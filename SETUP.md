@@ -139,22 +139,6 @@ VAPID_SUBJECT=mailto:you@example.com
 
 Generate keys: `npx web-push generate-vapid-keys`
 
-### Hindsight (Long-Term Memory)
-
-AI-powered evidence recall and knowledge management. Runs as a Docker container.
-
-```bash
-HINDSIGHT_ENABLED=true
-HINDSIGHT_URL=http://localhost:18888
-```
-
-First start downloads embedding models (~1-3 min). Manage with:
-```bash
-pnpm hindsight:start    # Docker compose up
-pnpm hindsight:status   # Health check
-pnpm hindsight:stop     # Shut down
-```
-
 ## Ports Overview
 
 | Service | Port | Required |
@@ -165,8 +149,6 @@ pnpm hindsight:stop     # Shut down
 | ASR | 9876 | No — voice input |
 | TTS | 9879 | No — voice output |
 | LLM Post-process | 9878 | No — speech correction |
-| Hindsight API | 18888 | No — long-term memory |
-| Hindsight UI | 19999 | No — memory dashboard |
 
 ## Useful Commands
 
@@ -335,22 +317,6 @@ VAPID_SUBJECT=mailto:you@example.com
 
 生成密钥：`npx web-push generate-vapid-keys`
 
-### Hindsight（长期记忆）
-
-AI 驱动的证据检索和知识管理。以 Docker 容器运行。
-
-```bash
-HINDSIGHT_ENABLED=true
-HINDSIGHT_URL=http://localhost:18888
-```
-
-首次启动会下载嵌入模型（约 1-3 分钟）。管理命令：
-```bash
-pnpm hindsight:start    # Docker compose 启动
-pnpm hindsight:status   # 健康检查
-pnpm hindsight:stop     # 关闭
-```
-
 ## 端口概览
 
 | 服务 | 端口 | 必需 |
@@ -361,8 +327,6 @@ pnpm hindsight:stop     # 关闭
 | ASR | 9876 | 否 — 语音输入 |
 | TTS | 9879 | 否 — 语音输出 |
 | LLM 后处理 | 9878 | 否 — 语音纠正 |
-| Hindsight API | 18888 | 否 — 长期记忆 |
-| Hindsight UI | 19999 | 否 — 记忆面板 |
 
 ## 常用命令
 

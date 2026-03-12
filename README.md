@@ -153,7 +153,7 @@ pnpm start
 
 Open `http://localhost:3001` and start talking to your team.
 
-**Full setup guide** — required vs optional config, voice, IM platforms, Hindsight: **[SETUP.md](SETUP.md)**
+**Full setup guide** — required vs optional config, voice, IM platforms: **[SETUP.md](SETUP.md)**
 
 ## Usage Guide
 
@@ -345,6 +345,8 @@ We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 [MIT](LICENSE) — Use it, modify it, ship it. Keep the copyright notice.
 
+"Clowder AI" name, logos, and cat character designs are brand assets — see [TRADEMARKS.md](TRADEMARKS.md).
+
 ---
 
 <a id="中文"></a>
@@ -498,7 +500,7 @@ pnpm start
 
 打开 `http://localhost:3001`，开始和你的团队对话。
 
-**完整安装指南** — 必选 vs 可选配置、语音、IM 平台、Hindsight 长期记忆：**[SETUP.md](SETUP.md)**
+**完整安装指南** — 必选 vs 可选配置、语音、IM 平台：**[SETUP.md](SETUP.md)**
 
 ## 使用指南
 
@@ -689,6 +691,8 @@ AI 不一定是冰冷的 API 和无状态调用。它可以是陪伴——有持
 ## 许可证
 
 [MIT](LICENSE) — 随便用，随便改，随便发。保留版权声明即可。
+
+"Clowder AI" 名称、logo 及猫猫角色设计为品牌资产 — 详见 [TRADEMARKS.md](TRADEMARKS.md)。
 
 ---
 
