@@ -109,16 +109,19 @@ echo "  Cat Café Skills provide development workflow governance."
 echo "  猫猫咖啡技能提供开发流程治理（feat-lifecycle、tdd 等）。"
 echo ""
 
+SKILLS_MOUNTED=true
 if [ -d "$PROJECT_DIR/cat-cafe-skills" ]; then
     if bash "$SCRIPT_DIR/sync-skills.sh"; then
         echo ""
         echo -e "  ${GREEN}✓${NC} Skills mounted to ~/.{claude,codex,gemini}/skills/"
     else
+        SKILLS_MOUNTED=false
         echo ""
-        echo -e "  ${YELLOW}⚠${NC} Some skills had conflicts. See output above."
+        echo -e "  ${RED}✗${NC} Skill mounting failed. See output above."
         echo -e "  ${YELLOW}  Remove conflicting paths and run: pnpm sync:skills${NC}"
     fi
 else
+    SKILLS_MOUNTED=false
     echo -e "  ${YELLOW}⚠${NC} cat-cafe-skills/ not found. Skipping skill mount."
 fi
 
@@ -314,13 +317,23 @@ echo -e "  ${GREEN}✓${NC} $ENV_FILE generated"
 # ── Step 6: Summary ─────────────────────────────────────────
 
 echo ""
-echo -e "${CYAN}[6/6] Setup complete! / 安装完成！${NC}"
+if [ "$SKILLS_MOUNTED" = true ]; then
+    echo -e "${CYAN}[6/6] Setup complete! / 安装完成！${NC}"
+else
+    echo -e "${CYAN}[6/6] Summary / 安装总结${NC}"
+fi
 echo ""
 echo "=================================="
-echo -e "${GREEN}🎉 Cat Cafe is ready!${NC}"
+if [ "$SKILLS_MOUNTED" = true ]; then
+    echo -e "${GREEN}Cat Cafe is ready!${NC}"
+else
+    echo -e "${YELLOW}Cat Cafe setup finished with warnings.${NC}"
+fi
 echo ""
 echo "  Enabled features / 已启用功能:"
 echo "    ✓ Core (API + Frontend + Redis)"
+[ "$SKILLS_MOUNTED" = true ] && echo "    ✓ Governance Skills (cat-cafe-skills)"
+[ "$SKILLS_MOUNTED" = false ] && echo -e "    ${RED}✗ Governance Skills (see above)${NC}"
 [ "$ENABLE_ASR" = true ] && echo "    ✓ Voice Input (ASR)"
 [ "$ENABLE_TTS" = true ] && echo "    ✓ Voice Output (TTS)"
 [ "$ENABLE_LLM_PP" = true ] && echo "    ✓ Speech Correction (LLM)"
@@ -351,3 +364,10 @@ fi
 echo "  Documentation / 文档: SETUP.md"
 echo "  Issues: https://github.com/your-org/clowder-ai/issues"
 echo ""
+
+if [ "$SKILLS_MOUNTED" = false ]; then
+    echo -e "${YELLOW}⚠ Setup completed with warnings. Skills were not mounted.${NC}"
+    echo -e "  Run ${CYAN}pnpm sync:skills${NC} after resolving conflicts."
+    echo ""
+    exit 1
+fi

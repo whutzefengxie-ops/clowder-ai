@@ -85,7 +85,7 @@ for PROVIDER_DIR in "${PROVIDERS[@]}"; do
             else
                 # Points elsewhere — update it
                 if [ "$DRY_RUN" = false ]; then
-                    ln -sf "$SKILL_PATH" "$TARGET"
+                    ln -sfn "$SKILL_PATH" "$TARGET"
                 fi
                 echo -e "  ${YELLOW}↻${NC} $SKILL_NAME (updated: was → $CURRENT)"
                 TOTAL_UPDATED=$((TOTAL_UPDATED + 1))
