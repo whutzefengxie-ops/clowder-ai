@@ -1,5 +1,4 @@
-import React from 'react';
-import { act } from 'react';
+import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -73,9 +72,7 @@ const FULL_TREE: TreeNode[] = [
             name: 'src',
             path: 'packages/web/src',
             type: 'directory',
-            children: [
-              { name: 'App.tsx', path: 'packages/web/src/App.tsx', type: 'file' },
-            ],
+            children: [{ name: 'App.tsx', path: 'packages/web/src/App.tsx', type: 'file' }],
           },
         ],
       },
@@ -203,13 +200,13 @@ describe('WorkspacePanel reveal-in-tree', () => {
     expect(searchResultEl).not.toBeNull();
 
     await act(async () => {
-      searchResultEl!.click();
+      searchResultEl?.click();
     });
 
     // Check that WorkspaceTree received expandedPaths with all ancestors
     const treeEl = container.querySelector('[data-testid="workspace-tree"]');
     expect(treeEl).not.toBeNull();
-    const expanded = JSON.parse(treeEl!.getAttribute('data-expanded') ?? '[]') as string[];
+    const expanded = JSON.parse(treeEl?.getAttribute('data-expanded') ?? '[]') as string[];
     expect(expanded).toContain('packages');
     expect(expanded).toContain('packages/web');
     expect(expanded).toContain('packages/web/src');
@@ -235,7 +232,7 @@ describe('WorkspacePanel reveal-in-tree', () => {
     expect(searchResultEl).not.toBeNull();
 
     await act(async () => {
-      searchResultEl!.click();
+      searchResultEl?.click();
     });
 
     // fetchSubtree should have been called for the first unloaded directory (packages/web)
@@ -244,7 +241,7 @@ describe('WorkspacePanel reveal-in-tree', () => {
     // Expanded paths should include known ancestors even though deeper ones aren't loaded yet
     const treeEl = container.querySelector('[data-testid="workspace-tree"]');
     expect(treeEl).not.toBeNull();
-    const expanded = JSON.parse(treeEl!.getAttribute('data-expanded') ?? '[]') as string[];
+    const expanded = JSON.parse(treeEl?.getAttribute('data-expanded') ?? '[]') as string[];
     expect(expanded).toContain('packages');
     expect(expanded).toContain('packages/web');
     // packages/web/src not yet expanded because it wasn't in the tree yet — will expand on next tree update

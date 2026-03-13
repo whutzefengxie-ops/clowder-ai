@@ -2,8 +2,9 @@
  * F045: GET /api/threads/:threadId/task-progress route tests
  * P0/P1 review fix: auth + ownership check
  */
-import { describe, it, beforeEach, afterEach } from 'node:test';
+
 import assert from 'node:assert/strict';
+import { afterEach, beforeEach, describe, it } from 'node:test';
 import Fastify from 'fastify';
 
 describe('GET /api/threads/:threadId/task-progress', () => {
@@ -13,9 +14,7 @@ describe('GET /api/threads/:threadId/task-progress', () => {
   let threadId;
 
   beforeEach(async () => {
-    const { ThreadStore } = await import(
-      '../dist/domains/cats/services/stores/ports/ThreadStore.js'
-    );
+    const { ThreadStore } = await import('../dist/domains/cats/services/stores/ports/ThreadStore.js');
     const { threadsRoutes } = await import('../dist/routes/threads.js');
     const { MemoryTaskProgressStore } = await import(
       '../dist/domains/cats/services/agents/invocation/MemoryTaskProgressStore.js'

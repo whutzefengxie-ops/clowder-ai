@@ -35,8 +35,6 @@ export class ExecutionDigestStore {
   }
 
   listAll(userId: string): DispatchExecutionDigest[] {
-    return [...this.digests.values()]
-      .filter((d) => d.userId === userId)
-      .sort((a, b) => b.completedAt - a.completedAt);
+    return [...this.digests.values()].filter((d) => d.userId === userId).sort((a, b) => b.completedAt - a.completedAt);
   }
 }

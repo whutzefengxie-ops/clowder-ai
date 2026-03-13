@@ -1,12 +1,8 @@
-import { describe, it, beforeEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
+import { beforeEach, describe, it, mock } from 'node:test';
 
-const { InvocationQueue } = await import(
-  '../dist/domains/cats/services/agents/invocation/InvocationQueue.js'
-);
-const { QueueProcessor } = await import(
-  '../dist/domains/cats/services/agents/invocation/QueueProcessor.js'
-);
+const { InvocationQueue } = await import('../dist/domains/cats/services/agents/invocation/InvocationQueue.js');
+const { QueueProcessor } = await import('../dist/domains/cats/services/agents/invocation/QueueProcessor.js');
 
 /** Build a stub deps object for QueueProcessor */
 function stubDeps(overrides = {}) {
@@ -166,10 +162,7 @@ describe('QueueProcessor', () => {
     enqueueEntry(slowDeps.queue, { content: 'b', targetCats: ['b'] });
 
     // Fire two processNext concurrently
-    const [r1, r2] = await Promise.all([
-      slowProcessor.processNext('t1', 'u1'),
-      slowProcessor.processNext('t1', 'u1'),
-    ]);
+    const [r1, r2] = await Promise.all([slowProcessor.processNext('t1', 'u1'), slowProcessor.processNext('t1', 'u1')]);
 
     // One should start, other should not (mutex)
     const startedCount = [r1, r2].filter((r) => r.started).length;
@@ -263,9 +256,7 @@ describe('QueueProcessor', () => {
 
     // InvocationRecord should be updated with status='failed'
     const updateCalls = failDeps.invocationRecordStore.update.mock.calls;
-    const failedUpdate = updateCalls.find(
-      (c) => c.arguments[1]?.status === 'failed',
-    );
+    const failedUpdate = updateCalls.find((c) => c.arguments[1]?.status === 'failed');
     assert.ok(failedUpdate, 'should mark InvocationRecord as failed');
     assert.ok(failedUpdate.arguments[1].error, 'should include error message');
   });

@@ -1,46 +1,42 @@
 export {
-  GithubReviewWatcher,
-  loadWatcherConfigFromEnv,
-  type GithubReviewEvent,
-  type GithubReviewWatcherConfig,
-} from './GithubReviewWatcher.js';
+  ConnectorInvokeTrigger,
+  type ConnectorInvokeTriggerOptions,
+} from './ConnectorInvokeTrigger.js';
 
 export {
-  parseGithubReviewSubject,
-  extractCatFromTitle,
+  type CatTag,
   catTagToCatId,
+  extractCatFromTitle,
   isGithubNotification,
   type ParsedGithubReviewMail,
+  parseGithubReviewSubject,
   type ReviewType,
-  type CatTag,
 } from './GithubReviewMailParser.js';
-
 export {
+  type GithubReviewEvent,
+  GithubReviewWatcher,
+  type GithubReviewWatcherConfig,
+  loadWatcherConfigFromEnv,
+} from './GithubReviewWatcher.js';
+export {
+  type GithubReviewBootstrapOptions,
+  isGithubReviewWatcherRunning,
   startGithubReviewWatcher,
   stopGithubReviewWatcher,
-  isGithubReviewWatcherRunning,
-  type GithubReviewBootstrapOptions,
 } from './github-review-bootstrap.js';
 
 export {
-  MemoryPrTrackingStore,
+  type IProcessedEmailStore,
+  MemoryProcessedEmailStore,
+} from './ProcessedEmailStore.js';
+export {
   type IPrTrackingStore,
+  MemoryPrTrackingStore,
   type PrTrackingEntry,
   type PrTrackingInput,
 } from './PrTrackingStore.js';
-
-export {
-  MemoryProcessedEmailStore,
-  type IProcessedEmailStore,
-} from './ProcessedEmailStore.js';
-
 export {
   ReviewRouter,
   type ReviewRouterOptions,
   type RouteResult,
 } from './ReviewRouter.js';
-
-export {
-  ConnectorInvokeTrigger,
-  type ConnectorInvokeTriggerOptions,
-} from './ConnectorInvokeTrigger.js';

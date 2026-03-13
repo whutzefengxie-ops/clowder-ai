@@ -53,7 +53,7 @@ describe('buildCatOptions vs buildWhisperOptions split', () => {
     expect(options).toHaveLength(2);
     const fast = options.find((o) => o.id === 'opus-fast');
     expect(fast).toBeDefined();
-    expect(fast!.label).toBe('@布偶猫(快)');
-    expect(fast!.insert).toBe(''); // no mentionPatterns → empty insert
+    expect(fast?.label).toBe('@布偶猫(快)');
+    expect(fast?.insert).toBe(''); // no mentionPatterns → empty insert
   });
 });

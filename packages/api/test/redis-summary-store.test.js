@@ -4,14 +4,11 @@
  * + SummaryStoreFactory 分发测试 (always runs)
  */
 
-import { describe, it, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  assertRedisIsolationOrThrow,
-  cleanupPrefixedRedisKeys,
-} from './helpers/redis-test-helpers.js';
+import { after, before, beforeEach, describe, it } from 'node:test';
+import { assertRedisIsolationOrThrow, cleanupPrefixedRedisKeys } from './helpers/redis-test-helpers.js';
 
-const REDIS_URL = process.env['REDIS_URL'];
+const REDIS_URL = process.env.REDIS_URL;
 
 describe('RedisSummaryStore', { skip: !REDIS_URL ? 'REDIS_URL not set' : false }, () => {
   let RedisSummaryStore;
@@ -69,7 +66,7 @@ describe('RedisSummaryStore', { skip: !REDIS_URL ? 'REDIS_URL not set' : false }
 
     const list = await store.listByThread('test-thread-s1');
     assert.ok(list.length >= 1);
-    const found = list.find(s => s.id === summary.id);
+    const found = list.find((s) => s.id === summary.id);
     assert.ok(found);
     assert.deepEqual(found.conclusions, ['选择 A 品牌', '每月采购']);
     assert.deepEqual(found.openQuestions, ['预算上限？']);
@@ -113,7 +110,9 @@ describe('RedisSummaryStore', { skip: !REDIS_URL ? 'REDIS_URL not set' : false }
 
 describe('SummaryStoreFactory', () => {
   it('returns SummaryStore when no redis, RedisSummaryStore when redis', async () => {
-    const { createSummaryStore } = await import('../dist/domains/cats/services/stores/factories/SummaryStoreFactory.js');
+    const { createSummaryStore } = await import(
+      '../dist/domains/cats/services/stores/factories/SummaryStoreFactory.js'
+    );
     const { SummaryStore } = await import('../dist/domains/cats/services/stores/ports/SummaryStore.js');
     const { RedisSummaryStore } = await import('../dist/domains/cats/services/stores/redis/RedisSummaryStore.js');
 

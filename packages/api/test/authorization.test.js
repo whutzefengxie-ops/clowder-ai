@@ -3,21 +3,15 @@
  * 猫猫授权系统 — RuleStore + PendingRequestStore + AuditStore + Manager
  */
 
-import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
+import { describe, test } from 'node:test';
 
-const { AuthorizationRuleStore } = await import(
-  '../dist/domains/cats/services/stores/ports/AuthorizationRuleStore.js'
-);
-const { PendingRequestStore } = await import(
-  '../dist/domains/cats/services/stores/ports/PendingRequestStore.js'
-);
+const { AuthorizationRuleStore } = await import('../dist/domains/cats/services/stores/ports/AuthorizationRuleStore.js');
+const { PendingRequestStore } = await import('../dist/domains/cats/services/stores/ports/PendingRequestStore.js');
 const { AuthorizationAuditStore } = await import(
   '../dist/domains/cats/services/stores/ports/AuthorizationAuditStore.js'
 );
-const { AuthorizationManager } = await import(
-  '../dist/domains/cats/services/auth/AuthorizationManager.js'
-);
+const { AuthorizationManager } = await import('../dist/domains/cats/services/auth/AuthorizationManager.js');
 
 // ---- RuleStore Tests ----
 
@@ -226,8 +220,24 @@ describe('AuthorizationAuditStore', () => {
 
   test('list filters by catId and threadId', () => {
     const store = new AuthorizationAuditStore();
-    store.append({ requestId: 'r1', invocationId: 'i1', catId: 'codex', threadId: 't1', action: 'a', reason: 'r', decision: 'allow' });
-    store.append({ requestId: 'r2', invocationId: 'i2', catId: 'opus', threadId: 't2', action: 'a', reason: 'r', decision: 'deny' });
+    store.append({
+      requestId: 'r1',
+      invocationId: 'i1',
+      catId: 'codex',
+      threadId: 't1',
+      action: 'a',
+      reason: 'r',
+      decision: 'allow',
+    });
+    store.append({
+      requestId: 'r2',
+      invocationId: 'i2',
+      catId: 'opus',
+      threadId: 't2',
+      action: 'a',
+      reason: 'r',
+      decision: 'deny',
+    });
 
     assert.equal(store.list({ catId: 'codex' }).length, 1);
     assert.equal(store.list({ threadId: 't2' }).length, 1);
@@ -236,7 +246,15 @@ describe('AuthorizationAuditStore', () => {
   test('evicts when at capacity', () => {
     const store = new AuthorizationAuditStore({ maxEntries: 5 });
     for (let i = 0; i < 6; i++) {
-      store.append({ requestId: `r${i}`, invocationId: `i${i}`, catId: 'codex', threadId: 't1', action: 'a', reason: 'r', decision: 'allow' });
+      store.append({
+        requestId: `r${i}`,
+        invocationId: `i${i}`,
+        catId: 'codex',
+        threadId: 't1',
+        action: 'a',
+        reason: 'r',
+        decision: 'allow',
+      });
     }
     assert.ok(store.size <= 5);
   });
@@ -320,7 +338,7 @@ describe('AuthorizationManager', () => {
     });
 
     // Yield a tick so requestPermission progresses past pendingStore.create()
-    await new Promise(r => setTimeout(r, 10));
+    await new Promise((r) => setTimeout(r, 10));
 
     const pending = await manager.getPending('thread-1');
     assert.equal(pending.length, 1);
@@ -342,7 +360,7 @@ describe('AuthorizationManager', () => {
       reason: 'commit',
     });
 
-    await new Promise(r => setTimeout(r, 10));
+    await new Promise((r) => setTimeout(r, 10));
     const pending = await manager.getPending();
     await manager.respond(pending[0].requestId, true, 'thread', 'user-1');
     await responsePromise;
@@ -363,7 +381,7 @@ describe('AuthorizationManager', () => {
       reason: 'commit',
     });
 
-    await new Promise(r => setTimeout(r, 10));
+    await new Promise((r) => setTimeout(r, 10));
     const pending = await manager.getPending();
     await manager.respond(pending[0].requestId, true, 'once', 'user-1');
     await responsePromise;

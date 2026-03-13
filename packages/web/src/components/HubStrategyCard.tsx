@@ -3,16 +3,14 @@
 import { useEffect, useState } from 'react';
 import { apiFetch } from '@/utils/api-client';
 import type { CatStrategyEntry, StrategyType } from './hub-strategy-types';
-import { STRATEGY_LABELS, SOURCE_LABELS } from './hub-strategy-types';
+import { SOURCE_LABELS, STRATEGY_LABELS } from './hub-strategy-types';
 
 function SourceBadge({ source }: { source: string }) {
   const isOverride = source === 'runtime_override';
   return (
     <span
       className={`inline-block text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
-        isOverride
-          ? 'bg-blue-100 text-blue-700'
-          : 'bg-gray-100 text-gray-500'
+        isOverride ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'
       }`}
     >
       {SOURCE_LABELS[source] ?? source}
@@ -20,13 +18,7 @@ function SourceBadge({ source }: { source: string }) {
   );
 }
 
-export function CatStrategyCard({
-  entry,
-  onSaved,
-}: {
-  entry: CatStrategyEntry;
-  onSaved: () => void;
-}) {
+export function CatStrategyCard({ entry, onSaved }: { entry: CatStrategyEntry; onSaved: () => void }) {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,9 +26,7 @@ export function CatStrategyCard({
   const [strategy, setStrategy] = useState<StrategyType>(entry.effective.strategy);
   const [warnThreshold, setWarnThreshold] = useState(entry.effective.thresholds.warn);
   const [actionThreshold, setActionThreshold] = useState(entry.effective.thresholds.action);
-  const [maxCompressions, setMaxCompressions] = useState(
-    entry.effective.hybrid?.maxCompressions ?? 2,
-  );
+  const [maxCompressions, setMaxCompressions] = useState(entry.effective.hybrid?.maxCompressions ?? 2);
 
   useEffect(() => {
     setStrategy(entry.effective.strategy);
@@ -63,7 +53,7 @@ export function CatStrategyCard({
         body: JSON.stringify(body),
       });
       if (!res.ok) {
-        const data = await res.json().catch(() => ({})) as Record<string, unknown>;
+        const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
         setError((data.error as string) ?? `保存失败 (${res.status})`);
         return;
       }
@@ -84,7 +74,7 @@ export function CatStrategyCard({
         method: 'DELETE',
       });
       if (!res.ok) {
-        const data = await res.json().catch(() => ({})) as Record<string, unknown>;
+        const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
         setError((data.error as string) ?? `重置失败 (${res.status})`);
         return;
       }
@@ -123,9 +113,7 @@ export function CatStrategyCard({
       </div>
 
       {!entry.sessionChainEnabled && (
-        <p className="text-xs text-gray-400">
-          此猫的 session chain 已关闭，策略配置不适用。
-        </p>
+        <p className="text-xs text-gray-400">此猫的 session chain 已关闭，策略配置不适用。</p>
       )}
 
       {entry.sessionChainEnabled && !editing && (
@@ -134,8 +122,7 @@ export function CatStrategyCard({
             <span className="font-medium">策略:</span> {STRATEGY_LABELS[entry.effective.strategy]}
           </div>
           <div className="text-xs text-gray-600">
-            <span className="font-medium">阈值:</span>{' '}
-            警告 {(entry.effective.thresholds.warn * 100).toFixed(0)}% / 行动{' '}
+            <span className="font-medium">阈值:</span> 警告 {(entry.effective.thresholds.warn * 100).toFixed(0)}% / 行动{' '}
             {(entry.effective.thresholds.action * 100).toFixed(0)}%
           </div>
           {entry.effective.strategy === 'hybrid' && entry.effective.hybrid && (
@@ -144,9 +131,7 @@ export function CatStrategyCard({
             </div>
           )}
           {!entry.hybridCapable && (
-            <div className="text-[10px] text-amber-600">
-              Provider {entry.provider} 不支持 hybrid 策略
-            </div>
+            <div className="text-[10px] text-amber-600">Provider {entry.provider} 不支持 hybrid 策略</div>
           )}
           <div className="flex gap-2 pt-1">
             <button
@@ -179,9 +164,7 @@ export function CatStrategyCard({
             >
               <option value="handoff">{STRATEGY_LABELS.handoff}</option>
               <option value="compress">{STRATEGY_LABELS.compress}</option>
-              {entry.hybridCapable && (
-                <option value="hybrid">{STRATEGY_LABELS.hybrid}</option>
-              )}
+              {entry.hybridCapable && <option value="hybrid">{STRATEGY_LABELS.hybrid}</option>}
             </select>
           </div>
 
@@ -191,7 +174,10 @@ export function CatStrategyCard({
                 警告阈值: {(warnThreshold * 100).toFixed(0)}%
               </label>
               <input
-                type="range" min="0.3" max="0.95" step="0.05"
+                type="range"
+                min="0.3"
+                max="0.95"
+                step="0.05"
                 value={warnThreshold}
                 onChange={(e) => {
                   const v = parseFloat(e.target.value);
@@ -206,7 +192,10 @@ export function CatStrategyCard({
                 行动阈值: {(actionThreshold * 100).toFixed(0)}%
               </label>
               <input
-                type="range" min="0.4" max="0.99" step="0.05"
+                type="range"
+                min="0.4"
+                max="0.99"
+                step="0.05"
                 value={actionThreshold}
                 onChange={(e) => {
                   const v = parseFloat(e.target.value);
@@ -220,11 +209,12 @@ export function CatStrategyCard({
 
           {strategy === 'hybrid' && (
             <div>
-              <label className="text-xs font-medium text-gray-600 block mb-1">
-                最大压缩次数: {maxCompressions}
-              </label>
+              <label className="text-xs font-medium text-gray-600 block mb-1">最大压缩次数: {maxCompressions}</label>
               <input
-                type="range" min="1" max="10" step="1"
+                type="range"
+                min="1"
+                max="10"
+                step="1"
                 value={maxCompressions}
                 onChange={(e) => setMaxCompressions(parseInt(e.target.value, 10))}
                 className="w-full accent-purple-500"
@@ -232,13 +222,9 @@ export function CatStrategyCard({
             </div>
           )}
 
-          {warnThreshold >= actionThreshold && (
-            <p className="text-[10px] text-red-500">警告阈值必须小于行动阈值</p>
-          )}
+          {warnThreshold >= actionThreshold && <p className="text-[10px] text-red-500">警告阈值必须小于行动阈值</p>}
 
-          {error && (
-            <p className="text-xs text-red-500 bg-red-50 rounded px-2 py-1">{error}</p>
-          )}
+          {error && <p className="text-xs text-red-500 bg-red-50 rounded px-2 py-1">{error}</p>}
 
           <div className="flex gap-2">
             <button

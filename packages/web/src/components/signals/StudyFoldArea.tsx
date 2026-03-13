@@ -1,5 +1,5 @@
-import React, { useCallback, useRef, useState } from 'react';
 import type { StudyMeta } from '@cat-cafe/shared';
+import { useCallback, useRef, useState } from 'react';
 import { PodcastPlayer } from './PodcastPlayer';
 
 interface StudyFoldAreaProps {
@@ -25,7 +25,17 @@ function formatDate(iso: string): string {
   });
 }
 
-export function StudyFoldArea({ articleId, studyMeta, onStartStudy, onLinkThread, onUnlinkThread, collections, onAddToCollection, onCreateCollection, onStudyMetaRefresh }: StudyFoldAreaProps) {
+export function StudyFoldArea({
+  articleId,
+  studyMeta,
+  onStartStudy,
+  onLinkThread,
+  onUnlinkThread,
+  collections,
+  onAddToCollection,
+  onCreateCollection,
+  onStudyMetaRefresh,
+}: StudyFoldAreaProps) {
   const [open, setOpen] = useState(!!studyMeta?.lastStudiedAt);
   const [linkInput, setLinkInput] = useState('');
   const [newCollectionName, setNewCollectionName] = useState('');
@@ -59,9 +69,7 @@ export function StudyFoldArea({ articleId, studyMeta, onStartStudy, onLinkThread
           {studyCount > 0 && <span className="ml-1 text-opus-dark">({studyCount})</span>}
         </span>
         {studyMeta?.lastStudiedAt && (
-          <span className="text-xs font-normal text-gray-400">
-            上次学习: {formatDate(studyMeta.lastStudiedAt)}
-          </span>
+          <span className="text-xs font-normal text-gray-400">上次学习: {formatDate(studyMeta.lastStudiedAt)}</span>
         )}
       </button>
       {open && (
@@ -124,7 +132,13 @@ export function StudyFoldArea({ articleId, studyMeta, onStartStudy, onLinkThread
                 ref={linkInputRef}
                 value={linkInput}
                 onChange={(e) => setLinkInput(e.target.value)}
-                onKeyDown={(e) => { if (e.nativeEvent.isComposing) return; if (e.key === 'Enter') { e.preventDefault(); void handleLinkThread(); } }}
+                onKeyDown={(e) => {
+                  if (e.nativeEvent.isComposing) return;
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    void handleLinkThread();
+                  }
+                }}
                 placeholder="输入 Thread ID 关联..."
                 className="flex-1 rounded-md border border-gray-200 px-2 py-1 text-xs"
               />
@@ -143,9 +157,14 @@ export function StudyFoldArea({ articleId, studyMeta, onStartStudy, onLinkThread
               <h4 className="text-xs font-semibold text-gray-500">学习笔记</h4>
               <ul className="mt-1 space-y-1">
                 {notes.map((n) => (
-                  <li key={n.id} className="rounded-md border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-700">
+                  <li
+                    key={n.id}
+                    className="rounded-md border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-700"
+                  >
                     <span className="font-medium">{n.id}</span>
-                    <span className="ml-2 text-gray-400">{n.state} · {formatDate(n.createdAt)}</span>
+                    <span className="ml-2 text-gray-400">
+                      {n.state} · {formatDate(n.createdAt)}
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -153,20 +172,21 @@ export function StudyFoldArea({ articleId, studyMeta, onStartStudy, onLinkThread
           )}
 
           {/* AC-5: 播客播放器 */}
-          <PodcastPlayer
-            articleId={articleId}
-            podcasts={podcasts}
-            onArtifactCreated={onStudyMetaRefresh}
-          />
+          <PodcastPlayer articleId={articleId} podcasts={podcasts} onArtifactCreated={onStudyMetaRefresh} />
 
           {reports.length > 0 && (
             <div className="mt-3">
               <h4 className="text-xs font-semibold text-gray-500">研究报告</h4>
               <ul className="mt-1 space-y-1">
                 {reports.map((r) => (
-                  <li key={r.id} className="rounded-md border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-700">
+                  <li
+                    key={r.id}
+                    className="rounded-md border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-700"
+                  >
                     <span className="font-medium">{r.id}</span>
-                    <span className="ml-2 text-gray-400">{r.state} · {formatDate(r.createdAt)}</span>
+                    <span className="ml-2 text-gray-400">
+                      {r.state} · {formatDate(r.createdAt)}
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -181,7 +201,10 @@ export function StudyFoldArea({ articleId, studyMeta, onStartStudy, onLinkThread
                 {studyMeta?.collections?.map((colId) => {
                   const col = collections.find((c) => c.id === colId);
                   return (
-                    <li key={colId} className="rounded-full border border-opus-light bg-opus-bg px-2 py-0.5 text-xs text-opus-dark">
+                    <li
+                      key={colId}
+                      className="rounded-full border border-opus-light bg-opus-bg px-2 py-0.5 text-xs text-opus-dark"
+                    >
                       {col?.name ?? colId}
                     </li>
                   );
@@ -193,15 +216,23 @@ export function StudyFoldArea({ articleId, studyMeta, onStartStudy, onLinkThread
           {onAddToCollection && collections && collections.length > 0 && (
             <div className="mt-2">
               <select
-                onChange={(e) => { if (e.target.value) void onAddToCollection(e.target.value); e.target.value = ''; }}
+                onChange={(e) => {
+                  if (e.target.value) void onAddToCollection(e.target.value);
+                  e.target.value = '';
+                }}
                 className="rounded-md border border-gray-200 px-2 py-1 text-xs"
                 defaultValue=""
               >
-                <option value="" disabled>加入学习集...</option>
+                <option value="" disabled>
+                  加入学习集...
+                </option>
                 {collections
                   .filter((c) => !studyMeta?.collections?.includes(c.id))
-                  .map((c) => <option key={c.id} value={c.id}>{c.name}</option>)
-                }
+                  .map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
               </select>
             </div>
           )}
@@ -211,13 +242,25 @@ export function StudyFoldArea({ articleId, studyMeta, onStartStudy, onLinkThread
               <input
                 value={newCollectionName}
                 onChange={(e) => setNewCollectionName(e.target.value)}
-                onKeyDown={(e) => { if (e.nativeEvent.isComposing) return; if (e.key === 'Enter' && newCollectionName.trim()) { e.preventDefault(); void onCreateCollection(newCollectionName.trim()); setNewCollectionName(''); } }}
+                onKeyDown={(e) => {
+                  if (e.nativeEvent.isComposing) return;
+                  if (e.key === 'Enter' && newCollectionName.trim()) {
+                    e.preventDefault();
+                    void onCreateCollection(newCollectionName.trim());
+                    setNewCollectionName('');
+                  }
+                }}
                 placeholder="新建学习集..."
                 className="flex-1 rounded-md border border-gray-200 px-2 py-1 text-xs"
               />
               <button
                 type="button"
-                onClick={() => { if (newCollectionName.trim()) { void onCreateCollection(newCollectionName.trim()); setNewCollectionName(''); } }}
+                onClick={() => {
+                  if (newCollectionName.trim()) {
+                    void onCreateCollection(newCollectionName.trim());
+                    setNewCollectionName('');
+                  }
+                }}
                 className="rounded-md border border-opus-light px-2 py-1 text-xs text-opus-dark hover:bg-opus-bg"
               >
                 创建
@@ -225,7 +268,7 @@ export function StudyFoldArea({ articleId, studyMeta, onStartStudy, onLinkThread
             </div>
           )}
 
-          {!hasContent && !(studyMeta?.collections?.length) && (
+          {!hasContent && !studyMeta?.collections?.length && (
             <p className="mt-3 text-xs text-gray-400">还没有学习记录，点击「开始学习」开始吧。</p>
           )}
         </div>

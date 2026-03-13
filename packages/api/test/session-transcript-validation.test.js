@@ -6,8 +6,8 @@
  * Fix: strictParseInt using /^\d+$/ regex
  */
 
-import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
 
 // We test the strictParseInt logic indirectly via the route,
 // but first test the regex behavior directly for clarity.

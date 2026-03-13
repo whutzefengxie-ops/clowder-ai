@@ -1,10 +1,9 @@
-import React from 'react';
+import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { act } from 'react';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { useChatHistory } from '../useChatHistory';
 import { useChatStore } from '@/stores/chatStore';
 import { apiFetch } from '@/utils/api-client';
+import { useChatHistory } from '../useChatHistory';
 
 vi.mock('@/utils/api-client', () => ({
   apiFetch: vi.fn(),
@@ -46,7 +45,7 @@ describe('useChatHistory task-progress hydration', () => {
       catStatuses: {},
       catInvocations: {},
       currentGame: null,
-      
+
       threadStates: {},
       currentThreadId: 'thread-progress',
       viewMode: 'single',
@@ -77,17 +76,20 @@ describe('useChatHistory task-progress hydration', () => {
         return Promise.resolve(new Response(JSON.stringify({ tasks: [] }), { status: 200 }));
       }
       if (typeof url === 'string' && url.includes('/task-progress')) {
-        return Promise.resolve(new Response(JSON.stringify({
-          taskProgress: {
-            codex: {
-              tasks: [
-                { id: 'task-1', subject: 'Write plan', status: 'completed' },
-              ],
-              status: 'completed',
-              updatedAt: 123,
-            },
-          },
-        }), { status: 200 }));
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              taskProgress: {
+                codex: {
+                  tasks: [{ id: 'task-1', subject: 'Write plan', status: 'completed' }],
+                  status: 'completed',
+                  updatedAt: 123,
+                },
+              },
+            }),
+            { status: 200 },
+          ),
+        );
       }
       if (typeof url === 'string' && url.includes('/queue')) {
         return Promise.resolve(new Response(JSON.stringify({ queue: [], paused: false }), { status: 200 }));
@@ -115,18 +117,23 @@ describe('useChatHistory task-progress hydration', () => {
         return Promise.resolve(new Response(JSON.stringify({ tasks: [] }), { status: 200 }));
       }
       if (typeof url === 'string' && url.includes('/task-progress')) {
-        return Promise.resolve(new Response(JSON.stringify({
-          taskProgress: {
-            codex: {
-              tasks: [
-                { id: 'task-1', subject: 'Write plan', status: 'completed' },
-                { id: 'task-2', subject: 'Run tests', status: 'completed' },
-              ],
-              status: 'running',
-              updatedAt: 456,
-            },
-          },
-        }), { status: 200 }));
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              taskProgress: {
+                codex: {
+                  tasks: [
+                    { id: 'task-1', subject: 'Write plan', status: 'completed' },
+                    { id: 'task-2', subject: 'Run tests', status: 'completed' },
+                  ],
+                  status: 'running',
+                  updatedAt: 456,
+                },
+              },
+            }),
+            { status: 200 },
+          ),
+        );
       }
       if (typeof url === 'string' && url.includes('/queue')) {
         return Promise.resolve(new Response(JSON.stringify({ queue: [], paused: false }), { status: 200 }));

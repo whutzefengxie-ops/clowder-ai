@@ -1,5 +1,4 @@
-import React from 'react';
-import { act } from 'react';
+import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useChatCommands } from '../useChatCommands';
@@ -7,12 +6,9 @@ import { useChatCommands } from '../useChatCommands';
 const mocks = vi.hoisted(() => {
   const mockAddMessage = vi.fn();
   const mockApiFetch = vi.fn();
-  const useChatStoreMock = Object.assign(
-    () => ({ addMessage: mockAddMessage }),
-    {
-      getState: () => ({ currentThreadId: 'thread-1' }),
-    },
-  );
+  const useChatStoreMock = Object.assign(() => ({ addMessage: mockAddMessage }), {
+    getState: () => ({ currentThreadId: 'thread-1' }),
+  });
 
   return { mockAddMessage, mockApiFetch, useChatStoreMock };
 });
@@ -58,11 +54,13 @@ async function setupProcessCommand(root: Root): Promise<(input: string) => Promi
   let processCommand: ((input: string) => Promise<boolean>) | null = null;
 
   await act(async () => {
-    root.render(React.createElement(Harness, {
-      onReady: (fn) => {
-        processCommand = fn;
-      },
-    }));
+    root.render(
+      React.createElement(Harness, {
+        onReady: (fn) => {
+          processCommand = fn;
+        },
+      }),
+    );
   });
 
   if (!processCommand) {
@@ -104,17 +102,18 @@ describe('useChatCommands /signals', () => {
 
     mocks.mockApiFetch.mockResolvedValueOnce({
       ok: true,
-      json: () => Promise.resolve({
-        items: [
-          {
-            id: 'signal_1',
-            title: 'Claude 5 roadmap',
-            source: 'anthropic-news',
-            tier: 1,
-            fetchedAt: '2026-02-19T08:00:00.000Z',
-          },
-        ],
-      }),
+      json: () =>
+        Promise.resolve({
+          items: [
+            {
+              id: 'signal_1',
+              title: 'Claude 5 roadmap',
+              source: 'anthropic-news',
+              tier: 1,
+              fetchedAt: '2026-02-19T08:00:00.000Z',
+            },
+          ],
+        }),
     });
 
     let handled = false;
@@ -132,18 +131,19 @@ describe('useChatCommands /signals', () => {
 
     mocks.mockApiFetch.mockResolvedValueOnce({
       ok: true,
-      json: () => Promise.resolve({
-        total: 1,
-        items: [
-          {
-            id: 'signal_2',
-            title: 'Claude 5 evals',
-            source: 'anthropic-news',
-            tier: 1,
-            fetchedAt: '2026-02-19T09:00:00.000Z',
-          },
-        ],
-      }),
+      json: () =>
+        Promise.resolve({
+          total: 1,
+          items: [
+            {
+              id: 'signal_2',
+              title: 'Claude 5 evals',
+              source: 'anthropic-news',
+              tier: 1,
+              fetchedAt: '2026-02-19T09:00:00.000Z',
+            },
+          ],
+        }),
     });
 
     let handled = false;
@@ -161,19 +161,20 @@ describe('useChatCommands /signals', () => {
 
     mocks.mockApiFetch.mockResolvedValueOnce({
       ok: true,
-      json: () => Promise.resolve({
-        sources: [
-          {
-            id: 'anthropic-news',
-            name: 'Anthropic Newsroom',
-            enabled: true,
-            tier: 1,
-            category: 'official',
-            fetch: { method: 'webpage' },
-            schedule: { frequency: 'daily' },
-          },
-        ],
-      }),
+      json: () =>
+        Promise.resolve({
+          sources: [
+            {
+              id: 'anthropic-news',
+              name: 'Anthropic Newsroom',
+              enabled: true,
+              tier: 1,
+              category: 'official',
+              fetch: { method: 'webpage' },
+              schedule: { frequency: 'daily' },
+            },
+          ],
+        }),
     });
 
     let handled = false;
@@ -191,13 +192,14 @@ describe('useChatCommands /signals', () => {
 
     mocks.mockApiFetch.mockResolvedValueOnce({
       ok: true,
-      json: () => Promise.resolve({
-        todayCount: 2,
-        weekCount: 5,
-        unreadCount: 3,
-        byTier: { '1': 5 },
-        bySource: { 'anthropic-news': 3, 'openai-news-rss': 2 },
-      }),
+      json: () =>
+        Promise.resolve({
+          todayCount: 2,
+          weekCount: 5,
+          unreadCount: 3,
+          byTier: { '1': 5 },
+          bySource: { 'anthropic-news': 3, 'openai-news-rss': 2 },
+        }),
     });
 
     let handled = false;
@@ -216,12 +218,13 @@ describe('useChatCommands /signals', () => {
 
     mocks.mockApiFetch.mockResolvedValueOnce({
       ok: true,
-      json: () => Promise.resolve({
-        source: {
-          id: 'anthropic-news',
-          enabled: false,
-        },
-      }),
+      json: () =>
+        Promise.resolve({
+          source: {
+            id: 'anthropic-news',
+            enabled: false,
+          },
+        }),
     });
 
     let handled = false;

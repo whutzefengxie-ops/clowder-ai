@@ -38,10 +38,7 @@ export function shouldForceSystemNotification(payload: PushNotificationPayload):
   return isDecisionLikeText(payload);
 }
 
-export function shouldShowSystemNotification(
-  payload: PushNotificationPayload,
-  hasFocusedClient: boolean,
-): boolean {
+export function shouldShowSystemNotification(payload: PushNotificationPayload, hasFocusedClient: boolean): boolean {
   if (!hasFocusedClient) return true;
   return shouldForceSystemNotification(payload);
 }

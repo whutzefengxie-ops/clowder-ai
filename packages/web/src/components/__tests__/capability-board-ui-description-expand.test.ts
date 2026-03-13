@@ -1,11 +1,7 @@
-import React from 'react';
-import { act } from 'react';
+import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import {
-  CapabilitySection,
-  type CapabilityBoardItem,
-} from '@/components/capability-board-ui';
+import { type CapabilityBoardItem, CapabilitySection } from '@/components/capability-board-ui';
 
 describe('CapabilitySection description expansion', () => {
   let container: HTMLDivElement;

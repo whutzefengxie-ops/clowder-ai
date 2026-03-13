@@ -229,8 +229,8 @@ export const messageActionsRoutes: FastifyPluginAsync<MessageActionsRoutesOption
 
     // Merge patch into block
     const mutable = block as unknown as Record<string, unknown>;
-    if (disabled !== undefined) mutable['disabled'] = disabled;
-    if (selectedIds !== undefined) mutable['selectedIds'] = selectedIds;
+    if (disabled !== undefined) mutable.disabled = disabled;
+    if (selectedIds !== undefined) mutable.selectedIds = selectedIds;
 
     await opts.messageStore.updateExtra(id, msg.extra);
     return { status: 'ok' };

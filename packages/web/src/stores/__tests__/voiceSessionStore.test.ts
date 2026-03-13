@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { useVoiceSessionStore } from '../voiceSessionStore';
 
 beforeEach(() => {
@@ -14,25 +14,25 @@ describe('voiceSessionStore', () => {
     useVoiceSessionStore.getState().start('thread-1', 'opus', true);
     const session = useVoiceSessionStore.getState().session;
     expect(session).not.toBeNull();
-    expect(session!.boundThreadId).toBe('thread-1');
-    expect(session!.activeCatId).toBe('opus');
-    expect(session!.voiceMode).toBe(true);
-    expect(session!.autoplayUnlocked).toBe(true);
-    expect(session!.playbackState).toBe('idle');
-    expect(session!.sessionId).toMatch(/^vs-/);
+    expect(session?.boundThreadId).toBe('thread-1');
+    expect(session?.activeCatId).toBe('opus');
+    expect(session?.voiceMode).toBe(true);
+    expect(session?.autoplayUnlocked).toBe(true);
+    expect(session?.playbackState).toBe('idle');
+    expect(session?.sessionId).toMatch(/^vs-/);
   });
 
   it('start() with autoplayUnlocked=false marks session as not unlocked', () => {
     useVoiceSessionStore.getState().start('thread-1', 'opus', false);
     const session = useVoiceSessionStore.getState().session;
-    expect(session!.autoplayUnlocked).toBe(false);
+    expect(session?.autoplayUnlocked).toBe(false);
   });
 
   it('confirmAutoplayUnlocked() sets autoplayUnlocked to true', () => {
     useVoiceSessionStore.getState().start('thread-1', 'opus', false);
-    expect(useVoiceSessionStore.getState().session!.autoplayUnlocked).toBe(false);
+    expect(useVoiceSessionStore.getState().session?.autoplayUnlocked).toBe(false);
     useVoiceSessionStore.getState().confirmAutoplayUnlocked();
-    expect(useVoiceSessionStore.getState().session!.autoplayUnlocked).toBe(true);
+    expect(useVoiceSessionStore.getState().session?.autoplayUnlocked).toBe(true);
   });
 
   it('confirmAutoplayUnlocked() is no-op when no session', () => {
@@ -50,9 +50,9 @@ describe('voiceSessionStore', () => {
   it('setPlaybackState() updates playback state', () => {
     useVoiceSessionStore.getState().start('thread-1', 'opus', true);
     useVoiceSessionStore.getState().setPlaybackState('playing');
-    expect(useVoiceSessionStore.getState().session!.playbackState).toBe('playing');
+    expect(useVoiceSessionStore.getState().session?.playbackState).toBe('playing');
     useVoiceSessionStore.getState().setPlaybackState('idle');
-    expect(useVoiceSessionStore.getState().session!.playbackState).toBe('idle');
+    expect(useVoiceSessionStore.getState().session?.playbackState).toBe('idle');
   });
 
   it('setPlaybackState() is no-op when no session', () => {
@@ -79,10 +79,10 @@ describe('voiceSessionStore', () => {
 
   it('each start() creates a unique sessionId', () => {
     useVoiceSessionStore.getState().start('t1', 'opus', true);
-    const id1 = useVoiceSessionStore.getState().session!.sessionId;
+    const id1 = useVoiceSessionStore.getState().session?.sessionId;
     useVoiceSessionStore.getState().stop();
     useVoiceSessionStore.getState().start('t2', 'codex', true);
-    const id2 = useVoiceSessionStore.getState().session!.sessionId;
+    const id2 = useVoiceSessionStore.getState().session?.sessionId;
     expect(id1).not.toBe(id2);
   });
 

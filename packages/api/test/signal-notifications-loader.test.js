@@ -11,15 +11,15 @@ describe('signal notifications loader', () => {
 
   beforeEach(() => {
     tempRoot = mkdtempSync('/tmp/cat-cafe-signal-notifications-');
-    prevSignalsRoot = process.env['SIGNALS_ROOT_DIR'];
-    process.env['SIGNALS_ROOT_DIR'] = tempRoot;
+    prevSignalsRoot = process.env.SIGNALS_ROOT_DIR;
+    process.env.SIGNALS_ROOT_DIR = tempRoot;
   });
 
   afterEach(() => {
     if (prevSignalsRoot === undefined) {
-      delete process.env['SIGNALS_ROOT_DIR'];
+      delete process.env.SIGNALS_ROOT_DIR;
     } else {
-      process.env['SIGNALS_ROOT_DIR'] = prevSignalsRoot;
+      process.env.SIGNALS_ROOT_DIR = prevSignalsRoot;
     }
     rmSync(tempRoot, { recursive: true, force: true });
   });

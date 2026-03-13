@@ -80,12 +80,7 @@ export function _clearTestStrategyOverrides(): void {
 // ── Lookup ──
 
 /** Source of the effective strategy config — tells the UI where the value came from. */
-export type StrategySource =
-  | 'runtime_override'
-  | 'config_file'
-  | 'breed_code'
-  | 'provider_default'
-  | 'global_default';
+export type StrategySource = 'runtime_override' | 'config_file' | 'breed_code' | 'provider_default' | 'global_default';
 
 /**
  * Get session strategy config for a cat.

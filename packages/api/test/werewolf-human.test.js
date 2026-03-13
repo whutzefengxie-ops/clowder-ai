@@ -4,8 +4,9 @@
  * Tests player-mode scoped views, god-view full access,
  * and action submission restrictions.
  */
-import { describe, it, beforeEach } from 'node:test';
+
 import assert from 'node:assert/strict';
+import { beforeEach, describe, it } from 'node:test';
 import Fastify from 'fastify';
 import { gameRoutes } from '../dist/routes/games.js';
 
@@ -32,7 +33,11 @@ function createStubStore() {
     },
     async endGame(gameId, winner) {
       const g = games.get(gameId);
-      if (g) { g.status = 'finished'; g.winner = winner; activeByThread.delete(g.threadId); }
+      if (g) {
+        g.status = 'finished';
+        g.winner = winner;
+        activeByThread.delete(g.threadId);
+      }
     },
   };
 }
@@ -47,8 +52,10 @@ function make4pRuntime(threadId, humanRole = 'player') {
     threadId,
     gameType: 'werewolf',
     definition: {
-      gameType: 'werewolf', displayName: 'Werewolf',
-      minPlayers: 4, maxPlayers: 4,
+      gameType: 'werewolf',
+      displayName: 'Werewolf',
+      minPlayers: 4,
+      maxPlayers: 4,
       roles: [
         { name: 'wolf', faction: 'wolf', description: 'Kills' },
         { name: 'villager', faction: 'village', description: 'Votes' },
@@ -73,8 +80,24 @@ function make4pRuntime(threadId, humanRole = 'player') {
     currentPhase: 'day_vote',
     round: 1,
     eventLog: [
-      { eventId: 'e1', round: 1, phase: 'night_wolf', type: 'wolf_kill', scope: 'faction:wolf', payload: { target: 'P4' }, timestamp: Date.now() },
-      { eventId: 'e2', round: 1, phase: 'day_vote', type: 'announcement', scope: 'public', payload: { message: 'Day begins' }, timestamp: Date.now() },
+      {
+        eventId: 'e1',
+        round: 1,
+        phase: 'night_wolf',
+        type: 'wolf_kill',
+        scope: 'faction:wolf',
+        payload: { target: 'P4' },
+        timestamp: Date.now(),
+      },
+      {
+        eventId: 'e2',
+        round: 1,
+        phase: 'day_vote',
+        type: 'announcement',
+        scope: 'public',
+        payload: { message: 'Day begins' },
+        timestamp: Date.now(),
+      },
     ],
     pendingActions: {},
     status: 'playing',
@@ -109,17 +132,17 @@ describe('Human Player Integration', () => {
     const view = JSON.parse(res.payload);
 
     // P2 is villager — should NOT see wolf_kill event
-    const wolfEvent = view.visibleEvents.find(e => e.type === 'wolf_kill');
+    const wolfEvent = view.visibleEvents.find((e) => e.type === 'wolf_kill');
     assert.equal(wolfEvent, undefined, 'Villager must not see wolf events');
 
     // Should see public event
-    const publicEvent = view.visibleEvents.find(e => e.type === 'announcement');
+    const publicEvent = view.visibleEvents.find((e) => e.type === 'announcement');
     assert.ok(publicEvent, 'Villager should see public events');
 
     // P2 should see own role but not wolf role
-    const self = view.seats.find(s => s.seatId === 'P2');
+    const self = view.seats.find((s) => s.seatId === 'P2');
     assert.equal(self.role, 'villager');
-    const wolf = view.seats.find(s => s.seatId === 'P1');
+    const wolf = view.seats.find((s) => s.seatId === 'P1');
     assert.equal(wolf.role, undefined, 'Villager should not see wolf role');
   });
 
@@ -136,7 +159,7 @@ describe('Human Player Integration', () => {
     const view = JSON.parse(res.payload);
 
     assert.equal(view.visibleEvents.length, 2, 'God sees all events');
-    const wolfSeat = view.seats.find(s => s.seatId === 'P1');
+    const wolfSeat = view.seats.find((s) => s.seatId === 'P1');
     assert.equal(wolfSeat.role, 'wolf', 'God sees wolf role');
   });
 
@@ -153,7 +176,7 @@ describe('Human Player Integration', () => {
     const view = JSON.parse(res.payload);
     // P2 (humanSeat) is villager — should NOT see wolf_kill (only public announcement)
     assert.equal(view.visibleEvents.length, 1, 'player-mode default must NOT return god view');
-    const wolfEvent = view.visibleEvents.find(e => e.type === 'wolf_kill');
+    const wolfEvent = view.visibleEvents.find((e) => e.type === 'wolf_kill');
     assert.equal(wolfEvent, undefined, 'player-mode must not leak faction events');
   });
 
@@ -204,11 +227,17 @@ describe('Human Player Integration', () => {
       url: '/api/threads/thread-noseat-start/game',
       payload: {
         definition: {
-          gameType: 'werewolf', displayName: 'Werewolf',
-          minPlayers: 2, maxPlayers: 4,
+          gameType: 'werewolf',
+          displayName: 'Werewolf',
+          minPlayers: 2,
+          maxPlayers: 4,
           roles: [{ name: 'wolf', faction: 'wolf', description: 'Kills' }],
-          phases: [{ name: 'night_wolf', type: 'night_action', actingRole: 'wolf', timeoutMs: 30000, autoAdvance: true }],
-          actions: [{ name: 'kill', allowedRole: 'wolf', allowedPhase: 'night_wolf', targetRequired: true, schema: {} }],
+          phases: [
+            { name: 'night_wolf', type: 'night_action', actingRole: 'wolf', timeoutMs: 30000, autoAdvance: true },
+          ],
+          actions: [
+            { name: 'kill', allowedRole: 'wolf', allowedPhase: 'night_wolf', targetRequired: true, schema: {} },
+          ],
           winConditions: [],
         },
         seats: [

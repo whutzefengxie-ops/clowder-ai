@@ -398,13 +398,15 @@ export class RedisBacklogStore implements IBacklogStore {
         },
         // When importing as done, add done audit + doneAt in one shot
         ...(input.initialStatus === 'done'
-          ? [{
-            id: generateSortableId(now + 2),
-            action: 'done' as const,
-            actor: makeCreatorActor(input),
-            timestamp: now,
-            detail: 'imported as done',
-          }]
+          ? [
+              {
+                id: generateSortableId(now + 2),
+                action: 'done' as const,
+                actor: makeCreatorActor(input),
+                timestamp: now,
+                detail: 'imported as done',
+              },
+            ]
           : []),
       ],
       ...(input.initialStatus === 'done' ? { doneAt: now } : {}),
@@ -425,9 +427,10 @@ export class RedisBacklogStore implements IBacklogStore {
     if (!existing) return null;
 
     // Status upgrade: only open→dispatched or open→done, never downgrade
-    const statusUpgrade = input.importStatus && existing.status === 'open' && input.importStatus !== 'open'
-      ? input.importStatus
-      : undefined;
+    const statusUpgrade =
+      input.importStatus && existing.status === 'open' && input.importStatus !== 'open'
+        ? input.importStatus
+        : undefined;
 
     const unchanged =
       existing.title === input.title &&
@@ -465,7 +468,7 @@ export class RedisBacklogStore implements IBacklogStore {
 
   async get(itemId: string, userId?: string): Promise<BacklogItem | null> {
     const data = await this.redis.hgetall(BacklogKeys.detail(itemId));
-    if (!data || !data['id']) return null;
+    if (!data || !data.id) return null;
     const item = this.hydrateItem(data);
     if (userId && item.userId !== userId) return null;
     return item;
@@ -486,7 +489,7 @@ export class RedisBacklogStore implements IBacklogStore {
     for (const [err, data] of rows) {
       if (err || !data || typeof data !== 'object') continue;
       const row = data as Record<string, string>;
-      if (!row['id']) continue;
+      if (!row.id) continue;
       result.push(this.hydrateItem(row));
     }
     return result;
@@ -895,44 +898,44 @@ export class RedisBacklogStore implements IBacklogStore {
       createdAt: String(item.createdAt),
       updatedAt: String(item.updatedAt),
     };
-    if (item.suggestion) result['suggestion'] = JSON.stringify(item.suggestion);
-    if (item.lease) result['lease'] = JSON.stringify(item.lease);
-    if (item.approvedAt) result['approvedAt'] = String(item.approvedAt);
-    if (item.dispatchedAt) result['dispatchedAt'] = String(item.dispatchedAt);
-    if (item.dispatchedThreadId) result['dispatchedThreadId'] = item.dispatchedThreadId;
-    if (item.dispatchedThreadPhase) result['dispatchedThreadPhase'] = item.dispatchedThreadPhase;
-    if (item.dispatchAttemptId) result['dispatchAttemptId'] = item.dispatchAttemptId;
-    if (item.pendingThreadId) result['pendingThreadId'] = item.pendingThreadId;
-    if (item.kickoffMessageId) result['kickoffMessageId'] = item.kickoffMessageId;
+    if (item.suggestion) result.suggestion = JSON.stringify(item.suggestion);
+    if (item.lease) result.lease = JSON.stringify(item.lease);
+    if (item.approvedAt) result.approvedAt = String(item.approvedAt);
+    if (item.dispatchedAt) result.dispatchedAt = String(item.dispatchedAt);
+    if (item.dispatchedThreadId) result.dispatchedThreadId = item.dispatchedThreadId;
+    if (item.dispatchedThreadPhase) result.dispatchedThreadPhase = item.dispatchedThreadPhase;
+    if (item.dispatchAttemptId) result.dispatchAttemptId = item.dispatchAttemptId;
+    if (item.pendingThreadId) result.pendingThreadId = item.pendingThreadId;
+    if (item.kickoffMessageId) result.kickoffMessageId = item.kickoffMessageId;
     return result;
   }
 
   private hydrateItem(data: Record<string, string>): BacklogItem {
-    const suggestion = data['suggestion']
-      ? this.parseJson(data['suggestion'], null as BacklogItem['suggestion'] | null)
+    const suggestion = data.suggestion
+      ? this.parseJson(data.suggestion, null as BacklogItem['suggestion'] | null)
       : null;
-    const lease = data['lease'] ? this.parseJson(data['lease'], null as BacklogLease | null) : null;
-    const approvedAt = data['approvedAt'] ? Number.parseInt(data['approvedAt'], 10) : null;
-    const dispatchedAt = data['dispatchedAt'] ? Number.parseInt(data['dispatchedAt'], 10) : null;
+    const lease = data.lease ? this.parseJson(data.lease, null as BacklogLease | null) : null;
+    const approvedAt = data.approvedAt ? Number.parseInt(data.approvedAt, 10) : null;
+    const dispatchedAt = data.dispatchedAt ? Number.parseInt(data.dispatchedAt, 10) : null;
     return {
-      id: data['id'] ?? '',
-      userId: data['userId'] ?? '',
-      title: data['title'] ?? '',
-      summary: data['summary'] ?? '',
-      priority: (data['priority'] ?? 'p2') as BacklogItem['priority'],
-      status: (data['status'] ?? 'open') as BacklogItem['status'],
-      createdBy: (data['createdBy'] ?? 'user') as BacklogItem['createdBy'],
-      tags: this.parseJson(data['tags'], []),
-      createdAt: Number.parseInt(data['createdAt'] ?? '0', 10),
-      updatedAt: Number.parseInt(data['updatedAt'] ?? '0', 10),
-      audit: this.parseJson(data['audit'], []),
+      id: data.id ?? '',
+      userId: data.userId ?? '',
+      title: data.title ?? '',
+      summary: data.summary ?? '',
+      priority: (data.priority ?? 'p2') as BacklogItem['priority'],
+      status: (data.status ?? 'open') as BacklogItem['status'],
+      createdBy: (data.createdBy ?? 'user') as BacklogItem['createdBy'],
+      tags: this.parseJson(data.tags, []),
+      createdAt: Number.parseInt(data.createdAt ?? '0', 10),
+      updatedAt: Number.parseInt(data.updatedAt ?? '0', 10),
+      audit: this.parseJson(data.audit, []),
       ...(suggestion ? { suggestion } : {}),
       ...(lease ? { lease } : {}),
-      ...(data['dispatchedThreadId'] ? { dispatchedThreadId: data['dispatchedThreadId'] } : {}),
-      ...(data['dispatchedThreadPhase'] ? { dispatchedThreadPhase: data['dispatchedThreadPhase'] as ThreadPhase } : {}),
-      ...(data['dispatchAttemptId'] ? { dispatchAttemptId: data['dispatchAttemptId'] } : {}),
-      ...(data['pendingThreadId'] ? { pendingThreadId: data['pendingThreadId'] } : {}),
-      ...(data['kickoffMessageId'] ? { kickoffMessageId: data['kickoffMessageId'] } : {}),
+      ...(data.dispatchedThreadId ? { dispatchedThreadId: data.dispatchedThreadId } : {}),
+      ...(data.dispatchedThreadPhase ? { dispatchedThreadPhase: data.dispatchedThreadPhase as ThreadPhase } : {}),
+      ...(data.dispatchAttemptId ? { dispatchAttemptId: data.dispatchAttemptId } : {}),
+      ...(data.pendingThreadId ? { pendingThreadId: data.pendingThreadId } : {}),
+      ...(data.kickoffMessageId ? { kickoffMessageId: data.kickoffMessageId } : {}),
       ...(approvedAt ? { approvedAt } : {}),
       ...(dispatchedAt ? { dispatchedAt } : {}),
     };
@@ -1000,10 +1003,7 @@ export class RedisBacklogStore implements IBacklogStore {
     await pipeline.exec();
   }
 
-  async tryAcquireDispatchLock(
-    itemId: string,
-    ttlMs = 30_000,
-  ): Promise<string | false> {
+  async tryAcquireDispatchLock(itemId: string, ttlMs = 30_000): Promise<string | false> {
     const key = BacklogKeys.dispatchLock(itemId);
     const token = crypto.randomUUID();
     const ttlSec = Math.max(1, Math.ceil(ttlMs / 1000));
@@ -1011,10 +1011,7 @@ export class RedisBacklogStore implements IBacklogStore {
     return result === 'OK' ? token : false;
   }
 
-  async releaseDispatchLock(
-    itemId: string,
-    token: string,
-  ): Promise<void> {
+  async releaseDispatchLock(itemId: string, token: string): Promise<void> {
     const key = BacklogKeys.dispatchLock(itemId);
     // CAS delete: only remove if the token still matches (prevents deleting another request's lock)
     await this.redis.eval(

@@ -72,11 +72,11 @@ export class IndexBuilder implements IIndexBuilder {
     // Remove stale anchors that no longer exist on disk
     const db = this.store.getDb();
     const allAnchors = db.prepare('SELECT anchor FROM evidence_docs').all() as Array<{ anchor: string }>;
-    let removed = 0;
+    let _removed = 0;
     for (const row of allAnchors) {
       if (!currentAnchors.has(row.anchor)) {
         await this.store.deleteByAnchor(row.anchor);
-        removed++;
+        _removed++;
       }
     }
 
@@ -181,9 +181,7 @@ export class IndexBuilder implements IIndexBuilder {
     const summary = extractSummary(content);
     const sourceHash = createHash('sha256').update(content).digest('hex').slice(0, 16);
 
-    const status = (
-      typeof frontmatter['status'] === 'string' ? frontmatter['status'] : 'active'
-    ) as EvidenceItem['status'];
+    const status = (typeof frontmatter.status === 'string' ? frontmatter.status : 'active') as EvidenceItem['status'];
 
     const item: EvidenceItem = {
       anchor,
@@ -194,7 +192,7 @@ export class IndexBuilder implements IIndexBuilder {
       sourcePath: relative(this.docsRoot, filePath),
     };
     if (summary) item.summary = summary;
-    const topics = frontmatter['topics'];
+    const topics = frontmatter.topics;
     if (Array.isArray(topics)) item.keywords = topics as string[];
     item.sourceHash = sourceHash;
 
@@ -219,7 +217,7 @@ function extractFrontmatter(content: string): Record<string, unknown> | null {
     // Parse simple arrays: [a, b, c]
     const arrMatch = rawVal.match(/^\[(.+)]$/);
     if (arrMatch) {
-      result[key] = arrMatch[1]!.split(',').map((s) => s.trim().replace(/^['"]|['"]$/g, ''));
+      result[key] = arrMatch[1]?.split(',').map((s) => s.trim().replace(/^['"]|['"]$/g, ''));
     } else {
       result[key] = rawVal.trim();
     }
@@ -230,24 +228,24 @@ function extractFrontmatter(content: string): Record<string, unknown> | null {
 
 function extractAnchor(fm: Record<string, unknown>): string | null {
   // Direct anchor field (from MaterializationService or explicit frontmatter)
-  const anchor = fm['anchor'];
+  const anchor = fm.anchor;
   if (typeof anchor === 'string') return anchor;
   // feature_ids: [F042] → F042
-  const featureIds = fm['feature_ids'];
+  const featureIds = fm.feature_ids;
   if (Array.isArray(featureIds) && featureIds.length > 0) {
     return featureIds[0] as string;
   }
   // decision_id: ADR-005
-  const decisionId = fm['decision_id'];
+  const decisionId = fm.decision_id;
   if (typeof decisionId === 'string') return decisionId;
   // plan_id: PLAN-001
-  const planId = fm['plan_id'];
+  const planId = fm.plan_id;
   if (typeof planId === 'string') return planId;
   return null;
 }
 
 function inferKind(fm: Record<string, unknown>, filePath: string): EvidenceKind {
-  const docKind = fm['doc_kind'];
+  const docKind = fm.doc_kind;
   if (docKind === 'decision' || filePath.includes('/decisions/')) return 'decision';
   if (docKind === 'plan' || filePath.includes('/plans/')) return 'plan';
   if (docKind === 'lesson') return 'lesson';

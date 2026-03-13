@@ -38,17 +38,14 @@ const TRANSITIONS: Record<string, GovernanceStatus | undefined> = {
  * Resolve the next status for a given transition.
  * Throws a descriptive error (409-style) if the transition is invalid.
  */
-export function resolveTransition(
-  currentStatus: GovernanceStatus,
-  action: PublishAction
-): GovernanceStatus {
+export function resolveTransition(currentStatus: GovernanceStatus, action: PublishAction): GovernanceStatus {
   const key = `${currentStatus}:${action}`;
   const next = TRANSITIONS[key];
   if (!next) {
     throw new GovernanceConflictError(
       `Invalid transition: cannot ${action} from ${currentStatus}`,
       currentStatus,
-      action
+      action,
     );
   }
   return next;
@@ -77,8 +74,8 @@ export class MemoryGovernanceStore implements IMemoryGovernanceStore {
     if (this.entries.has(entryId)) {
       throw new GovernanceConflictError(
         `Entry ${entryId} already exists`,
-        this.entries.get(entryId)!.status,
-        'submit_review'
+        this.entries.get(entryId)?.status,
+        'submit_review',
       );
     }
 
@@ -97,11 +94,7 @@ export class MemoryGovernanceStore implements IMemoryGovernanceStore {
   transition(entryId: string, action: PublishAction, actor: string): GovernanceEntry {
     const existing = this.entries.get(entryId);
     if (!existing) {
-      throw new GovernanceConflictError(
-        `Entry ${entryId} not found`,
-        'draft',
-        action
-      );
+      throw new GovernanceConflictError(`Entry ${entryId} not found`, 'draft', action);
     }
 
     const nextStatus = resolveTransition(existing.status, action);

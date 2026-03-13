@@ -13,7 +13,7 @@
  * 或直接修改项目根目录的 cat-config.json
  */
 
-import { catRegistry, CAT_CONFIGS } from '@cat-cafe/shared';
+import { CAT_CONFIGS, catRegistry } from '@cat-cafe/shared';
 
 /**
  * F32-b: Generate dynamic env key from catId.
@@ -56,9 +56,7 @@ export function getCatModel(catName: string): string {
  */
 export function getAllCatModels(): Record<string, string> {
   const result: Record<string, string> = {};
-  const allIds = catRegistry.getAllIds().length > 0
-    ? catRegistry.getAllIds().map(String)
-    : Object.keys(CAT_CONFIGS);
+  const allIds = catRegistry.getAllIds().length > 0 ? catRegistry.getAllIds().map(String) : Object.keys(CAT_CONFIGS);
   for (const catName of allIds) {
     result[catName] = getCatModel(catName);
   }

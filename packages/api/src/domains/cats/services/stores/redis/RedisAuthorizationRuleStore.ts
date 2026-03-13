@@ -9,11 +9,11 @@
  * IMPORTANT: ioredis keyPrefix auto-prefixes ALL commands including eval() KEYS[].
  */
 
-import type { CatId, AuthorizationRule } from '@cat-cafe/shared';
+import type { AuthorizationRule, CatId } from '@cat-cafe/shared';
 import type { RedisClient } from '@cat-cafe/shared/utils';
-import { AuthRuleKeys } from '../redis-keys/authorization-keys.js';
 import type { IAuthorizationRuleStore } from '../ports/AuthorizationRuleStore.js';
 import { generateSortableId } from '../ports/MessageStore.js';
+import { AuthRuleKeys } from '../redis-keys/authorization-keys.js';
 
 /** Simple glob-style match: 'git_*' matches 'git_commit' */
 function matchAction(pattern: string, action: string): boolean {
@@ -93,7 +93,7 @@ export class RedisAuthorizationRuleStore implements IAuthorizationRuleStore {
     for (const [err, data] of results) {
       if (err || !data || typeof data !== 'object') continue;
       const record = data as Record<string, string>;
-      if (!record['id']) continue;
+      if (!record.id) continue;
 
       const rule = this.hydrateRule(record);
       const catMatch = rule.catId === '*' || rule.catId === catId;
@@ -129,7 +129,7 @@ export class RedisAuthorizationRuleStore implements IAuthorizationRuleStore {
     for (const [err, data] of results) {
       if (err || !data || typeof data !== 'object') continue;
       const record = data as Record<string, string>;
-      if (!record['id']) continue;
+      if (!record.id) continue;
 
       const rule = this.hydrateRule(record);
       if (filter?.catId && rule.catId !== filter.catId && rule.catId !== '*') continue;
@@ -153,13 +153,20 @@ export class RedisAuthorizationRuleStore implements IAuthorizationRuleStore {
 
   private serializeRule(rule: AuthorizationRule): string[] {
     const fields: string[] = [
-      'id', rule.id,
-      'catId', rule.catId,
-      'action', rule.action,
-      'scope', rule.scope,
-      'decision', rule.decision,
-      'createdAt', String(rule.createdAt),
-      'createdBy', rule.createdBy,
+      'id',
+      rule.id,
+      'catId',
+      rule.catId,
+      'action',
+      rule.action,
+      'scope',
+      rule.scope,
+      'decision',
+      rule.decision,
+      'createdAt',
+      String(rule.createdAt),
+      'createdBy',
+      rule.createdBy,
     ];
     if (rule.threadId) fields.push('threadId', rule.threadId);
     if (rule.reason) fields.push('reason', rule.reason);
@@ -168,15 +175,15 @@ export class RedisAuthorizationRuleStore implements IAuthorizationRuleStore {
 
   private hydrateRule(data: Record<string, string>): AuthorizationRule {
     return {
-      id: data['id']!,
-      catId: data['catId']! as CatId | '*',
-      action: data['action']!,
-      scope: data['scope']! as 'thread' | 'global',
-      decision: data['decision']! as 'allow' | 'deny',
-      createdAt: parseInt(data['createdAt']!, 10),
-      createdBy: data['createdBy']!,
-      ...(data['threadId'] ? { threadId: data['threadId'] } : {}),
-      ...(data['reason'] ? { reason: data['reason'] } : {}),
+      id: data.id!,
+      catId: data.catId! as CatId | '*',
+      action: data.action!,
+      scope: data.scope! as 'thread' | 'global',
+      decision: data.decision! as 'allow' | 'deny',
+      createdAt: parseInt(data.createdAt!, 10),
+      createdBy: data.createdBy!,
+      ...(data.threadId ? { threadId: data.threadId } : {}),
+      ...(data.reason ? { reason: data.reason } : {}),
     };
   }
 }

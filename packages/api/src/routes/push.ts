@@ -4,9 +4,12 @@
 
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
-import type { IPushSubscriptionStore, PushSubscriptionRecord } from '../domains/cats/services/stores/ports/PushSubscriptionStore.js';
-import type { PushNotificationService } from '../domains/cats/services/push/PushNotificationService.js';
 import { AuditEventTypes, getEventAuditLog } from '../domains/cats/services/orchestration/EventAuditLog.js';
+import type { PushNotificationService } from '../domains/cats/services/push/PushNotificationService.js';
+import type {
+  IPushSubscriptionStore,
+  PushSubscriptionRecord,
+} from '../domains/cats/services/stores/ports/PushSubscriptionStore.js';
 
 export interface PushRoutesOptions {
   pushSubscriptionStore: IPushSubscriptionStore;
@@ -63,12 +66,14 @@ export const pushRoutes: FastifyPluginAsync<PushRoutesOptions> = async (app, opt
   const deliveryByUser = new Map<string, PushDeliverySnapshot>();
 
   function getDeliverySnapshot(userId: string): PushDeliverySnapshot {
-    return deliveryByUser.get(userId) ?? {
-      lastAttemptAt: null,
-      lastHttpStatus: null,
-      lastResult: 'not_attempted',
-      lastError: null,
-    };
+    return (
+      deliveryByUser.get(userId) ?? {
+        lastAttemptAt: null,
+        lastHttpStatus: null,
+        lastResult: 'not_attempted',
+        lastError: null,
+      }
+    );
   }
 
   function setDeliverySnapshot(userId: string, update: PushDeliverySnapshot): void {
@@ -244,12 +249,12 @@ export const pushRoutes: FastifyPluginAsync<PushRoutesOptions> = async (app, opt
     await appendPushAudit(request, AuditEventTypes.PUSH_TEST_REQUESTED, {
       userId,
       proxyConfigured: Boolean(
-        process.env['HTTPS_PROXY']
-          || process.env['https_proxy']
-          || process.env['HTTP_PROXY']
-          || process.env['http_proxy']
-          || process.env['ALL_PROXY']
-          || process.env['all_proxy'],
+        process.env.HTTPS_PROXY ||
+          process.env.https_proxy ||
+          process.env.HTTP_PROXY ||
+          process.env.http_proxy ||
+          process.env.ALL_PROXY ||
+          process.env.all_proxy,
       ),
     });
 

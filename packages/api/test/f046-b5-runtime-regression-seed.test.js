@@ -1,5 +1,5 @@
-import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
 import { catRegistry } from '@cat-cafe/shared';
 
 function createMockService(catId, text = 'hello') {
@@ -82,7 +82,8 @@ describe('F046 B5 runtime regression scenarios', () => {
       codex: codexService,
     });
 
-    for await (const _ of routeSerial(deps, ['opus'], 'write code', 'user1', 'thread1', { thinkingMode: 'debug' })) {}
+    for await (const _ of routeSerial(deps, ['opus'], 'write code', 'user1', 'thread1', { thinkingMode: 'debug' })) {
+    }
 
     assert.equal(codexService.calls.length, 1, 'codex should be called once');
     assert.ok(codexService.calls[0].includes('代码完成'), 'debug mode should include upstream response text');
@@ -96,7 +97,8 @@ describe('F046 B5 runtime regression scenarios', () => {
       codex: codexService,
     });
 
-    for await (const _ of routeSerial(deps, ['opus'], 'write code', 'user1', 'thread1', { thinkingMode: 'play' })) {}
+    for await (const _ of routeSerial(deps, ['opus'], 'write code', 'user1', 'thread1', { thinkingMode: 'play' })) {
+    }
 
     assert.equal(codexService.calls.length, 1, 'codex should be called once');
     assert.ok(!codexService.calls[0].includes('代码完成'), 'play mode should isolate upstream response text');
@@ -121,14 +123,10 @@ describe('F046 B5 runtime regression scenarios', () => {
         opus: opusService,
       });
 
-      for await (const _ of routeSerial(
-        deps,
-        ['codex'],
-        'debug review chain',
-        'user1',
-        'thread1',
-        { thinkingMode: 'debug' },
-      )) {}
+      for await (const _ of routeSerial(deps, ['codex'], 'debug review chain', 'user1', 'thread1', {
+        thinkingMode: 'debug',
+      })) {
+      }
 
       assert.equal(opusService.calls.length, 1, 'downstream opus should be called once');
       assert.ok(
@@ -173,7 +171,9 @@ describe('F046 B5 runtime regression scenarios', () => {
     });
 
     const messages = [];
-    for await (const msg of routeSerial(deps, ['opus'], 'review request', 'user1', 'thread1', { thinkingMode: 'debug' })) {
+    for await (const msg of routeSerial(deps, ['opus'], 'review request', 'user1', 'thread1', {
+      thinkingMode: 'debug',
+    })) {
       messages.push(msg);
     }
 
@@ -204,13 +204,18 @@ describe('F046 B5 runtime regression scenarios', () => {
     const { ThreadStore } = await import('../dist/domains/cats/services/stores/ports/ThreadStore.js');
     const threadStore = new ThreadStore();
     const thread = threadStore.create('user1', 'no keyword gate');
-    const deps = createMockDeps({
-      opus: createMockService('opus', '@缅因猫\n\n这是交接文档'),
-      codex: createMockService('codex', '收到，开始 review'),
-    }, threadStore);
+    const deps = createMockDeps(
+      {
+        opus: createMockService('opus', '@缅因猫\n\n这是交接文档'),
+        codex: createMockService('codex', '收到，开始 review'),
+      },
+      threadStore,
+    );
 
     const messages = [];
-    for await (const msg of routeSerial(deps, ['opus'], 'review request', 'user1', thread.id, { thinkingMode: 'debug' })) {
+    for await (const msg of routeSerial(deps, ['opus'], 'review request', 'user1', thread.id, {
+      thinkingMode: 'debug',
+    })) {
       messages.push(msg);
     }
 
@@ -261,14 +266,13 @@ describe('F046 B5 runtime regression scenarios', () => {
     const threadStore = new ThreadStore();
     const thread = threadStore.create('user1', 'no suppression');
     const opusService = createCapturingService('opus', '收到');
-    const codexService = createSequentialCapturingService('codex', [
-      '@布偶猫',
-      '第二次调用',
-    ]);
+    const codexService = createSequentialCapturingService('codex', ['@布偶猫', '第二次调用']);
     const deps = createMockDeps({ codex: codexService, opus: opusService }, threadStore);
 
-    for await (const _ of routeSerial(deps, ['codex'], 'first', 'user1', thread.id, { thinkingMode: 'debug' })) {}
-    for await (const _ of routeSerial(deps, ['codex'], 'second', 'user1', thread.id, { thinkingMode: 'debug' })) {}
+    for await (const _ of routeSerial(deps, ['codex'], 'first', 'user1', thread.id, { thinkingMode: 'debug' })) {
+    }
+    for await (const _ of routeSerial(deps, ['codex'], 'second', 'user1', thread.id, { thinkingMode: 'debug' })) {
+    }
 
     // Bare @布偶猫 now routes, and no feedback is injected
     assert.ok(

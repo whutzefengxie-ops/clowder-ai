@@ -1,6 +1,7 @@
 // @ts-check
-import { describe, test, beforeEach } from 'node:test';
+
 import assert from 'node:assert/strict';
+import { beforeEach, describe, test } from 'node:test';
 import Fastify from 'fastify';
 
 const H = { 'x-cat-cafe-user': 'user1' };
@@ -10,24 +11,12 @@ describe('External Project Routes', () => {
   let app;
 
   beforeEach(async () => {
-    const { ExternalProjectStore } = await import(
-      '../dist/domains/projects/external-project-store.js'
-    );
-    const { IntentCardStore } = await import(
-      '../dist/domains/projects/intent-card-store.js'
-    );
-    const { NeedAuditFrameStore } = await import(
-      '../dist/domains/projects/need-audit-frame-store.js'
-    );
-    const { BacklogStore } = await import(
-      '../dist/domains/cats/services/stores/ports/BacklogStore.js'
-    );
-    const { externalProjectRoutes } = await import(
-      '../dist/routes/external-projects.js'
-    );
-    const { intentCardRoutes } = await import(
-      '../dist/routes/intent-card-routes.js'
-    );
+    const { ExternalProjectStore } = await import('../dist/domains/projects/external-project-store.js');
+    const { IntentCardStore } = await import('../dist/domains/projects/intent-card-store.js');
+    const { NeedAuditFrameStore } = await import('../dist/domains/projects/need-audit-frame-store.js');
+    const { BacklogStore } = await import('../dist/domains/cats/services/stores/ports/BacklogStore.js');
+    const { externalProjectRoutes } = await import('../dist/routes/external-projects.js');
+    const { intentCardRoutes } = await import('../dist/routes/intent-card-routes.js');
 
     const externalProjectStore = new ExternalProjectStore();
     app = Fastify();

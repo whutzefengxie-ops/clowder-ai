@@ -49,10 +49,7 @@ merges: dispatching-parallel-agents + subagent-driven-development + executing-pl
 - 无上下文：把错误信息粘进去
 - 无约束：Agent 可能重构整个模块
 
-**模型选择：**
-- `haiku`：文件搜索、grep、目录确认
-- `sonnet`：需要理解调用链的多文件分析
-- 几乎不用高成本模型做 subagent（除非真正的深度架构）
+**Subagent 不需要指定 model**（继承主猫即可）。
 
 ## (B) Subagent 驱动 — Sequential with Review
 

@@ -4,14 +4,13 @@
  * Draft messages have synthetic IDs (draft-xxx) that break backend pagination.
  * These tests verify handleScroll picks the first non-draft message for cursor.
  */
-import React from 'react';
+import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { act } from 'react';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { useChatHistory } from '../useChatHistory';
+import type { ChatMessage, ThreadState } from '@/stores/chat-types';
 import { useChatStore } from '@/stores/chatStore';
 import { apiFetch } from '@/utils/api-client';
-import type { ChatMessage, ThreadState } from '@/stores/chat-types';
+import { useChatHistory } from '../useChatHistory';
 
 vi.mock('@/utils/api-client', () => ({
   apiFetch: vi.fn(),
@@ -56,15 +55,22 @@ describe('useChatHistory pagination cursor (#80 cloud R8 P2)', () => {
   const ts = 1700000000000;
 
   const draftMsg: ChatMessage = {
-    id: 'draft-inv-stale', type: 'assistant', content: 'Stale draft',
-    timestamp: ts - 2000, isStreaming: true,
+    id: 'draft-inv-stale',
+    type: 'assistant',
+    content: 'Stale draft',
+    timestamp: ts - 2000,
+    isStreaming: true,
   };
   const formalOldest: ChatMessage = {
-    id: 'msg-formal-oldest', type: 'user', content: 'Oldest formal',
+    id: 'msg-formal-oldest',
+    type: 'user',
+    content: 'Oldest formal',
     timestamp: ts - 1000,
   };
   const formalNewest: ChatMessage = {
-    id: 'msg-formal-newest', type: 'assistant', content: 'Newest',
+    id: 'msg-formal-newest',
+    type: 'assistant',
+    content: 'Newest',
     timestamp: ts,
   };
 
@@ -92,7 +98,9 @@ describe('useChatHistory pagination cursor (#80 cloud R8 P2)', () => {
   });
 
   afterEach(() => {
-    act(() => { root.unmount(); });
+    act(() => {
+      root.unmount();
+    });
     container.remove();
     apiFetchMock.mockReset();
   });
@@ -121,15 +129,15 @@ describe('useChatHistory pagination cursor (#80 cloud R8 P2)', () => {
     } as Response);
 
     // Simulate scroll to top
-    const scrollEl = capturedHook!.scrollContainerRef.current!;
+    const scrollEl = capturedHook?.scrollContainerRef.current!;
     Object.defineProperty(scrollEl, 'scrollTop', { value: 10, writable: true });
 
-    act(() => { capturedHook!.handleScroll(); });
+    act(() => {
+      capturedHook?.handleScroll();
+    });
 
     // fetchHistory should use the FORMAL message cursor, not the draft
-    const msgCalls = apiFetchMock.mock.calls.filter(
-      (c) => (c[0] as string).includes('/api/messages'),
-    );
+    const msgCalls = apiFetchMock.mock.calls.filter((c) => (c[0] as string).includes('/api/messages'));
     expect(msgCalls.length).toBe(1);
     const url = msgCalls[0][0] as string;
     expect(url).toContain('msg-formal-oldest');
@@ -156,15 +164,15 @@ describe('useChatHistory pagination cursor (#80 cloud R8 P2)', () => {
 
     apiFetchMock.mockClear();
 
-    const scrollEl = capturedHook!.scrollContainerRef.current!;
+    const scrollEl = capturedHook?.scrollContainerRef.current!;
     Object.defineProperty(scrollEl, 'scrollTop', { value: 10, writable: true });
 
-    act(() => { capturedHook!.handleScroll(); });
+    act(() => {
+      capturedHook?.handleScroll();
+    });
 
     // No fetchHistory should be called for messages — all are drafts
-    const msgCalls = apiFetchMock.mock.calls.filter(
-      (c) => (c[0] as string).includes('/api/messages'),
-    );
+    const msgCalls = apiFetchMock.mock.calls.filter((c) => (c[0] as string).includes('/api/messages'));
     expect(msgCalls.length).toBe(0);
   });
 });

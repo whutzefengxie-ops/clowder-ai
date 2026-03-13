@@ -129,13 +129,21 @@ export function HubLeaderboardTab() {
               <AchievementWall achievements={data.achievements ?? []} />
             </SectionCard>
             <SectionCard title="CVO 能力等级 🐾">
-              {data.cvoLevel ? <CvoLevelCard level={data.cvoLevel} /> : (
-                <p className="text-sm" style={{ color: '#8E8E93' }}>暂无等级数据</p>
+              {data.cvoLevel ? (
+                <CvoLevelCard level={data.cvoLevel} />
+              ) : (
+                <p className="text-sm" style={{ color: '#8E8E93' }}>
+                  暂无等级数据
+                </p>
               )}
             </SectionCard>
             <SectionCard title="游戏竞技场 🎮">
-              {data.games ? <GameArena stats={data.games} /> : (
-                <p className="text-sm" style={{ color: '#8E8E93' }}>暂无游戏数据</p>
+              {data.games ? (
+                <GameArena stats={data.games} />
+              ) : (
+                <p className="text-sm" style={{ color: '#8E8E93' }}>
+                  暂无游戏数据
+                </p>
               )}
             </SectionCard>
           </div>

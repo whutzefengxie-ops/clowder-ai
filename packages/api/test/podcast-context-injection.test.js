@@ -1,5 +1,5 @@
-import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
 
 /**
  * F091 Phase 8: Podcast context injection tests.
@@ -61,7 +61,7 @@ function buildCapturingDeps(callLog) {
       },
     },
     router: {
-      async *routeExecution(userId, message, threadId, userMessageId, targetCats, intent, options) {
+      async *routeExecution(_userId, message, _threadId, _userMessageId, _targetCats, _intent, _options) {
         callLog.push({
           op: 'routeExecution',
           promptReceived: message,
@@ -70,11 +70,11 @@ function buildCapturingDeps(callLog) {
       },
     },
     invocationRecordStore: {
-      create(input) {
+      create(_input) {
         callLog.push({ op: 'create' });
         return { outcome: 'created', invocationId: 'inv-001' };
       },
-      update(id, patch) {
+      update(_id, patch) {
         callLog.push({ op: 'update', ...patch });
         return {};
       },
@@ -90,9 +90,7 @@ function buildCapturingDeps(callLog) {
 
 describe('F091 Phase 8: threadContext injection into podcast prompt', () => {
   it('buildScriptPrompt places threadContext BEFORE JSON output format', async () => {
-    const { generateScriptViaThread } = await import(
-      '../dist/domains/signals/services/podcast-generator.js'
-    );
+    const { generateScriptViaThread } = await import('../dist/domains/signals/services/podcast-generator.js');
     const callLog = [];
     const deps = buildCapturingDeps(callLog);
 
@@ -113,10 +111,7 @@ describe('F091 Phase 8: threadContext injection into podcast prompt', () => {
     const prompt = appendCall.content;
 
     // threadContext must appear in the prompt
-    assert.ok(
-      prompt.includes('CAP 定理在金融场景下的特殊需求'),
-      'prompt must include threadContext content',
-    );
+    assert.ok(prompt.includes('CAP 定理在金融场景下的特殊需求'), 'prompt must include threadContext content');
 
     // threadContext must appear BEFORE the JSON output format
     const contextIdx = prompt.indexOf('之前的讨论上下文');
@@ -132,9 +127,7 @@ describe('F091 Phase 8: threadContext injection into podcast prompt', () => {
 
 describe('F091 Phase 8: route assembles threadContext from study data', () => {
   it('assembleThreadContext combines thread messages and study notes', async () => {
-    const { assembleThreadContext } = await import(
-      '../dist/domains/signals/services/podcast-generator.js'
-    );
+    const { assembleThreadContext } = await import('../dist/domains/signals/services/podcast-generator.js');
 
     // This function should be newly exported
     assert.ok(assembleThreadContext, 'assembleThreadContext should be exported');
@@ -156,9 +149,7 @@ describe('F091 Phase 8: route assembles threadContext from study data', () => {
   });
 
   it('assembleThreadContext handles empty inputs gracefully', async () => {
-    const { assembleThreadContext } = await import(
-      '../dist/domains/signals/services/podcast-generator.js'
-    );
+    const { assembleThreadContext } = await import('../dist/domains/signals/services/podcast-generator.js');
 
     const result = assembleThreadContext([], undefined);
     assert.equal(result, undefined, 'should return undefined when no context available');

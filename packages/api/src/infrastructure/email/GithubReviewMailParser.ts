@@ -48,27 +48,21 @@ export function normalizeLegacyPrMarkerSubject(subject: string): string | null {
 export function inferReviewActionFromEmailSource(source: string): InferredReviewAction {
   // Extract body after the first header/body separator without truncating multi-paragraph bodies.
   const sep = source.match(/\r?\n\r?\n/);
-  const bodyText =
-    sep && typeof sep.index === 'number'
-      ? source.slice(sep.index + sep[0].length)
-      : source;
+  const bodyText = sep && typeof sep.index === 'number' ? source.slice(sep.index + sep[0].length) : source;
 
-  const hasSetupSentence =
-    /to use codex here,/i.test(bodyText) &&
-    /environment for this repo\b/i.test(bodyText);
-  const hasCodexReviewTemplate =
-    /(?<!@)\bCodex Review\b/i.test(bodyText) && /\bReviewed commit:/i.test(bodyText);
+  const hasSetupSentence = /to use codex here,/i.test(bodyText) && /environment for this repo\b/i.test(bodyText);
+  const hasCodexReviewTemplate = /(?<!@)\bCodex Review\b/i.test(bodyText) && /\bReviewed commit:/i.test(bodyText);
   const hasCodexReviewContent = /\bcodex review\b/i.test(bodyText);
-  const hasCodexReviewTrigger = /^\s*@codex\s+review\b/mi.test(bodyText);
+  const hasCodexReviewTrigger = /^\s*@codex\s+review\b/im.test(bodyText);
   const hasOurCodexReviewTriggerTemplate =
     /规则：任何\s*P1\/P2\s*必须给可执行复现/i.test(bodyText) ||
     /rules:\s*any\s*p1\/p2\s*must\s*include/i.test(bodyText);
 
   // Prefer explicit action markers in body
-  const reviewed = bodyText.match(/^(.+?)\s+reviewed\s+\(/mi);
-  const commented = bodyText.match(/^(.+?)\s+left a comment\s+\(/mi);
-  const approved = bodyText.match(/^(.+?)\s+approved\s+\(/mi);
-  const changesRequested = bodyText.match(/^(.+?)\s+requested changes\s+\(/mi);
+  const reviewed = bodyText.match(/^(.+?)\s+reviewed\s+\(/im);
+  const commented = bodyText.match(/^(.+?)\s+left a comment\s+\(/im);
+  const approved = bodyText.match(/^(.+?)\s+approved\s+\(/im);
+  const changesRequested = bodyText.match(/^(.+?)\s+requested changes\s+\(/im);
 
   let reviewType: ReviewType = 'unknown';
   let reviewer: string | undefined;
@@ -104,9 +98,7 @@ export function inferReviewActionFromEmailSource(source: string): InferredReview
   //
   // IMPORTANT: Scope this to setup-only Codex bot emails.
   // The same sentence can appear quoted inside real human comments/reviews.
-  const isCodexBot = reviewer
-    ? /^chatgpt-codex-connector(?:\[bot\])?$/i.test(reviewer)
-    : false;
+  const isCodexBot = reviewer ? /^chatgpt-codex-connector(?:\[bot\])?$/i.test(reviewer) : false;
   if (hasSetupSentence && !hasCodexReviewContent && (!reviewer || isCodexBot)) {
     return { ignorable: true, reviewType: 'unknown', reviewer: undefined };
   }
@@ -118,18 +110,14 @@ function hasCodexReviewTemplate(source: string): boolean {
   return /(?<!@)\bCodex Review\b/i.test(source) && /\bReviewed commit:/i.test(source);
 }
 
-export function parseGithubReviewFromSubjectAndSource(
-  subject: string,
-  source: string,
-): ParsedGithubReviewMail | null {
+export function parseGithubReviewFromSubjectAndSource(subject: string, source: string): ParsedGithubReviewMail | null {
   const inferred = source ? inferReviewActionFromEmailSource(source) : null;
   if (inferred?.ignorable) return null;
 
   let parsed = parseGithubReviewSubject(subject);
   if (!parsed) {
     const normalized = normalizeLegacyPrMarkerSubject(subject);
-    const hasReviewSignal =
-      (inferred?.reviewType ?? 'unknown') !== 'unknown' || hasCodexReviewTemplate(source);
+    const hasReviewSignal = (inferred?.reviewType ?? 'unknown') !== 'unknown' || hasCodexReviewTemplate(source);
     if (normalized && hasReviewSignal) {
       parsed = parseGithubReviewSubject(normalized);
     }
@@ -251,13 +239,13 @@ const CAT_TAG_REGEX = /\[([^\]]+?)🐾\]/;
 
 // Nickname prefix → breed mapping (CLAUDE.md 猫猫花名册)
 const NICKNAME_TO_BREED: Record<string, CatTag> = {
-  '布偶猫': '布偶猫',
-  '缅因猫': '缅因猫',
-  '暹罗猫': '暹罗猫',
-  '宪宪': '布偶猫',
-  '砚砚': '缅因猫',
-  '烁烁': '暹罗猫',
-  'Spark': '缅因猫',
+  布偶猫: '布偶猫',
+  缅因猫: '缅因猫',
+  暹罗猫: '暹罗猫',
+  宪宪: '布偶猫',
+  砚砚: '缅因猫',
+  烁烁: '暹罗猫',
+  Spark: '缅因猫',
 };
 
 export function extractCatFromTitle(title: string): CatTag | null {

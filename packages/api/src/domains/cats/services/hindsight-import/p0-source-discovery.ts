@@ -1,14 +1,14 @@
 import { execFile, execFileSync } from 'node:child_process';
-import { promisify } from 'node:util';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { promisify } from 'node:util';
 import {
+  isP0AllowedSourcePath,
+  isP0DiscussionSourcePath,
+  normalizeSourcePath,
   P0_AGENTS_PATH,
   P0_CLAUDE_PATH,
   P0_LESSONS_PATH,
-  isP0DiscussionSourcePath,
-  isP0AllowedSourcePath,
-  normalizeSourcePath,
 } from './p0-contract.js';
 import { hasHindsightIncludeDirective } from './p0-markdown-parser.js';
 
@@ -65,8 +65,9 @@ export async function collectP0ImportSources(repoRoot: string, explicitSource?: 
 
   const decisions = listTrackedDocsInDir(repoRoot, 'docs/decisions');
   const discussions = listTrackedDocsInDir(repoRoot, 'docs/discussions');
-  const baselineSources = [P0_CLAUDE_PATH, P0_AGENTS_PATH, P0_LESSONS_PATH]
-    .filter((source) => isTrackedSource(repoRoot, source));
+  const baselineSources = [P0_CLAUDE_PATH, P0_AGENTS_PATH, P0_LESSONS_PATH].filter((source) =>
+    isTrackedSource(repoRoot, source),
+  );
   const includedDiscussions: string[] = [];
   for (const source of discussions) {
     if (await shouldIncludeDiscussionSource(repoRoot, source)) {
@@ -74,11 +75,7 @@ export async function collectP0ImportSources(repoRoot: string, explicitSource?: 
     }
   }
 
-  return [
-    ...decisions,
-    ...includedDiscussions,
-    ...baselineSources,
-  ];
+  return [...decisions, ...includedDiscussions, ...baselineSources];
 }
 
 export async function readGitHeadCommit(repoRoot: string): Promise<string | null> {

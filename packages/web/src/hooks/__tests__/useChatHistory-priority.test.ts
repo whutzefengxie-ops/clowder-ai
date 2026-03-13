@@ -1,10 +1,9 @@
-import React from 'react';
+import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { act } from 'react';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { useChatHistory } from '../useChatHistory';
 import { useChatStore } from '@/stores/chatStore';
 import { apiFetch } from '@/utils/api-client';
+import { useChatHistory } from '../useChatHistory';
 
 vi.mock('@/utils/api-client', () => ({
   apiFetch: vi.fn(),
@@ -46,7 +45,7 @@ describe('useChatHistory request priority', () => {
       catStatuses: {},
       catInvocations: {},
       currentGame: null,
-      
+
       threadStates: {},
       currentThreadId: 'thread-priority',
       viewMode: 'single',
@@ -101,12 +100,7 @@ describe('useChatHistory request priority', () => {
     expect(urlsBeforeHistoryResolved.some((u) => u.includes('/task-progress'))).toBe(false);
     expect(urlsBeforeHistoryResolved.some((u) => u.includes('/queue'))).toBe(false);
 
-    resolveMessages?.(
-      new Response(
-        JSON.stringify({ messages: [], hasMore: false }),
-        { status: 200 },
-      ),
-    );
+    resolveMessages?.(new Response(JSON.stringify({ messages: [], hasMore: false }), { status: 200 }));
 
     await act(async () => {
       await Promise.resolve();
@@ -163,12 +157,7 @@ describe('useChatHistory request priority', () => {
     expect(fallbackUrls.some((u) => u.includes('/queue'))).toBe(true);
 
     // Clean up pending promise to avoid dangling async.
-    resolveMessages?.(
-      new Response(
-        JSON.stringify({ messages: [], hasMore: false }),
-        { status: 200 },
-      ),
-    );
+    resolveMessages?.(new Response(JSON.stringify({ messages: [], hasMore: false }), { status: 200 }));
     await act(async () => {
       await Promise.resolve();
     });

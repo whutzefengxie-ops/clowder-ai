@@ -1,17 +1,25 @@
 import React from 'react';
-import { describe, expect, it, vi, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react-dom/test-utils';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useVoiceSettingsStore } from '@/stores/voiceSettingsStore';
 
 // Stub localStorage before importing the component
 const mockStorage: Record<string, string> = {};
 vi.stubGlobal('localStorage', {
   getItem: vi.fn((key: string) => mockStorage[key] ?? null),
-  setItem: vi.fn((key: string, value: string) => { mockStorage[key] = value; }),
-  removeItem: vi.fn((key: string) => { delete mockStorage[key]; }),
-  clear: vi.fn(() => { for (const k of Object.keys(mockStorage)) delete mockStorage[k]; }),
-  get length() { return Object.keys(mockStorage).length; },
+  setItem: vi.fn((key: string, value: string) => {
+    mockStorage[key] = value;
+  }),
+  removeItem: vi.fn((key: string) => {
+    delete mockStorage[key];
+  }),
+  clear: vi.fn(() => {
+    for (const k of Object.keys(mockStorage)) delete mockStorage[k];
+  }),
+  get length() {
+    return Object.keys(mockStorage).length;
+  },
   key: vi.fn(() => null),
 });
 
@@ -141,10 +149,12 @@ describe('CustomTermRow inline editing', () => {
     seedTerm('gpt', 'GPT');
     renderPanel();
 
-    const editBtn = getButtons().find(b => b.title === '编辑');
+    const editBtn = getButtons().find((b) => b.title === '编辑');
     expect(editBtn).toBeDefined();
 
-    act(() => { editBtn!.click(); });
+    act(() => {
+      editBtn?.click();
+    });
 
     // In edit mode, there should be 4 inputs: 2 for edit row + 2 for add row
     const inputs = getInputs();
@@ -158,8 +168,10 @@ describe('CustomTermRow inline editing', () => {
     seedTerm('gpt', 'GPT');
     renderPanel();
 
-    const editBtn = getButtons().find(b => b.title === '编辑');
-    act(() => { editBtn!.click(); });
+    const editBtn = getButtons().find((b) => b.title === '编辑');
+    act(() => {
+      editBtn?.click();
+    });
 
     const inputs = getInputs();
     act(() => {
@@ -179,8 +191,10 @@ describe('CustomTermRow inline editing', () => {
     seedTerm('gpt', 'GPT');
     renderPanel();
 
-    const editBtn = getButtons().find(b => b.title === '编辑');
-    act(() => { editBtn!.click(); });
+    const editBtn = getButtons().find((b) => b.title === '编辑');
+    act(() => {
+      editBtn?.click();
+    });
 
     const inputs = getInputs();
     act(() => {
@@ -200,8 +214,10 @@ describe('CustomTermRow inline editing', () => {
     seedTerm('gpt', 'GPT');
     renderPanel();
 
-    const editBtn = getButtons().find(b => b.title === '编辑');
-    act(() => { editBtn!.click(); });
+    const editBtn = getButtons().find((b) => b.title === '编辑');
+    act(() => {
+      editBtn?.click();
+    });
 
     const inputs = getInputs();
     act(() => {
@@ -228,19 +244,21 @@ describe('CustomTermRow delete button', () => {
     useVoiceSettingsStore.getState().addTerm('test', 'TEST');
     renderPanel();
 
-    const deleteBtn = getButtons().find(b => b.title === '删除');
+    const deleteBtn = getButtons().find((b) => b.title === '删除');
     expect(deleteBtn).toBeDefined();
 
     // Should NOT have opacity-0 class (which makes it invisible without hover)
-    expect(deleteBtn!.className).not.toContain('opacity-0');
+    expect(deleteBtn?.className).not.toContain('opacity-0');
   });
 
   it('removes term on delete click', () => {
     useVoiceSettingsStore.getState().addTerm('test', 'TEST');
     renderPanel();
 
-    const deleteBtn = getButtons().find(b => b.title === '删除');
-    act(() => { deleteBtn!.click(); });
+    const deleteBtn = getButtons().find((b) => b.title === '删除');
+    act(() => {
+      deleteBtn?.click();
+    });
 
     const { settings } = useVoiceSettingsStore.getState();
     expect(settings.customTerms).toEqual([]);
@@ -252,9 +270,7 @@ describe('CustomTermRow delete button', () => {
 function fireNativeInput(input: HTMLInputElement, value: string) {
   // For React controlled components rendered via createRoot, we need to
   // set the value via the native setter and dispatch an input event.
-  const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-    HTMLInputElement.prototype, 'value'
-  )!.set!;
+  const nativeInputValueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set!;
   nativeInputValueSetter.call(input, value);
   input.dispatchEvent(new Event('input', { bubbles: true }));
 }

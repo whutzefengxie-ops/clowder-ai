@@ -2,9 +2,9 @@
  * Callback task routes — MCP post_message 回传的任务更新端点
  */
 
+import { catRegistry } from '@cat-cafe/shared';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { catRegistry } from '@cat-cafe/shared';
 import type { InvocationRegistry } from '../domains/cats/services/agents/invocation/InvocationRegistry.js';
 import type { ITaskStore } from '../domains/cats/services/stores/ports/TaskStore.js';
 import type { IThreadStore } from '../domains/cats/services/stores/ports/ThreadStore.js';
@@ -64,8 +64,8 @@ export function registerCallbackTaskRoutes(
     }
 
     const updateData: Record<string, unknown> = {};
-    if (status) updateData['status'] = status;
-    if (why) updateData['why'] = why;
+    if (status) updateData.status = status;
+    if (why) updateData.why = why;
 
     const updated = await taskStore.update(taskId, updateData);
     if (!updated) {

@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import { useCallback, useState } from 'react';
 import type { ProfileItem, ProfileMode, ProfileTestResult } from './hub-provider-profiles.types';
 
 export interface ProfileEditPayload {
@@ -65,14 +65,24 @@ export function HubProviderProfileItem({
     return (
       <div className="rounded-lg border-2 border-blue-300 bg-blue-50/30 p-3 space-y-2">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-          <input value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="名称" className={inputCls} />
+          <input
+            value={editName}
+            onChange={(e) => setEditName(e.target.value)}
+            placeholder="名称"
+            className={inputCls}
+          />
           <select value={editMode} onChange={(e) => setEditMode(e.target.value as ProfileMode)} className={inputCls}>
             <option value="subscription">subscription（自有订阅）</option>
             <option value="api_key">api_key（赞助 API）</option>
           </select>
           {editMode === 'api_key' && (
             <>
-              <input value={editBaseUrl} onChange={(e) => setEditBaseUrl(e.target.value)} placeholder="Base URL" className={`${inputCls} md:col-span-2`} />
+              <input
+                value={editBaseUrl}
+                onChange={(e) => setEditBaseUrl(e.target.value)}
+                placeholder="Base URL"
+                className={`${inputCls} md:col-span-2`}
+              />
               <input
                 value={editApiKey}
                 onChange={(e) => setEditApiKey(e.target.value)}
@@ -124,9 +134,7 @@ export function HubProviderProfileItem({
               ? `baseUrl: ${profile.baseUrl ?? '(未设置)'} · apiKey: ${profile.hasApiKey ? '已配置' : '未配置'}`
               : '走本机订阅登录态（不使用 API key）'}
           </p>
-          {profile.modelOverride && (
-            <p className="text-xs text-indigo-600 mt-0.5">model: {profile.modelOverride}</p>
-          )}
+          {profile.modelOverride && <p className="text-xs text-indigo-600 mt-0.5">model: {profile.modelOverride}</p>}
         </div>
         <div className="flex flex-wrap gap-1.5 shrink-0">
           {!isActive && (

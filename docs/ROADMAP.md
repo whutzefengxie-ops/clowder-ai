@@ -30,16 +30,21 @@ created: 2026-02-26
 | F061 | Antigravity 接入 — 孟加拉猫（混血家族） | phase-1-done | Ragdoll | [F061](features/F061-antigravity-bengal-cat.md) |
 | F066 | Voice Pipeline Upgrade — Phase 4: TTS 韧性增强 | in-progress | Ragdoll | [F066](features/F066-voice-pipeline-upgrade.md) |
 | F067 | Cold-start Verifier — 无历史污染的交付物验证 | spec | Ragdoll | [F067](features/F067-cold-start-verifier.md) |
+| F068 | 新建对话弹窗 UX 优化 | in-progress | 三猫 | [F068](features/F068-new-thread-dialog-ux.md) |
 | F069 | Thread Read State — 未读 Badge 后端真相源 | spec | Ragdoll | [F069](features/F069-thread-read-state.md) |
 | F076 | Mission Hub 跨项目作战面板 — 派遣进展 + 回流摘要 + 决策中枢 | phase-2-done | Ragdoll | [F076](features/F076-mission-hub-cross-project.md) |
 | F077 | Multi-User Secure Collaboration — GitHub OAuth + Thread ACL + Session | spec | Ragdoll | [F077](features/F077-multi-user-secure-collab.md) |
 | F088 | Multi-Platform Chat Gateway — 飞书/Telegram 多平台网关 | phase5-6-done | Ragdoll | [F088](features/F088-multi-platform-chat-gateway.md) |
 | F089 | Hub Terminal & tmux Integration — 浏览器终端 + 猫猫可观测性 | spec | Ragdoll | [F089](features/F089-hub-terminal-tmux.md) |
 | F090 | Pixel Cat Brawl — 像素猫猫大作战：即时格斗 demo game | phase-1-done | Ragdoll | [F090](features/F090-pixel-cat-brawl.md) |
+| F091 | Signal Study Mode — 信号学习伴侣 | in-progress | Ragdoll | [F091](features/F091-signal-study-mode.md) |
 | F092 | Cats & U 语音陪伴体验 — hands-free 语音交互 | spec | Ragdoll | [F092](features/F092-voice-companion-experience.md) |
 | F093 | Cats & U 陪伴式共创世界引擎 — 万物有灵 | spec | Ragdoll | [F093](features/F093-cats-and-u-world-engine.md) |
+| F095 | Thread Sidebar 导航体验升级 | in-progress | Ragdoll | [F095](features/F095-sidebar-collapse-memory.md) |
+| F096 | Interactive Rich Blocks — 可交互富文本组件 | in-progress | Ragdoll | [F096](features/F096-interactive-rich-blocks.md) |
 | F100 | Self-Evolution — 猫猫自我进化机制（行为层 + 知识对象化） | in-progress | Ragdoll | [F100](features/F100-self-evolution.md) |
 | F102 | 记忆组件 Adapter 化重构 — IEvidenceStore + 本地索引 | in-progress | Ragdoll | [F102](features/F102-memory-adapter-refactor.md) |
 | F103 | 猫猫独立声线 — Per-Cat Voice Identity | spec | TBD | [F103](features/F103-per-cat-voice-identity.md) |
 | F104 | 本地全感知升级 — Qwen Omni + VL MoE 替换管道 | spec | Ragdoll | [F104](features/F104-local-omni-perception.md) |
 | F107 | 猫猫杀（脑门贴词）— 坏猫战术推理游戏 | spec | Ragdoll | [F107](features/F107-headband-guess-game.md) |
+| F108 | Side-Dispatch — 同一 Thread 多猫并发执行 | spec | TBD | [F108](features/F108-side-dispatch-concurrent-invocation.md) |

@@ -1,5 +1,5 @@
-import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
 import { buildThreadMemory } from '../dist/domains/cats/services/session/buildThreadMemory.js';
 
 describe('buildThreadMemory', () => {
@@ -47,10 +47,7 @@ describe('buildThreadMemory', () => {
         sessionId: `s${i}`,
         invocations: [
           {
-            toolNames: Array.from(
-              { length: 10 },
-              (_, j) => `Tool${j}_${'x'.repeat(20)}`,
-            ),
+            toolNames: Array.from({ length: 10 }, (_, j) => `Tool${j}_${'x'.repeat(20)}`),
           },
         ],
         filesTouched: Array.from({ length: 10 }, (_, j) => ({
@@ -77,9 +74,7 @@ describe('buildThreadMemory', () => {
   it('caps tools at 10 and files at 10', () => {
     const bigDigest = {
       ...baseDigest,
-      invocations: [
-        { toolNames: Array.from({ length: 20 }, (_, i) => `Tool${i}`) },
-      ],
+      invocations: [{ toolNames: Array.from({ length: 20 }, (_, i) => `Tool${i}`) }],
       filesTouched: Array.from({ length: 20 }, (_, i) => ({
         path: `f${i}.ts`,
         ops: ['edit'],
@@ -111,10 +106,7 @@ describe('buildThreadMemory', () => {
       ...baseDigest,
       invocations: [
         {
-          toolNames: Array.from(
-            { length: 10 },
-            (_, i) => `VeryLongToolName_${'z'.repeat(100)}_${i}`,
-          ),
+          toolNames: Array.from({ length: 10 }, (_, i) => `VeryLongToolName_${'z'.repeat(100)}_${i}`),
         },
       ],
       filesTouched: Array.from({ length: 10 }, (_, i) => ({

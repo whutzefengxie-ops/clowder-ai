@@ -22,7 +22,7 @@ export function assertRedisIsolationOrThrow(redisUrl, suiteName) {
   if (process.env[ISOLATION_FLAG] !== '1') {
     throw new Error(
       `[${suiteName}] REDIS_URL is set without ${ISOLATION_FLAG}=1. ` +
-      'Run via: pnpm --filter @cat-cafe/api test:redis'
+        'Run via: pnpm --filter @cat-cafe/api test:redis',
     );
   }
 
@@ -32,16 +32,12 @@ export function assertRedisIsolationOrThrow(redisUrl, suiteName) {
   }
 
   if (parsed.hostname !== '127.0.0.1' && parsed.hostname !== 'localhost') {
-    throw new Error(
-      `[${suiteName}] REDIS_URL must point to localhost for tests, got hostname=${parsed.hostname}`
-    );
+    throw new Error(`[${suiteName}] REDIS_URL must point to localhost for tests, got hostname=${parsed.hostname}`);
   }
 
   const db = parsed.pathname.replace('/', '') || '0';
   if (db !== '15') {
-    throw new Error(
-      `[${suiteName}] REDIS_URL must use /15 test DB for isolation, got /${db}`
-    );
+    throw new Error(`[${suiteName}] REDIS_URL must use /15 test DB for isolation, got /${db}`);
   }
 }
 
@@ -54,10 +50,7 @@ function normalizePattern(pattern) {
  */
 export async function cleanupPrefixedRedisKeys(redis, patterns) {
   const normalized = patterns.map(normalizePattern);
-  const expandedPatterns = normalized.flatMap((pattern) => [
-    `cat-cafe:${pattern}`,
-    `cat-cafe:cat-cafe:${pattern}`,
-  ]);
+  const expandedPatterns = normalized.flatMap((pattern) => [`cat-cafe:${pattern}`, `cat-cafe:cat-cafe:${pattern}`]);
 
   const grouped = await Promise.all(expandedPatterns.map((pattern) => redis.keys(pattern)));
   const prefixedKeys = [...new Set(grouped.flat())];

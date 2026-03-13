@@ -1,14 +1,14 @@
 import {
-  type Fighter,
-  type FighterId,
-  type HitResult,
-  TEAM_COLORS,
+  ATTACK_RANGE,
   FIGHTER_NAMES,
   FIGHTER_STATS,
-  SKILLS,
+  type Fighter,
+  type FighterId,
   GROUND_Y,
-  ATTACK_RANGE,
+  type HitResult,
   KNOCKBACK_FORCE,
+  SKILLS,
+  TEAM_COLORS,
 } from './types';
 
 /** Scale HP by fighter count — more opponents = more incoming damage */
@@ -18,12 +18,7 @@ function hpForCount(count: number): number {
   return count * 100;
 }
 
-function createFighter(
-  id: FighterId,
-  x: number,
-  facing: 'left' | 'right',
-  totalFighters: number,
-): Fighter {
+function createFighter(id: FighterId, x: number, facing: 'left' | 'right', totalFighters: number): Fighter {
   const hp = hpForCount(totalFighters);
   return {
     id,
@@ -48,9 +43,7 @@ function spawnPositions(count: number): number[] {
   const margin = 120;
   const span = 640 - 2 * margin;
   if (count === 1) return [320];
-  return Array.from({ length: count }, (_, i) =>
-    Math.round(margin + (span * i) / (count - 1)),
-  );
+  return Array.from({ length: count }, (_, i) => Math.round(margin + (span * i) / (count - 1)));
 }
 
 export class GameState {

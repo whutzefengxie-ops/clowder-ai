@@ -3,13 +3,13 @@
  * 测试布偶猫 CLI 子进程调用
  */
 
-import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { PassThrough } from 'node:stream';
 import { EventEmitter } from 'node:events';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, realpathSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { PassThrough } from 'node:stream';
+import { mock, test } from 'node:test';
 
 const { ClaudeAgentService, resolveDefaultClaudeMcpServerPath } = await import(
   '../dist/domains/cats/services/agents/providers/ClaudeAgentService.js'
@@ -64,7 +64,7 @@ function createMockSpawnFn(proc) {
 /** Write NDJSON events to mock process stdout, then end with exit 0 */
 function emitClaudeEvents(proc, events) {
   for (const event of events) {
-    proc.stdout.write(JSON.stringify(event) + '\n');
+    proc.stdout.write(`${JSON.stringify(event)}\n`);
   }
   proc.stdout.end();
   proc._emitter.emit('exit', 0, null);
@@ -107,11 +107,13 @@ test('handles tool_use content blocks', async () => {
     {
       type: 'assistant',
       message: {
-        content: [{
-          type: 'tool_use',
-          name: 'Read',
-          input: { file_path: '/foo.ts' },
-        }],
+        content: [
+          {
+            type: 'tool_use',
+            name: 'Read',
+            input: { file_path: '/foo.ts' },
+          },
+        ],
       },
     },
     { type: 'result', subtype: 'success' },
@@ -190,9 +192,7 @@ test('passes cwd from workingDirectory option', async () => {
   const spawnFn = createMockSpawnFn(proc);
   const service = new ClaudeAgentService({ spawnFn });
 
-  const promise = collect(
-    service.invoke('hi', { workingDirectory: '/my/project' })
-  );
+  const promise = collect(service.invoke('hi', { workingDirectory: '/my/project' }));
   emitClaudeEvents(proc, [{ type: 'result', subtype: 'success' }]);
   await promise;
 
@@ -201,24 +201,26 @@ test('passes cwd from workingDirectory option', async () => {
 });
 
 test('F062: subscription profile clears inherited ANTHROPIC env vars', async () => {
-  const prevApiKey = process.env['ANTHROPIC_API_KEY'];
-  const prevBaseUrl = process.env['ANTHROPIC_BASE_URL'];
-  process.env['ANTHROPIC_API_KEY'] = 'sk-inherited';
-  process.env['ANTHROPIC_BASE_URL'] = 'https://inherited.example.com';
+  const prevApiKey = process.env.ANTHROPIC_API_KEY;
+  const prevBaseUrl = process.env.ANTHROPIC_BASE_URL;
+  process.env.ANTHROPIC_API_KEY = 'sk-inherited';
+  process.env.ANTHROPIC_BASE_URL = 'https://inherited.example.com';
 
   const proc = createMockProcess();
   const spawnFn = createMockSpawnFn(proc);
   const service = new ClaudeAgentService({ spawnFn });
 
   try {
-    const promise = collect(service.invoke('hello', {
-      callbackEnv: {
-        CAT_CAFE_API_URL: 'http://localhost:3002',
-        CAT_CAFE_INVOCATION_ID: 'inv-1',
-        CAT_CAFE_CALLBACK_TOKEN: 'token-1',
-        CAT_CAFE_ANTHROPIC_PROFILE_MODE: 'subscription',
-      },
-    }));
+    const promise = collect(
+      service.invoke('hello', {
+        callbackEnv: {
+          CAT_CAFE_API_URL: 'http://localhost:3002',
+          CAT_CAFE_INVOCATION_ID: 'inv-1',
+          CAT_CAFE_CALLBACK_TOKEN: 'token-1',
+          CAT_CAFE_ANTHROPIC_PROFILE_MODE: 'subscription',
+        },
+      }),
+    );
     emitClaudeEvents(proc, [{ type: 'result', subtype: 'success' }]);
     await promise;
 
@@ -226,34 +228,36 @@ test('F062: subscription profile clears inherited ANTHROPIC env vars', async () 
     assert.equal(spawnOpts.env.ANTHROPIC_API_KEY, undefined);
     assert.equal(spawnOpts.env.ANTHROPIC_BASE_URL, undefined);
   } finally {
-    if (prevApiKey === undefined) delete process.env['ANTHROPIC_API_KEY'];
-    else process.env['ANTHROPIC_API_KEY'] = prevApiKey;
-    if (prevBaseUrl === undefined) delete process.env['ANTHROPIC_BASE_URL'];
-    else process.env['ANTHROPIC_BASE_URL'] = prevBaseUrl;
+    if (prevApiKey === undefined) delete process.env.ANTHROPIC_API_KEY;
+    else process.env.ANTHROPIC_API_KEY = prevApiKey;
+    if (prevBaseUrl === undefined) delete process.env.ANTHROPIC_BASE_URL;
+    else process.env.ANTHROPIC_BASE_URL = prevBaseUrl;
   }
 });
 
 test('F062: api_key profile injects ANTHROPIC_API_KEY and ANTHROPIC_BASE_URL', async () => {
-  const prevApiKey = process.env['ANTHROPIC_API_KEY'];
-  const prevBaseUrl = process.env['ANTHROPIC_BASE_URL'];
-  process.env['ANTHROPIC_API_KEY'] = 'sk-inherited';
-  process.env['ANTHROPIC_BASE_URL'] = 'https://inherited.example.com';
+  const prevApiKey = process.env.ANTHROPIC_API_KEY;
+  const prevBaseUrl = process.env.ANTHROPIC_BASE_URL;
+  process.env.ANTHROPIC_API_KEY = 'sk-inherited';
+  process.env.ANTHROPIC_BASE_URL = 'https://inherited.example.com';
 
   const proc = createMockProcess();
   const spawnFn = createMockSpawnFn(proc);
   const service = new ClaudeAgentService({ spawnFn });
 
   try {
-    const promise = collect(service.invoke('hello', {
-      callbackEnv: {
-        CAT_CAFE_API_URL: 'http://localhost:3002',
-        CAT_CAFE_INVOCATION_ID: 'inv-2',
-        CAT_CAFE_CALLBACK_TOKEN: 'token-2',
-        CAT_CAFE_ANTHROPIC_PROFILE_MODE: 'api_key',
-        CAT_CAFE_ANTHROPIC_API_KEY: 'sk-sponsor',
-        CAT_CAFE_ANTHROPIC_BASE_URL: 'https://sponsor.example.com',
-      },
-    }));
+    const promise = collect(
+      service.invoke('hello', {
+        callbackEnv: {
+          CAT_CAFE_API_URL: 'http://localhost:3002',
+          CAT_CAFE_INVOCATION_ID: 'inv-2',
+          CAT_CAFE_CALLBACK_TOKEN: 'token-2',
+          CAT_CAFE_ANTHROPIC_PROFILE_MODE: 'api_key',
+          CAT_CAFE_ANTHROPIC_API_KEY: 'sk-sponsor',
+          CAT_CAFE_ANTHROPIC_BASE_URL: 'https://sponsor.example.com',
+        },
+      }),
+    );
     emitClaudeEvents(proc, [{ type: 'result', subtype: 'success' }]);
     await promise;
 
@@ -261,10 +265,10 @@ test('F062: api_key profile injects ANTHROPIC_API_KEY and ANTHROPIC_BASE_URL', a
     assert.equal(spawnOpts.env.ANTHROPIC_API_KEY, 'sk-sponsor');
     assert.equal(spawnOpts.env.ANTHROPIC_BASE_URL, 'https://sponsor.example.com');
   } finally {
-    if (prevApiKey === undefined) delete process.env['ANTHROPIC_API_KEY'];
-    else process.env['ANTHROPIC_API_KEY'] = prevApiKey;
-    if (prevBaseUrl === undefined) delete process.env['ANTHROPIC_BASE_URL'];
-    else process.env['ANTHROPIC_BASE_URL'] = prevBaseUrl;
+    if (prevApiKey === undefined) delete process.env.ANTHROPIC_API_KEY;
+    else process.env.ANTHROPIC_API_KEY = prevApiKey;
+    if (prevBaseUrl === undefined) delete process.env.ANTHROPIC_BASE_URL;
+    else process.env.ANTHROPIC_BASE_URL = prevBaseUrl;
   }
 });
 
@@ -275,9 +279,7 @@ test('yields error on result/error event', async () => {
 
   const promise = collect(service.invoke('bad'));
 
-  emitClaudeEvents(proc, [
-    { type: 'result', subtype: 'error', errors: ['rate limited', 'try again'] },
-  ]);
+  emitClaudeEvents(proc, [{ type: 'result', subtype: 'error', errors: ['rate limited', 'try again'] }]);
 
   const msgs = await promise;
   const errMsg = msgs.find((m) => m.type === 'error');
@@ -316,7 +318,7 @@ test('yields actionable rescue hint on invalid thinking signature resume failure
   const promise = collect(service.invoke('resume me', { sessionId: 'sess-bad-thinking' }));
 
   proc.stderr.write(
-    'API Error: 400 {"type":"error","error":{"type":"invalid_request_error","message":"messages.1.content.0: Invalid `signature` in `thinking` block"}}\n'
+    'API Error: 400 {"type":"error","error":{"type":"invalid_request_error","message":"messages.1.content.0: Invalid `signature` in `thinking` block"}}\n',
   );
   proc.stdout.end();
   proc._emitter.emit('exit', 1, null);
@@ -343,7 +345,7 @@ test('does not duplicate error when result/error is followed by non-zero exit', 
       type: 'result',
       subtype: 'error_during_execution',
       errors: ['rate limited'],
-    })}\n`
+    })}\n`,
   );
   proc.stderr.write('rate limited\n');
   proc.stdout.end();
@@ -487,8 +489,11 @@ test('F32-b P1 regression: env var CAT_*_MODEL overrides default when model not 
     const args = spawnFn.mock.calls[0].arguments[1];
     const modelIdx = args.indexOf('--model');
     assert.ok(modelIdx >= 0, '--model flag should be present');
-    assert.equal(args[modelIdx + 1], 'env-override-model',
-      'CAT_OPUS_MODEL env var should take priority over config default');
+    assert.equal(
+      args[modelIdx + 1],
+      'env-override-model',
+      'CAT_OPUS_MODEL env var should take priority over config default',
+    );
   } finally {
     if (saved === undefined) delete process.env.CAT_OPUS_MODEL;
     else process.env.CAT_OPUS_MODEL = saved;
@@ -636,22 +641,24 @@ test('falls back to default MCP path when CAT_CAFE_MCP_SERVER_PATH is empty', as
   writeFileSync(join(mcpDistDir, 'index.js'), 'export {};', 'utf8');
 
   const previousCwd = process.cwd();
-  const previousEnv = process.env['CAT_CAFE_MCP_SERVER_PATH'];
+  const previousEnv = process.env.CAT_CAFE_MCP_SERVER_PATH;
   const proc = createMockProcess();
   const spawnFn = createMockSpawnFn(proc);
 
   try {
     process.chdir(apiCwd);
-    process.env['CAT_CAFE_MCP_SERVER_PATH'] = '';
+    process.env.CAT_CAFE_MCP_SERVER_PATH = '';
 
     const service = new ClaudeAgentService({ spawnFn });
-    const promise = collect(service.invoke('hello', {
-      callbackEnv: {
-        CAT_CAFE_API_URL: 'http://localhost:3002',
-        CAT_CAFE_INVOCATION_ID: 'inv-1',
-        CAT_CAFE_CALLBACK_TOKEN: 'token-1',
-      },
-    }));
+    const promise = collect(
+      service.invoke('hello', {
+        callbackEnv: {
+          CAT_CAFE_API_URL: 'http://localhost:3002',
+          CAT_CAFE_INVOCATION_ID: 'inv-1',
+          CAT_CAFE_CALLBACK_TOKEN: 'token-1',
+        },
+      }),
+    );
     emitClaudeEvents(proc, [{ type: 'result', subtype: 'success' }]);
     await promise;
 
@@ -659,16 +666,13 @@ test('falls back to default MCP path when CAT_CAFE_MCP_SERVER_PATH is empty', as
     const mcpConfigIdx = args.indexOf('--mcp-config');
     assert.ok(mcpConfigIdx >= 0, '--mcp-config should be present when fallback resolves');
     const parsed = JSON.parse(args[mcpConfigIdx + 1]);
-    assert.equal(
-      realpathSync(parsed.mcpServers['cat-cafe'].args[0]),
-      realpathSync(join(mcpDistDir, 'index.js')),
-    );
+    assert.equal(realpathSync(parsed.mcpServers['cat-cafe'].args[0]), realpathSync(join(mcpDistDir, 'index.js')));
   } finally {
     process.chdir(previousCwd);
     if (previousEnv === undefined) {
-      delete process.env['CAT_CAFE_MCP_SERVER_PATH'];
+      delete process.env.CAT_CAFE_MCP_SERVER_PATH;
     } else {
-      process.env['CAT_CAFE_MCP_SERVER_PATH'] = previousEnv;
+      process.env.CAT_CAFE_MCP_SERVER_PATH = previousEnv;
     }
     rmSync(root, { recursive: true, force: true });
   }
@@ -697,7 +701,7 @@ test('F8: result/success extracts usage into done metadata', async () => {
   ]);
 
   const msgs = await promise;
-  const done = msgs.find(m => m.type === 'done');
+  const done = msgs.find((m) => m.type === 'done');
   assert.ok(done, 'should have done message');
   assert.ok(done.metadata?.usage, 'done should have usage in metadata');
   assert.equal(done.metadata.usage.inputTokens, 1234);
@@ -728,7 +732,7 @@ test('F24: extracts contextWindowSize from result.modelUsage (camelCase)', async
   ]);
 
   const msgs = await promise;
-  const done = msgs.find(m => m.type === 'done');
+  const done = msgs.find((m) => m.type === 'done');
   assert.ok(done?.metadata?.usage);
   assert.equal(
     done.metadata.usage.contextWindowSize,
@@ -786,7 +790,7 @@ test('F8: normalises inputTokens to include cache tokens (Claude API → total)'
   ]);
 
   const msgs = await promise;
-  const done = msgs.find(m => m.type === 'done');
+  const done = msgs.find((m) => m.type === 'done');
   assert.ok(done?.metadata?.usage);
   // inputTokens = 4 (new) + 95000 (cache read) + 0 (cache create) = 95004
   assert.equal(done.metadata.usage.inputTokens, 95004);
@@ -818,7 +822,10 @@ test('F24-fix: lastTurnInputTokens extracted from last message_start usage', asy
         },
       },
     },
-    { type: 'stream_event', event: { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'Turn 1' } } },
+    {
+      type: 'stream_event',
+      event: { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'Turn 1' } },
+    },
     { type: 'stream_event', event: { type: 'message_stop' } },
     // Turn 2: message_start with larger context (last turn — this is the one we want)
     {
@@ -831,7 +838,10 @@ test('F24-fix: lastTurnInputTokens extracted from last message_start usage', asy
         },
       },
     },
-    { type: 'stream_event', event: { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'Turn 2' } } },
+    {
+      type: 'stream_event',
+      event: { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'Turn 2' } },
+    },
     { type: 'stream_event', event: { type: 'message_stop' } },
     // Assistant final + result
     { type: 'assistant', message: { id: 'msg-2', content: [{ type: 'text', text: 'Turn 2' }] } },
@@ -839,9 +849,9 @@ test('F24-fix: lastTurnInputTokens extracted from last message_start usage', asy
       type: 'result',
       subtype: 'success',
       usage: {
-        input_tokens: 15000,  // aggregated across turns (raw new tokens)
+        input_tokens: 15000, // aggregated across turns (raw new tokens)
         output_tokens: 500,
-        cache_read_input_tokens: 55000,  // aggregated
+        cache_read_input_tokens: 55000, // aggregated
         cache_creation_input_tokens: 4000,
       },
       num_turns: 2,
@@ -849,14 +859,16 @@ test('F24-fix: lastTurnInputTokens extracted from last message_start usage', asy
   ]);
 
   const msgs = await promise;
-  const done = msgs.find(m => m.type === 'done');
+  const done = msgs.find((m) => m.type === 'done');
   assert.ok(done?.metadata?.usage);
   // lastTurnInputTokens = last message_start: 5000 + 35000 + 4000 = 44000
-  assert.equal(done.metadata.usage.lastTurnInputTokens, 44000,
-    'lastTurnInputTokens should be sum of last message_start usage (raw + cache_read + cache_create)');
+  assert.equal(
+    done.metadata.usage.lastTurnInputTokens,
+    44000,
+    'lastTurnInputTokens should be sum of last message_start usage (raw + cache_read + cache_create)',
+  );
   // inputTokens is still the aggregated value: 15000 + 55000 + 4000 = 74000
-  assert.equal(done.metadata.usage.inputTokens, 74000,
-    'inputTokens should still be the aggregated total');
+  assert.equal(done.metadata.usage.inputTokens, 74000, 'inputTokens should still be the aggregated total');
 });
 
 test('F24-fix: lastTurnInputTokens is undefined when no message_start has usage', async () => {
@@ -876,11 +888,14 @@ test('F24-fix: lastTurnInputTokens is undefined when no message_start has usage'
   ]);
 
   const msgs = await promise;
-  const done = msgs.find(m => m.type === 'done');
+  const done = msgs.find((m) => m.type === 'done');
   assert.ok(done?.metadata?.usage);
   // No stream events → no lastTurnInputTokens
-  assert.equal(done.metadata.usage.lastTurnInputTokens, undefined,
-    'lastTurnInputTokens should be undefined when no message_start has usage');
+  assert.equal(
+    done.metadata.usage.lastTurnInputTokens,
+    undefined,
+    'lastTurnInputTokens should be undefined when no message_start has usage',
+  );
   // Aggregated inputTokens still works
   assert.equal(done.metadata.usage.inputTokens, 1000);
 });
@@ -905,7 +920,10 @@ test('F24-fix: lastTurnInputTokens resets when final message_start has no usage 
         },
       },
     },
-    { type: 'stream_event', event: { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'T1' } } },
+    {
+      type: 'stream_event',
+      event: { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'T1' } },
+    },
     { type: 'stream_event', event: { type: 'message_stop' } },
     // Turn 2: message_start WITHOUT usage (should clear, not carry over 3000)
     {
@@ -915,7 +933,10 @@ test('F24-fix: lastTurnInputTokens resets when final message_start has no usage 
         message: { id: 'msg-stale-2' },
       },
     },
-    { type: 'stream_event', event: { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'T2' } } },
+    {
+      type: 'stream_event',
+      event: { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'T2' } },
+    },
     { type: 'stream_event', event: { type: 'message_stop' } },
     // Final
     { type: 'assistant', message: { id: 'msg-stale-2', content: [{ type: 'text', text: 'T2' }] } },
@@ -927,9 +948,12 @@ test('F24-fix: lastTurnInputTokens resets when final message_start has no usage 
   ]);
 
   const msgs = await promise;
-  const done = msgs.find(m => m.type === 'done');
+  const done = msgs.find((m) => m.type === 'done');
   assert.ok(done?.metadata?.usage);
   // The final message_start had no usage → lastTurnInputTokens must be undefined, NOT 3000
-  assert.equal(done.metadata.usage.lastTurnInputTokens, undefined,
-    'lastTurnInputTokens must not carry over from a previous turn when the final turn lacks usage');
+  assert.equal(
+    done.metadata.usage.lastTurnInputTokens,
+    undefined,
+    'lastTurnInputTokens must not carry over from a previous turn when the final turn lacks usage',
+  );
 });

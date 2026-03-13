@@ -8,19 +8,13 @@
  * - 历史截断到 maxMessages
  */
 
-import { test, describe, mock, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { beforeEach, describe, mock, test } from 'node:test';
 import { migrateRouterOpts } from '../helpers/agent-registry-helpers.js';
 
-const { AgentRouter } = await import(
-  '../../dist/domains/cats/services/AgentRouter.js'
-);
-const { MessageStore } = await import(
-  '../../dist/domains/cats/services/MessageStore.js'
-);
-const { InvocationRegistry } = await import(
-  '../../dist/domains/cats/services/InvocationRegistry.js'
-);
+const { AgentRouter } = await import('../../dist/domains/cats/services/AgentRouter.js');
+const { MessageStore } = await import('../../dist/domains/cats/services/MessageStore.js');
+const { InvocationRegistry } = await import('../../dist/domains/cats/services/InvocationRegistry.js');
 
 /** Collect all items from async iterable */
 async function collect(iterable) {
@@ -55,13 +49,15 @@ describe('Cross-Cat Context (暗号测试)', () => {
     const opusService = createCapturingService('opus', `I confirm: ${SECRET}`);
     const codexService = createCapturingService('codex', 'Received');
 
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: opusService,
-      codexService: codexService,
-      geminiService: createCapturingService('gemini', 'skip'),
-      registry,
-      messageStore,
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: opusService,
+        codexService: codexService,
+        geminiService: createCapturingService('gemini', 'skip'),
+        registry,
+        messageStore,
+      }),
+    );
 
     // Round 1: user → opus → opus replies with SECRET
     await collect(router.route('user-1', '@opus tell me the secret', 'thread-1'));
@@ -70,10 +66,11 @@ describe('Cross-Cat Context (暗号测试)', () => {
     await collect(router.route('user-1', '@codex what was the secret?', 'thread-1'));
 
     const codexPrompt = codexService.capturedPrompts[0];
-    assert.ok(codexPrompt.includes(SECRET),
-      `Codex prompt should contain the secret token. Got: ${codexPrompt.slice(0, 500)}`);
-    assert.ok(codexPrompt.includes('对话历史'),
-      'Codex prompt should contain history header');
+    assert.ok(
+      codexPrompt.includes(SECRET),
+      `Codex prompt should contain the secret token. Got: ${codexPrompt.slice(0, 500)}`,
+    );
+    assert.ok(codexPrompt.includes('对话历史'), 'Codex prompt should contain history header');
   });
 
   test('three-cat secret: cat C sees both cat A and cat B secrets', async () => {
@@ -83,13 +80,15 @@ describe('Cross-Cat Context (暗号测试)', () => {
     const codexService = createCapturingService('codex', `My secret is ${SECRET_B}`);
     const geminiService = createCapturingService('gemini', 'I see them');
 
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: opusService,
-      codexService: codexService,
-      geminiService: geminiService,
-      registry,
-      messageStore,
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: opusService,
+        codexService: codexService,
+        geminiService: geminiService,
+        registry,
+        messageStore,
+      }),
+    );
 
     // Round 1: opus says its secret
     await collect(router.route('user-1', '@opus share your secret', 'thread-2'));
@@ -99,22 +98,22 @@ describe('Cross-Cat Context (暗号测试)', () => {
     await collect(router.route('user-1', '@gemini what secrets did they share?', 'thread-2'));
 
     const geminiPrompt = geminiService.capturedPrompts[0];
-    assert.ok(geminiPrompt.includes(SECRET_A),
-      'Gemini should see opus secret in history');
-    assert.ok(geminiPrompt.includes(SECRET_B),
-      'Gemini should see codex secret in history');
+    assert.ok(geminiPrompt.includes(SECRET_A), 'Gemini should see opus secret in history');
+    assert.ok(geminiPrompt.includes(SECRET_B), 'Gemini should see codex secret in history');
   });
 
   test('history delivery: includes unseen history without replay markers', async () => {
     const opusService = createCapturingService('opus', 'final reply');
 
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: opusService,
-      codexService: createCapturingService('codex', 'x'),
-      geminiService: createCapturingService('gemini', 'x'),
-      registry,
-      messageStore,
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: opusService,
+        codexService: createCapturingService('codex', 'x'),
+        geminiService: createCapturingService('gemini', 'x'),
+        registry,
+        messageStore,
+      }),
+    );
 
     // Seed 25 messages directly into messageStore
     for (let i = 0; i < 25; i++) {
@@ -143,13 +142,15 @@ describe('Cross-Cat Context (暗号测试)', () => {
     const codexService = createCapturingService('codex', 'Round 2 codex answer');
     const geminiService = createCapturingService('gemini', 'I see everything');
 
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: opusService,
-      codexService: codexService,
-      geminiService: geminiService,
-      registry,
-      messageStore,
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: opusService,
+        codexService: codexService,
+        geminiService: geminiService,
+        registry,
+        messageStore,
+      }),
+    );
 
     // Round 1
     await collect(router.route('user-1', '@opus first question', 'thread-4'));

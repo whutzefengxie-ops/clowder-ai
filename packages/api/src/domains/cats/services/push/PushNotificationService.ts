@@ -22,12 +22,12 @@ function isHttpProxyUrl(value: string): boolean {
 
 function resolveWebPushProxy(): string | undefined {
   const candidates = [
-    process.env['HTTPS_PROXY'],
-    process.env['https_proxy'],
-    process.env['HTTP_PROXY'],
-    process.env['http_proxy'],
-    process.env['ALL_PROXY'],
-    process.env['all_proxy'],
+    process.env.HTTPS_PROXY,
+    process.env.https_proxy,
+    process.env.HTTP_PROXY,
+    process.env.http_proxy,
+    process.env.ALL_PROXY,
+    process.env.all_proxy,
   ];
 
   for (const candidate of candidates) {
@@ -39,7 +39,7 @@ function resolveWebPushProxy(): string | undefined {
 }
 
 function resolveWebPushTimeoutMs(): number {
-  const raw = asNonEmptyString(process.env['WEB_PUSH_TIMEOUT_MS']);
+  const raw = asNonEmptyString(process.env.WEB_PUSH_TIMEOUT_MS);
   if (!raw) return DEFAULT_WEB_PUSH_TIMEOUT_MS;
   const parsed = Number(raw);
   if (!Number.isFinite(parsed) || parsed <= 0) {
@@ -107,9 +107,7 @@ export class PushNotificationService {
     }
 
     const body = JSON.stringify(payload);
-    const results = await Promise.allSettled(
-      subs.map((sub) => this.sendOne(sub, body)),
-    );
+    const results = await Promise.allSettled(subs.map((sub) => this.sendOne(sub, body)));
 
     const summary: PushDeliverySummary = {
       attempted: subs.length,

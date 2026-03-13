@@ -58,64 +58,62 @@ export class TelegramAdapter implements IStreamableOutboundAdapter {
     if (!update || typeof update !== 'object') return null;
 
     const u = update as Record<string, unknown>;
-    const message = u['message'] as Record<string, unknown> | undefined;
+    const message = u.message as Record<string, unknown> | undefined;
     if (!message) return null;
 
     // MVP: DM only (private chats)
-    const chat = message['chat'] as Record<string, unknown> | undefined;
-    if (!chat || chat['type'] !== 'private') return null;
+    const chat = message.chat as Record<string, unknown> | undefined;
+    if (!chat || chat.type !== 'private') return null;
 
     // Skip bot messages
-    const from = message['from'] as Record<string, unknown> | undefined;
-    if (!from || from['is_bot'] === true) return null;
+    const from = message.from as Record<string, unknown> | undefined;
+    if (!from || from.is_bot === true) return null;
 
     const base = {
-      chatId: String(chat['id']),
-      messageId: String(message['message_id']),
-      senderId: String(from['id']),
+      chatId: String(chat.id),
+      messageId: String(message.message_id),
+      senderId: String(from.id),
     };
 
-    const caption = typeof message['caption'] === 'string' ? message['caption'] : undefined;
+    const caption = typeof message.caption === 'string' ? message.caption : undefined;
 
     // Text message
-    const text = message['text'];
+    const text = message.text;
     if (typeof text === 'string') {
       return { ...base, text };
     }
 
     // Photo message — pick largest photo (last in array)
-    const photo = message['photo'] as Array<Record<string, unknown>> | undefined;
+    const photo = message.photo as Array<Record<string, unknown>> | undefined;
     if (Array.isArray(photo) && photo.length > 0) {
       const largest = photo[photo.length - 1]!;
       return {
         ...base,
         text: caption ?? '[图片]',
-        attachments: [{ type: 'image', telegramFileId: largest['file_id'] as string }],
+        attachments: [{ type: 'image', telegramFileId: largest.file_id as string }],
       };
     }
 
     // Document message
-    const document = message['document'] as Record<string, unknown> | undefined;
+    const document = message.document as Record<string, unknown> | undefined;
     if (document) {
-      const fileName = document['file_name'] as string | undefined;
+      const fileName = document.file_name as string | undefined;
       return {
         ...base,
         text: caption ?? (fileName ? `[文件] ${fileName}` : '[文件]'),
-        attachments: [
-          { type: 'file', telegramFileId: document['file_id'] as string, ...(fileName ? { fileName } : {}) },
-        ],
+        attachments: [{ type: 'file', telegramFileId: document.file_id as string, ...(fileName ? { fileName } : {}) }],
       };
     }
 
     // Voice message
-    const voice = message['voice'] as Record<string, unknown> | undefined;
+    const voice = message.voice as Record<string, unknown> | undefined;
     if (voice) {
-      const duration = voice['duration'] as number | undefined;
+      const duration = voice.duration as number | undefined;
       return {
         ...base,
         text: '[语音]',
         attachments: [
-          { type: 'audio', telegramFileId: voice['file_id'] as string, ...(duration != null ? { duration } : {}) },
+          { type: 'audio', telegramFileId: voice.file_id as string, ...(duration != null ? { duration } : {}) },
         ],
       };
     }
@@ -227,7 +225,7 @@ export class TelegramAdapter implements IStreamableOutboundAdapter {
     let source: string | InputFile;
     if (absPath) {
       source = new InputFile(absPath);
-    } else if (payload.url && payload.url.startsWith('/') && !payload.url.startsWith('/api/')) {
+    } else if (payload.url?.startsWith('/') && !payload.url.startsWith('/api/')) {
       source = new InputFile(payload.url);
     } else {
       source = payload.url!;

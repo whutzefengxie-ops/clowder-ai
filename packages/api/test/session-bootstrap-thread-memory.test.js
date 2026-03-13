@@ -1,5 +1,5 @@
-import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
 import { buildSessionBootstrap } from '../dist/domains/cats/services/session/SessionBootstrap.js';
 import { SessionChainStore } from '../dist/domains/cats/services/stores/ports/SessionChainStore.js';
 import { ThreadStore } from '../dist/domains/cats/services/stores/ports/ThreadStore.js';
@@ -7,13 +7,21 @@ import { ThreadStore } from '../dist/domains/cats/services/stores/ports/ThreadSt
 /** Fake TranscriptReader that returns stored digests */
 function createFakeTranscriptReader(digests = new Map()) {
   return {
-    async readDigest(sessionId, threadId, catId) {
+    async readDigest(sessionId, _threadId, _catId) {
       return digests.get(sessionId) ?? null;
     },
-    async readEvents() { return { events: [], total: 0 }; },
-    async search() { return []; },
-    async readInvocationEvents() { return null; },
-    async hasTranscript() { return false; },
+    async readEvents() {
+      return { events: [], total: 0 };
+    },
+    async search() {
+      return [];
+    },
+    async readInvocationEvents() {
+      return null;
+    },
+    async hasTranscript() {
+      return false;
+    },
   };
 }
 
@@ -25,7 +33,10 @@ describe('SessionBootstrap — ThreadMemory injection', () => {
 
     // Create and seal a session (so bootstrap triggers for session #2)
     const s1 = chainStore.create({
-      cliSessionId: 'cli-1', threadId: thread.id, catId: 'opus', userId: 'user1',
+      cliSessionId: 'cli-1',
+      threadId: thread.id,
+      catId: 'opus',
+      userId: 'user1',
     });
     chainStore.update(s1.id, { status: 'sealed', sealedAt: Date.now() });
 
@@ -57,7 +68,10 @@ describe('SessionBootstrap — ThreadMemory injection', () => {
     const thread = threadStore.create('user1', 'test');
 
     const s1 = chainStore.create({
-      cliSessionId: 'cli-1', threadId: thread.id, catId: 'opus', userId: 'user1',
+      cliSessionId: 'cli-1',
+      threadId: thread.id,
+      catId: 'opus',
+      userId: 'user1',
     });
     chainStore.update(s1.id, { status: 'sealed', sealedAt: Date.now() });
 
@@ -76,7 +90,10 @@ describe('SessionBootstrap — ThreadMemory injection', () => {
     const chainStore = new SessionChainStore();
 
     const s1 = chainStore.create({
-      cliSessionId: 'cli-1', threadId: 'default', catId: 'opus', userId: 'user1',
+      cliSessionId: 'cli-1',
+      threadId: 'default',
+      catId: 'opus',
+      userId: 'user1',
     });
     chainStore.update(s1.id, { status: 'sealed', sealedAt: Date.now() });
 

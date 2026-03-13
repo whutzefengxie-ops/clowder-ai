@@ -7,10 +7,10 @@
 import { catIdSchema } from '@cat-cafe/shared';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { BOOTCAMP_PHASE_ACHIEVEMENTS } from '../domains/leaderboard/achievement-defs.js';
 import type { InvocationRegistry } from '../domains/cats/services/agents/invocation/InvocationRegistry.js';
 import { runEnvironmentCheck } from '../domains/cats/services/bootcamp/env-check.js';
 import type { BootcampStateV1, IThreadStore } from '../domains/cats/services/stores/ports/ThreadStore.js';
+import { BOOTCAMP_PHASE_ACHIEVEMENTS } from '../domains/leaderboard/achievement-defs.js';
 import { callbackAuthSchema } from './callback-auth-schema.js';
 import { EXPIRED_CREDENTIALS_ERROR } from './callback-errors.js';
 
@@ -120,12 +120,12 @@ export function registerCallbackBootcampRoutes(
 
     // Build merged state — spreads preserve existing fields, updates override
     const raw: Record<string, unknown> = { ...existing };
-    if (updates.phase !== undefined) raw['phase'] = updates.phase;
-    if (updates.leadCat !== undefined) raw['leadCat'] = updates.leadCat;
-    if (updates.selectedTaskId !== undefined) raw['selectedTaskId'] = updates.selectedTaskId;
-    if (updates.envCheck !== undefined) raw['envCheck'] = updates.envCheck;
-    if (updates.advancedFeatures !== undefined) raw['advancedFeatures'] = updates.advancedFeatures;
-    if (updates.completedAt !== undefined) raw['completedAt'] = updates.completedAt;
+    if (updates.phase !== undefined) raw.phase = updates.phase;
+    if (updates.leadCat !== undefined) raw.leadCat = updates.leadCat;
+    if (updates.selectedTaskId !== undefined) raw.selectedTaskId = updates.selectedTaskId;
+    if (updates.envCheck !== undefined) raw.envCheck = updates.envCheck;
+    if (updates.advancedFeatures !== undefined) raw.advancedFeatures = updates.advancedFeatures;
+    if (updates.completedAt !== undefined) raw.completedAt = updates.completedAt;
 
     await threadStore.updateBootcampState(threadId, raw as unknown as BootcampStateV1);
 

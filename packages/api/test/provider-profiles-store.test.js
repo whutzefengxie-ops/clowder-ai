@@ -1,8 +1,9 @@
 // @ts-check
-import { describe, it, beforeEach, afterEach } from 'node:test';
+
 import assert from 'node:assert/strict';
-import { mkdir, rm, readFile, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { afterEach, beforeEach, describe, it } from 'node:test';
 
 const {
   readProviderProfiles,
@@ -51,10 +52,7 @@ describe('provider profile store', () => {
 
     const metaPath = join(projectRoot, '.cat-cafe', 'provider-profiles.json');
     const secretsPath = join(projectRoot, '.cat-cafe', 'provider-profiles.secrets.local.json');
-    const [metaRaw, secretsRaw] = await Promise.all([
-      readFile(metaPath, 'utf-8'),
-      readFile(secretsPath, 'utf-8'),
-    ]);
+    const [metaRaw, secretsRaw] = await Promise.all([readFile(metaPath, 'utf-8'), readFile(secretsPath, 'utf-8')]);
 
     assert.ok(!metaRaw.includes('sk-secret-test'), 'meta should not contain api key');
     assert.ok(secretsRaw.includes('sk-secret-test'), 'secrets should contain api key');
@@ -143,21 +141,9 @@ describe('provider profile store', () => {
     try {
       const runtimeGitDir = join(repoRoot, '.git', 'worktrees', 'runtime');
       await mkdir(runtimeGitDir, { recursive: true });
-      await writeFile(
-        join(runtimeRoot, '.git'),
-        `gitdir: ${runtimeGitDir}\n`,
-        'utf-8',
-      );
-      await writeFile(
-        join(runtimeGitDir, 'gitdir'),
-        `${join(runtimeRoot, '.git')}\n`,
-        'utf-8',
-      );
-      await writeFile(
-        join(runtimeGitDir, 'commondir'),
-        '../..\n',
-        'utf-8',
-      );
+      await writeFile(join(runtimeRoot, '.git'), `gitdir: ${runtimeGitDir}\n`, 'utf-8');
+      await writeFile(join(runtimeGitDir, 'gitdir'), `${join(runtimeRoot, '.git')}\n`, 'utf-8');
+      await writeFile(join(runtimeGitDir, 'commondir'), '../..\n', 'utf-8');
 
       const created = await createProviderProfile(runtimeRoot, {
         provider: 'anthropic',

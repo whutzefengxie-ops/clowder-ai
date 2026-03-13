@@ -23,9 +23,7 @@ interface TaggedError {
   error: unknown;
 }
 
-type TaggedOutcome<T> =
-  | { ok: true; value: TaggedResult<T> }
-  | { ok: false; value: TaggedError };
+type TaggedOutcome<T> = { ok: true; value: TaggedResult<T> } | { ok: false; value: TaggedError };
 
 /**
  * Merge multiple async iterables, yielding values as they arrive.

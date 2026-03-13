@@ -8,9 +8,9 @@
 
 import type { CatId } from '@cat-cafe/shared';
 import type { FastifyBaseLogger } from 'fastify';
+import type { ConnectorInvokeTrigger } from './ConnectorInvokeTrigger.js';
 import { GithubReviewWatcher, loadWatcherConfigFromEnv } from './GithubReviewWatcher.js';
 import type { ReviewRouter } from './ReviewRouter.js';
-import type { ConnectorInvokeTrigger } from './ConnectorInvokeTrigger.js';
 
 let watcher: GithubReviewWatcher | null = null;
 
@@ -55,9 +55,7 @@ export async function startGithubReviewWatcher(options: GithubReviewBootstrapOpt
           undefined,
           { priority: 'urgent', reason: 'github_review' },
         );
-        options.log.info(
-          `[GithubReviewWatcher] Triggered ${result.catId} invocation in thread ${result.threadId}`,
-        );
+        options.log.info(`[GithubReviewWatcher] Triggered ${result.catId} invocation in thread ${result.threadId}`);
       }
     });
   }
@@ -76,9 +74,7 @@ export async function startGithubReviewWatcher(options: GithubReviewBootstrapOpt
 
   try {
     await watcher.start();
-    options.log.info(
-      `[GithubReviewWatcher] Started (polling every ${config.pollIntervalMs / 1000}s)`,
-    );
+    options.log.info(`[GithubReviewWatcher] Started (polling every ${config.pollIntervalMs / 1000}s)`);
     return true;
   } catch (error) {
     options.log.error(`[GithubReviewWatcher] Failed to start: ${String(error)}`);

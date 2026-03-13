@@ -1,16 +1,21 @@
 // @ts-check
-import { describe, it, beforeEach } from 'node:test';
-import assert from 'node:assert';
-import { ConnectorInvokeTrigger } from '../dist/infrastructure/email/ConnectorInvokeTrigger.js';
 
+import assert from 'node:assert';
+import { beforeEach, describe, it } from 'node:test';
 import { InvocationQueue } from '../dist/domains/cats/services/agents/invocation/InvocationQueue.js';
+import { ConnectorInvokeTrigger } from '../dist/infrastructure/email/ConnectorInvokeTrigger.js';
 
 // ─── Mocks ───────────────────────────────────────────────────────
 
 function noopLog() {
   const noop = () => {};
   return /** @type {any} */ ({
-    info: noop, warn: noop, error: noop, debug: noop, trace: noop, fatal: noop,
+    info: noop,
+    warn: noop,
+    error: noop,
+    debug: noop,
+    trace: noop,
+    fatal: noop,
     child: () => noopLog(),
   });
 }
@@ -22,7 +27,8 @@ function noopLog() {
  * @param {boolean} [opts.persistenceFail] - If set, simulates persistence failure
  */
 function mockRouter(opts = {}) {
-  const calls = /** @type {Array<{userId: string, message: string, threadId: string, userMessageId: string, targetCats: string[], intent: object}>} */ ([]);
+  const calls =
+    /** @type {Array<{userId: string, message: string, threadId: string, userMessageId: string, targetCats: string[], intent: object}>} */ ([]);
   const ackCalls = /** @type {Array<{userId: string, threadId: string}>} */ ([]);
 
   return {
@@ -112,7 +118,7 @@ function mockInvocationRecordStore() {
         beforeUpdate?.();
         updates.push({ id, data });
       },
-      async getByIdempotencyKey(threadId, userId, key) {
+      async getByIdempotencyKey(_threadId, _userId, _key) {
         return null;
       },
     },
@@ -141,19 +147,27 @@ function mockInvocationTracker() {
     starts,
     completes,
     cancelCalls,
-    setAborted(val) { aborted = val; },
-    setCancelDenied(val) { cancelDenied = val; },
+    setAborted(val) {
+      aborted = val;
+    },
+    setCancelDenied(val) {
+      cancelDenied = val;
+    },
     /** Mark a thread as having an active invocation (for queue tests) */
-    setActive(threadId, userId = 'user-1') { activeThreads.set(threadId, userId); },
-    clearActive(threadId) { activeThreads.delete(threadId); },
+    setActive(threadId, userId = 'user-1') {
+      activeThreads.set(threadId, userId);
+    },
+    clearActive(threadId) {
+      activeThreads.delete(threadId);
+    },
     /** @type {any} */
     tracker: {
-      start(threadId, userId, targetCats) {
+      start(threadId, _userId, _targetCats) {
         starts.push({ threadId });
         const controller = { signal: { aborted } };
         return controller;
       },
-      complete(threadId, controller) {
+      complete(threadId, _controller) {
         completes.push({ threadId });
       },
       has(threadId) {
@@ -213,7 +227,7 @@ describe('ConnectorInvokeTrigger', () => {
   /** Wait for background execution to complete */
   async function waitForTrigger() {
     // trigger() is fire-and-forget; give microtasks time to settle
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await new Promise((resolve) => setTimeout(resolve, 50));
   }
 
   it('creates InvocationRecord and calls routeExecution', async () => {
@@ -242,13 +256,13 @@ describe('ConnectorInvokeTrigger', () => {
     await waitForTrigger();
 
     // Should have broadcast text + done messages
-    const agentBroadcasts = socketMock.broadcasts.filter(b => b.threadId === 'thread-1');
+    const agentBroadcasts = socketMock.broadcasts.filter((b) => b.threadId === 'thread-1');
     assert.ok(agentBroadcasts.length >= 2, `Expected at least 2 broadcasts, got ${agentBroadcasts.length}`);
     assert.strictEqual(agentBroadcasts[0].msg.type, 'text');
     assert.strictEqual(agentBroadcasts[1].msg.type, 'done');
 
     // Should have broadcast intent_mode
-    const intentBroadcast = socketMock.roomBroadcasts.find(b => b.event === 'intent_mode');
+    const intentBroadcast = socketMock.roomBroadcasts.find((b) => b.event === 'intent_mode');
     assert.ok(intentBroadcast, 'Should broadcast intent_mode');
     assert.strictEqual(intentBroadcast.data.mode, 'execute');
   });
@@ -315,7 +329,7 @@ describe('ConnectorInvokeTrigger', () => {
     assert.strictEqual(routerMock.calls.length, 0);
 
     // Should update status to canceled
-    const cancelUpdate = recordMock.updates.find(u => u.data.status === 'canceled');
+    const cancelUpdate = recordMock.updates.find((u) => u.data.status === 'canceled');
     assert.ok(cancelUpdate, 'Should set status to canceled');
   });
 
@@ -326,12 +340,12 @@ describe('ConnectorInvokeTrigger', () => {
     await waitForTrigger();
 
     // Should update status to failed
-    const failUpdate = recordMock.updates.find(u => u.data.status === 'failed');
+    const failUpdate = recordMock.updates.find((u) => u.data.status === 'failed');
     assert.ok(failUpdate, 'Should set status to failed');
     assert.ok(failUpdate.data.error.includes('CLI crashed'));
 
     // Should broadcast error to WebSocket
-    const errorBroadcast = socketMock.broadcasts.find(b => b.msg.type === 'error');
+    const errorBroadcast = socketMock.broadcasts.find((b) => b.msg.type === 'error');
     assert.ok(errorBroadcast, 'Should broadcast error');
 
     // Should still complete tracker (finally block)
@@ -344,7 +358,7 @@ describe('ConnectorInvokeTrigger', () => {
     trigger.trigger('thread-1', /** @type {any} */ ('opus'), 'user-1', 'msg', 'msg-1');
     await waitForTrigger();
 
-    const failUpdate = recordMock.updates.find(u => u.data.status === 'failed');
+    const failUpdate = recordMock.updates.find((u) => u.data.status === 'failed');
     assert.ok(failUpdate, 'Should set status to failed on persistence failure');
     assert.ok(failUpdate.data.error.includes('persistence failed'));
 
@@ -356,7 +370,9 @@ describe('ConnectorInvokeTrigger', () => {
 
   it('R1-P1 regression: create() throws → no unhandledRejection, no tracker leak', async () => {
     // Override create to throw
-    recordMock.store.create = async () => { throw new Error('create boom'); };
+    recordMock.store.create = async () => {
+      throw new Error('create boom');
+    };
 
     const trigger = createTrigger();
     trigger.trigger('thread-1', /** @type {any} */ ('opus'), 'user-1', 'msg', 'msg-1');
@@ -420,14 +436,10 @@ describe('ConnectorInvokeTrigger', () => {
     it('preempts active invocation for urgent connector triggers', async () => {
       trackerMock.setActive('thread-1', 'user-1');
       const trigger = createTrigger();
-      trigger.trigger(
-        'thread-1',
-        /** @type {any} */ ('opus'),
-        'user-1',
-        'Urgent review msg',
-        'msg-urgent-1',
-        { priority: 'urgent', reason: 'github_review' },
-      );
+      trigger.trigger('thread-1', /** @type {any} */ ('opus'), 'user-1', 'Urgent review msg', 'msg-urgent-1', {
+        priority: 'urgent',
+        reason: 'github_review',
+      });
       await waitForTrigger();
 
       // Should execute directly instead of queueing
@@ -467,14 +479,10 @@ describe('ConnectorInvokeTrigger', () => {
     it('does not preempt when urgent cancel is denied (owner mismatch)', async () => {
       trackerMock.setActive('thread-1', 'owner-user');
       const trigger = createTrigger();
-      trigger.trigger(
-        'thread-1',
-        /** @type {any} */ ('opus'),
-        'user-2',
-        'Urgent review msg',
-        'msg-urgent-2',
-        { priority: 'urgent', reason: 'github_review' },
-      );
+      trigger.trigger('thread-1', /** @type {any} */ ('opus'), 'user-2', 'Urgent review msg', 'msg-urgent-2', {
+        priority: 'urgent',
+        reason: 'github_review',
+      });
       await waitForTrigger();
 
       // owner mismatch should enqueue without attempting cancel
@@ -490,14 +498,10 @@ describe('ConnectorInvokeTrigger', () => {
       trackerMock.setActive('thread-1', 'user-1');
       recordMock.setDuplicate();
       const trigger = createTrigger();
-      trigger.trigger(
-        'thread-1',
-        /** @type {any} */ ('opus'),
-        'user-1',
-        'Urgent duplicate review msg',
-        'msg-dup-1',
-        { priority: 'urgent', reason: 'github_review' },
-      );
+      trigger.trigger('thread-1', /** @type {any} */ ('opus'), 'user-1', 'Urgent duplicate review msg', 'msg-dup-1', {
+        priority: 'urgent',
+        reason: 'github_review',
+      });
       await waitForTrigger();
 
       // Existing invocation should remain untouched.
@@ -527,25 +531,17 @@ describe('ConnectorInvokeTrigger', () => {
       };
 
       const trigger = createTrigger();
-      trigger.trigger(
-        'thread-1',
-        /** @type {any} */ ('opus'),
-        'user-1',
-        'Urgent duplicate race',
-        'msg-dup-race',
-        { priority: 'urgent', reason: 'github_review' },
-      );
+      trigger.trigger('thread-1', /** @type {any} */ ('opus'), 'user-1', 'Urgent duplicate race', 'msg-dup-race', {
+        priority: 'urgent',
+        reason: 'github_review',
+      });
 
       // Let first trigger enter create() await, then send duplicate.
       await Promise.resolve();
-      trigger.trigger(
-        'thread-1',
-        /** @type {any} */ ('opus'),
-        'user-1',
-        'Urgent duplicate race',
-        'msg-dup-race',
-        { priority: 'urgent', reason: 'github_review' },
-      );
+      trigger.trigger('thread-1', /** @type {any} */ ('opus'), 'user-1', 'Urgent duplicate race', 'msg-dup-race', {
+        priority: 'urgent',
+        reason: 'github_review',
+      });
 
       await waitForTrigger();
       assert.strictEqual(trackerMock.cancelCalls.length, 0, 'Duplicate trigger must not cancel before winner resolves');
@@ -601,9 +597,17 @@ describe('ConnectorInvokeTrigger', () => {
 
       assert.strictEqual(trackerMock.cancelCalls.length, 1, 'Should attempt cancel once');
       assert.strictEqual(routerMock.calls.length, 0, 'Should not execute fallback inline while cancel denied');
-      assert.strictEqual(queue.list('thread-1', 'user-1').length, 1, 'Fallback entry should already be enqueued before awaited update');
+      assert.strictEqual(
+        queue.list('thread-1', 'user-1').length,
+        1,
+        'Fallback entry should already be enqueued before awaited update',
+      );
       const canceledUpdates = recordMock.updates.filter((update) => update.data.status === 'canceled');
-      assert.strictEqual(canceledUpdates.length, 1, 'Fallback invocation should be marked canceled after queue handoff');
+      assert.strictEqual(
+        canceledUpdates.length,
+        1,
+        'Fallback invocation should be marked canceled after queue handoff',
+      );
     });
 
     it('falls back to direct execution when urgent fallback queue is full', async () => {
@@ -618,21 +622,22 @@ describe('ConnectorInvokeTrigger', () => {
         await waitForTrigger();
       }
 
-      trigger.trigger(
-        'thread-1',
-        /** @type {any} */ ('opus'),
-        'user-1',
-        'Urgent when queue full',
-        'msg-urgent-full',
-        { priority: 'urgent', reason: 'github_review' },
-      );
+      trigger.trigger('thread-1', /** @type {any} */ ('opus'), 'user-1', 'Urgent when queue full', 'msg-urgent-full', {
+        priority: 'urgent',
+        reason: 'github_review',
+      });
       await waitForTrigger();
 
       assert.strictEqual(trackerMock.cancelCalls.length, 1, 'Should attempt cancel once');
       assert.strictEqual(routerMock.calls.length, 1, 'Should execute directly when fallback enqueue is full');
-      assert.strictEqual(queue.list('thread-1', 'user-1').length, 5, 'Queue should remain full without fallback enqueue');
-      const canceledFallback = recordMock.updates.filter((update) =>
-        update.data.status === 'canceled' && update.data.error === 'urgent preempt fallback to queue');
+      assert.strictEqual(
+        queue.list('thread-1', 'user-1').length,
+        5,
+        'Queue should remain full without fallback enqueue',
+      );
+      const canceledFallback = recordMock.updates.filter(
+        (update) => update.data.status === 'canceled' && update.data.error === 'urgent preempt fallback to queue',
+      );
       assert.strictEqual(canceledFallback.length, 0, 'Direct fallback must not mark invocation canceled');
     });
 
@@ -668,8 +673,10 @@ describe('ConnectorInvokeTrigger', () => {
 
       assert.strictEqual(trackerMock.cancelCalls.length, 1, 'Should attempt cancel once');
       assert.strictEqual(routerMock.calls.length, 0, 'Must not execute when queue is full and owner changed');
-      const failedUpdates = recordMock.updates.filter((update) =>
-        update.data.status === 'failed' && update.data.error === 'urgent fallback queue full with owner mismatch');
+      const failedUpdates = recordMock.updates.filter(
+        (update) =>
+          update.data.status === 'failed' && update.data.error === 'urgent fallback queue full with owner mismatch',
+      );
       assert.strictEqual(failedUpdates.length, 1, 'Should mark provisional invocation as failed');
     });
 
@@ -679,7 +686,7 @@ describe('ConnectorInvokeTrigger', () => {
       trigger.trigger('thread-1', /** @type {any} */ ('opus'), 'user-1', 'Review msg', 'msg-1');
       await waitForTrigger();
 
-      const queueUpdate = socketMock.userEmits.find(e => e.event === 'queue_updated');
+      const queueUpdate = socketMock.userEmits.find((e) => e.event === 'queue_updated');
       assert.ok(queueUpdate, 'Should emit queue_updated');
       assert.strictEqual(queueUpdate.userId, 'user-1');
       assert.strictEqual(queueUpdate.data.threadId, 'thread-1');
@@ -720,12 +727,12 @@ describe('ConnectorInvokeTrigger', () => {
       trigger.trigger('thread-1', /** @type {any} */ ('codex'), 'user-1', 'overflow msg', 'msg-overflow');
       await waitForTrigger();
 
-      const fullWarning = socketMock.userEmits.find(e => e.event === 'queue_full_warning');
+      const fullWarning = socketMock.userEmits.find((e) => e.event === 'queue_full_warning');
       assert.ok(fullWarning, 'Should emit queue_full_warning');
       assert.strictEqual(fullWarning.data.source, 'connector');
 
       // Should NOT have emitted queue_updated for the overflow
-      const lastUpdate = socketMock.userEmits.filter(e => e.event === 'queue_updated');
+      const lastUpdate = socketMock.userEmits.filter((e) => e.event === 'queue_updated');
       // 5 successful enqueues = 5 queue_updated events (but not 6)
       assert.strictEqual(lastUpdate.length, 5);
     });

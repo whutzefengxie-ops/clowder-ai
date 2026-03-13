@@ -1,17 +1,17 @@
-import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
 
 describe('OutboundDeliveryHook — media delivery integration', () => {
   it('sends synthesized audio via sendMedia when audio block has url', async () => {
-    const { OutboundDeliveryHook } = await import(
-      '../dist/infrastructure/connectors/OutboundDeliveryHook.js'
-    );
+    const { OutboundDeliveryHook } = await import('../dist/infrastructure/connectors/OutboundDeliveryHook.js');
 
     const sendMediaCalls = [];
     const mockAdapter = {
       connectorId: 'feishu',
       async sendReply() {},
-      async sendMedia(chatId, payload) { sendMediaCalls.push({ chatId, payload }); },
+      async sendMedia(chatId, payload) {
+        sendMediaCalls.push({ chatId, payload });
+      },
       async sendRichMessage() {},
     };
 
@@ -36,15 +36,15 @@ describe('OutboundDeliveryHook — media delivery integration', () => {
   });
 
   it('sends media_gallery image blocks via sendMedia', async () => {
-    const { OutboundDeliveryHook } = await import(
-      '../dist/infrastructure/connectors/OutboundDeliveryHook.js'
-    );
+    const { OutboundDeliveryHook } = await import('../dist/infrastructure/connectors/OutboundDeliveryHook.js');
 
     const sendMediaCalls = [];
     const mockAdapter = {
       connectorId: 'telegram',
       async sendReply() {},
-      async sendMedia(chatId, payload) { sendMediaCalls.push({ chatId, payload }); },
+      async sendMedia(chatId, payload) {
+        sendMediaCalls.push({ chatId, payload });
+      },
       async sendRichMessage() {},
     };
 
@@ -59,10 +59,15 @@ describe('OutboundDeliveryHook — media delivery integration', () => {
     });
 
     await hook.deliver('T2', 'Check this image', undefined, [
-      { id: 'block1', kind: 'media_gallery', v: 1, items: [
-        { url: '/uploads/photo.jpg', type: 'image' },
-        { url: '/uploads/doc.pdf', type: 'file' },
-      ] },
+      {
+        id: 'block1',
+        kind: 'media_gallery',
+        v: 1,
+        items: [
+          { url: '/uploads/photo.jpg', type: 'image' },
+          { url: '/uploads/doc.pdf', type: 'file' },
+        ],
+      },
     ]);
 
     // Only the image item should be sent, not the file item
@@ -72,14 +77,14 @@ describe('OutboundDeliveryHook — media delivery integration', () => {
   });
 
   it('does not send media when adapter lacks sendMedia', async () => {
-    const { OutboundDeliveryHook } = await import(
-      '../dist/infrastructure/connectors/OutboundDeliveryHook.js'
-    );
+    const { OutboundDeliveryHook } = await import('../dist/infrastructure/connectors/OutboundDeliveryHook.js');
 
     const replyCalls = [];
     const mockAdapter = {
       connectorId: 'basic',
-      async sendReply(chatId, content) { replyCalls.push({ chatId, content }); },
+      async sendReply(chatId, content) {
+        replyCalls.push({ chatId, content });
+      },
       // No sendMedia method
     };
 
@@ -103,15 +108,15 @@ describe('OutboundDeliveryHook — media delivery integration', () => {
   });
 
   it('R3-P1: mediaPathResolver resolves route URL to absPath in sendMedia payload', async () => {
-    const { OutboundDeliveryHook } = await import(
-      '../dist/infrastructure/connectors/OutboundDeliveryHook.js'
-    );
+    const { OutboundDeliveryHook } = await import('../dist/infrastructure/connectors/OutboundDeliveryHook.js');
 
     const sendMediaCalls = [];
     const mockAdapter = {
       connectorId: 'telegram',
       async sendReply() {},
-      async sendMedia(chatId, payload) { sendMediaCalls.push({ chatId, payload }); },
+      async sendMedia(chatId, payload) {
+        sendMediaCalls.push({ chatId, payload });
+      },
     };
 
     const hook = new OutboundDeliveryHook({
@@ -139,15 +144,15 @@ describe('OutboundDeliveryHook — media delivery integration', () => {
   });
 
   it('R3-P1: mediaPathResolver resolves image URL to absPath', async () => {
-    const { OutboundDeliveryHook } = await import(
-      '../dist/infrastructure/connectors/OutboundDeliveryHook.js'
-    );
+    const { OutboundDeliveryHook } = await import('../dist/infrastructure/connectors/OutboundDeliveryHook.js');
 
     const sendMediaCalls = [];
     const mockAdapter = {
       connectorId: 'telegram',
       async sendReply() {},
-      async sendMedia(chatId, payload) { sendMediaCalls.push({ chatId, payload }); },
+      async sendMedia(chatId, payload) {
+        sendMediaCalls.push({ chatId, payload });
+      },
     };
 
     const hook = new OutboundDeliveryHook({
@@ -173,9 +178,7 @@ describe('OutboundDeliveryHook — media delivery integration', () => {
   });
 
   it('handles multiple bindings delivering to different adapters', async () => {
-    const { OutboundDeliveryHook } = await import(
-      '../dist/infrastructure/connectors/OutboundDeliveryHook.js'
-    );
+    const { OutboundDeliveryHook } = await import('../dist/infrastructure/connectors/OutboundDeliveryHook.js');
 
     const feishuMedia = [];
     const telegramMedia = [];
@@ -190,18 +193,28 @@ describe('OutboundDeliveryHook — media delivery integration', () => {
         },
       },
       adapters: new Map([
-        ['feishu', {
-          connectorId: 'feishu',
-          async sendReply() {},
-          async sendRichMessage() {},
-          async sendMedia(_c, p) { feishuMedia.push(p); },
-        }],
-        ['telegram', {
-          connectorId: 'telegram',
-          async sendReply() {},
-          async sendRichMessage() {},
-          async sendMedia(_c, p) { telegramMedia.push(p); },
-        }],
+        [
+          'feishu',
+          {
+            connectorId: 'feishu',
+            async sendReply() {},
+            async sendRichMessage() {},
+            async sendMedia(_c, p) {
+              feishuMedia.push(p);
+            },
+          },
+        ],
+        [
+          'telegram',
+          {
+            connectorId: 'telegram',
+            async sendReply() {},
+            async sendRichMessage() {},
+            async sendMedia(_c, p) {
+              telegramMedia.push(p);
+            },
+          },
+        ],
       ]),
       log: { info() {}, warn() {}, error() {}, debug() {} },
     });

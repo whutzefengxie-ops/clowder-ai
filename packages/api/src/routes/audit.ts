@@ -21,39 +21,35 @@ export interface AuditRoutesOptions {
 export const auditRoutes: FastifyPluginAsync<AuditRoutesOptions> = async (app, opts) => {
   const { threadStore } = opts;
 
-  app.get<{ Params: { threadId: string } }>(
-    '/api/audit/thread/:threadId',
-    async (request, reply) => {
-      const { threadId } = request.params;
-      const userId = resolveUserId(request);
+  app.get<{ Params: { threadId: string } }>('/api/audit/thread/:threadId', async (request, reply) => {
+    const { threadId } = request.params;
+    const userId = resolveUserId(request);
 
-      if (!userId) {
-        reply.status(401);
-        return { error: 'Identity required (X-Cat-Cafe-User header or userId query)' };
-      }
-
-      const thread = await threadStore.get(threadId);
-      if (!thread) {
-        reply.status(404);
-        return { error: 'Thread not found' };
-      }
-
-      if (thread.createdBy !== userId) {
-        reply.status(403);
-        return { error: 'Access denied' };
-      }
-
-      const auditLog = getEventAuditLog();
-      const events = await auditLog.readByThread(threadId, { days: 7 });
-      const logFiles = await auditLog.listFiles();
-
-      // logPath 仅在开发环境或显式开关下暴露 (避免生产路径泄露)
-      const env = process.env;
-      const exposePath = env['EXPOSE_LOG_PATH'] === 'true'
-        || env['NODE_ENV'] !== 'production';
-      const logPath = exposePath ? auditLog.getLogPath() : null;
-
-      return { events, logPath, logFiles };
+    if (!userId) {
+      reply.status(401);
+      return { error: 'Identity required (X-Cat-Cafe-User header or userId query)' };
     }
-  );
+
+    const thread = await threadStore.get(threadId);
+    if (!thread) {
+      reply.status(404);
+      return { error: 'Thread not found' };
+    }
+
+    if (thread.createdBy !== userId) {
+      reply.status(403);
+      return { error: 'Access denied' };
+    }
+
+    const auditLog = getEventAuditLog();
+    const events = await auditLog.readByThread(threadId, { days: 7 });
+    const logFiles = await auditLog.listFiles();
+
+    // logPath 仅在开发环境或显式开关下暴露 (避免生产路径泄露)
+    const env = process.env;
+    const exposePath = env.EXPOSE_LOG_PATH === 'true' || env.NODE_ENV !== 'production';
+    const logPath = exposePath ? auditLog.getLogPath() : null;
+
+    return { events, logPath, logFiles };
+  });
 };

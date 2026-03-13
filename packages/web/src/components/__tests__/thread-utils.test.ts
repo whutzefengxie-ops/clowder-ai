@@ -83,8 +83,8 @@ describe('sortAndGroupThreads', () => {
     const pinnedGroup = groups.find((g) => g.type === 'pinned');
     const favGroup = groups.find((g) => g.type === 'favorites');
     expect(pinnedGroup).toBeDefined();
-    expect(pinnedGroup!.threads).toHaveLength(1);
-    expect(pinnedGroup!.threads[0].id).toBe('both');
+    expect(pinnedGroup?.threads).toHaveLength(1);
+    expect(pinnedGroup?.threads[0].id).toBe('both');
     expect(favGroup).toBeUndefined(); // should not appear in favorites
   });
 
@@ -305,7 +305,7 @@ describe('sortAndGroupThreadsWithWorkspace', () => {
     );
     const recent = groups.find((g) => g.type === 'recent');
     expect(recent).toBeDefined();
-    expect(recent!.threads.map((t) => t.id)).toEqual(['t3', 't2', 't1']);
+    expect(recent?.threads.map((t) => t.id)).toEqual(['t3', 't2', 't1']);
   });
 
   it('archived-container has archivedGroups with nested project groups', () => {
@@ -322,8 +322,8 @@ describe('sortAndGroupThreadsWithWorkspace', () => {
     );
     const archived = groups.find((g) => g.type === 'archived-container');
     expect(archived).toBeDefined();
-    expect(archived!.archivedGroups).toHaveLength(2);
-    expect(archived!.label).toMatch(/其他项目 \(2\)/);
+    expect(archived?.archivedGroups).toHaveLength(2);
+    expect(archived?.label).toMatch(/其他项目 \(2\)/);
   });
 
   it('pinned projects stay in active section even when old', () => {

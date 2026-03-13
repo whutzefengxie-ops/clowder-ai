@@ -28,9 +28,7 @@ export function AuthorizationCard({ request, onRespond }: AuthorizationCardProps
             {catLabel} 请求权限: <code className="text-xs bg-amber-100 px-1 py-0.5 rounded">{request.action}</code>
           </div>
           <p className="text-xs text-gray-600 mt-1">{request.reason}</p>
-          {request.context && (
-            <p className="text-xs text-gray-500 mt-1 italic">{request.context}</p>
-          )}
+          {request.context && <p className="text-xs text-gray-500 mt-1 italic">{request.context}</p>}
         </div>
       </div>
 

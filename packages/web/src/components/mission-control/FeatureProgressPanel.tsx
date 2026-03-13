@@ -46,11 +46,7 @@ export function FeatureProgressPanel({ detail }: FeatureProgressPanelProps) {
   );
 }
 
-function PhaseRow({
-  phase,
-  expanded,
-  onToggle,
-}: { phase: FeatureDocPhase; expanded: boolean; onToggle: () => void }) {
+function PhaseRow({ phase, expanded, onToggle }: { phase: FeatureDocPhase; expanded: boolean; onToggle: () => void }) {
   const total = phase.acs.length;
   const done = phase.acs.filter((ac) => ac.done).length;
   const pct = total > 0 ? Math.round((done / total) * 100) : 0;
@@ -80,7 +76,15 @@ function PhaseRow({
           {phase.acs.map((ac) => (
             <div key={ac.id} className="flex items-center gap-1.5 text-[11px]">
               {ac.done ? (
-                <svg className="h-3.5 w-3.5 shrink-0 text-[#7CB87C]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg
+                  className="h-3.5 w-3.5 shrink-0 text-[#7CB87C]"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
                   <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
                   <polyline points="22 4 12 14.01 9 11.01" />
                 </svg>

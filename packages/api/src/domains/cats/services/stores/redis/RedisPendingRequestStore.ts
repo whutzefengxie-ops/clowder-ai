@@ -12,9 +12,9 @@
 
 import type { CatId, PendingRequestRecord, RespondScope } from '@cat-cafe/shared';
 import type { RedisClient } from '@cat-cafe/shared/utils';
-import { PendingReqKeys } from '../redis-keys/authorization-keys.js';
-import type { CreatePendingInput, IPendingRequestStore } from '../ports/PendingRequestStore.js';
 import { generateSortableId } from '../ports/MessageStore.js';
+import type { CreatePendingInput, IPendingRequestStore } from '../ports/PendingRequestStore.js';
+import { PendingReqKeys } from '../redis-keys/authorization-keys.js';
 
 const DEFAULT_TTL_SECONDS = 7 * 24 * 60 * 60; // 7 days
 const DEFAULT_MAX = 1000;
@@ -95,7 +95,7 @@ export class RedisPendingRequestStore implements IPendingRequestStore {
   async get(requestId: string): Promise<PendingRequestRecord | null> {
     const key = PendingReqKeys.detail(requestId);
     const data = await this.redis.hgetall(key);
-    if (!data || !data['requestId']) return null;
+    if (!data || !data.requestId) return null;
     return this.hydrateRecord(data);
   }
 
@@ -109,22 +109,11 @@ export class RedisPendingRequestStore implements IPendingRequestStore {
     const key = PendingReqKeys.detail(requestId);
 
     // Build field/value pairs for atomic HSET inside Lua
-    const pairs: string[] = [
-      'status', decision,
-      'respondedAt', String(now),
-      'respondScope', scope,
-    ];
+    const pairs: string[] = ['status', decision, 'respondedAt', String(now), 'respondScope', scope];
     if (reason) pairs.push('respondReason', reason);
 
     // Lua CAS: atomically check status='waiting' → HSET + ZREM
-    const ok = await this.redis.eval(
-      CAS_RESPOND_LUA,
-      2,
-      key,
-      PendingReqKeys.WAITING,
-      requestId,
-      ...pairs,
-    ) as number;
+    const ok = (await this.redis.eval(CAS_RESPOND_LUA, 2, key, PendingReqKeys.WAITING, requestId, ...pairs)) as number;
 
     if (ok === 0) return null;
 
@@ -148,7 +137,7 @@ export class RedisPendingRequestStore implements IPendingRequestStore {
     for (const [err, data] of results) {
       if (err || !data || typeof data !== 'object') continue;
       const d = data as Record<string, string>;
-      if (!d['requestId']) continue;
+      if (!d.requestId) continue;
       const record = this.hydrateRecord(d);
       if (record.status !== 'waiting') continue;
       if (threadId && record.threadId !== threadId) continue;
@@ -182,14 +171,22 @@ export class RedisPendingRequestStore implements IPendingRequestStore {
 
   private serializeRecord(record: PendingRequestRecord): string[] {
     const fields: string[] = [
-      'requestId', record.requestId,
-      'invocationId', record.invocationId,
-      'catId', record.catId,
-      'threadId', record.threadId,
-      'action', record.action,
-      'reason', record.reason,
-      'createdAt', String(record.createdAt),
-      'status', record.status,
+      'requestId',
+      record.requestId,
+      'invocationId',
+      record.invocationId,
+      'catId',
+      record.catId,
+      'threadId',
+      record.threadId,
+      'action',
+      record.action,
+      'reason',
+      record.reason,
+      'createdAt',
+      String(record.createdAt),
+      'status',
+      record.status,
     ];
     if (record.context) fields.push('context', record.context);
     if (record.respondedAt) fields.push('respondedAt', String(record.respondedAt));
@@ -200,18 +197,18 @@ export class RedisPendingRequestStore implements IPendingRequestStore {
 
   private hydrateRecord(data: Record<string, string>): PendingRequestRecord {
     return {
-      requestId: data['requestId']!,
-      invocationId: data['invocationId']!,
-      catId: data['catId']! as CatId,
-      threadId: data['threadId']!,
-      action: data['action']!,
-      reason: data['reason']!,
-      createdAt: parseInt(data['createdAt']!, 10),
-      status: data['status']! as 'waiting' | 'granted' | 'denied',
-      ...(data['context'] ? { context: data['context'] } : {}),
-      ...(data['respondedAt'] ? { respondedAt: parseInt(data['respondedAt'], 10) } : {}),
-      ...(data['respondReason'] ? { respondReason: data['respondReason'] } : {}),
-      ...(data['respondScope'] ? { respondScope: data['respondScope'] as RespondScope } : {}),
+      requestId: data.requestId!,
+      invocationId: data.invocationId!,
+      catId: data.catId! as CatId,
+      threadId: data.threadId!,
+      action: data.action!,
+      reason: data.reason!,
+      createdAt: parseInt(data.createdAt!, 10),
+      status: data.status! as 'waiting' | 'granted' | 'denied',
+      ...(data.context ? { context: data.context } : {}),
+      ...(data.respondedAt ? { respondedAt: parseInt(data.respondedAt, 10) } : {}),
+      ...(data.respondReason ? { respondReason: data.respondReason } : {}),
+      ...(data.respondScope ? { respondScope: data.respondScope as RespondScope } : {}),
     };
   }
 }

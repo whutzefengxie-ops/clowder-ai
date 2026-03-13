@@ -6,15 +6,15 @@
  * DELETE /api/config/session-strategy/:catId    — remove runtime override (fall back to lower sources)
  */
 
-import type { FastifyInstance, FastifyPluginOptions } from 'fastify';
 import type { SessionStrategyConfig } from '@cat-cafe/shared';
 import { catRegistry } from '@cat-cafe/shared';
-import { sessionStrategySchema, isSessionChainEnabled } from '../config/cat-config-loader.js';
+import type { FastifyInstance, FastifyPluginOptions } from 'fastify';
+import { isSessionChainEnabled, sessionStrategySchema } from '../config/cat-config-loader.js';
 import { getSessionStrategyWithSource } from '../config/session-strategy.js';
 import {
+  deleteRuntimeOverride,
   getAllRuntimeOverrides,
   setRuntimeOverride,
-  deleteRuntimeOverride,
 } from '../config/session-strategy-overrides.js';
 
 /** Providers that support compression event signaling (PreCompact hook) */
@@ -29,10 +29,7 @@ function resolveOperator(raw: unknown): string | null {
   return null;
 }
 
-export async function sessionStrategyConfigRoutes(
-  app: FastifyInstance,
-  _opts: FastifyPluginOptions,
-): Promise<void> {
+export async function sessionStrategyConfigRoutes(app: FastifyInstance, _opts: FastifyPluginOptions): Promise<void> {
   /**
    * GET /api/config/session-strategy
    * Returns every registered variant cat's effective strategy, source, and override status.
@@ -71,93 +68,88 @@ export async function sessionStrategyConfigRoutes(
    * Set or update a runtime strategy override for a specific variant cat.
    * The override is deep-merged with the base strategy at read time.
    */
-  app.patch<{ Params: { catId: string } }>(
-    '/api/config/session-strategy/:catId',
-    async (request, reply) => {
-      const operator = resolveOperator(request.headers['x-cat-cafe-user']);
-      if (!operator) {
-        reply.status(400);
-        return { error: 'Identity required (X-Cat-Cafe-User header)' };
-      }
+  app.patch<{ Params: { catId: string } }>('/api/config/session-strategy/:catId', async (request, reply) => {
+    const operator = resolveOperator(request.headers['x-cat-cafe-user']);
+    if (!operator) {
+      reply.status(400);
+      return { error: 'Identity required (X-Cat-Cafe-User header)' };
+    }
 
-      const { catId } = request.params;
+    const { catId } = request.params;
 
-      // Verify cat exists in registry
-      const entry = catRegistry.tryGet(catId);
-      if (!entry) {
-        reply.status(404);
-        return { error: `Unknown cat ID: "${catId}"` };
-      }
+    // Verify cat exists in registry
+    const entry = catRegistry.tryGet(catId);
+    if (!entry) {
+      reply.status(404);
+      return { error: `Unknown cat ID: "${catId}"` };
+    }
 
-      // Validate the override payload with the shared Zod schema
-      const parseResult = sessionStrategySchema.safeParse(request.body);
-      if (!parseResult.success) {
-        reply.status(400);
-        return { error: 'Invalid strategy config', details: parseResult.error.issues };
-      }
+    // Validate the override payload with the shared Zod schema
+    const parseResult = sessionStrategySchema.safeParse(request.body);
+    if (!parseResult.success) {
+      reply.status(400);
+      return { error: 'Invalid strategy config', details: parseResult.error.issues };
+    }
 
-      const override = parseResult.data;
-      if (!override || Object.keys(override).length === 0) {
-        reply.status(400);
-        return { error: 'Empty override — use DELETE to remove an override' };
-      }
+    const override = parseResult.data;
+    if (!override || Object.keys(override).length === 0) {
+      reply.status(400);
+      return { error: 'Empty override — use DELETE to remove an override' };
+    }
 
-      // Guard: hybrid requires hook-capable provider
-      if (override.strategy === 'hybrid' && !HOOK_CAPABLE_PROVIDERS.has(entry.config.provider)) {
-        reply.status(422);
-        return {
-          error: `hybrid strategy requires a hook-capable provider (${[...HOOK_CAPABLE_PROVIDERS].join(', ')}), ` +
-            `but "${catId}" uses provider "${entry.config.provider}"`,
-        };
-      }
-
-      // Zod .optional() produces `T | undefined` for nested props; our type uses optional-only.
-      // Shapes are equivalent at runtime after validation.
-      await setRuntimeOverride(catId, override as unknown as Partial<SessionStrategyConfig>);
-      request.log.info({ operator, catId, override }, 'session strategy override set');
-
-      // Return the new effective config after applying the override
-      const { effective, source } = getSessionStrategyWithSource(catId);
+    // Guard: hybrid requires hook-capable provider
+    if (override.strategy === 'hybrid' && !HOOK_CAPABLE_PROVIDERS.has(entry.config.provider)) {
+      reply.status(422);
       return {
-        catId,
-        effective,
-        source,
-        override,
+        error:
+          `hybrid strategy requires a hook-capable provider (${[...HOOK_CAPABLE_PROVIDERS].join(', ')}), ` +
+          `but "${catId}" uses provider "${entry.config.provider}"`,
       };
-    },
-  );
+    }
+
+    // Zod .optional() produces `T | undefined` for nested props; our type uses optional-only.
+    // Shapes are equivalent at runtime after validation.
+    await setRuntimeOverride(catId, override as unknown as Partial<SessionStrategyConfig>);
+    request.log.info({ operator, catId, override }, 'session strategy override set');
+
+    // Return the new effective config after applying the override
+    const { effective, source } = getSessionStrategyWithSource(catId);
+    return {
+      catId,
+      effective,
+      source,
+      override,
+    };
+  });
 
   /**
    * DELETE /api/config/session-strategy/:catId
    * Remove a runtime override for a variant cat — it falls back to lower-priority sources.
    */
-  app.delete<{ Params: { catId: string } }>(
-    '/api/config/session-strategy/:catId',
-    async (request, reply) => {
-      const operator = resolveOperator(request.headers['x-cat-cafe-user']);
-      if (!operator) {
-        reply.status(400);
-        return { error: 'Identity required (X-Cat-Cafe-User header)' };
-      }
+  app.delete<{ Params: { catId: string } }>('/api/config/session-strategy/:catId', async (request, reply) => {
+    const operator = resolveOperator(request.headers['x-cat-cafe-user']);
+    if (!operator) {
+      reply.status(400);
+      return { error: 'Identity required (X-Cat-Cafe-User header)' };
+    }
 
-      const { catId } = request.params;
+    const { catId } = request.params;
 
-      // Verify cat exists in registry
-      if (!catRegistry.tryGet(catId)) {
-        reply.status(404);
-        return { error: `Unknown cat ID: "${catId}"` };
-      }
+    // Verify cat exists in registry
+    if (!catRegistry.tryGet(catId)) {
+      reply.status(404);
+      return { error: `Unknown cat ID: "${catId}"` };
+    }
 
-      const existed = await deleteRuntimeOverride(catId);
-      request.log.info({ operator, catId, deleted: existed }, 'session strategy override delete');
-      if (!existed) {
-        reply.status(404);
-        return { error: `No runtime override exists for "${catId}"` };
-      }
+    const existed = await deleteRuntimeOverride(catId);
+    request.log.info({ operator, catId, deleted: existed }, 'session strategy override delete');
+    if (!existed) {
+      reply.status(404);
+      return { error: `No runtime override exists for "${catId}"` };
+    }
 
-      // Return the new effective config after removing the override
-      const { effective, source } = getSessionStrategyWithSource(catId);
-      return { catId, effective, source, deleted: true };
-    },
-  );
+    // Return the new effective config after removing the override
+    const { effective, source } = getSessionStrategyWithSource(catId);
+    return { catId, effective, source, deleted: true };
+  });
 }

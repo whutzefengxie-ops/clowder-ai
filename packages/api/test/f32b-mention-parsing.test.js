@@ -4,17 +4,12 @@
  */
 
 import './helpers/setup-cat-registry.js';
-import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
+import { after, before, describe, it } from 'node:test';
 import { catRegistry, createCatId } from '@cat-cafe/shared';
-import { migrateRouterOpts } from './helpers/agent-registry-helpers.js';
 
-const { AgentRouter } = await import(
-  '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-);
-const { AgentRegistry } = await import(
-  '../dist/domains/cats/services/agents/registry/AgentRegistry.js'
-);
+const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
+const { AgentRegistry } = await import('../dist/domains/cats/services/agents/registry/AgentRegistry.js');
 
 /** Minimal mock service that yields text + done */
 function createMockService(catId) {
@@ -115,13 +110,13 @@ const variantCatConfigs = {
 };
 
 // Track whether we registered (for cleanup)
-let registeredVariants = false;
+let _registeredVariants = false;
 
 before(() => {
   for (const [id, config] of Object.entries(variantCatConfigs)) {
     if (!catRegistry.has(id)) {
       catRegistry.register(id, config);
-      registeredVariants = true;
+      _registeredVariants = true;
     }
   }
 });
@@ -149,28 +144,19 @@ describe('F32-b: parseMentions (longest-match-first)', () => {
 
   it('@opus-45 routes to opus-45 only, not both opus and opus-45', async () => {
     const router = await createVariantRouter();
-    const { targetCats } = await router.resolveTargetsAndIntent(
-      '请 @opus-45 帮我写个函数',
-      'test-thread',
-    );
+    const { targetCats } = await router.resolveTargetsAndIntent('请 @opus-45 帮我写个函数', 'test-thread');
     assert.deepEqual(targetCats.map(String), ['opus-45']);
   });
 
   it('@opus routes to opus only, not opus-45', async () => {
     const router = await createVariantRouter();
-    const { targetCats } = await router.resolveTargetsAndIntent(
-      '请 @opus 帮我看看',
-      'test-thread',
-    );
+    const { targetCats } = await router.resolveTargetsAndIntent('请 @opus 帮我看看', 'test-thread');
     assert.deepEqual(targetCats.map(String), ['opus']);
   });
 
   it('@opus and @opus-45 both mentioned → two distinct targets', async () => {
     const router = await createVariantRouter();
-    const { targetCats } = await router.resolveTargetsAndIntent(
-      '@opus 和 @opus-45 一起来讨论',
-      'test-thread',
-    );
+    const { targetCats } = await router.resolveTargetsAndIntent('@opus 和 @opus-45 一起来讨论', 'test-thread');
     assert.equal(targetCats.length, 2);
     assert.ok(targetCats.map(String).includes('opus'));
     assert.ok(targetCats.map(String).includes('opus-45'));
@@ -178,38 +164,26 @@ describe('F32-b: parseMentions (longest-match-first)', () => {
 
   it('@布偶猫4.5 routes to opus-45 (Chinese variant mention)', async () => {
     const router = await createVariantRouter();
-    const { targetCats } = await router.resolveTargetsAndIntent(
-      '请 @布偶猫4.5 来帮忙',
-      'test-thread',
-    );
+    const { targetCats } = await router.resolveTargetsAndIntent('请 @布偶猫4.5 来帮忙', 'test-thread');
     assert.deepEqual(targetCats.map(String), ['opus-45']);
   });
 
   it('token boundary: @opus-45x does not match (no boundary after)', async () => {
     const router = await createVariantRouter();
-    const { targetCats } = await router.resolveTargetsAndIntent(
-      '邮件 @opus-45x 不是猫猫',
-      'test-thread',
-    );
+    const { targetCats } = await router.resolveTargetsAndIntent('邮件 @opus-45x 不是猫猫', 'test-thread');
     // Should fall through to default (opus) since no valid mention found
     assert.deepEqual(targetCats.map(String), ['opus']);
   });
 
   it('token boundary: @opus-45, (with comma) matches', async () => {
     const router = await createVariantRouter();
-    const { targetCats } = await router.resolveTargetsAndIntent(
-      '@opus-45，帮我看看代码',
-      'test-thread',
-    );
+    const { targetCats } = await router.resolveTargetsAndIntent('@opus-45，帮我看看代码', 'test-thread');
     assert.deepEqual(targetCats.map(String), ['opus-45']);
   });
 
   it('preserves first-occurrence ordering', async () => {
     const router = await createVariantRouter();
-    const { targetCats } = await router.resolveTargetsAndIntent(
-      '@codex 和 @opus 来看看',
-      'test-thread',
-    );
+    const { targetCats } = await router.resolveTargetsAndIntent('@codex 和 @opus 来看看', 'test-thread');
     assert.deepEqual(targetCats.map(String), ['codex', 'opus']);
   });
 

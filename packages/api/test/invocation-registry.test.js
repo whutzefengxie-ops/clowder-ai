@@ -3,8 +3,8 @@
  * 测试 MCP 回传鉴权的 invocation 注册和验证
  */
 
-import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
+import { describe, test } from 'node:test';
 
 describe('InvocationRegistry', () => {
   test('create() returns invocationId and callbackToken', async () => {
@@ -102,15 +102,22 @@ describe('InvocationRegistry', () => {
 
     const first = registry.create('user-1', 'opus');
     const second = registry.create('user-2', 'codex');
-    const third = registry.create('user-3', 'gemini');
+    const _third = registry.create('user-3', 'gemini');
 
     // Access first — refreshes its recency, making second the oldest
     assert.ok(registry.verify(first.invocationId, first.callbackToken) !== null);
 
     // Adding a 4th should evict second (oldest unused), not first (recently verified)
     registry.create('user-4', 'opus');
-    assert.ok(registry.verify(first.invocationId, first.callbackToken) !== null, 'first should survive (recently used)');
-    assert.equal(registry.verify(second.invocationId, second.callbackToken), null, 'second should be evicted (oldest unused)');
+    assert.ok(
+      registry.verify(first.invocationId, first.callbackToken) !== null,
+      'first should survive (recently used)',
+    );
+    assert.equal(
+      registry.verify(second.invocationId, second.callbackToken),
+      null,
+      'second should be evicted (oldest unused)',
+    );
   });
 
   test('multiple creates produce unique IDs', async () => {
@@ -277,8 +284,11 @@ describe('InvocationRegistry', () => {
     registry.create('user-3', 'gemini', 'thread-3');
 
     // newId's latest pointer should NOT have been cleaned up by oldId's eviction
-    assert.equal(registry.isLatest(newId), true,
-      'latest pointer must survive when evicted record was already superseded');
+    assert.equal(
+      registry.isLatest(newId),
+      true,
+      'latest pointer must survive when evicted record was already superseded',
+    );
   });
 
   // --- Sliding window TTL renewal (F-Ground-1 pre: TTL 止血) ---
@@ -318,8 +328,7 @@ describe('InvocationRegistry', () => {
     assert.ok(record !== null);
     const remainingMs = record.expiresAt - Date.now();
     // Should be close to 2h (allow 5s tolerance for test execution)
-    assert.ok(remainingMs > 2 * 60 * 60 * 1000 - 5000,
-      `TTL should be ~2h, got ${Math.round(remainingMs / 1000)}s`);
+    assert.ok(remainingMs > 2 * 60 * 60 * 1000 - 5000, `TTL should be ~2h, got ${Math.round(remainingMs / 1000)}s`);
   });
 
   test('stale invocation still rejected despite sliding window', async () => {
@@ -336,7 +345,10 @@ describe('InvocationRegistry', () => {
     const record = registry.verify(old.invocationId, old.callbackToken);
     assert.ok(record !== null, 'old token still valid');
     // ...but isLatest() correctly rejects it
-    assert.equal(registry.isLatest(old.invocationId), false,
-      'stale invocation must be rejected by isLatest even if verify succeeds');
+    assert.equal(
+      registry.isLatest(old.invocationId),
+      false,
+      'stale invocation must be rejected by isLatest even if verify succeeds',
+    );
   });
 });

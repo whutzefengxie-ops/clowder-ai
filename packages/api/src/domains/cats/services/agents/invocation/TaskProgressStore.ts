@@ -21,10 +21,7 @@ export interface TaskProgressSnapshot {
 
 export interface TaskProgressStore {
   getSnapshot(threadId: string, catId: CatId): Promise<TaskProgressSnapshot | null>;
-  setSnapshot(
-    snapshot: TaskProgressSnapshot,
-    options?: { ttlSeconds?: number },
-  ): Promise<void>;
+  setSnapshot(snapshot: TaskProgressSnapshot, options?: { ttlSeconds?: number }): Promise<void>;
   deleteSnapshot(threadId: string, catId: CatId): Promise<void>;
   getThreadSnapshots(threadId: string): Promise<Record<string, TaskProgressSnapshot>>;
   deleteThread(threadId: string): Promise<void>;

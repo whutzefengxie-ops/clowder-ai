@@ -5,10 +5,10 @@
  * Coordinates GameEngine (logic) + GameStore (persistence) + Socket (broadcast).
  */
 
-import type { GameRuntime, GameAction, GameConfig, GameDefinition, Seat } from '@cat-cafe/shared';
+import type { GameAction, GameConfig, GameDefinition, GameRuntime, Seat } from '@cat-cafe/shared';
+import type { IGameStore } from '../stores/ports/GameStore.js';
 import { GameEngine } from './GameEngine.js';
 import { GameViewBuilder } from './GameViewBuilder.js';
-import type { IGameStore } from '../stores/ports/GameStore.js';
 
 interface SocketLike {
   broadcastToRoom(room: string, event: string, data: unknown): void;
@@ -65,7 +65,7 @@ export class GameOrchestrator {
       gameId: created.gameId,
       gameType: created.gameType,
       status: created.status,
-      seats: created.seats.map(s => ({ seatId: s.seatId, actorType: s.actorType, actorId: s.actorId })),
+      seats: created.seats.map((s) => ({ seatId: s.seatId, actorType: s.actorType, actorId: s.actorId })),
       timestamp: now,
     });
 
@@ -95,7 +95,7 @@ export class GameOrchestrator {
     if (!runtime) return;
     if (runtime.status !== 'playing') return;
 
-    const phaseDef = runtime.definition.phases.find(p => p.name === runtime.currentPhase);
+    const phaseDef = runtime.definition.phases.find((p) => p.name === runtime.currentPhase);
     if (!phaseDef) return;
 
     const phaseStart = runtime.phaseStartedAt ?? runtime.updatedAt;
@@ -141,7 +141,7 @@ export class GameOrchestrator {
   private advancePhase(engine: GameEngine): void {
     const runtime = engine.getRuntime();
     const phases = runtime.definition.phases;
-    const currentIdx = phases.findIndex(p => p.name === runtime.currentPhase);
+    const currentIdx = phases.findIndex((p) => p.name === runtime.currentPhase);
 
     engine.clearPendingActions();
 

@@ -3,7 +3,7 @@
  */
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { AudioBlock } from '@/components/rich/AudioBlock';
 
 Object.assign(globalThis as Record<string, unknown>, { React });
@@ -20,15 +20,17 @@ describe('AudioBlock voice message detection', () => {
   });
 
   it('block without text is a generic audio block', () => {
-    const block = { id: 'a1', kind: 'audio' as const, v: 1 as const, url: '/uploads/audio/test.wav' } as { text?: string };
+    const block = { id: 'a1', kind: 'audio' as const, v: 1 as const, url: '/uploads/audio/test.wav' } as {
+      text?: string;
+    };
     expect(!!block.text).toBe(false);
   });
 
   it('voice bar width scales with duration', () => {
     const computeWidth = (sec: number) => Math.min(200, Math.max(80, 80 + sec * 12));
-    expect(computeWidth(0)).toBe(80);   // minimum
-    expect(computeWidth(3)).toBe(116);  // short message
-    expect(computeWidth(5)).toBe(140);  // medium
+    expect(computeWidth(0)).toBe(80); // minimum
+    expect(computeWidth(3)).toBe(116); // short message
+    expect(computeWidth(5)).toBe(140); // medium
     expect(computeWidth(10)).toBe(200); // max cap
     expect(computeWidth(20)).toBe(200); // still max
   });

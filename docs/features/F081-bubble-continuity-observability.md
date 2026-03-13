@@ -177,12 +177,12 @@ team experience可以概括成一句：
 - 两条看似不同的Ragdoll session：`7ef0ef90-ac7c-4672-85f1-e1dd8d9ee444` 与 `bfe74a71-e28f-456d-83e4-ae8c5c4bce14`
 - 一条由 Cat Café runtime 驱动，一条由外部 Claude Code `resume` 直接驱动
 - 进程树向下追到最深处后，两条最终都落在同一个具体 test worker：`test/antigravity-smoke.test.js`
-- 这个 smoke test 不在单独的 opt-in 命令里，而是直接包含在 `packages/api` 默认 `pnpm test` 的 `node --test test/*.test.js` 套件中；只要机器上 `localhost:9000` 有 Antigravity 在监听，它就会自动参战
+- 这个 smoke test 不在单独的 opt-in 命令里，而是直接包含在 `packages/api` 默认 `pnpm test` 的 `node --test test/*.test.js` 套件中；只要机器上 `<local-browser-automation-endpoint>` 有 Antigravity 在监听，它就会自动参战
 - `antigravity-smoke.test.js` 自己声明的单测超时是 `90_000`，内部 `pollResponse()` 也只等 `60_000`，见 `packages/api/test/antigravity-smoke.test.js`
 - 但现场里两条 worker 分别静默挂了 8 分钟以上和 20 分钟以上，明显超过预期
 - `sample` 结果显示两个 worker 都不是在忙 CPU，而是在事件循环里 `kevent` 空等
 - `lsof` 结果显示两个最深 worker 都保持着到 `127.0.0.1:9000` 的 `ESTABLISHED` TCP 连接
-- `curl http://localhost:9000/json/version` 返回正常，说明 Antigravity 端口活着，但 smoke test 路径没有按预期收敛退出
+- `curl http://<local-browser-automation-endpoint>/json/version` 返回正常，说明 Antigravity 端口活着，但 smoke test 路径没有按预期收敛退出
 - 初步推断：这不是“前端把测试刷屏吃掉了”，而是 `antigravity-smoke` 自身存在沉默挂住/句柄未清理问题，随后被Ragdoll的 CLI 静默超时和主区渲染缺失放大成更像“猫没在回话”的体验
 - 更强嫌疑点：`CDP connect → send → receive round trip` 这条测试把 `await client.disconnect()` 放在断言之后；如果 `pollResponse()` 返回 `null` 或中途抛错，WebSocket 可能不会被关闭，测试 worker 会留下对 `:9000` 的活连接
 - 因此，后续修复需要同时覆盖两条线：一条是 `F081` 的气泡连续性/可观测性，另一条是 `antigravity-smoke` 的资源清理与硬 watchdog

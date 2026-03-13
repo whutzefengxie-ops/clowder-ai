@@ -166,38 +166,38 @@ export class RedisMessageStore {
 
   async getById(id: string): Promise<StoredMessage | null> {
     const data = await this.redis.hgetall(MessageKeys.detail(id));
-    if (!data || !data['id']) return null;
+    if (!data || !data.id) return null;
 
-    const contentBlocks = safeParseContentBlocks(data['contentBlocks']);
-    const toolEvents = safeParseToolEvents(data['toolEvents']);
-    const parsedMetadata = safeParseMetadata(data['metadata']);
-    const parsedExtra = safeParseExtra(data['extra']);
-    const parsedSource = safeParseConnectorSource(data['source']);
-    const deletedAt = data['deletedAt'] ? parseInt(data['deletedAt'], 10) : undefined;
+    const contentBlocks = safeParseContentBlocks(data.contentBlocks);
+    const toolEvents = safeParseToolEvents(data.toolEvents);
+    const parsedMetadata = safeParseMetadata(data.metadata);
+    const parsedExtra = safeParseExtra(data.extra);
+    const parsedSource = safeParseConnectorSource(data.source);
+    const deletedAt = data.deletedAt ? parseInt(data.deletedAt, 10) : undefined;
     return {
-      id: data['id'],
-      threadId: data['threadId'] || DEFAULT_THREAD_ID,
-      userId: data['userId'] ?? 'unknown',
-      catId: (data['catId'] || null) as CatId | null,
-      content: data['content'] ?? '',
+      id: data.id,
+      threadId: data.threadId || DEFAULT_THREAD_ID,
+      userId: data.userId ?? 'unknown',
+      catId: (data.catId || null) as CatId | null,
+      content: data.content ?? '',
       ...(contentBlocks ? { contentBlocks } : {}),
       ...(toolEvents ? { toolEvents } : {}),
       ...(parsedMetadata ? { metadata: parsedMetadata } : {}),
       ...(parsedExtra ? { extra: parsedExtra } : {}),
-      mentions: safeParseMentions(data['mentions']),
-      timestamp: parseInt(data['timestamp'] ?? '0', 10),
-      ...(deletedAt ? { deletedAt, deletedBy: data['deletedBy'] ?? '' } : {}),
-      ...(data['_tombstone'] === '1' ? { _tombstone: true as const } : {}),
-      ...(data['thinking'] ? { thinking: data['thinking'] } : {}),
-      ...(data['origin'] === 'stream' || data['origin'] === 'callback'
-        ? { origin: data['origin'] as 'stream' | 'callback' }
+      mentions: safeParseMentions(data.mentions),
+      timestamp: parseInt(data.timestamp ?? '0', 10),
+      ...(deletedAt ? { deletedAt, deletedBy: data.deletedBy ?? '' } : {}),
+      ...(data._tombstone === '1' ? { _tombstone: true as const } : {}),
+      ...(data.thinking ? { thinking: data.thinking } : {}),
+      ...(data.origin === 'stream' || data.origin === 'callback'
+        ? { origin: data.origin as 'stream' | 'callback' }
         : {}),
-      ...(data['visibility'] === 'whisper' ? { visibility: 'whisper' as const } : {}),
-      ...(data['whisperTo'] ? { whisperTo: safeParseMentions(data['whisperTo']) } : {}),
-      ...(data['revealedAt'] ? { revealedAt: parseInt(data['revealedAt'], 10) } : {}),
-      ...(data['deliveredAt'] ? { deliveredAt: parseInt(data['deliveredAt'], 10) } : {}),
+      ...(data.visibility === 'whisper' ? { visibility: 'whisper' as const } : {}),
+      ...(data.whisperTo ? { whisperTo: safeParseMentions(data.whisperTo) } : {}),
+      ...(data.revealedAt ? { revealedAt: parseInt(data.revealedAt, 10) } : {}),
+      ...(data.deliveredAt ? { deliveredAt: parseInt(data.deliveredAt, 10) } : {}),
       ...(parsedSource ? { source: parsedSource } : {}),
-      ...(data['mentionsUser'] === '1' ? { mentionsUser: true } : {}),
+      ...(data.mentionsUser === '1' ? { mentionsUser: true } : {}),
     };
   }
 
@@ -591,42 +591,40 @@ export class RedisMessageStore {
     for (const [err, data] of results) {
       if (err || !data || typeof data !== 'object') continue;
       const d = data as Record<string, string>;
-      if (!d['id']) continue;
+      if (!d.id) continue;
 
-      const deletedAt = d['deletedAt'] ? parseInt(d['deletedAt'], 10) : undefined;
+      const deletedAt = d.deletedAt ? parseInt(d.deletedAt, 10) : undefined;
 
       // ADR-008 D3: skip soft-deleted messages unless includeDeleted
       if (deletedAt && !options?.includeDeleted) continue;
 
-      const contentBlocks = safeParseContentBlocks(d['contentBlocks']);
-      const toolEvents = safeParseToolEvents(d['toolEvents']);
-      const parsedMetadata = safeParseMetadata(d['metadata']);
-      const parsedExtra = safeParseExtra(d['extra']);
-      const parsedSource = safeParseConnectorSource(d['source']);
+      const contentBlocks = safeParseContentBlocks(d.contentBlocks);
+      const toolEvents = safeParseToolEvents(d.toolEvents);
+      const parsedMetadata = safeParseMetadata(d.metadata);
+      const parsedExtra = safeParseExtra(d.extra);
+      const parsedSource = safeParseConnectorSource(d.source);
       messages.push({
-        id: d['id'],
-        threadId: d['threadId'] || DEFAULT_THREAD_ID,
-        userId: d['userId'] ?? 'unknown',
-        catId: (d['catId'] || null) as CatId | null,
-        content: d['content'] ?? '',
+        id: d.id,
+        threadId: d.threadId || DEFAULT_THREAD_ID,
+        userId: d.userId ?? 'unknown',
+        catId: (d.catId || null) as CatId | null,
+        content: d.content ?? '',
         ...(contentBlocks ? { contentBlocks } : {}),
         ...(toolEvents ? { toolEvents } : {}),
         ...(parsedMetadata ? { metadata: parsedMetadata } : {}),
         ...(parsedExtra ? { extra: parsedExtra } : {}),
-        mentions: safeParseMentions(d['mentions']),
-        timestamp: parseInt(d['timestamp'] ?? '0', 10),
-        ...(deletedAt ? { deletedAt, deletedBy: d['deletedBy'] ?? '' } : {}),
-        ...(d['_tombstone'] === '1' ? { _tombstone: true as const } : {}),
-        ...(d['thinking'] ? { thinking: d['thinking'] } : {}),
-        ...(d['origin'] === 'stream' || d['origin'] === 'callback'
-          ? { origin: d['origin'] as 'stream' | 'callback' }
-          : {}),
-        ...(d['visibility'] === 'whisper' ? { visibility: 'whisper' as const } : {}),
-        ...(d['whisperTo'] ? { whisperTo: safeParseMentions(d['whisperTo']) } : {}),
-        ...(d['revealedAt'] ? { revealedAt: parseInt(d['revealedAt'], 10) } : {}),
-        ...(d['deliveredAt'] ? { deliveredAt: parseInt(d['deliveredAt'], 10) } : {}),
+        mentions: safeParseMentions(d.mentions),
+        timestamp: parseInt(d.timestamp ?? '0', 10),
+        ...(deletedAt ? { deletedAt, deletedBy: d.deletedBy ?? '' } : {}),
+        ...(d._tombstone === '1' ? { _tombstone: true as const } : {}),
+        ...(d.thinking ? { thinking: d.thinking } : {}),
+        ...(d.origin === 'stream' || d.origin === 'callback' ? { origin: d.origin as 'stream' | 'callback' } : {}),
+        ...(d.visibility === 'whisper' ? { visibility: 'whisper' as const } : {}),
+        ...(d.whisperTo ? { whisperTo: safeParseMentions(d.whisperTo) } : {}),
+        ...(d.revealedAt ? { revealedAt: parseInt(d.revealedAt, 10) } : {}),
+        ...(d.deliveredAt ? { deliveredAt: parseInt(d.deliveredAt, 10) } : {}),
         ...(parsedSource ? { source: parsedSource } : {}),
-        ...(d['mentionsUser'] === '1' ? { mentionsUser: true } : {}),
+        ...(d.mentionsUser === '1' ? { mentionsUser: true } : {}),
       });
     }
     return messages;

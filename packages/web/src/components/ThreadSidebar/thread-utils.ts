@@ -184,7 +184,7 @@ function groupByProject(threads: Thread[], unreadIds?: Set<string>): [string, Th
   for (const thread of threads) {
     const key = thread.projectPath;
     if (!groups.has(key)) groups.set(key, []);
-    groups.get(key)!.push(thread);
+    groups.get(key)?.push(thread);
   }
   // Sort threads within each project group
   for (const [, projectThreads] of groups) {

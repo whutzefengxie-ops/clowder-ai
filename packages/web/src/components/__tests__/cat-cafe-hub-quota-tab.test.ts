@@ -31,18 +31,21 @@ vi.mock('@/hooks/useCatData', () => ({
       },
     ],
     isLoading: false,
-    getCatById: (id: string) => (id === 'codex' ? {
-      id: 'codex',
-      displayName: '缅因猫',
-      nickname: '砚砚',
-      color: { primary: '#4A90E2', secondary: '#E6F2FF' },
-      mentionPatterns: ['@codex'],
-      provider: 'openai',
-      defaultModel: 'gpt-5.3-codex',
-      avatar: '/avatars/codex.png',
-      roleDescription: '代码审查',
-      personality: '严谨',
-    } : undefined),
+    getCatById: (id: string) =>
+      id === 'codex'
+        ? {
+            id: 'codex',
+            displayName: '缅因猫',
+            nickname: '砚砚',
+            color: { primary: '#4A90E2', secondary: '#E6F2FF' },
+            mentionPatterns: ['@codex'],
+            provider: 'openai',
+            defaultModel: 'gpt-5.3-codex',
+            avatar: '/avatars/codex.png',
+            roleDescription: '代码审查',
+            personality: '严谨',
+          }
+        : undefined,
     getCatsByBreed: () => new Map(),
   }),
   formatCatName: (cat: { displayName: string; variantLabel?: string }) =>

@@ -4,17 +4,32 @@
  *
  * Red test: verifies that SplitPaneView passes splitPaneTargetId to onStop.
  */
-import React from 'react';
+import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { act } from 'react';
-import { describe, it, expect, vi, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockOnStop = vi.fn();
 
 const mockStoreState = () => ({
   threads: [
-    { id: 'thread-a', title: 'Thread A', projectPath: 'p', createdBy: 'u', participants: [], lastActiveAt: 0, createdAt: 0 },
-    { id: 'thread-b', title: 'Thread B', projectPath: 'p', createdBy: 'u', participants: [], lastActiveAt: 0, createdAt: 0 },
+    {
+      id: 'thread-a',
+      title: 'Thread A',
+      projectPath: 'p',
+      createdBy: 'u',
+      participants: [],
+      lastActiveAt: 0,
+      createdAt: 0,
+    },
+    {
+      id: 'thread-b',
+      title: 'Thread B',
+      projectPath: 'p',
+      createdBy: 'u',
+      participants: [],
+      lastActiveAt: 0,
+      createdAt: 0,
+    },
   ],
   splitPaneThreadIds: ['thread-a', 'thread-b'],
   splitPaneTargetId: 'thread-b',
@@ -31,7 +46,7 @@ const mockStoreState = () => ({
     catStatuses: {},
     catInvocations: {},
     currentGame: null,
-    
+
     unreadCount: 0,
     lastActivity: 0,
   }),
@@ -46,9 +61,8 @@ vi.mock('@/stores/chatStore', () => {
 });
 
 vi.mock('@/components/ChatInput', () => ({
-  ChatInput: ({ onStop }: { onStop?: () => void }) => (
-    React.createElement('button', { 'data-testid': 'stop-btn', onClick: onStop }, 'Stop')
-  ),
+  ChatInput: ({ onStop }: { onStop?: () => void }) =>
+    React.createElement('button', { 'data-testid': 'stop-btn', onClick: onStop }, 'Stop'),
 }));
 
 vi.mock('@/components/SplitPaneCell', () => ({
@@ -84,23 +98,29 @@ describe('SplitPaneView stop routing (P1 regression)', () => {
   });
 
   afterEach(() => {
-    act(() => { root.unmount(); });
+    act(() => {
+      root.unmount();
+    });
     container.remove();
   });
 
   it('passes splitPaneTargetId to onStop, not the URL threadId', () => {
     act(() => {
-      root.render(React.createElement(SplitPaneView, {
-        onSend: vi.fn(),
-        onStop: mockOnStop,
-        onZoomToThread: vi.fn(),
-      }));
+      root.render(
+        React.createElement(SplitPaneView, {
+          onSend: vi.fn(),
+          onStop: mockOnStop,
+          onZoomToThread: vi.fn(),
+        }),
+      );
     });
 
     const stopBtn = container.querySelector('[data-testid="stop-btn"]');
     expect(stopBtn).toBeTruthy();
 
-    act(() => { stopBtn!.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    act(() => {
+      stopBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
 
     // P1 regression: onStop should be called with the target thread ID (thread-b),
     // NOT with no args (which would default to URL threadId in ChatContainer)

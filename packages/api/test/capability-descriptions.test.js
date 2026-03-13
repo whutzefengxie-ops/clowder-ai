@@ -1,6 +1,7 @@
 // @ts-check
-import { describe, it } from 'node:test';
+
 import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
 
 const { describeMcpCapability } = await import('../dist/routes/capabilities.js');
 
@@ -26,14 +27,11 @@ describe('describeMcpCapability', () => {
   });
 
   it('includes detected sub-server families for docker gateway tools', () => {
-    const desc = describeMcpCapability(
-      makeCapability('MCP_DOCKER', 'docker', ['mcp', 'gateway', 'run']),
-      [
-        { name: 'browser_click' },
-        { name: 'search' },
-        { name: 'docker' },
-      ],
-    );
+    const desc = describeMcpCapability(makeCapability('MCP_DOCKER', 'docker', ['mcp', 'gateway', 'run']), [
+      { name: 'browser_click' },
+      { name: 'search' },
+      { name: 'docker' },
+    ]);
     assert.ok(desc?.includes('playwright(browser_*)'));
     assert.ok(desc?.includes('dockerhub'));
     assert.ok(desc?.includes('docker-gateway'));

@@ -1,8 +1,8 @@
-import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import Fastify from 'fastify';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { after, before, describe, it } from 'node:test';
+import Fastify from 'fastify';
 
 const { projectsRoutes } = await import('../dist/routes/projects.js');
 
@@ -45,7 +45,7 @@ describe('GET /api/projects/complete', () => {
     assert.equal(res.statusCode, 200);
     const body = JSON.parse(res.body);
     assert.ok(Array.isArray(body.entries));
-    const names = body.entries.map(e => e.name);
+    const names = body.entries.map((e) => e.name);
     assert.ok(names.includes('components/'));
     assert.ok(names.includes('utils/'));
     assert.ok(names.includes('index.ts'));
@@ -58,7 +58,7 @@ describe('GET /api/projects/complete', () => {
     });
     assert.equal(res.statusCode, 200);
     const body = JSON.parse(res.body);
-    const names = body.entries.map(e => e.name);
+    const names = body.entries.map((e) => e.name);
     assert.ok(names.includes('components/'));
     assert.equal(names.length, 1);
   });
@@ -100,12 +100,12 @@ describe('GET /api/projects/complete', () => {
   it('filters hidden directories and node_modules', async () => {
     const res = await app.inject({
       method: 'GET',
-      url: `/api/projects/complete?prefix=${encodeURIComponent(testDir + '/')}&cwd=${encodeURIComponent(testDir)}`,
+      url: `/api/projects/complete?prefix=${encodeURIComponent(`${testDir}/`)}&cwd=${encodeURIComponent(testDir)}`,
     });
     const body = JSON.parse(res.body);
-    const names = body.entries.map(e => e.name);
-    assert.ok(!names.some(n => n.startsWith('.')), 'should not include hidden entries');
-    assert.ok(!names.some(n => n.startsWith('node_modules')), 'should not include node_modules');
+    const names = body.entries.map((e) => e.name);
+    assert.ok(!names.some((n) => n.startsWith('.')), 'should not include hidden entries');
+    assert.ok(!names.some((n) => n.startsWith('node_modules')), 'should not include node_modules');
   });
 
   it('returns 403 for prefix outside allowed roots', async () => {
@@ -131,7 +131,7 @@ describe('GET /api/projects/complete', () => {
     });
     assert.equal(res.statusCode, 200);
     const body = JSON.parse(res.body);
-    const names = body.entries.map(e => e.name);
+    const names = body.entries.map((e) => e.name);
     assert.ok(names.includes('components/'));
     assert.ok(names.includes('utils/'));
   });
@@ -153,14 +153,14 @@ describe('GET /api/projects/complete', () => {
   it('sorts entries alphabetically, directories first', async () => {
     const res = await app.inject({
       method: 'GET',
-      url: `/api/projects/complete?prefix=${encodeURIComponent(testDir + '/')}&cwd=${encodeURIComponent(testDir)}`,
+      url: `/api/projects/complete?prefix=${encodeURIComponent(`${testDir}/`)}&cwd=${encodeURIComponent(testDir)}`,
     });
     const body = JSON.parse(res.body);
-    const dirs = body.entries.filter(e => e.isDirectory);
-    const files = body.entries.filter(e => !e.isDirectory);
+    const dirs = body.entries.filter((e) => e.isDirectory);
+    const files = body.entries.filter((e) => !e.isDirectory);
     // All dirs come before all files
-    const lastDirIdx = body.entries.findLastIndex(e => e.isDirectory);
-    const firstFileIdx = body.entries.findIndex(e => !e.isDirectory);
+    const lastDirIdx = body.entries.findLastIndex((e) => e.isDirectory);
+    const firstFileIdx = body.entries.findIndex((e) => !e.isDirectory);
     if (dirs.length > 0 && files.length > 0) {
       assert.ok(lastDirIdx < firstFileIdx, 'directories should come before files');
     }

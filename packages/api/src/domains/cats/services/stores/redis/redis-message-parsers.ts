@@ -5,8 +5,8 @@
  */
 
 import type { CatId, ConnectorSource, MessageContent, RichMessageExtra } from '@cat-cafe/shared';
-import type { StoredToolEvent } from '../ports/MessageStore.js';
 import type { MessageMetadata } from '../../types.js';
+import type { StoredToolEvent } from '../ports/MessageStore.js';
 
 export function safeParseMentions(raw: string | undefined): readonly CatId[] {
   if (!raw) return [];
@@ -39,15 +39,23 @@ export function safeParseContentBlocks(raw: string | undefined): readonly Messag
 }
 
 /** F22+F52: Parse extra field (contains rich blocks, stream metadata, cross-post origin) */
-export function safeParseExtra(
-  raw: string | undefined,
-): { rich?: RichMessageExtra; stream?: { invocationId: string }; crossPost?: { sourceThreadId: string; sourceInvocationId?: string } } | undefined {
+export function safeParseExtra(raw: string | undefined):
+  | {
+      rich?: RichMessageExtra;
+      stream?: { invocationId: string };
+      crossPost?: { sourceThreadId: string; sourceInvocationId?: string };
+    }
+  | undefined {
   if (!raw) return undefined;
   try {
     const parsed = JSON.parse(raw);
     if (typeof parsed !== 'object' || parsed === null) return undefined;
 
-    const result: { rich?: RichMessageExtra; stream?: { invocationId: string }; crossPost?: { sourceThreadId: string; sourceInvocationId?: string } } = {};
+    const result: {
+      rich?: RichMessageExtra;
+      stream?: { invocationId: string };
+      crossPost?: { sourceThreadId: string; sourceInvocationId?: string };
+    } = {};
     let hasField = false;
 
     // Validate rich sub-field shape
@@ -63,10 +71,16 @@ export function safeParseExtra(
     }
 
     // F52: Validate crossPost sub-field shape
-    if (parsed.crossPost && typeof parsed.crossPost === 'object' && typeof parsed.crossPost.sourceThreadId === 'string') {
+    if (
+      parsed.crossPost &&
+      typeof parsed.crossPost === 'object' &&
+      typeof parsed.crossPost.sourceThreadId === 'string'
+    ) {
       result.crossPost = {
         sourceThreadId: parsed.crossPost.sourceThreadId,
-        ...(typeof parsed.crossPost.sourceInvocationId === 'string' ? { sourceInvocationId: parsed.crossPost.sourceInvocationId } : {}),
+        ...(typeof parsed.crossPost.sourceInvocationId === 'string'
+          ? { sourceInvocationId: parsed.crossPost.sourceInvocationId }
+          : {}),
       };
       hasField = true;
     }
@@ -83,7 +97,8 @@ export function safeParseConnectorSource(raw: string | undefined): ConnectorSour
   try {
     const parsed = JSON.parse(raw);
     if (
-      typeof parsed === 'object' && parsed !== null &&
+      typeof parsed === 'object' &&
+      parsed !== null &&
       typeof parsed.connector === 'string' &&
       typeof parsed.label === 'string' &&
       typeof parsed.icon === 'string'
@@ -101,7 +116,8 @@ export function safeParseMetadata(raw: string | undefined): MessageMetadata | un
   try {
     const parsed = JSON.parse(raw);
     if (
-      typeof parsed === 'object' && parsed !== null &&
+      typeof parsed === 'object' &&
+      parsed !== null &&
       typeof parsed.provider === 'string' &&
       typeof parsed.model === 'string'
     ) {

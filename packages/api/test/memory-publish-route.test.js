@@ -4,11 +4,11 @@
  */
 
 import './helpers/setup-cat-registry.js';
-import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { beforeEach, describe, it } from 'node:test';
 import Fastify from 'fastify';
-import { memoryPublishRoutes } from '../dist/routes/memory-publish.js';
 import { MemoryGovernanceStore } from '../dist/domains/cats/services/stores/ports/MemoryGovernanceStore.js';
+import { memoryPublishRoutes } from '../dist/routes/memory-publish.js';
 
 /** @returns {import('fastify').FastifyInstance} */
 function buildApp() {

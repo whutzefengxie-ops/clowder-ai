@@ -1,6 +1,7 @@
 // @ts-check
-import { describe, it, beforeEach } from 'node:test';
+
 import assert from 'node:assert';
+import { beforeEach, describe, it } from 'node:test';
 import { MemoryProcessedEmailStore } from '../dist/infrastructure/email/ProcessedEmailStore.js';
 
 describe('MemoryProcessedEmailStore', () => {

@@ -1,7 +1,6 @@
-import React from 'react';
-import { describe, expect, it, vi, beforeAll, beforeEach, afterEach, afterAll } from 'vitest';
+import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { act } from 'react';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
 
@@ -88,4 +87,3 @@ describe('ChatMessage author precedence', () => {
     expect(container.textContent).not.toContain('owner');
   });
 });
-

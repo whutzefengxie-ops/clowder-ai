@@ -1,6 +1,7 @@
 // @ts-check
-import { describe, it, beforeEach, afterEach, mock } from 'node:test';
+
 import assert from 'node:assert/strict';
+import { afterEach, beforeEach, describe, it, mock } from 'node:test';
 import webpush from 'web-push';
 import { PushNotificationService } from '../dist/domains/cats/services/push/PushNotificationService.js';
 

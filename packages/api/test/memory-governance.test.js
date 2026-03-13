@@ -3,11 +3,11 @@
  * Phase 5.0 Step 2a: 治理状态机
  */
 
-import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { beforeEach, describe, it } from 'node:test';
 import {
-  MemoryGovernanceStore,
   GovernanceConflictError,
+  MemoryGovernanceStore,
   resolveTransition,
 } from '../dist/domains/cats/services/stores/ports/MemoryGovernanceStore.js';
 
@@ -29,24 +29,15 @@ describe('resolveTransition (pure function)', () => {
   });
 
   it('draft → approve throws GovernanceConflictError', () => {
-    assert.throws(
-      () => resolveTransition('draft', 'approve'),
-      GovernanceConflictError
-    );
+    assert.throws(() => resolveTransition('draft', 'approve'), GovernanceConflictError);
   });
 
   it('archived → approve throws GovernanceConflictError', () => {
-    assert.throws(
-      () => resolveTransition('archived', 'approve'),
-      GovernanceConflictError
-    );
+    assert.throws(() => resolveTransition('archived', 'approve'), GovernanceConflictError);
   });
 
   it('pending_review → rollback throws GovernanceConflictError', () => {
-    assert.throws(
-      () => resolveTransition('pending_review', 'rollback'),
-      GovernanceConflictError
-    );
+    assert.throws(() => resolveTransition('pending_review', 'rollback'), GovernanceConflictError);
   });
 });
 
@@ -98,18 +89,12 @@ describe('MemoryGovernanceStore', () => {
   });
 
   it('transition on non-existent entry throws', () => {
-    assert.throws(
-      () => store.transition('nope', 'approve', 'user'),
-      GovernanceConflictError
-    );
+    assert.throws(() => store.transition('nope', 'approve', 'user'), GovernanceConflictError);
   });
 
   it('invalid transition throws', () => {
     store.create('e1', 'opus');
-    assert.throws(
-      () => store.transition('e1', 'approve', 'user'),
-      GovernanceConflictError
-    );
+    assert.throws(() => store.transition('e1', 'approve', 'user'), GovernanceConflictError);
   });
 
   it('get() returns entry or null', () => {

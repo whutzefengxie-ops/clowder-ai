@@ -1,8 +1,8 @@
-import { describe, test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, mkdir, writeFile, readFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, beforeEach, describe, test } from 'node:test';
 import { TranscriptReader } from '../dist/domains/cats/services/session/TranscriptReader.js';
 import { TranscriptWriter } from '../dist/domains/cats/services/session/TranscriptWriter.js';
 
@@ -14,23 +14,28 @@ describe('handoff digest IO', () => {
     tempDir = await mkdtemp(join(tmpdir(), 'handoff-io-'));
     reader = new TranscriptReader({ dataDir: tempDir });
   });
-  afterEach(async () => { await rm(tempDir, { recursive: true }); });
+  afterEach(async () => {
+    await rm(tempDir, { recursive: true });
+  });
 
   // --- readHandoffDigest ---
 
   test('readHandoffDigest returns parsed result when file exists', async () => {
     const dir = join(tempDir, 'threads', 'thread1', 'cat1', 'sessions', 'sess1');
     await mkdir(dir, { recursive: true });
-    await writeFile(join(dir, 'digest.handoff.md'), [
-      '---',
-      'v: 1',
-      'model: claude-haiku-4-5-20251001',
-      'generatedAt: 1709700000000',
-      '---',
-      '',
-      '## Session Summary',
-      'Cat worked on feature X.',
-    ].join('\n'));
+    await writeFile(
+      join(dir, 'digest.handoff.md'),
+      [
+        '---',
+        'v: 1',
+        'model: claude-haiku-4-5-20251001',
+        'generatedAt: 1709700000000',
+        '---',
+        '',
+        '## Session Summary',
+        'Cat worked on feature X.',
+      ].join('\n'),
+    );
 
     const result = await reader.readHandoffDigest('sess1', 'thread1', 'cat1');
     assert.ok(result);
@@ -60,11 +65,15 @@ describe('handoff digest IO', () => {
     const sessionDir = join(tempDir, 'threads', 'thread1', 'cat1', 'sessions', 'sess-write');
     await mkdir(sessionDir, { recursive: true });
 
-    await TranscriptWriter.writeHandoffDigest(sessionDir, {
-      v: 1,
-      model: 'claude-haiku-4-5-20251001',
-      generatedAt: 1709700000000,
-    }, '## Summary\nDid things.');
+    await TranscriptWriter.writeHandoffDigest(
+      sessionDir,
+      {
+        v: 1,
+        model: 'claude-haiku-4-5-20251001',
+        generatedAt: 1709700000000,
+      },
+      '## Summary\nDid things.',
+    );
 
     const content = await readFile(join(sessionDir, 'digest.handoff.md'), 'utf-8');
     assert.ok(content.startsWith('---\n'));
@@ -84,11 +93,18 @@ describe('handoff digest IO', () => {
     // Write 100 events — more than the default limit of 50
     const lines = [];
     for (let i = 0; i < 100; i++) {
-      lines.push(JSON.stringify({
-        v: 1, t: 1709700000000 + i, threadId: 'thread1', catId: 'cat1',
-        sessionId: 'sess-all', cliSessionId: 'cli1', eventNo: i,
-        event: { type: 'text', content: `msg ${i}` },
-      }));
+      lines.push(
+        JSON.stringify({
+          v: 1,
+          t: 1709700000000 + i,
+          threadId: 'thread1',
+          catId: 'cat1',
+          sessionId: 'sess-all',
+          cliSessionId: 'cli1',
+          eventNo: i,
+          event: { type: 'text', content: `msg ${i}` },
+        }),
+      );
     }
     await writeFile(join(dir, 'events.jsonl'), lines.join('\n'));
 

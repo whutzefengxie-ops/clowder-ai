@@ -1,12 +1,13 @@
 // @ts-check
-import { describe, it } from 'node:test';
+
 import assert from 'node:assert';
+import { describe, it } from 'node:test';
 import {
-  parseGithubReviewSubject,
-  parseGithubReviewFromSubjectAndSource,
-  extractCatFromTitle,
   catTagToCatId,
+  extractCatFromTitle,
   isGithubNotification,
+  parseGithubReviewFromSubjectAndSource,
+  parseGithubReviewSubject,
 } from '../dist/infrastructure/email/GithubReviewMailParser.js';
 
 describe('parseGithubReviewSubject', () => {
@@ -23,8 +24,7 @@ describe('parseGithubReviewSubject', () => {
   });
 
   it('parses review with changes requested', () => {
-    const subject =
-      '[zts212653/cat-cafe] @codex-bot requested changes on pull request #24: [缅因猫🐾] fix: typo';
+    const subject = '[zts212653/cat-cafe] @codex-bot requested changes on pull request #24: [缅因猫🐾] fix: typo';
     const result = parseGithubReviewSubject(subject);
 
     assert.ok(result);
@@ -51,8 +51,7 @@ describe('parseGithubReviewSubject', () => {
   });
 
   it('parses Re: reply with explicit (PR #N) marker (cloud Codex review email)', () => {
-    const subject =
-      'Re: [zts212653/cat-cafe] fix(F039): queue contentBlocks + pauseReasonhydration (PR #96)';
+    const subject = 'Re: [zts212653/cat-cafe] fix(F039): queue contentBlocks + pauseReasonhydration (PR #96)';
     const result = parseGithubReviewSubject(subject);
 
     assert.ok(result);

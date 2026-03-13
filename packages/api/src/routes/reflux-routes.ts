@@ -1,10 +1,11 @@
 /**
  * F076: Reflux Pattern routes — methodology experience capture
  */
+
+import type { CreateRefluxPatternInput, RefluxCategory } from '@cat-cafe/shared';
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import type { ExternalProjectStore } from '../domains/projects/external-project-store.js';
 import type { RefluxPatternStore } from '../domains/projects/reflux-pattern-store.js';
-import type { CreateRefluxPatternInput, RefluxCategory } from '@cat-cafe/shared';
 
 export interface RefluxRoutesOptions {
   externalProjectStore: ExternalProjectStore;
@@ -40,10 +41,10 @@ export const refluxRoutes: FastifyPluginAsync<RefluxRoutesOptions> = async (app,
 
     const body = request.body as Record<string, unknown>;
     const input: CreateRefluxPatternInput = {
-      category: (body['category'] as RefluxCategory) ?? 'methodology',
-      title: (body['title'] as string) ?? '',
-      insight: (body['insight'] as string) ?? '',
-      evidence: (body['evidence'] as string) ?? '',
+      category: (body.category as RefluxCategory) ?? 'methodology',
+      title: (body.title as string) ?? '',
+      insight: (body.insight as string) ?? '',
+      evidence: (body.evidence as string) ?? '',
     };
     const pattern = refluxPatternStore.create(projectId, input);
     return reply.status(201).send({ pattern });

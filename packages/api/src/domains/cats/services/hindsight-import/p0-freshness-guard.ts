@@ -54,7 +54,7 @@ function defaultRunCommand(command: string, cwd: string): void {
 }
 
 function resolveStatePath(repoRoot: string, relativePath?: string): string {
-  const statePath = relativePath ?? process.env['HINDSIGHT_P0_REIMPORT_STATE_PATH'] ?? DEFAULT_REIMPORT_STATE_PATH;
+  const statePath = relativePath ?? process.env.HINDSIGHT_P0_REIMPORT_STATE_PATH ?? DEFAULT_REIMPORT_STATE_PATH;
   return resolve(repoRoot, statePath);
 }
 
@@ -76,28 +76,34 @@ async function writeState(repoRoot: string, state: P0ReimportState, relativePath
 }
 
 function isTriggerCandidate(freshness: P0Freshness): boolean {
-  return freshness.status === 'stale'
-    && (freshness.reason === 'commit_mismatch' || freshness.reason === 'watermark_missing');
+  return (
+    freshness.status === 'stale' && (freshness.reason === 'commit_mismatch' || freshness.reason === 'watermark_missing')
+  );
 }
 
 export function getDefaultP0FailClosedSettings(env: NodeJS.ProcessEnv = process.env): P0FailClosedSettings {
   const statuses = parseCsvEnumList(
-    env['HINDSIGHT_P0_FAIL_CLOSED_STATUSES'],
+    env.HINDSIGHT_P0_FAIL_CLOSED_STATUSES,
     ['fresh', 'stale', 'unknown'],
     ['stale'],
   ) as P0Freshness['status'][];
 
   return {
-    enabled: parseBoolean(env['HINDSIGHT_P0_FAIL_CLOSED_ENABLED'], true),
+    enabled: parseBoolean(env.HINDSIGHT_P0_FAIL_CLOSED_ENABLED, true),
     statuses,
   };
 }
 
 export function getDefaultP0ReimportSettings(env: NodeJS.ProcessEnv = process.env): P0ReimportSettings {
   return {
-    enabled: parseBoolean(env['HINDSIGHT_P0_AUTO_REIMPORT_ENABLED'], true),
-    cooldownMs: parseIntInRange(env['HINDSIGHT_P0_AUTO_REIMPORT_COOLDOWN_MS'], DEFAULT_REIMPORT_COOLDOWN_MS, 1000, 86400000),
-    command: env['HINDSIGHT_P0_AUTO_REIMPORT_COMMAND']?.trim() || DEFAULT_REIMPORT_COMMAND,
+    enabled: parseBoolean(env.HINDSIGHT_P0_AUTO_REIMPORT_ENABLED, true),
+    cooldownMs: parseIntInRange(
+      env.HINDSIGHT_P0_AUTO_REIMPORT_COOLDOWN_MS,
+      DEFAULT_REIMPORT_COOLDOWN_MS,
+      1000,
+      86400000,
+    ),
+    command: env.HINDSIGHT_P0_AUTO_REIMPORT_COMMAND?.trim() || DEFAULT_REIMPORT_COMMAND,
   };
 }
 
@@ -132,11 +138,15 @@ export async function triggerP0ReimportIfNeeded(input: TriggerP0ReimportInput): 
   const runCommand = input.runCommand ?? defaultRunCommand;
   try {
     runCommand(settings.command, input.repoRoot);
-    await writeState(input.repoRoot, {
-      version: 1,
-      lastTriggeredAt: now.toISOString(),
-      lastFreshnessReason: input.freshness.reason ?? 'unknown',
-    }, input.statePath);
+    await writeState(
+      input.repoRoot,
+      {
+        version: 1,
+        lastTriggeredAt: now.toISOString(),
+        lastFreshnessReason: input.freshness.reason ?? 'unknown',
+      },
+      input.statePath,
+    );
 
     if (input.auditLog) {
       await input.auditLog.append({

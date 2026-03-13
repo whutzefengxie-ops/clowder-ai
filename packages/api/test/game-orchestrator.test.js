@@ -4,8 +4,9 @@
  *
  * Uses in-memory stubs for GameStore and SocketManager.
  */
-import { describe, it, beforeEach } from 'node:test';
+
 import assert from 'node:assert/strict';
+import { beforeEach, describe, it } from 'node:test';
 import { GameOrchestrator } from '../dist/domains/cats/services/game/GameOrchestrator.js';
 
 /** In-memory GameStore stub */
@@ -125,7 +126,7 @@ describe('GameOrchestrator', () => {
       assert.equal(result.seats.length, 2);
 
       // Should broadcast game_started to thread room
-      const startEvent = socket.broadcasts.find(b => b.event === 'game:started');
+      const startEvent = socket.broadcasts.find((b) => b.event === 'game:started');
       assert.ok(startEvent, 'should broadcast game:started');
       assert.equal(startEvent.room, 'thread:thread-001');
     });
@@ -155,7 +156,7 @@ describe('GameOrchestrator', () => {
 
       // Action recorded, phase not advanced (P2 still pending)
       const updated = await store.getGame(game.gameId);
-      assert.ok(updated.pendingActions['P1'], 'P1 action should be recorded');
+      assert.ok(updated.pendingActions.P1, 'P1 action should be recorded');
       assert.equal(updated.currentPhase, 'day_vote', 'should NOT advance yet');
     });
 
@@ -174,12 +175,13 @@ describe('GameOrchestrator', () => {
 
       // P2 is villager, cannot act during night_wolf
       await assert.rejects(
-        () => orchestrator.handlePlayerAction(game.gameId, 'P2', {
-          seatId: 'P2',
-          actionName: 'vote',
-          targetSeat: 'P1',
-          submittedAt: Date.now(),
-        }),
+        () =>
+          orchestrator.handlePlayerAction(game.gameId, 'P2', {
+            seatId: 'P2',
+            actionName: 'vote',
+            targetSeat: 'P1',
+            submittedAt: Date.now(),
+          }),
         /not allowed/i,
       );
     });
@@ -210,7 +212,7 @@ describe('GameOrchestrator', () => {
       assert.equal(updated.currentPhase, 'day_vote', 'should auto-advance to day_vote');
 
       // Should broadcast phase_changed
-      const phaseEvent = socket.broadcasts.find(b => b.event === 'game:phase_changed');
+      const phaseEvent = socket.broadcasts.find((b) => b.event === 'game:phase_changed');
       assert.ok(phaseEvent, 'should broadcast game:phase_changed');
     });
   });
@@ -315,7 +317,7 @@ describe('GameOrchestrator', () => {
       await orchestrator.broadcastGameState(game.gameId);
 
       // Should broadcast a game:state_update to the thread room
-      const stateEvent = socket.broadcasts.find(b => b.event === 'game:state_update');
+      const stateEvent = socket.broadcasts.find((b) => b.event === 'game:state_update');
       assert.ok(stateEvent, 'should broadcast game:state_update');
     });
 
@@ -334,8 +336,13 @@ describe('GameOrchestrator', () => {
       stored.currentPhase = 'night_wolf';
       stored.round = 1;
       stored.eventLog.push({
-        eventId: 'evt-test', round: 1, phase: 'night_wolf', type: 'wolf_kill',
-        scope: 'faction:wolf', payload: { target: 'P2' }, timestamp: Date.now(),
+        eventId: 'evt-test',
+        round: 1,
+        phase: 'night_wolf',
+        type: 'wolf_kill',
+        scope: 'faction:wolf',
+        payload: { target: 'P2' },
+        timestamp: Date.now(),
       });
       await store.updateGame(game.gameId, stored);
 
@@ -343,21 +350,19 @@ describe('GameOrchestrator', () => {
       await orchestrator.broadcastGameState(game.gameId);
 
       // Must emit per-seat views (via emitToUser), not a single room broadcast
-      const perSeatEmits = socket.broadcasts.filter(
-        b => b.event === 'game:state_update' && b.userId,
-      );
+      const perSeatEmits = socket.broadcasts.filter((b) => b.event === 'game:state_update' && b.userId);
       assert.ok(perSeatEmits.length >= 2, 'should emit per-seat state_update to each seat actor');
 
       // Wolf seat (opus) should see wolf_kill; villager (owner) should NOT
-      const wolfEmit = perSeatEmits.find(b => b.userId === 'opus');
-      const villagerEmit = perSeatEmits.find(b => b.userId === 'owner');
+      const wolfEmit = perSeatEmits.find((b) => b.userId === 'opus');
+      const villagerEmit = perSeatEmits.find((b) => b.userId === 'owner');
       assert.ok(wolfEmit, 'wolf seat should receive per-seat view');
       assert.ok(villagerEmit, 'villager seat should receive per-seat view');
 
-      const wolfHasKill = wolfEmit.data.view.visibleEvents.some(e => e.type === 'wolf_kill');
+      const wolfHasKill = wolfEmit.data.view.visibleEvents.some((e) => e.type === 'wolf_kill');
       assert.ok(wolfHasKill, 'wolf should see wolf_kill event');
 
-      const villagerHasKill = villagerEmit.data.view.visibleEvents.some(e => e.type === 'wolf_kill');
+      const villagerHasKill = villagerEmit.data.view.visibleEvents.some((e) => e.type === 'wolf_kill');
       assert.equal(villagerHasKill, false, 'villager must NOT see wolf_kill event');
     });
   });

@@ -1,8 +1,8 @@
-import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
-import { rm, readFile } from 'node:fs/promises';
+import { readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
+import { afterEach, beforeEach, describe, test } from 'node:test';
 
 const { CliRawArchive } = await import('../dist/domains/cats/services/session/CliRawArchive.js');
 
@@ -70,10 +70,7 @@ describe('CliRawArchive', () => {
   test('rejects invalid invocationId path traversal attempts', async () => {
     const archive = new CliRawArchive({ archiveDir: TEST_ARCHIVE_DIR });
 
-    await assert.rejects(
-      archive.append('../etc/passwd', { marker: 'x' }),
-      /Invalid invocationId/
-    );
+    await assert.rejects(archive.append('../etc/passwd', { marker: 'x' }), /Invalid invocationId/);
   });
 
   test('supports concurrent append calls for same invocation', async () => {

@@ -10,7 +10,7 @@
 
 import type { CatId } from '@cat-cafe/shared';
 import type { RedisClient } from '@cat-cafe/shared/utils';
-import type { IDraftStore, DraftRecord } from '../ports/DraftStore.js';
+import type { DraftRecord, IDraftStore } from '../ports/DraftStore.js';
 import { DraftKeys } from '../redis-keys/draft-keys.js';
 
 const DEFAULT_TTL = 300; // 5 minutes
@@ -46,7 +46,7 @@ export class RedisDraftStore implements IDraftStore {
       updatedAt: String(draft.updatedAt),
     };
     if (draft.toolEvents && draft.toolEvents.length > 0) {
-      fields['toolEvents'] = JSON.stringify(draft.toolEvents);
+      fields.toolEvents = JSON.stringify(draft.toolEvents);
     }
 
     const pipeline = this.redis.multi();
@@ -94,7 +94,7 @@ export class RedisDraftStore implements IDraftStore {
         continue;
       }
       const d = data as Record<string, string>;
-      if (!d['invocationId']) {
+      if (!d.invocationId) {
         staleIds.push(invocationIds[i]!);
         continue;
       }
@@ -139,18 +139,20 @@ export class RedisDraftStore implements IDraftStore {
 
   private hydrate(d: Record<string, string>): DraftRecord {
     let toolEvents: unknown[] | undefined;
-    if (d['toolEvents']) {
+    if (d.toolEvents) {
       try {
-        toolEvents = JSON.parse(d['toolEvents']);
-      } catch { /* ignore parse errors */ }
+        toolEvents = JSON.parse(d.toolEvents);
+      } catch {
+        /* ignore parse errors */
+      }
     }
     return {
-      userId: d['userId'] ?? '',
-      threadId: d['threadId'] ?? '',
-      invocationId: d['invocationId'] ?? '',
-      catId: (d['catId'] ?? 'opus') as CatId,
-      content: d['content'] ?? '',
-      updatedAt: parseInt(d['updatedAt'] ?? '0', 10),
+      userId: d.userId ?? '',
+      threadId: d.threadId ?? '',
+      invocationId: d.invocationId ?? '',
+      catId: (d.catId ?? 'opus') as CatId,
+      content: d.content ?? '',
+      updatedAt: parseInt(d.updatedAt ?? '0', 10),
       ...(toolEvents ? { toolEvents } : {}),
     };
   }

@@ -1,7 +1,7 @@
-import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, existsSync, readdirSync } from 'node:fs';
-import { resolve, dirname } from 'node:path';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -13,7 +13,15 @@ describe('F086 M3: Reflection capsule infrastructure', () => {
     assert.ok(existsSync(readmePath), 'Missing docs/reflections/README.md');
     const content = readFileSync(readmePath, 'utf-8');
     // Check all required fields are documented (as markdown headers or YAML keys)
-    const requiredFields = ['capsule_id', 'context', 'What Worked', 'What Failed', 'Trigger Missed', 'Doc Links', 'Rule Update Target'];
+    const requiredFields = [
+      'capsule_id',
+      'context',
+      'What Worked',
+      'What Failed',
+      'Trigger Missed',
+      'Doc Links',
+      'Rule Update Target',
+    ];
     for (const field of requiredFields) {
       assert.ok(content.includes(field), `Missing capsule field: ${field}`);
     }
@@ -35,7 +43,7 @@ describe('F086 M3: Reflection capsule infrastructure', () => {
     const reflectionsDir = resolve(ROOT, 'docs/reflections');
     assert.ok(existsSync(reflectionsDir), 'Missing docs/reflections/ directory');
     const files = readdirSync(reflectionsDir);
-    const capsules = files.filter(f => f.endsWith('-capsule.md'));
+    const capsules = files.filter((f) => f.endsWith('-capsule.md'));
     assert.ok(capsules.length >= 1, 'No capsule files found');
   });
 

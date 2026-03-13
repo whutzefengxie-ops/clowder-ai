@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { RichAudioBlock } from '@/stores/chat-types';
 import { apiFetch } from '@/utils/api-client';
 
 /** CSS variable-based cat colors for voice message bars */
 const CAT_VOICE_COLORS: Record<string, { bg: string; bar: string }> = {
-  opus:   { bg: 'bg-[var(--color-opus-bg)]',   bar: 'bg-[var(--color-opus-primary)]' },
-  codex:  { bg: 'bg-[var(--color-codex-bg)]',  bar: 'bg-[var(--color-codex-primary)]' },
+  opus: { bg: 'bg-[var(--color-opus-bg)]', bar: 'bg-[var(--color-opus-primary)]' },
+  codex: { bg: 'bg-[var(--color-codex-bg)]', bar: 'bg-[var(--color-codex-primary)]' },
   gemini: { bg: 'bg-[var(--color-gemini-bg)]', bar: 'bg-[var(--color-gemini-primary)]' },
 };
 const DEFAULT_VOICE_COLORS = { bg: 'bg-gray-100 dark:bg-gray-800', bar: 'bg-gray-400' };
@@ -54,7 +54,10 @@ export function AudioBlock({ block, catId }: { block: RichAudioBlock; catId?: st
 
     const onPlay = () => setPlaying(true);
     const onPause = () => setPlaying(false);
-    const onEnded = () => { setPlaying(false); setProgress(0); };
+    const onEnded = () => {
+      setPlaying(false);
+      setProgress(0);
+    };
     const onTimeUpdate = () => {
       if (audio.duration > 0) setProgress(audio.currentTime / audio.duration);
     };
@@ -76,12 +79,16 @@ export function AudioBlock({ block, catId }: { block: RichAudioBlock; catId?: st
       audio.removeEventListener('timeupdate', onTimeUpdate);
       audio.removeEventListener('loadedmetadata', onLoadedMetadata);
     };
-  }, [blobSrc]);
+  }, []);
 
   const toggle = () => {
     const audio = audioRef.current;
     if (!audio) return;
-    if (playing) { audio.pause(); } else { audio.play(); }
+    if (playing) {
+      audio.pause();
+    } else {
+      audio.play();
+    }
   };
 
   const formatDuration = (sec: number) => {
@@ -96,9 +103,7 @@ export function AudioBlock({ block, catId }: { block: RichAudioBlock; catId?: st
   if (isVoiceMessage) {
     const colors = (catId ? CAT_VOICE_COLORS[catId] : undefined) ?? DEFAULT_VOICE_COLORS;
     // Bar width scales with duration: min 80px, max 200px
-    const barWidth = audioDuration > 0
-      ? Math.min(200, Math.max(80, 80 + audioDuration * 12))
-      : 120;
+    const barWidth = audioDuration > 0 ? Math.min(200, Math.max(80, 80 + audioDuration * 12)) : 120;
 
     return (
       <div className="space-y-0.5">
@@ -111,13 +116,29 @@ export function AudioBlock({ block, catId }: { block: RichAudioBlock; catId?: st
           {/* Speaker / sound wave icon */}
           <span className="flex-shrink-0">
             {playing ? (
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="opacity-70">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                className="opacity-70"
+              >
                 <path d="M11 5L6 9H2v6h4l5 4V5z" />
                 <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
                 <path d="M19.07 4.93a10 10 0 0 1 0 14.14" className="animate-pulse" />
               </svg>
             ) : (
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="opacity-50">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                className="opacity-50"
+              >
                 <path d="M11 5L6 9H2v6h4l5 4V5z" />
                 <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
               </svg>
@@ -130,9 +151,7 @@ export function AudioBlock({ block, catId }: { block: RichAudioBlock; catId?: st
               <div
                 key={i}
                 className={`rounded-full transition-all duration-150 ${
-                  playing && progress > i / 6
-                    ? `h-3 ${colors.bar}`
-                    : `h-1.5 ${colors.bar} opacity-30`
+                  playing && progress > i / 6 ? `h-3 ${colors.bar}` : `h-1.5 ${colors.bar} opacity-30`
                 }`}
                 style={{ width: '3px' }}
               />
@@ -190,9 +209,7 @@ export function AudioBlock({ block, catId }: { block: RichAudioBlock; catId?: st
       </div>
 
       {audioDuration > 0 && (
-        <span className="text-[10px] text-gray-400 flex-shrink-0 tabular-nums">
-          {formatDuration(audioDuration)}
-        </span>
+        <span className="text-[10px] text-gray-400 flex-shrink-0 tabular-nums">{formatDuration(audioDuration)}</span>
       )}
 
       {blobSrc && <audio ref={audioRef} src={blobSrc} preload="none" />}

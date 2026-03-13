@@ -3,10 +3,11 @@
  *
  * Tests vote resolution, exile, hunter shoot, idiot reveal, last words, PK.
  */
-import { describe, it, beforeEach } from 'node:test';
+
 import assert from 'node:assert/strict';
-import { WerewolfEngine } from '../dist/domains/cats/services/game/werewolf/WerewolfEngine.js';
+import { describe, it } from 'node:test';
 import { createWerewolfDefinition } from '../dist/domains/cats/services/game/werewolf/WerewolfDefinition.js';
+import { WerewolfEngine } from '../dist/domains/cats/services/game/werewolf/WerewolfEngine.js';
 
 function create9pRuntime() {
   const def = createWerewolfDefinition(9);
@@ -57,7 +58,7 @@ describe('WerewolfEngine — Day Phase', () => {
     assert.equal(result.exiled, 'P1', 'P1 should be exiled (5 votes)');
     assert.equal(result.tied, false, 'should not be tied');
 
-    const seat = engine.getRuntime().seats.find(s => s.seatId === 'P1');
+    const seat = engine.getRuntime().seats.find((s) => s.seatId === 'P1');
     assert.equal(seat.alive, false, 'P1 should be dead');
   });
 
@@ -104,7 +105,7 @@ describe('WerewolfEngine — Day Phase', () => {
     engine.recordLastWords('P1', 'I am not a wolf, trust me!');
 
     const events = engine.getRuntime().eventLog;
-    const lastWordsEvent = events.find(e => e.type === 'last_words');
+    const lastWordsEvent = events.find((e) => e.type === 'last_words');
     assert.ok(lastWordsEvent, 'should have last_words event');
     assert.equal(lastWordsEvent.scope, 'public');
     assert.equal(lastWordsEvent.payload.seatId, 'P1');
@@ -127,13 +128,13 @@ describe('WerewolfEngine — Day Phase', () => {
     // Hunter is dead (exiled)
     runtime.seats[4].alive = false;
 
-    engine.hunterShoot('P5', 'P1');  // hunter shoots wolf P1
+    engine.hunterShoot('P5', 'P1'); // hunter shoots wolf P1
 
-    const seat = engine.getRuntime().seats.find(s => s.seatId === 'P1');
+    const seat = engine.getRuntime().seats.find((s) => s.seatId === 'P1');
     assert.equal(seat.alive, false, 'P1 should be dead (shot by hunter)');
 
     // Event logged
-    const shootEvent = engine.getRuntime().eventLog.find(e => e.type === 'hunter_shoot');
+    const shootEvent = engine.getRuntime().eventLog.find((e) => e.type === 'hunter_shoot');
     assert.ok(shootEvent);
     assert.equal(shootEvent.scope, 'public');
     assert.equal(shootEvent.payload.target, 'P1');
@@ -143,34 +144,30 @@ describe('WerewolfEngine — Day Phase', () => {
     const runtime = create9pRuntime();
     // Add idiot seat
     runtime.seats.push({
-      seatId: 'P10', actorType: 'cat', actorId: 'a10',
-      role: 'idiot', alive: true, properties: {},
+      seatId: 'P10',
+      actorType: 'cat',
+      actorId: 'a10',
+      role: 'idiot',
+      alive: true,
+      properties: {},
     });
     const engine = new WerewolfEngine(runtime);
 
-    const result = engine.resolveVoteExile('P10');
-    const seat = engine.getRuntime().seats.find(s => s.seatId === 'P10');
+    const _result = engine.resolveVoteExile('P10');
+    const seat = engine.getRuntime().seats.find((s) => s.seatId === 'P10');
     assert.equal(seat.alive, true, 'Idiot survives');
-    assert.equal(seat.properties['idiotRevealed'], true, 'Idiot revealed');
+    assert.equal(seat.properties.idiotRevealed, true, 'Idiot revealed');
 
     // Idiot should not be able to vote
-    assert.throws(
-      () => engine.castVote('P10', 'P1'),
-      /cannot vote/i,
-      'Revealed idiot cannot vote',
-    );
+    assert.throws(() => engine.castVote('P10', 'P1'), /cannot vote/i, 'Revealed idiot cannot vote');
   });
 
   it('dead player cannot vote', () => {
     const runtime = create9pRuntime();
-    runtime.seats[6].alive = false;  // P7 dead
+    runtime.seats[6].alive = false; // P7 dead
     const engine = new WerewolfEngine(runtime);
 
-    assert.throws(
-      () => engine.castVote('P7', 'P1'),
-      /not alive|cannot vote/i,
-      'Dead player cannot vote',
-    );
+    assert.throws(() => engine.castVote('P7', 'P1'), /not alive|cannot vote/i, 'Dead player cannot vote');
   });
 
   it('discussion phase → record speeches as public events', () => {
@@ -181,7 +178,7 @@ describe('WerewolfEngine — Day Phase', () => {
     engine.recordSpeech('P3', 'I think P1 is suspicious.');
     engine.recordSpeech('P1', 'I am a villager.');
 
-    const speeches = engine.getRuntime().eventLog.filter(e => e.type === 'speech');
+    const speeches = engine.getRuntime().eventLog.filter((e) => e.type === 'speech');
     assert.equal(speeches.length, 2);
     assert.equal(speeches[0].scope, 'public');
     assert.equal(speeches[0].payload.seatId, 'P3');

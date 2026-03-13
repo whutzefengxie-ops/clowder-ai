@@ -1,8 +1,8 @@
 import React, { act, useEffect } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { usePushNotify, type UsePushNotifyReturn } from '../usePushNotify';
 import { apiFetch } from '@/utils/api-client';
+import { type UsePushNotifyReturn, usePushNotify } from '../usePushNotify';
 
 vi.mock('@/utils/api-client', () => ({
   apiFetch: vi.fn(),
@@ -94,7 +94,13 @@ describe('usePushNotify subscribe robustness', () => {
       } as Response);
 
     await act(async () => {
-      root.render(React.createElement(HookHarness, { onUpdate: (v) => { hookValue = v; } }));
+      root.render(
+        React.createElement(HookHarness, {
+          onUpdate: (v) => {
+            hookValue = v;
+          },
+        }),
+      );
     });
 
     await act(async () => {
@@ -121,7 +127,13 @@ describe('usePushNotify subscribe robustness', () => {
     } as Response);
 
     await act(async () => {
-      root.render(React.createElement(HookHarness, { onUpdate: (v) => { hookValue = v; } }));
+      root.render(
+        React.createElement(HookHarness, {
+          onUpdate: (v) => {
+            hookValue = v;
+          },
+        }),
+      );
     });
 
     await act(async () => {

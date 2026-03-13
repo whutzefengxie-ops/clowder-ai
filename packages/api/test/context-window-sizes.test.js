@@ -3,8 +3,8 @@
  * F24: Hardcoded model → context window mapping.
  */
 
-import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
+import { describe, test } from 'node:test';
 
 describe('getContextWindowFallback', () => {
   let getContextWindowFallback;

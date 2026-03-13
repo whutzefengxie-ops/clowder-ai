@@ -100,13 +100,15 @@ export class BacklogStore implements IBacklogStore {
         },
         // When importing as done, add done audit + doneAt in one shot
         ...(input.initialStatus === 'done'
-          ? [{
-            id: generateSortableId(now + 2),
-            action: 'done' as const,
-            actor: makeCreatorActor(input),
-            timestamp: now,
-            detail: 'imported as done',
-          }]
+          ? [
+              {
+                id: generateSortableId(now + 2),
+                action: 'done' as const,
+                actor: makeCreatorActor(input),
+                timestamp: now,
+                detail: 'imported as done',
+              },
+            ]
           : []),
       ],
       ...(input.initialStatus === 'done' ? { doneAt: now } : {}),
@@ -120,9 +122,10 @@ export class BacklogStore implements IBacklogStore {
     if (!existing) return null;
 
     // Status upgrade: only open→dispatched or open→done, never downgrade
-    const statusUpgrade = input.importStatus && existing.status === 'open' && input.importStatus !== 'open'
-      ? input.importStatus
-      : undefined;
+    const statusUpgrade =
+      input.importStatus && existing.status === 'open' && input.importStatus !== 'open'
+        ? input.importStatus
+        : undefined;
 
     const unchanged =
       existing.title === input.title &&

@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { useChatStore } from '../chatStore';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChatMessage } from '../chat-types';
+import { useChatStore } from '../chatStore';
 
 function makeMsg(id: string, content = 'hello'): ChatMessage {
   return { id, type: 'user', content, timestamp: Date.now() };
@@ -20,7 +20,7 @@ describe('chatStore multi-thread state', () => {
       catStatuses: {},
       catInvocations: {},
       currentGame: null,
-      
+
       threadStates: {},
       viewMode: 'single',
       splitPaneThreadIds: [],
@@ -61,7 +61,7 @@ describe('chatStore multi-thread state', () => {
     // Set cat status on thread A
     useChatStore.getState().setTargetCats(['opus', 'codex']);
     useChatStore.getState().setCatStatus('opus', 'streaming');
-    expect(useChatStore.getState().catStatuses['opus']).toBe('streaming');
+    expect(useChatStore.getState().catStatuses.opus).toBe('streaming');
 
     // Switch to thread B
     useChatStore.getState().setCurrentThread('thread-b');
@@ -71,7 +71,7 @@ describe('chatStore multi-thread state', () => {
     // Switch back to thread A — statuses restored
     useChatStore.getState().setCurrentThread('thread-a');
     expect(useChatStore.getState().targetCats).toEqual(['opus', 'codex']);
-    expect(useChatStore.getState().catStatuses['opus']).toBe('streaming');
+    expect(useChatStore.getState().catStatuses.opus).toBe('streaming');
   });
 
   it('preserves intentMode when switching threads', () => {
@@ -114,15 +114,15 @@ describe('chatStore multi-thread state', () => {
       // Map updated
       const ts = useChatStore.getState().threadStates['thread-b'];
       expect(ts).toBeDefined();
-      expect(ts!.messages).toHaveLength(1);
-      expect(ts!.unreadCount).toBe(1);
+      expect(ts?.messages).toHaveLength(1);
+      expect(ts?.unreadCount).toBe(1);
     });
 
     it('deduplicates by id', () => {
       useChatStore.getState().addMessageToThread('thread-b', makeMsg('m1'));
       useChatStore.getState().addMessageToThread('thread-b', makeMsg('m1'));
       const ts = useChatStore.getState().threadStates['thread-b'];
-      expect(ts!.messages).toHaveLength(1);
+      expect(ts?.messages).toHaveLength(1);
     });
   });
 
@@ -136,7 +136,7 @@ describe('chatStore multi-thread state', () => {
     it('appends to background thread message content', () => {
       useChatStore.getState().addMessageToThread('thread-b', makeMsg('m2', 'foo'));
       useChatStore.getState().appendToThreadMessage('thread-b', 'm2', 'bar');
-      expect(useChatStore.getState().threadStates['thread-b']!.messages[0].content).toBe('foobar');
+      expect(useChatStore.getState().threadStates['thread-b']?.messages[0].content).toBe('foobar');
     });
   });
 
@@ -167,7 +167,7 @@ describe('chatStore multi-thread state', () => {
 
       useChatStore.getState().replaceThreadMessageId('thread-b', 'temp-user-2', 'msg-server-2');
 
-      const messages = useChatStore.getState().threadStates['thread-b']!.messages;
+      const messages = useChatStore.getState().threadStates['thread-b']?.messages;
       expect(messages).toHaveLength(1);
       expect(messages[0].id).toBe('msg-server-2');
       expect(messages[0].content).toBe('background');
@@ -179,7 +179,7 @@ describe('chatStore multi-thread state', () => {
 
       useChatStore.getState().replaceThreadMessageId('thread-b', 'temp-user-2', 'msg-server-2');
 
-      const messages = useChatStore.getState().threadStates['thread-b']!.messages;
+      const messages = useChatStore.getState().threadStates['thread-b']?.messages;
       expect(messages).toHaveLength(1);
       expect(messages[0].id).toBe('msg-server-2');
     });
@@ -195,7 +195,7 @@ describe('chatStore multi-thread state', () => {
     it('updates streaming flag in background thread', () => {
       useChatStore.getState().addMessageToThread('thread-b', { ...makeMsg('m4', 'run'), type: 'assistant' });
       useChatStore.getState().setThreadMessageStreaming('thread-b', 'm4', true);
-      expect(useChatStore.getState().threadStates['thread-b']!.messages[0].isStreaming).toBe(true);
+      expect(useChatStore.getState().threadStates['thread-b']?.messages[0].isStreaming).toBe(true);
     });
   });
 
@@ -228,13 +228,13 @@ describe('chatStore multi-thread state', () => {
       useChatStore.getState().incrementUnread('thread-b');
       const ts = useChatStore.getState().threadStates['thread-b'];
       // 1 from addMessageToThread + 1 from incrementUnread
-      expect(ts!.unreadCount).toBe(2);
+      expect(ts?.unreadCount).toBe(2);
     });
 
     it('clearUnread resets count', () => {
       useChatStore.getState().addMessageToThread('thread-b', makeMsg('u2'));
       useChatStore.getState().clearUnread('thread-b');
-      expect(useChatStore.getState().threadStates['thread-b']!.unreadCount).toBe(0);
+      expect(useChatStore.getState().threadStates['thread-b']?.unreadCount).toBe(0);
     });
 
     it('incrementUnread is no-op for active thread', () => {
@@ -278,22 +278,22 @@ describe('chatStore multi-thread state', () => {
   describe('updateThreadCatStatus', () => {
     it('updates active thread cat status via flat state', () => {
       useChatStore.getState().updateThreadCatStatus('thread-a', 'opus', 'streaming');
-      expect(useChatStore.getState().catStatuses['opus']).toBe('streaming');
+      expect(useChatStore.getState().catStatuses.opus).toBe('streaming');
     });
 
     it('updates background thread cat status in map', () => {
       useChatStore.getState().updateThreadCatStatus('thread-b', 'codex', 'error');
       const ts = useChatStore.getState().threadStates['thread-b'];
       expect(ts).toBeDefined();
-      expect(ts!.catStatuses['codex']).toBe('error');
+      expect(ts?.catStatuses.codex).toBe('error');
     });
 
     it('preserves existing cat statuses when updating one cat', () => {
       useChatStore.getState().updateThreadCatStatus('thread-b', 'opus', 'streaming');
       useChatStore.getState().updateThreadCatStatus('thread-b', 'codex', 'done');
       const ts = useChatStore.getState().threadStates['thread-b']!;
-      expect(ts.catStatuses['opus']).toBe('streaming');
-      expect(ts.catStatuses['codex']).toBe('done');
+      expect(ts.catStatuses.opus).toBe('streaming');
+      expect(ts.catStatuses.codex).toBe('done');
     });
 
     it('updates lastActivity when updating background thread', () => {
@@ -309,7 +309,7 @@ describe('chatStore multi-thread state', () => {
       // Simulate the background intent_mode sequence from useSocket.ts:
       // 1. setThreadIntentMode clears catStatuses to {}
       useChatStore.getState().setThreadIntentMode('thread-b', 'execute');
-      expect(useChatStore.getState().threadStates['thread-b']!.catStatuses).toEqual({});
+      expect(useChatStore.getState().threadStates['thread-b']?.catStatuses).toEqual({});
 
       // 2. setThreadTargetCats should pre-seed with 'pending' (like active path)
       useChatStore.getState().setThreadTargetCats('thread-b', ['opus', 'codex']);
@@ -357,15 +357,15 @@ describe('chatStore multi-thread state', () => {
     it('clearUnread sets suppression that blocks initThreadUnread', () => {
       // Background thread gets unread
       useChatStore.getState().addMessageToThread('thread-b', makeMsg('s1'));
-      expect(useChatStore.getState().threadStates['thread-b']!.unreadCount).toBe(1);
+      expect(useChatStore.getState().threadStates['thread-b']?.unreadCount).toBe(1);
 
       // User opens thread-b (simulated) — clearUnread fires
       useChatStore.getState().clearUnread('thread-b');
-      expect(useChatStore.getState().threadStates['thread-b']!.unreadCount).toBe(0);
+      expect(useChatStore.getState().threadStates['thread-b']?.unreadCount).toBe(0);
 
       // API re-hydration arrives with stale count — should be suppressed
       useChatStore.getState().initThreadUnread('thread-b', 1, false);
-      expect(useChatStore.getState().threadStates['thread-b']!.unreadCount).toBe(0);
+      expect(useChatStore.getState().threadStates['thread-b']?.unreadCount).toBe(0);
     });
 
     it('suppression expires after 10s', () => {
@@ -377,7 +377,7 @@ describe('chatStore multi-thread state', () => {
 
       // Now initThreadUnread should work
       useChatStore.getState().initThreadUnread('thread-b', 2, false);
-      expect(useChatStore.getState().threadStates['thread-b']!.unreadCount).toBe(2);
+      expect(useChatStore.getState().threadStates['thread-b']?.unreadCount).toBe(2);
     });
 
     it('clearAllUnread suppresses all threads', () => {
@@ -385,14 +385,14 @@ describe('chatStore multi-thread state', () => {
       useChatStore.getState().addMessageToThread('thread-c', makeMsg('s4'));
 
       useChatStore.getState().clearAllUnread();
-      expect(useChatStore.getState().threadStates['thread-b']!.unreadCount).toBe(0);
-      expect(useChatStore.getState().threadStates['thread-c']!.unreadCount).toBe(0);
+      expect(useChatStore.getState().threadStates['thread-b']?.unreadCount).toBe(0);
+      expect(useChatStore.getState().threadStates['thread-c']?.unreadCount).toBe(0);
 
       // Stale re-hydration — both suppressed
       useChatStore.getState().initThreadUnread('thread-b', 1, false);
       useChatStore.getState().initThreadUnread('thread-c', 3, true);
-      expect(useChatStore.getState().threadStates['thread-b']!.unreadCount).toBe(0);
-      expect(useChatStore.getState().threadStates['thread-c']!.unreadCount).toBe(0);
+      expect(useChatStore.getState().threadStates['thread-b']?.unreadCount).toBe(0);
+      expect(useChatStore.getState().threadStates['thread-c']?.unreadCount).toBe(0);
     });
 
     it('suppression does not block genuinely new messages via addMessageToThread', () => {
@@ -401,7 +401,7 @@ describe('chatStore multi-thread state', () => {
 
       // A genuinely new WebSocket message arrives — addMessageToThread should still work
       useChatStore.getState().addMessageToThread('thread-b', makeMsg('s6'));
-      expect(useChatStore.getState().threadStates['thread-b']!.unreadCount).toBe(1);
+      expect(useChatStore.getState().threadStates['thread-b']?.unreadCount).toBe(1);
     });
   });
 });

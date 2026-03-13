@@ -11,7 +11,7 @@ import { RedisMessageStore } from '../redis/RedisMessageStore.js';
 export type AnyMessageStore = MessageStore | RedisMessageStore;
 
 function resolveMessageTtlSeconds(): number | undefined {
-  const raw = process.env['MESSAGE_TTL_SECONDS'];
+  const raw = process.env.MESSAGE_TTL_SECONDS;
   if (!raw) return undefined;
   const parsed = Number(raw);
   if (!Number.isFinite(parsed)) {
@@ -21,15 +21,10 @@ function resolveMessageTtlSeconds(): number | undefined {
   return Math.trunc(parsed);
 }
 
-export function createMessageStore(
-  redis?: RedisClient
-): AnyMessageStore {
+export function createMessageStore(redis?: RedisClient): AnyMessageStore {
   if (redis) {
     const ttlSeconds = resolveMessageTtlSeconds();
-    return new RedisMessageStore(
-      redis,
-      ttlSeconds !== undefined ? { ttlSeconds } : undefined,
-    );
+    return new RedisMessageStore(redis, ttlSeconds !== undefined ? { ttlSeconds } : undefined);
   }
   return new MessageStore();
 }

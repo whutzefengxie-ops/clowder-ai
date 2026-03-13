@@ -9,8 +9,8 @@
  */
 
 import type { RedisClient } from '@cat-cafe/shared/utils';
-import { PushSubKeys, hashEndpoint } from '../redis-keys/push-keys.js';
 import type { IPushSubscriptionStore, PushSubscriptionRecord } from '../ports/PushSubscriptionStore.js';
+import { hashEndpoint, PushSubKeys } from '../redis-keys/push-keys.js';
 
 const DEFAULT_TTL_SECONDS = 30 * 24 * 60 * 60; // 30 days
 
@@ -105,7 +105,7 @@ export class RedisPushSubscriptionStore implements IPushSubscriptionStore {
         continue;
       }
       const d = data as Record<string, string>;
-      if (!d['endpoint']) {
+      if (!d.endpoint) {
         // Detail hash expired (TTL) but set entries remain — mark for cleanup
         staleHashes.push(hashes[i]!);
         continue;
@@ -124,7 +124,9 @@ export class RedisPushSubscriptionStore implements IPushSubscriptionStore {
           cleanup.srem(sourceSetKey, eh);
         }
       }
-      cleanup.exec().catch(() => { /* best-effort cleanup */ });
+      cleanup.exec().catch(() => {
+        /* best-effort cleanup */
+      });
     }
 
     return records;
@@ -132,11 +134,16 @@ export class RedisPushSubscriptionStore implements IPushSubscriptionStore {
 
   private serialize(record: PushSubscriptionRecord): string[] {
     const fields: string[] = [
-      'endpoint', record.endpoint,
-      'p256dh', record.keys.p256dh,
-      'auth', record.keys.auth,
-      'userId', record.userId,
-      'createdAt', String(record.createdAt),
+      'endpoint',
+      record.endpoint,
+      'p256dh',
+      record.keys.p256dh,
+      'auth',
+      record.keys.auth,
+      'userId',
+      record.userId,
+      'createdAt',
+      String(record.createdAt),
     ];
     if (record.userAgent) fields.push('userAgent', record.userAgent);
     return fields;
@@ -144,14 +151,14 @@ export class RedisPushSubscriptionStore implements IPushSubscriptionStore {
 
   private hydrate(data: Record<string, string>): PushSubscriptionRecord {
     return {
-      endpoint: data['endpoint']!,
+      endpoint: data.endpoint!,
       keys: {
-        p256dh: data['p256dh']!,
-        auth: data['auth']!,
+        p256dh: data.p256dh!,
+        auth: data.auth!,
       },
-      userId: data['userId']!,
-      createdAt: parseInt(data['createdAt']!, 10),
-      ...(data['userAgent'] ? { userAgent: data['userAgent'] } : {}),
+      userId: data.userId!,
+      createdAt: parseInt(data.createdAt!, 10),
+      ...(data.userAgent ? { userAgent: data.userAgent } : {}),
     };
   }
 }

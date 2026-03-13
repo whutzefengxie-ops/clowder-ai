@@ -1,10 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { SignalArticleStatus, StudyMeta } from '@cat-cafe/shared';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { MarkdownContent } from '@/components/MarkdownContent';
 import type { SignalArticleDetail } from '@/utils/signals-api';
 import { fetchStudyMeta, linkSignalThread, unlinkSignalThread } from '@/utils/signals-api';
 import { SignalTierBadge } from './SignalTierBadge';
 import { StudyFoldArea } from './StudyFoldArea';
-import { MarkdownContent } from '@/components/MarkdownContent';
 
 interface SignalArticleDetailProps {
   readonly article: SignalArticleDetail | null;
@@ -33,7 +33,18 @@ function formatDate(input: string): string {
   });
 }
 
-export function SignalArticleDetail({ article, isLoading, onStatusChange, onTagsChange, onNoteChange, onDelete, collections, onAddToCollection, onCreateCollection, onCollectionChanged }: SignalArticleDetailProps) {
+export function SignalArticleDetail({
+  article,
+  isLoading,
+  onStatusChange,
+  onTagsChange,
+  onNoteChange,
+  onDelete,
+  collections,
+  onAddToCollection,
+  onCreateCollection,
+  onCollectionChanged,
+}: SignalArticleDetailProps) {
   const [pendingTag, setPendingTag] = useState('');
   const [noteText, setNoteText] = useState('');
   const [noteOpen, setNoteOpen] = useState(false);
@@ -71,22 +82,34 @@ export function SignalArticleDetail({ article, isLoading, onStatusChange, onTags
     }
     let cancelled = false;
     fetchStudyMeta(article.id)
-      .then((meta) => { if (!cancelled) setStudyMeta(meta); })
-      .catch(() => { if (!cancelled) setStudyMeta(null); });
-    return () => { cancelled = true; };
-  }, [article?.id]);
+      .then((meta) => {
+        if (!cancelled) setStudyMeta(meta);
+      })
+      .catch(() => {
+        if (!cancelled) setStudyMeta(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [article?.id, article]);
 
-  const handleLinkThread = useCallback(async (threadId: string) => {
-    if (!article) return;
-    const meta = await linkSignalThread(article.id, threadId);
-    setStudyMeta(meta);
-  }, [article]);
+  const handleLinkThread = useCallback(
+    async (threadId: string) => {
+      if (!article) return;
+      const meta = await linkSignalThread(article.id, threadId);
+      setStudyMeta(meta);
+    },
+    [article],
+  );
 
-  const handleUnlinkThread = useCallback(async (threadId: string) => {
-    if (!article) return;
-    const meta = await unlinkSignalThread(article.id, threadId);
-    setStudyMeta(meta);
-  }, [article]);
+  const handleUnlinkThread = useCallback(
+    async (threadId: string) => {
+      if (!article) return;
+      const meta = await unlinkSignalThread(article.id, threadId);
+      setStudyMeta(meta);
+    },
+    [article],
+  );
 
   const refreshStudyMeta = useCallback(() => {
     if (!article) return;
@@ -95,19 +118,25 @@ export function SignalArticleDetail({ article, isLoading, onStatusChange, onTags
       .catch(() => {});
   }, [article]);
 
-  const handleCollectionAdd = useCallback(async (collectionId: string) => {
-    if (!onAddToCollection) return;
-    await onAddToCollection(collectionId);
-    refreshStudyMeta();
-    onCollectionChanged?.();
-  }, [onAddToCollection, refreshStudyMeta, onCollectionChanged]);
+  const handleCollectionAdd = useCallback(
+    async (collectionId: string) => {
+      if (!onAddToCollection) return;
+      await onAddToCollection(collectionId);
+      refreshStudyMeta();
+      onCollectionChanged?.();
+    },
+    [onAddToCollection, refreshStudyMeta, onCollectionChanged],
+  );
 
-  const handleCollectionCreate = useCallback(async (name: string) => {
-    if (!onCreateCollection) return;
-    await onCreateCollection(name);
-    refreshStudyMeta();
-    onCollectionChanged?.();
-  }, [onCreateCollection, refreshStudyMeta, onCollectionChanged]);
+  const handleCollectionCreate = useCallback(
+    async (name: string) => {
+      if (!onCreateCollection) return;
+      await onCreateCollection(name);
+      refreshStudyMeta();
+      onCollectionChanged?.();
+    },
+    [onCreateCollection, refreshStudyMeta, onCollectionChanged],
+  );
 
   const discussedLink = useMemo(() => {
     if (!article) {
@@ -124,9 +153,8 @@ export function SignalArticleDetail({ article, isLoading, onStatusChange, onTags
     if (!article) {
       return;
     }
-    const candidateTag = normalizedPendingTag.length > 0
-      ? normalizedPendingTag
-      : pendingTagInputRef.current?.value.trim() ?? '';
+    const candidateTag =
+      normalizedPendingTag.length > 0 ? normalizedPendingTag : (pendingTagInputRef.current?.value.trim() ?? '');
     if (candidateTag.length === 0) {
       return;
     }
@@ -193,7 +221,9 @@ export function SignalArticleDetail({ article, isLoading, onStatusChange, onTags
       <StudyFoldArea
         articleId={article.id}
         studyMeta={studyMeta}
-        onStartStudy={() => { window.location.href = discussedLink; }}
+        onStartStudy={() => {
+          window.location.href = discussedLink;
+        }}
         onLinkThread={handleLinkThread}
         onUnlinkThread={handleUnlinkThread}
         collections={collections}
@@ -212,7 +242,9 @@ export function SignalArticleDetail({ article, isLoading, onStatusChange, onTags
             {expandContent ? '收起' : '展开阅读'}
           </button>
         </div>
-        <div className={`mt-1 overflow-y-auto rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm text-cafe-black ${expandContent ? '' : 'max-h-[300px]'}`}>
+        <div
+          className={`mt-1 overflow-y-auto rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm text-cafe-black ${expandContent ? '' : 'max-h-[300px]'}`}
+        >
           <MarkdownContent content={article.content || '（无正文）'} />
         </div>
       </section>
@@ -309,8 +341,8 @@ export function SignalArticleDetail({ article, isLoading, onStatusChange, onTags
         >
           收藏
         </button>
-        {onDelete && (
-          confirmDelete ? (
+        {onDelete &&
+          (confirmDelete ? (
             <div className="flex items-center gap-2">
               <span className="text-xs text-red-600">确认删除？</span>
               <button
@@ -336,8 +368,7 @@ export function SignalArticleDetail({ article, isLoading, onStatusChange, onTags
             >
               删除
             </button>
-          )
-        )}
+          ))}
       </div>
     </aside>
   );

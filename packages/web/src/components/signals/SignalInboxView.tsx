@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type { SignalArticle, SignalArticleStatus, SignalTier } from '@cat-cafe/shared';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   createCollection,
   deleteSignalArticle,
@@ -9,11 +9,11 @@ import {
   fetchSignalArticle,
   fetchSignalStats,
   fetchSignalsInbox,
-  searchSignals,
-  updateCollection,
   type SignalArticleDetail,
   type SignalArticleStats,
   type StudyCollection,
+  searchSignals,
+  updateCollection,
   updateSignalArticle,
 } from '@/utils/signals-api';
 import { filterSignalArticles, type SignalArticleFilters } from '@/utils/signals-view';
@@ -42,7 +42,6 @@ function toSignalTier(value: string | undefined): SignalTier | undefined {
   return parsed as SignalTier;
 }
 
-
 export function SignalInboxView() {
   const [items, setItems] = useState<readonly SignalArticle[]>([]);
   const [showServerSearchResults, setShowServerSearchResults] = useState(false);
@@ -58,23 +57,31 @@ export function SignalInboxView() {
 
   // Load collections on mount
   useEffect(() => {
-    fetchCollections().then(setCollections).catch(() => {});
+    fetchCollections()
+      .then(setCollections)
+      .catch(() => {});
   }, []);
 
-  const handleAddToCollection = useCallback(async (collectionId: string) => {
-    if (!selectedArticle) return;
-    const col = collections.find((c) => c.id === collectionId);
-    if (!col) return;
-    const updated = await updateCollection(collectionId, {
-      articleIds: [...col.articleIds, selectedArticle.id],
-    });
-    setCollections((prev) => prev.map((c) => (c.id === collectionId ? updated : c)));
-  }, [selectedArticle, collections]);
+  const handleAddToCollection = useCallback(
+    async (collectionId: string) => {
+      if (!selectedArticle) return;
+      const col = collections.find((c) => c.id === collectionId);
+      if (!col) return;
+      const updated = await updateCollection(collectionId, {
+        articleIds: [...col.articleIds, selectedArticle.id],
+      });
+      setCollections((prev) => prev.map((c) => (c.id === collectionId ? updated : c)));
+    },
+    [selectedArticle, collections],
+  );
 
-  const handleCreateCollection = useCallback(async (name: string) => {
-    const col = await createCollection(name, selectedArticle ? [selectedArticle.id] : []);
-    setCollections((prev) => [...prev, col]);
-  }, [selectedArticle]);
+  const handleCreateCollection = useCallback(
+    async (name: string) => {
+      const col = await createCollection(name, selectedArticle ? [selectedArticle.id] : []);
+      setCollections((prev) => [...prev, col]);
+    },
+    [selectedArticle],
+  );
 
   const toggleBatchSelect = useCallback((articleId: string) => {
     setBatchSelected((prev) => {
@@ -85,35 +92,42 @@ export function SignalInboxView() {
     });
   }, []);
 
-  const refreshInbox = useCallback(async (statusOverride?: SignalArticleFilters['status']) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const activeStatus = statusOverride ?? filters.status;
-      const statusParam = activeStatus === 'all' ? ('all' as const) : activeStatus === 'inbox' ? undefined : activeStatus;
-      const [inboxItems, statsData] = await Promise.all([
-        fetchSignalsInbox({ limit: 80, status: statusParam }),
-        fetchSignalStats(),
-      ]);
-      setItems(inboxItems);
-      setShowServerSearchResults(false);
-      setStats(statsData);
-    } catch (fetchError) {
-      setError(fetchError instanceof Error ? fetchError.message : '加载失败');
-    } finally {
-      setLoading(false);
-    }
-  }, [filters.status]);
+  const refreshInbox = useCallback(
+    async (statusOverride?: SignalArticleFilters['status']) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const activeStatus = statusOverride ?? filters.status;
+        const statusParam =
+          activeStatus === 'all' ? ('all' as const) : activeStatus === 'inbox' ? undefined : activeStatus;
+        const [inboxItems, statsData] = await Promise.all([
+          fetchSignalsInbox({ limit: 80, status: statusParam }),
+          fetchSignalStats(),
+        ]);
+        setItems(inboxItems);
+        setShowServerSearchResults(false);
+        setStats(statsData);
+      } catch (fetchError) {
+        setError(fetchError instanceof Error ? fetchError.message : '加载失败');
+      } finally {
+        setLoading(false);
+      }
+    },
+    [filters.status],
+  );
 
   useEffect(() => {
     void refreshInbox();
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- only on mount
-  }, []);
-
-  const handleStatusTab = useCallback((status: SignalArticleFilters['status']) => {
-    setFilters((current) => ({ ...current, status }));
-    void refreshInbox(status);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only on mount
   }, [refreshInbox]);
+
+  const handleStatusTab = useCallback(
+    (status: SignalArticleFilters['status']) => {
+      setFilters((current) => ({ ...current, status }));
+      void refreshInbox(status);
+    },
+    [refreshInbox],
+  );
 
   const filteredItems = useMemo(
     () => (showServerSearchResults ? items : filterSignalArticles(items, filters)),
@@ -121,40 +135,40 @@ export function SignalInboxView() {
   );
   const sources = useMemo(() => uniqueSources(items), [items]);
 
-  const handleSearchSubmit = useCallback(async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setError(null);
-    const query = filters.query.trim();
-    if (query.length === 0) {
-      await refreshInbox();
-      return;
-    }
-    const formData = new FormData(event.currentTarget);
-    const selectedSource = formData.get('source');
-    const selectedTier = formData.get('tier');
-    const statusForSearch = filters.status === 'all' ? undefined : (filters.status as SignalArticleStatus);
+  const handleSearchSubmit = useCallback(
+    async (event: React.FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      setError(null);
+      const query = filters.query.trim();
+      if (query.length === 0) {
+        await refreshInbox();
+        return;
+      }
+      const formData = new FormData(event.currentTarget);
+      const selectedSource = formData.get('source');
+      const selectedTier = formData.get('tier');
+      const statusForSearch = filters.status === 'all' ? undefined : (filters.status as SignalArticleStatus);
 
-    setLoading(true);
-    try {
-      const result = await searchSignals(query, {
-        limit: 80,
-        status: statusForSearch,
-        source:
-          typeof selectedSource === 'string' && selectedSource !== 'all'
-            ? selectedSource
-            : undefined,
-        tier: typeof selectedTier === 'string' ? toSignalTier(selectedTier) : undefined,
-      });
-      setItems(result.items);
-      setShowServerSearchResults(true);
-      setSelectedArticleId(null);
-      setSelectedArticle(null);
-    } catch (searchError) {
-      setError(searchError instanceof Error ? searchError.message : '搜索失败');
-    } finally {
-      setLoading(false);
-    }
-  }, [filters.query, filters.status, refreshInbox]);
+      setLoading(true);
+      try {
+        const result = await searchSignals(query, {
+          limit: 80,
+          status: statusForSearch,
+          source: typeof selectedSource === 'string' && selectedSource !== 'all' ? selectedSource : undefined,
+          tier: typeof selectedTier === 'string' ? toSignalTier(selectedTier) : undefined,
+        });
+        setItems(result.items);
+        setShowServerSearchResults(true);
+        setSelectedArticleId(null);
+        setSelectedArticle(null);
+      } catch (searchError) {
+        setError(searchError instanceof Error ? searchError.message : '搜索失败');
+      } finally {
+        setLoading(false);
+      }
+    },
+    [filters.query, filters.status, refreshInbox],
+  );
 
   const handleSelectArticle = useCallback(async (article: SignalArticle) => {
     setSelectedArticleId(article.id);
@@ -230,15 +244,19 @@ export function SignalInboxView() {
 
         <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm space-y-3">
           <div className="flex gap-1">
-            {([['inbox', 'Inbox'], ['read', '已读'], ['all', '全部']] as const).map(([key, label]) => (
+            {(
+              [
+                ['inbox', 'Inbox'],
+                ['read', '已读'],
+                ['all', '全部'],
+              ] as const
+            ).map(([key, label]) => (
               <button
                 key={key}
                 type="button"
                 onClick={() => handleStatusTab(key)}
                 className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-                  filters.status === key
-                    ? 'bg-owner-primary text-white'
-                    : 'text-gray-600 hover:bg-gray-100'
+                  filters.status === key ? 'bg-owner-primary text-white' : 'text-gray-600 hover:bg-gray-100'
                 }`}
               >
                 {label}
@@ -254,7 +272,9 @@ export function SignalInboxView() {
             />
             <select
               value={filters.tier}
-              onChange={(event) => setFilters((current) => ({ ...current, tier: event.target.value as SignalArticleFilters['tier'] }))}
+              onChange={(event) =>
+                setFilters((current) => ({ ...current, tier: event.target.value as SignalArticleFilters['tier'] }))
+              }
               name="tier"
               className="rounded-lg border border-gray-200 px-3 py-2 text-sm"
             >
@@ -272,10 +292,15 @@ export function SignalInboxView() {
             >
               <option value="all">来源: 全部</option>
               {sources.map((source) => (
-                <option key={source} value={source}>{source}</option>
+                <option key={source} value={source}>
+                  {source}
+                </option>
               ))}
             </select>
-            <button type="submit" className="rounded-lg bg-owner-primary px-3 py-2 text-sm font-semibold text-white hover:bg-owner-dark md:col-span-4">
+            <button
+              type="submit"
+              className="rounded-lg bg-owner-primary px-3 py-2 text-sm font-semibold text-white hover:bg-owner-dark md:col-span-4"
+            >
               搜索
             </button>
           </form>
@@ -283,7 +308,11 @@ export function SignalInboxView() {
 
         <SignalStatsCards stats={stats} />
 
-        {error && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">请求失败: {error}</div>}
+        {error && (
+          <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            请求失败: {error}
+          </div>
+        )}
 
         <section className="grid gap-4 lg:grid-cols-[1.25fr_1fr]">
           <div className="space-y-2">

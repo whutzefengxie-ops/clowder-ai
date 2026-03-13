@@ -2,9 +2,10 @@
  * Shared test helpers for opencode tests.
  * Mock process, event emitter, and OMOC fixture factories.
  */
-import { mock } from 'node:test';
+
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
+import { mock } from 'node:test';
 
 export function createMockProcess(exitCode = 0) {
   const stdout = new PassThrough();
@@ -161,4 +162,11 @@ export const OPENCODE_INTERNAL_TOOLS = [
   'todoreplace',
 ];
 
-export const OMOC_INTERNAL_AGENTS = ['oracle', 'librarian', 'frontend-engineer', 'backend-engineer', 'devops-engineer', 'qa-engineer'];
+export const OMOC_INTERNAL_AGENTS = [
+  'oracle',
+  'librarian',
+  'frontend-engineer',
+  'backend-engineer',
+  'devops-engineer',
+  'qa-engineer',
+];

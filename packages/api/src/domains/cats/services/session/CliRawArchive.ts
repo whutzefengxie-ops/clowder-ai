@@ -15,7 +15,7 @@ export class CliRawArchive {
   private readonly initInFlight = new Map<string, Promise<void>>();
 
   constructor(options?: { archiveDir?: string }) {
-    this.archiveDir = options?.archiveDir ?? process.env['CLI_RAW_ARCHIVE_DIR'] ?? DEFAULT_CLI_RAW_ARCHIVE_DIR;
+    this.archiveDir = options?.archiveDir ?? process.env.CLI_RAW_ARCHIVE_DIR ?? DEFAULT_CLI_RAW_ARCHIVE_DIR;
   }
 
   async append(invocationId: string, payload: unknown): Promise<void> {

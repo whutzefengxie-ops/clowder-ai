@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
-import { useChatStore, type Thread } from '@/stores/chatStore';
+import { type Thread, useChatStore } from '@/stores/chatStore';
 import { apiFetch } from '@/utils/api-client';
 import { BootcampIcon } from './icons/BootcampIcon';
 
@@ -24,10 +24,18 @@ const PHASE_LABELS: Record<string, string> = {
 };
 
 const PHASE_ORDER = [
-  'phase-0-select-cat', 'phase-1-intro', 'phase-2-env-check',
-  'phase-3-config-help', 'phase-3.5-advanced', 'phase-4-task-select',
-  'phase-5-kickoff', 'phase-6-design', 'phase-7-dev',
-  'phase-8-review', 'phase-9-complete', 'phase-10-retro',
+  'phase-0-select-cat',
+  'phase-1-intro',
+  'phase-2-env-check',
+  'phase-3-config-help',
+  'phase-3.5-advanced',
+  'phase-4-task-select',
+  'phase-5-kickoff',
+  'phase-6-design',
+  'phase-7-dev',
+  'phase-8-review',
+  'phase-9-complete',
+  'phase-10-retro',
   'phase-11-farewell',
 ];
 
@@ -112,7 +120,9 @@ export function BootcampListModal({ open, onClose, currentThreadId }: BootcampLi
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
       data-testid="bootcamp-list-modal"
     >
       <div className="bg-white rounded-2xl shadow-xl w-[480px] max-h-[80vh] flex flex-col overflow-hidden">
@@ -169,13 +179,15 @@ export function BootcampListModal({ open, onClose, currentThreadId }: BootcampLi
                     <span className={`text-[15px] font-semibold ${isCompleted ? 'text-gray-500' : 'text-gray-900'}`}>
                       {t.title ?? '🎓 猫猫训练营'}
                     </span>
-                    <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${
-                      isCompleted
-                        ? 'bg-green-100 text-green-700'
-                        : isCurrent
-                          ? 'bg-amber-100 text-amber-700'
-                          : 'bg-amber-100 text-amber-700'
-                    }`}>
+                    <span
+                      className={`text-xs font-medium px-2.5 py-1 rounded-full ${
+                        isCompleted
+                          ? 'bg-green-100 text-green-700'
+                          : isCurrent
+                            ? 'bg-amber-100 text-amber-700'
+                            : 'bg-amber-100 text-amber-700'
+                      }`}
+                    >
                       {isCurrent ? '当前' : isCompleted ? '已完成 ✓' : '进行中'}
                     </span>
                   </div>
@@ -183,7 +195,9 @@ export function BootcampListModal({ open, onClose, currentThreadId }: BootcampLi
                   <div className="flex items-center justify-between text-[13px] text-gray-500 mb-2">
                     <div className="flex items-center gap-4">
                       {t.selectedTaskId && <span>⭐ {t.selectedTaskId}</span>}
-                      <span>Phase {phaseNum}/{PHASE_ORDER.length} · {phaseLabel}</span>
+                      <span>
+                        Phase {phaseNum}/{PHASE_ORDER.length} · {phaseLabel}
+                      </span>
                     </div>
                     {!isCurrent && (
                       <svg className="w-4 h-4 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">

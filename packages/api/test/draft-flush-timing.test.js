@@ -9,8 +9,8 @@
  * draft-messages-merge.test.js.
  */
 
-import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
 
 // Minimal mock service: tool-only stream (no text at all)
 // This isolates the tool-event flush path — if text were present, the text
@@ -68,10 +68,18 @@ function createSpyDraftStore() {
   const calls = [];
   return {
     calls,
-    upsert: (...args) => { calls.push({ method: 'upsert', args }); },
-    touch: (...args) => { calls.push({ method: 'touch', args }); },
-    delete: (...args) => { calls.push({ method: 'delete', args }); },
-    deleteByThread: (...args) => { calls.push({ method: 'deleteByThread', args }); },
+    upsert: (...args) => {
+      calls.push({ method: 'upsert', args });
+    },
+    touch: (...args) => {
+      calls.push({ method: 'touch', args });
+    },
+    delete: (...args) => {
+      calls.push({ method: 'delete', args });
+    },
+    deleteByThread: (...args) => {
+      calls.push({ method: 'deleteByThread', args });
+    },
     getByThread: () => [],
   };
 }
@@ -79,9 +87,7 @@ function createSpyDraftStore() {
 describe('#80 draft flush timing — first event bypass (cloud R7 P1)', () => {
   describe('routeSerial', () => {
     it('first tool_use creates draft immediately (no 2s wait)', async () => {
-      const { routeSerial } = await import(
-        '../dist/domains/cats/services/agents/routing/route-serial.js'
-      );
+      const { routeSerial } = await import('../dist/domains/cats/services/agents/routing/route-serial.js');
       const deps = createMockDeps({ opus: createToolFirstService('opus') });
       const spy = createSpyDraftStore();
       deps.draftStore = spy;
@@ -95,10 +101,7 @@ describe('#80 draft flush timing — first event bypass (cloud R7 P1)', () => {
       // R10 P1: The very FIRST draftStore call must be upsert, not touch.
       // If neverFlushed bypass regresses, the first call would be touch (heartbeat).
       assert.ok(spy.calls.length >= 1, `Expected at least 1 draftStore call, got ${spy.calls.length}`);
-      assert.equal(
-        spy.calls[0].method, 'upsert',
-        `First draftStore call must be upsert, got "${spy.calls[0].method}"`,
-      );
+      assert.equal(spy.calls[0].method, 'upsert', `First draftStore call must be upsert, got "${spy.calls[0].method}"`);
 
       // No touch should precede the first upsert
       const firstUpsertIdx = spy.calls.findIndex((c) => c.method === 'upsert');
@@ -110,16 +113,11 @@ describe('#80 draft flush timing — first event bypass (cloud R7 P1)', () => {
 
       // First upsert should carry tool events
       const firstUpsert = spy.calls[0].args[0];
-      assert.ok(
-        firstUpsert.toolEvents && firstUpsert.toolEvents.length > 0,
-        'First upsert should include tool events',
-      );
+      assert.ok(firstUpsert.toolEvents && firstUpsert.toolEvents.length > 0, 'First upsert should include tool events');
     });
 
     it('first small text creates draft immediately (no 2s wait)', async () => {
-      const { routeSerial } = await import(
-        '../dist/domains/cats/services/agents/routing/route-serial.js'
-      );
+      const { routeSerial } = await import('../dist/domains/cats/services/agents/routing/route-serial.js');
       const deps = createMockDeps({ opus: createSmallTextService('opus') });
       const spy = createSpyDraftStore();
       deps.draftStore = spy;
@@ -131,10 +129,7 @@ describe('#80 draft flush timing — first event bypass (cloud R7 P1)', () => {
 
       // R10 P1: First draftStore call must be upsert (not touch)
       assert.ok(spy.calls.length >= 1, `Expected at least 1 draftStore call, got ${spy.calls.length}`);
-      assert.equal(
-        spy.calls[0].method, 'upsert',
-        `First draftStore call must be upsert, got "${spy.calls[0].method}"`,
-      );
+      assert.equal(spy.calls[0].method, 'upsert', `First draftStore call must be upsert, got "${spy.calls[0].method}"`);
 
       // No touch should precede the first upsert
       const firstUpsertIdx = spy.calls.findIndex((c) => c.method === 'upsert');
@@ -152,9 +147,7 @@ describe('#80 draft flush timing — first event bypass (cloud R7 P1)', () => {
 
   describe('routeParallel', () => {
     it('first tool_use per cat creates draft immediately (no 2s wait)', async () => {
-      const { routeParallel } = await import(
-        '../dist/domains/cats/services/agents/routing/route-parallel.js'
-      );
+      const { routeParallel } = await import('../dist/domains/cats/services/agents/routing/route-parallel.js');
       const deps = createMockDeps({ opus: createToolFirstService('opus') });
       const spy = createSpyDraftStore();
       deps.draftStore = spy;
@@ -166,10 +159,7 @@ describe('#80 draft flush timing — first event bypass (cloud R7 P1)', () => {
 
       // R10 P1: First draftStore call must be upsert, not touch
       assert.ok(spy.calls.length >= 1, `Expected at least 1 draftStore call, got ${spy.calls.length}`);
-      assert.equal(
-        spy.calls[0].method, 'upsert',
-        `First draftStore call must be upsert, got "${spy.calls[0].method}"`,
-      );
+      assert.equal(spy.calls[0].method, 'upsert', `First draftStore call must be upsert, got "${spy.calls[0].method}"`);
 
       // No touch should precede the first upsert
       const firstUpsertIdx = spy.calls.findIndex((c) => c.method === 'upsert');
@@ -181,10 +171,7 @@ describe('#80 draft flush timing — first event bypass (cloud R7 P1)', () => {
 
       // First upsert should carry tool events
       const firstUpsert = spy.calls[0].args[0];
-      assert.ok(
-        firstUpsert.toolEvents && firstUpsert.toolEvents.length > 0,
-        'First upsert should include tool events',
-      );
+      assert.ok(firstUpsert.toolEvents && firstUpsert.toolEvents.length > 0, 'First upsert should include tool events');
     });
   });
 });

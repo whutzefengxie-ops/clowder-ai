@@ -7,18 +7,18 @@
  * - 运行时层: inFlightWaiters (Map<requestId, {resolve, timer}>) — 不可序列化
  */
 
-import type { Server as SocketIOServer } from 'socket.io';
 import type {
   CatId,
+  PendingRequestRecord,
   PermissionRequest,
   PermissionResponse,
-  PendingRequestRecord,
   RespondScope,
 } from '@cat-cafe/shared';
+import type { Server as SocketIOServer } from 'socket.io';
+import { getPushNotificationService } from '../push/PushNotificationService.js';
+import type { IAuthorizationAuditStore } from '../stores/ports/AuthorizationAuditStore.js';
 import type { IAuthorizationRuleStore } from '../stores/ports/AuthorizationRuleStore.js';
 import type { IPendingRequestStore } from '../stores/ports/PendingRequestStore.js';
-import type { IAuthorizationAuditStore } from '../stores/ports/AuthorizationAuditStore.js';
-import { getPushNotificationService } from '../push/PushNotificationService.js';
 
 const DEFAULT_TIMEOUT_MS = 120_000;
 
@@ -105,12 +105,16 @@ export class AuthorizationManager {
     // Web Push: 即使不在 Cat Cafe 页面也能收到权限请求
     const pushSvc = getPushNotificationService();
     if (pushSvc && userId) {
-      pushSvc.notifyUser(userId, {
-        title: `🔐 ${catId} 需要权限`,
-        body: `${req.action}: ${req.reason}`.slice(0, 120),
-        tag: `auth-${record.requestId}`,
-        data: { threadId, url: `/?thread=${threadId}`, forceSystemNotification: true },
-      }).catch(() => { /* best-effort */ });
+      pushSvc
+        .notifyUser(userId, {
+          title: `🔐 ${catId} 需要权限`,
+          body: `${req.action}: ${req.reason}`.slice(0, 120),
+          tag: `auth-${record.requestId}`,
+          data: { threadId, url: `/?thread=${threadId}`, forceSystemNotification: true },
+        })
+        .catch(() => {
+          /* best-effort */
+        });
     }
 
     // Step 3: 等待owner审批
@@ -142,7 +146,7 @@ export class AuthorizationManager {
     granted: boolean,
     scope: RespondScope,
     userId: string,
-    reason?: string
+    reason?: string,
   ): Promise<PendingRequestRecord | null> {
     const decision = granted ? 'granted' : 'denied';
 

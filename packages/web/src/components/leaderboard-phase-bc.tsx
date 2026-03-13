@@ -1,19 +1,24 @@
 'use client';
 
-import React from 'react';
 import type { Achievement, CvoLevel, GameStats, SillyCatEntry } from '@cat-cafe/shared';
 import { CatAvatar } from './CatAvatar';
 
 /** Phase B: Silly cats — 翻车现场 */
 export function SillyCatsList({ entries }: { entries: SillyCatEntry[] }) {
   if (entries.length === 0)
-    return <p className="text-sm" style={{ color: '#8E8E93' }}>暂无翻车记录 🎉</p>;
+    return (
+      <p className="text-sm" style={{ color: '#8E8E93' }}>
+        暂无翻车记录 🎉
+      </p>
+    );
   return (
     <ul className="space-y-2">
       {entries.slice(0, 5).map((e) => (
         <li key={e.catId} className="flex items-center gap-2">
           <CatAvatar catId={e.catId} size={24} />
-          <span className="text-[13px] font-semibold" style={{ color: '#2D2D2D' }}>{e.displayName}</span>
+          <span className="text-[13px] font-semibold" style={{ color: '#2D2D2D' }}>
+            {e.displayName}
+          </span>
           <span className="text-[11px] ml-auto font-medium" style={{ color: '#D4845E' }}>
             ×{e.count} {e.description}
           </span>
@@ -31,7 +36,9 @@ export function GameArena({ stats }: { stats: GameStats }) {
         <span className="text-3xl font-medium" style={{ fontFamily: 'Fraunces, serif', color: '#8B6F47' }}>
           {stats.catKill.wins}
         </span>
-        <span className="text-[11px]" style={{ color: '#8E8E93' }}>猫猫杀 胜场</span>
+        <span className="text-[11px]" style={{ color: '#8E8E93' }}>
+          猫猫杀 胜场
+        </span>
         {stats.catKill.topCat && (
           <span className="text-[11px] font-semibold" style={{ color: '#D4845E' }}>
             🏆 MVP: {stats.catKill.topCat.displayName}
@@ -42,7 +49,9 @@ export function GameArena({ stats }: { stats: GameStats }) {
         <span className="text-3xl font-medium" style={{ fontFamily: 'Fraunces, serif', color: '#8B6F47' }}>
           {stats.whoSpy.shameCount}
         </span>
-        <span className="text-[11px]" style={{ color: '#8E8E93' }}>谁是卧底 社死次数</span>
+        <span className="text-[11px]" style={{ color: '#8E8E93' }}>
+          谁是卧底 社死次数
+        </span>
         {stats.whoSpy.shameCat && (
           <span className="text-[11px] font-semibold" style={{ color: '#D4845E' }}>
             💀 社死王: {stats.whoSpy.shameCat.displayName}
@@ -56,7 +65,11 @@ export function GameArena({ stats }: { stats: GameStats }) {
 /** Phase C: Achievement wall — 成就墙 */
 export function AchievementWall({ achievements }: { achievements: Achievement[] }) {
   if (achievements.length === 0)
-    return <p className="text-sm" style={{ color: '#8E8E93' }}>尚未解锁成就</p>;
+    return (
+      <p className="text-sm" style={{ color: '#8E8E93' }}>
+        尚未解锁成就
+      </p>
+    );
   return (
     <div className="flex flex-wrap gap-3">
       {achievements.map((a) => (
@@ -67,7 +80,9 @@ export function AchievementWall({ achievements }: { achievements: Achievement[] 
           title={a.description}
         >
           <span className="text-lg">{a.emoji}</span>
-          <span className="text-[12px] font-semibold" style={{ color: '#8B6F47' }}>{a.label}</span>
+          <span className="text-[12px] font-semibold" style={{ color: '#8B6F47' }}>
+            {a.label}
+          </span>
         </div>
       ))}
     </div>
@@ -83,9 +98,13 @@ export function CvoLevelCard({ level }: { level: CvoLevel }) {
         <span className="text-3xl font-medium" style={{ fontFamily: 'Fraunces, serif', color: '#8B6F47' }}>
           Lv.{level.level}
         </span>
-        <span className="text-sm font-semibold" style={{ color: '#2D2D2D' }}>{level.title}</span>
+        <span className="text-sm font-semibold" style={{ color: '#2D2D2D' }}>
+          {level.title}
+        </span>
       </div>
-      <p className="text-[11px]" style={{ color: '#8E8E93' }}>{level.description}</p>
+      <p className="text-[11px]" style={{ color: '#8E8E93' }}>
+        {level.description}
+      </p>
       <div className="h-2 rounded-full overflow-hidden" style={{ background: 'rgba(139,111,71,0.1)' }}>
         <div className="h-full rounded-full" style={{ width: `${pct}%`, background: '#8B6F47' }} />
       </div>

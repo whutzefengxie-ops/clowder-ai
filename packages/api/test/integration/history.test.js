@@ -3,8 +3,8 @@
  * POST → GET roundtrip, pagination, format matching frontend expectations
  */
 
-import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { afterEach, beforeEach, describe, it } from 'node:test';
 import Fastify from 'fastify';
 
 describe('POST → GET /api/messages roundtrip', () => {
@@ -12,12 +12,8 @@ describe('POST → GET /api/messages roundtrip', () => {
   let messageStore;
 
   beforeEach(async () => {
-    const { MessageStore } = await import(
-      '../../dist/domains/cats/services/MessageStore.js'
-    );
-    const { InvocationRegistry } = await import(
-      '../../dist/domains/cats/services/InvocationRegistry.js'
-    );
+    const { MessageStore } = await import('../../dist/domains/cats/services/MessageStore.js');
+    const { InvocationRegistry } = await import('../../dist/domains/cats/services/InvocationRegistry.js');
     const { messagesRoutes } = await import('../../dist/routes/messages.js');
     const { callbacksRoutes } = await import('../../dist/routes/callbacks.js');
 

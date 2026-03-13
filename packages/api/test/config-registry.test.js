@@ -3,8 +3,8 @@
  * 验证配置快照收集的正确性
  */
 
-import { describe, it, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { afterEach, describe, it } from 'node:test';
 
 // Save and restore env vars around tests
 const savedEnv = {};
@@ -168,7 +168,7 @@ describe('ConfigRegistry', () => {
     // gemini has highest token budget (200k), opus (150k) > codex (100k)
     assert.ok(
       snapshot.perCatBudgets.gemini.maxPromptTokens > snapshot.perCatBudgets.opus.maxPromptTokens,
-      'gemini should have higher maxPromptTokens than opus (largest context window)'
+      'gemini should have higher maxPromptTokens than opus (largest context window)',
     );
   });
 
@@ -203,7 +203,21 @@ describe('ConfigRegistry', () => {
     const { collectConfigSnapshot } = await import('../dist/config/ConfigRegistry.js');
     const snapshot = collectConfigSnapshot();
 
-    const categories = ['context', 'perCatBudgets', 'cli', 'storage', 'upload', 'server', 'cats', 'a2a', 'memory', 'governance', 'deliberate', 'hindsight', 'codexExecution'];
+    const categories = [
+      'context',
+      'perCatBudgets',
+      'cli',
+      'storage',
+      'upload',
+      'server',
+      'cats',
+      'a2a',
+      'memory',
+      'governance',
+      'deliberate',
+      'hindsight',
+      'codexExecution',
+    ];
     for (const cat of categories) {
       assert.ok(snapshot[cat], `has ${cat}`);
     }

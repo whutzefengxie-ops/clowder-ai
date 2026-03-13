@@ -2,8 +2,9 @@
  * F075 Phase B — In-memory game record store
  * Tracks game results (猫猫杀, 谁是卧底, etc.) and computes stats.
  */
-import type { GameRecord, GameRecordInput, GameStats, RankedCat } from '@cat-cafe/shared';
+
 import { randomUUID } from 'node:crypto';
+import type { GameRecord, GameRecordInput, GameStats, RankedCat } from '@cat-cafe/shared';
 
 export class GameStore {
   private records: GameRecord[] = [];

@@ -4,8 +4,8 @@ import type { BacklogItem, CatId, ExternalProject, MissionHubSelfClaimScope, Thr
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ThreadSidebar } from '@/components/ThreadSidebar';
-import { useMissionControlStore } from '@/stores/missionControlStore';
 import { useExternalProjectStore } from '@/stores/externalProjectStore';
+import { useMissionControlStore } from '@/stores/missionControlStore';
 import { apiFetch } from '@/utils/api-client';
 import { DependencyGraphTab } from './DependencyGraphTab';
 import { ExternalProjectTab } from './ExternalProjectTab';
@@ -416,10 +416,12 @@ export function MissionControlPage() {
     try {
       const res = await apiFetch('/api/external-projects');
       if (res.ok) {
-        const body = await res.json() as { projects: ExternalProject[] };
+        const body = (await res.json()) as { projects: ExternalProject[] };
         setProjects(body.projects);
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }, [setProjects]);
 
   useEffect(() => {
@@ -427,10 +429,7 @@ export function MissionControlPage() {
   }, [loadExternalProjects]);
 
   // Sync active project
-  const activeProject = useMemo(
-    () => projects.find((p) => p.id === activeTab) ?? null,
-    [projects, activeTab],
-  );
+  const activeProject = useMemo(() => projects.find((p) => p.id === activeTab) ?? null, [projects, activeTab]);
   useEffect(() => {
     setActiveProjectId(activeProject?.id ?? null);
   }, [activeProject, setActiveProjectId]);
@@ -656,9 +655,7 @@ export function MissionControlPage() {
                       onReclaimLease={handleReclaimLease}
                     />
                   )}
-                  {rightPanelTab === 'sop' && (
-                    <WorkflowSopPanel backlogItemId={selectedItemId} />
-                  )}
+                  {rightPanelTab === 'sop' && <WorkflowSopPanel backlogItemId={selectedItemId} />}
                   {rightPanelTab === 'threads' && (
                     <ThreadSituationPanel
                       dispatchedItems={dispatchedItems}

@@ -1,8 +1,8 @@
-import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
-import { join } from 'node:path';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { test } from 'node:test';
 
 const { createCodexSessionContextSnapshotResolver } = await import(
   '../dist/domains/cats/services/agents/providers/codex-session-context-snapshot.js'
@@ -96,11 +96,7 @@ test('caps internal session file cache with LRU eviction', async () => {
   const dayDir = join(root, '2026', '02', '14');
   await mkdir(dayDir, { recursive: true });
 
-  const sessionIds = [
-    'sid-1-aaaaaaaaaaaaaaaaaaaa',
-    'sid-2-bbbbbbbbbbbbbbbbbbbb',
-    'sid-3-cccccccccccccccccccc',
-  ];
+  const sessionIds = ['sid-1-aaaaaaaaaaaaaaaaaaaa', 'sid-2-bbbbbbbbbbbbbbbbbbbb', 'sid-3-cccccccccccccccccccc'];
 
   for (const sessionId of sessionIds) {
     const file = join(dayDir, `rollout-2026-02-14T16-25-17-${sessionId}.jsonl`);

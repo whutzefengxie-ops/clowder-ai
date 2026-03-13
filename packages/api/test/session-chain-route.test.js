@@ -3,8 +3,8 @@
  * F24: GET /api/threads/:threadId/sessions, GET /api/sessions/:sessionId
  */
 
-import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
 import Fastify from 'fastify';
 
 /** Minimal mock threadStore for auth tests */
@@ -30,10 +30,12 @@ describe('Session Chain Routes', () => {
     sessionChainRoutes = routeMod.sessionChainRoutes;
 
     const store = new SessionChainStore();
-    const threadStore = threadStoreOverride ?? mockThreadStore({
-      'thread-1': { id: 'thread-1', createdBy: 'user-1' },
-      'unknown-thread': { id: 'unknown-thread', createdBy: 'user-1' },
-    });
+    const threadStore =
+      threadStoreOverride ??
+      mockThreadStore({
+        'thread-1': { id: 'thread-1', createdBy: 'user-1' },
+        'unknown-thread': { id: 'unknown-thread', createdBy: 'user-1' },
+      });
     app = Fastify();
     await app.register(sessionChainRoutes, { sessionChainStore: store, threadStore });
     await app.ready();
@@ -204,8 +206,18 @@ describe('Session Chain Routes', () => {
 
   it('POST /api/sessions/:sessionId/unseal returns 404 when thread no longer exists', async () => {
     const store = await setup();
-    const dangling = store.create({ cliSessionId: 'cli-dangling', threadId: 'ghost-thread', catId: 'opus', userId: 'user-1' });
-    store.update(dangling.id, { status: 'sealed', sealReason: 'threshold', sealedAt: Date.now(), updatedAt: Date.now() });
+    const dangling = store.create({
+      cliSessionId: 'cli-dangling',
+      threadId: 'ghost-thread',
+      catId: 'opus',
+      userId: 'user-1',
+    });
+    store.update(dangling.id, {
+      status: 'sealed',
+      sealReason: 'threshold',
+      sealedAt: Date.now(),
+      updatedAt: Date.now(),
+    });
 
     const res = await app.inject({
       method: 'POST',

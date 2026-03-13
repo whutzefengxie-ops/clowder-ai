@@ -10,39 +10,43 @@
  * A2A only triggers here in routeSerial; routeParallel never chains (MVP safety boundary).
  */
 
-import { catRegistry, CAT_CONFIGS } from '@cat-cafe/shared';
-import type { CatId, CatConfig } from '@cat-cafe/shared';
-import { buildStaticIdentity, buildInvocationContext, type InvocationContext } from '../../context/SystemPromptBuilder.js';
-import { needsMcpInjection, buildMcpCallbackInstructions } from '../invocation/McpPromptInjector.js';
-import { resolveDefaultClaudeMcpServerPath } from '../providers/ClaudeAgentService.js';
-import { invokeSingleCat } from '../invocation/invoke-single-cat.js';
-import type { StoredToolEvent } from '../../stores/ports/MessageStore.js';
-import type { AgentMessage, AgentMessageType, MessageMetadata } from '../../types.js';
-import { parseA2AMentions, getMaxA2ADepth } from '../routing/a2a-mentions.js';
-import { registerWorklist, unregisterWorklist } from '../routing/WorklistRegistry.js';
-import { assembleContext } from '../../context/ContextAssembler.js';
+import type { CatConfig, CatId } from '@cat-cafe/shared';
+import { CAT_CONFIGS, catRegistry } from '@cat-cafe/shared';
 import { getCatContextBudget } from '../../../../../config/cat-budgets.js';
+import { getConfigSessionStrategy, isSessionChainEnabled } from '../../../../../config/cat-config-loader.js';
+import { detectUserMention } from '../../../../../routes/user-mention.js';
 import { estimateTokens } from '../../../../../utils/token-counter.js';
-import { getEventAuditLog, AuditEventTypes } from '../../orchestration/EventAuditLog.js';
-import { formatDegradationMessage } from '../../orchestration/DegradationPolicy.js';
-import { buildSessionBootstrap } from '../../session/SessionBootstrap.js';
-import { isSessionChainEnabled, getConfigSessionStrategy } from '../../../../../config/cat-config-loader.js';
+import { assembleContext } from '../../context/ContextAssembler.js';
 import {
-  getService,
-  detectContextDegradation,
-  toStoredToolEvent,
-  sanitizeInjectedContent,
-  routeContentBlocksForCat,
+  buildInvocationContext,
+  buildStaticIdentity,
+  type InvocationContext,
+} from '../../context/SystemPromptBuilder.js';
+import { formatDegradationMessage } from '../../orchestration/DegradationPolicy.js';
+import { AuditEventTypes, getEventAuditLog } from '../../orchestration/EventAuditLog.js';
+import { buildSessionBootstrap } from '../../session/SessionBootstrap.js';
+import type { StoredToolEvent } from '../../stores/ports/MessageStore.js';
+import type { ThreadRoutingPolicyV1 } from '../../stores/ports/ThreadStore.js';
+import { getVoiceBlockSynthesizer } from '../../tts/VoiceBlockSynthesizer.js';
+import type { AgentMessage, AgentMessageType, MessageMetadata } from '../../types.js';
+import { invokeSingleCat } from '../invocation/invoke-single-cat.js';
+import { buildMcpCallbackInstructions, needsMcpInjection } from '../invocation/McpPromptInjector.js';
+import { getRichBlockBuffer } from '../invocation/RichBlockBuffer.js';
+import { resolveDefaultClaudeMcpServerPath } from '../providers/ClaudeAgentService.js';
+import { getMaxA2ADepth, parseA2AMentions } from '../routing/a2a-mentions.js';
+import { registerWorklist, unregisterWorklist } from '../routing/WorklistRegistry.js';
+import { extractRichFromText, isValidRichBlock } from './rich-block-extract.js';
+import type { RouteOptions, RouteStrategyDeps } from './route-helpers.js';
+import {
   assembleIncrementalContext,
+  detectContextDegradation,
+  getService,
+  routeContentBlocksForCat,
+  sanitizeInjectedContent,
+  toStoredToolEvent,
   upsertMaxBoundary,
 } from './route-helpers.js';
-import type { RouteStrategyDeps, RouteOptions } from './route-helpers.js';
-import { getRichBlockBuffer } from '../invocation/RichBlockBuffer.js';
-import { extractRichFromText, isValidRichBlock } from './rich-block-extract.js';
-import { getVoiceBlockSynthesizer } from '../../tts/VoiceBlockSynthesizer.js';
-import type { ThreadRoutingPolicyV1 } from '../../stores/ports/ThreadStore.js';
-import { detectUserMention } from '../../../../../routes/user-mention.js';
-import { VOTE_RESULT_SOURCE, extractVoteFromText, checkVoteCompletion, buildVoteTally } from './vote-intercept.js';
+import { buildVoteTally, checkVoteCompletion, extractVoteFromText, VOTE_RESULT_SOURCE } from './vote-intercept.js';
 
 export async function* routeSerial(
   deps: RouteStrategyDeps,
@@ -67,7 +71,7 @@ export async function* routeSerial(
   const previousResponses: { catId: CatId; content: string }[] = [];
   const thinkingMode = options.thinkingMode ?? 'play';
   // P2-3 fix: also consider default MCP server path (ClaudeAgentService has fallback resolution)
-  const mcpServerPath = process.env['CAT_CAFE_MCP_SERVER_PATH'] || resolveDefaultClaudeMcpServerPath();
+  const mcpServerPath = process.env.CAT_CAFE_MCP_SERVER_PATH || resolveDefaultClaudeMcpServerPath();
   const incrementalMode = Boolean(currentUserMessageId && deps.deliveryCursorStore);
 
   // Worklist pattern: starts with targetCats, may grow via A2A mentions
@@ -84,7 +88,9 @@ export async function* routeSerial(
   if (deps.invocationDeps.threadStore) {
     try {
       activeParticipants = await deps.invocationDeps.threadStore.getParticipantsWithActivity(threadId);
-    } catch { /* best-effort: activity fetch failure does not block invocation */ }
+    } catch {
+      /* best-effort: activity fetch failure does not block invocation */
+    }
   }
   // F042: Fetch thread routingPolicy once before loop (threadId doesn't change).
   let routingPolicy: ThreadRoutingPolicyV1 | undefined;
@@ -111,646 +117,698 @@ export async function* routeSerial(
               featureId: sop.featureId,
             };
           }
-        } catch { /* best-effort: SOP hint failure does not block invocation */ }
+        } catch {
+          /* best-effort: SOP hint failure does not block invocation */
+        }
       }
-    } catch { /* best-effort */ }
+    } catch {
+      /* best-effort */
+    }
   }
 
   try {
-  while (index < worklist.length) {
-    if (signal?.aborted) break;
-    const catId = worklist[index]!;
+    while (index < worklist.length) {
+      if (signal?.aborted) break;
+      const catId = worklist[index]!;
 
-    // Only pass images/uploads for the first cat (user's original target)
-    const isOriginalTarget = index < targetCats.length;
-    const targetContentBlocks = isOriginalTarget
-      ? routeContentBlocksForCat(catId, contentBlocks)
-      : undefined;
-    const targetUploadDir = targetContentBlocks ? uploadDir : undefined;
+      // Only pass images/uploads for the first cat (user's original target)
+      const isOriginalTarget = index < targetCats.length;
+      const targetContentBlocks = isOriginalTarget ? routeContentBlocksForCat(catId, contentBlocks) : undefined;
+      const targetUploadDir = targetContentBlocks ? uploadDir : undefined;
 
-    let prompt = message;
-    if (!incrementalMode && previousResponses.length > 0) {
-      const contextParts = previousResponses.map(
-        (r) => `[${r.catId} responded: ${r.content}]`
-      );
-      prompt = `${message}\n\n${contextParts.join('\n')}`;
-    }
-
-    // Build identity: static goes in -p content (+ systemPrompt as defense-in-depth), dynamic in -p only
-    const catConfig: CatConfig | undefined = catRegistry.tryGet(catId as string)?.config ?? CAT_CONFIGS[catId as string];
-    const teammates = [...new Set(worklist.filter((id) => id !== catId))];
-    const directMessageFrom = worklistEntry.a2aFrom.get(catId);
-    let mentionRoutingFeedback = null;
-    if (deps.invocationDeps.threadStore) {
-      try {
-        mentionRoutingFeedback = await deps.invocationDeps.threadStore.consumeMentionRoutingFeedback(threadId, catId);
-      } catch (feedbackErr) {
-        console.warn(`[routeSerial] consumeMentionRoutingFeedback failed for ${catId as string}, degrading:`, feedbackErr);
+      let prompt = message;
+      if (!incrementalMode && previousResponses.length > 0) {
+        const contextParts = previousResponses.map((r) => `[${r.catId} responded: ${r.content}]`);
+        prompt = `${message}\n\n${contextParts.join('\n')}`;
       }
-    }
-    // MCP documentation: Claude's MCP_TOOLS_SECTION → staticIdentity (in -p content).
-    // Non-Claude HTTP callback instructions → per-message (session history may be lost on compress).
-    const mcpAvailable = (catConfig?.mcpSupport ?? false) && !!mcpServerPath;
-    const staticIdentity = buildStaticIdentity(catId, { mcpAvailable });
-    // F041: inject HTTP callback only when MCP is NOT actually available (fallback)
-    const mcpInstructions = needsMcpInjection(mcpAvailable)
-      ? buildMcpCallbackInstructions({
-        currentCatId: catId as string,
-        teammates: teammates.map((id) => id as string),
-      })
-      : '';
-    // F091: Inject linked signal articles into context
-    let activeSignals: readonly { id: string; title: string; source: string; tier: number; contentSnippet: string; note?: string | undefined; relatedDiscussions?: readonly { sessionId: string; snippet: string; score: number }[] | undefined }[] | undefined;
-    if (deps.invocationDeps.signalArticleLookup) {
-      try {
-        const signals = await deps.invocationDeps.signalArticleLookup(threadId);
-        if (signals.length > 0) activeSignals = signals;
-      } catch { /* best-effort: signal lookup failure does not block invocation */ }
-    }
 
-    const invocationContext = buildInvocationContext({
-      catId,
-      mode: worklist.length > 1 ? 'serial' : 'independent',
-      chainIndex: index + 1,
-      chainTotal: worklist.length,
-      teammates,
-      mcpAvailable,
-      ...(promptTags && promptTags.length > 0 ? { promptTags } : {}),
-      a2aEnabled: worklistEntry.a2aCount < maxDepth,
-      ...(directMessageFrom ? { directMessageFrom } : {}),
-      ...(mentionRoutingFeedback ? { mentionRoutingFeedback } : {}),
-      ...(activeParticipants.length > 0 ? { activeParticipants } : {}),
-      ...(routingPolicy ? { routingPolicy } : {}),
-      ...(sopStageHint ? { sopStageHint } : {}),
-      ...(activeSignals ? { activeSignals } : {}),
-      ...(voiceMode ? { voiceMode } : {}),
-      ...(bootcampState ? { bootcampState, threadId } : {}),
-    });
-
-    // F24 Phase E: Bootstrap context for Session #2+
-    let bootstrapContext = '';
-    if (isSessionChainEnabled(catId) && deps.invocationDeps.sessionChainStore && deps.invocationDeps.transcriptReader) {
-      try {
-        const bootstrapDepth = getConfigSessionStrategy(catId)?.handoff?.bootstrapDepth;
-        const bootstrap = await buildSessionBootstrap(
-          {
-            sessionChainStore: deps.invocationDeps.sessionChainStore,
-            transcriptReader: deps.invocationDeps.transcriptReader,
-            ...(deps.invocationDeps.taskStore ? { taskStore: deps.invocationDeps.taskStore } : {}),
-            ...(deps.invocationDeps.threadStore ? { threadStore: deps.invocationDeps.threadStore } : {}),
-            ...(bootstrapDepth ? { bootstrapDepth } : {}),
-          },
-          catId,
-          threadId,
-        );
-        if (bootstrap) {
-          bootstrapContext = bootstrap.text;
+      // Build identity: static goes in -p content (+ systemPrompt as defense-in-depth), dynamic in -p only
+      const catConfig: CatConfig | undefined =
+        catRegistry.tryGet(catId as string)?.config ?? CAT_CONFIGS[catId as string];
+      const teammates = [...new Set(worklist.filter((id) => id !== catId))];
+      const directMessageFrom = worklistEntry.a2aFrom.get(catId);
+      let mentionRoutingFeedback = null;
+      if (deps.invocationDeps.threadStore) {
+        try {
+          mentionRoutingFeedback = await deps.invocationDeps.threadStore.consumeMentionRoutingFeedback(threadId, catId);
+        } catch (feedbackErr) {
+          console.warn(
+            `[routeSerial] consumeMentionRoutingFeedback failed for ${catId as string}, degrading:`,
+            feedbackErr,
+          );
         }
-      } catch {
-        // Best-effort: bootstrap failure doesn't block invocation
       }
-    }
+      // MCP documentation: Claude's MCP_TOOLS_SECTION → staticIdentity (in -p content).
+      // Non-Claude HTTP callback instructions → per-message (session history may be lost on compress).
+      const mcpAvailable = (catConfig?.mcpSupport ?? false) && !!mcpServerPath;
+      const staticIdentity = buildStaticIdentity(catId, { mcpAvailable });
+      // F041: inject HTTP callback only when MCP is NOT actually available (fallback)
+      const mcpInstructions = needsMcpInjection(mcpAvailable)
+        ? buildMcpCallbackInstructions({
+            currentCatId: catId as string,
+            teammates: teammates.map((id) => id as string),
+          })
+        : '';
+      // F091: Inject linked signal articles into context
+      let activeSignals:
+        | readonly {
+            id: string;
+            title: string;
+            source: string;
+            tier: number;
+            contentSnippet: string;
+            note?: string | undefined;
+            relatedDiscussions?: readonly { sessionId: string; snippet: string; score: number }[] | undefined;
+          }[]
+        | undefined;
+      if (deps.invocationDeps.signalArticleLookup) {
+        try {
+          const signals = await deps.invocationDeps.signalArticleLookup(threadId);
+          if (signals.length > 0) activeSignals = signals;
+        } catch {
+          /* best-effort: signal lookup failure does not block invocation */
+        }
+      }
 
-    let deliveryBoundaryId: string | undefined;
-    if (incrementalMode) {
-      // Serial incremental mode depends on AgentRouter having appended current user message first.
-      // We still explicitly include `message` when that message is not present in unseen rows.
-      const inc = await assembleIncrementalContext(
-        deps,
+      const invocationContext = buildInvocationContext({
+        catId,
+        mode: worklist.length > 1 ? 'serial' : 'independent',
+        chainIndex: index + 1,
+        chainTotal: worklist.length,
+        teammates,
+        mcpAvailable,
+        ...(promptTags && promptTags.length > 0 ? { promptTags } : {}),
+        a2aEnabled: worklistEntry.a2aCount < maxDepth,
+        ...(directMessageFrom ? { directMessageFrom } : {}),
+        ...(mentionRoutingFeedback ? { mentionRoutingFeedback } : {}),
+        ...(activeParticipants.length > 0 ? { activeParticipants } : {}),
+        ...(routingPolicy ? { routingPolicy } : {}),
+        ...(sopStageHint ? { sopStageHint } : {}),
+        ...(activeSignals ? { activeSignals } : {}),
+        ...(voiceMode ? { voiceMode } : {}),
+        ...(bootcampState ? { bootcampState, threadId } : {}),
+      });
+
+      // F24 Phase E: Bootstrap context for Session #2+
+      let bootstrapContext = '';
+      if (
+        isSessionChainEnabled(catId) &&
+        deps.invocationDeps.sessionChainStore &&
+        deps.invocationDeps.transcriptReader
+      ) {
+        try {
+          const bootstrapDepth = getConfigSessionStrategy(catId)?.handoff?.bootstrapDepth;
+          const bootstrap = await buildSessionBootstrap(
+            {
+              sessionChainStore: deps.invocationDeps.sessionChainStore,
+              transcriptReader: deps.invocationDeps.transcriptReader,
+              ...(deps.invocationDeps.taskStore ? { taskStore: deps.invocationDeps.taskStore } : {}),
+              ...(deps.invocationDeps.threadStore ? { threadStore: deps.invocationDeps.threadStore } : {}),
+              ...(bootstrapDepth ? { bootstrapDepth } : {}),
+            },
+            catId,
+            threadId,
+          );
+          if (bootstrap) {
+            bootstrapContext = bootstrap.text;
+          }
+        } catch {
+          // Best-effort: bootstrap failure doesn't block invocation
+        }
+      }
+
+      let deliveryBoundaryId: string | undefined;
+      if (incrementalMode) {
+        // Serial incremental mode depends on AgentRouter having appended current user message first.
+        // We still explicitly include `message` when that message is not present in unseen rows.
+        const inc = await assembleIncrementalContext(deps, userId, threadId, catId, currentUserMessageId, thinkingMode);
+        deliveryBoundaryId = inc.boundaryId;
+        const catModePrompt = modeSystemPromptByCat?.[catId as string] ?? modeSystemPrompt;
+        const parts = [invocationContext, catModePrompt, bootstrapContext, mcpInstructions].filter(Boolean);
+        if (inc.contextText) parts.push(inc.contextText);
+        // F35 fix: only inject raw message when it was genuinely absent from unseen rows.
+        // If it was present but filtered out (e.g. whisper), injecting would leak private content.
+        if (!inc.includesCurrentUserMessage && !inc.currentMessageFilteredOut) parts.push(message);
+        prompt = parts.join('\n\n---\n\n');
+      } else {
+        // Per-cat context budget (Phase 4.0): assemble context with cat-specific limits
+        let catContextHistory = contextHistory; // fallback to legacy pre-assembled
+        if (history && history.length > 0 && !contextHistory) {
+          const budget = getCatContextBudget(catId as string);
+          // F8: token-based budget — estimate non-context tokens, remainder goes to context
+          const systemPartsTokens = estimateTokens(
+            [staticIdentity, invocationContext, mcpInstructions].filter(Boolean).join('\n'),
+          );
+          const promptTokens = estimateTokens(prompt);
+          const budgetForContext = Math.max(0, budget.maxPromptTokens - systemPartsTokens - promptTokens - 200);
+          const { contextText, messageCount } = assembleContext(history, {
+            maxMessages: budget.maxMessages,
+            maxContentLength: budget.maxContentLengthPerMsg,
+            maxTotalTokens: Math.min(budgetForContext, budget.maxContextTokens),
+          });
+          catContextHistory = contextText || undefined;
+
+          // Degradation check: notify user if context was truncated (count budget or char budget)
+          const degradation = detectContextDegradation(history.length, messageCount, budget);
+          if (degradation?.degraded) {
+            yield {
+              type: 'system_info' as AgentMessageType,
+              catId,
+              content: formatDegradationMessage(degradation),
+              timestamp: Date.now(),
+            } as AgentMessage;
+          }
+        }
+
+        const catModePromptLegacy = modeSystemPromptByCat?.[catId as string] ?? modeSystemPrompt;
+        if (invocationContext || catModePromptLegacy || mcpInstructions || bootstrapContext) {
+          const parts = [invocationContext, catModePromptLegacy, bootstrapContext, mcpInstructions].filter(Boolean);
+          if (catContextHistory) parts.push(catContextHistory);
+          prompt = `${parts.join('\n\n---\n\n')}\n\n---\n\n${prompt}`;
+        } else if (catContextHistory) {
+          prompt = `${catContextHistory}\n\n---\n\n${prompt}`;
+        }
+      }
+
+      let textContent = '';
+      let thinkingContent = '';
+      let firstMetadata: MessageMetadata | undefined;
+      let doneMsg: AgentMessage | undefined;
+      let hadError = false;
+      const collectedToolEvents: StoredToolEvent[] = [];
+      // F060: Collect rich blocks emitted inline via system_info (not MCP buffer)
+      const streamRichBlocks: import('@cat-cafe/shared').RichBlock[] = [];
+      // F22 R2 P1-1: Capture own invocationId from stream (not getLatestId)
+      let ownInvocationId: string | undefined;
+
+      // #80: Draft flush state — periodic persistence for F5 recovery
+      let lastFlushTime = Date.now();
+      let lastFlushLen = 0;
+      let lastFlushToolLen = 0;
+      const FLUSH_INTERVAL_MS = 2000;
+      const FLUSH_CHAR_DELTA = 2000;
+      const noop = () => {};
+
+      // Always pass isLastCat:false — we set isFinal AFTER A2A detection
+      for await (const msg of invokeSingleCat(deps.invocationDeps, {
+        catId,
+        service: getService(deps.services, catId),
+        prompt,
         userId,
         threadId,
-        catId,
-        currentUserMessageId,
-        thinkingMode,
-      );
-      deliveryBoundaryId = inc.boundaryId;
-      const catModePrompt = modeSystemPromptByCat?.[catId as string] ?? modeSystemPrompt;
-      const parts = [invocationContext, catModePrompt, bootstrapContext, mcpInstructions].filter(Boolean);
-      if (inc.contextText) parts.push(inc.contextText);
-      // F35 fix: only inject raw message when it was genuinely absent from unseen rows.
-      // If it was present but filtered out (e.g. whisper), injecting would leak private content.
-      if (!inc.includesCurrentUserMessage && !inc.currentMessageFilteredOut) parts.push(message);
-      prompt = parts.join('\n\n---\n\n');
-    } else {
-      // Per-cat context budget (Phase 4.0): assemble context with cat-specific limits
-      let catContextHistory = contextHistory; // fallback to legacy pre-assembled
-      if (history && history.length > 0 && !contextHistory) {
-        const budget = getCatContextBudget(catId as string);
-        // F8: token-based budget — estimate non-context tokens, remainder goes to context
-        const systemPartsTokens = estimateTokens(
-          [staticIdentity, invocationContext, mcpInstructions].filter(Boolean).join('\n'),
-        );
-        const promptTokens = estimateTokens(prompt);
-        const budgetForContext = Math.max(0, budget.maxPromptTokens - systemPartsTokens - promptTokens - 200);
-        const { contextText, messageCount } = assembleContext(history, {
-          maxMessages: budget.maxMessages,
-          maxContentLength: budget.maxContentLengthPerMsg,
-          maxTotalTokens: Math.min(budgetForContext, budget.maxContextTokens),
-        });
-        catContextHistory = contextText || undefined;
+        ...(targetContentBlocks ? { contentBlocks: targetContentBlocks } : {}),
+        ...(targetUploadDir ? { uploadDir: targetUploadDir } : {}),
+        ...(signal ? { signal } : {}),
+        ...(staticIdentity ? { systemPrompt: staticIdentity } : {}),
+        isLastCat: false,
+      })) {
+        // F39 bugfix: stop yielding after cancel (pipe buffer may still drain)
+        if (signal?.aborted) break;
 
-        // Degradation check: notify user if context was truncated (count budget or char budget)
-        const degradation = detectContextDegradation(history.length, messageCount, budget);
-        if (degradation?.degraded) {
-          yield {
-            type: 'system_info' as AgentMessageType,
+        // F22 R2 P1-1: Capture invocationId from the initial system_info.
+        // Keep forwarding this boundary event so frontend can reset stale task progress.
+        if (msg.type === 'system_info' && msg.content && !ownInvocationId) {
+          try {
+            const parsed = JSON.parse(msg.content);
+            if (parsed.type === 'invocation_created') {
+              ownInvocationId = parsed.invocationId;
+            }
+          } catch {
+            /* ignore parse errors */
+          }
+        }
+        if (msg.type === 'text' && msg.content) {
+          textContent += msg.content;
+        }
+        // F045: Accumulate thinking blocks for persistence (F5 recovery)
+        if (msg.type === 'system_info' && msg.content) {
+          try {
+            const parsed = JSON.parse(msg.content);
+            if (parsed.type === 'thinking' && typeof parsed.text === 'string') {
+              thinkingContent += (thinkingContent ? '\n\n---\n\n' : '') + parsed.text;
+            }
+            // F060: Collect inline rich_block for persistence (P1 fix)
+            if (parsed.type === 'rich_block' && parsed.block && isValidRichBlock(parsed.block)) {
+              streamRichBlocks.push(parsed.block);
+            }
+          } catch {
+            /* ignore parse errors */
+          }
+        }
+        // Accumulate tool events for persistence (before draft flush so current event is available)
+        const toolEvt = toStoredToolEvent(msg);
+        if (toolEvt) {
+          collectedToolEvents.push(toolEvt);
+        }
+
+        // #80: Draft flush — fire-and-forget periodic persistence for F5 recovery
+        if (deps.draftStore && ownInvocationId) {
+          const now = Date.now();
+          const charDelta = textContent.length - lastFlushLen;
+          const neverFlushed = lastFlushLen === 0 && lastFlushToolLen === 0;
+          if (
+            msg.type === 'text' &&
+            charDelta > 0 &&
+            (neverFlushed || now - lastFlushTime >= FLUSH_INTERVAL_MS || charDelta >= FLUSH_CHAR_DELTA)
+          ) {
+            deps.draftStore
+              .upsert({
+                userId,
+                threadId,
+                invocationId: ownInvocationId,
+                catId,
+                content: textContent,
+                ...(collectedToolEvents.length > 0 ? { toolEvents: collectedToolEvents } : {}),
+                updatedAt: now,
+              })
+              ?.catch?.(noop);
+            lastFlushTime = now;
+            lastFlushLen = textContent.length;
+            lastFlushToolLen = collectedToolEvents.length;
+          } else if (
+            (msg.type === 'tool_use' || msg.type === 'tool_result') &&
+            // Cloud R7 P1: bypass interval for the very first flush — tool-first invocations
+            // must create a draft immediately, not wait 2s for the interval gate.
+            (neverFlushed || now - lastFlushTime >= FLUSH_INTERVAL_MS)
+          ) {
+            // Heartbeat for non-text events: keep draft alive during long tool calls.
+            // Cloud R6 P1: upsert when there's unsaved text OR new tool events —
+            // tool-first invocations (no text yet) must still create a draft record.
+            if (textContent.length > lastFlushLen || collectedToolEvents.length > lastFlushToolLen) {
+              deps.draftStore
+                .upsert({
+                  userId,
+                  threadId,
+                  invocationId: ownInvocationId,
+                  catId,
+                  content: textContent,
+                  ...(collectedToolEvents.length > 0 ? { toolEvents: collectedToolEvents } : {}),
+                  updatedAt: now,
+                })
+                ?.catch?.(noop);
+              lastFlushLen = textContent.length;
+              lastFlushToolLen = collectedToolEvents.length;
+            } else {
+              deps.draftStore.touch(userId, threadId, ownInvocationId)?.catch?.(noop);
+            }
+            lastFlushTime = now;
+          }
+        }
+
+        if (msg.type === 'error') {
+          hadError = true;
+          if (msg.error) {
+            textContent += `${textContent ? '\n\n' : ''}❌ ${msg.error}`;
+          }
+        }
+        if (msg.metadata && !firstMetadata) {
+          firstMetadata = msg.metadata;
+        }
+        if (msg.type === 'done') {
+          doneMsg = msg; // Buffer — yield after A2A detection
+        } else {
+          // Tag CLI stdout text with origin: 'stream' (thinking/internal)
+          yield msg.type === 'text' ? { ...msg, origin: 'stream' as const } : msg;
+        }
+      }
+
+      let a2aMentions: CatId[] = [];
+
+      // F22: Consume MCP-buffered rich blocks BEFORE the text/empty branch —
+      // blocks must be persisted even when the cat emits no text (cloud Codex P1).
+      const bufferedBlocks = getRichBlockBuffer().consume(threadId, catId as string, ownInvocationId);
+
+      // F061: Detect @owner mentions in agent response for browser notification
+      let mentionsUser = false;
+
+      if (textContent) {
+        const sanitized = sanitizeInjectedContent(textContent);
+
+        // F22: Extract cc_rich blocks from text (Route B fallback for non-MCP cats)
+        const { cleanText, blocks: textBlocks } = extractRichFromText(sanitized);
+        const storedContent = cleanText;
+        let allRichBlocks = [...bufferedBlocks, ...textBlocks, ...streamRichBlocks];
+
+        // F34-b: Resolve voice blocks (audio with text, no url) — Route B path.
+        // Route A blocks were already resolved in the callback handler.
+        const voiceSynth = getVoiceBlockSynthesizer();
+        if (voiceSynth && allRichBlocks.some((b) => b.kind === 'audio' && 'text' in b)) {
+          try {
+            allRichBlocks = await voiceSynth.resolveVoiceBlocks(allRichBlocks, catId as string);
+          } catch (err) {
+            console.error(`[routeSerial] Voice block synthesis failed for ${catId as string}:`, err);
+          }
+        }
+
+        // In play mode, CLI stream output (thinking) is hidden from other cats.
+        // Only share previousResponses in debug mode where cats see each other's thinking.
+        // Important: push after review gate mutation so downstream cats see invalid-review marker.
+        if (!incrementalMode && thinkingMode === 'debug') {
+          previousResponses.push({ catId, content: storedContent });
+        }
+
+        // A2A mention detection (缅因猫 P1-3: only after full text accumulated)
+        // Line-start @mention = always actionable (no keyword gate)
+        a2aMentions = parseA2AMentions(storedContent, catId);
+
+        // F079 Phase 2: Vote interception — extract [VOTE:xxx] from cat response
+        const votedOption = extractVoteFromText(storedContent);
+        if (votedOption && deps.invocationDeps.threadStore) {
+          try {
+            const voteState = await deps.invocationDeps.threadStore.getVotingState(threadId);
+            if (voteState && voteState.status === 'active' && voteState.options.includes(votedOption)) {
+              // Deadline enforcement (parity with HTTP cast path)
+              if (Date.now() > voteState.deadline) {
+                console.log(`[routeSerial] F079: Vote expired in ${threadId}, ignoring [VOTE:${votedOption}]`);
+              } else if (
+                voteState.voters &&
+                voteState.voters.length > 0 &&
+                !voteState.voters.includes(catId as string)
+              ) {
+                console.log(`[routeSerial] F079: ${catId as string} not in voters list, ignoring vote`);
+              } else {
+                voteState.votes[catId as string] = votedOption;
+                await deps.invocationDeps.threadStore.updateVotingState(threadId, voteState);
+                console.log(`[routeSerial] F079: ${catId as string} voted [${votedOption}] in ${threadId}`);
+
+                // Auto-close if all designated voters have voted
+                if (checkVoteCompletion(voteState)) {
+                  const tally = buildVoteTally(voteState.options, voteState.votes);
+                  const totalVotes = Object.values(voteState.votes).length;
+                  const fields = voteState.options.map((opt) => ({
+                    label: opt,
+                    value: `${tally[opt] ?? 0} 票 (${totalVotes > 0 ? Math.round(((tally[opt] ?? 0) / totalVotes) * 100) : 0}%)`,
+                  }));
+                  const richBlock = {
+                    id: `vote-${Date.now()}`,
+                    kind: 'card' as const,
+                    v: 1 as const,
+                    title: `投票结果: ${voteState.question}`,
+                    bodyMarkdown: voteState.anonymous ? `匿名投票 · ${totalVotes} 票` : `实名投票 · ${totalVotes} 票`,
+                    tone: 'info' as const,
+                    fields,
+                  };
+                  await deps.invocationDeps.threadStore.updateVotingState(threadId, null);
+                  // F079 Bug 1 fix: do NOT push richBlock into allRichBlocks — that
+                  // embeds the result in the cat's own message, causing duplication.
+                  // Only the standalone connector message below should carry the result.
+                  // Gap 3: persist separate connector message for ConnectorBubble rendering
+                  try {
+                    const stored = await deps.messageStore.append({
+                      userId,
+                      catId: null,
+                      content: `投票结果: ${voteState.question}`,
+                      mentions: [],
+                      timestamp: Date.now(),
+                      threadId,
+                      source: VOTE_RESULT_SOURCE,
+                      extra: { rich: { v: 1 as const, blocks: [richBlock] } },
+                    });
+                    // F079 Bug 2 fix: broadcast connector_message so frontend updates without F5
+                    if (deps.socketManager) {
+                      deps.socketManager.broadcastToRoom(`thread:${threadId}`, 'connector_message', {
+                        threadId,
+                        message: {
+                          id: stored.id,
+                          type: 'connector',
+                          content: stored.content,
+                          source: VOTE_RESULT_SOURCE,
+                          timestamp: stored.timestamp,
+                          extra: stored.extra,
+                        },
+                      });
+                    }
+                  } catch (persistErr) {
+                    console.warn(`[routeSerial] Failed to persist vote connector message:`, persistErr);
+                  }
+                  console.log(`[routeSerial] F079: Vote auto-closed in ${threadId}`);
+                }
+              }
+            }
+          } catch (voteErr) {
+            console.warn(`[routeSerial] F079: Vote interception failed for ${catId as string}:`, voteErr);
+          }
+        }
+
+        const storedTimestamp = Date.now();
+
+        // F061: Detect @owner mentions in agent response for browser notification
+        mentionsUser = storedContent ? detectUserMention(storedContent) : false;
+
+        // Store with actual mentions — degrade on failure to ensure done reaches frontend
+        // (缅因猫 review P1-2: Redis failure must not block done yield)
+        try {
+          await deps.messageStore.append({
+            userId,
             catId,
-            content: formatDegradationMessage(degradation),
+            content: storedContent,
+            mentions: a2aMentions,
+            origin: 'stream',
+            timestamp: storedTimestamp,
+            threadId,
+            ...(mentionsUser ? { mentionsUser } : {}),
+            ...(thinkingContent ? { thinking: thinkingContent } : {}),
+            ...(firstMetadata ? { metadata: firstMetadata } : {}),
+            ...(collectedToolEvents.length > 0 ? { toolEvents: collectedToolEvents } : {}),
+            extra: {
+              ...(allRichBlocks.length > 0 ? { rich: { v: 1 as const, blocks: allRichBlocks } } : {}),
+              ...(ownInvocationId ? { stream: { invocationId: ownInvocationId } } : {}),
+            },
+          });
+          // F088-P3: Stash rich blocks for outbound delivery
+          if (options.persistenceContext && allRichBlocks.length > 0) {
+            options.persistenceContext.richBlocks = allRichBlocks;
+          }
+          // #80: Clean up draft only after successful append (guard: keep draft if append fails)
+          if (deps.draftStore && ownInvocationId) {
+            deps.draftStore.delete(userId, threadId, ownInvocationId)?.catch?.(noop);
+          }
+          // Cloud Codex R4 P1 fix: Update activity in isolated try/catch to not affect append status
+          if (deps.invocationDeps.threadStore) {
+            try {
+              await deps.invocationDeps.threadStore.updateParticipantActivity(threadId, catId);
+            } catch (activityErr) {
+              console.warn(
+                `[routeSerial] updateParticipantActivity failed for ${catId as string}, ignoring:`,
+                activityErr,
+              );
+            }
+          }
+        } catch (err) {
+          console.error(`[routeSerial] messageStore.append failed for ${catId as string}, degrading:`, err);
+          if (options.persistenceContext) {
+            options.persistenceContext.failed = true;
+            options.persistenceContext.errors.push({
+              catId: catId as string,
+              error: err instanceof Error ? err.message : String(err),
+            });
+          }
+        }
+
+        // A2A: extend worklist if mention found + depth allows + queue fairness gate
+        // F27: dedup only against pending (not-yet-executed) tail — cats that already ran
+        // can be re-enqueued for another round (e.g. A→B→A review ping-pong).
+        let queuedMessagesPending = false;
+        if (queueHasQueuedMessages) {
+          try {
+            queuedMessagesPending = queueHasQueuedMessages(threadId);
+          } catch {
+            queuedMessagesPending = false;
+          }
+        }
+
+        if (a2aMentions.length > 0 && worklistEntry.a2aCount < maxDepth && !signal?.aborted && !queuedMessagesPending) {
+          const pendingTail = worklist.slice(index + 1);
+          const pendingOriginalTargets = targetCats.slice(index + 1);
+          for (const nextCat of a2aMentions) {
+            if (worklistEntry.a2aCount >= maxDepth) break;
+            if (pendingTail.includes(nextCat)) {
+              // Keep original user-selected targets replying to user, not to another cat.
+              if (!pendingOriginalTargets.includes(nextCat)) {
+                worklistEntry.a2aFrom.set(nextCat, catId);
+              }
+              continue;
+            }
+
+            worklist.push(nextCat);
+            worklistEntry.a2aCount++;
+            pendingTail.push(nextCat); // Keep dedup view in sync
+            worklistEntry.a2aFrom.set(nextCat, catId);
+          }
+        }
+
+        // F27: Emit a2a_handoff for ALL new A2A targets (both response-text and callback-pushed).
+        // We track which targets have already been announced to avoid duplicate handoff events.
+        for (let wi = handoffEmitted; wi < worklist.length; wi++) {
+          const pendingCat = worklist[wi]!;
+          if (wi < targetCats.length) continue; // Skip original targets — not A2A
+
+          // === A2A_HANDOFF 审计 (fire-and-forget, 缅因猫 review P2-3) ===
+          const auditLog = getEventAuditLog();
+          auditLog
+            .append({
+              type: AuditEventTypes.A2A_HANDOFF,
+              threadId,
+              data: {
+                fromCat: catId,
+                toCat: pendingCat,
+                userId,
+                a2aDepth: worklistEntry.a2aCount,
+                maxDepth,
+              },
+            })
+            .catch((err) => {
+              console.warn('[audit] A2A_HANDOFF write failed', { threadId, fromCat: catId, toCat: pendingCat, err });
+            });
+
+          const nextConfig: CatConfig | undefined =
+            catRegistry.tryGet(pendingCat as string)?.config ?? CAT_CONFIGS[pendingCat as string];
+          yield {
+            type: 'a2a_handoff' as AgentMessageType,
+            catId,
+            content: `${catConfig?.displayName ?? catId} → ${nextConfig?.displayName ?? pendingCat}`,
             timestamp: Date.now(),
           } as AgentMessage;
         }
-      }
-
-      const catModePromptLegacy = modeSystemPromptByCat?.[catId as string] ?? modeSystemPrompt;
-      if (invocationContext || catModePromptLegacy || mcpInstructions || bootstrapContext) {
-        const parts = [invocationContext, catModePromptLegacy, bootstrapContext, mcpInstructions].filter(Boolean);
-        if (catContextHistory) parts.push(catContextHistory);
-        prompt = `${parts.join('\n\n---\n\n')}\n\n---\n\n${prompt}`;
-      } else if (catContextHistory) {
-        prompt = `${catContextHistory}\n\n---\n\n${prompt}`;
-      }
-    }
-
-    let textContent = '';
-    let thinkingContent = '';
-    let firstMetadata: MessageMetadata | undefined;
-    let doneMsg: AgentMessage | undefined;
-    let hadError = false;
-    const collectedToolEvents: StoredToolEvent[] = [];
-    // F060: Collect rich blocks emitted inline via system_info (not MCP buffer)
-    const streamRichBlocks: import('@cat-cafe/shared').RichBlock[] = [];
-    // F22 R2 P1-1: Capture own invocationId from stream (not getLatestId)
-    let ownInvocationId: string | undefined;
-
-    // #80: Draft flush state — periodic persistence for F5 recovery
-    let lastFlushTime = Date.now();
-    let lastFlushLen = 0;
-    let lastFlushToolLen = 0;
-    const FLUSH_INTERVAL_MS = 2000;
-    const FLUSH_CHAR_DELTA = 2000;
-    const noop = () => {};
-
-    // Always pass isLastCat:false — we set isFinal AFTER A2A detection
-    for await (const msg of invokeSingleCat(deps.invocationDeps, {
-      catId,
-      service: getService(deps.services, catId),
-      prompt,
-      userId,
-      threadId,
-      ...(targetContentBlocks ? { contentBlocks: targetContentBlocks } : {}),
-      ...(targetUploadDir ? { uploadDir: targetUploadDir } : {}),
-      ...(signal ? { signal } : {}),
-      ...(staticIdentity ? { systemPrompt: staticIdentity } : {}),
-      isLastCat: false,
-    })) {
-      // F39 bugfix: stop yielding after cancel (pipe buffer may still drain)
-      if (signal?.aborted) break;
-
-      // F22 R2 P1-1: Capture invocationId from the initial system_info.
-      // Keep forwarding this boundary event so frontend can reset stale task progress.
-      if (msg.type === 'system_info' && msg.content && !ownInvocationId) {
+        handoffEmitted = worklist.length;
+      } else if (!hadError) {
+        // No text content and no error — store empty message (cat responded with no text)
+        // F22: still attach any MCP-buffered rich blocks (cloud Codex P1: block-only responses)
         try {
-          const parsed = JSON.parse(msg.content);
-          if (parsed.type === 'invocation_created') {
-            ownInvocationId = parsed.invocationId;
-          }
-        } catch { /* ignore parse errors */ }
-      }
-      if (msg.type === 'text' && msg.content) {
-        textContent += msg.content;
-      }
-      // F045: Accumulate thinking blocks for persistence (F5 recovery)
-      if (msg.type === 'system_info' && msg.content) {
-        try {
-          const parsed = JSON.parse(msg.content);
-          if (parsed.type === 'thinking' && typeof parsed.text === 'string') {
-            thinkingContent += (thinkingContent ? '\n\n---\n\n' : '') + parsed.text;
-          }
-          // F060: Collect inline rich_block for persistence (P1 fix)
-          if (parsed.type === 'rich_block' && parsed.block && isValidRichBlock(parsed.block)) {
-            streamRichBlocks.push(parsed.block);
-          }
-        } catch { /* ignore parse errors */ }
-      }
-      // Accumulate tool events for persistence (before draft flush so current event is available)
-      const toolEvt = toStoredToolEvent(msg);
-      if (toolEvt) {
-        collectedToolEvents.push(toolEvt);
-      }
-
-      // #80: Draft flush — fire-and-forget periodic persistence for F5 recovery
-      if (deps.draftStore && ownInvocationId) {
-        const now = Date.now();
-        const charDelta = textContent.length - lastFlushLen;
-        const neverFlushed = lastFlushLen === 0 && lastFlushToolLen === 0;
-        if (msg.type === 'text' && charDelta > 0 && (neverFlushed || now - lastFlushTime >= FLUSH_INTERVAL_MS || charDelta >= FLUSH_CHAR_DELTA)) {
-          deps.draftStore.upsert({
-            userId, threadId, invocationId: ownInvocationId, catId,
-            content: textContent,
-            ...(collectedToolEvents.length > 0 ? { toolEvents: collectedToolEvents } : {}),
-            updatedAt: now,
-          })?.catch?.(noop);
-          lastFlushTime = now;
-          lastFlushLen = textContent.length;
-          lastFlushToolLen = collectedToolEvents.length;
-        } else if ((msg.type === 'tool_use' || msg.type === 'tool_result') &&
-          // Cloud R7 P1: bypass interval for the very first flush — tool-first invocations
-          // must create a draft immediately, not wait 2s for the interval gate.
-          (neverFlushed || now - lastFlushTime >= FLUSH_INTERVAL_MS)) {
-          // Heartbeat for non-text events: keep draft alive during long tool calls.
-          // Cloud R6 P1: upsert when there's unsaved text OR new tool events —
-          // tool-first invocations (no text yet) must still create a draft record.
-          if (textContent.length > lastFlushLen || collectedToolEvents.length > lastFlushToolLen) {
-            deps.draftStore.upsert({
-              userId, threadId, invocationId: ownInvocationId, catId,
-              content: textContent,
-              ...(collectedToolEvents.length > 0 ? { toolEvents: collectedToolEvents } : {}),
-              updatedAt: now,
-            })?.catch?.(noop);
-            lastFlushLen = textContent.length;
-            lastFlushToolLen = collectedToolEvents.length;
-          } else {
-            deps.draftStore.touch(userId, threadId, ownInvocationId)?.catch?.(noop);
-          }
-          lastFlushTime = now;
-        }
-      }
-
-      if (msg.type === 'error') {
-        hadError = true;
-        if (msg.error) {
-          textContent += (textContent ? '\n\n' : '') + `❌ ${msg.error}`;
-        }
-      }
-      if (msg.metadata && !firstMetadata) {
-        firstMetadata = msg.metadata;
-      }
-      if (msg.type === 'done') {
-        doneMsg = msg; // Buffer — yield after A2A detection
-      } else {
-        // Tag CLI stdout text with origin: 'stream' (thinking/internal)
-        yield msg.type === 'text' ? { ...msg, origin: 'stream' as const } : msg;
-      }
-    }
-
-    let a2aMentions: CatId[] = [];
-
-    // F22: Consume MCP-buffered rich blocks BEFORE the text/empty branch —
-    // blocks must be persisted even when the cat emits no text (cloud Codex P1).
-    const bufferedBlocks = getRichBlockBuffer().consume(threadId, catId as string, ownInvocationId);
-
-    // F061: Detect @owner mentions in agent response for browser notification
-    let mentionsUser = false;
-
-    if (textContent) {
-      const sanitized = sanitizeInjectedContent(textContent);
-
-      // F22: Extract cc_rich blocks from text (Route B fallback for non-MCP cats)
-      const { cleanText, blocks: textBlocks } = extractRichFromText(sanitized);
-      let storedContent = cleanText;
-      let allRichBlocks = [...bufferedBlocks, ...textBlocks, ...streamRichBlocks];
-
-      // F34-b: Resolve voice blocks (audio with text, no url) — Route B path.
-      // Route A blocks were already resolved in the callback handler.
-      const voiceSynth = getVoiceBlockSynthesizer();
-      if (voiceSynth && allRichBlocks.some((b) => b.kind === 'audio' && 'text' in b)) {
-        try {
-          allRichBlocks = await voiceSynth.resolveVoiceBlocks(allRichBlocks, catId as string);
-        } catch (err) {
-          console.error(`[routeSerial] Voice block synthesis failed for ${catId as string}:`, err);
-        }
-      }
-
-      // In play mode, CLI stream output (thinking) is hidden from other cats.
-      // Only share previousResponses in debug mode where cats see each other's thinking.
-      // Important: push after review gate mutation so downstream cats see invalid-review marker.
-      if (!incrementalMode && thinkingMode === 'debug') {
-        previousResponses.push({ catId, content: storedContent });
-      }
-
-      // A2A mention detection (缅因猫 P1-3: only after full text accumulated)
-      // Line-start @mention = always actionable (no keyword gate)
-      a2aMentions = parseA2AMentions(storedContent, catId);
-
-      // F079 Phase 2: Vote interception — extract [VOTE:xxx] from cat response
-      const votedOption = extractVoteFromText(storedContent);
-      if (votedOption && deps.invocationDeps.threadStore) {
-        try {
-          const voteState = await deps.invocationDeps.threadStore.getVotingState(threadId);
-          if (voteState && voteState.status === 'active' && voteState.options.includes(votedOption)) {
-            // Deadline enforcement (parity with HTTP cast path)
-            if (Date.now() > voteState.deadline) {
-              console.log(`[routeSerial] F079: Vote expired in ${threadId}, ignoring [VOTE:${votedOption}]`);
-            } else if (voteState.voters && voteState.voters.length > 0 && !voteState.voters.includes(catId as string)) {
-              console.log(`[routeSerial] F079: ${catId as string} not in voters list, ignoring vote`);
-            } else {
-              voteState.votes[catId as string] = votedOption;
-              await deps.invocationDeps.threadStore.updateVotingState(threadId, voteState);
-              console.log(`[routeSerial] F079: ${catId as string} voted [${votedOption}] in ${threadId}`);
-
-              // Auto-close if all designated voters have voted
-              if (checkVoteCompletion(voteState)) {
-                const tally = buildVoteTally(voteState.options, voteState.votes);
-                const totalVotes = Object.values(voteState.votes).length;
-                const fields = voteState.options.map((opt) => ({
-                  label: opt,
-                  value: `${tally[opt] ?? 0} 票 (${totalVotes > 0 ? Math.round(((tally[opt] ?? 0) / totalVotes) * 100) : 0}%)`,
-                }));
-                const richBlock = {
-                  id: `vote-${Date.now()}`,
-                  kind: 'card' as const,
-                  v: 1 as const,
-                  title: `投票结果: ${voteState.question}`,
-                  bodyMarkdown: voteState.anonymous
-                    ? `匿名投票 · ${totalVotes} 票`
-                    : `实名投票 · ${totalVotes} 票`,
-                  tone: 'info' as const,
-                  fields,
-                };
-                await deps.invocationDeps.threadStore.updateVotingState(threadId, null);
-                // F079 Bug 1 fix: do NOT push richBlock into allRichBlocks — that
-                // embeds the result in the cat's own message, causing duplication.
-                // Only the standalone connector message below should carry the result.
-                // Gap 3: persist separate connector message for ConnectorBubble rendering
-                try {
-                  const stored = await deps.messageStore.append({
-                    userId,
-                    catId: null,
-                    content: `投票结果: ${voteState.question}`,
-                    mentions: [],
-                    timestamp: Date.now(),
-                    threadId,
-                    source: VOTE_RESULT_SOURCE,
-                    extra: { rich: { v: 1 as const, blocks: [richBlock] } },
-                  });
-                  // F079 Bug 2 fix: broadcast connector_message so frontend updates without F5
-                  if (deps.socketManager) {
-                    deps.socketManager.broadcastToRoom(`thread:${threadId}`, 'connector_message', {
-                      threadId,
-                      message: { id: stored.id, type: 'connector', content: stored.content, source: VOTE_RESULT_SOURCE, timestamp: stored.timestamp, extra: stored.extra },
-                    });
-                  }
-                } catch (persistErr) {
-                  console.warn(`[routeSerial] Failed to persist vote connector message:`, persistErr);
-                }
-                console.log(`[routeSerial] F079: Vote auto-closed in ${threadId}`);
-              }
-            }
-          }
-        } catch (voteErr) {
-          console.warn(`[routeSerial] F079: Vote interception failed for ${catId as string}:`, voteErr);
-        }
-      }
-
-      const storedTimestamp = Date.now();
-
-      // F061: Detect @owner mentions in agent response for browser notification
-      mentionsUser = storedContent ? detectUserMention(storedContent) : false;
-
-      // Store with actual mentions — degrade on failure to ensure done reaches frontend
-      // (缅因猫 review P1-2: Redis failure must not block done yield)
-      try {
-        await deps.messageStore.append({
-          userId,
-          catId,
-          content: storedContent,
-          mentions: a2aMentions,
-          origin: 'stream',
-          timestamp: storedTimestamp,
-          threadId,
-          ...(mentionsUser ? { mentionsUser } : {}),
-          ...(thinkingContent ? { thinking: thinkingContent } : {}),
-          ...(firstMetadata ? { metadata: firstMetadata } : {}),
-          ...(collectedToolEvents.length > 0 ? { toolEvents: collectedToolEvents } : {}),
-          extra: {
-            ...(allRichBlocks.length > 0 ? { rich: { v: 1 as const, blocks: allRichBlocks } } : {}),
-            ...(ownInvocationId ? { stream: { invocationId: ownInvocationId } } : {}),
-          },
-        });
-        // F088-P3: Stash rich blocks for outbound delivery
-        if (options.persistenceContext && allRichBlocks.length > 0) {
-          options.persistenceContext.richBlocks = allRichBlocks;
-        }
-        // #80: Clean up draft only after successful append (guard: keep draft if append fails)
-        if (deps.draftStore && ownInvocationId) {
-          deps.draftStore.delete(userId, threadId, ownInvocationId)?.catch?.(noop);
-        }
-        // Cloud Codex R4 P1 fix: Update activity in isolated try/catch to not affect append status
-        if (deps.invocationDeps.threadStore) {
-          try {
-            await deps.invocationDeps.threadStore.updateParticipantActivity(threadId, catId);
-          } catch (activityErr) {
-            console.warn(`[routeSerial] updateParticipantActivity failed for ${catId as string}, ignoring:`, activityErr);
-          }
-        }
-      } catch (err) {
-        console.error(`[routeSerial] messageStore.append failed for ${catId as string}, degrading:`, err);
-        if (options.persistenceContext) {
-          options.persistenceContext.failed = true;
-          options.persistenceContext.errors.push({
-            catId: catId as string,
-            error: err instanceof Error ? err.message : String(err),
-          });
-        }
-      }
-
-      // A2A: extend worklist if mention found + depth allows + queue fairness gate
-      // F27: dedup only against pending (not-yet-executed) tail — cats that already ran
-      // can be re-enqueued for another round (e.g. A→B→A review ping-pong).
-      let queuedMessagesPending = false;
-      if (queueHasQueuedMessages) {
-        try {
-          queuedMessagesPending = queueHasQueuedMessages(threadId);
-        } catch {
-          queuedMessagesPending = false;
-        }
-      }
-
-      if (
-        a2aMentions.length > 0
-        && worklistEntry.a2aCount < maxDepth
-        && !signal?.aborted
-        && !queuedMessagesPending
-      ) {
-        const pendingTail = worklist.slice(index + 1);
-        const pendingOriginalTargets = targetCats.slice(index + 1);
-        for (const nextCat of a2aMentions) {
-          if (worklistEntry.a2aCount >= maxDepth) break;
-          if (pendingTail.includes(nextCat)) {
-            // Keep original user-selected targets replying to user, not to another cat.
-            if (!pendingOriginalTargets.includes(nextCat)) {
-              worklistEntry.a2aFrom.set(nextCat, catId);
-            }
-            continue;
-          }
-
-          worklist.push(nextCat);
-          worklistEntry.a2aCount++;
-          pendingTail.push(nextCat); // Keep dedup view in sync
-          worklistEntry.a2aFrom.set(nextCat, catId);
-        }
-      }
-
-      // F27: Emit a2a_handoff for ALL new A2A targets (both response-text and callback-pushed).
-      // We track which targets have already been announced to avoid duplicate handoff events.
-      for (let wi = handoffEmitted; wi < worklist.length; wi++) {
-        const pendingCat = worklist[wi]!;
-        if (wi < targetCats.length) continue; // Skip original targets — not A2A
-
-        // === A2A_HANDOFF 审计 (fire-and-forget, 缅因猫 review P2-3) ===
-        const auditLog = getEventAuditLog();
-        auditLog.append({
-          type: AuditEventTypes.A2A_HANDOFF,
-          threadId,
-          data: {
-            fromCat: catId,
-            toCat: pendingCat,
+          await deps.messageStore.append({
             userId,
-            a2aDepth: worklistEntry.a2aCount,
-            maxDepth,
-          },
-        }).catch((err) => {
-          console.warn('[audit] A2A_HANDOFF write failed', { threadId, fromCat: catId, toCat: pendingCat, err });
-        });
-
-        const nextConfig: CatConfig | undefined = catRegistry.tryGet(pendingCat as string)?.config ?? CAT_CONFIGS[pendingCat as string];
-        yield {
-          type: 'a2a_handoff' as AgentMessageType,
-          catId,
-          content: `${catConfig?.displayName ?? catId} → ${nextConfig?.displayName ?? pendingCat}`,
-          timestamp: Date.now(),
-        } as AgentMessage;
-      }
-      handoffEmitted = worklist.length;
-    } else if (!hadError) {
-      // No text content and no error — store empty message (cat responded with no text)
-      // F22: still attach any MCP-buffered rich blocks (cloud Codex P1: block-only responses)
-      try {
-        await deps.messageStore.append({
-          userId,
-          catId,
-          content: '',
-          mentions: [],
-          origin: 'stream',
-          timestamp: Date.now(),
-          threadId,
-          ...(thinkingContent ? { thinking: thinkingContent } : {}),
-          ...(firstMetadata ? { metadata: firstMetadata } : {}),
-          ...(collectedToolEvents.length > 0 ? { toolEvents: collectedToolEvents } : {}),
-          extra: {
-            ...(() => {
-              const blocks = [...bufferedBlocks, ...streamRichBlocks];
-              return blocks.length > 0 ? { rich: { v: 1 as const, blocks } } : {};
-            })(),
-            ...(ownInvocationId ? { stream: { invocationId: ownInvocationId } } : {}),
-          },
-        });
-        // F088-P3: Stash rich blocks for outbound delivery (no-text branch)
-        if (options.persistenceContext) {
-          const noTextBlocks = [...bufferedBlocks, ...streamRichBlocks];
-          if (noTextBlocks.length > 0) {
-            options.persistenceContext.richBlocks = [
-              ...(options.persistenceContext.richBlocks ?? []),
-              ...noTextBlocks,
-            ];
-          }
-        }
-        // #80: Clean up draft only after successful append
-        if (deps.draftStore && ownInvocationId) {
-          deps.draftStore.delete(userId, threadId, ownInvocationId)?.catch?.(noop);
-        }
-        // Cloud Codex R4 P1 fix: Update activity in isolated try/catch to not affect append status
-        if (deps.invocationDeps.threadStore) {
-          try {
-            await deps.invocationDeps.threadStore.updateParticipantActivity(threadId, catId);
-          } catch (activityErr) {
-            console.warn(`[routeSerial] updateParticipantActivity failed for ${catId as string}, ignoring:`, activityErr);
-          }
-        }
-      } catch (err) {
-        console.error(`[routeSerial] messageStore.append failed for ${catId as string}, degrading:`, err);
-        if (options.persistenceContext) {
-          options.persistenceContext.failed = true;
-          options.persistenceContext.errors.push({
-            catId: catId as string,
-            error: err instanceof Error ? err.message : String(err),
+            catId,
+            content: '',
+            mentions: [],
+            origin: 'stream',
+            timestamp: Date.now(),
+            threadId,
+            ...(thinkingContent ? { thinking: thinkingContent } : {}),
+            ...(firstMetadata ? { metadata: firstMetadata } : {}),
+            ...(collectedToolEvents.length > 0 ? { toolEvents: collectedToolEvents } : {}),
+            extra: {
+              ...(() => {
+                const blocks = [...bufferedBlocks, ...streamRichBlocks];
+                return blocks.length > 0 ? { rich: { v: 1 as const, blocks } } : {};
+              })(),
+              ...(ownInvocationId ? { stream: { invocationId: ownInvocationId } } : {}),
+            },
           });
-        }
-      }
-    } else if (collectedToolEvents.length > 0) {
-      // hadError && textContent === '' but toolEvents exist — persist tool record so
-      // refreshing the page still shows what the cat attempted before the error.
-      try {
-        await deps.messageStore.append({
-          userId,
-          catId,
-          content: '',
-          mentions: [],
-          origin: 'stream',
-          timestamp: Date.now(),
-          threadId,
-          ...(firstMetadata ? { metadata: firstMetadata } : {}),
-          toolEvents: collectedToolEvents,
-          ...(ownInvocationId ? { extra: { stream: { invocationId: ownInvocationId } } } : {}),
-        });
-        // #80: Clean up draft only after successful append
-        if (deps.draftStore && ownInvocationId) {
-          deps.draftStore.delete(userId, threadId, ownInvocationId)?.catch?.(noop);
-        }
-        // Cloud Codex R4 P1 fix: Update activity in isolated try/catch to not affect append status
-        if (deps.invocationDeps.threadStore) {
-          try {
-            await deps.invocationDeps.threadStore.updateParticipantActivity(threadId, catId);
-          } catch (activityErr) {
-            console.warn(`[routeSerial] updateParticipantActivity failed for ${catId as string}, ignoring:`, activityErr);
+          // F088-P3: Stash rich blocks for outbound delivery (no-text branch)
+          if (options.persistenceContext) {
+            const noTextBlocks = [...bufferedBlocks, ...streamRichBlocks];
+            if (noTextBlocks.length > 0) {
+              options.persistenceContext.richBlocks = [
+                ...(options.persistenceContext.richBlocks ?? []),
+                ...noTextBlocks,
+              ];
+            }
           }
-        }
-      } catch (err) {
-        console.error(`[routeSerial] messageStore.append (error+tools) failed for ${catId as string}, degrading:`, err);
-        if (options.persistenceContext) {
-          options.persistenceContext.failed = true;
-          options.persistenceContext.errors.push({
-            catId: catId as string,
-            error: err instanceof Error ? err.message : String(err),
-          });
-        }
-      }
-    } else {
-      // hadError && textContent === '' && no toolEvents → clean up draft only
-      if (deps.draftStore && ownInvocationId) {
-        deps.draftStore.delete(userId, threadId, ownInvocationId)?.catch?.(noop);
-      }
-    }
-    // hadError && textContent === '' && no toolEvents → skip persistence
-    // Error events were already yielded to frontend via the stream.
-
-    // Ack cursor regardless of hadError: messages were assembled into the prompt
-    // and delivered to the cat. Not acking causes infinite re-delivery on subsequent
-    // rounds (bug: "砚砚每次都疯狂回之前的消息").
-    if (incrementalMode && deliveryBoundaryId) {
-      if (options.cursorBoundaries) {
-        // ADR-008 S3: defer ack — caller acks after invocation succeeds
-        upsertMaxBoundary(options.cursorBoundaries, catId, deliveryBoundaryId);
-      } else if (deps.deliveryCursorStore) {
-        // Legacy: ack immediately (deprecated route() path)
-        try {
-          await deps.deliveryCursorStore.ackCursor(userId, catId, threadId, deliveryBoundaryId);
+          // #80: Clean up draft only after successful append
+          if (deps.draftStore && ownInvocationId) {
+            deps.draftStore.delete(userId, threadId, ownInvocationId)?.catch?.(noop);
+          }
+          // Cloud Codex R4 P1 fix: Update activity in isolated try/catch to not affect append status
+          if (deps.invocationDeps.threadStore) {
+            try {
+              await deps.invocationDeps.threadStore.updateParticipantActivity(threadId, catId);
+            } catch (activityErr) {
+              console.warn(
+                `[routeSerial] updateParticipantActivity failed for ${catId as string}, ignoring:`,
+                activityErr,
+              );
+            }
+          }
         } catch (err) {
-          console.error(`[routeSerial] ackCursor failed for ${catId as string}:`, err);
+          console.error(`[routeSerial] messageStore.append failed for ${catId as string}, degrading:`, err);
+          if (options.persistenceContext) {
+            options.persistenceContext.failed = true;
+            options.persistenceContext.errors.push({
+              catId: catId as string,
+              error: err instanceof Error ? err.message : String(err),
+            });
+          }
+        }
+      } else if (collectedToolEvents.length > 0) {
+        // hadError && textContent === '' but toolEvents exist — persist tool record so
+        // refreshing the page still shows what the cat attempted before the error.
+        try {
+          await deps.messageStore.append({
+            userId,
+            catId,
+            content: '',
+            mentions: [],
+            origin: 'stream',
+            timestamp: Date.now(),
+            threadId,
+            ...(firstMetadata ? { metadata: firstMetadata } : {}),
+            toolEvents: collectedToolEvents,
+            ...(ownInvocationId ? { extra: { stream: { invocationId: ownInvocationId } } } : {}),
+          });
+          // #80: Clean up draft only after successful append
+          if (deps.draftStore && ownInvocationId) {
+            deps.draftStore.delete(userId, threadId, ownInvocationId)?.catch?.(noop);
+          }
+          // Cloud Codex R4 P1 fix: Update activity in isolated try/catch to not affect append status
+          if (deps.invocationDeps.threadStore) {
+            try {
+              await deps.invocationDeps.threadStore.updateParticipantActivity(threadId, catId);
+            } catch (activityErr) {
+              console.warn(
+                `[routeSerial] updateParticipantActivity failed for ${catId as string}, ignoring:`,
+                activityErr,
+              );
+            }
+          }
+        } catch (err) {
+          console.error(
+            `[routeSerial] messageStore.append (error+tools) failed for ${catId as string}, degrading:`,
+            err,
+          );
+          if (options.persistenceContext) {
+            options.persistenceContext.failed = true;
+            options.persistenceContext.errors.push({
+              catId: catId as string,
+              error: err instanceof Error ? err.message : String(err),
+            });
+          }
+        }
+      } else {
+        // hadError && textContent === '' && no toolEvents → clean up draft only
+        if (deps.draftStore && ownInvocationId) {
+          deps.draftStore.delete(userId, threadId, ownInvocationId)?.catch?.(noop);
         }
       }
-    }
+      // hadError && textContent === '' && no toolEvents → skip persistence
+      // Error events were already yielded to frontend via the stream.
 
-    // Yield buffered done with correct isFinal (evaluated AFTER worklist may have grown)
-    // MUST always reach here regardless of append success (缅因猫 review P1-2)
-    if (doneMsg) {
-      yield { ...doneMsg, ...(mentionsUser ? { mentionsUser } : {}), isFinal: index === worklist.length - 1 };
-    }
+      // Ack cursor regardless of hadError: messages were assembled into the prompt
+      // and delivered to the cat. Not acking causes infinite re-delivery on subsequent
+      // rounds (bug: "砚砚每次都疯狂回之前的消息").
+      if (incrementalMode && deliveryBoundaryId) {
+        if (options.cursorBoundaries) {
+          // ADR-008 S3: defer ack — caller acks after invocation succeeds
+          upsertMaxBoundary(options.cursorBoundaries, catId, deliveryBoundaryId);
+        } else if (deps.deliveryCursorStore) {
+          // Legacy: ack immediately (deprecated route() path)
+          try {
+            await deps.deliveryCursorStore.ackCursor(userId, catId, threadId, deliveryBoundaryId);
+          } catch (err) {
+            console.error(`[routeSerial] ackCursor failed for ${catId as string}:`, err);
+          }
+        }
+      }
 
-    // F27: Advance executedIndex so pushToWorklist knows which cats are done
-    worklistEntry.executedIndex = index + 1;
-    index++;
-  }
+      // Yield buffered done with correct isFinal (evaluated AFTER worklist may have grown)
+      // MUST always reach here regardless of append success (缅因猫 review P1-2)
+      if (doneMsg) {
+        yield { ...doneMsg, ...(mentionsUser ? { mentionsUser } : {}), isFinal: index === worklist.length - 1 };
+      }
+
+      // F27: Advance executedIndex so pushToWorklist knows which cats are done
+      worklistEntry.executedIndex = index + 1;
+      index++;
+    }
   } finally {
     // F27: Always unregister worklist, even on error/abort.
     // Pass owner ref so preempting new invocation's worklist is not deleted (缅因猫 R1 P1-1)

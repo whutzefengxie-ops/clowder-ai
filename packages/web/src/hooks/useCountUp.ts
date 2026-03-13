@@ -26,7 +26,7 @@ export function useCountUp(target: number, durationMs = 800): number {
       const elapsed = now - start;
       const progress = Math.min(elapsed / durationMs, 1);
       // ease-out: 1 - (1 - t)^3
-      const eased = 1 - Math.pow(1 - progress, 3);
+      const eased = 1 - (1 - progress) ** 3;
       const current = Math.round(from + (target - from) * eased);
       setDisplay(current);
 

@@ -2,10 +2,11 @@
  * F055: PlanBoardPanel — 猫猫祟祟
  * Tests for independent per-cat plan board in right sidebar.
  */
-import { describe, it, expect, vi, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
+
 import React from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react-dom/test-utils';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CatInvocationInfo } from '@/stores/chatStore';
 
 const origCreateElement = document.createElement.bind(document);
@@ -39,9 +40,7 @@ vi.mock('@/utils/taskProgressContinue', () => ({
 
 /* ── Helpers ──────────────────────────────────────────────── */
 
-function makeTasks(
-  specs: Array<{ status: 'pending' | 'in_progress' | 'completed'; subject: string }>,
-) {
+function makeTasks(specs: Array<{ status: 'pending' | 'in_progress' | 'completed'; subject: string }>) {
   return specs.map((s, i) => ({
     id: `t${i}`,
     subject: s.subject,
@@ -83,10 +82,7 @@ afterEach(() => {
 });
 
 // Lazy import so mocks are in place
-async function renderPanel(
-  threadId: string,
-  catInvocations: Record<string, CatInvocationInfo>,
-) {
+async function renderPanel(threadId: string, catInvocations: Record<string, CatInvocationInfo>) {
   const { PlanBoardPanel } = await import('../PlanBoardPanel');
   act(() => {
     root.render(React.createElement(PlanBoardPanel, { threadId, catInvocations }));
@@ -210,7 +206,9 @@ describe('F055: PlanBoardPanel (猫猫祟祟)', () => {
     // Click expand button
     const expandBtn = container.querySelector('button');
     expect(expandBtn).not.toBeNull();
-    act(() => { expandBtn!.click(); });
+    act(() => {
+      expandBtn?.click();
+    });
 
     expect(container.textContent).toContain('Finished work');
   });
@@ -230,8 +228,7 @@ describe('F055: PlanBoardPanel (猫猫祟祟)', () => {
     });
 
     expect(container.textContent).toContain('已中断');
-    const continueBtn = Array.from(container.querySelectorAll('button'))
-      .find((b) => b.textContent?.includes('继续'));
+    const continueBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('继续'));
     expect(continueBtn).not.toBeUndefined();
   });
 
@@ -262,10 +259,12 @@ describe('F055: PlanBoardPanel (猫猫祟祟)', () => {
       }),
     };
     act(() => {
-      root.render(React.createElement(PlanBoardPanel, {
-        threadId: 'thread-1',
-        catInvocations: newInvocations,
-      }));
+      root.render(
+        React.createElement(PlanBoardPanel, {
+          threadId: 'thread-1',
+          catInvocations: newInvocations,
+        }),
+      );
     });
 
     expect(container.textContent).toContain('New plan');

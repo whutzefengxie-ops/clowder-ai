@@ -58,7 +58,7 @@ export function ThreadSituationPanel({
           const thread = threadsByBacklogId[item.id];
           // Fallback: match by feature ID in thread title
           const featureId = extractFeatureId(item.tags);
-          const titleMatchedThreads = featureId !== 'Untagged' ? threadsByFeatureId[featureId] ?? [] : [];
+          const titleMatchedThreads = featureId !== 'Untagged' ? (threadsByFeatureId[featureId] ?? []) : [];
 
           if (!thread && titleMatchedThreads.length === 0) {
             return (
@@ -86,9 +86,7 @@ export function ThreadSituationPanel({
               data-testid={`mc-thread-situation-item-${item.id}`}
             >
               <p className="text-xs font-semibold text-[#4B3A2A]">{item.title}</p>
-              {matchType === 'title' && (
-                <p className="text-[10px] text-[#9A866F]">通过标题匹配</p>
-              )}
+              {matchType === 'title' && <p className="text-[10px] text-[#9A866F]">通过标题匹配</p>}
               {displayThreads.map((t) => (
                 <div key={t.id} className="mt-1 border-t border-[#F0E8DA] pt-1 first:mt-0 first:border-t-0 first:pt-0">
                   <p className="text-[11px] text-[#6E5A46]">Thread：{t.title || t.id}</p>

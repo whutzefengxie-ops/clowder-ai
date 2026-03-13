@@ -4,10 +4,14 @@
  * Validates that the werewolf game definition has correct roles, phases,
  * actions, and win conditions for various player presets.
  */
-import { describe, it } from 'node:test';
+
 import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
+import {
+  createWerewolfDefinition,
+  WEREWOLF_PRESETS,
+} from '../dist/domains/cats/services/game/werewolf/WerewolfDefinition.js';
 import { WEREWOLF_ROLES } from '../dist/domains/cats/services/game/werewolf/WerewolfRoles.js';
-import { WEREWOLF_PRESETS, createWerewolfDefinition } from '../dist/domains/cats/services/game/werewolf/WerewolfDefinition.js';
 
 describe('WerewolfRoles', () => {
   it('defines all 7 standard roles', () => {
@@ -22,13 +26,13 @@ describe('WerewolfRoles', () => {
   });
 
   it('wolf is in wolf faction, all others in village', () => {
-    assert.equal(WEREWOLF_ROLES['wolf'].faction, 'wolf');
-    assert.equal(WEREWOLF_ROLES['seer'].faction, 'village');
-    assert.equal(WEREWOLF_ROLES['witch'].faction, 'village');
-    assert.equal(WEREWOLF_ROLES['hunter'].faction, 'village');
-    assert.equal(WEREWOLF_ROLES['guard'].faction, 'village');
-    assert.equal(WEREWOLF_ROLES['idiot'].faction, 'village');
-    assert.equal(WEREWOLF_ROLES['villager'].faction, 'village');
+    assert.equal(WEREWOLF_ROLES.wolf.faction, 'wolf');
+    assert.equal(WEREWOLF_ROLES.seer.faction, 'village');
+    assert.equal(WEREWOLF_ROLES.witch.faction, 'village');
+    assert.equal(WEREWOLF_ROLES.hunter.faction, 'village');
+    assert.equal(WEREWOLF_ROLES.guard.faction, 'village');
+    assert.equal(WEREWOLF_ROLES.idiot.faction, 'village');
+    assert.equal(WEREWOLF_ROLES.villager.faction, 'village');
   });
 });
 
@@ -51,8 +55,8 @@ describe('WerewolfPresets', () => {
 
   it('each preset has at least 1 wolf and 1 seer', () => {
     for (const [count, preset] of Object.entries(WEREWOLF_PRESETS)) {
-      assert.ok(preset.roles['wolf'] >= 1, `${count}p has wolf`);
-      assert.ok(preset.roles['seer'] >= 1, `${count}p has seer`);
+      assert.ok(preset.roles.wolf >= 1, `${count}p has wolf`);
+      assert.ok(preset.roles.seer >= 1, `${count}p has seer`);
     }
   });
 });
@@ -68,7 +72,7 @@ describe('createWerewolfDefinition', () => {
 
   it('has correct phase sequence', () => {
     const def = createWerewolfDefinition(8);
-    const phaseNames = def.phases.map(p => p.name);
+    const phaseNames = def.phases.map((p) => p.name);
 
     // Core phases must be in order
     assert.ok(phaseNames.indexOf('night_guard') < phaseNames.indexOf('night_wolf'));
@@ -83,7 +87,7 @@ describe('createWerewolfDefinition', () => {
 
   it('has actions matching phases', () => {
     const def = createWerewolfDefinition(8);
-    const actionNames = def.actions.map(a => a.name);
+    const actionNames = def.actions.map((a) => a.name);
 
     assert.ok(actionNames.includes('kill'), 'has kill action');
     assert.ok(actionNames.includes('divine'), 'has divine action');
@@ -95,7 +99,7 @@ describe('createWerewolfDefinition', () => {
 
   it('has win conditions for wolf and village', () => {
     const def = createWerewolfDefinition(8);
-    const factions = def.winConditions.map(wc => wc.faction);
+    const factions = def.winConditions.map((wc) => wc.faction);
     assert.ok(factions.includes('wolf'), 'wolf win condition');
     assert.ok(factions.includes('village'), 'village win condition');
   });
@@ -103,7 +107,7 @@ describe('createWerewolfDefinition', () => {
   it('definition roles match preset role counts', () => {
     const def = createWerewolfDefinition(8);
     // The definition should have role definitions for all preset roles
-    const defRoleNames = def.roles.map(r => r.name);
+    const defRoleNames = def.roles.map((r) => r.name);
     const preset = WEREWOLF_PRESETS[8];
     for (const roleName of Object.keys(preset.roles)) {
       if (preset.roles[roleName] > 0) {

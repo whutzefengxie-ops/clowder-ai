@@ -177,7 +177,7 @@ export function parseRuntimeDrift(
 }
 
 async function detectRuntimeDrift(repoRoot: string): Promise<RuntimeDrift | null> {
-  const runtimePath = process.env['RUNTIME_REPO_PATH'];
+  const runtimePath = process.env.RUNTIME_REPO_PATH;
   if (!runtimePath) return null;
   try {
     // Always compare against main, not HEAD — HEAD varies per worktree (VG-1 P1 fix)

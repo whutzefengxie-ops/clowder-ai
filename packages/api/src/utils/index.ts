@@ -3,15 +3,14 @@
  * CLI 子进程解析工具导出
  */
 
+export { formatCliExitError } from './cli-format.js';
+export type { CliSpawnerDeps } from './cli-spawn.js';
+export { isCliError, KILL_GRACE_MS, spawnCli } from './cli-spawn.js';
 export type {
+  ChildProcessLike,
   CliSpawnOptions,
   CliTransformer,
-  ChildProcessLike,
   SpawnFn,
 } from './cli-types.js';
-
-export { parseNDJSON, isParseError } from './ndjson-parser.js';
-export { spawnCli, isCliError, KILL_GRACE_MS } from './cli-spawn.js';
-export type { CliSpawnerDeps } from './cli-spawn.js';
-export { formatCliExitError } from './cli-format.js';
-export { validateProjectPath, isUnderAllowedRoot } from './project-path.js';
+export { isParseError, parseNDJSON } from './ndjson-parser.js';
+export { isUnderAllowedRoot, validateProjectPath } from './project-path.js';

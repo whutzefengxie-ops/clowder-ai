@@ -1,18 +1,15 @@
 /**
  * F076: External Project routes — CRUD + BACKLOG import
  */
-import type { ExternalProject } from '@cat-cafe/shared';
-import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
+
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import type { ExternalProject } from '@cat-cafe/shared';
+import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
+import type { IBacklogStore } from '../domains/cats/services/stores/ports/BacklogStore.js';
 import type { ExternalProjectStore } from '../domains/projects/external-project-store.js';
 import type { NeedAuditFrameStore } from '../domains/projects/need-audit-frame-store.js';
-import type { IBacklogStore } from '../domains/cats/services/stores/ports/BacklogStore.js';
-import {
-  parseActiveFeaturesFromBacklog,
-  buildBacklogInputFromFeature,
-  getFeatureTagId,
-} from './backlog-doc-import.js';
+import { buildBacklogInputFromFeature, getFeatureTagId, parseActiveFeaturesFromBacklog } from './backlog-doc-import.js';
 
 export interface ExternalProjectRoutesOptions {
   externalProjectStore: ExternalProjectStore;
@@ -20,10 +17,7 @@ export interface ExternalProjectRoutesOptions {
   backlogStore: IBacklogStore;
 }
 
-export const externalProjectRoutes: FastifyPluginAsync<ExternalProjectRoutesOptions> = async (
-  app,
-  opts,
-) => {
+export const externalProjectRoutes: FastifyPluginAsync<ExternalProjectRoutesOptions> = async (app, opts) => {
   const { externalProjectStore, needAuditFrameStore, backlogStore } = opts;
 
   /** Returns userId or sends 401 and returns null */
@@ -37,11 +31,7 @@ export const externalProjectRoutes: FastifyPluginAsync<ExternalProjectRoutesOpti
   }
 
   /** Resolves project with ownership check. Returns project or sends 404 and returns null. */
-  function requireOwnedProject(
-    id: string,
-    userId: string,
-    reply: FastifyReply,
-  ): ExternalProject | null {
+  function requireOwnedProject(id: string, userId: string, reply: FastifyReply): ExternalProject | null {
     const project = externalProjectStore.getById(id);
     if (!project || project.userId !== userId) {
       void reply.status(404).send({ error: 'Project not found' });
@@ -157,12 +147,12 @@ export const externalProjectRoutes: FastifyPluginAsync<ExternalProjectRoutesOpti
     const body = request.body as Record<string, unknown>;
     try {
       const frame = needAuditFrameStore.upsert(projectId, {
-        sponsor: (body['sponsor'] as string) ?? '',
-        motivation: (body['motivation'] as string) ?? '',
-        successMetric: (body['successMetric'] as string) ?? '',
-        constraints: (body['constraints'] as string) ?? '',
-        currentWorkflow: (body['currentWorkflow'] as string) ?? '',
-        provenanceMap: (body['provenanceMap'] as string) ?? '',
+        sponsor: (body.sponsor as string) ?? '',
+        motivation: (body.motivation as string) ?? '',
+        successMetric: (body.successMetric as string) ?? '',
+        constraints: (body.constraints as string) ?? '',
+        currentWorkflow: (body.currentWorkflow as string) ?? '',
+        provenanceMap: (body.provenanceMap as string) ?? '',
       });
       return reply.send({ frame });
     } catch (err: unknown) {

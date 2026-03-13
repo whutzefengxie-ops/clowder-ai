@@ -3,13 +3,12 @@
  * - Steer button shows only for queued entries
  * - Steer modal submits correct mode
  */
-import React from 'react';
+import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { act } from 'react';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { QueuePanel } from '../QueuePanel';
-import { useChatStore } from '@/stores/chatStore';
 import type { QueueEntry } from '@/stores/chat-types';
+import { useChatStore } from '@/stores/chatStore';
+import { QueuePanel } from '../QueuePanel';
 
 vi.mock('@/utils/api-client', () => ({
   apiFetch: vi.fn(async () => ({ ok: true, json: async () => ({}) })),
@@ -91,17 +90,17 @@ describe('QueuePanel steer (F047)', () => {
 
     const steerBtn = container.querySelector('[data-testid="steer-q1"]') as HTMLButtonElement | null;
     expect(steerBtn).not.toBeNull();
-    act(() => steerBtn!.click());
+    act(() => steerBtn?.click());
 
     const promote = container.querySelector('[data-testid="steer-mode-promote"]') as HTMLButtonElement | null;
     expect(promote).not.toBeNull();
-    act(() => promote!.click());
+    act(() => promote?.click());
 
     const confirm = container.querySelector('[data-testid="steer-confirm"]') as HTMLButtonElement | null;
     expect(confirm).not.toBeNull();
 
     await act(async () => {
-      confirm!.click();
+      confirm?.click();
     });
 
     expect(apiFetch).toHaveBeenCalledTimes(1);
@@ -111,8 +110,7 @@ describe('QueuePanel steer (F047)', () => {
         method: 'POST',
       }),
     );
-    const callArgs = (apiFetch as unknown as { mock: { calls: unknown[][] } }).mock.calls[0]![1] as { body?: string };
+    const callArgs = (apiFetch as unknown as { mock: { calls: unknown[][] } }).mock.calls[0]?.[1] as { body?: string };
     expect(callArgs.body).toContain('"mode":"promote"');
   });
 });
-

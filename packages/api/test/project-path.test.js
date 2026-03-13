@@ -1,13 +1,11 @@
-import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { homedir } from 'node:os';
-import { mkdtempSync, mkdirSync, symlinkSync, rmSync, existsSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs';
 import { realpath } from 'node:fs/promises';
+import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { after, before, describe, it } from 'node:test';
 
-const { validateProjectPath, isUnderAllowedRoot, getAllowedRoots } = await import(
-  '../dist/utils/project-path.js'
-);
+const { validateProjectPath, isUnderAllowedRoot, getAllowedRoots } = await import('../dist/utils/project-path.js');
 
 describe('isUnderAllowedRoot', () => {
   it('accepts path under home directory', () => {
@@ -24,7 +22,7 @@ describe('isUnderAllowedRoot', () => {
 
   it('rejects path with home prefix but no separator boundary', () => {
     // /home/user-evil should NOT pass for home = /home/user
-    const fakePath = homedir() + '-evil/data';
+    const fakePath = `${homedir()}-evil/data`;
     assert.strictEqual(isUnderAllowedRoot(fakePath), false);
   });
 
@@ -111,34 +109,34 @@ describe('PROJECT_ALLOWED_ROOTS env var', () => {
   let savedAppend;
 
   before(() => {
-    savedEnv = process.env['PROJECT_ALLOWED_ROOTS'];
-    savedAppend = process.env['PROJECT_ALLOWED_ROOTS_APPEND'];
+    savedEnv = process.env.PROJECT_ALLOWED_ROOTS;
+    savedAppend = process.env.PROJECT_ALLOWED_ROOTS_APPEND;
   });
 
   after(() => {
     if (savedEnv === undefined) {
-      delete process.env['PROJECT_ALLOWED_ROOTS'];
+      delete process.env.PROJECT_ALLOWED_ROOTS;
     } else {
-      process.env['PROJECT_ALLOWED_ROOTS'] = savedEnv;
+      process.env.PROJECT_ALLOWED_ROOTS = savedEnv;
     }
     if (savedAppend === undefined) {
-      delete process.env['PROJECT_ALLOWED_ROOTS_APPEND'];
+      delete process.env.PROJECT_ALLOWED_ROOTS_APPEND;
     } else {
-      process.env['PROJECT_ALLOWED_ROOTS_APPEND'] = savedAppend;
+      process.env.PROJECT_ALLOWED_ROOTS_APPEND = savedAppend;
     }
   });
 
   it('uses default roots when env var is not set', () => {
-    delete process.env['PROJECT_ALLOWED_ROOTS'];
-    delete process.env['PROJECT_ALLOWED_ROOTS_APPEND'];
+    delete process.env.PROJECT_ALLOWED_ROOTS;
+    delete process.env.PROJECT_ALLOWED_ROOTS_APPEND;
     // Default: homedir + /tmp + /private/tmp + /Volumes (macOS)
     assert.strictEqual(isUnderAllowedRoot(join(homedir(), 'projects')), true);
     assert.strictEqual(isUnderAllowedRoot('/tmp/foo'), true);
   });
 
   it('includes /Volumes in default roots on macOS', () => {
-    delete process.env['PROJECT_ALLOWED_ROOTS'];
-    delete process.env['PROJECT_ALLOWED_ROOTS_APPEND'];
+    delete process.env.PROJECT_ALLOWED_ROOTS;
+    delete process.env.PROJECT_ALLOWED_ROOTS_APPEND;
     if (process.platform === 'darwin') {
       assert.strictEqual(isUnderAllowedRoot('/Volumes/shared/project'), true);
       assert.strictEqual(isUnderAllowedRoot('/Volumes'), true);
@@ -146,8 +144,8 @@ describe('PROJECT_ALLOWED_ROOTS env var', () => {
   });
 
   it('replaces defaults when env var is set (backward compat)', () => {
-    process.env['PROJECT_ALLOWED_ROOTS'] = '/opt/projects:/srv/data';
-    delete process.env['PROJECT_ALLOWED_ROOTS_APPEND'];
+    process.env.PROJECT_ALLOWED_ROOTS = '/opt/projects:/srv/data';
+    delete process.env.PROJECT_ALLOWED_ROOTS_APPEND;
     assert.strictEqual(isUnderAllowedRoot('/opt/projects/my-app'), true);
     assert.strictEqual(isUnderAllowedRoot('/srv/data/files'), true);
     // Default roots should no longer work (replace mode is default)
@@ -156,8 +154,8 @@ describe('PROJECT_ALLOWED_ROOTS env var', () => {
   });
 
   it('appends to defaults when PROJECT_ALLOWED_ROOTS_APPEND=true', () => {
-    process.env['PROJECT_ALLOWED_ROOTS'] = '/opt/projects:/srv/data';
-    process.env['PROJECT_ALLOWED_ROOTS_APPEND'] = 'true';
+    process.env.PROJECT_ALLOWED_ROOTS = '/opt/projects:/srv/data';
+    process.env.PROJECT_ALLOWED_ROOTS_APPEND = 'true';
     // Extra roots work
     assert.strictEqual(isUnderAllowedRoot('/opt/projects/my-app'), true);
     assert.strictEqual(isUnderAllowedRoot('/srv/data/files'), true);
@@ -167,14 +165,14 @@ describe('PROJECT_ALLOWED_ROOTS env var', () => {
   });
 
   it('falls back to defaults when env var is empty', () => {
-    process.env['PROJECT_ALLOWED_ROOTS'] = '';
-    delete process.env['PROJECT_ALLOWED_ROOTS_APPEND'];
+    process.env.PROJECT_ALLOWED_ROOTS = '';
+    delete process.env.PROJECT_ALLOWED_ROOTS_APPEND;
     assert.strictEqual(isUnderAllowedRoot(join(homedir(), 'projects')), true);
   });
 
   it('handles multiple colon-separated paths', () => {
-    process.env['PROJECT_ALLOWED_ROOTS'] = `/opt/a:/opt/b:${homedir()}`;
-    delete process.env['PROJECT_ALLOWED_ROOTS_APPEND'];
+    process.env.PROJECT_ALLOWED_ROOTS = `/opt/a:/opt/b:${homedir()}`;
+    delete process.env.PROJECT_ALLOWED_ROOTS_APPEND;
     assert.strictEqual(isUnderAllowedRoot('/opt/a/x'), true);
     assert.strictEqual(isUnderAllowedRoot('/opt/b/y'), true);
     assert.strictEqual(isUnderAllowedRoot(join(homedir(), 'z')), true);
@@ -182,8 +180,8 @@ describe('PROJECT_ALLOWED_ROOTS env var', () => {
   });
 
   it('getAllowedRoots() returns computed list', () => {
-    delete process.env['PROJECT_ALLOWED_ROOTS'];
-    delete process.env['PROJECT_ALLOWED_ROOTS_APPEND'];
+    delete process.env.PROJECT_ALLOWED_ROOTS;
+    delete process.env.PROJECT_ALLOWED_ROOTS_APPEND;
     const roots = getAllowedRoots();
     assert.ok(Array.isArray(roots));
     assert.ok(roots.includes(homedir()));

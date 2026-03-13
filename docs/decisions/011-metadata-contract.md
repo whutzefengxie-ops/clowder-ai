@@ -15,7 +15,7 @@ created: 2026-02-27
 
 2026-02-26 team lead发现 BACKLOG 蜘蛛网问题：
 - Feature (F1-F39) 和 Tech Debt (#1-#103) 混编
-- 一个 Feature 的文档散落在 plans/discussions/mailbox/bug-reports
+- 一个 Feature 的文档散落在 feature-specs/feature-discussions/review-notes/bug-reports
 - 问"F21 什么情况"要搜 85 个文件
 
 根因：缺乏统一的元数据契约，文档之间的关联靠人记忆，无法机器索引。

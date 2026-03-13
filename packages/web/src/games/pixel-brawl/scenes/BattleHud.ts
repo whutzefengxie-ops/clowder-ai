@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
 import type { Fighter, FighterId } from '../types';
-import { PALETTE, TEAM_COLORS, SKILLS, FIGHTER_STATS } from '../types';
+import { FIGHTER_STATS, PALETTE, SKILLS, TEAM_COLORS } from '../types';
 
 const HP_BAR_W = 120;
 const HP_BAR_H = 10;
@@ -53,9 +53,7 @@ export class BattleHud {
         .setOrigin(0, 0);
 
       // HP bar fill
-      const hpBar = this.scene.add
-        .rectangle(cx - HP_BAR_W / 2 + 2, 18, HP_BAR_W, HP_BAR_H, teamColor)
-        .setOrigin(0, 0);
+      const hpBar = this.scene.add.rectangle(cx - HP_BAR_W / 2 + 2, 18, HP_BAR_W, HP_BAR_H, teamColor).setOrigin(0, 0);
 
       // Skill cooldown bar (thin, below HP)
       const skillColor = Phaser.Display.Color.IntegerToColor(teamColor).brighten(30).color;
@@ -118,10 +116,7 @@ export class BattleHud {
 
       // Skill bar: full when ready (cooldown = 0), empties as cooldown ticks
       const skillDef = SKILLS[FIGHTER_STATS[f.id].skillId];
-      const skillPct =
-        f.skillCooldownMs <= 0
-          ? 1
-          : 1 - f.skillCooldownMs / skillDef.cooldownMs;
+      const skillPct = f.skillCooldownMs <= 0 ? 1 : 1 - f.skillCooldownMs / skillDef.cooldownMs;
       hud.skillBar.setSize(HP_BAR_W * skillPct, SKILL_BAR_H);
 
       // Update label position to follow fighter

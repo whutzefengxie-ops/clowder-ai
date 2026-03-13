@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { describe, it, beforeEach } from 'node:test';
+import { describe, it } from 'node:test';
 
 const AUTH_HEADERS = { 'x-cat-cafe-user': 'test-user' };
 
@@ -10,9 +10,7 @@ describe('F087: Bootcamp env-check route', () => {
   async function createApp() {
     const { default: Fastify } = await import('fastify');
     const { bootcampRoutes } = await import('../dist/routes/bootcamp.js');
-    const { ThreadStore } = await import(
-      '../dist/domains/cats/services/stores/ports/ThreadStore.js'
-    );
+    const { ThreadStore } = await import('../dist/domains/cats/services/stores/ports/ThreadStore.js');
     threadStore = new ThreadStore();
     app = Fastify();
     await app.register(bootcampRoutes, { threadStore });
@@ -98,9 +96,7 @@ describe('F087: Bootcamp thread discovery', () => {
   async function createApp() {
     const { default: Fastify } = await import('fastify');
     const { bootcampRoutes } = await import('../dist/routes/bootcamp.js');
-    const { ThreadStore } = await import(
-      '../dist/domains/cats/services/stores/ports/ThreadStore.js'
-    );
+    const { ThreadStore } = await import('../dist/domains/cats/services/stores/ports/ThreadStore.js');
     threadStore = new ThreadStore();
     app = Fastify();
     await app.register(bootcampRoutes, { threadStore });
@@ -148,11 +144,16 @@ describe('F087: Bootcamp thread discovery', () => {
     await createApp();
     const older = await threadStore.create('test-user', '🎓 旧训练营');
     await threadStore.updateBootcampState(older.id, {
-      v: 1, phase: 'phase-11-farewell', startedAt: 500, completedAt: 600,
+      v: 1,
+      phase: 'phase-11-farewell',
+      startedAt: 500,
+      completedAt: 600,
     });
     const newer = await threadStore.create('test-user', '🎓 新训练营');
     await threadStore.updateBootcampState(newer.id, {
-      v: 1, phase: 'phase-1-intro', startedAt: 2000,
+      v: 1,
+      phase: 'phase-1-intro',
+      startedAt: 2000,
     });
 
     const res = await app.inject({ method: 'GET', url: '/api/bootcamp/thread', headers: AUTH_HEADERS });
@@ -170,9 +171,7 @@ describe('F106: Bootcamp threads list', () => {
   async function createApp() {
     const { default: Fastify } = await import('fastify');
     const { bootcampRoutes } = await import('../dist/routes/bootcamp.js');
-    const { ThreadStore } = await import(
-      '../dist/domains/cats/services/stores/ports/ThreadStore.js'
-    );
+    const { ThreadStore } = await import('../dist/domains/cats/services/stores/ports/ThreadStore.js');
     threadStore = new ThreadStore();
     app = Fastify();
     await app.register(bootcampRoutes, { threadStore });
@@ -204,11 +203,16 @@ describe('F106: Bootcamp threads list', () => {
     // Create two bootcamp threads
     const older = await threadStore.create('test-user', '🎓 训练营 1');
     await threadStore.updateBootcampState(older.id, {
-      v: 1, phase: 'phase-11-farewell', startedAt: 500, completedAt: 600,
+      v: 1,
+      phase: 'phase-11-farewell',
+      startedAt: 500,
+      completedAt: 600,
     });
     const newer = await threadStore.create('test-user', '🎓 训练营 2');
     await threadStore.updateBootcampState(newer.id, {
-      v: 1, phase: 'phase-5-kickoff', startedAt: 2000,
+      v: 1,
+      phase: 'phase-5-kickoff',
+      startedAt: 2000,
     });
 
     const res = await app.inject({ method: 'GET', url: '/api/bootcamp/threads', headers: AUTH_HEADERS });
@@ -227,7 +231,10 @@ describe('F106: Bootcamp threads list', () => {
     await createApp();
     const t = await threadStore.create('test-user', '🎓 训练营');
     await threadStore.updateBootcampState(t.id, {
-      v: 1, phase: 'phase-5-kickoff', startedAt: 1000, selectedTaskId: 'Q3',
+      v: 1,
+      phase: 'phase-5-kickoff',
+      startedAt: 1000,
+      selectedTaskId: 'Q3',
     });
 
     const res = await app.inject({ method: 'GET', url: '/api/bootcamp/threads', headers: AUTH_HEADERS });

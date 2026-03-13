@@ -9,15 +9,17 @@
  *         消息存储（由调用方在 yield 后累积并存储）。
  */
 
-import { catRegistry, type CatId, type ContextHealth, type MessageContent } from '@cat-cafe/shared';
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { type CatId, type ContextHealth, catRegistry, type MessageContent } from '@cat-cafe/shared';
 import { isSessionChainEnabled } from '../../../../../config/cat-config-loader.js';
 import { getContextWindowFallback } from '../../../../../config/context-window-sizes.js';
 import { resolveAnthropicRuntimeProfile } from '../../../../../config/provider-profiles.js';
 import { getSessionStrategy, shouldTakeAction } from '../../../../../config/session-strategy.js';
 import { findMonorepoRoot, isSameProject } from '../../../../../utils/monorepo-root.js';
 import { isUnderAllowedRoot } from '../../../../../utils/project-path.js';
+import type { AgentPaneRegistry } from '../../../../terminal/agent-pane-registry.js';
+import type { TmuxGateway } from '../../../../terminal/tmux-gateway.js';
 import { createPromptDigest } from '../../context/prompt-digest.js';
 import { AuditEventTypes, getEventAuditLog } from '../../orchestration/EventAuditLog.js';
 import type { SessionManager } from '../../session/SessionManager.js';
@@ -26,16 +28,14 @@ import type { TranscriptSessionInfo, TranscriptWriter } from '../../session/Tran
 import type { ISessionChainStore } from '../../stores/ports/SessionChainStore.js';
 import type { IThreadStore } from '../../stores/ports/ThreadStore.js';
 import type { AgentMessage, AgentService, AgentServiceOptions } from '../../types.js';
-import type { TmuxGateway } from '../../../../terminal/tmux-gateway.js';
-import type { AgentPaneRegistry } from '../../../../terminal/agent-pane-registry.js';
 import type { InvocationRegistry } from '../invocation/InvocationRegistry.js';
+import type { ResumeFailureKind } from './invoke-helpers.js';
 import {
   classifyResumeFailure,
   extractTaskProgress,
   isMissingClaudeSessionError,
   isTransientCliExitCode1,
 } from './invoke-helpers.js';
-import type { ResumeFailureKind } from './invoke-helpers.js';
 import type { TaskProgressItem, TaskProgressStatus, TaskProgressStore } from './TaskProgressStore.js';
 
 const ANTHROPIC_PROFILE_MODE_KEY = 'CAT_CAFE_ANTHROPIC_PROFILE_MODE';
@@ -57,11 +57,13 @@ function registerProxyUpstream(projectRoot: string, slug: string, targetUrl: str
     if (existsSync(filePath)) {
       upstreams = JSON.parse(readFileSync(filePath, 'utf-8'));
     }
-  } catch { /* start fresh */ }
+  } catch {
+    /* start fresh */
+  }
   if (upstreams[slug] === targetUrl) return; // no change
   upstreams[slug] = targetUrl;
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-  writeFileSync(filePath, JSON.stringify(upstreams, null, 2) + '\n');
+  writeFileSync(filePath, `${JSON.stringify(upstreams, null, 2)}\n`);
 }
 
 /**
@@ -111,7 +113,17 @@ export interface InvocationDeps {
   /** F089 Phase 2: agent pane registry for observability */
   readonly agentPaneRegistry?: AgentPaneRegistry;
   /** F091: Lookup signal articles linked to a thread for context injection */
-  readonly signalArticleLookup?: (threadId: string) => Promise<readonly { id: string; title: string; source: string; tier: number; contentSnippet: string; note?: string | undefined; relatedDiscussions?: readonly { sessionId: string; snippet: string; score: number }[] | undefined }[]>;
+  readonly signalArticleLookup?: (threadId: string) => Promise<
+    readonly {
+      id: string;
+      title: string;
+      source: string;
+      tier: number;
+      contentSnippet: string;
+      note?: string | undefined;
+      relatedDiscussions?: readonly { sessionId: string; snippet: string; score: number }[] | undefined;
+    }[]
+  >;
 }
 
 /**
@@ -169,9 +181,7 @@ export async function* invokeSingleCat(deps: InvocationDeps, params: InvocationP
     CAT_CAFE_INVOCATION_ID: invocationId,
     CAT_CAFE_CALLBACK_TOKEN: callbackToken,
     CAT_CAFE_USER_ID: userId,
-    ...(process.env['CAT_CAFE_SIGNAL_USER']
-      ? { CAT_CAFE_SIGNAL_USER: process.env['CAT_CAFE_SIGNAL_USER'] }
-      : {}),
+    ...(process.env.CAT_CAFE_SIGNAL_USER ? { CAT_CAFE_SIGNAL_USER: process.env.CAT_CAFE_SIGNAL_USER } : {}),
   };
 
   const auditLog = getEventAuditLog();
@@ -207,7 +217,7 @@ export async function* invokeSingleCat(deps: InvocationDeps, params: InvocationP
     if (message.type !== 'system_info' || !message.content) return message;
     try {
       const parsed = JSON.parse(message.content) as Record<string, unknown>;
-      if (parsed['type'] !== 'task_progress' || typeof parsed['invocationId'] === 'string') return message;
+      if (parsed.type !== 'task_progress' || typeof parsed.invocationId === 'string') return message;
       return {
         ...message,
         content: JSON.stringify({ ...parsed, invocationId }),
@@ -258,11 +268,10 @@ export async function* invokeSingleCat(deps: InvocationDeps, params: InvocationP
     // later `AbortSignal` flips (client disconnect / iterator.return()) must NOT
     // downgrade the snapshot to `interrupted`.
     const status: TaskProgressStatus =
-      terminalTaskProgressStatus ??
-      (hadError || wasAborted ? 'interrupted' : 'completed');
+      terminalTaskProgressStatus ?? (hadError || wasAborted ? 'interrupted' : 'completed');
     const interruptReason =
       terminalInterruptReason ??
-      (status === 'interrupted' ? (hadError ? 'error' : (wasAborted ? 'aborted' : undefined)) : undefined);
+      (status === 'interrupted' ? (hadError ? 'error' : wasAborted ? 'aborted' : undefined) : undefined);
 
     // Once we have persisted a "completed" snapshot, don't downgrade it to
     // "interrupted" just because the request was aborted after completion
@@ -363,7 +372,12 @@ export async function* invokeSingleCat(deps: InvocationDeps, params: InvocationP
       const catEntry = catRegistry.tryGet(catId as string);
       const preflight = await checkGovernancePreflight(workingDirectory, catCafeRoot, catEntry?.config.provider);
       if (!preflight.ready) {
-        yield { type: 'system_info', catId, content: `[F070] Governance not ready: ${preflight.reason}`, timestamp: Date.now() };
+        yield {
+          type: 'system_info',
+          catId,
+          content: `[F070] Governance not ready: ${preflight.reason}`,
+          timestamp: Date.now(),
+        };
         yield { type: 'done', catId, isFinal: params.isLastCat, timestamp: Date.now() };
         return;
       }
@@ -375,7 +389,9 @@ export async function* invokeSingleCat(deps: InvocationDeps, params: InvocationP
     if (workingDirectory && !isSameProject(workingDirectory, findMonorepoRoot(process.cwd())) && threadStore) {
       const thread = await threadStore.get(threadId);
       if (thread) {
-        const { buildMissionPack, formatMissionPackPrompt } = await import('../../../../../config/governance/mission-pack.js');
+        const { buildMissionPack, formatMissionPackPrompt } = await import(
+          '../../../../../config/governance/mission-pack.js'
+        );
         capturedMissionPack = buildMissionPack({
           title: thread.title ?? undefined,
           phase: thread.phase ?? undefined,
@@ -395,29 +411,29 @@ export async function* invokeSingleCat(deps: InvocationDeps, params: InvocationP
       try {
         const projectRoot = workingDirectory ?? findMonorepoRoot(process.cwd());
         const profile = await resolveAnthropicRuntimeProfile(projectRoot);
-        callbackEnv['CAT_CAFE_ANTHROPIC_PROFILE_MODE'] = profile.mode;
+        callbackEnv.CAT_CAFE_ANTHROPIC_PROFILE_MODE = profile.mode;
         if (profile.mode === 'api_key') {
-          if (profile.apiKey) callbackEnv['CAT_CAFE_ANTHROPIC_API_KEY'] = profile.apiKey;
+          if (profile.apiKey) callbackEnv.CAT_CAFE_ANTHROPIC_API_KEY = profile.apiKey;
           if (profile.baseUrl) {
             // Route through local proxy gateway if enabled (default: on).
             // Proxy uses slug-based routing: /SLUG/v1/messages → upstream/v1/messages
-            const proxyPort = process.env['ANTHROPIC_PROXY_PORT'] || '9877';
-            const proxyEnabled = process.env['ANTHROPIC_PROXY_ENABLED'] !== '0';
+            const proxyPort = process.env.ANTHROPIC_PROXY_PORT || '9877';
+            const proxyEnabled = process.env.ANTHROPIC_PROXY_ENABLED !== '0';
             if (proxyEnabled) {
               const slug = deriveProxySlug(profile.id);
               registerProxyUpstream(projectRoot, slug, profile.baseUrl);
-              callbackEnv['CAT_CAFE_ANTHROPIC_BASE_URL'] = `http://127.0.0.1:${proxyPort}/${slug}`;
+              callbackEnv.CAT_CAFE_ANTHROPIC_BASE_URL = `http://127.0.0.1:${proxyPort}/${slug}`;
             } else {
-              callbackEnv['CAT_CAFE_ANTHROPIC_BASE_URL'] = profile.baseUrl;
+              callbackEnv.CAT_CAFE_ANTHROPIC_BASE_URL = profile.baseUrl;
             }
           }
         }
         if (profile.modelOverride) {
-          callbackEnv['CAT_CAFE_ANTHROPIC_MODEL_OVERRIDE'] = profile.modelOverride;
+          callbackEnv.CAT_CAFE_ANTHROPIC_MODEL_OVERRIDE = profile.modelOverride;
         }
       } catch {
         // Best-effort fallback: default to subscription mode when profile resolution fails.
-        callbackEnv['CAT_CAFE_ANTHROPIC_PROFILE_MODE'] = 'subscription';
+        callbackEnv.CAT_CAFE_ANTHROPIC_PROFILE_MODE = 'subscription';
       }
     }
 
@@ -440,9 +456,10 @@ export async function* invokeSingleCat(deps: InvocationDeps, params: InvocationP
     // Prepend staticIdentity to prompt when injection is needed
     // F070-P2: missionPrefix (dispatch context) is prepended for external projects
     const promptWithMission = missionPrefix ? `${missionPrefix}\n\n${prompt}` : prompt;
-    const effectivePrompt = (injectSystemPrompt && params.systemPrompt)
-      ? `${params.systemPrompt}\n\n---\n\n${promptWithMission}`
-      : promptWithMission;
+    const effectivePrompt =
+      injectSystemPrompt && params.systemPrompt
+        ? `${params.systemPrompt}\n\n---\n\n${promptWithMission}`
+        : promptWithMission;
 
     // F089 Phase 2+3: Create tmux spawn override for agent-in-pane execution
     let spawnCliOverride: AgentServiceOptions['spawnCliOverride'];
@@ -452,10 +469,16 @@ export async function* invokeSingleCat(deps: InvocationDeps, params: InvocationP
       try {
         const worktreeId = await resolveWorktreeIdByPath(workingDirectory);
         spawnCliOverride = createTmuxSpawnOverride(
-          worktreeId, invocationId, userId, deps.tmuxGateway, deps.agentPaneRegistry,
+          worktreeId,
+          invocationId,
+          userId,
+          deps.tmuxGateway,
+          deps.agentPaneRegistry,
         );
       } catch {
-        console.warn(`[invoke-single-cat] resolveWorktreeIdByPath failed for ${workingDirectory} — skipping tmux pane (agent runs without tmux)`);
+        console.warn(
+          `[invoke-single-cat] resolveWorktreeIdByPath failed for ${workingDirectory} — skipping tmux pane (agent runs without tmux)`,
+        );
       }
     }
 
@@ -600,7 +623,9 @@ export async function* invokeSingleCat(deps: InvocationDeps, params: InvocationP
         // F070 Phase 3a: Capture execution digest for external project dispatch (best-effort)
         if (capturedMissionPack && workingDirectory && deps.executionDigestStore) {
           try {
-            const { captureExecutionDigest } = await import('../../../../../config/governance/execution-digest-capture.js');
+            const { captureExecutionDigest } = await import(
+              '../../../../../config/governance/execution-digest-capture.js'
+            );
             const digestInput = captureExecutionDigest(
               capturedMissionPack,
               {
@@ -668,7 +693,7 @@ export async function* invokeSingleCat(deps: InvocationDeps, params: InvocationP
                 try {
                   const activeRecord = await deps.sessionChainStore.getActive(catId, threadId);
                   if (activeRecord) {
-                    const u = msg.metadata!.usage!;
+                    const u = msg.metadata?.usage!;
                     await deps.sessionChainStore.update(activeRecord.id, {
                       contextHealth: health,
                       lastUsage: {
@@ -710,12 +735,9 @@ export async function* invokeSingleCat(deps: InvocationDeps, params: InvocationP
                   const provider = catRegistry.tryGet(catId as string)?.config.provider;
                   const profileMode = callbackEnv[ANTHROPIC_PROFILE_MODE_KEY];
                   const strategy = getSessionStrategy(catId as string);
-                  const isAnthropicApiKey =
-                    provider === 'anthropic'
-                    && profileMode === ANTHROPIC_PROFILE_MODE_API_KEY;
+                  const isAnthropicApiKey = provider === 'anthropic' && profileMode === ANTHROPIC_PROFILE_MODE_API_KEY;
                   const skipAutoSealForApproxApiKey = isAnthropicApiKey && health.source === 'approx';
-                  const skipAutoSealForApiKeyCompress =
-                    isAnthropicApiKey && strategy.strategy === 'compress';
+                  const skipAutoSealForApiKeyCompress = isAnthropicApiKey && strategy.strategy === 'compress';
                   if (!skipAutoSealForApproxApiKey && !skipAutoSealForApiKeyCompress) {
                     const activeRecord = await deps.sessionChainStore.getActive(catId, threadId);
                     const action = shouldTakeAction(

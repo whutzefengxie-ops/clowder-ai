@@ -24,4 +24,3 @@ export function buildContinueMessage(catId: string, progress: TaskProgressState)
   lines.push('请从“未完成”项继续推进；如计划需要调整，也请直接更新 checklist。');
   return lines.join('\n');
 }
-

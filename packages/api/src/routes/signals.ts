@@ -1,5 +1,5 @@
-import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import { SignalArticleStatusSchema, type SignalTier } from '@cat-cafe/shared';
+import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { loadSignalSources, resolveSignalPaths, saveSignalSources } from '../domains/signals/config/sources-loader.js';
 import { SignalArticleQueryService } from '../domains/signals/services/article-query-service.js';
@@ -7,7 +7,10 @@ import { runSignalFetchScheduler } from '../domains/signals/services/fetch-sched
 import { resolveUserId } from '../utils/request-identity.js';
 
 const listInboxQuerySchema = z.object({
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
   limit: z.coerce.number().int().min(1).max(100).optional(),
   source: z.string().min(1).max(200).optional(),
   tier: z.enum(['1', '2', '3', '4']).optional(),
@@ -45,8 +48,6 @@ const updateArticleBodySchema = z
       value.deletedAt !== undefined,
     'At least one field is required',
   );
-
-
 
 const updateSourceBodySchema = z.object({
   enabled: z.boolean(),

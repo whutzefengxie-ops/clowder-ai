@@ -1,12 +1,12 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import {
-  findBrokenClaudeThinkingSessions as findBrokenClaudeThinkingSessionsDefault,
-  rescueClaudeThinkingSessions as rescueClaudeThinkingSessionsDefault,
   type BrokenClaudeThinkingSession,
   type ClaudeThinkingRescueRunResult,
   type ClaudeThinkingRescueScanResult,
   type ClaudeThinkingRescueTarget,
+  findBrokenClaudeThinkingSessions as findBrokenClaudeThinkingSessionsDefault,
+  rescueClaudeThinkingSessions as rescueClaudeThinkingSessionsDefault,
 } from '../domains/cats/services/session/ClaudeThinkingRescue.js';
 import { resolveUserId } from '../utils/request-identity.js';
 
@@ -27,9 +27,10 @@ function sortSessions(sessions: BrokenClaudeThinkingSession[]): BrokenClaudeThin
 }
 
 export const claudeRescueRoutes: FastifyPluginAsync<ClaudeRescueRoutesOptions> = async (app, opts) => {
-  const findBrokenClaudeThinkingSessions = opts.findBrokenClaudeThinkingSessions ?? findBrokenClaudeThinkingSessionsDefault;
-  const rescueClaudeThinkingSessions = opts.rescueClaudeThinkingSessions ?? (async ({ targets }) =>
-    rescueClaudeThinkingSessionsDefault({ targets }));
+  const findBrokenClaudeThinkingSessions =
+    opts.findBrokenClaudeThinkingSessions ?? findBrokenClaudeThinkingSessionsDefault;
+  const rescueClaudeThinkingSessions =
+    opts.rescueClaudeThinkingSessions ?? (async ({ targets }) => rescueClaudeThinkingSessionsDefault({ targets }));
 
   app.get('/api/claude-rescue/sessions', async (request, reply) => {
     const userId = resolveUserId(request);

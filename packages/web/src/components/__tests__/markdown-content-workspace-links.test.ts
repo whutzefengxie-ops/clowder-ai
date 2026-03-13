@@ -1,7 +1,7 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, it, expect } from 'vitest';
-import { isRelativeMdLink, resolveRelativePath, MarkdownContent } from '@/components/MarkdownContent';
+import { describe, expect, it } from 'vitest';
+import { isRelativeMdLink, MarkdownContent, resolveRelativePath } from '@/components/MarkdownContent';
 
 Object.assign(globalThis as Record<string, unknown>, { React });
 

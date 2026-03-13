@@ -7,10 +7,10 @@
  * DELETE /api/summaries/:id     → 删除 (204)
  */
 
+import type { CatId, CreateSummaryInput } from '@cat-cafe/shared';
+import { catIdSchema } from '@cat-cafe/shared';
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
-import { catIdSchema } from '@cat-cafe/shared';
-import type { CatId, CreateSummaryInput } from '@cat-cafe/shared';
 import type { ISummaryStore } from '../domains/cats/services/stores/ports/SummaryStore.js';
 import type { SocketManager } from '../infrastructure/websocket/index.js';
 
@@ -27,68 +27,63 @@ const createSchema = z.object({
   createdBy: z.union([catIdSchema(), z.literal('user')]),
 });
 
-export const summariesRoutes: FastifyPluginAsync<SummariesRoutesOptions> =
-  async (app, opts) => {
-    const { summaryStore, socketManager } = opts;
+export const summariesRoutes: FastifyPluginAsync<SummariesRoutesOptions> = async (app, opts) => {
+  const { summaryStore, socketManager } = opts;
 
-    // POST /api/summaries
-    app.post('/api/summaries', async (request, reply) => {
-      const result = createSchema.safeParse(request.body);
-      if (!result.success) {
-        reply.status(400);
-        return { error: 'Invalid request body', details: result.error.issues };
-      }
+  // POST /api/summaries
+  app.post('/api/summaries', async (request, reply) => {
+    const result = createSchema.safeParse(request.body);
+    if (!result.success) {
+      reply.status(400);
+      return { error: 'Invalid request body', details: result.error.issues };
+    }
 
-      const input: CreateSummaryInput = {
-        threadId: result.data.threadId,
-        topic: result.data.topic,
-        conclusions: result.data.conclusions,
-        openQuestions: result.data.openQuestions,
-        createdBy: result.data.createdBy as CatId | 'user',
-      };
-      const summary = await summaryStore.create(input);
+    const input: CreateSummaryInput = {
+      threadId: result.data.threadId,
+      topic: result.data.topic,
+      conclusions: result.data.conclusions,
+      openQuestions: result.data.openQuestions,
+      createdBy: result.data.createdBy as CatId | 'user',
+    };
+    const summary = await summaryStore.create(input);
 
-      socketManager.broadcastToRoom(
-        `thread:${summary.threadId}`,
-        'thread_summary',
-        summary,
-      );
+    socketManager.broadcastToRoom(`thread:${summary.threadId}`, 'thread_summary', summary);
 
-      reply.status(201);
-      return summary;
-    });
+    reply.status(201);
+    return summary;
+  });
 
-    // GET /api/summaries?threadId=xxx
-    app.get('/api/summaries', async (request, reply) => {
-      const { threadId } = request.query as { threadId?: string };
-      if (!threadId) {
-        reply.status(400);
-        return { error: 'Missing threadId query parameter' };
-      }
+  // GET /api/summaries?threadId=xxx
+  app.get('/api/summaries', async (request, reply) => {
+    const { threadId } = request.query as { threadId?: string };
+    if (!threadId) {
+      reply.status(400);
+      return { error: 'Missing threadId query parameter' };
+    }
 
-      const summaries = await summaryStore.listByThread(threadId);
-      return { summaries };
-    });
+    const summaries = await summaryStore.listByThread(threadId);
+    return { summaries };
+  });
 
-    // GET /api/summaries/:id
-    app.get('/api/summaries/:id', async (request, reply) => {
-      const { id } = request.params as { id: string };
-      const summary = await summaryStore.get(id);
-      if (!summary) {
-        reply.status(404);
-        return { error: 'Summary not found' };
-      }
-      return summary;
-    });
+  // GET /api/summaries/:id
+  app.get('/api/summaries/:id', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const summary = await summaryStore.get(id);
+    if (!summary) {
+      reply.status(404);
+      return { error: 'Summary not found' };
+    }
+    return summary;
+  });
 
-    // DELETE /api/summaries/:id
-    app.delete('/api/summaries/:id', async (request, reply) => {
-      const { id } = request.params as { id: string };
-      const deleted = await summaryStore.delete(id);
-      if (!deleted) {
-        reply.status(404);
-        return { error: 'Summary not found' };
-      }
-      reply.status(204);
-    });
-  };
+  // DELETE /api/summaries/:id
+  app.delete('/api/summaries/:id', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const deleted = await summaryStore.delete(id);
+    if (!deleted) {
+      reply.status(404);
+      return { error: 'Summary not found' };
+    }
+    reply.status(204);
+  });
+};

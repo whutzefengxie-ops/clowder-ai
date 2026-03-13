@@ -3,7 +3,7 @@
  * 审计日志持久化 — 所有授权事件必须有记录
  */
 
-import type { CatId, AuthorizationAuditEntry, RespondScope } from '@cat-cafe/shared';
+import type { AuthorizationAuditEntry, CatId, RespondScope } from '@cat-cafe/shared';
 import { generateSortableId } from './MessageStore.js';
 
 export interface CreateAuditInput {
@@ -21,7 +21,11 @@ export interface CreateAuditInput {
 
 export interface IAuthorizationAuditStore {
   append(input: CreateAuditInput): AuthorizationAuditEntry | Promise<AuthorizationAuditEntry>;
-  list(filter?: { catId?: CatId; threadId?: string; limit?: number }): AuthorizationAuditEntry[] | Promise<AuthorizationAuditEntry[]>;
+  list(filter?: {
+    catId?: CatId;
+    threadId?: string;
+    limit?: number;
+  }): AuthorizationAuditEntry[] | Promise<AuthorizationAuditEntry[]>;
 }
 
 const DEFAULT_MAX = 5000;

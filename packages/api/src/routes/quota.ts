@@ -234,7 +234,9 @@ export function listQuotaProbeDescriptors(env: NodeJS.ProcessEnv = process.env):
         },
       ],
       reason:
-        claudeStatus === 'error' ? (claudeCache.error ?? 'ccusage probe error') : 'Uses ccusage CLI output. No browser scraping.',
+        claudeStatus === 'error'
+          ? (claudeCache.error ?? 'ccusage probe error')
+          : 'Uses ccusage CLI output. No browser scraping.',
     },
     {
       id: 'official-browser',
@@ -541,9 +543,7 @@ export function parseClaudeOAuthUsageResponse(json: ClaudeOAuthUsageResponse): C
       usedPercent: Math.max(0, Math.min(100, pct)),
       percentKind: 'used',
       poolId: def.poolId,
-      ...((bucket as ClaudeOAuthQuotaBucket).reset_at
-        ? { resetsAt: (bucket as ClaudeOAuthQuotaBucket).reset_at }
-        : {}),
+      ...((bucket as ClaudeOAuthQuotaBucket).reset_at ? { resetsAt: (bucket as ClaudeOAuthQuotaBucket).reset_at } : {}),
     });
   }
   return items;
@@ -736,9 +736,7 @@ async function fetchProviderUsage(
   return { json, status: response.status };
 }
 
-export async function refreshOfficialQuotaViaOAuth(
-  options: RefreshOAuthOptions,
-): Promise<RefreshOAuthResult> {
+export async function refreshOfficialQuotaViaOAuth(options: RefreshOAuthOptions): Promise<RefreshOAuthResult> {
   const fetchFn = options.fetchLike ?? globalThis.fetch.bind(globalThis);
   const result: RefreshOAuthResult = {};
   const skipped: string[] = [];
@@ -757,7 +755,10 @@ export async function refreshOfficialQuotaViaOAuth(
           } catch (err) {
             if (err instanceof TokenExpiredError) {
               const freshToken = await refreshAccessToken(
-                ANTHROPIC_TOKEN_REFRESH_URL, ANTHROPIC_CLIENT_ID, creds.refreshToken, fetchFn,
+                ANTHROPIC_TOKEN_REFRESH_URL,
+                ANTHROPIC_CLIENT_ID,
+                creds.refreshToken,
+                fetchFn,
               );
               if (freshToken) {
                 token = freshToken;
@@ -808,7 +809,10 @@ export async function refreshOfficialQuotaViaOAuth(
           } catch (err) {
             if (err instanceof TokenExpiredError) {
               const freshToken = await refreshAccessToken(
-                OPENAI_TOKEN_REFRESH_URL, OPENAI_CLIENT_ID, creds.refreshToken, fetchFn,
+                OPENAI_TOKEN_REFRESH_URL,
+                OPENAI_CLIENT_ID,
+                creds.refreshToken,
+                fetchFn,
               );
               if (freshToken) {
                 token = freshToken;
@@ -919,7 +923,8 @@ export async function quotaRoutes(app: FastifyInstance): Promise<void> {
     const codexCredentials = loadCodexCredentials(process.env[CODEX_CREDENTIALS_PATH_ENV]);
 
     if (!claudeCredentials && !codexCredentials) {
-      const message = 'No OAuth credentials found. Claude: ~/.claude/.credentials.json, Codex: set CODEX_CREDENTIALS_PATH.';
+      const message =
+        'No OAuth credentials found. Claude: ~/.claude/.credentials.json, Codex: set CODEX_CREDENTIALS_PATH.';
       const checkedAt = new Date().toISOString();
       codexCache = { ...codexCache, error: message, lastChecked: checkedAt };
       claudeCache = { ...claudeCache, error: message, lastChecked: checkedAt };

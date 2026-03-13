@@ -13,21 +13,9 @@ const API_URL = process.env['CAT_CAFE_API_URL'] ?? 'http://localhost:3002';
 
 export const searchEvidenceInputSchema = {
   query: z.string().min(1).describe('Search query for project knowledge'),
-  limit: z
-    .number()
-    .int()
-    .min(1)
-    .max(20)
-    .optional()
-    .describe('Max results (default 5)'),
-  budget: z
-    .enum(['low', 'mid', 'high'])
-    .optional()
-    .describe('Search budget (default mid)'),
-  tags: z
-    .string()
-    .optional()
-    .describe('Comma-separated tags to filter (default: project:cat-cafe)'),
+  limit: z.number().int().min(1).max(20).optional().describe('Max results (default 5)'),
+  budget: z.enum(['low', 'mid', 'high']).optional().describe('Search budget (default mid)'),
+  tags: z.string().optional().describe('Comma-separated tags to filter (default: project:cat-cafe)'),
 };
 
 export async function handleSearchEvidence(input: {
@@ -89,10 +77,7 @@ export async function handleSearchEvidence(input: {
       lines.push(`[${r.confidence}] ${r.title}`);
       lines.push(`  anchor: ${r.anchor}`);
       lines.push(`  type: ${r.sourceType}`);
-      const snippet =
-        r.snippet.length > 200
-          ? r.snippet.slice(0, 200) + '...'
-          : r.snippet;
+      const snippet = r.snippet.length > 200 ? `${r.snippet.slice(0, 200)}...` : r.snippet;
       lines.push(`  > ${snippet.replace(/\n/g, ' ')}`);
       lines.push('');
     }

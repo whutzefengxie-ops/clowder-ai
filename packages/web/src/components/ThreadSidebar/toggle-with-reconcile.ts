@@ -31,11 +31,7 @@ export interface ToggleWithReconcileOptions {
 export function createToggleWithReconcile(opts: ToggleWithReconcileOptions) {
   const seqMap = opts.seqMap ?? new Map<string, number>();
 
-  async function reconcile(
-    threadId: string,
-    expectedSeq: number,
-    expectedSiblingSeq: number,
-  ): Promise<void> {
+  async function reconcile(threadId: string, expectedSeq: number, expectedSiblingSeq: number): Promise<void> {
     try {
       const res = await opts.fetch(`/api/threads/${threadId}`);
       if (!res.ok) return;

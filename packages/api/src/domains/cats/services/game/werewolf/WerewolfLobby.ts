@@ -4,9 +4,8 @@
  * Creates lobby state and handles role assignment + game start.
  */
 
-import type { GameRuntime, Seat, GameEvent } from '@cat-cafe/shared';
-import { createWerewolfDefinition } from './WerewolfDefinition.js';
-import { WEREWOLF_PRESETS } from './WerewolfDefinition.js';
+import type { GameEvent, GameRuntime, Seat } from '@cat-cafe/shared';
+import { createWerewolfDefinition, WEREWOLF_PRESETS } from './WerewolfDefinition.js';
 
 interface LobbyInput {
   threadId: string;

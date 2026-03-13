@@ -65,7 +65,7 @@ export function EvidenceCard({ result }: { result: EvidenceResult }) {
   const status = result.status ? STATUS_CONFIG[result.status] : null;
   const Icon = source.icon;
 
-  const snippet = result.snippet.length > 160 ? result.snippet.slice(0, 160) + '...' : result.snippet;
+  const snippet = result.snippet.length > 160 ? `${result.snippet.slice(0, 160)}...` : result.snippet;
 
   return (
     <div

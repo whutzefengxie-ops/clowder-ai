@@ -9,11 +9,11 @@
  * 5. Draft messages have isDraft flag for frontend streaming indicator
  */
 
-import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { beforeEach, describe, it } from 'node:test';
 import Fastify from 'fastify';
-import { MessageStore } from '../dist/domains/cats/services/stores/ports/MessageStore.js';
 import { DraftStore } from '../dist/domains/cats/services/stores/ports/DraftStore.js';
+import { MessageStore } from '../dist/domains/cats/services/stores/ports/MessageStore.js';
 import { messagesRoutes } from '../dist/routes/messages.js';
 
 // Minimal mock router that satisfies the type contract
@@ -265,9 +265,7 @@ describe('GET /api/messages — draft merge (#80)', () => {
     const body = JSON.parse(res.body);
 
     // The formal message should NOT be on the page (pushed off by filler)
-    const formalOnPage = body.messages.find(
-      (m) => m.content === 'Completed streaming response',
-    );
+    const formalOnPage = body.messages.find((m) => m.content === 'Completed streaming response');
     assert.equal(formalOnPage, undefined, 'Formal message should be off-page');
 
     // The stale draft should be deduped by the wider 200-message query
@@ -349,9 +347,7 @@ describe('GET /api/messages — draft merge (#80)', () => {
       invocationId: 'inv-tool-first',
       catId: 'opus',
       content: '',
-      toolEvents: [
-        { id: 'te-1', type: 'tool_use', label: 'Read file', timestamp: ts + 500 },
-      ],
+      toolEvents: [{ id: 'te-1', type: 'tool_use', label: 'Read file', timestamp: ts + 500 }],
       updatedAt: ts + 500,
     });
 

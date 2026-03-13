@@ -1,8 +1,7 @@
-import React from 'react';
-import { act } from 'react';
+import type { SignalArticle } from '@cat-cafe/shared';
+import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { SignalArticle } from '@cat-cafe/shared';
 import { SignalInboxView } from '@/components/signals/SignalInboxView';
 
 const mocks = vi.hoisted(() => ({

@@ -1,5 +1,5 @@
-import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
+import { describe, test } from 'node:test';
 
 describe('backlog-doc-import parser', () => {
   test('accepts markdown rows without trailing pipe', async () => {
@@ -65,40 +65,21 @@ describe('parseFeatureDocStatus', () => {
 
   test('returns done from YAML frontmatter status field', async () => {
     const { parseFeatureDocStatus } = await import('../dist/routes/backlog-doc-import.js');
-    const md = [
-      '---',
-      'feature_ids: [F068]',
-      'status: done',
-      '---',
-      '',
-      '# F068 — New Thread Dialog UX',
-    ].join('\n');
+    const md = ['---', 'feature_ids: [F068]', 'status: done', '---', '', '# F068 — New Thread Dialog UX'].join('\n');
     assert.strictEqual(parseFeatureDocStatus(md), 'done');
   });
 
   test('prefers body status over frontmatter when both exist', async () => {
     const { parseFeatureDocStatus } = await import('../dist/routes/backlog-doc-import.js');
-    const md = [
-      '---',
-      'status: spec',
-      '---',
-      '',
-      '> **Status**: in-progress',
-    ].join('\n');
+    const md = ['---', 'status: spec', '---', '', '> **Status**: in-progress'].join('\n');
     assert.strictEqual(parseFeatureDocStatus(md), 'in-progress');
   });
 
   test('returns frontmatter status when body has no Status line', async () => {
     const { parseFeatureDocStatus } = await import('../dist/routes/backlog-doc-import.js');
-    const md = [
-      '---',
-      'status: in-progress',
-      '---',
-      '',
-      '# F064 — A2A Exit Check',
-      '',
-      '> **Owner**: 布偶猫',
-    ].join('\n');
+    const md = ['---', 'status: in-progress', '---', '', '# F064 — A2A Exit Check', '', '> **Owner**: 布偶猫'].join(
+      '\n',
+    );
     assert.strictEqual(parseFeatureDocStatus(md), 'in-progress');
   });
 });
@@ -124,13 +105,7 @@ describe('parseFeatureDocDependencies', () => {
 
   test('extracts blockedBy', async () => {
     const { parseFeatureDocDependencies } = await import('../dist/routes/backlog-doc-import.js');
-    const md = [
-      '---',
-      'feature_ids: [F099]',
-      '---',
-      '',
-      '- **Blocked by**: F052',
-    ].join('\n');
+    const md = ['---', 'feature_ids: [F099]', '---', '', '- **Blocked by**: F052'].join('\n');
     const deps = parseFeatureDocDependencies(md);
     assert.deepStrictEqual(deps.blockedBy, ['f052']);
   });
@@ -160,13 +135,7 @@ describe('parseFeatureDocDependencies', () => {
 
   test('rejects non-F\\d{3} frontmatter related_features (e.g. F32-b)', async () => {
     const { parseFeatureDocDependencies } = await import('../dist/routes/backlog-doc-import.js');
-    const md = [
-      '---',
-      'related_features: [F032, F32-b, F049]',
-      '---',
-      '',
-      '# Test',
-    ].join('\n');
+    const md = ['---', 'related_features: [F032, F32-b, F049]', '---', '', '# Test'].join('\n');
     const deps = parseFeatureDocDependencies(md);
     // F32-b should be rejected, only F032 and F049 accepted
     assert.deepStrictEqual(deps.related?.sort(), ['f032', 'f049']);
@@ -174,14 +143,7 @@ describe('parseFeatureDocDependencies', () => {
 
   test('filters placeholder Related lines (无/TBD)', async () => {
     const { parseFeatureDocDependencies } = await import('../dist/routes/backlog-doc-import.js');
-    const md = [
-      '---',
-      'feature_ids: [F094]',
-      '---',
-      '',
-      '- **Related**: 无',
-      '- **Blocked by**: 待定',
-    ].join('\n');
+    const md = ['---', 'feature_ids: [F094]', '---', '', '- **Related**: 无', '- **Blocked by**: 待定'].join('\n');
     const deps = parseFeatureDocDependencies(md);
     assert.deepStrictEqual(deps, {});
   });
@@ -222,7 +184,13 @@ describe('featureStatusToBacklogStatus', () => {
 describe('buildBacklogInputFromFeature initialStatus', () => {
   test('in-progress feature gets initialStatus dispatched', async () => {
     const { buildBacklogInputFromFeature } = await import('../dist/routes/backlog-doc-import.js');
-    const row = { id: 'F064', name: 'A2A Exit Check', status: 'in-progress', owner: '布偶猫', link: 'features/F064.md' };
+    const row = {
+      id: 'F064',
+      name: 'A2A Exit Check',
+      status: 'in-progress',
+      owner: '布偶猫',
+      link: 'features/F064.md',
+    };
     const input = buildBacklogInputFromFeature(row, 'user1');
     assert.strictEqual(input.initialStatus, 'dispatched');
   });
@@ -298,7 +266,10 @@ describe('gitListFeatureDocs', () => {
     const entries = await gitListFeatureDocs();
     assert.ok(Array.isArray(entries), 'should return an array');
     assert.ok(entries.length > 0, 'should find feature docs');
-    assert.ok(entries.some((e) => e.startsWith('F0')), 'should contain F0xx entries');
+    assert.ok(
+      entries.some((e) => e.startsWith('F0')),
+      'should contain F0xx entries',
+    );
   });
 
   test('returns empty array on git failure', async () => {

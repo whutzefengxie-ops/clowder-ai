@@ -2,7 +2,7 @@
  * F075 — Work stats computation from git log
  * Pure functions: git log output → ranked work stats
  */
-import type { WorkStats, RankedCat } from '@cat-cafe/shared';
+import type { RankedCat, WorkStats } from '@cat-cafe/shared';
 
 export interface GitLogEntry {
   hash: string;
@@ -40,10 +40,7 @@ function classifyCommit(msg: string): 'bugfix' | 'review' | 'commit' {
   return 'commit';
 }
 
-function toRanked(
-  counter: Map<string, number>,
-  catNames: Record<string, string>,
-): RankedCat[] {
+function toRanked(counter: Map<string, number>, catNames: Record<string, string>): RankedCat[] {
   return [...counter.entries()]
     .sort((a, b) => b[1] - a[1])
     .map(([catId, count], i) => ({
@@ -58,18 +55,12 @@ function toRanked(
  * Resolve which cat authored a commit.
  * Priority: Co-Authored-By containing known cat emails → author email → fallback to email
  */
-function resolveAuthor(
-  entry: GitLogEntry,
-  authorMap: Record<string, string>,
-): string {
+function resolveAuthor(entry: GitLogEntry, authorMap: Record<string, string>): string {
   // Check Co-Authored-By for known cat identifiers
   const coAuthor = entry.coAuthors.toLowerCase();
-  if (coAuthor.includes('opus') || coAuthor.includes('anthropic'))
-    return authorMap['noreply@anthropic.com'] ?? 'opus';
-  if (coAuthor.includes('codex') || coAuthor.includes('openai'))
-    return authorMap['codex@openai.com'] ?? 'codex';
-  if (coAuthor.includes('gemini') || coAuthor.includes('google'))
-    return authorMap['gemini@google.com'] ?? 'gemini';
+  if (coAuthor.includes('opus') || coAuthor.includes('anthropic')) return authorMap['noreply@anthropic.com'] ?? 'opus';
+  if (coAuthor.includes('codex') || coAuthor.includes('openai')) return authorMap['codex@openai.com'] ?? 'codex';
+  if (coAuthor.includes('gemini') || coAuthor.includes('google')) return authorMap['gemini@google.com'] ?? 'gemini';
 
   // Fallback to author email map
   return authorMap[entry.author] ?? entry.author;

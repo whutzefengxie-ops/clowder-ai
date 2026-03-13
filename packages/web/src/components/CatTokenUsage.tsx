@@ -1,11 +1,10 @@
 'use client';
 
-import React from 'react';
-import type { TokenUsage, ContextHealthData } from '@/stores/chat-types';
-import { formatTokenCount, formatCost, formatDuration } from './status-helpers';
 import { useCountUp } from '@/hooks/useCountUp';
-import { TokenCacheBar } from './TokenCacheBar';
+import type { ContextHealthData, TokenUsage } from '@/stores/chat-types';
 import { ContextHealthBar } from './ContextHealthBar';
+import { formatCost, formatDuration, formatTokenCount } from './status-helpers';
+import { TokenCacheBar } from './TokenCacheBar';
 
 export interface CatTokenUsageProps {
   catId: string;
@@ -59,18 +58,14 @@ export function CatTokenUsage({ catId, usage, contextHealth }: CatTokenUsageProp
   const textColor = CAT_TEXT_COLORS[catId] ?? 'text-gray-700';
   const cachePct = cachePercent(usage);
   const hasExactContextSummary =
-    usage.contextUsedTokens != null &&
-    usage.contextWindowSize != null &&
-    usage.contextWindowSize > 0;
+    usage.contextUsedTokens != null && usage.contextWindowSize != null && usage.contextWindowSize > 0;
   const contextLeftPct = hasExactContextSummary
-    ? Math.max(0, Math.round((1 - (usage.contextUsedTokens! / usage.contextWindowSize!)) * 100))
+    ? Math.max(0, Math.round((1 - usage.contextUsedTokens! / usage.contextWindowSize!) * 100))
     : null;
   const contextSummary = hasExactContextSummary
-    ? `Context: ${contextLeftPct}% left (${usage.contextUsedTokens!.toLocaleString()} used / ${formatContextWindowShort(usage.contextWindowSize!)})`
+    ? `Context: ${contextLeftPct}% left (${usage.contextUsedTokens?.toLocaleString()} used / ${formatContextWindowShort(usage.contextWindowSize!)})`
     : null;
-  const contextResetDay = usage.contextResetsAtMs != null
-    ? formatMonthDay(usage.contextResetsAtMs)
-    : '';
+  const contextResetDay = usage.contextResetsAtMs != null ? formatMonthDay(usage.contextResetsAtMs) : '';
   const contextResetLabel = contextResetDay ? `(resets ${contextResetDay})` : null;
 
   return (
@@ -112,13 +107,9 @@ export function CatTokenUsage({ catId, usage, contextHealth }: CatTokenUsageProp
       {/* Cost + duration row */}
       <div className="flex items-center gap-2 text-[10px]">
         {usage.costUsd != null && (
-          <span className="text-amber-600 font-medium tabular-nums animate-cost-glow">
-            {formatCost(usage.costUsd)}
-          </span>
+          <span className="text-amber-600 font-medium tabular-nums animate-cost-glow">{formatCost(usage.costUsd)}</span>
         )}
-        {usage.numTurns != null && usage.numTurns > 1 && (
-          <span className="text-gray-400">{usage.numTurns} turns</span>
-        )}
+        {usage.numTurns != null && usage.numTurns > 1 && <span className="text-gray-400">{usage.numTurns} turns</span>}
         {usage.durationApiMs != null && (
           <span className="text-gray-400">API {formatDuration(usage.durationApiMs)}</span>
         )}

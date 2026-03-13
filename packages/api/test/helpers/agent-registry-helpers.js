@@ -24,9 +24,7 @@ export async function ensureCatRegistryPopulated() {
  * Drop-in replacement for the old AgentRouter constructor pattern.
  */
 export async function createTestAgentRegistry(services) {
-  const { AgentRegistry } = await import(
-    '../../dist/domains/cats/services/agents/registry/AgentRegistry.js'
-  );
+  const { AgentRegistry } = await import('../../dist/domains/cats/services/agents/registry/AgentRegistry.js');
   const registry = new AgentRegistry();
   if (services.claudeService) registry.register('opus', services.claudeService);
   if (services.codexService) registry.register('codex', services.codexService);

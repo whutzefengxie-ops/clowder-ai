@@ -8,6 +8,5 @@ export const InvocationKeys = {
   detail: (id: string) => `invoc:${id}`,
 
   /** Idempotency key: idemp:{threadId}:{userId}:{key} */
-  idempotency: (threadId: string, userId: string, key: string) =>
-    `idemp:${threadId}:${userId}:${key}`,
+  idempotency: (threadId: string, userId: string, key: string) => `idemp:${threadId}:${userId}:${key}`,
 } as const;

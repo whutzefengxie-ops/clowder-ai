@@ -19,7 +19,8 @@ interface A2ACollapsibleProps {
  */
 export function A2ACollapsible({ group, renderMessage, getCatColor }: A2ACollapsibleProps) {
   // In export mode (?export=true), default to expanded so screenshots show full A2A conversations
-  const isExport = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('export') === 'true';
+  const isExport =
+    typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('export') === 'true';
   const [expanded, setExpanded] = useState(isExport);
   const hasMounted = useRef(false);
 
@@ -33,7 +34,7 @@ export function A2ACollapsible({ group, renderMessage, getCatColor }: A2ACollaps
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new Event('catcafe:chat-layout-changed'));
     }
-  }, [expanded]);
+  }, []);
 
   const catIds = [...new Set(group.messages.filter((m) => m.catId).map((m) => m.catId!))];
   const catLabel = catIds.length > 0 ? catIds.join(' ↔ ') : 'agents';
@@ -67,9 +68,7 @@ export function A2ACollapsible({ group, renderMessage, getCatColor }: A2ACollaps
           style={{ borderColor }}
         >
           {group.messages.map((msg) => (
-            <div key={msg.id}>
-              {renderMessage(msg)}
-            </div>
+            <div key={msg.id}>{renderMessage(msg)}</div>
           ))}
         </div>
       )}

@@ -1,5 +1,5 @@
-import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { test } from 'node:test';
 
 const { routeSerial } = await import('../dist/domains/cats/services/agents/routing/route-serial.js');
 
@@ -87,41 +87,39 @@ test('routeSerial keeps newest cursor boundary when same cat re-enters in one ch
   deps.messageStore.getByThreadAfter = async () => {
     afterCursorCalls += 1;
     if (afterCursorCalls === 1) {
-      return [{
-        id: newUserMsgId,
+      return [
+        {
+          id: newUserMsgId,
+          threadId: 'thread-1',
+          userId: 'user-1',
+          catId: null,
+          content: '新用户消息',
+          mentions: [],
+          timestamp: Date.now(),
+        },
+      ];
+    }
+    return [
+      {
+        id: streamOnlyMsgId,
         threadId: 'thread-1',
         userId: 'user-1',
-        catId: null,
-        content: '新用户消息',
+        catId: 'codex',
+        content: 'codex stream internal',
         mentions: [],
+        origin: 'stream',
         timestamp: Date.now(),
-      }];
-    }
-    return [{
-      id: streamOnlyMsgId,
-      threadId: 'thread-1',
-      userId: 'user-1',
-      catId: 'codex',
-      content: 'codex stream internal',
-      mentions: [],
-      origin: 'stream',
-      timestamp: Date.now(),
-    }];
+      },
+    ];
   };
 
   const cursorBoundaries = new Map();
-  for await (const _ of routeSerial(
-    deps,
-    ['opus'],
-    '当前用户消息',
-    'user-1',
-    'thread-1',
-    {
-      currentUserMessageId: newUserMsgId,
-      thinkingMode: 'play',
-      cursorBoundaries,
-    },
-  )) {}
+  for await (const _ of routeSerial(deps, ['opus'], '当前用户消息', 'user-1', 'thread-1', {
+    currentUserMessageId: newUserMsgId,
+    thinkingMode: 'play',
+    cursorBoundaries,
+  })) {
+  }
 
   assert.equal(
     cursorBoundaries.get('opus'),
@@ -129,4 +127,3 @@ test('routeSerial keeps newest cursor boundary when same cat re-enters in one ch
     'opus boundary should keep newest unseen user message instead of regressing',
   );
 });
-

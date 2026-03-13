@@ -13,12 +13,12 @@ import { CatAvatar } from './CatAvatar';
 import { ConnectorBubble } from './ConnectorBubble';
 import { CliOutputBlock } from './cli-output/CliOutputBlock';
 import { toCliEvents } from './cli-output/toCliEvents';
+import { DirectionPill } from './DirectionPill';
 import { EvidencePanel } from './EvidencePanel';
 import { Lightbox } from './Lightbox';
 import { MarkdownContent } from './MarkdownContent';
 import { MetadataBadge } from './MetadataBadge';
 import { RichBlocks } from './rich/RichBlocks';
-import { DirectionPill } from './DirectionPill';
 import { SummaryCard } from './SummaryCard';
 import { ThinkingContent } from './ThinkingContent';
 
@@ -162,9 +162,7 @@ export function ChatMessage({ message, getCatById }: ChatMessageProps) {
   const isRevealed = isWhisper && !!message.revealedAt;
 
   // F098: Direction info for pill badge
-  const direction = catData
-    ? parseDirection(message, () => ({ toCat: getMentionToCat(), re: getMentionRe() }))
-    : null;
+  const direction = catData ? parseDirection(message, () => ({ toCat: getMentionToCat(), re: getMentionRe() })) : null;
 
   // F097: CLI Output Block — merge tool events + stream content into unified CliEvent[]
   const isStreamOrigin = message.origin === 'stream';
@@ -287,17 +285,17 @@ export function ChatMessage({ message, getCatById }: ChatMessageProps) {
                 >
                   {isRevealed
                     ? '已揭秘'
-                    : `悄悄话 → ${message.whisperTo
-                        ?.map((id) => {
-                          const cat = getCatById(id);
-                          return cat ? cat.displayName : id;
-                        })
-                        .join(', ') ?? ''}`}
+                    : `悄悄话 → ${
+                        message.whisperTo
+                          ?.map((id) => {
+                            const cat = getCatById(id);
+                            return cat ? cat.displayName : id;
+                          })
+                          .join(', ') ?? ''
+                      }`}
                 </span>
               )}
-              {!isWhisper && direction && (
-                <DirectionPill direction={direction} getCatById={getCatById} />
-              )}
+              {!isWhisper && direction && <DirectionPill direction={direction} getCatById={getCatById} />}
               {hasTextContent && !message.isStreaming && (
                 <TtsPlayButton
                   messageId={message.id}
@@ -311,7 +309,7 @@ export function ChatMessage({ message, getCatById }: ChatMessageProps) {
             </div>
             {message.extra?.crossPost &&
               (() => {
-                const sourceId = message.extra.crossPost!.sourceThreadId;
+                const sourceId = message.extra.crossPost?.sourceThreadId;
                 const sourceName = threads.find((t) => t.id === sourceId)?.title ?? '未命名对话';
                 const shortId = sourceId.replace(/^thread_/, '').slice(0, 8);
                 const senderLabel = catStyle?.label;
@@ -355,8 +353,7 @@ export function ChatMessage({ message, getCatById }: ChatMessageProps) {
           {/* F097: Content first, then Thinking (reasoning before execution), then CLI output */}
           {/* 1. Content — callback messages or non-stream text shown as normal content.
               If CLI block exists, text is already inside it — never render outside. */}
-          {hasCliBlock ? null
-          : !isStreamOrigin && hasBlocks ? (
+          {hasCliBlock ? null : !isStreamOrigin && hasBlocks ? (
             <ContentBlocks blocks={message.contentBlocks!} />
           ) : !isStreamOrigin && hasTextContent ? (
             <MarkdownContent content={message.content} className={catStyle?.font} />

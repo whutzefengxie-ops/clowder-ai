@@ -72,7 +72,9 @@ describe('CliOutputBlock', () => {
     expect(container.textContent).toContain('1 tool');
     // Expand tools section to see tool labels
     const toolsToggle = container.querySelector('[data-testid="tools-section-toggle"]') as HTMLElement | null;
-    act(() => { toolsToggle?.click(); });
+    act(() => {
+      toolsToggle?.click();
+    });
     expect(container.textContent).toContain('Read index.ts');
   });
 
@@ -200,7 +202,9 @@ describe('CliOutputBlock', () => {
     });
     // Tools section collapsed by default when done — expand it first
     const toolsToggle = container.querySelector('[data-testid="tools-section-toggle"]') as HTMLElement | null;
-    act(() => { toolsToggle?.click(); });
+    act(() => {
+      toolsToggle?.click();
+    });
     // Tool label visible, but detail hidden by default (collapsed row)
     expect(container.textContent).toContain('Read index.ts');
     expect(container.textContent).not.toContain('200 lines read');
@@ -287,7 +291,9 @@ describe('CliOutputBlock', () => {
     });
     // Expand tools section first (collapsed by default when done)
     const toolsToggle = container.querySelector('[data-testid="tools-section-toggle"]') as HTMLElement | null;
-    act(() => { toolsToggle?.click(); });
+    act(() => {
+      toolsToggle?.click();
+    });
     // Expand both tool rows to see details
     const row1 = container.querySelector('[data-testid="tool-row-u1"]') as HTMLElement | null;
     const row2 = container.querySelector('[data-testid="tool-row-u2"]') as HTMLElement | null;

@@ -5,11 +5,11 @@
  * Uses globalThis.fetch mocking since tools use fetch() internally.
  */
 
-import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, readdirSync, rmSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, beforeEach, describe, test } from 'node:test';
 
 describe('MCP Callback Tools', () => {
   let originalEnv;
@@ -19,13 +19,13 @@ describe('MCP Callback Tools', () => {
   beforeEach(() => {
     // Save and set env vars
     originalEnv = { ...process.env };
-    process.env['CAT_CAFE_API_URL'] = 'http://127.0.0.1:3002';
-    process.env['CAT_CAFE_INVOCATION_ID'] = 'test-invocation';
-    process.env['CAT_CAFE_CALLBACK_TOKEN'] = 'test-token';
-    process.env['CAT_CAFE_CALLBACK_RETRY_DELAYS_MS'] = '0,0,0';
+    process.env.CAT_CAFE_API_URL = 'http://127.0.0.1:3002';
+    process.env.CAT_CAFE_INVOCATION_ID = 'test-invocation';
+    process.env.CAT_CAFE_CALLBACK_TOKEN = 'test-token';
+    process.env.CAT_CAFE_CALLBACK_RETRY_DELAYS_MS = '0,0,0';
     outboxDir = join(tmpdir(), `cat-cafe-mcp-outbox-test-${Date.now()}-${Math.random()}`);
     mkdirSync(outboxDir, { recursive: true });
-    process.env['CAT_CAFE_CALLBACK_OUTBOX_DIR'] = outboxDir;
+    process.env.CAT_CAFE_CALLBACK_OUTBOX_DIR = outboxDir;
 
     // Save original fetch
     originalFetch = globalThis.fetch;
@@ -50,9 +50,7 @@ describe('MCP Callback Tools', () => {
   });
 
   test('handlePostMessage calls API with correct body', async () => {
-    const { handlePostMessage } = await import(
-      '../dist/tools/callback-tools.js'
-    );
+    const { handlePostMessage } = await import('../dist/tools/callback-tools.js');
 
     let capturedUrl, capturedOptions;
     globalThis.fetch = async (url, options) => {
@@ -75,9 +73,7 @@ describe('MCP Callback Tools', () => {
   });
 
   test('handlePostMessage forwards optional threadId for cross-thread posting', async () => {
-    const { handlePostMessage } = await import(
-      '../dist/tools/callback-tools.js'
-    );
+    const { handlePostMessage } = await import('../dist/tools/callback-tools.js');
 
     let capturedOptions;
     globalThis.fetch = async (_url, options) => {
@@ -99,13 +95,11 @@ describe('MCP Callback Tools', () => {
   });
 
   test('handlePostMessage returns error when env vars missing', async () => {
-    const { handlePostMessage } = await import(
-      '../dist/tools/callback-tools.js'
-    );
+    const { handlePostMessage } = await import('../dist/tools/callback-tools.js');
 
-    delete process.env['CAT_CAFE_API_URL'];
-    delete process.env['CAT_CAFE_INVOCATION_ID'];
-    delete process.env['CAT_CAFE_CALLBACK_TOKEN'];
+    delete process.env.CAT_CAFE_API_URL;
+    delete process.env.CAT_CAFE_INVOCATION_ID;
+    delete process.env.CAT_CAFE_CALLBACK_TOKEN;
 
     const result = await handlePostMessage({ content: 'Hello' });
 
@@ -114,9 +108,7 @@ describe('MCP Callback Tools', () => {
   });
 
   test('handleGetPendingMentions calls API with auth in query', async () => {
-    const { handleGetPendingMentions } = await import(
-      '../dist/tools/callback-tools.js'
-    );
+    const { handleGetPendingMentions } = await import('../dist/tools/callback-tools.js');
 
     let capturedUrl;
     globalThis.fetch = async (url) => {
@@ -136,9 +128,7 @@ describe('MCP Callback Tools', () => {
   });
 
   test('handleGetThreadContext calls API with limit', async () => {
-    const { handleGetThreadContext } = await import(
-      '../dist/tools/callback-tools.js'
-    );
+    const { handleGetThreadContext } = await import('../dist/tools/callback-tools.js');
 
     let capturedUrl;
     globalThis.fetch = async (url) => {
@@ -157,9 +147,7 @@ describe('MCP Callback Tools', () => {
   });
 
   test('handleGetThreadContext works without limit', async () => {
-    const { handleGetThreadContext } = await import(
-      '../dist/tools/callback-tools.js'
-    );
+    const { handleGetThreadContext } = await import('../dist/tools/callback-tools.js');
 
     let capturedUrl;
     globalThis.fetch = async (url) => {
@@ -177,9 +165,7 @@ describe('MCP Callback Tools', () => {
   });
 
   test('handleGetThreadContext forwards catId/keyword filters', async () => {
-    const { handleGetThreadContext } = await import(
-      '../dist/tools/callback-tools.js'
-    );
+    const { handleGetThreadContext } = await import('../dist/tools/callback-tools.js');
 
     let capturedUrl;
     globalThis.fetch = async (url) => {
@@ -206,9 +192,7 @@ describe('MCP Callback Tools', () => {
   });
 
   test('handleListThreads forwards limit/activeSince filters', async () => {
-    const { handleListThreads } = await import(
-      '../dist/tools/callback-tools.js'
-    );
+    const { handleListThreads } = await import('../dist/tools/callback-tools.js');
 
     let capturedUrl;
     globalThis.fetch = async (url) => {
@@ -233,9 +217,7 @@ describe('MCP Callback Tools', () => {
   });
 
   test('handleCrossPostMessage calls post-message with threadId', async () => {
-    const { handleCrossPostMessage } = await import(
-      '../dist/tools/callback-tools.js'
-    );
+    const { handleCrossPostMessage } = await import('../dist/tools/callback-tools.js');
 
     let capturedUrl;
     let capturedOptions;
@@ -261,9 +243,7 @@ describe('MCP Callback Tools', () => {
   });
 
   test('handleListTasks forwards threadId/catId/status filters', async () => {
-    const { handleListTasks } = await import(
-      '../dist/tools/callback-tools.js'
-    );
+    const { handleListTasks } = await import('../dist/tools/callback-tools.js');
 
     let capturedUrl;
     globalThis.fetch = async (url) => {
@@ -288,9 +268,7 @@ describe('MCP Callback Tools', () => {
   });
 
   test('handleFeatIndex forwards limit/featId/query filters', async () => {
-    const { handleFeatIndex } = await import(
-      '../dist/tools/callback-tools.js'
-    );
+    const { handleFeatIndex } = await import('../dist/tools/callback-tools.js');
 
     let capturedUrl;
     globalThis.fetch = async (url) => {
@@ -315,9 +293,7 @@ describe('MCP Callback Tools', () => {
   });
 
   test('handles API error response', async () => {
-    const { handlePostMessage } = await import(
-      '../dist/tools/callback-tools.js'
-    );
+    const { handlePostMessage } = await import('../dist/tools/callback-tools.js');
 
     globalThis.fetch = async () => ({
       ok: false,
@@ -332,9 +308,7 @@ describe('MCP Callback Tools', () => {
   });
 
   test('adds generic @mention fallback hint on non-credential post failure', async () => {
-    const { handlePostMessage } = await import(
-      '../dist/tools/callback-tools.js'
-    );
+    const { handlePostMessage } = await import('../dist/tools/callback-tools.js');
 
     globalThis.fetch = async () => ({
       ok: false,
@@ -352,9 +326,7 @@ describe('MCP Callback Tools', () => {
   });
 
   test('adds credential hint on callback credential failure with @mention', async () => {
-    const { handlePostMessage } = await import(
-      '../dist/tools/callback-tools.js'
-    );
+    const { handlePostMessage } = await import('../dist/tools/callback-tools.js');
 
     globalThis.fetch = async () => ({
       ok: false,
@@ -371,9 +343,7 @@ describe('MCP Callback Tools', () => {
   });
 
   test('handleSearchEvidence calls callback endpoint with encoded query params', async () => {
-    const { handleCallbackSearchEvidence } = await import(
-      '../dist/tools/callback-memory-tools.js'
-    );
+    const { handleCallbackSearchEvidence } = await import('../dist/tools/callback-memory-tools.js');
 
     let capturedUrl;
     globalThis.fetch = async (url) => {
@@ -400,9 +370,7 @@ describe('MCP Callback Tools', () => {
   });
 
   test('handleReflectProject posts query to callback reflect endpoint', async () => {
-    const { handleCallbackReflect } = await import(
-      '../dist/tools/callback-memory-tools.js'
-    );
+    const { handleCallbackReflect } = await import('../dist/tools/callback-memory-tools.js');
 
     let capturedUrl, capturedOptions;
     globalThis.fetch = async (url, options) => {
@@ -425,9 +393,7 @@ describe('MCP Callback Tools', () => {
   });
 
   test('handleRetainMemory posts content/tags/metadata to callback retain endpoint', async () => {
-    const { handleCallbackRetainMemory } = await import(
-      '../dist/tools/callback-memory-tools.js'
-    );
+    const { handleCallbackRetainMemory } = await import('../dist/tools/callback-memory-tools.js');
 
     let capturedUrl, capturedOptions;
     globalThis.fetch = async (url, options) => {
@@ -457,9 +423,7 @@ describe('MCP Callback Tools', () => {
   });
 
   test('retries transient post failure and keeps same clientMessageId', async () => {
-    const { handlePostMessage } = await import(
-      '../dist/tools/callback-tools.js'
-    );
+    const { handlePostMessage } = await import('../dist/tools/callback-tools.js');
 
     let attempts = 0;
     const observedIds = [];
@@ -490,9 +454,7 @@ describe('MCP Callback Tools', () => {
   });
 
   test('queues post-message to local outbox when transient failures exhaust retries', async () => {
-    const { handlePostMessage } = await import(
-      '../dist/tools/callback-tools.js'
-    );
+    const { handlePostMessage } = await import('../dist/tools/callback-tools.js');
 
     globalThis.fetch = async () => ({
       ok: false,
@@ -517,9 +479,7 @@ describe('MCP Callback Tools', () => {
   });
 
   test('flushes queued outbox payload before posting new message after recovery', async () => {
-    const { handlePostMessage } = await import(
-      '../dist/tools/callback-tools.js'
-    );
+    const { handlePostMessage } = await import('../dist/tools/callback-tools.js');
 
     // Step 1: enqueue by forcing transient failures.
     globalThis.fetch = async () => ({
@@ -556,10 +516,8 @@ describe('MCP Callback Tools', () => {
   });
 
   test('flushes at most configured outbox batch size per post', async () => {
-    process.env['CAT_CAFE_CALLBACK_OUTBOX_MAX_FLUSH_BATCH'] = '2';
-    const { handlePostMessage } = await import(
-      '../dist/tools/callback-tools.js'
-    );
+    process.env.CAT_CAFE_CALLBACK_OUTBOX_MAX_FLUSH_BATCH = '2';
+    const { handlePostMessage } = await import('../dist/tools/callback-tools.js');
 
     const seed = (queuedAt, id, content) => {
       const payload = {
@@ -607,9 +565,7 @@ describe('MCP Callback Tools', () => {
   });
 
   test('handleRequestPermission posts action+reason to request-permission endpoint', async () => {
-    const { handleRequestPermission } = await import(
-      '../dist/tools/callback-tools.js'
-    );
+    const { handleRequestPermission } = await import('../dist/tools/callback-tools.js');
 
     let capturedUrl, capturedOptions;
     globalThis.fetch = async (url, options) => {
@@ -639,9 +595,7 @@ describe('MCP Callback Tools', () => {
   });
 
   test('handleRequestPermission omits context when not provided', async () => {
-    const { handleRequestPermission } = await import(
-      '../dist/tools/callback-tools.js'
-    );
+    const { handleRequestPermission } = await import('../dist/tools/callback-tools.js');
 
     let capturedOptions;
     globalThis.fetch = async (_url, options) => {
@@ -665,9 +619,7 @@ describe('MCP Callback Tools', () => {
   });
 
   test('handleCheckPermissionStatus queries permission-status endpoint', async () => {
-    const { handleCheckPermissionStatus } = await import(
-      '../dist/tools/callback-tools.js'
-    );
+    const { handleCheckPermissionStatus } = await import('../dist/tools/callback-tools.js');
 
     let capturedUrl;
     globalThis.fetch = async (url) => {
@@ -694,13 +646,11 @@ describe('MCP Callback Tools', () => {
   });
 
   test('handleRequestPermission returns error when env vars missing', async () => {
-    const { handleRequestPermission } = await import(
-      '../dist/tools/callback-tools.js'
-    );
+    const { handleRequestPermission } = await import('../dist/tools/callback-tools.js');
 
-    delete process.env['CAT_CAFE_API_URL'];
-    delete process.env['CAT_CAFE_INVOCATION_ID'];
-    delete process.env['CAT_CAFE_CALLBACK_TOKEN'];
+    delete process.env.CAT_CAFE_API_URL;
+    delete process.env.CAT_CAFE_INVOCATION_ID;
+    delete process.env.CAT_CAFE_CALLBACK_TOKEN;
 
     const result = await handleRequestPermission({
       action: 'git_commit',
@@ -712,10 +662,8 @@ describe('MCP Callback Tools', () => {
   });
 
   test('drops retryable outbox entry when attempts reached max threshold', async () => {
-    process.env['CAT_CAFE_CALLBACK_OUTBOX_MAX_ATTEMPTS'] = '2';
-    const { handlePostMessage } = await import(
-      '../dist/tools/callback-tools.js'
-    );
+    process.env.CAT_CAFE_CALLBACK_OUTBOX_MAX_ATTEMPTS = '2';
+    const { handlePostMessage } = await import('../dist/tools/callback-tools.js');
 
     const stale = {
       id: 'stale-001',
@@ -760,9 +708,7 @@ describe('MCP Callback Tools', () => {
   // ---- #84: create_rich_block Route A → Route B fallback ----
 
   test('handleCreateRichBlock succeeds via Route A when callback works', async () => {
-    const { handleCreateRichBlock } = await import(
-      '../dist/tools/callback-tools.js'
-    );
+    const { handleCreateRichBlock } = await import('../dist/tools/callback-tools.js');
 
     let capturedUrl;
     globalThis.fetch = async (url, _options) => {
@@ -781,9 +727,7 @@ describe('MCP Callback Tools', () => {
   });
 
   test('handleCreateRichBlock falls back to Route B (post_message + cc_rich) when Route A fails', async () => {
-    const { handleCreateRichBlock } = await import(
-      '../dist/tools/callback-tools.js'
-    );
+    const { handleCreateRichBlock } = await import('../dist/tools/callback-tools.js');
 
     const capturedUrls = [];
     globalThis.fetch = async (url, _options) => {
@@ -803,14 +747,18 @@ describe('MCP Callback Tools', () => {
     const text = result.content[0].text;
     assert.ok(text.includes('B_fallback'), 'should indicate Route B fallback was used');
     // Verify both endpoints were tried
-    assert.ok(capturedUrls.some((u) => u.includes('create-rich-block')), 'Route A attempted');
-    assert.ok(capturedUrls.some((u) => u.includes('post-message')), 'Route B fallback attempted');
+    assert.ok(
+      capturedUrls.some((u) => u.includes('create-rich-block')),
+      'Route A attempted',
+    );
+    assert.ok(
+      capturedUrls.some((u) => u.includes('post-message')),
+      'Route B fallback attempted',
+    );
   });
 
   test('handleCreateRichBlock returns error with cc_rich hint when both routes fail', async () => {
-    const { handleCreateRichBlock } = await import(
-      '../dist/tools/callback-tools.js'
-    );
+    const { handleCreateRichBlock } = await import('../dist/tools/callback-tools.js');
 
     globalThis.fetch = async () => ({
       ok: false,
@@ -828,9 +776,7 @@ describe('MCP Callback Tools', () => {
   });
 
   test('handleCreateRichBlock does NOT fallback on validation error (400)', async () => {
-    const { handleCreateRichBlock } = await import(
-      '../dist/tools/callback-tools.js'
-    );
+    const { handleCreateRichBlock } = await import('../dist/tools/callback-tools.js');
 
     const capturedUrls = [];
     globalThis.fetch = async (url, _options) => {
@@ -845,13 +791,14 @@ describe('MCP Callback Tools', () => {
     assert.equal(result.isError, true);
     assert.ok(result.content[0].text.includes('400'), 'should surface the 400 error');
     // Should NOT have attempted post-message (Route B)
-    assert.ok(!capturedUrls.some((u) => u.includes('post-message')), 'should NOT fallback to Route B for validation errors');
+    assert.ok(
+      !capturedUrls.some((u) => u.includes('post-message')),
+      'should NOT fallback to Route B for validation errors',
+    );
   });
 
   test('handleCreateRichBlock rejects invalid JSON', async () => {
-    const { handleCreateRichBlock } = await import(
-      '../dist/tools/callback-tools.js'
-    );
+    const { handleCreateRichBlock } = await import('../dist/tools/callback-tools.js');
 
     const result = await handleCreateRichBlock({ block: 'not json {' });
     assert.equal(result.isError, true);
@@ -859,9 +806,7 @@ describe('MCP Callback Tools', () => {
   });
 
   test('handleCreateRichBlock rejects block without id or kind', async () => {
-    const { handleCreateRichBlock } = await import(
-      '../dist/tools/callback-tools.js'
-    );
+    const { handleCreateRichBlock } = await import('../dist/tools/callback-tools.js');
 
     const result = await handleCreateRichBlock({ block: '{"v": 1}' });
     assert.equal(result.isError, true);
@@ -869,12 +814,10 @@ describe('MCP Callback Tools', () => {
   });
 
   test('#85 M2c: handleCreateRichBlock normalizes type→kind before validation', async () => {
-    const { handleCreateRichBlock } = await import(
-      '../dist/tools/callback-tools.js'
-    );
+    const { handleCreateRichBlock } = await import('../dist/tools/callback-tools.js');
 
     let capturedBody;
-    globalThis.fetch = async (url, options) => {
+    globalThis.fetch = async (_url, options) => {
       capturedBody = JSON.parse(options.body);
       return { ok: true, json: async () => ({ status: 'ok' }) };
     };
@@ -893,9 +836,7 @@ describe('MCP Callback Tools', () => {
   // ---- F086: multi_mention ----
 
   test('handleMultiMention calls /api/callbacks/multi-mention with correct payload', async () => {
-    const { handleMultiMention } = await import(
-      '../dist/tools/callback-tools.js'
-    );
+    const { handleMultiMention } = await import('../dist/tools/callback-tools.js');
 
     let capturedUrl, capturedOptions;
     globalThis.fetch = async (url, options) => {
@@ -930,9 +871,7 @@ describe('MCP Callback Tools', () => {
   });
 
   test('handleMultiMention rejects missing searchEvidenceRefs and overrideReason', async () => {
-    const { handleMultiMention } = await import(
-      '../dist/tools/callback-tools.js'
-    );
+    const { handleMultiMention } = await import('../dist/tools/callback-tools.js');
 
     const result = await handleMultiMention({
       targets: ['codex'],
@@ -946,9 +885,7 @@ describe('MCP Callback Tools', () => {
   });
 
   test('handleMultiMention accepts overrideReason instead of searchEvidenceRefs', async () => {
-    const { handleMultiMention } = await import(
-      '../dist/tools/callback-tools.js'
-    );
+    const { handleMultiMention } = await import('../dist/tools/callback-tools.js');
 
     let capturedOptions;
     globalThis.fetch = async (_url, options) => {
@@ -973,9 +910,7 @@ describe('MCP Callback Tools', () => {
   });
 
   test('handleMultiMention omits optional fields when undefined', async () => {
-    const { handleMultiMention } = await import(
-      '../dist/tools/callback-tools.js'
-    );
+    const { handleMultiMention } = await import('../dist/tools/callback-tools.js');
 
     let capturedOptions;
     globalThis.fetch = async (_url, options) => {

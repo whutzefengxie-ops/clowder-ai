@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeAll, beforeEach } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { scrollToMessage } from '@/utils/scrollToMessage';
 
 // jsdom doesn't provide CSS.escape — polyfill for tests
@@ -7,8 +7,7 @@ beforeAll(() => {
     (globalThis as Record<string, unknown>).CSS = {};
   }
   if (!CSS.escape) {
-    CSS.escape = (value: string) =>
-      value.replace(/([^\w-])/g, '\\$1');
+    CSS.escape = (value: string) => value.replace(/([^\w-])/g, '\\$1');
   }
 });
 

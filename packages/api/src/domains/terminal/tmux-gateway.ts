@@ -26,9 +26,9 @@ function resolveTmuxBin(): string {
   if (envPath && isExecutable(envPath)) return envPath;
 
   const candidates = [
-    '/opt/homebrew/bin/tmux',   // macOS ARM Homebrew
-    '/usr/local/bin/tmux',      // macOS Intel Homebrew / Linux manual
-    '/usr/bin/tmux',            // system package
+    '/opt/homebrew/bin/tmux', // macOS ARM Homebrew
+    '/usr/local/bin/tmux', // macOS Intel Homebrew / Linux manual
+    '/usr/bin/tmux', // system package
   ];
   for (const p of candidates) {
     if (isExecutable(p)) return p;
@@ -38,9 +38,7 @@ function resolveTmuxBin(): string {
   try {
     return execFileSync('/usr/bin/which', ['tmux'], { encoding: 'utf8' }).trim();
   } catch {
-    throw new Error(
-      'tmux not found. Install tmux or set CAT_CAFE_TMUX_PATH to its absolute path.',
-    );
+    throw new Error('tmux not found. Install tmux or set CAT_CAFE_TMUX_PATH to its absolute path.');
   }
 }
 
@@ -80,14 +78,26 @@ export class TmuxGateway {
   /** Create a new pane (creates session if needed) */
   async createPane(worktreeId: string, opts: CreatePaneOpts = {}): Promise<string> {
     const sock = this.socketName(worktreeId);
-    const shell = opts.shell ?? process.env["SHELL"] ?? "/bin/zsh";
-    const cwd = opts.cwd ?? process.env["HOME"] ?? "/tmp";
+    const shell = opts.shell ?? process.env.SHELL ?? '/bin/zsh';
+    const cwd = opts.cwd ?? process.env.HOME ?? '/tmp';
     const cols = opts.cols ?? 80;
     const rows = opts.rows ?? 24;
 
     if (!this.activeServers.has(worktreeId)) {
       // Create new session (this starts the tmux server)
-      await exec(this.tmuxBin, ['-L', sock, 'new-session', '-d', '-x', String(cols), '-y', String(rows), '-c', cwd, shell]);
+      await exec(this.tmuxBin, [
+        '-L',
+        sock,
+        'new-session',
+        '-d',
+        '-x',
+        String(cols),
+        '-y',
+        String(rows),
+        '-c',
+        cwd,
+        shell,
+      ]);
       this.activeServers.add(worktreeId);
     } else {
       // Add window to existing session

@@ -4,13 +4,22 @@
  * 从 messages.ts 提取，降低文件复杂度。
  */
 
+import type { ImageContent, MessageContent, TextContent } from '@cat-cafe/shared';
 import type { Multipart } from '@fastify/multipart';
-import type { MessageContent, TextContent, ImageContent } from '@cat-cafe/shared';
-import { saveUploadedImages, ImageUploadError, type UploadImageFile } from './image-upload.js';
+import { ImageUploadError, saveUploadedImages, type UploadImageFile } from './image-upload.js';
 import { sendMessageSchema } from './messages.schema.js';
 
 export type ParsedMultipart =
-  | { content: string; userId?: string; threadId?: string; idempotencyKey?: string; contentBlocks: MessageContent[]; visibility?: string; whisperTo?: string[]; deliveryMode?: 'immediate' | 'queue' | 'force' }
+  | {
+      content: string;
+      userId?: string;
+      threadId?: string;
+      idempotencyKey?: string;
+      contentBlocks: MessageContent[];
+      visibility?: string;
+      whisperTo?: string[];
+      deliveryMode?: 'immediate' | 'queue' | 'force';
+    }
   | { error: string };
 
 /** Parse multipart request into validated message fields + contentBlocks */
@@ -27,9 +36,7 @@ export async function parseMultipart(
       const existing = fields[part.fieldname];
       if (existing !== undefined) {
         // Multi-value field (e.g. whisperTo): collect into array
-        fields[part.fieldname] = Array.isArray(existing)
-          ? [...existing, part.value]
-          : [existing, part.value];
+        fields[part.fieldname] = Array.isArray(existing) ? [...existing, part.value] : [existing, part.value];
       } else {
         fields[part.fieldname] = part.value;
       }
@@ -47,8 +54,8 @@ export async function parseMultipart(
   }
 
   // F35: Normalize whisperTo — single value becomes array for Zod validation
-  if (fields['whisperTo'] !== undefined && !Array.isArray(fields['whisperTo'])) {
-    fields['whisperTo'] = [fields['whisperTo']];
+  if (fields.whisperTo !== undefined && !Array.isArray(fields.whisperTo)) {
+    fields.whisperTo = [fields.whisperTo];
   }
 
   const parseResult = sendMessageSchema.safeParse(fields);

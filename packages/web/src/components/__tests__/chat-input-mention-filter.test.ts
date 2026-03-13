@@ -8,14 +8,55 @@
  * 4. detectMenuTrigger returns filter string
  */
 import { describe, expect, it } from 'vitest';
-import { detectMenuTrigger, buildCatOptions } from '@/components/chat-input-options';
+import { buildCatOptions, detectMenuTrigger } from '@/components/chat-input-options';
 import type { CatData } from '@/hooks/useCatData';
 
 const MANY_CATS: CatData[] = [
-  { id: 'opus', displayName: '布偶猫', color: { primary: '#9B7EBD', secondary: '#E8D5F5' }, mentionPatterns: ['布偶', 'opus'], provider: 'anthropic', defaultModel: 'opus', avatar: '/a.png', roleDescription: 'dev', personality: 'kind' },
-  { id: 'codex', displayName: '缅因猫', color: { primary: '#5B8C5A', secondary: '#D5E8D4' }, mentionPatterns: ['缅因', 'codex'], provider: 'openai', defaultModel: 'codex', avatar: '/b.png', roleDescription: 'review', personality: 'strict' },
-  { id: 'gemini', displayName: '暹罗猫', color: { primary: '#5B9BD5', secondary: '#D6E9F8' }, mentionPatterns: ['暹罗', 'gemini'], provider: 'google', defaultModel: 'gemini', avatar: '/c.png', roleDescription: 'design', personality: 'creative' },
-  { id: 'sonnet', displayName: '布偶猫', variantLabel: 'Sonnet', color: { primary: '#9B7EBD', secondary: '#E8D5F5' }, mentionPatterns: ['sonnet'], provider: 'anthropic', defaultModel: 'sonnet', avatar: '/d.png', roleDescription: 'fast dev', personality: 'quick' },
+  {
+    id: 'opus',
+    displayName: '布偶猫',
+    color: { primary: '#9B7EBD', secondary: '#E8D5F5' },
+    mentionPatterns: ['布偶', 'opus'],
+    provider: 'anthropic',
+    defaultModel: 'opus',
+    avatar: '/a.png',
+    roleDescription: 'dev',
+    personality: 'kind',
+  },
+  {
+    id: 'codex',
+    displayName: '缅因猫',
+    color: { primary: '#5B8C5A', secondary: '#D5E8D4' },
+    mentionPatterns: ['缅因', 'codex'],
+    provider: 'openai',
+    defaultModel: 'codex',
+    avatar: '/b.png',
+    roleDescription: 'review',
+    personality: 'strict',
+  },
+  {
+    id: 'gemini',
+    displayName: '暹罗猫',
+    color: { primary: '#5B9BD5', secondary: '#D6E9F8' },
+    mentionPatterns: ['暹罗', 'gemini'],
+    provider: 'google',
+    defaultModel: 'gemini',
+    avatar: '/c.png',
+    roleDescription: 'design',
+    personality: 'creative',
+  },
+  {
+    id: 'sonnet',
+    displayName: '布偶猫',
+    variantLabel: 'Sonnet',
+    color: { primary: '#9B7EBD', secondary: '#E8D5F5' },
+    mentionPatterns: ['sonnet'],
+    provider: 'anthropic',
+    defaultModel: 'sonnet',
+    avatar: '/d.png',
+    roleDescription: 'fast dev',
+    personality: 'quick',
+  },
 ];
 
 describe('detectMenuTrigger filter', () => {
@@ -45,10 +86,11 @@ describe('mention filter matching', () => {
 
   it('filters by label match', () => {
     const lower = 'op';
-    const filtered = options.filter((opt) =>
-      opt.label.toLowerCase().includes(lower) ||
-      opt.insert.toLowerCase().includes(lower) ||
-      opt.id.toLowerCase().includes(lower),
+    const filtered = options.filter(
+      (opt) =>
+        opt.label.toLowerCase().includes(lower) ||
+        opt.insert.toLowerCase().includes(lower) ||
+        opt.id.toLowerCase().includes(lower),
     );
     // Should match opus (id) and possibly sonnet's label if it contains 'op'
     expect(filtered.some((o) => o.id === 'opus')).toBe(true);
@@ -57,10 +99,11 @@ describe('mention filter matching', () => {
 
   it('filters by id match', () => {
     const lower = 'codex';
-    const filtered = options.filter((opt) =>
-      opt.label.toLowerCase().includes(lower) ||
-      opt.insert.toLowerCase().includes(lower) ||
-      opt.id.toLowerCase().includes(lower),
+    const filtered = options.filter(
+      (opt) =>
+        opt.label.toLowerCase().includes(lower) ||
+        opt.insert.toLowerCase().includes(lower) ||
+        opt.id.toLowerCase().includes(lower),
     );
     expect(filtered).toHaveLength(1);
     expect(filtered[0].id).toBe('codex');
@@ -68,21 +111,25 @@ describe('mention filter matching', () => {
 
   it('returns empty for non-matching filter', () => {
     const lower = 'xyz';
-    const filtered = options.filter((opt) =>
-      opt.label.toLowerCase().includes(lower) ||
-      opt.insert.toLowerCase().includes(lower) ||
-      opt.id.toLowerCase().includes(lower),
+    const filtered = options.filter(
+      (opt) =>
+        opt.label.toLowerCase().includes(lower) ||
+        opt.insert.toLowerCase().includes(lower) ||
+        opt.id.toLowerCase().includes(lower),
     );
     expect(filtered).toHaveLength(0);
   });
 
   it('empty filter returns all options', () => {
     const lower = '';
-    const filtered = lower ? options.filter((opt) =>
-      opt.label.toLowerCase().includes(lower) ||
-      opt.insert.toLowerCase().includes(lower) ||
-      opt.id.toLowerCase().includes(lower),
-    ) : options;
+    const filtered = lower
+      ? options.filter(
+          (opt) =>
+            opt.label.toLowerCase().includes(lower) ||
+            opt.insert.toLowerCase().includes(lower) ||
+            opt.id.toLowerCase().includes(lower),
+        )
+      : options;
     expect(filtered).toHaveLength(options.length);
   });
 });

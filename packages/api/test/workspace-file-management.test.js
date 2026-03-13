@@ -7,10 +7,11 @@
  * DELETE /api/workspace/file        — delete file or empty dir
  * POST /api/workspace/file/rename   — rename/move file
  */
-import { describe, it, before, after } from 'node:test';
+
 import assert from 'node:assert/strict';
 import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { after, before, describe, it } from 'node:test';
 import Fastify from 'fastify';
 
 const TEST_DIR = '__file_mgmt_test__';

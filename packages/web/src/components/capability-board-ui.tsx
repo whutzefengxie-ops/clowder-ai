@@ -58,8 +58,18 @@ export type ToggleHandler = (
 
 export function McpIcon({ className }: { className?: string }) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 22v-5" /><path d="M9 8V2" /><path d="M15 8V2" />
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M12 22v-5" />
+      <path d="M9 8V2" />
+      <path d="M15 8V2" />
       <path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z" />
     </svg>
   );
@@ -67,7 +77,15 @@ export function McpIcon({ className }: { className?: string }) {
 
 export function SkillIcon({ className }: { className?: string }) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
       <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
     </svg>
@@ -76,7 +94,15 @@ export function SkillIcon({ className }: { className?: string }) {
 
 export function ExtensionIcon({ className }: { className?: string }) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M19.439 7.85c-.049.322.059.648.289.878l1.568 1.568c.47.47.706 1.087.706 1.704s-.235 1.233-.706 1.704l-1.611 1.611a.98.98 0 0 1-.837.276c-.47-.07-.802-.48-.968-.925a2.501 2.501 0 1 0-3.214 3.214c.446.166.855.497.925.968a.979.979 0 0 1-.276.837l-1.61 1.61a2.404 2.404 0 0 1-1.705.707 2.402 2.402 0 0 1-1.704-.706l-1.568-1.568a1.026 1.026 0 0 0-.877-.29c-.493.074-.84.504-1.02.968a2.5 2.5 0 1 1-3.237-3.237c.464-.18.894-.527.967-1.02a1.026 1.026 0 0 0-.289-.877l-1.568-1.568A2.402 2.402 0 0 1 1.998 12c0-.617.236-1.234.706-1.704L4.315 8.685a.98.98 0 0 1 .837-.276c.47.07.802.48.968.925a2.501 2.501 0 1 0 3.214-3.214c-.446-.166-.855-.497-.925-.968a.979.979 0 0 1 .276-.837l1.61-1.61a2.404 2.404 0 0 1 1.705-.707c.617 0 1.234.236 1.704.706l1.568 1.568c.23.23.556.338.877.29.493-.074.84-.504 1.02-.969a2.5 2.5 0 1 1 3.237 3.237c-.464.18-.894.527-.967 1.02Z" />
     </svg>
   );
@@ -108,7 +134,9 @@ export function CapabilitySection({
         {icon}
         <div>
           <h3 className="text-[15px] font-bold text-slate-800 tracking-wide">{title}</h3>
-          <p className="text-xs font-medium text-slate-400 mt-0.5">{subtitle} · {items.length}</p>
+          <p className="text-xs font-medium text-slate-400 mt-0.5">
+            {subtitle} · {items.length}
+          </p>
         </div>
       </div>
       <div className="space-y-2.5">
@@ -141,16 +169,20 @@ function CapabilityCard({
 }) {
   const [expanded, setExpanded] = useState(false);
   const isToggling = toggling === `${item.type}:${item.id}`;
-  const hasDetails = (item.triggers && item.triggers.length > 0) ||
+  const hasDetails =
+    (item.triggers && item.triggers.length > 0) ||
     (item.tools && item.tools.length > 0) ||
     item.type === 'mcp' ||
     catFamilies.length > 0;
 
   return (
-    <div className={`rounded-xl border transition-all duration-300 overflow-hidden ${expanded
-      ? 'border-indigo-300 shadow-md ring-1 ring-indigo-100 bg-white/60 backdrop-blur-sm'
-      : 'border-slate-200/60 hover:border-indigo-200 hover:shadow shadow-sm bg-white/40'
-      }`}>
+    <div
+      className={`rounded-xl border transition-all duration-300 overflow-hidden ${
+        expanded
+          ? 'border-indigo-300 shadow-md ring-1 ring-indigo-100 bg-white/60 backdrop-blur-sm'
+          : 'border-slate-200/60 hover:border-indigo-200 hover:shadow shadow-sm bg-white/40'
+      }`}
+    >
       {/* Header */}
       <div className={`flex items-center gap-3 px-4 transition-all duration-300 ${expanded ? 'py-3' : 'py-2.5'}`}>
         <button
@@ -159,14 +191,23 @@ function CapabilityCard({
           className={`flex-1 min-w-0 flex items-center gap-3 text-left ${hasDetails ? 'cursor-pointer group' : 'cursor-default'}`}
         >
           {hasDetails && (
-            <div className={`shrink-0 flex items-center justify-center w-6 h-6 rounded-full transition-colors ${expanded ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-100 text-slate-400 group-hover:bg-indigo-50 group-hover:text-indigo-500'
-              }`}>
+            <div
+              className={`shrink-0 flex items-center justify-center w-6 h-6 rounded-full transition-colors ${
+                expanded
+                  ? 'bg-indigo-100 text-indigo-600'
+                  : 'bg-slate-100 text-slate-400 group-hover:bg-indigo-50 group-hover:text-indigo-500'
+              }`}
+            >
               <svg
                 className={`w-3.5 h-3.5 transition-transform duration-300 ${expanded ? 'rotate-90' : ''}`}
                 viewBox="0 0 20 20"
                 fill="currentColor"
               >
-                <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                <path
+                  fillRule="evenodd"
+                  d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
+                  clipRule="evenodd"
+                />
               </svg>
             </div>
           )}
@@ -174,8 +215,13 @@ function CapabilityCard({
 
           <div className="flex-1 min-w-0 py-0.5">
             <div className="flex items-center gap-2">
-              <span className={`text-sm font-semibold truncate transition-colors ${expanded ? 'text-indigo-900' : 'text-slate-700'
-                }`}>{item.id}</span>
+              <span
+                className={`text-sm font-semibold truncate transition-colors ${
+                  expanded ? 'text-indigo-900' : 'text-slate-700'
+                }`}
+              >
+                {item.id}
+              </span>
               <TypeBadge type={item.type} />
               {item.connectionStatus && <StatusDot status={item.connectionStatus} />}
             </div>
@@ -197,8 +243,9 @@ function CapabilityCard({
 
       {/* Expanded details */}
       <div
-        className={`grid transition-all duration-300 ease-in-out ${expanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
-          }`}
+        className={`grid transition-all duration-300 ease-in-out ${
+          expanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
+        }`}
       >
         <div className="overflow-hidden">
           {expanded && (
@@ -207,9 +254,7 @@ function CapabilityCard({
               {item.description && (
                 <div>
                   <span className="font-medium text-slate-500">描述:</span>
-                  <p className="mt-1 text-slate-600 leading-relaxed break-words">
-                    {item.description}
-                  </p>
+                  <p className="mt-1 text-slate-600 leading-relaxed break-words">{item.description}</p>
                 </div>
               )}
 
@@ -221,7 +266,9 @@ function CapabilityCard({
                     {item.tools.map((tool) => (
                       <li key={tool.name} className="flex gap-2">
                         <code className="text-purple-600">{tool.name}</code>
-                        {tool.description && <span className="text-gray-400 leading-relaxed break-words">{tool.description}</span>}
+                        {tool.description && (
+                          <span className="text-gray-400 leading-relaxed break-words">{tool.description}</span>
+                        )}
                       </li>
                     ))}
                   </ul>
@@ -243,7 +290,10 @@ function CapabilityCard({
                   <span className="font-medium text-slate-500 mb-2 block">触发词:</span>
                   <div className="flex flex-wrap gap-1.5 mt-1">
                     {item.triggers.map((t) => (
-                      <span key={t} className="px-2 py-1 bg-white border border-indigo-100/50 text-indigo-600 rounded-md text-[11px] font-medium shadow-sm">
+                      <span
+                        key={t}
+                        className="px-2 py-1 bg-white border border-indigo-100/50 text-indigo-600 rounded-md text-[11px] font-medium shadow-sm"
+                      >
                         &quot;{t}&quot;
                       </span>
                     ))}
@@ -251,9 +301,7 @@ function CapabilityCard({
                 </div>
               )}
               {item.type === 'skill' && (!item.triggers || item.triggers.length === 0) && (
-                <p className="text-slate-400 italic py-1">
-                  无特定触发词，由上下文自动匹配
-                </p>
+                <p className="text-slate-400 italic py-1">无特定触发词，由上下文自动匹配</p>
               )}
 
               {/* Skill mount status */}
@@ -263,12 +311,7 @@ function CapabilityCard({
 
               {/* Per-cat toggles (grouped by family) */}
               {catFamilies.length > 0 && (
-                <CatFamilyToggles
-                  item={item}
-                  catFamilies={catFamilies}
-                  toggling={toggling}
-                  onToggle={onToggle}
-                />
+                <CatFamilyToggles item={item} catFamilies={catFamilies} toggling={toggling} onToggle={onToggle} />
               )}
             </div>
           )}
@@ -315,9 +358,14 @@ function CatFamilyToggles({
                   {enabledCount}/{relevantCatIds.length}
                   <svg
                     className={`inline-block w-3 h-3 ml-1 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
-                    viewBox="0 0 20 20" fill="currentColor"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
                   >
-                    <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                    <path
+                      fillRule="evenodd"
+                      d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
+                      clipRule="evenodd"
+                    />
                   </svg>
                 </span>
               </button>
@@ -330,7 +378,9 @@ function CatFamilyToggles({
                       return (
                         <div key={catId} className="flex items-center justify-between py-0.5">
                           <span className="text-[11px] text-slate-500 font-mono">{catId}</span>
-                          <span className="text-[12px] text-slate-300 select-none" title="该 Skill 对此猫不适用">–</span>
+                          <span className="text-[12px] text-slate-300 select-none" title="该 Skill 对此猫不适用">
+                            –
+                          </span>
                         </div>
                       );
                     }
@@ -362,10 +412,13 @@ function CatFamilyToggles({
 
 function TypeBadge({ type }: { type: 'mcp' | 'skill' }) {
   return (
-    <span className={`inline-flex items-center justify-center text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${type === 'mcp'
-      ? 'bg-gradient-to-r from-purple-100 to-indigo-100 text-purple-700 border border-purple-200/50'
-      : 'bg-gradient-to-r from-blue-100 to-cyan-100 text-blue-700 border border-blue-200/50'
-      }`}>
+    <span
+      className={`inline-flex items-center justify-center text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${
+        type === 'mcp'
+          ? 'bg-gradient-to-r from-purple-100 to-indigo-100 text-purple-700 border border-purple-200/50'
+          : 'bg-gradient-to-r from-blue-100 to-cyan-100 text-blue-700 border border-blue-200/50'
+      }`}
+    >
       {type === 'mcp' ? 'MCP' : 'Skill'}
     </span>
   );
@@ -374,9 +427,7 @@ function TypeBadge({ type }: { type: 'mcp' | 'skill' }) {
 export function StatusDot({ status }: { status: 'connected' | 'disconnected' | 'unknown' }) {
   const color = status === 'connected' ? 'bg-green-400' : status === 'disconnected' ? 'bg-red-400' : 'bg-gray-300';
   const label = status === 'connected' ? '已连接' : status === 'disconnected' ? '掉线' : '未知';
-  return (
-    <span className={`inline-block w-2 h-2 rounded-full ${color}`} title={label} />
-  );
+  return <span className={`inline-block w-2 h-2 rounded-full ${color}`} title={label} />;
 }
 
 function ToggleSwitch({
@@ -394,20 +445,29 @@ function ToggleSwitch({
   return (
     <button
       type="button"
-      onClick={(e) => { e.stopPropagation(); onChange(!enabled); }}
+      onClick={(e) => {
+        e.stopPropagation();
+        onChange(!enabled);
+      }}
       disabled={disabled}
-      className={`rounded-full relative transition-[background-color,opacity] duration-300 ease-in-out shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-indigo-500 box-content border-[3px] border-transparent ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:opacity-90'
-        } ${enabled ? 'bg-indigo-500' : 'bg-slate-200'} ${isSm ? 'w-7 h-3.5' : 'w-10 h-5'}`}
+      className={`rounded-full relative transition-[background-color,opacity] duration-300 ease-in-out shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-indigo-500 box-content border-[3px] border-transparent ${
+        disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:opacity-90'
+      } ${enabled ? 'bg-indigo-500' : 'bg-slate-200'} ${isSm ? 'w-7 h-3.5' : 'w-10 h-5'}`}
     >
       <span
-        className={`absolute top-0 rounded-full bg-white shadow-sm ring-1 ring-black/5 transition-transform duration-300 ease-in-out flex items-center justify-center ${isSm ? 'w-3.5 h-3.5' : 'w-5 h-5'} ${enabled
-          ? isSm ? 'translate-x-[14px]' : 'translate-x-[20px]'
-          : 'translate-x-0'
-          }`}
+        className={`absolute top-0 rounded-full bg-white shadow-sm ring-1 ring-black/5 transition-transform duration-300 ease-in-out flex items-center justify-center ${isSm ? 'w-3.5 h-3.5' : 'w-5 h-5'} ${
+          enabled ? (isSm ? 'translate-x-[14px]' : 'translate-x-[20px]') : 'translate-x-0'
+        }`}
       >
         {enabled && !isSm && (
           <svg className="w-2.5 h-2.5 text-indigo-500 drop-shadow-sm" viewBox="0 0 12 12" fill="none">
-            <path stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M3.5 6.5l2 2 3-4" />
+            <path
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M3.5 6.5l2 2 3-4"
+            />
           </svg>
         )}
       </span>
@@ -432,14 +492,18 @@ function MountStatusBadges({ mounts }: { mounts: Record<string, boolean> }) {
             <span
               key={key}
               className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium border ${
-                ok
-                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200/50'
-                  : 'bg-red-50 text-red-600 border-red-200/50'
+                ok ? 'bg-emerald-50 text-emerald-700 border-emerald-200/50' : 'bg-red-50 text-red-600 border-red-200/50'
               }`}
             >
               {ok ? (
                 <svg className="w-3 h-3" viewBox="0 0 12 12" fill="none">
-                  <path stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" d="M3 6.5l2 2 4-4.5" />
+                  <path
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M3 6.5l2 2 4-4.5"
+                  />
                 </svg>
               ) : (
                 <svg className="w-3 h-3" viewBox="0 0 12 12" fill="none">
@@ -456,13 +520,7 @@ function MountStatusBadges({ mounts }: { mounts: Record<string, boolean> }) {
 }
 
 /** Skill health summary banner (allMounted + registrationConsistent) */
-export function SkillHealthBanner({
-  health,
-  items,
-}: {
-  health: SkillHealthSummary;
-  items?: CapabilityBoardItem[];
-}) {
+export function SkillHealthBanner({ health, items }: { health: SkillHealthSummary; items?: CapabilityBoardItem[] }) {
   const allGood = health.allMounted && health.registrationConsistent;
 
   // Find skills with mount failures for detail display
@@ -477,11 +535,13 @@ export function SkillHealthBanner({
     }));
 
   return (
-    <div className={`flex items-start gap-2.5 rounded-lg px-3.5 py-2.5 text-xs border ${
-      allGood
-        ? 'bg-emerald-50/60 border-emerald-200/40 text-emerald-700'
-        : 'bg-amber-50/60 border-amber-200/40 text-amber-700'
-    }`}>
+    <div
+      className={`flex items-start gap-2.5 rounded-lg px-3.5 py-2.5 text-xs border ${
+        allGood
+          ? 'bg-emerald-50/60 border-emerald-200/40 text-emerald-700'
+          : 'bg-amber-50/60 border-amber-200/40 text-amber-700'
+      }`}
+    >
       <span className="text-base leading-none mt-0.5">{allGood ? '✓' : '!'}</span>
       <div className="space-y-1">
         <div className="flex items-center gap-3">
@@ -497,22 +557,15 @@ export function SkillHealthBanner({
           <div className="space-y-0.5 text-amber-600/80">
             {mountFailures.map((f) => (
               <p key={f.id}>
-                <code className="text-[10px] bg-amber-100/50 px-1 rounded">{f.id}</code>
-                {' '}— {f.failed.join(', ')} 未挂载
+                <code className="text-[10px] bg-amber-100/50 px-1 rounded">{f.id}</code> — {f.failed.join(', ')} 未挂载
               </p>
             ))}
           </div>
         )}
         {health.unregistered.length > 0 && (
-          <p className="text-amber-600/80">
-            未注册: {health.unregistered.join(', ')}
-          </p>
+          <p className="text-amber-600/80">未注册: {health.unregistered.join(', ')}</p>
         )}
-        {health.phantom.length > 0 && (
-          <p className="text-amber-600/80">
-            幽灵项: {health.phantom.join(', ')}
-          </p>
-        )}
+        {health.phantom.length > 0 && <p className="text-amber-600/80">幽灵项: {health.phantom.join(', ')}</p>}
       </div>
     </div>
   );
@@ -537,10 +590,11 @@ export function FilterChips({
           key={opt.value}
           type="button"
           onClick={() => onChange(opt.value)}
-          className={`text-xs px-2 py-0.5 rounded-full border transition-colors ${value === opt.value
-            ? 'bg-blue-50 border-blue-300 text-blue-700'
-            : 'border-gray-200 text-gray-500 hover:border-gray-300'
-            }`}
+          className={`text-xs px-2 py-0.5 rounded-full border transition-colors ${
+            value === opt.value
+              ? 'bg-blue-50 border-blue-300 text-blue-700'
+              : 'border-gray-200 text-gray-500 hover:border-gray-300'
+          }`}
         >
           {opt.label}
         </button>

@@ -3,13 +3,11 @@
  * Tests: GET/DELETE/POST/PATCH queue endpoints with auth + isolation.
  */
 
-import { describe, it, beforeEach, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
+import { afterEach, beforeEach, describe, it, mock } from 'node:test';
 import Fastify from 'fastify';
 
-const { InvocationQueue } = await import(
-  '../dist/domains/cats/services/agents/invocation/InvocationQueue.js'
-);
+const { InvocationQueue } = await import('../dist/domains/cats/services/agents/invocation/InvocationQueue.js');
 
 /** Build deps with stubs */
 function buildDeps(overrides = {}) {
@@ -176,12 +174,10 @@ describe('Queue Management API', () => {
     enqueueEntry(deps.invocationQueue, { userId: 'user-a' });
     enqueueEntry(deps.invocationQueue, { userId: 'user-b', targetCats: ['codex'] });
 
-    deps.queueProcessor.processNext.mock.mockImplementation(
-      async (threadId, userId) => {
-        // Simulate processing user's queue
-        return { started: true, entry: { userId } };
-      },
-    );
+    deps.queueProcessor.processNext.mock.mockImplementation(async (_threadId, userId) => {
+      // Simulate processing user's queue
+      return { started: true, entry: { userId } };
+    });
 
     const res = await app.inject({
       method: 'POST',
@@ -297,9 +293,7 @@ describe('Queue Management API', () => {
   // ── Functional: POST next ──
 
   it('POST /queue/next triggers next entry processing', async () => {
-    deps.queueProcessor.processNext.mock.mockImplementation(
-      async () => ({ started: true, entry: { id: 'e1' } }),
-    );
+    deps.queueProcessor.processNext.mock.mockImplementation(async () => ({ started: true, entry: { id: 'e1' } }));
 
     const res = await app.inject({
       method: 'POST',

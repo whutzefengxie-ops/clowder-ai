@@ -1,5 +1,5 @@
-import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
 import { renderRichBlockPlaintext } from '../dist/infrastructure/connectors/rich-block-plaintext.js';
 
 describe('renderRichBlockPlaintext', () => {
@@ -19,8 +19,14 @@ describe('renderRichBlockPlaintext', () => {
 
   it('renders checklist with checked/unchecked items', () => {
     const block = {
-      id: 'b2', kind: 'checklist', v: 1, title: 'TODO',
-      items: [{ id: 'i1', text: 'Write tests', checked: true }, { id: 'i2', text: 'Deploy' }],
+      id: 'b2',
+      kind: 'checklist',
+      v: 1,
+      title: 'TODO',
+      items: [
+        { id: 'i1', text: 'Write tests', checked: true },
+        { id: 'i2', text: 'Deploy' },
+      ],
     };
     const result = renderRichBlockPlaintext(block);
     assert.ok(result.includes('✅ Write tests'));
@@ -42,7 +48,9 @@ describe('renderRichBlockPlaintext', () => {
 
   it('renders media_gallery with items', () => {
     const block = {
-      id: 'b5', kind: 'media_gallery', v: 1,
+      id: 'b5',
+      kind: 'media_gallery',
+      v: 1,
       items: [{ url: 'https://img.png', caption: 'Screenshot' }],
     };
     const result = renderRichBlockPlaintext(block);

@@ -1,4 +1,3 @@
-import React from 'react';
 import type { SignalTier } from '@cat-cafe/shared';
 
 const tierClassMap: Record<SignalTier, string> = {
@@ -14,7 +13,9 @@ interface SignalTierBadgeProps {
 
 export function SignalTierBadge({ tier }: SignalTierBadgeProps) {
   return (
-    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${tierClassMap[tier]}`}>
+    <span
+      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${tierClassMap[tier]}`}
+    >
       Tier {tier}
     </span>
   );

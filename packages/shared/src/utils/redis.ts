@@ -44,14 +44,11 @@ export function createRedisClient(config?: Partial<RedisConfig>): RedisClient {
 
 export const SessionKeys = {
   /** Session key now includes threadId for isolation (茶话会夺魂 bug fix #38) */
-  session: (userId: string, catId: string, threadId: string) =>
-    `sessions:${userId}:${catId}:${threadId}`,
+  session: (userId: string, catId: string, threadId: string) => `sessions:${userId}:${catId}:${threadId}`,
   /** Per-cat delivery cursor for exact incremental context transport */
-  deliveryCursor: (userId: string, catId: string, threadId: string) =>
-    `delivery-cursor:${userId}:${catId}:${threadId}`,
+  deliveryCursor: (userId: string, catId: string, threadId: string) => `delivery-cursor:${userId}:${catId}:${threadId}`,
   /** Per-cat mention ack cursor — tracks last acknowledged @mention (#77) */
-  mentionAck: (userId: string, catId: string, threadId: string) =>
-    `mention-ack:${userId}:${catId}:${threadId}`,
+  mentionAck: (userId: string, catId: string, threadId: string) => `mention-ack:${userId}:${catId}:${threadId}`,
   catState: (catId: string) => `state:${catId}`,
   taskQueue: (catId: string) => `tasks:${catId}`,
   messageChannel: () => 'chat:messages',
@@ -84,25 +81,16 @@ export class SessionStore {
     catId: string,
     threadId: string,
     sessionId: string,
-    ttlSeconds = 86400
+    ttlSeconds = 86400,
   ): Promise<void> {
-    await this.redis.set(
-      SessionKeys.session(userId, catId, threadId),
-      sessionId,
-      'EX',
-      ttlSeconds
-    );
+    await this.redis.set(SessionKeys.session(userId, catId, threadId), sessionId, 'EX', ttlSeconds);
   }
 
   async deleteSession(userId: string, catId: string, threadId: string): Promise<void> {
     await this.redis.del(SessionKeys.session(userId, catId, threadId));
   }
 
-  async getDeliveryCursor(
-    userId: string,
-    catId: string,
-    threadId: string
-  ): Promise<string | null> {
+  async getDeliveryCursor(userId: string, catId: string, threadId: string): Promise<string | null> {
     return this.redis.get(SessionKeys.deliveryCursor(userId, catId, threadId));
   }
 
@@ -116,29 +104,19 @@ export class SessionStore {
     catId: string,
     threadId: string,
     messageId: string,
-    ttlSeconds = 604800 // 7 days (#40)
+    ttlSeconds = 604800, // 7 days (#40)
   ): Promise<boolean> {
     const key = SessionKeys.deliveryCursor(userId, catId, threadId);
-    const result = await this.redis.eval(
-      SET_IF_GREATER_LUA, 1, key, messageId, String(ttlSeconds)
-    ) as number;
+    const result = (await this.redis.eval(SET_IF_GREATER_LUA, 1, key, messageId, String(ttlSeconds))) as number;
     return result === 1;
   }
 
-  async deleteDeliveryCursor(
-    userId: string,
-    catId: string,
-    threadId: string,
-  ): Promise<number> {
+  async deleteDeliveryCursor(userId: string, catId: string, threadId: string): Promise<number> {
     return this.redis.del(SessionKeys.deliveryCursor(userId, catId, threadId));
   }
 
   /** Get the last acknowledged mention message ID for a cat in a thread (#77) */
-  async getMentionAckCursor(
-    userId: string,
-    catId: string,
-    threadId: string,
-  ): Promise<string | null> {
+  async getMentionAckCursor(userId: string, catId: string, threadId: string): Promise<string | null> {
     return this.redis.get(SessionKeys.mentionAck(userId, catId, threadId));
   }
 
@@ -152,21 +130,15 @@ export class SessionStore {
     catId: string,
     threadId: string,
     messageId: string,
-    ttlSeconds = 604800 // 7 days, same as delivery cursor
+    ttlSeconds = 604800, // 7 days, same as delivery cursor
   ): Promise<boolean> {
     const key = SessionKeys.mentionAck(userId, catId, threadId);
-    const result = await this.redis.eval(
-      SET_IF_GREATER_LUA, 1, key, messageId, String(ttlSeconds)
-    ) as number;
+    const result = (await this.redis.eval(SET_IF_GREATER_LUA, 1, key, messageId, String(ttlSeconds))) as number;
     return result === 1;
   }
 
   /** Delete a mention ack cursor (#77) */
-  async deleteMentionAckCursor(
-    userId: string,
-    catId: string,
-    threadId: string,
-  ): Promise<number> {
+  async deleteMentionAckCursor(userId: string, catId: string, threadId: string): Promise<number> {
     return this.redis.del(SessionKeys.mentionAck(userId, catId, threadId));
   }
 

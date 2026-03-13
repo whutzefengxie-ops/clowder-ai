@@ -8,18 +8,26 @@
  * - P2-1: Deleting race → record marked canceled
  */
 
-import { test, describe, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { beforeEach, describe, test } from 'node:test';
 import Fastify from 'fastify';
 
 function createMockSocketManager() {
   const messages = [];
   const roomEvents = [];
   return {
-    broadcastAgentMessage(msg) { messages.push(msg); },
-    broadcastToRoom(room, event, data) { roomEvents.push({ room, event, data }); },
-    getMessages() { return messages; },
-    getRoomEvents() { return roomEvents; },
+    broadcastAgentMessage(msg) {
+      messages.push(msg);
+    },
+    broadcastToRoom(room, event, data) {
+      roomEvents.push({ room, event, data });
+    },
+    getMessages() {
+      return messages;
+    },
+    getRoomEvents() {
+      return roomEvents;
+    },
   };
 }
 
@@ -36,15 +44,19 @@ function createMockInvocationRecordStore() {
       updates.push({ id, ...data });
       return { id, ...data };
     },
-    getRecords() { return records; },
-    getUpdates() { return updates; },
+    getRecords() {
+      return records;
+    },
+    getUpdates() {
+      return updates;
+    },
   };
 }
 
 function createMockRouter() {
   const executions = [];
   return {
-    async *routeExecution(userId, message, threadId, userMessageId, targetCats, intent) {
+    async *routeExecution(userId, message, threadId, _userMessageId, targetCats, _intent) {
       executions.push({ userId, message, threadId, targetCats });
       // Yield a done message
       yield {
@@ -54,7 +66,9 @@ function createMockRouter() {
         timestamp: Date.now(),
       };
     },
-    getExecutions() { return executions; },
+    getExecutions() {
+      return executions;
+    },
   };
 }
 
@@ -69,9 +83,7 @@ describe('post_message A2A mention invocation', () => {
     const { InvocationRegistry } = await import(
       '../dist/domains/cats/services/agents/invocation/InvocationRegistry.js'
     );
-    const { MessageStore } = await import(
-      '../dist/domains/cats/services/stores/ports/MessageStore.js'
-    );
+    const { MessageStore } = await import('../dist/domains/cats/services/stores/ports/MessageStore.js');
 
     registry = new InvocationRegistry();
     messageStore = new MessageStore();
@@ -106,10 +118,12 @@ describe('post_message A2A mention invocation', () => {
     });
 
     assert.equal(response.statusCode, 200);
-    assert.equal(invocationRecordStore.getRecords().length, 0,
-      'No InvocationRecord should be created for non-@ messages');
-    assert.equal(mockRouter.getExecutions().length, 0,
-      'routeExecution should not be called');
+    assert.equal(
+      invocationRecordStore.getRecords().length,
+      0,
+      'No InvocationRecord should be created for non-@ messages',
+    );
+    assert.equal(mockRouter.getExecutions().length, 0, 'routeExecution should not be called');
   });
 
   // P1-2 regression: inline @ → no invocation
@@ -128,8 +142,11 @@ describe('post_message A2A mention invocation', () => {
     });
 
     assert.equal(response.statusCode, 200);
-    assert.equal(invocationRecordStore.getRecords().length, 0,
-      'Inline @mentions (行中) must not trigger A2A invocation');
+    assert.equal(
+      invocationRecordStore.getRecords().length,
+      0,
+      'Inline @mentions (行中) must not trigger A2A invocation',
+    );
   });
 
   // P1-2 regression: @ inside code block → no invocation
@@ -148,8 +165,11 @@ describe('post_message A2A mention invocation', () => {
     });
 
     assert.equal(response.statusCode, 200);
-    assert.equal(invocationRecordStore.getRecords().length, 0,
-      '@mentions inside code blocks must not trigger invocation');
+    assert.equal(
+      invocationRecordStore.getRecords().length,
+      0,
+      '@mentions inside code blocks must not trigger invocation',
+    );
   });
 
   // Positive case: line-start @ → mentions stored + invocation created
@@ -172,8 +192,7 @@ describe('post_message A2A mention invocation', () => {
     // Mentions should be stored on the message
     const recent = messageStore.getRecent(10);
     assert.equal(recent.length, 1);
-    assert.ok(recent[0].mentions.includes('codex'),
-      'Message should store codex as mention (缅因猫 = codex)');
+    assert.ok(recent[0].mentions.includes('codex'), 'Message should store codex as mention (缅因猫 = codex)');
 
     // InvocationRecord should be created
     assert.equal(invocationRecordStore.getRecords().length, 1);
@@ -199,19 +218,27 @@ describe('post_message A2A mention invocation', () => {
 
     const recent = messageStore.getRecent(10);
     const lastMsg = recent[recent.length - 1];
-    assert.ok(lastMsg.mentions.includes('codex'),
-      'Content-before-mention: codex should be mentioned when @缅因猫 is on last line');
+    assert.ok(
+      lastMsg.mentions.includes('codex'),
+      'Content-before-mention: codex should be mentioned when @缅因猫 is on last line',
+    );
 
     const records = invocationRecordStore.getRecords();
-    const a2aRecord = records.find(r => r.targetCats.includes('codex'));
+    const a2aRecord = records.find((r) => r.targetCats.includes('codex'));
     assert.ok(a2aRecord, 'Content-before-mention should trigger A2A invocation for codex');
   });
 
   test('post-message skips redundant A2A when target already covered by active parent invocation', async () => {
     const mockInvocationTracker = {
-      has() { return true; },
-      getCatIds() { return ['opus', 'codex', 'gemini']; },
-      start() { return new AbortController(); },
+      has() {
+        return true;
+      },
+      getCatIds() {
+        return ['opus', 'codex', 'gemini'];
+      },
+      start() {
+        return new AbortController();
+      },
       complete() {},
     };
     const app = await createApp({ invocationTracker: mockInvocationTracker });
@@ -228,10 +255,8 @@ describe('post_message A2A mention invocation', () => {
     });
 
     assert.equal(response.statusCode, 200);
-    assert.equal(invocationRecordStore.getRecords().length, 0,
-      'Redundant A2A should not create InvocationRecord');
-    assert.equal(mockRouter.getExecutions().length, 0,
-      'Redundant A2A should not call routeExecution');
+    assert.equal(invocationRecordStore.getRecords().length, 0, 'Redundant A2A should not create InvocationRecord');
+    assert.equal(mockRouter.getExecutions().length, 0, 'Redundant A2A should not call routeExecution');
   });
 
   // Self-mention filter: opus @布偶猫 → no invocation (can't invoke self)
@@ -251,8 +276,7 @@ describe('post_message A2A mention invocation', () => {
 
     assert.equal(response.statusCode, 200);
     // parseA2AMentions filters self-mentions, so no invocation
-    assert.equal(invocationRecordStore.getRecords().length, 0,
-      'Self-mention must not trigger invocation');
+    assert.equal(invocationRecordStore.getRecords().length, 0, 'Self-mention must not trigger invocation');
   });
 });
 
@@ -268,12 +292,8 @@ describe('F052: cross-thread A2A mention routing', () => {
     const { InvocationRegistry } = await import(
       '../dist/domains/cats/services/agents/invocation/InvocationRegistry.js'
     );
-    const { MessageStore } = await import(
-      '../dist/domains/cats/services/stores/ports/MessageStore.js'
-    );
-    const { ThreadStore } = await import(
-      '../dist/domains/cats/services/stores/ports/ThreadStore.js'
-    );
+    const { MessageStore } = await import('../dist/domains/cats/services/stores/ports/MessageStore.js');
+    const { ThreadStore } = await import('../dist/domains/cats/services/stores/ports/ThreadStore.js');
 
     registry = new InvocationRegistry();
     messageStore = new MessageStore();

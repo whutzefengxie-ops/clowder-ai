@@ -57,7 +57,6 @@ export interface FeishuAdapterOptions {
 export class FeishuAdapter implements IStreamableOutboundAdapter {
   readonly connectorId = 'feishu';
   private readonly client: lark.Client;
-  private readonly log: FastifyBaseLogger;
   private readonly verificationToken: string | null;
   private tokenManager: FeishuTokenManager | null = null;
   private uploadFetchFn: typeof fetch = globalThis.fetch;
@@ -82,8 +81,8 @@ export class FeishuAdapter implements IStreamableOutboundAdapter {
   isVerificationChallenge(body: unknown): { challenge: string } | null {
     if (!body || typeof body !== 'object') return null;
     const b = body as Record<string, unknown>;
-    if (b['type'] === 'url_verification' && typeof b['challenge'] === 'string') {
-      return { challenge: b['challenge'] };
+    if (b.type === 'url_verification' && typeof b.challenge === 'string') {
+      return { challenge: b.challenge };
     }
     return null;
   }
@@ -97,9 +96,9 @@ export class FeishuAdapter implements IStreamableOutboundAdapter {
     if (!this.verificationToken) return true;
     if (!body || typeof body !== 'object') return false;
     const b = body as Record<string, unknown>;
-    const header = b['header'] as Record<string, unknown> | undefined;
+    const header = b.header as Record<string, unknown> | undefined;
     if (!header) return false;
-    return header['token'] === this.verificationToken;
+    return header.token === this.verificationToken;
   }
 
   /**
@@ -111,52 +110,52 @@ export class FeishuAdapter implements IStreamableOutboundAdapter {
     if (!eventBody || typeof eventBody !== 'object') return null;
 
     const body = eventBody as Record<string, unknown>;
-    const header = body['header'] as Record<string, unknown> | undefined;
-    if (!header || header['event_type'] !== 'im.message.receive_v1') return null;
+    const header = body.header as Record<string, unknown> | undefined;
+    if (!header || header.event_type !== 'im.message.receive_v1') return null;
 
-    const event = body['event'] as Record<string, unknown> | undefined;
+    const event = body.event as Record<string, unknown> | undefined;
     if (!event) return null;
 
-    const message = event['message'] as Record<string, unknown> | undefined;
+    const message = event.message as Record<string, unknown> | undefined;
     if (!message) return null;
 
-    const msgType = message['message_type'] as string;
+    const msgType = message.message_type as string;
 
     // MVP: DM only (p2p)
-    if (message['chat_type'] !== 'p2p') return null;
+    if (message.chat_type !== 'p2p') return null;
 
     // Extract sender
-    const sender = event['sender'] as Record<string, unknown> | undefined;
-    const senderId = (sender?.['sender_id'] as Record<string, unknown> | undefined)?.['open_id'];
+    const sender = event.sender as Record<string, unknown> | undefined;
+    const senderId = (sender?.sender_id as Record<string, unknown> | undefined)?.open_id;
 
     const base = {
-      chatId: message['chat_id'] as string,
-      messageId: message['message_id'] as string,
+      chatId: message.chat_id as string,
+      messageId: message.message_id as string,
       senderId: String(senderId ?? 'unknown'),
     };
 
     // Parse content JSON
     let content: Record<string, unknown>;
     try {
-      content = JSON.parse(message['content'] as string);
+      content = JSON.parse(message.content as string);
     } catch {
       return null;
     }
 
     switch (msgType) {
       case 'text': {
-        const text = content['text'];
+        const text = content.text;
         if (typeof text !== 'string') return null;
         return { ...base, text };
       }
       case 'image': {
-        const imageKey = content['image_key'] as string;
+        const imageKey = content.image_key as string;
         if (!imageKey) return null;
         return { ...base, text: '[图片]', attachments: [{ type: 'image', feishuKey: imageKey }] };
       }
       case 'file': {
-        const fileKey = content['file_key'] as string;
-        const fileName = content['file_name'] as string | undefined;
+        const fileKey = content.file_key as string;
+        const fileName = content.file_name as string | undefined;
         if (!fileKey) return null;
         return {
           ...base,
@@ -165,8 +164,8 @@ export class FeishuAdapter implements IStreamableOutboundAdapter {
         };
       }
       case 'audio': {
-        const audioKey = content['file_key'] as string;
-        const duration = content['duration'] as number | undefined;
+        const audioKey = content.file_key as string;
+        const duration = content.duration as number | undefined;
         if (!audioKey) return null;
         return {
           ...base,
@@ -187,24 +186,24 @@ export class FeishuAdapter implements IStreamableOutboundAdapter {
     if (!eventBody || typeof eventBody !== 'object') return null;
 
     const body = eventBody as Record<string, unknown>;
-    const header = body['header'] as Record<string, unknown> | undefined;
-    if (!header || header['event_type'] !== 'card.action.trigger') return null;
+    const header = body.header as Record<string, unknown> | undefined;
+    if (!header || header.event_type !== 'card.action.trigger') return null;
 
-    const event = body['event'] as Record<string, unknown> | undefined;
+    const event = body.event as Record<string, unknown> | undefined;
     if (!event) return null;
 
-    const operator = event['operator'] as Record<string, unknown> | undefined;
-    const action = event['action'] as Record<string, unknown> | undefined;
-    const context = event['context'] as Record<string, unknown> | undefined;
+    const operator = event.operator as Record<string, unknown> | undefined;
+    const action = event.action as Record<string, unknown> | undefined;
+    const context = event.context as Record<string, unknown> | undefined;
 
     if (!operator || !action || !context) return null;
 
-    const actionValue = action['value'] as Record<string, unknown> | undefined;
+    const actionValue = action.value as Record<string, unknown> | undefined;
     if (!actionValue || typeof actionValue !== 'object') return null;
 
     return {
-      chatId: context['open_chat_id'] as string,
-      senderId: operator['open_id'] as string,
+      chatId: context.open_chat_id as string,
+      senderId: operator.open_id as string,
       actionValue,
     };
   }
@@ -265,7 +264,7 @@ export class FeishuAdapter implements IStreamableOutboundAdapter {
     absPath: string,
     type: 'image' | 'file' | 'audio',
   ): Promise<{ imageKey?: string; fileKey?: string } | null> {
-    const token = await this.tokenManager!.getTenantAccessToken();
+    const token = await this.tokenManager?.getTenantAccessToken();
     const fileStream = createReadStream(absPath);
     const form = new FormData();
 

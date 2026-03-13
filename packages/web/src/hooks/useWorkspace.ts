@@ -24,7 +24,7 @@ function mergeSubtree(nodes: TreeNode[], targetPath: string, children: TreeNode[
     if (node.path === targetPath && node.type === 'directory') {
       return { ...node, children };
     }
-    if (node.children && targetPath.startsWith(node.path + '/')) {
+    if (node.children && targetPath.startsWith(`${node.path}/`)) {
       return { ...node, children: mergeSubtree(node.children, targetPath, children) };
     }
     return node;
@@ -133,7 +133,9 @@ export function useWorkspace() {
         const subtreeChildren: TreeNode[] = data.tree ?? [];
         // Merge subtree into existing tree
         setTree((prev) => mergeSubtree(prev, dirPath, subtreeChildren));
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     },
     [worktreeId],
   );

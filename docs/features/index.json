@@ -1,0 +1,671 @@
+{
+  "features": [
+    {
+      "id": "F001",
+      "name": "配置可见性",
+      "status": "done | **Owner**: 三猫",
+      "file": "F001-config-visibility.md"
+    },
+    {
+      "id": "F002",
+      "name": "Agent-to-Agent 调用 (A2A)",
+      "status": "done | **Owner**: 三猫",
+      "file": "F002-agent-to-agent.md"
+    },
+    {
+      "id": "F003",
+      "name": "显式记忆 (F3-lite)",
+      "status": "done | **Owner**: 三猫",
+      "file": "F003-hindsight-lite.md"
+    },
+    {
+      "id": "F004",
+      "name": "配置运行时修改",
+      "status": "done | **Owner**: 三猫",
+      "file": "F004-runtime-config.md"
+    },
+    {
+      "id": "F005",
+      "name": "ideate 模式 A2A follow-up",
+      "status": "done | **Owner**: 三猫",
+      "file": "F005-a2a-follow-up.md"
+    },
+    {
+      "id": "F006",
+      "name": "Thread 名字编辑",
+      "status": "done | **Owner**: 三猫",
+      "file": "F006-thread-title-editor.md"
+    },
+    {
+      "id": "F007",
+      "name": "Thread 名字检索",
+      "status": "done | **Owner**: 三猫",
+      "file": "F007-thread-title-search.md"
+    },
+    {
+      "id": "F008",
+      "name": "Token 预算 + 深度可观测性",
+      "status": "done | **Owner**: 三猫",
+      "file": "F008-token-budget-observability.md"
+    },
+    {
+      "id": "F009",
+      "name": "tool_use/tool_result 事件显示",
+      "status": "done | **Owner**: 三猫",
+      "file": "F009-tool-use-tool-result.md"
+    },
+    {
+      "id": "F010",
+      "name": "手机端猫猫",
+      "status": "in-progress | **Owner**: 三猫",
+      "file": "F010-mobile-cat.md"
+    },
+    {
+      "id": "F011",
+      "name": "模式系统",
+      "status": "done | **Owner**: 三猫",
+      "file": "F011-mode-system.md"
+    },
+    {
+      "id": "F012",
+      "name": "功能可发现性",
+      "status": "done | **Owner**: 三猫",
+      "file": "F012-feature-discoverability.md"
+    },
+    {
+      "id": "F013",
+      "name": "审计日志 v2",
+      "status": "done | **Owner**: 三猫",
+      "file": "F013-audit-log-v2.md"
+    },
+    {
+      "id": "F014",
+      "name": "SVG 猫猫状态动画",
+      "status": "in-progress | **Owner**: 三猫",
+      "file": "F014-svg-cat-animation.md"
+    },
+    {
+      "id": "F015",
+      "name": "Backlog 管理",
+      "status": "done | **Owner**: 三猫",
+      "file": "F015-backlog-management.md"
+    },
+    {
+      "id": "F016",
+      "name": "Codex OAuth + 记忆闭环",
+      "status": "done | **Owner**: 三猫",
+      "file": "F016-codex-oauth-memory-loop.md"
+    },
+    {
+      "id": "F017",
+      "name": "导出对话长图",
+      "status": "done | **Owner**: 三猫",
+      "file": "F017-export-dialog-image.md"
+    },
+    {
+      "id": "F018",
+      "name": "工具栏收起+滚动",
+      "status": "done | **Owner**: 三猫",
+      "file": "F018-toolbar-collapse.md"
+    },
+    {
+      "id": "F019",
+      "name": "动态累积计时器",
+      "status": "done | **Owner**: 三猫",
+      "file": "F019-dynamic-elapsed-timer.md"
+    },
+    {
+      "id": "F020",
+      "name": "语音输入 M1 MVP",
+      "status": "done | **Owner**: 三猫",
+      "file": "F020-voice-input-suite.md"
+    },
+    {
+      "id": "F021",
+      "name": "Signal Hunter 集成",
+      "status": "done | **Owner**: 三猫",
+      "file": "F021-signal-study-mode.md"
+    },
+    {
+      "id": "F022",
+      "name": "Rich Blocks 富消息系统",
+      "status": "done | **Owner**: 三猫",
+      "file": "F022-rich-blocks.md"
+    },
+    {
+      "id": "F023",
+      "name": "目录结构防腐化 + 重构 + 代码检查工具链",
+      "status": "done | **Owner**: 三猫",
+      "file": "F023-directory-corrosion-defense.md"
+    },
+    {
+      "id": "F024",
+      "name": "中途消息注入 + Context 存活监控 + 自动交接",
+      "status": "done | **Owner**: 三猫",
+      "file": "F024-context-monitoring.md"
+    },
+    {
+      "id": "F025",
+      "name": "可靠性工程（状态机规格 + 并发演练 + 证据闸门）",
+      "status": "done | **Owner**: 三猫",
+      "file": "F025-reliability-engineering.md"
+    },
+    {
+      "id": "F026",
+      "name": "UI Dashboard Upgrade — 右面板重构 + 实时计划进度",
+      "status": "done | **Owner**: 三猫",
+      "file": "F026-ui-dashboard-upgrade.md"
+    },
+    {
+      "id": "F027",
+      "name": "A2A 路径统一 — 两条路合一 + 全链可取消 + 多 mention",
+      "status": "done | **Owner**: 三猫",
+      "file": "F027-a2a-path-unification.md"
+    },
+    {
+      "id": "F028",
+      "name": "授权请求跨渠道通知",
+      "status": "done | **Owner**: 三猫",
+      "file": "F028-cross-channel-authorization.md"
+    },
+    {
+      "id": "F029",
+      "name": "删除右面板\"任务统计\"死区 + TaskExtractor 清理",
+      "status": "done | **Owner**: 三猫",
+      "file": "F029-task-summary-right-panel-cleanup.md"
+    },
+    {
+      "id": "F030",
+      "name": "消息代码块复制按钮 + 文件路径可跳转",
+      "status": "done | **Owner**: 三猫",
+      "file": "F030-copy-button-paths.md"
+    },
+    {
+      "id": "F031",
+      "name": "PR 双层 Review 流程（本地猫 + 云端猫）",
+      "status": "done | **Owner**: 三猫",
+      "file": "F031-review-two-layer-process.md"
+    },
+    {
+      "id": "F032",
+      "name": "Agent Plugin Architecture（CatId 松绑 + 协作规则动态化）",
+      "status": "done | **Owner**: Ragdoll (Opus 4.5) + 三猫",
+      "file": "F032-agent-plugin-architecture.md"
+    },
+    {
+      "id": "F033",
+      "name": "Session Chain 策略可配置化",
+      "status": "done | **Owner**: 三猫",
+      "file": "F033-session-strategy-configurability.md"
+    },
+    {
+      "id": "F034",
+      "name": "Voice Block 语音消息",
+      "status": "done | **Owner**: 三猫",
+      "file": "F034-voice-message.md"
+    },
+    {
+      "id": "F035",
+      "name": "Whisper 消息可见性（悄悄话）",
+      "status": "done | **Owner**: 三猫",
+      "file": "F035-whisper-visibility.md"
+    },
+    {
+      "id": "F036",
+      "name": "Logo 一笔画动画（Stroke Drawing Animation）",
+      "status": "in-progress | **Owner**: 三猫",
+      "file": "F036-logo-stroke-animation.md"
+    },
+    {
+      "id": "F037",
+      "name": "Agent Swarm 协同模式",
+      "status": "in-progress | **Owner**: 三猫",
+      "file": "F037-agent-swarm.md"
+    },
+    {
+      "id": "F038",
+      "name": "Skills 梳理 + 按需发现机制",
+      "status": "in-progress | **Owner**: 三猫",
+      "file": "F038-skills-discovery.md"
+    },
+    {
+      "id": "F039",
+      "name": "消息排队投递 — 用户操作三模式",
+      "status": "done | **Owner**: 三猫",
+      "file": "F039-message-queue-delivery.md"
+    },
+    {
+      "id": "F040",
+      "name": "BACKLOG 整理与 Feature 聚合体系",
+      "status": "done | **Owner**: Ragdoll",
+      "file": "F40-backlog-reorganization.md"
+    },
+    {
+      "id": "F041",
+      "name": "能力看板 — Hub MCP/Skills 统一管理",
+      "status": "done | **Owner**: Ragdoll",
+      "file": "F041-capability-dashboard.md"
+    },
+    {
+      "id": "F042",
+      "name": "提示词 & Skills 系统性优化",
+      "status": "done | **Owner**: Ragdoll (Opus 4.6, leader)",
+      "file": "F042-prompt-engineering-audit.md"
+    },
+    {
+      "id": "F043",
+      "name": "MCP 归一化 — Server 拆分 + 协作工具补全",
+      "status": "done | **Owner**: Ragdoll",
+      "file": "F043-mcp-unification.md"
+    },
+    {
+      "id": "F044",
+      "name": "Channel & Activity System（频道与活动系统）",
+      "status": "spec（五猫讨论完成，待开发） | **Owner**: Ragdoll",
+      "file": "F044-channel-activity-system.md"
+    },
+    {
+      "id": "F045",
+      "name": "NDJSON 可观测性 — CLI 事件流全量解析 + 多猫透明化",
+      "status": "done (Phase 1+2 合并交付, PR #88) | **Owner**: Ragdoll",
+      "file": "F045-ndjson-observability.md"
+    },
+    {
+      "id": "F046",
+      "name": "愿景守护协议 — Anti-Drift Protocol",
+      "status": "done | **Owner**: 三猫",
+      "file": "F046-anti-drift-protocol.md"
+    },
+    {
+      "id": "F047",
+      "name": "Queue Steer（队列消息一键“立即执行 / 提到队首”）",
+      "status": "done | **Owner**: Maine Coon/Maine Coon（Codex）",
+      "file": "F047-queue-steer.md"
+    },
+    {
+      "id": "F048",
+      "name": "Restart Recovery — 重启自愈（Invocation/Queue 恢复）",
+      "status": "Phase A done / Phase B idea | **Owner**: Ragdoll",
+      "file": "F048-restart-recovery.md"
+    },
+    {
+      "id": "F049",
+      "name": "Mission Hub — Backlog Center（领取/派发/自动开 Thread）",
+      "status": "done | **Owner**: 三猫",
+      "file": "F049-mission-control-backlog-center.md"
+    },
+    {
+      "id": "F050",
+      "name": "External Agent Onboarding（A2A/CLI 接入契约）",
+      "status": "in-progress | **Owner**: 三猫（Phase 1 leader: Ragdoll Opus 4.6）",
+      "file": "F050-a2a-external-agent-onboarding.md"
+    },
+    {
+      "id": "F051",
+      "name": "— 猫粮看板（Quota Board）",
+      "status": "in-progress | **Owner**: Ragdoll (Opus) ← v2 重写后接管",
+      "file": "F051-real-quota-dashboard.md"
+    },
+    {
+      "id": "F052",
+      "name": "跨线程身份隔离与消息溯源",
+      "status": "done | **Owner**: Ragdoll",
+      "file": "F052-cross-thread-identity-isolation.md"
+    },
+    {
+      "id": "F053",
+      "name": "Gemini Session/Resume 语义对齐",
+      "status": "done | **Owner**: Maine Coon",
+      "file": "F053-gemini-resume-session-parity.md"
+    },
+    {
+      "id": "F054",
+      "name": "HCI 预热基础设施 — Social Media MCP + 内容管线",
+      "status": "spec | **Owner**: Ragdoll (Opus 4.6, Leader)",
+      "file": "F054-hci-preheat-infra.md"
+    },
+    {
+      "id": "F055",
+      "name": "A2A MCP Structured Routing（结构化路由 + targetCats）",
+      "status": "spec | **Owner**: Ragdoll (Opus 4.6)",
+      "file": "F055-a2a-mcp-structured-routing.md"
+    },
+    {
+      "id": "F055",
+      "name": "— 猫猫祟祟（Plan Board）",
+      "status": "done | **Owner**: Ragdoll (Opus)",
+      "file": "F055-plan-board.md"
+    },
+    {
+      "id": "F056",
+      "name": "Cat Café 设计语言 — 猫猫化不是猫化",
+      "status": "doing | **Owner**: Maine Coon/GPT-5.2 主导设计执行 + Ragdoll工程架构 + Siamese概念方向",
+      "file": "F056-cat-cafe-design-language.md"
+    },
+    {
+      "id": "F057",
+      "name": "Thread 可发现性 — 排序 + 搜索 + 猫猫工具",
+      "status": "done | **Owner**: Ragdoll",
+      "file": "F057-thread-discoverability.md"
+    },
+    {
+      "id": "F058",
+      "name": "Mission Control 增强（F049++）",
+      "status": "done | **Completed**: 2026-03-11 | **Owner**: Ragdoll",
+      "file": "F058-mission-control-enhancements.md"
+    },
+    {
+      "id": "F059",
+      "name": "Cat Café 开源计划",
+      "status": "spec | **Owner**: Ragdoll | **Priority**: P2 | **Target**: 2026-03-30（team lead定）",
+      "file": "F059-open-source-plan.md"
+    },
+    {
+      "id": "F060",
+      "name": "output_image 富文本渲染",
+      "status": "done | **Owner**: 三猫",
+      "file": "F060-output-image-rich-block.md"
+    },
+    {
+      "id": "F061",
+      "name": "Antigravity 接入 — 孟加拉猫（混血家族）",
+      "status": "phase-1-done | **Owner**: Ragdoll Opus 4.6",
+      "file": "F061-antigravity-bengal-cat.md"
+    },
+    {
+      "id": "F061",
+      "name": "CDP 接入困难与解决方案复盘",
+      "status": "done | **Owner**: Ragdoll/Ragdoll",
+      "file": "F061-cdp-integration-retrospective.md"
+    },
+    {
+      "id": "F062",
+      "name": "Ragdoll账号配置中枢（订阅 / 赞助 API 切换）",
+      "status": "done | **Owner**: 三猫",
+      "file": "F062-ragdoll-provider-profile-hub.md"
+    },
+    {
+      "id": "F063",
+      "name": "Hub Workspace Explorer — team lead不用打开 IDE 也可以和猫猫们优雅协作",
+      "status": "done | **Owner**: Ragdoll (Opus 4.6, Leader)",
+      "file": "F063-hub-workspace-explorer.md"
+    },
+    {
+      "id": "F064",
+      "name": "A2A 出口检查 — 链条终止盲区修复",
+      "status": "done | **Owner**: Ragdoll",
+      "file": "F064-a2a-exit-check.md"
+    },
+    {
+      "id": "F065",
+      "name": "Session Continuity — 封印重生，记忆不断",
+      "status": "done | **Owner**: Ragdoll（实现）+ Maine Coon（review）",
+      "file": "F065-session-continuity.md"
+    },
+    {
+      "id": "F066",
+      "name": "Voice Pipeline Upgrade — 本地 TTS + 流式合成 + 播放队列",
+      "status": "phase4-done | **Owner**: Ragdoll (Opus 4.6)",
+      "file": "F066-voice-pipeline-upgrade.md"
+    },
+    {
+      "id": "F067",
+      "name": "Cold-start Verifier — 无历史污染的交付物验证",
+      "status": "spec | **Owner**: Ragdoll",
+      "file": "F067-cold-start-verifier.md"
+    },
+    {
+      "id": "F068",
+      "name": "— 新建对话弹窗 UX 优化",
+      "status": "in-progress | **Owner**: 三猫",
+      "file": "F068-new-thread-dialog-ux.md"
+    },
+    {
+      "id": "F069",
+      "name": "— Thread Read State (Unread Badge Persistence)",
+      "status": "spec | **Owner**: 三猫",
+      "file": "F069-thread-read-state.md"
+    },
+    {
+      "id": "F070",
+      "name": "Portable Governance — 猫咖方法论的可复制输出",
+      "status": "done | **Owner**: Ragdoll",
+      "file": "F070-portable-governance.md"
+    },
+    {
+      "id": "F071",
+      "name": "UX Debt Batch — 前端小修小补合集",
+      "status": "done | **Owner**: Ragdoll | **Priority**: P2",
+      "file": "F071-ux-debt-batch.md"
+    },
+    {
+      "id": "F072",
+      "name": "Mark All Read — 一键清理未读 Badge",
+      "status": "done | **Owner**: 三猫",
+      "file": "F072-mark-all-read.md"
+    },
+    {
+      "id": "F073",
+      "name": "SOP Auto-Guardian — 流程自闭环守护",
+      "status": "done | **Owner**: Ragdoll",
+      "file": "F073-sop-auto-guardian.md"
+    },
+    {
+      "id": "F074",
+      "name": "Mount Directory Support — 挂载/共享目录支持",
+      "status": "done | **Owner**: Ragdoll",
+      "file": "F074-mount-directory-support.md"
+    },
+    {
+      "id": "F075",
+      "name": "— 猫猫排行榜 (Cat Leaderboard)",
+      "status": "done | **Owner**: Ragdoll | **Completed**: 2026-03-12",
+      "file": "F075-cat-leaderboard.md"
+    },
+    {
+      "id": "F076",
+      "name": "Mission Hub 跨项目作战面板 + 甲方项目治理引擎",
+      "status": "phase-2-done | **Owner**: Ragdoll",
+      "file": "F076-mission-hub-cross-project.md"
+    },
+    {
+      "id": "F077",
+      "name": "— Multi-User Secure Collaboration（多用户安全协作）",
+      "status": "spec | **Owner**: Ragdoll",
+      "file": "F077-multi-user-secure-collab.md"
+    },
+    {
+      "id": "F078",
+      "name": "Smart Routing & Group Mentions",
+      "status": "done | **Owner**: Ragdoll",
+      "file": "F078-smart-routing-group-mentions.md"
+    },
+    {
+      "id": "F079",
+      "name": "Voting System (v2 — UX 重写)",
+      "status": "done | **Owner**: Ragdoll",
+      "file": "F079-voting-system.md"
+    },
+    {
+      "id": "F080",
+      "name": "Input History Completion",
+      "status": "done | **Owner**: Ragdoll",
+      "file": "F080-input-history-completion.md"
+    },
+    {
+      "id": "F081",
+      "name": "— Bubble Continuity & Rendering Observability（猫猫气泡连续性与可观测性）",
+      "status": "done | **Owner**: Ragdoll",
+      "file": "F081-bubble-continuity-observability.md"
+    },
+    {
+      "id": "F081",
+      "name": "Appendix — Bubble/Thread State Write-Path Audit",
+      "status": "done | **Owner**: Ragdoll",
+      "file": "F081-write-path-audit.md"
+    },
+    {
+      "id": "F082",
+      "name": "Git Health Panel — Repo 状态可视化",
+      "status": "done | **Owner**: Ragdoll",
+      "file": "F082-git-health-panel.md"
+    },
+    {
+      "id": "F083",
+      "name": "— Design Gate + Cloud Reviewer Quota Fallback",
+      "status": "done | **Owner**: Ragdoll",
+      "file": "F083-design-gate-sop.md"
+    },
+    {
+      "id": "F084",
+      "name": "— Ragdoll Rescue Hub（Ragdoll救援中心）",
+      "status": "done | **Owner**: Maine Coon",
+      "file": "F084-ragdoll-rescue-hub.md"
+    },
+    {
+      "id": "F085",
+      "name": "Hyperfocus Brake — 猫猫健康小刹车",
+      "status": "done | **Completed**: 2026-03-11 | **Owner**: Ragdoll",
+      "file": "F085-hyperfocus-brake.md"
+    },
+    {
+      "id": "F086",
+      "name": "Cat Orchestration — 猫猫自主协作 + 元认知系统",
+      "status": "done | **Owner**: 三猫",
+      "file": "F086-cat-orchestration-multi-mention.md"
+    },
+    {
+      "id": "F087",
+      "name": "猫猫训练营（CVO Bootcamp）",
+      "status": "done | **Owner**: Ragdoll | **Completed**: 2026-03-12",
+      "file": "F087-cvo-bootcamp.md"
+    },
+    {
+      "id": "F088",
+      "name": "Multi-Platform Chat Gateway — 聊天平台接入网关",
+      "status": "Phase 1-6+A+B+C+E done, Phase D in-progress | **Owner**: Ragdoll",
+      "file": "F088-multi-platform-chat-gateway.md"
+    },
+    {
+      "id": "F089",
+      "name": "Hub Terminal & tmux Integration — 浏览器终端 + 猫猫可观测性",
+      "status": "in-progress | **Owner**: Ragdoll",
+      "file": "F089-hub-terminal-tmux.md"
+    },
+    {
+      "id": "F090",
+      "name": "像素猫猫大作战（Pixel Cat Brawl）",
+      "status": "phase-1-done | **Owner**: Ragdoll",
+      "file": "F090-pixel-cat-brawl.md"
+    },
+    {
+      "id": "F091",
+      "name": "Signal Study Mode — 信号学习伴侣",
+      "status": "in-progress (Phase 8 podcast context injection done) | **Owner**: Ragdoll",
+      "file": "F091-signal-study-mode.md"
+    },
+    {
+      "id": "F092",
+      "name": "— Cats & U 语音陪伴体验",
+      "status": "in-progress (P0 complete) | **Owner**: Ragdoll (Opus 4.6)",
+      "file": "F092-voice-companion-experience.md"
+    },
+    {
+      "id": "F093",
+      "name": "Cats & U — 陪伴式共创世界引擎",
+      "status": "spec | **Owner**: Ragdoll | **Priority**: P1",
+      "file": "F093-cats-and-u-world-engine.md"
+    },
+    {
+      "id": "F094",
+      "name": "Feature 文档债务清理 — 全量迁移到黄金模板标准",
+      "status": "done | **Owner**: Ragdoll | **Priority**: P1 | **Completed**: 2026-03-11",
+      "file": "F094-feature-doc-debt-cleanup.md"
+    },
+    {
+      "id": "F095",
+      "name": "Thread Sidebar 导航体验升级",
+      "status": "in-progress (Phase D) | **Owner**: Ragdoll | **Priority**: P1",
+      "file": "F095-sidebar-collapse-memory.md"
+    },
+    {
+      "id": "F096",
+      "name": "Interactive Rich Blocks — 可交互富文本组件",
+      "status": "Phase C in progress | **Owner**: Ragdoll | **Priority**: P1",
+      "file": "F096-interactive-rich-blocks.md"
+    },
+    {
+      "id": "F097",
+      "name": "CLI Output Collapsible UX — 聊天气泡折叠式重构",
+      "status": "done | **Owner**: Ragdoll | **Priority**: P1 | **Completed**: 2026-03-11",
+      "file": "F097-cli-output-collapsible-ux.md"
+    },
+    {
+      "id": "F098",
+      "name": "Callback Message UX — 猫猫传话可视化",
+      "status": "done | **Completed**: 2026-03-12 | **Owner**: Ragdoll | **Priority**: P1",
+      "file": "F098-callback-message-ux.md"
+    },
+    {
+      "id": "F099",
+      "name": "Hub & 顶栏导航可扩展性重构",
+      "status": "done | **Owner**: Ragdoll | **Priority**: P1 | **Completed**: 2026-03-12",
+      "file": "F099-hub-navigation-scalability.md"
+    },
+    {
+      "id": "F100",
+      "name": "Self-Evolution — 猫猫自我进化机制",
+      "status": "in-progress | **Owner**: Ragdoll | **Priority**: P1",
+      "file": "F100-self-evolution.md"
+    },
+    {
+      "id": "F101",
+      "name": "Mode v2 — 游戏系统引擎 + 狼人杀",
+      "status": "done | **Owner**: Ragdoll | **Priority**: P1 | **Completed**: 2026-03-12",
+      "file": "F101-mode-v2-game-engine.md"
+    },
+    {
+      "id": "F102",
+      "name": "记忆组件 Adapter 化重构 — IEvidenceStore + 本地索引",
+      "status": "in-progress | **Owner**: Ragdoll | **Priority**: P1",
+      "file": "F102-memory-adapter-refactor.md"
+    },
+    {
+      "id": "F103",
+      "name": "猫猫独立声线 — Per-Cat Voice Identity",
+      "status": "spec | **Owner**: TBD（team lead另派Ragdoll） | **Priority**: P2",
+      "file": "F103-per-cat-voice-identity.md"
+    },
+    {
+      "id": "F104",
+      "name": "本地全感知升级 — Qwen Omni + VL MoE 替换管道",
+      "status": "spec | **Owner**: Ragdoll | **Priority**: P1",
+      "file": "F104-local-omni-perception.md"
+    },
+    {
+      "id": "F105",
+      "name": "opencode 接入 — 金渐层（开源多模型编码猫）",
+      "status": "done | **Owner**: Ragdoll Opus 4.6",
+      "file": "F105-opencode-golden-chinchilla.md"
+    },
+    {
+      "id": "F106",
+      "name": "多训练营支持 + 训练营列表页",
+      "status": "done | **Owner**: Ragdoll | **Priority**: P2 | **Completed**: 2026-03-12",
+      "file": "F106-multi-bootcamp.md"
+    },
+    {
+      "id": "F107",
+      "name": "猫猫杀（脑门贴词）— 坏猫战术推理游戏",
+      "status": "spec | **Owner**: Ragdoll | **Priority**: P1",
+      "file": "F107-headband-guess-game.md"
+    },
+    {
+      "id": "F108",
+      "name": "Side-Dispatch — 同一 Thread 多猫并发执行",
+      "status": "spec | **Owner**: TBD | **Priority**: P1",
+      "file": "F108-side-dispatch-concurrent-invocation.md"
+    }
+  ],
+  "generated_at": "2026-03-13T01:39:24.314Z"
+}

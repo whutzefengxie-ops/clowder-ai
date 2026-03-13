@@ -1,10 +1,10 @@
 import './helpers/setup-cat-registry.js';
-import { describe, test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import Fastify from 'fastify';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { beforeEach, describe, test } from 'node:test';
+import Fastify from 'fastify';
 
 const USER_HEADER = { 'x-cat-cafe-user': 'default-user' };
 
@@ -935,13 +935,16 @@ describe('Backlog Routes', () => {
     const featuresDir = join(tempDir, 'features');
     await mkdir(featuresDir, { recursive: true });
 
-    await writeFile(backlogDocPath, `# Cat Cafe Feature Roadmap
+    await writeFile(
+      backlogDocPath,
+      `# Cat Cafe Feature Roadmap
 
 | ID | 名称 | Status | Owner | Link |
 |----|------|--------|-------|------|
 | F010 | 手机端猫猫 | in-progress | 三猫 | [F010](features/F010-mobile-cat.md) |
 | F049 | Mission Hub — Backlog Center | review | 三猫 | [F049](features/F049-mission-control-backlog-center.md) |
-`);
+`,
+    );
 
     try {
       const app = await createApp({ backlogDocPath, featuresDir });
@@ -966,16 +969,25 @@ describe('Backlog Routes', () => {
       assert.equal(listAfterImport.statusCode, 200);
       const importedItems = listAfterImport.json().items;
       assert.equal(importedItems.length, 2);
-      assert.equal(importedItems.some((item) => item.tags.includes('feature:f010')), true);
-      assert.equal(importedItems.some((item) => item.tags.includes('feature:f049')), true);
+      assert.equal(
+        importedItems.some((item) => item.tags.includes('feature:f010')),
+        true,
+      );
+      assert.equal(
+        importedItems.some((item) => item.tags.includes('feature:f049')),
+        true,
+      );
 
-      await writeFile(backlogDocPath, `# Cat Cafe Feature Roadmap
+      await writeFile(
+        backlogDocPath,
+        `# Cat Cafe Feature Roadmap
 
 | ID | 名称 | Status | Owner | Link |
 |----|------|--------|-------|------|
 | F010 | 手机端猫猫 | spec | 三猫 | [F010](features/F010-mobile-cat.md) |
 | F049 | Mission Hub — Backlog Center (updated) | in-progress | 三猫 | [F049](features/F049-mission-control-backlog-center.md) |
-`);
+`,
+      );
 
       const secondImport = await app.inject({
         method: 'POST',
@@ -1141,8 +1153,9 @@ describe('Backlog Routes', () => {
     assert.equal(secondBody.item.dispatchedThreadId, itemAfterFailure?.pendingThreadId);
     assert.ok(secondBody.item.kickoffMessageId);
 
-    const backlogThreads = (await threadStore.list('default-user'))
-      .filter((thread) => thread.title === '[Backlog] dispatch retry should reuse thread');
+    const backlogThreads = (await threadStore.list('default-user')).filter(
+      (thread) => thread.title === '[Backlog] dispatch retry should reuse thread',
+    );
     assert.equal(backlogThreads.length, 1);
     assert.equal(backlogThreads[0].id, itemAfterFailure?.pendingThreadId);
 
@@ -1220,8 +1233,9 @@ describe('Backlog Routes', () => {
     assert.equal(secondBody.item.status, 'dispatched');
     assert.ok(secondBody.item.kickoffMessageId);
 
-    const backlogThreads = (await threadStore.list('default-user'))
-      .filter((thread) => thread.title === '[Backlog] dispatch retry should dedupe kickoff append');
+    const backlogThreads = (await threadStore.list('default-user')).filter(
+      (thread) => thread.title === '[Backlog] dispatch retry should dedupe kickoff append',
+    );
     assert.equal(backlogThreads.length, 1);
     assert.equal(backlogThreads[0].id, itemAfterFailure?.pendingThreadId);
 
@@ -1236,12 +1250,15 @@ describe('Backlog Routes', () => {
     const featuresDir = join(tempDir, 'features');
     await mkdir(featuresDir, { recursive: true });
 
-    await writeFile(backlogDocPath, `# Cat Cafe Feature Roadmap
+    await writeFile(
+      backlogDocPath,
+      `# Cat Cafe Feature Roadmap
 
 | ID | 名称 | Status | Owner | Link |
 |----|------|--------|-------|------|
 | F010 | 手机端猫猫（docs） | in-progress | 三猫 | [F010](features/F010-mobile-cat.md) |
-`);
+`,
+    );
 
     try {
       const app = await createApp({ backlogDocPath, featuresDir });
@@ -1324,10 +1341,7 @@ describe('Backlog Routes', () => {
     const body = approveRes.json();
     assert.equal(body.item.status, 'dispatched');
     assert.ok(body.item.dispatchAttemptId, 'dispatchAttemptId must be set');
-    assert.ok(
-      !body.item.dispatchAttemptId.includes('pending'),
-      'must not contain pending fallback',
-    );
+    assert.ok(!body.item.dispatchAttemptId.includes('pending'), 'must not contain pending fallback');
 
     // Verify kickoff message was created
     const messages = await messageStore.getByThread(body.thread.id, 10, 'default-user');
@@ -1406,19 +1420,25 @@ describe('Backlog mark-done route', () => {
 
   async function createDispatchedItem(app) {
     const createRes = await app.inject({
-      method: 'POST', url: '/api/backlog/items', headers: H,
+      method: 'POST',
+      url: '/api/backlog/items',
+      headers: H,
       payload: { title: 'Done test', summary: 'S', priority: 'p2', tags: [] },
     });
     const itemId = createRes.json().id;
 
     const suggestRes = await app.inject({
-      method: 'POST', url: `/api/backlog/items/${itemId}/suggest-claim`, headers: H,
+      method: 'POST',
+      url: `/api/backlog/items/${itemId}/suggest-claim`,
+      headers: H,
       payload: { catId: 'codex', why: 'w', plan: 'p', requestedPhase: 'coding' },
     });
     assert.equal(suggestRes.statusCode, 200, 'suggest should succeed');
 
     const approveRes = await app.inject({
-      method: 'POST', url: `/api/backlog/items/${itemId}/decide-claim`, headers: H,
+      method: 'POST',
+      url: `/api/backlog/items/${itemId}/decide-claim`,
+      headers: H,
       payload: { decision: 'approve', threadPhase: 'coding' },
     });
     assert.equal(approveRes.statusCode, 200, 'approve should succeed');
@@ -1445,7 +1465,9 @@ describe('Backlog mark-done route', () => {
   test('POST mark-done accepts open item (any status → done)', async () => {
     const app = await createApp();
     const createRes = await app.inject({
-      method: 'POST', url: '/api/backlog/items', headers: H,
+      method: 'POST',
+      url: '/api/backlog/items',
+      headers: H,
       payload: { title: 'Open item', summary: 'S', priority: 'p2', tags: [] },
     });
 
@@ -1490,43 +1512,56 @@ describe('Import sync marks disappeared items as done (any status)', () => {
     const tempDir = await mkdtemp(join(tmpdir(), 'backlog-done-'));
     const backlogPath = join(tempDir, 'BACKLOG.md');
     // Only F001 in BACKLOG, no F999
-    await writeFile(backlogPath, [
-      '| ID | 名称 | Status | Owner | Link |',
-      '|---|---|---|---|---|',
-      '| F001 | Active Feature | in-progress | 布偶猫 | [F001](features/F001.md) |',
-    ].join('\n'));
+    await writeFile(
+      backlogPath,
+      [
+        '| ID | 名称 | Status | Owner | Link |',
+        '|---|---|---|---|---|',
+        '| F001 | Active Feature | in-progress | 布偶猫 | [F001](features/F001.md) |',
+      ].join('\n'),
+    );
 
     const app = Fastify();
     await app.register(backlogRoutes, {
-      backlogStore, threadStore, messageStore,
+      backlogStore,
+      threadStore,
+      messageStore,
       backlogDocPath: backlogPath,
     });
 
     // Create a dispatched item tagged as F999
     const createRes = await app.inject({
-      method: 'POST', url: '/api/backlog/items', headers: H,
+      method: 'POST',
+      url: '/api/backlog/items',
+      headers: H,
       payload: { title: '[F999] Ghost', summary: 'S', priority: 'p2', tags: ['source:docs-backlog', 'feature:f999'] },
     });
     const itemId = createRes.json().id;
 
     // Move to dispatched via suggest → approve
     await app.inject({
-      method: 'POST', url: `/api/backlog/items/${itemId}/suggest-claim`, headers: H,
+      method: 'POST',
+      url: `/api/backlog/items/${itemId}/suggest-claim`,
+      headers: H,
       payload: { catId: 'codex', why: 'w', plan: 'p', requestedPhase: 'coding' },
     });
     await app.inject({
-      method: 'POST', url: `/api/backlog/items/${itemId}/decide-claim`, headers: H,
+      method: 'POST',
+      url: `/api/backlog/items/${itemId}/decide-claim`,
+      headers: H,
       payload: { decision: 'approve', threadPhase: 'coding' },
     });
 
     // Verify it's dispatched
     const listRes = await app.inject({ method: 'GET', url: '/api/backlog/items', headers: H });
-    const f999Item = listRes.json().items.find(i => i.tags.includes('feature:f999'));
+    const f999Item = listRes.json().items.find((i) => i.tags.includes('feature:f999'));
     assert.strictEqual(f999Item.status, 'dispatched');
 
     // Now import — F999 not in BACKLOG.md → should mark done
     const importRes = await app.inject({
-      method: 'POST', url: '/api/backlog/import-active-features', headers: H,
+      method: 'POST',
+      url: '/api/backlog/import-active-features',
+      headers: H,
     });
     assert.strictEqual(importRes.statusCode, 200);
     const body = importRes.json();
@@ -1535,7 +1570,7 @@ describe('Import sync marks disappeared items as done (any status)', () => {
 
     // Verify the item is now done
     const afterList = await app.inject({ method: 'GET', url: '/api/backlog/items', headers: H });
-    const doneItem = afterList.json().items.find(i => i.id === itemId);
+    const doneItem = afterList.json().items.find((i) => i.id === itemId);
     assert.strictEqual(doneItem.status, 'done');
 
     await rm(tempDir, { recursive: true, force: true });
@@ -1562,42 +1597,58 @@ describe('Import sync marks suggested items as done when disappeared', () => {
     const { backlogRoutes } = await import('../dist/routes/backlog.js');
     const tempDir = await mkdtemp(join(tmpdir(), 'backlog-done-'));
     const backlogPath = join(tempDir, 'BACKLOG.md');
-    await writeFile(backlogPath, [
-      '| ID | 名称 | Status | Owner | Link |',
-      '|---|---|---|---|---|',
-      '| F001 | Active Feature | in-progress | 布偶猫 | [F001](features/F001.md) |',
-    ].join('\n'));
+    await writeFile(
+      backlogPath,
+      [
+        '| ID | 名称 | Status | Owner | Link |',
+        '|---|---|---|---|---|',
+        '| F001 | Active Feature | in-progress | 布偶猫 | [F001](features/F001.md) |',
+      ].join('\n'),
+    );
 
     const app = Fastify();
     await app.register(backlogRoutes, {
-      backlogStore, threadStore, messageStore,
+      backlogStore,
+      threadStore,
+      messageStore,
       backlogDocPath: backlogPath,
     });
 
     // Create a suggested item tagged as F888 (not dispatched!)
     const createRes = await app.inject({
-      method: 'POST', url: '/api/backlog/items', headers: H,
-      payload: { title: '[F888] Suggested Ghost', summary: 'S', priority: 'p2', tags: ['source:docs-backlog', 'feature:f888'] },
+      method: 'POST',
+      url: '/api/backlog/items',
+      headers: H,
+      payload: {
+        title: '[F888] Suggested Ghost',
+        summary: 'S',
+        priority: 'p2',
+        tags: ['source:docs-backlog', 'feature:f888'],
+      },
     });
     const itemId = createRes.json().id;
     await app.inject({
-      method: 'POST', url: `/api/backlog/items/${itemId}/suggest-claim`, headers: H,
+      method: 'POST',
+      url: `/api/backlog/items/${itemId}/suggest-claim`,
+      headers: H,
       payload: { catId: 'codex', why: 'w', plan: 'p', requestedPhase: 'coding' },
     });
 
     const listRes = await app.inject({ method: 'GET', url: '/api/backlog/items', headers: H });
-    assert.strictEqual(listRes.json().items.find(i => i.id === itemId).status, 'suggested');
+    assert.strictEqual(listRes.json().items.find((i) => i.id === itemId).status, 'suggested');
 
     // Import — F888 not in BACKLOG.md → should mark done even though suggested
     const importRes = await app.inject({
-      method: 'POST', url: '/api/backlog/import-active-features', headers: H,
+      method: 'POST',
+      url: '/api/backlog/import-active-features',
+      headers: H,
     });
     assert.strictEqual(importRes.statusCode, 200);
     const body = importRes.json();
     assert.ok(body.markedDoneIds.includes(itemId), 'F888 suggested item should be marked done');
 
     const afterList = await app.inject({ method: 'GET', url: '/api/backlog/items', headers: H });
-    assert.strictEqual(afterList.json().items.find(i => i.id === itemId).status, 'done');
+    assert.strictEqual(afterList.json().items.find((i) => i.id === itemId).status, 'done');
 
     await rm(tempDir, { recursive: true, force: true });
   });

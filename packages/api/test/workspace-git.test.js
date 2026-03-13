@@ -37,7 +37,7 @@ describe('parseGitLog', () => {
   });
 
   test('handles subject containing NUL-like chars gracefully', () => {
-    const stdout = 'a'.repeat(40) + '\x00Author\x002026-01-01T00:00:00Z\x00subject with special chars: 你好';
+    const stdout = `${'a'.repeat(40)}\x00Author\x002026-01-01T00:00:00Z\x00subject with special chars: 你好`;
     const commits = parseGitLog(stdout);
     assert.equal(commits.length, 1);
     assert.equal(commits[0].subject, 'subject with special chars: 你好');

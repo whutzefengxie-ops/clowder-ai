@@ -1,9 +1,10 @@
 // @ts-check
-import { describe, it } from 'node:test';
+
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { describe, it } from 'node:test';
 
 function buildPureThinkingAssistantTurn(sessionId, signature = 'sig-123') {
   return JSON.stringify({

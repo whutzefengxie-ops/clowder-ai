@@ -127,14 +127,16 @@ describe('consumeBackgroundSystemInfo web_search', () => {
       batchStreamChunkUpdate: vi.fn(),
       clearThreadActiveInvocation: vi.fn(),
       getThreadState: vi.fn(() => ({
-        messages: [{
-          id: 'bg-msg-1',
-          type: 'assistant',
-          catId: 'codex',
-          content: 'partial chunk',
-          isStreaming: true,
-          timestamp: Date.now(),
-        }],
+        messages: [
+          {
+            id: 'bg-msg-1',
+            type: 'assistant',
+            catId: 'codex',
+            content: 'partial chunk',
+            isStreaming: true,
+            timestamp: Date.now(),
+          },
+        ],
         catStatuses: {},
         catInvocations: {},
       })),

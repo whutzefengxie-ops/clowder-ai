@@ -1,8 +1,8 @@
-import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import test from 'node:test';
 
 import {
   getDefaultP0FailClosedSettings,
@@ -105,13 +105,13 @@ test('triggerP0ReimportIfNeeded returns disabled when auto trigger is off', asyn
 });
 
 test('getDefaultP0FailClosedSettings deduplicates status list from env', () => {
-  const prevStatuses = process.env['HINDSIGHT_P0_FAIL_CLOSED_STATUSES'];
-  process.env['HINDSIGHT_P0_FAIL_CLOSED_STATUSES'] = 'stale,unknown,stale';
+  const prevStatuses = process.env.HINDSIGHT_P0_FAIL_CLOSED_STATUSES;
+  process.env.HINDSIGHT_P0_FAIL_CLOSED_STATUSES = 'stale,unknown,stale';
 
   const settings = getDefaultP0FailClosedSettings(process.env);
 
-  if (prevStatuses === undefined) delete process.env['HINDSIGHT_P0_FAIL_CLOSED_STATUSES'];
-  else process.env['HINDSIGHT_P0_FAIL_CLOSED_STATUSES'] = prevStatuses;
+  if (prevStatuses === undefined) delete process.env.HINDSIGHT_P0_FAIL_CLOSED_STATUSES;
+  else process.env.HINDSIGHT_P0_FAIL_CLOSED_STATUSES = prevStatuses;
 
   assert.deepEqual(settings.statuses, ['stale', 'unknown']);
 });

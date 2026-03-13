@@ -5,11 +5,11 @@
  * falls back to extractive, and still works for extractive-only cats.
  */
 
-import { describe, test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, mkdir, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, beforeEach, describe, test } from 'node:test';
 
 describe('SessionBootstrap bootstrapDepth branching', () => {
   let tempDir;
@@ -17,18 +17,14 @@ describe('SessionBootstrap bootstrapDepth branching', () => {
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), 'bootstrap-depth-'));
   });
-  afterEach(async () => { await rm(tempDir, { recursive: true }); });
+  afterEach(async () => {
+    await rm(tempDir, { recursive: true });
+  });
 
   async function createFixtures(bootstrapDepth) {
-    const { SessionChainStore } = await import(
-      '../dist/domains/cats/services/stores/ports/SessionChainStore.js'
-    );
-    const { TranscriptReader } = await import(
-      '../dist/domains/cats/services/session/TranscriptReader.js'
-    );
-    const { buildSessionBootstrap } = await import(
-      '../dist/domains/cats/services/session/SessionBootstrap.js'
-    );
+    const { SessionChainStore } = await import('../dist/domains/cats/services/stores/ports/SessionChainStore.js');
+    const { TranscriptReader } = await import('../dist/domains/cats/services/session/TranscriptReader.js');
+    const { buildSessionBootstrap } = await import('../dist/domains/cats/services/session/SessionBootstrap.js');
 
     const store = new SessionChainStore();
     const reader = new TranscriptReader({ dataDir: tempDir });
@@ -39,7 +35,10 @@ describe('SessionBootstrap bootstrapDepth branching', () => {
   async function setupPreviousSession(store, tempDir, opts = {}) {
     // Create and seal a previous session
     const record = store.create({
-      cliSessionId: 'cli-prev', threadId: 'thread-1', catId: 'opus', userId: 'user-1',
+      cliSessionId: 'cli-prev',
+      threadId: 'thread-1',
+      catId: 'opus',
+      userId: 'user-1',
     });
     store.update(record.id, { status: 'sealed', sealedAt: Date.now() });
 
@@ -47,25 +46,35 @@ describe('SessionBootstrap bootstrapDepth branching', () => {
     await mkdir(sessionDir, { recursive: true });
 
     // Write extractive digest
-    await writeFile(join(sessionDir, 'digest.extractive.json'), JSON.stringify({
-      v: 1, sessionId: record.id, threadId: 'thread-1', catId: 'opus', seq: 0,
-      time: { createdAt: 1709700000000, sealedAt: 1709700060000 },
-      invocations: [{ toolNames: ['Read', 'Edit'] }],
-      filesTouched: [{ path: 'src/foo.ts', ops: ['edit'] }],
-      errors: [],
-    }));
+    await writeFile(
+      join(sessionDir, 'digest.extractive.json'),
+      JSON.stringify({
+        v: 1,
+        sessionId: record.id,
+        threadId: 'thread-1',
+        catId: 'opus',
+        seq: 0,
+        time: { createdAt: 1709700000000, sealedAt: 1709700060000 },
+        invocations: [{ toolNames: ['Read', 'Edit'] }],
+        filesTouched: [{ path: 'src/foo.ts', ops: ['edit'] }],
+        errors: [],
+      }),
+    );
 
     if (opts.withHandoff) {
-      await writeFile(join(sessionDir, 'digest.handoff.md'), [
-        '---',
-        'v: 1',
-        'model: claude-haiku-4-5-20251001',
-        'generatedAt: 1709700000000',
-        '---',
-        '',
-        '## Session Summary',
-        'Fixed a critical bug in foo.ts. The issue was a null pointer dereference.',
-      ].join('\n'));
+      await writeFile(
+        join(sessionDir, 'digest.handoff.md'),
+        [
+          '---',
+          'v: 1',
+          'model: claude-haiku-4-5-20251001',
+          'generatedAt: 1709700000000',
+          '---',
+          '',
+          '## Session Summary',
+          'Fixed a critical bug in foo.ts. The issue was a null pointer dereference.',
+        ].join('\n'),
+      );
     }
 
     // Create a new active session (session #2)
@@ -80,7 +89,8 @@ describe('SessionBootstrap bootstrapDepth branching', () => {
 
     const result = await buildSessionBootstrap(
       { sessionChainStore: store, transcriptReader: reader, bootstrapDepth: 'generative' },
-      'opus', 'thread-1',
+      'opus',
+      'thread-1',
     );
 
     assert.ok(result);
@@ -96,7 +106,8 @@ describe('SessionBootstrap bootstrapDepth branching', () => {
 
     const result = await buildSessionBootstrap(
       { sessionChainStore: store, transcriptReader: reader, bootstrapDepth: 'generative' },
-      'opus', 'thread-1',
+      'opus',
+      'thread-1',
     );
 
     assert.ok(result);
@@ -111,7 +122,8 @@ describe('SessionBootstrap bootstrapDepth branching', () => {
 
     const result = await buildSessionBootstrap(
       { sessionChainStore: store, transcriptReader: reader, bootstrapDepth: 'extractive' },
-      'opus', 'thread-1',
+      'opus',
+      'thread-1',
     );
 
     assert.ok(result);
@@ -127,7 +139,8 @@ describe('SessionBootstrap bootstrapDepth branching', () => {
 
     const result = await buildSessionBootstrap(
       { sessionChainStore: store, transcriptReader: reader },
-      'opus', 'thread-1',
+      'opus',
+      'thread-1',
     );
 
     assert.ok(result);

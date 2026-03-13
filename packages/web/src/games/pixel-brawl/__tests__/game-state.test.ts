@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { GameState } from '../game-state';
 
 describe('GameState', () => {
@@ -44,7 +44,7 @@ describe('GameState', () => {
     gs.p1.state = 'attack';
     const hit = gs.checkHit('opus46');
     expect(hit).not.toBeNull();
-    expect(hit!.damage).toBe(7); // opus46 attackDamage from FIGHTER_STATS
+    expect(hit?.damage).toBe(7); // opus46 attackDamage from FIGHTER_STATS
   });
 
   it('checkHit returns null when out of range', () => {
@@ -183,7 +183,7 @@ describe('skill system', () => {
     gs.activateSkill('opus46');
     const hit = gs.checkSkillHit('opus46');
     expect(hit).not.toBeNull();
-    expect(hit!.damage).toBe(5); // architecture_lock damage
+    expect(hit?.damage).toBe(5); // architecture_lock damage
   });
 
   it('checkSkillHit returns null when out of range', () => {
@@ -200,7 +200,7 @@ describe('skill system', () => {
     gs.activateSkill('opus46');
     const hit = gs.checkSkillHit('opus46');
     expect(hit).not.toBeNull();
-    gs.applySkillEffect('opus46', hit!.defenderId);
+    gs.applySkillEffect('opus46', hit?.defenderId);
     expect(gs.getFighter('codex').stunMs).toBe(2000);
   });
 
@@ -213,7 +213,7 @@ describe('skill system', () => {
     const hit = gs.checkSkillHit('codex');
     expect(hit).not.toBeNull();
     const beforeX = gs.getFighter('opus46').x;
-    gs.applySkillEffect('codex', hit!.defenderId);
+    gs.applySkillEffect('codex', hit?.defenderId);
     // code_flood pushes opponent away
     expect(gs.getFighter('opus46').x).not.toBe(beforeX);
   });

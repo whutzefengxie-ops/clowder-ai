@@ -6,19 +6,13 @@
  * 用 invokeSingleCat 设置的 env vars 构造请求 → 全部 200/正确数据。
  */
 
-import { describe, test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { beforeEach, describe, test } from 'node:test';
 import Fastify from 'fastify';
 
-const { InvocationRegistry } = await import(
-  '../../dist/domains/cats/services/agents/invocation/InvocationRegistry.js'
-);
-const { MessageStore } = await import(
-  '../../dist/domains/cats/services/stores/ports/MessageStore.js'
-);
-const { TaskStore } = await import(
-  '../../dist/domains/cats/services/stores/ports/TaskStore.js'
-);
+const { InvocationRegistry } = await import('../../dist/domains/cats/services/agents/invocation/InvocationRegistry.js');
+const { MessageStore } = await import('../../dist/domains/cats/services/stores/ports/MessageStore.js');
+const { TaskStore } = await import('../../dist/domains/cats/services/stores/ports/TaskStore.js');
 const { buildMcpCallbackInstructions, needsMcpInjection } = await import(
   '../../dist/domains/cats/services/agents/invocation/McpPromptInjector.js'
 );
@@ -27,9 +21,15 @@ const { callbacksRoutes } = await import('../../dist/routes/callbacks.js');
 function createMockSocketManager() {
   const events = [];
   return {
-    broadcastAgentMessage(msg) { events.push({ type: 'agent', msg }); },
-    broadcastToRoom(room, event, data) { events.push({ room, event, data }); },
-    getEvents() { return events; },
+    broadcastAgentMessage(msg) {
+      events.push({ type: 'agent', msg });
+    },
+    broadcastToRoom(room, event, data) {
+      events.push({ room, event, data });
+    },
+    getEvents() {
+      return events;
+    },
   };
 }
 
@@ -48,7 +48,10 @@ describe('MCP Prompt Injection E2E', () => {
 
     app = Fastify();
     await app.register(callbacksRoutes, {
-      registry, messageStore, socketManager, taskStore,
+      registry,
+      messageStore,
+      socketManager,
+      taskStore,
     });
   });
 
@@ -81,7 +84,7 @@ describe('MCP Prompt Injection E2E', () => {
 
     // 6. Verify message was stored
     const messages = messageStore.getByThread('thread-e2e', 10, 'user-1');
-    const codexMsg = messages.find(m => m.content === 'Hello from Codex via HTTP callback!');
+    const codexMsg = messages.find((m) => m.content === 'Hello from Codex via HTTP callback!');
     assert.ok(codexMsg, 'message should be stored in messageStore');
     assert.equal(codexMsg.catId, 'codex');
   });
@@ -89,12 +92,20 @@ describe('MCP Prompt Injection E2E', () => {
   test('injected thread-context endpoint succeeds with real credentials', async () => {
     // Pre-populate some messages
     messageStore.append({
-      userId: 'user-1', catId: null, content: '你好',
-      mentions: [], timestamp: Date.now(), threadId: 'thread-e2e',
+      userId: 'user-1',
+      catId: null,
+      content: '你好',
+      mentions: [],
+      timestamp: Date.now(),
+      threadId: 'thread-e2e',
     });
     messageStore.append({
-      userId: 'user-1', catId: 'opus', content: '你好owner',
-      mentions: [], timestamp: Date.now() + 1, threadId: 'thread-e2e',
+      userId: 'user-1',
+      catId: 'opus',
+      content: '你好owner',
+      mentions: [],
+      timestamp: Date.now() + 1,
+      threadId: 'thread-e2e',
     });
 
     const { invocationId, callbackToken } = registry.create('user-1', 'gemini', 'thread-e2e');

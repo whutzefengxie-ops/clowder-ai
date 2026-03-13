@@ -6,21 +6,17 @@
  * progression can be enforced with string comparison.
  */
 
-import { catRegistry, createCatId } from '@cat-cafe/shared';
 import type { CatId } from '@cat-cafe/shared';
+import { catRegistry, createCatId } from '@cat-cafe/shared';
 import type { SessionStore } from '@cat-cafe/shared/utils';
 
 const MAX_CURSORS = 5000;
-const FALLBACK_CATS: readonly CatId[] = [
-  createCatId('opus'),
-  createCatId('codex'),
-  createCatId('gemini'),
-];
+const FALLBACK_CATS: readonly CatId[] = [createCatId('opus'), createCatId('codex'), createCatId('gemini')];
 
 /** Get all cat IDs dynamically from registry, with static fallback */
 function getAllCats(): readonly CatId[] {
   const ids = catRegistry.getAllIds();
-  return ids.length > 0 ? ids.map(id => createCatId(id)) : FALLBACK_CATS;
+  return ids.length > 0 ? ids.map((id) => createCatId(id)) : FALLBACK_CATS;
 }
 
 function cursorKey(userId: string, catId: CatId, threadId: string): string {
@@ -46,7 +42,7 @@ export class DeliveryCursorStore {
         if (redisValue != null) {
           // Return max(redis, memory) — Redis may hold a stale value if a
           // prior ack succeeded in-memory but failed to write to Redis
-          return (memValue && memValue > redisValue) ? memValue : redisValue;
+          return memValue && memValue > redisValue ? memValue : redisValue;
         }
         // Redis returned null — fall through to return memValue below
       } catch (err) {
@@ -68,7 +64,7 @@ export class DeliveryCursorStore {
     // This prevents Redis-recovery regression: if Redis was down and
     // in-memory has a higher cursor, we seed Redis with that floor.
     const memCursor = this.cursors.get(key);
-    const effective = (memCursor && memCursor > deliveredToId) ? memCursor : deliveredToId;
+    const effective = memCursor && memCursor > deliveredToId ? memCursor : deliveredToId;
 
     if (this.sessionStore) {
       try {
@@ -118,7 +114,7 @@ export class DeliveryCursorStore {
         const redisValue = await this.sessionStore.getMentionAckCursor(userId, catId, threadId);
         if (redisValue != null) {
           // Return max(redis, memory) — same rationale as getCursor
-          return (memValue && memValue > redisValue) ? memValue : redisValue;
+          return memValue && memValue > redisValue ? memValue : redisValue;
         }
         // Redis returned null — fall through to return memValue below
       } catch (err) {
@@ -138,7 +134,7 @@ export class DeliveryCursorStore {
     // Use max(messageId, in-memory cursor) as effective value.
     // Prevents Redis-recovery regression (same as ackCursor).
     const memCursor = this.mentionAckCursors.get(key);
-    const effective = (memCursor && memCursor > messageId) ? memCursor : messageId;
+    const effective = memCursor && memCursor > messageId ? memCursor : messageId;
 
     if (this.sessionStore) {
       try {

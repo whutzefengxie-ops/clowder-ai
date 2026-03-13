@@ -3,8 +3,8 @@
  */
 
 import { z } from 'zod';
-import type { ToolResult } from './file-tools.js';
 import { callbackGet, callbackPost } from './callback-tools.js';
+import type { ToolResult } from './file-tools.js';
 
 export const callbackEvidenceSearchInputSchema = {
   query: z.string().trim().min(1).describe('Evidence query string'),
@@ -59,7 +59,8 @@ export async function handleCallbackRetainMemory(input: {
 export const callbackMemoryTools = [
   {
     name: 'cat_cafe_search_evidence_callback',
-    description: 'Search project evidence (invocation-scoped callback auth). Uses Cat Cafe callback endpoint and Hindsight recall behind the API.',
+    description:
+      'Search project evidence (invocation-scoped callback auth). Uses Cat Cafe callback endpoint and Hindsight recall behind the API.',
     inputSchema: callbackEvidenceSearchInputSchema,
     handler: handleCallbackSearchEvidence,
   },

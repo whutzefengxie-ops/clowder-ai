@@ -6,11 +6,11 @@
  * cloud Codex flagged as P1 (route-parallel had no synthesis).
  */
 
-import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import fs from 'node:fs';
+import { after, before, describe, it } from 'node:test';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -66,11 +66,13 @@ const tmpDir = path.join(os.tmpdir(), 'cat-cafe-rp-voice-test');
 
 before(async () => {
   // Clean stale cache
-  try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* ok */ }
+  try {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  } catch {
+    /* ok */
+  }
 
-  const { initVoiceBlockSynthesizer } = await import(
-    '../dist/domains/cats/services/tts/VoiceBlockSynthesizer.js'
-  );
+  const { initVoiceBlockSynthesizer } = await import('../dist/domains/cats/services/tts/VoiceBlockSynthesizer.js');
 
   const mockRegistry = {
     getDefault: () => ({
@@ -88,7 +90,11 @@ before(async () => {
 });
 
 after(() => {
-  try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* ok */ }
+  try {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  } catch {
+    /* ok */
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -97,9 +103,7 @@ after(() => {
 
 describe('routeParallel voice synthesis (F34-b regression)', () => {
   it('synthesizes text-only audio block in cc_rich to playable url', async () => {
-    const { routeParallel } = await import(
-      '../dist/domains/cats/services/agents/routing/route-parallel.js'
-    );
+    const { routeParallel } = await import('../dist/domains/cats/services/agents/routing/route-parallel.js');
 
     const richPayload = JSON.stringify({
       v: 1,
@@ -107,10 +111,7 @@ describe('routeParallel voice synthesis (F34-b regression)', () => {
     });
 
     const appendCalls = [];
-    const deps = createMockDeps(
-      { opus: createVoiceService('opus', richPayload) },
-      appendCalls,
-    );
+    const deps = createMockDeps({ opus: createVoiceService('opus', richPayload) }, appendCalls);
 
     for await (const _msg of routeParallel(deps, ['opus'], 'say hello', 'user1', 'thread1')) {
       // drain
@@ -124,7 +125,7 @@ describe('routeParallel voice synthesis (F34-b regression)', () => {
     const audioBlock = stored.extra.rich.blocks[0];
     assert.equal(audioBlock.kind, 'audio');
     assert.ok(
-      audioBlock.url && audioBlock.url.startsWith('/api/tts/audio/'),
+      audioBlock.url?.startsWith('/api/tts/audio/'),
       `audio block should have synthesized url, got: ${audioBlock.url}`,
     );
     assert.equal(audioBlock.text, 'Hello from parallel mode');
@@ -132,24 +133,23 @@ describe('routeParallel voice synthesis (F34-b regression)', () => {
   });
 
   it('does NOT re-synthesize audio block that already has url', async () => {
-    const { routeParallel } = await import(
-      '../dist/domains/cats/services/agents/routing/route-parallel.js'
-    );
+    const { routeParallel } = await import('../dist/domains/cats/services/agents/routing/route-parallel.js');
 
     const richPayload = JSON.stringify({
       v: 1,
-      blocks: [{
-        id: 'a2', kind: 'audio', v: 1,
-        url: '/api/tts/audio/existing.wav',
-        text: 'Already synthesized',
-      }],
+      blocks: [
+        {
+          id: 'a2',
+          kind: 'audio',
+          v: 1,
+          url: '/api/tts/audio/existing.wav',
+          text: 'Already synthesized',
+        },
+      ],
     });
 
     const appendCalls = [];
-    const deps = createMockDeps(
-      { opus: createVoiceService('opus', richPayload) },
-      appendCalls,
-    );
+    const deps = createMockDeps({ opus: createVoiceService('opus', richPayload) }, appendCalls);
 
     for await (const _msg of routeParallel(deps, ['opus'], 'say again', 'user1', 'thread1')) {
       // drain

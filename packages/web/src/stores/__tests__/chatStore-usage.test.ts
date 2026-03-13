@@ -3,7 +3,7 @@
  * Verifies that setCatInvocation correctly stores and merges TokenUsage data,
  * simulating what useAgentMessages does when receiving invocation_usage events.
  */
-import { describe, it, expect, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { useChatStore } from '@/stores/chatStore';
 
 describe('F8: chatStore token usage', () => {
@@ -18,9 +18,9 @@ describe('F8: chatStore token usage', () => {
       usage: { inputTokens: 1000, outputTokens: 500, costUsd: 0.03 },
     });
 
-    const info = useChatStore.getState().catInvocations['opus'];
+    const info = useChatStore.getState().catInvocations.opus;
     expect(info).toBeDefined();
-    expect(info!.usage).toEqual({
+    expect(info?.usage).toEqual({
       inputTokens: 1000,
       outputTokens: 500,
       costUsd: 0.03,
@@ -47,13 +47,13 @@ describe('F8: chatStore token usage', () => {
       usage: { inputTokens: 2000, outputTokens: 800, cacheReadTokens: 1500 },
     });
 
-    const info = useChatStore.getState().catInvocations['opus'];
+    const info = useChatStore.getState().catInvocations.opus;
     expect(info).toBeDefined();
-    expect(info!.sessionId).toBe('sess-1');
-    expect(info!.invocationId).toBe('inv-1');
-    expect(info!.startedAt).toBe(1000);
-    expect(info!.durationMs).toBe(4500);
-    expect(info!.usage).toEqual({
+    expect(info?.sessionId).toBe('sess-1');
+    expect(info?.invocationId).toBe('inv-1');
+    expect(info?.startedAt).toBe(1000);
+    expect(info?.durationMs).toBe(4500);
+    expect(info?.usage).toEqual({
       inputTokens: 2000,
       outputTokens: 800,
       cacheReadTokens: 1500,
@@ -83,9 +83,9 @@ describe('F8: chatStore token usage', () => {
     store.setMessageUsage('msg-1', { inputTokens: 1000, outputTokens: 500 });
 
     const msgs = useChatStore.getState().messages;
-    expect(msgs[0].metadata!.usage).toEqual({ inputTokens: 1000, outputTokens: 500 });
+    expect(msgs[0].metadata?.usage).toEqual({ inputTokens: 1000, outputTokens: 500 });
     // msg-2 should NOT have usage
-    expect(msgs[1].metadata!.usage).toBeUndefined();
+    expect(msgs[1].metadata?.usage).toBeUndefined();
   });
 
   it('stores usage for multiple cats independently', () => {
@@ -102,8 +102,8 @@ describe('F8: chatStore token usage', () => {
     });
 
     const state = useChatStore.getState();
-    expect(state.catInvocations['opus']!.usage!.costUsd).toBe(0.03);
-    expect(state.catInvocations['codex']!.usage!.inputTokens).toBe(200);
-    expect(state.catInvocations['gemini']!.usage!.totalTokens).toBe(150);
+    expect(state.catInvocations.opus?.usage?.costUsd).toBe(0.03);
+    expect(state.catInvocations.codex?.usage?.inputTokens).toBe(200);
+    expect(state.catInvocations.gemini?.usage?.totalTokens).toBe(150);
   });
 });

@@ -101,13 +101,13 @@ export interface ConnectorGatewayHandle {
 
 export function loadConnectorGatewayConfig(): ConnectorGatewayConfig {
   return {
-    telegramBotToken: process.env['TELEGRAM_BOT_TOKEN'],
-    feishuAppId: process.env['FEISHU_APP_ID'],
-    feishuAppSecret: process.env['FEISHU_APP_SECRET'],
-    feishuVerificationToken: process.env['FEISHU_VERIFICATION_TOKEN'],
-    ownerUserId: process.env['DEFAULT_OWNER_USER_ID'],
-    whisperUrl: process.env['WHISPER_URL'],
-    connectorMediaDir: process.env['CONNECTOR_MEDIA_DIR'],
+    telegramBotToken: process.env.TELEGRAM_BOT_TOKEN,
+    feishuAppId: process.env.FEISHU_APP_ID,
+    feishuAppSecret: process.env.FEISHU_APP_SECRET,
+    feishuVerificationToken: process.env.FEISHU_VERIFICATION_TOKEN,
+    ownerUserId: process.env.DEFAULT_OWNER_USER_ID,
+    whisperUrl: process.env.WHISPER_URL,
+    connectorMediaDir: process.env.CONNECTOR_MEDIA_DIR,
   };
 }
 
@@ -274,8 +274,8 @@ export async function startConnectorGateway(
   }
 
   // R3-P1: Resolve route URLs to local file paths for real media delivery
-  const uploadDir = resolve(process.env['UPLOAD_DIR'] ?? './uploads');
-  const ttsCacheDir = resolve(process.env['TTS_CACHE_DIR'] ?? './data/tts-cache');
+  const uploadDir = resolve(process.env.UPLOAD_DIR ?? './uploads');
+  const ttsCacheDir = resolve(process.env.TTS_CACHE_DIR ?? './data/tts-cache');
   const resolvedMediaDir = resolve(mediaDir);
   const mediaPathResolver = (url: string): string | undefined => {
     if (url.startsWith('/uploads/')) return join(uploadDir, url.slice('/uploads/'.length));

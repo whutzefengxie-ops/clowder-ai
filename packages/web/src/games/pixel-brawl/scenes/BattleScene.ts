@@ -1,18 +1,18 @@
 import * as Phaser from 'phaser';
+import { type AiAction, AiController } from '../ai-controller';
 import { GameState } from '../game-state';
-import { AiController, type AiAction } from '../ai-controller';
-import { BattleHud } from './BattleHud';
 import { createRng } from '../rng';
+import type { FighterId, GameMode } from '../types';
 import {
   ALL_FIGHTER_IDS,
-  PALETTE,
-  TEAM_COLORS,
+  ATTACK_COOLDOWN_MS,
   FIGHTER_STATS,
   GROUND_Y,
-  ATTACK_COOLDOWN_MS,
   HURT_DURATION_MS,
+  PALETTE,
+  TEAM_COLORS,
 } from '../types';
-import type { FighterId, GameMode } from '../types';
+import { BattleHud } from './BattleHud';
 
 const FIGHTER_W = 48;
 const FIGHTER_H = 64;
@@ -40,11 +40,7 @@ export class BattleScene extends Phaser.Scene {
   init(data: { mode?: GameMode; seed?: number; fighters?: FighterId[] }) {
     this.mode = data.mode ?? 'aivai';
     this.seed = data.seed ?? Date.now();
-    this.fighterIds = data.fighters ?? (
-      this.mode === 'aivai'
-        ? [...ALL_FIGHTER_IDS]
-        : ['opus46', 'codex']
-    );
+    this.fighterIds = data.fighters ?? (this.mode === 'aivai' ? [...ALL_FIGHTER_IDS] : ['opus46', 'codex']);
 
     this.gs = new GameState(this.fighterIds);
 
@@ -197,15 +193,11 @@ export class BattleScene extends Phaser.Scene {
     if (this.timerEvent) this.timerEvent.remove();
 
     const winnerId = this.gs.winner();
-    const winnerName = winnerId
-      ? this.gs.getFighter(winnerId).name
-      : 'DRAW';
+    const winnerName = winnerId ? this.gs.getFighter(winnerId).name : 'DRAW';
     const label = winnerId ? 'K.O.!' : 'TIME UP!';
 
     this.hud.showResult(label);
-    this.hud.showSubtitle(
-      winnerId ? `${winnerName} WINS!  —  Press R to restart` : 'Press R to restart',
-    );
+    this.hud.showSubtitle(winnerId ? `${winnerName} WINS!  —  Press R to restart` : 'Press R to restart');
 
     if (this.input.keyboard) {
       this.input.keyboard.once('keydown-R', () => {
@@ -293,11 +285,7 @@ export class BattleScene extends Phaser.Scene {
     fighter.state = 'idle';
   }
 
-  private flashSprite(
-    targetId: FighterId,
-    style: 'danger' | 'team',
-    sourceId?: FighterId,
-  ) {
+  private flashSprite(targetId: FighterId, style: 'danger' | 'team', sourceId?: FighterId) {
     const sprite = this.sprites.get(targetId);
     if (!sprite) return;
 

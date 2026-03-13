@@ -5,25 +5,17 @@
  * Uses Fastify injection (no real HTTP server).
  */
 
-import { test, describe, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { beforeEach, describe, test } from 'node:test';
 import Fastify from 'fastify';
 
-const { InvocationRegistry } = await import(
-  '../dist/domains/cats/services/agents/invocation/InvocationRegistry.js'
-);
-const { AuthorizationRuleStore } = await import(
-  '../dist/domains/cats/services/stores/ports/AuthorizationRuleStore.js'
-);
-const { PendingRequestStore } = await import(
-  '../dist/domains/cats/services/stores/ports/PendingRequestStore.js'
-);
+const { InvocationRegistry } = await import('../dist/domains/cats/services/agents/invocation/InvocationRegistry.js');
+const { AuthorizationRuleStore } = await import('../dist/domains/cats/services/stores/ports/AuthorizationRuleStore.js');
+const { PendingRequestStore } = await import('../dist/domains/cats/services/stores/ports/PendingRequestStore.js');
 const { AuthorizationAuditStore } = await import(
   '../dist/domains/cats/services/stores/ports/AuthorizationAuditStore.js'
 );
-const { AuthorizationManager } = await import(
-  '../dist/domains/cats/services/auth/AuthorizationManager.js'
-);
+const { AuthorizationManager } = await import('../dist/domains/cats/services/auth/AuthorizationManager.js');
 const { callbackAuthRoutes } = await import('../dist/routes/callback-auth.js');
 const { authorizationRoutes } = await import('../dist/routes/authorization.js');
 
@@ -202,7 +194,12 @@ describe('GET /api/callbacks/permission-status', () => {
     const createRes = await app.inject({
       method: 'POST',
       url: '/api/callbacks/request-permission',
-      payload: { invocationId: catA.invocationId, callbackToken: catA.callbackToken, action: 'git_commit', reason: 'fix' },
+      payload: {
+        invocationId: catA.invocationId,
+        callbackToken: catA.callbackToken,
+        action: 'git_commit',
+        reason: 'fix',
+      },
     });
     const { requestId } = JSON.parse(createRes.body);
 
@@ -223,7 +220,12 @@ describe('GET /api/callbacks/permission-status', () => {
     const createRes = await app.inject({
       method: 'POST',
       url: '/api/callbacks/request-permission',
-      payload: { invocationId: invocA.invocationId, callbackToken: invocA.callbackToken, action: 'git_commit', reason: 'fix' },
+      payload: {
+        invocationId: invocA.invocationId,
+        callbackToken: invocA.callbackToken,
+        action: 'git_commit',
+        reason: 'fix',
+      },
     });
     const { requestId } = JSON.parse(createRes.body);
 

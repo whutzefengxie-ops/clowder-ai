@@ -4,8 +4,8 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { apiFetch } from '@/utils/api-client';
 import { useChatStore } from '@/stores/chatStore';
+import { apiFetch } from '@/utils/api-client';
 
 export interface PathEntry {
   name: string;
@@ -43,24 +43,27 @@ export function usePathCompletion(input: string) {
     // re-fetching the same prefix after Esc/select (P1 fix from codex R1)
   }, []);
 
-  const selectEntry = useCallback((entry: PathEntry): string => {
-    // Replace the path prefix in input with the completed path
-    const match = input.match(PATH_PATTERN);
-    if (!match) return input;
-    const beforePath = input.slice(0, match.index! + (match[0].startsWith(' ') ? 1 : 0));
-    const completedName = entry.isDirectory ? entry.name : entry.name;
-    // Build the completed prefix: parent path + selected name
-    const pathPrefix = match[1];
-    const lastSlash = pathPrefix.lastIndexOf('/');
-    const parentPart = lastSlash >= 0 ? pathPrefix.slice(0, lastSlash + 1) : '';
-    const newText = beforePath + parentPart + completedName;
-    // Pre-set lastPrefixRef to the new completed path so the effect
-    // won't re-fetch and reopen the menu (P1 fix from codex R1)
-    const newPathMatch = newText.match(PATH_PATTERN);
-    if (newPathMatch) lastPrefixRef.current = newPathMatch[1];
-    close();
-    return newText;
-  }, [input, close]);
+  const selectEntry = useCallback(
+    (entry: PathEntry): string => {
+      // Replace the path prefix in input with the completed path
+      const match = input.match(PATH_PATTERN);
+      if (!match) return input;
+      const beforePath = input.slice(0, match.index! + (match[0].startsWith(' ') ? 1 : 0));
+      const completedName = entry.isDirectory ? entry.name : entry.name;
+      // Build the completed prefix: parent path + selected name
+      const pathPrefix = match[1];
+      const lastSlash = pathPrefix.lastIndexOf('/');
+      const parentPart = lastSlash >= 0 ? pathPrefix.slice(0, lastSlash + 1) : '';
+      const newText = beforePath + parentPart + completedName;
+      // Pre-set lastPrefixRef to the new completed path so the effect
+      // won't re-fetch and reopen the menu (P1 fix from codex R1)
+      const newPathMatch = newText.match(PATH_PATTERN);
+      if (newPathMatch) lastPrefixRef.current = newPathMatch[1];
+      close();
+      return newText;
+    },
+    [input, close],
+  );
 
   useEffect(() => {
     const pathPrefix = detectPath(input);
@@ -69,7 +72,10 @@ export function usePathCompletion(input: string) {
       // Abort any in-flight fetch — prevents stale response from reopening
       // the menu after user deletes the path token (cloud review P1 fix)
       abortRef.current?.abort();
-      if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
       if (isOpenRef.current) close();
       return;
     }

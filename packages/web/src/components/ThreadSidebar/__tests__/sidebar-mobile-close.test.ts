@@ -2,8 +2,7 @@
  * Regression test: mobile sidebar auto-closes after creating a new conversation.
  * Verifies that createInProject success path calls onClose on narrow viewports.
  */
-import React from 'react';
-import { act } from 'react';
+import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ThreadSidebar } from '../ThreadSidebar';
@@ -31,7 +30,7 @@ const mockStore: Record<string, unknown> = {
 };
 vi.mock('@/stores/chatStore', () => {
   const hook = Object.assign(
-    (selector?: (s: typeof mockStore) => unknown) => selector ? selector(mockStore) : mockStore,
+    (selector?: (s: typeof mockStore) => unknown) => (selector ? selector(mockStore) : mockStore),
     { getState: () => mockStore },
   );
   return { useChatStore: hook };
@@ -63,9 +62,13 @@ describe('ThreadSidebar mobile auto-close', () => {
     mockApiFetch.mockImplementation((path: string) => {
       if (path === '/api/threads') return jsonOk({ threads: [] });
       if (path === '/api/projects/cwd') return jsonOk({ path: '/test' });
-      if (path.startsWith('/api/projects/browse')) return jsonOk({
-        current: '/test', name: 'test', parent: '/', entries: [],
-      });
+      if (path.startsWith('/api/projects/browse'))
+        return jsonOk({
+          current: '/test',
+          name: 'test',
+          parent: '/',
+          entries: [],
+        });
       return jsonOk({});
     });
   });
@@ -83,7 +86,9 @@ describe('ThreadSidebar mobile auto-close', () => {
   });
 
   async function flush() {
-    await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
   }
 
   it('calls onClose after createInProject succeeds on mobile viewport', async () => {
@@ -91,7 +96,9 @@ describe('ThreadSidebar mobile auto-close', () => {
     Object.defineProperty(window, 'innerWidth', { value: 375, writable: true });
 
     const onClose = vi.fn();
-    act(() => { root.render(React.createElement(ThreadSidebar, { onClose })); });
+    act(() => {
+      root.render(React.createElement(ThreadSidebar, { onClose }));
+    });
     await flush();
 
     // Set up mock for thread creation
@@ -104,19 +111,28 @@ describe('ThreadSidebar mobile auto-close', () => {
     });
 
     // Click "+ 新对话" button to open picker
-    const newBtn = Array.from(container.querySelectorAll('button')).find(
-      (b) => b.textContent?.includes('新对话'),
-    )!;
+    const newBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('新对话'))!;
     expect(newBtn).toBeTruthy();
-    act(() => { newBtn.click(); });
+    act(() => {
+      newBtn.click();
+    });
 
-    // Click "大厅 (无项目)" in the picker — this calls createInProject(undefined)
+    // Click "大厅 (无项目)" in the picker — this selects it (F068-R7 two-step flow)
     await flush();
-    const lobbyBtn = Array.from(container.querySelectorAll('button')).find(
-      (b) => b.textContent?.includes('大厅'),
-    )!;
+    const lobbyBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('大厅'))!;
     expect(lobbyBtn).toBeTruthy();
-    act(() => { lobbyBtn.click(); });
+    act(() => {
+      lobbyBtn.click();
+    });
+
+    // Click "创建对话" confirm button to trigger createInProject
+    const confirmBtn = Array.from(container.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('创建对话'),
+    )!;
+    expect(confirmBtn).toBeTruthy();
+    act(() => {
+      confirmBtn.click();
+    });
     await flush();
 
     expect(onClose).toHaveBeenCalled();
@@ -127,7 +143,9 @@ describe('ThreadSidebar mobile auto-close', () => {
     Object.defineProperty(window, 'innerWidth', { value: 1024, writable: true });
 
     const onClose = vi.fn();
-    act(() => { root.render(React.createElement(ThreadSidebar, { onClose })); });
+    act(() => {
+      root.render(React.createElement(ThreadSidebar, { onClose }));
+    });
     await flush();
 
     mockApiFetch.mockImplementation((path: string, init?: RequestInit) => {
@@ -139,17 +157,25 @@ describe('ThreadSidebar mobile auto-close', () => {
     });
 
     // Open picker
-    const newBtn = Array.from(container.querySelectorAll('button')).find(
-      (b) => b.textContent?.includes('新对话'),
-    )!;
-    act(() => { newBtn.click(); });
+    const newBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('新对话'))!;
+    act(() => {
+      newBtn.click();
+    });
     await flush();
 
     // Select lobby
-    const lobbyBtn = Array.from(container.querySelectorAll('button')).find(
-      (b) => b.textContent?.includes('大厅'),
+    const lobbyBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('大厅'))!;
+    act(() => {
+      lobbyBtn.click();
+    });
+
+    // Confirm creation (F068-R7 two-step flow)
+    const confirmBtn = Array.from(container.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('创建对话'),
     )!;
-    act(() => { lobbyBtn.click(); });
+    act(() => {
+      confirmBtn.click();
+    });
     await flush();
 
     expect(onClose).not.toHaveBeenCalled();

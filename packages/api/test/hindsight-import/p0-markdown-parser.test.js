@@ -1,5 +1,5 @@
-import test from 'node:test';
 import assert from 'node:assert/strict';
+import test from 'node:test';
 
 import {
   hasHindsightIncludeDirective,
@@ -8,14 +8,7 @@ import {
 } from '../../dist/domains/cats/services/hindsight-import/p0-markdown-parser.js';
 
 test('hasHindsightIncludeDirective returns true when frontmatter sets hindsight: include', () => {
-  const content = [
-    '---',
-    'title: discussion sample',
-    'hindsight: include',
-    '---',
-    '',
-    '# Discussion',
-  ].join('\n');
+  const content = ['---', 'title: discussion sample', 'hindsight: include', '---', '', '# Discussion'].join('\n');
 
   assert.equal(hasHindsightIncludeDirective(content), true);
 });
@@ -24,14 +17,7 @@ test('hasHindsightIncludeDirective returns false without include marker', () => 
   const noFrontmatter = '# Discussion\nBody';
   assert.equal(hasHindsightIncludeDirective(noFrontmatter), false);
 
-  const otherMarker = [
-    '---',
-    'title: discussion sample',
-    'hindsight: skip',
-    '---',
-    '',
-    '# Discussion',
-  ].join('\n');
+  const otherMarker = ['---', 'title: discussion sample', 'hindsight: skip', '---', '', '# Discussion'].join('\n');
   assert.equal(hasHindsightIncludeDirective(otherMarker), false);
 });
 

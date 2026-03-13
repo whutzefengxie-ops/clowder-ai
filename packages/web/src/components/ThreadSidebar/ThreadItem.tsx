@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCatData } from '@/hooks/useCatData';
+import type { ThreadState } from '@/stores/chat-types';
+import { API_URL } from '@/utils/api-client';
 import { CatAvatar } from '../CatAvatar';
 import { PawIcon } from '../icons/PawIcon';
 import { ThreadCatStatus } from '../ThreadCatStatus';
 import { ThreadCatSettings } from './ThreadCatSettings';
-import { useCatData } from '@/hooks/useCatData';
-import { API_URL } from '@/utils/api-client';
-import type { ThreadState } from '@/stores/chat-types';
 import { formatRelativeTime } from './thread-utils';
 
 export interface ThreadItemProps {
@@ -103,8 +103,12 @@ export function ThreadItem({
             value={draftTitle}
             onChange={(e) => setDraftTitle(e.target.value)}
             onClick={(e) => e.stopPropagation()}
-            onCompositionStart={() => { isComposingRef.current = true; }}
-            onCompositionEnd={() => { isComposingRef.current = false; }}
+            onCompositionStart={() => {
+              isComposingRef.current = true;
+            }}
+            onCompositionEnd={() => {
+              isComposingRef.current = false;
+            }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !isComposingRef.current) {
                 e.preventDefault();
@@ -116,13 +120,17 @@ export function ThreadItem({
                 setIsEditing(false);
               }
             }}
-            onBlur={() => { void submitRename(); }}
+            onBlur={() => {
+              void submitRename();
+            }}
             disabled={isSaving}
             maxLength={200}
             className="text-sm px-1.5 py-0.5 rounded border border-owner-light focus:outline-none focus:border-owner-primary w-full mr-2 disabled:opacity-70"
           />
         ) : (
-          <span className={`text-sm leading-snug line-clamp-2 flex-1 min-w-0 ${isActive ? 'font-semibold text-cafe-black' : 'text-gray-700'}`}>
+          <span
+            className={`text-sm leading-snug line-clamp-2 flex-1 min-w-0 ${isActive ? 'font-semibold text-cafe-black' : 'text-gray-700'}`}
+          >
             {title ?? (id === 'default' ? '大厅' : '未命名对话')}
           </span>
         )}
@@ -163,16 +171,14 @@ export function ThreadItem({
           )}
           {/* Cat settings button */}
           {id !== 'default' && onUpdatePreferredCats && !isEditing && (
-            <ThreadCatSettings
-              threadId={id}
-              currentCats={preferredCats ?? []}
-              onSave={onUpdatePreferredCats}
-            />
+            <ThreadCatSettings threadId={id} currentCats={preferredCats ?? []} onSave={onUpdatePreferredCats} />
           )}
           {/* Rename button */}
           {canRename && !isEditing && (
             <button
-              onMouseDown={(e) => { e.preventDefault(); }}
+              onMouseDown={(e) => {
+                e.preventDefault();
+              }}
               onClick={(e) => {
                 e.stopPropagation();
                 setIsEditing(true);
@@ -213,7 +219,11 @@ export function ThreadItem({
               title="删除对话"
             >
               <svg className="w-3 h-3 text-gray-300 hover:text-red-400" viewBox="0 0 16 16" fill="currentColor">
-                <path fillRule="evenodd" d="M5 3.25V4H2.75a.75.75 0 000 1.5h.3l.815 8.15A1.5 1.5 0 005.357 15h5.285a1.5 1.5 0 001.493-1.35l.815-8.15h.3a.75.75 0 000-1.5H11v-.75A2.25 2.25 0 008.75 1h-1.5A2.25 2.25 0 005 3.25zm2.25-.75a.75.75 0 00-.75.75V4h3v-.75a.75.75 0 00-.75-.75h-1.5z" clipRule="evenodd" />
+                <path
+                  fillRule="evenodd"
+                  d="M5 3.25V4H2.75a.75.75 0 000 1.5h.3l.815 8.15A1.5 1.5 0 005.357 15h5.285a1.5 1.5 0 001.493-1.35l.815-8.15h.3a.75.75 0 000-1.5H11v-.75A2.25 2.25 0 008.75 1h-1.5A2.25 2.25 0 005 3.25zm2.25-.75a.75.75 0 00-.75.75V4h3v-.75a.75.75 0 00-.75-.75h-1.5z"
+                  clipRule="evenodd"
+                />
               </svg>
             </button>
           )}
@@ -223,9 +233,7 @@ export function ThreadItem({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1">
           {participants.length > 0 ? (
-            participants.map((catId) => (
-              <CatAvatar key={catId} catId={catId} size={16} />
-            ))
+            participants.map((catId) => <CatAvatar key={catId} catId={catId} size={16} />)
           ) : id !== 'default' ? (
             <>
               <PawIcon className="w-3 h-3 text-gray-300" />
@@ -233,7 +241,10 @@ export function ThreadItem({
             </>
           ) : null}
           {preferredCats && preferredCats.length > 0 && (
-            <div className="flex items-center gap-0.5 ml-1" title={`默认: ${preferredCats.map((id) => getCatById(id)?.displayName ?? id).join(', ')}`}>
+            <div
+              className="flex items-center gap-0.5 ml-1"
+              title={`默认: ${preferredCats.map((id) => getCatById(id)?.displayName ?? id).join(', ')}`}
+            >
               <span className="text-[9px] text-gray-400">🎯</span>
               {preferredCats.map((catId) => (
                 <span
@@ -245,12 +256,14 @@ export function ThreadItem({
             </div>
           )}
           {threadState && (
-            <ThreadCatStatus threadState={threadState} unreadCount={threadState.unreadCount} hasUserMention={threadState.hasUserMention} />
+            <ThreadCatStatus
+              threadState={threadState}
+              unreadCount={threadState.unreadCount}
+              hasUserMention={threadState.hasUserMention}
+            />
           )}
         </div>
-        <span className="text-[10px] text-gray-400 flex-shrink-0">
-          {formatRelativeTime(lastActiveAt, true)}
-        </span>
+        <span className="text-[10px] text-gray-400 flex-shrink-0">{formatRelativeTime(lastActiveAt, true)}</span>
       </div>
     </div>
   );
@@ -268,7 +281,13 @@ function PinIcon() {
 
 function StarIcon({ filled }: { filled?: boolean }) {
   return (
-    <svg className="w-3 h-3" viewBox="0 0 16 16" fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.2">
+    <svg
+      className="w-3 h-3"
+      viewBox="0 0 16 16"
+      fill={filled ? 'currentColor' : 'none'}
+      stroke="currentColor"
+      strokeWidth="1.2"
+    >
       <path d="M8 1.5l2.09 4.26 4.71.68-3.41 3.32.8 4.69L8 12.26l-4.19 2.19.8-4.69L1.2 6.44l4.71-.68L8 1.5z" />
     </svg>
   );

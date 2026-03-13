@@ -1,9 +1,7 @@
-import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
 
-const { mergeStreams } = await import(
-  '../dist/domains/cats/services/agents/invocation/stream-merge.js'
-);
+const { mergeStreams } = await import('../dist/domains/cats/services/agents/invocation/stream-merge.js');
 
 /** Create an async iterable that yields values with optional delays */
 async function* delayed(values, delayMs = 0) {
@@ -48,9 +46,7 @@ describe('mergeStreams', () => {
     const good = delayed([1, 2, 3]);
     const bad = failAfter([4], new Error('boom'));
     const errors = [];
-    const result = await collect(
-      mergeStreams([good, bad], (idx, err) => errors.push({ idx, err }))
-    );
+    const result = await collect(mergeStreams([good, bad], (idx, err) => errors.push({ idx, err })));
     // Good stream's values present
     assert.ok(result.includes(1));
     assert.ok(result.includes(2));
@@ -76,9 +72,7 @@ describe('mergeStreams', () => {
     const a = failAfter([], new Error('a'));
     const b = failAfter([], new Error('b'));
     const errors = [];
-    const result = await collect(
-      mergeStreams([a, b], (idx, err) => errors.push({ idx, err }))
-    );
+    const result = await collect(mergeStreams([a, b], (idx, err) => errors.push({ idx, err })));
     assert.deepEqual(result, []);
     assert.equal(errors.length, 2);
   });

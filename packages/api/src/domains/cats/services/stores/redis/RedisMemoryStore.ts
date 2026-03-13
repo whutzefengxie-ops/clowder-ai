@@ -3,11 +3,11 @@
  * Uses Redis Hash for efficient per-thread storage.
  */
 
-import type { Redis } from 'ioredis';
 import type { MemoryEntry, MemoryInput } from '@cat-cafe/shared';
+import type { Redis } from 'ioredis';
 import type { IMemoryStore } from '../ports/MemoryStore.js';
 import { MAX_KEYS_PER_THREAD } from '../ports/MemoryStore.js';
-import { memoryKey, MEMORY_TTL_SECONDS } from '../redis-keys/memory-keys.js';
+import { MEMORY_TTL_SECONDS, memoryKey } from '../redis-keys/memory-keys.js';
 
 /**
  * Redis implementation of IMemoryStore.

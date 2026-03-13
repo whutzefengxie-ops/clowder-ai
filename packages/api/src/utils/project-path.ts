@@ -7,9 +7,8 @@
  */
 
 import { realpath, stat } from 'node:fs/promises';
-import { homedir } from 'node:os';
-import { platform } from 'node:os';
-import { resolve, relative } from 'node:path';
+import { homedir, platform } from 'node:os';
+import { relative, resolve } from 'node:path';
 
 /**
  * Allowed root directories for project paths.
@@ -27,10 +26,10 @@ const DEFAULT_ROOTS = (): string[] => {
 };
 
 const ALLOWED_ROOTS = (): string[] => {
-  const envRoots = process.env['PROJECT_ALLOWED_ROOTS'];
-  if (envRoots && envRoots.trim()) {
+  const envRoots = process.env.PROJECT_ALLOWED_ROOTS;
+  if (envRoots?.trim()) {
     const custom = envRoots.split(':').filter(Boolean);
-    const append = process.env['PROJECT_ALLOWED_ROOTS_APPEND'] === 'true';
+    const append = process.env.PROJECT_ALLOWED_ROOTS_APPEND === 'true';
     return append ? [...new Set([...DEFAULT_ROOTS(), ...custom])] : custom;
   }
   return DEFAULT_ROOTS();

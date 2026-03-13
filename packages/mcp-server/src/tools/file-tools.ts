@@ -6,7 +6,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { z } from 'zod';
-import { isPathAllowed, ensureDir } from '../utils/path-validator.js';
+import { ensureDir, isPathAllowed } from '../utils/path-validator.js';
 
 /**
  * MCP 工具返回结果类型
@@ -48,11 +48,7 @@ export const writeFileInputSchema = {
 
 export const listFilesInputSchema = {
   path: z.string().describe('The directory path to list'),
-  recursive: z
-    .boolean()
-    .optional()
-    .default(false)
-    .describe('Whether to list files recursively'),
+  recursive: z.boolean().optional().default(false).describe('Whether to list files recursively'),
 };
 
 // ============ Tool Handlers ============
@@ -61,16 +57,12 @@ export const listFilesInputSchema = {
  * read_file handler
  * 读取文件内容，带路径验证
  */
-export async function handleReadFile(input: {
-  path: string;
-}): Promise<ToolResult> {
+export async function handleReadFile(input: { path: string }): Promise<ToolResult> {
   const filePath = path.resolve(input.path);
 
   // 路径验证
   if (!isPathAllowed(filePath)) {
-    return errorResult(
-      `Access denied: ${filePath} is not within allowed directories`
-    );
+    return errorResult(`Access denied: ${filePath} is not within allowed directories`);
   }
 
   // 检查文件是否存在
@@ -97,17 +89,12 @@ export async function handleReadFile(input: {
  * write_file handler
  * 写入文件内容，带路径验证和自动创建父目录
  */
-export async function handleWriteFile(input: {
-  path: string;
-  content: string;
-}): Promise<ToolResult> {
+export async function handleWriteFile(input: { path: string; content: string }): Promise<ToolResult> {
   const filePath = path.resolve(input.path);
 
   // 路径验证
   if (!isPathAllowed(filePath)) {
-    return errorResult(
-      `Access denied: ${filePath} is not within allowed directories`
-    );
+    return errorResult(`Access denied: ${filePath} is not within allowed directories`);
   }
 
   try {
@@ -136,7 +123,7 @@ function listFilesRecursive(dirPath: string, basePath: string): string[] {
     const relativePath = path.relative(basePath, fullPath);
 
     if (entry.isDirectory()) {
-      results.push(relativePath + '/');
+      results.push(`${relativePath}/`);
       results.push(...listFilesRecursive(fullPath, basePath));
     } else {
       results.push(relativePath);
@@ -150,18 +137,13 @@ function listFilesRecursive(dirPath: string, basePath: string): string[] {
  * list_files handler
  * 列出目录中的文件，支持递归选项
  */
-export async function handleListFiles(input: {
-  path: string;
-  recursive?: boolean;
-}): Promise<ToolResult> {
+export async function handleListFiles(input: { path: string; recursive?: boolean }): Promise<ToolResult> {
   const dirPath = path.resolve(input.path);
   const recursive = input.recursive ?? false;
 
   // 路径验证
   if (!isPathAllowed(dirPath)) {
-    return errorResult(
-      `Access denied: ${dirPath} is not within allowed directories`
-    );
+    return errorResult(`Access denied: ${dirPath} is not within allowed directories`);
   }
 
   // 检查目录是否存在
@@ -182,9 +164,7 @@ export async function handleListFiles(input: {
       files = listFilesRecursive(dirPath, dirPath);
     } else {
       const entries = fs.readdirSync(dirPath, { withFileTypes: true });
-      files = entries.map((entry) =>
-        entry.isDirectory() ? entry.name + '/' : entry.name
-      );
+      files = entries.map((entry) => (entry.isDirectory() ? `${entry.name}/` : entry.name));
     }
 
     if (files.length === 0) {
@@ -209,7 +189,8 @@ export const fileTools = [
   },
   {
     name: 'write_file',
-    description: 'Write content to a file. Creates parent directories if needed. Only files within allowed directories can be written.',
+    description:
+      'Write content to a file. Creates parent directories if needed. Only files within allowed directories can be written.',
     inputSchema: writeFileInputSchema,
     handler: handleWriteFile,
   },

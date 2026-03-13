@@ -101,12 +101,12 @@ domains/cats/services/
 ```
 docs/
 ├── active/              # 当前进行中
-│   ├── plans/
-│   ├── mailbox/
-│   ├── discussions/
+│   ├── feature-specs/
+│   ├── review-notes/
+│   ├── feature-discussions/
 │   ├── bugs/
 │   └── research/
-├── archive/             # 已完成/已关闭，按月归档
+├── internal-archive/             # 已完成/已关闭，按月归档
 │   └── 2026-02/
 ├── decisions/           # ADR（已有，不动）
 ├── phases/              # Phase 设计文档（不动）

@@ -1,5 +1,5 @@
-import test from 'node:test';
 import assert from 'node:assert/strict';
+import test from 'node:test';
 
 import {
   assertUniqueP0DocumentIds,
@@ -11,10 +11,7 @@ import {
 } from '../../dist/domains/cats/services/hindsight-import/p0-contract.js';
 
 test('buildP0DocumentId derives stable ids for ADR paths', () => {
-  assert.equal(
-    buildP0DocumentId('docs/decisions/005-hindsight-integration-decisions.md'),
-    'adr:005',
-  );
+  assert.equal(buildP0DocumentId('docs/decisions/005-hindsight-integration-decisions.md'), 'adr:005');
 });
 
 test('buildP0DocumentId falls back to path-based id for non-ADR source', () => {
@@ -27,26 +24,24 @@ test('validateP0Tags rejects missing required governance tags', () => {
 
 test('validateP0Tags rejects tags missing visibility prefix', () => {
   assert.throws(
-    () => validateP0Tags([
-      'project:cat-cafe',
-      'kind:decision',
-      'status:published',
-      'author:codex',
-      'origin:git',
-      'sourcePath:docs/decisions/005-hindsight-integration-decisions.md',
-      'sourceCommit:abc1234',
-      'anchor:adr:005#final-decision',
-    ]),
+    () =>
+      validateP0Tags([
+        'project:cat-cafe',
+        'kind:decision',
+        'status:published',
+        'author:codex',
+        'origin:git',
+        'sourcePath:docs/decisions/005-hindsight-integration-decisions.md',
+        'sourceCommit:abc1234',
+        'anchor:adr:005#final-decision',
+      ]),
     /missing required tag prefix: visibility:/,
   );
 });
 
 test('assertUniqueP0DocumentIds rejects duplicate ADR ids', () => {
   assert.throws(
-    () => assertUniqueP0DocumentIds([
-      'docs/decisions/009-duplicate-a.md',
-      'docs/decisions/009-duplicate-b.md',
-    ]),
+    () => assertUniqueP0DocumentIds(['docs/decisions/009-duplicate-a.md', 'docs/decisions/009-duplicate-b.md']),
     /duplicate document_id adr:009/,
   );
 });

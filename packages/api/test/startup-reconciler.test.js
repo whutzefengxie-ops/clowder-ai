@@ -390,5 +390,4 @@ describe('StartupReconciler', () => {
     assert.equal((await store.get('old1')).status, 'failed');
     assert.equal((await store.get('new1')).status, 'running', 'fresh record survives');
   });
-
 });

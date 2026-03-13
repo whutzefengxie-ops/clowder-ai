@@ -74,7 +74,11 @@ export const useInputHistoryStore = create<InputHistoryState>((set, get) => ({
 
   clearHistory: () => {
     if (typeof window !== 'undefined') {
-      try { localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+      } catch {
+        /* ignore */
+      }
     }
     set({ entries: [] });
   },

@@ -5,9 +5,13 @@
  * and mode switch instruction.
  */
 
-import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildBrainstormPrompt, buildDebatePrompt, buildModeSwitchInstruction } from '../dist/domains/cats/services/modes/mode-prompts.js';
+import { describe, it } from 'node:test';
+import {
+  buildBrainstormPrompt,
+  buildDebatePrompt,
+  buildModeSwitchInstruction,
+} from '../dist/domains/cats/services/modes/mode-prompts.js';
 
 describe('buildBrainstormPrompt', () => {
   const config = {

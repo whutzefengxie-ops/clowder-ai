@@ -1,5 +1,5 @@
-import { describe, it, before } from 'node:test';
 import assert from 'node:assert/strict';
+import { before, describe, it } from 'node:test';
 
 describe('StreamingOutboundHook', () => {
   let StreamingOutboundHook;
@@ -45,10 +45,20 @@ describe('StreamingOutboundHook', () => {
   function createHook(opts = {}) {
     const adapter = wrapAdapter(createMockAdapter());
     const adapters = new Map([['feishu', adapter]]);
-    const bindingStore = createBindingStore(opts.bindings ?? [
-      { connectorId: 'feishu', externalChatId: 'chat1', threadId: 'thread-1', userId: 'u1', createdAt: Date.now() },
-    ]);
-    const log = { warn: () => {}, info: () => {}, error: () => {}, debug: () => {}, fatal: () => {}, trace: () => {}, child: () => log };
+    const bindingStore = createBindingStore(
+      opts.bindings ?? [
+        { connectorId: 'feishu', externalChatId: 'chat1', threadId: 'thread-1', userId: 'u1', createdAt: Date.now() },
+      ],
+    );
+    const log = {
+      warn: () => {},
+      info: () => {},
+      error: () => {},
+      debug: () => {},
+      fatal: () => {},
+      trace: () => {},
+      child: () => log,
+    };
     const hook = new StreamingOutboundHook({
       bindingStore,
       adapters,

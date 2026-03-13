@@ -48,18 +48,14 @@ export class OpenCodeAgentService implements AgentService {
   constructor(options?: OpenCodeAgentServiceOptions) {
     this.catId = options?.catId ?? createCatId('opencode');
     this.model = options?.model ?? getCatModel(this.catId as string);
-    this.apiKey = options?.apiKey
-      ?? process.env[OPENCODE_API_KEY_ENV]
-      ?? process.env[ANTHROPIC_API_KEY_ENV];
-    this.baseUrl = options?.baseUrl
-      ?? process.env['OPENCODE_BASE_URL']
-      ?? process.env[ANTHROPIC_BASE_URL_ENV];
+    this.apiKey = options?.apiKey ?? process.env[OPENCODE_API_KEY_ENV] ?? process.env[ANTHROPIC_API_KEY_ENV];
+    this.baseUrl = options?.baseUrl ?? process.env.OPENCODE_BASE_URL ?? process.env[ANTHROPIC_BASE_URL_ENV];
     this.spawnFn = options?.spawnFn;
   }
 
   async *invoke(prompt: string, options?: AgentServiceOptions): AsyncIterable<AgentMessage> {
     // P1-2: runtime model override takes precedence over constructor model
-    const effectiveModel = options?.callbackEnv?.['CAT_CAFE_ANTHROPIC_MODEL_OVERRIDE'] ?? this.model;
+    const effectiveModel = options?.callbackEnv?.CAT_CAFE_ANTHROPIC_MODEL_OVERRIDE ?? this.model;
     const args = this.buildArgs(prompt, options?.sessionId, effectiveModel);
     const cwd = options?.workingDirectory;
     const childEnv = this.buildEnv(options?.callbackEnv);
@@ -136,9 +132,7 @@ export class OpenCodeAgentService implements AgentService {
 
     // Model: opencode expects provider/model format
     const effectiveModel = model ?? this.model;
-    const modelStr = effectiveModel.includes('/')
-      ? effectiveModel
-      : `anthropic/${effectiveModel}`;
+    const modelStr = effectiveModel.includes('/') ? effectiveModel : `anthropic/${effectiveModel}`;
     args.push('-m', modelStr);
 
     // JSON event stream output
@@ -154,10 +148,7 @@ export class OpenCodeAgentService implements AgentService {
     const env: Record<string, string | null> = { ...callbackEnv };
 
     // API key: callbackEnv > constructor > process.env
-    const apiKey =
-      callbackEnv?.['CAT_CAFE_ANTHROPIC_API_KEY']
-      ?? callbackEnv?.[OPENCODE_API_KEY_ENV]
-      ?? this.apiKey;
+    const apiKey = callbackEnv?.CAT_CAFE_ANTHROPIC_API_KEY ?? callbackEnv?.[OPENCODE_API_KEY_ENV] ?? this.apiKey;
     if (apiKey) {
       env[ANTHROPIC_API_KEY_ENV] = apiKey;
     }
@@ -165,9 +156,7 @@ export class OpenCodeAgentService implements AgentService {
     // Base URL: callbackEnv > constructor > process.env
     // P1-1: opencode's Anthropic SDK calls {baseURL}/messages (not /v1/messages),
     // so proxy URLs need /v1 appended to route correctly through nuoda.vip.
-    const rawBaseUrl =
-      callbackEnv?.['CAT_CAFE_ANTHROPIC_BASE_URL']
-      ?? this.baseUrl;
+    const rawBaseUrl = callbackEnv?.CAT_CAFE_ANTHROPIC_BASE_URL ?? this.baseUrl;
     if (rawBaseUrl) {
       const needsV1 = !rawBaseUrl.endsWith('/v1') && !rawBaseUrl.endsWith('/v1/');
       env[ANTHROPIC_BASE_URL_ENV] = needsV1 ? `${rawBaseUrl}/v1` : rawBaseUrl;
@@ -175,7 +164,7 @@ export class OpenCodeAgentService implements AgentService {
 
     // Clean up intermediate env vars (don't leak to child)
     env[OPENCODE_API_KEY_ENV] = null;
-    env['OPENCODE_BASE_URL'] = null;
+    env.OPENCODE_BASE_URL = null;
 
     return env;
   }

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 
 /* ── Diff parser ─────────────────────────────────────── */
 
@@ -144,10 +144,14 @@ function UnifiedView({ hunks }: { hunks: DiffHunk[] }) {
         {hunks.map((hunk, hi) =>
           hunk.lines.map((line, li) => (
             <tr key={`${hi}-${li}`} className={lineStyles[line.type]}>
-              <td className={`w-10 text-right px-1.5 select-none border-r border-gray-700/50 ${gutterStyles[line.type]}`}>
+              <td
+                className={`w-10 text-right px-1.5 select-none border-r border-gray-700/50 ${gutterStyles[line.type]}`}
+              >
                 {line.oldLine ?? ''}
               </td>
-              <td className={`w-10 text-right px-1.5 select-none border-r border-gray-700/50 ${gutterStyles[line.type]}`}>
+              <td
+                className={`w-10 text-right px-1.5 select-none border-r border-gray-700/50 ${gutterStyles[line.type]}`}
+              >
                 {line.newLine ?? ''}
               </td>
               <td className="px-2 whitespace-pre overflow-x-auto">
@@ -171,17 +175,25 @@ function SideBySideView({ hunks }: { hunks: DiffHunk[] }) {
         {pairs.map((pair, i) => (
           <tr key={i}>
             {/* Left (old) */}
-            <td className={`w-8 text-right px-1 select-none border-r border-gray-700/50 ${pair.left ? gutterStyles[pair.left.type] : 'bg-gray-900/50'}`}>
+            <td
+              className={`w-8 text-right px-1 select-none border-r border-gray-700/50 ${pair.left ? gutterStyles[pair.left.type] : 'bg-gray-900/50'}`}
+            >
               {pair.left?.oldLine ?? ''}
             </td>
-            <td className={`w-1/2 px-2 whitespace-pre overflow-x-auto ${pair.left ? lineStyles[pair.left.type] : 'bg-gray-900/50'}`}>
+            <td
+              className={`w-1/2 px-2 whitespace-pre overflow-x-auto ${pair.left ? lineStyles[pair.left.type] : 'bg-gray-900/50'}`}
+            >
               {pair.left?.content ?? ''}
             </td>
             {/* Right (new) */}
-            <td className={`w-8 text-right px-1 select-none border-l border-r border-gray-700/50 ${pair.right ? gutterStyles[pair.right.type] : 'bg-gray-900/50'}`}>
+            <td
+              className={`w-8 text-right px-1 select-none border-l border-r border-gray-700/50 ${pair.right ? gutterStyles[pair.right.type] : 'bg-gray-900/50'}`}
+            >
               {pair.right?.newLine ?? ''}
             </td>
-            <td className={`w-1/2 px-2 whitespace-pre overflow-x-auto ${pair.right ? lineStyles[pair.right.type] : 'bg-gray-900/50'}`}>
+            <td
+              className={`w-1/2 px-2 whitespace-pre overflow-x-auto ${pair.right ? lineStyles[pair.right.type] : 'bg-gray-900/50'}`}
+            >
               {pair.right?.content ?? ''}
             </td>
           </tr>
@@ -224,7 +236,9 @@ export function DiffViewer({ diff, filePath, compact }: DiffViewerProps) {
             type="button"
             onClick={() => setMode('unified')}
             className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${
-              mode === 'unified' ? 'bg-owner-primary/80 text-white' : 'text-gray-500 hover:text-gray-300 hover:bg-white/10'
+              mode === 'unified'
+                ? 'bg-owner-primary/80 text-white'
+                : 'text-gray-500 hover:text-gray-300 hover:bg-white/10'
             }`}
           >
             Unified
@@ -233,7 +247,9 @@ export function DiffViewer({ diff, filePath, compact }: DiffViewerProps) {
             type="button"
             onClick={() => setMode('split')}
             className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${
-              mode === 'split' ? 'bg-owner-primary/80 text-white' : 'text-gray-500 hover:text-gray-300 hover:bg-white/10'
+              mode === 'split'
+                ? 'bg-owner-primary/80 text-white'
+                : 'text-gray-500 hover:text-gray-300 hover:bg-white/10'
             }`}
           >
             Side-by-side
@@ -251,11 +267,7 @@ export function DiffViewer({ diff, filePath, compact }: DiffViewerProps) {
             </div>
           )}
           <div className="overflow-x-auto bg-[#16161c]">
-            {mode === 'unified' ? (
-              <UnifiedView hunks={file.hunks} />
-            ) : (
-              <SideBySideView hunks={file.hunks} />
-            )}
+            {mode === 'unified' ? <UnifiedView hunks={file.hunks} /> : <SideBySideView hunks={file.hunks} />}
           </div>
         </div>
       ))}

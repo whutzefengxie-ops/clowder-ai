@@ -205,7 +205,7 @@ Before:                              After:
 |------|------|
 | 折叠逻辑与 streaming 冲突 | streaming 时强制展开（`进行中`状态），完成后才允许折叠 |
 | 现有 export 模式被破坏 | AC-A7: `?export=true` 全展开 |
-| scope 膨胀（顺手改 archive/export） | AC-A9: Phase A 只改 runtime chat UI |
+| scope 膨胀（顺手改 internal-archive/export） | AC-A9: Phase A 只改 runtime chat UI |
 | tool count 双算 | 摘要行 deduplicate `tool_use`，只计唯一 tool 数 |
 
 ## Key Decisions

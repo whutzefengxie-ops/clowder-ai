@@ -2,8 +2,7 @@
  * Thread indicator in ChatContainerHeader.
  * Verifies that the header shows the current thread title (not just "Cat Cafe").
  */
-import React from 'react';
-import { act } from 'react';
+import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatContainerHeader } from '@/components/ChatContainerHeader';
@@ -35,7 +34,7 @@ const mockStore: Record<string, unknown> = {
 };
 vi.mock('@/stores/chatStore', () => {
   const hook = Object.assign(
-    (selector?: (s: typeof mockStore) => unknown) => selector ? selector(mockStore) : mockStore,
+    (selector?: (s: typeof mockStore) => unknown) => (selector ? selector(mockStore) : mockStore),
     { getState: () => mockStore },
   );
   return { useChatStore: hook };

@@ -1,6 +1,6 @@
-import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseGitLog, computeWorkStats } from '../../dist/domains/leaderboard/work-stats.js';
+import { describe, it } from 'node:test';
+import { computeWorkStats, parseGitLog } from '../../dist/domains/leaderboard/work-stats.js';
 
 const CAT_NAMES = { opus: '布偶猫', codex: '缅因猫', gemini: '暹罗猫', owner: 'owner' };
 
@@ -27,9 +27,27 @@ describe('parseGitLog', () => {
 
 describe('computeWorkStats', () => {
   const entries = [
-    { hash: '1', author: 'noreply@anthropic.com', date: '2026-03-10', message: 'feat: add feature', coAuthors: 'Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>' },
-    { hash: '2', author: 'noreply@anthropic.com', date: '2026-03-09', message: 'fix: resolve bug in parser', coAuthors: 'Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>' },
-    { hash: '3', author: 'codex@openai.com', date: '2026-03-09', message: 'review: F070 code review feedback', coAuthors: '' },
+    {
+      hash: '1',
+      author: 'noreply@anthropic.com',
+      date: '2026-03-10',
+      message: 'feat: add feature',
+      coAuthors: 'Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>',
+    },
+    {
+      hash: '2',
+      author: 'noreply@anthropic.com',
+      date: '2026-03-09',
+      message: 'fix: resolve bug in parser',
+      coAuthors: 'Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>',
+    },
+    {
+      hash: '3',
+      author: 'codex@openai.com',
+      date: '2026-03-09',
+      message: 'review: F070 code review feedback',
+      coAuthors: '',
+    },
     { hash: '4', author: 'lysander@local', date: '2026-03-08', message: 'docs: update readme', coAuthors: '' },
   ];
 
@@ -48,14 +66,14 @@ describe('computeWorkStats', () => {
 
   it('identifies bug fixes from commit messages', () => {
     const result = computeWorkStats(entries, authorMap, CAT_NAMES);
-    const opusBugs = result.bugFixes.find(c => c.catId === 'opus');
+    const opusBugs = result.bugFixes.find((c) => c.catId === 'opus');
     assert.ok(opusBugs);
     assert.equal(opusBugs.count, 1); // "fix: resolve bug"
   });
 
   it('identifies reviews from commit messages', () => {
     const result = computeWorkStats(entries, authorMap, CAT_NAMES);
-    const codexReviews = result.reviews.find(c => c.catId === 'codex');
+    const codexReviews = result.reviews.find((c) => c.catId === 'codex');
     assert.ok(codexReviews);
     assert.equal(codexReviews.count, 1); // "review: F070"
   });

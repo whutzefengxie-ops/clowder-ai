@@ -2,8 +2,9 @@
  * GameEngine Core Tests (F101 Task A3)
  * Event log, action validation, GameViewBuilder.
  */
-import { describe, it, beforeEach } from 'node:test';
+
 import assert from 'node:assert/strict';
+import { beforeEach, describe, it } from 'node:test';
 
 import { GameEngine } from '../dist/domains/cats/services/game/GameEngine.js';
 import { GameViewBuilder } from '../dist/domains/cats/services/game/GameViewBuilder.js';
@@ -101,8 +102,11 @@ describe('GameEngine', () => {
     it('bumps version on append', () => {
       const v1 = engine.getRuntime().version;
       engine.appendEvent({
-        round: 1, phase: 'night_wolf', type: 'test',
-        scope: 'public', payload: {},
+        round: 1,
+        phase: 'night_wolf',
+        type: 'test',
+        scope: 'public',
+        payload: {},
       });
       assert.equal(engine.getRuntime().version, v1 + 1);
     });
@@ -110,21 +114,39 @@ describe('GameEngine', () => {
 
   describe('getVisibleEvents', () => {
     it('filters by scope correctly', () => {
-      engine.appendEvent({ round: 1, phase: 'night_wolf', type: 'attack', scope: 'faction:wolf', payload: { target: 'P3' } });
-      engine.appendEvent({ round: 1, phase: 'night_seer', type: 'divine', scope: 'seat:P2', payload: { target: 'P1', result: 'wolf' } });
-      engine.appendEvent({ round: 1, phase: 'day_discuss', type: 'announce', scope: 'public', payload: { deaths: ['P3'] } });
+      engine.appendEvent({
+        round: 1,
+        phase: 'night_wolf',
+        type: 'attack',
+        scope: 'faction:wolf',
+        payload: { target: 'P3' },
+      });
+      engine.appendEvent({
+        round: 1,
+        phase: 'night_seer',
+        type: 'divine',
+        scope: 'seat:P2',
+        payload: { target: 'P1', result: 'wolf' },
+      });
+      engine.appendEvent({
+        round: 1,
+        phase: 'day_discuss',
+        type: 'announce',
+        scope: 'public',
+        payload: { deaths: ['P3'] },
+      });
 
       // Wolf (P1) sees faction:wolf + public
       const wolfEvents = engine.getVisibleEvents('P1');
       assert.equal(wolfEvents.length, 2);
-      assert.ok(wolfEvents.some(e => e.scope === 'faction:wolf'));
-      assert.ok(wolfEvents.some(e => e.scope === 'public'));
+      assert.ok(wolfEvents.some((e) => e.scope === 'faction:wolf'));
+      assert.ok(wolfEvents.some((e) => e.scope === 'public'));
 
       // Seer (P2) sees seat:P2 + public
       const seerEvents = engine.getVisibleEvents('P2');
       assert.equal(seerEvents.length, 2);
-      assert.ok(seerEvents.some(e => e.scope === 'seat:P2'));
-      assert.ok(seerEvents.some(e => e.scope === 'public'));
+      assert.ok(seerEvents.some((e) => e.scope === 'seat:P2'));
+      assert.ok(seerEvents.some((e) => e.scope === 'public'));
 
       // Villager (P3) sees only public
       const villagerEvents = engine.getVisibleEvents('P3');
@@ -148,14 +170,15 @@ describe('GameEngine', () => {
       // P1 is wolf in night_wolf phase — should succeed
       engine.submitAction('P1', { seatId: 'P1', actionName: 'attack', targetSeat: 'P3', submittedAt: Date.now() });
       const actions = engine.getRuntime().pendingActions;
-      assert.ok(actions['P1']);
-      assert.equal(actions['P1'].actionName, 'attack');
+      assert.ok(actions.P1);
+      assert.equal(actions.P1.actionName, 'attack');
     });
 
     it('rejects action from wrong role', () => {
       // P3 is villager, can't attack in night_wolf
       assert.throws(
-        () => engine.submitAction('P3', { seatId: 'P3', actionName: 'attack', targetSeat: 'P1', submittedAt: Date.now() }),
+        () =>
+          engine.submitAction('P3', { seatId: 'P3', actionName: 'attack', targetSeat: 'P1', submittedAt: Date.now() }),
         /not allowed/i,
       );
     });
@@ -164,7 +187,8 @@ describe('GameEngine', () => {
       const rt = engine.getRuntime();
       rt.seats[0].alive = false; // kill P1
       assert.throws(
-        () => engine.submitAction('P1', { seatId: 'P1', actionName: 'attack', targetSeat: 'P3', submittedAt: Date.now() }),
+        () =>
+          engine.submitAction('P1', { seatId: 'P1', actionName: 'attack', targetSeat: 'P3', submittedAt: Date.now() }),
         /dead|not alive/i,
       );
     });
@@ -172,7 +196,8 @@ describe('GameEngine', () => {
     it('rejects action in wrong phase', () => {
       // P2 is seer, can't divine in night_wolf phase
       assert.throws(
-        () => engine.submitAction('P2', { seatId: 'P2', actionName: 'divine', targetSeat: 'P1', submittedAt: Date.now() }),
+        () =>
+          engine.submitAction('P2', { seatId: 'P2', actionName: 'divine', targetSeat: 'P1', submittedAt: Date.now() }),
         /phase/i,
       );
     });
@@ -198,8 +223,24 @@ describe('GameViewBuilder', () => {
   it('builds scoped view for player', () => {
     const runtime = createTestRuntime();
     runtime.eventLog = [
-      { eventId: 'evt-1', round: 1, phase: 'night_wolf', type: 'attack', scope: 'faction:wolf', payload: { target: 'P3' }, timestamp: Date.now() },
-      { eventId: 'evt-2', round: 1, phase: 'day_discuss', type: 'announce', scope: 'public', payload: { deaths: ['P3'] }, timestamp: Date.now() },
+      {
+        eventId: 'evt-1',
+        round: 1,
+        phase: 'night_wolf',
+        type: 'attack',
+        scope: 'faction:wolf',
+        payload: { target: 'P3' },
+        timestamp: Date.now(),
+      },
+      {
+        eventId: 'evt-2',
+        round: 1,
+        phase: 'day_discuss',
+        type: 'announce',
+        scope: 'public',
+        payload: { deaths: ['P3'] },
+        timestamp: Date.now(),
+      },
     ];
 
     // Villager P3 should only see public events, and roles should be hidden
@@ -207,25 +248,49 @@ describe('GameViewBuilder', () => {
     assert.equal(view.visibleEvents.length, 1);
     assert.equal(view.visibleEvents[0].scope, 'public');
     // Roles should be hidden for non-wolf, non-self seats
-    const p1View = view.seats.find(s => s.seatId === 'P1');
+    const p1View = view.seats.find((s) => s.seatId === 'P1');
     assert.equal(p1View.role, undefined);
     // Own role should be visible
-    const p3View = view.seats.find(s => s.seatId === 'P3');
+    const p3View = view.seats.find((s) => s.seatId === 'P3');
     assert.equal(p3View.role, 'villager');
   });
 
   it('builds full view for god', () => {
     const runtime = createTestRuntime();
     runtime.eventLog = [
-      { eventId: 'evt-1', round: 1, phase: 'night_wolf', type: 'attack', scope: 'faction:wolf', payload: {}, timestamp: Date.now() },
-      { eventId: 'evt-2', round: 1, phase: 'resolve', type: 'internal', scope: 'god', payload: {}, timestamp: Date.now() },
-      { eventId: 'evt-3', round: 1, phase: 'day_discuss', type: 'announce', scope: 'public', payload: {}, timestamp: Date.now() },
+      {
+        eventId: 'evt-1',
+        round: 1,
+        phase: 'night_wolf',
+        type: 'attack',
+        scope: 'faction:wolf',
+        payload: {},
+        timestamp: Date.now(),
+      },
+      {
+        eventId: 'evt-2',
+        round: 1,
+        phase: 'resolve',
+        type: 'internal',
+        scope: 'god',
+        payload: {},
+        timestamp: Date.now(),
+      },
+      {
+        eventId: 'evt-3',
+        round: 1,
+        phase: 'day_discuss',
+        type: 'announce',
+        scope: 'public',
+        payload: {},
+        timestamp: Date.now(),
+      },
     ];
 
     const view = GameViewBuilder.buildView(runtime, 'god');
     assert.equal(view.visibleEvents.length, 3);
     // God sees all roles
-    const p1View = view.seats.find(s => s.seatId === 'P1');
+    const p1View = view.seats.find((s) => s.seatId === 'P1');
     assert.equal(p1View.role, 'wolf');
     assert.equal(p1View.faction, 'wolf');
   });
@@ -237,11 +302,11 @@ describe('GameViewBuilder', () => {
 
     const view = GameViewBuilder.buildView(runtime, 'P1');
     // P1 (wolf) should see P4's role as wolf
-    const p4View = view.seats.find(s => s.seatId === 'P4');
+    const p4View = view.seats.find((s) => s.seatId === 'P4');
     assert.equal(p4View.role, 'wolf');
     assert.equal(p4View.faction, 'wolf');
     // But should NOT see seer's role
-    const p2View = view.seats.find(s => s.seatId === 'P2');
+    const p2View = view.seats.find((s) => s.seatId === 'P2');
     assert.equal(p2View.role, undefined);
   });
 });

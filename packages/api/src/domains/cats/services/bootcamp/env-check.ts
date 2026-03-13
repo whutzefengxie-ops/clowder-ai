@@ -58,7 +58,7 @@ export async function runEnvironmentCheck(): Promise<EnvCheckResult> {
     checkCommand('claude --version'),
   ]);
 
-  const mcpPath = process.env['CAT_CAFE_MCP_SERVER_PATH'] || resolveDefaultClaudeMcpServerPath();
+  const mcpPath = process.env.CAT_CAFE_MCP_SERVER_PATH || resolveDefaultClaudeMcpServerPath();
   const mcp: EnvCheckItem = mcpPath
     ? { ok: true, note: `MCP server found: ${mcpPath}` }
     : { ok: false, note: 'MCP server not found (packages/mcp-server/dist/index.js)' };

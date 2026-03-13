@@ -24,7 +24,7 @@ export interface PromptDigest {
 
 /** Check if prompt snippets should be included in audit logs */
 function includeSnippets(): boolean {
-  return process.env['AUDIT_LOG_INCLUDE_PROMPT_SNIPPETS'] === 'true';
+  return process.env.AUDIT_LOG_INCLUDE_PROMPT_SNIPPETS === 'true';
 }
 
 /**

@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
-import { describe, it, beforeEach, afterEach } from 'node:test';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, beforeEach, describe, it } from 'node:test';
 
 const { StudyMetaService } = await import('../dist/domains/signals/services/study-meta-service.js');
 

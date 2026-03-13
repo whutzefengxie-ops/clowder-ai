@@ -3,14 +3,11 @@
  * Redis → full suite; no Redis → skip
  */
 
-import { describe, it, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  assertRedisIsolationOrThrow,
-  cleanupPrefixedRedisKeys,
-} from './helpers/redis-test-helpers.js';
+import { after, before, beforeEach, describe, it } from 'node:test';
+import { assertRedisIsolationOrThrow, cleanupPrefixedRedisKeys } from './helpers/redis-test-helpers.js';
 
-const REDIS_URL = process.env['REDIS_URL'];
+const REDIS_URL = process.env.REDIS_URL;
 
 describe('RedisWorkflowSopStore', { skip: !REDIS_URL ? 'REDIS_URL not set' : false }, () => {
   let RedisWorkflowSopStore;
@@ -78,13 +75,18 @@ describe('RedisWorkflowSopStore', { skip: !REDIS_URL ? 'REDIS_URL not set' : fal
   });
 
   it('upsert creates with explicit values', async () => {
-    const sop = await store.upsert('item-2', 'F073', {
-      stage: 'impl',
-      batonHolder: 'codex',
-      nextSkill: 'tdd',
-      resumeCapsule: { goal: 'Build store', done: ['types'], currentFocus: 'Redis impl' },
-      checks: { remoteMainSynced: 'attested' },
-    }, 'opus');
+    const sop = await store.upsert(
+      'item-2',
+      'F073',
+      {
+        stage: 'impl',
+        batonHolder: 'codex',
+        nextSkill: 'tdd',
+        resumeCapsule: { goal: 'Build store', done: ['types'], currentFocus: 'Redis impl' },
+        checks: { remoteMainSynced: 'attested' },
+      },
+      'opus',
+    );
 
     assert.equal(sop.stage, 'impl');
     assert.equal(sop.batonHolder, 'codex');
@@ -107,17 +109,27 @@ describe('RedisWorkflowSopStore', { skip: !REDIS_URL ? 'REDIS_URL not set' : fal
   });
 
   it('upsert merges partial updates into existing record', async () => {
-    await store.upsert('item-4', 'F073', {
-      stage: 'impl',
-      batonHolder: 'opus',
-      resumeCapsule: { goal: 'Build feature' },
-    }, 'opus');
+    await store.upsert(
+      'item-4',
+      'F073',
+      {
+        stage: 'impl',
+        batonHolder: 'opus',
+        resumeCapsule: { goal: 'Build feature' },
+      },
+      'opus',
+    );
 
-    const updated = await store.upsert('item-4', 'F073', {
-      stage: 'review',
-      batonHolder: 'codex',
-      resumeCapsule: { currentFocus: 'Review code' },
-    }, 'codex');
+    const updated = await store.upsert(
+      'item-4',
+      'F073',
+      {
+        stage: 'review',
+        batonHolder: 'codex',
+        resumeCapsule: { currentFocus: 'Review code' },
+      },
+      'codex',
+    );
 
     assert.equal(updated.stage, 'review');
     assert.equal(updated.batonHolder, 'codex');
@@ -138,10 +150,15 @@ describe('RedisWorkflowSopStore', { skip: !REDIS_URL ? 'REDIS_URL not set' : fal
 
   it('upsert with CAS succeeds when version matches', async () => {
     await store.upsert('item-6', 'F073', {}, 'opus');
-    const updated = await store.upsert('item-6', 'F073', {
-      stage: 'impl',
-      expectedVersion: 1,
-    }, 'opus');
+    const updated = await store.upsert(
+      'item-6',
+      'F073',
+      {
+        stage: 'impl',
+        expectedVersion: 1,
+      },
+      'opus',
+    );
 
     assert.equal(updated.version, 2);
     assert.equal(updated.stage, 'impl');
@@ -152,10 +169,16 @@ describe('RedisWorkflowSopStore', { skip: !REDIS_URL ? 'REDIS_URL not set' : fal
     await store.upsert('item-7', 'F073', { stage: 'impl' }, 'opus'); // version = 2
 
     await assert.rejects(
-      () => store.upsert('item-7', 'F073', {
-        stage: 'review',
-        expectedVersion: 1, // stale
-      }, 'codex'),
+      () =>
+        store.upsert(
+          'item-7',
+          'F073',
+          {
+            stage: 'review',
+            expectedVersion: 1, // stale
+          },
+          'codex',
+        ),
       (err) => {
         assert.ok(err instanceof VersionConflictError);
         assert.equal(err.currentState.version, 2);

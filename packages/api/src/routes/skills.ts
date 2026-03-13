@@ -6,11 +6,11 @@
  * 解析 BOOTSTRAP.md 提取分类，解析 manifest.yaml 提取触发词。
  */
 
-import { readdir, readFile, lstat, readlink, realpath } from 'fs/promises';
-import { existsSync } from 'fs';
-import { join, dirname, resolve } from 'path';
-import { homedir } from 'os';
-import { fileURLToPath } from 'url';
+import { existsSync } from 'node:fs';
+import { lstat, readdir, readFile, readlink, realpath } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { FastifyPluginAsync } from 'fastify';
 import { parse as parseYaml } from 'yaml';
 import { resolveUserId } from '../utils/request-identity.js';
@@ -145,7 +145,10 @@ async function parseManifestSkillMeta(skillsSrcDir: string): Promise<Map<string,
     for (const [name, meta] of Object.entries(parsed.skills)) {
       const description = typeof meta?.description === 'string' ? meta.description.trim() : undefined;
       const triggers = Array.isArray(meta?.triggers)
-        ? meta.triggers.filter((v): v is string => typeof v === 'string').map((s) => s.trim()).filter(Boolean)
+        ? meta.triggers
+            .filter((v): v is string => typeof v === 'string')
+            .map((s) => s.trim())
+            .filter(Boolean)
         : undefined;
       if (description || (triggers && triggers.length > 0)) {
         result.set(name, {
@@ -196,9 +199,7 @@ export const skillsRoutes: FastifyPluginAsync = async (app) => {
         ]);
         const entry = bootstrapEntries.get(name);
         const meta = manifestMeta.get(name);
-        const trigger = meta?.triggers?.length
-          ? meta.triggers.join('、')
-          : (entry?.trigger ?? '');
+        const trigger = meta?.triggers?.length ? meta.triggers.join('、') : (entry?.trigger ?? '');
         mountLookup.set(name, {
           name,
           category: entry?.category ?? '未分类',

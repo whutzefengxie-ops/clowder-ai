@@ -44,7 +44,17 @@ export function CopyButton({ url }: { url: string }) {
   );
 }
 
-export function Lightbox({ url, alt, caption, onClose }: { url: string; alt: string; caption?: string; onClose: () => void }) {
+export function Lightbox({
+  url,
+  alt,
+  caption,
+  onClose,
+}: {
+  url: string;
+  alt: string;
+  caption?: string;
+  onClose: () => void;
+}) {
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();

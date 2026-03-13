@@ -12,10 +12,7 @@ export function ImagePreview({ files, onRemove }: ImagePreviewProps) {
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
 
   // Create object URLs once per file set, revoke on cleanup
-  const urls = useMemo(
-    () => files.map((f) => URL.createObjectURL(f)),
-    [files]
-  );
+  const urls = useMemo(() => files.map((f) => URL.createObjectURL(f)), [files]);
 
   useEffect(() => {
     return () => {
@@ -45,14 +42,16 @@ export function ImagePreview({ files, onRemove }: ImagePreviewProps) {
             >
               x
             </button>
-            <span className="block text-[9px] text-gray-400 truncate w-16 mt-0.5 text-center">
-              {file.name}
-            </span>
+            <span className="block text-[9px] text-gray-400 truncate w-16 mt-0.5 text-center">{file.name}</span>
           </div>
         ))}
       </div>
       {lightboxIdx !== null && urls[lightboxIdx] && (
-        <Lightbox url={urls[lightboxIdx]} alt={files[lightboxIdx]?.name ?? 'preview'} onClose={() => setLightboxIdx(null)} />
+        <Lightbox
+          url={urls[lightboxIdx]}
+          alt={files[lightboxIdx]?.name ?? 'preview'}
+          onClose={() => setLightboxIdx(null)}
+        />
       )}
     </>
   );

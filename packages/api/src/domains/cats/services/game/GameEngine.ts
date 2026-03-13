@@ -5,13 +5,7 @@
  * Game-specific logic (resolution, phase transitions) is handled by subclasses.
  */
 
-import type {
-  GameRuntime,
-  GameEvent,
-  GameAction,
-  EventScope,
-  SeatId,
-} from '@cat-cafe/shared';
+import type { EventScope, GameAction, GameEvent, GameRuntime, SeatId } from '@cat-cafe/shared';
 
 type PartialEvent = Omit<GameEvent, 'eventId' | 'timestamp'>;
 
@@ -48,43 +42,34 @@ export class GameEngine {
       return [...this.runtime.eventLog];
     }
 
-    const seat = this.runtime.seats.find(s => s.seatId === viewer);
-    if (!seat) return this.runtime.eventLog.filter(e => e.scope === 'public');
+    const seat = this.runtime.seats.find((s) => s.seatId === viewer);
+    if (!seat) return this.runtime.eventLog.filter((e) => e.scope === 'public');
 
     // Dead players only see public + own seat-scoped events (no faction leak)
-    const faction = seat.alive && seat.role
-      ? this.runtime.definition.roles.find(r => r.name === seat.role)?.faction
-      : undefined;
+    const faction =
+      seat.alive && seat.role ? this.runtime.definition.roles.find((r) => r.name === seat.role)?.faction : undefined;
 
-    return this.runtime.eventLog.filter(e =>
-      this.isEventVisible(e.scope, viewer, faction),
-    );
+    return this.runtime.eventLog.filter((e) => this.isEventVisible(e.scope, viewer, faction));
   }
 
   /** Submit a player action with validation */
   submitAction(seatId: string, action: GameAction): void {
-    const seat = this.runtime.seats.find(s => s.seatId === seatId);
+    const seat = this.runtime.seats.find((s) => s.seatId === seatId);
     if (!seat) throw new Error(`Seat ${seatId} not found`);
     if (!seat.alive) throw new Error(`Seat ${seatId} is not alive`);
 
     // Find the action definition
-    const actionDef = this.runtime.definition.actions.find(
-      a => a.name === action.actionName,
-    );
+    const actionDef = this.runtime.definition.actions.find((a) => a.name === action.actionName);
     if (!actionDef) throw new Error(`Action ${action.actionName} not defined`);
 
     // Check phase
     if (actionDef.allowedPhase !== this.runtime.currentPhase) {
-      throw new Error(
-        `Action ${action.actionName} not allowed in phase ${this.runtime.currentPhase}`,
-      );
+      throw new Error(`Action ${action.actionName} not allowed in phase ${this.runtime.currentPhase}`);
     }
 
     // Check role (wildcard '*' = any alive player)
     if (actionDef.allowedRole !== '*' && seat.role !== actionDef.allowedRole) {
-      throw new Error(
-        `Action ${action.actionName} not allowed for role ${seat.role}`,
-      );
+      throw new Error(`Action ${action.actionName} not allowed for role ${seat.role}`);
     }
 
     this.runtime.pendingActions[seatId] = action;
@@ -94,15 +79,11 @@ export class GameEngine {
 
   /** Check if all expected actions for current phase have been collected */
   allActionsCollected(): boolean {
-    const phase = this.runtime.definition.phases.find(
-      p => p.name === this.runtime.currentPhase,
-    );
+    const phase = this.runtime.definition.phases.find((p) => p.name === this.runtime.currentPhase);
     if (!phase) return true;
 
     const expectedSeats = this.getExpectedActors(phase.actingRole);
-    return expectedSeats.every(
-      seatId => this.runtime.pendingActions[seatId] !== undefined,
-    );
+    return expectedSeats.every((seatId) => this.runtime.pendingActions[seatId] !== undefined);
   }
 
   /** Clear pending actions (call after phase resolution) */
@@ -115,21 +96,13 @@ export class GameEngine {
   private getExpectedActors(actingRole?: string): string[] {
     if (!actingRole || actingRole === '*') {
       // All alive players
-      return this.runtime.seats
-        .filter(s => s.alive)
-        .map(s => s.seatId);
+      return this.runtime.seats.filter((s) => s.alive).map((s) => s.seatId);
     }
     // Only seats with matching role
-    return this.runtime.seats
-      .filter(s => s.alive && s.role === actingRole)
-      .map(s => s.seatId);
+    return this.runtime.seats.filter((s) => s.alive && s.role === actingRole).map((s) => s.seatId);
   }
 
-  private isEventVisible(
-    scope: EventScope,
-    viewer: SeatId,
-    viewerFaction?: string,
-  ): boolean {
+  private isEventVisible(scope: EventScope, viewer: SeatId, viewerFaction?: string): boolean {
     if (scope === 'public') return true;
     if (scope === 'god') return false; // god-only events invisible to players
     if (scope === 'judge') return false;

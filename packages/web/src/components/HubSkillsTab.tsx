@@ -29,9 +29,13 @@ interface SkillsData {
 
 function MountBadge({ mounted }: { mounted: boolean }) {
   return mounted ? (
-    <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-green-100 text-green-600 text-xs font-bold">✓</span>
+    <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-green-100 text-green-600 text-xs font-bold">
+      ✓
+    </span>
   ) : (
-    <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-red-100 text-red-500 text-xs font-bold">✗</span>
+    <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-red-100 text-red-500 text-xs font-bold">
+      ✗
+    </span>
   );
 }
 
@@ -54,12 +58,20 @@ function CategoryGroup({ category, skills }: { category: string; skills: SkillEn
             {skills.map((skill) => (
               <tr key={skill.name} className="border-t border-gray-100">
                 <td className="py-1.5 pr-3">
-                  <code className="font-mono text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-[11px]">{skill.name}</code>
+                  <code className="font-mono text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-[11px]">
+                    {skill.name}
+                  </code>
                 </td>
                 <td className="py-1.5 pr-3 text-gray-600 max-w-[260px] truncate">{skill.trigger}</td>
-                <td className="py-1.5 text-center"><MountBadge mounted={skill.mounts.claude} /></td>
-                <td className="py-1.5 text-center"><MountBadge mounted={skill.mounts.codex} /></td>
-                <td className="py-1.5 text-center"><MountBadge mounted={skill.mounts.gemini} /></td>
+                <td className="py-1.5 text-center">
+                  <MountBadge mounted={skill.mounts.claude} />
+                </td>
+                <td className="py-1.5 text-center">
+                  <MountBadge mounted={skill.mounts.codex} />
+                </td>
+                <td className="py-1.5 text-center">
+                  <MountBadge mounted={skill.mounts.gemini} />
+                </td>
               </tr>
             ))}
           </tbody>
@@ -81,7 +93,7 @@ export function HubSkillsTab() {
         setError('Skills 数据加载失败');
         return;
       }
-      setData(await res.json() as SkillsData);
+      setData((await res.json()) as SkillsData);
     } catch {
       setError('网络错误');
     }
@@ -107,7 +119,7 @@ export function HubSkillsTab() {
       categoryOrder.push(cat);
       grouped.set(cat, []);
     }
-    grouped.get(cat)!.push(skill);
+    grouped.get(cat)?.push(skill);
   }
 
   return (
@@ -118,9 +130,7 @@ export function HubSkillsTab() {
 
       <div className="rounded-lg border border-gray-200 bg-gray-50/70 p-3">
         <div className="flex items-center gap-4 text-xs">
-          <span className="font-semibold text-gray-700">
-            {data.summary.total} skills
-          </span>
+          <span className="font-semibold text-gray-700">{data.summary.total} skills</span>
           <span className={data.summary.allMounted ? 'text-green-600' : 'text-amber-600'}>
             {data.summary.allMounted ? '全部正确挂载' : '部分挂载缺失'}
           </span>

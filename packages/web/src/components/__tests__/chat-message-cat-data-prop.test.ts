@@ -5,10 +5,9 @@
  * If someone moves useCatData() back into ChatMessage, this test will fail
  * because the spy will detect a direct hook call from within the component.
  */
-import React from 'react';
-import { describe, expect, it, vi, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
+import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { act } from 'react';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
 
@@ -83,9 +82,30 @@ describe('ChatMessage getCatById prop injection (R24 P2-1)', () => {
     }));
 
     const messages = [
-      { id: '1', type: 'assistant' as const, catId: 'opus', content: 'msg-1', timestamp: Date.now(), contentBlocks: [] },
-      { id: '2', type: 'assistant' as const, catId: 'opus', content: 'msg-2', timestamp: Date.now(), contentBlocks: [] },
-      { id: '3', type: 'assistant' as const, catId: 'codex', content: 'msg-3', timestamp: Date.now(), contentBlocks: [] },
+      {
+        id: '1',
+        type: 'assistant' as const,
+        catId: 'opus',
+        content: 'msg-1',
+        timestamp: Date.now(),
+        contentBlocks: [],
+      },
+      {
+        id: '2',
+        type: 'assistant' as const,
+        catId: 'opus',
+        content: 'msg-2',
+        timestamp: Date.now(),
+        contentBlocks: [],
+      },
+      {
+        id: '3',
+        type: 'assistant' as const,
+        catId: 'codex',
+        content: 'msg-3',
+        timestamp: Date.now(),
+        contentBlocks: [],
+      },
     ];
 
     act(() => {
@@ -110,7 +130,11 @@ describe('ChatMessage getCatById prop injection (R24 P2-1)', () => {
     const getCatById = vi.fn(() => undefined);
 
     const userMsg = {
-      id: 'u1', type: 'user' as const, content: 'Hello cats!', timestamp: Date.now(), contentBlocks: [],
+      id: 'u1',
+      type: 'user' as const,
+      content: 'Hello cats!',
+      timestamp: Date.now(),
+      contentBlocks: [],
     };
 
     act(() => {

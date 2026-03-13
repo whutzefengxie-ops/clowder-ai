@@ -3,9 +3,9 @@
  * 测试 NDJSON 流式解析器
  */
 
-import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { PassThrough } from 'node:stream';
+import { test } from 'node:test';
 
 const { parseNDJSON, isParseError } = await import('../dist/utils/ndjson-parser.js');
 

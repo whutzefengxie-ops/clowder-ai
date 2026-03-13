@@ -1,23 +1,22 @@
 // @ts-check
-import { describe, it, beforeEach, afterEach } from 'node:test';
+
 import assert from 'node:assert/strict';
-import { writeFile, mkdir, rm, readFile } from 'fs/promises';
-import { join } from 'path';
-import { tmpdir } from 'os';
-
-import {
-  readCapabilitiesConfig,
-  writeCapabilitiesConfig,
-  discoverExternalMcpServers,
-  buildCatCafeMcpDescriptor,
-  migrateLegacyCatCafeCapability,
-  bootstrapCapabilities,
-  resolveServersForCat,
-  generateCliConfigs,
-  orchestrate,
-} from '../dist/config/capabilities/capability-orchestrator.js';
-
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, beforeEach, describe, it } from 'node:test';
 import { catRegistry } from '@cat-cafe/shared';
+import {
+  bootstrapCapabilities,
+  buildCatCafeMcpDescriptor,
+  discoverExternalMcpServers,
+  generateCliConfigs,
+  migrateLegacyCatCafeCapability,
+  orchestrate,
+  readCapabilitiesConfig,
+  resolveServersForCat,
+  writeCapabilitiesConfig,
+} from '../dist/config/capabilities/capability-orchestrator.js';
 
 /** @param {string} prefix */
 async function makeTmpDir(prefix) {
@@ -36,17 +35,28 @@ function makeConfig(capabilities = []) {
 describe('readCapabilitiesConfig', () => {
   /** @type {string} */ let dir;
 
-  beforeEach(async () => { dir = await makeTmpDir('cap-read'); });
-  afterEach(async () => { await rm(dir, { recursive: true, force: true }); });
+  beforeEach(async () => {
+    dir = await makeTmpDir('cap-read');
+  });
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
 
   it('reads valid capabilities.json', async () => {
     await mkdir(join(dir, '.cat-cafe'), { recursive: true });
     await writeFile(
       join(dir, '.cat-cafe', 'capabilities.json'),
-      JSON.stringify(makeConfig([
-        { id: 'cat-cafe', type: 'mcp', enabled: true, source: 'cat-cafe',
-          mcpServer: { command: 'node', args: ['index.js'] } },
-      ])),
+      JSON.stringify(
+        makeConfig([
+          {
+            id: 'cat-cafe',
+            type: 'mcp',
+            enabled: true,
+            source: 'cat-cafe',
+            mcpServer: { command: 'node', args: ['index.js'] },
+          },
+        ]),
+      ),
     );
 
     const config = await readCapabilitiesConfig(dir);
@@ -70,10 +80,7 @@ describe('readCapabilitiesConfig', () => {
 
   it('returns null for wrong version', async () => {
     await mkdir(join(dir, '.cat-cafe'), { recursive: true });
-    await writeFile(
-      join(dir, '.cat-cafe', 'capabilities.json'),
-      JSON.stringify({ version: 99, capabilities: [] }),
-    );
+    await writeFile(join(dir, '.cat-cafe', 'capabilities.json'), JSON.stringify({ version: 99, capabilities: [] }));
     const config = await readCapabilitiesConfig(dir);
     assert.equal(config, null);
   });
@@ -82,13 +89,16 @@ describe('readCapabilitiesConfig', () => {
 describe('writeCapabilitiesConfig', () => {
   /** @type {string} */ let dir;
 
-  beforeEach(async () => { dir = await makeTmpDir('cap-write'); });
-  afterEach(async () => { await rm(dir, { recursive: true, force: true }); });
+  beforeEach(async () => {
+    dir = await makeTmpDir('cap-write');
+  });
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
 
   it('creates .cat-cafe/ dir and writes config', async () => {
     const config = makeConfig([
-      { id: 'test', type: 'mcp', enabled: true, source: 'external',
-        mcpServer: { command: 'echo', args: [] } },
+      { id: 'test', type: 'mcp', enabled: true, source: 'external', mcpServer: { command: 'echo', args: [] } },
     ]);
 
     await writeCapabilitiesConfig(dir, config);
@@ -101,11 +111,21 @@ describe('writeCapabilitiesConfig', () => {
 
   it('round-trips correctly', async () => {
     const config = makeConfig([
-      { id: 'cat-cafe', type: 'mcp', enabled: true, source: 'cat-cafe',
-        mcpServer: { command: 'node', args: ['server.js'] } },
-      { id: 'ext', type: 'mcp', enabled: false, source: 'external',
+      {
+        id: 'cat-cafe',
+        type: 'mcp',
+        enabled: true,
+        source: 'cat-cafe',
+        mcpServer: { command: 'node', args: ['server.js'] },
+      },
+      {
+        id: 'ext',
+        type: 'mcp',
+        enabled: false,
+        source: 'external',
         mcpServer: { command: 'npx', args: ['ext-server'] },
-        overrides: [{ catId: 'opus', enabled: true }] },
+        overrides: [{ catId: 'opus', enabled: true }],
+      },
     ]);
 
     await writeCapabilitiesConfig(dir, config);
@@ -119,16 +139,23 @@ describe('writeCapabilitiesConfig', () => {
 describe('discoverExternalMcpServers', () => {
   /** @type {string} */ let dir;
 
-  beforeEach(async () => { dir = await makeTmpDir('discover'); });
-  afterEach(async () => { await rm(dir, { recursive: true, force: true }); });
+  beforeEach(async () => {
+    dir = await makeTmpDir('discover');
+  });
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
 
   it('discovers servers from Claude .mcp.json', async () => {
     const claudeFile = join(dir, '.mcp.json');
-    await writeFile(claudeFile, JSON.stringify({
-      mcpServers: {
-        filesystem: { command: 'npx', args: ['-y', '@mcp/fs'] },
-      },
-    }));
+    await writeFile(
+      claudeFile,
+      JSON.stringify({
+        mcpServers: {
+          filesystem: { command: 'npx', args: ['-y', '@mcp/fs'] },
+        },
+      }),
+    );
 
     const servers = await discoverExternalMcpServers({
       claudeConfig: claudeFile,
@@ -144,12 +171,18 @@ describe('discoverExternalMcpServers', () => {
   it('deduplicates by name (first wins)', async () => {
     const claudeFile = join(dir, 'claude.json');
     const geminiFile = join(dir, 'gemini.json');
-    await writeFile(claudeFile, JSON.stringify({
-      mcpServers: { shared: { command: 'claude-cmd', args: [] } },
-    }));
-    await writeFile(geminiFile, JSON.stringify({
-      mcpServers: { shared: { command: 'gemini-cmd', args: [] } },
-    }));
+    await writeFile(
+      claudeFile,
+      JSON.stringify({
+        mcpServers: { shared: { command: 'claude-cmd', args: [] } },
+      }),
+    );
+    await writeFile(
+      geminiFile,
+      JSON.stringify({
+        mcpServers: { shared: { command: 'gemini-cmd', args: [] } },
+      }),
+    );
 
     const servers = await discoverExternalMcpServers({
       claudeConfig: claudeFile,
@@ -172,12 +205,15 @@ describe('discoverExternalMcpServers', () => {
 
   it('skips commandless entries (invalid for stdio config model)', async () => {
     const geminiFile = join(dir, 'gemini.json');
-    await writeFile(geminiFile, JSON.stringify({
-      mcpServers: {
-        jetbrains: { command: '', args: [] },
-        filesystem: { command: 'npx', args: ['-y', '@mcp/fs'] },
-      },
-    }));
+    await writeFile(
+      geminiFile,
+      JSON.stringify({
+        mcpServers: {
+          jetbrains: { command: '', args: [] },
+          filesystem: { command: 'npx', args: ['-y', '@mcp/fs'] },
+        },
+      }),
+    );
 
     const servers = await discoverExternalMcpServers({
       claudeConfig: join(dir, 'nonexistent.json'),
@@ -206,17 +242,24 @@ describe('buildCatCafeMcpDescriptor', () => {
 describe('bootstrapCapabilities', () => {
   /** @type {string} */ let dir;
 
-  beforeEach(async () => { dir = await makeTmpDir('bootstrap'); });
-  afterEach(async () => { await rm(dir, { recursive: true, force: true }); });
+  beforeEach(async () => {
+    dir = await makeTmpDir('bootstrap');
+  });
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
 
   it('creates capabilities.json with split cat-cafe servers + externals', async () => {
     // Seed a Claude config with one external server
     const claudeFile = join(dir, '.mcp.json');
-    await writeFile(claudeFile, JSON.stringify({
-      mcpServers: {
-        filesystem: { command: 'npx', args: ['-y', '@mcp/fs'] },
-      },
-    }));
+    await writeFile(
+      claudeFile,
+      JSON.stringify({
+        mcpServers: {
+          filesystem: { command: 'npx', args: ['-y', '@mcp/fs'] },
+        },
+      }),
+    );
 
     const config = await bootstrapCapabilities(dir, {
       claudeConfig: claudeFile,
@@ -253,11 +296,14 @@ describe('bootstrapCapabilities', () => {
 
   it('skips duplicate cat-cafe from external discovery', async () => {
     const claudeFile = join(dir, '.mcp.json');
-    await writeFile(claudeFile, JSON.stringify({
-      mcpServers: {
-        'cat-cafe': { command: 'node', args: ['old-path.js'] },
-      },
-    }));
+    await writeFile(
+      claudeFile,
+      JSON.stringify({
+        mcpServers: {
+          'cat-cafe': { command: 'node', args: ['old-path.js'] },
+        },
+      }),
+    );
 
     const config = await bootstrapCapabilities(dir, {
       claudeConfig: claudeFile,
@@ -351,10 +397,14 @@ describe('migrateLegacyCatCafeCapability', () => {
 describe('resolveServersForCat', () => {
   it('applies global enabled state', () => {
     const config = makeConfig([
-      { id: 'cat-cafe', type: 'mcp', enabled: true, source: 'cat-cafe',
-        mcpServer: { command: 'node', args: ['index.js'] } },
-      { id: 'disabled', type: 'mcp', enabled: false, source: 'external',
-        mcpServer: { command: 'echo', args: [] } },
+      {
+        id: 'cat-cafe',
+        type: 'mcp',
+        enabled: true,
+        source: 'cat-cafe',
+        mcpServer: { command: 'node', args: ['index.js'] },
+      },
+      { id: 'disabled', type: 'mcp', enabled: false, source: 'external', mcpServer: { command: 'echo', args: [] } },
     ]);
 
     const servers = resolveServersForCat(config, 'opus');
@@ -365,9 +415,14 @@ describe('resolveServersForCat', () => {
 
   it('applies per-cat override', () => {
     const config = makeConfig([
-      { id: 'tool', type: 'mcp', enabled: true, source: 'external',
+      {
+        id: 'tool',
+        type: 'mcp',
+        enabled: true,
+        source: 'external',
         mcpServer: { command: 'echo', args: [] },
-        overrides: [{ catId: 'codex', enabled: false }] },
+        overrides: [{ catId: 'codex', enabled: false }],
+      },
     ]);
 
     // codex has override → disabled
@@ -381,8 +436,7 @@ describe('resolveServersForCat', () => {
 
   it('skips skill entries', () => {
     const config = makeConfig([
-      { id: 'cat-cafe', type: 'mcp', enabled: true, source: 'cat-cafe',
-        mcpServer: { command: 'node', args: [] } },
+      { id: 'cat-cafe', type: 'mcp', enabled: true, source: 'cat-cafe', mcpServer: { command: 'node', args: [] } },
       { id: 'some-skill', type: 'skill', enabled: true, source: 'external' },
     ]);
 
@@ -393,8 +447,13 @@ describe('resolveServersForCat', () => {
 
   it('preserves env and workingDir', () => {
     const config = makeConfig([
-      { id: 'tool', type: 'mcp', enabled: true, source: 'external',
-        mcpServer: { command: 'node', args: [], env: { KEY: 'val' }, workingDir: '/tmp' } },
+      {
+        id: 'tool',
+        type: 'mcp',
+        enabled: true,
+        source: 'external',
+        mcpServer: { command: 'node', args: [], env: { KEY: 'val' }, workingDir: '/tmp' },
+      },
     ]);
 
     const servers = resolveServersForCat(config, 'opus');
@@ -404,8 +463,7 @@ describe('resolveServersForCat', () => {
 
   it('forces commandless entries disabled for cleanup', () => {
     const config = makeConfig([
-      { id: 'jetbrains', type: 'mcp', enabled: true, source: 'external',
-        mcpServer: { command: '', args: [] } },
+      { id: 'jetbrains', type: 'mcp', enabled: true, source: 'external', mcpServer: { command: '', args: [] } },
     ]);
 
     const servers = resolveServersForCat(config, 'opus');
@@ -418,8 +476,12 @@ describe('resolveServersForCat', () => {
 describe('generateCliConfigs', () => {
   /** @type {string} */ let dir;
 
-  beforeEach(async () => { dir = await makeTmpDir('gen-cli'); });
-  afterEach(async () => { await rm(dir, { recursive: true, force: true }); });
+  beforeEach(async () => {
+    dir = await makeTmpDir('gen-cli');
+  });
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
 
   it('generates config files for all providers', async () => {
     // Need cats registered for this test
@@ -430,8 +492,13 @@ describe('generateCliConfigs', () => {
     }
 
     const config = makeConfig([
-      { id: 'cat-cafe', type: 'mcp', enabled: true, source: 'cat-cafe',
-        mcpServer: { command: 'node', args: ['server.js'] } },
+      {
+        id: 'cat-cafe',
+        type: 'mcp',
+        enabled: true,
+        source: 'cat-cafe',
+        mcpServer: { command: 'node', args: ['server.js'] },
+      },
     ]);
 
     const paths = {
@@ -444,9 +511,24 @@ describe('generateCliConfigs', () => {
 
     // At least one config should exist
     let configCount = 0;
-    try { await readFile(paths.anthropic, 'utf-8'); configCount++; } catch { /* ok */ }
-    try { await readFile(paths.openai, 'utf-8'); configCount++; } catch { /* ok */ }
-    try { await readFile(paths.google, 'utf-8'); configCount++; } catch { /* ok */ }
+    try {
+      await readFile(paths.anthropic, 'utf-8');
+      configCount++;
+    } catch {
+      /* ok */
+    }
+    try {
+      await readFile(paths.openai, 'utf-8');
+      configCount++;
+    } catch {
+      /* ok */
+    }
+    try {
+      await readFile(paths.google, 'utf-8');
+      configCount++;
+    } catch {
+      /* ok */
+    }
 
     assert.ok(configCount > 0, 'At least one CLI config should be generated');
   });
@@ -466,17 +548,24 @@ describe('generateCliConfigs', () => {
 
     // Seed an existing invalid entry (historical config).
     await mkdir(join(dir, '.gemini'), { recursive: true });
-    await writeFile(paths.google, JSON.stringify({
-      mcpServers: {
-        jetbrains: { command: '', args: [] },
-      },
-    }));
+    await writeFile(
+      paths.google,
+      JSON.stringify({
+        mcpServers: {
+          jetbrains: { command: '', args: [] },
+        },
+      }),
+    );
 
     const config = makeConfig([
-      { id: 'jetbrains', type: 'mcp', enabled: true, source: 'external',
-        mcpServer: { command: '', args: [] } },
-      { id: 'cat-cafe-collab', type: 'mcp', enabled: true, source: 'cat-cafe',
-        mcpServer: { command: 'node', args: ['collab.js'] } },
+      { id: 'jetbrains', type: 'mcp', enabled: true, source: 'external', mcpServer: { command: '', args: [] } },
+      {
+        id: 'cat-cafe-collab',
+        type: 'mcp',
+        enabled: true,
+        source: 'cat-cafe',
+        mcpServer: { command: 'node', args: ['collab.js'] },
+      },
     ]);
 
     await generateCliConfigs(config, paths);
@@ -492,8 +581,12 @@ describe('generateCliConfigs', () => {
 describe('orchestrate', () => {
   /** @type {string} */ let dir;
 
-  beforeEach(async () => { dir = await makeTmpDir('orch'); });
-  afterEach(async () => { await rm(dir, { recursive: true, force: true }); });
+  beforeEach(async () => {
+    dir = await makeTmpDir('orch');
+  });
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
 
   it('bootstraps on first run (no capabilities.json)', async () => {
     const config = await orchestrate(
@@ -520,10 +613,18 @@ describe('orchestrate', () => {
 
   it('uses existing capabilities.json on subsequent runs', async () => {
     // Pre-seed capabilities.json
-    await writeCapabilitiesConfig(dir, makeConfig([
-      { id: 'custom', type: 'mcp', enabled: true, source: 'external',
-        mcpServer: { command: 'custom-cmd', args: ['--flag'] } },
-    ]));
+    await writeCapabilitiesConfig(
+      dir,
+      makeConfig([
+        {
+          id: 'custom',
+          type: 'mcp',
+          enabled: true,
+          source: 'external',
+          mcpServer: { command: 'custom-cmd', args: ['--flag'] },
+        },
+      ]),
+    );
 
     const config = await orchestrate(
       dir,

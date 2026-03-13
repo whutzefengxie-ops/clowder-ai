@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type { SignalSource } from '@cat-cafe/shared';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { fetchSignalSources, triggerSourceFetch, updateSignalSource } from '@/utils/signals-api';
 import { groupSignalSourcesByTierAndCategory } from '@/utils/signals-view';
 import { SignalNav } from './SignalNav';
@@ -32,10 +32,7 @@ export function SignalSourcesView() {
     void reloadSources();
   }, [reloadSources]);
 
-  const groupedSources = useMemo(
-    () => groupSignalSourcesByTierAndCategory(sources),
-    [sources],
-  );
+  const groupedSources = useMemo(() => groupSignalSourcesByTierAndCategory(sources), [sources]);
 
   const setEnabled = useCallback(async (sourceId: string, enabled: boolean) => {
     setError(null);
@@ -77,12 +74,15 @@ export function SignalSourcesView() {
     }
   }, []);
 
-  const setAllEnabled = useCallback(async (enabled: boolean) => {
-    const targets = sources.filter((source) => source.enabled !== enabled);
-    for (const source of targets) {
-      await setEnabled(source.id, enabled);
-    }
-  }, [setEnabled, sources]);
+  const setAllEnabled = useCallback(
+    async (enabled: boolean) => {
+      const targets = sources.filter((source) => source.enabled !== enabled);
+      for (const source of targets) {
+        await setEnabled(source.id, enabled);
+      }
+    },
+    [setEnabled, sources],
+  );
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-codex-bg/30 via-cafe-white to-cafe-white">
@@ -121,7 +121,11 @@ export function SignalSourcesView() {
           </button>
         </section>
 
-        {error && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">请求失败: {error}</div>}
+        {error && (
+          <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            请求失败: {error}
+          </div>
+        )}
         {fetchResult && (
           <div
             className={[
@@ -136,7 +140,10 @@ export function SignalSourcesView() {
 
         <section className="space-y-4">
           {groupedSources.map((group) => (
-            <div key={`${group.tier}-${group.category}`} className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+            <div
+              key={`${group.tier}-${group.category}`}
+              className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm"
+            >
               <div className="mb-3 flex items-center gap-2">
                 <SignalTierBadge tier={group.tier} />
                 <h2 className="text-sm font-semibold text-cafe-black">{group.category}</h2>

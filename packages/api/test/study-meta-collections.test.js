@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
-import { describe, it, beforeEach, afterEach } from 'node:test';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, beforeEach, describe, it } from 'node:test';
 
 const { StudyMetaService } = await import('../dist/domains/signals/services/study-meta-service.js');
 
@@ -77,12 +77,20 @@ describe('Collection ↔ StudyMeta atomicity', () => {
     // Simulate: create empty collection, attempt sync that throws,
     // verify collection file still has empty articleIds.
     const colPath = join(tmpDir, 'test-col.json');
-    const emptyCol = { id: 'col-test', name: 'Test', articleIds: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+    const emptyCol = {
+      id: 'col-test',
+      name: 'Test',
+      articleIds: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
     writeFileSync(colPath, JSON.stringify(emptyCol, null, 2));
 
     // Simulate sync failure
     const brokenStudyMeta = {
-      addCollection: () => { throw new Error('disk full'); },
+      addCollection: () => {
+        throw new Error('disk full');
+      },
     };
 
     let threw = false;
@@ -101,11 +109,19 @@ describe('Collection ↔ StudyMeta atomicity', () => {
 
   it('PATCH pattern: sync failure preserves old articleIds in collection', async () => {
     const colPath = join(tmpDir, 'test-col2.json');
-    const existingCol = { id: 'col-test2', name: 'Test2', articleIds: ['old-art'], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+    const existingCol = {
+      id: 'col-test2',
+      name: 'Test2',
+      articleIds: ['old-art'],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
     writeFileSync(colPath, JSON.stringify(existingCol, null, 2));
 
     const brokenStudyMeta = {
-      addCollection: () => { throw new Error('permission denied'); },
+      addCollection: () => {
+        throw new Error('permission denied');
+      },
     };
 
     let threw = false;

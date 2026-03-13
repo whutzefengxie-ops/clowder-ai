@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import type { CatInvocationInfo, ThreadState } from '@/stores/chat-types';
 import {
   classifyQuotaUtilization,
   collectLatestQuotaByCat,
   type QuotaUtilizationLevel,
 } from '@/components/hub-quota-board.helpers';
+import type { CatInvocationInfo, ThreadState } from '@/stores/chat-types';
 
 function inv(info: Partial<CatInvocationInfo>): CatInvocationInfo {
   return info;
@@ -344,9 +344,9 @@ describe('hub-quota-board.helpers', () => {
 
   it('classifies utilization thresholds for warning levels', () => {
     const cases: Array<{ v: number; expected: QuotaUtilizationLevel }> = [
-      { v: 0.70, expected: 'ok' },
-      { v: 0.80, expected: 'warn' },
-      { v: 0.90, expected: 'high' },
+      { v: 0.7, expected: 'ok' },
+      { v: 0.8, expected: 'warn' },
+      { v: 0.9, expected: 'high' },
       { v: 0.95, expected: 'critical' },
     ];
 

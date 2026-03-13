@@ -1,5 +1,5 @@
-import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
 import { formatTelegramHtml } from '../dist/infrastructure/connectors/adapters/telegram-html-formatter.js';
 
 describe('formatTelegramHtml', () => {
@@ -12,10 +12,17 @@ describe('formatTelegramHtml', () => {
   });
 
   it('formats checklist with emoji checkboxes', () => {
-    const blocks = [{
-      id: 'b2', kind: 'checklist', v: 1,
-      items: [{ id: 'i1', text: 'Done', checked: true }, { id: 'i2', text: 'Pending' }],
-    }];
+    const blocks = [
+      {
+        id: 'b2',
+        kind: 'checklist',
+        v: 1,
+        items: [
+          { id: 'i1', text: 'Done', checked: true },
+          { id: 'i2', text: 'Pending' },
+        ],
+      },
+    ];
     const html = formatTelegramHtml(blocks, '布偶猫');
     assert.ok(html.includes('✅ Done'));
     assert.ok(html.includes('☐ Pending'));
@@ -49,10 +56,15 @@ describe('formatTelegramHtml', () => {
   });
 
   it('formats media_gallery', () => {
-    const blocks = [{
-      id: 'b5', kind: 'media_gallery', v: 1, title: 'Screenshots',
-      items: [{ url: 'https://img.png', caption: 'UI' }],
-    }];
+    const blocks = [
+      {
+        id: 'b5',
+        kind: 'media_gallery',
+        v: 1,
+        title: 'Screenshots',
+        items: [{ url: 'https://img.png', caption: 'UI' }],
+      },
+    ];
     const html = formatTelegramHtml(blocks, '布偶猫');
     assert.ok(html.includes('Screenshots'));
     assert.ok(html.includes('UI'));

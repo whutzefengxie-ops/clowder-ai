@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { apiFetch } from '@/utils/api-client';
-import type { CatStrategyEntry } from './hub-strategy-types';
 import { CatStrategyCard } from './HubStrategyCard';
+import type { CatStrategyEntry } from './hub-strategy-types';
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -26,7 +26,7 @@ export function HubStrategyTab() {
         setError('策略配置加载失败');
         return;
       }
-      const data = await res.json() as { cats: CatStrategyEntry[] };
+      const data = (await res.json()) as { cats: CatStrategyEntry[] };
       setCats(data.cats);
     } catch {
       setError('网络错误');

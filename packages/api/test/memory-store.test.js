@@ -2,9 +2,9 @@
  * MemoryStore tests
  */
 
-import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { MemoryStore, MAX_KEYS_PER_THREAD } from '../dist/domains/cats/services/stores/ports/MemoryStore.js';
+import { beforeEach, describe, it } from 'node:test';
+import { MAX_KEYS_PER_THREAD, MemoryStore } from '../dist/domains/cats/services/stores/ports/MemoryStore.js';
 
 describe('MemoryStore', () => {
   let store;
@@ -43,8 +43,8 @@ describe('MemoryStore', () => {
 
     const list1 = store.list('thread-1');
     assert.equal(list1.length, 2);
-    assert.ok(list1.some(e => e.key === 'a'));
-    assert.ok(list1.some(e => e.key === 'b'));
+    assert.ok(list1.some((e) => e.key === 'a'));
+    assert.ok(list1.some((e) => e.key === 'b'));
 
     const list2 = store.list('thread-2');
     assert.equal(list2.length, 1);
@@ -81,7 +81,7 @@ describe('MemoryStore', () => {
     for (let i = 0; i < MAX_KEYS_PER_THREAD; i++) {
       store.set({ threadId: 'thread-1', key: `key-${i}`, value: `val-${i}`, updatedBy: 'user' });
       // Small delay to ensure different timestamps
-      await new Promise(r => setTimeout(r, 1));
+      await new Promise((r) => setTimeout(r, 1));
     }
 
     // Add one more (should evict key-0)
@@ -89,7 +89,10 @@ describe('MemoryStore', () => {
 
     const list = store.list('thread-1');
     assert.equal(list.length, MAX_KEYS_PER_THREAD);
-    assert.ok(!list.some(e => e.key === 'key-0'), 'key-0 should be evicted');
-    assert.ok(list.some(e => e.key === 'new-key'), 'new-key should exist');
+    assert.ok(!list.some((e) => e.key === 'key-0'), 'key-0 should be evicted');
+    assert.ok(
+      list.some((e) => e.key === 'new-key'),
+      'new-key should exist',
+    );
   });
 });

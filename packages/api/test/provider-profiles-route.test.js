@@ -1,10 +1,10 @@
 // @ts-check
 import './helpers/setup-cat-registry.js';
-import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
-import { join } from 'node:path';
 import { homedir } from 'node:os';
+import { join } from 'node:path';
+import { describe, it } from 'node:test';
 
 const AUTH_HEADERS = { 'x-cat-cafe-user': 'test-user' };
 
@@ -192,7 +192,9 @@ describe('provider profiles routes', () => {
           return new Response('Not Found', { status: 404 });
         }
         if (urlString.endsWith('/v1/messages')) {
-          return new Response('{"type":"error","error":{"type":"invalid_request_error","message":"invalid model"}}', { status: 400 });
+          return new Response('{"type":"error","error":{"type":"invalid_request_error","message":"invalid model"}}', {
+            status: 400,
+          });
         }
         return new Response('Unhandled URL', { status: 500 });
       },

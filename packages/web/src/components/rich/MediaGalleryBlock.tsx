@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import type { RichMediaGalleryBlock } from '@/stores/chat-types';
 import { CopyButton, Lightbox } from '@/components/Lightbox';
+import type { RichMediaGalleryBlock } from '@/stores/chat-types';
 
 export function MediaGalleryBlock({ block }: { block: RichMediaGalleryBlock }) {
   const items = Array.isArray(block.items) ? block.items : [];

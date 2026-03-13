@@ -7,12 +7,12 @@
  * Also covers P2-1 (extractTextContent type guard) and P2-2 (keyMessages limit).
  */
 
-import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import Fastify from 'fastify';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { afterEach, beforeEach, describe, it } from 'node:test';
+import Fastify from 'fastify';
 
 function mockThreadStore(threads = {}) {
   return {
@@ -40,18 +40,10 @@ describe('F98 Route Inject: session-transcript', () => {
   });
 
   async function setup() {
-    const { SessionChainStore } = await import(
-      '../dist/domains/cats/services/stores/ports/SessionChainStore.js'
-    );
-    const { TranscriptWriter } = await import(
-      '../dist/domains/cats/services/session/TranscriptWriter.js'
-    );
-    const { TranscriptReader } = await import(
-      '../dist/domains/cats/services/session/TranscriptReader.js'
-    );
-    const { sessionTranscriptRoutes } = await import(
-      '../dist/routes/session-transcript.js'
-    );
+    const { SessionChainStore } = await import('../dist/domains/cats/services/stores/ports/SessionChainStore.js');
+    const { TranscriptWriter } = await import('../dist/domains/cats/services/session/TranscriptWriter.js');
+    const { TranscriptReader } = await import('../dist/domains/cats/services/session/TranscriptReader.js');
+    const { sessionTranscriptRoutes } = await import('../dist/routes/session-transcript.js');
 
     const sessionChainStore = new SessionChainStore();
     const threadStore = mockThreadStore({ 'thread-1': THREAD });
@@ -85,19 +77,31 @@ describe('F98 Route Inject: session-transcript', () => {
     };
     const invId = 'inv-test-001';
 
-    writer.appendEvent(sessInfo, {
-      type: 'user',
-      content: [{ type: 'text', text: 'Hello' }],
-    }, invId);
-    writer.appendEvent(sessInfo, {
-      type: 'assistant',
-      content: [{ type: 'text', text: 'Hi there!' }],
-    }, invId);
-    writer.appendEvent(sessInfo, {
-      type: 'tool_use',
-      name: 'Read',
-      input: { file_path: '/a.ts' },
-    }, invId);
+    writer.appendEvent(
+      sessInfo,
+      {
+        type: 'user',
+        content: [{ type: 'text', text: 'Hello' }],
+      },
+      invId,
+    );
+    writer.appendEvent(
+      sessInfo,
+      {
+        type: 'assistant',
+        content: [{ type: 'text', text: 'Hi there!' }],
+      },
+      invId,
+    );
+    writer.appendEvent(
+      sessInfo,
+      {
+        type: 'tool_use',
+        name: 'Read',
+        input: { file_path: '/a.ts' },
+      },
+      invId,
+    );
 
     // Seal so transcript is readable
     sessionChainStore.update(record.id, { status: 'sealed' });
@@ -277,18 +281,28 @@ describe('F98 Route Inject: session-transcript', () => {
 
 describe('Cloud P1-1: chat view handles production event type (text)', () => {
   it('includes type:text events as role:assistant', async () => {
-    const { formatEventsChat } = await import(
-      '../dist/domains/cats/services/session/TranscriptFormatter.js'
-    );
+    const { formatEventsChat } = await import('../dist/domains/cats/services/session/TranscriptFormatter.js');
     const events = [
       {
-        v: 1, t: 1000, threadId: 't', catId: 'opus', sessionId: 's',
-        cliSessionId: 'c', invocationId: 'inv-1', eventNo: 0,
+        v: 1,
+        t: 1000,
+        threadId: 't',
+        catId: 'opus',
+        sessionId: 's',
+        cliSessionId: 'c',
+        invocationId: 'inv-1',
+        eventNo: 0,
         event: { type: 'text', content: 'I will fix the bug.' },
       },
       {
-        v: 1, t: 1001, threadId: 't', catId: 'opus', sessionId: 's',
-        cliSessionId: 'c', invocationId: 'inv-1', eventNo: 1,
+        v: 1,
+        t: 1001,
+        threadId: 't',
+        catId: 'opus',
+        sessionId: 's',
+        cliSessionId: 'c',
+        invocationId: 'inv-1',
+        eventNo: 1,
         event: { type: 'tool_use', toolName: 'Edit', toolInput: { file_path: '/app.ts' } },
       },
     ];
@@ -303,18 +317,28 @@ describe('Cloud P1-1: chat view handles production event type (text)', () => {
 
 describe('Cloud P1-2: handoff view reads toolName field', () => {
   it('extracts tool names from toolName (production format)', async () => {
-    const { formatEventsHandoff } = await import(
-      '../dist/domains/cats/services/session/TranscriptFormatter.js'
-    );
+    const { formatEventsHandoff } = await import('../dist/domains/cats/services/session/TranscriptFormatter.js');
     const events = [
       {
-        v: 1, t: 1000, threadId: 't', catId: 'opus', sessionId: 's',
-        cliSessionId: 'c', invocationId: 'inv-1', eventNo: 0,
+        v: 1,
+        t: 1000,
+        threadId: 't',
+        catId: 'opus',
+        sessionId: 's',
+        cliSessionId: 'c',
+        invocationId: 'inv-1',
+        eventNo: 0,
         event: { type: 'tool_use', toolName: 'Read' },
       },
       {
-        v: 1, t: 1001, threadId: 't', catId: 'opus', sessionId: 's',
-        cliSessionId: 'c', invocationId: 'inv-1', eventNo: 1,
+        v: 1,
+        t: 1001,
+        threadId: 't',
+        catId: 'opus',
+        sessionId: 's',
+        cliSessionId: 'c',
+        invocationId: 'inv-1',
+        eventNo: 1,
         event: { type: 'tool_use', toolName: 'Edit' },
       },
     ];
@@ -324,13 +348,17 @@ describe('Cloud P1-2: handoff view reads toolName field', () => {
   });
 
   it('extracts key messages from type:text events', async () => {
-    const { formatEventsHandoff } = await import(
-      '../dist/domains/cats/services/session/TranscriptFormatter.js'
-    );
+    const { formatEventsHandoff } = await import('../dist/domains/cats/services/session/TranscriptFormatter.js');
     const events = [
       {
-        v: 1, t: 1000, threadId: 't', catId: 'opus', sessionId: 's',
-        cliSessionId: 'c', invocationId: 'inv-1', eventNo: 0,
+        v: 1,
+        t: 1000,
+        threadId: 't',
+        catId: 'opus',
+        sessionId: 's',
+        cliSessionId: 'c',
+        invocationId: 'inv-1',
+        eventNo: 0,
         event: { type: 'text', content: 'Found the bug in app.ts.' },
       },
     ];
@@ -345,21 +373,26 @@ describe('Cloud P1-2: handoff view reads toolName field', () => {
 
 describe('P2-1: extractTextContent rejects non-string text', () => {
   it('skips content items where text is not a string', async () => {
-    const { formatEventsChat } = await import(
-      '../dist/domains/cats/services/session/TranscriptFormatter.js'
-    );
-    const events = [{
-      v: 1, t: 1000, threadId: 't', catId: 'opus', sessionId: 's',
-      cliSessionId: 'c', eventNo: 0,
-      event: {
-        type: 'assistant',
-        content: [
-          { type: 'text', text: 42 },           // number, not string
-          { type: 'text' },                       // missing text field
-          { type: 'text', text: 'valid' },        // valid
-        ],
+    const { formatEventsChat } = await import('../dist/domains/cats/services/session/TranscriptFormatter.js');
+    const events = [
+      {
+        v: 1,
+        t: 1000,
+        threadId: 't',
+        catId: 'opus',
+        sessionId: 's',
+        cliSessionId: 'c',
+        eventNo: 0,
+        event: {
+          type: 'assistant',
+          content: [
+            { type: 'text', text: 42 }, // number, not string
+            { type: 'text' }, // missing text field
+            { type: 'text', text: 'valid' }, // valid
+          ],
+        },
       },
-    }];
+    ];
     const messages = formatEventsChat(events);
     assert.equal(messages.length, 1);
     assert.equal(messages[0].content, 'valid');
@@ -370,13 +403,17 @@ describe('P2-1: extractTextContent rejects non-string text', () => {
 
 describe('P2-2: handoff keyMessages capped at 5', () => {
   it('limits keyMessages to 5 per invocation', async () => {
-    const { formatEventsHandoff } = await import(
-      '../dist/domains/cats/services/session/TranscriptFormatter.js'
-    );
+    const { formatEventsHandoff } = await import('../dist/domains/cats/services/session/TranscriptFormatter.js');
     // Create 10 assistant events in same invocation
     const events = Array.from({ length: 10 }, (_, i) => ({
-      v: 1, t: 1000 + i, threadId: 't', catId: 'opus', sessionId: 's',
-      cliSessionId: 'c', invocationId: 'inv-many', eventNo: i,
+      v: 1,
+      t: 1000 + i,
+      threadId: 't',
+      catId: 'opus',
+      sessionId: 's',
+      cliSessionId: 'c',
+      invocationId: 'inv-many',
+      eventNo: i,
       event: {
         type: 'assistant',
         content: `Message number ${i}`,

@@ -3,14 +3,18 @@
  * Tests the REAL exported rightPanelToggleTransition function from ChatContainerHeader.
  * Cycle: closed → status → workspace → closed
  */
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { rightPanelToggleTransition } from '../ChatContainerHeader';
 
 describe('F099 RightPanelToggle three-state cycle', () => {
   let panelOpen: boolean;
   let mode: 'status' | 'workspace';
-  const togglePanel = () => { panelOpen = !panelOpen; };
-  const setMode = (m: 'status' | 'workspace') => { mode = m; };
+  const togglePanel = () => {
+    panelOpen = !panelOpen;
+  };
+  const setMode = (m: 'status' | 'workspace') => {
+    mode = m;
+  };
 
   beforeEach(() => {
     panelOpen = false;

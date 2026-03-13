@@ -1,6 +1,6 @@
 import type { GameState } from './game-state';
 import type { FighterId } from './types';
-import { ATTACK_RANGE, SKILLS, FIGHTER_STATS } from './types';
+import { ATTACK_RANGE, FIGHTER_STATS, SKILLS } from './types';
 
 export type AiAction = 'idle' | 'move_left' | 'move_right' | 'attack' | 'skill';
 

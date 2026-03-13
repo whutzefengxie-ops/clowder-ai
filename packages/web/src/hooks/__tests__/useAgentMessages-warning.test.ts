@@ -47,7 +47,7 @@ const storeState = {
   setMessageUsage: mockSetMessageUsage,
   setMessageMetadata: mockSetMessageMetadata,
   setMessageThinking: mockSetMessageThinking,
-  
+
   addMessageToThread: mockAddMessageToThread,
   clearThreadActiveInvocation: mockClearThreadActiveInvocation,
   resetThreadInvocationState: mockResetThreadInvocationState,
@@ -122,4 +122,3 @@ describe('useAgentMessages system_info warning', () => {
     );
   });
 });
-

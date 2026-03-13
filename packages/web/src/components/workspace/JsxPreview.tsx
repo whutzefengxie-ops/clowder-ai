@@ -8,24 +8,28 @@ let esbuildReady: Promise<EsbuildModule> | null = null;
 
 function ensureEsbuild(): Promise<EsbuildModule> {
   if (!esbuildReady) {
-    esbuildReady = import('esbuild-wasm').then(async (mod) => {
-      await mod.initialize({
-        wasmURL: 'https://unpkg.com/esbuild-wasm@0.27.3/esbuild.wasm',
-      }).catch((err) => {
-        if (!String(err).includes('already')) throw err;
+    esbuildReady = import('esbuild-wasm')
+      .then(async (mod) => {
+        await mod
+          .initialize({
+            wasmURL: 'https://unpkg.com/esbuild-wasm@0.27.3/esbuild.wasm',
+          })
+          .catch((err) => {
+            if (!String(err).includes('already')) throw err;
+          });
+        return mod;
+      })
+      .catch((err) => {
+        esbuildReady = null;
+        throw err;
       });
-      return mod;
-    }).catch((err) => {
-      esbuildReady = null;
-      throw err;
-    });
   }
   return esbuildReady;
 }
 
 /** Known React-ecosystem packages → esm.sh CDN URLs */
 const ESM_SH_MAP: Record<string, string> = {
-  'react': 'https://esm.sh/react@18?dev',
+  react: 'https://esm.sh/react@18?dev',
   'react/jsx-runtime': 'https://esm.sh/react@18/jsx-runtime?dev',
   'react/jsx-dev-runtime': 'https://esm.sh/react@18/jsx-dev-runtime?dev',
   'react-dom': 'https://esm.sh/react-dom@18?dev',
@@ -34,7 +38,7 @@ const ESM_SH_MAP: Record<string, string> = {
 
 /** Fetch file content from workspace API */
 async function fetchWorkspaceFile(worktreeId: string, filePath: string): Promise<string | null> {
-  const apiBase = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3101';
+  const apiBase = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3101';
   const url = `${apiBase}/api/workspace/file?worktreeId=${encodeURIComponent(worktreeId)}&path=${encodeURIComponent(filePath)}`;
   try {
     const res = await fetch(url);
@@ -49,7 +53,7 @@ async function fetchWorkspaceFile(worktreeId: string, filePath: string): Promise
 /** Resolve relative path against a directory */
 function resolveRelative(from: string, rel: string): string {
   const dir = from.includes('/') ? from.slice(0, from.lastIndexOf('/')) : '.';
-  const parts = (dir + '/' + rel).split('/').filter(Boolean);
+  const parts = `${dir}/${rel}`.split('/').filter(Boolean);
   const resolved: string[] = [];
   for (const p of parts) {
     if (p === '..') resolved.pop();
@@ -61,7 +65,10 @@ function resolveRelative(from: string, rel: string): string {
 /** Try resolving a path with common extensions */
 const EXTENSIONS = ['', '.tsx', '.ts', '.jsx', '.js', '/index.tsx', '/index.ts', '/index.jsx', '/index.js'];
 
-async function resolveWithExtensions(worktreeId: string, basePath: string): Promise<{ path: string; content: string } | null> {
+async function resolveWithExtensions(
+  worktreeId: string,
+  basePath: string,
+): Promise<{ path: string; content: string } | null> {
   for (const ext of EXTENSIONS) {
     const tryPath = basePath + ext;
     const content = await fetchWorkspaceFile(worktreeId, tryPath);
@@ -104,7 +111,7 @@ export function JsxPreview({ code, filePath, worktreeId }: JsxPreviewProps) {
           // Resolve relative imports via workspace API
           // stdin entry has importer="<stdin>" which is truthy but not a real path
           pluginBuild.onResolve({ filter: /^\./ }, (args) => {
-            const base = (!args.importer || args.importer === '<stdin>') ? filePath : args.importer;
+            const base = !args.importer || args.importer === '<stdin>' ? filePath : args.importer;
             const resolved = resolveRelative(base, args.path);
             return { path: resolved, namespace: 'workspace' };
           });
@@ -116,7 +123,11 @@ export function JsxPreview({ code, filePath, worktreeId }: JsxPreviewProps) {
             if (!result) return { contents: `// Could not resolve: ${args.path}`, loader: 'js' as const };
             const ext = result.path.split('.').pop() ?? '';
             const loader = (['tsx', 'ts'].includes(ext) ? 'tsx' : 'jsx') as 'tsx' | 'jsx';
-            return { contents: result.content, loader, resolveDir: result.path.includes('/') ? result.path.slice(0, result.path.lastIndexOf('/')) : '.' };
+            return {
+              contents: result.content,
+              loader,
+              resolveDir: result.path.includes('/') ? result.path.slice(0, result.path.lastIndexOf('/')) : '.',
+            };
           });
         },
       };
@@ -215,12 +226,7 @@ export function JsxPreview({ code, filePath, worktreeId }: JsxPreviewProps) {
         JSX Preview (esbuild-wasm) — local imports resolved, npm packages via esm.sh
       </div>
       <div className="flex-1 min-h-0 bg-white">
-        <iframe
-          srcDoc={html}
-          sandbox="allow-scripts"
-          title="JSX Preview"
-          className="w-full h-full border-0"
-        />
+        <iframe srcDoc={html} sandbox="allow-scripts" title="JSX Preview" className="w-full h-full border-0" />
       </div>
     </div>
   );

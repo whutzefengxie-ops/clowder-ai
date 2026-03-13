@@ -34,7 +34,13 @@ describe('computeScrollRecomputeSignal', () => {
       { id: 'm1', type: 'assistant', content: 'x', timestamp: 1, extra: { rich: { v: 1, blocks: [] } } },
     ] as never);
     const grown = computeScrollRecomputeSignal('t1', [
-      { id: 'm1', type: 'assistant', content: 'x', timestamp: 1, extra: { rich: { v: 1, blocks: [{ kind: 'card', v: 1, id: 'b1' }] } } },
+      {
+        id: 'm1',
+        type: 'assistant',
+        content: 'x',
+        timestamp: 1,
+        extra: { rich: { v: 1, blocks: [{ kind: 'card', v: 1, id: 'b1' }] } },
+      },
     ] as never);
 
     expect(grown).not.toBe(base);

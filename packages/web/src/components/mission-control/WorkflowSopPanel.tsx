@@ -1,7 +1,7 @@
 'use client';
 
 import type { CheckStatus, SopStage, WorkflowSop } from '@cat-cafe/shared';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiFetch } from '@/utils/api-client';
 
 interface WorkflowSopPanelProps {
@@ -55,8 +55,7 @@ function StagePills({ current }: { current: SopStage }) {
       {STAGE_ORDER.map((stage, idx) => {
         const isCurrent = stage === current;
         const isPast = idx < currentIdx;
-        let className =
-          'rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors';
+        let className = 'rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors';
         if (isCurrent) {
           className += ' bg-[#8B6F47] text-white';
         } else if (isPast) {
@@ -167,7 +166,10 @@ export function WorkflowSopPanel({ backlogItemId }: WorkflowSopPanelProps) {
       {/* Baton holder + next skill */}
       <div className="mb-3 rounded-xl border border-[#EADFCF] bg-[#FFF9F0] px-2.5 py-2">
         <p className="text-[11px] text-[#6E5A46]">
-          接力棒：<span className="font-semibold text-[#4B3A2A]" data-testid="sop-baton-holder">{sop.batonHolder}</span>
+          接力棒：
+          <span className="font-semibold text-[#4B3A2A]" data-testid="sop-baton-holder">
+            {sop.batonHolder}
+          </span>
         </p>
         {sop.nextSkill && (
           <p className="text-[11px] text-[#6E5A46]">
@@ -177,23 +179,30 @@ export function WorkflowSopPanel({ backlogItemId }: WorkflowSopPanelProps) {
       </div>
 
       {/* Resume capsule */}
-      <div className="mb-3 rounded-xl border border-[#EADFCF] bg-[#FEFCF7] px-2.5 py-2" data-testid="sop-resume-capsule">
+      <div
+        className="mb-3 rounded-xl border border-[#EADFCF] bg-[#FEFCF7] px-2.5 py-2"
+        data-testid="sop-resume-capsule"
+      >
         <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[#9A866F]">Resume Capsule</p>
         <p className="text-[11px] text-[#4B3A2A]">
-          <span className="font-medium text-[#6E5A46]">Goal：</span>{sop.resumeCapsule.goal}
+          <span className="font-medium text-[#6E5A46]">Goal：</span>
+          {sop.resumeCapsule.goal}
         </p>
         {sop.resumeCapsule.done.length > 0 && (
           <div className="mt-1">
             <span className="text-[10px] font-medium text-[#6E5A46]">Done：</span>
             <ul className="ml-3 list-disc">
               {sop.resumeCapsule.done.map((item, i) => (
-                <li key={i} className="text-[11px] text-[#4B3A2A]">{item}</li>
+                <li key={i} className="text-[11px] text-[#4B3A2A]">
+                  {item}
+                </li>
               ))}
             </ul>
           </div>
         )}
         <p className="mt-1 text-[11px] text-[#4B3A2A]">
-          <span className="font-medium text-[#6E5A46]">Focus：</span>{sop.resumeCapsule.currentFocus}
+          <span className="font-medium text-[#6E5A46]">Focus：</span>
+          {sop.resumeCapsule.currentFocus}
         </p>
       </div>
 
@@ -211,13 +220,14 @@ export function WorkflowSopPanel({ backlogItemId }: WorkflowSopPanelProps) {
       {/* Footer */}
       <div className="border-t border-[#F0E8DA] pt-1.5">
         <p className="text-[10px] text-[#A89880]">
-          更新于 {new Date(sop.updatedAt).toLocaleString('zh-CN', {
+          更新于{' '}
+          {new Date(sop.updatedAt).toLocaleString('zh-CN', {
             month: '2-digit',
             day: '2-digit',
             hour: '2-digit',
             minute: '2-digit',
-          })}
-          {' '}by {sop.updatedBy}
+          })}{' '}
+          by {sop.updatedBy}
         </p>
       </div>
     </section>

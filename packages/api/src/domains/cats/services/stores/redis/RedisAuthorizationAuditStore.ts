@@ -9,11 +9,11 @@
  * IMPORTANT: ioredis keyPrefix auto-prefixes ALL commands.
  */
 
-import type { CatId, AuthorizationAuditEntry, RespondScope } from '@cat-cafe/shared';
+import type { AuthorizationAuditEntry, CatId, RespondScope } from '@cat-cafe/shared';
 import type { RedisClient } from '@cat-cafe/shared/utils';
-import { AuthAuditKeys } from '../redis-keys/authorization-keys.js';
 import type { CreateAuditInput, IAuthorizationAuditStore } from '../ports/AuthorizationAuditStore.js';
 import { generateSortableId } from '../ports/MessageStore.js';
+import { AuthAuditKeys } from '../redis-keys/authorization-keys.js';
 
 const DEFAULT_TTL_SECONDS = 90 * 24 * 60 * 60; // 90 days
 const DEFAULT_MAX = 5000;
@@ -76,7 +76,7 @@ export class RedisAuthorizationAuditStore implements IAuthorizationAuditStore {
     for (const [err, data] of results) {
       if (err || !data || typeof data !== 'object') continue;
       const d = data as Record<string, string>;
-      if (!d['id']) continue;
+      if (!d.id) continue;
 
       const entry = this.hydrateEntry(d);
       if (filter?.catId && entry.catId !== filter.catId) continue;
@@ -109,15 +109,24 @@ export class RedisAuthorizationAuditStore implements IAuthorizationAuditStore {
 
   private serializeEntry(entry: AuthorizationAuditEntry): string[] {
     const fields: string[] = [
-      'id', entry.id,
-      'requestId', entry.requestId,
-      'invocationId', entry.invocationId,
-      'catId', entry.catId,
-      'threadId', entry.threadId,
-      'action', entry.action,
-      'reason', entry.reason,
-      'decision', entry.decision,
-      'createdAt', String(entry.createdAt),
+      'id',
+      entry.id,
+      'requestId',
+      entry.requestId,
+      'invocationId',
+      entry.invocationId,
+      'catId',
+      entry.catId,
+      'threadId',
+      entry.threadId,
+      'action',
+      entry.action,
+      'reason',
+      entry.reason,
+      'decision',
+      entry.decision,
+      'createdAt',
+      String(entry.createdAt),
     ];
     if (entry.scope) fields.push('scope', entry.scope);
     if (entry.decidedBy) fields.push('decidedBy', entry.decidedBy);
@@ -128,19 +137,19 @@ export class RedisAuthorizationAuditStore implements IAuthorizationAuditStore {
 
   private hydrateEntry(data: Record<string, string>): AuthorizationAuditEntry {
     return {
-      id: data['id']!,
-      requestId: data['requestId']!,
-      invocationId: data['invocationId']!,
-      catId: data['catId']! as CatId,
-      threadId: data['threadId']!,
-      action: data['action']!,
-      reason: data['reason']!,
-      decision: data['decision']! as 'allow' | 'deny' | 'pending',
-      createdAt: parseInt(data['createdAt']!, 10),
-      ...(data['scope'] ? { scope: data['scope'] as RespondScope } : {}),
-      ...(data['decidedBy'] ? { decidedBy: data['decidedBy'] } : {}),
-      ...(data['decidedAt'] ? { decidedAt: parseInt(data['decidedAt'], 10) } : {}),
-      ...(data['matchedRuleId'] ? { matchedRuleId: data['matchedRuleId'] } : {}),
+      id: data.id!,
+      requestId: data.requestId!,
+      invocationId: data.invocationId!,
+      catId: data.catId! as CatId,
+      threadId: data.threadId!,
+      action: data.action!,
+      reason: data.reason!,
+      decision: data.decision! as 'allow' | 'deny' | 'pending',
+      createdAt: parseInt(data.createdAt!, 10),
+      ...(data.scope ? { scope: data.scope as RespondScope } : {}),
+      ...(data.decidedBy ? { decidedBy: data.decidedBy } : {}),
+      ...(data.decidedAt ? { decidedAt: parseInt(data.decidedAt, 10) } : {}),
+      ...(data.matchedRuleId ? { matchedRuleId: data.matchedRuleId } : {}),
     };
   }
 }

@@ -5,7 +5,7 @@
  * using presets for role distribution and the standard phase sequence.
  */
 
-import type { GameDefinition, RoleDefinition, PhaseDefinition, ActionDefinition, WinCondition } from '@cat-cafe/shared';
+import type { ActionDefinition, GameDefinition, PhaseDefinition, RoleDefinition, WinCondition } from '@cat-cafe/shared';
 import { WEREWOLF_ROLES } from './WerewolfRoles.js';
 
 /** Role distribution for a specific player count */
@@ -65,7 +65,9 @@ function buildWinConditions(): WinCondition[] {
 export function createWerewolfDefinition(playerCount: number): GameDefinition {
   const preset = WEREWOLF_PRESETS[playerCount];
   if (!preset) {
-    throw new Error(`No werewolf preset for ${playerCount} players. Available: ${Object.keys(WEREWOLF_PRESETS).join(', ')}`);
+    throw new Error(
+      `No werewolf preset for ${playerCount} players. Available: ${Object.keys(WEREWOLF_PRESETS).join(', ')}`,
+    );
   }
 
   const roles: RoleDefinition[] = [];

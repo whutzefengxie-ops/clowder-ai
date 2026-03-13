@@ -494,7 +494,7 @@ describe('AntigravityCdpClient', () => {
       onerror: null,
     };
     // Start a command (will be pending forever)
-    const pendingCmd = client.cdp('Test.method', {});
+    const _pendingCmd = client.cdp('Test.method', {});
     // Disconnect should clear the pending map and timers
     await client.disconnect();
     // The pending promise should never resolve or reject (timer cleared),
@@ -592,7 +592,7 @@ describe('AntigravityCdpClient', () => {
 
     // Simulate: loading for 5 polls (each 10ms = 50ms total), then stable
     // idleTimeoutMs = 30ms — without reset, it would timeout after 3 polls
-    const pollCount = 0;
+    const _pollCount = 0;
     const states = [
       1, // initial userMsgCount
       JSON.stringify({ userMsgCount: 1, responseText: 'partial...', hasInlineLoading: true }),

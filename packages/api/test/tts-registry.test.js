@@ -2,12 +2,20 @@
  * F34: TtsRegistry tests
  */
 
-import { describe, it } from 'node:test';
 import assert from 'node:assert';
+import { describe, it } from 'node:test';
 import { TtsRegistry } from '../dist/domains/cats/services/tts/TtsRegistry.js';
 
 function mockProvider(id) {
-  return { id, model: 'test-model', synthesize: async () => ({ audio: new Uint8Array(0), format: 'wav', metadata: { provider: id, model: 'test-model', voice: 'test' } }) };
+  return {
+    id,
+    model: 'test-model',
+    synthesize: async () => ({
+      audio: new Uint8Array(0),
+      format: 'wav',
+      metadata: { provider: id, model: 'test-model', voice: 'test' },
+    }),
+  };
 }
 
 describe('TtsRegistry', () => {

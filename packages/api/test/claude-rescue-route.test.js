@@ -1,7 +1,7 @@
 // @ts-check
 import './helpers/setup-cat-registry.js';
-import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
 
 const AUTH_HEADERS = { 'x-cat-cafe-user': 'test-user' };
 
@@ -12,15 +12,19 @@ describe('claude rescue routes', () => {
 
     const app = Fastify();
     await app.register(claudeRescueRoutes, {
-      findBrokenClaudeThinkingSessions: overrides.findBrokenClaudeThinkingSessions ?? (async () => ({
-        sessions: [],
-      })),
-      rescueClaudeThinkingSessions: overrides.rescueClaudeThinkingSessions ?? (async () => ({
-        status: 'noop',
-        rescuedCount: 0,
-        skippedCount: 0,
-        results: [],
-      })),
+      findBrokenClaudeThinkingSessions:
+        overrides.findBrokenClaudeThinkingSessions ??
+        (async () => ({
+          sessions: [],
+        })),
+      rescueClaudeThinkingSessions:
+        overrides.rescueClaudeThinkingSessions ??
+        (async () => ({
+          status: 'noop',
+          rescuedCount: 0,
+          skippedCount: 0,
+          results: [],
+        })),
     });
     await app.ready();
     return app;

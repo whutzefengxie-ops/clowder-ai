@@ -5,8 +5,8 @@
  * Uses lightweight Fastify injection (no real HTTP server).
  */
 
-import { test, describe, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { beforeEach, describe, test } from 'node:test';
 import Fastify from 'fastify';
 import './helpers/setup-cat-registry.js';
 
@@ -21,15 +21,9 @@ describe('Callback Bootcamp State', () => {
     const { InvocationRegistry } = await import(
       '../dist/domains/cats/services/agents/invocation/InvocationRegistry.js'
     );
-    const { ThreadStore } = await import(
-      '../dist/domains/cats/services/stores/ports/ThreadStore.js'
-    );
-    const { MessageStore } = await import(
-      '../dist/domains/cats/services/stores/ports/MessageStore.js'
-    );
-    const { AchievementStore } = await import(
-      '../dist/domains/leaderboard/achievement-store.js'
-    );
+    const { ThreadStore } = await import('../dist/domains/cats/services/stores/ports/ThreadStore.js');
+    const { MessageStore } = await import('../dist/domains/cats/services/stores/ports/MessageStore.js');
+    const { AchievementStore } = await import('../dist/domains/leaderboard/achievement-store.js');
 
     registry = new InvocationRegistry();
     threadStore = new ThreadStore();
@@ -37,7 +31,9 @@ describe('Callback Bootcamp State', () => {
     achievementStore = new AchievementStore();
     socketManager = {
       broadcastAgentMessage() {},
-      getMessages() { return []; },
+      getMessages() {
+        return [];
+      },
     };
   });
 
@@ -282,7 +278,9 @@ describe('Callback Bootcamp State', () => {
     const thread = await threadStore.create('user-1', '🎓 训练营');
     const { invocationId, callbackToken } = registry.create('user-1', 'opus', thread.id);
     await threadStore.updateBootcampState(thread.id, {
-      v: 1, phase: 'phase-0-select-cat', startedAt: 1000,
+      v: 1,
+      phase: 'phase-0-select-cat',
+      startedAt: 1000,
     });
 
     const response = await app.inject({
@@ -309,7 +307,9 @@ describe('Callback Bootcamp State', () => {
     const thread = await threadStore.create('user-1', '🎓 训练营');
     const { invocationId, callbackToken } = registry.create('user-1', 'opus', thread.id);
     await threadStore.updateBootcampState(thread.id, {
-      v: 1, phase: 'phase-5-kickoff', startedAt: 1000,
+      v: 1,
+      phase: 'phase-5-kickoff',
+      startedAt: 1000,
     });
 
     const response = await app.inject({
@@ -328,7 +328,9 @@ describe('Callback Bootcamp State', () => {
     const thread = await threadStore.create('user-1', '🎓 训练营');
     const { invocationId, callbackToken } = registry.create('user-1', 'opus', thread.id);
     await threadStore.updateBootcampState(thread.id, {
-      v: 1, phase: 'phase-3-config-help', startedAt: 1000,
+      v: 1,
+      phase: 'phase-3-config-help',
+      startedAt: 1000,
     });
 
     const response = await app.inject({
@@ -347,7 +349,9 @@ describe('Callback Bootcamp State', () => {
     const thread = await threadStore.create('user-1', '🎓 训练营');
     const { invocationId, callbackToken } = registry.create('user-1', 'opus', thread.id);
     await threadStore.updateBootcampState(thread.id, {
-      v: 1, phase: 'phase-0-select-cat', startedAt: 1000,
+      v: 1,
+      phase: 'phase-0-select-cat',
+      startedAt: 1000,
     });
 
     const response = await app.inject({
@@ -362,7 +366,10 @@ describe('Callback Bootcamp State', () => {
 
     // Verify achievement is in the store
     const unlocked = achievementStore.getUnlocked('user-1');
-    assert.ok(unlocked.some(a => a.id === 'bootcamp-enrolled'), 'Should have bootcamp-enrolled achievement');
+    assert.ok(
+      unlocked.some((a) => a.id === 'bootcamp-enrolled'),
+      'Should have bootcamp-enrolled achievement',
+    );
   });
 
   test('emits bootcamp-graduated achievement on phase-11-farewell', async () => {
@@ -370,13 +377,22 @@ describe('Callback Bootcamp State', () => {
     const thread = await threadStore.create('user-1', '🎓 训练营');
     const { invocationId, callbackToken } = registry.create('user-1', 'opus', thread.id);
     await threadStore.updateBootcampState(thread.id, {
-      v: 1, phase: 'phase-10-retro', leadCat: 'opus', startedAt: 1000,
+      v: 1,
+      phase: 'phase-10-retro',
+      leadCat: 'opus',
+      startedAt: 1000,
     });
 
     const response = await app.inject({
       method: 'POST',
       url: '/api/callbacks/update-bootcamp-state',
-      payload: { invocationId, callbackToken, threadId: thread.id, phase: 'phase-11-farewell', completedAt: Date.now() },
+      payload: {
+        invocationId,
+        callbackToken,
+        threadId: thread.id,
+        phase: 'phase-11-farewell',
+        completedAt: Date.now(),
+      },
     });
 
     assert.equal(response.statusCode, 200);
@@ -385,7 +401,7 @@ describe('Callback Bootcamp State', () => {
     assert.equal(body.bootcampState.phase, 'phase-11-farewell');
 
     const unlocked = achievementStore.getUnlocked('user-1');
-    assert.ok(unlocked.some(a => a.id === 'bootcamp-graduated'));
+    assert.ok(unlocked.some((a) => a.id === 'bootcamp-graduated'));
   });
 
   test('does not emit achievement for phases without mapping', async () => {
@@ -393,7 +409,10 @@ describe('Callback Bootcamp State', () => {
     const thread = await threadStore.create('user-1', '🎓 训练营');
     const { invocationId, callbackToken } = registry.create('user-1', 'opus', thread.id);
     await threadStore.updateBootcampState(thread.id, {
-      v: 1, phase: 'phase-1-intro', leadCat: 'opus', startedAt: 1000,
+      v: 1,
+      phase: 'phase-1-intro',
+      leadCat: 'opus',
+      startedAt: 1000,
     });
 
     const response = await app.inject({
@@ -412,7 +431,10 @@ describe('Callback Bootcamp State', () => {
     const { callbacksRoutes } = await import('../dist/routes/callbacks.js');
     const app = Fastify();
     await app.register(callbacksRoutes, {
-      registry, messageStore, socketManager, threadStore,
+      registry,
+      messageStore,
+      socketManager,
+      threadStore,
       sharedBank: 'cat-cafe-shared',
     });
     // Deliberately NOT registering leaderboardEventsRoutes
@@ -420,7 +442,9 @@ describe('Callback Bootcamp State', () => {
     const thread = await threadStore.create('user-1', '🎓 训练营');
     const { invocationId, callbackToken } = registry.create('user-1', 'opus', thread.id);
     await threadStore.updateBootcampState(thread.id, {
-      v: 1, phase: 'phase-0-select-cat', startedAt: 1000,
+      v: 1,
+      phase: 'phase-0-select-cat',
+      startedAt: 1000,
     });
 
     const response = await app.inject({
@@ -441,7 +465,10 @@ describe('Callback Bootcamp State', () => {
     const thread = await threadStore.create('user-1', '🎓 训练营');
     const { invocationId, callbackToken } = registry.create('user-1', 'opus', thread.id);
     await threadStore.updateBootcampState(thread.id, {
-      v: 1, phase: 'phase-1-intro', leadCat: 'opus', startedAt: 1000,
+      v: 1,
+      phase: 'phase-1-intro',
+      leadCat: 'opus',
+      startedAt: 1000,
     });
 
     // Try to submit same phase again — rejected (not forward)

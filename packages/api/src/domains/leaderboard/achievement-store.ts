@@ -36,9 +36,7 @@ export class AchievementStore {
 
   getCvoLevel(userId: string): CvoLevel {
     const userMap = this.unlocked.get(userId);
-    const cvoCount = userMap
-      ? [...userMap.values()].filter((a) => a.category === 'cvo').length
-      : 0;
+    const cvoCount = userMap ? [...userMap.values()].filter((a) => a.category === 'cvo').length : 0;
     return computeCvoLevel(cvoCount);
   }
 }

@@ -8,7 +8,7 @@
  */
 
 import { readFile } from 'node:fs/promises';
-import { resolve, dirname } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { FastifyPluginAsync } from 'fastify';
 import { RICH_BLOCK_RULES } from '../domains/cats/services/context/rich-block-rules.js';

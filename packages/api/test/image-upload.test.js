@@ -6,11 +6,11 @@
  * - Multipart POST + contentBlocks in GET response
  */
 
-import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { afterEach, beforeEach, describe, it } from 'node:test';
 import Fastify from 'fastify';
 
 describe('saveUploadedImages', () => {
@@ -68,7 +68,7 @@ describe('saveUploadedImages', () => {
     const { saveUploadedImages, ImageUploadError } = await import('../dist/routes/image-upload.js');
 
     const files = Array.from({ length: 6 }, (_, i) =>
-      createMockFile(`img${i}.png`, 'image/png', Buffer.from(`img${i}`))
+      createMockFile(`img${i}.png`, 'image/png', Buffer.from(`img${i}`)),
     );
     await assert.rejects(
       () => saveUploadedImages(files, uploadDir),
@@ -154,9 +154,7 @@ describe('Claude CLI image fallback', () => {
       return createMockProcess([]);
     };
 
-    const { ClaudeAgentService } = await import(
-      '../dist/domains/cats/services/agents/providers/ClaudeAgentService.js'
-    );
+    const { ClaudeAgentService } = await import('../dist/domains/cats/services/agents/providers/ClaudeAgentService.js');
     const service = new ClaudeAgentService({ spawnFn: mockSpawnFn });
 
     for await (const _ of service.invoke('test', {
@@ -188,15 +186,11 @@ describe('Codex CLI image text fallback', () => {
       return createMockProcess([]);
     };
 
-    const { CodexAgentService } = await import(
-      '../dist/domains/cats/services/agents/providers/CodexAgentService.js'
-    );
+    const { CodexAgentService } = await import('../dist/domains/cats/services/agents/providers/CodexAgentService.js');
     const service = new CodexAgentService({ spawnFn: mockSpawnFn });
 
     for await (const _ of service.invoke('review this', {
-      contentBlocks: [
-        { type: 'image', url: '/uploads/screenshot.png' },
-      ],
+      contentBlocks: [{ type: 'image', url: '/uploads/screenshot.png' }],
     })) {
       // consume
     }
@@ -217,18 +211,14 @@ describe('Gemini CLI image fallback', () => {
       return createMockProcess([]);
     };
 
-    const { GeminiAgentService } = await import(
-      '../dist/domains/cats/services/agents/providers/GeminiAgentService.js'
-    );
+    const { GeminiAgentService } = await import('../dist/domains/cats/services/agents/providers/GeminiAgentService.js');
     const service = new GeminiAgentService({
       adapter: 'gemini-cli',
       spawnFn: mockSpawnFn,
     });
 
     for await (const _ of service.invoke('describe this', {
-      contentBlocks: [
-        { type: 'image', url: '/uploads/cat-photo.jpg' },
-      ],
+      contentBlocks: [{ type: 'image', url: '/uploads/cat-photo.jpg' }],
     })) {
       // consume
     }
@@ -250,15 +240,11 @@ describe('contentBlocks in GET /api/messages', () => {
   let messageStore;
 
   beforeEach(async () => {
-    const { MessageStore } = await import(
-      '../dist/domains/cats/services/stores/ports/MessageStore.js'
-    );
+    const { MessageStore } = await import('../dist/domains/cats/services/stores/ports/MessageStore.js');
     const { InvocationRegistry } = await import(
       '../dist/domains/cats/services/agents/invocation/InvocationRegistry.js'
     );
-    const { ThreadStore } = await import(
-      '../dist/domains/cats/services/stores/ports/ThreadStore.js'
-    );
+    const { ThreadStore } = await import('../dist/domains/cats/services/stores/ports/ThreadStore.js');
     const { messagesRoutes } = await import('../dist/routes/messages.js');
 
     messageStore = new MessageStore();
@@ -326,8 +312,12 @@ describe('multipart image target routing', () => {
     broadcastedAgentMessages.length = 0;
 
     const { MessageStore } = await import('../dist/domains/cats/services/stores/ports/MessageStore.js');
-    const { InvocationRegistry } = await import('../dist/domains/cats/services/agents/invocation/InvocationRegistry.js');
-    const { InvocationRecordStore } = await import('../dist/domains/cats/services/stores/ports/InvocationRecordStore.js');
+    const { InvocationRegistry } = await import(
+      '../dist/domains/cats/services/agents/invocation/InvocationRegistry.js'
+    );
+    const { InvocationRecordStore } = await import(
+      '../dist/domains/cats/services/stores/ports/InvocationRecordStore.js'
+    );
     const { messagesRoutes } = await import('../dist/routes/messages.js');
 
     const messageStore = new MessageStore();
@@ -375,7 +365,9 @@ describe('multipart image target routing', () => {
     const boundary = '----cat-cafe-test-boundary';
     const payload = Buffer.concat([
       Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="content"\r\n\r\n请看图\r\n`),
-      Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="images"; filename="clip.png"\r\nContent-Type: image/png\r\n\r\nfake-png-bytes\r\n`),
+      Buffer.from(
+        `--${boundary}\r\nContent-Disposition: form-data; name="images"; filename="clip.png"\r\nContent-Type: image/png\r\n\r\nfake-png-bytes\r\n`,
+      ),
       Buffer.from(`--${boundary}--\r\n`),
     ]);
 
@@ -393,7 +385,11 @@ describe('multipart image target routing', () => {
     await new Promise((resolve) => setTimeout(resolve, 20));
     assert.equal(routeExecutionCalls.length, 1);
     // P1 regression guard: targetCats must match router resolution, not be overridden to codex
-    assert.deepEqual(routeExecutionCalls[0].targetCats, ['opus'], 'image message should route to the resolved target cat, not forced to codex');
+    assert.deepEqual(
+      routeExecutionCalls[0].targetCats,
+      ['opus'],
+      'image message should route to the resolved target cat, not forced to codex',
+    );
     assert.equal(routeExecutionCalls[0].uploadDir, uploadDir);
     assert.ok(Array.isArray(routeExecutionCalls[0].contentBlocks), 'routeExecution should receive contentBlocks');
     assert.ok(
@@ -401,11 +397,9 @@ describe('multipart image target routing', () => {
       'routeExecution should receive image content block',
     );
     // No forced-to-codex notice should be broadcast
-    const notice = broadcastedAgentMessages.find((m) => (
-      m?.type === 'system_info'
-      && typeof m?.content === 'string'
-      && m.content.includes('已自动转交缅因猫')
-    ));
+    const notice = broadcastedAgentMessages.find(
+      (m) => m?.type === 'system_info' && typeof m?.content === 'string' && m.content.includes('已自动转交缅因猫'),
+    );
     assert.equal(notice, undefined, 'should NOT broadcast forced-to-codex notice');
   });
 });
@@ -423,7 +417,7 @@ function createMockFile(filename, mimetype, buffer) {
 function createMockProcess(events) {
   const { Readable } = require('node:stream');
 
-  const stdoutData = events.map((e) => JSON.stringify(e)).join('\n') + '\n';
+  const stdoutData = `${events.map((e) => JSON.stringify(e)).join('\n')}\n`;
   const stdout = Readable.from(stdoutData);
   const stderr = Readable.from('');
 
@@ -432,7 +426,9 @@ function createMockProcess(events) {
     stderr,
     on: (event, cb) => {
       if (event === 'close') setTimeout(() => cb(0, null), 10);
-      if (event === 'error') { /* no-op */ }
+      if (event === 'error') {
+        /* no-op */
+      }
       return { stdout, stderr, on: () => ({}) };
     },
     kill: () => true,

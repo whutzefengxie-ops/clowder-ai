@@ -1,12 +1,22 @@
 import './helpers/setup-cat-registry.js';
-import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { writeFileSync, mkdtempSync, unlinkSync } from 'node:fs';
-import { join } from 'node:path';
+import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { describe, it } from 'node:test';
 
-const { loadCatConfig, getDefaultVariant, toFlatConfigs, toAllCatConfigs, findBreedByMention, isSessionChainEnabled, getMissionHubSelfClaimScope, getDefaultCatId, buildCatIdToBreedIndex, _resetCachedConfig } =
-  await import('../dist/config/cat-config-loader.js');
+const {
+  loadCatConfig,
+  getDefaultVariant,
+  toFlatConfigs,
+  toAllCatConfigs,
+  findBreedByMention,
+  isSessionChainEnabled,
+  getMissionHubSelfClaimScope,
+  getDefaultCatId,
+  buildCatIdToBreedIndex,
+  _resetCachedConfig,
+} = await import('../dist/config/cat-config-loader.js');
 
 /** Create a temp JSON file with given content, return path */
 function writeTempConfig(data) {
@@ -87,10 +97,7 @@ describe('cat-config-loader', () => {
     });
 
     it('throws clear error when file not found', () => {
-      assert.throws(
-        () => loadCatConfig('/nonexistent/cat-config.json'),
-        /Failed to read cat config/,
-      );
+      assert.throws(() => loadCatConfig('/nonexistent/cat-config.json'), /Failed to read cat config/);
     });
 
     it('rejects empty variants array', () => {
@@ -126,19 +133,21 @@ describe('cat-config-loader', () => {
         mentionPatterns: ['@dare'],
         roleDescription: '确定性执行与审计引擎',
         defaultVariantId: 'dare-default',
-        variants: [{
-          id: 'dare-default',
-          provider: 'dare',
-          defaultModel: 'zhipu/glm-4.7',
-          mcpSupport: false,
-          cli: { command: 'python', outputFormat: 'headless-json' },
-        }],
+        variants: [
+          {
+            id: 'dare-default',
+            provider: 'dare',
+            defaultModel: 'zhipu/glm-4.7',
+            mcpSupport: false,
+            cli: { command: 'python', outputFormat: 'headless-json' },
+          },
+        ],
       });
       const path = writeTempConfig(config);
       const loaded = loadCatConfig(path);
       const cats = toAllCatConfigs(loaded);
-      assert.ok(cats['dare']);
-      assert.strictEqual(cats['dare'].provider, 'dare');
+      assert.ok(cats.dare);
+      assert.strictEqual(cats.dare.provider, 'dare');
     });
 
     it('accepts arbitrary catId (F32-a: any non-empty string is valid)', () => {
@@ -168,12 +177,12 @@ describe('cat-config-loader', () => {
       const config = loadCatConfig(path);
       const flat = toFlatConfigs(config);
 
-      assert.ok(flat['opus']);
-      assert.equal(flat['opus'].displayName, '布偶猫');
-      assert.equal(flat['opus'].provider, 'anthropic');
-      assert.equal(flat['opus'].mcpSupport, true);
-      assert.deepEqual(flat['opus'].mentionPatterns, ['@opus', '@布偶猫']);
-      assert.equal(flat['opus'].personality, '温柔');
+      assert.ok(flat.opus);
+      assert.equal(flat.opus.displayName, '布偶猫');
+      assert.equal(flat.opus.provider, 'anthropic');
+      assert.equal(flat.opus.mcpSupport, true);
+      assert.deepEqual(flat.opus.mentionPatterns, ['@opus', '@布偶猫']);
+      assert.equal(flat.opus.personality, '温柔');
     });
 
     it('handles multiple breeds', () => {
@@ -203,9 +212,9 @@ describe('cat-config-loader', () => {
       const config = loadCatConfig(path);
       const flat = toFlatConfigs(config);
 
-      assert.ok(flat['opus']);
-      assert.ok(flat['codex']);
-      assert.equal(flat['codex'].provider, 'openai');
+      assert.ok(flat.opus);
+      assert.ok(flat.codex);
+      assert.equal(flat.codex.provider, 'openai');
     });
   });
 
@@ -406,16 +415,16 @@ describe('F32-b: toAllCatConfigs (multi-variant)', () => {
   it('expands all variants as independent cats', () => {
     const config = loadCatConfig(writeTempConfig(multiVariantConfig()));
     const all = toAllCatConfigs(config);
-    assert.ok(all['opus'], 'default variant registered as opus');
+    assert.ok(all.opus, 'default variant registered as opus');
     assert.ok(all['opus-45'], 'non-default variant registered as opus-45');
-    assert.ok(all['gemini'], 'second breed registered');
+    assert.ok(all.gemini, 'second breed registered');
     assert.equal(Object.keys(all).length, 3);
   });
 
   it('default variant inherits breed mentionPatterns', () => {
     const config = loadCatConfig(writeTempConfig(multiVariantConfig()));
     const all = toAllCatConfigs(config);
-    assert.deepEqual(all['opus'].mentionPatterns, ['@opus', '@布偶猫', '@布偶']);
+    assert.deepEqual(all.opus.mentionPatterns, ['@opus', '@布偶猫', '@布偶']);
   });
 
   it('non-default variant uses its own mentionPatterns (not breed)', () => {
@@ -461,7 +470,7 @@ describe('F32-b: toAllCatConfigs (multi-variant)', () => {
   it('variant overrides displayName', () => {
     const config = loadCatConfig(writeTempConfig(multiVariantConfig()));
     const all = toAllCatConfigs(config);
-    assert.equal(all['opus'].displayName, '布偶猫');
+    assert.equal(all.opus.displayName, '布偶猫');
     assert.equal(all['opus-45'].displayName, '布偶猫 4.5');
   });
 
@@ -469,16 +478,16 @@ describe('F32-b: toAllCatConfigs (multi-variant)', () => {
     const config = loadCatConfig(writeTempConfig(multiVariantConfig()));
     const all = toAllCatConfigs(config);
     // opus-45 has no avatar/color override → inherits breed
-    assert.equal(all['opus'].avatar, all['opus-45'].avatar);
-    assert.deepEqual(all['opus'].color, all['opus-45'].color);
+    assert.equal(all.opus.avatar, all['opus-45'].avatar);
+    assert.deepEqual(all.opus.color, all['opus-45'].color);
   });
 
   it('sets breedId on all variants', () => {
     const config = loadCatConfig(writeTempConfig(multiVariantConfig()));
     const all = toAllCatConfigs(config);
-    assert.equal(all['opus'].breedId, 'ragdoll');
+    assert.equal(all.opus.breedId, 'ragdoll');
     assert.equal(all['opus-45'].breedId, 'ragdoll');
-    assert.equal(all['gemini'].breedId, 'siamese');
+    assert.equal(all.gemini.breedId, 'siamese');
   });
 
   it('throws on duplicate catId', () => {
@@ -486,10 +495,7 @@ describe('F32-b: toAllCatConfigs (multi-variant)', () => {
     // Make second variant use same catId as default (no catId override → inherits breed)
     delete cfg.breeds[0].variants[1].catId;
     cfg.breeds[0].variants[1].mentionPatterns = ['@opus', '@布偶猫4.5'];
-    assert.throws(
-      () => toAllCatConfigs(loadCatConfig(writeTempConfig(cfg))),
-      /Duplicate catId "opus"/,
-    );
+    assert.throws(() => toAllCatConfigs(loadCatConfig(writeTempConfig(cfg))), /Duplicate catId "opus"/);
   });
 
   it('toFlatConfigs is an alias for toAllCatConfigs', () => {
@@ -612,8 +618,8 @@ describe('F32-b P4c: variant-level avatar/color override', () => {
   it('default variant still uses breed-level avatar/color', () => {
     const config = loadCatConfig(writeTempConfig(variantOverrideConfig()));
     const all = toAllCatConfigs(config);
-    assert.equal(all['opus'].avatar, '/avatars/opus.png');
-    assert.deepEqual(all['opus'].color, { primary: '#9B7EBD', secondary: '#E8DFF5' });
+    assert.equal(all.opus.avatar, '/avatars/opus.png');
+    assert.deepEqual(all.opus.color, { primary: '#9B7EBD', secondary: '#E8DFF5' });
   });
 
   it('variant without override inherits breed values (unchanged behavior)', () => {
@@ -646,16 +652,16 @@ describe('F32-b P4c: personality fallback to default variant', () => {
   it('default variant personality is used as-is', () => {
     const config = loadCatConfig(writeTempConfig(multiVariantConfig()));
     const all = toAllCatConfigs(config);
-    assert.equal(all['opus'].personality, '温柔');
+    assert.equal(all.opus.personality, '温柔');
   });
 });
 
 describe('F32-b P4c: Sonnet variant in project config', () => {
   it('project cat-config.json loads with Sonnet variant', () => {
     const config = loadCatConfig();
-    const ragdoll = config.breeds.find(b => b.id === 'ragdoll');
+    const ragdoll = config.breeds.find((b) => b.id === 'ragdoll');
     assert.ok(ragdoll, 'ragdoll breed exists');
-    const sonnetVariant = ragdoll.variants.find(v => v.id === 'opus-sonnet');
+    const sonnetVariant = ragdoll.variants.find((v) => v.id === 'opus-sonnet');
     assert.ok(sonnetVariant, 'opus-sonnet variant exists');
     assert.equal(sonnetVariant.catId, 'sonnet');
     assert.equal(sonnetVariant.variantLabel, 'Sonnet');
@@ -666,7 +672,7 @@ describe('F32-b P4c: Sonnet variant in project config', () => {
   it('Sonnet expands to independent cat with correct overrides', () => {
     const config = loadCatConfig();
     const all = toAllCatConfigs(config);
-    const sonnet = all['sonnet'];
+    const sonnet = all.sonnet;
     assert.ok(sonnet, 'sonnet cat config exists');
     assert.equal(sonnet.breedId, 'ragdoll');
     assert.equal(sonnet.displayName, '布偶猫');
@@ -680,23 +686,23 @@ describe('F32-b P4c: Sonnet variant in project config', () => {
     const config = loadCatConfig();
     const all = toAllCatConfigs(config);
     // Sonnet has its own color
-    assert.notDeepEqual(all['sonnet'].color, all['opus'].color);
+    assert.notDeepEqual(all.sonnet.color, all.opus.color);
   });
 
   it('total cat count is 11 (opus + sonnet + opus-45 + codex + gpt52 + spark + gemini + gemini25 + dare + antigravity + antig-opus)', () => {
     const config = loadCatConfig();
     const all = toAllCatConfigs(config);
     assert.equal(Object.keys(all).length, 11);
-    assert.ok(all['opus']);
-    assert.ok(all['sonnet']);
+    assert.ok(all.opus);
+    assert.ok(all.sonnet);
     assert.ok(all['opus-45']);
-    assert.ok(all['codex']);
-    assert.ok(all['gpt52']);
-    assert.ok(all['spark']); // F032 Phase E: new cat added
-    assert.ok(all['gemini']);
-    assert.ok(all['gemini25']);
-    assert.ok(all['dare']); // F050: DARE external agent (dragon-li)
-    assert.ok(all['antigravity']); // F061: Bengal cat (Antigravity CDP bridge)
+    assert.ok(all.codex);
+    assert.ok(all.gpt52);
+    assert.ok(all.spark); // F032 Phase E: new cat added
+    assert.ok(all.gemini);
+    assert.ok(all.gemini25);
+    assert.ok(all.dare); // F050: DARE external agent (dragon-li)
+    assert.ok(all.antigravity); // F061: Bengal cat (Antigravity CDP bridge)
     assert.ok(all['antig-opus']); // F061: Bengal cat Claude variant
   });
 });
@@ -730,7 +736,7 @@ describe('F-Ground-3: caution null semantics', () => {
     const loaded = loadCatConfig(path);
     const all = toAllCatConfigs(loaded);
     // null means "explicitly no caution" — should NOT fallback to breed's caution
-    assert.equal(all['opus'].caution, null, 'variant null should override breed caution');
+    assert.equal(all.opus.caution, null, 'variant null should override breed caution');
   });
 
   it('variant caution: undefined inherits breed caution', () => {
@@ -740,7 +746,7 @@ describe('F-Ground-3: caution null semantics', () => {
     const path = writeTempConfig(cfg);
     const loaded = loadCatConfig(path);
     const all = toAllCatConfigs(loaded);
-    assert.equal(all['opus'].caution, 'breed warning');
+    assert.equal(all.opus.caution, 'breed warning');
   });
 });
 
@@ -748,7 +754,7 @@ describe('GPT-5.2 variant mention aliases in project config', () => {
   it('includes @gpt5.2 and @gpt-5.2 for gpt52 variant', () => {
     const config = loadCatConfig();
     const all = toAllCatConfigs(config);
-    const gpt52 = all['gpt52'];
+    const gpt52 = all.gpt52;
     assert.ok(gpt52, 'gpt52 cat config exists');
     assert.ok(gpt52.mentionPatterns.includes('@gpt5.2'));
     assert.ok(gpt52.mentionPatterns.includes('@gpt-5.2'));
@@ -757,7 +763,7 @@ describe('GPT-5.2 variant mention aliases in project config', () => {
   it('includes stable @gpt alias for gpt52 variant', () => {
     const config = loadCatConfig();
     const all = toAllCatConfigs(config);
-    const gpt52 = all['gpt52'];
+    const gpt52 = all.gpt52;
     assert.ok(gpt52, 'gpt52 cat config exists');
     assert.ok(gpt52.mentionPatterns.includes('@gpt'));
   });

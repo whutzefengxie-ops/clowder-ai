@@ -1,1 +1,1 @@
-export { SocketManager, buildCancelMessages } from './SocketManager.js';
+export { buildCancelMessages, SocketManager } from './SocketManager.js';

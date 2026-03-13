@@ -12,7 +12,7 @@ export function extractTaskProgress(
   toolInput: Record<string, unknown> | undefined,
 ): { action: 'snapshot'; tasks: Array<{ id: string; subject: string; status: string; activeForm?: string }> } | null {
   if (!toolInput || !TASK_TOOL_NAMES.has(toolName)) return null;
-  const todos = toolInput['todos'] as Array<{ content?: string; status?: string; activeForm?: string }> | undefined;
+  const todos = toolInput.todos as Array<{ content?: string; status?: string; activeForm?: string }> | undefined;
   if (!Array.isArray(todos)) return null;
   return {
     action: 'snapshot',

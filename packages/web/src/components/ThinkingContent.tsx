@@ -19,7 +19,19 @@ const DIVIDER = '#334155';
 
 function ThinkingChevron({ expanded, color }: { expanded: boolean; color?: string }) {
   return (
-    <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={color || '#6B7280'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0 transition-transform duration-150" style={{ transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>
+    <svg
+      aria-hidden="true"
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke={color || '#6B7280'}
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="flex-shrink-0 transition-transform duration-150"
+      style={{ transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)' }}
+    >
       <polyline points="9 18 15 12 9 6" />
     </svg>
   );
@@ -28,7 +40,19 @@ function ThinkingChevron({ expanded, color }: { expanded: boolean; color?: strin
 /** Brain SVG — official lucide brain icon */
 function BrainIcon() {
   return (
-    <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0" style={{ color: '#94A3B8' }}>
+    <svg
+      aria-hidden="true"
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="flex-shrink-0"
+      style={{ color: '#94A3B8' }}
+    >
       <path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z" />
       <path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z" />
       <path d="M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4" />
@@ -87,7 +111,9 @@ export function ThinkingContent({
     <div className="mt-2 mb-1 overflow-hidden" style={{ backgroundColor: surface, borderRadius: 10 }}>
       <button
         type="button"
-        onClick={() => { setExpanded((v) => !v); }}
+        onClick={() => {
+          setExpanded((v) => !v);
+        }}
         className="w-full flex items-center gap-2 text-[11px] font-mono transition-colors"
         style={{ padding: '8px 12px', backgroundColor: surface }}
       >
@@ -95,13 +121,22 @@ export function ThinkingContent({
           <ThinkingChevron expanded={expanded} color={breedColor} />
         </span>
         <BrainIcon />
-        <span className="font-medium" style={{ color: '#94A3B8' }}>{label}</span>
-        {!expanded && <span className="truncate max-w-[240px]" style={{ color: '#6B7280' }}>{preview}</span>}
+        <span className="font-medium" style={{ color: '#94A3B8' }}>
+          {label}
+        </span>
+        {!expanded && (
+          <span className="truncate max-w-[240px]" style={{ color: '#6B7280' }}>
+            {preview}
+          </span>
+        )}
       </button>
       {expanded && (
         <div style={{ backgroundColor: surfaceInner }}>
           <div style={{ height: 1, backgroundColor: DIVIDER }} />
-          <div style={{ padding: '8px 12px 10px 12px', color: '#CBD5E1' }} className="text-xs leading-relaxed cli-output-md">
+          <div
+            style={{ padding: '8px 12px 10px 12px', color: '#CBD5E1' }}
+            className="text-xs leading-relaxed cli-output-md"
+          >
             <MarkdownContent content={content} className={className} />
           </div>
         </div>

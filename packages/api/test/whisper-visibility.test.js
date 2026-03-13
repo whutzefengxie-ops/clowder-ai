@@ -3,17 +3,15 @@
  * Tests for canViewMessage, whisper storage, reveal, and callback filtering.
  */
 
-import { test, describe, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { beforeEach, describe, test } from 'node:test';
 import './helpers/setup-cat-registry.js';
 
 describe('canViewMessage', () => {
   let canViewMessage;
 
   beforeEach(async () => {
-    ({ canViewMessage } = await import(
-      '../dist/domains/cats/services/stores/visibility.js'
-    ));
+    ({ canViewMessage } = await import('../dist/domains/cats/services/stores/visibility.js'));
   });
 
   test('user always sees everything', () => {
@@ -57,9 +55,7 @@ describe('MessageStore whisper', () => {
   let store;
 
   beforeEach(async () => {
-    ({ MessageStore } = await import(
-      '../dist/domains/cats/services/stores/ports/MessageStore.js'
-    ));
+    ({ MessageStore } = await import('../dist/domains/cats/services/stores/ports/MessageStore.js'));
     store = new MessageStore();
   });
 
@@ -81,23 +77,42 @@ describe('MessageStore whisper', () => {
 
   test('revealWhispers sets revealedAt on all whispers in thread', () => {
     store.append({
-      userId: 'user1', catId: null, content: 'public msg',
-      mentions: [], timestamp: 1000, threadId: 'thread1',
+      userId: 'user1',
+      catId: null,
+      content: 'public msg',
+      mentions: [],
+      timestamp: 1000,
+      threadId: 'thread1',
     });
     store.append({
-      userId: 'user1', catId: null, content: 'whisper 1',
-      mentions: ['opus'], timestamp: 2000, threadId: 'thread1',
-      visibility: 'whisper', whisperTo: ['opus'],
+      userId: 'user1',
+      catId: null,
+      content: 'whisper 1',
+      mentions: ['opus'],
+      timestamp: 2000,
+      threadId: 'thread1',
+      visibility: 'whisper',
+      whisperTo: ['opus'],
     });
     store.append({
-      userId: 'user1', catId: null, content: 'whisper 2',
-      mentions: ['codex'], timestamp: 3000, threadId: 'thread1',
-      visibility: 'whisper', whisperTo: ['codex'],
+      userId: 'user1',
+      catId: null,
+      content: 'whisper 2',
+      mentions: ['codex'],
+      timestamp: 3000,
+      threadId: 'thread1',
+      visibility: 'whisper',
+      whisperTo: ['codex'],
     });
     store.append({
-      userId: 'user1', catId: null, content: 'other thread whisper',
-      mentions: ['opus'], timestamp: 4000, threadId: 'thread2',
-      visibility: 'whisper', whisperTo: ['opus'],
+      userId: 'user1',
+      catId: null,
+      content: 'other thread whisper',
+      mentions: ['opus'],
+      timestamp: 4000,
+      threadId: 'thread2',
+      visibility: 'whisper',
+      whisperTo: ['opus'],
     });
 
     const count = store.revealWhispers('thread1', 'user1');
@@ -105,7 +120,7 @@ describe('MessageStore whisper', () => {
 
     // Verify thread1 whispers are revealed
     const thread1 = store.getByThread('thread1', 10, 'user1');
-    const whispers = thread1.filter(m => m.visibility === 'whisper');
+    const whispers = thread1.filter((m) => m.visibility === 'whisper');
     assert.equal(whispers.length, 2);
     for (const w of whispers) {
       assert.ok(w.revealedAt, 'whisper should have revealedAt');
@@ -113,16 +128,21 @@ describe('MessageStore whisper', () => {
 
     // Verify thread2 whisper is NOT revealed
     const thread2 = store.getByThread('thread2', 10, 'user1');
-    const t2Whispers = thread2.filter(m => m.visibility === 'whisper');
+    const t2Whispers = thread2.filter((m) => m.visibility === 'whisper');
     assert.equal(t2Whispers.length, 1);
     assert.equal(t2Whispers[0].revealedAt, undefined);
   });
 
   test('revealWhispers is idempotent', () => {
     store.append({
-      userId: 'user1', catId: null, content: 'whisper',
-      mentions: ['opus'], timestamp: 1000, threadId: 'thread1',
-      visibility: 'whisper', whisperTo: ['opus'],
+      userId: 'user1',
+      catId: null,
+      content: 'whisper',
+      mentions: ['opus'],
+      timestamp: 1000,
+      threadId: 'thread1',
+      visibility: 'whisper',
+      whisperTo: ['opus'],
     });
 
     assert.equal(store.revealWhispers('thread1', 'user1'), 1);

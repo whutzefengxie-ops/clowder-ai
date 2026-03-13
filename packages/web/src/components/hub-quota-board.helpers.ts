@@ -18,34 +18,24 @@ interface CollectQuotaInput {
 function hasQuotaTelemetry(invocation: CatInvocationInfo): boolean {
   const usage = invocation.usage;
   const hasUsage = Boolean(
-    usage
-      && (
-        usage.inputTokens != null
-        || usage.outputTokens != null
-        || usage.totalTokens != null
-        || usage.cacheReadTokens != null
-        || usage.contextUsedTokens != null
-        || usage.contextWindowSize != null
-      ),
+    usage &&
+      (usage.inputTokens != null ||
+        usage.outputTokens != null ||
+        usage.totalTokens != null ||
+        usage.cacheReadTokens != null ||
+        usage.contextUsedTokens != null ||
+        usage.contextWindowSize != null),
   );
 
   const rateLimit = invocation.rateLimit;
   const hasRateLimit = Boolean(
-    rateLimit
-      && (
-        rateLimit.utilization != null
-        || (typeof rateLimit.resetsAt === 'string' && rateLimit.resetsAt.length > 0)
-      ),
+    rateLimit &&
+      (rateLimit.utilization != null || (typeof rateLimit.resetsAt === 'string' && rateLimit.resetsAt.length > 0)),
   );
 
   const contextHealth = invocation.contextHealth;
   const hasContextHealth = Boolean(
-    contextHealth
-      && (
-        contextHealth.usedTokens > 0
-        || contextHealth.windowTokens > 0
-        || contextHealth.fillRatio > 0
-      ),
+    contextHealth && (contextHealth.usedTokens > 0 || contextHealth.windowTokens > 0 || contextHealth.fillRatio > 0),
   );
 
   return hasUsage || hasRateLimit || hasContextHealth;
@@ -74,12 +64,7 @@ export function collectLatestQuotaByCat(input: CollectQuotaInput): Record<string
   const result: Record<string, CatQuotaSnapshot> = {};
   const activeThreadLastActivity = threadStates[currentThreadId]?.lastActivity ?? 0;
 
-  const upsert = (
-    threadId: string,
-    catId: string,
-    invocation: CatInvocationInfo,
-    fallbackLastActivity = 0,
-  ) => {
+  const upsert = (threadId: string, catId: string, invocation: CatInvocationInfo, fallbackLastActivity = 0) => {
     if (!hasQuotaTelemetry(invocation)) return;
 
     const updatedAt = resolveUpdatedAt(invocation, fallbackLastActivity);
@@ -134,7 +119,7 @@ export function collectLatestQuotaByCat(input: CollectQuotaInput): Record<string
 export function classifyQuotaUtilization(utilization: number | undefined): QuotaUtilizationLevel {
   if (typeof utilization !== 'number' || !Number.isFinite(utilization)) return 'ok';
   if (utilization >= 0.95) return 'critical';
-  if (utilization >= 0.90) return 'high';
-  if (utilization >= 0.80) return 'warn';
+  if (utilization >= 0.9) return 'high';
+  if (utilization >= 0.8) return 'warn';
   return 'ok';
 }

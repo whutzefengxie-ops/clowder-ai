@@ -1066,7 +1066,7 @@ describe('MissionControlPage — Done lane + dependencies', () => {
 
     const doneSection = container.querySelector('[data-testid="mc-feature-done-section"]');
     expect(doneSection).not.toBeNull();
-    expect(doneSection!.textContent).toContain('已完成');
+    expect(doneSection?.textContent).toContain('已完成');
   });
 
   it('Done section is collapsed by default', async () => {
@@ -1095,7 +1095,7 @@ describe('MissionControlPage — Done lane + dependencies', () => {
     const doneSection = container.querySelector('[data-testid="mc-feature-done-section"]');
     expect(doneSection).not.toBeNull();
     // Feature details should not be visible when collapsed
-    expect(doneSection!.textContent).not.toContain('Done task');
+    expect(doneSection?.textContent).not.toContain('Done task');
   });
 
   it('renders dependency labels when feature row is expanded', async () => {

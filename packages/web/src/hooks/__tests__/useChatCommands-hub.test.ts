@@ -5,10 +5,9 @@
  * Uses React.createElement + createRoot to render the hook (project convention),
  * avoiding @testing-library/react dependency.
  */
-import React from 'react';
+import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { act } from 'react';
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useChatStore } from '@/stores/chatStore';
 
 // Mock apiFetch — /config set needs it
@@ -56,29 +55,29 @@ describe('useChatCommands hub commands (F12)', () => {
   });
 
   it('/help opens Hub to commands tab via processCommand', async () => {
-    const handled = await act(() => captured!.processCommand('/help'));
+    const handled = await act(() => captured?.processCommand('/help'));
     expect(handled).toBe(true);
     expect(useChatStore.getState().hubState).toEqual({ open: true, tab: 'commands' });
   });
 
   it('/help does NOT add any message to chat', async () => {
-    await act(() => captured!.processCommand('/help'));
+    await act(() => captured?.processCommand('/help'));
     expect(useChatStore.getState().messages).toHaveLength(0);
   });
 
   it('/config (no args) opens Hub to system tab via processCommand', async () => {
-    const handled = await act(() => captured!.processCommand('/config'));
+    const handled = await act(() => captured?.processCommand('/config'));
     expect(handled).toBe(true);
     expect(useChatStore.getState().hubState).toEqual({ open: true, tab: 'system' });
   });
 
   it('/config (no args) does NOT add any message to chat', async () => {
-    await act(() => captured!.processCommand('/config'));
+    await act(() => captured?.processCommand('/config'));
     expect(useChatStore.getState().messages).toHaveLength(0);
   });
 
   it('/config set still adds messages (regression)', async () => {
-    const handled = await act(() => captured!.processCommand('/config set cli.timeoutMs 120000'));
+    const handled = await act(() => captured?.processCommand('/config set cli.timeoutMs 120000'));
     expect(handled).toBe(true);
     // Should have user echo + system response
     expect(useChatStore.getState().messages.length).toBeGreaterThanOrEqual(1);

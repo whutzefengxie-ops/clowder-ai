@@ -1,8 +1,8 @@
 /**
  * F12: Registry tests — command-registry + shortcut-registry
  */
-import { describe, it, expect } from 'vitest';
-import { COMMANDS, COMMAND_CATEGORIES, type CommandCategory } from '../command-registry';
+import { describe, expect, it } from 'vitest';
+import { COMMAND_CATEGORIES, COMMANDS, type CommandCategory } from '../command-registry';
 import { SHORTCUTS } from '../shortcut-registry';
 
 describe('command-registry', () => {

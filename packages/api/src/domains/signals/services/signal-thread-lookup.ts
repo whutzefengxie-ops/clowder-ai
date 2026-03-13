@@ -1,8 +1,8 @@
-import { resolveSignalPaths } from '../config/sources-loader.js';
-import { readInboxRecords } from './inbox-records.js';
-import { readArticleDocument } from './article-document.js';
-import { StudyMetaService } from './study-meta-service.js';
 import type { TranscriptReader } from '../../cats/services/session/TranscriptReader.js';
+import { resolveSignalPaths } from '../config/sources-loader.js';
+import { readArticleDocument } from './article-document.js';
+import { readInboxRecords } from './inbox-records.js';
+import { StudyMetaService } from './study-meta-service.js';
 
 export interface DiscussionSnippet {
   readonly sessionId: string;
@@ -61,11 +61,10 @@ export function createSignalArticleLookup(
         let relatedDiscussions: DiscussionSnippet[] | undefined;
         if (deps?.transcriptReader) {
           try {
-            const hits = await deps.transcriptReader.search(
-              threadId,
-              article.title,
-              { limit: MAX_DISCUSSION_HITS, scope: 'digests' },
-            );
+            const hits = await deps.transcriptReader.search(threadId, article.title, {
+              limit: MAX_DISCUSSION_HITS,
+              scope: 'digests',
+            });
             if (hits.length > 0) {
               relatedDiscussions = hits.map((h) => ({
                 sessionId: h.sessionId,

@@ -18,32 +18,31 @@
  * 虽然参数可选（兼容测试），但生产代码必须显式传入。
  */
 
-import { catRegistry, escapeRegExp } from '@cat-cafe/shared';
 import type { CatId, MessageContent } from '@cat-cafe/shared';
-import { getDefaultCatId } from '../../../../../config/cat-config-loader.js';
+import { catRegistry, escapeRegExp } from '@cat-cafe/shared';
 import type { SessionStore } from '@cat-cafe/shared/utils';
-import { DEFAULT_THREAD_ID } from '../../stores/ports/ThreadStore.js';
-import type { ThreadRoutingPolicyV1, ThreadRoutingScope } from '../../stores/ports/ThreadStore.js';
-import { SessionManager } from '../../session/SessionManager.js';
-import { DeliveryCursorStore } from '../../stores/ports/DeliveryCursorStore.js';
-import { parseIntent, stripIntentTags } from '../../context/IntentParser.js';
+import { getDefaultCatId } from '../../../../../config/cat-config-loader.js';
 import type { IntentResult } from '../../context/IntentParser.js';
-import { routeSerial } from '../routing/route-serial.js';
-import { routeParallel } from '../routing/route-parallel.js';
-import type { RouteStrategyDeps, PersistenceContext } from '../routing/route-helpers.js';
-import type { InvocationRegistry } from '../invocation/InvocationRegistry.js';
-import type { IMessageStore } from '../../stores/ports/MessageStore.js';
+import { parseIntent, stripIntentTags } from '../../context/IntentParser.js';
+import { SessionManager } from '../../session/SessionManager.js';
+import type { ISessionSealer } from '../../session/SessionSealer.js';
+import type { TranscriptReader } from '../../session/TranscriptReader.js';
+import type { TranscriptWriter } from '../../session/TranscriptWriter.js';
+import { DeliveryCursorStore } from '../../stores/ports/DeliveryCursorStore.js';
 import type { IDraftStore } from '../../stores/ports/DraftStore.js';
-import type { IThreadStore } from '../../stores/ports/ThreadStore.js';
-import type { AgentMessage, AgentService } from '../../types.js';
+import type { IMessageStore } from '../../stores/ports/MessageStore.js';
 import type { ISessionChainStore } from '../../stores/ports/SessionChainStore.js';
 import type { ITaskStore } from '../../stores/ports/TaskStore.js';
-import type { TranscriptWriter } from '../../session/TranscriptWriter.js';
-import type { TranscriptReader } from '../../session/TranscriptReader.js';
-import type { ISessionSealer } from '../../session/SessionSealer.js';
-import type { AgentRegistry } from '../registry/AgentRegistry.js';
-import type { TaskProgressStore } from '../invocation/TaskProgressStore.js';
+import type { IThreadStore, ThreadRoutingPolicyV1, ThreadRoutingScope } from '../../stores/ports/ThreadStore.js';
+import { DEFAULT_THREAD_ID } from '../../stores/ports/ThreadStore.js';
 import type { IWorkflowSopStore } from '../../stores/ports/WorkflowSopStore.js';
+import type { AgentMessage, AgentService } from '../../types.js';
+import type { InvocationRegistry } from '../invocation/InvocationRegistry.js';
+import type { TaskProgressStore } from '../invocation/TaskProgressStore.js';
+import type { AgentRegistry } from '../registry/AgentRegistry.js';
+import type { PersistenceContext, RouteStrategyDeps } from '../routing/route-helpers.js';
+import { routeParallel } from '../routing/route-parallel.js';
+import { routeSerial } from '../routing/route-serial.js';
 
 /** Parsed mention with position for ordering */
 interface ParsedMention {
@@ -58,9 +57,7 @@ interface ParsedMention {
 function buildMentionData(configs: Record<string, import('@cat-cafe/shared').CatConfig>) {
   const mentionAliases = Array.from(
     new Set(
-      Object.values(configs).flatMap((config) =>
-        config.mentionPatterns.map((pattern) => pattern.replace(/^@/, '')),
-      ),
+      Object.values(configs).flatMap((config) => config.mentionPatterns.map((pattern) => pattern.replace(/^@/, ''))),
     ),
   ).sort((a, b) => b.length - a.length);
 
@@ -151,7 +148,17 @@ export interface AgentRouterOptions {
   /** F089 Phase 2: agent pane registry for observability */
   agentPaneRegistry?: import('../../../../terminal/agent-pane-registry.js').AgentPaneRegistry;
   /** F091: Signal article lookup for thread context injection */
-  signalArticleLookup?: (threadId: string) => Promise<readonly { id: string; title: string; source: string; tier: number; contentSnippet: string; note?: string | undefined; relatedDiscussions?: readonly { sessionId: string; snippet: string; score: number }[] | undefined }[]>;
+  signalArticleLookup?: (threadId: string) => Promise<
+    readonly {
+      id: string;
+      title: string;
+      source: string;
+      tier: number;
+      contentSnippet: string;
+      note?: string | undefined;
+      relatedDiscussions?: readonly { sessionId: string; snippet: string; score: number }[] | undefined;
+    }[]
+  >;
 }
 
 /**
@@ -172,11 +179,24 @@ export class AgentRouter {
   private taskProgressStore: TaskProgressStore | undefined;
   private taskStore: ITaskStore | undefined;
   private workflowSopStore: IWorkflowSopStore | undefined;
-  private executionDigestStore: import('../../../../projects/execution-digest-store.js').ExecutionDigestStore | undefined;
+  private executionDigestStore:
+    | import('../../../../projects/execution-digest-store.js').ExecutionDigestStore
+    | undefined;
   private socketManager: import('../../../../../infrastructure/websocket/SocketManager.js').SocketManager | undefined;
   private tmuxGateway: import('../../../../terminal/tmux-gateway.js').TmuxGateway | undefined;
   private agentPaneRegistry: import('../../../../terminal/agent-pane-registry.js').AgentPaneRegistry | undefined;
-  private signalArticleLookup?: ((threadId: string) => Promise<readonly { id: string; title: string; source: string; tier: number; contentSnippet: string; note?: string | undefined }[]>) | undefined;
+  private signalArticleLookup?:
+    | ((threadId: string) => Promise<
+        readonly {
+          id: string;
+          title: string;
+          source: string;
+          tier: number;
+          contentSnippet: string;
+          note?: string | undefined;
+        }[]
+      >)
+    | undefined;
   private speechMentionRe: RegExp;
 
   constructor(options: AgentRouterOptions) {
@@ -314,9 +334,7 @@ export class AgentRouter {
 
         // Token boundary: char after pattern must be whitespace/punctuation/EOF
         const charAfter = lowerMessage[end];
-        const isEndBoundary =
-          !charAfter ||
-          /[\s,.:;!?()\[\]{}<>，。！？、：；（）【】《》「」『』〈〉]/.test(charAfter);
+        const isEndBoundary = !charAfter || /[\s,.:;!?()[\]{}<>，。！？、：；（）【】《》「」『』〈〉]/.test(charAfter);
 
         // Not in an already-consumed interval
         const isConsumed = consumed.some(([s, e]) => pos >= s && pos < e);
@@ -355,7 +373,7 @@ export class AgentRouter {
     const lowerMessage = this.normalizeSpeechMentions(message).toLowerCase();
 
     // Reuse parseMentions' token boundary regex
-    const boundaryRe = /[\s,.:;!?()\[\]{}<>，。！？、：；（）【】《》「」『』〈〉]/;
+    const boundaryRe = /[\s,.:;!?()[\]{}<>，。！？、：；（）【】《》「」『』〈〉]/;
 
     /** Check if pattern appears in message with a valid token boundary after it */
     const matchesWithBoundary = (pattern: string): boolean => {
@@ -373,7 +391,10 @@ export class AgentRouter {
     };
 
     // Build all group patterns sorted longest-first for correct priority
-    interface GroupPattern { pattern: string; resolve: () => Promise<CatId[] | null> }
+    interface GroupPattern {
+      pattern: string;
+      resolve: () => Promise<CatId[] | null>;
+    }
     const patterns: GroupPattern[] = [];
 
     // Thread-scoped patterns
@@ -465,9 +486,7 @@ export class AgentRouter {
       // F32-b Phase 2: Thread preferred cats
       // R5: Object.hasOwn + dedupe; Cloud P1: Array.isArray guard for corrupted data
       const rawPref = Array.isArray(thread?.preferredCats) ? thread.preferredCats : [];
-      const validPreferred = [...new Set(
-        rawPref.filter((id) => Object.hasOwn(this.services, id as string)),
-      )];
+      const validPreferred = [...new Set(rawPref.filter((id) => Object.hasOwn(this.services, id as string)))];
       if (validPreferred.length > 0) {
         return this.applyThreadRoutingPolicy(thread, message, validPreferred);
       }
@@ -476,7 +495,7 @@ export class AgentRouter {
       const participantsWithActivity = await this.threadStore.getParticipantsWithActivity(threadId);
       if (participantsWithActivity.length > 0) {
         // Already sorted by lastMessageAt desc in ThreadStore — take only the most recent
-        return this.applyThreadRoutingPolicy(thread, message, [participantsWithActivity[0]!.catId]);
+        return this.applyThreadRoutingPolicy(thread, message, [participantsWithActivity[0]?.catId]);
       }
 
       // No preferredCats and no participants: default cat, then apply policy (e.g. review avoid opus)
@@ -503,9 +522,7 @@ export class AgentRouter {
       // F32-b Phase 2: Thread preferred cats
       // R5: Object.hasOwn + dedupe; Cloud P1: Array.isArray guard for corrupted data
       const rawPref = Array.isArray(thread?.preferredCats) ? thread.preferredCats : [];
-      const validPreferred = [...new Set(
-        rawPref.filter((id) => Object.hasOwn(this.services, id as string)),
-      )];
+      const validPreferred = [...new Set(rawPref.filter((id) => Object.hasOwn(this.services, id as string)))];
       if (validPreferred.length > 0) {
         return this.applyThreadRoutingPolicy(thread, message, validPreferred);
       }
@@ -514,7 +531,7 @@ export class AgentRouter {
       const participantsWithActivity = await this.threadStore.getParticipantsWithActivity(threadId);
       if (participantsWithActivity.length > 0) {
         // Already sorted by lastMessageAt desc in ThreadStore — take only the most recent
-        return this.applyThreadRoutingPolicy(thread, message, [participantsWithActivity[0]!.catId]);
+        return this.applyThreadRoutingPolicy(thread, message, [participantsWithActivity[0]?.catId]);
       }
 
       return this.applyThreadRoutingPolicy(thread, message, [getDefaultCatId()]);
@@ -525,7 +542,7 @@ export class AgentRouter {
 
   /** Build shared strategy dependencies (public for ModeOrchestrator) */
   getStrategyDeps(): RouteStrategyDeps {
-    const apiPort = process.env['API_SERVER_PORT'] ?? '3002';
+    const apiPort = process.env.API_SERVER_PORT ?? '3002';
     return {
       services: this.services,
       invocationDeps: {
@@ -602,7 +619,7 @@ export class AgentRouter {
     const storedUserMessage = await this.messageStore.append({
       userId,
       catId: null,
-      content: message,  // Store original (with tags) for audit
+      content: message, // Store original (with tags) for audit
       mentions: targetCats,
       timestamp: Date.now(),
       threadId: resolvedThreadId,
@@ -611,20 +628,18 @@ export class AgentRouter {
 
     const strategyDeps = this.getStrategyDeps();
     const routeOptions = {
-      contentBlocks, uploadDir, signal,
+      contentBlocks,
+      uploadDir,
+      signal,
       promptTags: intent.promptTags,
       currentUserMessageId: storedUserMessage.id,
       thinkingMode: legacyThinkingMode,
     };
 
     if (intent.intent === 'ideate' && targetCats.length > 1) {
-      yield* routeParallel(
-        strategyDeps, targetCats, cleanMessage, userId, resolvedThreadId, routeOptions,
-      );
+      yield* routeParallel(strategyDeps, targetCats, cleanMessage, userId, resolvedThreadId, routeOptions);
     } else {
-      yield* routeSerial(
-        strategyDeps, targetCats, cleanMessage, userId, resolvedThreadId, routeOptions,
-      );
+      yield* routeSerial(strategyDeps, targetCats, cleanMessage, userId, resolvedThreadId, routeOptions);
     }
   }
 
@@ -681,13 +696,9 @@ export class AgentRouter {
     };
 
     if (intent.intent === 'ideate' && targetCats.length > 1) {
-      yield* routeParallel(
-        strategyDeps, targetCats, cleanMessage, userId, threadId, routeOptions,
-      );
+      yield* routeParallel(strategyDeps, targetCats, cleanMessage, userId, threadId, routeOptions);
     } else {
-      yield* routeSerial(
-        strategyDeps, targetCats, cleanMessage, userId, threadId, routeOptions,
-      );
+      yield* routeSerial(strategyDeps, targetCats, cleanMessage, userId, threadId, routeOptions);
     }
   }
 
@@ -695,11 +706,7 @@ export class AgentRouter {
    * ADR-008 S3: Ack all cursor boundaries collected during execution.
    * Call ONLY after InvocationRecord.status = 'succeeded'.
    */
-  async ackCollectedCursors(
-    userId: string,
-    threadId: string,
-    boundaries: Map<string, string>,
-  ): Promise<void> {
+  async ackCollectedCursors(userId: string, threadId: string, boundaries: Map<string, string>): Promise<void> {
     for (const [catId, boundaryId] of boundaries) {
       try {
         await this.deliveryCursorStore.ackCursor(userId, catId as CatId, threadId, boundaryId);

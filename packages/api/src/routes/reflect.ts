@@ -8,8 +8,8 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { collectConfigSnapshot } from '../config/ConfigRegistry.js';
-import { HindsightError } from '../domains/cats/services/orchestration/HindsightClient.js';
 import type { IHindsightClient } from '../domains/cats/services/orchestration/HindsightClient.js';
+import { HindsightError } from '../domains/cats/services/orchestration/HindsightClient.js';
 import type { IReflectionService } from '../domains/memory/interfaces.js';
 
 const reflectSchema = z.object({
@@ -46,7 +46,12 @@ export const reflectRoutes: FastifyPluginAsync<ReflectRoutesOptions> = async (ap
         const reflection = await opts.reflectionService.reflect(query);
         return { reflection, degraded: false, dispositionMode: 'off' as const } satisfies ReflectResponse;
       } catch {
-        return { reflection: '', degraded: true, degradeReason: 'reflection_service_error', dispositionMode: 'off' as const } satisfies ReflectResponse;
+        return {
+          reflection: '',
+          degraded: true,
+          degradeReason: 'reflection_service_error',
+          dispositionMode: 'off' as const,
+        } satisfies ReflectResponse;
       }
     }
 

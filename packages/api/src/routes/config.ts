@@ -5,16 +5,16 @@
  * GET   /api/config/env-summary  — 返回用户可配的 env 变量及当前值 (F12)
  */
 
+import { existsSync } from 'node:fs';
+import os from 'node:os';
+import { dirname, resolve } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { collectConfigSnapshot } from '../config/ConfigRegistry.js';
-import type { ConfigSnapshot } from '../config/config-snapshot.js';
 import { configStore } from '../config/ConfigStore.js';
-import { getEventAuditLog, AuditEventTypes } from '../domains/cats/services/orchestration/EventAuditLog.js';
-import os from 'node:os';
-import { existsSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import type { ConfigSnapshot } from '../config/config-snapshot.js';
 import { buildEnvSummary, ENV_CATEGORIES } from '../config/env-registry.js';
+import { AuditEventTypes, getEventAuditLog } from '../domains/cats/services/orchestration/EventAuditLog.js';
 
 /** Walk up from CWD to find pnpm-workspace.yaml — the monorepo root. */
 function findMonorepoRoot(): string {
@@ -197,10 +197,10 @@ export async function configRoutes(app: FastifyInstance, opts: ConfigRoutesOptio
         projectRoot: MONOREPO_ROOT,
         homeDir: home,
         dataDirs: {
-          auditLogs: resolve(apiCwd, process.env['AUDIT_LOG_DIR'] ?? './data/audit-logs'),
-          cliArchive: resolve(apiCwd, process.env['CLI_RAW_ARCHIVE_DIR'] ?? './data/cli-raw-archive'),
+          auditLogs: resolve(apiCwd, process.env.AUDIT_LOG_DIR ?? './data/audit-logs'),
+          cliArchive: resolve(apiCwd, process.env.CLI_RAW_ARCHIVE_DIR ?? './data/cli-raw-archive'),
           redisDevSandbox: resolve(home, '.cat-cafe/redis-dev-sandbox'),
-          uploads: resolve(apiCwd, process.env['UPLOAD_DIR'] ?? './uploads'),
+          uploads: resolve(apiCwd, process.env.UPLOAD_DIR ?? './uploads'),
         },
       },
     };

@@ -3,16 +3,12 @@
  * Tests queue/force/immediate routing logic.
  */
 
-import { describe, it, beforeEach, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
+import { afterEach, beforeEach, describe, it, mock } from 'node:test';
 import Fastify from 'fastify';
 
-const { InvocationQueue } = await import(
-  '../dist/domains/cats/services/agents/invocation/InvocationQueue.js'
-);
-const { InvocationRegistry } = await import(
-  '../dist/domains/cats/services/agents/invocation/InvocationRegistry.js'
-);
+const { InvocationQueue } = await import('../dist/domains/cats/services/agents/invocation/InvocationQueue.js');
+const { InvocationRegistry } = await import('../dist/domains/cats/services/agents/invocation/InvocationRegistry.js');
 
 /** Build a complete deps object for messagesRoutes */
 function buildDeps(overrides = {}) {
@@ -211,7 +207,7 @@ describe('POST /api/messages deliveryMode', () => {
   it('force mode → cancels active invocation then executes immediately', async () => {
     deps.invocationTracker.has.mock.mockImplementation(() => true);
 
-    const res = await app.inject({
+    const _res = await app.inject({
       method: 'POST',
       url: '/api/messages',
       headers: { 'x-cat-cafe-user': 'user-1', 'content-type': 'application/json' },
@@ -223,9 +219,7 @@ describe('POST /api/messages deliveryMode', () => {
 
     // Should have broadcast cancel messages
     const broadcastCalls = deps.socketManager.broadcastAgentMessage.mock.calls;
-    const cancelMsg = broadcastCalls.find(
-      (c) => c.arguments[0]?.type === 'system_info',
-    );
+    const cancelMsg = broadcastCalls.find((c) => c.arguments[0]?.type === 'system_info');
     assert.ok(cancelMsg, 'should broadcast cancel system_info');
 
     // Should have proceeded to create InvocationRecord (immediate path)
@@ -296,7 +290,7 @@ describe('POST /api/messages deliveryMode', () => {
       Buffer.from(`--${boundary}--\r\n`),
     ]);
 
-    const res = await app.inject({
+    const _res = await app.inject({
       method: 'POST',
       url: '/api/messages',
       headers: {
@@ -313,11 +307,7 @@ describe('POST /api/messages deliveryMode', () => {
     );
 
     // Should NOT queue — should proceed to immediate execution
-    assert.equal(
-      deps.invocationQueue.list('thread-1', 'user-1').length,
-      0,
-      'force mode should not enqueue',
-    );
+    assert.equal(deps.invocationQueue.list('thread-1', 'user-1').length, 0, 'force mode should not enqueue');
   });
 
   // ── P1-2: merged entry rollback race ──
@@ -358,10 +348,7 @@ describe('POST /api/messages deliveryMode', () => {
     // B's merged content should still be in the queue (not removed by A's rollback)
     const queue = deps.invocationQueue.list('thread-1', 'user-1');
     assert.ok(queue.length > 0, 'queue should not be empty — B merged content must survive');
-    assert.ok(
-      queue[0].content.includes('B的消息不应该丢失'),
-      'B message content should survive A rollback',
-    );
+    assert.ok(queue[0].content.includes('B的消息不应该丢失'), 'B message content should survive A rollback');
   });
 
   // ── P1 bugfix: abort mid-loop → must NOT ack or mark succeeded ──
@@ -393,20 +380,17 @@ describe('POST /api/messages deliveryMode', () => {
     assert.equal(res.statusCode, 200);
 
     // Wait for background IIFE to complete
-    await new Promise(resolve => setTimeout(resolve, 200));
+    await new Promise((resolve) => setTimeout(resolve, 200));
 
     // ackCollectedCursors should NOT be called (aborted invocation)
-    assert.equal(
-      deps.router.ackCollectedCursors.mock.calls.length, 0,
-      'should NOT ack cursors for aborted invocation',
-    );
+    assert.equal(deps.router.ackCollectedCursors.mock.calls.length, 0, 'should NOT ack cursors for aborted invocation');
 
     // invocationRecordStore.update should have 'canceled', NOT 'succeeded'
     const updateCalls = deps.invocationRecordStore.update.mock.calls;
-    const succeededCall = updateCalls.find(c => c.arguments[1]?.status === 'succeeded');
+    const succeededCall = updateCalls.find((c) => c.arguments[1]?.status === 'succeeded');
     assert.ok(!succeededCall, 'should NOT mark as succeeded when signal aborted');
 
-    const canceledCall = updateCalls.find(c => c.arguments[1]?.status === 'canceled');
+    const canceledCall = updateCalls.find((c) => c.arguments[1]?.status === 'canceled');
     assert.ok(canceledCall, 'should mark as canceled when signal aborted');
   });
 

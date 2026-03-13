@@ -12,8 +12,8 @@
  * Uses real useChatStore (no mocks) to verify store state transitions.
  */
 import { beforeEach, describe, expect, it } from 'vitest';
-import { useChatStore } from '@/stores/chatStore';
 import type { TokenUsage } from '@/stores/chat-types';
+import { useChatStore } from '@/stores/chatStore';
 
 const THREAD_ID = 'thread-active';
 const CAT_ID = 'opus';
@@ -32,7 +32,7 @@ describe('F045: thinking-first placeholder metadata flow', () => {
       catStatuses: {},
       catInvocations: {},
       currentGame: null,
-      
+
       threadStates: {},
       viewMode: 'single',
       splitPaneThreadIds: [],
@@ -74,7 +74,7 @@ describe('F045: thinking-first placeholder metadata flow', () => {
     const afterText = useChatStore.getState().messages.find((m) => m.id === MSG_ID)!;
     expect(afterText.content).toBe('Hello, I am responding.');
     expect(afterText.metadata).toBeDefined();
-    expect(afterText.metadata!.provider).toBe('anthropic');
+    expect(afterText.metadata?.provider).toBe('anthropic');
 
     // Step 3: invocation_usage arrives → setMessageUsage should succeed (not no-op)
     const usage: TokenUsage = { inputTokens: 100, outputTokens: 50 };
@@ -83,7 +83,7 @@ describe('F045: thinking-first placeholder metadata flow', () => {
     // Verify: usage is set inside metadata
     const afterUsage = useChatStore.getState().messages.find((m) => m.id === MSG_ID)!;
     expect(afterUsage.metadata).toBeDefined();
-    expect(afterUsage.metadata!.usage).toEqual(usage);
+    expect(afterUsage.metadata?.usage).toEqual(usage);
   });
 
   it('setMessageMetadata skips when metadata already exists (streaming perf guard)', () => {
@@ -104,8 +104,8 @@ describe('F045: thinking-first placeholder metadata flow', () => {
 
     const msg = useChatStore.getState().messages.find((m) => m.id === MSG_ID)!;
     // Original metadata preserved, not overwritten
-    expect(msg.metadata!.provider).toBe('anthropic');
-    expect(msg.metadata!.model).toBe('claude-opus-4-5-20250514');
+    expect(msg.metadata?.provider).toBe('anthropic');
+    expect(msg.metadata?.model).toBe('claude-opus-4-5-20250514');
   });
 
   it('setMessageMetadata is idempotent (same metadata applied twice produces same state)', () => {

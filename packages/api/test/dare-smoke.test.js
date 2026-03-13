@@ -9,21 +9,17 @@
  * Skip condition: if DARE_PATH is unset AND the default path doesn't exist,
  * or if OPENROUTER_API_KEY is missing, tests are skipped gracefully.
  */
-import { describe, test } from 'node:test';
+
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
+import { describe, test } from 'node:test';
 import { DareAgentService } from '../dist/domains/cats/services/agents/providers/DareAgentService.js';
 
-const DARE_PATH =
-  process.env['DARE_PATH'] || '/tmp/cat-cafe-reviews/Deterministic-Agent-Runtime-Engine';
+const DARE_PATH = process.env.DARE_PATH || '/tmp/cat-cafe-reviews/Deterministic-Agent-Runtime-Engine';
 const HAS_DARE = existsSync(`${DARE_PATH}/client/__main__.py`);
-const HAS_KEY = !!process.env['OPENROUTER_API_KEY'];
+const HAS_KEY = !!process.env.OPENROUTER_API_KEY;
 
-const SKIP_REASON = !HAS_DARE
-  ? `DARE repo not found at ${DARE_PATH}`
-  : !HAS_KEY
-    ? 'OPENROUTER_API_KEY not set'
-    : null;
+const SKIP_REASON = !HAS_DARE ? `DARE repo not found at ${DARE_PATH}` : !HAS_KEY ? 'OPENROUTER_API_KEY not set' : null;
 
 describe('DARE Smoke Test', { skip: SKIP_REASON ?? false }, () => {
   test('DARE CLI responds to simple prompt via headless mode', { timeout: 60_000 }, async () => {
@@ -54,11 +50,14 @@ describe('DARE Smoke Test', { skip: SKIP_REASON ?? false }, () => {
     // P1-4 fix: API-level errors (429, auth) are tolerated for free models,
     // but missing-module errors (python can't find client) must fail.
     const adapterErrors = messages.filter(
-      (m) => m.type === 'error' && m.error &&
+      (m) =>
+        m.type === 'error' &&
+        m.error &&
         (m.error.includes('No module named') || m.error.includes('ModuleNotFoundError')),
     );
     assert.strictEqual(
-      adapterErrors.length, 0,
+      adapterErrors.length,
+      0,
       `DARE adapter must find client module: ${adapterErrors.map((e) => e.error).join('; ')}`,
     );
 

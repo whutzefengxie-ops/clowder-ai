@@ -7,8 +7,8 @@
 
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { SqliteEvidenceStore } from '../domains/memory/SqliteEvidenceStore.js';
 import { IndexBuilder } from '../domains/memory/IndexBuilder.js';
+import { SqliteEvidenceStore } from '../domains/memory/SqliteEvidenceStore.js';
 
 interface RebuildIndexArgs {
   force: boolean;
@@ -37,7 +37,9 @@ export async function runRebuildIndexCli(argv: string[] = process.argv.slice(2))
 
   const result = await builder.rebuild({ force: args.force });
 
-  console.log(`[rebuild-index] indexed: ${result.docsIndexed}, skipped: ${result.docsSkipped}, duration: ${result.durationMs}ms`);
+  console.log(
+    `[rebuild-index] indexed: ${result.docsIndexed}, skipped: ${result.docsSkipped}, duration: ${result.durationMs}ms`,
+  );
 
   const consistency = await builder.checkConsistency();
   if (!consistency.ok) {

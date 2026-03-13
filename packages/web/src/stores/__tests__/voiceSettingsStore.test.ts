@@ -1,13 +1,21 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useVoiceSettingsStore } from '../voiceSettingsStore';
 
 const mockStorage: Record<string, string> = {};
 const mockLocalStorage = {
   getItem: vi.fn((key: string) => mockStorage[key] ?? null),
-  setItem: vi.fn((key: string, value: string) => { mockStorage[key] = value; }),
-  removeItem: vi.fn((key: string) => { delete mockStorage[key]; }),
-  clear: vi.fn(() => { for (const k of Object.keys(mockStorage)) delete mockStorage[k]; }),
-  get length() { return Object.keys(mockStorage).length; },
+  setItem: vi.fn((key: string, value: string) => {
+    mockStorage[key] = value;
+  }),
+  removeItem: vi.fn((key: string) => {
+    delete mockStorage[key];
+  }),
+  clear: vi.fn(() => {
+    for (const k of Object.keys(mockStorage)) delete mockStorage[k];
+  }),
+  get length() {
+    return Object.keys(mockStorage).length;
+  },
   key: vi.fn(() => null),
 };
 
@@ -103,8 +111,8 @@ describe('voiceSettingsStore', () => {
     mockStorage['cat-cafe-voice-settings'] = JSON.stringify({
       customTerms: [
         { from: 'valid', to: 'ok' },
-        { from: 123, to: 'bad-from' },     // from is not string
-        'not-an-object',                     // not an object at all
+        { from: 123, to: 'bad-from' }, // from is not string
+        'not-an-object', // not an object at all
         { from: 'also-valid', to: 'fine' },
       ],
     });
@@ -126,9 +134,7 @@ describe('voiceSettingsStore', () => {
     // Also test negative index
     useVoiceSettingsStore.getState().addTerm('a', 'A');
     useVoiceSettingsStore.getState().updateTerm(-1, 'b', 'B');
-    expect(useVoiceSettingsStore.getState().settings.customTerms).toEqual([
-      { from: 'a', to: 'A' },
-    ]);
+    expect(useVoiceSettingsStore.getState().settings.customTerms).toEqual([{ from: 'a', to: 'A' }]);
   });
 
   it('resets all settings to defaults', () => {

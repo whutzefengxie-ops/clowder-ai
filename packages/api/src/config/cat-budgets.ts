@@ -13,8 +13,8 @@
 
 import type { ContextBudget } from '@cat-cafe/shared';
 import { catRegistry } from '@cat-cafe/shared';
-import { loadCatConfig, getDefaultVariant, getAllCatIdsFromConfig } from './cat-config-loader.js';
 import { resolveBreedId } from './breed-resolver.js';
+import { getAllCatIdsFromConfig, getDefaultVariant, loadCatConfig } from './cat-config-loader.js';
 
 const BUDGET_ENV_KEYS = {
   opus: 'CAT_OPUS_MAX_PROMPT_TOKENS',
@@ -36,9 +36,9 @@ const BUDGET_ENV_KEYS = {
 const DEFAULT_BUDGETS: Record<string, ContextBudget> = {
   // Keep these in sync with project cat-config.json defaults (方案 A) so
   // missing/invalid config doesn't silently regress budgets.
-  ragdoll:      { maxPromptTokens: 180000, maxContextTokens: 160000, maxMessages: 200, maxContentLengthPerMsg: 10000 },
+  ragdoll: { maxPromptTokens: 180000, maxContextTokens: 160000, maxMessages: 200, maxContentLengthPerMsg: 10000 },
   'maine-coon': { maxPromptTokens: 240000, maxContextTokens: 216000, maxMessages: 200, maxContentLengthPerMsg: 10000 },
-  siamese:      { maxPromptTokens: 350000, maxContextTokens: 300000, maxMessages: 300, maxContentLengthPerMsg: 15000 },
+  siamese: { maxPromptTokens: 350000, maxContextTokens: 300000, maxMessages: 300, maxContentLengthPerMsg: 15000 },
 };
 
 /** F32-a: Conservative fallback for unknown/dynamic cats — use smallest built-in budget */
@@ -92,15 +92,16 @@ export function getCatContextBudget(catName: string): ContextBudget {
   // 1. Get base budget from JSON or default (resolve breedId for DEFAULT_BUDGETS)
   const jsonBudgets = loadBudgetsFromJson();
   const breedId = resolveBreedId(catName);
-  const baseBudget: ContextBudget = jsonBudgets[catName]
-    ?? (breedId ? DEFAULT_BUDGETS[breedId] : undefined)
-    ?? DEFAULT_BUDGETS[catName]
-    ?? GLOBAL_FALLBACK_BUDGET; // F32-a: conservative fallback for dynamic cats
+  const baseBudget: ContextBudget =
+    jsonBudgets[catName] ??
+    (breedId ? DEFAULT_BUDGETS[breedId] : undefined) ??
+    DEFAULT_BUDGETS[catName] ??
+    GLOBAL_FALLBACK_BUDGET; // F32-a: conservative fallback for dynamic cats
 
   // 2. Check for per-cat env var override
   const perCatEnvKey = BUDGET_ENV_KEYS[catName as keyof typeof BUDGET_ENV_KEYS];
   const perCatEnvValue = process.env[perCatEnvKey];
-  if (perCatEnvValue && perCatEnvValue.trim()) {
+  if (perCatEnvValue?.trim()) {
     const parsed = parseInt(perCatEnvValue.trim(), 10);
     if (Number.isFinite(parsed) && parsed > 0) {
       return {
@@ -113,8 +114,8 @@ export function getCatContextBudget(catName: string): ContextBudget {
   }
 
   // 3. Check for global fallback env var
-  const globalEnvValue = process.env['MAX_PROMPT_TOKENS'];
-  if (globalEnvValue && globalEnvValue.trim()) {
+  const globalEnvValue = process.env.MAX_PROMPT_TOKENS;
+  if (globalEnvValue?.trim()) {
     const parsed = parseInt(globalEnvValue.trim(), 10);
     if (Number.isFinite(parsed) && parsed > 0) {
       return {
@@ -136,9 +137,7 @@ export function getAllCatBudgets(): Record<string, ContextBudget> {
   const result: Record<string, ContextBudget> = {};
   // F32-a: iterate catRegistry (includes dynamic cats), F032 P2: use config fallback
   const registryIds = catRegistry.getAllIds();
-  const allIds = registryIds.length > 0
-    ? registryIds.map(String)
-    : getAllCatIdsFromConfig();
+  const allIds = registryIds.length > 0 ? registryIds.map(String) : getAllCatIdsFromConfig();
   for (const catName of allIds) {
     result[catName] = getCatContextBudget(catName);
   }

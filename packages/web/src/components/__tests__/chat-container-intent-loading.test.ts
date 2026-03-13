@@ -1,7 +1,6 @@
-import React from 'react';
+import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { act } from 'react';
-import { beforeAll, afterAll, beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatContainer } from '@/components/ChatContainer';
 
 const mockSetLoading = vi.fn();
@@ -12,12 +11,10 @@ const mockSetCurrentThread = vi.fn();
 const mockClearUnread = vi.fn();
 const mockHandleAgentMessage = vi.fn();
 
-let capturedSocketCallbacks:
-  | {
-      onIntentMode?: (data: { threadId: string; mode: string; targetCats: string[] }) => void;
-      onMessage?: (msg: unknown) => boolean | void;
-    }
-  | null = null;
+let capturedSocketCallbacks: {
+  onIntentMode?: (data: { threadId: string; mode: string; targetCats: string[] }) => void;
+  onMessage?: (msg: unknown) => boolean | undefined;
+} | null = null;
 
 const mockStoreState = () => ({
   messages: [],
@@ -38,8 +35,7 @@ const mockStoreState = () => ({
   updateThreadTitle: vi.fn(),
   setCurrentGame: vi.fn(),
   currentGame: null,
-  
-  
+
   viewMode: 'single' as const,
   setViewMode: vi.fn(),
   clearUnread: mockClearUnread,
@@ -119,7 +115,9 @@ vi.mock('@/components/ModeStatusBar', () => ({ ModeStatusBar: () => null }));
 vi.mock('@/components/ConfirmDialog', () => ({ ConfirmDialog: () => null }));
 vi.mock('@/components/ExportButton', () => ({ ExportButton: () => null }));
 vi.mock('@/components/MessageNavigator', () => ({ MessageNavigator: () => null }));
-vi.mock('@/components/MessageActions', () => ({ MessageActions: ({ children }: { children: React.ReactNode }) => children }));
+vi.mock('@/components/MessageActions', () => ({
+  MessageActions: ({ children }: { children: React.ReactNode }) => children,
+}));
 vi.mock('@/components/CatCafeHub', () => ({ CatCafeHub: () => null }));
 
 describe('ChatContainer intent_mode loading lock', () => {

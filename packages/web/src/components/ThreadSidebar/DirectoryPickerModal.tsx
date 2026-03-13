@@ -48,6 +48,11 @@ export function DirectoryPickerModal({
   // F068-R7: Two-step flow — select project first, then confirm
   // 'lobby' sentinel means user explicitly chose "大厅 (无项目)"
   const [selectedPath, setSelectedPath] = useState<string | 'lobby' | null>(null);
+  // P2 fix: clear stale pathError whenever user selects a project
+  const _handleSelectPath = useCallback((path: string | 'lobby') => {
+    setPathError(null);
+    setSelectedPath(path);
+  }, []);
 
   // F095 Phase C: new fields
   const [threadTitle, setThreadTitle] = useState('');

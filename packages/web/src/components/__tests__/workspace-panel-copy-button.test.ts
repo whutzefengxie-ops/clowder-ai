@@ -1,5 +1,4 @@
-import React from 'react';
-import { act } from 'react';
+import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -167,7 +166,9 @@ describe('WorkspacePanel Copy button', () => {
     expect(btn).not.toBeNull();
     expect(btn.textContent).toBe('Copy');
 
-    await act(async () => { btn.click(); });
+    await act(async () => {
+      btn.click();
+    });
     expect(clipboardWriteText).toHaveBeenCalledWith('# Hello\nWorld');
   });
 
@@ -175,7 +176,9 @@ describe('WorkspacePanel Copy button', () => {
     setupMocks({ truncated: true, content: 'partial content...' });
     await renderPanel();
 
-    const btn = container.querySelector('button[title="复制已加载内容（文件已截断，非完整全文）"]') as HTMLButtonElement;
+    const btn = container.querySelector(
+      'button[title="复制已加载内容（文件已截断，非完整全文）"]',
+    ) as HTMLButtonElement;
     expect(btn).not.toBeNull();
     expect(btn.textContent).toBe('Copy…');
   });
@@ -188,7 +191,9 @@ describe('WorkspacePanel Copy button', () => {
     expect(btn).not.toBeNull();
     expect(btn.textContent).toBe('Copy');
 
-    await act(async () => { btn.click(); });
+    await act(async () => {
+      btn.click();
+    });
     expect(clipboardWriteText).toHaveBeenCalledWith('');
   });
 });

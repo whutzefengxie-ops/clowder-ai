@@ -1,6 +1,6 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { CardBlock } from '@/components/rich/CardBlock';
 
 Object.assign(globalThis as Record<string, unknown>, { React });

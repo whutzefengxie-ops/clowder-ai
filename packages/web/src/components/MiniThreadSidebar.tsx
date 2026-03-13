@@ -1,10 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useChatStore, type Thread } from '@/stores/chatStore';
 import type { CatStatusType } from '@/stores/chat-types';
-import { getCatStatusType } from './ThreadCatStatus';
+import { type Thread, useChatStore } from '@/stores/chatStore';
 import { CatAvatar } from './CatAvatar';
+import { getCatStatusType } from './ThreadCatStatus';
 
 interface MiniThreadSidebarProps {
   onAssignToPane: (threadId: string) => void;
@@ -28,63 +28,63 @@ export function MiniThreadSidebar({ onAssignToPane }: MiniThreadSidebarProps) {
 
   // Unmount safety net: remove any lingering document listeners
   useEffect(() => {
-    return () => { cleanupRef.current?.(); };
+    return () => {
+      cleanupRef.current?.();
+    };
   }, []);
 
-  const available = threads.filter(
-    (t) => t.id !== 'default' && !assignedSet.has(t.id)
-  );
+  const available = threads.filter((t) => t.id !== 'default' && !assignedSet.has(t.id));
   const assigned = threads.filter((t) => assignedSet.has(t.id));
   const isCollapsed = width < 80;
 
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    dragging.current = true;
-    const startX = e.clientX;
-    const startWidth = width;
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      dragging.current = true;
+      const startX = e.clientX;
+      const startWidth = width;
 
-    const onMouseMove = (ev: MouseEvent) => {
-      if (!dragging.current) return;
-      const delta = ev.clientX - startX;
-      setWidth(Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, startWidth + delta)));
-    };
-    const onMouseUp = () => {
-      dragging.current = false;
-      document.removeEventListener('mousemove', onMouseMove);
-      document.removeEventListener('mouseup', onMouseUp);
-      cleanupRef.current = null;
-    };
-    document.addEventListener('mousemove', onMouseMove);
-    document.addEventListener('mouseup', onMouseUp);
-    cleanupRef.current = () => {
-      document.removeEventListener('mousemove', onMouseMove);
-      document.removeEventListener('mouseup', onMouseUp);
-    };
-  }, [width]);
+      const onMouseMove = (ev: MouseEvent) => {
+        if (!dragging.current) return;
+        const delta = ev.clientX - startX;
+        setWidth(Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, startWidth + delta)));
+      };
+      const onMouseUp = () => {
+        dragging.current = false;
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+        cleanupRef.current = null;
+      };
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+      cleanupRef.current = () => {
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+      };
+    },
+    [width],
+  );
 
   return (
-    <aside className="relative flex-shrink-0 border-r border-owner-light bg-white flex flex-col h-full" style={{ width }}>
+    <aside
+      className="relative flex-shrink-0 border-r border-owner-light bg-white flex flex-col h-full"
+      style={{ width }}
+    >
       <div className="flex-1 overflow-y-auto py-2 px-1 space-y-0.5">
         {assigned.length > 0 && (
           <div className="px-1 mb-1">
-            <span className="text-[9px] text-gray-400 uppercase tracking-wider">
-              {isCollapsed ? '' : '窗格中'}
-            </span>
+            <span className="text-[9px] text-gray-400 uppercase tracking-wider">{isCollapsed ? '' : '窗格中'}</span>
           </div>
         )}
         {assigned.map((t) => (
           <MiniThreadRow key={t.id} thread={t} isInPane isCollapsed={isCollapsed} getThreadState={getThreadState} />
         ))}
 
-        {assigned.length > 0 && available.length > 0 && (
-          <div className="mx-1 border-t border-gray-200 my-1.5" />
-        )}
+        {assigned.length > 0 && available.length > 0 && <div className="mx-1 border-t border-gray-200 my-1.5" />}
 
         {available.length > 0 && (
           <div className="px-1 mb-1">
-            <span className="text-[9px] text-gray-400 uppercase tracking-wider">
-              {isCollapsed ? '' : '可添加'}
-            </span>
+            <span className="text-[9px] text-gray-400 uppercase tracking-wider">{isCollapsed ? '' : '可添加'}</span>
           </div>
         )}
         {available.map((t) => (
@@ -117,15 +117,23 @@ function MiniThreadRow({
   thread: Thread;
   isInPane?: boolean;
   isCollapsed: boolean;
-  getThreadState: (id: string) => { catStatuses: Record<string, CatStatusType>; unreadCount: number; hasUserMention: boolean };
+  getThreadState: (id: string) => {
+    catStatuses: Record<string, CatStatusType>;
+    unreadCount: number;
+    hasUserMention: boolean;
+  };
   onClick?: () => void;
 }) {
   const ts = getThreadState(thread.id);
   const status = getCatStatusType(ts.catStatuses);
   const dotColor =
-    status === 'error' ? 'bg-red-400'
-      : status === 'working' ? 'bg-amber-400 animate-pulse'
-        : status === 'done' ? 'bg-green-400' : '';
+    status === 'error'
+      ? 'bg-red-400'
+      : status === 'working'
+        ? 'bg-amber-400 animate-pulse'
+        : status === 'done'
+          ? 'bg-green-400'
+          : '';
 
   const firstCat = thread.participants[0];
   const title = thread.title ?? thread.id;
@@ -144,15 +152,13 @@ function MiniThreadRow({
         ) : (
           <span className="text-xs font-medium text-gray-500">{title.charAt(0).toUpperCase()}</span>
         )}
-        {dotColor && (
-          <span className={`absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full ${dotColor}`} />
-        )}
+        {dotColor && <span className={`absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full ${dotColor}`} />}
       </div>
-      {!isCollapsed && (
-        <span className="text-xs text-gray-700 truncate flex-1 min-w-0">{title}</span>
-      )}
+      {!isCollapsed && <span className="text-xs text-gray-700 truncate flex-1 min-w-0">{title}</span>}
       {ts.unreadCount > 0 && (
-        <span className={`text-[8px] ${ts.hasUserMention ? 'bg-red-500' : 'bg-amber-500'} text-white rounded-full min-w-[14px] px-0.5 text-center leading-3 flex-shrink-0`}>
+        <span
+          className={`text-[8px] ${ts.hasUserMention ? 'bg-red-500' : 'bg-amber-500'} text-white rounded-full min-w-[14px] px-0.5 text-center leading-3 flex-shrink-0`}
+        >
           {ts.unreadCount > 9 ? '9+' : ts.unreadCount}
         </span>
       )}

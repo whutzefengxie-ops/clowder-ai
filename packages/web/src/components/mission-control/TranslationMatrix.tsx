@@ -30,14 +30,18 @@ export function TranslationMatrix({ cards, selectedCardId, onSelectCard, onCreat
 
   const triaged = cards.filter((c) => c.triage).length;
   const buildNow = cards.filter((c) => c.triage?.bucket === 'build_now').length;
-  const unresolved = cards.filter((c) => c.triage?.bucket === 'clarify_first' || c.triage?.bucket === 'validate_first').length;
+  const unresolved = cards.filter(
+    (c) => c.triage?.bucket === 'clarify_first' || c.triage?.bucket === 'validate_first',
+  ).length;
 
   return (
     <div className="space-y-3">
       {/* Summary */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4 text-xs text-[#6B5D4F]">
-          <span>{triaged}/{cards.length} triaged</span>
+          <span>
+            {triaged}/{cards.length} triaged
+          </span>
           <span>{buildNow} Build Now</span>
           <span>{unresolved} unresolved</span>
         </div>
@@ -58,9 +62,7 @@ export function TranslationMatrix({ cards, selectedCardId, onSelectCard, onCreat
             type="button"
             onClick={() => setBucketFilter(f.value)}
             className={`rounded-full px-3 py-1 text-[11px] font-medium transition-colors ${
-              bucketFilter === f.value
-                ? 'bg-[#8B6F47] text-white'
-                : 'bg-[#F4EFE7] text-[#6B5D4F] hover:bg-[#E7DAC7]'
+              bucketFilter === f.value ? 'bg-[#8B6F47] text-white' : 'bg-[#F4EFE7] text-[#6B5D4F] hover:bg-[#E7DAC7]'
             }`}
           >
             {f.label}
@@ -93,9 +95,7 @@ export function TranslationMatrix({ cards, selectedCardId, onSelectCard, onCreat
                     selectedCardId === card.id ? 'bg-[#F7EEDB]' : 'bg-white'
                   }`}
                 >
-                  <td className="max-w-[200px] truncate px-3 py-2 text-[#2B2118]">
-                    {card.originalText || '—'}
-                  </td>
+                  <td className="max-w-[200px] truncate px-3 py-2 text-[#2B2118]">{card.originalText || '—'}</td>
                   <td className="max-w-[200px] truncate px-3 py-2 text-[#6B5D4F]">
                     {card.actor} → {card.goal}
                   </td>
@@ -103,7 +103,9 @@ export function TranslationMatrix({ cards, selectedCardId, onSelectCard, onCreat
                     <SourceBadge tag={card.sourceTag} />
                   </td>
                   <td className="px-3 py-2">
-                    {card.triage ? <BucketBadge bucket={card.triage.bucket} /> : (
+                    {card.triage ? (
+                      <BucketBadge bucket={card.triage.bucket} />
+                    ) : (
                       <span className="text-[10px] text-[#B8A88F]">未评估</span>
                     )}
                   </td>

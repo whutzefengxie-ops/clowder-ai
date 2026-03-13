@@ -1,12 +1,12 @@
 'use client';
 
-import { useCallback, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useCallback, useRef, useState } from 'react';
 import type { ChatMessage } from '@/stores/chatStore';
 import { useChatStore } from '@/stores/chatStore';
-import { ConfirmDialog } from './ConfirmDialog';
 import { apiFetch } from '@/utils/api-client';
 import { getUserId } from '@/utils/userId';
+import { ConfirmDialog } from './ConfirmDialog';
 
 type DialogState =
   | { type: 'none' }
@@ -59,7 +59,9 @@ export function MessageActions({ message, threadId, children }: MessageActionsPr
         body: JSON.stringify({ userId: getUserId(), mode: 'soft' }),
       });
       if (res.ok) removeMessage(message.id);
-    } catch { /* socket event will sync if needed */ }
+    } catch {
+      /* socket event will sync if needed */
+    }
   }, [message.id, removeMessage]);
 
   const confirmHardDelete = useCallback(async () => {
@@ -73,7 +75,9 @@ export function MessageActions({ message, threadId, children }: MessageActionsPr
         body: JSON.stringify({ userId: getUserId(), mode: 'hard', confirmTitle }),
       });
       if (res.ok) removeMessage(message.id);
-    } catch { /* socket event will sync if needed */ }
+    } catch {
+      /* socket event will sync if needed */
+    }
   }, [dialog, message.id, removeMessage]);
 
   const handleBranchConfirm = useCallback(() => {
@@ -99,7 +103,9 @@ export function MessageActions({ message, threadId, children }: MessageActionsPr
         const { threadId: newThreadId } = await res.json();
         router.push(`/thread/${newThreadId}`);
       }
-    } catch { /* show error in future */ }
+    } catch {
+      /* show error in future */
+    }
   }, [dialog, message.id, message.content, threadId, router]);
 
   const branchingRef = useRef(false);
@@ -117,7 +123,9 @@ export function MessageActions({ message, threadId, children }: MessageActionsPr
         const { threadId: newThreadId } = await res.json();
         router.push(`/thread/${newThreadId}`);
       }
-    } catch { /* show error in future */ } finally {
+    } catch {
+      /* show error in future */
+    } finally {
       branchingRef.current = false;
     }
   }, [message.id, threadId, router]);
@@ -129,20 +137,61 @@ export function MessageActions({ message, threadId, children }: MessageActionsPr
       {children}
 
       {canAct && (
-        <div className={`opacity-0 group-hover:opacity-100 absolute ${toolbarPositionClass} right-1 flex gap-0.5 transition-opacity bg-white/90 rounded-lg shadow-sm border border-gray-200 px-1 py-0.5`}>
-          <button onClick={handleSoftDelete} className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-red-500 transition-colors" title="删除">
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+        <div
+          className={`opacity-0 group-hover:opacity-100 absolute ${toolbarPositionClass} right-1 flex gap-0.5 transition-opacity bg-white/90 rounded-lg shadow-sm border border-gray-200 px-1 py-0.5`}
+        >
+          <button
+            onClick={handleSoftDelete}
+            className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-red-500 transition-colors"
+            title="删除"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+              />
+            </svg>
           </button>
-          <button onClick={handleBranchDirect} className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-green-600 transition-colors" title="从这里分支">
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
+          <button
+            onClick={handleBranchDirect}
+            className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-green-600 transition-colors"
+            title="从这里分支"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+            </svg>
           </button>
           {isUser && (
-            <button onClick={handleEdit} className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-blue-500 transition-colors" title="编辑 (创建分支)">
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+            <button
+              onClick={handleEdit}
+              className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-blue-500 transition-colors"
+              title="编辑 (创建分支)"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                />
+              </svg>
             </button>
           )}
-          <button onClick={handleHardDelete} className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-red-600 transition-colors" title="永久删除">
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+          <button
+            onClick={handleHardDelete}
+            className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-red-600 transition-colors"
+            title="永久删除"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+              />
+            </svg>
           </button>
         </div>
       )}
@@ -163,16 +212,8 @@ export function MessageActions({ message, threadId, children }: MessageActionsPr
         open={dialog.type === 'hard-delete'}
         title="永久删除"
         message="此操作不可恢复。请输入对话标题以确认。"
-        requireInput={
-          dialog.type === 'hard-delete'
-            ? (dialog.threadTitle ?? '确认删除')
-            : undefined
-        }
-        inputPlaceholder={
-          dialog.type === 'hard-delete' && dialog.threadTitle
-            ? '输入对话标题'
-            : '输入 "确认删除"'
-        }
+        requireInput={dialog.type === 'hard-delete' ? (dialog.threadTitle ?? '确认删除') : undefined}
+        inputPlaceholder={dialog.type === 'hard-delete' && dialog.threadTitle ? '输入对话标题' : '输入 "确认删除"'}
         confirmLabel="永久删除"
         variant="danger"
         onConfirm={confirmHardDelete}
@@ -190,7 +231,9 @@ export function MessageActions({ message, threadId, children }: MessageActionsPr
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-4 h-32 resize-y focus:outline-none focus:ring-2 focus:ring-blue-300"
             />
             <div className="flex justify-end gap-2">
-              <button onClick={close} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">取消</button>
+              <button onClick={close} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">
+                取消
+              </button>
               <button
                 onClick={handleBranchConfirm}
                 disabled={!dialog.editedContent.trim()}

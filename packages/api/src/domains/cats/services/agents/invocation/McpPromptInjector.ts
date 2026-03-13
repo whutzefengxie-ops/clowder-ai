@@ -41,11 +41,13 @@ export function needsMcpInjection(mcpAvailable: boolean): boolean {
 }
 
 function resolveExampleHandle(opts: McpCallbackOptions): string {
-  return opts.exampleHandle
-    ?? (() => {
+  return (
+    opts.exampleHandle ??
+    (() => {
       const teammate = opts.teammates?.find((id) => id && id !== opts.currentCatId);
       return teammate ? `@${teammate}` : '@opus';
-    })();
+    })()
+  );
 }
 
 /**

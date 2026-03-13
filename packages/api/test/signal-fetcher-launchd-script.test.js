@@ -50,12 +50,7 @@ describe('signal fetcher launchd scripts', () => {
     mkdirSync(resolve(signalsRootDir, 'config'), { recursive: true });
     writeFileSync(
       resolve(signalsRootDir, 'config', 'notifications.yaml'),
-      [
-        'version: 1',
-        'notifications:',
-        '  schedule:',
-        "    daily_digest: '09:45' # local morning digest",
-      ].join('\n'),
+      ['version: 1', 'notifications:', '  schedule:', "    daily_digest: '09:45' # local morning digest"].join('\n'),
       'utf8',
     );
 

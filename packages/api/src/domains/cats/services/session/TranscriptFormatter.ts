@@ -40,7 +40,7 @@ export function formatEventsChat(events: TranscriptEvent[]): ChatMessage[] {
 
   for (const evt of events) {
     const evtData = evt.event;
-    const evtType = evtData['type'] as string | undefined;
+    const evtType = evtData.type as string | undefined;
     if (!evtType || !MESSAGE_TYPES.has(evtType)) continue;
 
     const content = extractTextContent(evtData);
@@ -81,14 +81,14 @@ export function formatEventsHandoff(events: TranscriptEvent[]): HandoffInvocatio
 
     for (const evt of group) {
       const evtData = evt.event;
-      const evtType = evtData['type'] as string | undefined;
+      const evtType = evtData.type as string | undefined;
 
       if (evtType === 'tool_use') {
         // Production AgentMessage uses toolName; raw NDJSON uses name.
-        const name = (evtData['toolName'] ?? evtData['name']) as string | undefined;
+        const name = (evtData.toolName ?? evtData.name) as string | undefined;
         if (name) toolCalls.push(name);
       }
-      if (evtType === 'tool_result' && evtData['is_error']) {
+      if (evtType === 'tool_result' && evtData.is_error) {
         errors++;
       }
       if (evtType === 'error') {
@@ -121,14 +121,16 @@ export function formatEventsHandoff(events: TranscriptEvent[]): HandoffInvocatio
 }
 
 function extractTextContent(evtData: Record<string, unknown>): string | undefined {
-  const content = evtData['content'];
+  const content = evtData.content;
   if (typeof content === 'string') return content;
   if (Array.isArray(content)) {
     const textParts = content
-      .filter((c): c is { type: string; text: string } =>
-        typeof c === 'object' && c !== null
-        && (c as Record<string, unknown>)['type'] === 'text'
-        && typeof (c as Record<string, unknown>)['text'] === 'string',
+      .filter(
+        (c): c is { type: string; text: string } =>
+          typeof c === 'object' &&
+          c !== null &&
+          (c as Record<string, unknown>).type === 'text' &&
+          typeof (c as Record<string, unknown>).text === 'string',
       )
       .map((c) => c.text);
     return textParts.length > 0 ? textParts.join('\n') : undefined;

@@ -1,5 +1,5 @@
 import React from 'react';
-import { COMMANDS, COMMAND_CATEGORIES, type CommandCategory } from '@/config/command-registry';
+import { COMMAND_CATEGORIES, COMMANDS, type CommandCategory } from '@/config/command-registry';
 import { SHORTCUTS } from '@/config/shortcut-registry';
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -46,9 +46,7 @@ export function HubCommandsTab() {
             <div key={s.keys} className="flex items-baseline gap-3 text-xs">
               <kbd className="font-mono text-gray-700 bg-gray-200 px-1.5 py-0.5 rounded shrink-0">{s.keys}</kbd>
               <span className="text-gray-600">{s.description}</span>
-              {s.context !== '全局' && (
-                <span className="text-[10px] text-gray-400 ml-auto">({s.context})</span>
-              )}
+              {s.context !== '全局' && <span className="text-[10px] text-gray-400 ml-auto">({s.context})</span>}
             </div>
           ))}
         </div>

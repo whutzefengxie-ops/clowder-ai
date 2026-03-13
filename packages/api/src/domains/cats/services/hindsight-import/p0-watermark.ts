@@ -3,7 +3,7 @@ import { dirname, resolve } from 'node:path';
 import { z } from 'zod';
 import { readGitHeadCommit } from './p0-source-discovery.js';
 
-const DEFAULT_P0_WATERMARK_PATH = process.env['HINDSIGHT_P0_WATERMARK_PATH']?.trim() || 'data/hindsight/p0-watermark.json';
+const DEFAULT_P0_WATERMARK_PATH = process.env.HINDSIGHT_P0_WATERMARK_PATH?.trim() || 'data/hindsight/p0-watermark.json';
 
 const p0SyncWatermarkSchema = z.object({
   version: z.literal(1),

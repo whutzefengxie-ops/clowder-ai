@@ -14,11 +14,11 @@ const PHASE_ACTION_MAP: Record<string, string> = {
 
 /** Phase → role that acts in that phase (only these roles get a targeted action card) */
 const PHASE_ACTING_ROLE: Record<string, string> = {
-	night_wolf: 'wolf',
-	night_seer: 'seer',
-	night_guard: 'guard',
-	night_witch: 'witch',
-	day_hunter: 'hunter',
+  night_wolf: 'wolf',
+  night_seer: 'seer',
+  night_guard: 'guard',
+  night_witch: 'witch',
+  day_hunter: 'hunter',
 };
 
 /** Role → night action label mapping */

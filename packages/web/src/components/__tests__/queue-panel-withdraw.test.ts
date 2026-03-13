@@ -2,14 +2,13 @@
  * F39 UX: withdrawing a queued entry should update UI immediately.
  * User expectation: after "撤回/取消" a queued message, it shouldn't linger stale in QueuePanel.
  */
-import React from 'react';
+import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { act } from 'react';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { QueuePanel } from '../QueuePanel';
+import type { QueueEntry } from '@/stores/chat-types';
 import { useChatStore } from '@/stores/chatStore';
 import { useToastStore } from '@/stores/toastStore';
-import type { QueueEntry } from '@/stores/chat-types';
+import { QueuePanel } from '../QueuePanel';
 
 vi.mock('@/utils/api-client', () => ({
   apiFetch: vi.fn(async () => ({ ok: true, json: async () => ({}) })),
@@ -78,7 +77,7 @@ describe('QueuePanel withdraw UX (F39)', () => {
     expect(removeBtn).not.toBeNull();
 
     await act(async () => {
-      removeBtn!.click();
+      removeBtn?.click();
     });
 
     expect(useChatStore.getState().queue).toHaveLength(0);
@@ -90,9 +89,10 @@ describe('QueuePanel withdraw UX (F39)', () => {
 
   it('rolls back queue state and shows error toast when withdraw fails', async () => {
     const { apiFetch } = await import('@/utils/api-client');
-    (apiFetch as unknown as { mockImplementation: (fn: unknown) => void }).mockImplementation(
-      async () => ({ ok: false, json: async () => ({ error: 'nope' }) }),
-    );
+    (apiFetch as unknown as { mockImplementation: (fn: unknown) => void }).mockImplementation(async () => ({
+      ok: false,
+      json: async () => ({ error: 'nope' }),
+    }));
 
     useChatStore.setState({ queue: [QUEUED_ENTRY] });
     act(() => {
@@ -103,7 +103,7 @@ describe('QueuePanel withdraw UX (F39)', () => {
     expect(removeBtn).not.toBeNull();
 
     await act(async () => {
-      removeBtn!.click();
+      removeBtn?.click();
     });
 
     // Should rollback, still visible
@@ -114,4 +114,3 @@ describe('QueuePanel withdraw UX (F39)', () => {
     expect(toasts.some((t) => t.type === 'error' && t.title === '撤回失败')).toBe(true);
   });
 });
-

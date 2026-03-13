@@ -46,7 +46,7 @@ export async function handleListSessionChain(input: {
     if (!res.ok) {
       return errorResult(`Failed to list sessions (${res.status}): ${await res.text()}`);
     }
-    const data = await res.json() as { sessions: unknown[] };
+    const data = (await res.json()) as { sessions: unknown[] };
     const sessions = input.limit ? data.sessions.slice(0, input.limit) : data.sessions;
 
     if (sessions.length === 0) {
@@ -65,9 +65,12 @@ export const readSessionEventsInputSchema = {
   sessionId: z.string().min(1).describe('Session ID to read events from'),
   cursor: z.number().int().min(0).optional().describe('Start from event number (0-based)'),
   limit: z.number().int().min(1).max(200).optional().describe('Max events per page (default 50)'),
-  view: z.enum(['raw', 'chat', 'handoff']).optional().describe(
-    'View mode: raw (default, full JSONL events), chat (role/content pairs), handoff (per-invocation summaries)',
-  ),
+  view: z
+    .enum(['raw', 'chat', 'handoff'])
+    .optional()
+    .describe(
+      'View mode: raw (default, full JSONL events), chat (role/content pairs), handoff (per-invocation summaries)',
+    ),
 };
 
 export async function handleReadSessionEvents(input: {
@@ -94,7 +97,7 @@ export async function handleReadSessionEvents(input: {
     const view = input.view ?? 'raw';
 
     if (view === 'chat') {
-      const data = await res.json() as {
+      const data = (await res.json()) as {
         messages: Array<{ role: string; content: string; timestamp: number; invocationId?: string }>;
         nextCursor?: { eventNo: number };
         total: number;
@@ -110,10 +113,13 @@ export async function handleReadSessionEvents(input: {
     }
 
     if (view === 'handoff') {
-      const data = await res.json() as {
+      const data = (await res.json()) as {
         invocations: Array<{
-          invocationId: string; eventCount: number;
-          toolCalls: string[]; errors: number; durationMs: number;
+          invocationId: string;
+          eventCount: number;
+          toolCalls: string[];
+          errors: number;
+          durationMs: number;
           keyMessages: string[];
         }>;
         nextCursor?: { eventNo: number };
@@ -137,7 +143,7 @@ export async function handleReadSessionEvents(input: {
     }
 
     // raw view (default)
-    const data = await res.json() as {
+    const data = (await res.json()) as {
       events: Array<{ eventNo: number; event: { type?: string } }>;
       nextCursor?: { eventNo: number };
       total: number;
@@ -162,9 +168,7 @@ export const readSessionDigestInputSchema = {
   sessionId: z.string().min(1).describe('Session ID to read digest from'),
 };
 
-export async function handleReadSessionDigest(input: {
-  sessionId: string;
-}): Promise<ToolResult> {
+export async function handleReadSessionDigest(input: { sessionId: string }): Promise<ToolResult> {
   const url = `${API_URL}/api/sessions/${input.sessionId}/digest`;
 
   try {
@@ -207,7 +211,7 @@ export async function handleReadInvocationDetail(input: {
       }
       return errorResult(`Failed to read invocation (${res.status}): ${await res.text()}`);
     }
-    const data = await res.json() as {
+    const data = (await res.json()) as {
       invocationId: string;
       events: Array<{ eventNo: number; event: Record<string, unknown> }>;
       total: number;
@@ -257,7 +261,7 @@ export async function handleSessionSearch(input: {
     if (!res.ok) {
       return errorResult(`Search failed (${res.status}): ${await res.text()}`);
     }
-    const data = await res.json() as {
+    const data = (await res.json()) as {
       hits: Array<{
         score: number;
         sessionId: string;
@@ -298,31 +302,36 @@ export async function handleSessionSearch(input: {
 export const sessionChainTools = [
   {
     name: 'cat_cafe_list_session_chain',
-    description: 'List session chain for a thread. Shows session IDs, sequence numbers, status, and context health for each cat.',
+    description:
+      'List session chain for a thread. Shows session IDs, sequence numbers, status, and context health for each cat.',
     inputSchema: listSessionChainInputSchema,
     handler: handleListSessionChain,
   },
   {
     name: 'cat_cafe_read_session_events',
-    description: 'Read events from a sealed session transcript. Supports view modes: raw (default, full events), chat (role/content pairs), handoff (per-invocation summaries). Pagination via cursor.',
+    description:
+      'Read events from a sealed session transcript. Supports view modes: raw (default, full events), chat (role/content pairs), handoff (per-invocation summaries). Pagination via cursor.',
     inputSchema: readSessionEventsInputSchema,
     handler: handleReadSessionEvents,
   },
   {
     name: 'cat_cafe_read_session_digest',
-    description: 'Read the extractive digest of a sealed session. Contains tool names, files touched, errors, and timing info. Use this first before reading full events.',
+    description:
+      'Read the extractive digest of a sealed session. Contains tool names, files touched, errors, and timing info. Use this first before reading full events.',
     inputSchema: readSessionDigestInputSchema,
     handler: handleReadSessionDigest,
   },
   {
     name: 'cat_cafe_read_invocation_detail',
-    description: 'Read all events for a specific invocation within a sealed session. Use after session_search returns an invocationId to inspect what happened in that invocation.',
+    description:
+      'Read all events for a specific invocation within a sealed session. Use after session_search returns an invocationId to inspect what happened in that invocation.',
     inputSchema: readInvocationDetailInputSchema,
     handler: handleReadInvocationDetail,
   },
   {
     name: 'cat_cafe_session_search',
-    description: 'Search across session transcripts and digests. Returns invocationId pointers — use read_invocation_detail to drill into specific invocations.',
+    description:
+      'Search across session transcripts and digests. Returns invocationId pointers — use read_invocation_detail to drill into specific invocations.',
     inputSchema: sessionSearchInputSchema,
     handler: handleSessionSearch,
   },

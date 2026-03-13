@@ -5,6 +5,9 @@ import { transformOpenCodeEvent } from '../dist/domains/cats/services/agents/pro
 import {
   CAT_CAFE_CAT_IDS,
   CAT_CAFE_HANDLES,
+  collect,
+  createMockProcess,
+  emitOpenCodeEvents,
   OMOC_BASH_TOOL,
   OMOC_DELEGATE_FRONTEND,
   OMOC_DELEGATE_LIBRARIAN,
@@ -14,9 +17,6 @@ import {
   OMOC_STEP_FINISH,
   OMOC_STEP_START,
   OPENCODE_INTERNAL_TOOLS,
-  collect,
-  createMockProcess,
-  emitOpenCodeEvents,
 } from './helpers/opencode-test-helpers.js';
 
 describe('OMOC Sisyphus Isolation (AC-9)', () => {
@@ -79,7 +79,12 @@ describe('OMOC Sisyphus Isolation (AC-9)', () => {
       assert.ok(OPENCODE_INTERNAL_TOOLS.includes(tu.toolName), `"${tu.toolName}" leaked outside boundary`);
     }
 
-    const catCafeMcpTools = ['cat_cafe_post_message', 'cat_cafe_get_thread_context', 'cat_cafe_search_evidence', 'cat_cafe_multi_mention'];
+    const catCafeMcpTools = [
+      'cat_cafe_post_message',
+      'cat_cafe_get_thread_context',
+      'cat_cafe_search_evidence',
+      'cat_cafe_multi_mention',
+    ];
     for (const tu of toolUses) {
       for (const mcpTool of catCafeMcpTools) {
         assert.notStrictEqual(tu.toolName, mcpTool, `Cat Cafe MCP tool "${mcpTool}" must not appear`);

@@ -10,16 +10,13 @@
  * - Cat family grouping metadata for frontend
  */
 
-import { lstat, readdir, readFile, readlink, realpath } from 'fs/promises';
-import { existsSync } from 'fs';
-import { join, dirname, resolve, basename } from 'path';
-import { homedir } from 'os';
-import { execFile } from 'child_process';
-import { promisify } from 'util';
-import { fileURLToPath } from 'url';
-import type { FastifyPluginAsync } from 'fastify';
-import { parse as parseYaml } from 'yaml';
-import { catRegistry } from '@cat-cafe/shared';
+import { execFile } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { lstat, readdir, readFile, readlink, realpath } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import { basename, dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
 import type {
   CapabilityBoardItem,
   CapabilityBoardResponse,
@@ -29,19 +26,22 @@ import type {
   McpToolInfo,
   SkillHealthSummary,
 } from '@cat-cafe/shared';
-import { resolveUserId } from '../utils/request-identity.js';
-import { validateProjectPath } from '../utils/project-path.js';
-import { probeMcpCapability, type McpProbeResult } from './mcp-probe.js';
+import { catRegistry } from '@cat-cafe/shared';
+import type { FastifyPluginAsync } from 'fastify';
+import { parse as parseYaml } from 'yaml';
 import {
-  readCapabilitiesConfig,
-  writeCapabilitiesConfig,
   bootstrapCapabilities,
-  migrateLegacyCatCafeCapability,
-  resolveServersForCat,
-  generateCliConfigs,
-  discoverExternalMcpServers,
   type DiscoveryPaths,
+  discoverExternalMcpServers,
+  generateCliConfigs,
+  migrateLegacyCatCafeCapability,
+  readCapabilitiesConfig,
+  resolveServersForCat,
+  writeCapabilitiesConfig,
 } from '../config/capabilities/capability-orchestrator.js';
+import { validateProjectPath } from '../utils/project-path.js';
+import { resolveUserId } from '../utils/request-identity.js';
+import { type McpProbeResult, probeMcpCapability } from './mcp-probe.js';
 
 // ────────── Helpers ──────────
 
@@ -108,7 +108,10 @@ async function isCorrectSymlink(
       const parentDir = dirname(normalizedDest);
       const nameMatches = normalizedDest.endsWith(`/${skillName}`);
       const isCatCafeSkillsDir = basename(parentDir) === 'cat-cafe-skills';
-      const resolvedFallbackRoot = (await realpath(fallbackSkillsRoot).catch(() => fallbackSkillsRoot)).replace(/\/$/, '');
+      const resolvedFallbackRoot = (await realpath(fallbackSkillsRoot).catch(() => fallbackSkillsRoot)).replace(
+        /\/$/,
+        '',
+      );
       const inFallbackRoot = parentDir === resolvedFallbackRoot;
       if (
         isCatCafeSkillsDir &&
@@ -138,18 +141,18 @@ async function resolveMainRepoPath(): Promise<string> {
   if (cachedMainRepoPath) return cachedMainRepoPath;
   if (cachedMainRepoPathPromise) return cachedMainRepoPathPromise;
   cachedMainRepoPathPromise = (async () => {
-  try {
-    const { stdout } = await execFileAsync('git', ['worktree', 'list', '--porcelain']);
-    const firstLine = stdout.split('\n')[0] ?? '';
-    return firstLine.replace(/^worktree\s+/, '').trim();
-  } catch {
     try {
-      const { stdout } = await execFileAsync('git', ['rev-parse', '--show-toplevel']);
-      return stdout.trim();
+      const { stdout } = await execFileAsync('git', ['worktree', 'list', '--porcelain']);
+      const firstLine = stdout.split('\n')[0] ?? '';
+      return firstLine.replace(/^worktree\s+/, '').trim();
     } catch {
-      return resolve(process.cwd(), '../..');
+      try {
+        const { stdout } = await execFileAsync('git', ['rev-parse', '--show-toplevel']);
+        return stdout.trim();
+      } catch {
+        return resolve(process.cwd(), '../..');
+      }
     }
-  }
   })().then((p) => {
     cachedMainRepoPath = p;
     return p;
@@ -226,39 +229,47 @@ async function readSkillMeta(skillDir: string): Promise<SkillMeta> {
     const match = content.match(/^---\n([\s\S]*?)\n---/);
     if (!match) return {};
     const fm = parseYaml(match[1]!) as { description?: unknown; triggers?: unknown } | null;
-    let desc = typeof fm?.description === 'string' ? fm.description.trim() : '';
+    const desc = typeof fm?.description === 'string' ? fm.description.trim() : '';
     if (!desc) return {};
 
     // Prefer explicit frontmatter `triggers` when available.
     const triggers: string[] = Array.isArray(fm?.triggers)
-      ? fm!.triggers.filter((v): v is string => typeof v === 'string').map((s) => s.trim()).filter(Boolean)
+      ? fm?.triggers
+          .filter((v): v is string => typeof v === 'string')
+          .map((s) => s.trim())
+          .filter(Boolean)
       : [];
 
     // Backward compatibility: extract triggers from description text for legacy skills.
     if (triggers.length === 0) {
-    // English: Triggers on "X", "Y", "Z"
-    const enMatch = desc.match(/[Tt]riggers?\s+on\s+"([^"]+)"(,\s*"([^"]+)")*/);
-    if (enMatch) {
-      const allQuoted = desc.match(/[Tt]riggers?\s+on\s+(.*)/);
-      if (allQuoted) {
-        for (const m of allQuoted[1]!.matchAll(/"([^"]+)"/g)) {
-          triggers.push(m[1]!);
+      // English: Triggers on "X", "Y", "Z"
+      const enMatch = desc.match(/[Tt]riggers?\s+on\s+"([^"]+)"(,\s*"([^"]+)")*/);
+      if (enMatch) {
+        const allQuoted = desc.match(/[Tt]riggers?\s+on\s+(.*)/);
+        if (allQuoted) {
+          for (const m of allQuoted[1]?.matchAll(/"([^"]+)"/g)) {
+            triggers.push(m[1]!);
+          }
         }
       }
-    }
-    // Chinese: 触发词："X"、"Y" or 触发词：X、Y
-    const cnMatch = desc.match(/触发词[：:]\s*(.*)/);
-    if (cnMatch) {
-      const raw = cnMatch[1]!;
-      // Quoted: "X"、"Y"
-      for (const m of raw.matchAll(/["""]([^"""]+)["""]/g)) {
-        triggers.push(m[1]!);
+      // Chinese: 触发词："X"、"Y" or 触发词：X、Y
+      const cnMatch = desc.match(/触发词[：:]\s*(.*)/);
+      if (cnMatch) {
+        const raw = cnMatch[1]!;
+        // Quoted: "X"、"Y"
+        for (const m of raw.matchAll(/["""]([^"""]+)["""]/g)) {
+          triggers.push(m[1]!);
+        }
+        // Unquoted fallback: X、Y、Z
+        if (triggers.length === 0) {
+          triggers.push(
+            ...raw
+              .split(/[、,，]/)
+              .map((s) => s.trim())
+              .filter(Boolean),
+          );
+        }
       }
-      // Unquoted fallback: X、Y、Z
-      if (triggers.length === 0) {
-        triggers.push(...raw.split(/[、,，]/).map((s) => s.trim()).filter(Boolean));
-      }
-    }
     }
 
     // Clean description: strip trigger suffix for display
@@ -320,7 +331,10 @@ async function parseManifestSkillMeta(skillsSrcDir: string): Promise<Map<string,
     for (const [name, meta] of Object.entries(parsed.skills)) {
       const description = typeof meta?.description === 'string' ? meta.description.trim() : undefined;
       const triggers = Array.isArray(meta?.triggers)
-        ? meta.triggers.filter((v): v is string => typeof v === 'string').map((s) => s.trim()).filter(Boolean)
+        ? meta.triggers
+            .filter((v): v is string => typeof v === 'string')
+            .map((s) => s.trim())
+            .filter(Boolean)
         : undefined;
       if (description || (triggers && triggers.length > 0)) {
         result.set(name, {
@@ -342,7 +356,8 @@ const MCP_DESCRIPTIONS: Record<string, string> = {
   'cat-cafe-signals': '信号猎手工具 — inbox 检索、搜索、摘要',
 };
 const MAX_CONCURRENT_MCP_PROBES = 4;
-const DOCKER_GATEWAY_DESCRIPTION_BASE = 'Docker MCP Gateway（聚合器）— 工具来自启用的子 server，不等于 Docker 本体工具集。';
+const DOCKER_GATEWAY_DESCRIPTION_BASE =
+  'Docker MCP Gateway（聚合器）— 工具来自启用的子 server，不等于 Docker 本体工具集。';
 
 function isDockerGatewayCapability(cap: CapabilityEntry): boolean {
   const command = cap.mcpServer?.command?.toLowerCase();
@@ -468,15 +483,12 @@ export const capabilitiesRoutes: FastifyPluginAsync = async (app) => {
     const catCafeOwnSkills = await listSkillSubdirs(catCafeSkillsDir);
     const hasProjectCatCafeSkillsDir = existsSync(catCafeSkillsDir);
 
-    const allScansOk = claudeProjectSkills !== null && claudeUserSkills !== null
-      && codexSkills !== null && geminiSkills !== null;
+    const allScansOk =
+      claudeProjectSkills !== null && claudeUserSkills !== null && codexSkills !== null && geminiSkills !== null;
 
     // F041 re-open: Track project-level skills for source classification
     // Includes both .claude/skills/ AND cat-cafe-skills/ entries
-    const projectSkillNames = new Set([
-      ...(claudeProjectSkills ?? []),
-      ...(catCafeOwnSkills ?? []),
-    ]);
+    const projectSkillNames = new Set([...(claudeProjectSkills ?? []), ...(catCafeOwnSkills ?? [])]);
 
     const providerSkills: Record<string, string[]> = {
       anthropic: [...new Set([...(claudeProjectSkills ?? []), ...(claudeUserSkills ?? [])])],
@@ -501,7 +513,7 @@ export const capabilitiesRoutes: FastifyPluginAsync = async (app) => {
       const exists = config.capabilities.some((c) => c.type === 'skill' && c.id === skillName);
       if (!exists) {
         // F041 re-open fix: project-level skills → 'cat-cafe', user-level → 'external'
-        const source = projectSkillNames.has(skillName) ? 'cat-cafe' as const : 'external' as const;
+        const source = projectSkillNames.has(skillName) ? ('cat-cafe' as const) : ('external' as const);
         config.capabilities.push({
           id: skillName,
           type: 'skill',
@@ -533,9 +545,7 @@ export const capabilitiesRoutes: FastifyPluginAsync = async (app) => {
     // Guard: only prune when ALL provider scans succeeded (no null returns).
     if (allScansOk) {
       const before = config.capabilities.length;
-      config.capabilities = config.capabilities.filter(
-        (c) => c.type !== 'skill' || allSkillNames.has(c.id),
-      );
+      config.capabilities = config.capabilities.filter((c) => c.type !== 'skill' || allSkillNames.has(c.id));
       if (config.capabilities.length !== before) configDirty = true;
     }
 
@@ -550,9 +560,7 @@ export const capabilitiesRoutes: FastifyPluginAsync = async (app) => {
     const userLevelServers = await discoverExternalMcpServers(userLevelPaths);
     for (const server of userLevelServers) {
       if (!server.command) continue; // Skip URL-based (TD104)
-      const exists = config.capabilities.some(
-        (c) => c.type === 'mcp' && c.id === server.name,
-      );
+      const exists = config.capabilities.some((c) => c.type === 'mcp' && c.id === server.name);
       if (!exists) {
         const mcpServer: { command: string; args: string[]; env?: Record<string, string>; workingDir?: string } = {
           command: server.command,
@@ -580,9 +588,7 @@ export const capabilitiesRoutes: FastifyPluginAsync = async (app) => {
     const mainRepo = await resolveMainRepoPath();
     const mainSkillsSrc = join(mainRepo, 'cat-cafe-skills');
     // Use dir existence (not skill count) to avoid treating existing-but-empty as "missing".
-    const mountSkillsSrc = (catCafeOwnSkills !== null && hasProjectCatCafeSkillsDir)
-      ? catCafeSkillsDir
-      : mainSkillsSrc;
+    const mountSkillsSrc = catCafeOwnSkills !== null && hasProjectCatCafeSkillsDir ? catCafeSkillsDir : mainSkillsSrc;
 
     const [skillCategoryMap, manifestMetaMap] = await Promise.all([
       parseBootstrapCategories(mountSkillsSrc),
@@ -655,9 +661,10 @@ export const capabilitiesRoutes: FastifyPluginAsync = async (app) => {
         enabled: cap.enabled,
         cats,
       };
-      const meta = cap.source === 'cat-cafe'
-        ? (manifestMetaMap.get(cap.id) ?? skillMetaMap.get(cap.id))
-        : skillMetaMap.get(cap.id);
+      const meta =
+        cap.source === 'cat-cafe'
+          ? (manifestMetaMap.get(cap.id) ?? skillMetaMap.get(cap.id))
+          : skillMetaMap.get(cap.id);
       if (meta?.description) skillItem.description = meta.description;
       if (meta?.triggers) skillItem.triggers = meta.triggers;
       const category = skillCategoryMap.get(cap.id);
@@ -675,15 +682,13 @@ export const capabilitiesRoutes: FastifyPluginAsync = async (app) => {
       );
       const probeEntries: Array<readonly [string, McpProbeResult]> = [];
       const probeOne = async (cap: (typeof mcpCaps)[number]): Promise<readonly [string, McpProbeResult]> => {
-          const boardItem = mcpItemById.get(cap.id);
-          const anyCatEnabled = boardItem
-            ? Object.values(boardItem.cats).some(Boolean)
-            : cap.enabled;
-          if (!anyCatEnabled) {
-            return [cap.id, { connectionStatus: 'unknown' }] as const;
-          }
-          const probe = await probeMcpCapability(cap, { projectRoot });
-          return [cap.id, probe] as const;
+        const boardItem = mcpItemById.get(cap.id);
+        const anyCatEnabled = boardItem ? Object.values(boardItem.cats).some(Boolean) : cap.enabled;
+        if (!anyCatEnabled) {
+          return [cap.id, { connectionStatus: 'unknown' }] as const;
+        }
+        const probe = await probeMcpCapability(cap, { projectRoot });
+        return [cap.id, probe] as const;
       };
       for (let i = 0; i < mcpCaps.length; i += MAX_CONCURRENT_MCP_PROBES) {
         const chunk = mcpCaps.slice(i, i + MAX_CONCURRENT_MCP_PROBES);
@@ -710,9 +715,7 @@ export const capabilitiesRoutes: FastifyPluginAsync = async (app) => {
     // if it exists; otherwise fall back to host repo's cat-cafe-skills.
 
     const mountSourceNames = new Set(
-      mountSkillsSrc === catCafeSkillsDir
-        ? (catCafeOwnSkills ?? [])
-        : ((await listSkillSubdirs(mountSkillsSrc)) ?? []),
+      mountSkillsSrc === catCafeSkillsDir ? (catCafeOwnSkills ?? []) : ((await listSkillSubdirs(mountSkillsSrc)) ?? []),
     );
     const catCafeSkillItems = items.filter((i) => i.type === 'skill' && i.source === 'cat-cafe');
     const providerDirs = {
@@ -736,9 +739,9 @@ export const capabilitiesRoutes: FastifyPluginAsync = async (app) => {
     const bootstrapNames = new Set(skillCategoryMap.keys());
     const unregistered = [...mountSourceNames].filter((n) => !bootstrapNames.has(n));
     const phantom = [...bootstrapNames].filter((n) => !mountSourceNames.has(n));
-    let allMounted = catCafeSkillItems.length > 0 && catCafeSkillItems.every((item) =>
-      item.mounts && Object.values(item.mounts).every(Boolean),
-    );
+    let allMounted =
+      catCafeSkillItems.length > 0 &&
+      catCafeSkillItems.every((item) => item.mounts && Object.values(item.mounts).every(Boolean));
     // If we have expected cat-cafe skills (source dir non-empty) but discovered none,
     // treat as unhealthy (likely broken mounts).
     if (!allMounted && catCafeSkillItems.length === 0 && mountSourceNames.size > 0) allMounted = false;
@@ -781,10 +784,7 @@ export const capabilitiesRoutes: FastifyPluginAsync = async (app) => {
     }
 
     const body = request.body as CapabilityPatchRequest | undefined;
-    if (
-      !body || !body.capabilityId || !body.capabilityType ||
-      !body.scope || typeof body.enabled !== 'boolean'
-    ) {
+    if (!body || !body.capabilityId || !body.capabilityType || !body.scope || typeof body.enabled !== 'boolean') {
       reply.status(400);
       return { error: 'Required: capabilityId, capabilityType (mcp|skill), scope (global|cat), enabled (boolean)' };
     }
@@ -805,16 +805,14 @@ export const capabilitiesRoutes: FastifyPluginAsync = async (app) => {
       projectRoot = validated;
     }
 
-    let config = await readCapabilitiesConfig(projectRoot);
+    const config = await readCapabilitiesConfig(projectRoot);
     if (!config) {
       reply.status(404);
       return { error: 'capabilities.json not found. Run GET first to bootstrap.' };
     }
 
     // Compound lookup: id + type disambiguates same-name MCP/skill entries
-    const capIndex = config.capabilities.findIndex(
-      (c) => c.id === body.capabilityId && c.type === body.capabilityType,
-    );
+    const capIndex = config.capabilities.findIndex((c) => c.id === body.capabilityId && c.type === body.capabilityType);
     if (capIndex === -1) {
       reply.status(404);
       return { error: `Capability "${body.capabilityId}" (type=${body.capabilityType}) not found` };
@@ -893,9 +891,7 @@ export const capabilitiesRoutes: FastifyPluginAsync = async (app) => {
     const registry = new GovernanceRegistry(catCafeRoot);
     const entries = await registry.listAll();
 
-    const healthResults = await Promise.all(
-      entries.map((entry) => registry.checkHealth(entry.projectPath)),
-    );
+    const healthResults = await Promise.all(entries.map((entry) => registry.checkHealth(entry.projectPath)));
 
     return { projects: healthResults };
   });

@@ -36,7 +36,9 @@ export function useGitPanel() {
       setLoading(true);
       setError(null);
       try {
-        const res = await apiFetch(`/api/workspace/git-log?worktreeId=${encodeURIComponent(worktreeId)}&limit=${limit}`);
+        const res = await apiFetch(
+          `/api/workspace/git-log?worktreeId=${encodeURIComponent(worktreeId)}&limit=${limit}`,
+        );
         if (!res.ok) throw new Error(await res.text());
         const data = await res.json();
         setCommits(data.commits);

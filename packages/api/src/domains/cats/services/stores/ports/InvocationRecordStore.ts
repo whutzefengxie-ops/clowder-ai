@@ -75,7 +75,11 @@ export interface IInvocationRecordStore {
   /** Update fields on a record */
   update(id: string, input: UpdateInvocationInput): InvocationRecord | null | Promise<InvocationRecord | null>;
   /** Look up an invocation by its idempotency key */
-  getByIdempotencyKey(threadId: string, userId: string, key: string): InvocationRecord | null | Promise<InvocationRecord | null>;
+  getByIdempotencyKey(
+    threadId: string,
+    userId: string,
+    key: string,
+  ): InvocationRecord | null | Promise<InvocationRecord | null>;
 }
 
 /** Max records in memory store */

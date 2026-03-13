@@ -8,10 +8,9 @@
  * 4. Clicking inner content does NOT close (stopPropagation)
  * 5. Renders caption when provided
  */
-import React from 'react';
-import { describe, expect, it, vi, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
+import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { act } from 'react';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Lightbox } from '@/components/Lightbox';
 
 let container: HTMLDivElement;
@@ -40,12 +39,14 @@ afterEach(() => {
 function renderLightbox(props: Partial<React.ComponentProps<typeof Lightbox>> = {}) {
   const onClose = props.onClose ?? vi.fn();
   act(() => {
-    root.render(React.createElement(Lightbox, {
-      url: '/test-image.png',
-      alt: 'test image',
-      onClose,
-      ...props,
-    }));
+    root.render(
+      React.createElement(Lightbox, {
+        url: '/test-image.png',
+        alt: 'test image',
+        onClose,
+        ...props,
+      }),
+    );
   });
   return { onClose };
 }
@@ -79,7 +80,7 @@ describe('Lightbox', () => {
     const backdrop = document.body.querySelector('[role="dialog"]');
     expect(backdrop).toBeDefined();
     act(() => {
-      backdrop!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      backdrop?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(onClose).toHaveBeenCalledTimes(1);
   });
@@ -89,7 +90,7 @@ describe('Lightbox', () => {
     const img = document.body.querySelector('img');
     expect(img).toBeDefined();
     act(() => {
-      img!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      img?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     // Click on image should be stopped by stopPropagation on inner container
     expect(onClose).not.toHaveBeenCalled();
@@ -111,7 +112,7 @@ describe('Lightbox', () => {
     const closeBtn = document.body.querySelector('button[title="Close"]');
     expect(closeBtn).toBeDefined();
     act(() => {
-      closeBtn!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      closeBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(onClose).toHaveBeenCalledTimes(1);
   });

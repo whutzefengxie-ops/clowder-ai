@@ -48,10 +48,7 @@ export function buildVoteNotification(question: string, options: string[]): stri
 /**
  * Build tally object from votes.
  */
-export function buildVoteTally(
-  options: string[],
-  votes: Record<string, string>,
-): Record<string, number> {
+export function buildVoteTally(options: string[], votes: Record<string, string>): Record<string, number> {
   const tally: Record<string, number> = {};
   for (const opt of options) tally[opt] = 0;
   for (const v of Object.values(votes)) {

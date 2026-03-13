@@ -1,9 +1,10 @@
 // @ts-check
-import { describe, it, beforeEach } from 'node:test';
+
 import assert from 'node:assert/strict';
+import { beforeEach, describe, it } from 'node:test';
 import Fastify from 'fastify';
-import { pushRoutes } from '../dist/routes/push.js';
 import { PushSubscriptionStore } from '../dist/domains/cats/services/stores/ports/PushSubscriptionStore.js';
+import { pushRoutes } from '../dist/routes/push.js';
 
 /**
  * @typedef {import('../src/domains/cats/services/push/PushNotificationService.js').PushPayload} PushPayload

@@ -1,11 +1,11 @@
 'use client';
 
 import { useCallback, useState } from 'react';
-import { useChatStore, type ChatMessage as ChatMessageData } from '@/stores/chatStore';
 import { useAgentMessages } from '@/hooks/useAgentMessages';
 import { useChatCommands } from '@/hooks/useChatCommands';
-import { apiFetch } from '@/utils/api-client';
 import type { DeliveryMode } from '@/stores/chat-types';
+import { type ChatMessage as ChatMessageData, useChatStore } from '@/stores/chatStore';
+import { apiFetch } from '@/utils/api-client';
 
 export type UploadStatus = 'idle' | 'uploading' | 'failed';
 
@@ -52,7 +52,13 @@ export function useSendMessage(activeThreadId?: string) {
   }, []);
 
   const handleSend = useCallback(
-    async (content: string, images?: File[], overrideThreadId?: string, whisper?: WhisperOptions, deliveryMode?: DeliveryMode) => {
+    async (
+      content: string,
+      images?: File[],
+      overrideThreadId?: string,
+      whisper?: WhisperOptions,
+      deliveryMode?: DeliveryMode,
+    ) => {
       const activeThread = activeThreadId ?? useChatStore.getState().currentThreadId;
       const threadId = overrideThreadId ?? activeThread;
       const hasImages = Boolean(images && images.length > 0);
@@ -201,7 +207,7 @@ export function useSendMessage(activeThreadId?: string) {
       setThreadHasActiveInvocation,
       activeThreadId,
       createClientId,
-    ]
+    ],
   );
 
   return { handleSend, uploadStatus, uploadError };

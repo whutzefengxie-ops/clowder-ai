@@ -1,7 +1,7 @@
 'use client';
 
-import type { RichDiffBlock } from '@/stores/chat-types';
 import { DiffViewer } from '@/components/workspace/DiffViewer';
+import type { RichDiffBlock } from '@/stores/chat-types';
 
 export function DiffBlock({ block }: { block: RichDiffBlock }) {
   return (

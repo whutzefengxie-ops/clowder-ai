@@ -1,6 +1,7 @@
 // @ts-check
-import { describe, it } from 'node:test';
+
 import assert from 'node:assert';
+import { describe, it } from 'node:test';
 import { safeParseConnectorSource } from '../dist/domains/cats/services/stores/redis/redis-message-parsers.js';
 
 describe('safeParseConnectorSource (F97)', () => {

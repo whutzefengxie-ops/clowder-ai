@@ -13,21 +13,31 @@ export function modeLabel(mode: IntentMode): string {
 
 export function statusLabel(status: CatStatus): string {
   switch (status) {
-    case 'pending': return '待命';
-    case 'streaming': return '工作中';
-    case 'done': return '完成';
-    case 'error': return '异常';
-    default: return '未知';
+    case 'pending':
+      return '待命';
+    case 'streaming':
+      return '工作中';
+    case 'done':
+      return '完成';
+    case 'error':
+      return '异常';
+    default:
+      return '未知';
   }
 }
 
 export function statusTone(status: CatStatus): string {
   switch (status) {
-    case 'pending': return 'text-gray-500';
-    case 'streaming': return 'text-green-600';
-    case 'done': return 'text-emerald-700';
-    case 'error': return 'text-red-600';
-    default: return 'text-gray-500';
+    case 'pending':
+      return 'text-gray-500';
+    case 'streaming':
+      return 'text-green-600';
+    case 'done':
+      return 'text-emerald-700';
+    case 'error':
+      return 'text-red-600';
+    default:
+      return 'text-gray-500';
   }
 }
 

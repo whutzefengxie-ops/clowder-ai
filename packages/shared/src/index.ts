@@ -7,14 +7,12 @@
  * Import from '@cat-cafe/shared/utils' instead.
  */
 
-// Export all types
-export * from './types/index.js';
-
-// Export all schemas
-export * from './schemas/index.js';
-
 // Export registry (CatRegistry, catIdSchema, assertKnownCatId)
 export * from './registry/index.js';
 
+// Export all schemas
+export * from './schemas/index.js';
 // Export shared text helpers
 export * from './text-utils.js';
+// Export all types
+export * from './types/index.js';

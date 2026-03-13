@@ -1,7 +1,6 @@
-import React from 'react';
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { act } from 'react';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 beforeAll(() => {
   (globalThis as { React?: typeof React }).React = React;
@@ -55,8 +54,9 @@ describe('A2ACollapsible layout-change event', () => {
       );
     });
 
-    const toggle = Array.from(container.querySelectorAll('button'))
-      .find((b) => b.textContent?.includes('查看内部讨论'));
+    const toggle = Array.from(container.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('查看内部讨论'),
+    );
     expect(toggle).toBeTruthy();
 
     act(() => {
@@ -69,4 +69,3 @@ describe('A2ACollapsible layout-change event', () => {
     window.removeEventListener('catcafe:chat-layout-changed', handler);
   });
 });
-

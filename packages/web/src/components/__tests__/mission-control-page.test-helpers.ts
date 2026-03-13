@@ -181,10 +181,16 @@ export function createMissionControlMockBackend(): MissionControlMockBackend {
       // F058 Phase G: featureIds query returns threadsByFeature grouped response
       const featureIdsCsv = url.searchParams.get('featureIds');
       if (featureIdsCsv) {
-        const fids = featureIdsCsv.split(',').map((id) => id.trim().toLowerCase()).filter(Boolean);
+        const fids = featureIdsCsv
+          .split(',')
+          .map((id) => id.trim().toLowerCase())
+          .filter(Boolean);
         // Enforce 50-ID limit (matching backend)
         if (fids.length > 50) return mockResponse(400, { error: 'Too many featureIds (max 50)' });
-        const threadsByFeature: Record<string, Array<{ id: string; title: string | null; lastActiveAt: number; participants: string[] }>> = {};
+        const threadsByFeature: Record<
+          string,
+          Array<{ id: string; title: string | null; lastActiveAt: number; participants: string[] }>
+        > = {};
         // Build fuzzy regex per feature ID (matching backend)
         const patterns = fids.map((fid) => {
           const num = Number.parseInt(fid.replace(/^f0*/, ''), 10);
@@ -195,7 +201,12 @@ export function createMissionControlMockBackend(): MissionControlMockBackend {
           for (const { key, re } of patterns) {
             if (re.test(title)) {
               const arr = threadsByFeature[key] ?? [];
-              arr.push({ id: thread.id, title: thread.title ?? null, lastActiveAt: thread.lastActiveAt, participants: [...thread.participants] });
+              arr.push({
+                id: thread.id,
+                title: thread.title ?? null,
+                lastActiveAt: thread.lastActiveAt,
+                participants: [...thread.participants],
+              });
               threadsByFeature[key] = arr;
             }
           }
@@ -206,11 +217,11 @@ export function createMissionControlMockBackend(): MissionControlMockBackend {
       const backlogFilterCsv = url.searchParams.get('backlogItemIds');
       const backlogFilters = backlogFilterCsv
         ? new Set(
-          backlogFilterCsv
-            .split(',')
-            .map((id) => id.trim())
-            .filter((id) => id.length > 0),
-        )
+            backlogFilterCsv
+              .split(',')
+              .map((id) => id.trim())
+              .filter((id) => id.length > 0),
+          )
         : null;
 
       const filteredThreads = backlogFilters
@@ -247,12 +258,14 @@ export function createMissionControlMockBackend(): MissionControlMockBackend {
         createdBy: 'user',
         createdAt: now,
         updatedAt: now,
-        audit: [{
-          id: `a-${now}`,
-          action: 'created',
-          actor: { kind: 'user', id: 'u_test' },
-          timestamp: now,
-        }],
+        audit: [
+          {
+            id: `a-${now}`,
+            action: 'created',
+            actor: { kind: 'user', id: 'u_test' },
+            timestamp: now,
+          },
+        ],
       };
       items = [item, ...items];
       return mockResponse(201, item);
@@ -294,12 +307,12 @@ export function createMissionControlMockBackend(): MissionControlMockBackend {
           status: 'open',
           suggestion: target.suggestion
             ? {
-              ...target.suggestion,
-              status: 'rejected',
-              decidedAt: Date.now(),
-              decidedBy: 'u_test',
-              ...(body.note ? { note: body.note } : {}),
-            }
+                ...target.suggestion,
+                status: 'rejected',
+                decidedAt: Date.now(),
+                decidedBy: 'u_test',
+                ...(body.note ? { note: body.note } : {}),
+              }
             : undefined,
           updatedAt: Date.now(),
         };
@@ -314,11 +327,11 @@ export function createMissionControlMockBackend(): MissionControlMockBackend {
         dispatchedThreadPhase: body.threadPhase ?? 'coding',
         suggestion: target.suggestion
           ? {
-            ...target.suggestion,
-            status: 'approved',
-            decidedAt: Date.now(),
-            decidedBy: 'u_test',
-          }
+              ...target.suggestion,
+              status: 'approved',
+              decidedAt: Date.now(),
+              decidedBy: 'u_test',
+            }
           : undefined,
         updatedAt: Date.now(),
       };
@@ -463,14 +476,22 @@ export function createMissionControlMockBackend(): MissionControlMockBackend {
         status: 'in-progress',
         owner: '布偶猫',
         phases: [
-          { id: 'A', name: '基础架构', acs: [
-            { id: 'AC-A1', text: 'Remote sync', done: true },
-            { id: 'AC-A2', text: 'YAML parsing', done: true },
-          ]},
-          { id: 'B', name: '线程关联', acs: [
-            { id: 'AC-B1', text: 'Fuzzy matching', done: true },
-            { id: 'AC-B2', text: 'Progress dashboard', done: false },
-          ]},
+          {
+            id: 'A',
+            name: '基础架构',
+            acs: [
+              { id: 'AC-A1', text: 'Remote sync', done: true },
+              { id: 'AC-A2', text: 'YAML parsing', done: true },
+            ],
+          },
+          {
+            id: 'B',
+            name: '线程关联',
+            acs: [
+              { id: 'AC-B1', text: 'Fuzzy matching', done: true },
+              { id: 'AC-B2', text: 'Progress dashboard', done: false },
+            ],
+          },
         ],
         risks: [{ risk: 'Format inconsistency', mitigation: 'Standard template' }],
         dependencies: {},

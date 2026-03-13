@@ -3,14 +3,12 @@
  * 测试缅因猫 CLI 子进程调用
  */
 
-import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { PassThrough } from 'node:stream';
 import { EventEmitter } from 'node:events';
+import { PassThrough } from 'node:stream';
+import { mock, test } from 'node:test';
 
-const { CodexAgentService } = await import(
-  '../dist/domains/cats/services/agents/providers/CodexAgentService.js'
-);
+const { CodexAgentService } = await import('../dist/domains/cats/services/agents/providers/CodexAgentService.js');
 
 /** Helper: collect all items from async iterable */
 async function collect(iterable) {
@@ -61,7 +59,7 @@ function createMockSpawnFn(proc) {
 /** Write NDJSON events to mock process stdout, then end with exit 0 */
 function emitCodexEvents(proc, events) {
   for (const event of events) {
-    proc.stdout.write(JSON.stringify(event) + '\n');
+    proc.stdout.write(`${JSON.stringify(event)}\n`);
   }
   proc.stdout.end();
   proc._emitter.emit('exit', 0, null);
@@ -102,9 +100,7 @@ test('uses exec resume when sessionId is provided', async () => {
   const spawnFn = createMockSpawnFn(proc);
   const service = new CodexAgentService({ spawnFn, model: 'gpt-5.3-codex' });
 
-  const promise = collect(
-    service.invoke('Continue', { sessionId: 'existing-thread-456' })
-  );
+  const promise = collect(service.invoke('Continue', { sessionId: 'existing-thread-456' }));
   emitCodexEvents(proc, [
     { type: 'thread.started', thread_id: 'existing-thread-456' },
     {
@@ -126,8 +122,8 @@ test('uses exec resume when sessionId is provided', async () => {
   assert.ok(modelFlagIndex >= 0, 'resume args must include --model');
   assert.equal(args[modelFlagIndex + 1], 'gpt-5.3-codex');
   assert.ok(args.includes('--config'), 'resume args must include approval policy override');
-  assert.ok(args.includes('approval_policy=\"on-request\"'), 'default approval policy should be on-request');
-  assert.ok(!args.includes('approval_policy=\\\"on-request\\\"'), 'argv should not contain literal backslash escapes');
+  assert.ok(args.includes('approval_policy="on-request"'), 'default approval policy should be on-request');
+  assert.ok(!args.includes('approval_policy=\\"on-request\\"'), 'argv should not contain literal backslash escapes');
 });
 
 test('injects cat-cafe MCP config even when cwd is outside repo', async () => {
@@ -137,29 +133,31 @@ test('injects cat-cafe MCP config even when cwd is outside repo', async () => {
   const cwdMock = mock.method(process, 'cwd', () => '/tmp/not-cat-cafe');
 
   try {
-    const promise = collect(service.invoke('hello from outside cwd', {
-      callbackEnv: {
-        CAT_CAFE_API_URL: 'http://127.0.0.1:3002',
-        CAT_CAFE_INVOCATION_ID: 'inv-test-1',
-        CAT_CAFE_CALLBACK_TOKEN: 'tok-test-1',
-        CAT_CAFE_USER_ID: 'user-test-1\nline2',
-        CAT_CAFE_SIGNAL_USER: 'codex',
-      },
-    }));
+    const promise = collect(
+      service.invoke('hello from outside cwd', {
+        callbackEnv: {
+          CAT_CAFE_API_URL: 'http://127.0.0.1:3002',
+          CAT_CAFE_INVOCATION_ID: 'inv-test-1',
+          CAT_CAFE_CALLBACK_TOKEN: 'tok-test-1',
+          CAT_CAFE_USER_ID: 'user-test-1\nline2',
+          CAT_CAFE_SIGNAL_USER: 'codex',
+        },
+      }),
+    );
     emitCodexEvents(proc, [{ type: 'thread.started', thread_id: 't-mcp-fallback' }]);
     await promise;
 
     const args = spawnFn.mock.calls[0].arguments[1];
-    assert.ok(args.includes('mcp_servers.cat-cafe.command=\"node\"'));
+    assert.ok(args.includes('mcp_servers.cat-cafe.command="node"'));
     const mcpArgsConfig = args.find((arg) => arg.startsWith('mcp_servers.cat-cafe.args=['));
     assert.ok(mcpArgsConfig, 'must inject cat-cafe mcp args config');
     assert.match(mcpArgsConfig, /packages\/mcp-server\/dist\/index\.js/);
     assert.ok(args.includes('mcp_servers.cat-cafe.enabled=true'));
-    assert.ok(args.includes('mcp_servers.cat-cafe.env.CAT_CAFE_API_URL=\"http://127.0.0.1:3002\"'));
-    assert.ok(args.includes('mcp_servers.cat-cafe.env.CAT_CAFE_INVOCATION_ID=\"inv-test-1\"'));
-    assert.ok(args.includes('mcp_servers.cat-cafe.env.CAT_CAFE_CALLBACK_TOKEN=\"tok-test-1\"'));
-    assert.ok(args.includes('mcp_servers.cat-cafe.env.CAT_CAFE_USER_ID=\"user-test-1\\nline2\"'));
-    assert.ok(args.includes('mcp_servers.cat-cafe.env.CAT_CAFE_SIGNAL_USER=\"codex\"'));
+    assert.ok(args.includes('mcp_servers.cat-cafe.env.CAT_CAFE_API_URL="http://127.0.0.1:3002"'));
+    assert.ok(args.includes('mcp_servers.cat-cafe.env.CAT_CAFE_INVOCATION_ID="inv-test-1"'));
+    assert.ok(args.includes('mcp_servers.cat-cafe.env.CAT_CAFE_CALLBACK_TOKEN="tok-test-1"'));
+    assert.ok(args.includes('mcp_servers.cat-cafe.env.CAT_CAFE_USER_ID="user-test-1\\nline2"'));
+    assert.ok(args.includes('mcp_servers.cat-cafe.env.CAT_CAFE_SIGNAL_USER="codex"'));
   } finally {
     cwdMock.mock.restore();
   }
@@ -171,9 +169,7 @@ test('does not include resume when no sessionId', async () => {
   const service = new CodexAgentService({ spawnFn, model: 'gpt-5.3-codex' });
 
   const promise = collect(service.invoke('hello'));
-  emitCodexEvents(proc, [
-    { type: 'thread.started', thread_id: 't1' },
-  ]);
+  emitCodexEvents(proc, [{ type: 'thread.started', thread_id: 't1' }]);
   await promise;
 
   const args = spawnFn.mock.calls[0].arguments[1];
@@ -185,8 +181,8 @@ test('does not include resume when no sessionId', async () => {
   assert.equal(args[modelFlagIndex + 1], 'gpt-5.3-codex');
   assert.ok(args.includes('--sandbox'), 'fresh exec should include sandbox mode');
   assert.ok(args.includes('danger-full-access'), 'default sandbox should allow git writes');
-  assert.ok(args.includes('approval_policy=\"on-request\"'), 'fresh exec should set default approval policy');
-  assert.ok(!args.includes('approval_policy=\\\"on-request\\\"'), 'argv should not contain literal backslash escapes');
+  assert.ok(args.includes('approval_policy="on-request"'), 'fresh exec should set default approval policy');
+  assert.ok(!args.includes('approval_policy=\\"on-request\\"'), 'argv should not contain literal backslash escapes');
 });
 
 test('uses env-configured sandbox and approval policy for fresh exec', async () => {
@@ -201,16 +197,14 @@ test('uses env-configured sandbox and approval policy for fresh exec', async () 
     const service = new CodexAgentService({ spawnFn });
 
     const promise = collect(service.invoke('configurable'));
-    emitCodexEvents(proc, [
-      { type: 'thread.started', thread_id: 'thread-config' },
-    ]);
+    emitCodexEvents(proc, [{ type: 'thread.started', thread_id: 'thread-config' }]);
     await promise;
 
     const args = spawnFn.mock.calls[0].arguments[1];
     assert.ok(args.includes('--sandbox'), 'sandbox flag should be present');
     assert.ok(args.includes('read-only'), 'sandbox should follow CAT_CODEX_SANDBOX_MODE');
     assert.ok(args.includes('--config'), 'approval policy should be set by config override');
-    assert.ok(args.includes('approval_policy=\"never\"'), 'approval policy should follow env');
+    assert.ok(args.includes('approval_policy="never"'), 'approval policy should follow env');
   } finally {
     if (oldSandbox === undefined) {
       delete process.env.CAT_CODEX_SANDBOX_MODE;
@@ -242,7 +236,7 @@ test('falls back to defaults for invalid sandbox/approval env values', async () 
 
     const args = spawnFn.mock.calls[0].arguments[1];
     assert.ok(args.includes('danger-full-access'), 'invalid sandbox should fallback to default');
-    assert.ok(args.includes('approval_policy=\"on-request\"'), 'invalid policy should fallback to default');
+    assert.ok(args.includes('approval_policy="on-request"'), 'invalid policy should fallback to default');
   } finally {
     if (oldSandbox === undefined) {
       delete process.env.CAT_CODEX_SANDBOX_MODE;
@@ -263,9 +257,7 @@ test('new session includes --add-dir .git for git write access', async () => {
   const service = new CodexAgentService({ spawnFn });
 
   const promise = collect(service.invoke('hello'));
-  emitCodexEvents(proc, [
-    { type: 'thread.started', thread_id: 't1' },
-  ]);
+  emitCodexEvents(proc, [{ type: 'thread.started', thread_id: 't1' }]);
   await promise;
 
   const args = spawnFn.mock.calls[0].arguments[1];
@@ -280,12 +272,8 @@ test('resume session does NOT include --add-dir (sandbox locked at creation)', a
   const spawnFn = createMockSpawnFn(proc);
   const service = new CodexAgentService({ spawnFn });
 
-  const promise = collect(
-    service.invoke('Continue', { sessionId: 'old-session-123' })
-  );
-  emitCodexEvents(proc, [
-    { type: 'thread.started', thread_id: 'old-session-123' },
-  ]);
+  const promise = collect(service.invoke('Continue', { sessionId: 'old-session-123' }));
+  emitCodexEvents(proc, [{ type: 'thread.started', thread_id: 'old-session-123' }]);
   await promise;
 
   const args = spawnFn.mock.calls[0].arguments[1];
@@ -340,7 +328,13 @@ test('separates multi-turn text with paragraph breaks (turn newline fix)', async
     },
     {
       type: 'item.completed',
-      item: { id: 'cmd-1', type: 'command_execution', command: 'ls', aggregated_output: 'file.ts', status: 'completed' },
+      item: {
+        id: 'cmd-1',
+        type: 'command_execution',
+        command: 'ls',
+        aggregated_output: 'file.ts',
+        status: 'completed',
+      },
     },
     {
       type: 'item.completed',
@@ -435,19 +429,25 @@ test('includes reconnect diagnostics in CLI exit error when available', async ()
 
   const promise = collect(service.invoke('reconnect failure'));
 
-  proc.stdout.write(JSON.stringify({ type: 'thread.started', thread_id: 'thread-reconnect' }) + '\n');
-  proc.stdout.write(JSON.stringify({
-    type: 'error',
-    message: 'Reconnecting... 1/5 (stream disconnected before completion)',
-  }) + '\n');
-  proc.stdout.write(JSON.stringify({
-    type: 'error',
-    message: 'Reconnecting... 2/5 (stream disconnected before completion)',
-  }) + '\n');
-  proc.stdout.write(JSON.stringify({
-    type: 'error',
-    message: 'stream disconnected before completion',
-  }) + '\n');
+  proc.stdout.write(`${JSON.stringify({ type: 'thread.started', thread_id: 'thread-reconnect' })}\n`);
+  proc.stdout.write(
+    `${JSON.stringify({
+      type: 'error',
+      message: 'Reconnecting... 1/5 (stream disconnected before completion)',
+    })}\n`,
+  );
+  proc.stdout.write(
+    `${JSON.stringify({
+      type: 'error',
+      message: 'Reconnecting... 2/5 (stream disconnected before completion)',
+    })}\n`,
+  );
+  proc.stdout.write(
+    `${JSON.stringify({
+      type: 'error',
+      message: 'stream disconnected before completion',
+    })}\n`,
+  );
   proc.stdout.end();
   // Exit code 2 = always a real failure (code 1 is suppressed only with substantive output)
   proc._emitter.emit('exit', 2, null);
@@ -461,14 +461,8 @@ test('includes reconnect diagnostics in CLI exit error when available', async ()
   const errMsg = msgs.find((m) => m.type === 'error');
   assert.ok(errMsg);
   assert.ok(errMsg.error.includes('code: 2'));
-  assert.ok(
-    errMsg.error.includes('Reconnecting... 1/5'),
-    'error should include reconnect diagnostics'
-  );
-  assert.ok(
-    errMsg.error.includes('Reconnecting... 2/5'),
-    'error should include multiple reconnect attempts'
-  );
+  assert.ok(errMsg.error.includes('Reconnecting... 1/5'), 'error should include reconnect diagnostics');
+  assert.ok(errMsg.error.includes('Reconnecting... 2/5'), 'error should include multiple reconnect attempts');
 });
 
 test('suppresses exit code 1 when Codex produced substantive output (item.completed)', async () => {
@@ -483,20 +477,31 @@ test('suppresses exit code 1 when Codex produced substantive output (item.comple
   const promise = collect(service.invoke('review this'));
 
   // Codex outputs thread.started + item.completed (agent_message) = substantive output
-  proc.stdout.write(JSON.stringify({ type: 'thread.started', thread_id: 'tx' }) + '\n');
-  proc.stdout.write(JSON.stringify({
-    type: 'item.completed',
-    item: { type: 'agent_message', text: 'Looks good!' },
-  }) + '\n');
+  proc.stdout.write(`${JSON.stringify({ type: 'thread.started', thread_id: 'tx' })}\n`);
+  proc.stdout.write(
+    `${JSON.stringify({
+      type: 'item.completed',
+      item: { type: 'agent_message', text: 'Looks good!' },
+    })}\n`,
+  );
   proc.stdout.end();
   proc._emitter.emit('exit', 1, null); // Codex 0.98+ quirk
 
   const msgs = await promise;
   const errors = msgs.filter((m) => m.type === 'error');
   assert.equal(errors.length, 0, 'exit code 1 with substantive output should be suppressed');
-  assert.ok(msgs.some((m) => m.type === 'text'), 'text message should still be yielded');
-  assert.ok(msgs.some((m) => m.type === 'done'), 'done should still be yielded');
-  assert.ok(warnCalls.some((w) => w.includes('Codex CLI exited with code 1')), 'should warn');
+  assert.ok(
+    msgs.some((m) => m.type === 'text'),
+    'text message should still be yielded',
+  );
+  assert.ok(
+    msgs.some((m) => m.type === 'done'),
+    'done should still be yielded',
+  );
+  assert.ok(
+    warnCalls.some((w) => w.includes('Codex CLI exited with code 1')),
+    'should warn',
+  );
 
   console.warn = originalWarn;
 });
@@ -509,7 +514,7 @@ test('does NOT suppress exit code 1 when only thread.started (no substantive out
   const promise = collect(service.invoke('review this'));
 
   // Only thread.started — no item.completed → NOT substantive
-  proc.stdout.write(JSON.stringify({ type: 'thread.started', thread_id: 'tx' }) + '\n');
+  proc.stdout.write(`${JSON.stringify({ type: 'thread.started', thread_id: 'tx' })}\n`);
   proc.stdout.end();
   proc._emitter.emit('exit', 1, null);
 
@@ -546,12 +551,8 @@ test('passes cwd from workingDirectory option', async () => {
   const spawnFn = createMockSpawnFn(proc);
   const service = new CodexAgentService({ spawnFn });
 
-  const promise = collect(
-    service.invoke('hi', { workingDirectory: '/my/project' })
-  );
-  emitCodexEvents(proc, [
-    { type: 'thread.started', thread_id: 't1' },
-  ]);
+  const promise = collect(service.invoke('hi', { workingDirectory: '/my/project' }));
+  emitCodexEvents(proc, [{ type: 'thread.started', thread_id: 't1' }]);
   await promise;
 
   const spawnOpts = spawnFn.mock.calls[0].arguments[2];
@@ -563,11 +564,11 @@ test('oauth mode (default) does not forward OPENAI_API_KEY to codex child env', 
   const spawnFn = createMockSpawnFn(proc);
   const service = new CodexAgentService({ spawnFn });
 
-  const originalApiKey = process.env['OPENAI_API_KEY'];
-  const originalAuthMode = process.env['CODEX_AUTH_MODE'];
+  const originalApiKey = process.env.OPENAI_API_KEY;
+  const originalAuthMode = process.env.CODEX_AUTH_MODE;
   try {
-    process.env['OPENAI_API_KEY'] = 'sk-test-forwarded-key';
-    delete process.env['CODEX_AUTH_MODE']; // default = oauth
+    process.env.OPENAI_API_KEY = 'sk-test-forwarded-key';
+    delete process.env.CODEX_AUTH_MODE; // default = oauth
 
     const promise = collect(service.invoke('oauth test'));
     emitCodexEvents(proc, [{ type: 'thread.started', thread_id: 'oauth-thread' }]);
@@ -575,12 +576,12 @@ test('oauth mode (default) does not forward OPENAI_API_KEY to codex child env', 
 
     const spawnOpts = spawnFn.mock.calls[0].arguments[2];
     assert.equal(spawnOpts.env.OPENAI_API_KEY, undefined);
-    assert.equal(Object.prototype.hasOwnProperty.call(spawnOpts.env, 'OPENAI_API_KEY'), false);
+    assert.equal(Object.hasOwn(spawnOpts.env, 'OPENAI_API_KEY'), false);
   } finally {
-    if (originalApiKey === undefined) delete process.env['OPENAI_API_KEY'];
-    else process.env['OPENAI_API_KEY'] = originalApiKey;
-    if (originalAuthMode === undefined) delete process.env['CODEX_AUTH_MODE'];
-    else process.env['CODEX_AUTH_MODE'] = originalAuthMode;
+    if (originalApiKey === undefined) delete process.env.OPENAI_API_KEY;
+    else process.env.OPENAI_API_KEY = originalApiKey;
+    if (originalAuthMode === undefined) delete process.env.CODEX_AUTH_MODE;
+    else process.env.CODEX_AUTH_MODE = originalAuthMode;
   }
 });
 
@@ -589,11 +590,11 @@ test('api_key mode keeps OPENAI_API_KEY for codex child env', async () => {
   const spawnFn = createMockSpawnFn(proc);
   const service = new CodexAgentService({ spawnFn });
 
-  const originalApiKey = process.env['OPENAI_API_KEY'];
-  const originalAuthMode = process.env['CODEX_AUTH_MODE'];
+  const originalApiKey = process.env.OPENAI_API_KEY;
+  const originalAuthMode = process.env.CODEX_AUTH_MODE;
   try {
-    process.env['OPENAI_API_KEY'] = 'sk-test-api-mode';
-    process.env['CODEX_AUTH_MODE'] = 'api_key';
+    process.env.OPENAI_API_KEY = 'sk-test-api-mode';
+    process.env.CODEX_AUTH_MODE = 'api_key';
 
     const promise = collect(service.invoke('api-key test'));
     emitCodexEvents(proc, [{ type: 'thread.started', thread_id: 'api-key-thread' }]);
@@ -602,10 +603,10 @@ test('api_key mode keeps OPENAI_API_KEY for codex child env', async () => {
     const spawnOpts = spawnFn.mock.calls[0].arguments[2];
     assert.equal(spawnOpts.env.OPENAI_API_KEY, 'sk-test-api-mode');
   } finally {
-    if (originalApiKey === undefined) delete process.env['OPENAI_API_KEY'];
-    else process.env['OPENAI_API_KEY'] = originalApiKey;
-    if (originalAuthMode === undefined) delete process.env['CODEX_AUTH_MODE'];
-    else process.env['CODEX_AUTH_MODE'] = originalAuthMode;
+    if (originalApiKey === undefined) delete process.env.OPENAI_API_KEY;
+    else process.env.OPENAI_API_KEY = originalApiKey;
+    if (originalAuthMode === undefined) delete process.env.CODEX_AUTH_MODE;
+    else process.env.CODEX_AUTH_MODE = originalAuthMode;
   }
 });
 
@@ -713,14 +714,16 @@ test('writes CLI tool lifecycle audit events when auditContext is provided', asy
   const rawArchive = { append: mock.fn(async () => {}) };
   const service = new CodexAgentService({ spawnFn, auditLog, rawArchive });
 
-  const promise = collect(service.invoke('run tool', {
-    auditContext: {
-      invocationId: 'inv-1',
-      threadId: 'thread-1',
-      userId: 'user-1',
-      catId: 'codex',
-    },
-  }));
+  const promise = collect(
+    service.invoke('run tool', {
+      auditContext: {
+        invocationId: 'inv-1',
+        threadId: 'thread-1',
+        userId: 'user-1',
+        catId: 'codex',
+      },
+    }),
+  );
 
   emitCodexEvents(proc, [
     { type: 'thread.started', thread_id: 'thread-1' },
@@ -770,14 +773,16 @@ test('archives raw stream events when auditContext is provided', async () => {
   const rawArchive = { append: mock.fn(async () => {}) };
   const service = new CodexAgentService({ spawnFn, auditLog, rawArchive });
 
-  const promise = collect(service.invoke('raw trace', {
-    auditContext: {
-      invocationId: 'inv-raw-1',
-      threadId: 'thread-raw-1',
-      userId: 'user-1',
-      catId: 'codex',
-    },
-  }));
+  const promise = collect(
+    service.invoke('raw trace', {
+      auditContext: {
+        invocationId: 'inv-raw-1',
+        threadId: 'thread-raw-1',
+        userId: 'user-1',
+        catId: 'codex',
+      },
+    }),
+  );
 
   emitCodexEvents(proc, [
     { type: 'thread.started', thread_id: 'thread-raw-1' },
@@ -840,14 +845,16 @@ test('redacts nested callback tokens before archiving raw events', async () => {
   const rawArchive = { append: mock.fn(async () => {}) };
   const service = new CodexAgentService({ spawnFn, auditLog, rawArchive });
 
-  const promise = collect(service.invoke('deep redact', {
-    auditContext: {
-      invocationId: 'inv-redact-1',
-      threadId: 'thread-redact-1',
-      userId: 'user-1',
-      catId: 'codex',
-    },
-  }));
+  const promise = collect(
+    service.invoke('deep redact', {
+      auditContext: {
+        invocationId: 'inv-redact-1',
+        threadId: 'thread-redact-1',
+        userId: 'user-1',
+        catId: 'codex',
+      },
+    }),
+  );
 
   emitCodexEvents(proc, [
     {
@@ -888,11 +895,9 @@ test('systemPrompt is preserved and codex --image is used when contentBlocks con
       systemPrompt: '你是缅因猫，由 OpenAI 提供的 AI 猫猫。',
       contentBlocks: [{ type: 'image', url: '/uploads/cat.png' }],
       uploadDir: '/tmp',
-    })
+    }),
   );
-  emitCodexEvents(proc, [
-    { type: 'thread.started', thread_id: 'img-thread' },
-  ]);
+  emitCodexEvents(proc, [{ type: 'thread.started', thread_id: 'img-thread' }]);
   await promise;
 
   // The prompt passed to CLI must preserve systemPrompt.
@@ -904,7 +909,7 @@ test('systemPrompt is preserved and codex --image is used when contentBlocks con
   const promptArg = args.at(-1); // last arg is the prompt
   assert.ok(
     promptArg.includes('缅因猫'),
-    `systemPrompt should be preserved in prompt when images present, got: ${promptArg.slice(0, 120)}`
+    `systemPrompt should be preserved in prompt when images present, got: ${promptArg.slice(0, 120)}`,
   );
 });
 
@@ -917,7 +922,7 @@ test('fresh exec with --image inserts "--" before prompt to avoid varargs swallo
     service.invoke('please describe this image path handling', {
       contentBlocks: [{ type: 'image', url: '/uploads/cat.png' }],
       uploadDir: '/tmp',
-    })
+    }),
   );
   emitCodexEvents(proc, [{ type: 'thread.started', thread_id: 'img-thread-arg-sep' }]);
   await promise;
@@ -925,7 +930,7 @@ test('fresh exec with --image inserts "--" before prompt to avoid varargs swallo
   const args = spawnFn.mock.calls[0].arguments[1];
   const imageIdx = args.indexOf('--image');
   assert.ok(imageIdx >= 0, 'codex should receive --image');
-  const promptIdx = args.findIndex((a) => a === 'please describe this image path handling');
+  const promptIdx = args.indexOf('please describe this image path handling');
   assert.ok(promptIdx >= 0, 'prompt should be present');
   assert.equal(args[promptIdx - 1], '--', 'prompt must be preceded by "--" separator');
 });
@@ -940,7 +945,7 @@ test('resume exec with --image inserts "--" before prompt', async () => {
       sessionId: 'existing-thread-456',
       contentBlocks: [{ type: 'image', url: '/uploads/cat.png' }],
       uploadDir: '/tmp',
-    })
+    }),
   );
   emitCodexEvents(proc, [{ type: 'thread.started', thread_id: 'existing-thread-456' }]);
   await promise;
@@ -951,7 +956,7 @@ test('resume exec with --image inserts "--" before prompt', async () => {
   assert.equal(args[2], 'existing-thread-456');
   const imageIdx = args.indexOf('--image');
   assert.ok(imageIdx >= 0, 'resume path should receive --image');
-  const promptIdx = args.findIndex((a) => a === 'resume image argument handling');
+  const promptIdx = args.indexOf('resume image argument handling');
   assert.ok(promptIdx >= 0, 'prompt should be present');
   assert.equal(args[promptIdx - 1], '--', 'resume prompt must be preceded by "--" separator');
 });
@@ -977,7 +982,7 @@ test('F8: turn.completed usage is captured into done metadata', async () => {
   ]);
 
   const msgs = await promise;
-  const done = msgs.find(m => m.type === 'done');
+  const done = msgs.find((m) => m.type === 'done');
   assert.ok(done, 'should have done message');
   assert.ok(done.metadata?.usage, 'done should have usage in metadata');
   assert.equal(done.metadata.usage.inputTokens, 500);

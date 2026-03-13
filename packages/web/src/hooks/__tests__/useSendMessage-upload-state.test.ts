@@ -1,7 +1,6 @@
-import React, { useEffect, useRef } from 'react';
+import React, { act, useEffect, useRef } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { act } from 'react';
-import { describe, it, expect, vi, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockApiFetch = vi.fn();
 const mockAddMessage = vi.fn();
@@ -124,7 +123,9 @@ describe('useSendMessage upload status', () => {
   });
 
   it('transitions to uploading then failed for image send errors', async () => {
-    let resolveFetch: ((value: { ok: boolean; status: number; json: () => Promise<{ detail: string }> }) => void) | null = null;
+    let resolveFetch:
+      | ((value: { ok: boolean; status: number; json: () => Promise<{ detail: string }> }) => void)
+      | null = null;
     mockApiFetch.mockImplementation(
       () =>
         new Promise((resolve) => {

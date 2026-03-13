@@ -1,7 +1,7 @@
 'use client';
 
-import React, { type ReactNode } from 'react';
 import type { RankedCat, StreakCat } from '@cat-cafe/shared';
+import { type ReactNode } from 'react';
 import { useCatData } from '@/hooks/useCatData';
 import { CatAvatar } from './CatAvatar';
 
@@ -12,13 +12,10 @@ function CatTag({ catId }: { catId: string }) {
   const cat = getCatById(catId);
   const family = cat?.breedDisplayName ?? cat?.displayName;
   const detail = cat?.variantLabel ?? cat?.nickname ?? cat?.id;
-  const label = family && detail && family !== detail ? `${family} · ${detail}` : family ?? detail ?? catId;
+  const label = family && detail && family !== detail ? `${family} · ${detail}` : (family ?? detail ?? catId);
 
   return (
-    <span
-      className="text-[11px] font-medium"
-      style={{ color: '#8E8E93', fontFamily: 'Plus Jakarta Sans, sans-serif' }}
-    >
+    <span className="text-[11px] font-medium" style={{ color: '#8E8E93', fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
       {label}
     </span>
   );

@@ -5,22 +5,11 @@
 
 export type SourceTag = 'Q' | 'O' | 'D' | 'R' | 'A';
 
-export type TriageBucket =
-  | 'build_now'
-  | 'clarify_first'
-  | 'validate_first'
-  | 'challenge'
-  | 'later';
+export type TriageBucket = 'build_now' | 'clarify_first' | 'validate_first' | 'challenge' | 'later';
 
 export type SizeBand = 'S' | 'M' | 'L' | 'XL';
 
-export type ResolutionPath =
-  | 'confirmation'
-  | 'evidence'
-  | 'artifact'
-  | 'prototype'
-  | 'escalation'
-  | null;
+export type ResolutionPath = 'confirmation' | 'evidence' | 'artifact' | 'prototype' | 'escalation' | null;
 
 export type RiskSignal =
   | 'hollow_verbs'

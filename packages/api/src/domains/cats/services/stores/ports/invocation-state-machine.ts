@@ -38,7 +38,11 @@ export const TERMINAL_STATES: ReadonlySet<InvocationStatus> = new Set(['succeede
 
 /** All valid InvocationStatus values. */
 export const ALL_STATUSES: readonly InvocationStatus[] = [
-  'queued', 'running', 'succeeded', 'failed', 'canceled',
+  'queued',
+  'running',
+  'succeeded',
+  'failed',
+  'canceled',
 ] as const;
 
 /**

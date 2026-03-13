@@ -12,11 +12,12 @@
  * 5. PUT /file returns 403 for path traversal / denylist
  * 6. PUT /file returns 400 for binary/image files
  */
-import { describe, it, before, after } from 'node:test';
+
 import assert from 'node:assert/strict';
-import { mkdir, writeFile, readFile, rm } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { after, before, describe, it } from 'node:test';
 import Fastify from 'fastify';
 
 function sha256(content) {
@@ -32,12 +33,8 @@ describe('workspace edit endpoints (integration)', () => {
 
   before(async () => {
     const { workspaceRoutes } = await import('../dist/routes/workspace.js');
-    const { workspaceEditRoutes } = await import(
-      '../dist/routes/workspace-edit.js'
-    );
-    const { listWorktrees } = await import(
-      '../dist/domains/workspace/workspace-security.js'
-    );
+    const { workspaceEditRoutes } = await import('../dist/routes/workspace-edit.js');
+    const { listWorktrees } = await import('../dist/domains/workspace/workspace-security.js');
 
     const worktrees = await listWorktrees();
     const thisWt = worktrees.find((w) => w.root.endsWith('cat-cafe-f063p2b5'));
@@ -61,9 +58,7 @@ describe('workspace edit endpoints (integration)', () => {
 
   after(async () => {
     await app?.close();
-    const { listWorktrees } = await import(
-      '../dist/domains/workspace/workspace-security.js'
-    );
+    const { listWorktrees } = await import('../dist/domains/workspace/workspace-security.js');
     const worktrees = await listWorktrees();
     const thisWt = worktrees.find((w) => w.root.endsWith('cat-cafe-f063p2b5'));
     const wt = thisWt ?? worktrees[0];
@@ -241,9 +236,7 @@ describe('workspace edit endpoints (integration)', () => {
   // ── Concurrency: per-file mutex ensures exactly one write wins ──
 
   it('concurrent writes: exactly one succeeds, others get 409 (domain-level)', async () => {
-    const { writeWorkspaceFile } = await import(
-      '../dist/domains/workspace/workspace-edit.js'
-    );
+    const { writeWorkspaceFile } = await import('../dist/domains/workspace/workspace-edit.js');
 
     const testFile = join(wtRoot, TEST_DIR, 'hello.ts');
     const original = await readFile(testFile, 'utf-8');
@@ -251,9 +244,7 @@ describe('workspace edit endpoints (integration)', () => {
 
     // Fire 5 concurrent domain-level writes with same baseSha
     const results = await Promise.all(
-      Array.from({ length: 5 }, (_, i) =>
-        writeWorkspaceFile(testFile, `export const x = ${i + 100};\n`, baseSha),
-      ),
+      Array.from({ length: 5 }, (_, i) => writeWorkspaceFile(testFile, `export const x = ${i + 100};\n`, baseSha)),
     );
 
     const successes = results.filter((r) => r.ok);

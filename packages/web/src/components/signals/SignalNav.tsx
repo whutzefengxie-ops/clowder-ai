@@ -1,4 +1,3 @@
-import React from 'react';
 import Link from 'next/link';
 
 export type SignalNavItem = 'chat' | 'signals' | 'sources';

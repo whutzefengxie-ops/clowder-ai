@@ -8,8 +8,8 @@
 
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
-import type { IThreadStore } from '../domains/cats/services/stores/ports/ThreadStore.js';
 import type { IMessageStore } from '../domains/cats/services/stores/ports/MessageStore.js';
+import type { IThreadStore } from '../domains/cats/services/stores/ports/ThreadStore.js';
 import type { SocketManager } from '../infrastructure/websocket/index.js';
 
 export interface ThreadBranchRoutesOptions {
@@ -26,7 +26,7 @@ interface RollbackCleanupResult {
 }
 
 function readRollbackRetryDelays(): number[] {
-  const raw = process.env['CAT_BRANCH_ROLLBACK_RETRY_DELAYS_MS'];
+  const raw = process.env.CAT_BRANCH_ROLLBACK_RETRY_DELAYS_MS;
   if (!raw) return DEFAULT_ROLLBACK_RETRY_DELAYS_MS;
   const parsed = raw
     .split(',')
@@ -44,16 +44,9 @@ async function attemptRollbackCleanup(
   messageStore: IMessageStore,
   threadStore: IThreadStore,
 ): Promise<RollbackCleanupResult> {
-  const messageCleanupPromise = Promise.resolve().then(
-    () => messageStore.deleteByThread(threadId),
-  );
-  const threadCleanupPromise = Promise.resolve().then(
-    () => threadStore.delete(threadId),
-  );
-  const [messageCleanup, threadCleanup] = await Promise.allSettled([
-    messageCleanupPromise,
-    threadCleanupPromise,
-  ]);
+  const messageCleanupPromise = Promise.resolve().then(() => messageStore.deleteByThread(threadId));
+  const threadCleanupPromise = Promise.resolve().then(() => threadStore.delete(threadId));
+  const [messageCleanup, threadCleanup] = await Promise.allSettled([messageCleanupPromise, threadCleanupPromise]);
   return { messageCleanup, threadCleanup };
 }
 
@@ -65,7 +58,11 @@ function scheduleRollbackReconcile(
   threadId: string,
   messageStore: IMessageStore,
   threadStore: IThreadStore,
-  log: { warn: (obj: unknown, msg?: string) => void; error: (obj: unknown, msg?: string) => void; info: (obj: unknown, msg?: string) => void },
+  log: {
+    warn: (obj: unknown, msg?: string) => void;
+    error: (obj: unknown, msg?: string) => void;
+    info: (obj: unknown, msg?: string) => void;
+  },
 ): void {
   const retryDelays = readRollbackRetryDelays();
   if (retryDelays.length === 0) return;
@@ -82,12 +79,15 @@ function scheduleRollbackReconcile(
           log.info({ branchThreadId: threadId, attempt: attempt + 1 }, 'Branch orphan reconciled');
           return;
         }
-        log.warn({
-          branchThreadId: threadId,
-          attempt: attempt + 1,
-          messageCleanup: result.messageCleanup.status,
-          threadCleanup: result.threadCleanup.status,
-        }, 'Branch orphan reconcile retry failed');
+        log.warn(
+          {
+            branchThreadId: threadId,
+            attempt: attempt + 1,
+            messageCleanup: result.messageCleanup.status,
+            threadCleanup: result.threadCleanup.status,
+          },
+          'Branch orphan reconcile retry failed',
+        );
       }
       log.error({ branchThreadId: threadId, retries: retryDelays.length }, 'Branch orphan reconcile exhausted retries');
     } catch (err) {
@@ -107,8 +107,7 @@ const branchSchema = z.object({
   userId: z.string().min(1).max(100),
 });
 
-export const threadBranchRoutes: FastifyPluginAsync<ThreadBranchRoutesOptions> =
-  async (app, opts) => {
+export const threadBranchRoutes: FastifyPluginAsync<ThreadBranchRoutesOptions> = async (app, opts) => {
   const { threadStore, messageStore, socketManager } = opts;
 
   // POST /api/threads/:id/branch — create branch from a message
@@ -143,7 +142,7 @@ export const threadBranchRoutes: FastifyPluginAsync<ThreadBranchRoutesOptions> =
     // ③ Get all visible messages up to and including fromMessage
     // getByThread filters soft-deleted/tombstone — cannot branch from deleted messages
     const allMessages = await messageStore.getByThread(id, 10000);
-    const cutIndex = allMessages.findIndex(m => m.id === fromMessageId);
+    const cutIndex = allMessages.findIndex((m) => m.id === fromMessageId);
     if (cutIndex === -1) {
       reply.status(400);
       return { error: '无法从已删除的消息创建分支', code: 'FROM_MESSAGE_DELETED' };
@@ -151,9 +150,7 @@ export const threadBranchRoutes: FastifyPluginAsync<ThreadBranchRoutesOptions> =
     const messagesToCopy = allMessages.slice(0, cutIndex + 1);
 
     // ④ Create new thread with "(分支)" suffix
-    const branchTitle = sourceThread.title
-      ? `${sourceThread.title} (分支)`
-      : '分支对话';
+    const branchTitle = sourceThread.title ? `${sourceThread.title} (分支)` : '分支对话';
     const newThread = await threadStore.create(userId, branchTitle, sourceThread.projectPath);
 
     // ⑤ Copy participants + messages inside guarded block; rollback on any failure
@@ -165,14 +162,15 @@ export const threadBranchRoutes: FastifyPluginAsync<ThreadBranchRoutesOptions> =
       for (let i = 0; i < messagesToCopy.length; i++) {
         const src = messagesToCopy[i]!;
         const isLast = i === messagesToCopy.length - 1;
-        const content = (isLast && editedContent !== undefined) ? editedContent : src.content;
+        const content = isLast && editedContent !== undefined ? editedContent : src.content;
 
         await messageStore.append({
           userId: src.userId,
           catId: src.catId,
           content,
           ...(src.contentBlocks && !(isLast && editedContent !== undefined)
-            ? { contentBlocks: src.contentBlocks } : {}),
+            ? { contentBlocks: src.contentBlocks }
+            : {}),
           ...(src.metadata ? { metadata: src.metadata } : {}),
           ...(src.origin ? { origin: src.origin } : {}),
           mentions: [...src.mentions],
@@ -186,22 +184,25 @@ export const threadBranchRoutes: FastifyPluginAsync<ThreadBranchRoutesOptions> =
       if (!rollbackCleanupDone(cleanup)) {
         scheduleRollbackReconcile(newThread.id, messageStore, threadStore, request.log);
       }
-      request.log.error({
-        err,
-        branchThreadId: newThread.id,
-        messageCleanup: cleanup.messageCleanup.status,
-        threadCleanup: cleanup.threadCleanup.status,
-      }, 'Branch copy failed, rolled back');
+      request.log.error(
+        {
+          err,
+          branchThreadId: newThread.id,
+          messageCleanup: cleanup.messageCleanup.status,
+          threadCleanup: cleanup.threadCleanup.status,
+        },
+        'Branch copy failed, rolled back',
+      );
       reply.status(500);
       return { error: '分支创建失败，已回滚', code: 'BRANCH_FAILED' };
     }
 
     // Notify frontend about new branch
-    socketManager.broadcastToRoom(
-      `thread:${id}`,
-      'thread_branched',
-      { sourceThreadId: id, newThreadId: newThread.id, fromMessageId },
-    );
+    socketManager.broadcastToRoom(`thread:${id}`, 'thread_branched', {
+      sourceThreadId: id,
+      newThreadId: newThread.id,
+      fromMessageId,
+    });
 
     reply.status(201);
     return {

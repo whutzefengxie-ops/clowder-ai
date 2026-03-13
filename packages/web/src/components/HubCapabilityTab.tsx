@@ -8,9 +8,8 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { apiFetch } from '@/utils/api-client';
 import { useChatStore } from '@/stores/chatStore';
-import { getProjectPaths, projectDisplayName } from './ThreadSidebar/thread-utils';
+import { apiFetch } from '@/utils/api-client';
 import type {
   CapabilityBoardItem,
   CapabilityBoardResponse,
@@ -21,12 +20,13 @@ import type {
 import {
   CapabilitySection,
   FilterChips,
+  SectionIconExtension,
   SectionIconMcp,
   SectionIconSkill,
-  SectionIconExtension,
   SkillHealthBanner,
   StatusDot,
 } from './capability-board-ui';
+import { getProjectPaths, projectDisplayName } from './ThreadSidebar/thread-utils';
 
 type FilterSource = 'all' | 'cat-cafe' | 'external';
 
@@ -54,11 +54,11 @@ export function HubCapabilityTab() {
       query.set('probe', 'true');
       const res = await apiFetch(`/api/capabilities?${query.toString()}`);
       if (!res.ok) {
-        const data = await res.json().catch(() => ({})) as Record<string, unknown>;
+        const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
         setError((data.error as string) ?? '加载失败');
         return;
       }
-      const data = await res.json() as CapabilityBoardResponse;
+      const data = (await res.json()) as CapabilityBoardResponse;
       setItems(data.items);
       setCatFamilies(data.catFamilies);
       setResolvedProjectPath(data.projectPath);
@@ -70,52 +70,52 @@ export function HubCapabilityTab() {
     }
   }, []);
 
-  useEffect(() => { fetchCapabilities(); }, [fetchCapabilities]);
-
-  const switchProject = useCallback((path: string | null) => {
-    setProjectPath(path);
-    setLoading(true);
-    fetchCapabilities(path ?? undefined);
+  useEffect(() => {
+    fetchCapabilities();
   }, [fetchCapabilities]);
 
-  const handleToggle: ToggleHandler = useCallback(async (
-    capabilityId,
-    capabilityType,
-    enabled,
-    scope = 'global',
-    catId,
-  ) => {
-    const toggleKey = catId
-      ? `${capabilityType}:${capabilityId}:${catId}`
-      : `${capabilityType}:${capabilityId}`;
-    setToggling(toggleKey);
-    try {
-      const body: Record<string, unknown> = {
-        capabilityId,
-        capabilityType,
-        scope,
-        enabled,
-        projectPath: projectPath ?? undefined,
-      };
-      if (catId) body.catId = catId;
+  const switchProject = useCallback(
+    (path: string | null) => {
+      setProjectPath(path);
+      setLoading(true);
+      fetchCapabilities(path ?? undefined);
+    },
+    [fetchCapabilities],
+  );
 
-      const res = await apiFetch('/api/capabilities', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({})) as Record<string, unknown>;
-        setError((data.error as string) ?? `开关失败 (${res.status})`);
-        return;
+  const handleToggle: ToggleHandler = useCallback(
+    async (capabilityId, capabilityType, enabled, scope = 'global', catId) => {
+      const toggleKey = catId ? `${capabilityType}:${capabilityId}:${catId}` : `${capabilityType}:${capabilityId}`;
+      setToggling(toggleKey);
+      try {
+        const body: Record<string, unknown> = {
+          capabilityId,
+          capabilityType,
+          scope,
+          enabled,
+          projectPath: projectPath ?? undefined,
+        };
+        if (catId) body.catId = catId;
+
+        const res = await apiFetch('/api/capabilities', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) {
+          const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+          setError((data.error as string) ?? `开关失败 (${res.status})`);
+          return;
+        }
+        await fetchCapabilities(projectPath ?? undefined);
+      } catch {
+        setError('网络错误');
+      } finally {
+        setToggling(null);
       }
-      await fetchCapabilities(projectPath ?? undefined);
-    } catch {
-      setError('网络错误');
-    } finally {
-      setToggling(null);
-    }
-  }, [fetchCapabilities, projectPath]);
+    },
+    [fetchCapabilities, projectPath],
+  );
 
   // Filter + group
   const filtered = useMemo(() => {
@@ -124,7 +124,10 @@ export function HubCapabilityTab() {
   }, [items, filterSource]);
 
   const mcpItems = useMemo(() => filtered.filter((i) => i.type === 'mcp'), [filtered]);
-  const externalSkills = useMemo(() => filtered.filter((i) => i.type === 'skill' && i.source === 'external'), [filtered]);
+  const externalSkills = useMemo(
+    () => filtered.filter((i) => i.type === 'skill' && i.source === 'external'),
+    [filtered],
+  );
 
   // Group Cat Cafe Skills by category (from BOOTSTRAP.md)
   const catCafeSkillGroups = useMemo(() => {
@@ -152,9 +155,7 @@ export function HubCapabilityTab() {
 
   return (
     <div className="space-y-4">
-      {error && (
-        <p className="text-sm text-red-500 bg-red-50 rounded-lg px-3 py-2">{error}</p>
-      )}
+      {error && <p className="text-sm text-red-500 bg-red-50 rounded-lg px-3 py-2">{error}</p>}
 
       {/* Header: project + filters */}
       <div className="flex flex-wrap items-center gap-3">
@@ -218,8 +219,16 @@ export function HubCapabilityTab() {
       {filtered.length === 0 && (
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-4">
-            <svg className="w-8 h-8 text-slate-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-              <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
+            <svg
+              className="w-8 h-8 text-slate-300"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            >
+              <circle cx="11" cy="11" r="8" />
+              <path d="m21 21-4.35-4.35" />
             </svg>
           </div>
           <h3 className="text-sm font-semibold text-slate-600">没有找到匹配的能力</h3>
@@ -232,9 +241,17 @@ export function HubCapabilityTab() {
         <div className="flex items-center justify-between text-xs text-slate-400">
           <span>共 {items.length} 项</span>
           <span className="flex gap-3">
-            <span className="flex items-center gap-1.5"><StatusDot status="connected" /> {items.filter((i) => i.connectionStatus === 'connected').length} 活跃</span>
-            <span>MCP: <strong className="text-slate-500 font-medium">{items.filter((i) => i.type === 'mcp').length}</strong></span>
-            <span>Skill: <strong className="text-slate-500 font-medium">{items.filter((i) => i.type === 'skill').length}</strong></span>
+            <span className="flex items-center gap-1.5">
+              <StatusDot status="connected" /> {items.filter((i) => i.connectionStatus === 'connected').length} 活跃
+            </span>
+            <span>
+              MCP:{' '}
+              <strong className="text-slate-500 font-medium">{items.filter((i) => i.type === 'mcp').length}</strong>
+            </span>
+            <span>
+              Skill:{' '}
+              <strong className="text-slate-500 font-medium">{items.filter((i) => i.type === 'skill').length}</strong>
+            </span>
           </span>
         </div>
       </div>
@@ -273,7 +290,9 @@ function ProjectSelector({
 
   return (
     <div className="flex items-center gap-2 text-xs">
-      <label htmlFor="project-select" className="text-gray-400 whitespace-nowrap">项目:</label>
+      <label htmlFor="project-select" className="text-gray-400 whitespace-nowrap">
+        项目:
+      </label>
       <select
         id="project-select"
         value={currentSelection ?? ''}
@@ -284,7 +303,9 @@ function ProjectSelector({
         {allPaths
           .filter((p) => p !== resolvedPath || currentSelection !== null)
           .map((path) => (
-            <option key={path} value={path}>{projectDisplayName(path)}</option>
+            <option key={path} value={path}>
+              {projectDisplayName(path)}
+            </option>
           ))}
       </select>
     </div>

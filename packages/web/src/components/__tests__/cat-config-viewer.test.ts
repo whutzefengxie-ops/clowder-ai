@@ -1,7 +1,7 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { CatOverviewTab, SystemTab, type ConfigData } from '@/components/config-viewer-tabs';
+import { CatOverviewTab, type ConfigData, SystemTab } from '@/components/config-viewer-tabs';
 import type { CatData } from '@/hooks/useCatData';
 
 const CONFIG: ConfigData = {
@@ -20,8 +20,30 @@ const CONFIG: ConfigData = {
 };
 
 const CATS: CatData[] = [
-  { id: 'opus', displayName: '布偶猫 Opus', breedDisplayName: '布偶猫', provider: 'anthropic', defaultModel: 'claude-opus-4-5', color: { primary: '#6366f1', secondary: '#818cf8' }, mentionPatterns: [], avatar: '', roleDescription: '', personality: '' },
-  { id: 'codex', displayName: '缅因猫 Codex', breedDisplayName: '缅因猫', provider: 'openai', defaultModel: 'codex', color: { primary: '#22c55e', secondary: '#4ade80' }, mentionPatterns: [], avatar: '', roleDescription: '', personality: '' },
+  {
+    id: 'opus',
+    displayName: '布偶猫 Opus',
+    breedDisplayName: '布偶猫',
+    provider: 'anthropic',
+    defaultModel: 'claude-opus-4-5',
+    color: { primary: '#6366f1', secondary: '#818cf8' },
+    mentionPatterns: [],
+    avatar: '',
+    roleDescription: '',
+    personality: '',
+  },
+  {
+    id: 'codex',
+    displayName: '缅因猫 Codex',
+    breedDisplayName: '缅因猫',
+    provider: 'openai',
+    defaultModel: 'codex',
+    color: { primary: '#22c55e', secondary: '#4ade80' },
+    mentionPatterns: [],
+    avatar: '',
+    roleDescription: '',
+    personality: '',
+  },
 ];
 
 describe('CatOverviewTab', () => {

@@ -1,11 +1,12 @@
 'use client';
 
 import React, { useRef, useState } from 'react';
-import { useVoiceSettingsStore, type CustomTerm } from '@/stores/voiceSettingsStore';
+import { type CustomTerm, useVoiceSettingsStore } from '@/stores/voiceSettingsStore';
 import builtInTerms from '@/utils/voice-terms.json';
 
-const BUILT_IN_ENTRIES = Object.entries(builtInTerms as Record<string, string>)
-  .filter(([k]) => !k.startsWith('_comment'));
+const BUILT_IN_ENTRIES = Object.entries(builtInTerms as Record<string, string>).filter(
+  ([k]) => !k.startsWith('_comment'),
+);
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -115,7 +116,6 @@ function CustomTermRow({
           onChange={(e) => setEditFrom(e.target.value)}
           onKeyDown={handleEditKeyDown}
           className="flex-1 border border-blue-300 rounded px-1.5 py-0.5 focus:outline-none focus:border-blue-500"
-          autoFocus
         />
         <span className="text-gray-400">&rarr;</span>
         <input
@@ -133,11 +133,7 @@ function CustomTermRow({
         >
           &#10003;
         </button>
-        <button
-          onClick={cancelEdit}
-          className="text-gray-400 hover:text-gray-600"
-          title="取消"
-        >
+        <button onClick={cancelEdit} className="text-gray-400 hover:text-gray-600" title="取消">
           &#10005;
         </button>
       </div>
@@ -150,11 +146,7 @@ function CustomTermRow({
       <span className="text-gray-400">&rarr;</span>
       <code className="bg-green-50 text-green-700 px-1.5 py-0.5 rounded">{term.to}</code>
       <div className="ml-auto flex items-center gap-1">
-        <button
-          onClick={startEdit}
-          className="text-gray-400 hover:text-blue-500 transition-colors"
-          title="编辑"
-        >
+        <button onClick={startEdit} className="text-gray-400 hover:text-blue-500 transition-colors" title="编辑">
           &#9998;
         </button>
         <button
@@ -170,21 +162,24 @@ function CustomTermRow({
 }
 
 export function VoiceSettingsPanel() {
-  const { settings, addTerm, updateTerm, removeTerm, setLanguage, setCustomPrompt, resetAll } =
-    useVoiceSettingsStore();
+  const { settings, addTerm, updateTerm, removeTerm, setLanguage, setCustomPrompt, resetAll } = useVoiceSettingsStore();
   const [showBuiltIn, setShowBuiltIn] = useState(false);
 
   return (
     <>
       {/* Custom terms */}
       <Section title="自定义术语纠正">
-        <p className="text-[11px] text-gray-500 mb-2">
-          添加你自己的纠正规则。自定义规则优先于内置词典。
-        </p>
+        <p className="text-[11px] text-gray-500 mb-2">添加你自己的纠正规则。自定义规则优先于内置词典。</p>
         {settings.customTerms.length > 0 ? (
           <div className="space-y-1.5 mb-1">
             {settings.customTerms.map((term, i) => (
-              <CustomTermRow key={`${term.from}-${i}`} term={term} index={i} onUpdate={updateTerm} onRemove={removeTerm} />
+              <CustomTermRow
+                key={`${term.from}-${i}`}
+                term={term}
+                index={i}
+                onUpdate={updateTerm}
+                onRemove={removeTerm}
+              />
             ))}
           </div>
         ) : (
@@ -246,10 +241,7 @@ export function VoiceSettingsPanel() {
 
       {/* Reset */}
       <div className="flex justify-end">
-        <button
-          onClick={resetAll}
-          className="text-xs text-gray-400 hover:text-red-500 transition-colors"
-        >
+        <button onClick={resetAll} className="text-xs text-gray-400 hover:text-red-500 transition-colors">
           重置所有设置
         </button>
       </div>

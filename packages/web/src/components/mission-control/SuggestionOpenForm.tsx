@@ -18,7 +18,13 @@ interface SuggestionOpenFormProps {
   onCatIdChange: (value: string) => void;
   onWhyChange: (value: string) => void;
   onPlanChange: (value: string) => void;
-  onSubmit: (payload: { itemId: string; catId: string; why: string; plan: string; requestedPhase: ThreadPhase }) => Promise<void>;
+  onSubmit: (payload: {
+    itemId: string;
+    catId: string;
+    why: string;
+    plan: string;
+    requestedPhase: ThreadPhase;
+  }) => Promise<void>;
 }
 
 export function SuggestionOpenForm({
@@ -58,7 +64,9 @@ export function SuggestionOpenForm({
           data-testid="mc-suggest-cat"
         >
           {catOptions.map((option) => (
-            <option key={option.id} value={option.id}>{option.label}</option>
+            <option key={option.id} value={option.id}>
+              {option.label}
+            </option>
           ))}
         </select>
       </label>

@@ -32,8 +32,19 @@ interface ExternalProjectTabProps {
 
 export function ExternalProjectTab({ project }: ExternalProjectTabProps) {
   const {
-    intentCards, auditFrame, executionDigests, resolutions, slices, refluxPatterns,
-    setIntentCards, setAuditFrame, setExecutionDigests, setResolutions, setSlices, setRefluxPatterns, setLoading,
+    intentCards,
+    auditFrame,
+    executionDigests,
+    resolutions,
+    slices,
+    refluxPatterns,
+    setIntentCards,
+    setAuditFrame,
+    setExecutionDigests,
+    setResolutions,
+    setSlices,
+    setRefluxPatterns,
+    setLoading,
   } = useExternalProjectStore();
   const [subTab, setSubTab] = useState<SubTab>('audit');
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
@@ -66,47 +77,61 @@ export function ExternalProjectTab({ project }: ExternalProjectTabProps) {
       if (cancelled) return;
 
       if (cardsRes.status === 'fulfilled' && cardsRes.value.ok) {
-        const body = await cardsRes.value.json() as { cards: IntentCard[] };
+        const body = (await cardsRes.value.json()) as { cards: IntentCard[] };
         if (!cancelled) setIntentCards(body.cards);
       }
       if (frameRes.status === 'fulfilled' && frameRes.value.ok) {
-        const body = await frameRes.value.json() as { frame: NeedAuditFrameType };
+        const body = (await frameRes.value.json()) as { frame: NeedAuditFrameType };
         if (!cancelled) setAuditFrame(body.frame);
       }
       if (itemsRes.status === 'fulfilled' && itemsRes.value.ok) {
-        const body = await itemsRes.value.json() as { items: BacklogItem[] };
+        const body = (await itemsRes.value.json()) as { items: BacklogItem[] };
         if (!cancelled) setProjectItems(body.items);
       }
       if (digestsRes.status === 'fulfilled' && digestsRes.value.ok) {
-        const body = await digestsRes.value.json() as { digests: DispatchExecutionDigest[] };
+        const body = (await digestsRes.value.json()) as { digests: DispatchExecutionDigest[] };
         if (!cancelled) setExecutionDigests(body.digests);
       }
       if (resRes.status === 'fulfilled' && resRes.value.ok) {
-        const body = await resRes.value.json() as { resolutions: ResolutionItem[] };
+        const body = (await resRes.value.json()) as { resolutions: ResolutionItem[] };
         if (!cancelled) setResolutions(body.resolutions);
       }
       if (slicesRes.status === 'fulfilled' && slicesRes.value.ok) {
-        const body = await slicesRes.value.json() as { slices: Slice[] };
+        const body = (await slicesRes.value.json()) as { slices: Slice[] };
         if (!cancelled) setSlices(body.slices);
       }
       if (refluxRes.status === 'fulfilled' && refluxRes.value.ok) {
-        const body = await refluxRes.value.json() as { patterns: RefluxPattern[] };
+        const body = (await refluxRes.value.json()) as { patterns: RefluxPattern[] };
         if (!cancelled) setRefluxPatterns(body.patterns);
       }
       if (!cancelled) setLoading(false);
     };
     void load();
-    return () => { cancelled = true; };
-  }, [project.id, setIntentCards, setAuditFrame, setExecutionDigests, setResolutions, setSlices, setRefluxPatterns, setLoading]);
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    project.id,
+    setIntentCards,
+    setAuditFrame,
+    setExecutionDigests,
+    setResolutions,
+    setSlices,
+    setRefluxPatterns,
+    setLoading,
+    project.sourcePath,
+  ]);
 
   const reloadProjectItems = useCallback(async () => {
     try {
       const res = await apiFetch(`/api/backlog/items?projectId=${project.id}`);
       if (res.ok) {
-        const body = await res.json() as { items: BacklogItem[] };
+        const body = (await res.json()) as { items: BacklogItem[] };
         setProjectItems(body.items);
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }, [project.id]);
 
   const handleImportBacklog = useCallback(async () => {
@@ -114,17 +139,17 @@ export function ExternalProjectTab({ project }: ExternalProjectTabProps) {
     try {
       const res = await apiFetch(`/api/external-projects/${project.id}/import-backlog`, { method: 'POST' });
       if (res.ok) {
-        const body = await res.json() as { imported: number; skipped: number; total: number };
+        const body = (await res.json()) as { imported: number; skipped: number; total: number };
         setImportStatus(`导入完成: ${body.imported} 新增, ${body.skipped} 跳过, ${body.total} 总计`);
         void reloadProjectItems();
       } else {
-        const body = await res.json() as { error?: string };
+        const body = (await res.json()) as { error?: string };
         setImportStatus(`导入失败: ${body.error ?? res.status}`);
       }
     } catch {
       setImportStatus('导入失败');
     }
-  }, [project.id]);
+  }, [project.id, reloadProjectItems]);
 
   const selectedCard = useMemo(
     () => intentCards.find((c) => c.id === selectedCardId) ?? null,
@@ -154,15 +179,15 @@ export function ExternalProjectTab({ project }: ExternalProjectTabProps) {
       apiFetch(`/api/external-projects/${project.id}/reflux-patterns`),
     ]);
     if (resRes.status === 'fulfilled' && resRes.value.ok) {
-      const body = await resRes.value.json() as { resolutions: ResolutionItem[] };
+      const body = (await resRes.value.json()) as { resolutions: ResolutionItem[] };
       setResolutions(body.resolutions);
     }
     if (slicesRes.status === 'fulfilled' && slicesRes.value.ok) {
-      const body = await slicesRes.value.json() as { slices: Slice[] };
+      const body = (await slicesRes.value.json()) as { slices: Slice[] };
       setSlices(body.slices);
     }
     if (refluxRes.status === 'fulfilled' && refluxRes.value.ok) {
-      const body = await refluxRes.value.json() as { patterns: RefluxPattern[] };
+      const body = (await refluxRes.value.json()) as { patterns: RefluxPattern[] };
       setRefluxPatterns(body.patterns);
     }
   }, [project.id, setResolutions, setSlices, setRefluxPatterns]);
@@ -189,9 +214,7 @@ export function ExternalProjectTab({ project }: ExternalProjectTabProps) {
               type="button"
               onClick={() => setSubTab(t.id)}
               className={`rounded-full px-3 py-1 text-[11px] font-medium transition-colors ${
-                subTab === t.id
-                  ? 'bg-[#8B6F47] text-white'
-                  : 'bg-[#F4EFE7] text-[#6B5D4F] hover:bg-[#E7DAC7]'
+                subTab === t.id ? 'bg-[#8B6F47] text-white' : 'bg-[#F4EFE7] text-[#6B5D4F] hover:bg-[#E7DAC7]'
               }`}
             >
               {t.label}
@@ -199,9 +222,7 @@ export function ExternalProjectTab({ project }: ExternalProjectTabProps) {
           ))}
         </div>
         <div className="flex items-center gap-2">
-          {importStatus && (
-            <span className="text-[10px] text-[#9A866F]">{importStatus}</span>
-          )}
+          {importStatus && <span className="text-[10px] text-[#9A866F]">{importStatus}</span>}
           <button
             type="button"
             onClick={() => void handleImportBacklog()}
@@ -220,35 +241,35 @@ export function ExternalProjectTab({ project }: ExternalProjectTabProps) {
             {/* Stage 0 Frame prompt */}
             {!auditFrame && subTab === 'audit' && (
               <div className="rounded-lg border-2 border-dashed border-[#D8C6AD] bg-[#FBF7F0] p-4 text-center">
-                <div className="text-sm font-medium text-[#6B5D4F]">
-                  Stage 0: Frame 尚未完成
-                </div>
-                <div className="mt-1 text-xs text-[#9A866F]">
-                  建议先完成六问定位，再开始需求翻译
-                </div>
+                <div className="text-sm font-medium text-[#6B5D4F]">Stage 0: Frame 尚未完成</div>
+                <div className="mt-1 text-xs text-[#9A866F]">建议先完成六问定位，再开始需求翻译</div>
               </div>
             )}
 
-            {subTab === 'audit' && (
-              <>
-                {showCreateForm ? (
-                  <CreateIntentCardForm
-                    projectId={project.id}
-                    onCreated={handleCardCreated}
-                    onCancel={() => setShowCreateForm(false)}
-                  />
-                ) : (
-                  <TranslationMatrix
-                    cards={intentCards}
-                    selectedCardId={selectedCardId}
-                    onSelectCard={setSelectedCardId}
-                    onCreateCard={() => setShowCreateForm(true)}
-                  />
-                )}
-              </>
-            )}
+            {subTab === 'audit' &&
+              (showCreateForm ? (
+                <CreateIntentCardForm
+                  projectId={project.id}
+                  onCreated={handleCardCreated}
+                  onCancel={() => setShowCreateForm(false)}
+                />
+              ) : (
+                <TranslationMatrix
+                  cards={intentCards}
+                  selectedCardId={selectedCardId}
+                  onSelectCard={setSelectedCardId}
+                  onCreateCard={() => setShowCreateForm(true)}
+                />
+              ))}
 
-            {subTab === 'health' && <GovernanceHealth cards={intentCards} digests={executionDigests} resolutions={resolutions} slices={slices} />}
+            {subTab === 'health' && (
+              <GovernanceHealth
+                cards={intentCards}
+                digests={executionDigests}
+                resolutions={resolutions}
+                slices={slices}
+              />
+            )}
 
             {subTab === 'progress' && <DispatchProgress digests={executionDigests} />}
 
@@ -264,23 +285,15 @@ export function ExternalProjectTab({ project }: ExternalProjectTabProps) {
             )}
 
             {subTab === 'slices' && (
-              <SliceLadder
-                projectId={project.id}
-                slices={slices}
-                onUpdate={() => void loadData()}
-              />
+              <SliceLadder projectId={project.id} slices={slices} onUpdate={() => void loadData()} />
             )}
 
             {subTab === 'reflux' && (
-              <RefluxCapture
-                projectId={project.id}
-                patterns={refluxPatterns}
-                onUpdate={() => void loadData()}
-              />
+              <RefluxCapture projectId={project.id} patterns={refluxPatterns} onUpdate={() => void loadData()} />
             )}
 
-            {subTab === 'features' && (
-              projectItems.length === 0 ? (
+            {subTab === 'features' &&
+              (projectItems.length === 0 ? (
                 <div className="rounded-lg border border-[#E7DAC7] bg-[#FFFDF8] p-8 text-center text-sm text-[#9A866F]">
                   暂无功能 — 使用上方「导入 Backlog」按钮从项目导入
                 </div>
@@ -297,27 +310,26 @@ export function ExternalProjectTab({ project }: ExternalProjectTabProps) {
                         </span>
                         <span className="text-sm font-medium text-[#4B3A2A]">{item.title}</span>
                       </div>
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                        item.status === 'done' ? 'bg-green-100 text-green-800'
-                          : item.status === 'dispatched' ? 'bg-blue-100 text-blue-800'
-                          : 'bg-[#F4EFE7] text-[#8B6F47]'
-                      }`}>
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                          item.status === 'done'
+                            ? 'bg-green-100 text-green-800'
+                            : item.status === 'dispatched'
+                              ? 'bg-blue-100 text-blue-800'
+                              : 'bg-[#F4EFE7] text-[#8B6F47]'
+                        }`}
+                      >
                         {item.status}
                       </span>
                     </div>
                   ))}
                 </div>
-              )
-            )}
+              ))}
           </div>
 
           {/* Right panel */}
           <div className="space-y-4">
-            <NeedAuditFrame
-              projectId={project.id}
-              frame={auditFrame}
-              onSaved={(frame) => setAuditFrame(frame)}
-            />
+            <NeedAuditFrame projectId={project.id} frame={auditFrame} onSaved={(frame) => setAuditFrame(frame)} />
             {selectedCard && subTab === 'audit' && (
               <IntentCardDetail card={selectedCard} onTriaged={handleCardTriaged} />
             )}

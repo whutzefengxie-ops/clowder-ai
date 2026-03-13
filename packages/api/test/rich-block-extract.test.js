@@ -1,6 +1,10 @@
-import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { extractRichFromText, isValidRichBlock, normalizeRichBlock, isRichBlockCandidate } from '../dist/domains/cats/services/agents/routing/rich-block-extract.js';
+import { describe, it } from 'node:test';
+import {
+  extractRichFromText,
+  isValidRichBlock,
+  normalizeRichBlock,
+} from '../dist/domains/cats/services/agents/routing/rich-block-extract.js';
 
 describe('extractRichFromText', () => {
   it('returns original text when no cc_rich blocks', () => {
@@ -137,10 +141,18 @@ describe('isValidRichBlock', () => {
   });
 
   it('accepts card with valid optional fields', () => {
-    assert.equal(isValidRichBlock({
-      id: 'b1', kind: 'card', v: 1, title: 'OK',
-      bodyMarkdown: 'text', tone: 'warning', fields: [{ label: 'a', value: 'b' }],
-    }), true);
+    assert.equal(
+      isValidRichBlock({
+        id: 'b1',
+        kind: 'card',
+        v: 1,
+        title: 'OK',
+        bodyMarkdown: 'text',
+        tone: 'warning',
+        fields: [{ label: 'a', value: 'b' }],
+      }),
+      true,
+    );
   });
 
   it('validates diff requires filePath + diff', () => {
@@ -150,7 +162,10 @@ describe('isValidRichBlock', () => {
   });
 
   it('rejects diff with malformed languageHint', () => {
-    assert.equal(isValidRichBlock({ id: 'b1', kind: 'diff', v: 1, filePath: 'a.ts', diff: '+x', languageHint: 42 }), false);
+    assert.equal(
+      isValidRichBlock({ id: 'b1', kind: 'diff', v: 1, filePath: 'a.ts', diff: '+x', languageHint: 42 }),
+      false,
+    );
   });
 
   it('validates checklist items shape', () => {
@@ -166,50 +181,106 @@ describe('isValidRichBlock', () => {
 
   it('rejects media_gallery item with non-URL string in url (e.g. text description)', () => {
     // Gemini bug: putting text descriptions instead of actual URLs
-    assert.equal(isValidRichBlock({
-      id: 'b1', kind: 'media_gallery', v: 1,
-      items: [{ url: '砚砚戴着齿轮勋章的威严侧脸' }],
-    }), false);
-    assert.equal(isValidRichBlock({
-      id: 'b1', kind: 'media_gallery', v: 1,
-      items: [{ url: 'A cute cat with blue eyes sitting in a box' }],
-    }), false);
+    assert.equal(
+      isValidRichBlock({
+        id: 'b1',
+        kind: 'media_gallery',
+        v: 1,
+        items: [{ url: '砚砚戴着齿轮勋章的威严侧脸' }],
+      }),
+      false,
+    );
+    assert.equal(
+      isValidRichBlock({
+        id: 'b1',
+        kind: 'media_gallery',
+        v: 1,
+        items: [{ url: 'A cute cat with blue eyes sitting in a box' }],
+      }),
+      false,
+    );
   });
 
   it('accepts media_gallery with valid URL formats', () => {
     // Local path
-    assert.equal(isValidRichBlock({
-      id: 'b1', kind: 'media_gallery', v: 1,
-      items: [{ url: '/avatars/opus.png' }],
-    }), true);
+    assert.equal(
+      isValidRichBlock({
+        id: 'b1',
+        kind: 'media_gallery',
+        v: 1,
+        items: [{ url: '/avatars/opus.png' }],
+      }),
+      true,
+    );
     // HTTP URL
-    assert.equal(isValidRichBlock({
-      id: 'b1', kind: 'media_gallery', v: 1,
-      items: [{ url: 'https://example.com/img.png' }],
-    }), true);
+    assert.equal(
+      isValidRichBlock({
+        id: 'b1',
+        kind: 'media_gallery',
+        v: 1,
+        items: [{ url: 'https://example.com/img.png' }],
+      }),
+      true,
+    );
     // Data URI
-    assert.equal(isValidRichBlock({
-      id: 'b1', kind: 'media_gallery', v: 1,
-      items: [{ url: 'data:image/png;base64,abc123' }],
-    }), true);
+    assert.equal(
+      isValidRichBlock({
+        id: 'b1',
+        kind: 'media_gallery',
+        v: 1,
+        items: [{ url: 'data:image/png;base64,abc123' }],
+      }),
+      true,
+    );
   });
 
   it('rejects media_gallery item with non-string alt/caption', () => {
-    assert.equal(isValidRichBlock({ id: 'b1', kind: 'media_gallery', v: 1, items: [{ url: 'http://x', alt: 42 }] }), false);
-    assert.equal(isValidRichBlock({ id: 'b1', kind: 'media_gallery', v: 1, items: [{ url: 'http://x', caption: { bad: true } }] }), false);
-    assert.equal(isValidRichBlock({ id: 'b1', kind: 'media_gallery', v: 1, items: [{ url: 'http://x', alt: 'ok', caption: 'ok' }] }), true);
+    assert.equal(
+      isValidRichBlock({ id: 'b1', kind: 'media_gallery', v: 1, items: [{ url: 'http://x', alt: 42 }] }),
+      false,
+    );
+    assert.equal(
+      isValidRichBlock({ id: 'b1', kind: 'media_gallery', v: 1, items: [{ url: 'http://x', caption: { bad: true } }] }),
+      false,
+    );
+    assert.equal(
+      isValidRichBlock({
+        id: 'b1',
+        kind: 'media_gallery',
+        v: 1,
+        items: [{ url: 'http://x', alt: 'ok', caption: 'ok' }],
+      }),
+      true,
+    );
   });
 
   it('rejects checklist item with non-boolean checked', () => {
-    assert.equal(isValidRichBlock({ id: 'b1', kind: 'checklist', v: 1, items: [{ id: 'i1', text: 'OK', checked: 'yes' }] }), false);
-    assert.equal(isValidRichBlock({ id: 'b1', kind: 'checklist', v: 1, items: [{ id: 'i1', text: 'OK', checked: true }] }), true);
+    assert.equal(
+      isValidRichBlock({ id: 'b1', kind: 'checklist', v: 1, items: [{ id: 'i1', text: 'OK', checked: 'yes' }] }),
+      false,
+    );
+    assert.equal(
+      isValidRichBlock({ id: 'b1', kind: 'checklist', v: 1, items: [{ id: 'i1', text: 'OK', checked: true }] }),
+      true,
+    );
   });
 
   it('validates audio blocks (F34)', () => {
     // Valid minimal audio block
     assert.equal(isValidRichBlock({ id: 'a1', kind: 'audio', v: 1, url: '/api/tts/audio/abc123.wav' }), true);
     // Valid audio block with all optional fields
-    assert.equal(isValidRichBlock({ id: 'a2', kind: 'audio', v: 1, url: '/api/tts/audio/abc123.wav', title: 'Speech', durationSec: 3.5, mimeType: 'audio/wav' }), true);
+    assert.equal(
+      isValidRichBlock({
+        id: 'a2',
+        kind: 'audio',
+        v: 1,
+        url: '/api/tts/audio/abc123.wav',
+        title: 'Speech',
+        durationSec: 3.5,
+        mimeType: 'audio/wav',
+      }),
+      true,
+    );
     // Missing url
     assert.equal(isValidRichBlock({ id: 'a3', kind: 'audio', v: 1 }), false);
     // Invalid optional field types
@@ -290,9 +361,7 @@ describe('normalizeRichBlock', () => {
 // #85 T5-T6: bare JSON array strong-match extraction
 describe('extractRichFromText bare JSON tolerance', () => {
   it('T5: extracts bare JSON array with valid rich blocks', () => {
-    const input = JSON.stringify([
-      { id: 'b1', type: 'card', title: 'Summary', bodyMarkdown: '**bold**' },
-    ]);
+    const input = JSON.stringify([{ id: 'b1', type: 'card', title: 'Summary', bodyMarkdown: '**bold**' }]);
     const result = extractRichFromText(input);
     assert.equal(result.blocks.length, 1);
     assert.equal(result.blocks[0].kind, 'card');

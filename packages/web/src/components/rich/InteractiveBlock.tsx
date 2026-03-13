@@ -55,7 +55,8 @@ function dispatchInteractiveSend(text: string) {
 
 /** Render option icon: prefer SVG icon over emoji */
 function OptionIcon({ opt, className = 'w-5 h-5' }: { opt: InteractiveOption; className?: string }) {
-  if (opt.icon) return <CafeIcon name={opt.icon} className={`${className} text-amber-600 dark:text-amber-400 shrink-0`} />;
+  if (opt.icon)
+    return <CafeIcon name={opt.icon} className={`${className} text-amber-600 dark:text-amber-400 shrink-0`} />;
   if (opt.emoji) return <span className="text-base shrink-0 leading-none">{opt.emoji}</span>;
   return null;
 }
@@ -79,7 +80,7 @@ function SelectInteraction({
 }) {
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [customText, setCustomText] = useState('');
-  const highlightId = disabled ? selectedIds[0] ?? null : pendingId;
+  const highlightId = disabled ? (selectedIds[0] ?? null) : pendingId;
   const pendingOpt = pendingId ? options.find((o) => o.id === pendingId) : null;
   const showCustomInput = !disabled && pendingOpt?.customInput;
 
@@ -118,11 +119,21 @@ function SelectInteraction({
           >
             <OptionIcon opt={opt} />
             <div className="flex-1 min-w-0">
-              <span className={`font-semibold ${isSelected ? 'text-amber-700 dark:text-amber-400' : ''}`}>{opt.label}</span>
-              {opt.description && <span className="block text-xs text-gray-500 dark:text-gray-400 mt-0.5">{opt.description}</span>}
+              <span className={`font-semibold ${isSelected ? 'text-amber-700 dark:text-amber-400' : ''}`}>
+                {opt.label}
+              </span>
+              {opt.description && (
+                <span className="block text-xs text-gray-500 dark:text-gray-400 mt-0.5">{opt.description}</span>
+              )}
             </div>
             {isSelected && (
-              <svg className="w-5 h-5 text-amber-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <svg
+                className="w-5 h-5 text-amber-600 shrink-0"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2.5}
+              >
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
               </svg>
             )}
@@ -135,10 +146,11 @@ function SelectInteraction({
             type="text"
             value={customText}
             onChange={(e) => setCustomText(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter' && !e.nativeEvent.isComposing && customText.trim()) handleSubmit(); }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.nativeEvent.isComposing && customText.trim()) handleSubmit();
+            }}
             placeholder={pendingOpt?.customInputPlaceholder ?? '输入你的想法...'}
             className="w-full px-4 py-2.5 rounded-xl border-[1.5px] border-amber-300 dark:border-amber-700 bg-white dark:bg-gray-900 text-sm focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500/30 placeholder:text-gray-400"
-            autoFocus
           />
         </div>
       )}
@@ -148,9 +160,10 @@ function SelectInteraction({
           disabled={showCustomInput && !customText.trim()}
           onClick={handleSubmit}
           className={`mt-2 w-full py-2.5 rounded-full text-sm font-semibold transition-colors flex items-center justify-center gap-1.5
-            ${showCustomInput && !customText.trim()
-              ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed'
-              : 'bg-amber-600 text-white hover:bg-amber-700'
+            ${
+              showCustomInput && !customText.trim()
+                ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed'
+                : 'bg-amber-600 text-white hover:bg-amber-700'
             }`}
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -219,13 +232,21 @@ function MultiSelectInteraction({
               }`}
             >
               {isChecked && (
-                <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                <svg
+                  className="w-3.5 h-3.5 text-white"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={3}
+                >
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                 </svg>
               )}
             </span>
             <OptionIcon opt={opt} />
-            <span className={`font-semibold ${isChecked ? 'text-amber-700 dark:text-amber-400' : ''}`}>{opt.label}</span>
+            <span className={`font-semibold ${isChecked ? 'text-amber-700 dark:text-amber-400' : ''}`}>
+              {opt.label}
+            </span>
           </button>
         );
       })}
@@ -283,14 +304,14 @@ function CardGridInteraction({
 
     const tick = () => {
       const idx = step % options.length;
-      setHighlightId(options[idx]!.id);
+      setHighlightId(options[idx]?.id);
       step++;
       if (step < totalSteps) {
         const delay = 50 + step * 25;
         setTimeout(tick, delay);
       } else {
         const finalIdx = Math.floor(Math.random() * options.length);
-        const finalId = options[finalIdx]!.id;
+        const finalId = options[finalIdx]?.id;
         setHighlightId(finalId);
         shuffling.current = false;
         if (pendingMode) {
@@ -309,7 +330,7 @@ function CardGridInteraction({
   for (const opt of options) {
     const g = opt.group ?? '';
     if (!groups.has(g)) groups.set(g, []);
-    groups.get(g)!.push(opt);
+    groups.get(g)?.push(opt);
   }
 
   return (
@@ -344,8 +365,14 @@ function CardGridInteraction({
                       <OptionIcon opt={opt} className="w-7 h-7" />
                     </div>
                   )}
-                  <div className={`font-semibold ${isSelected || isPending ? 'text-amber-700 dark:text-amber-400' : ''}`}>{opt.label}</div>
-                  {opt.description && <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{opt.description}</div>}
+                  <div
+                    className={`font-semibold ${isSelected || isPending ? 'text-amber-700 dark:text-amber-400' : ''}`}
+                  >
+                    {opt.label}
+                  </div>
+                  {opt.description && (
+                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{opt.description}</div>
+                  )}
                 </button>
               );
             })}
@@ -381,7 +408,7 @@ function ConfirmInteraction({
   const confirmOpt = options.find((o) => o.id === '__confirm__') ?? { id: '__confirm__', label: '确认' };
   const cancelOpt = options.find((o) => o.id === '__cancel__') ?? { id: '__cancel__', label: '取消' };
   const [pendingId, setPendingId] = useState<string | null>(null);
-  const selectedId = disabled ? selectedIds[0] : (pendingMode ? pendingId : selectedIds[0]);
+  const selectedId = disabled ? selectedIds[0] : pendingMode ? pendingId : selectedIds[0];
 
   const handleClick = (id: string) => {
     if (disabled) return;
@@ -458,7 +485,14 @@ export interface InteractiveBlockProps {
   groupSelectedIds?: string[];
 }
 
-export function InteractiveBlock({ block, messageId, pendingMode, onPendingChange, groupDisabled, groupSelectedIds }: InteractiveBlockProps) {
+export function InteractiveBlock({
+  block,
+  messageId,
+  pendingMode,
+  onPendingChange,
+  groupDisabled,
+  groupSelectedIds,
+}: InteractiveBlockProps) {
   const [localDisabled, setLocalDisabled] = useState(block.disabled ?? false);
   const [localSelectedIds, setLocalSelectedIds] = useState<string[]>(block.selectedIds ?? []);
   const [customText, setCustomText] = useState('');
@@ -479,7 +513,14 @@ export function InteractiveBlock({ block, messageId, pendingMode, onPendingChang
       setLocalSelectedIds(optionIds);
 
       // Build and send message (include custom text if present)
-      const text = buildSelectionMessage(block.interactiveType, block.options, optionIds, block.messageTemplate, block.title, customText || undefined);
+      const text = buildSelectionMessage(
+        block.interactiveType,
+        block.options,
+        optionIds,
+        block.messageTemplate,
+        block.title,
+        customText || undefined,
+      );
       dispatchInteractiveSend(text);
 
       // P2-1 fix: write back to store so re-mount/thread-switch preserves state

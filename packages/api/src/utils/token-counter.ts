@@ -36,19 +36,14 @@ interface MessageLike {
  * Estimate total tokens across messages, respecting per-message content truncation.
  * Only counts text content (skips images and other non-text blocks).
  */
-export function estimateTokensFromMessages(
-  messages: MessageLike[],
-  maxContentLength: number,
-): number {
+export function estimateTokensFromMessages(messages: MessageLike[], maxContentLength: number): number {
   const enc = getEncoder();
   let total = 0;
 
   for (const msg of messages) {
     // Primary content field
     if (msg.content) {
-      const truncated = msg.content.length > maxContentLength
-        ? msg.content.slice(0, maxContentLength)
-        : msg.content;
+      const truncated = msg.content.length > maxContentLength ? msg.content.slice(0, maxContentLength) : msg.content;
       total += enc.encode(truncated).length;
     }
 
@@ -56,9 +51,7 @@ export function estimateTokensFromMessages(
     if (msg.contentBlocks) {
       for (const block of msg.contentBlocks) {
         if (block.type === 'text' && block.text) {
-          const truncated = block.text.length > maxContentLength
-            ? block.text.slice(0, maxContentLength)
-            : block.text;
+          const truncated = block.text.length > maxContentLength ? block.text.slice(0, maxContentLength) : block.text;
           total += enc.encode(truncated).length;
         }
       }

@@ -1,19 +1,16 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { formatCatName, useCatData } from '@/hooks/useCatData';
 import type { CatInvocationInfo } from '@/stores/chatStore';
 import { useChatStore } from '@/stores/chatStore';
 import { apiFetch } from '@/utils/api-client';
-import {
-  modeLabel, statusLabel, statusTone, truncateId,
-  type IntentMode, type CatStatus,
-} from './status-helpers';
-import { useCatData, formatCatName } from '@/hooks/useCatData';
-import { CatTokenUsage } from './CatTokenUsage';
-import { CatInvocationTime, CollapsibleIds } from './status-panel-parts';
-import { SessionChainPanel } from './SessionChainPanel';
-import { PlanBoardPanel } from './PlanBoardPanel';
 import { AuditExplorerPanel } from './audit/AuditExplorerPanel';
+import { CatTokenUsage } from './CatTokenUsage';
+import { PlanBoardPanel } from './PlanBoardPanel';
+import { SessionChainPanel } from './SessionChainPanel';
+import { type CatStatus, type IntentMode, modeLabel, statusLabel, statusTone, truncateId } from './status-helpers';
+import { CatInvocationTime, CollapsibleIds } from './status-panel-parts';
 
 export interface RightStatusPanelProps {
   intentMode: IntentMode;
@@ -32,7 +29,10 @@ export interface RightStatusPanelProps {
 
 /* ── Cat invocation card (shared between active/history) ──── */
 function CatInvocationCard({
-  catId, inv, onCopy, isActive,
+  catId,
+  inv,
+  onCopy,
+  isActive,
 }: {
   catId: string;
   inv: CatInvocationInfo;
@@ -57,7 +57,8 @@ function CatInvocationCard({
             }`}
             title={inv.sessionSealed ? `会话 #${inv.sessionSeq} 已封存` : `会话 #${inv.sessionSeq}`}
           >
-            S#{inv.sessionSeq}{inv.sessionSealed ? ' sealed' : ''}
+            S#{inv.sessionSeq}
+            {inv.sessionSealed ? ' sealed' : ''}
           </span>
         )}
         <CatInvocationTime invocation={inv} />
@@ -106,7 +107,9 @@ function ThinkingModeToggle({ threadId }: { threadId: string }) {
 
   return (
     <div className="flex items-center justify-between">
-      <span>心里话: <span className="font-medium">{isDebug ? '🔍 调试' : '🎭 游戏'}</span></span>
+      <span>
+        心里话: <span className="font-medium">{isDebug ? '🔍 调试' : '🎭 游戏'}</span>
+      </span>
       <button
         onClick={toggle}
         className="text-[11px] px-2 py-0.5 rounded-full border border-gray-300 hover:border-gray-400 hover:bg-gray-100 transition-colors"
@@ -118,7 +121,6 @@ function ThinkingModeToggle({ threadId }: { threadId: string }) {
   );
 }
 
-
 /** Global UI preference: default expand/collapse for Thinking blocks */
 function ThinkingDefaultExpandToggle() {
   const expanded = useChatStore((s) => s.uiThinkingExpandedByDefault);
@@ -127,7 +129,9 @@ function ThinkingDefaultExpandToggle() {
 
   return (
     <div className="flex items-center justify-between">
-      <span>Thinking 默认: <span className="font-medium">{expanded ? '📖 展开' : '🧻 折叠'}</span></span>
+      <span>
+        Thinking 默认: <span className="font-medium">{expanded ? '📖 展开' : '🧻 折叠'}</span>
+      </span>
       <button
         onClick={toggle}
         className="text-[11px] px-2 py-0.5 rounded-full border border-gray-300 hover:border-gray-400 hover:bg-gray-100 transition-colors"
@@ -148,7 +152,7 @@ function RevealWhispersButton({ threadId }: { threadId: string }) {
   useEffect(() => {
     setStatus('idle');
     setRevealedCount(null);
-  }, [threadId]);
+  }, []);
 
   const handleReveal = useCallback(async () => {
     if (status === 'pending') return;
@@ -188,9 +192,7 @@ function RevealWhispersButton({ threadId }: { threadId: string }) {
     <div className="flex items-center justify-between">
       <span>悄悄话:</span>
       {status === 'done' ? (
-        <span className="text-[11px] text-green-600">
-          已揭秘 {revealedCount} 条
-        </span>
+        <span className="text-[11px] text-green-600">已揭秘 {revealedCount} 条</span>
       ) : (
         <button
           onClick={handleReveal}
@@ -223,10 +225,7 @@ export function RightStatusPanel({
       })
       .map(([catId]) => catId);
     const active = Array.from(new Set([...targetCats, ...snapshotCats]));
-    const allParticipants = new Set([
-      ...active,
-      ...Object.keys(catInvocations),
-    ]);
+    const allParticipants = new Set([...active, ...Object.keys(catInvocations)]);
     const history = [...allParticipants].filter((c) => !active.includes(c));
     return { activeCats: active, historyCats: history };
   }, [targetCats, catInvocations]);
@@ -259,9 +258,7 @@ export function RightStatusPanel({
       {/* ── Active cats: currently working ──────────────── */}
       <section className="rounded-lg border border-gray-200 bg-gray-50/70 p-3">
         <div className="flex items-center justify-between mb-2">
-          <h3 className="text-xs font-semibold text-gray-700">
-            {activeCats.length > 0 ? '当前调用' : '猫猫状态'}
-          </h3>
+          <h3 className="text-xs font-semibold text-gray-700">{activeCats.length > 0 ? '当前调用' : '猫猫状态'}</h3>
           <button
             onClick={() => openHub()}
             className="text-base text-gray-400 hover:text-blue-600 hover:rotate-45 transition-all duration-200"
@@ -284,13 +281,9 @@ export function RightStatusPanel({
                       <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: dotColor }} />
                       <span className="text-xs text-gray-700">{cat ? formatCatName(cat) : catId}</span>
                     </div>
-                    <span className={`text-xs font-medium ${statusTone(status)}`}>
-                      {statusLabel(status)}
-                    </span>
+                    <span className={`text-xs font-medium ${statusTone(status)}`}>{statusLabel(status)}</span>
                   </div>
-                  {inv && (
-                    <CatInvocationCard catId={catId} inv={inv} onCopy={copyText} isActive />
-                  )}
+                  {inv && <CatInvocationCard catId={catId} inv={inv} onCopy={copyText} isActive />}
                 </div>
               );
             })}
@@ -318,7 +311,10 @@ export function RightStatusPanel({
                   const cat = getCatById(catId);
                   return (
                     <div key={catId} className="flex items-center gap-2 text-xs text-gray-400">
-                      <span className="inline-block h-2 w-2 rounded-full opacity-50" style={{ backgroundColor: cat?.color.primary ?? '#9CA3AF' }} />
+                      <span
+                        className="inline-block h-2 w-2 rounded-full opacity-50"
+                        style={{ backgroundColor: cat?.color.primary ?? '#9CA3AF' }}
+                      />
                       {cat ? formatCatName(cat) : catId}
                     </div>
                   );
@@ -355,11 +351,14 @@ export function RightStatusPanel({
         <h3 className="text-xs font-semibold text-gray-700 mb-2">对话信息</h3>
         <div className="text-xs text-gray-500 space-y-2">
           <div>
-            Thread: <button
+            Thread:{' '}
+            <button
               className="text-gray-600 font-mono hover:text-gray-800 cursor-pointer transition-colors"
               title={`点击复制: ${threadId}`}
               onClick={() => copyText(threadId)}
-            >{truncateId(threadId, 12)}</button>
+            >
+              {truncateId(threadId, 12)}
+            </button>
           </div>
           <ThinkingDefaultExpandToggle />
           <ThinkingModeToggle threadId={threadId} />
@@ -368,7 +367,12 @@ export function RightStatusPanel({
         </div>
       </section>
 
-      <AuditExplorerPanel key={threadId} threadId={threadId} externalSessionId={viewSessionId} onCloseSession={() => setViewSessionId(null)} />
+      <AuditExplorerPanel
+        key={threadId}
+        threadId={threadId}
+        externalSessionId={viewSessionId}
+        onCloseSession={() => setViewSessionId(null)}
+      />
     </aside>
   );
 }

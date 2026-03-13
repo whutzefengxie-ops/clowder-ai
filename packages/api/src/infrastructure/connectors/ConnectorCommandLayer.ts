@@ -115,9 +115,7 @@ export class ConnectorCommandLayer {
       const title = t.title ?? '(无标题)';
       const shortId = t.id.slice(0, 8);
       const badge = featBadges.get(t.id);
-      return badge
-        ? `${i + 1}. ${title} [${badge}] [${shortId}]`
-        : `${i + 1}. ${title} [${shortId}]`;
+      return badge ? `${i + 1}. ${title} [${badge}] [${shortId}]` : `${i + 1}. ${title} [${shortId}]`;
     });
     const result: CommandResult = {
       kind: 'threads',
@@ -167,11 +165,7 @@ export class ConnectorCommandLayer {
   // --- Phase D: matching helpers ---
 
   /** Match by feature number (e.g., /use F088). Async because it needs backlogStore. */
-  private async matchByFeatId(
-    input: string,
-    threads: ThreadEntry[],
-    userId: string,
-  ): Promise<ThreadEntry | null> {
+  private async matchByFeatId(input: string, threads: ThreadEntry[], userId: string): Promise<ThreadEntry | null> {
     if (!/^F\d+$/i.test(input)) return null;
     const { backlogStore } = this.deps;
     if (!backlogStore) return null;
@@ -222,10 +216,7 @@ export class ConnectorCommandLayer {
   }
 
   /** Resolve feat badges for threads (used by /threads display). */
-  private async resolveFeatBadges(
-    threads: ThreadEntry[],
-    userId: string,
-  ): Promise<Map<string, string>> {
+  private async resolveFeatBadges(threads: ThreadEntry[], userId: string): Promise<Map<string, string>> {
     const badges = new Map<string, string>();
     const { backlogStore } = this.deps;
     if (!backlogStore) return badges;

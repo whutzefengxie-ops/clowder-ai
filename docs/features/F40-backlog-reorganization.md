@@ -25,7 +25,7 @@ team lead 2026-02-26 提出：
 ### 核心问题
 
 1. **编号混乱**：BACKLOG 混编 Feature (#F1-F39) + Tech Debt (#1-#103)，F 都编到 101 了
-2. **蜘蛛网引用**：一个 Feature 的文档散落在 plans/discussions/mailbox/bug-reports，没有统一入口
+2. **蜘蛛网引用**：一个 Feature 的文档散落在 feature-specs/feature-discussions/review-notes/bug-reports，没有统一入口
 3. **无法顺藤摸瓜**：问"F21 什么情况"要搜 85 个文件
 4. **1000 feat 怎么办**：现有结构不可扩展
 
@@ -34,7 +34,7 @@ team lead 2026-02-26 提出：
 team lead的记忆系统设计 proposal（三层记忆）：
 - **热层**：直接在 context（BACKLOG 索引表）
 - **温层**：轻量索引，快速召回（feat 聚合文件）
-- **冷层**：需要搜索（散落的 plans/discussions）
+- **冷层**：需要搜索（散落的 feature-specs/discussions）
 
 ---
 
@@ -69,7 +69,7 @@ docs/
 │   ├── F021-signal-hunter.md
 │   ├── index.json          # 机器索引（脚本生成，不手写）
 │   └── ...
-└── (plans/discussions/...)  # 冷层，被 frontmatter 挂接
+└── (feature-specs/feature-discussions/...)  # 冷层，被 frontmatter 挂接
 ```
 
 ### BACKLOG 新结构设计（Ragdoll 2026-02-26）
@@ -403,7 +403,7 @@ F014 → F015 → F036
    - （聚合文件保留，不删除）
 
 5. **真相源同步检查**
-   - 检查关联的 plans/discussions 是否都有正确的 frontmatter
+   - 检查关联的 feature-specs/discussions 是否都有正确的 frontmatter
    - 检查关联的 Tech Debt 是否标记完成
 
 **检查清单**：

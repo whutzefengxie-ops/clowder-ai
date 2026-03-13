@@ -3,8 +3,8 @@
  * In-memory stores, no Redis needed.
  */
 
-import { describe, it, before, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { before, beforeEach, describe, it } from 'node:test';
 import Fastify from 'fastify';
 
 const USER_HEADERS = { 'x-cat-cafe-user': 'test-user' };
@@ -19,18 +19,42 @@ function createStubBacklogStore() {
       if (item && userId && item.userId !== userId) return null;
       return item;
     },
-    create() { throw new Error('not implemented'); },
-    refreshMetadata() { throw new Error('not implemented'); },
-    listByUser() { return []; },
-    suggestClaim() { throw new Error('not implemented'); },
-    decideClaim() { throw new Error('not implemented'); },
-    updateDispatchProgress() { throw new Error('not implemented'); },
-    markDispatched() { throw new Error('not implemented'); },
-    markDone() { throw new Error('not implemented'); },
-    acquireLease() { throw new Error('not implemented'); },
-    heartbeatLease() { throw new Error('not implemented'); },
-    releaseLease() { throw new Error('not implemented'); },
-    reclaimExpiredLease() { throw new Error('not implemented'); },
+    create() {
+      throw new Error('not implemented');
+    },
+    refreshMetadata() {
+      throw new Error('not implemented');
+    },
+    listByUser() {
+      return [];
+    },
+    suggestClaim() {
+      throw new Error('not implemented');
+    },
+    decideClaim() {
+      throw new Error('not implemented');
+    },
+    updateDispatchProgress() {
+      throw new Error('not implemented');
+    },
+    markDispatched() {
+      throw new Error('not implemented');
+    },
+    markDone() {
+      throw new Error('not implemented');
+    },
+    acquireLease() {
+      throw new Error('not implemented');
+    },
+    heartbeatLease() {
+      throw new Error('not implemented');
+    },
+    releaseLease() {
+      throw new Error('not implemented');
+    },
+    reclaimExpiredLease() {
+      throw new Error('not implemented');
+    },
   };
 }
 
@@ -69,9 +93,7 @@ function createInMemoryWorkflowSopStore() {
             resumeCapsule: input.resumeCapsule
               ? { ...existing.resumeCapsule, ...input.resumeCapsule }
               : existing.resumeCapsule,
-            checks: input.checks
-              ? { ...existing.checks, ...input.checks }
-              : existing.checks,
+            checks: input.checks ? { ...existing.checks, ...input.checks } : existing.checks,
             version: existing.version + 1,
             updatedAt: now,
             updatedBy,
@@ -85,9 +107,7 @@ function createInMemoryWorkflowSopStore() {
             resumeCapsule: input.resumeCapsule
               ? { goal: '', done: [], currentFocus: '', ...input.resumeCapsule }
               : { goal: '', done: [], currentFocus: '' },
-            checks: input.checks
-              ? { ...DEFAULT_CHECKS, ...input.checks }
-              : { ...DEFAULT_CHECKS },
+            checks: input.checks ? { ...DEFAULT_CHECKS, ...input.checks } : { ...DEFAULT_CHECKS },
             version: 1,
             updatedAt: now,
             updatedBy,

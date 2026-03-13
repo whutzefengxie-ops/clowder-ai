@@ -3,14 +3,11 @@
  * 有 Redis → 测全量；无 Redis → skip
  */
 
-import { describe, it, before, after, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  assertRedisIsolationOrThrow,
-  cleanupPrefixedRedisKeys,
-} from './helpers/redis-test-helpers.js';
+import { after, afterEach, before, beforeEach, describe, it } from 'node:test';
+import { assertRedisIsolationOrThrow, cleanupPrefixedRedisKeys } from './helpers/redis-test-helpers.js';
 
-const REDIS_URL = process.env['REDIS_URL'];
+const REDIS_URL = process.env.REDIS_URL;
 
 describe('RedisBacklogStore', { skip: !REDIS_URL ? 'REDIS_URL not set' : false }, () => {
   let RedisBacklogStore;

@@ -2,8 +2,8 @@
  * A2A Mention Detection + Prompt Injection Tests
  */
 
-import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
 import { catRegistry } from '@cat-cafe/shared';
 
 describe('parseA2AMentions', () => {
@@ -240,28 +240,19 @@ describe('parseA2AMentions', () => {
 describe('F052: cross-thread self-reference exemption', () => {
   it('parseA2AMentions with undefined currentCatId does not filter any cat', async () => {
     const { parseA2AMentions } = await import('../dist/domains/cats/services/agents/routing/a2a-mentions.js');
-    const result = parseA2AMentions(
-      '@codex 请处理这个任务',
-      undefined,
-    );
+    const result = parseA2AMentions('@codex 请处理这个任务', undefined);
     assert.ok(result.includes('codex'), 'should include codex when currentCatId is undefined');
   });
 
   it('parseA2AMentions with currentCatId still filters self', async () => {
     const { parseA2AMentions } = await import('../dist/domains/cats/services/agents/routing/a2a-mentions.js');
-    const result = parseA2AMentions(
-      '@codex 请处理这个任务',
-      'codex',
-    );
+    const result = parseA2AMentions('@codex 请处理这个任务', 'codex');
     assert.ok(!result.includes('codex'), 'should NOT include codex when it is currentCatId');
   });
 
   it('cross-thread: @gemini still works normally when currentCatId is undefined (no regression)', async () => {
     const { parseA2AMentions } = await import('../dist/domains/cats/services/agents/routing/a2a-mentions.js');
-    const result = parseA2AMentions(
-      '@gemini 请确认这个安排',
-      undefined,
-    );
+    const result = parseA2AMentions('@gemini 请确认这个安排', undefined);
     assert.ok(result.includes('gemini'), '@gemini should work with undefined currentCatId');
   });
 });

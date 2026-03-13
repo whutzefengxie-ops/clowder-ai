@@ -235,7 +235,7 @@ export class ConnectorRouter {
 
     for (const att of attachments) {
       try {
-        const downloaded = await this.opts.mediaService!.download(connectorId, att);
+        const downloaded = await this.opts.mediaService?.download(connectorId, att);
 
         if (att.type === 'audio' && this.opts.sttProvider) {
           try {

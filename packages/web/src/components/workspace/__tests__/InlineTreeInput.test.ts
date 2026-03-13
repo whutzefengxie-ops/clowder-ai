@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi } from 'vitest';
-import React from 'react';
+
+import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import { act } from 'react';
+import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('../FileIcons', () => ({
   FileIcon: () => React.createElement('span', null, '[F]'),
@@ -58,7 +58,7 @@ describe('InlineTreeInput', () => {
     });
     // Simulate change via React
     act(() => {
-      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set!;
       nativeInputValueSetter.call(input, 'test.md');
       input.dispatchEvent(new Event('input', { bubbles: true }));
     });
@@ -137,7 +137,7 @@ describe('InlineTreeInput', () => {
     const input = container.querySelector('input')!;
     // Type some text
     act(() => {
-      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set!;
       setter.call(input, 'ios');
       input.dispatchEvent(new Event('input', { bubbles: true }));
     });

@@ -4,11 +4,11 @@
  */
 
 export {
-  type PathConfig,
-  getDefaultConfig,
-  isPathAllowed,
-  getCatCafeDir,
   ensureDir,
-  initCatCafeDir,
+  getCatCafeDir,
+  getDefaultConfig,
   getSafePath,
+  initCatCafeDir,
+  isPathAllowed,
+  type PathConfig,
 } from './path-validator.js';

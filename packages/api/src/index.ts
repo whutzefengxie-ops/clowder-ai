@@ -3,13 +3,13 @@
  * 后端 API 入口
  */
 
+import { join } from 'node:path';
 import { type CatId, catRegistry } from '@cat-cafe/shared';
 import type { RedisClient } from '@cat-cafe/shared/utils';
 import { createRedisClient, SessionStore } from '@cat-cafe/shared/utils';
 import cors from '@fastify/cors';
 import fastifyWebsocket from '@fastify/websocket';
 import Fastify from 'fastify';
-import { join } from 'path';
 import { generateCliConfigs, readCapabilitiesConfig } from './config/capabilities/capability-orchestrator.js';
 import { getCatContextBudget } from './config/cat-budgets.js';
 import { getConfigSessionStrategy, loadCatConfig, toAllCatConfigs } from './config/cat-config-loader.js';
@@ -40,11 +40,11 @@ import {
   createInvocationRecordStore,
   createSessionChainStore,
   DareAgentService,
-  OpenCodeAgentService,
   DeliveryCursorStore,
   GeminiAgentService,
   getEventAuditLog,
   MemoryGovernanceStore,
+  OpenCodeAgentService,
 } from './domains/cats/services/index.js';
 import { AutoSummarizer } from './domains/cats/services/orchestration/AutoSummarizer.js';
 import { initPushNotificationService } from './domains/cats/services/push/PushNotificationService.js';
@@ -87,6 +87,7 @@ import {
 } from './infrastructure/email/index.js';
 import { SocketManager } from './infrastructure/websocket/index.js';
 import { connectorWebhookRoutes } from './routes/connector-webhooks.js';
+import { gameRoutes } from './routes/games.js';
 import {
   auditRoutes,
   authorizationRoutes,
@@ -114,7 +115,6 @@ import {
   memoryRoutes,
   messageActionsRoutes,
   messagesRoutes,
-
   projectsRoutes,
   providerProfilesRoutes,
   pushRoutes,
@@ -145,15 +145,14 @@ import {
   workspaceGitRoutes,
   workspaceRoutes,
 } from './routes/index.js';
-import { gameRoutes } from './routes/games.js';
 import { prTrackingRoutes } from './routes/pr-tracking.js';
 import { terminalRoutes } from './routes/terminal.js';
 import { threadExportRoutes } from './routes/thread-export.js';
 import { findMonorepoRoot } from './utils/monorepo-root.js';
 import { resolveUserId } from './utils/request-identity.js';
 
-const PORT = parseInt(process.env['API_SERVER_PORT'] ?? '3002', 10);
-const HOST = process.env['API_SERVER_HOST'] ?? '127.0.0.1';
+const PORT = parseInt(process.env.API_SERVER_PORT ?? '3002', 10);
+const HOST = process.env.API_SERVER_HOST ?? '127.0.0.1';
 
 let socketManager: SocketManager | null = null;
 let redisClient: RedisClient | null = null;
@@ -236,7 +235,7 @@ async function main(): Promise<void> {
 
   // Create shared service instances for MCP callback flow
   const registry = new InvocationRegistry();
-  const redisUrl = process.env['REDIS_URL'];
+  const redisUrl = process.env.REDIS_URL;
   const redis = redisUrl ? createRedisClient({ url: redisUrl }) : undefined;
   redisClient = redis ?? null;
 
@@ -275,7 +274,7 @@ async function main(): Promise<void> {
 
   const sessionChainStore = createSessionChainStore(redis);
   // F24: Transcript Writer/Reader for session chain
-  const transcriptDataDir = process.env['TRANSCRIPT_DATA_DIR'] ?? './data/transcripts';
+  const transcriptDataDir = process.env.TRANSCRIPT_DATA_DIR ?? './data/transcripts';
   const transcriptWriter = new TranscriptWriter({ dataDir: transcriptDataDir });
   const transcriptReader = new TranscriptReader({ dataDir: transcriptDataDir });
   // F065 Phase C: HandoffConfig for LLM-generated digest on seal
@@ -310,14 +309,14 @@ async function main(): Promise<void> {
   const hindsightClient = createHindsightClient();
 
   // F102: Memory services — SQLite-backed when configured, otherwise routes fall through to Hindsight
-  const evidenceStoreType = process.env['EVIDENCE_STORE_TYPE'] ?? (hindsightClient ? 'hindsight' : 'sqlite');
+  const evidenceStoreType = process.env.EVIDENCE_STORE_TYPE ?? (hindsightClient ? 'hindsight' : 'sqlite');
   let memoryServices: import('./domains/memory/factory.js').MemoryServices | undefined;
   if (evidenceStoreType === 'sqlite') {
     const { createMemoryServices } = await import('./domains/memory/factory.js');
     memoryServices = await createMemoryServices({
       type: 'sqlite',
-      sqlitePath: process.env['EVIDENCE_DB'] ?? 'evidence.sqlite',
-      docsRoot: process.env['DOCS_ROOT'] ?? 'docs',
+      sqlitePath: process.env.EVIDENCE_DB ?? 'evidence.sqlite',
+      docsRoot: process.env.DOCS_ROOT ?? 'docs',
     });
     app.log.info('[api] F102: SQLite memory services initialized');
   }
@@ -378,7 +377,7 @@ async function main(): Promise<void> {
   }
 
   // F089 Phase 2: Shared instances for tmux agent pane execution (opt-in)
-  const enableTmuxAgent = process.env['CAT_CAFE_TMUX_AGENT'] === '1';
+  const enableTmuxAgent = process.env.CAT_CAFE_TMUX_AGENT === '1';
   let tmuxGateway: TmuxGateway | undefined;
   if (enableTmuxAgent) {
     try {
@@ -503,11 +502,13 @@ async function main(): Promise<void> {
     prTrackingStore,
     ...(workflowSopStore ? { workflowSopStore } : {}),
     queueProcessor,
-    ...(memoryServices ? {
-      evidenceStore: memoryServices.evidenceStore,
-      markerQueue: memoryServices.markerQueue,
-      reflectionService: memoryServices.reflectionService,
-    } : {}),
+    ...(memoryServices
+      ? {
+          evidenceStore: memoryServices.evidenceStore,
+          markerQueue: memoryServices.markerQueue,
+          reflectionService: memoryServices.reflectionService,
+        }
+      : {}),
   });
 
   // Authorization system — 猫猫动态权限 (Redis-backed when available)
@@ -597,7 +598,7 @@ async function main(): Promise<void> {
     transcriptReader,
   });
   await app.register(sessionTranscriptRoutes, { sessionChainStore, threadStore, transcriptReader });
-  const hookToken = process.env['CAT_CAFE_HOOK_TOKEN'] || '';
+  const hookToken = process.env.CAT_CAFE_HOOK_TOKEN || '';
   await app.register(sessionHooksRoutes, {
     sessionChainStore,
     sessionSealer,
@@ -661,26 +662,26 @@ async function main(): Promise<void> {
   });
 
   // Serve uploaded files (images)
-  const uploadDir = process.env['UPLOAD_DIR'] ?? './uploads';
+  const uploadDir = process.env.UPLOAD_DIR ?? './uploads';
   await app.register(uploadsRoutes, { uploadDir });
 
   // F088: Serve downloaded connector media files
-  const connectorMediaDir = process.env['CONNECTOR_MEDIA_DIR'] ?? './data/connector-media';
+  const connectorMediaDir = process.env.CONNECTOR_MEDIA_DIR ?? './data/connector-media';
   await app.register(connectorMediaRoutes, { mediaDir: connectorMediaDir });
 
   // F34: TTS Provider (mlx-audio → Python TTS server)
   const ttsRegistry = new TtsRegistry();
-  const ttsUrl = process.env['TTS_URL'] ?? 'http://localhost:9879';
+  const ttsUrl = process.env.TTS_URL ?? 'http://localhost:9879';
   ttsRegistry.register(new MlxAudioTtsProvider({ baseUrl: ttsUrl }));
-  const ttsCacheDir = process.env['TTS_CACHE_DIR'] ?? './data/tts-cache';
+  const ttsCacheDir = process.env.TTS_CACHE_DIR ?? './data/tts-cache';
   await app.register(ttsRoutes, { ttsRegistry, cacheDir: ttsCacheDir });
   initVoiceBlockSynthesizer(ttsRegistry, ttsCacheDir);
   startTtsCacheCleaner(ttsCacheDir);
 
   // C1+C2: Web Push Notifications (optional — requires VAPID keys)
-  const vapidPublicKey = process.env['VAPID_PUBLIC_KEY'] ?? '';
-  const vapidPrivateKey = process.env['VAPID_PRIVATE_KEY'] ?? '';
-  const vapidSubject = process.env['VAPID_SUBJECT'] ?? 'mailto:cat-cafe@localhost';
+  const vapidPublicKey = process.env.VAPID_PUBLIC_KEY ?? '';
+  const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY ?? '';
+  const vapidSubject = process.env.VAPID_SUBJECT ?? 'mailto:cat-cafe@localhost';
   const pushSubscriptionStore = createPushSubscriptionStore(redis);
   const pushService =
     vapidPublicKey && vapidPrivateKey

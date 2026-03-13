@@ -1,5 +1,5 @@
-import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
+import { describe, test } from 'node:test';
 
 class MockRedisHash {
   constructor() {
@@ -82,7 +82,7 @@ describe('RedisTaskProgressStore', () => {
 
     const thread = await store.getThreadSnapshots('thread_1');
     assert.equal(Object.keys(thread).length, 1);
-    assert.deepEqual(thread['opus'], snapshot);
+    assert.deepEqual(thread.opus, snapshot);
 
     await store.deleteSnapshot('thread_1', 'opus');
     const afterDelete = await store.getSnapshot('thread_1', 'opus');

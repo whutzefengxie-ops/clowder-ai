@@ -75,7 +75,9 @@ export async function checkGovernancePreflight(
   // Resolve provider-specific files to check
   const govProvider = catProvider ? CAT_PROVIDER_MAP[catProvider] : undefined;
   const configFile = govProvider ? PROVIDER_CONFIG_FILE[govProvider] : 'CLAUDE.md';
-  const skillsDirs = govProvider ? [PROVIDER_SKILLS_DIR[govProvider]] : ['.claude/skills', '.codex/skills', '.gemini/skills'];
+  const skillsDirs = govProvider
+    ? [PROVIDER_SKILLS_DIR[govProvider]]
+    : ['.claude/skills', '.codex/skills', '.gemini/skills'];
 
   // Filesystem: verify provider config file has managed block
   try {

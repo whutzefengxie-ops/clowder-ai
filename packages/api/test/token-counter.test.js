@@ -3,8 +3,8 @@
  * js-tiktoken based token estimation for context budget management
  */
 
-import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
 import { estimateTokens, estimateTokensFromMessages } from '../dist/utils/token-counter.js';
 
 describe('estimateTokens', () => {
@@ -20,15 +20,12 @@ describe('estimateTokens', () => {
   });
 
   it('returns higher token count for Chinese text vs same-length ASCII', () => {
-    const chinese = '你好世界测试文本';         // 8 chars
-    const ascii = 'abcdefgh';                  // 8 chars
+    const chinese = '你好世界测试文本'; // 8 chars
+    const ascii = 'abcdefgh'; // 8 chars
     const chineseTokens = estimateTokens(chinese);
     const asciiTokens = estimateTokens(ascii);
     // Chinese chars typically 1-2 tokens each vs ASCII ~4 chars/token
-    assert.ok(
-      chineseTokens > asciiTokens,
-      `Chinese (${chineseTokens}) should > ASCII (${asciiTokens})`,
-    );
+    assert.ok(chineseTokens > asciiTokens, `Chinese (${chineseTokens}) should > ASCII (${asciiTokens})`);
   });
 
   it('handles mixed Chinese-English text', () => {
@@ -54,25 +51,17 @@ describe('estimateTokensFromMessages', () => {
   });
 
   it('sums tokens across messages', () => {
-    const messages = [
-      { content: 'Hello, world!' },
-      { content: 'How are you?' },
-    ];
+    const messages = [{ content: 'Hello, world!' }, { content: 'How are you?' }];
     const total = estimateTokensFromMessages(messages, 5000);
     const individual = estimateTokens('Hello, world!') + estimateTokens('How are you?');
     assert.equal(total, individual);
   });
 
   it('truncates content exceeding maxContentLength before tokenizing', () => {
-    const messages = [
-      { content: 'a'.repeat(200) },
-    ];
+    const messages = [{ content: 'a'.repeat(200) }];
     const withLimit = estimateTokensFromMessages(messages, 50);
     const withoutLimit = estimateTokensFromMessages(messages, 5000);
-    assert.ok(
-      withLimit < withoutLimit,
-      `limited (${withLimit}) should < unlimited (${withoutLimit})`,
-    );
+    assert.ok(withLimit < withoutLimit, `limited (${withLimit}) should < unlimited (${withoutLimit})`);
   });
 
   it('handles messages with contentBlocks', () => {
@@ -93,9 +82,7 @@ describe('estimateTokensFromMessages', () => {
     const messages = [
       {
         content: 'text content',
-        contentBlocks: [
-          { type: 'image', url: 'data:image/png;base64,...' },
-        ],
+        contentBlocks: [{ type: 'image', url: 'data:image/png;base64,...' }],
       },
     ];
     const count = estimateTokensFromMessages(messages, 5000);

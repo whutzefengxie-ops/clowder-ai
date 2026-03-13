@@ -6,11 +6,15 @@
  * 2. detectUserMention is called for route-serial stored messages
  *    (integration verified via import chain — unit tests in user-mention-detection.test.js)
  */
-import { describe, it } from 'node:test';
+
 import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
 
 // Verify the updated FIND_SEND_BUTTON_JS is importable and is a non-empty string
-import { FIND_SEND_BUTTON_JS, DISPATCH_ENTER_JS } from '../dist/domains/cats/services/agents/providers/antigravity/cdp-dom-scripts.js';
+import {
+  DISPATCH_ENTER_JS,
+  FIND_SEND_BUTTON_JS,
+} from '../dist/domains/cats/services/agents/providers/antigravity/cdp-dom-scripts.js';
 
 // Verify detectUserMention is importable from the route it's used in
 import { detectUserMention } from '../dist/routes/user-mention.js';

@@ -224,7 +224,7 @@ CREATE TABLE schema_version (
 - [x] AC-B1: frontmatter 解析器，从 .md 提取 anchor/kind/status/title/summary
 - [x] AC-B3: feat-lifecycle 立项/关闭时自动 upsert 索引（与 SOP 集成）
 - [x] AC-B4: search 支持 kind/status/keyword 过滤，检索时 `superseded_by IS NOT NULL` 降权
-- [x] AC-B5: 比 grep docs/ 信噪比可测量提升（不返回 archive/废案/discussion）
+- [x] AC-B5: 比 grep docs/ 信噪比可测量提升（不返回 internal-archive/废案/discussion）
 - [x] AC-B6: 新项目初始化时自动创建空 `evidence.sqlite`
 - [x] AC-B7: `memory_eval_corpus.yaml` 评测集：检索评测（Recall@k）+ 状态评测（DB 变化验证），含 10-15 条 Hindsight 失败案例
 

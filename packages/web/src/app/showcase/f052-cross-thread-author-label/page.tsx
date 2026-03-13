@@ -1,10 +1,10 @@
 'use client';
 
 import { useRef } from 'react';
-import type { ChatMessage as ChatMessageType } from '@/stores/chatStore';
 import { ChatMessage } from '@/components/ChatMessage';
 import { MessageNavigator } from '@/components/MessageNavigator';
 import { useCatData } from '@/hooks/useCatData';
+import type { ChatMessage as ChatMessageType } from '@/stores/chatStore';
 
 const now = Date.now();
 
@@ -54,10 +54,7 @@ export default function ShowcaseF052CrossThreadAuthorLabel() {
       </p>
 
       <div className="relative mt-4 overflow-hidden rounded-xl border border-gray-200 bg-white">
-        <div
-          ref={scrollContainerRef}
-          className="relative max-h-[520px] overflow-y-auto p-4 space-y-3"
-        >
+        <div ref={scrollContainerRef} className="relative max-h-[520px] overflow-y-auto p-4 space-y-3">
           {messages.map((message) => (
             <ChatMessage key={message.id} message={message} getCatById={getCatById} />
           ))}
@@ -68,4 +65,3 @@ export default function ShowcaseF052CrossThreadAuthorLabel() {
     </div>
   );
 }
-

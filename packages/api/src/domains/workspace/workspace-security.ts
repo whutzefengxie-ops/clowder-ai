@@ -203,7 +203,7 @@ async function readLinkedRootsConfig(): Promise<Array<{ name: string; path: stri
 async function writeLinkedRootsConfig(entries: Array<{ name: string; path: string }>): Promise<void> {
   const configPath = linkedRootsConfigPath();
   await mkdir(dirname(configPath), { recursive: true });
-  await writeFile(configPath, JSON.stringify(entries, null, 2) + '\n', 'utf-8');
+  await writeFile(configPath, `${JSON.stringify(entries, null, 2)}\n`, 'utf-8');
 }
 
 /**
@@ -213,7 +213,7 @@ async function writeLinkedRootsConfig(entries: Array<{ name: string; path: strin
 export function getLinkedRoots(): WorktreeEntry[] {
   // From env var
   const envRoots: WorktreeEntry[] = [];
-  const raw = process.env['WORKSPACE_LINKED_ROOTS'];
+  const raw = process.env.WORKSPACE_LINKED_ROOTS;
   if (raw) {
     for (const segment of raw.split(',')) {
       const trimmed = segment.trim();

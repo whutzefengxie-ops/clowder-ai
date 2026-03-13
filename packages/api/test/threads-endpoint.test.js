@@ -4,8 +4,8 @@
  * PATCH /api/threads/:id, DELETE /api/threads/:id
  */
 
-import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { afterEach, beforeEach, describe, it } from 'node:test';
 import Fastify from 'fastify';
 
 describe('Thread API', () => {
@@ -13,9 +13,7 @@ describe('Thread API', () => {
   let threadStore;
 
   beforeEach(async () => {
-    const { ThreadStore } = await import(
-      '../dist/domains/cats/services/stores/ports/ThreadStore.js'
-    );
+    const { ThreadStore } = await import('../dist/domains/cats/services/stores/ports/ThreadStore.js');
     const { threadsRoutes } = await import('../dist/routes/threads.js');
 
     threadStore = new ThreadStore();
@@ -56,18 +54,18 @@ describe('Thread API', () => {
 
   it('POST /api/threads with backlogItemId links the thread when item exists', async () => {
     // Pre-create the backlog item so validation passes
-    const { BacklogStore } = await import(
-      '../dist/domains/cats/services/stores/ports/BacklogStore.js'
-    );
+    const { BacklogStore } = await import('../dist/domains/cats/services/stores/ports/BacklogStore.js');
     const { threadsRoutes } = await import('../dist/routes/threads.js');
-    const { ThreadStore } = await import(
-      '../dist/domains/cats/services/stores/ports/ThreadStore.js'
-    );
+    const { ThreadStore } = await import('../dist/domains/cats/services/stores/ports/ThreadStore.js');
 
     const backlogStore = new BacklogStore();
     const item = backlogStore.create({
-      userId: 'alice', title: 'F095 Sidebar', summary: 'sidebar nav',
-      priority: 'medium', tags: [], createdBy: 'user',
+      userId: 'alice',
+      title: 'F095 Sidebar',
+      summary: 'sidebar nav',
+      priority: 'medium',
+      tags: [],
+      createdBy: 'user',
     });
 
     const localThreadStore = new ThreadStore();
@@ -88,13 +86,9 @@ describe('Thread API', () => {
   });
 
   it('POST /api/threads rejects non-existent backlogItemId with 400', async () => {
-    const { BacklogStore } = await import(
-      '../dist/domains/cats/services/stores/ports/BacklogStore.js'
-    );
+    const { BacklogStore } = await import('../dist/domains/cats/services/stores/ports/BacklogStore.js');
     const { threadsRoutes } = await import('../dist/routes/threads.js');
-    const { ThreadStore } = await import(
-      '../dist/domains/cats/services/stores/ports/ThreadStore.js'
-    );
+    const { ThreadStore } = await import('../dist/domains/cats/services/stores/ports/ThreadStore.js');
 
     const backlogStore = new BacklogStore();
     // No items created — 'ghost-feat' does not exist
@@ -117,19 +111,19 @@ describe('Thread API', () => {
   });
 
   it('POST /api/threads rejects cross-user backlogItemId with 400', async () => {
-    const { BacklogStore } = await import(
-      '../dist/domains/cats/services/stores/ports/BacklogStore.js'
-    );
+    const { BacklogStore } = await import('../dist/domains/cats/services/stores/ports/BacklogStore.js');
     const { threadsRoutes } = await import('../dist/routes/threads.js');
-    const { ThreadStore } = await import(
-      '../dist/domains/cats/services/stores/ports/ThreadStore.js'
-    );
+    const { ThreadStore } = await import('../dist/domains/cats/services/stores/ports/ThreadStore.js');
 
     const backlogStore = new BacklogStore();
     // Create item owned by bob
     const bobItem = backlogStore.create({
-      userId: 'bob', title: 'Bob Feature', summary: 'bob only',
-      priority: 'medium', tags: [], createdBy: 'user',
+      userId: 'bob',
+      title: 'Bob Feature',
+      summary: 'bob only',
+      priority: 'medium',
+      tags: [],
+      createdBy: 'user',
     });
 
     const localThreadStore = new ThreadStore();
@@ -698,9 +692,8 @@ describe('Thread delete invocation protection (#35)', () => {
 
     // guardDelete returns acquired:false when thread has active invocation
     const mockTracker = {
-      guardDelete: (id) => id === thread.id
-        ? { acquired: false, release: () => {} }
-        : { acquired: true, release: () => {} },
+      guardDelete: (id) =>
+        id === thread.id ? { acquired: false, release: () => {} } : { acquired: true, release: () => {} },
     };
 
     const app = Fastify();
@@ -730,7 +723,12 @@ describe('Thread delete invocation protection (#35)', () => {
 
     let released = false;
     const mockTracker = {
-      guardDelete: () => ({ acquired: true, release: () => { released = true; } }),
+      guardDelete: () => ({
+        acquired: true,
+        release: () => {
+          released = true;
+        },
+      }),
     };
 
     const app = Fastify();
@@ -782,9 +780,7 @@ describe('Thread delete audit failure resilience (P1 fix)', () => {
   it('DELETE succeeds even when audit log append rejects', async () => {
     const { ThreadStore } = await import('../dist/domains/cats/services/stores/ports/ThreadStore.js');
     const { threadsRoutes } = await import('../dist/routes/threads.js');
-    const { getEventAuditLog } = await import(
-      '../dist/domains/cats/services/orchestration/EventAuditLog.js'
-    );
+    const { getEventAuditLog } = await import('../dist/domains/cats/services/orchestration/EventAuditLog.js');
 
     const threadStore = new ThreadStore();
     const thread = threadStore.create('alice', 'Audit Fail Thread');
@@ -800,7 +796,9 @@ describe('Thread delete audit failure resilience (P1 fix)', () => {
 
     // Track unhandled rejections
     let unhandled = false;
-    const handler = () => { unhandled = true; };
+    const handler = () => {
+      unhandled = true;
+    };
     process.on('unhandledRejection', handler);
 
     const res = await app.inject({
@@ -830,9 +828,7 @@ describe('F095 Phase D: Soft delete + trash bin', () => {
   let threadStore;
 
   beforeEach(async () => {
-    const { ThreadStore } = await import(
-      '../dist/domains/cats/services/stores/ports/ThreadStore.js'
-    );
+    const { ThreadStore } = await import('../dist/domains/cats/services/stores/ports/ThreadStore.js');
     const { threadsRoutes } = await import('../dist/routes/threads.js');
 
     threadStore = new ThreadStore();
@@ -967,15 +963,11 @@ describe('GET /api/messages with threadId', () => {
   let messageStore;
 
   beforeEach(async () => {
-    const { MessageStore } = await import(
-      '../dist/domains/cats/services/stores/ports/MessageStore.js'
-    );
+    const { MessageStore } = await import('../dist/domains/cats/services/stores/ports/MessageStore.js');
     const { InvocationRegistry } = await import(
       '../dist/domains/cats/services/agents/invocation/InvocationRegistry.js'
     );
-    const { ThreadStore } = await import(
-      '../dist/domains/cats/services/stores/ports/ThreadStore.js'
-    );
+    const { ThreadStore } = await import('../dist/domains/cats/services/stores/ports/ThreadStore.js');
     const { messagesRoutes } = await import('../dist/routes/messages.js');
 
     messageStore = new MessageStore();

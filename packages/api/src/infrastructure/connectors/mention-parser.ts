@@ -17,11 +17,7 @@ const MENTION_BOUNDARY_LEFT = '(?<!\\w)';
  * @param allPatterns — Map<CatId, mentionPatterns[]> from catRegistry
  * @param defaultCatId — fallback when no mention found
  */
-export function parseMentions(
-  text: string,
-  allPatterns: Map<string, string[]>,
-  defaultCatId: CatId,
-): ParsedMention {
+export function parseMentions(text: string, allPatterns: Map<string, string[]>, defaultCatId: CatId): ParsedMention {
   let bestIndex = Infinity;
   let bestCatId: string | undefined;
 

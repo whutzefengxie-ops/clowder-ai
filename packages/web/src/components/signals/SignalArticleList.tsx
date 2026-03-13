@@ -1,4 +1,3 @@
-import React from 'react';
 import type { SignalArticle, SignalArticleStatus } from '@cat-cafe/shared';
 import { SignalTierBadge } from './SignalTierBadge';
 
@@ -66,7 +65,9 @@ export function SignalArticleList({
               }}
               className={[
                 'w-full rounded-xl border bg-white p-4 text-left shadow-sm transition-colors',
-                selected ? 'border-owner-primary ring-1 ring-owner-primary/40' : 'border-gray-200 hover:border-owner-light',
+                selected
+                  ? 'border-owner-primary ring-1 ring-owner-primary/40'
+                  : 'border-gray-200 hover:border-owner-light',
               ].join(' ')}
             >
               <div className="flex items-start gap-3">
@@ -74,13 +75,18 @@ export function SignalArticleList({
                   <input
                     type="checkbox"
                     checked={selectedIds?.has(article.id) ?? false}
-                    onChange={(e) => { e.stopPropagation(); onToggleSelect(article.id); }}
+                    onChange={(e) => {
+                      e.stopPropagation();
+                      onToggleSelect(article.id);
+                    }}
                     onClick={(e) => e.stopPropagation()}
                     className="mt-1.5 shrink-0"
                   />
                 )}
                 <div className="min-w-0 flex-1">
-                  <p className="line-clamp-2 min-h-[2.5rem] text-sm font-semibold leading-5 text-cafe-black">{article.title}</p>
+                  <p className="line-clamp-2 min-h-[2.5rem] text-sm font-semibold leading-5 text-cafe-black">
+                    {article.title}
+                  </p>
                   <div className="mt-1.5 flex items-center gap-2">
                     <SignalTierBadge tier={article.tier} />
                     <span className={`rounded px-2 py-0.5 text-[11px] font-medium ${statusClassMap[article.status]}`}>
@@ -89,9 +95,16 @@ export function SignalArticleList({
                     <span className="text-xs text-gray-400">·</span>
                     <span className="text-xs text-gray-500">{article.source}</span>
                     <span className="text-xs text-gray-500">{formatDate(article.fetchedAt)}</span>
-                    {article.note && <span title="有备注" className="text-opus-dark">✎</span>}
+                    {article.note && (
+                      <span title="有备注" className="text-opus-dark">
+                        ✎
+                      </span>
+                    )}
                     {(article.studyCount ?? 0) > 0 && (
-                      <span title={`学习 ${article.studyCount} 次`} className="rounded bg-opus-bg px-1 text-[10px] text-opus-dark">
+                      <span
+                        title={`学习 ${article.studyCount} 次`}
+                        className="rounded bg-opus-bg px-1 text-[10px] text-opus-dark"
+                      >
                         学{article.studyCount}
                       </span>
                     )}

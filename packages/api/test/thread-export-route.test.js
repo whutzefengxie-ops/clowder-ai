@@ -3,8 +3,8 @@
  * 验证导出长图路由生成的前端 URL
  */
 
-import { afterEach, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { afterEach, beforeEach, describe, it } from 'node:test';
 import Fastify from 'fastify';
 
 await import('tsx/esm');
@@ -130,7 +130,9 @@ describe('POST /api/threads/:threadId/export-image', () => {
     delete process.env.FRONTEND_PORT;
 
     let closeCalled = false;
-    ImageExporter.prototype.close = async () => { closeCalled = true; };
+    ImageExporter.prototype.close = async () => {
+      closeCalled = true;
+    };
 
     const app = await buildApp();
 
@@ -180,10 +182,7 @@ describe('resolveFrontendBaseUrl', () => {
       },
     };
 
-    const baseUrl = resolveFrontendBaseUrl(
-      { FRONTEND_PORT: 'abc' },
-      logger,
-    );
+    const baseUrl = resolveFrontendBaseUrl({ FRONTEND_PORT: 'abc' }, logger);
 
     assert.equal(baseUrl, 'http://localhost:3001');
     assert.equal(warnings.length, 1);

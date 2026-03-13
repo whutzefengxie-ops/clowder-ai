@@ -3,7 +3,7 @@
  * Tries catRegistry first (dynamic, includes variants), falls back to
  * static CAT_CONFIGS (always available, no async dependency).
  */
-import { catRegistry, CAT_CONFIGS } from '@cat-cafe/shared';
+import { CAT_CONFIGS, catRegistry } from '@cat-cafe/shared';
 
 export function resolveBreedId(catName: string): string | undefined {
   const entry = catRegistry.tryGet(catName);

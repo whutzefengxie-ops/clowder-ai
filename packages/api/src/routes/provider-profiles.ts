@@ -5,15 +5,15 @@ import {
   createProviderProfile,
   deleteProviderProfile,
   getProviderProfile,
+  type ProviderProfileMode,
+  type ProviderProfileProvider,
   readProviderProfiles,
   resolveAnthropicRuntimeProfileById,
   updateProviderProfile,
-  type ProviderProfileMode,
-  type ProviderProfileProvider,
 } from '../config/provider-profiles.js';
-import { resolveUserId } from '../utils/request-identity.js';
 import { findMonorepoRoot } from '../utils/monorepo-root.js';
 import { validateProjectPath } from '../utils/project-path.js';
+import { resolveUserId } from '../utils/request-identity.js';
 import { buildProbeHeaders, isInvalidModelProbeError, readProbeError } from './provider-profiles-probe.js';
 
 const PROJECT_ROOT = findMonorepoRoot();
@@ -195,11 +195,7 @@ export const providerProfilesRoutes: FastifyPluginAsync<ProviderProfilesRoutesOp
     const params = request.params as { profileId: string };
 
     try {
-      await deleteProviderProfile(
-        projectRoot,
-        parsed.data.provider as ProviderProfileProvider,
-        params.profileId,
-      );
+      await deleteProviderProfile(projectRoot, parsed.data.provider as ProviderProfileProvider, params.profileId);
       return { ok: true };
     } catch (err) {
       reply.status(400);
@@ -227,11 +223,7 @@ export const providerProfilesRoutes: FastifyPluginAsync<ProviderProfilesRoutesOp
     const params = request.params as { profileId: string };
 
     try {
-      await activateProviderProfile(
-        projectRoot,
-        parsed.data.provider as ProviderProfileProvider,
-        params.profileId,
-      );
+      await activateProviderProfile(projectRoot, parsed.data.provider as ProviderProfileProvider, params.profileId);
       return { ok: true, profileId: params.profileId };
     } catch (err) {
       reply.status(400);

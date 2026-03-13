@@ -5,12 +5,12 @@
 
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
+import { extractTasks, toCreateTaskInputs } from '../domains/cats/services/orchestration/TaskExtractor.js';
 import type { IMessageStore } from '../domains/cats/services/stores/ports/MessageStore.js';
 import type { ITaskStore } from '../domains/cats/services/stores/ports/TaskStore.js';
-import type { SocketManager } from '../infrastructure/websocket/index.js';
-import type { AgentService } from '../domains/cats/services/types.js';
 import type { IThreadStore } from '../domains/cats/services/stores/ports/ThreadStore.js';
-import { extractTasks, toCreateTaskInputs } from '../domains/cats/services/orchestration/TaskExtractor.js';
+import type { AgentService } from '../domains/cats/services/types.js';
+import type { SocketManager } from '../infrastructure/websocket/index.js';
 import { resolveUserId } from '../utils/request-identity.js';
 
 export interface CommandsRoutesOptions {

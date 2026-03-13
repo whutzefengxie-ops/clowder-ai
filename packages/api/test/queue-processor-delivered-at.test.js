@@ -5,15 +5,11 @@
  * (primary + merged) should get deliveredAt = now.
  */
 
-import { describe, it, beforeEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
+import { beforeEach, describe, it, mock } from 'node:test';
 
-const { InvocationQueue } = await import(
-  '../dist/domains/cats/services/agents/invocation/InvocationQueue.js'
-);
-const { QueueProcessor } = await import(
-  '../dist/domains/cats/services/agents/invocation/QueueProcessor.js'
-);
+const { InvocationQueue } = await import('../dist/domains/cats/services/agents/invocation/InvocationQueue.js');
+const { QueueProcessor } = await import('../dist/domains/cats/services/agents/invocation/QueueProcessor.js');
 
 function stubDeps(overrides = {}) {
   return {
@@ -161,9 +157,7 @@ describe('QueueProcessor deliveredAt backfill', () => {
 
     // messages_delivered should NOT have been emitted (no IDs persisted)
     const emitCalls = deps.socketManager.emitToUser.mock.calls;
-    const deliveredEvents = emitCalls.filter(
-      (c) => c.arguments[1] === 'messages_delivered',
-    );
+    const deliveredEvents = emitCalls.filter((c) => c.arguments[1] === 'messages_delivered');
     assert.equal(
       deliveredEvents.length,
       0,
@@ -189,9 +183,7 @@ describe('QueueProcessor deliveredAt backfill', () => {
     await new Promise((r) => setTimeout(r, 100));
 
     const emitCalls = deps.socketManager.emitToUser.mock.calls;
-    const deliveredEvents = emitCalls.filter(
-      (c) => c.arguments[1] === 'messages_delivered',
-    );
+    const deliveredEvents = emitCalls.filter((c) => c.arguments[1] === 'messages_delivered');
     assert.equal(
       deliveredEvents.length,
       0,

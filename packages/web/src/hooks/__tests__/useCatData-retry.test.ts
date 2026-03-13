@@ -4,10 +4,9 @@
  * Verifies: first fetch fails → 10s timer → retry succeeds →
  *           cats updated from fallback to API data → no further retries.
  */
-import React from 'react';
-import { describe, expect, it, vi, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
+import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { act } from 'react';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // ── Mocks ──────────────────────────────────────────────────
 
@@ -19,11 +18,16 @@ vi.mock('@/utils/api-client', () => ({
 vi.mock('@cat-cafe/shared', () => ({
   CAT_CONFIGS: {
     opus: {
-      id: 'opus', displayName: '布偶猫', nickname: '宪宪',
+      id: 'opus',
+      displayName: '布偶猫',
+      nickname: '宪宪',
       color: { primary: '#9B7EBD', secondary: '#E8D5F5' },
       mentionPatterns: ['@布偶', '@布偶猫', '@opus'],
-      provider: 'anthropic', defaultModel: 'opus',
-      avatar: '/a.png', roleDescription: 'dev', personality: 'kind',
+      provider: 'anthropic',
+      defaultModel: 'opus',
+      avatar: '/a.png',
+      roleDescription: 'dev',
+      personality: 'kind',
     },
   },
 }));
@@ -32,26 +36,36 @@ vi.mock('@/lib/mention-highlight', () => ({ refreshMentionData: vi.fn() }));
 vi.mock('@/utils/transcription-corrector', () => ({ refreshSpeechAliases: vi.fn() }));
 
 import type { CatData } from '@/hooks/useCatData';
-import { useCatData, _resetCatDataCache } from '@/hooks/useCatData';
+import { _resetCatDataCache, useCatData } from '@/hooks/useCatData';
 
 // ── API response cats (distinguishable from fallback via breedId) ──
 
 const API_CATS: CatData[] = [
   {
-    id: 'opus', displayName: '布偶猫', nickname: '宪宪',
+    id: 'opus',
+    displayName: '布偶猫',
+    nickname: '宪宪',
     color: { primary: '#9B7EBD', secondary: '#E8D5F5' },
     mentionPatterns: ['@布偶', '@布偶猫', '@opus'],
     breedId: 'ragdoll',
-    provider: 'anthropic', defaultModel: 'claude-opus-4',
-    avatar: '/avatars/opus.png', roleDescription: '主架构师', personality: '温柔有主见',
+    provider: 'anthropic',
+    defaultModel: 'claude-opus-4',
+    avatar: '/avatars/opus.png',
+    roleDescription: '主架构师',
+    personality: '温柔有主见',
   },
   {
-    id: 'codex', displayName: '缅因猫', nickname: '砚砚',
+    id: 'codex',
+    displayName: '缅因猫',
+    nickname: '砚砚',
     color: { primary: '#5B8C5A', secondary: '#D5E8D4' },
     mentionPatterns: ['@缅因', '@缅因猫', '@codex'],
     breedId: 'maine-coon',
-    provider: 'openai', defaultModel: 'codex-mini',
-    avatar: '/avatars/codex.png', roleDescription: '代码审查', personality: '严格',
+    provider: 'openai',
+    defaultModel: 'codex-mini',
+    avatar: '/avatars/codex.png',
+    roleDescription: '代码审查',
+    personality: '严格',
   },
 ];
 

@@ -48,7 +48,8 @@ export function shouldCollapse(groupKey: string, collapsedSet: Set<string>, sear
 }
 
 /** Before storage is read, default to collapsed (prevents first-render flicker). */
-export function shouldCollapseBeforeInit(_groupKey: string): boolean { // eslint-disable-line @typescript-eslint/no-unused-vars
+export function shouldCollapseBeforeInit(_groupKey: string): boolean {
+  // eslint-disable-line @typescript-eslint/no-unused-vars
   return true;
 }
 

@@ -1,13 +1,21 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useInputHistoryStore } from '../inputHistoryStore';
 
 const mockStorage: Record<string, string> = {};
 const mockLocalStorage = {
   getItem: vi.fn((key: string) => mockStorage[key] ?? null),
-  setItem: vi.fn((key: string, value: string) => { mockStorage[key] = value; }),
-  removeItem: vi.fn((key: string) => { delete mockStorage[key]; }),
-  clear: vi.fn(() => { for (const k of Object.keys(mockStorage)) delete mockStorage[k]; }),
-  get length() { return Object.keys(mockStorage).length; },
+  setItem: vi.fn((key: string, value: string) => {
+    mockStorage[key] = value;
+  }),
+  removeItem: vi.fn((key: string) => {
+    delete mockStorage[key];
+  }),
+  clear: vi.fn(() => {
+    for (const k of Object.keys(mockStorage)) delete mockStorage[k];
+  }),
+  get length() {
+    return Object.keys(mockStorage).length;
+  },
   key: vi.fn(() => null),
 };
 

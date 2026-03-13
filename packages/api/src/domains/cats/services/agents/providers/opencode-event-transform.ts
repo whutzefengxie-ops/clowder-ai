@@ -46,7 +46,7 @@ interface OpenCodeEvent {
 function isOpenCodeEvent(event: unknown): event is OpenCodeEvent {
   if (typeof event !== 'object' || event === null) return false;
   const e = event as Record<string, unknown>;
-  return typeof e['type'] === 'string';
+  return typeof e.type === 'string';
 }
 
 export function transformOpenCodeEvent(event: unknown, catId: CatId | string): AgentMessage | null {
@@ -85,10 +85,7 @@ export function transformOpenCodeEvent(event: unknown, catId: CatId | string): A
     }
 
     case 'error': {
-      const errorMsg =
-        event.error?.data?.message
-        ?? event.error?.name
-        ?? 'opencode error';
+      const errorMsg = event.error?.data?.message ?? event.error?.name ?? 'opencode error';
       return {
         type: 'error',
         catId: catId as CatId,

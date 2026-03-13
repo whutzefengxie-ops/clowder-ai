@@ -1,8 +1,8 @@
 'use client';
 
+import type { BacklogItem, MissionHubSelfClaimScope, ThreadPhase } from '@cat-cafe/shared';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import type { BacklogItem, MissionHubSelfClaimScope, ThreadPhase } from '@cat-cafe/shared';
 import { formatCatName, useCatData } from '@/hooks/useCatData';
 import { SuggestionDecisionPanel } from './SuggestionDecisionPanel';
 import { SuggestionOpenForm } from './SuggestionOpenForm';
@@ -57,9 +57,7 @@ export function SuggestionDrawer({
     () =>
       cats.map((cat) => ({
         id: cat.id,
-        label: !cat.variantLabel && cat.nickname
-          ? `${formatCatName(cat)}（${cat.nickname}）`
-          : formatCatName(cat),
+        label: !cat.variantLabel && cat.nickname ? `${formatCatName(cat)}（${cat.nickname}）` : formatCatName(cat),
       })),
     [cats],
   );
@@ -153,14 +151,10 @@ export function SuggestionDrawer({
               Self-claim policy：<span className="font-semibold">{currentSelfClaimScope}</span>
             </p>
             {currentSelfClaimScope === 'once' && (
-              <p className="mt-1 text-[11px] text-[#846D55]">
-                once：每只猫只允许一次非幂等自领。
-              </p>
+              <p className="mt-1 text-[11px] text-[#846D55]">once：每只猫只允许一次非幂等自领。</p>
             )}
             {currentSelfClaimScope === 'thread' && (
-              <p className="mt-1 text-[11px] text-[#846D55]">
-                thread：同一只猫同一时间只允许一个 active lease 线程。
-              </p>
+              <p className="mt-1 text-[11px] text-[#846D55]">thread：同一只猫同一时间只允许一个 active lease 线程。</p>
             )}
             {selfClaimPolicyBlocker === 'once' && (
               <p className="mt-1 text-[11px] text-[#A14A2D]" data-testid="mc-self-claim-blocker-once">
@@ -176,13 +170,15 @@ export function SuggestionDrawer({
               <button
                 type="button"
                 disabled={submitting || !catId || !why.trim() || !plan.trim()}
-                onClick={() => void onSelfClaim({
-                  itemId: item.id,
-                  catId,
-                  why: why.trim(),
-                  plan: plan.trim(),
-                  requestedPhase: selectedPhase,
-                })}
+                onClick={() =>
+                  void onSelfClaim({
+                    itemId: item.id,
+                    catId,
+                    why: why.trim(),
+                    plan: plan.trim(),
+                    requestedPhase: selectedPhase,
+                  })
+                }
                 className="mt-2 w-full rounded-lg border border-[#1F1A16] px-3 py-2 text-xs font-semibold text-[#1F1A16] disabled:opacity-40"
                 data-testid="mc-self-claim-submit"
               >

@@ -5,12 +5,10 @@
  * When a queued message is dequeued for processing, deliveredAt is set.
  */
 
-import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
+import { describe, test } from 'node:test';
 
-const { MessageStore } = await import(
-  '../dist/domains/cats/services/stores/ports/MessageStore.js'
-);
+const { MessageStore } = await import('../dist/domains/cats/services/stores/ports/MessageStore.js');
 
 describe('MessageStore.markDelivered', () => {
   test('sets deliveredAt on an existing message', () => {

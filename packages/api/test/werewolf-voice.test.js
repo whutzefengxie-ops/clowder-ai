@@ -3,10 +3,11 @@
  *
  * When config.voiceMode = true, AI speech output wraps in audio rich block.
  */
-import { describe, it } from 'node:test';
+
 import assert from 'node:assert/strict';
-import { WerewolfAIPlayer } from '../dist/domains/cats/services/game/werewolf/WerewolfAIPlayer.js';
+import { describe, it } from 'node:test';
 import { GameViewBuilder } from '../dist/domains/cats/services/game/GameViewBuilder.js';
+import { WerewolfAIPlayer } from '../dist/domains/cats/services/game/werewolf/WerewolfAIPlayer.js';
 import { createWerewolfDefinition } from '../dist/domains/cats/services/game/werewolf/WerewolfDefinition.js';
 
 function create4pRuntime(voiceMode) {
@@ -38,8 +39,12 @@ function create4pRuntime(voiceMode) {
 
 function createMockProvider(text) {
   return {
-    async generateAction() { return { actionName: 'vote', targetSeat: 'P2' }; },
-    async generateSpeech() { return text; },
+    async generateAction() {
+      return { actionName: 'vote', targetSeat: 'P2' };
+    },
+    async generateSpeech() {
+      return text;
+    },
   };
 }
 

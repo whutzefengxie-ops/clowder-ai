@@ -3,8 +3,8 @@
  * 验证 routeSerial / routeParallel 纯函数的基本行为 + A2A worklist
  */
 
-import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
 
 // Create a mock agent service that yields text + done
 function createMockService(catId, text = 'hello') {
@@ -111,8 +111,8 @@ describe('routeSerial', () => {
       messages.push(msg);
     }
 
-    const textMsgs = messages.filter(m => m.type === 'text');
-    const doneMsgs = messages.filter(m => m.type === 'done');
+    const textMsgs = messages.filter((m) => m.type === 'text');
+    const doneMsgs = messages.filter((m) => m.type === 'done');
     assert.ok(textMsgs.length > 0, 'should have text messages');
     assert.ok(doneMsgs.length > 0, 'should have done message');
     assert.equal(textMsgs[0].content, 'serial response');
@@ -140,8 +140,8 @@ describe('routeSerial', () => {
     }
 
     // Verify tool events were yielded to frontend
-    const toolUses = messages.filter(m => m.type === 'tool_use');
-    const toolResults = messages.filter(m => m.type === 'tool_result');
+    const toolUses = messages.filter((m) => m.type === 'tool_use');
+    const toolResults = messages.filter((m) => m.type === 'tool_result');
     assert.equal(toolUses.length, 1, 'should yield tool_use');
     assert.equal(toolResults.length, 1, 'should yield tool_result');
 
@@ -171,8 +171,8 @@ describe('routeSerial A2A worklist', () => {
     }
 
     // Should have text from both cats (opus + codex via A2A)
-    const opusText = messages.filter(m => m.type === 'text' && m.catId === 'opus');
-    const codexText = messages.filter(m => m.type === 'text' && m.catId === 'codex');
+    const opusText = messages.filter((m) => m.type === 'text' && m.catId === 'opus');
+    const codexText = messages.filter((m) => m.type === 'text' && m.catId === 'codex');
     assert.ok(opusText.length > 0, 'opus should produce text');
     assert.ok(codexText.length > 0, 'codex should be invoked via A2A');
   });
@@ -189,7 +189,7 @@ describe('routeSerial A2A worklist', () => {
       messages.push(msg);
     }
 
-    const handoffs = messages.filter(m => m.type === 'a2a_handoff');
+    const handoffs = messages.filter((m) => m.type === 'a2a_handoff');
     assert.equal(handoffs.length, 1, 'should yield exactly one a2a_handoff');
     assert.equal(handoffs[0].catId, 'opus', 'handoff should be from opus');
     assert.ok(handoffs[0].content.includes('→'), 'handoff content should show arrow');
@@ -203,12 +203,13 @@ describe('routeSerial A2A worklist', () => {
       codex: codexService,
     });
 
-    for await (const _ of routeSerial(deps, ['opus'], 'write code', 'user1', 'thread1', { thinkingMode: 'debug' })) {}
+    for await (const _ of routeSerial(deps, ['opus'], 'write code', 'user1', 'thread1', { thinkingMode: 'debug' })) {
+    }
 
     assert.equal(codexService.calls.length, 1, 'codex should be called once');
     assert.ok(
       codexService.calls[0].includes('代码完成'),
-      'codex prompt should include opus response content in debug mode'
+      'codex prompt should include opus response content in debug mode',
     );
   });
 
@@ -221,12 +222,13 @@ describe('routeSerial A2A worklist', () => {
     });
 
     // Explicitly set play mode — cats should not see each other's thinking (default is now debug)
-    for await (const _ of routeSerial(deps, ['opus'], 'write code', 'user1', 'thread1', { thinkingMode: 'play' })) {}
+    for await (const _ of routeSerial(deps, ['opus'], 'write code', 'user1', 'thread1', { thinkingMode: 'play' })) {
+    }
 
     assert.equal(codexService.calls.length, 1, 'codex should be called once');
     assert.ok(
       !codexService.calls[0].includes('代码完成'),
-      'codex prompt should NOT include opus response content in play mode'
+      'codex prompt should NOT include opus response content in play mode',
     );
   });
 
@@ -242,13 +244,13 @@ describe('routeSerial A2A worklist', () => {
       messages.push(msg);
     }
 
-    const doneMsgs = messages.filter(m => m.type === 'done');
+    const doneMsgs = messages.filter((m) => m.type === 'done');
     assert.ok(doneMsgs.length >= 2, 'should have done from both cats');
     // First done (opus) should NOT be isFinal
-    const opusDone = doneMsgs.find(m => m.catId === 'opus');
+    const opusDone = doneMsgs.find((m) => m.catId === 'opus');
     assert.ok(!opusDone.isFinal, 'opus done should not be isFinal');
     // Last done (codex) should be isFinal
-    const codexDone = doneMsgs.find(m => m.catId === 'codex');
+    const codexDone = doneMsgs.find((m) => m.catId === 'codex');
     assert.ok(codexDone.isFinal, 'codex done (chain end) should be isFinal');
   });
 
@@ -268,7 +270,7 @@ describe('routeSerial A2A worklist', () => {
     }
 
     // Only opus + codex should produce text (depth=1 allows 1 hop)
-    const catIds = [...new Set(messages.filter(m => m.type === 'text').map(m => m.catId))];
+    const catIds = [...new Set(messages.filter((m) => m.type === 'text').map((m) => m.catId))];
     assert.ok(catIds.includes('opus'), 'opus should have text');
     assert.ok(catIds.includes('codex'), 'codex should be invoked (1st hop)');
     assert.ok(!catIds.includes('gemini'), 'gemini should NOT be invoked (2nd hop blocked by depth=1)');
@@ -282,21 +284,16 @@ describe('routeSerial A2A worklist', () => {
     });
 
     const messages = [];
-    for await (const msg of routeSerial(
-      deps,
-      ['opus'],
-      'test',
-      'user1',
-      'thread1',
-      { queueHasQueuedMessages: () => true },
-    )) {
+    for await (const msg of routeSerial(deps, ['opus'], 'test', 'user1', 'thread1', {
+      queueHasQueuedMessages: () => true,
+    })) {
       messages.push(msg);
     }
 
-    const codexText = messages.filter(m => m.type === 'text' && m.catId === 'codex');
+    const codexText = messages.filter((m) => m.type === 'text' && m.catId === 'codex');
     assert.equal(codexText.length, 0, 'A2A should yield to queued user messages');
 
-    const handoffs = messages.filter(m => m.type === 'a2a_handoff');
+    const handoffs = messages.filter((m) => m.type === 'a2a_handoff');
     assert.equal(handoffs.length, 0, 'should not emit handoff when fairness guard blocks extension');
   });
 
@@ -312,9 +309,9 @@ describe('routeSerial A2A worklist', () => {
       messages.push(msg);
     }
 
-    const handoffs = messages.filter(m => m.type === 'a2a_handoff');
+    const handoffs = messages.filter((m) => m.type === 'a2a_handoff');
     assert.equal(handoffs.length, 0, 'self-mention should not trigger A2A');
-    const codexText = messages.filter(m => m.type === 'text' && m.catId === 'codex');
+    const codexText = messages.filter((m) => m.type === 'text' && m.catId === 'codex');
     assert.equal(codexText.length, 0, 'codex should not be invoked');
   });
 
@@ -330,7 +327,7 @@ describe('routeSerial A2A worklist', () => {
       messages.push(msg);
     }
 
-    const handoffs = messages.filter(m => m.type === 'a2a_handoff');
+    const handoffs = messages.filter((m) => m.type === 'a2a_handoff');
     assert.equal(handoffs.length, 0, 'mid-line mention should not trigger A2A');
   });
 
@@ -355,27 +352,31 @@ describe('routeSerial A2A worklist', () => {
     }
 
     // Codex should not be invoked because signal was aborted
-    const codexText = messages.filter(m => m.type === 'text' && m.catId === 'codex');
+    const codexText = messages.filter((m) => m.type === 'text' && m.catId === 'codex');
     assert.equal(codexText.length, 0, 'codex should not be invoked after abort');
   });
 
   it('stores mentions correctly in messageStore.append', async () => {
     const { routeSerial } = await import('../dist/domains/cats/services/agents/routing/route-serial.js');
     const appendCalls = [];
-    const deps = createMockDeps({
-      opus: createMockService('opus', '写完了\n@缅因猫 帮review'),
-      codex: createMockService('codex', '审查完毕'),
-    }, appendCalls);
+    const deps = createMockDeps(
+      {
+        opus: createMockService('opus', '写完了\n@缅因猫 帮review'),
+        codex: createMockService('codex', '审查完毕'),
+      },
+      appendCalls,
+    );
 
-    for await (const _ of routeSerial(deps, ['opus'], 'code', 'user1', 'thread1')) {}
+    for await (const _ of routeSerial(deps, ['opus'], 'code', 'user1', 'thread1')) {
+    }
 
     // opus's stored message should have mentions: ['codex']
-    const opusAppend = appendCalls.find(c => c.catId === 'opus');
+    const opusAppend = appendCalls.find((c) => c.catId === 'opus');
     assert.ok(opusAppend, 'opus response should be stored');
     assert.deepEqual(opusAppend.mentions, ['codex'], 'opus mentions should include codex');
 
     // codex's stored message (no mention in response) → mentions: []
-    const codexAppend = appendCalls.find(c => c.catId === 'codex');
+    const codexAppend = appendCalls.find((c) => c.catId === 'codex');
     assert.ok(codexAppend, 'codex response should be stored');
     assert.deepEqual(codexAppend.mentions, [], 'codex mentions should be empty');
   });
@@ -404,7 +405,7 @@ describe('routeSerial A2A worklist', () => {
     }
 
     // Chain: opus → codex → opus (2 hops)
-    const handoffs = messages.filter(m => m.type === 'a2a_handoff');
+    const handoffs = messages.filter((m) => m.type === 'a2a_handoff');
     assert.equal(handoffs.length, 2, 'should have 2 A2A handoffs');
     assert.equal(opusCallCount, 2, 'opus should be called twice');
   });
@@ -430,19 +431,18 @@ describe('routeSerial A2A worklist', () => {
       },
     ];
 
-    for await (const _ of routeSerial(
-      deps,
-      ['opus'],
-      'CURRENT USER MESSAGE',
-      'user1',
-      'thread1',
-      { currentUserMessageId: 'missing-current-id' },
-    )) {}
+    for await (const _ of routeSerial(deps, ['opus'], 'CURRENT USER MESSAGE', 'user1', 'thread1', {
+      currentUserMessageId: 'missing-current-id',
+    })) {
+    }
 
     assert.equal(captureService.calls.length, 1, 'opus should be called once');
     const prompt = captureService.calls[0];
     assert.ok(prompt.includes('older user message'), 'prompt should include incremental unseen history');
-    assert.ok(prompt.includes('CURRENT USER MESSAGE'), 'prompt must include current user message explicitly when missing from unseen history');
+    assert.ok(
+      prompt.includes('CURRENT USER MESSAGE'),
+      'prompt must include current user message explicitly when missing from unseen history',
+    );
   });
 
   it('incremental mode: does NOT inject whisper content for non-recipient cat (F35 privacy fix)', async () => {
@@ -472,14 +472,11 @@ describe('routeSerial A2A worklist', () => {
       },
     ];
 
-    for await (const _ of routeSerial(
-      deps,
-      ['codex'],
-      'SECRET: 图灵是狼人',
-      'user1',
-      'thread1',
-      { currentUserMessageId: whisperMsgId, thinkingMode: 'play' },
-    )) {}
+    for await (const _ of routeSerial(deps, ['codex'], 'SECRET: 图灵是狼人', 'user1', 'thread1', {
+      currentUserMessageId: whisperMsgId,
+      thinkingMode: 'play',
+    })) {
+    }
 
     assert.equal(codexService.calls.length, 1, 'codex should be called once');
     const prompt = codexService.calls[0];
@@ -493,10 +490,7 @@ describe('routeSerial A2A worklist', () => {
     const threadStore = new ThreadStore();
     const thread = threadStore.create('user1', 'no suppression');
     const opusService = createCapturingService('opus', '收到');
-    const codexService = createSequentialCapturingService('codex', [
-      '@布偶猫',
-      '第二次调用',
-    ]);
+    const codexService = createSequentialCapturingService('codex', ['@布偶猫', '第二次调用']);
     const deps = createMockDeps({ codex: codexService, opus: opusService }, undefined, threadStore);
 
     const messages = [];
@@ -509,7 +503,8 @@ describe('routeSerial A2A worklist', () => {
     assert.equal(handoffs.length, 1, 'bare @布偶猫 should trigger A2A handoff without action keywords');
 
     // Second invocation should NOT have any routing feedback (suppression system removed)
-    for await (const _ of routeSerial(deps, ['codex'], 'second', 'user1', thread.id, { thinkingMode: 'debug' })) {}
+    for await (const _ of routeSerial(deps, ['codex'], 'second', 'user1', thread.id, { thinkingMode: 'debug' })) {
+    }
     assert.ok(
       !codexService.calls[1].includes('Routing feedback(one-shot):'),
       'no routing feedback should be injected (suppression system removed)',
@@ -519,11 +514,15 @@ describe('routeSerial A2A worklist', () => {
   it('sanitize should preserve normal markdown separator lines', async () => {
     const { routeSerial } = await import('../dist/domains/cats/services/agents/routing/route-serial.js');
     const appendCalls = [];
-    const deps = createMockDeps({
-      opus: createMockService('opus', '章节A\n---\n章节B'),
-    }, appendCalls);
+    const deps = createMockDeps(
+      {
+        opus: createMockService('opus', '章节A\n---\n章节B'),
+      },
+      appendCalls,
+    );
 
-    for await (const _ of routeSerial(deps, ['opus'], 'markdown test', 'user1', 'thread1')) {}
+    for await (const _ of routeSerial(deps, ['opus'], 'markdown test', 'user1', 'thread1')) {
+    }
 
     const saved = appendCalls.find((c) => c.catId === 'opus');
     assert.ok(saved, 'stored message should exist');
@@ -552,7 +551,9 @@ describe('routeSerial resilience', () => {
         apiUrl: 'http://127.0.0.1:3002',
       },
       messageStore: {
-        append: async () => { throw new Error('Redis connection refused'); },
+        append: async () => {
+          throw new Error('Redis connection refused');
+        },
         getRecent: () => [],
         getMentionsFor: () => [],
         getBefore: () => [],
@@ -568,7 +569,7 @@ describe('routeSerial resilience', () => {
     }
 
     // done MUST still be yielded despite append failure
-    const doneMsgs = messages.filter(m => m.type === 'done');
+    const doneMsgs = messages.filter((m) => m.type === 'done');
     assert.ok(doneMsgs.length > 0, 'done must be yielded even when append throws');
     assert.ok(doneMsgs[0].isFinal, 'done should be isFinal');
   });
@@ -605,19 +606,13 @@ describe('routeSerial cursor ack on error', () => {
     ];
 
     const cursorBoundaries = new Map();
-    for await (const _ of routeSerial(
-      deps,
-      ['opus'],
-      'test',
-      'user1',
-      'thread1',
-      { currentUserMessageId: '0000000000000001-000001-aaaaaaaa', cursorBoundaries },
-    )) {}
+    for await (const _ of routeSerial(deps, ['opus'], 'test', 'user1', 'thread1', {
+      currentUserMessageId: '0000000000000001-000001-aaaaaaaa',
+      cursorBoundaries,
+    })) {
+    }
 
-    assert.ok(
-      cursorBoundaries.has('opus'),
-      'cursor boundary must be set for opus even when hadError=true',
-    );
+    assert.ok(cursorBoundaries.has('opus'), 'cursor boundary must be set for opus even when hadError=true');
     assert.equal(
       cursorBoundaries.get('opus'),
       '0000000000000001-000001-aaaaaaaa',
@@ -659,23 +654,14 @@ describe('routeParallel cursor ack on error', () => {
     ];
 
     const cursorBoundaries = new Map();
-    for await (const _ of routeParallel(
-      deps,
-      ['opus', 'codex'],
-      'test',
-      'user1',
-      'thread1',
-      { currentUserMessageId: '0000000000000002-000001-bbbbbbbb', cursorBoundaries },
-    )) {}
+    for await (const _ of routeParallel(deps, ['opus', 'codex'], 'test', 'user1', 'thread1', {
+      currentUserMessageId: '0000000000000002-000001-bbbbbbbb',
+      cursorBoundaries,
+    })) {
+    }
 
-    assert.ok(
-      cursorBoundaries.has('opus'),
-      'cursor boundary must be set for opus even when it errored',
-    );
-    assert.ok(
-      cursorBoundaries.has('codex'),
-      'cursor boundary must be set for codex (no error)',
-    );
+    assert.ok(cursorBoundaries.has('opus'), 'cursor boundary must be set for opus even when it errored');
+    assert.ok(cursorBoundaries.has('codex'), 'cursor boundary must be set for codex (no error)');
   });
 });
 
@@ -688,16 +674,21 @@ describe('routeParallel resilience', () => {
       codex: createMockService('codex', 'codex says'),
     });
     // Force append failure (simulates Redis outage)
-    deps.messageStore.append = async () => { throw new Error('Redis connection refused'); };
+    deps.messageStore.append = async () => {
+      throw new Error('Redis connection refused');
+    };
 
     const messages = [];
     for await (const msg of routeParallel(deps, ['opus', 'codex'], 'test', 'user1', 'thread1')) {
       messages.push(msg);
     }
 
-    const doneMsgs = messages.filter(m => m.type === 'done');
+    const doneMsgs = messages.filter((m) => m.type === 'done');
     assert.equal(doneMsgs.length, 2, 'should still yield done for both cats');
-    assert.ok(doneMsgs.some(m => m.isFinal), 'one done should be isFinal');
+    assert.ok(
+      doneMsgs.some((m) => m.isFinal),
+      'one done should be isFinal',
+    );
   });
 });
 
@@ -726,14 +717,11 @@ describe('routeParallel whisper privacy (F35)', () => {
       },
     ];
 
-    for await (const _ of routeParallel(
-      deps,
-      ['codex'],
-      'SECRET: 图灵是狼人',
-      'user1',
-      'thread1',
-      { currentUserMessageId: whisperMsgId, thinkingMode: 'play' },
-    )) {}
+    for await (const _ of routeParallel(deps, ['codex'], 'SECRET: 图灵是狼人', 'user1', 'thread1', {
+      currentUserMessageId: whisperMsgId,
+      thinkingMode: 'play',
+    })) {
+    }
 
     assert.equal(codexService.calls.length, 1, 'codex should be called once');
     const prompt = codexService.calls[0];
@@ -760,10 +748,11 @@ describe('routeParallel tool events persistence', () => {
     const appendCalls = [];
     const deps = createMockDeps({ opus: opusService, codex: codexService }, appendCalls);
 
-    for await (const _msg of routeParallel(deps, ['opus', 'codex'], 'review', 'user1', 'thread1')) {}
+    for await (const _msg of routeParallel(deps, ['opus', 'codex'], 'review', 'user1', 'thread1')) {
+    }
 
     // opus message should have toolEvents
-    const opusAppend = appendCalls.find(c => c.catId === 'opus');
+    const opusAppend = appendCalls.find((c) => c.catId === 'opus');
     assert.ok(opusAppend, 'opus message should be appended');
     assert.ok(opusAppend.toolEvents, 'opus should have toolEvents');
     assert.equal(opusAppend.toolEvents.length, 2);
@@ -771,7 +760,7 @@ describe('routeParallel tool events persistence', () => {
     assert.equal(opusAppend.toolEvents[1].type, 'tool_result');
 
     // codex message should NOT have toolEvents (no tool usage)
-    const codexAppend = appendCalls.find(c => c.catId === 'codex');
+    const codexAppend = appendCalls.find((c) => c.catId === 'codex');
     assert.ok(codexAppend, 'codex message should be appended');
     assert.ok(!codexAppend.toolEvents, 'codex should not have toolEvents');
   });
@@ -792,10 +781,11 @@ describe('routeParallel tool events persistence', () => {
     const appendCalls = [];
     const deps = createMockDeps({ opus: toolOnlyService, codex: codexService }, appendCalls);
 
-    for await (const _msg of routeParallel(deps, ['opus', 'codex'], 'search', 'user1', 'thread1')) {}
+    for await (const _msg of routeParallel(deps, ['opus', 'codex'], 'search', 'user1', 'thread1')) {
+    }
 
     // Even though opus had no text, it should still be persisted with tool events
-    const opusAppend = appendCalls.find(c => c.catId === 'opus');
+    const opusAppend = appendCalls.find((c) => c.catId === 'opus');
     assert.ok(opusAppend, 'tool-only cat should still be persisted');
     assert.equal(opusAppend.content, '', 'content should be empty');
     assert.ok(opusAppend.toolEvents, 'should have toolEvents');
@@ -810,7 +800,9 @@ describe('routeSerial persistence context (P1-2)', () => {
     const { routeSerial } = await import('../dist/domains/cats/services/agents/routing/route-serial.js');
 
     const deps = createMockDeps({ opus: createMockService('opus', '结果') });
-    deps.messageStore.append = async () => { throw new Error('Redis connection refused'); };
+    deps.messageStore.append = async () => {
+      throw new Error('Redis connection refused');
+    };
 
     const persistenceContext = { failed: false, errors: [] };
     const messages = [];
@@ -824,7 +816,7 @@ describe('routeSerial persistence context (P1-2)', () => {
     assert.ok(persistenceContext.errors[0].error.includes('Redis'), 'error should contain original message');
 
     // done MUST still be yielded despite append failure
-    const doneMsgs = messages.filter(m => m.type === 'done');
+    const doneMsgs = messages.filter((m) => m.type === 'done');
     assert.ok(doneMsgs.length > 0, 'done must still be yielded');
   });
 
@@ -850,11 +842,15 @@ describe('routeParallel persistence context (P1-2)', () => {
       opus: createMockService('opus', 'opus says'),
       codex: createMockService('codex', 'codex says'),
     });
-    deps.messageStore.append = async () => { throw new Error('Redis connection refused'); };
+    deps.messageStore.append = async () => {
+      throw new Error('Redis connection refused');
+    };
 
     const persistenceContext = { failed: false, errors: [] };
     const messages = [];
-    for await (const msg of routeParallel(deps, ['opus', 'codex'], 'test', 'user1', 'thread1', { persistenceContext })) {
+    for await (const msg of routeParallel(deps, ['opus', 'codex'], 'test', 'user1', 'thread1', {
+      persistenceContext,
+    })) {
       messages.push(msg);
     }
 
@@ -862,7 +858,7 @@ describe('routeParallel persistence context (P1-2)', () => {
     assert.ok(persistenceContext.errors.length >= 2, 'should record errors for both cats');
 
     // done MUST still be yielded for both
-    const doneMsgs = messages.filter(m => m.type === 'done');
+    const doneMsgs = messages.filter((m) => m.type === 'done');
     assert.equal(doneMsgs.length, 2);
   });
 
@@ -874,7 +870,9 @@ describe('routeParallel persistence context (P1-2)', () => {
     });
 
     const persistenceContext = { failed: false, errors: [] };
-    for await (const _msg of routeParallel(deps, ['opus', 'codex'], 'test', 'user1', 'thread1', { persistenceContext })) {
+    for await (const _msg of routeParallel(deps, ['opus', 'codex'], 'test', 'user1', 'thread1', {
+      persistenceContext,
+    })) {
       // consume
     }
 
@@ -902,11 +900,19 @@ describe('image contentBlocks routing', () => {
     }
 
     assert.equal(opusService.calls.length, 1, 'opus should be invoked once');
-    assert.deepEqual(opusService.calls[0].options?.contentBlocks, contentBlocks, 'opus should receive image contentBlocks');
+    assert.deepEqual(
+      opusService.calls[0].options?.contentBlocks,
+      contentBlocks,
+      'opus should receive image contentBlocks',
+    );
     assert.equal(opusService.calls[0].options?.uploadDir, '/tmp/uploads', 'opus should receive uploadDir');
 
     assert.equal(codexService.calls.length, 1, 'codex should be invoked once');
-    assert.deepEqual(codexService.calls[0].options?.contentBlocks, contentBlocks, 'codex should receive original image contentBlocks');
+    assert.deepEqual(
+      codexService.calls[0].options?.contentBlocks,
+      contentBlocks,
+      'codex should receive original image contentBlocks',
+    );
     assert.equal(codexService.calls[0].options?.uploadDir, '/tmp/uploads', 'codex should receive uploadDir');
   });
 
@@ -928,11 +934,19 @@ describe('image contentBlocks routing', () => {
     }
 
     assert.equal(opusService.calls.length, 1, 'opus should be invoked once');
-    assert.deepEqual(opusService.calls[0].options?.contentBlocks, contentBlocks, 'opus should receive image contentBlocks');
+    assert.deepEqual(
+      opusService.calls[0].options?.contentBlocks,
+      contentBlocks,
+      'opus should receive image contentBlocks',
+    );
     assert.equal(opusService.calls[0].options?.uploadDir, '/tmp/uploads', 'opus should receive uploadDir');
 
     assert.equal(codexService.calls.length, 1, 'codex should be invoked once');
-    assert.deepEqual(codexService.calls[0].options?.contentBlocks, contentBlocks, 'codex should receive original image contentBlocks');
+    assert.deepEqual(
+      codexService.calls[0].options?.contentBlocks,
+      contentBlocks,
+      'codex should receive original image contentBlocks',
+    );
     assert.equal(codexService.calls[0].options?.uploadDir, '/tmp/uploads', 'codex should receive uploadDir');
   });
 });
@@ -945,11 +959,28 @@ describe('routeSerial per-cat budget', () => {
 
     // Provide history in options
     const history = [
-      { id: 'm1', threadId: 'thread1', userId: 'user1', catId: null, content: '之前说了什么', mentions: [], timestamp: Date.now() - 1000 },
-      { id: 'm2', threadId: 'thread1', userId: 'user1', catId: 'opus', content: '我回复了', mentions: [], timestamp: Date.now() - 500 },
+      {
+        id: 'm1',
+        threadId: 'thread1',
+        userId: 'user1',
+        catId: null,
+        content: '之前说了什么',
+        mentions: [],
+        timestamp: Date.now() - 1000,
+      },
+      {
+        id: 'm2',
+        threadId: 'thread1',
+        userId: 'user1',
+        catId: 'opus',
+        content: '我回复了',
+        mentions: [],
+        timestamp: Date.now() - 500,
+      },
     ];
 
-    for await (const _ of routeSerial(deps, ['opus'], 'new message', 'user1', 'thread1', { history })) {}
+    for await (const _ of routeSerial(deps, ['opus'], 'new message', 'user1', 'thread1', { history })) {
+    }
 
     // Check that prompt includes context from history
     assert.equal(captureService.calls.length, 1, 'opus should be called once');
@@ -963,7 +994,10 @@ describe('routeSerial per-cat budget', () => {
     const captureService = createCapturingService('opus', 'response');
     const deps = createMockDeps({ opus: captureService });
 
-    for await (const _ of routeSerial(deps, ['opus'], 'msg', 'user1', 'thread1', { contextHistory: '[对话历史] 测试上下文' })) {}
+    for await (const _ of routeSerial(deps, ['opus'], 'msg', 'user1', 'thread1', {
+      contextHistory: '[对话历史] 测试上下文',
+    })) {
+    }
 
     const prompt = captureService.calls[0];
     assert.ok(prompt.includes('[对话历史] 测试上下文'), 'prompt should include legacy contextHistory');
@@ -978,10 +1012,19 @@ describe('routeParallel per-cat budget', () => {
     const deps = createMockDeps({ opus: opusService, codex: codexService });
 
     const history = [
-      { id: 'm1', threadId: 'thread1', userId: 'user1', catId: null, content: '历史消息', mentions: [], timestamp: Date.now() - 1000 },
+      {
+        id: 'm1',
+        threadId: 'thread1',
+        userId: 'user1',
+        catId: null,
+        content: '历史消息',
+        mentions: [],
+        timestamp: Date.now() - 1000,
+      },
     ];
 
-    for await (const _ of routeParallel(deps, ['opus', 'codex'], 'test', 'user1', 'thread1', { history })) {}
+    for await (const _ of routeParallel(deps, ['opus', 'codex'], 'test', 'user1', 'thread1', { history })) {
+    }
 
     // Both cats should receive history in their prompts
     assert.ok(opusService.calls[0].includes('对话历史'), 'opus prompt should include history');
@@ -1047,7 +1090,7 @@ describe('routeSerial degradation notification', () => {
     // budgetForContext = maxPromptTokens - systemTokens - promptTokens - 200
     // With maxPromptTokens=500, budgetForContext ≈ 90 tokens → truncation.
     // Count (20) is within maxMessages (200), but total tokens exceed context budget.
-    process.env['CAT_OPUS_MAX_PROMPT_TOKENS'] = '500';
+    process.env.CAT_OPUS_MAX_PROMPT_TOKENS = '500';
     try {
       const history = Array.from({ length: 20 }, (_, i) => ({
         id: `m${i}`,
@@ -1068,7 +1111,7 @@ describe('routeSerial degradation notification', () => {
       assert.ok(sysInfos.length > 0, 'should yield degradation when token budget truncates context');
       assert.ok(sysInfos[0].content.includes('截断'), 'degradation message should mention truncation');
     } finally {
-      delete process.env['CAT_OPUS_MAX_PROMPT_TOKENS'];
+      delete process.env.CAT_OPUS_MAX_PROMPT_TOKENS;
     }
   });
 });
@@ -1110,14 +1153,14 @@ describe('routeParallel degradation notification', () => {
 
     // Count is within both cats' maxMessages (codex=200, opus=200), but token budget should force truncation.
     // Override codex maxPromptTokens to a small value so assembleContext can't fit the full history.
-    process.env['CAT_CODEX_MAX_PROMPT_TOKENS'] = '500';
+    process.env.CAT_CODEX_MAX_PROMPT_TOKENS = '500';
     try {
       const history = Array.from({ length: 50 }, (_, i) => ({
         id: `m${i}`,
         threadId: 'thread1',
         userId: 'user1',
         catId: null,
-        content: `message ${i} ` + 'y'.repeat(2100),
+        content: `message ${i} ${'y'.repeat(2100)}`,
         mentions: [],
         timestamp: Date.now() - (50 - i) * 1000,
       }));
@@ -1130,7 +1173,7 @@ describe('routeParallel degradation notification', () => {
       const sysInfos = degradationSystemInfos(messages);
       assert.ok(sysInfos.length > 0, 'should yield at least one degradation system_info');
     } finally {
-      delete process.env['CAT_CODEX_MAX_PROMPT_TOKENS'];
+      delete process.env.CAT_CODEX_MAX_PROMPT_TOKENS;
     }
   });
 });
@@ -1139,10 +1182,13 @@ describe('routeParallel A2A safety', () => {
   it('does not chain A2A even when mentions are detected', async () => {
     const { routeParallel } = await import('../dist/domains/cats/services/agents/routing/route-parallel.js');
     const appendCalls = [];
-    const deps = createMockDeps({
-      opus: createMockService('opus', '需要缅因猫帮忙\n@缅因猫 请看'),
-      codex: createMockService('codex', '我来了'),
-    }, appendCalls);
+    const deps = createMockDeps(
+      {
+        opus: createMockService('opus', '需要缅因猫帮忙\n@缅因猫 请看'),
+        codex: createMockService('codex', '我来了'),
+      },
+      appendCalls,
+    );
 
     const messages = [];
     for await (const msg of routeParallel(deps, ['opus', 'codex'], 'brainstorm', 'user1', 'thread1')) {
@@ -1150,11 +1196,11 @@ describe('routeParallel A2A safety', () => {
     }
 
     // Should not yield any a2a_handoff events
-    const handoffs = messages.filter(m => m.type === 'a2a_handoff');
+    const handoffs = messages.filter((m) => m.type === 'a2a_handoff');
     assert.equal(handoffs.length, 0, 'parallel mode should never chain A2A');
 
     // But mentions should still be stored
-    const opusAppend = appendCalls.find(c => c.catId === 'opus');
+    const opusAppend = appendCalls.find((c) => c.catId === 'opus');
     assert.ok(opusAppend, 'opus response should be stored');
     assert.deepEqual(opusAppend.mentions, ['codex'], 'mentions should be detected and stored');
   });
@@ -1171,16 +1217,16 @@ describe('routeParallel A2A safety', () => {
       messages.push(msg);
     }
 
-    const doneMsgs = messages.filter(m => m.type === 'done');
+    const doneMsgs = messages.filter((m) => m.type === 'done');
     assert.equal(doneMsgs.length, 2, 'should have 2 done messages (one per cat)');
 
     // Last done should be marked isFinal
-    const finalDone = doneMsgs.find(m => m.isFinal === true);
+    const finalDone = doneMsgs.find((m) => m.isFinal === true);
     assert.ok(finalDone, 'last done should be marked isFinal');
 
     // Both cats should have text
-    const opusText = messages.filter(m => m.type === 'text' && m.catId === 'opus');
-    const codexText = messages.filter(m => m.type === 'text' && m.catId === 'codex');
+    const opusText = messages.filter((m) => m.type === 'text' && m.catId === 'opus');
+    const codexText = messages.filter((m) => m.type === 'text' && m.catId === 'codex');
     assert.ok(opusText.length > 0, 'opus should have text');
     assert.ok(codexText.length > 0, 'codex should have text');
   });
@@ -1202,9 +1248,12 @@ describe('routeSerial: CLI error without text should not persist empty message (
   it('persists error text when cat yields error + done with no user-visible text', async () => {
     const { routeSerial } = await import('../dist/domains/cats/services/agents/routing/route-serial.js');
     const appendCalls = [];
-    const deps = createMockDeps({
-      codex: createErrorOnlyService('codex'),
-    }, appendCalls);
+    const deps = createMockDeps(
+      {
+        codex: createErrorOnlyService('codex'),
+      },
+      appendCalls,
+    );
 
     const messages = [];
     for await (const msg of routeSerial(deps, ['codex'], 'test', 'user1', 'thread1')) {
@@ -1212,29 +1261,33 @@ describe('routeSerial: CLI error without text should not persist empty message (
     }
 
     // Error should be yielded to frontend
-    const errorMsgs = messages.filter(m => m.type === 'error');
+    const errorMsgs = messages.filter((m) => m.type === 'error');
     assert.ok(errorMsgs.length > 0, 'error message should be yielded to frontend');
 
     // Error text is appended to textContent and persisted (❌ prefix)
-    const catAppends = appendCalls.filter(c => c.catId === 'codex');
+    const catAppends = appendCalls.filter((c) => c.catId === 'codex');
     assert.equal(catAppends.length, 1, 'error text should be persisted as message content');
     assert.ok(catAppends[0].content.includes('❌'), 'persisted content should contain error marker');
 
     // Done should still be yielded
-    const doneMsgs = messages.filter(m => m.type === 'done');
+    const doneMsgs = messages.filter((m) => m.type === 'done');
     assert.ok(doneMsgs.length > 0, 'done should still be yielded');
   });
 
   it('still persists message normally when cat yields text + done (no error)', async () => {
     const { routeSerial } = await import('../dist/domains/cats/services/agents/routing/route-serial.js');
     const appendCalls = [];
-    const deps = createMockDeps({
-      codex: createMockService('codex', 'normal response'),
-    }, appendCalls);
+    const deps = createMockDeps(
+      {
+        codex: createMockService('codex', 'normal response'),
+      },
+      appendCalls,
+    );
 
-    for await (const _ of routeSerial(deps, ['codex'], 'test', 'user1', 'thread1')) {}
+    for await (const _ of routeSerial(deps, ['codex'], 'test', 'user1', 'thread1')) {
+    }
 
-    const catAppends = appendCalls.filter(c => c.catId === 'codex');
+    const catAppends = appendCalls.filter((c) => c.catId === 'codex');
     assert.equal(catAppends.length, 1, 'normal response should be persisted');
     assert.equal(catAppends[0].content, 'normal response');
   });
@@ -1242,20 +1295,24 @@ describe('routeSerial: CLI error without text should not persist empty message (
   it('still persists message when cat yields error + text + done (partial response)', async () => {
     const { routeSerial } = await import('../dist/domains/cats/services/agents/routing/route-serial.js');
     const appendCalls = [];
-    const deps = createMockDeps({
-      codex: {
-        async *invoke() {
-          yield { type: 'text', catId: 'codex', content: 'partial output before error', timestamp: Date.now() };
-          yield { type: 'error', catId: 'codex', error: 'timeout', timestamp: Date.now() };
-          yield { type: 'done', catId: 'codex', timestamp: Date.now() };
+    const deps = createMockDeps(
+      {
+        codex: {
+          async *invoke() {
+            yield { type: 'text', catId: 'codex', content: 'partial output before error', timestamp: Date.now() };
+            yield { type: 'error', catId: 'codex', error: 'timeout', timestamp: Date.now() };
+            yield { type: 'done', catId: 'codex', timestamp: Date.now() };
+          },
         },
       },
-    }, appendCalls);
+      appendCalls,
+    );
 
-    for await (const _ of routeSerial(deps, ['codex'], 'test', 'user1', 'thread1')) {}
+    for await (const _ of routeSerial(deps, ['codex'], 'test', 'user1', 'thread1')) {
+    }
 
     // Partial text + error suffix should be persisted
-    const catAppends = appendCalls.filter(c => c.catId === 'codex');
+    const catAppends = appendCalls.filter((c) => c.catId === 'codex');
     assert.equal(catAppends.length, 1, 'partial response with text should still be persisted');
     assert.ok(catAppends[0].content.startsWith('partial output before error'), 'should start with partial text');
     assert.ok(catAppends[0].content.includes('❌ timeout'), 'should include error suffix');
@@ -1277,15 +1334,19 @@ describe('routeSerial: done-only (no text, no error) must tag origin:stream', ()
   it('persists empty message with origin:stream when cat yields only done', async () => {
     const { routeSerial } = await import('../dist/domains/cats/services/agents/routing/route-serial.js');
     const appendCalls = [];
-    const deps = createMockDeps({
-      codex: createDoneOnlyService('codex'),
-    }, appendCalls);
+    const deps = createMockDeps(
+      {
+        codex: createDoneOnlyService('codex'),
+      },
+      appendCalls,
+    );
 
     for await (const _ of routeSerial(deps, ['codex'], 'test', 'user1', 'thread1', {
       thinkingMode: 'play',
-    })) {}
+    })) {
+    }
 
-    const catAppends = appendCalls.filter(c => c.catId === 'codex');
+    const catAppends = appendCalls.filter((c) => c.catId === 'codex');
     assert.equal(catAppends.length, 1, 'done-only cat should still persist a message');
     assert.equal(catAppends[0].origin, 'stream', 'done-only append must have origin:stream');
   });
@@ -1295,15 +1356,19 @@ describe('routeSerial: done-only (no text, no error) must tag origin:stream', ()
     // play-mode filter hides it → legacy untagged remains visible.
     const { routeSerial } = await import('../dist/domains/cats/services/agents/routing/route-serial.js');
     const appendCalls = [];
-    const deps = createMockDeps({
-      codex: createDoneOnlyService('codex'),
-    }, appendCalls);
+    const deps = createMockDeps(
+      {
+        codex: createDoneOnlyService('codex'),
+      },
+      appendCalls,
+    );
 
     for await (const _ of routeSerial(deps, ['codex'], 'test', 'user1', 'thread1', {
       thinkingMode: 'play',
-    })) {}
+    })) {
+    }
 
-    const codexAppend = appendCalls.find(c => c.catId === 'codex');
+    const codexAppend = appendCalls.find((c) => c.catId === 'codex');
     assert.ok(codexAppend, 'codex message should be persisted');
     assert.equal(codexAppend.origin, 'stream');
 
@@ -1323,12 +1388,14 @@ describe('routeParallel thinking persistence (F045)', () => {
     const thinkingService = {
       async *invoke(_prompt) {
         yield {
-          type: 'system_info', catId: 'opus',
+          type: 'system_info',
+          catId: 'opus',
           content: JSON.stringify({ type: 'invocation_created', invocationId: 'inv-think-1' }),
           timestamp: Date.now(),
         };
         yield {
-          type: 'system_info', catId: 'opus',
+          type: 'system_info',
+          catId: 'opus',
           content: JSON.stringify({ type: 'thinking', text: 'Let me reason about this...' }),
           timestamp: Date.now(),
         };
@@ -1357,17 +1424,20 @@ describe('routeParallel thinking persistence (F045)', () => {
     const multiThinkService = {
       async *invoke(_prompt) {
         yield {
-          type: 'system_info', catId: 'opus',
+          type: 'system_info',
+          catId: 'opus',
           content: JSON.stringify({ type: 'invocation_created', invocationId: 'inv-think-2' }),
           timestamp: Date.now(),
         };
         yield {
-          type: 'system_info', catId: 'opus',
+          type: 'system_info',
+          catId: 'opus',
           content: JSON.stringify({ type: 'thinking', text: 'First thought' }),
           timestamp: Date.now(),
         };
         yield {
-          type: 'system_info', catId: 'opus',
+          type: 'system_info',
+          catId: 'opus',
           content: JSON.stringify({ type: 'thinking', text: 'Second thought' }),
           timestamp: Date.now(),
         };
@@ -1379,7 +1449,9 @@ describe('routeParallel thinking persistence (F045)', () => {
     const appendCalls = [];
     const deps = createMockDeps({ opus: multiThinkService }, appendCalls);
 
-    for await (const msg of routeParallel(deps, ['opus'], 'test', 'user1', 'thread1')) { /* drain */ }
+    for await (const _msg of routeParallel(deps, ['opus'], 'test', 'user1', 'thread1')) {
+      /* drain */
+    }
 
     assert.equal(appendCalls[0].thinking, 'First thought\n\n---\n\nSecond thought');
   });
@@ -1390,7 +1462,8 @@ describe('routeParallel thinking persistence (F045)', () => {
     const service = {
       async *invoke(_prompt) {
         yield {
-          type: 'system_info', catId: 'opus',
+          type: 'system_info',
+          catId: 'opus',
           content: JSON.stringify({ type: 'invocation_created', invocationId: 'inv-par-forward-1' }),
           timestamp: Date.now(),
         };
@@ -1407,11 +1480,9 @@ describe('routeParallel thinking persistence (F045)', () => {
       messages.push(msg);
     }
 
-    const invocationCreated = messages.find((m) => (
-      m.type === 'system_info' &&
-      typeof m.content === 'string' &&
-      m.content.includes('"invocation_created"')
-    ));
+    const invocationCreated = messages.find(
+      (m) => m.type === 'system_info' && typeof m.content === 'string' && m.content.includes('"invocation_created"'),
+    );
     assert.ok(invocationCreated, 'routeParallel must forward invocation_created');
     assert.equal(appendCalls.length, 1, 'content persistence should still work');
   });
@@ -1424,12 +1495,14 @@ describe('routeSerial thinking persistence (F045)', () => {
     const thinkingService = {
       async *invoke(_prompt) {
         yield {
-          type: 'system_info', catId: 'opus',
+          type: 'system_info',
+          catId: 'opus',
           content: JSON.stringify({ type: 'invocation_created', invocationId: 'inv-think-s1' }),
           timestamp: Date.now(),
         };
         yield {
-          type: 'system_info', catId: 'opus',
+          type: 'system_info',
+          catId: 'opus',
           content: JSON.stringify({ type: 'thinking', text: 'Serial thinking...' }),
           timestamp: Date.now(),
         };
@@ -1441,7 +1514,9 @@ describe('routeSerial thinking persistence (F045)', () => {
     const appendCalls = [];
     const deps = createMockDeps({ opus: thinkingService }, appendCalls);
 
-    for await (const msg of routeSerial(deps, ['opus'], 'test', 'user1', 'thread1')) { /* drain */ }
+    for await (const _msg of routeSerial(deps, ['opus'], 'test', 'user1', 'thread1')) {
+      /* drain */
+    }
 
     assert.equal(appendCalls.length, 1, 'should store one message');
     assert.equal(appendCalls[0].thinking, 'Serial thinking...', 'thinking must be persisted in serial mode');
@@ -1454,7 +1529,8 @@ describe('routeSerial thinking persistence (F045)', () => {
     const service = {
       async *invoke(_prompt) {
         yield {
-          type: 'system_info', catId: 'opus',
+          type: 'system_info',
+          catId: 'opus',
           content: JSON.stringify({ type: 'invocation_created', invocationId: 'inv-ser-forward-1' }),
           timestamp: Date.now(),
         };
@@ -1471,11 +1547,9 @@ describe('routeSerial thinking persistence (F045)', () => {
       messages.push(msg);
     }
 
-    const invocationCreated = messages.find((m) => (
-      m.type === 'system_info' &&
-      typeof m.content === 'string' &&
-      m.content.includes('"invocation_created"')
-    ));
+    const invocationCreated = messages.find(
+      (m) => m.type === 'system_info' && typeof m.content === 'string' && m.content.includes('"invocation_created"'),
+    );
     assert.ok(invocationCreated, 'routeSerial must forward invocation_created');
     assert.equal(appendCalls.length, 1, 'content persistence should still work');
   });

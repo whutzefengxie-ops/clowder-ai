@@ -3,8 +3,8 @@
  * F24 Session Blindness Fix: POST /api/sessions/seal, GET /api/sessions/latest-digest
  */
 
-import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
 import Fastify from 'fastify';
 
 /** Minimal mock TranscriptReader */
@@ -296,7 +296,7 @@ describe('Session Hooks Routes', () => {
       await loadStrategyHelpers();
       _setTestStrategyOverride('opus', {
         strategy: 'hybrid',
-        thresholds: { warn: 0.80, action: 0.90 },
+        thresholds: { warn: 0.8, action: 0.9 },
         hybrid: { maxCompressions: 2 },
         turnBudget: 12_000,
         safetyMargin: 4_000,
@@ -334,7 +334,7 @@ describe('Session Hooks Routes', () => {
       await loadStrategyHelpers();
       _setTestStrategyOverride('opus', {
         strategy: 'hybrid',
-        thresholds: { warn: 0.80, action: 0.90 },
+        thresholds: { warn: 0.8, action: 0.9 },
         hybrid: { maxCompressions: 1 },
         turnBudget: 12_000,
         safetyMargin: 4_000,
@@ -370,7 +370,7 @@ describe('Session Hooks Routes', () => {
       await loadStrategyHelpers();
       _setTestStrategyOverride('opus', {
         strategy: 'hybrid',
-        thresholds: { warn: 0.80, action: 0.90 },
+        thresholds: { warn: 0.8, action: 0.9 },
         hybrid: { maxCompressions: 1 },
         turnBudget: 12_000,
         safetyMargin: 4_000,

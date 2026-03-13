@@ -34,7 +34,7 @@ export class MediaCleanupJob {
     for (const name of entries) {
       const filePath = join(this.opts.mediaDir, name);
       const s = await stat(filePath).catch(() => undefined);
-      if (s && s.isFile() && s.mtimeMs < cutoff) {
+      if (s?.isFile() && s.mtimeMs < cutoff) {
         await unlink(filePath).catch(() => {});
         removed++;
       }

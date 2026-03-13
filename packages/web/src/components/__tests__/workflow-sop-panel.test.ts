@@ -1,16 +1,16 @@
 // F073 P2: WorkflowSopPanel unit tests
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import type { WorkflowSop } from '@cat-cafe/shared';
 import React, { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import type { WorkflowSop } from '@cat-cafe/shared';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WorkflowSopPanel } from '../mission-control/WorkflowSopPanel';
 import { mockResponse } from './mission-control-page.test-helpers';
 
 // ── Mocks ──
 vi.mock('next/link', () => ({
   __esModule: true,
-  default: ({ children, href }: { children: React.ReactNode; href: string }) =>
-    createElement('a', { href }, children),
+  default: ({ children, href }: { children: React.ReactNode; href: string }) => createElement('a', { href }, children),
 }));
 
 const apiFetchMock = vi.hoisted(() => vi.fn());
@@ -77,21 +77,21 @@ describe('WorkflowSopPanel', () => {
     await renderPanel(null);
     const section = container.querySelector('[data-testid="mc-workflow-sop"]');
     expect(section).toBeTruthy();
-    expect(section!.textContent).toContain('选择一个 backlog 项');
+    expect(section?.textContent).toContain('选择一个 backlog 项');
   });
 
   it('shows empty state when API returns 404', async () => {
     apiFetchMock.mockResolvedValue(mockResponse(404, { error: 'not found' }));
     await renderPanel('b-1');
     const section = container.querySelector('[data-testid="mc-workflow-sop"]');
-    expect(section!.textContent).toContain('暂无 SOP 告示牌数据');
+    expect(section?.textContent).toContain('暂无 SOP 告示牌数据');
   });
 
   it('shows error when API fails', async () => {
     apiFetchMock.mockResolvedValue(mockResponse(500, { error: 'internal error' }));
     await renderPanel('b-1');
     const section = container.querySelector('[data-testid="mc-workflow-sop"]');
-    expect(section!.textContent).toContain('internal error');
+    expect(section?.textContent).toContain('internal error');
   });
 
   it('renders SOP data with all sections', async () => {
@@ -103,42 +103,42 @@ describe('WorkflowSopPanel', () => {
     expect(section).toBeTruthy();
 
     // Feature ID header
-    expect(section!.textContent).toContain('F073');
+    expect(section?.textContent).toContain('F073');
 
     // Stage pills — current stage highlighted
     const pills = container.querySelector('[data-testid="sop-stage-pills"]');
     expect(pills).toBeTruthy();
     const implPill = container.querySelector('[data-testid="sop-stage-impl"]');
     expect(implPill).toBeTruthy();
-    expect(implPill!.className).toContain('bg-[#8B6F47]'); // current = active color
+    expect(implPill?.className).toContain('bg-[#8B6F47]'); // current = active color
 
     // Past stage should have muted color
     const kickoffPill = container.querySelector('[data-testid="sop-stage-kickoff"]');
-    expect(kickoffPill!.className).toContain('bg-[#D4C4A8]');
+    expect(kickoffPill?.className).toContain('bg-[#D4C4A8]');
 
     // Future stage should be lightest
     const reviewPill = container.querySelector('[data-testid="sop-stage-review"]');
-    expect(reviewPill!.className).toContain('bg-[#F0EBE3]');
+    expect(reviewPill?.className).toContain('bg-[#F0EBE3]');
 
     // Baton holder
     const baton = container.querySelector('[data-testid="sop-baton-holder"]');
-    expect(baton!.textContent).toBe('opus');
+    expect(baton?.textContent).toBe('opus');
 
     // Next skill
-    expect(section!.textContent).toContain('tdd');
+    expect(section?.textContent).toContain('tdd');
 
     // Resume capsule
     const capsule = container.querySelector('[data-testid="sop-resume-capsule"]');
-    expect(capsule!.textContent).toContain('Build SOP tab');
-    expect(capsule!.textContent).toContain('Created types');
-    expect(capsule!.textContent).toContain('Frontend panel');
+    expect(capsule?.textContent).toContain('Build SOP tab');
+    expect(capsule?.textContent).toContain('Created types');
+    expect(capsule?.textContent).toContain('Frontend panel');
 
     // Checks
     const checks = container.querySelector('[data-testid="sop-checks"]');
-    expect(checks!.textContent).toContain('Main 同步');
-    expect(checks!.textContent).toContain('verified');
-    expect(checks!.textContent).toContain('attested');
-    expect(checks!.textContent).toContain('unknown');
+    expect(checks?.textContent).toContain('Main 同步');
+    expect(checks?.textContent).toContain('verified');
+    expect(checks?.textContent).toContain('attested');
+    expect(checks?.textContent).toContain('unknown');
   });
 
   it('calls correct API endpoint with encoded backlogItemId', async () => {
@@ -169,10 +169,10 @@ describe('WorkflowSopPanel', () => {
     apiFetchMock.mockResolvedValue(mockResponse(200, sop));
     await renderPanel('b-1');
     const completionPill = container.querySelector('[data-testid="sop-stage-completion"]');
-    expect(completionPill!.className).toContain('bg-[#8B6F47]');
+    expect(completionPill?.className).toContain('bg-[#8B6F47]');
     // All prior stages should be past
     const mergePill = container.querySelector('[data-testid="sop-stage-merge"]');
-    expect(mergePill!.className).toContain('bg-[#D4C4A8]');
+    expect(mergePill?.className).toContain('bg-[#D4C4A8]');
   });
 
   it('hides next skill when null', async () => {
@@ -189,7 +189,7 @@ describe('WorkflowSopPanel', () => {
     apiFetchMock.mockResolvedValue(mockResponse(200, sop));
     await renderPanel('b-1');
     const capsule = container.querySelector('[data-testid="sop-resume-capsule"]');
-    expect(capsule!.textContent).toContain('Test');
-    expect(capsule!.textContent).not.toContain('Done');
+    expect(capsule?.textContent).toContain('Test');
+    expect(capsule?.textContent).not.toContain('Done');
   });
 });

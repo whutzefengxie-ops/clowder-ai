@@ -1,5 +1,5 @@
-import test from 'node:test';
 import assert from 'node:assert/strict';
+import test from 'node:test';
 
 import {
   buildImportItemsFromMarkdown,
@@ -109,7 +109,11 @@ test('buildImportItemsFromMarkdown imports only LL entries from lessons-learned.
   assert.equal(first.metadata?.status, 'draft');
   assert.deepEqual(JSON.parse(first.metadata?.sourceAnchors ?? '[]'), ['docs/a.md#L1', 'docs/b.md#L2']);
   assert.deepEqual(JSON.parse(first.metadata?.related ?? '[]'), ['LL-001', 'docs/x.md']);
-  assert.equal((first.content.match(/LL-101: 第一条教训/g) ?? []).length, 1, 'lesson heading must not be duplicated in content');
+  assert.equal(
+    (first.content.match(/LL-101: 第一条教训/g) ?? []).length,
+    1,
+    'lesson heading must not be duplicated in content',
+  );
 
   const second = items[1];
   assert.equal(second.metadata?.status, 'validated');
@@ -117,19 +121,10 @@ test('buildImportItemsFromMarkdown imports only LL entries from lessons-learned.
 });
 
 test('buildP0RetainOptions enables async retain and strips anchor tags from document_tags', () => {
-  const options = buildP0RetainOptions([
-    'project:cat-cafe',
-    'kind:decision',
-    'anchor:adr:005#foo',
-    'origin:git',
-  ]);
+  const options = buildP0RetainOptions(['project:cat-cafe', 'kind:decision', 'anchor:adr:005#foo', 'origin:git']);
 
   assert.equal(options.async, true);
-  assert.deepEqual(options.document_tags, [
-    'project:cat-cafe',
-    'kind:decision',
-    'origin:git',
-  ]);
+  assert.deepEqual(options.document_tags, ['project:cat-cafe', 'kind:decision', 'origin:git']);
 });
 
 test('buildImportItemsFromMarkdown imports discussion with hindsight: include using quarantined lifecycle tags', () => {
@@ -137,16 +132,9 @@ test('buildImportItemsFromMarkdown imports discussion with hindsight: include us
     sourcePath: 'docs/discussions/2026-02-14-sample.md',
     sourceCommit: 'abc1234',
     author: 'codex',
-    content: [
-      '---',
-      'hindsight: include',
-      '---',
-      '',
-      '# Discussion',
-      '',
-      '## 临时执行规则',
-      '这里是讨论结论。',
-    ].join('\n'),
+    content: ['---', 'hindsight: include', '---', '', '# Discussion', '', '## 临时执行规则', '这里是讨论结论。'].join(
+      '\n',
+    ),
   });
 
   assert.equal(items.length, 1);
@@ -161,21 +149,15 @@ test('buildImportItemsFromMarkdown imports discussion with hindsight: include us
 
 test('buildImportItemsFromMarkdown rejects discussion source without hindsight: include marker', () => {
   assert.throws(
-    () => buildImportItemsFromMarkdown({
-      sourcePath: 'docs/discussions/2026-02-14-sample.md',
-      sourceCommit: 'abc1234',
-      author: 'codex',
-      content: [
-        '---',
-        'hindsight: skip',
-        '---',
-        '',
-        '# Discussion',
-        '',
-        '## 临时执行规则',
-        '这里是讨论结论。',
-      ].join('\n'),
-    }),
+    () =>
+      buildImportItemsFromMarkdown({
+        sourcePath: 'docs/discussions/2026-02-14-sample.md',
+        sourceCommit: 'abc1234',
+        author: 'codex',
+        content: ['---', 'hindsight: skip', '---', '', '# Discussion', '', '## 临时执行规则', '这里是讨论结论。'].join(
+          '\n',
+        ),
+      }),
     /discussion source must include frontmatter marker hindsight: include/,
   );
 });

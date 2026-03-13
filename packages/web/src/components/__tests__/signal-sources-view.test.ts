@@ -1,5 +1,4 @@
-import React from 'react';
-import { act } from 'react';
+import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SignalSourcesView } from '@/components/signals/SignalSourcesView';
@@ -65,8 +64,9 @@ describe('SignalSourcesView', () => {
       await Promise.resolve();
     });
 
-    const visitLink = Array.from(container.querySelectorAll('a[href="https://www.anthropic.com/news"]'))
-      .find((item) => item.textContent?.includes('访问'));
+    const visitLink = Array.from(container.querySelectorAll('a[href="https://www.anthropic.com/news"]')).find((item) =>
+      item.textContent?.includes('访问'),
+    );
     expect(visitLink).not.toBeNull();
     expect(visitLink?.textContent ?? '').toContain('访问');
   });
@@ -100,24 +100,26 @@ describe('SignalSourcesView', () => {
 
   it('clicking Fetch button calls triggerSourceFetch with source id', async () => {
     let resolvePromise: (v: unknown) => void;
-    const pending = new Promise((resolve) => { resolvePromise = resolve; });
+    const pending = new Promise((resolve) => {
+      resolvePromise = resolve;
+    });
     mocks.triggerSourceFetch.mockReturnValueOnce(pending);
 
     await renderWithSource();
 
     const fetchBtn = findFetchButton();
     expect(fetchBtn).toBeDefined();
-    expect(fetchBtn!.textContent).toBe('Fetch');
+    expect(fetchBtn?.textContent).toBe('Fetch');
 
     await act(async () => {
-      fetchBtn!.click();
+      fetchBtn?.click();
     });
 
     expect(mocks.triggerSourceFetch).toHaveBeenCalledWith('anthropic-news');
-    expect(fetchBtn!.textContent).toBe('抓取中...');
+    expect(fetchBtn?.textContent).toBe('抓取中...');
 
     await act(async () => {
-      resolvePromise!({
+      resolvePromise?.({
         summary: { fetchedArticles: 5, newArticles: 3, storedArticles: 3, duplicateArticles: 2, errors: [] },
       });
     });

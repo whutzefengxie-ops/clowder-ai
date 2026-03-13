@@ -10,12 +10,8 @@ export function IdeateHeader() {
     <div className="px-5 py-2.5 bg-gradient-to-r from-opus-bg via-codex-bg to-gemini-bg border-b border-gray-200">
       <div className="flex items-center gap-2">
         <span className="text-sm animate-pulse">🐾</span>
-        <span className="text-sm font-medium text-gray-600">
-          独立观点采样中
-        </span>
-        <span className="text-xs text-gray-400">
-          猫猫们各自独立思考中...
-        </span>
+        <span className="text-sm font-medium text-gray-600">独立观点采样中</span>
+        <span className="text-xs text-gray-400">猫猫们各自独立思考中...</span>
       </div>
     </div>
   );

@@ -4,9 +4,9 @@
  */
 
 import { spawn as nodeSpawn } from 'node:child_process';
-import type { CliSpawnOptions, ChildProcessLike, SpawnFn } from './cli-types.js';
 import { resolveCliTimeoutMs } from './cli-timeout.js';
-import { parseNDJSON, isParseError } from './ndjson-parser.js';
+import type { ChildProcessLike, CliSpawnOptions, SpawnFn } from './cli-types.js';
+import { isParseError, parseNDJSON } from './ndjson-parser.js';
 
 type CliErrorReasonCode = 'invalid_thinking_signature';
 
@@ -59,7 +59,7 @@ function buildChildEnv(overrides?: Record<string, string | null>): NodeJS.Proces
  */
 export async function* spawnCli(
   options: CliSpawnOptions,
-  deps?: CliSpawnerDeps
+  deps?: CliSpawnerDeps,
 ): AsyncGenerator<unknown, void, undefined> {
   const doSpawn: SpawnFn = deps?.spawnFn ?? defaultSpawn;
   // Default timeout is configurable via CLI_TIMEOUT_MS env var; 0 disables timeout.
@@ -206,7 +206,9 @@ export async function* spawnCli(
     if (timedOut) {
       // Log stderr for debugging (never expose to users)
       if (stderrBuffer.trim()) {
-        console.error(`[cli-spawn] ${options.command} stderr on timeout (debug only):\n${stderrBuffer.trim().slice(-1000)}`);
+        console.error(
+          `[cli-spawn] ${options.command} stderr on timeout (debug only):\n${stderrBuffer.trim().slice(-1000)}`,
+        );
       }
       yield {
         __cliTimeout: true,
@@ -231,9 +233,7 @@ export async function* spawnCli(
  * Type guard for CLI error objects (abnormal exit or external signal kill)
  * Note: `message` is sanitized for user display; raw stderr is logged to console only.
  */
-export function isCliError(
-  value: unknown
-): value is {
+export function isCliError(value: unknown): value is {
   __cliError: true;
   exitCode: number | null;
   signal: string | null;
@@ -245,7 +245,7 @@ export function isCliError(
     typeof value === 'object' &&
     value !== null &&
     '__cliError' in value &&
-    (value as Record<string, unknown>)['__cliError'] === true
+    (value as Record<string, unknown>).__cliError === true
   );
 }
 
@@ -254,13 +254,13 @@ export function isCliError(
  * Note: `message` is sanitized for user display; raw stderr is logged to console only.
  */
 export function isCliTimeout(
-  value: unknown
+  value: unknown,
 ): value is { __cliTimeout: true; timeoutMs: number; message: string; command: string } {
   return (
     typeof value === 'object' &&
     value !== null &&
     '__cliTimeout' in value &&
-    (value as Record<string, unknown>)['__cliTimeout'] === true
+    (value as Record<string, unknown>).__cliTimeout === true
   );
 }
 
@@ -274,7 +274,7 @@ function defaultSpawn(
     cwd?: string | undefined;
     env?: NodeJS.ProcessEnv | undefined;
     stdio: ['ignore', 'pipe', 'pipe'];
-  }
+  },
 ): ChildProcessLike {
   return nodeSpawn(command, [...args], {
     cwd: options.cwd,

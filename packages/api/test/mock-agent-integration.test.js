@@ -14,7 +14,6 @@ import { afterEach, beforeEach, describe, test } from 'node:test';
 
 // Shared registry + helpers
 import { CAT_CONFIGS, catRegistry } from '@cat-cafe/shared';
-import { createTestAgentRegistry } from './helpers/agent-registry-helpers.js';
 
 // Populate built-in cats first
 for (const [id, config] of Object.entries(CAT_CONFIGS)) {
@@ -324,7 +323,7 @@ describe('F32-a Mock Agent Integration', () => {
           entries.set(id, entry);
           return entry;
         },
-        transition: (id, action, actor) => {
+        transition: (id, _action, actor) => {
           const entry = entries.get(id);
           entry.status = 'in_review';
           entry.actor = actor;

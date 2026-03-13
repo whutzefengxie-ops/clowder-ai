@@ -4,14 +4,12 @@
  *
  * Run: pnpm --filter @cat-cafe/api test:redis
  */
-import { describe, it, before, after, beforeEach } from 'node:test';
-import assert from 'node:assert/strict';
-import {
-  assertRedisIsolationOrThrow,
-  cleanupPrefixedRedisKeys,
-} from './helpers/redis-test-helpers.js';
 
-const REDIS_URL = process.env['REDIS_URL'];
+import assert from 'node:assert/strict';
+import { after, before, beforeEach, describe, it } from 'node:test';
+import { assertRedisIsolationOrThrow, cleanupPrefixedRedisKeys } from './helpers/redis-test-helpers.js';
+
+const REDIS_URL = process.env.REDIS_URL;
 
 function createTestRuntime(overrides = {}) {
   return {
@@ -85,7 +83,10 @@ describe('RedisGameStore', { skip: !REDIS_URL ? 'REDIS_URL not set' : false }, (
   });
 
   it('createGame persists to Redis, returns GameRuntime', async (t) => {
-    if (!connected) { t.skip(); return; }
+    if (!connected) {
+      t.skip();
+      return;
+    }
     const runtime = createTestRuntime();
     const result = await store.createGame(runtime);
     assert.equal(result.gameId, runtime.gameId);
@@ -93,7 +94,10 @@ describe('RedisGameStore', { skip: !REDIS_URL ? 'REDIS_URL not set' : false }, (
   });
 
   it('getGame loads from Redis', async (t) => {
-    if (!connected) { t.skip(); return; }
+    if (!connected) {
+      t.skip();
+      return;
+    }
     const runtime = createTestRuntime();
     await store.createGame(runtime);
     const loaded = await store.getGame(runtime.gameId);
@@ -104,7 +108,10 @@ describe('RedisGameStore', { skip: !REDIS_URL ? 'REDIS_URL not set' : false }, (
   });
 
   it('getActiveGame returns active game for thread (KD-15)', async (t) => {
-    if (!connected) { t.skip(); return; }
+    if (!connected) {
+      t.skip();
+      return;
+    }
     const runtime = createTestRuntime();
     await store.createGame(runtime);
     const active = await store.getActiveGame(runtime.threadId);
@@ -113,18 +120,21 @@ describe('RedisGameStore', { skip: !REDIS_URL ? 'REDIS_URL not set' : false }, (
   });
 
   it('createGame rejects if thread already has active game (KD-15)', async (t) => {
-    if (!connected) { t.skip(); return; }
+    if (!connected) {
+      t.skip();
+      return;
+    }
     const runtime1 = createTestRuntime();
     await store.createGame(runtime1);
     const runtime2 = createTestRuntime({ gameId: 'game-duplicate', threadId: runtime1.threadId });
-    await assert.rejects(
-      () => store.createGame(runtime2),
-      /already has an active game/,
-    );
+    await assert.rejects(() => store.createGame(runtime2), /already has an active game/);
   });
 
   it('updateGame with version check (optimistic concurrency)', async (t) => {
-    if (!connected) { t.skip(); return; }
+    if (!connected) {
+      t.skip();
+      return;
+    }
     const runtime = createTestRuntime();
     await store.createGame(runtime);
     runtime.currentPhase = 'night_wolf';
@@ -136,19 +146,22 @@ describe('RedisGameStore', { skip: !REDIS_URL ? 'REDIS_URL not set' : false }, (
   });
 
   it('updateGame rejects stale version', async (t) => {
-    if (!connected) { t.skip(); return; }
+    if (!connected) {
+      t.skip();
+      return;
+    }
     const runtime = createTestRuntime();
     await store.createGame(runtime);
     runtime.currentPhase = 'night_wolf';
     // Don't increment version — should fail
-    await assert.rejects(
-      () => store.updateGame(runtime.gameId, runtime),
-      /version conflict/i,
-    );
+    await assert.rejects(() => store.updateGame(runtime.gameId, runtime), /version conflict/i);
   });
 
   it('endGame marks as finished and clears active thread mapping', async (t) => {
-    if (!connected) { t.skip(); return; }
+    if (!connected) {
+      t.skip();
+      return;
+    }
     const runtime = createTestRuntime();
     await store.createGame(runtime);
     await store.endGame(runtime.gameId, 'villager');

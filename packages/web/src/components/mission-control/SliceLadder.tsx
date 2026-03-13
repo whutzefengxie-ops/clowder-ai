@@ -43,37 +43,59 @@ export function SliceLadder({ projectId, slices, onUpdate }: SliceLadderProps) {
 
   const sorted = [...slices].sort((a, b) => a.order - b.order);
 
-  const toggle = (id: string) => setExpanded((prev) => {
-    const next = new Set(prev);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    return next;
-  });
-
-  const handleReorder = useCallback(async (id1: string, id2: string) => {
-    await apiFetch(`/api/external-projects/${projectId}/slices/reorder`, {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id1, id2 }),
+  const toggle = (id: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
     });
-    onUpdate();
-  }, [projectId, onUpdate]);
 
-  const handleStatusChange = useCallback(async (id: string, status: SliceStatus) => {
-    await apiFetch(`/api/external-projects/${projectId}/slices/${id}`, {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }),
-    });
-    onUpdate();
-  }, [projectId, onUpdate]);
+  const handleReorder = useCallback(
+    async (id1: string, id2: string) => {
+      await apiFetch(`/api/external-projects/${projectId}/slices/reorder`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id1, id2 }),
+      });
+      onUpdate();
+    },
+    [projectId, onUpdate],
+  );
+
+  const handleStatusChange = useCallback(
+    async (id: string, status: SliceStatus) => {
+      await apiFetch(`/api/external-projects/${projectId}/slices/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+      onUpdate();
+    },
+    [projectId, onUpdate],
+  );
 
   const handleCreate = useCallback(async () => {
     if (!name.trim()) return;
     setSubmitting(true);
     try {
       const res = await apiFetch(`/api/external-projects/${projectId}/slices`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, sliceType, description, actor, workflow, verifiableOutcome }),
       });
-      if (res.ok) { setShowForm(false); setName(''); setDescription(''); setActor(''); setWorkflow(''); setVerifiableOutcome(''); onUpdate(); }
-    } finally { setSubmitting(false); }
+      if (res.ok) {
+        setShowForm(false);
+        setName('');
+        setDescription('');
+        setActor('');
+        setWorkflow('');
+        setVerifiableOutcome('');
+        onUpdate();
+      }
+    } finally {
+      setSubmitting(false);
+    }
   }, [projectId, name, sliceType, description, actor, workflow, verifiableOutcome, onUpdate]);
 
   return (
@@ -145,12 +167,30 @@ export function SliceLadder({ projectId, slices, onUpdate }: SliceLadderProps) {
                 </div>
                 {isExpanded && (
                   <div className="mt-2 space-y-1 border-t border-[#E7DAC7] pt-2 text-[#6B5D4F]">
-                    {slice.description && <div><strong>Description:</strong> {slice.description}</div>}
-                    {slice.actor && <div><strong>Actor:</strong> {slice.actor}</div>}
-                    {slice.workflow && <div><strong>Workflow:</strong> {slice.workflow}</div>}
-                    {slice.verifiableOutcome && <div><strong>Verifiable Outcome:</strong> {slice.verifiableOutcome}</div>}
+                    {slice.description && (
+                      <div>
+                        <strong>Description:</strong> {slice.description}
+                      </div>
+                    )}
+                    {slice.actor && (
+                      <div>
+                        <strong>Actor:</strong> {slice.actor}
+                      </div>
+                    )}
+                    {slice.workflow && (
+                      <div>
+                        <strong>Workflow:</strong> {slice.workflow}
+                      </div>
+                    )}
+                    {slice.verifiableOutcome && (
+                      <div>
+                        <strong>Verifiable Outcome:</strong> {slice.verifiableOutcome}
+                      </div>
+                    )}
                     {slice.cardIds.length > 0 && (
-                      <div><strong>Linked Cards:</strong> {slice.cardIds.map((id) => id.slice(0, 8)).join(', ')}</div>
+                      <div>
+                        <strong>Linked Cards:</strong> {slice.cardIds.map((id) => id.slice(0, 8)).join(', ')}
+                      </div>
                     )}
                   </div>
                 )}
@@ -162,18 +202,86 @@ export function SliceLadder({ projectId, slices, onUpdate }: SliceLadderProps) {
 
       {/* Add Slice form */}
       {showForm && (
-        <div style={{ background: '#FFFDF8', border: '1px solid #E7DAC7', borderRadius: 10, padding: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Slice name" style={{ border: '1px solid #E7DAC7', borderRadius: 6, padding: '6px 10px', fontSize: 13 }} />
-          <select value={sliceType} onChange={(e) => setSliceType(e.target.value as SliceType)} style={{ border: '1px solid #E7DAC7', borderRadius: 6, padding: '6px 10px', fontSize: 13 }}>
+        <div
+          style={{
+            background: '#FFFDF8',
+            border: '1px solid #E7DAC7',
+            borderRadius: 10,
+            padding: 14,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 8,
+          }}
+        >
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Slice name"
+            style={{ border: '1px solid #E7DAC7', borderRadius: 6, padding: '6px 10px', fontSize: 13 }}
+          />
+          <select
+            value={sliceType}
+            onChange={(e) => setSliceType(e.target.value as SliceType)}
+            style={{ border: '1px solid #E7DAC7', borderRadius: 6, padding: '6px 10px', fontSize: 13 }}
+          >
             <option value="learning">Learning</option>
             <option value="value">Value</option>
             <option value="hardening">Hardening</option>
           </select>
-          <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Description" rows={2} style={{ border: '1px solid #E7DAC7', borderRadius: 6, padding: '6px 10px', fontSize: 13, resize: 'vertical' }} />
-          <input value={actor} onChange={(e) => setActor(e.target.value)} placeholder="Actor" style={{ border: '1px solid #E7DAC7', borderRadius: 6, padding: '6px 10px', fontSize: 13 }} />
-          <input value={workflow} onChange={(e) => setWorkflow(e.target.value)} placeholder="Workflow" style={{ border: '1px solid #E7DAC7', borderRadius: 6, padding: '6px 10px', fontSize: 13 }} />
-          <textarea value={verifiableOutcome} onChange={(e) => setVerifiableOutcome(e.target.value)} placeholder="Verifiable outcome" rows={2} style={{ border: '1px solid #E7DAC7', borderRadius: 6, padding: '6px 10px', fontSize: 13, resize: 'vertical' }} />
-          <button type="button" onClick={() => void handleCreate()} disabled={submitting || !name.trim()} style={{ background: '#8B6F47', color: 'white', borderRadius: 8, padding: '6px 0', fontSize: 13, fontWeight: 500, border: 'none', cursor: 'pointer', opacity: submitting || !name.trim() ? 0.4 : 1 }}>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Description"
+            rows={2}
+            style={{
+              border: '1px solid #E7DAC7',
+              borderRadius: 6,
+              padding: '6px 10px',
+              fontSize: 13,
+              resize: 'vertical',
+            }}
+          />
+          <input
+            value={actor}
+            onChange={(e) => setActor(e.target.value)}
+            placeholder="Actor"
+            style={{ border: '1px solid #E7DAC7', borderRadius: 6, padding: '6px 10px', fontSize: 13 }}
+          />
+          <input
+            value={workflow}
+            onChange={(e) => setWorkflow(e.target.value)}
+            placeholder="Workflow"
+            style={{ border: '1px solid #E7DAC7', borderRadius: 6, padding: '6px 10px', fontSize: 13 }}
+          />
+          <textarea
+            value={verifiableOutcome}
+            onChange={(e) => setVerifiableOutcome(e.target.value)}
+            placeholder="Verifiable outcome"
+            rows={2}
+            style={{
+              border: '1px solid #E7DAC7',
+              borderRadius: 6,
+              padding: '6px 10px',
+              fontSize: 13,
+              resize: 'vertical',
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => void handleCreate()}
+            disabled={submitting || !name.trim()}
+            style={{
+              background: '#8B6F47',
+              color: 'white',
+              borderRadius: 8,
+              padding: '6px 0',
+              fontSize: 13,
+              fontWeight: 500,
+              border: 'none',
+              cursor: 'pointer',
+              opacity: submitting || !name.trim() ? 0.4 : 1,
+            }}
+          >
             {submitting ? '创建中...' : '创建切片'}
           </button>
         </div>

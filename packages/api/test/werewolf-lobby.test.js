@@ -3,10 +3,10 @@
  *
  * Tests lobby creation, role shuffling, seat assignment, and scoped role_assigned events.
  */
-import { describe, it } from 'node:test';
+
 import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
 import { WerewolfLobby } from '../dist/domains/cats/services/game/werewolf/WerewolfLobby.js';
-import { createWerewolfDefinition } from '../dist/domains/cats/services/game/werewolf/WerewolfDefinition.js';
 
 function makePlayers(count) {
   return Array.from({ length: count }, (_, i) => ({
@@ -70,12 +70,12 @@ describe('WerewolfLobby', () => {
     }
 
     // 9-player preset: wolf:2, seer:1, witch:1, hunter:1, guard:1, villager:3
-    assert.equal(roleCounts['wolf'], 2);
-    assert.equal(roleCounts['seer'], 1);
-    assert.equal(roleCounts['witch'], 1);
-    assert.equal(roleCounts['hunter'], 1);
-    assert.equal(roleCounts['guard'], 1);
-    assert.equal(roleCounts['villager'], 3);
+    assert.equal(roleCounts.wolf, 2);
+    assert.equal(roleCounts.seer, 1);
+    assert.equal(roleCounts.witch, 1);
+    assert.equal(roleCounts.hunter, 1);
+    assert.equal(roleCounts.guard, 1);
+    assert.equal(roleCounts.villager, 3);
   });
 
   it('startGame → role assignment is shuffled (not always same order)', () => {
@@ -88,7 +88,7 @@ describe('WerewolfLobby', () => {
         players: makePlayers(9),
       });
       lobby.startGame(runtime);
-      results.push(runtime.seats.map(s => s.role).join(','));
+      results.push(runtime.seats.map((s) => s.role).join(','));
     }
 
     // At least 2 different orderings in 20 runs (astronomically unlikely to be same)
@@ -106,7 +106,7 @@ describe('WerewolfLobby', () => {
 
     lobby.startGame(runtime);
 
-    const roleEvents = runtime.eventLog.filter(e => e.type === 'role_assigned');
+    const roleEvents = runtime.eventLog.filter((e) => e.type === 'role_assigned');
     assert.equal(roleEvents.length, 9, 'should have 9 role_assigned events');
 
     // Each event should be scoped to the individual seat
@@ -141,11 +141,12 @@ describe('WerewolfLobby', () => {
   it('rejects invalid player count', () => {
     const lobby = new WerewolfLobby();
     assert.throws(
-      () => lobby.createLobby({
-        threadId: 'thread-bad',
-        playerCount: 5,
-        players: makePlayers(5),
-      }),
+      () =>
+        lobby.createLobby({
+          threadId: 'thread-bad',
+          playerCount: 5,
+          players: makePlayers(5),
+        }),
       /no preset/i,
     );
   });

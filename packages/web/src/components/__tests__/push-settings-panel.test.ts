@@ -1,10 +1,9 @@
-import React from 'react';
+import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { act } from 'react';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { PushSettingsPanel } from '../PushSettingsPanel';
-import { useToastStore } from '@/stores/toastStore';
 import { usePushNotify } from '@/hooks/usePushNotify';
+import { useToastStore } from '@/stores/toastStore';
+import { PushSettingsPanel } from '../PushSettingsPanel';
 
 vi.mock('@/hooks/usePushNotify', () => ({
   usePushNotify: vi.fn(),
@@ -70,8 +69,8 @@ describe('PushSettingsPanel test push feedback', () => {
       root.render(React.createElement(PushSettingsPanel));
     });
 
-    const testBtn = Array.from(container.querySelectorAll('button')).find(
-      (node) => node.textContent?.includes('发送测试通知'),
+    const testBtn = Array.from(container.querySelectorAll('button')).find((node) =>
+      node.textContent?.includes('发送测试通知'),
     ) as HTMLButtonElement | undefined;
     expect(testBtn).toBeDefined();
 
@@ -101,8 +100,8 @@ describe('PushSettingsPanel test push feedback', () => {
       root.render(React.createElement(PushSettingsPanel));
     });
 
-    const testBtn = Array.from(container.querySelectorAll('button')).find(
-      (node) => node.textContent?.includes('发送测试通知'),
+    const testBtn = Array.from(container.querySelectorAll('button')).find((node) =>
+      node.textContent?.includes('发送测试通知'),
     ) as HTMLButtonElement | undefined;
     expect(testBtn).toBeDefined();
 
@@ -244,8 +243,8 @@ describe('PushSettingsPanel test push feedback', () => {
       root.render(React.createElement(PushSettingsPanel));
     });
 
-    const testBtn = Array.from(container.querySelectorAll('button')).find(
-      (node) => node.textContent?.includes('发送测试通知'),
+    const testBtn = Array.from(container.querySelectorAll('button')).find((node) =>
+      node.textContent?.includes('发送测试通知'),
     ) as HTMLButtonElement | undefined;
     expect(testBtn).toBeDefined();
 

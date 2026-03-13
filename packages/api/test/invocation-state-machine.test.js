@@ -5,8 +5,8 @@
  * Verifies the explicit transition spec before WT-3 refactoring.
  */
 
-import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
+import { describe, test } from 'node:test';
 import fc from 'fast-check';
 
 // Fixed seed for CI reproducibility
@@ -46,17 +46,17 @@ describe('invocation-state-machine', () => {
   // ─── Deterministic: known invalid transitions ───
 
   const INVALID_PAIRS = [
-    ['succeeded', 'running'],   // terminal
-    ['succeeded', 'failed'],    // terminal
-    ['succeeded', 'queued'],    // terminal
-    ['succeeded', 'canceled'],  // terminal
-    ['canceled', 'running'],    // terminal
-    ['canceled', 'queued'],     // terminal
-    ['canceled', 'failed'],     // terminal
-    ['queued', 'succeeded'],    // skip running
-    ['running', 'queued'],      // backwards
-    ['failed', 'succeeded'],    // must go through running first
-    ['failed', 'queued'],       // backwards
+    ['succeeded', 'running'], // terminal
+    ['succeeded', 'failed'], // terminal
+    ['succeeded', 'queued'], // terminal
+    ['succeeded', 'canceled'], // terminal
+    ['canceled', 'running'], // terminal
+    ['canceled', 'queued'], // terminal
+    ['canceled', 'failed'], // terminal
+    ['queued', 'succeeded'], // skip running
+    ['running', 'queued'], // backwards
+    ['failed', 'succeeded'], // must go through running first
+    ['failed', 'queued'], // backwards
   ];
 
   for (const [from, to] of INVALID_PAIRS) {
@@ -120,8 +120,7 @@ describe('invocation-state-machine', () => {
         fc.array(statusArb, { minLength: 1, maxLength: 20 }),
         (terminal, targets) => {
           for (const target of targets) {
-            assert.ok(!mod.isValidTransition(terminal, target),
-              `${terminal} should reject → ${target}`);
+            assert.ok(!mod.isValidTransition(terminal, target), `${terminal} should reject → ${target}`);
           }
         },
       ),
@@ -158,11 +157,9 @@ describe('invocation-state-machine', () => {
         const allowed = mod.getAllowedTransitions(from);
         const valid = mod.isValidTransition(from, to);
         if (valid) {
-          assert.ok(allowed.includes(to),
-            `isValidTransition(${from},${to})=true but not in getAllowedTransitions`);
+          assert.ok(allowed.includes(to), `isValidTransition(${from},${to})=true but not in getAllowedTransitions`);
         } else {
-          assert.ok(!allowed.includes(to),
-            `isValidTransition(${from},${to})=false but found in getAllowedTransitions`);
+          assert.ok(!allowed.includes(to), `isValidTransition(${from},${to})=false but found in getAllowedTransitions`);
         }
       }),
       FC_PARAMS,

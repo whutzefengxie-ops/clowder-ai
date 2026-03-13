@@ -1,5 +1,5 @@
-import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { beforeEach, describe, it } from 'node:test';
 import { DraftStore } from '../dist/domains/cats/services/stores/ports/DraftStore.js';
 
 describe('DraftStore (in-memory)', () => {
@@ -131,9 +131,11 @@ describe('DraftStore (in-memory)', () => {
 
   describe('toolEvents persistence', () => {
     it('stores and retrieves toolEvents', () => {
-      store.upsert(makeDraft({
-        toolEvents: [{ id: 'te-1', type: 'tool_use', label: 'Read', timestamp: 1 }],
-      }));
+      store.upsert(
+        makeDraft({
+          toolEvents: [{ id: 'te-1', type: 'tool_use', label: 'Read', timestamp: 1 }],
+        }),
+      );
       const drafts = store.getByThread('user-1', 'thread-1');
       assert.equal(drafts[0].toolEvents?.length, 1);
       assert.equal(drafts[0].toolEvents[0].label, 'Read');

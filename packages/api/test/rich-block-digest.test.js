@@ -1,5 +1,5 @@
-import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
 import { digestRichBlocks } from '../dist/domains/cats/services/agents/routing/route-helpers.js';
 import { safeParseExtra } from '../dist/domains/cats/services/stores/redis/redis-message-parsers.js';
 
@@ -44,7 +44,17 @@ describe('digestRichBlocks', () => {
       extra: {
         rich: {
           v: 1,
-          blocks: [{ id: 'b1', kind: 'checklist', v: 1, items: [{id:'i1',text:'a'},{id:'i2',text:'b'}] }],
+          blocks: [
+            {
+              id: 'b1',
+              kind: 'checklist',
+              v: 1,
+              items: [
+                { id: 'i1', text: 'a' },
+                { id: 'i2', text: 'b' },
+              ],
+            },
+          ],
         },
       },
     };
@@ -58,7 +68,9 @@ describe('digestRichBlocks', () => {
       extra: {
         rich: {
           v: 1,
-          blocks: [{ id: 'b1', kind: 'media_gallery', v: 1, items: [{url:'a.png'},{url:'b.png'},{url:'c.png'}] }],
+          blocks: [
+            { id: 'b1', kind: 'media_gallery', v: 1, items: [{ url: 'a.png' }, { url: 'b.png' }, { url: 'c.png' }] },
+          ],
         },
       },
     };

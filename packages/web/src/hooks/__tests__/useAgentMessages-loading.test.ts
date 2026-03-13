@@ -41,7 +41,7 @@ const storeState = {
   clearCatStatuses: mockClearCatStatuses,
   setCatInvocation: mockSetCatInvocation,
   setMessageUsage: mockSetMessageUsage,
-  
+
   addMessageToThread: mockAddMessageToThread,
   clearThreadActiveInvocation: mockClearThreadActiveInvocation,
   resetThreadInvocationState: mockResetThreadInvocationState,

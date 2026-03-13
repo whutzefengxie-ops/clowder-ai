@@ -1,13 +1,13 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import {
-  callbackTools,
   callbackMemoryTools,
+  callbackTools,
   evidenceTools,
   reflectTools,
-  sessionChainTools,
-  signalsTools,
-  signalStudyTools,
   richBlockRulesTools,
+  sessionChainTools,
+  signalStudyTools,
+  signalsTools,
 } from './tools/index.js';
 
 type ToolDef = {
@@ -17,10 +17,7 @@ type ToolDef = {
   handler: (args: never) => Promise<unknown>;
 };
 
-const collabTools: readonly ToolDef[] = [
-  ...callbackTools,
-  ...richBlockRulesTools,
-];
+const collabTools: readonly ToolDef[] = [...callbackTools, ...richBlockRulesTools];
 
 const memoryTools: readonly ToolDef[] = [
   ...callbackMemoryTools,
@@ -29,24 +26,16 @@ const memoryTools: readonly ToolDef[] = [
   ...sessionChainTools,
 ];
 
-const signalTools: readonly ToolDef[] = [
-  ...signalsTools,
-  ...signalStudyTools,
-];
+const signalTools: readonly ToolDef[] = [...signalsTools, ...signalStudyTools];
 
 function registerTools(server: McpServer, tools: readonly ToolDef[]): void {
   for (const tool of tools) {
-    server.tool(
-      tool.name,
-      tool.description,
-      tool.inputSchema,
-      async (args) => {
-        const result = await tool.handler(args as never);
-        return {
-          ...(result as Record<string, unknown>),
-        } as { content: Array<{ type: 'text'; text: string }>; isError?: boolean; [key: string]: unknown };
-      },
-    );
+    server.tool(tool.name, tool.description, tool.inputSchema, async (args) => {
+      const result = await tool.handler(args as never);
+      return {
+        ...(result as Record<string, unknown>),
+      } as { content: Array<{ type: 'text'; text: string }>; isError?: boolean; [key: string]: unknown };
+    });
   }
 }
 

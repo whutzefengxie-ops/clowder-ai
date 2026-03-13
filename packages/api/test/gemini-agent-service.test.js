@@ -3,14 +3,12 @@
  * 测试暹罗猫 CLI 子进程调用 (gemini-cli + antigravity-desktop)
  */
 
-import { test, mock, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { PassThrough } from 'node:stream';
 import { EventEmitter } from 'node:events';
+import { PassThrough } from 'node:stream';
+import { describe, mock, test } from 'node:test';
 
-const { GeminiAgentService } = await import(
-  '../dist/domains/cats/services/agents/providers/GeminiAgentService.js'
-);
+const { GeminiAgentService } = await import('../dist/domains/cats/services/agents/providers/GeminiAgentService.js');
 
 /** Helper: collect all items from async iterable */
 async function collect(iterable) {
@@ -61,7 +59,7 @@ function createMockSpawnFn(proc) {
 /** Write NDJSON events to mock process stdout, then end with exit 0 */
 function emitGeminiEvents(proc, events) {
   for (const event of events) {
-    proc.stdout.write(JSON.stringify(event) + '\n');
+    proc.stdout.write(`${JSON.stringify(event)}\n`);
   }
   proc.stdout.end();
   proc._emitter.emit('exit', 0, null);
@@ -105,9 +103,7 @@ describe('GeminiAgentService (gemini-cli adapter)', () => {
     });
 
     const promise = collect(service.invoke('test prompt'));
-    emitGeminiEvents(proc, [
-      { type: 'init', session_id: 's1', model: 'auto' },
-    ]);
+    emitGeminiEvents(proc, [{ type: 'init', session_id: 's1', model: 'auto' }]);
     await promise;
 
     const args = spawnFn.mock.calls[0].arguments[1];
@@ -133,9 +129,7 @@ describe('GeminiAgentService (gemini-cli adapter)', () => {
     });
 
     const promise = collect(service.invoke('resume prompt', { sessionId: 'sid-uuid-1234' }));
-    emitGeminiEvents(proc, [
-      { type: 'init', session_id: 'sid-uuid-1234', model: 'auto' },
-    ]);
+    emitGeminiEvents(proc, [{ type: 'init', session_id: 'sid-uuid-1234', model: 'auto' }]);
     await promise;
 
     const args = spawnFn.mock.calls[0].arguments[1];
@@ -160,13 +154,13 @@ describe('GeminiAgentService (gemini-cli adapter)', () => {
       CAT_CAFE_CALLBACK_TOKEN: 'tok-789',
     };
 
-    const promise = collect(service.invoke('resume prompt', {
-      sessionId: 'sid-uuid-5678',
-      callbackEnv,
-    }));
-    emitGeminiEvents(proc, [
-      { type: 'init', session_id: 'sid-uuid-5678', model: 'auto' },
-    ]);
+    const promise = collect(
+      service.invoke('resume prompt', {
+        sessionId: 'sid-uuid-5678',
+        callbackEnv,
+      }),
+    );
+    emitGeminiEvents(proc, [{ type: 'init', session_id: 'sid-uuid-5678', model: 'auto' }]);
     await promise;
 
     const args = spawnFn.mock.calls[0].arguments[1];
@@ -185,12 +179,8 @@ describe('GeminiAgentService (gemini-cli adapter)', () => {
       CAT_CAFE_CALLBACK_TOKEN: 'tok-456',
     };
 
-    const promise = collect(
-      service.invoke('test', { callbackEnv })
-    );
-    emitGeminiEvents(proc, [
-      { type: 'init', session_id: 's1', model: 'auto' },
-    ]);
+    const promise = collect(service.invoke('test', { callbackEnv }));
+    emitGeminiEvents(proc, [{ type: 'init', session_id: 's1', model: 'auto' }]);
     await promise;
 
     const spawnOpts = spawnFn.mock.calls[0].arguments[2];
@@ -256,8 +246,8 @@ describe('GeminiAgentService (gemini-cli adapter)', () => {
 
     // result/error without detailed error text, then process exits non-zero
     // Any non-zero exit code from spawnCli yields __cliError
-    proc.stdout.write(JSON.stringify({ type: 'init', session_id: 's1', model: 'auto' }) + '\n');
-    proc.stdout.write(JSON.stringify({ type: 'result', status: 'error' }) + '\n');
+    proc.stdout.write(`${JSON.stringify({ type: 'init', session_id: 's1', model: 'auto' })}\n`);
+    proc.stdout.write(`${JSON.stringify({ type: 'result', status: 'error' })}\n`);
     proc.stdout.end();
     proc._emitter.emit('exit', 2, null);
 
@@ -357,16 +347,18 @@ describe('GeminiAgentService (gemini-cli adapter)', () => {
 
     const promise = collect(service.invoke('Reply with exactly hi'));
 
-    proc.stdout.write(JSON.stringify({ type: 'init', session_id: 's1', model: 'auto' }) + '\n');
-    proc.stdout.write(JSON.stringify({ type: 'message', role: 'assistant', content: 'hi' }) + '\n');
-    proc.stdout.write(JSON.stringify({
-      type: 'result',
-      status: 'error',
-      error: {
-        type: 'Error',
-        message: "[API Error: Cannot read properties of undefined (reading 'candidates')]",
-      },
-    }) + '\n');
+    proc.stdout.write(`${JSON.stringify({ type: 'init', session_id: 's1', model: 'auto' })}\n`);
+    proc.stdout.write(`${JSON.stringify({ type: 'message', role: 'assistant', content: 'hi' })}\n`);
+    proc.stdout.write(
+      `${JSON.stringify({
+        type: 'result',
+        status: 'error',
+        error: {
+          type: 'Error',
+          message: "[API Error: Cannot read properties of undefined (reading 'candidates')]",
+        },
+      })}\n`,
+    );
     proc.stdout.end();
     proc._emitter.emit('exit', 1, null);
 
@@ -523,7 +515,10 @@ describe('GeminiAgentService (antigravity adapter)', () => {
     const errMsg = msgs.find((m) => m.type === 'error');
     assert.ok(errMsg, 'should yield error for async ENOENT');
     assert.ok(errMsg.error.includes('ENOENT'));
-    assert.ok(msgs.some((m) => m.type === 'done'), 'should yield done after error so frontend stops loading');
+    assert.ok(
+      msgs.some((m) => m.type === 'done'),
+      'should yield done after error so frontend stops loading',
+    );
   });
 
   test('handles synchronous spawn failure gracefully', async () => {
@@ -549,7 +544,10 @@ describe('GeminiAgentService (antigravity adapter)', () => {
     const errMsg = msgs.find((m) => m.type === 'error');
     assert.ok(errMsg);
     assert.ok(errMsg.error.includes('ENOENT'));
-    assert.ok(msgs.some((m) => m.type === 'done'), 'should yield done after error so frontend stops loading');
+    assert.ok(
+      msgs.some((m) => m.type === 'done'),
+      'should yield done after error so frontend stops loading',
+    );
   });
 
   test('all messages have catId gemini', async () => {
@@ -588,9 +586,7 @@ describe('GeminiAgentService (adapter selection)', () => {
     const service = new GeminiAgentService({ spawnFn });
 
     const promise = collect(service.invoke('test'));
-    emitGeminiEvents(proc, [
-      { type: 'init', session_id: 's1', model: 'auto' },
-    ]);
+    emitGeminiEvents(proc, [{ type: 'init', session_id: 's1', model: 'auto' }]);
     await promise;
 
     // Verify gemini CLI was spawned (not antigravity)
@@ -637,7 +633,7 @@ test('F8: result/success stats captured into done metadata', async () => {
   ]);
 
   const msgs = await promise;
-  const done = msgs.find(m => m.type === 'done');
+  const done = msgs.find((m) => m.type === 'done');
   assert.ok(done, 'should have done message');
   assert.ok(done.metadata?.usage, 'done should have usage in metadata');
   assert.equal(done.metadata.usage.totalTokens, 150);

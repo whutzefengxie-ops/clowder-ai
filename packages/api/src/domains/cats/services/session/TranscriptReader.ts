@@ -8,9 +8,9 @@
  * - Full-text search across events and digests
  */
 
-import { readFile, stat, readdir } from 'node:fs/promises';
-import { join } from 'node:path';
 import { createReadStream } from 'node:fs';
+import { readdir, readFile, stat } from 'node:fs/promises';
+import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 
 export interface TranscriptEvent {
@@ -106,7 +106,9 @@ export class TranscriptReader {
       if (lineNo >= startEventNo && events.length < limit) {
         try {
           events.push(JSON.parse(line) as TranscriptEvent);
-        } catch { /* skip malformed lines */ }
+        } catch {
+          /* skip malformed lines */
+        }
       }
       lineNo++;
       // Early exit: we've collected enough and passed our window
@@ -130,15 +132,8 @@ export class TranscriptReader {
   /**
    * Read extractive digest for a sealed session.
    */
-  async readDigest(
-    sessionId: string,
-    threadId: string,
-    catId: string,
-  ): Promise<Record<string, unknown> | null> {
-    const digestPath = join(
-      this.sessionDir(threadId, catId, sessionId),
-      'digest.extractive.json',
-    );
+  async readDigest(sessionId: string, threadId: string, catId: string): Promise<Record<string, unknown> | null> {
+    const digestPath = join(this.sessionDir(threadId, catId, sessionId), 'digest.extractive.json');
     try {
       const content = await readFile(digestPath, 'utf-8');
       return JSON.parse(content) as Record<string, unknown>;
@@ -183,7 +178,9 @@ export class TranscriptReader {
       let sessionDirs: string[];
       try {
         sessionDirs = await readdir(sessionsDir);
-      } catch { continue; }
+      } catch {
+        continue;
+      }
 
       for (const sessionId of sessionDirs) {
         if (opts?.sessionIds && !opts.sessionIds.includes(sessionId)) continue;
@@ -194,9 +191,7 @@ export class TranscriptReader {
         // Search digests
         if (scope === 'digests' || scope === 'both') {
           try {
-            const digestContent = await readFile(
-              join(sessionDir, 'digest.extractive.json'), 'utf-8',
-            );
+            const digestContent = await readFile(join(sessionDir, 'digest.extractive.json'), 'utf-8');
             const digestText = digestContent.toLowerCase();
             if (digestText.includes(needle)) {
               const digest = JSON.parse(digestContent);
@@ -209,7 +204,9 @@ export class TranscriptReader {
                 pointer: {},
               });
             }
-          } catch { /* no digest or parse error */ }
+          } catch {
+            /* no digest or parse error */
+          }
         }
 
         // Search transcripts
@@ -234,10 +231,14 @@ export class TranscriptReader {
                       ...(evt.invocationId ? { invocationId: evt.invocationId } : {}),
                     },
                   });
-                } catch { /* skip */ }
+                } catch {
+                  /* skip */
+                }
               }
             }
-          } catch { /* no transcript */ }
+          } catch {
+            /* no transcript */
+          }
         }
       }
     }
@@ -277,7 +278,9 @@ export class TranscriptReader {
         if (evt.invocationId === invocationId) {
           events.push(evt);
         }
-      } catch { /* skip malformed */ }
+      } catch {
+        /* skip malformed */
+      }
     }
 
     return events.length > 0 ? events : null;
@@ -287,15 +290,8 @@ export class TranscriptReader {
    * Read handoff digest (LLM-generated) for a sealed session.
    * F065 Phase C: returns parsed YAML frontmatter + markdown body.
    */
-  async readHandoffDigest(
-    sessionId: string,
-    threadId: string,
-    catId: string,
-  ): Promise<HandoffDigestResult | null> {
-    const digestPath = join(
-      this.sessionDir(threadId, catId, sessionId),
-      'digest.handoff.md',
-    );
+  async readHandoffDigest(sessionId: string, threadId: string, catId: string): Promise<HandoffDigestResult | null> {
+    const digestPath = join(this.sessionDir(threadId, catId, sessionId), 'digest.handoff.md');
     try {
       const content = await readFile(digestPath, 'utf-8');
       return this.parseHandoffDigest(content);
@@ -308,15 +304,8 @@ export class TranscriptReader {
    * Read ALL events from a sealed session transcript (no limit).
    * F065 Phase C: needed for handoff digest generation on long sessions.
    */
-  async readAllEvents(
-    sessionId: string,
-    threadId: string,
-    catId: string,
-  ): Promise<TranscriptEvent[]> {
-    const jsonlPath = join(
-      this.sessionDir(threadId, catId, sessionId),
-      'events.jsonl',
-    );
+  async readAllEvents(sessionId: string, threadId: string, catId: string): Promise<TranscriptEvent[]> {
+    const jsonlPath = join(this.sessionDir(threadId, catId, sessionId), 'events.jsonl');
 
     try {
       await stat(jsonlPath);
@@ -334,7 +323,9 @@ export class TranscriptReader {
       if (line.trim().length === 0) continue;
       try {
         events.push(JSON.parse(line) as TranscriptEvent);
-      } catch { /* skip malformed */ }
+      } catch {
+        /* skip malformed */
+      }
     }
 
     return events;
@@ -346,11 +337,7 @@ export class TranscriptReader {
   }
 
   /** Check if a session has a transcript on disk. */
-  async hasTranscript(
-    sessionId: string,
-    threadId: string,
-    catId: string,
-  ): Promise<boolean> {
+  async hasTranscript(sessionId: string, threadId: string, catId: string): Promise<boolean> {
     try {
       await stat(join(this.sessionDir(threadId, catId, sessionId), 'events.jsonl'));
       return true;
@@ -391,13 +378,13 @@ export class TranscriptReader {
       }
     }
 
-    const v = Number(meta['v']);
-    const generatedAt = Number(meta['generatedAt']);
-    if (!Number.isFinite(v) || !meta['model'] || !Number.isFinite(generatedAt)) {
+    const v = Number(meta.v);
+    const generatedAt = Number(meta.generatedAt);
+    if (!Number.isFinite(v) || !meta.model || !Number.isFinite(generatedAt)) {
       return null;
     }
 
-    return { v, model: meta['model'], generatedAt, body };
+    return { v, model: meta.model, generatedAt, body };
   }
 
   private extractSnippet(text: string, query: string, maxLen = 200): string {

@@ -44,7 +44,19 @@ const DIVIDER = '#334155';
 
 function ChevronIcon({ expanded }: { expanded: boolean }) {
   return (
-    <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="transition-transform duration-150 flex-shrink-0" style={{ transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>
+    <svg
+      aria-hidden="true"
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="transition-transform duration-150 flex-shrink-0"
+      style={{ transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)' }}
+    >
       <polyline points="9 18 15 12 9 6" />
     </svg>
   );
@@ -52,7 +64,18 @@ function ChevronIcon({ expanded }: { expanded: boolean }) {
 
 function WrenchIcon({ color }: { color?: string }) {
   return (
-    <svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={color || '#E2E8F0'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
+    <svg
+      aria-hidden="true"
+      width="11"
+      height="11"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke={color || '#E2E8F0'}
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="flex-shrink-0"
+    >
       <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
     </svg>
   );
@@ -60,7 +83,18 @@ function WrenchIcon({ color }: { color?: string }) {
 
 function CheckIcon() {
   return (
-    <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#22D3EE" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
+    <svg
+      aria-hidden="true"
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="#22D3EE"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="flex-shrink-0"
+    >
       <polyline points="20 6 9 17 4 12" />
     </svg>
   );
@@ -68,7 +102,18 @@ function CheckIcon() {
 
 function LoaderIcon({ color }: { color?: string }) {
   return (
-    <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={color || 'currentColor'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0 animate-spin">
+    <svg
+      aria-hidden="true"
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke={color || 'currentColor'}
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="flex-shrink-0 animate-spin"
+    >
       <path d="M21 12a9 9 0 1 1-6.219-8.56" />
     </svg>
   );
@@ -76,7 +121,18 @@ function LoaderIcon({ color }: { color?: string }) {
 
 function PawPrint() {
   return (
-    <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64748B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
+    <svg
+      aria-hidden="true"
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="#64748B"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="flex-shrink-0"
+    >
       <circle cx="11" cy="4" r="2" />
       <circle cx="18" cy="8" r="2" />
       <circle cx="20" cy="16" r="2" />
@@ -150,7 +206,7 @@ function ToolRow({
       style={{
         padding: '5px 8px',
         borderRadius: 4,
-        backgroundColor: isActive ? hexToRgba(accent, 0.20) : undefined,
+        backgroundColor: isActive ? hexToRgba(accent, 0.2) : undefined,
         borderLeft: isActive ? `2px solid ${accent}` : undefined,
       }}
       onClick={() => {
@@ -167,14 +223,18 @@ function ToolRow({
         <span className="truncate" style={{ color: isActive ? accentVeryLight : '#E2E8F0' }}>
           <span className="font-medium">{event.label?.split(' ')[0]}</span>
           {event.label?.includes(' ') && (
-            <span style={{ color: isActive ? accentLight : '#64748B' }}>{` ${event.label.split(' ').slice(1).join(' ')}`}</span>
+            <span
+              style={{ color: isActive ? accentLight : '#64748B' }}
+            >{` ${event.label.split(' ').slice(1).join(' ')}`}</span>
           )}
         </span>
       </div>
       {/* Detail — hidden by default, shown on click */}
       {hasResult && !rowExpanded && <ChevronIcon expanded={false} />}
       {rowExpanded && hasResult && event.detail && (
-        <div className="w-full mt-1 pl-7 whitespace-pre-wrap text-[10px]" style={{ color: '#64748B' }}>{event.detail}</div>
+        <div className="w-full mt-1 pl-7 whitespace-pre-wrap text-[10px]" style={{ color: '#64748B' }}>
+          {event.detail}
+        </div>
       )}
     </button>
   );
@@ -350,7 +410,9 @@ export function CliOutputBlock({
               toolResults={toolResults}
               lastToolId={lastToolId}
               status={status}
-              onUserInteract={() => { userInteracted.current = true; }}
+              onUserInteract={() => {
+                userInteracted.current = true;
+              }}
               accent={accent}
             />
           )}
@@ -359,12 +421,22 @@ export function CliOutputBlock({
               {toolUses.length > 0 && (
                 <>
                   <div style={{ height: 1, backgroundColor: DIVIDER }} />
-                  <div style={{ padding: '8px 12px 4px 12px', fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#475569' }}>
+                  <div
+                    style={{
+                      padding: '8px 12px 4px 12px',
+                      fontFamily: 'JetBrains Mono, monospace',
+                      fontSize: 10,
+                      color: '#475569',
+                    }}
+                  >
                     ─── stdout ───
                   </div>
                 </>
               )}
-              <div style={{ padding: '8px 12px 10px 12px' }} className="font-mono text-[11px] leading-relaxed cli-output-md" >
+              <div
+                style={{ padding: '8px 12px 10px 12px' }}
+                className="font-mono text-[11px] leading-relaxed cli-output-md"
+              >
                 <span style={{ color: '#CBD5E1' }}>
                   <MarkdownContent content={textEvents.map((e) => e.content).join('\n')} />
                 </span>

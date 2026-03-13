@@ -7,8 +7,9 @@
  * POST /api/threads/:threadId/game/action — Submit action
  * DELETE /api/threads/:threadId/game     — Abort game
  */
-import { describe, it, before, after, beforeEach } from 'node:test';
+
 import assert from 'node:assert/strict';
+import { after, before, describe, it } from 'node:test';
 import Fastify from 'fastify';
 import { gameRoutes } from '../dist/routes/games.js';
 
@@ -123,9 +124,7 @@ describe('Game API Routes', () => {
         url: '/api/threads/thread-route-1/game',
         payload: {
           definition: makeDefinition(),
-          seats: [
-            { seatId: 'P1', actorType: 'cat', actorId: 'opus', role: 'wolf', alive: true, properties: {} },
-          ],
+          seats: [{ seatId: 'P1', actorType: 'cat', actorId: 'opus', role: 'wolf', alive: true, properties: {} }],
           config: { timeoutMs: 30000, voiceMode: false, humanRole: 'player', humanSeat: 'P2' },
         },
       });
@@ -208,9 +207,7 @@ describe('Game API Routes', () => {
         url: '/api/threads/thread-route-del/game',
         payload: {
           definition: makeDefinition(),
-          seats: [
-            { seatId: 'P1', actorType: 'cat', actorId: 'opus', role: 'wolf', alive: true, properties: {} },
-          ],
+          seats: [{ seatId: 'P1', actorType: 'cat', actorId: 'opus', role: 'wolf', alive: true, properties: {} }],
           config: { timeoutMs: 30000, voiceMode: false, humanRole: 'player', humanSeat: 'P2' },
         },
       });

@@ -12,9 +12,9 @@
  * BACKLOG #81
  */
 
+import { catRegistry } from '@cat-cafe/shared';
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
-import { catRegistry } from '@cat-cafe/shared';
 import type { IPrTrackingStore } from '../infrastructure/email/PrTrackingStore.js';
 import { resolveUserId } from '../utils/request-identity.js';
 
@@ -23,7 +23,10 @@ export interface PrTrackingRoutesOptions {
 }
 
 const RegisterBodySchema = z.object({
-  repoFullName: z.string().min(1).regex(/^[^/]+\/[^/]+$/, 'Must be owner/repo format'),
+  repoFullName: z
+    .string()
+    .min(1)
+    .regex(/^[^/]+\/[^/]+$/, 'Must be owner/repo format'),
   prNumber: z.number().int().positive(),
   catId: z.string().min(1),
   /** Trusted input: caller is our own code registering a PR it just created.
@@ -91,33 +94,30 @@ export const prTrackingRoutes: FastifyPluginAsync<PrTrackingRoutesOptions> = asy
   });
 
   // Remove tracking for a PR (owner only)
-  app.delete<{ Params: { repo: string; pr: string } }>(
-    '/api/pr-tracking/:repo/:pr',
-    async (request, reply) => {
-      const userId = resolveUserId(request);
-      if (!userId) {
-        return reply.status(401).send({ error: 'Identity required (X-Cat-Cafe-User header or userId query)' });
-      }
+  app.delete<{ Params: { repo: string; pr: string } }>('/api/pr-tracking/:repo/:pr', async (request, reply) => {
+    const userId = resolveUserId(request);
+    if (!userId) {
+      return reply.status(401).send({ error: 'Identity required (X-Cat-Cafe-User header or userId query)' });
+    }
 
-      const repoFullName = decodeURIComponent(request.params.repo);
-      const prNumber = parseInt(request.params.pr, 10);
+    const repoFullName = decodeURIComponent(request.params.repo);
+    const prNumber = parseInt(request.params.pr, 10);
 
-      if (Number.isNaN(prNumber) || String(prNumber) !== request.params.pr) {
-        return reply.status(400).send({ error: 'Invalid PR number' });
-      }
+    if (Number.isNaN(prNumber) || String(prNumber) !== request.params.pr) {
+      return reply.status(400).send({ error: 'Invalid PR number' });
+    }
 
-      // Ownership check
-      const entry = await prTrackingStore.get(repoFullName, prNumber);
-      if (!entry) {
-        return reply.status(404).send({ error: 'Tracking entry not found' });
-      }
-      if (entry.userId !== userId) {
-        return reply.status(403).send({ error: 'Not the owner of this tracking entry' });
-      }
+    // Ownership check
+    const entry = await prTrackingStore.get(repoFullName, prNumber);
+    if (!entry) {
+      return reply.status(404).send({ error: 'Tracking entry not found' });
+    }
+    if (entry.userId !== userId) {
+      return reply.status(403).send({ error: 'Not the owner of this tracking entry' });
+    }
 
-      await prTrackingStore.remove(repoFullName, prNumber);
-      app.log.info(`[pr-tracking] Removed: ${repoFullName}#${prNumber} by ${userId}`);
-      return reply.status(200).send({ removed: true });
-    },
-  );
+    await prTrackingStore.remove(repoFullName, prNumber);
+    app.log.info(`[pr-tracking] Removed: ${repoFullName}#${prNumber} by ${userId}`);
+    return reply.status(200).send({ removed: true });
+  });
 };

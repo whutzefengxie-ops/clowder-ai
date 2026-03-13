@@ -24,11 +24,11 @@ import type { FastifyPluginAsync } from 'fastify';
 import {
   addLinkedRoot,
   getLinkedRootsAsync,
-  registerWorktrees,
-  removeLinkedRoot,
   getWorktreeRoot,
   isDenylisted,
   listWorktrees,
+  registerWorktrees,
+  removeLinkedRoot,
   resolveWorkspacePath,
   WorkspaceSecurityError,
 } from '../domains/workspace/workspace-security.js';
@@ -316,16 +316,35 @@ export const workspaceRoutes: FastifyPluginAsync = async (app) => {
           'find',
           [
             root,
-            '-type', 'f',
-            '-not', '-path', '*/node_modules/*',
-            '-not', '-path', '*/.git/*',
-            '-not', '-path', '*/.next/*',
-            '-not', '-path', '*/dist/*',
-            '-not', '-path', '*/secrets/*',
-            '-not', '-name', '.env*',
-            '-not', '-name', '*.pem',
-            '-not', '-name', '*.key',
-            '-not', '-name', 'id_rsa*',
+            '-type',
+            'f',
+            '-not',
+            '-path',
+            '*/node_modules/*',
+            '-not',
+            '-path',
+            '*/.git/*',
+            '-not',
+            '-path',
+            '*/.next/*',
+            '-not',
+            '-path',
+            '*/dist/*',
+            '-not',
+            '-path',
+            '*/secrets/*',
+            '-not',
+            '-name',
+            '.env*',
+            '-not',
+            '-name',
+            '*.pem',
+            '-not',
+            '-name',
+            '*.key',
+            '-not',
+            '-name',
+            'id_rsa*',
           ],
           { timeout: 5000, maxBuffer: 1024 * 1024 },
         );
@@ -413,7 +432,7 @@ export const workspaceRoutes: FastifyPluginAsync = async (app) => {
         results.push({
           path: relPath,
           line: parseInt(lineStr!, 10),
-          content: content!.trim(),
+          content: content?.trim(),
           contextBefore: beforeLines.map((l) => l.replace(/^.+?:\d+[:-]/, '')).join('\n'),
           contextAfter: afterLines.map((l) => l.replace(/^.+?:\d+[:-]/, '')).join('\n'),
         });
@@ -449,11 +468,10 @@ export const workspaceRoutes: FastifyPluginAsync = async (app) => {
       const root = await getWorktreeRoot(worktreeId);
 
       // Get list of changed files (staged + unstaged)
-      const { stdout: statusOut } = await execFileAsync(
-        'git',
-        ['status', '--porcelain', '-uall'],
-        { cwd: root, timeout: 5000 },
-      );
+      const { stdout: statusOut } = await execFileAsync('git', ['status', '--porcelain', '-uall'], {
+        cwd: root,
+        timeout: 5000,
+      });
 
       const changedFiles = statusOut
         .trim()
@@ -511,9 +529,7 @@ export const workspaceRoutes: FastifyPluginAsync = async (app) => {
 
       // Supplement diff for untracked (??) files — git diff HEAD doesn't cover them
       const untrackedFiles = changedFiles.filter((f) => f.status === '??');
-      const targetUntracked = filePath
-        ? untrackedFiles.filter((f) => f.path === filePath)
-        : untrackedFiles;
+      const targetUntracked = filePath ? untrackedFiles.filter((f) => f.path === filePath) : untrackedFiles;
 
       for (const uf of targetUntracked) {
         try {

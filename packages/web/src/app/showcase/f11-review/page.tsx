@@ -375,12 +375,8 @@ export default function F11ReviewShowcase() {
       {/* Header */}
       <div className="sticky top-0 z-10 bg-white/80 backdrop-blur-sm border-b border-orange-100 px-6 py-4">
         <div className="max-w-3xl mx-auto">
-          <h1 className="text-2xl font-bold text-gray-800">
-            F11 Mode System Review 攻防录
-          </h1>
-          <p className="text-sm text-gray-500 mt-1">
-            布偶猫 vs 缅因猫 — 6 轮 code review，研发自闭环
-          </p>
+          <h1 className="text-2xl font-bold text-gray-800">F11 Mode System Review 攻防录</h1>
+          <p className="text-sm text-gray-500 mt-1">布偶猫 vs 缅因猫 — 6 轮 code review，研发自闭环</p>
         </div>
       </div>
 

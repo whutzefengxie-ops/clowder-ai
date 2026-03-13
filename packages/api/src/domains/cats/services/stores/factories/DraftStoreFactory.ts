@@ -4,12 +4,12 @@
  */
 
 import type { RedisClient } from '@cat-cafe/shared/utils';
-import { DraftStore } from '../ports/DraftStore.js';
 import type { IDraftStore } from '../ports/DraftStore.js';
+import { DraftStore } from '../ports/DraftStore.js';
 import { RedisDraftStore } from '../redis/RedisDraftStore.js';
 
 function resolveDraftTtlSeconds(): number | undefined {
-  const raw = process.env['DRAFT_TTL_SECONDS'];
+  const raw = process.env.DRAFT_TTL_SECONDS;
   if (!raw) return undefined;
   const parsed = Number(raw);
   if (!Number.isFinite(parsed)) {
@@ -22,10 +22,7 @@ function resolveDraftTtlSeconds(): number | undefined {
 export function createDraftStore(redis?: RedisClient): IDraftStore {
   if (redis) {
     const ttlSeconds = resolveDraftTtlSeconds();
-    return new RedisDraftStore(
-      redis,
-      ttlSeconds !== undefined ? { ttlSeconds } : undefined,
-    );
+    return new RedisDraftStore(redis, ttlSeconds !== undefined ? { ttlSeconds } : undefined);
   }
   return new DraftStore();
 }

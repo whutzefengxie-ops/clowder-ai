@@ -1,10 +1,10 @@
 import './helpers/setup-cat-registry.js';
-import { afterEach, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import Fastify from 'fastify';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { afterEach, describe, test } from 'node:test';
+import Fastify from 'fastify';
 
 const tempDirs = [];
 
@@ -14,24 +14,14 @@ afterEach(async () => {
 
 describe('Session bind history import', () => {
   async function buildApp() {
-    const { SessionChainStore } = await import(
-      '../dist/domains/cats/services/stores/ports/SessionChainStore.js'
-    );
-    const { ThreadStore } = await import(
-      '../dist/domains/cats/services/stores/ports/ThreadStore.js'
-    );
-    const { MessageStore } = await import(
-      '../dist/domains/cats/services/stores/ports/MessageStore.js'
-    );
+    const { SessionChainStore } = await import('../dist/domains/cats/services/stores/ports/SessionChainStore.js');
+    const { ThreadStore } = await import('../dist/domains/cats/services/stores/ports/ThreadStore.js');
+    const { MessageStore } = await import('../dist/domains/cats/services/stores/ports/MessageStore.js');
     const { InvocationRegistry } = await import(
       '../dist/domains/cats/services/agents/invocation/InvocationRegistry.js'
     );
-    const { TranscriptReader } = await import(
-      '../dist/domains/cats/services/session/TranscriptReader.js'
-    );
-    const { TranscriptWriter } = await import(
-      '../dist/domains/cats/services/session/TranscriptWriter.js'
-    );
+    const { TranscriptReader } = await import('../dist/domains/cats/services/session/TranscriptReader.js');
+    const { TranscriptWriter } = await import('../dist/domains/cats/services/session/TranscriptWriter.js');
     const { sessionChainRoutes } = await import('../dist/routes/session-chain.js');
     const { messagesRoutes } = await import('../dist/routes/messages.js');
 

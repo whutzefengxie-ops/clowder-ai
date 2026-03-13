@@ -41,9 +41,7 @@ function extractFrontmatter(content: string): { frontmatter: Record<string, unkn
   if (!match) return { frontmatter: {}, body: content };
   try {
     const parsed = parseYaml(match[1] ?? '');
-    const frontmatter = parsed && typeof parsed === 'object'
-      ? parsed as Record<string, unknown>
-      : {};
+    const frontmatter = parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {};
     return { frontmatter, body: content.slice((match[0] ?? '').length) };
   } catch {
     return { frontmatter: {}, body: content };
@@ -65,14 +63,14 @@ function extractHeadingTitle(body: string): string | undefined {
 }
 
 function extractStatusFromBody(body: string): string | undefined {
-  const match = body.match(/^\>\s*\*\*Status\*\*:\s*(.+)$/im)?.[1]?.trim();
+  const match = body.match(/^>\s*\*\*Status\*\*:\s*(.+)$/im)?.[1]?.trim();
   if (!match) return undefined;
   return match.replace(/^`|`$/g, '').trim();
 }
 
 function extractFeatureIds(frontmatter: Record<string, unknown>, fallbackFileName: string): string[] {
   const ids: string[] = [];
-  const raw = frontmatter['feature_ids'];
+  const raw = frontmatter.feature_ids;
   if (Array.isArray(raw)) {
     for (const item of raw) {
       if (typeof item !== 'string') continue;
@@ -89,7 +87,7 @@ function extractFeatureIds(frontmatter: Record<string, unknown>, fallbackFileNam
 }
 
 function extractKeyDecisions(frontmatter: Record<string, unknown>): string[] | undefined {
-  const value = frontmatter['keyDecisions'];
+  const value = frontmatter.keyDecisions;
   if (!Array.isArray(value)) return undefined;
   const decisions = value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
   return decisions.length > 0 ? decisions : undefined;
@@ -99,8 +97,7 @@ async function readFeatureDocEntries(featuresDir: string): Promise<FeatureDocEnt
   if (!existsSync(featuresDir)) return [];
   let fileNames: string[] = [];
   try {
-    fileNames = readdirSync(featuresDir)
-      .filter((name) => /\.md$/i.test(name));
+    fileNames = readdirSync(featuresDir).filter((name) => /\.md$/i.test(name));
   } catch {
     return [];
   }

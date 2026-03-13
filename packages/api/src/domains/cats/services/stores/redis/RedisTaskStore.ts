@@ -9,8 +9,7 @@
  * TTL 默认 30 天。
  */
 
-import type { TaskItem, CreateTaskInput, UpdateTaskInput } from '@cat-cafe/shared';
-import type { CatId } from '@cat-cafe/shared';
+import type { CatId, CreateTaskInput, TaskItem, UpdateTaskInput } from '@cat-cafe/shared';
 import type { RedisClient } from '@cat-cafe/shared/utils';
 import { generateSortableId } from '../ports/MessageStore.js';
 import type { ITaskStore } from '../ports/TaskStore.js';
@@ -68,7 +67,7 @@ export class RedisTaskStore implements ITaskStore {
 
   async get(taskId: string): Promise<TaskItem | null> {
     const data = await this.redis.hgetall(TaskKeys.detail(taskId));
-    if (!data || !data['id']) return null;
+    if (!data || !data.id) return null;
     return this.hydrateTask(data);
   }
 
@@ -104,7 +103,7 @@ export class RedisTaskStore implements ITaskStore {
     for (const [err, data] of results) {
       if (err || !data || typeof data !== 'object') continue;
       const d = data as Record<string, string>;
-      if (!d['id']) continue;
+      if (!d.id) continue;
       tasks.push(this.hydrateTask(d));
     }
     return tasks;
@@ -112,9 +111,9 @@ export class RedisTaskStore implements ITaskStore {
 
   async delete(taskId: string): Promise<boolean> {
     const data = await this.redis.hgetall(TaskKeys.detail(taskId));
-    if (!data || !data['id']) return false;
+    if (!data || !data.id) return false;
 
-    const threadId = data['threadId'] ?? '';
+    const threadId = data.threadId ?? '';
     const pipeline = this.redis.multi();
     pipeline.del(TaskKeys.detail(taskId));
     if (threadId) {
@@ -156,15 +155,15 @@ export class RedisTaskStore implements ITaskStore {
 
   private hydrateTask(data: Record<string, string>): TaskItem {
     return {
-      id: data['id'] ?? '',
-      threadId: data['threadId'] ?? '',
-      title: data['title'] ?? '',
-      ownerCatId: (data['ownerCatId'] || null) as CatId | null,
-      status: (data['status'] ?? 'todo') as TaskItem['status'],
-      why: data['why'] ?? '',
-      createdBy: (data['createdBy'] ?? 'user') as TaskItem['createdBy'],
-      createdAt: parseInt(data['createdAt'] ?? '0', 10),
-      updatedAt: parseInt(data['updatedAt'] ?? '0', 10),
+      id: data.id ?? '',
+      threadId: data.threadId ?? '',
+      title: data.title ?? '',
+      ownerCatId: (data.ownerCatId || null) as CatId | null,
+      status: (data.status ?? 'todo') as TaskItem['status'],
+      why: data.why ?? '',
+      createdBy: (data.createdBy ?? 'user') as TaskItem['createdBy'],
+      createdAt: parseInt(data.createdAt ?? '0', 10),
+      updatedAt: parseInt(data.updatedAt ?? '0', 10),
     };
   }
 }

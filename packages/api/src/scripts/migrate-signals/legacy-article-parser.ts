@@ -1,4 +1,4 @@
-import { readFile, readdir } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import { basename, extname, join, resolve } from 'node:path';
 import type { SignalArticleStatus, SignalTier } from '@cat-cafe/shared';
 import { parse as parseYaml } from 'yaml';
@@ -32,7 +32,10 @@ function normalizeStatus(value: string | undefined): SignalArticleStatus {
   return 'inbox';
 }
 
-function splitFrontmatter(rawMarkdown: string): { readonly frontmatter: Record<string, unknown>; readonly content: string } {
+function splitFrontmatter(rawMarkdown: string): {
+  readonly frontmatter: Record<string, unknown>;
+  readonly content: string;
+} {
   const normalized = rawMarkdown.replace(/\r\n/g, '\n');
   const hasFrontmatterOpening = normalized.startsWith('---\n');
   const match = normalized.match(/^---\n([\s\S]*?)\n---(?:\n|$)/);
@@ -84,7 +87,10 @@ async function collectMarkdownFiles(root: string): Promise<string[]> {
   return files;
 }
 
-export async function parseLegacyArticles(libraryDir: string, options: ParseLegacyArticlesOptions = {}): Promise<LegacyArticle[]> {
+export async function parseLegacyArticles(
+  libraryDir: string,
+  options: ParseLegacyArticlesOptions = {},
+): Promise<LegacyArticle[]> {
   const files = await collectMarkdownFiles(libraryDir);
   const fallbackNow = new Date().toISOString();
   const articles: LegacyArticle[] = [];
@@ -105,7 +111,7 @@ export async function parseLegacyArticles(libraryDir: string, options: ParseLega
       );
       const fetchedAt = normalizeDate(pickString(frontmatter, ['fetchedAt', 'captured']), publishedAt);
       const tierNumber = pickNumber(frontmatter, 'tier');
-      const tagsValue = frontmatter['tags'];
+      const tagsValue = frontmatter.tags;
 
       articles.push({
         filePath,

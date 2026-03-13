@@ -15,7 +15,7 @@
  *   2. No newer toggle → GET result SHOULD apply
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { createToggleWithReconcile, type FetchFn } from '../ThreadSidebar/toggle-with-reconcile';
 
 // ---------- controlled promise helpers ----------
@@ -27,7 +27,9 @@ interface Deferred<T> {
 
 function deferred<T>(): Deferred<T> {
   let resolve!: (v: T) => void;
-  const promise = new Promise<T>((res) => { resolve = res; });
+  const promise = new Promise<T>((res) => {
+    resolve = res;
+  });
   return { promise, resolve };
 }
 
@@ -72,10 +74,10 @@ describe('createToggleWithReconcile (race regression)', () => {
     // Step 3: Reconcile GET from step 1 returns { pinned: true }
     // But seq was 1 when reconcile started, now seq=2 → must NOT apply
     fetchQueue[1].resolve(mockResponse(true, { pinned: true }));
-    await new Promise(r => setTimeout(r, 0)); // let reconcile microtask run
+    await new Promise((r) => setTimeout(r, 0)); // let reconcile microtask run
 
     // Assert: stale GET should NOT have written pinned=true
-    expect(updates.filter(u => u.val === true)).toHaveLength(0);
+    expect(updates.filter((u) => u.val === true)).toHaveLength(0);
 
     // Step 4: Second PATCH succeeds
     fetchQueue[2].resolve(mockResponse(true, { pinned: false }));
@@ -110,7 +112,7 @@ describe('createToggleWithReconcile (race regression)', () => {
 
     // Reconcile GET returns — no newer toggle, seq still 1 → APPLY
     fetchQueue[1].resolve(mockResponse(true, { pinned: false }));
-    await new Promise(r => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 0));
 
     expect(updates).toHaveLength(1);
     expect(updates[0]).toEqual({ id: 't1', val: false });
@@ -146,7 +148,7 @@ describe('createToggleWithReconcile (race regression)', () => {
     // Reconcile GET returns both pinned and favorited
     // favSeqMap has no entry for 't1' (=== 0) and expectedSiblingSeq was 0 → sibling APPLIES
     fetchQueue[1].resolve(mockResponse(true, { pinned: false, favorited: true }));
-    await new Promise(r => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 0));
 
     expect(pinUpdates).toHaveLength(1);
     expect(pinUpdates[0]).toEqual({ id: 't1', val: false });
@@ -186,7 +188,7 @@ describe('createToggleWithReconcile (race regression)', () => {
 
     // Reconcile GET returns — pin seq matches (applies), but fav seq moved (skips)
     fetchQueue[1].resolve(mockResponse(true, { pinned: false, favorited: true }));
-    await new Promise(r => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 0));
 
     expect(pinUpdates).toHaveLength(1);
     expect(favUpdates).toHaveLength(0); // sibling skipped because favSeqMap moved

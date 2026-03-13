@@ -90,11 +90,13 @@ function ConfigFilesSection({ projectRoot }: { projectRoot: string }) {
 }
 
 function EnvVarsSection({ categories, variables }: { categories: Record<string, string>; variables: EnvVar[] }) {
-  const grouped = Object.entries(categories).map(([key, label]) => ({
-    key,
-    label,
-    vars: variables.filter((v) => v.category === key),
-  })).filter((g) => g.vars.length > 0);
+  const grouped = Object.entries(categories)
+    .map(([key, label]) => ({
+      key,
+      label,
+      vars: variables.filter((v) => v.category === key),
+    }))
+    .filter((g) => g.vars.length > 0);
 
   return (
     <Section title="环境变量">
@@ -147,7 +149,7 @@ export function HubEnvFilesTab() {
   useEffect(() => {
     apiFetch('/api/config/env-summary')
       .then(async (res) => {
-        if (res.ok) setData(await res.json() as EnvSummaryData);
+        if (res.ok) setData((await res.json()) as EnvSummaryData);
         else setError('环境信息加载失败');
       })
       .catch(() => setError('环境信息加载失败'));

@@ -24,10 +24,19 @@
           "provider": "anthropic",
           "defaultModel": "claude-opus-4-6",
           "mcpSupport": true,
-          "cli": { "command": "claude", "outputFormat": "stream-json", "defaultArgs": ["--output-format", "stream-json"] },
+          "cli": {
+            "command": "claude",
+            "outputFormat": "stream-json",
+            "defaultArgs": ["--output-format", "stream-json"]
+          },
           "personality": "Deep thinker, quality-focused",
           "strengths": ["architecture", "backend", "mcp"],
-          "contextBudget": { "maxPromptTokens": 180000, "maxContextTokens": 160000, "maxMessages": 200, "maxContentLengthPerMsg": 10000 }
+          "contextBudget": {
+            "maxPromptTokens": 180000,
+            "maxContextTokens": 160000,
+            "maxMessages": 200,
+            "maxContentLengthPerMsg": 10000
+          }
         }
       ]
     },
@@ -50,7 +59,12 @@
           "cli": { "command": "codex", "outputFormat": "stream-json", "defaultArgs": ["--full-auto"] },
           "personality": "Thorough reviewer, security-minded",
           "strengths": ["review", "security", "testing"],
-          "contextBudget": { "maxPromptTokens": 180000, "maxContextTokens": 160000, "maxMessages": 200, "maxContentLengthPerMsg": 10000 }
+          "contextBudget": {
+            "maxPromptTokens": 180000,
+            "maxContextTokens": 160000,
+            "maxMessages": 200,
+            "maxContentLengthPerMsg": 10000
+          }
         }
       ]
     },
@@ -73,15 +87,38 @@
           "cli": { "command": "gemini", "outputFormat": "stream-json", "defaultArgs": [] },
           "personality": "Creative spark, visual excellence",
           "strengths": ["design", "creativity"],
-          "contextBudget": { "maxPromptTokens": 180000, "maxContextTokens": 160000, "maxMessages": 200, "maxContentLengthPerMsg": 10000 }
+          "contextBudget": {
+            "maxPromptTokens": 180000,
+            "maxContextTokens": 160000,
+            "maxMessages": 200,
+            "maxContentLengthPerMsg": 10000
+          }
         }
       ]
     }
   ],
   "roster": {
-    "opus": { "family": "ragdoll", "roles": ["architect", "peer-reviewer"], "lead": true, "available": true, "evaluation": "Lead architect" },
-    "codex": { "family": "maine-coon", "roles": ["reviewer", "peer-reviewer"], "lead": true, "available": true, "evaluation": "Code reviewer" },
-    "gemini": { "family": "siamese", "roles": ["designer", "peer-reviewer"], "lead": true, "available": true, "evaluation": "Visual designer" }
+    "opus": {
+      "family": "ragdoll",
+      "roles": ["architect", "peer-reviewer"],
+      "lead": true,
+      "available": true,
+      "evaluation": "Lead architect"
+    },
+    "codex": {
+      "family": "maine-coon",
+      "roles": ["reviewer", "peer-reviewer"],
+      "lead": true,
+      "available": true,
+      "evaluation": "Code reviewer"
+    },
+    "gemini": {
+      "family": "siamese",
+      "roles": ["designer", "peer-reviewer"],
+      "lead": true,
+      "available": true,
+      "evaluation": "Visual designer"
+    }
   },
   "reviewPolicy": {
     "requireDifferentFamily": true,

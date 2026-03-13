@@ -6,11 +6,11 @@
  */
 
 import './helpers/setup-cat-registry.js';
-import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
 import Fastify from 'fastify';
-import { prTrackingRoutes } from '../dist/routes/pr-tracking.js';
 import { MemoryPrTrackingStore } from '../dist/infrastructure/email/PrTrackingStore.js';
+import { prTrackingRoutes } from '../dist/routes/pr-tracking.js';
 
 const ALICE = { 'x-cat-cafe-user': 'alice' };
 const BOB = { 'x-cat-cafe-user': 'bob' };

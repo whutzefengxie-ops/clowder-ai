@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile, writeFile, unlink } from 'node:fs/promises';
+import { mkdir, readdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { resolveSignalPaths } from '../config/sources-loader.js';
 
@@ -59,7 +59,10 @@ export class CollectionService {
     return collection;
   }
 
-  async update(id: string, patch: { name?: string | undefined; articleIds?: readonly string[] | undefined }): Promise<StudyCollection | null> {
+  async update(
+    id: string,
+    patch: { name?: string | undefined; articleIds?: readonly string[] | undefined },
+  ): Promise<StudyCollection | null> {
     const existing = await this.get(id);
     if (!existing) return null;
     const updated: StudyCollection = {

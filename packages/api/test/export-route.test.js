@@ -3,8 +3,8 @@
  * 测试聊天记录导出为 Markdown / 纯文本
  */
 
-import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
+import { describe, test } from 'node:test';
 
 const { formatThreadAsMarkdown, formatThreadAsText } = await import('../dist/routes/export.js');
 
@@ -41,7 +41,12 @@ describe('formatThreadAsMarkdown', () => {
     const thread = makeThread({ title: '第一次测试', participants: ['opus'] });
     const messages = [
       makeMessage({ content: '你好布偶猫', timestamp: new Date('2026-02-07T10:30:00').getTime() }),
-      makeMessage({ catId: 'opus', content: '你好owner！', timestamp: new Date('2026-02-07T10:31:00').getTime(), id: 'msg-2' }),
+      makeMessage({
+        catId: 'opus',
+        content: '你好owner！',
+        timestamp: new Date('2026-02-07T10:31:00').getTime(),
+        id: 'msg-2',
+      }),
     ];
 
     const md = formatThreadAsMarkdown(thread, messages);
@@ -119,7 +124,12 @@ describe('formatThreadAsText', () => {
     const thread = makeThread({ title: '纯文本测试', participants: ['opus'] });
     const messages = [
       makeMessage({ content: '你好布偶猫', timestamp: new Date('2026-02-07T10:30:00').getTime() }),
-      makeMessage({ catId: 'opus', content: '你好owner！', timestamp: new Date('2026-02-07T10:31:00').getTime(), id: 'msg-2' }),
+      makeMessage({
+        catId: 'opus',
+        content: '你好owner！',
+        timestamp: new Date('2026-02-07T10:31:00').getTime(),
+        id: 'msg-2',
+      }),
     ];
 
     const txt = formatThreadAsText(thread, messages);
@@ -205,7 +215,15 @@ describe('Export Route (endpoint)', () => {
 
   function mockMessageStore(messages = []) {
     return {
-      append: async () => ({ id: '1', threadId: 'x', userId: 'u', catId: null, content: '', mentions: [], timestamp: 0 }),
+      append: async () => ({
+        id: '1',
+        threadId: 'x',
+        userId: 'u',
+        catId: null,
+        content: '',
+        mentions: [],
+        timestamp: 0,
+      }),
       getRecent: () => [],
       getByThread: async () => messages,
       getById: async () => null,
@@ -216,10 +234,7 @@ describe('Export Route (endpoint)', () => {
   test('GET existing thread returns 200 with markdown', async () => {
     const thread = makeThread();
     const messages = [makeMessage({ content: 'hello' })];
-    const app = await buildApp(
-      mockThreadStore({ 'thread-1': thread }),
-      mockMessageStore(messages),
-    );
+    const app = await buildApp(mockThreadStore({ 'thread-1': thread }), mockMessageStore(messages));
 
     const res = await app.inject({
       method: 'GET',
@@ -247,10 +262,7 @@ describe('Export Route (endpoint)', () => {
 
   test('GET with unsupported format returns 400', async () => {
     const thread = makeThread();
-    const app = await buildApp(
-      mockThreadStore({ 'thread-1': thread }),
-      mockMessageStore(),
-    );
+    const app = await buildApp(mockThreadStore({ 'thread-1': thread }), mockMessageStore());
 
     const res = await app.inject({
       method: 'GET',
@@ -265,10 +277,7 @@ describe('Export Route (endpoint)', () => {
   test('GET with format=txt returns 200 with plain text', async () => {
     const thread = makeThread();
     const messages = [makeMessage({ content: 'hello txt' })];
-    const app = await buildApp(
-      mockThreadStore({ 'thread-1': thread }),
-      mockMessageStore(messages),
-    );
+    const app = await buildApp(mockThreadStore({ 'thread-1': thread }), mockMessageStore(messages));
 
     const res = await app.inject({
       method: 'GET',
@@ -285,10 +294,7 @@ describe('Export Route (endpoint)', () => {
   test('GET default format (no query) returns markdown', async () => {
     const thread = makeThread();
     const messages = [makeMessage({ content: 'default format' })];
-    const app = await buildApp(
-      mockThreadStore({ 'thread-1': thread }),
-      mockMessageStore(messages),
-    );
+    const app = await buildApp(mockThreadStore({ 'thread-1': thread }), mockMessageStore(messages));
 
     const res = await app.inject({
       method: 'GET',

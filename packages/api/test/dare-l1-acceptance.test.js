@@ -70,8 +70,8 @@ describe('DARE L1 acceptance contract', () => {
   test('auth contract: no CLI key leakage, key+callback env forwarded to child process', async () => {
     const proc = createMockProcess();
     const spawnFn = mock.fn(() => proc);
-    const oldOpenrouter = process.env['OPENROUTER_API_KEY'];
-    process.env['OPENROUTER_API_KEY'] = 'sk-openrouter-test';
+    const oldOpenrouter = process.env.OPENROUTER_API_KEY;
+    process.env.OPENROUTER_API_KEY = 'sk-openrouter-test';
 
     try {
       const service = new DareAgentService({
@@ -101,12 +101,12 @@ describe('DARE L1 acceptance contract', () => {
       assert.ok(!args.includes('sk-openrouter-test'));
 
       const spawnOpts = spawnFn.mock.calls[0].arguments[2];
-      assert.equal(spawnOpts.env['OPENROUTER_API_KEY'], 'sk-openrouter-test');
-      assert.equal(spawnOpts.env['CAT_CAFE_API_URL'], 'http://127.0.0.1:3002');
-      assert.equal(spawnOpts.env['CAT_CAFE_INVOCATION_ID'], 'inv-l1');
+      assert.equal(spawnOpts.env.OPENROUTER_API_KEY, 'sk-openrouter-test');
+      assert.equal(spawnOpts.env.CAT_CAFE_API_URL, 'http://127.0.0.1:3002');
+      assert.equal(spawnOpts.env.CAT_CAFE_INVOCATION_ID, 'inv-l1');
     } finally {
-      if (oldOpenrouter === undefined) delete process.env['OPENROUTER_API_KEY'];
-      else process.env['OPENROUTER_API_KEY'] = oldOpenrouter;
+      if (oldOpenrouter === undefined) delete process.env.OPENROUTER_API_KEY;
+      else process.env.OPENROUTER_API_KEY = oldOpenrouter;
     }
   });
 
@@ -132,8 +132,8 @@ describe('DARE L1 acceptance contract', () => {
   test('error recovery: CLI silent timeout emits error and final done', { timeout: 2_000 }, async () => {
     const proc = createMockProcess();
     const spawnFn = mock.fn(() => proc);
-    const oldTimeout = process.env['CLI_TIMEOUT_MS'];
-    process.env['CLI_TIMEOUT_MS'] = '20';
+    const oldTimeout = process.env.CLI_TIMEOUT_MS;
+    process.env.CLI_TIMEOUT_MS = '20';
 
     try {
       const service = new DareAgentService({ catId: 'dare', spawnFn, model: 'test/model' });
@@ -143,8 +143,8 @@ describe('DARE L1 acceptance contract', () => {
       assert.ok(timeoutError, 'must emit timeout error when CLI is silent');
       assert.equal(messages.at(-1)?.type, 'done');
     } finally {
-      if (oldTimeout === undefined) delete process.env['CLI_TIMEOUT_MS'];
-      else process.env['CLI_TIMEOUT_MS'] = oldTimeout;
+      if (oldTimeout === undefined) delete process.env.CLI_TIMEOUT_MS;
+      else process.env.CLI_TIMEOUT_MS = oldTimeout;
     }
   });
 

@@ -4,11 +4,11 @@
  */
 
 import './helpers/setup-cat-registry.js';
-import { describe, it, before, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { before, describe, it, mock } from 'node:test';
 
 async function collect(iterable) {
   const msgs = [];
@@ -23,7 +23,7 @@ let invokeSingleCat;
 describe('invokeSingleCat audit events (P1 fix)', () => {
   before(async () => {
     tempDir = await mkdtemp(join(tmpdir(), 'cat-audit-'));
-    process.env['AUDIT_LOG_DIR'] = tempDir;
+    process.env.AUDIT_LOG_DIR = tempDir;
     // Dynamic import AFTER env is set — singleton will use this dir
     const mod = await import('../dist/domains/cats/services/agents/invocation/invoke-single-cat.js');
     invokeSingleCat = mod.invokeSingleCat;
@@ -56,28 +56,39 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
       },
     };
 
-    const msgs = await collect(invokeSingleCat(makeDeps(), {
-      catId: 'codex',
-      service: errorService,
-      prompt: 'test',
-      userId: 'user1',
-      threadId: 'thread-error',
-      isLastCat: true,
-    }));
+    const msgs = await collect(
+      invokeSingleCat(makeDeps(), {
+        catId: 'codex',
+        service: errorService,
+        prompt: 'test',
+        userId: 'user1',
+        threadId: 'thread-error',
+        isLastCat: true,
+      }),
+    );
 
-    assert.ok(msgs.some(m => m.type === 'error'), 'error should be yielded');
-    assert.ok(msgs.some(m => m.type === 'done'), 'done should be yielded');
+    assert.ok(
+      msgs.some((m) => m.type === 'error'),
+      'error should be yielded',
+    );
+    assert.ok(
+      msgs.some((m) => m.type === 'done'),
+      'done should be yielded',
+    );
 
     // Wait for fire-and-forget audit writes
-    await new Promise(r => setTimeout(r, 150));
+    await new Promise((r) => setTimeout(r, 150));
 
     const files = await readdir(tempDir);
     const auditContent = await readFile(join(tempDir, files[0]), 'utf-8');
-    const events = auditContent.trim().split('\n').map(l => JSON.parse(l));
-    const threadEvents = events.filter(e => e.threadId === 'thread-error');
+    const events = auditContent
+      .trim()
+      .split('\n')
+      .map((l) => JSON.parse(l));
+    const threadEvents = events.filter((e) => e.threadId === 'thread-error');
 
-    const responded = threadEvents.filter(e => e.type === 'cat_responded');
-    const catError = threadEvents.filter(e => e.type === 'cat_error');
+    const responded = threadEvents.filter((e) => e.type === 'cat_responded');
+    const catError = threadEvents.filter((e) => e.type === 'cat_error');
 
     assert.equal(responded.length, 0, 'should NOT have cat_responded when errors occurred');
     assert.ok(catError.length > 0, 'should have cat_error event');
@@ -107,14 +118,16 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
       },
     };
 
-    await collect(invokeSingleCat(deps, {
-      catId: 'codex',
-      service,
-      prompt: 'test',
-      userId: 'user1',
-      threadId: 'thread-progress-done',
-      isLastCat: true,
-    }));
+    await collect(
+      invokeSingleCat(deps, {
+        catId: 'codex',
+        service,
+        prompt: 'test',
+        userId: 'user1',
+        threadId: 'thread-progress-done',
+        isLastCat: true,
+      }),
+    );
 
     const snap = await store.getSnapshot('thread-progress-done', 'codex');
     assert.ok(snap, 'snapshot should exist');
@@ -139,14 +152,16 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
       },
     };
 
-    const msgs = await collect(invokeSingleCat(deps, {
-      catId: 'codex',
-      service,
-      prompt: 'test',
-      userId: 'user1',
-      threadId: 'thread-progress-invocation-id',
-      isLastCat: true,
-    }));
+    const msgs = await collect(
+      invokeSingleCat(deps, {
+        catId: 'codex',
+        service,
+        prompt: 'test',
+        userId: 'user1',
+        threadId: 'thread-progress-invocation-id',
+        isLastCat: true,
+      }),
+    );
 
     const taskProgressMsg = msgs.find((m) => {
       if (m.type !== 'system_info' || !m.content) return false;
@@ -186,14 +201,16 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
       },
     };
 
-    await collect(invokeSingleCat(deps, {
-      catId: 'codex',
-      service,
-      prompt: 'test',
-      userId: 'user1',
-      threadId: 'thread-progress-done-partial',
-      isLastCat: true,
-    }));
+    await collect(
+      invokeSingleCat(deps, {
+        catId: 'codex',
+        service,
+        prompt: 'test',
+        userId: 'user1',
+        threadId: 'thread-progress-done-partial',
+        isLastCat: true,
+      }),
+    );
 
     const snap = await store.getSnapshot('thread-progress-done-partial', 'codex');
     assert.ok(snap, 'snapshot should exist');
@@ -224,14 +241,16 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
       },
     };
 
-    await collect(invokeSingleCat(deps, {
-      catId: 'codex',
-      service,
-      prompt: 'test',
-      userId: 'user1',
-      threadId: 'thread-progress-error',
-      isLastCat: true,
-    }));
+    await collect(
+      invokeSingleCat(deps, {
+        catId: 'codex',
+        service,
+        prompt: 'test',
+        userId: 'user1',
+        threadId: 'thread-progress-error',
+        isLastCat: true,
+      }),
+    );
 
     const snap = await store.getSnapshot('thread-progress-error', 'codex');
     assert.ok(snap, 'snapshot should exist');
@@ -270,17 +289,22 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
       },
     };
 
-    const msgs = await collect(invokeSingleCat(deps, {
-      catId: 'codex',
-      service,
-      prompt: 'test',
-      userId: 'user1',
-      threadId: 'thread-progress-finalize-throws',
-      isLastCat: true,
-    }));
+    const msgs = await collect(
+      invokeSingleCat(deps, {
+        catId: 'codex',
+        service,
+        prompt: 'test',
+        userId: 'user1',
+        threadId: 'thread-progress-finalize-throws',
+        isLastCat: true,
+      }),
+    );
 
     assert.equal(msgs.filter((m) => m.type === 'error').length, 0, 'should not surface store failures as error');
-    assert.ok(msgs.some((m) => m.type === 'done'), 'done should still be yielded');
+    assert.ok(
+      msgs.some((m) => m.type === 'done'),
+      'done should still be yielded',
+    );
   });
 
   it('finalize marks snapshot interrupted when invocation is aborted after progress (early iterator return)', async () => {
@@ -471,24 +495,29 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
       },
     };
 
-    await collect(invokeSingleCat(makeDeps(), {
-      catId: 'opus',
-      service: normalService,
-      prompt: 'test',
-      userId: 'user1',
-      threadId: 'thread-normal',
-      isLastCat: true,
-    }));
+    await collect(
+      invokeSingleCat(makeDeps(), {
+        catId: 'opus',
+        service: normalService,
+        prompt: 'test',
+        userId: 'user1',
+        threadId: 'thread-normal',
+        isLastCat: true,
+      }),
+    );
 
-    await new Promise(r => setTimeout(r, 150));
+    await new Promise((r) => setTimeout(r, 150));
 
     const files = await readdir(tempDir);
     const auditContent = await readFile(join(tempDir, files[0]), 'utf-8');
-    const events = auditContent.trim().split('\n').map(l => JSON.parse(l));
-    const threadEvents = events.filter(e => e.threadId === 'thread-normal');
+    const events = auditContent
+      .trim()
+      .split('\n')
+      .map((l) => JSON.parse(l));
+    const threadEvents = events.filter((e) => e.threadId === 'thread-normal');
 
-    const responded = threadEvents.filter(e => e.type === 'cat_responded');
-    const catError = threadEvents.filter(e => e.type === 'cat_error');
+    const responded = threadEvents.filter((e) => e.type === 'cat_responded');
+    const catError = threadEvents.filter((e) => e.type === 'cat_error');
 
     assert.ok(responded.length > 0, 'should have cat_responded for normal path');
     assert.equal(catError.length, 0, 'should NOT have cat_error for normal path');
@@ -511,21 +540,25 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
       },
     };
 
-    const msgs = await collect(invokeSingleCat(makeDeps(), {
-      catId: 'opus',
-      service: usageService,
-      prompt: 'test',
-      userId: 'user1',
-      threadId: 'thread-usage',
-      isLastCat: true,
-    }));
+    const msgs = await collect(
+      invokeSingleCat(makeDeps(), {
+        catId: 'opus',
+        service: usageService,
+        prompt: 'test',
+        userId: 'user1',
+        threadId: 'thread-usage',
+        isLastCat: true,
+      }),
+    );
 
-    const usageInfos = msgs.filter(m => {
+    const usageInfos = msgs.filter((m) => {
       if (m.type !== 'system_info') return false;
       try {
         const parsed = JSON.parse(m.content);
         return parsed.type === 'invocation_usage';
-      } catch { return false; }
+      } catch {
+        return false;
+      }
     });
 
     assert.equal(usageInfos.length, 1, 'should yield exactly one invocation_usage system_info');
@@ -544,21 +577,25 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
       },
     };
 
-    const msgs = await collect(invokeSingleCat(makeDeps(), {
-      catId: 'opus',
-      service: noUsageService,
-      prompt: 'test',
-      userId: 'user1',
-      threadId: 'thread-no-usage',
-      isLastCat: true,
-    }));
+    const msgs = await collect(
+      invokeSingleCat(makeDeps(), {
+        catId: 'opus',
+        service: noUsageService,
+        prompt: 'test',
+        userId: 'user1',
+        threadId: 'thread-no-usage',
+        isLastCat: true,
+      }),
+    );
 
-    const usageInfos = msgs.filter(m => {
+    const usageInfos = msgs.filter((m) => {
       if (m.type !== 'system_info') return false;
       try {
         const parsed = JSON.parse(m.content);
         return parsed.type === 'invocation_usage';
-      } catch { return false; }
+      } catch {
+        return false;
+      }
     });
 
     assert.equal(usageInfos.length, 0, 'should not yield invocation_usage when no usage data');
@@ -577,14 +614,16 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
     };
 
     const deps = { ...makeDeps(), sessionChainStore };
-    await collect(invokeSingleCat(deps, {
-      catId: 'opus',
-      service,
-      prompt: 'test',
-      userId: 'user1',
-      threadId: 'thread-f24-init',
-      isLastCat: true,
-    }));
+    await collect(
+      invokeSingleCat(deps, {
+        catId: 'opus',
+        service,
+        prompt: 'test',
+        userId: 'user1',
+        threadId: 'thread-f24-init',
+        isLastCat: true,
+      }),
+    );
 
     const active = sessionChainStore.getActive('opus', 'thread-f24-init');
     assert.ok(active, 'should have created an active SessionRecord');
@@ -614,14 +653,16 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
     };
 
     const deps = { ...makeDeps(), sessionChainStore };
-    await collect(invokeSingleCat(deps, {
-      catId: 'opus',
-      service,
-      prompt: 'test',
-      userId: 'user1',
-      threadId: 'thread-f24-update',
-      isLastCat: true,
-    }));
+    await collect(
+      invokeSingleCat(deps, {
+        catId: 'opus',
+        service,
+        prompt: 'test',
+        userId: 'user1',
+        threadId: 'thread-f24-update',
+        isLastCat: true,
+      }),
+    );
 
     const active = sessionChainStore.getActive('opus', 'thread-f24-update');
     assert.ok(active);
@@ -654,21 +695,25 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
     };
 
     const deps = { ...makeDeps(), sessionChainStore };
-    const msgs = await collect(invokeSingleCat(deps, {
-      catId: 'opus',
-      service,
-      prompt: 'test',
-      userId: 'user1',
-      threadId: 'thread-f24-health',
-      isLastCat: true,
-    }));
+    const msgs = await collect(
+      invokeSingleCat(deps, {
+        catId: 'opus',
+        service,
+        prompt: 'test',
+        userId: 'user1',
+        threadId: 'thread-f24-health',
+        isLastCat: true,
+      }),
+    );
 
-    const healthInfos = msgs.filter(m => {
+    const healthInfos = msgs.filter((m) => {
       if (m.type !== 'system_info') return false;
       try {
         const parsed = JSON.parse(m.content);
         return parsed.type === 'context_health';
-      } catch { return false; }
+      } catch {
+        return false;
+      }
     });
 
     assert.equal(healthInfos.length, 1, 'should yield exactly one context_health system_info');
@@ -705,20 +750,24 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
     };
 
     const deps = { ...makeDeps(), sessionChainStore };
-    const msgs = await collect(invokeSingleCat(deps, {
-      catId: 'opus',
-      service,
-      prompt: 'test',
-      userId: 'user1',
-      threadId: 'thread-f24-fallback',
-      isLastCat: true,
-    }));
+    const msgs = await collect(
+      invokeSingleCat(deps, {
+        catId: 'opus',
+        service,
+        prompt: 'test',
+        userId: 'user1',
+        threadId: 'thread-f24-fallback',
+        isLastCat: true,
+      }),
+    );
 
-    const healthInfos = msgs.filter(m => {
+    const healthInfos = msgs.filter((m) => {
       if (m.type !== 'system_info') return false;
       try {
         return JSON.parse(m.content).type === 'context_health';
-      } catch { return false; }
+      } catch {
+        return false;
+      }
     });
 
     assert.equal(healthInfos.length, 1, 'should yield context_health with fallback window');
@@ -748,20 +797,24 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
 
     const { SessionChainStore } = await import('../dist/domains/cats/services/stores/ports/SessionChainStore.js');
     const deps = { ...makeDeps(), sessionChainStore: new SessionChainStore() };
-    const msgs = await collect(invokeSingleCat(deps, {
-      catId: 'opus',
-      service,
-      prompt: 'test',
-      userId: 'user1',
-      threadId: 'thread-f24-unknown',
-      isLastCat: true,
-    }));
+    const msgs = await collect(
+      invokeSingleCat(deps, {
+        catId: 'opus',
+        service,
+        prompt: 'test',
+        userId: 'user1',
+        threadId: 'thread-f24-unknown',
+        isLastCat: true,
+      }),
+    );
 
-    const healthInfos = msgs.filter(m => {
+    const healthInfos = msgs.filter((m) => {
       if (m.type !== 'system_info') return false;
       try {
         return JSON.parse(m.content).type === 'context_health';
-      } catch { return false; }
+      } catch {
+        return false;
+      }
     });
 
     assert.equal(healthInfos.length, 0, 'should not yield context_health for unknown model without window');
@@ -792,14 +845,16 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
     };
 
     const deps = { ...makeDeps(), sessionChainStore };
-    await collect(invokeSingleCat(deps, {
-      catId: 'opus',
-      service,
-      prompt: 'test',
-      userId: 'user1',
-      threadId: 'thread-f24-persist',
-      isLastCat: true,
-    }));
+    await collect(
+      invokeSingleCat(deps, {
+        catId: 'opus',
+        service,
+        prompt: 'test',
+        userId: 'user1',
+        threadId: 'thread-f24-persist',
+        isLastCat: true,
+      }),
+    );
 
     const active = sessionChainStore.getActive('opus', 'thread-f24-persist');
     assert.ok(active, 'should still have active session');
@@ -825,8 +880,8 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
             provider: 'anthropic',
             model: 'claude-opus-4-6',
             usage: {
-              inputTokens: 192000,          // aggregated across 5 turns (WRONG for context health)
-              lastTurnInputTokens: 44000,   // last API call's actual input (CORRECT)
+              inputTokens: 192000, // aggregated across 5 turns (WRONG for context health)
+              lastTurnInputTokens: 44000, // last API call's actual input (CORRECT)
               outputTokens: 5000,
               contextWindowSize: 200000,
             },
@@ -836,32 +891,41 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
     };
 
     const deps = { ...makeDeps(), sessionChainStore };
-    const msgs = await collect(invokeSingleCat(deps, {
-      catId: 'opus',
-      service,
-      prompt: 'test',
-      userId: 'user1',
-      threadId: 'thread-f24-lastturn',
-      isLastCat: true,
-    }));
+    const msgs = await collect(
+      invokeSingleCat(deps, {
+        catId: 'opus',
+        service,
+        prompt: 'test',
+        userId: 'user1',
+        threadId: 'thread-f24-lastturn',
+        isLastCat: true,
+      }),
+    );
 
-    const healthInfos = msgs.filter(m => {
+    const healthInfos = msgs.filter((m) => {
       if (m.type !== 'system_info') return false;
       try {
         return JSON.parse(m.content).type === 'context_health';
-      } catch { return false; }
+      } catch {
+        return false;
+      }
     });
 
     assert.equal(healthInfos.length, 1);
     const payload = JSON.parse(healthInfos[0].content);
     // Should use lastTurnInputTokens (44000) not aggregated inputTokens (192000)
-    assert.equal(payload.health.usedTokens, 44000,
-      'context health should use lastTurnInputTokens, not aggregated inputTokens');
+    assert.equal(
+      payload.health.usedTokens,
+      44000,
+      'context health should use lastTurnInputTokens, not aggregated inputTokens',
+    );
     assert.equal(payload.health.windowTokens, 200000);
     // fillRatio should be 44000/200000 = 0.22, not 192000/200000 = 0.96
     const expectedRatio = 44000 / 200000;
-    assert.ok(Math.abs(payload.health.fillRatio - expectedRatio) < 0.001,
-      `fillRatio should be ~${expectedRatio} (22%), got ${payload.health.fillRatio}`);
+    assert.ok(
+      Math.abs(payload.health.fillRatio - expectedRatio) < 0.001,
+      `fillRatio should be ~${expectedRatio} (22%), got ${payload.health.fillRatio}`,
+    );
   });
 
   it('F24-fix: falls back to inputTokens when lastTurnInputTokens is absent', async () => {
@@ -875,7 +939,7 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
             provider: 'anthropic',
             model: 'claude-opus-4-6',
             usage: {
-              inputTokens: 50000,  // no lastTurnInputTokens
+              inputTokens: 50000, // no lastTurnInputTokens
               outputTokens: 2000,
               contextWindowSize: 200000,
             },
@@ -885,27 +949,34 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
     };
 
     const deps = makeDeps();
-    const msgs = await collect(invokeSingleCat(deps, {
-      catId: 'opus',
-      service,
-      prompt: 'test',
-      userId: 'user1',
-      threadId: 'thread-f24-fallback',
-      isLastCat: true,
-    }));
+    const msgs = await collect(
+      invokeSingleCat(deps, {
+        catId: 'opus',
+        service,
+        prompt: 'test',
+        userId: 'user1',
+        threadId: 'thread-f24-fallback',
+        isLastCat: true,
+      }),
+    );
 
-    const healthInfos = msgs.filter(m => {
+    const healthInfos = msgs.filter((m) => {
       if (m.type !== 'system_info') return false;
       try {
         return JSON.parse(m.content).type === 'context_health';
-      } catch { return false; }
+      } catch {
+        return false;
+      }
     });
 
     assert.equal(healthInfos.length, 1);
     const payload = JSON.parse(healthInfos[0].content);
     // Falls back to inputTokens since lastTurnInputTokens is absent
-    assert.equal(payload.health.usedTokens, 50000,
-      'should fall back to inputTokens when lastTurnInputTokens is absent');
+    assert.equal(
+      payload.health.usedTokens,
+      50000,
+      'should fall back to inputTokens when lastTurnInputTokens is absent',
+    );
   });
 
   it('F24: falls back to totalTokens when inputTokens are unavailable (totalTokens-only provider)', async () => {
@@ -930,20 +1001,24 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
     };
 
     const deps = makeDeps();
-    const msgs = await collect(invokeSingleCat(deps, {
-      catId: 'codex',
-      service,
-      prompt: 'test',
-      userId: 'user1',
-      threadId: 'thread-f24-total-fallback',
-      isLastCat: true,
-    }));
+    const msgs = await collect(
+      invokeSingleCat(deps, {
+        catId: 'codex',
+        service,
+        prompt: 'test',
+        userId: 'user1',
+        threadId: 'thread-f24-total-fallback',
+        isLastCat: true,
+      }),
+    );
 
-    const healthInfos = msgs.filter(m => {
+    const healthInfos = msgs.filter((m) => {
       if (m.type !== 'system_info') return false;
       try {
         return JSON.parse(m.content).type === 'context_health';
-      } catch { return false; }
+      } catch {
+        return false;
+      }
     });
 
     assert.equal(healthInfos.length, 1, 'should emit context_health from totalTokens fallback');
@@ -974,20 +1049,24 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
     };
 
     const deps = makeDeps();
-    const msgs = await collect(invokeSingleCat(deps, {
-      catId: 'codex',
-      service,
-      prompt: 'test',
-      userId: 'user1',
-      threadId: 'thread-f24-total-source',
-      isLastCat: true,
-    }));
+    const msgs = await collect(
+      invokeSingleCat(deps, {
+        catId: 'codex',
+        service,
+        prompt: 'test',
+        userId: 'user1',
+        threadId: 'thread-f24-total-source',
+        isLastCat: true,
+      }),
+    );
 
     const healthInfos = msgs.filter((m) => {
       if (m.type !== 'system_info') return false;
       try {
         return JSON.parse(m.content).type === 'context_health';
-      } catch { return false; }
+      } catch {
+        return false;
+      }
     });
 
     assert.equal(healthInfos.length, 1);
@@ -998,36 +1077,19 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
   });
 
   it('resume failure classification: maps missing session / cli exit / auth / invalid thinking signature / unknown', async () => {
-    const { classifyResumeFailure } = await import(
-      '../dist/domains/cats/services/agents/invocation/invoke-helpers.js'
-    );
+    const { classifyResumeFailure } = await import('../dist/domains/cats/services/agents/invocation/invoke-helpers.js');
 
-    assert.equal(
-      classifyResumeFailure('No conversation found with session ID: stale-123'),
-      'missing_session',
-    );
-    assert.equal(
-      classifyResumeFailure('Gemini CLI: CLI 异常退出 (code: 1, signal: none)'),
-      'cli_exit',
-    );
-    assert.equal(
-      classifyResumeFailure('Gemini CLI: CLI 异常退出 (code: null, signal: SIGTERM)'),
-      'cli_exit',
-    );
-    assert.equal(
-      classifyResumeFailure('authentication failed: login required'),
-      'auth',
-    );
+    assert.equal(classifyResumeFailure('No conversation found with session ID: stale-123'), 'missing_session');
+    assert.equal(classifyResumeFailure('Gemini CLI: CLI 异常退出 (code: 1, signal: none)'), 'cli_exit');
+    assert.equal(classifyResumeFailure('Gemini CLI: CLI 异常退出 (code: null, signal: SIGTERM)'), 'cli_exit');
+    assert.equal(classifyResumeFailure('authentication failed: login required'), 'auth');
     assert.equal(
       classifyResumeFailure(
-        'API Error: 400 {"type":"error","error":{"type":"invalid_request_error","message":"messages.1.content.0: Invalid `signature` in `thinking` block"}}'
+        'API Error: 400 {"type":"error","error":{"type":"invalid_request_error","message":"messages.1.content.0: Invalid `signature` in `thinking` block"}}',
       ),
       'invalid_thinking_signature',
     );
-    assert.equal(
-      classifyResumeFailure('upstream timeout'),
-      null,
-    );
+    assert.equal(classifyResumeFailure('upstream timeout'), null);
   });
 
   it('session self-heal: retries once without --resume when Claude reports missing conversation', async () => {
@@ -1058,27 +1120,42 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
     const deps = makeDeps();
     deps.sessionManager = {
       get: async () => 'bad-sess',
-      store: async (_u, _c, _t, sid) => { sessionStores.push(sid); },
-      delete: async (u, c, t) => { sessionDeletes.push(`${u}:${c}:${t}`); },
+      store: async (_u, _c, _t, sid) => {
+        sessionStores.push(sid);
+      },
+      delete: async (u, c, t) => {
+        sessionDeletes.push(`${u}:${c}:${t}`);
+      },
     };
 
-    const msgs = await collect(invokeSingleCat(deps, {
-      catId: 'opus',
-      service,
-      prompt: 'test',
-      userId: 'user-retry',
-      threadId: 'thread-retry',
-      isLastCat: true,
-    }));
+    const msgs = await collect(
+      invokeSingleCat(deps, {
+        catId: 'opus',
+        service,
+        prompt: 'test',
+        userId: 'user-retry',
+        threadId: 'thread-retry',
+        isLastCat: true,
+      }),
+    );
 
     assert.equal(invokeCount, 2, 'should re-invoke service once after stale session error');
     assert.equal(optionsSeen[0].sessionId, 'bad-sess', 'first attempt should include stored session');
     assert.equal(optionsSeen[1].sessionId, undefined, 'retry attempt should drop --resume session');
     assert.deepEqual(sessionDeletes, ['user-retry:opus:thread-retry'], 'should delete stale session before retry');
-    assert.ok(msgs.some(m => m.type === 'text' && m.content === 'recovered'), 'should recover and stream retry result');
-    assert.ok(msgs.some(m => m.type === 'session_init' && m.sessionId === 'new-sess'), 'should accept new session');
-    assert.equal(msgs.some(m => m.type === 'error' && String(m.error).includes('No conversation found')), false,
-      'stale-session bootstrap error should be suppressed when retry succeeds');
+    assert.ok(
+      msgs.some((m) => m.type === 'text' && m.content === 'recovered'),
+      'should recover and stream retry result',
+    );
+    assert.ok(
+      msgs.some((m) => m.type === 'session_init' && m.sessionId === 'new-sess'),
+      'should accept new session',
+    );
+    assert.equal(
+      msgs.some((m) => m.type === 'error' && String(m.error).includes('No conversation found')),
+      false,
+      'stale-session bootstrap error should be suppressed when retry succeeds',
+    );
     assert.ok(sessionStores.includes('new-sess'), 'new session should be stored after recovery');
   });
 
@@ -1112,25 +1189,29 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
       delete: async () => {},
     };
 
-    await collect(invokeSingleCat(deps, {
-      catId: 'opus',
-      service,
-      prompt: 'test',
-      systemPrompt: 'You are a helpful cat',
-      userId: 'u1',
-      threadId: 'thread-selfheal-prompt',
-      isLastCat: true,
-    }));
+    await collect(
+      invokeSingleCat(deps, {
+        catId: 'opus',
+        service,
+        prompt: 'test',
+        systemPrompt: 'You are a helpful cat',
+        userId: 'u1',
+        threadId: 'thread-selfheal-prompt',
+        isLastCat: true,
+      }),
+    );
 
     assert.equal(invokeCount, 2, 'should retry once');
     // First attempt: resume → systemPrompt skipped (canSkipOnResume + isResume)
     assert.equal(optionsSeen[0].sessionId, 'stale-sess', 'first attempt is resume');
-    assert.equal(optionsSeen[0].systemPrompt, undefined,
-      'first attempt (resume) skips systemPrompt');
+    assert.equal(optionsSeen[0].systemPrompt, undefined, 'first attempt (resume) skips systemPrompt');
     // Second attempt: session dropped → fresh start → systemPrompt MUST be present
     assert.equal(optionsSeen[1].sessionId, undefined, 'retry drops session');
-    assert.equal(optionsSeen[1].systemPrompt, 'You are a helpful cat',
-      'F-BLOAT cloud P1: self-heal retry must re-inject systemPrompt');
+    assert.equal(
+      optionsSeen[1].systemPrompt,
+      'You are a helpful cat',
+      'F-BLOAT cloud P1: self-heal retry must re-inject systemPrompt',
+    );
   });
 
   it('session self-heal: does not retry on non-session errors', async () => {
@@ -1148,21 +1229,25 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
     deps.sessionManager = {
       get: async () => 'sess-normal',
       store: async () => {},
-      delete: async () => { sessionDeletes.push('deleted'); },
+      delete: async () => {
+        sessionDeletes.push('deleted');
+      },
     };
 
-    const msgs = await collect(invokeSingleCat(deps, {
-      catId: 'opus',
-      service,
-      prompt: 'test',
-      userId: 'user-no-retry',
-      threadId: 'thread-no-retry',
-      isLastCat: true,
-    }));
+    const msgs = await collect(
+      invokeSingleCat(deps, {
+        catId: 'opus',
+        service,
+        prompt: 'test',
+        userId: 'user-no-retry',
+        threadId: 'thread-no-retry',
+        isLastCat: true,
+      }),
+    );
 
     assert.equal(invokeCount, 1, 'non-session errors should not trigger retry');
     assert.equal(sessionDeletes.length, 0, 'non-session errors should not clear session');
-    assert.ok(msgs.some(m => m.type === 'error' && String(m.error).includes('upstream timeout')));
+    assert.ok(msgs.some((m) => m.type === 'error' && String(m.error).includes('upstream timeout')));
   });
 
   it('transient CLI self-heal: retries once when Claude exits code 1 before any stream output', async () => {
@@ -1185,17 +1270,22 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
       },
     };
 
-    const msgs = await collect(invokeSingleCat(makeDeps(), {
-      catId: 'opus',
-      service,
-      prompt: 'test',
-      userId: 'user-transient-retry',
-      threadId: 'thread-transient-retry',
-      isLastCat: true,
-    }));
+    const msgs = await collect(
+      invokeSingleCat(makeDeps(), {
+        catId: 'opus',
+        service,
+        prompt: 'test',
+        userId: 'user-transient-retry',
+        threadId: 'thread-transient-retry',
+        isLastCat: true,
+      }),
+    );
 
     assert.equal(invokeCount, 2, 'should retry once for transient code:1 exit');
-    assert.ok(msgs.some((m) => m.type === 'text' && m.content === 'retry-ok'), 'retry result should be streamed');
+    assert.ok(
+      msgs.some((m) => m.type === 'text' && m.content === 'retry-ok'),
+      'retry result should be streamed',
+    );
     assert.equal(
       msgs.some((m) => m.type === 'error' && String(m.error).includes('CLI 异常退出')),
       false,
@@ -1219,14 +1309,16 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
       },
     };
 
-    const msgs = await collect(invokeSingleCat(makeDeps(), {
-      catId: 'opus',
-      service,
-      prompt: 'test',
-      userId: 'user-no-transient-retry',
-      threadId: 'thread-no-transient-retry',
-      isLastCat: true,
-    }));
+    const msgs = await collect(
+      invokeSingleCat(makeDeps(), {
+        catId: 'opus',
+        service,
+        prompt: 'test',
+        userId: 'user-no-transient-retry',
+        threadId: 'thread-no-transient-retry',
+        isLastCat: true,
+      }),
+    );
 
     assert.equal(invokeCount, 1, 'must not retry after partial output to avoid duplication');
     assert.ok(
@@ -1262,14 +1354,16 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
       delete: async () => {},
     };
 
-    const msgs = await collect(invokeSingleCat(deps, {
-      catId: 'gemini',
-      service,
-      prompt: 'test',
-      userId: 'user-gemini-missing',
-      threadId: 'thread-gemini-missing',
-      isLastCat: true,
-    }));
+    const msgs = await collect(
+      invokeSingleCat(deps, {
+        catId: 'gemini',
+        service,
+        prompt: 'test',
+        userId: 'user-gemini-missing',
+        threadId: 'thread-gemini-missing',
+        isLastCat: true,
+      }),
+    );
 
     const statsMsg = msgs.find((m) => m.type === 'system_info' && m.content?.includes('"resume_failure_stats"'));
     assert.ok(statsMsg, 'should emit resume_failure_stats system_info');
@@ -1301,14 +1395,16 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
       delete: async () => {},
     };
 
-    const msgs = await collect(invokeSingleCat(deps, {
-      catId: 'gemini',
-      service,
-      prompt: 'test',
-      userId: 'user-gemini-auth',
-      threadId: 'thread-gemini-auth',
-      isLastCat: true,
-    }));
+    const msgs = await collect(
+      invokeSingleCat(deps, {
+        catId: 'gemini',
+        service,
+        prompt: 'test',
+        userId: 'user-gemini-auth',
+        threadId: 'thread-gemini-auth',
+        isLastCat: true,
+      }),
+    );
 
     assert.equal(invokeCount, 1, 'auth failure should not trigger retry');
     const statsMsg = msgs.find((m) => m.type === 'system_info' && m.content?.includes('"resume_failure_stats"'));
@@ -1344,14 +1440,16 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
       delete: async () => {},
     };
 
-    const msgs = await collect(invokeSingleCat(deps, {
-      catId: 'gemini',
-      service,
-      prompt: 'test',
-      userId: 'user-gemini-cli-exit',
-      threadId: 'thread-gemini-cli-exit',
-      isLastCat: true,
-    }));
+    const msgs = await collect(
+      invokeSingleCat(deps, {
+        catId: 'gemini',
+        service,
+        prompt: 'test',
+        userId: 'user-gemini-cli-exit',
+        threadId: 'thread-gemini-cli-exit',
+        isLastCat: true,
+      }),
+    );
 
     assert.equal(invokeCount, 2, 'transient cli exit should retry once');
     const statsMsg = msgs.find((m) => m.type === 'system_info' && m.content?.includes('"resume_failure_stats"'));
@@ -1389,17 +1487,19 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
         delete: async () => {},
       };
 
-      await collect(invokeSingleCat(deps, {
-        catId: 'gemini',
-        service,
-        prompt: 'test',
-        userId: 'user-gemini-cli-exit-log',
-        threadId: 'thread-gemini-cli-exit-log',
-        isLastCat: true,
-      }));
+      await collect(
+        invokeSingleCat(deps, {
+          catId: 'gemini',
+          service,
+          prompt: 'test',
+          userId: 'user-gemini-cli-exit-log',
+          threadId: 'thread-gemini-cli-exit-log',
+          isLastCat: true,
+        }),
+      );
 
       const retryLog = infoMock.mock.calls.find(
-        (call) => call.arguments[0] === '[diag/gemini-startup] retrying invoke'
+        (call) => call.arguments[0] === '[diag/gemini-startup] retrying invoke',
       );
       assert.ok(retryLog, 'should emit Gemini retry timing log');
       assert.equal(retryLog.arguments[1].catId, 'gemini');
@@ -1422,10 +1522,12 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
     let finalizeResolved = false;
     const realSealer = new SessionSealer(sessionChainStore);
     const sealer = {
-      async requestSeal(opts) { return realSealer.requestSeal(opts); },
+      async requestSeal(opts) {
+        return realSealer.requestSeal(opts);
+      },
       async finalize(opts) {
         // Delay finalize to simulate transcript flush
-        await new Promise(r => setTimeout(r, 200));
+        await new Promise((r) => setTimeout(r, 200));
         finalizeResolved = true;
         return realSealer.finalize(opts);
       },
@@ -1470,21 +1572,26 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
       },
     };
 
-    await collect(invokeSingleCat(deps, {
-      catId: 'opus',
-      service,
-      prompt: 'test',
-      userId: 'user-seal',
-      threadId: 'thread-seal-race',
-      isLastCat: true,
-    }));
+    await collect(
+      invokeSingleCat(deps, {
+        catId: 'opus',
+        service,
+        prompt: 'test',
+        userId: 'user-seal',
+        threadId: 'thread-seal-race',
+        isLastCat: true,
+      }),
+    );
 
     // sessionManager.delete should have been called BEFORE finalize completed
     assert.ok(sessionDeletes.length > 0, 'sessionManager.delete must be called on seal');
     assert.deepEqual(sessionDeletes, ['user-seal:opus:thread-seal-race']);
     assert.equal(timeline[0].event, 'delete');
-    assert.equal(timeline[0].finalizeResolved, false,
-      'sessionManager.delete must execute BEFORE finalize resolves (no race window)');
+    assert.equal(
+      timeline[0].finalizeResolved,
+      false,
+      'sessionManager.delete must execute BEFORE finalize resolves (no race window)',
+    );
   });
 
   it('R7 P1: next invocation after seal gets no sessionId (clean start)', async () => {
@@ -1501,7 +1608,12 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
       async *invoke(_prompt, options) {
         optionsSeen.push({ ...options });
         invokeCount++;
-        yield { type: 'session_init', catId: 'opus', sessionId: invokeCount === 1 ? 'old-sess' : 'new-sess', timestamp: Date.now() };
+        yield {
+          type: 'session_init',
+          catId: 'opus',
+          sessionId: invokeCount === 1 ? 'old-sess' : 'new-sess',
+          timestamp: Date.now(),
+        };
         yield { type: 'text', catId: 'opus', content: `answer-${invokeCount}`, timestamp: Date.now() };
         yield {
           type: 'done',
@@ -1526,30 +1638,49 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
       sessionSealer: sealer,
       sessionManager: {
         get: async () => stored,
-        store: async (_u, _c, _t, sid) => { stored = sid; },
-        delete: async () => { stored = undefined; },
+        store: async (_u, _c, _t, sid) => {
+          stored = sid;
+        },
+        delete: async () => {
+          stored = undefined;
+        },
       },
     };
 
     // First invocation — triggers seal at 91%
-    await collect(invokeSingleCat(deps, {
-      catId: 'opus', service, prompt: 'test', userId: 'u1',
-      threadId: 'thread-seal-clean', isLastCat: true,
-    }));
+    await collect(
+      invokeSingleCat(deps, {
+        catId: 'opus',
+        service,
+        prompt: 'test',
+        userId: 'u1',
+        threadId: 'thread-seal-clean',
+        isLastCat: true,
+      }),
+    );
 
     // Small delay to let async delete settle
-    await new Promise(r => setTimeout(r, 50));
+    await new Promise((r) => setTimeout(r, 50));
 
     // Second invocation — should NOT have sessionId (old one was deleted)
-    await collect(invokeSingleCat(deps, {
-      catId: 'opus', service, prompt: 'test2', userId: 'u1',
-      threadId: 'thread-seal-clean', isLastCat: true,
-    }));
+    await collect(
+      invokeSingleCat(deps, {
+        catId: 'opus',
+        service,
+        prompt: 'test2',
+        userId: 'u1',
+        threadId: 'thread-seal-clean',
+        isLastCat: true,
+      }),
+    );
 
     assert.equal(invokeCount, 2);
     assert.equal(optionsSeen[0].sessionId, 'old-sess', 'first call should use persisted session');
-    assert.equal(optionsSeen[1].sessionId, undefined,
-      'second call after seal must NOT resume old session (R7 P1 race fix)');
+    assert.equal(
+      optionsSeen[1].sessionId,
+      undefined,
+      'second call after seal must NOT resume old session (R7 P1 race fix)',
+    );
   });
 
   it('R8 P1: slow sessionManager.delete cannot cause --resume race (read-side short-circuit)', async () => {
@@ -1572,7 +1703,12 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
       async *invoke(_prompt, options) {
         optionsSeen.push({ ...options });
         invokeCount++;
-        yield { type: 'session_init', catId: 'opus', sessionId: invokeCount === 1 ? 'old-sess' : 'new-sess', timestamp: Date.now() };
+        yield {
+          type: 'session_init',
+          catId: 'opus',
+          sessionId: invokeCount === 1 ? 'old-sess' : 'new-sess',
+          timestamp: Date.now(),
+        };
         yield { type: 'text', catId: 'opus', content: `answer-${invokeCount}`, timestamp: Date.now() };
         yield {
           type: 'done',
@@ -1596,22 +1732,30 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
       sessionChainStore,
       sessionSealer: sealer,
       sessionManager: {
-        get: async () => stored,  // ALWAYS returns old value (delete is slow)
-        store: async (_u, _c, _t, sid) => { stored = sid; },
+        get: async () => stored, // ALWAYS returns old value (delete is slow)
+        store: async (_u, _c, _t, sid) => {
+          stored = sid;
+        },
         delete: async () => {
           deleteStarted = true;
           // Simulate very slow Redis delete — 500ms
-          await new Promise(r => setTimeout(r, 500));
+          await new Promise((r) => setTimeout(r, 500));
           stored = undefined;
         },
       },
     };
 
     // First invocation — triggers seal at 91%
-    await collect(invokeSingleCat(deps, {
-      catId: 'opus', service, prompt: 'test', userId: 'u1',
-      threadId: 'thread-slow-delete', isLastCat: true,
-    }));
+    await collect(
+      invokeSingleCat(deps, {
+        catId: 'opus',
+        service,
+        prompt: 'test',
+        userId: 'u1',
+        threadId: 'thread-slow-delete',
+        isLastCat: true,
+      }),
+    );
 
     // Delete has STARTED but NOT completed (it takes 500ms)
     assert.ok(deleteStarted, 'delete should have been initiated');
@@ -1619,15 +1763,24 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
 
     // Second invocation — arrives while delete is still pending
     // Without read-side short-circuit, this would --resume into sealed session
-    await collect(invokeSingleCat(deps, {
-      catId: 'opus', service, prompt: 'test2', userId: 'u1',
-      threadId: 'thread-slow-delete', isLastCat: true,
-    }));
+    await collect(
+      invokeSingleCat(deps, {
+        catId: 'opus',
+        service,
+        prompt: 'test2',
+        userId: 'u1',
+        threadId: 'thread-slow-delete',
+        isLastCat: true,
+      }),
+    );
 
     assert.equal(invokeCount, 2);
     assert.equal(optionsSeen[0].sessionId, 'old-sess', 'first call uses persisted session');
-    assert.equal(optionsSeen[1].sessionId, undefined,
-      'second call must NOT resume despite slow delete — read-side short-circuit (R8 P1)');
+    assert.equal(
+      optionsSeen[1].sessionId,
+      undefined,
+      'second call must NOT resume despite slow delete — read-side short-circuit (R8 P1)',
+    );
   });
 
   it('R9 P1: getChain() failure triggers fail-closed — no resume (not fail-open)', async () => {
@@ -1648,31 +1801,46 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
 
     // sessionChainStore that always throws on getChain
     const failingChainStore = {
-      getChain() { throw new Error('Redis connection lost'); },
-      getActive() { throw new Error('Redis connection lost'); },
-      get() { return null; },
-      create() { return { id: 'x', seq: 0, status: 'active' }; },
-      update() { return {}; },
+      getChain() {
+        throw new Error('Redis connection lost');
+      },
+      getActive() {
+        throw new Error('Redis connection lost');
+      },
+      get() {
+        return null;
+      },
+      create() {
+        return { id: 'x', seq: 0, status: 'active' };
+      },
+      update() {
+        return {};
+      },
     };
 
     const deps = {
       ...makeDeps(),
       sessionChainStore: failingChainStore,
       sessionManager: {
-        get: async () => 'old-sess',  // stale key still present
+        get: async () => 'old-sess', // stale key still present
         store: async () => {},
         delete: async () => {},
       },
     };
 
-    await collect(invokeSingleCat(deps, {
-      catId: 'opus', service, prompt: 'test', userId: 'u1',
-      threadId: 'thread-chain-fail', isLastCat: true,
-    }));
+    await collect(
+      invokeSingleCat(deps, {
+        catId: 'opus',
+        service,
+        prompt: 'test',
+        userId: 'u1',
+        threadId: 'thread-chain-fail',
+        isLastCat: true,
+      }),
+    );
 
     assert.equal(invokeCount, 1);
-    assert.equal(optionsSeen[0].sessionId, undefined,
-      'getChain() failure must discard sessionId (fail-closed, R9 P1)');
+    assert.equal(optionsSeen[0].sessionId, undefined, 'getChain() failure must discard sessionId (fail-closed, R9 P1)');
   });
 
   it('R11 P1-1: uses active record cliSessionId when it differs from sessionManager (RED)', async () => {
@@ -1691,9 +1859,13 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
     };
 
     const activeRecord = {
-      id: 'rec-1', seq: 0, status: 'active',
+      id: 'rec-1',
+      seq: 0,
+      status: 'active',
       cliSessionId: 'cli-new',
-      catId: 'opus', threadId: 'thread-align', userId: 'u1',
+      catId: 'opus',
+      threadId: 'thread-align',
+      userId: 'u1',
     };
 
     const chainStore = {
@@ -1708,20 +1880,29 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
       ...makeDeps(),
       sessionChainStore: chainStore,
       sessionManager: {
-        get: async () => 'cli-old',  // stale value — doesn't match active record
+        get: async () => 'cli-old', // stale value — doesn't match active record
         store: async () => {},
         delete: async () => {},
       },
     };
 
-    await collect(invokeSingleCat(deps, {
-      catId: 'opus', service, prompt: 'test', userId: 'u1',
-      threadId: 'thread-align', isLastCat: true,
-    }));
+    await collect(
+      invokeSingleCat(deps, {
+        catId: 'opus',
+        service,
+        prompt: 'test',
+        userId: 'u1',
+        threadId: 'thread-align',
+        isLastCat: true,
+      }),
+    );
 
     assert.equal(invokeCount, 1);
-    assert.equal(optionsSeen[0].sessionId, 'cli-new',
-      'must use active record cliSessionId (authoritative), not stale sessionManager value');
+    assert.equal(
+      optionsSeen[0].sessionId,
+      'cli-new',
+      'must use active record cliSessionId (authoritative), not stale sessionManager value',
+    );
   });
 
   it('F33-fix: uses chain-bound cliSessionId even when sessionManager returns undefined', async () => {
@@ -1741,9 +1922,13 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
     };
 
     const boundRecord = {
-      id: 'rec-bind', seq: 0, status: 'active',
+      id: 'rec-bind',
+      seq: 0,
+      status: 'active',
       cliSessionId: 'bound-cli-session',
-      catId: 'opus', threadId: 'thread-f33-bind', userId: 'u1',
+      catId: 'opus',
+      threadId: 'thread-f33-bind',
+      userId: 'u1',
     };
 
     const chainStore = {
@@ -1758,20 +1943,29 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
       ...makeDeps(),
       sessionChainStore: chainStore,
       sessionManager: {
-        get: async () => undefined,  // bind does NOT write sessionManager
+        get: async () => undefined, // bind does NOT write sessionManager
         store: async () => {},
         delete: async () => {},
       },
     };
 
-    await collect(invokeSingleCat(deps, {
-      catId: 'opus', service, prompt: 'test', userId: 'u1',
-      threadId: 'thread-f33-bind', isLastCat: true,
-    }));
+    await collect(
+      invokeSingleCat(deps, {
+        catId: 'opus',
+        service,
+        prompt: 'test',
+        userId: 'u1',
+        threadId: 'thread-f33-bind',
+        isLastCat: true,
+      }),
+    );
 
     assert.equal(invokeCount, 1);
-    assert.equal(optionsSeen[0].sessionId, 'bound-cli-session',
-      'must use chain-bound cliSessionId even when sessionManager returns undefined');
+    assert.equal(
+      optionsSeen[0].sessionId,
+      'bound-cli-session',
+      'must use chain-bound cliSessionId even when sessionManager returns undefined',
+    );
   });
 
   it('F053: gemini (sessionChain=true after parity fix) creates SessionRecord and participates in chain', async () => {
@@ -1783,7 +1977,9 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
         yield { type: 'session_init', catId: 'gemini', sessionId: 'gem-sess-1', timestamp: Date.now() };
         yield { type: 'text', catId: 'gemini', content: 'hello', timestamp: Date.now() };
         yield {
-          type: 'done', catId: 'gemini', timestamp: Date.now(),
+          type: 'done',
+          catId: 'gemini',
+          timestamp: Date.now(),
           metadata: {
             usage: { totalTokens: 500000, contextWindowSize: 1000000 },
             model: 'gemini-3-pro',
@@ -1795,8 +1991,11 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
     const activeRecord = { id: 'sr1', seq: 0, status: 'active', catId: 'gemini' };
     const chainStore = {
       getChain: async () => [],
-      getActive: async () => sessionRecordCreated ? activeRecord : null,
-      create: async () => { sessionRecordCreated = true; return activeRecord; },
+      getActive: async () => (sessionRecordCreated ? activeRecord : null),
+      create: async () => {
+        sessionRecordCreated = true;
+        return activeRecord;
+      },
       update: async () => null,
     };
     const sealer = {
@@ -1804,7 +2003,9 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
       finalize: async () => {},
     };
     const writer = {
-      appendEvent: () => { transcriptWritten = true; },
+      appendEvent: () => {
+        transcriptWritten = true;
+      },
     };
 
     const deps = {
@@ -1814,21 +2015,26 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
       transcriptWriter: writer,
     };
 
-    const msgs = await collect(invokeSingleCat(deps, {
-      catId: 'gemini', service, prompt: 'test', userId: 'u1',
-      threadId: 'thread-toggle', isLastCat: true,
-    }));
+    const msgs = await collect(
+      invokeSingleCat(deps, {
+        catId: 'gemini',
+        service,
+        prompt: 'test',
+        userId: 'u1',
+        threadId: 'thread-toggle',
+        isLastCat: true,
+      }),
+    );
 
     // F053: Gemini now has sessionChain=true, so it participates fully
     assert.equal(sessionRecordCreated, true, 'F053: Gemini SHOULD create SessionRecord now');
     assert.equal(transcriptWritten, true, 'F053: Gemini SHOULD write transcript now');
 
     // context_health system_info SHOULD be emitted now
-    const contextHealthMsgs = msgs.filter(m =>
-      m.type === 'system_info' && m.content && m.content.includes('context_health'),
+    const contextHealthMsgs = msgs.filter(
+      (m) => m.type === 'system_info' && m.content && m.content.includes('context_health'),
     );
-    assert.ok(contextHealthMsgs.length > 0,
-      'F053: Gemini SHOULD emit context_health system_info now');
+    assert.ok(contextHealthMsgs.length > 0, 'F053: Gemini SHOULD emit context_health system_info now');
   });
 
   it('F24 toggle: opus (sessionChain=true by default) DOES create SessionRecord', async () => {
@@ -1856,10 +2062,16 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
       sessionChainStore: chainStore,
     };
 
-    await collect(invokeSingleCat(deps, {
-      catId: 'opus', service, prompt: 'test', userId: 'u1',
-      threadId: 'thread-toggle-on', isLastCat: true,
-    }));
+    await collect(
+      invokeSingleCat(deps, {
+        catId: 'opus',
+        service,
+        prompt: 'test',
+        userId: 'u1',
+        threadId: 'thread-toggle-on',
+        isLastCat: true,
+      }),
+    );
 
     assert.equal(sessionRecordCreated, true, 'should create SessionRecord when sessionChain enabled');
   });
@@ -1885,19 +2097,20 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
       delete: async () => {},
     };
 
-    await collect(invokeSingleCat(deps, {
-      catId: 'opus',
-      service,
-      prompt: 'test',
-      systemPrompt: 'You are a cat',
-      userId: 'u1',
-      threadId: 'thread-bloat-resume',
-      isLastCat: true,
-    }));
+    await collect(
+      invokeSingleCat(deps, {
+        catId: 'opus',
+        service,
+        prompt: 'test',
+        systemPrompt: 'You are a cat',
+        userId: 'u1',
+        threadId: 'thread-bloat-resume',
+        isLastCat: true,
+      }),
+    );
 
     assert.equal(optionsSeen[0].sessionId, 'existing-sess', 'should resume');
-    assert.ok(!promptsSeen[0].includes('You are a cat'),
-      'F-BLOAT: systemPrompt should NOT be prepended on resume');
+    assert.ok(!promptsSeen[0].includes('You are a cat'), 'F-BLOAT: systemPrompt should NOT be prepended on resume');
   });
 
   it('F-BLOAT: injects systemPrompt on new session (no sessionId)', async () => {
@@ -1917,20 +2130,23 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
       delete: async () => {},
     };
 
-    await collect(invokeSingleCat(deps, {
-      catId: 'opus',
-      service,
-      prompt: 'test',
-      systemPrompt: 'You are a cat',
-      userId: 'u1',
-      threadId: 'thread-bloat-new',
-      isLastCat: true,
-    }));
+    await collect(
+      invokeSingleCat(deps, {
+        catId: 'opus',
+        service,
+        prompt: 'test',
+        systemPrompt: 'You are a cat',
+        userId: 'u1',
+        threadId: 'thread-bloat-new',
+        isLastCat: true,
+      }),
+    );
 
-    assert.ok(promptsSeen[0].includes('You are a cat'),
-      'F-BLOAT: systemPrompt should be prepended to prompt on new session');
-    assert.ok(promptsSeen[0].includes('test'),
-      'F-BLOAT: original prompt should still be present');
+    assert.ok(
+      promptsSeen[0].includes('You are a cat'),
+      'F-BLOAT: systemPrompt should be prepended to prompt on new session',
+    );
+    assert.ok(promptsSeen[0].includes('test'), 'F-BLOAT: original prompt should still be present');
   });
 
   it('F053: Gemini (sessionChain=true) skips systemPrompt on resume like other cats', async () => {
@@ -1950,20 +2166,24 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
       delete: async () => {},
     };
 
-    await collect(invokeSingleCat(deps, {
-      catId: 'gemini',
-      service,
-      prompt: 'test',
-      systemPrompt: 'You are a Siamese cat',
-      userId: 'u1',
-      threadId: 'thread-bloat-gemini',
-      isLastCat: true,
-    }));
+    await collect(
+      invokeSingleCat(deps, {
+        catId: 'gemini',
+        service,
+        prompt: 'test',
+        systemPrompt: 'You are a Siamese cat',
+        userId: 'u1',
+        threadId: 'thread-bloat-gemini',
+        isLastCat: true,
+      }),
+    );
 
     // F053: Gemini now has sessionChain=true, so on resume it SKIPS
     // systemPrompt injection (same as Claude/Codex)
-    assert.ok(!promptsSeen[0].includes('You are a Siamese cat'),
-      'F053: Gemini should skip systemPrompt on resume (sessionChain=true)');
+    assert.ok(
+      !promptsSeen[0].includes('You are a Siamese cat'),
+      'F053: Gemini should skip systemPrompt on resume (sessionChain=true)',
+    );
   });
 
   it('F-BLOAT: compression detection flags re-injection when tokens drop >60%', async () => {
@@ -1980,9 +2200,12 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
         yield { type: 'session_init', catId: 'codex', sessionId: 'sess-compress', timestamp: Date.now() };
         yield { type: 'text', catId: 'codex', content: `answer-${callNum}`, timestamp: Date.now() };
         yield {
-          type: 'done', catId: 'codex', timestamp: Date.now(),
+          type: 'done',
+          catId: 'codex',
+          timestamp: Date.now(),
           metadata: {
-            provider: 'openai', model: 'gpt-5.3-codex',
+            provider: 'openai',
+            model: 'gpt-5.3-codex',
             usage: {
               inputTokens: callNum === 1 ? 60000 : 15000,
               outputTokens: 1000,
@@ -1998,38 +2221,63 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
       ...makeDeps(),
       sessionManager: {
         get: async () => stored,
-        store: async (_u, _c, _t, sid) => { stored = sid; },
-        delete: async () => { stored = undefined; },
+        store: async (_u, _c, _t, sid) => {
+          stored = sid;
+        },
+        delete: async () => {
+          stored = undefined;
+        },
       },
     };
 
     // Turn 1: 60k tokens — establishes baseline
-    await collect(invokeSingleCat(deps, {
-      catId: 'codex', service, prompt: 'test1', systemPrompt: 'Identity prompt',
-      userId: 'u1', threadId: 'thread-compress', isLastCat: true,
-    }));
+    await collect(
+      invokeSingleCat(deps, {
+        catId: 'codex',
+        service,
+        prompt: 'test1',
+        systemPrompt: 'Identity prompt',
+        userId: 'u1',
+        threadId: 'thread-compress',
+        isLastCat: true,
+      }),
+    );
 
     // Turn 2: 15k tokens (75% drop) — should flag re-injection for NEXT turn
-    await collect(invokeSingleCat(deps, {
-      catId: 'codex', service, prompt: 'test2', systemPrompt: 'Identity prompt',
-      userId: 'u1', threadId: 'thread-compress', isLastCat: true,
-    }));
+    await collect(
+      invokeSingleCat(deps, {
+        catId: 'codex',
+        service,
+        prompt: 'test2',
+        systemPrompt: 'Identity prompt',
+        userId: 'u1',
+        threadId: 'thread-compress',
+        isLastCat: true,
+      }),
+    );
 
     // Turn 3: should have forceReinjection=true → systemPrompt injected despite resume
-    await collect(invokeSingleCat(deps, {
-      catId: 'codex', service, prompt: 'test3', systemPrompt: 'Identity prompt',
-      userId: 'u1', threadId: 'thread-compress', isLastCat: true,
-    }));
+    await collect(
+      invokeSingleCat(deps, {
+        catId: 'codex',
+        service,
+        prompt: 'test3',
+        systemPrompt: 'Identity prompt',
+        userId: 'u1',
+        threadId: 'thread-compress',
+        isLastCat: true,
+      }),
+    );
 
     // Turn 1: resume (sessionId='sess-compress') → systemPrompt skipped
     // Turn 2: resume → systemPrompt skipped (compression detected AFTER this turn)
     // Turn 3: resume + forceReinjection → systemPrompt re-prepended
-    assert.ok(!promptsSeen[0].includes('Identity prompt'),
-      'Turn 1 (resume): systemPrompt should NOT be prepended');
-    assert.ok(!promptsSeen[1].includes('Identity prompt'),
-      'Turn 2 (resume): systemPrompt should NOT be prepended');
-    assert.ok(promptsSeen[2].includes('Identity prompt'),
-      'F-BLOAT: systemPrompt should be re-injected after compression detection');
+    assert.ok(!promptsSeen[0].includes('Identity prompt'), 'Turn 1 (resume): systemPrompt should NOT be prepended');
+    assert.ok(!promptsSeen[1].includes('Identity prompt'), 'Turn 2 (resume): systemPrompt should NOT be prepended');
+    assert.ok(
+      promptsSeen[2].includes('Identity prompt'),
+      'F-BLOAT: systemPrompt should be re-injected after compression detection',
+    );
 
     mod._resetCompressionDetection();
   });
@@ -2054,17 +2302,21 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
     deps.sessionManager = {
       get: async () => 'stale-sess',
       store: async () => {},
-      delete: async () => { sessionDeletes.push('deleted'); },
+      delete: async () => {
+        sessionDeletes.push('deleted');
+      },
     };
 
-    const msgs = await collect(invokeSingleCat(deps, {
-      catId: 'opus',
-      service,
-      prompt: 'test',
-      userId: 'user-still-failing',
-      threadId: 'thread-still-failing',
-      isLastCat: true,
-    }));
+    const msgs = await collect(
+      invokeSingleCat(deps, {
+        catId: 'opus',
+        service,
+        prompt: 'test',
+        userId: 'user-still-failing',
+        threadId: 'thread-still-failing',
+        isLastCat: true,
+      }),
+    );
 
     assert.equal(invokeCount, 2, 'should never retry more than once');
     assert.equal(sessionDeletes.length, 1, 'stale session should be cleared once before retry');
@@ -2072,7 +2324,10 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
       msgs.some((m) => m.type === 'error' && String(m.error).includes('No conversation found')),
       'should surface session error if retry still fails',
     );
-    assert.ok(msgs.some((m) => m.type === 'done'), 'should still emit done');
+    assert.ok(
+      msgs.some((m) => m.type === 'done'),
+      'should still emit done',
+    );
   });
 
   it('F062 P1: falls back to monorepo root profile when thread projectPath is absent', async () => {
@@ -2103,14 +2358,16 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
     const previousCwd = process.cwd();
     try {
       process.chdir(apiDir);
-      await collect(invokeSingleCat(deps, {
-        catId: 'opus',
-        service,
-        prompt: 'test',
-        userId: 'user-f062-root-fallback',
-        threadId: 'thread-f062-root-fallback',
-        isLastCat: true,
-      }));
+      await collect(
+        invokeSingleCat(deps, {
+          catId: 'opus',
+          service,
+          prompt: 'test',
+          userId: 'user-f062-root-fallback',
+          threadId: 'thread-f062-root-fallback',
+          isLastCat: true,
+        }),
+      );
     } finally {
       process.chdir(previousCwd);
       await rm(root, { recursive: true, force: true });
@@ -2191,14 +2448,16 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
     };
 
     try {
-      const msgs = await collect(invokeSingleCat(deps, {
-        catId: 'opus',
-        service,
-        prompt: 'test',
-        userId: 'user-f062-approx-no-seal',
-        threadId: 'thread-f062-approx-no-seal',
-        isLastCat: true,
-      }));
+      const msgs = await collect(
+        invokeSingleCat(deps, {
+          catId: 'opus',
+          service,
+          prompt: 'test',
+          userId: 'user-f062-approx-no-seal',
+          threadId: 'thread-f062-approx-no-seal',
+          isLastCat: true,
+        }),
+      );
 
       const healthInfo = msgs.find((m) => {
         if (m.type !== 'system_info') return false;
@@ -2229,8 +2488,9 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
 
   it('F062-fix: skips auto-seal for api_key + compress strategy even when context health is exact', async () => {
     const { createProviderProfile } = await import('../dist/config/provider-profiles.js');
-    const { _setTestStrategyOverride, _clearTestStrategyOverrides } =
-      await import('../dist/config/session-strategy.js');
+    const { _setTestStrategyOverride, _clearTestStrategyOverrides } = await import(
+      '../dist/config/session-strategy.js'
+    );
     _setTestStrategyOverride('opus', {
       strategy: 'compress',
       thresholds: { warn: 0.8, action: 0.9 },
@@ -2303,14 +2563,16 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
     };
 
     try {
-      const msgs = await collect(invokeSingleCat(deps, {
-        catId: 'opus',
-        service,
-        prompt: 'test',
-        userId: 'user-f062-exact-no-seal',
-        threadId: 'thread-f062-exact-no-seal',
-        isLastCat: true,
-      }));
+      const msgs = await collect(
+        invokeSingleCat(deps, {
+          catId: 'opus',
+          service,
+          prompt: 'test',
+          userId: 'user-f062-exact-no-seal',
+          threadId: 'thread-f062-exact-no-seal',
+          isLastCat: true,
+        }),
+      );
 
       const healthInfo = msgs.find((m) => {
         if (m.type !== 'system_info') return false;
@@ -2343,8 +2605,9 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
 
   it('F062-fix: keeps auto-seal for api_key + handoff strategy on exact budget overflow', async () => {
     const { createProviderProfile } = await import('../dist/config/provider-profiles.js');
-    const { _setTestStrategyOverride, _clearTestStrategyOverrides } =
-      await import('../dist/config/session-strategy.js');
+    const { _setTestStrategyOverride, _clearTestStrategyOverrides } = await import(
+      '../dist/config/session-strategy.js'
+    );
     _setTestStrategyOverride('opus', {
       strategy: 'handoff',
       thresholds: { warn: 0.8, action: 0.9 },
@@ -2416,14 +2679,16 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
     };
 
     try {
-      const msgs = await collect(invokeSingleCat(deps, {
-        catId: 'opus',
-        service,
-        prompt: 'test',
-        userId: 'user-f062-exact-handoff-seal',
-        threadId: 'thread-f062-exact-handoff-seal',
-        isLastCat: true,
-      }));
+      const msgs = await collect(
+        invokeSingleCat(deps, {
+          catId: 'opus',
+          service,
+          prompt: 'test',
+          userId: 'user-f062-exact-handoff-seal',
+          threadId: 'thread-f062-exact-handoff-seal',
+          isLastCat: true,
+        }),
+      );
 
       const sealEvent = msgs.find((m) => {
         if (m.type !== 'system_info') return false;

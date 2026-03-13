@@ -2,14 +2,13 @@
  * Task 5: Wiring tests — verify handoffConfig flows into SessionSealer
  * and bootstrapDepth flows into buildSessionBootstrap calls.
  */
-import { describe, it, mock } from 'node:test';
+
 import assert from 'node:assert/strict';
+import { describe, it, mock } from 'node:test';
 
 describe('Task 5: Wiring – handoffConfig in SessionSealer', () => {
   it('SessionSealer accepts handoffConfig as 6th parameter', async () => {
-    const { SessionSealer } = await import(
-      '../dist/domains/cats/services/session/SessionSealer.js'
-    );
+    const { SessionSealer } = await import('../dist/domains/cats/services/session/SessionSealer.js');
     const fakeChainStore = { getLatest: mock.fn(), seal: mock.fn() };
     const fakeWriter = { appendEvent: mock.fn(), flush: mock.fn(), getEventCount: mock.fn() };
     const fakeThreadStore = { get: mock.fn() };
@@ -36,31 +35,21 @@ describe('Task 5: Wiring – handoffConfig in SessionSealer', () => {
   });
 
   it('SessionSealer works without handoffConfig (backward compat)', async () => {
-    const { SessionSealer } = await import(
-      '../dist/domains/cats/services/session/SessionSealer.js'
-    );
+    const { SessionSealer } = await import('../dist/domains/cats/services/session/SessionSealer.js');
     const fakeChainStore = { getLatest: mock.fn(), seal: mock.fn() };
     const fakeWriter = { appendEvent: mock.fn(), flush: mock.fn(), getEventCount: mock.fn() };
     const fakeThreadStore = { get: mock.fn() };
     const fakeReader = { readDigest: mock.fn() };
     const fakeBudgetFn = () => 4096;
 
-    const sealer = new SessionSealer(
-      fakeChainStore,
-      fakeWriter,
-      fakeThreadStore,
-      fakeReader,
-      fakeBudgetFn,
-    );
+    const sealer = new SessionSealer(fakeChainStore, fakeWriter, fakeThreadStore, fakeReader, fakeBudgetFn);
     assert.ok(sealer, 'SessionSealer constructed without handoffConfig');
   });
 });
 
 describe('Task 5: Wiring – bootstrapDepth in buildSessionBootstrap', () => {
   it('buildSessionBootstrap accepts bootstrapDepth option', async () => {
-    const { buildSessionBootstrap } = await import(
-      '../dist/domains/cats/services/session/SessionBootstrap.js'
-    );
+    const { buildSessionBootstrap } = await import('../dist/domains/cats/services/session/SessionBootstrap.js');
     const fakeChainStore = {
       getLatest: mock.fn(async () => null),
       getChain: mock.fn(async () => []),
@@ -88,9 +77,7 @@ describe('Task 5: Wiring – bootstrapDepth in buildSessionBootstrap', () => {
 
 describe('Task 5: Wiring – getConfigSessionStrategy accessor', () => {
   it('getConfigSessionStrategy returns valid bootstrapDepth when configured', async () => {
-    const { getConfigSessionStrategy } = await import(
-      '../dist/config/cat-config-loader.js'
-    );
+    const { getConfigSessionStrategy } = await import('../dist/config/cat-config-loader.js');
     const strategy = getConfigSessionStrategy('opus');
     if (strategy?.handoff?.bootstrapDepth) {
       assert.ok(

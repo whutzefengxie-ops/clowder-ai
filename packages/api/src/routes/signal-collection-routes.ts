@@ -1,9 +1,9 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
+import { resolveSignalPaths } from '../domains/signals/config/sources-loader.js';
+import { SignalArticleQueryService } from '../domains/signals/services/article-query-service.js';
 import { CollectionService } from '../domains/signals/services/collection-service.js';
 import { StudyMetaService } from '../domains/signals/services/study-meta-service.js';
-import { SignalArticleQueryService } from '../domains/signals/services/article-query-service.js';
-import { resolveSignalPaths } from '../domains/signals/config/sources-loader.js';
 import { resolveUserId } from '../utils/request-identity.js';
 
 const createBodySchema = z.object({
@@ -48,26 +48,44 @@ export const signalCollectionRoutes: FastifyPluginAsync = async (app) => {
 
   app.get('/api/signals/collections', async (request, reply) => {
     const userId = resolveUserId(request);
-    if (!userId) { reply.status(401); return { error: 'Identity required' }; }
+    if (!userId) {
+      reply.status(401);
+      return { error: 'Identity required' };
+    }
     const list = await collections.list();
     return { collections: list };
   });
 
   app.get('/api/signals/collections/:id', async (request, reply) => {
     const userId = resolveUserId(request);
-    if (!userId) { reply.status(401); return { error: 'Identity required' }; }
+    if (!userId) {
+      reply.status(401);
+      return { error: 'Identity required' };
+    }
     const params = request.params as { id?: string };
-    if (!params.id) { reply.status(400); return { error: 'Collection id required' }; }
+    if (!params.id) {
+      reply.status(400);
+      return { error: 'Collection id required' };
+    }
     const col = await collections.get(params.id);
-    if (!col) { reply.status(404); return { error: 'Collection not found' }; }
+    if (!col) {
+      reply.status(404);
+      return { error: 'Collection not found' };
+    }
     return { collection: col };
   });
 
   app.post('/api/signals/collections', async (request, reply) => {
     const userId = resolveUserId(request);
-    if (!userId) { reply.status(401); return { error: 'Identity required' }; }
+    if (!userId) {
+      reply.status(401);
+      return { error: 'Identity required' };
+    }
     const parsed = createBodySchema.safeParse(request.body);
-    if (!parsed.success) { reply.status(400); return { error: 'Invalid body', details: parsed.error.issues }; }
+    if (!parsed.success) {
+      reply.status(400);
+      return { error: 'Invalid body', details: parsed.error.issues };
+    }
 
     const requestedArticleIds = parsed.data.articleIds ?? [];
 
@@ -87,36 +105,63 @@ export const signalCollectionRoutes: FastifyPluginAsync = async (app) => {
 
   app.patch('/api/signals/collections/:id', async (request, reply) => {
     const userId = resolveUserId(request);
-    if (!userId) { reply.status(401); return { error: 'Identity required' }; }
+    if (!userId) {
+      reply.status(401);
+      return { error: 'Identity required' };
+    }
     const params = request.params as { id?: string };
-    if (!params.id) { reply.status(400); return { error: 'Collection id required' }; }
+    if (!params.id) {
+      reply.status(400);
+      return { error: 'Collection id required' };
+    }
     const parsed = updateBodySchema.safeParse(request.body);
-    if (!parsed.success) { reply.status(400); return { error: 'Invalid body', details: parsed.error.issues }; }
+    if (!parsed.success) {
+      reply.status(400);
+      return { error: 'Invalid body', details: parsed.error.issues };
+    }
     const existing = await collections.get(params.id);
-    if (!existing) { reply.status(404); return { error: 'Collection not found' }; }
+    if (!existing) {
+      reply.status(404);
+      return { error: 'Collection not found' };
+    }
 
     // Sync studyMeta BEFORE writing collection file.
     // If sync fails, collection file retains old articleIds → retry
     // recomputes correct diff.
     if (parsed.data.articleIds) {
       await syncStudyMetaCollections(
-        studyMeta, articleQuery, params.id,
-        [...existing.articleIds], [...parsed.data.articleIds],
+        studyMeta,
+        articleQuery,
+        params.id,
+        [...existing.articleIds],
+        [...parsed.data.articleIds],
       );
     }
 
     const col = await collections.update(params.id, parsed.data);
-    if (!col) { reply.status(404); return { error: 'Collection not found' }; }
+    if (!col) {
+      reply.status(404);
+      return { error: 'Collection not found' };
+    }
     return { collection: col };
   });
 
   app.delete('/api/signals/collections/:id', async (request, reply) => {
     const userId = resolveUserId(request);
-    if (!userId) { reply.status(401); return { error: 'Identity required' }; }
+    if (!userId) {
+      reply.status(401);
+      return { error: 'Identity required' };
+    }
     const params = request.params as { id?: string };
-    if (!params.id) { reply.status(400); return { error: 'Collection id required' }; }
+    if (!params.id) {
+      reply.status(400);
+      return { error: 'Collection id required' };
+    }
     const existing = await collections.get(params.id);
-    if (!existing) { reply.status(404); return { error: 'Collection not found' }; }
+    if (!existing) {
+      reply.status(404);
+      return { error: 'Collection not found' };
+    }
 
     // Sync meta BEFORE deleting collection file.
     // If sync fails, collection file still exists → retry works.
@@ -125,7 +170,10 @@ export const signalCollectionRoutes: FastifyPluginAsync = async (app) => {
     }
 
     const removed = await collections.remove(params.id);
-    if (!removed) { reply.status(404); return { error: 'Collection not found' }; }
+    if (!removed) {
+      reply.status(404);
+      return { error: 'Collection not found' };
+    }
     return { ok: true };
   });
 };

@@ -5,12 +5,12 @@
  * Phase 5.0 Step 2a: 发布门禁
  */
 
+import { catIdSchema } from '@cat-cafe/shared';
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
-import { catIdSchema } from '@cat-cafe/shared';
+import { AuditEventTypes, getEventAuditLog } from '../domains/cats/services/orchestration/EventAuditLog.js';
 import type { IMemoryGovernanceStore } from '../domains/cats/services/stores/ports/MemoryGovernanceStore.js';
 import { GovernanceConflictError } from '../domains/cats/services/stores/ports/MemoryGovernanceStore.js';
-import { getEventAuditLog, AuditEventTypes } from '../domains/cats/services/orchestration/EventAuditLog.js';
 
 export interface MemoryPublishRoutesOptions {
   governanceStore: IMemoryGovernanceStore;

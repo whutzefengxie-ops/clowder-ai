@@ -3,37 +3,41 @@
  * All cats respond independently to the same message.
  */
 
-import { catRegistry, CAT_CONFIGS } from '@cat-cafe/shared';
-import type { CatId, CatConfig } from '@cat-cafe/shared';
-import { buildStaticIdentity, buildInvocationContext, type InvocationContext } from '../../context/SystemPromptBuilder.js';
-import { needsMcpInjection, buildMcpCallbackInstructions } from '../invocation/McpPromptInjector.js';
-import { resolveDefaultClaudeMcpServerPath } from '../providers/ClaudeAgentService.js';
-import { invokeSingleCat } from '../invocation/invoke-single-cat.js';
-import { mergeStreams } from '../invocation/stream-merge.js';
-import type { StoredToolEvent } from '../../stores/ports/MessageStore.js';
-import type { AgentMessage, AgentMessageType, MessageMetadata } from '../../types.js';
-import { parseA2AMentions } from '../routing/a2a-mentions.js';
-import { assembleContext } from '../../context/ContextAssembler.js';
+import type { CatConfig, CatId } from '@cat-cafe/shared';
+import { CAT_CONFIGS, catRegistry } from '@cat-cafe/shared';
 import { getCatContextBudget } from '../../../../../config/cat-budgets.js';
+import { getConfigSessionStrategy, isSessionChainEnabled } from '../../../../../config/cat-config-loader.js';
 import { estimateTokens } from '../../../../../utils/token-counter.js';
+import { assembleContext } from '../../context/ContextAssembler.js';
+import {
+  buildInvocationContext,
+  buildStaticIdentity,
+  type InvocationContext,
+} from '../../context/SystemPromptBuilder.js';
 import { formatDegradationMessage } from '../../orchestration/DegradationPolicy.js';
 import { buildSessionBootstrap } from '../../session/SessionBootstrap.js';
-import { isSessionChainEnabled, getConfigSessionStrategy } from '../../../../../config/cat-config-loader.js';
+import type { StoredToolEvent } from '../../stores/ports/MessageStore.js';
+import type { ThreadRoutingPolicyV1 } from '../../stores/ports/ThreadStore.js';
+import { getVoiceBlockSynthesizer } from '../../tts/VoiceBlockSynthesizer.js';
+import type { AgentMessage, AgentMessageType, MessageMetadata } from '../../types.js';
+import { invokeSingleCat } from '../invocation/invoke-single-cat.js';
+import { buildMcpCallbackInstructions, needsMcpInjection } from '../invocation/McpPromptInjector.js';
+import { getRichBlockBuffer } from '../invocation/RichBlockBuffer.js';
+import { mergeStreams } from '../invocation/stream-merge.js';
+import { resolveDefaultClaudeMcpServerPath } from '../providers/ClaudeAgentService.js';
+import { parseA2AMentions } from '../routing/a2a-mentions.js';
+import { extractRichFromText, isValidRichBlock } from './rich-block-extract.js';
+import type { RouteOptions, RouteStrategyDeps } from './route-helpers.js';
 import {
-  getService,
-  detectContextDegradation,
-  toStoredToolEvent,
-  sanitizeInjectedContent,
-  routeContentBlocksForCat,
   assembleIncrementalContext,
+  detectContextDegradation,
+  getService,
+  routeContentBlocksForCat,
+  sanitizeInjectedContent,
+  toStoredToolEvent,
   upsertMaxBoundary,
 } from './route-helpers.js';
-import type { RouteStrategyDeps, RouteOptions } from './route-helpers.js';
-import { getRichBlockBuffer } from '../invocation/RichBlockBuffer.js';
-import { extractRichFromText, isValidRichBlock } from './rich-block-extract.js';
-import { getVoiceBlockSynthesizer } from '../../tts/VoiceBlockSynthesizer.js';
-import type { ThreadRoutingPolicyV1 } from '../../stores/ports/ThreadStore.js';
-import { VOTE_RESULT_SOURCE, extractVoteFromText, checkVoteCompletion, buildVoteTally } from './vote-intercept.js';
+import { buildVoteTally, checkVoteCompletion, extractVoteFromText, VOTE_RESULT_SOURCE } from './vote-intercept.js';
 
 export async function* routeParallel(
   deps: RouteStrategyDeps,
@@ -56,7 +60,7 @@ export async function* routeParallel(
   } = options;
   const thinkingMode = options.thinkingMode ?? 'play';
   // P2-3 fix: also consider default MCP server path (ClaudeAgentService has fallback resolution)
-  const mcpServerPath = process.env['CAT_CAFE_MCP_SERVER_PATH'] || resolveDefaultClaudeMcpServerPath();
+  const mcpServerPath = process.env.CAT_CAFE_MCP_SERVER_PATH || resolveDefaultClaudeMcpServerPath();
   const incrementalMode = Boolean(currentUserMessageId && deps.deliveryCursorStore);
 
   const degradationMsgs: AgentMessage[] = [];
@@ -67,7 +71,9 @@ export async function* routeParallel(
   if (deps.invocationDeps.threadStore) {
     try {
       activeParticipants = await deps.invocationDeps.threadStore.getParticipantsWithActivity(threadId);
-    } catch { /* best-effort */ }
+    } catch {
+      /* best-effort */
+    }
   }
   // F042: Fetch thread routingPolicy once (shared across all cats).
   let routingPolicy: ThreadRoutingPolicyV1 | undefined;
@@ -94,147 +100,163 @@ export async function* routeParallel(
               featureId: sop.featureId,
             };
           }
-        } catch { /* best-effort: SOP hint failure does not block invocation */ }
+        } catch {
+          /* best-effort: SOP hint failure does not block invocation */
+        }
       }
-    } catch { /* best-effort */ }
+    } catch {
+      /* best-effort */
+    }
   }
 
-	  const streams = await Promise.all(targetCats.map(async (catId) => {
-	    const catConfig: CatConfig | undefined = catRegistry.tryGet(catId as string)?.config ?? CAT_CONFIGS[catId as string];
-	    const teammates = targetCats.filter((id) => id !== catId);
-	    // Build identity: static goes in -p content (+ systemPrompt as defense-in-depth), dynamic in -p only.
-	    // Non-Claude HTTP callback instructions → per-message (session history may be lost on compress).
-	    const mcpAvailable = (catConfig?.mcpSupport ?? false) && !!mcpServerPath;
-	    const staticIdentity = buildStaticIdentity(catId, { mcpAvailable });
-	    // F041: inject HTTP callback only when MCP is NOT actually available (fallback)
-	    const mcpInstructions = needsMcpInjection(mcpAvailable)
-	      ? buildMcpCallbackInstructions({
-	        currentCatId: catId as string,
-	        teammates: teammates.map((id) => id as string),
-	      })
-	      : '';
-	    // F091: Inject linked signal articles into context
-	    let activeSignals: readonly { id: string; title: string; source: string; tier: number; contentSnippet: string; note?: string | undefined; relatedDiscussions?: readonly { sessionId: string; snippet: string; score: number }[] | undefined }[] | undefined;
-	    if (deps.invocationDeps.signalArticleLookup) {
-	      try {
-	        const signals = await deps.invocationDeps.signalArticleLookup(threadId);
-	        if (signals.length > 0) activeSignals = signals;
-	      } catch { /* best-effort: signal lookup failure does not block invocation */ }
-	    }
-	    const invocationContext = buildInvocationContext({
-	      catId,
-	      mode: 'parallel',
-	      teammates,
-	      mcpAvailable,
-	      ...(promptTags && promptTags.length > 0 ? { promptTags } : {}),
-	      ...(activeParticipants.length > 0 ? { activeParticipants } : {}),
-	      ...(routingPolicy ? { routingPolicy } : {}),
-	      ...(sopStageHint ? { sopStageHint } : {}),
-	      ...(activeSignals ? { activeSignals } : {}),
-	      ...(voiceMode ? { voiceMode } : {}),
-	      ...(bootcampState ? { bootcampState, threadId } : {}),
-	    });
-
-    const targetContentBlocks = routeContentBlocksForCat(catId, contentBlocks);
-    const targetUploadDir = targetContentBlocks ? uploadDir : undefined;
-
-    // F24 Phase E: Bootstrap context for Session #2+
-    let bootstrapCtx = '';
-    if (isSessionChainEnabled(catId) && deps.invocationDeps.sessionChainStore && deps.invocationDeps.transcriptReader) {
-      try {
-        const bootstrapDepth = getConfigSessionStrategy(catId)?.handoff?.bootstrapDepth;
-        const bootstrap = await buildSessionBootstrap(
-          {
-            sessionChainStore: deps.invocationDeps.sessionChainStore,
-            transcriptReader: deps.invocationDeps.transcriptReader,
-            ...(deps.invocationDeps.taskStore ? { taskStore: deps.invocationDeps.taskStore } : {}),
-            ...(deps.invocationDeps.threadStore ? { threadStore: deps.invocationDeps.threadStore } : {}),
-            ...(bootstrapDepth ? { bootstrapDepth } : {}),
-          },
-          catId,
-          threadId,
-        );
-        if (bootstrap) {
-          bootstrapCtx = bootstrap.text;
+  const streams = await Promise.all(
+    targetCats.map(async (catId) => {
+      const catConfig: CatConfig | undefined =
+        catRegistry.tryGet(catId as string)?.config ?? CAT_CONFIGS[catId as string];
+      const teammates = targetCats.filter((id) => id !== catId);
+      // Build identity: static goes in -p content (+ systemPrompt as defense-in-depth), dynamic in -p only.
+      // Non-Claude HTTP callback instructions → per-message (session history may be lost on compress).
+      const mcpAvailable = (catConfig?.mcpSupport ?? false) && !!mcpServerPath;
+      const staticIdentity = buildStaticIdentity(catId, { mcpAvailable });
+      // F041: inject HTTP callback only when MCP is NOT actually available (fallback)
+      const mcpInstructions = needsMcpInjection(mcpAvailable)
+        ? buildMcpCallbackInstructions({
+            currentCatId: catId as string,
+            teammates: teammates.map((id) => id as string),
+          })
+        : '';
+      // F091: Inject linked signal articles into context
+      let activeSignals:
+        | readonly {
+            id: string;
+            title: string;
+            source: string;
+            tier: number;
+            contentSnippet: string;
+            note?: string | undefined;
+            relatedDiscussions?: readonly { sessionId: string; snippet: string; score: number }[] | undefined;
+          }[]
+        | undefined;
+      if (deps.invocationDeps.signalArticleLookup) {
+        try {
+          const signals = await deps.invocationDeps.signalArticleLookup(threadId);
+          if (signals.length > 0) activeSignals = signals;
+        } catch {
+          /* best-effort: signal lookup failure does not block invocation */
         }
-      } catch {
-        // Best-effort: bootstrap failure doesn't block invocation
       }
-    }
+      const invocationContext = buildInvocationContext({
+        catId,
+        mode: 'parallel',
+        teammates,
+        mcpAvailable,
+        ...(promptTags && promptTags.length > 0 ? { promptTags } : {}),
+        ...(activeParticipants.length > 0 ? { activeParticipants } : {}),
+        ...(routingPolicy ? { routingPolicy } : {}),
+        ...(sopStageHint ? { sopStageHint } : {}),
+        ...(activeSignals ? { activeSignals } : {}),
+        ...(voiceMode ? { voiceMode } : {}),
+        ...(bootcampState ? { bootcampState, threadId } : {}),
+      });
 
-    let prompt: string;
-    if (incrementalMode) {
-      const inc = await assembleIncrementalContext(
-        deps,
+      const targetContentBlocks = routeContentBlocksForCat(catId, contentBlocks);
+      const targetUploadDir = targetContentBlocks ? uploadDir : undefined;
+
+      // F24 Phase E: Bootstrap context for Session #2+
+      let bootstrapCtx = '';
+      if (
+        isSessionChainEnabled(catId) &&
+        deps.invocationDeps.sessionChainStore &&
+        deps.invocationDeps.transcriptReader
+      ) {
+        try {
+          const bootstrapDepth = getConfigSessionStrategy(catId)?.handoff?.bootstrapDepth;
+          const bootstrap = await buildSessionBootstrap(
+            {
+              sessionChainStore: deps.invocationDeps.sessionChainStore,
+              transcriptReader: deps.invocationDeps.transcriptReader,
+              ...(deps.invocationDeps.taskStore ? { taskStore: deps.invocationDeps.taskStore } : {}),
+              ...(deps.invocationDeps.threadStore ? { threadStore: deps.invocationDeps.threadStore } : {}),
+              ...(bootstrapDepth ? { bootstrapDepth } : {}),
+            },
+            catId,
+            threadId,
+          );
+          if (bootstrap) {
+            bootstrapCtx = bootstrap.text;
+          }
+        } catch {
+          // Best-effort: bootstrap failure doesn't block invocation
+        }
+      }
+
+      let prompt: string;
+      if (incrementalMode) {
+        const inc = await assembleIncrementalContext(deps, userId, threadId, catId, currentUserMessageId, thinkingMode);
+        boundaryByCat.set(catId, inc.boundaryId);
+        const parCatModePrompt = modeSystemPromptByCat?.[catId as string] ?? modeSystemPrompt;
+        const parts = [invocationContext, parCatModePrompt, bootstrapCtx, mcpInstructions].filter(Boolean);
+        if (inc.contextText) parts.push(inc.contextText);
+        // F35 fix: only inject raw message when it was genuinely absent from unseen rows.
+        // If it was present but filtered out (e.g. whisper), injecting would leak private content.
+        if (!inc.includesCurrentUserMessage && !inc.currentMessageFilteredOut) parts.push(message);
+        prompt = parts.join('\n\n---\n\n');
+      } else {
+        // Per-cat context budget (Phase 4.0)
+        let catContextHistory = contextHistory;
+        if (history && history.length > 0 && !contextHistory) {
+          const budget = getCatContextBudget(catId as string);
+          // F8: token-based budget — estimate non-context tokens, remainder goes to context
+          const parSystemTokens = estimateTokens(
+            [staticIdentity, invocationContext, mcpInstructions].filter(Boolean).join('\n'),
+          );
+          const parPromptTokens = estimateTokens(message);
+          const budgetForContext = Math.max(0, budget.maxPromptTokens - parSystemTokens - parPromptTokens - 200);
+          const { contextText, messageCount } = assembleContext(history, {
+            maxMessages: budget.maxMessages,
+            maxContentLength: budget.maxContentLengthPerMsg,
+            maxTotalTokens: Math.min(budgetForContext, budget.maxContextTokens),
+          });
+          catContextHistory = contextText || undefined;
+
+          // Degradation check: notify user if context was truncated (count budget or char budget)
+          const degradation = detectContextDegradation(history.length, messageCount, budget);
+          if (degradation?.degraded) {
+            degradationMsgs.push({
+              type: 'system_info' as AgentMessageType,
+              catId,
+              content: formatDegradationMessage(degradation),
+              timestamp: Date.now(),
+            } as AgentMessage);
+          }
+        }
+
+        const parCatModePromptLegacy = modeSystemPromptByCat?.[catId as string] ?? modeSystemPrompt;
+        if (invocationContext || parCatModePromptLegacy || mcpInstructions || bootstrapCtx) {
+          const parts = [invocationContext, parCatModePromptLegacy, bootstrapCtx, mcpInstructions].filter(Boolean);
+          if (catContextHistory) parts.push(catContextHistory);
+          prompt = `${parts.join('\n\n---\n\n')}\n\n---\n\n${message}`;
+        } else if (catContextHistory) {
+          prompt = `${catContextHistory}\n\n---\n\n${message}`;
+        } else {
+          prompt = message;
+        }
+      }
+
+      return invokeSingleCat(deps.invocationDeps, {
+        catId,
+        service: getService(deps.services, catId),
+        prompt,
         userId,
         threadId,
-        catId,
-        currentUserMessageId,
-        thinkingMode,
-      );
-      boundaryByCat.set(catId, inc.boundaryId);
-      const parCatModePrompt = modeSystemPromptByCat?.[catId as string] ?? modeSystemPrompt;
-      const parts = [invocationContext, parCatModePrompt, bootstrapCtx, mcpInstructions].filter(Boolean);
-      if (inc.contextText) parts.push(inc.contextText);
-      // F35 fix: only inject raw message when it was genuinely absent from unseen rows.
-      // If it was present but filtered out (e.g. whisper), injecting would leak private content.
-      if (!inc.includesCurrentUserMessage && !inc.currentMessageFilteredOut) parts.push(message);
-      prompt = parts.join('\n\n---\n\n');
-    } else {
-      // Per-cat context budget (Phase 4.0)
-      let catContextHistory = contextHistory;
-      if (history && history.length > 0 && !contextHistory) {
-        const budget = getCatContextBudget(catId as string);
-        // F8: token-based budget — estimate non-context tokens, remainder goes to context
-        const parSystemTokens = estimateTokens(
-          [staticIdentity, invocationContext, mcpInstructions].filter(Boolean).join('\n'),
-        );
-        const parPromptTokens = estimateTokens(message);
-        const budgetForContext = Math.max(0, budget.maxPromptTokens - parSystemTokens - parPromptTokens - 200);
-        const { contextText, messageCount } = assembleContext(history, {
-          maxMessages: budget.maxMessages,
-          maxContentLength: budget.maxContentLengthPerMsg,
-          maxTotalTokens: Math.min(budgetForContext, budget.maxContextTokens),
-        });
-        catContextHistory = contextText || undefined;
-
-        // Degradation check: notify user if context was truncated (count budget or char budget)
-        const degradation = detectContextDegradation(history.length, messageCount, budget);
-        if (degradation?.degraded) {
-          degradationMsgs.push({
-            type: 'system_info' as AgentMessageType,
-            catId,
-            content: formatDegradationMessage(degradation),
-            timestamp: Date.now(),
-          } as AgentMessage);
-        }
-      }
-
-      const parCatModePromptLegacy = modeSystemPromptByCat?.[catId as string] ?? modeSystemPrompt;
-      if (invocationContext || parCatModePromptLegacy || mcpInstructions || bootstrapCtx) {
-        const parts = [invocationContext, parCatModePromptLegacy, bootstrapCtx, mcpInstructions].filter(Boolean);
-        if (catContextHistory) parts.push(catContextHistory);
-        prompt = `${parts.join('\n\n---\n\n')}\n\n---\n\n${message}`;
-      } else if (catContextHistory) {
-        prompt = `${catContextHistory}\n\n---\n\n${message}`;
-      } else {
-        prompt = message;
-      }
-    }
-
-    return invokeSingleCat(deps.invocationDeps, {
-      catId,
-      service: getService(deps.services, catId),
-      prompt,
-      userId,
-      threadId,
-      ...(targetContentBlocks ? { contentBlocks: targetContentBlocks } : {}),
-      ...(targetUploadDir ? { uploadDir: targetUploadDir } : {}),
-      ...(signal ? { signal } : {}),
-      ...(staticIdentity ? { systemPrompt: staticIdentity } : {}),
-      isLastCat: false,
-    });
-  }));
+        ...(targetContentBlocks ? { contentBlocks: targetContentBlocks } : {}),
+        ...(targetUploadDir ? { uploadDir: targetUploadDir } : {}),
+        ...(signal ? { signal } : {}),
+        ...(staticIdentity ? { systemPrompt: staticIdentity } : {}),
+        isLastCat: false,
+      });
+    }),
+  );
 
   // Yield degradation notifications before streaming starts (BACKLOG #32)
   for (const dm of degradationMsgs) {
@@ -273,7 +295,9 @@ export async function* routeParallel(
           // #80 fix: seed flush baseline so interval triggers after FLUSH_INTERVAL_MS
           catFlushTime.set(msg.catId, Date.now());
         }
-      } catch { /* ignore parse errors */ }
+      } catch {
+        /* ignore parse errors */
+      }
     }
     if (msg.type === 'text' && msg.content && msg.catId) {
       catText.set(msg.catId, (catText.get(msg.catId) ?? '') + msg.content);
@@ -292,13 +316,15 @@ export async function* routeParallel(
           arr.push(parsed.block);
           catStreamRichBlocks.set(msg.catId, arr);
         }
-      } catch { /* ignore parse errors */ }
+      } catch {
+        /* ignore parse errors */
+      }
     }
     if (msg.type === 'error' && msg.catId) {
       catHadError.add(msg.catId);
       if (msg.error) {
         const prev = catText.get(msg.catId) ?? '';
-        catText.set(msg.catId, prev + (prev ? '\n\n' : '') + `❌ ${msg.error}`);
+        catText.set(msg.catId, `${prev + (prev ? '\n\n' : '')}❌ ${msg.error}`);
       }
     }
     // Accumulate tool events per cat
@@ -326,29 +352,45 @@ export async function* routeParallel(
       const curToolLen = curTools?.length ?? 0;
 
       const neverFlushedCat = lastLen === 0 && lastToolLen === 0;
-      if (msg.type === 'text' && charDelta > 0 && (neverFlushedCat || now - lastFlush >= FLUSH_INTERVAL_MS || charDelta >= FLUSH_CHAR_DELTA)) {
-        deps.draftStore.upsert({
-          userId, threadId, invocationId: invId, catId: msg.catId as CatId,
-          content: curText,
-          ...(curTools && curToolLen > 0 ? { toolEvents: curTools } : {}),
-          updatedAt: now,
-        })?.catch?.(noop);
-        catFlushTime.set(msg.catId, now);
-        catFlushLen.set(msg.catId, curText.length);
-        catFlushToolLen.set(msg.catId, curToolLen);
-      } else if ((msg.type === 'tool_use' || msg.type === 'tool_result') &&
-        // Cloud R7 P1: bypass interval for the very first flush — tool-first invocations
-        // must create a draft immediately, not wait 2s for the interval gate.
-        (neverFlushedCat || now - lastFlush >= FLUSH_INTERVAL_MS)) {
-        // Cloud R6 P1: upsert when there's unsaved text OR new tool events —
-        // tool-first invocations (no text yet) must still create a draft record.
-        if (curText.length > lastLen || curToolLen > lastToolLen) {
-          deps.draftStore.upsert({
-            userId, threadId, invocationId: invId, catId: msg.catId as CatId,
+      if (
+        msg.type === 'text' &&
+        charDelta > 0 &&
+        (neverFlushedCat || now - lastFlush >= FLUSH_INTERVAL_MS || charDelta >= FLUSH_CHAR_DELTA)
+      ) {
+        deps.draftStore
+          .upsert({
+            userId,
+            threadId,
+            invocationId: invId,
+            catId: msg.catId as CatId,
             content: curText,
             ...(curTools && curToolLen > 0 ? { toolEvents: curTools } : {}),
             updatedAt: now,
-          })?.catch?.(noop);
+          })
+          ?.catch?.(noop);
+        catFlushTime.set(msg.catId, now);
+        catFlushLen.set(msg.catId, curText.length);
+        catFlushToolLen.set(msg.catId, curToolLen);
+      } else if (
+        (msg.type === 'tool_use' || msg.type === 'tool_result') &&
+        // Cloud R7 P1: bypass interval for the very first flush — tool-first invocations
+        // must create a draft immediately, not wait 2s for the interval gate.
+        (neverFlushedCat || now - lastFlush >= FLUSH_INTERVAL_MS)
+      ) {
+        // Cloud R6 P1: upsert when there's unsaved text OR new tool events —
+        // tool-first invocations (no text yet) must still create a draft record.
+        if (curText.length > lastLen || curToolLen > lastToolLen) {
+          deps.draftStore
+            .upsert({
+              userId,
+              threadId,
+              invocationId: invId,
+              catId: msg.catId as CatId,
+              content: curText,
+              ...(curTools && curToolLen > 0 ? { toolEvents: curTools } : {}),
+              updatedAt: now,
+            })
+            ?.catch?.(noop);
           catFlushLen.set(msg.catId, curText.length);
           catFlushToolLen.set(msg.catId, curToolLen);
         } else {
@@ -414,9 +456,7 @@ export async function* routeParallel(
                     kind: 'card' as const,
                     v: 1 as const,
                     title: `投票结果: ${voteState.question}`,
-                    bodyMarkdown: voteState.anonymous
-                      ? `匿名投票 · ${totalVotes} 票`
-                      : `实名投票 · ${totalVotes} 票`,
+                    bodyMarkdown: voteState.anonymous ? `匿名投票 · ${totalVotes} 票` : `实名投票 · ${totalVotes} 票`,
                     tone: 'info' as const,
                     fields,
                   };
@@ -440,7 +480,14 @@ export async function* routeParallel(
                     if (deps.socketManager) {
                       deps.socketManager.broadcastToRoom(`thread:${threadId}`, 'connector_message', {
                         threadId,
-                        message: { id: stored.id, type: 'connector', content: stored.content, source: VOTE_RESULT_SOURCE, timestamp: stored.timestamp, extra: stored.extra },
+                        message: {
+                          id: stored.id,
+                          type: 'connector',
+                          content: stored.content,
+                          source: VOTE_RESULT_SOURCE,
+                          timestamp: stored.timestamp,
+                          extra: stored.extra,
+                        },
                       });
                     }
                   } catch (persistErr) {
@@ -589,7 +636,10 @@ export async function* routeParallel(
               try {
                 await deps.invocationDeps.threadStore.updateParticipantActivity(threadId, msg.catId as CatId);
               } catch (activityErr) {
-                console.warn(`[routeParallel] updateParticipantActivity failed for ${msg.catId}, ignoring:`, activityErr);
+                console.warn(
+                  `[routeParallel] updateParticipantActivity failed for ${msg.catId}, ignoring:`,
+                  activityErr,
+                );
               }
             }
           } catch (err) {
@@ -616,12 +666,7 @@ export async function* routeParallel(
           } else if (deps.deliveryCursorStore) {
             // Legacy: ack immediately
             try {
-              await deps.deliveryCursorStore.ackCursor(
-                userId,
-                msg.catId as CatId,
-                threadId,
-                boundaryId,
-              );
+              await deps.deliveryCursorStore.ackCursor(userId, msg.catId as CatId, threadId, boundaryId);
             } catch (err) {
               console.error(`[routeParallel] ackCursor failed for ${msg.catId}:`, err);
             }

@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type CatData, formatCatName, useCatData } from '@/hooks/useCatData';
 import type { ChatMessage as ChatMessageData } from '@/stores/chatStore';
-import { formatCatName, useCatData, type CatData } from '@/hooks/useCatData';
 import { scrollToMessage } from '@/utils/scrollToMessage';
 
 /** Maximum dots rendered on the track — prevents clutter in long conversations */
@@ -81,7 +81,7 @@ function formatTime(ts: number): string {
 }
 
 function truncateContent(content: string, maxLen: number): string {
-  return content.length <= maxLen ? content : content.slice(0, maxLen) + '…';
+  return content.length <= maxLen ? content : `${content.slice(0, maxLen)}…`;
 }
 
 interface MessageNavigatorProps {
@@ -95,21 +95,12 @@ export function MessageNavigator({ messages, scrollContainerRef }: MessageNaviga
   const [viewport, setViewport] = useState({ top: 0, height: 1 });
   const trackRef = useRef<HTMLDivElement>(null);
 
-  const resolveCat = useCallback(
-    (catId: string) => resolveCatById(getCatById, catId),
-    [getCatById],
-  );
+  const resolveCat = useCallback((catId: string) => resolveCatById(getCatById, catId), [getCatById]);
 
-  const getSenderName = useCallback(
-    (msg: ChatMessageData) => getSenderLabel(msg, resolveCat),
-    [resolveCat],
-  );
+  const getSenderName = useCallback((msg: ChatMessageData) => getSenderLabel(msg, resolveCat), [resolveCat]);
 
   // Filter to user + assistant only
-  const navItems = useMemo(
-    () => messages.filter((m) => m.type === 'user' || m.type === 'assistant'),
-    [messages],
-  );
+  const navItems = useMemo(() => messages.filter((m) => m.type === 'user' || m.type === 'assistant'), [messages]);
 
   // Sample at fixed intervals when too many messages
   const sampledItems = useMemo(() => {
@@ -145,7 +136,7 @@ export function MessageNavigator({ messages, scrollContainerRef }: MessageNaviga
     updateViewport();
     el.addEventListener('scroll', updateViewport, { passive: true });
     return () => el.removeEventListener('scroll', updateViewport);
-  }, [scrollContainerRef, updateViewport, navItems.length]);
+  }, [scrollContainerRef, updateViewport]);
 
   // Click on track background → scroll proportionally
   const handleTrackClick = useCallback(
@@ -169,11 +160,7 @@ export function MessageNavigator({ messages, scrollContainerRef }: MessageNaviga
 
   return (
     <div className="absolute right-0.5 top-2 bottom-2 w-5 z-10">
-      <div
-        ref={trackRef}
-        className="relative h-full cursor-pointer"
-        onClick={handleTrackClick}
-      >
+      <div ref={trackRef} className="relative h-full cursor-pointer" onClick={handleTrackClick}>
         {/* Track rail */}
         <div className="absolute left-1/2 top-0 bottom-0 w-px bg-gray-200 -translate-x-1/2" />
 
@@ -191,9 +178,7 @@ export function MessageNavigator({ messages, scrollContainerRef }: MessageNaviga
 
         {/* Sampled dots */}
         {sampledItems.map(({ msg, sourceIdx }, idx) => {
-          const top = sampledItems.length <= 1
-            ? 50
-            : (idx / (sampledItems.length - 1)) * 100;
+          const top = sampledItems.length <= 1 ? 50 : (idx / (sampledItems.length - 1)) * 100;
           const isOwner = msg.type === 'user' && !msg.catId;
           const isAssistant = msg.type === 'assistant' || (msg.type === 'user' && !!msg.catId);
           const cat = isAssistant && msg.catId ? resolveCat(msg.catId) : undefined;
@@ -224,11 +209,7 @@ export function MessageNavigator({ messages, scrollContainerRef }: MessageNaviga
         {hoveredIdx !== null && sampledItems[hoveredIdx] && (
           <NavTooltip
             message={sampledItems[hoveredIdx].msg}
-            topPercent={
-              sampledItems.length <= 1
-                ? 50
-                : (hoveredIdx / (sampledItems.length - 1)) * 100
-            }
+            topPercent={sampledItems.length <= 1 ? 50 : (hoveredIdx / (sampledItems.length - 1)) * 100}
           />
         )}
       </div>
@@ -238,10 +219,7 @@ export function MessageNavigator({ messages, scrollContainerRef }: MessageNaviga
 
 function NavTooltip({ message, topPercent }: { message: ChatMessageData; topPercent: number }) {
   const { getCatById } = useCatData();
-  const resolveCat = useCallback(
-    (catId: string) => resolveCatById(getCatById, catId),
-    [getCatById],
-  );
+  const resolveCat = useCallback((catId: string) => resolveCatById(getCatById, catId), [getCatById]);
 
   const senderName = useMemo(() => {
     return getSenderLabel(message, resolveCat);
@@ -255,9 +233,7 @@ function NavTooltip({ message, topPercent }: { message: ChatMessageData; topPerc
       <div className="font-medium">
         {senderName} · {formatTime(message.timestamp)}
       </div>
-      <div className="text-gray-300 truncate mt-0.5">
-        {truncateContent(message.content, 40)}
-      </div>
+      <div className="text-gray-300 truncate mt-0.5">{truncateContent(message.content, 40)}</div>
     </div>
   );
 }

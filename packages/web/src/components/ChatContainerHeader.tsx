@@ -1,8 +1,8 @@
 import Link from 'next/link';
 import { useChatStore } from '@/stores/chatStore';
 import { ExportButton } from './ExportButton';
-import { CatCafeLogo } from './icons/CatCafeLogo';
 import { HubButton } from './HubButton';
+import { CatCafeLogo } from './icons/CatCafeLogo';
 import { VoiceCompanionButton } from './VoiceCompanionButton';
 
 interface ChatContainerHeaderProps {

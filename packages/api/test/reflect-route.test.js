@@ -3,11 +3,11 @@
  * POST /api/reflect — Hindsight LLM reflection
  */
 
-import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
 import Fastify from 'fastify';
-import { reflectRoutes } from '../dist/routes/reflect.js';
 import { HindsightError } from '../dist/domains/cats/services/orchestration/HindsightClient.js';
+import { reflectRoutes } from '../dist/routes/reflect.js';
 
 function createMockClient(overrides = {}) {
   return {
@@ -50,8 +50,8 @@ describe('POST /api/reflect', () => {
   });
 
   it('exposes runtime-configured reflect disposition mode', async () => {
-    const previous = process.env['HINDSIGHT_REFLECT_DISPOSITION_MODE'];
-    process.env['HINDSIGHT_REFLECT_DISPOSITION_MODE'] = 'off';
+    const previous = process.env.HINDSIGHT_REFLECT_DISPOSITION_MODE;
+    process.env.HINDSIGHT_REFLECT_DISPOSITION_MODE = 'off';
 
     const app = await setup({
       reflect: async () => 'reflection payload',
@@ -63,8 +63,8 @@ describe('POST /api/reflect', () => {
       payload: { query: 'test reflect disposition' },
     });
 
-    if (previous === undefined) delete process.env['HINDSIGHT_REFLECT_DISPOSITION_MODE'];
-    else process.env['HINDSIGHT_REFLECT_DISPOSITION_MODE'] = previous;
+    if (previous === undefined) delete process.env.HINDSIGHT_REFLECT_DISPOSITION_MODE;
+    else process.env.HINDSIGHT_REFLECT_DISPOSITION_MODE = previous;
 
     assert.equal(res.statusCode, 200);
     const body = res.json();
@@ -111,8 +111,8 @@ describe('POST /api/reflect', () => {
   });
 
   it('returns disabled degradation when HINDSIGHT_ENABLED=false', async () => {
-    const previous = process.env['HINDSIGHT_ENABLED'];
-    process.env['HINDSIGHT_ENABLED'] = 'false';
+    const previous = process.env.HINDSIGHT_ENABLED;
+    process.env.HINDSIGHT_ENABLED = 'false';
 
     let reflectCalls = 0;
     const app = await setup({
@@ -128,8 +128,8 @@ describe('POST /api/reflect', () => {
       payload: { query: 'test' },
     });
 
-    if (previous === undefined) delete process.env['HINDSIGHT_ENABLED'];
-    else process.env['HINDSIGHT_ENABLED'] = previous;
+    if (previous === undefined) delete process.env.HINDSIGHT_ENABLED;
+    else process.env.HINDSIGHT_ENABLED = previous;
 
     assert.equal(res.statusCode, 200);
     const body = res.json();

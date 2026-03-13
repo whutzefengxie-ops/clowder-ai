@@ -3,12 +3,10 @@
  * userId 鉴权 + catId 追踪 + 基本调用追踪
  */
 
-import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
+import { describe, test } from 'node:test';
 
-const { InvocationTracker } = await import(
-  '../dist/domains/cats/services/agents/invocation/InvocationTracker.js'
-);
+const { InvocationTracker } = await import('../dist/domains/cats/services/agents/invocation/InvocationTracker.js');
 
 describe('InvocationTracker userId auth', () => {
   test('start records userId and getUserId returns it', () => {

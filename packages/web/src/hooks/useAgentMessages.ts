@@ -162,88 +162,90 @@ export function useAgentMessages() {
     return useChatStore.getState().catInvocations?.[catId]?.invocationId;
   }, []);
 
-  const findRecoverableAssistantMessage = useCallback((catId: string) => {
-    const currentMessages = useChatStore.getState().messages;
-    for (let i = currentMessages.length - 1; i >= 0; i--) {
-      const msg = currentMessages[i];
-      if (msg.type === 'assistant' && msg.catId === catId && msg.isStreaming) {
-        return { id: msg.id, needsStreamingRestore: false };
-      }
-    }
-
-    const invocationId = getCurrentInvocationIdForCat(catId);
-    if (!invocationId) return null;
-
-    for (let i = currentMessages.length - 1; i >= 0; i--) {
-      const msg = currentMessages[i];
-      if (msg.type !== 'assistant' || msg.catId !== catId) continue;
-      if (msg.extra?.stream?.invocationId !== invocationId) continue;
-      return { id: msg.id, needsStreamingRestore: !msg.isStreaming };
-    }
-
-    return null;
-  }, [getCurrentInvocationIdForCat]);
-
-  const getOrRecoverActiveAssistantMessageId = useCallback((
-    catId: string,
-    metadata?: AgentMsg['metadata'],
-    options?: { ensureStreaming?: boolean },
-  ): string | null => {
-    const currentMessages = useChatStore.getState().messages;
-    const existing = activeRefs.current.get(catId);
-    if (existing?.id) {
-      const found = currentMessages.find((msg) => msg.id === existing.id && msg.type === 'assistant');
-      if (found) {
-        if (options?.ensureStreaming && !found.isStreaming) {
-          setStreaming(found.id, true);
+  const findRecoverableAssistantMessage = useCallback(
+    (catId: string) => {
+      const currentMessages = useChatStore.getState().messages;
+      for (let i = currentMessages.length - 1; i >= 0; i--) {
+        const msg = currentMessages[i];
+        if (msg.type === 'assistant' && msg.catId === catId && msg.isStreaming) {
+          return { id: msg.id, needsStreamingRestore: false };
         }
-        if (metadata) {
-          setMessageMetadata(found.id, metadata);
-        }
-        return found.id;
       }
-      activeRefs.current.delete(catId);
-    }
 
-    const recovered = findRecoverableAssistantMessage(catId);
-    if (!recovered) return null;
+      const invocationId = getCurrentInvocationIdForCat(catId);
+      if (!invocationId) return null;
 
-    activeRefs.current.set(catId, { id: recovered.id, catId });
-    if (options?.ensureStreaming && recovered.needsStreamingRestore) {
-      setStreaming(recovered.id, true);
-    }
-    if (metadata) {
-      setMessageMetadata(recovered.id, metadata);
-    }
-    return recovered.id;
-  }, [findRecoverableAssistantMessage, setMessageMetadata, setStreaming]);
+      for (let i = currentMessages.length - 1; i >= 0; i--) {
+        const msg = currentMessages[i];
+        if (msg.type !== 'assistant' || msg.catId !== catId) continue;
+        if (msg.extra?.stream?.invocationId !== invocationId) continue;
+        return { id: msg.id, needsStreamingRestore: !msg.isStreaming };
+      }
 
-  const ensureActiveAssistantMessage = useCallback((
-    catId: string,
-    metadata?: AgentMsg['metadata'],
-  ): string => {
-    const existingId = getOrRecoverActiveAssistantMessageId(catId, metadata, { ensureStreaming: true });
-    if (existingId) {
-      return existingId;
-    }
+      return null;
+    },
+    [getCurrentInvocationIdForCat],
+  );
 
-    const id = `msg-${Date.now()}-${catId}`;
-    const invocationId = getCurrentInvocationIdForCat(catId);
-    activeRefs.current.set(catId, { id, catId });
-    addMessage({
-      id,
-      type: 'assistant',
-      catId,
-      content: '',
-      origin: 'stream',
-      ...(metadata ? { metadata } : {}),
-      ...(invocationId ? { extra: { stream: { invocationId } } } : {}),
-      ...(a2aGroupRef.current ? { a2aGroupId: a2aGroupRef.current } : {}),
-      timestamp: Date.now(),
-      isStreaming: true,
-    });
-    return id;
-  }, [addMessage, getCurrentInvocationIdForCat, getOrRecoverActiveAssistantMessageId]);
+  const getOrRecoverActiveAssistantMessageId = useCallback(
+    (catId: string, metadata?: AgentMsg['metadata'], options?: { ensureStreaming?: boolean }): string | null => {
+      const currentMessages = useChatStore.getState().messages;
+      const existing = activeRefs.current.get(catId);
+      if (existing?.id) {
+        const found = currentMessages.find((msg) => msg.id === existing.id && msg.type === 'assistant');
+        if (found) {
+          if (options?.ensureStreaming && !found.isStreaming) {
+            setStreaming(found.id, true);
+          }
+          if (metadata) {
+            setMessageMetadata(found.id, metadata);
+          }
+          return found.id;
+        }
+        activeRefs.current.delete(catId);
+      }
+
+      const recovered = findRecoverableAssistantMessage(catId);
+      if (!recovered) return null;
+
+      activeRefs.current.set(catId, { id: recovered.id, catId });
+      if (options?.ensureStreaming && recovered.needsStreamingRestore) {
+        setStreaming(recovered.id, true);
+      }
+      if (metadata) {
+        setMessageMetadata(recovered.id, metadata);
+      }
+      return recovered.id;
+    },
+    [findRecoverableAssistantMessage, setMessageMetadata, setStreaming],
+  );
+
+  const ensureActiveAssistantMessage = useCallback(
+    (catId: string, metadata?: AgentMsg['metadata']): string => {
+      const existingId = getOrRecoverActiveAssistantMessageId(catId, metadata, { ensureStreaming: true });
+      if (existingId) {
+        return existingId;
+      }
+
+      const id = `msg-${Date.now()}-${catId}`;
+      const invocationId = getCurrentInvocationIdForCat(catId);
+      activeRefs.current.set(catId, { id, catId });
+      addMessage({
+        id,
+        type: 'assistant',
+        catId,
+        content: '',
+        origin: 'stream',
+        ...(metadata ? { metadata } : {}),
+        ...(invocationId ? { extra: { stream: { invocationId } } } : {}),
+        ...(a2aGroupRef.current ? { a2aGroupId: a2aGroupRef.current } : {}),
+        timestamp: Date.now(),
+        isStreaming: true,
+      });
+      return id;
+    },
+    [addMessage, getCurrentInvocationIdForCat, getOrRecoverActiveAssistantMessageId],
+  );
 
   const handleAgentMessage = useCallback(
     (msg: AgentMsg) => {
@@ -592,7 +594,9 @@ export function useAgentMessages() {
                 };
                 return labels[subtype] ? `${base} (${labels[subtype]})` : base;
               }
-            } catch { /* no subtype */ }
+            } catch {
+              /* no subtype */
+            }
             return base;
           })(),
           timestamp: Date.now(),
@@ -626,7 +630,6 @@ export function useAgentMessages() {
       setCatInvocation,
       setMessageThinking,
       setMessageStreamInvocation,
-      currentThreadId,
       resetTimeout,
       clearDoneTimeout,
       getCurrentInvocationIdForCat,

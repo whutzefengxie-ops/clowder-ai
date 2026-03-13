@@ -10,9 +10,13 @@
 
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
-import { VOTE_RESULT_SOURCE, buildVoteTally, checkVoteCompletion } from '../domains/cats/services/agents/routing/vote-intercept.js';
-import type { IThreadStore, VotingStateV1 } from '../domains/cats/services/stores/ports/ThreadStore.js';
+import {
+  buildVoteTally,
+  checkVoteCompletion,
+  VOTE_RESULT_SOURCE,
+} from '../domains/cats/services/agents/routing/vote-intercept.js';
 import type { IMessageStore } from '../domains/cats/services/stores/ports/MessageStore.js';
+import type { IThreadStore, VotingStateV1 } from '../domains/cats/services/stores/ports/ThreadStore.js';
 import type { SocketManager } from '../infrastructure/websocket/index.js';
 
 export interface VoteRoutesOptions {
@@ -95,7 +99,14 @@ export async function closeVoteInternal(
       });
       socketManager.broadcastToRoom(`thread:${threadId}`, 'connector_message', {
         threadId,
-        message: { id: stored.id, type: 'connector', content: stored.content, source: VOTE_RESULT_SOURCE, timestamp: stored.timestamp, extra: stored.extra },
+        message: {
+          id: stored.id,
+          type: 'connector',
+          content: stored.content,
+          source: VOTE_RESULT_SOURCE,
+          timestamp: stored.timestamp,
+          extra: stored.extra,
+        },
       });
     } catch (err) {
       console.warn(`[votes] Failed to persist vote result for ${threadId}:`, err);
@@ -281,7 +292,14 @@ export const voteRoutes: FastifyPluginAsync<VoteRoutesOptions> = async (app, opt
           });
           socketManager.broadcastToRoom(`thread:${threadId}`, 'connector_message', {
             threadId,
-            message: { id: stored.id, type: 'connector', content: stored.content, source: VOTE_RESULT_SOURCE, timestamp: stored.timestamp, extra: stored.extra },
+            message: {
+              id: stored.id,
+              type: 'connector',
+              content: stored.content,
+              source: VOTE_RESULT_SOURCE,
+              timestamp: stored.timestamp,
+              extra: stored.extra,
+            },
           });
         } catch (err) {
           console.warn(`[votes] Failed to persist vote result for ${threadId}:`, err);
@@ -383,7 +401,14 @@ export const voteRoutes: FastifyPluginAsync<VoteRoutesOptions> = async (app, opt
         });
         socketManager.broadcastToRoom(`thread:${threadId}`, 'connector_message', {
           threadId,
-          message: { id: stored.id, type: 'connector', content: stored.content, source: VOTE_RESULT_SOURCE, timestamp: stored.timestamp, extra: stored.extra },
+          message: {
+            id: stored.id,
+            type: 'connector',
+            content: stored.content,
+            source: VOTE_RESULT_SOURCE,
+            timestamp: stored.timestamp,
+            extra: stored.extra,
+          },
         });
       } catch (err) {
         console.warn(`[votes] Failed to persist vote result for ${threadId}:`, err);

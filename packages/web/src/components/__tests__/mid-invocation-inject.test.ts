@@ -3,10 +3,9 @@
  * Verifies that when hasActiveInvocation=true but disabled=false,
  * both Stop and Send (or Mic) buttons coexist.
  */
-import React from 'react';
-import { describe, it, expect, vi, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
+import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { act } from 'react';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/hooks/useVoiceInput', () => ({
   useVoiceInput: () => ({
@@ -43,7 +42,9 @@ describe('F24: mid-invocation message injection', () => {
   });
 
   afterEach(() => {
-    act(() => { root.unmount(); });
+    act(() => {
+      root.unmount();
+    });
     container.remove();
   });
 
@@ -51,14 +52,16 @@ describe('F24: mid-invocation message injection', () => {
     const onStop = vi.fn();
 
     act(() => {
-      root.render(React.createElement(ChatInputActionButton, {
-        onTranscript: vi.fn(),
-        onSend: vi.fn(),
-        onStop,
-        disabled: false,
-        hasActiveInvocation: true,
-        hasText: false,
-      }));
+      root.render(
+        React.createElement(ChatInputActionButton, {
+          onTranscript: vi.fn(),
+          onSend: vi.fn(),
+          onStop,
+          disabled: false,
+          hasActiveInvocation: true,
+          hasText: false,
+        }),
+      );
     });
 
     const stopBtn = container.querySelector('button[aria-label="Stop generation"]');
@@ -72,14 +75,16 @@ describe('F24: mid-invocation message injection', () => {
     const onSend = vi.fn();
 
     act(() => {
-      root.render(React.createElement(ChatInputActionButton, {
-        onTranscript: vi.fn(),
-        onSend,
-        onStop,
-        disabled: false,
-        hasActiveInvocation: true,
-        hasText: true,
-      }));
+      root.render(
+        React.createElement(ChatInputActionButton, {
+          onTranscript: vi.fn(),
+          onSend,
+          onStop,
+          disabled: false,
+          hasActiveInvocation: true,
+          hasText: true,
+        }),
+      );
     });
 
     const stopBtn = container.querySelector('button[aria-label="Stop generation"]');
@@ -92,21 +97,23 @@ describe('F24: mid-invocation message injection', () => {
     const onSend = vi.fn();
 
     act(() => {
-      root.render(React.createElement(ChatInputActionButton, {
-        onTranscript: vi.fn(),
-        onSend,
-        onStop: vi.fn(),
-        disabled: false,
-        hasActiveInvocation: true,
-        hasText: true,
-      }));
+      root.render(
+        React.createElement(ChatInputActionButton, {
+          onTranscript: vi.fn(),
+          onSend,
+          onStop: vi.fn(),
+          disabled: false,
+          hasActiveInvocation: true,
+          hasText: true,
+        }),
+      );
     });
 
     const sendBtn = container.querySelector('button[aria-label="Send message"]');
     expect(sendBtn).not.toBeNull();
 
     act(() => {
-      sendBtn!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      sendBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
     expect(onSend).toHaveBeenCalledTimes(1);
@@ -114,14 +121,16 @@ describe('F24: mid-invocation message injection', () => {
 
   it('only shows full-size Stop when disabled=true (loading state)', () => {
     act(() => {
-      root.render(React.createElement(ChatInputActionButton, {
-        onTranscript: vi.fn(),
-        onSend: vi.fn(),
-        onStop: vi.fn(),
-        disabled: true,
-        hasActiveInvocation: true,
-        hasText: true,
-      }));
+      root.render(
+        React.createElement(ChatInputActionButton, {
+          onTranscript: vi.fn(),
+          onSend: vi.fn(),
+          onStop: vi.fn(),
+          disabled: true,
+          hasActiveInvocation: true,
+          hasText: true,
+        }),
+      );
     });
 
     const stopBtns = container.querySelectorAll('button[aria-label="Stop generation"]');

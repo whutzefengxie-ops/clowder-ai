@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { buildContinueMessage } from '@/utils/taskProgressContinue';
 
 describe('buildContinueMessage', () => {
@@ -21,4 +21,3 @@ describe('buildContinueMessage', () => {
     expect(msg).toContain('- [ ] Run tests');
   });
 });
-

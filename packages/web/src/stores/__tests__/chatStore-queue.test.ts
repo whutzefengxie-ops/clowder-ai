@@ -1,13 +1,20 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { useChatStore } from '../chatStore';
+import { beforeEach, describe, expect, it } from 'vitest';
 import type { QueueEntry } from '../chat-types';
+import { useChatStore } from '../chatStore';
 
 function makeEntry(id: string, status: 'queued' | 'processing' = 'queued'): QueueEntry {
   return {
-    id, threadId: 'thread-1', userId: 'user-1',
-    content: `msg-${id}`, messageId: null, mergedMessageIds: [],
-    source: 'user', targetCats: ['opus'], intent: 'execute',
-    status, createdAt: Date.now(),
+    id,
+    threadId: 'thread-1',
+    userId: 'user-1',
+    content: `msg-${id}`,
+    messageId: null,
+    mergedMessageIds: [],
+    source: 'user',
+    targetCats: ['opus'],
+    intent: 'execute',
+    status,
+    createdAt: Date.now(),
   };
 }
 

@@ -1,7 +1,7 @@
 import { access, readdir, readFile } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve } from 'node:path';
-import { HindsightError } from '../domains/cats/services/orchestration/HindsightClient.js';
 import type { HindsightMemory } from '../domains/cats/services/orchestration/HindsightClient.js';
+import { HindsightError } from '../domains/cats/services/orchestration/HindsightClient.js';
 
 export type EvidenceSourceType = 'decision' | 'phase' | 'discussion' | 'commit';
 export type EvidenceConfidence = 'high' | 'mid' | 'low';
@@ -67,7 +67,7 @@ export function classifySource(path: string): EvidenceSourceType {
 
 /** Convert Hindsight memory to EvidenceResult */
 export function memoryToResult(mem: HindsightMemory): EvidenceResult {
-  const anchor = mem.metadata?.['anchor'] ?? '';
+  const anchor = mem.metadata?.anchor ?? '';
 
   // Extract status from tags if present (e.g. status:draft)
   let status: EvidenceStatus | undefined;
@@ -125,7 +125,11 @@ export async function searchDocs(docsRoot: string, query: string, limit: number)
       if (!matched) continue;
 
       const relPath = `docs/${dir}/${file}`;
-      const firstLine = content.split('\n').find((line) => line.trim().startsWith('#'))?.replace(/^#+\s*/, '') ?? file;
+      const firstLine =
+        content
+          .split('\n')
+          .find((line) => line.trim().startsWith('#'))
+          ?.replace(/^#+\s*/, '') ?? file;
       const snippet = content.slice(0, 300);
 
       results.push({
@@ -168,6 +172,6 @@ export async function validateAnchors(results: EvidenceResult[], docsRoot: strin
       } catch {
         return { ...result, confidence: 'low' as EvidenceConfidence };
       }
-    })
+    }),
   );
 }

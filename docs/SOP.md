@@ -41,11 +41,11 @@ Phase N merge → 碰头（不是"要不要继续"，是"方向对不对"）→ 
 
 ## Runtime 单实例保护（P0）
 
-`../cat-cafe-runtime` 是咱们的运行态单实例（通常占用 `3002/3001`），默认视为**在线服务**，不是随手重启的实验环境。
+`../cat-cafe-runtime` 是咱们的运行态单实例（通常占用 `3004/3003`），默认视为**在线服务**，不是随手重启的实验环境。
 
 硬规则：
 1. 在 runtime 会话里，禁止执行会触发重启的命令：`pnpm start`、`pnpm runtime:start`、`./scripts/start-dev.sh`
-2. 做截图/验收/排查前，先复用现有服务（先查 `curl -sf http://localhost:3002/health`）
+2. 做截图/验收/排查前，先复用现有服务（先查 `curl -sf http://localhost:3003/health`）
 3. 确实要重启，必须先拿到team lead明确同意，再显式设置 `CAT_CAFE_RUNTIME_RESTART_OK=1` 执行启动命令
 
 说明：`--force` 不是重启授权，不能替代第 3 条。

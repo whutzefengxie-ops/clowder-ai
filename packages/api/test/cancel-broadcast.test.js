@@ -8,15 +8,11 @@
  */
 
 import './helpers/setup-cat-registry.js';
-import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
+import { describe, test } from 'node:test';
 
-const { InvocationTracker } = await import(
-  '../dist/domains/cats/services/agents/invocation/InvocationTracker.js'
-);
-const { buildCancelMessages } = await import(
-  '../dist/infrastructure/websocket/SocketManager.js'
-);
+const { InvocationTracker } = await import('../dist/domains/cats/services/agents/invocation/InvocationTracker.js');
+const { buildCancelMessages } = await import('../dist/infrastructure/websocket/SocketManager.js');
 
 describe('buildCancelMessages (production function)', () => {
   test('single cat cancel: 1 system_info + 1 done with correct catId', () => {
@@ -43,15 +39,18 @@ describe('buildCancelMessages (production function)', () => {
     assert.equal(messages.length, 4);
 
     // Only one system_info (not three!)
-    const systemInfos = messages.filter(m => m.type === 'system_info');
+    const systemInfos = messages.filter((m) => m.type === 'system_info');
     assert.equal(systemInfos.length, 1);
     assert.equal(systemInfos[0].catId, 'opus');
 
     // Three done messages, one per cat
-    const dones = messages.filter(m => m.type === 'done');
+    const dones = messages.filter((m) => m.type === 'done');
     assert.equal(dones.length, 3);
-    assert.deepEqual(dones.map(d => d.catId), ['opus', 'codex', 'gemini']);
-    assert.ok(dones.every(d => d.isFinal === true));
+    assert.deepEqual(
+      dones.map((d) => d.catId),
+      ['opus', 'codex', 'gemini'],
+    );
+    assert.ok(dones.every((d) => d.isFinal === true));
   });
 
   test('empty catIds fallback: defaults to opus', () => {

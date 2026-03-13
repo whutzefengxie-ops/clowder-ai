@@ -1,8 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { AiController } from '../ai-controller';
 import { GameState } from '../game-state';
 import { createRng } from '../rng';
-import { SKILLS, FIGHTER_STATS } from '../types';
+import { FIGHTER_STATS, SKILLS } from '../types';
 
 describe('AiController', () => {
   it('deterministic: same seed produces same action sequence', () => {

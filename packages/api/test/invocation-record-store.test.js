@@ -3,8 +3,8 @@
  * 测试内存 InvocationRecord 存储
  */
 
-import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
+import { describe, test } from 'node:test';
 
 describe('InvocationRecordStore', () => {
   test('create() returns created outcome with invocationId', async () => {

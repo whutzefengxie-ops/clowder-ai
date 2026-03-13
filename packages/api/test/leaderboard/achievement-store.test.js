@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { AchievementStore } from '../../dist/domains/leaderboard/achievement-store.js';
 import { computeCvoLevel } from '../../dist/domains/leaderboard/achievement-defs.js';
+import { AchievementStore } from '../../dist/domains/leaderboard/achievement-store.js';
 
 describe('AchievementStore', () => {
   it('unlocks an achievement and returns it', () => {

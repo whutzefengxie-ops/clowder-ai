@@ -3,18 +3,33 @@
  *
  * Verifies that SplitPaneView passes splitPaneTargetId to onSend as overrideThreadId.
  */
-import React from 'react';
+import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { act } from 'react';
-import { describe, it, expect, vi, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // ── Track what onSend receives ──
 const mockOnSend = vi.fn();
 
 const mockStoreState = () => ({
   threads: [
-    { id: 'thread-1', title: 'Thread 1', projectPath: 'p', createdBy: 'u', participants: [], lastActiveAt: 0, createdAt: 0 },
-    { id: 'thread-2', title: 'Thread 2', projectPath: 'p', createdBy: 'u', participants: [], lastActiveAt: 0, createdAt: 0 },
+    {
+      id: 'thread-1',
+      title: 'Thread 1',
+      projectPath: 'p',
+      createdBy: 'u',
+      participants: [],
+      lastActiveAt: 0,
+      createdAt: 0,
+    },
+    {
+      id: 'thread-2',
+      title: 'Thread 2',
+      projectPath: 'p',
+      createdBy: 'u',
+      participants: [],
+      lastActiveAt: 0,
+      createdAt: 0,
+    },
   ],
   splitPaneThreadIds: ['thread-1', 'thread-2'],
   splitPaneTargetId: 'thread-2',
@@ -31,7 +46,7 @@ const mockStoreState = () => ({
     catStatuses: {},
     catInvocations: {},
     currentGame: null,
-    
+
     unreadCount: 0,
     lastActivity: 0,
   }),
@@ -57,10 +72,14 @@ vi.mock('@/components/MiniThreadSidebar', () => ({
 // Mock ChatInput to render a button that triggers onSend when clicked
 vi.mock('@/components/ChatInput', () => ({
   ChatInput: (props: { onSend: (c: string) => void; disabled: boolean }) => {
-    return React.createElement('button', {
-      'data-testid': 'send-btn',
-      onClick: () => props.onSend('test message'),
-    }, 'Send');
+    return React.createElement(
+      'button',
+      {
+        'data-testid': 'send-btn',
+        onClick: () => props.onSend('test message'),
+      },
+      'Send',
+    );
   },
 }));
 
@@ -86,7 +105,9 @@ describe('SplitPaneView input routing (P1-1)', () => {
   });
 
   afterEach(() => {
-    act(() => { root.unmount(); });
+    act(() => {
+      root.unmount();
+    });
     container.remove();
   });
 
@@ -97,7 +118,7 @@ describe('SplitPaneView input routing (P1-1)', () => {
           onSend: mockOnSend,
           onStop: vi.fn(),
           onZoomToThread: vi.fn(),
-        })
+        }),
       );
     });
 
@@ -105,7 +126,9 @@ describe('SplitPaneView input routing (P1-1)', () => {
     const btn = container.querySelector('[data-testid="send-btn"]');
     expect(btn).toBeTruthy();
 
-    act(() => { (btn as HTMLElement).click(); });
+    act(() => {
+      (btn as HTMLElement).click();
+    });
 
     // SplitPaneView wraps onSend: (content, images, whisper, deliveryMode) => onSend(content, images, splitPaneTargetId, whisper, deliveryMode)
     expect(mockOnSend).toHaveBeenCalledWith('test message', undefined, 'thread-2', undefined, undefined);

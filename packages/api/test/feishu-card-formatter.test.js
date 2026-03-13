@@ -1,5 +1,5 @@
-import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
 import { formatFeishuCard } from '../dist/infrastructure/connectors/adapters/feishu-card-formatter.js';
 
 describe('formatFeishuCard', () => {
@@ -11,10 +11,18 @@ describe('formatFeishuCard', () => {
   });
 
   it('formats checklist as card elements', () => {
-    const blocks = [{
-      id: 'b2', kind: 'checklist', v: 1, title: 'TODO',
-      items: [{ id: 'i1', text: 'Tests', checked: true }, { id: 'i2', text: 'Deploy' }],
-    }];
+    const blocks = [
+      {
+        id: 'b2',
+        kind: 'checklist',
+        v: 1,
+        title: 'TODO',
+        items: [
+          { id: 'i1', text: 'Tests', checked: true },
+          { id: 'i2', text: 'Deploy' },
+        ],
+      },
+    ];
     const card = formatFeishuCard(blocks, '布偶猫');
     const content = JSON.stringify(card);
     assert.ok(content.includes('Tests'));

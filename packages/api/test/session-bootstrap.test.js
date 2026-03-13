@@ -6,8 +6,8 @@
  * Bootstrap displays 1-based for humans (seq 0 → "Session #1", seq 1 → "Session #2").
  */
 
-import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
 import { buildSessionBootstrap } from '../dist/domains/cats/services/session/SessionBootstrap.js';
 
 // --- Mock SessionChainStore ---
@@ -15,14 +15,10 @@ import { buildSessionBootstrap } from '../dist/domains/cats/services/session/Ses
 function createMockSessionChainStore(sessions = []) {
   return {
     getActive(catId, threadId) {
-      return sessions.find(
-        (s) => s.catId === catId && s.threadId === threadId && s.status === 'active',
-      ) ?? null;
+      return sessions.find((s) => s.catId === catId && s.threadId === threadId && s.status === 'active') ?? null;
     },
     getChain(catId, threadId) {
-      return sessions
-        .filter((s) => s.catId === catId && s.threadId === threadId)
-        .sort((a, b) => a.seq - b.seq);
+      return sessions.filter((s) => s.catId === catId && s.threadId === threadId).sort((a, b) => a.seq - b.seq);
     },
   };
 }
@@ -42,13 +38,12 @@ function createMockTranscriptReader(digests = {}) {
 function createMockTaskStore(tasks = []) {
   return {
     async listByThread(threadId) {
-      return tasks.filter(t => t.threadId === threadId);
+      return tasks.filter((t) => t.threadId === threadId);
     },
   };
 }
 
 describe('SessionBootstrap', () => {
-
   describe('buildSessionBootstrap', () => {
     it('returns null for first session (seq=0, no prior context)', async () => {
       const store = createMockSessionChainStore([
@@ -162,7 +157,9 @@ describe('SessionBootstrap', () => {
         { id: 'sess-1', catId: 'opus', threadId: 'thread-1', status: 'active', seq: 1 },
       ]);
       const reader = {
-        async readDigest() { throw new Error('disk error'); },
+        async readDigest() {
+          throw new Error('disk error');
+        },
       };
 
       const result = await buildSessionBootstrap(
@@ -238,7 +235,7 @@ describe('SessionBootstrap', () => {
         { id: 'sess-0', catId: 'opus', threadId: 'thread-1', status: 'sealed', seq: 0 },
         { id: 'sess-1', catId: 'opus', threadId: 'thread-1', status: 'sealing', seq: 1 },
       ]);
-      let readDigestCalls = [];
+      const readDigestCalls = [];
       const reader = {
         async readDigest(sessionId) {
           readDigestCalls.push(sessionId);
@@ -260,7 +257,7 @@ describe('SessionBootstrap', () => {
     });
 
     it('only reads digest from previous seq (seq-1), not older sessions', async () => {
-      let readDigestCalls = [];
+      const readDigestCalls = [];
       const store = createMockSessionChainStore([
         { id: 'sess-0', catId: 'opus', threadId: 'thread-1', status: 'sealed', seq: 0 },
         { id: 'sess-1', catId: 'opus', threadId: 'thread-1', status: 'sealed', seq: 1 },
@@ -273,11 +270,7 @@ describe('SessionBootstrap', () => {
         },
       };
 
-      await buildSessionBootstrap(
-        { sessionChainStore: store, transcriptReader: reader },
-        'opus',
-        'thread-1',
-      );
+      await buildSessionBootstrap({ sessionChainStore: store, transcriptReader: reader }, 'opus', 'thread-1');
 
       // Should only read sess-1 digest (the most recent sealed session)
       assert.deepEqual(readDigestCalls, ['sess-1']);
@@ -292,8 +285,28 @@ describe('SessionBootstrap', () => {
       ]);
       const reader = createMockTranscriptReader();
       const taskStore = createMockTaskStore([
-        { id: 't1', threadId: 'thread-1', title: 'Build feature', ownerCatId: 'opus', status: 'doing', why: '', createdBy: 'user', createdAt: 1000, updatedAt: 2000 },
-        { id: 't2', threadId: 'thread-1', title: 'Write tests', ownerCatId: 'opus', status: 'todo', why: '', createdBy: 'user', createdAt: 1000, updatedAt: 2000 },
+        {
+          id: 't1',
+          threadId: 'thread-1',
+          title: 'Build feature',
+          ownerCatId: 'opus',
+          status: 'doing',
+          why: '',
+          createdBy: 'user',
+          createdAt: 1000,
+          updatedAt: 2000,
+        },
+        {
+          id: 't2',
+          threadId: 'thread-1',
+          title: 'Write tests',
+          ownerCatId: 'opus',
+          status: 'todo',
+          why: '',
+          createdBy: 'user',
+          createdAt: 1000,
+          updatedAt: 2000,
+        },
       ]);
 
       const result = await buildSessionBootstrap(
@@ -352,7 +365,9 @@ describe('SessionBootstrap', () => {
       ]);
       const reader = createMockTranscriptReader();
       const taskStore = {
-        async listByThread() { throw new Error('redis down'); },
+        async listByThread() {
+          throw new Error('redis down');
+        },
       };
 
       const result = await buildSessionBootstrap(
@@ -402,9 +417,11 @@ describe('SessionBootstrap', () => {
         catId: 'opus',
         seq: 0,
         time: { createdAt: 1000000, sealedAt: 1060000 },
-        invocations: [{
-          toolNames: Array.from({ length: 50 }, (_, i) => `tool_cap_${'w'.repeat(40)}_${i}`),
-        }],
+        invocations: [
+          {
+            toolNames: Array.from({ length: 50 }, (_, i) => `tool_cap_${'w'.repeat(40)}_${i}`),
+          },
+        ],
         filesTouched: Array.from({ length: 15 }, (_, i) => ({
           path: `src/${'nested/'.repeat(6)}file-${i}.ts`,
           ops: ['edit'],
@@ -413,8 +430,15 @@ describe('SessionBootstrap', () => {
       };
       const reader = createMockTranscriptReader({ 'sess-0': longToolDigest });
       const tasks = Array.from({ length: 8 }, (_, i) => ({
-        id: `t${i}`, threadId: 'thread-1', title: `Task ${i}: ${'DescriptionWord '.repeat(20)}`,
-        ownerCatId: 'opus', status: 'doing', why: '', createdBy: 'user', createdAt: 1000, updatedAt: 2000,
+        id: `t${i}`,
+        threadId: 'thread-1',
+        title: `Task ${i}: ${'DescriptionWord '.repeat(20)}`,
+        ownerCatId: 'opus',
+        status: 'doing',
+        why: '',
+        createdBy: 'user',
+        createdAt: 1000,
+        updatedAt: 2000,
       }));
       const taskStore = createMockTaskStore(tasks);
 
@@ -450,9 +474,11 @@ describe('SessionBootstrap', () => {
         catId: 'opus',
         seq: 0,
         time: { createdAt: 1000000, sealedAt: 1060000 },
-        invocations: [{
-          toolNames: Array.from({ length: 100 }, (_, i) => `MassiveTool_${'z'.repeat(60)}_${i}`),
-        }],
+        invocations: [
+          {
+            toolNames: Array.from({ length: 100 }, (_, i) => `MassiveTool_${'z'.repeat(60)}_${i}`),
+          },
+        ],
         filesTouched: Array.from({ length: 15 }, (_, i) => ({
           path: `src/${'deep/'.repeat(10)}module-${i}.ts`,
           ops: ['edit'],
@@ -464,8 +490,15 @@ describe('SessionBootstrap', () => {
       };
       const reader = createMockTranscriptReader({ 'sess-0': hugeDigest });
       const tasks = Array.from({ length: 8 }, (_, i) => ({
-        id: `t${i}`, threadId: 'thread-1', title: `Big task ${i} ${'Q'.repeat(60)}`,
-        ownerCatId: 'opus', status: 'doing', why: '', createdBy: 'user', createdAt: 1000, updatedAt: 2000,
+        id: `t${i}`,
+        threadId: 'thread-1',
+        title: `Big task ${i} ${'Q'.repeat(60)}`,
+        ownerCatId: 'opus',
+        status: 'doing',
+        why: '',
+        createdBy: 'user',
+        createdAt: 1000,
+        updatedAt: 2000,
       }));
       const taskStore = createMockTaskStore(tasks);
 

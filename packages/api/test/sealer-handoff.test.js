@@ -5,11 +5,11 @@
  * when bootstrapDepth is 'generative' and API key is available.
  */
 
-import { describe, test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, mkdir, readFile, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, beforeEach, describe, test } from 'node:test';
 
 describe('SessionSealer handoff digest integration', () => {
   let tempDir;
@@ -17,21 +17,15 @@ describe('SessionSealer handoff digest integration', () => {
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), 'sealer-handoff-'));
   });
-  afterEach(async () => { await rm(tempDir, { recursive: true }); });
+  afterEach(async () => {
+    await rm(tempDir, { recursive: true });
+  });
 
   async function createFixtures(handoffConfig) {
-    const { SessionChainStore } = await import(
-      '../dist/domains/cats/services/stores/ports/SessionChainStore.js'
-    );
-    const { SessionSealer } = await import(
-      '../dist/domains/cats/services/session/SessionSealer.js'
-    );
-    const { TranscriptWriter } = await import(
-      '../dist/domains/cats/services/session/TranscriptWriter.js'
-    );
-    const { TranscriptReader } = await import(
-      '../dist/domains/cats/services/session/TranscriptReader.js'
-    );
+    const { SessionChainStore } = await import('../dist/domains/cats/services/stores/ports/SessionChainStore.js');
+    const { SessionSealer } = await import('../dist/domains/cats/services/session/SessionSealer.js');
+    const { TranscriptWriter } = await import('../dist/domains/cats/services/session/TranscriptWriter.js');
+    const { TranscriptReader } = await import('../dist/domains/cats/services/session/TranscriptReader.js');
 
     const store = new SessionChainStore();
     const writer = new TranscriptWriter({ dataDir: tempDir });
@@ -42,17 +36,12 @@ describe('SessionSealer handoff digest integration', () => {
     const threadStore = {
       get: async (threadId) => ({ threadId, projectPath: '/test/project' }),
       getThreadMemory: async (threadId) => threadMemories.get(threadId) ?? null,
-      updateThreadMemory: async (threadId, memory) => { threadMemories.set(threadId, memory); },
+      updateThreadMemory: async (threadId, memory) => {
+        threadMemories.set(threadId, memory);
+      },
     };
 
-    const sealer = new SessionSealer(
-      store,
-      writer,
-      threadStore,
-      reader,
-      (_catId) => 180000,
-      handoffConfig,
-    );
+    const sealer = new SessionSealer(store, writer, threadStore, reader, (_catId) => 180000, handoffConfig);
 
     return { store, writer, reader, sealer };
   }
@@ -78,7 +67,10 @@ describe('SessionSealer handoff digest integration', () => {
 
     const { store, writer, sealer } = await createFixtures(handoffConfig);
     const record = store.create({
-      cliSessionId: 'cli-1', threadId: 'thread-1', catId: 'opus', userId: 'user-1',
+      cliSessionId: 'cli-1',
+      threadId: 'thread-1',
+      catId: 'opus',
+      userId: 'user-1',
     });
 
     // Append some events so transcript flush writes files
@@ -105,12 +97,18 @@ describe('SessionSealer handoff digest integration', () => {
     const handoffConfig = {
       getBootstrapDepth: (_catId) => 'extractive',
       resolveProfile: async () => ({ apiKey: 'sk-test', baseUrl: 'https://api.anthropic.com' }),
-      fetchFn: async () => { fetchCalled = true; return { ok: true, json: async () => ({ content: [] }) }; },
+      fetchFn: async () => {
+        fetchCalled = true;
+        return { ok: true, json: async () => ({ content: [] }) };
+      },
     };
 
     const { store, writer, sealer } = await createFixtures(handoffConfig);
     const record = store.create({
-      cliSessionId: 'cli-1', threadId: 'thread-1', catId: 'opus', userId: 'user-1',
+      cliSessionId: 'cli-1',
+      threadId: 'thread-1',
+      catId: 'opus',
+      userId: 'user-1',
     });
 
     writer.appendEvent(
@@ -129,12 +127,18 @@ describe('SessionSealer handoff digest integration', () => {
     const handoffConfig = {
       getBootstrapDepth: (_catId) => 'generative',
       resolveProfile: async () => null,
-      fetchFn: async () => { fetchCalled = true; return { ok: true, json: async () => ({ content: [] }) }; },
+      fetchFn: async () => {
+        fetchCalled = true;
+        return { ok: true, json: async () => ({ content: [] }) };
+      },
     };
 
     const { store, writer, sealer } = await createFixtures(handoffConfig);
     const record = store.create({
-      cliSessionId: 'cli-1', threadId: 'thread-1', catId: 'opus', userId: 'user-1',
+      cliSessionId: 'cli-1',
+      threadId: 'thread-1',
+      catId: 'opus',
+      userId: 'user-1',
     });
 
     writer.appendEvent(
@@ -152,12 +156,17 @@ describe('SessionSealer handoff digest integration', () => {
     const handoffConfig = {
       getBootstrapDepth: (_catId) => 'generative',
       resolveProfile: async () => ({ apiKey: 'sk-test', baseUrl: 'https://api.anthropic.com' }),
-      fetchFn: async () => { throw new Error('Network failure'); },
+      fetchFn: async () => {
+        throw new Error('Network failure');
+      },
     };
 
     const { store, writer, sealer } = await createFixtures(handoffConfig);
     const record = store.create({
-      cliSessionId: 'cli-1', threadId: 'thread-1', catId: 'opus', userId: 'user-1',
+      cliSessionId: 'cli-1',
+      threadId: 'thread-1',
+      catId: 'opus',
+      userId: 'user-1',
     });
 
     writer.appendEvent(

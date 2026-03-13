@@ -6,14 +6,15 @@ export interface WarnLoggerLike {
   warn: (...args: unknown[]) => void;
 }
 
-const DEFAULT_FRONTEND_BASE_URL = 'http://localhost:3001';
-const DEFAULT_CORS_ORIGINS = ['http://localhost:3000', 'http://localhost:3001', 'https://cafe.clowder-ai.com'];
+const DEFAULT_FRONTEND_BASE_URL = 'http://localhost:3004';
+const DEFAULT_CORS_ORIGINS = ['http://localhost:3000', 'http://localhost:3004', 'https://cafe.clowder-ai.com'];
 
 /**
  * Match origins from private networks (RFC 1918 + Tailscale CGNAT 100.64/10 + loopback).
  * Safe to auto-accept: these IPs never appear on the public internet.
  */
-const PRIVATE_NETWORK_ORIGIN = /^https?:\/\/(10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|192\.168\.\d+\.\d+|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d+\.\d+|127\.\d+\.\d+\.\d+)(:\d+)?$/;
+const PRIVATE_NETWORK_ORIGIN =
+  /^https?:\/\/(10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|192\.168\.\d+\.\d+|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d+\.\d+|127\.\d+\.\d+\.\d+)(:\d+)?$/;
 
 function normalizeConfiguredUrl(rawUrl: string): string | null {
   try {
@@ -52,11 +53,8 @@ function parseFrontendPort(rawPort: string | undefined): number | null {
   return port;
 }
 
-export function resolveFrontendBaseUrl(
-  env: NodeJS.ProcessEnv,
-  logger?: WarnLoggerLike,
-): string {
-  const rawFrontendUrl = env['FRONTEND_URL']?.trim();
+export function resolveFrontendBaseUrl(env: NodeJS.ProcessEnv, logger?: WarnLoggerLike): string {
+  const rawFrontendUrl = env.FRONTEND_URL?.trim();
   if (rawFrontendUrl) {
     const normalizedUrl = normalizeConfiguredUrl(rawFrontendUrl);
     if (normalizedUrl) {
@@ -68,7 +66,7 @@ export function resolveFrontendBaseUrl(
     );
   }
 
-  const rawFrontendPort = env['FRONTEND_PORT'];
+  const rawFrontendPort = env.FRONTEND_PORT;
   const frontendPort = parseFrontendPort(rawFrontendPort);
   if (frontendPort !== null) {
     return `http://localhost:${frontendPort}`;
@@ -77,41 +75,32 @@ export function resolveFrontendBaseUrl(
   if (rawFrontendPort?.trim()) {
     logger?.warn(
       { frontendPort: rawFrontendPort },
-      '[thread-export] Invalid FRONTEND_PORT, fallback to localhost:3001',
+      '[thread-export] Invalid FRONTEND_PORT, fallback to localhost:3004',
     );
   }
 
   return DEFAULT_FRONTEND_BASE_URL;
 }
 
-export function resolveFrontendCorsOrigins(
-  env: NodeJS.ProcessEnv,
-  logger?: WarnLoggerLike,
-): (string | RegExp)[] {
+export function resolveFrontendCorsOrigins(env: NodeJS.ProcessEnv, logger?: WarnLoggerLike): (string | RegExp)[] {
   const origins = new Set<string>(DEFAULT_CORS_ORIGINS);
 
-  const rawFrontendUrl = env['FRONTEND_URL']?.trim();
+  const rawFrontendUrl = env.FRONTEND_URL?.trim();
   if (rawFrontendUrl) {
     const normalizedOrigin = normalizeConfiguredOrigin(rawFrontendUrl);
     if (normalizedOrigin) {
       origins.add(normalizedOrigin);
     } else {
-      logger?.warn(
-        { frontendUrl: rawFrontendUrl },
-        '[cors] Invalid FRONTEND_URL, ignored custom origin',
-      );
+      logger?.warn({ frontendUrl: rawFrontendUrl }, '[cors] Invalid FRONTEND_URL, ignored custom origin');
     }
   }
 
-  const rawFrontendPort = env['FRONTEND_PORT'];
+  const rawFrontendPort = env.FRONTEND_PORT;
   const frontendPort = parseFrontendPort(rawFrontendPort);
   if (frontendPort !== null) {
     origins.add(`http://localhost:${frontendPort}`);
   } else if (rawFrontendPort?.trim()) {
-    logger?.warn(
-      { frontendPort: rawFrontendPort },
-      '[cors] Invalid FRONTEND_PORT, fallback to default origins',
-    );
+    logger?.warn({ frontendPort: rawFrontendPort }, '[cors] Invalid FRONTEND_PORT, fallback to default origins');
   }
 
   const result: (string | RegExp)[] = [...origins];

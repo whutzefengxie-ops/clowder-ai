@@ -5,10 +5,10 @@
  * connection + tool metadata for the Capability Center UI.
  */
 
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { StdioClientTransport, getDefaultEnvironment } from '@modelcontextprotocol/sdk/client/stdio.js';
-import type { StdioServerParameters } from '@modelcontextprotocol/sdk/client/stdio.js';
 import type { CapabilityEntry, McpToolInfo } from '@cat-cafe/shared';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import type { StdioServerParameters } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { getDefaultEnvironment, StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 
 export interface McpProbeResult {
   connectionStatus: 'connected' | 'disconnected' | 'unknown';
@@ -50,15 +50,10 @@ function remainingTimeout(deadlineMs: number): number {
 }
 
 async function closeTransportBounded(transport: StdioClientTransport): Promise<void> {
-  await Promise.race([
-    transport.close(),
-    new Promise<void>((resolve) => setTimeout(resolve, CLOSE_TIMEOUT_MS)),
-  ]);
+  await Promise.race([transport.close(), new Promise<void>((resolve) => setTimeout(resolve, CLOSE_TIMEOUT_MS))]);
 }
 
-function normalizeTools(
-  tools: Array<{ name?: string | undefined; description?: string | undefined }>,
-): McpToolInfo[] {
+function normalizeTools(tools: Array<{ name?: string | undefined; description?: string | undefined }>): McpToolInfo[] {
   const byName = new Map<string, McpToolInfo>();
   for (const tool of tools) {
     const name = typeof tool.name === 'string' ? tool.name.trim() : '';
@@ -71,10 +66,7 @@ function normalizeTools(
   return [...byName.values()];
 }
 
-export function resolveProbeTimeoutMs(
-  capability: CapabilityEntry,
-  overrideTimeoutMs?: number,
-): number {
+export function resolveProbeTimeoutMs(capability: CapabilityEntry, overrideTimeoutMs?: number): number {
   if (typeof overrideTimeoutMs === 'number' && Number.isFinite(overrideTimeoutMs) && overrideTimeoutMs > 0) {
     return overrideTimeoutMs;
   }
@@ -93,10 +85,8 @@ export function resolveProbeTimeoutMs(
   }
 
   // Docker MCP gateway can be briefly unavailable while it reloads enabled servers.
-  const isDockerGatewayRun = command === 'docker'
-    && argsLower[0] === 'mcp'
-    && argsLower[1] === 'gateway'
-    && argsLower[2] === 'run';
+  const isDockerGatewayRun =
+    command === 'docker' && argsLower[0] === 'mcp' && argsLower[1] === 'gateway' && argsLower[2] === 'run';
   if (isDockerGatewayRun) {
     return SLOW_START_PROBE_TIMEOUT_MS;
   }
@@ -127,10 +117,7 @@ export async function probeMcpCapability(
   if (env && Object.keys(env).length > 0) serverParams.env = env;
 
   const transport = new StdioClientTransport(serverParams);
-  const client = new Client(
-    { name: 'cat-cafe-capability-probe', version: '0.1.0' },
-    { capabilities: {} },
-  );
+  const client = new Client({ name: 'cat-cafe-capability-probe', version: '0.1.0' }, { capabilities: {} });
 
   try {
     await withTimeout(client.connect(transport), remainingTimeout(deadlineMs));

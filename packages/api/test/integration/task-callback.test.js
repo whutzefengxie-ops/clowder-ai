@@ -5,27 +5,27 @@
  * 使用 Fastify injection + 真实 InvocationRegistry + TaskStore
  */
 
-import { test, describe, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { beforeEach, describe, test } from 'node:test';
 import Fastify from 'fastify';
 
-const { InvocationRegistry } = await import(
-  '../../dist/domains/cats/services/InvocationRegistry.js'
-);
-const { TaskStore } = await import(
-  '../../dist/domains/cats/services/TaskStore.js'
-);
-const { MessageStore } = await import(
-  '../../dist/domains/cats/services/MessageStore.js'
-);
+const { InvocationRegistry } = await import('../../dist/domains/cats/services/InvocationRegistry.js');
+const { TaskStore } = await import('../../dist/domains/cats/services/TaskStore.js');
+const { MessageStore } = await import('../../dist/domains/cats/services/MessageStore.js');
 const { callbacksRoutes } = await import('../../dist/routes/callbacks.js');
 
 function createMockSocketManager() {
   const events = [];
   return {
-    broadcastAgentMessage(msg) { events.push({ type: 'agent', msg }); },
-    broadcastToRoom(room, event, data) { events.push({ room, event, data }); },
-    getEvents() { return events; },
+    broadcastAgentMessage(msg) {
+      events.push({ type: 'agent', msg });
+    },
+    broadcastToRoom(room, event, data) {
+      events.push({ room, event, data });
+    },
+    getEvents() {
+      return events;
+    },
   };
 }
 

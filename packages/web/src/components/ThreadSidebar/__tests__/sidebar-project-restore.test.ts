@@ -21,10 +21,7 @@ const threads = [
  * Mirrors the logic in ThreadSidebar.handleSelect and ChatContainer mount:
  * resolve projectPath from threads array for a given threadId.
  */
-function resolveProjectPath(
-  storeThreads: Array<{ id: string; projectPath: string }>,
-  threadId: string,
-): string {
+function resolveProjectPath(storeThreads: Array<{ id: string; projectPath: string }>, threadId: string): string {
   const cached = storeThreads.find((t) => t.id === threadId);
   if (cached) return cached.projectPath || 'default';
   return 'default';
@@ -51,8 +48,12 @@ describe('B1.1 project path restoration logic', () => {
     // Verify the ordering contract: projectPath must be set before navigation
     // so that useWorkspace re-fetches with the correct repoRoot
     const calls: string[] = [];
-    const setCurrentProject = (path: string) => { calls.push(`setProject:${path}`); };
-    const navigateToThread = (id: string) => { calls.push(`navigate:${id}`); };
+    const setCurrentProject = (path: string) => {
+      calls.push(`setProject:${path}`);
+    };
+    const navigateToThread = (id: string) => {
+      calls.push(`navigate:${id}`);
+    };
 
     // Simulate handleSelect logic
     const threadId = 'thread-foreign';
@@ -60,9 +61,6 @@ describe('B1.1 project path restoration logic', () => {
     setCurrentProject(target?.projectPath ?? 'default');
     navigateToThread(threadId);
 
-    expect(calls).toEqual([
-      `setProject:${FOREIGN_PROJECT}`,
-      'navigate:thread-foreign',
-    ]);
+    expect(calls).toEqual([`setProject:${FOREIGN_PROJECT}`, 'navigate:thread-foreign']);
   });
 });

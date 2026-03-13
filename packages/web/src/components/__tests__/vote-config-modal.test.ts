@@ -1,6 +1,6 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { VoteConfigModal } from '@/components/VoteConfigModal';
 
 Object.assign(globalThis as Record<string, unknown>, { React });

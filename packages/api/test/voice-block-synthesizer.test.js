@@ -5,26 +5,30 @@
  * graceful degradation, and cache hit logic.
  */
 
-import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import os from 'node:os';
-import path from 'node:path';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { createHash } from 'node:crypto';
+import os from 'node:os';
+import path from 'node:path';
+import { beforeEach, describe, it } from 'node:test';
 
 /** Clean up test temp directory to avoid stale cache hits between runs. */
 function cleanTmpDir(dirName) {
   const p = path.join(os.tmpdir(), dirName);
-  try { fs.rmSync(p, { recursive: true, force: true }); } catch { /* ok */ }
+  try {
+    fs.rmSync(p, { recursive: true, force: true });
+  } catch {
+    /* ok */
+  }
 }
 
+import { getCatVoice } from '../dist/config/cat-voices.js';
 import {
-  initVoiceBlockSynthesizer,
   getVoiceBlockSynthesizer,
+  initVoiceBlockSynthesizer,
   VoiceBlockSynthesizer,
 } from '../dist/domains/cats/services/tts/VoiceBlockSynthesizer.js';
-import { getCatVoice } from '../dist/config/cat-voices.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -35,11 +39,13 @@ function makeMockRegistry({ synthesize } = {}) {
   const provider = {
     id: 'mock',
     model: 'test',
-    synthesize: synthesize ?? (async () => ({
-      audio: Buffer.from('fake-audio'),
-      format: 'wav',
-      metadata: { provider: 'mock', model: 'test', voice: 'test' },
-    })),
+    synthesize:
+      synthesize ??
+      (async () => ({
+        audio: Buffer.from('fake-audio'),
+        format: 'wav',
+        metadata: { provider: 'mock', model: 'test', voice: 'test' },
+      })),
   };
   return {
     getDefault: () => provider,
@@ -255,7 +261,7 @@ describe('VoiceBlockSynthesizer.resolveVoiceBlocks — synthesis', () => {
   });
 
   it('uses block.speaker override instead of catId for voice lookup (F085-P3)', async () => {
-    let receivedVoiceArgs = [];
+    const receivedVoiceArgs = [];
     const registry = makeMockRegistry({
       synthesize: async (args) => {
         receivedVoiceArgs.push(args);
@@ -375,7 +381,9 @@ describe('VoiceBlockSynthesizer.resolveVoiceBlocks — degradation', () => {
   it('degrades to card when registry has no providers', async () => {
     // Registry with no providers throws from getDefault()
     const emptyRegistry = {
-      getDefault: () => { throw new Error('No TTS providers registered'); },
+      getDefault: () => {
+        throw new Error('No TTS providers registered');
+      },
     };
     const cacheDir = path.join(os.tmpdir(), 'vbs-test-no-provider');
     const synthesizer = new VoiceBlockSynthesizer(emptyRegistry, cacheDir);

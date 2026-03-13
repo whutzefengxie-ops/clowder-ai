@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useVoiceSessionStore } from '@/stores/voiceSessionStore';
 
 /**
@@ -35,25 +35,25 @@ beforeEach(() => {
 describe('voiceSessionStore session-binding contracts', () => {
   it('stop-start cycle creates a new sessionId (stale check basis)', () => {
     useVoiceSessionStore.getState().start('t1', 'opus', true);
-    const id1 = useVoiceSessionStore.getState().session!.sessionId;
+    const id1 = useVoiceSessionStore.getState().session?.sessionId;
 
     useVoiceSessionStore.getState().stop();
     useVoiceSessionStore.getState().start('t2', 'opus', true);
-    const id2 = useVoiceSessionStore.getState().session!.sessionId;
+    const id2 = useVoiceSessionStore.getState().session?.sessionId;
 
     expect(id1).not.toBe(id2);
   });
 
   it('re-start without stop also creates new sessionId (thread switch)', () => {
     useVoiceSessionStore.getState().start('t1', 'opus', true);
-    const id1 = useVoiceSessionStore.getState().session!.sessionId;
+    const id1 = useVoiceSessionStore.getState().session?.sessionId;
 
     // Simulate thread switch: start new session without explicit stop
     useVoiceSessionStore.getState().start('t2', 'codex', true);
-    const id2 = useVoiceSessionStore.getState().session!.sessionId;
+    const id2 = useVoiceSessionStore.getState().session?.sessionId;
 
     expect(id1).not.toBe(id2);
-    expect(useVoiceSessionStore.getState().session!.boundThreadId).toBe('t2');
+    expect(useVoiceSessionStore.getState().session?.boundThreadId).toBe('t2');
   });
 
   it('markPlayed is scoped to session — new session has clean slate', () => {
@@ -80,10 +80,10 @@ describe('voiceSessionStore session-binding contracts', () => {
 
   it('confirmAutoplayUnlocked upgrades false → true after first successful play', () => {
     useVoiceSessionStore.getState().start('t1', 'opus', false);
-    expect(useVoiceSessionStore.getState().session!.autoplayUnlocked).toBe(false);
+    expect(useVoiceSessionStore.getState().session?.autoplayUnlocked).toBe(false);
 
     useVoiceSessionStore.getState().confirmAutoplayUnlocked();
-    expect(useVoiceSessionStore.getState().session!.autoplayUnlocked).toBe(true);
+    expect(useVoiceSessionStore.getState().session?.autoplayUnlocked).toBe(true);
   });
 });
 
@@ -113,7 +113,7 @@ describe('findUnplayedAudioBlock logic (via store contracts)', () => {
 describe('session staleness detection', () => {
   it('sessionId mismatch after stop means stale', () => {
     useVoiceSessionStore.getState().start('t1', 'opus', true);
-    const originalSessionId = useVoiceSessionStore.getState().session!.sessionId;
+    const originalSessionId = useVoiceSessionStore.getState().session?.sessionId;
 
     // Simulate: user stops voice companion while fetch is in-flight
     useVoiceSessionStore.getState().stop();
@@ -126,7 +126,7 @@ describe('session staleness detection', () => {
 
   it('sessionId mismatch after re-start means stale', () => {
     useVoiceSessionStore.getState().start('t1', 'opus', true);
-    const originalSessionId = useVoiceSessionStore.getState().session!.sessionId;
+    const originalSessionId = useVoiceSessionStore.getState().session?.sessionId;
 
     // Simulate: user switches thread (new session) while fetch is in-flight
     useVoiceSessionStore.getState().start('t2', 'codex', true);
@@ -138,7 +138,7 @@ describe('session staleness detection', () => {
 
   it('same session is not stale', () => {
     useVoiceSessionStore.getState().start('t1', 'opus', true);
-    const originalSessionId = useVoiceSessionStore.getState().session!.sessionId;
+    const originalSessionId = useVoiceSessionStore.getState().session?.sessionId;
 
     const session = useVoiceSessionStore.getState().session!;
     const isStale = !session.voiceMode || session.sessionId !== originalSessionId;

@@ -53,7 +53,7 @@ Step 0.5: DELIVERY COMPLETENESS CHECK
      → 重写：如果是已标注 Spike 且有结论，通过；否则不通过，回去重做
 
 Step 1: FIND — 找 spec/plan 文档
-  - docs/plans/{date}-{topic}.md 或 docs/phases/{name}.md
+  - the active feature spec or implementation plan
   - 同时找 Discussion/Interview（team experience所在）
 
 Step 2: CREATE — 建检查清单
@@ -68,9 +68,9 @@ Step 3: VERIFY — 逐项检查
   - 🔴 新增行为规则 → governance digest / shared-rules 注入更新了吗？
 
 Step 4: RUNTIME GUARD — 前端证据采集前先做运行态保护
-  - 若会话在 `cat-cafe-runtime`，先探活：`curl -sf http://localhost:3002/health`
+  - 若会话在 `cat-cafe-runtime`，先探活：`curl -sf http://localhost:3003/health`
   - 服务已在线时直接复用，禁止在该会话执行 `pnpm start` / `pnpm runtime:start` / `./scripts/start-dev.sh`
-  - `localhost:3001/3002` 默认按 runtime 处理；如果你要验证未合入改动，不能把这两个端口的页面/接口响应当成当前分支的证据
+  - `localhost:3004/3003` 默认按 runtime 处理；如果你要验证未合入改动，不能把这两个端口的页面/接口响应当成当前分支的证据
   - 证明“这是我当前 worktree 的验证证据”时，必须同时说清：`worktree/cwd` + 目标 URL。两者对不上 = 证据无效
   - 确需重启时，先获team lead明确授权，再用 `CAT_CAFE_RUNTIME_RESTART_OK=1` 执行
 
@@ -84,9 +84,13 @@ Step 5: PEN CHECK — 自动化设计稿对照（不可跳过！）
 Step 6: RUN — 运行验证命令（必须这次真实运行）
   pnpm test                              # 必须全部通过
   pnpm lint                              # 0 errors
+  pnpm check                             # 0 errors（biome 格式 + lint）
   pnpm -r --if-present run build         # exit 0
   # Redis 相关改动额外跑：
   pnpm --filter @cat-cafe/api test:redis
+  # ⚠️ pnpm check 包含 biome format + lint 规则。
+  # 如果有 format 问题，先跑 pnpm check:fix 自动修复。
+  # 不能带着 biome errors 提 review！（2026-03-12 team lead定调）
 
 Step 7: READ — 完整读输出，看 exit code，数失败数
 
@@ -113,6 +117,7 @@ Step 8: REPORT — 输出合规报告 + 证据
 |-------|------|--------|
 | 测试通过 | 这次运行输出：0 failures | "上次跑过"、"应该通过" |
 | lint 干净 | lint 输出：0 errors | 部分检查、推断 |
+| biome 干净 | pnpm check：0 errors | "先跑通再说"、"回头再改格式" |
 | 构建成功 | build 命令：exit 0 | lint 通过不代表编译通过 |
 | Bug 修了 | 原症状测试：通过 | 代码改了，以为修了 |
 | 需求满足 | spec + Discussion 逐项打勾 | 测试通过就完事 |
@@ -123,8 +128,8 @@ Step 8: REPORT — 输出合规报告 + 证据
 ```markdown
 ## Quality Gate Report
 
-Spec: docs/plans/YYYY-MM-DD-xxx.md
-原始需求: docs/discussions/YYYY-MM-DD-xxx/README.md
+Spec: feature spec or implementation note
+原始需求: feature-discussions/YYYY-MM-DD-xxx/README.md
 检查时间: YYYY-MM-DD HH:MM
 
 ### 愿景覆盖（Step 0）
@@ -144,6 +149,7 @@ glob designs/**/*.pen 匹配结果: [列出匹配文件或"无匹配"]
 ### 验证命令输出（必须是这次真实运行）
 pnpm test → 34/34 pass ✅
 pnpm lint → 0 errors ✅
+pnpm check → 0 errors ✅ (biome format + lint)
 pnpm -r --if-present run build → exit 0 ✅
 ```
 
@@ -161,7 +167,7 @@ pnpm -r --if-present run build → exit 0 ✅
 | 前端功能没有截图证据 | ≤3 张截图 + 15s 录屏 + 映射表 |
 | 有 .pen 设计稿但没对照实现 | Step 5 自动 glob 检测，匹配到就强制对照，不靠记忆 |
 | 为了截图在 runtime 会话里重跑 `pnpm start` | 先探活复用现有 runtime；确需重启必须显式授权 |
-| 拿 runtime 的 `3001/3002` 页面当成当前 worktree 的验证结果 | 报告里同时写明 `pwd/worktree` 和目标 URL；如果 URL 是 `3001/3002`，默认这是 runtime 证据，不是未合入改动证据 |
+| 拿 runtime 的 `3004/3003` 页面当成当前 worktree 的验证结果 | 报告里同时写明 `pwd/worktree` 和目标 URL；如果 URL 是 `3004/3003`，默认这是 runtime 证据，不是未合入改动证据 |
 | Redis 改动用默认测试命令 | 必须跑 `test:redis`，禁止直连 6399 |
 | 只看 spec checkbox 就声称完成/未完成 | 核实 `git log --grep` + `gh pr list` + 实际 commit（LL-029）|
 

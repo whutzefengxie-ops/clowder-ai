@@ -3,13 +3,11 @@
  * GET /api/export/thread/:threadId?format=md|txt - 导出对话记录
  */
 
+import { CAT_CONFIGS, catRegistry } from '@cat-cafe/shared';
 import type { FastifyPluginAsync } from 'fastify';
-import type { IMessageStore } from '../domains/cats/services/stores/ports/MessageStore.js';
-import type { IThreadStore } from '../domains/cats/services/stores/ports/ThreadStore.js';
-import type { Thread } from '../domains/cats/services/stores/ports/ThreadStore.js';
-import type { StoredMessage } from '../domains/cats/services/stores/ports/MessageStore.js';
 import { formatMessage } from '../domains/cats/services/context/ContextAssembler.js';
-import { catRegistry, CAT_CONFIGS } from '@cat-cafe/shared';
+import type { IMessageStore, StoredMessage } from '../domains/cats/services/stores/ports/MessageStore.js';
+import type { IThreadStore, Thread } from '../domains/cats/services/stores/ports/ThreadStore.js';
 
 /**
  * Format date consistently across environments (no locale dependency).
@@ -29,10 +27,7 @@ export interface ExportRoutesOptions {
  * Format a thread as Markdown document.
  * Reuses formatMessage() from ContextAssembler for consistent [HH:MM 角色名] format.
  */
-export function formatThreadAsMarkdown(
-  thread: Thread,
-  messages: StoredMessage[],
-): string {
+export function formatThreadAsMarkdown(thread: Thread, messages: StoredMessage[]): string {
   const lines: string[] = [];
 
   // Header
@@ -42,8 +37,8 @@ export function formatThreadAsMarkdown(
   // Meta
   lines.push(`- **ID**: ${thread.id}`);
   if (messages.length > 0) {
-    const first = formatDatetime(new Date(messages[0]!.timestamp));
-    const last = formatDatetime(new Date(messages[messages.length - 1]!.timestamp));
+    const first = formatDatetime(new Date(messages[0]?.timestamp));
+    const last = formatDatetime(new Date(messages[messages.length - 1]?.timestamp));
     lines.push(`- **时间**: ${first} ~ ${last}`);
   }
   if (thread.participants.length > 0) {
@@ -78,10 +73,7 @@ export function formatThreadAsMarkdown(
  * Format a thread as plain text (no Markdown syntax).
  * Same structure as Markdown but without formatting markers.
  */
-export function formatThreadAsText(
-  thread: Thread,
-  messages: StoredMessage[],
-): string {
+export function formatThreadAsText(thread: Thread, messages: StoredMessage[]): string {
   const lines: string[] = [];
 
   const title = thread.title ?? '未命名对话';
@@ -89,8 +81,8 @@ export function formatThreadAsText(
 
   lines.push(`ID: ${thread.id}`);
   if (messages.length > 0) {
-    const first = formatDatetime(new Date(messages[0]!.timestamp));
-    const last = formatDatetime(new Date(messages[messages.length - 1]!.timestamp));
+    const first = formatDatetime(new Date(messages[0]?.timestamp));
+    const last = formatDatetime(new Date(messages[messages.length - 1]?.timestamp));
     lines.push(`时间: ${first} ~ ${last}`);
   }
   if (thread.participants.length > 0) {
@@ -121,8 +113,7 @@ export function formatThreadAsText(
 
 const SUPPORTED_FORMATS = new Set(['md', 'txt']);
 
-export const exportRoutes: FastifyPluginAsync<ExportRoutesOptions> =
-  async (app, opts) => {
+export const exportRoutes: FastifyPluginAsync<ExportRoutesOptions> = async (app, opts) => {
   const { messageStore, threadStore } = opts;
 
   // GET /api/export/thread/:threadId?format=md|txt
@@ -146,19 +137,13 @@ export const exportRoutes: FastifyPluginAsync<ExportRoutesOptions> =
     if (format === 'txt') {
       const txt = formatThreadAsText(thread, messages);
       reply.header('Content-Type', 'text/plain; charset=utf-8');
-      reply.header(
-        'Content-Disposition',
-        `attachment; filename="thread-${threadId}.txt"`,
-      );
+      reply.header('Content-Disposition', `attachment; filename="thread-${threadId}.txt"`);
       return txt;
     }
 
     const md = formatThreadAsMarkdown(thread, messages);
     reply.header('Content-Type', 'text/markdown; charset=utf-8');
-    reply.header(
-      'Content-Disposition',
-      `attachment; filename="thread-${threadId}.md"`,
-    );
+    reply.header('Content-Disposition', `attachment; filename="thread-${threadId}.md"`);
     return md;
   });
 };

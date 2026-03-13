@@ -1,9 +1,9 @@
-import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { test } from 'node:test';
 
 function runSourceOnlySnippet(scriptPath, snippet) {
   const result = spawnSync(
@@ -12,11 +12,7 @@ function runSourceOnlySnippet(scriptPath, snippet) {
     { encoding: 'utf8' },
   );
 
-  assert.equal(
-    result.status,
-    0,
-    `snippet failed\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`,
-  );
+  assert.equal(result.status, 0, `snippet failed\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
 
   return result.stdout.trim();
 }
@@ -118,8 +114,5 @@ printf '%s|%s|%s|%s' "$DARE_API_KEY" "$DARE_ENDPOINT" "$ANTHROPIC_API_KEY" "$ANT
 `,
   );
 
-  assert.equal(
-    output,
-    'sk-dare-local|https://dare-proxy.example/v1|sk-ant-local|https://anthropic-proxy.example',
-  );
+  assert.equal(output, 'sk-dare-local|https://dare-proxy.example/v1|sk-ant-local|https://anthropic-proxy.example');
 });

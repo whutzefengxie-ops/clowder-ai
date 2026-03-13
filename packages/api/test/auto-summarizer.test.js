@@ -3,8 +3,9 @@
  * - P1-A: createdBy must NOT be 'opus'; should be 'system'
  * - P2-C: extraction window should use only recent (incremental) messages
  */
-import { describe, it, beforeEach } from 'node:test';
+
 import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
 
 const { AutoSummarizer } = await import('../dist/domains/cats/services/orchestration/AutoSummarizer.js');
 const { SummaryStore } = await import('../dist/domains/cats/services/stores/ports/SummaryStore.js');
@@ -29,11 +30,13 @@ describe('AutoSummarizer', () => {
       // Generate 25 messages with conclusion-like content
       const messages = [];
       for (let i = 0; i < 25; i++) {
-        messages.push(makeCatMessage(
-          i === 20 ? '我们决定采用 CLI 子进程模式来实现 agent 调用' : `这是第 ${i} 条测试消息，内容需要超过20个字符`,
-          'opus',
-          now + i * 1000,
-        ));
+        messages.push(
+          makeCatMessage(
+            i === 20 ? '我们决定采用 CLI 子进程模式来实现 agent 调用' : `这是第 ${i} 条测试消息，内容需要超过20个字符`,
+            'opus',
+            now + i * 1000,
+          ),
+        );
       }
 
       const messageStore = createMockMessageStore(messages);
@@ -56,11 +59,13 @@ describe('AutoSummarizer', () => {
       // Phase 1: old messages with an old topic
       const oldMessages = [];
       for (let i = 0; i < 25; i++) {
-        oldMessages.push(makeCatMessage(
-          i === 0 ? '讨论旧话题：我们确定要使用 Redis 作为持久化层' : `旧话题消息 ${i}，内容需要超过二十个字符`,
-          'codex',
-          oldTimestamp + i * 1000,
-        ));
+        oldMessages.push(
+          makeCatMessage(
+            i === 0 ? '讨论旧话题：我们确定要使用 Redis 作为持久化层' : `旧话题消息 ${i}，内容需要超过二十个字符`,
+            'codex',
+            oldTimestamp + i * 1000,
+          ),
+        );
       }
 
       // Pre-seed a summary from the old window (simulates first auto-summary)
@@ -78,11 +83,13 @@ describe('AutoSummarizer', () => {
       // All messages: old + new
       const allMessages = [...oldMessages];
       for (let i = 0; i < 25; i++) {
-        allMessages.push(makeCatMessage(
-          i === 0 ? '新话题：我们选择 Fastify 作为 HTTP 框架' : `新话题消息 ${i}，内容也需要超过二十个字符`,
-          'opus',
-          now + i * 1000,
-        ));
+        allMessages.push(
+          makeCatMessage(
+            i === 0 ? '新话题：我们选择 Fastify 作为 HTTP 框架' : `新话题消息 ${i}，内容也需要超过二十个字符`,
+            'opus',
+            now + i * 1000,
+          ),
+        );
       }
 
       const messageStore = createMockMessageStore(allMessages);
@@ -95,10 +102,7 @@ describe('AutoSummarizer', () => {
         secondSummary.topic.includes('新话题'),
         `topic should come from new messages window, got: "${secondSummary.topic}"`,
       );
-      assert.ok(
-        !secondSummary.topic.includes('旧话题'),
-        'topic should NOT come from old messages',
-      );
+      assert.ok(!secondSummary.topic.includes('旧话题'), 'topic should NOT come from old messages');
     });
   });
 

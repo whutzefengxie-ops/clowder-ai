@@ -17,6 +17,8 @@ Be respectful, constructive, and collaborative. We welcome contributors of all e
 
 ### Development Setup
 
+See [SETUP.md](SETUP.md) for the full runtime configuration matrix, optional integrations, and design tooling requirements.
+
 ```bash
 # Clone the repository
 git clone https://github.com/zts212653/clowder-ai.git

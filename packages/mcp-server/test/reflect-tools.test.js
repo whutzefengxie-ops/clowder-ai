@@ -3,8 +3,8 @@
  * 测试 cat_cafe_reflect 的 POST 调用与降级行为。
  */
 
-import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { afterEach, beforeEach, describe, test } from 'node:test';
 
 describe('MCP Reflect Tools', () => {
   let originalEnv;
@@ -12,7 +12,7 @@ describe('MCP Reflect Tools', () => {
 
   beforeEach(() => {
     originalEnv = { ...process.env };
-    process.env['CAT_CAFE_API_URL'] = 'http://127.0.0.1:3002';
+    process.env.CAT_CAFE_API_URL = 'http://127.0.0.1:3002';
     originalFetch = globalThis.fetch;
   });
 
@@ -66,14 +66,8 @@ describe('MCP Reflect Tools', () => {
     const result = await handleReflect({ query: 'test' });
 
     assert.equal(result.isError, undefined);
-    assert.ok(
-      result.content[0].text.includes('[DEGRADED]'),
-      'expected degraded prefix'
-    );
-    assert.ok(
-      result.content[0].text.includes('hindsight_unavailable'),
-      'expected reason in text'
-    );
+    assert.ok(result.content[0].text.includes('[DEGRADED]'), 'expected degraded prefix');
+    assert.ok(result.content[0].text.includes('hindsight_unavailable'), 'expected reason in text');
   });
 
   test('handleReflect returns error on fetch failure', async () => {

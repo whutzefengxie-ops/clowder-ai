@@ -72,7 +72,9 @@ describe('SignalArticleQueryService', () => {
 
   it('listInbox keeps newest probe record when sampled inbox history overflows', async () => {
     const baseTime = Date.parse('2026-02-23T00:00:00.000Z');
-    const records = Array.from({ length: 201 }, (_unused, index) => createRecord(`id-${index}`, new Date(baseTime + (index * 60_000)).toISOString()));
+    const records = Array.from({ length: 201 }, (_unused, index) =>
+      createRecord(`id-${index}`, new Date(baseTime + index * 60_000).toISOString()),
+    );
     const readCalls = [];
 
     const service = new SignalArticleQueryService({

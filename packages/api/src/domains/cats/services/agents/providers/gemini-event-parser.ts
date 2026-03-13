@@ -13,16 +13,13 @@ const KNOWN_POST_RESPONSE_CANDIDATES_CRASH = "Cannot read properties of undefine
  * Transform a raw Gemini CLI NDJSON event into an AgentMessage.
  * Returns null to skip events we don't care about.
  */
-export function transformGeminiEvent(
-  event: unknown,
-  catId: CatId
-): AgentMessage | null {
+export function transformGeminiEvent(event: unknown, catId: CatId): AgentMessage | null {
   if (typeof event !== 'object' || event === null) return null;
   const e = event as Record<string, unknown>;
 
   // init → session_init
-  if (e['type'] === 'init') {
-    const sessionId = e['session_id'];
+  if (e.type === 'init') {
+    const sessionId = e.session_id;
     if (typeof sessionId === 'string') {
       return {
         type: 'session_init',
@@ -35,8 +32,8 @@ export function transformGeminiEvent(
   }
 
   // message with role:"assistant" → text
-  if (e['type'] === 'message' && e['role'] === 'assistant') {
-    const content = e['content'];
+  if (e.type === 'message' && e.role === 'assistant') {
+    const content = e.content;
     if (typeof content === 'string') {
       return {
         type: 'text',
@@ -49,14 +46,14 @@ export function transformGeminiEvent(
   }
 
   // tool_use → tool_use
-  if (e['type'] === 'tool_use') {
-    const toolName = e['tool_name'];
+  if (e.type === 'tool_use') {
+    const toolName = e.tool_name;
     if (typeof toolName === 'string') {
       return {
         type: 'tool_use',
         catId,
         toolName,
-        toolInput: (e['parameters'] as Record<string, unknown>) ?? {},
+        toolInput: (e.parameters as Record<string, unknown>) ?? {},
         timestamp: Date.now(),
       };
     }
@@ -64,8 +61,8 @@ export function transformGeminiEvent(
   }
 
   // result with non-success status → error
-  if (e['type'] === 'result' && e['status'] !== 'success') {
-    const message = extractGeminiErrorMessage(e['error']);
+  if (e.type === 'result' && e.status !== 'success') {
+    const message = extractGeminiErrorMessage(e.error);
     if (!message) {
       // Let cli-exit error provide the detailed message.
       return null;
@@ -85,7 +82,7 @@ export function transformGeminiEvent(
 export function isResultErrorEvent(event: unknown): boolean {
   if (typeof event !== 'object' || event === null) return false;
   const e = event as Record<string, unknown>;
-  return e['type'] === 'result' && e['status'] !== 'success';
+  return e.type === 'result' && e.status !== 'success';
 }
 
 export function extractGeminiErrorMessage(rawError: unknown): string | null {
@@ -95,7 +92,7 @@ export function extractGeminiErrorMessage(rawError: unknown): string | null {
   }
 
   if (typeof rawError === 'object' && rawError !== null) {
-    const message = (rawError as Record<string, unknown>)['message'];
+    const message = (rawError as Record<string, unknown>).message;
     if (typeof message === 'string') {
       const value = message.trim();
       return value.length > 0 ? value : null;
@@ -108,8 +105,8 @@ export function extractGeminiErrorMessage(rawError: unknown): string | null {
 export function isKnownPostResponseCandidatesCrash(event: unknown): boolean {
   if (typeof event !== 'object' || event === null) return false;
   const e = event as Record<string, unknown>;
-  if (e['type'] !== 'result' || e['status'] === 'success') return false;
+  if (e.type !== 'result' || e.status === 'success') return false;
 
-  const message = extractGeminiErrorMessage(e['error']);
+  const message = extractGeminiErrorMessage(e.error);
   return message?.includes(KNOWN_POST_RESPONSE_CANDIDATES_CRASH) ?? false;
 }

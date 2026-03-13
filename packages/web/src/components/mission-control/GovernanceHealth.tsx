@@ -1,6 +1,13 @@
 'use client';
 
-import type { DispatchExecutionDigest, IntentCard, ResolutionItem, Slice, SourceTag, TriageBucket } from '@cat-cafe/shared';
+import type {
+  DispatchExecutionDigest,
+  IntentCard,
+  ResolutionItem,
+  Slice,
+  SourceTag,
+  TriageBucket,
+} from '@cat-cafe/shared';
 
 interface GovernanceHealthProps {
   cards: IntentCard[];
@@ -27,7 +34,11 @@ const BUCKET_COLORS: Record<TriageBucket, string> = {
 
 const SOURCE_TAGS: SourceTag[] = ['Q', 'O', 'D', 'R', 'A'];
 const SOURCE_COLORS: Record<SourceTag, string> = {
-  Q: 'bg-blue-400', O: 'bg-green-400', D: 'bg-purple-400', R: 'bg-teal-400', A: 'bg-red-400',
+  Q: 'bg-blue-400',
+  O: 'bg-green-400',
+  D: 'bg-purple-400',
+  R: 'bg-teal-400',
+  A: 'bg-red-400',
 };
 
 export function GovernanceHealth({ cards, digests = [], resolutions = [], slices = [] }: GovernanceHealthProps) {
@@ -47,7 +58,9 @@ export function GovernanceHealth({ cards, digests = [], resolutions = [], slices
       riskCounts[signal] = (riskCounts[signal] ?? 0) + 1;
     }
   }
-  const topRisks = Object.entries(riskCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const topRisks = Object.entries(riskCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5);
 
   return (
     <div className="space-y-4">
@@ -59,7 +72,7 @@ export function GovernanceHealth({ cards, digests = [], resolutions = [], slices
           label="Unresolved"
           value={String(
             (bucketCounts.find((b) => b.bucket === 'clarify_first')?.count ?? 0) +
-            (bucketCounts.find((b) => b.bucket === 'validate_first')?.count ?? 0),
+              (bucketCounts.find((b) => b.bucket === 'validate_first')?.count ?? 0),
           )}
           sub="需要确认"
         />
@@ -73,22 +86,26 @@ export function GovernanceHealth({ cards, digests = [], resolutions = [], slices
         ) : (
           <>
             <div className="mb-2 flex h-4 overflow-hidden rounded-full">
-              {bucketCounts.filter((b) => b.count > 0).map((b) => (
-                <div
-                  key={b.bucket}
-                  className={`${BUCKET_COLORS[b.bucket]}`}
-                  style={{ width: `${(b.count / total) * 100}%` }}
-                  title={`${BUCKET_LABELS[b.bucket]}: ${b.count}`}
-                />
-              ))}
+              {bucketCounts
+                .filter((b) => b.count > 0)
+                .map((b) => (
+                  <div
+                    key={b.bucket}
+                    className={`${BUCKET_COLORS[b.bucket]}`}
+                    style={{ width: `${(b.count / total) * 100}%` }}
+                    title={`${BUCKET_LABELS[b.bucket]}: ${b.count}`}
+                  />
+                ))}
             </div>
             <div className="flex flex-wrap gap-3 text-[10px] text-[#6B5D4F]">
-              {bucketCounts.filter((b) => b.count > 0).map((b) => (
-                <span key={b.bucket} className="flex items-center gap-1">
-                  <span className={`inline-block h-2 w-2 rounded-full ${BUCKET_COLORS[b.bucket]}`} />
-                  {BUCKET_LABELS[b.bucket]}: {b.count}
-                </span>
-              ))}
+              {bucketCounts
+                .filter((b) => b.count > 0)
+                .map((b) => (
+                  <span key={b.bucket} className="flex items-center gap-1">
+                    <span className={`inline-block h-2 w-2 rounded-full ${BUCKET_COLORS[b.bucket]}`} />
+                    {BUCKET_LABELS[b.bucket]}: {b.count}
+                  </span>
+                ))}
             </div>
           </>
         )}
@@ -98,15 +115,15 @@ export function GovernanceHealth({ cards, digests = [], resolutions = [], slices
       <div className="rounded-lg border border-[#E7DAC7] bg-[#FFFDF8] p-3">
         <div className="mb-2 text-[10px] font-semibold uppercase text-[#9A866F]">Source Tag Distribution</div>
         <div className="flex gap-2">
-          {sourceCounts.filter((s) => s.count > 0).map((s) => (
-            <div key={s.tag} className="flex items-center gap-1 text-xs text-[#6B5D4F]">
-              <span className={`inline-block h-2 w-2 rounded-full ${SOURCE_COLORS[s.tag]}`} />
-              {s.tag}: {s.count}
-            </div>
-          ))}
-          {sourceCounts.every((s) => s.count === 0) && (
-            <div className="text-xs text-[#B8A88F]">尚无数据</div>
-          )}
+          {sourceCounts
+            .filter((s) => s.count > 0)
+            .map((s) => (
+              <div key={s.tag} className="flex items-center gap-1 text-xs text-[#6B5D4F]">
+                <span className={`inline-block h-2 w-2 rounded-full ${SOURCE_COLORS[s.tag]}`} />
+                {s.tag}: {s.count}
+              </div>
+            ))}
+          {sourceCounts.every((s) => s.count === 0) && <div className="text-xs text-[#B8A88F]">尚无数据</div>}
         </div>
       </div>
 
@@ -130,11 +147,7 @@ export function GovernanceHealth({ cards, digests = [], resolutions = [], slices
         <div className="rounded-lg border border-[#E7DAC7] bg-[#FFFDF8] p-3">
           <div className="mb-2 text-[10px] font-semibold uppercase text-[#9A866F]">Dispatch Stats</div>
           <div className="grid grid-cols-3 gap-3">
-            <StatCard
-              label="派遣次数"
-              value={String(digests.length)}
-              sub="total"
-            />
+            <StatCard label="派遣次数" value={String(digests.length)} sub="total" />
             <StatCard
               label="完成率"
               value={`${Math.round((digests.filter((d) => d.status === 'completed').length / digests.length) * 100)}%`}
@@ -159,8 +172,16 @@ export function GovernanceHealth({ cards, digests = [], resolutions = [], slices
           <div className="mb-2 text-[10px] font-semibold uppercase text-[#9A866F]">Resolution Progress</div>
           <div className="grid grid-cols-3 gap-3">
             <StatCard label="Open" value={String(resolutions.filter((r) => r.status === 'open').length)} sub="待解决" />
-            <StatCard label="Answered" value={String(resolutions.filter((r) => r.status === 'answered').length)} sub="已回答" />
-            <StatCard label="Escalated" value={String(resolutions.filter((r) => r.status === 'escalated').length)} sub="已升级" />
+            <StatCard
+              label="Answered"
+              value={String(resolutions.filter((r) => r.status === 'answered').length)}
+              sub="已回答"
+            />
+            <StatCard
+              label="Escalated"
+              value={String(resolutions.filter((r) => r.status === 'escalated').length)}
+              sub="已升级"
+            />
           </div>
         </div>
       )}
@@ -170,10 +191,26 @@ export function GovernanceHealth({ cards, digests = [], resolutions = [], slices
         <div className="rounded-lg border border-[#E7DAC7] bg-[#FFFDF8] p-3">
           <div className="mb-2 text-[10px] font-semibold uppercase text-[#9A866F]">Slice Progress</div>
           <div className="grid grid-cols-4 gap-3">
-            <StatCard label="Planned" value={String(slices.filter((s) => s.status === 'planned').length)} sub="计划中" />
-            <StatCard label="In Progress" value={String(slices.filter((s) => s.status === 'in_progress').length)} sub="进行中" />
-            <StatCard label="Delivered" value={String(slices.filter((s) => s.status === 'delivered').length)} sub="已交付" />
-            <StatCard label="Validated" value={String(slices.filter((s) => s.status === 'validated').length)} sub="已验证" />
+            <StatCard
+              label="Planned"
+              value={String(slices.filter((s) => s.status === 'planned').length)}
+              sub="计划中"
+            />
+            <StatCard
+              label="In Progress"
+              value={String(slices.filter((s) => s.status === 'in_progress').length)}
+              sub="进行中"
+            />
+            <StatCard
+              label="Delivered"
+              value={String(slices.filter((s) => s.status === 'delivered').length)}
+              sub="已交付"
+            />
+            <StatCard
+              label="Validated"
+              value={String(slices.filter((s) => s.status === 'validated').length)}
+              sub="已验证"
+            />
           </div>
         </div>
       )}

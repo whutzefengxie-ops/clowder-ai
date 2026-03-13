@@ -12,7 +12,7 @@
 import { useState } from 'react';
 import { MarkdownContent } from '@/components/MarkdownContent';
 import { hexToRgba } from '@/lib/color-utils';
-import { STORY_CARDS, CAT_STYLES, type StoryMessage, type StoryCard as StoryCardType } from './story-data';
+import { CAT_STYLES, STORY_CARDS, type StoryCard as StoryCardType, type StoryMessage } from './story-data';
 
 function StoryBubble({ msg }: { msg: StoryMessage }) {
   const style = CAT_STYLES[msg.speaker];
@@ -35,32 +35,23 @@ function StoryBubble({ msg }: { msg: StoryMessage }) {
       <div
         className="rounded-full ring-2 overflow-hidden flex-shrink-0 bg-gray-100 flex items-center justify-center"
         style={{
-          width: 32, height: 32,
+          width: 32,
+          height: 32,
           ['--tw-ring-color' as string]: style.primary,
         }}
       >
-        <img
-          src={style.avatar}
-          alt={nameLabel}
-          width={32}
-          height={32}
-          className="object-cover w-full h-full"
-        />
+        <img src={style.avatar} alt={nameLabel} width={32} height={32} className="object-cover w-full h-full" />
       </div>
 
       {/* Bubble */}
       <div className="max-w-[80%] min-w-0">
         {/* Name + badge */}
         <div className={`mb-1 flex items-center gap-2 ${isUser ? 'flex-row-reverse' : ''}`}>
-          {isUser && msg.badge && (
-            <BadgeTag badge={msg.badge} />
-          )}
+          {isUser && msg.badge && <BadgeTag badge={msg.badge} />}
           <span className="text-xs font-semibold" style={{ color: isUser ? undefined : style.primary, opacity: 0.8 }}>
             {nameLabel}
           </span>
-          {!isUser && msg.badge && (
-            <BadgeTag badge={msg.badge} />
-          )}
+          {!isUser && msg.badge && <BadgeTag badge={msg.badge} />}
         </div>
 
         <div className={`px-4 py-3 ${bubbleClasses}`} style={bubbleStyle}>
@@ -68,10 +59,19 @@ function StoryBubble({ msg }: { msg: StoryMessage }) {
           {msg.thinking && (
             <div className="mb-1">
               <button
-                onClick={() => setThinkingExpanded(v => !v)}
+                onClick={() => setThinkingExpanded((v) => !v)}
                 className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 transition-colors mb-1"
               >
-                <span className="text-[10px]" style={{ transform: thinkingExpanded ? 'rotate(90deg)' : 'rotate(0deg)', display: 'inline-block', transition: 'transform 0.15s' }}>&#9654;</span>
+                <span
+                  className="text-[10px]"
+                  style={{
+                    transform: thinkingExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
+                    display: 'inline-block',
+                    transition: 'transform 0.15s',
+                  }}
+                >
+                  &#9654;
+                </span>
                 <span>&#128173; 心里话</span>
               </button>
               {thinkingExpanded && (
@@ -82,22 +82,20 @@ function StoryBubble({ msg }: { msg: StoryMessage }) {
             </div>
           )}
           {/* Main content */}
-          {msg.content && (
-            <MarkdownContent content={msg.content} className={style.font} />
-          )}
+          {msg.content && <MarkdownContent content={msg.content} className={style.font} />}
         </div>
 
         {/* Annotation */}
         {msg.annotation && (
-          <div className={`mt-1 text-[11px] text-gray-400 ${isUser ? 'text-right' : ''}`}>
-            {msg.annotation}
-          </div>
+          <div className={`mt-1 text-[11px] text-gray-400 ${isUser ? 'text-right' : ''}`}>{msg.annotation}</div>
         )}
         {/* Reaction row */}
         {msg.reactions && (
           <div className={`mt-1 flex gap-1 ${isUser ? 'justify-end' : ''}`}>
             {msg.reactions.map((r, ri) => (
-              <span key={ri} className="text-xs bg-gray-100 rounded-full px-1.5 py-0.5">{r}</span>
+              <span key={ri} className="text-xs bg-gray-100 rounded-full px-1.5 py-0.5">
+                {r}
+              </span>
             ))}
           </div>
         )}
@@ -113,11 +111,7 @@ function BadgeTag({ badge }: { badge: NonNullable<StoryMessage['badge']> }) {
     amber: 'bg-amber-100 text-amber-600',
     blue: 'bg-blue-50 text-blue-500',
   };
-  return (
-    <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${colorMap[badge.color]}`}>
-      {badge.text}
-    </span>
-  );
+  return <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${colorMap[badge.color]}`}>{badge.text}</span>;
 }
 
 function StoryCardView({ card, index }: { card: StoryCardType; index: number }) {
@@ -127,9 +121,7 @@ function StoryCardView({ card, index }: { card: StoryCardType; index: number }) 
       <div className="mb-6 text-center">
         <div className="text-xs text-gray-400 mb-1">#{index + 1}</div>
         <h2 className="text-xl font-bold text-gray-800">{card.title}</h2>
-        {card.subtitle && (
-          <p className="text-sm text-gray-500 mt-1">{card.subtitle}</p>
-        )}
+        {card.subtitle && <p className="text-sm text-gray-500 mt-1">{card.subtitle}</p>}
         <div className="mt-3 mx-auto w-16 h-0.5 bg-gray-200 rounded-full" />
       </div>
 
@@ -148,15 +140,9 @@ export default function StoryExportPage() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <div className="bg-white border-b border-gray-200 py-6 text-center">
-        <h1 className="text-2xl font-bold text-gray-800">
-          猫猫杀名场面集锦
-        </h1>
-        <p className="text-sm text-gray-500 mt-1">
-          当 AI 猫猫们互相贴标签猜词 · 一个owner的恶趣味编年史
-        </p>
-        <p className="text-xs text-gray-400 mt-2">
-          七届 · 三只猫 · 无数名场面
-        </p>
+        <h1 className="text-2xl font-bold text-gray-800">猫猫杀名场面集锦</h1>
+        <p className="text-sm text-gray-500 mt-1">当 AI 猫猫们互相贴标签猜词 · 一个owner的恶趣味编年史</p>
+        <p className="text-xs text-gray-400 mt-2">七届 · 三只猫 · 无数名场面</p>
       </div>
 
       {/* Cards */}

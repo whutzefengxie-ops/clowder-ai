@@ -5,8 +5,8 @@
  */
 
 import type { RedisClient } from '@cat-cafe/shared/utils';
-import { PushSubscriptionStore } from '../ports/PushSubscriptionStore.js';
 import type { IPushSubscriptionStore } from '../ports/PushSubscriptionStore.js';
+import { PushSubscriptionStore } from '../ports/PushSubscriptionStore.js';
 import { RedisPushSubscriptionStore } from '../redis/RedisPushSubscriptionStore.js';
 
 export function createPushSubscriptionStore(redis?: RedisClient): IPushSubscriptionStore {

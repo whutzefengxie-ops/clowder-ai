@@ -4,14 +4,11 @@
  * + TaskStoreFactory 分发测试 (always runs)
  */
 
-import { describe, it, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  assertRedisIsolationOrThrow,
-  cleanupPrefixedRedisKeys,
-} from './helpers/redis-test-helpers.js';
+import { after, before, beforeEach, describe, it } from 'node:test';
+import { assertRedisIsolationOrThrow, cleanupPrefixedRedisKeys } from './helpers/redis-test-helpers.js';
 
-const REDIS_URL = process.env['REDIS_URL'];
+const REDIS_URL = process.env.REDIS_URL;
 
 describe('RedisTaskStore', { skip: !REDIS_URL ? 'REDIS_URL not set' : false }, () => {
   let RedisTaskStore;
@@ -68,7 +65,7 @@ describe('RedisTaskStore', { skip: !REDIS_URL ? 'REDIS_URL not set' : false }, (
 
     const list = await store.listByThread('test-thread-1');
     assert.ok(list.length >= 1);
-    assert.ok(list.some(t => t.id === task.id));
+    assert.ok(list.some((t) => t.id === task.id));
   });
 
   it('get returns task by id', async () => {

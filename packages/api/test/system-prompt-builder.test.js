@@ -3,16 +3,14 @@
  * 测试身份注入 prompt 生成
  */
 
-import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
+import { describe, test } from 'node:test';
 import { catRegistry } from '@cat-cafe/shared';
 
 describe('SystemPromptBuilder', () => {
   // Dynamic import after build
   async function getBuilder() {
-    const { buildSystemPrompt } = await import(
-      '../dist/domains/cats/services/context/SystemPromptBuilder.js'
-    );
+    const { buildSystemPrompt } = await import('../dist/domains/cats/services/context/SystemPromptBuilder.js');
     return buildSystemPrompt;
   }
 
@@ -178,10 +176,7 @@ describe('SystemPromptBuilder', () => {
       mcpAvailable: true,
       promptTags: ['critique'],
     });
-    assert.ok(
-      prompt.length < 2600,
-      `Prompt is ${prompt.length} chars, expected < 2600`
-    );
+    assert.ok(prompt.length < 2600, `Prompt is ${prompt.length} chars, expected < 2600`);
   });
 
   test('returns empty string for unknown catId', async () => {
@@ -273,9 +268,7 @@ describe('SystemPromptBuilder', () => {
   // --- System prompt split tests (buildStaticIdentity / buildInvocationContext) ---
 
   test('buildStaticIdentity returns identity for known cat', async () => {
-    const { buildStaticIdentity } = await import(
-      '../dist/domains/cats/services/context/SystemPromptBuilder.js'
-    );
+    const { buildStaticIdentity } = await import('../dist/domains/cats/services/context/SystemPromptBuilder.js');
     const identity = buildStaticIdentity('opus');
     assert.ok(identity.includes('布偶猫'), 'Should contain display name');
     assert.ok(identity.includes('Anthropic'), 'Should contain provider');
@@ -285,16 +278,12 @@ describe('SystemPromptBuilder', () => {
   });
 
   test('buildStaticIdentity returns empty for unknown cat', async () => {
-    const { buildStaticIdentity } = await import(
-      '../dist/domains/cats/services/context/SystemPromptBuilder.js'
-    );
+    const { buildStaticIdentity } = await import('../dist/domains/cats/services/context/SystemPromptBuilder.js');
     assert.equal(buildStaticIdentity('unknown-cat'), '');
   });
 
   test('buildStaticIdentity includes workflow triggers', async () => {
-    const { buildStaticIdentity } = await import(
-      '../dist/domains/cats/services/context/SystemPromptBuilder.js'
-    );
+    const { buildStaticIdentity } = await import('../dist/domains/cats/services/context/SystemPromptBuilder.js');
     const opusId = buildStaticIdentity('opus');
     assert.ok(opusId.includes('工作流'), 'Opus should have workflow triggers');
     assert.ok(opusId.includes('@缅因猫'), 'Opus workflow should mention review with 缅因猫');
@@ -306,19 +295,13 @@ describe('SystemPromptBuilder', () => {
   });
 
   test('buildStaticIdentity is deterministic', async () => {
-    const { buildStaticIdentity } = await import(
-      '../dist/domains/cats/services/context/SystemPromptBuilder.js'
-    );
+    const { buildStaticIdentity } = await import('../dist/domains/cats/services/context/SystemPromptBuilder.js');
     assert.equal(buildStaticIdentity('opus'), buildStaticIdentity('opus'));
   });
 
   test('buildStaticIdentity disambiguates duplicate display names in runtime multi-variant config', async () => {
-    const { buildStaticIdentity } = await import(
-      '../dist/domains/cats/services/context/SystemPromptBuilder.js'
-    );
-    const { loadCatConfig, toAllCatConfigs } = await import(
-      '../dist/config/cat-config-loader.js'
-    );
+    const { buildStaticIdentity } = await import('../dist/domains/cats/services/context/SystemPromptBuilder.js');
+    const { loadCatConfig, toAllCatConfigs } = await import('../dist/config/cat-config-loader.js');
 
     const originalConfigs = catRegistry.getAllConfigs();
     catRegistry.reset();
@@ -346,12 +329,8 @@ describe('SystemPromptBuilder', () => {
   });
 
   test('buildStaticIdentity duplicate-name hint should not suggest self handle', async () => {
-    const { buildStaticIdentity } = await import(
-      '../dist/domains/cats/services/context/SystemPromptBuilder.js'
-    );
-    const { loadCatConfig, toAllCatConfigs } = await import(
-      '../dist/config/cat-config-loader.js'
-    );
+    const { buildStaticIdentity } = await import('../dist/domains/cats/services/context/SystemPromptBuilder.js');
+    const { loadCatConfig, toAllCatConfigs } = await import('../dist/config/cat-config-loader.js');
 
     const originalConfigs = catRegistry.getAllConfigs();
     catRegistry.reset();
@@ -375,9 +354,7 @@ describe('SystemPromptBuilder', () => {
   // --- F-Ground-3: Teammate roster tests ---
 
   test('buildStaticIdentity includes teammate roster with strengths', async () => {
-    const { buildStaticIdentity } = await import(
-      '../dist/domains/cats/services/context/SystemPromptBuilder.js'
-    );
+    const { buildStaticIdentity } = await import('../dist/domains/cats/services/context/SystemPromptBuilder.js');
     const identity = buildStaticIdentity('opus');
     assert.ok(identity.includes('## 队友名册'), 'Should have roster section');
     assert.ok(identity.includes('擅长'), 'Should have strengths column header');
@@ -386,9 +363,7 @@ describe('SystemPromptBuilder', () => {
   });
 
   test('buildStaticIdentity roster excludes self', async () => {
-    const { buildStaticIdentity } = await import(
-      '../dist/domains/cats/services/context/SystemPromptBuilder.js'
-    );
+    const { buildStaticIdentity } = await import('../dist/domains/cats/services/context/SystemPromptBuilder.js');
     const opusRoster = buildStaticIdentity('opus');
     // Self (opus) should not appear in the roster table rows
     // The roster rows start after the header, each begins with "|"
@@ -398,12 +373,8 @@ describe('SystemPromptBuilder', () => {
   });
 
   test('buildStaticIdentity roster uses teamStrengths from config', async () => {
-    const { buildStaticIdentity } = await import(
-      '../dist/domains/cats/services/context/SystemPromptBuilder.js'
-    );
-    const { loadCatConfig, toAllCatConfigs } = await import(
-      '../dist/config/cat-config-loader.js'
-    );
+    const { buildStaticIdentity } = await import('../dist/domains/cats/services/context/SystemPromptBuilder.js');
+    const { loadCatConfig, toAllCatConfigs } = await import('../dist/config/cat-config-loader.js');
 
     const originalConfigs = catRegistry.getAllConfigs();
     catRegistry.reset();
@@ -428,12 +399,8 @@ describe('SystemPromptBuilder', () => {
   });
 
   test('buildStaticIdentity roster: Sonnet does not inherit Opus cost caution (R1 null override)', async () => {
-    const { buildStaticIdentity } = await import(
-      '../dist/domains/cats/services/context/SystemPromptBuilder.js'
-    );
-    const { loadCatConfig, toAllCatConfigs } = await import(
-      '../dist/config/cat-config-loader.js'
-    );
+    const { buildStaticIdentity } = await import('../dist/domains/cats/services/context/SystemPromptBuilder.js');
+    const { loadCatConfig, toAllCatConfigs } = await import('../dist/config/cat-config-loader.js');
 
     const originalConfigs = catRegistry.getAllConfigs();
     catRegistry.reset();
@@ -461,12 +428,8 @@ describe('SystemPromptBuilder', () => {
   });
 
   test('buildStaticIdentity roster size with full runtime config is under 2700 (raised for L0 governance digest)', async () => {
-    const { buildSystemPrompt } = await import(
-      '../dist/domains/cats/services/context/SystemPromptBuilder.js'
-    );
-    const { loadCatConfig, toAllCatConfigs } = await import(
-      '../dist/config/cat-config-loader.js'
-    );
+    const { buildSystemPrompt } = await import('../dist/domains/cats/services/context/SystemPromptBuilder.js');
+    const { loadCatConfig, toAllCatConfigs } = await import('../dist/config/cat-config-loader.js');
 
     const originalConfigs = catRegistry.getAllConfigs();
     catRegistry.reset();
@@ -485,10 +448,7 @@ describe('SystemPromptBuilder', () => {
         mcpAvailable: true,
         promptTags: ['critique'],
       });
-      assert.ok(
-        prompt.length < 3350,
-        `Full runtime prompt is ${prompt.length} chars, expected < 3350`
-      );
+      assert.ok(prompt.length < 3350, `Full runtime prompt is ${prompt.length} chars, expected < 3350`);
     } finally {
       catRegistry.reset();
       for (const [id, config] of Object.entries(originalConfigs)) {
@@ -498,9 +458,7 @@ describe('SystemPromptBuilder', () => {
   });
 
   test('buildInvocationContext returns teammates when present', async () => {
-    const { buildInvocationContext } = await import(
-      '../dist/domains/cats/services/context/SystemPromptBuilder.js'
-    );
+    const { buildInvocationContext } = await import('../dist/domains/cats/services/context/SystemPromptBuilder.js');
     const ctx = buildInvocationContext({
       catId: 'opus',
       mode: 'serial',
@@ -515,9 +473,7 @@ describe('SystemPromptBuilder', () => {
   });
 
   test('buildInvocationContext omits teammate listing when empty', async () => {
-    const { buildInvocationContext } = await import(
-      '../dist/domains/cats/services/context/SystemPromptBuilder.js'
-    );
+    const { buildInvocationContext } = await import('../dist/domains/cats/services/context/SystemPromptBuilder.js');
     const ctx = buildInvocationContext({
       catId: 'opus',
       mode: 'independent',
@@ -529,9 +485,7 @@ describe('SystemPromptBuilder', () => {
   });
 
   test('buildInvocationContext injects A2A exit check when enabled (non-parallel)', async () => {
-    const { buildInvocationContext } = await import(
-      '../dist/domains/cats/services/context/SystemPromptBuilder.js'
-    );
+    const { buildInvocationContext } = await import('../dist/domains/cats/services/context/SystemPromptBuilder.js');
     const ctx = buildInvocationContext({
       catId: 'codex',
       mode: 'independent',
@@ -544,9 +498,7 @@ describe('SystemPromptBuilder', () => {
   });
 
   test('buildInvocationContext does not inject A2A exit check in parallel mode', async () => {
-    const { buildInvocationContext } = await import(
-      '../dist/domains/cats/services/context/SystemPromptBuilder.js'
-    );
+    const { buildInvocationContext } = await import('../dist/domains/cats/services/context/SystemPromptBuilder.js');
     const ctx = buildInvocationContext({
       catId: 'codex',
       mode: 'parallel',
@@ -558,9 +510,7 @@ describe('SystemPromptBuilder', () => {
   });
 
   test('buildInvocationContext injects mention routing feedback when provided', async () => {
-    const { buildInvocationContext } = await import(
-      '../dist/domains/cats/services/context/SystemPromptBuilder.js'
-    );
+    const { buildInvocationContext } = await import('../dist/domains/cats/services/context/SystemPromptBuilder.js');
     const ctx = buildInvocationContext({
       catId: 'codex',
       mode: 'independent',
@@ -577,9 +527,7 @@ describe('SystemPromptBuilder', () => {
   });
 
   test('buildInvocationContext does not contain static identity or MCP tools', async () => {
-    const { buildInvocationContext } = await import(
-      '../dist/domains/cats/services/context/SystemPromptBuilder.js'
-    );
+    const { buildInvocationContext } = await import('../dist/domains/cats/services/context/SystemPromptBuilder.js');
     const ctx = buildInvocationContext({
       catId: 'opus',
       mode: 'independent',
@@ -596,26 +544,20 @@ describe('SystemPromptBuilder', () => {
   });
 
   test('buildStaticIdentity includes MCP tools when mcpAvailable', async () => {
-    const { buildStaticIdentity } = await import(
-      '../dist/domains/cats/services/context/SystemPromptBuilder.js'
-    );
+    const { buildStaticIdentity } = await import('../dist/domains/cats/services/context/SystemPromptBuilder.js');
     const identity = buildStaticIdentity('opus', { mcpAvailable: true });
     assert.ok(identity.includes('cat_cafe_post_message'), 'Should contain MCP tools when mcpAvailable');
     assert.ok(identity.includes('cat_cafe_get_thread_context'), 'Should contain thread context tool');
   });
 
   test('buildStaticIdentity omits MCP tools when mcpAvailable is false', async () => {
-    const { buildStaticIdentity } = await import(
-      '../dist/domains/cats/services/context/SystemPromptBuilder.js'
-    );
+    const { buildStaticIdentity } = await import('../dist/domains/cats/services/context/SystemPromptBuilder.js');
     const identity = buildStaticIdentity('opus');
     assert.ok(!identity.includes('cat_cafe_post_message'), 'Should not contain MCP tools without mcpAvailable');
   });
 
   test('buildStaticIdentity does NOT include mcpCallbackInstructions (non-Claude stays per-message)', async () => {
-    const { buildStaticIdentity } = await import(
-      '../dist/domains/cats/services/context/SystemPromptBuilder.js'
-    );
+    const { buildStaticIdentity } = await import('../dist/domains/cats/services/context/SystemPromptBuilder.js');
     // Non-Claude cats use per-message injection for HTTP callback instructions
     // because their systemPrompt lives in session history and may be lost on compression.
     // Only Claude's MCP_TOOLS_SECTION goes in staticIdentity (survives compression via --append-system-prompt).
@@ -625,17 +567,13 @@ describe('SystemPromptBuilder', () => {
   });
 
   test('buildStaticIdentity includes owner reference', async () => {
-    const { buildStaticIdentity } = await import(
-      '../dist/domains/cats/services/context/SystemPromptBuilder.js'
-    );
+    const { buildStaticIdentity } = await import('../dist/domains/cats/services/context/SystemPromptBuilder.js');
     const identity = buildStaticIdentity('opus');
     assert.ok(identity.includes('owner'), 'Should contain owner reference in static identity');
   });
 
   test('buildStaticIdentity includes configured owner name and mention handles', async () => {
-    const { buildStaticIdentity } = await import(
-      '../dist/domains/cats/services/context/SystemPromptBuilder.js'
-    );
+    const { buildStaticIdentity } = await import('../dist/domains/cats/services/context/SystemPromptBuilder.js');
     const identity = buildStaticIdentity('opus');
     // Owner config has name: "Owner", mentionPatterns: ["@owner", "@owner", "@owner"]
     assert.ok(identity.includes('Owner'), 'Should include owner name from config');
@@ -646,9 +584,7 @@ describe('SystemPromptBuilder', () => {
 
   // F032 Phase D2: Reviewer section tests
   test('buildReviewerSection returns reviewer list for opus (different family reviewers)', async () => {
-    const { buildReviewerSection } = await import(
-      '../dist/domains/cats/services/context/SystemPromptBuilder.js'
-    );
+    const { buildReviewerSection } = await import('../dist/domains/cats/services/context/SystemPromptBuilder.js');
     const section = buildReviewerSection('opus');
     assert.ok(section, 'Should return section for opus');
     assert.ok(section.includes('## 你当前的 Reviewers'), 'Should have reviewer header');
@@ -658,9 +594,7 @@ describe('SystemPromptBuilder', () => {
   });
 
   test('buildReviewerSection returns null for unknown cat', async () => {
-    const { buildReviewerSection } = await import(
-      '../dist/domains/cats/services/context/SystemPromptBuilder.js'
-    );
+    const { buildReviewerSection } = await import('../dist/domains/cats/services/context/SystemPromptBuilder.js');
     const section = buildReviewerSection('unknown-cat');
     assert.equal(section, null, 'Should return null for unknown cat');
   });
@@ -671,9 +605,7 @@ describe('SystemPromptBuilder', () => {
   // This test verifies the cross-family-available case works correctly;
   // the fallback case requires mocking roster/availability (out of scope for unit test).
   test('buildReviewerSection shows cross-family when available (R5 P2 prerequisite)', async () => {
-    const { buildReviewerSection } = await import(
-      '../dist/domains/cats/services/context/SystemPromptBuilder.js'
-    );
+    const { buildReviewerSection } = await import('../dist/domains/cats/services/context/SystemPromptBuilder.js');
     const section = buildReviewerSection('opus');
     assert.ok(section, 'Should return section');
     // Cross-family available, so should NOT show fallback note
@@ -695,9 +627,7 @@ describe('SystemPromptBuilder', () => {
   // --- F042 Wave 3: Active participant hint tests ---
 
   test('buildInvocationContext injects most-recently-active participant', async () => {
-    const { buildInvocationContext } = await import(
-      '../dist/domains/cats/services/context/SystemPromptBuilder.js'
-    );
+    const { buildInvocationContext } = await import('../dist/domains/cats/services/context/SystemPromptBuilder.js');
     const ctx = buildInvocationContext({
       catId: 'codex',
       mode: 'serial',
@@ -715,9 +645,7 @@ describe('SystemPromptBuilder', () => {
   });
 
   test('buildInvocationContext skips self in activity list', async () => {
-    const { buildInvocationContext } = await import(
-      '../dist/domains/cats/services/context/SystemPromptBuilder.js'
-    );
+    const { buildInvocationContext } = await import('../dist/domains/cats/services/context/SystemPromptBuilder.js');
     const ctx = buildInvocationContext({
       catId: 'opus',
       mode: 'serial',
@@ -735,9 +663,7 @@ describe('SystemPromptBuilder', () => {
   });
 
   test('buildInvocationContext omits hint when activeParticipants absent', async () => {
-    const { buildInvocationContext } = await import(
-      '../dist/domains/cats/services/context/SystemPromptBuilder.js'
-    );
+    const { buildInvocationContext } = await import('../dist/domains/cats/services/context/SystemPromptBuilder.js');
     const ctx = buildInvocationContext({
       catId: 'opus',
       mode: 'independent',
@@ -748,9 +674,7 @@ describe('SystemPromptBuilder', () => {
   });
 
   test('buildInvocationContext omits hint when only self has activity', async () => {
-    const { buildInvocationContext } = await import(
-      '../dist/domains/cats/services/context/SystemPromptBuilder.js'
-    );
+    const { buildInvocationContext } = await import('../dist/domains/cats/services/context/SystemPromptBuilder.js');
     const ctx = buildInvocationContext({
       catId: 'opus',
       mode: 'serial',
@@ -781,18 +705,13 @@ describe('SystemPromptBuilder', () => {
         { catId: 'opus', lastMessageAt: Date.now() - 1000, messageCount: 3 },
       ],
     });
-    assert.ok(
-      prompt.length < 2650,
-      `Prompt with activity is ${prompt.length} chars, expected < 2650`,
-    );
+    assert.ok(prompt.length < 2650, `Prompt with activity is ${prompt.length} chars, expected < 2650`);
   });
 
   // --- F042: pinned identity constant + direct-message reply target ---
 
   test('buildInvocationContext includes pinned Identity line with handle + model', async () => {
-    const { buildInvocationContext } = await import(
-      '../dist/domains/cats/services/context/SystemPromptBuilder.js'
-    );
+    const { buildInvocationContext } = await import('../dist/domains/cats/services/context/SystemPromptBuilder.js');
     const ctx = buildInvocationContext({
       catId: 'codex',
       mode: 'independent',
@@ -805,12 +724,10 @@ describe('SystemPromptBuilder', () => {
   });
 
   test('buildInvocationContext Identity line uses resolved runtime model override', async () => {
-    const { buildInvocationContext } = await import(
-      '../dist/domains/cats/services/context/SystemPromptBuilder.js'
-    );
+    const { buildInvocationContext } = await import('../dist/domains/cats/services/context/SystemPromptBuilder.js');
 
-    const prev = process.env['CAT_CODEX_MODEL'];
-    process.env['CAT_CODEX_MODEL'] = 'gpt-5.9-codex-test';
+    const prev = process.env.CAT_CODEX_MODEL;
+    process.env.CAT_CODEX_MODEL = 'gpt-5.9-codex-test';
     try {
       const ctx = buildInvocationContext({
         catId: 'codex',
@@ -824,17 +741,15 @@ describe('SystemPromptBuilder', () => {
       );
     } finally {
       if (prev === undefined) {
-        delete process.env['CAT_CODEX_MODEL'];
+        delete process.env.CAT_CODEX_MODEL;
       } else {
-        process.env['CAT_CODEX_MODEL'] = prev;
+        process.env.CAT_CODEX_MODEL = prev;
       }
     }
   });
 
   test('buildInvocationContext includes Direct message reply target when provided', async () => {
-    const { buildInvocationContext } = await import(
-      '../dist/domains/cats/services/context/SystemPromptBuilder.js'
-    );
+    const { buildInvocationContext } = await import('../dist/domains/cats/services/context/SystemPromptBuilder.js');
     const ctx = buildInvocationContext({
       catId: 'codex',
       mode: 'independent',
@@ -848,12 +763,8 @@ describe('SystemPromptBuilder', () => {
   });
 
   test('buildInvocationContext supports runtime variant cat IDs (gpt52)', async () => {
-    const { buildInvocationContext } = await import(
-      '../dist/domains/cats/services/context/SystemPromptBuilder.js'
-    );
-    const { loadCatConfig, toAllCatConfigs } = await import(
-      '../dist/config/cat-config-loader.js'
-    );
+    const { buildInvocationContext } = await import('../dist/domains/cats/services/context/SystemPromptBuilder.js');
+    const { loadCatConfig, toAllCatConfigs } = await import('../dist/config/cat-config-loader.js');
 
     const originalConfigs = catRegistry.getAllConfigs();
     catRegistry.reset();
@@ -885,9 +796,7 @@ describe('SystemPromptBuilder', () => {
   // --- F042: Thread routingPolicy hint tests ---
 
   test('buildInvocationContext injects routing policy summary line when present', async () => {
-    const { buildInvocationContext } = await import(
-      '../dist/domains/cats/services/context/SystemPromptBuilder.js'
-    );
+    const { buildInvocationContext } = await import('../dist/domains/cats/services/context/SystemPromptBuilder.js');
     const ctx = buildInvocationContext({
       catId: 'codex',
       mode: 'independent',
@@ -906,9 +815,7 @@ describe('SystemPromptBuilder', () => {
   });
 
   test('buildInvocationContext sanitizes routing reason and tolerates malformed lists', async () => {
-    const { buildInvocationContext } = await import(
-      '../dist/domains/cats/services/context/SystemPromptBuilder.js'
-    );
+    const { buildInvocationContext } = await import('../dist/domains/cats/services/context/SystemPromptBuilder.js');
     const ctx = buildInvocationContext({
       catId: 'codex',
       mode: 'independent',
@@ -933,9 +840,7 @@ describe('SystemPromptBuilder', () => {
   // --- F073 P4: SOP stage hint injection ---
 
   test('buildInvocationContext injects SOP stage hint when sopStageHint provided', async () => {
-    const { buildInvocationContext } = await import(
-      '../dist/domains/cats/services/context/SystemPromptBuilder.js'
-    );
+    const { buildInvocationContext } = await import('../dist/domains/cats/services/context/SystemPromptBuilder.js');
     const ctx = buildInvocationContext({
       catId: 'opus',
       mode: 'independent',
@@ -954,9 +859,7 @@ describe('SystemPromptBuilder', () => {
   });
 
   test('buildInvocationContext omits SOP hint when sopStageHint absent', async () => {
-    const { buildInvocationContext } = await import(
-      '../dist/domains/cats/services/context/SystemPromptBuilder.js'
-    );
+    const { buildInvocationContext } = await import('../dist/domains/cats/services/context/SystemPromptBuilder.js');
     const ctx = buildInvocationContext({
       catId: 'opus',
       mode: 'independent',
@@ -967,9 +870,7 @@ describe('SystemPromptBuilder', () => {
   });
 
   test('buildInvocationContext SOP hint omits suggestedSkill when null', async () => {
-    const { buildInvocationContext } = await import(
-      '../dist/domains/cats/services/context/SystemPromptBuilder.js'
-    );
+    const { buildInvocationContext } = await import('../dist/domains/cats/services/context/SystemPromptBuilder.js');
     const ctx = buildInvocationContext({
       catId: 'opus',
       mode: 'independent',
@@ -997,27 +898,20 @@ describe('SystemPromptBuilder', () => {
       teammates: ['codex', 'gemini'],
       mcpAvailable: true,
       promptTags: ['critique'],
-      activeParticipants: [
-        { catId: 'codex', lastMessageAt: Date.now(), messageCount: 5 },
-      ],
+      activeParticipants: [{ catId: 'codex', lastMessageAt: Date.now(), messageCount: 5 }],
       sopStageHint: {
         stage: 'quality_gate',
         suggestedSkill: 'quality-gate',
         featureId: 'F073',
       },
     });
-    assert.ok(
-      prompt.length < 2600,
-      `Prompt with SOP hint is ${prompt.length} chars, expected < 2600`,
-    );
+    assert.ok(prompt.length < 2600, `Prompt with SOP hint is ${prompt.length} chars, expected < 2600`);
   });
 
   // --- F092: Voice Mode prompt injection ---
 
   test('buildInvocationContext includes voice mode instructions when voiceMode=true', async () => {
-    const { buildInvocationContext } = await import(
-      '../dist/domains/cats/services/context/SystemPromptBuilder.js'
-    );
+    const { buildInvocationContext } = await import('../dist/domains/cats/services/context/SystemPromptBuilder.js');
     const ctx = buildInvocationContext({
       catId: 'opus',
       mode: 'independent',
@@ -1030,9 +924,7 @@ describe('SystemPromptBuilder', () => {
   });
 
   test('buildInvocationContext omits voice mode instructions when voiceMode absent', async () => {
-    const { buildInvocationContext } = await import(
-      '../dist/domains/cats/services/context/SystemPromptBuilder.js'
-    );
+    const { buildInvocationContext } = await import('../dist/domains/cats/services/context/SystemPromptBuilder.js');
     const ctx = buildInvocationContext({
       catId: 'opus',
       mode: 'independent',
@@ -1052,9 +944,7 @@ describe('SystemPromptBuilder', () => {
       teammates: ['codex', 'gemini'],
       mcpAvailable: true,
       promptTags: ['critique'],
-      activeParticipants: [
-        { catId: 'codex', lastMessageAt: Date.now(), messageCount: 5 },
-      ],
+      activeParticipants: [{ catId: 'codex', lastMessageAt: Date.now(), messageCount: 5 }],
       sopStageHint: {
         stage: 'quality_gate',
         suggestedSkill: 'quality-gate',
@@ -1062,16 +952,11 @@ describe('SystemPromptBuilder', () => {
       },
       voiceMode: true,
     });
-    assert.ok(
-      prompt.length < 2800,
-      `Prompt with voice mode + SOP hint is ${prompt.length} chars, expected < 2800`,
-    );
+    assert.ok(prompt.length < 2800, `Prompt with voice mode + SOP hint is ${prompt.length} chars, expected < 2800`);
   });
 
   test('buildInvocationContext injects bootcamp mode when bootcampState provided', async () => {
-    const { buildInvocationContext } = await import(
-      '../dist/domains/cats/services/context/SystemPromptBuilder.js'
-    );
+    const { buildInvocationContext } = await import('../dist/domains/cats/services/context/SystemPromptBuilder.js');
     const ctx = buildInvocationContext({
       catId: 'opus',
       mode: 'independent',
@@ -1091,9 +976,7 @@ describe('SystemPromptBuilder', () => {
   });
 
   test('buildInvocationContext injects threadId in bootcamp mode', async () => {
-    const { buildInvocationContext } = await import(
-      '../dist/domains/cats/services/context/SystemPromptBuilder.js'
-    );
+    const { buildInvocationContext } = await import('../dist/domains/cats/services/context/SystemPromptBuilder.js');
     const ctx = buildInvocationContext({
       catId: 'opus',
       mode: 'independent',
@@ -1110,9 +993,7 @@ describe('SystemPromptBuilder', () => {
   });
 
   test('buildInvocationContext omits bootcamp when bootcampState absent', async () => {
-    const { buildInvocationContext } = await import(
-      '../dist/domains/cats/services/context/SystemPromptBuilder.js'
-    );
+    const { buildInvocationContext } = await import('../dist/domains/cats/services/context/SystemPromptBuilder.js');
     const ctx = buildInvocationContext({
       catId: 'opus',
       mode: 'independent',

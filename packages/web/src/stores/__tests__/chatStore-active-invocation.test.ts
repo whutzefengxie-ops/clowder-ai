@@ -3,7 +3,7 @@
  * Verifies that hasActiveInvocation is preserved across thread switches
  * and correctly toggled by setHasActiveInvocation.
  */
-import { describe, it, expect, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { useChatStore } from '../chatStore';
 
 describe('chatStore hasActiveInvocation', () => {
@@ -19,7 +19,7 @@ describe('chatStore hasActiveInvocation', () => {
       catStatuses: {},
       catInvocations: {},
       currentGame: null,
-      
+
       threadStates: {},
       viewMode: 'single',
       splitPaneThreadIds: [],

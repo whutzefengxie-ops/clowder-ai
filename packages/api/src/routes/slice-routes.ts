@@ -41,13 +41,13 @@ export const sliceRoutes: FastifyPluginAsync<SliceRoutesOptions> = async (app, o
 
     const body = request.body as Record<string, unknown>;
     const input: CreateSliceInput = {
-      name: (body['name'] as string) ?? '',
-      sliceType: (body['sliceType'] as SliceType) ?? 'value',
-      description: (body['description'] as string) ?? '',
-      cardIds: (body['cardIds'] as string[]) ?? [],
-      actor: (body['actor'] as string) ?? '',
-      workflow: (body['workflow'] as string) ?? '',
-      verifiableOutcome: (body['verifiableOutcome'] as string) ?? '',
+      name: (body.name as string) ?? '',
+      sliceType: (body.sliceType as SliceType) ?? 'value',
+      description: (body.description as string) ?? '',
+      cardIds: (body.cardIds as string[]) ?? [],
+      actor: (body.actor as string) ?? '',
+      workflow: (body.workflow as string) ?? '',
+      verifiableOutcome: (body.verifiableOutcome as string) ?? '',
     };
     const slice = sliceStore.create(projectId, input);
     return reply.status(201).send({ slice });
@@ -92,14 +92,14 @@ export const sliceRoutes: FastifyPluginAsync<SliceRoutesOptions> = async (app, o
 
     const body = request.body as Record<string, unknown>;
     const patch: UpdateSliceInput = {};
-    if (body['name'] !== undefined) (patch as Record<string, unknown>)['name'] = body['name'];
-    if (body['description'] !== undefined) (patch as Record<string, unknown>)['description'] = body['description'];
-    if (body['cardIds'] !== undefined) (patch as Record<string, unknown>)['cardIds'] = body['cardIds'];
-    if (body['actor'] !== undefined) (patch as Record<string, unknown>)['actor'] = body['actor'];
-    if (body['workflow'] !== undefined) (patch as Record<string, unknown>)['workflow'] = body['workflow'];
-    if (body['verifiableOutcome'] !== undefined)
-      (patch as Record<string, unknown>)['verifiableOutcome'] = body['verifiableOutcome'];
-    if (body['status'] !== undefined) (patch as Record<string, unknown>)['status'] = body['status'];
+    if (body.name !== undefined) (patch as Record<string, unknown>).name = body.name;
+    if (body.description !== undefined) (patch as Record<string, unknown>).description = body.description;
+    if (body.cardIds !== undefined) (patch as Record<string, unknown>).cardIds = body.cardIds;
+    if (body.actor !== undefined) (patch as Record<string, unknown>).actor = body.actor;
+    if (body.workflow !== undefined) (patch as Record<string, unknown>).workflow = body.workflow;
+    if (body.verifiableOutcome !== undefined)
+      (patch as Record<string, unknown>).verifiableOutcome = body.verifiableOutcome;
+    if (body.status !== undefined) (patch as Record<string, unknown>).status = body.status;
 
     const slice = sliceStore.update(id, patch);
     if (!slice) return reply.status(404).send({ error: 'Slice not found' });

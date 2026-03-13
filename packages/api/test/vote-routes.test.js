@@ -3,8 +3,8 @@
  * 投票系统 API 测试
  */
 
-import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
+import { describe, test } from 'node:test';
 
 /**
  * Minimal Fastify test harness (same pattern as modes routes tests).
@@ -12,9 +12,7 @@ import assert from 'node:assert/strict';
  */
 async function buildApp() {
   const { default: Fastify } = await import('fastify');
-  const { ThreadStore } = await import(
-    '../dist/domains/cats/services/stores/ports/ThreadStore.js'
-  );
+  const { ThreadStore } = await import('../dist/domains/cats/services/stores/ports/ThreadStore.js');
   const { voteRoutes } = await import('../dist/routes/votes.js');
 
   const threadStore = new ThreadStore();
@@ -706,7 +704,7 @@ describe('Vote Routes', () => {
 
     // intruder's vote must not be recorded
     const state = await threadStore.getVotingState(thread.id);
-    assert.equal(state.votes['intruder'], undefined);
+    assert.equal(state.votes.intruder, undefined);
   });
 
   test('cast allows anyone when voters not specified (Phase 1 compat)', async () => {

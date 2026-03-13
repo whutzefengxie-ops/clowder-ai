@@ -4,9 +4,9 @@
  * sealed sessions with lock icons, post-compact safety alert, re-fetch on seal.
  */
 import React from 'react';
-import { describe, it, expect, vi, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react-dom/test-utils';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CatInvocationInfo } from '@/stores/chat-types';
 import { SessionChainPanel } from '../SessionChainPanel';
 
@@ -51,7 +51,7 @@ vi.mock('@/hooks/useCatData', () => ({
 }));
 
 vi.mock('../status-helpers', () => ({
-  truncateId: (id: string, len: number) => id.length > len ? `${id.slice(0, len)}…` : id,
+  truncateId: (id: string, len: number) => (id.length > len ? `${id.slice(0, len)}…` : id),
 }));
 
 const origCreateElement = document.createElement.bind(document);
@@ -70,10 +70,7 @@ afterEach(() => {
   container.remove();
 });
 
-function renderPanel(
-  threadId: string,
-  catInvocations: Record<string, CatInvocationInfo> = {},
-) {
+function renderPanel(threadId: string, catInvocations: Record<string, CatInvocationInfo> = {}) {
   act(() => {
     root.render(React.createElement(SessionChainPanel, { threadId, catInvocations }));
   });
@@ -107,7 +104,15 @@ describe('F24: SessionChainPanel', () => {
   it('renders session count in header', async () => {
     mockSessionsResponse([
       { id: 's1', catId: 'opus', seq: 0, status: 'active', messageCount: 5, createdAt: Date.now() },
-      { id: 's2', catId: 'opus', seq: 1, status: 'sealed', messageCount: 12, createdAt: Date.now() - 60000, sealedAt: Date.now() - 30000 },
+      {
+        id: 's2',
+        catId: 'opus',
+        seq: 1,
+        status: 'sealed',
+        messageCount: 12,
+        createdAt: Date.now() - 60000,
+        sealedAt: Date.now() - 30000,
+      },
     ]);
     renderPanel('thread-1');
     await flushFetch();
@@ -127,13 +132,18 @@ describe('F24: SessionChainPanel', () => {
     // Session ID should be visible (truncated) with copy title
     const idBtn = container.querySelector('button[title*="ses_abc12345xyz"]');
     expect(idBtn).not.toBeNull();
-    expect(idBtn!.textContent).toContain('ses_abc123');
+    expect(idBtn?.textContent).toContain('ses_abc123');
   });
 
   it('renders ContextHealthBar for active session with health data', async () => {
     mockSessionsResponse([
       {
-        id: 's1', catId: 'opus', seq: 0, status: 'active', messageCount: 3, createdAt: Date.now(),
+        id: 's1',
+        catId: 'opus',
+        seq: 0,
+        status: 'active',
+        messageCount: 3,
+        createdAt: Date.now(),
         contextHealth: { usedTokens: 123000, windowTokens: 150000, fillRatio: 0.82, source: 'exact' },
       },
     ]);
@@ -146,13 +156,24 @@ describe('F24: SessionChainPanel', () => {
   it('prefers invocation contextHealth over session contextHealth', async () => {
     mockSessionsResponse([
       {
-        id: 's1', catId: 'opus', seq: 0, status: 'active', messageCount: 3, createdAt: Date.now(),
+        id: 's1',
+        catId: 'opus',
+        seq: 0,
+        status: 'active',
+        messageCount: 3,
+        createdAt: Date.now(),
         contextHealth: { usedTokens: 50000, windowTokens: 150000, fillRatio: 0.33, source: 'approx' },
       },
     ]);
     const invocations: Record<string, CatInvocationInfo> = {
       opus: {
-        contextHealth: { usedTokens: 120000, windowTokens: 150000, fillRatio: 0.80, source: 'exact', measuredAt: Date.now() },
+        contextHealth: {
+          usedTokens: 120000,
+          windowTokens: 150000,
+          fillRatio: 0.8,
+          source: 'exact',
+          measuredAt: Date.now(),
+        },
       },
     };
     renderPanel('thread-1', invocations);
@@ -164,14 +185,24 @@ describe('F24: SessionChainPanel', () => {
   it('renders sealed sessions with seal reason label and clickable IDs', async () => {
     mockSessionsResponse([
       {
-        id: 'seal_aaa111', catId: 'opus', seq: 0, status: 'sealed', messageCount: 20,
-        createdAt: Date.now() - 120000, sealedAt: Date.now() - 60000,
+        id: 'seal_aaa111',
+        catId: 'opus',
+        seq: 0,
+        status: 'sealed',
+        messageCount: 20,
+        createdAt: Date.now() - 120000,
+        sealedAt: Date.now() - 60000,
         sealReason: 'claude-code-compact-auto',
         contextHealth: { usedTokens: 140000, windowTokens: 150000, fillRatio: 0.93, source: 'exact' },
       },
       {
-        id: 'seal_bbb222', catId: 'opus', seq: 1, status: 'sealed', messageCount: 15,
-        createdAt: Date.now() - 60000, sealedAt: Date.now() - 10000,
+        id: 'seal_bbb222',
+        catId: 'opus',
+        seq: 1,
+        status: 'sealed',
+        messageCount: 15,
+        createdAt: Date.now() - 60000,
+        sealedAt: Date.now() - 10000,
         sealReason: 'threshold',
       },
     ]);
@@ -229,7 +260,15 @@ describe('F24: SessionChainPanel', () => {
 
     // Re-render with sessionSealed changed → triggers sealSignal change
     mockSessionsResponse([
-      { id: 's1', catId: 'opus', seq: 0, status: 'sealed', messageCount: 3, createdAt: Date.now(), sealedAt: Date.now() },
+      {
+        id: 's1',
+        catId: 'opus',
+        seq: 0,
+        status: 'sealed',
+        messageCount: 3,
+        createdAt: Date.now(),
+        sealedAt: Date.now(),
+      },
       { id: 's2', catId: 'opus', seq: 1, status: 'active', messageCount: 0, createdAt: Date.now() },
     ]);
     renderPanel('thread-1', { opus: { sessionSeq: 0, sessionSealed: true } });
@@ -241,7 +280,12 @@ describe('F24: SessionChainPanel', () => {
   it('renders ContextHealthBar for approx source health', async () => {
     mockSessionsResponse([
       {
-        id: 's1', catId: 'gemini', seq: 0, status: 'active', messageCount: 2, createdAt: Date.now(),
+        id: 's1',
+        catId: 'gemini',
+        seq: 0,
+        status: 'active',
+        messageCount: 2,
+        createdAt: Date.now(),
         contextHealth: { usedTokens: 80000, windowTokens: 150000, fillRatio: 0.53, source: 'approx' },
       },
     ]);
@@ -254,7 +298,12 @@ describe('F24: SessionChainPanel', () => {
   it('renders ContextHealthBar for high fill ratio', async () => {
     mockSessionsResponse([
       {
-        id: 's1', catId: 'opus', seq: 0, status: 'active', messageCount: 5, createdAt: Date.now(),
+        id: 's1',
+        catId: 'opus',
+        seq: 0,
+        status: 'active',
+        messageCount: 5,
+        createdAt: Date.now(),
         contextHealth: { usedTokens: 140000, windowTokens: 150000, fillRatio: 0.93, source: 'exact' },
       },
     ]);
@@ -295,7 +344,12 @@ describe('F24: SessionChainPanel', () => {
   it('shows token counts from session.lastUsage when no live invocation', async () => {
     mockSessionsResponse([
       {
-        id: 's1', catId: 'opus', seq: 0, status: 'active', messageCount: 5, createdAt: Date.now(),
+        id: 's1',
+        catId: 'opus',
+        seq: 0,
+        status: 'active',
+        messageCount: 5,
+        createdAt: Date.now(),
         lastUsage: { inputTokens: 120000, outputTokens: 8000, cacheReadTokens: 90000 },
       },
     ]);
@@ -310,7 +364,12 @@ describe('F24: SessionChainPanel', () => {
   it('prefers live invocation usage over session.lastUsage', async () => {
     mockSessionsResponse([
       {
-        id: 's1', catId: 'opus', seq: 0, status: 'active', messageCount: 5, createdAt: Date.now(),
+        id: 's1',
+        catId: 'opus',
+        seq: 0,
+        status: 'active',
+        messageCount: 5,
+        createdAt: Date.now(),
         lastUsage: { inputTokens: 50000, outputTokens: 2000 },
       },
     ]);
@@ -376,7 +435,15 @@ describe('F24: SessionChainPanel', () => {
 
   it('clears stale sessions on thread switch when fetch throws', async () => {
     mockSessionsResponse([
-      { id: 's1', catId: 'opus', seq: 0, status: 'sealed', messageCount: 12, createdAt: Date.now() - 60000, sealedAt: Date.now() },
+      {
+        id: 's1',
+        catId: 'opus',
+        seq: 0,
+        status: 'sealed',
+        messageCount: 12,
+        createdAt: Date.now() - 60000,
+        sealedAt: Date.now(),
+      },
     ]);
     renderPanel('thread-A');
     await flushFetch();
@@ -405,7 +472,7 @@ describe('F24: SessionChainPanel', () => {
     // Badge should use codex colors
     const badge = container.querySelector('.bg-codex-light.text-codex-dark');
     expect(badge).not.toBeNull();
-    expect(badge!.textContent).toContain('codex');
+    expect(badge?.textContent).toContain('codex');
     // Must NOT have opus purple
     expect(container.querySelector('.border-opus-primary\\/40')).toBeNull();
     expect(container.querySelector('.bg-opus-light')).toBeNull();
@@ -472,7 +539,7 @@ describe('F24: SessionChainPanel', () => {
     expect(card).not.toBeNull();
     const badge = container.querySelector('.bg-gray-200.text-gray-600');
     expect(badge).not.toBeNull();
-    expect(badge!.textContent).toContain('unknown-cat');
+    expect(badge?.textContent).toContain('unknown-cat');
   });
 
   it('discards stale response when slow thread-1 fetch resolves after thread-2 (P1 race condition)', async () => {
@@ -480,8 +547,12 @@ describe('F24: SessionChainPanel', () => {
     let resolveThread1!: (v: unknown) => void;
     let resolveThread2!: (v: unknown) => void;
 
-    const thread1Promise = new Promise((r) => { resolveThread1 = r; });
-    const thread2Promise = new Promise((r) => { resolveThread2 = r; });
+    const thread1Promise = new Promise((r) => {
+      resolveThread1 = r;
+    });
+    const thread2Promise = new Promise((r) => {
+      resolveThread2 = r;
+    });
 
     // First render: thread-1 (slow)
     mockApiFetch.mockImplementation((url: string) => {
@@ -500,9 +571,9 @@ describe('F24: SessionChainPanel', () => {
     // thread-2 resolves first
     resolveThread2({
       ok: true,
-      json: async () => ({ sessions: [
-        { id: 's2', catId: 'opus', seq: 5, status: 'active', messageCount: 3, createdAt: Date.now() },
-      ] }),
+      json: async () => ({
+        sessions: [{ id: 's2', catId: 'opus', seq: 5, status: 'active', messageCount: 3, createdAt: Date.now() }],
+      }),
     });
     await flushFetch();
 
@@ -511,9 +582,9 @@ describe('F24: SessionChainPanel', () => {
     // Now thread-1 (stale) resolves late
     resolveThread1({
       ok: true,
-      json: async () => ({ sessions: [
-        { id: 's1', catId: 'opus', seq: 0, status: 'active', messageCount: 10, createdAt: Date.now() },
-      ] }),
+      json: async () => ({
+        sessions: [{ id: 's1', catId: 'opus', seq: 0, status: 'active', messageCount: 10, createdAt: Date.now() }],
+      }),
     });
     await flushFetch();
 
@@ -559,18 +630,21 @@ describe('F24: SessionChainPanel', () => {
       await flushFetch();
 
       // Click to expand bind section
-      const bindBtn = Array.from(container.querySelectorAll('button'))
-        .find(btn => btn.textContent?.includes('绑定外部 Session'));
+      const bindBtn = Array.from(container.querySelectorAll('button')).find((btn) =>
+        btn.textContent?.includes('绑定外部 Session'),
+      );
       expect(bindBtn).not.toBeUndefined();
-      act(() => { bindBtn!.click(); });
+      act(() => {
+        bindBtn?.click();
+      });
 
       // Should show codex (no active session) but not opus (has active session)
       const select = container.querySelector('select');
       expect(select).not.toBeNull();
-      const options = Array.from(select!.querySelectorAll('option'));
-      const optionTexts = options.map(o => o.textContent);
-      expect(optionTexts.some(t => t?.includes('缅因猫'))).toBe(true);
-      expect(optionTexts.some(t => t?.includes('布偶猫'))).toBe(false);
+      const options = Array.from(select?.querySelectorAll('option'));
+      const optionTexts = options.map((o) => o.textContent);
+      expect(optionTexts.some((t) => t?.includes('缅因猫'))).toBe(true);
+      expect(optionTexts.some((t) => t?.includes('布偶猫'))).toBe(false);
     });
   });
 
@@ -586,7 +660,15 @@ describe('F24: SessionChainPanel', () => {
 
     it('does not render bind button for sealed sessions', async () => {
       mockSessionsResponse([
-        { id: 's1', catId: 'opus', seq: 0, status: 'sealed', messageCount: 10, createdAt: Date.now(), sealedAt: Date.now() },
+        {
+          id: 's1',
+          catId: 'opus',
+          seq: 0,
+          status: 'sealed',
+          messageCount: 10,
+          createdAt: Date.now(),
+          sealedAt: Date.now(),
+        },
       ]);
       renderPanel('thread-1');
       await flushFetch();
@@ -600,11 +682,12 @@ describe('F24: SessionChainPanel', () => {
       renderPanel('thread-1');
       await flushFetch();
 
-      const bindBtn = Array.from(container.querySelectorAll('button'))
-        .find(btn => btn.textContent === 'bind...');
+      const bindBtn = Array.from(container.querySelectorAll('button')).find((btn) => btn.textContent === 'bind...');
       expect(bindBtn).not.toBeUndefined();
 
-      act(() => { bindBtn!.click(); });
+      act(() => {
+        bindBtn?.click();
+      });
 
       const input = container.querySelector('input[placeholder="CLI session ID"]');
       expect(input).not.toBeNull();
@@ -618,15 +701,16 @@ describe('F24: SessionChainPanel', () => {
       await flushFetch();
 
       // Click bind button to open input
-      const bindBtn = Array.from(container.querySelectorAll('button'))
-        .find(btn => btn.textContent === 'bind...');
-      act(() => { bindBtn!.click(); });
+      const bindBtn = Array.from(container.querySelectorAll('button')).find((btn) => btn.textContent === 'bind...');
+      act(() => {
+        bindBtn?.click();
+      });
 
       // Type session ID
       const input = container.querySelector('input[placeholder="CLI session ID"]') as HTMLInputElement;
       act(() => {
-        const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-          window.HTMLInputElement.prototype, 'value')!.set!;
+        const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')
+          ?.set!;
         nativeInputValueSetter.call(input, 'ses_test_123');
         input.dispatchEvent(new Event('input', { bubbles: true }));
       });
@@ -635,9 +719,10 @@ describe('F24: SessionChainPanel', () => {
       mockApiFetch.mockResolvedValue({ ok: true, json: async () => ({}) });
 
       // Click bind submit button
-      const submitBtn = Array.from(container.querySelectorAll('button'))
-        .find(btn => btn.textContent === 'bind');
-      act(() => { submitBtn!.click(); });
+      const submitBtn = Array.from(container.querySelectorAll('button')).find((btn) => btn.textContent === 'bind');
+      act(() => {
+        submitBtn?.click();
+      });
 
       await flushFetch();
 
@@ -646,8 +731,8 @@ describe('F24: SessionChainPanel', () => {
         (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('/bind'),
       );
       expect(patchCall).toBeDefined();
-      expect(patchCall![0]).toBe('/api/threads/thread-1/sessions/opus/bind');
-      expect(patchCall![1]).toMatchObject({
+      expect(patchCall?.[0]).toBe('/api/threads/thread-1/sessions/opus/bind');
+      expect(patchCall?.[1]).toMatchObject({
         method: 'PATCH',
         body: JSON.stringify({ cliSessionId: 'ses_test_123' }),
       });
@@ -661,14 +746,15 @@ describe('F24: SessionChainPanel', () => {
       await flushFetch();
 
       // Open bind input
-      const bindBtn = Array.from(container.querySelectorAll('button'))
-        .find(btn => btn.textContent === 'bind...');
-      act(() => { bindBtn!.click(); });
+      const bindBtn = Array.from(container.querySelectorAll('button')).find((btn) => btn.textContent === 'bind...');
+      act(() => {
+        bindBtn?.click();
+      });
 
       // Type value
       const input = container.querySelector('input[placeholder="CLI session ID"]') as HTMLInputElement;
       act(() => {
-        const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!;
+        const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set!;
         setter.call(input, 'bad_session');
         input.dispatchEvent(new Event('input', { bubbles: true }));
       });
@@ -676,9 +762,10 @@ describe('F24: SessionChainPanel', () => {
       // Mock failed bind
       mockApiFetch.mockResolvedValue({ ok: false, status: 404 });
 
-      const submitBtn = Array.from(container.querySelectorAll('button'))
-        .find(btn => btn.textContent === 'bind');
-      act(() => { submitBtn!.click(); });
+      const submitBtn = Array.from(container.querySelectorAll('button')).find((btn) => btn.textContent === 'bind');
+      act(() => {
+        submitBtn?.click();
+      });
 
       await flushFetch();
 

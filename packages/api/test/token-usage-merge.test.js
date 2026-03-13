@@ -3,8 +3,9 @@
  * When the same catId appears twice in an A2A chain (opus→codex→opus),
  * the second opus usage must add to the first, not replace it.
  */
-import { describe, it } from 'node:test';
+
 import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
 
 const { mergeTokenUsage } = await import('../dist/domains/cats/services/types.js');
 
@@ -15,7 +16,7 @@ describe('F8: mergeTokenUsage', () => {
   });
 
   it('accumulates numeric fields from two usage objects', () => {
-    const first = { inputTokens: 10000, outputTokens: 3000, costUsd: 0.10 };
+    const first = { inputTokens: 10000, outputTokens: 3000, costUsd: 0.1 };
     const second = { inputTokens: 8000, outputTokens: 2000, costUsd: 0.08 };
     const result = mergeTokenUsage(first, second);
 

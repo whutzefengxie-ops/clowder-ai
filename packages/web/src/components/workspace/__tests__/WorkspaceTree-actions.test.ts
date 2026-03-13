@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi } from 'vitest';
-import React from 'react';
+
+import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import { act } from 'react';
+import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('../FileIcons', () => ({
   FileIcon: () => React.createElement('span', null, '[F]'),
@@ -21,9 +21,7 @@ const sampleTree = [
     name: 'docs',
     path: 'docs',
     type: 'directory' as const,
-    children: [
-      { name: 'readme.md', path: 'docs/readme.md', type: 'file' as const },
-    ],
+    children: [{ name: 'readme.md', path: 'docs/readme.md', type: 'file' as const }],
   },
   { name: 'index.ts', path: 'index.ts', type: 'file' as const },
 ];
@@ -151,7 +149,7 @@ describe('WorkspaceTree with file management actions', () => {
     expect(newFileBtn).toBeTruthy();
 
     act(() => {
-      newFileBtn!.click();
+      newFileBtn?.click();
     });
 
     // Inline input should appear

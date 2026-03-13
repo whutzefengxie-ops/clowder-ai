@@ -34,10 +34,7 @@ export function SteerQueuedEntryModal({
         if (modalRef.current && !modalRef.current.contains(e.target as Node)) onCancel();
       }}
     >
-      <div
-        ref={modalRef}
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-[520px] mx-4 overflow-hidden"
-      >
+      <div ref={modalRef} className="bg-white rounded-2xl shadow-2xl w-full max-w-[520px] mx-4 overflow-hidden">
         <div className="px-6 pt-6 pb-4">
           <h2 className="text-lg font-semibold text-cafe-black">Steer 这条排队消息</h2>
           <p className="text-sm text-gray-500 mt-1">选择你希望如何处理这条 queued 消息：</p>
@@ -63,9 +60,7 @@ export function SteerQueuedEntryModal({
             data-testid="steer-mode-promote"
             onClick={() => onModeChange('promote')}
             className={`w-full text-left p-4 rounded-xl border transition-colors ${
-              mode === 'promote'
-                ? 'border-[#9B7EBD] bg-[#9B7EBD]/5'
-                : 'border-gray-200 hover:border-gray-300 bg-white'
+              mode === 'promote' ? 'border-[#9B7EBD] bg-[#9B7EBD]/5' : 'border-gray-200 hover:border-gray-300 bg-white'
             }`}
           >
             <div className="text-sm font-medium text-gray-800">提到队首（不取消）</div>
@@ -94,4 +89,3 @@ export function SteerQueuedEntryModal({
     </div>
   );
 }
-

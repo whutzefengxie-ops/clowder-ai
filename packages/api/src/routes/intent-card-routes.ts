@@ -51,19 +51,19 @@ export const intentCardRoutes: FastifyPluginAsync<IntentCardRoutesOptions> = asy
     const body = request.body as Record<string, unknown>;
     const card = intentCardStore.create({
       projectId,
-      actor: (body['actor'] as string) ?? '',
-      contextTrigger: (body['contextTrigger'] as string) ?? '',
-      goal: (body['goal'] as string) ?? '',
-      objectState: (body['objectState'] as string) ?? '',
-      successSignal: (body['successSignal'] as string) ?? '',
-      nonGoal: (body['nonGoal'] as string) ?? '',
-      sourceTag: (body['sourceTag'] as 'Q' | 'O' | 'D' | 'R' | 'A') ?? 'A',
-      sourceDetail: (body['sourceDetail'] as string) ?? '',
-      decisionOwner: (body['decisionOwner'] as string) ?? '',
-      confidence: (body['confidence'] as 1 | 2 | 3) ?? 1,
-      dependencyTags: (body['dependencyTags'] as string[]) ?? [],
-      riskSignals: (body['riskSignals'] as IntentCard['riskSignals']) ?? [],
-      originalText: (body['originalText'] as string) ?? '',
+      actor: (body.actor as string) ?? '',
+      contextTrigger: (body.contextTrigger as string) ?? '',
+      goal: (body.goal as string) ?? '',
+      objectState: (body.objectState as string) ?? '',
+      successSignal: (body.successSignal as string) ?? '',
+      nonGoal: (body.nonGoal as string) ?? '',
+      sourceTag: (body.sourceTag as 'Q' | 'O' | 'D' | 'R' | 'A') ?? 'A',
+      sourceDetail: (body.sourceDetail as string) ?? '',
+      decisionOwner: (body.decisionOwner as string) ?? '',
+      confidence: (body.confidence as 1 | 2 | 3) ?? 1,
+      dependencyTags: (body.dependencyTags as string[]) ?? [],
+      riskSignals: (body.riskSignals as IntentCard['riskSignals']) ?? [],
+      originalText: (body.originalText as string) ?? '',
     });
     return reply.status(201).send({ card });
   });
@@ -97,32 +97,46 @@ export const intentCardRoutes: FastifyPluginAsync<IntentCardRoutesOptions> = asy
     const { projectId, cardId } = request.params as { projectId: string; cardId: string };
     if (!requireOwnedProject(projectId, userId, reply)) return;
     if (!getCardForProject(projectId, cardId)) return reply.status(404).send({ error: 'Intent card not found' });
-    const body = request.body as Partial<Pick<IntentCard, 'actor' | 'contextTrigger' | 'goal' | 'objectState' | 'successSignal' | 'nonGoal' | 'sourceTag' | 'sourceDetail' | 'decisionOwner' | 'confidence' | 'dependencyTags' | 'riskSignals' | 'originalText'>>;
+    const body = request.body as Partial<
+      Pick<
+        IntentCard,
+        | 'actor'
+        | 'contextTrigger'
+        | 'goal'
+        | 'objectState'
+        | 'successSignal'
+        | 'nonGoal'
+        | 'sourceTag'
+        | 'sourceDetail'
+        | 'decisionOwner'
+        | 'confidence'
+        | 'dependencyTags'
+        | 'riskSignals'
+        | 'originalText'
+      >
+    >;
     const card = intentCardStore.update(cardId, body);
     if (!card) return reply.status(404).send({ error: 'Intent card not found' });
     return reply.send({ card });
   });
 
-  app.post(
-    '/api/external-projects/:projectId/intent-cards/:cardId/triage',
-    async (request, reply) => {
-      const userId = requireUserId(request, reply);
-      if (!userId) return;
-      const { projectId, cardId } = request.params as { projectId: string; cardId: string };
-      if (!requireOwnedProject(projectId, userId, reply)) return;
-      if (!getCardForProject(projectId, cardId)) return reply.status(404).send({ error: 'Intent card not found' });
-      const body = request.body as Record<string, unknown>;
-      const card = intentCardStore.triage(cardId, {
-        clarity: (body['clarity'] as 1 | 2 | 3) ?? 1,
-        groundedness: (body['groundedness'] as 1 | 2 | 3) ?? 1,
-        necessity: (body['necessity'] as 1 | 2 | 3) ?? 1,
-        coupling: (body['coupling'] as 1 | 2 | 3) ?? 1,
-        sizeBand: (body['sizeBand'] as 'S' | 'M' | 'L' | 'XL') ?? 'M',
-      });
-      if (!card) return reply.status(404).send({ error: 'Intent card not found' });
-      return reply.send({ card });
-    },
-  );
+  app.post('/api/external-projects/:projectId/intent-cards/:cardId/triage', async (request, reply) => {
+    const userId = requireUserId(request, reply);
+    if (!userId) return;
+    const { projectId, cardId } = request.params as { projectId: string; cardId: string };
+    if (!requireOwnedProject(projectId, userId, reply)) return;
+    if (!getCardForProject(projectId, cardId)) return reply.status(404).send({ error: 'Intent card not found' });
+    const body = request.body as Record<string, unknown>;
+    const card = intentCardStore.triage(cardId, {
+      clarity: (body.clarity as 1 | 2 | 3) ?? 1,
+      groundedness: (body.groundedness as 1 | 2 | 3) ?? 1,
+      necessity: (body.necessity as 1 | 2 | 3) ?? 1,
+      coupling: (body.coupling as 1 | 2 | 3) ?? 1,
+      sizeBand: (body.sizeBand as 'S' | 'M' | 'L' | 'XL') ?? 'M',
+    });
+    if (!card) return reply.status(404).send({ error: 'Intent card not found' });
+    return reply.send({ card });
+  });
 
   app.delete('/api/external-projects/:projectId/intent-cards/:cardId', async (request, reply) => {
     const userId = requireUserId(request, reply);
@@ -136,24 +150,21 @@ export const intentCardRoutes: FastifyPluginAsync<IntentCardRoutesOptions> = asy
 
   // --- Risk Detection ---
 
-  app.post(
-    '/api/external-projects/:projectId/intent-cards/:cardId/detect-risks',
-    async (request, reply) => {
-      const userId = requireUserId(request, reply);
-      if (!userId) return;
-      const { projectId, cardId } = request.params as { projectId: string; cardId: string };
-      if (!requireOwnedProject(projectId, userId, reply)) return;
-      const card = getCardForProject(projectId, cardId);
-      if (!card) return reply.status(404).send({ error: 'Intent card not found' });
+  app.post('/api/external-projects/:projectId/intent-cards/:cardId/detect-risks', async (request, reply) => {
+    const userId = requireUserId(request, reply);
+    if (!userId) return;
+    const { projectId, cardId } = request.params as { projectId: string; cardId: string };
+    if (!requireOwnedProject(projectId, userId, reply)) return;
+    const card = getCardForProject(projectId, cardId);
+    if (!card) return reply.status(404).send({ error: 'Intent card not found' });
 
-      const risks = detectRisks(card);
-      // Also update card.riskSignals with detected signal names
-      const signals: RiskSignal[] = risks.map((r) => r.signal);
-      intentCardStore.update(cardId, { riskSignals: signals });
+    const risks = detectRisks(card);
+    // Also update card.riskSignals with detected signal names
+    const signals: RiskSignal[] = risks.map((r) => r.signal);
+    intentCardStore.update(cardId, { riskSignals: signals });
 
-      return reply.send({ risks });
-    },
-  );
+    return reply.send({ risks });
+  });
 
   app.get('/api/external-projects/:projectId/risk-summary', async (request, reply) => {
     const userId = requireUserId(request, reply);

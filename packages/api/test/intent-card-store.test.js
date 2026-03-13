@@ -1,6 +1,7 @@
 // @ts-check
-import { describe, test, beforeEach } from 'node:test';
+
 import assert from 'node:assert/strict';
+import { beforeEach, describe, test } from 'node:test';
 
 /** @returns {import('../dist/domains/projects/intent-card-store.js').CreateIntentCardInput} */
 function makeCardInput(overrides = {}) {
@@ -182,27 +183,18 @@ describe('computeBucket', () => {
   });
 
   test('A-tagged always goes to validate_first', () => {
-    const result = computeBucket(
-      { clarity: 3, groundedness: 3, necessity: 3, coupling: 1, sizeBand: 'S' },
-      'A',
-    );
+    const result = computeBucket({ clarity: 3, groundedness: 3, necessity: 3, coupling: 1, sizeBand: 'S' }, 'A');
     assert.equal(result.bucket, 'validate_first');
     assert.equal(result.resolutionPath, 'evidence');
   });
 
   test('high scores + S/M size = build_now', () => {
-    const result = computeBucket(
-      { clarity: 2, groundedness: 2, necessity: 2, coupling: 2, sizeBand: 'M' },
-      'Q',
-    );
+    const result = computeBucket({ clarity: 2, groundedness: 2, necessity: 2, coupling: 2, sizeBand: 'M' }, 'Q');
     assert.equal(result.bucket, 'build_now');
   });
 
   test('L/XL size prevents build_now even with high scores', () => {
-    const result = computeBucket(
-      { clarity: 3, groundedness: 3, necessity: 3, coupling: 1, sizeBand: 'L' },
-      'Q',
-    );
+    const result = computeBucket({ clarity: 3, groundedness: 3, necessity: 3, coupling: 1, sizeBand: 'L' }, 'Q');
     assert.notEqual(result.bucket, 'build_now');
   });
 });

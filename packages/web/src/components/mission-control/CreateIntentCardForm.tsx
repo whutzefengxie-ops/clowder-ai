@@ -38,9 +38,7 @@ export function CreateIntentCardForm({ projectId, onCreated, onCancel }: CreateI
   const [error, setError] = useState<string | null>(null);
 
   const toggleRisk = (signal: RiskSignal) => {
-    setRiskSignals((prev) =>
-      prev.includes(signal) ? prev.filter((s) => s !== signal) : [...prev, signal],
-    );
+    setRiskSignals((prev) => (prev.includes(signal) ? prev.filter((s) => s !== signal) : [...prev, signal]));
   };
 
   const handleSubmit = async () => {
@@ -55,16 +53,25 @@ export function CreateIntentCardForm({ projectId, onCreated, onCancel }: CreateI
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          originalText, actor, contextTrigger, goal, objectState,
-          successSignal, nonGoal, sourceTag, sourceDetail,
-          decisionOwner, confidence, riskSignals,
+          originalText,
+          actor,
+          contextTrigger,
+          goal,
+          objectState,
+          successSignal,
+          nonGoal,
+          sourceTag,
+          sourceDetail,
+          decisionOwner,
+          confidence,
+          riskSignals,
         }),
       });
       if (!res.ok) {
-        const body = await res.json() as { error?: string };
+        const body = (await res.json()) as { error?: string };
         throw new Error(body.error ?? `创建失败: ${res.status}`);
       }
-      const body = await res.json() as { card: IntentCard };
+      const body = (await res.json()) as { card: IntentCard };
       onCreated(body.card);
     } catch (err) {
       setError(err instanceof Error ? err.message : '创建失败');
@@ -102,7 +109,9 @@ export function CreateIntentCardForm({ projectId, onCreated, onCancel }: CreateI
           <label key={f.label} className="block">
             <span className="text-[10px] font-medium text-[#9A866F]">{f.label}</span>
             <input
-              type="text" value={f.value} onChange={(e) => f.set(e.target.value)}
+              type="text"
+              value={f.value}
+              onChange={(e) => f.set(e.target.value)}
               placeholder={f.ph}
               className="mt-0.5 w-full rounded border border-[#D8C6AD] bg-white px-2 py-1 text-xs focus:border-[#8B6F47] focus:outline-none"
             />
@@ -115,7 +124,8 @@ export function CreateIntentCardForm({ projectId, onCreated, onCancel }: CreateI
         <label className="block flex-1">
           <span className="text-[10px] font-medium text-[#9A866F]">Source Tag</span>
           <select
-            value={sourceTag} onChange={(e) => setSourceTag(e.target.value as SourceTag)}
+            value={sourceTag}
+            onChange={(e) => setSourceTag(e.target.value as SourceTag)}
             className="mt-0.5 w-full rounded border border-[#D8C6AD] bg-white px-2 py-1 text-xs"
           >
             <option value="Q">Q — 客户口述</option>
@@ -128,7 +138,8 @@ export function CreateIntentCardForm({ projectId, onCreated, onCancel }: CreateI
         <label className="block flex-1">
           <span className="text-[10px] font-medium text-[#9A866F]">Confidence</span>
           <select
-            value={confidence} onChange={(e) => setConfidence(Number(e.target.value))}
+            value={confidence}
+            onChange={(e) => setConfidence(Number(e.target.value))}
             className="mt-0.5 w-full rounded border border-[#D8C6AD] bg-white px-2 py-1 text-xs"
           >
             <option value={1}>1 — 低</option>
@@ -142,15 +153,23 @@ export function CreateIntentCardForm({ projectId, onCreated, onCancel }: CreateI
       <div className="grid grid-cols-2 gap-2">
         <label className="block">
           <span className="text-[10px] font-medium text-[#9A866F]">Source Detail</span>
-          <input type="text" value={sourceDetail} onChange={(e) => setSourceDetail(e.target.value)}
+          <input
+            type="text"
+            value={sourceDetail}
+            onChange={(e) => setSourceDetail(e.target.value)}
             placeholder="PRD section 3.2"
-            className="mt-0.5 w-full rounded border border-[#D8C6AD] bg-white px-2 py-1 text-xs focus:border-[#8B6F47] focus:outline-none" />
+            className="mt-0.5 w-full rounded border border-[#D8C6AD] bg-white px-2 py-1 text-xs focus:border-[#8B6F47] focus:outline-none"
+          />
         </label>
         <label className="block">
           <span className="text-[10px] font-medium text-[#9A866F]">Decision Owner</span>
-          <input type="text" value={decisionOwner} onChange={(e) => setDecisionOwner(e.target.value)}
+          <input
+            type="text"
+            value={decisionOwner}
+            onChange={(e) => setDecisionOwner(e.target.value)}
             placeholder="Product Owner"
-            className="mt-0.5 w-full rounded border border-[#D8C6AD] bg-white px-2 py-1 text-xs focus:border-[#8B6F47] focus:outline-none" />
+            className="mt-0.5 w-full rounded border border-[#D8C6AD] bg-white px-2 py-1 text-xs focus:border-[#8B6F47] focus:outline-none"
+          />
         </label>
       </div>
 
@@ -160,7 +179,8 @@ export function CreateIntentCardForm({ projectId, onCreated, onCancel }: CreateI
         <div className="mt-1 flex flex-wrap gap-1">
           {RISK_SIGNALS.map((s) => (
             <button
-              key={s.value} type="button"
+              key={s.value}
+              type="button"
               onClick={() => toggleRisk(s.value)}
               className={`rounded-full px-2 py-0.5 text-[10px] ${
                 riskSignals.includes(s.value) ? 'bg-red-100 text-red-800' : 'bg-[#F4EFE7] text-[#6B5D4F]'
@@ -177,12 +197,19 @@ export function CreateIntentCardForm({ projectId, onCreated, onCancel }: CreateI
       )}
 
       <div className="flex justify-end gap-2">
-        <button type="button" onClick={onCancel}
-          className="rounded-lg border border-[#D8C6AD] px-4 py-1.5 text-xs font-medium text-[#7A6B5A] hover:bg-[#F7EEDB]">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="rounded-lg border border-[#D8C6AD] px-4 py-1.5 text-xs font-medium text-[#7A6B5A] hover:bg-[#F7EEDB]"
+        >
           取消
         </button>
-        <button type="button" onClick={() => void handleSubmit()} disabled={submitting}
-          className="rounded-lg bg-[#8B6F47] px-4 py-1.5 text-xs font-medium text-white hover:bg-[#7A6139] disabled:opacity-40">
+        <button
+          type="button"
+          onClick={() => void handleSubmit()}
+          disabled={submitting}
+          className="rounded-lg bg-[#8B6F47] px-4 py-1.5 text-xs font-medium text-white hover:bg-[#7A6139] disabled:opacity-40"
+        >
           {submitting ? '创建中...' : '创建'}
         </button>
       </div>

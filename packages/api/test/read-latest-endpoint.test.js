@@ -3,8 +3,8 @@
  * Backend acks to the latest real message in a thread — no frontend ID needed.
  */
 
-import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { afterEach, beforeEach, describe, it } from 'node:test';
 import Fastify from 'fastify';
 
 describe('POST /api/threads/:id/read/latest', () => {
@@ -14,12 +14,8 @@ describe('POST /api/threads/:id/read/latest', () => {
   let readStateStore;
 
   beforeEach(async () => {
-    const { ThreadStore } = await import(
-      '../dist/domains/cats/services/stores/ports/ThreadStore.js'
-    );
-    const { MessageStore } = await import(
-      '../dist/domains/cats/services/stores/ports/MessageStore.js'
-    );
+    const { ThreadStore } = await import('../dist/domains/cats/services/stores/ports/ThreadStore.js');
+    const { MessageStore } = await import('../dist/domains/cats/services/stores/ports/MessageStore.js');
     const { threadsRoutes } = await import('../dist/routes/threads.js');
 
     threadStore = new ThreadStore();
@@ -86,12 +82,20 @@ describe('POST /api/threads/:id/read/latest', () => {
     const thread = threadStore.create('alice', 'Thread with messages');
 
     messageStore.append({
-      userId: 'alice', catId: 'opus', content: 'first',
-      mentions: [], timestamp: 1000, threadId: thread.id,
+      userId: 'alice',
+      catId: 'opus',
+      content: 'first',
+      mentions: [],
+      timestamp: 1000,
+      threadId: thread.id,
     });
     const msg2 = messageStore.append({
-      userId: 'alice', catId: 'opus', content: 'second (latest)',
-      mentions: [], timestamp: 2000, threadId: thread.id,
+      userId: 'alice',
+      catId: 'opus',
+      content: 'second (latest)',
+      mentions: [],
+      timestamp: 2000,
+      threadId: thread.id,
     });
 
     const res = await app.inject({
@@ -107,8 +111,12 @@ describe('POST /api/threads/:id/read/latest', () => {
   it('is idempotent — second call returns advanced=false', async () => {
     const thread = threadStore.create('alice', 'Thread');
     messageStore.append({
-      userId: 'alice', catId: 'opus', content: 'hello',
-      mentions: [], timestamp: 1000, threadId: thread.id,
+      userId: 'alice',
+      catId: 'opus',
+      content: 'hello',
+      mentions: [],
+      timestamp: 1000,
+      threadId: thread.id,
     });
 
     // First call
@@ -127,12 +135,8 @@ describe('POST /api/threads/:id/read/latest', () => {
   });
 
   it('returns 501 when readStateStore is not available', async () => {
-    const { ThreadStore } = await import(
-      '../dist/domains/cats/services/stores/ports/ThreadStore.js'
-    );
-    const { MessageStore } = await import(
-      '../dist/domains/cats/services/stores/ports/MessageStore.js'
-    );
+    const { ThreadStore } = await import('../dist/domains/cats/services/stores/ports/ThreadStore.js');
+    const { MessageStore } = await import('../dist/domains/cats/services/stores/ports/MessageStore.js');
     const { threadsRoutes } = await import('../dist/routes/threads.js');
 
     const noReadApp = Fastify();
@@ -151,9 +155,7 @@ describe('POST /api/threads/:id/read/latest', () => {
   });
 
   it('returns 501 when messageStore is not available', async () => {
-    const { ThreadStore } = await import(
-      '../dist/domains/cats/services/stores/ports/ThreadStore.js'
-    );
+    const { ThreadStore } = await import('../dist/domains/cats/services/stores/ports/ThreadStore.js');
     const { threadsRoutes } = await import('../dist/routes/threads.js');
 
     const noMsgApp = Fastify();

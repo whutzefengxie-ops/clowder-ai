@@ -3,14 +3,12 @@
  * F24: Thread → N Sessions per cat, context health tracking.
  */
 
-import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
+import { describe, test } from 'node:test';
 
 describe('SessionChainStore', () => {
   async function createStore() {
-    const { SessionChainStore } = await import(
-      '../dist/domains/cats/services/stores/ports/SessionChainStore.js'
-    );
+    const { SessionChainStore } = await import('../dist/domains/cats/services/stores/ports/SessionChainStore.js');
     return new SessionChainStore();
   }
 
@@ -283,12 +281,13 @@ describe('SessionChainStore', () => {
 
     // The 1001st create should throw, not silently evict an active session
     assert.throws(
-      () => store.create({
-        cliSessionId: 'cli-overflow',
-        threadId: 'thread-overflow',
-        catId: 'opus',
-        userId: 'user-1',
-      }),
+      () =>
+        store.create({
+          cliSessionId: 'cli-overflow',
+          threadId: 'thread-overflow',
+          catId: 'opus',
+          userId: 'user-1',
+        }),
       (err) => {
         assert.ok(err.message.includes('capacity'));
         return true;

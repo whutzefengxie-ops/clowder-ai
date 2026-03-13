@@ -121,7 +121,7 @@ function resolveHeaders(source: SignalSource): Record<string, string> | undefine
   const base = source.fetch.headers ?? {};
   if (!isGitHubApiUrl(source.url)) return source.fetch.headers;
 
-  const pat = process.env['GITHUB_MCP_PAT'];
+  const pat = process.env.GITHUB_MCP_PAT;
   if (!pat) return source.fetch.headers;
 
   return { ...base, Authorization: `Bearer ${pat}` };

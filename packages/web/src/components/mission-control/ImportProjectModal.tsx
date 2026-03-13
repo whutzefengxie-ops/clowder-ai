@@ -30,7 +30,7 @@ export function ImportProjectModal({ onClose, onImported }: ImportProjectModalPr
         body: JSON.stringify({ name: name.trim(), sourcePath: sourcePath.trim(), backlogPath, description }),
       });
       if (!res.ok) {
-        const body = await res.json() as { error?: string };
+        const body = (await res.json()) as { error?: string };
         throw new Error(body.error ?? `创建失败: ${res.status}`);
       }
       onImported();
@@ -96,9 +96,7 @@ export function ImportProjectModal({ onClose, onImported }: ImportProjectModalPr
         </div>
 
         {error && (
-          <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-            {error}
-          </div>
+          <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{error}</div>
         )}
 
         <div className="mt-4 flex justify-end gap-2">

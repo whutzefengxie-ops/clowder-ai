@@ -60,7 +60,7 @@ export class SqliteEvidenceStore implements IEvidenceStore {
       anchorSql += ` AND (${options.keywords.map(() => 'keywords LIKE ?').join(' OR ')})`;
       anchorParams.push(...options.keywords.map((kw) => `%"${kw}"%`));
     }
-    const exactRow = this.db!.prepare(anchorSql).get(...anchorParams) as RowShape | undefined;
+    const exactRow = this.db?.prepare(anchorSql).get(...anchorParams) as RowShape | undefined;
     if (exactRow) {
       results.push(rowToItem(exactRow));
       seenAnchors.add(exactRow.anchor);
@@ -101,7 +101,7 @@ export class SqliteEvidenceStore implements IEvidenceStore {
         sql += ' LIMIT ?';
         params.push(limit);
 
-        const rows = this.db!.prepare(sql).all(...params) as RowShape[];
+        const rows = this.db?.prepare(sql).all(...params) as RowShape[];
         for (const row of rows) {
           if (!seenAnchors.has(row.anchor)) {
             results.push(rowToItem(row));
@@ -118,14 +118,14 @@ export class SqliteEvidenceStore implements IEvidenceStore {
 
   async upsert(items: EvidenceItem[]): Promise<void> {
     this.ensureOpen();
-    const stmt = this.db!.prepare(`
+    const stmt = this.db?.prepare(`
 			INSERT OR REPLACE INTO evidence_docs
 			(anchor, kind, status, title, summary, keywords, source_path, source_hash,
 			 superseded_by, materialized_from, updated_at)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		`);
 
-    const tx = this.db!.transaction((items: EvidenceItem[]) => {
+    const tx = this.db?.transaction((items: EvidenceItem[]) => {
       for (const item of items) {
         stmt.run(
           item.anchor,
@@ -147,12 +147,14 @@ export class SqliteEvidenceStore implements IEvidenceStore {
 
   async deleteByAnchor(anchor: string): Promise<void> {
     this.ensureOpen();
-    this.db!.prepare('DELETE FROM evidence_docs WHERE anchor = ?').run(anchor);
+    this.db?.prepare('DELETE FROM evidence_docs WHERE anchor = ?').run(anchor);
   }
 
   async getByAnchor(anchor: string): Promise<EvidenceItem | null> {
     this.ensureOpen();
-    const row = this.db!.prepare('SELECT * FROM evidence_docs WHERE anchor = ? COLLATE NOCASE').get(anchor) as RowShape | undefined;
+    const row = this.db?.prepare('SELECT * FROM evidence_docs WHERE anchor = ? COLLATE NOCASE').get(anchor) as
+      | RowShape
+      | undefined;
     return row ? rowToItem(row) : null;
   }
 
@@ -176,30 +178,28 @@ export class SqliteEvidenceStore implements IEvidenceStore {
 
   async addEdge(edge: Edge): Promise<void> {
     this.ensureOpen();
-    this.db!.prepare('INSERT OR IGNORE INTO edges (from_anchor, to_anchor, relation) VALUES (?, ?, ?)').run(
-      edge.fromAnchor,
-      edge.toAnchor,
-      edge.relation,
-    );
+    this.db
+      ?.prepare('INSERT OR IGNORE INTO edges (from_anchor, to_anchor, relation) VALUES (?, ?, ?)')
+      .run(edge.fromAnchor, edge.toAnchor, edge.relation);
   }
 
   async getRelated(anchor: string): Promise<Array<{ anchor: string; relation: string }>> {
     this.ensureOpen();
-    const rows = this.db!.prepare(
-      `SELECT to_anchor AS anchor, relation FROM edges WHERE from_anchor = ?
+    const rows = this.db
+      ?.prepare(
+        `SELECT to_anchor AS anchor, relation FROM edges WHERE from_anchor = ?
 			 UNION
 			 SELECT from_anchor AS anchor, relation FROM edges WHERE to_anchor = ?`,
-    ).all(anchor, anchor) as Array<{ anchor: string; relation: string }>;
+      )
+      .all(anchor, anchor) as Array<{ anchor: string; relation: string }>;
     return rows;
   }
 
   async removeEdge(edge: Edge): Promise<void> {
     this.ensureOpen();
-    this.db!.prepare('DELETE FROM edges WHERE from_anchor = ? AND to_anchor = ? AND relation = ?').run(
-      edge.fromAnchor,
-      edge.toAnchor,
-      edge.relation,
-    );
+    this.db
+      ?.prepare('DELETE FROM edges WHERE from_anchor = ? AND to_anchor = ? AND relation = ?')
+      .run(edge.fromAnchor, edge.toAnchor, edge.relation);
   }
 
   close(): void {

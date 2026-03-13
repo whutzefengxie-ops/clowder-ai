@@ -3,11 +3,11 @@
  * Covers: normal return, default tagsMatch, degraded fallback, limit validation.
  */
 
-import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import Fastify from 'fastify';
-import { join, dirname } from 'node:path';
+import { dirname, join } from 'node:path';
+import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import Fastify from 'fastify';
 import { evidenceRoutes } from '../dist/routes/evidence.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -70,13 +70,9 @@ describe('GET /api/evidence/search', () => {
   });
 
   it('falls back to freshness=unknown when freshness provider throws', async () => {
-    await setup(
-      { recall: async () => [] },
-      undefined,
-      async () => {
-        throw new Error('freshness provider failure');
-      },
-    );
+    await setup({ recall: async () => [] }, undefined, async () => {
+      throw new Error('freshness provider failure');
+    });
 
     const res = await app.inject({
       method: 'GET',
@@ -96,7 +92,13 @@ describe('GET /api/evidence/search', () => {
       {
         recall: async () => {
           recallCalls += 1;
-          return [{ content: 'stale hindsight result', metadata: { anchor: 'docs/decisions/005-hindsight-integration-decisions.md' }, score: 0.95 }];
+          return [
+            {
+              content: 'stale hindsight result',
+              metadata: { anchor: 'docs/decisions/005-hindsight-integration-decisions.md' },
+              score: 0.95,
+            },
+          ];
         },
       },
       docsRoot,
@@ -164,20 +166,23 @@ describe('GET /api/evidence/search', () => {
 
   it('returns results from Hindsight', async () => {
     const docsRoot = join(__dirname, '..', '..', '..', 'docs');
-    await setup({
-      recall: async () => [
-        {
-          content: 'ADR-005 decided single bank strategy for Hindsight integration',
-          metadata: { anchor: 'docs/decisions/005-hindsight-integration-decisions.md', author: 'opus' },
-          score: 0.92,
-        },
-        {
-          content: 'Phase 4 completed with 460 tests',
-          metadata: { anchor: 'docs/phases/phase-4.0-direction.md' },
-          score: 0.75,
-        },
-      ],
-    }, docsRoot);
+    await setup(
+      {
+        recall: async () => [
+          {
+            content: 'ADR-005 decided single bank strategy for Hindsight integration',
+            metadata: { anchor: 'docs/decisions/005-hindsight-integration-decisions.md', author: 'opus' },
+            score: 0.92,
+          },
+          {
+            content: 'Phase 4 completed with 460 tests',
+            metadata: { anchor: 'docs/phases/phase-4.0-direction.md' },
+            score: 0.75,
+          },
+        ],
+      },
+      docsRoot,
+    );
 
     const res = await app.inject({
       method: 'GET',
@@ -235,12 +240,12 @@ describe('GET /api/evidence/search', () => {
   });
 
   it('uses runtime-configured recall defaults when query omits params', async () => {
-    const prevBudget = process.env['HINDSIGHT_RECALL_DEFAULT_BUDGET'];
-    const prevTagsMatch = process.env['HINDSIGHT_RECALL_DEFAULT_TAGS_MATCH'];
-    const prevLimit = process.env['HINDSIGHT_RECALL_DEFAULT_LIMIT'];
-    process.env['HINDSIGHT_RECALL_DEFAULT_BUDGET'] = 'high';
-    process.env['HINDSIGHT_RECALL_DEFAULT_TAGS_MATCH'] = 'any';
-    process.env['HINDSIGHT_RECALL_DEFAULT_LIMIT'] = '7';
+    const prevBudget = process.env.HINDSIGHT_RECALL_DEFAULT_BUDGET;
+    const prevTagsMatch = process.env.HINDSIGHT_RECALL_DEFAULT_TAGS_MATCH;
+    const prevLimit = process.env.HINDSIGHT_RECALL_DEFAULT_LIMIT;
+    process.env.HINDSIGHT_RECALL_DEFAULT_BUDGET = 'high';
+    process.env.HINDSIGHT_RECALL_DEFAULT_TAGS_MATCH = 'any';
+    process.env.HINDSIGHT_RECALL_DEFAULT_LIMIT = '7';
 
     let capturedOptions;
     await setup({
@@ -255,12 +260,12 @@ describe('GET /api/evidence/search', () => {
       url: '/api/evidence/search?q=test',
     });
 
-    if (prevBudget === undefined) delete process.env['HINDSIGHT_RECALL_DEFAULT_BUDGET'];
-    else process.env['HINDSIGHT_RECALL_DEFAULT_BUDGET'] = prevBudget;
-    if (prevTagsMatch === undefined) delete process.env['HINDSIGHT_RECALL_DEFAULT_TAGS_MATCH'];
-    else process.env['HINDSIGHT_RECALL_DEFAULT_TAGS_MATCH'] = prevTagsMatch;
-    if (prevLimit === undefined) delete process.env['HINDSIGHT_RECALL_DEFAULT_LIMIT'];
-    else process.env['HINDSIGHT_RECALL_DEFAULT_LIMIT'] = prevLimit;
+    if (prevBudget === undefined) delete process.env.HINDSIGHT_RECALL_DEFAULT_BUDGET;
+    else process.env.HINDSIGHT_RECALL_DEFAULT_BUDGET = prevBudget;
+    if (prevTagsMatch === undefined) delete process.env.HINDSIGHT_RECALL_DEFAULT_TAGS_MATCH;
+    else process.env.HINDSIGHT_RECALL_DEFAULT_TAGS_MATCH = prevTagsMatch;
+    if (prevLimit === undefined) delete process.env.HINDSIGHT_RECALL_DEFAULT_LIMIT;
+    else process.env.HINDSIGHT_RECALL_DEFAULT_LIMIT = prevLimit;
 
     assert.equal(res.statusCode, 200);
     assert.equal(capturedOptions.budget, 'high');
@@ -309,7 +314,11 @@ describe('GET /api/evidence/search', () => {
     // Use project docs/ as fallback
     const docsRoot = join(__dirname, '..', '..', '..', 'docs');
     await setup(
-      { recall: async () => { throw new Error('ECONNREFUSED'); } },
+      {
+        recall: async () => {
+          throw new Error('ECONNREFUSED');
+        },
+      },
       docsRoot,
     );
 
@@ -327,8 +336,8 @@ describe('GET /api/evidence/search', () => {
   });
 
   it('degrades to docs fallback when HINDSIGHT_ENABLED=false and skips recall', async () => {
-    const previous = process.env['HINDSIGHT_ENABLED'];
-    process.env['HINDSIGHT_ENABLED'] = 'false';
+    const previous = process.env.HINDSIGHT_ENABLED;
+    process.env.HINDSIGHT_ENABLED = 'false';
 
     let recallCalls = 0;
     const docsRoot = join(__dirname, '..', '..', '..', 'docs');
@@ -336,7 +345,13 @@ describe('GET /api/evidence/search', () => {
       {
         recall: async () => {
           recallCalls += 1;
-          return [{ content: 'unexpected hindsight result', metadata: { anchor: 'docs/decisions/005-hindsight-integration-decisions.md' }, score: 0.95 }];
+          return [
+            {
+              content: 'unexpected hindsight result',
+              metadata: { anchor: 'docs/decisions/005-hindsight-integration-decisions.md' },
+              score: 0.95,
+            },
+          ];
         },
       },
       docsRoot,
@@ -347,8 +362,8 @@ describe('GET /api/evidence/search', () => {
       url: '/api/evidence/search?q=phase',
     });
 
-    if (previous === undefined) delete process.env['HINDSIGHT_ENABLED'];
-    else process.env['HINDSIGHT_ENABLED'] = previous;
+    if (previous === undefined) delete process.env.HINDSIGHT_ENABLED;
+    else process.env.HINDSIGHT_ENABLED = previous;
 
     assert.equal(res.statusCode, 200);
     const body = res.json();
@@ -549,7 +564,11 @@ describe('GET /api/evidence/search', () => {
   it('degraded search classifies source types correctly', async () => {
     const docsRoot = join(__dirname, '..', '..', '..', 'docs');
     await setup(
-      { recall: async () => { throw new Error('ECONNREFUSED'); } },
+      {
+        recall: async () => {
+          throw new Error('ECONNREFUSED');
+        },
+      },
       docsRoot,
     );
 

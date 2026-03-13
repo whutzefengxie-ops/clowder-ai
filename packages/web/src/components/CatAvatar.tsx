@@ -1,9 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { PawIcon } from './icons/PawIcon';
 import { useCatData } from '@/hooks/useCatData';
 import { hexToRgba } from '@/lib/color-utils';
+import { PawIcon } from './icons/PawIcon';
 
 type CatStatus = 'pending' | 'streaming' | 'done' | 'error';
 
@@ -21,9 +21,7 @@ export function CatAvatar({ catId, size = 32, status }: CatAvatarProps) {
   const isStreaming = status === 'streaming';
   const isError = status === 'error';
   const ringColor = cat?.color.primary ?? '#9CA3AF'; // gray-400 fallback
-  const glowShadow = isStreaming && cat
-    ? `0 0 10px ${hexToRgba(ringColor, 0.5)}`
-    : undefined;
+  const glowShadow = isStreaming && cat ? `0 0 10px ${hexToRgba(ringColor, 0.5)}` : undefined;
 
   return (
     <div

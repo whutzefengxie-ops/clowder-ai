@@ -1,7 +1,6 @@
-import React from 'react';
+import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { act } from 'react';
-import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AuthPendingRequest } from '@/hooks/useAuthorization';
 import { useAuthorization } from '@/hooks/useAuthorization';
 
@@ -23,7 +22,11 @@ describe('useAuthorization notification dedup', () => {
 
   beforeAll(() => {
     // Must use `function` (not arrow) so it can be called with `new`
-    const MockNotification = vi.fn().mockImplementation(function (this: Record<string, unknown>, _title: string, opts: { tag: string }) {
+    const MockNotification = vi.fn().mockImplementation(function (
+      this: Record<string, unknown>,
+      _title: string,
+      opts: { tag: string },
+    ) {
       notifyCalls.push(opts.tag);
       this.onclick = null;
       this.close = mockClose;
@@ -73,16 +76,22 @@ describe('useAuthorization notification dedup', () => {
     };
 
     // First call → should notify
-    act(() => { capturedHandler!(request); });
+    act(() => {
+      capturedHandler?.(request);
+    });
     expect(notifyCalls).toHaveLength(1);
     expect(notifyCalls[0]).toBe('auth-req-1');
 
     // Duplicate → should NOT notify again
-    act(() => { capturedHandler!(request); });
+    act(() => {
+      capturedHandler?.(request);
+    });
     expect(notifyCalls).toHaveLength(1);
 
     // Different requestId → should notify
-    act(() => { capturedHandler!({ ...request, requestId: 'req-2' }); });
+    act(() => {
+      capturedHandler?.({ ...request, requestId: 'req-2' });
+    });
     expect(notifyCalls).toHaveLength(2);
     expect(notifyCalls[1]).toBe('auth-req-2');
   });

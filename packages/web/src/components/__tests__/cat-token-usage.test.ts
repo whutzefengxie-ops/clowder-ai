@@ -4,7 +4,7 @@
  */
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { CatTokenUsage } from '../CatTokenUsage';
 
 function render(catId: string, usage: Parameters<typeof CatTokenUsage>[0]['usage']): string {
@@ -105,7 +105,7 @@ describe('F8: CatTokenUsage (dynamic redesign)', () => {
           source: 'approx',
           measuredAt: Date.now(),
         },
-      })
+      }),
     );
 
     expect(html).toContain('上下文占用');

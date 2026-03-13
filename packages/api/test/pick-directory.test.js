@@ -1,7 +1,7 @@
-import { describe, it, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import Fastify from 'fastify';
 import { homedir } from 'node:os';
+import { afterEach, describe, it } from 'node:test';
+import Fastify from 'fastify';
 
 let setPickDirectoryImpl;
 let projectsRoutes;

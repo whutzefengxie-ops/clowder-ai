@@ -1,5 +1,5 @@
-import test from 'node:test';
 import assert from 'node:assert/strict';
+import test from 'node:test';
 
 import { parseBoolean, parseCsvEnumList } from '../dist/config/parse-utils.js';
 

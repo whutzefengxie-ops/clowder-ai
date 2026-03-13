@@ -3,17 +3,15 @@
  * F24: Redis available → RedisSessionChainStore, otherwise in-memory.
  */
 
-import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
+import { describe, test } from 'node:test';
 
 describe('createSessionChainStore', () => {
   test('returns SessionChainStore when no redis provided', async () => {
     const { createSessionChainStore } = await import(
       '../dist/domains/cats/services/stores/factories/SessionChainStoreFactory.js'
     );
-    const { SessionChainStore } = await import(
-      '../dist/domains/cats/services/stores/ports/SessionChainStore.js'
-    );
+    const { SessionChainStore } = await import('../dist/domains/cats/services/stores/ports/SessionChainStore.js');
 
     const store = createSessionChainStore();
     assert.ok(store instanceof SessionChainStore);
@@ -37,9 +35,7 @@ describe('createSessionChainStore', () => {
     const { createSessionChainStore } = await import(
       '../dist/domains/cats/services/stores/factories/SessionChainStoreFactory.js'
     );
-    const { SessionChainStore } = await import(
-      '../dist/domains/cats/services/stores/ports/SessionChainStore.js'
-    );
+    const { SessionChainStore } = await import('../dist/domains/cats/services/stores/ports/SessionChainStore.js');
 
     const store = createSessionChainStore(undefined);
     assert.ok(store instanceof SessionChainStore);

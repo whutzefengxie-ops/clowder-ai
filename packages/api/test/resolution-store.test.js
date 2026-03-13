@@ -1,6 +1,7 @@
 // @ts-check
-import { describe, test, beforeEach } from 'node:test';
+
 import assert from 'node:assert/strict';
+import { beforeEach, describe, test } from 'node:test';
 
 /** @returns {import('../dist/domains/projects/resolution-store.js').default extends { create: (projectId: string, input: any) => any } ? Parameters<import('../dist/domains/projects/resolution-store.js').ResolutionStore['create']>[1] : never} */
 function makeInput(overrides = {}) {

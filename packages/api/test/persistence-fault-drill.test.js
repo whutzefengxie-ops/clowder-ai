@@ -7,16 +7,16 @@
  * - Verify recovery path succeeds after retry.
  */
 
-import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
 import Fastify from 'fastify';
-import { messagesRoutes } from '../dist/routes/messages.js';
-import { invocationsRoutes } from '../dist/routes/invocations.js';
 import { InvocationRegistry } from '../dist/domains/cats/services/agents/invocation/InvocationRegistry.js';
+import { InvocationTracker } from '../dist/domains/cats/services/agents/invocation/InvocationTracker.js';
+import { InvocationRecordStore } from '../dist/domains/cats/services/stores/ports/InvocationRecordStore.js';
 import { MessageStore } from '../dist/domains/cats/services/stores/ports/MessageStore.js';
 import { ThreadStore } from '../dist/domains/cats/services/stores/ports/ThreadStore.js';
-import { InvocationRecordStore } from '../dist/domains/cats/services/stores/ports/InvocationRecordStore.js';
-import { InvocationTracker } from '../dist/domains/cats/services/agents/invocation/InvocationTracker.js';
+import { invocationsRoutes } from '../dist/routes/invocations.js';
+import { messagesRoutes } from '../dist/routes/messages.js';
 
 function createMockSocketManager() {
   const events = [];
@@ -136,9 +136,7 @@ describe('Persistence fault drills', () => {
     assert.equal(body.status, 'processing');
     assert.ok(body.invocationId);
 
-    const failedReady = await waitFor(
-      () => invocationRecordStore.get(body.invocationId)?.status === 'failed',
-    );
+    const failedReady = await waitFor(() => invocationRecordStore.get(body.invocationId)?.status === 'failed');
     assert.equal(failedReady, true, 'invocation should become failed within wait window');
 
     const record = invocationRecordStore.get(body.invocationId);
@@ -148,9 +146,9 @@ describe('Persistence fault drills', () => {
       'should persist explicit failure reason',
     );
 
-    const failureSignal = socketManager.getEvents().find(
-      (e) => e.type === 'agent' && e.msg?.type === 'error' && String(e.msg?.error).includes('未能保存'),
-    );
+    const failureSignal = socketManager
+      .getEvents()
+      .find((e) => e.type === 'agent' && e.msg?.type === 'error' && String(e.msg?.error).includes('未能保存'));
     assert.ok(failureSignal, 'should emit explicit user-facing persistence warning');
     assert.equal(router.getAckCalls().length, 0, 'cursor ack must be deferred on failure');
 
@@ -171,9 +169,7 @@ describe('Persistence fault drills', () => {
     });
 
     const { invocationId } = createRes.json();
-    const firstFailedReady = await waitFor(
-      () => invocationRecordStore.get(invocationId)?.status === 'failed',
-    );
+    const firstFailedReady = await waitFor(() => invocationRecordStore.get(invocationId)?.status === 'failed');
     assert.equal(firstFailedReady, true, 'initial invocation should fail before retry');
     assert.equal(invocationRecordStore.get(invocationId).status, 'failed');
 
@@ -186,9 +182,7 @@ describe('Persistence fault drills', () => {
     });
     assert.equal(retryRes.statusCode, 202);
 
-    const retrySucceeded = await waitFor(
-      () => invocationRecordStore.get(invocationId)?.status === 'succeeded',
-    );
+    const retrySucceeded = await waitFor(() => invocationRecordStore.get(invocationId)?.status === 'succeeded');
     assert.equal(retrySucceeded, true, 'retry should eventually become succeeded');
     assert.equal(invocationRecordStore.get(invocationId).status, 'succeeded');
     assert.equal(router.getAckCalls().length, 1, 'cursor ack should occur after recovered retry');

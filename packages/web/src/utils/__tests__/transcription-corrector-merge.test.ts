@@ -1,9 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import {
-  mergeTermEntries,
-  applyTermDictionary,
-  correctTranscription,
-} from '@/utils/transcription-corrector';
+import { describe, expect, it } from 'vitest';
+import { applyTermDictionary, correctTranscription, mergeTermEntries } from '@/utils/transcription-corrector';
 
 describe('mergeTermEntries', () => {
   it('returns built-in entries when no custom terms', () => {

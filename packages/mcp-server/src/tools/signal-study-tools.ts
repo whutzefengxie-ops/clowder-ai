@@ -52,11 +52,7 @@ async function handleDeleteArticle(input: { ids: string[] }): Promise<ToolResult
   return successResult(`Soft-deleted ${data.affected ?? 0} article(s).`);
 }
 
-async function handleLinkThread(input: {
-  articleId: string;
-  threadId: string;
-  action?: string;
-}): Promise<ToolResult> {
+async function handleLinkThread(input: { articleId: string; threadId: string; action?: string }): Promise<ToolResult> {
   if (input.action === 'unlink') {
     const path = `/api/signals/articles/${encodeURIComponent(input.articleId)}/threads/${encodeURIComponent(input.threadId)}`;
     const result = await apiJson(path, { method: 'DELETE' });
@@ -71,10 +67,7 @@ async function handleLinkThread(input: {
   return successResult(`Linked thread ${input.threadId} to article ${input.articleId}`);
 }
 
-async function handleStartStudy(input: {
-  articleId: string;
-  threadId?: string;
-}): Promise<ToolResult> {
+async function handleStartStudy(input: { articleId: string; threadId?: string }): Promise<ToolResult> {
   // Fetch article content for context
   const articleResult = await apiJson(`/api/signals/articles/${encodeURIComponent(input.articleId)}`);
   if (!articleResult.ok) return errorResult(articleResult.error);
@@ -125,11 +118,7 @@ async function handleSaveNotes(input: {
   );
 }
 
-async function handleListStudies(input: {
-  articleId?: string;
-  kind?: string;
-  limit?: number;
-}): Promise<ToolResult> {
+async function handleListStudies(input: { articleId?: string; kind?: string; limit?: number }): Promise<ToolResult> {
   if (input.articleId) {
     const result = await apiJson(`/api/signals/articles/${encodeURIComponent(input.articleId)}/study`);
     if (!result.ok) return errorResult(result.error);
@@ -153,13 +142,10 @@ async function handleGeneratePodcast(input: {
   mode: string;
   speakers?: string[];
 }): Promise<ToolResult> {
-  const result = await apiJson(
-    `/api/signals/articles/${encodeURIComponent(input.articleId)}/podcast`,
-    {
-      method: 'POST',
-      body: JSON.stringify({ mode: input.mode }),
-    },
-  );
+  const result = await apiJson(`/api/signals/articles/${encodeURIComponent(input.articleId)}/podcast`, {
+    method: 'POST',
+    body: JSON.stringify({ mode: input.mode }),
+  });
   if (!result.ok) return errorResult(result.error);
 
   const data = result.data as { artifact?: { id?: string; state?: string } };
@@ -238,7 +224,8 @@ export const signalStudyTools = [
   },
   {
     name: 'signal_start_study',
-    description: 'Start studying a Signal article. Returns article content for context injection and optionally links a thread.',
+    description:
+      'Start studying a Signal article. Returns article content for context injection and optionally links a thread.',
     inputSchema: signalStartStudyInputSchema,
     handler: handleStartStudy,
   },

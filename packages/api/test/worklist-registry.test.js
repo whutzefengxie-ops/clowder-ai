@@ -2,22 +2,18 @@
  * Unit tests for WorklistRegistry (F27)
  */
 
-import { describe, test, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { describe, test } from 'node:test';
 
 describe('WorklistRegistry', () => {
-  let registryModule;
+  let _registryModule;
 
   // Import fresh each time to avoid cross-test contamination
   // (registry is a module-level Map)
   test('register + push + unregister lifecycle', async () => {
-    const {
-      registerWorklist,
-      unregisterWorklist,
-      pushToWorklist,
-      hasWorklist,
-      getWorklist,
-    } = await import('../dist/domains/cats/services/agents/routing/WorklistRegistry.js');
+    const { registerWorklist, unregisterWorklist, pushToWorklist, hasWorklist, getWorklist } = await import(
+      '../dist/domains/cats/services/agents/routing/WorklistRegistry.js'
+    );
 
     const threadId = 'test-lifecycle';
     const worklist = ['opus'];

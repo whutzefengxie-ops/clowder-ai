@@ -34,7 +34,7 @@ interface DareEnvelope {
 function isDareEnvelope(event: unknown): event is DareEnvelope {
   if (typeof event !== 'object' || event === null) return false;
   const e = event as Record<string, unknown>;
-  return e['schema_version'] === DARE_SCHEMA && typeof e['event'] === 'string';
+  return e.schema_version === DARE_SCHEMA && typeof e.event === 'string';
 }
 
 function str(val: unknown, fallback = ''): string {
@@ -60,11 +60,11 @@ export function transformDareEvent(event: unknown, catId: CatId | string): Agent
       const msg: AgentMessage = {
         type: 'tool_use',
         catId: catId as CatId,
-        toolName: str(data['tool_name'], 'unknown'),
+        toolName: str(data.tool_name, 'unknown'),
         timestamp: ts,
       };
-      if (typeof data['tool_call_id'] === 'string') {
-        msg.toolInput = { tool_call_id: data['tool_call_id'] };
+      if (typeof data.tool_call_id === 'string') {
+        msg.toolInput = { tool_call_id: data.tool_call_id };
       }
       return msg;
     }
@@ -73,8 +73,8 @@ export function transformDareEvent(event: unknown, catId: CatId | string): Agent
       return {
         type: 'tool_result',
         catId: catId as CatId,
-        toolName: str(data['tool_name']),
-        content: str(data['tool_name']) + ' completed',
+        toolName: str(data.tool_name),
+        content: `${str(data.tool_name)} completed`,
         timestamp: ts,
       };
 
@@ -82,8 +82,8 @@ export function transformDareEvent(event: unknown, catId: CatId | string): Agent
       return {
         type: 'tool_result',
         catId: catId as CatId,
-        toolName: str(data['tool_name']),
-        content: `Error: ${str(data['error'], 'tool execution failed')}`,
+        toolName: str(data.tool_name),
+        content: `Error: ${str(data.error, 'tool execution failed')}`,
         timestamp: ts,
       };
 
@@ -91,16 +91,16 @@ export function transformDareEvent(event: unknown, catId: CatId | string): Agent
       return {
         type: 'text',
         catId: catId as CatId,
-        content: str(data['rendered_output']),
+        content: str(data.rendered_output),
         timestamp: ts,
       };
 
     case 'task.failed': {
       let errorMsg: string;
-      if (typeof data['error'] === 'string') {
-        errorMsg = data['error'];
-      } else if (Array.isArray(data['errors'])) {
-        errorMsg = (data['errors'] as unknown[]).map(String).join('; ');
+      if (typeof data.error === 'string') {
+        errorMsg = data.error;
+      } else if (Array.isArray(data.errors)) {
+        errorMsg = (data.errors as unknown[]).map(String).join('; ');
       } else {
         errorMsg = 'DARE task failed';
       }
@@ -116,7 +116,7 @@ export function transformDareEvent(event: unknown, catId: CatId | string): Agent
       return {
         type: 'system_info',
         catId: catId as CatId,
-        content: `DARE approval pending: ${str(data['tool_name'], 'unknown tool')}`,
+        content: `DARE approval pending: ${str(data.tool_name, 'unknown tool')}`,
         timestamp: ts,
       };
 

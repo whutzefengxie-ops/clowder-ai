@@ -1,12 +1,17 @@
 import type { CatId, SessionRecord } from '@cat-cafe/shared';
-import type { IMessageStore, AppendMessageInput } from '../stores/ports/MessageStore.js';
+import type { AppendMessageInput, IMessageStore } from '../stores/ports/MessageStore.js';
 import type { ISessionChainStore } from '../stores/ports/SessionChainStore.js';
 import type { TranscriptEvent, TranscriptReader } from './TranscriptReader.js';
 
 export interface HistoryImportResult {
   status: 'ok' | 'skipped' | 'failed';
   importedCount: number;
-  reason?: 'history_import_unavailable' | 'no_transcript_found' | 'no_importable_messages' | 'no_new_messages' | 'import_failed';
+  reason?:
+    | 'history_import_unavailable'
+    | 'no_transcript_found'
+    | 'no_importable_messages'
+    | 'no_new_messages'
+    | 'import_failed';
 }
 
 interface BackfillBoundSessionHistoryOptions {
@@ -82,7 +87,7 @@ function mapTranscriptEventToMessage(
   session: SessionRecord,
   userId: string,
 ): AppendMessageInput | null {
-  const evtType = typeof evt.event['type'] === 'string' ? evt.event['type'] : undefined;
+  const evtType = typeof evt.event.type === 'string' ? evt.event.type : undefined;
   if (!evtType || !IMPORTABLE_TYPES.has(evtType)) return null;
 
   const content = extractTextContent(evt.event);
@@ -111,15 +116,15 @@ function mapTranscriptEventToMessage(
 }
 
 function extractTextContent(event: Record<string, unknown>): string | undefined {
-  const content = event['content'];
+  const content = event.content;
   if (typeof content === 'string') return content;
   if (!Array.isArray(content)) return undefined;
 
   const parts: string[] = [];
   for (const item of content) {
     if (!item || typeof item !== 'object') continue;
-    const type = (item as Record<string, unknown>)['type'];
-    const text = (item as Record<string, unknown>)['text'];
+    const type = (item as Record<string, unknown>).type;
+    const text = (item as Record<string, unknown>).text;
     if (type === 'text' && typeof text === 'string' && text.length > 0) {
       parts.push(text);
     }

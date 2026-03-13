@@ -9,7 +9,7 @@
  * TTL 默认 30 天。
  */
 
-import type { ThreadSummary, CreateSummaryInput } from '@cat-cafe/shared';
+import type { CreateSummaryInput, ThreadSummary } from '@cat-cafe/shared';
 import type { RedisClient } from '@cat-cafe/shared/utils';
 import { generateSortableId } from '../ports/MessageStore.js';
 import type { ISummaryStore } from '../ports/SummaryStore.js';
@@ -65,7 +65,7 @@ export class RedisSummaryStore implements ISummaryStore {
 
   async get(summaryId: string): Promise<ThreadSummary | null> {
     const data = await this.redis.hgetall(SummaryKeys.detail(summaryId));
-    if (!data || !data['id']) return null;
+    if (!data || !data.id) return null;
     return this.hydrateSummary(data);
   }
 
@@ -84,7 +84,7 @@ export class RedisSummaryStore implements ISummaryStore {
     for (const [err, data] of results) {
       if (err || !data || typeof data !== 'object') continue;
       const d = data as Record<string, string>;
-      if (!d['id']) continue;
+      if (!d.id) continue;
       summaries.push(this.hydrateSummary(d));
     }
     return summaries;
@@ -92,9 +92,9 @@ export class RedisSummaryStore implements ISummaryStore {
 
   async delete(summaryId: string): Promise<boolean> {
     const data = await this.redis.hgetall(SummaryKeys.detail(summaryId));
-    if (!data || !data['id']) return false;
+    if (!data || !data.id) return false;
 
-    const threadId = data['threadId'] ?? '';
+    const threadId = data.threadId ?? '';
     const pipeline = this.redis.multi();
     pipeline.del(SummaryKeys.detail(summaryId));
     if (threadId) {
@@ -118,13 +118,13 @@ export class RedisSummaryStore implements ISummaryStore {
 
   private hydrateSummary(data: Record<string, string>): ThreadSummary {
     return {
-      id: data['id'] ?? '',
-      threadId: data['threadId'] ?? '',
-      topic: data['topic'] ?? '',
-      conclusions: safeParseArray(data['conclusions']),
-      openQuestions: safeParseArray(data['openQuestions']),
-      createdAt: parseInt(data['createdAt'] ?? '0', 10),
-      createdBy: (data['createdBy'] ?? 'user') as ThreadSummary['createdBy'],
+      id: data.id ?? '',
+      threadId: data.threadId ?? '',
+      topic: data.topic ?? '',
+      conclusions: safeParseArray(data.conclusions),
+      openQuestions: safeParseArray(data.openQuestions),
+      createdAt: parseInt(data.createdAt ?? '0', 10),
+      createdBy: (data.createdBy ?? 'user') as ThreadSummary['createdBy'],
     };
   }
 }

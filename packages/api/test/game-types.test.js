@@ -2,10 +2,11 @@
  * Game Type System Tests (F101 Task A2)
  * Verifies type guards for the game engine type system.
  */
-import { describe, it } from 'node:test';
-import assert from 'node:assert/strict';
 
-import { isSeatId, isValidScope, isGameEvent } from '@cat-cafe/shared';
+import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
+
+import { isGameEvent, isSeatId, isValidScope } from '@cat-cafe/shared';
 
 describe('Game type guards', () => {
   describe('isSeatId', () => {

@@ -4,8 +4,8 @@
  * GET /api/cats/:id/status - 获取猫猫状态
  */
 
-import type { FastifyPluginAsync } from 'fastify';
 import { catRegistry } from '@cat-cafe/shared';
+import type { FastifyPluginAsync } from 'fastify';
 
 export const catsRoutes: FastifyPluginAsync = async (app) => {
   // GET /api/cats - 获取所有猫猫配置

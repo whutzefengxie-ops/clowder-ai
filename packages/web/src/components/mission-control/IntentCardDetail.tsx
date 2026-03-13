@@ -32,16 +32,13 @@ export function IntentCardDetail({ card, onTriaged }: IntentCardDetailProps) {
   const handleTriage = async () => {
     setSubmitting(true);
     try {
-      const res = await apiFetch(
-        `/api/external-projects/${card.projectId}/intent-cards/${card.id}/triage`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ clarity, groundedness, necessity, coupling, sizeBand }),
-        },
-      );
+      const res = await apiFetch(`/api/external-projects/${card.projectId}/intent-cards/${card.id}/triage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clarity, groundedness, necessity, coupling, sizeBand }),
+      });
       if (res.ok) {
-        const body = await res.json() as { card: IntentCard };
+        const body = (await res.json()) as { card: IntentCard };
         onTriaged(body.card);
       }
     } finally {

@@ -3,8 +3,9 @@
  *
  * Tests extraction of game stats from finished runtime for leaderboard integration.
  */
-import { describe, it } from 'node:test';
+
 import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
 import { GameStatsRecorder } from '../dist/domains/cats/services/game/GameStatsRecorder.js';
 
 function makeFinishedRuntime(winner) {
@@ -15,14 +16,17 @@ function makeFinishedRuntime(winner) {
     definition: {
       gameType: 'werewolf',
       displayName: 'Werewolf',
-      minPlayers: 6, maxPlayers: 6,
+      minPlayers: 6,
+      maxPlayers: 6,
       roles: [
         { name: 'wolf', faction: 'wolf', description: 'Kills' },
         { name: 'seer', faction: 'village', description: 'Divines' },
         { name: 'witch', faction: 'village', description: 'Saves or poisons' },
         { name: 'villager', faction: 'village', description: 'Votes' },
       ],
-      phases: [], actions: [], winConditions: [],
+      phases: [],
+      actions: [],
+      winConditions: [],
     },
     seats: [
       { seatId: 'P1', actorType: 'cat', actorId: 'opus', role: 'wolf', alive: false, properties: {} },
@@ -56,21 +60,21 @@ describe('GameStatsRecorder', () => {
     assert.equal(stats.players.length, 6);
 
     // Wolf (P1) lost — dead, faction lost
-    const wolfStats = stats.players.find(p => p.actorId === 'opus');
+    const wolfStats = stats.players.find((p) => p.actorId === 'opus');
     assert.equal(wolfStats.role, 'wolf');
     assert.equal(wolfStats.faction, 'wolf');
     assert.equal(wolfStats.survived, false);
     assert.equal(wolfStats.won, false);
 
     // Seer (P2) won — alive, village won
-    const seerStats = stats.players.find(p => p.actorId === 'alice');
+    const seerStats = stats.players.find((p) => p.actorId === 'alice');
     assert.equal(seerStats.role, 'seer');
     assert.equal(seerStats.faction, 'village');
     assert.equal(seerStats.survived, true);
     assert.equal(seerStats.won, true);
 
     // Dead villager (P5) — village won but player died
-    const deadVillager = stats.players.find(p => p.actorId === 'sonnet');
+    const deadVillager = stats.players.find((p) => p.actorId === 'sonnet');
     assert.equal(deadVillager.survived, false);
     assert.equal(deadVillager.won, true, 'dead villager still wins if village wins');
   });
@@ -81,10 +85,10 @@ describe('GameStatsRecorder', () => {
 
     assert.equal(stats.winner, 'wolf');
 
-    const wolfStats = stats.players.find(p => p.role === 'wolf');
+    const wolfStats = stats.players.find((p) => p.role === 'wolf');
     assert.equal(wolfStats.won, true);
 
-    const seerStats = stats.players.find(p => p.role === 'seer');
+    const seerStats = stats.players.find((p) => p.role === 'seer');
     assert.equal(seerStats.won, false);
   });
 
@@ -92,10 +96,10 @@ describe('GameStatsRecorder', () => {
     const runtime = makeFinishedRuntime('village');
     const stats = GameStatsRecorder.extractStats(runtime);
 
-    const humanPlayer = stats.players.find(p => p.actorId === 'alice');
+    const humanPlayer = stats.players.find((p) => p.actorId === 'alice');
     assert.equal(humanPlayer.actorType, 'human');
 
-    const catPlayer = stats.players.find(p => p.actorId === 'opus');
+    const catPlayer = stats.players.find((p) => p.actorId === 'opus');
     assert.equal(catPlayer.actorType, 'cat');
   });
 

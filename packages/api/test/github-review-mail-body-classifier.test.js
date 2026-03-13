@@ -4,14 +4,12 @@
  * - Extract reviewer label from body when subject lacks action keywords
  */
 
-import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
+import { describe, test } from 'node:test';
 
 describe('GitHub review mail body classifier', () => {
   test('infers reviewType=reviewed from email body and extracts reviewer', async () => {
-    const { inferReviewActionFromEmailSource } = await import(
-      '../dist/infrastructure/email/GithubReviewMailParser.js'
-    );
+    const { inferReviewActionFromEmailSource } = await import('../dist/infrastructure/email/GithubReviewMailParser.js');
 
     const source = [
       'From: GitHub <notifications@github.com>',
@@ -27,9 +25,7 @@ describe('GitHub review mail body classifier', () => {
   });
 
   test('infers reviewType=commented from email body', async () => {
-    const { inferReviewActionFromEmailSource } = await import(
-      '../dist/infrastructure/email/GithubReviewMailParser.js'
-    );
+    const { inferReviewActionFromEmailSource } = await import('../dist/infrastructure/email/GithubReviewMailParser.js');
 
     const source = [
       'From: GitHub <notifications@github.com>',
@@ -44,9 +40,7 @@ describe('GitHub review mail body classifier', () => {
   });
 
   test('infers reviewType=approved from email body', async () => {
-    const { inferReviewActionFromEmailSource } = await import(
-      '../dist/infrastructure/email/GithubReviewMailParser.js'
-    );
+    const { inferReviewActionFromEmailSource } = await import('../dist/infrastructure/email/GithubReviewMailParser.js');
 
     const source = [
       'From: GitHub <notifications@github.com>',
@@ -61,9 +55,7 @@ describe('GitHub review mail body classifier', () => {
   });
 
   test('infers reviewType=changes_requested from email body', async () => {
-    const { inferReviewActionFromEmailSource } = await import(
-      '../dist/infrastructure/email/GithubReviewMailParser.js'
-    );
+    const { inferReviewActionFromEmailSource } = await import('../dist/infrastructure/email/GithubReviewMailParser.js');
 
     const source = [
       'From: GitHub <notifications@github.com>',
@@ -78,9 +70,7 @@ describe('GitHub review mail body classifier', () => {
   });
 
   test('does not mark email ignorable when setup sentence is quoted in a normal comment', async () => {
-    const { inferReviewActionFromEmailSource } = await import(
-      '../dist/infrastructure/email/GithubReviewMailParser.js'
-    );
+    const { inferReviewActionFromEmailSource } = await import('../dist/infrastructure/email/GithubReviewMailParser.js');
 
     const source = [
       'From: GitHub <notifications@github.com>',
@@ -99,9 +89,7 @@ describe('GitHub review mail body classifier', () => {
   });
 
   test('still marks setup-only email ignorable even when subject contains "Codex Review:"', async () => {
-    const { inferReviewActionFromEmailSource } = await import(
-      '../dist/infrastructure/email/GithubReviewMailParser.js'
-    );
+    const { inferReviewActionFromEmailSource } = await import('../dist/infrastructure/email/GithubReviewMailParser.js');
 
     const source = [
       'From: GitHub <notifications@github.com>',
@@ -115,9 +103,7 @@ describe('GitHub review mail body classifier', () => {
   });
 
   test('detects Codex environment/setup guidance email as ignorable', async () => {
-    const { inferReviewActionFromEmailSource } = await import(
-      '../dist/infrastructure/email/GithubReviewMailParser.js'
-    );
+    const { inferReviewActionFromEmailSource } = await import('../dist/infrastructure/email/GithubReviewMailParser.js');
 
     const source = [
       'From: GitHub <notifications@github.com>',
@@ -131,9 +117,7 @@ describe('GitHub review mail body classifier', () => {
   });
 
   test('detects Codex setup guidance (markdown link variant) as ignorable', async () => {
-    const { inferReviewActionFromEmailSource } = await import(
-      '../dist/infrastructure/email/GithubReviewMailParser.js'
-    );
+    const { inferReviewActionFromEmailSource } = await import('../dist/infrastructure/email/GithubReviewMailParser.js');
 
     const source = [
       'From: GitHub <notifications@github.com>',
@@ -149,9 +133,7 @@ describe('GitHub review mail body classifier', () => {
   });
 
   test('treats Codex PR review template (with setup sentence) as real review, not ignorable', async () => {
-    const { inferReviewActionFromEmailSource } = await import(
-      '../dist/infrastructure/email/GithubReviewMailParser.js'
-    );
+    const { inferReviewActionFromEmailSource } = await import('../dist/infrastructure/email/GithubReviewMailParser.js');
 
     const source = [
       'From: GitHub <notifications@github.com>',
@@ -177,9 +159,7 @@ describe('GitHub review mail body classifier', () => {
   });
 
   test('treats Codex PR review template without action markers as reviewType=reviewed', async () => {
-    const { inferReviewActionFromEmailSource } = await import(
-      '../dist/infrastructure/email/GithubReviewMailParser.js'
-    );
+    const { inferReviewActionFromEmailSource } = await import('../dist/infrastructure/email/GithubReviewMailParser.js');
 
     const source = [
       'From: GitHub <notifications@github.com>',
@@ -198,9 +178,7 @@ describe('GitHub review mail body classifier', () => {
   });
 
   test('does not treat "@codex review" trigger text as a Codex template review', async () => {
-    const { inferReviewActionFromEmailSource } = await import(
-      '../dist/infrastructure/email/GithubReviewMailParser.js'
-    );
+    const { inferReviewActionFromEmailSource } = await import('../dist/infrastructure/email/GithubReviewMailParser.js');
 
     const source = [
       'From: GitHub <notifications@github.com>',
@@ -217,9 +195,7 @@ describe('GitHub review mail body classifier', () => {
   });
 
   test('marks @codex review trigger comment as ignorable noise', async () => {
-    const { inferReviewActionFromEmailSource } = await import(
-      '../dist/infrastructure/email/GithubReviewMailParser.js'
-    );
+    const { inferReviewActionFromEmailSource } = await import('../dist/infrastructure/email/GithubReviewMailParser.js');
 
     const source = [
       'From: GitHub <notifications@github.com>',

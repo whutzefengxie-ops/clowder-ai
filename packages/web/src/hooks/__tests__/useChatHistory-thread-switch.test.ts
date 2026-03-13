@@ -1,10 +1,9 @@
-import React from 'react';
+import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { act } from 'react';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { useChatHistory } from '../useChatHistory';
 import { useChatStore } from '@/stores/chatStore';
 import { apiFetch } from '@/utils/api-client';
+import { useChatHistory } from '../useChatHistory';
 
 vi.mock('@/utils/api-client', () => ({
   apiFetch: vi.fn(),
@@ -46,7 +45,7 @@ describe('useChatHistory thread switch ordering', () => {
       catStatuses: {},
       catInvocations: {},
       currentGame: null,
-      
+
       threadStates: {},
       currentThreadId: 'thread-a',
       viewMode: 'single',
@@ -58,7 +57,7 @@ describe('useChatHistory thread switch ordering', () => {
     });
 
     // Keep requests pending so this test only observes immediate switch side-effects.
-    apiFetchMock.mockImplementation(() => new Promise<Response>(() => { }));
+    apiFetchMock.mockImplementation(() => new Promise<Response>(() => {}));
   });
 
   afterEach(() => {
@@ -98,7 +97,13 @@ describe('useChatHistory thread switch ordering', () => {
       threadStates: {
         'thread-c': {
           messages: [
-            { id: '0000001710000000-000001-abcd1234', type: 'assistant', catId: 'opus', content: 'old real msg', timestamp: Date.now() - 60_000 },
+            {
+              id: '0000001710000000-000001-abcd1234',
+              type: 'assistant',
+              catId: 'opus',
+              content: 'old real msg',
+              timestamp: Date.now() - 60_000,
+            },
             { id: 'bg-sys-1710000060000-opus-1', type: 'system', content: 'background update', timestamp: Date.now() },
           ],
           isLoading: false,
@@ -110,7 +115,7 @@ describe('useChatHistory thread switch ordering', () => {
           catStatuses: {},
           catInvocations: {},
           currentGame: null,
-          
+
           unreadCount: 1,
           hasUserMention: false,
           lastActivity: Date.now(),
@@ -138,7 +143,13 @@ describe('useChatHistory thread switch ordering', () => {
       threadStates: {
         'thread-d': {
           messages: [
-            { id: '0000001710000000-000001-abcd1234', type: 'assistant', catId: 'opus', content: 'cached msg', timestamp: Date.now() },
+            {
+              id: '0000001710000000-000001-abcd1234',
+              type: 'assistant',
+              catId: 'opus',
+              content: 'cached msg',
+              timestamp: Date.now(),
+            },
           ],
           isLoading: false,
           isLoadingHistory: false,
@@ -149,7 +160,7 @@ describe('useChatHistory thread switch ordering', () => {
           catStatuses: {},
           catInvocations: {},
           currentGame: null,
-          
+
           unreadCount: 0,
           hasUserMention: false,
           lastActivity: Date.now(),
@@ -187,7 +198,7 @@ describe('useChatHistory thread switch ordering', () => {
           catStatuses: { opus: 'streaming' },
           catInvocations: {},
           currentGame: null,
-          
+
           unreadCount: 0,
           hasUserMention: false,
           lastActivity: Date.now(),

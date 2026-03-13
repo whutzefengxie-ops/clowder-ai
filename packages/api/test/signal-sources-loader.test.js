@@ -12,15 +12,15 @@ describe('signal sources loader', () => {
 
   beforeEach(() => {
     tempRoot = mkdtempSync('/tmp/cat-cafe-signals-');
-    prevSignalsRoot = process.env['SIGNALS_ROOT_DIR'];
-    process.env['SIGNALS_ROOT_DIR'] = tempRoot;
+    prevSignalsRoot = process.env.SIGNALS_ROOT_DIR;
+    process.env.SIGNALS_ROOT_DIR = tempRoot;
   });
 
   afterEach(() => {
     if (prevSignalsRoot === undefined) {
-      delete process.env['SIGNALS_ROOT_DIR'];
+      delete process.env.SIGNALS_ROOT_DIR;
     } else {
-      process.env['SIGNALS_ROOT_DIR'] = prevSignalsRoot;
+      process.env.SIGNALS_ROOT_DIR = prevSignalsRoot;
     }
     rmSync(tempRoot, { recursive: true, force: true });
   });
@@ -102,7 +102,7 @@ describe('signal sources loader', () => {
   it('falls back to default root when SIGNALS_ROOT_DIR is empty', async () => {
     const { resolveSignalPaths } = await import(modulePath);
 
-    process.env['SIGNALS_ROOT_DIR'] = '';
+    process.env.SIGNALS_ROOT_DIR = '';
 
     const paths = resolveSignalPaths();
     const expectedRoot = join(homedir(), '.cat-cafe', 'signals');

@@ -1,7 +1,6 @@
-import React from 'react';
-import { describe, expect, it, vi, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
+import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { act } from 'react';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 beforeAll(() => {
   (globalThis as { React?: typeof React }).React = React;
@@ -60,7 +59,7 @@ describe('ScrollToBottomButton', () => {
       );
     });
 
-    expect(container.querySelector('button[aria-label=\"到最新\"]')).toBeNull();
+    expect(container.querySelector('button[aria-label="到最新"]')).toBeNull();
 
     // Scroll up
     defineNumberProp(scrollEl, 'scrollTop', 0);
@@ -68,7 +67,7 @@ describe('ScrollToBottomButton', () => {
       scrollEl.dispatchEvent(new Event('scroll'));
     });
 
-    const btn = container.querySelector('button[aria-label=\"到最新\"]');
+    const btn = container.querySelector('button[aria-label="到最新"]');
     expect(btn).toBeTruthy();
 
     act(() => {
@@ -96,7 +95,7 @@ describe('ScrollToBottomButton', () => {
       );
     });
 
-    expect(container.querySelector('button[aria-label=\"到最新\"]')).toBeTruthy();
+    expect(container.querySelector('button[aria-label="到最新"]')).toBeTruthy();
 
     // Thread switch / content replacement: scrollTop changes, but no scroll event fired.
     defineNumberProp(scrollEl, 'scrollTop', 200); // at bottom
@@ -110,7 +109,7 @@ describe('ScrollToBottomButton', () => {
       );
     });
 
-    expect(container.querySelector('button[aria-label=\"到最新\"]')).toBeNull();
+    expect(container.querySelector('button[aria-label="到最新"]')).toBeNull();
   });
 
   it('recomputes visibility on local layout change events (cloud P2)', async () => {
@@ -130,7 +129,7 @@ describe('ScrollToBottomButton', () => {
         }),
       );
     });
-    expect(container.querySelector('button[aria-label=\"到最新\"]')).toBeNull();
+    expect(container.querySelector('button[aria-label="到最新"]')).toBeNull();
 
     // Local expansion (e.g. ThinkingContent) grows scrollHeight without scroll/resize events.
     defineNumberProp(scrollEl, 'scrollHeight', 500);
@@ -138,7 +137,7 @@ describe('ScrollToBottomButton', () => {
       window.dispatchEvent(new Event('catcafe:chat-layout-changed'));
     });
 
-    expect(container.querySelector('button[aria-label=\"到最新\"]')).toBeTruthy();
+    expect(container.querySelector('button[aria-label="到最新"]')).toBeTruthy();
   });
 
   it('recomputes visibility on media-driven layout changes via IntersectionObserver (cloud P2)', async () => {
@@ -175,14 +174,14 @@ describe('ScrollToBottomButton', () => {
       });
 
       expect(callback).toBeTruthy();
-      expect(container.querySelector('button[aria-label=\"到最新\"]')).toBeNull();
+      expect(container.querySelector('button[aria-label="到最新"]')).toBeNull();
 
       // Media load / layout shift pushes the end sentinel out of view without scroll/resize.
       act(() => {
         callback?.([{ isIntersecting: false }]);
       });
 
-      expect(container.querySelector('button[aria-label=\"到最新\"]')).toBeTruthy();
+      expect(container.querySelector('button[aria-label="到最新"]')).toBeTruthy();
     } finally {
       (globalThis as { IntersectionObserver?: unknown }).IntersectionObserver = original;
     }

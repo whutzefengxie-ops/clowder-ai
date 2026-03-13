@@ -1,8 +1,8 @@
-import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
-import { rm } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { EventAuditLog, AuditEventTypes } from '../dist/domains/cats/services/orchestration/EventAuditLog.js';
+import { rm } from 'node:fs/promises';
+import { afterEach, beforeEach, describe, test } from 'node:test';
+import { AuditEventTypes, EventAuditLog } from '../dist/domains/cats/services/orchestration/EventAuditLog.js';
 
 const TEST_AUDIT_DIR = './test-audit-logs';
 

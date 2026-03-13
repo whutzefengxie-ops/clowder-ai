@@ -6,7 +6,11 @@ import type { ChatMessage } from '@/stores/chatStore';
  * Purpose: detect cases where scrollHeight changes without scroll/resize events,
  * such as streaming chunks that append to an existing message (no messages.length change).
  */
-export function computeScrollRecomputeSignal(threadId: string, messages: ChatMessage[], uiExpansionSignal?: unknown): string {
+export function computeScrollRecomputeSignal(
+  threadId: string,
+  messages: ChatMessage[],
+  uiExpansionSignal?: unknown,
+): string {
   const tail = messages.slice(-3);
   const tailSig = tail
     .map((m) => {

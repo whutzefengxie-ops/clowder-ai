@@ -1,6 +1,7 @@
 // @ts-check
-import { describe, test } from 'node:test';
+
 import assert from 'node:assert/strict';
+import { describe, test } from 'node:test';
 
 describe('detectRisks', () => {
   /** @type {typeof import('../dist/domains/projects/risk-detection-service.js').detectRisks} */
@@ -14,7 +15,8 @@ describe('detectRisks', () => {
   /** minimal card factory */
   function makeCard(overrides = {}) {
     return {
-      id: 'ic-1', projectId: 'ep-1',
+      id: 'ic-1',
+      projectId: 'ep-1',
       actor: 'Store Manager',
       contextTrigger: 'When reviewing daily sales',
       goal: 'View today sales summary',
@@ -29,7 +31,8 @@ describe('detectRisks', () => {
       riskSignals: [],
       triage: null,
       originalText: 'As a store manager I want to see daily sales',
-      createdAt: Date.now(), updatedAt: Date.now(),
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
       ...overrides,
     };
   }
@@ -37,49 +40,49 @@ describe('detectRisks', () => {
   test('hollow_verbs: detects vague action words in goal', () => {
     const card = makeCard({ goal: 'Improve system performance and optimize workflows' });
     const results = detectRisks(card);
-    assert.ok(results.some(r => r.signal === 'hollow_verbs'));
+    assert.ok(results.some((r) => r.signal === 'hollow_verbs'));
   });
 
   test('missing_actors: detects system-only or empty actor', () => {
     const card = makeCard({ actor: 'the system' });
     const results = detectRisks(card);
-    assert.ok(results.some(r => r.signal === 'missing_actors'));
+    assert.ok(results.some((r) => r.signal === 'missing_actors'));
   });
 
   test('unknown_data_source: detects empty sourceDetail with data references', () => {
     const card = makeCard({ sourceDetail: '', goal: 'Query the database for user records' });
     const results = detectRisks(card);
-    assert.ok(results.some(r => r.signal === 'unknown_data_source'));
+    assert.ok(results.some((r) => r.signal === 'unknown_data_source'));
   });
 
   test('missing_success_signal: detects empty successSignal', () => {
     const card = makeCard({ successSignal: '' });
     const results = detectRisks(card);
-    assert.ok(results.some(r => r.signal === 'missing_success_signal'));
+    assert.ok(results.some((r) => r.signal === 'missing_success_signal'));
   });
 
   test('missing_edge_cases: detects no error/boundary mentions', () => {
     const card = makeCard({ nonGoal: '' });
     const results = detectRisks(card);
-    assert.ok(results.some(r => r.signal === 'missing_edge_cases'));
+    assert.ok(results.some((r) => r.signal === 'missing_edge_cases'));
   });
 
   test('hidden_dependencies: detects 4+ dependency tags', () => {
     const card = makeCard({ dependencyTags: ['auth', 'billing', 'notification', 'analytics'] });
     const results = detectRisks(card);
-    assert.ok(results.some(r => r.signal === 'hidden_dependencies'));
+    assert.ok(results.some((r) => r.signal === 'hidden_dependencies'));
   });
 
   test('ai_fake_specificity: detects A-tagged card with empty objectState', () => {
     const card = makeCard({ sourceTag: /** @type {const} */ ('A'), objectState: '' });
     const results = detectRisks(card);
-    assert.ok(results.some(r => r.signal === 'ai_fake_specificity'));
+    assert.ok(results.some((r) => r.signal === 'ai_fake_specificity'));
   });
 
   test('scope_creep: detects expansive language', () => {
     const card = makeCard({ goal: 'Build enterprise-grade MVP with all modules' });
     const results = detectRisks(card);
-    assert.ok(results.some(r => r.signal === 'scope_creep'));
+    assert.ok(results.some((r) => r.signal === 'scope_creep'));
   });
 
   test('clean card: no risks detected', () => {
@@ -99,7 +102,7 @@ describe('detectRisks', () => {
     });
     const results = detectRisks(card);
     assert.ok(results.length >= 4);
-    const signals = results.map(r => r.signal);
+    const signals = results.map((r) => r.signal);
     assert.ok(signals.includes('missing_actors'));
     assert.ok(signals.includes('missing_success_signal'));
     assert.ok(signals.includes('ai_fake_specificity'));

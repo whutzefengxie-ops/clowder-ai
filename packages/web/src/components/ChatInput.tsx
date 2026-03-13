@@ -2,16 +2,14 @@
 
 import { KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useCatData } from '@/hooks/useCatData';
+import { usePathCompletion } from '@/hooks/usePathCompletion';
 import type { UploadStatus, WhisperOptions } from '@/hooks/useSendMessage';
 import type { DeliveryMode } from '@/stores/chat-types';
 import { useChatStore } from '@/stores/chatStore';
 import { useInputHistoryStore } from '@/stores/inputHistoryStore';
 import { compressImage } from '@/utils/compressImage';
-import { usePathCompletion } from '@/hooks/usePathCompletion';
 import { ChatInputActionButton } from './ChatInputActionButton';
 import { ChatInputMenus } from './ChatInputMenus';
-import { HistorySearchModal } from './HistorySearchModal';
-import { PathCompletionMenu } from './PathCompletionMenu';
 import {
   buildCatOptions,
   buildWhisperOptions,
@@ -20,9 +18,11 @@ import {
   MODE_OPTIONS,
 } from './chat-input-options';
 import { deriveImageLifecycleStatus, isImageLifecycleBlockingSend } from './chat-input-upload-state';
+import { HistorySearchModal } from './HistorySearchModal';
 import { ImagePreview } from './ImagePreview';
 import { AttachIcon } from './icons/AttachIcon';
 import { MobileInputToolbar } from './MobileInputToolbar';
+import { PathCompletionMenu } from './PathCompletionMenu';
 
 /** Module-level draft storage — survives component unmount/remount across thread switches */
 export const threadDrafts = new Map<string, string>();
@@ -97,10 +97,11 @@ export function ChatInput({
   const filteredCatOptions = useMemo(() => {
     if (!mentionFilter) return catOptions;
     const lower = mentionFilter.toLowerCase();
-    return catOptions.filter((opt) =>
-      opt.label.toLowerCase().includes(lower) ||
-      opt.insert.toLowerCase().includes(lower) ||
-      opt.id.toLowerCase().includes(lower),
+    return catOptions.filter(
+      (opt) =>
+        opt.label.toLowerCase().includes(lower) ||
+        opt.insert.toLowerCase().includes(lower) ||
+        opt.id.toLowerCase().includes(lower),
     );
   }, [catOptions, mentionFilter]);
 
@@ -196,15 +197,18 @@ export function ChatInput({
     [closeMenus],
   );
 
-  const handleHistorySelect = useCallback((text: string) => {
-    setInput(text);
-    setShowHistorySearch(false);
-    ghostRef.current = null;
-    setGhostSuggestion(null);
-    closeMenus();
-    setMentionFilter('');
-    setTimeout(() => textareaRef.current?.focus(), 0);
-  }, [closeMenus]);
+  const handleHistorySelect = useCallback(
+    (text: string) => {
+      setInput(text);
+      setShowHistorySearch(false);
+      ghostRef.current = null;
+      setGhostSuggestion(null);
+      closeMenus();
+      setMentionFilter('');
+      setTimeout(() => textareaRef.current?.focus(), 0);
+    },
+    [closeMenus],
+  );
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.nativeEvent.isComposing) return;
@@ -441,7 +445,7 @@ export function ChatInput({
     const isMobile = typeof window.matchMedia === 'function' ? window.matchMedia('(max-width: 767px)').matches : false;
     const maxH = isMobile ? 120 : 200; // ~5 lines mobile, ~8 lines desktop
     ta.style.height = `${Math.min(ta.scrollHeight, maxH)}px`;
-  }, [input]);
+  }, []);
 
   useEffect(() => {
     if (!activeMenu) return;
@@ -618,11 +622,7 @@ export function ChatInput({
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
             placeholder={
-              whisperMode
-                ? '悄悄话...'
-                : hasActiveInvocation
-                  ? '继续输入，消息会排队...'
-                  : '输入消息... (@ 召唤猫猫)'
+              whisperMode ? '悄悄话...' : hasActiveInvocation ? '继续输入，消息会排队...' : '输入消息... (@ 召唤猫猫)'
             }
             className={`w-full resize-none rounded-xl border p-3 text-sm focus:outline-none focus:ring-2 placeholder:text-gray-400 ${
               whisperMode
@@ -658,10 +658,7 @@ export function ChatInput({
       </div>
 
       {showHistorySearch && (
-        <HistorySearchModal
-          onSelect={handleHistorySelect}
-          onClose={() => setShowHistorySearch(false)}
-        />
+        <HistorySearchModal onSelect={handleHistorySelect} onClose={() => setShowHistorySearch(false)} />
       )}
     </div>
   );

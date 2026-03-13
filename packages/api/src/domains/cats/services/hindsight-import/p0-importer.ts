@@ -1,14 +1,14 @@
 import type { RetainItem, RetainOptions } from '../orchestration/HindsightClient.js';
 import {
-  P0_LESSONS_PATH,
-  P0_PROJECT_TAG,
   buildP0Anchor,
   buildP0DocumentId,
   deriveP0Kind,
-  isP0DiscussionSourcePath,
   deriveP0Status,
   isP0AllowedSourcePath,
+  isP0DiscussionSourcePath,
   normalizeSourcePath,
+  P0_LESSONS_PATH,
+  P0_PROJECT_TAG,
   validateP0Tags,
 } from './p0-contract.js';
 import {
@@ -188,12 +188,13 @@ export function buildImportItemsFromMarkdown(input: BuildImportItemsInput): Reta
 
   const kind = deriveP0Kind(sourcePath);
   const status = deriveP0Status(sourcePath);
-  const sections = kind === 'decision'
-    ? splitByLevel2Headings(normalizedContent, {
-      headingAllowlist: P0_DECISION_HEADING_ALLOWLIST,
-      minChunkContentLength: P0_MIN_CHUNK_CONTENT_LENGTH,
-    })
-    : splitByLevel2Headings(normalizedContent);
+  const sections =
+    kind === 'decision'
+      ? splitByLevel2Headings(normalizedContent, {
+          headingAllowlist: P0_DECISION_HEADING_ALLOWLIST,
+          minChunkContentLength: P0_MIN_CHUNK_CONTENT_LENGTH,
+        })
+      : splitByLevel2Headings(normalizedContent);
 
   return sections.map((section) => {
     const anchor = buildP0Anchor(sourcePath, section.heading);
@@ -201,7 +202,17 @@ export function buildImportItemsFromMarkdown(input: BuildImportItemsInput): Reta
       document_id: documentId,
       content: section.content,
       tags: buildGovernanceTags({ kind, status, origin, visibility, author, sourcePath, sourceCommit, anchor }),
-      metadata: buildMetadata({ kind, status, origin, visibility, author, sourcePath, sourceCommit, anchor, heading: section.heading }),
+      metadata: buildMetadata({
+        kind,
+        status,
+        origin,
+        visibility,
+        author,
+        sourcePath,
+        sourceCommit,
+        anchor,
+        heading: section.heading,
+      }),
     };
   });
 }

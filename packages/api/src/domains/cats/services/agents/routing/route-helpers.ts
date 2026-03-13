@@ -4,14 +4,14 @@
  */
 
 import type { CatId, MessageContent, RichBlock, RichBlockBase } from '@cat-cafe/shared';
-import type { IMessageStore, StoredMessage, StoredToolEvent } from '../../stores/ports/MessageStore.js';
+import { getCatContextBudget } from '../../../../../config/cat-budgets.js';
+import { formatMessage } from '../../context/ContextAssembler.js';
+import { checkContextBudget, type DegradationResult } from '../../orchestration/DegradationPolicy.js';
 import { DeliveryCursorStore } from '../../stores/ports/DeliveryCursorStore.js';
 import type { IDraftStore } from '../../stores/ports/DraftStore.js';
-import type { AgentMessage, AgentService } from '../../types.js';
-import { formatMessage } from '../../context/ContextAssembler.js';
+import type { IMessageStore, StoredMessage, StoredToolEvent } from '../../stores/ports/MessageStore.js';
 import { canViewMessage } from '../../stores/visibility.js';
-import { getCatContextBudget } from '../../../../../config/cat-budgets.js';
-import { checkContextBudget, type DegradationResult } from '../../orchestration/DegradationPolicy.js';
+import type { AgentMessage, AgentService } from '../../types.js';
 import type { InvocationDeps } from '../invocation/invoke-single-cat.js';
 
 /** Minimal broadcast interface — avoids coupling routing layer to SocketManager concrete class */
@@ -90,11 +90,7 @@ export interface IncrementalContextResult {
  *
  * Assumes message IDs are lexicographically monotonic (timestamp+seq prefix).
  */
-export function upsertMaxBoundary(
-  cursorBoundaries: Map<string, string>,
-  catId: string,
-  boundaryId: string,
-): void {
+export function upsertMaxBoundary(cursorBoundaries: Map<string, string>, catId: string, boundaryId: string): void {
   const current = cursorBoundaries.get(catId);
   if (!current || boundaryId > current) {
     cursorBoundaries.set(catId, boundaryId);
@@ -178,8 +174,7 @@ export function sanitizeInjectedContent(content: string): string {
 
   for (const line of lines) {
     const trimmed = line.trim();
-    const isHistoryHeader = line.startsWith('[对话历史 - 最近 ')
-      || line.startsWith('[对话历史增量 - 未发送过 ');
+    const isHistoryHeader = line.startsWith('[对话历史 - 最近 ') || line.startsWith('[对话历史增量 - 未发送过 ');
 
     if (!skippingHistoryEnvelope && isHistoryHeader) {
       // Drop known injected history envelopes only.
@@ -221,18 +216,23 @@ export function routeContentBlocksForCat(
  */
 function digestRichBlock(b: RichBlock): string {
   switch (b.kind) {
-    case 'card':       return `[卡片: ${b.title ?? '无标题'}]`;
-    case 'diff':       return `[代码 diff: ${b.filePath ?? '未知文件'}]`;
-    case 'checklist':  return `[清单: ${b.title ?? `${Array.isArray(b.items) ? b.items.length : 0} 项`}]`;
-    case 'media_gallery': return `[图片: ${Array.isArray(b.items) ? b.items.length : 0} 张]`;
-    default:           return `[富块: ${(b as RichBlockBase).kind}]`;
+    case 'card':
+      return `[卡片: ${b.title ?? '无标题'}]`;
+    case 'diff':
+      return `[代码 diff: ${b.filePath ?? '未知文件'}]`;
+    case 'checklist':
+      return `[清单: ${b.title ?? `${Array.isArray(b.items) ? b.items.length : 0} 项`}]`;
+    case 'media_gallery':
+      return `[图片: ${Array.isArray(b.items) ? b.items.length : 0} 张]`;
+    default:
+      return `[富块: ${(b as RichBlockBase).kind}]`;
   }
 }
 
 export function digestRichBlocks(msg: StoredMessage): string {
   if (!msg.extra?.rich?.blocks?.length) return msg.content;
   const digests = msg.extra.rich.blocks.map(digestRichBlock);
-  return msg.content + '\n' + digests.join(' ');
+  return `${msg.content}\n${digests.join(' ')}`;
 }
 
 export async function fetchAfterCursor(
@@ -260,9 +260,7 @@ export async function assembleIncrementalContext(
   const unseen = await fetchAfterCursor(deps.messageStore, threadId, cursor, userId);
 
   // Debug mode: cats see all whispers (full transparency). Play mode: cats only see their own whispers.
-  const viewer = (thinkingMode ?? 'play') === 'play'
-    ? { type: 'cat' as const, catId }
-    : { type: 'user' as const };
+  const viewer = (thinkingMode ?? 'play') === 'play' ? { type: 'cat' as const, catId } : { type: 'user' as const };
   const relevant = unseen.filter((m) => {
     // F35: Exclude whispers not intended for this cat (play mode only)
     if (!canViewMessage(m, viewer)) return false;
@@ -281,9 +279,7 @@ export async function assembleIncrementalContext(
   // F35 fix: detect when the current message was present but filtered out by visibility
   // (e.g. whisper not intended for this cat). Must NOT fallback-inject in that case.
   const currentMessageFilteredOut = Boolean(
-    currentUserMessageId
-      && !includesCurrentUserMessage
-      && unseen.some((m) => m.id === currentUserMessageId),
+    currentUserMessageId && !includesCurrentUserMessage && unseen.some((m) => m.id === currentUserMessageId),
   );
   if (relevant.length === 0) {
     return cursor
@@ -296,14 +292,12 @@ export async function assembleIncrementalContext(
     // F22: Digest rich blocks into compact summaries for context
     const contentWithDigest = digestRichBlocks(m);
     const cleanContent = sanitizeInjectedContent(contentWithDigest);
-    const normalized: StoredMessage = cleanContent === m.content
-      ? m
-      : { ...m, content: cleanContent };
+    const normalized: StoredMessage = cleanContent === m.content ? m : { ...m, content: cleanContent };
     const rendered = formatMessage(normalized, { truncate: truncateLimit });
     return `[${m.id}] ${rendered}`;
   });
 
-  const boundaryId = relevant[relevant.length - 1]!.id;
+  const boundaryId = relevant[relevant.length - 1]?.id;
   return {
     contextText: `[对话历史增量 - 未发送过 ${relevant.length} 条]\n${lines.join('\n')}\n[/对话历史]`,
     boundaryId,

@@ -92,7 +92,7 @@ export class MarkerQueue implements IMarkerQueue {
     for (const line of marker.content.split('\n')) {
       lines.push(`  ${line}`);
     }
-    writeFileSync(join(this.markersDir, `${marker.id}.yaml`), lines.join('\n') + '\n');
+    writeFileSync(join(this.markersDir, `${marker.id}.yaml`), `${lines.join('\n')}\n`);
   }
 
   private parseYaml(text: string): Marker | null {
@@ -123,10 +123,10 @@ export class MarkerQueue implements IMarkerQueue {
       }
     }
 
-    const id = fields['id'];
-    const status = fields['status'];
-    const source = fields['source'];
-    const createdAt = fields['created_at'];
+    const id = fields.id;
+    const status = fields.status;
+    const source = fields.source;
+    const createdAt = fields.created_at;
     const content = contentLines.join('\n').trimEnd();
 
     if (!id || !status || !source || !createdAt || !content) return null;
@@ -138,7 +138,7 @@ export class MarkerQueue implements IMarkerQueue {
       status: status as MarkerStatus,
       createdAt,
     };
-    const tk = fields['target_kind'];
+    const tk = fields.target_kind;
     if (tk) marker.targetKind = tk as NonNullable<Marker['targetKind']>;
     return marker;
   }

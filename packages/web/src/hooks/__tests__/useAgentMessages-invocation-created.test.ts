@@ -59,7 +59,7 @@ const storeState = {
   setMessageMetadata: mockSetMessageMetadata,
   setMessageThinking: mockSetMessageThinking,
   setMessageStreamInvocation: mockSetMessageStreamInvocation,
-  
+
   addMessageToThread: mockAddMessageToThread,
   clearThreadActiveInvocation: mockClearThreadActiveInvocation,
   resetThreadInvocationState: mockResetThreadInvocationState,
@@ -146,14 +146,16 @@ describe('useAgentMessages system_info invocation_created', () => {
   });
 
   it('binds stream invocation identity onto an existing placeholder bubble when invocation_created arrives late', () => {
-    storeState.messages = [{
-      id: 'msg-live-1',
-      type: 'assistant',
-      catId: 'codex',
-      content: 'partial chunk',
-      isStreaming: true,
-      timestamp: Date.now(),
-    }];
+    storeState.messages = [
+      {
+        id: 'msg-live-1',
+        type: 'assistant',
+        catId: 'codex',
+        content: 'partial chunk',
+        isStreaming: true,
+        timestamp: Date.now(),
+      },
+    ];
 
     act(() => {
       root.render(React.createElement(Harness));

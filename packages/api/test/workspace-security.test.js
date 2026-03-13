@@ -1,8 +1,8 @@
-import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdir, writeFile, symlink, rm } from 'node:fs/promises';
-import { join } from 'node:path';
+import { mkdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { beforeEach, describe, it } from 'node:test';
 
 describe('workspace-security', () => {
   let mod;

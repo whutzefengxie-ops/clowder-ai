@@ -1,10 +1,11 @@
 /**
  * F076: Resolution routes — Stage 3 clarification queue CRUD
  */
+
+import type { CreateResolutionInput, ResolutionPath } from '@cat-cafe/shared';
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import type { ExternalProjectStore } from '../domains/projects/external-project-store.js';
 import type { ResolutionStore } from '../domains/projects/resolution-store.js';
-import type { CreateResolutionInput, ResolutionPath } from '@cat-cafe/shared';
 
 export interface ResolutionRoutesOptions {
   externalProjectStore: ExternalProjectStore;
@@ -40,11 +41,11 @@ export const resolutionRoutes: FastifyPluginAsync<ResolutionRoutesOptions> = asy
 
     const body = request.body as Record<string, unknown>;
     const input: CreateResolutionInput = {
-      cardId: (body['cardId'] as string) ?? '',
-      path: (body['path'] as ResolutionPath) ?? 'confirmation',
-      question: (body['question'] as string) ?? '',
-      options: (body['options'] as string[]) ?? [],
-      recommendation: (body['recommendation'] as string) ?? '',
+      cardId: (body.cardId as string) ?? '',
+      path: (body.path as ResolutionPath) ?? 'confirmation',
+      question: (body.question as string) ?? '',
+      options: (body.options as string[]) ?? [],
+      recommendation: (body.recommendation as string) ?? '',
     };
     const resolution = resolutionStore.create(projectId, input);
     return reply.status(201).send({ resolution });
@@ -57,9 +58,8 @@ export const resolutionRoutes: FastifyPluginAsync<ResolutionRoutesOptions> = asy
     if (!requireOwnedProject(projectId, userId, reply)) return;
 
     const query = request.query as { status?: string };
-    const items = query.status === 'open'
-      ? resolutionStore.listOpen(projectId)
-      : resolutionStore.listByProject(projectId);
+    const items =
+      query.status === 'open' ? resolutionStore.listOpen(projectId) : resolutionStore.listByProject(projectId);
     return reply.send({ resolutions: items });
   });
 
@@ -89,7 +89,7 @@ export const resolutionRoutes: FastifyPluginAsync<ResolutionRoutesOptions> = asy
 
     const body = request.body as Record<string, unknown>;
     const resolution = resolutionStore.answer(id, {
-      answer: (body['answer'] as string) ?? '',
+      answer: (body.answer as string) ?? '',
     });
     if (!resolution) return reply.status(404).send({ error: 'Resolution not found' });
     return reply.send({ resolution });

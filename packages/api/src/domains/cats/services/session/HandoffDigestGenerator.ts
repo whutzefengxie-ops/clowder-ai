@@ -137,7 +137,7 @@ export function buildPromptContent(
 
   // Truncate if over input cap
   if (result.length > MAX_INPUT_CHARS) {
-    return result.slice(0, MAX_INPUT_CHARS) + '\n\n[... truncated due to input size limit]';
+    return `${result.slice(0, MAX_INPUT_CHARS)}\n\n[... truncated due to input size limit]`;
   }
   return result;
 }

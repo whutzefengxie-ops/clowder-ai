@@ -7,8 +7,8 @@
  * - processNext（用户级）：owner手动触发处理自己的下一条
  */
 
-import type { QueueEntry, InvocationQueue } from './InvocationQueue.js';
 import type { IMessageStore } from '../../stores/ports/MessageStore.js';
+import type { InvocationQueue, QueueEntry } from './InvocationQueue.js';
 
 /** Minimal interfaces for deps — avoid importing full types for testability */
 
@@ -33,11 +33,7 @@ export interface RouterLike {
     intent: { intent: string },
     opts?: Record<string, unknown>,
   ): AsyncIterable<{ type: string; catId?: string; [key: string]: unknown }>;
-  ackCollectedCursors(
-    userId: string,
-    threadId: string,
-    cursors: Map<string, string>,
-  ): Promise<void>;
+  ackCollectedCursors(userId: string, threadId: string, cursors: Map<string, string>): Promise<void>;
 }
 
 interface SocketManagerLike {
@@ -94,10 +90,7 @@ export class QueueProcessor {
    * - succeeded → auto-dequeue oldest across users
    * - canceled/failed → pause, notify relevant users
    */
-  async onInvocationComplete(
-    threadId: string,
-    status: 'succeeded' | 'failed' | 'canceled',
-  ): Promise<void> {
+  async onInvocationComplete(threadId: string, status: 'succeeded' | 'failed' | 'canceled'): Promise<void> {
     if (status === 'succeeded') {
       this.pausedThreads.delete(threadId);
       // Auto-dequeue: pick oldest entry across all users
@@ -142,19 +135,14 @@ export class QueueProcessor {
   /**
    * User-level entry: owner manually triggers processing their next entry.
    */
-  async processNext(
-    threadId: string,
-    userId: string,
-  ): Promise<{ started: boolean; entry?: QueueEntry }> {
+  async processNext(threadId: string, userId: string): Promise<{ started: boolean; entry?: QueueEntry }> {
     this.pausedThreads.delete(threadId);
     return this.tryExecuteNextForUser(threadId, userId);
   }
 
   // ── Internal ──
 
-  private async tryExecuteNextAcrossUsers(
-    threadId: string,
-  ): Promise<{ started: boolean; entry?: QueueEntry }> {
+  private async tryExecuteNextAcrossUsers(threadId: string): Promise<{ started: boolean; entry?: QueueEntry }> {
     // Mutex check
     if (this.processingThreads.has(threadId)) {
       return { started: false };
@@ -212,11 +200,8 @@ export class QueueProcessor {
    * Creates InvocationRecord → tracker.start → route execution → complete → cleanup.
    * Returns final status for chain auto-dequeue (called by tryExecuteNext*).
    */
-  private async executeEntry(
-    entry: QueueEntry,
-  ): Promise<'succeeded' | 'failed'> {
-    const { queue, invocationTracker, invocationRecordStore, router, socketManager, messageStore, log } =
-      this.deps;
+  private async executeEntry(entry: QueueEntry): Promise<'succeeded' | 'failed'> {
+    const { queue, invocationTracker, invocationRecordStore, router, socketManager, messageStore, log } = this.deps;
     const { threadId, userId, content, targetCats, intent, messageId } = entry;
 
     let controller: AbortController | undefined;
@@ -268,7 +253,9 @@ export class QueueProcessor {
         try {
           const result = await messageStore.markDelivered(mid, deliveredNow);
           if (result) deliveredIds.push(mid);
-        } catch { /* best-effort: delivery timestamp is non-critical */ }
+        } catch {
+          /* best-effort: delivery timestamp is non-critical */
+        }
       }
       // Notify frontend only for successfully persisted IDs (cloud P2: avoid phantom timestamps)
       if (deliveredIds.length > 0) {
@@ -325,10 +312,7 @@ export class QueueProcessor {
 
       return 'succeeded';
     } catch (err) {
-      log.error(
-        { threadId, entryId: entry.id, err },
-        '[QueueProcessor] executeEntry failed',
-      );
+      log.error({ threadId, entryId: entry.id, err }, '[QueueProcessor] executeEntry failed');
       const errMsg = err instanceof Error ? err.message : String(err);
       // Best-effort: mark record failed + broadcast error
       try {
@@ -348,7 +332,9 @@ export class QueueProcessor {
           },
           threadId,
         );
-      } catch { /* ignore secondary errors */ }
+      } catch {
+        /* ignore secondary errors */
+      }
 
       return 'failed';
     } finally {
@@ -361,10 +347,7 @@ export class QueueProcessor {
   }
 
   /** Emit queue_paused to each user who has queued entries for this thread. */
-  private emitPausedToQueuedUsers(
-    threadId: string,
-    reason: 'canceled' | 'failed',
-  ): void {
+  private emitPausedToQueuedUsers(threadId: string, reason: 'canceled' | 'failed'): void {
     const users = this.deps.queue.listUsersForThread(threadId);
     for (const userId of users) {
       const userQueue = this.deps.queue.list(threadId, userId);

@@ -6,10 +6,10 @@
  * Falls back to static CAT_CONFIGS from @cat-cafe/shared during initial load.
  */
 
-import { useEffect, useMemo, useState } from 'react';
 import { CAT_CONFIGS } from '@cat-cafe/shared';
-import { apiFetch } from '@/utils/api-client';
+import { useEffect, useMemo, useState } from 'react';
 import { refreshMentionData } from '@/lib/mention-highlight';
+import { apiFetch } from '@/utils/api-client';
 import { refreshSpeechAliases } from '@/utils/transcription-corrector';
 
 export interface CatData {
@@ -54,7 +54,10 @@ function buildFallbackCats(): CatData[] {
   }));
 }
 
-interface FetchResult { cats: CatData[]; fromApi: boolean }
+interface FetchResult {
+  cats: CatData[];
+  fromApi: boolean;
+}
 
 async function fetchCats(): Promise<FetchResult> {
   try {
@@ -105,7 +108,10 @@ export function useCatData() {
         setIsLoading(false);
       }
     });
-    return () => { cancelled = true; clearTimeout(retryTimer); };
+    return () => {
+      cancelled = true;
+      clearTimeout(retryTimer);
+    };
   }, [retryCount]);
 
   const getCatById = useMemo(() => {

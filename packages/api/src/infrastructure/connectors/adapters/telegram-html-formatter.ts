@@ -44,5 +44,5 @@ export function formatTelegramHtml(blocks: RichBlock[], catDisplayName: string, 
   parts.push(blocks.map(blockToHtml).join('\n\n'));
   const full = parts.join('\n\n');
   if (full.length <= TELEGRAM_MAX) return full;
-  return full.slice(0, TELEGRAM_MAX - 1) + '…';
+  return `${full.slice(0, TELEGRAM_MAX - 1)}…`;
 }

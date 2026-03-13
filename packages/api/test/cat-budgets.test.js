@@ -3,9 +3,9 @@
  * Per-cat context budget configuration
  */
 
-import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
-import { getCatContextBudget, getAllCatBudgets, clearBudgetCache } from '../dist/config/cat-budgets.js';
+import { afterEach, beforeEach, describe, it } from 'node:test';
+import { clearBudgetCache, getAllCatBudgets, getCatContextBudget } from '../dist/config/cat-budgets.js';
 
 describe('getCatContextBudget', () => {
   beforeEach(() => {

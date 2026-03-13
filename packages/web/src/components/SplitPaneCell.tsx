@@ -3,8 +3,8 @@
 import { useMemo } from 'react';
 import type { ThreadState } from '@/stores/chat-types';
 import type { ChatMessage } from '@/stores/chatStore';
-import { getCatStatusType } from './ThreadCatStatus';
 import { CatAvatar } from './CatAvatar';
+import { getCatStatusType } from './ThreadCatStatus';
 
 const VISIBLE_MESSAGES = 5;
 
@@ -21,17 +21,14 @@ function MiniMessage({ msg }: { msg: ChatMessage }) {
   const isUser = msg.type === 'user' && !msg.catId;
   return (
     <div className={`flex gap-1.5 ${isUser ? 'justify-end' : ''}`}>
-      {!isUser && msg.catId && (
-        <CatAvatar catId={msg.catId} size={16} />
-      )}
+      {!isUser && msg.catId && <CatAvatar catId={msg.catId} size={16} />}
       <p
         className={`text-xs leading-relaxed truncate max-w-[90%] px-2 py-1 rounded-lg ${
-          isUser
-            ? 'bg-owner-bg text-cafe-black'
-            : 'bg-gray-50 text-gray-700'
+          isUser ? 'bg-owner-bg text-cafe-black' : 'bg-gray-50 text-gray-700'
         } ${msg.isStreaming ? 'opacity-70' : ''}`}
       >
-        {msg.content.slice(0, 120)}{msg.content.length > 120 ? '...' : ''}
+        {msg.content.slice(0, 120)}
+        {msg.content.length > 120 ? '...' : ''}
         {msg.isStreaming && <span className="animate-pulse ml-1">|</span>}
       </p>
     </div>
@@ -47,10 +44,7 @@ export function SplitPaneCell({
   onDoubleClick,
 }: SplitPaneCellProps) {
   const catStatus = getCatStatusType(threadState.catStatuses);
-  const recentMessages = useMemo(
-    () => threadState.messages.slice(-VISIBLE_MESSAGES),
-    [threadState.messages]
-  );
+  const recentMessages = useMemo(() => threadState.messages.slice(-VISIBLE_MESSAGES), [threadState.messages]);
 
   const statusColor =
     catStatus === 'error'
@@ -64,24 +58,16 @@ export function SplitPaneCell({
   return (
     <div
       className={`flex flex-col rounded-lg border-2 transition-colors cursor-pointer overflow-hidden ${
-        isSelected
-          ? 'border-owner-primary shadow-sm'
-          : 'border-gray-200 hover:border-gray-300'
+        isSelected ? 'border-owner-primary shadow-sm' : 'border-gray-200 hover:border-gray-300'
       }`}
       onClick={() => onSelect(threadId)}
       onDoubleClick={() => onDoubleClick(threadId)}
     >
       {/* Pane header */}
       <div className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-50 border-b border-gray-100 flex-shrink-0">
-        <span className={`text-xs ${statusColor}`}>
-          {catStatus !== 'idle' ? 'ᓚᘏᗢ' : ''}
-        </span>
-        <span className="text-xs font-medium text-gray-700 truncate flex-1">
-          {threadTitle}
-        </span>
-        {threadState.isLoading && (
-          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-        )}
+        <span className={`text-xs ${statusColor}`}>{catStatus !== 'idle' ? 'ᓚᘏᗢ' : ''}</span>
+        <span className="text-xs font-medium text-gray-700 truncate flex-1">{threadTitle}</span>
+        {threadState.isLoading && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />}
         {threadState.unreadCount > 0 && (
           <span className="text-[9px] bg-amber-500 text-white rounded-full px-1 min-w-[14px] text-center">
             {threadState.unreadCount > 99 ? '99+' : threadState.unreadCount}
@@ -96,9 +82,7 @@ export function SplitPaneCell({
             <span className="text-xs text-gray-300">无消息</span>
           </div>
         ) : (
-          recentMessages.map((msg) => (
-            <MiniMessage key={msg.id} msg={msg} />
-          ))
+          recentMessages.map((msg) => <MiniMessage key={msg.id} msg={msg} />)
         )}
       </div>
     </div>

@@ -2,11 +2,11 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   formatMigrateSignalsSummary,
-  parseMigrateSignalsArgs,
-  runMigrateSignalsCli,
   type MigrateSignalsCliArgs,
   type MigrateSignalsCliIo,
   type MigrateSignalsSummary,
+  parseMigrateSignalsArgs,
+  runMigrateSignalsCli,
 } from './migrate-signals/cli.js';
 
 export {

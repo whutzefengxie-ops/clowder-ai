@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  applyTermDictionary,
-  removeFillers,
-  correctTranscription,
-} from '@/utils/transcription-corrector';
+import { applyTermDictionary, correctTranscription, removeFillers } from '@/utils/transcription-corrector';
 
 /* ------------------------------------------------------------------ */
 /*  applyTermDictionary                                                */

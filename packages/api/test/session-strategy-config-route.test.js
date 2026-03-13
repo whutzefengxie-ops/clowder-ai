@@ -4,8 +4,8 @@
  */
 
 import './helpers/setup-cat-registry.js';
-import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { afterEach, beforeEach, describe, test } from 'node:test';
 import Fastify from 'fastify';
 
 async function loadOverridesModule() {
@@ -13,9 +13,7 @@ async function loadOverridesModule() {
 }
 
 async function createApp() {
-  const { sessionStrategyConfigRoutes } = await import(
-    '../dist/routes/session-strategy-config.js'
-  );
+  const { sessionStrategyConfigRoutes } = await import('../dist/routes/session-strategy-config.js');
   const app = Fastify();
   await app.register(sessionStrategyConfigRoutes);
   return app;

@@ -1,11 +1,12 @@
 'use client';
 
 import { useCallback, useEffect, useRef } from 'react';
-import { useChatStore, type CatInvocationInfo, type ChatMessage as ChatMessageData } from '@/stores/chatStore';
-import type { TaskProgressItem, QueueEntry } from '@/stores/chat-types';
+import { recordDebugEvent } from '@/debug/invocationEventDebug';
+import type { QueueEntry, TaskProgressItem } from '@/stores/chat-types';
+import { type CatInvocationInfo, type ChatMessage as ChatMessageData, useChatStore } from '@/stores/chatStore';
 import { useTaskStore } from '@/stores/taskStore';
 import { apiFetch } from '@/utils/api-client';
-import { recordDebugEvent } from '@/debug/invocationEventDebug';
+
 const HISTORY_PAGE_SIZE = 50;
 // In export mode (?export=true), load all messages in one request for screenshot capture.
 // Normal browsing still uses 50-per-page pagination.
@@ -92,9 +93,7 @@ function mergeReplaceHydrationMessages(
   for (const msg of currentMsgs) {
     if (historyIds.has(msg.id)) continue;
 
-    const invocationId = msg.catId
-      ? getLocalPlaceholderInvocationId(msg, currentCatInvocations)
-      : undefined;
+    const invocationId = msg.catId ? getLocalPlaceholderInvocationId(msg, currentCatInvocations) : undefined;
     const streamKey = msg.catId && invocationId ? `${msg.catId}:${invocationId}` : undefined;
 
     if (streamKey) {
@@ -179,8 +178,8 @@ export function useChatHistory(threadId: string) {
       setLoadingHistory(true);
       const fetchForThread = threadId; // capture at call time
       try {
-        const isExport = typeof window !== 'undefined' &&
-          new URLSearchParams(window.location.search).get('export') === 'true';
+        const isExport =
+          typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('export') === 'true';
         const limit = isExport ? EXPORT_LIMIT : HISTORY_PAGE_SIZE;
         const params = new URLSearchParams({ limit: String(limit) });
         if (cursor) params.set('before', cursor);
@@ -193,34 +192,65 @@ export function useChatHistory(threadId: string) {
         if (threadIdRef.current !== fetchForThread) return;
         const data = await res.json();
         const historyMsgs = (data.messages ?? []).map(
-          (m: { id: string; type: string; catId?: string; content: string; contentBlocks?: unknown[]; toolEvents?: unknown[]; metadata?: { provider: string; model: string; sessionId?: string }; origin?: 'stream' | 'callback'; thinking?: string; extra?: { rich?: { v: number; blocks: unknown[] }; crossPost?: { sourceThreadId: string; sourceInvocationId?: string }; stream?: { invocationId?: string } }; timestamp: number; summary?: { id: string; topic: string; conclusions: string[]; openQuestions: string[]; createdBy: string }; visibility?: 'public' | 'whisper'; whisperTo?: string[]; revealedAt?: number; isDraft?: boolean; source?: { connector: string; label: string; icon: string; url?: string }; mentionsUser?: boolean; deliveredAt?: number }) => ({
-            id: m.id,
-            type: (m.summary ? 'summary' : m.source ? 'connector' : m.catId ? 'assistant' : 'user') as 'user' | 'assistant' | 'summary' | 'connector',
-            catId: m.catId,
-            content: m.content,
-            ...(m.contentBlocks ? { contentBlocks: m.contentBlocks } : {}),
-            ...(m.toolEvents ? { toolEvents: m.toolEvents as import('../stores/chat-types').ToolEvent[] } : {}),
-            ...(m.metadata ? { metadata: m.metadata } : {}),
-            ...(m.origin ? { origin: m.origin } : {}),
-            ...(m.thinking ? { thinking: m.thinking } : {}),
-            ...(m.extra?.rich || m.extra?.crossPost || m.extra?.stream ? {
-              extra: {
-                ...(m.extra.rich ? { rich: m.extra.rich } : {}),
-                ...(m.extra.crossPost ? { crossPost: m.extra.crossPost } : {}),
-                ...(m.extra.stream ? { stream: m.extra.stream } : {}),
-              },
-            } : {}),
-            ...(m.summary ? { summary: m.summary } : {}),
-            ...(m.visibility ? { visibility: m.visibility } : {}),
-            ...(m.whisperTo ? { whisperTo: m.whisperTo } : {}),
-            ...(m.revealedAt ? { revealedAt: m.revealedAt } : {}),
-            ...(m.deliveredAt ? { deliveredAt: m.deliveredAt } : {}),
-            ...(m.source ? { source: m.source } : {}),
-            ...(m.mentionsUser ? { mentionsUser: true } : {}),
-            // #80: Restore streaming indicator for draft messages recovered from Redis
-            ...(m.isDraft ? { isStreaming: true } : {}),
-            timestamp: m.timestamp,
-          } as ChatMessageData)
+          (m: {
+            id: string;
+            type: string;
+            catId?: string;
+            content: string;
+            contentBlocks?: unknown[];
+            toolEvents?: unknown[];
+            metadata?: { provider: string; model: string; sessionId?: string };
+            origin?: 'stream' | 'callback';
+            thinking?: string;
+            extra?: {
+              rich?: { v: number; blocks: unknown[] };
+              crossPost?: { sourceThreadId: string; sourceInvocationId?: string };
+              stream?: { invocationId?: string };
+            };
+            timestamp: number;
+            summary?: { id: string; topic: string; conclusions: string[]; openQuestions: string[]; createdBy: string };
+            visibility?: 'public' | 'whisper';
+            whisperTo?: string[];
+            revealedAt?: number;
+            isDraft?: boolean;
+            source?: { connector: string; label: string; icon: string; url?: string };
+            mentionsUser?: boolean;
+            deliveredAt?: number;
+          }) =>
+            ({
+              id: m.id,
+              type: (m.summary ? 'summary' : m.source ? 'connector' : m.catId ? 'assistant' : 'user') as
+                | 'user'
+                | 'assistant'
+                | 'summary'
+                | 'connector',
+              catId: m.catId,
+              content: m.content,
+              ...(m.contentBlocks ? { contentBlocks: m.contentBlocks } : {}),
+              ...(m.toolEvents ? { toolEvents: m.toolEvents as import('../stores/chat-types').ToolEvent[] } : {}),
+              ...(m.metadata ? { metadata: m.metadata } : {}),
+              ...(m.origin ? { origin: m.origin } : {}),
+              ...(m.thinking ? { thinking: m.thinking } : {}),
+              ...(m.extra?.rich || m.extra?.crossPost || m.extra?.stream
+                ? {
+                    extra: {
+                      ...(m.extra.rich ? { rich: m.extra.rich } : {}),
+                      ...(m.extra.crossPost ? { crossPost: m.extra.crossPost } : {}),
+                      ...(m.extra.stream ? { stream: m.extra.stream } : {}),
+                    },
+                  }
+                : {}),
+              ...(m.summary ? { summary: m.summary } : {}),
+              ...(m.visibility ? { visibility: m.visibility } : {}),
+              ...(m.whisperTo ? { whisperTo: m.whisperTo } : {}),
+              ...(m.revealedAt ? { revealedAt: m.revealedAt } : {}),
+              ...(m.deliveredAt ? { deliveredAt: m.deliveredAt } : {}),
+              ...(m.source ? { source: m.source } : {}),
+              ...(m.mentionsUser ? { mentionsUser: true } : {}),
+              // #80: Restore streaming indicator for draft messages recovered from Redis
+              ...(m.isDraft ? { isStreaming: true } : {}),
+              timestamp: m.timestamp,
+            }) as ChatMessageData,
         );
         if (options?.replace) {
           // Replace mode now does a non-destructive merge first, then resets the thread
@@ -239,11 +269,12 @@ export function useChatHistory(threadId: string) {
           recordDebugEvent({
             event: 'history_replace',
             threadId: fetchForThread,
-            action: mergeResult.stats.preservedLocalCount > 0 || mergeResult.stats.replacedHistoryCount > 0
-              ? 'merge_local'
-              : mergeResult.stats.reconciledToHistoryCount > 0
-                ? 'reconcile_history'
-                : 'replace_exact',
+            action:
+              mergeResult.stats.preservedLocalCount > 0 || mergeResult.stats.replacedHistoryCount > 0
+                ? 'merge_local'
+                : mergeResult.stats.reconciledToHistoryCount > 0
+                  ? 'reconcile_history'
+                  : 'replace_exact',
             queueLength: mergedMsgs.length,
             reason: [
               `history=${historyMsgs.length}`,
@@ -268,7 +299,7 @@ export function useChatHistory(threadId: string) {
         }
       }
     },
-    [setLoadingHistory, prependHistory, replaceMessages, threadId]
+    [setLoadingHistory, prependHistory, replaceMessages, threadId],
   );
 
   const fetchTasks = useCallback(async () => {
@@ -277,10 +308,9 @@ export function useChatHistory(threadId: string) {
     if (!controller) return;
 
     try {
-      const res = await apiFetch(
-        `/api/tasks?threadId=${encodeURIComponent(fetchForThread)}`,
-        { signal: controller.signal },
-      );
+      const res = await apiFetch(`/api/tasks?threadId=${encodeURIComponent(fetchForThread)}`, {
+        signal: controller.signal,
+      });
       if (!res.ok) return;
       if (abortRef.current !== controller) return;
       if (threadIdRef.current !== fetchForThread) return;
@@ -298,33 +328,38 @@ export function useChatHistory(threadId: string) {
     if (!controller) return;
 
     try {
-      const res = await apiFetch(
-        `/api/threads/${encodeURIComponent(fetchForThread)}/task-progress`,
-        { signal: controller.signal },
-      );
+      const res = await apiFetch(`/api/threads/${encodeURIComponent(fetchForThread)}/task-progress`, {
+        signal: controller.signal,
+      });
       if (!res.ok) return;
       if (abortRef.current !== controller) return;
       if (threadIdRef.current !== fetchForThread) return;
-      const data = await res.json() as {
-        taskProgress?: Record<string, {
-          tasks: Array<{ id: string; subject: string; status: string; activeForm?: string }>;
-          status?: 'running' | 'completed' | 'interrupted';
-          updatedAt?: number;
-          lastInvocationId?: string;
-          interruptReason?: string;
-        }>;
+      const data = (await res.json()) as {
+        taskProgress?: Record<
+          string,
+          {
+            tasks: Array<{ id: string; subject: string; status: string; activeForm?: string }>;
+            status?: 'running' | 'completed' | 'interrupted';
+            updatedAt?: number;
+            lastInvocationId?: string;
+            interruptReason?: string;
+          }
+        >;
       };
       if (data.taskProgress) {
         const restoredCats: string[] = [];
         for (const [catId, progress] of Object.entries(data.taskProgress)) {
           setCatInvocation(catId, {
             taskProgress: {
-              tasks: progress.tasks.map((t): TaskProgressItem => ({
-                id: t.id,
-                subject: t.subject,
-                status: t.status === 'in_progress' ? 'in_progress' : t.status === 'completed' ? 'completed' : 'pending',
-                ...(t.activeForm ? { activeForm: t.activeForm } : {}),
-              })),
+              tasks: progress.tasks.map(
+                (t): TaskProgressItem => ({
+                  id: t.id,
+                  subject: t.subject,
+                  status:
+                    t.status === 'in_progress' ? 'in_progress' : t.status === 'completed' ? 'completed' : 'pending',
+                  ...(t.activeForm ? { activeForm: t.activeForm } : {}),
+                }),
+              ),
               lastUpdate: progress.updatedAt ?? Date.now(),
               ...(progress.status ? { snapshotStatus: progress.status } : {}),
               ...(progress.lastInvocationId ? { lastInvocationId: progress.lastInvocationId } : {}),
@@ -359,14 +394,13 @@ export function useChatHistory(threadId: string) {
     if (!controller) return;
 
     try {
-      const res = await apiFetch(
-        `/api/threads/${encodeURIComponent(fetchForThread)}/queue`,
-        { signal: controller.signal },
-      );
+      const res = await apiFetch(`/api/threads/${encodeURIComponent(fetchForThread)}/queue`, {
+        signal: controller.signal,
+      });
       if (!res.ok) return;
       if (abortRef.current !== controller) return;
       if (threadIdRef.current !== fetchForThread) return;
-      const data = await res.json() as { queue: QueueEntry[]; paused: boolean; pauseReason?: 'canceled' | 'failed' };
+      const data = (await res.json()) as { queue: QueueEntry[]; paused: boolean; pauseReason?: 'canceled' | 'failed' };
       // Always sync server state — clears stale local data when server queue is empty
       setQueue(fetchForThread, data.queue);
       setQueuePaused(fetchForThread, data.paused, data.pauseReason);
@@ -440,7 +474,7 @@ export function useChatHistory(threadId: string) {
       clearTimeout(secondaryFallbackTimer);
       abortRef.current?.abort();
     };
-  }, [threadId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [threadId, clearMessages, fetchHistory, fetchQueue, fetchTaskProgress, fetchTasks]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Snapshot scroll height before history load
   useEffect(() => {
@@ -488,7 +522,7 @@ export function useChatHistory(threadId: string) {
     if (!el || !hasMore || isLoadingHistory) return;
     if (el.scrollTop < 80 && messages.length > 0) {
       // #80 cloud R8 P2: skip draft rows — their synthetic IDs break cursor semantics
-      const oldest = messages.find(m => !m.id.startsWith('draft-'));
+      const oldest = messages.find((m) => !m.id.startsWith('draft-'));
       if (oldest) {
         void fetchHistory(`${oldest.timestamp}:${oldest.id}`);
       }

@@ -73,8 +73,8 @@ export class AutoSummarizer {
     if (catMessages.length === 0) return null;
 
     // Extract topic from first substantial message
-    const firstMsg = catMessages[0]!.content;
-    const topic = firstMsg.length > 60 ? firstMsg.slice(0, 60) + '...' : firstMsg;
+    const firstMsg = catMessages[0]?.content;
+    const topic = firstMsg.length > 60 ? `${firstMsg.slice(0, 60)}...` : firstMsg;
 
     // Extract conclusion-like sentences
     const conclusionPatterns = [/决定|确定|选择|采用|使用|实现了|完成了|修复了/];

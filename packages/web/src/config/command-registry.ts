@@ -48,7 +48,12 @@ export const COMMANDS: CommandDefinition[] = [
   { name: '/reflect', usage: '/reflect <query>', description: 'AI 反思项目知识', category: 'knowledge' },
   { name: '/signals', usage: '/signals [inbox]', description: '查看今日 Signal inbox', category: 'knowledge' },
   { name: '/signals search', usage: '/signals search <query>', description: '搜索 Signal 文章', category: 'knowledge' },
-  { name: '/signals sources', usage: '/signals sources [sourceId on|off]', description: '查看/切换信源启用状态', category: 'knowledge' },
+  {
+    name: '/signals sources',
+    usage: '/signals sources [sourceId on|off]',
+    description: '查看/切换信源启用状态',
+    category: 'knowledge',
+  },
   { name: '/signals stats', usage: '/signals stats', description: '查看 Signal 统计信息', category: 'knowledge' },
 
   // --- task ---

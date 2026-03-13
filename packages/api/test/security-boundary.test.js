@@ -1,9 +1,9 @@
-import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { setTimeout as delay } from 'node:timers/promises';
-import path from 'node:path';
 import net from 'node:net';
+import path from 'node:path';
+import { test } from 'node:test';
+import { setTimeout as delay } from 'node:timers/promises';
 
 function once(emitter, event) {
   return new Promise((resolve) => emitter.once(event, resolve));
@@ -45,9 +45,7 @@ async function canBindLoopback() {
   return await new Promise((resolve) => {
     const server = net.createServer();
     server.once('error', (err) => {
-      const code = err && typeof err === 'object' && 'code' in err
-        ? err.code
-        : undefined;
+      const code = err && typeof err === 'object' && 'code' in err ? err.code : undefined;
       if (code === 'EPERM' || code === 'EACCES') {
         resolve(false);
       } else {
@@ -81,11 +79,7 @@ test('API binds to 127.0.0.1 by default', async (t) => {
   });
 
   try {
-    const { match } = await waitForMatch(
-      child,
-      /Server listening at http:\/\/([^:]+):(\d+)/,
-      { timeoutMs: 5000 }
-    );
+    const { match } = await waitForMatch(child, /Server listening at http:\/\/([^:]+):(\d+)/, { timeoutMs: 5000 });
 
     const host = match[1];
     const port = Number(match[2]);
@@ -104,4 +98,3 @@ test('API binds to 127.0.0.1 by default', async (t) => {
     await Promise.race([once(child, 'exit'), delay(2000)]);
   }
 });
-

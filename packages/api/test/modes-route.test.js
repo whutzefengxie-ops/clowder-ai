@@ -8,8 +8,8 @@
  */
 
 import './helpers/setup-cat-registry.js';
-import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
 import Fastify from 'fastify';
 import { ModeStore } from '../dist/domains/cats/services/stores/ports/ModeStore.js';
 import { modesRoutes } from '../dist/routes/modes.js';
@@ -21,8 +21,12 @@ function createMockSocketManager() {
   const events = [];
   return {
     broadcastAgentMessage() {},
-    broadcastToRoom(room, event, data) { events.push({ room, event, data }); },
-    getEvents() { return events; },
+    broadcastToRoom(room, event, data) {
+      events.push({ room, event, data });
+    },
+    getEvents() {
+      return events;
+    },
   };
 }
 
@@ -34,7 +38,9 @@ function createMockThreadStore() {
       threads[id] = { id, title, createdBy: userId, participants: [], lastActiveAt: Date.now(), createdAt: Date.now() };
       return threads[id];
     },
-    get(id) { return threads[id] ?? null; },
+    get(id) {
+      return threads[id] ?? null;
+    },
     _seedThread(id, data) {
       threads[id] = {
         id,
@@ -640,14 +646,20 @@ describe('ModeStore', () => {
 
   it('startMode + getMode round-trip', () => {
     const store = new ModeStore();
-    const mode = store.startMode('t1', 'brainstorm', { topic: 'test', participants: ['opus'] }, 'user-1', { roundOneComplete: false, currentRound: 1 });
+    const mode = store.startMode('t1', 'brainstorm', { topic: 'test', participants: ['opus'] }, 'user-1', {
+      roundOneComplete: false,
+      currentRound: 1,
+    });
     assert.equal(mode.record.name, 'brainstorm');
     assert.equal(store.getMode('t1').record.name, 'brainstorm');
   });
 
   it('updateState mutates active mode', () => {
     const store = new ModeStore();
-    store.startMode('t1', 'brainstorm', { topic: 'test', participants: ['opus'] }, 'user-1', { roundOneComplete: false, currentRound: 1 });
+    store.startMode('t1', 'brainstorm', { topic: 'test', participants: ['opus'] }, 'user-1', {
+      roundOneComplete: false,
+      currentRound: 1,
+    });
     store.updateState('t1', { roundOneComplete: true, currentRound: 2 });
     assert.equal(store.getMode('t1').state.roundOneComplete, true);
     assert.equal(store.getMode('t1').state.currentRound, 2);
@@ -655,7 +667,10 @@ describe('ModeStore', () => {
 
   it('endMode removes active and adds to history', () => {
     const store = new ModeStore();
-    store.startMode('t1', 'brainstorm', { topic: 'test', participants: ['opus'] }, 'user-1', { roundOneComplete: false, currentRound: 1 });
+    store.startMode('t1', 'brainstorm', { topic: 'test', participants: ['opus'] }, 'user-1', {
+      roundOneComplete: false,
+      currentRound: 1,
+    });
     const ended = store.endMode('t1', '完成');
     assert.equal(ended.name, 'brainstorm');
     assert.equal(ended.outcome, '完成');
@@ -694,7 +709,7 @@ describe('POST /mode dev-loop', () => {
     assert.equal(body.state.iteration, 0);
 
     const events = socketManager.getEvents();
-    assert.ok(events.some(e => e.data.action === 'started'));
+    assert.ok(events.some((e) => e.data.action === 'started'));
   });
 
   it('rejects dev-loop with leadCat === reviewCat', async () => {

@@ -1,8 +1,5 @@
-export function getAntigravitySmokeSkipReason({
-  env = process.env,
-  runtimeReachable,
-} = {}) {
-  if (env['RUN_ANTIGRAVITY_SMOKE'] !== 'true') {
+export function getAntigravitySmokeSkipReason({ env = process.env, runtimeReachable } = {}) {
+  if (env.RUN_ANTIGRAVITY_SMOKE !== 'true') {
     return 'RUN_ANTIGRAVITY_SMOKE=true not set';
   }
 
@@ -13,10 +10,10 @@ export function getAntigravitySmokeSkipReason({
   return null;
 }
 
-export async function runAntigravityRoundTripSmoke(client, {
-  prompt = 'Reply with just the word "pong"',
-  pollTimeoutMs = 60_000,
-} = {}) {
+export async function runAntigravityRoundTripSmoke(
+  client,
+  { prompt = 'Reply with just the word "pong"', pollTimeoutMs = 60_000 } = {},
+) {
   try {
     await client.connect();
     await client.newConversation();

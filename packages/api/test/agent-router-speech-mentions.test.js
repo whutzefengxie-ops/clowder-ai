@@ -1,5 +1,5 @@
-import test from 'node:test';
 import assert from 'node:assert/strict';
+import test from 'node:test';
 import { migrateRouterOpts } from './helpers/agent-registry-helpers.js';
 
 function createNoopService(catId) {
@@ -33,13 +33,15 @@ function createNoopMessageStore() {
 
 test('resolveTargetsAndIntent supports speech-style "at + nickname" mentions', async () => {
   const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
-  const router = new AgentRouter(await migrateRouterOpts({
-    claudeService: createNoopService('opus'),
-    codexService: createNoopService('codex'),
-    geminiService: createNoopService('gemini'),
-    registry: createNoopRegistry(),
-    messageStore: createNoopMessageStore(),
-  }));
+  const router = new AgentRouter(
+    await migrateRouterOpts({
+      claudeService: createNoopService('opus'),
+      codexService: createNoopService('codex'),
+      geminiService: createNoopService('gemini'),
+      registry: createNoopRegistry(),
+      messageStore: createNoopMessageStore(),
+    }),
+  );
 
   const result = await router.resolveTargetsAndIntent('at咱的砚砚 和 at 宪宪 你们出来了', 'thread-voice');
   assert.deepEqual(result.targetCats, ['codex', 'opus']);
@@ -47,13 +49,15 @@ test('resolveTargetsAndIntent supports speech-style "at + nickname" mentions', a
 
 test('resolveTargetsAndIntent supports at without spaces', async () => {
   const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
-  const router = new AgentRouter(await migrateRouterOpts({
-    claudeService: createNoopService('opus'),
-    codexService: createNoopService('codex'),
-    geminiService: createNoopService('gemini'),
-    registry: createNoopRegistry(),
-    messageStore: createNoopMessageStore(),
-  }));
+  const router = new AgentRouter(
+    await migrateRouterOpts({
+      claudeService: createNoopService('opus'),
+      codexService: createNoopService('codex'),
+      geminiService: createNoopService('gemini'),
+      registry: createNoopRegistry(),
+      messageStore: createNoopMessageStore(),
+    }),
+  );
 
   const result = await router.resolveTargetsAndIntent('at缅因 你先看下这个', 'thread-voice');
   assert.deepEqual(result.targetCats, ['codex']);
@@ -61,13 +65,15 @@ test('resolveTargetsAndIntent supports at without spaces', async () => {
 
 test('resolveTargetsAndIntent supports 艾特 prefix', async () => {
   const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
-  const router = new AgentRouter(await migrateRouterOpts({
-    claudeService: createNoopService('opus'),
-    codexService: createNoopService('codex'),
-    geminiService: createNoopService('gemini'),
-    registry: createNoopRegistry(),
-    messageStore: createNoopMessageStore(),
-  }));
+  const router = new AgentRouter(
+    await migrateRouterOpts({
+      claudeService: createNoopService('opus'),
+      codexService: createNoopService('codex'),
+      geminiService: createNoopService('gemini'),
+      registry: createNoopRegistry(),
+      messageStore: createNoopMessageStore(),
+    }),
+  );
 
   const result = await router.resolveTargetsAndIntent('艾特宪宪 看一下这个', 'thread-voice');
   assert.deepEqual(result.targetCats, ['opus']);
@@ -75,13 +81,15 @@ test('resolveTargetsAndIntent supports 艾特 prefix', async () => {
 
 test('resolveTargetsAndIntent does not false-positive normal words like attack', async () => {
   const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
-  const router = new AgentRouter(await migrateRouterOpts({
-    claudeService: createNoopService('opus'),
-    codexService: createNoopService('codex'),
-    geminiService: createNoopService('gemini'),
-    registry: createNoopRegistry(),
-    messageStore: createNoopMessageStore(),
-  }));
+  const router = new AgentRouter(
+    await migrateRouterOpts({
+      claudeService: createNoopService('opus'),
+      codexService: createNoopService('codex'),
+      geminiService: createNoopService('gemini'),
+      registry: createNoopRegistry(),
+      messageStore: createNoopMessageStore(),
+    }),
+  );
 
   const result = await router.resolveTargetsAndIntent('这个 attack 测试先别动', 'thread-voice');
   assert.deepEqual(result.targetCats, ['opus']);
@@ -89,13 +97,15 @@ test('resolveTargetsAndIntent does not false-positive normal words like attack',
 
 test('resolveTargetsAndIntent keeps existing @mentions unchanged', async () => {
   const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
-  const router = new AgentRouter(await migrateRouterOpts({
-    claudeService: createNoopService('opus'),
-    codexService: createNoopService('codex'),
-    geminiService: createNoopService('gemini'),
-    registry: createNoopRegistry(),
-    messageStore: createNoopMessageStore(),
-  }));
+  const router = new AgentRouter(
+    await migrateRouterOpts({
+      claudeService: createNoopService('opus'),
+      codexService: createNoopService('codex'),
+      geminiService: createNoopService('gemini'),
+      registry: createNoopRegistry(),
+      messageStore: createNoopMessageStore(),
+    }),
+  );
 
   const result = await router.resolveTargetsAndIntent('@砚砚 看下这个', 'thread-voice');
   assert.deepEqual(result.targetCats, ['codex']);
@@ -103,13 +113,15 @@ test('resolveTargetsAndIntent keeps existing @mentions unchanged', async () => {
 
 test('resolveTargetsAndIntent supports @。 speech punctuation prefix', async () => {
   const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
-  const router = new AgentRouter(await migrateRouterOpts({
-    claudeService: createNoopService('opus'),
-    codexService: createNoopService('codex'),
-    geminiService: createNoopService('gemini'),
-    registry: createNoopRegistry(),
-    messageStore: createNoopMessageStore(),
-  }));
+  const router = new AgentRouter(
+    await migrateRouterOpts({
+      claudeService: createNoopService('opus'),
+      codexService: createNoopService('codex'),
+      geminiService: createNoopService('gemini'),
+      registry: createNoopRegistry(),
+      messageStore: createNoopMessageStore(),
+    }),
+  );
 
   const result = await router.resolveTargetsAndIntent('@。砚砚 出来一下', 'thread-voice');
   assert.deepEqual(result.targetCats, ['codex']);

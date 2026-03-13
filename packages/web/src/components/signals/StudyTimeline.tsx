@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { fetchStudyTimeline, type TimelineEntry } from '@/utils/signals-api';
 
 function formatDate(iso: string): string {
@@ -53,7 +53,9 @@ export function StudyTimeline({ days = 7 }: StudyTimelineProps) {
     }
   }, [selectedDays]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   const dateGroups = groupByDate(entries);
 

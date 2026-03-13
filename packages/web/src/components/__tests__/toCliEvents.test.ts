@@ -2,8 +2,8 @@
  * F097: toCliEvents adapter — label cleaning + primary arg extraction
  */
 import { describe, expect, it } from 'vitest';
-import { toCliEvents } from '../cli-output/toCliEvents';
 import type { ToolEvent } from '@/stores/chat-types';
+import { toCliEvents } from '../cli-output/toCliEvents';
 
 describe('toCliEvents', () => {
   it('strips "catId → " prefix from tool_use labels', () => {
@@ -20,7 +20,13 @@ describe('toCliEvents', () => {
     const toolEvents: ToolEvent[] = [
       { id: 't1', type: 'tool_use', label: 'opus → Read', detail: '{"file_path":"src/index.ts"}', timestamp: 1000 },
       { id: 't2', type: 'tool_use', label: 'opus → Bash', detail: '{"command":"pnpm test"}', timestamp: 2000 },
-      { id: 't3', type: 'tool_use', label: 'opus → Grep', detail: '{"pattern":"CliOutput","glob":"**/*.ts"}', timestamp: 3000 },
+      {
+        id: 't3',
+        type: 'tool_use',
+        label: 'opus → Grep',
+        detail: '{"pattern":"CliOutput","glob":"**/*.ts"}',
+        timestamp: 3000,
+      },
     ];
     const events = toCliEvents(toolEvents, undefined);
     expect(events[0].label).toBe('Read src/index.ts');
@@ -31,24 +37,26 @@ describe('toCliEvents', () => {
   it('truncates long primary args at 60 chars', () => {
     const longPath = 'a'.repeat(80);
     const toolEvents: ToolEvent[] = [
-      { id: 't1', type: 'tool_use', label: 'opus → Read', detail: JSON.stringify({ file_path: longPath }), timestamp: 1000 },
+      {
+        id: 't1',
+        type: 'tool_use',
+        label: 'opus → Read',
+        detail: JSON.stringify({ file_path: longPath }),
+        timestamp: 1000,
+      },
     ];
     const events = toCliEvents(toolEvents, undefined);
     expect(events[0].label).toBe(`Read ${'a'.repeat(57)}...`);
   });
 
   it('handles labels without arrow prefix (already clean)', () => {
-    const toolEvents: ToolEvent[] = [
-      { id: 't1', type: 'tool_use', label: 'Read foo.ts', timestamp: 1000 },
-    ];
+    const toolEvents: ToolEvent[] = [{ id: 't1', type: 'tool_use', label: 'Read foo.ts', timestamp: 1000 }];
     const events = toCliEvents(toolEvents, undefined);
     expect(events[0].label).toBe('Read foo.ts');
   });
 
   it('handles tool_use without detail', () => {
-    const toolEvents: ToolEvent[] = [
-      { id: 't1', type: 'tool_use', label: 'opus → Agent', timestamp: 1000 },
-    ];
+    const toolEvents: ToolEvent[] = [{ id: 't1', type: 'tool_use', label: 'opus → Agent', timestamp: 1000 }];
     const events = toCliEvents(toolEvents, undefined);
     expect(events[0].label).toBe('Agent');
   });
@@ -87,7 +95,8 @@ describe('toCliEvents', () => {
 
   it('extracts file_path from truncated JSON via regex fallback', () => {
     // safeJsonPreview truncates at 200 chars — Edit tool has long old_string/new_string
-    const truncatedDetail = '{"file_path":"src/components/ChatMessage.tsx","old_string":"some long code that gets trunca';
+    const truncatedDetail =
+      '{"file_path":"src/components/ChatMessage.tsx","old_string":"some long code that gets trunca';
     const toolEvents: ToolEvent[] = [
       { id: 't1', type: 'tool_use', label: 'opus → Edit', detail: truncatedDetail, timestamp: 1000 },
     ];
@@ -96,7 +105,8 @@ describe('toCliEvents', () => {
   });
 
   it('extracts command from truncated JSON via regex fallback', () => {
-    const truncatedDetail = '{"command":"pnpm --filter @cat-cafe/web test","timeout":60000,"some_other_field":"this gets trunca';
+    const truncatedDetail =
+      '{"command":"pnpm --filter @cat-cafe/web test","timeout":60000,"some_other_field":"this gets trunca';
     const toolEvents: ToolEvent[] = [
       { id: 't1', type: 'tool_use', label: 'opus → Bash', detail: truncatedDetail, timestamp: 1000 },
     ];

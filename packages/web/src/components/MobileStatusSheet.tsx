@@ -1,12 +1,10 @@
 'use client';
 
 import { useMemo } from 'react';
-import type { RightStatusPanelProps } from './RightStatusPanel';
-import {
-  modeLabel, statusLabel, statusTone, truncateId,
-} from './status-helpers';
-import { useCatData, formatCatName } from '@/hooks/useCatData';
+import { formatCatName, useCatData } from '@/hooks/useCatData';
 import { CatTokenUsage } from './CatTokenUsage';
+import type { RightStatusPanelProps } from './RightStatusPanel';
+import { modeLabel, statusLabel, statusTone, truncateId } from './status-helpers';
 
 interface MobileStatusSheetProps extends RightStatusPanelProps {
   open: boolean;
@@ -66,13 +64,13 @@ export function MobileStatusSheet({
           <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-2" />
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-bold text-cafe-black">状态面板</h2>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 p-1 -mr-1"
-              aria-label="关闭状态面板"
-            >
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1 -mr-1" aria-label="关闭状态面板">
               <svg className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                <path
+                  fillRule="evenodd"
+                  d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                  clipRule="evenodd"
+                />
               </svg>
             </button>
           </div>
@@ -98,12 +96,13 @@ export function MobileStatusSheet({
                     <div key={catId}>
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: dotColor }} />
+                          <span
+                            className="inline-block h-2.5 w-2.5 rounded-full"
+                            style={{ backgroundColor: dotColor }}
+                          />
                           <span className="text-xs text-gray-700">{cat ? formatCatName(cat) : catId}</span>
                         </div>
-                        <span className={`text-xs font-medium ${statusTone(status)}`}>
-                          {statusLabel(status)}
-                        </span>
+                        <span className={`text-xs font-medium ${statusTone(status)}`}>{statusLabel(status)}</span>
                       </div>
                       {inv?.usage && (
                         <div className="ml-3.5 mt-1">
@@ -120,7 +119,10 @@ export function MobileStatusSheet({
                   const cat = getCatById(catId);
                   return (
                     <div key={catId} className="flex items-center gap-2 text-xs text-gray-500">
-                      <span className="inline-block h-2 w-2 rounded-full opacity-60" style={{ backgroundColor: cat?.color.primary ?? '#9CA3AF' }} />
+                      <span
+                        className="inline-block h-2 w-2 rounded-full opacity-60"
+                        style={{ backgroundColor: cat?.color.primary ?? '#9CA3AF' }}
+                      />
                       {cat ? formatCatName(cat) : catId}
                     </div>
                   );
@@ -152,7 +154,9 @@ export function MobileStatusSheet({
               <button
                 className="text-gray-600 font-mono hover:text-gray-800 transition-colors"
                 title={`点击复制: ${threadId}`}
-                onClick={() => { void navigator.clipboard.writeText(threadId); }}
+                onClick={() => {
+                  void navigator.clipboard.writeText(threadId);
+                }}
               >
                 {truncateId(threadId, 16)}
               </button>

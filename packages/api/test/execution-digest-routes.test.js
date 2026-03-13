@@ -1,6 +1,7 @@
 // @ts-check
-import { describe, test, beforeEach } from 'node:test';
+
 import assert from 'node:assert/strict';
+import { beforeEach, describe, test } from 'node:test';
 import Fastify from 'fastify';
 
 const H = { 'x-cat-cafe-user': 'user1' };
@@ -36,12 +37,8 @@ describe('Execution Digest Routes', () => {
   let store;
 
   beforeEach(async () => {
-    const { ExecutionDigestStore } = await import(
-      '../dist/domains/projects/execution-digest-store.js'
-    );
-    const { executionDigestRoutes } = await import(
-      '../dist/routes/execution-digests.js'
-    );
+    const { ExecutionDigestStore } = await import('../dist/domains/projects/execution-digest-store.js');
+    const { executionDigestRoutes } = await import('../dist/routes/execution-digests.js');
     store = new ExecutionDigestStore();
     app = Fastify();
     await app.register(executionDigestRoutes, { executionDigestStore: store });

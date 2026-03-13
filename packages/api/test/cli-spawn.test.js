@@ -3,10 +3,10 @@
  * 测试 CLI 子进程管理器
  */
 
-import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { PassThrough } from 'node:stream';
 import { EventEmitter } from 'node:events';
+import { PassThrough } from 'node:stream';
+import { mock, test } from 'node:test';
 
 const { spawnCli, isCliError, isCliTimeout, KILL_GRACE_MS } = await import('../dist/utils/cli-spawn.js');
 
@@ -67,10 +67,7 @@ test('spawnCli yields parsed JSON events from stdout', async () => {
   const proc = createMockProcess();
   const spawnFn = createMockSpawnFn(proc);
 
-  const promise = collect(spawnCli(
-    { command: 'test-cli', args: ['--json'] },
-    { spawnFn }
-  ));
+  const promise = collect(spawnCli({ command: 'test-cli', args: ['--json'] }, { spawnFn }));
 
   proc.stdout.write('{"type":"start","id":"123"}\n');
   proc.stdout.write('{"type":"message","text":"hello"}\n');
@@ -94,10 +91,7 @@ test('spawnCli does not yield stderr data', async () => {
   const proc = createMockProcess();
   const spawnFn = createMockSpawnFn(proc);
 
-  const promise = collect(spawnCli(
-    { command: 'test-cli', args: [] },
-    { spawnFn }
-  ));
+  const promise = collect(spawnCli({ command: 'test-cli', args: [] }, { spawnFn }));
 
   proc.stderr.write('DEBUG: some warning\n');
   proc.stdout.write('{"type":"ok"}\n');
@@ -117,10 +111,7 @@ test('spawnCli skips parse errors in stdout', async () => {
   const originalError = console.error;
   console.error = mock.fn();
 
-  const promise = collect(spawnCli(
-    { command: 'test-cli', args: [] },
-    { spawnFn }
-  ));
+  const promise = collect(spawnCli({ command: 'test-cli', args: [] }, { spawnFn }));
 
   proc.stdout.write('{"valid":true}\n');
   proc.stdout.write('not-json-line\n');
@@ -144,10 +135,7 @@ test('spawnCli kills process on timeout', async () => {
   const proc = createMockProcess();
   const spawnFn = createMockSpawnFn(proc);
 
-  const promise = collect(spawnCli(
-    { command: 'test-cli', args: [], timeoutMs: 50 },
-    { spawnFn }
-  ));
+  const promise = collect(spawnCli({ command: 'test-cli', args: [], timeoutMs: 50 }, { spawnFn }));
 
   // Don't write anything to stdout - let it timeout
   // Wait for timeout to fire, then close stdout
@@ -168,10 +156,7 @@ test('CLI_TIMEOUT_MS=0 disables timeout (no auto-kill on silence)', async () => 
     const proc = createMockProcess();
     const spawnFn = createMockSpawnFn(proc);
 
-    const promise = collect(spawnCli(
-      { command: 'test-cli', args: [] },
-      { spawnFn }
-    ));
+    const promise = collect(spawnCli({ command: 'test-cli', args: [] }, { spawnFn }));
 
     // Wait longer than our typical small timeout values; should NOT auto-kill
     await new Promise((resolve) => setTimeout(resolve, 120));
@@ -200,16 +185,13 @@ test('spawnCli uses 5 minute fallback timeout when CLI_TIMEOUT_MS is unset', asy
   const originalSetTimeout = global.setTimeout;
   const delays = [];
 
-  global.setTimeout = ((handler, delay, ...args) => {
+  global.setTimeout = (_handler, delay, ...args) => {
     delays.push(delay);
     return originalSetTimeout(() => {}, 0, ...args);
-  });
+  };
 
   try {
-    const promise = collect(spawnCli(
-      { command: 'test-cli', args: [] },
-      { spawnFn }
-    ));
+    const promise = collect(spawnCli({ command: 'test-cli', args: [] }, { spawnFn }));
 
     proc.stdout.end();
     proc._emitter.emit('exit', 0, null);
@@ -231,10 +213,7 @@ test('spawnCli resets timeout on stderr activity (CLI alive signal)', async () =
   const proc = createMockProcess();
   const spawnFn = createMockSpawnFn(proc);
 
-  const promise = collect(spawnCli(
-    { command: 'test-cli', args: [], timeoutMs: 50 },
-    { spawnFn }
-  ));
+  const promise = collect(spawnCli({ command: 'test-cli', args: [], timeoutMs: 50 }, { spawnFn }));
 
   // Keep the process "alive" with stderr output so it doesn't timeout
   await new Promise((resolve) => setTimeout(resolve, 20));
@@ -259,10 +238,7 @@ test('spawnCli kills process on abort signal', async () => {
   const spawnFn = createMockSpawnFn(proc);
   const controller = new AbortController();
 
-  const promise = collect(spawnCli(
-    { command: 'test-cli', args: [], signal: controller.signal },
-    { spawnFn }
-  ));
+  const promise = collect(spawnCli({ command: 'test-cli', args: [], signal: controller.signal }, { spawnFn }));
 
   // Write one event then abort
   proc.stdout.write('{"type":"first"}\n');
@@ -291,10 +267,7 @@ test('spawnCli cleans up on consumer break (early return)', async () => {
   proc.stdout.write('{"type":"second"}\n');
 
   const results = [];
-  for await (const event of spawnCli(
-    { command: 'test-cli', args: [] },
-    { spawnFn }
-  )) {
+  for await (const event of spawnCli({ command: 'test-cli', args: [] }, { spawnFn })) {
     results.push(event);
     if (results.length === 1) break; // Consumer stops early
   }
@@ -310,15 +283,17 @@ test('spawnCli passes cwd and env to spawn', async () => {
   const proc = createMockProcess();
   const spawnFn = createMockSpawnFn(proc);
 
-  const promise = collect(spawnCli(
-    {
-      command: 'claude',
-      args: ['-p', 'hello'],
-      cwd: '/some/project',
-      env: { CUSTOM_VAR: 'value' },
-    },
-    { spawnFn }
-  ));
+  const promise = collect(
+    spawnCli(
+      {
+        command: 'claude',
+        args: ['-p', 'hello'],
+        cwd: '/some/project',
+        env: { CUSTOM_VAR: 'value' },
+      },
+      { spawnFn },
+    ),
+  );
 
   proc.stdout.end();
   proc._emitter.emit('exit', 0, null);
@@ -337,14 +312,16 @@ test('spawnCli removes inherited env vars when override is null', async () => {
 
   const proc = createMockProcess();
   const spawnFn = createMockSpawnFn(proc);
-  const promise = collect(spawnCli(
-    {
-      command: 'claude',
-      args: ['-p', 'hello'],
-      env: { SPAWN_DELETE_ME: null, KEEP_ME: '1' },
-    },
-    { spawnFn }
-  ));
+  const promise = collect(
+    spawnCli(
+      {
+        command: 'claude',
+        args: ['-p', 'hello'],
+        env: { SPAWN_DELETE_ME: null, KEEP_ME: '1' },
+      },
+      { spawnFn },
+    ),
+  );
 
   proc.stdout.end();
   proc._emitter.emit('exit', 0, null);
@@ -352,7 +329,7 @@ test('spawnCli removes inherited env vars when override is null', async () => {
 
   const env = spawnFn.mock.calls[0].arguments[2].env;
   assert.equal(env.SPAWN_DELETE_ME, undefined);
-  assert.equal(Object.prototype.hasOwnProperty.call(env, 'SPAWN_DELETE_ME'), false);
+  assert.equal(Object.hasOwn(env, 'SPAWN_DELETE_ME'), false);
   assert.equal(env.KEEP_ME, '1');
 
   if (saved === undefined) delete process.env.SPAWN_DELETE_ME;
@@ -365,10 +342,7 @@ test('spawnCli handles already-aborted signal', async () => {
   const controller = new AbortController();
   controller.abort(); // Already aborted
 
-  const promise = collect(spawnCli(
-    { command: 'test-cli', args: [], signal: controller.signal },
-    { spawnFn }
-  ));
+  const promise = collect(spawnCli({ command: 'test-cli', args: [], signal: controller.signal }, { spawnFn }));
 
   proc.stdout.end();
   await promise;
@@ -381,10 +355,7 @@ test('spawnCli handles empty stdout', async () => {
   const proc = createMockProcess();
   const spawnFn = createMockSpawnFn(proc);
 
-  const promise = collect(spawnCli(
-    { command: 'test-cli', args: [] },
-    { spawnFn }
-  ));
+  const promise = collect(spawnCli({ command: 'test-cli', args: [] }, { spawnFn }));
 
   proc.stdout.end();
   proc._emitter.emit('exit', 0, null);
@@ -399,10 +370,7 @@ test('spawnCli yields __cliError on non-zero exit code >= 2 (stderr sanitized)',
   const proc = createMockProcess({ exitOnKill: false });
   const spawnFn = createMockSpawnFn(proc);
 
-  const promise = collect(spawnCli(
-    { command: 'test-cli', args: [] },
-    { spawnFn }
-  ));
+  const promise = collect(spawnCli({ command: 'test-cli', args: [] }, { spawnFn }));
 
   proc.stdout.write('{"type":"partial"}\n');
   proc.stderr.write('Error: something went wrong\n');
@@ -427,10 +395,7 @@ test('spawnCli yields __cliError for exit code 1 even with valid output (no soft
   const proc = createMockProcess({ exitOnKill: false });
   const spawnFn = createMockSpawnFn(proc);
 
-  const promise = collect(spawnCli(
-    { command: 'codex', args: ['exec'] },
-    { spawnFn }
-  ));
+  const promise = collect(spawnCli({ command: 'codex', args: ['exec'] }, { spawnFn }));
 
   // spawnCli always reports non-zero exit as error — soft exit handling
   // is the caller's responsibility (e.g. CodexAgentService)
@@ -450,10 +415,7 @@ test('spawnCli yields __cliError when killed by external signal (stderr sanitize
   const proc = createMockProcess({ exitOnKill: false });
   const spawnFn = createMockSpawnFn(proc);
 
-  const promise = collect(spawnCli(
-    { command: 'test-cli', args: [] },
-    { spawnFn }
-  ));
+  const promise = collect(spawnCli({ command: 'test-cli', args: [] }, { spawnFn }));
 
   proc.stderr.write('Killed by OOM\n');
   proc.stdout.end();
@@ -476,10 +438,7 @@ test('spawnCli yields __cliTimeout (not __cliError) on timeout kill', async () =
   const proc = createMockProcess();
   const spawnFn = createMockSpawnFn(proc);
 
-  const promise = collect(spawnCli(
-    { command: 'test-cli', args: [], timeoutMs: 50 },
-    { spawnFn }
-  ));
+  const promise = collect(spawnCli({ command: 'test-cli', args: [], timeoutMs: 50 }, { spawnFn }));
 
   // Let timeout fire and kill the process
   await new Promise((resolve) => setTimeout(resolve, 100));
@@ -521,10 +480,7 @@ test('AbortSignal cancel does NOT yield __cliTimeout', async () => {
   const spawnFn = createMockSpawnFn(proc);
   const controller = new AbortController();
 
-  const promise = collect(spawnCli(
-    { command: 'test-cli', args: [], signal: controller.signal },
-    { spawnFn }
-  ));
+  const promise = collect(spawnCli({ command: 'test-cli', args: [], signal: controller.signal }, { spawnFn }));
 
   // Cancel via AbortSignal (not timeout)
   controller.abort();
@@ -544,10 +500,7 @@ test('spawnCli escalates SIGTERM to SIGKILL after grace period', async () => {
   const proc = createMockProcess({ exitOnKill: false });
   const spawnFn = createMockSpawnFn(proc);
 
-  const promise = collect(spawnCli(
-    { command: 'stubborn-cli', args: [], timeoutMs: 50 },
-    { spawnFn }
-  ));
+  const promise = collect(spawnCli({ command: 'stubborn-cli', args: [], timeoutMs: 50 }, { spawnFn }));
 
   // Wait for timeout to fire SIGTERM
   await new Promise((resolve) => setTimeout(resolve, 100));
@@ -575,10 +528,7 @@ test('spawnCli handles spawn error (e.g. command not found)', async () => {
   const proc = createMockProcess({ exitOnKill: false });
   const spawnFn = createMockSpawnFn(proc);
 
-  const gen = spawnCli(
-    { command: 'nonexistent-command', args: [] },
-    { spawnFn }
-  );
+  const gen = spawnCli({ command: 'nonexistent-command', args: [] }, { spawnFn });
 
   // Emit error before any stdout data
   process.nextTick(() => {
@@ -590,10 +540,14 @@ test('spawnCli handles spawn error (e.g. command not found)', async () => {
   });
 
   await assert.rejects(
-    async () => { for await (const _ of gen) { /* consume */ } },
+    async () => {
+      for await (const _ of gen) {
+        /* consume */
+      }
+    },
     (err) => {
       assert.ok(err.message.includes('ENOENT'));
       return true;
-    }
+    },
   );
 });

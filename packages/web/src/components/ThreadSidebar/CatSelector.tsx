@@ -1,6 +1,6 @@
 'use client';
 
-import { useCatData, formatCatName } from '@/hooks/useCatData';
+import { formatCatName, useCatData } from '@/hooks/useCatData';
 import { hexToRgba } from '@/lib/color-utils';
 
 interface CatSelectorProps {
@@ -53,15 +53,17 @@ export function CatSelector({ selectedCats, onSelectionChange }: CatSelectorProp
                     type="button"
                     onClick={() => toggleCat(cat.id)}
                     className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs transition-colors border ${
-                      isSelected
-                        ? 'font-medium border-current'
-                        : 'border-gray-200 text-gray-500 hover:border-gray-400'
+                      isSelected ? 'font-medium border-current' : 'border-gray-200 text-gray-500 hover:border-gray-400'
                     }`}
-                    style={isSelected ? {
-                      color: cat.color.primary,
-                      backgroundColor: hexToRgba(cat.color.primary, 0.1),
-                      borderColor: cat.color.primary,
-                    } : undefined}
+                    style={
+                      isSelected
+                        ? {
+                            color: cat.color.primary,
+                            backgroundColor: hexToRgba(cat.color.primary, 0.1),
+                            borderColor: cat.color.primary,
+                          }
+                        : undefined
+                    }
                   >
                     <span
                       className="inline-block w-2 h-2 rounded-full flex-shrink-0"

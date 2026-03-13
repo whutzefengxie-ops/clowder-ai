@@ -3,8 +3,8 @@
  * GET /api/skills — Cat Café 共享 Skills 看板数据
  */
 
-import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
 import Fastify from 'fastify';
 import { skillsRoutes } from '../dist/routes/skills.js';
 

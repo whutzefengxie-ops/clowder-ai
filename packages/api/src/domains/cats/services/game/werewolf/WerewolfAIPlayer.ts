@@ -5,7 +5,7 @@
  * builds role-specific prompt, calls LLM provider for structured output.
  */
 
-import type { GameView, GameAction } from '@cat-cafe/shared';
+import type { GameAction, GameView } from '@cat-cafe/shared';
 import { buildWerewolfPrompt } from './werewolf-prompts.js';
 
 export interface AIActionResponse {
@@ -25,12 +25,7 @@ export class WerewolfAIPlayer {
     this.provider = provider;
   }
 
-  async decideNightAction(
-    seatId: string,
-    role: string,
-    view: GameView,
-    round: number,
-  ): Promise<GameAction> {
+  async decideNightAction(seatId: string, role: string, view: GameView, round: number): Promise<GameAction> {
     const prompt = buildWerewolfPrompt(role, view, round);
     const actionPrompt = `${prompt}\n\nChoose your night action. Return a JSON with actionName and targetSeat.`;
 
@@ -54,12 +49,7 @@ export class WerewolfAIPlayer {
     return action;
   }
 
-  async decideSpeech(
-    seatId: string,
-    role: string,
-    view: GameView,
-    round: number,
-  ): Promise<string> {
+  async decideSpeech(seatId: string, role: string, view: GameView, round: number): Promise<string> {
     const prompt = buildWerewolfPrompt(role, view, round);
     const speechPrompt = `${prompt}\n\nIt is the discussion phase. Give a brief speech (1-3 sentences) as ${seatId}.`;
 
@@ -77,12 +67,7 @@ export class WerewolfAIPlayer {
     return { kind: voiceMode ? 'audio' : 'text', text, seatId };
   }
 
-  async decideVote(
-    seatId: string,
-    role: string,
-    view: GameView,
-    round: number,
-  ): Promise<GameAction> {
+  async decideVote(seatId: string, role: string, view: GameView, round: number): Promise<GameAction> {
     const prompt = buildWerewolfPrompt(role, view, round);
     const votePrompt = `${prompt}\n\nChoose who to vote for exile. Return a JSON with actionName "vote" and targetSeat.`;
 

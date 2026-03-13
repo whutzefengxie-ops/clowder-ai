@@ -1,10 +1,9 @@
 /**
  * F080-P2: Path completion integration tests with ChatInput.
  */
-import React from 'react';
-import { describe, expect, it, vi, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
+import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { act } from 'react';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatInput } from '@/components/ChatInput';
 import { useInputHistoryStore } from '@/stores/inputHistoryStore';
 
@@ -29,10 +28,15 @@ vi.mock('@/hooks/useCatData', () => ({
   useCatData: () => ({
     cats: [
       {
-        id: 'opus', displayName: '布偶猫',
+        id: 'opus',
+        displayName: '布偶猫',
         color: { primary: '#9B7EBD', secondary: '#E8D5F5' },
-        mentionPatterns: ['布偶猫'], provider: 'anthropic', defaultModel: 'opus',
-        avatar: '/a.png', roleDescription: 'dev', personality: 'kind',
+        mentionPatterns: ['布偶猫'],
+        provider: 'anthropic',
+        defaultModel: 'opus',
+        avatar: '/a.png',
+        roleDescription: 'dev',
+        personality: 'kind',
       },
     ],
     isLoading: false,
@@ -79,17 +83,13 @@ function getTextarea(): HTMLTextAreaElement {
 }
 
 function typeInto(textarea: HTMLTextAreaElement, value: string) {
-  const nativeSetter = Object.getOwnPropertyDescriptor(
-    HTMLTextAreaElement.prototype, 'value',
-  )!.set!;
+  const nativeSetter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set!;
   nativeSetter.call(textarea, value);
   textarea.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
 function pressKey(textarea: HTMLTextAreaElement, key: string, opts: Partial<KeyboardEventInit> = {}) {
-  textarea.dispatchEvent(
-    new KeyboardEvent('keydown', { key, bubbles: true, ...opts }),
-  );
+  textarea.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, ...opts }));
 }
 
 describe('ChatInput path completion', () => {
@@ -112,9 +112,13 @@ describe('ChatInput path completion', () => {
     });
 
     // Type a path pattern
-    act(() => { typeInto(getTextarea(), './src/'); });
+    act(() => {
+      typeInto(getTextarea(), './src/');
+    });
     // Advance debounce timer
-    await act(async () => { vi.advanceTimersByTime(300); });
+    await act(async () => {
+      vi.advanceTimersByTime(300);
+    });
 
     const menu = container.querySelector('[data-testid="path-completion-menu"]');
     expect(menu).not.toBeNull();
@@ -127,8 +131,12 @@ describe('ChatInput path completion', () => {
     act(() => {
       root.render(React.createElement(ChatInput, { threadId: 'thread-1', onSend }));
     });
-    act(() => { typeInto(getTextarea(), 'hello world'); });
-    await act(async () => { vi.advanceTimersByTime(300); });
+    act(() => {
+      typeInto(getTextarea(), 'hello world');
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(300);
+    });
 
     const menu = container.querySelector('[data-testid="path-completion-menu"]');
     expect(menu).toBeNull();
@@ -138,9 +146,7 @@ describe('ChatInput path completion', () => {
     mockApiFetch.mockImplementation((url: string) => {
       if (typeof url === 'string' && url.includes('/api/projects/complete')) {
         return jsonOk({
-          entries: [
-            { name: 'components/', path: '/test/src/components', isDirectory: true },
-          ],
+          entries: [{ name: 'components/', path: '/test/src/components', isDirectory: true }],
         });
       }
       return jsonOk({ entries: [] });
@@ -151,15 +157,21 @@ describe('ChatInput path completion', () => {
       root.render(React.createElement(ChatInput, { threadId: 'thread-1', onSend }));
     });
 
-    act(() => { typeInto(getTextarea(), './src/comp'); });
-    await act(async () => { vi.advanceTimersByTime(300); });
+    act(() => {
+      typeInto(getTextarea(), './src/comp');
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(300);
+    });
 
     // Menu should be visible
     const menu = container.querySelector('[data-testid="path-completion-menu"]');
     expect(menu).not.toBeNull();
 
     // Tab to select
-    act(() => { pressKey(getTextarea(), 'Tab'); });
+    act(() => {
+      pressKey(getTextarea(), 'Tab');
+    });
 
     // Input should be updated with completed path
     expect(getTextarea().value).toBe('./src/components/');
@@ -183,12 +195,18 @@ describe('ChatInput path completion', () => {
       root.render(React.createElement(ChatInput, { threadId: 'thread-1', onSend }));
     });
 
-    act(() => { typeInto(getTextarea(), './foo'); });
-    await act(async () => { vi.advanceTimersByTime(300); });
+    act(() => {
+      typeInto(getTextarea(), './foo');
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(300);
+    });
 
     expect(container.querySelector('[data-testid="path-completion-menu"]')).not.toBeNull();
 
-    act(() => { pressKey(getTextarea(), 'Escape'); });
+    act(() => {
+      pressKey(getTextarea(), 'Escape');
+    });
     expect(container.querySelector('[data-testid="path-completion-menu"]')).toBeNull();
   });
 
@@ -209,8 +227,12 @@ describe('ChatInput path completion', () => {
       root.render(React.createElement(ChatInput, { threadId: 'thread-1', onSend }));
     });
 
-    act(() => { typeInto(getTextarea(), './src/'); });
-    await act(async () => { vi.advanceTimersByTime(300); });
+    act(() => {
+      typeInto(getTextarea(), './src/');
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(300);
+    });
 
     // Path menu should be open
     expect(container.querySelector('[data-testid="path-completion-menu"]')).not.toBeNull();
@@ -233,16 +255,24 @@ describe('ChatInput path completion', () => {
       root.render(React.createElement(ChatInput, { threadId: 'thread-1', onSend }));
     });
 
-    act(() => { typeInto(getTextarea(), './foo'); });
-    await act(async () => { vi.advanceTimersByTime(300); });
+    act(() => {
+      typeInto(getTextarea(), './foo');
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(300);
+    });
     expect(container.querySelector('[data-testid="path-completion-menu"]')).not.toBeNull();
 
     // Esc to close
-    act(() => { pressKey(getTextarea(), 'Escape'); });
+    act(() => {
+      pressKey(getTextarea(), 'Escape');
+    });
     expect(container.querySelector('[data-testid="path-completion-menu"]')).toBeNull();
 
     // Wait past another debounce — menu must NOT reopen
-    await act(async () => { vi.advanceTimersByTime(500); });
+    await act(async () => {
+      vi.advanceTimersByTime(500);
+    });
     expect(container.querySelector('[data-testid="path-completion-menu"]')).toBeNull();
   });
 
@@ -261,20 +291,30 @@ describe('ChatInput path completion', () => {
       root.render(React.createElement(ChatInput, { threadId: 'thread-1', onSend }));
     });
 
-    act(() => { typeInto(getTextarea(), './src/ind'); });
-    await act(async () => { vi.advanceTimersByTime(300); });
+    act(() => {
+      typeInto(getTextarea(), './src/ind');
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(300);
+    });
     expect(container.querySelector('[data-testid="path-completion-menu"]')).not.toBeNull();
 
     // Tab to select file
-    act(() => { pressKey(getTextarea(), 'Tab'); });
+    act(() => {
+      pressKey(getTextarea(), 'Tab');
+    });
     expect(container.querySelector('[data-testid="path-completion-menu"]')).toBeNull();
 
     // Wait past debounce — menu should NOT reopen for a file selection
-    await act(async () => { vi.advanceTimersByTime(500); });
+    await act(async () => {
+      vi.advanceTimersByTime(500);
+    });
     expect(container.querySelector('[data-testid="path-completion-menu"]')).toBeNull();
 
     // Enter should send, not re-select
-    act(() => { pressKey(getTextarea(), 'Enter'); });
+    act(() => {
+      pressKey(getTextarea(), 'Enter');
+    });
     expect(onSend).toHaveBeenCalled();
   });
 
@@ -282,15 +322,18 @@ describe('ChatInput path completion', () => {
     // Scenario: type path → fetch dispatched → delete path → response arrives
     // Expected: menu stays closed because input no longer has path pattern
     let resolveDeferred: (value: unknown) => void;
-    const deferredPromise = new Promise((resolve) => { resolveDeferred = resolve; });
+    const deferredPromise = new Promise((resolve) => {
+      resolveDeferred = resolve;
+    });
 
     mockApiFetch.mockImplementation((url: string) => {
       if (typeof url === 'string' && url.includes('/api/projects/complete')) {
         return deferredPromise.then(() => ({
           ok: true,
-          json: () => Promise.resolve({
-            entries: [{ name: 'components/', path: '/test/src/components', isDirectory: true }],
-          }),
+          json: () =>
+            Promise.resolve({
+              entries: [{ name: 'components/', path: '/test/src/components', isDirectory: true }],
+            }),
         }));
       }
       return jsonOk({ entries: [] });
@@ -302,17 +345,25 @@ describe('ChatInput path completion', () => {
     });
 
     // Type path to trigger fetch
-    act(() => { typeInto(getTextarea(), './src'); });
+    act(() => {
+      typeInto(getTextarea(), './src');
+    });
     // Advance past debounce to dispatch the request
-    await act(async () => { vi.advanceTimersByTime(300); });
+    await act(async () => {
+      vi.advanceTimersByTime(300);
+    });
 
     // Now replace input with non-path text BEFORE response arrives
-    act(() => { typeInto(getTextarea(), 'hello'); });
-    await act(async () => { vi.advanceTimersByTime(50); });
+    act(() => {
+      typeInto(getTextarea(), 'hello');
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(50);
+    });
 
     // Resolve the deferred response
     await act(async () => {
-      resolveDeferred!(undefined);
+      resolveDeferred?.(undefined);
       await Promise.resolve(); // flush microtasks
     });
 
@@ -338,8 +389,12 @@ describe('ChatInput path completion', () => {
       root.render(React.createElement(ChatInput, { threadId: 'thread-1', onSend }));
     });
 
-    act(() => { typeInto(getTextarea(), './src/'); });
-    await act(async () => { vi.advanceTimersByTime(300); });
+    act(() => {
+      typeInto(getTextarea(), './src/');
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(300);
+    });
 
     // Path menu visible (dropdown), not ghost text
     expect(container.querySelector('[data-testid="path-completion-menu"]')).not.toBeNull();

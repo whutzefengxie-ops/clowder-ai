@@ -4,7 +4,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { mkdir, readFile, readdir, rename, unlink, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { getRetryDelaysMs, postJsonWithRetry } from './callback-retry.js';
@@ -122,11 +122,7 @@ async function flushOutbox(): Promise<void> {
         continue;
       }
 
-      const replay = await postJsonWithRetry(
-        `${entry.apiUrl}${entry.path}`,
-        JSON.stringify(entry.body),
-        retryDelaysMs,
-      );
+      const replay = await postJsonWithRetry(`${entry.apiUrl}${entry.path}`, JSON.stringify(entry.body), retryDelaysMs);
       if (replay.ok) {
         await unlink(processingPath);
         continue;

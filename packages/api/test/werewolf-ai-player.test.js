@@ -4,12 +4,13 @@
  * Tests that AI player produces structurally valid actions.
  * Does NOT test LLM quality — uses a deterministic mock provider.
  */
-import { describe, it } from 'node:test';
+
 import assert from 'node:assert/strict';
-import { WerewolfAIPlayer } from '../dist/domains/cats/services/game/werewolf/WerewolfAIPlayer.js';
-import { buildWerewolfPrompt } from '../dist/domains/cats/services/game/werewolf/werewolf-prompts.js';
+import { describe, it } from 'node:test';
 import { GameViewBuilder } from '../dist/domains/cats/services/game/GameViewBuilder.js';
+import { WerewolfAIPlayer } from '../dist/domains/cats/services/game/werewolf/WerewolfAIPlayer.js';
 import { createWerewolfDefinition } from '../dist/domains/cats/services/game/werewolf/WerewolfDefinition.js';
+import { buildWerewolfPrompt } from '../dist/domains/cats/services/game/werewolf/werewolf-prompts.js';
 
 function create9pRuntime() {
   const def = createWerewolfDefinition(9);

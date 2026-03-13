@@ -1,5 +1,5 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
 import type { SignalArticle, SignalSource } from '@cat-cafe/shared';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   fetchSignalSources,
   fetchSignalsInbox,
@@ -129,7 +129,10 @@ describe('signals-api', () => {
   it('triggerSourceFetch encodes special characters in sourceId', async () => {
     mocks.apiFetch.mockResolvedValueOnce({
       ok: true,
-      json: () => Promise.resolve({ summary: { fetchedArticles: 0, newArticles: 0, storedArticles: 0, duplicateArticles: 0, errors: [] } }),
+      json: () =>
+        Promise.resolve({
+          summary: { fetchedArticles: 0, newArticles: 0, storedArticles: 0, duplicateArticles: 0, errors: [] },
+        }),
     });
 
     await triggerSourceFetch('source/with spaces');

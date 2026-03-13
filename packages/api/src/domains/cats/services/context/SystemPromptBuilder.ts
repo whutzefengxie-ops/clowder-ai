@@ -80,11 +80,13 @@ export interface InvocationContext {
     readonly tier: number;
     readonly contentSnippet: string;
     readonly note?: string | undefined;
-    readonly relatedDiscussions?: readonly {
-      readonly sessionId: string;
-      readonly snippet: string;
-      readonly score: number;
-    }[] | undefined;
+    readonly relatedDiscussions?:
+      | readonly {
+          readonly sessionId: string;
+          readonly snippet: string;
+          readonly score: number;
+        }[]
+      | undefined;
   }[];
   /**
    * F092: Voice companion mode.
@@ -162,9 +164,10 @@ function buildCallableMentions(currentCatId: CatId): CallableMentionsResult {
 
   for (const entry of entries) {
     const group = byDisplayName.get(entry.config.displayName) ?? [];
-    const mention = group.length <= 1 || entry.config.isDefaultVariant
-      ? `@${entry.config.displayName}`
-      : pickVariantMention(entry.id, entry.config);
+    const mention =
+      group.length <= 1 || entry.config.isDefaultVariant
+        ? `@${entry.config.displayName}`
+        : pickVariantMention(entry.id, entry.config);
     if (group.length > 1 && !entry.config.isDefaultVariant && uniqueHandleExample == null) {
       uniqueHandleExample = mention;
     }
@@ -281,12 +284,7 @@ function buildTeammateRoster(currentCatId: CatId): string | null {
     rows.push(`| ${label} | ${mention} | ${strengths} | ${caution} |`);
   }
 
-  return [
-    '## 队友名册',
-    '| 猫猫 | @mention | 擅长 | 注意 |',
-    '|------|---------|------|------|',
-    ...rows,
-  ].join('\n');
+  return ['## 队友名册', '| 猫猫 | @mention | 擅长 | 注意 |', '|------|---------|------|------|', ...rows].join('\n');
 }
 
 /**
@@ -333,11 +331,7 @@ export function buildStaticIdentity(catId: CatId, options?: StaticIdentityOption
   );
 
   // A2A collaboration format (always included — cats should know how to @ even in single-cat mode)
-  const {
-    mentions: callableMentions,
-    hasDuplicateDisplayNames,
-    uniqueHandleExample,
-  } = buildCallableMentions(catId);
+  const { mentions: callableMentions, hasDuplicateDisplayNames, uniqueHandleExample } = buildCallableMentions(catId);
   if (callableMentions.length > 0) {
     const exampleTarget = callableMentions[0]!;
     lines.push('## 协作');
@@ -429,10 +423,7 @@ export function buildInvocationContext(context: InvocationContext): string {
   }
   // Mode context
   if (context.mode === 'serial' && context.chainIndex != null && context.chainTotal != null) {
-    lines.push(
-      `当前模式：你是第 ${context.chainIndex}/${context.chainTotal} 只被召唤的猫，请注意前面猫的回复。`,
-      '',
-    );
+    lines.push(`当前模式：你是第 ${context.chainIndex}/${context.chainTotal} 只被召唤的猫，请注意前面猫的回复。`, '');
   } else if (context.mode === 'parallel') {
     lines.push('当前模式：独立思考。你和队友各自独立回答同一问题，给出你自己的观点。', '');
   } else {
@@ -442,13 +433,19 @@ export function buildInvocationContext(context: InvocationContext): string {
   // A2A: Exit check reminder — prevents "chain termination blind spot" where cats finish output
   // without considering whether a teammate needs to act next.
   if (context.mode !== 'parallel' && context.a2aEnabled) {
-    lines.push('A2A 出口检查：回复前问"到我这里结束了吗？"不是 → 谁需要动 → 末尾另起一行行首写 @句柄（句中 @ 无效）。', '');
+    lines.push(
+      'A2A 出口检查：回复前问"到我这里结束了吗？"不是 → 谁需要动 → 末尾另起一行行首写 @句柄（句中 @ 无效）。',
+      '',
+    );
   }
 
   // F064: One-shot feedback when previous @mention was not routed.
   if (context.mentionRoutingFeedback && context.mentionRoutingFeedback.items?.length > 0) {
     const items = context.mentionRoutingFeedback.items.slice(0, 2).map((it) => `@${it.targetCatId}`);
-    lines.push(`⚠️ 路由反馈：上次你提到了 ${items.join('、')} 但没有用行首 @ 路由。如果需要对方行动，请在行首独立一行写 @句柄。`, '');
+    lines.push(
+      `⚠️ 路由反馈：上次你提到了 ${items.join('、')} 但没有用行首 @ 路由。如果需要对方行动，请在行首独立一行写 @句柄。`,
+      '',
+    );
   }
 
   // Prompt tags
@@ -492,9 +489,7 @@ export function buildInvocationContext(context: InvocationContext): string {
       const prefer = preferList.slice(0, 3).map((id) => toMention(String(id)));
       if (avoid.length > 0) segs.push(`avoid ${avoid.join(', ')}`);
       if (prefer.length > 0) segs.push(`prefer ${prefer.join(', ')}`);
-      const sanitizedReason = typeof rule.reason === 'string'
-        ? rule.reason.replace(/[\r\n]+/g, ' ').trim()
-        : '';
+      const sanitizedReason = typeof rule.reason === 'string' ? rule.reason.replace(/[\r\n]+/g, ' ').trim() : '';
       if (sanitizedReason) segs.push(`(${sanitizedReason})`);
 
       if (segs.length > 0) parts.push(`${scope} ${segs.join(' ')}`);

@@ -72,21 +72,21 @@ export class HindsightClient implements IHindsightClient {
   /** Retrieve memories matching a query */
   async recall(bankId: string, query: string, options?: RecallOptions): Promise<HindsightMemory[]> {
     const body: Record<string, unknown> = { query };
-    if (options?.limit != null) body['limit'] = options.limit;
-    if (options?.budget) body['budget'] = options.budget;
-    if (options?.types) body['types'] = options.types;
-    if (options?.tags) body['tags'] = options.tags;
-    if (options?.tagsMatch) body['tags_match'] = options.tagsMatch;
+    if (options?.limit != null) body.limit = options.limit;
+    if (options?.budget) body.budget = options.budget;
+    if (options?.types) body.types = options.types;
+    if (options?.tags) body.tags = options.tags;
+    if (options?.tagsMatch) body.tags_match = options.tagsMatch;
 
     const res = await this.post(`/v1/default/banks/${bankId}/memories/recall`, body);
-    return (res['memories'] as HindsightMemory[]) ?? [];
+    return (res.memories as HindsightMemory[]) ?? [];
   }
 
   /** Store memory items into a bank */
   async retain(bankId: string, items: RetainItem[], options?: RetainOptions): Promise<void> {
     const body: Record<string, unknown> = { items };
-    if (options?.async != null) body['async'] = options.async;
-    if (options?.document_tags) body['document_tags'] = options.document_tags;
+    if (options?.async != null) body.async = options.async;
+    if (options?.document_tags) body.document_tags = options.document_tags;
 
     await this.post(`/v1/default/banks/${bankId}/memories`, body);
   }
@@ -94,7 +94,7 @@ export class HindsightClient implements IHindsightClient {
   /** LLM-based reflection on stored memories */
   async reflect(bankId: string, query: string): Promise<string> {
     const res = await this.post(`/v1/default/banks/${bankId}/reflect`, { query });
-    return (res['reflection'] as string) ?? '';
+    return (res.reflection as string) ?? '';
   }
 
   /** Ensure a bank exists; create if missing (idempotent PUT) */
@@ -102,7 +102,7 @@ export class HindsightClient implements IHindsightClient {
     const body: Record<string, unknown> = {
       name: name ?? bankId,
     };
-    if (background) body['background'] = background;
+    if (background) body.background = background;
 
     const url = `${this.baseUrl}/v1/default/banks/${bankId}`;
     let res: Response;
@@ -116,9 +116,7 @@ export class HindsightClient implements IHindsightClient {
     } catch (err) {
       const msg = (err as Error).message ?? String(err);
       const lower = msg.toLowerCase();
-      const code = lower.includes('timeout') || lower.includes('aborted')
-        ? 'TIMEOUT'
-        : 'CONNECTION_FAILED';
+      const code = lower.includes('timeout') || lower.includes('aborted') ? 'TIMEOUT' : 'CONNECTION_FAILED';
       throw new HindsightError(code, `Cannot reach Hindsight at ${this.baseUrl}: ${msg}`);
     }
 
@@ -158,22 +156,13 @@ export class HindsightClient implements IHindsightClient {
     } catch (err) {
       const msg = (err as Error).message ?? String(err);
       const lower = msg.toLowerCase();
-      const code = lower.includes('timeout') || lower.includes('aborted')
-        ? 'TIMEOUT'
-        : 'CONNECTION_FAILED';
-      throw new HindsightError(
-        code,
-        `Cannot reach Hindsight at ${this.baseUrl}: ${msg}`,
-      );
+      const code = lower.includes('timeout') || lower.includes('aborted') ? 'TIMEOUT' : 'CONNECTION_FAILED';
+      throw new HindsightError(code, `Cannot reach Hindsight at ${this.baseUrl}: ${msg}`);
     }
 
     if (!res.ok) {
       const text = await this.readBodyAsText(res);
-      throw new HindsightError(
-        'API_ERROR',
-        `Hindsight ${path} returned ${res.status}: ${text}`,
-        res.status,
-      );
+      throw new HindsightError('API_ERROR', `Hindsight ${path} returned ${res.status}: ${text}`, res.status);
     }
 
     if (res.status === 204) return {};
@@ -187,11 +176,7 @@ export class HindsightClient implements IHindsightClient {
       if (typeof (res as { json?: () => Promise<unknown> }).json === 'function') {
         return (await (res as { json: () => Promise<Record<string, unknown>> }).json()) ?? {};
       }
-      throw new HindsightError(
-        'INVALID_RESPONSE',
-        `Hindsight ${path} returned non-JSON response`,
-        res.status,
-      );
+      throw new HindsightError('INVALID_RESPONSE', `Hindsight ${path} returned non-JSON response`, res.status);
     }
   }
 
@@ -216,5 +201,5 @@ export class HindsightClient implements IHindsightClient {
 
 /** Factory function matching codebase convention */
 export function createHindsightClient(url?: string): HindsightClient {
-  return new HindsightClient(url ?? process.env['HINDSIGHT_URL'] ?? 'http://localhost:18888');
+  return new HindsightClient(url ?? process.env.HINDSIGHT_URL ?? 'http://localhost:18888');
 }

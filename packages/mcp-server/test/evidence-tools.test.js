@@ -3,8 +3,8 @@
  * 测试 cat_cafe_search_evidence 的参数编码与降级提示行为。
  */
 
-import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { afterEach, beforeEach, describe, test } from 'node:test';
 
 describe('MCP Evidence Tools', () => {
   let originalEnv;
@@ -12,7 +12,7 @@ describe('MCP Evidence Tools', () => {
 
   beforeEach(() => {
     originalEnv = { ...process.env };
-    process.env['CAT_CAFE_API_URL'] = 'http://127.0.0.1:3002';
+    process.env.CAT_CAFE_API_URL = 'http://127.0.0.1:3002';
     originalFetch = globalThis.fetch;
   });
 
@@ -52,10 +52,7 @@ describe('MCP Evidence Tools', () => {
 
     const parsed = new URL(String(capturedUrl));
     assert.equal(parsed.pathname, '/api/evidence/search');
-    assert.deepEqual(parsed.searchParams.getAll('tags'), [
-      'project:cat-cafe',
-      'kind:decision',
-    ]);
+    assert.deepEqual(parsed.searchParams.getAll('tags'), ['project:cat-cafe', 'kind:decision']);
   });
 
   test('handleSearchEvidence includes degraded header when API responds with degraded=true', async () => {
@@ -82,8 +79,7 @@ describe('MCP Evidence Tools', () => {
     assert.equal(result.isError, undefined);
     assert.ok(
       result.content[0].text.includes('[DEGRADED] Results from local docs fallback'),
-      'expected degraded header in response text'
+      'expected degraded header in response text',
     );
   });
 });
-

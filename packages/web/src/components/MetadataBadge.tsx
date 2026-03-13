@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import type { ChatMessageMetadata } from '@/stores/chatStore';
-import { formatTokenCount, formatCost } from './status-helpers';
+import { formatCost, formatTokenCount } from './status-helpers';
 
 interface MetadataBadgeProps {
   metadata: ChatMessageMetadata;
@@ -27,7 +27,9 @@ export function MetadataBadge({ metadata }: MetadataBadgeProps) {
       onClick={() => setExpanded((v) => !v)}
       className="mt-1 text-[10px] text-gray-400 hover:text-gray-500 transition-colors cursor-pointer select-none flex items-center gap-0 flex-wrap"
     >
-      <span>{metadata.model || 'unknown'} · {metadata.provider || 'unknown'}</span>
+      <span>
+        {metadata.model || 'unknown'} · {metadata.provider || 'unknown'}
+      </span>
 
       {hasTokens && (
         <span className="ml-1 animate-fade-in">

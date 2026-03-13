@@ -28,12 +28,12 @@ export class RedisThreadReadStateStore implements IThreadReadStateStore {
   async get(userId: string, threadId: string): Promise<ThreadReadState | null> {
     const key = ReadStateKeys.cursor(userId, threadId);
     const data = await this.redis.hgetall(key);
-    if (!data || !data['lastReadMessageId']) return null;
+    if (!data || !data.lastReadMessageId) return null;
     return {
       userId,
       threadId,
-      lastReadMessageId: data['lastReadMessageId'],
-      updatedAt: Number(data['updatedAt'] ?? 0),
+      lastReadMessageId: data.lastReadMessageId,
+      updatedAt: Number(data.updatedAt ?? 0),
     };
   }
 

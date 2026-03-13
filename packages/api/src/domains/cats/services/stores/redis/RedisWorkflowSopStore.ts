@@ -97,9 +97,7 @@ export class RedisWorkflowSopStore implements IWorkflowSopStore {
           resumeCapsule: input.resumeCapsule
             ? { ...existing.resumeCapsule, ...input.resumeCapsule }
             : existing.resumeCapsule,
-          checks: input.checks
-            ? { ...existing.checks, ...input.checks }
-            : existing.checks,
+          checks: input.checks ? { ...existing.checks, ...input.checks } : existing.checks,
           version: existing.version + 1,
           updatedAt: now,
           updatedBy,
@@ -113,9 +111,7 @@ export class RedisWorkflowSopStore implements IWorkflowSopStore {
           resumeCapsule: input.resumeCapsule
             ? { ...DEFAULT_RESUME_CAPSULE, ...input.resumeCapsule }
             : { ...DEFAULT_RESUME_CAPSULE },
-          checks: input.checks
-            ? { ...DEFAULT_CHECKS, ...input.checks }
-            : { ...DEFAULT_CHECKS },
+          checks: input.checks ? { ...DEFAULT_CHECKS, ...input.checks } : { ...DEFAULT_CHECKS },
           version: 1,
           updatedAt: now,
           updatedBy,
@@ -125,14 +121,14 @@ export class RedisWorkflowSopStore implements IWorkflowSopStore {
     const expectedVersion = input.expectedVersion !== undefined ? input.expectedVersion : -1;
     const ttl = this.ttlSeconds ?? -1;
 
-    const result = await this.redis.eval(
+    const result = (await this.redis.eval(
       CAS_UPSERT_LUA,
       1, // numKeys
       key,
       String(expectedVersion),
       JSON.stringify(sop),
       String(ttl),
-    ) as string;
+    )) as string;
 
     if (result !== 'OK') {
       // Lua returned existing JSON = version mismatch

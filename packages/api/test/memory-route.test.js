@@ -3,12 +3,12 @@
  */
 
 import './helpers/setup-cat-registry.js';
-import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { beforeEach, describe, it } from 'node:test';
 import Fastify from 'fastify';
-import { memoryRoutes } from '../dist/routes/memory.js';
 import { MemoryStore } from '../dist/domains/cats/services/stores/ports/MemoryStore.js';
 import { ThreadStore } from '../dist/domains/cats/services/stores/ports/ThreadStore.js';
+import { memoryRoutes } from '../dist/routes/memory.js';
 
 describe('Memory API Routes', () => {
   let app;

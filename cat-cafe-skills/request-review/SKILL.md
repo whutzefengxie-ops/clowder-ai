@@ -4,7 +4,7 @@ description: >
   向跨家族 peer-reviewer 发送 review 请求（含五件套）。
   Use when: 自检通过后准备请其他猫 review。
   Not for: 收到 review 结果（用 receive-review）、自检（用 quality-gate）。
-  Output: Review 请求信（存档到 docs/mailbox/）。
+  Output: Review 请求信（存档到 review-notes/）。
 triggers:
   - "请 review"
   - "帮我看看"
@@ -73,7 +73,7 @@ BEFORE 发 review 请求:
 - **Open Questions**: 标注 review 重点，帮 reviewer 快速定位
 - **自检证据**: 附 quality-gate report 摘要 + 测试命令输出
 
-存档：`docs/mailbox/YYYY-MM-DD-{topic}-review-request.md`
+存档：`review request note`
 
 ## Block 场景
 

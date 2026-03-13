@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
@@ -118,7 +118,10 @@ describe('runMigrateSignalsCli', () => {
 
     assert.equal(code, 1);
     assert.match(errors.join('\n'), /--from is required/);
-    assert.equal(logs.some((line) => line.includes('migration completed')), false);
+    assert.equal(
+      logs.some((line) => line.includes('migration completed')),
+      false,
+    );
   });
 
   it('fails fast when --from path does not exist', async () => {
@@ -130,7 +133,10 @@ describe('runMigrateSignalsCli', () => {
 
     assert.equal(code, 1);
     assert.match(errors.join('\n'), /legacy root not found/i);
-    assert.equal(logs.some((line) => line.includes('migration completed')), false);
+    assert.equal(
+      logs.some((line) => line.includes('migration completed')),
+      false,
+    );
   });
 
   it('dry-run does not write target signals workspace', async () => {
@@ -203,12 +209,7 @@ describe('runMigrateSignalsCli', () => {
 
     await writeFile(
       join(legacyRoot, 'library', 'anthropic', '20260124-unterminated-frontmatter.md'),
-      [
-        '---',
-        'title: "Broken legacy article"',
-        'url: "https://example.com/broken-legacy"',
-        'tags: [broken',
-      ].join('\n'),
+      ['---', 'title: "Broken legacy article"', 'url: "https://example.com/broken-legacy"', 'tags: [broken'].join('\n'),
       'utf-8',
     );
 

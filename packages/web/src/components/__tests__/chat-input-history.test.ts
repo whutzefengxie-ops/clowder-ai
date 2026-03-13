@@ -1,10 +1,9 @@
 /**
  * F080: Input history completion — ghost text + Tab accept + Ctrl+R search.
  */
-import React from 'react';
-import { describe, expect, it, vi, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
+import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { act } from 'react';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatInput } from '@/components/ChatInput';
 import { useInputHistoryStore } from '@/stores/inputHistoryStore';
 
@@ -24,10 +23,15 @@ vi.mock('@/hooks/useCatData', () => ({
   useCatData: () => ({
     cats: [
       {
-        id: 'opus', displayName: '布偶猫',
+        id: 'opus',
+        displayName: '布偶猫',
         color: { primary: '#9B7EBD', secondary: '#E8D5F5' },
-        mentionPatterns: ['布偶猫'], provider: 'anthropic', defaultModel: 'opus',
-        avatar: '/a.png', roleDescription: 'dev', personality: 'kind',
+        mentionPatterns: ['布偶猫'],
+        provider: 'anthropic',
+        defaultModel: 'opus',
+        avatar: '/a.png',
+        roleDescription: 'dev',
+        personality: 'kind',
       },
     ],
     isLoading: false,
@@ -62,17 +66,13 @@ function getTextarea(): HTMLTextAreaElement {
 }
 
 function typeInto(textarea: HTMLTextAreaElement, value: string) {
-  const nativeSetter = Object.getOwnPropertyDescriptor(
-    HTMLTextAreaElement.prototype, 'value',
-  )!.set!;
+  const nativeSetter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set!;
   nativeSetter.call(textarea, value);
   textarea.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
 function pressKey(textarea: HTMLTextAreaElement, key: string, opts: Partial<KeyboardEventInit> = {}) {
-  textarea.dispatchEvent(
-    new KeyboardEvent('keydown', { key, bubbles: true, ...opts }),
-  );
+  textarea.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, ...opts }));
 }
 
 describe('ChatInput history completion', () => {
@@ -81,8 +81,12 @@ describe('ChatInput history completion', () => {
     act(() => {
       root.render(React.createElement(ChatInput, { threadId: 'thread-1', onSend }));
     });
-    act(() => { typeInto(getTextarea(), 'hello world'); });
-    act(() => { pressKey(getTextarea(), 'Enter'); });
+    act(() => {
+      typeInto(getTextarea(), 'hello world');
+    });
+    act(() => {
+      pressKey(getTextarea(), 'Enter');
+    });
 
     expect(onSend).toHaveBeenCalledWith('hello world', undefined, undefined, undefined);
     expect(useInputHistoryStore.getState().entries).toContain('hello world');
@@ -96,7 +100,9 @@ describe('ChatInput history completion', () => {
     act(() => {
       root.render(React.createElement(ChatInput, { threadId: 'thread-1', onSend }));
     });
-    act(() => { typeInto(getTextarea(), 'hel'); });
+    act(() => {
+      typeInto(getTextarea(), 'hel');
+    });
 
     const ghost = container.querySelector('[data-testid="ghost-suggestion"]');
     expect(ghost).not.toBeNull();
@@ -111,10 +117,14 @@ describe('ChatInput history completion', () => {
     act(() => {
       root.render(React.createElement(ChatInput, { threadId: 'thread-1', onSend }));
     });
-    act(() => { typeInto(getTextarea(), 'hel'); });
+    act(() => {
+      typeInto(getTextarea(), 'hel');
+    });
 
     // Press Tab to accept
-    act(() => { pressKey(getTextarea(), 'Tab'); });
+    act(() => {
+      pressKey(getTextarea(), 'Tab');
+    });
 
     expect(getTextarea().value).toBe('hello world');
   });
@@ -126,8 +136,12 @@ describe('ChatInput history completion', () => {
     act(() => {
       root.render(React.createElement(ChatInput, { threadId: 'thread-1', onSend }));
     });
-    act(() => { typeInto(getTextarea(), 'hel'); });
-    act(() => { pressKey(getTextarea(), 'ArrowRight'); });
+    act(() => {
+      typeInto(getTextarea(), 'hel');
+    });
+    act(() => {
+      pressKey(getTextarea(), 'ArrowRight');
+    });
 
     expect(getTextarea().value).toBe('hello world');
   });
@@ -139,7 +153,9 @@ describe('ChatInput history completion', () => {
     act(() => {
       root.render(React.createElement(ChatInput, { threadId: 'thread-1', onSend }));
     });
-    act(() => { typeInto(getTextarea(), 'xyz'); });
+    act(() => {
+      typeInto(getTextarea(), 'xyz');
+    });
 
     const ghost = container.querySelector('[data-testid="ghost-suggestion"]');
     expect(ghost).toBeNull();
@@ -152,8 +168,12 @@ describe('ChatInput history completion', () => {
     act(() => {
       root.render(React.createElement(ChatInput, { threadId: 'thread-1', onSend }));
     });
-    act(() => { typeInto(getTextarea(), 'hel'); });
-    act(() => { pressKey(getTextarea(), 'Tab'); });
+    act(() => {
+      typeInto(getTextarea(), 'hel');
+    });
+    act(() => {
+      pressKey(getTextarea(), 'Tab');
+    });
 
     // Ghost should be gone after accepting
     const ghost = container.querySelector('[data-testid="ghost-suggestion"]');
@@ -167,14 +187,18 @@ describe('ChatInput history completion', () => {
     act(() => {
       root.render(React.createElement(ChatInput, { threadId: 'thread-1', onSend }));
     });
-    act(() => { typeInto(getTextarea(), 'hel'); });
+    act(() => {
+      typeInto(getTextarea(), 'hel');
+    });
 
     // Move cursor to position 1 (not at end)
     const ta = getTextarea();
     ta.selectionStart = 1;
     ta.selectionEnd = 1;
 
-    act(() => { pressKey(ta, 'ArrowRight'); });
+    act(() => {
+      pressKey(ta, 'ArrowRight');
+    });
 
     // Should NOT accept — value stays 'hel'
     expect(ta.value).toBe('hel');
@@ -188,20 +212,22 @@ describe('ChatInput history completion', () => {
       root.render(React.createElement(ChatInput, { threadId: 'thread-1', onSend }));
     });
     // Type @ to trigger mention menu
-    act(() => { typeInto(getTextarea(), '@'); });
+    act(() => {
+      typeInto(getTextarea(), '@');
+    });
     const mentionMenu = container.querySelector('[class*="absolute bottom-full"]');
     expect(mentionMenu).not.toBeNull();
 
     // Ctrl+R should close mention menu and open search
-    act(() => { pressKey(getTextarea(), 'r', { ctrlKey: true }); });
+    act(() => {
+      pressKey(getTextarea(), 'r', { ctrlKey: true });
+    });
     const searchModal = container.querySelector('[data-testid="history-search"]');
     expect(searchModal).not.toBeNull();
     // Mention menu should be gone
     const mentionMenuAfter = container.querySelectorAll('[class*="absolute bottom-full"]');
     // Only the search modal should be positioned absolute, not the mention menu
-    const hasMentionMenu = Array.from(mentionMenuAfter).some(
-      el => el.textContent?.includes('布偶猫'),
-    );
+    const hasMentionMenu = Array.from(mentionMenuAfter).some((el) => el.textContent?.includes('布偶猫'));
     expect(hasMentionMenu).toBe(false);
   });
 
@@ -213,12 +239,16 @@ describe('ChatInput history completion', () => {
       root.render(React.createElement(ChatInput, { threadId: 'thread-1', onSend }));
     });
     // Type to get ghost suggestion
-    act(() => { typeInto(getTextarea(), 'hel'); });
+    act(() => {
+      typeInto(getTextarea(), 'hel');
+    });
     const ghostBefore = container.querySelector('[data-testid="ghost-suggestion"]');
     expect(ghostBefore).not.toBeNull();
 
     // Now type @ to trigger mention — this changes input programmatically
-    act(() => { typeInto(getTextarea(), '@布偶猫 '); });
+    act(() => {
+      typeInto(getTextarea(), '@布偶猫 ');
+    });
     const ghostAfter = container.querySelector('[data-testid="ghost-suggestion"]');
     // Ghost should be gone — no history entry starts with "@布偶猫 "
     expect(ghostAfter).toBeNull();
@@ -231,7 +261,9 @@ describe('ChatInput history completion', () => {
     act(() => {
       root.render(React.createElement(ChatInput, { threadId: 'thread-1', onSend }));
     });
-    act(() => { pressKey(getTextarea(), 'r', { ctrlKey: true }); });
+    act(() => {
+      pressKey(getTextarea(), 'r', { ctrlKey: true });
+    });
 
     const searchModal = container.querySelector('[data-testid="history-search"]');
     expect(searchModal).not.toBeNull();
@@ -245,17 +277,19 @@ describe('ChatInput history completion', () => {
       root.render(React.createElement(ChatInput, { threadId: 'thread-1', onSend }));
     });
     // Open search modal
-    act(() => { pressKey(getTextarea(), 'r', { ctrlKey: true }); });
+    act(() => {
+      pressKey(getTextarea(), 'r', { ctrlKey: true });
+    });
 
     const searchModal = container.querySelector('[data-testid="history-search"]');
     expect(searchModal).not.toBeNull();
 
-    const searchInput = searchModal!.querySelector('input') as HTMLInputElement;
+    const searchInput = searchModal?.querySelector('input') as HTMLInputElement;
     expect(searchInput).not.toBeNull();
 
     // Type a search term
     act(() => {
-      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set!;
       setter.call(searchInput, 'hel');
       searchInput.dispatchEvent(new Event('input', { bubbles: true }));
     });

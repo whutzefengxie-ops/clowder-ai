@@ -16,12 +16,7 @@ export type SeatId = `P${number}`;
 export type ActorType = 'human' | 'cat' | 'system';
 
 /** Event visibility scope */
-export type EventScope =
-  | 'public'
-  | `seat:${SeatId}`
-  | `faction:${string}`
-  | 'judge'
-  | 'god';
+export type EventScope = 'public' | `seat:${SeatId}` | `faction:${string}` | 'judge' | 'god';
 
 /** A seat in the game */
 export interface Seat {

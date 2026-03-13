@@ -19,7 +19,7 @@ const DEFAULT_FILE_CACHE_MAX = 100;
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? value as Record<string, unknown>
+    ? (value as Record<string, unknown>)
     : null;
 }
 
@@ -40,9 +40,7 @@ export interface CodexSessionContextSnapshot {
   totalOutputTokens?: number;
 }
 
-export type CodexSessionContextSnapshotResolver = (
-  sessionId: string,
-) => Promise<CodexSessionContextSnapshot | null>;
+export type CodexSessionContextSnapshotResolver = (sessionId: string) => Promise<CodexSessionContextSnapshot | null>;
 
 interface CandidateSnapshot {
   snapshot: CodexSessionContextSnapshot;
@@ -50,28 +48,28 @@ interface CandidateSnapshot {
 }
 
 function toCandidateSnapshot(payload: Record<string, unknown>): CandidateSnapshot | null {
-  if (payload['type'] !== 'token_count') return null;
+  if (payload.type !== 'token_count') return null;
 
-  const info = asRecord(payload['info']);
+  const info = asRecord(payload.info);
   if (!info) return null;
 
-  const lastUsage = asRecord(info['last_token_usage']);
-  const contextUsedTokens = asNumber(lastUsage?.['input_tokens']);
-  const contextWindowTokens = asNumber(info['model_context_window']);
+  const lastUsage = asRecord(info.last_token_usage);
+  const contextUsedTokens = asNumber(lastUsage?.input_tokens);
+  const contextWindowTokens = asNumber(info.model_context_window);
   if (contextUsedTokens == null || contextWindowTokens == null) return null;
 
-  const totalUsage = asRecord(info['total_token_usage']);
+  const totalUsage = asRecord(info.total_token_usage);
 
-  const rateLimits = asRecord(payload['rate_limits']);
-  const primary = asRecord(rateLimits?.['primary']);
-  const secondary = asRecord(rateLimits?.['secondary']);
-  const primaryUsed = asNumber(primary?.['used_percent']);
-  const secondaryUsed = asNumber(secondary?.['used_percent']);
+  const rateLimits = asRecord(payload.rate_limits);
+  const primary = asRecord(rateLimits?.primary);
+  const secondary = asRecord(rateLimits?.secondary);
+  const primaryUsed = asNumber(primary?.used_percent);
+  const secondaryUsed = asNumber(secondary?.used_percent);
   const hasNonZeroRateUsage = (primaryUsed ?? 0) > 0 || (secondaryUsed ?? 0) > 0;
-  const resetsAtSeconds = asNumber(secondary?.['resets_at']) ?? asNumber(primary?.['resets_at']);
-  const totalInputTokens = asNumber(totalUsage?.['input_tokens']);
-  const totalCachedInputTokens = asNumber(totalUsage?.['cached_input_tokens']);
-  const totalOutputTokens = asNumber(totalUsage?.['output_tokens']);
+  const resetsAtSeconds = asNumber(secondary?.resets_at) ?? asNumber(primary?.resets_at);
+  const totalInputTokens = asNumber(totalUsage?.input_tokens);
+  const totalCachedInputTokens = asNumber(totalUsage?.cached_input_tokens);
+  const totalOutputTokens = asNumber(totalUsage?.output_tokens);
 
   const snapshot: CodexSessionContextSnapshot = { contextUsedTokens, contextWindowTokens };
   if (resetsAtSeconds != null) {
@@ -119,7 +117,7 @@ interface ResolverOptions {
 export function createCodexSessionContextSnapshotResolver(
   options?: ResolverOptions,
 ): CodexSessionContextSnapshotResolver {
-  const sessionsRoot = options?.sessionsRoot ?? join(process.env['CODEX_HOME'] ?? join(homedir(), '.codex'), 'sessions');
+  const sessionsRoot = options?.sessionsRoot ?? join(process.env.CODEX_HOME ?? join(homedir(), '.codex'), 'sessions');
   const tailBytes = options?.tailBytes ?? DEFAULT_TAIL_BYTES;
   const maxCacheEntries = Math.max(1, options?.maxCacheEntries ?? DEFAULT_FILE_CACHE_MAX);
   const fileCache = options?.fileCache ?? new Map<string, string>();
@@ -200,7 +198,7 @@ export function createCodexSessionContextSnapshotResolver(
       }
 
       const row = asRecord(parsed);
-      const payload = asRecord(row?.['payload']);
+      const payload = asRecord(row?.payload);
       if (!payload) continue;
 
       const candidate = toCandidateSnapshot(payload);

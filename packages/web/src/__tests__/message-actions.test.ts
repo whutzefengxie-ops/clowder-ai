@@ -4,8 +4,8 @@
  * Tests store-level removeMessage + socket event routing logic.
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
-import { useChatStore, type ChatMessage } from '@/stores/chatStore';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { type ChatMessage, useChatStore } from '@/stores/chatStore';
 
 function makMsg(id: string, type: 'user' | 'assistant' = 'user'): ChatMessage {
   return { id, type, content: `msg-${id}`, timestamp: Date.now() };
@@ -58,6 +58,6 @@ describe('chatStore.removeMessage', () => {
     store.addMessage(makMsg('a'));
 
     expect(useChatStore.getState().messages).toHaveLength(1);
-    expect(useChatStore.getState().messages[0]!.id).toBe('a');
+    expect(useChatStore.getState().messages[0]?.id).toBe('a');
   });
 });

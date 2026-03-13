@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { apiFetch } from '@/utils/api-client';
 import { DiffViewer } from './DiffViewer';
 import { FileIcon } from './FileIcons';
@@ -69,7 +69,10 @@ export function ChangesPanel({ worktreeId, basisPct }: ChangesPanelProps) {
   return (
     <div className="flex flex-col min-h-0 flex-1">
       {/* Changed files list */}
-      <div className="flex-shrink-0 overflow-y-auto border-b border-owner-light/40" style={{ maxHeight: `${basisPct}%` }}>
+      <div
+        className="flex-shrink-0 overflow-y-auto border-b border-owner-light/40"
+        style={{ maxHeight: `${basisPct}%` }}
+      >
         <div className="px-3 py-1.5 flex items-center justify-between sticky top-0 bg-cafe-white/95 backdrop-blur-sm">
           <span className="text-[10px] text-owner-dark/50 font-semibold uppercase tracking-wider">
             {data ? `${data.changedFiles.length} changed` : 'Changes'}
@@ -99,7 +102,9 @@ export function ChangesPanel({ worktreeId, basisPct }: ChangesPanelProps) {
               <span className={`text-[10px] font-mono font-bold w-3 ${info.color}`}>{info.label}</span>
               <FileIcon name={f.path} />
               <span className="text-[11px] text-cafe-black truncate">{f.path.split('/').pop()}</span>
-              <span className="text-[9px] text-gray-400 truncate ml-auto">{f.path.includes('/') ? f.path.slice(0, f.path.lastIndexOf('/')) : ''}</span>
+              <span className="text-[9px] text-gray-400 truncate ml-auto">
+                {f.path.includes('/') ? f.path.slice(0, f.path.lastIndexOf('/')) : ''}
+              </span>
             </button>
           );
         })}

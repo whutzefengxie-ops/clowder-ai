@@ -21,7 +21,13 @@ const CVO_ACHIEVEMENTS: AchievementDef[] = [
 const BOOTCAMP_ACHIEVEMENTS: AchievementDef[] = [
   { id: 'bootcamp-enrolled', emoji: '🎒', label: '入营新兵', description: '开始猫猫训练营', category: 'cvo' },
   { id: 'bootcamp-env-ready', emoji: '🔧', label: '装备齐全', description: '通过环境检测', category: 'cvo' },
-  { id: 'bootcamp-first-decision', emoji: '🎯', label: '第一次拍板', description: '做出第一个 CVO 决策', category: 'cvo' },
+  {
+    id: 'bootcamp-first-decision',
+    emoji: '🎯',
+    label: '第一次拍板',
+    description: '做出第一个 CVO 决策',
+    category: 'cvo',
+  },
   { id: 'bootcamp-graduated', emoji: '🎓', label: '训练营毕业', description: '完成猫猫训练营全流程', category: 'cvo' },
 ];
 

@@ -67,7 +67,7 @@ export class AntigravityCdpClient {
     this.connectTimeoutMs = o.connectTimeoutMs ?? 5_000;
     this.fetchTimeoutMs = o.fetchTimeoutMs ?? 5_000;
     this.probeTimeoutMs = o.probeTimeoutMs ?? 2_000;
-    this.debug = o.debug ?? !!process.env['CDP_DEBUG'];
+    this.debug = o.debug ?? !!process.env.CDP_DEBUG;
   }
 
   private log(...args: unknown[]): void {
@@ -183,7 +183,7 @@ export class AntigravityCdpClient {
         }
       }, t);
       this.pending.set(id, { resolve, reject, timer });
-      this.ws!.send(JSON.stringify({ id, method, params }));
+      this.ws?.send(JSON.stringify({ id, method, params }));
     });
   }
 
@@ -313,7 +313,7 @@ export class AntigravityCdpClient {
   /** Switch Antigravity to a different model via the dropdown. No-op if already correct. */
   async switchModel(targetModelLabel: string): Promise<void> {
     if (!this.connected) throw new Error('CDP not connected');
-    const normalised = targetModelLabel.toLowerCase().split('(')[0]!.trim();
+    const normalised = targetModelLabel.toLowerCase().split('(')[0]?.trim();
     const current = await this.getCurrentModel();
     if (current?.toLowerCase().includes(normalised)) return;
 

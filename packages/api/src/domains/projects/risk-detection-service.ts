@@ -1,14 +1,11 @@
-import type { IntentCard, RiskDetectionResult, RiskSignal } from '@cat-cafe/shared';
+import type { IntentCard, RiskDetectionResult } from '@cat-cafe/shared';
 
-const HOLLOW_VERBS =
-  /\b(improve|optimize|enhance|support|manage|ensure|streamline|facilitate|leverage|utilize)\b/i;
+const HOLLOW_VERBS = /\b(improve|optimize|enhance|support|manage|ensure|streamline|facilitate|leverage|utilize)\b/i;
 const SYSTEM_ACTORS = /^(the system|system|n\/a|none|tbd|)$/i;
-const DATA_WORDS =
-  /\b(database|data|query|fetch|api|records?|storage|table)\b/i;
+const DATA_WORDS = /\b(database|data|query|fetch|api|records?|storage|table)\b/i;
 const EDGE_WORDS =
   /\b(error|empty|permission|denied|fail|timeout|invalid|overflow|limit|boundary|edge case|concurrent)\b/i;
-const SCOPE_WORDS =
-  /\b(enterprise|all modules|everything|full.?suite|end.?to.?end|comprehensive)\b/i;
+const SCOPE_WORDS = /\b(enterprise|all modules|everything|full.?suite|end.?to.?end|comprehensive)\b/i;
 
 export function detectRisks(card: IntentCard): RiskDetectionResult[] {
   const results: RiskDetectionResult[] = [];
@@ -34,10 +31,7 @@ export function detectRisks(card: IntentCard): RiskDetectionResult[] {
   }
 
   // 3. unknown_data_source
-  if (
-    !card.sourceDetail.trim() &&
-    DATA_WORDS.test(card.goal + ' ' + card.objectState)
-  ) {
+  if (!card.sourceDetail.trim() && DATA_WORDS.test(`${card.goal} ${card.objectState}`)) {
     results.push({
       signal: 'unknown_data_source',
       severity: 'high',
@@ -51,25 +45,18 @@ export function detectRisks(card: IntentCard): RiskDetectionResult[] {
     results.push({
       signal: 'missing_success_signal',
       severity: 'critical',
-      evidence:
-        'successSignal is empty — no observable verification criteria',
+      evidence: 'successSignal is empty — no observable verification criteria',
       autoDetected: true,
     });
   }
 
   // 5. missing_edge_cases
-  const allText = [
-    card.goal,
-    card.objectState,
-    card.nonGoal,
-    card.successSignal,
-  ].join(' ');
+  const allText = [card.goal, card.objectState, card.nonGoal, card.successSignal].join(' ');
   if (!EDGE_WORDS.test(allText) && !card.nonGoal.trim()) {
     results.push({
       signal: 'missing_edge_cases',
       severity: 'medium',
-      evidence:
-        'No mention of error handling, boundaries, or edge cases; nonGoal is empty',
+      evidence: 'No mention of error handling, boundaries, or edge cases; nonGoal is empty',
       autoDetected: true,
     });
   }
@@ -89,8 +76,7 @@ export function detectRisks(card: IntentCard): RiskDetectionResult[] {
     results.push({
       signal: 'ai_fake_specificity',
       severity: 'critical',
-      evidence:
-        'AI-inferred card with empty objectState — looks specific but lacks grounding',
+      evidence: 'AI-inferred card with empty objectState — looks specific but lacks grounding',
       autoDetected: true,
     });
   }

@@ -34,9 +34,7 @@ const VOICE_ENV_KEYS = {
  * Override with GENSHIN_VOICE_DIR env var.
  */
 function genshinVoiceDir(): string {
-  return (
-    process.env['GENSHIN_VOICE_DIR'] ?? join(homedir(), 'projects/relay-station/GPT-SoVITS/character-models/genshin')
-  );
+  return process.env.GENSHIN_VOICE_DIR ?? join(homedir(), 'projects/relay-station/GPT-SoVITS/character-models/genshin');
 }
 
 /**

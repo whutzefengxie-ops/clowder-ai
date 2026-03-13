@@ -8,16 +8,16 @@
  * PATCH /api/threads/:threadId/sessions/:catId/bind - Manual bind CLI session ID (#72)
  */
 
-import type { FastifyInstance, FastifyPluginOptions } from 'fastify';
 import { type CatId, catRegistry } from '@cat-cafe/shared';
+import type { FastifyInstance, FastifyPluginOptions } from 'fastify';
 import { z } from 'zod';
+import { AuditEventTypes, getEventAuditLog } from '../domains/cats/services/orchestration/EventAuditLog.js';
+import { backfillBoundSessionHistory } from '../domains/cats/services/session/BoundSessionHistoryImporter.js';
+import type { TranscriptReader } from '../domains/cats/services/session/TranscriptReader.js';
+import type { IMessageStore } from '../domains/cats/services/stores/ports/MessageStore.js';
 import type { ISessionChainStore } from '../domains/cats/services/stores/ports/SessionChainStore.js';
 import type { IThreadStore } from '../domains/cats/services/stores/ports/ThreadStore.js';
-import type { IMessageStore } from '../domains/cats/services/stores/ports/MessageStore.js';
-import type { TranscriptReader } from '../domains/cats/services/session/TranscriptReader.js';
-import { backfillBoundSessionHistory } from '../domains/cats/services/session/BoundSessionHistoryImporter.js';
 import { resolveUserId } from '../utils/request-identity.js';
-import { getEventAuditLog, AuditEventTypes } from '../domains/cats/services/orchestration/EventAuditLog.js';
 
 const bindSessionSchema = z.object({
   cliSessionId: z.string().min(1).max(500),
@@ -30,10 +30,7 @@ interface SessionChainRouteOptions extends FastifyPluginOptions {
   transcriptReader?: TranscriptReader;
 }
 
-export async function sessionChainRoutes(
-  app: FastifyInstance,
-  opts: SessionChainRouteOptions,
-): Promise<void> {
+export async function sessionChainRoutes(app: FastifyInstance, opts: SessionChainRouteOptions): Promise<void> {
   const { sessionChainStore, threadStore, messageStore, transcriptReader } = opts;
 
   app.get<{
@@ -238,11 +235,15 @@ export async function sessionChainRoutes(
     }
 
     // Audit trail (best-effort, fire-and-forget)
-    getEventAuditLog().append({
-      type: AuditEventTypes.SESSION_BIND,
-      threadId,
-      data: { catId, cliSessionId, mode, sessionId: session.id, userId },
-    }).catch(() => { /* best-effort */ });
+    getEventAuditLog()
+      .append({
+        type: AuditEventTypes.SESSION_BIND,
+        threadId,
+        data: { catId, cliSessionId, mode, sessionId: session.id, userId },
+      })
+      .catch(() => {
+        /* best-effort */
+      });
 
     const historyImport = await backfillBoundSessionHistory({
       sessionChainStore,

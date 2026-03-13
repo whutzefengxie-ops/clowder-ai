@@ -1,6 +1,6 @@
-import React, { type ReactNode } from 'react';
-import type { ConfigData } from './config-viewer-types';
+import { type ReactNode } from 'react';
 import type { CatData } from '@/hooks/useCatData';
+import type { ConfigData } from './config-viewer-types';
 
 export type { Capabilities, CatConfig, ConfigData, ContextBudget } from './config-viewer-types';
 
@@ -26,7 +26,7 @@ function KV({ label, value }: { label: string; value: string | number | boolean 
 /** Unified cat overview — all cats' model & budget in one tab */
 export function CatOverviewTab({ config, cats }: { config: ConfigData; cats: CatData[] }) {
   // One card per breed (default variant only)
-  const breeds = cats.filter(c => c.isDefaultVariant !== false).slice(0, 3);
+  const breeds = cats.filter((c) => c.isDefaultVariant !== false).slice(0, 3);
 
   return (
     <div className="space-y-3">
@@ -49,9 +49,7 @@ export function CatOverviewTab({ config, cats }: { config: ConfigData; cats: Cat
           </Section>
         );
       })}
-      {breeds.length === 0 && (
-        <p className="text-sm text-gray-400">未找到猫猫配置数据</p>
-      )}
+      {breeds.length === 0 && <p className="text-sm text-gray-400">未找到猫猫配置数据</p>}
     </div>
   );
 }

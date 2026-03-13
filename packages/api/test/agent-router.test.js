@@ -6,10 +6,9 @@
  */
 
 import './helpers/setup-cat-registry.js';
-import { test, describe, mock } from 'node:test';
 import assert from 'node:assert/strict';
+import { describe, mock, test } from 'node:test';
 import { migrateRouterOpts } from './helpers/agent-registry-helpers.js';
-
 
 // Create mock dependencies for AgentRouter
 function createMockRegistry() {
@@ -40,11 +39,17 @@ function createMockMessageStore() {
     },
     getRecent: (limit = 50) => sorted().slice(-limit),
     getMentionsFor: (catId, limit = 50) =>
-      sorted().filter((m) => m.mentions?.includes(catId)).slice(-limit),
+      sorted()
+        .filter((m) => m.mentions?.includes(catId))
+        .slice(-limit),
     getBefore: (timestamp, limit = 50) =>
-      sorted().filter((m) => m.timestamp < timestamp).slice(-limit),
+      sorted()
+        .filter((m) => m.timestamp < timestamp)
+        .slice(-limit),
     getByThread: (threadId, limit = 50) =>
-      sorted().filter((m) => m.threadId === threadId).slice(-limit),
+      sorted()
+        .filter((m) => m.threadId === threadId)
+        .slice(-limit),
     getByThreadAfter: (threadId, afterId, limit) => {
       const inThread = sorted().filter((m) => m.threadId === threadId);
       const filtered = afterId ? inThread.filter((m) => m.id > afterId) : inThread;
@@ -71,7 +76,15 @@ function createMockThreadStore(initialParticipants = {}, threadProjectPaths = {}
   // F032 P1-2: Track activity timestamps for each participant
   const activity = {};
   return {
-    create: (userId, title, projectPath) => ({ id: `thread_mock`, projectPath: projectPath ?? 'default', title: title ?? null, createdBy: userId, participants: [], lastActiveAt: Date.now(), createdAt: Date.now() }),
+    create: (userId, title, projectPath) => ({
+      id: `thread_mock`,
+      projectPath: projectPath ?? 'default',
+      title: title ?? null,
+      createdBy: userId,
+      participants: [],
+      lastActiveAt: Date.now(),
+      createdAt: Date.now(),
+    }),
     get: (threadId) => ({
       id: threadId,
       projectPath: threadProjectPaths[threadId] ?? 'default',
@@ -184,100 +197,116 @@ function createMockAgentService(catId, responseText = 'Hello from mock') {
 
 describe('AgentRouter', () => {
   test('routingPolicy(review) avoids opus when default routing would pick opus', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-    );
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
     const mockClaudeService = createMockAgentService('opus', 'Opus response');
     const mockCodexService = createMockAgentService('codex', 'Codex response');
     const mockGeminiService = createMockAgentService('gemini', 'Gemini response');
 
-    const threadStore = createMockThreadStore({}, {}, {
-      'thread-policy': { v: 1, scopes: { review: { avoidCats: ['opus'], reason: 'budget' } } },
-    });
+    const threadStore = createMockThreadStore(
+      {},
+      {},
+      {
+        'thread-policy': { v: 1, scopes: { review: { avoidCats: ['opus'], reason: 'budget' } } },
+      },
+    );
 
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: mockClaudeService,
-      codexService: mockCodexService,
-      geminiService: mockGeminiService,
-      registry: createMockRegistry(),
-      messageStore: createMockMessageStore(),
-      threadStore,
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: mockClaudeService,
+        codexService: mockCodexService,
+        geminiService: mockGeminiService,
+        registry: createMockRegistry(),
+        messageStore: createMockMessageStore(),
+        threadStore,
+      }),
+    );
 
     const { targetCats } = await router.resolveTargetsAndIntent('帮我 review 一下', 'thread-policy');
     assert.equal(targetCats[0], 'codex', 'Should pick deterministic non-opus fallback (codex) when opus is avoided');
   });
 
   test('routingPolicy(review) does not trigger on words containing "pr" like "prompt"', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
+
+    const threadStore = createMockThreadStore(
+      {},
+      {},
+      {
+        'thread-policy': { v: 1, scopes: { review: { avoidCats: ['opus'], reason: 'budget' } } },
+      },
     );
 
-    const threadStore = createMockThreadStore({}, {}, {
-      'thread-policy': { v: 1, scopes: { review: { avoidCats: ['opus'], reason: 'budget' } } },
-    });
-
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: createMockAgentService('opus', 'Opus response'),
-      codexService: createMockAgentService('codex', 'Codex response'),
-      geminiService: createMockAgentService('gemini', 'Gemini response'),
-      registry: createMockRegistry(),
-      messageStore: createMockMessageStore(),
-      threadStore,
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: createMockAgentService('opus', 'Opus response'),
+        codexService: createMockAgentService('codex', 'Codex response'),
+        geminiService: createMockAgentService('gemini', 'Gemini response'),
+        registry: createMockRegistry(),
+        messageStore: createMockMessageStore(),
+        threadStore,
+      }),
+    );
 
     const { targetCats } = await router.resolveTargetsAndIntent('prompt engineering 这块怎么做', 'thread-policy');
     assert.equal(targetCats[0], 'opus', 'Should not classify "prompt" as PR/review scope');
   });
 
   test('routingPolicy tolerates malformed avoid/prefer lists without crashing', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-    );
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
-    const threadStore = createMockThreadStore({}, {}, {
-      'thread-malformed': {
-        v: 1,
-        scopes: {
-          review: {
-            avoidCats: { bad: true },
-            preferCats: 'opus',
+    const threadStore = createMockThreadStore(
+      {},
+      {},
+      {
+        'thread-malformed': {
+          v: 1,
+          scopes: {
+            review: {
+              avoidCats: { bad: true },
+              preferCats: 'opus',
+            },
           },
         },
       },
-    });
+    );
 
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: createMockAgentService('opus', 'Opus response'),
-      codexService: createMockAgentService('codex', 'Codex response'),
-      geminiService: createMockAgentService('gemini', 'Gemini response'),
-      registry: createMockRegistry(),
-      messageStore: createMockMessageStore(),
-      threadStore,
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: createMockAgentService('opus', 'Opus response'),
+        codexService: createMockAgentService('codex', 'Codex response'),
+        geminiService: createMockAgentService('gemini', 'Gemini response'),
+        registry: createMockRegistry(),
+        messageStore: createMockMessageStore(),
+        threadStore,
+      }),
+    );
 
     const { targetCats } = await router.resolveTargetsAndIntent('请 review 这次改动', 'thread-malformed');
     assert.equal(targetCats[0], 'opus');
   });
 
   test('routingPolicy(architecture) prefers opus even when participants would route elsewhere', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
+
+    const threadStore = createMockThreadStore(
+      { 'thread-arch': ['codex'] },
+      {},
+      {
+        'thread-arch': { v: 1, scopes: { architecture: { preferCats: ['opus'] } } },
+      },
     );
 
-    const threadStore = createMockThreadStore({ 'thread-arch': ['codex'] }, {}, {
-      'thread-arch': { v: 1, scopes: { architecture: { preferCats: ['opus'] } } },
-    });
-
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: createMockAgentService('opus', 'Opus response'),
-      codexService: createMockAgentService('codex', 'Codex response'),
-      geminiService: createMockAgentService('gemini', 'Gemini response'),
-      registry: createMockRegistry(),
-      messageStore: createMockMessageStore(),
-      threadStore,
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: createMockAgentService('opus', 'Opus response'),
+        codexService: createMockAgentService('codex', 'Codex response'),
+        geminiService: createMockAgentService('gemini', 'Gemini response'),
+        registry: createMockRegistry(),
+        messageStore: createMockMessageStore(),
+        threadStore,
+      }),
+    );
 
     const { targetCats } = await router.resolveTargetsAndIntent('这个架构 tradeoff 怎么选', 'thread-arch');
     assert.equal(targetCats[0], 'opus', 'Should prefer opus first for architecture scope');
@@ -285,43 +314,47 @@ describe('AgentRouter', () => {
   });
 
   test('routingPolicy does not override explicit @mention', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
+
+    const threadStore = createMockThreadStore(
+      {},
+      {},
+      {
+        'thread-mention': { v: 1, scopes: { review: { avoidCats: ['opus'] } } },
+      },
     );
 
-    const threadStore = createMockThreadStore({}, {}, {
-      'thread-mention': { v: 1, scopes: { review: { avoidCats: ['opus'] } } },
-    });
-
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: createMockAgentService('opus', 'Opus response'),
-      codexService: createMockAgentService('codex', 'Codex response'),
-      geminiService: createMockAgentService('gemini', 'Gemini response'),
-      registry: createMockRegistry(),
-      messageStore: createMockMessageStore(),
-      threadStore,
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: createMockAgentService('opus', 'Opus response'),
+        codexService: createMockAgentService('codex', 'Codex response'),
+        geminiService: createMockAgentService('gemini', 'Gemini response'),
+        registry: createMockRegistry(),
+        messageStore: createMockMessageStore(),
+        threadStore,
+      }),
+    );
 
     const { targetCats } = await router.resolveTargetsAndIntent('@opus 帮我 review', 'thread-mention');
     assert.deepEqual(targetCats, ['opus']);
   });
 
   test('routes to opus (default) when no @ mention is present', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-    );
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
     const mockClaudeService = createMockAgentService('opus', 'Opus response');
     const mockCodexService = createMockAgentService('codex', 'Codex response');
     const mockGeminiService = createMockAgentService('gemini', 'Gemini response');
 
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: mockClaudeService,
-      codexService: mockCodexService,
-      geminiService: mockGeminiService,
-      registry: createMockRegistry(),
-      messageStore: createMockMessageStore(),
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: mockClaudeService,
+        codexService: mockCodexService,
+        geminiService: mockGeminiService,
+        registry: createMockRegistry(),
+        messageStore: createMockMessageStore(),
+      }),
+    );
 
     const messages = [];
     for await (const msg of router.route('user-1', 'Hello, how are you?')) {
@@ -339,21 +372,21 @@ describe('AgentRouter', () => {
   });
 
   test('routes to opus when @opus is mentioned', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-    );
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
     const mockClaudeService = createMockAgentService('opus');
     const mockCodexService = createMockAgentService('codex');
     const mockGeminiService = createMockAgentService('gemini');
 
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: mockClaudeService,
-      codexService: mockCodexService,
-      geminiService: mockGeminiService,
-      registry: createMockRegistry(),
-      messageStore: createMockMessageStore(),
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: mockClaudeService,
+        codexService: mockCodexService,
+        geminiService: mockGeminiService,
+        registry: createMockRegistry(),
+        messageStore: createMockMessageStore(),
+      }),
+    );
 
     const messages = [];
     for await (const msg of router.route('user-1', '@opus help me')) {
@@ -366,21 +399,21 @@ describe('AgentRouter', () => {
   });
 
   test('routes to opus when Chinese mention @布偶猫 is used', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-    );
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
     const mockClaudeService = createMockAgentService('opus');
     const mockCodexService = createMockAgentService('codex');
     const mockGeminiService = createMockAgentService('gemini');
 
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: mockClaudeService,
-      codexService: mockCodexService,
-      geminiService: mockGeminiService,
-      registry: createMockRegistry(),
-      messageStore: createMockMessageStore(),
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: mockClaudeService,
+        codexService: mockCodexService,
+        geminiService: mockGeminiService,
+        registry: createMockRegistry(),
+        messageStore: createMockMessageStore(),
+      }),
+    );
 
     const messages = [];
     for await (const msg of router.route('user-1', '@布偶猫 请帮我')) {
@@ -393,21 +426,21 @@ describe('AgentRouter', () => {
   });
 
   test('routes to codex when @codex is mentioned', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-    );
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
     const mockClaudeService = createMockAgentService('opus');
     const mockCodexService = createMockAgentService('codex');
     const mockGeminiService = createMockAgentService('gemini');
 
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: mockClaudeService,
-      codexService: mockCodexService,
-      geminiService: mockGeminiService,
-      registry: createMockRegistry(),
-      messageStore: createMockMessageStore(),
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: mockClaudeService,
+        codexService: mockCodexService,
+        geminiService: mockGeminiService,
+        registry: createMockRegistry(),
+        messageStore: createMockMessageStore(),
+      }),
+    );
 
     const messages = [];
     for await (const msg of router.route('user-1', '@codex review this')) {
@@ -421,21 +454,21 @@ describe('AgentRouter', () => {
   });
 
   test('routes to codex when Chinese mention @缅因猫 is used', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-    );
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
     const mockClaudeService = createMockAgentService('opus');
     const mockCodexService = createMockAgentService('codex');
     const mockGeminiService = createMockAgentService('gemini');
 
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: mockClaudeService,
-      codexService: mockCodexService,
-      geminiService: mockGeminiService,
-      registry: createMockRegistry(),
-      messageStore: createMockMessageStore(),
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: mockClaudeService,
+        codexService: mockCodexService,
+        geminiService: mockGeminiService,
+        registry: createMockRegistry(),
+        messageStore: createMockMessageStore(),
+      }),
+    );
 
     const messages = [];
     for await (const msg of router.route('user-1', '@缅因猫 检查代码')) {
@@ -447,21 +480,21 @@ describe('AgentRouter', () => {
   });
 
   test('routes to gemini when @gemini is mentioned', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-    );
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
     const mockClaudeService = createMockAgentService('opus');
     const mockCodexService = createMockAgentService('codex');
     const mockGeminiService = createMockAgentService('gemini');
 
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: mockClaudeService,
-      codexService: mockCodexService,
-      geminiService: mockGeminiService,
-      registry: createMockRegistry(),
-      messageStore: createMockMessageStore(),
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: mockClaudeService,
+        codexService: mockCodexService,
+        geminiService: mockGeminiService,
+        registry: createMockRegistry(),
+        messageStore: createMockMessageStore(),
+      }),
+    );
 
     const messages = [];
     for await (const msg of router.route('user-1', '@gemini design this')) {
@@ -475,21 +508,21 @@ describe('AgentRouter', () => {
   });
 
   test('routes to gemini when Chinese mention @暹罗猫 is used', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-    );
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
     const mockClaudeService = createMockAgentService('opus');
     const mockCodexService = createMockAgentService('codex');
     const mockGeminiService = createMockAgentService('gemini');
 
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: mockClaudeService,
-      codexService: mockCodexService,
-      geminiService: mockGeminiService,
-      registry: createMockRegistry(),
-      messageStore: createMockMessageStore(),
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: mockClaudeService,
+        codexService: mockCodexService,
+        geminiService: mockGeminiService,
+        registry: createMockRegistry(),
+        messageStore: createMockMessageStore(),
+      }),
+    );
 
     const messages = [];
     for await (const msg of router.route('user-1', '@暹罗猫 设计表情')) {
@@ -501,27 +534,24 @@ describe('AgentRouter', () => {
   });
 
   test('executes multiple cats in order when multiple @ mentions are present (#execute)', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-    );
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
     const mockClaudeService = createMockAgentService('opus', 'Opus says');
     const mockCodexService = createMockAgentService('codex', 'Codex says');
     const mockGeminiService = createMockAgentService('gemini', 'Gemini says');
 
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: mockClaudeService,
-      codexService: mockCodexService,
-      geminiService: mockGeminiService,
-      registry: createMockRegistry(),
-      messageStore: createMockMessageStore(),
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: mockClaudeService,
+        codexService: mockCodexService,
+        geminiService: mockGeminiService,
+        registry: createMockRegistry(),
+        messageStore: createMockMessageStore(),
+      }),
+    );
 
     const messages = [];
-    for await (const msg of router.route(
-      'user-1',
-      '#execute @opus write code, then @codex review it'
-    )) {
+    for await (const msg of router.route('user-1', '#execute @opus write code, then @codex review it')) {
       messages.push(msg);
     }
 
@@ -537,9 +567,7 @@ describe('AgentRouter', () => {
   });
 
   test('multi-cat serial chain hides previous stream responses in play mode (#execute)', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-    );
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
     let codexReceivedPrompt = '';
     const mockClaudeService = createMockAgentService('opus', 'Opus response');
@@ -553,33 +581,30 @@ describe('AgentRouter', () => {
     };
     const mockGeminiService = createMockAgentService('gemini');
 
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: mockClaudeService,
-      codexService: mockCodexService,
-      geminiService: mockGeminiService,
-      registry: createMockRegistry(),
-      messageStore: createMockMessageStore(),
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: mockClaudeService,
+        codexService: mockCodexService,
+        geminiService: mockGeminiService,
+        registry: createMockRegistry(),
+        messageStore: createMockMessageStore(),
+      }),
+    );
 
     const messages = [];
-    for await (const msg of router.route(
-      'user-1',
-      '#execute @opus write code, then @codex review it'
-    )) {
+    for await (const msg of router.route('user-1', '#execute @opus write code, then @codex review it')) {
       messages.push(msg);
     }
 
     // In play mode, stream thinking is isolated between cats.
     assert.ok(
       !codexReceivedPrompt.includes('Opus response'),
-      'Codex prompt should NOT include Opus stream response in play mode'
+      'Codex prompt should NOT include Opus stream response in play mode',
     );
   });
 
   test('multi-cat serial chain includes previous stream responses in debug mode (#execute)', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-    );
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
     let codexReceivedPrompt = '';
     const mockClaudeService = createMockAgentService('opus', 'Opus response');
@@ -592,32 +617,29 @@ describe('AgentRouter', () => {
       }),
     };
 
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: mockClaudeService,
-      codexService: mockCodexService,
-      geminiService: createMockAgentService('gemini'),
-      registry: createMockRegistry(),
-      messageStore: createMockMessageStore(),
-      threadStore: createDebugThinkingThreadStore(),
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: mockClaudeService,
+        codexService: mockCodexService,
+        geminiService: createMockAgentService('gemini'),
+        registry: createMockRegistry(),
+        messageStore: createMockMessageStore(),
+        threadStore: createDebugThinkingThreadStore(),
+      }),
+    );
 
-    for await (const _ of router.route(
-      'user-1',
-      '#execute @opus write code, then @codex review it'
-    )) {
+    for await (const _ of router.route('user-1', '#execute @opus write code, then @codex review it')) {
       // consume
     }
 
     assert.ok(
       codexReceivedPrompt.includes('Opus response'),
-      'Codex prompt should include Opus stream response in debug mode'
+      'Codex prompt should include Opus stream response in debug mode',
     );
   });
 
   test('stores and uses session IDs per user per cat', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-    );
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
     let capturedOptions = null;
     const mockClaudeService = {
@@ -631,13 +653,15 @@ describe('AgentRouter', () => {
     const mockCodexService = createMockAgentService('codex');
     const mockGeminiService = createMockAgentService('gemini');
 
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: mockClaudeService,
-      codexService: mockCodexService,
-      geminiService: mockGeminiService,
-      registry: createMockRegistry(),
-      messageStore: createMockMessageStore(),
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: mockClaudeService,
+        codexService: mockCodexService,
+        geminiService: mockGeminiService,
+        registry: createMockRegistry(),
+        messageStore: createMockMessageStore(),
+      }),
+    );
 
     // First call - no session yet
     for await (const _ of router.route('user-1', 'Hello')) {
@@ -653,9 +677,7 @@ describe('AgentRouter', () => {
   });
 
   test('maintains separate sessions for different users', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-    );
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
     const capturedSessions = [];
     const mockClaudeService = {
@@ -670,22 +692,28 @@ describe('AgentRouter', () => {
     const mockCodexService = createMockAgentService('codex');
     const mockGeminiService = createMockAgentService('gemini');
 
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: mockClaudeService,
-      codexService: mockCodexService,
-      geminiService: mockGeminiService,
-      registry: createMockRegistry(),
-      messageStore: createMockMessageStore(),
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: mockClaudeService,
+        codexService: mockCodexService,
+        geminiService: mockGeminiService,
+        registry: createMockRegistry(),
+        messageStore: createMockMessageStore(),
+      }),
+    );
 
     // User 1 first call
-    for await (const _ of router.route('user-1', 'Hello')) {}
+    for await (const _ of router.route('user-1', 'Hello')) {
+    }
     // User 2 first call
-    for await (const _ of router.route('user-2', 'Hello')) {}
+    for await (const _ of router.route('user-2', 'Hello')) {
+    }
     // User 1 second call
-    for await (const _ of router.route('user-1', 'Hello')) {}
+    for await (const _ of router.route('user-1', 'Hello')) {
+    }
     // User 2 second call
-    for await (const _ of router.route('user-2', 'Hello')) {}
+    for await (const _ of router.route('user-2', 'Hello')) {
+    }
 
     // First calls for both users should have no session
     assert.equal(capturedSessions[0], undefined);
@@ -696,9 +724,7 @@ describe('AgentRouter', () => {
   });
 
   test('handles all English mention patterns correctly', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-    );
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
     const testCases = [
       { mention: '@ragdoll', expectedCat: 'opus' },
@@ -711,13 +737,15 @@ describe('AgentRouter', () => {
       const mockCodexService = createMockAgentService('codex');
       const mockGeminiService = createMockAgentService('gemini');
 
-      const router = new AgentRouter(await migrateRouterOpts({
-        claudeService: mockClaudeService,
-        codexService: mockCodexService,
-        geminiService: mockGeminiService,
-        registry: createMockRegistry(),
-        messageStore: createMockMessageStore(),
-      }));
+      const router = new AgentRouter(
+        await migrateRouterOpts({
+          claudeService: mockClaudeService,
+          codexService: mockCodexService,
+          geminiService: mockGeminiService,
+          registry: createMockRegistry(),
+          messageStore: createMockMessageStore(),
+        }),
+      );
 
       for await (const _ of router.route('user-1', `${mention} do something`)) {
         // consume
@@ -729,18 +757,12 @@ describe('AgentRouter', () => {
         gemini: mockGeminiService,
       };
 
-      assert.equal(
-        services[expectedCat].invoke.mock.callCount(),
-        1,
-        `${mention} should route to ${expectedCat}`
-      );
+      assert.equal(services[expectedCat].invoke.mock.callCount(), 1, `${mention} should route to ${expectedCat}`);
     }
   });
 
   test('handles all Chinese mention patterns correctly', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-    );
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
     const testCases = [
       { mention: '@布偶', expectedCat: 'opus' },
@@ -753,13 +775,15 @@ describe('AgentRouter', () => {
       const mockCodexService = createMockAgentService('codex');
       const mockGeminiService = createMockAgentService('gemini');
 
-      const router = new AgentRouter(await migrateRouterOpts({
-        claudeService: mockClaudeService,
-        codexService: mockCodexService,
-        geminiService: mockGeminiService,
-        registry: createMockRegistry(),
-        messageStore: createMockMessageStore(),
-      }));
+      const router = new AgentRouter(
+        await migrateRouterOpts({
+          claudeService: mockClaudeService,
+          codexService: mockCodexService,
+          geminiService: mockGeminiService,
+          registry: createMockRegistry(),
+          messageStore: createMockMessageStore(),
+        }),
+      );
 
       for await (const _ of router.route('user-1', `${mention} 做某事`)) {
         // consume
@@ -771,36 +795,29 @@ describe('AgentRouter', () => {
         gemini: mockGeminiService,
       };
 
-      assert.equal(
-        services[expectedCat].invoke.mock.callCount(),
-        1,
-        `${mention} should route to ${expectedCat}`
-      );
+      assert.equal(services[expectedCat].invoke.mock.callCount(), 1, `${mention} should route to ${expectedCat}`);
     }
   });
 
   test('invokes all three cats for triple mention (parallel, no order guarantee)', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-    );
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
     const mockClaudeService = createMockAgentService('opus', 'Opus');
     const mockCodexService = createMockAgentService('codex', 'Codex');
     const mockGeminiService = createMockAgentService('gemini', 'Gemini');
 
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: mockClaudeService,
-      codexService: mockCodexService,
-      geminiService: mockGeminiService,
-      registry: createMockRegistry(),
-      messageStore: createMockMessageStore(),
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: mockClaudeService,
+        codexService: mockCodexService,
+        geminiService: mockGeminiService,
+        registry: createMockRegistry(),
+        messageStore: createMockMessageStore(),
+      }),
+    );
 
     const messages = [];
-    for await (const msg of router.route(
-      'user-1',
-      '@opus design, @codex review, @gemini visualize'
-    )) {
+    for await (const msg of router.route('user-1', '@opus design, @codex review, @gemini visualize')) {
       messages.push(msg);
     }
 
@@ -817,27 +834,24 @@ describe('AgentRouter', () => {
   });
 
   test('does not duplicate same cat when mentioned multiple times', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-    );
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
     const mockClaudeService = createMockAgentService('opus');
     const mockCodexService = createMockAgentService('codex');
     const mockGeminiService = createMockAgentService('gemini');
 
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: mockClaudeService,
-      codexService: mockCodexService,
-      geminiService: mockGeminiService,
-      registry: createMockRegistry(),
-      messageStore: createMockMessageStore(),
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: mockClaudeService,
+        codexService: mockCodexService,
+        geminiService: mockGeminiService,
+        registry: createMockRegistry(),
+        messageStore: createMockMessageStore(),
+      }),
+    );
 
     const messages = [];
-    for await (const msg of router.route(
-      'user-1',
-      '@opus do this, and @opus also do that'
-    )) {
+    for await (const msg of router.route('user-1', '@opus do this, and @opus also do that')) {
       messages.push(msg);
     }
 
@@ -846,21 +860,21 @@ describe('AgentRouter', () => {
   });
 
   test('case insensitive mention matching', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-    );
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
     const mockClaudeService = createMockAgentService('opus');
     const mockCodexService = createMockAgentService('codex');
     const mockGeminiService = createMockAgentService('gemini');
 
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: mockClaudeService,
-      codexService: mockCodexService,
-      geminiService: mockGeminiService,
-      registry: createMockRegistry(),
-      messageStore: createMockMessageStore(),
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: mockClaudeService,
+        codexService: mockCodexService,
+        geminiService: mockGeminiService,
+        registry: createMockRegistry(),
+        messageStore: createMockMessageStore(),
+      }),
+    );
 
     for await (const _ of router.route('user-1', '@OPUS help me')) {
       // consume
@@ -870,9 +884,7 @@ describe('AgentRouter', () => {
   });
 
   test('continues chain when first cat throws an error', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-    );
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
     // Opus throws, Codex should still execute
     const mockClaudeService = {
@@ -883,13 +895,15 @@ describe('AgentRouter', () => {
     const mockCodexService = createMockAgentService('codex', 'Codex response');
     const mockGeminiService = createMockAgentService('gemini');
 
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: mockClaudeService,
-      codexService: mockCodexService,
-      geminiService: mockGeminiService,
-      registry: createMockRegistry(),
-      messageStore: createMockMessageStore(),
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: mockClaudeService,
+        codexService: mockCodexService,
+        geminiService: mockGeminiService,
+        registry: createMockRegistry(),
+        messageStore: createMockMessageStore(),
+      }),
+    );
 
     const messages = [];
     for await (const msg of router.route('user-1', '@opus write, @codex review')) {
@@ -916,9 +930,7 @@ describe('AgentRouter', () => {
   });
 
   test('session store failure degrades gracefully without crashing route', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-    );
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
     let capturedOptions = null;
     const mockClaudeService = {
@@ -934,22 +946,36 @@ describe('AgentRouter', () => {
 
     // SessionStore that throws on every operation (simulates Redis down)
     const brokenSessionStore = {
-      getSessionId: mock.fn(async () => { throw new Error('Redis ETIMEDOUT'); }),
-      setSessionId: mock.fn(async () => { throw new Error('Redis ETIMEDOUT'); }),
-      deleteSession: mock.fn(async () => { throw new Error('Redis ETIMEDOUT'); }),
-      getDeliveryCursor: mock.fn(async () => { throw new Error('Redis ETIMEDOUT'); }),
-      setDeliveryCursor: mock.fn(async () => { throw new Error('Redis ETIMEDOUT'); }),
-      deleteDeliveryCursor: mock.fn(async () => { throw new Error('Redis ETIMEDOUT'); }),
+      getSessionId: mock.fn(async () => {
+        throw new Error('Redis ETIMEDOUT');
+      }),
+      setSessionId: mock.fn(async () => {
+        throw new Error('Redis ETIMEDOUT');
+      }),
+      deleteSession: mock.fn(async () => {
+        throw new Error('Redis ETIMEDOUT');
+      }),
+      getDeliveryCursor: mock.fn(async () => {
+        throw new Error('Redis ETIMEDOUT');
+      }),
+      setDeliveryCursor: mock.fn(async () => {
+        throw new Error('Redis ETIMEDOUT');
+      }),
+      deleteDeliveryCursor: mock.fn(async () => {
+        throw new Error('Redis ETIMEDOUT');
+      }),
     };
 
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: mockClaudeService,
-      codexService: mockCodexService,
-      geminiService: mockGeminiService,
-      registry: createMockRegistry(),
-      messageStore: createMockMessageStore(),
-      sessionStore: brokenSessionStore,
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: mockClaudeService,
+        codexService: mockCodexService,
+        geminiService: mockGeminiService,
+        registry: createMockRegistry(),
+        messageStore: createMockMessageStore(),
+        sessionStore: brokenSessionStore,
+      }),
+    );
 
     // Should NOT throw — should degrade to no-session
     const messages = [];
@@ -968,30 +994,29 @@ describe('AgentRouter', () => {
   // --- Participant tracking tests (Phase 3.2 Task 3) ---
 
   test('@ mentions update thread participants via threadStore', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-    );
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
     const threadStore = createMockThreadStore();
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: createMockAgentService('opus'),
-      codexService: createMockAgentService('codex'),
-      geminiService: createMockAgentService('gemini'),
-      registry: createMockRegistry(),
-      messageStore: createMockMessageStore(),
-      threadStore,
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: createMockAgentService('opus'),
+        codexService: createMockAgentService('codex'),
+        geminiService: createMockAgentService('gemini'),
+        registry: createMockRegistry(),
+        messageStore: createMockMessageStore(),
+        threadStore,
+      }),
+    );
 
-    for await (const _ of router.route('user-1', '@opus @codex help', 'thread_1')) {}
+    for await (const _ of router.route('user-1', '@opus @codex help', 'thread_1')) {
+    }
 
     // Participants should have been added
-    assert.deepEqual(threadStore._participants['thread_1'], ['opus', 'codex']);
+    assert.deepEqual(threadStore._participants.thread_1, ['opus', 'codex']);
   });
 
   test('no @ mention routes to last replier only (F078)', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-    );
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
     const mockClaudeService = createMockAgentService('opus');
     const mockCodexService = createMockAgentService('codex');
@@ -1000,16 +1025,18 @@ describe('AgentRouter', () => {
     // Thread already has opus + codex as participants; codex more recent
     const threadStore = createMockThreadStore({ thread_1: ['opus', 'codex'] });
     threadStore.updateParticipantActivity('thread_1', 'opus');
-    await new Promise(resolve => setTimeout(resolve, 5)); // ensure different timestamps
+    await new Promise((resolve) => setTimeout(resolve, 5)); // ensure different timestamps
     threadStore.updateParticipantActivity('thread_1', 'codex'); // most recent
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: mockClaudeService,
-      codexService: mockCodexService,
-      geminiService: mockGeminiService,
-      registry: createMockRegistry(),
-      messageStore: createMockMessageStore(),
-      threadStore,
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: mockClaudeService,
+        codexService: mockCodexService,
+        geminiService: mockGeminiService,
+        registry: createMockRegistry(),
+        messageStore: createMockMessageStore(),
+        threadStore,
+      }),
+    );
 
     const messages = [];
     // No @ mention — F078: routes to last replier only (codex)
@@ -1023,9 +1050,7 @@ describe('AgentRouter', () => {
   });
 
   test('F078: no @ mention returns only last replier (most recent by activity)', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-    );
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
     const mockClaudeService = createMockAgentService('opus');
     const mockCodexService = createMockAgentService('codex');
@@ -1036,17 +1061,19 @@ describe('AgentRouter', () => {
 
     // Manually set activity timestamps: codex more recent than opus
     threadStore.updateParticipantActivity('thread_activity', 'opus');
-    await new Promise(resolve => setTimeout(resolve, 5));
+    await new Promise((resolve) => setTimeout(resolve, 5));
     threadStore.updateParticipantActivity('thread_activity', 'codex');
 
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: mockClaudeService,
-      codexService: mockCodexService,
-      geminiService: mockGeminiService,
-      registry: createMockRegistry(),
-      messageStore: createMockMessageStore(),
-      threadStore,
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: mockClaudeService,
+        codexService: mockCodexService,
+        geminiService: mockGeminiService,
+        registry: createMockRegistry(),
+        messageStore: createMockMessageStore(),
+        threadStore,
+      }),
+    );
 
     // F078: returns only the most recent replier, not all participants
     const result = await router.resolveTargetsAndIntent('what do you think?', 'thread_activity');
@@ -1056,9 +1083,7 @@ describe('AgentRouter', () => {
   });
 
   test('no @ mention + no participants defaults to opus', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-    );
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
     const mockClaudeService = createMockAgentService('opus');
     const mockCodexService = createMockAgentService('codex');
@@ -1066,16 +1091,19 @@ describe('AgentRouter', () => {
 
     // Thread exists but has no participants
     const threadStore = createMockThreadStore({});
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: mockClaudeService,
-      codexService: mockCodexService,
-      geminiService: mockGeminiService,
-      registry: createMockRegistry(),
-      messageStore: createMockMessageStore(),
-      threadStore,
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: mockClaudeService,
+        codexService: mockCodexService,
+        geminiService: mockGeminiService,
+        registry: createMockRegistry(),
+        messageStore: createMockMessageStore(),
+        threadStore,
+      }),
+    );
 
-    for await (const _ of router.route('user-1', 'hello', 'thread_new')) {}
+    for await (const _ of router.route('user-1', 'hello', 'thread_new')) {
+    }
 
     assert.equal(mockClaudeService.invoke.mock.callCount(), 1);
     assert.equal(mockCodexService.invoke.mock.callCount(), 0);
@@ -1083,26 +1111,27 @@ describe('AgentRouter', () => {
   });
 
   test('@three cats then no-@ routes to last replier only (F078)', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-    );
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
     const mockClaudeService = createMockAgentService('opus');
     const mockCodexService = createMockAgentService('codex');
     const mockGeminiService = createMockAgentService('gemini');
 
     const threadStore = createMockThreadStore();
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: mockClaudeService,
-      codexService: mockCodexService,
-      geminiService: mockGeminiService,
-      registry: createMockRegistry(),
-      messageStore: createMockMessageStore(),
-      threadStore,
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: mockClaudeService,
+        codexService: mockCodexService,
+        geminiService: mockGeminiService,
+        registry: createMockRegistry(),
+        messageStore: createMockMessageStore(),
+        threadStore,
+      }),
+    );
 
     // First: @ all three cats
-    for await (const _ of router.route('user-1', '@opus @codex @gemini meeting', 'thread_x')) {}
+    for await (const _ of router.route('user-1', '@opus @codex @gemini meeting', 'thread_x')) {
+    }
 
     // Verify all three called
     assert.equal(mockClaudeService.invoke.mock.callCount(), 1);
@@ -1111,7 +1140,8 @@ describe('AgentRouter', () => {
 
     // Second: no @ — F078: routes to last replier only (not all three)
     // The last participant added was gemini (serial order: opus → codex → gemini)
-    for await (const _ of router.route('user-1', 'what about this?', 'thread_x')) {}
+    for await (const _ of router.route('user-1', 'what about this?', 'thread_x')) {
+    }
 
     // Only one cat should be called again (the most recent replier)
     const totalSecondRound =
@@ -1122,25 +1152,29 @@ describe('AgentRouter', () => {
   });
 
   test('route with explicit threadId passes it to messageStore.append', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-    );
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
     const appendedMessages = [];
     const msgStore = {
       ...createMockMessageStore(),
-      append: (msg) => { appendedMessages.push(msg); return { ...msg, id: 'msg-1' }; },
+      append: (msg) => {
+        appendedMessages.push(msg);
+        return { ...msg, id: 'msg-1' };
+      },
     };
 
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: createMockAgentService('opus'),
-      codexService: createMockAgentService('codex'),
-      geminiService: createMockAgentService('gemini'),
-      registry: createMockRegistry(),
-      messageStore: msgStore,
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: createMockAgentService('opus'),
+        codexService: createMockAgentService('codex'),
+        geminiService: createMockAgentService('gemini'),
+        registry: createMockRegistry(),
+        messageStore: msgStore,
+      }),
+    );
 
-    for await (const _ of router.route('user-1', 'hi', 'my-thread')) {}
+    for await (const _ of router.route('user-1', 'hi', 'my-thread')) {
+    }
 
     // User message should have threadId
     assert.equal(appendedMessages[0].threadId, 'my-thread');
@@ -1151,33 +1185,32 @@ describe('AgentRouter', () => {
   });
 
   test('no threadStore degrades to default opus routing', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-    );
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
     const mockClaudeService = createMockAgentService('opus');
     const mockCodexService = createMockAgentService('codex');
     const mockGeminiService = createMockAgentService('gemini');
 
     // No threadStore — old behavior
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: mockClaudeService,
-      codexService: mockCodexService,
-      geminiService: mockGeminiService,
-      registry: createMockRegistry(),
-      messageStore: createMockMessageStore(),
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: mockClaudeService,
+        codexService: mockCodexService,
+        geminiService: mockGeminiService,
+        registry: createMockRegistry(),
+        messageStore: createMockMessageStore(),
+      }),
+    );
 
-    for await (const _ of router.route('user-1', 'hello')) {}
+    for await (const _ of router.route('user-1', 'hello')) {
+    }
 
     assert.equal(mockClaudeService.invoke.mock.callCount(), 1);
     assert.equal(mockCodexService.invoke.mock.callCount(), 0);
   });
 
   test('new @ mention adds to participants; no-@ routes to last replier (F078)', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-    );
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
     const mockClaudeService = createMockAgentService('opus');
     const mockCodexService = createMockAgentService('codex');
@@ -1185,31 +1218,33 @@ describe('AgentRouter', () => {
 
     // Thread already has opus
     const threadStore = createMockThreadStore({ thread_y: ['opus'] });
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: mockClaudeService,
-      codexService: mockCodexService,
-      geminiService: mockGeminiService,
-      registry: createMockRegistry(),
-      messageStore: createMockMessageStore(),
-      threadStore,
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: mockClaudeService,
+        codexService: mockCodexService,
+        geminiService: mockGeminiService,
+        registry: createMockRegistry(),
+        messageStore: createMockMessageStore(),
+        threadStore,
+      }),
+    );
 
     // @gemini — should add gemini to participants and route only to gemini
-    for await (const _ of router.route('user-1', '@gemini design this', 'thread_y')) {}
+    for await (const _ of router.route('user-1', '@gemini design this', 'thread_y')) {
+    }
     assert.equal(mockGeminiService.invoke.mock.callCount(), 1);
     assert.equal(mockClaudeService.invoke.mock.callCount(), 0); // not called — only @gemini
 
     // Now no @ — F078: routes to last replier only (gemini, most recent participant)
-    for await (const _ of router.route('user-1', 'looks good?', 'thread_y')) {}
+    for await (const _ of router.route('user-1', 'looks good?', 'thread_y')) {
+    }
     assert.equal(mockClaudeService.invoke.mock.callCount(), 0, 'opus not called — not last replier');
     assert.equal(mockGeminiService.invoke.mock.callCount(), 2, 'gemini called again — last replier');
-    assert.deepEqual(threadStore._participants['thread_y'], ['opus', 'gemini']);
+    assert.deepEqual(threadStore._participants.thread_y, ['opus', 'gemini']);
   });
 
   test('error from first cat is not passed as context to second cat', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-    );
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
     let codexReceivedPrompt = '';
     const mockClaudeService = {
@@ -1227,13 +1262,15 @@ describe('AgentRouter', () => {
     };
     const mockGeminiService = createMockAgentService('gemini');
 
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: mockClaudeService,
-      codexService: mockCodexService,
-      geminiService: mockGeminiService,
-      registry: createMockRegistry(),
-      messageStore: createMockMessageStore(),
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: mockClaudeService,
+        codexService: mockCodexService,
+        geminiService: mockGeminiService,
+        registry: createMockRegistry(),
+        messageStore: createMockMessageStore(),
+      }),
+    );
 
     for await (const _ of router.route('user-1', '@opus then @codex')) {
       // consume
@@ -1244,9 +1281,7 @@ describe('AgentRouter', () => {
   });
 
   test('passes workingDirectory when thread has non-default projectPath', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-    );
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
     let receivedOptions = null;
     const mockClaudeService = {
@@ -1257,18 +1292,23 @@ describe('AgentRouter', () => {
       }),
     };
 
-    const threadStore = createMockThreadStore({}, {
-      'thread-proj': '/home/user/projects/cat-cafe',
-    });
+    const threadStore = createMockThreadStore(
+      {},
+      {
+        'thread-proj': '/home/user/projects/cat-cafe',
+      },
+    );
 
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: mockClaudeService,
-      codexService: createMockAgentService('codex'),
-      geminiService: createMockAgentService('gemini'),
-      registry: createMockRegistry(),
-      messageStore: createMockMessageStore(),
-      threadStore,
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: mockClaudeService,
+        codexService: createMockAgentService('codex'),
+        geminiService: createMockAgentService('gemini'),
+        registry: createMockRegistry(),
+        messageStore: createMockMessageStore(),
+        threadStore,
+      }),
+    );
 
     for await (const _ of router.route('user-1', '@opus hello', 'thread-proj')) {
       // consume
@@ -1279,9 +1319,7 @@ describe('AgentRouter', () => {
   });
 
   test('does NOT pass workingDirectory when thread has default projectPath', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-    );
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
     let receivedOptions = null;
     const mockClaudeService = {
@@ -1292,18 +1330,23 @@ describe('AgentRouter', () => {
       }),
     };
 
-    const threadStore = createMockThreadStore({}, {
-      'thread-default': 'default',
-    });
+    const threadStore = createMockThreadStore(
+      {},
+      {
+        'thread-default': 'default',
+      },
+    );
 
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: mockClaudeService,
-      codexService: createMockAgentService('codex'),
-      geminiService: createMockAgentService('gemini'),
-      registry: createMockRegistry(),
-      messageStore: createMockMessageStore(),
-      threadStore,
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: mockClaudeService,
+        codexService: createMockAgentService('codex'),
+        geminiService: createMockAgentService('gemini'),
+        registry: createMockRegistry(),
+        messageStore: createMockMessageStore(),
+        threadStore,
+      }),
+    );
 
     for await (const _ of router.route('user-1', '@opus hello', 'thread-default')) {
       // consume
@@ -1314,9 +1357,7 @@ describe('AgentRouter', () => {
   });
 
   test('passes auditContext with invocation correlation fields', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-    );
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
     let receivedOptions = null;
     const mockClaudeService = {
@@ -1327,13 +1368,15 @@ describe('AgentRouter', () => {
       }),
     };
 
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: mockClaudeService,
-      codexService: createMockAgentService('codex'),
-      geminiService: createMockAgentService('gemini'),
-      registry: createMockRegistry(),
-      messageStore: createMockMessageStore(),
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: mockClaudeService,
+        codexService: createMockAgentService('codex'),
+        geminiService: createMockAgentService('gemini'),
+        registry: createMockRegistry(),
+        messageStore: createMockMessageStore(),
+      }),
+    );
 
     for await (const _ of router.route('user-1', '@opus hello', 'thread-audit')) {
       // consume
@@ -1349,28 +1392,28 @@ describe('AgentRouter', () => {
   });
 
   test('identity injection: opus prompt contains 布偶猫', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-    );
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
     let opusReceivedPrompt = '';
-    let opusReceivedOptions;
+    let _opusReceivedOptions;
     const mockClaudeService = {
       invoke: mock.fn(async function* (prompt, options) {
         opusReceivedPrompt = prompt;
-        opusReceivedOptions = options;
+        _opusReceivedOptions = options;
         yield { type: 'text', catId: 'opus', content: 'hi', timestamp: Date.now() };
         yield { type: 'done', catId: 'opus', timestamp: Date.now() };
       }),
     };
 
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: mockClaudeService,
-      codexService: createMockAgentService('codex'),
-      geminiService: createMockAgentService('gemini'),
-      registry: createMockRegistry(),
-      messageStore: createMockMessageStore(),
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: mockClaudeService,
+        codexService: createMockAgentService('codex'),
+        geminiService: createMockAgentService('gemini'),
+        registry: createMockRegistry(),
+        messageStore: createMockMessageStore(),
+      }),
+    );
 
     for await (const _ of router.route('user-1', '@opus hello')) {
       // consume
@@ -1383,29 +1426,29 @@ describe('AgentRouter', () => {
   });
 
   test('identity injection: codex prompt in serial chain contains 缅因猫 (#execute)', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-    );
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
     let codexReceivedPrompt = '';
-    let codexReceivedOptions;
+    let _codexReceivedOptions;
     const mockClaudeService = createMockAgentService('opus', 'opus says hi');
     const mockCodexService = {
       invoke: mock.fn(async function* (prompt, options) {
         codexReceivedPrompt = prompt;
-        codexReceivedOptions = options;
+        _codexReceivedOptions = options;
         yield { type: 'text', catId: 'codex', content: 'codex says hi', timestamp: Date.now() };
         yield { type: 'done', catId: 'codex', timestamp: Date.now() };
       }),
     };
 
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: mockClaudeService,
-      codexService: mockCodexService,
-      geminiService: createMockAgentService('gemini'),
-      registry: createMockRegistry(),
-      messageStore: createMockMessageStore(),
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: mockClaudeService,
+        codexService: mockCodexService,
+        geminiService: createMockAgentService('gemini'),
+        registry: createMockRegistry(),
+        messageStore: createMockMessageStore(),
+      }),
+    );
 
     for await (const _ of router.route('user-1', '#execute @opus @codex hello')) {
       // consume
@@ -1420,9 +1463,7 @@ describe('AgentRouter', () => {
   // --- Parallel routing tests ---
 
   test('parallel: 2 cats both invoked with mode=parallel (auto ideate)', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-    );
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
     let opusPrompt = '';
     let codexPrompt = '';
@@ -1441,13 +1482,15 @@ describe('AgentRouter', () => {
       }),
     };
 
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: mockClaudeService,
-      codexService: mockCodexService,
-      geminiService: createMockAgentService('gemini'),
-      registry: createMockRegistry(),
-      messageStore: createMockMessageStore(),
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: mockClaudeService,
+        codexService: mockCodexService,
+        geminiService: createMockAgentService('gemini'),
+        registry: createMockRegistry(),
+        messageStore: createMockMessageStore(),
+      }),
+    );
 
     const messages = [];
     for await (const msg of router.route('user-1', '@opus @codex what do you think?')) {
@@ -1469,9 +1512,7 @@ describe('AgentRouter', () => {
   });
 
   test('parallel: codex does NOT see opus response (independent thinking)', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-    );
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
     let codexPrompt = '';
     const mockClaudeService = createMockAgentService('opus', 'Opus unique response');
@@ -1483,34 +1524,35 @@ describe('AgentRouter', () => {
       }),
     };
 
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: mockClaudeService,
-      codexService: mockCodexService,
-      geminiService: createMockAgentService('gemini'),
-      registry: createMockRegistry(),
-      messageStore: createMockMessageStore(),
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: mockClaudeService,
+        codexService: mockCodexService,
+        geminiService: createMockAgentService('gemini'),
+        registry: createMockRegistry(),
+        messageStore: createMockMessageStore(),
+      }),
+    );
 
     for await (const _ of router.route('user-1', '@opus @codex brainstorm this')) {
       // consume
     }
 
-    assert.ok(!codexPrompt.includes('Opus unique response'),
-      'Codex should NOT see opus response in parallel mode');
+    assert.ok(!codexPrompt.includes('Opus unique response'), 'Codex should NOT see opus response in parallel mode');
   });
 
   test('parallel: isFinal only on last done message', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-    );
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: createMockAgentService('opus', 'a'),
-      codexService: createMockAgentService('codex', 'b'),
-      geminiService: createMockAgentService('gemini'),
-      registry: createMockRegistry(),
-      messageStore: createMockMessageStore(),
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: createMockAgentService('opus', 'a'),
+        codexService: createMockAgentService('codex', 'b'),
+        geminiService: createMockAgentService('gemini'),
+        registry: createMockRegistry(),
+        messageStore: createMockMessageStore(),
+      }),
+    );
 
     const doneMessages = [];
     for await (const msg of router.route('user-1', '@opus @codex parallel test')) {
@@ -1526,9 +1568,7 @@ describe('AgentRouter', () => {
   });
 
   test('parallel: #execute forces serial mode metadata even with multiple cats', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-    );
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
     let codexPrompt = '';
     const mockClaudeService = createMockAgentService('opus', 'Serial opus');
@@ -1540,29 +1580,27 @@ describe('AgentRouter', () => {
       }),
     };
 
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: mockClaudeService,
-      codexService: mockCodexService,
-      geminiService: createMockAgentService('gemini'),
-      registry: createMockRegistry(),
-      messageStore: createMockMessageStore(),
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: mockClaudeService,
+        codexService: mockCodexService,
+        geminiService: createMockAgentService('gemini'),
+        registry: createMockRegistry(),
+        messageStore: createMockMessageStore(),
+      }),
+    );
 
     for await (const _ of router.route('user-1', '#execute @opus @codex do this')) {
       // consume
     }
 
     // Play mode: codex should NOT see opus stream response.
-    assert.ok(!codexPrompt.includes('Serial opus'),
-      '#execute should keep stream isolation in play mode');
-    assert.ok(codexPrompt.includes('被召唤'),
-      '#execute should use serial mode text');
+    assert.ok(!codexPrompt.includes('Serial opus'), '#execute should keep stream isolation in play mode');
+    assert.ok(codexPrompt.includes('被召唤'), '#execute should use serial mode text');
   });
 
   test('parallel: #execute in debug mode includes previous stream responses', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-    );
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
     let codexPrompt = '';
     const mockClaudeService = createMockAgentService('opus', 'Serial opus');
@@ -1574,42 +1612,45 @@ describe('AgentRouter', () => {
       }),
     };
 
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: mockClaudeService,
-      codexService: mockCodexService,
-      geminiService: createMockAgentService('gemini'),
-      registry: createMockRegistry(),
-      messageStore: createMockMessageStore(),
-      threadStore: createDebugThinkingThreadStore(),
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: mockClaudeService,
+        codexService: mockCodexService,
+        geminiService: createMockAgentService('gemini'),
+        registry: createMockRegistry(),
+        messageStore: createMockMessageStore(),
+        threadStore: createDebugThinkingThreadStore(),
+      }),
+    );
 
     for await (const _ of router.route('user-1', '#execute @opus @codex do this')) {
       // consume
     }
 
-    assert.ok(codexPrompt.includes('Serial opus'),
-      '#execute in debug mode should include previous stream response');
-    assert.ok(codexPrompt.includes('被召唤'),
-      '#execute in debug mode should keep serial mode text');
+    assert.ok(codexPrompt.includes('Serial opus'), '#execute in debug mode should include previous stream response');
+    assert.ok(codexPrompt.includes('被召唤'), '#execute in debug mode should keep serial mode text');
   });
 
   test('parallel: all cat responses are stored in messageStore', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-    );
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
     const appendedMessages = [];
     const store = {
       ...createMockMessageStore(),
-      append: (msg) => { appendedMessages.push(msg); return { ...msg, id: 'msg-1' }; },
+      append: (msg) => {
+        appendedMessages.push(msg);
+        return { ...msg, id: 'msg-1' };
+      },
     };
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: createMockAgentService('opus', 'Opus stored'),
-      codexService: createMockAgentService('codex', 'Codex stored'),
-      geminiService: createMockAgentService('gemini'),
-      registry: createMockRegistry(),
-      messageStore: store,
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: createMockAgentService('opus', 'Opus stored'),
+        codexService: createMockAgentService('codex', 'Codex stored'),
+        geminiService: createMockAgentService('gemini'),
+        registry: createMockRegistry(),
+        messageStore: store,
+      }),
+    );
 
     for await (const _ of router.route('user-1', '@opus @codex store test')) {
       // consume
@@ -1623,21 +1664,21 @@ describe('AgentRouter', () => {
   });
 
   test('parallel: 3 cats all invoked independently', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-    );
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
     const mockClaude = createMockAgentService('opus', 'a');
     const mockCodex = createMockAgentService('codex', 'b');
     const mockGemini = createMockAgentService('gemini', 'c');
 
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: mockClaude,
-      codexService: mockCodex,
-      geminiService: mockGemini,
-      registry: createMockRegistry(),
-      messageStore: createMockMessageStore(),
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: mockClaude,
+        codexService: mockCodex,
+        geminiService: mockGemini,
+        registry: createMockRegistry(),
+        messageStore: createMockMessageStore(),
+      }),
+    );
 
     const messages = [];
     for await (const msg of router.route('user-1', '@opus @codex @gemini three way')) {
@@ -1658,9 +1699,7 @@ describe('AgentRouter', () => {
   // --- Context history injection tests (Phase 3.6) ---
 
   test('context history: single cat prompt includes thread history', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-    );
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
     let opusPrompt = '';
     const mockClaudeService = {
@@ -1689,15 +1728,18 @@ describe('AgentRouter', () => {
       threadId: 'default',
     });
 
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: mockClaudeService,
-      codexService: createMockAgentService('codex'),
-      geminiService: createMockAgentService('gemini'),
-      registry: createMockRegistry(),
-      messageStore: store,
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: mockClaudeService,
+        codexService: createMockAgentService('codex'),
+        geminiService: createMockAgentService('gemini'),
+        registry: createMockRegistry(),
+        messageStore: store,
+      }),
+    );
 
-    for await (const _ of router.route('user-1', '@opus follow up')) {}
+    for await (const _ of router.route('user-1', '@opus follow up')) {
+    }
 
     assert.ok(opusPrompt.includes('对话历史'), 'Prompt should contain context history header');
     assert.ok(opusPrompt.includes('earlier question'), 'Prompt should contain user history');
@@ -1705,9 +1747,7 @@ describe('AgentRouter', () => {
   });
 
   test('context history: serial multi-cat — both cats receive history', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-    );
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
     let opusPrompt = '';
     let codexPrompt = '';
@@ -1736,24 +1776,25 @@ describe('AgentRouter', () => {
       threadId: 'default',
     });
 
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: mockClaudeService,
-      codexService: mockCodexService,
-      geminiService: createMockAgentService('gemini'),
-      registry: createMockRegistry(),
-      messageStore: store,
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: mockClaudeService,
+        codexService: mockCodexService,
+        geminiService: createMockAgentService('gemini'),
+        registry: createMockRegistry(),
+        messageStore: store,
+      }),
+    );
 
-    for await (const _ of router.route('user-1', '#execute @opus @codex review')) {}
+    for await (const _ of router.route('user-1', '#execute @opus @codex review')) {
+    }
 
     assert.ok(opusPrompt.includes('gemini said something'), 'Opus should see gemini history');
     assert.ok(codexPrompt.includes('gemini said something'), 'Codex should see gemini history');
   });
 
   test('context history: parallel multi-cat — both cats receive history', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-    );
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
     let opusPrompt = '';
     let codexPrompt = '';
@@ -1782,24 +1823,25 @@ describe('AgentRouter', () => {
       threadId: 'default',
     });
 
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: mockClaudeService,
-      codexService: mockCodexService,
-      geminiService: createMockAgentService('gemini'),
-      registry: createMockRegistry(),
-      messageStore: store,
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: mockClaudeService,
+        codexService: mockCodexService,
+        geminiService: createMockAgentService('gemini'),
+        registry: createMockRegistry(),
+        messageStore: store,
+      }),
+    );
 
-    for await (const _ of router.route('user-1', '@opus @codex think about this')) {}
+    for await (const _ of router.route('user-1', '@opus @codex think about this')) {
+    }
 
     assert.ok(opusPrompt.includes('user said hi'), 'Opus should see history in parallel mode');
     assert.ok(codexPrompt.includes('user said hi'), 'Codex should see history in parallel mode');
   });
 
   test('context history: empty history — no context header in prompt', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-    );
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
     let opusPrompt = '';
     const mockClaudeService = {
@@ -1811,15 +1853,18 @@ describe('AgentRouter', () => {
     };
 
     const store = createMockMessageStore();
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: mockClaudeService,
-      codexService: createMockAgentService('codex'),
-      geminiService: createMockAgentService('gemini'),
-      registry: createMockRegistry(),
-      messageStore: store,
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: mockClaudeService,
+        codexService: createMockAgentService('codex'),
+        geminiService: createMockAgentService('gemini'),
+        registry: createMockRegistry(),
+        messageStore: store,
+      }),
+    );
 
-    for await (const _ of router.route('user-1', '@opus first message')) {}
+    for await (const _ of router.route('user-1', '@opus first message')) {
+    }
 
     assert.ok(opusPrompt.includes('对话历史增量'), 'Incremental mode should include delta header');
     assert.ok(!opusPrompt.includes('[对话历史 - 最近'), 'Legacy history header should not be used');
@@ -1827,17 +1872,17 @@ describe('AgentRouter', () => {
   });
 
   test('parallel: resolveTargetsAndIntent returns correct intent', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-    );
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: createMockAgentService('opus'),
-      codexService: createMockAgentService('codex'),
-      geminiService: createMockAgentService('gemini'),
-      registry: createMockRegistry(),
-      messageStore: createMockMessageStore(),
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: createMockAgentService('opus'),
+        codexService: createMockAgentService('codex'),
+        geminiService: createMockAgentService('gemini'),
+        registry: createMockRegistry(),
+        messageStore: createMockMessageStore(),
+      }),
+    );
 
     const result1 = await router.resolveTargetsAndIntent('@opus @codex think');
     assert.equal(result1.intent.intent, 'ideate', '2 cats should auto-ideate');
@@ -1855,64 +1900,64 @@ describe('AgentRouter', () => {
 
 describe('F078: Default to last replier', () => {
   test('no @mention routes to most recent replier only (not all participants)', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-    );
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
-    const threadStore = createMockThreadStore({ 't1': ['opus', 'codex', 'gemini'] });
+    const threadStore = createMockThreadStore({ t1: ['opus', 'codex', 'gemini'] });
     // Simulate activity: codex first, then opus most recently
     threadStore.updateParticipantActivity('t1', 'gemini');
     threadStore.updateParticipantActivity('t1', 'codex');
     threadStore.updateParticipantActivity('t1', 'opus'); // most recent
 
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: createMockAgentService('opus'),
-      codexService: createMockAgentService('codex'),
-      geminiService: createMockAgentService('gemini'),
-      registry: createMockRegistry(),
-      messageStore: createMockMessageStore(),
-      threadStore,
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: createMockAgentService('opus'),
+        codexService: createMockAgentService('codex'),
+        geminiService: createMockAgentService('gemini'),
+        registry: createMockRegistry(),
+        messageStore: createMockMessageStore(),
+        threadStore,
+      }),
+    );
 
     const { targetCats } = await router.resolveTargetsAndIntent('hello', 't1');
     assert.deepStrictEqual(targetCats, ['opus'], 'should route to last replier only');
   });
 
   test('no participants defaults to opus', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-    );
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
     const threadStore = createMockThreadStore({});
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: createMockAgentService('opus'),
-      codexService: createMockAgentService('codex'),
-      geminiService: createMockAgentService('gemini'),
-      registry: createMockRegistry(),
-      messageStore: createMockMessageStore(),
-      threadStore,
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: createMockAgentService('opus'),
+        codexService: createMockAgentService('codex'),
+        geminiService: createMockAgentService('gemini'),
+        registry: createMockRegistry(),
+        messageStore: createMockMessageStore(),
+        threadStore,
+      }),
+    );
 
     const { targetCats } = await router.resolveTargetsAndIntent('hello', 't1');
     assert.deepStrictEqual(targetCats, ['opus']);
   });
 
   test('explicit @mention still overrides last-replier default', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-    );
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
-    const threadStore = createMockThreadStore({ 't1': ['opus', 'codex'] });
+    const threadStore = createMockThreadStore({ t1: ['opus', 'codex'] });
     threadStore.updateParticipantActivity('t1', 'opus'); // most recent
 
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: createMockAgentService('opus'),
-      codexService: createMockAgentService('codex'),
-      geminiService: createMockAgentService('gemini'),
-      registry: createMockRegistry(),
-      messageStore: createMockMessageStore(),
-      threadStore,
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: createMockAgentService('opus'),
+        codexService: createMockAgentService('codex'),
+        geminiService: createMockAgentService('gemini'),
+        registry: createMockRegistry(),
+        messageStore: createMockMessageStore(),
+        threadStore,
+      }),
+    );
 
     const { targetCats } = await router.resolveTargetsAndIntent('@codex 帮我看看', 't1');
     assert.deepStrictEqual(targetCats, ['codex'], 'explicit @mention should override');
@@ -1921,17 +1966,17 @@ describe('F078: Default to last replier', () => {
 
 describe('F078: Group mentions', () => {
   test('@all routes to all registered cats', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-    );
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: createMockAgentService('opus'),
-      codexService: createMockAgentService('codex'),
-      geminiService: createMockAgentService('gemini'),
-      registry: createMockRegistry(),
-      messageStore: createMockMessageStore(),
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: createMockAgentService('opus'),
+        codexService: createMockAgentService('codex'),
+        geminiService: createMockAgentService('gemini'),
+        registry: createMockRegistry(),
+        messageStore: createMockMessageStore(),
+      }),
+    );
 
     const { targetCats } = await router.resolveTargetsAndIntent('@all 大家好');
     assert.ok(targetCats.length >= 3, 'should route to all registered cats');
@@ -1941,17 +1986,17 @@ describe('F078: Group mentions', () => {
   });
 
   test('@全体 routes to all registered cats', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-    );
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: createMockAgentService('opus'),
-      codexService: createMockAgentService('codex'),
-      geminiService: createMockAgentService('gemini'),
-      registry: createMockRegistry(),
-      messageStore: createMockMessageStore(),
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: createMockAgentService('opus'),
+        codexService: createMockAgentService('codex'),
+        geminiService: createMockAgentService('gemini'),
+        registry: createMockRegistry(),
+        messageStore: createMockMessageStore(),
+      }),
+    );
 
     const { targetCats } = await router.resolveTargetsAndIntent('@全体 大家好');
     assert.ok(targetCats.length >= 3);
@@ -1959,9 +2004,7 @@ describe('F078: Group mentions', () => {
   });
 
   test('@全体布偶猫 routes to all ragdoll variants', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-    );
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
     // Register sonnet as a second ragdoll variant
     const { catRegistry, createCatId } = await import('@cat-cafe/shared');
@@ -1983,9 +2026,7 @@ describe('F078: Group mentions', () => {
     }
 
     // Need AgentRegistry with sonnet too
-    const { AgentRegistry } = await import(
-      '../dist/domains/cats/services/agents/registry/AgentRegistry.js'
-    );
+    const { AgentRegistry } = await import('../dist/domains/cats/services/agents/registry/AgentRegistry.js');
     const agentRegistry = new AgentRegistry();
     agentRegistry.register('opus', createMockAgentService('opus'));
     agentRegistry.register('sonnet', createMockAgentService('sonnet'));
@@ -2006,14 +2047,10 @@ describe('F078: Group mentions', () => {
   });
 
   test('@all-ragdoll routes to ragdoll variants', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-    );
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
     // sonnet already registered from previous test
-    const { AgentRegistry } = await import(
-      '../dist/domains/cats/services/agents/registry/AgentRegistry.js'
-    );
+    const { AgentRegistry } = await import('../dist/domains/cats/services/agents/registry/AgentRegistry.js');
     const agentRegistry = new AgentRegistry();
     agentRegistry.register('opus', createMockAgentService('opus'));
     agentRegistry.register('sonnet', createMockAgentService('sonnet'));
@@ -2032,90 +2069,86 @@ describe('F078: Group mentions', () => {
   });
 
   test('@thread routes to current thread participants', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-    );
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
-    const threadStore = createMockThreadStore({ 't1': ['opus', 'codex'] });
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: createMockAgentService('opus'),
-      codexService: createMockAgentService('codex'),
-      geminiService: createMockAgentService('gemini'),
-      registry: createMockRegistry(),
-      messageStore: createMockMessageStore(),
-      threadStore,
-    }));
+    const threadStore = createMockThreadStore({ t1: ['opus', 'codex'] });
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: createMockAgentService('opus'),
+        codexService: createMockAgentService('codex'),
+        geminiService: createMockAgentService('gemini'),
+        registry: createMockRegistry(),
+        messageStore: createMockMessageStore(),
+        threadStore,
+      }),
+    );
 
     const { targetCats } = await router.resolveTargetsAndIntent('@thread 大家看看', 't1');
     assert.deepStrictEqual(new Set(targetCats), new Set(['opus', 'codex']));
   });
 
   test('@本帖 routes to thread participants', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-    );
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
-    const threadStore = createMockThreadStore({ 't1': ['opus', 'gemini'] });
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: createMockAgentService('opus'),
-      codexService: createMockAgentService('codex'),
-      geminiService: createMockAgentService('gemini'),
-      registry: createMockRegistry(),
-      messageStore: createMockMessageStore(),
-      threadStore,
-    }));
+    const threadStore = createMockThreadStore({ t1: ['opus', 'gemini'] });
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: createMockAgentService('opus'),
+        codexService: createMockAgentService('codex'),
+        geminiService: createMockAgentService('gemini'),
+        registry: createMockRegistry(),
+        messageStore: createMockMessageStore(),
+        threadStore,
+      }),
+    );
 
     const { targetCats } = await router.resolveTargetsAndIntent('@本帖 看看', 't1');
     assert.deepStrictEqual(new Set(targetCats), new Set(['opus', 'gemini']));
   });
 
   test('@全体参与者 routes to thread participants', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-    );
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
-    const threadStore = createMockThreadStore({ 't1': ['codex', 'gemini'] });
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: createMockAgentService('opus'),
-      codexService: createMockAgentService('codex'),
-      geminiService: createMockAgentService('gemini'),
-      registry: createMockRegistry(),
-      messageStore: createMockMessageStore(),
-      threadStore,
-    }));
+    const threadStore = createMockThreadStore({ t1: ['codex', 'gemini'] });
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: createMockAgentService('opus'),
+        codexService: createMockAgentService('codex'),
+        geminiService: createMockAgentService('gemini'),
+        registry: createMockRegistry(),
+        messageStore: createMockMessageStore(),
+        threadStore,
+      }),
+    );
 
     const { targetCats } = await router.resolveTargetsAndIntent('@全体参与者 看看', 't1');
     assert.deepStrictEqual(new Set(targetCats), new Set(['codex', 'gemini']));
   });
 
   test('@thread with no participants falls back to default cat', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-    );
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
     const threadStore = createMockThreadStore({});
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: createMockAgentService('opus'),
-      codexService: createMockAgentService('codex'),
-      geminiService: createMockAgentService('gemini'),
-      registry: createMockRegistry(),
-      messageStore: createMockMessageStore(),
-      threadStore,
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: createMockAgentService('opus'),
+        codexService: createMockAgentService('codex'),
+        geminiService: createMockAgentService('gemini'),
+        registry: createMockRegistry(),
+        messageStore: createMockMessageStore(),
+        threadStore,
+      }),
+    );
 
     const { targetCats } = await router.resolveTargetsAndIntent('@thread hello', 't1');
     assert.deepStrictEqual(targetCats, ['opus'], 'no participants → fallback to default');
   });
 
   test('group mentions only include cats with registered services', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-    );
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
     // Only register opus and codex services (not gemini)
-    const { AgentRegistry } = await import(
-      '../dist/domains/cats/services/agents/registry/AgentRegistry.js'
-    );
+    const { AgentRegistry } = await import('../dist/domains/cats/services/agents/registry/AgentRegistry.js');
     const agentRegistry = new AgentRegistry();
     agentRegistry.register('opus', createMockAgentService('opus'));
     agentRegistry.register('codex', createMockAgentService('codex'));
@@ -2134,17 +2167,17 @@ describe('F078: Group mentions', () => {
 
   // P1 fix: negative cases — substring collisions must NOT trigger group mentions
   test('@allison does NOT trigger @all (token boundary)', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-    );
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: createMockAgentService('opus'),
-      codexService: createMockAgentService('codex'),
-      geminiService: createMockAgentService('gemini'),
-      registry: createMockRegistry(),
-      messageStore: createMockMessageStore(),
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: createMockAgentService('opus'),
+        codexService: createMockAgentService('codex'),
+        geminiService: createMockAgentService('gemini'),
+        registry: createMockRegistry(),
+        messageStore: createMockMessageStore(),
+      }),
+    );
 
     const { targetCats } = await router.resolveTargetsAndIntent('@allison hi');
     // @allison is not a known mention — should fall back to default, NOT trigger @all
@@ -2153,19 +2186,19 @@ describe('F078: Group mentions', () => {
   });
 
   test('@threadsafe does NOT trigger @thread (token boundary)', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-    );
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
-    const threadStore = createMockThreadStore({ 't1': ['opus', 'codex'] });
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: createMockAgentService('opus'),
-      codexService: createMockAgentService('codex'),
-      geminiService: createMockAgentService('gemini'),
-      registry: createMockRegistry(),
-      messageStore: createMockMessageStore(),
-      threadStore,
-    }));
+    const threadStore = createMockThreadStore({ t1: ['opus', 'codex'] });
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: createMockAgentService('opus'),
+        codexService: createMockAgentService('codex'),
+        geminiService: createMockAgentService('gemini'),
+        registry: createMockRegistry(),
+        messageStore: createMockMessageStore(),
+        threadStore,
+      }),
+    );
 
     const { targetCats } = await router.resolveTargetsAndIntent('@threadsafe hi', 't1');
     // Should NOT route to thread participants — @threadsafe is not @thread
@@ -2173,9 +2206,7 @@ describe('F078: Group mentions', () => {
   });
 
   test('@all-ragdollish does NOT trigger @all-ragdoll (token boundary)', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-    );
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
     const { catRegistry, createCatId } = await import('@cat-cafe/shared');
     if (!catRegistry.has('sonnet')) {
@@ -2195,9 +2226,7 @@ describe('F078: Group mentions', () => {
       });
     }
 
-    const { AgentRegistry } = await import(
-      '../dist/domains/cats/services/agents/registry/AgentRegistry.js'
-    );
+    const { AgentRegistry } = await import('../dist/domains/cats/services/agents/registry/AgentRegistry.js');
     const agentRegistry = new AgentRegistry();
     agentRegistry.register('opus', createMockAgentService('opus'));
     agentRegistry.register('sonnet', createMockAgentService('sonnet'));
@@ -2215,17 +2244,17 @@ describe('F078: Group mentions', () => {
   });
 
   test('@全体布偶猫咪 does NOT trigger @全体布偶猫 (token boundary)', async () => {
-    const { AgentRouter } = await import(
-      '../dist/domains/cats/services/agents/routing/AgentRouter.js'
-    );
+    const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: createMockAgentService('opus'),
-      codexService: createMockAgentService('codex'),
-      geminiService: createMockAgentService('gemini'),
-      registry: createMockRegistry(),
-      messageStore: createMockMessageStore(),
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: createMockAgentService('opus'),
+        codexService: createMockAgentService('codex'),
+        geminiService: createMockAgentService('gemini'),
+        registry: createMockRegistry(),
+        messageStore: createMockMessageStore(),
+      }),
+    );
 
     const { targetCats } = await router.resolveTargetsAndIntent('@全体布偶猫咪 hi');
     // 咪 is not a boundary char — should NOT match @全体布偶猫

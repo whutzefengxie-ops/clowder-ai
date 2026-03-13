@@ -5,14 +5,12 @@
  * independent invocations. triggerA2AInvocation is kept as fallback only.
  */
 
-import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
+import { describe, test } from 'node:test';
 
 describe('triggerA2AInvocation (fallback path)', () => {
   test('marks InvocationRecord as canceled when thread is deleting (P2-1)', async () => {
-    const { triggerA2AInvocation } = await import(
-      '../dist/routes/callback-a2a-trigger.js'
-    );
+    const { triggerA2AInvocation } = await import('../dist/routes/callback-a2a-trigger.js');
 
     const updates = [];
     const mockInvocationRecordStore = {
@@ -30,8 +28,12 @@ describe('triggerA2AInvocation (fallback path)', () => {
     abortController.abort();
 
     const mockInvocationTracker = {
-      has() { return false; },
-      start() { return abortController; },
+      has() {
+        return false;
+      },
+      start() {
+        return abortController;
+      },
       complete() {},
     };
 
@@ -65,8 +67,15 @@ describe('triggerA2AInvocation (fallback path)', () => {
         content: '@缅因猫\nreview please',
         userId: 'user-1',
         threadId: 't-deleting',
-        triggerMessage: { id: 'msg-1', threadId: 't-deleting', userId: 'user-1',
-          catId: 'opus', content: 'test', mentions: [], timestamp: Date.now() },
+        triggerMessage: {
+          id: 'msg-1',
+          threadId: 't-deleting',
+          userId: 'user-1',
+          catId: 'opus',
+          content: 'test',
+          mentions: [],
+          timestamp: Date.now(),
+        },
       },
     );
 
@@ -76,9 +85,7 @@ describe('triggerA2AInvocation (fallback path)', () => {
   });
 
   test('does not trigger invocation for duplicate idempotency key', async () => {
-    const { triggerA2AInvocation } = await import(
-      '../dist/routes/callback-a2a-trigger.js'
-    );
+    const { triggerA2AInvocation } = await import('../dist/routes/callback-a2a-trigger.js');
 
     const updates = [];
     const mockInvocationRecordStore = {
@@ -116,8 +123,15 @@ describe('triggerA2AInvocation (fallback path)', () => {
         content: '@缅因猫\nreview',
         userId: 'user-1',
         threadId: 't1',
-        triggerMessage: { id: 'msg-1', threadId: 't1', userId: 'user-1',
-          catId: 'opus', content: 'test', mentions: [], timestamp: Date.now() },
+        triggerMessage: {
+          id: 'msg-1',
+          threadId: 't1',
+          userId: 'user-1',
+          catId: 'opus',
+          content: 'test',
+          mentions: [],
+          timestamp: Date.now(),
+        },
       },
     );
 
@@ -125,9 +139,7 @@ describe('triggerA2AInvocation (fallback path)', () => {
   });
 
   test('skips redundant A2A when target cat is already in active parent target set', async () => {
-    const { triggerA2AInvocation } = await import(
-      '../dist/routes/callback-a2a-trigger.js'
-    );
+    const { triggerA2AInvocation } = await import('../dist/routes/callback-a2a-trigger.js');
 
     let createCalled = 0;
     let routeCalled = 0;
@@ -141,9 +153,15 @@ describe('triggerA2AInvocation (fallback path)', () => {
     };
 
     const mockInvocationTracker = {
-      has() { return true; },
-      getCatIds() { return ['opus', 'codex', 'gemini']; },
-      start() { return new AbortController(); },
+      has() {
+        return true;
+      },
+      getCatIds() {
+        return ['opus', 'codex', 'gemini'];
+      },
+      start() {
+        return new AbortController();
+      },
       complete() {},
     };
 
@@ -174,8 +192,15 @@ describe('triggerA2AInvocation (fallback path)', () => {
         content: '@缅因猫\nalready covered by parent',
         userId: 'user-1',
         threadId: 'active-thread',
-        triggerMessage: { id: 'msg-covered', threadId: 'active-thread', userId: 'user-1',
-          catId: 'opus', content: 'test', mentions: [], timestamp: Date.now() },
+        triggerMessage: {
+          id: 'msg-covered',
+          threadId: 'active-thread',
+          userId: 'user-1',
+          catId: 'opus',
+          content: 'test',
+          mentions: [],
+          timestamp: Date.now(),
+        },
       },
     );
 
@@ -186,9 +211,7 @@ describe('triggerA2AInvocation (fallback path)', () => {
   });
 
   test('broadcasts terminal error + done when routeExecution throws (release loading lock)', async () => {
-    const { triggerA2AInvocation } = await import(
-      '../dist/routes/callback-a2a-trigger.js'
-    );
+    const { triggerA2AInvocation } = await import('../dist/routes/callback-a2a-trigger.js');
 
     const updates = [];
     const roomEvents = [];
@@ -204,8 +227,12 @@ describe('triggerA2AInvocation (fallback path)', () => {
     };
 
     const mockInvocationTracker = {
-      has() { return false; },
-      start() { return new AbortController(); },
+      has() {
+        return false;
+      },
+      start() {
+        return new AbortController();
+      },
       complete() {},
     };
 
@@ -216,8 +243,12 @@ describe('triggerA2AInvocation (fallback path)', () => {
     };
 
     const mockSocketManager = {
-      broadcastAgentMessage(msg, threadId) { agentBroadcasts.push({ msg, threadId }); },
-      broadcastToRoom(room, event, payload) { roomEvents.push({ room, event, payload }); },
+      broadcastAgentMessage(msg, threadId) {
+        agentBroadcasts.push({ msg, threadId });
+      },
+      broadcastToRoom(room, event, payload) {
+        roomEvents.push({ room, event, payload });
+      },
     };
 
     const mockLog = { error() {}, warn() {}, info() {} };
@@ -235,8 +266,15 @@ describe('triggerA2AInvocation (fallback path)', () => {
         content: '@缅因猫\nplease review',
         userId: 'user-1',
         threadId: 'thread-err',
-        triggerMessage: { id: 'msg-err', threadId: 'thread-err', userId: 'user-1',
-          catId: 'opus', content: 'test', mentions: [], timestamp: Date.now() },
+        triggerMessage: {
+          id: 'msg-err',
+          threadId: 'thread-err',
+          userId: 'user-1',
+          catId: 'opus',
+          content: 'test',
+          mentions: [],
+          timestamp: Date.now(),
+        },
       },
     );
 
@@ -245,19 +283,25 @@ describe('triggerA2AInvocation (fallback path)', () => {
 
     assert.equal(roomEvents.length, 1, 'should emit intent_mode once execution starts');
     assert.equal(roomEvents[0].event, 'intent_mode');
-    assert.equal(agentBroadcasts.some((b) => b.msg.type === 'error'), true, 'should broadcast error on execution failure');
+    assert.equal(
+      agentBroadcasts.some((b) => b.msg.type === 'error'),
+      true,
+      'should broadcast error on execution failure',
+    );
     assert.equal(
       agentBroadcasts.some((b) => b.msg.type === 'done' && b.msg.isFinal === true),
       true,
       'should broadcast terminal done(isFinal) to release loading lock',
     );
-    assert.equal(updates.some((u) => u.status === 'failed'), true, 'failed status should be persisted');
+    assert.equal(
+      updates.some((u) => u.status === 'failed'),
+      true,
+      'failed status should be persisted',
+    );
   });
 
   test('calls queueProcessor.onInvocationComplete on success', async () => {
-    const { triggerA2AInvocation } = await import(
-      '../dist/routes/callback-a2a-trigger.js'
-    );
+    const { triggerA2AInvocation } = await import('../dist/routes/callback-a2a-trigger.js');
 
     const completions = [];
     const mockQueueProcessor = {
@@ -267,13 +311,19 @@ describe('triggerA2AInvocation (fallback path)', () => {
     };
 
     const mockInvocationRecordStore = {
-      create() { return { outcome: 'created', invocationId: 'inv-q1' }; },
+      create() {
+        return { outcome: 'created', invocationId: 'inv-q1' };
+      },
       update() {},
     };
 
     const mockInvocationTracker = {
-      has() { return false; },
-      start() { return new AbortController(); },
+      has() {
+        return false;
+      },
+      start() {
+        return new AbortController();
+      },
       complete() {},
     };
 
@@ -304,8 +354,15 @@ describe('triggerA2AInvocation (fallback path)', () => {
         content: '@缅因猫\nreview',
         userId: 'user-1',
         threadId: 't-queue-ok',
-        triggerMessage: { id: 'msg-q1', threadId: 't-queue-ok', userId: 'user-1',
-          catId: 'opus', content: 'test', mentions: [], timestamp: Date.now() },
+        triggerMessage: {
+          id: 'msg-q1',
+          threadId: 't-queue-ok',
+          userId: 'user-1',
+          catId: 'opus',
+          content: 'test',
+          mentions: [],
+          timestamp: Date.now(),
+        },
       },
     );
 
@@ -317,9 +374,7 @@ describe('triggerA2AInvocation (fallback path)', () => {
   });
 
   test('calls queueProcessor.onInvocationComplete with failed on error', async () => {
-    const { triggerA2AInvocation } = await import(
-      '../dist/routes/callback-a2a-trigger.js'
-    );
+    const { triggerA2AInvocation } = await import('../dist/routes/callback-a2a-trigger.js');
 
     const completions = [];
     const mockQueueProcessor = {
@@ -329,13 +384,19 @@ describe('triggerA2AInvocation (fallback path)', () => {
     };
 
     const mockInvocationRecordStore = {
-      create() { return { outcome: 'created', invocationId: 'inv-q2' }; },
+      create() {
+        return { outcome: 'created', invocationId: 'inv-q2' };
+      },
       update() {},
     };
 
     const mockInvocationTracker = {
-      has() { return false; },
-      start() { return new AbortController(); },
+      has() {
+        return false;
+      },
+      start() {
+        return new AbortController();
+      },
       complete() {},
     };
 
@@ -366,8 +427,15 @@ describe('triggerA2AInvocation (fallback path)', () => {
         content: '@缅因猫\nreview',
         userId: 'user-1',
         threadId: 't-queue-err',
-        triggerMessage: { id: 'msg-q2', threadId: 't-queue-err', userId: 'user-1',
-          catId: 'opus', content: 'test', mentions: [], timestamp: Date.now() },
+        triggerMessage: {
+          id: 'msg-q2',
+          threadId: 't-queue-err',
+          userId: 'user-1',
+          catId: 'opus',
+          content: 'test',
+          mentions: [],
+          timestamp: Date.now(),
+        },
       },
     );
 
@@ -379,9 +447,7 @@ describe('triggerA2AInvocation (fallback path)', () => {
   });
 
   test('calls queueProcessor.onInvocationComplete with canceled on abort', async () => {
-    const { triggerA2AInvocation } = await import(
-      '../dist/routes/callback-a2a-trigger.js'
-    );
+    const { triggerA2AInvocation } = await import('../dist/routes/callback-a2a-trigger.js');
 
     const completions = [];
     const mockQueueProcessor = {
@@ -391,13 +457,17 @@ describe('triggerA2AInvocation (fallback path)', () => {
     };
 
     const mockInvocationRecordStore = {
-      create() { return { outcome: 'created', invocationId: 'inv-q3' }; },
+      create() {
+        return { outcome: 'created', invocationId: 'inv-q3' };
+      },
       update() {},
     };
 
     const abortController = new AbortController();
     const mockInvocationTracker = {
-      has() { return false; },
+      has() {
+        return false;
+      },
       start() {
         // Simulate abort mid-execution (e.g., force-send canceled this invocation)
         setTimeout(() => abortController.abort(), 5);
@@ -407,7 +477,7 @@ describe('triggerA2AInvocation (fallback path)', () => {
     };
 
     const mockRouter = {
-      async *routeExecution(userId, content, threadId, messageId, targetCats, intent, opts) {
+      async *routeExecution(_userId, _content, _threadId, _messageId, _targetCats, _intent, opts) {
         // Simulate some work before abort hits
         await new Promise((resolve) => setTimeout(resolve, 15));
         if (opts?.signal?.aborted) return;
@@ -436,8 +506,15 @@ describe('triggerA2AInvocation (fallback path)', () => {
         content: '@缅因猫\nreview',
         userId: 'user-1',
         threadId: 't-queue-cancel',
-        triggerMessage: { id: 'msg-q3', threadId: 't-queue-cancel', userId: 'user-1',
-          catId: 'opus', content: 'test', mentions: [], timestamp: Date.now() },
+        triggerMessage: {
+          id: 'msg-q3',
+          threadId: 't-queue-cancel',
+          userId: 'user-1',
+          catId: 'opus',
+          content: 'test',
+          mentions: [],
+          timestamp: Date.now(),
+        },
       },
     );
 
@@ -474,8 +551,15 @@ describe('enqueueA2ATargets (F27 primary path)', () => {
           content: '@缅因猫\nreview please',
           userId: 'user-1',
           threadId: 't-enqueue',
-          triggerMessage: { id: 'msg-1', threadId: 't-enqueue', userId: 'user-1',
-            catId: 'opus', content: 'test', mentions: [], timestamp: Date.now() },
+          triggerMessage: {
+            id: 'msg-1',
+            threadId: 't-enqueue',
+            userId: 'user-1',
+            catId: 'opus',
+            content: 'test',
+            mentions: [],
+            timestamp: Date.now(),
+          },
         },
       );
 
@@ -511,8 +595,15 @@ describe('enqueueA2ATargets (F27 primary path)', () => {
           content: '@缅因猫\nagain',
           userId: 'user-1',
           threadId: 't-dedup',
-          triggerMessage: { id: 'msg-2', threadId: 't-dedup', userId: 'user-1',
-            catId: 'opus', content: 'test', mentions: [], timestamp: Date.now() },
+          triggerMessage: {
+            id: 'msg-2',
+            threadId: 't-dedup',
+            userId: 'user-1',
+            catId: 'opus',
+            content: 'test',
+            mentions: [],
+            timestamp: Date.now(),
+          },
         },
       );
 
@@ -544,8 +635,15 @@ describe('enqueueA2ATargets (F27 primary path)', () => {
           content: '@缅因猫',
           userId: 'u1',
           threadId: 't-depth',
-          triggerMessage: { id: 'm1', threadId: 't-depth', userId: 'u1',
-            catId: 'opus', content: 'test', mentions: [], timestamp: Date.now() },
+          triggerMessage: {
+            id: 'm1',
+            threadId: 't-depth',
+            userId: 'u1',
+            catId: 'opus',
+            content: 'test',
+            mentions: [],
+            timestamp: Date.now(),
+          },
         },
       );
       assert.deepEqual(r1.enqueued, ['codex']);
@@ -558,8 +656,15 @@ describe('enqueueA2ATargets (F27 primary path)', () => {
           content: '@暹罗猫',
           userId: 'u1',
           threadId: 't-depth',
-          triggerMessage: { id: 'm2', threadId: 't-depth', userId: 'u1',
-            catId: 'opus', content: 'test', mentions: [], timestamp: Date.now() },
+          triggerMessage: {
+            id: 'm2',
+            threadId: 't-depth',
+            userId: 'u1',
+            catId: 'opus',
+            content: 'test',
+            mentions: [],
+            timestamp: Date.now(),
+          },
         },
       );
       assert.deepEqual(r2.enqueued, [], 'depth limit reached');
@@ -575,14 +680,24 @@ describe('enqueueA2ATargets (F27 primary path)', () => {
     let startCalled = 0;
     let createCalled = 0;
     const mockInvocationTracker = {
-      has() { return true; },   // Parent is active
-      getCatIds() { return ['opus']; },  // Different from targets
-      start() { startCalled++; return new AbortController(); },
+      has() {
+        return true;
+      }, // Parent is active
+      getCatIds() {
+        return ['opus'];
+      }, // Different from targets
+      start() {
+        startCalled++;
+        return new AbortController();
+      },
       complete() {},
     };
 
     const mockInvocationRecordStore = {
-      create() { createCalled++; return { outcome: 'created', invocationId: 'inv-x' }; },
+      create() {
+        createCalled++;
+        return { outcome: 'created', invocationId: 'inv-x' };
+      },
       update() {},
     };
 
@@ -612,8 +727,15 @@ describe('enqueueA2ATargets (F27 primary path)', () => {
         content: '@缅因猫\nreview',
         userId: 'user-1',
         threadId: 'active-parent-thread',
-        triggerMessage: { id: 'msg-p2', threadId: 'active-parent-thread', userId: 'user-1',
-          catId: 'opus', content: 'test', mentions: [], timestamp: Date.now() },
+        triggerMessage: {
+          id: 'msg-p2',
+          threadId: 'active-parent-thread',
+          userId: 'user-1',
+          catId: 'opus',
+          content: 'test',
+          mentions: [],
+          timestamp: Date.now(),
+        },
       },
     );
 
@@ -630,13 +752,21 @@ describe('enqueueA2ATargets (F27 primary path)', () => {
 
     const updates = [];
     const mockInvocationRecordStore = {
-      create() { return { outcome: 'created', invocationId: 'inv-fb' }; },
-      update(id, data) { updates.push({ id, ...data }); },
+      create() {
+        return { outcome: 'created', invocationId: 'inv-fb' };
+      },
+      update(id, data) {
+        updates.push({ id, ...data });
+      },
     };
 
     const mockInvocationTracker = {
-      has() { return false; },
-      start() { return new AbortController(); },
+      has() {
+        return false;
+      },
+      start() {
+        return new AbortController();
+      },
       complete() {},
     };
 
@@ -668,8 +798,15 @@ describe('enqueueA2ATargets (F27 primary path)', () => {
         content: '@缅因猫\nreview',
         userId: 'user-1',
         threadId: 'no-worklist-thread',
-        triggerMessage: { id: 'msg-fb', threadId: 'no-worklist-thread', userId: 'user-1',
-          catId: 'opus', content: 'test', mentions: [], timestamp: Date.now() },
+        triggerMessage: {
+          id: 'msg-fb',
+          threadId: 'no-worklist-thread',
+          userId: 'user-1',
+          catId: 'opus',
+          content: 'test',
+          mentions: [],
+          timestamp: Date.now(),
+        },
       },
     );
 

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { parseUnifiedDiff } from '@/components/workspace/DiffViewer';
 
 const sampleDiff = `diff --git a/src/app.ts b/src/app.ts

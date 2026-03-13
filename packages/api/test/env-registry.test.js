@@ -2,12 +2,12 @@
  * F12: env-registry + GET /api/config/env-summary tests
  */
 
-import { describe, it, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { afterEach, describe, it } from 'node:test';
 import Fastify from 'fastify';
-import { ENV_VARS, ENV_CATEGORIES, buildEnvSummary, maskUrlCredentials } from '../dist/config/env-registry.js';
+import { buildEnvSummary, ENV_CATEGORIES, ENV_VARS, maskUrlCredentials } from '../dist/config/env-registry.js';
 
 // Save and restore env vars around tests
 const savedEnv = {};
@@ -157,10 +157,7 @@ describe('GET /api/config/env-summary (route)', () => {
       existsSync(resolve(root, 'pnpm-workspace.yaml')),
       `projectRoot should contain pnpm-workspace.yaml, got: ${root}`,
     );
-    assert.ok(
-      !root.endsWith('/packages/api'),
-      `projectRoot should not end with /packages/api, got: ${root}`,
-    );
+    assert.ok(!root.endsWith('/packages/api'), `projectRoot should not end with /packages/api, got: ${root}`);
 
     await app.close();
   });
@@ -178,10 +175,7 @@ describe('GET /api/config/env-summary (route)', () => {
     assert.ok(dataDirs, 'paths.dataDirs should exist');
     for (const key of ['auditLogs', 'cliArchive', 'redisDevSandbox', 'uploads']) {
       assert.ok(dataDirs[key], `dataDirs.${key} should exist`);
-      assert.ok(
-        dataDirs[key].startsWith('/'),
-        `dataDirs.${key} should be absolute, got: ${dataDirs[key]}`,
-      );
+      assert.ok(dataDirs[key].startsWith('/'), `dataDirs.${key} should be absolute, got: ${dataDirs[key]}`);
     }
 
     await app.close();

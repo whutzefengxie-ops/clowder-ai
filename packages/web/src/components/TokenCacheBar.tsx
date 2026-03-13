@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 const CAT_GRADIENTS: Record<string, string> = {
   opus: 'linear-gradient(90deg, var(--color-opus-light), var(--color-opus-primary))',
@@ -41,9 +41,7 @@ export function TokenCacheBar({ percent, catId }: TokenCacheBarProps) {
           }}
         />
       </div>
-      <span className="text-[10px] text-gray-400 tabular-nums w-7 text-right">
-        {percent}%
-      </span>
+      <span className="text-[10px] text-gray-400 tabular-nums w-7 text-right">{percent}%</span>
     </div>
   );
 }

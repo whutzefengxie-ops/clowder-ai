@@ -1,4 +1,3 @@
-import React from 'react';
 import type { SignalArticleStats } from '@/utils/signals-api';
 
 interface SignalStatsCardsProps {

@@ -5,8 +5,8 @@
  * Uses optimistic concurrency via version field.
  */
 
-import type { RedisClient } from '@cat-cafe/shared/utils';
 import type { GameRuntime } from '@cat-cafe/shared';
+import type { RedisClient } from '@cat-cafe/shared/utils';
 import type { IGameStore } from '../ports/GameStore.js';
 import { GameKeys } from '../redis-keys/game-keys.js';
 
@@ -19,24 +19,14 @@ export class RedisGameStore implements IGameStore {
 
   async createGame(runtime: GameRuntime): Promise<GameRuntime> {
     // KD-15: check no active game on this thread
-    const existingGameId = await this.redis.get(
-      GameKeys.threadActive(runtime.threadId),
-    );
+    const existingGameId = await this.redis.get(GameKeys.threadActive(runtime.threadId));
     if (existingGameId) {
-      throw new Error(
-        `Thread ${runtime.threadId} already has an active game: ${existingGameId}`,
-      );
+      throw new Error(`Thread ${runtime.threadId} already has an active game: ${existingGameId}`);
     }
 
     const pipeline = this.redis.multi();
-    pipeline.set(
-      GameKeys.detail(runtime.gameId),
-      JSON.stringify(runtime),
-    );
-    pipeline.set(
-      GameKeys.threadActive(runtime.threadId),
-      runtime.gameId,
-    );
+    pipeline.set(GameKeys.detail(runtime.gameId), JSON.stringify(runtime));
+    pipeline.set(GameKeys.threadActive(runtime.threadId), runtime.gameId);
     await pipeline.exec();
 
     return runtime;
@@ -60,15 +50,10 @@ export class RedisGameStore implements IGameStore {
 
     const current = JSON.parse(existing) as GameRuntime;
     if (current.version !== runtime.version - 1) {
-      throw new Error(
-        `Version conflict for game ${gameId}: expected ${current.version}, got ${runtime.version - 1}`,
-      );
+      throw new Error(`Version conflict for game ${gameId}: expected ${current.version}, got ${runtime.version - 1}`);
     }
 
-    await this.redis.set(
-      GameKeys.detail(gameId),
-      JSON.stringify(runtime),
-    );
+    await this.redis.set(GameKeys.detail(gameId), JSON.stringify(runtime));
   }
 
   async endGame(gameId: string, winner: string): Promise<void> {
@@ -85,11 +70,7 @@ export class RedisGameStore implements IGameStore {
     pipeline.set(GameKeys.detail(gameId), JSON.stringify(runtime));
     // Remove from active, add to history
     pipeline.del(GameKeys.threadActive(runtime.threadId));
-    pipeline.zadd(
-      GameKeys.threadHistory(runtime.threadId),
-      runtime.updatedAt,
-      gameId,
-    );
+    pipeline.zadd(GameKeys.threadHistory(runtime.threadId), runtime.updatedAt, gameId);
     await pipeline.exec();
   }
 }

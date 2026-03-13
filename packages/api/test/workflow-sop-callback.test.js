@@ -3,8 +3,8 @@
  * Tests the MCP callback endpoint /api/callbacks/update-workflow-sop
  */
 
-import { describe, it, before, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { before, beforeEach, describe, it } from 'node:test';
 import Fastify from 'fastify';
 
 const INVOCATION_ID = 'inv-test-001';

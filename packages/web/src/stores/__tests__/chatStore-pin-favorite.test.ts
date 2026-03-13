@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { useChatStore } from '../chatStore';
+import { beforeEach, describe, expect, it } from 'vitest';
 import type { Thread } from '../chat-types';
+import { useChatStore } from '../chatStore';
 
 function makeThread(overrides: Partial<Thread> & { id: string }): Thread {
   return {
@@ -17,10 +17,7 @@ function makeThread(overrides: Partial<Thread> & { id: string }): Thread {
 describe('chatStore updateThreadPin / updateThreadFavorite', () => {
   beforeEach(() => {
     useChatStore.setState({
-      threads: [
-        makeThread({ id: 'thread-1', title: 'First' }),
-        makeThread({ id: 'thread-2', title: 'Second' }),
-      ],
+      threads: [makeThread({ id: 'thread-1', title: 'First' }), makeThread({ id: 'thread-2', title: 'Second' })],
     });
   });
 

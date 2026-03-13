@@ -92,7 +92,7 @@ describe('AuditEventsTab', () => {
     const row = container.querySelector('[data-testid="audit-event-row"]');
     expect(row).toBeTruthy();
     await act(async () => {
-      row!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      row?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
     // Expanded data should show full JSON

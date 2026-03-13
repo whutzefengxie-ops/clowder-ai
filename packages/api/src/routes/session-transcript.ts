@@ -10,10 +10,10 @@
 
 import type { FastifyInstance, FastifyPluginOptions } from 'fastify';
 import { z } from 'zod';
+import { formatEventsChat, formatEventsHandoff } from '../domains/cats/services/session/TranscriptFormatter.js';
+import type { TranscriptReader } from '../domains/cats/services/session/TranscriptReader.js';
 import type { ISessionChainStore } from '../domains/cats/services/stores/ports/SessionChainStore.js';
 import type { IThreadStore } from '../domains/cats/services/stores/ports/ThreadStore.js';
-import type { TranscriptReader } from '../domains/cats/services/session/TranscriptReader.js';
-import { formatEventsChat, formatEventsHandoff } from '../domains/cats/services/session/TranscriptFormatter.js';
 import { resolveUserId } from '../utils/request-identity.js';
 
 const VALID_VIEWS = new Set(['raw', 'chat', 'handoff']);
@@ -88,9 +88,7 @@ export async function sessionTranscriptRoutes(
     }
     const limit = limitNum != null ? Math.min(limitNum, 200) : 50;
 
-    const result = await transcriptReader.readEvents(
-      sessionId, session.threadId, session.catId, cursor, limit,
-    );
+    const result = await transcriptReader.readEvents(sessionId, session.threadId, session.catId, cursor, limit);
 
     if (view === 'chat') {
       return reply.send({
@@ -132,9 +130,7 @@ export async function sessionTranscriptRoutes(
       return { error: 'Access denied' };
     }
 
-    const digest = await transcriptReader.readDigest(
-      sessionId, session.threadId, session.catId,
-    );
+    const digest = await transcriptReader.readDigest(sessionId, session.threadId, session.catId);
     if (!digest) {
       return reply.status(404).send({ error: 'Digest not found' });
     }
@@ -165,7 +161,10 @@ export async function sessionTranscriptRoutes(
     }
 
     const events = await transcriptReader.readInvocationEvents(
-      sessionId, session.threadId, session.catId, invocationId,
+      sessionId,
+      session.threadId,
+      session.catId,
+      invocationId,
     );
     if (!events) {
       return reply.status(404).send({ error: 'Invocation not found' });

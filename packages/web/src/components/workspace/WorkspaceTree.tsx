@@ -28,7 +28,10 @@ const PenIcon = () => (
 const TrashIcon = () => (
   <svg width="9" height="9" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
     <path d="M5.5 5.5a.5.5 0 01.5.5v6a.5.5 0 01-1 0V6a.5.5 0 01.5-.5zm5 .5a.5.5 0 00-1 0v6a.5.5 0 001 0V6z" />
-    <path fillRule="evenodd" d="M14.5 3a1 1 0 01-1 1H13v9a2 2 0 01-2 2H5a2 2 0 01-2-2V4h-.5a1 1 0 010-2H6a1 1 0 011-1h2a1 1 0 011 1h3.5a1 1 0 011 1zM4.1 4L4 4.06V13a1 1 0 001 1h6a1 1 0 001-1V4.06L11.9 4H4.1zM7 2h2v1H7V2z" />
+    <path
+      fillRule="evenodd"
+      d="M14.5 3a1 1 0 01-1 1H13v9a2 2 0 01-2 2H5a2 2 0 01-2-2V4h-.5a1 1 0 010-2H6a1 1 0 011-1h2a1 1 0 011 1h3.5a1 1 0 011 1zM4.1 4L4 4.06V13a1 1 0 001 1h6a1 1 0 001-1V4.06L11.9 4H4.1zM7 2h2v1H7V2z"
+    />
   </svg>
 );
 
@@ -163,7 +166,14 @@ function TreeItem({
             className={`w-3 flex items-center justify-center flex-shrink-0 transition-transform duration-150 ${isDir && isExpanded ? 'rotate-90' : ''}`}
           >
             {isDir && (
-              <svg width="8" height="8" viewBox="0 0 8 8" fill="currentColor" className="text-owner-dark/40" aria-hidden="true">
+              <svg
+                width="8"
+                height="8"
+                viewBox="0 0 8 8"
+                fill="currentColor"
+                className="text-owner-dark/40"
+                aria-hidden="true"
+              >
                 <path d="M2.5 1L6 4L2.5 7" strokeWidth="1" />
               </svg>
             )}
@@ -175,36 +185,80 @@ function TreeItem({
         {/* Hover action buttons */}
         <div className="absolute right-1 flex items-center gap-0.5">
           {isDir && callbacks.onCreateFile && (
-            <button type="button" className={hoverBtn} title="新建文件"
-              onClick={(e) => { e.stopPropagation(); if (!isExpanded) toggleExpand(node.path); onStartAction({ type: 'new-file', targetPath: node.path }); }}>
+            <button
+              type="button"
+              className={hoverBtn}
+              title="新建文件"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (!isExpanded) toggleExpand(node.path);
+                onStartAction({ type: 'new-file', targetPath: node.path });
+              }}
+            >
               <PlusFileIcon />
             </button>
           )}
           {isDir && callbacks.onCreateDir && (
-            <button type="button" className={hoverBtn} title="新建目录"
-              onClick={(e) => { e.stopPropagation(); if (!isExpanded) toggleExpand(node.path); onStartAction({ type: 'new-dir', targetPath: node.path }); }}>
+            <button
+              type="button"
+              className={hoverBtn}
+              title="新建目录"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (!isExpanded) toggleExpand(node.path);
+                onStartAction({ type: 'new-dir', targetPath: node.path });
+              }}
+            >
               <PlusDirIcon />
             </button>
           )}
           {!isDir && onCite && (
-            <button type="button" className={hoverBtn} title="引用到聊天"
-              onClick={(e) => { e.stopPropagation(); onCite(node.path); }}>
+            <button
+              type="button"
+              className={hoverBtn}
+              title="引用到聊天"
+              onClick={(e) => {
+                e.stopPropagation();
+                onCite(node.path);
+              }}
+            >
               <CiteIcon />
             </button>
           )}
-          <button type="button" className={hoverBtn} title="复制路径"
-            onClick={(e) => { e.stopPropagation(); void navigator.clipboard.writeText(node.path); }}>
+          <button
+            type="button"
+            className={hoverBtn}
+            title="复制路径"
+            onClick={(e) => {
+              e.stopPropagation();
+              void navigator.clipboard.writeText(node.path);
+            }}
+          >
             <CopyPathIcon />
           </button>
           {callbacks.onRename && (
-            <button type="button" className={hoverBtn} title="重命名"
-              onClick={(e) => { e.stopPropagation(); onStartAction({ type: 'rename', targetPath: node.path }); }}>
+            <button
+              type="button"
+              className={hoverBtn}
+              title="重命名"
+              onClick={(e) => {
+                e.stopPropagation();
+                onStartAction({ type: 'rename', targetPath: node.path });
+              }}
+            >
               <PenIcon />
             </button>
           )}
           {callbacks.onDelete && (
-            <button type="button" className={hoverBtnDanger} title="删除"
-              onClick={(e) => { e.stopPropagation(); callbacks.onDelete?.(node.path); }}>
+            <button
+              type="button"
+              className={hoverBtnDanger}
+              title="删除"
+              onClick={(e) => {
+                e.stopPropagation();
+                callbacks.onDelete?.(node.path);
+              }}
+            >
               <TrashIcon />
             </button>
           )}
@@ -224,7 +278,10 @@ function TreeItem({
       {isDir && isExpanded && (
         <div className="relative">
           {node.children === undefined ? (
-            <div className="py-1 text-[10px] text-gray-400 animate-pulse" style={{ paddingLeft: `${(depth + 1) * 16 + 8}px` }}>
+            <div
+              className="py-1 text-[10px] text-gray-400 animate-pulse"
+              style={{ paddingLeft: `${(depth + 1) * 16 + 8}px` }}
+            >
               加载中...
             </div>
           ) : (
@@ -263,7 +320,8 @@ export function TreeSkeleton() {
           style={{
             width: `${w}px`,
             marginLeft: `${(idx % 3) * 12}px`,
-            background: 'linear-gradient(90deg, var(--color-owner-light) 25%, rgba(255,221,210,0.3) 50%, var(--color-owner-light) 75%)',
+            background:
+              'linear-gradient(90deg, var(--color-owner-light) 25%, rgba(255,221,210,0.3) 50%, var(--color-owner-light) 75%)',
             backgroundSize: '200% 100%',
           }}
         />
@@ -339,8 +397,13 @@ export function WorkspaceTree({
   return (
     <div
       className="overflow-y-auto py-1 min-h-0"
-      style={hasFile && basisPct != null ? { flexBasis: `${basisPct}%`, flexGrow: 0, flexShrink: 0 } : { flex: '1 1 0%' }}
-      onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+      style={
+        hasFile && basisPct != null ? { flexBasis: `${basisPct}%`, flexGrow: 0, flexShrink: 0 } : { flex: '1 1 0%' }
+      }
+      onDragOver={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      }}
       onDrop={(e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -351,30 +414,39 @@ export function WorkspaceTree({
       {callbacks && (
         <div className="group flex items-center gap-0.5 px-3 py-1 border-b border-owner-light/30">
           <span className="text-[10px] text-owner-dark/40 flex-1 uppercase tracking-wider">Files</span>
-          <button type="button" className={hoverBtn} title="新建文件"
-            onClick={() => setPendingAction({ type: 'new-file', targetPath: '' })}>
+          <button
+            type="button"
+            className={hoverBtn}
+            title="新建文件"
+            onClick={() => setPendingAction({ type: 'new-file', targetPath: '' })}
+          >
             <PlusFileIcon />
           </button>
-          <button type="button" className={hoverBtn} title="新建目录"
-            onClick={() => setPendingAction({ type: 'new-dir', targetPath: '' })}>
+          <button
+            type="button"
+            className={hoverBtn}
+            title="新建目录"
+            onClick={() => setPendingAction({ type: 'new-dir', targetPath: '' })}
+          >
             <PlusDirIcon />
           </button>
-          <button type="button" className={hoverBtn} title="上传文件"
-            onClick={handleUploadClick}>
+          <button type="button" className={hoverBtn} title="上传文件" onClick={handleUploadClick}>
             <UploadIcon />
           </button>
           <input ref={uploadInputRef} type="file" multiple className="hidden" onChange={handleUploadChange} />
         </div>
       )}
       {/* Root-level inline input */}
-      {pendingAction && pendingAction.targetPath === '' && (pendingAction.type === 'new-file' || pendingAction.type === 'new-dir') && (
-        <InlineTreeInput
-          depth={0}
-          kind={pendingAction.type === 'new-file' ? 'file' : 'directory'}
-          onConfirm={handleConfirmAction}
-          onCancel={() => setPendingAction(null)}
-        />
-      )}
+      {pendingAction &&
+        pendingAction.targetPath === '' &&
+        (pendingAction.type === 'new-file' || pendingAction.type === 'new-dir') && (
+          <InlineTreeInput
+            depth={0}
+            kind={pendingAction.type === 'new-file' ? 'file' : 'directory'}
+            onConfirm={handleConfirmAction}
+            onCancel={() => setPendingAction(null)}
+          />
+        )}
       {loading && tree.length === 0 ? (
         <TreeSkeleton />
       ) : tree.length === 0 ? (

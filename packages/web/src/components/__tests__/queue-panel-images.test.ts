@@ -2,13 +2,12 @@
  * F39 Bug 2: QueuePanel should show image count indicator
  * when the associated message has image contentBlocks.
  */
-import React from 'react';
+import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { act } from 'react';
-import { afterAll, afterEach, beforeAll, beforeEach, describe, it, expect } from 'vitest';
-import { QueuePanel } from '../QueuePanel';
-import { useChatStore } from '@/stores/chatStore';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { QueueEntry } from '@/stores/chat-types';
+import { useChatStore } from '@/stores/chatStore';
+import { QueuePanel } from '../QueuePanel';
 
 const NOW = Date.now();
 
@@ -54,7 +53,9 @@ describe('QueuePanel image indicator (F39 Bug 2)', () => {
   });
 
   afterEach(() => {
-    act(() => { root.unmount(); });
+    act(() => {
+      root.unmount();
+    });
     container.remove();
   });
 
@@ -66,9 +67,7 @@ describe('QueuePanel image indicator (F39 Bug 2)', () => {
           id: 'msg-1',
           type: 'user' as const,
           content: 'hello with image',
-          contentBlocks: [
-            { type: 'image' as const, url: 'https://example.com/cat.png' },
-          ],
+          contentBlocks: [{ type: 'image' as const, url: 'https://example.com/cat.png' }],
           timestamp: NOW,
         },
       ],
@@ -153,12 +152,14 @@ describe('QueuePanel image indicator (F39 Bug 2)', () => {
 
   it('counts images from merged messages too (Cloud R2 P2)', () => {
     useChatStore.setState({
-      queue: [{
-        ...QUEUE_ENTRY_BASE,
-        content: 'merged entry',
-        messageId: 'msg-1',
-        mergedMessageIds: ['msg-2'],
-      }],
+      queue: [
+        {
+          ...QUEUE_ENTRY_BASE,
+          content: 'merged entry',
+          messageId: 'msg-1',
+          mergedMessageIds: ['msg-2'],
+        },
+      ],
       messages: [
         {
           id: 'msg-1',

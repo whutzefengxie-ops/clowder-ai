@@ -77,7 +77,7 @@ async function readSingleInboxFile(filePath: string): Promise<readonly InboxReco
       const source = pickString(record, ['source']);
       const fetchedAt = pickString(record, ['fetchedAt']);
       const filePathValue = pickString(record, ['filePath']);
-      const tierValue = record['tier'];
+      const tierValue = record.tier;
 
       if (!id || !title || !url || !source || !fetchedAt || !filePathValue || typeof tierValue !== 'number') {
         continue;

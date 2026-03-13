@@ -1,5 +1,5 @@
-import { describe, it, beforeEach, after } from 'node:test';
 import assert from 'node:assert/strict';
+import { after, beforeEach, describe, it } from 'node:test';
 import { getRichBlockBuffer } from '../dist/domains/cats/services/agents/invocation/RichBlockBuffer.js';
 
 describe('RichBlockBuffer', () => {

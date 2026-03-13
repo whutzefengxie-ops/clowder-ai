@@ -7,9 +7,7 @@ import type { CatId } from '@cat-cafe/shared';
 import type { StoredMessage } from './ports/MessageStore.js';
 
 /** Who is viewing */
-export type Viewer =
-  | { readonly type: 'user' }
-  | { readonly type: 'cat'; readonly catId: CatId };
+export type Viewer = { readonly type: 'user' } | { readonly type: 'cat'; readonly catId: CatId };
 
 /**
  * Check if a message is visible to the given viewer.

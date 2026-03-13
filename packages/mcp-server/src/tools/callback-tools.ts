@@ -90,7 +90,9 @@ export const postMessageInputSchema = {
   targetCats: z
     .array(z.string().min(1))
     .optional()
-    .describe('Optional explicit target cat IDs (e.g. ["codex","gpt52"]). Merged with @mentions parsed from content. Used for direction rendering in frontend.'),
+    .describe(
+      'Optional explicit target cat IDs (e.g. ["codex","gpt52"]). Merged with @mentions parsed from content. Used for direction rendering in frontend.',
+    ),
 };
 
 export const getPendingMentionsInputSchema = {

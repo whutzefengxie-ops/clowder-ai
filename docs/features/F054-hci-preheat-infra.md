@@ -30,8 +30,8 @@ updated: 2026-03-05
 让每只猫在 Cat Café 内可以直接使用社交媒体工具：
 
 1. **小红书 MCP 接入 Cat Café**
-   - MCP Server 已确认：`mcp-remote http://localhost:18060/mcp`（通过 `npx` 启动）
-   - 接入方式：在 cat-cafe `.mcp.json` 中添加 xiaohongshu MCP server 配置，指向同一个 localhost:18060（**已确认同一台机器，可直接接入**）
+   - MCP Server 已确认：`mcp-remote http://<local-integration-endpoint>/mcp`（通过 `npx` 启动）
+   - 接入方式：在 cat-cafe `.mcp.json` 中添加 xiaohongshu MCP server 配置，指向同一个 <local-integration-endpoint>（**已确认同一台机器，可直接接入**）
    - 权限模型：**猫猫自主发布 + team lead可回溯**；内容含密码/token/内部吐槽时需审批
    - 发布签名：用team lead的号，每只猫发帖时附带猫猫签名（如"—Ragdoll"）
 
@@ -370,7 +370,7 @@ AIRI 的 `personality-v1.velin.md` 结构（已验证可用）：
 | 主线路径 | A 传播优先 / B 开源增长优先 | **待外部讨论拍板**（团队倾向 A） | team lead |
 | 猫猫发帖权限 | 自由发布 / 审批后发布 | **默认自主发 + team lead可回溯；敏感内容需审批** | team lead (2026-03-03) |
 | 社交媒体优先级 | 小红书 > 抖音 > B站 | 小红书先行（已有基础） | 会议共识 |
-| 小红书 MCP 接入方式 | 代理 / 直连 | `mcp-remote http://localhost:18060/mcp`（本地 MCP Server） | team lead (2026-03-03) |
+| 小红书 MCP 接入方式 | 代理 / 直连 | `mcp-remote http://<local-integration-endpoint>/mcp`（本地 MCP Server） | team lead (2026-03-03) |
 | 表情包出图方式 | 单张逐个生成 / Sheet 一次性 | **4×4 Sheet 一次性**（画风统一 + 方便切割） | team lead (2026-03-05) |
 | 表情包风格 | 写实 / 拟人 / Q 版猫猫 | **日系 Q 版，2.5 头身，猫猫肢体语言，禁止人类动作** | team lead (2026-03-05) |
 | 表情包切割 | 手动 PS / 脚本自动 | **脚本自动切割**（Ragdoll写，Siamese之前切不对） | team lead (2026-03-05) |

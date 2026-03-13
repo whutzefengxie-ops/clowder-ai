@@ -16,27 +16,17 @@
  *   result/error       → error
  */
 
-import { randomUUID } from 'node:crypto';
 import { spawn as nodeSpawn } from 'node:child_process';
-import { createCatId, type CatId } from '@cat-cafe/shared';
-import { spawnCli, isCliError, isCliTimeout } from '../../../../../utils/cli-spawn.js';
-import { formatCliExitError } from '../../../../../utils/cli-format.js';
-import type { SpawnFn } from '../../../../../utils/cli-types.js';
-import { extractImagePaths } from '../providers/image-paths.js';
-import { appendLocalImagePathHints, collectImageAccessDirectories } from '../providers/image-cli-bridge.js';
+import { randomUUID } from 'node:crypto';
+import { type CatId, createCatId } from '@cat-cafe/shared';
 import { getCatModel } from '../../../../../config/cat-models.js';
-import type {
-  AgentMessage,
-  AgentService,
-  AgentServiceOptions,
-  MessageMetadata,
-  TokenUsage,
-} from '../../types.js';
-import {
-  transformGeminiEvent,
-  isResultErrorEvent,
-  isKnownPostResponseCandidatesCrash,
-} from './gemini-event-parser.js';
+import { formatCliExitError } from '../../../../../utils/cli-format.js';
+import { isCliError, isCliTimeout, spawnCli } from '../../../../../utils/cli-spawn.js';
+import type { SpawnFn } from '../../../../../utils/cli-types.js';
+import type { AgentMessage, AgentService, AgentServiceOptions, MessageMetadata, TokenUsage } from '../../types.js';
+import { appendLocalImagePathHints, collectImageAccessDirectories } from '../providers/image-cli-bridge.js';
+import { extractImagePaths } from '../providers/image-paths.js';
+import { isKnownPostResponseCandidatesCrash, isResultErrorEvent, transformGeminiEvent } from './gemini-event-parser.js';
 
 type GeminiAdapter = 'gemini-cli' | 'antigravity';
 /**
@@ -71,15 +61,10 @@ export class GeminiAgentService implements AgentService {
     this.model = options?.model ?? getCatModel(this.catId as string);
     this.spawnFn = options?.spawnFn;
     this.antigravitySpawnFn = options?.antigravitySpawnFn ?? nodeSpawn;
-    this.adapter = options?.adapter
-      ?? (process.env['GEMINI_ADAPTER'] as GeminiAdapter | undefined)
-      ?? 'gemini-cli';
+    this.adapter = options?.adapter ?? (process.env.GEMINI_ADAPTER as GeminiAdapter | undefined) ?? 'gemini-cli';
   }
 
-  async *invoke(
-    prompt: string,
-    options?: AgentServiceOptions
-  ): AsyncIterable<AgentMessage> {
+  async *invoke(prompt: string, options?: AgentServiceOptions): AsyncIterable<AgentMessage> {
     if (this.adapter === 'antigravity') {
       yield* this.invokeAntigravity(prompt, options);
     } else {
@@ -87,16 +72,11 @@ export class GeminiAgentService implements AgentService {
     }
   }
 
-  private async *invokeGeminiCLI(
-    prompt: string,
-    options?: AgentServiceOptions
-  ): AsyncIterable<AgentMessage> {
+  private async *invokeGeminiCLI(prompt: string, options?: AgentServiceOptions): AsyncIterable<AgentMessage> {
     const metadata: MessageMetadata = { provider: 'google', model: this.model };
 
     // Gemini CLI has no system prompt flag; prepend identity to prompt text
-    let effectivePrompt = options?.systemPrompt
-      ? `${options.systemPrompt}\n\n${prompt}`
-      : prompt;
+    let effectivePrompt = options?.systemPrompt ? `${options.systemPrompt}\n\n${prompt}` : prompt;
 
     const imagePaths = extractImagePaths(options?.contentBlocks, options?.uploadDir);
     const imageAccessDirs = collectImageAccessDirectories(imagePaths);
@@ -110,7 +90,7 @@ export class GeminiAgentService implements AgentService {
     // session semantics as Claude/Codex (session-chain + self-heal).
     const modelArgs = ['--model', this.model];
     const args: string[] = options?.sessionId
-      ? ['--resume', options!.sessionId!, ...modelArgs, '-p', effectivePrompt, '-o', 'stream-json', '-y']
+      ? ['--resume', options?.sessionId!, ...modelArgs, '-p', effectivePrompt, '-o', 'stream-json', '-y']
       : [...modelArgs, '-p', effectivePrompt, '-o', 'stream-json', '-y'];
     for (const dir of imageAccessDirs) {
       args.push('--include-directories', dir);
@@ -123,9 +103,7 @@ export class GeminiAgentService implements AgentService {
       const cliOpts = {
         command: 'gemini' as const,
         args,
-        ...(options?.workingDirectory
-          ? { cwd: options.workingDirectory }
-          : {}),
+        ...(options?.workingDirectory ? { cwd: options.workingDirectory } : {}),
         ...(options?.callbackEnv ? { env: options.callbackEnv } : {}),
         ...(options?.signal ? { signal: options.signal } : {}),
       };
@@ -159,18 +137,17 @@ export class GeminiAgentService implements AgentService {
         // F8: Capture usage from result/success events before transform drops them
         if (typeof event === 'object' && event !== null) {
           const raw = event as Record<string, unknown>;
-          if (raw['type'] === 'result' && raw['status'] === 'success') {
-            const stats = raw['stats'] as Record<string, unknown> | undefined;
+          if (raw.type === 'result' && raw.status === 'success') {
+            const stats = raw.stats as Record<string, unknown> | undefined;
             if (stats) {
               const usage: TokenUsage = {};
-              if (typeof stats['total_tokens'] === 'number') usage.totalTokens = stats['total_tokens'];
-              if (typeof stats['input_tokens'] === 'number') usage.inputTokens = stats['input_tokens'];
-              if (typeof stats['output_tokens'] === 'number') usage.outputTokens = stats['output_tokens'];
-              if (typeof stats['cached_input_tokens'] === 'number') usage.cacheReadTokens = stats['cached_input_tokens'];
-              const contextWindow = (
-                (typeof stats['context_window'] === 'number' ? stats['context_window'] : undefined)
-                ?? (typeof stats['contextWindow'] === 'number' ? stats['contextWindow'] : undefined)
-              );
+              if (typeof stats.total_tokens === 'number') usage.totalTokens = stats.total_tokens;
+              if (typeof stats.input_tokens === 'number') usage.inputTokens = stats.input_tokens;
+              if (typeof stats.output_tokens === 'number') usage.outputTokens = stats.output_tokens;
+              if (typeof stats.cached_input_tokens === 'number') usage.cacheReadTokens = stats.cached_input_tokens;
+              const contextWindow =
+                (typeof stats.context_window === 'number' ? stats.context_window : undefined) ??
+                (typeof stats.contextWindow === 'number' ? stats.contextWindow : undefined);
               if (contextWindow != null) usage.contextWindowSize = contextWindow;
               metadata.usage = usage;
             }
@@ -193,7 +170,7 @@ export class GeminiAgentService implements AgentService {
             // Each Gemini message/assistant is a complete turn (unlike Claude's
             // incremental deltas), so direct concatenation loses inter-turn spacing.
             if (sawAssistantText && result.content) {
-              yield { ...result, content: '\n\n' + result.content, metadata };
+              yield { ...result, content: `\n\n${result.content}`, metadata };
             } else {
               yield { ...result, metadata };
             }
@@ -221,10 +198,7 @@ export class GeminiAgentService implements AgentService {
     }
   }
 
-  private async *invokeAntigravity(
-    prompt: string,
-    options?: AgentServiceOptions
-  ): AsyncIterable<AgentMessage> {
+  private async *invokeAntigravity(prompt: string, options?: AgentServiceOptions): AsyncIterable<AgentMessage> {
     const agMetadata: MessageMetadata = { provider: 'google', model: `${this.model} (antigravity)` };
 
     if (!options?.callbackEnv) {
@@ -252,15 +226,11 @@ export class GeminiAgentService implements AgentService {
     let spawnError: Error | null = null;
 
     try {
-      const child = this.antigravitySpawnFn(
-        'antigravity',
-        ['chat', '--mode', 'agent', prompt],
-        {
-          detached: true,
-          stdio: 'ignore',
-          env: { ...process.env, ...options.callbackEnv },
-        }
-      );
+      const child = this.antigravitySpawnFn('antigravity', ['chat', '--mode', 'agent', prompt], {
+        detached: true,
+        stdio: 'ignore',
+        env: { ...process.env, ...options.callbackEnv },
+      });
       // Capture async spawn errors (ENOENT etc.) that fire on next tick.
       child.on('error', (err: Error) => {
         spawnError = err;
@@ -269,12 +239,18 @@ export class GeminiAgentService implements AgentService {
       // Wire AbortSignal to kill the detached process group
       const pid = child.pid;
       if (pid && options?.signal) {
-        options.signal.addEventListener('abort', () => {
-          try {
-            process.kill(-pid, 'SIGTERM');
-            console.log(`[gemini] Antigravity process group ${pid} killed via signal`);
-          } catch { /* already exited */ }
-        }, { once: true });
+        options.signal.addEventListener(
+          'abort',
+          () => {
+            try {
+              process.kill(-pid, 'SIGTERM');
+              console.log(`[gemini] Antigravity process group ${pid} killed via signal`);
+            } catch {
+              /* already exited */
+            }
+          },
+          { once: true },
+        );
       }
 
       child.unref();
@@ -308,8 +284,7 @@ export class GeminiAgentService implements AgentService {
     yield {
       type: 'text',
       catId: this.catId,
-      content:
-        '暹罗猫已在 Antigravity 中开始工作，结果将通过 MCP 回传到对话中。',
+      content: '暹罗猫已在 Antigravity 中开始工作，结果将通过 MCP 回传到对话中。',
       metadata: agMetadata,
       timestamp: Date.now(),
     };

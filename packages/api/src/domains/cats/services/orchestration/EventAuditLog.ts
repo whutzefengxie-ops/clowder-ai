@@ -15,10 +15,10 @@
  * - Review 批准
  */
 
+import { randomUUID } from 'node:crypto';
+import { existsSync } from 'node:fs';
 import { appendFile, mkdir, readdir, readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
-import { existsSync } from 'node:fs';
-import { randomUUID } from 'node:crypto';
 
 export interface AuditEvent {
   readonly id: string;
@@ -40,7 +40,7 @@ export class EventAuditLog {
   private initialized = false;
 
   constructor(options?: { auditDir?: string }) {
-    this.auditDir = options?.auditDir ?? process.env['AUDIT_LOG_DIR'] ?? DEFAULT_AUDIT_DIR;
+    this.auditDir = options?.auditDir ?? process.env.AUDIT_LOG_DIR ?? DEFAULT_AUDIT_DIR;
   }
 
   /**
@@ -58,7 +58,7 @@ export class EventAuditLog {
 
     const filename = this.getFilename(event.timestamp);
     const filepath = join(this.auditDir, filename);
-    const line = JSON.stringify(event) + '\n';
+    const line = `${JSON.stringify(event)}\n`;
 
     await appendFile(filepath, line, 'utf-8');
 

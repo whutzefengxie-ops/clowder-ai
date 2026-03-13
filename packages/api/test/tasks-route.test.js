@@ -4,8 +4,8 @@
  */
 
 import './helpers/setup-cat-registry.js';
-import { test, describe, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { beforeEach, describe, test } from 'node:test';
 import Fastify from 'fastify';
 
 function createMockSocketManager() {
@@ -25,9 +25,7 @@ describe('Tasks Routes', () => {
   let socketManager;
 
   beforeEach(async () => {
-    const { TaskStore } = await import(
-      '../dist/domains/cats/services/stores/ports/TaskStore.js'
-    );
+    const { TaskStore } = await import('../dist/domains/cats/services/stores/ports/TaskStore.js');
     taskStore = new TaskStore();
     socketManager = createMockSocketManager();
   });

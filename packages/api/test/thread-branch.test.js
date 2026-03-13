@@ -5,8 +5,8 @@
  * Edit semantics: messages up to fromMessageId are copied; last one gets editedContent.
  */
 
-import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
 import Fastify from 'fastify';
 import { MessageStore } from '../dist/domains/cats/services/stores/ports/MessageStore.js';
 import { threadBranchRoutes } from '../dist/routes/thread-branch.js';
@@ -15,8 +15,12 @@ function createMockSocketManager() {
   const events = [];
   return {
     broadcastAgentMessage() {},
-    broadcastToRoom(room, event, data) { events.push({ room, event, data }); },
-    getEvents() { return events; },
+    broadcastToRoom(room, event, data) {
+      events.push({ room, event, data });
+    },
+    getEvents() {
+      return events;
+    },
   };
 }
 
@@ -56,7 +60,11 @@ function createMockThreadStore() {
     getParticipants: (id) => threads[id]?.participants ?? [],
     updateTitle: () => {},
     updateLastActive: () => {},
-    delete: (id) => { const existed = !!threads[id]; delete threads[id]; return existed; },
+    delete: (id) => {
+      const existed = !!threads[id];
+      delete threads[id];
+      return existed;
+    },
     _threads: threads,
     _seedThread(id, data) {
       threads[id] = {
@@ -81,22 +89,46 @@ function seedThread(messageStore, threadStore) {
   });
 
   const msgs = [];
-  msgs.push(messageStore.append({
-    userId: 'user-1', catId: null, content: '你好',
-    mentions: ['opus'], timestamp: 1000, threadId: 'thread-orig',
-  }));
-  msgs.push(messageStore.append({
-    userId: 'user-1', catId: 'opus', content: '你好！有什么可以帮你？',
-    mentions: [], timestamp: 1001, threadId: 'thread-orig',
-  }));
-  msgs.push(messageStore.append({
-    userId: 'user-1', catId: null, content: '帮我写个登录页',
-    mentions: ['opus'], timestamp: 1002, threadId: 'thread-orig',
-  }));
-  msgs.push(messageStore.append({
-    userId: 'user-1', catId: 'opus', content: '好的，已创建登录页...',
-    mentions: [], timestamp: 1003, threadId: 'thread-orig',
-  }));
+  msgs.push(
+    messageStore.append({
+      userId: 'user-1',
+      catId: null,
+      content: '你好',
+      mentions: ['opus'],
+      timestamp: 1000,
+      threadId: 'thread-orig',
+    }),
+  );
+  msgs.push(
+    messageStore.append({
+      userId: 'user-1',
+      catId: 'opus',
+      content: '你好！有什么可以帮你？',
+      mentions: [],
+      timestamp: 1001,
+      threadId: 'thread-orig',
+    }),
+  );
+  msgs.push(
+    messageStore.append({
+      userId: 'user-1',
+      catId: null,
+      content: '帮我写个登录页',
+      mentions: ['opus'],
+      timestamp: 1002,
+      threadId: 'thread-orig',
+    }),
+  );
+  msgs.push(
+    messageStore.append({
+      userId: 'user-1',
+      catId: 'opus',
+      content: '好的，已创建登录页...',
+      mentions: [],
+      timestamp: 1003,
+      threadId: 'thread-orig',
+    }),
+  );
   return msgs;
 }
 
@@ -211,7 +243,7 @@ describe('POST /api/threads/:id/branch (ADR-008 D4 / S7)', () => {
 
     const body = res.json();
     const events = socketManager.getEvents();
-    const branchEvent = events.find(e => e.event === 'thread_branched');
+    const branchEvent = events.find((e) => e.event === 'thread_branched');
     assert.ok(branchEvent);
     assert.equal(branchEvent.data.sourceThreadId, 'thread-orig');
     assert.equal(branchEvent.data.newThreadId, body.threadId);
@@ -261,8 +293,12 @@ describe('POST /api/threads/:id/branch (ADR-008 D4 / S7)', () => {
 
     // Create a message in a different thread
     const otherMsg = messageStore.append({
-      userId: 'user-1', catId: null, content: 'other thread',
-      mentions: [], timestamp: 2000, threadId: 'other-thread',
+      userId: 'user-1',
+      catId: null,
+      content: 'other thread',
+      mentions: [],
+      timestamp: 2000,
+      threadId: 'other-thread',
     });
 
     threadStore._seedThread('other-thread', { title: 'Other' });
@@ -348,7 +384,9 @@ describe('POST /api/threads/:id/branch (ADR-008 D4 / S7)', () => {
     const msgs = seedThread(messageStore, threadStore);
 
     // Sabotage addParticipants to throw
-    threadStore.addParticipants = () => { throw new Error('Simulated addParticipants failure'); };
+    threadStore.addParticipants = () => {
+      throw new Error('Simulated addParticipants failure');
+    };
 
     const { app } = await setupApp(messageStore, threadStore);
 
@@ -363,7 +401,7 @@ describe('POST /api/threads/:id/branch (ADR-008 D4 / S7)', () => {
 
     // Verify branch thread was cleaned up
     const allThreads = threadStore.list();
-    const branchThreads = allThreads.filter(t => t.id !== 'thread-orig');
+    const branchThreads = allThreads.filter((t) => t.id !== 'thread-orig');
     assert.equal(branchThreads.length, 0, 'Branch thread should be cleaned up after addParticipants failure');
 
     await app.close();
@@ -396,7 +434,7 @@ describe('POST /api/threads/:id/branch (ADR-008 D4 / S7)', () => {
 
     // Verify the partial branch thread was cleaned up
     const allThreads = threadStore.list();
-    const branchThreads = allThreads.filter(t => t.id !== 'thread-orig');
+    const branchThreads = allThreads.filter((t) => t.id !== 'thread-orig');
     assert.equal(branchThreads.length, 0, 'Branch thread should be cleaned up');
 
     await app.close();
@@ -469,8 +507,12 @@ describe('POST /api/threads/:id/branch (ADR-008 D4 / S7)', () => {
       createdBy: 'user-1',
     });
     const msg = messageStore.append({
-      userId: 'user-1', catId: null, content: 'hi',
-      mentions: [], timestamp: 1000, threadId: 'thread-notitle',
+      userId: 'user-1',
+      catId: null,
+      content: 'hi',
+      mentions: [],
+      timestamp: 1000,
+      threadId: 'thread-notitle',
     });
 
     const { app } = await setupApp(messageStore, threadStore);
@@ -501,18 +543,32 @@ describe('POST /api/threads/:id/branch (ADR-008 D4 / S7)', () => {
 
     // User message (no origin)
     messageStore.append({
-      userId: 'user-1', catId: null, content: 'Hello',
-      mentions: ['opus'], timestamp: 1000, threadId: 'thread-origin-test',
+      userId: 'user-1',
+      catId: null,
+      content: 'Hello',
+      mentions: ['opus'],
+      timestamp: 1000,
+      threadId: 'thread-origin-test',
     });
     // Opus stream message (origin: 'stream' — should be hidden in play mode)
     messageStore.append({
-      userId: 'user-1', catId: 'opus', content: 'thinking...',
-      mentions: [], origin: 'stream', timestamp: 1001, threadId: 'thread-origin-test',
+      userId: 'user-1',
+      catId: 'opus',
+      content: 'thinking...',
+      mentions: [],
+      origin: 'stream',
+      timestamp: 1001,
+      threadId: 'thread-origin-test',
     });
     // Codex callback message (origin: 'callback' — should be visible)
     const m3 = messageStore.append({
-      userId: 'user-1', catId: 'codex', content: 'result',
-      mentions: [], origin: 'callback', timestamp: 1002, threadId: 'thread-origin-test',
+      userId: 'user-1',
+      catId: 'codex',
+      content: 'result',
+      mentions: [],
+      origin: 'callback',
+      timestamp: 1002,
+      threadId: 'thread-origin-test',
     });
 
     const { app } = await setupApp(messageStore, threadStore);
@@ -531,13 +587,13 @@ describe('POST /api/threads/:id/branch (ADR-008 D4 / S7)', () => {
     assert.equal(copied.length, 3, 'all 3 messages should be copied');
 
     // Verify origin is preserved
-    const copiedStream = copied.find(m => m.content === 'thinking...');
+    const copiedStream = copied.find((m) => m.content === 'thinking...');
     assert.equal(copiedStream.origin, 'stream', 'stream origin must be preserved in branch');
 
-    const copiedCallback = copied.find(m => m.content === 'result');
+    const copiedCallback = copied.find((m) => m.content === 'result');
     assert.equal(copiedCallback.origin, 'callback', 'callback origin must be preserved in branch');
 
-    const copiedUser = copied.find(m => m.content === 'Hello');
+    const copiedUser = copied.find((m) => m.content === 'Hello');
     assert.equal(copiedUser.origin, undefined, 'user message has no origin');
 
     await app.close();

@@ -50,26 +50,32 @@ export function ResolutionQueue({ projectId, resolutions, cards, onUpdate }: Res
     }
   }, [projectId, cardId, path, question, recommendation, onUpdate]);
 
-  const handleAnswer = useCallback(async (id: string) => {
-    const answer = answerText[id]?.trim();
-    if (!answer) return;
-    const res = await apiFetch(`/api/external-projects/${projectId}/resolutions/${id}/answer`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ answer }),
-    });
-    if (res.ok) {
-      setAnswerText((prev) => ({ ...prev, [id]: '' }));
-      onUpdate();
-    }
-  }, [projectId, answerText, onUpdate]);
+  const handleAnswer = useCallback(
+    async (id: string) => {
+      const answer = answerText[id]?.trim();
+      if (!answer) return;
+      const res = await apiFetch(`/api/external-projects/${projectId}/resolutions/${id}/answer`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ answer }),
+      });
+      if (res.ok) {
+        setAnswerText((prev) => ({ ...prev, [id]: '' }));
+        onUpdate();
+      }
+    },
+    [projectId, answerText, onUpdate],
+  );
 
-  const handleEscalate = useCallback(async (id: string) => {
-    const res = await apiFetch(`/api/external-projects/${projectId}/resolutions/${id}/escalate`, {
-      method: 'PATCH',
-    });
-    if (res.ok) onUpdate();
-  }, [projectId, onUpdate]);
+  const handleEscalate = useCallback(
+    async (id: string) => {
+      const res = await apiFetch(`/api/external-projects/${projectId}/resolutions/${id}/escalate`, {
+        method: 'PATCH',
+      });
+      if (res.ok) onUpdate();
+    },
+    [projectId, onUpdate],
+  );
 
   return (
     <div className="space-y-4">
@@ -94,7 +100,9 @@ export function ResolutionQueue({ projectId, resolutions, cards, onUpdate }: Res
           >
             <option value="">选择 Card...</option>
             {cards.map((c) => (
-              <option key={c.id} value={c.id}>{c.id.slice(0, 8)} — {c.goal.slice(0, 50)}</option>
+              <option key={c.id} value={c.id}>
+                {c.id.slice(0, 8)} — {c.goal.slice(0, 50)}
+              </option>
             ))}
           </select>
           <select
@@ -102,7 +110,11 @@ export function ResolutionQueue({ projectId, resolutions, cards, onUpdate }: Res
             onChange={(e) => setPath(e.target.value as NonNullPath)}
             className="w-full rounded border border-[#E7DAC7] bg-white px-2 py-1.5 text-xs text-[#2B2118]"
           >
-            {PATH_OPTIONS.map((p) => <option key={p} value={p}>{p}</option>)}
+            {PATH_OPTIONS.map((p) => (
+              <option key={p} value={p}>
+                {p}
+              </option>
+            ))}
           </select>
           <textarea
             value={question}
@@ -153,9 +165,7 @@ export function ResolutionQueue({ projectId, resolutions, cards, onUpdate }: Res
                 {item.recommendation && (
                   <div className="mb-1 text-[10px] text-[#9A866F]">建议: {item.recommendation}</div>
                 )}
-                {item.answer && (
-                  <div className="rounded bg-green-50 px-2 py-1 text-[#2B2118]">{item.answer}</div>
-                )}
+                {item.answer && <div className="rounded bg-green-50 px-2 py-1 text-[#2B2118]">{item.answer}</div>}
                 {item.status === 'open' && (
                   <div className="mt-2 flex gap-2">
                     <input

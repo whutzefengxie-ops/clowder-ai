@@ -39,12 +39,15 @@ export interface ConfigSnapshot {
     host: string;
     redis: 'connected' | 'memory';
   };
-  cats: Record<string, {
-    displayName: string;
-    provider: string;
-    model: string;
-    mcpSupport: boolean;
-  }>;
+  cats: Record<
+    string,
+    {
+      displayName: string;
+      provider: string;
+      model: string;
+      mcpSupport: boolean;
+    }
+  >;
   a2a: {
     enabled: boolean;
     maxDepth: number;

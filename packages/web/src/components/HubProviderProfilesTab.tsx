@@ -1,17 +1,12 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import React from 'react';
-import { apiFetch } from '@/utils/api-client';
 import { useChatStore } from '@/stores/chatStore';
-import { getProjectPaths, projectDisplayName } from './ThreadSidebar/thread-utils';
+import { apiFetch } from '@/utils/api-client';
 import { HubClaudeRescueSection } from './HubClaudeRescueSection';
 import { HubProviderProfileItem, type ProfileEditPayload } from './HubProviderProfileItem';
-import type {
-  ProfileMode,
-  ProfileTestResult,
-  ProviderProfilesResponse,
-} from './hub-provider-profiles.types';
+import type { ProfileMode, ProfileTestResult, ProviderProfilesResponse } from './hub-provider-profiles.types';
+import { getProjectPaths, projectDisplayName } from './ThreadSidebar/thread-utils';
 
 export function HubProviderProfilesTab() {
   const threads = useChatStore((s) => s.threads);
@@ -37,11 +32,11 @@ export function HubProviderProfilesTab() {
       if (forProject) query.set('projectPath', forProject);
       const res = await apiFetch(`/api/provider-profiles?${query.toString()}`);
       if (!res.ok) {
-        const body = await res.json().catch(() => ({})) as Record<string, unknown>;
+        const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
         setError((body.error as string) ?? '加载失败');
         return;
       }
-      const body = await res.json() as ProviderProfilesResponse;
+      const body = (await res.json()) as ProviderProfilesResponse;
       setData(body);
     } catch {
       setError('网络错误');
@@ -54,11 +49,14 @@ export function HubProviderProfilesTab() {
     fetchProfiles();
   }, [fetchProfiles]);
 
-  const switchProject = useCallback((nextPath: string | null) => {
-    setProjectPath(nextPath);
-    setLoading(true);
-    fetchProfiles(nextPath ?? undefined);
-  }, [fetchProfiles]);
+  const switchProject = useCallback(
+    (nextPath: string | null) => {
+      setProjectPath(nextPath);
+      setLoading(true);
+      fetchProfiles(nextPath ?? undefined);
+    },
+    [fetchProfiles],
+  );
 
   const callApi = useCallback(async (path: string, init: RequestInit) => {
     const res = await apiFetch(path, {
@@ -68,7 +66,7 @@ export function HubProviderProfilesTab() {
         ...(init.headers ?? {}),
       },
     });
-    const body = await res.json().catch(() => ({})) as Record<string, unknown>;
+    const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
     if (!res.ok) {
       throw new Error((body.error as string) ?? `请求失败 (${res.status})`);
     }
@@ -117,82 +115,94 @@ export function HubProviderProfilesTab() {
     }
   }, [callApi, createApiKey, createBaseUrl, createMode, createModelOverride, createName, projectPath, refresh]);
 
-  const activateProfile = useCallback(async (profileId: string) => {
-    setBusyId(profileId);
-    setError(null);
-    try {
-      await callApi(`/api/provider-profiles/${profileId}/activate`, {
-        method: 'POST',
-        body: JSON.stringify({
-          projectPath: projectPath ?? undefined,
-          provider: 'anthropic',
-        }),
-      });
-      await refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusyId(null);
-    }
-  }, [callApi, projectPath, refresh]);
+  const activateProfile = useCallback(
+    async (profileId: string) => {
+      setBusyId(profileId);
+      setError(null);
+      try {
+        await callApi(`/api/provider-profiles/${profileId}/activate`, {
+          method: 'POST',
+          body: JSON.stringify({
+            projectPath: projectPath ?? undefined,
+            provider: 'anthropic',
+          }),
+        });
+        await refresh();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setBusyId(null);
+      }
+    },
+    [callApi, projectPath, refresh],
+  );
 
-  const deleteProfile = useCallback(async (profileId: string) => {
-    setBusyId(profileId);
-    setError(null);
-    try {
-      await callApi(`/api/provider-profiles/${profileId}`, {
-        method: 'DELETE',
-        body: JSON.stringify({
-          projectPath: projectPath ?? undefined,
-          provider: 'anthropic',
-        }),
-      });
-      await refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusyId(null);
-    }
-  }, [callApi, projectPath, refresh]);
+  const deleteProfile = useCallback(
+    async (profileId: string) => {
+      setBusyId(profileId);
+      setError(null);
+      try {
+        await callApi(`/api/provider-profiles/${profileId}`, {
+          method: 'DELETE',
+          body: JSON.stringify({
+            projectPath: projectPath ?? undefined,
+            provider: 'anthropic',
+          }),
+        });
+        await refresh();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setBusyId(null);
+      }
+    },
+    [callApi, projectPath, refresh],
+  );
 
-  const saveProfile = useCallback(async (profileId: string, payload: ProfileEditPayload) => {
-    setBusyId(profileId);
-    setError(null);
-    try {
-      await callApi(`/api/provider-profiles/${profileId}`, {
-        method: 'PATCH',
-        body: JSON.stringify({
-          projectPath: projectPath ?? undefined,
-          provider: 'anthropic',
-          ...payload,
-        }),
-      });
-      await refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusyId(null);
-    }
-  }, [callApi, projectPath, refresh]);
+  const saveProfile = useCallback(
+    async (profileId: string, payload: ProfileEditPayload) => {
+      setBusyId(profileId);
+      setError(null);
+      try {
+        await callApi(`/api/provider-profiles/${profileId}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            projectPath: projectPath ?? undefined,
+            provider: 'anthropic',
+            ...payload,
+          }),
+        });
+        await refresh();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setBusyId(null);
+      }
+    },
+    [callApi, projectPath, refresh],
+  );
 
-  const testProfile = useCallback(async (profileId: string) => {
-    setBusyId(profileId);
-    setError(null);
-    try {
-      const body = await callApi(`/api/provider-profiles/${profileId}/test`, {
-        method: 'POST',
-        body: JSON.stringify({
-          projectPath: projectPath ?? undefined,
-          provider: 'anthropic',
-        }),
-      }) as unknown as ProfileTestResult;
-      setTestResultById((prev) => ({ ...prev, [profileId]: body }));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusyId(null);
-    }
-  }, [callApi, projectPath]);
+  const testProfile = useCallback(
+    async (profileId: string) => {
+      setBusyId(profileId);
+      setError(null);
+      try {
+        const body = (await callApi(`/api/provider-profiles/${profileId}/test`, {
+          method: 'POST',
+          body: JSON.stringify({
+            projectPath: projectPath ?? undefined,
+            provider: 'anthropic',
+          }),
+        })) as unknown as ProfileTestResult;
+        setTestResultById((prev) => ({ ...prev, [profileId]: body }));
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setBusyId(null);
+      }
+    },
+    [callApi, projectPath],
+  );
 
   const allPaths = useMemo(() => {
     const paths = new Set<string>();
@@ -206,9 +216,7 @@ export function HubProviderProfilesTab() {
 
   return (
     <div className="space-y-4">
-      {error && (
-        <p className="text-sm text-red-500 bg-red-50 rounded-lg px-3 py-2">{error}</p>
-      )}
+      {error && <p className="text-sm text-red-500 bg-red-50 rounded-lg px-3 py-2">{error}</p>}
 
       <div className="rounded-lg border border-gray-200 bg-gray-50/70 p-3">
         <div className="flex items-center justify-between gap-3 mb-2">

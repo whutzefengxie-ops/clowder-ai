@@ -117,6 +117,8 @@ pnpm --filter @cat-cafe/api run test:public
 pnpm --filter @cat-cafe/api test
 ```
 
+For the full configuration matrix, optional integrations, and design tooling requirements, see [SETUP.md](SETUP.md).
+
 ## Project Structure
 
 ```

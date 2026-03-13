@@ -7,24 +7,20 @@
  * P2:   multipart 路径需要提取 idempotencyKey
  */
 
-import { test, describe, mock } from 'node:test';
 import assert from 'node:assert/strict';
+import { describe, mock, test } from 'node:test';
 
 // --- P1-1: InvocationTracker.start() 不应在 duplicate 检查前调用 ---
 
 describe('P1-1: duplicate request must not abort active invocation', () => {
   test('isDeleting() returns false for normal threads', async () => {
-    const { InvocationTracker } = await import(
-      '../dist/domains/cats/services/agents/invocation/InvocationTracker.js'
-    );
+    const { InvocationTracker } = await import('../dist/domains/cats/services/agents/invocation/InvocationTracker.js');
     const tracker = new InvocationTracker();
     assert.equal(tracker.isDeleting('thread-1'), false);
   });
 
   test('isDeleting() returns true during delete guard', async () => {
-    const { InvocationTracker } = await import(
-      '../dist/domains/cats/services/agents/invocation/InvocationTracker.js'
-    );
+    const { InvocationTracker } = await import('../dist/domains/cats/services/agents/invocation/InvocationTracker.js');
     const tracker = new InvocationTracker();
     const guard = tracker.guardDelete('thread-1');
     assert.equal(guard.acquired, true);
@@ -34,9 +30,7 @@ describe('P1-1: duplicate request must not abort active invocation', () => {
   });
 
   test('start() aborts existing invocation but isDeleting() does not', async () => {
-    const { InvocationTracker } = await import(
-      '../dist/domains/cats/services/agents/invocation/InvocationTracker.js'
-    );
+    const { InvocationTracker } = await import('../dist/domains/cats/services/agents/invocation/InvocationTracker.js');
     const tracker = new InvocationTracker();
 
     // Start an active invocation
@@ -88,7 +82,14 @@ describe('P1-2: resolveTargetsAndIntent persist writes participants', () => {
     const participants = {};
     return {
       create: () => ({ id: 'mock' }),
-      get: (id) => ({ id, title: null, createdBy: 'system', participants: participants[id] ?? [], lastActiveAt: Date.now(), createdAt: Date.now() }),
+      get: (id) => ({
+        id,
+        title: null,
+        createdBy: 'system',
+        participants: participants[id] ?? [],
+        lastActiveAt: Date.now(),
+        createdAt: Date.now(),
+      }),
       list: () => [],
       listByProject: () => [],
       addParticipants: (threadId, catIds) => {
@@ -106,21 +107,27 @@ describe('P1-2: resolveTargetsAndIntent persist writes participants', () => {
   }
 
   function createMockService() {
-    return { invoke: mock.fn(async function* () { yield { type: 'done', catId: 'opus', timestamp: Date.now() }; }) };
+    return {
+      invoke: mock.fn(async function* () {
+        yield { type: 'done', catId: 'opus', timestamp: Date.now() };
+      }),
+    };
   }
 
   test('persist: false (default) does NOT write participants', async () => {
     const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
     const threadStore = createMockThreadStore();
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: createMockService(),
-      codexService: createMockService(),
-      geminiService: createMockService(),
-      registry: createMockRegistry(),
-      messageStore: createMockMessageStore(),
-      threadStore,
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: createMockService(),
+        codexService: createMockService(),
+        geminiService: createMockService(),
+        registry: createMockRegistry(),
+        messageStore: createMockMessageStore(),
+        threadStore,
+      }),
+    );
 
     await router.resolveTargetsAndIntent('@codex 你好', 'thread-1');
     assert.deepEqual(threadStore._participants['thread-1'] ?? [], []);
@@ -130,18 +137,18 @@ describe('P1-2: resolveTargetsAndIntent persist writes participants', () => {
     const { AgentRouter } = await import('../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
     const threadStore = createMockThreadStore();
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: createMockService(),
-      codexService: createMockService(),
-      geminiService: createMockService(),
-      registry: createMockRegistry(),
-      messageStore: createMockMessageStore(),
-      threadStore,
-    }));
-
-    const { targetCats } = await router.resolveTargetsAndIntent(
-      '@codex 你好', 'thread-1', { persist: true },
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: createMockService(),
+        codexService: createMockService(),
+        geminiService: createMockService(),
+        registry: createMockRegistry(),
+        messageStore: createMockMessageStore(),
+        threadStore,
+      }),
     );
+
+    const { targetCats } = await router.resolveTargetsAndIntent('@codex 你好', 'thread-1', { persist: true });
     assert.ok(targetCats.includes('codex'));
     assert.ok(threadStore._participants['thread-1']?.includes('codex'));
   });
@@ -191,9 +198,7 @@ describe('Integration: dedup does not trigger tracker abort', () => {
     const { InvocationRecordStore } = await import(
       '../dist/domains/cats/services/stores/ports/InvocationRecordStore.js'
     );
-    const { InvocationTracker } = await import(
-      '../dist/domains/cats/services/agents/invocation/InvocationTracker.js'
-    );
+    const { InvocationTracker } = await import('../dist/domains/cats/services/agents/invocation/InvocationTracker.js');
 
     const store = new InvocationRecordStore();
     const tracker = new InvocationTracker();
@@ -235,8 +240,12 @@ import { migrateRouterOpts } from './helpers/agent-registry-helpers.js';
 describe('R2: delete-guard race via POST /api/messages route', () => {
   test('returns 409 and cancels InvocationRecord when start() returns aborted controller', async () => {
     const { MessageStore } = await import('../dist/domains/cats/services/stores/ports/MessageStore.js');
-    const { InvocationRegistry } = await import('../dist/domains/cats/services/agents/invocation/InvocationRegistry.js');
-    const { InvocationRecordStore } = await import('../dist/domains/cats/services/stores/ports/InvocationRecordStore.js');
+    const { InvocationRegistry } = await import(
+      '../dist/domains/cats/services/agents/invocation/InvocationRegistry.js'
+    );
+    const { InvocationRecordStore } = await import(
+      '../dist/domains/cats/services/stores/ports/InvocationRecordStore.js'
+    );
     const { messagesRoutes } = await import('../dist/routes/messages.js');
 
     const threadId = 'thread-race-r2';
@@ -270,19 +279,23 @@ describe('R2: delete-guard race via POST /api/messages route', () => {
       },
       async updateTitle() {},
       async updateLastActive() {},
-      async getParticipants() { return []; },
+      async getParticipants() {
+        return [];
+      },
       async addParticipants() {},
     };
 
     // Mock AgentRouter: resolveTargetsAndIntent for routing, routeExecution unused here
     const mockRouter = {
-      async resolveTargetsAndIntent(msg) {
+      async resolveTargetsAndIntent(_msg) {
         return {
           targetCats: ['opus'],
           intent: { intent: 'execute', explicit: false, promptTags: [] },
         };
       },
-      async *routeExecution() { /* never reached in this test */ },
+      async *routeExecution() {
+        /* never reached in this test */
+      },
       async ackCollectedCursors() {},
     };
 

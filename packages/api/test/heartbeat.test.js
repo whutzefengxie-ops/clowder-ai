@@ -3,8 +3,8 @@
  * Verifies that heartbeat is emitted during long-running invocations
  */
 
-import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { afterEach, beforeEach, describe, it } from 'node:test';
 
 describe('Heartbeat emission', () => {
   let originalSetInterval;
@@ -38,125 +38,79 @@ describe('Heartbeat emission', () => {
   it('messages.ts sets up 30s heartbeat interval', async () => {
     // Read the source to verify the constant
     const fs = await import('node:fs/promises');
-    const source = await fs.readFile(
-      new URL('../src/routes/messages.ts', import.meta.url),
-      'utf8'
-    );
+    const source = await fs.readFile(new URL('../src/routes/messages.ts', import.meta.url), 'utf8');
 
     // Verify HEARTBEAT_INTERVAL_MS is defined as 30000
     assert.ok(
-      source.includes('HEARTBEAT_INTERVAL_MS = 30_000') ||
-      source.includes('HEARTBEAT_INTERVAL_MS = 30000'),
-      'HEARTBEAT_INTERVAL_MS should be 30 seconds'
+      source.includes('HEARTBEAT_INTERVAL_MS = 30_000') || source.includes('HEARTBEAT_INTERVAL_MS = 30000'),
+      'HEARTBEAT_INTERVAL_MS should be 30 seconds',
     );
 
     // Verify broadcastToRoom is called with 'heartbeat' event
-    assert.ok(
-      source.includes("'heartbeat'"),
-      'Should broadcast heartbeat event'
-    );
+    assert.ok(source.includes("'heartbeat'"), 'Should broadcast heartbeat event');
   });
 
   it('heartbeat interval is cleared in finally block', async () => {
     const fs = await import('node:fs/promises');
-    const source = await fs.readFile(
-      new URL('../src/routes/messages.ts', import.meta.url),
-      'utf8'
-    );
+    const source = await fs.readFile(new URL('../src/routes/messages.ts', import.meta.url), 'utf8');
 
     // Verify clearInterval is called in finally
-    assert.ok(
-      source.includes('clearInterval(heartbeatInterval)'),
-      'Should clear heartbeat interval in finally block'
-    );
+    assert.ok(source.includes('clearInterval(heartbeatInterval)'), 'Should clear heartbeat interval in finally block');
 
     // Verify finally block exists
-    assert.ok(
-      source.includes('} finally {'),
-      'Should have finally block'
-    );
+    assert.ok(source.includes('} finally {'), 'Should have finally block');
   });
 });
 
 describe('SocketManager heartbeat listener', () => {
   it('useSocket.ts includes onHeartbeat callback type', async () => {
     const fs = await import('node:fs/promises');
-    const source = await fs.readFile(
-      new URL('../../web/src/hooks/useSocket.ts', import.meta.url),
-      'utf8'
-    );
+    const source = await fs.readFile(new URL('../../web/src/hooks/useSocket.ts', import.meta.url), 'utf8');
 
-    assert.ok(
-      source.includes('onHeartbeat'),
-      'Should have onHeartbeat callback'
-    );
+    assert.ok(source.includes('onHeartbeat'), 'Should have onHeartbeat callback');
 
-    assert.ok(
-      source.includes("socket.on('heartbeat'"),
-      'Should listen for heartbeat event'
-    );
+    assert.ok(source.includes("socket.on('heartbeat'"), 'Should listen for heartbeat event');
   });
 });
 
 describe('Frontend timeout logic (source verification)', () => {
   it('useAgentMessages.ts has 5-minute timeout constant', async () => {
     const fs = await import('node:fs/promises');
-    const source = await fs.readFile(
-      new URL('../../web/src/hooks/useAgentMessages.ts', import.meta.url),
-      'utf8'
-    );
+    const source = await fs.readFile(new URL('../../web/src/hooks/useAgentMessages.ts', import.meta.url), 'utf8');
 
     // 5 * 60 * 1000 = 300000
-    assert.ok(
-      source.includes('DONE_TIMEOUT_MS = 5 * 60 * 1000'),
-      'Should have 5-minute timeout constant'
-    );
+    assert.ok(source.includes('DONE_TIMEOUT_MS = 5 * 60 * 1000'), 'Should have 5-minute timeout constant');
   });
 
   it('useAgentMessages.ts resets timeout on each message', async () => {
     const fs = await import('node:fs/promises');
-    const source = await fs.readFile(
-      new URL('../../web/src/hooks/useAgentMessages.ts', import.meta.url),
-      'utf8'
-    );
+    const source = await fs.readFile(new URL('../../web/src/hooks/useAgentMessages.ts', import.meta.url), 'utf8');
 
     // Should call resetTimeout() at the start of handleAgentMessage
-    assert.ok(
-      source.includes('resetTimeout()'),
-      'Should reset timeout on message'
-    );
+    assert.ok(source.includes('resetTimeout()'), 'Should reset timeout on message');
   });
 
   it('useAgentMessages.ts clears timeout on done with isFinal', async () => {
     const fs = await import('node:fs/promises');
-    const source = await fs.readFile(
-      new URL('../../web/src/hooks/useAgentMessages.ts', import.meta.url),
-      'utf8'
-    );
+    const source = await fs.readFile(new URL('../../web/src/hooks/useAgentMessages.ts', import.meta.url), 'utf8');
 
     // Should call clearDoneTimeout() when msg.isFinal
     assert.ok(
       source.includes('if (msg.isFinal)') && source.includes('clearDoneTimeout()'),
-      'Should clear timeout on isFinal'
+      'Should clear timeout on isFinal',
     );
   });
 
   it('useAgentMessages.ts shows system_info on timeout', async () => {
     const fs = await import('node:fs/promises');
-    const source = await fs.readFile(
-      new URL('../../web/src/hooks/useAgentMessages.ts', import.meta.url),
-      'utf8'
-    );
+    const source = await fs.readFile(new URL('../../web/src/hooks/useAgentMessages.ts', import.meta.url), 'utf8');
 
     // Should add a system message with timeout content
-    assert.ok(
-      source.includes('Response timed out'),
-      'Should show timeout message'
-    );
+    assert.ok(source.includes('Response timed out'), 'Should show timeout message');
 
     assert.ok(
       source.includes("type: 'system'") && source.includes("variant: 'info'"),
-      'Should be a system info message'
+      'Should be a system info message',
     );
   });
 });

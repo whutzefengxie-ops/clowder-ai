@@ -104,7 +104,7 @@ export class RedisSessionChainStore implements ISessionChainStore {
 
   async get(id: string): Promise<SessionRecord | null> {
     const data = await this.redis.hgetall(SessionChainKeys.detail(id));
-    if (!data || !data['id']) return null;
+    if (!data || !data.id) return null;
     return this.hydrate(data);
   }
 
@@ -131,7 +131,7 @@ export class RedisSessionChainStore implements ISessionChainStore {
     for (const [err, data] of results) {
       if (err || !data) continue;
       const d = data as Record<string, string>;
-      if (d['id']) records.push(this.hydrate(d));
+      if (d.id) records.push(this.hydrate(d));
     }
     return records.sort((a, b) => a.seq - b.seq);
   }
@@ -162,7 +162,7 @@ export class RedisSessionChainStore implements ISessionChainStore {
     for (const [err, data] of results) {
       if (err || !data) continue;
       const d = data as Record<string, string>;
-      if (d['id']) records.push(this.hydrate(d));
+      if (d.id) records.push(this.hydrate(d));
     }
     return records.sort((a, b) => {
       if (a.catId !== b.catId) return a.catId.localeCompare(b.catId);
@@ -235,39 +235,34 @@ export class RedisSessionChainStore implements ISessionChainStore {
     const detailKey = SessionChainKeys.detail(id);
     // Lua: atomic exists-check + increment in one round-trip.
     // Returns -1 if key doesn't exist, otherwise the new compressionCount.
-    const result = await this.redis.eval(
-      INCR_COMPRESSION_LUA,
-      1,
-      detailKey,
-      String(Date.now()),
-    );
+    const result = await this.redis.eval(INCR_COMPRESSION_LUA, 1, detailKey, String(Date.now()));
     const code = result as number;
     return code < 0 ? null : code;
   }
 
   private hydrate(data: Record<string, string>): SessionRecord {
-    const contextHealth = safeParseJson<ContextHealth>(data['contextHealth']);
-    const lastUsage = safeParseJson<SessionUsageSnapshot>(data['lastUsage']);
-    const sealReason = data['sealReason'] as SessionRecord['sealReason'] | undefined;
-    const sealedAt = data['sealedAt'] ? parseInt(data['sealedAt'], 10) : undefined;
-    const compressionCount = data['compressionCount'] ? parseInt(data['compressionCount'], 10) : undefined;
+    const contextHealth = safeParseJson<ContextHealth>(data.contextHealth);
+    const lastUsage = safeParseJson<SessionUsageSnapshot>(data.lastUsage);
+    const sealReason = data.sealReason as SessionRecord['sealReason'] | undefined;
+    const sealedAt = data.sealedAt ? parseInt(data.sealedAt, 10) : undefined;
+    const compressionCount = data.compressionCount ? parseInt(data.compressionCount, 10) : undefined;
 
     return {
-      id: data['id']!,
-      cliSessionId: data['cliSessionId']!,
-      threadId: data['threadId']!,
-      catId: data['catId'] as CatId,
-      userId: data['userId']!,
-      seq: parseInt(data['seq']!, 10),
-      status: (data['status'] as SessionStatus) ?? 'active',
+      id: data.id!,
+      cliSessionId: data.cliSessionId!,
+      threadId: data.threadId!,
+      catId: data.catId as CatId,
+      userId: data.userId!,
+      seq: parseInt(data.seq!, 10),
+      status: (data.status as SessionStatus) ?? 'active',
       ...(contextHealth ? { contextHealth } : {}),
       ...(lastUsage ? { lastUsage } : {}),
-      messageCount: parseInt(data['messageCount'] ?? '0', 10),
+      messageCount: parseInt(data.messageCount ?? '0', 10),
       ...(sealReason ? { sealReason } : {}),
       ...(sealedAt ? { sealedAt } : {}),
       ...(compressionCount !== undefined ? { compressionCount } : {}),
-      createdAt: parseInt(data['createdAt']!, 10),
-      updatedAt: parseInt(data['updatedAt']!, 10),
+      createdAt: parseInt(data.createdAt!, 10),
+      updatedAt: parseInt(data.updatedAt!, 10),
     };
   }
 

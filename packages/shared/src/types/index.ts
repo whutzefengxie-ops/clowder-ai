@@ -132,6 +132,29 @@ export type {
   CreateExternalProjectInput,
   ExternalProject,
 } from './external-project.js';
+// Game engine types (F101)
+export type {
+  ActionDefinition,
+  ActorType,
+  EventScope,
+  GameAction,
+  GameConfig,
+  GameDefinition,
+  GameEvent,
+  GameRuntime,
+  GameView,
+  PhaseDefinition,
+  RoleDefinition,
+  Seat,
+  SeatId,
+  SeatView,
+  WinCondition,
+} from './game.js';
+export {
+  isGameEvent,
+  isSeatId,
+  isValidScope,
+} from './game.js';
 // ID types
 export type {
   CatId,
@@ -205,29 +228,6 @@ export {
   createCatMessage,
   createUserMessage,
 } from './message.js';
-// Game engine types (F101)
-export type {
-  SeatId,
-  ActorType,
-  EventScope,
-  Seat,
-  GameDefinition,
-  RoleDefinition,
-  PhaseDefinition,
-  ActionDefinition,
-  WinCondition,
-  GameRuntime,
-  GameEvent,
-  GameAction,
-  GameConfig,
-  GameView,
-  SeatView,
-} from './game.js';
-export {
-  isSeatId,
-  isValidScope,
-  isGameEvent,
-} from './game.js';
 // Multi-mention types (F086 Cat Orchestration)
 export type {
   MultiMentionRequest,

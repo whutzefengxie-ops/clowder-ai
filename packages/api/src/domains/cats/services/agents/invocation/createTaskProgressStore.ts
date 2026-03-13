@@ -12,4 +12,3 @@ export function createTaskProgressStore(
   if (!redis) return new MemoryTaskProgressStore();
   return new RedisTaskProgressStore(redis, options?.defaultTtlSeconds ?? DEFAULT_TTL_SECONDS);
 }
-

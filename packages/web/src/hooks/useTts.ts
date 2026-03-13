@@ -9,7 +9,7 @@
  * broke cross-message playback mutex when each ChatMessage had its own hook.
  */
 
-import { useSyncExternalStore, useCallback } from 'react';
+import { useCallback, useSyncExternalStore } from 'react';
 import { apiFetch } from '@/utils/api-client';
 
 export type TtsState = 'idle' | 'loading' | 'playing' | 'error';
@@ -35,7 +35,9 @@ function emit(next: TtsStore): void {
 
 function subscribe(cb: () => void): () => void {
   listeners.add(cb);
-  return () => { listeners.delete(cb); };
+  return () => {
+    listeners.delete(cb);
+  };
 }
 
 /** Per-message blob URL cache with LRU eviction + revoke */
@@ -130,16 +132,18 @@ function synthesize(messageId: string, text: string, catId?: string): void {
       // Check if this request was superseded by another
       if (store.activeMessageId !== messageId) return;
       // Fetch audio via apiFetch (carries auth header) → blob URL
-      return apiFetch(data.audioUrl).then((audioRes) => {
-        if (!audioRes.ok) throw new Error(`TTS audio ${audioRes.status}`);
-        if (store.activeMessageId !== messageId) return;
-        return audioRes.blob();
-      }).then((blob) => {
-        if (!blob || store.activeMessageId !== messageId) return;
-        const blobUrl = URL.createObjectURL(blob);
-        cacheBlobUrl(messageId, blobUrl);
-        playAudio(blobUrl, messageId);
-      });
+      return apiFetch(data.audioUrl)
+        .then((audioRes) => {
+          if (!audioRes.ok) throw new Error(`TTS audio ${audioRes.status}`);
+          if (store.activeMessageId !== messageId) return;
+          return audioRes.blob();
+        })
+        .then((blob) => {
+          if (!blob || store.activeMessageId !== messageId) return;
+          const blobUrl = URL.createObjectURL(blob);
+          cacheBlobUrl(messageId, blobUrl);
+          playAudio(blobUrl, messageId);
+        });
     })
     .catch((err) => {
       if (err instanceof DOMException && err.name === 'AbortError') return;

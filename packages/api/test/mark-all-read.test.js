@@ -2,8 +2,8 @@
  * F072: POST /api/threads/read/mark-all endpoint tests
  */
 
-import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { afterEach, beforeEach, describe, it } from 'node:test';
 import Fastify from 'fastify';
 
 describe('POST /api/threads/read/mark-all', () => {
@@ -13,12 +13,8 @@ describe('POST /api/threads/read/mark-all', () => {
   let readStateStore;
 
   beforeEach(async () => {
-    const { ThreadStore } = await import(
-      '../dist/domains/cats/services/stores/ports/ThreadStore.js'
-    );
-    const { MessageStore } = await import(
-      '../dist/domains/cats/services/stores/ports/MessageStore.js'
-    );
+    const { ThreadStore } = await import('../dist/domains/cats/services/stores/ports/ThreadStore.js');
+    const { MessageStore } = await import('../dist/domains/cats/services/stores/ports/MessageStore.js');
     const { threadsRoutes } = await import('../dist/routes/threads.js');
 
     threadStore = new ThreadStore();
@@ -68,12 +64,20 @@ describe('POST /api/threads/read/mark-all', () => {
     // Add messages to each thread
     for (const t of threads) {
       messageStore.append({
-        userId: 'alice', catId: 'opus', content: `msg1 in ${t.id}`,
-        mentions: [], timestamp: 1000, threadId: t.id,
+        userId: 'alice',
+        catId: 'opus',
+        content: `msg1 in ${t.id}`,
+        mentions: [],
+        timestamp: 1000,
+        threadId: t.id,
       });
       messageStore.append({
-        userId: 'alice', catId: 'opus', content: `msg2 in ${t.id}`,
-        mentions: [], timestamp: 2000, threadId: t.id,
+        userId: 'alice',
+        catId: 'opus',
+        content: `msg2 in ${t.id}`,
+        mentions: [],
+        timestamp: 2000,
+        threadId: t.id,
       });
     }
 
@@ -91,8 +95,12 @@ describe('POST /api/threads/read/mark-all', () => {
   it('is idempotent — second call advances 0', async () => {
     const t = threadStore.create('alice', 'Thread X');
     messageStore.append({
-      userId: 'alice', catId: 'opus', content: 'hello',
-      mentions: [], timestamp: 1000, threadId: t.id,
+      userId: 'alice',
+      catId: 'opus',
+      content: 'hello',
+      mentions: [],
+      timestamp: 1000,
+      threadId: t.id,
     });
 
     // First call
@@ -118,9 +126,7 @@ describe('POST /api/threads/read/mark-all', () => {
   });
 
   it('returns 501 when readStateStore is not available', async () => {
-    const { ThreadStore } = await import(
-      '../dist/domains/cats/services/stores/ports/ThreadStore.js'
-    );
+    const { ThreadStore } = await import('../dist/domains/cats/services/stores/ports/ThreadStore.js');
     const { threadsRoutes } = await import('../dist/routes/threads.js');
 
     const noReadApp = Fastify();

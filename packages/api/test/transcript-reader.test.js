@@ -5,11 +5,11 @@
  * Uses TranscriptWriter to create test fixtures, then reads back.
  */
 
-import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { afterEach, beforeEach, describe, test } from 'node:test';
 
 describe('TranscriptReader', () => {
   let tmpDir;
@@ -23,12 +23,8 @@ describe('TranscriptReader', () => {
   });
 
   async function loadModules() {
-    const { TranscriptWriter } = await import(
-      '../dist/domains/cats/services/session/TranscriptWriter.js'
-    );
-    const { TranscriptReader } = await import(
-      '../dist/domains/cats/services/session/TranscriptReader.js'
-    );
+    const { TranscriptWriter } = await import('../dist/domains/cats/services/session/TranscriptWriter.js');
+    const { TranscriptReader } = await import('../dist/domains/cats/services/session/TranscriptReader.js');
     return { TranscriptWriter, TranscriptReader };
   }
 

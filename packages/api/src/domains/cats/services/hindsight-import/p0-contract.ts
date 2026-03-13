@@ -78,7 +78,7 @@ export function slugifyHeading(heading: string): string {
   return heading
     .toLowerCase()
     .trim()
-    .replace(/[`~!@#$%^&*()+={}\[\]|\\:;"'<>,.?/]/g, ' ')
+    .replace(/[`~!@#$%^&*()+={}[\]|\\:;"'<>,.?/]/g, ' ')
     .replace(/\s+/g, '-')
     .replace(/-+/g, '-')
     .replace(/^-|-$/g, '');

@@ -4,10 +4,9 @@
  *
  * Covers the R2 P1-2 fix: command path ignores split target thread.
  */
-import React, { useRef, useEffect } from 'react';
+import React, { act, useEffect, useRef } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { act } from 'react';
-import { describe, it, expect, vi, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // ── Capture apiFetch calls ──
 const mockApiFetch = vi.fn();
@@ -98,7 +97,9 @@ describe('processCommand overrideThreadId (P1-2 R2)', () => {
   });
 
   afterEach(() => {
-    act(() => { root.unmount(); });
+    act(() => {
+      root.unmount();
+    });
     container.remove();
   });
 
@@ -113,15 +114,20 @@ describe('processCommand overrideThreadId (P1-2 R2)', () => {
         React.createElement(CommandRunner, {
           input: '/remember mykey myvalue',
           overrideThreadId: OVERRIDE_THREAD,
-          onDone: (r: boolean) => { result = r; },
+          onDone: (r: boolean) => {
+            result = r;
+          },
         }),
       );
     });
 
     expect(result).toBe(true);
-    expect(mockApiFetch).toHaveBeenCalledWith('/api/memory', expect.objectContaining({
-      method: 'POST',
-    }));
+    expect(mockApiFetch).toHaveBeenCalledWith(
+      '/api/memory',
+      expect.objectContaining({
+        method: 'POST',
+      }),
+    );
 
     // Parse the body to verify threadId
     const callArgs = mockApiFetch.mock.calls[0];
@@ -141,7 +147,9 @@ describe('processCommand overrideThreadId (P1-2 R2)', () => {
       root.render(
         React.createElement(CommandRunner, {
           input: '/remember foo bar',
-          onDone: (r: boolean) => { result = r; },
+          onDone: (r: boolean) => {
+            result = r;
+          },
         }),
       );
     });

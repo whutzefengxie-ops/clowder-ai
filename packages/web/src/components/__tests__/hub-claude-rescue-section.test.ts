@@ -1,6 +1,5 @@
-import React from 'react';
+import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { act } from 'react';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useToastStore } from '@/stores/toastStore';
 
@@ -55,22 +54,24 @@ describe('HubClaudeRescueSection', () => {
   });
 
   it('renders scanned broken sessions as checklist items', async () => {
-    mockApiFetch.mockResolvedValueOnce(jsonResponse({
-      sessions: [
-        {
-          sessionId: 'broken-2',
-          transcriptPath: '/tmp/broken-2.jsonl',
-          removableThinkingTurns: 8,
-          detectedBy: 'api_error_entry',
-        },
-        {
-          sessionId: 'broken-1',
-          transcriptPath: '/tmp/broken-1.jsonl',
-          removableThinkingTurns: 12,
-          detectedBy: 'api_error_entry',
-        },
-      ],
-    }));
+    mockApiFetch.mockResolvedValueOnce(
+      jsonResponse({
+        sessions: [
+          {
+            sessionId: 'broken-2',
+            transcriptPath: '/tmp/broken-2.jsonl',
+            removableThinkingTurns: 8,
+            detectedBy: 'api_error_entry',
+          },
+          {
+            sessionId: 'broken-1',
+            transcriptPath: '/tmp/broken-1.jsonl',
+            removableThinkingTurns: 12,
+            detectedBy: 'api_error_entry',
+          },
+        ],
+      }),
+    );
 
     await act(async () => {
       root.render(React.createElement(HubClaudeRescueSection));
@@ -87,8 +88,9 @@ describe('HubClaudeRescueSection', () => {
     expect(container.textContent).toContain('/tmp/broken-2.jsonl');
     expect(container.textContent).toContain('一键救活 2 只布偶猫');
 
-    const checkedBoxes = Array.from(container.querySelectorAll('input[type="checkbox"]'))
-      .filter((node) => (node as HTMLInputElement).checked);
+    const checkedBoxes = Array.from(container.querySelectorAll('input[type="checkbox"]')).filter(
+      (node) => (node as HTMLInputElement).checked,
+    );
     expect(checkedBoxes).toHaveLength(2);
   });
 
@@ -106,41 +108,45 @@ describe('HubClaudeRescueSection', () => {
 
   it('rescues selected sessions, refreshes scan, and shows success toast', async () => {
     mockApiFetch
-      .mockResolvedValueOnce(jsonResponse({
-        sessions: [
-          {
-            sessionId: 'broken-1',
-            transcriptPath: '/tmp/broken-1.jsonl',
-            removableThinkingTurns: 12,
-            detectedBy: 'api_error_entry',
-          },
-          {
-            sessionId: 'broken-2',
-            transcriptPath: '/tmp/broken-2.jsonl',
-            removableThinkingTurns: 8,
-            detectedBy: 'api_error_entry',
-          },
-        ],
-      }))
-      .mockResolvedValueOnce(jsonResponse({
-        status: 'ok',
-        rescuedCount: 2,
-        skippedCount: 0,
-        results: [
-          {
-            sessionId: 'broken-1',
-            status: 'repaired',
-            removedTurns: 12,
-            backupPath: '/tmp/backups/broken-1.jsonl',
-          },
-          {
-            sessionId: 'broken-2',
-            status: 'repaired',
-            removedTurns: 8,
-            backupPath: '/tmp/backups/broken-2.jsonl',
-          },
-        ],
-      }))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          sessions: [
+            {
+              sessionId: 'broken-1',
+              transcriptPath: '/tmp/broken-1.jsonl',
+              removableThinkingTurns: 12,
+              detectedBy: 'api_error_entry',
+            },
+            {
+              sessionId: 'broken-2',
+              transcriptPath: '/tmp/broken-2.jsonl',
+              removableThinkingTurns: 8,
+              detectedBy: 'api_error_entry',
+            },
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          status: 'ok',
+          rescuedCount: 2,
+          skippedCount: 0,
+          results: [
+            {
+              sessionId: 'broken-1',
+              status: 'repaired',
+              removedTurns: 12,
+              backupPath: '/tmp/backups/broken-1.jsonl',
+            },
+            {
+              sessionId: 'broken-2',
+              status: 'repaired',
+              removedTurns: 8,
+              backupPath: '/tmp/backups/broken-2.jsonl',
+            },
+          ],
+        }),
+      )
       .mockResolvedValueOnce(jsonResponse({ sessions: [] }));
 
     await act(async () => {
@@ -148,8 +154,8 @@ describe('HubClaudeRescueSection', () => {
     });
     await flushEffects();
 
-    const rescueButton = Array.from(container.querySelectorAll('button')).find(
-      (node) => node.textContent?.includes('一键救活 2 只布偶猫'),
+    const rescueButton = Array.from(container.querySelectorAll('button')).find((node) =>
+      node.textContent?.includes('一键救活 2 只布偶猫'),
     ) as HTMLButtonElement | undefined;
     expect(rescueButton).toBeDefined();
 
@@ -176,8 +182,6 @@ describe('HubClaudeRescueSection', () => {
     expect(container.textContent).toContain('暂未发现坏掉的布偶猫 session');
 
     const toasts = useToastStore.getState().toasts;
-    expect(
-      toasts.some((toast) => toast.type === 'success' && toast.title === '布偶猫已救活'),
-    ).toBe(true);
+    expect(toasts.some((toast) => toast.type === 'success' && toast.title === '布偶猫已救活')).toBe(true);
   });
 });

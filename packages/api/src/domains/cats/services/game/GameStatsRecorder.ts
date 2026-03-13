@@ -34,7 +34,7 @@ export class GameStatsRecorder {
       factionMap.set(roleDef.name, roleDef.faction);
     }
 
-    const players: PlayerStats[] = runtime.seats.map(seat => {
+    const players: PlayerStats[] = runtime.seats.map((seat) => {
       const faction = factionMap.get(seat.role) ?? 'unknown';
       const won = faction === winner;
 

@@ -1,7 +1,7 @@
 /**
  * F096: chatStore.updateRichBlock action tests
  */
-import { describe, it, expect, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { useChatStore } from '@/stores/chatStore';
 
 describe('F096: chatStore.updateRichBlock', () => {
@@ -12,10 +12,24 @@ describe('F096: chatStore.updateRichBlock', () => {
   it('updates a rich block by id within a message', () => {
     const store = useChatStore.getState();
     store.addMessage({
-      id: 'msg-1', type: 'assistant', content: 'pick one', timestamp: Date.now(),
-      extra: { rich: { v: 1, blocks: [
-        { id: 'i1', kind: 'interactive' as const, v: 1 as const, interactiveType: 'select' as const, options: [{ id: 'o1', label: 'A' }] },
-      ] } },
+      id: 'msg-1',
+      type: 'assistant',
+      content: 'pick one',
+      timestamp: Date.now(),
+      extra: {
+        rich: {
+          v: 1,
+          blocks: [
+            {
+              id: 'i1',
+              kind: 'interactive' as const,
+              v: 1 as const,
+              interactiveType: 'select' as const,
+              options: [{ id: 'o1', label: 'A' }],
+            },
+          ],
+        },
+      },
     });
 
     store.updateRichBlock('msg-1', 'i1', { disabled: true, selectedIds: ['o1'] });
@@ -29,11 +43,25 @@ describe('F096: chatStore.updateRichBlock', () => {
   it('does not affect other blocks in the same message', () => {
     const store = useChatStore.getState();
     store.addMessage({
-      id: 'msg-2', type: 'assistant', content: 'two blocks', timestamp: Date.now(),
-      extra: { rich: { v: 1, blocks: [
-        { id: 'b1', kind: 'card' as const, v: 1 as const, title: 'Unchanged' },
-        { id: 'i2', kind: 'interactive' as const, v: 1 as const, interactiveType: 'confirm' as const, options: [{ id: '__confirm__', label: '确认' }] },
-      ] } },
+      id: 'msg-2',
+      type: 'assistant',
+      content: 'two blocks',
+      timestamp: Date.now(),
+      extra: {
+        rich: {
+          v: 1,
+          blocks: [
+            { id: 'b1', kind: 'card' as const, v: 1 as const, title: 'Unchanged' },
+            {
+              id: 'i2',
+              kind: 'interactive' as const,
+              v: 1 as const,
+              interactiveType: 'confirm' as const,
+              options: [{ id: '__confirm__', label: '确认' }],
+            },
+          ],
+        },
+      },
     });
 
     store.updateRichBlock('msg-2', 'i2', { disabled: true, selectedIds: ['__confirm__'] });

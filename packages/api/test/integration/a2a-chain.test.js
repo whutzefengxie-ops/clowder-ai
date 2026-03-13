@@ -5,8 +5,8 @@
  * 使用 mock services, 不需要真实 CLI。
  */
 
-import { describe, test, mock } from 'node:test';
 import assert from 'node:assert/strict';
+import { describe, mock, test } from 'node:test';
 import { migrateRouterOpts } from '../helpers/agent-registry-helpers.js';
 
 // Mock service that yields specific text
@@ -55,13 +55,15 @@ describe('A2A Chain Integration (AgentRouter end-to-end)', () => {
     const mockGemini = createMockService('gemini', 'unused');
     const messageStore = createMockMessageStore();
 
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: mockOpus,
-      codexService: mockCodex,
-      geminiService: mockGemini,
-      registry: createMockRegistry(),
-      messageStore,
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: mockOpus,
+        codexService: mockCodex,
+        geminiService: mockGemini,
+        registry: createMockRegistry(),
+        messageStore,
+      }),
+    );
 
     const messages = [];
     for await (const msg of router.route('user-1', '@opus 写个 hello world')) {
@@ -82,25 +84,25 @@ describe('A2A Chain Integration (AgentRouter end-to-end)', () => {
     );
 
     // Should have a2a_handoff event
-    const handoffs = messages.filter(m => m.type === 'a2a_handoff');
+    const handoffs = messages.filter((m) => m.type === 'a2a_handoff');
     assert.equal(handoffs.length, 1, 'should yield exactly one a2a_handoff');
     assert.ok(handoffs[0].content.includes('→'), 'handoff shows arrow transition');
 
     // Messages from both cats present
-    const opusText = messages.filter(m => m.type === 'text' && m.catId === 'opus');
-    const codexText = messages.filter(m => m.type === 'text' && m.catId === 'codex');
+    const opusText = messages.filter((m) => m.type === 'text' && m.catId === 'opus');
+    const codexText = messages.filter((m) => m.type === 'text' && m.catId === 'codex');
     assert.ok(opusText.length > 0, 'should have opus text');
     assert.ok(codexText.length > 0, 'should have codex text');
 
     // isFinal should be true only on the last done (codex)
-    const dones = messages.filter(m => m.type === 'done');
-    const opusDone = dones.find(m => m.catId === 'opus');
-    const codexDone = dones.find(m => m.catId === 'codex');
+    const dones = messages.filter((m) => m.type === 'done');
+    const opusDone = dones.find((m) => m.catId === 'opus');
+    const codexDone = dones.find((m) => m.catId === 'codex');
     assert.ok(!opusDone.isFinal, 'opus done should NOT be isFinal');
     assert.ok(codexDone.isFinal, 'codex done (chain end) SHOULD be isFinal');
 
     // messageStore should have opus mentions = ['codex']
-    const opusStored = messageStore._stored.find(m => m.catId === 'opus');
+    const opusStored = messageStore._stored.find((m) => m.catId === 'opus');
     assert.ok(opusStored, 'opus message should be stored');
     assert.deepEqual(opusStored.mentions, ['codex'], 'opus should have codex mention stored');
   });
@@ -109,10 +111,10 @@ describe('A2A Chain Integration (AgentRouter end-to-end)', () => {
     const { AgentRouter } = await import('../../dist/domains/cats/services/agents/routing/AgentRouter.js');
 
     // Chain: opus → @codex → @gemini → (blocked by depth=2)
-    let opusCalls = 0;
+    let _opusCalls = 0;
     const mockOpus = {
       invoke: mock.fn(async function* () {
-        opusCalls++;
+        _opusCalls++;
         yield { type: 'session_init', catId: 'opus', sessionId: 'opus-s', timestamp: Date.now() };
         yield { type: 'text', catId: 'opus', content: '开始\n@缅因猫 帮忙review', timestamp: Date.now() };
         yield { type: 'done', catId: 'opus', timestamp: Date.now() };
@@ -123,17 +125,19 @@ describe('A2A Chain Integration (AgentRouter end-to-end)', () => {
     const messageStore = createMockMessageStore();
 
     // Set MAX_A2A_DEPTH=2 via env (will be read by route-strategies)
-    const prevDepth = process.env['MAX_A2A_DEPTH'];
-    process.env['MAX_A2A_DEPTH'] = '2';
+    const prevDepth = process.env.MAX_A2A_DEPTH;
+    process.env.MAX_A2A_DEPTH = '2';
 
     try {
-      const router = new AgentRouter(await migrateRouterOpts({
-        claudeService: mockOpus,
-        codexService: mockCodex,
-        geminiService: mockGemini,
-        registry: createMockRegistry(),
-        messageStore,
-      }));
+      const router = new AgentRouter(
+        await migrateRouterOpts({
+          claudeService: mockOpus,
+          codexService: mockCodex,
+          geminiService: mockGemini,
+          registry: createMockRegistry(),
+          messageStore,
+        }),
+      );
 
       const messages = [];
       for await (const msg of router.route('user-1', '@opus implement feature')) {
@@ -146,13 +150,13 @@ describe('A2A Chain Integration (AgentRouter end-to-end)', () => {
       assert.equal(mockGemini.invoke.mock.callCount(), 1, 'gemini called once');
 
       // Exactly 2 handoffs
-      const handoffs = messages.filter(m => m.type === 'a2a_handoff');
+      const handoffs = messages.filter((m) => m.type === 'a2a_handoff');
       assert.equal(handoffs.length, 2, 'should have exactly 2 A2A hops');
     } finally {
       if (prevDepth !== undefined) {
-        process.env['MAX_A2A_DEPTH'] = prevDepth;
+        process.env.MAX_A2A_DEPTH = prevDepth;
       } else {
-        delete process.env['MAX_A2A_DEPTH'];
+        delete process.env.MAX_A2A_DEPTH;
       }
     }
   });
@@ -164,13 +168,15 @@ describe('A2A Chain Integration (AgentRouter end-to-end)', () => {
     const mockCodex = createMockService('codex', '我来补充结论');
     const mockGemini = createMockService('gemini', 'unused');
 
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: mockOpus,
-      codexService: mockCodex,
-      geminiService: mockGemini,
-      registry: createMockRegistry(),
-      messageStore: createMockMessageStore(),
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: mockOpus,
+        codexService: mockCodex,
+        geminiService: mockGemini,
+        registry: createMockRegistry(),
+        messageStore: createMockMessageStore(),
+      }),
+    );
 
     const messages = [];
     for await (const msg of router.route('user-1', '@opus @codex 一起看这个问题')) {
@@ -188,7 +194,7 @@ describe('A2A Chain Integration (AgentRouter end-to-end)', () => {
       'original target must not be forced to reply to another cat',
     );
 
-    const handoffs = messages.filter(m => m.type === 'a2a_handoff');
+    const handoffs = messages.filter((m) => m.type === 'a2a_handoff');
     assert.equal(handoffs.length, 0, 'no new A2A handoff should be emitted for already-pending original target');
   });
 
@@ -200,13 +206,15 @@ describe('A2A Chain Integration (AgentRouter end-to-end)', () => {
     const mockCodex = createMockService('codex', 'should not be called');
     const mockGemini = createMockService('gemini', 'should not be called');
 
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: mockOpus,
-      codexService: mockCodex,
-      geminiService: mockGemini,
-      registry: createMockRegistry(),
-      messageStore: createMockMessageStore(),
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: mockOpus,
+        codexService: mockCodex,
+        geminiService: mockGemini,
+        registry: createMockRegistry(),
+        messageStore: createMockMessageStore(),
+      }),
+    );
 
     const messages = [];
     for await (const msg of router.route('user-1', '@opus 分析一下')) {
@@ -219,7 +227,7 @@ describe('A2A Chain Integration (AgentRouter end-to-end)', () => {
     assert.equal(mockGemini.invoke.mock.callCount(), 0, 'gemini NOT called');
 
     // No handoffs
-    const handoffs = messages.filter(m => m.type === 'a2a_handoff');
+    const handoffs = messages.filter((m) => m.type === 'a2a_handoff');
     assert.equal(handoffs.length, 0, 'no A2A handoffs');
   });
 });

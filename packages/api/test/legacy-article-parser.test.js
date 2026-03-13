@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
@@ -15,15 +15,7 @@ describe('legacy article parser', () => {
     const filePath = join(sourceDir, '2026-01-23-agent-update.md');
     await writeFile(
       filePath,
-      [
-        '---',
-        'title: "Agent update"',
-        'url: "https://example.com/agent-update"',
-        '---',
-        '',
-        'content',
-        '',
-      ].join('\n'),
+      ['---', 'title: "Agent update"', 'url: "https://example.com/agent-update"', '---', '', 'content', ''].join('\n'),
       'utf-8',
     );
 
@@ -41,28 +33,15 @@ describe('legacy article parser', () => {
 
     await writeFile(
       join(sourceDir, '2026-01-23-valid.md'),
-      [
-        '---',
-        'title: "Valid article"',
-        'url: "https://example.com/valid"',
-        '---',
-        '',
-        'ok',
-        '',
-      ].join('\n'),
+      ['---', 'title: "Valid article"', 'url: "https://example.com/valid"', '---', '', 'ok', ''].join('\n'),
       'utf-8',
     );
 
     await writeFile(
       join(sourceDir, '2026-01-24-malformed.md'),
-      [
-        '---',
-        'title: "Malformed article"',
-        'url: "https://example.com/malformed"',
-        'tags: [broken',
-        '---',
-        '',
-      ].join('\n'),
+      ['---', 'title: "Malformed article"', 'url: "https://example.com/malformed"', 'tags: [broken', '---', ''].join(
+        '\n',
+      ),
       'utf-8',
     );
 
@@ -84,26 +63,13 @@ describe('legacy article parser', () => {
 
     await writeFile(
       join(sourceDir, '2026-01-23-valid.md'),
-      [
-        '---',
-        'title: "Valid article"',
-        'url: "https://example.com/valid"',
-        '---',
-        '',
-        'ok',
-        '',
-      ].join('\n'),
+      ['---', 'title: "Valid article"', 'url: "https://example.com/valid"', '---', '', 'ok', ''].join('\n'),
       'utf-8',
     );
 
     await writeFile(
       join(sourceDir, '2026-01-24-unterminated.md'),
-      [
-        '---',
-        'title: "Unterminated article"',
-        'url: "https://example.com/unterminated"',
-        'tags: [broken',
-      ].join('\n'),
+      ['---', 'title: "Unterminated article"', 'url: "https://example.com/unterminated"', 'tags: [broken'].join('\n'),
       'utf-8',
     );
 

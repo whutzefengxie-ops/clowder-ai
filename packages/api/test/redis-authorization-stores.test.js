@@ -3,14 +3,11 @@
  * 有 Redis → 测全量；无 Redis → skip
  */
 
-import { describe, it, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  assertRedisIsolationOrThrow,
-  cleanupPrefixedRedisKeys,
-} from './helpers/redis-test-helpers.js';
+import { after, before, beforeEach, describe, it } from 'node:test';
+import { assertRedisIsolationOrThrow, cleanupPrefixedRedisKeys } from './helpers/redis-test-helpers.js';
 
-const REDIS_URL = process.env['REDIS_URL'];
+const REDIS_URL = process.env.REDIS_URL;
 const CLEANUP_PATTERNS = ['auth-rule:*', 'auth-rules:*', 'pending-req:*', 'pending-reqs:*', 'auth-audit:*'];
 
 describe('RedisAuthorizationRuleStore', { skip: !REDIS_URL ? 'REDIS_URL not set' : false }, () => {
@@ -116,7 +113,14 @@ describe('RedisAuthorizationRuleStore', { skip: !REDIS_URL ? 'REDIS_URL not set'
 
   it('match() prefers thread-scoped over global', async () => {
     await store.add({ catId: 'opus', action: 'deploy', scope: 'global', decision: 'allow', createdBy: 'u' });
-    await store.add({ catId: 'opus', action: 'deploy', scope: 'thread', decision: 'deny', createdBy: 'u', threadId: 'thread-1' });
+    await store.add({
+      catId: 'opus',
+      action: 'deploy',
+      scope: 'thread',
+      decision: 'deny',
+      createdBy: 'u',
+      threadId: 'thread-1',
+    });
 
     const matched = await store.match('opus', 'deploy', 'thread-1');
     assert.ok(matched);
@@ -142,7 +146,13 @@ describe('RedisAuthorizationRuleStore', { skip: !REDIS_URL ? 'REDIS_URL not set'
     // Clean before using smallStore
     await cleanupPrefixedRedisKeys(redis, CLEANUP_PATTERNS);
 
-    const r1 = await smallStore.add({ catId: 'opus', action: 'a1', scope: 'global', decision: 'allow', createdBy: 'u' });
+    const r1 = await smallStore.add({
+      catId: 'opus',
+      action: 'a1',
+      scope: 'global',
+      decision: 'allow',
+      createdBy: 'u',
+    });
     await smallStore.add({ catId: 'opus', action: 'a2', scope: 'global', decision: 'allow', createdBy: 'u' });
     await smallStore.add({ catId: 'opus', action: 'a3', scope: 'global', decision: 'allow', createdBy: 'u' });
     // Should evict r1
@@ -150,7 +160,7 @@ describe('RedisAuthorizationRuleStore', { skip: !REDIS_URL ? 'REDIS_URL not set'
 
     const all = await smallStore.list();
     assert.equal(all.length, 3);
-    assert.ok(!all.find(r => r.id === r1.id), 'oldest rule should be evicted');
+    assert.ok(!all.find((r) => r.id === r1.id), 'oldest rule should be evicted');
   });
 });
 
@@ -270,7 +280,7 @@ describe('RedisPendingRequestStore', { skip: !REDIS_URL ? 'REDIS_URL not set' : 
 
     const waiting = await store.listWaiting();
     assert.equal(waiting.length, 2);
-    assert.ok(waiting.every(r => r.status === 'waiting'));
+    assert.ok(waiting.every((r) => r.status === 'waiting'));
   });
 
   it('listWaiting() filters by threadId', async () => {
@@ -401,12 +411,22 @@ describe('RedisAuthorizationAuditStore', { skip: !REDIS_URL ? 'REDIS_URL not set
 
   it('list() returns entries newest-first', async () => {
     await store.append({
-      requestId: 'r1', invocationId: 'i1', catId: 'opus', threadId: 't1',
-      action: 'a', reason: 'r', decision: 'allow',
+      requestId: 'r1',
+      invocationId: 'i1',
+      catId: 'opus',
+      threadId: 't1',
+      action: 'a',
+      reason: 'r',
+      decision: 'allow',
     });
     await store.append({
-      requestId: 'r2', invocationId: 'i2', catId: 'codex', threadId: 't1',
-      action: 'b', reason: 'r', decision: 'deny',
+      requestId: 'r2',
+      invocationId: 'i2',
+      catId: 'codex',
+      threadId: 't1',
+      action: 'b',
+      reason: 'r',
+      decision: 'deny',
     });
 
     const all = await store.list();
@@ -417,12 +437,22 @@ describe('RedisAuthorizationAuditStore', { skip: !REDIS_URL ? 'REDIS_URL not set
 
   it('list() filters by catId', async () => {
     await store.append({
-      requestId: 'r1', invocationId: 'i1', catId: 'opus', threadId: 't1',
-      action: 'a', reason: 'r', decision: 'allow',
+      requestId: 'r1',
+      invocationId: 'i1',
+      catId: 'opus',
+      threadId: 't1',
+      action: 'a',
+      reason: 'r',
+      decision: 'allow',
     });
     await store.append({
-      requestId: 'r2', invocationId: 'i2', catId: 'codex', threadId: 't1',
-      action: 'b', reason: 'r', decision: 'deny',
+      requestId: 'r2',
+      invocationId: 'i2',
+      catId: 'codex',
+      threadId: 't1',
+      action: 'b',
+      reason: 'r',
+      decision: 'deny',
     });
 
     const filtered = await store.list({ catId: 'opus' });
@@ -432,12 +462,22 @@ describe('RedisAuthorizationAuditStore', { skip: !REDIS_URL ? 'REDIS_URL not set
 
   it('list() filters by threadId', async () => {
     await store.append({
-      requestId: 'r1', invocationId: 'i1', catId: 'opus', threadId: 't1',
-      action: 'a', reason: 'r', decision: 'allow',
+      requestId: 'r1',
+      invocationId: 'i1',
+      catId: 'opus',
+      threadId: 't1',
+      action: 'a',
+      reason: 'r',
+      decision: 'allow',
     });
     await store.append({
-      requestId: 'r2', invocationId: 'i2', catId: 'opus', threadId: 't2',
-      action: 'b', reason: 'r', decision: 'deny',
+      requestId: 'r2',
+      invocationId: 'i2',
+      catId: 'opus',
+      threadId: 't2',
+      action: 'b',
+      reason: 'r',
+      decision: 'deny',
     });
 
     const filtered = await store.list({ threadId: 't2' });
@@ -448,8 +488,13 @@ describe('RedisAuthorizationAuditStore', { skip: !REDIS_URL ? 'REDIS_URL not set
   it('list() respects limit', async () => {
     for (let i = 0; i < 5; i++) {
       await store.append({
-        requestId: `r${i}`, invocationId: `i${i}`, catId: 'opus', threadId: 't1',
-        action: `a${i}`, reason: 'r', decision: 'allow',
+        requestId: `r${i}`,
+        invocationId: `i${i}`,
+        catId: 'opus',
+        threadId: 't1',
+        action: `a${i}`,
+        reason: 'r',
+        decision: 'allow',
       });
     }
 
@@ -463,15 +508,25 @@ describe('RedisAuthorizationAuditStore', { skip: !REDIS_URL ? 'REDIS_URL not set
 
     for (let i = 0; i < 5; i++) {
       await smallStore.append({
-        requestId: `r${i}`, invocationId: `i${i}`, catId: 'opus', threadId: 't1',
-        action: `a${i}`, reason: 'r', decision: 'allow',
+        requestId: `r${i}`,
+        invocationId: `i${i}`,
+        catId: 'opus',
+        threadId: 't1',
+        action: `a${i}`,
+        reason: 'r',
+        decision: 'allow',
       });
     }
 
     // Adding one more should evict oldest 20%
     await smallStore.append({
-      requestId: 'r5', invocationId: 'i5', catId: 'opus', threadId: 't1',
-      action: 'a5', reason: 'r', decision: 'allow',
+      requestId: 'r5',
+      invocationId: 'i5',
+      catId: 'opus',
+      threadId: 't1',
+      action: 'a5',
+      reason: 'r',
+      decision: 'allow',
     });
 
     const all = await smallStore.list({ limit: 100 });

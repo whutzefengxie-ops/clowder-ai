@@ -17,11 +17,7 @@ export interface CachedTaskProgress {
 
 const cache = new Map<string, Record<string, CachedTaskProgress>>();
 
-export function setTaskProgress(
-  threadId: string,
-  catId: string,
-  tasks: CachedTaskItem[],
-): void {
+export function setTaskProgress(threadId: string, catId: string, tasks: CachedTaskItem[]): void {
   let byThread = cache.get(threadId);
   if (!byThread) {
     byThread = {};
@@ -30,9 +26,7 @@ export function setTaskProgress(
   byThread[catId] = { tasks, lastUpdate: Date.now() };
 }
 
-export function getTaskProgress(
-  threadId: string,
-): Record<string, CachedTaskProgress> | null {
+export function getTaskProgress(threadId: string): Record<string, CachedTaskProgress> | null {
   return cache.get(threadId) ?? null;
 }
 

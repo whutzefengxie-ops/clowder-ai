@@ -90,7 +90,7 @@ describe('SessionEventsViewer', () => {
     expect(handoffBtn).toBeTruthy();
 
     await act(async () => {
-      handoffBtn!.click();
+      handoffBtn?.click();
     });
     await act(async () => {
       await new Promise((r) => setTimeout(r, 10));
@@ -124,7 +124,7 @@ describe('SessionEventsViewer', () => {
         }),
     });
     await act(async () => {
-      nextBtn!.click();
+      nextBtn?.click();
     });
     await act(async () => {
       await new Promise((r) => setTimeout(r, 10));
@@ -145,7 +145,7 @@ describe('SessionEventsViewer', () => {
     const closeBtn = container.querySelector('[data-testid="session-viewer-close"]');
     expect(closeBtn).toBeTruthy();
     await act(async () => {
-      closeBtn!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      closeBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
     expect(onClose).toHaveBeenCalled();

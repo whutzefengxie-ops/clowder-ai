@@ -94,7 +94,7 @@ describe('SessionChainPanel onViewSession', () => {
     expect(viewBtn).toBeTruthy();
 
     await act(async () => {
-      viewBtn!.click();
+      viewBtn?.click();
     });
 
     expect(props.onViewSession).toHaveBeenCalledWith('sess-abc');

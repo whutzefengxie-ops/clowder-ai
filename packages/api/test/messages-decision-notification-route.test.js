@@ -1,17 +1,11 @@
-import { describe, it, beforeEach, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
+import { afterEach, beforeEach, describe, it, mock } from 'node:test';
 import Fastify from 'fastify';
 import webpush from 'web-push';
 
-const { InvocationQueue } = await import(
-  '../dist/domains/cats/services/agents/invocation/InvocationQueue.js'
-);
-const { InvocationRegistry } = await import(
-  '../dist/domains/cats/services/agents/invocation/InvocationRegistry.js'
-);
-const { initPushNotificationService } = await import(
-  '../dist/domains/cats/services/push/PushNotificationService.js'
-);
+const { InvocationQueue } = await import('../dist/domains/cats/services/agents/invocation/InvocationQueue.js');
+const { InvocationRegistry } = await import('../dist/domains/cats/services/agents/invocation/InvocationRegistry.js');
+const { initPushNotificationService } = await import('../dist/domains/cats/services/push/PushNotificationService.js');
 
 function buildDeps() {
   const invocationQueue = new InvocationQueue();
@@ -119,10 +113,7 @@ describe('POST /api/messages decision notification route policy', () => {
 
     assert.equal(notifyUserMock.mock.calls.length, 1);
     const payload = notifyUserMock.mock.calls[0].arguments[1];
-    assert.ok(
-      payload.tag.startsWith('cat-decision-'),
-      `expected decision tag, got ${payload.tag}`,
-    );
+    assert.ok(payload.tag.startsWith('cat-decision-'), `expected decision tag, got ${payload.tag}`);
     assert.equal(payload.data?.requiresDecision, true);
     assert.match(payload.body, /请你拍板|合入/);
   });

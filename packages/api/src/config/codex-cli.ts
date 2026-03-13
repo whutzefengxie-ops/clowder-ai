@@ -12,31 +12,17 @@ export type CodexApprovalPolicy = (typeof CODEX_APPROVAL_POLICIES)[number];
 export const DEFAULT_CODEX_SANDBOX_MODE: CodexSandboxMode = 'danger-full-access';
 export const DEFAULT_CODEX_APPROVAL_POLICY: CodexApprovalPolicy = 'on-request';
 
-function parseEnum<T extends readonly string[]>(
-  raw: string | undefined,
-  valid: T,
-  fallback: T[number],
-): T[number] {
+function parseEnum<T extends readonly string[]>(raw: string | undefined, valid: T, fallback: T[number]): T[number] {
   if (!raw) return fallback;
   const normalized = raw.trim();
   if (normalized.length === 0) return fallback;
-  return (valid as readonly string[]).includes(normalized)
-    ? (normalized as T[number])
-    : fallback;
+  return (valid as readonly string[]).includes(normalized) ? (normalized as T[number]) : fallback;
 }
 
 export function getCodexSandboxMode(env: NodeJS.ProcessEnv = process.env): CodexSandboxMode {
-  return parseEnum(
-    env['CAT_CODEX_SANDBOX_MODE'],
-    CODEX_SANDBOX_MODES,
-    DEFAULT_CODEX_SANDBOX_MODE,
-  );
+  return parseEnum(env.CAT_CODEX_SANDBOX_MODE, CODEX_SANDBOX_MODES, DEFAULT_CODEX_SANDBOX_MODE);
 }
 
 export function getCodexApprovalPolicy(env: NodeJS.ProcessEnv = process.env): CodexApprovalPolicy {
-  return parseEnum(
-    env['CAT_CODEX_APPROVAL_POLICY'],
-    CODEX_APPROVAL_POLICIES,
-    DEFAULT_CODEX_APPROVAL_POLICY,
-  );
+  return parseEnum(env.CAT_CODEX_APPROVAL_POLICY, CODEX_APPROVAL_POLICIES, DEFAULT_CODEX_APPROVAL_POLICY);
 }

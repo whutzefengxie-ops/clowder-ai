@@ -6,22 +6,18 @@
  * minimal prompt referencing skills. No more full/short distinction.
  */
 
-import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
 
 describe('McpPromptInjector', () => {
   // F041: parameter is now mcpAvailable (was mcpSupport), same boolean logic
   it('needsMcpInjection returns false when MCP is available (no fallback needed)', async () => {
-    const { needsMcpInjection } = await import(
-      '../dist/domains/cats/services/agents/invocation/McpPromptInjector.js'
-    );
+    const { needsMcpInjection } = await import('../dist/domains/cats/services/agents/invocation/McpPromptInjector.js');
     assert.equal(needsMcpInjection(true), false);
   });
 
   it('needsMcpInjection returns true when MCP is unavailable (fallback to HTTP callback)', async () => {
-    const { needsMcpInjection } = await import(
-      '../dist/domains/cats/services/agents/invocation/McpPromptInjector.js'
-    );
+    const { needsMcpInjection } = await import('../dist/domains/cats/services/agents/invocation/McpPromptInjector.js');
     assert.equal(needsMcpInjection(false), true);
   });
 

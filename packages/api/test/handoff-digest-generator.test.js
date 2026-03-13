@@ -1,5 +1,5 @@
-import { describe, test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { describe, test } from 'node:test';
 import { generateHandoffDigest } from '../dist/domains/cats/services/session/HandoffDigestGenerator.js';
 
 describe('HandoffDigestGenerator', () => {
@@ -74,7 +74,7 @@ describe('HandoffDigestGenerator', () => {
   });
 
   test('returns null on timeout (AbortError)', async () => {
-    const mockFetch = async (_url, opts) => {
+    const mockFetch = async (_url, _opts) => {
       // Simulate abort
       const error = new Error('The operation was aborted');
       error.name = 'AbortError';

@@ -25,10 +25,7 @@ export interface DegradationResult {
  * - 'truncated': exceeds 50%+ of maxMessages, truncate to budget
  * - 'abort': cannot proceed (shouldn't happen in practice)
  */
-export function checkContextBudget(
-  messageCount: number,
-  budget: ContextBudget,
-): DegradationResult {
+export function checkContextBudget(messageCount: number, budget: ContextBudget): DegradationResult {
   if (messageCount <= budget.maxMessages) {
     return {
       degraded: false,
@@ -64,10 +61,7 @@ export function checkContextBudget(
  * - 'pattern_only': history too large, use regex matching only
  * - 'abort': cannot proceed
  */
-export function checkExtractionBudget(
-  historyTokens: number,
-  budget: ContextBudget,
-): DegradationResult {
+export function checkExtractionBudget(historyTokens: number, budget: ContextBudget): DegradationResult {
   // Use 80% of maxPromptTokens as threshold for extraction
   const extractionBudget = budget.maxPromptTokens * 0.8;
 

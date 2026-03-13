@@ -26,18 +26,18 @@ const MAX_WHY = 120;
 
 function truncate(s: string, max: number): string {
   if (s.length <= max) return s;
-  return s.slice(0, max - 3) + '...';
+  return `${s.slice(0, max - 3)}...`;
 }
 
 /** Sanitize user-writable text for safe embedding in bootstrap prompt. */
 function sanitize(text: string): string {
   return text
-    .replace(/\n/g, ' ')               // single-line (before control char strip)
-    .replace(/[\x00-\x1f]/g, '')       // control chars (after newline→space)
-    .replace(/```[^`]*```/g, '')        // code blocks
-    .replace(/^#{1,6}\s*/gm, '')        // headings
-    .replace(/^---+\s*/gm, '')          // horizontal rules
-    .replace(/^>\s*/gm, '')             // blockquotes
+    .replace(/\n/g, ' ') // single-line (before control char strip)
+    .replace(/[\x00-\x1f]/g, '') // control chars (after newline→space)
+    .replace(/```[^`]*```/g, '') // code blocks
+    .replace(/^#{1,6}\s*/gm, '') // headings
+    .replace(/^---+\s*/gm, '') // horizontal rules
+    .replace(/^>\s*/gm, '') // blockquotes
     .replace(/\[\/Task Snapshot\]/g, '') // prevent closing marker spoofing (R4 P2-1)
     .trim();
 }
@@ -69,8 +69,8 @@ export function formatTaskSnapshot(tasks: readonly TaskItem[]): string {
   });
 
   // Split into open (doing/blocked/todo) and done
-  const open = sorted.filter(t => t.status !== 'done').slice(0, MAX_OPEN);
-  const done = sorted.filter(t => t.status === 'done').slice(0, MAX_DONE);
+  const open = sorted.filter((t) => t.status !== 'done').slice(0, MAX_OPEN);
+  const done = sorted.filter((t) => t.status === 'done').slice(0, MAX_DONE);
   const display = [...open, ...done];
 
   // Header with counts
@@ -84,8 +84,7 @@ export function formatTaskSnapshot(tasks: readonly TaskItem[]): string {
   lines.push(`[Task Snapshot — ${tasks.length} tasks (${countParts.join(', ')})]`);
 
   // Find focus task (first doing, else first blocked)
-  const focusId = display.find(t => t.status === 'doing')?.id
-    ?? display.find(t => t.status === 'blocked')?.id;
+  const focusId = display.find((t) => t.status === 'doing')?.id ?? display.find((t) => t.status === 'blocked')?.id;
 
   for (const t of display) {
     const isFocus = t.id === focusId;

@@ -1,7 +1,7 @@
 import React from 'react';
-import { describe, expect, it, vi, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react-dom/test-utils';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ExportButton } from '@/components/ExportButton';
 
 beforeAll(() => {
@@ -96,7 +96,9 @@ describe('ExportButton', () => {
 
   it('opens dropdown menu on click', () => {
     renderButton();
-    act(() => { getToggle().click(); });
+    act(() => {
+      getToggle().click();
+    });
     expect(getMenu()).toBeTruthy();
     const items = getMenuButtons();
     expect(items.length).toBe(3);
@@ -104,7 +106,9 @@ describe('ExportButton', () => {
 
   it('shows all three export format options', () => {
     renderButton();
-    act(() => { getToggle().click(); });
+    act(() => {
+      getToggle().click();
+    });
     const items = getMenuButtons();
     const labels = items.map((b) => b.textContent);
     expect(labels.some((t) => t?.includes('PNG'))).toBe(true);
@@ -114,15 +118,21 @@ describe('ExportButton', () => {
 
   it('toggles menu closed on second click', () => {
     renderButton();
-    act(() => { getToggle().click(); });
+    act(() => {
+      getToggle().click();
+    });
     expect(getMenu()).toBeTruthy();
-    act(() => { getToggle().click(); });
+    act(() => {
+      getToggle().click();
+    });
     expect(getMenu()).toBeNull();
   });
 
   it('closes menu on outside click', () => {
     renderButton();
-    act(() => { getToggle().click(); });
+    act(() => {
+      getToggle().click();
+    });
     expect(getMenu()).toBeTruthy();
     act(() => {
       document.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
@@ -138,11 +148,15 @@ describe('ExportButton', () => {
     const dl = mockDownload();
 
     renderButton('thread-42');
-    act(() => { getToggle().click(); });
+    act(() => {
+      getToggle().click();
+    });
     const txtBtn = getMenuButtons().find((b) => b.textContent?.includes('纯文本'));
     expect(txtBtn).toBeTruthy();
 
-    await act(async () => { txtBtn!.click(); });
+    await act(async () => {
+      txtBtn?.click();
+    });
 
     expect(mockApiFetch).toHaveBeenCalledWith('/api/export/thread/thread-42?format=txt');
     expect(dl.clickSpy).toHaveBeenCalled();
@@ -157,10 +171,14 @@ describe('ExportButton', () => {
     const dl = mockDownload();
 
     renderButton('thread-99');
-    act(() => { getToggle().click(); });
+    act(() => {
+      getToggle().click();
+    });
     const pngBtn = getMenuButtons().find((b) => b.textContent?.includes('PNG'));
 
-    await act(async () => { pngBtn!.click(); });
+    await act(async () => {
+      pngBtn?.click();
+    });
 
     expect(mockApiFetch).toHaveBeenCalledWith('/api/threads/thread-99/export-image', { method: 'POST' });
     dl.restore();
@@ -174,10 +192,14 @@ describe('ExportButton', () => {
     const dl = mockDownload();
 
     renderButton('thread-77');
-    act(() => { getToggle().click(); });
+    act(() => {
+      getToggle().click();
+    });
     const mdBtn = getMenuButtons().find((b) => b.textContent?.includes('Markdown'));
 
-    await act(async () => { mdBtn!.click(); });
+    await act(async () => {
+      mdBtn?.click();
+    });
 
     expect(mockApiFetch).toHaveBeenCalledWith('/api/export/thread/thread-77?format=md');
     expect(dl.clickSpy).toHaveBeenCalled();
@@ -192,11 +214,15 @@ describe('ExportButton', () => {
     const dl = mockDownload();
 
     renderButton();
-    act(() => { getToggle().click(); });
+    act(() => {
+      getToggle().click();
+    });
     expect(getMenu()).toBeTruthy();
 
     const txtBtn = getMenuButtons().find((b) => b.textContent?.includes('纯文本'));
-    await act(async () => { txtBtn!.click(); });
+    await act(async () => {
+      txtBtn?.click();
+    });
 
     // Menu should close after clicking an option
     expect(getMenu()).toBeNull();

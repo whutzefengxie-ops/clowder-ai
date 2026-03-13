@@ -123,7 +123,7 @@ export class RedisConnectorThreadBindingStore implements IConnectorThreadBinding
 
   async getByExternal(connectorId: string, externalChatId: string): Promise<ConnectorThreadBinding | null> {
     const data = await this.redis.hgetall(ConnectorBindingKeys.detail(connectorId, externalChatId));
-    if (!data || !data['connectorId']) return null;
+    if (!data || !data.connectorId) return null;
     return this.hydrate(data);
   }
 
@@ -151,12 +151,12 @@ export class RedisConnectorThreadBindingStore implements IConnectorThreadBinding
       const d = data as Record<string, string>;
       const mk = memberKeys[i];
       if (!mk) continue;
-      if (!d['connectorId']) {
+      if (!d.connectorId) {
         // Hash was deleted but reverse index entry remains — stale
         staleKeys.push(mk);
         continue;
       }
-      if (d['threadId'] !== threadId) {
+      if (d.threadId !== threadId) {
         // Binding was rebound to a different thread — stale reverse entry
         staleKeys.push(mk);
         continue;
@@ -175,15 +175,15 @@ export class RedisConnectorThreadBindingStore implements IConnectorThreadBinding
   async remove(connectorId: string, externalChatId: string): Promise<boolean> {
     const key = ConnectorBindingKeys.detail(connectorId, externalChatId);
     const data = await this.redis.hgetall(key);
-    if (!data || !data['connectorId']) return false;
+    if (!data || !data.connectorId) return false;
 
     const pipeline = this.redis.multi();
     pipeline.del(key);
-    if (data['threadId']) {
-      pipeline.srem(ConnectorBindingKeys.byThread(data['threadId']), key);
+    if (data.threadId) {
+      pipeline.srem(ConnectorBindingKeys.byThread(data.threadId), key);
     }
-    if (data['connectorId'] && data['userId']) {
-      pipeline.zrem(ConnectorBindingKeys.byUser(data['connectorId'], data['userId']), key);
+    if (data.connectorId && data.userId) {
+      pipeline.zrem(ConnectorBindingKeys.byUser(data.connectorId, data.userId), key);
     }
     await pipeline.exec();
     return true;
@@ -209,7 +209,7 @@ export class RedisConnectorThreadBindingStore implements IConnectorThreadBinding
       const [err, data] = entry;
       if (err || !data || typeof data !== 'object') continue;
       const d = data as Record<string, string>;
-      if (!d['connectorId']) continue;
+      if (!d.connectorId) continue;
       bindings.push(this.hydrate(d));
     }
     return bindings;
@@ -217,11 +217,11 @@ export class RedisConnectorThreadBindingStore implements IConnectorThreadBinding
 
   private hydrate(data: Record<string, string>): ConnectorThreadBinding {
     return {
-      connectorId: data['connectorId']!,
-      externalChatId: data['externalChatId']!,
-      threadId: data['threadId']!,
-      userId: data['userId']!,
-      createdAt: parseInt(data['createdAt'] ?? '0', 10),
+      connectorId: data.connectorId!,
+      externalChatId: data.externalChatId!,
+      threadId: data.threadId!,
+      userId: data.userId!,
+      createdAt: parseInt(data.createdAt ?? '0', 10),
     };
   }
 }

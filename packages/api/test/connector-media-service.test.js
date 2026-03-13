@@ -1,14 +1,12 @@
-import { describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { describe, it, mock } from 'node:test';
 
 describe('ConnectorMediaService', () => {
   it('downloads feishu image and stores locally', async () => {
-    const { ConnectorMediaService } = await import(
-      '../dist/infrastructure/connectors/media/ConnectorMediaService.js'
-    );
+    const { ConnectorMediaService } = await import('../dist/infrastructure/connectors/media/ConnectorMediaService.js');
 
     const tempDir = await mkdtemp(path.join(tmpdir(), 'media-test-'));
 
@@ -35,9 +33,7 @@ describe('ConnectorMediaService', () => {
   });
 
   it('downloads telegram audio and stores locally', async () => {
-    const { ConnectorMediaService } = await import(
-      '../dist/infrastructure/connectors/media/ConnectorMediaService.js'
-    );
+    const { ConnectorMediaService } = await import('../dist/infrastructure/connectors/media/ConnectorMediaService.js');
 
     const tempDir = await mkdtemp(path.join(tmpdir(), 'media-test-'));
 
@@ -61,9 +57,7 @@ describe('ConnectorMediaService', () => {
   });
 
   it('uses fileName extension for file type', async () => {
-    const { ConnectorMediaService } = await import(
-      '../dist/infrastructure/connectors/media/ConnectorMediaService.js'
-    );
+    const { ConnectorMediaService } = await import('../dist/infrastructure/connectors/media/ConnectorMediaService.js');
 
     const tempDir = await mkdtemp(path.join(tmpdir(), 'media-test-'));
     const service = new ConnectorMediaService({
@@ -85,9 +79,7 @@ describe('ConnectorMediaService', () => {
   });
 
   it('throws for unsupported connector', async () => {
-    const { ConnectorMediaService } = await import(
-      '../dist/infrastructure/connectors/media/ConnectorMediaService.js'
-    );
+    const { ConnectorMediaService } = await import('../dist/infrastructure/connectors/media/ConnectorMediaService.js');
 
     const tempDir = await mkdtemp(path.join(tmpdir(), 'media-test-'));
     const service = new ConnectorMediaService({ mediaDir: tempDir });

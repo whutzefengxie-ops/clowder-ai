@@ -152,10 +152,7 @@ function ensureBackgroundAssistantMessage(
   return messageId;
 }
 
-function markThreadInvocationActive(
-  msg: BackgroundAgentMessage,
-  options: HandleBackgroundMessageOptions,
-): void {
+function markThreadInvocationActive(msg: BackgroundAgentMessage, options: HandleBackgroundMessageOptions): void {
   const threadState = options.store.getThreadState(msg.threadId);
   if (!threadState.isLoading) {
     options.store.setThreadLoading(msg.threadId, true);
@@ -165,10 +162,7 @@ function markThreadInvocationActive(
   }
 }
 
-function markThreadInvocationComplete(
-  msg: BackgroundAgentMessage,
-  options: HandleBackgroundMessageOptions,
-): void {
+function markThreadInvocationComplete(msg: BackgroundAgentMessage, options: HandleBackgroundMessageOptions): void {
   options.store.setThreadLoading(msg.threadId, false);
   options.store.setThreadHasActiveInvocation(msg.threadId, false);
 }

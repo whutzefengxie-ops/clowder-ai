@@ -23,13 +23,7 @@ export function computeBucket(
 
   const { clarity, groundedness, necessity, coupling, sizeBand } = scores;
 
-  if (
-    clarity >= 2 &&
-    groundedness >= 2 &&
-    necessity >= 2 &&
-    coupling <= 2 &&
-    (sizeBand === 'S' || sizeBand === 'M')
-  ) {
+  if (clarity >= 2 && groundedness >= 2 && necessity >= 2 && coupling <= 2 && (sizeBand === 'S' || sizeBand === 'M')) {
     return { bucket: 'build_now', resolutionPath: null };
   }
 
@@ -77,10 +71,7 @@ export class IntentCardStore {
     return card;
   }
 
-  listByProject(
-    projectId: string,
-    bucket?: TriageBucket,
-  ): IntentCard[] {
+  listByProject(projectId: string, bucket?: TriageBucket): IntentCard[] {
     return [...this.cards.values()]
       .filter((c) => c.projectId === projectId)
       .filter((c) => (bucket ? c.triage?.bucket === bucket : true))

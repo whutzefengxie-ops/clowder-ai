@@ -1,5 +1,5 @@
-import { describe, test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { afterEach, beforeEach, describe, test } from 'node:test';
 
 describe('BacklogStore', () => {
   /** @type {import('../dist/domains/cats/services/stores/ports/BacklogStore.js').BacklogStore} */
@@ -541,7 +541,12 @@ describe('BacklogStore markDone', () => {
 
   function createAndDispatch() {
     const item = store.create({
-      userId: 'u1', title: 'T', summary: 'S', priority: 'p2', tags: [], createdBy: 'user',
+      userId: 'u1',
+      title: 'T',
+      summary: 'S',
+      priority: 'p2',
+      tags: [],
+      createdBy: 'user',
     });
     store.suggestClaim(item.id, { catId: 'claude-opus', why: 'w', plan: 'p', requestedPhase: 'coding' });
     store.decideClaim(item.id, { decision: 'approve', decidedBy: 'u1', note: 'ok' });
@@ -573,7 +578,12 @@ describe('BacklogStore markDone', () => {
 
   test('transitions open → done (disappeared feature)', () => {
     const item = store.create({
-      userId: 'u1', title: 'T', summary: 'S', priority: 'p2', tags: [], createdBy: 'user',
+      userId: 'u1',
+      title: 'T',
+      summary: 'S',
+      priority: 'p2',
+      tags: [],
+      createdBy: 'user',
     });
     now += 5000;
     const done = store.markDone(item.id, { doneBy: 'u1' });
@@ -584,7 +594,12 @@ describe('BacklogStore markDone', () => {
 
   test('transitions suggested → done (disappeared feature)', () => {
     const item = store.create({
-      userId: 'u1', title: 'T', summary: 'S', priority: 'p2', tags: [], createdBy: 'user',
+      userId: 'u1',
+      title: 'T',
+      summary: 'S',
+      priority: 'p2',
+      tags: [],
+      createdBy: 'user',
     });
     store.suggestClaim(item.id, { catId: 'claude-opus', why: 'w', plan: 'p', requestedPhase: 'coding' });
     now += 5000;
@@ -595,7 +610,12 @@ describe('BacklogStore markDone', () => {
 
   test('transitions approved → done (disappeared feature)', () => {
     const item = store.create({
-      userId: 'u1', title: 'T', summary: 'S', priority: 'p2', tags: [], createdBy: 'user',
+      userId: 'u1',
+      title: 'T',
+      summary: 'S',
+      priority: 'p2',
+      tags: [],
+      createdBy: 'user',
     });
     store.suggestClaim(item.id, { catId: 'claude-opus', why: 'w', plan: 'p', requestedPhase: 'coding' });
     store.decideClaim(item.id, { decision: 'approve', decidedBy: 'u1', note: 'ok' });
@@ -611,7 +631,12 @@ describe('BacklogStore markDone', () => {
 
   test('create with dependencies preserves them', () => {
     const item = store.create({
-      userId: 'u1', title: 'T', summary: 'S', priority: 'p2', tags: [], createdBy: 'user',
+      userId: 'u1',
+      title: 'T',
+      summary: 'S',
+      priority: 'p2',
+      tags: [],
+      createdBy: 'user',
       dependencies: { evolvedFrom: ['f049'], related: ['f037'] },
     });
     assert.deepStrictEqual(item.dependencies, { evolvedFrom: ['f049'], related: ['f037'] });
@@ -619,10 +644,19 @@ describe('BacklogStore markDone', () => {
 
   test('refreshMetadata with dependencies updates them', () => {
     const item = store.create({
-      userId: 'u1', title: 'T', summary: 'S', priority: 'p2', tags: [], createdBy: 'user',
+      userId: 'u1',
+      title: 'T',
+      summary: 'S',
+      priority: 'p2',
+      tags: [],
+      createdBy: 'user',
     });
     const refreshed = store.refreshMetadata(item.id, {
-      title: 'T2', summary: 'S', priority: 'p2', tags: [], refreshedBy: 'u1',
+      title: 'T2',
+      summary: 'S',
+      priority: 'p2',
+      tags: [],
+      refreshedBy: 'u1',
       dependencies: { blockedBy: ['f052'] },
     });
     assert.deepStrictEqual(refreshed.dependencies, { blockedBy: ['f052'] });
@@ -630,12 +664,21 @@ describe('BacklogStore markDone', () => {
 
   test('refreshMetadata triggers refresh when only dependencies change', () => {
     const item = store.create({
-      userId: 'u1', title: 'Same', summary: 'Same', priority: 'p2', tags: ['a'],
-      createdBy: 'user', dependencies: { blockedBy: ['f001'] },
+      userId: 'u1',
+      title: 'Same',
+      summary: 'Same',
+      priority: 'p2',
+      tags: ['a'],
+      createdBy: 'user',
+      dependencies: { blockedBy: ['f001'] },
     });
     const beforeAuditLength = item.audit.length;
     const refreshed = store.refreshMetadata(item.id, {
-      title: 'Same', summary: 'Same', priority: 'p2', tags: ['a'], refreshedBy: 'u1',
+      title: 'Same',
+      summary: 'Same',
+      priority: 'p2',
+      tags: ['a'],
+      refreshedBy: 'u1',
       dependencies: { blockedBy: ['f001', 'f002'] },
     });
     assert.notEqual(refreshed.audit.length, beforeAuditLength, 'should append audit entry');
@@ -644,13 +687,22 @@ describe('BacklogStore markDone', () => {
 
   test('refreshMetadata is no-op when dependencies are identical', () => {
     const item = store.create({
-      userId: 'u1', title: 'Same', summary: 'Same', priority: 'p2', tags: [],
-      createdBy: 'user', dependencies: { related: ['f010'] },
+      userId: 'u1',
+      title: 'Same',
+      summary: 'Same',
+      priority: 'p2',
+      tags: [],
+      createdBy: 'user',
+      dependencies: { related: ['f010'] },
     });
     const beforeAuditLength = item.audit.length;
     const beforeUpdatedAt = item.updatedAt;
     const refreshed = store.refreshMetadata(item.id, {
-      title: 'Same', summary: 'Same', priority: 'p2', tags: [], refreshedBy: 'u1',
+      title: 'Same',
+      summary: 'Same',
+      priority: 'p2',
+      tags: [],
+      refreshedBy: 'u1',
       dependencies: { related: ['f010'] },
     });
     assert.equal(refreshed.audit.length, beforeAuditLength, 'should not append audit entry');
@@ -710,7 +762,12 @@ describe('BacklogStore atomicDispatch', () => {
 
   function makeApproved(store) {
     const item = store.create({
-      userId: 'u1', title: 'T', summary: 'S', priority: 'p2', tags: [], createdBy: 'user',
+      userId: 'u1',
+      title: 'T',
+      summary: 'S',
+      priority: 'p2',
+      tags: [],
+      createdBy: 'user',
     });
     store.suggestClaim(item.id, { catId: 'claude-opus', why: 'w', plan: 'p', requestedPhase: 'coding' });
     store.decideClaim(item.id, { decision: 'approve', decidedBy: 'u1' });
@@ -742,13 +799,23 @@ describe('BacklogStore atomicDispatch', () => {
   test('atomicDispatch rejects non-approved item', () => {
     const store = new BacklogStore();
     const item = store.create({
-      userId: 'u1', title: 'T', summary: 'S', priority: 'p2', tags: [], createdBy: 'user',
+      userId: 'u1',
+      title: 'T',
+      summary: 'S',
+      priority: 'p2',
+      tags: [],
+      createdBy: 'user',
     });
     assert.throws(
-      () => store.atomicDispatch(item.id, {
-        dispatchAttemptId: 'a1', pendingThreadId: 't1', kickoffMessageId: 'm1',
-        threadId: 't1', threadPhase: 'coding', dispatchedBy: 'u1',
-      }),
+      () =>
+        store.atomicDispatch(item.id, {
+          dispatchAttemptId: 'a1',
+          pendingThreadId: 't1',
+          kickoffMessageId: 'm1',
+          threadId: 't1',
+          threadPhase: 'coding',
+          dispatchedBy: 'u1',
+        }),
       /Invalid backlog transition/,
     );
   });
@@ -757,8 +824,12 @@ describe('BacklogStore atomicDispatch', () => {
     const store = new BacklogStore();
     const item = makeApproved(store);
     const input = {
-      dispatchAttemptId: 'a1', pendingThreadId: 't1', kickoffMessageId: 'm1',
-      threadId: 't1', threadPhase: 'coding', dispatchedBy: 'u1',
+      dispatchAttemptId: 'a1',
+      pendingThreadId: 't1',
+      kickoffMessageId: 'm1',
+      threadId: 't1',
+      threadPhase: 'coding',
+      dispatchedBy: 'u1',
     };
     const first = store.atomicDispatch(item.id, input);
     const second = store.atomicDispatch(item.id, input);
@@ -770,14 +841,23 @@ describe('BacklogStore atomicDispatch', () => {
     const store = new BacklogStore();
     const item = makeApproved(store);
     store.atomicDispatch(item.id, {
-      dispatchAttemptId: 'a1', pendingThreadId: 't1', kickoffMessageId: 'm1',
-      threadId: 't1', threadPhase: 'coding', dispatchedBy: 'u1',
+      dispatchAttemptId: 'a1',
+      pendingThreadId: 't1',
+      kickoffMessageId: 'm1',
+      threadId: 't1',
+      threadPhase: 'coding',
+      dispatchedBy: 'u1',
     });
     assert.throws(
-      () => store.atomicDispatch(item.id, {
-        dispatchAttemptId: 'a2', pendingThreadId: 't2', kickoffMessageId: 'm2',
-        threadId: 't2', threadPhase: 'coding', dispatchedBy: 'u1',
-      }),
+      () =>
+        store.atomicDispatch(item.id, {
+          dispatchAttemptId: 'a2',
+          pendingThreadId: 't2',
+          kickoffMessageId: 'm2',
+          threadId: 't2',
+          threadPhase: 'coding',
+          dispatchedBy: 'u1',
+        }),
       /already dispatched to another thread/,
     );
   });
@@ -785,8 +865,12 @@ describe('BacklogStore atomicDispatch', () => {
   test('atomicDispatch returns null for missing item', () => {
     const store = new BacklogStore();
     const result = store.atomicDispatch('nonexistent', {
-      dispatchAttemptId: 'a1', pendingThreadId: 't1', kickoffMessageId: 'm1',
-      threadId: 't1', threadPhase: 'coding', dispatchedBy: 'u1',
+      dispatchAttemptId: 'a1',
+      pendingThreadId: 't1',
+      kickoffMessageId: 'm1',
+      threadId: 't1',
+      threadPhase: 'coding',
+      dispatchedBy: 'u1',
     });
     assert.equal(result, null);
   });

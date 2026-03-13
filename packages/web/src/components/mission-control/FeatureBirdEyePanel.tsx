@@ -94,7 +94,13 @@ export function FeatureBirdEyePanel({ items, threadsByBacklogId, threadCountByFe
       <h2 className="mb-2 text-sm font-semibold text-[#2C2118]">Feature 鸟瞰</h2>
       <div className="space-y-2">
         {activeGroups.map(([tag, featureItems]) => (
-          <FeatureCard key={tag} tag={tag} featureItems={featureItems} threadsByBacklogId={threadsByBacklogId} titleThreadCount={threadCountByFeature?.[tag]} />
+          <FeatureCard
+            key={tag}
+            tag={tag}
+            featureItems={featureItems}
+            threadsByBacklogId={threadsByBacklogId}
+            titleThreadCount={threadCountByFeature?.[tag]}
+          />
         ))}
       </div>
       {doneGroups.length > 0 && (
@@ -145,9 +151,7 @@ function FeatureCard({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5 min-w-0">
           <span className="text-xs font-semibold text-[#4B3A2A] shrink-0">{tag}</span>
-          {featureName && (
-            <span className="text-[11px] text-[#8B7864] truncate">{featureName}</span>
-          )}
+          {featureName && <span className="text-[11px] text-[#8B7864] truncate">{featureName}</span>}
         </div>
         <span className="text-[11px] text-[#8B7864] shrink-0 ml-2">{featureItems.length} 项</span>
       </div>

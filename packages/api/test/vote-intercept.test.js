@@ -3,8 +3,8 @@
  * Tests the [VOTE:xxx] regex extraction + auto-close logic
  */
 
-import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
+import { describe, test } from 'node:test';
 
 describe('extractVoteFromText', () => {
   test('extracts [VOTE:option] from text', async () => {
@@ -42,10 +42,14 @@ describe('checkVoteCompletion', () => {
   test('returns true when all voters have voted', async () => {
     const { checkVoteCompletion } = await import('../dist/domains/cats/services/agents/routing/vote-intercept.js');
     const state = {
-      v: 1, question: 'test?', options: ['a', 'b'],
+      v: 1,
+      question: 'test?',
+      options: ['a', 'b'],
       votes: { opus: 'a', codex: 'b' },
-      anonymous: false, deadline: Date.now() + 60000,
-      createdBy: 'user-1', status: 'active',
+      anonymous: false,
+      deadline: Date.now() + 60000,
+      createdBy: 'user-1',
+      status: 'active',
       voters: ['opus', 'codex'],
     };
     assert.equal(checkVoteCompletion(state), true);
@@ -54,10 +58,14 @@ describe('checkVoteCompletion', () => {
   test('returns false when not all voters voted', async () => {
     const { checkVoteCompletion } = await import('../dist/domains/cats/services/agents/routing/vote-intercept.js');
     const state = {
-      v: 1, question: 'test?', options: ['a', 'b'],
+      v: 1,
+      question: 'test?',
+      options: ['a', 'b'],
       votes: { opus: 'a' },
-      anonymous: false, deadline: Date.now() + 60000,
-      createdBy: 'user-1', status: 'active',
+      anonymous: false,
+      deadline: Date.now() + 60000,
+      createdBy: 'user-1',
+      status: 'active',
       voters: ['opus', 'codex'],
     };
     assert.equal(checkVoteCompletion(state), false);
@@ -66,10 +74,14 @@ describe('checkVoteCompletion', () => {
   test('returns false when no voters field (Phase 1 compat)', async () => {
     const { checkVoteCompletion } = await import('../dist/domains/cats/services/agents/routing/vote-intercept.js');
     const state = {
-      v: 1, question: 'test?', options: ['a', 'b'],
+      v: 1,
+      question: 'test?',
+      options: ['a', 'b'],
       votes: { opus: 'a' },
-      anonymous: false, deadline: Date.now() + 60000,
-      createdBy: 'user-1', status: 'active',
+      anonymous: false,
+      deadline: Date.now() + 60000,
+      createdBy: 'user-1',
+      status: 'active',
     };
     assert.equal(checkVoteCompletion(state), false);
   });

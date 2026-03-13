@@ -4,8 +4,8 @@
  * Uses mock fetch to avoid depending on live Hindsight service.
  */
 
-import { describe, it, beforeEach, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
+import { afterEach, beforeEach, describe, it, mock } from 'node:test';
 
 // We'll mock global fetch
 let mockFetch;
@@ -93,9 +93,7 @@ describe('HindsightClient', () => {
         { content: 'ADR-005 decided single bank', score: 0.95 },
         { content: 'Phase 4 completed', score: 0.8 },
       ];
-      mockFetch.mock.mockImplementation(() =>
-        Promise.resolve({ ok: true, json: () => Promise.resolve({ memories }) }),
-      );
+      mockFetch.mock.mockImplementation(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ memories }) }));
 
       const client = await getClient();
       const result = await client.recall('cat-cafe-shared', 'test');
@@ -104,9 +102,7 @@ describe('HindsightClient', () => {
     });
 
     it('returns empty array when memories is missing', async () => {
-      mockFetch.mock.mockImplementation(() =>
-        Promise.resolve({ ok: true, json: () => Promise.resolve({}) }),
-      );
+      mockFetch.mock.mockImplementation(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
 
       const client = await getClient();
       const result = await client.recall('cat-cafe-shared', 'test');
@@ -128,9 +124,7 @@ describe('HindsightClient', () => {
 
   describe('retain', () => {
     it('constructs correct URL and body', async () => {
-      mockFetch.mock.mockImplementation(() =>
-        Promise.resolve({ ok: true, json: () => Promise.resolve({}) }),
-      );
+      mockFetch.mock.mockImplementation(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
 
       const client = await getClient();
       const items = [
@@ -150,9 +144,7 @@ describe('HindsightClient', () => {
     });
 
     it('passes async and document_tags options', async () => {
-      mockFetch.mock.mockImplementation(() =>
-        Promise.resolve({ ok: true, json: () => Promise.resolve({}) }),
-      );
+      mockFetch.mock.mockImplementation(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
 
       const client = await getClient();
       await client.retain('cat-cafe-shared', [{ content: 'test' }], {
@@ -166,14 +158,10 @@ describe('HindsightClient', () => {
     });
 
     it('accepts empty response body (204) without throwing', async () => {
-      mockFetch.mock.mockImplementation(() =>
-        Promise.resolve({ ok: true, status: 204 }),
-      );
+      mockFetch.mock.mockImplementation(() => Promise.resolve({ ok: true, status: 204 }));
 
       const client = await getClient();
-      await assert.doesNotReject(
-        () => client.retain('cat-cafe-shared', [{ content: 'ok' }]),
-      );
+      await assert.doesNotReject(() => client.retain('cat-cafe-shared', [{ content: 'ok' }]));
     });
   });
 
@@ -192,9 +180,7 @@ describe('HindsightClient', () => {
     });
 
     it('returns empty string when reflection is missing', async () => {
-      mockFetch.mock.mockImplementation(() =>
-        Promise.resolve({ ok: true, json: () => Promise.resolve({}) }),
-      );
+      mockFetch.mock.mockImplementation(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
 
       const client = await getClient();
       const result = await client.reflect('cat-cafe-shared', 'test');
@@ -204,9 +190,7 @@ describe('HindsightClient', () => {
 
   describe('ensureBank', () => {
     it('sends PUT with bank name', async () => {
-      mockFetch.mock.mockImplementation(() =>
-        Promise.resolve({ ok: true }),
-      );
+      mockFetch.mock.mockImplementation(() => Promise.resolve({ ok: true }));
 
       const client = await getClient();
       await client.ensureBank('cat-cafe-shared', 'Cat Cafe Shared', 'Project knowledge base');
@@ -221,9 +205,7 @@ describe('HindsightClient', () => {
     });
 
     it('defaults name to bankId', async () => {
-      mockFetch.mock.mockImplementation(() =>
-        Promise.resolve({ ok: true }),
-      );
+      mockFetch.mock.mockImplementation(() => Promise.resolve({ ok: true }));
 
       const client = await getClient();
       await client.ensureBank('cat-cafe-shared');
@@ -233,9 +215,7 @@ describe('HindsightClient', () => {
     });
 
     it('sets timeout signal for ensureBank call', async () => {
-      mockFetch.mock.mockImplementation(() =>
-        Promise.resolve({ ok: true }),
-      );
+      mockFetch.mock.mockImplementation(() => Promise.resolve({ ok: true }));
 
       const client = await getClient();
       await client.ensureBank('cat-cafe-shared');
@@ -247,18 +227,14 @@ describe('HindsightClient', () => {
 
   describe('isHealthy', () => {
     it('returns true when healthy', async () => {
-      mockFetch.mock.mockImplementation(() =>
-        Promise.resolve({ ok: true }),
-      );
+      mockFetch.mock.mockImplementation(() => Promise.resolve({ ok: true }));
 
       const client = await getClient();
       assert.equal(await client.isHealthy(), true);
     });
 
     it('returns false on network error', async () => {
-      mockFetch.mock.mockImplementation(() =>
-        Promise.reject(new Error('ECONNREFUSED')),
-      );
+      mockFetch.mock.mockImplementation(() => Promise.reject(new Error('ECONNREFUSED')));
 
       const client = await getClient();
       assert.equal(await client.isHealthy(), false);
@@ -290,9 +266,7 @@ describe('HindsightClient', () => {
     });
 
     it('throws HindsightError on connection failure', async () => {
-      mockFetch.mock.mockImplementation(() =>
-        Promise.reject(new Error('ECONNREFUSED')),
-      );
+      mockFetch.mock.mockImplementation(() => Promise.reject(new Error('ECONNREFUSED')));
 
       const { HindsightError } = await import('../dist/domains/cats/services/orchestration/HindsightClient.js');
       const client = await getClient();

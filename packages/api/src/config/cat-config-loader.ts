@@ -182,7 +182,7 @@ const catCafeConfigSchema = z.union([catCafeConfigSchemaV1, catCafeConfigSchemaV
  * @param filePath - Explicit path or auto-resolved from env/project root
  */
 export function loadCatConfig(filePath?: string): CatCafeConfig {
-  const resolvedPath = filePath ?? process.env['CAT_CONFIG_PATH'] ?? DEFAULT_CAT_CONFIG_PATH;
+  const resolvedPath = filePath ?? process.env.CAT_CONFIG_PATH ?? DEFAULT_CAT_CONFIG_PATH;
 
   let raw: string;
   try {
@@ -431,7 +431,10 @@ export function isSessionChainEnabled(catId: CatId | string, config?: CatCafeCon
  *
  * F33 Phase 2: Same lookup pattern as isSessionChainEnabled — catId → breed → features.
  */
-export function getConfigSessionStrategy(catId: string, config?: CatCafeConfig): CatFeatures['sessionStrategy'] | undefined {
+export function getConfigSessionStrategy(
+  catId: string,
+  config?: CatCafeConfig,
+): CatFeatures['sessionStrategy'] | undefined {
   const cfg = config ?? getCachedConfig();
   if (!cfg) return undefined;
 
@@ -451,10 +454,7 @@ export function getConfigSessionStrategy(catId: string, config?: CatCafeConfig):
  * Get Mission Hub self-claim scope from cat-config.json for a cat.
  * Defaults to 'disabled' when not configured.
  */
-export function getMissionHubSelfClaimScope(
-  catId: string,
-  config?: CatCafeConfig,
-): MissionHubSelfClaimScope {
+export function getMissionHubSelfClaimScope(catId: string, config?: CatCafeConfig): MissionHubSelfClaimScope {
   const cfg = config ?? getCachedConfig();
   if (!cfg) return DEFAULT_MISSION_HUB_SELF_CLAIM_SCOPE;
 

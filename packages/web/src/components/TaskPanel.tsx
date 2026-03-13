@@ -1,15 +1,21 @@
 'use client';
 
 import { useState } from 'react';
-import { useTaskStore, type TaskItem } from '@/stores/taskStore';
+import { type TaskItem, useTaskStore } from '@/stores/taskStore';
 import { CatAvatar } from './CatAvatar';
 
 const STATUS_ORDER: Record<string, number> = { doing: 0, blocked: 1, todo: 2, done: 3 };
 const STATUS_ICONS: Record<string, string> = {
-  todo: '○', doing: '◉', blocked: '⊘', done: '●',
+  todo: '○',
+  doing: '◉',
+  blocked: '⊘',
+  done: '●',
 };
 const STATUS_COLORS: Record<string, string> = {
-  todo: 'text-gray-400', doing: 'text-blue-500', blocked: 'text-red-400', done: 'text-green-500',
+  todo: 'text-gray-400',
+  doing: 'text-blue-500',
+  blocked: 'text-red-400',
+  done: 'text-green-500',
 };
 
 function TaskItemRow({ task }: { task: TaskItem }) {
@@ -21,9 +27,7 @@ function TaskItemRow({ task }: { task: TaskItem }) {
         onClick={() => setExpanded((v) => !v)}
         className="w-full text-left px-3 py-1.5 flex items-center gap-2 hover:bg-gray-50 rounded transition-colors"
       >
-        <span className={`text-sm ${STATUS_COLORS[task.status]}`}>
-          {STATUS_ICONS[task.status]}
-        </span>
+        <span className={`text-sm ${STATUS_COLORS[task.status]}`}>{STATUS_ICONS[task.status]}</span>
         <span className="text-xs text-gray-700 truncate flex-1">{task.title}</span>
         {task.ownerCatId && <CatAvatar catId={task.ownerCatId} size={14} />}
       </button>
@@ -45,9 +49,7 @@ export function TaskPanel() {
 
   if (tasks.length === 0) return null;
 
-  const sorted = [...tasks].sort(
-    (a, b) => (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9)
-  );
+  const sorted = [...tasks].sort((a, b) => (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9));
   const activeCount = tasks.filter((t) => t.status !== 'done').length;
 
   return (

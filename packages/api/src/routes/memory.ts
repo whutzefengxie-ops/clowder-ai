@@ -5,9 +5,9 @@
  * DELETE /api/memory - Delete memory entry
  */
 
+import { catIdSchema, createCatId } from '@cat-cafe/shared';
 import type { FastifyPluginAsync, FastifyReply } from 'fastify';
 import { z } from 'zod';
-import { createCatId, catIdSchema } from '@cat-cafe/shared';
 import type { IMemoryStore } from '../domains/cats/services/stores/ports/MemoryStore.js';
 import type { IThreadStore } from '../domains/cats/services/stores/ports/ThreadStore.js';
 import { resolveUserId } from '../utils/request-identity.js';
@@ -22,10 +22,7 @@ const writeSchema = z.object({
   threadId: z.string().min(1).max(100),
   key: z.string().min(1).max(100),
   value: z.string().min(1).max(10000),
-  updatedBy: z.union([
-    catIdSchema(),
-    z.literal('user'),
-  ]),
+  updatedBy: z.union([catIdSchema(), z.literal('user')]),
 });
 
 const readSchema = z.object({
@@ -39,11 +36,7 @@ const deleteSchema = z.object({
 });
 
 export const memoryRoutes: FastifyPluginAsync<MemoryRoutesOptions> = async (app, opts) => {
-  async function authorizeThread(
-    threadId: string,
-    userId: string,
-    reply: FastifyReply,
-  ): Promise<boolean> {
+  async function authorizeThread(threadId: string, userId: string, reply: FastifyReply): Promise<boolean> {
     if (!opts.threadStore || threadId === 'default') return true;
     const thread = await opts.threadStore.get(threadId);
     if (!thread) {
@@ -78,7 +71,7 @@ export const memoryRoutes: FastifyPluginAsync<MemoryRoutesOptions> = async (app,
       return { error: 'Access denied' };
     }
 
-    const resolvedUpdatedBy = updatedBy === 'user' ? 'user' as const : createCatId(updatedBy);
+    const resolvedUpdatedBy = updatedBy === 'user' ? ('user' as const) : createCatId(updatedBy);
     const entry = await opts.memoryStore.set({ threadId, key, value, updatedBy: resolvedUpdatedBy });
 
     reply.status(201);

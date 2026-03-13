@@ -59,9 +59,7 @@ export class InvocationQueue {
    * 预留队列位。容量检查在此完成。
    * 同源同目标的连续消息自动合并。
    */
-  enqueue(
-    input: Omit<QueueEntry, 'id' | 'status' | 'createdAt' | 'mergedMessageIds' | 'messageId'>,
-  ): EnqueueResult {
+  enqueue(input: Omit<QueueEntry, 'id' | 'status' | 'createdAt' | 'mergedMessageIds' | 'messageId'>): EnqueueResult {
     const key = this.scopeKey(input.threadId, input.userId);
     const q = this.getOrCreate(key);
 
@@ -76,7 +74,7 @@ export class InvocationQueue {
     ) {
       // Save snapshot for rollback
       this.preMergeSnapshots.set(tail.id, tail.content);
-      tail.content += '\n' + input.content;
+      tail.content += `\n${input.content}`;
       return { outcome: 'merged', entry: { ...tail }, queuePosition: q.indexOf(tail) + 1 };
     }
 
@@ -140,7 +138,7 @@ export class InvocationQueue {
     // Detect merges: content grew beyond original
     if (origContent !== undefined && e.content !== origContent) {
       // Strip original content prefix, keep merged content
-      const prefix = origContent + '\n';
+      const prefix = `${origContent}\n`;
       if (e.content.startsWith(prefix)) {
         e.content = e.content.slice(prefix.length);
       }
@@ -218,7 +216,7 @@ export class InvocationQueue {
     if (!q) return false;
     const idx = q.findIndex((e) => e.id === entryId);
     if (idx === -1) return false;
-    if (q[idx]!.status === 'processing') return false;
+    if (q[idx]?.status === 'processing') return false;
 
     const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
     if (swapIdx < 0 || swapIdx >= q.length) return true; // boundary no-op, idempotent
@@ -276,7 +274,7 @@ export class InvocationQueue {
   peekOldestAcrossUsers(threadId: string): QueueEntry | null {
     let oldest: QueueEntry | null = null;
     for (const [key, q] of this.queues) {
-      if (!key.startsWith(threadId + ':')) continue;
+      if (!key.startsWith(`${threadId}:`)) continue;
       for (const e of q) {
         if (e.status !== 'queued') continue;
         if (!oldest || e.createdAt < oldest.createdAt) {
@@ -291,7 +289,7 @@ export class InvocationQueue {
   markProcessingAcrossUsers(threadId: string): QueueEntry | null {
     let oldest: { entry: QueueEntry; key: string } | null = null;
     for (const [key, q] of this.queues) {
-      if (!key.startsWith(threadId + ':')) continue;
+      if (!key.startsWith(`${threadId}:`)) continue;
       for (const e of q) {
         if (e.status !== 'queued') continue;
         if (!oldest || e.createdAt < oldest.entry.createdAt) {
@@ -307,7 +305,7 @@ export class InvocationQueue {
   /** Remove a processing entry across all users for a thread by entryId. */
   removeProcessedAcrossUsers(threadId: string, entryId: string): QueueEntry | null {
     for (const [key, q] of this.queues) {
-      if (!key.startsWith(threadId + ':')) continue;
+      if (!key.startsWith(`${threadId}:`)) continue;
       const idx = q.findIndex((e) => e.status === 'processing' && e.id === entryId);
       if (idx !== -1) {
         this.originalContents.delete(entryId);
@@ -322,7 +320,7 @@ export class InvocationQueue {
   listUsersForThread(threadId: string): string[] {
     const users: string[] = [];
     for (const [key, q] of this.queues) {
-      if (!key.startsWith(threadId + ':') || q.length === 0) continue;
+      if (!key.startsWith(`${threadId}:`) || q.length === 0) continue;
       const userId = key.slice(threadId.length + 1);
       users.push(userId);
     }
@@ -332,7 +330,7 @@ export class InvocationQueue {
   /** Whether any user has queued entries for this thread. */
   hasQueuedForThread(threadId: string): boolean {
     for (const [key, q] of this.queues) {
-      if (!key.startsWith(threadId + ':')) continue;
+      if (!key.startsWith(`${threadId}:`)) continue;
       if (q.some((e) => e.status === 'queued')) return true;
     }
     return false;

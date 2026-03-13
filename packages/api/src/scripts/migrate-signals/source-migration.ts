@@ -10,8 +10,8 @@ import type {
 import { SignalSourceConfigSchema } from '@cat-cafe/shared';
 import { parse as parseYaml } from 'yaml';
 import { DEFAULT_SIGNAL_SOURCES } from '../../domains/signals/config/default-sources.js';
-import { asRecord, exists, normalizeUrl, pickString, slugify } from './shared.js';
 import type { LegacyArticle } from './legacy-article-parser.js';
+import { asRecord, exists, normalizeUrl, pickString, slugify } from './shared.js';
 
 export interface LegacySourceMigration {
   readonly sources: readonly SignalSource[];
@@ -112,7 +112,7 @@ export async function parseLegacySources(legacySourcesFile: string): Promise<Leg
 
     for (const [legacySourceId, sourceValue] of Object.entries(sourcesById)) {
       const sourceRecord = asRecord(sourceValue);
-      const feeds = Array.isArray(sourceRecord?.['feeds']) ? sourceRecord['feeds'] : [];
+      const feeds = Array.isArray(sourceRecord?.feeds) ? sourceRecord.feeds : [];
       if (feeds.length === 0) continue;
 
       const baseName = pickString(sourceRecord ?? {}, ['name']) ?? legacySourceId;

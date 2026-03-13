@@ -10,8 +10,8 @@ import { readdir, stat, unlink } from 'node:fs/promises';
 import path from 'node:path';
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
-const MAX_SIZE_BYTES = 500 * 1024 * 1024;    // 500 MB
-const TARGET_SIZE_BYTES = 400 * 1024 * 1024;  // 400 MB (evict down to this)
+const MAX_SIZE_BYTES = 500 * 1024 * 1024; // 500 MB
+const TARGET_SIZE_BYTES = 400 * 1024 * 1024; // 400 MB (evict down to this)
 const CLEAN_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
 
 interface CacheFileEntry {
@@ -68,7 +68,7 @@ export async function cleanTtsCache(cacheDir: string): Promise<{ deleted: number
   }
 
   // Recalculate remaining files
-  const remaining = files.filter(f => now - f.mtimeMs <= SEVEN_DAYS_MS);
+  const remaining = files.filter((f) => now - f.mtimeMs <= SEVEN_DAYS_MS);
   let totalSize = remaining.reduce((sum, f) => sum + f.size, 0);
 
   // Phase 2: LRU — if still over limit, evict oldest first

@@ -12,8 +12,8 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
-import type { CliSpawnOptions } from '../../utils/cli-types.js';
 import { resolveCliTimeoutMs } from '../../utils/cli-timeout.js';
+import type { CliSpawnOptions } from '../../utils/cli-types.js';
 import { isParseError, parseNDJSON } from '../../utils/ndjson-parser.js';
 import type { SpawnCliOverride } from '../cats/services/types.js';
 import type { AgentPaneRegistry } from './agent-pane-registry.js';
@@ -209,8 +209,8 @@ export function createTmuxSpawnOverride(
         }
         // Intercept __tmuxPaneCreated to register with AgentPaneRegistry
         const ev = value as Record<string, unknown>;
-        if (ev['__tmuxPaneCreated'] && typeof ev['paneId'] === 'string') {
-          paneId = ev['paneId'];
+        if (ev.__tmuxPaneCreated && typeof ev.paneId === 'string') {
+          paneId = ev.paneId;
           agentPaneRegistry?.register(invocationId, worktreeId, paneId, userId);
         }
         yield value;

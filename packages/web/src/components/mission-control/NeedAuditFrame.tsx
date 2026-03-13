@@ -41,10 +41,10 @@ export function NeedAuditFrame({ projectId, frame, onSaved }: NeedAuditFrameProp
         body: JSON.stringify({ sponsor, motivation, successMetric, constraints, currentWorkflow, provenanceMap }),
       });
       if (!res.ok) {
-        const body = await res.json() as { error?: string };
+        const body = (await res.json()) as { error?: string };
         throw new Error(body.error ?? `保存失败: ${res.status}`);
       }
-      const body = await res.json() as { frame: NeedAuditFrameType };
+      const body = (await res.json()) as { frame: NeedAuditFrameType };
       onSaved(body.frame);
     } catch (err) {
       setError(err instanceof Error ? err.message : '保存失败');
@@ -58,7 +58,12 @@ export function NeedAuditFrame({ projectId, frame, onSaved }: NeedAuditFrameProp
     { label: '为什么现在做 (Motivation)', value: motivation, set: setMotivation, placeholder: '项目动因' },
     { label: '成功指标 (Success Metric) *', value: successMetric, set: setSuccessMetric, placeholder: '什么算成功？' },
     { label: '约束条件 (Constraints)', value: constraints, set: setConstraints, placeholder: '时间/预算/技术约束' },
-    { label: '现有流程 (Current Workflow)', value: currentWorkflow, set: setCurrentWorkflow, placeholder: '目前怎么做的？' },
+    {
+      label: '现有流程 (Current Workflow)',
+      value: currentWorkflow,
+      set: setCurrentWorkflow,
+      placeholder: '目前怎么做的？',
+    },
     { label: '来源追踪 (Provenance Map)', value: provenanceMap, set: setProvenanceMap, placeholder: '各条声明的来源' },
   ];
 

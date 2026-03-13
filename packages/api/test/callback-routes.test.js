@@ -5,8 +5,8 @@
  * Uses lightweight Fastify injection (no real HTTP server).
  */
 
-import { test, describe, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { beforeEach, describe, test } from 'node:test';
 import Fastify from 'fastify';
 import './helpers/setup-cat-registry.js';
 
@@ -39,18 +39,10 @@ describe('Callback Routes', () => {
     const { InvocationRegistry } = await import(
       '../dist/domains/cats/services/agents/invocation/InvocationRegistry.js'
     );
-    const { MessageStore } = await import(
-      '../dist/domains/cats/services/stores/ports/MessageStore.js'
-    );
-    const { ThreadStore } = await import(
-      '../dist/domains/cats/services/stores/ports/ThreadStore.js'
-    );
-    const { TaskStore } = await import(
-      '../dist/domains/cats/services/stores/ports/TaskStore.js'
-    );
-    const { BacklogStore } = await import(
-      '../dist/domains/cats/services/stores/ports/BacklogStore.js'
-    );
+    const { MessageStore } = await import('../dist/domains/cats/services/stores/ports/MessageStore.js');
+    const { ThreadStore } = await import('../dist/domains/cats/services/stores/ports/ThreadStore.js');
+    const { TaskStore } = await import('../dist/domains/cats/services/stores/ports/TaskStore.js');
+    const { BacklogStore } = await import('../dist/domains/cats/services/stores/ports/BacklogStore.js');
 
     registry = new InvocationRegistry();
     messageStore = new MessageStore();
@@ -322,8 +314,11 @@ describe('Callback Routes', () => {
 
     const broadcasted = socketManager.getMessages();
     assert.equal(broadcasted.length, 1);
-    assert.deepEqual(broadcasted[0].extra?.targetCats, ['codex', 'gpt52'],
-      'real-time broadcast must include extra.targetCats for immediate direction pill rendering');
+    assert.deepEqual(
+      broadcasted[0].extra?.targetCats,
+      ['codex', 'gpt52'],
+      'real-time broadcast must include extra.targetCats for immediate direction pill rendering',
+    );
   });
 
   test('POST post-message targetCats merges with content @mentions (F098-C1)', async () => {
@@ -617,11 +612,19 @@ describe('Callback Routes', () => {
 
     // user-1's message
     messageStore.append({
-      userId: 'user-1', catId: null, content: 'User 1 msg', mentions: [], timestamp: 1,
+      userId: 'user-1',
+      catId: null,
+      content: 'User 1 msg',
+      mentions: [],
+      timestamp: 1,
     });
     // user-2's message (should NOT be visible to user-1's invocation)
     messageStore.append({
-      userId: 'user-2', catId: null, content: 'User 2 msg', mentions: [], timestamp: 2,
+      userId: 'user-2',
+      catId: null,
+      content: 'User 2 msg',
+      mentions: [],
+      timestamp: 2,
     });
 
     const response = await app.inject({
@@ -684,17 +687,29 @@ describe('Callback Routes', () => {
 
     // Messages in thread-A (own thread)
     messageStore.append({
-      userId: 'user-1', catId: null, content: 'thread-A msg',
-      mentions: [], timestamp: 1, threadId: 'thread-A',
+      userId: 'user-1',
+      catId: null,
+      content: 'thread-A msg',
+      mentions: [],
+      timestamp: 1,
+      threadId: 'thread-A',
     });
     // Messages in thread-B (cross-thread target)
     messageStore.append({
-      userId: 'user-1', catId: null, content: 'thread-B msg 1',
-      mentions: [], timestamp: 2, threadId: 'thread-B',
+      userId: 'user-1',
+      catId: null,
+      content: 'thread-B msg 1',
+      mentions: [],
+      timestamp: 2,
+      threadId: 'thread-B',
     });
     messageStore.append({
-      userId: 'user-1', catId: 'codex', content: 'thread-B msg 2',
-      mentions: [], timestamp: 3, threadId: 'thread-B',
+      userId: 'user-1',
+      catId: 'codex',
+      content: 'thread-B msg 2',
+      mentions: [],
+      timestamp: 3,
+      threadId: 'thread-B',
     });
 
     // Query thread-B from an invocation in thread-A
@@ -715,12 +730,20 @@ describe('Callback Routes', () => {
     const { invocationId, callbackToken } = registry.create('user-1', 'opus', 'thread-A');
 
     messageStore.append({
-      userId: 'user-1', catId: null, content: 'thread-A msg',
-      mentions: [], timestamp: 1, threadId: 'thread-A',
+      userId: 'user-1',
+      catId: null,
+      content: 'thread-A msg',
+      mentions: [],
+      timestamp: 1,
+      threadId: 'thread-A',
     });
     messageStore.append({
-      userId: 'user-1', catId: null, content: 'thread-B msg',
-      mentions: [], timestamp: 2, threadId: 'thread-B',
+      userId: 'user-1',
+      catId: null,
+      content: 'thread-B msg',
+      mentions: [],
+      timestamp: 2,
+      threadId: 'thread-B',
     });
 
     const response = await app.inject({
@@ -741,8 +764,12 @@ describe('Callback Routes', () => {
     // 5 messages in thread-B
     for (let i = 0; i < 5; i++) {
       messageStore.append({
-        userId: 'user-1', catId: null, content: `thread-B msg ${i}`,
-        mentions: [], timestamp: i + 1, threadId: 'thread-B',
+        userId: 'user-1',
+        catId: null,
+        content: `thread-B msg ${i}`,
+        mentions: [],
+        timestamp: i + 1,
+        threadId: 'thread-B',
       });
     }
 
@@ -789,7 +816,10 @@ describe('Callback Routes', () => {
     const body = JSON.parse(response.body);
 
     assert.equal(body.threads.length, 2);
-    assert.deepEqual(body.threads.map((item) => item.threadId), [newThread.id, oldThread.id]);
+    assert.deepEqual(
+      body.threads.map((item) => item.threadId),
+      [newThread.id, oldThread.id],
+    );
     assert.deepEqual(body.threads[0], {
       threadId: newThread.id,
       title: 'New thread',
@@ -926,10 +956,7 @@ describe('Callback Routes', () => {
     });
     assert.equal(allRes.statusCode, 200);
     const allBody = JSON.parse(allRes.body);
-    assert.deepEqual(
-      allBody.tasks.map((task) => task.id).sort(),
-      [taskA1.id, taskA2.id, taskB1.id].sort(),
-    );
+    assert.deepEqual(allBody.tasks.map((task) => task.id).sort(), [taskA1.id, taskA2.id, taskB1.id].sort());
 
     const filteredRes = await app.inject({
       method: 'GET',
@@ -960,10 +987,10 @@ describe('Callback Routes', () => {
   // ---- GET /api/callbacks/feat-index ----
 
   test('GET feat-index returns entries with default limit and phase-A threadIds', async () => {
-    featIndexProvider = async () => ([
+    featIndexProvider = async () => [
       { featId: 'F042', name: 'Prompt Engineering Audit', status: 'done' },
       { featId: 'F043', name: 'MCP Unification', status: 'spec', keyDecisions: ['A', 'B'] },
-    ]);
+    ];
     const app = await createApp();
     const { invocationId, callbackToken } = registry.create('user-1', 'opus');
 
@@ -991,10 +1018,10 @@ describe('Callback Routes', () => {
   });
 
   test('GET feat-index enriches threadIds from backlog feature tags via thread backlogItemId mapping', async () => {
-    featIndexProvider = async () => ([
+    featIndexProvider = async () => [
       { featId: 'F040', name: 'Backlog Reorganization', status: 'in-progress' },
       { featId: 'F043', name: 'MCP Unification', status: 'spec' },
-    ]);
+    ];
 
     const backlogF040 = await backlogStore.create({
       userId: 'user-1',
@@ -1047,9 +1074,7 @@ describe('Callback Routes', () => {
   });
 
   test('GET feat-index degrades gracefully when threadStore enrichment fails', async () => {
-    featIndexProvider = async () => ([
-      { featId: 'F043', name: 'MCP Unification', status: 'spec' },
-    ]);
+    featIndexProvider = async () => [{ featId: 'F043', name: 'MCP Unification', status: 'spec' }];
     threadStore = {
       list: async () => {
         throw new Error('boom');
@@ -1069,10 +1094,10 @@ describe('Callback Routes', () => {
   });
 
   test('GET feat-index supports exact featId match (case-insensitive)', async () => {
-    featIndexProvider = async () => ([
+    featIndexProvider = async () => [
       { featId: 'F039', name: 'Mission Hub', status: 'in-progress' },
       { featId: 'F043', name: 'MCP Unification', status: 'spec' },
-    ]);
+    ];
     const app = await createApp();
     const { invocationId, callbackToken } = registry.create('user-1', 'opus');
 
@@ -1095,11 +1120,11 @@ describe('Callback Routes', () => {
   });
 
   test('GET feat-index supports query fuzzy match over featId/name/status', async () => {
-    featIndexProvider = async () => ([
+    featIndexProvider = async () => [
       { featId: 'F043', name: 'MCP Unification', status: 'spec' },
       { featId: 'F046', name: 'Anti-Drift Protocol', status: 'in-progress' },
       { featId: 'F049', name: 'Mission Hub', status: 'done' },
-    ]);
+    ];
     const app = await createApp();
     const { invocationId, callbackToken } = registry.create('user-1', 'opus');
 
@@ -1122,9 +1147,7 @@ describe('Callback Routes', () => {
   });
 
   test('GET feat-index validates limit max=100', async () => {
-    featIndexProvider = async () => ([
-      { featId: 'F043', name: 'MCP Unification', status: 'spec' },
-    ]);
+    featIndexProvider = async () => [{ featId: 'F043', name: 'MCP Unification', status: 'spec' }];
     const app = await createApp();
     const { invocationId, callbackToken } = registry.create('user-1', 'opus');
 
@@ -1136,9 +1159,7 @@ describe('Callback Routes', () => {
   });
 
   test('GET feat-index returns 401 for invalid callback credentials', async () => {
-    featIndexProvider = async () => ([
-      { featId: 'F043', name: 'MCP Unification', status: 'spec' },
-    ]);
+    featIndexProvider = async () => [{ featId: 'F043', name: 'MCP Unification', status: 'spec' }];
     const app = await createApp();
     const { invocationId } = registry.create('user-1', 'opus');
 
@@ -1155,11 +1176,19 @@ describe('Callback Routes', () => {
 
     // user-1 mentions opus
     messageStore.append({
-      userId: 'user-1', catId: null, content: '@opus from user-1', mentions: ['opus'], timestamp: 1,
+      userId: 'user-1',
+      catId: null,
+      content: '@opus from user-1',
+      mentions: ['opus'],
+      timestamp: 1,
     });
     // user-2 also mentions opus (should NOT be visible)
     messageStore.append({
-      userId: 'user-2', catId: null, content: '@opus from user-2', mentions: ['opus'], timestamp: 2,
+      userId: 'user-2',
+      catId: null,
+      content: '@opus from user-2',
+      mentions: ['opus'],
+      timestamp: 2,
     });
 
     const response = await app.inject({
@@ -1180,18 +1209,30 @@ describe('Callback Routes', () => {
 
     // @opus in thread-A (should be visible)
     messageStore.append({
-      userId: 'user-1', catId: null, content: '@opus in thread-A',
-      mentions: ['opus'], timestamp: 1, threadId: 'thread-A',
+      userId: 'user-1',
+      catId: null,
+      content: '@opus in thread-A',
+      mentions: ['opus'],
+      timestamp: 1,
+      threadId: 'thread-A',
     });
     // @opus in thread-B (should NOT be visible — cross-thread leak)
     messageStore.append({
-      userId: 'user-1', catId: null, content: '@opus in thread-B',
-      mentions: ['opus'], timestamp: 2, threadId: 'thread-B',
+      userId: 'user-1',
+      catId: null,
+      content: '@opus in thread-B',
+      mentions: ['opus'],
+      timestamp: 2,
+      threadId: 'thread-B',
     });
     // @opus in thread-A again
     messageStore.append({
-      userId: 'user-1', catId: null, content: '@opus in thread-A again',
-      mentions: ['opus'], timestamp: 3, threadId: 'thread-A',
+      userId: 'user-1',
+      catId: null,
+      content: '@opus in thread-A again',
+      mentions: ['opus'],
+      timestamp: 3,
+      threadId: 'thread-A',
     });
 
     const response = await app.inject({
@@ -1292,12 +1333,12 @@ describe('Callback Routes', () => {
   });
 
   test('GET search-evidence uses runtime-configured recall defaults when params omitted', async () => {
-    const prevBudget = process.env['HINDSIGHT_RECALL_DEFAULT_BUDGET'];
-    const prevTagsMatch = process.env['HINDSIGHT_RECALL_DEFAULT_TAGS_MATCH'];
-    const prevLimit = process.env['HINDSIGHT_RECALL_DEFAULT_LIMIT'];
-    process.env['HINDSIGHT_RECALL_DEFAULT_BUDGET'] = 'low';
-    process.env['HINDSIGHT_RECALL_DEFAULT_TAGS_MATCH'] = 'any';
-    process.env['HINDSIGHT_RECALL_DEFAULT_LIMIT'] = '9';
+    const prevBudget = process.env.HINDSIGHT_RECALL_DEFAULT_BUDGET;
+    const prevTagsMatch = process.env.HINDSIGHT_RECALL_DEFAULT_TAGS_MATCH;
+    const prevLimit = process.env.HINDSIGHT_RECALL_DEFAULT_LIMIT;
+    process.env.HINDSIGHT_RECALL_DEFAULT_BUDGET = 'low';
+    process.env.HINDSIGHT_RECALL_DEFAULT_TAGS_MATCH = 'any';
+    process.env.HINDSIGHT_RECALL_DEFAULT_LIMIT = '9';
 
     const app = await createApp();
     const { invocationId, callbackToken } = registry.create('user-1', 'codex');
@@ -1312,12 +1353,12 @@ describe('Callback Routes', () => {
       url: `/api/callbacks/search-evidence?invocationId=${invocationId}&callbackToken=${callbackToken}&q=bank-policy`,
     });
 
-    if (prevBudget === undefined) delete process.env['HINDSIGHT_RECALL_DEFAULT_BUDGET'];
-    else process.env['HINDSIGHT_RECALL_DEFAULT_BUDGET'] = prevBudget;
-    if (prevTagsMatch === undefined) delete process.env['HINDSIGHT_RECALL_DEFAULT_TAGS_MATCH'];
-    else process.env['HINDSIGHT_RECALL_DEFAULT_TAGS_MATCH'] = prevTagsMatch;
-    if (prevLimit === undefined) delete process.env['HINDSIGHT_RECALL_DEFAULT_LIMIT'];
-    else process.env['HINDSIGHT_RECALL_DEFAULT_LIMIT'] = prevLimit;
+    if (prevBudget === undefined) delete process.env.HINDSIGHT_RECALL_DEFAULT_BUDGET;
+    else process.env.HINDSIGHT_RECALL_DEFAULT_BUDGET = prevBudget;
+    if (prevTagsMatch === undefined) delete process.env.HINDSIGHT_RECALL_DEFAULT_TAGS_MATCH;
+    else process.env.HINDSIGHT_RECALL_DEFAULT_TAGS_MATCH = prevTagsMatch;
+    if (prevLimit === undefined) delete process.env.HINDSIGHT_RECALL_DEFAULT_LIMIT;
+    else process.env.HINDSIGHT_RECALL_DEFAULT_LIMIT = prevLimit;
 
     assert.equal(response.statusCode, 200);
     assert.equal(recallCalls.length, 1);
@@ -1329,9 +1370,7 @@ describe('Callback Routes', () => {
   test('GET search-evidence degrades on CONNECTION_FAILED', async () => {
     const app = await createApp();
     const { invocationId, callbackToken } = registry.create('user-1', 'codex');
-    const { HindsightError } = await import(
-      '../dist/domains/cats/services/orchestration/HindsightClient.js'
-    );
+    const { HindsightError } = await import('../dist/domains/cats/services/orchestration/HindsightClient.js');
     hindsightClient.recall = async () => {
       throw new HindsightError('CONNECTION_FAILED', 'cannot connect');
     };
@@ -1348,8 +1387,8 @@ describe('Callback Routes', () => {
   });
 
   test('GET search-evidence returns disabled degradation when HINDSIGHT_ENABLED=false', async () => {
-    const previous = process.env['HINDSIGHT_ENABLED'];
-    process.env['HINDSIGHT_ENABLED'] = 'false';
+    const previous = process.env.HINDSIGHT_ENABLED;
+    process.env.HINDSIGHT_ENABLED = 'false';
 
     const app = await createApp();
     const { invocationId, callbackToken } = registry.create('user-1', 'codex');
@@ -1364,8 +1403,8 @@ describe('Callback Routes', () => {
       url: `/api/callbacks/search-evidence?invocationId=${invocationId}&callbackToken=${callbackToken}&q=bank-policy`,
     });
 
-    if (previous === undefined) delete process.env['HINDSIGHT_ENABLED'];
-    else process.env['HINDSIGHT_ENABLED'] = previous;
+    if (previous === undefined) delete process.env.HINDSIGHT_ENABLED;
+    else process.env.HINDSIGHT_ENABLED = previous;
 
     assert.equal(response.statusCode, 200);
     const body = JSON.parse(response.body);
@@ -1378,9 +1417,7 @@ describe('Callback Routes', () => {
   test('GET search-evidence degrades on 429 rate limit', async () => {
     const app = await createApp();
     const { invocationId, callbackToken } = registry.create('user-1', 'codex');
-    const { HindsightError } = await import(
-      '../dist/domains/cats/services/orchestration/HindsightClient.js'
-    );
+    const { HindsightError } = await import('../dist/domains/cats/services/orchestration/HindsightClient.js');
     hindsightClient.recall = async () => {
       throw new HindsightError('API_ERROR', 'rate limited', 429);
     };
@@ -1401,7 +1438,13 @@ describe('Callback Routes', () => {
     let recallCalls = 0;
     hindsightClient.recall = async () => {
       recallCalls += 1;
-      return [{ content: 'stale recall', metadata: { anchor: 'docs/decisions/005-hindsight-integration-decisions.md' }, score: 0.99 }];
+      return [
+        {
+          content: 'stale recall',
+          metadata: { anchor: 'docs/decisions/005-hindsight-integration-decisions.md' },
+          score: 0.99,
+        },
+      ];
     };
     freshnessProvider = async () => ({
       status: 'stale',
@@ -1512,8 +1555,8 @@ describe('Callback Routes', () => {
   });
 
   test('POST reflect returns disabled degradation when HINDSIGHT_ENABLED=false', async () => {
-    const previous = process.env['HINDSIGHT_ENABLED'];
-    process.env['HINDSIGHT_ENABLED'] = 'false';
+    const previous = process.env.HINDSIGHT_ENABLED;
+    process.env.HINDSIGHT_ENABLED = 'false';
 
     const app = await createApp();
     const { invocationId, callbackToken } = registry.create('user-1', 'codex');
@@ -1533,8 +1576,8 @@ describe('Callback Routes', () => {
       },
     });
 
-    if (previous === undefined) delete process.env['HINDSIGHT_ENABLED'];
-    else process.env['HINDSIGHT_ENABLED'] = previous;
+    if (previous === undefined) delete process.env.HINDSIGHT_ENABLED;
+    else process.env.HINDSIGHT_ENABLED = previous;
 
     assert.equal(response.statusCode, 200);
     const body = JSON.parse(response.body);
@@ -1573,7 +1616,10 @@ describe('Callback Routes', () => {
     assert.equal(retainCalls.length, 1);
     assert.equal(retainCalls[0].bankId, 'cat-cafe-shared');
     assert.equal(retainCalls[0].items.length, 1);
-    assert.equal(retainCalls[0].items[0].content, 'When storage is unavailable, fail-closed and surface explicit errors.');
+    assert.equal(
+      retainCalls[0].items[0].content,
+      'When storage is unavailable, fail-closed and surface explicit errors.',
+    );
     assert.deepEqual(retainCalls[0].items[0].tags, ['project:cat-cafe', 'kind:decision', 'source:codex']);
     assert.equal(retainCalls[0].items[0].metadata.source, 'callback');
     assert.equal(retainCalls[0].items[0].metadata.catId, 'codex');
@@ -1642,8 +1688,8 @@ describe('Callback Routes', () => {
   });
 
   test('POST retain-memory skips write when HINDSIGHT_ENABLED=false', async () => {
-    const previous = process.env['HINDSIGHT_ENABLED'];
-    process.env['HINDSIGHT_ENABLED'] = 'false';
+    const previous = process.env.HINDSIGHT_ENABLED;
+    process.env.HINDSIGHT_ENABLED = 'false';
 
     const app = await createApp();
     const { invocationId, callbackToken } = registry.create('user-1', 'codex');
@@ -1662,8 +1708,8 @@ describe('Callback Routes', () => {
       },
     });
 
-    if (previous === undefined) delete process.env['HINDSIGHT_ENABLED'];
-    else process.env['HINDSIGHT_ENABLED'] = previous;
+    if (previous === undefined) delete process.env.HINDSIGHT_ENABLED;
+    else process.env.HINDSIGHT_ENABLED = previous;
 
     assert.equal(response.statusCode, 200);
     const body = JSON.parse(response.body);
@@ -1738,9 +1784,7 @@ describe('Callback Routes', () => {
 
     const richPayload = JSON.stringify({
       v: 1,
-      blocks: [
-        { id: 'card-1', kind: 'card', v: 1, title: 'Test Card', tone: 'info' },
-      ],
+      blocks: [{ id: 'card-1', kind: 'card', v: 1, title: 'Test Card', tone: 'info' }],
     });
     const content = `Here is a card:\n\`\`\`cc_rich\n${richPayload}\n\`\`\`\nDone!`;
 
@@ -1770,9 +1814,7 @@ describe('Callback Routes', () => {
 
     const richPayload = JSON.stringify({
       v: 1,
-      blocks: [
-        { id: 'diff-1', kind: 'diff', v: 1, filePath: 'src/foo.ts', diff: '- old\n+ new' },
-      ],
+      blocks: [{ id: 'diff-1', kind: 'diff', v: 1, filePath: 'src/foo.ts', diff: '- old\n+ new' }],
     });
     const content = `Check this:\n\`\`\`cc_rich\n${richPayload}\n\`\`\``;
 
@@ -1910,7 +1952,7 @@ describe('Callback Routes', () => {
     for (const msg of body.messages) {
       assert.ok(
         !msg.content.startsWith('codex stream'),
-        `should not contain codex stream messages, got: ${msg.content}`
+        `should not contain codex stream messages, got: ${msg.content}`,
       );
     }
 
@@ -1980,27 +2022,49 @@ describe('Callback Routes', () => {
 
     // 2 legacy untagged from codex (visible)
     messageStore.append({
-      userId: 'user-1', catId: 'codex', content: 'legacy reply',
-      mentions: [], timestamp: 1000, threadId: tid,
+      userId: 'user-1',
+      catId: 'codex',
+      content: 'legacy reply',
+      mentions: [],
+      timestamp: 1000,
+      threadId: tid,
     });
     messageStore.append({
-      userId: 'user-1', catId: 'codex', content: 'legacy reply 2',
-      mentions: [], timestamp: 1001, threadId: tid,
+      userId: 'user-1',
+      catId: 'codex',
+      content: 'legacy reply 2',
+      mentions: [],
+      timestamp: 1001,
+      threadId: tid,
     });
     // 1 tagged stream from codex (hidden)
     messageStore.append({
-      userId: 'user-1', catId: 'codex', content: 'thinking output',
-      mentions: [], origin: 'stream', timestamp: 2000, threadId: tid,
+      userId: 'user-1',
+      catId: 'codex',
+      content: 'thinking output',
+      mentions: [],
+      origin: 'stream',
+      timestamp: 2000,
+      threadId: tid,
     });
     // 1 tagged callback from codex (visible)
     messageStore.append({
-      userId: 'user-1', catId: 'codex', content: 'callback speech',
-      mentions: [], origin: 'callback', timestamp: 3000, threadId: tid,
+      userId: 'user-1',
+      catId: 'codex',
+      content: 'callback speech',
+      mentions: [],
+      origin: 'callback',
+      timestamp: 3000,
+      threadId: tid,
     });
     // 1 user message (visible)
     messageStore.append({
-      userId: 'user-1', catId: null, content: 'user question',
-      mentions: [], timestamp: 4000, threadId: tid,
+      userId: 'user-1',
+      catId: null,
+      content: 'user question',
+      mentions: [],
+      timestamp: 4000,
+      threadId: tid,
     });
 
     const response = await app.inject({
@@ -2012,7 +2076,7 @@ describe('Callback Routes', () => {
     const body = JSON.parse(response.body);
     // 4 visible: 2 legacy + 1 callback + 1 user. Stream hidden.
     assert.equal(body.messages.length, 4, 'tagged stream hidden, legacy + callback + user visible');
-    const contents = body.messages.map(m => m.content);
+    const contents = body.messages.map((m) => m.content);
     assert.ok(!contents.includes('thinking output'), 'stream must be hidden');
     assert.ok(contents.includes('legacy reply'), 'legacy must be visible');
     assert.ok(contents.includes('callback speech'), 'callback must be visible');
@@ -2025,7 +2089,12 @@ describe('Callback Routes', () => {
     const { invocationId, callbackToken } = registry.create('user-1', 'opus', 'thread-xyz');
 
     messageStore.append({
-      userId: 'user-1', catId: null, content: 'hi', mentions: [], timestamp: 1, threadId: 'thread-xyz',
+      userId: 'user-1',
+      catId: null,
+      content: 'hi',
+      mentions: [],
+      timestamp: 1,
+      threadId: 'thread-xyz',
     });
 
     const response = await app.inject({
@@ -2044,7 +2113,12 @@ describe('Callback Routes', () => {
     const { invocationId, callbackToken } = registry.create('user-1', 'opus', 'thread-home');
 
     messageStore.append({
-      userId: 'user-1', catId: null, content: 'msg-A', mentions: [], timestamp: 1, threadId: 'thread-other',
+      userId: 'user-1',
+      catId: null,
+      content: 'msg-A',
+      mentions: [],
+      timestamp: 1,
+      threadId: 'thread-other',
     });
 
     const response = await app.inject({
@@ -2060,16 +2134,18 @@ describe('Callback Routes', () => {
   // ---- TD091: POST /api/callbacks/register-pr-tracking ----
 
   test('POST register-pr-tracking succeeds with valid input', async () => {
-    const { MemoryPrTrackingStore } = await import(
-      '../dist/infrastructure/email/PrTrackingStore.js'
-    );
+    const { MemoryPrTrackingStore } = await import('../dist/infrastructure/email/PrTrackingStore.js');
     const prTrackingStore = new MemoryPrTrackingStore();
 
     const { callbacksRoutes } = await import('../dist/routes/callbacks.js');
     const app = Fastify();
     await app.register(callbacksRoutes, {
-      registry, messageStore, socketManager, threadStore,
-      sharedBank: 'cat-cafe-shared', prTrackingStore,
+      registry,
+      messageStore,
+      socketManager,
+      threadStore,
+      sharedBank: 'cat-cafe-shared',
+      prTrackingStore,
     });
 
     const { invocationId, callbackToken } = registry.create('user-1', 'opus', 'thread-pr');
@@ -2078,7 +2154,8 @@ describe('Callback Routes', () => {
       method: 'POST',
       url: '/api/callbacks/register-pr-tracking',
       payload: {
-        invocationId, callbackToken,
+        invocationId,
+        callbackToken,
         repoFullName: 'zts212653/cat-cafe',
         prNumber: 99,
         catId: 'opus',
@@ -2102,23 +2179,26 @@ describe('Callback Routes', () => {
   });
 
   test('POST register-pr-tracking rejects invalid credentials', async () => {
-    const { MemoryPrTrackingStore } = await import(
-      '../dist/infrastructure/email/PrTrackingStore.js'
-    );
+    const { MemoryPrTrackingStore } = await import('../dist/infrastructure/email/PrTrackingStore.js');
     const prTrackingStore = new MemoryPrTrackingStore();
 
     const { callbacksRoutes } = await import('../dist/routes/callbacks.js');
     const app = Fastify();
     await app.register(callbacksRoutes, {
-      registry, messageStore, socketManager, threadStore,
-      sharedBank: 'cat-cafe-shared', prTrackingStore,
+      registry,
+      messageStore,
+      socketManager,
+      threadStore,
+      sharedBank: 'cat-cafe-shared',
+      prTrackingStore,
     });
 
     const response = await app.inject({
       method: 'POST',
       url: '/api/callbacks/register-pr-tracking',
       payload: {
-        invocationId: 'bogus', callbackToken: 'bogus',
+        invocationId: 'bogus',
+        callbackToken: 'bogus',
         repoFullName: 'zts212653/cat-cafe',
         prNumber: 1,
         catId: 'opus',
@@ -2129,16 +2209,18 @@ describe('Callback Routes', () => {
   });
 
   test('POST register-pr-tracking rejects unknown catId', async () => {
-    const { MemoryPrTrackingStore } = await import(
-      '../dist/infrastructure/email/PrTrackingStore.js'
-    );
+    const { MemoryPrTrackingStore } = await import('../dist/infrastructure/email/PrTrackingStore.js');
     const prTrackingStore = new MemoryPrTrackingStore();
 
     const { callbacksRoutes } = await import('../dist/routes/callbacks.js');
     const app = Fastify();
     await app.register(callbacksRoutes, {
-      registry, messageStore, socketManager, threadStore,
-      sharedBank: 'cat-cafe-shared', prTrackingStore,
+      registry,
+      messageStore,
+      socketManager,
+      threadStore,
+      sharedBank: 'cat-cafe-shared',
+      prTrackingStore,
     });
 
     const { invocationId, callbackToken } = registry.create('user-1', 'opus');
@@ -2147,7 +2229,8 @@ describe('Callback Routes', () => {
       method: 'POST',
       url: '/api/callbacks/register-pr-tracking',
       payload: {
-        invocationId, callbackToken,
+        invocationId,
+        callbackToken,
         repoFullName: 'zts212653/cat-cafe',
         prNumber: 1,
         catId: 'nonexistent-cat',
@@ -2160,16 +2243,18 @@ describe('Callback Routes', () => {
   });
 
   test('POST register-pr-tracking rejects overwrite from different user (P1-2 ownership)', async () => {
-    const { MemoryPrTrackingStore } = await import(
-      '../dist/infrastructure/email/PrTrackingStore.js'
-    );
+    const { MemoryPrTrackingStore } = await import('../dist/infrastructure/email/PrTrackingStore.js');
     const prTrackingStore = new MemoryPrTrackingStore();
 
     const { callbacksRoutes } = await import('../dist/routes/callbacks.js');
     const app = Fastify();
     await app.register(callbacksRoutes, {
-      registry, messageStore, socketManager, threadStore,
-      sharedBank: 'cat-cafe-shared', prTrackingStore,
+      registry,
+      messageStore,
+      socketManager,
+      threadStore,
+      sharedBank: 'cat-cafe-shared',
+      prTrackingStore,
     });
 
     // User A registers PR #42
@@ -2178,8 +2263,11 @@ describe('Callback Routes', () => {
       method: 'POST',
       url: '/api/callbacks/register-pr-tracking',
       payload: {
-        invocationId: userA.invocationId, callbackToken: userA.callbackToken,
-        repoFullName: 'zts212653/cat-cafe', prNumber: 42, catId: 'opus',
+        invocationId: userA.invocationId,
+        callbackToken: userA.callbackToken,
+        repoFullName: 'zts212653/cat-cafe',
+        prNumber: 42,
+        catId: 'opus',
       },
     });
     assert.equal(regA.statusCode, 200);
@@ -2190,8 +2278,11 @@ describe('Callback Routes', () => {
       method: 'POST',
       url: '/api/callbacks/register-pr-tracking',
       payload: {
-        invocationId: userB.invocationId, callbackToken: userB.callbackToken,
-        repoFullName: 'zts212653/cat-cafe', prNumber: 42, catId: 'codex',
+        invocationId: userB.invocationId,
+        callbackToken: userB.callbackToken,
+        repoFullName: 'zts212653/cat-cafe',
+        prNumber: 42,
+        catId: 'codex',
       },
     });
     assert.equal(regB.statusCode, 409, 'must reject overwrite from different user');
@@ -2203,16 +2294,18 @@ describe('Callback Routes', () => {
   });
 
   test('POST register-pr-tracking allows re-register from same user (update thread)', async () => {
-    const { MemoryPrTrackingStore } = await import(
-      '../dist/infrastructure/email/PrTrackingStore.js'
-    );
+    const { MemoryPrTrackingStore } = await import('../dist/infrastructure/email/PrTrackingStore.js');
     const prTrackingStore = new MemoryPrTrackingStore();
 
     const { callbacksRoutes } = await import('../dist/routes/callbacks.js');
     const app = Fastify();
     await app.register(callbacksRoutes, {
-      registry, messageStore, socketManager, threadStore,
-      sharedBank: 'cat-cafe-shared', prTrackingStore,
+      registry,
+      messageStore,
+      socketManager,
+      threadStore,
+      sharedBank: 'cat-cafe-shared',
+      prTrackingStore,
     });
 
     // User A registers PR #42 from thread-1
@@ -2221,8 +2314,11 @@ describe('Callback Routes', () => {
       method: 'POST',
       url: '/api/callbacks/register-pr-tracking',
       payload: {
-        invocationId: inv1.invocationId, callbackToken: inv1.callbackToken,
-        repoFullName: 'zts212653/cat-cafe', prNumber: 42, catId: 'opus',
+        invocationId: inv1.invocationId,
+        callbackToken: inv1.callbackToken,
+        repoFullName: 'zts212653/cat-cafe',
+        prNumber: 42,
+        catId: 'opus',
       },
     });
 
@@ -2232,8 +2328,11 @@ describe('Callback Routes', () => {
       method: 'POST',
       url: '/api/callbacks/register-pr-tracking',
       payload: {
-        invocationId: inv2.invocationId, callbackToken: inv2.callbackToken,
-        repoFullName: 'zts212653/cat-cafe', prNumber: 42, catId: 'opus',
+        invocationId: inv2.invocationId,
+        callbackToken: inv2.callbackToken,
+        repoFullName: 'zts212653/cat-cafe',
+        prNumber: 42,
+        catId: 'opus',
       },
     });
     assert.equal(res.statusCode, 200);
@@ -2251,7 +2350,8 @@ describe('Callback Routes', () => {
       method: 'POST',
       url: '/api/callbacks/register-pr-tracking',
       payload: {
-        invocationId, callbackToken,
+        invocationId,
+        callbackToken,
         repoFullName: 'zts212653/cat-cafe',
         prNumber: 1,
         catId: 'opus',

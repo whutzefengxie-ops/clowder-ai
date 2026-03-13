@@ -2,12 +2,11 @@
  * claude-ndjson-parser pure function tests
  * F045: NDJSON 可观测性 — Claude parser 补全
  */
-import { test } from 'node:test';
-import assert from 'node:assert/strict';
 
-const { transformClaudeEvent } = await import(
-  '../dist/domains/cats/services/agents/providers/claude-ndjson-parser.js'
-);
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+
+const { transformClaudeEvent } = await import('../dist/domains/cats/services/agents/providers/claude-ndjson-parser.js');
 
 const CAT = 'opus';
 
@@ -56,9 +55,7 @@ test('assistant tool_use → tool_use', () => {
     type: 'assistant',
     message: {
       id: 'msg-2',
-      content: [
-        { type: 'tool_use', name: 'bash', input: { command: 'ls' } },
-      ],
+      content: [{ type: 'tool_use', name: 'bash', input: { command: 'ls' } }],
     },
   };
   const result = transformClaudeEvent(event, CAT, state);

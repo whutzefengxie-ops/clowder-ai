@@ -47,21 +47,22 @@ export function RefluxCapture({ projectId, patterns, onUpdate }: RefluxCapturePr
     }
   }, [projectId, category, title, insight, evidence, onUpdate]);
 
-  const handleDelete = useCallback(async (id: string) => {
-    const res = await apiFetch(`/api/external-projects/${projectId}/reflux-patterns/${id}`, {
-      method: 'DELETE',
-    });
-    if (res.ok || res.status === 204) onUpdate();
-  }, [projectId, onUpdate]);
+  const handleDelete = useCallback(
+    async (id: string) => {
+      const res = await apiFetch(`/api/external-projects/${projectId}/reflux-patterns/${id}`, {
+        method: 'DELETE',
+      });
+      if (res.ok || res.status === 204) onUpdate();
+    },
+    [projectId, onUpdate],
+  );
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <div className="text-sm font-semibold text-[#2B2118]">经验回流</div>
-          <div className="text-[10px] text-[#9A866F]">
-            方法论经验沉淀 — 只回流知识，不回流项目数据
-          </div>
+          <div className="text-[10px] text-[#9A866F]">方法论经验沉淀 — 只回流知识，不回流项目数据</div>
         </div>
         <button
           type="button"
@@ -81,7 +82,9 @@ export function RefluxCapture({ projectId, patterns, onUpdate }: RefluxCapturePr
             className="w-full rounded border border-[#E7DAC7] bg-white px-2 py-1.5 text-xs text-[#2B2118]"
           >
             {CATEGORY_OPTIONS.map((c) => (
-              <option key={c} value={c}>{CATEGORY_STYLES[c].label}</option>
+              <option key={c} value={c}>
+                {CATEGORY_STYLES[c].label}
+              </option>
             ))}
           </select>
           <input
@@ -143,9 +146,7 @@ export function RefluxCapture({ projectId, patterns, onUpdate }: RefluxCapturePr
                 </div>
                 <div className="text-[#6B5D4F]">{p.insight}</div>
                 {p.evidence && (
-                  <div className="mt-1 rounded bg-[#F4EFE7] px-2 py-1 text-[10px] text-[#9A866F]">
-                    {p.evidence}
-                  </div>
+                  <div className="mt-1 rounded bg-[#F4EFE7] px-2 py-1 text-[10px] text-[#9A866F]">{p.evidence}</div>
                 )}
               </div>
             );

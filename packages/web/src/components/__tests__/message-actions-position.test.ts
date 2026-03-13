@@ -1,14 +1,14 @@
-import React from 'react';
+import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { act } from 'react';
-import { beforeAll, beforeEach, afterAll, afterEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn() }),
 }));
 
 vi.mock('@/stores/chatStore', () => ({
-  useChatStore: (selector: (state: { removeMessage: (id: string) => void }) => unknown) => selector({ removeMessage: () => {} }),
+  useChatStore: (selector: (state: { removeMessage: (id: string) => void }) => unknown) =>
+    selector({ removeMessage: () => {} }),
 }));
 
 vi.mock('@/utils/api-client', () => ({
@@ -66,8 +66,8 @@ describe('MessageActions position', () => {
             },
             threadId: 'thread-1',
           },
-          React.createElement('div', null, 'user message')
-        )
+          React.createElement('div', null, 'user message'),
+        ),
       );
     });
 
@@ -93,8 +93,8 @@ describe('MessageActions position', () => {
             },
             threadId: 'thread-1',
           },
-          React.createElement('div', null, 'assistant message')
-        )
+          React.createElement('div', null, 'assistant message'),
+        ),
       );
     });
 

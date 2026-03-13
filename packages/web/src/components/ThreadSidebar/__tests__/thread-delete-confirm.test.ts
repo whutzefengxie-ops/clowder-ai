@@ -3,8 +3,7 @@
  * Verifies that clicking delete shows a dialog, cancel dismisses it,
  * and confirm actually triggers the DELETE API call.
  */
-import React from 'react';
-import { act } from 'react';
+import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ThreadSidebar } from '../ThreadSidebar';
@@ -34,9 +33,13 @@ const TEST_THREAD = {
 
 let storeThreads = [TEST_THREAD];
 const mockStore: Record<string, unknown> = {
-  get threads() { return storeThreads; },
+  get threads() {
+    return storeThreads;
+  },
   currentThreadId: 'default',
-  setThreads: vi.fn((t: typeof storeThreads) => { storeThreads = t; }),
+  setThreads: vi.fn((t: typeof storeThreads) => {
+    storeThreads = t;
+  }),
   setCurrentProject: vi.fn(),
   isLoadingThreads: false,
   setLoadingThreads: vi.fn(),
@@ -51,7 +54,7 @@ const mockStore: Record<string, unknown> = {
 };
 vi.mock('@/stores/chatStore', () => {
   const hook = Object.assign(
-    (selector?: (s: typeof mockStore) => unknown) => selector ? selector(mockStore) : mockStore,
+    (selector?: (s: typeof mockStore) => unknown) => (selector ? selector(mockStore) : mockStore),
     { getState: () => mockStore },
   );
   return { useChatStore: hook };
@@ -90,8 +93,12 @@ describe('Thread delete confirmation (I-1)', () => {
     Object.defineProperty(window, 'localStorage', {
       value: {
         getItem: (k: string) => store[k] ?? null,
-        setItem: (k: string, v: string) => { store[k] = v; },
-        removeItem: (k: string) => { delete store[k]; },
+        setItem: (k: string, v: string) => {
+          store[k] = v;
+        },
+        removeItem: (k: string) => {
+          delete store[k];
+        },
       },
       writable: true,
       configurable: true,
@@ -109,30 +116,37 @@ describe('Thread delete confirmation (I-1)', () => {
   });
 
   async function flush() {
-    await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
   }
 
   function findDeleteButton(): HTMLButtonElement | undefined {
-    return Array.from(container.querySelectorAll('button')).find(
-      (b) => b.getAttribute('title') === '删除对话',
-    );
+    return Array.from(container.querySelectorAll('button')).find((b) => b.getAttribute('title') === '删除对话');
   }
 
   /** F095 defaults all sections collapsed. Click expand-all first. */
   function expandAll() {
     const expandBtn = container.querySelector('[data-testid="expand-all-btn"]') as HTMLButtonElement | null;
-    if (expandBtn) act(() => { expandBtn.click(); });
+    if (expandBtn)
+      act(() => {
+        expandBtn.click();
+      });
   }
 
   it('shows confirmation dialog when clicking delete', async () => {
-    act(() => { root.render(React.createElement(ThreadSidebar)); });
+    act(() => {
+      root.render(React.createElement(ThreadSidebar));
+    });
     await flush();
     expandAll();
 
     const deleteBtn = findDeleteButton();
     expect(deleteBtn, 'delete button should exist for non-default thread').toBeTruthy();
 
-    act(() => { deleteBtn!.click(); });
+    act(() => {
+      deleteBtn?.click();
+    });
 
     // Dialog should appear with thread title and warning
     expect(container.textContent).toContain('确认删除对话');
@@ -147,39 +161,47 @@ describe('Thread delete confirmation (I-1)', () => {
   });
 
   it('dismisses dialog when clicking cancel', async () => {
-    act(() => { root.render(React.createElement(ThreadSidebar)); });
+    act(() => {
+      root.render(React.createElement(ThreadSidebar));
+    });
     await flush();
     expandAll();
 
     const deleteBtn = findDeleteButton();
-    act(() => { deleteBtn!.click(); });
+    act(() => {
+      deleteBtn?.click();
+    });
     expect(container.textContent).toContain('确认删除对话');
 
     // Click cancel
-    const cancelBtn = Array.from(container.querySelectorAll('button')).find(
-      (b) => b.textContent === '取消',
-    )!;
-    act(() => { cancelBtn.click(); });
+    const cancelBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === '取消')!;
+    act(() => {
+      cancelBtn.click();
+    });
 
     // Dialog should be gone
     expect(container.textContent).not.toContain('确认删除对话');
   });
 
   it('calls DELETE API only after clicking confirm', async () => {
-    act(() => { root.render(React.createElement(ThreadSidebar)); });
+    act(() => {
+      root.render(React.createElement(ThreadSidebar));
+    });
     await flush();
     expandAll();
 
     const deleteBtn = findDeleteButton();
-    act(() => { deleteBtn!.click(); });
+    act(() => {
+      deleteBtn?.click();
+    });
 
     // Click confirm
-    const confirmBtn = Array.from(container.querySelectorAll('button')).find(
-      (b) => b.textContent === '移入回收站',
-    )!;
+    const confirmBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === '移入回收站')!;
     expect(confirmBtn).toBeTruthy();
 
-    await act(async () => { confirmBtn.click(); });
+    await act(async () => {
+      confirmBtn.click();
+    });
     await flush();
 
     // Now DELETE should have been called

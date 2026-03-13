@@ -1,6 +1,7 @@
 // @ts-check
-import { describe, it, beforeEach } from 'node:test';
+
 import assert from 'node:assert/strict';
+import { beforeEach, describe, it } from 'node:test';
 import { PushSubscriptionStore } from '../dist/domains/cats/services/stores/ports/PushSubscriptionStore.js';
 
 describe('PushSubscriptionStore (memory)', () => {
@@ -93,7 +94,7 @@ describe('PushSubscriptionStore (memory)', () => {
     smallStore.upsert(sub3);
     // sub1 should be evicted (oldest)
     assert.equal(smallStore.listAll().length, 2);
-    const endpoints = smallStore.listAll().map(s => s.endpoint);
+    const endpoints = smallStore.listAll().map((s) => s.endpoint);
     assert.ok(!endpoints.includes(sub1.endpoint), 'sub1 should be evicted');
     assert.ok(endpoints.includes(sub2.endpoint));
     assert.ok(endpoints.includes(sub3.endpoint));

@@ -24,17 +24,17 @@ import type { ITaskStore } from '../domains/cats/services/stores/ports/TaskStore
 import type { IThreadStore, VotingStateV1 } from '../domains/cats/services/stores/ports/ThreadStore.js';
 import { canViewMessage } from '../domains/cats/services/stores/visibility.js';
 import { getVoiceBlockSynthesizer } from '../domains/cats/services/tts/VoiceBlockSynthesizer.js';
+import type { IEvidenceStore, IMarkerQueue, IReflectionService } from '../domains/memory/interfaces.js';
 import type { IPrTrackingStore } from '../infrastructure/email/PrTrackingStore.js';
 import type { SocketManager } from '../infrastructure/websocket/index.js';
 import { getFeatureTagId } from './backlog-doc-import.js';
 import { enqueueA2ATargets } from './callback-a2a-trigger.js';
 import { callbackAuthSchema } from './callback-auth-schema.js';
+import { registerCallbackBootcampRoutes } from './callback-bootcamp-routes.js';
 import { EXPIRED_CREDENTIALS_ERROR } from './callback-errors.js';
-import type { IEvidenceStore, IMarkerQueue, IReflectionService } from '../domains/memory/interfaces.js';
 import { registerCallbackMemoryRoutes } from './callback-memory-routes.js';
 import { getMultiMentionOrchestrator, registerMultiMentionRoutes } from './callback-multi-mention-routes.js';
 import { registerCallbackTaskRoutes } from './callback-task-routes.js';
-import { registerCallbackBootcampRoutes } from './callback-bootcamp-routes.js';
 import { registerCallbackWorkflowSopRoutes } from './callback-workflow-sop-routes.js';
 import { type FeatIndexEntry, readFeatIndexEntries } from './feat-index-doc-import.js';
 import { detectUserMention } from './user-mention.js';
@@ -166,17 +166,21 @@ const richBlockSchema = z.discriminatedUnion('kind', [
     interactiveType: z.enum(['select', 'multi-select', 'card-grid', 'confirm']),
     title: z.string().optional(),
     description: z.string().optional(),
-    options: z.array(z.object({
-      id: z.string().min(1),
-      label: z.string().min(1),
-      emoji: z.string().optional(),
-      icon: z.string().optional(),
-      description: z.string().optional(),
-      level: z.number().optional(),
-      group: z.string().optional(),
-      customInput: z.boolean().optional(),
-      customInputPlaceholder: z.string().optional(),
-    })).min(1),
+    options: z
+      .array(
+        z.object({
+          id: z.string().min(1),
+          label: z.string().min(1),
+          emoji: z.string().optional(),
+          icon: z.string().optional(),
+          description: z.string().optional(),
+          level: z.number().optional(),
+          group: z.string().optional(),
+          customInput: z.boolean().optional(),
+          customInputPlaceholder: z.string().optional(),
+        }),
+      )
+      .min(1),
     maxSelect: z.number().int().min(1).optional(),
     allowRandom: z.boolean().optional(),
     messageTemplate: z.string().optional(),
@@ -250,7 +254,15 @@ export const callbacksRoutes: FastifyPluginAsync<CallbackRoutesOptions> = async 
       return { error: 'Invalid request body', details: parsed.error.issues };
     }
 
-    const { invocationId, callbackToken, content, threadId, replyTo, clientMessageId, targetCats: explicitTargetCats } = parsed.data;
+    const {
+      invocationId,
+      callbackToken,
+      content,
+      threadId,
+      replyTo,
+      clientMessageId,
+      targetCats: explicitTargetCats,
+    } = parsed.data;
     const record = registry.verify(invocationId, callbackToken);
     if (!record) {
       reply.status(401);
@@ -321,7 +333,7 @@ export const callbacksRoutes: FastifyPluginAsync<CallbackRoutesOptions> = async 
     const senderCatId = createCatId(record.catId);
     const contentTargets = parseA2AMentions(storedContent, isCrossThread ? undefined : senderCatId);
     // F098-C1: Merge explicit targetCats with content-parsed mentions (deduped)
-    const mergedTargets = new Set<CatId>([...contentTargets, ...(explicitTargetCats ?? []) as CatId[]]);
+    const mergedTargets = new Set<CatId>([...contentTargets, ...((explicitTargetCats ?? []) as CatId[])]);
     const mentions: CatId[] = [...mergedTargets];
     const mentionsUser = detectUserMention(storedContent);
     const crossPostExtra = isCrossThread
@@ -354,10 +366,14 @@ export const callbacksRoutes: FastifyPluginAsync<CallbackRoutesOptions> = async 
         messageId: storedMsg.id,
         // F52+F098-C1: Include crossPost + targetCats in real-time broadcast
         ...(isCrossThread || explicitTargetCats?.length
-          ? { extra: {
-              ...(isCrossThread ? { crossPost: { sourceThreadId: record.threadId, sourceInvocationId: invocationId } } : {}),
-              ...(explicitTargetCats?.length ? { targetCats: explicitTargetCats } : {}),
-            } }
+          ? {
+              extra: {
+                ...(isCrossThread
+                  ? { crossPost: { sourceThreadId: record.threadId, sourceInvocationId: invocationId } }
+                  : {}),
+                ...(explicitTargetCats?.length ? { targetCats: explicitTargetCats } : {}),
+              },
+            }
           : {}),
         ...(mentionsUser ? { mentionsUser } : {}),
         timestamp: Date.now(),
@@ -518,7 +534,7 @@ export const callbacksRoutes: FastifyPluginAsync<CallbackRoutesOptions> = async 
       currentCursor,
     );
     if (pendingWindow.length > 0) {
-      const windowLastId = pendingWindow[pendingWindow.length - 1]!.id;
+      const windowLastId = pendingWindow[pendingWindow.length - 1]?.id;
       if (upToMessageId > windowLastId) {
         reply.status(400);
         return {
@@ -835,8 +851,8 @@ export const callbacksRoutes: FastifyPluginAsync<CallbackRoutesOptions> = async 
   app.post('/api/callbacks/create-rich-block', async (request, reply) => {
     // #85 M2b: normalize block before Zod parse (type→kind, auto v:1)
     const rawBody = request.body as Record<string, unknown>;
-    if (rawBody && typeof rawBody === 'object' && rawBody['block']) {
-      normalizeRichBlock(rawBody['block']);
+    if (rawBody && typeof rawBody === 'object' && rawBody.block) {
+      normalizeRichBlock(rawBody.block);
     }
 
     const parsed = createRichBlockSchema.safeParse(rawBody);

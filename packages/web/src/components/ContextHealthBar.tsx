@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { ContextHealthData } from '@/stores/chat-types';
 
 const CAT_BG_COLORS: Record<string, string> = {
@@ -13,7 +13,7 @@ const CAT_BG_COLORS: Record<string, string> = {
   sonnet: '#B39DDB',
 };
 
-const WARN_COLOR = '#f59e0b';  // amber-500
+const WARN_COLOR = '#f59e0b'; // amber-500
 const DANGER_COLOR = '#ef4444'; // red-500
 
 export interface ContextHealthBarProps {
@@ -41,7 +41,7 @@ function formatTokenCount(n: number): string {
 export function ContextHealthBar({
   catId,
   health,
-  warnThreshold = 0.70,
+  warnThreshold = 0.7,
   dangerThreshold = 0.85,
 }: ContextHealthBarProps) {
   const [width, setWidth] = useState(0);
@@ -68,11 +68,7 @@ export function ContextHealthBar({
   const tooltip = `Context: ${approxPrefix}${percent}% (${formatTokenCount(health.usedTokens)} / ${formatTokenCount(health.windowTokens)} tokens)`;
 
   return (
-    <div
-      className="mt-1"
-      title={tooltip}
-      data-testid={`context-health-${catId}`}
-    >
+    <div className="mt-1" title={tooltip} data-testid={`context-health-${catId}`}>
       <div className="flex items-center gap-1.5">
         <div className="flex-1 h-[3px] rounded-full bg-gray-200 overflow-hidden">
           <div
@@ -85,7 +81,8 @@ export function ContextHealthBar({
           />
         </div>
         <span className="text-[10px] text-gray-400 tabular-nums w-8 text-right">
-          {approxPrefix}{percent}%
+          {approxPrefix}
+          {percent}%
         </span>
       </div>
     </div>

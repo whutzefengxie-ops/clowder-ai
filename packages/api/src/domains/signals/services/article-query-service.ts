@@ -3,15 +3,15 @@ import { SignalArticleSchema } from '@cat-cafe/shared';
 import type { SignalPaths } from '../config/signal-paths.js';
 import { resolveSignalPaths } from '../config/signal-paths.js';
 import {
-  readArticleDocument as readArticleDocumentFromStore,
   type ParsedArticleDocument,
-  toUpdatedFrontmatter,
+  readArticleDocument as readArticleDocumentFromStore,
   type SignalArticleDetail,
+  toUpdatedFrontmatter,
   writeArticleDocument,
 } from './article-document.js';
 import { computeSignalArticleStats, type SignalArticleStats } from './article-stats.js';
 import { normalizeArticleUrl } from './deduplication.js';
-import { readInboxRecords as readInboxRecordsFromStore, type InboxRecord } from './inbox-records.js';
+import { type InboxRecord, readInboxRecords as readInboxRecordsFromStore } from './inbox-records.js';
 
 export type { SignalArticleDetail } from './article-document.js';
 
@@ -183,8 +183,8 @@ export class SignalArticleQueryService {
     const hasMoreHistory = sampledRecords.length > scanBudget;
     const initialRecords = hasMoreHistory
       ? [...sampledRecords]
-        .sort((left, right) => Date.parse(right.fetchedAt) - Date.parse(left.fetchedAt))
-        .slice(0, scanBudget)
+          .sort((left, right) => Date.parse(right.fetchedAt) - Date.parse(left.fetchedAt))
+          .slice(0, scanBudget)
       : sampledRecords;
 
     let selected = await selectInboxArticles(initialRecords, options, limit, this.deps.readArticleDocument);
@@ -237,7 +237,9 @@ export class SignalArticleQueryService {
     };
   }
 
-  async search(options: SearchSignalArticlesOptions): Promise<{ readonly total: number; readonly items: readonly SignalArticle[] }> {
+  async search(
+    options: SearchSignalArticlesOptions,
+  ): Promise<{ readonly total: number; readonly items: readonly SignalArticle[] }> {
     const query = options.query.trim().toLowerCase();
     if (query.length === 0) {
       return {
@@ -289,10 +291,7 @@ export class SignalArticleQueryService {
       return null;
     }
     const { summary: _previousSummary, note: _previousNote, ...articleBase } = detail.article;
-    const nextSummary =
-      input.summary === undefined
-        ? detail.article.summary
-        : input.summary.trim();
+    const nextSummary = input.summary === undefined ? detail.article.summary : input.summary.trim();
     const nextNote = input.note === undefined ? detail.article.note : input.note;
     const nextDeletedAt = input.deletedAt === undefined ? detail.article.deletedAt : input.deletedAt;
     const nextArticle: SignalArticle = SignalArticleSchema.parse({

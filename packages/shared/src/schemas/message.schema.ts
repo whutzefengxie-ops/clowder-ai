@@ -89,12 +89,7 @@ export const MessageContentSchema = z.discriminatedUnion('type', [
 /**
  * Message status schema
  */
-export const MessageStatusSchema = z.enum([
-  'pending',
-  'streaming',
-  'complete',
-  'error',
-]);
+export const MessageStatusSchema = z.enum(['pending', 'streaming', 'complete', 'error']);
 
 /**
  * Complete message schema

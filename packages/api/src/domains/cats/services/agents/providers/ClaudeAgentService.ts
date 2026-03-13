@@ -15,22 +15,17 @@
  *   result/success → 跳过 (done 在循环后 yield)
  */
 
-import { createCatId, type CatId } from '@cat-cafe/shared';
 import { existsSync } from 'node:fs';
 import { isAbsolute, resolve } from 'node:path';
-import { spawnCli, isCliError, isCliTimeout } from '../../../../../utils/cli-spawn.js';
-import { formatCliExitError } from '../../../../../utils/cli-format.js';
-import type { SpawnFn } from '../../../../../utils/cli-types.js';
-import { extractImagePaths } from '../providers/image-paths.js';
-import { appendLocalImagePathHints, collectImageAccessDirectories } from '../providers/image-cli-bridge.js';
+import { type CatId, createCatId } from '@cat-cafe/shared';
 import { getCatModel } from '../../../../../config/cat-models.js';
-import type {
-  AgentMessage,
-  AgentService,
-  AgentServiceOptions,
-  MessageMetadata,
-} from '../../types.js';
-import { transformClaudeEvent, isResultErrorEvent, extractClaudeUsage } from './claude-ndjson-parser.js';
+import { formatCliExitError } from '../../../../../utils/cli-format.js';
+import { isCliError, isCliTimeout, spawnCli } from '../../../../../utils/cli-spawn.js';
+import type { SpawnFn } from '../../../../../utils/cli-types.js';
+import type { AgentMessage, AgentService, AgentServiceOptions, MessageMetadata } from '../../types.js';
+import { appendLocalImagePathHints, collectImageAccessDirectories } from '../providers/image-cli-bridge.js';
+import { extractImagePaths } from '../providers/image-paths.js';
+import { extractClaudeUsage, isResultErrorEvent, transformClaudeEvent } from './claude-ndjson-parser.js';
 
 const PERMISSION_MODE = 'bypassPermissions';
 
@@ -54,21 +49,19 @@ function formatThinkingSignatureRescueError(sessionId: string | undefined): stri
   ].join(' ');
 }
 
-function buildClaudeEnvOverrides(
-  callbackEnv?: Record<string, string>,
-): Record<string, string | null> | undefined {
+function buildClaudeEnvOverrides(callbackEnv?: Record<string, string>): Record<string, string | null> | undefined {
   if (!callbackEnv) return undefined;
   const env: Record<string, string | null> = { ...callbackEnv };
   const mode = callbackEnv[ANTHROPIC_PROFILE_MODE_KEY];
   if (mode === 'api_key') {
     const apiKey = callbackEnv[ANTHROPIC_PROFILE_API_KEY]?.trim();
     const baseUrl = callbackEnv[ANTHROPIC_PROFILE_BASE_URL]?.trim();
-    if (apiKey) env['ANTHROPIC_API_KEY'] = apiKey;
-    if (baseUrl) env['ANTHROPIC_BASE_URL'] = baseUrl;
+    if (apiKey) env.ANTHROPIC_API_KEY = apiKey;
+    if (baseUrl) env.ANTHROPIC_BASE_URL = baseUrl;
   } else {
     // Subscription mode: explicitly clear inherited key-based env vars.
-    env['ANTHROPIC_API_KEY'] = null;
-    env['ANTHROPIC_BASE_URL'] = null;
+    env.ANTHROPIC_API_KEY = null;
+    env.ANTHROPIC_BASE_URL = null;
   }
   return env;
 }
@@ -123,7 +116,7 @@ export class ClaudeAgentService implements AgentService {
     this.spawnFn = options?.spawnFn;
     // F32-b: model from options > env (getCatModel) > default
     this.model = options?.model ?? getCatModel(this.catId as string);
-    const configuredPath = options?.mcpServerPath ?? process.env['CAT_CAFE_MCP_SERVER_PATH'];
+    const configuredPath = options?.mcpServerPath ?? process.env.CAT_CAFE_MCP_SERVER_PATH;
     if (configuredPath && configuredPath.trim().length > 0) {
       this.mcpServerPath = isAbsolute(configuredPath) ? configuredPath : resolve(process.cwd(), configuredPath);
     } else {
@@ -131,10 +124,7 @@ export class ClaudeAgentService implements AgentService {
     }
   }
 
-  async *invoke(
-    prompt: string,
-    options?: AgentServiceOptions
-  ): AsyncIterable<AgentMessage> {
+  async *invoke(prompt: string, options?: AgentServiceOptions): AsyncIterable<AgentMessage> {
     let effectivePrompt = prompt;
     const imagePaths = extractImagePaths(options?.contentBlocks, options?.uploadDir);
     const imageAccessDirs = collectImageAccessDirectories(imagePaths);
@@ -144,14 +134,19 @@ export class ClaudeAgentService implements AgentService {
     // Profile-level model override (e.g. "opus[1m]") takes precedence over constructor model
     const effectiveModel = options?.callbackEnv?.[ANTHROPIC_MODEL_OVERRIDE_KEY]?.trim() || this.model;
     const args: string[] = [
-      '-p', effectivePrompt,
-      '--output-format', 'stream-json',
+      '-p',
+      effectivePrompt,
+      '--output-format',
+      'stream-json',
       '--include-partial-messages',
       '--verbose',
-      '--model', effectiveModel,
-      '--permission-mode', PERMISSION_MODE,
+      '--model',
+      effectiveModel,
+      '--permission-mode',
+      PERMISSION_MODE,
       // Skip global user settings to prevent config pollution across sessions
-      '--setting-sources', 'project,local',
+      '--setting-sources',
+      'project,local',
       // Enable Chrome MCP integration (built-in, requires Chrome + extension running)
       '--chrome',
     ];
@@ -170,14 +165,17 @@ export class ClaudeAgentService implements AgentService {
 
     // Add MCP server config when callback env is present
     if (options?.callbackEnv && this.mcpServerPath) {
-      args.push('--mcp-config', JSON.stringify({
-        mcpServers: {
-          'cat-cafe': {
-            command: 'node',
-            args: [this.mcpServerPath],
+      args.push(
+        '--mcp-config',
+        JSON.stringify({
+          mcpServers: {
+            'cat-cafe': {
+              command: 'node',
+              args: [this.mcpServerPath],
+            },
           },
-        },
-      }));
+        }),
+      );
     }
 
     const metadata: MessageMetadata = { provider: 'anthropic', model: effectiveModel };
@@ -215,9 +213,10 @@ export class ClaudeAgentService implements AgentService {
         }
         if (isCliError(event)) {
           if (sawResultError) continue;
-          const error = event.reasonCode === 'invalid_thinking_signature'
-            ? formatThinkingSignatureRescueError(options?.sessionId)
-            : formatCliExitError('Claude CLI', event);
+          const error =
+            event.reasonCode === 'invalid_thinking_signature'
+              ? formatThinkingSignatureRescueError(options?.sessionId)
+              : formatCliExitError('Claude CLI', event);
           yield {
             type: 'error',
             catId: this.catId,
@@ -230,7 +229,7 @@ export class ClaudeAgentService implements AgentService {
 
         // F8: Capture usage from result/success events before transform drops them
         const rawEvt = event as Record<string, unknown>;
-        if (rawEvt['type'] === 'result' && rawEvt['subtype'] === 'success') {
+        if (rawEvt.type === 'result' && rawEvt.subtype === 'success') {
           metadata.usage = extractClaudeUsage(rawEvt);
           // F24-fix: Attach per-turn input from last message_start for context health
           if (streamState.lastTurnInputTokens != null && metadata.usage) {

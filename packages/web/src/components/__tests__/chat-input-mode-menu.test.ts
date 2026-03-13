@@ -1,7 +1,7 @@
 import React from 'react';
-import { describe, expect, it, vi, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react-dom/test-utils';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatInput } from '@/components/ChatInput';
 
 vi.mock('@/components/icons/SendIcon', () => ({
@@ -60,10 +60,7 @@ function typeInTextarea(value: string) {
   const ta = getTextarea();
   act(() => {
     // Simulate native input: set value then fire change
-    const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-      HTMLTextAreaElement.prototype,
-      'value',
-    )!.set!;
+    const nativeInputValueSetter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set!;
     nativeInputValueSetter.call(ta, value);
     ta.dispatchEvent(new Event('change', { bubbles: true }));
   });

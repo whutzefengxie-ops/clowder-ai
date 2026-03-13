@@ -1,5 +1,4 @@
-import React from 'react';
-import { act } from 'react';
+import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MobileInputToolbar } from '@/components/MobileInputToolbar';
@@ -37,7 +36,9 @@ describe('MobileInputToolbar', () => {
       onClose: vi.fn(),
       ...props,
     };
-    act(() => { root.render(React.createElement(MobileInputToolbar, defaults)); });
+    act(() => {
+      root.render(React.createElement(MobileInputToolbar, defaults));
+    });
     return defaults;
   }
 
@@ -52,24 +53,30 @@ describe('MobileInputToolbar', () => {
 
   it('calls onAttach + onClose when attach button is clicked', () => {
     const fns = render();
-    const attachBtn = Array.from(container.querySelectorAll('button')).find(b => b.textContent?.includes('附件'));
-    act(() => { attachBtn?.click(); });
+    const attachBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('附件'));
+    act(() => {
+      attachBtn?.click();
+    });
     expect(fns.onAttach).toHaveBeenCalledTimes(1);
     expect(fns.onClose).toHaveBeenCalledTimes(1);
   });
 
   it('calls onWhisperToggle + onClose when whisper button is clicked', () => {
     const fns = render();
-    const whisperBtn = Array.from(container.querySelectorAll('button')).find(b => b.textContent?.includes('悄悄话'));
-    act(() => { whisperBtn?.click(); });
+    const whisperBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('悄悄话'));
+    act(() => {
+      whisperBtn?.click();
+    });
     expect(fns.onWhisperToggle).toHaveBeenCalledTimes(1);
     expect(fns.onClose).toHaveBeenCalledTimes(1);
   });
 
   it('calls onModeClick + onClose when mode button is clicked', () => {
     const fns = render();
-    const modeBtn = Array.from(container.querySelectorAll('button')).find(b => b.textContent?.includes('模式'));
-    act(() => { modeBtn?.click(); });
+    const modeBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('模式'));
+    act(() => {
+      modeBtn?.click();
+    });
     expect(fns.onModeClick).toHaveBeenCalledTimes(1);
     expect(fns.onClose).toHaveBeenCalledTimes(1);
   });
@@ -78,15 +85,15 @@ describe('MobileInputToolbar', () => {
     render({ disabled: true });
     const buttons = container.querySelectorAll('button');
     // whisper and mode should be disabled (attach also disabled via sendDisabled)
-    const whisperBtn = Array.from(buttons).find(b => b.textContent?.includes('悄悄话'));
-    const modeBtn = Array.from(buttons).find(b => b.textContent?.includes('模式'));
+    const whisperBtn = Array.from(buttons).find((b) => b.textContent?.includes('悄悄话'));
+    const modeBtn = Array.from(buttons).find((b) => b.textContent?.includes('模式'));
     expect(whisperBtn?.disabled).toBe(true);
     expect(modeBtn?.disabled).toBe(true);
   });
 
   it('applies whisper-active styling when whisperMode is true', () => {
     render({ whisperMode: true });
-    const whisperBtn = Array.from(container.querySelectorAll('button')).find(b => b.textContent?.includes('悄悄话'));
+    const whisperBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('悄悄话'));
     expect(whisperBtn?.className).toContain('amber');
   });
 });

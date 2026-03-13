@@ -1,16 +1,11 @@
 'use client';
 
-import { useState } from 'react';
 import type { BacklogPriority } from '@cat-cafe/shared';
+import { useState } from 'react';
 
 interface QuickCreateFormProps {
   disabled?: boolean;
-  onCreate: (payload: {
-    title: string;
-    summary: string;
-    priority: BacklogPriority;
-    tags: string[];
-  }) => Promise<void>;
+  onCreate: (payload: { title: string; summary: string; priority: BacklogPriority; tags: string[] }) => Promise<void>;
 }
 
 export function QuickCreateForm({ disabled, onCreate }: QuickCreateFormProps) {

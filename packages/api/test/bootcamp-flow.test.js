@@ -3,8 +3,8 @@
  * Full happy path: create thread → advance through phases → complete
  */
 
-import { test, describe, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { beforeEach, describe, test } from 'node:test';
 import Fastify from 'fastify';
 import './helpers/setup-cat-registry.js';
 
@@ -18,19 +18,17 @@ describe('Bootcamp Flow Integration', () => {
     const { InvocationRegistry } = await import(
       '../dist/domains/cats/services/agents/invocation/InvocationRegistry.js'
     );
-    const { ThreadStore } = await import(
-      '../dist/domains/cats/services/stores/ports/ThreadStore.js'
-    );
-    const { MessageStore } = await import(
-      '../dist/domains/cats/services/stores/ports/MessageStore.js'
-    );
+    const { ThreadStore } = await import('../dist/domains/cats/services/stores/ports/ThreadStore.js');
+    const { MessageStore } = await import('../dist/domains/cats/services/stores/ports/MessageStore.js');
 
     registry = new InvocationRegistry();
     threadStore = new ThreadStore();
     messageStore = new MessageStore();
     socketManager = {
       broadcastAgentMessage() {},
-      getMessages() { return []; },
+      getMessages() {
+        return [];
+      },
     };
   });
 

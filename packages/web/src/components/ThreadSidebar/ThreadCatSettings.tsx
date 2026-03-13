@@ -93,21 +93,19 @@ export function ThreadCatSettings({ threadId, currentCats, onSave }: ThreadCatSe
           onClick={(e) => e.stopPropagation()}
         >
           <CatSelector selectedCats={selectedCats} onSelectionChange={setSelectedCats} />
-          {saveError && (
-            <p className="text-[10px] text-red-500 mt-1">保存失败，请重试</p>
-          )}
+          {saveError && <p className="text-[10px] text-red-500 mt-1">保存失败，请重试</p>}
           <div className="flex items-center justify-between mt-3 pt-2 border-t border-gray-100">
             {selectedCats.length > 0 && (
-              <button
-                onClick={() => setSelectedCats([])}
-                className="text-[10px] text-gray-400 hover:text-red-400"
-              >
+              <button onClick={() => setSelectedCats([])} className="text-[10px] text-gray-400 hover:text-red-400">
                 清除
               </button>
             )}
             <div className="flex gap-1.5 ml-auto">
               <button
-                onClick={() => { setIsOpen(false); setSelectedCats(currentCats); }}
+                onClick={() => {
+                  setIsOpen(false);
+                  setSelectedCats(currentCats);
+                }}
                 className="text-xs px-2 py-0.5 rounded text-gray-500 hover:bg-gray-100"
               >
                 取消

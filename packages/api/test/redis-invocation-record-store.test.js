@@ -3,14 +3,11 @@
  * 有 Redis → 测全量；无 Redis → skip
  */
 
-import { describe, it, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  assertRedisIsolationOrThrow,
-  cleanupPrefixedRedisKeys,
-} from './helpers/redis-test-helpers.js';
+import { after, before, beforeEach, describe, it } from 'node:test';
+import { assertRedisIsolationOrThrow, cleanupPrefixedRedisKeys } from './helpers/redis-test-helpers.js';
 
-const REDIS_URL = process.env['REDIS_URL'];
+const REDIS_URL = process.env.REDIS_URL;
 
 describe('RedisInvocationRecordStore', { skip: !REDIS_URL ? 'REDIS_URL not set' : false }, () => {
   let RedisInvocationRecordStore;
@@ -225,7 +222,7 @@ describe('RedisInvocationRecordStore', { skip: !REDIS_URL ? 'REDIS_URL not set' 
 
     const result = await store.update(invocationId, {
       status: 'running',
-      expectedStatus: 'failed',   // actual is 'queued'
+      expectedStatus: 'failed', // actual is 'queued'
     });
     assert.equal(result, null);
 

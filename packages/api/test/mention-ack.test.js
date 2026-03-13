@@ -13,14 +13,16 @@
  * 10. F27 auto-ack on enqueue (callback enqueues → pending-mentions empty)
  */
 
-import { test, describe, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { beforeEach, describe, test } from 'node:test';
 import Fastify from 'fastify';
 
 function createMockSocketManager() {
   return {
     broadcastAgentMessage() {},
-    getMessages() { return []; },
+    getMessages() {
+      return [];
+    },
   };
 }
 
@@ -34,12 +36,8 @@ describe('Mention Ack (#77)', () => {
     const { InvocationRegistry } = await import(
       '../dist/domains/cats/services/agents/invocation/InvocationRegistry.js'
     );
-    const { MessageStore } = await import(
-      '../dist/domains/cats/services/stores/ports/MessageStore.js'
-    );
-    const { DeliveryCursorStore } = await import(
-      '../dist/domains/cats/services/stores/ports/DeliveryCursorStore.js'
-    );
+    const { MessageStore } = await import('../dist/domains/cats/services/stores/ports/MessageStore.js');
+    const { DeliveryCursorStore } = await import('../dist/domains/cats/services/stores/ports/DeliveryCursorStore.js');
 
     registry = new InvocationRegistry();
     messageStore = new MessageStore();
@@ -105,7 +103,7 @@ describe('Mention Ack (#77)', () => {
 
     // Session #1: 3 mentions arrive
     const m1 = appendMention('thread-A', '@opus task 1', 1000);
-    const m2 = appendMention('thread-A', '@opus task 2', 2000);
+    const _m2 = appendMention('thread-A', '@opus task 2', 2000);
     const m3 = appendMention('thread-A', '@opus task 3', 3000);
 
     const sess1 = registry.create('user-1', 'opus', 'thread-A');
@@ -186,8 +184,12 @@ describe('Mention Ack (#77)', () => {
 
     // Message from user-1 mentioning codex (not opus)
     const mCodex = messageStore.append({
-      userId: 'user-1', catId: null, content: '@codex review',
-      mentions: ['codex'], timestamp: 2000, threadId: 'thread-A',
+      userId: 'user-1',
+      catId: null,
+      content: '@codex review',
+      mentions: ['codex'],
+      timestamp: 2000,
+      threadId: 'thread-A',
     });
 
     // Message in different thread
@@ -304,7 +306,7 @@ describe('Mention Ack (#77)', () => {
     assert.equal(round3.mentions.length, 0);
 
     // Verify: all 25 seen, no duplicates
-    const allIds = [...round1.mentions, ...round2.mentions].map(m => m.id);
+    const allIds = [...round1.mentions, ...round2.mentions].map((m) => m.id);
     assert.equal(allIds.length, 25);
     assert.equal(new Set(allIds).size, 25);
   });
@@ -313,7 +315,7 @@ describe('Mention Ack (#77)', () => {
   test('F24 session chain: session #1 acks → seal → session #2 inherits cursor', async () => {
     const app = await createApp();
 
-    const m1 = appendMention('thread-A', '@opus before seal', 1000);
+    const _m1 = appendMention('thread-A', '@opus before seal', 1000);
     const m2 = appendMention('thread-A', '@opus before seal 2', 2000);
 
     // Session #1 processes and acks
@@ -412,7 +414,10 @@ describe('Mention Ack (#77)', () => {
     assert.equal(pendingIncludeAcked.mentions.length, 20);
     assert.equal(pendingIncludeAcked.mentions[0].message, '@opus msg 6');
     assert.equal(pendingIncludeAcked.mentions[pendingIncludeAcked.mentions.length - 1].message, '@opus msg 25');
-    assert.equal(pendingIncludeAcked.mentions.some((m) => m.message === '@opus msg 1'), false);
+    assert.equal(
+      pendingIncludeAcked.mentions.some((m) => m.message === '@opus msg 1'),
+      false,
+    );
 
     const m10 = pendingIncludeAcked.mentions.find((m) => m.message === '@opus msg 10');
     const m11 = pendingIncludeAcked.mentions.find((m) => m.message === '@opus msg 11');
@@ -457,12 +462,7 @@ describe('Mention Ack (#77)', () => {
     const owner = registerWorklist(threadId, ['codex'], 5);
     try {
       const sender = registry.create('user-1', 'codex', threadId);
-      const r1 = await postMessage(
-        app,
-        sender.invocationId,
-        sender.callbackToken,
-        '@opus review please take a look',
-      );
+      const r1 = await postMessage(app, sender.invocationId, sender.callbackToken, '@opus review please take a look');
       assert.equal(r1.statusCode, 200);
       assert.equal(r1.body.status, 'ok');
 
@@ -520,8 +520,21 @@ describe('Mention Ack (#77)', () => {
       assert.equal(pending1.mentions.length, 0);
 
       await enqueueA2ATargets(
-        { router: routerStub, invocationRecordStore: invocationRecordStoreStub, socketManager, deliveryCursorStore, log: app.log },
-        { targetCats: ['opus'], content: '@opus review', userId: 'user-1', threadId, triggerMessage: trigger1, callerCatId: 'codex' },
+        {
+          router: routerStub,
+          invocationRecordStore: invocationRecordStoreStub,
+          socketManager,
+          deliveryCursorStore,
+          log: app.log,
+        },
+        {
+          targetCats: ['opus'],
+          content: '@opus review',
+          userId: 'user-1',
+          threadId,
+          triggerMessage: trigger1,
+          callerCatId: 'codex',
+        },
       );
 
       const cursor2 = await deliveryCursorStore.getMentionAckCursor('user-1', 'opus', threadId);

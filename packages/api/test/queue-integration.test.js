@@ -1,6 +1,7 @@
 // @ts-check
-import { describe, it, beforeEach } from 'node:test';
+
 import assert from 'node:assert';
+import { beforeEach, describe, it } from 'node:test';
 import { InvocationQueue } from '../dist/domains/cats/services/agents/invocation/InvocationQueue.js';
 import { QueueProcessor } from '../dist/domains/cats/services/agents/invocation/QueueProcessor.js';
 import { ConnectorInvokeTrigger } from '../dist/infrastructure/email/ConnectorInvokeTrigger.js';
@@ -10,7 +11,12 @@ import { ConnectorInvokeTrigger } from '../dist/infrastructure/email/ConnectorIn
 function noopLog() {
   const noop = () => {};
   return /** @type {any} */ ({
-    info: noop, warn: noop, error: noop, debug: noop, trace: noop, fatal: noop,
+    info: noop,
+    warn: noop,
+    error: noop,
+    debug: noop,
+    trace: noop,
+    fatal: noop,
     child: () => noopLog(),
   });
 }
@@ -28,13 +34,19 @@ function mockRouter(opts = {}) {
     ackCalls,
     /** @type {any} */
     router: {
-      async *routeExecution(userId, message, threadId, userMessageId, targetCats, intent, options) {
+      async *routeExecution(userId, message, threadId, userMessageId, targetCats, intent, _options) {
         calls.push({ userId, message, threadId, userMessageId, targetCats, intent });
 
         if (/** @type {any} */ (opts).throwError) throw /** @type {any} */ (opts).throwError;
 
         yield { type: 'text', catId: targetCats[0], content: `Processed: ${message}`, timestamp: Date.now() };
-        yield { type: 'done', catId: targetCats[0], content: '', timestamp: Date.now(), metadata: { usage: { inputTokens: 10, outputTokens: 5 } } };
+        yield {
+          type: 'done',
+          catId: targetCats[0],
+          content: '',
+          timestamp: Date.now(),
+          metadata: { usage: { inputTokens: 10, outputTokens: 5 } },
+        };
       },
       async ackCollectedCursors(userId, threadId) {
         ackCalls.push({ userId, threadId });
@@ -53,9 +65,15 @@ function mockSocketManager() {
     userEmits,
     /** @type {any} */
     manager: {
-      broadcastAgentMessage(msg, threadId) { broadcasts.push({ msg, threadId }); },
-      broadcastToRoom(room, event, data) { roomBroadcasts.push({ room, event, data }); },
-      emitToUser(userId, event, data) { userEmits.push({ userId, event, data }); },
+      broadcastAgentMessage(msg, threadId) {
+        broadcasts.push({ msg, threadId });
+      },
+      broadcastToRoom(room, event, data) {
+        roomBroadcasts.push({ room, event, data });
+      },
+      emitToUser(userId, event, data) {
+        userEmits.push({ userId, event, data });
+      },
     },
   };
 }
@@ -74,7 +92,9 @@ function mockInvocationRecordStore() {
         counter++;
         return { outcome: 'created', invocationId: `inv-${counter}` };
       },
-      async update(id, data) { updates.push({ id, data }); },
+      async update(id, data) {
+        updates.push({ id, data });
+      },
     },
   };
 }
@@ -89,16 +109,22 @@ function mockInvocationTracker() {
   const starts = /** @type {any[]} */ ([]);
   const completes = /** @type {any[]} */ ([]);
   /** @type {((threadId: string, status: string) => void) | null} */
-  let onCompleteCallback = null;
+  let _onCompleteCallback = null;
 
   return {
     starts,
     completes,
     activeThreads,
-    setActive(threadId) { activeThreads.add(threadId); },
-    clearActive(threadId) { activeThreads.delete(threadId); },
+    setActive(threadId) {
+      activeThreads.add(threadId);
+    },
+    clearActive(threadId) {
+      activeThreads.delete(threadId);
+    },
     /** Register callback for when complete is called (simulates wiring) */
-    onComplete(cb) { onCompleteCallback = cb; },
+    onComplete(cb) {
+      _onCompleteCallback = cb;
+    },
     /** @type {any} */
     tracker: {
       start(threadId, userId, catIds) {
@@ -106,18 +132,20 @@ function mockInvocationTracker() {
         activeThreads.add(threadId);
         return new AbortController();
       },
-      complete(threadId, controller) {
+      complete(threadId, _controller) {
         completes.push({ threadId });
         activeThreads.delete(threadId);
       },
-      has(threadId) { return activeThreads.has(threadId); },
+      has(threadId) {
+        return activeThreads.has(threadId);
+      },
     },
   };
 }
 
 /** Wait for background execution */
 async function settle(ms = 100) {
-  await new Promise(resolve => setTimeout(resolve, ms));
+  await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 // ─── Integration Tests ──────────────────────────────────────────
@@ -160,8 +188,12 @@ describe('Queue Integration (E2E scenarios)', () => {
 
     // 2. Enqueue a user message (simulating what POST /api/messages does)
     const result = queue.enqueue({
-      threadId: 'thread-1', userId: 'user-1', content: 'Fix the bug',
-      source: 'user', targetCats: ['opus'], intent: 'execute',
+      threadId: 'thread-1',
+      userId: 'user-1',
+      content: 'Fix the bug',
+      source: 'user',
+      targetCats: ['opus'],
+      intent: 'execute',
     });
     assert.strictEqual(result.outcome, 'enqueued');
 
@@ -183,8 +215,12 @@ describe('Queue Integration (E2E scenarios)', () => {
     // 1. Enqueue a message
     trackerMock.setActive('thread-1');
     queue.enqueue({
-      threadId: 'thread-1', userId: 'user-1', content: 'Continue working',
-      source: 'user', targetCats: ['opus'], intent: 'execute',
+      threadId: 'thread-1',
+      userId: 'user-1',
+      content: 'Continue working',
+      source: 'user',
+      targetCats: ['opus'],
+      intent: 'execute',
     });
 
     // 2. Cancel invocation → queue pauses
@@ -192,7 +228,7 @@ describe('Queue Integration (E2E scenarios)', () => {
     await processor.onInvocationComplete('thread-1', 'canceled');
 
     // 3. Verify queue_paused emitted
-    const pauseEmit = socketMock.userEmits.find(e => e.event === 'queue_paused');
+    const pauseEmit = socketMock.userEmits.find((e) => e.event === 'queue_paused');
     assert.ok(pauseEmit, 'Should emit queue_paused');
     assert.strictEqual(pauseEmit.data.reason, 'canceled');
     assert.ok(processor.isPaused('thread-1'), 'Thread should be paused');
@@ -239,7 +275,7 @@ describe('Queue Integration (E2E scenarios)', () => {
     assert.strictEqual(entries[0].messageId, 'msg-connector-1');
 
     // 4. queue_updated emitted
-    const queueUpdate = socketMock.userEmits.find(e => e.event === 'queue_updated');
+    const queueUpdate = socketMock.userEmits.find((e) => e.event === 'queue_updated');
     assert.ok(queueUpdate, 'Should emit queue_updated');
 
     // 5. Active invocation completes → auto-dequeue
@@ -255,8 +291,12 @@ describe('Queue Integration (E2E scenarios)', () => {
     // Setup: active invocation + one queued message
     trackerMock.setActive('thread-1');
     queue.enqueue({
-      threadId: 'thread-1', userId: 'user-1', content: 'Queued msg',
-      source: 'user', targetCats: ['opus'], intent: 'execute',
+      threadId: 'thread-1',
+      userId: 'user-1',
+      content: 'Queued msg',
+      source: 'user',
+      targetCats: ['opus'],
+      intent: 'execute',
     });
 
     // Force send simulates what POST /api/messages does with deliveryMode=force:
@@ -277,7 +317,7 @@ describe('Queue Integration (E2E scenarios)', () => {
     assert.strictEqual(entries[0].content, 'Queued msg');
 
     // pause event emitted
-    const pauseEmit = socketMock.userEmits.find(e => e.event === 'queue_paused');
+    const pauseEmit = socketMock.userEmits.find((e) => e.event === 'queue_paused');
     assert.ok(pauseEmit, 'Should emit queue_paused');
   });
 
@@ -288,8 +328,12 @@ describe('Queue Integration (E2E scenarios)', () => {
     // 1. Active invocation running
     trackerMock.setActive('thread-1');
     queue.enqueue({
-      threadId: 'thread-1', userId: 'user-1', content: 'Queued msg',
-      source: 'user', targetCats: ['opus'], intent: 'execute',
+      threadId: 'thread-1',
+      userId: 'user-1',
+      content: 'Queued msg',
+      source: 'user',
+      targetCats: ['opus'],
+      intent: 'execute',
     });
 
     // 2. Force cancel → clearPause (what messages.ts now does)
@@ -320,7 +364,7 @@ describe('Queue Integration (E2E scenarios)', () => {
     // Router yields one msg, then aborts (simulating external cancel), then ends normally
     const ackCalls = /** @type {any[]} */ ([]);
     const customRouter = {
-      async *routeExecution(userId, message, threadId, userMessageId, targetCats, intent, options) {
+      async *routeExecution(_userId, _message, _threadId, _userMessageId, _targetCats, _intent, _options) {
         yield { type: 'text', catId: 'opus', content: 'partial', timestamp: Date.now() };
         // External cancel while connector is streaming
         controller.abort();
@@ -347,10 +391,10 @@ describe('Queue Integration (E2E scenarios)', () => {
     assert.strictEqual(ackCalls.length, 0, 'should NOT ack cursors for aborted connector invocation');
 
     // invocationRecordStore should have 'canceled', NOT 'succeeded'
-    const succeededUpdate = recordMock.updates.find(u => u.data.status === 'succeeded');
+    const succeededUpdate = recordMock.updates.find((u) => u.data.status === 'succeeded');
     assert.ok(!succeededUpdate, 'should NOT mark connector invocation as succeeded when aborted');
 
-    const canceledUpdate = recordMock.updates.find(u => u.data.status === 'canceled');
+    const canceledUpdate = recordMock.updates.find((u) => u.data.status === 'canceled');
     assert.ok(canceledUpdate, 'should mark connector invocation as canceled when aborted');
   });
 
@@ -358,8 +402,12 @@ describe('Queue Integration (E2E scenarios)', () => {
     // 1. Active invocation + queued message
     trackerMock.setActive('thread-1');
     queue.enqueue({
-      threadId: 'thread-1', userId: 'user-1', content: 'Queued msg',
-      source: 'user', targetCats: ['opus'], intent: 'execute',
+      threadId: 'thread-1',
+      userId: 'user-1',
+      content: 'Queued msg',
+      source: 'user',
+      targetCats: ['opus'],
+      intent: 'execute',
     });
 
     // 2. Force cancel

@@ -1,6 +1,7 @@
 // @ts-check
-import { describe, test, beforeEach } from 'node:test';
+
 import assert from 'node:assert/strict';
+import { beforeEach, describe, test } from 'node:test';
 
 describe('NeedAuditFrameStore', () => {
   /** @type {import('../dist/domains/projects/need-audit-frame-store.js').NeedAuditFrameStore} */

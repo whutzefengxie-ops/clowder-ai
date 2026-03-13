@@ -9,26 +9,18 @@
  * 5. MCP 回传 → 广播到正确的对话房间
  */
 
-import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { PassThrough } from 'node:stream';
 import { EventEmitter } from 'node:events';
 import { mkdirSync, rmSync } from 'node:fs';
+import { PassThrough } from 'node:stream';
+import { afterEach, beforeEach, describe, it } from 'node:test';
 import Fastify from 'fastify';
 import { migrateRouterOpts } from '../helpers/agent-registry-helpers.js';
 
-const { AgentRouter } = await import(
-  '../../dist/domains/cats/services/AgentRouter.js'
-);
-const { InvocationRegistry } = await import(
-  '../../dist/domains/cats/services/InvocationRegistry.js'
-);
-const { MessageStore } = await import(
-  '../../dist/domains/cats/services/MessageStore.js'
-);
-const { ThreadStore } = await import(
-  '../../dist/domains/cats/services/ThreadStore.js'
-);
+const { AgentRouter } = await import('../../dist/domains/cats/services/AgentRouter.js');
+const { InvocationRegistry } = await import('../../dist/domains/cats/services/InvocationRegistry.js');
+const { MessageStore } = await import('../../dist/domains/cats/services/MessageStore.js');
+const { ThreadStore } = await import('../../dist/domains/cats/services/ThreadStore.js');
 const { threadsRoutes } = await import('../../dist/routes/threads.js');
 const { messagesRoutes } = await import('../../dist/routes/messages.js');
 
@@ -73,7 +65,7 @@ function createMockProcess() {
 
 function emitEvents(proc, events) {
   for (const event of events) {
-    proc.stdout.write(JSON.stringify(event) + '\n');
+    proc.stdout.write(`${JSON.stringify(event)}\n`);
   }
   proc.stdout.end();
   process.nextTick(() => proc._emitter.emit('exit', 0, null));
@@ -168,9 +160,7 @@ describe('Thread isolation: messages stay in their thread', () => {
 
 describe('Participant tracking: @mentions add cats to thread', () => {
   it('@opus → no @ → opus still responds (via participants)', async () => {
-    const { ClaudeAgentService } = await import(
-      '../../dist/domains/cats/services/ClaudeAgentService.js'
-    );
+    const { ClaudeAgentService } = await import('../../dist/domains/cats/services/ClaudeAgentService.js');
 
     const spawnFn = createMockSpawnFn([
       { type: 'assistant', message: { content: [{ type: 'text', text: 'hi' }] } },
@@ -181,14 +171,16 @@ describe('Participant tracking: @mentions add cats to thread', () => {
     const messageStore = new MessageStore();
     const registry = new InvocationRegistry();
 
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: new ClaudeAgentService({ spawnFn }),
-      codexService: { invoke: async function* () {} },
-      geminiService: { invoke: async function* () {} },
-      registry,
-      messageStore,
-      threadStore,
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: new ClaudeAgentService({ spawnFn }),
+        codexService: { invoke: async function* () {} },
+        geminiService: { invoke: async function* () {} },
+        registry,
+        messageStore,
+        threadStore,
+      }),
+    );
 
     // Create thread first (addParticipants requires existing thread)
     const thread = threadStore.create('alice', 'Test Thread');
@@ -330,14 +322,16 @@ describe('AgentRouter passes workingDirectory from thread.projectPath', () => {
       },
     };
 
-    const router = new AgentRouter(await migrateRouterOpts({
-      claudeService: mockClaudeService,
-      codexService: { invoke: async function* () {} },
-      geminiService: { invoke: async function* () {} },
-      registry,
-      messageStore,
-      threadStore,
-    }));
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: mockClaudeService,
+        codexService: { invoke: async function* () {} },
+        geminiService: { invoke: async function* () {} },
+        registry,
+        messageStore,
+        threadStore,
+      }),
+    );
 
     await collect(router.route('alice', '@opus hello', thread.id));
 
@@ -411,12 +405,18 @@ describe('Default thread isolation: no cross-thread message leak', () => {
     // We directly test broadcastAgentMessage behavior
     const { SocketManager } = /** @type {any} */ (
       // Access the constructor to create an instance
-      { SocketManager: class { io; constructor(io) { this.io = io; }
-        broadcastAgentMessage(message, threadId) {
-          const room = `thread:${threadId ?? 'default'}`;
-          this.io.to(room).emit('agent_message', message);
-        }
-      }}
+      {
+        SocketManager: class {
+          io;
+          constructor(io) {
+            this.io = io;
+          }
+          broadcastAgentMessage(message, threadId) {
+            const room = `thread:${threadId ?? 'default'}`;
+            this.io.to(room).emit('agent_message', message);
+          }
+        },
+      }
     );
     const sm = new SocketManager(mockIo);
     const msg = { type: 'text', catId: 'opus', content: 'hello', timestamp: Date.now() };
@@ -439,13 +439,19 @@ describe('Default thread isolation: no cross-thread message leak', () => {
 
     // Store messages in different threads
     messageStore.append({
-      userId: 'alice', catId: null, content: 'lobby msg',
-      mentions: [], timestamp: Date.now(),
+      userId: 'alice',
+      catId: null,
+      content: 'lobby msg',
+      mentions: [],
+      timestamp: Date.now(),
       threadId: 'default',
     });
     messageStore.append({
-      userId: 'alice', catId: null, content: 'thread-B msg',
-      mentions: [], timestamp: Date.now() + 1,
+      userId: 'alice',
+      catId: null,
+      content: 'thread-B msg',
+      mentions: [],
+      timestamp: Date.now() + 1,
       threadId: 'thread-B',
     });
 

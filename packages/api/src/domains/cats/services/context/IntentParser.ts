@@ -35,7 +35,7 @@ export function parseIntent(message: string, targetCatCount: number): IntentResu
   const promptTags: string[] = [];
 
   for (const match of message.matchAll(TAG_PATTERN)) {
-    const tag = match[1]!.toLowerCase();
+    const tag = match[1]?.toLowerCase();
     if (INTENT_TAGS.has(tag)) {
       explicitIntent = tag as Intent;
     } else if (PROMPT_TAGS.has(tag)) {
@@ -54,11 +54,14 @@ export function parseIntent(message: string, targetCatCount: number): IntentResu
 
 /** Remove intent and prompt tags from message text */
 export function stripIntentTags(message: string): string {
-  return message.replace(TAG_PATTERN, (full, tag) => {
-    const lower = (tag as string).toLowerCase();
-    if (INTENT_TAGS.has(lower) || PROMPT_TAGS.has(lower)) {
-      return '';
-    }
-    return full;
-  }).replace(/\s{2,}/g, ' ').trim();
+  return message
+    .replace(TAG_PATTERN, (full, tag) => {
+      const lower = (tag as string).toLowerCase();
+      if (INTENT_TAGS.has(lower) || PROMPT_TAGS.has(lower)) {
+        return '';
+      }
+      return full;
+    })
+    .replace(/\s{2,}/g, ' ')
+    .trim();
 }

@@ -1,14 +1,14 @@
+import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { relative, resolve, sep } from 'node:path';
-import { randomUUID } from 'node:crypto';
 import type {
   AnthropicRuntimeProfile,
   CreateProviderProfileInput,
   NormalizedState,
   ProviderProfileMeta,
+  ProviderProfileProvider,
   ProviderProfilesMetaFile,
   ProviderProfilesSecretsFile,
-  ProviderProfileProvider,
   ProviderProfilesView,
   ProviderProfileView,
   UpdateProviderProfileInput,
@@ -85,7 +85,7 @@ async function readJsonOrNull<T>(filePath: string): Promise<T | null> {
 }
 
 async function writeJson(filePath: string, value: unknown): Promise<void> {
-  await writeFile(filePath, JSON.stringify(value, null, 2) + '\n', 'utf-8');
+  await writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, 'utf-8');
 }
 
 function normalizeMeta(meta: ProviderProfilesMetaFile | null): NormalizedState<ProviderProfilesMetaFile> {
@@ -147,10 +147,7 @@ async function writeRaw(
   meta: ProviderProfilesMetaFile,
   secrets: ProviderProfilesSecretsFile,
 ): Promise<void> {
-  await Promise.all([
-    writeJson(metaPath, meta),
-    writeJson(secretsPath, secrets),
-  ]);
+  await Promise.all([writeJson(metaPath, meta), writeJson(secretsPath, secrets)]);
 }
 
 function toView(meta: ProviderProfilesMetaFile, secrets: ProviderProfilesSecretsFile): ProviderProfilesView {
@@ -305,9 +302,10 @@ export async function resolveAnthropicRuntimeProfile(projectRoot: string): Promi
   const { meta, secrets, metaPath, secretsPath, dirty } = await readRaw(projectRoot);
   if (dirty) await writeRaw(metaPath, secretsPath, meta, secrets);
   const activeId = meta.providers.anthropic.activeProfileId ?? DEFAULT_SUBSCRIPTION_PROFILE_ID;
-  const profile = meta.providers.anthropic.profiles.find((p) => p.id === activeId)
-    ?? meta.providers.anthropic.profiles.find((p) => p.id === DEFAULT_SUBSCRIPTION_PROFILE_ID)
-    ?? createDefaultSubscriptionProfile();
+  const profile =
+    meta.providers.anthropic.profiles.find((p) => p.id === activeId) ??
+    meta.providers.anthropic.profiles.find((p) => p.id === DEFAULT_SUBSCRIPTION_PROFILE_ID) ??
+    createDefaultSubscriptionProfile();
 
   if (profile.mode === 'api_key') {
     const apiKey = secrets.providers.anthropic[profile.id]?.apiKey;

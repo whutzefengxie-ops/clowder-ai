@@ -19,7 +19,7 @@ function normalizeRootDir(value: string | undefined): string | undefined {
 
 export function resolveSignalPaths(rootOverride?: string): SignalPaths {
   const rootDir = resolve(
-    normalizeRootDir(rootOverride) ?? normalizeRootDir(process.env['SIGNALS_ROOT_DIR']) ?? DEFAULT_SIGNAL_ROOT_DIR,
+    normalizeRootDir(rootOverride) ?? normalizeRootDir(process.env.SIGNALS_ROOT_DIR) ?? DEFAULT_SIGNAL_ROOT_DIR,
   );
 
   const configDir = join(rootDir, 'config');

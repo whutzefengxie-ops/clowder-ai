@@ -1,10 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import React from 'react';
-import { apiFetch } from '@/utils/api-client';
-import { useChatStore } from '@/stores/chatStore';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Thread, ThreadRoutingPolicyV1 } from '@/stores/chat-types';
+import { useChatStore } from '@/stores/chatStore';
+import { apiFetch } from '@/utils/api-client';
 import { HubQuotaBoardTab } from './HubQuotaBoardTab';
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -55,7 +54,7 @@ export function HubRoutingPolicyTab() {
         setError('线程信息加载失败');
         return;
       }
-      const t = await res.json() as Thread;
+      const t = (await res.json()) as Thread;
       setThread(t);
 
       const policy = t.routingPolicy;
@@ -86,7 +85,7 @@ export function HubRoutingPolicyTab() {
         setError('保存失败');
         return;
       }
-      const updated = await res.json() as Thread;
+      const updated = (await res.json()) as Thread;
       setThread(updated);
       setSavedAt(Date.now());
     } catch {
@@ -114,11 +113,7 @@ export function HubRoutingPolicyTab() {
               <div className="text-[11px] text-gray-500">当消息明显是 review/合入/PR 场景时生效</div>
             </div>
             <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={reviewAvoidOpus}
-                onChange={(e) => setReviewAvoidOpus(e.target.checked)}
-              />
+              <input type="checkbox" checked={reviewAvoidOpus} onChange={(e) => setReviewAvoidOpus(e.target.checked)} />
               避开 @opus（budget）
             </label>
           </div>

@@ -3,8 +3,8 @@
  */
 
 import './helpers/setup-cat-registry.js';
-import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
 
 const { getCatModel, getAllCatModels } = await import('../dist/config/cat-models.js');
 
@@ -45,8 +45,8 @@ describe('F32-b: getCatModel dynamic env key', () => {
 
   it('getAllCatModels returns models for all registered cats', () => {
     const all = getAllCatModels();
-    assert.ok(all['opus']);
-    assert.ok(all['codex']);
-    assert.ok(all['gemini']);
+    assert.ok(all.opus);
+    assert.ok(all.codex);
+    assert.ok(all.gemini);
   });
 });

@@ -7,7 +7,7 @@
  * Usage: import './helpers/setup-cat-registry.js';
  */
 
-import { catRegistry, CAT_CONFIGS } from '@cat-cafe/shared';
+import { CAT_CONFIGS, catRegistry } from '@cat-cafe/shared';
 
 for (const [id, config] of Object.entries(CAT_CONFIGS)) {
   if (!catRegistry.has(id)) {

@@ -10,9 +10,9 @@
  * 4. Increment sessionsIncorporated
  */
 
+import { estimateTokens } from '../../../../utils/token-counter.js';
 import type { ThreadMemoryV1 } from '../stores/ports/ThreadStore.js';
 import type { ExtractiveDigestV1 } from './TranscriptWriter.js';
-import { estimateTokens } from '../../../../utils/token-counter.js';
 
 const MAX_TOOLS_DISPLAY = 10;
 const MAX_FILES_DISPLAY = 10;
@@ -29,8 +29,7 @@ function formatSessionLine(digest: ExtractiveDigestV1, sessionNumber: number): s
   // Tools (deduplicated, capped)
   const allTools = [...new Set(digest.invocations.flatMap((inv) => inv.toolNames ?? []))];
   const toolsDisplay = allTools.slice(0, MAX_TOOLS_DISPLAY).join(', ');
-  const toolsExtra =
-    allTools.length > MAX_TOOLS_DISPLAY ? ` +${allTools.length - MAX_TOOLS_DISPLAY} more` : '';
+  const toolsExtra = allTools.length > MAX_TOOLS_DISPLAY ? ` +${allTools.length - MAX_TOOLS_DISPLAY} more` : '';
 
   // Files (capped)
   const files = digest.filesTouched
@@ -38,15 +37,11 @@ function formatSessionLine(digest: ExtractiveDigestV1, sessionNumber: number): s
     .map((f) => f.path)
     .join(', ');
   const filesExtra =
-    digest.filesTouched.length > MAX_FILES_DISPLAY
-      ? ` +${digest.filesTouched.length - MAX_FILES_DISPLAY} more`
-      : '';
+    digest.filesTouched.length > MAX_FILES_DISPLAY ? ` +${digest.filesTouched.length - MAX_FILES_DISPLAY} more` : '';
 
   // Errors
   const errorPart =
-    digest.errors.length > 0
-      ? ` ${digest.errors.length} error${digest.errors.length > 1 ? 's' : ''}.`
-      : '';
+    digest.errors.length > 0 ? ` ${digest.errors.length} error${digest.errors.length > 1 ? 's' : ''}.` : '';
 
   return `Session #${sessionNumber} (${timeRange}, ${duration}min): ${toolsDisplay}${toolsExtra}. Files: ${files}${filesExtra}.${errorPart}`;
 }
@@ -76,7 +71,7 @@ export function buildThreadMemory(
   // truncate it (rough char-level cut, re-estimate)
   if (estimateTokens(summary) > maxTokens) {
     const ratio = maxTokens / Math.max(1, estimateTokens(summary));
-    summary = summary.slice(0, Math.floor(summary.length * ratio * 0.9)) + '...';
+    summary = `${summary.slice(0, Math.floor(summary.length * ratio * 0.9))}...`;
   }
 
   return {

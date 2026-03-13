@@ -1,8 +1,7 @@
-import React from 'react';
-import { act } from 'react';
+import type { SignalArticle, SignalArticleStatus } from '@cat-cafe/shared';
+import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { SignalArticle, SignalArticleStatus } from '@cat-cafe/shared';
 import { SignalArticleList } from '@/components/signals/SignalArticleList';
 
 function createArticle(overrides: Partial<SignalArticle> = {}): SignalArticle {
@@ -48,7 +47,8 @@ describe('SignalArticleList', () => {
 
   it('does not render nested action buttons and keeps action click isolated', async () => {
     const onSelect = vi.fn<(article: SignalArticle) => void>();
-    const onStatusChange = vi.fn<(articleId: string, status: SignalArticleStatus) => Promise<void>>()
+    const onStatusChange = vi
+      .fn<(articleId: string, status: SignalArticleStatus) => Promise<void>>()
       .mockResolvedValue(undefined);
 
     await act(async () => {

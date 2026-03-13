@@ -18,31 +18,29 @@ export interface CommandExecutionLifecycle {
 const REDACTED = '[redacted]';
 const MAX_REDACT_DEPTH = 2;
 
-export function extractCommandExecutionLifecycle(
-  event: unknown
-): CommandExecutionLifecycle | null {
+export function extractCommandExecutionLifecycle(event: unknown): CommandExecutionLifecycle | null {
   if (typeof event !== 'object' || event === null) return null;
   const e = event as Record<string, unknown>;
 
-  if (e['type'] === 'item.started') {
-    const item = e['item'] as Record<string, unknown> | undefined;
-    if (item?.['type'] === 'command_execution' && typeof item['command'] === 'string') {
+  if (e.type === 'item.started') {
+    const item = e.item as Record<string, unknown> | undefined;
+    if (item?.type === 'command_execution' && typeof item.command === 'string') {
       return {
         phase: 'started',
-        command: item['command'],
-        ...(typeof item['status'] === 'string' ? { status: item['status'] } : {}),
+        command: item.command,
+        ...(typeof item.status === 'string' ? { status: item.status } : {}),
       };
     }
   }
 
-  if (e['type'] === 'item.completed') {
-    const item = e['item'] as Record<string, unknown> | undefined;
-    if (item?.['type'] === 'command_execution' && typeof item['command'] === 'string') {
+  if (e.type === 'item.completed') {
+    const item = e.item as Record<string, unknown> | undefined;
+    if (item?.type === 'command_execution' && typeof item.command === 'string') {
       return {
         phase: 'completed',
-        command: item['command'],
-        ...(typeof item['status'] === 'string' ? { status: item['status'] } : {}),
-        ...(typeof item['exit_code'] === 'number' ? { exitCode: item['exit_code'] } : {}),
+        command: item.command,
+        ...(typeof item.status === 'string' ? { status: item.status } : {}),
+        ...(typeof item.exit_code === 'number' ? { exitCode: item.exit_code } : {}),
       };
     }
   }

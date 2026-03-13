@@ -3,14 +3,11 @@
  * 有 Redis → 测全量；无 Redis → skip
  */
 
-import { describe, it, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  assertRedisIsolationOrThrow,
-  cleanupPrefixedRedisKeys,
-} from './helpers/redis-test-helpers.js';
+import { after, before, beforeEach, describe, it } from 'node:test';
+import { assertRedisIsolationOrThrow, cleanupPrefixedRedisKeys } from './helpers/redis-test-helpers.js';
 
-const REDIS_URL = process.env['REDIS_URL'];
+const REDIS_URL = process.env.REDIS_URL;
 
 describe('RedisMessageStore', { skip: !REDIS_URL ? 'REDIS_URL not set' : false }, () => {
   let RedisMessageStore;
@@ -91,7 +88,13 @@ describe('RedisMessageStore', { skip: !REDIS_URL ? 'REDIS_URL not set' : false }
     const now = Date.now();
     await store.append({ userId: 'u', catId: null, content: 'hi opus', mentions: ['opus'], timestamp: now });
     await store.append({ userId: 'u', catId: null, content: 'hi codex', mentions: ['codex'], timestamp: now + 1 });
-    await store.append({ userId: 'u', catId: null, content: 'hi both', mentions: ['opus', 'codex'], timestamp: now + 2 });
+    await store.append({
+      userId: 'u',
+      catId: null,
+      content: 'hi both',
+      mentions: ['opus', 'codex'],
+      timestamp: now + 2,
+    });
 
     const opusMentions = await store.getMentionsFor('opus');
     assert.equal(opusMentions.length, 2);
@@ -101,9 +104,30 @@ describe('RedisMessageStore', { skip: !REDIS_URL ? 'REDIS_URL not set' : false }
 
   it('getMentionsFor() filters by threadId (#75)', async () => {
     const now = Date.now();
-    await store.append({ userId: 'u', catId: null, content: '@opus in tA', mentions: ['opus'], timestamp: now, threadId: 'thread-A' });
-    await store.append({ userId: 'u', catId: null, content: '@opus in tB', mentions: ['opus'], timestamp: now + 1, threadId: 'thread-B' });
-    await store.append({ userId: 'u', catId: null, content: '@opus in tA again', mentions: ['opus'], timestamp: now + 2, threadId: 'thread-A' });
+    await store.append({
+      userId: 'u',
+      catId: null,
+      content: '@opus in tA',
+      mentions: ['opus'],
+      timestamp: now,
+      threadId: 'thread-A',
+    });
+    await store.append({
+      userId: 'u',
+      catId: null,
+      content: '@opus in tB',
+      mentions: ['opus'],
+      timestamp: now + 1,
+      threadId: 'thread-B',
+    });
+    await store.append({
+      userId: 'u',
+      catId: null,
+      content: '@opus in tA again',
+      mentions: ['opus'],
+      timestamp: now + 2,
+      threadId: 'thread-A',
+    });
 
     const threadA = await store.getMentionsFor('opus', 10, undefined, 'thread-A');
     assert.equal(threadA.length, 2);

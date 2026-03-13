@@ -5,11 +5,11 @@
  * Red→Green: Tests written before full implementation.
  */
 
-import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, readFile, readdir } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { afterEach, beforeEach, describe, test } from 'node:test';
 
 describe('TranscriptWriter', () => {
   let tmpDir;
@@ -23,9 +23,7 @@ describe('TranscriptWriter', () => {
   });
 
   async function loadModules() {
-    const { TranscriptWriter } = await import(
-      '../dist/domains/cats/services/session/TranscriptWriter.js'
-    );
+    const { TranscriptWriter } = await import('../dist/domains/cats/services/session/TranscriptWriter.js');
     return { TranscriptWriter };
   }
 
@@ -80,15 +78,22 @@ describe('TranscriptWriter', () => {
       await writer.flush(SESSION_INFO);
 
       const sessionDir = join(
-        tmpDir, 'threads', SESSION_INFO.threadId,
-        SESSION_INFO.catId, 'sessions', SESSION_INFO.sessionId
+        tmpDir,
+        'threads',
+        SESSION_INFO.threadId,
+        SESSION_INFO.catId,
+        'sessions',
+        SESSION_INFO.sessionId,
       );
       const files = await readdir(sessionDir);
       assert.ok(files.includes('events.jsonl'), `Expected events.jsonl in ${files}`);
 
       // Read and validate JSONL
       const content = await readFile(join(sessionDir, 'events.jsonl'), 'utf-8');
-      const lines = content.trim().split('\n').map(l => JSON.parse(l));
+      const lines = content
+        .trim()
+        .split('\n')
+        .map((l) => JSON.parse(l));
       assert.equal(lines.length, 1);
       assert.equal(lines[0].v, 1);
       assert.equal(lines[0].threadId, 'thread-1');
@@ -112,8 +117,12 @@ describe('TranscriptWriter', () => {
       await writer.flush(SESSION_INFO);
 
       const sessionDir = join(
-        tmpDir, 'threads', SESSION_INFO.threadId,
-        SESSION_INFO.catId, 'sessions', SESSION_INFO.sessionId
+        tmpDir,
+        'threads',
+        SESSION_INFO.threadId,
+        SESSION_INFO.catId,
+        'sessions',
+        SESSION_INFO.sessionId,
       );
       const indexContent = await readFile(join(sessionDir, 'index.json'), 'utf-8');
       const index = JSON.parse(indexContent);
@@ -199,7 +208,7 @@ describe('TranscriptWriter', () => {
       });
 
       // Invocations section should mention tools
-      const allTools = digest.invocations.flatMap(inv => inv.toolNames ?? []);
+      const allTools = digest.invocations.flatMap((inv) => inv.toolNames ?? []);
       assert.ok(allTools.includes('Edit'));
       assert.ok(allTools.includes('Write'));
     });
@@ -225,7 +234,7 @@ describe('TranscriptWriter', () => {
       });
 
       assert.ok(digest.filesTouched.length >= 2);
-      const paths = digest.filesTouched.map(f => f.path);
+      const paths = digest.filesTouched.map((f) => f.path);
       assert.ok(paths.includes('/src/foo.ts'));
       assert.ok(paths.includes('/src/bar.ts'));
     });
@@ -286,19 +295,21 @@ describe('TranscriptWriter', () => {
       });
 
       // Tool names must be extracted from toolName field
-      const allTools = digest.invocations.flatMap(inv => inv.toolNames ?? []);
+      const allTools = digest.invocations.flatMap((inv) => inv.toolNames ?? []);
       assert.ok(allTools.includes('Edit'), 'digest must extract toolName="Edit" from AgentMessage');
       assert.ok(allTools.includes('Write'), 'digest must extract toolName="Write" from AgentMessage');
 
       // File paths must be extracted from toolInput field
-      const paths = digest.filesTouched.map(f => f.path);
+      const paths = digest.filesTouched.map((f) => f.path);
       assert.ok(paths.includes('/src/foo.ts'), 'digest must extract file_path from toolInput');
       assert.ok(paths.includes('/src/bar.ts'), 'digest must extract file_path from toolInput');
 
       // Errors must be extracted from type='error' messages
       assert.ok(digest.errors.length >= 1, 'digest must extract errors from AgentMessage error type');
-      assert.ok(digest.errors[0].message.includes('File not found'),
-        'error message must come from AgentMessage.error field');
+      assert.ok(
+        digest.errors[0].message.includes('File not found'),
+        'error message must come from AgentMessage.error field',
+      );
     });
 
     test('writes digest.extractive.json during flush', async () => {
@@ -316,12 +327,14 @@ describe('TranscriptWriter', () => {
       });
 
       const sessionDir = join(
-        tmpDir, 'threads', SESSION_INFO.threadId,
-        SESSION_INFO.catId, 'sessions', SESSION_INFO.sessionId
+        tmpDir,
+        'threads',
+        SESSION_INFO.threadId,
+        SESSION_INFO.catId,
+        'sessions',
+        SESSION_INFO.sessionId,
       );
-      const digestContent = await readFile(
-        join(sessionDir, 'digest.extractive.json'), 'utf-8'
-      );
+      const digestContent = await readFile(join(sessionDir, 'digest.extractive.json'), 'utf-8');
       const digest = JSON.parse(digestContent);
       assert.equal(digest.v, 1);
       assert.equal(digest.sessionId, 'sess-abc');

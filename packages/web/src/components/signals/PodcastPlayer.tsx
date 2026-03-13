@@ -70,10 +70,16 @@ function usePlayAll(segments: readonly PodcastSegment[], audioRef: React.Mutable
         const audio = new Audio(blobUrl);
         audioRef.current = audio;
         await new Promise<void>((resolve, reject) => {
-          const cleanup = () => { URL.revokeObjectURL(blobUrl); resolve(); };
+          const cleanup = () => {
+            URL.revokeObjectURL(blobUrl);
+            resolve();
+          };
           audio.addEventListener('ended', cleanup);
           audio.addEventListener('pause', cleanup);
-          audio.addEventListener('error', () => { URL.revokeObjectURL(blobUrl); reject(); });
+          audio.addEventListener('error', () => {
+            URL.revokeObjectURL(blobUrl);
+            reject();
+          });
           void audio.play().catch(reject);
         });
       } catch {
@@ -177,7 +183,7 @@ export function PodcastPlayer({ articleId, podcasts, onArtifactCreated }: Podcas
     setError(null);
     setActiveSegment(-1);
     setPlayingSegment(-1);
-  }, [articleId]);
+  }, []);
 
   // Auto-load first ready podcast
   useEffect(() => {

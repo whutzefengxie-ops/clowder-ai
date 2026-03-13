@@ -1,5 +1,5 @@
-import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
+import { describe, test } from 'node:test';
 import { transformDareEvent } from '../dist/domains/cats/services/agents/providers/dare-event-transform.js';
 
 const catId = 'dare';

@@ -15,7 +15,14 @@ vi.mock('@/utils/api-client', () => ({
 }));
 
 const searchHits = [
-  { score: 1.0, sessionId: 's1', seq: 3, kind: 'event' as const, snippet: 'found the bug in handler', pointer: { eventNo: 42 } },
+  {
+    score: 1.0,
+    sessionId: 's1',
+    seq: 3,
+    kind: 'event' as const,
+    snippet: 'found the bug in handler',
+    pointer: { eventNo: 42 },
+  },
   { score: 0.8, sessionId: 's2', seq: 1, kind: 'digest' as const, snippet: 'review passed all checks', pointer: {} },
 ];
 
@@ -71,7 +78,7 @@ describe('SessionSearchTab', () => {
     // Submit
     const submitBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('搜索'));
     await act(async () => {
-      submitBtn!.click();
+      submitBtn?.click();
     });
     await act(async () => {
       await new Promise((r) => setTimeout(r, 10));
@@ -98,7 +105,7 @@ describe('SessionSearchTab', () => {
     });
     const submitBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('搜索'));
     await act(async () => {
-      submitBtn!.click();
+      submitBtn?.click();
     });
     await act(async () => {
       await new Promise((r) => setTimeout(r, 10));
@@ -124,7 +131,7 @@ describe('SessionSearchTab', () => {
     });
     const submitBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('搜索'));
     await act(async () => {
-      submitBtn!.click();
+      submitBtn?.click();
     });
     await act(async () => {
       await new Promise((r) => setTimeout(r, 10));
@@ -133,7 +140,7 @@ describe('SessionSearchTab', () => {
     const resultBtn = container.querySelector('[data-testid="search-result-session"]');
     expect(resultBtn).toBeTruthy();
     await act(async () => {
-      resultBtn!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      resultBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
     expect(onViewSession).toHaveBeenCalledWith('s1');

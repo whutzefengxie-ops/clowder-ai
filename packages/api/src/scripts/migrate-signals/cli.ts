@@ -1,19 +1,14 @@
 import { stat } from 'node:fs/promises';
-import { resolve, join } from 'node:path';
-import { Redis } from 'ioredis';
+import { join, resolve } from 'node:path';
 import type { SignalSourceConfig } from '@cat-cafe/shared';
 import { SignalSourceConfigSchema } from '@cat-cafe/shared';
-import { saveSignalSources } from '../../domains/signals/config/sources-loader.js';
+import { Redis } from 'ioredis';
 import { resolveSignalPaths } from '../../domains/signals/config/signal-paths.js';
+import { saveSignalSources } from '../../domains/signals/config/sources-loader.js';
 import { ArticleStoreService, type SignalRedisIndexClient } from '../../domains/signals/services/article-store.js';
 import { parseLegacyArticles } from './legacy-article-parser.js';
-import {
-  createFallbackSource,
-  mergeSources,
-  parseLegacySources,
-  readTargetSourceConfig,
-} from './source-migration.js';
 import { slugify } from './shared.js';
+import { createFallbackSource, mergeSources, parseLegacySources, readTargetSourceConfig } from './source-migration.js';
 
 const USAGE = [
   'Usage: pnpm --filter @cat-cafe/api run migrate-signals -- [options]',
@@ -119,7 +114,11 @@ function buildAliasToSourceId(config: SignalSourceConfig): Map<string, string> {
   return aliasToId;
 }
 
-function tryResolveSourceId(aliasToId: ReadonlyMap<string, string>, sourceLabel: string | undefined, folderName: string): string | undefined {
+function tryResolveSourceId(
+  aliasToId: ReadonlyMap<string, string>,
+  sourceLabel: string | undefined,
+  folderName: string,
+): string | undefined {
   const bySourceLabel = aliasToId.get(slugify(sourceLabel ?? ''));
   if (bySourceLabel) return bySourceLabel;
 

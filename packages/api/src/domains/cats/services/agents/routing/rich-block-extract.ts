@@ -21,7 +21,7 @@ const CC_RICH_RE = /```cc_rich\s*\n([\s\S]*?)\n```/g;
 export function isRichBlockCandidate(raw: unknown): boolean {
   if (!raw || typeof raw !== 'object') return false;
   const obj = raw as Record<string, unknown>;
-  return typeof obj['id'] === 'string' && ('kind' in obj || 'type' in obj);
+  return typeof obj.id === 'string' && ('kind' in obj || 'type' in obj);
 }
 
 /**
@@ -32,22 +32,22 @@ export function isRichBlockCandidate(raw: unknown): boolean {
 export function isValidRichBlock(b: unknown): b is RichBlock {
   if (!b || typeof b !== 'object') return false;
   const obj = b as Record<string, unknown>;
-  if (typeof obj['id'] !== 'string' || !obj['id']) return false;
-  if (obj['v'] !== 1) return false;
-  switch (obj['kind']) {
+  if (typeof obj.id !== 'string' || !obj.id) return false;
+  if (obj.v !== 1) return false;
+  switch (obj.kind) {
     case 'card': {
-      if (typeof obj['title'] !== 'string') return false;
-      if ('bodyMarkdown' in obj && typeof obj['bodyMarkdown'] !== 'string') return false;
-      if ('tone' in obj && !['info', 'success', 'warning', 'danger'].includes(obj['tone'] as string)) return false;
+      if (typeof obj.title !== 'string') return false;
+      if ('bodyMarkdown' in obj && typeof obj.bodyMarkdown !== 'string') return false;
+      if ('tone' in obj && !['info', 'success', 'warning', 'danger'].includes(obj.tone as string)) return false;
       if ('fields' in obj) {
-        if (!Array.isArray(obj['fields'])) return false;
+        if (!Array.isArray(obj.fields)) return false;
         if (
-          !(obj['fields'] as unknown[]).every(
+          !(obj.fields as unknown[]).every(
             (f: unknown) =>
               f &&
               typeof f === 'object' &&
-              typeof (f as Record<string, unknown>)['label'] === 'string' &&
-              typeof (f as Record<string, unknown>)['value'] === 'string',
+              typeof (f as Record<string, unknown>).label === 'string' &&
+              typeof (f as Record<string, unknown>).value === 'string',
           )
         )
           return false;
@@ -55,36 +55,36 @@ export function isValidRichBlock(b: unknown): b is RichBlock {
       return true;
     }
     case 'diff': {
-      if (typeof obj['filePath'] !== 'string' || typeof obj['diff'] !== 'string') return false;
-      if ('languageHint' in obj && typeof obj['languageHint'] !== 'string') return false;
+      if (typeof obj.filePath !== 'string' || typeof obj.diff !== 'string') return false;
+      if ('languageHint' in obj && typeof obj.languageHint !== 'string') return false;
       return true;
     }
     case 'checklist': {
-      if ('title' in obj && typeof obj['title'] !== 'string') return false;
+      if ('title' in obj && typeof obj.title !== 'string') return false;
       return (
-        Array.isArray(obj['items']) &&
-        (obj['items'] as unknown[]).every((it: unknown) => {
+        Array.isArray(obj.items) &&
+        (obj.items as unknown[]).every((it: unknown) => {
           if (!it || typeof it !== 'object') return false;
           const r = it as Record<string, unknown>;
-          if (typeof r['id'] !== 'string' || typeof r['text'] !== 'string') return false;
-          if ('checked' in r && typeof r['checked'] !== 'boolean') return false;
+          if (typeof r.id !== 'string' || typeof r.text !== 'string') return false;
+          if ('checked' in r && typeof r.checked !== 'boolean') return false;
           return true;
         })
       );
     }
     case 'media_gallery': {
-      if ('title' in obj && typeof obj['title'] !== 'string') return false;
+      if ('title' in obj && typeof obj.title !== 'string') return false;
       return (
-        Array.isArray(obj['items']) &&
-        (obj['items'] as unknown[]).every((it: unknown) => {
+        Array.isArray(obj.items) &&
+        (obj.items as unknown[]).every((it: unknown) => {
           if (!it || typeof it !== 'object') return false;
           const r = it as Record<string, unknown>;
-          if (typeof r['url'] !== 'string') return false;
+          if (typeof r.url !== 'string') return false;
           // Reject non-URL strings (e.g. text descriptions cats hallucinate as "images")
-          const url = r['url'] as string;
+          const url = r.url as string;
           if (!/^(\/|https?:\/\/|data:)/.test(url)) return false;
-          if ('alt' in r && typeof r['alt'] !== 'string') return false;
-          if ('caption' in r && typeof r['caption'] !== 'string') return false;
+          if ('alt' in r && typeof r.alt !== 'string') return false;
+          if ('caption' in r && typeof r.caption !== 'string') return false;
           return true;
         })
       );
@@ -92,24 +92,24 @@ export function isValidRichBlock(b: unknown): b is RichBlock {
     case 'audio': {
       // F34-b: voice messages have `text` without `url` (backend synthesizes url).
       // Accept if either `url` (audio playback) or `text` (voice message) is present.
-      const hasUrl = typeof obj['url'] === 'string' && (obj['url'] as string).trim().length > 0;
-      const hasText = typeof obj['text'] === 'string' && (obj['text'] as string).trim().length > 0;
+      const hasUrl = typeof obj.url === 'string' && (obj.url as string).trim().length > 0;
+      const hasText = typeof obj.text === 'string' && (obj.text as string).trim().length > 0;
       if (!hasUrl && !hasText) return false;
-      if ('title' in obj && typeof obj['title'] !== 'string') return false;
-      if ('durationSec' in obj && typeof obj['durationSec'] !== 'number') return false;
-      if ('mimeType' in obj && typeof obj['mimeType'] !== 'string') return false;
+      if ('title' in obj && typeof obj.title !== 'string') return false;
+      if ('durationSec' in obj && typeof obj.durationSec !== 'number') return false;
+      if ('mimeType' in obj && typeof obj.mimeType !== 'string') return false;
       return true;
     }
     case 'interactive': {
       const VALID_INTERACTIVE_TYPES = ['select', 'multi-select', 'card-grid', 'confirm'];
-      if (typeof obj['interactiveType'] !== 'string') return false;
-      if (!VALID_INTERACTIVE_TYPES.includes(obj['interactiveType'] as string)) return false;
-      if (!Array.isArray(obj['options']) || (obj['options'] as unknown[]).length === 0) return false;
+      if (typeof obj.interactiveType !== 'string') return false;
+      if (!VALID_INTERACTIVE_TYPES.includes(obj.interactiveType as string)) return false;
+      if (!Array.isArray(obj.options) || (obj.options as unknown[]).length === 0) return false;
       // P1-2 fix: validate each option has required id + label
-      for (const opt of obj['options'] as unknown[]) {
+      for (const opt of obj.options as unknown[]) {
         if (opt == null || typeof opt !== 'object') return false;
         const o = opt as Record<string, unknown>;
-        if (typeof o['id'] !== 'string' || typeof o['label'] !== 'string') return false;
+        if (typeof o.id !== 'string' || typeof o.label !== 'string') return false;
       }
       return true;
     }

@@ -1,29 +1,47 @@
 /**
  * F096 Phase C: InteractiveBlockGroup — buildGroupMessage + groupBlocks tests
  */
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { buildSelectionMessage } from '@/components/rich/InteractiveBlock';
 import { buildGroupMessage } from '@/components/rich/InteractiveBlockGroup';
 import type { RichInteractiveBlock } from '@/stores/chat-types';
 
 const selectBlock: RichInteractiveBlock = {
-  id: 'b1', kind: 'interactive', v: 1,
-  interactiveType: 'select', title: '今晚吃什么？',
-  options: [{ id: 'hotpot', label: '火锅', emoji: '🍲' }, { id: 'sushi', label: '寿司', emoji: '🍣' }],
+  id: 'b1',
+  kind: 'interactive',
+  v: 1,
+  interactiveType: 'select',
+  title: '今晚吃什么？',
+  options: [
+    { id: 'hotpot', label: '火锅', emoji: '🍲' },
+    { id: 'sushi', label: '寿司', emoji: '🍣' },
+  ],
   groupId: 'g1',
 };
 
 const multiBlock: RichInteractiveBlock = {
-  id: 'b2', kind: 'interactive', v: 1,
-  interactiveType: 'multi-select', title: '加强什么？',
-  options: [{ id: 'mem', label: '记忆力', emoji: '🧠' }, { id: 'auto', label: '自主性', emoji: '🚀' }],
+  id: 'b2',
+  kind: 'interactive',
+  v: 1,
+  interactiveType: 'multi-select',
+  title: '加强什么？',
+  options: [
+    { id: 'mem', label: '记忆力', emoji: '🧠' },
+    { id: 'auto', label: '自主性', emoji: '🚀' },
+  ],
   groupId: 'g1',
 };
 
 const confirmBlock: RichInteractiveBlock = {
-  id: 'b3', kind: 'interactive', v: 1,
-  interactiveType: 'confirm', title: '加鸡腿？',
-  options: [{ id: '__confirm__', label: '加！' }, { id: '__cancel__', label: '不加' }],
+  id: 'b3',
+  kind: 'interactive',
+  v: 1,
+  interactiveType: 'confirm',
+  title: '加鸡腿？',
+  options: [
+    { id: '__confirm__', label: '加！' },
+    { id: '__cancel__', label: '不加' },
+  ],
   groupId: 'g1',
 };
 
@@ -58,7 +76,8 @@ describe('F096 Phase C: buildGroupMessage', () => {
 
   it('uses messageTemplate per block', () => {
     const customBlock: RichInteractiveBlock = {
-      ...selectBlock, id: 'b4',
+      ...selectBlock,
+      id: 'b4',
       messageTemplate: '晚饭吃 {selection}！',
     };
     const selections = new Map([['b4', ['hotpot']]]);
@@ -69,8 +88,7 @@ describe('F096 Phase C: buildGroupMessage', () => {
 
 describe('F096 Phase C: buildSelectionMessage title context', () => {
   it('select with title adds parenthetical', () => {
-    const msg = buildSelectionMessage('select',
-      [{ id: 'a', label: 'A' }], ['a'], undefined, '问题一');
+    const msg = buildSelectionMessage('select', [{ id: 'a', label: 'A' }], ['a'], undefined, '问题一');
     expect(msg).toBe('我选了：A（问题一）');
   });
 

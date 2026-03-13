@@ -81,7 +81,10 @@ export function LinkedRootsManager({ onRootsChanged }: LinkedRootsManagerProps) 
         </button>
         <button
           type="button"
-          onClick={() => { setAdding(false); setError(null); }}
+          onClick={() => {
+            setAdding(false);
+            setError(null);
+          }}
           className="px-2 py-0.5 rounded text-[10px] font-medium text-owner-dark/60 hover:text-cafe-black transition-colors"
         >
           Cancel
@@ -100,7 +103,9 @@ export function LinkedRootRemoveButton({ id, onRemoved }: { id: string; onRemove
         method: 'DELETE',
       });
       if (res.ok) onRemoved();
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   };
   return (
     <button

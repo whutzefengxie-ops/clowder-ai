@@ -9,13 +9,9 @@
  * 连同 Cat Cafe 自有 MCP 一起写入 capabilities.json。
  */
 
-import { readFile, writeFile, mkdir } from 'fs/promises';
-import { resolve, relative, sep } from 'path';
-import type {
-  CapabilitiesConfig,
-  CapabilityEntry,
-  McpServerDescriptor,
-} from '@cat-cafe/shared';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { relative, resolve, sep } from 'node:path';
+import type { CapabilitiesConfig, CapabilityEntry, McpServerDescriptor } from '@cat-cafe/shared';
 import { catRegistry } from '@cat-cafe/shared';
 import {
   readClaudeMcpConfig,
@@ -55,9 +51,7 @@ function safePath(projectRoot: string, ...segments: string[]): string {
   return normalized;
 }
 
-export async function readCapabilitiesConfig(
-  projectRoot: string,
-): Promise<CapabilitiesConfig | null> {
+export async function readCapabilitiesConfig(projectRoot: string): Promise<CapabilitiesConfig | null> {
   const filePath = safePath(projectRoot, CAT_CAFE_DIR, CAPABILITIES_FILENAME);
   try {
     const raw = await readFile(filePath, 'utf-8');
@@ -69,31 +63,26 @@ export async function readCapabilitiesConfig(
   }
 }
 
-export async function writeCapabilitiesConfig(
-  projectRoot: string,
-  config: CapabilitiesConfig,
-): Promise<void> {
+export async function writeCapabilitiesConfig(projectRoot: string, config: CapabilitiesConfig): Promise<void> {
   const dir = safePath(projectRoot, CAT_CAFE_DIR);
   await mkdir(dir, { recursive: true });
   const filePath = safePath(projectRoot, CAT_CAFE_DIR, CAPABILITIES_FILENAME);
-  await writeFile(filePath, JSON.stringify(config, null, 2) + '\n', 'utf-8');
+  await writeFile(filePath, `${JSON.stringify(config, null, 2)}\n`, 'utf-8');
 }
 
 // ────────── Discovery: Bootstrap from existing CLI configs ──────────
 
 export interface DiscoveryPaths {
-  claudeConfig: string;   // e.g. <projectRoot>/.mcp.json
-  codexConfig: string;    // e.g. <projectRoot>/.codex/config.toml
-  geminiConfig: string;   // e.g. <projectRoot>/.gemini/settings.json
+  claudeConfig: string; // e.g. <projectRoot>/.mcp.json
+  codexConfig: string; // e.g. <projectRoot>/.codex/config.toml
+  geminiConfig: string; // e.g. <projectRoot>/.gemini/settings.json
 }
 
 /**
  * Discover external MCP servers from all 3 CLI configs.
  * Merges by name; if same name appears in multiple, first wins.
  */
-export async function discoverExternalMcpServers(
-  paths: DiscoveryPaths,
-): Promise<McpServerDescriptor[]> {
+export async function discoverExternalMcpServers(paths: DiscoveryPaths): Promise<McpServerDescriptor[]> {
   const [claude, codex, gemini] = await Promise.all([
     readClaudeMcpConfig(paths.claudeConfig),
     readCodexMcpConfig(paths.codexConfig),
@@ -119,9 +108,7 @@ export async function discoverExternalMcpServers(
  * Build the Cat Cafe own MCP server descriptor.
  * Uses the same resolution logic as ClaudeAgentService.
  */
-export function buildCatCafeMcpDescriptor(
-  projectRoot: string,
-): McpServerDescriptor {
+export function buildCatCafeMcpDescriptor(projectRoot: string): McpServerDescriptor {
   const serverPath = resolve(projectRoot, 'packages/mcp-server/dist/index.js');
   return {
     name: 'cat-cafe',
@@ -132,15 +119,9 @@ export function buildCatCafeMcpDescriptor(
   };
 }
 
-const CAT_CAFE_SPLIT_SERVER_IDS = [
-  'cat-cafe-collab',
-  'cat-cafe-memory',
-  'cat-cafe-signals',
-] as const;
+const CAT_CAFE_SPLIT_SERVER_IDS = ['cat-cafe-collab', 'cat-cafe-memory', 'cat-cafe-signals'] as const;
 
-function buildCatCafeSplitMcpDescriptors(
-  projectRoot: string,
-): McpServerDescriptor[] {
+function buildCatCafeSplitMcpDescriptors(projectRoot: string): McpServerDescriptor[] {
   return [
     {
       name: 'cat-cafe-collab',
@@ -189,10 +170,7 @@ type LegacyCatCafeSeed = {
   workingDir?: string;
 };
 
-function buildSplitCapabilityEntries(
-  projectRoot: string,
-  legacySeed?: LegacyCatCafeSeed,
-): CapabilityEntry[] {
+function buildSplitCapabilityEntries(projectRoot: string, legacySeed?: LegacyCatCafeSeed): CapabilityEntry[] {
   const descriptors = buildCatCafeSplitMcpDescriptors(projectRoot);
   const entries = descriptors.map((descriptor) => {
     const entry = toCapabilityEntry(descriptor);
@@ -221,7 +199,9 @@ export function migrateLegacyCatCafeCapability(
   if (!projectRoot) return { migrated: false, config };
 
   const splitSet = new Set(CAT_CAFE_SPLIT_SERVER_IDS);
-  const hasSplit = config.capabilities.some((cap) => splitSet.has(cap.id as typeof CAT_CAFE_SPLIT_SERVER_IDS[number]));
+  const hasSplit = config.capabilities.some((cap) =>
+    splitSet.has(cap.id as (typeof CAT_CAFE_SPLIT_SERVER_IDS)[number]),
+  );
   if (hasSplit) return { migrated: false, config };
 
   const legacyCatCafe = config.capabilities.find((cap) => cap.type === 'mcp' && cap.id === 'cat-cafe');
@@ -292,19 +272,16 @@ export async function bootstrapCapabilities(
 
 /** Provider → config file path mapping */
 export interface CliConfigPaths {
-  anthropic: string;   // e.g. <projectRoot>/.mcp.json
-  openai: string;      // e.g. <projectRoot>/.codex/config.toml
-  google: string;      // e.g. <projectRoot>/.gemini/settings.json
+  anthropic: string; // e.g. <projectRoot>/.mcp.json
+  openai: string; // e.g. <projectRoot>/.codex/config.toml
+  google: string; // e.g. <projectRoot>/.gemini/settings.json
 }
 
 /**
  * Resolve effective MCP servers for a specific cat.
  * Applies global enabled + per-cat overrides.
  */
-export function resolveServersForCat(
-  config: CapabilitiesConfig,
-  catId: string,
-): McpServerDescriptor[] {
+export function resolveServersForCat(config: CapabilitiesConfig, catId: string): McpServerDescriptor[] {
   return config.capabilities
     .filter((cap) => cap.type === 'mcp' && cap.mcpServer)
     .map((cap) => {
@@ -313,17 +290,17 @@ export function resolveServersForCat(
       const enabledFromConfig = override ? override.enabled : cap.enabled;
       // Guardrail: commandless MCP entries are invalid for current stdio model.
       // Keep descriptor for writer cleanup (disabled => remove in Gemini/Claude).
-      const enabled = enabledFromConfig && hasUsableStdioCommand(cap.mcpServer!.command);
+      const enabled = enabledFromConfig && hasUsableStdioCommand(cap.mcpServer?.command);
 
       const desc: McpServerDescriptor = {
         name: cap.id,
-        command: cap.mcpServer!.command,
-        args: cap.mcpServer!.args,
+        command: cap.mcpServer?.command,
+        args: cap.mcpServer?.args,
         enabled,
         source: cap.source,
       };
-      if (cap.mcpServer!.env) desc.env = cap.mcpServer!.env;
-      if (cap.mcpServer!.workingDir) desc.workingDir = cap.mcpServer!.workingDir;
+      if (cap.mcpServer?.env) desc.env = cap.mcpServer?.env;
+      if (cap.mcpServer?.workingDir) desc.workingDir = cap.mcpServer?.workingDir;
       return desc;
     });
 }
@@ -332,9 +309,7 @@ export function resolveServersForCat(
  * Group cats by provider, collecting the union of servers each provider needs.
  * A server is included for a provider if ANY cat of that provider has it enabled.
  */
-function collectServersPerProvider(
-  config: CapabilitiesConfig,
-): Record<string, McpServerDescriptor[]> {
+function collectServersPerProvider(config: CapabilitiesConfig): Record<string, McpServerDescriptor[]> {
   const providerServers: Record<string, Map<string, McpServerDescriptor>> = {};
 
   for (const catId of catRegistry.getAllIds()) {
@@ -369,10 +344,7 @@ function collectServersPerProvider(
  * This is the main orchestration entry point:
  * capabilities.json → resolve per-provider → write CLI configs
  */
-export async function generateCliConfigs(
-  config: CapabilitiesConfig,
-  paths: CliConfigPaths,
-): Promise<void> {
+export async function generateCliConfigs(config: CapabilitiesConfig, paths: CliConfigPaths): Promise<void> {
   const perProvider = collectServersPerProvider(config);
 
   const writes: Promise<void>[] = [];
@@ -404,9 +376,7 @@ export async function orchestrate(
   } else {
     const migrated = migrateLegacyCatCafeCapability(
       config,
-      opts?.catCafeRepoRoot
-        ? { projectRoot, catCafeRepoRoot: opts.catCafeRepoRoot }
-        : { projectRoot },
+      opts?.catCafeRepoRoot ? { projectRoot, catCafeRepoRoot: opts.catCafeRepoRoot } : { projectRoot },
     );
     if (migrated.migrated) {
       config = migrated.config;

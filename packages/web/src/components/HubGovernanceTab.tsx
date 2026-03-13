@@ -38,7 +38,9 @@ export function HubGovernanceTab() {
         const threadsRes = await apiFetch('/api/threads');
         if (threadsRes.ok) {
           const { threads } = (await threadsRes.json()) as { threads: { projectPath?: string }[] };
-          const externalPaths = [...new Set(threads.map((t) => t.projectPath).filter((p): p is string => !!p && p !== 'default'))];
+          const externalPaths = [
+            ...new Set(threads.map((t) => t.projectPath).filter((p): p is string => !!p && p !== 'default')),
+          ];
           if (externalPaths.length > 0) {
             const discoverRes = await apiFetch('/api/governance/discover', {
               method: 'POST',
@@ -50,7 +52,13 @@ export function HubGovernanceTab() {
               const knownPaths = new Set(known.map((p) => p.projectPath));
               for (const path of unsynced) {
                 if (!knownPaths.has(path)) {
-                  known.push({ projectPath: path, status: 'never-synced', packVersion: null, lastSyncedAt: null, findings: [] });
+                  known.push({
+                    projectPath: path,
+                    status: 'never-synced',
+                    packVersion: null,
+                    lastSyncedAt: null,
+                    findings: [],
+                  });
                 }
               }
             }

@@ -9,11 +9,11 @@
  * 4. Per-cat override resolution
  */
 import './helpers/setup-cat-registry.js';
-import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { writeFile, mkdir, rm, readFile } from 'fs/promises';
-import { join } from 'path';
-import { tmpdir } from 'os';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, beforeEach, describe, it } from 'node:test';
 
 const {
   readCapabilitiesConfig,
@@ -24,16 +24,11 @@ const {
   orchestrate,
 } = await import('../dist/config/capabilities/capability-orchestrator.js');
 
-const {
-  readClaudeMcpConfig,
-  readCodexMcpConfig,
-  readGeminiMcpConfig,
-} = await import('../dist/config/capabilities/mcp-config-adapters.js');
+const { readClaudeMcpConfig, readCodexMcpConfig, readGeminiMcpConfig } = await import(
+  '../dist/config/capabilities/mcp-config-adapters.js'
+);
 
-const {
-  needsMcpInjection,
-  buildMcpCallbackInstructions,
-} = await import(
+const { needsMcpInjection, buildMcpCallbackInstructions } = await import(
   '../dist/domains/cats/services/agents/invocation/McpPromptInjector.js'
 );
 
@@ -51,23 +46,39 @@ async function makeTmpDir(prefix) {
 describe('F041 Config Round-Trip', () => {
   /** @type {string} */ let dir;
 
-  beforeEach(async () => { dir = await makeTmpDir('roundtrip'); });
-  afterEach(async () => { await rm(dir, { recursive: true, force: true }); });
+  beforeEach(async () => {
+    dir = await makeTmpDir('roundtrip');
+  });
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
 
   it('capabilities.json → CLI configs → read back preserves servers', async () => {
     // Seed capabilities.json with cat-cafe + external
     const config = {
       version: /** @type {1} */ (1),
       capabilities: [
-        { id: 'cat-cafe', type: /** @type {'mcp'} */ ('mcp'), enabled: true,
+        {
+          id: 'cat-cafe',
+          type: /** @type {'mcp'} */ ('mcp'),
+          enabled: true,
           source: /** @type {'cat-cafe'} */ ('cat-cafe'),
-          mcpServer: { command: 'node', args: ['server.js'] } },
-        { id: 'filesystem', type: /** @type {'mcp'} */ ('mcp'), enabled: true,
+          mcpServer: { command: 'node', args: ['server.js'] },
+        },
+        {
+          id: 'filesystem',
+          type: /** @type {'mcp'} */ ('mcp'),
+          enabled: true,
           source: /** @type {'external'} */ ('external'),
-          mcpServer: { command: 'npx', args: ['-y', '@mcp/fs'] } },
-        { id: 'disabled-tool', type: /** @type {'mcp'} */ ('mcp'), enabled: false,
+          mcpServer: { command: 'npx', args: ['-y', '@mcp/fs'] },
+        },
+        {
+          id: 'disabled-tool',
+          type: /** @type {'mcp'} */ ('mcp'),
+          enabled: false,
           source: /** @type {'external'} */ ('external'),
-          mcpServer: { command: 'echo', args: [] } },
+          mcpServer: { command: 'echo', args: [] },
+        },
       ],
     };
 
@@ -87,15 +98,27 @@ describe('F041 Config Round-Trip', () => {
     const geminiServers = await readGeminiMcpConfig(paths.google);
 
     // Claude/Gemini: only enabled servers (no 'enabled' field in these formats)
-    assert.ok(claudeServers.find((s) => s.name === 'cat-cafe'), 'Claude should have cat-cafe');
-    assert.ok(claudeServers.find((s) => s.name === 'filesystem'), 'Claude should have filesystem');
+    assert.ok(
+      claudeServers.find((s) => s.name === 'cat-cafe'),
+      'Claude should have cat-cafe',
+    );
+    assert.ok(
+      claudeServers.find((s) => s.name === 'filesystem'),
+      'Claude should have filesystem',
+    );
     assert.ok(!claudeServers.find((s) => s.name === 'disabled-tool'), 'Claude should NOT have disabled tool');
 
-    assert.ok(geminiServers.find((s) => s.name === 'cat-cafe'), 'Gemini should have cat-cafe');
+    assert.ok(
+      geminiServers.find((s) => s.name === 'cat-cafe'),
+      'Gemini should have cat-cafe',
+    );
     assert.ok(!geminiServers.find((s) => s.name === 'disabled-tool'), 'Gemini should NOT have disabled tool');
 
     // Codex: all servers with explicit enabled field
-    assert.ok(codexServers.find((s) => s.name === 'cat-cafe'), 'Codex should have cat-cafe');
+    assert.ok(
+      codexServers.find((s) => s.name === 'cat-cafe'),
+      'Codex should have cat-cafe',
+    );
     const disabledInCodex = codexServers.find((s) => s.name === 'disabled-tool');
     assert.ok(disabledInCodex, 'Codex should have disabled-tool (with enabled=false)');
     assert.equal(disabledInCodex.enabled, false, 'disabled-tool should be disabled in Codex');
@@ -127,8 +150,12 @@ describe('F041 Config Round-Trip', () => {
 describe('F041 Cloud P1-1: bootstrap generates CLI configs', () => {
   /** @type {string} */ let dir;
 
-  beforeEach(async () => { dir = await makeTmpDir('bootstrap-cli'); });
-  afterEach(async () => { await rm(dir, { recursive: true, force: true }); });
+  beforeEach(async () => {
+    dir = await makeTmpDir('bootstrap-cli');
+  });
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
 
   it('bootstrapCapabilities + generateCliConfigs produces CLI config files', async () => {
     // Simulate first-run: no capabilities.json exists
@@ -187,20 +214,32 @@ describe('F041 Cloud P1-1: bootstrap generates CLI configs', () => {
 describe('F041 Hot-Reload: toggle → CLI config regenerated', () => {
   /** @type {string} */ let dir;
 
-  beforeEach(async () => { dir = await makeTmpDir('hotreload'); });
-  afterEach(async () => { await rm(dir, { recursive: true, force: true }); });
+  beforeEach(async () => {
+    dir = await makeTmpDir('hotreload');
+  });
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
 
   it('disabling MCP tool via PATCH removes it from CLI configs', async () => {
     // 1. Seed: two MCP tools, both enabled
     const config = {
       version: /** @type {1} */ (1),
       capabilities: [
-        { id: 'cat-cafe', type: /** @type {'mcp'} */ ('mcp'), enabled: true,
+        {
+          id: 'cat-cafe',
+          type: /** @type {'mcp'} */ ('mcp'),
+          enabled: true,
           source: /** @type {'cat-cafe'} */ ('cat-cafe'),
-          mcpServer: { command: 'node', args: ['server.js'] } },
-        { id: 'filesystem', type: /** @type {'mcp'} */ ('mcp'), enabled: true,
+          mcpServer: { command: 'node', args: ['server.js'] },
+        },
+        {
+          id: 'filesystem',
+          type: /** @type {'mcp'} */ ('mcp'),
+          enabled: true,
           source: /** @type {'external'} */ ('external'),
-          mcpServer: { command: 'npx', args: ['@mcp/fs'] } },
+          mcpServer: { command: 'npx', args: ['@mcp/fs'] },
+        },
       ],
     };
     await writeCapabilitiesConfig(dir, config);
@@ -214,7 +253,10 @@ describe('F041 Hot-Reload: toggle → CLI config regenerated', () => {
 
     // Verify both present
     let claude = await readClaudeMcpConfig(paths.anthropic);
-    assert.ok(claude.find((s) => s.name === 'filesystem'), 'filesystem should be in Claude config');
+    assert.ok(
+      claude.find((s) => s.name === 'filesystem'),
+      'filesystem should be in Claude config',
+    );
 
     // 2. PATCH: disable filesystem globally
     const updated = await readCapabilitiesConfig(dir);
@@ -227,14 +269,20 @@ describe('F041 Hot-Reload: toggle → CLI config regenerated', () => {
 
     // 3. Verify: filesystem removed from Claude/Gemini configs
     claude = await readClaudeMcpConfig(paths.anthropic);
-    assert.ok(!claude.find((s) => s.name === 'filesystem'),
-      'filesystem should be REMOVED from Claude config after disable');
-    assert.ok(claude.find((s) => s.name === 'cat-cafe'),
-      'cat-cafe should still be present');
+    assert.ok(
+      !claude.find((s) => s.name === 'filesystem'),
+      'filesystem should be REMOVED from Claude config after disable',
+    );
+    assert.ok(
+      claude.find((s) => s.name === 'cat-cafe'),
+      'cat-cafe should still be present',
+    );
 
     const gemini = await readGeminiMcpConfig(paths.google);
-    assert.ok(!gemini.find((s) => s.name === 'filesystem'),
-      'filesystem should be REMOVED from Gemini config after disable');
+    assert.ok(
+      !gemini.find((s) => s.name === 'filesystem'),
+      'filesystem should be REMOVED from Gemini config after disable',
+    );
 
     // Codex: should have filesystem with enabled=false
     const codex = await readCodexMcpConfig(paths.openai);
@@ -248,12 +296,20 @@ describe('F041 Hot-Reload: toggle → CLI config regenerated', () => {
     const config = {
       version: /** @type {1} */ (1),
       capabilities: [
-        { id: 'cat-cafe', type: /** @type {'mcp'} */ ('mcp'), enabled: true,
+        {
+          id: 'cat-cafe',
+          type: /** @type {'mcp'} */ ('mcp'),
+          enabled: true,
           source: /** @type {'cat-cafe'} */ ('cat-cafe'),
-          mcpServer: { command: 'node', args: ['server.js'] } },
-        { id: 'filesystem', type: /** @type {'mcp'} */ ('mcp'), enabled: false,
+          mcpServer: { command: 'node', args: ['server.js'] },
+        },
+        {
+          id: 'filesystem',
+          type: /** @type {'mcp'} */ ('mcp'),
+          enabled: false,
           source: /** @type {'external'} */ ('external'),
-          mcpServer: { command: 'npx', args: ['@mcp/fs'] } },
+          mcpServer: { command: 'npx', args: ['@mcp/fs'] },
+        },
       ],
     };
     await writeCapabilitiesConfig(dir, config);
@@ -280,12 +336,16 @@ describe('F041 Hot-Reload: toggle → CLI config regenerated', () => {
 
     // 3. Verify: filesystem restored in all configs
     claude = await readClaudeMcpConfig(paths.anthropic);
-    assert.ok(claude.find((s) => s.name === 'filesystem'),
-      'filesystem should be RESTORED in Claude config after re-enable');
+    assert.ok(
+      claude.find((s) => s.name === 'filesystem'),
+      'filesystem should be RESTORED in Claude config after re-enable',
+    );
 
     const gemini = await readGeminiMcpConfig(paths.google);
-    assert.ok(gemini.find((s) => s.name === 'filesystem'),
-      'filesystem should be RESTORED in Gemini config after re-enable');
+    assert.ok(
+      gemini.find((s) => s.name === 'filesystem'),
+      'filesystem should be RESTORED in Gemini config after re-enable',
+    );
   });
 });
 
@@ -295,13 +355,11 @@ describe('F041 Hot-Reload: toggle → CLI config regenerated', () => {
 
 describe('F041 Injection互斥', () => {
   it('MCP available → no HTTP callback injection', () => {
-    assert.equal(needsMcpInjection(true), false,
-      'When MCP is available, should NOT inject HTTP callback');
+    assert.equal(needsMcpInjection(true), false, 'When MCP is available, should NOT inject HTTP callback');
   });
 
   it('MCP unavailable → HTTP callback fallback injection', () => {
-    assert.equal(needsMcpInjection(false), true,
-      'When MCP is unavailable, should inject HTTP callback as fallback');
+    assert.equal(needsMcpInjection(false), true, 'When MCP is unavailable, should inject HTTP callback as fallback');
   });
 
   it('HTTP callback instructions contain required tool names', () => {
@@ -323,8 +381,11 @@ describe('F041 Injection互斥', () => {
     for (const s of scenarios) {
       const mcpAvailable = s.mcpSupport && !!s.serverPath;
       const shouldInject = needsMcpInjection(mcpAvailable);
-      assert.equal(shouldInject, s.expectedInjection,
-        `mcpSupport=${s.mcpSupport}, serverPath='${s.serverPath}' → inject=${s.expectedInjection}`);
+      assert.equal(
+        shouldInject,
+        s.expectedInjection,
+        `mcpSupport=${s.mcpSupport}, serverPath='${s.serverPath}' → inject=${s.expectedInjection}`,
+      );
     }
   });
 });
@@ -336,18 +397,25 @@ describe('F041 Injection互斥', () => {
 describe('F041 Discovery Consistency', () => {
   /** @type {string} */ let dir;
 
-  beforeEach(async () => { dir = await makeTmpDir('discovery'); });
-  afterEach(async () => { await rm(dir, { recursive: true, force: true }); });
+  beforeEach(async () => {
+    dir = await makeTmpDir('discovery');
+  });
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
 
   it('bootstrap discovers external servers and includes split cat-cafe servers', async () => {
     // Seed Claude config with external server
     const claudeFile = join(dir, '.mcp.json');
-    await writeFile(claudeFile, JSON.stringify({
-      mcpServers: {
-        'pencil': { command: 'node', args: ['pencil-server.js'] },
-        'jetbrains': { command: 'npx', args: ['jb-mcp'] },
-      },
-    }));
+    await writeFile(
+      claudeFile,
+      JSON.stringify({
+        mcpServers: {
+          pencil: { command: 'node', args: ['pencil-server.js'] },
+          jetbrains: { command: 'npx', args: ['jb-mcp'] },
+        },
+      }),
+    );
 
     const config = await bootstrapCapabilities(dir, {
       claudeConfig: claudeFile,
@@ -378,12 +446,18 @@ describe('F041 Discovery Consistency', () => {
     const geminiFile = join(dir, 'gemini.json');
 
     // Same server name in both Claude and Gemini configs
-    await writeFile(claudeFile, JSON.stringify({
-      mcpServers: { shared: { command: 'node', args: ['shared-v1.js'] } },
-    }));
-    await writeFile(geminiFile, JSON.stringify({
-      mcpServers: { shared: { command: 'node', args: ['shared-v2.js'] } },
-    }));
+    await writeFile(
+      claudeFile,
+      JSON.stringify({
+        mcpServers: { shared: { command: 'node', args: ['shared-v1.js'] } },
+      }),
+    );
+    await writeFile(
+      geminiFile,
+      JSON.stringify({
+        mcpServers: { shared: { command: 'node', args: ['shared-v2.js'] } },
+      }),
+    );
 
     const config = await bootstrapCapabilities(dir, {
       claudeConfig: claudeFile,
@@ -407,10 +481,14 @@ describe('F041 Per-Cat Override Resolution', () => {
     const config = {
       version: /** @type {1} */ (1),
       capabilities: [
-        { id: 'tool', type: /** @type {'mcp'} */ ('mcp'), enabled: true,
+        {
+          id: 'tool',
+          type: /** @type {'mcp'} */ ('mcp'),
+          enabled: true,
           source: /** @type {'external'} */ ('external'),
           mcpServer: { command: 'echo', args: [] },
-          overrides: [{ catId: 'codex', enabled: false }] },
+          overrides: [{ catId: 'codex', enabled: false }],
+        },
       ],
     };
 
@@ -425,10 +503,14 @@ describe('F041 Per-Cat Override Resolution', () => {
     const config = {
       version: /** @type {1} */ (1),
       capabilities: [
-        { id: 'tool', type: /** @type {'mcp'} */ ('mcp'), enabled: false,
+        {
+          id: 'tool',
+          type: /** @type {'mcp'} */ ('mcp'),
+          enabled: false,
           source: /** @type {'external'} */ ('external'),
           mcpServer: { command: 'echo', args: [] },
-          overrides: [{ catId: 'gemini', enabled: true }] },
+          overrides: [{ catId: 'gemini', enabled: true }],
+        },
       ],
     };
 
@@ -446,13 +528,17 @@ describe('F041 Per-Cat Override Resolution', () => {
     const config = {
       version: /** @type {1} */ (1),
       capabilities: [
-        { id: 'tool', type: /** @type {'mcp'} */ ('mcp'), enabled: true,
+        {
+          id: 'tool',
+          type: /** @type {'mcp'} */ ('mcp'),
+          enabled: true,
           source: /** @type {'external'} */ ('external'),
           mcpServer: { command: 'echo', args: [] },
           overrides: [
             { catId: 'codex', enabled: false },
             { catId: 'gemini', enabled: false },
-          ] },
+          ],
+        },
       ],
     };
 

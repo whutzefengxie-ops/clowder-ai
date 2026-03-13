@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  bootstrapDebugFromStorage,
   clearDebugEvents,
   configureDebug,
   dumpDebugEvents,
-  bootstrapDebugFromStorage,
   ensureWindowDebugApi,
   getDebugStatus,
   invocationDebugConstants,

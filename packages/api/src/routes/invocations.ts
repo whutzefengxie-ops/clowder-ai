@@ -9,14 +9,14 @@
 
 import type { FastifyPluginAsync } from 'fastify';
 import { getDefaultCatId } from '../config/cat-config-loader.js';
-import type { IInvocationRecordStore } from '../domains/cats/services/stores/ports/InvocationRecordStore.js';
-import type { IMessageStore } from '../domains/cats/services/stores/ports/MessageStore.js';
-import type { AgentRouter } from '../domains/cats/services/agents/routing/AgentRouter.js';
 import type { InvocationTracker } from '../domains/cats/services/agents/invocation/InvocationTracker.js';
 import type { QueueProcessor } from '../domains/cats/services/agents/invocation/QueueProcessor.js';
+import type { AgentRouter } from '../domains/cats/services/agents/routing/AgentRouter.js';
 import type { PersistenceContext } from '../domains/cats/services/agents/routing/route-helpers.js';
-import type { SocketManager } from '../infrastructure/websocket/index.js';
 import { parseIntent } from '../domains/cats/services/context/IntentParser.js';
+import type { IInvocationRecordStore } from '../domains/cats/services/stores/ports/InvocationRecordStore.js';
+import type { IMessageStore } from '../domains/cats/services/stores/ports/MessageStore.js';
+import type { SocketManager } from '../infrastructure/websocket/index.js';
 
 export interface InvocationsRoutesOptions {
   invocationRecordStore: IInvocationRecordStore;
@@ -29,10 +29,8 @@ export interface InvocationsRoutesOptions {
   queueProcessor?: QueueProcessor;
 }
 
-export const invocationsRoutes: FastifyPluginAsync<InvocationsRoutesOptions> =
-  async (app, opts) => {
-
-  const uploadDir = opts.uploadDir ?? process.env['UPLOAD_DIR'] ?? './uploads';
+export const invocationsRoutes: FastifyPluginAsync<InvocationsRoutesOptions> = async (app, opts) => {
+  const uploadDir = opts.uploadDir ?? process.env.UPLOAD_DIR ?? './uploads';
 
   // GET /api/invocations/:id — query InvocationRecord state
   app.get<{ Params: { id: string } }>('/api/invocations/:id', async (request, reply) => {
@@ -154,22 +152,21 @@ export const invocationsRoutes: FastifyPluginAsync<InvocationsRoutesOptions> =
     void (async () => {
       const HEARTBEAT_INTERVAL_MS = 30_000;
       const heartbeatInterval = setInterval(() => {
-        opts.socketManager.broadcastToRoom(
-          `thread:${record.threadId}`,
-          'heartbeat',
-          { threadId: record.threadId, timestamp: Date.now() },
-        );
+        opts.socketManager.broadcastToRoom(`thread:${record.threadId}`, 'heartbeat', {
+          threadId: record.threadId,
+          timestamp: Date.now(),
+        });
       }, HEARTBEAT_INTERVAL_MS);
 
       // F39: Track final status for queue auto-dequeue
       let finalStatus: 'succeeded' | 'failed' | 'canceled' = 'failed';
 
       try {
-        opts.socketManager.broadcastToRoom(
-          `thread:${record.threadId}`,
-          'intent_mode',
-          { threadId: record.threadId, mode: intent.intent, targetCats: record.targetCats },
-        );
+        opts.socketManager.broadcastToRoom(`thread:${record.threadId}`, 'intent_mode', {
+          threadId: record.threadId,
+          mode: intent.intent,
+          targetCats: record.targetCats,
+        });
 
         // ADR-008 S3: collect cursor boundaries; ack only after succeeded
         const cursorBoundaries = new Map<string, string>();
@@ -187,9 +184,11 @@ export const invocationsRoutes: FastifyPluginAsync<InvocationsRoutesOptions> =
             ...(storedMessage.contentBlocks ? { contentBlocks: storedMessage.contentBlocks } : {}),
             uploadDir,
             signal: controller.signal,
-            ...(opts.queueProcessor ? {
-              queueHasQueuedMessages: (tid: string) => opts.queueProcessor!.hasQueuedForThread(tid),
-            } : {}),
+            ...(opts.queueProcessor
+              ? {
+                  queueHasQueuedMessages: (tid: string) => opts.queueProcessor?.hasQueuedForThread(tid),
+                }
+              : {}),
             cursorBoundaries,
             persistenceContext,
           },
@@ -199,19 +198,20 @@ export const invocationsRoutes: FastifyPluginAsync<InvocationsRoutesOptions> =
 
         // P1-2: mark failed if any message persistence failed
         if (persistenceContext.failed) {
-          const errorDetail = persistenceContext.errors
-            .map(e => `${e.catId}: ${e.error}`)
-            .join('; ');
+          const errorDetail = persistenceContext.errors.map((e) => `${e.catId}: ${e.error}`).join('; ');
           await opts.invocationRecordStore.update(id, {
             status: 'failed',
             error: `Message delivered but persistence failed: ${errorDetail}`,
           });
-          opts.socketManager.broadcastAgentMessage({
-            type: 'error',
-            catId: getDefaultCatId(),
-            error: '消息已发送但未能保存，刷新后可能丢失。可点击重试。',
-            timestamp: Date.now(),
-          }, record.threadId);
+          opts.socketManager.broadcastAgentMessage(
+            {
+              type: 'error',
+              catId: getDefaultCatId(),
+              error: '消息已发送但未能保存，刷新后可能丢失。可点击重试。',
+              timestamp: Date.now(),
+            },
+            record.threadId,
+          );
         } else {
           // ADR-008 S3: ack cursors before marking succeeded so that if ack
           // throws, the catch block sees running→failed (valid transition).
@@ -227,19 +227,23 @@ export const invocationsRoutes: FastifyPluginAsync<InvocationsRoutesOptions> =
           status: 'failed',
           error: errorMsg,
         });
-        opts.socketManager.broadcastAgentMessage({
-          type: 'error',
-          catId: getDefaultCatId(),
-          error: errorMsg,
-          isFinal: true,
-          timestamp: Date.now(),
-        }, record.threadId);
+        opts.socketManager.broadcastAgentMessage(
+          {
+            type: 'error',
+            catId: getDefaultCatId(),
+            error: errorMsg,
+            isFinal: true,
+            timestamp: Date.now(),
+          },
+          record.threadId,
+        );
       } finally {
         clearInterval(heartbeatInterval);
         opts.invocationTracker.complete(record.threadId, controller);
         // F39: Notify queue processor for auto-dequeue chain
-        opts.queueProcessor?.onInvocationComplete(record.threadId, finalStatus)
-          .catch(() => { /* best-effort */ });
+        opts.queueProcessor?.onInvocationComplete(record.threadId, finalStatus).catch(() => {
+          /* best-effort */
+        });
       }
     })();
   });

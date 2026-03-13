@@ -37,9 +37,7 @@ export class CatRegistry {
   getOrThrow(catId: string): CatRegistryEntry {
     const entry = this.entries.get(catId);
     if (!entry) {
-      throw new Error(
-        `Unknown cat ID: "${catId}". Registered: ${this.getAllIds().join(', ')}`,
-      );
+      throw new Error(`Unknown cat ID: "${catId}". Registered: ${this.getAllIds().join(', ')}`);
     }
     return entry;
   }

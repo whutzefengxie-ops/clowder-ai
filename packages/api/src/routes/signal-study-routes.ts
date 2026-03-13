@@ -1,10 +1,10 @@
-import type { FastifyPluginAsync } from 'fastify';
+import type { ArtifactJobState, ArtifactKind } from '@cat-cafe/shared';
 import { SignalArticleStatusSchema } from '@cat-cafe/shared';
-import type { ArtifactKind, ArtifactJobState } from '@cat-cafe/shared';
+import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { resolveSignalPaths } from '../domains/signals/config/sources-loader.js';
-import { readInboxRecords } from '../domains/signals/services/inbox-records.js';
 import { SignalArticleQueryService } from '../domains/signals/services/article-query-service.js';
+import { readInboxRecords } from '../domains/signals/services/inbox-records.js';
 import { StudyMetaService } from '../domains/signals/services/study-meta-service.js';
 import { resolveUserId } from '../utils/request-identity.js';
 
@@ -121,7 +121,10 @@ export const signalStudyRoutes: FastifyPluginAsync = async (app) => {
 
   app.delete('/api/signals/articles/:id', async (request, reply) => {
     const userId = resolveUserId(request);
-    if (!userId) { reply.status(401); return { error: 'Identity required' }; }
+    if (!userId) {
+      reply.status(401);
+      return { error: 'Identity required' };
+    }
 
     const params = request.params as { id?: string };
     if (!params.id || params.id.trim().length === 0) {
@@ -142,7 +145,10 @@ export const signalStudyRoutes: FastifyPluginAsync = async (app) => {
 
   app.post('/api/signals/articles/batch', async (request, reply) => {
     const userId = resolveUserId(request);
-    if (!userId) { reply.status(401); return { error: 'Identity required' }; }
+    if (!userId) {
+      reply.status(401);
+      return { error: 'Identity required' };
+    }
 
     const parsed = batchArticleBodySchema.safeParse(request.body);
     if (!parsed.success) {
@@ -154,9 +160,7 @@ export const signalStudyRoutes: FastifyPluginAsync = async (app) => {
     let affected = 0;
 
     for (const id of ids) {
-      const input = action === 'delete'
-        ? { deletedAt: new Date().toISOString() }
-        : fields ?? {};
+      const input = action === 'delete' ? { deletedAt: new Date().toISOString() } : (fields ?? {});
       const result = await articleQuery.updateArticle(id, input);
       if (result) affected++;
     }
@@ -167,7 +171,10 @@ export const signalStudyRoutes: FastifyPluginAsync = async (app) => {
   // AC-19: Study timeline — recent study activity across all articles
   app.get('/api/signals/timeline', async (request, reply) => {
     const userId = resolveUserId(request);
-    if (!userId) { reply.status(401); return { error: 'Identity required' }; }
+    if (!userId) {
+      reply.status(401);
+      return { error: 'Identity required' };
+    }
     const query = request.query as { days?: string };
     const days = Math.min(Math.max(Number(query.days) || 7, 1), 90);
     const cutoff = new Date(Date.now() - days * 86400000).toISOString();

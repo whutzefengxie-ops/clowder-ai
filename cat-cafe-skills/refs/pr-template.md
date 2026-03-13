@@ -16,7 +16,7 @@
 
 ## Original Requirements（必填）
 
-- Discussion/Interview: `docs/discussions/{date}-{topic}/README.md`
+- Discussion/Interview: `feature-discussions/{date}-{topic}/README.md`
 - **原始需求摘录（≤5 行，直接粘贴team experience）**：
   > {例："我要能看到三只猫分别挂了哪些 Skill，按猫分类，一目了然"}
 - team lead核心痛点：{用team lead自己的话概括}
@@ -24,7 +24,7 @@
 
 ## Plan / ADR
 
-- Plan: `docs/plans/YYYY-MM-DD-xxx.md`
+- Plan: `feature spec or implementation note`
 - ADR: `docs/decisions/NNN-xxx.md`（如有）
 - BACKLOG: F__ / #__
 

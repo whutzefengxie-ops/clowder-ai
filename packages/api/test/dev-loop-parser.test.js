@@ -5,9 +5,9 @@
  * buildDevLoopSummary: with P3 / without P3 / multi-iteration
  */
 
-import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseReviewResult, buildDevLoopSummary } from '../dist/domains/cats/services/modes/dev-loop-parser.js';
+import { describe, it } from 'node:test';
+import { buildDevLoopSummary, parseReviewResult } from '../dist/domains/cats/services/modes/dev-loop-parser.js';
 
 describe('parseReviewResult', () => {
   it('extracts APPROVED verdict', () => {
@@ -35,12 +35,7 @@ describe('parseReviewResult', () => {
   });
 
   it('handles multiple P items of same level', () => {
-    const text = [
-      '[P1] Bug A',
-      '[P1] Bug B',
-      '[P2] Issue C',
-      'VERDICT: NEEDS_FIX',
-    ].join('\n');
+    const text = ['[P1] Bug A', '[P1] Bug B', '[P2] Issue C', 'VERDICT: NEEDS_FIX'].join('\n');
     const result = parseReviewResult(text);
     assert.equal(result.p1.length, 2);
     assert.equal(result.p2.length, 1);
@@ -134,20 +129,13 @@ describe('parseReviewResult', () => {
   });
 
   it('multi-VERDICT: NEEDS_FIX then APPROVED → NOT approved (R4 P1-2)', () => {
-    const text = [
-      'VERDICT: NEEDS_FIX',
-      'Actually after re-review:',
-      'VERDICT: APPROVED',
-    ].join('\n');
+    const text = ['VERDICT: NEEDS_FIX', 'Actually after re-review:', 'VERDICT: APPROVED'].join('\n');
     const result = parseReviewResult(text);
     assert.equal(result.approved, false, 'any NEEDS_FIX anywhere → fail-closed');
   });
 
   it('multi-VERDICT: all APPROVED → approved (R4 P1-2)', () => {
-    const text = [
-      'Section 1: VERDICT: APPROVED',
-      'Section 2: VERDICT: APPROVED',
-    ].join('\n');
+    const text = ['Section 1: VERDICT: APPROVED', 'Section 2: VERDICT: APPROVED'].join('\n');
     const result = parseReviewResult(text);
     assert.equal(result.approved, true, 'all APPROVED → approved');
   });

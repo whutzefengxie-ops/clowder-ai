@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
+import { afterEach, beforeEach, describe, test } from 'node:test';
 
 describe('MCP Signal Tools', () => {
   let originalEnv;
@@ -7,7 +7,7 @@ describe('MCP Signal Tools', () => {
 
   beforeEach(() => {
     originalEnv = { ...process.env };
-    process.env['CAT_CAFE_API_URL'] = 'http://127.0.0.1:3002';
+    process.env.CAT_CAFE_API_URL = 'http://127.0.0.1:3002';
     originalFetch = globalThis.fetch;
   });
 
@@ -159,7 +159,8 @@ describe('MCP Signal Tools', () => {
               source: 'anthropic-news',
               tier: 1,
               status: 'inbox',
-              content: 'Claude 5 introduces better coding, safety, and tool-use capabilities across long-context tasks.',
+              content:
+                'Claude 5 introduces better coding, safety, and tool-use capabilities across long-context tasks.',
               fetchedAt: '2026-02-19T08:00:00.000Z',
               publishedAt: '2026-02-19T07:00:00.000Z',
               tags: [],

@@ -2,7 +2,7 @@
  * F8: ParallelStatusBar aggregateUsage tests.
  * Verifies cross-cat token usage aggregation.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { aggregateUsage } from '../ParallelStatusBar';
 
 describe('F8: aggregateUsage', () => {
@@ -20,11 +20,11 @@ describe('F8: aggregateUsage', () => {
 
     expect(result).not.toBeNull();
     // opus 30k + codex 5k + gemini 3k (totalTokens falls back to input)
-    expect(result!.inputTokens).toBe(38000);
+    expect(result?.inputTokens).toBe(38000);
     // opus 8k + codex 2k
-    expect(result!.outputTokens).toBe(10000);
+    expect(result?.outputTokens).toBe(10000);
     // only opus has cost
-    expect(result!.costUsd).toBe(0.15);
+    expect(result?.costUsd).toBe(0.15);
   });
 
   it('handles single cat with detailed usage', () => {
@@ -32,9 +32,9 @@ describe('F8: aggregateUsage', () => {
       opus: { usage: { inputTokens: 10000, outputTokens: 3000, costUsd: 0.05 } },
     });
 
-    expect(result!.inputTokens).toBe(10000);
-    expect(result!.outputTokens).toBe(3000);
-    expect(result!.costUsd).toBe(0.05);
+    expect(result?.inputTokens).toBe(10000);
+    expect(result?.outputTokens).toBe(3000);
+    expect(result?.costUsd).toBe(0.05);
   });
 
   it('omits zero-value fields from result', () => {
@@ -42,11 +42,11 @@ describe('F8: aggregateUsage', () => {
       gemini: { usage: { totalTokens: 500 } },
     });
 
-    expect(result!.inputTokens).toBe(500);
+    expect(result?.inputTokens).toBe(500);
     // outputTokens not set (0 → omitted)
-    expect(result!.outputTokens).toBeUndefined();
+    expect(result?.outputTokens).toBeUndefined();
     // no cost
-    expect(result!.costUsd).toBeUndefined();
+    expect(result?.costUsd).toBeUndefined();
   });
 
   // P2-1 regression: stale cats should be excluded when filterCatIds is provided
@@ -62,9 +62,9 @@ describe('F8: aggregateUsage', () => {
 
     expect(result).not.toBeNull();
     // Only opus + codex, NOT gemini
-    expect(result!.inputTokens).toBe(35000);
-    expect(result!.outputTokens).toBe(10000);
-    expect(result!.costUsd).toBe(0.15);
+    expect(result?.inputTokens).toBe(35000);
+    expect(result?.outputTokens).toBe(10000);
+    expect(result?.costUsd).toBe(0.15);
   });
 
   it('returns null when filterCatIds has no matching usage', () => {

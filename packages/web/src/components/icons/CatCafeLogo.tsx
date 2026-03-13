@@ -1,10 +1,7 @@
 /** Cat Café Logo — 烁烁画的详细线稿版 + 三猫流光渐变 */
 export function CatCafeLogo({ className = 'w-6 h-6' }: { className?: string }) {
   return (
-    <svg
-      viewBox="0 0 640 640"
-      className={className}
-    >
+    <svg viewBox="0 0 640 640" className={className}>
       <defs>
         {/* 三猫流光渐变：布偶蓝 → 缅因金 → 暹罗紫 (45°) */}
         <linearGradient id="cat-cafe-gradient" x1="0%" y1="0%" x2="100%" y2="100%">

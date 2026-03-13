@@ -50,7 +50,10 @@ function toStringArray(value: unknown): readonly string[] {
   return results;
 }
 
-function parseFrontmatter(rawMarkdown: string): { readonly frontmatter: Record<string, unknown>; readonly content: string } {
+function parseFrontmatter(rawMarkdown: string): {
+  readonly frontmatter: Record<string, unknown>;
+  readonly content: string;
+} {
   if (!rawMarkdown.startsWith('---\n')) {
     return {
       frontmatter: {},
@@ -90,11 +93,11 @@ function toSignalArticle(record: InboxRecord, frontmatter: Record<string, unknow
     title: pickString(frontmatter, ['title']) ?? record.title,
     url: pickString(frontmatter, ['url']) ?? record.url,
     source: pickString(frontmatter, ['source']) ?? record.source,
-    tier: typeof frontmatter['tier'] === 'number' ? frontmatter['tier'] : record.tier,
+    tier: typeof frontmatter.tier === 'number' ? frontmatter.tier : record.tier,
     publishedAt: pickString(frontmatter, ['publishedAt']) ?? record.fetchedAt,
     fetchedAt: pickString(frontmatter, ['fetchedAt']) ?? record.fetchedAt,
     status,
-    tags: toStringArray(frontmatter['tags']),
+    tags: toStringArray(frontmatter.tags),
     ...(summary ? { summary } : {}),
     ...(note ? { note } : {}),
     ...(deletedAt ? { deletedAt } : {}),

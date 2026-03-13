@@ -1,7 +1,6 @@
-import React from 'react';
+import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { act } from 'react';
-import { beforeAll, beforeEach, afterAll, afterEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const apiFetchMock = vi.hoisted(() => vi.fn());
 const getUserIdMock = vi.hoisted(() => vi.fn(() => 'alice'));
@@ -14,9 +13,8 @@ vi.mock('next/navigation', () => ({
 }));
 
 vi.mock('@/stores/chatStore', () => ({
-  useChatStore: (
-    selector: (state: { removeMessage: typeof removeMessageMock }) => unknown,
-  ) => selector({ removeMessage: removeMessageMock }),
+  useChatStore: (selector: (state: { removeMessage: typeof removeMessageMock }) => unknown) =>
+    selector({ removeMessage: removeMessageMock }),
 }));
 
 vi.mock('@/utils/api-client', () => ({
@@ -104,7 +102,7 @@ describe('MessageActions identity source', () => {
     expect(branchButton).not.toBeNull();
 
     await act(async () => {
-      branchButton!.click();
+      branchButton?.click();
     });
 
     const directDialogProps = confirmDialogSpy.mock.calls

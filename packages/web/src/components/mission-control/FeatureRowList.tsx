@@ -127,7 +127,7 @@ export function FeatureRowList({
                   featureItems={featureItems}
                   threadsByBacklogId={threadsByBacklogId}
                   threadCount={threadCountByFeature[tag] ?? 0}
-          titleMatchedThreads={threadsByFeatureId[tag] ?? []}
+                  titleMatchedThreads={threadsByFeatureId[tag] ?? []}
                   expanded={expandedFeature === tag}
                   onToggle={() => setExpandedFeature(expandedFeature === tag ? null : tag)}
                   selectedItemId={selectedItemId}
@@ -166,7 +166,9 @@ function FeatureRow({
   const status = featureStatus(featureItems);
   const name = featureName(featureItems);
   const badge = STATUS_BADGE[status];
-  const dispatchedThreadCount = featureItems.filter((i) => i.status === 'dispatched' && threadsByBacklogId[i.id]).length;
+  const dispatchedThreadCount = featureItems.filter(
+    (i) => i.status === 'dispatched' && threadsByBacklogId[i.id],
+  ).length;
   const totalThreadCount = Math.max(threadCount, dispatchedThreadCount);
   const { detail, loading: detailLoading } = useFeatureDocDetail(expanded ? tag : null);
 
@@ -276,10 +278,12 @@ function FeatureRow({
                   </div>
                 </div>
               )}
-              {detailLoading && (
-                <p className="mt-3 text-[11px] text-[#B5A48E] animate-pulse">加载 Phase 进度...</p>
+              {detailLoading && <p className="mt-3 text-[11px] text-[#B5A48E] animate-pulse">加载 Phase 进度...</p>}
+              {detail && (
+                <div className="mt-3">
+                  <FeatureProgressPanel detail={detail} />
+                </div>
               )}
-              {detail && <div className="mt-3"><FeatureProgressPanel detail={detail} /></div>}
             </div>
             <div>
               <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-[#9A866F]">关联线程</p>

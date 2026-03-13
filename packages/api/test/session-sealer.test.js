@@ -5,17 +5,13 @@
  * Red→Green: These tests are written BEFORE the implementation is complete.
  */
 
-import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
+import { describe, test } from 'node:test';
 
 describe('SessionSealer', () => {
   async function createFixtures() {
-    const { SessionChainStore } = await import(
-      '../dist/domains/cats/services/stores/ports/SessionChainStore.js'
-    );
-    const { SessionSealer } = await import(
-      '../dist/domains/cats/services/session/SessionSealer.js'
-    );
+    const { SessionChainStore } = await import('../dist/domains/cats/services/stores/ports/SessionChainStore.js');
+    const { SessionSealer } = await import('../dist/domains/cats/services/session/SessionSealer.js');
     const store = new SessionChainStore();
     const sealer = new SessionSealer(store);
     return { store, sealer };

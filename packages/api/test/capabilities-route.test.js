@@ -6,15 +6,15 @@
  * Uses Fastify injection + tmp directories for isolation.
  */
 import './helpers/setup-cat-registry.js';
-import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { writeFile, mkdir, rm, readFile } from 'fs/promises';
-import { join } from 'path';
-import { tmpdir } from 'os';
+import { mkdir, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, beforeEach, describe, it } from 'node:test';
 
 import {
-  writeCapabilitiesConfig,
   readCapabilitiesConfig,
+  writeCapabilitiesConfig,
 } from '../dist/config/capabilities/capability-orchestrator.js';
 
 const AUTH_HEADERS = { 'x-cat-cafe-user': 'test-user' };
@@ -31,17 +31,31 @@ async function makeTmpDir(prefix) {
 describe('PATCH capabilities logic', () => {
   /** @type {string} */ let dir;
 
-  beforeEach(async () => { dir = await makeTmpDir('patch'); });
-  afterEach(async () => { await rm(dir, { recursive: true, force: true }); });
+  beforeEach(async () => {
+    dir = await makeTmpDir('patch');
+  });
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
 
   it('toggles global enabled and persists', async () => {
     await writeCapabilitiesConfig(dir, {
       version: 1,
       capabilities: [
-        { id: 'cat-cafe', type: 'mcp', enabled: true, source: 'cat-cafe',
-          mcpServer: { command: 'node', args: ['server.js'] } },
-        { id: 'external-tool', type: 'mcp', enabled: true, source: 'external',
-          mcpServer: { command: 'echo', args: [] } },
+        {
+          id: 'cat-cafe',
+          type: 'mcp',
+          enabled: true,
+          source: 'cat-cafe',
+          mcpServer: { command: 'node', args: ['server.js'] },
+        },
+        {
+          id: 'external-tool',
+          type: 'mcp',
+          enabled: true,
+          source: 'external',
+          mcpServer: { command: 'echo', args: [] },
+        },
       ],
     });
 
@@ -62,8 +76,7 @@ describe('PATCH capabilities logic', () => {
     await writeCapabilitiesConfig(dir, {
       version: 1,
       capabilities: [
-        { id: 'tool', type: 'mcp', enabled: true, source: 'external',
-          mcpServer: { command: 'echo', args: [] } },
+        { id: 'tool', type: 'mcp', enabled: true, source: 'external', mcpServer: { command: 'echo', args: [] } },
       ],
     });
 
@@ -84,8 +97,13 @@ describe('PATCH capabilities logic', () => {
     await writeCapabilitiesConfig(dir, {
       version: 1,
       capabilities: [
-        { id: 'cat-cafe', type: 'mcp', enabled: true, source: 'cat-cafe',
-          mcpServer: { command: 'node', args: ['server.js'] } },
+        {
+          id: 'cat-cafe',
+          type: 'mcp',
+          enabled: true,
+          source: 'cat-cafe',
+          mcpServer: { command: 'node', args: ['server.js'] },
+        },
         { id: 'cross-cat-handoff', type: 'skill', enabled: true, source: 'external' },
       ],
     });
@@ -107,9 +125,7 @@ describe('PATCH capabilities logic', () => {
   it('adds per-cat override for skill', async () => {
     await writeCapabilitiesConfig(dir, {
       version: 1,
-      capabilities: [
-        { id: 'spec-compliance-check', type: 'skill', enabled: true, source: 'external' },
-      ],
+      capabilities: [{ id: 'spec-compliance-check', type: 'skill', enabled: true, source: 'external' }],
     });
 
     const config = await readCapabilitiesConfig(dir);
@@ -132,8 +148,13 @@ describe('PATCH capabilities logic', () => {
     await writeCapabilitiesConfig(dir, {
       version: 1,
       capabilities: [
-        { id: 'filesystem', type: 'mcp', enabled: true, source: 'external',
-          mcpServer: { command: 'npx', args: ['@mcp/fs'] } },
+        {
+          id: 'filesystem',
+          type: 'mcp',
+          enabled: true,
+          source: 'external',
+          mcpServer: { command: 'npx', args: ['@mcp/fs'] },
+        },
       ],
     });
 
@@ -142,13 +163,14 @@ describe('PATCH capabilities logic', () => {
 
     // Simulate the GET handler's skill sync logic (type-scoped check)
     const skillName = 'filesystem';
-    const existsAsSkill = config.capabilities.some(
-      (c) => c.type === 'skill' && c.id === skillName,
-    );
+    const existsAsSkill = config.capabilities.some((c) => c.type === 'skill' && c.id === skillName);
 
     if (!existsAsSkill) {
       config.capabilities.push({
-        id: skillName, type: 'skill', enabled: true, source: 'external',
+        id: skillName,
+        type: 'skill',
+        enabled: true,
+        source: 'external',
       });
     }
     await writeCapabilitiesConfig(dir, config);
@@ -167,8 +189,13 @@ describe('PATCH capabilities logic', () => {
     await writeCapabilitiesConfig(dir, {
       version: 1,
       capabilities: [
-        { id: 'filesystem', type: 'mcp', enabled: true, source: 'external',
-          mcpServer: { command: 'npx', args: ['@mcp/fs'] } },
+        {
+          id: 'filesystem',
+          type: 'mcp',
+          enabled: true,
+          source: 'external',
+          mcpServer: { command: 'npx', args: ['@mcp/fs'] },
+        },
         { id: 'filesystem', type: 'skill', enabled: true, source: 'external' },
       ],
     });
@@ -179,9 +206,7 @@ describe('PATCH capabilities logic', () => {
     // Simulate PATCH with compound lookup (id + type)
     const targetId = 'filesystem';
     const targetType = 'skill';
-    const capIndex = config.capabilities.findIndex(
-      (c) => c.id === targetId && c.type === targetType,
-    );
+    const capIndex = config.capabilities.findIndex((c) => c.id === targetId && c.type === targetType);
     assert.ok(capIndex !== -1, 'Should find the skill entry');
 
     const cap = config.capabilities[capIndex];
@@ -202,9 +227,14 @@ describe('PATCH capabilities logic', () => {
     await writeCapabilitiesConfig(dir, {
       version: 1,
       capabilities: [
-        { id: 'tool', type: 'mcp', enabled: true, source: 'external',
+        {
+          id: 'tool',
+          type: 'mcp',
+          enabled: true,
+          source: 'external',
           mcpServer: { command: 'echo', args: [] },
-          overrides: [{ catId: 'opus', enabled: false }] },
+          overrides: [{ catId: 'opus', enabled: false }],
+        },
       ],
     });
 
@@ -267,8 +297,7 @@ describe('PATCH capabilities logic', () => {
     await writeCapabilitiesConfig(dir, {
       version: 1,
       capabilities: [
-        { id: 'mcp-tool', type: 'mcp', enabled: true, source: 'external',
-          mcpServer: { command: 'echo', args: [] } },
+        { id: 'mcp-tool', type: 'mcp', enabled: true, source: 'external', mcpServer: { command: 'echo', args: [] } },
         { id: 'old-skill', type: 'skill', enabled: true, source: 'external' },
         { id: 'current-skill', type: 'skill', enabled: true, source: 'external' },
       ],
@@ -281,9 +310,7 @@ describe('PATCH capabilities logic', () => {
     const allSkillNames = new Set(['current-skill']);
 
     // Prune stale skills (same logic as GET handler)
-    config.capabilities = config.capabilities.filter(
-      (c) => c.type !== 'skill' || allSkillNames.has(c.id),
-    );
+    config.capabilities = config.capabilities.filter((c) => c.type !== 'skill' || allSkillNames.has(c.id));
     await writeCapabilitiesConfig(dir, config);
 
     const updated = await readCapabilitiesConfig(dir);
@@ -306,10 +333,14 @@ describe('PATCH capabilities logic', () => {
     await writeCapabilitiesConfig(dir, {
       version: 1,
       capabilities: [
-        { id: 'mcp-tool', type: 'mcp', enabled: true, source: 'external',
-          mcpServer: { command: 'echo', args: [] } },
-        { id: 'saved-skill', type: 'skill', enabled: false, source: 'external',
-          overrides: [{ catId: 'opus', enabled: true }] },
+        { id: 'mcp-tool', type: 'mcp', enabled: true, source: 'external', mcpServer: { command: 'echo', args: [] } },
+        {
+          id: 'saved-skill',
+          type: 'skill',
+          enabled: false,
+          source: 'external',
+          overrides: [{ catId: 'opus', enabled: true }],
+        },
       ],
     });
 
@@ -321,9 +352,7 @@ describe('PATCH capabilities logic', () => {
     const allSkillNames = new Set(['other-skill']); // non-empty but incomplete
 
     if (allScansOk) {
-      config.capabilities = config.capabilities.filter(
-        (c) => c.type !== 'skill' || allSkillNames.has(c.id),
-      );
+      config.capabilities = config.capabilities.filter((c) => c.type !== 'skill' || allSkillNames.has(c.id));
     }
     await writeCapabilitiesConfig(dir, config);
 
@@ -339,8 +368,7 @@ describe('PATCH capabilities logic', () => {
     await writeCapabilitiesConfig(dir, {
       version: 1,
       capabilities: [
-        { id: 'mcp-tool', type: 'mcp', enabled: true, source: 'external',
-          mcpServer: { command: 'echo', args: [] } },
+        { id: 'mcp-tool', type: 'mcp', enabled: true, source: 'external', mcpServer: { command: 'echo', args: [] } },
         { id: 'stale-skill', type: 'skill', enabled: true, source: 'external' },
       ],
     });
@@ -352,9 +380,7 @@ describe('PATCH capabilities logic', () => {
     const allSkillNames = new Set(); // genuinely 0 skills
 
     if (allScansOk) {
-      config.capabilities = config.capabilities.filter(
-        (c) => c.type !== 'skill' || allSkillNames.has(c.id),
-      );
+      config.capabilities = config.capabilities.filter((c) => c.type !== 'skill' || allSkillNames.has(c.id));
     }
     await writeCapabilitiesConfig(dir, config);
 
@@ -369,17 +395,20 @@ describe('PATCH capabilities logic', () => {
 
 describe('resolveServersForCat with overrides', () => {
   it('override disabled wins over global enabled', async () => {
-    const { resolveServersForCat } = await import(
-      '../dist/config/capabilities/capability-orchestrator.js'
-    );
+    const { resolveServersForCat } = await import('../dist/config/capabilities/capability-orchestrator.js');
 
     /** @type {any} */
     const config = {
       version: 1,
       capabilities: [
-        { id: 'tool', type: 'mcp', enabled: true, source: 'external',
+        {
+          id: 'tool',
+          type: 'mcp',
+          enabled: true,
+          source: 'external',
           mcpServer: { command: 'echo', args: [] },
-          overrides: [{ catId: 'codex', enabled: false }] },
+          overrides: [{ catId: 'codex', enabled: false }],
+        },
       ],
     };
 
@@ -391,17 +420,20 @@ describe('resolveServersForCat with overrides', () => {
   });
 
   it('override enabled wins over global disabled', async () => {
-    const { resolveServersForCat } = await import(
-      '../dist/config/capabilities/capability-orchestrator.js'
-    );
+    const { resolveServersForCat } = await import('../dist/config/capabilities/capability-orchestrator.js');
 
     /** @type {any} */
     const config = {
       version: 1,
       capabilities: [
-        { id: 'tool', type: 'mcp', enabled: false, source: 'external',
+        {
+          id: 'tool',
+          type: 'mcp',
+          enabled: false,
+          source: 'external',
           mcpServer: { command: 'echo', args: [] },
-          overrides: [{ catId: 'opus', enabled: true }] },
+          overrides: [{ catId: 'opus', enabled: true }],
+        },
       ],
     };
 
@@ -510,10 +542,7 @@ describe('GET /api/capabilities (Fastify)', () => {
     assert.ok(!catCafeSkillIds.includes('refs'), 'refs/ is a reference folder, not a skill');
 
     assert.ok(body.skillHealth, 'response.skillHealth should exist');
-    assert.ok(
-      !((body.skillHealth.unregistered ?? []).includes('refs')),
-      'refs should not be reported as unregistered',
-    );
+    assert.ok(!(body.skillHealth.unregistered ?? []).includes('refs'), 'refs should not be reported as unregistered');
 
     await app.close();
   });

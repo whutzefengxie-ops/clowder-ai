@@ -4,14 +4,9 @@
  */
 
 import * as fs from 'node:fs';
-import * as path from 'node:path';
 import * as os from 'node:os';
-import {
-  findDeepestExistingPath,
-  isWithinPath,
-  resolveAbsolutePath,
-  tryRealpathSync,
-} from './path-utils.js';
+import * as path from 'node:path';
+import { findDeepestExistingPath, isWithinPath, resolveAbsolutePath, tryRealpathSync } from './path-utils.js';
 
 /**
  * 配置接口
@@ -60,10 +55,7 @@ export function getDefaultConfig(): PathConfig {
  * @param config - 可选的配置，默认使用 getDefaultConfig()
  * @returns 是否允许访问该路径
  */
-export function isPathAllowed(
-  targetPath: string,
-  config?: PathConfig
-): boolean {
+export function isPathAllowed(targetPath: string, config?: PathConfig): boolean {
   const { allowedDirs } = config ?? getDefaultConfig();
 
   // 解析为绝对路径
@@ -72,16 +64,12 @@ export function isPathAllowed(
   const resolvedAllowedDirs = allowedDirs.map(resolveAbsolutePath);
 
   // Quick reject using pure path prefix check
-  const prefixAllowed = resolvedAllowedDirs.some((allowedDir) =>
-    isWithinPath(resolvedPath, allowedDir)
-  );
+  const prefixAllowed = resolvedAllowedDirs.some((allowedDir) => isWithinPath(resolvedPath, allowedDir));
   if (!prefixAllowed) {
     return false;
   }
 
-  const realAllowedDirs = resolvedAllowedDirs.map(
-    (allowedDir) => tryRealpathSync(allowedDir) ?? allowedDir
-  );
+  const realAllowedDirs = resolvedAllowedDirs.map((allowedDir) => tryRealpathSync(allowedDir) ?? allowedDir);
 
   // If target exists, validate its realpath; otherwise validate the realpath of the deepest
   // existing prefix to prevent symlink escapes like allowed/link -> /etc.
@@ -154,10 +142,7 @@ export function initCatCafeDir(config?: PathConfig): void {
  * @param config - 可选的配置
  * @returns 解析后的绝对路径，若不允许则返回 null
  */
-export function getSafePath(
-  targetPath: string,
-  config?: PathConfig
-): string | null {
+export function getSafePath(targetPath: string, config?: PathConfig): string | null {
   const resolvedPath = resolveAbsolutePath(targetPath);
 
   if (!isPathAllowed(resolvedPath, config)) {

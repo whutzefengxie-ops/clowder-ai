@@ -11,12 +11,9 @@ export function parseCliTimeoutMs(raw: string | undefined): number | undefined {
 }
 
 export function readCliTimeoutMsFromEnv(env: NodeJS.ProcessEnv = process.env): number | undefined {
-  return parseCliTimeoutMs(env['CLI_TIMEOUT_MS']);
+  return parseCliTimeoutMs(env.CLI_TIMEOUT_MS);
 }
 
-export function resolveCliTimeoutMs(
-  overrideMs: number | undefined,
-  env: NodeJS.ProcessEnv = process.env,
-): number {
+export function resolveCliTimeoutMs(overrideMs: number | undefined, env: NodeJS.ProcessEnv = process.env): number {
   return overrideMs ?? readCliTimeoutMsFromEnv(env) ?? DEFAULT_CLI_TIMEOUT_MS;
 }

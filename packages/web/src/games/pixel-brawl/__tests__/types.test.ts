@@ -1,11 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import {
-  SKILLS,
-  TEAM_COLORS,
-  FIGHTER_NAMES,
-  FIGHTER_STATS,
-  ALL_FIGHTER_IDS,
-} from '../types';
+import { describe, expect, it } from 'vitest';
+import { ALL_FIGHTER_IDS, FIGHTER_NAMES, FIGHTER_STATS, SKILLS, TEAM_COLORS } from '../types';
 
 describe('types', () => {
   it('every FighterId has a skill, color, name, and stats', () => {

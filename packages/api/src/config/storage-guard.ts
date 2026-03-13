@@ -20,13 +20,13 @@ export function assertStorageReady(redisAvailable: boolean): StorageGuardResult 
     return { mode: 'redis' };
   }
 
-  if (process.env['MEMORY_STORE'] === '1') {
+  if (process.env.MEMORY_STORE === '1') {
     return { mode: 'memory' };
   }
 
   throw new Error(
-    '[api] REDIS_URL not set and MEMORY_STORE not enabled. '
-    + 'Start Redis or use --memory flag. '
-    + 'Set MEMORY_STORE=1 to explicitly allow in-memory storage.',
+    '[api] REDIS_URL not set and MEMORY_STORE not enabled. ' +
+      'Start Redis or use --memory flag. ' +
+      'Set MEMORY_STORE=1 to explicitly allow in-memory storage.',
   );
 }

@@ -4,8 +4,9 @@
  * These tests are security-critical and must NEVER be weakened.
  * They verify that game event scoping correctly prevents information leaks.
  */
-import { describe, it } from 'node:test';
+
 import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
 import { GameEngine } from '../dist/domains/cats/services/game/GameEngine.js';
 import { GameViewBuilder } from '../dist/domains/cats/services/game/GameViewBuilder.js';
 
@@ -63,13 +64,15 @@ describe('Information Isolation Red-Line Tests', () => {
     const engine = new GameEngine(runtime);
 
     engine.appendEvent({
-      round: 1, phase: 'night_wolf', type: 'wolf_kill',
+      round: 1,
+      phase: 'night_wolf',
+      type: 'wolf_kill',
       scope: 'faction:wolf',
       payload: { target: 'P2' },
     });
 
     const villagerEvents = engine.getVisibleEvents('P2');
-    const wolfEvent = villagerEvents.find(e => e.type === 'wolf_kill');
+    const wolfEvent = villagerEvents.find((e) => e.type === 'wolf_kill');
     assert.equal(wolfEvent, undefined, 'Villager must NOT see wolf faction events');
   });
 
@@ -79,26 +82,30 @@ describe('Information Isolation Red-Line Tests', () => {
 
     // Seer's divine result (seat-scoped)
     engine.appendEvent({
-      round: 1, phase: 'night_seer', type: 'divine_result',
+      round: 1,
+      phase: 'night_seer',
+      type: 'divine_result',
       scope: 'seat:P3',
       payload: { target: 'P1', result: 'wolf' },
     });
 
     // Witch's notification (seat-scoped)
     engine.appendEvent({
-      round: 1, phase: 'night_witch', type: 'witch_notification',
+      round: 1,
+      phase: 'night_witch',
+      type: 'witch_notification',
       scope: 'seat:P4',
       payload: { knifedPlayer: 'P2' },
     });
 
     const villagerEvents = engine.getVisibleEvents('P2');
     assert.equal(
-      villagerEvents.find(e => e.type === 'divine_result'),
+      villagerEvents.find((e) => e.type === 'divine_result'),
       undefined,
       'Villager must NOT see seer divine result',
     );
     assert.equal(
-      villagerEvents.find(e => e.type === 'witch_notification'),
+      villagerEvents.find((e) => e.type === 'witch_notification'),
       undefined,
       'Villager must NOT see witch notification',
     );
@@ -109,13 +116,15 @@ describe('Information Isolation Red-Line Tests', () => {
     const engine = new GameEngine(runtime);
 
     engine.appendEvent({
-      round: 1, phase: 'night_wolf', type: 'wolf_discussion',
+      round: 1,
+      phase: 'night_wolf',
+      type: 'wolf_discussion',
       scope: 'faction:wolf',
       payload: { message: 'Let us kill P2' },
     });
 
     const wolfEvents = engine.getVisibleEvents('P1');
-    const discussion = wolfEvents.find(e => e.type === 'wolf_discussion');
+    const discussion = wolfEvents.find((e) => e.type === 'wolf_discussion');
     assert.ok(discussion, 'Wolf MUST see faction:wolf events');
   });
 
@@ -124,13 +133,15 @@ describe('Information Isolation Red-Line Tests', () => {
     const engine = new GameEngine(runtime);
 
     engine.appendEvent({
-      round: 1, phase: 'night_seer', type: 'divine_result',
+      round: 1,
+      phase: 'night_seer',
+      type: 'divine_result',
       scope: 'seat:P3',
       payload: { target: 'P1', result: 'wolf' },
     });
 
     const seerEvents = engine.getVisibleEvents('P3');
-    const divine = seerEvents.find(e => e.type === 'divine_result');
+    const divine = seerEvents.find((e) => e.type === 'divine_result');
     assert.ok(divine, 'Seer MUST see their own divine result');
     assert.equal(divine.payload.result, 'wolf');
   });
@@ -140,13 +151,15 @@ describe('Information Isolation Red-Line Tests', () => {
     const engine = new GameEngine(runtime);
 
     engine.appendEvent({
-      round: 1, phase: 'night_witch', type: 'witch_notification',
+      round: 1,
+      phase: 'night_witch',
+      type: 'witch_notification',
       scope: 'seat:P4',
       payload: { knifedPlayer: 'P2' },
     });
 
     const witchEvents = engine.getVisibleEvents('P4');
-    const notification = witchEvents.find(e => e.type === 'witch_notification');
+    const notification = witchEvents.find((e) => e.type === 'witch_notification');
     assert.ok(notification, 'Witch MUST see who was knifed');
     assert.equal(notification.payload.knifedPlayer, 'P2');
   });
@@ -155,11 +168,41 @@ describe('Information Isolation Red-Line Tests', () => {
     const runtime = createRuntime();
     const engine = new GameEngine(runtime);
 
-    engine.appendEvent({ round: 1, phase: 'night_wolf', type: 'wolf_kill', scope: 'faction:wolf', payload: { target: 'P2' } });
-    engine.appendEvent({ round: 1, phase: 'night_seer', type: 'divine_result', scope: 'seat:P3', payload: { target: 'P1', result: 'wolf' } });
-    engine.appendEvent({ round: 1, phase: 'night_witch', type: 'witch_notification', scope: 'seat:P4', payload: { knifedPlayer: 'P2' } });
-    engine.appendEvent({ round: 1, phase: 'day_vote', type: 'vote', scope: 'public', payload: { voter: 'P2', target: 'P1' } });
-    engine.appendEvent({ round: 1, phase: 'day_vote', type: 'system_note', scope: 'god', payload: { note: 'debug info' } });
+    engine.appendEvent({
+      round: 1,
+      phase: 'night_wolf',
+      type: 'wolf_kill',
+      scope: 'faction:wolf',
+      payload: { target: 'P2' },
+    });
+    engine.appendEvent({
+      round: 1,
+      phase: 'night_seer',
+      type: 'divine_result',
+      scope: 'seat:P3',
+      payload: { target: 'P1', result: 'wolf' },
+    });
+    engine.appendEvent({
+      round: 1,
+      phase: 'night_witch',
+      type: 'witch_notification',
+      scope: 'seat:P4',
+      payload: { knifedPlayer: 'P2' },
+    });
+    engine.appendEvent({
+      round: 1,
+      phase: 'day_vote',
+      type: 'vote',
+      scope: 'public',
+      payload: { voter: 'P2', target: 'P1' },
+    });
+    engine.appendEvent({
+      round: 1,
+      phase: 'day_vote',
+      type: 'system_note',
+      scope: 'god',
+      payload: { note: 'debug info' },
+    });
 
     const godEvents = engine.getVisibleEvents('god');
     assert.equal(godEvents.length, 5, 'God MUST see all 5 events');
@@ -169,9 +212,27 @@ describe('Information Isolation Red-Line Tests', () => {
     const runtime = createRuntime();
     const engine = new GameEngine(runtime);
 
-    engine.appendEvent({ round: 1, phase: 'night_wolf', type: 'wolf_kill', scope: 'faction:wolf', payload: { target: 'P2' } });
-    engine.appendEvent({ round: 1, phase: 'night_seer', type: 'divine_result', scope: 'seat:P3', payload: { target: 'P1', result: 'wolf' } });
-    engine.appendEvent({ round: 1, phase: 'day_vote', type: 'announcement', scope: 'public', payload: { message: 'Day begins' } });
+    engine.appendEvent({
+      round: 1,
+      phase: 'night_wolf',
+      type: 'wolf_kill',
+      scope: 'faction:wolf',
+      payload: { target: 'P2' },
+    });
+    engine.appendEvent({
+      round: 1,
+      phase: 'night_seer',
+      type: 'divine_result',
+      scope: 'seat:P3',
+      payload: { target: 'P1', result: 'wolf' },
+    });
+    engine.appendEvent({
+      round: 1,
+      phase: 'day_vote',
+      type: 'announcement',
+      scope: 'public',
+      payload: { message: 'Day begins' },
+    });
 
     const wolfView = GameViewBuilder.buildView(engine.getRuntime(), 'P1');
     const villagerView = GameViewBuilder.buildView(engine.getRuntime(), 'P2');
@@ -193,11 +254,11 @@ describe('Information Isolation Red-Line Tests', () => {
     const villagerView = GameViewBuilder.buildView(runtime, 'P2');
 
     // Villager should see their own role
-    const selfSeat = villagerView.seats.find(s => s.seatId === 'P2');
+    const selfSeat = villagerView.seats.find((s) => s.seatId === 'P2');
     assert.equal(selfSeat.role, 'villager', 'Player sees own role');
 
     // Should NOT see wolf's role
-    const wolfSeat = villagerView.seats.find(s => s.seatId === 'P1');
+    const wolfSeat = villagerView.seats.find((s) => s.seatId === 'P1');
     assert.equal(wolfSeat.role, undefined, 'Villager must NOT see wolf role');
   });
 
@@ -213,8 +274,20 @@ describe('Information Isolation Red-Line Tests', () => {
 
     // Even if dead player had a seat-scoped event before death, post-death
     // they should only see public events
-    engine.appendEvent({ round: 2, phase: 'night_wolf', type: 'wolf_kill', scope: 'faction:wolf', payload: { target: 'P3' } });
-    engine.appendEvent({ round: 2, phase: 'day_vote', type: 'announce', scope: 'public', payload: { message: 'Day 2' } });
+    engine.appendEvent({
+      round: 2,
+      phase: 'night_wolf',
+      type: 'wolf_kill',
+      scope: 'faction:wolf',
+      payload: { target: 'P3' },
+    });
+    engine.appendEvent({
+      round: 2,
+      phase: 'day_vote',
+      type: 'announce',
+      scope: 'public',
+      payload: { message: 'Day 2' },
+    });
 
     const deadView = engine.getVisibleEvents('P2');
     assert.equal(deadView.length, 1, 'Dead player sees only public events');
@@ -231,18 +304,30 @@ describe('Information Isolation Red-Line Tests', () => {
     const runtime = createRuntime(seats);
     const engine = new GameEngine(runtime);
 
-    engine.appendEvent({ round: 2, phase: 'night_wolf', type: 'wolf_kill', scope: 'faction:wolf', payload: { target: 'P2' } });
-    engine.appendEvent({ round: 2, phase: 'day_vote', type: 'announce', scope: 'public', payload: { message: 'Day 2' } });
+    engine.appendEvent({
+      round: 2,
+      phase: 'night_wolf',
+      type: 'wolf_kill',
+      scope: 'faction:wolf',
+      payload: { target: 'P2' },
+    });
+    engine.appendEvent({
+      round: 2,
+      phase: 'day_vote',
+      type: 'announce',
+      scope: 'public',
+      payload: { message: 'Day 2' },
+    });
 
     // Dead wolf (P1) should only see public events, NOT faction:wolf
     const deadWolfEvents = engine.getVisibleEvents('P1');
-    const wolfEvent = deadWolfEvents.find(e => e.type === 'wolf_kill');
+    const wolfEvent = deadWolfEvents.find((e) => e.type === 'wolf_kill');
     assert.equal(wolfEvent, undefined, 'Dead wolf must NOT see faction:wolf events');
     assert.equal(deadWolfEvents.length, 1, 'Dead wolf sees only public events');
 
     // Dead wolf's GameView should also not show faction events
     const deadWolfView = GameViewBuilder.buildView(engine.getRuntime(), 'P1');
-    const viewWolfEvent = deadWolfView.visibleEvents.find(e => e.type === 'wolf_kill');
+    const viewWolfEvent = deadWolfView.visibleEvents.find((e) => e.type === 'wolf_kill');
     assert.equal(viewWolfEvent, undefined, 'Dead wolf GameView must NOT include faction:wolf events');
   });
 });

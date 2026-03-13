@@ -1,8 +1,8 @@
-import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { test } from 'node:test';
 
 const { readFeatIndexEntries } = await import('../dist/routes/feat-index-doc-import.js');
 
@@ -23,7 +23,7 @@ test('feature docs override backlog fields for same featId', async () => {
         '|----|------|--------|-------|------|',
         '| F043 | Backlog Name | spec | 三猫 | [F043](docs/features/F043-mcp-unification.md) |',
       ].join('\n'),
-      'utf8'
+      'utf8',
     );
     await writeFile(
       join(root, 'docs', 'features', 'F043-mcp-unification.md'),
@@ -38,7 +38,7 @@ test('feature docs override backlog fields for same featId', async () => {
         '',
         '# F043: MCP Unification',
       ].join('\n'),
-      'utf8'
+      'utf8',
     );
 
     process.chdir(root);
@@ -71,7 +71,7 @@ test('feature doc with non-padded filename still indexes by feature_ids frontmat
         '',
         '# F40: Backlog Reorganization',
       ].join('\n'),
-      'utf8'
+      'utf8',
     );
 
     process.chdir(root);
@@ -99,7 +99,7 @@ test('directory entry matching Fxxx*.md does not crash importer', async () => {
         '|----|------|--------|-------|------|',
         '| F043 | Backlog Name | spec | 三猫 | [F043](docs/features/F043-broken.md) |',
       ].join('\n'),
-      'utf8'
+      'utf8',
     );
     await mkdir(join(root, 'docs', 'features', 'F043-broken.md'), { recursive: true });
 
@@ -122,16 +122,8 @@ test('unreadable BACKLOG.md does not crash importer', async () => {
     await createRepoSkeleton(root);
     await writeFile(
       join(root, 'docs', 'features', 'F044-feature.md'),
-      [
-        '---',
-        'feature_ids: [F044]',
-        'name: Feature 044',
-        'status: spec',
-        '---',
-        '',
-        '# F044: Example',
-      ].join('\n'),
-      'utf8'
+      ['---', 'feature_ids: [F044]', 'name: Feature 044', 'status: spec', '---', '', '# F044: Example'].join('\n'),
+      'utf8',
     );
     await mkdir(join(root, 'docs', 'BACKLOG.md'), { recursive: true });
 

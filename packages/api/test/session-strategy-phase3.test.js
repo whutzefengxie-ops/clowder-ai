@@ -5,7 +5,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { describe, test, beforeEach, afterEach } from 'node:test';
+import { afterEach, beforeEach, describe, test } from 'node:test';
 
 async function loadStrategyModule() {
   return import('../dist/config/session-strategy.js');
@@ -169,8 +169,7 @@ describe('session-strategy Phase 3: runtime overrides', () => {
 
     test('deleting runtime override falls back to lower source', async () => {
       const { getSessionStrategyWithSource } = await loadStrategyModule();
-      const { setRuntimeOverride, deleteRuntimeOverride, _clearRuntimeOverrides } =
-        await loadOverridesModule();
+      const { setRuntimeOverride, deleteRuntimeOverride, _clearRuntimeOverrides } = await loadOverridesModule();
       _clearRuntimeOverrides();
 
       await setRuntimeOverride('opus', { strategy: 'compress' });
@@ -211,15 +210,16 @@ describe('session-strategy Phase 3: runtime overrides', () => {
 
       const stubRedis = {
         options: { keyPrefix: '' },
-        scan: async () => { throw new Error('SCAN connection refused'); },
+        scan: async () => {
+          throw new Error('SCAN connection refused');
+        },
         get: async () => null,
       };
 
       // initRuntimeOverrides itself throws — the caller (index.ts) wraps in try/catch
-      await assert.rejects(
-        () => overridesModule.initRuntimeOverrides(stubRedis),
-        { message: 'SCAN connection refused' },
-      );
+      await assert.rejects(() => overridesModule.initRuntimeOverrides(stubRedis), {
+        message: 'SCAN connection refused',
+      });
       // Cache should remain empty (not corrupted)
       assert.equal(overridesModule.getAllRuntimeOverrides().size, 0);
 
@@ -254,13 +254,15 @@ describe('session-strategy Phase 3: runtime overrides', () => {
         },
       };
 
-      await assert.rejects(
-        () => overridesModule.initRuntimeOverrides(stubRedis),
-        { message: 'SCAN connection lost mid-iteration' },
-      );
+      await assert.rejects(() => overridesModule.initRuntimeOverrides(stubRedis), {
+        message: 'SCAN connection lost mid-iteration',
+      });
       // Cache must be empty — no partial state from the first SCAN page
-      assert.equal(overridesModule.getAllRuntimeOverrides().size, 0,
-        'cache should be empty after partial SCAN failure (no partial state)');
+      assert.equal(
+        overridesModule.getAllRuntimeOverrides().size,
+        0,
+        'cache should be empty after partial SCAN failure (no partial state)',
+      );
       assert.ok(scanCallCount >= 2, 'should have attempted at least 2 SCAN calls');
 
       overridesModule._clearRuntimeOverrides();
@@ -277,10 +279,7 @@ describe('session-strategy Phase 3: runtime overrides', () => {
       // First hydration: 2 keys
       const stubRedis = {
         options: { keyPrefix: '' },
-        scan: async () => ['0', [
-          'session-strategy:override:opus',
-          'session-strategy:override:sonnet',
-        ]],
+        scan: async () => ['0', ['session-strategy:override:opus', 'session-strategy:override:sonnet']],
         get: async (key) => {
           if (key === 'session-strategy:override:opus') return JSON.stringify({ strategy: 'compress' });
           if (key === 'session-strategy:override:sonnet') return JSON.stringify({ strategy: 'hybrid' });
@@ -327,10 +326,13 @@ describe('session-strategy Phase 3: runtime overrides', () => {
           if (cursor !== '0') return ['0', []];
           // Return prefixed keys (as real Redis SCAN would)
           const keys = Object.keys(storedData).map((k) => `cat-cafe:${k}`);
-          return ['0', keys.filter((k) => {
-            const bare = pattern.replace('*', '');
-            return k.startsWith(bare) || k.includes('session-strategy:override:');
-          })];
+          return [
+            '0',
+            keys.filter((k) => {
+              const bare = pattern.replace('*', '');
+              return k.startsWith(bare) || k.includes('session-strategy:override:');
+            }),
+          ];
         },
         get: async (key) => {
           // ioredis auto-prefixes, so get() receives bare key
@@ -449,17 +451,22 @@ describe('session-strategy Phase 3: runtime overrides', () => {
       const stubRedis = {
         options: { keyPrefix: 'cat-cafe:' },
         scan: async () => ['0', []],
-        set: async () => { throw new Error('Redis write failure'); },
+        set: async () => {
+          throw new Error('Redis write failure');
+        },
         get: async () => null,
       };
       await overridesModule.initRuntimeOverrides(stubRedis);
 
       // Attempting to set should throw and NOT update cache
-      await assert.rejects(
-        () => overridesModule.setRuntimeOverride('opus', { strategy: 'compress' }),
-        { message: 'Redis write failure' },
+      await assert.rejects(() => overridesModule.setRuntimeOverride('opus', { strategy: 'compress' }), {
+        message: 'Redis write failure',
+      });
+      assert.equal(
+        overridesModule.getRuntimeOverride('opus'),
+        undefined,
+        'cache should not be updated on Redis failure',
       );
-      assert.equal(overridesModule.getRuntimeOverride('opus'), undefined, 'cache should not be updated on Redis failure');
 
       overridesModule._clearRuntimeOverrides();
     });
@@ -473,17 +480,16 @@ describe('session-strategy Phase 3: runtime overrides', () => {
         options: { keyPrefix: 'cat-cafe:' },
         scan: async () => ['0', []],
         set: async () => 'OK',
-        del: async () => { throw new Error('Redis delete failure'); },
+        del: async () => {
+          throw new Error('Redis delete failure');
+        },
         get: async () => null,
       };
       await overridesModule.initRuntimeOverrides(stubRedis);
       await overridesModule.setRuntimeOverride('opus', { strategy: 'compress' });
       assert.ok(overridesModule.getRuntimeOverride('opus'), 'should be in cache before delete');
 
-      await assert.rejects(
-        () => overridesModule.deleteRuntimeOverride('opus'),
-        { message: 'Redis delete failure' },
-      );
+      await assert.rejects(() => overridesModule.deleteRuntimeOverride('opus'), { message: 'Redis delete failure' });
       // Cache should still have the entry (not deleted)
       assert.ok(overridesModule.getRuntimeOverride('opus'), 'cache should not be deleted on Redis failure');
 

@@ -6,8 +6,7 @@
  * action 支持通配: 'git_*' 匹配 'git_commit'
  */
 
-import type { CatId } from '@cat-cafe/shared';
-import type { AuthorizationRule } from '@cat-cafe/shared';
+import type { AuthorizationRule, CatId } from '@cat-cafe/shared';
 import { generateSortableId } from './MessageStore.js';
 
 export interface IAuthorizationRuleStore {

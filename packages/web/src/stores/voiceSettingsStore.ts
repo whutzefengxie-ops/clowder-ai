@@ -12,7 +12,7 @@ export interface CustomTerm {
 export interface VoiceSettings {
   customTerms: CustomTerm[];
   customPrompt: string | null; // null = use default
-  language: 'zh' | 'en' | '';  // '' = auto-detect
+  language: 'zh' | 'en' | ''; // '' = auto-detect
 }
 
 const DEFAULT_SETTINGS: VoiceSettings = {
@@ -36,12 +36,9 @@ function normalizeSettings(parsed: unknown): VoiceSettings {
   if (typeof parsed !== 'object' || parsed === null) return DEFAULT_SETTINGS;
   const obj = parsed as Record<string, unknown>;
 
-  const customTerms = Array.isArray(obj.customTerms)
-    ? obj.customTerms.filter(isValidTerm)
-    : [];
+  const customTerms = Array.isArray(obj.customTerms) ? obj.customTerms.filter(isValidTerm) : [];
 
-  const customPrompt =
-    typeof obj.customPrompt === 'string' ? obj.customPrompt : null;
+  const customPrompt = typeof obj.customPrompt === 'string' ? obj.customPrompt : null;
 
   const language = VALID_LANGUAGES.has(obj.language as VoiceSettings['language'])
     ? (obj.language as VoiceSettings['language'])

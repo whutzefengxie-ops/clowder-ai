@@ -70,7 +70,7 @@ describe('computeMentionStats', () => {
 describe('computeMentionStats — streak', () => {
   it('computes consecutive days streak', () => {
     const msgs = [
-      msg('1', ['opus'], '2026-03-10T10:00:00Z'),     // numeric ts
+      msg('1', ['opus'], '2026-03-10T10:00:00Z'), // numeric ts
       msg('2', ['opus'], '2026-03-09T10:00:00Z'),
       msg('3', ['opus'], '2026-03-08T10:00:00Z'),
       // gap: no mention on 03-07

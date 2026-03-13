@@ -14,14 +14,13 @@
  * 不再需要 API keys — CLI 使用订阅额度。
  */
 
-import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { execSync } from 'node:child_process';
+import { describe, test } from 'node:test';
 import { migrateRouterOpts } from '../helpers/agent-registry-helpers.js';
 
 // Check if integration tests should run
-const shouldRunIntegrationTests =
-  process.env['RUN_INTEGRATION_TESTS'] === 'true';
+const shouldRunIntegrationTests = process.env.RUN_INTEGRATION_TESTS === 'true';
 
 // Check for CLI availability (not API keys)
 function hasCli(cmd) {
@@ -42,43 +41,29 @@ const itOrSkip = shouldRunIntegrationTests ? test : test.skip;
 
 // Log status at startup
 if (!shouldRunIntegrationTests) {
-  console.log(
-    '\n[multi-cat.test.js] Skipping integration tests (RUN_INTEGRATION_TESTS not set)\n'
-  );
+  console.log('\n[multi-cat.test.js] Skipping integration tests (RUN_INTEGRATION_TESTS not set)\n');
 } else {
-  console.log(
-    `\n[multi-cat.test.js] CLI availability: claude=${hasClaude} codex=${hasCodex} gemini=${hasGemini}\n`
-  );
+  console.log(`\n[multi-cat.test.js] CLI availability: claude=${hasClaude} codex=${hasCodex} gemini=${hasGemini}\n`);
 }
 
 /** Create a fully wired router with real services (no mock) */
 async function createRealRouter() {
-  const { ClaudeAgentService } = await import(
-    '../../dist/domains/cats/services/ClaudeAgentService.js'
-  );
-  const { CodexAgentService } = await import(
-    '../../dist/domains/cats/services/CodexAgentService.js'
-  );
-  const { GeminiAgentService } = await import(
-    '../../dist/domains/cats/services/GeminiAgentService.js'
-  );
-  const { AgentRouter } = await import(
-    '../../dist/domains/cats/services/AgentRouter.js'
-  );
-  const { InvocationRegistry } = await import(
-    '../../dist/domains/cats/services/InvocationRegistry.js'
-  );
-  const { MessageStore } = await import(
-    '../../dist/domains/cats/services/MessageStore.js'
-  );
+  const { ClaudeAgentService } = await import('../../dist/domains/cats/services/ClaudeAgentService.js');
+  const { CodexAgentService } = await import('../../dist/domains/cats/services/CodexAgentService.js');
+  const { GeminiAgentService } = await import('../../dist/domains/cats/services/GeminiAgentService.js');
+  const { AgentRouter } = await import('../../dist/domains/cats/services/AgentRouter.js');
+  const { InvocationRegistry } = await import('../../dist/domains/cats/services/InvocationRegistry.js');
+  const { MessageStore } = await import('../../dist/domains/cats/services/MessageStore.js');
 
-  return new AgentRouter(await migrateRouterOpts({
-    claudeService: new ClaudeAgentService(),
-    codexService: new CodexAgentService(),
-    geminiService: new GeminiAgentService(),
-    registry: new InvocationRegistry(),
-    messageStore: new MessageStore(),
-  }));
+  return new AgentRouter(
+    await migrateRouterOpts({
+      claudeService: new ClaudeAgentService(),
+      codexService: new CodexAgentService(),
+      geminiService: new GeminiAgentService(),
+      registry: new InvocationRegistry(),
+      messageStore: new MessageStore(),
+    }),
+  );
 }
 
 describe('Multi-Cat Integration Tests', { skip: !shouldRunIntegrationTests }, () => {
@@ -98,15 +83,15 @@ describe('Multi-Cat Integration Tests', { skip: !shouldRunIntegrationTests }, ()
     assert.ok(messages.length > 0, 'Should receive at least one message');
     assert.ok(
       messages.some((m) => m.catId === 'opus'),
-      'Messages should be from opus'
+      'Messages should be from opus',
     );
     assert.ok(
       messages.some((m) => m.type === 'text'),
-      'Should have text response'
+      'Should have text response',
     );
     assert.ok(
       messages.some((m) => m.type === 'done'),
-      'Should have done message'
+      'Should have done message',
     );
 
     // Verify session was created
@@ -131,11 +116,11 @@ describe('Multi-Cat Integration Tests', { skip: !shouldRunIntegrationTests }, ()
     assert.ok(messages.length > 0, 'Should receive at least one message');
     assert.ok(
       messages.some((m) => m.catId === 'codex'),
-      'Messages should be from codex'
+      'Messages should be from codex',
     );
     assert.ok(
       messages.some((m) => m.type === 'text'),
-      'Should have text response'
+      'Should have text response',
     );
   });
 
@@ -155,11 +140,11 @@ describe('Multi-Cat Integration Tests', { skip: !shouldRunIntegrationTests }, ()
     assert.ok(messages.length > 0, 'Should receive at least one message');
     assert.ok(
       messages.some((m) => m.catId === 'gemini'),
-      'Messages should be from gemini'
+      'Messages should be from gemini',
     );
     assert.ok(
       messages.some((m) => m.type === 'text'),
-      'Should have text response'
+      'Should have text response',
     );
   });
 
@@ -167,77 +152,66 @@ describe('Multi-Cat Integration Tests', { skip: !shouldRunIntegrationTests }, ()
    * Test: Multi-cat serial invocation
    * 多猫串行调用 - @opus 和 @codex 按顺序执行
    */
-  itOrSkip('executes multiple cats in order for multi-mention', { skip: !hasClaude || !hasCodex, timeout: 120_000 }, async () => {
-    const router = await createRealRouter();
+  itOrSkip(
+    'executes multiple cats in order for multi-mention',
+    { skip: !hasClaude || !hasCodex, timeout: 120_000 },
+    async () => {
+      const router = await createRealRouter();
 
-    const messages = [];
-    for await (const msg of router.route(
-      'test-user-4',
-      '@opus say "hello", then @codex say "world"'
-    )) {
-      messages.push(msg);
-    }
+      const messages = [];
+      for await (const msg of router.route('test-user-4', '@opus say "hello", then @codex say "world"')) {
+        messages.push(msg);
+      }
 
-    // Verify we got messages from both cats
-    const opusMessages = messages.filter((m) => m.catId === 'opus');
-    const codexMessages = messages.filter((m) => m.catId === 'codex');
+      // Verify we got messages from both cats
+      const opusMessages = messages.filter((m) => m.catId === 'opus');
+      const codexMessages = messages.filter((m) => m.catId === 'codex');
 
-    assert.ok(opusMessages.length > 0, 'Should have opus messages');
-    assert.ok(codexMessages.length > 0, 'Should have codex messages');
+      assert.ok(opusMessages.length > 0, 'Should have opus messages');
+      assert.ok(codexMessages.length > 0, 'Should have codex messages');
 
-    // Verify opus text comes before codex text
-    const opusTextIndex = messages.findIndex(
-      (m) => m.catId === 'opus' && m.type === 'text'
-    );
-    const codexTextIndex = messages.findIndex(
-      (m) => m.catId === 'codex' && m.type === 'text'
-    );
+      // Verify opus text comes before codex text
+      const opusTextIndex = messages.findIndex((m) => m.catId === 'opus' && m.type === 'text');
+      const codexTextIndex = messages.findIndex((m) => m.catId === 'codex' && m.type === 'text');
 
-    assert.ok(opusTextIndex >= 0, 'Should have opus text');
-    assert.ok(codexTextIndex >= 0, 'Should have codex text');
-    assert.ok(
-      opusTextIndex < codexTextIndex,
-      'Opus text should come before codex text'
-    );
-  });
+      assert.ok(opusTextIndex >= 0, 'Should have opus text');
+      assert.ok(codexTextIndex >= 0, 'Should have codex text');
+      assert.ok(opusTextIndex < codexTextIndex, 'Opus text should come before codex text');
+    },
+  );
 
   /**
    * Test: Three-cat serial invocation
    * 三猫串行调用
    */
-  itOrSkip('executes all three cats in order', { skip: !hasClaude || !hasCodex || !hasGemini, timeout: 180_000 }, async () => {
-    const router = await createRealRouter();
+  itOrSkip(
+    'executes all three cats in order',
+    { skip: !hasClaude || !hasCodex || !hasGemini, timeout: 180_000 },
+    async () => {
+      const router = await createRealRouter();
 
-    const messages = [];
-    for await (const msg of router.route(
-      'test-user-5',
-      '@布偶 say "one", @缅因 say "two", @暹罗 say "three"'
-    )) {
-      messages.push(msg);
-    }
+      const messages = [];
+      for await (const msg of router.route('test-user-5', '@布偶 say "one", @缅因 say "two", @暹罗 say "three"')) {
+        messages.push(msg);
+      }
 
-    // Verify we got text from all three cats
-    const textMessages = messages.filter((m) => m.type === 'text');
-    const catIds = [...new Set(textMessages.map((m) => m.catId))];
+      // Verify we got text from all three cats
+      const textMessages = messages.filter((m) => m.type === 'text');
+      const catIds = [...new Set(textMessages.map((m) => m.catId))];
 
-    assert.ok(catIds.includes('opus'), 'Should have opus text');
-    assert.ok(catIds.includes('codex'), 'Should have codex text');
-    assert.ok(catIds.includes('gemini'), 'Should have gemini text');
+      assert.ok(catIds.includes('opus'), 'Should have opus text');
+      assert.ok(catIds.includes('codex'), 'Should have codex text');
+      assert.ok(catIds.includes('gemini'), 'Should have gemini text');
 
-    // Verify order: opus -> codex -> gemini
-    const opusTextIndex = textMessages.findIndex((m) => m.catId === 'opus');
-    const codexTextIndex = textMessages.findIndex((m) => m.catId === 'codex');
-    const geminiTextIndex = textMessages.findIndex((m) => m.catId === 'gemini');
+      // Verify order: opus -> codex -> gemini
+      const opusTextIndex = textMessages.findIndex((m) => m.catId === 'opus');
+      const codexTextIndex = textMessages.findIndex((m) => m.catId === 'codex');
+      const geminiTextIndex = textMessages.findIndex((m) => m.catId === 'gemini');
 
-    assert.ok(
-      opusTextIndex < codexTextIndex,
-      'Opus should come before codex'
-    );
-    assert.ok(
-      codexTextIndex < geminiTextIndex,
-      'Codex should come before gemini'
-    );
-  });
+      assert.ok(opusTextIndex < codexTextIndex, 'Opus should come before codex');
+      assert.ok(codexTextIndex < geminiTextIndex, 'Codex should come before gemini');
+    },
+  );
 
   /**
    * Test: Session persistence (Claude only)
@@ -269,11 +243,7 @@ describe('Multi-Cat Integration Tests', { skip: !shouldRunIntegrationTests }, ()
     assert.ok(sessionInit2, 'Second call should have session_init');
 
     // The session ID should be the same (session was resumed)
-    assert.equal(
-      sessionInit2.sessionId,
-      firstSessionId,
-      'Second call should reuse the same session ID'
-    );
+    assert.equal(sessionInit2.sessionId, firstSessionId, 'Second call should reuse the same session ID');
   });
 });
 
@@ -282,9 +252,7 @@ describe('Individual Service Integration Tests', { skip: !shouldRunIntegrationTe
    * Test: ClaudeAgentService direct invocation
    */
   itOrSkip('ClaudeAgentService responds to prompt', { skip: !hasClaude, timeout: 60_000 }, async () => {
-    const { ClaudeAgentService } = await import(
-      '../../dist/domains/cats/services/ClaudeAgentService.js'
-    );
+    const { ClaudeAgentService } = await import('../../dist/domains/cats/services/ClaudeAgentService.js');
 
     const service = new ClaudeAgentService();
     const messages = [];
@@ -296,15 +264,15 @@ describe('Individual Service Integration Tests', { skip: !shouldRunIntegrationTe
     assert.ok(messages.length > 0, 'Should receive messages');
     assert.ok(
       messages.some((m) => m.type === 'session_init'),
-      'Should have session_init'
+      'Should have session_init',
     );
     assert.ok(
       messages.some((m) => m.type === 'text'),
-      'Should have text response'
+      'Should have text response',
     );
     assert.ok(
       messages.some((m) => m.type === 'done'),
-      'Should have done message'
+      'Should have done message',
     );
   });
 
@@ -312,9 +280,7 @@ describe('Individual Service Integration Tests', { skip: !shouldRunIntegrationTe
    * Test: CodexAgentService direct invocation
    */
   itOrSkip('CodexAgentService responds to prompt', { skip: !hasCodex, timeout: 60_000 }, async () => {
-    const { CodexAgentService } = await import(
-      '../../dist/domains/cats/services/CodexAgentService.js'
-    );
+    const { CodexAgentService } = await import('../../dist/domains/cats/services/CodexAgentService.js');
 
     const service = new CodexAgentService();
     const messages = [];
@@ -326,7 +292,7 @@ describe('Individual Service Integration Tests', { skip: !shouldRunIntegrationTe
     assert.ok(messages.length > 0, 'Should receive messages');
     assert.ok(
       messages.some((m) => m.type === 'text' || m.type === 'done' || m.type === 'error'),
-      'Should have some response'
+      'Should have some response',
     );
   });
 
@@ -334,9 +300,7 @@ describe('Individual Service Integration Tests', { skip: !shouldRunIntegrationTe
    * Test: GeminiAgentService direct invocation
    */
   itOrSkip('GeminiAgentService responds to prompt', { skip: !hasGemini, timeout: 60_000 }, async () => {
-    const { GeminiAgentService } = await import(
-      '../../dist/domains/cats/services/GeminiAgentService.js'
-    );
+    const { GeminiAgentService } = await import('../../dist/domains/cats/services/GeminiAgentService.js');
 
     const service = new GeminiAgentService();
     const messages = [];
@@ -348,15 +312,15 @@ describe('Individual Service Integration Tests', { skip: !shouldRunIntegrationTe
     assert.ok(messages.length > 0, 'Should receive messages');
     assert.ok(
       messages.some((m) => m.type === 'session_init'),
-      'Should have session_init'
+      'Should have session_init',
     );
     assert.ok(
       messages.some((m) => m.type === 'text'),
-      'Should have text response'
+      'Should have text response',
     );
     assert.ok(
       messages.some((m) => m.type === 'done'),
-      'Should have done message'
+      'Should have done message',
     );
   });
 });

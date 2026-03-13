@@ -6,11 +6,11 @@
  * Gap 3: session_search returns invocationId in pointer
  */
 
-import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { afterEach, beforeEach, describe, test } from 'node:test';
 
 describe('F98: Session Query Tools Upgrade', () => {
   let tmpDir;
@@ -24,12 +24,8 @@ describe('F98: Session Query Tools Upgrade', () => {
   });
 
   async function loadModules() {
-    const { TranscriptWriter } = await import(
-      '../dist/domains/cats/services/session/TranscriptWriter.js'
-    );
-    const { TranscriptReader } = await import(
-      '../dist/domains/cats/services/session/TranscriptReader.js'
-    );
+    const { TranscriptWriter } = await import('../dist/domains/cats/services/session/TranscriptWriter.js');
+    const { TranscriptReader } = await import('../dist/domains/cats/services/session/TranscriptReader.js');
     const { formatEventsChat, formatEventsHandoff } = await import(
       '../dist/domains/cats/services/session/TranscriptFormatter.js'
     );
@@ -53,47 +49,83 @@ describe('F98: Session Query Tools Upgrade', () => {
     const reader = new TranscriptReader({ dataDir: tmpDir });
 
     // Invocation A: user asks, assistant responds, uses Edit tool
-    writer.appendEvent(SESSION_INFO, {
-      type: 'user',
-      content: [{ type: 'text', text: 'Please fix the bug in app.ts' }],
-    }, INV_A);
-    writer.appendEvent(SESSION_INFO, {
-      type: 'assistant',
-      content: [{ type: 'text', text: 'I will fix the bug in app.ts now.' }],
-    }, INV_A);
-    writer.appendEvent(SESSION_INFO, {
-      type: 'tool_use',
-      name: 'Edit',
-      input: { file_path: '/src/app.ts' },
-    }, INV_A);
-    writer.appendEvent(SESSION_INFO, {
-      type: 'tool_result',
-      content: 'File edited successfully',
-    }, INV_A);
+    writer.appendEvent(
+      SESSION_INFO,
+      {
+        type: 'user',
+        content: [{ type: 'text', text: 'Please fix the bug in app.ts' }],
+      },
+      INV_A,
+    );
+    writer.appendEvent(
+      SESSION_INFO,
+      {
+        type: 'assistant',
+        content: [{ type: 'text', text: 'I will fix the bug in app.ts now.' }],
+      },
+      INV_A,
+    );
+    writer.appendEvent(
+      SESSION_INFO,
+      {
+        type: 'tool_use',
+        name: 'Edit',
+        input: { file_path: '/src/app.ts' },
+      },
+      INV_A,
+    );
+    writer.appendEvent(
+      SESSION_INFO,
+      {
+        type: 'tool_result',
+        content: 'File edited successfully',
+      },
+      INV_A,
+    );
 
     // Invocation B: user asks about tests, assistant responds, tool error
-    writer.appendEvent(SESSION_INFO, {
-      type: 'user',
-      content: [{ type: 'text', text: 'Run the tests please' }],
-    }, INV_B);
-    writer.appendEvent(SESSION_INFO, {
-      type: 'assistant',
-      content: [{ type: 'text', text: 'Running tests now.' }],
-    }, INV_B);
-    writer.appendEvent(SESSION_INFO, {
-      type: 'tool_use',
-      name: 'Bash',
-      input: { command: 'npm test' },
-    }, INV_B);
-    writer.appendEvent(SESSION_INFO, {
-      type: 'tool_result',
-      content: 'Test failed: assertion error',
-      is_error: true,
-    }, INV_B);
-    writer.appendEvent(SESSION_INFO, {
-      type: 'assistant',
-      content: 'The test failed with an assertion error. Let me investigate.',
-    }, INV_B);
+    writer.appendEvent(
+      SESSION_INFO,
+      {
+        type: 'user',
+        content: [{ type: 'text', text: 'Run the tests please' }],
+      },
+      INV_B,
+    );
+    writer.appendEvent(
+      SESSION_INFO,
+      {
+        type: 'assistant',
+        content: [{ type: 'text', text: 'Running tests now.' }],
+      },
+      INV_B,
+    );
+    writer.appendEvent(
+      SESSION_INFO,
+      {
+        type: 'tool_use',
+        name: 'Bash',
+        input: { command: 'npm test' },
+      },
+      INV_B,
+    );
+    writer.appendEvent(
+      SESSION_INFO,
+      {
+        type: 'tool_result',
+        content: 'Test failed: assertion error',
+        is_error: true,
+      },
+      INV_B,
+    );
+    writer.appendEvent(
+      SESSION_INFO,
+      {
+        type: 'assistant',
+        content: 'The test failed with an assertion error. Let me investigate.',
+      },
+      INV_B,
+    );
 
     await writer.flush(SESSION_INFO, { createdAt: 1000, sealedAt: 5000 });
     return { writer, reader };
@@ -104,7 +136,7 @@ describe('F98: Session Query Tools Upgrade', () => {
   describe('Gap 1: formatEventsChat()', () => {
     test('extracts only message events with role/content', async () => {
       const modules = await loadModules();
-      const { reader, } = await createFixtureWithInvocations(modules);
+      const { reader } = await createFixtureWithInvocations(modules);
       const { formatEventsChat } = modules;
 
       const result = await reader.readEvents('sess-f98', 'thread-f98', 'opus');
@@ -146,8 +178,8 @@ describe('F98: Session Query Tools Upgrade', () => {
 
       assert.equal(summaries.length, 2);
 
-      const invA = summaries.find(s => s.invocationId === INV_A);
-      const invB = summaries.find(s => s.invocationId === INV_B);
+      const invA = summaries.find((s) => s.invocationId === INV_A);
+      const invB = summaries.find((s) => s.invocationId === INV_B);
       assert.ok(invA);
       assert.ok(invB);
 
@@ -207,9 +239,7 @@ describe('F98: Session Query Tools Upgrade', () => {
       const modules = await loadModules();
       const { reader } = await createFixtureWithInvocations(modules);
 
-      const events = await reader.readInvocationEvents(
-        'sess-f98', 'thread-f98', 'opus', INV_A,
-      );
+      const events = await reader.readInvocationEvents('sess-f98', 'thread-f98', 'opus', INV_A);
       assert.ok(events);
       assert.equal(events.length, 4);
       for (const evt of events) {
@@ -221,9 +251,7 @@ describe('F98: Session Query Tools Upgrade', () => {
       const modules = await loadModules();
       const { reader } = await createFixtureWithInvocations(modules);
 
-      const events = await reader.readInvocationEvents(
-        'sess-f98', 'thread-f98', 'opus', 'inv-nonexistent',
-      );
+      const events = await reader.readInvocationEvents('sess-f98', 'thread-f98', 'opus', 'inv-nonexistent');
       assert.equal(events, null);
     });
 
@@ -231,9 +259,7 @@ describe('F98: Session Query Tools Upgrade', () => {
       const modules = await loadModules();
       const reader = new modules.TranscriptReader({ dataDir: tmpDir });
 
-      const events = await reader.readInvocationEvents(
-        'nonexistent', 'thread-f98', 'opus', INV_A,
-      );
+      const events = await reader.readInvocationEvents('nonexistent', 'thread-f98', 'opus', INV_A);
       assert.equal(events, null);
     });
   });
@@ -248,7 +274,7 @@ describe('F98: Session Query Tools Upgrade', () => {
       const hits = await reader.search('thread-f98', 'bug', { scope: 'transcripts' });
       assert.ok(hits.length > 0);
 
-      const eventHit = hits.find(h => h.kind === 'event');
+      const eventHit = hits.find((h) => h.kind === 'event');
       assert.ok(eventHit);
       assert.ok(eventHit.pointer.invocationId, 'Should have invocationId in pointer');
       assert.equal(eventHit.pointer.invocationId, INV_A);
@@ -259,7 +285,7 @@ describe('F98: Session Query Tools Upgrade', () => {
       const { reader } = await createFixtureWithInvocations(modules);
 
       const hits = await reader.search('thread-f98', 'Edit', { scope: 'digests' });
-      const digestHit = hits.find(h => h.kind === 'digest');
+      const digestHit = hits.find((h) => h.kind === 'digest');
       if (digestHit) {
         assert.equal(digestHit.pointer.invocationId, undefined);
       }

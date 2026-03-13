@@ -54,10 +54,7 @@ export function ConfirmDialog({
 
   return (
     <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={onCancel}>
-      <div
-        className="bg-white rounded-xl shadow-xl p-6 max-w-sm w-full mx-4"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div className="bg-white rounded-xl shadow-xl p-6 max-w-sm w-full mx-4" onClick={(e) => e.stopPropagation()}>
         <h3 className="text-base font-semibold mb-2">{title}</h3>
         <p className="text-sm text-gray-600 mb-4 whitespace-pre-wrap">{message}</p>
         {requireInput && (
@@ -81,9 +78,7 @@ export function ConfirmDialog({
             onClick={onConfirm}
             disabled={!canConfirm}
             className={`px-4 py-2 text-sm text-white rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
-              isDanger
-                ? 'bg-red-500 hover:bg-red-600'
-                : 'bg-blue-500 hover:bg-blue-600'
+              isDanger ? 'bg-red-500 hover:bg-red-600' : 'bg-blue-500 hover:bg-blue-600'
             }`}
           >
             {confirmLabel}

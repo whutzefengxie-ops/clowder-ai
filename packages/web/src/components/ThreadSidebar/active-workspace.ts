@@ -13,7 +13,8 @@ export const PROJECT_PIN_KEY = 'cat-cafe:sidebar:pinned-projects';
  * Get the N most recently active threads (cross-project).
  * Excludes default thread and pinned threads (those have their own section).
  */
-export function getRecentThreads(threads: Thread[], limit: number, _now?: number): Thread[] { // eslint-disable-line @typescript-eslint/no-unused-vars
+export function getRecentThreads(threads: Thread[], limit: number, _now?: number): Thread[] {
+  // eslint-disable-line @typescript-eslint/no-unused-vars
   return threads
     .filter((t) => t.id !== 'default' && !t.pinned)
     .sort((a, b) => b.lastActiveAt - a.lastActiveAt)

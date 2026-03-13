@@ -5,11 +5,7 @@
  * GIF (animated) and files under maxBytes are returned as-is.
  * Falls back to original file if compression fails.
  */
-export async function compressImage(
-  file: File,
-  maxWidth = 1920,
-  maxBytes = 2 * 1024 * 1024,
-): Promise<File> {
+export async function compressImage(file: File, maxWidth = 1920, maxBytes = 2 * 1024 * 1024): Promise<File> {
   if (file.type === 'image/gif') return file;
   if (file.size <= maxBytes) return file;
 
@@ -21,11 +17,7 @@ export async function compressImage(
   }
 }
 
-async function _compressImageInner(
-  file: File,
-  maxWidth: number,
-  maxBytes: number,
-): Promise<File> {
+async function _compressImageInner(file: File, maxWidth: number, maxBytes: number): Promise<File> {
   const img = new Image();
   const url = URL.createObjectURL(file);
   try {
@@ -51,9 +43,7 @@ async function _compressImageInner(
 
   // Quality sweep: 0.8 → 0.3
   for (let q = 0.8; q >= 0.3; q -= 0.1) {
-    const blob = await new Promise<Blob | null>((r) =>
-      canvas.toBlob(r, 'image/jpeg', q),
-    );
+    const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, 'image/jpeg', q));
     if (blob && blob.size <= maxBytes) {
       return new File([blob], file.name.replace(/\.\w+$/, '.jpg'), {
         type: 'image/jpeg',
@@ -62,9 +52,7 @@ async function _compressImageInner(
   }
 
   // Last resort: lowest quality
-  const blob = await new Promise<Blob | null>((r) =>
-    canvas.toBlob(r, 'image/jpeg', 0.3),
-  );
+  const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, 'image/jpeg', 0.3));
   if (blob) {
     return new File([blob], file.name.replace(/\.\w+$/, '.jpg'), {
       type: 'image/jpeg',

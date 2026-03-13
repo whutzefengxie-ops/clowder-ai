@@ -157,7 +157,7 @@ describe('ApiFetcher', () => {
         'https://api.github.com.evil.tld/repos',
         'https://api.github.com@evil.tld/repos',
         'https://fake-api.github.com/repos',
-        'http://api.github.com/repos',  // plaintext HTTP — PAT must not leak
+        'http://api.github.com/repos', // plaintext HTTP — PAT must not leak
       ];
       for (const spoofUrl of spoofUrls) {
         let capturedHeaders;
@@ -173,11 +173,7 @@ describe('ApiFetcher', () => {
           }),
         );
 
-        assert.equal(
-          capturedHeaders?.Authorization,
-          undefined,
-          `PAT must not leak to spoofed URL: ${spoofUrl}`,
-        );
+        assert.equal(capturedHeaders?.Authorization, undefined, `PAT must not leak to spoofed URL: ${spoofUrl}`);
       }
     } finally {
       if (originalPat === undefined) {

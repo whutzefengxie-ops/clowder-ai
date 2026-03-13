@@ -8,10 +8,10 @@
  * DELETE /api/tasks/:id     → 删除 (204)
  */
 
+import type { CatId, CreateTaskInput, UpdateTaskInput } from '@cat-cafe/shared';
+import { catIdSchema } from '@cat-cafe/shared';
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
-import { catIdSchema } from '@cat-cafe/shared';
-import type { CatId, CreateTaskInput, UpdateTaskInput } from '@cat-cafe/shared';
 import type { ITaskStore } from '../domains/cats/services/stores/ports/TaskStore.js';
 import type { SocketManager } from '../infrastructure/websocket/index.js';
 
@@ -33,14 +33,16 @@ const createSchema = z.object({
   ownerCatId: catIdSchema().nullable().optional(),
 });
 
-const updateSchema = z.object({
-  title: z.string().min(1).max(200).optional(),
-  ownerCatId: catIdSchema().nullable().optional(),
-  status: z.enum(VALID_STATUSES).optional(),
-  why: z.string().max(1000).optional(),
-}).refine((data) => Object.keys(data).length > 0, {
-  message: 'At least one field must be provided',
-});
+const updateSchema = z
+  .object({
+    title: z.string().min(1).max(200).optional(),
+    ownerCatId: catIdSchema().nullable().optional(),
+    status: z.enum(VALID_STATUSES).optional(),
+    why: z.string().max(1000).optional(),
+  })
+  .refine((data) => Object.keys(data).length > 0, {
+    message: 'At least one field must be provided',
+  });
 
 /** Build CreateTaskInput from zod output (bridges string→CatId branded types) */
 function toCreateInput(data: z.infer<typeof createSchema>): CreateTaskInput {
@@ -66,84 +68,75 @@ function toUpdateInput(data: z.infer<typeof updateSchema>): UpdateTaskInput {
   return input;
 }
 
-export const tasksRoutes: FastifyPluginAsync<TasksRoutesOptions> =
-  async (app, opts) => {
-    const { taskStore, socketManager } = opts;
+export const tasksRoutes: FastifyPluginAsync<TasksRoutesOptions> = async (app, opts) => {
+  const { taskStore, socketManager } = opts;
 
-    // POST /api/tasks
-    app.post('/api/tasks', async (request, reply) => {
-      const result = createSchema.safeParse(request.body);
-      if (!result.success) {
-        reply.status(400);
-        return { error: 'Invalid request body', details: result.error.issues };
-      }
+  // POST /api/tasks
+  app.post('/api/tasks', async (request, reply) => {
+    const result = createSchema.safeParse(request.body);
+    if (!result.success) {
+      reply.status(400);
+      return { error: 'Invalid request body', details: result.error.issues };
+    }
 
-      const task = await taskStore.create(toCreateInput(result.data));
-      socketManager.broadcastToRoom(
-        `thread:${task.threadId}`,
-        'task_created',
-        task,
-      );
+    const task = await taskStore.create(toCreateInput(result.data));
+    socketManager.broadcastToRoom(`thread:${task.threadId}`, 'task_created', task);
 
-      reply.status(201);
-      return task;
-    });
+    reply.status(201);
+    return task;
+  });
 
-    // GET /api/tasks?threadId=xxx
-    app.get('/api/tasks', async (request, reply) => {
-      const { threadId } = request.query as { threadId?: string };
-      if (!threadId) {
-        reply.status(400);
-        return { error: 'Missing threadId query parameter' };
-      }
+  // GET /api/tasks?threadId=xxx
+  app.get('/api/tasks', async (request, reply) => {
+    const { threadId } = request.query as { threadId?: string };
+    if (!threadId) {
+      reply.status(400);
+      return { error: 'Missing threadId query parameter' };
+    }
 
-      const tasks = await taskStore.listByThread(threadId);
-      return { tasks };
-    });
+    const tasks = await taskStore.listByThread(threadId);
+    return { tasks };
+  });
 
-    // GET /api/tasks/:id
-    app.get('/api/tasks/:id', async (request, reply) => {
-      const { id } = request.params as { id: string };
-      const task = await taskStore.get(id);
-      if (!task) {
-        reply.status(404);
-        return { error: 'Task not found' };
-      }
-      return task;
-    });
+  // GET /api/tasks/:id
+  app.get('/api/tasks/:id', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const task = await taskStore.get(id);
+    if (!task) {
+      reply.status(404);
+      return { error: 'Task not found' };
+    }
+    return task;
+  });
 
-    // PATCH /api/tasks/:id
-    app.patch('/api/tasks/:id', async (request, reply) => {
-      const { id } = request.params as { id: string };
-      const result = updateSchema.safeParse(request.body);
-      if (!result.success) {
-        reply.status(400);
-        return { error: 'Invalid request body', details: result.error.issues };
-      }
+  // PATCH /api/tasks/:id
+  app.patch('/api/tasks/:id', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const result = updateSchema.safeParse(request.body);
+    if (!result.success) {
+      reply.status(400);
+      return { error: 'Invalid request body', details: result.error.issues };
+    }
 
-      const updated = await taskStore.update(id, toUpdateInput(result.data));
-      if (!updated) {
-        reply.status(404);
-        return { error: 'Task not found' };
-      }
+    const updated = await taskStore.update(id, toUpdateInput(result.data));
+    if (!updated) {
+      reply.status(404);
+      return { error: 'Task not found' };
+    }
 
-      socketManager.broadcastToRoom(
-        `thread:${updated.threadId}`,
-        'task_updated',
-        updated,
-      );
+    socketManager.broadcastToRoom(`thread:${updated.threadId}`, 'task_updated', updated);
 
-      return updated;
-    });
+    return updated;
+  });
 
-    // DELETE /api/tasks/:id
-    app.delete('/api/tasks/:id', async (request, reply) => {
-      const { id } = request.params as { id: string };
-      const deleted = await taskStore.delete(id);
-      if (!deleted) {
-        reply.status(404);
-        return { error: 'Task not found' };
-      }
-      reply.status(204);
-    });
-  };
+  // DELETE /api/tasks/:id
+  app.delete('/api/tasks/:id', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const deleted = await taskStore.delete(id);
+    if (!deleted) {
+      reply.status(404);
+      return { error: 'Task not found' };
+    }
+    reply.status(204);
+  });
+};

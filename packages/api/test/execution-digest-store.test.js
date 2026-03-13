@@ -1,6 +1,7 @@
 // @ts-check
-import { describe, test, beforeEach } from 'node:test';
+
 import assert from 'node:assert/strict';
+import { beforeEach, describe, test } from 'node:test';
 
 /** @returns {import('../dist/domains/projects/execution-digest-store.js').CreateDigestInput} */
 function makeDigest(overrides = {}) {

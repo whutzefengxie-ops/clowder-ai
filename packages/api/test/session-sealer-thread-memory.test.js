@@ -1,5 +1,5 @@
-import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { beforeEach, describe, it } from 'node:test';
 import { SessionSealer } from '../dist/domains/cats/services/session/SessionSealer.js';
 import { SessionChainStore } from '../dist/domains/cats/services/stores/ports/SessionChainStore.js';
 import { ThreadStore } from '../dist/domains/cats/services/stores/ports/ThreadStore.js';
@@ -23,10 +23,7 @@ function createMockTranscriptWriter(fakeReader) {
         filesTouched: [{ path: 'src/index.ts', ops: ['edit'] }],
         errors: [],
       };
-      fakeReader._digestStore.set(
-        `${session.threadId}/${session.catId}/${session.sessionId}`,
-        digest,
-      );
+      fakeReader._digestStore.set(`${session.threadId}/${session.catId}/${session.sessionId}`, digest);
     },
   };
 }
@@ -37,10 +34,18 @@ function createMockTranscriptReader() {
     async readDigest(sessionId, threadId, catId) {
       return reader._digestStore.get(`${threadId}/${catId}/${sessionId}`) ?? null;
     },
-    async readEvents() { return { events: [], total: 0 }; },
-    async search() { return []; },
-    async readInvocationEvents() { return null; },
-    async hasTranscript() { return false; },
+    async readEvents() {
+      return { events: [], total: 0 };
+    },
+    async search() {
+      return [];
+    },
+    async readInvocationEvents() {
+      return null;
+    },
+    async hasTranscript() {
+      return false;
+    },
   };
   return reader;
 }
@@ -95,14 +100,20 @@ describe('SessionSealer — ThreadMemory integration', () => {
 
     // Seal session 1
     const s1 = chainStore.create({
-      cliSessionId: 'cli-1', threadId: thread.id, catId: 'opus', userId: 'user1',
+      cliSessionId: 'cli-1',
+      threadId: thread.id,
+      catId: 'opus',
+      userId: 'user1',
     });
     await sealer.requestSeal({ sessionId: s1.id, reason: 'threshold' });
     await sealer.finalize({ sessionId: s1.id });
 
     // Seal session 2
     const s2 = chainStore.create({
-      cliSessionId: 'cli-2', threadId: thread.id, catId: 'opus', userId: 'user1',
+      cliSessionId: 'cli-2',
+      threadId: thread.id,
+      catId: 'opus',
+      userId: 'user1',
     });
     await sealer.requestSeal({ sessionId: s2.id, reason: 'threshold' });
     await sealer.finalize({ sessionId: s2.id });
@@ -117,19 +128,18 @@ describe('SessionSealer — ThreadMemory integration', () => {
   it('still seals when ThreadMemory update fails', async () => {
     // Use a threadStore that throws on updateThreadMemory
     const brokenThreadStore = new ThreadStore();
-    brokenThreadStore.updateThreadMemory = () => { throw new Error('boom'); };
+    brokenThreadStore.updateThreadMemory = () => {
+      throw new Error('boom');
+    };
 
-    const brokenSealer = new SessionSealer(
-      chainStore,
-      fakeWriter,
-      brokenThreadStore,
-      fakeReader,
-      () => 180000,
-    );
+    const brokenSealer = new SessionSealer(chainStore, fakeWriter, brokenThreadStore, fakeReader, () => 180000);
 
     const thread = brokenThreadStore.create('user1', 'broken');
     const session = chainStore.create({
-      cliSessionId: 'cli-3', threadId: thread.id, catId: 'opus', userId: 'user1',
+      cliSessionId: 'cli-3',
+      threadId: thread.id,
+      catId: 'opus',
+      userId: 'user1',
     });
 
     await brokenSealer.requestSeal({ sessionId: session.id, reason: 'threshold' });
@@ -142,14 +152,14 @@ describe('SessionSealer — ThreadMemory integration', () => {
 
   it('uses dynamic token cap based on getMaxPromptTokens', async () => {
     // Spark: 64k → cap = max(1200, min(3000, floor(64000*0.03))) = max(1200,1920) = 1920
-    const sparkSealer = new SessionSealer(
-      chainStore, fakeWriter, threadStore, fakeReader,
-      () => 64000,
-    );
+    const sparkSealer = new SessionSealer(chainStore, fakeWriter, threadStore, fakeReader, () => 64000);
 
     const thread = threadStore.create('user1', 'spark');
     const session = chainStore.create({
-      cliSessionId: 'cli-4', threadId: thread.id, catId: 'spark', userId: 'user1',
+      cliSessionId: 'cli-4',
+      threadId: thread.id,
+      catId: 'spark',
+      userId: 'user1',
     });
     await sparkSealer.requestSeal({ sessionId: session.id, reason: 'threshold' });
     await sparkSealer.finalize({ sessionId: session.id });

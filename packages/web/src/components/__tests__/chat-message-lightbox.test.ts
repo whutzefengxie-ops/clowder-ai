@@ -1,5 +1,4 @@
-import React from 'react';
-import { act } from 'react';
+import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -79,7 +78,7 @@ describe('ChatMessage image lightbox', () => {
     expect(thumbnail).toBeTruthy();
 
     act(() => {
-      thumbnail!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      thumbnail?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
     const dialog = document.body.querySelector('[role="dialog"]');

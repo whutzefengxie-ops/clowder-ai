@@ -45,7 +45,9 @@ function simulateBackgroundMessage(msg: {
     bgStreamRefs: testBgStreamRefs,
     nextBgSeq: () => testBgSeq++,
     addToast: (toast) => useToastStore.getState().addToast(toast),
-    clearDoneTimeout: (threadId) => { clearDoneTimeoutCalls.push(threadId); },
+    clearDoneTimeout: (threadId) => {
+      clearDoneTimeoutCalls.push(threadId);
+    },
   });
 }
 
@@ -62,7 +64,7 @@ describe('background thread socket handling', () => {
       catStatuses: {},
       catInvocations: {},
       currentGame: null,
-      
+
       threadStates: {},
       viewMode: 'single',
       splitPaneThreadIds: [],
@@ -91,7 +93,7 @@ describe('background thread socket handling', () => {
       });
 
       const ts = useChatStore.getState().getThreadState('thread-bg');
-      expect(ts.catStatuses['opus']).toBe('done');
+      expect(ts.catStatuses.opus).toBe('done');
     });
 
     it('done event fires success toast', () => {
@@ -120,7 +122,7 @@ describe('background thread socket handling', () => {
       });
 
       const ts = useChatStore.getState().getThreadState('thread-bg');
-      expect(ts.catStatuses['opus']).toBe('done');
+      expect(ts.catStatuses.opus).toBe('done');
     });
   });
 
@@ -135,7 +137,7 @@ describe('background thread socket handling', () => {
         timestamp: Date.now(),
       });
       // Status should be error
-      expect(useChatStore.getState().getThreadState('thread-bg').catStatuses['opus']).toBe('error');
+      expect(useChatStore.getState().getThreadState('thread-bg').catStatuses.opus).toBe('error');
 
       simulateBackgroundMessage({
         type: 'done',
@@ -146,7 +148,7 @@ describe('background thread socket handling', () => {
 
       // Status must still be error, NOT done
       const ts = useChatStore.getState().getThreadState('thread-bg');
-      expect(ts.catStatuses['opus']).toBe('error');
+      expect(ts.catStatuses.opus).toBe('error');
     });
 
     it('done after error does not emit success toast', () => {
@@ -511,7 +513,7 @@ describe('background thread socket handling', () => {
       expect(ts.messages[0]?.toolEvents).toHaveLength(1);
       expect(ts.messages[0]?.toolEvents?.[0]?.type).toBe('tool_use');
       expect(ts.messages[0]?.toolEvents?.[0]?.label).toContain('opus → TodoWrite');
-      expect(ts.catStatuses['opus']).toBe('streaming');
+      expect(ts.catStatuses.opus).toBe('streaming');
     });
 
     it('preserves tool_result as collapsed tool event on assistant message', () => {
@@ -531,7 +533,7 @@ describe('background thread socket handling', () => {
       expect(ts.messages[0]?.toolEvents).toHaveLength(1);
       expect(ts.messages[0]?.toolEvents?.[0]?.type).toBe('tool_result');
       expect(ts.messages[0]?.toolEvents?.[0]?.label).toContain('opus ← result');
-      expect(ts.catStatuses['opus']).toBe('streaming');
+      expect(ts.catStatuses.opus).toBe('streaming');
     });
 
     it('tool_use + tool_result merge into one assistant message with two tool events', () => {
@@ -710,7 +712,7 @@ describe('background thread socket handling', () => {
         cacheReadTokens: 114738,
         costUsd: 0.57,
       });
-      expect(ts.catInvocations['opus']?.usage).toMatchObject({
+      expect(ts.catInvocations.opus?.usage).toMatchObject({
         inputTokens: 160123,
         outputTokens: 1589,
         cacheReadTokens: 114738,
@@ -801,7 +803,7 @@ describe('background thread socket handling', () => {
         outputTokens: 22,
       });
       // Invocation-level usage still updates.
-      expect(ts.catInvocations['opus']?.usage).toMatchObject({
+      expect(ts.catInvocations.opus?.usage).toMatchObject({
         inputTokens: 999,
         outputTokens: 1,
       });
@@ -844,10 +846,10 @@ describe('background thread socket handling', () => {
 
       const ts = useChatStore.getState().getThreadState('thread-bg');
       expect(ts.messages).toHaveLength(0);
-      expect(ts.catInvocations['opus']?.sessionId).toBe('sess-1');
-      expect(ts.catInvocations['opus']?.invocationId).toBe('inv-1');
-      expect(ts.catInvocations['opus']?.sessionSeq).toBe(3);
-      expect(ts.catInvocations['opus']?.contextHealth).toMatchObject({
+      expect(ts.catInvocations.opus?.sessionId).toBe('sess-1');
+      expect(ts.catInvocations.opus?.invocationId).toBe('inv-1');
+      expect(ts.catInvocations.opus?.sessionSeq).toBe(3);
+      expect(ts.catInvocations.opus?.contextHealth).toMatchObject({
         usedTokens: 59342,
         windowTokens: 200000,
       });
@@ -871,7 +873,7 @@ describe('background thread socket handling', () => {
 
       const ts = useChatStore.getState().getThreadState('thread-bg');
       expect(ts.messages).toHaveLength(0);
-      expect(ts.catInvocations['opus']?.rateLimit).toMatchObject({
+      expect(ts.catInvocations.opus?.rateLimit).toMatchObject({
         utilization: 0.91,
         resetsAt: '2026-02-28T12:00:00Z',
       });
@@ -894,7 +896,7 @@ describe('background thread socket handling', () => {
 
       const ts = useChatStore.getState().getThreadState('thread-bg');
       expect(ts.messages).toHaveLength(0);
-      expect(ts.catInvocations['opus']?.compactBoundary).toMatchObject({ preTokens: 42000 });
+      expect(ts.catInvocations.opus?.compactBoundary).toMatchObject({ preTokens: 42000 });
     });
 
     it('consumes context_health without catId via message catId fallback', () => {
@@ -919,7 +921,7 @@ describe('background thread socket handling', () => {
 
       const ts = useChatStore.getState().getThreadState('thread-bg');
       expect(ts.messages).toHaveLength(0);
-      expect(ts.catInvocations['opus']?.contextHealth).toMatchObject({
+      expect(ts.catInvocations.opus?.contextHealth).toMatchObject({
         usedTokens: 8123,
         windowTokens: 200000,
       });
@@ -1222,7 +1224,7 @@ describe('background thread socket handling', () => {
       expect(ts.messages[0].content).toBe('first second');
       expect(ts.messages[0].isStreaming).toBe(true);
       expect(ts.messages[0].metadata?.provider).toBe('anthropic');
-      expect(ts.catStatuses['opus']).toBe('streaming');
+      expect(ts.catStatuses.opus).toBe('streaming');
     });
 
     it('batch handles high-frequency chunks without state corruption', () => {
@@ -1244,7 +1246,7 @@ describe('background thread socket handling', () => {
       const expected = Array.from({ length: 50 }, (_, i) => `c${i}`).join('');
       expect(ts.messages[0].content).toBe(expected);
       expect(ts.messages[0].isStreaming).toBe(true);
-      expect(ts.catStatuses['opus']).toBe('streaming');
+      expect(ts.catStatuses.opus).toBe('streaming');
     });
 
     it('batch final chunk sets streaming=false and catStatus=done', () => {
@@ -1268,7 +1270,7 @@ describe('background thread socket handling', () => {
       const ts = useChatStore.getState().getThreadState('thread-bg');
       expect(ts.messages[0].content).toBe('start end');
       expect(ts.messages[0].isStreaming).toBe(false);
-      expect(ts.catStatuses['opus']).toBe('done');
+      expect(ts.catStatuses.opus).toBe('done');
     });
   });
 });

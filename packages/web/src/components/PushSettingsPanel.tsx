@@ -5,9 +5,9 @@
  * 推送通知设置 — CatCafeHub "通知" tab
  */
 
+import { useState } from 'react';
 import { usePushNotify } from '@/hooks/usePushNotify';
 import { useToastStore } from '@/stores/toastStore';
-import { useState } from 'react';
 
 const REPAIR_HINTS: Record<string, string> = {
   push_vapid_key_missing: '服务端未配置 VAPID 公钥，请先补齐推送密钥环境变量。',
@@ -41,11 +41,15 @@ export function PushSettingsPanel() {
     subscribe,
     unsubscribe,
     sendTest,
-  } =
-    usePushNotify();
+  } = usePushNotify();
   const addToast = useToastStore((s) => s.addToast);
   const [isTesting, setIsTesting] = useState(false);
-  const [lastTestSummary, setLastTestSummary] = useState<{ attempted: number; delivered: number; failed: number; removed: number } | null>(null);
+  const [lastTestSummary, setLastTestSummary] = useState<{
+    attempted: number;
+    delivered: number;
+    failed: number;
+    removed: number;
+  } | null>(null);
   const [lastTestMessage, setLastTestMessage] = useState<string | null>(null);
 
   const handleSendTest = async () => {
@@ -74,9 +78,7 @@ export function PushSettingsPanel() {
       <div className="space-y-3">
         <h3 className="text-base font-semibold text-gray-800">推送通知</h3>
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-4 space-y-2">
-          <p className="text-sm text-amber-900 font-medium">
-            {environmentHint ?? '当前浏览器不支持推送通知。'}
-          </p>
+          <p className="text-sm text-amber-900 font-medium">{environmentHint ?? '当前浏览器不支持推送通知。'}</p>
           <p className="text-xs text-amber-700">
             iPhone 用户请将 Cat Cafe 添加到主屏幕后再开启推送（Safari 普通标签页不支持 Web Push）。
           </p>
@@ -107,7 +109,9 @@ export function PushSettingsPanel() {
           </div>
           <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
             <div className="text-gray-500">权限状态</div>
-            <div className={`font-semibold ${permission === 'granted' ? 'text-emerald-700' : permission === 'denied' ? 'text-rose-700' : 'text-amber-700'}`}>
+            <div
+              className={`font-semibold ${permission === 'granted' ? 'text-emerald-700' : permission === 'denied' ? 'text-rose-700' : 'text-amber-700'}`}
+            >
               {describePermission(permission)}
             </div>
           </div>
@@ -125,7 +129,9 @@ export function PushSettingsPanel() {
           </div>
           <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
             <div className="text-gray-500">最近投递</div>
-            <div className={`font-semibold ${status?.delivery.lastResult === 'ok' ? 'text-emerald-700' : status?.delivery.lastResult === 'error' ? 'text-rose-700' : 'text-gray-700'}`}>
+            <div
+              className={`font-semibold ${status?.delivery.lastResult === 'ok' ? 'text-emerald-700' : status?.delivery.lastResult === 'error' ? 'text-rose-700' : 'text-gray-700'}`}
+            >
               {describeDelivery(status?.delivery.lastResult ?? 'not_attempted', status?.delivery.lastError ?? null)}
             </div>
           </div>
@@ -135,8 +141,8 @@ export function PushSettingsPanel() {
             服务状态：{status.capability.enabled ? '已启用' : '未启用'}
             {' · '}VAPID：{status.capability.vapidPublicKeyConfigured ? '已配置' : '未配置'}
             {' · '}PushService：{status.capability.pushServiceConfigured ? '可用' : '不可用'}
-            {' · '}设备订阅：{status.subscription.count} 台
-            {' · '}最近投递：{status.delivery.lastResult === 'ok' ? '成功' : status.delivery.lastResult === 'error' ? '失败' : '未测试'}
+            {' · '}设备订阅：{status.subscription.count} 台{' · '}最近投递：
+            {status.delivery.lastResult === 'ok' ? '成功' : status.delivery.lastResult === 'error' ? '失败' : '未测试'}
           </p>
         )}
       </div>
@@ -171,7 +177,8 @@ export function PushSettingsPanel() {
           <div className="text-sm font-medium text-slate-900">最近测试</div>
           {lastTestMessage && <p>{lastTestMessage}</p>}
           <p>
-            尝试 {lastTestSummary.attempted} · 成功 {lastTestSummary.delivered} · 失败 {lastTestSummary.failed} · 清理 {lastTestSummary.removed}
+            尝试 {lastTestSummary.attempted} · 成功 {lastTestSummary.delivered} · 失败 {lastTestSummary.failed} · 清理{' '}
+            {lastTestSummary.removed}
           </p>
         </div>
       )}
@@ -189,20 +196,14 @@ export function PushSettingsPanel() {
 
       <div className="flex items-center justify-between rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
         <div>
-          <p className="text-sm font-medium text-gray-700">
-            {isSubscribed ? '已开启推送' : '推送已关闭'}
-          </p>
-          <p className="text-xs text-gray-500">
-            {isSubscribed ? '猫猫消息会推送到通知栏' : '点击开启接收猫猫推送'}
-          </p>
+          <p className="text-sm font-medium text-gray-700">{isSubscribed ? '已开启推送' : '推送已关闭'}</p>
+          <p className="text-xs text-gray-500">{isSubscribed ? '猫猫消息会推送到通知栏' : '点击开启接收猫猫推送'}</p>
         </div>
         <button
           onClick={isSubscribed ? unsubscribe : subscribe}
           disabled={isLoading}
           className={`px-4 py-1.5 text-sm rounded-lg font-medium transition-colors ${
-            isSubscribed
-              ? 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-              : 'bg-blue-600 text-white hover:bg-blue-700'
+            isSubscribed ? 'bg-gray-200 text-gray-700 hover:bg-gray-300' : 'bg-blue-600 text-white hover:bg-blue-700'
           } disabled:opacity-50`}
         >
           {isLoading ? '处理中...' : isSubscribed ? '关闭' : '开启'}
@@ -212,16 +213,16 @@ export function PushSettingsPanel() {
       {isSubscribed && (
         <button
           type="button"
-          onClick={() => { void handleSendTest(); }}
+          onClick={() => {
+            void handleSendTest();
+          }}
           disabled={isTesting || isLoading}
           className="text-xs text-blue-600 hover:text-blue-800 underline"
         >
           {isTesting ? '发送中...' : '发送测试通知'}
         </button>
       )}
-      <p className="text-[11px] text-gray-500">
-        iPhone 路线（Phase 3）：PWA Web Push。请先“添加到主屏幕”再开启通知。
-      </p>
+      <p className="text-[11px] text-gray-500">iPhone 路线（Phase 3）：PWA Web Push。请先“添加到主屏幕”再开启通知。</p>
     </div>
   );
 }

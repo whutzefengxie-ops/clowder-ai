@@ -11,10 +11,9 @@
  * 1. Empty catOptions: typing "@" then Enter → no crash, menu closes
  * 2. Happy path: typing "@" then Enter with valid cats → mention inserted
  */
-import React from 'react';
-import { describe, expect, it, vi, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
+import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { act } from 'react';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatInput } from '@/components/ChatInput';
 
 // ── Mocks ──
@@ -44,14 +43,44 @@ vi.mock('@/hooks/useCatData', () => ({
 
 function buildCatsWithPatterns() {
   return [
-    { id: 'opus', displayName: '布偶猫', color: { primary: '#9B7EBD', secondary: '#E8D5F5' }, mentionPatterns: ['布偶', '布偶猫', 'opus'], provider: 'anthropic', defaultModel: 'opus', avatar: '/a.png', roleDescription: 'dev', personality: 'kind' },
-    { id: 'codex', displayName: '缅因猫', color: { primary: '#5B8C5A', secondary: '#D5E8D4' }, mentionPatterns: ['缅因', '缅因猫', 'codex'], provider: 'openai', defaultModel: 'codex', avatar: '/b.png', roleDescription: 'review', personality: 'strict' },
+    {
+      id: 'opus',
+      displayName: '布偶猫',
+      color: { primary: '#9B7EBD', secondary: '#E8D5F5' },
+      mentionPatterns: ['布偶', '布偶猫', 'opus'],
+      provider: 'anthropic',
+      defaultModel: 'opus',
+      avatar: '/a.png',
+      roleDescription: 'dev',
+      personality: 'kind',
+    },
+    {
+      id: 'codex',
+      displayName: '缅因猫',
+      color: { primary: '#5B8C5A', secondary: '#D5E8D4' },
+      mentionPatterns: ['缅因', '缅因猫', 'codex'],
+      provider: 'openai',
+      defaultModel: 'codex',
+      avatar: '/b.png',
+      roleDescription: 'review',
+      personality: 'strict',
+    },
   ];
 }
 
 function buildCatsNoPatterns() {
   return [
-    { id: 'opus', displayName: '布偶猫', color: { primary: '#9B7EBD', secondary: '#E8D5F5' }, mentionPatterns: [] as string[], provider: 'anthropic', defaultModel: 'opus', avatar: '/a.png', roleDescription: 'dev', personality: 'kind' },
+    {
+      id: 'opus',
+      displayName: '布偶猫',
+      color: { primary: '#9B7EBD', secondary: '#E8D5F5' },
+      mentionPatterns: [] as string[],
+      provider: 'anthropic',
+      defaultModel: 'opus',
+      avatar: '/a.png',
+      roleDescription: 'dev',
+      personality: 'kind',
+    },
   ];
 }
 
@@ -83,7 +112,9 @@ afterEach(() => {
 
 function render(props: Partial<React.ComponentProps<typeof ChatInput>> = {}) {
   const defaults = { onSend: vi.fn(), disabled: false };
-  act(() => { root.render(React.createElement(ChatInput, { ...defaults, ...props })); });
+  act(() => {
+    root.render(React.createElement(ChatInput, { ...defaults, ...props }));
+  });
   return defaults;
 }
 
@@ -94,7 +125,7 @@ function getTextarea(): HTMLTextAreaElement {
 function typeInTextarea(value: string) {
   const ta = getTextarea();
   act(() => {
-    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!;
+    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set!;
     setter.call(ta, value);
     ta.dispatchEvent(new Event('change', { bubbles: true }));
   });

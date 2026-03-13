@@ -2,7 +2,7 @@
  * F099: Hub accordion navigation regression tests
  * Tests entry-point routing, group lookup, and resolveRequestedHubTab.
  */
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useChatStore } from '@/stores/chatStore';
 
 // Mock heavy deps so CatCafeHub can be imported without full React tree
@@ -40,19 +40,19 @@ describe('F099 Hub navigation', () => {
     it('finds cats group for "leaderboard"', () => {
       const group = findGroupForTab('leaderboard');
       expect(group).toBeDefined();
-      expect(group!.id).toBe('cats');
+      expect(group?.id).toBe('cats');
     });
 
     it('finds settings group for "voice"', () => {
       const group = findGroupForTab('voice');
       expect(group).toBeDefined();
-      expect(group!.id).toBe('settings');
+      expect(group?.id).toBe('settings');
     });
 
     it('finds monitor group for "commands"', () => {
       const group = findGroupForTab('commands');
       expect(group).toBeDefined();
-      expect(group!.id).toBe('monitor');
+      expect(group?.id).toBe('monitor');
     });
 
     it('returns undefined for unknown tab', () => {

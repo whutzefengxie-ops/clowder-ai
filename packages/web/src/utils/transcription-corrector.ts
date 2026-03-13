@@ -21,24 +21,17 @@ export type TermEntry = readonly [RegExp, string];
 function buildTermEntries(dict: Record<string, string>): TermEntry[] {
   return Object.entries(dict)
     .filter(([k]) => !k.startsWith('_comment'))
-    .map(([pattern, replacement]) => [
-      new RegExp(escapeRegExp(pattern), 'gi'),
-      replacement,
-    ]);
+    .map(([pattern, replacement]) => [new RegExp(escapeRegExp(pattern), 'gi'), replacement]);
 }
 
-const builtInEntries: ReadonlyArray<TermEntry> = buildTermEntries(
-  terms as Record<string, string>,
-);
+const builtInEntries: ReadonlyArray<TermEntry> = buildTermEntries(terms as Record<string, string>);
 
 /**
  * Merge built-in terms with user-defined custom terms (custom wins).
  * Keys are normalized to lowercase before merging so that custom "ICP"
  * correctly overrides built-in "icp" (regex matching is case-insensitive).
  */
-export function mergeTermEntries(
-  customTerms: ReadonlyArray<{ from: string; to: string }>,
-): TermEntry[] {
+export function mergeTermEntries(customTerms: ReadonlyArray<{ from: string; to: string }>): TermEntry[] {
   if (customTerms.length === 0) return [...builtInEntries];
   // Build lowercase-keyed dict from built-in terms
   const merged: Record<string, string> = {};
@@ -66,9 +59,7 @@ function buildSpeechMentionPattern(aliases: string[]): RegExp {
 
 const staticAliases = Array.from(
   new Set(
-    Object.values(CAT_CONFIGS).flatMap((config) =>
-      config.mentionPatterns.map((pattern) => pattern.replace(/^@/, '')),
-    ),
+    Object.values(CAT_CONFIGS).flatMap((config) => config.mentionPatterns.map((pattern) => pattern.replace(/^@/, ''))),
   ),
 ).sort((a, b) => b.length - a.length);
 
@@ -76,13 +67,9 @@ let _speechMentionPattern = buildSpeechMentionPattern(staticAliases);
 
 /** Refresh speech mention aliases from dynamic cat data (called by useCatData) */
 export function refreshSpeechAliases(cats: Array<{ mentionPatterns: string[] }>): void {
-  const aliases = Array.from(
-    new Set(
-      cats.flatMap((cat) =>
-        cat.mentionPatterns.map((p) => p.replace(/^@/, '')),
-      ),
-    ),
-  ).sort((a, b) => b.length - a.length);
+  const aliases = Array.from(new Set(cats.flatMap((cat) => cat.mentionPatterns.map((p) => p.replace(/^@/, ''))))).sort(
+    (a, b) => b.length - a.length,
+  );
   _speechMentionPattern = buildSpeechMentionPattern(aliases);
 }
 
@@ -115,30 +102,16 @@ export function applyTermDictionary(text: string, entries?: ReadonlyArray<TermEn
  * Chinese filler / hedge words that add no semantic value in a
  * technical instruction context.
  */
-const FILLERS = [
-  '就是说',
-  '然后呢',
-  '对对对',
-  '那个',
-  '就是',
-  '嗯',
-  '啊',
-];
+const FILLERS = ['就是说', '然后呢', '对对对', '那个', '就是', '嗯', '啊'];
 
-const fillerPattern = new RegExp(
-  FILLERS.map(escapeRegExp).join('|'),
-  'g',
-);
+const fillerPattern = new RegExp(FILLERS.map(escapeRegExp).join('|'), 'g');
 
 /**
  * Remove common Chinese filler words, then collapse consecutive
  * whitespace and trim.
  */
 export function removeFillers(text: string): string {
-  return text
-    .replace(fillerPattern, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+  return text.replace(fillerPattern, ' ').replace(/\s+/g, ' ').trim();
 }
 
 /* ------------------------------------------------------------------ */

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { useChatStore } from '../chatStore';
 
 describe('chatStore viewMode + split pane state', () => {
@@ -14,7 +14,7 @@ describe('chatStore viewMode + split pane state', () => {
       catStatuses: {},
       catInvocations: {},
       currentGame: null,
-      
+
       threadStates: {},
       viewMode: 'single',
       splitPaneThreadIds: [],
@@ -63,6 +63,6 @@ describe('chatStore viewMode + split pane state', () => {
     // Update background thread
     useChatStore.getState().updateThreadCatStatus('thread-b', 'opus', 'streaming');
     const ts = useChatStore.getState().getThreadState('thread-b');
-    expect(ts.catStatuses['opus']).toBe('streaming');
+    expect(ts.catStatuses.opus).toBe('streaming');
   });
 });

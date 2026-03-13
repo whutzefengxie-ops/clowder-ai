@@ -11,16 +11,16 @@
  * 3. Correct Content-Type / Content-Length headers
  * 4. Missing params → 400, nonexistent file → 404
  */
-import { describe, it, before, after } from 'node:test';
+
 import assert from 'node:assert/strict';
-import { mkdir, writeFile, rm } from 'node:fs/promises';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { after, before, describe, it } from 'node:test';
 import Fastify from 'fastify';
 
 // 1x1 transparent PNG (68 bytes)
 const TINY_PNG = Buffer.from(
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVQI12NgAAIABQAB' +
-    'Nl7BcQAAAABJRU5ErkJggg==',
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVQI12NgAAIABQAB' + 'Nl7BcQAAAABJRU5ErkJggg==',
   'base64',
 );
 
@@ -32,15 +32,11 @@ describe('workspace file/raw endpoint (integration)', () => {
   before(async () => {
     // Import real route plugin and security module
     const { workspaceRoutes } = await import('../dist/routes/workspace.js');
-    const { listWorktrees } = await import(
-      '../dist/domains/workspace/workspace-security.js'
-    );
+    const { listWorktrees } = await import('../dist/domains/workspace/workspace-security.js');
 
     // Find this worktree's ID
     const worktrees = await listWorktrees();
-    const thisWt = worktrees.find((w) =>
-      w.root.endsWith('cat-cafe-f063p2b4'),
-    );
+    const thisWt = worktrees.find((w) => w.root.endsWith('cat-cafe-f063p2b4'));
     // Fallback: use the main worktree if this one isn't found
     const wt = thisWt ?? worktrees[0];
     worktreeId = wt.id;
@@ -64,13 +60,9 @@ describe('workspace file/raw endpoint (integration)', () => {
   after(async () => {
     await app?.close();
     // Clean up test files — find the worktree root from the resolved path
-    const { listWorktrees } = await import(
-      '../dist/domains/workspace/workspace-security.js'
-    );
+    const { listWorktrees } = await import('../dist/domains/workspace/workspace-security.js');
     const worktrees = await listWorktrees();
-    const thisWt = worktrees.find((w) =>
-      w.root.endsWith('cat-cafe-f063p2b4'),
-    );
+    const thisWt = worktrees.find((w) => w.root.endsWith('cat-cafe-f063p2b4'));
     const wt = thisWt ?? worktrees[0];
     await rm(join(wt.root, TEST_DIR), { recursive: true, force: true });
   });
@@ -183,9 +175,7 @@ describe('workspace reveal endpoint', () => {
 
   before(async () => {
     const { workspaceRoutes } = await import('../dist/routes/workspace.js');
-    const { listWorktrees } = await import(
-      '../dist/domains/workspace/workspace-security.js'
-    );
+    const { listWorktrees } = await import('../dist/domains/workspace/workspace-security.js');
     const worktrees = await listWorktrees();
     const wt = worktrees[0];
     worktreeId = wt.id;

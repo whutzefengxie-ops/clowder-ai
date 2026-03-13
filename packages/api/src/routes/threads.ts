@@ -13,17 +13,21 @@ import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import type { InvocationTracker } from '../domains/cats/services/agents/invocation/InvocationTracker.js';
 import type { TaskProgressStore } from '../domains/cats/services/agents/invocation/TaskProgressStore.js';
+import { AuditEventTypes, getEventAuditLog } from '../domains/cats/services/orchestration/EventAuditLog.js';
+import type { IBacklogStore } from '../domains/cats/services/stores/ports/BacklogStore.js';
 import type { DeliveryCursorStore } from '../domains/cats/services/stores/ports/DeliveryCursorStore.js';
 import type { IDraftStore } from '../domains/cats/services/stores/ports/DraftStore.js';
 import type { IMemoryStore } from '../domains/cats/services/stores/ports/MemoryStore.js';
 import type { IMessageStore } from '../domains/cats/services/stores/ports/MessageStore.js';
 import type { ITaskStore } from '../domains/cats/services/stores/ports/TaskStore.js';
-import type { IBacklogStore } from '../domains/cats/services/stores/ports/BacklogStore.js';
 import type { IThreadReadStateStore } from '../domains/cats/services/stores/ports/ThreadReadStateStore.js';
-import type { IThreadStore, ThreadRoutingPolicyV1, BootcampStateV1 } from '../domains/cats/services/stores/ports/ThreadStore.js';
+import type {
+  BootcampStateV1,
+  IThreadStore,
+  ThreadRoutingPolicyV1,
+} from '../domains/cats/services/stores/ports/ThreadStore.js';
 import { validateProjectPath } from '../utils/project-path.js';
 import { resolveUserId } from '../utils/request-identity.js';
-import { AuditEventTypes, getEventAuditLog } from '../domains/cats/services/orchestration/EventAuditLog.js';
 import { getMultiMentionOrchestrator } from './callback-multi-mention-routes.js';
 
 export interface ThreadsRoutesOptions {
@@ -50,21 +54,34 @@ export interface ThreadsRoutesOptions {
 
 /** F087: Bootcamp state Zod schema */
 const bootcampPhaseSchema = z.enum([
-  'phase-0-select-cat', 'phase-1-intro', 'phase-2-env-check',
-  'phase-3-config-help', 'phase-3.5-advanced', 'phase-4-task-select',
-  'phase-5-kickoff', 'phase-6-design', 'phase-7-dev',
-  'phase-8-review', 'phase-9-complete', 'phase-10-retro', 'phase-11-farewell',
+  'phase-0-select-cat',
+  'phase-1-intro',
+  'phase-2-env-check',
+  'phase-3-config-help',
+  'phase-3.5-advanced',
+  'phase-4-task-select',
+  'phase-5-kickoff',
+  'phase-6-design',
+  'phase-7-dev',
+  'phase-8-review',
+  'phase-9-complete',
+  'phase-10-retro',
+  'phase-11-farewell',
 ]);
-const bootcampStateSchema = z.object({
-  v: z.literal(1),
-  phase: bootcampPhaseSchema,
-  leadCat: catIdSchema().optional(),
-  selectedTaskId: z.string().max(50).optional(),
-  envCheck: z.record(z.object({ ok: z.boolean(), version: z.string().optional(), note: z.string().optional() })).optional(),
-  advancedFeatures: z.record(z.enum(['available', 'unavailable', 'skipped'])).optional(),
-  startedAt: z.number(),
-  completedAt: z.number().optional(),
-}).strict();
+const bootcampStateSchema = z
+  .object({
+    v: z.literal(1),
+    phase: bootcampPhaseSchema,
+    leadCat: catIdSchema().optional(),
+    selectedTaskId: z.string().max(50).optional(),
+    envCheck: z
+      .record(z.object({ ok: z.boolean(), version: z.string().optional(), note: z.string().optional() }))
+      .optional(),
+    advancedFeatures: z.record(z.enum(['available', 'unavailable', 'skipped'])).optional(),
+    startedAt: z.number(),
+    completedAt: z.number().optional(),
+  })
+  .strict();
 
 const createThreadSchema = z.object({
   /** Legacy fallback only; preferred identity source is X-Cat-Cafe-User header. */
@@ -235,7 +252,14 @@ export const threadsRoutes: FastifyPluginAsync<ThreadsRoutesOptions> = async (ap
       return { threads: [] };
     }
 
-    const { projectPath, q, backlogItemIds, hasBacklogItemId: hasBacklogItemIdRaw, featureIds, deleted: deletedRaw } = parseResult.data;
+    const {
+      projectPath,
+      q,
+      backlogItemIds,
+      hasBacklogItemId: hasBacklogItemIdRaw,
+      featureIds,
+      deleted: deletedRaw,
+    } = parseResult.data;
     const hasBacklogItemId = parseOptionalBooleanQuery(hasBacklogItemIdRaw);
     const showDeleted = parseOptionalBooleanQuery(deletedRaw);
     const userId = resolveUserId(request, { defaultUserId: 'default-user' });
@@ -372,7 +396,8 @@ export const threadsRoutes: FastifyPluginAsync<ThreadsRoutesOptions> = async (ap
       return { error: 'Thread not found' };
     }
 
-    const { title, pinned, favorited, thinkingMode, preferredCats, routingPolicy, voiceMode, bootcampState } = parseResult.data;
+    const { title, pinned, favorited, thinkingMode, preferredCats, routingPolicy, voiceMode, bootcampState } =
+      parseResult.data;
     if (title !== undefined) await threadStore.updateTitle(id, title);
     if (pinned !== undefined) await threadStore.updatePin(id, pinned);
     if (favorited !== undefined) await threadStore.updateFavorite(id, favorited);
@@ -427,18 +452,20 @@ export const threadsRoutes: FastifyPluginAsync<ThreadsRoutesOptions> = async (ap
 
       // I-2: Audit thread deletion for traceability (best-effort, don't block response)
       const userId = resolveUserId(request, {});
-      void getEventAuditLog().append({
-        threadId: id,
-        type: AuditEventTypes.THREAD_DELETED,
-        data: {
-          deletedBy: userId ?? 'unknown',
-          threadTitle: thread?.title ?? null,
-          projectPath: thread?.projectPath ?? null,
-          softDelete: true,
-        },
-      }).catch((err) => {
-        console.warn(`[threads] Audit log warning for ${id}:`, err);
-      });
+      void getEventAuditLog()
+        .append({
+          threadId: id,
+          type: AuditEventTypes.THREAD_DELETED,
+          data: {
+            deletedBy: userId ?? 'unknown',
+            threadTitle: thread?.title ?? null,
+            projectPath: thread?.projectPath ?? null,
+            softDelete: true,
+          },
+        })
+        .catch((err) => {
+          console.warn(`[threads] Audit log warning for ${id}:`, err);
+        });
 
       reply.status(204);
       return;
@@ -539,7 +566,7 @@ export const threadsRoutes: FastifyPluginAsync<ThreadsRoutesOptions> = async (ap
     for (const thread of threads) {
       const messages = await messageStore.getByThread(thread.id);
       if (messages.length === 0) continue;
-      const latestId = messages[messages.length - 1]!.id;
+      const latestId = messages[messages.length - 1]?.id;
       const advanced = await opts.readStateStore.ack(userId, thread.id, latestId);
       if (advanced) advancedCount++;
     }
@@ -622,7 +649,7 @@ export const threadsRoutes: FastifyPluginAsync<ThreadsRoutesOptions> = async (ap
       return { advanced: false, reason: 'no messages' };
     }
 
-    const latestId = messages[messages.length - 1]!.id;
+    const latestId = messages[messages.length - 1]?.id;
     const advanced = await opts.readStateStore.ack(userId, id, latestId);
     return { advanced, messageId: latestId };
   });

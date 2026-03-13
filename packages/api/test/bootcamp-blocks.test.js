@@ -34,7 +34,9 @@ describe('F087: Bootcamp Interactive Rich Block definitions', () => {
   });
 
   it('all block IDs are unique', async () => {
-    const { taskSelectionBlock, catSelectionBlock } = await import('../dist/domains/cats/services/bootcamp/bootcamp-blocks.js');
+    const { taskSelectionBlock, catSelectionBlock } = await import(
+      '../dist/domains/cats/services/bootcamp/bootcamp-blocks.js'
+    );
     const allOptions = [...catSelectionBlock.options, ...taskSelectionBlock.options];
     const ids = allOptions.map((o) => o.id);
     const uniqueIds = new Set(ids);
@@ -49,7 +51,9 @@ describe('F087: Bootcamp Interactive Rich Block definitions', () => {
   });
 
   it('messageTemplate contains {selection} placeholder', async () => {
-    const { catSelectionBlock, taskSelectionBlock } = await import('../dist/domains/cats/services/bootcamp/bootcamp-blocks.js');
+    const { catSelectionBlock, taskSelectionBlock } = await import(
+      '../dist/domains/cats/services/bootcamp/bootcamp-blocks.js'
+    );
     assert.ok(catSelectionBlock.messageTemplate?.includes('{selection}'));
     assert.ok(taskSelectionBlock.messageTemplate?.includes('{selection}'));
   });

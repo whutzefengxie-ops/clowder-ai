@@ -2,31 +2,24 @@
  * codex-event-transform pure function tests
  * F045: NDJSON 可观测性 — Codex parser 补全
  */
-import { test } from 'node:test';
-import assert from 'node:assert/strict';
 
-const { transformCodexEvent } = await import(
-  '../dist/domains/cats/services/agents/providers/codex-event-transform.js'
-);
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+
+const { transformCodexEvent } = await import('../dist/domains/cats/services/agents/providers/codex-event-transform.js');
 
 const CAT = 'codex';
 
 // ── Existing behaviour (regression guard) ──
 
 test('thread.started → session_init', () => {
-  const msg = transformCodexEvent(
-    { type: 'thread.started', thread_id: 'th-1' },
-    CAT,
-  );
+  const msg = transformCodexEvent({ type: 'thread.started', thread_id: 'th-1' }, CAT);
   assert.equal(msg?.type, 'session_init');
   assert.equal(msg?.sessionId, 'th-1');
 });
 
 test('item.completed agent_message → text', () => {
-  const msg = transformCodexEvent(
-    { type: 'item.completed', item: { type: 'agent_message', text: 'Hello' } },
-    CAT,
-  );
+  const msg = transformCodexEvent({ type: 'item.completed', item: { type: 'agent_message', text: 'Hello' } }, CAT);
   assert.equal(msg?.type, 'text');
   assert.equal(msg?.content, 'Hello');
 });
@@ -72,10 +65,7 @@ test('item.completed file_change → tool_use', () => {
 });
 
 test('Reconnecting error → system_info', () => {
-  const msg = transformCodexEvent(
-    { type: 'error', message: 'Reconnecting... (attempt 1)' },
-    CAT,
-  );
+  const msg = transformCodexEvent({ type: 'error', message: 'Reconnecting... (attempt 1)' }, CAT);
   assert.equal(msg?.type, 'system_info');
   assert.ok(msg?.content?.startsWith('Reconnecting...'));
 });
@@ -161,7 +151,10 @@ test('item.completed todo_list → system_info(task_progress) all done', () => {
   const msg = transformCodexEvent(event, CAT);
   assert.equal(msg?.type, 'system_info');
   const payload = JSON.parse(msg?.content ?? '{}');
-  assert.equal(payload.tasks.every(t => t.status === 'completed'), true);
+  assert.equal(
+    payload.tasks.every((t) => t.status === 'completed'),
+    true,
+  );
 });
 
 test('todo_list with empty items → system_info with tasks:[] (clears UI)', () => {
@@ -413,9 +406,7 @@ test('mcp_tool_call with only images (no text) → still returns array', () => {
       tool: 'generate',
       status: 'completed',
       result: {
-        content: [
-          { type: 'image', data: 'CCCC', mimeType: 'image/png' },
-        ],
+        content: [{ type: 'image', data: 'CCCC', mimeType: 'image/png' }],
       },
     },
   };
@@ -484,9 +475,7 @@ test('mcp_tool_call image at exactly 5MB → accepted', () => {
       tool: 'exact',
       status: 'completed',
       result: {
-        content: [
-          { type: 'image', data, mimeType: 'image/png' },
-        ],
+        content: [{ type: 'image', data, mimeType: 'image/png' }],
       },
     },
   };

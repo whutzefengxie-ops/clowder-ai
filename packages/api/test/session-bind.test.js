@@ -11,14 +11,12 @@
  */
 
 import './helpers/setup-cat-registry.js';
-import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
+import { describe, test } from 'node:test';
 
 describe('Session manual bind (unit)', () => {
   async function loadModules() {
-    const { SessionChainStore } = await import(
-      '../dist/domains/cats/services/stores/ports/SessionChainStore.js'
-    );
+    const { SessionChainStore } = await import('../dist/domains/cats/services/stores/ports/SessionChainStore.js');
     return { SessionChainStore };
   }
 
@@ -114,12 +112,8 @@ describe('Session manual bind (unit)', () => {
 
 describe('Session bind API route', () => {
   async function loadModules() {
-    const { SessionChainStore } = await import(
-      '../dist/domains/cats/services/stores/ports/SessionChainStore.js'
-    );
-    const { ThreadStore } = await import(
-      '../dist/domains/cats/services/stores/ports/ThreadStore.js'
-    );
+    const { SessionChainStore } = await import('../dist/domains/cats/services/stores/ports/SessionChainStore.js');
+    const { ThreadStore } = await import('../dist/domains/cats/services/stores/ports/ThreadStore.js');
     return { SessionChainStore, ThreadStore };
   }
 

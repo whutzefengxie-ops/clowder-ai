@@ -1,7 +1,7 @@
-import { describe, test, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { PassThrough } from 'node:stream';
 import { EventEmitter } from 'node:events';
+import { PassThrough } from 'node:stream';
+import { describe, mock, test } from 'node:test';
 import { OpenCodeAgentService } from '../dist/domains/cats/services/agents/providers/OpenCodeAgentService.js';
 
 // ── Mock helpers (same pattern as dare-agent-service.test.js) ──
@@ -21,8 +21,14 @@ function createMockProcess(exitCode = 0) {
       });
       return true;
     }),
-    on: (event, listener) => { emitter.on(event, listener); return proc; },
-    once: (event, listener) => { emitter.once(event, listener); return proc; },
+    on: (event, listener) => {
+      emitter.on(event, listener);
+      return proc;
+    },
+    once: (event, listener) => {
+      emitter.once(event, listener);
+      return proc;
+    },
     _emitter: emitter,
   };
   return proc;
@@ -30,7 +36,7 @@ function createMockProcess(exitCode = 0) {
 
 function emitOpenCodeEvents(proc, events) {
   for (const event of events) {
-    proc.stdout.write(JSON.stringify(event) + '\n');
+    proc.stdout.write(`${JSON.stringify(event)}\n`);
   }
   proc.stdout.end();
   process.nextTick(() => proc._emitter.emit('exit', 0, null));
@@ -77,7 +83,7 @@ const STEP_FINISH = {
   part: { type: 'step-finish', reason: 'stop', cost: 0.036, tokens: { total: 36937 } },
 };
 
-const ERROR_EVENT = {
+const _ERROR_EVENT = {
   type: 'error',
   timestamp: 1773298718314,
   sessionID: 'ses_test123',
@@ -137,7 +143,10 @@ describe('OpenCodeAgentService', () => {
     const proc = createMockProcess();
     const spawnFn = mock.fn(() => proc);
     const service = new OpenCodeAgentService({
-      catId: 'opencode', spawnFn, model: 'claude-haiku-4-5', apiKey: 'sk-test-secret',
+      catId: 'opencode',
+      spawnFn,
+      model: 'claude-haiku-4-5',
+      apiKey: 'sk-test-secret',
     });
     const promise = collect(service.invoke('Test'));
     emitOpenCodeEvents(proc, [STEP_START, TEXT_RESPONSE, STEP_FINISH]);
@@ -147,14 +156,16 @@ describe('OpenCodeAgentService', () => {
     assert.ok(!args.includes('sk-test-secret'), 'secret must not appear in CLI args');
 
     const opts = spawnFn.mock.calls[0].arguments[2];
-    assert.strictEqual(opts.env['ANTHROPIC_API_KEY'], 'sk-test-secret');
+    assert.strictEqual(opts.env.ANTHROPIC_API_KEY, 'sk-test-secret');
   });
 
   test('baseUrl passed via ANTHROPIC_BASE_URL env', async () => {
     const proc = createMockProcess();
     const spawnFn = mock.fn(() => proc);
     const service = new OpenCodeAgentService({
-      catId: 'opencode', spawnFn, model: 'claude-haiku-4-5',
+      catId: 'opencode',
+      spawnFn,
+      model: 'claude-haiku-4-5',
       baseUrl: 'https://proxy.example/v1',
     });
     const promise = collect(service.invoke('Test'));
@@ -162,7 +173,7 @@ describe('OpenCodeAgentService', () => {
     await promise;
 
     const opts = spawnFn.mock.calls[0].arguments[2];
-    assert.strictEqual(opts.env['ANTHROPIC_BASE_URL'], 'https://proxy.example/v1');
+    assert.strictEqual(opts.env.ANTHROPIC_BASE_URL, 'https://proxy.example/v1');
   });
 
   test('cwd is workingDirectory (unlike DARE which uses darePath)', async () => {
@@ -249,16 +260,21 @@ describe('OpenCodeAgentService', () => {
     const proc = createMockProcess();
     const spawnFn = mock.fn(() => proc);
     const service = new OpenCodeAgentService({ catId: 'opencode', spawnFn, model: 'claude-sonnet-4-6' });
-    const promise = collect(service.invoke('Test', {
-      callbackEnv: { 'CAT_CAFE_ANTHROPIC_MODEL_OVERRIDE': 'claude-haiku-4-5' },
-    }));
+    const promise = collect(
+      service.invoke('Test', {
+        callbackEnv: { CAT_CAFE_ANTHROPIC_MODEL_OVERRIDE: 'claude-haiku-4-5' },
+      }),
+    );
     emitOpenCodeEvents(proc, [STEP_START, TEXT_RESPONSE, STEP_FINISH]);
     await promise;
 
     const args = spawnFn.mock.calls[0].arguments[1];
     const mIdx = args.indexOf('-m');
-    assert.strictEqual(args[mIdx + 1], 'anthropic/claude-haiku-4-5',
-      `expected model override to be used, got: ${args[mIdx + 1]}`);
+    assert.strictEqual(
+      args[mIdx + 1],
+      'anthropic/claude-haiku-4-5',
+      `expected model override to be used, got: ${args[mIdx + 1]}`,
+    );
   });
 
   // ── P1-1: callbackEnv BASE_URL gets /v1 suffix for opencode ──
@@ -267,30 +283,36 @@ describe('OpenCodeAgentService', () => {
     const proc = createMockProcess();
     const spawnFn = mock.fn(() => proc);
     const service = new OpenCodeAgentService({ catId: 'opencode', spawnFn, model: 'claude-haiku-4-5' });
-    const promise = collect(service.invoke('Test', {
-      callbackEnv: { 'CAT_CAFE_ANTHROPIC_BASE_URL': 'http://127.0.0.1:9877/a247a834' },
-    }));
+    const promise = collect(
+      service.invoke('Test', {
+        callbackEnv: { CAT_CAFE_ANTHROPIC_BASE_URL: 'http://127.0.0.1:9877/a247a834' },
+      }),
+    );
     emitOpenCodeEvents(proc, [STEP_START, TEXT_RESPONSE, STEP_FINISH]);
     await promise;
 
     const opts = spawnFn.mock.calls[0].arguments[2];
-    assert.strictEqual(opts.env['ANTHROPIC_BASE_URL'], 'http://127.0.0.1:9877/a247a834/v1',
-      'opencode needs /v1 suffix because its SDK calls {baseURL}/messages not {baseURL}/v1/messages');
+    assert.strictEqual(
+      opts.env.ANTHROPIC_BASE_URL,
+      'http://127.0.0.1:9877/a247a834/v1',
+      'opencode needs /v1 suffix because its SDK calls {baseURL}/messages not {baseURL}/v1/messages',
+    );
   });
 
   test('callbackEnv BASE_URL with trailing /v1 is not double-suffixed', async () => {
     const proc = createMockProcess();
     const spawnFn = mock.fn(() => proc);
     const service = new OpenCodeAgentService({ catId: 'opencode', spawnFn, model: 'claude-haiku-4-5' });
-    const promise = collect(service.invoke('Test', {
-      callbackEnv: { 'CAT_CAFE_ANTHROPIC_BASE_URL': 'http://127.0.0.1:9877/slug/v1' },
-    }));
+    const promise = collect(
+      service.invoke('Test', {
+        callbackEnv: { CAT_CAFE_ANTHROPIC_BASE_URL: 'http://127.0.0.1:9877/slug/v1' },
+      }),
+    );
     emitOpenCodeEvents(proc, [STEP_START, TEXT_RESPONSE, STEP_FINISH]);
     await promise;
 
     const opts = spawnFn.mock.calls[0].arguments[2];
-    assert.strictEqual(opts.env['ANTHROPIC_BASE_URL'], 'http://127.0.0.1:9877/slug/v1',
-      'should not double-append /v1');
+    assert.strictEqual(opts.env.ANTHROPIC_BASE_URL, 'http://127.0.0.1:9877/slug/v1', 'should not double-append /v1');
   });
 
   // ── P2-1: multiple step_start should NOT produce multiple session_init ──
@@ -305,7 +327,10 @@ describe('OpenCodeAgentService', () => {
     const messages = await promise;
 
     const sessionInits = messages.filter((m) => m.type === 'session_init');
-    assert.strictEqual(sessionInits.length, 1,
-      `expected exactly 1 session_init, got ${sessionInits.length} — multi-step runs must not produce duplicate session events`);
+    assert.strictEqual(
+      sessionInits.length,
+      1,
+      `expected exactly 1 session_init, got ${sessionInits.length} — multi-step runs must not produce duplicate session events`,
+    );
   });
 });

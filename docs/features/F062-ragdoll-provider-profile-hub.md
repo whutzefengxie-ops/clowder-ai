@@ -27,7 +27,7 @@ created: 2026-03-05
 2. 运行时切换：active profile 变更后，下一次Ragdoll调用按该 profile 启动
 3. 安全存储分层：
    - 非敏感信息（profile 元数据、active 指针）写入项目态
-   - 密钥写入本地 secrets 文件（`.cat-cafe/*secrets*.local.json`），不进 Git
+   - 密钥写入本地 secrets 文件（`local secrets file`），不进 Git
 4. 连通性自检：支持 profile 级“测试”操作，避免切换到坏配置
 
 ## Acceptance Criteria
@@ -58,7 +58,7 @@ created: 2026-03-05
 
 - **KD-1 (2026-03-05)**: 首版范围限定为Ragdoll/Anthropic，不把 Codex/Gemini 一次性打包进来。理由：用户当前痛点是Ragdoll账号切换，先做最短价值链，再复用结构扩展多 provider。
 - **KD-2 (2026-03-05)**: profile 元信息与 secrets 分文件存储，避免明文 key 混入普通配置回读接口。
-- **KD-3 (2026-03-05)**: secrets 持久化采用本机落盘 `.cat-cafe/*secrets*.local.json`（team lead拍板）。
+- **KD-3 (2026-03-05)**: secrets 持久化采用本机落盘 `local secrets file`（team lead拍板）。
 
 ## Dependencies
 

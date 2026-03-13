@@ -41,11 +41,7 @@ const registry = new Map<string, WorklistEntry>();
  * Register a worklist for a thread. Called by routeSerial at start.
  * Returns the entry for routeSerial to read a2aCount updates.
  */
-export function registerWorklist(
-  threadId: string,
-  worklist: CatId[],
-  maxDepth: number,
-): WorklistEntry {
+export function registerWorklist(threadId: string, worklist: CatId[], maxDepth: number): WorklistEntry {
   const entry: WorklistEntry = {
     list: worklist,
     originalCount: worklist.length,

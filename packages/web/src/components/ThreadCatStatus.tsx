@@ -1,6 +1,6 @@
 'use client';
 
-import type { ThreadState, CatStatusType } from '@/stores/chat-types';
+import type { CatStatusType, ThreadState } from '@/stores/chat-types';
 
 /**
  * ASCII cat status indicator for thread sidebar.
@@ -16,7 +16,11 @@ function aggregateStatus(ts: ThreadState): 'idle' | 'working' | 'done' | 'error'
   return 'idle';
 }
 
-export function ThreadCatStatus({ threadState, unreadCount, hasUserMention }: {
+export function ThreadCatStatus({
+  threadState,
+  unreadCount,
+  hasUserMention,
+}: {
   threadState: ThreadState;
   unreadCount: number;
   hasUserMention?: boolean;
@@ -39,16 +43,18 @@ export function ThreadCatStatus({ threadState, unreadCount, hasUserMention }: {
           ᓚᘏᗢ
         </span>
       )}
-      {status === 'done' && (
-        <span className="text-green-500 text-[10px]">&#10003;</span>
-      )}
+      {status === 'done' && <span className="text-green-500 text-[10px]">&#10003;</span>}
       {hasUserMention && (
-        <span className="text-[11px]" title="猫猫 @ 了你">🐾</span>
+        <span className="text-[11px]" title="猫猫 @ 了你">
+          🐾
+        </span>
       )}
       {unreadCount > 0 && (
-        <span className={`inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full text-white text-[10px] font-bold leading-none ${
-          hasUserMention ? 'bg-red-500' : 'bg-amber-500'
-        }`}>
+        <span
+          className={`inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full text-white text-[10px] font-bold leading-none ${
+            hasUserMention ? 'bg-red-500' : 'bg-amber-500'
+          }`}
+        >
           {unreadCount > 99 ? '99+' : unreadCount}
         </span>
       )}

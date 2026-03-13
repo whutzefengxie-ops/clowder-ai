@@ -186,7 +186,10 @@ describe('GET /api/quota/summary', () => {
       assert.equal(res.statusCode, 200);
       const body = res.json();
       assert.equal(body.risk.level, 'high');
-      assert.equal(body.risk.reasons.some((reason) => /95%/.test(String(reason))), true);
+      assert.equal(
+        body.risk.reasons.some((reason) => /95%/.test(String(reason))),
+        true,
+      );
     } finally {
       if (oldEnabled != null) process.env.QUOTA_OFFICIAL_REFRESH_ENABLED = oldEnabled;
       else delete process.env.QUOTA_OFFICIAL_REFRESH_ENABLED;
@@ -232,7 +235,10 @@ describe('GET /api/quota/summary', () => {
       const body = res.json();
       assert.equal(body.risk.level, 'warn');
       assert.equal(body.probes.official.status, 'disabled');
-      assert.equal(body.risk.reasons.some((reason) => /已禁用/.test(String(reason))), true);
+      assert.equal(
+        body.risk.reasons.some((reason) => /已禁用/.test(String(reason))),
+        true,
+      );
     } finally {
       if (oldEnabled != null) process.env.QUOTA_OFFICIAL_REFRESH_ENABLED = oldEnabled;
       else delete process.env.QUOTA_OFFICIAL_REFRESH_ENABLED;

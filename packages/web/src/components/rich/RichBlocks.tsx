@@ -73,7 +73,7 @@ function groupBlocks(blocks: RichBlock[]): ResultItem[] {
 
   for (const run of findConsecutiveRuns(blocks)) {
     if (run.length >= 2 && !run.some(hasCustomInput)) {
-      const gid = `__auto_${run[0]!.id}`;
+      const gid = `__auto_${run[0]?.id}`;
       syntheticGroups.set(gid, run);
       for (const b of run) {
         autoGroupIds.add(b.id);
@@ -90,7 +90,7 @@ function groupBlocks(blocks: RichBlock[]): ResultItem[] {
         groupMap.set(block.groupId, []);
         groupFirstIdx.set(block.groupId, i);
       }
-      groupMap.get(block.groupId)!.push(block);
+      groupMap.get(block.groupId)?.push(block);
     }
   }
 

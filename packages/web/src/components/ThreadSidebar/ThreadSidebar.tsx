@@ -206,16 +206,19 @@ export function ThreadSidebar({ onClose, className, onBootcampClick }: ThreadSid
     });
   }, [loadTrash]);
 
-  const handleRestore = useCallback(async (threadId: string) => {
-    try {
-      const res = await apiFetch(`/api/threads/${threadId}/restore`, { method: 'POST' });
-      if (!res.ok) return;
-      await loadThreads();
-      await loadTrash();
-    } catch {
-      // Silently ignore
-    }
-  }, [loadThreads, loadTrash]);
+  const handleRestore = useCallback(
+    async (threadId: string) => {
+      try {
+        const res = await apiFetch(`/api/threads/${threadId}/restore`, { method: 'POST' });
+        if (!res.ok) return;
+        await loadThreads();
+        await loadTrash();
+      } catch {
+        // Silently ignore
+      }
+    },
+    [loadThreads, loadTrash],
+  );
 
   /** F087: Create a bootcamp onboarding thread */
   const createBootcampThread = useCallback(async () => {
@@ -545,12 +548,8 @@ export function ThreadSidebar({ onClose, className, onBootcampClick }: ThreadSid
                         onToggle={() => toggleGroup(subKey)}
                         projectPath={sub.projectPath}
                         governanceStatus={sub.projectPath ? govHealth[sub.projectPath] : undefined}
-                        onToggleProjectPin={
-                          sub.projectPath ? () => toggleProjectPin(sub.projectPath!) : undefined
-                        }
-                        isProjectPinned={
-                          sub.projectPath ? pinnedProjects.has(sub.projectPath) : undefined
-                        }
+                        onToggleProjectPin={sub.projectPath ? () => toggleProjectPin(sub.projectPath!) : undefined}
+                        isProjectPinned={sub.projectPath ? pinnedProjects.has(sub.projectPath) : undefined}
                       >
                         {sub.threads.map((t) => (
                           <ThreadItem
@@ -651,9 +650,7 @@ export function ThreadSidebar({ onClose, className, onBootcampClick }: ThreadSid
           </button>
           {showTrash && (
             <div className="max-h-48 overflow-y-auto">
-              {isLoadingTrash && (
-                <div className="px-3 py-2 text-[10px] text-gray-400">加载中...</div>
-              )}
+              {isLoadingTrash && <div className="px-3 py-2 text-[10px] text-gray-400">加载中...</div>}
               {!isLoadingTrash && trashedThreads.length === 0 && (
                 <div className="px-3 py-2 text-[10px] text-gray-400">回收站是空的</div>
               )}
@@ -690,18 +687,14 @@ export function ThreadSidebar({ onClose, className, onBootcampClick }: ThreadSid
 
       {/* I-1: Delete confirmation dialog */}
       {deleteTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setDeleteTarget(null)}>
-          <div
-            className="bg-white rounded-xl shadow-2xl p-5 max-w-sm w-full mx-4"
-            onClick={(e) => e.stopPropagation()}
-          >
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          onClick={() => setDeleteTarget(null)}
+        >
+          <div className="bg-white rounded-xl shadow-2xl p-5 max-w-sm w-full mx-4" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-base font-bold text-gray-900 mb-2">确认删除对话</h3>
-            <p className="text-sm text-gray-600 mb-1">
-              即将删除「{deleteTarget.title ?? '未命名对话'}」
-            </p>
-            <p className="text-xs text-gray-500 mb-4">
-              对话将移入回收站，30 天后自动清理。你可以随时从回收站恢复。
-            </p>
+            <p className="text-sm text-gray-600 mb-1">即将删除「{deleteTarget.title ?? '未命名对话'}」</p>
+            <p className="text-xs text-gray-500 mb-4">对话将移入回收站，30 天后自动清理。你可以随时从回收站恢复。</p>
             <div className="flex gap-2 justify-end">
               <button
                 onClick={() => setDeleteTarget(null)}

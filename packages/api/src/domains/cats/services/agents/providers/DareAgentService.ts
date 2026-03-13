@@ -15,9 +15,9 @@
  *   task.failed      → error
  */
 
-import { type CatId, createCatId } from '@cat-cafe/shared';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { type CatId, createCatId } from '@cat-cafe/shared';
 import { getCatModel } from '../../../../../config/cat-models.js';
 import { formatCliExitError } from '../../../../../utils/cli-format.js';
 import { isCliError, isCliTimeout, spawnCli } from '../../../../../utils/cli-spawn.js';
@@ -73,15 +73,13 @@ export class DareAgentService implements AgentService {
 
   constructor(options?: DareAgentServiceOptions) {
     this.catId = options?.catId ?? createCatId('dare');
-    this.adapter = options?.adapter ?? process.env['DARE_ADAPTER'] ?? 'openrouter';
+    this.adapter = options?.adapter ?? process.env.DARE_ADAPTER ?? 'openrouter';
     // P1-2: Use unified model resolution chain (env CAT_*_MODEL > cat-config > fallback)
     this.model = options?.model ?? getCatModel(this.catId as string);
     this.endpoint =
-      options?.endpoint
-      ?? process.env[DARE_ENDPOINT_ENV]
-      ?? process.env[this.getAdapterEndpointEnvName()];
+      options?.endpoint ?? process.env[DARE_ENDPOINT_ENV] ?? process.env[this.getAdapterEndpointEnvName()];
     this.apiKey = options?.apiKey ?? process.env[DARE_API_KEY_ENV];
-    this.darePath = options?.darePath ?? process.env['DARE_PATH'] ?? resolveDefaultDarePath();
+    this.darePath = options?.darePath ?? process.env.DARE_PATH ?? resolveDefaultDarePath();
     this.spawnFn = options?.spawnFn;
   }
 
@@ -208,10 +206,7 @@ export class DareAgentService implements AgentService {
     // P1-3: Pass API key via env vars (not CLI args) to avoid ps/audit leakage
     const apiKeyEnvName = this.getAdapterApiKeyEnvName();
     const apiKey =
-      callbackEnv?.[DARE_API_KEY_ENV]
-      ?? callbackEnv?.[apiKeyEnvName]
-      ?? this.apiKey
-      ?? process.env[apiKeyEnvName];
+      callbackEnv?.[DARE_API_KEY_ENV] ?? callbackEnv?.[apiKeyEnvName] ?? this.apiKey ?? process.env[apiKeyEnvName];
     if (apiKey) {
       env[apiKeyEnvName] = apiKey;
     }
@@ -231,8 +226,6 @@ export class DareAgentService implements AgentService {
 
   private resolveEndpoint(callbackEnv?: Record<string, string>): string | undefined {
     const adapterEndpointEnv = this.getAdapterEndpointEnvName();
-    return callbackEnv?.[DARE_ENDPOINT_ENV]
-      ?? callbackEnv?.[adapterEndpointEnv]
-      ?? this.endpoint;
+    return callbackEnv?.[DARE_ENDPOINT_ENV] ?? callbackEnv?.[adapterEndpointEnv] ?? this.endpoint;
   }
 }

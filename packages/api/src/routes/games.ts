@@ -7,8 +7,8 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { GameOrchestrator } from '../domains/cats/services/game/GameOrchestrator.js';
-import type { IGameStore } from '../domains/cats/services/stores/ports/GameStore.js';
 import { GameViewBuilder } from '../domains/cats/services/game/GameViewBuilder.js';
+import type { IGameStore } from '../domains/cats/services/stores/ports/GameStore.js';
 
 interface SocketLike {
   broadcastToRoom(room: string, event: string, data: unknown): void;
@@ -60,31 +60,40 @@ const definitionSchema = z.object({
   roles: z.array(roleSchema),
   phases: z.array(phaseSchema).min(1),
   actions: z.array(actionDefSchema),
-  winConditions: z.array(z.object({
-    faction: z.string(),
-    description: z.string(),
-    check: z.string(),
-  })),
+  winConditions: z.array(
+    z.object({
+      faction: z.string(),
+      description: z.string(),
+      check: z.string(),
+    }),
+  ),
 });
 
 const startGameSchema = z.object({
   definition: definitionSchema,
   seats: z.array(seatSchema).min(1),
-  config: z.object({
-    timeoutMs: z.number().int().positive(),
-    voiceMode: z.boolean(),
-    humanRole: z.enum(['player', 'god-view']),
-    humanSeat: z.string().regex(/^P\d+$/).optional(),
-  }).refine(
-    (c) => c.humanRole !== 'player' || c.humanSeat,
-    { message: 'humanSeat is required when humanRole is player' },
-  ),
+  config: z
+    .object({
+      timeoutMs: z.number().int().positive(),
+      voiceMode: z.boolean(),
+      humanRole: z.enum(['player', 'god-view']),
+      humanSeat: z
+        .string()
+        .regex(/^P\d+$/)
+        .optional(),
+    })
+    .refine((c) => c.humanRole !== 'player' || c.humanSeat, {
+      message: 'humanSeat is required when humanRole is player',
+    }),
 });
 
 const actionSchema = z.object({
   seatId: z.string().regex(/^P\d+$/),
   actionName: z.string().min(1),
-  targetSeat: z.string().regex(/^P\d+$/).optional(),
+  targetSeat: z
+    .string()
+    .regex(/^P\d+$/)
+    .optional(),
   params: z.record(z.unknown()).optional(),
 });
 
@@ -154,10 +163,7 @@ export const gameRoutes: FastifyPluginAsync<GameRoutesOptions> = async (app, opt
         viewer = humanSeat;
       }
 
-      const view = GameViewBuilder.buildView(
-        runtime,
-        viewer as import('@cat-cafe/shared').SeatId | 'god',
-      );
+      const view = GameViewBuilder.buildView(runtime, viewer as import('@cat-cafe/shared').SeatId | 'god');
       return view;
     },
   );

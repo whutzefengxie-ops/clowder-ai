@@ -20,10 +20,5 @@ import { TIER2_COMMUNITY_SOURCES } from './sources-tier2-community.js';
  */
 export const DEFAULT_SIGNAL_SOURCES: SignalSourceConfig = {
   version: 1,
-  sources: [
-    ...TIER1_GLOBAL_SOURCES,
-    ...TIER1_CHINA_SOURCES,
-    ...PAPER_SOURCES,
-    ...TIER2_COMMUNITY_SOURCES,
-  ],
+  sources: [...TIER1_GLOBAL_SOURCES, ...TIER1_CHINA_SOURCES, ...PAPER_SOURCES, ...TIER2_COMMUNITY_SOURCES],
 };

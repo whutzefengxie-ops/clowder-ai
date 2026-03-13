@@ -1,15 +1,16 @@
-import { describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
 
 describe('P1-2: TelegramAdapter.sendMedia', () => {
   it('sendMedia sends image via bot API', async () => {
-    const { TelegramAdapter } = await import(
-      '../dist/infrastructure/connectors/adapters/TelegramAdapter.js'
-    );
+    const { TelegramAdapter } = await import('../dist/infrastructure/connectors/adapters/TelegramAdapter.js');
 
     const sent = [];
     const adapter = new TelegramAdapter('fake-token', {
-      info() {}, warn() {}, error() {}, debug() {},
+      info() {},
+      warn() {},
+      error() {},
+      debug() {},
     });
     // Inject mock to capture all send calls
     adapter._injectSendMessage(async (chatId, text, opts) => {
@@ -17,9 +18,15 @@ describe('P1-2: TelegramAdapter.sendMedia', () => {
     });
     // Inject media send mock
     adapter._injectSendMedia?.({
-      sendPhoto: async (chatId, url) => { sent.push({ method: 'sendPhoto', chatId, url }); },
-      sendDocument: async (chatId, url) => { sent.push({ method: 'sendDocument', chatId, url }); },
-      sendVoice: async (chatId, url) => { sent.push({ method: 'sendVoice', chatId, url }); },
+      sendPhoto: async (chatId, url) => {
+        sent.push({ method: 'sendPhoto', chatId, url });
+      },
+      sendDocument: async (chatId, url) => {
+        sent.push({ method: 'sendDocument', chatId, url });
+      },
+      sendVoice: async (chatId, url) => {
+        sent.push({ method: 'sendVoice', chatId, url });
+      },
     });
 
     // sendMedia should exist and work with url payload
@@ -28,72 +35,93 @@ describe('P1-2: TelegramAdapter.sendMedia', () => {
 
     // Should have sent something
     assert.ok(sent.length > 0, 'sendMedia should have sent a message');
-    const call = sent.find(s => s.method === 'sendPhoto');
+    const call = sent.find((s) => s.method === 'sendPhoto');
     assert.ok(call, 'should have called sendPhoto for image');
     assert.equal(call.url, 'https://example.com/photo.jpg');
   });
 
   it('R2-P1-2: local file path uses InputFile instead of raw string', async () => {
-    const { TelegramAdapter } = await import(
-      '../dist/infrastructure/connectors/adapters/TelegramAdapter.js'
-    );
+    const { TelegramAdapter } = await import('../dist/infrastructure/connectors/adapters/TelegramAdapter.js');
     const { InputFile } = await import('grammy');
 
     const sent = [];
     const adapter = new TelegramAdapter('fake-token', {
-      info() {}, warn() {}, error() {}, debug() {},
+      info() {},
+      warn() {},
+      error() {},
+      debug() {},
     });
     adapter._injectSendMedia({
-      sendPhoto: async (chatId, input) => { sent.push({ method: 'sendPhoto', chatId, input }); },
-      sendDocument: async (chatId, input) => { sent.push({ method: 'sendDocument', chatId, input }); },
-      sendVoice: async (chatId, input) => { sent.push({ method: 'sendVoice', chatId, input }); },
+      sendPhoto: async (chatId, input) => {
+        sent.push({ method: 'sendPhoto', chatId, input });
+      },
+      sendDocument: async (chatId, input) => {
+        sent.push({ method: 'sendDocument', chatId, input });
+      },
+      sendVoice: async (chatId, input) => {
+        sent.push({ method: 'sendVoice', chatId, input });
+      },
     });
 
     // Local absolute file path should become InputFile, not raw string
     await adapter.sendMedia('12345', { type: 'image', url: '/tmp/connector-media/photo.jpg' });
 
-    const call = sent.find(s => s.method === 'sendPhoto');
+    const call = sent.find((s) => s.method === 'sendPhoto');
     assert.ok(call, 'should have called sendPhoto');
     assert.ok(call.input instanceof InputFile, 'local path should be wrapped in InputFile');
   });
 
   it('R2-P1-2: public URL stays as string (not InputFile)', async () => {
-    const { TelegramAdapter } = await import(
-      '../dist/infrastructure/connectors/adapters/TelegramAdapter.js'
-    );
+    const { TelegramAdapter } = await import('../dist/infrastructure/connectors/adapters/TelegramAdapter.js');
 
     const sent = [];
     const adapter = new TelegramAdapter('fake-token', {
-      info() {}, warn() {}, error() {}, debug() {},
+      info() {},
+      warn() {},
+      error() {},
+      debug() {},
     });
     adapter._injectSendMedia({
-      sendPhoto: async (chatId, input) => { sent.push({ method: 'sendPhoto', chatId, input }); },
-      sendDocument: async (chatId, input) => { sent.push({ method: 'sendDocument', chatId, input }); },
-      sendVoice: async (chatId, input) => { sent.push({ method: 'sendVoice', chatId, input }); },
+      sendPhoto: async (chatId, input) => {
+        sent.push({ method: 'sendPhoto', chatId, input });
+      },
+      sendDocument: async (chatId, input) => {
+        sent.push({ method: 'sendDocument', chatId, input });
+      },
+      sendVoice: async (chatId, input) => {
+        sent.push({ method: 'sendVoice', chatId, input });
+      },
     });
 
     await adapter.sendMedia('12345', { type: 'image', url: 'https://example.com/photo.jpg' });
 
-    const call = sent.find(s => s.method === 'sendPhoto');
+    const call = sent.find((s) => s.method === 'sendPhoto');
     assert.ok(call, 'should have called sendPhoto');
     assert.equal(typeof call.input, 'string', 'public URL should stay as string');
     assert.equal(call.input, 'https://example.com/photo.jpg');
   });
 
   it('R3-P1: absPath in payload takes priority over url for InputFile', async () => {
-    const { TelegramAdapter } = await import(
-      '../dist/infrastructure/connectors/adapters/TelegramAdapter.js'
-    );
+    const { TelegramAdapter } = await import('../dist/infrastructure/connectors/adapters/TelegramAdapter.js');
     const { InputFile } = await import('grammy');
 
     const sent = [];
     const adapter = new TelegramAdapter('fake-token', {
-      info() {}, warn() {}, error() {}, debug() {},
+      info() {},
+      warn() {},
+      error() {},
+      debug() {},
     });
     adapter._injectSendMedia({
-      sendPhoto: async (chatId, input) => { sent.push({ method: 'sendPhoto', chatId, input }); },
-      sendDocument: async (chatId, input) => { sent.push({ method: 'sendDocument', chatId, input }); },
-      sendVoice: async (chatId, input) => { sent.push({ method: 'sendVoice', chatId, input }); },
+      sendPhoto: async (chatId, input) => {
+        sent.push({ method: 'sendPhoto', chatId, input });
+      },
+      sendDocument: async (chatId, input) => {
+        sent.push({ method: 'sendDocument', chatId, input });
+      },
+      sendVoice: async (chatId, input) => {
+        sent.push({ method: 'sendVoice', chatId, input });
+      },
     });
 
     // absPath takes priority — even with a route URL, should use absPath for InputFile
@@ -103,43 +131,51 @@ describe('P1-2: TelegramAdapter.sendMedia', () => {
       absPath: '/data/tts-cache/abc123.wav',
     });
 
-    const call = sent.find(s => s.method === 'sendVoice');
+    const call = sent.find((s) => s.method === 'sendVoice');
     assert.ok(call, 'should have called sendVoice');
     assert.ok(call.input instanceof InputFile, 'absPath should be wrapped in InputFile');
   });
 
   it('sendMedia sends voice via bot API', async () => {
-    const { TelegramAdapter } = await import(
-      '../dist/infrastructure/connectors/adapters/TelegramAdapter.js'
-    );
+    const { TelegramAdapter } = await import('../dist/infrastructure/connectors/adapters/TelegramAdapter.js');
 
     const sent = [];
     const adapter = new TelegramAdapter('fake-token', {
-      info() {}, warn() {}, error() {}, debug() {},
+      info() {},
+      warn() {},
+      error() {},
+      debug() {},
     });
     adapter._injectSendMedia?.({
-      sendPhoto: async (chatId, url) => { sent.push({ method: 'sendPhoto', chatId, url }); },
-      sendDocument: async (chatId, url) => { sent.push({ method: 'sendDocument', chatId, url }); },
-      sendVoice: async (chatId, url) => { sent.push({ method: 'sendVoice', chatId, url }); },
+      sendPhoto: async (chatId, url) => {
+        sent.push({ method: 'sendPhoto', chatId, url });
+      },
+      sendDocument: async (chatId, url) => {
+        sent.push({ method: 'sendDocument', chatId, url });
+      },
+      sendVoice: async (chatId, url) => {
+        sent.push({ method: 'sendVoice', chatId, url });
+      },
     });
 
     assert.equal(typeof adapter.sendMedia, 'function', 'TelegramAdapter must have sendMedia');
     await adapter.sendMedia('12345', { type: 'audio', url: 'https://example.com/voice.ogg' });
 
-    const call = sent.find(s => s.method === 'sendVoice');
+    const call = sent.find((s) => s.method === 'sendVoice');
     assert.ok(call, 'should have called sendVoice for audio');
   });
 });
 
 describe('P1-2: FeishuAdapter.sendMedia with URL fallback', () => {
   it('sendMedia with url (no platform key) sends link as text', async () => {
-    const { FeishuAdapter } = await import(
-      '../dist/infrastructure/connectors/adapters/FeishuAdapter.js'
-    );
+    const { FeishuAdapter } = await import('../dist/infrastructure/connectors/adapters/FeishuAdapter.js');
 
     const sent = [];
     const adapter = new FeishuAdapter('fake-app-id', 'fake-secret', {
-      info() {}, warn() {}, error() {}, debug() {},
+      info() {},
+      warn() {},
+      error() {},
+      debug() {},
     });
     adapter._injectSendMessage(async (params) => {
       sent.push(params);
@@ -155,13 +191,14 @@ describe('P1-2: FeishuAdapter.sendMedia with URL fallback', () => {
   });
 
   it('sendMedia with imageKey uses platform key (existing behavior)', async () => {
-    const { FeishuAdapter } = await import(
-      '../dist/infrastructure/connectors/adapters/FeishuAdapter.js'
-    );
+    const { FeishuAdapter } = await import('../dist/infrastructure/connectors/adapters/FeishuAdapter.js');
 
     const sent = [];
     const adapter = new FeishuAdapter('fake-app-id', 'fake-secret', {
-      info() {}, warn() {}, error() {}, debug() {},
+      info() {},
+      warn() {},
+      error() {},
+      debug() {},
     });
     adapter._injectSendMessage(async (params) => {
       sent.push(params);

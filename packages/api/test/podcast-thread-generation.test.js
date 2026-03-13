@@ -1,5 +1,5 @@
-import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
 
 /**
  * F091 Phase 6: Thread-based podcast generation tests.
@@ -71,13 +71,13 @@ function buildFakeDeps(callLog, responseText = VALID_PODCAST_JSON) {
       },
     },
     router: {
-      async *routeExecution(userId, message, threadId, userMessageId, targetCats, intent, options) {
+      async *routeExecution(_userId, _message, threadId, userMessageId, _targetCats, _intent, options) {
         callLog.push({
           op: 'routeExecution',
           threadId,
           userMessageId,
-          hasSignal: !!(options && options.signal),
-          signalAborted: !!(options && options.signal && options.signal.aborted),
+          hasSignal: !!options?.signal,
+          signalAborted: !!options?.signal?.aborted,
         });
         yield { type: 'text', content: responseText };
       },
@@ -93,11 +93,11 @@ function buildFakeDeps(callLog, responseText = VALID_PODCAST_JSON) {
       },
     },
     invocationTracker: {
-      start(threadId, userId, cats) {
+      start(_threadId, _userId, _cats) {
         callLog.push({ op: 'tracker.start' });
         return new AbortController();
       },
-      complete(threadId, controller) {
+      complete(_threadId, _controller) {
         callLog.push({ op: 'tracker.complete' });
       },
     },
@@ -118,17 +118,13 @@ function makeRequest(overrides = {}) {
 
 describe('F091 Phase 6: generateScriptViaThread — real production function', () => {
   it('P1-1: backfills userMessageId into invocation record', async () => {
-    const { generateScriptViaThread } = await import(
-      '../dist/domains/signals/services/podcast-generator.js'
-    );
+    const { generateScriptViaThread } = await import('../dist/domains/signals/services/podcast-generator.js');
     const callLog = [];
     const deps = buildFakeDeps(callLog);
 
     await generateScriptViaThread(makeRequest(), 'thread-test', deps);
 
-    const backfillCall = callLog.find(
-      (c) => c.op === 'update' && c.userMessageId !== undefined,
-    );
+    const backfillCall = callLog.find((c) => c.op === 'update' && c.userMessageId !== undefined);
     assert.ok(backfillCall, 'must backfill userMessageId into invocation record');
     assert.equal(backfillCall.userMessageId, 'msg-001');
 
@@ -139,9 +135,7 @@ describe('F091 Phase 6: generateScriptViaThread — real production function', (
   });
 
   it('P1-2: passes controller.signal into routeExecution options', async () => {
-    const { generateScriptViaThread } = await import(
-      '../dist/domains/signals/services/podcast-generator.js'
-    );
+    const { generateScriptViaThread } = await import('../dist/domains/signals/services/podcast-generator.js');
     const callLog = [];
     const deps = buildFakeDeps(callLog);
 
@@ -154,9 +148,7 @@ describe('F091 Phase 6: generateScriptViaThread — real production function', (
   });
 
   it('full lifecycle call sequence is correct', async () => {
-    const { generateScriptViaThread } = await import(
-      '../dist/domains/signals/services/podcast-generator.js'
-    );
+    const { generateScriptViaThread } = await import('../dist/domains/signals/services/podcast-generator.js');
     const callLog = [];
     const deps = buildFakeDeps(callLog);
 
@@ -164,21 +156,19 @@ describe('F091 Phase 6: generateScriptViaThread — real production function', (
 
     const ops = callLog.map((c) => c.op);
     assert.deepEqual(ops, [
-      'append',           // ① post message
-      'create',           // ② create invocation record
-      'update',           // ②b backfill userMessageId
-      'tracker.start',    // ③ start tracker
-      'update',           // ④a status → running
-      'routeExecution',   // ④b invoke cat
-      'update',           // ④c status → succeeded
+      'append', // ① post message
+      'create', // ② create invocation record
+      'update', // ②b backfill userMessageId
+      'tracker.start', // ③ start tracker
+      'update', // ④a status → running
+      'routeExecution', // ④b invoke cat
+      'update', // ④c status → succeeded
       'tracker.complete', // ⑤ cleanup
     ]);
   });
 
   it('failure path: tracker cleanup + failed status even when routeExecution throws', async () => {
-    const { generateScriptViaThread } = await import(
-      '../dist/domains/signals/services/podcast-generator.js'
-    );
+    const { generateScriptViaThread } = await import('../dist/domains/signals/services/podcast-generator.js');
     const callLog = [];
     const failDeps = buildFakeDeps(callLog);
 
@@ -190,10 +180,9 @@ describe('F091 Phase 6: generateScriptViaThread — real production function', (
       },
     };
 
-    await assert.rejects(
-      () => generateScriptViaThread(makeRequest(), 'thread-fail', failDeps),
-      { message: 'LLM unavailable' },
-    );
+    await assert.rejects(() => generateScriptViaThread(makeRequest(), 'thread-fail', failDeps), {
+      message: 'LLM unavailable',
+    });
 
     // Verify failed status was recorded
     const failUpdate = callLog.find((c) => c.op === 'update' && c.status === 'failed');
@@ -210,9 +199,7 @@ describe('F091 Phase 6: generateScriptViaThread — real production function', (
   });
 
   it('returns parsed PodcastScript on success', async () => {
-    const { generateScriptViaThread } = await import(
-      '../dist/domains/signals/services/podcast-generator.js'
-    );
+    const { generateScriptViaThread } = await import('../dist/domains/signals/services/podcast-generator.js');
     const callLog = [];
     const deps = buildFakeDeps(callLog, VALID_PODCAST_JSON);
 

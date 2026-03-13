@@ -5,13 +5,13 @@
  * and only committed via ackCollectedCursors after the invocation succeeds.
  */
 
-import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
 import Fastify from 'fastify';
-import { invocationsRoutes } from '../dist/routes/invocations.js';
+import { InvocationTracker } from '../dist/domains/cats/services/agents/invocation/InvocationTracker.js';
 import { InvocationRecordStore } from '../dist/domains/cats/services/stores/ports/InvocationRecordStore.js';
 import { MessageStore } from '../dist/domains/cats/services/stores/ports/MessageStore.js';
-import { InvocationTracker } from '../dist/domains/cats/services/agents/invocation/InvocationTracker.js';
+import { invocationsRoutes } from '../dist/routes/invocations.js';
 
 function createMockSocketManager() {
   return {
@@ -38,7 +38,9 @@ function createTrackingRouter(options = {}) {
     async ackCollectedCursors(userId, threadId, boundaries) {
       ackCalls.push({ userId, threadId, boundaries: new Map(boundaries) });
     },
-    getAckCalls() { return ackCalls; },
+    getAckCalls() {
+      return ackCalls;
+    },
   };
 }
 
@@ -88,7 +90,6 @@ async function setupScenario(router, status = 'failed') {
 }
 
 describe('ADR-008 S3: cursor deferred ack', () => {
-
   it('ackCollectedCursors is called after successful retry', async () => {
     const router = createTrackingRouter();
     const { app, invocationRecordStore, invocationId } = await setupScenario(router);
@@ -155,7 +156,6 @@ describe('ADR-008 S3: cursor deferred ack', () => {
     await new Promise((r) => setTimeout(r, 150));
 
     assert.ok(capturedOpts, 'routeExecution should have been called');
-    assert.ok(capturedOpts.cursorBoundaries instanceof Map,
-      'cursorBoundaries should be a Map instance');
+    assert.ok(capturedOpts.cursorBoundaries instanceof Map, 'cursorBoundaries should be a Map instance');
   });
 });

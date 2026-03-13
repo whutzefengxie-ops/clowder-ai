@@ -1,7 +1,7 @@
-import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { dirname, resolve } from 'node:path';
+import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 test('hindsight p0 health-check self-test passes', () => {
@@ -14,10 +14,6 @@ test('hindsight p0 health-check self-test passes', () => {
   assert.equal(
     result.status,
     0,
-    [
-      `exit=${result.status}`,
-      `stdout:\n${result.stdout}`,
-      `stderr:\n${result.stderr}`,
-    ].join('\n'),
+    [`exit=${result.status}`, `stdout:\n${result.stdout}`, `stderr:\n${result.stderr}`].join('\n'),
   );
 });

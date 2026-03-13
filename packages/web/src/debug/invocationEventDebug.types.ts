@@ -26,7 +26,7 @@ export const EVENT_KEYS = [
   'reason',
 ] as const;
 
-export type AllowedEventKey = typeof EVENT_KEYS[number];
+export type AllowedEventKey = (typeof EVENT_KEYS)[number];
 
 export type StoredDebugEvent = {
   event: DebugEventName;

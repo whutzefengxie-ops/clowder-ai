@@ -1,11 +1,9 @@
 /**
  * F076: ExternalProjectStore — in-memory store for external projects
  */
-import type {
-  CreateExternalProjectInput,
-  ExternalProject,
-} from '@cat-cafe/shared';
+
 import { resolve } from 'node:path';
+import type { CreateExternalProjectInput, ExternalProject } from '@cat-cafe/shared';
 import { generateSortableId } from '../cats/services/stores/ports/MessageStore.js';
 
 export class ExternalProjectStore {
@@ -19,7 +17,7 @@ export class ExternalProjectStore {
     const backlogPath = input.backlogPath ?? 'docs/BACKLOG.md';
     const resolvedBacklog = resolve(input.sourcePath, backlogPath);
     const resolvedSource = resolve(input.sourcePath);
-    if (!resolvedBacklog.startsWith(resolvedSource + '/') && resolvedBacklog !== resolvedSource) {
+    if (!resolvedBacklog.startsWith(`${resolvedSource}/`) && resolvedBacklog !== resolvedSource) {
       throw new Error('backlogPath must not escape sourcePath');
     }
     const now = Date.now();
@@ -38,33 +36,22 @@ export class ExternalProjectStore {
   }
 
   listByUser(userId: string): ExternalProject[] {
-    return [...this.projects.values()]
-      .filter((p) => p.userId === userId)
-      .sort((a, b) => b.id.localeCompare(a.id));
+    return [...this.projects.values()].filter((p) => p.userId === userId).sort((a, b) => b.id.localeCompare(a.id));
   }
 
   getById(id: string): ExternalProject | null {
     return this.projects.get(id) ?? null;
   }
 
-  update(
-    id: string,
-    patch: Partial<CreateExternalProjectInput>,
-  ): ExternalProject | null {
+  update(id: string, patch: Partial<CreateExternalProjectInput>): ExternalProject | null {
     const existing = this.projects.get(id);
     if (!existing) return null;
     const updated: ExternalProject = {
       ...existing,
       ...(patch.name !== undefined ? { name: patch.name } : {}),
-      ...(patch.description !== undefined
-        ? { description: patch.description }
-        : {}),
-      ...(patch.sourcePath !== undefined
-        ? { sourcePath: patch.sourcePath }
-        : {}),
-      ...(patch.backlogPath !== undefined
-        ? { backlogPath: patch.backlogPath }
-        : {}),
+      ...(patch.description !== undefined ? { description: patch.description } : {}),
+      ...(patch.sourcePath !== undefined ? { sourcePath: patch.sourcePath } : {}),
+      ...(patch.backlogPath !== undefined ? { backlogPath: patch.backlogPath } : {}),
       updatedAt: Date.now(),
     };
     this.projects.set(id, updated);

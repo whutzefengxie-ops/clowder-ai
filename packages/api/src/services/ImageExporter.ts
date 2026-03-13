@@ -23,11 +23,7 @@ export class ImageExporter {
       if (!this.browser) {
         this.browser = await puppeteer.launch({
           headless: true,
-          args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-          ],
+          args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
         });
       }
 
@@ -100,7 +96,7 @@ export class ImageExporter {
           await this.waitForPaint(page);
         }
 
-        const chunk = await page.screenshot({ type: 'png' }) as Buffer;
+        const chunk = (await page.screenshot({ type: 'png' })) as Buffer;
         chunks.push({ buffer: chunk, top: y, height: chunkH });
       }
 
@@ -129,22 +125,21 @@ export class ImageExporter {
       await page.close();
       return stitched;
     } catch (error) {
-      throw new Error(
-        `Screenshot capture failed: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      throw new Error(`Screenshot capture failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
   /** Wait for two animation frames (one paint cycle). */
   private async waitForPaint(page: puppeteer.Page): Promise<void> {
-    await page.evaluate(() =>
-      new Promise<void>((resolve) =>
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (globalThis as any).requestAnimationFrame(() =>
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) =>
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (globalThis as any).requestAnimationFrame(() => resolve()),
+          (globalThis as any).requestAnimationFrame(() =>
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (globalThis as any).requestAnimationFrame(() => resolve()),
+          ),
         ),
-      ),
     );
   }
 

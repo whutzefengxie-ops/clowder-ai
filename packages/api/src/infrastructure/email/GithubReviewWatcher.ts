@@ -6,14 +6,14 @@
  * BACKLOG #81: https://github.com/zts212653/cat-cafe/issues/81
  */
 
-import { ImapFlow } from 'imapflow';
 import { EventEmitter } from 'node:events';
+import { ImapFlow } from 'imapflow';
 import {
-  parseGithubReviewFromSubjectAndSource,
-  extractCatFromTitle,
-  catTagToCatId,
-  isGithubNotification,
   type CatTag,
+  catTagToCatId,
+  extractCatFromTitle,
+  isGithubNotification,
+  parseGithubReviewFromSubjectAndSource,
 } from './GithubReviewMailParser.js';
 
 export interface GithubReviewEvent {
@@ -209,10 +209,7 @@ export class GithubReviewWatcher extends EventEmitter<WatcherEventMap> {
   private scheduleReconnect(): void {
     if (!this.running || this.reconnectTimer) return; // Already scheduled or stopping
 
-    const delay = Math.min(
-      BASE_RECONNECT_DELAY_MS * 2 ** this.reconnectAttempts,
-      MAX_RECONNECT_DELAY_MS,
-    );
+    const delay = Math.min(BASE_RECONNECT_DELAY_MS * 2 ** this.reconnectAttempts, MAX_RECONNECT_DELAY_MS);
     this.reconnectAttempts++;
 
     this.log.info(
@@ -287,10 +284,8 @@ export class GithubReviewWatcher extends EventEmitter<WatcherEventMap> {
       // Collect all fetched UIDs in order, tagged as review or skip.
       // We process them sequentially — cursor only advances for UIDs
       // that are successfully handled (Cloud Codex P1-3/P1-4/P1-5).
-      const items: Array<
-        | { kind: 'skip'; uid: number }
-        | { kind: 'review'; uid: number; event: GithubReviewEvent }
-      > = [];
+      const items: Array<{ kind: 'skip'; uid: number } | { kind: 'review'; uid: number; event: GithubReviewEvent }> =
+        [];
 
       for await (const message of this.client.fetch(
         { uid: `${this.lastSeenUid + 1}:*` },
@@ -352,7 +347,9 @@ export class GithubReviewWatcher extends EventEmitter<WatcherEventMap> {
             await this.reviewHandler(item.event);
             this.lastSeenUid = Math.max(this.lastSeenUid, item.uid);
           } catch (err) {
-            this.log.error(`[GithubReviewWatcher] Handler failed for UID ${item.uid}, will retry next poll: ${String(err)}`);
+            this.log.error(
+              `[GithubReviewWatcher] Handler failed for UID ${item.uid}, will retry next poll: ${String(err)}`,
+            );
             break; // Stop — don't advance past failed UID
           }
         } else {
@@ -371,8 +368,13 @@ function isConnectionError(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
   const code = (error as NodeJS.ErrnoException).code;
   const connectionCodes = new Set([
-    'ETIMEDOUT', 'ECONNRESET', 'ECONNREFUSED', 'EPIPE',
-    'EHOSTUNREACH', 'ENETUNREACH', 'EAI_AGAIN',
+    'ETIMEDOUT',
+    'ECONNRESET',
+    'ECONNREFUSED',
+    'EPIPE',
+    'EHOSTUNREACH',
+    'ENETUNREACH',
+    'EAI_AGAIN',
   ]);
   if (code && connectionCodes.has(code)) return true;
   // ImapFlow sometimes wraps errors without preserving code
@@ -385,25 +387,25 @@ function isConnectionError(error: unknown): boolean {
  * Returns null if required env vars are not set.
  */
 export function loadWatcherConfigFromEnv(): GithubReviewWatcherConfig | null {
-  const user = process.env['GITHUB_REVIEW_IMAP_USER'];
-  const pass = process.env['GITHUB_REVIEW_IMAP_PASS'];
+  const user = process.env.GITHUB_REVIEW_IMAP_USER;
+  const pass = process.env.GITHUB_REVIEW_IMAP_PASS;
 
   if (!user || !pass) {
     return null;
   }
 
-  const pollIntervalMs = parseInt(process.env['GITHUB_REVIEW_POLL_INTERVAL_MS'] ?? '120000', 10);
+  const pollIntervalMs = parseInt(process.env.GITHUB_REVIEW_POLL_INTERVAL_MS ?? '120000', 10);
   if (!Number.isFinite(pollIntervalMs) || pollIntervalMs < 5000) {
     throw new Error(
-      `[GithubReviewWatcher] Invalid GITHUB_REVIEW_POLL_INTERVAL_MS: ${process.env['GITHUB_REVIEW_POLL_INTERVAL_MS']} (must be >= 5000ms)`,
+      `[GithubReviewWatcher] Invalid GITHUB_REVIEW_POLL_INTERVAL_MS: ${process.env.GITHUB_REVIEW_POLL_INTERVAL_MS} (must be >= 5000ms)`,
     );
   }
 
   return {
     user,
     pass,
-    host: process.env['GITHUB_REVIEW_IMAP_HOST'] ?? 'imap.qq.com',
-    port: parseInt(process.env['GITHUB_REVIEW_IMAP_PORT'] ?? '993', 10),
+    host: process.env.GITHUB_REVIEW_IMAP_HOST ?? 'imap.qq.com',
+    port: parseInt(process.env.GITHUB_REVIEW_IMAP_PORT ?? '993', 10),
     pollIntervalMs,
   };
 }

@@ -12,13 +12,9 @@
  * 7. Degrade to same-family lead if no cross-family reviewer available
  */
 
-import type { CatId, Roster, ReviewPolicy } from '@cat-cafe/shared';
+import type { CatId, ReviewPolicy, Roster } from '@cat-cafe/shared';
 import { createCatId } from '@cat-cafe/shared';
-import {
-  getRoster,
-  getReviewPolicy,
-  getDefaultCatId,
-} from '../../../../config/cat-config-loader.js';
+import { getDefaultCatId, getReviewPolicy, getRoster } from '../../../../config/cat-config-loader.js';
 
 export interface ReviewerMatchOptions {
   /** The author who needs a reviewer */
@@ -50,9 +46,7 @@ export interface ReviewerMatchResult {
  * F032 Phase C: Get thread activity scores from options.
  * Activity data should be populated by caller from threadStore.getParticipantsWithActivity().
  */
-function getThreadActivity(
-  options: ReviewerMatchOptions,
-): Record<string, number> {
+function getThreadActivity(options: ReviewerMatchOptions): Record<string, number> {
   // Return provided activity data, or empty object if not available
   return options.threadActivity ?? {};
 }
@@ -61,9 +55,7 @@ function getThreadActivity(
  * Resolve the best reviewer for an author.
  * Considers: roles, availability, family, lead status, thread activity.
  */
-export async function resolveReviewer(
-  options: ReviewerMatchOptions,
-): Promise<ReviewerMatchResult> {
+export async function resolveReviewer(options: ReviewerMatchOptions): Promise<ReviewerMatchResult> {
   const roster = getRoster();
   const defaultPolicy = getReviewPolicy();
   const policy: ReviewPolicy = { ...defaultPolicy, ...options.policy };
@@ -82,8 +74,7 @@ export async function resolveReviewer(
 
   // 1. Find all cats with peer-reviewer role
   const allReviewers = Object.entries(roster).filter(
-    ([id, entry]) =>
-      id !== authorId && entry.roles.includes('peer-reviewer'),
+    ([id, entry]) => id !== authorId && entry.roles.includes('peer-reviewer'),
   );
 
   // 2. Filter by availability (owner 40 美刀教训！)
@@ -92,22 +83,14 @@ export async function resolveReviewer(
     : allReviewers;
 
   // 3. Separate by family
-  const differentFamily = availableReviewers.filter(
-    ([_, entry]) => entry.family !== authorEntry.family,
-  );
-  const sameFamily = availableReviewers.filter(
-    ([_, entry]) => entry.family === authorEntry.family,
-  );
+  const differentFamily = availableReviewers.filter(([_, entry]) => entry.family !== authorEntry.family);
+  const sameFamily = availableReviewers.filter(([_, entry]) => entry.family === authorEntry.family);
 
   // 4. Get thread activity for sorting (F032 Phase C)
-  const activity = policy.preferActiveInThread
-    ? getThreadActivity(options)
-    : {};
+  const activity = policy.preferActiveInThread ? getThreadActivity(options) : {};
 
   // Sort function: activity desc, then lead first
-  const sortCandidates = (
-    candidates: Array<[string, Roster[string]]>,
-  ): Array<[string, Roster[string]]> => {
+  const sortCandidates = (candidates: Array<[string, Roster[string]]>): Array<[string, Roster[string]]> => {
     return [...candidates].sort((a, b) => {
       // First by activity (higher = better)
       const activityDiff = (activity[b[0]] ?? 0) - (activity[a[0]] ?? 0);
@@ -130,7 +113,7 @@ export async function resolveReviewer(
     const sorted = sortCandidates(differentFamily);
     if (sorted.length > 0) {
       return {
-        reviewer: createCatId(sorted[0]![0]),
+        reviewer: createCatId(sorted[0]?.[0]),
         isDegraded: false,
         candidates: allCandidateIds,
       };
@@ -141,9 +124,7 @@ export async function resolveReviewer(
   if (sameFamily.length > 0) {
     // Only consider leads for degradation
     const sameFamilyLeads = sameFamily.filter(([_, entry]) => entry.lead);
-    const sorted = sortCandidates(
-      sameFamilyLeads.length > 0 ? sameFamilyLeads : sameFamily,
-    );
+    const sorted = sortCandidates(sameFamilyLeads.length > 0 ? sameFamilyLeads : sameFamily);
 
     if (sorted.length > 0) {
       const degradeReason =
@@ -151,12 +132,10 @@ export async function resolveReviewer(
           ? 'No different-family reviewers available (all unavailable or no peer-reviewer role)'
           : 'Different-family reviewers filtered out by policy';
 
-      console.warn(
-        `[resolveReviewer] Degraded to same-family for author "${authorId}": ${degradeReason}`,
-      );
+      console.warn(`[resolveReviewer] Degraded to same-family for author "${authorId}": ${degradeReason}`);
 
       return {
-        reviewer: createCatId(sorted[0]![0]),
+        reviewer: createCatId(sorted[0]?.[0]),
         isDegraded: true,
         degradeReason,
         candidates: allCandidateIds,
@@ -165,9 +144,7 @@ export async function resolveReviewer(
   }
 
   // 7. Ultimate fallback: default cat
-  console.warn(
-    `[resolveReviewer] No reviewers available for author "${authorId}". Using default cat.`,
-  );
+  console.warn(`[resolveReviewer] No reviewers available for author "${authorId}". Using default cat.`);
   return {
     reviewer: getDefaultCatId(),
     isDegraded: true,
@@ -180,9 +157,7 @@ export async function resolveReviewer(
  * Get all available reviewers for an author (for UI display).
  * Returns sorted list by preference.
  */
-export async function getAvailableReviewers(
-  options: ReviewerMatchOptions,
-): Promise<readonly CatId[]> {
+export async function getAvailableReviewers(options: ReviewerMatchOptions): Promise<readonly CatId[]> {
   const result = await resolveReviewer(options);
   return result.candidates;
 }
@@ -191,10 +166,7 @@ export async function getAvailableReviewers(
  * Check if a specific cat can review another cat's code.
  * Returns { canReview, reason }.
  */
-export function canReview(
-  reviewer: CatId,
-  author: CatId,
-): { canReview: boolean; reason: string } {
+export function canReview(reviewer: CatId, author: CatId): { canReview: boolean; reason: string } {
   const roster = getRoster();
   const policy = getReviewPolicy();
 

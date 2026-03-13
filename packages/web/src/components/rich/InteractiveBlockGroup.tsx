@@ -23,15 +23,18 @@ function dispatchInteractiveSend(text: string) {
 
 // ── Pure function (exported for testing) ────────────────────
 
-export function buildGroupMessage(
-  blocks: RichInteractiveBlock[],
-  selections: Map<string, string[]>,
-): string {
+export function buildGroupMessage(blocks: RichInteractiveBlock[], selections: Map<string, string[]>): string {
   const parts: string[] = [];
   for (const block of blocks) {
     const selected = selections.get(block.id);
     if (!selected || selected.length === 0) continue;
-    const msg = buildSelectionMessage(block.interactiveType, block.options, selected, block.messageTemplate, block.title);
+    const msg = buildSelectionMessage(
+      block.interactiveType,
+      block.options,
+      selected,
+      block.messageTemplate,
+      block.title,
+    );
     parts.push(msg);
   }
   return parts.join('\n');
@@ -39,13 +42,7 @@ export function buildGroupMessage(
 
 // ── Component ───────────────────────────────────────────────
 
-export function InteractiveBlockGroup({
-  blocks,
-  messageId,
-}: {
-  blocks: RichInteractiveBlock[];
-  messageId?: string;
-}) {
+export function InteractiveBlockGroup({ blocks, messageId }: { blocks: RichInteractiveBlock[]; messageId?: string }) {
   const allDisabled = blocks.every((b) => b.disabled);
   const [submitted, setSubmitted] = useState(allDisabled);
   const [selections, setSelections] = useState<Map<string, string[]>>(() => {
@@ -113,11 +110,13 @@ export function InteractiveBlockGroup({
             }`}
         >
           全部提交
-          <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
-            allSelected
-              ? 'bg-white/20 text-white'
-              : 'bg-amber-100 dark:bg-amber-900/50 text-amber-600 dark:text-amber-400'
-          }`}>
+          <span
+            className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
+              allSelected
+                ? 'bg-white/20 text-white'
+                : 'bg-amber-100 dark:bg-amber-900/50 text-amber-600 dark:text-amber-400'
+            }`}
+          >
             {selections.size}/{blocks.length}
           </span>
         </button>
