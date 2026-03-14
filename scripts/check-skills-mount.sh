@@ -40,6 +40,13 @@ for SKILL_PATH in "$SKILLS_DIR"/*/; do
 done
 
 TOTAL_SKILLS=${#SKILLS[@]}
+
+if [ "$TOTAL_SKILLS" -eq 0 ]; then
+    echo -e "${RED}✗ No valid skills found in $SKILLS_DIR${NC}"
+    echo "  (Each skill must have a SKILL.md file)"
+    exit 1
+fi
+
 echo -e "${BOLD}Cat Café Skills Mount Check${NC}"
 echo -e "Source: $SKILLS_DIR"
 echo -e "Skills: $TOTAL_SKILLS"

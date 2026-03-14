@@ -48,6 +48,23 @@ PROVIDERS=(
 # Directories to skip (not skills)
 SKIP_DIRS="refs"
 
+# Count valid skills (must have SKILL.md)
+TOTAL_SKILLS=0
+for SKILL_PATH in "$SKILLS_DIR"/*/; do
+    SKILL_NAME=$(basename "$SKILL_PATH")
+    echo "$SKIP_DIRS" | grep -qw "$SKILL_NAME" && continue
+    [ -f "$SKILL_PATH/SKILL.md" ] && TOTAL_SKILLS=$((TOTAL_SKILLS + 1))
+done
+
+if [ "$TOTAL_SKILLS" -eq 0 ]; then
+    echo -e "${RED}✗ No valid skills found in $SKILLS_DIR${NC}"
+    echo "  (Each skill must have a SKILL.md file)"
+    exit 1
+fi
+
+echo "Found $TOTAL_SKILLS skills to sync."
+echo ""
+
 TOTAL_CREATED=0
 TOTAL_SKIPPED=0
 TOTAL_UPDATED=0
