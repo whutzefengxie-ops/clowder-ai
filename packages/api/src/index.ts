@@ -10,6 +10,7 @@ import { createRedisClient, SessionStore } from '@cat-cafe/shared/utils';
 import cors from '@fastify/cors';
 import fastifyWebsocket from '@fastify/websocket';
 import Fastify from 'fastify';
+import { detectAuthModeConflict } from './config/auth-mode-detector.js';
 import { generateCliConfigs, readCapabilitiesConfig } from './config/capabilities/capability-orchestrator.js';
 import { getCatContextBudget } from './config/cat-budgets.js';
 import { getConfigSessionStrategy, loadCatConfig, toAllCatConfigs } from './config/cat-config-loader.js';
@@ -832,6 +833,21 @@ async function main(): Promise<void> {
     }
   } catch (err) {
     app.log.warn(`[api] CLI config regeneration failed (best-effort): ${String(err)}`);
+  }
+
+  // Issue #51: Detect API key auth misconfiguration at startup
+  try {
+    const profilesRoot = await resolveProviderProfilesRoot(findMonorepoRoot(process.cwd()));
+    const runtimeProfile = await resolveAnthropicRuntimeProfile(profilesRoot);
+    const authWarning = await detectAuthModeConflict(runtimeProfile);
+    if (authWarning) {
+      app.log.warn(authWarning.message);
+      for (const detail of authWarning.details) {
+        app.log.warn(`  → ${detail}`);
+      }
+    }
+  } catch (err) {
+    app.log.warn(`[api] Auth mode detection failed (best-effort): ${String(err)}`);
   }
 
   // Phase 3b: connector invoke trigger (auto-invoke cat after review email routing)

@@ -37,7 +37,7 @@ echo ""
 
 # ── Step 1: Check prerequisites ─────────────────────────────
 
-echo -e "${CYAN}[1/5] Checking prerequisites / 检查前置依赖...${NC}"
+echo -e "${CYAN}[1/6] Checking prerequisites / 检查前置依赖...${NC}"
 echo ""
 
 MISSING=()
@@ -99,7 +99,7 @@ fi
 # ── Step 2: Install packages ────────────────────────────────
 
 echo ""
-echo -e "${CYAN}[2/5] Installing packages / 安装依赖包...${NC}"
+echo -e "${CYAN}[2/6] Installing packages / 安装依赖包...${NC}"
 echo ""
 
 if [ -d "node_modules" ]; then
@@ -108,10 +108,104 @@ fi
 pnpm install --frozen-lockfile 2>&1 | tail -3
 echo -e "  ${GREEN}✓${NC} Packages installed"
 
-# ── Step 3: Choose optional features ────────────────────────
+# ── Step 3: Authentication mode ───────────────────────────────
 
 echo ""
-echo -e "${CYAN}[3/5] Optional features / 可选功能${NC}"
+echo -e "${CYAN}[3/6] Authentication mode / 认证模式${NC}"
+echo ""
+echo "  How will Cat Cafe authenticate with the Claude API?"
+echo "  Cat Cafe 如何认证 Claude API？"
+echo ""
+echo -e "  ${BOLD}[1] Claude Max subscription (default)${NC}"
+echo "      Use your Claude CLI login session. No API key needed."
+echo "      使用 Claude CLI 登录会话，无需 API Key。"
+echo ""
+echo -e "  ${BOLD}[2] API Key + custom endpoint${NC}"
+echo "      Use an Anthropic API key (direct or via proxy/gateway)."
+echo "      使用 Anthropic API Key（直连或通过代理网关）。"
+echo ""
+read -p "  Choose (1/2) [1]: " AUTH_MODE_CHOICE
+AUTH_MODE_CHOICE=${AUTH_MODE_CHOICE:-1}
+
+CAT_CAFE_DIR="$PROJECT_DIR/.cat-cafe"
+PROFILE_META="$CAT_CAFE_DIR/provider-profiles.json"
+PROFILE_SECRETS="$CAT_CAFE_DIR/provider-profiles.secrets.local.json"
+
+if [ "$AUTH_MODE_CHOICE" = "2" ]; then
+    echo ""
+    read -p "  Anthropic API Key: " -s SETUP_API_KEY
+    echo ""
+    if [ -z "$SETUP_API_KEY" ]; then
+        echo -e "  ${RED}✗${NC} API Key is required for api_key mode."
+        echo "     You can add it later via Web UI → Settings → Provider Profiles."
+        echo "     也可稍后通过 Web UI → Settings → Provider Profiles 添加。"
+    else
+        read -p "  API Base URL [https://api.anthropic.com]: " SETUP_BASE_URL
+        SETUP_BASE_URL=${SETUP_BASE_URL:-https://api.anthropic.com}
+        # Remove trailing slashes
+        SETUP_BASE_URL=$(echo "$SETUP_BASE_URL" | sed 's|/\+$||')
+
+        # Write provider profile files
+        mkdir -p "$CAT_CAFE_DIR"
+        PROFILE_ID="profile-setup-$(date +%s)"
+        NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+        cat > "$PROFILE_META" <<METAEOF
+{
+  "version": 1,
+  "providers": {
+    "anthropic": {
+      "activeProfileId": "$PROFILE_ID",
+      "profiles": [
+        {
+          "id": "anthropic-subscription-default",
+          "provider": "anthropic",
+          "name": "自有订阅",
+          "mode": "subscription",
+          "createdAt": "$NOW",
+          "updatedAt": "$NOW"
+        },
+        {
+          "id": "$PROFILE_ID",
+          "provider": "anthropic",
+          "name": "API Key (setup.sh)",
+          "mode": "api_key",
+          "baseUrl": "$SETUP_BASE_URL",
+          "createdAt": "$NOW",
+          "updatedAt": "$NOW"
+        }
+      ]
+    }
+  }
+}
+METAEOF
+
+        cat > "$PROFILE_SECRETS" <<SECRETSEOF
+{
+  "version": 1,
+  "providers": {
+    "anthropic": {
+      "$PROFILE_ID": {
+        "apiKey": "$SETUP_API_KEY"
+      }
+    }
+  }
+}
+SECRETSEOF
+
+        chmod 600 "$PROFILE_SECRETS"
+
+        echo -e "  ${GREEN}✓${NC} API key profile created and activated"
+        echo -e "  ${GREEN}✓${NC} Provider profile is the auth truth source for Cat Cafe"
+    fi
+else
+    echo -e "  ${GREEN}✓${NC} Using Claude Max subscription (default)"
+fi
+
+# ── Step 4: Choose optional features ────────────────────────
+
+echo ""
+echo -e "${CYAN}[4/6] Optional features / 可选功能${NC}"
 echo ""
 echo "Cat Cafe works with just a model API key."
 echo "猫猫咖啡只需一个模型 API Key 即可运行。"
@@ -234,7 +328,7 @@ echo ""
 
 # ── Step 4: Generate .env ───────────────────────────────────
 
-echo -e "${CYAN}[4/5] Generating .env / 生成配置文件...${NC}"
+echo -e "${CYAN}[5/6] Generating .env / 生成配置文件...${NC}"
 echo ""
 
 if [ -f .env ]; then
@@ -369,12 +463,13 @@ fi
 # ── Step 5: Summary ─────────────────────────────────────────
 
 echo ""
-echo -e "${CYAN}[5/5] Setup complete! / 安装完成！${NC}"
+echo -e "${CYAN}[6/6] Setup complete! / 安装完成！${NC}"
 echo ""
 echo "=================================="
 echo -e "${GREEN}🎉 Cat Cafe is ready!${NC}"
 echo ""
 echo "  Enabled features / 已启用功能:"
+[ "$AUTH_MODE_CHOICE" = "2" ] && echo "    ✓ Auth: API Key" || echo "    ✓ Auth: Claude Max subscription"
 echo "    ✓ Core (API + Frontend + Redis)"
 [ "$ENABLE_ASR" = true ] && echo "    ✓ Voice Input (ASR)"
 [ "$ENABLE_TTS" = true ] && echo "    ✓ Voice Output (TTS)"
