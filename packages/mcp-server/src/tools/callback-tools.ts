@@ -677,6 +677,27 @@ export async function handleBootcampEnvCheck(input: { threadId: string }): Promi
   return callbackPost('/api/callbacks/bootcamp-env-check', { threadId: input.threadId });
 }
 
+// ============ Create Thread (F115) ============
+
+export const createThreadInputSchema = {
+  title: z.string().min(1).max(200).describe('Title for the new thread'),
+  preferredCats: z
+    .array(z.string().min(1))
+    .max(10)
+    .optional()
+    .describe('Optional cat IDs to set as preferred cats for the thread (e.g. ["codex","gemini"])'),
+};
+
+export async function handleCreateThread(input: {
+  title: string;
+  preferredCats?: string[] | undefined;
+}): Promise<ToolResult> {
+  return callbackPost('/api/callbacks/create-thread', {
+    title: input.title,
+    ...(input.preferredCats?.length ? { preferredCats: input.preferredCats } : {}),
+  });
+}
+
 export const callbackTools = [
   {
     name: 'cat_cafe_post_message',
@@ -811,5 +832,15 @@ export const callbackTools = [
       'Returns the full check results for display to the user.',
     inputSchema: bootcampEnvCheckInputSchema,
     handler: handleBootcampEnvCheck,
+  },
+  // F115: Cat-initiated thread creation
+  {
+    name: 'cat_cafe_create_thread',
+    description:
+      'Create a new thread programmatically. Use when a topic needs its own dedicated thread ' +
+      '(e.g. investigating an issue, starting a focused discussion). Returns the new threadId ' +
+      'so you can immediately post to it with cross_post_message.',
+    inputSchema: createThreadInputSchema,
+    handler: handleCreateThread,
   },
 ] as const;
