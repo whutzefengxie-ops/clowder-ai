@@ -70,8 +70,8 @@ Native PowerShell Installer + Production-like Runtime。
 - 优先评估 `redis-windows/redis-windows`（silent install + 服务注册）
 - 失败降级到 external Redis URL 或 `--memory` 模式
 
-**Step 4: Clone / Update / Build**
-- `git clone` 或更新已存在目录
+**Step 4: Repo-local Build**
+- 要求用户先 clone / download 仓库，再在 repo 内运行 `install.ps1`
 - `pnpm install --frozen-lockfile` + 分步构建 shared/mcp-server/api/web
 
 **Step 5: Skills 挂载**
@@ -92,7 +92,7 @@ Native PowerShell Installer + Production-like Runtime。
 
 **Step 9: 启动与收尾**
 - 调用 `scripts/start-windows.ps1`（production-like 模式）
-- API：`node --env-file=.env packages/api/dist/index.js`
+- API：PowerShell 先加载 `.env`，再启动 `node packages/api/dist/index.js`
 - Web：`pnpm --dir packages/web exec next start`
 - 配套 `scripts/stop-windows.ps1` 用 `Stop-Process` 级联清理
 
@@ -102,7 +102,7 @@ Native PowerShell Installer + Production-like Runtime。
 |------|-----------|-------------|
 | 执行 | `bash install.sh` | `powershell -ExecutionPolicy Bypass -File install.ps1` |
 | 包管理 | apt/yum | winget / npm |
-| 环境变量加载 | `source .env` | `node --env-file=.env` |
+| 环境变量加载 | `source .env` | PowerShell 进程加载后再启动 Node |
 | Redis | 系统包 | `redis-windows` / `--memory` fallback |
 | 文件权限 | `chmod 600` | NTFS ACL (`icacls`) |
 | Skill 挂载 | `ln -sfn` | symlink / junction |

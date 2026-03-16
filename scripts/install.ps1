@@ -1,26 +1,26 @@
 <#
 .SYNOPSIS
-  Clowder AI — Windows One-Click Installer
-  猫猫咖啡 Windows 一键安装脚本
+  Clowder AI — Windows Repo-Local Install Helper
+  猫猫咖啡 Windows 仓库内安装助手
 
 .DESCRIPTION
-  Installs all prerequisites and sets up Clowder AI on a bare Windows 11 machine.
-  Steps: env detect → Node/pnpm install → Redis → clone/build → skills mount
-         → AI CLI tools → auth config → .env → verify & start
+  Installs prerequisites and sets up the current checked-out clowder-ai repo.
+  Clone or download the repo first, then run this helper from inside it.
+  Steps: env detect → Node/pnpm install → Redis → repo-local build → skills mount
+         → AI CLI tools → auth config → .env → verify & optionally start
 
 .EXAMPLE
   # From repo root:
   .\scripts\install.ps1
-  # From any directory (auto-clones):
-  powershell -ExecutionPolicy Bypass -File install.ps1
+  # Memory mode + auto-start:
+  .\scripts\install.ps1 -Memory -Start
 #>
 
 param(
-    [switch]$SkipRedis,
+    [switch]$Memory,
+    [switch]$Start,
     [switch]$SkipBuild,
-    [switch]$SkipCli,
-    [string]$RepoUrl = "https://github.com/zts212653/clowder-ai.git",
-    [string]$Branch = "main"
+    [switch]$SkipCli
 )
 
 $ErrorActionPreference = "Stop"
@@ -33,6 +33,21 @@ function Write-Err   { param([string]$msg) Write-Host "  [ERR] $msg" -Foreground
 function Refresh-Path {
     $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" +
                 [System.Environment]::GetEnvironmentVariable("Path", "User")
+}
+
+function Resolve-ProjectRoot {
+    $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+    $projectRoot = Split-Path -Parent $scriptDir
+    if (-not (Test-Path (Join-Path $projectRoot "package.json")) -or
+        -not (Test-Path (Join-Path $projectRoot "packages/api"))) {
+        Write-Err "Run this helper from a checked-out clowder-ai repo: .\\scripts\\install.ps1"
+        exit 1
+    }
+    & git -C $projectRoot rev-parse --is-inside-work-tree 1>$null 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Warn "No .git directory detected — git-dependent features will be unavailable"
+    }
+    return $projectRoot
 }
 
 # ── Step 1: Environment detection ──────────────────────────
@@ -63,12 +78,11 @@ try {
     if ($nodeRaw -match 'v(\d+)\.(\d+)') {
         $nodeMajor = [int]$Matches[1]
         $nodeMinor = [int]$Matches[2]
-        # --env-file requires Node >= 20.6
-        if ($nodeMajor -gt 20 -or ($nodeMajor -eq 20 -and $nodeMinor -ge 6)) {
+        if ($nodeMajor -ge 20) {
             Write-Ok "Node.js $nodeRaw"
             $nodeOk = $true
         } else {
-            Write-Warn "Node.js $nodeRaw too old (need >= 20.6 for --env-file), upgrading..."
+            Write-Warn "Node.js $nodeRaw too old (need >= 20), upgrading..."
         }
     }
 } catch {}
@@ -85,7 +99,7 @@ if (-not $nodeOk) {
         }
     }
     if (-not $nodeOk) {
-        Write-Err "Node.js >= 20.6 required (for --env-file support). Install from https://nodejs.org/"
+        Write-Err "Node.js >= 20 required. Install from https://nodejs.org/"
         exit 1
     }
 }
@@ -128,7 +142,7 @@ if (-not $pnpmOk) {
 Write-Step "Step 3/9 - Redis"
 
 $hasRedis = $false
-if (-not $SkipRedis) {
+if (-not $Memory) {
     try {
         $null = & redis-cli --version 2>$null
         Write-Ok "Redis CLI available"
@@ -139,36 +153,15 @@ if (-not $SkipRedis) {
         Write-Warn "  https://github.com/redis-windows/redis-windows"
     }
 } else {
-    Write-Warn "Redis check skipped (-SkipRedis)"
+    Write-Warn "Memory mode (-Memory) — skipping Redis detection"
 }
 
-# ── Step 4: Clone and build ───────────────────────────────
-Write-Step "Step 4/9 - Clone and build"
+# ── Step 4: Repo-local build ──────────────────────────────
+Write-Step "Step 4/9 - Prepare current repo and build"
 
-$inRepo = $false
-if (Test-Path "package.json") {
-    $pkg = Get-Content "package.json" -Raw | ConvertFrom-Json
-    if ($pkg.name -eq "cat-cafe" -or $pkg.name -eq "clowder-ai") {
-        Write-Ok "Already in project root: $(Get-Location)"
-        $inRepo = $true
-    }
-}
-
-if (-not $inRepo) {
-    $targetDir = Join-Path (Get-Location) "clowder-ai"
-    if (Test-Path $targetDir) {
-        Write-Ok "Directory exists: $targetDir"
-        Set-Location $targetDir
-    } else {
-        Write-Host "  Cloning $RepoUrl ($Branch)..."
-        & git clone --branch $Branch --single-branch $RepoUrl $targetDir
-        if ($LASTEXITCODE -ne 0) { Write-Err "git clone failed"; exit 1 }
-        Set-Location $targetDir
-        Write-Ok "Cloned to $targetDir"
-    }
-}
-
-$ProjectRoot = (Get-Location).Path
+$ProjectRoot = Resolve-ProjectRoot
+Set-Location $ProjectRoot
+Write-Ok "Using project root: $ProjectRoot"
 
 # Install dependencies
 Write-Host "  Running pnpm install..."
@@ -207,27 +200,27 @@ $skillsSource = Join-Path $ProjectRoot "cat-cafe-skills"
 $cliDirs = @("$env:USERPROFILE\.claude", "$env:USERPROFILE\.codex", "$env:USERPROFILE\.gemini")
 
 if (Test-Path $skillsSource) {
+    $skillItems = Get-ChildItem $skillsSource -Directory | Where-Object { $_.Name -ne "refs" }
     foreach ($cliDir in $cliDirs) {
-        $skillsTarget = Join-Path $cliDir "skills"
-        # Create parent dir if needed
-        if (-not (Test-Path $cliDir)) { New-Item -Path $cliDir -ItemType Directory -Force | Out-Null }
-
-        if (Test-Path $skillsTarget) {
-            Write-Ok "Skills already mounted: $skillsTarget"
-            continue
-        }
-
-        try {
-            # Prefer directory junction (no admin required)
-            cmd /c mklink /J "$skillsTarget" "$skillsSource" 2>$null | Out-Null
-            if (Test-Path $skillsTarget) {
-                Write-Ok "Skills mounted (junction): $skillsTarget"
-            } else {
-                throw "junction failed"
+        $skillsRoot = Join-Path $cliDir "skills"
+        if (-not (Test-Path $skillsRoot)) { New-Item -Path $skillsRoot -ItemType Directory -Force | Out-Null }
+        foreach ($skill in $skillItems) {
+            $skillTarget = Join-Path $skillsRoot $skill.Name
+            if (Test-Path $skillTarget) {
+                Write-Ok "Skill already mounted: $skillTarget"
+                continue
             }
-        } catch {
-            Write-Warn "Could not create junction for $skillsTarget"
-            Write-Warn "Run as Administrator, or manually: mklink /J `"$skillsTarget`" `"$skillsSource`""
+            try {
+                cmd /c mklink /J "$skillTarget" "$($skill.FullName)" 2>$null | Out-Null
+                if (Test-Path $skillTarget) {
+                    Write-Ok "Skill mounted: $skillTarget"
+                } else {
+                    throw "junction failed"
+                }
+            } catch {
+                Write-Warn "Could not create junction for $skillTarget"
+                Write-Warn "Run manually: mklink /J `"$skillTarget`" `"$($skill.FullName)`""
+            }
         }
     }
 } else {
@@ -243,10 +236,33 @@ if (-not $SkipCli) {
         @{ Name = "Codex";  Cmd = "codex";  Pkg = "@openai/codex" },
         @{ Name = "Gemini"; Cmd = "gemini"; Pkg = "@google/gemini-cli" }
     )
+    $missingTools = @($cliTools | Where-Object { -not (Get-Command $_.Cmd -ErrorAction SilentlyContinue) })
+    $toolsToInstall = $missingTools
+    if ($missingTools.Count -gt 0 -and [Environment]::UserInteractive -and -not $env:CI) {
+        Write-Host "  Missing agent CLIs:"
+        for ($i = 0; $i -lt $missingTools.Count; $i++) {
+            Write-Host "    $($i + 1)) $($missingTools[$i].Name)"
+        }
+        $selection = Read-Host "    Install which? (Enter=all, 0=none, e.g. 1,2)"
+        if ($selection -eq "0") {
+            $toolsToInstall = @()
+        } elseif ($selection) {
+            $picked = @()
+            foreach ($rawIndex in ($selection -split ",")) {
+                $index = 0
+                if ([int]::TryParse($rawIndex.Trim(), [ref]$index) -and $index -ge 1 -and $index -le $missingTools.Count) {
+                    $picked += $missingTools[$index - 1]
+                }
+            }
+            if ($picked.Count -gt 0) { $toolsToInstall = @($picked | Select-Object -Unique) }
+        }
+    }
     foreach ($tool in $cliTools) {
         $installed = $null -ne (Get-Command $tool.Cmd -ErrorAction SilentlyContinue)
         if ($installed) {
             Write-Ok "$($tool.Name) CLI already installed"
+        } elseif ($toolsToInstall.Cmd -notcontains $tool.Cmd) {
+            Write-Warn "$($tool.Name) CLI install skipped"
         } else {
             Write-Host "  Installing $($tool.Name) CLI..."
             try {
@@ -332,8 +348,15 @@ Write-Host "  Gemini:  $(if ($hasGemini) { 'ready' } else { 'not installed' })"
 Write-Host ""
 Write-Host "  Start the app:" -ForegroundColor Cyan
 $startCmd = ".\scripts\start-windows.ps1"
-if (-not $hasRedis) { $startCmd += " -Memory" }
+if ($Memory -or -not $hasRedis) { $startCmd += " -Memory" }
 Write-Host "    $startCmd" -ForegroundColor White
 Write-Host ""
 Write-Host "  Then open http://localhost:3003" -ForegroundColor Cyan
 Write-Host ""
+
+if ($Start) {
+    Write-Host "  Auto-starting..." -ForegroundColor Cyan
+    $startArgs = @("-Quick")
+    if ($Memory -or -not $hasRedis) { $startArgs += "-Memory" }
+    & (Join-Path $ProjectRoot "scripts\start-windows.ps1") @startArgs
+}
