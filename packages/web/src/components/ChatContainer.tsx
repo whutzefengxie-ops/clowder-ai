@@ -297,43 +297,54 @@ export function ChatContainer({ threadId }: ChatContainerProps) {
     }
     return ids;
   }, [queueRaw]);
-  const queuedContents = useMemo(() => {
-    const set = new Set<string>();
-    if (!queueRaw) return set;
+  const queuedContentCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    if (!queueRaw) return counts;
     for (const entry of queueRaw) {
       if (entry.status !== 'queued') continue;
       if (!entry.content) continue;
-      // #20: Keep full content for exact single-message match (including multiline).
-      set.add(entry.content);
+      // #20: Collect all content variants this entry could match, deduped per entry.
+      // Each unique variant gets +1 count (not per-occurrence within one entry).
+      const variants = new Set<string>();
+      variants.add(entry.content);
       const lines = entry.content.split('\n');
-      // Individual line segments for merged single-line messages.
       for (const line of lines) {
-        if (line) set.add(line);
+        if (line) variants.add(line);
       }
-      // Merged entries concatenate content with "\n". A multiline message can appear
-      // as any contiguous run of lines (prefix, suffix, or middle). Add all contiguous
-      // multi-line runs so optimistic bubbles match regardless of merge position.
       if (lines.length > 1) {
         for (let start = 0; start < lines.length; start++) {
           for (let end = start + 2; end <= lines.length; end++) {
-            set.add(lines.slice(start, end).join('\n'));
+            variants.add(lines.slice(start, end).join('\n'));
           }
         }
       }
+      for (const v of variants) {
+        counts.set(v, (counts.get(v) ?? 0) + 1);
+      }
     }
-    return set;
+    return counts;
   }, [queueRaw]);
 
   const renderItems = useMemo<RenderItem[]>(() => {
     const items: RenderItem[] = [];
     let currentGroup: { groupId: string; messages: ChatMessageData[] } | null = null;
+    // #20: Track how many optimistic bubbles we've hidden per content string.
+    // Never hide more than the queue produced — prevents hiding force-sent messages
+    // that coincidentally match queued content.
+    const contentHideQuota = new Map(queuedContentCounts);
 
     for (const msg of messages) {
       // #20: Skip messages whose queue entry is still 'queued'.
       // Messages in 'processing' are NOT filtered — they must be visible in the chat stream.
       // Also catch optimistic messages (user-xxx) via content match before ID swap completes.
       if (queuedMessageIds.has(msg.id)) continue;
-      if (msg.id.startsWith('user-') && msg.type === 'user' && queuedContents.has(msg.content)) continue;
+      if (msg.id.startsWith('user-') && msg.type === 'user') {
+        const quota = contentHideQuota.get(msg.content) ?? 0;
+        if (quota > 0) {
+          contentHideQuota.set(msg.content, quota - 1);
+          continue;
+        }
+      }
       if (msg.a2aGroupId) {
         if (currentGroup && currentGroup.groupId === msg.a2aGroupId) {
           currentGroup.messages.push(msg);
@@ -351,21 +362,25 @@ export function ChatContainer({ threadId }: ChatContainerProps) {
     }
     if (currentGroup) items.push({ kind: 'a2a_group', ...currentGroup });
     return items;
-  }, [messages, queuedMessageIds, queuedContents]);
+  }, [messages, queuedMessageIds, queuedContentCounts]);
 
   // #20: Visible messages list (queue-filtered) for components that need a flat array
   // instead of RenderItem[] (e.g. MessageNavigator).
-  const visibleMessages = useMemo(
-    () =>
-      queuedMessageIds.size === 0 && queuedContents.size === 0
-        ? messages
-        : messages.filter(
-            (m) =>
-              !queuedMessageIds.has(m.id) &&
-              !(m.id.startsWith('user-') && m.type === 'user' && queuedContents.has(m.content)),
-          ),
-    [messages, queuedMessageIds, queuedContents],
-  );
+  const visibleMessages = useMemo(() => {
+    if (queuedMessageIds.size === 0 && queuedContentCounts.size === 0) return messages;
+    const quota = new Map(queuedContentCounts);
+    return messages.filter((m) => {
+      if (queuedMessageIds.has(m.id)) return false;
+      if (m.id.startsWith('user-') && m.type === 'user') {
+        const q = quota.get(m.content) ?? 0;
+        if (q > 0) {
+          quota.set(m.content, q - 1);
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [messages, queuedMessageIds, queuedContentCounts]);
 
   const renderSingleMessage = useCallback(
     (msg: ChatMessageData) => (

@@ -23,37 +23,50 @@ function buildQueuedMessageIds(queue: QueueEntry[]): Set<string> {
   return ids;
 }
 
-/** Mirrors the queuedContents logic in ChatContainer (full + segments + all contiguous runs) */
-function buildQueuedContents(queue: QueueEntry[]): Set<string> {
-  const set = new Set<string>();
+/** Mirrors the queuedContentCounts logic in ChatContainer (deduped per entry) */
+function buildQueuedContentCounts(queue: QueueEntry[]): Map<string, number> {
+  const counts = new Map<string, number>();
   for (const entry of queue) {
     if (entry.status !== 'queued') continue;
     if (!entry.content) continue;
-    set.add(entry.content);
+    const variants = new Set<string>();
+    variants.add(entry.content);
     const lines = entry.content.split('\n');
     for (const line of lines) {
-      if (line) set.add(line);
+      if (line) variants.add(line);
     }
     if (lines.length > 1) {
       for (let start = 0; start < lines.length; start++) {
         for (let end = start + 2; end <= lines.length; end++) {
-          set.add(lines.slice(start, end).join('\n'));
+          variants.add(lines.slice(start, end).join('\n'));
         }
       }
     }
+    for (const v of variants) {
+      counts.set(v, (counts.get(v) ?? 0) + 1);
+    }
   }
-  return set;
+  return counts;
 }
 
-/** Mirrors the renderItems filtering logic in ChatContainer */
+/** Mirrors the renderItems filtering logic in ChatContainer (count-based content match) */
 function filterMessages(
   messages: ChatMessage[],
   queuedIds: Set<string>,
-  queuedContents: Set<string> = new Set(),
+  queuedContentCounts: Map<string, number> = new Map(),
 ): ChatMessage[] {
-  return messages.filter(
-    (m) => !queuedIds.has(m.id) && !(m.id.startsWith('user-') && m.type === 'user' && queuedContents.has(m.content)),
-  );
+  const quota = new Map(queuedContentCounts);
+  return messages.filter((m) => {
+    if (queuedIds.has(m.id)) return false;
+    if (m.id.startsWith('user-') && m.type === 'user') {
+      const q = quota.get(m.content) ?? 0;
+      if (q > 0) {
+        quota.set(m.content, q - 1);
+        return false;
+      }
+    }
+    return true;
+  });
 }
 
 const NOW = Date.now();
@@ -189,7 +202,7 @@ describe('#20: queued message filtering', () => {
     // Backend merged them into one queue entry: "hello\nworld"
     const queue = [makeQueueEntry({ content: 'hello\nworld', messageId: null })];
     const queuedIds = buildQueuedMessageIds(queue);
-    const queuedContents = buildQueuedContents(queue);
+    const queuedContents = buildQueuedContentCounts(queue);
     const visible = filterMessages(messages, queuedIds, queuedContents);
 
     // Both optimistic bubbles should be hidden; assistant message stays
@@ -201,7 +214,7 @@ describe('#20: queued message filtering', () => {
     const messages = [{ id: 'server-id-1', type: 'user', content: 'hello', timestamp: NOW } as ChatMessage];
     const queue = [makeQueueEntry({ content: 'hello', messageId: null })];
     const queuedIds = buildQueuedMessageIds(queue);
-    const queuedContents = buildQueuedContents(queue);
+    const queuedContents = buildQueuedContentCounts(queue);
     const visible = filterMessages(messages, queuedIds, queuedContents);
 
     // Server-ID messages don't start with "user-", so content match doesn't apply
@@ -215,7 +228,7 @@ describe('#20: queued message filtering', () => {
     // Queue entry has the same content (not merged — single message)
     const queue = [makeQueueEntry({ content: multiline, messageId: null })];
     const queuedIds = buildQueuedMessageIds(queue);
-    const queuedContents = buildQueuedContents(queue);
+    const queuedContents = buildQueuedContentCounts(queue);
     const visible = filterMessages(messages, queuedIds, queuedContents);
 
     // Full multiline content should match — bubble should be hidden
@@ -230,7 +243,7 @@ describe('#20: queued message filtering', () => {
     ];
     const queue = [makeQueueEntry({ content: 'a\nb\nc', messageId: null })];
     const queuedIds = buildQueuedMessageIds(queue);
-    const queuedContents = buildQueuedContents(queue);
+    const queuedContents = buildQueuedContentCounts(queue);
     const visible = filterMessages(messages, queuedIds, queuedContents);
 
     // "a\nb" matches as a \n-boundary prefix; "c" matches as a segment
@@ -245,10 +258,26 @@ describe('#20: queued message filtering', () => {
     ];
     const queue = [makeQueueEntry({ content: 'x\na\nb', messageId: null })];
     const queuedIds = buildQueuedMessageIds(queue);
-    const queuedContents = buildQueuedContents(queue);
+    const queuedContents = buildQueuedContentCounts(queue);
     const visible = filterMessages(messages, queuedIds, queuedContents);
 
     // "x" matches as a segment; "a\nb" matches as a \n-boundary suffix
     expect(visible.map((m) => m.id)).toEqual([]);
+  });
+
+  it('does not hide force-sent optimistic message with same content as a queued entry', () => {
+    // Queue has one entry with content "hello".
+    // User also force-sends "hello" — that second bubble should NOT be hidden.
+    const messages = [
+      { id: 'user-qqq', type: 'user', content: 'hello', timestamp: NOW } as ChatMessage,
+      { id: 'user-rrr', type: 'user', content: 'hello', timestamp: NOW } as ChatMessage,
+    ];
+    const queue = [makeQueueEntry({ content: 'hello', messageId: null })];
+    const queuedIds = buildQueuedMessageIds(queue);
+    const queuedContents = buildQueuedContentCounts(queue);
+    const visible = filterMessages(messages, queuedIds, queuedContents);
+
+    // Only ONE bubble hidden (matching queue entry), the second stays visible
+    expect(visible.map((m) => m.id)).toEqual(['user-rrr']);
   });
 });
