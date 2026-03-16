@@ -272,3 +272,24 @@ commit body 补一行 `Why:` 说明决策理由。
 - 有 → 直接做，不问
 - 没有 / 方向不确定 → 才问
 - 遇到阻塞（P1 无法解决、方向分歧）→ 升级team lead
+
+## 18. GitHub Issue 认领协议
+
+GitHub issue 是任务分配的可见层。认领用 label，不用口头声明。
+
+**Label 体系**：
+| Label | 含义 |
+|-------|------|
+| `wip:<github-username>` | 该 GitHub 账号正在处理此 issue |
+| `status:blocked` | 进行中但被阻塞（原因写在 issue comment 里） |
+
+**认领流程**：
+1. 开始做之前，先 `gh issue view` 检查有无 `wip:*` label
+2. 无人认领 → 加 `wip:<你的 github username>` label
+3. 已有 `wip:*` → 联系对应负责人确认是否还在做，不得抢占
+4. 完成后（PR merged）→ 移除 `wip:*` label
+
+**规则**：
+- 同一 issue 同时只能有一个 `wip:*` label
+- 哪只猫在做，从 PR/commit 的 branch 名和签名（§5）区分
+- 阻塞时加 `status:blocked`，在 issue comment 写明阻塞原因和依赖
