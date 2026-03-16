@@ -105,6 +105,34 @@ async function startProxy(upstreams, envOverrides = {}) {
   };
 }
 
+function requestViaHttp({ port, path, method = 'GET', headers = {}, body = '' }) {
+  return new Promise((resolve, reject) => {
+    const req = http.request(
+      {
+        host: '127.0.0.1',
+        port,
+        path,
+        method,
+        headers,
+      },
+      (res) => {
+        const chunks = [];
+        res.on('data', (chunk) => chunks.push(chunk));
+        res.on('end', () => {
+          resolve({
+            statusCode: res.statusCode ?? 0,
+            headers: res.headers,
+            body: Buffer.concat(chunks).toString('utf8'),
+          });
+        });
+      },
+    );
+    req.once('error', reject);
+    if (body) req.write(body);
+    req.end();
+  });
+}
+
 test('anthropic proxy retries transient upstream socket failures and succeeds on retry', async () => {
   let attempts = 0;
   const upstream = http.createServer((req, res) => {
@@ -214,5 +242,69 @@ test('anthropic proxy includes cause codes for terminal network failures', async
     assert.match(body.error.message, /connection refused/i);
   } finally {
     await proxy.close();
+  }
+});
+
+test('anthropic proxy preserves request forwarding when sanitization changes body length', async () => {
+  const requests = [];
+  const upstream = http.createServer((req, res) => {
+    const chunks = [];
+    req.on('data', (chunk) => chunks.push(chunk));
+    req.on('end', () => {
+      requests.push({
+        headers: req.headers,
+        body: Buffer.concat(chunks).toString('utf8'),
+      });
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ ok: true }));
+    });
+  });
+
+  const upstreamPort = await listen(upstream);
+  const proxy = await startProxy(
+    { sponsor: `http://127.0.0.1:${upstreamPort}` },
+    {
+      ANTHROPIC_PROXY_MAX_RETRIES: '0',
+      ANTHROPIC_PROXY_UPSTREAM_TIMEOUT_MS: '3000',
+    },
+  );
+
+  const requestPayload = {
+    model: 'claude-opus-4-6',
+    max_tokens: 1,
+    messages: [
+      {
+        role: 'assistant',
+        content: [
+          { type: 'thinking', thinking: 'private reasoning', signature: 'sig' },
+          { type: 'text', text: 'visible context' },
+        ],
+      },
+      { role: 'user', content: 'ping' },
+    ],
+  };
+  const requestBody = JSON.stringify(requestPayload);
+
+  try {
+    const response = await requestViaHttp({
+      port: proxy.port,
+      path: '/sponsor/v1/messages',
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'content-length': String(Buffer.byteLength(requestBody)),
+      },
+      body: requestBody,
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(requests.length, 1);
+
+    const forwardedPayload = JSON.parse(requests[0].body);
+    assert.deepEqual(forwardedPayload.messages[0].content, [{ type: 'text', text: 'visible context' }]);
+    assert.equal(requests[0].headers['content-length'], String(Buffer.byteLength(requests[0].body)));
+  } finally {
+    await proxy.close();
+    await new Promise((resolve) => upstream.close(() => resolve()));
   }
 });

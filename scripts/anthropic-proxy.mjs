@@ -436,6 +436,7 @@ const server = createServer(async (req, res) => {
   for (const [key, value] of Object.entries(req.headers)) {
     if (key === 'host' || key === 'connection') continue;
     if (key === 'accept-encoding') continue; // override below
+    if (key === 'content-length' || key === 'transfer-encoding') continue;
     forwardHeaders[key] = value;
   }
   forwardHeaders['accept-encoding'] = 'identity';
