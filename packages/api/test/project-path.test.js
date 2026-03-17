@@ -5,7 +5,9 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { after, before, describe, it } from 'node:test';
 
-const { validateProjectPath, isUnderAllowedRoot, getAllowedRoots } = await import('../dist/utils/project-path.js');
+const { validateProjectPath, isUnderAllowedRoot, getAllowedRoots, getDefaultRootsForPlatform } = await import(
+  '../dist/utils/project-path.js'
+);
 
 describe('isUnderAllowedRoot', () => {
   it('accepts path under home directory', () => {
@@ -33,6 +35,19 @@ describe('isUnderAllowedRoot', () => {
 
   it('rejects root directory', () => {
     assert.strictEqual(isUnderAllowedRoot('/'), false);
+  });
+});
+
+describe('getDefaultRootsForPlatform', () => {
+  it('includes detected Windows drive roots by default', () => {
+    const roots = getDefaultRootsForPlatform('win32', {
+      homeDir: 'C:\\Users\\share',
+      pathExists: (target) => target === 'C:\\' || target === 'D:\\',
+    });
+    assert.ok(roots.includes('C:\\Users\\share'));
+    assert.ok(roots.includes('C:\\'));
+    assert.ok(roots.includes('D:\\'));
+    assert.ok(!roots.includes('E:\\'));
   });
 });
 

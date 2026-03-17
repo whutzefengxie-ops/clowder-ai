@@ -30,6 +30,27 @@ describe('execPickDirectory()', () => {
   });
 });
 
+describe('getPickDirectoryCommand()', () => {
+  it('uses osascript on macOS', () => {
+    const command = mod.getPickDirectoryCommand('darwin');
+    assert.ok(command);
+    assert.equal(command.command, 'osascript');
+    assert.deepEqual(command.args, ['-e', 'POSIX path of (choose folder)']);
+  });
+
+  it('uses PowerShell folder picker on Windows', () => {
+    const command = mod.getPickDirectoryCommand('win32');
+    assert.ok(command);
+    assert.equal(command.command, 'powershell.exe');
+    assert.ok(command.args.includes('-STA'));
+    assert.match(command.args.at(-1), /FolderBrowserDialog/);
+  });
+
+  it('returns null on unsupported platforms', () => {
+    assert.equal(mod.getPickDirectoryCommand('linux'), null);
+  });
+});
+
 describe('POST /api/projects/pick-directory', () => {
   it('returns 401 without identity header', async () => {
     const app = await buildApp();

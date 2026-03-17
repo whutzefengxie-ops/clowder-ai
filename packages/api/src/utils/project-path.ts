@@ -6,9 +6,10 @@
  * 被 projects.ts, threads.ts, AgentRouter.ts 复用。
  */
 
+import { existsSync } from 'node:fs';
 import { realpath, stat } from 'node:fs/promises';
 import { homedir, platform } from 'node:os';
-import { relative, resolve } from 'node:path';
+import { delimiter, relative, resolve } from 'node:path';
 
 /**
  * Allowed root directories for project paths.
@@ -19,16 +20,34 @@ import { relative, resolve } from 'node:path';
  *   - Default behaviour: **replaces** built-in defaults (backward compat).
  *   - Set PROJECT_ALLOWED_ROOTS_APPEND=true to merge with defaults instead.
  */
-const DEFAULT_ROOTS = (): string[] => {
-  const roots = [homedir(), '/tmp', '/private/tmp'];
-  if (platform() === 'darwin') roots.push('/Volumes');
-  return roots;
-};
+export function getDefaultRootsForPlatform(
+  platformName = platform(),
+  opts?: { homeDir?: string; pathExists?: (targetPath: string) => boolean },
+): string[] {
+  const homeDir = opts?.homeDir ?? homedir();
+  const pathExists = opts?.pathExists ?? existsSync;
+  const roots = new Set<string>([homeDir]);
+
+  if (platformName === 'win32') {
+    for (const letter of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ') {
+      const driveRoot = `${letter}:\\`;
+      if (pathExists(driveRoot)) roots.add(driveRoot);
+    }
+    return [...roots];
+  }
+
+  roots.add('/tmp');
+  roots.add('/private/tmp');
+  if (platformName === 'darwin') roots.add('/Volumes');
+  return [...roots];
+}
+
+const DEFAULT_ROOTS = (): string[] => getDefaultRootsForPlatform();
 
 const ALLOWED_ROOTS = (): string[] => {
   const envRoots = process.env['PROJECT_ALLOWED_ROOTS'];
   if (envRoots?.trim()) {
-    const custom = envRoots.split(':').filter(Boolean);
+    const custom = envRoots.split(delimiter).filter(Boolean);
     const append = process.env['PROJECT_ALLOWED_ROOTS_APPEND'] === 'true';
     return append ? [...new Set([...DEFAULT_ROOTS(), ...custom])] : custom;
   }

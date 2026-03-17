@@ -16,19 +16,57 @@ import { resolveUserId } from '../utils/request-identity.js';
 
 const execFileAsync = promisify(execFile);
 
+const WINDOWS_PICK_DIRECTORY_SCRIPT = [
+  'Add-Type -AssemblyName System.Windows.Forms',
+  '$dialog = New-Object System.Windows.Forms.FolderBrowserDialog',
+  '$dialog.ShowNewFolderButton = $false',
+  '$dialog.Description = "Select project directory"',
+  'if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {',
+  '  [Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
+  '  Write-Output $dialog.SelectedPath',
+  '}',
+].join('; ');
+
 export type PickDirectoryResult =
   | { status: 'picked'; path: string }
   | { status: 'cancelled' }
   | { status: 'error'; message: string };
 
+export interface NativeDirectoryPickerCommand {
+  command: string;
+  args: string[];
+}
+
+export function getPickDirectoryCommand(platformName = process.platform): NativeDirectoryPickerCommand | null {
+  switch (platformName) {
+    case 'darwin':
+      return { command: 'osascript', args: ['-e', 'POSIX path of (choose folder)'] };
+    case 'win32':
+      return {
+        command: 'powershell.exe',
+        args: ['-NoProfile', '-STA', '-Command', WINDOWS_PICK_DIRECTORY_SCRIPT],
+      };
+    default:
+      return null;
+  }
+}
+
 /**
- * Shell out to macOS osascript to open native folder picker (NSOpenPanel).
+ * Shell out to the host OS native folder picker.
  * Returns a discriminated result: picked / cancelled / error.
  */
 export async function execPickDirectory(): Promise<PickDirectoryResult> {
+  const picker = getPickDirectoryCommand();
+  if (!picker) {
+    return {
+      status: 'error',
+      message: `Native directory picker is not supported on ${process.platform}. Enter the project path manually.`,
+    };
+  }
+
   try {
-    const { stdout } = await execFileAsync('osascript', ['-e', 'POSIX path of (choose folder)'], { timeout: 120_000 });
-    const picked = stdout.trim().replace(/\/$/, '');
+    const { stdout } = await execFileAsync(picker.command, picker.args, { timeout: 120_000 });
+    const picked = stdout.trim().replace(/[\\/]$/, '');
     if (!picked) return { status: 'cancelled' };
     const s = await stat(picked);
     if (!s.isDirectory()) return { status: 'error', message: 'Selected path is not a directory' };
