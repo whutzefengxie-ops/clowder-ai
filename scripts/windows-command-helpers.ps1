@@ -9,7 +9,7 @@ function Resolve-ToolCommand {
     if ($npmCommand) {
         $npmPath = if ($npmCommand.Path) { $npmCommand.Path } else { $npmCommand.Source }
         try {
-            $npmPrefix = & $npmPath prefix -g 2>$null
+            $npmPrefix = @(& $npmPath prefix -g 2>$null) | Select-Object -Last 1
             if ($npmPrefix) { $candidates += Join-Path $npmPrefix "$Name.cmd" }
         } catch {}
     }
