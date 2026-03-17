@@ -91,6 +91,8 @@ test('Windows command forwarding helpers avoid PowerShell automatic $args collis
 
 test('Windows installer probes the npm shim path when pnpm is installed but not yet on PATH', () => {
   assert.match(commandHelpersScript, /Join-Path \$env:APPDATA "npm\\\$Name\.cmd"/);
+  assert.match(commandHelpersScript, /prefix -g/);
+  assert.match(commandHelpersScript, /Join-Path \$npmPrefix "\$Name\.cmd"/);
   assert.match(installScript, /Resolve-PnpmCommand/);
   assert.match(installScript, /Invoke-Pnpm/);
   assert.match(installScript, /Resolve-ToolCommand -Name "pnpm"/);
