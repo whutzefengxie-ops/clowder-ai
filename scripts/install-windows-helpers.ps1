@@ -151,8 +151,8 @@ function Ensure-WindowsRedis {
         Write-Warn "Portable Redis will be reused from .cat-cafe/redis/windows on later starts."
         return $true
     } catch {
-        Write-Warn "Redis auto-install failed — using in-memory storage"
-        Write-Warn "Manual fallback: https://github.com/redis-windows/redis-windows/releases"
+        Write-Warn "Redis auto-install failed — install Redis manually or rerun with an external Redis URL"
+        Write-Warn "Manual Redis install: https://github.com/redis-windows/redis-windows/releases"
         return $false
     }
 }
@@ -241,9 +241,9 @@ function Remove-ClaudeInstallerProfile {
 function Configure-InstallerAuth {
     param([string]$ProjectRoot, $State)
 
-    $hasClaude = $null -ne (Resolve-ToolCommand -Name "claude")
-    $hasCodex = $null -ne (Resolve-ToolCommand -Name "codex")
-    $hasGemini = $null -ne (Resolve-ToolCommand -Name "gemini")
+    $hasClaude = $null -ne (Resolve-ToolCommandWithRetry -Name "claude" -Attempts 6)
+    $hasCodex = $null -ne (Resolve-ToolCommandWithRetry -Name "codex" -Attempts 6)
+    $hasGemini = $null -ne (Resolve-ToolCommandWithRetry -Name "gemini" -Attempts 6)
     $isInteractive = [Environment]::UserInteractive -and -not $env:CI
 
     if (-not $isInteractive) {

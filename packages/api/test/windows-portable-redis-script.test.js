@@ -119,11 +119,12 @@ test('Windows installer prints pnpm resolver diagnostics before giving up', () =
 
 test('Windows scripts share a generic npm shim resolver for pnpm and agent CLIs', () => {
   assert.match(commandHelpersScript, /function Resolve-ToolCommand/);
+  assert.match(commandHelpersScript, /function Resolve-ToolCommandWithRetry/);
   assert.match(commandHelpersScript, /Join-Path \$env:APPDATA "npm\\\$Name\.cmd"/);
   assert.match(commandHelpersScript, /function Invoke-ToolCommand/);
-  assert.match(helpersScript, /\$hasClaude = \$null -ne \(Resolve-ToolCommand -Name "claude"\)/);
-  assert.match(helpersScript, /\$hasCodex = \$null -ne \(Resolve-ToolCommand -Name "codex"\)/);
-  assert.match(helpersScript, /\$hasGemini = \$null -ne \(Resolve-ToolCommand -Name "gemini"\)/);
+  assert.match(helpersScript, /\$hasClaude = \$null -ne \(Resolve-ToolCommandWithRetry -Name "claude" -Attempts 6\)/);
+  assert.match(helpersScript, /\$hasCodex = \$null -ne \(Resolve-ToolCommandWithRetry -Name "codex" -Attempts 6\)/);
+  assert.match(helpersScript, /\$hasGemini = \$null -ne \(Resolve-ToolCommandWithRetry -Name "gemini" -Attempts 6\)/);
 });
 
 test('Windows tool resolution prefers explicit shim candidates before generic Get-Command resolution', () => {
@@ -135,11 +136,15 @@ test('Windows tool resolution prefers explicit shim candidates before generic Ge
   assert.ok(candidatesIndex < getCommandIndex, 'expected shim candidates to be preferred before generic Get-Command lookup');
 });
 
-test('Windows installer uses prompt-driven selectors instead of typed numeric input', () => {
+test('Windows installer uses interactive selectors instead of typed or letter-based menus', () => {
   assert.match(uiHelpersScript, /function Select-InstallerChoice/);
-  assert.match(uiHelpersScript, /PromptForChoice/);
   assert.match(uiHelpersScript, /function Select-InstallerMultiChoice/);
+  assert.match(uiHelpersScript, /Use .*Enter to select/);
+  assert.match(uiHelpersScript, /Space to toggle, Enter to confirm/);
   assert.match(installScript, /Select-InstallerMultiChoice -Title "Missing agent CLIs"/);
+  assert.doesNotMatch(uiHelpersScript, /Label = "&All"/);
+  assert.doesNotMatch(uiHelpersScript, /Label = "&Select"/);
+  assert.doesNotMatch(uiHelpersScript, /Prompt "Install \$\(\$option.Name\)\?"/);
   assert.doesNotMatch(installScript, /Read-Host "    Install which\?/);
   assert.match(helpersScript, /Select-InstallerChoice -Title "Claude auth"/);
   assert.match(helpersScript, /Select-InstallerChoice -Title "Codex auth"/);
@@ -166,17 +171,22 @@ test('Windows installer retries pnpm shim detection after bootstrap instead of f
   assert.match(installScript, /\$pnpmStatus = Get-PnpmStatus -Attempts 6/);
 });
 
-test('Windows CLI installs use the explicit npm command path and Redis mode is selectable', () => {
+test('Windows CLI installs use the explicit npm command path and Redis mode only offers portable or external', () => {
   assert.match(installScript, /\$npmInstallCommand = Resolve-ToolCommand -Name "npm"/);
   assert.match(installScript, /& \$npmInstallCommand install -g \$tool\.Pkg 2>\$null/);
-  assert.match(uiHelpersScript, /Select-InstallerChoice -Title "Redis mode"/);
+  assert.match(uiHelpersScript, /Select-InstallerChoice -Title "Redis setup"/);
+  assert.match(uiHelpersScript, /Install Redis locally \(recommended \/ 推荐\)/);
+  assert.match(uiHelpersScript, /Use external Redis URL \/ 使用外部 Redis/);
   assert.match(uiHelpersScript, /Value = "portable"/);
   assert.match(uiHelpersScript, /Value = "external"/);
-  assert.match(uiHelpersScript, /Value = "memory"/);
+  assert.doesNotMatch(uiHelpersScript, /Value = "memory"/);
+  assert.doesNotMatch(uiHelpersScript, /using memory storage/);
+  assert.doesNotMatch(uiHelpersScript, /Write-Warn "Memory mode — data will be lost on restart"/);
 });
 
 test('Windows portable Redis defers REDIS_URL to runtime instead of hardcoding localhost:6379', () => {
-  assert.match(uiHelpersScript, /if \(\$Plan\.Mode -eq "portable"\) \{[\s\S]*Add-InstallerEnvDelete \$State "REDIS_URL"/);
+  assert.match(uiHelpersScript, /function Apply-InstallerRedisPlan/);
+  assert.match(uiHelpersScript, /Add-InstallerEnvDelete \$State "REDIS_URL"/);
   assert.doesNotMatch(uiHelpersScript, /Set-InstallerEnvValue \$State "REDIS_URL" "redis:\/\/localhost:6379"/);
   assert.doesNotMatch(installScript, /REDIS_URL=redis:\/\/localhost:6379/);
 });
@@ -218,6 +228,17 @@ test('Windows installer and startup reuse shared tool resolution instead of raw 
   assert.match(startWindowsScript, /param\(\$root, \$port, \$pnpmPath\)/);
   assert.match(startWindowsScript, /& \$pnpmPath exec next dev -p \$port/);
   assert.match(startWindowsScript, /& \$pnpmPath exec next start -p \$port -H 0\.0\.0\.0/);
+});
+
+test('Windows CLI installs retry command discovery before warning and auth detection uses the same retry helper', () => {
+  assert.match(commandHelpersScript, /function Resolve-ToolCommandWithRetry/);
+  assert.match(commandHelpersScript, /param\(\[string\]\$Name, \[int\]\$Attempts = 1, \[int\]\$DelayMs = 500\)/);
+  assert.match(commandHelpersScript, /for \(\$attempt = 0; \$attempt -lt \$Attempts; \$attempt\+\+\)/);
+  assert.match(commandHelpersScript, /Start-Sleep -Milliseconds \$DelayMs/);
+  assert.match(installScript, /Resolve-ToolCommandWithRetry -Name \$tool\.Cmd -Attempts 6/);
+  assert.match(helpersScript, /Resolve-ToolCommandWithRetry -Name "claude" -Attempts 6/);
+  assert.match(helpersScript, /Resolve-ToolCommandWithRetry -Name "codex" -Attempts 6/);
+  assert.match(helpersScript, /Resolve-ToolCommandWithRetry -Name "gemini" -Attempts 6/);
 });
 
 test('Windows start.bat delegates to start-windows.ps1', () => {

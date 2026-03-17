@@ -12,8 +12,6 @@
 .EXAMPLE
   # From repo root:
   .\scripts\install.ps1
-  # Memory mode + auto-start:
-  .\scripts\install.ps1 -Memory -Start
 #>
 
 param(
@@ -195,10 +193,15 @@ if (-not $pnpmOk) {
 
 Write-Step "Step 3/9 - Redis"
 
-$redisPlan = Resolve-InstallerRedisPlan -Memory:$Memory
-$redisMode = $redisPlan.Mode
+if ($Memory) {
+    Write-Warn "Windows installer no longer offers memory mode — continuing with Redis setup"
+}
+$redisPlan = Resolve-InstallerRedisPlan
 $hasRedis = Apply-InstallerRedisPlan -State $authState -ProjectRoot $ProjectRoot -Plan $redisPlan
-if (-not $hasRedis -and $redisMode -eq "portable") { $redisMode = "memory" }
+if (-not $hasRedis) {
+    Write-Err "Redis setup failed. Install Redis locally or rerun and choose an external Redis URL."
+    exit 1
+}
 
 Write-Step "Step 4/9 - Prepare current repo and build"
 
@@ -265,11 +268,11 @@ if (-not $SkipCli) {
             try {
                 if (-not $npmInstallCommand) { throw "npm command not found" }
                 & $npmInstallCommand install -g $tool.Pkg 2>$null
-                Refresh-Path
-                if (Resolve-ToolCommand -Name $tool.Cmd) {
+                if (Resolve-ToolCommandWithRetry -Name $tool.Cmd -Attempts 6) {
                     Write-Ok "$($tool.Name) CLI installed"
                 } else {
-                    Write-Warn "$($tool.Name) CLI install may need PATH refresh — restart terminal"
+                    Write-ToolResolutionDiagnostics -Name $tool.Cmd
+                    Write-Warn "$($tool.Name) CLI install completed but command was not visible yet"
                 }
             } catch {
                 Write-Warn "Could not install $($tool.Name) CLI: npm install -g $($tool.Pkg)"
@@ -307,9 +310,9 @@ REDIS_PORT=6379
 
 Apply-InstallerAuthEnv -State $authState -EnvFile $envFile
 
-$hasClaude = $null -ne (Resolve-ToolCommand -Name "claude")
-$hasCodex = $null -ne (Resolve-ToolCommand -Name "codex")
-$hasGemini = $null -ne (Resolve-ToolCommand -Name "gemini")
+$hasClaude = $null -ne (Resolve-ToolCommandWithRetry -Name "claude" -Attempts 6)
+$hasCodex = $null -ne (Resolve-ToolCommandWithRetry -Name "codex" -Attempts 6)
+$hasGemini = $null -ne (Resolve-ToolCommandWithRetry -Name "gemini" -Attempts 6)
 
 Write-Step "Step 9/9 - Verify and launch"
 
@@ -332,14 +335,13 @@ Write-Host "  ========================================" -ForegroundColor Green
 Write-Host ""
 Write-Host "  Project: $ProjectRoot"
 Write-Host "  Node:    $(node --version)"
-Write-Host "  Redis:   $(if ($hasRedis) { 'available' } else { 'not found (use -Memory)' })"
+Write-Host "  Redis:   $(if ($hasRedis) { 'available' } else { 'not configured' })"
 Write-Host "  Claude:  $(if ($hasClaude) { 'ready' } else { 'not installed' })"
 Write-Host "  Codex:   $(if ($hasCodex) { 'ready' } else { 'not installed' })"
 Write-Host "  Gemini:  $(if ($hasGemini) { 'ready' } else { 'not installed' })"
 Write-Host ""
 Write-Host "  Start the app:" -ForegroundColor Cyan
 $startCmd = ".\scripts\start-windows.ps1"
-if ($Memory -or -not $hasRedis) { $startCmd += " -Memory" }
 Write-Host "    $startCmd" -ForegroundColor White
 Write-Host ""
 Write-Host "  Then open http://localhost:3003" -ForegroundColor Cyan
@@ -348,6 +350,5 @@ Write-Host ""
 if ($Start) {
     Write-Host "  Auto-starting..." -ForegroundColor Cyan
     $startArgs = @("-Quick")
-    if ($Memory -or -not $hasRedis) { $startArgs += "-Memory" }
     & (Join-Path $ProjectRoot "scripts\start-windows.ps1") @startArgs
 }

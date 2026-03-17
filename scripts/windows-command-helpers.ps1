@@ -39,6 +39,28 @@ function Resolve-ToolCommand {
     return $null
 }
 
+function Sync-ToolPath {
+    $machinePath = [System.Environment]::GetEnvironmentVariable("Path", "Machine")
+    $userPath = [System.Environment]::GetEnvironmentVariable("Path", "User")
+    $segments = @($machinePath, $userPath) | Where-Object { $_ }
+    if ($segments.Count -gt 0) {
+        $env:Path = ($segments -join ";")
+    }
+}
+
+function Resolve-ToolCommandWithRetry {
+    param([string]$Name, [int]$Attempts = 1, [int]$DelayMs = 500)
+    for ($attempt = 0; $attempt -lt $Attempts; $attempt++) {
+        Sync-ToolPath
+        $toolCommand = Resolve-ToolCommand -Name $Name
+        if ($toolCommand) { return $toolCommand }
+        if ($attempt -lt ($Attempts - 1)) {
+            Start-Sleep -Milliseconds $DelayMs
+        }
+    }
+    return $null
+}
+
 function Write-ToolResolutionDiagnostics {
     param([string]$Name)
     Write-Warn "$Name resolver candidates:"
