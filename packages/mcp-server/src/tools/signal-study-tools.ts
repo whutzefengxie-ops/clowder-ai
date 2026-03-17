@@ -1,8 +1,7 @@
 import { z } from 'zod';
+import { DEFAULT_API_URL } from '../constants.js';
 import type { ToolResult } from './file-tools.js';
 import { errorResult, successResult } from './file-tools.js';
-
-import { DEFAULT_API_URL } from '../constants.js';
 
 const API_URL = DEFAULT_API_URL;
 const SIGNAL_USER = process.env['CAT_CAFE_SIGNAL_USER']?.trim() || 'codex';

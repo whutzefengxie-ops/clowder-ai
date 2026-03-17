@@ -6,10 +6,9 @@
  * 猫猫首次使用富块前调用此工具获取完整规则。
  */
 
+import { DEFAULT_API_URL } from '../constants.js';
 import type { ToolResult } from './file-tools.js';
 import { errorResult, successResult } from './file-tools.js';
-
-import { DEFAULT_API_URL } from '../constants.js';
 
 const API_URL = DEFAULT_API_URL;
 
