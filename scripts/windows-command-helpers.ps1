@@ -20,8 +20,8 @@ function Resolve-ToolCommand {
 }
 
 function Invoke-ToolCommand {
-    param([string]$Name, [string[]]$Args)
+    param([string]$Name, [string[]]$CommandArgs)
     $toolCommand = Resolve-ToolCommand -Name $Name
     if (-not $toolCommand) { throw "$Name command not found" }
-    & $toolCommand @Args
+    & $toolCommand @CommandArgs
 }

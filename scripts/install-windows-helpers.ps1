@@ -183,11 +183,11 @@ function Add-InstallerEnvDelete {
 }
 
 function Invoke-InstallerAuthHelper {
-    param($State, [string[]]$Args)
+    param($State, [string[]]$CommandArgs)
     if (-not (Test-Path $State.HelperPath)) {
         throw "Missing install auth helper: $($State.HelperPath)"
     }
-    & node $State.HelperPath @Args
+    & node $State.HelperPath @CommandArgs
     if ($LASTEXITCODE -ne 0) {
         throw "install auth helper failed"
     }

@@ -69,6 +69,20 @@ test('Windows installer retries plain pnpm install when frozen lockfile mode hit
   assert.ok(retryWarnIndex < retryInstallIndex, 'expected plain install retry after warning');
 });
 
+test('Windows command forwarding helpers avoid PowerShell automatic $args collisions', () => {
+  assert.match(commandHelpersScript, /function Invoke-ToolCommand/);
+  assert.match(commandHelpersScript, /param\(\[string\]\$Name, \[string\[\]\]\$CommandArgs\)/);
+  assert.match(commandHelpersScript, /& \$toolCommand @CommandArgs/);
+  assert.doesNotMatch(commandHelpersScript, /param\(\[string\]\$Name, \[string\[\]\]\$Args\)/);
+  assert.doesNotMatch(commandHelpersScript, /& \$toolCommand @Args/);
+
+  assert.match(helpersScript, /function Invoke-InstallerAuthHelper/);
+  assert.match(helpersScript, /param\(\$State, \[string\[\]\]\$CommandArgs\)/);
+  assert.match(helpersScript, /& node \$State\.HelperPath @CommandArgs/);
+  assert.doesNotMatch(helpersScript, /param\(\$State, \[string\[\]\]\$Args\)/);
+  assert.doesNotMatch(helpersScript, /& node \$State\.HelperPath @Args/);
+});
+
 test('Windows installer probes the npm shim path when pnpm is installed but not yet on PATH', () => {
   assert.match(commandHelpersScript, /Join-Path \$env:APPDATA "npm\\\$Name\.cmd"/);
   assert.match(installScript, /Resolve-PnpmCommand/);
