@@ -12,18 +12,37 @@ import { execFileSync } from 'node:child_process';
 
 const SHARED_STATE_PATTERN = /^(docs\/BACKLOG\.md|cat-config\.json)$/;
 
+interface GitExecResult {
+  ok: boolean;
+  stdout: string;
+  exitCode: number | null;
+}
+
+function gitExec(args: string[], cwd: string): GitExecResult {
+  try {
+    return {
+      ok: true,
+      stdout: execFileSync('git', args, {
+        cwd,
+        encoding: 'utf-8',
+        timeout: 5000,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      }).trim(),
+      exitCode: 0,
+    };
+  } catch (error) {
+    const exitCode =
+      typeof error === 'object' && error !== null && 'status' in error
+        ? ((error as { status?: number | null }).status ?? null)
+        : null;
+    return { ok: false, stdout: '', exitCode };
+  }
+}
+
 /** Safe git exec — returns trimmed stdout or empty string on failure. */
 function safeExec(cmd: string, args: string[], cwd: string): string {
-  try {
-    return execFileSync(cmd, args, {
-      cwd,
-      encoding: 'utf-8',
-      timeout: 5000,
-      stdio: ['ignore', 'pipe', 'ignore'],
-    }).trim();
-  } catch {
-    return '';
-  }
+  if (cmd !== 'git') return '';
+  return gitExec(args, cwd).stdout;
 }
 
 export interface SharedStatePreflightResult {
@@ -47,8 +66,15 @@ function diffUnpushedShared(ref: string, cwd: string): string[] {
 
 export function checkSharedStatePreflight(projectRoot: string): SharedStatePreflightResult {
   try {
-    const isGitRepo = safeExec('git', ['rev-parse', '--is-inside-work-tree'], projectRoot) === 'true';
-    if (!isGitRepo) return { ok: true };
+    const repoProbe = gitExec(['rev-parse', '--is-inside-work-tree'], projectRoot);
+    const isGitRepo = repoProbe.ok && repoProbe.stdout === 'true';
+    if (!isGitRepo) {
+      console.info('[shared-state-preflight] skip git checks (non-git project root)', {
+        projectRoot,
+        exitCode: repoProbe.exitCode,
+      });
+      return { ok: true };
+    }
 
     // Check uncommitted changes to shared state
     const uncommittedRaw = safeExec('git', ['diff', '--name-only'], projectRoot);
@@ -86,7 +112,10 @@ export function checkSharedStatePreflight(projectRoot: string): SharedStatePrefl
       ...(uncommittedShared.length > 0 ? { uncommittedFiles: [...new Set(uncommittedShared)] } : {}),
       ...(unpushedShared.length > 0 ? { unpushedFiles: [...new Set(unpushedShared)] } : {}),
     };
-  } catch {
+  } catch (error) {
+    console.warn('[shared-state-preflight] fail-open on internal preflight error', {
+      error: error instanceof Error ? error.message : String(error),
+    });
     // Git not available or other error — don't block
     return { ok: true };
   }
