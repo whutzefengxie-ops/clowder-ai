@@ -37,6 +37,28 @@ function Refresh-Path {
 
 function Resolve-PnpmCommand { Resolve-ToolCommand -Name "pnpm" }
 function Invoke-Pnpm { param([string[]]$CommandArgs) Invoke-ToolCommand -Name "pnpm" -CommandArgs $CommandArgs }
+function Get-PnpmStatus {
+    param([int]$Attempts = 1, [int]$DelayMs = 500)
+    for ($attempt = 0; $attempt -lt $Attempts; $attempt++) {
+        try {
+            Refresh-Path
+            $pnpmCommand = Resolve-PnpmCommand
+            if ($pnpmCommand) {
+                $pnpmRaw = & $pnpmCommand --version 2>$null
+                if ($pnpmRaw -and $pnpmRaw -match '^(\d+)\.' -and [int]$Matches[1] -ge 8) {
+                    return [pscustomobject]@{
+                        Command = $pnpmCommand
+                        Version = $pnpmRaw
+                    }
+                }
+            }
+        } catch {}
+        if ($attempt -lt ($Attempts - 1)) {
+            Start-Sleep -Milliseconds $DelayMs
+        }
+    }
+    return $null
+}
 
 $ScriptPath = if ($PSCommandPath) { $PSCommandPath } elseif ($MyInvocation.MyCommand.Path) { $MyInvocation.MyCommand.Path } else { $null }
 if (-not $ScriptPath) {
@@ -125,10 +147,9 @@ if (-not $nodeOk) {
 
 $pnpmOk = $false
 try {
-    $pnpmCommand = Resolve-PnpmCommand
-    if ($pnpmCommand) { $pnpmRaw = & $pnpmCommand --version 2>$null }
-    if ($pnpmRaw -and $pnpmRaw -match '^(\d+)\.' -and [int]$Matches[1] -ge 8) {
-        Write-Ok "pnpm $pnpmRaw"
+    $pnpmStatus = Get-PnpmStatus
+    if ($pnpmStatus) {
+        Write-Ok "pnpm $($pnpmStatus.Version)"
         $pnpmOk = $true
     }
 } catch {}
@@ -140,11 +161,9 @@ if (-not $pnpmOk) {
         try {
             & $corepackCommand enable 2>$null
             & $corepackCommand install -g pnpm@latest 2>$null
-            Refresh-Path
-            $pnpmCommand = Resolve-PnpmCommand
-            if ($pnpmCommand) {
-                $pnpmRaw = & $pnpmCommand --version 2>$null
-                Write-Ok "pnpm $pnpmRaw (via corepack)"
+            $pnpmStatus = Get-PnpmStatus -Attempts 6
+            if ($pnpmStatus) {
+                Write-Ok "pnpm $($pnpmStatus.Version) (via corepack)"
                 $pnpmOk = $true
             } else {
                 throw "pnpm shim missing after corepack install"
@@ -158,11 +177,9 @@ if (-not $pnpmOk) {
                 throw "npm command not found"
             }
             & $npmCommand install -g pnpm 2>$null
-            Refresh-Path
-            $pnpmCommand = Resolve-PnpmCommand
-            if ($pnpmCommand) {
-                $pnpmRaw = & $pnpmCommand --version 2>$null
-                Write-Ok "pnpm $pnpmRaw (via npm)"
+            $pnpmStatus = Get-PnpmStatus -Attempts 6
+            if ($pnpmStatus) {
+                Write-Ok "pnpm $($pnpmStatus.Version) (via npm)"
                 $pnpmOk = $true
             } else {
                 throw "pnpm shim missing after npm install"
@@ -178,7 +195,10 @@ if (-not $pnpmOk) {
 
 Write-Step "Step 3/9 - Redis"
 
-$hasRedis = Ensure-WindowsRedis -ProjectRoot $ProjectRoot -Memory:$Memory
+$redisPlan = Resolve-InstallerRedisPlan -Memory:$Memory
+$redisMode = $redisPlan.Mode
+$hasRedis = Apply-InstallerRedisPlan -State $authState -ProjectRoot $ProjectRoot -Plan $redisPlan
+if (-not $hasRedis -and $redisMode -eq "portable") { $redisMode = "memory" }
 
 Write-Step "Step 4/9 - Prepare current repo and build"
 
@@ -230,26 +250,10 @@ $cliTools = @(
 
 if (-not $SkipCli) {
     $missingTools = @($cliTools | Where-Object { -not (Resolve-ToolCommand -Name $_.Cmd) })
-    $toolsToInstall = $missingTools
-    if ($missingTools.Count -gt 0 -and [Environment]::UserInteractive -and -not $env:CI) {
-        Write-Host "  Missing agent CLIs:"
-        for ($i = 0; $i -lt $missingTools.Count; $i++) {
-            Write-Host "    $($i + 1)) $($missingTools[$i].Name)"
-        }
-        $selection = Read-Host "    Install which? (Enter=all, 0=none, e.g. 1,2)"
-        if ($selection -eq "0") {
-            $toolsToInstall = @()
-        } elseif ($selection) {
-            $picked = @()
-            foreach ($rawIndex in ($selection -split ",")) {
-                $index = 0
-                if ([int]::TryParse($rawIndex.Trim(), [ref]$index) -and $index -ge 1 -and $index -le $missingTools.Count) {
-                    $picked += $missingTools[$index - 1]
-                }
-            }
-            if ($picked.Count -gt 0) { $toolsToInstall = @($picked | Select-Object -Unique) }
-        }
-    }
+    $toolsToInstall = if ($missingTools.Count -gt 0 -and [Environment]::UserInteractive -and -not $env:CI) {
+        Select-InstallerMultiChoice -Title "Missing agent CLIs" -Prompt "Choose which agent CLIs to install" -Options $missingTools
+    } else { $missingTools }
+    $npmInstallCommand = Resolve-ToolCommand -Name "npm"
     foreach ($tool in $cliTools) {
         $installed = $null -ne (Resolve-ToolCommand -Name $tool.Cmd)
         if ($installed) {
@@ -259,7 +263,8 @@ if (-not $SkipCli) {
         } else {
             Write-Host "  Installing $($tool.Name) CLI..."
             try {
-                Invoke-ToolCommand -Name "npm" -Args @("install", "-g", $tool.Pkg) 2>$null
+                if (-not $npmInstallCommand) { throw "npm command not found" }
+                & $npmInstallCommand install -g $tool.Pkg 2>$null
                 Refresh-Path
                 if (Resolve-ToolCommand -Name $tool.Cmd) {
                     Write-Ok "$($tool.Name) CLI installed"
@@ -296,7 +301,6 @@ FRONTEND_PORT=3003
 API_SERVER_PORT=3004
 NEXT_PUBLIC_API_URL=http://localhost:3004
 REDIS_PORT=6379
-REDIS_URL=redis://localhost:6379
 "@ | Out-File -FilePath $envFile -Encoding utf8
     Write-Ok "Minimal .env created"
 }

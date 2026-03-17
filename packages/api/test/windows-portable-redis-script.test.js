@@ -11,6 +11,10 @@ const commandHelpersPath = join(repoRoot, 'scripts', 'windows-command-helpers.ps
 const commandHelpersScript = existsSync(commandHelpersPath)
   ? readFileSync(commandHelpersPath, 'utf8')
   : '';
+const uiHelpersPath = join(repoRoot, 'scripts', 'windows-installer-ui.ps1');
+const uiHelpersScript = existsSync(uiHelpersPath)
+  ? readFileSync(uiHelpersPath, 'utf8')
+  : '';
 const helpersScript = readFileSync(join(repoRoot, 'scripts', 'install-windows-helpers.ps1'), 'utf8');
 const startWindowsScript = readFileSync(join(repoRoot, 'scripts', 'start-windows.ps1'), 'utf8');
 const startBatPath = join(repoRoot, 'scripts', 'start.bat');
@@ -85,8 +89,11 @@ test('Windows command forwarding helpers avoid PowerShell automatic $args collis
   assert.match(helpersScript, /function Invoke-InstallerAuthHelper/);
   assert.match(helpersScript, /param\(\$State, \[string\[\]\]\$CommandArgs\)/);
   assert.match(helpersScript, /& node \$State\.HelperPath @CommandArgs/);
+  assert.match(helpersScript, /\$profileArgs = @\("claude-profile", "set"/);
+  assert.match(helpersScript, /Invoke-InstallerAuthHelper \$State \$profileArgs/);
   assert.doesNotMatch(helpersScript, /param\(\$State, \[string\[\]\]\$Args\)/);
   assert.doesNotMatch(helpersScript, /& node \$State\.HelperPath @Args/);
+  assert.doesNotMatch(helpersScript, /\$args = @\("claude-profile", "set"/);
 });
 
 test('Windows installer probes the npm shim path when pnpm is installed but not yet on PATH', () => {
@@ -128,6 +135,18 @@ test('Windows tool resolution prefers explicit shim candidates before generic Ge
   assert.ok(candidatesIndex < getCommandIndex, 'expected shim candidates to be preferred before generic Get-Command lookup');
 });
 
+test('Windows installer uses prompt-driven selectors instead of typed numeric input', () => {
+  assert.match(uiHelpersScript, /function Select-InstallerChoice/);
+  assert.match(uiHelpersScript, /PromptForChoice/);
+  assert.match(uiHelpersScript, /function Select-InstallerMultiChoice/);
+  assert.match(installScript, /Select-InstallerMultiChoice -Title "Missing agent CLIs"/);
+  assert.doesNotMatch(installScript, /Read-Host "    Install which\?/);
+  assert.match(helpersScript, /Select-InstallerChoice -Title "Claude auth"/);
+  assert.match(helpersScript, /Select-InstallerChoice -Title "Codex auth"/);
+  assert.match(helpersScript, /Select-InstallerChoice -Title "Gemini auth"/);
+  assert.doesNotMatch(helpersScript, /Read-Host "    Choose \[1\/2\]/);
+});
+
 test('Windows installer resolves corepack and npm explicitly when bootstrapping pnpm', () => {
   assert.match(installScript, /\$corepackCommand = Resolve-ToolCommand -Name "corepack"/);
   assert.match(installScript, /& \$corepackCommand enable 2>\$null/);
@@ -137,6 +156,29 @@ test('Windows installer resolves corepack and npm explicitly when bootstrapping 
   assert.match(installScript, /\$npmCommand = Resolve-ToolCommand -Name "npm"/);
   assert.match(installScript, /& \$npmCommand install -g pnpm 2>\$null/);
   assert.doesNotMatch(installScript, /Invoke-ToolCommand -Name "npm" -Args @\("install", "-g", "pnpm"\)/);
+});
+
+test('Windows installer retries pnpm shim detection after bootstrap instead of failing on the first probe', () => {
+  assert.match(installScript, /function Get-PnpmStatus/);
+  assert.match(installScript, /param\(\[int\]\$Attempts = 1, \[int\]\$DelayMs = 500\)/);
+  assert.match(installScript, /for \(\$attempt = 0; \$attempt -lt \$Attempts; \$attempt\+\+\)/);
+  assert.match(installScript, /Start-Sleep -Milliseconds \$DelayMs/);
+  assert.match(installScript, /\$pnpmStatus = Get-PnpmStatus -Attempts 6/);
+});
+
+test('Windows CLI installs use the explicit npm command path and Redis mode is selectable', () => {
+  assert.match(installScript, /\$npmInstallCommand = Resolve-ToolCommand -Name "npm"/);
+  assert.match(installScript, /& \$npmInstallCommand install -g \$tool\.Pkg 2>\$null/);
+  assert.match(uiHelpersScript, /Select-InstallerChoice -Title "Redis mode"/);
+  assert.match(uiHelpersScript, /Value = "portable"/);
+  assert.match(uiHelpersScript, /Value = "external"/);
+  assert.match(uiHelpersScript, /Value = "memory"/);
+});
+
+test('Windows portable Redis defers REDIS_URL to runtime instead of hardcoding localhost:6379', () => {
+  assert.match(uiHelpersScript, /if \(\$Plan\.Mode -eq "portable"\) \{[\s\S]*Add-InstallerEnvDelete \$State "REDIS_URL"/);
+  assert.doesNotMatch(uiHelpersScript, /Set-InstallerEnvValue \$State "REDIS_URL" "redis:\/\/localhost:6379"/);
+  assert.doesNotMatch(installScript, /REDIS_URL=redis:\/\/localhost:6379/);
 });
 
 test('Windows installer keeps portable Redis inside the project .cat-cafe directory', () => {

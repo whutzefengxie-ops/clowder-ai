@@ -1,4 +1,5 @@
 . (Join-Path $PSScriptRoot "windows-command-helpers.ps1")
+. (Join-Path $PSScriptRoot "windows-installer-ui.ps1")
 
 function Mount-InstallerSkills {
     param([string]$ProjectRoot)
@@ -226,10 +227,10 @@ function Set-GeminiApiKeyMode {
 function Set-ClaudeInstallerProfile {
     param($State, [string]$ApiKey, [string]$BaseUrl, [string]$Model)
 
-    $args = @("claude-profile", "set", "--project-dir", $State.ProjectRoot, "--api-key", $ApiKey)
-    if ($BaseUrl) { $args += @("--base-url", $BaseUrl) }
-    if ($Model) { $args += @("--model", $Model) }
-    Invoke-InstallerAuthHelper $State $args
+    $profileArgs = @("claude-profile", "set", "--project-dir", $State.ProjectRoot, "--api-key", $ApiKey)
+    if ($BaseUrl) { $profileArgs += @("--base-url", $BaseUrl) }
+    if ($Model) { $profileArgs += @("--model", $Model) }
+    Invoke-InstallerAuthHelper $State $profileArgs
 }
 
 function Remove-ClaudeInstallerProfile {
@@ -253,10 +254,12 @@ function Configure-InstallerAuth {
     if ($hasClaude) {
         Write-Host ""
         Write-Host "  Claude (claude):"
-        Write-Host "    1) OAuth / Subscription (recommended)"
-        Write-Host "    2) API Key"
-        $choice = Read-Host "    Choose [1/2] (default: 1)"
-        if ($choice -eq "2") {
+        $choice = Select-InstallerChoice -Title "Claude auth" -Prompt "Choose how to configure Claude" -Options @(
+            @{ Label = "&OAuth"; Help = "Use Claude subscription / OAuth (recommended)"; Value = "oauth" },
+            @{ Label = "&API Key"; Help = "Write an installer-managed Claude API key profile"; Value = "api_key" },
+            @{ Label = "&Skip"; Help = "Skip Claude auth setup for now"; Value = "skip" }
+        )
+        if ($choice -eq "api_key") {
             $apiKey = Read-Host "    API Key"
             $baseUrl = Read-Host "    Base URL (Enter = https://api.anthropic.com)"
             $model = Read-Host "    Model (Enter = default)"
@@ -267,19 +270,23 @@ function Configure-InstallerAuth {
                 Remove-ClaudeInstallerProfile $State
                 Write-Warn "Claude API key empty — keeping OAuth"
             }
-        } else {
+        } elseif ($choice -eq "oauth") {
             Remove-ClaudeInstallerProfile $State
             Write-Ok "Claude: OAuth mode"
+        } else {
+            Write-Warn "Claude auth setup skipped"
         }
     }
 
     if ($hasCodex) {
         Write-Host ""
         Write-Host "  Codex (codex):"
-        Write-Host "    1) OAuth / Subscription (recommended)"
-        Write-Host "    2) API Key"
-        $choice = Read-Host "    Choose [1/2] (default: 1)"
-        if ($choice -eq "2") {
+        $choice = Select-InstallerChoice -Title "Codex auth" -Prompt "Choose how to configure Codex" -Options @(
+            @{ Label = "&OAuth"; Help = "Use Codex OAuth / subscription (recommended)"; Value = "oauth" },
+            @{ Label = "&API Key"; Help = "Store OpenAI API settings in .env"; Value = "api_key" },
+            @{ Label = "&Skip"; Help = "Skip Codex auth setup for now"; Value = "skip" }
+        )
+        if ($choice -eq "api_key") {
             $apiKey = Read-Host "    API Key"
             $baseUrl = Read-Host "    Base URL (Enter = default)"
             $model = Read-Host "    Model (Enter = default)"
@@ -290,19 +297,23 @@ function Configure-InstallerAuth {
                 Set-CodexOAuthMode $State
                 Write-Warn "Codex API key empty — keeping OAuth"
             }
-        } else {
+        } elseif ($choice -eq "oauth") {
             Set-CodexOAuthMode $State
             Write-Ok "Codex: OAuth mode"
+        } else {
+            Write-Warn "Codex auth setup skipped"
         }
     }
 
     if ($hasGemini) {
         Write-Host ""
         Write-Host "  Gemini (gemini):"
-        Write-Host "    1) OAuth / Subscription (recommended)"
-        Write-Host "    2) API Key"
-        $choice = Read-Host "    Choose [1/2] (default: 1)"
-        if ($choice -eq "2") {
+        $choice = Select-InstallerChoice -Title "Gemini auth" -Prompt "Choose how to configure Gemini" -Options @(
+            @{ Label = "&OAuth"; Help = "Use Gemini OAuth / subscription (recommended)"; Value = "oauth" },
+            @{ Label = "&API Key"; Help = "Store Gemini API settings in .env"; Value = "api_key" },
+            @{ Label = "&Skip"; Help = "Skip Gemini auth setup for now"; Value = "skip" }
+        )
+        if ($choice -eq "api_key") {
             $apiKey = Read-Host "    API Key"
             $model = Read-Host "    Model (Enter = default)"
             if ($apiKey) {
@@ -312,9 +323,11 @@ function Configure-InstallerAuth {
                 Set-GeminiOAuthMode $State
                 Write-Warn "Gemini API key empty — keeping OAuth"
             }
-        } else {
+        } elseif ($choice -eq "oauth") {
             Set-GeminiOAuthMode $State
             Write-Ok "Gemini: OAuth mode"
+        } else {
+            Write-Warn "Gemini auth setup skipped"
         }
     }
 }
