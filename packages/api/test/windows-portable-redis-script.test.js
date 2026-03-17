@@ -167,15 +167,21 @@ test('Windows installer uses interactive selectors instead of typed or letter-ba
   assert.doesNotMatch(helpersScript, /Read-Host "    Choose \[1\/2\]/);
 });
 
-test('Windows installer resolves corepack and npm explicitly when bootstrapping pnpm', () => {
+test('Windows installer prefers npm before corepack when bootstrapping pnpm', () => {
+  assert.match(installScript, /\$npmCommand = Resolve-ToolCommand -Name "npm"/);
+  assert.match(installScript, /& \$npmCommand install -g pnpm 2>\$null/);
+  assert.doesNotMatch(installScript, /Invoke-ToolCommand -Name "npm" -Args @\("install", "-g", "pnpm"\)/);
+
   assert.match(installScript, /\$corepackCommand = Resolve-ToolCommand -Name "corepack"/);
   assert.match(installScript, /& \$corepackCommand enable 2>\$null/);
   assert.match(installScript, /& \$corepackCommand install -g pnpm@latest 2>\$null/);
   assert.doesNotMatch(installScript, /corepack" -Args @\("prepare", "pnpm@latest", "--activate"\)/);
 
-  assert.match(installScript, /\$npmCommand = Resolve-ToolCommand -Name "npm"/);
-  assert.match(installScript, /& \$npmCommand install -g pnpm 2>\$null/);
-  assert.doesNotMatch(installScript, /Invoke-ToolCommand -Name "npm" -Args @\("install", "-g", "pnpm"\)/);
+  const npmIndex = installScript.indexOf('$npmCommand = Resolve-ToolCommand -Name "npm"');
+  const corepackIndex = installScript.indexOf('$corepackCommand = Resolve-ToolCommand -Name "corepack"');
+  assert.notEqual(npmIndex, -1, 'expected explicit npm resolution');
+  assert.notEqual(corepackIndex, -1, 'expected explicit corepack resolution');
+  assert.ok(npmIndex < corepackIndex, 'expected npm bootstrap path before corepack fallback on Windows');
 });
 
 test('Windows installer retries pnpm shim detection after bootstrap instead of failing on the first probe', () => {

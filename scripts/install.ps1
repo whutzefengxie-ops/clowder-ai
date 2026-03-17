@@ -177,28 +177,9 @@ try {
 
 if (-not $pnpmOk) {
     Write-Host "  Installing pnpm..."
-    $corepackCommand = Resolve-ToolCommand -Name "corepack"
-    if ($corepackCommand) {
+    $npmCommand = Resolve-ToolCommand -Name "npm"
+    if ($npmCommand) {
         try {
-            & $corepackCommand enable 2>$null
-            & $corepackCommand install -g pnpm@latest 2>$null
-            $pnpmStatus = Get-PnpmStatus -Attempts 6
-            if ($pnpmStatus) {
-                Write-Ok "pnpm $($pnpmStatus.Version) (via corepack)"
-                $pnpmOk = $true
-            } else {
-                throw "pnpm shim missing after corepack install"
-            }
-        } catch {
-            Exit-InstallerIfCancelled -ErrorRecord $_ -Context "pnpm installation"
-        }
-    }
-    if (-not $pnpmOk) {
-        $npmCommand = Resolve-ToolCommand -Name "npm"
-        try {
-            if (-not $npmCommand) {
-                throw "npm command not found"
-            }
             & $npmCommand install -g pnpm 2>$null
             $pnpmStatus = Get-PnpmStatus -Attempts 6
             if ($pnpmStatus) {
@@ -209,6 +190,24 @@ if (-not $pnpmOk) {
             }
         } catch {
             Exit-InstallerIfCancelled -ErrorRecord $_ -Context "pnpm installation"
+        }
+    }
+    if (-not $pnpmOk) {
+        $corepackCommand = Resolve-ToolCommand -Name "corepack"
+        if ($corepackCommand) {
+            try {
+                & $corepackCommand enable 2>$null
+                & $corepackCommand install -g pnpm@latest 2>$null
+                $pnpmStatus = Get-PnpmStatus -Attempts 6
+                if ($pnpmStatus) {
+                    Write-Ok "pnpm $($pnpmStatus.Version) (via corepack)"
+                    $pnpmOk = $true
+                } else {
+                    throw "pnpm shim missing after corepack install"
+                }
+            } catch {
+                Exit-InstallerIfCancelled -ErrorRecord $_ -Context "pnpm installation"
+            }
         }
     }
     if (-not $pnpmOk) {
