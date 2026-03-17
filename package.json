@@ -5,7 +5,7 @@
   "description": "三只 AI 猫猫的协作空间",
   "scripts": {
     "init": "./scripts/init-cafe.sh",
-    "start": "./scripts/runtime-worktree.sh start",
+    "start": "./scripts/start-dev.sh",
     "start:direct": "./scripts/start-dev.sh",
     "alpha:init": "./scripts/alpha-worktree.sh init",
     "alpha:sync": "./scripts/alpha-worktree.sh sync",
