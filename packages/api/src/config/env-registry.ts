@@ -66,7 +66,7 @@ export const ENV_CATEGORIES: Record<EnvCategory, string> = {
 
 export const ENV_VARS: EnvDefinition[] = [
   // --- server ---
-  { name: 'API_SERVER_PORT', defaultValue: '3003', description: 'API 服务端口', category: 'server', sensitive: false },
+  { name: 'API_SERVER_PORT', defaultValue: '3004', description: 'API 服务端口', category: 'server', sensitive: false },
   {
     name: 'PREVIEW_GATEWAY_PORT',
     defaultValue: '4100',
@@ -105,7 +105,7 @@ export const ENV_VARS: EnvDefinition[] = [
   },
   {
     name: 'FRONTEND_PORT',
-    defaultValue: '3004',
+    defaultValue: '3003',
     description: '前端端口（导出长图用）',
     category: 'server',
     sensitive: false,
@@ -559,7 +559,7 @@ export const ENV_VARS: EnvDefinition[] = [
   // --- frontend ---
   {
     name: 'NEXT_PUBLIC_API_URL',
-    defaultValue: 'http://localhost:3003',
+    defaultValue: 'http://localhost:3004',
     description: '前端连接的 API 地址',
     category: 'frontend',
     sensitive: false,

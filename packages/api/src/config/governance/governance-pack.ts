@@ -19,8 +19,8 @@ export const MANAGED_BLOCK_END = '<!-- CAT-CAFE-GOVERNANCE-END -->';
 const HARD_CONSTRAINTS = `## Cat Cafe Governance Rules (Auto-managed)
 
 ### Hard Constraints (immutable)
-- **Public local defaults**: use frontend 3004 and API 3003 to avoid colliding with another local runtime.
-- **Redis port 6379** is the default production Redis. Never connect to it from external projects. Use 6380 for dev/test.
+- **Public local defaults**: use frontend 3003 and API 3004 (F115 canonical topology).
+- **Redis port 6399** is Cat Cafe's dedicated Redis (avoids system Redis on 6379). Use 6398 for dev/test in external projects.
 - **No self-review**: The same individual cannot review their own code. Cross-family review preferred.
 - **Identity is constant**: Never impersonate another cat. Identity is a hard constraint.
 

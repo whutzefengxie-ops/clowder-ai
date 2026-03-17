@@ -156,7 +156,7 @@ import { ApiInstanceLease, type ApiInstanceLeaseInvalidation } from './services/
 import { findMonorepoRoot } from './utils/monorepo-root.js';
 import { resolveUserId } from './utils/request-identity.js';
 
-const PORT = parseInt(process.env.API_SERVER_PORT ?? '3003', 10);
+const PORT = parseInt(process.env.API_SERVER_PORT ?? '3004', 10);
 const HOST = process.env.API_SERVER_HOST ?? '127.0.0.1';
 
 let socketManager: SocketManager | null = null;
