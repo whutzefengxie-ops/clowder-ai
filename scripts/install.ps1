@@ -384,7 +384,8 @@ Write-Host "  Start the app:" -ForegroundColor Cyan
 $startCmd = ".\scripts\start-windows.ps1"
 Write-Host "    $startCmd" -ForegroundColor White
 Write-Host ""
-$frontendPort = if ($env:FRONTEND_PORT) { $env:FRONTEND_PORT } else { "3003" }
+$frontendPort = Get-InstallerEnvValueFromFile -EnvFile $envFile -Key "FRONTEND_PORT"
+if (-not $frontendPort) { $frontendPort = "3003" }
 Write-Host "  Then open http://localhost:$frontendPort" -ForegroundColor Cyan
 Write-Host ""
 

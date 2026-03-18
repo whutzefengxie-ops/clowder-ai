@@ -393,6 +393,21 @@ test('Windows stop script resolves redis-cli through the shared helper chain bef
   assert.match(stopWindowsScript, /Resolve-GlobalRedisBinaries/);
   assert.match(stopWindowsScript, /\$redisCli = \$redisCommands\.CliPath/);
   assert.doesNotMatch(stopWindowsScript, /& redis-cli -p \$RedisPort ping/);
+  // stop script must pass auth args from REDIS_URL to redis-cli (ping + shutdown)
+  assert.match(stopWindowsScript, /Get-RedisAuthArgs\s+-RedisUrl\s+\$configuredRedisUrl/);
+  assert.match(stopWindowsScript, /@redisAuthArgs\s+ping/);
+  assert.match(stopWindowsScript, /@redisAuthArgs\s+shutdown/);
+});
+
+test('Windows installer reads FRONTEND_PORT from .env file not process environment', () => {
+  assert.match(installScript, /Get-InstallerEnvValueFromFile\s+-EnvFile\s+\$envFile\s+-Key\s+"FRONTEND_PORT"/);
+  assert.doesNotMatch(installScript, /\$env:FRONTEND_PORT/);
+});
+
+test('Windows start and stop scripts share Get-RedisAuthArgs from helpers instead of local definitions', () => {
+  assert.match(helpersScript, /function\s+Get-RedisAuthArgs/);
+  assert.doesNotMatch(startWindowsScript, /function\s+Get-RedisAuthArgs/);
+  assert.doesNotMatch(stopWindowsScript, /function\s+Get-RedisAuthArgs/);
 });
 
 test('Windows start.bat delegates to start-windows.ps1', () => {

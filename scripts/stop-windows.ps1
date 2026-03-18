@@ -135,9 +135,10 @@ if ($configuredRedisUrl -and -not (Test-LocalRedisUrl -RedisUrl $configuredRedis
             throw "redis-cli unavailable"
         }
         $redisCli = $redisCommands.CliPath
-        $redisPing = & $redisCli -p $RedisPort ping 2>$null
+        $redisAuthArgs = Get-RedisAuthArgs -RedisUrl $configuredRedisUrl
+        $redisPing = & $redisCli -p $RedisPort @redisAuthArgs ping 2>$null
         if ($redisPing -eq "PONG") {
-            & $redisCli -p $RedisPort shutdown save 2>$null
+            & $redisCli -p $RedisPort @redisAuthArgs shutdown save 2>$null
             Write-Ok "Redis stopped (port $RedisPort)"
         } else {
             Write-Warn "Redis (port $RedisPort) - not running"

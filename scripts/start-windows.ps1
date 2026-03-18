@@ -163,23 +163,6 @@ $redisPidFile = Join-Path $redisLayout.Data "redis-$RedisPort.pid"
 $configuredRedisUrl = if ($env:REDIS_URL) { $env:REDIS_URL.Trim() } else { "" }
 $useExternalRedis = $useRedis -and $configuredRedisUrl -and -not (Test-LocalRedisUrl -RedisUrl $configuredRedisUrl -RedisPort $RedisPort)
 
-function Get-RedisAuthArgs {
-    param([string]$RedisUrl)
-    if (-not $RedisUrl) { return @() }
-    try {
-        $uri = [System.Uri]::new($RedisUrl)
-        $userInfo = $uri.UserInfo
-        if (-not $userInfo) { return @() }
-        $parts = $userInfo -split ":", 2
-        if ($parts.Count -eq 2 -and $parts[1]) {
-            return @("-a", $parts[1])
-        } elseif ($parts[0]) {
-            return @("-a", $parts[0])
-        }
-    } catch {}
-    return @()
-}
-
 if ($useExternalRedis) {
     Write-Ok "Using external Redis: $configuredRedisUrl"
 } elseif ($useRedis) {
