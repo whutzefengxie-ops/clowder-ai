@@ -1,16 +1,21 @@
 #!/bin/bash
 
-# Cat Cafe 启动脚本
-# 用法:
-#   pnpm start                        — 开发模式 (next dev + Redis 持久化)
-#   pnpm start --profile=dev          — 家里开发默认值 (proxy ON, sidecar ON)
-#   pnpm start --profile=opensource   — 开源仓默认值 (proxy OFF, sidecar OFF)
-#   pnpm start --quick                — 跳过 rebuild
-#   pnpm start --memory               — 使用内存存储 (重启丢数据)
-#   pnpm start --no-redis             — 同 --memory
-#   pnpm start --prod-web             — 前端 production build (PWA + Tailscale 友好)
-#   pnpm start -- --npm-registry=URL --pip-index-url=URL --hf-endpoint=URL
-#                                   — 显式指定安装/模型下载镜像（仅手动 override）
+# Cat Cafe 启动脚本（底层实现）
+# 用户入口:
+#   pnpm start                        — runtime worktree 稳定启动（由 runtime-worktree.sh 注入 --prod-web）
+#   pnpm start:direct                 — 当前目录稳定启动（package.json 注入 --prod-web）
+#   pnpm dev:direct                   — 当前目录开发模式 (next dev + 热重载)
+#
+# 直接调用脚本:
+#   ./scripts/start-dev.sh            — 开发模式 (next dev + Redis 持久化)
+#   ./scripts/start-dev.sh --prod-web — 前端 production build + next start
+#   ./scripts/start-dev.sh --quick    — 仅跳过重复构建；不改变 dev/prod 模式
+#   ./scripts/start-dev.sh --memory   — 使用内存存储 (重启丢数据)
+#   ./scripts/start-dev.sh --no-redis — 同 --memory
+#   ./scripts/start-dev.sh --profile=dev          — 家里开发默认值 (proxy ON, sidecar ON)
+#   ./scripts/start-dev.sh --profile=opensource   — 开源仓默认值 (proxy OFF, sidecar OFF)
+#   ./scripts/start-dev.sh -- --npm-registry=URL --pip-index-url=URL --hf-endpoint=URL
+#                                               — 显式指定安装/模型下载镜像（仅手动 override）
 #
 # Profile 说明:
 #   dev        — proxy ON, ASR/TTS/LLM ON, TTL=永久, redis-dev

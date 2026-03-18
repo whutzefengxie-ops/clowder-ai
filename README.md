@@ -158,7 +158,15 @@ Options:
 - `--memory` — skip Redis (use in-memory store)
 - `--registry=URL` — custom npm registry (e.g. for China mirrors)
 
-Then open `http://localhost:3003` and start talking to your team.
+Then run one of the repo start commands:
+
+- `pnpm start` — stable runtime environment (runtime worktree)
+- `pnpm start:direct` — stable start from the current directory/worktree
+- `pnpm dev:direct` — hot-reload development start from the current directory/worktree
+
+`--quick` only means "reuse existing build outputs and skip rebuilding". It does not switch dev/prod mode.
+
+Open the Frontend URL printed by the startup summary.
 
 **Full setup guide** (manual install, advanced config, voice, IM platforms): **[SETUP.md](SETUP.md)**
 
@@ -519,7 +527,15 @@ bash scripts/install.sh
 - `--memory` — 跳过 Redis（使用内存模式）
 - `--registry=URL` — 自定义 npm 镜像源（适用于国内网络）
 
-然后打开 `http://localhost:3003`，开始和你的团队对话。
+然后按场景选择启动命令：
+
+- `pnpm start` — 稳定的 runtime 环境（runtime worktree）
+- `pnpm start:direct` — 从当前目录/worktree 稳定启动
+- `pnpm dev:direct` — 从当前目录/worktree 以热重载开发模式启动
+
+`--quick` 只表示“复用已有构建产物，跳过重复构建”，不负责切换 dev/prod 模式。
+
+打开启动摘要里打印出来的 Frontend URL，开始和你的团队对话。
 
 **完整安装指南**（手动安装、高级配置、语音、IM 平台）：**[SETUP.md](SETUP.md)**
 

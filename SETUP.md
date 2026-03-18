@@ -33,9 +33,15 @@ cp .env.example .env
 pnpm start
 ```
 
-This auto-starts Redis, builds packages, and launches both API (port 3004) and Frontend (port 3003).
+This starts the stable runtime environment. Use these entrypoints:
 
-Open `http://localhost:3003` and start talking to your team.
+- `pnpm start` — stable runtime environment (runtime worktree)
+- `pnpm start:direct` — stable start from the current directory/worktree
+- `pnpm dev:direct` — hot-reload development start from the current directory/worktree
+
+`--quick` only means "reuse existing build outputs and skip rebuilding". It does not switch dev/prod mode.
+
+Open the Frontend URL printed by the startup summary.
 
 ## Required Configuration
 
@@ -59,18 +65,20 @@ GOOGLE_API_KEY=...
 Redis is the persistent store for threads, messages, tasks, and memory.
 
 ```bash
-REDIS_URL=redis://localhost:6379
+REDIS_URL=redis://localhost:<REDIS_PORT>
 ```
 
-The `pnpm start` command auto-starts Redis on port 6379. Data persists in `~/.cat-cafe/redis-dev/`.
+When you use the repo start scripts, Redis is auto-started on the configured `REDIS_PORT` (repo defaults come from the startup scripts and `.env`). Set `REDIS_URL` only when pointing to an external Redis or overriding the port family yourself.
 
 **No Redis?** Use `pnpm start --memory` for in-memory mode (data lost on restart — fine for trying things out).
 
 ### Frontend
 
 ```bash
-NEXT_PUBLIC_API_URL=http://localhost:3004
+NEXT_PUBLIC_API_URL=http://localhost:<API_SERVER_PORT>
 ```
+
+If you override ports for direct modes, set `NEXT_PUBLIC_API_URL` to the matching API address before building/starting.
 
 ## Optional Features
 
@@ -209,11 +217,11 @@ pnpm hindsight:stop     # Shut down
 
 ## Ports Overview
 
-| Service | Port | Required |
-|---------|------|----------|
-| Frontend (Next.js) | 3003 | Yes |
-| API Backend | 3004 | Yes |
-| Redis | 6379 | Yes (or use `--memory`) |
+| Service | Port / Env | Required |
+|---------|------------|----------|
+| Frontend (Next.js) | `FRONTEND_PORT` | Yes |
+| API Backend | `API_SERVER_PORT` | Yes |
+| Redis | `REDIS_PORT` | Yes (or use `--memory`) |
 | ASR | 9876 | No — voice input |
 | TTS | 9879 | No — voice output |
 | LLM Post-process | 9878 | No — speech correction |
@@ -223,9 +231,12 @@ pnpm hindsight:stop     # Shut down
 ## Useful Commands
 
 ```bash
-pnpm start              # Start everything (Redis + API + Frontend)
-pnpm start --memory     # No Redis, in-memory mode
-pnpm start --quick      # Skip rebuild, use existing dist/
+pnpm start                     # Stable runtime environment (runtime worktree)
+pnpm start --quick             # Reuse existing runtime build outputs
+pnpm start --memory            # Runtime environment without Redis
+pnpm start:direct              # Stable start from current directory/worktree
+pnpm start:direct --quick      # Reuse current-directory build outputs
+pnpm dev:direct                # Hot-reload development start from current directory/worktree
 
 pnpm check              # Biome lint + format check
 pnpm check:fix          # Auto-fix lint issues
@@ -239,7 +250,7 @@ pnpm redis:user:backup  # Manual backup
 ## Troubleshooting
 
 **Redis won't start?**
-- Check if port 6379 is in use: `lsof -i :6379`
+- Check if your configured `REDIS_PORT` is in use: `lsof -i :<REDIS_PORT>`
 - Make sure Redis is installed: `redis-server --version`
 
 **No agents responding?**
@@ -247,7 +258,7 @@ pnpm redis:user:backup  # Manual backup
 - Check the API logs in terminal for auth errors
 
 **Frontend can't connect to API?**
-- Make sure `NEXT_PUBLIC_API_URL=http://localhost:3004` is set
+- When overriding direct-start ports, make sure `NEXT_PUBLIC_API_URL` matches the API address
 - API must be running before frontend loads
 
 ---
@@ -281,9 +292,15 @@ cp .env.example .env
 pnpm start
 ```
 
-自动启动 Redis，构建包，启动 API（端口 3004）和前端（端口 3003）。
+这会启动稳定的 runtime 环境。按场景使用下面这些入口：
 
-打开 `http://localhost:3003`，开始和你的团队对话。
+- `pnpm start` — 稳定的 runtime 环境（runtime worktree）
+- `pnpm start:direct` — 从当前目录/worktree 稳定启动
+- `pnpm dev:direct` — 从当前目录/worktree 以热重载开发模式启动
+
+`--quick` 只表示“复用已有构建产物，跳过重复构建”，不负责切换 dev/prod 模式。
+
+打开启动摘要里打印出来的 Frontend URL，开始和你的团队对话。
 
 ## 必须配置
 
@@ -307,18 +324,20 @@ GOOGLE_API_KEY=...
 Redis 是线程、消息、任务和记忆的持久化存储。
 
 ```bash
-REDIS_URL=redis://localhost:6379
+REDIS_URL=redis://localhost:<REDIS_PORT>
 ```
 
-`pnpm start` 会自动启动 Redis（端口 6379）。数据持久化在 `~/.cat-cafe/redis-dev/`。
+使用仓库自带启动脚本时，Redis 会按配置的 `REDIS_PORT` 自动启动（repo 默认值由启动脚本和 `.env` 决定）。只有在你要接外部 Redis 或自己改端口族时，才需要手动设置 `REDIS_URL`。
 
 **没有 Redis？** 用 `pnpm start --memory` 启动纯内存模式（重启后数据丢失 — 试玩够用了）。
 
 ### 前端
 
 ```bash
-NEXT_PUBLIC_API_URL=http://localhost:3004
+NEXT_PUBLIC_API_URL=http://localhost:<API_SERVER_PORT>
 ```
+
+如果 direct 模式改了端口，记得把 `NEXT_PUBLIC_API_URL` 改成对应的 API 地址再 build / start。
 
 ## 可选功能
 
@@ -457,11 +476,11 @@ pnpm hindsight:stop     # 关闭
 
 ## 端口概览
 
-| 服务 | 端口 | 必需 |
-|------|------|------|
-| 前端（Next.js） | 3003 | 是 |
-| API 后端 | 3004 | 是 |
-| Redis | 6379 | 是（或用 `--memory`） |
+| 服务 | 端口 / 环境变量 | 必需 |
+|------|-----------------|------|
+| 前端（Next.js） | `FRONTEND_PORT` | 是 |
+| API 后端 | `API_SERVER_PORT` | 是 |
+| Redis | `REDIS_PORT` | 是（或用 `--memory`） |
 | ASR | 9876 | 否 — 语音输入 |
 | TTS | 9879 | 否 — 语音输出 |
 | LLM 后处理 | 9878 | 否 — 语音纠正 |
@@ -471,9 +490,12 @@ pnpm hindsight:stop     # 关闭
 ## 常用命令
 
 ```bash
-pnpm start              # 启动全部（Redis + API + 前端）
-pnpm start --memory     # 无 Redis，纯内存模式
-pnpm start --quick      # 跳过重编译，用已有 dist/
+pnpm start                     # 稳定的 runtime 环境（runtime worktree）
+pnpm start --quick             # 复用已有 runtime 构建产物
+pnpm start --memory            # 无 Redis 的 runtime 环境
+pnpm start:direct              # 从当前目录/worktree 稳定启动
+pnpm start:direct --quick      # 复用当前目录的构建产物
+pnpm dev:direct                # 从当前目录/worktree 以热重载开发模式启动
 
 pnpm check              # Biome lint + 格式检查
 pnpm check:fix          # 自动修复 lint 问题
@@ -487,7 +509,7 @@ pnpm redis:user:backup  # 手动备份
 ## 常见问题
 
 **Redis 启动不了？**
-- 检查端口 6379 是否被占用：`lsof -i :6379`
+- 检查当前配置的 `REDIS_PORT` 是否被占用：`lsof -i :<REDIS_PORT>`
 - 确认 Redis 已安装：`redis-server --version`
 
 **没有 agent 响应？**
@@ -495,5 +517,5 @@ pnpm redis:user:backup  # 手动备份
 - 看终端里 API 日志有没有认证错误
 
 **前端连不上 API？**
-- 确认设了 `NEXT_PUBLIC_API_URL=http://localhost:3004`
+- 如果你在 direct 模式里改了端口，确认 `NEXT_PUBLIC_API_URL` 指向对应的 API 地址
 - API 必须在前端加载前启动
