@@ -153,6 +153,13 @@ function normalizeActiveProfileIds(profilesFile) {
     openai: raw.openai ?? defaults.openai,
     google: raw.google ?? defaults.google,
   };
+  const legacyActive = profilesFile.activeProfileId;
+  if (legacyActive) {
+    const legacyProfile = profilesFile.profiles.find((profile) => profile.id === legacyActive);
+    if (legacyProfile?.protocol === 'anthropic' || legacyProfile?.protocol === 'openai' || legacyProfile?.protocol === 'google') {
+      next[legacyProfile.protocol] = legacyActive;
+    }
+  }
   next.anthropic = resolveProtocolFallbackProfileId(profilesFile.profiles, 'anthropic', next.anthropic);
   next.openai = resolveProtocolFallbackProfileId(profilesFile.profiles, 'openai', next.openai);
   next.google = resolveProtocolFallbackProfileId(profilesFile.profiles, 'google', next.google);

@@ -170,6 +170,90 @@ test('claude-profile create and remove keeps installer-managed profile in sync',
   }
 });
 
+test('claude-profile set preserves legacy v2 activeProfileId for non-anthropic protocol', () => {
+  const projectRoot = mkdtempSync(join(tmpdir(), 'clowder-install-claude-profile-legacy-v2-'));
+
+  try {
+    const profileDir = join(projectRoot, '.cat-cafe');
+    mkdirSync(profileDir, { recursive: true });
+    writeFileSync(
+      join(profileDir, 'provider-profiles.json'),
+      `${JSON.stringify({
+        version: 2,
+        activeProfileId: 'openai-sponsor',
+        profiles: [
+          {
+            id: 'claude-oauth',
+            provider: 'claude-oauth',
+            displayName: 'Claude (OAuth)',
+            authType: 'oauth',
+            protocol: 'anthropic',
+            builtin: true,
+            models: ['claude-opus-4-6'],
+            createdAt: '2026-03-18T00:00:00.000Z',
+            updatedAt: '2026-03-18T00:00:00.000Z',
+          },
+          {
+            id: 'codex-oauth',
+            provider: 'codex-oauth',
+            displayName: 'Codex (OAuth)',
+            authType: 'oauth',
+            protocol: 'openai',
+            builtin: true,
+            models: ['gpt-5.4'],
+            createdAt: '2026-03-18T00:00:00.000Z',
+            updatedAt: '2026-03-18T00:00:00.000Z',
+          },
+          {
+            id: 'gemini-oauth',
+            provider: 'gemini-oauth',
+            displayName: 'Gemini (OAuth)',
+            authType: 'oauth',
+            protocol: 'google',
+            builtin: true,
+            models: ['gemini-3.1-pro'],
+            createdAt: '2026-03-18T00:00:00.000Z',
+            updatedAt: '2026-03-18T00:00:00.000Z',
+          },
+          {
+            id: 'openai-sponsor',
+            provider: 'openai-sponsor',
+            displayName: 'OpenAI Sponsor',
+            authType: 'api_key',
+            protocol: 'openai',
+            builtin: false,
+            models: ['gpt-5.4-mini'],
+            createdAt: '2026-03-18T00:00:00.000Z',
+            updatedAt: '2026-03-18T00:00:00.000Z',
+          },
+        ],
+      }, null, 2)}\n`,
+      'utf8',
+    );
+    writeFileSync(join(profileDir, 'provider-profiles.secrets.local.json'), `${JSON.stringify({ version: 2, profiles: {} }, null, 2)}\n`, 'utf8');
+
+    runHelper([
+      'claude-profile',
+      'set',
+      '--project-dir',
+      projectRoot,
+      '--api-key',
+      'claude-key',
+      '--base-url',
+      'https://claude.example',
+      '--model',
+      'claude-model',
+    ]);
+
+    const profiles = JSON.parse(readFileSync(join(profileDir, 'provider-profiles.json'), 'utf8'));
+    assert.equal(profiles.activeProfileIds?.anthropic, 'installer-managed');
+    assert.equal(profiles.activeProfileIds?.openai, 'openai-sponsor');
+    assert.equal(profiles.activeProfileIds?.google, 'gemini-oauth');
+  } finally {
+    rmSync(projectRoot, { recursive: true, force: true });
+  }
+});
+
 test('env-apply writes apostrophes with dotenv-compatible double quotes', () => {
   const envRoot = mkdtempSync(join(tmpdir(), 'clowder-install-env-apostrophe-'));
 

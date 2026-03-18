@@ -1425,11 +1425,11 @@ describe('HubCatEditor', () => {
           jsonResponse({
             config: {
               cli: {
-                codexSandboxMode: 'workspace-write',
-                codexApprovalPolicy: 'on-request',
+                codexSandboxMode: 'danger-full-access',
+                codexApprovalPolicy: 'never',
               },
               codexExecution: {
-                authMode: 'oauth',
+                authMode: 'api_key',
               },
             },
           }),
@@ -1458,6 +1458,12 @@ describe('HubCatEditor', () => {
     await flushEffects();
 
     expect(container.textContent).toContain('Codex Sandbox 🏷️');
+    expect(queryField<HTMLSelectElement>(container, 'select[aria-label^="Codex Sandbox"]').value).toBe('danger-full-access');
+    expect(queryField<HTMLSelectElement>(container, 'select[aria-label^="Codex Approval"]').value).toBe('never');
+    expect(queryField<HTMLSelectElement>(container, 'select[aria-label^="Codex Auth Mode"]').value).toBe('api_key');
+    expect(queryField<HTMLSelectElement>(container, 'select[aria-label^="Codex Sandbox"]').disabled).toBe(true);
+    expect(queryField<HTMLSelectElement>(container, 'select[aria-label^="Codex Approval"]').disabled).toBe(true);
+    expect(queryField<HTMLSelectElement>(container, 'select[aria-label^="Codex Auth Mode"]').disabled).toBe(true);
 
     const removeAliasButton = queryField<HTMLButtonElement>(container, 'button[aria-label="移除 @第二别名"]');
     await act(async () => {

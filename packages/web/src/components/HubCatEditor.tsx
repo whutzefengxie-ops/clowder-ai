@@ -125,15 +125,10 @@ export function HubCatEditor({ cat, draft, open, onClose, onSaved }: HubCatEdito
       setLoadingCodexSettings(false);
       return;
     }
-    if (!cat) {
-      const defaults = toCodexRuntimeSettings();
-      setCodexSettings(defaults);
-      setLoadingCodexSettings(false);
-      return;
-    }
     let cancelled = false;
     setLoadingCodexSettings(true);
-    apiFetch('/api/config')
+    Promise.resolve()
+      .then(() => apiFetch('/api/config'))
       .then(async (res) => {
         if (!res.ok) throw new Error(`Codex 运行参数加载失败 (${res.status})`);
         return (await res.json()) as { config?: ConfigData };
@@ -144,7 +139,10 @@ export function HubCatEditor({ cat, draft, open, onClose, onSaved }: HubCatEdito
         setCodexSettings(next);
       })
       .catch((err) => {
-        if (!cancelled) setCodexSettingsError(err instanceof Error ? err.message : 'Codex 运行参数加载失败');
+        if (!cancelled) {
+          setCodexSettings((prev) => prev ?? toCodexRuntimeSettings());
+          setCodexSettingsError(err instanceof Error ? err.message : 'Codex 运行参数加载失败');
+        }
       })
       .finally(() => {
         if (!cancelled) setLoadingCodexSettings(false);
