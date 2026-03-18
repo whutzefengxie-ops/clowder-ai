@@ -1,12 +1,9 @@
-import { useCallback, useState } from 'react';
-import type { ProfileItem, ProfileTestResult } from './hub-provider-profiles.types';
+'use client';
 
-function parseModels(value: string): string[] {
-  return value
-    .split(',')
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
+import { useCallback, useState } from 'react';
+import { TagEditor, TagPillList } from './hub-tag-editor';
+import { formatProtocolLabel } from './hub-provider-profiles.sections';
+import type { ProfileItem, ProfileTestResult } from './hub-provider-profiles.types';
 
 export interface ProfileEditPayload {
   displayName: string;
@@ -27,6 +24,15 @@ interface HubProviderProfileItemProps {
   onDelete: (profileId: string) => void;
 }
 
+function summaryText(profile: ProfileItem): string {
+  if (profile.authType === 'api_key') {
+    const host = profile.baseUrl?.replace(/^https?:\/\//, '') ?? '(未设置)';
+    return `${formatProtocolLabel(profile.protocol)} · ${host} · apiKey: ${profile.hasApiKey ? '已配置' : '未配置'}`;
+  }
+  const runtimeName = profile.protocol === 'anthropic' ? 'Claude' : profile.protocol === 'google' ? 'Gemini' : 'Codex';
+  return `${runtimeName} · subscription · 走本机 ${runtimeName} 登录态`;
+}
+
 export function HubProviderProfileItem({
   profile,
   isActive,
@@ -41,75 +47,68 @@ export function HubProviderProfileItem({
   const [editDisplayName, setEditDisplayName] = useState(profile.displayName);
   const [editBaseUrl, setEditBaseUrl] = useState(profile.baseUrl ?? '');
   const [editApiKey, setEditApiKey] = useState('');
-  const [editModels, setEditModels] = useState(profile.models.join(', '));
-  const [editModelOverride, setEditModelOverride] = useState(profile.modelOverride ?? '');
+  const [editModels, setEditModels] = useState(profile.models);
 
   const startEdit = useCallback(() => {
     setEditDisplayName(profile.displayName);
     setEditBaseUrl(profile.baseUrl ?? '');
     setEditApiKey('');
-    setEditModels(profile.models.join(', '));
-    setEditModelOverride(profile.modelOverride ?? '');
+    setEditModels(profile.models);
     setEditing(true);
   }, [profile]);
-
-  const cancelEdit = useCallback(() => setEditing(false), []);
 
   const saveEdit = useCallback(async () => {
     await onSave(profile.id, {
       displayName: editDisplayName.trim(),
       ...(profile.authType === 'api_key' && editBaseUrl.trim() ? { baseUrl: editBaseUrl.trim() } : {}),
       ...(editApiKey.trim() ? { apiKey: editApiKey.trim() } : {}),
-      ...(editModels.trim() ? { models: parseModels(editModels) } : {}),
-      modelOverride: editModelOverride.trim() || null,
+      models: editModels,
+      modelOverride: null,
     });
     setEditing(false);
-  }, [onSave, profile.id, profile.authType, editDisplayName, editBaseUrl, editApiKey, editModels, editModelOverride]);
+  }, [editApiKey, editBaseUrl, editDisplayName, editModels, onSave, profile.authType, profile.id]);
 
-  const inputCls = 'px-2 py-1 rounded border border-gray-200 bg-white text-xs w-full';
   const showTestButton = profile.protocol === 'anthropic' && profile.authType === 'api_key';
 
   if (editing) {
     return (
-      <div className="rounded-lg border-2 border-blue-300 bg-blue-50/30 p-3 space-y-2">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+      <div className="space-y-3 rounded-[20px] border-2 border-[#E8C9AF] bg-[#FFF8F2] p-[18px]">
+        <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
           <input
             value={editDisplayName}
             onChange={(e) => setEditDisplayName(e.target.value)}
             placeholder="账号显示名"
-            className={inputCls}
+            className="rounded border border-[#E8DCCF] bg-white px-3 py-2 text-sm"
           />
-          <div className="px-2 py-1 rounded border border-gray-200 bg-gray-50 text-xs text-gray-600">
-            {profile.protocol} · {profile.authType}
-            {profile.builtin ? ' · builtin' : ''}
+          <div className="rounded border border-[#E8DCCF] bg-white px-3 py-2 text-sm text-[#8A776B]">
+            {formatProtocolLabel(profile.protocol)} · {profile.authType}
+            {profile.builtin ? ' · 🔒 内置' : ''}
           </div>
-          {profile.authType === 'api_key' && (
+          {profile.authType === 'api_key' ? (
             <>
               <input
                 value={editBaseUrl}
                 onChange={(e) => setEditBaseUrl(e.target.value)}
                 placeholder="Base URL"
-                className={`${inputCls} md:col-span-2`}
+                className="rounded border border-[#E8DCCF] bg-white px-3 py-2 text-sm md:col-span-2"
               />
               <input
                 value={editApiKey}
                 onChange={(e) => setEditApiKey(e.target.value)}
                 placeholder={profile.hasApiKey ? 'API Key（留空保持不变）' : 'API Key'}
-                className={`${inputCls} md:col-span-2`}
+                className="rounded border border-[#E8DCCF] bg-white px-3 py-2 text-sm md:col-span-2"
               />
             </>
-          )}
-          <input
-            value={editModels}
-            onChange={(e) => setEditModels(e.target.value)}
-            placeholder="支持模型（逗号分隔）"
-            className={`${inputCls} md:col-span-2`}
-          />
-          <input
-            value={editModelOverride}
-            onChange={(e) => setEditModelOverride(e.target.value)}
-            placeholder="默认/覆盖模型（可选）"
-            className={`${inputCls} md:col-span-2`}
+          ) : null}
+        </div>
+        <div className="space-y-2">
+          <p className="text-sm font-medium text-[#5C4B42]">可用模型</p>
+          <TagEditor
+            tags={editModels}
+            onChange={setEditModels}
+            addLabel="+ 添加"
+            placeholder="输入模型名"
+            emptyLabel="(暂无模型)"
           />
         </div>
         <div className="flex gap-2">
@@ -117,15 +116,15 @@ export function HubProviderProfileItem({
             type="button"
             onClick={saveEdit}
             disabled={busy}
-            className="px-3 py-1 rounded bg-blue-600 text-white text-xs hover:bg-blue-700 disabled:opacity-50"
+            className="rounded bg-[#D49266] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#c47f52] disabled:opacity-50"
           >
             {busy ? '保存中...' : '保存'}
           </button>
           <button
             type="button"
-            onClick={cancelEdit}
+            onClick={() => setEditing(false)}
             disabled={busy}
-            className="px-3 py-1 rounded border border-gray-200 text-gray-600 text-xs hover:bg-gray-50"
+            className="rounded border border-gray-200 px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50"
           >
             取消
           </button>
@@ -135,73 +134,76 @@ export function HubProviderProfileItem({
   }
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-3">
+    <div className="rounded-[20px] border border-[#F1E7DF] bg-[#FFFDFC] p-[18px]">
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 space-y-1">
+        <div className="min-w-0 space-y-2">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-medium text-gray-800">{profile.displayName}</span>
-            <span className="text-[11px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">{profile.authType}</span>
-            <span className="text-[11px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">{profile.protocol}</span>
-            {profile.builtin && <span className="text-[11px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">🔒 内置</span>}
-            {isActive && <span className="text-[11px] px-1.5 py-0.5 rounded bg-green-100 text-green-700">active</span>}
+            <span className="text-base font-bold text-[#2D2118]">{profile.displayName}</span>
+            {isActive ? (
+              <span className="rounded-full bg-[#E8F5E9] px-2.5 py-1 text-[11px] font-semibold text-[#4CAF50]">已激活</span>
+            ) : null}
+            {profile.builtin ? <span className="text-[11px] font-semibold text-[#8A776B]">🔒 内置</span> : null}
+            {!profile.builtin ? (
+              <span className="rounded-full bg-[#F3E8FF] px-2.5 py-1 text-[11px] font-semibold text-[#9D7BC7]">api_key</span>
+            ) : null}
           </div>
-          <p className="text-xs text-gray-500">
-            {profile.authType === 'api_key'
-              ? `baseUrl: ${profile.baseUrl ?? '(未设置)'} · apiKey: ${profile.hasApiKey ? '已配置' : '未配置'}`
-              : '走本机 OAuth / CLI 登录态，不使用 API key'}
-          </p>
-          {profile.models.length > 0 && <p className="text-xs text-indigo-600">models: {profile.models.join(', ')}</p>}
-          {profile.modelOverride && <p className="text-xs text-indigo-500">default: {profile.modelOverride}</p>}
+          <p className="text-sm text-[#8A776B]">{summaryText(profile)}</p>
+          <div className="space-y-2">
+            <p className="text-xs font-semibold text-[#8A776B]">可用模型</p>
+            <div className="flex flex-wrap gap-2">
+              <TagPillList tags={profile.models} emptyLabel="(暂无模型)" />
+            </div>
+          </div>
         </div>
-        <div className="flex flex-wrap gap-1.5 shrink-0">
-          {!isActive && (
+        <div className="flex shrink-0 flex-wrap gap-1.5">
+          {!isActive ? (
             <button
               type="button"
-              className="px-2 py-1 rounded border border-blue-200 text-blue-700 text-xs hover:bg-blue-50"
+              className="rounded-full bg-[#F7F3F0] px-3 py-1.5 text-xs font-semibold text-[#8A776B]"
               onClick={() => onActivate(profile.id)}
               disabled={busy}
             >
               激活
             </button>
-          )}
-          <button
-            type="button"
-            className="px-2 py-1 rounded border border-gray-200 text-gray-700 text-xs hover:bg-gray-50"
-            onClick={startEdit}
-            disabled={busy}
-          >
-            编辑
-          </button>
-          {showTestButton && (
+          ) : null}
+          {showTestButton ? (
             <button
               type="button"
-              className="px-2 py-1 rounded border border-indigo-200 text-indigo-700 text-xs hover:bg-indigo-50"
+              className="rounded-full bg-[#F7F3F0] px-3 py-1.5 text-xs font-semibold text-[#8A776B]"
               onClick={() => onTest(profile.id)}
               disabled={busy}
             >
               测试
             </button>
-          )}
-          {!profile.builtin && (
+          ) : null}
+          <button
+            type="button"
+            className="rounded-full bg-[#F7F3F0] px-3 py-1.5 text-xs font-semibold text-[#8A776B]"
+            onClick={startEdit}
+            disabled={busy}
+          >
+            编辑
+          </button>
+          {!profile.builtin ? (
             <button
               type="button"
-              className="px-2 py-1 rounded border border-red-200 text-red-700 text-xs hover:bg-red-50"
+              className="rounded-full bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-600"
               onClick={() => onDelete(profile.id)}
               disabled={busy}
             >
               删除
             </button>
-          )}
+          ) : null}
         </div>
       </div>
 
-      {testResult && (
-        <p className={`text-xs mt-2 ${testResult.ok ? 'text-green-700' : 'text-red-600'}`}>
+      {testResult ? (
+        <p className={`mt-3 text-xs ${testResult.ok ? 'text-green-700' : 'text-red-600'}`}>
           {testResult.ok
             ? `测试通过${testResult.status ? ` (HTTP ${testResult.status})` : ''}`
             : `测试失败${testResult.status ? ` (HTTP ${testResult.status})` : ''}${testResult.error ? `: ${testResult.error}` : ''}`}
         </p>
-      )}
+      ) : null}
     </div>
   );
 }

@@ -196,7 +196,7 @@ describe('CatCafeHub provider profiles tab', () => {
     expect(mockApiFetch).not.toHaveBeenCalledWith('/api/claude-rescue/sessions');
   });
 
-  it('shows Screen 6 filter tabs and keeps Antigravity out of the provider page', async () => {
+  it('keeps API key creation collapsed by default and removes redundant protocol fields', async () => {
     mockApiFetch.mockImplementation((path: string) => {
       if (path.startsWith('/api/provider-profiles')) {
         return Promise.resolve(
@@ -273,23 +273,134 @@ describe('CatCafeHub provider profiles tab', () => {
     });
     await flushEffects();
 
-    expect(container.textContent).toContain('全部');
-    expect(container.textContent).toContain('Claude OAuth');
-    expect(container.textContent).toContain('Codex OAuth');
-    expect(container.textContent).toContain('Gemini OAuth');
-    expect(container.textContent).toContain('API Key');
     expect(container.textContent).toContain('🔒');
-    expect(container.textContent).not.toContain('Antigravity');
+    expect(container.textContent).toContain('全部');
+    expect(container.textContent).toContain('Claude');
+    expect(container.textContent).toContain('Codex');
+    expect(container.textContent).toContain('Gemini');
+    expect(container.textContent).toContain('API Key');
+    expect(container.textContent).toContain('+ 新建 API Key 账号');
+    expect(container.textContent).not.toContain('协议自动识别');
+    expect(container.textContent).not.toContain('默认/覆盖模型');
+    expect(container.querySelector('input[placeholder="Base URL"]')).toBeNull();
+
+    const profileList = container.querySelector('[aria-label="Provider Profile List"]');
+    expect(profileList?.textContent).not.toContain('Antigravity');
+
+    await act(async () => {
+      queryButton(container, '+ 新建 API Key 账号').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushEffects();
+
+    expect(container.textContent).toContain('协议自动识别');
+    expect(container.querySelector('input[placeholder="Base URL"]')).toBeTruthy();
+    expect(container.querySelector('input[placeholder="API Key"]')).toBeTruthy();
+    expect(container.querySelector('select')).toBeNull();
+    expect(container.textContent).toContain('可用模型');
+  });
+
+  it('filters provider cards with the wireframe tabs', async () => {
+    mockApiFetch.mockImplementation((path: string) => {
+      if (path.startsWith('/api/provider-profiles')) {
+        return Promise.resolve(
+          jsonResponse({
+            projectPath: '/tmp/project',
+            activeProfileId: 'claude-oauth',
+            providers: [
+              {
+                id: 'claude-oauth',
+                provider: 'claude-oauth',
+                displayName: 'Claude (OAuth)',
+                name: 'Claude (OAuth)',
+                authType: 'oauth',
+                protocol: 'anthropic',
+                builtin: true,
+                mode: 'subscription',
+                models: ['claude-opus-4-6'],
+                hasApiKey: false,
+                createdAt: '2026-03-18T00:00:00.000Z',
+                updatedAt: '2026-03-18T00:00:00.000Z',
+              },
+              {
+                id: 'codex-oauth',
+                provider: 'codex-oauth',
+                displayName: 'Codex (OAuth)',
+                name: 'Codex (OAuth)',
+                authType: 'oauth',
+                protocol: 'openai',
+                builtin: true,
+                mode: 'subscription',
+                models: ['gpt-5.4'],
+                hasApiKey: false,
+                createdAt: '2026-03-18T00:00:00.000Z',
+                updatedAt: '2026-03-18T00:00:00.000Z',
+              },
+              {
+                id: 'gemini-oauth',
+                provider: 'gemini-oauth',
+                displayName: 'Gemini (OAuth)',
+                name: 'Gemini (OAuth)',
+                authType: 'oauth',
+                protocol: 'google',
+                builtin: true,
+                mode: 'subscription',
+                models: ['gemini-2.5-pro'],
+                hasApiKey: false,
+                createdAt: '2026-03-18T00:00:00.000Z',
+                updatedAt: '2026-03-18T00:00:00.000Z',
+              },
+              {
+                id: 'codex-sponsor',
+                provider: 'codex-sponsor',
+                displayName: 'Codex Sponsor',
+                name: 'Codex Sponsor',
+                authType: 'api_key',
+                protocol: 'openai',
+                builtin: false,
+                mode: 'api_key',
+                baseUrl: 'https://api.openai-proxy.dev',
+                models: ['gpt-5.4'],
+                hasApiKey: true,
+                createdAt: '2026-03-18T00:00:00.000Z',
+                updatedAt: '2026-03-18T00:00:00.000Z',
+              },
+            ],
+          }),
+        );
+      }
+      throw new Error(`Unexpected apiFetch path: ${path}`);
+    });
+
+    await act(async () => {
+      root.render(React.createElement(HubProviderProfilesTab));
+    });
+    await flushEffects();
+
+    const profileList = container.querySelector('[aria-label="Provider Profile List"]');
+    expect(profileList?.textContent).toContain('Claude (OAuth)');
+    expect(profileList?.textContent).toContain('Codex (OAuth)');
+    expect(profileList?.textContent).toContain('Gemini (OAuth)');
+    expect(profileList?.textContent).toContain('Codex Sponsor');
 
     await act(async () => {
       queryButton(container, 'API Key').dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
+    await flushEffects();
 
-    const profileList = container.querySelector('[aria-label="Provider Profile List"]');
-    expect(profileList?.textContent).toContain('Codex Sponsor');
     expect(profileList?.textContent).not.toContain('Claude (OAuth)');
     expect(profileList?.textContent).not.toContain('Codex (OAuth)');
     expect(profileList?.textContent).not.toContain('Gemini (OAuth)');
+    expect(profileList?.textContent).toContain('Codex Sponsor');
+
+    await act(async () => {
+      queryButton(container, 'Codex').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushEffects();
+
+    expect(profileList?.textContent).not.toContain('Claude (OAuth)');
+    expect(profileList?.textContent).toContain('Codex (OAuth)');
+    expect(profileList?.textContent).not.toContain('Gemini (OAuth)');
+    expect(profileList?.textContent).not.toContain('Codex Sponsor');
   });
 
   it('renders ragdoll rescue section from the dedicated rescue tab', async () => {

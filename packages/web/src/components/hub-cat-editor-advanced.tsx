@@ -11,7 +11,7 @@ import {
   type HubCatEditorFormState,
   type StrategyFormState,
 } from './hub-cat-editor.model';
-import { SectionCard, SelectField, TextField } from './hub-cat-editor-fields';
+import { RangeField, SectionCard, SelectField, TextField } from './hub-cat-editor-fields';
 
 type FormPatch = Partial<HubCatEditorFormState>;
 
@@ -75,8 +75,8 @@ export function AdvancedRuntimeSection({
           inputMode="numeric"
         />
         <TextField
-          label="Max Content Length"
-          ariaLabel="Max Content Length"
+          label="Max Content Length Per Msg"
+          ariaLabel="Max Content Length Per Msg"
           value={form.maxContentLengthPerMsg}
           onChange={(value) => onChange({ maxContentLengthPerMsg: value })}
           inputMode="numeric"
@@ -94,7 +94,11 @@ export function AdvancedRuntimeSection({
           {loadingStrategy ? <p className="text-sm text-[#7F7168]">Session 策略加载中...</p> : null}
           {strategyError ? <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600">{strategyError}</p> : null}
           {strategyForm ? (
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-4">
+              <div className="rounded-2xl border border-[#CFE5D5] bg-[#F5FBF6] px-4 py-3 text-xs leading-5 text-[#6C7A6D]">
+                📊 阈值基于 context 填充率 = 当前 tokens / Max Context Tokens。拖动滑条调节百分比。
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
               <SelectField
                 label="Session Strategy"
                 value={strategyForm.strategy}
@@ -103,17 +107,17 @@ export function AdvancedRuntimeSection({
                 )}
                 onChange={(value) => onStrategyChange({ strategy: value as StrategyFormState['strategy'] })}
               />
-              <TextField
-                label="Warn Threshold"
+              <RangeField
+                label="Session Warn Threshold"
                 value={strategyForm.warnThreshold}
                 onChange={(value) => onStrategyChange({ warnThreshold: value })}
-                inputMode="decimal"
+                hint="⚡ context 填充到此比例时前端弹出警告提示"
               />
-              <TextField
-                label="Action Threshold"
+              <RangeField
+                label="Session Action Threshold"
                 value={strategyForm.actionThreshold}
                 onChange={(value) => onStrategyChange({ actionThreshold: value })}
-                inputMode="decimal"
+                hint="🔥 context 填充到此比例时触发 Session 策略动作（如 handoff 换 session）"
               />
               {strategyForm.strategy === 'hybrid' ? (
                 <TextField
@@ -123,6 +127,7 @@ export function AdvancedRuntimeSection({
                   inputMode="numeric"
                 />
               ) : null}
+              </div>
             </div>
           ) : null}
         </div>
@@ -134,6 +139,7 @@ export function AdvancedRuntimeSection({
           {codexSettingsError ? (
             <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600">{codexSettingsError}</p>
           ) : null}
+          <p className="text-center text-xs font-semibold text-[#B59A88]">── Codex 专属 (仅 Client=Codex 时显示) ──</p>
           <div className="grid gap-4 md:grid-cols-3">
             <SelectField
               label="Codex Sandbox 🏷️"

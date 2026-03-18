@@ -9,7 +9,7 @@ export function SectionCard({
   children,
 }: {
   title: string;
-  description: string;
+  description?: string;
   tone?: 'neutral' | 'success';
   children: ReactNode;
 }) {
@@ -21,7 +21,7 @@ export function SectionCard({
     <section className={`rounded-[20px] border p-5 ${toneClass}`}>
       <div className="space-y-1">
         <h4 className="text-[17px] font-semibold text-[#2D2118]">{title}</h4>
-        <p className="text-sm leading-6 text-[#7F7168]">{description}</p>
+        {description ? <p className="text-sm leading-6 text-[#7F7168]">{description}</p> : null}
       </div>
       <div className="mt-4 space-y-4">{children}</div>
     </section>
@@ -116,6 +116,43 @@ export function SelectField({
           </option>
         ))}
       </select>
+    </label>
+  );
+}
+
+export function RangeField({
+  label,
+  value,
+  onChange,
+  hint,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  hint: string;
+}) {
+  const numeric = Number.parseFloat(value);
+  const safeValue = Number.isFinite(numeric) ? Math.min(Math.max(numeric, 0), 1) : 0;
+
+  return (
+    <label className="space-y-2 text-sm text-[#5C4B42]">
+      <div className="flex items-center justify-between gap-3">
+        <span className="font-medium">{label}</span>
+        <span className="rounded-full bg-white/80 px-2 py-0.5 text-xs font-semibold text-[#5B7A5C]">
+          {(safeValue * 100).toFixed(0)}%
+        </span>
+      </div>
+      <input
+        type="range"
+        aria-label={label}
+        min="0"
+        max="1"
+        step="0.01"
+        value={safeValue}
+        onChange={(event) => onChange(event.target.value)}
+        className="w-full accent-[#77A777]"
+      />
+      <p className="text-xs leading-5 text-[#6C7A6D]">{hint}</p>
     </label>
   );
 }

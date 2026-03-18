@@ -273,6 +273,9 @@ describe('HubCatEditor', () => {
       if (path === '/api/config/session-strategy') {
         return Promise.resolve(jsonResponse({ cats: [] }));
       }
+      if (path === '/api/config' && !init?.method) {
+        return Promise.resolve(jsonResponse({ config: { cli: {}, codexExecution: {} } }));
+      }
       if (path === '/api/cats/runtime-codex' && init?.method === 'PATCH') {
         return Promise.resolve(jsonResponse({ cat: { id: 'runtime-codex' } }));
       }
@@ -284,7 +287,7 @@ describe('HubCatEditor', () => {
     });
     await flushEffects();
 
-    const saveButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === '保存');
+    const saveButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === '保存修改');
     await act(async () => {
       saveButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
@@ -347,6 +350,9 @@ describe('HubCatEditor', () => {
       if (path === '/api/config/session-strategy') {
         return Promise.resolve(jsonResponse({ cats: [] }));
       }
+      if (path === '/api/config' && !init?.method) {
+        return Promise.resolve(jsonResponse({ config: { cli: {}, codexExecution: {} } }));
+      }
       if (path === '/api/cats/runtime-codex' && init?.method === 'PATCH') {
         return Promise.resolve(jsonResponse({ cat: { id: 'runtime-codex' } }));
       }
@@ -361,9 +367,9 @@ describe('HubCatEditor', () => {
     await changeField(queryField(container, 'input[aria-label="Max Prompt Tokens"]'), '');
     await changeField(queryField(container, 'input[aria-label="Max Context Tokens"]'), '');
     await changeField(queryField(container, 'input[aria-label="Max Messages"]'), '');
-    await changeField(queryField(container, 'input[aria-label="Max Content Length"]'), '');
+    await changeField(queryField(container, 'input[aria-label="Max Content Length Per Msg"]'), '');
 
-    const saveButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === '保存');
+    const saveButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === '保存修改');
     await act(async () => {
       saveButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
@@ -471,9 +477,9 @@ describe('HubCatEditor', () => {
     });
     await flushEffects();
 
-    const deleteButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === '删除成员');
+    const deleteButton = queryField<HTMLButtonElement>(container, 'button[aria-label="删除成员"]');
     await act(async () => {
-      deleteButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      deleteButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     await flushEffects();
 
@@ -629,11 +635,18 @@ describe('HubCatEditor', () => {
     expect(container.textContent).toContain('Strengths');
     expect(container.textContent).toContain('▸ Voice Config (点击展开)');
     expect(container.textContent).toContain('别名与 @ 路由');
+    expect(container.textContent).toContain('认证与模型');
     expect(container.textContent).toContain('Session Chain');
+    expect(container.textContent).toContain('── Codex 专属 (仅 Client=Codex 时显示) ──');
     expect(container.textContent).toContain('Codex Sandbox 🏷️');
     expect(container.textContent).toContain('Codex Approval 🏷️');
     expect(container.textContent).toContain('Codex Auth Mode 🏷️');
     expect(container.textContent).toContain('💾 运行时持久化');
+    expect(container.textContent).toContain('保存修改');
+    expect(container.textContent).not.toContain('删除成员');
+    expect(container.textContent).not.toContain('账号与运行方式');
+    expect(container.textContent).not.toContain('Primary');
+    expect(container.textContent).not.toContain('Secondary');
     expect(container.textContent).not.toContain('Display Name');
 
     await changeField(queryField(container, 'input[aria-label="Max Prompt Tokens"]'), '48000');
@@ -642,10 +655,10 @@ describe('HubCatEditor', () => {
     await changeField(queryField(container, 'input[aria-label="Strengths"]'), 'security, testing, debugging');
     await changeField(queryField(container, 'select[aria-label="Session Chain"]'), 'false', 'change');
     await changeField(queryField(container, 'select[aria-label="Session Strategy"]'), 'handoff', 'change');
-    await changeField(queryField(container, 'input[aria-label="Warn Threshold"]'), '0.55');
+    await changeField(queryField(container, 'input[aria-label="Session Warn Threshold"]'), '0.55', 'change');
     await changeField(queryField(container, 'select[aria-label^="Codex Approval"]'), 'never', 'change');
 
-    const saveButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === '保存');
+    const saveButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === '保存修改');
     await act(async () => {
       saveButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
@@ -675,5 +688,91 @@ describe('HubCatEditor', () => {
         String(init.body).includes('cli.codexApprovalPolicy'),
     );
     expect(codexConfigPatch).toBeTruthy();
+  });
+
+  it('shows Codex-only runtime controls for any Client=Codex and lets alias chips be removed', async () => {
+    const onSaved = vi.fn(() => Promise.resolve());
+    mockApiFetch.mockImplementation((path: string, init?: RequestInit) => {
+      if (path === '/api/provider-profiles') {
+        return Promise.resolve(
+          jsonResponse({
+            projectPath: '/tmp/project',
+            activeProfileId: 'codex-sponsor',
+            providers: [
+              {
+                id: 'codex-sponsor',
+                provider: 'codex-sponsor',
+                displayName: 'Codex Sponsor',
+                name: 'Codex Sponsor',
+                authType: 'api_key',
+                protocol: 'openai',
+                builtin: false,
+                mode: 'api_key',
+                models: ['gpt-5.4'],
+                hasApiKey: true,
+                createdAt: '2026-03-18T00:00:00.000Z',
+                updatedAt: '2026-03-18T00:00:00.000Z',
+              },
+            ],
+          }),
+        );
+      }
+      if (path === '/api/config' && !init?.method) {
+        return Promise.resolve(
+          jsonResponse({
+            config: {
+              cli: {
+                codexSandboxMode: 'workspace-write',
+                codexApprovalPolicy: 'on-request',
+              },
+              codexExecution: {
+                authMode: 'oauth',
+              },
+            },
+          }),
+        );
+      }
+      if (path === '/api/cats') {
+        return Promise.resolve(jsonResponse({ cat: { id: 'runtime-reviewer' } }, 201));
+      }
+      if (path === '/api/config' && init?.method === 'PATCH') {
+        return Promise.resolve(jsonResponse({ config: {} }));
+      }
+      throw new Error(`Unexpected apiFetch path: ${path}`);
+    });
+
+    await act(async () => {
+      root.render(React.createElement(HubCatEditor, { open: true, onClose: vi.fn(), onSaved }));
+    });
+    await flushEffects();
+
+    await changeField(queryField(container, 'input[aria-label="Cat ID"]'), 'runtime-reviewer');
+    await changeField(queryField(container, 'input[aria-label="Name"]'), '运行时审查猫');
+    await changeField(queryField(container, 'input[aria-label="Display Name"]'), '运行时审查猫');
+    await changeField(queryField(container, 'input[aria-label="Description"]'), 'review');
+    await changeField(queryField(container, 'textarea[aria-label="Aliases"]'), '@runtime-reviewer, @第二别名');
+    await changeField(queryField(container, 'select[aria-label="Client"]'), 'openai', 'change');
+    await flushEffects();
+
+    expect(container.textContent).toContain('Codex Sandbox 🏷️');
+
+    const removeAliasButton = queryField<HTMLButtonElement>(container, 'button[aria-label="移除 @第二别名"]');
+    await act(async () => {
+      removeAliasButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    await changeField(queryField(container, 'select[aria-label="Provider"]'), 'codex-sponsor', 'change');
+    await changeField(queryField(container, 'select[aria-label="Model"]'), 'gpt-5.4', 'change');
+
+    const saveButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === '保存');
+    await act(async () => {
+      saveButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushEffects();
+
+    const postCall = mockApiFetch.mock.calls.find(([path]) => path === '/api/cats');
+    expect(postCall).toBeTruthy();
+    const payload = JSON.parse(String(postCall?.[1]?.body));
+    expect(payload.mentionPatterns).toEqual(['@runtime-reviewer']);
   });
 });

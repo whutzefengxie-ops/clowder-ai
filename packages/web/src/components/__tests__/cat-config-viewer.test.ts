@@ -113,6 +113,7 @@ describe('CatOverviewTab', () => {
     expect(html).toContain('Co-worker');
     expect(html).toContain('🔒 Owner');
     expect(html).toContain('#D4A76A');
+    expect(html).toContain('只能编辑，不能新增或删除');
     expect(html.indexOf('Co-worker')).toBeLessThan(html.indexOf('布偶猫 · 宪宪'));
     expect(html).toContain('全部');
     expect(html).toContain('订阅');
@@ -130,6 +131,7 @@ describe('CatOverviewTab', () => {
     expect(html).toContain('gemini-bridge');
     expect(html).toContain('编辑成员');
     expect(html).toContain('添加成员');
+    expect(html).not.toContain('Owner 信息独立维护');
     expect(html).not.toContain('Locked');
     expect(html).not.toContain('border-dashed');
     expect(html).not.toContain('md:grid-cols-2');

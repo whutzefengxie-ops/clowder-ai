@@ -5,6 +5,7 @@ import type { CatData } from '@/hooks/useCatData';
 import { apiFetch } from '@/utils/api-client';
 import type { ConfigData } from './config-viewer-types';
 import { AdvancedRuntimeSection } from './hub-cat-editor-advanced';
+import { buildEditorLoadingNote, uploadAvatarAsset } from './hub-cat-editor.client';
 import { PersistenceBanner } from './hub-cat-editor-fields';
 import {
   buildCatPayload,
@@ -36,6 +37,7 @@ export function HubCatEditor({ cat, draft, open, onClose, onSaved }: HubCatEdito
   const [loadingProfiles, setLoadingProfiles] = useState(false);
   const [loadingStrategy, setLoadingStrategy] = useState(false);
   const [loadingCodexSettings, setLoadingCodexSettings] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [strategyError, setStrategyError] = useState<string | null>(null);
   const [codexSettingsError, setCodexSettingsError] = useState<string | null>(null);
@@ -46,11 +48,8 @@ export function HubCatEditor({ cat, draft, open, onClose, onSaved }: HubCatEdito
   const [codexBaseline, setCodexBaseline] = useState<CodexRuntimeSettings | null>(null);
 
   const availableProfiles = useMemo(() => filterProfiles(form.client, profiles), [form.client, profiles]);
-  const selectedProfile = useMemo(
-    () => availableProfiles.find((profile) => profile.id === form.providerProfileId) ?? null,
-    [availableProfiles, form.providerProfileId],
-  );
-  const showCodexSettings = cat?.id === 'codex' || (!cat && form.client === 'openai' && form.catId.trim() === 'codex');
+  const selectedProfile = useMemo(() => availableProfiles.find((profile) => profile.id === form.providerProfileId) ?? null, [availableProfiles, form.providerProfileId]);
+  const showCodexSettings = form.client === 'openai';
 
   useEffect(() => {
     if (!open) return;
@@ -119,6 +118,13 @@ export function HubCatEditor({ cat, draft, open, onClose, onSaved }: HubCatEdito
       setLoadingCodexSettings(false);
       return;
     }
+    if (!cat) {
+      const defaults = toCodexRuntimeSettings();
+      setCodexSettings(defaults);
+      setCodexBaseline(defaults);
+      setLoadingCodexSettings(false);
+      return;
+    }
     let cancelled = false;
     setLoadingCodexSettings(true);
     apiFetch('/api/config')
@@ -141,7 +147,7 @@ export function HubCatEditor({ cat, draft, open, onClose, onSaved }: HubCatEdito
     return () => {
       cancelled = true;
     };
-  }, [open, showCodexSettings]);
+  }, [cat, open, showCodexSettings]);
 
   useEffect(() => {
     if (form.client === 'antigravity') {
@@ -177,6 +183,14 @@ export function HubCatEditor({ cat, draft, open, onClose, onSaved }: HubCatEdito
       ...(prev ?? toCodexRuntimeSettings()),
       ...patch,
     }));
+
+  const handleAvatarUpload = async (file: File) => {
+    setUploadingAvatar(true);
+    setError(null);
+    try {
+      patchForm({ avatar: await uploadAvatarAsset(file) });
+    } catch (err) { setError(err instanceof Error ? err.message : '头像上传失败'); } finally { setUploadingAvatar(false); }
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -262,13 +276,24 @@ export function HubCatEditor({ cat, draft, open, onClose, onSaved }: HubCatEdito
             <h3 className="mt-2 text-2xl font-bold text-[#2D2118]">{cat ? '成员配置' : '添加成员'}</h3>
             <p className="mt-1 text-sm text-[#8A776B]">成员配置：身份、认证、路由、高级参数一站到位</p>
           </div>
-          <button type="button" onClick={onClose} className="text-2xl leading-none text-[#B59A88]" aria-label="关闭">
-            ×
-          </button>
+          <div className="flex items-center gap-2">
+            {cat ? (
+              <button type="button" onClick={handleDelete} disabled={saving} className="rounded-full bg-red-50 p-2 text-red-600 transition hover:bg-red-100 disabled:opacity-50" aria-label="删除成员">
+                <svg viewBox="0 0 16 16" className="h-4 w-4 fill-none stroke-current" aria-hidden="true"><path d="M3.5 4.5h9m-7.5 0V3.25h5V4.5m-5.5 0 .5 8h5l.5-8m-4 2v4m2-4v4" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              </button>
+            ) : null}
+            <button type="button" onClick={onClose} className="text-2xl leading-none text-[#B59A88]" aria-label="关闭">×</button>
+          </div>
         </div>
 
         <div className="space-y-5 px-7 py-6">
-          <IdentitySection cat={cat} form={form} onChange={patchForm} />
+          <IdentitySection
+            cat={cat}
+            form={form}
+            avatarUploading={uploadingAvatar}
+            onChange={patchForm}
+            onAvatarUpload={handleAvatarUpload}
+          />
           <AccountSection
             form={form}
             availableProfiles={availableProfiles}
@@ -296,22 +321,8 @@ export function HubCatEditor({ cat, draft, open, onClose, onSaved }: HubCatEdito
         </div>
 
         <div className="flex items-center justify-between border-t border-[#F0DDCD] bg-[#FFF3EA] px-7 py-4">
-          <div className="text-xs text-[#8A776B]">
-            {[loadingProfiles ? '账号配置加载中…' : null, loadingStrategy ? 'Session 策略加载中…' : null, loadingCodexSettings ? 'Codex 参数加载中…' : null]
-              .filter(Boolean)
-              .join(' · ')}
-          </div>
+          <div className="text-xs text-[#8A776B]">{buildEditorLoadingNote({ loadingProfiles, loadingStrategy, loadingCodexSettings })}</div>
           <div className="flex gap-2">
-            {cat ? (
-              <button
-                type="button"
-                onClick={handleDelete}
-                disabled={saving}
-                className="rounded-xl bg-red-50 px-4 py-2 text-sm text-red-600 transition hover:bg-red-100 disabled:opacity-50"
-              >
-                删除成员
-              </button>
-            ) : null}
             <button
               type="button"
               onClick={onClose}
@@ -325,7 +336,7 @@ export function HubCatEditor({ cat, draft, open, onClose, onSaved }: HubCatEdito
               disabled={saving}
               className="rounded-xl bg-[#D49266] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#C88254] disabled:opacity-50"
             >
-              {saving ? '保存中…' : '保存'}
+              {saving ? '保存中…' : cat ? '保存修改' : '保存'}
             </button>
           </div>
         </div>

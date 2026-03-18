@@ -6,13 +6,12 @@ import { apiFetch } from '@/utils/api-client';
 import { HubProviderProfileItem, type ProfileEditPayload } from './HubProviderProfileItem';
 import {
   CreateApiKeyProfileSection,
-  parseModels,
+  inferProfileProtocol,
   ProviderFilterTabs,
-  type ProviderFilterKey,
   ProviderProfilesSummaryCard,
+  type ProviderFilterKey,
 } from './hub-provider-profiles.sections';
 import type {
-  ProfileProtocol,
   ProfileTestResult,
   ProviderProfilesResponse,
 } from './hub-provider-profiles.types';
@@ -28,14 +27,12 @@ export function HubProviderProfilesTab() {
   const [projectPath, setProjectPath] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [testResultById, setTestResultById] = useState<Record<string, ProfileTestResult>>({});
-  const [filterKey, setFilterKey] = useState<ProviderFilterKey>('all');
+  const [filter, setFilter] = useState<ProviderFilterKey>('all');
 
   const [createDisplayName, setCreateDisplayName] = useState('');
-  const [createProtocol, setCreateProtocol] = useState<ProfileProtocol>('anthropic');
   const [createBaseUrl, setCreateBaseUrl] = useState('');
   const [createApiKey, setCreateApiKey] = useState('');
-  const [createModels, setCreateModels] = useState('');
-  const [createModelOverride, setCreateModelOverride] = useState('');
+  const [createModels, setCreateModels] = useState<string[]>([]);
 
   const fetchProfiles = useCallback(async (forProject?: string) => {
     setError(null);
@@ -107,20 +104,17 @@ export function HubProviderProfilesTab() {
           projectPath: projectPath ?? undefined,
           displayName: createDisplayName.trim(),
           authType: 'api_key',
-          protocol: createProtocol,
+          protocol: inferProfileProtocol(createBaseUrl),
           baseUrl: createBaseUrl.trim(),
           apiKey: createApiKey.trim(),
-          ...(createModels.trim() ? { models: parseModels(createModels) } : {}),
-          ...(createModelOverride.trim() ? { modelOverride: createModelOverride.trim() } : {}),
+          ...(createModels.length > 0 ? { models: createModels } : {}),
           setActive: true,
         }),
       });
       setCreateDisplayName('');
       setCreateBaseUrl('');
       setCreateApiKey('');
-      setCreateModels('');
-      setCreateModelOverride('');
-      setCreateProtocol('anthropic');
+      setCreateModels([]);
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -132,9 +126,7 @@ export function HubProviderProfilesTab() {
     createApiKey,
     createBaseUrl,
     createDisplayName,
-    createModelOverride,
     createModels,
-    createProtocol,
     projectPath,
     refresh,
   ]);
@@ -233,24 +225,16 @@ export function HubProviderProfilesTab() {
 
   const builtinProfiles = useMemo(() => data?.providers.filter((profile) => profile.builtin) ?? [], [data?.providers]);
   const customProfiles = useMemo(() => data?.providers.filter((profile) => !profile.builtin) ?? [], [data?.providers]);
-  const matchesFilter = useCallback(
-    (profileId: string, authType: 'oauth' | 'api_key') => {
-      if (filterKey === 'all') return true;
-      if (filterKey === 'api_key') return authType === 'api_key';
-      return profileId === filterKey;
-    },
-    [filterKey],
-  );
-  const visibleBuiltinProfiles = useMemo(
-    () => builtinProfiles.filter((profile) => matchesFilter(profile.id, profile.authType)),
-    [builtinProfiles, matchesFilter],
-  );
-  const visibleCustomProfiles = useMemo(
-    () => customProfiles.filter((profile) => matchesFilter(profile.id, profile.authType)),
-    [customProfiles, matchesFilter],
-  );
+  const filteredBuiltinProfiles = useMemo(() => {
+    if (filter === 'all' || filter === 'api_key') return filter === 'all' ? builtinProfiles : [];
+    return builtinProfiles.filter((profile) => profile.protocol === filter);
+  }, [builtinProfiles, filter]);
+  const filteredCustomProfiles = useMemo(() => {
+    if (filter === 'all' || filter === 'api_key') return customProfiles;
+    return [];
+  }, [customProfiles, filter]);
   const isProfileActive = useCallback(
-    (profile: { id: string; protocol: ProfileProtocol }) => {
+    (profile: { id: string; protocol: 'anthropic' | 'openai' | 'google' }) => {
       if (!data) return false;
       const protocolActive = data.activeProfileIds?.[profile.protocol];
       if (protocolActive !== undefined) return protocolActive === profile.id;
@@ -272,34 +256,17 @@ export function HubProviderProfilesTab() {
         activePath={projectPath}
         onSwitchProject={switchProject}
       />
-      <ProviderFilterTabs value={filterKey} onChange={setFilterKey} />
-
-      <CreateApiKeyProfileSection
-        displayName={createDisplayName}
-        protocol={createProtocol}
-        baseUrl={createBaseUrl}
-        apiKey={createApiKey}
-        models={createModels}
-        modelOverride={createModelOverride}
-        busy={busyId === 'create'}
-        onDisplayNameChange={setCreateDisplayName}
-        onProtocolChange={setCreateProtocol}
-        onBaseUrlChange={setCreateBaseUrl}
-        onApiKeyChange={setCreateApiKey}
-        onModelsChange={setCreateModels}
-        onModelOverrideChange={setCreateModelOverride}
-        onCreate={createProfile}
-      />
+      <ProviderFilterTabs value={filter} onChange={setFilter} />
 
       <div aria-label="Provider Profile List" className="space-y-4">
-        {visibleBuiltinProfiles.length > 0 ? (
+        {filteredBuiltinProfiles.length > 0 ? (
           <section className="space-y-2">
             <div className="flex items-center justify-between">
               <h4 className="text-xs font-semibold text-gray-700">内置 OAuth</h4>
-              <span className="text-[11px] text-gray-400">{visibleBuiltinProfiles.length} 项</span>
+              <span className="text-[11px] text-gray-400">{filteredBuiltinProfiles.length} 项</span>
             </div>
             <div className="space-y-2">
-              {visibleBuiltinProfiles.map((profile) => (
+              {filteredBuiltinProfiles.map((profile) => (
                 <HubProviderProfileItem
                   key={profile.id}
                   profile={profile}
@@ -316,15 +283,15 @@ export function HubProviderProfilesTab() {
           </section>
         ) : null}
 
-        {(filterKey === 'all' || filterKey === 'api_key') && (
+        {filter === 'all' || filter === 'api_key' ? (
           <section className="space-y-2">
             <div className="flex items-center justify-between">
               <h4 className="text-xs font-semibold text-gray-700">自定义 API Key 账号</h4>
-              <span className="text-[11px] text-gray-400">{visibleCustomProfiles.length} 项</span>
+              <span className="text-[11px] text-gray-400">{filteredCustomProfiles.length} 项</span>
             </div>
             <div className="space-y-2">
-              {visibleCustomProfiles.length === 0 && <p className="text-xs text-gray-400">暂未创建自定义 API Key 账号</p>}
-              {visibleCustomProfiles.map((profile) => (
+              {filteredCustomProfiles.length === 0 ? <p className="text-xs text-gray-400">暂未创建自定义 API Key 账号</p> : null}
+              {filteredCustomProfiles.map((profile) => (
                 <HubProviderProfileItem
                   key={profile.id}
                   profile={profile}
@@ -339,8 +306,21 @@ export function HubProviderProfilesTab() {
               ))}
             </div>
           </section>
-        )}
+        ) : null}
       </div>
+
+      <CreateApiKeyProfileSection
+        displayName={createDisplayName}
+        baseUrl={createBaseUrl}
+        apiKey={createApiKey}
+        models={createModels}
+        busy={busyId === 'create'}
+        onDisplayNameChange={setCreateDisplayName}
+        onBaseUrlChange={setCreateBaseUrl}
+        onApiKeyChange={setCreateApiKey}
+        onModelsChange={setCreateModels}
+        onCreate={createProfile}
+      />
     </div>
   );
 }

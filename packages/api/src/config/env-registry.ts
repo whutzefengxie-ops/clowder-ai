@@ -45,6 +45,8 @@ export interface EnvDefinition {
   sensitive: boolean;
   /** If 'url', credentials in URL are masked but host/port/db preserved */
   maskMode?: 'url';
+  /** If false, keep internal-only and do not surface in Hub env editor */
+  hubVisible?: boolean;
 }
 
 export const ENV_CATEGORIES: Record<EnvCategory, string> = {
@@ -228,6 +230,7 @@ export const ENV_VARS: EnvDefinition[] = [
     description: '全局 prompt 字符上限',
     category: 'budget',
     sensitive: false,
+    hubVisible: false,
   },
   {
     name: 'CAT_OPUS_MAX_PROMPT_CHARS',
@@ -235,6 +238,7 @@ export const ENV_VARS: EnvDefinition[] = [
     description: '布偶猫 prompt 上限',
     category: 'budget',
     sensitive: false,
+    hubVisible: false,
   },
   {
     name: 'CAT_CODEX_MAX_PROMPT_CHARS',
@@ -242,6 +246,7 @@ export const ENV_VARS: EnvDefinition[] = [
     description: '缅因猫 prompt 上限',
     category: 'budget',
     sensitive: false,
+    hubVisible: false,
   },
   {
     name: 'CAT_GEMINI_MAX_PROMPT_CHARS',
@@ -249,6 +254,7 @@ export const ENV_VARS: EnvDefinition[] = [
     description: '暹罗猫 prompt 上限',
     category: 'budget',
     sensitive: false,
+    hubVisible: false,
   },
   {
     name: 'MAX_CONTEXT_MSG_CHARS',
@@ -256,6 +262,7 @@ export const ENV_VARS: EnvDefinition[] = [
     description: '单条消息上下文截断',
     category: 'budget',
     sensitive: false,
+    hubVisible: false,
   },
   {
     name: 'MAX_A2A_DEPTH',
@@ -270,6 +277,7 @@ export const ENV_VARS: EnvDefinition[] = [
     description: '全局 prompt token 上限',
     category: 'budget',
     sensitive: false,
+    hubVisible: false,
   },
   {
     name: 'WEB_PUSH_TIMEOUT_MS',
@@ -786,12 +794,16 @@ function maskValue(def: EnvDefinition, raw: string): string {
   return raw;
 }
 
+function isHubVisibleEnvVar(def: EnvDefinition): boolean {
+  return def.hubVisible !== false;
+}
+
 /**
  * Build env summary by reading current process.env values.
  * Sensitive values are masked. URL values have credentials masked.
  */
 export function buildEnvSummary(): Array<EnvDefinition & { currentValue: string | null }> {
-  return ENV_VARS.map((def) => {
+  return ENV_VARS.filter(isHubVisibleEnvVar).map((def) => {
     const raw = process.env[def.name];
     const currentValue = raw != null && raw !== '' ? maskValue(def, raw) : null;
     return { ...def, currentValue };
@@ -803,5 +815,5 @@ export function isEditableEnvVar(def: EnvDefinition): boolean {
 }
 
 export function isEditableEnvVarName(name: string): boolean {
-  return ENV_VARS.some((def) => def.name === name && isEditableEnvVar(def));
+  return ENV_VARS.some((def) => def.name === name && isHubVisibleEnvVar(def) && isEditableEnvVar(def));
 }

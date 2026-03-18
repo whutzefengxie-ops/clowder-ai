@@ -1,37 +1,52 @@
 'use client';
 
+import { useRef } from 'react';
 import type { CatData } from '@/hooks/useCatData';
 import {
   CLIENT_OPTIONS,
+  canonicalMentionPattern,
+  filterProfiles,
+  type HubCatEditorFormState,
+  joinTags,
+  normalizeMentionPattern,
   splitMentionPatterns,
   splitStrengthTags,
-  type HubCatEditorFormState,
 } from './hub-cat-editor.model';
+import { SectionCard, SelectField, TextField } from './hub-cat-editor-fields';
 import type { ProfileItem } from './hub-provider-profiles.types';
-import { SectionCard, SelectField, TextAreaField, TextField } from './hub-cat-editor-fields';
+import { TagEditor } from './hub-tag-editor';
 
 type FormPatch = Partial<HubCatEditorFormState>;
 
-function fieldInputClass() {
-  return 'w-full rounded-xl border border-[#E8DCCF] bg-[#F7F3F0] px-3 py-2.5 text-sm text-[#2D2118] outline-none transition focus:border-[#D49266] focus:ring-2 focus:ring-[#F5D2B8]';
+function uniqueTags(tags: string[]): string[] {
+  return Array.from(new Set(tags));
+}
+
+function currentAliasTags(form: HubCatEditorFormState, cat?: CatData | null): string[] {
+  const raw = splitMentionPatterns(form.mentionPatterns).map(normalizeMentionPattern).filter(Boolean);
+  const catId = cat?.id ?? form.catId.trim();
+  const locked = catId ? [canonicalMentionPattern(catId)] : [];
+  return uniqueTags([...locked, ...raw]);
 }
 
 export function IdentitySection({
   cat,
   form,
+  avatarUploading,
   onChange,
+  onAvatarUpload,
 }: {
   cat?: CatData | null;
   form: HubCatEditorFormState;
+  avatarUploading: boolean;
   onChange: (patch: FormPatch) => void;
+  onAvatarUpload: (file: File) => Promise<void>;
 }) {
   const strengthTags = splitStrengthTags(form.strengths);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   return (
-    <SectionCard
-      title="身份信息"
-      description="成员身份信息与对外展示文案。编辑现有成员时，Name 会同步 name/displayName，避免两处漂移。"
-    >
+    <SectionCard title="身份信息">
       {!cat ? (
         <div className="grid gap-4 md:grid-cols-3">
           <TextField label="Cat ID" value={form.catId} onChange={(value) => onChange({ catId: value })} />
@@ -51,18 +66,43 @@ export function IdentitySection({
           <span className="text-sm font-medium text-[#5C4B42]">Avatar</span>
           <span className="text-xs text-[#8A776B]">点击上传新头像覆盖</span>
         </div>
-        <div className="flex items-center gap-3 rounded-2xl border border-[#E8DCCF] bg-white/80 p-3">
-          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-[#E8DCCF] bg-[#F7F3F0] text-xs text-[#8A776B]">
-            {form.avatar ? '已设置' : 'Avatar'}
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          className="flex w-full items-center gap-3 rounded-2xl border border-[#E8DCCF] bg-white/80 p-3 text-left transition hover:border-[#D49266]"
+        >
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[#E8DCCF] bg-[#F7F3F0] text-xs text-[#8A776B]">
+            {form.avatar ? (
+              // biome-ignore lint/performance/noImgElement: avatar path may be runtime upload URL
+              <img src={form.avatar} alt="Avatar preview" className="h-full w-full object-cover" />
+            ) : (
+              'Avatar'
+            )}
           </div>
-          <input
-            aria-label="Avatar"
-            value={form.avatar}
-            onChange={(event) => onChange({ avatar: event.target.value })}
-            className={fieldInputClass()}
-            placeholder="/avatars/codex.png"
-          />
-        </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium text-[#2D2118]">{avatarUploading ? '上传中…' : '点击上传头像'}</p>
+            <p className="mt-1 text-xs text-[#8A776B]">支持 png / jpg / webp，上传后自动回填</p>
+          </div>
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          className="hidden"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            if (!file) return;
+            void onAvatarUpload(file).finally(() => {
+              if (fileInputRef.current) fileInputRef.current.value = '';
+            });
+          }}
+        />
+        <input
+          aria-label="Avatar"
+          value={form.avatar}
+          onChange={(event) => onChange({ avatar: event.target.value })}
+          className="sr-only"
+        />
       </div>
 
       <div className="space-y-2">
@@ -71,9 +111,11 @@ export function IdentitySection({
           <span className="text-xs text-[#8A776B]">点击调色盘</span>
         </div>
         <div className="grid gap-3 md:grid-cols-2">
-          <label className="flex items-center gap-3 rounded-2xl border border-[#E8DCCF] bg-white/80 px-3 py-2.5 text-sm text-[#5C4B42]">
-            <span className="h-8 w-8 rounded-full border border-white shadow-sm" style={{ backgroundColor: form.colorPrimary }} />
-            <span className="flex-1">Primary</span>
+          <label className="flex items-center justify-between rounded-2xl border border-[#E8DCCF] bg-white/80 px-3 py-2.5 text-sm text-[#5C4B42]">
+            <span
+              className="h-8 w-8 rounded-lg border border-white shadow-sm"
+              style={{ backgroundColor: form.colorPrimary }}
+            />
             <input
               type="color"
               aria-label="Background Color Primary"
@@ -82,9 +124,11 @@ export function IdentitySection({
               className="h-8 w-10 cursor-pointer rounded border-0 bg-transparent p-0"
             />
           </label>
-          <label className="flex items-center gap-3 rounded-2xl border border-[#E8DCCF] bg-white/80 px-3 py-2.5 text-sm text-[#5C4B42]">
-            <span className="h-8 w-8 rounded-full border border-white shadow-sm" style={{ backgroundColor: form.colorSecondary }} />
-            <span className="flex-1">Secondary</span>
+          <label className="flex items-center justify-between rounded-2xl border border-[#E8DCCF] bg-white/80 px-3 py-2.5 text-sm text-[#5C4B42]">
+            <span
+              className="h-8 w-8 rounded-lg border border-white shadow-sm"
+              style={{ backgroundColor: form.colorSecondary }}
+            />
             <input
               type="color"
               aria-label="Background Color Secondary"
@@ -113,39 +157,28 @@ export function IdentitySection({
           value={form.personality}
           onChange={(value) => onChange({ personality: value })}
         />
-        <TextField label="Caution" value={form.caution} onChange={(value) => onChange({ caution: value })} placeholder="(无)" />
+        <TextField
+          label="Caution"
+          value={form.caution}
+          onChange={(value) => onChange({ caution: value })}
+          placeholder="(无)"
+        />
       </div>
 
       <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-medium text-[#5C4B42]">Strengths</span>
-          <button
-            type="button"
-            className="rounded-full border border-[#D9C5EF] bg-[#F3EDFA] px-3 py-1 text-xs font-medium text-[#8B68B7]"
-          >
-            + 选择
-          </button>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {strengthTags.length > 0 ? (
-            strengthTags.map((tag) => (
-              <span
-                key={tag}
-                className="rounded-full border border-[#D9C5EF] bg-[#F3EDFA] px-2.5 py-1 text-xs font-medium text-[#8B68B7]"
-              >
-                {tag}
-              </span>
-            ))
-          ) : (
-            <span className="text-sm italic text-[#8A776B]">(无)</span>
-          )}
-        </div>
+        <span className="text-sm font-medium text-[#5C4B42]">Strengths</span>
+        <TagEditor
+          tags={strengthTags}
+          onChange={(tags) => onChange({ strengths: joinTags(tags) })}
+          addLabel="+ 选择"
+          placeholder="输入标签，例如 security"
+          emptyLabel="(无)"
+        />
         <input
           aria-label="Strengths"
           value={form.strengths}
           onChange={(event) => onChange({ strengths: event.target.value })}
-          className={fieldInputClass()}
-          placeholder="security, testing"
+          className="sr-only"
         />
       </div>
 
@@ -170,13 +203,16 @@ export function AccountSection({
   loadingProfiles: boolean;
   onChange: (patch: FormPatch) => void;
 }) {
+  const protocolScopedProfiles = filterProfiles(form.client, availableProfiles);
+
   return (
     <SectionCard
-      title="账号与运行方式"
-      description="普通成员绑定 Client / Provider / Model；Antigravity 走命令行直连。切换 Provider 后会重算可选模型。"
+      title="认证与模型"
+      description="API Key 凭证在账号配置中管理；普通 Client 在此选择 Provider + 模型。若 Client=Antigravity，则直接配置 CLI 命令（默认值来自 cat-template）和模型。"
     >
-      <p className="rounded-2xl border border-[#F1E7DF] bg-white/80 px-4 py-3 text-xs leading-5 text-[#8A776B]">
-        Provider 下拉展示具体账号标签，例如 `Claude (OAuth)`；如果 Provider 模型列表为空，则回退为手动输入 Model。
+      <p className="text-xs font-semibold leading-5 text-[#BF360C]">
+        ⚠️ 约束：Claude/Codex/Gemini = 同名 OAuth + 任意 API Key provider；其他 Client = 仅 API Key；Antigravity =
+        直接配置 CLI 命令 + model。
       </p>
       <div className="grid gap-4 md:grid-cols-3">
         <SelectField
@@ -188,8 +224,16 @@ export function AccountSection({
 
         {form.client === 'antigravity' ? (
           <>
-            <TextField label="CLI Command" value={form.commandArgs} onChange={(value) => onChange({ commandArgs: value })} />
-            <TextField label="Model" value={form.defaultModel} onChange={(value) => onChange({ defaultModel: value })} />
+            <TextField
+              label="CLI Command"
+              value={form.commandArgs}
+              onChange={(value) => onChange({ commandArgs: value })}
+            />
+            <TextField
+              label="Model"
+              value={form.defaultModel}
+              onChange={(value) => onChange({ defaultModel: value })}
+            />
           </>
         ) : (
           <>
@@ -198,7 +242,7 @@ export function AccountSection({
               value={form.providerProfileId}
               options={[
                 { value: '', label: loadingProfiles ? '加载中…' : '未绑定' },
-                ...availableProfiles.map((profile) => ({ value: profile.id, label: profile.displayName })),
+                ...protocolScopedProfiles.map((profile) => ({ value: profile.id, label: profile.displayName })),
               ]}
               onChange={(value) => onChange({ providerProfileId: value })}
               disabled={loadingProfiles}
@@ -211,7 +255,11 @@ export function AccountSection({
                 onChange={(value) => onChange({ defaultModel: value })}
               />
             ) : (
-              <TextField label="Model" value={form.defaultModel} onChange={(value) => onChange({ defaultModel: value })} />
+              <TextField
+                label="Model"
+                value={form.defaultModel}
+                onChange={(value) => onChange({ defaultModel: value })}
+              />
             )}
           </>
         )}
@@ -221,44 +269,37 @@ export function AccountSection({
 }
 
 export function RoutingSection({
+  cat,
   form,
   onChange,
 }: {
+  cat?: CatData | null;
   form: HubCatEditorFormState;
   onChange: (patch: FormPatch) => void;
 }) {
-  const aliases = splitMentionPatterns(form.mentionPatterns);
+  const aliases = currentAliasTags(form, cat);
+  const catId = cat?.id ?? form.catId.trim();
+  const lockedTags = catId ? [canonicalMentionPattern(catId)] : [];
 
   return (
-    <SectionCard title="别名与 @ 路由" description="默认 alias、中文名和历史 mention pattern 在这里维护。当前 + 添加 按钮先作为占位入口。">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-[#7F7168]">支持逗号或换行分隔；chip 区展示最终会参与 @ 路由的 pattern。</p>
-        <button
-          type="button"
-          className="rounded-full border border-[#D9C5EF] bg-[#F3EDFA] px-3 py-1 text-xs font-medium text-[#8B68B7]"
-        >
-          + 添加
-        </button>
-      </div>
-      <div className="flex flex-wrap gap-2">
-        {aliases.length > 0 ? (
-          aliases.map((alias) => (
-            <span
-              key={alias}
-              className="rounded-full border border-[#D9C5EF] bg-[#F3EDFA] px-2.5 py-1 text-xs font-medium text-[#8B68B7]"
-            >
-              {alias}
-            </span>
-          ))
-        ) : (
-          <span className="text-sm italic text-[#8A776B]">(暂无别名)</span>
-        )}
-      </div>
-      <TextAreaField
-        label="Aliases"
+    <SectionCard
+      title="别名与 @ 路由"
+      description="默认包含 @catId；前端自动 @ 仅提示首个 mention，后续别名仍可路由但不进入提示列表。唯一性校验自动进行。"
+    >
+      <TagEditor
+        tags={aliases}
+        lockedTags={lockedTags}
+        onChange={(tags) => onChange({ mentionPatterns: joinTags(tags) })}
+        addLabel="+ 添加"
+        placeholder="@砚砚"
+        emptyLabel="(暂无别名)"
+      />
+      <textarea
+        aria-label="Aliases"
         value={form.mentionPatterns}
-        onChange={(value) => onChange({ mentionPatterns: value })}
+        onChange={(event) => onChange({ mentionPatterns: event.target.value })}
         placeholder="@codex, @缅因猫"
+        className="sr-only"
       />
     </SectionCard>
   );

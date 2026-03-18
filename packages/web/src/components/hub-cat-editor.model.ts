@@ -101,6 +101,20 @@ export function splitMentionPatterns(raw: string): string[] {
     .filter(Boolean);
 }
 
+export function normalizeMentionPattern(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  return trimmed.startsWith('@') ? trimmed : `@${trimmed}`;
+}
+
+export function canonicalMentionPattern(catId: string): string {
+  return normalizeMentionPattern(catId);
+}
+
+export function joinTags(tags: string[]): string {
+  return tags.join(', ');
+}
+
 export function splitCommandArgs(raw: string): string[] {
   return raw
     .split(/\s+/)
@@ -141,15 +155,17 @@ export function filterProfiles(client: ClientValue, profiles: ProfileItem[]): Pr
 
 export function initialState(cat?: CatData | null, draft?: HubCatEditorDraft | null): HubCatEditorFormState {
   const createDraft = !cat ? draft : null;
+  const catId = cat?.id ?? '';
+  const mentionPatterns = cat?.mentionPatterns ?? (catId ? [canonicalMentionPattern(catId)] : []);
   return {
-    catId: cat?.id ?? '',
+    catId,
     name: cat?.name ?? cat?.displayName ?? '',
     displayName: cat?.displayName ?? cat?.name ?? '',
     nickname: cat?.nickname ?? '',
     avatar: cat?.avatar ?? '',
     colorPrimary: cat?.color.primary ?? '#9B7EBD',
     colorSecondary: cat?.color.secondary ?? '#E8DFF5',
-    mentionPatterns: cat?.mentionPatterns.join(', ') ?? '',
+    mentionPatterns: joinTags(mentionPatterns),
     roleDescription: cat?.roleDescription ?? '',
     personality: cat?.personality ?? '',
     teamStrengths: cat?.teamStrengths ?? '',
@@ -285,7 +301,14 @@ export function buildCatPayload(form: HubCatEditorFormState, cat?: CatData | nul
       primary: trimText(form.colorPrimary),
       secondary: trimText(form.colorSecondary),
     },
-    mentionPatterns: splitMentionPatterns(form.mentionPatterns),
+    mentionPatterns: Array.from(
+      new Set(
+        splitMentionPatterns(form.mentionPatterns)
+          .map(normalizeMentionPattern)
+          .filter(Boolean)
+          .concat(!cat && form.catId.trim() ? [canonicalMentionPattern(form.catId.trim())] : []),
+      ),
+    ),
     roleDescription: trimText(form.roleDescription),
     personality: trimText(form.personality),
     teamStrengths: trimText(form.teamStrengths),

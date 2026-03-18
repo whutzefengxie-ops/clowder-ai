@@ -138,7 +138,15 @@ describe('buildEnvSummary', () => {
 
   it('returns same number of entries as ENV_VARS', () => {
     const summary = buildEnvSummary();
-    assert.equal(summary.length, ENV_VARS.length);
+    assert.ok(summary.length < ENV_VARS.length);
+  });
+
+  it('hides per-cat runtime budget env vars from hub summary', () => {
+    const summary = buildEnvSummary();
+    assert.equal(summary.some((v) => v.name === 'CAT_OPUS_MAX_PROMPT_CHARS'), false);
+    assert.equal(summary.some((v) => v.name === 'CAT_CODEX_MAX_PROMPT_CHARS'), false);
+    assert.equal(summary.some((v) => v.name === 'CAT_GEMINI_MAX_PROMPT_CHARS'), false);
+    assert.equal(summary.some((v) => v.name === 'MAX_PROMPT_TOKENS'), false);
   });
 });
 
@@ -256,6 +264,40 @@ describe('PATCH /api/config/env (route)', () => {
       const body = JSON.parse(res.payload);
       assert.match(body.error, /not editable/);
       assert.equal(readFileSync(envFilePath, 'utf8'), 'OPENAI_API_KEY=sk-old\n');
+    } finally {
+      await app.close();
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects internal runtime budget env vars from hub writes', async () => {
+    const { configRoutes } = await import('../dist/routes/config.js');
+    const tempRoot = mkdtempSync(resolve(tmpdir(), 'cat-cafe-env-'));
+    const envFilePath = resolve(tempRoot, '.env');
+    writeFileSync(envFilePath, 'CAT_OPUS_MAX_PROMPT_CHARS=150000\n', 'utf8');
+
+    const app = Fastify({ logger: false });
+    try {
+      await configRoutes(app, {
+        projectRoot: tempRoot,
+        envFilePath,
+        auditLog: { append: async () => {} },
+      });
+      await app.ready();
+
+      const res = await app.inject({
+        method: 'PATCH',
+        url: '/api/config/env',
+        headers: { 'x-cat-cafe-user': 'codex' },
+        payload: {
+          updates: [{ name: 'CAT_OPUS_MAX_PROMPT_CHARS', value: '180000' }],
+        },
+      });
+
+      assert.equal(res.statusCode, 400);
+      const body = JSON.parse(res.payload);
+      assert.match(body.error, /not editable/);
+      assert.equal(readFileSync(envFilePath, 'utf8'), 'CAT_OPUS_MAX_PROMPT_CHARS=150000\n');
     } finally {
       await app.close();
       rmSync(tempRoot, { recursive: true, force: true });

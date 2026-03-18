@@ -142,6 +142,24 @@ test('explicit port env vars override .env values for direct startup', () => {
   assert.equal(result.stdout.trim(), '3023|3024|6409');
 });
 
+test('explicit NEXT_PUBLIC_API_URL override survives project .env during direct startup', () => {
+  const scriptPath = resolve(process.cwd(), '../../scripts/start-dev.sh');
+  const result = spawnSync(
+    'bash',
+    ['-lc', `set -e\nsource "${scriptPath}" --source-only >/dev/null 2>&1\ntrap - EXIT INT TERM\nprintf '%s' "$NEXT_PUBLIC_API_URL"`],
+    {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        NEXT_PUBLIC_API_URL: 'http://localhost:3035',
+      },
+    },
+  );
+
+  assert.equal(result.status, 0, `snippet failed\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
+  assert.equal(result.stdout.trim(), 'http://localhost:3035');
+});
+
 test('redis port override also recomputes isolated redis dirs', () => {
   const scriptPath = resolve(process.cwd(), '../../scripts/start-dev.sh');
   const tempHome = mkdtempSync(join(tmpdir(), 'cat-cafe-start-dev-redis-override-'));
