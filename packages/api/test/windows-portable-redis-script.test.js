@@ -272,6 +272,14 @@ test('Windows installer keeps portable Redis inside the project .cat-cafe direct
   assert.doesNotMatch(helpersScript, /Join-Path \$ProjectRoot "downloads\\redis\\windows"/);
 });
 
+test('Windows installer allows explicit Redis release API and archive URL overrides', () => {
+  assert.match(helpersScript, /\$redisReleaseApi = if \(\$env:CAT_CAFE_WINDOWS_REDIS_RELEASE_API\)/);
+  assert.match(helpersScript, /\$redisDownloadUrl = if \(\$env:CAT_CAFE_WINDOWS_REDIS_DOWNLOAD_URL\)/);
+  assert.match(helpersScript, /Invoke-RestMethod -Uri \$redisReleaseApi -Headers \$headers/);
+  assert.match(helpersScript, /if \(\$redisDownloadUrl\) \{/);
+  assert.match(helpersScript, /Invoke-WebRequest -Uri \$redisDownloadUrl -OutFile \$archivePath -Headers \$headers -UseBasicParsing/);
+});
+
 test('Windows Redis failures print underlying exception details for installer and startup debugging', () => {
   assert.match(helpersScript, /function Get-InstallerExceptionDetails/);
   assert.match(helpersScript, /function Write-InstallerExceptionDetails/);

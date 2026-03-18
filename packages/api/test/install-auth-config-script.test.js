@@ -142,22 +142,23 @@ test('claude-profile create and remove keeps installer-managed profile in sync',
     const secretsFile = join(projectRoot, '.cat-cafe', 'provider-profiles.secrets.local.json');
     const profiles = JSON.parse(readFileSync(profileFile, 'utf8'));
     const secrets = JSON.parse(readFileSync(secretsFile, 'utf8'));
+    const installerManaged = profiles.profiles.find((profile) => profile.id === 'installer-managed');
 
-    assert.equal(profiles.providers.anthropic.activeProfileId, 'installer-managed');
-    assert.equal(profiles.providers.anthropic.profiles.at(-1)?.baseUrl, 'https://claude.example');
-    assert.equal(profiles.providers.anthropic.profiles.at(-1)?.modelOverride, 'claude-model');
-    assert.equal(secrets.providers.anthropic['installer-managed'].apiKey, 'claude-key');
+    assert.equal(profiles.activeProfileId, 'installer-managed');
+    assert.equal(installerManaged?.baseUrl, 'https://claude.example');
+    assert.equal(installerManaged?.modelOverride, 'claude-model');
+    assert.equal(installerManaged?.protocol, 'anthropic');
+    assert.equal(installerManaged?.authType, 'api_key');
+    assert.equal(secrets.profiles['installer-managed'].apiKey, 'claude-key');
 
     runHelper(['claude-profile', 'remove', '--project-dir', projectRoot]);
 
     const profilesAfterRemove = JSON.parse(readFileSync(profileFile, 'utf8'));
     const secretsAfterRemove = JSON.parse(readFileSync(secretsFile, 'utf8'));
 
-    assert.equal(
-      profilesAfterRemove.providers.anthropic.profiles.some((profile) => profile.id === 'installer-managed'),
-      false,
-    );
-    assert.equal('installer-managed' in (secretsAfterRemove.providers.anthropic ?? {}), false);
+    assert.equal(profilesAfterRemove.profiles.some((profile) => profile.id === 'installer-managed'), false);
+    assert.equal(profilesAfterRemove.activeProfileId, 'claude-oauth');
+    assert.equal('installer-managed' in (secretsAfterRemove.profiles ?? {}), false);
   } finally {
     rmSync(projectRoot, { recursive: true, force: true });
   }
