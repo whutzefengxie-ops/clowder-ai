@@ -176,12 +176,12 @@ if ($useExternalRedis) {
         $redisSource = $redisCommands.Source
         Write-Ok "Redis binaries resolved ($redisSource): $($redisCommands.BinDir)"
     }
+    $redisAuthArgs = Get-RedisAuthArgs -RedisUrl $configuredRedisUrl
     # Check if Redis is already running
     try {
         if (-not $redisCliPath) {
             throw "redis-cli unavailable"
         }
-        $redisAuthArgs = Get-RedisAuthArgs -RedisUrl $configuredRedisUrl
         $redisPing = & $redisCliPath -p $RedisPort @redisAuthArgs ping 2>$null
         if ($redisPing -eq "PONG") {
             Write-Ok "Redis already running on port $RedisPort"
@@ -200,11 +200,13 @@ if ($useExternalRedis) {
             if ($redisServerPath) {
                 New-Item -Path $redisLayout.Data -ItemType Directory -Force | Out-Null
                 New-Item -Path $redisLayout.Logs -ItemType Directory -Force | Out-Null
-                $redisArgs = @("--port", $RedisPort, "--bind", "127.0.0.1", "--dir", $redisLayout.Data, "--logfile", $redisLogFile, "--pidfile", $redisPidFile)
+                $redisAclFile = Join-Path $redisLayout.Data "redis-$RedisPort.acl"
+                $redisServerAuthArgs = Get-RedisServerAuthArgs -RedisUrl $configuredRedisUrl -AclFilePath $redisAclFile
+                $redisArgs = @("--port", $RedisPort, "--bind", "127.0.0.1", "--dir", $redisLayout.Data, "--logfile", $redisLogFile, "--pidfile", $redisPidFile) + $redisServerAuthArgs
                 Write-Host "  Starting Redis on port $RedisPort ($redisSource)..."
                 Start-Process -FilePath $redisServerPath -ArgumentList $redisArgs -WindowStyle Hidden
                 Start-Sleep -Seconds 2
-                $redisPing = & $redisCliPath -p $RedisPort ping 2>$null
+                $redisPing = & $redisCliPath -p $RedisPort @redisAuthArgs ping 2>$null
                 if ($redisPing -eq "PONG") {
                     Write-Ok "Redis started on port $RedisPort"
                     if ($configuredRedisUrl) {

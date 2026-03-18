@@ -134,6 +134,47 @@ function Get-RedisAuthArgs {
     return @()
 }
 
+function Get-RedisServerAuthArgs {
+    param([string]$RedisUrl, [string]$AclFilePath)
+    if (-not $RedisUrl) { return @() }
+    try {
+        $uri = [System.Uri]::new($RedisUrl)
+        $userInfo = $uri.UserInfo
+        if (-not $userInfo) { return @() }
+
+        $parts = $userInfo -split ":", 2
+        $username = ""
+        $password = ""
+        if ($parts.Count -eq 2) {
+            $username = $parts[0]
+            $password = $parts[1]
+        } elseif ($parts[0]) {
+            $password = $parts[0]
+        }
+
+        if (-not $password) { return @() }
+
+        if ($username) {
+            if (-not $AclFilePath) {
+                throw "AclFilePath is required for Redis ACL usernames"
+            }
+            $aclLines = if ($username -eq "default") {
+                @("user default on >$password allkeys allcommands")
+            } else {
+                @(
+                    "user default off",
+                    "user $username on >$password allkeys allcommands"
+                )
+            }
+            Set-Content -Path $AclFilePath -Value $aclLines -Encoding ascii
+            return @("--aclfile", $AclFilePath)
+        }
+
+        return @("--requirepass", $password)
+    } catch {}
+    return @()
+}
+
 function Get-InstallerExceptionDetails {
     param($ErrorRecord)
 

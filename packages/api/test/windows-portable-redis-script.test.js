@@ -471,3 +471,16 @@ test('Windows startup preserves configured REDIS_URL with DB suffix after Redis 
   assert.ok(matches && matches.length >= 2,
     `Expected REDIS_URL preservation in both already-running and auto-start branches, found ${matches ? matches.length : 0}`);
 });
+
+test('Windows startup passes localhost REDIS_URL auth into redis-server auto-start and authenticated ping', () => {
+  assert.match(helpersScript, /function Get-RedisServerAuthArgs/);
+  assert.match(helpersScript, /Set-Content -Path \$AclFilePath -Value \$aclLines -Encoding ascii/);
+  assert.match(startWindowsScript, /\$redisAclFile = Join-Path \$redisLayout\.Data "redis-\$RedisPort\.acl"/);
+  assert.match(startWindowsScript, /Get-RedisServerAuthArgs -RedisUrl \$configuredRedisUrl -AclFilePath \$redisAclFile/);
+
+  const pingMatches = startWindowsScript.match(/\$redisPing = & \$redisCliPath -p \$RedisPort @redisAuthArgs ping 2>\$null/g);
+  assert.ok(
+    pingMatches && pingMatches.length >= 2,
+    `Expected authenticated redis-cli ping in both already-running and auto-start branches, found ${pingMatches ? pingMatches.length : 0}`,
+  );
+});
