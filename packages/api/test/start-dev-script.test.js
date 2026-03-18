@@ -23,6 +23,7 @@ test('source-only exposes helper functions for testing seams', () => {
     scriptPath,
     `
 declare -F configure_mcp_server_path >/dev/null
+declare -F background_eval_with_null_stdin >/dev/null
 printf 'ok'
 `,
   );
@@ -150,4 +151,23 @@ printf '%s|%s|%s|%s|%s|%s|%s|%s' \
       'https://hf.mirror.example',
     ].join('|'),
   );
+});
+
+test('background_eval_with_null_stdin detaches background jobs from caller stdin', () => {
+  const scriptPath = resolve(process.cwd(), '../../scripts/start-dev.sh');
+  const output = runSourceOnlySnippet(
+    scriptPath,
+    `
+tmp_dir=$(mktemp -d)
+trap 'rm -rf "$tmp_dir"' RETURN
+printf 'parent-stdin' > "$tmp_dir/input.txt"
+exec < "$tmp_dir/input.txt"
+background_eval_with_null_stdin "sleep 1"
+pid=$!
+lsof -p "$pid" -a -d 0 -Fn
+wait "$pid"
+`,
+  );
+
+  assert.match(output, /n\/dev\/null/);
 });

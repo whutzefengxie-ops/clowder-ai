@@ -262,12 +262,22 @@ start_sidecar() {
 
     eval "${state_var}=launching"
     echo "  启动 ${name} (端口 ${port})..."
-    eval "$launch_cmd" &
+    background_eval_with_null_stdin "$launch_cmd"
     if wait_for_port "$port" "$name" "$timeout"; then
         eval "${state_var}=ready"
     else
         eval "${state_var}=failed"
     fi
+}
+
+# 后台 Node dev 进程（tsx watch / next dev）在 macOS + Node 25 下若继承 TTY stdin，
+# 可能在读取 fd0 时抛出 `TTY.onStreamRead` EIO。统一把后台任务 stdin 切到 /dev/null。
+background_eval_with_null_stdin() {
+    local launch_cmd="$1"
+    (
+        exec </dev/null
+        eval "$launch_cmd"
+    ) &
 }
 
 # Sidecar summary: ready → 地址, failed → 报告, disabled → 静默
@@ -598,7 +608,7 @@ main() {
         if [ -f "scripts/anthropic-proxy.mjs" ]; then
             echo "  启动 Anthropic Proxy (端口 $PROXY_PORT)..."
             PROXY_UPSTREAMS="${ANTHROPIC_PROXY_UPSTREAMS_PATH:-$PROJECT_DIR/.cat-cafe/proxy-upstreams.json}"
-            ANTHROPIC_PROXY_PORT=$PROXY_PORT node scripts/anthropic-proxy.mjs --port $PROXY_PORT --upstreams "$PROXY_UPSTREAMS" &
+            background_eval_with_null_stdin "ANTHROPIC_PROXY_PORT=$PROXY_PORT node scripts/anthropic-proxy.mjs --port $PROXY_PORT --upstreams \"$PROXY_UPSTREAMS\""
             PROXY_PID=$!
             sleep 1
             if kill -0 $PROXY_PID 2>/dev/null; then
@@ -668,7 +678,7 @@ main() {
 
     # API Server
     echo "  启动 API Server (端口 $API_PORT)..."
-    (cd packages/api && pnpm run dev) &
+    background_eval_with_null_stdin "cd packages/api && pnpm run dev"
     sleep 2
 
     # Frontend
@@ -676,7 +686,7 @@ main() {
         # Production: next start (PWA + Tailscale 友好)
         echo "  启动 Frontend (端口 $WEB_PORT, production)..."
         if [ -d "packages/web/.next" ]; then
-            (cd packages/web && PORT=$WEB_PORT pnpm exec next start -p $WEB_PORT -H 0.0.0.0) &
+            background_eval_with_null_stdin "cd packages/web && PORT=$WEB_PORT pnpm exec next start -p $WEB_PORT -H 0.0.0.0"
         else
             echo -e "${RED}  ✗ .next 目录不存在，无法以 production 模式启动${NC}"
             echo -e "${RED}    请先不带 --quick 运行以执行 next build${NC}"
@@ -685,7 +695,7 @@ main() {
     else
         # Development: next dev (热重载)
         echo "  启动 Frontend (端口 $WEB_PORT, dev)..."
-        (cd packages/web && NEXT_IGNORE_INCORRECT_LOCKFILE=1 PORT=$WEB_PORT pnpm exec next dev -p $WEB_PORT) &
+        background_eval_with_null_stdin "cd packages/web && NEXT_IGNORE_INCORRECT_LOCKFILE=1 PORT=$WEB_PORT pnpm exec next dev -p $WEB_PORT"
     fi
     sleep 3
 
