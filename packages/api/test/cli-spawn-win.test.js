@@ -86,6 +86,16 @@ test('escapeCmdArg escapes internal double quotes', () => {
   assert.equal(escapeCmdArg('say "hi"'), '"say \\"hi\\""');
 });
 
+test('escapeCmdArg doubles backslashes preceding internal quotes per MSVC CRT rules', () => {
+  // foo\"bar → foo has 0 bs before ", but the literal string 'foo\\"bar' has 1 bs before "
+  // Input JS string 'foo\\"bar' = foo\"bar (1 backslash then quote then bar)
+  // CRT: 1 backslash before " → doubled to 2, then \" → foo\\\"bar
+  assert.equal(escapeCmdArg('foo\\"bar'), '"foo\\\\\\"bar"');
+  // Input: 'foo\\\\"bar' = foo\\"bar (2 backslashes then quote then bar)
+  // CRT: 2 backslashes before " → doubled to 4, then \" → foo\\\\\"bar
+  assert.equal(escapeCmdArg('foo\\\\"bar'), '"foo\\\\\\\\\\"bar"');
+});
+
 test('escapeCmdArg doubles trailing backslashes to prevent closing quote escape', () => {
   assert.equal(escapeCmdArg('arg\\'), '"arg\\\\"');
   assert.equal(escapeCmdArg('path with spaces\\'), '"path with spaces\\\\"');

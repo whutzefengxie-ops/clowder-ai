@@ -82,23 +82,33 @@ export function resolveCmdShimScript(command: string): string | null {
 /**
  * Escape a command-line argument for Windows cmd.exe shell mode.
  *
- * cmd.exe interprets: & | < > ^ % " and whitespace.
- * Strategy: wrap in double quotes, escape internal `"` as `\"`,
- * and caret-escape all remaining cmd.exe metacharacters inside the quotes.
- * `%` is doubled to `%%` to prevent env-var expansion.
- * Trailing backslashes before the closing quote are doubled to prevent
- * the backslash from escaping the closing quote (e.g. `arg\` → `"arg\\"`)
+ * Uses the MSVC C runtime escaping rules for argv parsing:
+ * - Backslashes before a double quote must be doubled
+ * - Trailing backslashes before the closing quote must be doubled
+ * - Internal double quotes are escaped as \"
+ * Then applies cmd.exe-level escaping: % doubled, metacharacters caret-escaped.
  */
 export function escapeCmdArg(arg: string): string {
   if (!/[\s"&|<>^%!\\]/.test(arg)) return arg;
-  // 1. Escape internal double quotes for the C runtime
-  let escaped = arg.replace(/"/g, '\\"');
-  // 2. Double trailing backslashes to prevent them from escaping the closing quote
-  escaped = escaped.replace(/\\+$/, (match) => match + match);
-  // 3. Double % to prevent cmd.exe env-var expansion
-  escaped = escaped.replace(/%/g, '%%');
-  // 4. Caret-escape cmd.exe metacharacters (inside double quotes,
-  //    only ^, !, and sometimes & need escaping; belt-and-suspenders)
+  // MSVC CRT escaping: process each character, tracking backslash runs
+  let crtEscaped = '';
+  let backslashes = 0;
+  for (const ch of arg) {
+    if (ch === '\\') {
+      backslashes++;
+    } else if (ch === '"') {
+      // Double the backslashes before a quote, then emit \"
+      crtEscaped += '\\'.repeat(backslashes * 2) + '\\"';
+      backslashes = 0;
+    } else {
+      crtEscaped += '\\'.repeat(backslashes) + ch;
+      backslashes = 0;
+    }
+  }
+  // Double trailing backslashes (they'll precede the closing quote)
+  crtEscaped += '\\'.repeat(backslashes * 2);
+  // cmd.exe escaping on top of CRT escaping
+  let escaped = crtEscaped.replace(/%/g, '%%');
   escaped = escaped.replace(/([&|<>^!])/g, '^$1');
   return `"${escaped}"`;
 }
