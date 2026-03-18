@@ -16,7 +16,7 @@
  */
 
 import { existsSync } from 'node:fs';
-import { isAbsolute, resolve } from 'node:path';
+import { isAbsolute, resolve, win32 } from 'node:path';
 import { execSync } from 'node:child_process';
 import { type CatId, createCatId } from '@cat-cafe/shared';
 import { getCatEffort } from '../../../../../config/cat-config-loader.js';
@@ -59,6 +59,16 @@ const IS_WINDOWS = process.platform === 'win32';
  * Caches result after first lookup.
  */
 let cachedGitBashPath: string | undefined | null;
+export function pickGitBashPathFromWhere(whereOutput: string, pathExists = existsSync): string | undefined {
+  for (const rawLine of whereOutput.split(/\r?\n/)) {
+    const candidate = rawLine.trim().replace(/^"+|"+$/g, '');
+    if (!candidate) continue;
+    if (win32.basename(candidate).toLowerCase() !== 'bash.exe') continue;
+    if (pathExists(candidate)) return candidate;
+  }
+  return undefined;
+}
+
 function findGitBashPath(): string | undefined {
   if (!IS_WINDOWS) return undefined;
   if (cachedGitBashPath !== undefined) return cachedGitBashPath ?? undefined;
@@ -73,11 +83,10 @@ function findGitBashPath(): string | undefined {
   // Dynamic discovery via `where bash`
   try {
     const whereOutput = execSync('where bash', { encoding: 'utf-8', timeout: 5000 }).trim();
-    for (const line of whereOutput.split(/\r?\n/)) {
-      if (/\\Git\\.*\\bash\.exe$/i.test(line) && existsSync(line)) {
-        cachedGitBashPath = line;
-        return line;
-      }
+    const discoveredPath = pickGitBashPathFromWhere(whereOutput);
+    if (discoveredPath) {
+      cachedGitBashPath = discoveredPath;
+      return discoveredPath;
     }
   } catch {
     // `where` failed

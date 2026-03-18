@@ -313,18 +313,44 @@ test('Windows startup resolves portable Redis from the shared helper before glob
 
 test('Windows startup preserves runtime Redis overrides, validates artifacts, and exits when service jobs stop', () => {
   assert.match(startWindowsScript, /\$configuredRedisUrl = if \(\$env:REDIS_URL\)/);
-  assert.match(startWindowsScript, /\$useExternalRedis = \$useRedis -and \$configuredRedisUrl -and \(\$LocalRedisUrls -notcontains \$configuredRedisUrl\)/);
+  assert.match(helpersScript, /function Test-LocalRedisUrl/);
+  assert.match(startWindowsScript, /\$useExternalRedis = \$useRedis -and \$configuredRedisUrl -and -not \(Test-LocalRedisUrl -RedisUrl \$configuredRedisUrl -RedisPort \$RedisPort\)/);
   assert.match(startWindowsScript, /Write-Ok "Using external Redis: \$configuredRedisUrl"/);
   assert.match(startWindowsScript, /\$runtimeEnvOverrides = @\{/);
   assert.match(startWindowsScript, /REDIS_URL = \$env:REDIS_URL/);
   assert.match(startWindowsScript, /MEMORY_STORE = \$env:MEMORY_STORE/);
+  assert.match(startWindowsScript, /try \{\s+# -- Build \(unless -Quick\) -+\s+if \(-not \$Quick\) \{/s);
   assert.match(startWindowsScript, /\$apiEntry = Join-Path \$ProjectRoot "packages\/api\/dist\/index\.js"/);
   assert.match(startWindowsScript, /API build artifact not found - run without -Quick first to build/);
-  assert.match(startWindowsScript, /Build failed: shared/);
-  assert.match(startWindowsScript, /Build failed: mcp-server/);
-  assert.match(startWindowsScript, /Build failed: api/);
-  assert.match(startWindowsScript, /Build failed: web/);
+  assert.match(startWindowsScript, /Write-Err "Build failed: shared";\s+throw "Build failed: shared"/);
+  assert.match(startWindowsScript, /Write-Err "Build failed: mcp-server";\s+throw "Build failed: mcp-server"/);
+  assert.match(startWindowsScript, /Write-Err "Build failed: api";\s+throw "Build failed: api"/);
+  assert.match(startWindowsScript, /Write-Err "Build failed: web";\s+throw "Build failed: web"/);
+  assert.match(startWindowsScript, /\$nextCli = Join-Path \$ProjectRoot "node_modules\/next\/dist\/bin\/next"/);
+  assert.match(startWindowsScript, /Write-Err "Next CLI not found at \$nextCli - run pnpm install first"/);
   assert.match(startWindowsScript, /Service job '\$\(\$job.Name\)' stopped \(\$\(\$job.State\)\)/);
+});
+
+test('Windows Redis URL handling preserves external backends and treats localhost URLs with suffixes as local', () => {
+  assert.match(startWindowsScript, /Test-LocalRedisUrl -RedisUrl \$configuredRedisUrl -RedisPort \$RedisPort/);
+  assert.match(helpersScript, /\$uri\.Host -notin @\("localhost", "127\.0\.0\.1"\)/);
+  assert.match(helpersScript, /if \(\$uri\.Port -gt 0 -and "\$\(\$uri\.Port\)" -ne "\$RedisPort"\) \{/);
+  assert.match(stopWindowsScript, /\$configuredRedisUrl = if \(\$env:REDIS_URL\) \{ \$env:REDIS_URL\.Trim\(\) \} else \{ Get-InstallerEnvValueFromFile -EnvFile \$envFile -Key "REDIS_URL" \}/);
+  assert.match(stopWindowsScript, /if \(\$configuredRedisUrl -and -not \(Test-LocalRedisUrl -RedisUrl \$configuredRedisUrl -RedisPort \$RedisPort\)\) \{/);
+  assert.match(stopWindowsScript, /Write-Warn "Skipping local Redis shutdown because REDIS_URL points to an external host"/);
+});
+
+test('Windows startup only stops Clowder-owned listeners and records managed service PIDs', () => {
+  assert.match(startWindowsScript, /\$RunDir = Join-Path \$ProjectRoot "\.cat-cafe\/run\/windows"/);
+  assert.match(startWindowsScript, /\$ApiPidFile = Join-Path \$RunDir "api-\$ApiPort\.pid"/);
+  assert.match(startWindowsScript, /function Get-ManagedProcessId/);
+  assert.match(startWindowsScript, /function Set-ManagedProcessId/);
+  assert.match(startWindowsScript, /function Test-ClowderOwnedProcess/);
+  assert.match(startWindowsScript, /Get-CimInstance Win32_Process -Filter "ProcessId = \$ProcessId"/);
+  assert.match(startWindowsScript, /Port \$Port \(\$Name\) is in use by non-Clowder PID/);
+  assert.match(startWindowsScript, /Stop-PortProcess -Port \(\[int\]\$ApiPort\) -Name "API" -PidFile \$ApiPidFile -ProjectRoot \$ProjectRoot/);
+  assert.match(startWindowsScript, /Set-ManagedProcessId -Port \(\[int\]\$ApiPort\) -PidFile \$ApiPidFile/);
+  assert.match(startWindowsScript, /Clear-ManagedProcessId -PidFile \$ApiPidFile/);
 });
 
 test('Windows installer and startup reuse shared tool resolution instead of raw pnpm PATH lookups', () => {
@@ -334,9 +360,9 @@ test('Windows installer and startup reuse shared tool resolution instead of raw 
   assert.match(installScript, /Resolve-ToolCommand -Name \$tool\.Cmd/);
   assert.match(startWindowsScript, /\$pnpmCommand = Resolve-ToolCommand -Name "pnpm"/);
   assert.match(startWindowsScript, /& \$pnpmCommand run build/);
-  assert.match(startWindowsScript, /param\(\$root, \$port, \$pnpmPath\)/);
-  assert.match(startWindowsScript, /& \$pnpmPath exec next dev -p \$port/);
-  assert.match(startWindowsScript, /& \$pnpmPath exec next start -p \$port -H 0\.0\.0\.0/);
+  assert.match(startWindowsScript, /param\(\$root, \$port, \$nextCli\)/);
+  assert.match(startWindowsScript, /& node \$nextCli dev \(Join-Path \$root "packages\/web"\) -p \$port/);
+  assert.match(startWindowsScript, /& node \$nextCli start \(Join-Path \$root "packages\/web"\) -p \$port -H 0\.0\.0\.0/);
 });
 
 test('Windows CLI installs retry command discovery before warning and auth detection uses the same retry helper', () => {

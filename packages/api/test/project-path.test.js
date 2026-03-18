@@ -5,7 +5,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { after, before, describe, it } from 'node:test';
 
-const { validateProjectPath, isUnderAllowedRoot, getAllowedRoots, getDefaultRootsForPlatform } = await import(
+const { validateProjectPath, isUnderAllowedRoot, getAllowedRoots, getDefaultRootsForPlatform, isPathUnderRoots } = await import(
   '../dist/utils/project-path.js'
 );
 
@@ -35,6 +35,11 @@ describe('isUnderAllowedRoot', () => {
 
   it('rejects root directory', () => {
     assert.strictEqual(isUnderAllowedRoot('/'), false);
+  });
+
+  it('rejects cross-drive Windows paths when custom roots are configured', () => {
+    assert.strictEqual(isPathUnderRoots('D:\\repo', ['C:\\work'], 'win32'), false);
+    assert.strictEqual(isPathUnderRoots('C:\\work\\repo', ['C:\\work'], 'win32'), true);
   });
 });
 

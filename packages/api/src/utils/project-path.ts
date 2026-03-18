@@ -9,7 +9,7 @@
 import { existsSync } from 'node:fs';
 import { realpath, stat } from 'node:fs/promises';
 import { homedir, platform } from 'node:os';
-import { delimiter, relative, resolve } from 'node:path';
+import { delimiter, relative, resolve, win32 } from 'node:path';
 
 /**
  * Allowed root directories for project paths.
@@ -68,6 +68,23 @@ export function getAllowedRoots(): string[] {
   return ALLOWED_ROOTS();
 }
 
+export function isPathUnderRoots(absPath: string, allowedRoots: string[], platformName = process.platform): boolean {
+  const isWindows = platformName === 'win32';
+  for (const root of allowedRoots) {
+    const rel = isWindows ? win32.relative(root, absPath) : relative(root, absPath);
+    if (rel === '') {
+      return true;
+    }
+    if (isWindows && win32.isAbsolute(rel)) {
+      continue;
+    }
+    if (!rel.startsWith('..') && !rel.startsWith('/') && !rel.startsWith('\\')) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /**
  * Check if a path is an allowed project directory.
  *
@@ -103,13 +120,5 @@ export async function validateProjectPath(rawPath: string): Promise<string | nul
  * For full validation (including symlinks), use validateProjectPath().
  */
 export function isUnderAllowedRoot(absPath: string): boolean {
-  for (const root of ALLOWED_ROOTS()) {
-    // path.relative(root, target): if target is under root,
-    // the result won't start with '..'
-    const rel = relative(root, absPath);
-    if (rel === '' || (!rel.startsWith('..') && !rel.startsWith('/'))) {
-      return true;
-    }
-  }
-  return false;
+  return isPathUnderRoots(absPath, ALLOWED_ROOTS());
 }

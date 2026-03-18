@@ -72,24 +72,79 @@ Write-Ok "pnpm: $pnpmCommand"
 $ApiPort = if ($env:API_SERVER_PORT) { $env:API_SERVER_PORT } else { "3004" }
 $WebPort = if ($env:FRONTEND_PORT) { $env:FRONTEND_PORT } else { "3003" }
 $RedisPort = if ($env:REDIS_PORT) { $env:REDIS_PORT } else { "6379" }
-$LocalRedisUrls = @("redis://localhost:$RedisPort", "redis://127.0.0.1:$RedisPort")
+$RunDir = Join-Path $ProjectRoot ".cat-cafe/run/windows"
+$ApiPidFile = Join-Path $RunDir "api-$ApiPort.pid"
+$WebPidFile = Join-Path $RunDir "web-$WebPort.pid"
+New-Item -Path $RunDir -ItemType Directory -Force | Out-Null
 
 # -- Kill existing port processes ----------------------------
+function Get-ManagedProcessId {
+    param([string]$PidFile)
+    if (-not (Test-Path $PidFile)) {
+        return $null
+    }
+    try {
+        return [int](Get-Content $PidFile -TotalCount 1).Trim()
+    } catch {
+        return $null
+    }
+}
+
+function Clear-ManagedProcessId {
+    param([string]$PidFile)
+    Remove-Item $PidFile -ErrorAction SilentlyContinue
+}
+
+function Set-ManagedProcessId {
+    param([int]$Port, [string]$PidFile)
+    $listener = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($listener) {
+        Set-Content -Path $PidFile -Value "$($listener.OwningProcess)" -Encoding ASCII
+    }
+}
+
+function Get-ProcessCommandLine {
+    param([int]$ProcessId)
+    try {
+        $processInfo = Get-CimInstance Win32_Process -Filter "ProcessId = $ProcessId" -ErrorAction Stop
+        return $processInfo.CommandLine
+    } catch {
+        return $null
+    }
+}
+
+function Test-ClowderOwnedProcess {
+    param([int]$ProcessId, [string]$ProjectRoot)
+    $commandLine = Get-ProcessCommandLine -ProcessId $ProcessId
+    if (-not $commandLine) {
+        return $false
+    }
+    return $commandLine -like "*$ProjectRoot*"
+}
+
 function Stop-PortProcess {
-    param([int]$Port, [string]$Name)
+    param([int]$Port, [string]$Name, [string]$PidFile, [string]$ProjectRoot)
     $connections = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue
     if ($connections) {
+        $managedPid = Get-ManagedProcessId -PidFile $PidFile
         foreach ($conn in $connections) {
+            $isManagedPid = $managedPid -and ($conn.OwningProcess -eq $managedPid)
+            $isClowderOwned = $isManagedPid -or (Test-ClowderOwnedProcess -ProcessId $conn.OwningProcess -ProjectRoot $ProjectRoot)
+            if (-not $isClowderOwned) {
+                Write-Err "Port $Port ($Name) is in use by non-Clowder PID $($conn.OwningProcess). Stop it manually or change the configured port."
+                throw "Port $Port ($Name) is in use by a non-Clowder process"
+            }
             Write-Warn "Port $Port ($Name) in use by PID $($conn.OwningProcess) - stopping"
             Stop-Process -Id $conn.OwningProcess -Force -ErrorAction SilentlyContinue
         }
+        Clear-ManagedProcessId -PidFile $PidFile
         Start-Sleep -Seconds 1
     }
 }
 
 Write-Step "Check ports"
-Stop-PortProcess -Port ([int]$ApiPort) -Name "API"
-Stop-PortProcess -Port ([int]$WebPort) -Name "Frontend"
+Stop-PortProcess -Port ([int]$ApiPort) -Name "API" -PidFile $ApiPidFile -ProjectRoot $ProjectRoot
+Stop-PortProcess -Port ([int]$WebPort) -Name "Frontend" -PidFile $WebPidFile -ProjectRoot $ProjectRoot
 
 # -- Storage (Redis or Memory) -------------------------------
 Write-Step "Storage"
@@ -103,7 +158,7 @@ $redisSource = $null
 $redisLogFile = Join-Path $redisLayout.Logs "redis-$RedisPort.log"
 $redisPidFile = Join-Path $redisLayout.Data "redis-$RedisPort.pid"
 $configuredRedisUrl = if ($env:REDIS_URL) { $env:REDIS_URL.Trim() } else { "" }
-$useExternalRedis = $useRedis -and $configuredRedisUrl -and ($LocalRedisUrls -notcontains $configuredRedisUrl)
+$useExternalRedis = $useRedis -and $configuredRedisUrl -and -not (Test-LocalRedisUrl -RedisUrl $configuredRedisUrl -RedisPort $RedisPort)
 
 if ($useExternalRedis) {
     Write-Ok "Using external Redis: $configuredRedisUrl"
@@ -169,153 +224,158 @@ if (-not $useRedis) {
     $env:MEMORY_STORE = "1"
 }
 
-# -- Build (unless -Quick) ----------------------------------
-if (-not $Quick) {
-    Write-Step "Build packages"
+try {
+    # -- Build (unless -Quick) ----------------------------------
+    if (-not $Quick) {
+        Write-Step "Build packages"
 
-    Write-Host "  Building shared..."
-    Push-Location (Join-Path $ProjectRoot "packages/shared")
-    & $pnpmCommand run build
-    if ($LASTEXITCODE -ne 0) { Pop-Location; Write-Err "Build failed: shared"; exit 1 }
-    Pop-Location
-    Write-Ok "shared"
-
-    Write-Host "  Building mcp-server..."
-    Push-Location (Join-Path $ProjectRoot "packages/mcp-server")
-    & $pnpmCommand run build
-    if ($LASTEXITCODE -ne 0) { Pop-Location; Write-Err "Build failed: mcp-server"; exit 1 }
-    Pop-Location
-    Write-Ok "mcp-server"
-
-    Write-Host "  Building api..."
-    Push-Location (Join-Path $ProjectRoot "packages/api")
-    & $pnpmCommand run build
-    if ($LASTEXITCODE -ne 0) { Pop-Location; Write-Err "Build failed: api"; exit 1 }
-    Pop-Location
-    Write-Ok "api"
-
-    if (-not $Dev) {
-        Write-Host "  Building web (production)..."
-        Push-Location (Join-Path $ProjectRoot "packages/web")
+        Write-Host "  Building shared..."
+        Push-Location (Join-Path $ProjectRoot "packages/shared")
         & $pnpmCommand run build
-        if ($LASTEXITCODE -ne 0) { Pop-Location; Write-Err "Build failed: web"; exit 1 }
+        if ($LASTEXITCODE -ne 0) { Pop-Location; Write-Err "Build failed: shared"; throw "Build failed: shared" }
         Pop-Location
-        Write-Ok "web (production)"
+        Write-Ok "shared"
+
+        Write-Host "  Building mcp-server..."
+        Push-Location (Join-Path $ProjectRoot "packages/mcp-server")
+        & $pnpmCommand run build
+        if ($LASTEXITCODE -ne 0) { Pop-Location; Write-Err "Build failed: mcp-server"; throw "Build failed: mcp-server" }
+        Pop-Location
+        Write-Ok "mcp-server"
+
+        Write-Host "  Building api..."
+        Push-Location (Join-Path $ProjectRoot "packages/api")
+        & $pnpmCommand run build
+        if ($LASTEXITCODE -ne 0) { Pop-Location; Write-Err "Build failed: api"; throw "Build failed: api" }
+        Pop-Location
+        Write-Ok "api"
+
+        if (-not $Dev) {
+            Write-Host "  Building web (production)..."
+            Push-Location (Join-Path $ProjectRoot "packages/web")
+            & $pnpmCommand run build
+            if ($LASTEXITCODE -ne 0) { Pop-Location; Write-Err "Build failed: web"; throw "Build failed: web" }
+            Pop-Location
+            Write-Ok "web (production)"
+        }
+    } else {
+        Write-Step "Skip build (-Quick)"
     }
-} else {
-    Write-Step "Skip build (-Quick)"
-}
 
-# -- Configure MCP server path -------------------------------
-$mcpPath = Join-Path $ProjectRoot "packages/mcp-server/dist/index.js"
-if (Test-Path $mcpPath) {
-    $env:CAT_CAFE_MCP_SERVER_PATH = $mcpPath
-    Write-Ok "MCP server path: $mcpPath"
-}
+    # -- Configure MCP server path -------------------------------
+    $mcpPath = Join-Path $ProjectRoot "packages/mcp-server/dist/index.js"
+    if (Test-Path $mcpPath) {
+        $env:CAT_CAFE_MCP_SERVER_PATH = $mcpPath
+        Write-Ok "MCP server path: $mcpPath"
+    }
 
-$apiEntry = Join-Path $ProjectRoot "packages/api/dist/index.js"
-if (-not (Test-Path $apiEntry)) {
-    Write-Err "API build artifact not found - run without -Quick first to build"
-    exit 1
-}
+    $apiEntry = Join-Path $ProjectRoot "packages/api/dist/index.js"
+    if (-not (Test-Path $apiEntry)) {
+        Write-Err "API build artifact not found - run without -Quick first to build"
+        throw "API build artifact not found"
+    }
 
-$nextDir = Join-Path $ProjectRoot "packages/web/.next"
-if (-not $Dev -and -not (Test-Path $nextDir)) {
-    Write-Err ".next directory not found - run without -Quick first to build"
-    exit 1
-}
+    $nextDir = Join-Path $ProjectRoot "packages/web/.next"
+    if (-not $Dev -and -not (Test-Path $nextDir)) {
+        Write-Err ".next directory not found - run without -Quick first to build"
+        throw ".next directory not found"
+    }
+    $nextCli = Join-Path $ProjectRoot "node_modules/next/dist/bin/next"
+    if (-not (Test-Path $nextCli)) {
+        Write-Err "Next CLI not found at $nextCli - run pnpm install first"
+        throw "Next CLI not found"
+    }
 
-# -- Start services ------------------------------------------
-Write-Step "Start services"
+    # -- Start services ------------------------------------------
+    Write-Step "Start services"
 
-# Track background jobs for cleanup
-$jobs = @()
-$runtimeEnvOverrides = @{
-    REDIS_URL = $env:REDIS_URL
-    MEMORY_STORE = $env:MEMORY_STORE
-    CAT_CAFE_MCP_SERVER_PATH = $env:CAT_CAFE_MCP_SERVER_PATH
-}
+    # Track background jobs for cleanup
+    $jobs = @()
+    $runtimeEnvOverrides = @{
+        REDIS_URL = $env:REDIS_URL
+        MEMORY_STORE = $env:MEMORY_STORE
+        CAT_CAFE_MCP_SERVER_PATH = $env:CAT_CAFE_MCP_SERVER_PATH
+    }
 
-# API Server
-# Env vars are loaded into this process (line 42-53) and inherited by Start-Job.
-# No --env-file needed - avoids depending on Node's --env-file support here.
-Write-Host "  Starting API Server (port $ApiPort)..."
-$apiJob = Start-Job -Name "api" -ScriptBlock {
-    param($root, $envFile, $runtimeEnvOverrides)
-    Set-Location (Join-Path $root "packages/api")
-    # Load .env into job process (Start-Job inherits parent env,
-    # but re-load to be safe if process env was not fully propagated)
-    if (Test-Path $envFile) {
-        Get-Content $envFile | ForEach-Object {
-            $line = $_.Trim()
-            if ($line -and -not $line.StartsWith("#")) {
-                $parts = $line -split "=", 2
-                if ($parts.Count -eq 2) {
-                    $k = $parts[0].Trim()
-                    $v = $parts[1].Trim().Trim('"').Trim("'")
-                    [System.Environment]::SetEnvironmentVariable($k, $v, "Process")
+    # API Server
+    # Env vars are loaded into this process (line 42-53) and inherited by Start-Job.
+    # No --env-file needed - avoids depending on Node's --env-file support here.
+    Write-Host "  Starting API Server (port $ApiPort)..."
+    $apiJob = Start-Job -Name "api" -ScriptBlock {
+        param($root, $envFile, $runtimeEnvOverrides, $apiEntry)
+        Set-Location (Join-Path $root "packages/api")
+        # Load .env into job process (Start-Job inherits parent env,
+        # but re-load to be safe if process env was not fully propagated)
+        if (Test-Path $envFile) {
+            Get-Content $envFile | ForEach-Object {
+                $line = $_.Trim()
+                if ($line -and -not $line.StartsWith("#")) {
+                    $parts = $line -split "=", 2
+                    if ($parts.Count -eq 2) {
+                        $k = $parts[0].Trim()
+                        $v = $parts[1].Trim().Trim('"').Trim("'")
+                        [System.Environment]::SetEnvironmentVariable($k, $v, "Process")
+                    }
                 }
             }
         }
-    }
-    foreach ($entry in $runtimeEnvOverrides.GetEnumerator()) {
-        if ($null -eq $entry.Value -or $entry.Value -eq "") {
-            [System.Environment]::SetEnvironmentVariable($entry.Key, $null, "Process")
-        } else {
-            [System.Environment]::SetEnvironmentVariable($entry.Key, [string]$entry.Value, "Process")
+        foreach ($entry in $runtimeEnvOverrides.GetEnumerator()) {
+            if ($null -eq $entry.Value -or $entry.Value -eq "") {
+                [System.Environment]::SetEnvironmentVariable($entry.Key, $null, "Process")
+            } else {
+                [System.Environment]::SetEnvironmentVariable($entry.Key, [string]$entry.Value, "Process")
+            }
         }
+        & node $apiEntry 2>&1
+    } -ArgumentList $ProjectRoot, $envFile, $runtimeEnvOverrides, $apiEntry
+    $jobs += $apiJob
+
+    Start-Sleep -Seconds 2
+
+    # Frontend
+    if ($Dev) {
+        # Development mode: next dev (hot reload)
+        Write-Host "  Starting Frontend (port $WebPort, dev)..."
+        $webJob = Start-Job -Name "web" -ScriptBlock {
+            param($root, $port, $nextCli)
+            $env:PORT = $port
+            $env:NEXT_IGNORE_INCORRECT_LOCKFILE = "1"
+            & node $nextCli dev (Join-Path $root "packages/web") -p $port 2>&1
+        } -ArgumentList $ProjectRoot, $WebPort, $nextCli
+    } else {
+        # Production mode: next start (default - avoids #105 issues)
+        Write-Host "  Starting Frontend (port $WebPort, production)..."
+        $webJob = Start-Job -Name "web" -ScriptBlock {
+            param($root, $port, $nextCli)
+            $env:PORT = $port
+            & node $nextCli start (Join-Path $root "packages/web") -p $port -H 0.0.0.0 2>&1
+        } -ArgumentList $ProjectRoot, $WebPort, $nextCli
     }
-    & node dist/index.js 2>&1
-} -ArgumentList $ProjectRoot, $envFile, $runtimeEnvOverrides
-$jobs += $apiJob
+    $jobs += $webJob
 
-Start-Sleep -Seconds 2
+    Start-Sleep -Seconds 3
+    Set-ManagedProcessId -Port ([int]$ApiPort) -PidFile $ApiPidFile
+    Set-ManagedProcessId -Port ([int]$WebPort) -PidFile $WebPidFile
 
-# Frontend
-if ($Dev) {
-    # Development mode: next dev (hot reload)
-    Write-Host "  Starting Frontend (port $WebPort, dev)..."
-    $webJob = Start-Job -Name "web" -ScriptBlock {
-        param($root, $port, $pnpmPath)
-        Set-Location (Join-Path $root "packages/web")
-        $env:PORT = $port
-        $env:NEXT_IGNORE_INCORRECT_LOCKFILE = "1"
-        & $pnpmPath exec next dev -p $port 2>&1
-    } -ArgumentList $ProjectRoot, $WebPort, $pnpmCommand
-} else {
-    # Production mode: next start (default - avoids #105 issues)
-    Write-Host "  Starting Frontend (port $WebPort, production)..."
-    $webJob = Start-Job -Name "web" -ScriptBlock {
-        param($root, $port, $pnpmPath)
-        Set-Location (Join-Path $root "packages/web")
-        $env:PORT = $port
-        & $pnpmPath exec next start -p $port -H 0.0.0.0 2>&1
-    } -ArgumentList $ProjectRoot, $WebPort, $pnpmCommand
-}
-$jobs += $webJob
+    # -- Status --------------------------------------------------
+    $effectiveRedisUrl = if ($env:REDIS_URL) { $env:REDIS_URL } else { "" }
+    $storageMode = if ($useRedis -and $effectiveRedisUrl) { "Redis ($effectiveRedisUrl)" } elseif ($useRedis) { "Redis (redis://localhost:$RedisPort)" } else { "Memory (restart loses data)" }
+    $frontendMode = if ($Dev) { "development (hot reload)" } else { "production (PWA enabled)" }
 
-Start-Sleep -Seconds 3
+    Write-Host ""
+    Write-Host "  ========================================" -ForegroundColor Green
+    Write-Host "  Cat Cafe started!" -ForegroundColor Green
+    Write-Host "  ========================================" -ForegroundColor Green
+    Write-Host ""
+    Write-Host "  Frontend: http://localhost:$WebPort"
+    Write-Host "  API:      http://localhost:$ApiPort"
+    Write-Host "  Storage:  $storageMode"
+    Write-Host "  Frontend: $frontendMode"
+    Write-Host ""
+    Write-Host "  Press Ctrl+C to stop all services" -ForegroundColor Yellow
+    Write-Host ""
 
-# -- Status --------------------------------------------------
-$effectiveRedisUrl = if ($env:REDIS_URL) { $env:REDIS_URL } else { "" }
-$storageMode = if ($useRedis -and $effectiveRedisUrl) { "Redis ($effectiveRedisUrl)" } elseif ($useRedis) { "Redis (redis://localhost:$RedisPort)" } else { "Memory (restart loses data)" }
-$frontendMode = if ($Dev) { "development (hot reload)" } else { "production (PWA enabled)" }
-
-Write-Host ""
-Write-Host "  ========================================" -ForegroundColor Green
-Write-Host "  Cat Cafe started!" -ForegroundColor Green
-Write-Host "  ========================================" -ForegroundColor Green
-Write-Host ""
-Write-Host "  Frontend: http://localhost:$WebPort"
-Write-Host "  API:      http://localhost:$ApiPort"
-Write-Host "  Storage:  $storageMode"
-Write-Host "  Frontend: $frontendMode"
-Write-Host ""
-Write-Host "  Press Ctrl+C to stop all services" -ForegroundColor Yellow
-Write-Host ""
-
-# -- Wait and cleanup ----------------------------------------
-try {
+    # -- Wait ----------------------------------------------------
     while ($true) {
         # Print any job output
         foreach ($job in $jobs) {
@@ -344,6 +404,8 @@ try {
         Stop-Job -Job $job -ErrorAction SilentlyContinue
         Remove-Job -Job $job -Force -ErrorAction SilentlyContinue
     }
+    Clear-ManagedProcessId -PidFile $ApiPidFile
+    Clear-ManagedProcessId -PidFile $WebPidFile
 
     if ($startedRedis) {
         try {

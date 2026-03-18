@@ -15,9 +15,8 @@
  *   turn.started / turn.completed / 其余 item 事件 → 跳过
  */
 
-import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { dirname, join, parse, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { type CatId, createCatId } from '@cat-cafe/shared';
 import { getCatEffort } from '../../../../../config/cat-config-loader.js';
@@ -182,18 +181,23 @@ function buildCatCafeMcpConfigArgs(workingDirectory?: string, callbackEnv?: Reco
   return args;
 }
 
-function isGitRepositoryPath(workingDirectory: string): boolean {
-  try {
-    return (
-      execFileSync('git', ['rev-parse', '--is-inside-work-tree'], {
-        cwd: workingDirectory,
-        encoding: 'utf-8',
-        stdio: ['ignore', 'pipe', 'ignore'],
-        timeout: 5000,
-      }).trim() === 'true'
-    );
-  } catch {
-    return false;
+export function isGitRepositoryPath(workingDirectory: string): boolean {
+  let current = resolve(workingDirectory);
+  while (true) {
+    if (existsSync(join(current, '.git'))) {
+      return true;
+    }
+
+    const root = parse(current).root;
+    if (current === root) {
+      return false;
+    }
+
+    const parent = dirname(current);
+    if (parent === current) {
+      return false;
+    }
+    current = parent;
   }
 }
 

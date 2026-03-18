@@ -91,6 +91,29 @@ function Resolve-GlobalRedisBinaries {
     }
 }
 
+function Test-LocalRedisUrl {
+    param([string]$RedisUrl, [string]$RedisPort)
+
+    if (-not $RedisUrl) {
+        return $false
+    }
+
+    $uri = $null
+    if (-not [System.Uri]::TryCreate($RedisUrl, [System.UriKind]::Absolute, [ref]$uri)) {
+        return $false
+    }
+
+    if ($uri.Host -notin @("localhost", "127.0.0.1")) {
+        return $false
+    }
+
+    if ($uri.Port -gt 0 -and "$($uri.Port)" -ne "$RedisPort") {
+        return $false
+    }
+
+    return $true
+}
+
 function Get-InstallerExceptionDetails {
     param($ErrorRecord)
 

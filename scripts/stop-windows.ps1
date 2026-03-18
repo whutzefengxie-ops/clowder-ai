@@ -48,6 +48,8 @@ if (Test-Path $envFile) {
     }
 }
 
+$configuredRedisUrl = if ($env:REDIS_URL) { $env:REDIS_URL.Trim() } else { Get-InstallerEnvValueFromFile -EnvFile $envFile -Key "REDIS_URL" }
+
 function Stop-PortProcess {
     param([int]$Port, [string]$Name)
     $connections = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue
@@ -73,20 +75,24 @@ if (-not $redisCommands) {
     $redisCommands = Resolve-GlobalRedisBinaries
 }
 
-try {
-    if (-not $redisCommands -or -not $redisCommands.CliPath) {
-        throw "redis-cli unavailable"
-    }
-    $redisCli = $redisCommands.CliPath
-    $redisPing = & $redisCli -p $RedisPort ping 2>$null
-    if ($redisPing -eq "PONG") {
-        & $redisCli -p $RedisPort shutdown save 2>$null
-        Write-Ok "Redis stopped (port $RedisPort)"
-    } else {
+if ($configuredRedisUrl -and -not (Test-LocalRedisUrl -RedisUrl $configuredRedisUrl -RedisPort $RedisPort)) {
+    Write-Warn "Skipping local Redis shutdown because REDIS_URL points to an external host"
+} else {
+    try {
+        if (-not $redisCommands -or -not $redisCommands.CliPath) {
+            throw "redis-cli unavailable"
+        }
+        $redisCli = $redisCommands.CliPath
+        $redisPing = & $redisCli -p $RedisPort ping 2>$null
+        if ($redisPing -eq "PONG") {
+            & $redisCli -p $RedisPort shutdown save 2>$null
+            Write-Ok "Redis stopped (port $RedisPort)"
+        } else {
+            Write-Warn "Redis (port $RedisPort) - not running"
+        }
+    } catch {
         Write-Warn "Redis (port $RedisPort) - not running"
     }
-} catch {
-    Write-Warn "Redis (port $RedisPort) - not running"
 }
 
 Write-Host "`nAll services stopped." -ForegroundColor Green

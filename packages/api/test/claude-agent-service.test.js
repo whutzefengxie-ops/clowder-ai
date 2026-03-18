@@ -11,7 +11,7 @@ import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
 import { mock, test } from 'node:test';
 
-const { ClaudeAgentService, resolveDefaultClaudeMcpServerPath } = await import(
+const { ClaudeAgentService, pickGitBashPathFromWhere, resolveDefaultClaudeMcpServerPath } = await import(
   '../dist/domains/cats/services/agents/providers/ClaudeAgentService.js'
 );
 
@@ -304,6 +304,19 @@ test('F062: api_key profile injects ANTHROPIC_API_KEY and ANTHROPIC_BASE_URL', a
     if (prevBaseUrl === undefined) delete process.env.ANTHROPIC_BASE_URL;
     else process.env.ANTHROPIC_BASE_URL = prevBaseUrl;
   }
+});
+
+test('pickGitBashPathFromWhere accepts nonstandard bash.exe locations returned by where', () => {
+  const whereOutput = [
+    'C:\\Users\\lang\\scoop\\apps\\git\\current\\bin\\bash.exe',
+    'C:\\Program Files\\Git\\bin\\bash.exe',
+  ].join('\r\n');
+
+  const resolved = pickGitBashPathFromWhere(whereOutput, (candidate) =>
+    candidate === 'C:\\Users\\lang\\scoop\\apps\\git\\current\\bin\\bash.exe',
+  );
+
+  assert.equal(resolved, 'C:\\Users\\lang\\scoop\\apps\\git\\current\\bin\\bash.exe');
 });
 
 test('yields error on result/error event', async () => {

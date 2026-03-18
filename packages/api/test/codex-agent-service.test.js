@@ -5,12 +5,14 @@
 
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
 import { mock, test } from 'node:test';
 
-const { CodexAgentService } = await import('../dist/domains/cats/services/agents/providers/CodexAgentService.js');
+const { CodexAgentService, isGitRepositoryPath } = await import(
+  '../dist/domains/cats/services/agents/providers/CodexAgentService.js'
+);
 
 /** Helper: collect all items from async iterable */
 async function collect(iterable) {
@@ -216,6 +218,21 @@ test('does not add --skip-git-repo-check inside a git repository', async () => {
 
   const args = spawnFn.mock.calls[0].arguments[1];
   assert.ok(!args.includes('--skip-git-repo-check'));
+});
+
+test('isGitRepositoryPath walks parent directories instead of shelling out to git', () => {
+  const root = mkdtempSync(join('/tmp', 'codex-git-marker-'));
+  const nestedDir = join(root, 'packages', 'api');
+
+  try {
+    mkdirSync(nestedDir, { recursive: true });
+    writeFileSync(join(root, '.git'), 'gitdir: /tmp/example\n', 'utf8');
+
+    assert.equal(isGitRepositoryPath(nestedDir), true);
+    assert.equal(isGitRepositoryPath(join('/tmp', 'codex-not-a-repo')), false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test('uses env-configured sandbox and approval policy for fresh exec', async () => {
