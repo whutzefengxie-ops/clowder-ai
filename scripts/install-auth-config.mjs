@@ -6,7 +6,8 @@ import path from 'node:path';
 function usage() {
   console.error(`Usage:
   node scripts/install-auth-config.mjs env-apply --env-file FILE [--set KEY=VALUE]... [--delete KEY]...
-  node scripts/install-auth-config.mjs claude-profile set --project-dir DIR --api-key KEY [--base-url URL] [--model MODEL]
+  node scripts/install-auth-config.mjs claude-profile set --project-dir DIR [--api-key KEY] [--base-url URL] [--model MODEL]
+    API key can also be passed via _INSTALLER_API_KEY env var (preferred for security).
   node scripts/install-auth-config.mjs claude-profile remove --project-dir DIR`);
   process.exit(1);
 }
@@ -236,9 +237,14 @@ if (positionals[0] === 'env-apply') {
 }
 
 if (positionals[0] === 'claude-profile' && positionals[1] === 'set') {
+  const apiKey = getOptional(values, 'api-key', '') || process.env._INSTALLER_API_KEY || '';
+  if (!apiKey) {
+    console.error('Error: API key required via --api-key or _INSTALLER_API_KEY env var');
+    process.exit(1);
+  }
   writeClaudeProfile(
     getRequired(values, 'project-dir'),
-    getRequired(values, 'api-key'),
+    apiKey,
     getOptional(values, 'base-url', 'https://api.anthropic.com'),
     getOptional(values, 'model', ''),
   );

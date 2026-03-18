@@ -119,7 +119,10 @@ function Test-ClowderOwnedProcess {
     if (-not $commandLine) {
         return $false
     }
-    return $commandLine -like "*$ProjectRoot*"
+    # Normalize ProjectRoot with trailing separator to avoid substring false positives
+    # e.g. C:\projects\clowder must not match C:\projects\clowder-test
+    $normalizedRoot = $ProjectRoot.TrimEnd('\', '/') + '\'
+    return ($commandLine -like "*$normalizedRoot*") -or ($commandLine -like "*$ProjectRoot`"*") -or ($commandLine -like "*$ProjectRoot'*")
 }
 
 function Stop-PortProcess {

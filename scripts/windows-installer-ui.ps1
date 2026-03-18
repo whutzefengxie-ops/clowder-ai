@@ -158,12 +158,20 @@ function Resolve-InstallerRedisPlan {
     param([string]$ProjectRoot)
     $defaultRedisUrl = Get-InstallerExternalRedisUrl -ProjectRoot $ProjectRoot
     $mode = if (Test-InstallerConsoleUi) {
-        Select-InstallerChoice -Title "Redis setup" -Prompt "Choose how this workspace should store runtime data" -Options @(
-            @{ Label = "&Install Redis locally (recommended)"; Help = "Download or reuse the project-local portable Redis bundle"; Value = "portable" },
+        $redisOptions = @()
+        if ($defaultRedisUrl) {
+            $redisOptions += @{ Label = "&Keep external ($defaultRedisUrl)"; Help = "Keep the current external Redis URL"; Value = "keep_external" }
+        }
+        $redisOptions += @(
+            @{ Label = if ($defaultRedisUrl) { "&Install Redis locally" } else { "&Install Redis locally (recommended)" }; Help = "Download or reuse the project-local portable Redis bundle"; Value = "portable" },
             @{ Label = "&Use external Redis URL"; Help = "Use an existing external Redis instance"; Value = "external" }
         )
-    } elseif ($defaultRedisUrl) { "external" } else { "portable" }
+        Select-InstallerChoice -Title "Redis setup" -Prompt "Choose how this workspace should store runtime data" -Options $redisOptions
+    } elseif ($defaultRedisUrl) { "keep_external" } else { "portable" }
 
+    if ($mode -eq "keep_external") {
+        return [pscustomobject]@{ Mode = "external"; RedisUrl = $defaultRedisUrl }
+    }
     $redisUrl = if ($mode -eq "external") {
         if (Test-InstallerConsoleUi) { Read-Host "  External Redis URL" } else { $defaultRedisUrl }
     } else { "" }

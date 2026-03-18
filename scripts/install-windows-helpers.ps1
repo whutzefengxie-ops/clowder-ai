@@ -317,10 +317,16 @@ function Set-GeminiApiKeyMode {
 function Set-ClaudeInstallerProfile {
     param($State, [string]$ApiKey, [string]$BaseUrl, [string]$Model)
 
-    $profileArgs = @("claude-profile", "set", "--project-dir", $State.ProjectRoot, "--api-key", $ApiKey)
+    $profileArgs = @("claude-profile", "set", "--project-dir", $State.ProjectRoot)
     if ($BaseUrl) { $profileArgs += @("--base-url", $BaseUrl) }
     if ($Model) { $profileArgs += @("--model", $Model) }
-    Invoke-InstallerAuthHelper $State $profileArgs
+    # Pass API key via environment variable to avoid exposure in process listing
+    $env:_INSTALLER_API_KEY = $ApiKey
+    try {
+        Invoke-InstallerAuthHelper $State $profileArgs
+    } finally {
+        Remove-Item Env:\_INSTALLER_API_KEY -ErrorAction SilentlyContinue
+    }
 }
 
 function Remove-ClaudeInstallerProfile {
@@ -344,12 +350,20 @@ function Configure-InstallerAuth {
     if ($hasClaude) {
         Write-Host ""
         Write-Host "  Claude (claude):"
-        $choice = Select-InstallerChoice -Title "Claude auth" -Prompt "Choose how to configure Claude" -Options @(
-            @{ Label = "&OAuth"; Help = "Use Claude subscription / OAuth (recommended)"; Value = "oauth" },
+        $hasExistingProfile = Test-Path (Join-Path $ProjectRoot ".cat-cafe/provider-profiles.json")
+        $claudeOptions = @()
+        if ($hasExistingProfile) {
+            $claudeOptions += @{ Label = "&Keep existing"; Help = "Keep the current Claude auth configuration"; Value = "keep" }
+        }
+        $claudeOptions += @(
+            @{ Label = if ($hasExistingProfile) { "&OAuth" } else { "&OAuth (recommended)" }; Help = "Use Claude subscription / OAuth"; Value = "oauth" },
             @{ Label = "&API Key"; Help = "Write an installer-managed Claude API key profile"; Value = "api_key" },
             @{ Label = "&Skip"; Help = "Skip Claude auth setup for now"; Value = "skip" }
         )
-        if ($choice -eq "api_key") {
+        $choice = Select-InstallerChoice -Title "Claude auth" -Prompt "Choose how to configure Claude" -Options $claudeOptions
+        if ($choice -eq "keep") {
+            Write-Ok "Claude: keeping existing configuration"
+        } elseif ($choice -eq "api_key") {
             $apiKey = Read-Host "    API Key"
             $baseUrl = Read-Host "    Base URL (Enter = https://api.anthropic.com)"
             $model = Read-Host "    Model (Enter = default)"
@@ -371,12 +385,20 @@ function Configure-InstallerAuth {
     if ($hasCodex) {
         Write-Host ""
         Write-Host "  Codex (codex):"
-        $choice = Select-InstallerChoice -Title "Codex auth" -Prompt "Choose how to configure Codex" -Options @(
-            @{ Label = "&OAuth"; Help = "Use Codex OAuth / subscription (recommended)"; Value = "oauth" },
+        $existingCodexKey = Get-InstallerEnvValueFromFile -EnvFile (Join-Path $ProjectRoot ".env") -Key "OPENAI_API_KEY"
+        $codexOptions = @()
+        if ($existingCodexKey) {
+            $codexOptions += @{ Label = "&Keep existing"; Help = "Keep the current Codex auth configuration"; Value = "keep" }
+        }
+        $codexOptions += @(
+            @{ Label = if ($existingCodexKey) { "&OAuth" } else { "&OAuth (recommended)" }; Help = "Use Codex OAuth / subscription"; Value = "oauth" },
             @{ Label = "&API Key"; Help = "Store OpenAI API settings in .env"; Value = "api_key" },
             @{ Label = "&Skip"; Help = "Skip Codex auth setup for now"; Value = "skip" }
         )
-        if ($choice -eq "api_key") {
+        $choice = Select-InstallerChoice -Title "Codex auth" -Prompt "Choose how to configure Codex" -Options $codexOptions
+        if ($choice -eq "keep") {
+            Write-Ok "Codex: keeping existing configuration"
+        } elseif ($choice -eq "api_key") {
             $apiKey = Read-Host "    API Key"
             $baseUrl = Read-Host "    Base URL (Enter = default)"
             $model = Read-Host "    Model (Enter = default)"
@@ -398,12 +420,20 @@ function Configure-InstallerAuth {
     if ($hasGemini) {
         Write-Host ""
         Write-Host "  Gemini (gemini):"
-        $choice = Select-InstallerChoice -Title "Gemini auth" -Prompt "Choose how to configure Gemini" -Options @(
-            @{ Label = "&OAuth"; Help = "Use Gemini OAuth / subscription (recommended)"; Value = "oauth" },
+        $existingGeminiKey = Get-InstallerEnvValueFromFile -EnvFile (Join-Path $ProjectRoot ".env") -Key "GEMINI_API_KEY"
+        $geminiOptions = @()
+        if ($existingGeminiKey) {
+            $geminiOptions += @{ Label = "&Keep existing"; Help = "Keep the current Gemini auth configuration"; Value = "keep" }
+        }
+        $geminiOptions += @(
+            @{ Label = if ($existingGeminiKey) { "&OAuth" } else { "&OAuth (recommended)" }; Help = "Use Gemini OAuth / subscription"; Value = "oauth" },
             @{ Label = "&API Key"; Help = "Store Gemini API settings in .env"; Value = "api_key" },
             @{ Label = "&Skip"; Help = "Skip Gemini auth setup for now"; Value = "skip" }
         )
-        if ($choice -eq "api_key") {
+        $choice = Select-InstallerChoice -Title "Gemini auth" -Prompt "Choose how to configure Gemini" -Options $geminiOptions
+        if ($choice -eq "keep") {
+            Write-Ok "Gemini: keeping existing configuration"
+        } elseif ($choice -eq "api_key") {
             $apiKey = Read-Host "    API Key"
             $model = Read-Host "    Model (Enter = default)"
             if ($apiKey) {

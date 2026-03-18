@@ -14,7 +14,6 @@
 #>
 
 param(
-    [switch]$Memory,
     [switch]$Start,
     [switch]$SkipBuild,
     [switch]$SkipCli
@@ -232,9 +231,6 @@ if (-not $pnpmOk) {
 
 Write-Step "Step 3/9 - Redis"
 
-if ($Memory) {
-    Write-Warn "Windows installer no longer offers memory mode - continuing with Redis setup"
-}
 $redisPlan = Resolve-InstallerRedisPlan -ProjectRoot $ProjectRoot
 $hasRedis = Apply-InstallerRedisPlan -State $authState -ProjectRoot $ProjectRoot -Plan $redisPlan
 if (-not $hasRedis) {
