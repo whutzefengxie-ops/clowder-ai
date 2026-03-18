@@ -74,7 +74,7 @@ const updateCatSchema = z.object({
   avatar: z.string().min(1).optional(),
   color: colorSchema.optional(),
   mentionPatterns: z.array(z.string().min(1)).min(1).optional(),
-  providerProfileId: z.string().min(1).optional(),
+  providerProfileId: z.string().min(1).nullable().optional(),
   contextBudget: contextBudgetSchema.nullable().optional(),
   roleDescription: z.string().min(1).optional(),
   personality: z.string().optional(),

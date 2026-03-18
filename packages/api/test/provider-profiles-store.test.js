@@ -14,7 +14,7 @@ const {
   resolveAnthropicRuntimeProfile,
   resolveRuntimeProviderProfile,
 } = await import('../dist/config/provider-profiles.js');
-const { createRuntimeCat } = await import('../dist/config/runtime-cat-catalog.js');
+const { createRuntimeCat, updateRuntimeCat } = await import('../dist/config/runtime-cat-catalog.js');
 
 /** @param {string} prefix */
 async function makeTmpDir(prefix) {
@@ -143,6 +143,43 @@ describe('provider profile store', () => {
       deleteProviderProfile(projectRoot, 'anthropic', sponsor.id),
       /still referenced by runtime cats: bound-runtime-cat/i,
     );
+  });
+
+  it('allows deleting a profile after cats clear the provider binding', async () => {
+    const templateRaw = await readFile(join(process.cwd(), '..', '..', 'cat-template.json'), 'utf-8');
+    await writeFile(join(projectRoot, 'cat-template.json'), templateRaw, 'utf-8');
+
+    const sponsor = await createProviderProfile(projectRoot, {
+      provider: 'anthropic',
+      name: 'unbind-delete',
+      mode: 'api_key',
+      baseUrl: 'https://api.unbind.dev',
+      apiKey: 'sk-unbind',
+      setActive: false,
+    });
+
+    await createRuntimeCat(projectRoot, {
+      catId: 'unbind-runtime-cat',
+      breedId: 'unbind-runtime-cat',
+      name: '解绑猫',
+      displayName: '解绑猫',
+      avatar: '/avatars/unbind.png',
+      color: { primary: '#64748b', secondary: '#cbd5e1' },
+      mentionPatterns: ['@unbind-runtime-cat'],
+      providerProfileId: sponsor.id,
+      roleDescription: '先绑定再解绑',
+      personality: '稳定',
+      provider: 'anthropic',
+      defaultModel: 'claude-opus-4-6',
+      mcpSupport: false,
+      cli: { command: 'claude', outputFormat: 'stream-json' },
+    });
+
+    updateRuntimeCat(projectRoot, 'unbind-runtime-cat', { providerProfileId: null });
+    await deleteProviderProfile(projectRoot, 'anthropic', sponsor.id);
+
+    const profiles = await readProviderProfiles(projectRoot);
+    assert.equal(profiles.providers.some((profile) => profile.id === sponsor.id), false);
   });
 
   it('keeps anthropic active profile when activating non-anthropic profiles', async () => {

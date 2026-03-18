@@ -37,7 +37,7 @@ export interface RuntimeCatUpdate {
   avatar?: string;
   color?: CatColor;
   mentionPatterns?: string[];
-  providerProfileId?: string;
+  providerProfileId?: string | null;
   roleDescription?: string;
   personality?: string;
   teamStrengths?: string;

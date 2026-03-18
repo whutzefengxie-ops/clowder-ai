@@ -185,6 +185,32 @@ describe('cats routes runtime CRUD', { concurrency: false }, () => {
       maxContentLengthPerMsg: 9000,
     });
 
+    const bindProviderRes = await app.inject({
+      method: 'PATCH',
+      url: '/api/cats/runtime-spark',
+      headers: {
+        'content-type': 'application/json',
+        'x-cat-cafe-user': 'codex',
+      },
+      body: JSON.stringify({
+        providerProfileId: 'codex-sponsor',
+      }),
+    });
+    assert.equal(bindProviderRes.statusCode, 200);
+
+    const clearProviderRes = await app.inject({
+      method: 'PATCH',
+      url: '/api/cats/runtime-spark',
+      headers: {
+        'content-type': 'application/json',
+        'x-cat-cafe-user': 'codex',
+      },
+      body: JSON.stringify({
+        providerProfileId: null,
+      }),
+    });
+    assert.equal(clearProviderRes.statusCode, 200);
+
     const clearBudgetRes = await app.inject({
       method: 'PATCH',
       url: '/api/cats/runtime-spark',
@@ -204,6 +230,7 @@ describe('cats routes runtime CRUD', { concurrency: false }, () => {
     const runtimeCatAfterClear = listAfterClearBody.cats.find((cat) => cat.id === 'runtime-spark');
     assert.ok(runtimeCatAfterClear, 'runtime-spark should still exist');
     assert.equal(runtimeCatAfterClear.contextBudget, undefined);
+    assert.equal(runtimeCatAfterClear.providerProfileId, undefined);
 
     const mentions = parseA2AMentions('@运行时火花 请跟进这个分支', createCatId('opus'));
     assert.ok(mentions.includes('runtime-spark'), 'new alias should route immediately');

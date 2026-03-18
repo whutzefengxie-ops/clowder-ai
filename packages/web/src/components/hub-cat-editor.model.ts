@@ -296,6 +296,13 @@ export function buildCatPayload(form: HubCatEditorFormState, cat?: CatData | nul
         : {};
   const name = trimText(form.name);
   const displayName = trimText(form.displayName) || name;
+  const trimmedProviderProfileId = trimText(form.providerProfileId);
+  const providerProfilePatch =
+    trimmedProviderProfileId.length > 0
+      ? { providerProfileId: trimmedProviderProfileId }
+      : cat?.providerProfileId
+        ? { providerProfileId: null as null }
+        : {};
   const common = {
     name: cat ? name || displayName : name,
     displayName,
@@ -336,7 +343,7 @@ export function buildCatPayload(form: HubCatEditorFormState, cat?: CatData | nul
     ...common,
     ...(cat ? {} : { catId: trimText(form.catId) }),
     client: form.client,
-    providerProfileId: form.providerProfileId || undefined,
+    ...providerProfilePatch,
     defaultModel: trimText(form.defaultModel),
   };
 }

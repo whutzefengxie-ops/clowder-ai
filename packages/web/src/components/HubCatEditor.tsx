@@ -154,9 +154,10 @@ export function HubCatEditor({ cat, draft, open, onClose, onSaved }: HubCatEdito
       setForm((prev) => (prev.providerProfileId === '' ? prev : { ...prev, providerProfileId: '' }));
       return;
     }
+    const requiresApiKeyBinding = form.client === 'dare' || form.client === 'opencode';
     setForm((prev) => {
       if (availableProfiles.length === 0) return prev;
-      if (prev.providerProfileId === '') return prev;
+      if (prev.providerProfileId === '' && !requiresApiKeyBinding) return prev;
       const nextProfile =
         availableProfiles.find((profile) => profile.id === prev.providerProfileId) ?? availableProfiles[0] ?? null;
       if (!nextProfile) return prev;
