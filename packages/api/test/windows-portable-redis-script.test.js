@@ -311,6 +311,15 @@ test('Windows startup resolves portable Redis from the shared helper before glob
   assert.match(helpersScript, /Get-Command redis-server -ErrorAction SilentlyContinue/);
 });
 
+test('Windows stop script only stops Clowder-owned API and frontend listeners', () => {
+  assert.match(stopWindowsScript, /\$RunDir = if \(\$ProjectRoot\) \{ Join-Path \$ProjectRoot "\.cat-cafe\/run\/windows" \} else \{ \$null \}/);
+  assert.match(stopWindowsScript, /Get-ManagedProcessId/);
+  assert.match(stopWindowsScript, /Test-ClowderOwnedProcess/);
+  assert.match(stopWindowsScript, /\$isClowderOwned = \$isManagedPid -or \(Test-ClowderOwnedProcess -ProcessId \$conn\.OwningProcess -ClowderProjectRoot \$ProjectRoot\)/);
+  assert.match(stopWindowsScript, /Write-Warn "Skipping non-Clowder \$Name listener on port \$Port/);
+  assert.match(stopWindowsScript, /Write-Warn "\$Name \(port \$Port\) - no Clowder-owned listener found"/);
+});
+
 test('Windows startup preserves runtime Redis overrides, validates artifacts, and exits when service jobs stop', () => {
   assert.match(startWindowsScript, /\$configuredRedisUrl = if \(\$env:REDIS_URL\)/);
   assert.match(helpersScript, /function Test-LocalRedisUrl/);

@@ -319,6 +319,20 @@ test('pickGitBashPathFromWhere accepts nonstandard bash.exe locations returned b
   assert.equal(resolved, 'C:\\Users\\lang\\scoop\\apps\\git\\current\\bin\\bash.exe');
 });
 
+test('pickGitBashPathFromWhere skips System32 bash.exe when a Git Bash candidate exists later in PATH', () => {
+  const whereOutput = [
+    'C:\\Windows\\System32\\bash.exe',
+    'C:\\Users\\lang\\scoop\\apps\\git\\current\\bin\\bash.exe',
+  ].join('\r\n');
+
+  const resolved = pickGitBashPathFromWhere(whereOutput, (candidate) =>
+    candidate === 'C:\\Windows\\System32\\bash.exe' ||
+    candidate === 'C:\\Users\\lang\\scoop\\apps\\git\\current\\bin\\bash.exe',
+  );
+
+  assert.equal(resolved, 'C:\\Users\\lang\\scoop\\apps\\git\\current\\bin\\bash.exe');
+});
+
 test('yields error on result/error event', async () => {
   const proc = createMockProcess();
   const spawnFn = createMockSpawnFn(proc);

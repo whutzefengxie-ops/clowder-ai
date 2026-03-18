@@ -20,6 +20,7 @@ if ($ScriptDir) {
     . (Join-Path $ScriptDir "install-windows-helpers.ps1")
 }
 $ProjectRoot = if ($ScriptDir) { Split-Path -Parent $ScriptDir } else { $null }
+$RunDir = if ($ProjectRoot) { Join-Path $ProjectRoot ".cat-cafe/run/windows" } else { $null }
 
 Write-Host "Cat Cafe - Stopping services" -ForegroundColor Cyan
 Write-Host "============================="
@@ -51,20 +52,71 @@ if (Test-Path $envFile) {
 $configuredRedisUrl = if ($env:REDIS_URL) { $env:REDIS_URL.Trim() } else { Get-InstallerEnvValueFromFile -EnvFile $envFile -Key "REDIS_URL" }
 
 function Stop-PortProcess {
-    param([int]$Port, [string]$Name)
+    param([int]$Port, [string]$Name, [string]$PidFile, [string]$ProjectRoot)
+    function Get-ManagedProcessId {
+        param([string]$ManagedPidFile)
+        if (-not $ManagedPidFile -or -not (Test-Path $ManagedPidFile)) {
+            return $null
+        }
+        try {
+            return [int](Get-Content $ManagedPidFile -TotalCount 1).Trim()
+        } catch {
+            return $null
+        }
+    }
+
+    function Get-ProcessCommandLine {
+        param([int]$ProcessId)
+        try {
+            $processInfo = Get-CimInstance Win32_Process -Filter "ProcessId = $ProcessId" -ErrorAction Stop
+            return $processInfo.CommandLine
+        } catch {
+            return $null
+        }
+    }
+
+    function Test-ClowderOwnedProcess {
+        param([int]$ProcessId, [string]$ClowderProjectRoot)
+        if (-not $ClowderProjectRoot) {
+            return $false
+        }
+        $commandLine = Get-ProcessCommandLine -ProcessId $ProcessId
+        if (-not $commandLine) {
+            return $false
+        }
+        return $commandLine -like "*$ClowderProjectRoot*"
+    }
+
     $connections = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue
     if ($connections) {
+        $managedPid = Get-ManagedProcessId -ManagedPidFile $PidFile
+        $stopped = $false
         foreach ($conn in $connections) {
+            $isManagedPid = $managedPid -and ($conn.OwningProcess -eq $managedPid)
+            $isClowderOwned = $isManagedPid -or (Test-ClowderOwnedProcess -ProcessId $conn.OwningProcess -ClowderProjectRoot $ProjectRoot)
+            if (-not $isClowderOwned) {
+                Write-Warn "Skipping non-Clowder $Name listener on port $Port (PID $($conn.OwningProcess))"
+                continue
+            }
             Stop-Process -Id $conn.OwningProcess -Force -ErrorAction SilentlyContinue
+            $stopped = $true
         }
-        Write-Ok "Stopped $Name (port $Port)"
+        if ($stopped) {
+            Remove-Item $PidFile -ErrorAction SilentlyContinue
+            Write-Ok "Stopped $Name (port $Port)"
+        } else {
+            Write-Warn "$Name (port $Port) - no Clowder-owned listener found"
+        }
     } else {
         Write-Warn "$Name (port $Port) - not running"
     }
 }
 
-Stop-PortProcess -Port $ApiPort -Name "API Server"
-Stop-PortProcess -Port $WebPort -Name "Frontend"
+$ApiPidFile = if ($RunDir) { Join-Path $RunDir "api-$ApiPort.pid" } else { $null }
+$WebPidFile = if ($RunDir) { Join-Path $RunDir "web-$WebPort.pid" } else { $null }
+
+Stop-PortProcess -Port $ApiPort -Name "API Server" -PidFile $ApiPidFile -ProjectRoot $ProjectRoot
+Stop-PortProcess -Port $WebPort -Name "Frontend" -PidFile $WebPidFile -ProjectRoot $ProjectRoot
 
 # Stop Redis if running on our port
 $redisCommands = $null

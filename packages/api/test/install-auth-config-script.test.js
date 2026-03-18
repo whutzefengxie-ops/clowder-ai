@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import test from 'node:test';
@@ -142,23 +142,36 @@ test('claude-profile create and remove keeps installer-managed profile in sync',
     const secretsFile = join(projectRoot, '.cat-cafe', 'provider-profiles.secrets.local.json');
     const profiles = JSON.parse(readFileSync(profileFile, 'utf8'));
     const secrets = JSON.parse(readFileSync(secretsFile, 'utf8'));
-    const installerManaged = profiles.profiles.find((profile) => profile.id === 'installer-managed');
+    const installerManaged = profiles.providers.anthropic.profiles.find((profile) => profile.id === 'installer-managed');
 
-    assert.equal(profiles.activeProfileId, 'installer-managed');
+    assert.equal(profiles.version, 1);
+    assert.equal(profiles.providers.anthropic.activeProfileId, 'installer-managed');
     assert.equal(installerManaged?.baseUrl, 'https://claude.example');
     assert.equal(installerManaged?.modelOverride, 'claude-model');
-    assert.equal(installerManaged?.protocol, 'anthropic');
-    assert.equal(installerManaged?.authType, 'api_key');
-    assert.equal(secrets.profiles['installer-managed'].apiKey, 'claude-key');
+    assert.equal(installerManaged?.provider, 'anthropic');
+    assert.equal(installerManaged?.mode, 'api_key');
+    assert.equal(secrets.version, 1);
+    assert.equal(secrets.providers.anthropic['installer-managed'].apiKey, 'claude-key');
 
     runHelper(['claude-profile', 'remove', '--project-dir', projectRoot]);
 
     const profilesAfterRemove = JSON.parse(readFileSync(profileFile, 'utf8'));
     const secretsAfterRemove = JSON.parse(readFileSync(secretsFile, 'utf8'));
 
-    assert.equal(profilesAfterRemove.profiles.some((profile) => profile.id === 'installer-managed'), false);
-    assert.equal(profilesAfterRemove.activeProfileId, 'claude-oauth');
-    assert.equal('installer-managed' in (secretsAfterRemove.profiles ?? {}), false);
+    assert.equal(profilesAfterRemove.providers.anthropic.profiles.some((profile) => profile.id === 'installer-managed'), false);
+    assert.equal(profilesAfterRemove.providers.anthropic.activeProfileId, '');
+    assert.equal('installer-managed' in (secretsAfterRemove.providers.anthropic ?? {}), false);
+  } finally {
+    rmSync(projectRoot, { recursive: true, force: true });
+  }
+});
+
+test('claude-profile remove is a no-op on a fresh project without provider profile files', () => {
+  const projectRoot = mkdtempSync(join(tmpdir(), 'clowder-install-claude-remove-empty-'));
+
+  try {
+    runHelper(['claude-profile', 'remove', '--project-dir', projectRoot]);
+    assert.equal(existsSync(join(projectRoot, '.cat-cafe')), false);
   } finally {
     rmSync(projectRoot, { recursive: true, force: true });
   }

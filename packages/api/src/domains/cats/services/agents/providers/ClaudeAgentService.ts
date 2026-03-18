@@ -59,13 +59,28 @@ const IS_WINDOWS = process.platform === 'win32';
  * Caches result after first lookup.
  */
 let cachedGitBashPath: string | undefined | null;
+
+function isWindowsSystemBash(candidate: string): boolean {
+  const normalized = win32.normalize(candidate).toLowerCase();
+  return normalized.endsWith('\\system32\\bash.exe');
+}
+
 export function pickGitBashPathFromWhere(whereOutput: string, pathExists = existsSync): string | undefined {
+  const existingCandidates: string[] = [];
   for (const rawLine of whereOutput.split(/\r?\n/)) {
     const candidate = rawLine.trim().replace(/^"+|"+$/g, '');
     if (!candidate) continue;
     if (win32.basename(candidate).toLowerCase() !== 'bash.exe') continue;
-    if (pathExists(candidate)) return candidate;
+    if (!pathExists(candidate)) continue;
+    existingCandidates.push(candidate);
   }
+
+  for (const candidate of existingCandidates) {
+    if (!isWindowsSystemBash(candidate)) {
+      return candidate;
+    }
+  }
+
   return undefined;
 }
 
