@@ -14,13 +14,16 @@ import { refreshSpeechAliases } from '@/utils/transcription-corrector';
 
 export interface CatData {
   id: string;
+  name?: string;
   displayName: string;
   nickname?: string;
   color: { primary: string; secondary: string };
   mentionPatterns: string[];
   breedId?: string;
+  providerProfileId?: string;
   provider: string;
   defaultModel: string;
+  commandArgs?: string[];
   avatar: string;
   roleDescription: string;
   personality: string;
@@ -71,6 +74,20 @@ async function fetchCats(): Promise<FetchResult> {
   }
 }
 
+async function refreshCatsNow(): Promise<FetchResult> {
+  _cached = null;
+  _fetchPromise = fetchCats();
+  const result = await _fetchPromise;
+  if (result.fromApi) {
+    _cached = result.cats;
+  } else {
+    _fetchPromise = null;
+  }
+  refreshMentionData(result.cats);
+  refreshSpeechAliases(result.cats);
+  return result;
+}
+
 // ── Hook ────────────────────────────────────────────────
 
 export function useCatData() {
@@ -114,6 +131,17 @@ export function useCatData() {
     };
   }, [retryCount]);
 
+  const refresh = useMemo(
+    () => async () => {
+      setIsLoading(true);
+      const result = await refreshCatsNow();
+      setCats(result.cats);
+      setIsLoading(false);
+      return result.cats;
+    },
+    [],
+  );
+
   const getCatById = useMemo(() => {
     const map = new Map(cats.map((c) => [c.id, c]));
     return (id: string) => map.get(id);
@@ -132,7 +160,7 @@ export function useCatData() {
     };
   }, [cats]);
 
-  return { cats, isLoading, getCatById, getCatsByBreed };
+  return { cats, isLoading, getCatById, getCatsByBreed, refresh };
 }
 
 /** Format cat name with optional variant label for multi-variant disambiguation */

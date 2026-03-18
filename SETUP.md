@@ -100,6 +100,39 @@ NEXT_PUBLIC_LLM_POSTPROCESS_URL=http://localhost:9878
 Supported engines: Qwen3-ASR (primary), Whisper (fallback) for input; Kokoro, edge-tts, Qwen3-TTS for output.
 These services are disabled by default. Set the corresponding `*_ENABLED=1` flags only after you have installed the local dependencies.
 
+### Manual Mirror / Download Overrides
+
+Use explicit overrides when the default external sources are blocked. Clowder does not auto-switch to domestic mirrors in this flow; you choose the mirror or direct download URL yourself.
+
+Persistent configuration in `.env`:
+
+```bash
+CAT_CAFE_NPM_REGISTRY=https://registry.npmmirror.com
+CAT_CAFE_PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
+CAT_CAFE_PIP_EXTRA_INDEX_URL=https://mirror.example/simple
+CAT_CAFE_HF_ENDPOINT=https://hf-mirror.com
+CAT_CAFE_WINDOWS_REDIS_RELEASE_API=https://mirror.example/redis/releases/latest.json
+CAT_CAFE_WINDOWS_REDIS_DOWNLOAD_URL=https://mirror.example/redis.zip
+```
+
+One-off Bash startup overrides:
+
+```bash
+pnpm start -- \
+  --npm-registry=https://registry.npmmirror.com \
+  --pip-index-url=https://pypi.tuna.tsinghua.edu.cn/simple \
+  --pip-extra-index-url=https://mirror.example/simple \
+  --hf-endpoint=https://hf-mirror.com
+```
+
+Windows install override example:
+
+```powershell
+$env:CAT_CAFE_NPM_REGISTRY="https://registry.npmmirror.com"
+$env:CAT_CAFE_WINDOWS_REDIS_DOWNLOAD_URL="https://mirror.example/redis.zip"
+.\scripts\install.ps1
+```
+
 ### API Gateway Proxy
 
 Optional reverse proxy for routing API requests through third-party gateways. Useful when you need to route Claude API calls through a custom endpoint.
@@ -314,6 +347,39 @@ NEXT_PUBLIC_LLM_POSTPROCESS_URL=http://localhost:9878
 
 支持引擎：输入用 Qwen3-ASR（主）/ Whisper（备）；输出用 Kokoro / edge-tts / Qwen3-TTS。
 这些服务默认关闭。只有在本地依赖安装完成后，再把对应的 `*_ENABLED=1` 打开。
+
+### 手动镜像 / 下载地址覆盖
+
+当默认外部源不可达时，可以显式指定镜像或直链下载地址。这里不做“自动切国内镜像”；所有覆盖都必须由你手动配置。
+
+把以下变量写进 `.env`，可长期生效：
+
+```bash
+CAT_CAFE_NPM_REGISTRY=https://registry.npmmirror.com
+CAT_CAFE_PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
+CAT_CAFE_PIP_EXTRA_INDEX_URL=https://mirror.example/simple
+CAT_CAFE_HF_ENDPOINT=https://hf-mirror.com
+CAT_CAFE_WINDOWS_REDIS_RELEASE_API=https://mirror.example/redis/releases/latest.json
+CAT_CAFE_WINDOWS_REDIS_DOWNLOAD_URL=https://mirror.example/redis.zip
+```
+
+只想临时覆盖一次，Bash 启动可直接传参：
+
+```bash
+pnpm start -- \
+  --npm-registry=https://registry.npmmirror.com \
+  --pip-index-url=https://pypi.tuna.tsinghua.edu.cn/simple \
+  --pip-extra-index-url=https://mirror.example/simple \
+  --hf-endpoint=https://hf-mirror.com
+```
+
+Windows 安装临时覆盖示例：
+
+```powershell
+$env:CAT_CAFE_NPM_REGISTRY="https://registry.npmmirror.com"
+$env:CAT_CAFE_WINDOWS_REDIS_DOWNLOAD_URL="https://mirror.example/redis.zip"
+.\scripts\install.ps1
+```
 
 ### API 网关代理
 

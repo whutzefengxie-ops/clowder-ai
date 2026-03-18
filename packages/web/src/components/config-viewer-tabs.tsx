@@ -23,33 +23,89 @@ function KV({ label, value }: { label: string; value: string | number | boolean 
   );
 }
 
-/** Unified cat overview — all cats' model & budget in one tab */
-export function CatOverviewTab({ config, cats }: { config: ConfigData; cats: CatData[] }) {
-  // One card per breed (default variant only)
-  const breeds = cats.filter((c) => c.isDefaultVariant !== false).slice(0, 3);
+function formatDeliveryMode(provider: string, mcpSupport: boolean | undefined) {
+  if (provider === 'antigravity') return 'CDP Bridge';
+  return mcpSupport ? '原生 (--mcp-config)' : 'HTTP 回调注入';
+}
 
+/** Unified cat overview — all cats' model & budget in one tab */
+export function CatOverviewTab({
+  config,
+  cats,
+  onAddMember,
+  onEditMember,
+}: {
+  config: ConfigData;
+  cats: CatData[];
+  onAddMember?: () => void;
+  onEditMember?: (cat: CatData) => void;
+}) {
   return (
     <div className="space-y-3">
-      {breeds.map((catData) => {
+      {cats.map((catData) => {
         const cat = config.cats[catData.id];
         const budget = config.perCatBudgets[catData.id];
-        if (!cat || !budget) return null;
-        const name = catData.breedDisplayName ?? catData.displayName;
+        const provider = cat?.provider ?? catData.provider;
+        const model = cat?.model ?? catData.defaultModel;
+        const name = catData.variantLabel
+          ? `${catData.breedDisplayName ?? catData.displayName}（${catData.variantLabel}）`
+          : catData.breedDisplayName ?? catData.displayName;
         return (
           <Section key={catData.id} title={name}>
             <div className="space-y-1.5">
-              <KV label="Provider" value={cat.provider} />
-              <KV label="Model" value={cat.model} />
-              <KV label="MCP 交付" value={cat.mcpSupport ? '原生 (--mcp-config)' : 'HTTP 回调注入'} />
-              <KV label="Prompt 上限" value={`${(budget.maxPromptTokens / 1000).toFixed(0)}k tokens`} />
-              <KV label="上下文上限" value={`${(budget.maxContextTokens / 1000).toFixed(0)}k tokens`} />
-              <KV label="消息数上限" value={budget.maxMessages} />
-              <KV label="单消息上限" value={`${(budget.maxContentLengthPerMsg / 1000).toFixed(0)}k chars`} />
+              {onEditMember ? (
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => onEditMember(catData)}
+                    className="text-[11px] px-2 py-1 rounded bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors"
+                  >
+                    编辑成员
+                  </button>
+                </div>
+              ) : null}
+              <KV label="Provider" value={provider} />
+              <KV label="Model" value={model} />
+              <KV label="运行方式" value={formatDeliveryMode(provider, cat?.mcpSupport)} />
+              {catData.providerProfileId ? <KV label="账号绑定" value={catData.providerProfileId} /> : null}
+              {catData.commandArgs?.length ? <KV label="CLI Args" value={catData.commandArgs.join(' ')} /> : null}
+              {budget ? (
+                <>
+                  <KV label="Prompt 上限" value={`${(budget.maxPromptTokens / 1000).toFixed(0)}k tokens`} />
+                  <KV label="上下文上限" value={`${(budget.maxContextTokens / 1000).toFixed(0)}k tokens`} />
+                  <KV label="消息数上限" value={budget.maxMessages} />
+                  <KV label="单消息上限" value={`${(budget.maxContentLengthPerMsg / 1000).toFixed(0)}k chars`} />
+                </>
+              ) : null}
+              {catData.mentionPatterns.length > 0 ? (
+                <div className="pt-1">
+                  <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Aliases</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {catData.mentionPatterns.map((pattern) => (
+                      <span
+                        key={`${catData.id}-${pattern}`}
+                        className="rounded-full bg-gray-200 px-2 py-0.5 text-[11px] font-medium text-gray-700"
+                      >
+                        {pattern}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </div>
           </Section>
         );
       })}
-      {breeds.length === 0 && <p className="text-sm text-gray-400">未找到猫猫配置数据</p>}
+      {onAddMember ? (
+        <button
+          type="button"
+          onClick={onAddMember}
+          className="w-full rounded-lg border border-dashed border-amber-300 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-700 hover:bg-amber-100 transition-colors"
+        >
+          + 添加成员
+        </button>
+      ) : null}
+      {cats.length === 0 && <p className="text-sm text-gray-400">未找到成员配置数据</p>}
     </div>
   );
 }

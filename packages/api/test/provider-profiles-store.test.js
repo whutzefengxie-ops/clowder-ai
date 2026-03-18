@@ -32,11 +32,21 @@ describe('provider profile store', () => {
     await rm(projectRoot, { recursive: true, force: true });
   });
 
-  it('bootstraps with a default subscription profile', async () => {
+  it('bootstraps with builtin OAuth providers', async () => {
     const data = await readProviderProfiles(projectRoot);
-    assert.ok(data.anthropic.activeProfileId, 'should have active profile');
-    assert.equal(data.anthropic.profiles.length, 1);
-    assert.equal(data.anthropic.profiles[0]?.mode, 'subscription');
+    assert.equal(data.activeProfileId, 'claude-oauth');
+    assert.deepEqual(
+      data.providers.map((profile) => ({
+        id: profile.id,
+        authType: profile.authType,
+        builtin: profile.builtin,
+      })),
+      [
+        { id: 'claude-oauth', authType: 'oauth', builtin: true },
+        { id: 'codex-oauth', authType: 'oauth', builtin: true },
+        { id: 'gemini-oauth', authType: 'oauth', builtin: true },
+      ],
+    );
   });
 
   it('stores api_key secret in secrets file but not in meta file', async () => {
@@ -48,7 +58,9 @@ describe('provider profile store', () => {
       apiKey: 'sk-secret-test',
       setActive: true,
     });
-    assert.equal(created.mode, 'api_key');
+    assert.equal(created.authType, 'api_key');
+    assert.equal(created.protocol, 'anthropic');
+    assert.equal(created.displayName, 'sponsor');
 
     const metaPath = join(projectRoot, '.cat-cafe', 'provider-profiles.json');
     const secretsPath = join(projectRoot, '.cat-cafe', 'provider-profiles.secrets.local.json');
@@ -69,6 +81,8 @@ describe('provider profile store', () => {
     });
 
     await activateProviderProfile(projectRoot, 'anthropic', created.id);
+    const data = await readProviderProfiles(projectRoot);
+    assert.equal(data.activeProfileId, created.id);
     const runtime = await resolveAnthropicRuntimeProfile(projectRoot);
     assert.equal(runtime.mode, 'api_key');
     assert.equal(runtime.baseUrl, 'https://api.sponsor.dev');
@@ -86,6 +100,8 @@ describe('provider profile store', () => {
     });
     await deleteProviderProfile(projectRoot, 'anthropic', sponsor.id);
 
+    const data = await readProviderProfiles(projectRoot);
+    assert.equal(data.activeProfileId, 'claude-oauth');
     const runtime = await resolveAnthropicRuntimeProfile(projectRoot);
     assert.equal(runtime.mode, 'subscription');
     assert.equal(runtime.apiKey, undefined);
@@ -119,6 +135,7 @@ describe('provider profile store', () => {
     const profile = await getProviderProfile(projectRoot, 'anthropic', created.id);
 
     assert.ok(profile);
+    assert.equal(profile?.displayName, 'readonly-check');
     const [metaAfter, secretsAfter] = await Promise.all([stat(metaPath), stat(secretsPath)]);
     assert.equal(metaAfter.mtimeMs, metaBefore.mtimeMs);
     assert.equal(secretsAfter.mtimeMs, secretsBefore.mtimeMs);

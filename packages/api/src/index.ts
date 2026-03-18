@@ -4,7 +4,7 @@
  */
 
 import { join } from 'node:path';
-import { type CatId, catRegistry } from '@cat-cafe/shared';
+import { type CatConfig, type CatId, catRegistry } from '@cat-cafe/shared';
 import type { RedisClient } from '@cat-cafe/shared/utils';
 import { createRedisClient, SessionStore } from '@cat-cafe/shared/utils';
 import cors from '@fastify/cors';
@@ -12,7 +12,7 @@ import fastifyWebsocket from '@fastify/websocket';
 import Fastify from 'fastify';
 import { generateCliConfigs, readCapabilitiesConfig } from './config/capabilities/capability-orchestrator.js';
 import { getCatContextBudget } from './config/cat-budgets.js';
-import { getConfigSessionStrategy, loadCatConfig, toAllCatConfigs } from './config/cat-config-loader.js';
+import { bootstrapDefaultCatCatalog, getConfigSessionStrategy, toAllCatConfigs } from './config/cat-config-loader.js';
 import { resolveFrontendBaseUrl, resolveFrontendCorsOrigins } from './config/frontend-origin.js';
 import { resolveAnthropicRuntimeProfile } from './config/provider-profiles.js';
 import { resolveProviderProfilesRoot } from './config/provider-profiles-root.js';
@@ -325,17 +325,17 @@ async function main(): Promise<void> {
     app.log.info('[api] F102: SQLite memory services initialized');
   }
 
-  // ── F32-b: Populate CatRegistry from cat-config.json (all variants) ──
+  // ── F32-b/F127: Bootstrap runtime catalog, then populate CatRegistry (all variants) ──
   // Must happen BEFORE AgentRouter construction (parseMentions reads catRegistry)
   try {
-    const catConfig = loadCatConfig();
+    const catConfig = bootstrapDefaultCatCatalog();
     const allConfigs = toAllCatConfigs(catConfig);
     for (const [id, config] of Object.entries(allConfigs)) {
       catRegistry.register(id, config);
     }
     app.log.info(`[api] CatRegistry initialized: ${catRegistry.getAllIds().join(', ')}`);
   } catch (err) {
-    app.log.warn(`[api] Failed to load cat-config.json, falling back to built-in CAT_CONFIGS: ${String(err)}`);
+    app.log.warn(`[api] Failed to load cat template/catalog, falling back to built-in CAT_CONFIGS: ${String(err)}`);
     // Fallback: register from static CAT_CONFIGS
     const { CAT_CONFIGS } = await import('@cat-cafe/shared');
     for (const [id, config] of Object.entries(CAT_CONFIGS)) {
@@ -346,39 +346,40 @@ async function main(): Promise<void> {
   // ── F32-b: AgentRegistry (catId → AgentService) — one instance per cat ──
   // Each cat gets its own AgentService instance with its catId + model.
   const agentRegistry = new AgentRegistry();
-  for (const id of catRegistry.getAllIds()) {
-    const entry = catRegistry.tryGet(id as string);
-    if (!entry) continue;
-    const { provider } = entry.config;
-    const catId = entry.config.id;
-    // F32-b P1 fix: do NOT pass model here — let constructors resolve via
-    // getCatModel(catId) which respects env override (CAT_*_MODEL > config > fallback)
-    let service: AgentService;
-    switch (provider) {
-      case 'anthropic':
-        service = new ClaudeAgentService({ catId });
-        break;
-      case 'openai':
-        service = new CodexAgentService({ catId });
-        break;
-      case 'google':
-        service = new GeminiAgentService({ catId });
-        break;
-      case 'dare':
-        service = new DareAgentService({ catId });
-        break;
-      case 'antigravity':
-        service = new AntigravityAgentService({ catId });
-        break;
-      case 'opencode':
-        service = new OpenCodeAgentService({ catId });
-        break;
-      default:
-        app.log.warn(`[api] Unknown provider "${provider}" for cat "${id as string}". It will not be routable.`);
-        continue;
+  const syncAgentRegistry = async (configs: Record<string, CatConfig>) => {
+    agentRegistry.reset();
+    for (const [id, config] of Object.entries(configs)) {
+      const catId = config.id;
+      // F32-b P1 fix: do NOT pass model here — let constructors resolve via
+      // getCatModel(catId) which respects env override (CAT_*_MODEL > config > fallback)
+      let service: AgentService;
+      switch (config.provider) {
+        case 'anthropic':
+          service = new ClaudeAgentService({ catId });
+          break;
+        case 'openai':
+          service = new CodexAgentService({ catId });
+          break;
+        case 'google':
+          service = new GeminiAgentService({ catId });
+          break;
+        case 'dare':
+          service = new DareAgentService({ catId });
+          break;
+        case 'antigravity':
+          service = new AntigravityAgentService({ catId });
+          break;
+        case 'opencode':
+          service = new OpenCodeAgentService({ catId });
+          break;
+        default:
+          app.log.warn(`[api] Unknown provider "${config.provider}" for cat "${id}". It will not be routable.`);
+          continue;
+      }
+      agentRegistry.register(id, service);
     }
-    agentRegistry.register(id as string, service);
-  }
+  };
+  await syncAgentRegistry(catRegistry.getAllConfigs());
 
   // F089 Phase 2: Shared instances for tmux agent pane execution (opt-in)
   const enableTmuxAgent = process.env.CAT_CAFE_TMUX_AGENT === '1';
@@ -492,7 +493,7 @@ async function main(): Promise<void> {
     socketManager,
     threadStore,
   });
-  await app.register(catsRoutes);
+  await app.register(catsRoutes, { onCatalogChanged: syncAgentRegistry });
   await app.register(quotaRoutes);
   // F075 Phase B+C: Game + Achievement stores
   const { GameStore } = await import('./domains/leaderboard/game-store.js');

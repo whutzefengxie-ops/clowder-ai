@@ -54,7 +54,8 @@ function VscodeLink({ path, label }: { path: string; label: string }) {
 
 function buildConfigFiles(projectRoot: string) {
   return [
-    { name: 'cat-config.json', path: `${projectRoot}/cat-config.json`, desc: '猫猫配置（模型、适配器）' },
+    { name: 'cat-template.json', path: `${projectRoot}/cat-template.json`, desc: '猫猫模板（只读 seed）' },
+    { name: '.cat-cafe/cat-catalog.json', path: `${projectRoot}/.cat-cafe/cat-catalog.json`, desc: '运行时成员真相源' },
     { name: '.env.local', path: `${projectRoot}/.env.local`, desc: '本地环境变量覆盖' },
     { name: 'start-dev.sh', path: `${projectRoot}/scripts/start-dev.sh`, desc: '开发启动脚本' },
     { name: 'CLAUDE.md', path: `${projectRoot}/CLAUDE.md`, desc: '布偶猫项目指引' },

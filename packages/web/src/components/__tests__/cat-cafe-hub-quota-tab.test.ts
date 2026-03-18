@@ -47,6 +47,7 @@ vi.mock('@/hooks/useCatData', () => ({
           }
         : undefined,
     getCatsByBreed: () => new Map(),
+    refresh: () => Promise.resolve([]),
   }),
   formatCatName: (cat: { displayName: string; variantLabel?: string }) =>
     cat.variantLabel ? `${cat.displayName}（${cat.variantLabel}）` : cat.displayName,

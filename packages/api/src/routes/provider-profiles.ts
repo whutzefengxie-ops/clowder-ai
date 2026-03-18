@@ -5,7 +5,9 @@ import {
   createProviderProfile,
   deleteProviderProfile,
   getProviderProfile,
+  type ProviderProfileAuthType,
   type ProviderProfileMode,
+  type ProviderProfileProtocol,
   type ProviderProfileProvider,
   readProviderProfiles,
   resolveAnthropicRuntimeProfileById,
@@ -18,42 +20,60 @@ import { buildProbeHeaders, isInvalidModelProbeError, readProbeError } from './p
 
 const PROJECT_ROOT = findMonorepoRoot();
 
-const providerEnum = z.enum(['anthropic']);
+const protocolEnum = z.enum(['anthropic', 'openai', 'google']);
+const authTypeEnum = z.enum(['oauth', 'api_key']);
 const modeEnum = z.enum(['subscription', 'api_key']);
 
 const projectQuerySchema = z.object({
   projectPath: z.string().optional(),
 });
 
-const createBodySchema = z.object({
-  projectPath: z.string().optional(),
-  provider: providerEnum,
-  name: z.string().trim().min(1),
-  mode: modeEnum,
-  baseUrl: z.string().optional(),
-  apiKey: z.string().optional(),
-  modelOverride: z.string().optional(),
-  setActive: z.boolean().optional(),
-});
+const createBodySchema = z
+  .object({
+    projectPath: z.string().optional(),
+    provider: z.string().trim().min(1).optional(),
+    name: z.string().trim().min(1).optional(),
+    displayName: z.string().trim().min(1).optional(),
+    mode: modeEnum.optional(),
+    authType: authTypeEnum.optional(),
+    protocol: protocolEnum.optional(),
+    baseUrl: z.string().optional(),
+    apiKey: z.string().optional(),
+    modelOverride: z.string().optional(),
+    models: z.array(z.string().trim().min(1)).optional(),
+    setActive: z.boolean().optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (!value.name && !value.displayName) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['displayName'],
+        message: 'displayName or name is required',
+      });
+    }
+  });
 
 const updateBodySchema = z.object({
   projectPath: z.string().optional(),
-  provider: providerEnum,
+  provider: z.string().trim().min(1).optional(),
   name: z.string().trim().min(1).optional(),
+  displayName: z.string().trim().min(1).optional(),
   mode: modeEnum.optional(),
+  authType: authTypeEnum.optional(),
   baseUrl: z.string().optional(),
   apiKey: z.string().optional(),
   modelOverride: z.string().nullable().optional(),
+  models: z.array(z.string().trim().min(1)).optional(),
 });
 
 const activateBodySchema = z.object({
   projectPath: z.string().optional(),
-  provider: providerEnum,
+  provider: z.string().trim().min(1).optional(),
 });
 
 const testBodySchema = z.object({
   projectPath: z.string().optional(),
-  provider: providerEnum,
+  provider: z.string().trim().min(1).optional(),
 });
 
 async function resolveProjectRoot(projectPath?: string): Promise<string | null> {
@@ -63,6 +83,10 @@ async function resolveProjectRoot(projectPath?: string): Promise<string | null> 
 
 function normalizeBaseUrl(baseUrl: string): string {
   return baseUrl.replace(/\/+$/, '');
+}
+
+function resolveProviderSelector(selector: string | undefined, fallback: string): ProviderProfileProvider {
+  return (selector?.trim() || fallback) as ProviderProfileProvider;
 }
 
 export interface ProviderProfilesRoutesOptions {
@@ -118,12 +142,16 @@ export const providerProfilesRoutes: FastifyPluginAsync<ProviderProfilesRoutesOp
     const body = parsed.data;
     try {
       const profile = await createProviderProfile(projectRoot, {
-        provider: body.provider as ProviderProfileProvider,
-        name: body.name,
-        mode: body.mode as ProviderProfileMode,
+        provider: resolveProviderSelector(body.provider ?? body.protocol, 'anthropic'),
+        ...(body.name != null ? { name: body.name } : {}),
+        ...(body.displayName != null ? { displayName: body.displayName } : {}),
+        ...(body.mode != null ? { mode: body.mode as ProviderProfileMode } : {}),
+        ...(body.authType != null ? { authType: body.authType as ProviderProfileAuthType } : {}),
+        ...(body.protocol != null ? { protocol: body.protocol as ProviderProfileProtocol } : {}),
         ...(body.baseUrl ? { baseUrl: body.baseUrl } : {}),
         ...(body.apiKey ? { apiKey: body.apiKey } : {}),
         ...(body.modelOverride ? { modelOverride: body.modelOverride } : {}),
+        ...(body.models ? { models: body.models } : {}),
         ...(body.setActive != null ? { setActive: body.setActive } : {}),
       });
       return {
@@ -158,14 +186,17 @@ export const providerProfilesRoutes: FastifyPluginAsync<ProviderProfilesRoutesOp
     try {
       const profile = await updateProviderProfile(
         projectRoot,
-        parsed.data.provider as ProviderProfileProvider,
+        resolveProviderSelector(parsed.data.provider, params.profileId),
         params.profileId,
         {
           ...(parsed.data.name != null ? { name: parsed.data.name } : {}),
+          ...(parsed.data.displayName != null ? { displayName: parsed.data.displayName } : {}),
           ...(parsed.data.mode != null ? { mode: parsed.data.mode as ProviderProfileMode } : {}),
+          ...(parsed.data.authType != null ? { authType: parsed.data.authType as ProviderProfileAuthType } : {}),
           ...(parsed.data.baseUrl != null ? { baseUrl: parsed.data.baseUrl } : {}),
           ...(parsed.data.apiKey != null ? { apiKey: parsed.data.apiKey } : {}),
           ...(parsed.data.modelOverride !== undefined ? { modelOverride: parsed.data.modelOverride } : {}),
+          ...(parsed.data.models != null ? { models: parsed.data.models } : {}),
         },
       );
       return { projectPath: projectRoot, profile };
@@ -195,7 +226,7 @@ export const providerProfilesRoutes: FastifyPluginAsync<ProviderProfilesRoutesOp
     const params = request.params as { profileId: string };
 
     try {
-      await deleteProviderProfile(projectRoot, parsed.data.provider as ProviderProfileProvider, params.profileId);
+      await deleteProviderProfile(projectRoot, resolveProviderSelector(parsed.data.provider, params.profileId), params.profileId);
       return { ok: true };
     } catch (err) {
       reply.status(400);
@@ -223,7 +254,7 @@ export const providerProfilesRoutes: FastifyPluginAsync<ProviderProfilesRoutesOp
     const params = request.params as { profileId: string };
 
     try {
-      await activateProviderProfile(projectRoot, parsed.data.provider as ProviderProfileProvider, params.profileId);
+      await activateProviderProfile(projectRoot, resolveProviderSelector(parsed.data.provider, params.profileId), params.profileId);
       return { ok: true, profileId: params.profileId };
     } catch (err) {
       reply.status(400);
@@ -249,28 +280,32 @@ export const providerProfilesRoutes: FastifyPluginAsync<ProviderProfilesRoutesOp
       return { error: 'Invalid project path: must be an existing directory under home' };
     }
     const params = request.params as { profileId: string };
-    const profile = await getProviderProfile(
-      projectRoot,
-      parsed.data.provider as ProviderProfileProvider,
-      params.profileId,
-    );
+
+    let profile;
+    try {
+      profile = await getProviderProfile(
+        projectRoot,
+        resolveProviderSelector(parsed.data.provider, params.profileId),
+        params.profileId,
+      );
+    } catch (err) {
+      reply.status(400);
+      return { error: err instanceof Error ? err.message : String(err) };
+    }
     if (!profile) {
       reply.status(404);
       return { error: 'Profile not found' };
     }
 
-    if (profile.mode === 'subscription') {
-      return {
-        ok: true,
-        mode: 'subscription',
-        message: 'subscription mode selected; network probe skipped',
-      };
+    if (profile.protocol !== 'anthropic' || profile.authType !== 'api_key') {
+      reply.status(400);
+      return { error: 'Only anthropic api_key providers can be tested' };
     }
 
     const runtime = await resolveAnthropicRuntimeProfileById(projectRoot, params.profileId);
     if (!runtime || runtime.mode !== 'api_key' || !runtime.baseUrl || !runtime.apiKey) {
       reply.status(400);
-      return { error: 'api_key profile is incomplete (baseUrl/apiKey required)' };
+      return { error: 'Only anthropic api_key providers can be tested' };
     }
 
     const baseUrl = normalizeBaseUrl(runtime.baseUrl);

@@ -9,6 +9,8 @@
 #   pnpm start --memory               — 使用内存存储 (重启丢数据)
 #   pnpm start --no-redis             — 同 --memory
 #   pnpm start --prod-web             — 前端 production build (PWA + Tailscale 友好)
+#   pnpm start -- --npm-registry=URL --pip-index-url=URL --hf-endpoint=URL
+#                                   — 显式指定安装/模型下载镜像（仅手动 override）
 #
 # Profile 说明:
 #   dev        — proxy ON, ASR/TTS/LLM ON, TTL=永久, redis-dev
@@ -32,8 +34,9 @@
 set -e
 set -o pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+source "$SCRIPT_DIR/download-source-overrides.sh"
 cd "$PROJECT_DIR"
 
 echo "🐱 Cat Café 启动"
@@ -57,6 +60,9 @@ for arg in "$@"; do
         --memory|--no-redis) USE_REDIS=false ;;
         --prod-web) PROD_WEB=true ;;
         --profile=*) PROFILE="${arg#*=}" ;;
+        *)
+            parse_manual_download_source_arg "$arg" || true
+            ;;
     esac
 done
 
@@ -95,6 +101,7 @@ load_dare_env_from_local() {
 }
 
 load_dare_env_from_local
+apply_manual_download_source_overrides
 
 # Profile 默认值（env 变量优先，profile 作 fallback）
 apply_profile_defaults() {
@@ -702,6 +709,7 @@ main() {
     [ -n "$PROFILE" ] && echo -e "  Profile: ${CYAN}${PROFILE}${NC}"
     echo ""
     print_config_summary
+    print_manual_download_source_summary
     echo ""
     echo "服务地址："
     echo "  - Frontend: http://localhost:$WEB_PORT"

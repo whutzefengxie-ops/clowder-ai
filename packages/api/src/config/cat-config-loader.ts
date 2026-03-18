@@ -1,6 +1,6 @@
 /**
  * Cat Config Loader
- * 从 cat-config.json 加载 Breed+Variant 配置。
+ * 从 cat-template.json / .cat-cafe/cat-catalog.json 加载 Breed+Variant 配置。
  * Node-only — 前端继续用 shared 包的 CAT_CONFIGS 常量。
  */
 
@@ -21,15 +21,16 @@ import type {
 } from '@cat-cafe/shared';
 import { createCatId } from '@cat-cafe/shared';
 import { z } from 'zod';
+import { bootstrapCatCatalog, readCatCatalogRaw, resolveCatCatalogPath } from './cat-catalog-store.js';
 
 /**
- * Default cat-config.json location (repo root).
+ * Default cat-template.json location (repo root).
  *
  * IMPORTANT: API dev scripts run with cwd=`packages/api`, so `process.cwd()` is
  * not the repo root. Resolve relative to this file instead to keep behavior
  * stable across different launch directories.
  */
-const DEFAULT_CAT_CONFIG_PATH = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..', 'cat-config.json');
+const DEFAULT_CAT_TEMPLATE_PATH = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..', 'cat-template.json');
 
 const cliConfigSchema = z.object({
   command: z.string().min(1),
@@ -55,10 +56,12 @@ const catVariantSchema = z.object({
   displayName: z.string().min(1).optional(), // F32-b: variant-level displayName
   variantLabel: z.string().min(1).optional(), // F32-b P4: disambiguation label
   mentionPatterns: z.array(mentionPatternSchema).optional(), // F32-b: variant-level mentions
+  providerProfileId: z.string().min(1).optional(), // F127: concrete provider account binding
   provider: z.enum(['anthropic', 'openai', 'google', 'dare', 'antigravity', 'opencode']),
   defaultModel: z.string().min(1),
   mcpSupport: z.boolean(),
   cli: cliConfigSchema,
+  commandArgs: z.array(z.string().min(1)).optional(), // F127: explicit bridge args (e.g. Antigravity)
   personality: z.string().optional(),
   strengths: z.array(z.string()).optional(),
   avatar: z.string().min(1).optional(), // F32-b P4c: override breed avatar
@@ -189,18 +192,36 @@ const catCafeConfigSchemaV2 = z.object({
 const catCafeConfigSchema = z.union([catCafeConfigSchemaV1, catCafeConfigSchemaV2]);
 
 /**
- * Load and validate cat-config.json.
- * @param filePath - Explicit path or auto-resolved from env/project root
+ * Load and validate the resolved cat config source.
+ * Explicit filePath reads that file directly.
+ * Default resolution uses `.cat-cafe/cat-catalog.json` first, then falls back to repo-root `cat-template.json`.
  */
 export function loadCatConfig(filePath?: string): CatCafeConfig {
-  const resolvedPath = filePath ?? process.env.CAT_CONFIG_PATH ?? DEFAULT_CAT_CONFIG_PATH;
-
   let raw: string;
-  try {
-    raw = readFileSync(resolvedPath, 'utf-8');
-  } catch (err) {
-    const code = (err as NodeJS.ErrnoException).code;
-    throw new Error(`Failed to read cat config at ${resolvedPath}: ${code ?? 'unknown error'}`);
+  let resolvedPath = filePath;
+  if (filePath) {
+    try {
+      raw = readFileSync(filePath, 'utf-8');
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      throw new Error(`Failed to read cat config at ${filePath}: ${code ?? 'unknown error'}`);
+    }
+  } else {
+    const templatePath = process.env.CAT_TEMPLATE_PATH ?? DEFAULT_CAT_TEMPLATE_PATH;
+    const projectRoot = dirname(templatePath);
+    const catalogRaw = readCatCatalogRaw(projectRoot);
+    if (catalogRaw !== null) {
+      raw = catalogRaw;
+      resolvedPath = resolveCatCatalogPath(projectRoot);
+    } else {
+      resolvedPath = templatePath;
+      try {
+        raw = readFileSync(templatePath, 'utf-8');
+      } catch (err) {
+        const code = (err as NodeJS.ErrnoException).code;
+        throw new Error(`Failed to read cat config at ${templatePath}: ${code ?? 'unknown error'}`);
+      }
+    }
   }
 
   const json: unknown = JSON.parse(raw);
@@ -245,6 +266,13 @@ export function loadCatConfig(filePath?: string): CatCafeConfig {
   // CatCafeConfig has readonly arrays + branded CatId.
   // The shapes match at runtime after validation.
   return result.data as unknown as CatCafeConfig;
+}
+
+export function bootstrapDefaultCatCatalog(templatePath?: string): CatCafeConfig {
+  const resolvedTemplatePath = templatePath ?? process.env.CAT_TEMPLATE_PATH ?? DEFAULT_CAT_TEMPLATE_PATH;
+  const projectRoot = dirname(resolvedTemplatePath);
+  const catalogPath = bootstrapCatCatalog(projectRoot, resolvedTemplatePath);
+  return loadCatConfig(catalogPath);
 }
 
 /** Get the default variant for a breed */
@@ -296,9 +324,11 @@ export function toAllCatConfigs(config: CatCafeConfig): Record<string, CatConfig
         avatar: variant.avatar ?? breed.avatar, // F32-b P4c: variant can override
         color: variant.color ?? breed.color, // F32-b P4c: variant can override
         mentionPatterns,
+        ...(variant.providerProfileId != null ? { providerProfileId: variant.providerProfileId } : {}),
         provider: variant.provider,
         defaultModel: variant.defaultModel,
         mcpSupport: variant.mcpSupport,
+        ...(variant.commandArgs != null ? { commandArgs: variant.commandArgs } : {}),
         roleDescription: breed.roleDescription,
         personality: variant.personality ?? defaultVariant?.personality ?? '',
         breedId: breed.id,
@@ -380,7 +410,7 @@ function getCachedConfig(): CatCafeConfig | null {
       _cachedConfig = loadCatConfig();
     } catch (err) {
       _configLoadFailed = true;
-      console.warn('[cat-config] Failed to load cat-config.json, F24 toggle will default to enabled:', err);
+      console.warn('[cat-config] Failed to load runtime catalog/template config, F24 toggle will default to enabled:', err);
       return null;
     }
   }

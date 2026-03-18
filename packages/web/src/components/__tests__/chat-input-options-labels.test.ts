@@ -39,6 +39,13 @@ describe('chat input mention option labels', () => {
     expect(geminiOption?.label).toBe('@暹罗猫');
     expect(geminiOption?.insert).toBe('@暹罗 ');
   });
+
+  it('only uses the first mention pattern for autocomplete insert text', () => {
+    const options = buildCatOptions(FAKE_CATS);
+    expect(options[0]?.insert).toBe('@暹罗 ');
+    expect(options[0]?.insert).not.toBe('@暹罗猫 ');
+    expect(options[0]?.insert).not.toBe('@gemini ');
+  });
 });
 
 describe('buildCatOptions vs buildWhisperOptions split', () => {

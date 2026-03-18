@@ -1,0 +1,352 @@
+import assert from 'node:assert/strict';
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import test from 'node:test';
+import { fileURLToPath } from 'node:url';
+
+const testDir = dirname(fileURLToPath(import.meta.url));
+const repoRoot = join(testDir, '..', '..', '..');
+const installScript = readFileSync(join(repoRoot, 'scripts', 'install.ps1'), 'utf8');
+const commandHelpersPath = join(repoRoot, 'scripts', 'windows-command-helpers.ps1');
+const commandHelpersScript = existsSync(commandHelpersPath)
+  ? readFileSync(commandHelpersPath, 'utf8')
+  : '';
+const uiHelpersPath = join(repoRoot, 'scripts', 'windows-installer-ui.ps1');
+const uiHelpersScript = existsSync(uiHelpersPath)
+  ? readFileSync(uiHelpersPath, 'utf8')
+  : '';
+const helpersScript = readFileSync(join(repoRoot, 'scripts', 'install-windows-helpers.ps1'), 'utf8');
+const startWindowsScript = readFileSync(join(repoRoot, 'scripts', 'start-windows.ps1'), 'utf8');
+const stopWindowsPath = join(repoRoot, 'scripts', 'stop-windows.ps1');
+const stopWindowsScript = existsSync(stopWindowsPath) ? readFileSync(stopWindowsPath, 'utf8') : '';
+const startBatPath = join(repoRoot, 'scripts', 'start.bat');
+const startBatScript = existsSync(startBatPath) ? readFileSync(startBatPath, 'utf8') : '';
+
+test('Windows installer resolves its script path via PSCommandPath before MyInvocation fallback', () => {
+  assert.match(installScript, /\$ScriptPath = if \(\$PSCommandPath\)/);
+  assert.match(installScript, /\$MyInvocation\.MyCommand\.Path/);
+});
+
+test('Windows installer treats non-git directories as a warning instead of a PowerShell native command error', () => {
+  const gitProbeIndex = installScript.indexOf('& git -C $projectRoot rev-parse --is-inside-work-tree 1>$null 2>$null');
+  const tryIndex = installScript.lastIndexOf('try {', gitProbeIndex);
+  const catchIndex = installScript.indexOf('} catch {}', gitProbeIndex);
+  const warningIndex = installScript.indexOf('Write-Warn "No .git directory detected');
+
+  assert.notEqual(gitProbeIndex, -1, 'expected git worktree probe');
+  assert.notEqual(tryIndex, -1, 'expected git probe to be wrapped in try/catch');
+  assert.notEqual(catchIndex, -1, 'expected git probe to swallow PowerShell native command errors');
+  assert.notEqual(warningIndex, -1, 'expected non-git installs to warn instead of exiting');
+  assert.ok(tryIndex < gitProbeIndex, 'expected try block to begin before git probe');
+  assert.ok(gitProbeIndex < catchIndex, 'expected catch block after git probe');
+  assert.ok(catchIndex < warningIndex, 'expected warning path after the protected git probe');
+});
+
+test('Windows installer treats winget Node install failures as retryable instead of terminating native command errors', () => {
+  const wingetInstallIndex = installScript.indexOf('winget install OpenJS.NodeJS.LTS --accept-source-agreements --accept-package-agreements --silent 2>$null');
+  const tryIndex = installScript.lastIndexOf('try {', wingetInstallIndex);
+  const catchIndex = installScript.indexOf('} catch {', wingetInstallIndex);
+  const cancelExitIndex = installScript.indexOf('Exit-InstallerIfCancelled -ErrorRecord $_ -Context "Node.js installation"', catchIndex);
+  const fallbackWarnIndex = installScript.indexOf('Write-Warn "winget Node.js install failed - falling back to manual prerequisite check"');
+  const manualInstallIndex = installScript.indexOf('Write-Err "Node.js >= 20 required. Install from https://nodejs.org/"');
+
+  assert.notEqual(wingetInstallIndex, -1, 'expected winget-based Node install path');
+  assert.notEqual(tryIndex, -1, 'expected winget install to be wrapped in try/catch');
+  assert.notEqual(catchIndex, -1, 'expected winget install catch block');
+  assert.notEqual(cancelExitIndex, -1, 'expected winget path to abort on user cancellation');
+  assert.notEqual(fallbackWarnIndex, -1, 'expected fallback warning after non-cancellation failure');
+  assert.notEqual(manualInstallIndex, -1, 'expected manual install fallback after winget failure');
+  assert.ok(tryIndex < wingetInstallIndex, 'expected try block before winget install');
+  assert.ok(wingetInstallIndex < catchIndex, 'expected catch block after winget install');
+  assert.ok(catchIndex < cancelExitIndex, 'expected cancellation handling inside winget catch path');
+  assert.ok(cancelExitIndex < fallbackWarnIndex, 'expected normal fallback after cancellation check');
+  assert.ok(fallbackWarnIndex < manualInstallIndex, 'expected manual install fallback after protected winget path');
+});
+
+test('Windows installer revalidates Node major version after winget install', () => {
+  assert.ok(
+    installScript.includes("if ($nodeRaw -match 'v(\\d+)\\.(\\d+)') {"),
+    'expected Node.js version check to rerun after winget install',
+  );
+  assert.match(installScript, /\$nodeMajor = \[int\]\$Matches\[1\]/);
+  assert.match(installScript, /if \(\$nodeMajor -ge 20\) \{/);
+  assert.match(installScript, /Write-Warn "Node\.js \$nodeRaw still too old after winget install"/);
+});
+
+test('Windows installer retries plain pnpm install when frozen lockfile mode hits a native command error', () => {
+  const frozenInstallIndex = installScript.indexOf('Invoke-Pnpm -CommandArgs @("install", "--frozen-lockfile") 2>$null');
+  const tryIndex = installScript.lastIndexOf('try {', frozenInstallIndex);
+  const catchIndex = installScript.indexOf('} catch {', frozenInstallIndex);
+  const capturedErrorIndex = installScript.indexOf('$frozenInstallError = $_', catchIndex);
+  const cancelExitIndex = installScript.indexOf('Exit-InstallerIfCancelled -ErrorRecord $frozenInstallError -Context "pnpm install"');
+  const retryWarnIndex = installScript.indexOf('Write-Warn "Frozen lockfile failed, retrying..."');
+  const retryInstallIndex = installScript.indexOf('Invoke-Pnpm -CommandArgs @("install")', retryWarnIndex);
+
+  assert.notEqual(frozenInstallIndex, -1, 'expected frozen lockfile install attempt');
+  assert.notEqual(tryIndex, -1, 'expected frozen lockfile attempt to be wrapped in try/catch');
+  assert.notEqual(catchIndex, -1, 'expected frozen lockfile attempt catch block');
+  assert.notEqual(capturedErrorIndex, -1, 'expected frozen lockfile catch to capture the error record');
+  assert.notEqual(cancelExitIndex, -1, 'expected retry path to abort on user cancellation');
+  assert.notEqual(retryWarnIndex, -1, 'expected retry warning after frozen lockfile failure');
+  assert.notEqual(retryInstallIndex, -1, 'expected plain pnpm install retry after frozen lockfile failure');
+  assert.ok(tryIndex < frozenInstallIndex, 'expected try block before frozen lockfile install');
+  assert.ok(frozenInstallIndex < catchIndex, 'expected catch block after frozen lockfile install');
+  assert.ok(catchIndex < capturedErrorIndex, 'expected frozen lockfile catch to save the error record');
+  assert.ok(capturedErrorIndex < cancelExitIndex, 'expected cancellation check before retry warning');
+  assert.ok(cancelExitIndex < retryWarnIndex, 'expected retry warning after protected frozen lockfile path');
+  assert.ok(retryWarnIndex < retryInstallIndex, 'expected plain install retry after warning');
+});
+
+test('Windows command forwarding helpers avoid PowerShell automatic $args collisions', () => {
+  assert.match(installScript, /function Invoke-Pnpm/);
+  assert.match(installScript, /param\(\[string\[\]\]\$CommandArgs\)/);
+  assert.match(installScript, /Invoke-ToolCommand -Name "pnpm" -CommandArgs \$CommandArgs/);
+  assert.doesNotMatch(installScript, /param\(\[string\[\]\]\$Args\)/);
+  assert.doesNotMatch(installScript, /Invoke-ToolCommand -Name "pnpm" -Args \$Args/);
+
+  assert.match(commandHelpersScript, /function Invoke-ToolCommand/);
+  assert.match(commandHelpersScript, /param\(\[string\]\$Name, \[string\[\]\]\$CommandArgs\)/);
+  assert.match(commandHelpersScript, /& \$toolCommand @CommandArgs/);
+  assert.doesNotMatch(commandHelpersScript, /param\(\[string\]\$Name, \[string\[\]\]\$Args\)/);
+  assert.doesNotMatch(commandHelpersScript, /& \$toolCommand @Args/);
+
+  assert.match(helpersScript, /function Invoke-InstallerAuthHelper/);
+  assert.match(helpersScript, /param\(\$State, \[string\[\]\]\$CommandArgs\)/);
+  assert.match(helpersScript, /& node \$State\.HelperPath @CommandArgs/);
+  assert.match(helpersScript, /\$profileArgs = @\("claude-profile", "set"/);
+  assert.match(helpersScript, /Invoke-InstallerAuthHelper \$State \$profileArgs/);
+  assert.doesNotMatch(helpersScript, /param\(\$State, \[string\[\]\]\$Args\)/);
+  assert.doesNotMatch(helpersScript, /& node \$State\.HelperPath @Args/);
+  assert.doesNotMatch(helpersScript, /\$args = @\("claude-profile", "set"/);
+});
+
+test('Windows installer probes the npm shim path when pnpm is installed but not yet on PATH', () => {
+  assert.match(commandHelpersScript, /@\(\(Join-Path \$env:APPDATA "npm\\\$Name\.cmd"\), \(Join-Path \$env:APPDATA "npm\\\$Name\.ps1"\), \(Join-Path \$env:APPDATA "npm\\\$Name"\)\)/);
+  assert.match(commandHelpersScript, /Join-Path \$env:APPDATA "npm\\\$Name\.cmd"/);
+  assert.match(commandHelpersScript, /Join-Path \$env:APPDATA "npm\\\$Name\.ps1"/);
+  assert.match(commandHelpersScript, /prefix -g/);
+  assert.match(commandHelpersScript, /Select-Object -Last 1/);
+  assert.match(commandHelpersScript, /@\(\(Join-Path \$npmPrefix "\$Name\.cmd"\), \(Join-Path \$npmPrefix "\$Name\.ps1"\), \(Join-Path \$npmPrefix \$Name\)\)/);
+  assert.match(commandHelpersScript, /Join-Path \$npmPrefix "\$Name\.cmd"/);
+  assert.match(commandHelpersScript, /Join-Path \$npmPrefix "\$Name\.ps1"/);
+  assert.match(installScript, /Resolve-PnpmCommand/);
+  assert.match(installScript, /Invoke-Pnpm/);
+  assert.match(installScript, /Resolve-ToolCommand -Name "pnpm"/);
+});
+
+test('Windows installer prints pnpm resolver diagnostics before giving up', () => {
+  assert.match(commandHelpersScript, /function Get-ToolCommandCandidates/);
+  assert.match(commandHelpersScript, /Write-Warn "\$Name resolver candidates:"/);
+  assert.match(commandHelpersScript, /Write-Warn "  \[\$status\] \$candidate"/);
+  assert.match(installScript, /Write-ToolResolutionDiagnostics -Name "pnpm"/);
+});
+
+test('Windows scripts share a generic npm shim resolver for pnpm and agent CLIs', () => {
+  assert.match(commandHelpersScript, /function Resolve-ToolCommand/);
+  assert.match(commandHelpersScript, /function Resolve-ToolCommandWithRetry/);
+  assert.match(commandHelpersScript, /Join-Path \$env:APPDATA "npm\\\$Name\.cmd"/);
+  assert.match(commandHelpersScript, /function Invoke-ToolCommand/);
+  assert.match(helpersScript, /\$hasClaude = \$null -ne \(Resolve-ToolCommandWithRetry -Name "claude" -Attempts 6\)/);
+  assert.match(helpersScript, /\$hasCodex = \$null -ne \(Resolve-ToolCommandWithRetry -Name "codex" -Attempts 6\)/);
+  assert.match(helpersScript, /\$hasGemini = \$null -ne \(Resolve-ToolCommandWithRetry -Name "gemini" -Attempts 6\)/);
+});
+
+test('Windows tool resolution prefers explicit shim candidates before generic Get-Command resolution', () => {
+  const candidatesIndex = commandHelpersScript.indexOf('foreach ($candidate in (Get-ToolCommandCandidates -Name $Name))');
+  const getCommandIndex = commandHelpersScript.indexOf('$toolCommand = Get-Command $Name -ErrorAction SilentlyContinue');
+
+  assert.notEqual(candidatesIndex, -1, 'expected explicit shim candidate loop');
+  assert.notEqual(getCommandIndex, -1, 'expected Get-Command fallback');
+  assert.ok(candidatesIndex < getCommandIndex, 'expected shim candidates to be preferred before generic Get-Command lookup');
+});
+
+test('Windows installer uses interactive selectors instead of typed or letter-based menus', () => {
+  assert.match(uiHelpersScript, /function Select-InstallerChoice/);
+  assert.match(uiHelpersScript, /function Select-InstallerMultiChoice/);
+  assert.match(uiHelpersScript, /if \(-not \$text\) \{ \$text = \$Option\.Name \}/);
+  assert.match(uiHelpersScript, /if \(-not \$text\) \{ \$text = \$Option\.Cmd \}/);
+  assert.match(uiHelpersScript, /\[\*\] /);
+  assert.match(uiHelpersScript, /\[ \] /);
+  assert.match(uiHelpersScript, /Use Up\/Down arrows to move, Enter to select/);
+  assert.match(uiHelpersScript, /Space to toggle, Enter to confirm/);
+  assert.match(installScript, /Name = "Claude"; Label = "Claude"; Cmd = "claude"/);
+  assert.match(installScript, /Name = "Codex"; Label = "Codex"; Cmd = "codex"/);
+  assert.match(installScript, /Name = "Gemini"; Label = "Gemini"; Cmd = "gemini"/);
+  assert.match(installScript, /Select-InstallerMultiChoice -Title "Missing agent CLIs"/);
+  assert.doesNotMatch(uiHelpersScript, /Label = "&All"/);
+  assert.doesNotMatch(uiHelpersScript, /Label = "&Select"/);
+  assert.doesNotMatch(uiHelpersScript, /Prompt "Install \$\(\$option.Name\)\?"/);
+  assert.doesNotMatch(installScript, /Read-Host "    Install which\?/);
+  assert.doesNotMatch(uiHelpersScript, /↑|↓|◉|◯/);
+  assert.match(helpersScript, /Select-InstallerChoice -Title "Claude auth"/);
+  assert.match(helpersScript, /Select-InstallerChoice -Title "Codex auth"/);
+  assert.match(helpersScript, /Select-InstallerChoice -Title "Gemini auth"/);
+  assert.doesNotMatch(helpersScript, /Read-Host "    Choose \[1\/2\]/);
+});
+
+test('Windows installer prefers npm before corepack when bootstrapping pnpm', () => {
+  assert.match(installScript, /\$npmCommand = Resolve-ToolCommand -Name "npm"/);
+  assert.match(installScript, /& \$npmCommand install -g pnpm 2>\$null/);
+  assert.doesNotMatch(installScript, /Invoke-ToolCommand -Name "npm" -Args @\("install", "-g", "pnpm"\)/);
+
+  assert.match(installScript, /\$corepackCommand = Resolve-ToolCommand -Name "corepack"/);
+  assert.match(installScript, /& \$corepackCommand enable 2>\$null/);
+  assert.match(installScript, /& \$corepackCommand install -g pnpm@latest 2>\$null/);
+  assert.doesNotMatch(installScript, /corepack" -Args @\("prepare", "pnpm@latest", "--activate"\)/);
+
+  const npmIndex = installScript.indexOf('$npmCommand = Resolve-ToolCommand -Name "npm"');
+  const corepackIndex = installScript.indexOf('$corepackCommand = Resolve-ToolCommand -Name "corepack"');
+  assert.notEqual(npmIndex, -1, 'expected explicit npm resolution');
+  assert.notEqual(corepackIndex, -1, 'expected explicit corepack resolution');
+  assert.ok(npmIndex < corepackIndex, 'expected npm bootstrap path before corepack fallback on Windows');
+});
+
+test('Windows installer retries pnpm shim detection after bootstrap instead of failing on the first probe', () => {
+  assert.match(installScript, /function Get-PnpmStatus/);
+  assert.match(installScript, /param\(\[int\]\$Attempts = 1, \[int\]\$DelayMs = 500\)/);
+  assert.match(installScript, /for \(\$attempt = 0; \$attempt -lt \$Attempts; \$attempt\+\+\)/);
+  assert.match(installScript, /Start-Sleep -Milliseconds \$DelayMs/);
+  assert.match(installScript, /\$pnpmStatus = Get-PnpmStatus -Attempts 6/);
+});
+
+test('Windows CLI installs use the explicit npm command path and Redis mode only offers portable or external', () => {
+  assert.match(installScript, /\$npmInstallCommand = Resolve-ToolCommand -Name "npm"/);
+  assert.match(installScript, /& \$npmInstallCommand install -g \$tool\.Pkg 2>\$null/);
+  assert.match(uiHelpersScript, /Select-InstallerChoice -Title "Redis setup"/);
+  assert.match(uiHelpersScript, /Install Redis locally \(recommended\)/);
+  assert.match(uiHelpersScript, /Use external Redis URL/);
+  assert.match(uiHelpersScript, /Value = "portable"/);
+  assert.match(uiHelpersScript, /Value = "external"/);
+  assert.doesNotMatch(uiHelpersScript, /Value = "memory"/);
+  assert.doesNotMatch(uiHelpersScript, /using memory storage/);
+  assert.doesNotMatch(uiHelpersScript, /Write-Warn "Memory mode — data will be lost on restart"/);
+  assert.match(installScript, /Resolve-InstallerRedisPlan -ProjectRoot \$ProjectRoot/);
+});
+
+test('Windows installer headless Redis planning respects existing external Redis defaults', () => {
+  assert.match(uiHelpersScript, /function Get-InstallerExternalRedisUrl/);
+  assert.match(uiHelpersScript, /Get-InstallerEnvValueFromFile -EnvFile \(Join-Path \$ProjectRoot "\.env"\) -Key "REDIS_URL"/);
+  assert.match(uiHelpersScript, /\} elseif \(\$defaultRedisUrl\) \{ "external" \} else \{ "portable" \}/);
+  assert.match(uiHelpersScript, /if \(Test-InstallerConsoleUi\) \{ Read-Host "  External Redis URL" \} else \{ \$defaultRedisUrl \}/);
+});
+
+test('Windows installer exits immediately when native installs are cancelled by the user', () => {
+  assert.match(installScript, /function Test-InstallerCancellation/);
+  assert.match(installScript, /function Exit-InstallerIfCancelled/);
+  assert.match(installScript, /\$exceptionType = \$exception\.GetType\(\)\.FullName/);
+  assert.match(installScript, /\$exceptionType -eq 'System\.Management\.Automation\.PipelineStoppedException'/);
+  assert.match(installScript, /\$exceptionType -eq 'System\.Management\.Automation\.OperationStoppedException'/);
+  assert.doesNotMatch(installScript, /-is \[System\.Management\.Automation\.OperationStoppedException\]/);
+  assert.match(installScript, /if \(Test-InstallerCancellation -ErrorRecord \$ErrorRecord\) \{/);
+  assert.match(installScript, /Write-Err "\$Context cancelled by user"/);
+  assert.match(installScript, /Exit-InstallerIfCancelled -ErrorRecord \$_ -Context "pnpm installation"/);
+  assert.match(installScript, /Exit-InstallerIfCancelled -ErrorRecord \$frozenInstallError -Context "pnpm install"/);
+  assert.match(installScript, /Exit-InstallerIfCancelled -ErrorRecord \$_ -Context "\$\(\$tool.Name\) CLI install"/);
+  assert.match(installScript, /exit 1/);
+});
+
+test('Windows PowerShell scripts stay ASCII-only to avoid console codepage issues', () => {
+  const windowsScriptBundle = [
+    installScript,
+    helpersScript,
+    uiHelpersScript,
+    startWindowsScript,
+    stopWindowsScript
+  ].join('\n');
+
+  assert.doesNotMatch(windowsScriptBundle, /[^\x00-\x7F]/);
+});
+
+test('Windows portable Redis defers REDIS_URL to runtime instead of hardcoding localhost:6379', () => {
+  assert.match(uiHelpersScript, /function Apply-InstallerRedisPlan/);
+  assert.match(uiHelpersScript, /Add-InstallerEnvDelete \$State "REDIS_URL"/);
+  assert.doesNotMatch(uiHelpersScript, /Set-InstallerEnvValue \$State "REDIS_URL" "redis:\/\/localhost:6379"/);
+  assert.doesNotMatch(installScript, /REDIS_URL=redis:\/\/localhost:6379/);
+});
+
+test('Windows installer keeps portable Redis inside the project .cat-cafe directory', () => {
+  assert.match(helpersScript, /Join-Path \$ProjectRoot "\.cat-cafe\\redis\\windows"/);
+  assert.match(helpersScript, /ArchiveDir = Join-Path \$[A-Za-z]+ "archives"/);
+  assert.match(helpersScript, /Data = Join-Path \$[A-Za-z]+ "data"/);
+  assert.match(helpersScript, /Logs = Join-Path \$[A-Za-z]+ "logs"/);
+  assert.doesNotMatch(helpersScript, /Join-Path \$ProjectRoot "downloads\\redis\\windows"/);
+});
+
+test('Windows installer allows explicit Redis release API and archive URL overrides', () => {
+  assert.match(helpersScript, /\$redisReleaseApi = if \(\$env:CAT_CAFE_WINDOWS_REDIS_RELEASE_API\)/);
+  assert.match(helpersScript, /\$redisDownloadUrl = if \(\$env:CAT_CAFE_WINDOWS_REDIS_DOWNLOAD_URL\)/);
+  assert.match(helpersScript, /Invoke-RestMethod -Uri \$redisReleaseApi -Headers \$headers/);
+  assert.match(helpersScript, /if \(\$redisDownloadUrl\) \{/);
+  assert.match(helpersScript, /Invoke-WebRequest -Uri \$redisDownloadUrl -OutFile \$archivePath -Headers \$headers -UseBasicParsing/);
+});
+
+test('Windows installer prefers plain portable Redis zips before service bundles', () => {
+  const msys2Zip = helpersScript.indexOf('Windows-x64-msys2\\.zip$');
+  const msys2ServiceZip = helpersScript.indexOf('Windows-x64-msys2-with-Service\\.zip$');
+
+  assert.notEqual(msys2Zip, -1, 'expected portable msys2 zip asset selection');
+  assert.notEqual(msys2ServiceZip, -1, 'expected service zip fallback selection');
+  assert.ok(msys2Zip < msys2ServiceZip, 'portable zip should be preferred before service zip');
+});
+
+test('Windows startup resolves portable Redis from the shared helper before global PATH lookup', () => {
+  assert.match(startWindowsScript, /install-windows-helpers\.ps1/);
+  assert.match(startWindowsScript, /Resolve-PortableRedisBinaries -ProjectRoot \$ProjectRoot/);
+  assert.match(startWindowsScript, /Resolve-PortableRedisLayout -ProjectRoot \$ProjectRoot/);
+  assert.match(startWindowsScript, /"--dir", \$redisLayout\.Data/);
+  assert.match(startWindowsScript, /"--logfile", \$redisLogFile/);
+  assert.match(helpersScript, /function Resolve-GlobalRedisBinaries/);
+  assert.match(helpersScript, /Get-Command redis-server -ErrorAction SilentlyContinue/);
+});
+
+test('Windows startup preserves runtime Redis overrides, validates artifacts, and exits when service jobs stop', () => {
+  assert.match(startWindowsScript, /\$configuredRedisUrl = if \(\$env:REDIS_URL\)/);
+  assert.match(startWindowsScript, /\$useExternalRedis = \$useRedis -and \$configuredRedisUrl -and \(\$LocalRedisUrls -notcontains \$configuredRedisUrl\)/);
+  assert.match(startWindowsScript, /Write-Ok "Using external Redis: \$configuredRedisUrl"/);
+  assert.match(startWindowsScript, /\$runtimeEnvOverrides = @\{/);
+  assert.match(startWindowsScript, /REDIS_URL = \$env:REDIS_URL/);
+  assert.match(startWindowsScript, /MEMORY_STORE = \$env:MEMORY_STORE/);
+  assert.match(startWindowsScript, /\$apiEntry = Join-Path \$ProjectRoot "packages\/api\/dist\/index\.js"/);
+  assert.match(startWindowsScript, /API build artifact not found - run without -Quick first to build/);
+  assert.match(startWindowsScript, /Build failed: shared/);
+  assert.match(startWindowsScript, /Build failed: mcp-server/);
+  assert.match(startWindowsScript, /Build failed: api/);
+  assert.match(startWindowsScript, /Build failed: web/);
+  assert.match(startWindowsScript, /Service job '\$\(\$job.Name\)' stopped \(\$\(\$job.State\)\)/);
+});
+
+test('Windows installer and startup reuse shared tool resolution instead of raw pnpm PATH lookups', () => {
+  assert.match(installScript, /Resolve-ToolCommand -Name "pnpm"/);
+  assert.match(installScript, /\$corepackCommand = Resolve-ToolCommand -Name "corepack"/);
+  assert.match(installScript, /\$npmCommand = Resolve-ToolCommand -Name "npm"/);
+  assert.match(installScript, /Resolve-ToolCommand -Name \$tool\.Cmd/);
+  assert.match(startWindowsScript, /\$pnpmCommand = Resolve-ToolCommand -Name "pnpm"/);
+  assert.match(startWindowsScript, /& \$pnpmCommand run build/);
+  assert.match(startWindowsScript, /param\(\$root, \$port, \$pnpmPath\)/);
+  assert.match(startWindowsScript, /& \$pnpmPath exec next dev -p \$port/);
+  assert.match(startWindowsScript, /& \$pnpmPath exec next start -p \$port -H 0\.0\.0\.0/);
+});
+
+test('Windows CLI installs retry command discovery before warning and auth detection uses the same retry helper', () => {
+  assert.match(commandHelpersScript, /function Resolve-ToolCommandWithRetry/);
+  assert.match(commandHelpersScript, /param\(\[string\]\$Name, \[int\]\$Attempts = 1, \[int\]\$DelayMs = 500\)/);
+  assert.match(commandHelpersScript, /for \(\$attempt = 0; \$attempt -lt \$Attempts; \$attempt\+\+\)/);
+  assert.match(commandHelpersScript, /Start-Sleep -Milliseconds \$DelayMs/);
+  assert.match(installScript, /Resolve-ToolCommandWithRetry -Name \$tool\.Cmd -Attempts 6/);
+  assert.match(helpersScript, /Resolve-ToolCommandWithRetry -Name "claude" -Attempts 6/);
+  assert.match(helpersScript, /Resolve-ToolCommandWithRetry -Name "codex" -Attempts 6/);
+  assert.match(helpersScript, /Resolve-ToolCommandWithRetry -Name "gemini" -Attempts 6/);
+});
+
+test('Windows stop script resolves redis-cli through the shared helper chain before shutdown', () => {
+  assert.match(stopWindowsScript, /install-windows-helpers\.ps1/);
+  assert.match(stopWindowsScript, /Resolve-PortableRedisBinaries -ProjectRoot \$ProjectRoot/);
+  assert.match(stopWindowsScript, /Resolve-GlobalRedisBinaries/);
+  assert.match(stopWindowsScript, /\$redisCli = \$redisCommands\.CliPath/);
+  assert.doesNotMatch(stopWindowsScript, /& redis-cli -p \$RedisPort ping/);
+});
+
+test('Windows start.bat delegates to start-windows.ps1', () => {
+  assert.match(startBatScript, /powershell/i);
+  assert.match(startBatScript, /start-windows\.ps1/);
+});

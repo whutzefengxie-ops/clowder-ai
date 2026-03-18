@@ -288,9 +288,9 @@ export const ENV_VARS: EnvDefinition[] = [
     sensitive: false,
   },
   {
-    name: 'CAT_CONFIG_PATH',
-    defaultValue: '(repo 根 cat-config.json)',
-    description: '猫猫配置文件路径',
+    name: 'CAT_TEMPLATE_PATH',
+    defaultValue: '(repo 根 cat-template.json)',
+    description: '猫猫模板文件路径',
     category: 'cli',
     sensitive: false,
   },

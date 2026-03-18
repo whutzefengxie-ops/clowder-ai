@@ -1,12 +1,19 @@
 import { useCallback, useState } from 'react';
-import type { ProfileItem, ProfileMode, ProfileTestResult } from './hub-provider-profiles.types';
+import type { ProfileItem, ProfileTestResult } from './hub-provider-profiles.types';
+
+function parseModels(value: string): string[] {
+  return value
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
 
 export interface ProfileEditPayload {
-  name: string;
-  mode: ProfileMode;
+  displayName: string;
   baseUrl?: string;
   apiKey?: string;
   modelOverride?: string | null;
+  models?: string[];
 }
 
 interface HubProviderProfileItemProps {
@@ -31,17 +38,17 @@ export function HubProviderProfileItem({
   onDelete,
 }: HubProviderProfileItemProps) {
   const [editing, setEditing] = useState(false);
-  const [editName, setEditName] = useState(profile.name);
-  const [editMode, setEditMode] = useState<ProfileMode>(profile.mode);
+  const [editDisplayName, setEditDisplayName] = useState(profile.displayName);
   const [editBaseUrl, setEditBaseUrl] = useState(profile.baseUrl ?? '');
   const [editApiKey, setEditApiKey] = useState('');
+  const [editModels, setEditModels] = useState(profile.models.join(', '));
   const [editModelOverride, setEditModelOverride] = useState(profile.modelOverride ?? '');
 
   const startEdit = useCallback(() => {
-    setEditName(profile.name);
-    setEditMode(profile.mode);
+    setEditDisplayName(profile.displayName);
     setEditBaseUrl(profile.baseUrl ?? '');
     setEditApiKey('');
+    setEditModels(profile.models.join(', '));
     setEditModelOverride(profile.modelOverride ?? '');
     setEditing(true);
   }, [profile]);
@@ -50,32 +57,33 @@ export function HubProviderProfileItem({
 
   const saveEdit = useCallback(async () => {
     await onSave(profile.id, {
-      name: editName.trim(),
-      mode: editMode,
-      ...(editMode === 'api_key' && editBaseUrl.trim() ? { baseUrl: editBaseUrl.trim() } : {}),
+      displayName: editDisplayName.trim(),
+      ...(profile.authType === 'api_key' && editBaseUrl.trim() ? { baseUrl: editBaseUrl.trim() } : {}),
       ...(editApiKey.trim() ? { apiKey: editApiKey.trim() } : {}),
+      ...(editModels.trim() ? { models: parseModels(editModels) } : {}),
       modelOverride: editModelOverride.trim() || null,
     });
     setEditing(false);
-  }, [onSave, profile.id, editName, editMode, editBaseUrl, editApiKey, editModelOverride]);
+  }, [onSave, profile.id, profile.authType, editDisplayName, editBaseUrl, editApiKey, editModels, editModelOverride]);
 
   const inputCls = 'px-2 py-1 rounded border border-gray-200 bg-white text-xs w-full';
+  const showTestButton = profile.protocol === 'anthropic' && profile.authType === 'api_key';
 
   if (editing) {
     return (
       <div className="rounded-lg border-2 border-blue-300 bg-blue-50/30 p-3 space-y-2">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
           <input
-            value={editName}
-            onChange={(e) => setEditName(e.target.value)}
-            placeholder="名称"
+            value={editDisplayName}
+            onChange={(e) => setEditDisplayName(e.target.value)}
+            placeholder="账号显示名"
             className={inputCls}
           />
-          <select value={editMode} onChange={(e) => setEditMode(e.target.value as ProfileMode)} className={inputCls}>
-            <option value="subscription">subscription（自有订阅）</option>
-            <option value="api_key">api_key（赞助 API）</option>
-          </select>
-          {editMode === 'api_key' && (
+          <div className="px-2 py-1 rounded border border-gray-200 bg-gray-50 text-xs text-gray-600">
+            {profile.protocol} · {profile.authType}
+            {profile.builtin ? ' · builtin' : ''}
+          </div>
+          {profile.authType === 'api_key' && (
             <>
               <input
                 value={editBaseUrl}
@@ -92,9 +100,15 @@ export function HubProviderProfileItem({
             </>
           )}
           <input
+            value={editModels}
+            onChange={(e) => setEditModels(e.target.value)}
+            placeholder="支持模型（逗号分隔）"
+            className={`${inputCls} md:col-span-2`}
+          />
+          <input
             value={editModelOverride}
             onChange={(e) => setEditModelOverride(e.target.value)}
-            placeholder="模型覆盖（可选，例如 opus[1m]）"
+            placeholder="默认/覆盖模型（可选）"
             className={`${inputCls} md:col-span-2`}
           />
         </div>
@@ -123,18 +137,21 @@ export function HubProviderProfileItem({
   return (
     <div className="rounded-lg border border-gray-200 bg-white p-3">
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-gray-800">{profile.name}</span>
-            <span className="text-[11px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">{profile.mode}</span>
+        <div className="min-w-0 space-y-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-medium text-gray-800">{profile.displayName}</span>
+            <span className="text-[11px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">{profile.authType}</span>
+            <span className="text-[11px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">{profile.protocol}</span>
+            {profile.builtin && <span className="text-[11px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">builtin</span>}
             {isActive && <span className="text-[11px] px-1.5 py-0.5 rounded bg-green-100 text-green-700">active</span>}
           </div>
-          <p className="text-xs text-gray-500 mt-1">
-            {profile.mode === 'api_key'
+          <p className="text-xs text-gray-500">
+            {profile.authType === 'api_key'
               ? `baseUrl: ${profile.baseUrl ?? '(未设置)'} · apiKey: ${profile.hasApiKey ? '已配置' : '未配置'}`
-              : '走本机订阅登录态（不使用 API key）'}
+              : '走本机 OAuth / CLI 登录态，不使用 API key'}
           </p>
-          {profile.modelOverride && <p className="text-xs text-indigo-600 mt-0.5">model: {profile.modelOverride}</p>}
+          {profile.models.length > 0 && <p className="text-xs text-indigo-600">models: {profile.models.join(', ')}</p>}
+          {profile.modelOverride && <p className="text-xs text-indigo-500">default: {profile.modelOverride}</p>}
         </div>
         <div className="flex flex-wrap gap-1.5 shrink-0">
           {!isActive && (
@@ -155,15 +172,17 @@ export function HubProviderProfileItem({
           >
             编辑
           </button>
-          <button
-            type="button"
-            className="px-2 py-1 rounded border border-indigo-200 text-indigo-700 text-xs hover:bg-indigo-50"
-            onClick={() => onTest(profile.id)}
-            disabled={busy}
-          >
-            测试
-          </button>
-          {profile.id !== 'anthropic-subscription-default' && (
+          {showTestButton && (
+            <button
+              type="button"
+              className="px-2 py-1 rounded border border-indigo-200 text-indigo-700 text-xs hover:bg-indigo-50"
+              onClick={() => onTest(profile.id)}
+              disabled={busy}
+            >
+              测试
+            </button>
+          )}
+          {!profile.builtin && (
             <button
               type="button"
               className="px-2 py-1 rounded border border-red-200 text-red-700 text-xs hover:bg-red-50"

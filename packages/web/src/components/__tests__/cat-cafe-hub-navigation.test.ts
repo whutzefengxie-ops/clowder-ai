@@ -6,7 +6,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useChatStore } from '@/stores/chatStore';
 
 // Mock heavy deps so CatCafeHub can be imported without full React tree
-vi.mock('@/hooks/useCatData', () => ({ useCatData: () => ({ cats: [], getCatById: () => undefined }) }));
+vi.mock('@/hooks/useCatData', () => ({
+  useCatData: () => ({ cats: [], getCatById: () => undefined, refresh: () => Promise.resolve([]) }),
+}));
 vi.mock('@/utils/api-client', () => ({ apiFetch: vi.fn() }));
 
 const { resolveRequestedHubTab, findGroupForTab } = await import('../CatCafeHub');

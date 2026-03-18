@@ -8,6 +8,7 @@ import { BrakeSettingsPanel } from './BrakeSettingsPanel';
 import { CatOverviewTab, type ConfigData, SystemTab } from './config-viewer-tabs';
 import { HubCapabilityTab } from './HubCapabilityTab';
 import { HubCommandsTab } from './HubCommandsTab';
+import { HubCatEditor } from './HubCatEditor';
 import { HubEnvFilesTab } from './HubEnvFilesTab';
 import { HubGovernanceTab } from './HubGovernanceTab';
 import { HubLeaderboardTab } from './HubLeaderboardTab';
@@ -100,14 +101,14 @@ interface HubGroup {
 const HUB_GROUPS: HubGroup[] = [
   {
     id: 'cats',
-    label: '猫猫与协作',
+    label: '成员协作',
     icon: 'cat',
     color: '#9B7EBD',
-    preview: '总览 · 能力 · 猫粮 · 排行',
+    preview: '总览 · 能力 · 配额 · 排行',
     tabs: [
-      { id: 'cats', label: '猫猫总览', icon: 'users' },
+      { id: 'cats', label: '总览', icon: 'users' },
       { id: 'capabilities', label: '能力中心', icon: 'sparkles' },
-      { id: 'routing', label: '猫粮看板', icon: 'chart-pie' },
+      { id: 'routing', label: '配额看板', icon: 'chart-pie' },
       { id: 'leaderboard', label: '排行榜', icon: 'trophy' },
     ],
   },
@@ -220,7 +221,7 @@ function AccordionSection({
 export function CatCafeHub() {
   const hubState = useChatStore((s) => s.hubState);
   const closeHub = useChatStore((s) => s.closeHub);
-  const { cats, getCatById } = useCatData();
+  const { cats, getCatById, refresh } = useCatData();
 
   const open = hubState?.open ?? false;
   const rawRequestedTab = hubState?.tab as HubTabId | undefined;
@@ -231,6 +232,8 @@ export function CatCafeHub() {
   const [config, setConfig] = useState<ConfigData | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [capTabEverOpened, setCapTabEverOpened] = useState(false);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editingCat, setEditingCat] = useState<(typeof cats)[number] | null>(null);
 
   // P1 fix: Render-time state sync (React 18 "adjusting state on props change" pattern).
   // Avoids first-frame flash that useEffect would cause on deep-link opens.
@@ -264,6 +267,16 @@ export function CatCafeHub() {
     setTab(tabId);
   }, []);
 
+  const openAddMember = useCallback(() => {
+    setEditingCat(null);
+    setEditorOpen(true);
+  }, []);
+
+  const openEditMember = useCallback((cat: (typeof cats)[number]) => {
+    setEditingCat(cat);
+    setEditorOpen(true);
+  }, []);
+
   useEffect(() => {
     if (!open) return;
     if (tab === 'capabilities') setCapTabEverOpened(true);
@@ -283,6 +296,10 @@ export function CatCafeHub() {
       setFetchError('网络错误');
     }
   }, []);
+
+  const handleEditorSaved = useCallback(async () => {
+    await Promise.all([fetchData(), refresh()]);
+  }, [fetchData, refresh]);
 
   useEffect(() => {
     if (open) fetchData();
@@ -345,7 +362,7 @@ export function CatCafeHub() {
             )}
             {tab === 'cats' &&
               (config ? (
-                <CatOverviewTab config={config} cats={cats} />
+                <CatOverviewTab config={config} cats={cats} onAddMember={openAddMember} onEditMember={openEditMember} />
               ) : !fetchError ? (
                 <p className="text-sm text-gray-400">加载中...</p>
               ) : null)}
@@ -367,6 +384,12 @@ export function CatCafeHub() {
             {tab === 'leaderboard' && <HubLeaderboardTab />}
           </div>
         </div>
+        <HubCatEditor
+          open={editorOpen}
+          cat={editingCat}
+          onClose={() => setEditorOpen(false)}
+          onSaved={handleEditorSaved}
+        />
       </div>
     </div>
   );

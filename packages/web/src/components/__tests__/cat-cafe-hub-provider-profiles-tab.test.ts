@@ -36,6 +36,7 @@ vi.mock('@/hooks/useCatData', () => ({
     isLoading: false,
     getCatById: () => undefined,
     getCatsByBreed: () => new Map(),
+    refresh: () => Promise.resolve([]),
   }),
   formatCatName: (cat: { displayName: string; variantLabel?: string }) =>
     cat.variantLabel ? `${cat.displayName}（${cat.variantLabel}）` : cat.displayName,
@@ -106,10 +107,38 @@ describe('CatCafeHub provider profiles tab', () => {
         return Promise.resolve(
           jsonResponse({
             projectPath: '/tmp/project',
-            anthropic: {
-              activeProfileId: null,
-              profiles: [],
-            },
+            activeProfileId: 'claude-oauth',
+            providers: [
+              {
+                id: 'claude-oauth',
+                provider: 'claude-oauth',
+                displayName: 'Claude (OAuth)',
+                name: 'Claude (OAuth)',
+                authType: 'oauth',
+                protocol: 'anthropic',
+                builtin: true,
+                mode: 'subscription',
+                models: ['claude-opus-4-6'],
+                hasApiKey: false,
+                createdAt: '2026-03-18T00:00:00.000Z',
+                updatedAt: '2026-03-18T00:00:00.000Z',
+              },
+              {
+                id: 'codex-sponsor',
+                provider: 'codex-sponsor',
+                displayName: 'Codex Sponsor',
+                name: 'Codex Sponsor',
+                authType: 'api_key',
+                protocol: 'openai',
+                builtin: false,
+                mode: 'api_key',
+                baseUrl: 'https://api.openai-proxy.dev',
+                models: ['gpt-5.4'],
+                hasApiKey: true,
+                createdAt: '2026-03-18T00:00:00.000Z',
+                updatedAt: '2026-03-18T00:00:00.000Z',
+              },
+            ],
           }),
         );
       }
@@ -125,6 +154,9 @@ describe('CatCafeHub provider profiles tab', () => {
     await flushEffects();
 
     expect(container.textContent).toContain('布偶猫账号配置');
+    expect(container.textContent).toContain('Claude (OAuth)');
+    expect(container.textContent).toContain('Codex Sponsor');
+    expect(container.textContent).toContain('新建 API Key 账号');
     expect(container.textContent).toContain('布偶猫救援中心');
     expect(container.textContent).toContain('暂未发现坏掉的布偶猫 session');
   });

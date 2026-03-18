@@ -53,10 +53,14 @@ export interface CatVariant {
   /** Independent mention patterns for this variant (F32-b).
    *  Default variant inherits breed mentionPatterns; non-default variants fallback to @catId when unspecified. */
   readonly mentionPatterns?: readonly string[];
+  /** F127: member-side binding to a concrete provider profile (OAuth/API Key account). */
+  readonly providerProfileId?: string;
   readonly provider: CatProvider;
   readonly defaultModel: string;
   readonly mcpSupport: boolean;
   readonly cli: CliConfig;
+  /** F127: explicit CLI args for bridge-style members such as Antigravity. */
+  readonly commandArgs?: readonly string[];
   readonly personality?: string;
   readonly strengths?: readonly string[];
   /** F32-b P4c: Override breed-level avatar for this variant */

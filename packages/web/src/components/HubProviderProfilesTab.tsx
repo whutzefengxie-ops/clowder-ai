@@ -5,8 +5,32 @@ import { useChatStore } from '@/stores/chatStore';
 import { apiFetch } from '@/utils/api-client';
 import { HubClaudeRescueSection } from './HubClaudeRescueSection';
 import { HubProviderProfileItem, type ProfileEditPayload } from './HubProviderProfileItem';
-import type { ProfileMode, ProfileTestResult, ProviderProfilesResponse } from './hub-provider-profiles.types';
+import type {
+  ProfileProtocol,
+  ProfileTestResult,
+  ProviderProfilesResponse,
+} from './hub-provider-profiles.types';
 import { getProjectPaths, projectDisplayName } from './ThreadSidebar/thread-utils';
+
+function parseModels(value: string): string[] {
+  return value
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function formatProtocolLabel(protocol: ProfileProtocol): string {
+  switch (protocol) {
+    case 'anthropic':
+      return 'Anthropic';
+    case 'openai':
+      return 'OpenAI';
+    case 'google':
+      return 'Google';
+    default:
+      return protocol;
+  }
+}
 
 export function HubProviderProfilesTab() {
   const threads = useChatStore((s) => s.threads);
@@ -19,10 +43,11 @@ export function HubProviderProfilesTab() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [testResultById, setTestResultById] = useState<Record<string, ProfileTestResult>>({});
 
-  const [createName, setCreateName] = useState('');
-  const [createMode, setCreateMode] = useState<ProfileMode>('subscription');
+  const [createDisplayName, setCreateDisplayName] = useState('');
+  const [createProtocol, setCreateProtocol] = useState<ProfileProtocol>('anthropic');
   const [createBaseUrl, setCreateBaseUrl] = useState('');
   const [createApiKey, setCreateApiKey] = useState('');
+  const [createModels, setCreateModels] = useState('');
   const [createModelOverride, setCreateModelOverride] = useState('');
 
   const fetchProfiles = useCallback(async (forProject?: string) => {
@@ -78,12 +103,12 @@ export function HubProviderProfilesTab() {
   }, [fetchProfiles, projectPath]);
 
   const createProfile = useCallback(async () => {
-    if (!createName.trim()) {
-      setError('请输入 profile 名称');
+    if (!createDisplayName.trim()) {
+      setError('请输入账号显示名');
       return;
     }
-    if (createMode === 'api_key' && (!createBaseUrl.trim() || !createApiKey.trim())) {
-      setError('api_key 模式需要填写 baseUrl 和 apiKey');
+    if (!createBaseUrl.trim() || !createApiKey.trim()) {
+      setError('API Key 账号需要填写 baseUrl 和 apiKey');
       return;
     }
     setBusyId('create');
@@ -93,27 +118,39 @@ export function HubProviderProfilesTab() {
         method: 'POST',
         body: JSON.stringify({
           projectPath: projectPath ?? undefined,
-          provider: 'anthropic',
-          name: createName.trim(),
-          mode: createMode,
-          ...(createBaseUrl.trim() ? { baseUrl: createBaseUrl.trim() } : {}),
-          ...(createApiKey.trim() ? { apiKey: createApiKey.trim() } : {}),
+          displayName: createDisplayName.trim(),
+          authType: 'api_key',
+          protocol: createProtocol,
+          baseUrl: createBaseUrl.trim(),
+          apiKey: createApiKey.trim(),
+          ...(createModels.trim() ? { models: parseModels(createModels) } : {}),
           ...(createModelOverride.trim() ? { modelOverride: createModelOverride.trim() } : {}),
           setActive: true,
         }),
       });
-      setCreateName('');
+      setCreateDisplayName('');
       setCreateBaseUrl('');
       setCreateApiKey('');
+      setCreateModels('');
       setCreateModelOverride('');
-      setCreateMode('subscription');
+      setCreateProtocol('anthropic');
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusyId(null);
     }
-  }, [callApi, createApiKey, createBaseUrl, createMode, createModelOverride, createName, projectPath, refresh]);
+  }, [
+    callApi,
+    createApiKey,
+    createBaseUrl,
+    createDisplayName,
+    createModelOverride,
+    createModels,
+    createProtocol,
+    projectPath,
+    refresh,
+  ]);
 
   const activateProfile = useCallback(
     async (profileId: string) => {
@@ -124,7 +161,6 @@ export function HubProviderProfilesTab() {
           method: 'POST',
           body: JSON.stringify({
             projectPath: projectPath ?? undefined,
-            provider: 'anthropic',
           }),
         });
         await refresh();
@@ -146,7 +182,6 @@ export function HubProviderProfilesTab() {
           method: 'DELETE',
           body: JSON.stringify({
             projectPath: projectPath ?? undefined,
-            provider: 'anthropic',
           }),
         });
         await refresh();
@@ -168,7 +203,6 @@ export function HubProviderProfilesTab() {
           method: 'PATCH',
           body: JSON.stringify({
             projectPath: projectPath ?? undefined,
-            provider: 'anthropic',
             ...payload,
           }),
         });
@@ -191,7 +225,6 @@ export function HubProviderProfilesTab() {
           method: 'POST',
           body: JSON.stringify({
             projectPath: projectPath ?? undefined,
-            provider: 'anthropic',
           }),
         })) as unknown as ProfileTestResult;
         setTestResultById((prev) => ({ ...prev, [profileId]: body }));
@@ -210,6 +243,9 @@ export function HubProviderProfilesTab() {
     for (const p of knownProjects) paths.add(p);
     return [...paths];
   }, [data?.projectPath, knownProjects]);
+
+  const builtinProfiles = useMemo(() => data?.providers.filter((profile) => profile.builtin) ?? [], [data?.providers]);
+  const customProfiles = useMemo(() => data?.providers.filter((profile) => !profile.builtin) ?? [], [data?.providers]);
 
   if (loading) return <p className="text-sm text-gray-400">加载中...</p>;
   if (!data) return <p className="text-sm text-gray-400">暂无数据</p>;
@@ -244,49 +280,52 @@ export function HubProviderProfilesTab() {
           secrets 存储在 `.cat-cafe/provider-profiles.secrets.local.json`（本机落盘，Git 忽略）
         </p>
         <p className="text-xs text-amber-700 mt-1">
-          提示：点击“测试”会使用对应 profile 的 API key 向 baseUrl 发起请求，请确认目标地址可信。
+          说明：内置 OAuth 账号固定存在；这里只新增 API Key 账号。Anthropic API Key provider 支持在线测试，其他协议暂不探测。
         </p>
       </div>
 
       <HubClaudeRescueSection />
 
       <div className="rounded-lg border border-gray-200 bg-gray-50/70 p-3 space-y-2">
-        <h4 className="text-xs font-semibold text-gray-700">新建 Profile</h4>
+        <h4 className="text-xs font-semibold text-gray-700">新建 API Key 账号</h4>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
           <input
-            value={createName}
-            onChange={(e) => setCreateName(e.target.value)}
-            placeholder="名称（例如 赞助-A）"
+            value={createDisplayName}
+            onChange={(e) => setCreateDisplayName(e.target.value)}
+            placeholder="账号显示名（例如 Codex Sponsor）"
             className="px-2 py-1.5 rounded border border-gray-200 bg-white text-xs"
           />
           <select
-            value={createMode}
-            onChange={(e) => setCreateMode(e.target.value as ProfileMode)}
+            value={createProtocol}
+            onChange={(e) => setCreateProtocol(e.target.value as ProfileProtocol)}
             className="px-2 py-1.5 rounded border border-gray-200 bg-white text-xs"
           >
-            <option value="subscription">subscription（自有订阅）</option>
-            <option value="api_key">api_key（赞助 API）</option>
+            <option value="anthropic">{formatProtocolLabel('anthropic')}</option>
+            <option value="openai">{formatProtocolLabel('openai')}</option>
+            <option value="google">{formatProtocolLabel('google')}</option>
           </select>
-          {createMode === 'api_key' && (
-            <>
-              <input
-                value={createBaseUrl}
-                onChange={(e) => setCreateBaseUrl(e.target.value)}
-                placeholder="Base URL"
-                className="px-2 py-1.5 rounded border border-gray-200 bg-white text-xs md:col-span-2"
-              />
-              <input
-                value={createApiKey}
-                onChange={(e) => setCreateApiKey(e.target.value)}
-                placeholder="API Key"
-                className="px-2 py-1.5 rounded border border-gray-200 bg-white text-xs md:col-span-2"
-              />
-            </>
-          )}
+          <input
+            value={createBaseUrl}
+            onChange={(e) => setCreateBaseUrl(e.target.value)}
+            placeholder="Base URL"
+            className="px-2 py-1.5 rounded border border-gray-200 bg-white text-xs md:col-span-2"
+          />
+          <input
+            value={createApiKey}
+            onChange={(e) => setCreateApiKey(e.target.value)}
+            placeholder="API Key"
+            className="px-2 py-1.5 rounded border border-gray-200 bg-white text-xs md:col-span-2"
+          />
+          <input
+            value={createModels}
+            onChange={(e) => setCreateModels(e.target.value)}
+            placeholder="支持模型（逗号分隔）"
+            className="px-2 py-1.5 rounded border border-gray-200 bg-white text-xs md:col-span-2"
+          />
           <input
             value={createModelOverride}
             onChange={(e) => setCreateModelOverride(e.target.value)}
-            placeholder="模型覆盖（可选，例如 opus[1m]）"
+            placeholder="默认/覆盖模型（可选）"
             className="px-2 py-1.5 rounded border border-gray-200 bg-white text-xs md:col-span-2"
           />
         </div>
@@ -300,25 +339,50 @@ export function HubProviderProfilesTab() {
         </button>
       </div>
 
-      <div className="space-y-2">
-        {data.anthropic.profiles.map((profile) => {
-          const isActive = data.anthropic.activeProfileId === profile.id;
-          const testResult = testResultById[profile.id];
-          return (
+      <section className="space-y-2">
+        <div className="flex items-center justify-between">
+          <h4 className="text-xs font-semibold text-gray-700">内置 OAuth</h4>
+          <span className="text-[11px] text-gray-400">{builtinProfiles.length} 项</span>
+        </div>
+        <div className="space-y-2">
+          {builtinProfiles.map((profile) => (
             <HubProviderProfileItem
               key={profile.id}
               profile={profile}
-              isActive={isActive}
+              isActive={data.activeProfileId === profile.id}
               busy={busyId === profile.id}
-              testResult={testResult}
+              testResult={testResultById[profile.id]}
               onActivate={activateProfile}
               onSave={saveProfile}
               onTest={testProfile}
               onDelete={deleteProfile}
             />
-          );
-        })}
-      </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="space-y-2">
+        <div className="flex items-center justify-between">
+          <h4 className="text-xs font-semibold text-gray-700">自定义 API Key 账号</h4>
+          <span className="text-[11px] text-gray-400">{customProfiles.length} 项</span>
+        </div>
+        <div className="space-y-2">
+          {customProfiles.length === 0 && <p className="text-xs text-gray-400">暂未创建自定义 API Key 账号</p>}
+          {customProfiles.map((profile) => (
+            <HubProviderProfileItem
+              key={profile.id}
+              profile={profile}
+              isActive={data.activeProfileId === profile.id}
+              busy={busyId === profile.id}
+              testResult={testResultById[profile.id]}
+              onActivate={activateProfile}
+              onSave={saveProfile}
+              onTest={testProfile}
+              onDelete={deleteProfile}
+            />
+          ))}
+        </div>
+      </section>
     </div>
   );
 }

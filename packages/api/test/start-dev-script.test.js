@@ -116,3 +116,38 @@ printf '%s|%s|%s|%s' "$DARE_API_KEY" "$DARE_ENDPOINT" "$ANTHROPIC_API_KEY" "$ANT
 
   assert.equal(output, 'sk-dare-local|https://dare-proxy.example/v1|sk-ant-local|https://anthropic-proxy.example');
 });
+
+test('manual mirror args map to npm, pip, and HuggingFace environment overrides', () => {
+  const scriptPath = resolve(process.cwd(), '../../scripts/start-dev.sh');
+  const output = runSourceOnlySnippet(
+    scriptPath,
+    `
+unset CAT_CAFE_NPM_REGISTRY CAT_CAFE_PIP_INDEX_URL CAT_CAFE_PIP_EXTRA_INDEX_URL CAT_CAFE_HF_ENDPOINT
+unset NPM_CONFIG_REGISTRY PIP_INDEX_URL PIP_EXTRA_INDEX_URL HF_ENDPOINT
+parse_manual_download_source_arg '--npm-registry=https://npm.mirror.example'
+parse_manual_download_source_arg '--pip-index-url=https://pip.mirror.example/simple'
+parse_manual_download_source_arg '--pip-extra-index-url=https://pip.extra.example/simple'
+parse_manual_download_source_arg '--hf-endpoint=https://hf.mirror.example'
+apply_manual_download_source_overrides
+printf '%s|%s|%s|%s|%s|%s|%s|%s' \
+  "$CAT_CAFE_NPM_REGISTRY" "$NPM_CONFIG_REGISTRY" \
+  "$CAT_CAFE_PIP_INDEX_URL" "$PIP_INDEX_URL" \
+  "$CAT_CAFE_PIP_EXTRA_INDEX_URL" "$PIP_EXTRA_INDEX_URL" \
+  "$CAT_CAFE_HF_ENDPOINT" "$HF_ENDPOINT"
+`,
+  );
+
+  assert.equal(
+    output,
+    [
+      'https://npm.mirror.example',
+      'https://npm.mirror.example',
+      'https://pip.mirror.example/simple',
+      'https://pip.mirror.example/simple',
+      'https://pip.extra.example/simple',
+      'https://pip.extra.example/simple',
+      'https://hf.mirror.example',
+      'https://hf.mirror.example',
+    ].join('|'),
+  );
+});

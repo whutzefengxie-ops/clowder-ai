@@ -8,6 +8,7 @@ const CONFIG: ConfigData = {
   cats: {
     opus: { displayName: '布偶猫', provider: 'anthropic', model: 'claude-opus-4-5-20250214', mcpSupport: true },
     codex: { displayName: '缅因猫', provider: 'openai', model: 'codex-2025-03', mcpSupport: false },
+    antigravity: { displayName: '孟加拉猫', provider: 'antigravity', model: 'gemini-bridge', mcpSupport: false },
   },
   perCatBudgets: {
     opus: { maxPromptTokens: 150000, maxContextTokens: 200000, maxMessages: 50, maxContentLengthPerMsg: 64000 },
@@ -27,7 +28,7 @@ const CATS: CatData[] = [
     provider: 'anthropic',
     defaultModel: 'claude-opus-4-5',
     color: { primary: '#6366f1', secondary: '#818cf8' },
-    mentionPatterns: [],
+    mentionPatterns: ['@opus', '@布偶猫'],
     avatar: '',
     roleDescription: '',
     personality: '',
@@ -39,7 +40,19 @@ const CATS: CatData[] = [
     provider: 'openai',
     defaultModel: 'codex',
     color: { primary: '#22c55e', secondary: '#4ade80' },
-    mentionPatterns: [],
+    mentionPatterns: ['@codex', '@缅因猫'],
+    avatar: '',
+    roleDescription: '',
+    personality: '',
+  },
+  {
+    id: 'antigravity',
+    displayName: '孟加拉猫 Antigravity',
+    breedDisplayName: '孟加拉猫',
+    provider: 'antigravity',
+    defaultModel: 'gemini-bridge',
+    color: { primary: '#f59e0b', secondary: '#fcd34d' },
+    mentionPatterns: ['@antigravity', '@孟加拉猫'],
     avatar: '',
     roleDescription: '',
     personality: '',
@@ -47,8 +60,15 @@ const CATS: CatData[] = [
 ];
 
 describe('CatOverviewTab', () => {
-  it('renders all cats model info and budgets in one view', () => {
-    const html = renderToStaticMarkup(React.createElement(CatOverviewTab, { config: CONFIG, cats: CATS }));
+  it('renders all members, aliases, Antigravity bridge mode, and CRUD entry points in one view', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(CatOverviewTab, {
+        config: CONFIG,
+        cats: CATS,
+        onAddMember: () => {},
+        onEditMember: () => {},
+      }),
+    );
     expect(html).toContain('布偶猫');
     expect(html).toContain('anthropic');
     expect(html).toContain('claude-opus');
@@ -57,6 +77,11 @@ describe('CatOverviewTab', () => {
     expect(html).toContain('缅因猫');
     expect(html).toContain('openai');
     expect(html).toContain('HTTP 回调注入');
+    expect(html).toContain('@antigravity');
+    expect(html).toContain('孟加拉猫');
+    expect(html).toContain('CDP Bridge');
+    expect(html).toContain('编辑成员');
+    expect(html).toContain('添加成员');
   });
 });
 

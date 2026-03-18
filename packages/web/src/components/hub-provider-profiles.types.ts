@@ -1,11 +1,18 @@
 export type ProfileMode = 'subscription' | 'api_key';
+export type ProfileAuthType = 'oauth' | 'api_key';
+export type ProfileProtocol = 'anthropic' | 'openai' | 'google';
 
 export interface ProfileItem {
   id: string;
-  provider: 'anthropic';
+  provider: string;
+  displayName: string;
   name: string;
+  authType: ProfileAuthType;
+  protocol: ProfileProtocol;
+  builtin: boolean;
   mode: ProfileMode;
   baseUrl?: string;
+  models: string[];
   modelOverride?: string;
   hasApiKey: boolean;
   createdAt: string;
@@ -14,10 +21,8 @@ export interface ProfileItem {
 
 export interface ProviderProfilesResponse {
   projectPath: string;
-  anthropic: {
-    activeProfileId: string | null;
-    profiles: ProfileItem[];
-  };
+  activeProfileId: string | null;
+  providers: ProfileItem[];
 }
 
 export interface ProfileTestResult {

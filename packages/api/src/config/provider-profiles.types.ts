@@ -1,45 +1,61 @@
-export type ProviderProfileProvider = 'anthropic';
+export type ProviderProfileProtocol = 'anthropic' | 'openai' | 'google';
+export type ProviderProfileProvider = string;
 export type ProviderProfileMode = 'subscription' | 'api_key';
+export type ProviderProfileAuthType = 'oauth' | 'api_key';
 
 export interface ProviderProfileMeta {
   id: string;
-  provider: ProviderProfileProvider;
-  name: string;
-  mode: ProviderProfileMode;
+  /** Stable account/provider identifier used by member binding and CRUD. */
+  provider: string;
+  displayName: string;
+  authType: ProviderProfileAuthType;
+  protocol: ProviderProfileProtocol;
+  builtin: boolean;
   baseUrl?: string;
-  /** Override model identifier when this profile is active (e.g. "opus[1m]") */
+  models: string[];
+  /** Legacy Anthropic runtime override until F127 member binding fully lands. */
   modelOverride?: string;
   createdAt: string;
   updatedAt: string;
 }
 
 export interface ProviderProfileView extends ProviderProfileMeta {
+  /** Legacy compatibility for existing callers/UI tests. */
+  name: string;
+  /** Legacy compatibility for Anthropic runtime terminology. */
+  mode: ProviderProfileMode;
   hasApiKey: boolean;
 }
 
 export interface ProviderProfilesView {
-  anthropic: {
-    activeProfileId: string | null;
-    profiles: ProviderProfileView[];
-  };
+  activeProfileId: string | null;
+  providers: ProviderProfileView[];
 }
 
 export interface CreateProviderProfileInput {
+  /** Legacy callers may still pass a protocol family like "anthropic". */
   provider: ProviderProfileProvider;
-  name: string;
-  mode: ProviderProfileMode;
+  name?: string;
+  displayName?: string;
+  mode?: ProviderProfileMode;
+  authType?: ProviderProfileAuthType;
+  protocol?: ProviderProfileProtocol;
   baseUrl?: string;
   apiKey?: string;
   modelOverride?: string;
+  models?: string[];
   setActive?: boolean;
 }
 
 export interface UpdateProviderProfileInput {
   name?: string;
+  displayName?: string;
   mode?: ProviderProfileMode;
+  authType?: ProviderProfileAuthType;
   baseUrl?: string;
   apiKey?: string;
   modelOverride?: string | null;
+  models?: string[];
 }
 
 export interface AnthropicRuntimeProfile {
@@ -51,20 +67,14 @@ export interface AnthropicRuntimeProfile {
 }
 
 export interface ProviderProfilesMetaFile {
-  version: 1;
-  providers: {
-    anthropic: {
-      activeProfileId: string | null;
-      profiles: ProviderProfileMeta[];
-    };
-  };
+  version: 2;
+  activeProfileId: string | null;
+  profiles: ProviderProfileMeta[];
 }
 
 export interface ProviderProfilesSecretsFile {
-  version: 1;
-  providers: {
-    anthropic: Record<string, { apiKey?: string }>;
-  };
+  version: 2;
+  profiles: Record<string, { apiKey?: string }>;
 }
 
 export interface NormalizedState<T> {

@@ -42,17 +42,19 @@ describe('provider profiles routes', () => {
         headers: { ...AUTH_HEADERS, 'content-type': 'application/json' },
         payload: JSON.stringify({
           projectPath: projectDir,
-          provider: 'anthropic',
-          name: 'sponsor-route',
-          mode: 'api_key',
+          displayName: 'sponsor-route',
+          authType: 'api_key',
+          protocol: 'anthropic',
           baseUrl: 'https://api.route.dev',
           apiKey: 'sk-route',
+          models: ['claude-opus-4-6'],
           setActive: true,
         }),
       });
       assert.equal(createRes.statusCode, 200);
       const created = createRes.json();
-      assert.equal(created.profile.mode, 'api_key');
+      assert.equal(created.profile.authType, 'api_key');
+      assert.equal(created.profile.protocol, 'anthropic');
       assert.equal(created.profile.hasApiKey, true);
 
       const listRes = await app.inject({
@@ -62,9 +64,13 @@ describe('provider profiles routes', () => {
       });
       assert.equal(listRes.statusCode, 200);
       const list = listRes.json();
-      assert.ok(Array.isArray(list.anthropic.profiles));
-      assert.equal(list.anthropic.activeProfileId, created.profile.id);
-      const listed = list.anthropic.profiles.find((p) => p.id === created.profile.id);
+      assert.ok(Array.isArray(list.providers));
+      assert.equal(list.activeProfileId, created.profile.id);
+      assert.deepEqual(
+        list.providers.slice(0, 3).map((profile) => profile.id),
+        ['claude-oauth', 'codex-oauth', 'gemini-oauth'],
+      );
+      const listed = list.providers.find((p) => p.id === created.profile.id);
       assert.ok(listed);
       assert.equal(listed.hasApiKey, true);
     } finally {
@@ -90,11 +96,12 @@ describe('provider profiles routes', () => {
         headers: { ...AUTH_HEADERS, 'content-type': 'application/json' },
         payload: JSON.stringify({
           projectPath: projectDir,
-          provider: 'anthropic',
-          name: 'sponsor-test',
-          mode: 'api_key',
+          displayName: 'sponsor-test',
+          authType: 'api_key',
+          protocol: 'anthropic',
           baseUrl: 'https://api.route.dev',
           apiKey: 'sk-route',
+          models: ['claude-opus-4-6'],
           setActive: false,
         }),
       });
@@ -106,7 +113,6 @@ describe('provider profiles routes', () => {
         headers: { ...AUTH_HEADERS, 'content-type': 'application/json' },
         payload: JSON.stringify({
           projectPath: projectDir,
-          provider: 'anthropic',
         }),
       });
       assert.equal(testRes.statusCode, 200);
@@ -146,11 +152,12 @@ describe('provider profiles routes', () => {
         headers: { ...AUTH_HEADERS, 'content-type': 'application/json' },
         payload: JSON.stringify({
           projectPath: projectDir,
-          provider: 'anthropic',
-          name: 'felix',
-          mode: 'api_key',
+          displayName: 'felix',
+          authType: 'api_key',
+          protocol: 'anthropic',
           baseUrl: 'https://chat.nuoda.vip/claudecode',
           apiKey: 'sk-route',
+          models: ['claude-opus-4-6'],
           setActive: false,
         }),
       });
@@ -162,7 +169,6 @@ describe('provider profiles routes', () => {
         headers: { ...AUTH_HEADERS, 'content-type': 'application/json' },
         payload: JSON.stringify({
           projectPath: projectDir,
-          provider: 'anthropic',
         }),
       });
       assert.equal(testRes.statusCode, 200);
@@ -209,11 +215,12 @@ describe('provider profiles routes', () => {
         headers: { ...AUTH_HEADERS, 'content-type': 'application/json' },
         payload: JSON.stringify({
           projectPath: projectDir,
-          provider: 'anthropic',
-          name: 'felix-invalid-model',
-          mode: 'api_key',
+          displayName: 'felix-invalid-model',
+          authType: 'api_key',
+          protocol: 'anthropic',
           baseUrl: 'https://chat.nuoda.vip/claudecode',
           apiKey: 'sk-route',
+          models: ['claude-opus-4-6'],
           setActive: false,
         }),
       });
@@ -225,7 +232,6 @@ describe('provider profiles routes', () => {
         headers: { ...AUTH_HEADERS, 'content-type': 'application/json' },
         payload: JSON.stringify({
           projectPath: projectDir,
-          provider: 'anthropic',
         }),
       });
       assert.equal(testRes.statusCode, 200);
@@ -256,12 +262,57 @@ describe('provider profiles routes', () => {
         headers: { ...AUTH_HEADERS, 'content-type': 'application/json' },
         payload: JSON.stringify({
           projectPath: projectDir,
-          provider: 'anthropic',
-          name: '   ',
-          mode: 'subscription',
+          displayName: '   ',
+          authType: 'api_key',
+          protocol: 'anthropic',
         }),
       });
       assert.equal(createRes.statusCode, 400);
+    } finally {
+      await rm(projectDir, { recursive: true, force: true });
+      await app.close();
+    }
+  });
+
+  it('POST /api/provider-profiles/:id/test rejects non-anthropic providers', async () => {
+    const Fastify = (await import('fastify')).default;
+    const { providerProfilesRoutes } = await import('../dist/routes/provider-profiles.js');
+    const app = Fastify();
+    await app.register(providerProfilesRoutes, {
+      fetchImpl: async () => new Response('{}', { status: 200 }),
+    });
+    await app.ready();
+
+    const projectDir = await makeTmpDir('test-openai');
+    try {
+      const createRes = await app.inject({
+        method: 'POST',
+        url: '/api/provider-profiles',
+        headers: { ...AUTH_HEADERS, 'content-type': 'application/json' },
+        payload: JSON.stringify({
+          projectPath: projectDir,
+          displayName: 'codex-sponsor',
+          authType: 'api_key',
+          protocol: 'openai',
+          baseUrl: 'https://api.openai-proxy.dev',
+          apiKey: 'sk-openai',
+          models: ['gpt-5.4'],
+          setActive: false,
+        }),
+      });
+      assert.equal(createRes.statusCode, 200);
+      const profileId = createRes.json().profile.id;
+
+      const testRes = await app.inject({
+        method: 'POST',
+        url: `/api/provider-profiles/${profileId}/test`,
+        headers: { ...AUTH_HEADERS, 'content-type': 'application/json' },
+        payload: JSON.stringify({
+          projectPath: projectDir,
+        }),
+      });
+      assert.equal(testRes.statusCode, 400);
+      assert.match(testRes.body, /only anthropic api_key providers can be tested/i);
     } finally {
       await rm(projectDir, { recursive: true, force: true });
       await app.close();
