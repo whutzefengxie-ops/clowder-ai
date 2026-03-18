@@ -34,7 +34,7 @@ const MOCK_CATS = [
     color: { primary: '#5B8C5A', secondary: '#D4E6D3' },
     mentionPatterns: ['@codex'],
     provider: 'openai',
-    providerProfileId: 'codex-oauth',
+    providerProfileId: '',
     defaultModel: 'gpt-5.4',
     avatar: '/avatars/codex.png',
     roleDescription: 'review',
@@ -140,6 +140,11 @@ vi.mock('@/utils/api-client', () => ({
         jsonResponse({
           projectPath: '/tmp/project',
           activeProfileId: 'claude-oauth',
+          activeProfileIds: {
+            anthropic: 'claude-oauth',
+            openai: 'codex-sponsor',
+            google: 'gemini-oauth',
+          },
           providers: [
             {
               id: 'claude-oauth',
@@ -297,6 +302,24 @@ describe('HubQuotaBoardTab — account pool grouping', () => {
     expect(container.textContent).toContain('@antigravity');
     expect(container.textContent).not.toContain('缅因猫 Codex + GPT-5.2');
     expect(container.textContent).not.toContain('缅因猫 代码审查');
+  });
+
+  it('attributes unbound openai cats to the active openai profile pool', async () => {
+    await act(async () => {
+      root.render(React.createElement(HubQuotaBoardTab));
+    });
+    await flushEffects();
+
+    const sectionLabel = (title: string) =>
+      Array.from(container.querySelectorAll('span')).find((node) => node.textContent?.trim() === title);
+
+    const sponsorHeader = sectionLabel('Codex Sponsor');
+    const codexOauthHeader = sectionLabel('Codex 订阅');
+
+    expect(sponsorHeader).toBeTruthy();
+    expect(codexOauthHeader).toBeTruthy();
+    expect(sponsorHeader?.parentElement?.textContent ?? '').toContain('@codex');
+    expect(codexOauthHeader?.parentElement?.textContent ?? '').not.toContain('@codex');
   });
 });
 

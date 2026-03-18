@@ -9,7 +9,6 @@ import { buildEditorLoadingNote, uploadAvatarAsset } from './hub-cat-editor.clie
 import { PersistenceBanner } from './hub-cat-editor-fields';
 import {
   buildCatPayload,
-  buildCodexConfigPatches,
   buildStrategyPayload,
   filterProfiles,
   initialState,
@@ -46,7 +45,6 @@ export function HubCatEditor({ cat, draft, open, onClose, onSaved }: HubCatEdito
   const [strategyForm, setStrategyForm] = useState<StrategyFormState | null>(null);
   const [strategyBaseline, setStrategyBaseline] = useState<StrategyFormState | null>(null);
   const [codexSettings, setCodexSettings] = useState<CodexRuntimeSettings | null>(null);
-  const [codexBaseline, setCodexBaseline] = useState<CodexRuntimeSettings | null>(null);
 
   const availableProfiles = useMemo(() => filterProfiles(form.client, profiles), [form.client, profiles]);
   const selectedProfile = useMemo(() => availableProfiles.find((profile) => profile.id === form.providerProfileId) ?? null, [availableProfiles, form.providerProfileId]);
@@ -124,14 +122,12 @@ export function HubCatEditor({ cat, draft, open, onClose, onSaved }: HubCatEdito
   useEffect(() => {
     if (!open || !showCodexSettings) {
       setCodexSettings(null);
-      setCodexBaseline(null);
       setLoadingCodexSettings(false);
       return;
     }
     if (!cat) {
       const defaults = toCodexRuntimeSettings();
       setCodexSettings(defaults);
-      setCodexBaseline(defaults);
       setLoadingCodexSettings(false);
       return;
     }
@@ -146,7 +142,6 @@ export function HubCatEditor({ cat, draft, open, onClose, onSaved }: HubCatEdito
         if (cancelled) return;
         const next = toCodexRuntimeSettings(body.config);
         setCodexSettings(next);
-        setCodexBaseline(next);
       })
       .catch((err) => {
         if (!cancelled) setCodexSettingsError(err instanceof Error ? err.message : 'Codex 运行参数加载失败');
@@ -235,21 +230,6 @@ export function HubCatEditor({ cat, draft, open, onClose, onSaved }: HubCatEdito
           if (!strategyRes.ok) {
             const payload = (await strategyRes.json().catch(() => ({}))) as Record<string, unknown>;
             setError((payload.error as string) ?? `Session 策略保存失败 (${strategyRes.status})`);
-            return;
-          }
-        }
-      }
-
-      if (showCodexSettings && codexSettings && codexBaseline) {
-        for (const patch of buildCodexConfigPatches(codexSettings, codexBaseline)) {
-          const configRes = await apiFetch('/api/config', {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(patch),
-          });
-          if (!configRes.ok) {
-            const payload = (await configRes.json().catch(() => ({}))) as Record<string, unknown>;
-            setError((payload.error as string) ?? `Codex 参数保存失败 (${configRes.status})`);
             return;
           }
         }

@@ -1239,13 +1239,8 @@ describe('HubCatEditor', () => {
     expect(strategyPayload.strategy).toBe('handoff');
     expect(strategyPayload.thresholds.warn).toBe(0.55);
 
-    const codexConfigPatch = mockApiFetch.mock.calls.find(
-      ([path, init]) =>
-        path === '/api/config' &&
-        init?.method === 'PATCH' &&
-        String(init.body).includes('cli.codexApprovalPolicy'),
-    );
-    expect(codexConfigPatch).toBeTruthy();
+    const codexConfigPatch = mockApiFetch.mock.calls.find(([path, init]) => path === '/api/config' && init?.method === 'PATCH');
+    expect(codexConfigPatch).toBeFalsy();
   });
 
   it('does not write session-strategy override when strategy fields are unchanged', async () => {

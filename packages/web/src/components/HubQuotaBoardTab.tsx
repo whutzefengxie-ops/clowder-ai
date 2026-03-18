@@ -56,6 +56,8 @@ export function HubQuotaBoardTab() {
   const { cats } = useCatData();
   const [quota, setQuota] = useState<QuotaResponse | null>(null);
   const [profiles, setProfiles] = useState<ProviderProfilesResponse['providers']>([]);
+  const [activeProfileId, setActiveProfileId] = useState<ProviderProfilesResponse['activeProfileId']>(null);
+  const [activeProfileIds, setActiveProfileIds] = useState<ProviderProfilesResponse['activeProfileIds']>({});
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const previousRiskRef = useRef<'ok' | 'warn' | 'high'>('ok');
@@ -86,7 +88,11 @@ export function HubQuotaBoardTab() {
         return (await res.json()) as ProviderProfilesResponse;
       })
       .then((body) => {
-        if (!cancelled && body) setProfiles(body.providers);
+        if (!cancelled && body) {
+          setProfiles(body.providers);
+          setActiveProfileId(body.activeProfileId);
+          setActiveProfileIds(body.activeProfileIds ?? {});
+        }
       })
       .catch(() => {});
     return () => {
@@ -142,7 +148,7 @@ export function HubQuotaBoardTab() {
     }
   }, [fetchQuota]);
 
-  const accountPools = buildAccountQuotaPools(quota, profiles, cats);
+  const accountPools = buildAccountQuotaPools(quota, profiles, cats, { activeProfileId, activeProfileIds });
   const errors = [
     ...new Set(
       [refreshError, quota?.codex?.error, quota?.claude?.error, quota?.gemini?.error, quota?.antigravity?.error].filter(
