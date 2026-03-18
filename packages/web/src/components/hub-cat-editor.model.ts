@@ -1,6 +1,7 @@
 import type { CatData } from '@/hooks/useCatData';
 import type { ProfileItem } from './hub-provider-profiles.types';
 import type { CatStrategyEntry, StrategyType } from './hub-strategy-types';
+import { defaultMcpSupportForClient, protocolForClient, requiresApiKeyProfile } from './hub-cat-editor.protocols';
 
 export type ClientValue = 'anthropic' | 'openai' | 'google' | 'dare' | 'opencode' | 'antigravity';
 export type SessionChainValue = 'true' | 'false';
@@ -129,33 +130,12 @@ export function splitStrengthTags(raw: string): string[] {
     .filter(Boolean);
 }
 
-function protocolForClient(client: ClientValue): 'anthropic' | 'openai' | 'google' | null {
-  switch (client) {
-    case 'anthropic':
-      return 'anthropic';
-    case 'openai':
-      return 'openai';
-    case 'google':
-      return 'google';
-    case 'dare':
-      return 'openai';
-    case 'opencode':
-      return 'anthropic';
-    default:
-      return null;
-  }
-}
-
-function defaultMcpSupportForClient(client: ClientValue): boolean {
-  return client === 'anthropic' || client === 'openai' || client === 'google' || client === 'opencode';
-}
-
 export function filterProfiles(client: ClientValue, profiles: ProfileItem[]): ProfileItem[] {
   if (client === 'antigravity') return [];
   const protocol = protocolForClient(client);
   if (!protocol) return [];
   const scoped = profiles.filter((profile) => profile.protocol === protocol);
-  if (client === 'dare' || client === 'opencode') {
+  if (requiresApiKeyProfile(client)) {
     return scoped.filter((profile) => profile.authType === 'api_key');
   }
   return scoped;
