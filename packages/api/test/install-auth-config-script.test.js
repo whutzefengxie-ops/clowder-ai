@@ -277,3 +277,32 @@ test('env-apply writes apostrophes with dotenv-compatible double quotes', () => 
     rmSync(envRoot, { recursive: true, force: true });
   }
 });
+
+test('env-apply escapes shell substitutions when apostrophe requires double quotes', () => {
+  const envRoot = mkdtempSync(join(tmpdir(), 'clowder-install-env-shell-escape-'));
+
+  try {
+    const envFile = join(envRoot, '.env');
+    const literal = "https://proxy.example/o'hara/$HOME/$(whoami)/`whoami`";
+    mkdirSync(envRoot, { recursive: true });
+    writeFileSync(envFile, '', 'utf8');
+
+    runHelper([
+      'env-apply',
+      '--env-file',
+      envFile,
+      '--set',
+      `OPENAI_BASE_URL=${literal}`,
+    ]);
+
+    const output = readFileSync(envFile, 'utf8');
+    assert.match(output, /^OPENAI_BASE_URL="https:\/\/proxy\.example\/o'hara\/\\\$HOME\/\\\$\(whoami\)\/\\`whoami\\`"$/m);
+
+    const sourced = execFileSync('sh', ['-lc', `set -a; . "${envFile}"; printf '%s' "$OPENAI_BASE_URL"`], {
+      encoding: 'utf8',
+    }).trim();
+    assert.equal(sourced, literal);
+  } finally {
+    rmSync(envRoot, { recursive: true, force: true });
+  }
+});

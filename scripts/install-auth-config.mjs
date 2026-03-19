@@ -53,7 +53,11 @@ function envQuote(value) {
   if (!stringValue.includes("'")) {
     return `'${stringValue}'`;
   }
-  return `"${stringValue.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+  return `"${stringValue
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+    .replace(/\$/g, '\\$')
+    .replace(/`/g, '\\`')}"`;
 }
 
 function applyEnvChanges(envFile, setPairs, deleteKeys) {
