@@ -12,6 +12,14 @@ export interface AccountQuotaPool {
   emptyText?: string;
 }
 
+export interface AccountQuotaPoolGroup {
+  id: string;
+  title: string;
+  description: string;
+  tone?: 'default' | 'success';
+  pools: AccountQuotaPool[];
+}
+
 function uniqueTags(tags: string[]): string[] {
   return [...new Set(tags.filter(Boolean))];
 }
@@ -73,7 +81,37 @@ function memberTagsForPool(
   );
 }
 
-export function buildAccountQuotaPools(
+const BUILTIN_OAUTH_PROFILES: Array<{
+  id: string;
+  protocol: ProtocolProvider;
+  fallbackTitle: string;
+  emptyText: string;
+  items: (quota: QuotaResponse | null) => CodexUsageItem[];
+}> = [
+  {
+    id: 'claude-oauth',
+    protocol: 'anthropic',
+    fallbackTitle: 'Claude (OAuth)',
+    emptyText: '暂无数据，点击刷新获取',
+    items: (quota) => quota?.claude.usageItems ?? [],
+  },
+  {
+    id: 'codex-oauth',
+    protocol: 'openai',
+    fallbackTitle: 'Codex (OAuth)',
+    emptyText: '暂无数据，点击刷新获取',
+    items: (quota) => quota?.codex.usageItems ?? [],
+  },
+  {
+    id: 'gemini-oauth',
+    protocol: 'google',
+    fallbackTitle: 'Gemini (OAuth)',
+    emptyText: '暂无数据（需 ClaudeBar 推送）',
+    items: (quota) => quota?.gemini?.usageItems ?? [],
+  },
+];
+
+export function buildAccountQuotaGroups(
   quota: QuotaResponse | null,
   profiles: ProfileItem[],
   cats: CatData[],
@@ -81,7 +119,7 @@ export function buildAccountQuotaPools(
     activeProfileId?: string | null;
     activeProfileIds?: Partial<Record<ProfileProtocol, string | null>>;
   },
-): AccountQuotaPool[] {
+): AccountQuotaPoolGroup[] {
   const activeProfileByProvider: Record<ProtocolProvider, string> = {
     anthropic: resolveActiveProfileIdForProvider(
       'anthropic',
@@ -98,29 +136,16 @@ export function buildAccountQuotaPools(
     google: resolveActiveProfileIdForProvider('google', profiles, activeProfiles?.activeProfileIds, activeProfiles?.activeProfileId),
   };
 
-  const builtinPools: AccountQuotaPool[] = [
-    {
-      id: 'claude-oauth',
-      title: 'Claude 订阅',
-      items: quota?.claude.usageItems ?? [],
-      memberTags: memberTagsForPool(cats, 'claude-oauth', 'anthropic', activeProfileByProvider.anthropic),
-      emptyText: '暂无数据，点击刷新获取',
-    },
-    {
-      id: 'codex-oauth',
-      title: 'Codex 订阅',
-      items: quota?.codex.usageItems ?? [],
-      memberTags: memberTagsForPool(cats, 'codex-oauth', 'openai', activeProfileByProvider.openai),
-      emptyText: '暂无数据，点击刷新获取',
-    },
-    {
-      id: 'gemini-oauth',
-      title: 'Gemini 订阅',
-      items: quota?.gemini?.usageItems ?? [],
-      memberTags: memberTagsForPool(cats, 'gemini-oauth', 'google', activeProfileByProvider.google),
-      emptyText: '暂无数据（需 ClaudeBar 推送）',
-    },
-  ];
+  const builtinPools: AccountQuotaPool[] = BUILTIN_OAUTH_PROFILES.map((profile) => {
+    const configuredProfile = profiles.find((item) => item.id === profile.id);
+    return {
+      id: profile.id,
+      title: configuredProfile?.displayName ?? profile.fallbackTitle,
+      items: profile.items(quota),
+      memberTags: memberTagsForPool(cats, profile.id, profile.protocol, activeProfileByProvider[profile.protocol]),
+      emptyText: profile.emptyText,
+    };
+  });
 
   const apiKeyPools = profiles
     .filter((profile) => profile.authType === 'api_key' && !profile.builtin)
@@ -134,16 +159,47 @@ export function buildAccountQuotaPools(
         providerFromProtocol(profile.protocol),
         activeProfileByProvider[providerFromProtocol(profile.protocol)],
       ),
-      emptyText: '暂无官方额度数据',
+      emptyText: '按账单周期计费，暂不展示官方用量',
     }));
 
-  const antigravityPool: AccountQuotaPool = {
-    id: 'antigravity',
-    title: 'Antigravity Bridge',
-    items: quota?.antigravity?.usageItems ?? [],
-    memberTags: uniqueTags(cats.filter((cat) => cat.provider === 'antigravity').map(memberTag)),
-    emptyText: '暂无数据（需 ClaudeBar 推送）',
-  };
+  const antigravityMemberTags = uniqueTags(cats.filter((cat) => cat.provider === 'antigravity').map(memberTag));
+  const antigravityPools: AccountQuotaPool[] =
+    antigravityMemberTags.length > 0 || (quota?.antigravity?.usageItems.length ?? 0) > 0
+      ? [
+          {
+            id: 'antigravity',
+            title: 'Antigravity Bridge',
+            items: quota?.antigravity?.usageItems ?? [],
+            memberTags: antigravityMemberTags,
+            emptyText: '暂无数据（需 Bridge 上报）',
+          },
+        ]
+      : [];
 
-  return [...builtinPools, ...apiKeyPools, antigravityPool];
+  const groups: AccountQuotaPoolGroup[] = [
+    {
+      id: 'oauth',
+      title: 'OAuth 订阅额度（按账号配置）',
+      description: '对应账号配置中的 Provider 订阅账号，每个账号下方反向显示关联成员。',
+      pools: builtinPools,
+    },
+    {
+      id: 'api-key',
+      title: 'API Key 额度（按账号配置）',
+      description: '对应账号配置中的 API Key 类型账号，每个账号独立计费。',
+      tone: 'success',
+      pools: apiKeyPools,
+    },
+  ];
+
+  if (antigravityPools.length > 0) {
+    groups.push({
+      id: 'antigravity',
+      title: 'Antigravity Bridge（独立通道）',
+      description: 'Bridge 通道单独展示，不混入账号池。',
+      pools: antigravityPools,
+    });
+  }
+
+  return groups;
 }

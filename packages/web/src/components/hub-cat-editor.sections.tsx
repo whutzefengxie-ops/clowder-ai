@@ -48,7 +48,7 @@ export function IdentitySection({
   return (
     <SectionCard title="身份信息">
       {!cat ? (
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="space-y-2">
           <TextField label="Cat ID" value={form.catId} onChange={(value) => onChange({ catId: value })} />
           <TextField label="Name" value={form.name} onChange={(value) => onChange({ name: value })} />
           <TextField
@@ -61,15 +61,15 @@ export function IdentitySection({
         <TextField label="Name" value={form.name} onChange={(value) => onChange({ name: value, displayName: value })} />
       )}
 
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-medium text-[#5C4B42]">Avatar</span>
+      <div className="space-y-2 rounded-[10px] border border-[#E8DCCF] bg-[#F7F3F0] px-4 py-3 sm:ml-[152px]">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-[13px] font-semibold text-[#8A776B]">Avatar</span>
           <span className="text-xs text-[#8A776B]">点击上传新头像覆盖</span>
         </div>
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
-          className="flex w-full items-center gap-3 rounded-2xl border border-[#E8DCCF] bg-white/80 p-3 text-left transition hover:border-[#D49266]"
+          className="flex w-full items-center gap-3 rounded-[10px] border border-[#E8DCCF] bg-white/90 p-3 text-left transition hover:border-[#D49266]"
         >
           <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[#E8DCCF] bg-[#F7F3F0] text-xs text-[#8A776B]">
             {form.avatar ? (
@@ -105,13 +105,13 @@ export function IdentitySection({
         />
       </div>
 
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-medium text-[#5C4B42]">Background Color</span>
+      <div className="space-y-2 rounded-[10px] border border-[#E8DCCF] bg-[#F7F3F0] px-4 py-3 sm:ml-[152px]">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-[13px] font-semibold text-[#8A776B]">Background Color</span>
           <span className="text-xs text-[#8A776B]">点击调色盘</span>
         </div>
-        <div className="grid gap-3 md:grid-cols-2">
-          <label className="flex items-center justify-between rounded-2xl border border-[#E8DCCF] bg-white/80 px-3 py-2.5 text-sm text-[#5C4B42]">
+        <div className="space-y-2">
+          <label className="flex items-center justify-between rounded-[10px] border border-[#E8DCCF] bg-white/90 px-3 py-2 text-[13px] text-[#5C4B42]">
             <span
               className="h-8 w-8 rounded-lg border border-white shadow-sm"
               style={{ backgroundColor: form.colorPrimary }}
@@ -124,7 +124,7 @@ export function IdentitySection({
               className="h-8 w-10 cursor-pointer rounded border-0 bg-transparent p-0"
             />
           </label>
-          <label className="flex items-center justify-between rounded-2xl border border-[#E8DCCF] bg-white/80 px-3 py-2.5 text-sm text-[#5C4B42]">
+          <label className="flex items-center justify-between rounded-[10px] border border-[#E8DCCF] bg-white/90 px-3 py-2 text-[13px] text-[#5C4B42]">
             <span
               className="h-8 w-8 rounded-lg border border-white shadow-sm"
               style={{ backgroundColor: form.colorSecondary }}
@@ -140,7 +140,7 @@ export function IdentitySection({
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="space-y-2">
         <TextField label="Nickname" value={form.nickname} onChange={(value) => onChange({ nickname: value })} />
         <TextField
           label="Description"
@@ -165,8 +165,8 @@ export function IdentitySection({
         />
       </div>
 
-      <div className="space-y-2">
-        <span className="text-sm font-medium text-[#5C4B42]">Strengths</span>
+      <div className="space-y-2 sm:ml-[152px]">
+        <span className="text-[13px] font-semibold text-[#8A776B]">Strengths</span>
         <TagEditor
           tags={strengthTags}
           onChange={(tags) => onChange({ strengths: joinTags(tags) })}
@@ -182,9 +182,9 @@ export function IdentitySection({
         />
       </div>
 
-      <div className="rounded-2xl border border-dashed border-[#DCC9B8] bg-[#FFF7F0] px-4 py-3">
-        <p className="text-sm font-medium text-[#5C4B42]">▸ Voice Config (点击展开)</p>
-        <p className="mt-1 text-xs leading-5 text-[#8A776B]">需对接和启用语音功能后才支持配置</p>
+      <div className="rounded-[12px] border border-dashed border-[#DCC9B8] bg-[#F7F3F0] px-4 py-3 sm:ml-[152px]">
+        <p className="text-[14px] font-semibold text-[#8A776B]">▸ Voice Config (点击展开)</p>
+        <p className="mt-1 text-[11px] leading-5 text-[#B59A88]">需对接和启用语音功能后才支持配置</p>
       </div>
     </SectionCard>
   );
@@ -211,10 +211,10 @@ export function AccountSection({
       description="API Key 凭证在账号配置中管理；普通 Client 在此选择 Provider + 模型。若 Client=Antigravity，则直接配置 CLI 命令（默认值来自 cat-template）和模型。"
     >
       <p className="text-xs font-semibold leading-5 text-[#BF360C]">
-        ⚠️ 约束：Claude/Codex/Gemini = 同名 OAuth + 任意 API Key provider；Dare/OpenCode = 同协议账号（OAuth-like /
-        API Key 都可）；Antigravity = 直接配置 CLI 命令 + model。
+        ⚠️ 约束：Claude/Codex/Gemini = 同名 OAuth + 任意 API Key provider；Dare/OpenCode = 同协议账号（OAuth-like / API
+        Key 都可）；Antigravity = 直接配置 CLI 命令 + model。
       </p>
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="space-y-2">
         <SelectField
           label="Client"
           value={form.client}
@@ -286,14 +286,16 @@ export function RoutingSection({
       title="别名与 @ 路由"
       description="默认包含 @catId；前端自动 @ 仅提示首个 mention，后续别名仍可路由但不进入提示列表。唯一性校验自动进行。"
     >
-      <TagEditor
-        tags={aliases}
-        lockedTags={lockedTags}
-        onChange={(tags) => onChange({ mentionPatterns: joinTags(tags) })}
-        addLabel="+ 添加"
-        placeholder="@砚砚"
-        emptyLabel="(暂无别名)"
-      />
+      <div className="sm:ml-[152px]">
+        <TagEditor
+          tags={aliases}
+          lockedTags={lockedTags}
+          onChange={(tags) => onChange({ mentionPatterns: joinTags(tags) })}
+          addLabel="+ 添加"
+          placeholder="@砚砚"
+          emptyLabel="(暂无别名)"
+        />
+      </div>
       <textarea
         aria-label="Aliases"
         value={form.mentionPatterns}

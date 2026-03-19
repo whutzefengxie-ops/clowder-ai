@@ -76,7 +76,6 @@ export const ENV_VARS: EnvDefinition[] = [
     description: 'API 服务端口',
     category: 'server',
     sensitive: false,
-    runtimeEditable: false,
   },
   {
     name: 'PREVIEW_GATEWAY_PORT',
@@ -84,7 +83,6 @@ export const ENV_VARS: EnvDefinition[] = [
     description: 'Preview Gateway 端口（F120 独立 origin 反向代理）',
     category: 'server',
     sensitive: false,
-    runtimeEditable: false,
   },
   {
     name: 'API_SERVER_HOST',
@@ -733,7 +731,7 @@ export function buildEnvSummary(): Array<EnvDefinition & { currentValue: string 
 }
 
 export function isEditableEnvVar(def: EnvDefinition): boolean {
-  return def.runtimeEditable !== false && !def.sensitive && def.maskMode !== 'url';
+  return def.runtimeEditable !== false && !def.sensitive;
 }
 
 export function isEditableEnvVarName(name: string): boolean {

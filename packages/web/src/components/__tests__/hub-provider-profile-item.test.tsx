@@ -109,4 +109,28 @@ describe('HubProviderProfileItem', () => {
     expect(container.textContent).toContain('+ 添加');
     expect(container.textContent).not.toContain('编辑');
   });
+
+  it('hides unsupported 测试 actions for non-api-key profiles', async () => {
+    const profile: ProfileItem = {
+      id: 'opencode-client-auth',
+      provider: 'opencode-client-auth',
+      displayName: 'OpenCode (client-auth)',
+      name: 'OpenCode (client-auth)',
+      authType: 'oauth',
+      protocol: 'anthropic',
+      builtin: true,
+      mode: 'subscription',
+      models: ['claude-sonnet-4'],
+      hasApiKey: false,
+      createdAt: '2026-03-18T00:00:00.000Z',
+      updatedAt: '2026-03-18T00:00:00.000Z',
+      oauthLikeClient: 'opencode',
+    };
+
+    await act(async () => {
+      root.render(<HubProviderProfileItem profile={profile} busy={false} onSave={vi.fn(async () => {})} onTest={() => {}} onDelete={() => {}} />);
+    });
+
+    expect(container.textContent).not.toContain('测试');
+  });
 });

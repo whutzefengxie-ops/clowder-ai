@@ -8,15 +8,33 @@ function humanizeProvider(provider: string) {
   return provider;
 }
 
+function clientRuntimeLabel(cat: CatData, configCat?: CatConfig) {
+  const profileId = cat.providerProfileId?.toLowerCase() ?? '';
+  if (profileId.includes('claude')) return 'Claude';
+  if (profileId.includes('codex')) return 'Codex';
+  if (profileId.includes('gemini')) return 'Gemini';
+  if (profileId.includes('opencode')) return 'OpenCode';
+  if (profileId.includes('dare')) return 'Dare';
+  if (cat.provider === 'antigravity') return 'Antigravity';
+  if (cat.source === 'runtime' && cat.provider === 'openai') return 'OpenAI-Compatible';
+  return humanizeProvider(configCat?.provider ?? cat.provider);
+}
+
+function accountSummary(cat: CatData) {
+  const profileId = cat.providerProfileId?.trim() ?? '';
+  if (!profileId) return humanizeProvider(cat.provider);
+  if (/\(oauth\)/i.test(profileId) || /-oauth$/i.test(profileId)) return 'OAuth 订阅';
+  if (/\(api key\)/i.test(profileId)) return profileId;
+  if (/-client-auth$/i.test(profileId)) return 'client-auth';
+  return 'API Key';
+}
+
 function getMetaSummary(cat: CatData, configCat?: CatConfig) {
   if (cat.provider === 'antigravity') {
-    return `Antigravity · ${configCat?.model ?? cat.defaultModel} · ${cat.commandArgs?.join(' ') || 'Bridge 未配置'}`;
+    return `Antigravity · ${configCat?.model ?? cat.defaultModel} · CLI Bridge`;
   }
 
-  const account = cat.providerProfileId?.includes('(OAuth)')
-    ? 'OAuth 订阅'
-    : cat.providerProfileId || humanizeProvider(configCat?.provider ?? cat.provider);
-  return `${humanizeProvider(configCat?.provider ?? cat.provider)} · ${configCat?.model ?? cat.defaultModel} · ${account}`;
+  return `${clientRuntimeLabel(cat, configCat)} · ${configCat?.model ?? cat.defaultModel} · ${accountSummary(cat)}`;
 }
 
 function getStatusBadge(cat: CatData) {
@@ -34,18 +52,28 @@ function getStatusBadge(cat: CatData) {
   };
 }
 
-export function HubOwnerOverviewCard({
-  owner,
-  onEdit,
-}: {
-  owner: OwnerConfig;
-  onEdit?: () => void;
-}) {
+function formatMentionPreview(patterns: string[], max = 3) {
+  const visible = patterns.slice(0, max);
+  const rest = patterns.length - visible.length;
+  return rest > 0 ? `${visible.join('  ')}  +${rest}` : visible.join('  ');
+}
+
+export function HubOwnerOverviewCard({ owner, onEdit }: { owner: OwnerConfig; onEdit?: () => void }) {
   const primary = owner.color?.primary ?? '#D4A76A';
   const secondary = owner.color?.secondary ?? '#FFF8F0';
 
   return (
     <section
+      role={onEdit ? 'button' : undefined}
+      tabIndex={onEdit ? 0 : undefined}
+      onClick={() => onEdit?.()}
+      onKeyDown={(event) => {
+        if (!onEdit) return;
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onEdit();
+        }
+      }}
       className="rounded-[20px] px-[18px] py-[18px] shadow-sm"
       style={{ backgroundColor: secondary, border: `2px solid ${primary}` }}
     >
@@ -64,23 +92,11 @@ export function HubOwnerOverviewCard({
           </div>
           <h3 className="text-base font-bold text-[#2D2118]">{owner.name}</h3>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="rounded-full bg-[#FFF3E0] px-2.5 py-1 text-[11px] font-semibold text-[#E65100]">
-            🔒 Owner
-          </span>
-          <button
-            type="button"
-            onClick={() => onEdit?.()}
-            disabled={!onEdit}
-            className="rounded-lg bg-white/80 px-2.5 py-1 text-[11px] font-medium text-[#9A5A2C] transition hover:bg-white disabled:cursor-default disabled:opacity-100"
-          >
-            编辑
-          </button>
-        </div>
+        <span className="rounded-full bg-[#FFF3E0] px-2.5 py-1 text-[11px] font-semibold text-[#E65100]">🔒 Owner</span>
       </div>
-      <p className="mt-2.5 text-[13px] text-[#8A776B]">别名: {owner.aliases.join(' · ') || '无'}</p>
+      <p className="mt-2.5 text-[13px] text-[#8A776B]">别名: {owner.aliases.join(' · ') || '无'} · 只能编辑，不能新增或删除</p>
       <p className="mt-2 text-[13px]" style={{ color: primary }}>
-        {owner.mentionPatterns.join('  ')}
+        {formatMentionPreview(owner.mentionPatterns, 2)}
       </p>
     </section>
   );
@@ -117,23 +133,39 @@ export function HubMemberOverviewCard({
 }) {
   const status = getStatusBadge(cat);
   const title = [cat.breedDisplayName ?? cat.displayName, cat.nickname].filter(Boolean).join(' · ');
-  const subtitleParts = [cat.id];
-  if (cat.roster?.lead) subtitleParts.push('Lead');
-  if (cat.source === 'runtime') subtitleParts.push('动态成员');
 
   return (
     <section
-      className="rounded-[20px] px-[18px] py-[18px] shadow-sm"
+      role={onEdit ? 'button' : undefined}
+      tabIndex={onEdit ? 0 : undefined}
+      onClick={() => onEdit?.(cat)}
+      onKeyDown={(event) => {
+        if (!onEdit) return;
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onEdit(cat);
+        }
+      }}
+      className="rounded-[20px] px-[18px] py-[18px] shadow-sm transition hover:shadow-md"
       style={{ backgroundColor: '#FFFDFC', border: `1px solid ${cat.source === 'runtime' ? '#D9C7EA' : '#F1E7DF'}` }}
     >
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="text-[17px] font-bold text-[#2D2118]">{title}</h3>
-          <p className="mt-1 text-xs text-[#8A776B]">{subtitleParts.join(' · ')}</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-[17px] font-bold text-[#2D2118]">{title}</h3>
+            {cat.source === 'runtime' ? (
+              <span className="rounded-full bg-[#F3E8FF] px-2 py-0.5 text-[11px] font-semibold text-[#9D7BC7]">
+                动态创建
+              </span>
+            ) : null}
+          </div>
         </div>
         <button
           type="button"
-          onClick={() => onToggleAvailability?.(cat)}
+          onClick={(event) => {
+            event.stopPropagation();
+            onToggleAvailability?.(cat);
+          }}
           disabled={!onToggleAvailability || togglingAvailability}
           aria-pressed={status.enabled}
           className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition ${status.className} disabled:cursor-default`}
@@ -144,19 +176,7 @@ export function HubMemberOverviewCard({
 
       <p className="mt-2.5 text-[13px] text-[#8A776B]">{getMetaSummary(cat, configCat)}</p>
 
-      <p className="mt-2 text-[13px] text-[#9D7BC7]">{cat.mentionPatterns.join('  ')}</p>
-
-      {onEdit ? (
-        <div className="mt-3 flex justify-end">
-          <button
-            type="button"
-            onClick={() => onEdit(cat)}
-            className="rounded-lg bg-amber-50 px-2.5 py-1 text-[11px] font-medium text-amber-700 transition-colors hover:bg-amber-100"
-          >
-            编辑成员
-          </button>
-        </div>
-      ) : null}
+      <p className="mt-2 text-[13px] text-[#9D7BC7]">{formatMentionPreview(cat.mentionPatterns)}</p>
     </section>
   );
 }

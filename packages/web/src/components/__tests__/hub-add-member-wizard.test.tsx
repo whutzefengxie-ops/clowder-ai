@@ -191,6 +191,7 @@ describe('HubAddMemberWizard', () => {
     expect(container.textContent).toContain('Codex (OAuth)');
     expect(container.textContent).toContain('Codex Sponsor');
     expect(container.textContent).toContain('Claude Sponsor');
+    expect(container.textContent).toContain('OpenCode/Dare → 内置 client-auth provider + 任意 API Key provider');
 
     await click(queryButton(container, 'Claude Sponsor'));
     expect(container.textContent).toContain('claude-opus-4-6');

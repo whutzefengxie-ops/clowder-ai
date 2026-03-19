@@ -114,7 +114,6 @@ describe('CatOverviewTab', () => {
     expect(html).toContain('Co-worker');
     expect(html).toContain('🔒 Owner');
     expect(html).toContain('#E29578');
-    expect(html).toContain('>编辑<');
     expect(html).toContain('/avatars/owner-custom.png');
     expect(html.indexOf('Co-worker')).toBeLessThan(html.indexOf('布偶猫 · 宪宪'));
     expect(html).toContain('全部');
@@ -125,16 +124,15 @@ describe('CatOverviewTab', () => {
     expect(html).toContain('布偶猫 · 宪宪');
     expect(html).toContain('缅因猫 · 砚砚');
     expect(html).toContain('孟加拉猫 · 阿吉');
-    expect(html).toContain('Anthropic · claude-opus-4-5-20250214 · OAuth 订阅');
+    expect(html).toContain('Claude · claude-opus-4-5-20250214 · OAuth 订阅');
     expect(html).toContain('OpenAI · codex-2025-03 · Name1 (API Key)');
     expect(html).toContain('已启用');
     expect(html).toContain('@布偶猫');
-    expect(html).toContain('npx antigravity --bridge');
+    expect(html).toContain('只能编辑，不能新增或删除');
+    expect(html).toContain('点击任意卡片进入成员配置');
     expect(html).toContain('gemini-bridge');
-    expect(html).toContain('编辑成员');
     expect(html).toContain('添加成员');
     expect(html).not.toContain('Owner 信息独立维护');
-    expect(html).not.toContain('只能编辑，不能新增或删除');
     expect(html).not.toContain('Locked');
     expect(html).not.toContain('border-dashed');
     expect(html).not.toContain('md:grid-cols-2');
@@ -145,6 +143,10 @@ describe('CatOverviewTab', () => {
     expect(html).not.toContain('150k tokens');
     expect(html).not.toContain('原生 (--mcp-config)');
     expect(html).not.toContain('HTTP 回调注入');
+    expect(html).not.toContain('>编辑<');
+    expect(html).not.toContain('编辑成员');
+    expect(html).not.toContain('Lead');
+    expect(html).not.toContain('npx antigravity --bridge');
   });
 });
 

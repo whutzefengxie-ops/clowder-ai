@@ -1249,10 +1249,10 @@ describe('HubCatEditor', () => {
     expect(container.textContent).toContain('Codex Sandbox 🏷️');
     expect(container.textContent).toContain('Codex Approval 🏷️');
     expect(container.textContent).toContain('Codex Auth Mode 🏷️');
-    expect(container.textContent).toContain('这 3 项是全局运行参数（非成员级）');
-    expect(queryField<HTMLSelectElement>(container, 'select[aria-label^="Codex Sandbox"]').disabled).toBe(true);
-    expect(queryField<HTMLSelectElement>(container, 'select[aria-label^="Codex Approval"]').disabled).toBe(true);
-    expect(queryField<HTMLSelectElement>(container, 'select[aria-label^="Codex Auth Mode"]').disabled).toBe(true);
+    expect(container.textContent).not.toContain('这 3 项是全局运行参数（非成员级）');
+    expect(queryField<HTMLSelectElement>(container, 'select[aria-label^="Codex Sandbox"]').disabled).toBe(false);
+    expect(queryField<HTMLSelectElement>(container, 'select[aria-label^="Codex Approval"]').disabled).toBe(false);
+    expect(queryField<HTMLSelectElement>(container, 'select[aria-label^="Codex Auth Mode"]').disabled).toBe(false);
     expect(container.textContent).toContain('💾 运行时持久化');
     expect(container.textContent).toContain('保存修改');
     expect(container.textContent).not.toContain('删除成员');
@@ -1268,6 +1268,9 @@ describe('HubCatEditor', () => {
     await changeField(queryField(container, 'select[aria-label="Session Chain"]'), 'false', 'change');
     await changeField(queryField(container, 'select[aria-label="Session Strategy"]'), 'handoff', 'change');
     await changeField(queryField(container, 'input[aria-label="Session Warn Threshold"]'), '0.55', 'change');
+    await changeField(queryField(container, 'select[aria-label^="Codex Sandbox"]'), 'danger-full-access', 'change');
+    await changeField(queryField(container, 'select[aria-label^="Codex Approval"]'), 'never', 'change');
+    await changeField(queryField(container, 'select[aria-label^="Codex Auth Mode"]'), 'api_key', 'change');
 
     const saveButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === '保存修改');
     await act(async () => {
@@ -1292,8 +1295,16 @@ describe('HubCatEditor', () => {
     expect(strategyPayload.strategy).toBe('handoff');
     expect(strategyPayload.thresholds.warn).toBe(0.55);
 
-    const codexConfigPatch = mockApiFetch.mock.calls.find(([path, init]) => path === '/api/config' && init?.method === 'PATCH');
-    expect(codexConfigPatch).toBeFalsy();
+    const codexConfigPatches = mockApiFetch.mock.calls.filter(
+      ([path, init]) => path === '/api/config' && init?.method === 'PATCH',
+    );
+    expect(codexConfigPatches).toHaveLength(3);
+    expect(String(codexConfigPatches[0]?.[1]?.body)).toContain('cli.codexSandboxMode');
+    expect(String(codexConfigPatches[0]?.[1]?.body)).toContain('danger-full-access');
+    expect(String(codexConfigPatches[1]?.[1]?.body)).toContain('cli.codexApprovalPolicy');
+    expect(String(codexConfigPatches[1]?.[1]?.body)).toContain('never');
+    expect(String(codexConfigPatches[2]?.[1]?.body)).toContain('codex.execution.authMode');
+    expect(String(codexConfigPatches[2]?.[1]?.body)).toContain('api_key');
   });
 
   it('does not write session-strategy override when strategy fields are unchanged', async () => {
@@ -1474,9 +1485,9 @@ describe('HubCatEditor', () => {
     expect(queryField<HTMLSelectElement>(container, 'select[aria-label^="Codex Sandbox"]').value).toBe('danger-full-access');
     expect(queryField<HTMLSelectElement>(container, 'select[aria-label^="Codex Approval"]').value).toBe('never');
     expect(queryField<HTMLSelectElement>(container, 'select[aria-label^="Codex Auth Mode"]').value).toBe('api_key');
-    expect(queryField<HTMLSelectElement>(container, 'select[aria-label^="Codex Sandbox"]').disabled).toBe(true);
-    expect(queryField<HTMLSelectElement>(container, 'select[aria-label^="Codex Approval"]').disabled).toBe(true);
-    expect(queryField<HTMLSelectElement>(container, 'select[aria-label^="Codex Auth Mode"]').disabled).toBe(true);
+    expect(queryField<HTMLSelectElement>(container, 'select[aria-label^="Codex Sandbox"]').disabled).toBe(false);
+    expect(queryField<HTMLSelectElement>(container, 'select[aria-label^="Codex Approval"]').disabled).toBe(false);
+    expect(queryField<HTMLSelectElement>(container, 'select[aria-label^="Codex Auth Mode"]').disabled).toBe(false);
 
     const removeAliasButton = queryField<HTMLButtonElement>(container, 'button[aria-label="移除 @第二别名"]');
     await act(async () => {
@@ -1485,6 +1496,9 @@ describe('HubCatEditor', () => {
 
     await changeField(queryField(container, 'select[aria-label="Provider"]'), 'codex-sponsor', 'change');
     await changeField(queryField(container, 'select[aria-label="Model"]'), 'gpt-5.4', 'change');
+    await changeField(queryField(container, 'select[aria-label^="Codex Sandbox"]'), 'workspace-write', 'change');
+    await changeField(queryField(container, 'select[aria-label^="Codex Approval"]'), 'on-request', 'change');
+    await changeField(queryField(container, 'select[aria-label^="Codex Auth Mode"]'), 'oauth', 'change');
 
     const saveButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === '保存');
     await act(async () => {
@@ -1496,5 +1510,97 @@ describe('HubCatEditor', () => {
     expect(postCall).toBeTruthy();
     const payload = JSON.parse(String(postCall?.[1]?.body));
     expect(payload.mentionPatterns).toEqual(['@runtime-reviewer']);
+    const codexConfigPatches = mockApiFetch.mock.calls.filter(
+      ([path, init]) => path === '/api/config' && init?.method === 'PATCH',
+    );
+    expect(codexConfigPatches).toHaveLength(3);
+    expect(String(codexConfigPatches[0]?.[1]?.body)).toContain('cli.codexSandboxMode');
+    expect(String(codexConfigPatches[1]?.[1]?.body)).toContain('cli.codexApprovalPolicy');
+    expect(String(codexConfigPatches[2]?.[1]?.body)).toContain('codex.execution.authMode');
+  });
+
+  it('surfaces an error when a Codex runtime PATCH fails', async () => {
+    const onSaved = vi.fn(() => Promise.resolve());
+    const existingCat = {
+      id: 'codex',
+      name: 'codex',
+      displayName: '缅因猫',
+      provider: 'openai',
+      providerProfileId: 'codex-sponsor',
+      defaultModel: 'gpt-5.4',
+      color: { primary: '#5B8C5A', secondary: '#D4E6D3' },
+      mentionPatterns: ['@codex'],
+      avatar: '/avatars/codex.png',
+      roleDescription: 'review',
+      source: 'runtime',
+    } as CatData;
+
+    mockApiFetch.mockImplementation((path: string, init?: RequestInit) => {
+      if (path === '/api/provider-profiles') {
+        return Promise.resolve(
+          jsonResponse({
+            projectPath: '/tmp/project',
+            activeProfileId: 'codex-sponsor',
+            providers: [
+              {
+                id: 'codex-sponsor',
+                provider: 'codex-sponsor',
+                displayName: 'Codex Sponsor',
+                name: 'Codex Sponsor',
+                authType: 'api_key',
+                protocol: 'openai',
+                builtin: false,
+                mode: 'api_key',
+                models: ['gpt-5.4'],
+                hasApiKey: true,
+                createdAt: '2026-03-18T00:00:00.000Z',
+                updatedAt: '2026-03-18T00:00:00.000Z',
+              },
+            ],
+          }),
+        );
+      }
+      if (path === '/api/config/session-strategy') {
+        return Promise.resolve(jsonResponse({ cats: [] }));
+      }
+      if (path === '/api/config' && !init?.method) {
+        return Promise.resolve(
+          jsonResponse({
+            config: {
+              cli: {
+                codexSandboxMode: 'workspace-write',
+                codexApprovalPolicy: 'on-request',
+              },
+              codexExecution: {
+                authMode: 'oauth',
+              },
+            },
+          }),
+        );
+      }
+      if (path === '/api/cats/codex' && init?.method === 'PATCH') {
+        return Promise.resolve(jsonResponse({ cat: { id: 'codex' } }));
+      }
+      if (path === '/api/config' && init?.method === 'PATCH') {
+        return Promise.resolve(jsonResponse({ error: 'Codex PATCH failed' }, 500));
+      }
+      throw new Error(`Unexpected apiFetch path: ${path}`);
+    });
+
+    await act(async () => {
+      root.render(React.createElement(HubCatEditor, { open: true, cat: existingCat, onClose: vi.fn(), onSaved }));
+    });
+    await flushEffects();
+
+    await changeField(queryField(container, 'select[aria-label^="Codex Sandbox"]'), 'danger-full-access', 'change');
+
+    const saveButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === '保存修改');
+    await act(async () => {
+      saveButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushEffects();
+
+    expect(container.textContent).toContain('Codex PATCH failed');
+    expect(onSaved).not.toHaveBeenCalled();
   });
 });

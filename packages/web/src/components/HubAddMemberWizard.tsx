@@ -215,17 +215,23 @@ export function HubAddMemberWizard({ open, onClose, onComplete }: HubAddMemberWi
             ) : loadingProfiles ? (
               <p className="text-sm text-[#8A776B]">账号配置加载中...</p>
             ) : availableProfiles.length > 0 ? (
-              <div className="grid grid-cols-2 gap-3">
-                {availableProfiles.map((profile) => (
-                  <ChoiceButton
-                    key={profile.id}
-                    label={profile.displayName}
-                    subtitle={profileSubtitle(profile)}
-                    selected={selectedProfileId === profile.id}
-                    onClick={() => handleProviderSelect(profile.id)}
-                  />
-                ))}
-              </div>
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  {availableProfiles.map((profile) => (
+                    <ChoiceButton
+                      key={profile.id}
+                      label={profile.displayName}
+                      subtitle={profileSubtitle(profile)}
+                      selected={selectedProfileId === profile.id}
+                      onClick={() => handleProviderSelect(profile.id)}
+                    />
+                  ))}
+                </div>
+                <p className="text-xs font-semibold leading-5 text-[#BF360C]">
+                  Claude/Codex/Gemini → 同名订阅 + 任意 API Key provider | OpenCode/Dare → 内置 client-auth provider +
+                  任意 API Key provider | 其他 Client → 仅 API Key | Antigravity → 此步改为配置 CLI 命令
+                </p>
+              </>
             ) : (
               <p className="rounded-2xl border border-[#F1E7DF] bg-white/80 px-4 py-3 text-sm text-[#8A776B]">
                 当前 Client 还没有可绑定的 Provider。

@@ -4,23 +4,24 @@ import { useEffect, useMemo, useState } from 'react';
 import type { CatData } from '@/hooks/useCatData';
 import { apiFetch } from '@/utils/api-client';
 import type { ConfigData } from './config-viewer-types';
-import { AdvancedRuntimeSection } from './hub-cat-editor-advanced';
 import { buildEditorLoadingNote, uploadAvatarAsset } from './hub-cat-editor.client';
-import { PersistenceBanner } from './hub-cat-editor-fields';
 import {
   buildCatPayload,
+  buildCodexConfigPatches,
   buildStrategyPayload,
+  type CodexRuntimeSettings,
   filterProfiles,
+  type HubCatEditorDraft,
+  type HubCatEditorFormState,
   initialState,
+  type StrategyFormState,
   toCodexRuntimeSettings,
   toStrategyForm,
-  type HubCatEditorDraft,
-  type CodexRuntimeSettings,
-  type HubCatEditorFormState,
-  type StrategyFormState,
 } from './hub-cat-editor.model';
-import type { ProfileItem, ProviderProfilesResponse } from './hub-provider-profiles.types';
 import { AccountSection, IdentitySection, RoutingSection } from './hub-cat-editor.sections';
+import { AdvancedRuntimeSection } from './hub-cat-editor-advanced';
+import { PersistenceBanner } from './hub-cat-editor-fields';
+import type { ProfileItem, ProviderProfilesResponse } from './hub-provider-profiles.types';
 import type { CatStrategyEntry } from './hub-strategy-types';
 
 interface HubCatEditorProps {
@@ -45,9 +46,13 @@ export function HubCatEditor({ cat, draft, open, onClose, onSaved }: HubCatEdito
   const [strategyForm, setStrategyForm] = useState<StrategyFormState | null>(null);
   const [strategyBaseline, setStrategyBaseline] = useState<StrategyFormState | null>(null);
   const [codexSettings, setCodexSettings] = useState<CodexRuntimeSettings | null>(null);
+  const [codexSettingsBaseline, setCodexSettingsBaseline] = useState<CodexRuntimeSettings | null>(null);
 
   const availableProfiles = useMemo(() => filterProfiles(form.client, profiles), [form.client, profiles]);
-  const selectedProfile = useMemo(() => availableProfiles.find((profile) => profile.id === form.providerProfileId) ?? null, [availableProfiles, form.providerProfileId]);
+  const selectedProfile = useMemo(
+    () => availableProfiles.find((profile) => profile.id === form.providerProfileId) ?? null,
+    [availableProfiles, form.providerProfileId],
+  );
   const showCodexSettings = form.client === 'openai';
   const requiresProviderBinding = form.client === 'dare' || form.client === 'opencode';
   const saveBlockedByProfileBinding =
@@ -59,6 +64,7 @@ export function HubCatEditor({ cat, draft, open, onClose, onSaved }: HubCatEdito
     setError(null);
     setStrategyError(null);
     setCodexSettingsError(null);
+    setCodexSettingsBaseline(null);
   }, [open, cat, draft]);
 
   useEffect(() => {
@@ -121,6 +127,7 @@ export function HubCatEditor({ cat, draft, open, onClose, onSaved }: HubCatEdito
   useEffect(() => {
     if (!open || !showCodexSettings) {
       setCodexSettings(null);
+      setCodexSettingsBaseline(null);
       setLoadingCodexSettings(false);
       return;
     }
@@ -136,10 +143,13 @@ export function HubCatEditor({ cat, draft, open, onClose, onSaved }: HubCatEdito
         if (cancelled) return;
         const next = toCodexRuntimeSettings(body.config);
         setCodexSettings(next);
+        setCodexSettingsBaseline(next);
       })
       .catch((err) => {
         if (!cancelled) {
-          setCodexSettings((prev) => prev ?? toCodexRuntimeSettings());
+          const fallback = toCodexRuntimeSettings();
+          setCodexSettings((prev) => prev ?? fallback);
+          setCodexSettingsBaseline((prev) => prev ?? fallback);
           setCodexSettingsError(err instanceof Error ? err.message : 'Codex 运行参数加载失败');
         }
       })
@@ -192,7 +202,11 @@ export function HubCatEditor({ cat, draft, open, onClose, onSaved }: HubCatEdito
     setError(null);
     try {
       patchForm({ avatar: await uploadAvatarAsset(file) });
-    } catch (err) { setError(err instanceof Error ? err.message : '头像上传失败'); } finally { setUploadingAvatar(false); }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '头像上传失败');
+    } finally {
+      setUploadingAvatar(false);
+    }
   };
 
   const handleSave = async () => {
@@ -231,6 +245,22 @@ export function HubCatEditor({ cat, draft, open, onClose, onSaved }: HubCatEdito
         }
       }
 
+      if (showCodexSettings && codexSettings) {
+        const codexPatches = buildCodexConfigPatches(codexSettings, codexSettingsBaseline ?? toCodexRuntimeSettings());
+        for (const patch of codexPatches) {
+          const configRes = await apiFetch('/api/config', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(patch),
+          });
+          if (!configRes.ok) {
+            const payload = (await configRes.json().catch(() => ({}))) as Record<string, unknown>;
+            setError((payload.error as string) ?? `Codex 运行参数保存失败 (${configRes.status})`);
+            return;
+          }
+        }
+      }
+
       await onSaved();
       onClose();
     } catch (err) {
@@ -263,26 +293,44 @@ export function HubCatEditor({ cat, draft, open, onClose, onSaved }: HubCatEdito
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 px-4" onClick={onClose}>
       <div
-        className="max-h-[88vh] w-full max-w-3xl overflow-y-auto rounded-[32px] border border-[#F0DDCD] bg-[#FFF8F2] shadow-2xl"
+        className="max-h-[88vh] w-full max-w-[560px] overflow-y-auto rounded-[32px] border border-[#F0DDCD] bg-[#FFF8F2] shadow-2xl"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-start justify-between border-b border-[#F0DDCD] px-7 py-5">
           <div>
-            <p className="text-xs font-semibold text-[#77A777]">成员协作 &gt; 总览 &gt; {cat ? '编辑成员' : '添加成员'}</p>
-            <h3 className="mt-2 text-2xl font-bold text-[#2D2118]">{cat ? '成员配置' : '添加成员'}</h3>
-            <p className="mt-1 text-sm text-[#8A776B]">成员配置：身份、认证、路由、高级参数一站到位</p>
+            <p className="text-[13px] font-semibold text-[#77A777]">
+              成员协作 &gt; 总览 &gt; {cat ? '编辑成员' : '添加成员'}
+            </p>
+            <p className="mt-2 text-[15px] leading-6 text-[#8A776B]">
+              默认值继承 cat-template；预设成员与动态成员走同一套表单。
+            </p>
           </div>
           <div className="flex items-center gap-2">
             {cat && cat.source === 'runtime' ? (
-              <button type="button" onClick={handleDelete} disabled={saving} className="rounded-full bg-red-50 p-2 text-red-600 transition hover:bg-red-100 disabled:opacity-50" aria-label="删除成员">
-                <svg viewBox="0 0 16 16" className="h-4 w-4 fill-none stroke-current" aria-hidden="true"><path d="M3.5 4.5h9m-7.5 0V3.25h5V4.5m-5.5 0 .5 8h5l.5-8m-4 2v4m2-4v4" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              <button
+                type="button"
+                onClick={handleDelete}
+                disabled={saving}
+                className="rounded-full bg-red-50 p-2 text-red-600 transition hover:bg-red-100 disabled:opacity-50"
+                aria-label="删除成员"
+              >
+                <svg viewBox="0 0 16 16" className="h-4 w-4 fill-none stroke-current" aria-hidden="true">
+                  <path
+                    d="M3.5 4.5h9m-7.5 0V3.25h5V4.5m-5.5 0 .5 8h5l.5-8m-4 2v4m2-4v4"
+                    strokeWidth="1.25"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
               </button>
             ) : null}
-            <button type="button" onClick={onClose} className="text-2xl leading-none text-[#B59A88]" aria-label="关闭">×</button>
+            <button type="button" onClick={onClose} className="text-2xl leading-none text-[#B59A88]" aria-label="关闭">
+              ×
+            </button>
           </div>
         </div>
 
-        <div className="space-y-5 px-7 py-6">
+        <div className="space-y-4 px-7 py-5">
           <IdentitySection
             cat={cat}
             form={form}
@@ -317,12 +365,14 @@ export function HubCatEditor({ cat, draft, open, onClose, onSaved }: HubCatEdito
         </div>
 
         <div className="flex items-center justify-between border-t border-[#F0DDCD] bg-[#FFF3EA] px-7 py-4">
-          <div className="text-xs text-[#8A776B]">{buildEditorLoadingNote({ loadingProfiles, loadingStrategy, loadingCodexSettings })}</div>
+          <div className="text-xs leading-5 text-[#8A776B]">
+            {buildEditorLoadingNote({ loadingProfiles, loadingStrategy, loadingCodexSettings })}
+          </div>
           <div className="flex gap-2">
             <button
               type="button"
               onClick={onClose}
-              className="rounded-xl bg-white px-4 py-2 text-sm text-[#6A5A50] transition hover:bg-[#F7EEE6]"
+              className="rounded-full bg-[#F7F3F0] px-5 py-2.5 text-sm font-semibold text-[#8A776B] transition hover:bg-[#F7EEE6]"
             >
               取消
             </button>
@@ -330,7 +380,7 @@ export function HubCatEditor({ cat, draft, open, onClose, onSaved }: HubCatEdito
               type="button"
               onClick={handleSave}
               disabled={saving || saveBlockedByProfileBinding}
-              className="rounded-xl bg-[#D49266] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#C88254] disabled:opacity-50"
+              className="rounded-full bg-[#D49266] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#C88254] disabled:opacity-50"
             >
               {saving ? '保存中…' : cat ? '保存修改' : '保存'}
             </button>

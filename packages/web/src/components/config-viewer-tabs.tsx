@@ -43,7 +43,7 @@ export function CatOverviewTab({
   togglingCatId?: string | null;
 }) {
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <HubOverviewToolbar onAddMember={onAddMember} />
       {config.owner ? <HubOwnerOverviewCard owner={config.owner} onEdit={onEditOwner} /> : null}
       <div className="space-y-3">
@@ -58,6 +58,7 @@ export function CatOverviewTab({
           />
         ))}
       </div>
+      <p className="text-[13px] text-[#B59A88]">点击任意卡片进入成员配置 →</p>
       {cats.length === 0 && <p className="text-sm text-gray-400">未找到成员配置数据</p>}
     </div>
   );

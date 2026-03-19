@@ -281,7 +281,7 @@ describe('CatCafeHub provider profiles tab', () => {
     expect(container.textContent).toContain('验证');
   });
 
-  it('keeps API key creation collapsed by default and shows protocol controls on expand', async () => {
+  it('renders API key creation form inline without protocol suggestion copy', async () => {
     mockApiFetch.mockImplementation((path: string) => {
       if (path.startsWith('/api/provider-profiles')) {
         return Promise.resolve(
@@ -363,21 +363,12 @@ describe('CatCafeHub provider profiles tab', () => {
     expect(container.textContent).toContain('+ 新建 API Key 账号');
     expect(container.textContent).not.toContain('协议建议：');
     expect(container.textContent).not.toContain('默认/覆盖模型');
-    expect(container.querySelector('input[placeholder="Base URL"]')).toBeNull();
-    expect(container.querySelector('select[aria-label="Protocol"]')).toBeNull();
+    expect(container.querySelector('input[placeholder="Base URL"]')).toBeTruthy();
+    expect(container.querySelector('select[aria-label="Protocol"]')).toBeTruthy();
+    expect(container.querySelector('input[placeholder="API Key"]')).toBeTruthy();
 
     const profileList = container.querySelector('[aria-label="Provider Profile List"]');
     expect(profileList?.textContent).not.toContain('Antigravity');
-
-    await act(async () => {
-      queryButton(container, '+ 新建 API Key 账号').dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-    await flushEffects();
-
-    expect(container.textContent).toContain('协议建议：');
-    expect(container.querySelector('input[placeholder="Base URL"]')).toBeTruthy();
-    expect(container.querySelector('input[placeholder="API Key"]')).toBeTruthy();
-    expect(container.querySelector('select[aria-label="Protocol"]')).toBeTruthy();
     expect(container.textContent).toContain('可用模型');
   });
 
@@ -422,11 +413,6 @@ describe('CatCafeHub provider profiles tab', () => {
 
     await act(async () => {
       root.render(React.createElement(HubProviderProfilesTab));
-    });
-    await flushEffects();
-
-    await act(async () => {
-      queryButton(container, '+ 新建 API Key 账号').dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     await flushEffects();
 
@@ -548,6 +534,59 @@ describe('CatCafeHub provider profiles tab', () => {
     expect(
       Array.from(container.querySelectorAll('button')).filter((button) => button.textContent?.includes('编辑')),
     ).toHaveLength(1);
+  });
+
+  it('only exposes 测试 on api-key provider cards', async () => {
+    mockApiFetch.mockImplementation((path: string) => {
+      if (path.startsWith('/api/provider-profiles')) {
+        return Promise.resolve(
+          jsonResponse({
+            projectPath: '/tmp/project',
+            activeProfileId: 'claude-oauth',
+            providers: [
+              {
+                id: 'claude-oauth',
+                provider: 'claude-oauth',
+                displayName: 'Claude (OAuth)',
+                name: 'Claude (OAuth)',
+                authType: 'oauth',
+                protocol: 'anthropic',
+                builtin: true,
+                mode: 'subscription',
+                models: ['claude-opus-4-6'],
+                hasApiKey: false,
+                createdAt: '2026-03-18T00:00:00.000Z',
+                updatedAt: '2026-03-18T00:00:00.000Z',
+              },
+              {
+                id: 'codex-sponsor',
+                provider: 'codex-sponsor',
+                displayName: 'Codex Sponsor',
+                name: 'Codex Sponsor',
+                authType: 'api_key',
+                protocol: 'openai',
+                builtin: false,
+                mode: 'api_key',
+                baseUrl: 'https://api.openai-proxy.dev',
+                models: ['gpt-5.4'],
+                hasApiKey: true,
+                createdAt: '2026-03-18T00:00:00.000Z',
+                updatedAt: '2026-03-18T00:00:00.000Z',
+              },
+            ],
+          }),
+        );
+      }
+      throw new Error(`Unexpected apiFetch path: ${path}`);
+    });
+
+    await act(async () => {
+      root.render(React.createElement(HubProviderProfilesTab));
+    });
+    await flushEffects();
+
+    expect(Array.from(container.querySelectorAll('button')).filter((button) => button.textContent?.trim() === '测试')).toHaveLength(1);
+    expect(container.textContent).toContain('Codex Sponsor');
   });
 
   it('renders ragdoll rescue section from the dedicated rescue tab', async () => {

@@ -4778,7 +4778,7 @@
           "fill": "#8A776B",
           "textGrowth": "fixed-width",
           "width": "fill_container",
-          "content": "【实现约束，非 UI 直出】每个账号可添加/删除模型；添加成员时从账号的模型列表中选择。状态 badge 只表示验证结果，不表示激活；secrets 存储沿用 .cat-cafe/ 分离模型。",
+          "content": "每个账号可添加或删除模型；状态 badge 只表示验证结果，不表示当前是否激活。",
           "lineHeight": 1.5,
           "fontFamily": "Inter",
           "fontSize": 14,
@@ -6091,27 +6091,291 @@
           "padding": 18,
           "children": [
             {
-              "type": "text",
-              "id": "5ZpIY",
-              "name": "newT",
-              "fill": "#D49266",
-              "content": "+ 新建 API Key 账号",
-              "fontFamily": "Inter",
-              "fontSize": 16,
-              "fontWeight": "700"
+              "type": "frame",
+              "id": "nHdr1",
+              "name": "newHeader",
+              "width": "fill_container",
+              "justifyContent": "space_between",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "nHdr2",
+                  "name": "newHeaderCopy",
+                  "layout": "vertical",
+                  "gap": 4,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "5ZpIY",
+                      "name": "newT",
+                      "fill": "#D49266",
+                      "content": "+ 新建 API Key 账号",
+                      "fontFamily": "Inter",
+                      "fontSize": 16,
+                      "fontWeight": "700"
+                    },
+                    {
+                      "type": "text",
+                      "id": "mcIbO",
+                      "name": "newD",
+                      "fill": "#8A776B",
+                      "textGrowth": "fixed-width",
+                      "width": 280,
+                      "content": "直接填写显示名、协议、Base URL 和 API Key；创建后会立即出现在上方账号卡片中。",
+                      "lineHeight": 1.5,
+                      "fontFamily": "Inter",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "nHdr3",
+                  "name": "newInferBadge",
+                  "fill": "#FFFFFFCC",
+                  "cornerRadius": 999,
+                  "padding": [
+                    6,
+                    10
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "nHdr4",
+                      "name": "newInferText",
+                      "fill": "#B07A4C",
+                      "content": "当前推断：OpenAI-Compatible",
+                      "fontFamily": "Inter",
+                      "fontSize": 11,
+                      "fontWeight": "600"
+                    }
+                  ]
+                }
+              ]
             },
             {
-              "type": "text",
-              "id": "mcIbO",
-              "name": "newD",
-              "fill": "#8A776B",
-              "textGrowth": "fixed-width",
+              "type": "frame",
+              "id": "nFrm1",
+              "name": "newForm",
               "width": "fill_container",
-              "content": "【实现约束，非 UI 直出】仅支持新建 API Key 类型的账号配置。Claude / Codex / Gemini / OpenCode / Dare 五项内置账号不可新增或删除，也不支持编辑账号信息；它们只支持测试和管理模型列表（添加/删除模型）。OpenCode / Dare 的 API Key 在各自 client 本地配置，不在这里保存；它们统一视作 client-auth；状态 badge 只表示验证结果，不表示激活。",
-              "lineHeight": 1.5,
-              "fontFamily": "Inter",
-              "fontSize": 13,
-              "fontWeight": "normal"
+              "layout": "vertical",
+              "gap": 12,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "nFrm2",
+                  "name": "newFormRow1",
+                  "width": "fill_container",
+                  "gap": 8,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "nInp1",
+                      "name": "newDisplayName",
+                      "width": "fill_container",
+                      "fill": "#FFFFFF",
+                      "cornerRadius": 10,
+                      "stroke": {
+                        "align": "inside",
+                        "thickness": 1,
+                        "fill": "#E8DCCF"
+                      },
+                      "padding": [
+                        10,
+                        12
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "nTxt1",
+                          "name": "newDisplayNameText",
+                          "fill": "#B59A88",
+                          "content": "账号显示名（例如 my-glm）",
+                          "fontFamily": "Inter",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "nInp2",
+                      "name": "newProtocol",
+                      "width": 180,
+                      "fill": "#FFFFFF",
+                      "cornerRadius": 10,
+                      "stroke": {
+                        "align": "inside",
+                        "thickness": 1,
+                        "fill": "#E8DCCF"
+                      },
+                      "padding": [
+                        10,
+                        12
+                      ],
+                      "justifyContent": "space_between",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "nTxt2",
+                          "name": "newProtocolText",
+                          "fill": "#5C4B42",
+                          "content": "OpenAI-Compatible",
+                          "fontFamily": "Inter",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "nTxt3",
+                          "name": "newProtocolCaret",
+                          "fill": "#8A776B",
+                          "content": "▾",
+                          "fontFamily": "Inter",
+                          "fontSize": 13,
+                          "fontWeight": "600"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "nInp3",
+                  "name": "newBaseUrl",
+                  "width": "fill_container",
+                  "fill": "#FFFFFF",
+                  "cornerRadius": 10,
+                  "stroke": {
+                    "align": "inside",
+                    "thickness": 1,
+                    "fill": "#E8DCCF"
+                  },
+                  "padding": [
+                    10,
+                    12
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "nTxt4",
+                      "name": "newBaseUrlText",
+                      "fill": "#B59A88",
+                      "content": "Base URL",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "nInp4",
+                  "name": "newApiKey",
+                  "width": "fill_container",
+                  "fill": "#FFFFFF",
+                  "cornerRadius": 10,
+                  "stroke": {
+                    "align": "inside",
+                    "thickness": 1,
+                    "fill": "#E8DCCF"
+                  },
+                  "padding": [
+                    10,
+                    12
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "nTxt5",
+                      "name": "newApiKeyText",
+                      "fill": "#B59A88",
+                      "content": "API Key",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "nMdl1",
+                  "name": "newModels",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 8,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "nMdl2",
+                      "name": "newModelsTitle",
+                      "fill": "#5C4B42",
+                      "content": "可用模型",
+                      "fontFamily": "Inter",
+                      "fontSize": 14,
+                      "fontWeight": "500"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "nMdl3",
+                      "name": "newModelsChips",
+                      "width": "fill_container",
+                      "gap": 6,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "nMdl4",
+                          "name": "newModelsAdd",
+                          "fill": "#F3E8FF",
+                          "cornerRadius": 999,
+                          "padding": [
+                            4,
+                            10
+                          ],
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "nMdl5",
+                              "name": "newModelsAddText",
+                              "fill": "#7B61B8",
+                              "content": "+ 添加",
+                              "fontFamily": "Inter",
+                              "fontSize": 11,
+                              "fontWeight": "600"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "nBtn1",
+                  "name": "newCreateButton",
+                  "fill": "#D49266",
+                  "cornerRadius": 8,
+                  "padding": [
+                    8,
+                    14
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "nBtn2",
+                      "name": "newCreateButtonText",
+                      "fill": "#FFFFFF",
+                      "content": "创建",
+                      "fontFamily": "Inter",
+                      "fontSize": 12,
+                      "fontWeight": "600"
+                    }
+                  ]
+                }
+              ]
             }
           ]
         },

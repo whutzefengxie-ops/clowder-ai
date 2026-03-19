@@ -9,7 +9,7 @@ export const TEMPLATE_ANTIGRAVITY_MODELS = ['gemini-3.1-pro', 'claude-opus-4-6']
 
 function cardClass(selected: boolean) {
   return selected
-    ? 'border-[#D49266] bg-[#FFF2E7] text-[#A85E2C] shadow-sm'
+    ? 'border-[#D49266] bg-[#F7EEE6] text-[#D49266] shadow-sm'
     : 'border-[#E8DCCF] bg-[#F7F3F0] text-[#5C4B42] hover:border-[#D9C0A8]';
 }
 
@@ -32,10 +32,10 @@ export function ChoiceButton({
     <button
       type="button"
       onClick={onClick}
-      className={`min-h-[74px] w-full rounded-2xl border px-4 py-3 text-left transition ${cardClass(selected)}`}
+      className={`min-h-[74px] w-full rounded-[14px] border px-4 py-3 text-left transition ${cardClass(selected)}`}
     >
-      <div className="font-semibold">{label}</div>
-      {subtitle ? <div className="mt-1 line-clamp-2 text-[11px] leading-5 opacity-80">{subtitle}</div> : null}
+      <div className="font-bold">{label}</div>
+      {subtitle ? <div className="mt-1 line-clamp-2 text-[12px] leading-5 opacity-80">{subtitle}</div> : null}
     </button>
   );
 }
@@ -53,7 +53,31 @@ export function PillChoiceButton({
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${cardClass(selected)}`}
+      className={`rounded-[12px] border px-4 py-[10px] text-sm font-semibold transition ${cardClass(selected)}`}
+    >
+      {label}
+    </button>
+  );
+}
+
+export function ModelPillButton({
+  label,
+  selected,
+  onClick,
+}: {
+  label: string;
+  selected: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-[10px] border px-[14px] py-2 text-[13px] font-semibold transition ${
+        selected
+          ? 'border-[#9D7BC7] bg-[#F3E8FF] text-[#9D7BC7] shadow-sm'
+          : 'border-[#E8DCCF] bg-[#F7F3F0] text-[#8A776B] hover:border-[#D9C0A8]'
+      }`}
     >
       {label}
     </button>

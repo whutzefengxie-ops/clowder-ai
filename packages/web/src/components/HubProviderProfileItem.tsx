@@ -111,7 +111,7 @@ export function HubProviderProfileItem({
     [onSave, profile.authType, profile.baseUrl, profile.displayName, profile.id],
   );
 
-  const showTestButton = true;
+  const showTestButton = profile.authType === 'api_key';
   const statusBadge = verificationBadge(testResult);
 
   if (editing) {

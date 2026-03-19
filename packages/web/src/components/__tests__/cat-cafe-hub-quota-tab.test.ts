@@ -71,10 +71,10 @@ describe('CatCafeHub quota tab', () => {
     expect(html).toContain('配额看板');
   });
 
-  it('renders quota board + routing as a unified panel', () => {
+  it('renders quota board only, without the extra routing policy panel', () => {
     const html = renderToStaticMarkup(React.createElement(HubRoutingPolicyTab));
     expect(html).toContain('配额看板');
-    expect(html).toContain('路由策略（配额约束子模块）');
+    expect(html).not.toContain('路由策略（配额约束子模块）');
     expect(html).toContain('@codex');
   });
 });
