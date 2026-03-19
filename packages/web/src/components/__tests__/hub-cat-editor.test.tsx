@@ -9,7 +9,13 @@ vi.mock('@/utils/api-client', () => ({
 }));
 
 import { HubCatEditor } from '@/components/HubCatEditor';
-import { buildCatPayload, filterProfiles, type HubCatEditorFormState, splitCommandArgs } from '@/components/hub-cat-editor.model';
+import {
+  buildCatPayload,
+  DEFAULT_ANTIGRAVITY_COMMAND_ARGS,
+  filterProfiles,
+  type HubCatEditorFormState,
+  splitCommandArgs,
+} from '@/components/hub-cat-editor.model';
 
 const mockApiFetch = vi.mocked(apiFetch);
 
@@ -153,6 +159,36 @@ describe('HubCatEditor', () => {
 
     const payload = buildCatPayload(baseForm, existingCat) as Record<string, unknown>;
     expect(payload.mcpSupport).toBe(true);
+  });
+
+  it('buildCatPayload seeds default Antigravity command args when the field is still blank', () => {
+    const form: HubCatEditorFormState = {
+      catId: 'runtime-bridge',
+      name: '桥接猫',
+      displayName: '桥接猫',
+      nickname: '',
+      avatar: '/avatars/bridge.png',
+      colorPrimary: '#16a34a',
+      colorSecondary: '#bbf7d0',
+      mentionPatterns: '@runtime-bridge',
+      roleDescription: 'bridge',
+      personality: 'steady',
+      teamStrengths: '',
+      caution: '',
+      strengths: '',
+      client: 'antigravity',
+      providerProfileId: '',
+      defaultModel: 'gemini-bridge',
+      commandArgs: '',
+      sessionChain: 'true',
+      maxPromptTokens: '',
+      maxContextTokens: '',
+      maxMessages: '',
+      maxContentLengthPerMsg: '',
+    };
+
+    const payload = buildCatPayload(form, null) as Record<string, unknown>;
+    expect(payload.commandArgs).toEqual(splitCommandArgs(DEFAULT_ANTIGRAVITY_COMMAND_ARGS));
   });
 
   it('splitCommandArgs preserves quoted segments', () => {

@@ -404,6 +404,7 @@ export function buildCatPayload(form: HubCatEditorFormState, cat?: CatData | nul
   };
 
   if (form.client === 'antigravity') {
+    const commandArgsSource = trimText(form.commandArgs) || DEFAULT_ANTIGRAVITY_COMMAND_ARGS;
     return {
       ...common,
       ...(cat ? { name: updateName } : { catId: trimText(form.catId), name: createName }),
@@ -411,7 +412,7 @@ export function buildCatPayload(form: HubCatEditorFormState, cat?: CatData | nul
       ...accountRefPatch,
       ...mcpSupportPatch,
       defaultModel: trimText(form.defaultModel),
-      commandArgs: splitCommandArgs(form.commandArgs),
+      commandArgs: splitCommandArgs(commandArgsSource),
     };
   }
 
