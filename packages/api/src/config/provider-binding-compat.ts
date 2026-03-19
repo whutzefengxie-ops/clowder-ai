@@ -38,6 +38,11 @@ export function validateRuntimeProviderBinding(
   profile: RuntimeProviderProfile,
   defaultModel?: string | null,
 ): string | null {
+  const expectedClient = resolveBuiltinClientForProvider(provider);
+  if (expectedClient && profile.kind === 'builtin' && profile.client && profile.client !== expectedClient) {
+    return `bound provider profile "${profile.id}" is incompatible with client "${provider}"`;
+  }
+
   const expectedProtocol = resolveExpectedProtocolForProvider(provider);
   if (expectedProtocol && profile.protocol && profile.protocol !== expectedProtocol) {
     return `bound provider profile "${profile.id}" is incompatible with client "${provider}"`;

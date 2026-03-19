@@ -10,7 +10,7 @@ import type {
   ContextBudget,
   OwnerConfig,
 } from '@cat-cafe/shared';
-import { createCatId } from '@cat-cafe/shared';
+import { CAT_CONFIGS, createCatId } from '@cat-cafe/shared';
 import { clearBudgetCache } from './cat-budgets.js';
 import { _resetCachedConfig, loadCatConfig, toAllCatConfigs } from './cat-config-loader.js';
 import { clearVoiceCache } from './cat-voices.js';
@@ -124,7 +124,7 @@ function isSeedCat(projectRoot: string, catId: string): boolean {
     const seedCats = toAllCatConfigs(loadCatConfig(templatePath));
     return Object.prototype.hasOwnProperty.call(seedCats, catId);
   } catch {
-    return false;
+    return Object.prototype.hasOwnProperty.call(CAT_CONFIGS, catId);
   }
 }
 

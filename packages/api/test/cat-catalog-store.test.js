@@ -592,4 +592,26 @@ describe('cat-catalog-store', () => {
     );
     assert.ok(catalog.roster?.opus, 'existing v2 metadata must stay intact');
   });
+
+  it('blocks seed deletion even when CAT_TEMPLATE_PATH points to an unreadable in-project file', () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), 'cat-catalog-store-stale-template-'));
+    const templatePath = join(projectRoot, 'cat-template.json');
+    writeFileSync(templatePath, JSON.stringify(validConfig(), null, 2));
+    bootstrapCatCatalog(projectRoot, templatePath);
+
+    const previousTemplatePath = process.env.CAT_TEMPLATE_PATH;
+    process.env.CAT_TEMPLATE_PATH = join(projectRoot, 'missing-template.json');
+    try {
+      assert.throws(() => deleteRuntimeCat(projectRoot, 'opus'), /cannot delete seed cat/i);
+    } finally {
+      if (previousTemplatePath === undefined) delete process.env.CAT_TEMPLATE_PATH;
+      else process.env.CAT_TEMPLATE_PATH = previousTemplatePath;
+    }
+
+    const catalog = readRuntimeCatCatalog(projectRoot);
+    assert.equal(
+      catalog.breeds.some((breed) => breed.catId === 'opus'),
+      true,
+    );
+  });
 });

@@ -471,6 +471,59 @@ describe('cats routes runtime CRUD', { concurrency: false }, () => {
     assert.match(createBody.error, /incompatible with client "opencode"/i);
   });
 
+  it('POST /api/cats rejects builtin bindings from the wrong client family even when protocol matches', async () => {
+    const projectRoot = createProjectRoot();
+    process.env.CAT_TEMPLATE_PATH = join(projectRoot, 'cat-template.json');
+
+    const Fastify = (await import('fastify')).default;
+    const { catsRoutes } = await import('../dist/routes/cats.js');
+
+    const app = Fastify();
+    await app.register(catsRoutes);
+
+    const cases = [
+      {
+        catId: 'runtime-dare-wrong-builtin',
+        client: 'dare',
+        providerProfileId: 'codex',
+        defaultModel: 'gpt-5.4',
+      },
+      {
+        catId: 'runtime-opencode-wrong-builtin',
+        client: 'opencode',
+        providerProfileId: 'claude',
+        defaultModel: 'claude-sonnet-4-6',
+      },
+    ];
+
+    for (const spec of cases) {
+      const createRes = await app.inject({
+        method: 'POST',
+        url: '/api/cats',
+        headers: {
+          'content-type': 'application/json',
+          'x-cat-cafe-user': 'codex',
+        },
+        body: JSON.stringify({
+          catId: spec.catId,
+          name: spec.catId,
+          displayName: spec.catId,
+          avatar: '/avatars/runtime.png',
+          color: { primary: '#0f172a', secondary: '#e2e8f0' },
+          mentionPatterns: [`@${spec.catId}`],
+          roleDescription: '审查',
+          client: spec.client,
+          providerProfileId: spec.providerProfileId,
+          defaultModel: spec.defaultModel,
+        }),
+      });
+
+      assert.equal(createRes.statusCode, 400);
+      const createBody = JSON.parse(createRes.body);
+      assert.match(createBody.error, new RegExp(`incompatible with client "${spec.client}"`, 'i'));
+    }
+  });
+
   it('PATCH /api/cats/:id rejects models that are not available on the bound provider profile', async () => {
     const projectRoot = createProjectRoot();
     process.env.CAT_TEMPLATE_PATH = join(projectRoot, 'cat-template.json');
