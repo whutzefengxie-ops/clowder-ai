@@ -63,14 +63,16 @@ triggers:
 
 **铁律**：同一子任务的实现和 review 不能是同一只猫（no self-review）。
 
-在 thread 里发任务描述 + 分工提议：
+在 thread 里发任务描述 + 分工提议。**必须包含主 thread ID**，这是子 thread 识别归属的唯一可靠来源：
 
 ```
 → cat_cafe_cross_post_message(
-    threadId: "<thread_id>",
-    content: "## 任务描述\n...\n## 分工提议\n...\n@codex 请确认"
+    threadId: "<sub_thread_id>",
+    content: "## 主 Thread\nID: <main_thread_id>\n标题: <main_thread_title>\n\n## 任务描述\n...\n## 分工提议\n...\n\n⚠️ 完成后请回报主 thread，不要回报其他 thread\n@codex 请确认"
   )
 ```
+
+**铁律**：每个子 thread 的**第一条消息**必须包含 `## 主 Thread` header，后续猫进入子 thread 时可据此定位汇报目标。
 
 ### Step 4: 并行执行 — Worktree 隔离
 
@@ -84,21 +86,49 @@ thread 内的执行遵循已有 skill：
 
 **加速手段**：thread 内可用 `parallel-execution` 的 subagent 模式加速实现，但 review 必须由其他猫完成。
 
-### Step 5: 汇聚 — 报告回主 thread
+### Step 5: 汇聚 — 确认门禁 + 串行推进
 
-**铁律：子 thread 达到里程碑时，必须立刻通知主 thread。**
+**铁律：子 thread 达到里程碑时，必须立刻通知主 thread 并等待确认。**
 
-主 thread 不追踪过程，只接收结果。汇报格式：
+#### 5a: 待 commit — 通知主 thread 等确认
+
+子 thread 完成开发 + 自检后，**不要直接 commit**，而是：
+
+```
+→ cat_cafe_cross_post_message(
+    threadId: "<main_thread_id>",     ← 从第一条消息的 ## 主 Thread 获取
+    content: "## [子任务名] — 待确认 commit\n\n| 子项 | 状态 | 关键产出 |\n|------|------|---------|\n| ... | ✅ | 一句话 |\n\n验证：测试 X/X pass, lint 0 errors\n请确认是否 commit + push"
+  )
+```
+
+**等主 thread 确认后再 commit。** 主 thread 可能会要求修改后再 commit。
+
+#### 5b: 确认后 — 串行触发
+
+如果有串行依赖（B 依赖 A），主 thread 确认 A commit 后：
+1. A commit + push（或 merge 到 main）
+2. 主 thread 通知 B 的子 thread："A 已合入，可以开始"
+3. B 从 main 拉取 A 的改动后开工
+
+```
+A 完成 → 通知主 thread → 确认 commit → A merge
+                                         ↓
+                              主 thread 通知 B → B 拉 main → B 开工
+```
+
+#### 5c: 全部完成 — 汇总报告
+
+所有子 thread 完成后，主 thread 汇总：
 
 ```markdown
-## [子任务名] — 完成 / 阻塞 / 待确认
+## 编排汇总
 
-| 子项 | 状态 | 关键产出 |
-|------|------|---------|
-| ... | ✅/🚧/❌ | 一句话 |
+| 子 Thread | 任务 | 状态 | PR |
+|-----------|------|------|----|
+| thread-xxx | ... | ✅ merged | #xx |
+| thread-yyy | ... | ✅ merged | #yy |
 
-验证：[测试结果 / lint 结果]
-下一步需要：[team lead 确认 commit / 无需动作 / 解除阻塞]
+下一步：[无 / 集成测试 / 部署]
 ```
 
 **不要让 team lead 自己去子 thread 查进度。**
@@ -115,12 +145,13 @@ thread 内的执行遵循已有 skill：
 ## Quick Reference
 
 ```
-拆解 → 建 thread → 选猫 → 并行执行 → 汇聚
+拆解 → 建 thread → 选猫(含主 Thread ID) → 并行执行 → 待 commit 通知 → 确认 → 串行触发 → 汇总
 
-主 thread = 指挥部（拆 + 收）
-子 thread = 战场（做 + review）
+主 thread = 指挥部（拆 + 确认 + 收）
+子 thread = 战场（做 + review + 等确认）
+第一条消息 = 必须含 ## 主 Thread（ID + 标题）
 Worktree = 隔离（不冲突）
-汇报 = 及时（不让 team lead 追）
+汇报 = 及时 + 等确认（不让 team lead 追，也不越权 commit）
 ```
 
 ## Common Mistakes
@@ -133,6 +164,8 @@ Worktree = 隔离（不冲突）
 | 只拉同家族猫 | 缺少多元视角 | 按任务性质跨家族选猫 |
 | 拆得太细（1 个小文件 = 1 个 thread） | 编排开销 > 收益 | 相关小任务合并到同一 thread |
 | 忘记在子 thread 发任务描述 | 被拉的猫不知道干啥 | 建 thread 后立刻发 scope + 分工 |
+| 子 thread 第一条消息没写主 Thread ID | 猫汇报到错误的 thread | 第一条消息必须含 `## 主 Thread` header |
+| 子 thread 完成直接 commit 不等确认 | team lead 失去控制权 | 待 commit 时通知主 thread 等确认 |
 
 ## 和其他 Skill 的区别
 
