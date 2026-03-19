@@ -192,6 +192,24 @@ function legacyProfileClient(profile: ProfileItem): BuiltinAccountClient | undef
   }
 }
 
+function expectedProtocolForClient(client: BuiltinAccountClient): string | null {
+  switch (client) {
+    case 'anthropic':
+    case 'opencode':
+      return 'anthropic';
+    case 'openai':
+    case 'dare':
+      return 'openai';
+    case 'google':
+      return 'google';
+  }
+}
+
+function isApiKeyProfileCompatible(client: BuiltinAccountClient, profile: ProfileItem): boolean {
+  const expectedProtocol = expectedProtocolForClient(client);
+  return !expectedProtocol || !profile.protocol || profile.protocol === expectedProtocol;
+}
+
 export function builtinAccountIdForClient(client: ClientValue): string | null {
   if (!isBuiltinClient(client)) return null;
   switch (client) {
@@ -213,7 +231,9 @@ export function filterAccounts(client: ClientValue, profiles: ProfileItem[]): Pr
   const builtinProfiles = profiles.filter(
     (profile) => profile.authType !== 'api_key' && legacyProfileClient(profile) === client,
   );
-  const apiKeyProfiles = profiles.filter((profile) => profile.authType === 'api_key');
+  const apiKeyProfiles = profiles.filter(
+    (profile) => profile.authType === 'api_key' && isApiKeyProfileCompatible(client, profile),
+  );
   return [...builtinProfiles, ...apiKeyProfiles.filter((profile) => !builtinProfiles.includes(profile))];
 }
 
