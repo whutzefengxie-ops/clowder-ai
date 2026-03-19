@@ -195,7 +195,8 @@ function Get-RedisServerAuthArgs {
                     "user $username on >$password allkeys allcommands"
                 )
             }
-            Set-Content -Path $AclFilePath -Value $aclLines -Encoding ascii
+            $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+            [System.IO.File]::WriteAllLines($AclFilePath, $aclLines, $utf8NoBom)
             return @("--aclfile", (Quote-WindowsProcessArgument -Value $AclFilePath))
         }
 

@@ -581,7 +581,9 @@ test('Windows startup preserves configured REDIS_URL with DB suffix after Redis 
 
 test('Windows startup passes localhost REDIS_URL auth into redis-server auto-start and authenticated ping', () => {
   assert.match(helpersScript, /function Get-RedisServerAuthArgs/);
-  assert.match(helpersScript, /Set-Content -Path \$AclFilePath -Value \$aclLines -Encoding ascii/);
+  assert.match(helpersScript, /\$utf8NoBom = New-Object System\.Text\.UTF8Encoding\(\$false\)/);
+  assert.match(helpersScript, /\[System\.IO\.File\]::WriteAllLines\(\$AclFilePath, \$aclLines, \$utf8NoBom\)/);
+  assert.doesNotMatch(helpersScript, /Set-Content -Path \$AclFilePath -Value \$aclLines -Encoding ascii/);
   assert.match(startWindowsScript, /\$redisAclFile = Join-Path \$redisLayout\.Data "redis-\$RedisPort\.acl"/);
   assert.match(
     startWindowsScript,

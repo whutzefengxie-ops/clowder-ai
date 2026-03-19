@@ -164,4 +164,6 @@ test('escapeCmdArg caret-escapes cmd.exe metacharacters', () => {
   assert.equal(escapeCmdArg('a<b'), '"a^<b"');
   assert.equal(escapeCmdArg('a^b'), '"a^^b"');
   assert.equal(escapeCmdArg('a!b'), '"a^!b"');
+  assert.equal(escapeCmdArg('a(b)c'), '"a^(b^)c"');
+  assert.equal(escapeCmdArg('(group)'), '"^(group^)"');
 });

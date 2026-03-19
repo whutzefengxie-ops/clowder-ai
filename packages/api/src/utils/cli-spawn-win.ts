@@ -104,10 +104,10 @@ export function resolveWindowsShimSpawn(
  * - Backslashes before a double quote must be doubled
  * - Trailing backslashes before the closing quote must be doubled
  * - Internal double quotes are escaped as \"
- * Then applies cmd.exe-level escaping: % doubled, metacharacters caret-escaped.
+ * Then applies cmd.exe-level escaping: % doubled, metacharacters (including parentheses) caret-escaped.
  */
 export function escapeCmdArg(arg: string): string {
-  if (!/[\s"&|<>^%!\\]/.test(arg)) return arg;
+  if (!/[\s"&|<>^%!\\()]/.test(arg)) return arg;
   // MSVC CRT escaping: process each character, tracking backslash runs
   let crtEscaped = '';
   let backslashes = 0;
@@ -127,6 +127,6 @@ export function escapeCmdArg(arg: string): string {
   crtEscaped += '\\'.repeat(backslashes * 2);
   // cmd.exe escaping on top of CRT escaping
   let escaped = crtEscaped.replace(/%/g, '%%');
-  escaped = escaped.replace(/([&|<>^!])/g, '^$1');
+  escaped = escaped.replace(/([&|<>^!()])/g, '^$1');
   return `"${escaped}"`;
 }
