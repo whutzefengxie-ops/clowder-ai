@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -12,6 +12,13 @@ const helperScript = resolve(repoRoot, 'scripts', 'install-auth-config.mjs');
 
 function runHelper(args) {
   return execFileSync('node', [helperScript, ...args], {
+    cwd: repoRoot,
+    encoding: 'utf8',
+  });
+}
+
+function runHelperResult(args) {
+  return spawnSync('node', [helperScript, ...args], {
     cwd: repoRoot,
     encoding: 'utf8',
   });
@@ -304,6 +311,35 @@ test('claude-profile v2 migration preserves non-installer profiles and secrets o
     );
     assert.equal(secretsAfterRemove.providers.anthropic.personal.apiKey, 'personal-key');
     assert.equal('installer-managed' in (secretsAfterRemove.providers.anthropic ?? {}), false);
+  } finally {
+    rmSync(projectRoot, { recursive: true, force: true });
+  }
+});
+
+test('claude-profile set fails fast on malformed provider profile JSON', () => {
+  const projectRoot = mkdtempSync(join(tmpdir(), 'clowder-install-claude-bad-profile-'));
+
+  try {
+    const profileDir = join(projectRoot, '.cat-cafe');
+    const profileFile = join(profileDir, 'provider-profiles.json');
+    const secretsFile = join(profileDir, 'provider-profiles.secrets.local.json');
+    mkdirSync(profileDir, { recursive: true });
+    writeFileSync(profileFile, '{"version": 1,', 'utf8');
+
+    const originalContents = readFileSync(profileFile, 'utf8');
+    const result = runHelperResult([
+      'claude-profile',
+      'set',
+      '--project-dir',
+      projectRoot,
+      '--api-key',
+      'new-installer-key',
+    ]);
+
+    assert.notEqual(result.status, 0);
+    assert.match(String(result.stderr), /provider-profiles\.json/);
+    assert.equal(readFileSync(profileFile, 'utf8'), originalContents);
+    assert.equal(existsSync(secretsFile), false);
   } finally {
     rmSync(projectRoot, { recursive: true, force: true });
   }

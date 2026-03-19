@@ -294,6 +294,29 @@ test('Windows installer headless rerun preserves local authenticated Redis URL v
   assert.match(uiHelpersScript, /Get-RedactedRedisUrl -RedisUrl \$RedisUrl/);
 });
 
+test('Windows installer validates external Redis URLs before persisting them', () => {
+  assert.match(helpersScript, /function Get-InstallerExternalRedisValidationError/);
+  assert.match(
+    helpersScript,
+    /\[System\.Uri\]::TryCreate\(\$RedisUrl, \[System\.UriKind\]::Absolute, \[ref\]\$uri\)/,
+  );
+  assert.match(helpersScript, /\$uri\.Scheme -notin @\("redis", "rediss"\)/);
+  assert.match(helpersScript, /\[System\.Net\.Sockets\.TcpClient\]::new\(\)/);
+
+  const validationIndex = uiHelpersScript.indexOf(
+    '$redisValidationError = Get-InstallerExternalRedisValidationError -RedisUrl $Plan.RedisUrl',
+  );
+  const setEnvIndex = uiHelpersScript.indexOf('Set-InstallerEnvValue $State "REDIS_URL" $Plan.RedisUrl');
+
+  assert.notEqual(validationIndex, -1, 'expected Apply-InstallerRedisPlan to validate external Redis URLs');
+  assert.notEqual(setEnvIndex, -1, 'expected REDIS_URL to still be written after validation passes');
+  assert.ok(validationIndex < setEnvIndex, 'expected external Redis validation before writing REDIS_URL');
+  assert.match(
+    uiHelpersScript,
+    /if \(\$Plan\.Mode -eq "external"\) \{\s+\$redisValidationError = Get-InstallerExternalRedisValidationError -RedisUrl \$Plan\.RedisUrl\s+if \(\$redisValidationError\) \{\s+Write-Warn \$redisValidationError\s+return \$false\s+\}\s+\}/s,
+  );
+});
+
 test('Windows installer ignores ambient REDIS_URL until this repo has its own .env', () => {
   const guardedAmbientPattern =
     /\$rawUrl = Get-InstallerEnvValueFromFile -EnvFile \$envFile -Key "REDIS_URL"\s+if \(-not \$rawUrl -and \(Test-Path \$envFile\) -and \$env:REDIS_URL\) \{\s+\$rawUrl = \$env:REDIS_URL\.Trim\(\)\s+\}/g;

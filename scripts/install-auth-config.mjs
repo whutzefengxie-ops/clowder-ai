@@ -87,10 +87,14 @@ function applyEnvChanges(envFile, setPairs, deleteKeys) {
 }
 
 function readJson(file, fallback) {
+  if (!existsSync(file)) {
+    return fallback;
+  }
   try {
     return JSON.parse(readFileSync(file, 'utf8'));
-  } catch {
-    return fallback;
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new Error(`Failed to parse ${path.basename(file)}: ${reason}`);
   }
 }
 
@@ -240,30 +244,36 @@ function removeClaudeProfile(projectDir) {
   }
 }
 
-const { positionals, values } = parseArgs(process.argv.slice(2));
-if (positionals[0] === 'env-apply') {
-  applyEnvChanges(getRequired(values, 'env-file'), values.get('set') ?? [], values.get('delete') ?? []);
-  process.exit(0);
-}
-
-if (positionals[0] === 'claude-profile' && positionals[1] === 'set') {
-  const apiKey = getOptional(values, 'api-key', '') || process.env._INSTALLER_API_KEY || '';
-  if (!apiKey) {
-    console.error('Error: API key required via --api-key or _INSTALLER_API_KEY env var');
-    process.exit(1);
+try {
+  const { positionals, values } = parseArgs(process.argv.slice(2));
+  if (positionals[0] === 'env-apply') {
+    applyEnvChanges(getRequired(values, 'env-file'), values.get('set') ?? [], values.get('delete') ?? []);
+    process.exit(0);
   }
-  writeClaudeProfile(
-    getRequired(values, 'project-dir'),
-    apiKey,
-    getOptional(values, 'base-url', 'https://api.anthropic.com'),
-    getOptional(values, 'model', ''),
-  );
-  process.exit(0);
-}
 
-if (positionals[0] === 'claude-profile' && positionals[1] === 'remove') {
-  removeClaudeProfile(getRequired(values, 'project-dir'));
-  process.exit(0);
-}
+  if (positionals[0] === 'claude-profile' && positionals[1] === 'set') {
+    const apiKey = getOptional(values, 'api-key', '') || process.env._INSTALLER_API_KEY || '';
+    if (!apiKey) {
+      console.error('Error: API key required via --api-key or _INSTALLER_API_KEY env var');
+      process.exit(1);
+    }
+    writeClaudeProfile(
+      getRequired(values, 'project-dir'),
+      apiKey,
+      getOptional(values, 'base-url', 'https://api.anthropic.com'),
+      getOptional(values, 'model', ''),
+    );
+    process.exit(0);
+  }
 
-usage();
+  if (positionals[0] === 'claude-profile' && positionals[1] === 'remove') {
+    removeClaudeProfile(getRequired(values, 'project-dir'));
+    process.exit(0);
+  }
+
+  usage();
+} catch (error) {
+  const message = error instanceof Error ? error.message : String(error);
+  console.error(message);
+  process.exit(1);
+}

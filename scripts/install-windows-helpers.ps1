@@ -114,6 +114,43 @@ function Test-LocalRedisUrl {
     return $true
 }
 
+function Get-InstallerExternalRedisValidationError {
+    param([string]$RedisUrl, [int]$TimeoutMs = 3000)
+
+    if (-not $RedisUrl) {
+        return "External Redis URL is empty."
+    }
+
+    $uri = $null
+    if (-not [System.Uri]::TryCreate($RedisUrl, [System.UriKind]::Absolute, [ref]$uri)) {
+        return "External Redis URL must be an absolute redis:// or rediss:// URL."
+    }
+
+    if ($uri.Scheme -notin @("redis", "rediss")) {
+        return "External Redis URL must use redis:// or rediss://."
+    }
+
+    if (-not $uri.Host) {
+        return "External Redis URL must include a hostname."
+    }
+
+    $port = if ($uri.Port -gt 0) { $uri.Port } elseif ($uri.Scheme -eq "rediss") { 6380 } else { 6379 }
+    $safeRedisUrl = Get-RedactedRedisUrl -RedisUrl $RedisUrl
+    $tcpClient = [System.Net.Sockets.TcpClient]::new()
+    try {
+        $connectTask = $tcpClient.ConnectAsync($uri.Host, $port)
+        if (-not $connectTask.Wait($TimeoutMs) -or -not $tcpClient.Connected) {
+            return "External Redis URL is not reachable: $safeRedisUrl"
+        }
+    } catch {
+        return "External Redis URL is not reachable: $safeRedisUrl"
+    } finally {
+        $tcpClient.Dispose()
+    }
+
+    return ""
+}
+
 function Quote-WindowsProcessArgument {
     param([string]$Value)
 

@@ -214,6 +214,13 @@ function Resolve-InstallerRedisPlan {
 
 function Apply-InstallerRedisPlan {
     param($State, [string]$ProjectRoot, $Plan)
+    if ($Plan.Mode -eq "external") {
+        $redisValidationError = Get-InstallerExternalRedisValidationError -RedisUrl $Plan.RedisUrl
+        if ($redisValidationError) {
+            Write-Warn $redisValidationError
+            return $false
+        }
+    }
     if ($Plan.Mode -eq "external" -or $Plan.Mode -eq "keep_local") {
         Set-InstallerEnvValue $State "REDIS_URL" $Plan.RedisUrl
         Add-InstallerEnvDelete $State "MEMORY_STORE"
