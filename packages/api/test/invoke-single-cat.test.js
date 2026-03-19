@@ -2537,57 +2537,70 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
     );
   });
 
-  it('F062 P1: falls back to monorepo root profile when thread projectPath is absent', async () => {
+  it('F127 P1: falls back to CAT_TEMPLATE_PATH project when thread projectPath is absent', async () => {
     const { createProviderProfile } = await import('../dist/config/provider-profiles.js');
-    const root = await mkdtemp(join(tmpdir(), 'f062-root-'));
-    const apiDir = join(root, 'packages', 'api');
-    await mkdir(apiDir, { recursive: true });
-    await writeFile(join(root, 'pnpm-workspace.yaml'), 'packages:\n  - "packages/*"\n', 'utf-8');
-
-    await createProviderProfile(root, {
-      provider: 'anthropic',
-      name: 'root-sponsor',
+    const templateRoot = await mkdtemp(join(tmpdir(), 'f127-active-template-'));
+    await writeFile(join(templateRoot, 'cat-template.json'), '{}', 'utf-8');
+    const boundProfile = await createProviderProfile(templateRoot, {
+      provider: 'openai',
+      name: 'template-bound-openai',
       mode: 'api_key',
-      baseUrl: 'https://api.root.example',
-      apiKey: 'sk-root-profile',
-      setActive: true,
+      authType: 'api_key',
+      protocol: 'openai',
+      baseUrl: 'https://api.template.example',
+      apiKey: 'sk-template-openai',
+      setActive: false,
+    });
+
+    const registrySnapshot = catRegistry.getAllConfigs();
+    const originalConfig = catRegistry.tryGet('codex')?.config;
+    assert.ok(originalConfig, 'codex config should exist in registry');
+    const boundCatId = 'codex-template-root-bound-profile';
+    catRegistry.register(boundCatId, {
+      ...originalConfig,
+      id: boundCatId,
+      mentionPatterns: [`@${boundCatId}`],
+      provider: 'openai',
+      providerProfileId: boundProfile.id,
+      defaultModel: 'gpt-5.4',
     });
 
     const optionsSeen = [];
     const service = {
       async *invoke(_prompt, options) {
         optionsSeen.push(options ?? {});
-        yield { type: 'done', catId: 'opus', timestamp: Date.now() };
+        yield { type: 'done', catId: 'codex', timestamp: Date.now() };
       },
     };
 
     const deps = makeDeps();
-    const previousCwd = process.cwd();
-    const previousProxyEnabled = process.env.ANTHROPIC_PROXY_ENABLED;
+    const previousTemplatePath = process.env.CAT_TEMPLATE_PATH;
     try {
-      process.env.ANTHROPIC_PROXY_ENABLED = '0';
-      process.chdir(apiDir);
+      process.env.CAT_TEMPLATE_PATH = join(templateRoot, 'cat-template.json');
       await collect(
         invokeSingleCat(deps, {
-          catId: 'opus',
+          catId: boundCatId,
           service,
           prompt: 'test',
-          userId: 'user-f062-root-fallback',
-          threadId: 'thread-f062-root-fallback',
+          userId: 'user-f127-active-template-fallback',
+          threadId: 'thread-f127-active-template-fallback',
           isLastCat: true,
         }),
       );
     } finally {
-      process.chdir(previousCwd);
-      if (previousProxyEnabled === undefined) delete process.env.ANTHROPIC_PROXY_ENABLED;
-      else process.env.ANTHROPIC_PROXY_ENABLED = previousProxyEnabled;
-      await rm(root, { recursive: true, force: true });
+      if (previousTemplatePath === undefined) delete process.env.CAT_TEMPLATE_PATH;
+      else process.env.CAT_TEMPLATE_PATH = previousTemplatePath;
+      catRegistry.reset();
+      for (const [id, config] of Object.entries(registrySnapshot)) {
+        catRegistry.register(id, config);
+      }
+      await rm(templateRoot, { recursive: true, force: true });
     }
 
     const callbackEnv = optionsSeen[0]?.callbackEnv ?? {};
-    assert.equal(callbackEnv.CAT_CAFE_ANTHROPIC_PROFILE_MODE, 'api_key');
-    assert.equal(callbackEnv.CAT_CAFE_ANTHROPIC_BASE_URL, 'https://api.root.example');
-    assert.equal(callbackEnv.CAT_CAFE_ANTHROPIC_API_KEY, 'sk-root-profile');
+    assert.equal(callbackEnv.OPENAI_BASE_URL, 'https://api.template.example');
+    assert.equal(callbackEnv.OPENAI_API_BASE, 'https://api.template.example');
+    assert.equal(callbackEnv.OPENAI_API_KEY, 'sk-template-openai');
   });
 
   it('F127 P1: prefers member-bound openai profile over protocol active profile', async () => {

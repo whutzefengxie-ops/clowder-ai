@@ -301,6 +301,14 @@ function normalizeProfile(profile: ProviderProfileMeta): ProviderProfileMeta {
   };
 }
 
+function inferLegacyProtocol(...candidates: Array<string | undefined>): ProviderProfileProtocol | undefined {
+  for (const candidate of candidates) {
+    const normalized = normalizeProtocol(candidate);
+    if (normalized) return normalized;
+  }
+  return undefined;
+}
+
 function migrateLegacyMetaV1(meta: LegacyProviderProfilesMetaFileV1 | null): ProviderProfilesMetaFile {
   const next = createDefaultMeta();
   if (!meta?.providers?.anthropic?.profiles) return next;
@@ -318,6 +326,7 @@ function migrateLegacyMetaV1(meta: LegacyProviderProfilesMetaFileV1 | null): Pro
       kind: 'api_key',
       authType: 'api_key',
       builtin: false,
+      protocol: inferLegacyProtocol(legacyProfile.provider, 'anthropic'),
       ...(normalizeBaseUrl(legacyProfile.baseUrl) ? { baseUrl: normalizeBaseUrl(legacyProfile.baseUrl) } : {}),
       createdAt: legacyProfile.createdAt || now,
       updatedAt: legacyProfile.updatedAt || legacyProfile.createdAt || now,
@@ -357,6 +366,9 @@ function migrateLegacyMetaV2(meta: LegacyProviderProfilesMetaFileV2 | null): Pro
       kind: 'api_key',
       authType: 'api_key',
       builtin: false,
+      ...(inferLegacyProtocol(legacyProfile.protocol, legacyProfile.provider)
+        ? { protocol: inferLegacyProtocol(legacyProfile.protocol, legacyProfile.provider) }
+        : {}),
       ...(normalizeBaseUrl(legacyProfile.baseUrl) ? { baseUrl: normalizeBaseUrl(legacyProfile.baseUrl) } : {}),
       createdAt: legacyProfile.createdAt || now,
       updatedAt: legacyProfile.updatedAt || legacyProfile.createdAt || now,

@@ -162,6 +162,15 @@ describe('OpenCodeAgentService', () => {
   test('subscription mode clears inherited anthropic credentials', async () => {
     const proc = createMockProcess();
     const spawnFn = mock.fn(() => proc);
+    const previousAnthropicApiKey = process.env.ANTHROPIC_API_KEY;
+    const previousAnthropicBaseUrl = process.env.ANTHROPIC_BASE_URL;
+    const previousOpenCodeApiKey = process.env.OPENCODE_API_KEY;
+    const previousOpenCodeBaseUrl = process.env.OPENCODE_BASE_URL;
+    process.env.ANTHROPIC_API_KEY = 'sk-parent-anthropic';
+    process.env.ANTHROPIC_BASE_URL = 'https://parent.anthropic.example/v1';
+    process.env.OPENCODE_API_KEY = 'sk-parent-opencode';
+    process.env.OPENCODE_BASE_URL = 'https://parent.opencode.example';
+
     const service = new OpenCodeAgentService({
       catId: 'opencode',
       spawnFn,
@@ -169,21 +178,32 @@ describe('OpenCodeAgentService', () => {
       apiKey: 'sk-should-not-leak',
       baseUrl: 'https://proxy.example/v1',
     });
-    const promise = collect(
-      service.invoke('Test', {
-        callbackEnv: {
-          CAT_CAFE_ANTHROPIC_PROFILE_MODE: 'subscription',
-          ANTHROPIC_API_KEY: 'sk-inherited',
-          ANTHROPIC_BASE_URL: 'https://inherited.example/v1',
-        },
-      }),
-    );
-    emitOpenCodeEvents(proc, [STEP_START, TEXT_RESPONSE, STEP_FINISH]);
-    await promise;
+    try {
+      const promise = collect(
+        service.invoke('Test', {
+          callbackEnv: {
+            CAT_CAFE_ANTHROPIC_PROFILE_MODE: 'subscription',
+          },
+        }),
+      );
+      emitOpenCodeEvents(proc, [STEP_START, TEXT_RESPONSE, STEP_FINISH]);
+      await promise;
 
-    const opts = spawnFn.mock.calls[0].arguments[2];
-    assert.strictEqual(opts.env.ANTHROPIC_API_KEY, null);
-    assert.strictEqual(opts.env.ANTHROPIC_BASE_URL, null);
+      const opts = spawnFn.mock.calls[0].arguments[2];
+      assert.strictEqual(opts.env.ANTHROPIC_API_KEY, undefined);
+      assert.strictEqual(opts.env.ANTHROPIC_BASE_URL, undefined);
+      assert.strictEqual(opts.env.OPENCODE_API_KEY, undefined);
+      assert.strictEqual(opts.env.OPENCODE_BASE_URL, undefined);
+    } finally {
+      if (previousAnthropicApiKey === undefined) delete process.env.ANTHROPIC_API_KEY;
+      else process.env.ANTHROPIC_API_KEY = previousAnthropicApiKey;
+      if (previousAnthropicBaseUrl === undefined) delete process.env.ANTHROPIC_BASE_URL;
+      else process.env.ANTHROPIC_BASE_URL = previousAnthropicBaseUrl;
+      if (previousOpenCodeApiKey === undefined) delete process.env.OPENCODE_API_KEY;
+      else process.env.OPENCODE_API_KEY = previousOpenCodeApiKey;
+      if (previousOpenCodeBaseUrl === undefined) delete process.env.OPENCODE_BASE_URL;
+      else process.env.OPENCODE_BASE_URL = previousOpenCodeBaseUrl;
+    }
   });
 
   test('baseUrl passed via ANTHROPIC_BASE_URL env', async () => {

@@ -593,7 +593,7 @@ export async function* invokeSingleCat(deps: InvocationDeps, params: InvocationP
     const builtinClient = provider ? resolveBuiltinClientForProvider(provider) : null;
     const legacyCatConfig = catConfig as (typeof catConfig & { providerProfileId?: string }) | undefined;
     const defaultModel = catConfig?.defaultModel?.trim() || undefined;
-    const projectRoot = workingDirectory ? findMonorepoRoot(workingDirectory) : findMonorepoRoot(process.cwd());
+    const projectRoot = workingDirectory ? findMonorepoRoot(workingDirectory) : resolveActiveProjectRoot(process.cwd());
     const runtimeCatalogExists = existsSync(resolve(projectRoot, '.cat-cafe', 'cat-catalog.json'));
     const explicitAccountRef = catConfig?.accountRef?.trim() || undefined;
     const inheritedBuiltinAccountRef =

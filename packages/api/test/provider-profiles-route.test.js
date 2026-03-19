@@ -1,7 +1,7 @@
 // @ts-check
 import './helpers/setup-cat-registry.js';
 import assert from 'node:assert/strict';
-import { mkdtemp, realpath, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
@@ -19,6 +19,104 @@ async function makeWorkspaceDir(prefix) {
 }
 
 describe('provider profiles routes', () => {
+  it('migrates legacy v1 provider profiles with anthropic protocol metadata', async () => {
+    const { readProviderProfiles } = await import('../dist/config/provider-profiles.js');
+    const projectDir = await makeTmpDir('legacy-v1');
+    try {
+      const catCafeDir = join(projectDir, '.cat-cafe');
+      await mkdir(catCafeDir, { recursive: true });
+      await writeFile(
+        join(catCafeDir, 'provider-profiles.json'),
+        JSON.stringify({
+          version: 1,
+          providers: {
+            anthropic: {
+              activeProfileId: 'anthropic-sponsor',
+              profiles: [
+                {
+                  id: 'anthropic-sponsor',
+                  displayName: 'Anthropic Sponsor',
+                  authType: 'api_key',
+                  mode: 'api_key',
+                  baseUrl: 'https://api.anthropic-proxy.dev',
+                },
+              ],
+            },
+          },
+        }),
+      );
+
+      const view = await readProviderProfiles(projectDir);
+      const migrated = view.providers.find((profile) => profile.id === 'anthropic-sponsor');
+      assert.ok(migrated, 'migrated anthropic profile should exist');
+      assert.equal(migrated.protocol, 'anthropic');
+      assert.deepEqual(view.bootstrapBindings.anthropic, {
+        enabled: true,
+        mode: 'api_key',
+        accountRef: 'anthropic-sponsor',
+      });
+    } finally {
+      await rm(projectDir, { recursive: true, force: true });
+    }
+  });
+
+  it('migrates legacy v2 provider profiles by preserving or inferring protocol metadata', async () => {
+    const { readProviderProfiles } = await import('../dist/config/provider-profiles.js');
+    const projectDir = await makeTmpDir('legacy-v2');
+    try {
+      const catCafeDir = join(projectDir, '.cat-cafe');
+      await mkdir(catCafeDir, { recursive: true });
+      await writeFile(
+        join(catCafeDir, 'provider-profiles.json'),
+        JSON.stringify({
+          version: 2,
+          activeProfileIds: {
+            openai: 'openai-sponsor',
+            google: 'google-sponsor',
+          },
+          profiles: [
+            {
+              id: 'openai-sponsor',
+              displayName: 'OpenAI Sponsor',
+              authType: 'api_key',
+              mode: 'api_key',
+              protocol: 'openai',
+              baseUrl: 'https://api.openai-proxy.dev',
+            },
+            {
+              id: 'google-sponsor',
+              displayName: 'Google Sponsor',
+              authType: 'api_key',
+              mode: 'api_key',
+              provider: 'google',
+              baseUrl: 'https://generativelanguage.googleapis.com',
+            },
+          ],
+        }),
+      );
+
+      const view = await readProviderProfiles(projectDir);
+      const openai = view.providers.find((profile) => profile.id === 'openai-sponsor');
+      const google = view.providers.find((profile) => profile.id === 'google-sponsor');
+      assert.ok(openai, 'migrated openai profile should exist');
+      assert.ok(google, 'migrated google profile should exist');
+      assert.equal(openai.protocol, 'openai');
+      assert.equal(google.protocol, 'google');
+      assert.deepEqual(view.bootstrapBindings.openai, {
+        enabled: true,
+        mode: 'api_key',
+        accountRef: 'openai-sponsor',
+      });
+      assert.deepEqual(view.bootstrapBindings.google, {
+        enabled: true,
+        mode: 'api_key',
+        accountRef: 'google-sponsor',
+      });
+    } finally {
+      await rm(projectDir, { recursive: true, force: true });
+    }
+  });
+
   it('GET /api/provider-profiles requires identity', async () => {
     const Fastify = (await import('fastify')).default;
     const { providerProfilesRoutes } = await import('../dist/routes/provider-profiles.js');
