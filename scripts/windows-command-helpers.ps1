@@ -53,10 +53,36 @@ function Resolve-ToolCommand {
     return $null
 }
 
+function Merge-ToolPathSegments {
+    param([string[]]$PathValues)
+
+    $seen = @{}
+    $segments = New-Object System.Collections.Generic.List[string]
+    foreach ($pathValue in $PathValues) {
+        if (-not $pathValue) {
+            continue
+        }
+        foreach ($segment in ($pathValue -split ";")) {
+            $candidate = $segment.Trim()
+            if (-not $candidate) {
+                continue
+            }
+            $normalized = $candidate.TrimEnd('\').ToLowerInvariant()
+            if ($seen.ContainsKey($normalized)) {
+                continue
+            }
+            $seen[$normalized] = $true
+            $segments.Add($candidate)
+        }
+    }
+    return @($segments)
+}
+
 function Sync-ToolPath {
+    $processPath = $env:Path
     $machinePath = [System.Environment]::GetEnvironmentVariable("Path", "Machine")
     $userPath = [System.Environment]::GetEnvironmentVariable("Path", "User")
-    $segments = @($machinePath, $userPath) | Where-Object { $_ }
+    $segments = Merge-ToolPathSegments -PathValues @($processPath, $machinePath, $userPath)
     if ($segments.Count -gt 0) {
         $env:Path = ($segments -join ";")
     }

@@ -27,8 +27,7 @@ function Write-Warn  { param([string]$msg) Write-Host "  [!!] $msg" -ForegroundC
 function Write-Err   { param([string]$msg) Write-Host "  [ERR] $msg" -ForegroundColor Red }
 
 function Refresh-Path {
-    $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" +
-                [System.Environment]::GetEnvironmentVariable("Path", "User")
+    Sync-ToolPath
 }
 
 function Resolve-PnpmCommand { Resolve-ToolCommand -Name "pnpm" }

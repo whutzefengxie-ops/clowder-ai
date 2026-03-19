@@ -529,6 +529,18 @@ test('Windows CLI installs retry command discovery before warning and auth detec
   assert.match(helpersScript, /Resolve-ToolCommandWithRetry -Name "gemini" -Attempts 6/);
 });
 
+test('Windows PATH refresh preserves shell-provided shim entries while appending machine and user paths', () => {
+  assert.match(commandHelpersScript, /function Merge-ToolPathSegments/);
+  assert.match(commandHelpersScript, /\$processPath = \$env:Path/);
+  assert.match(commandHelpersScript, /Merge-ToolPathSegments -PathValues @\(\$processPath, \$machinePath, \$userPath\)/);
+  assert.match(commandHelpersScript, /\$normalized = \$candidate\.TrimEnd\('\\'\)\.ToLowerInvariant\(\)/);
+  assert.match(installScript, /function Refresh-Path \{\s+Sync-ToolPath\s+\}/s);
+  assert.doesNotMatch(
+    installScript,
+    /\$env:Path = \[System\.Environment\]::GetEnvironmentVariable\("Path", "Machine"\) \+ ";" \+\s+\[System\.Environment\]::GetEnvironmentVariable\("Path", "User"\)/,
+  );
+});
+
 test('Windows stop script resolves redis-cli through the shared helper chain before shutdown', () => {
   assert.match(stopWindowsScript, /install-windows-helpers\.ps1/);
   assert.match(stopWindowsScript, /Resolve-PortableRedisBinaries -ProjectRoot \$ProjectRoot/);
