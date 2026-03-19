@@ -451,6 +451,65 @@ describe('cat-catalog-store', () => {
     assert.equal(defaultVariant.roleDescription, undefined);
   });
 
+  it('keeps roleDescription updates scoped to the default variant', async () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), 'cat-catalog-store-'));
+    const templatePath = join(projectRoot, 'cat-template.json');
+    const template = validConfig();
+    template.breeds[0].variants.push({
+      id: 'opus-sonnet',
+      catId: 'opus-sonnet',
+      provider: 'anthropic',
+      defaultModel: 'claude-sonnet-4-5-20250929',
+      mcpSupport: true,
+      cli: { command: 'claude', outputFormat: 'stream-json' },
+    });
+    writeFileSync(templatePath, JSON.stringify(template, null, 2));
+    bootstrapCatCatalog(projectRoot, templatePath);
+
+    await updateRuntimeCat(projectRoot, 'opus', { roleDescription: '默认成员专属职责' });
+
+    const catalog = readRuntimeCatCatalog(projectRoot);
+    const breed = catalog.breeds.find((item) => item.id === 'ragdoll');
+    assert.ok(breed, 'ragdoll breed should still exist');
+    assert.equal(breed.roleDescription, '主架构师');
+    const defaultVariant = breed.variants.find((variant) => variant.id === 'opus-default');
+    assert.ok(defaultVariant, 'opus-default variant should still exist');
+    assert.equal(defaultVariant.roleDescription, '默认成员专属职责');
+    const sonnetVariant = breed.variants.find((variant) => variant.id === 'opus-sonnet');
+    assert.ok(sonnetVariant, 'opus-sonnet variant should still exist');
+    assert.equal(sonnetVariant.roleDescription, undefined);
+  });
+
+  it('keeps sessionChain updates scoped to the default variant', async () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), 'cat-catalog-store-'));
+    const templatePath = join(projectRoot, 'cat-template.json');
+    const template = validConfig();
+    template.breeds[0].features = { sessionChain: true };
+    template.breeds[0].variants.push({
+      id: 'opus-sonnet',
+      catId: 'opus-sonnet',
+      provider: 'anthropic',
+      defaultModel: 'claude-sonnet-4-5-20250929',
+      mcpSupport: true,
+      cli: { command: 'claude', outputFormat: 'stream-json' },
+    });
+    writeFileSync(templatePath, JSON.stringify(template, null, 2));
+    bootstrapCatCatalog(projectRoot, templatePath);
+
+    await updateRuntimeCat(projectRoot, 'opus', { sessionChain: false });
+
+    const catalog = readRuntimeCatCatalog(projectRoot);
+    const breed = catalog.breeds.find((item) => item.id === 'ragdoll');
+    assert.ok(breed, 'ragdoll breed should still exist');
+    assert.equal(breed.features?.sessionChain, true);
+    const defaultVariant = breed.variants.find((variant) => variant.id === 'opus-default');
+    assert.ok(defaultVariant, 'opus-default variant should still exist');
+    assert.equal(defaultVariant.sessionChain, false);
+    const sonnetVariant = breed.variants.find((variant) => variant.id === 'opus-sonnet');
+    assert.ok(sonnetVariant, 'opus-sonnet variant should still exist');
+    assert.equal(sonnetVariant.sessionChain, undefined);
+  });
+
   it('does not overwrite runtime catalog when validation fails', () => {
     const projectRoot = mkdtempSync(join(tmpdir(), 'cat-catalog-store-'));
     const templatePath = join(projectRoot, 'cat-template.json');

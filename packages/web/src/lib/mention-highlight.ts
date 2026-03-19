@@ -60,14 +60,13 @@ let _mentionColor = buildMentionColor(withOwner);
 
 /** Called once by useCatData after API fetch succeeds */
 export function refreshMentionData(cats: CatData[]): void {
-  const availableCats = cats.filter((cat) => cat.roster?.available !== false);
   // Always include owner alongside dynamic cats
   const ownerEntry = {
     id: OWNER_ID,
     mentionPatterns: OWNER_MENTIONS.map((m) => `@${m}`),
     color: { primary: OWNER_COLOR },
   };
-  const all = [...availableCats, ownerEntry];
+  const all = [...cats, ownerEntry];
   _mentionToCat = buildMentionToCat(all);
   _mentionRe = buildMentionRe(_mentionToCat);
   _mentionColor = buildMentionColor(all);

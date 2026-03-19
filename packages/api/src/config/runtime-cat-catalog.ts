@@ -297,8 +297,7 @@ export function updateRuntimeCat(projectRoot: string, catId: string, patch: Runt
   }
   if (patch.roleDescription !== undefined) {
     if (located.isDefaultVariant) {
-      breed.roleDescription = patch.roleDescription;
-      delete variant.roleDescription;
+      variant.roleDescription = patch.roleDescription;
     } else {
       variant.roleDescription = patch.roleDescription;
     }
@@ -377,8 +376,7 @@ export function updateRuntimeCat(projectRoot: string, catId: string, patch: Runt
   }
   if (patch.sessionChain !== undefined) {
     if (located.isDefaultVariant) {
-      breed.features = { ...(breed.features ?? {}), sessionChain: patch.sessionChain };
-      delete variant.sessionChain;
+      variant.sessionChain = patch.sessionChain;
     } else {
       variant.sessionChain = patch.sessionChain;
     }
