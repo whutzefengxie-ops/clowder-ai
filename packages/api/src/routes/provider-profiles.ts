@@ -1,4 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
+import { realpath, stat } from 'node:fs/promises';
+import { relative, resolve } from 'node:path';
 import { z } from 'zod';
 import {
   activateProviderProfile,
@@ -78,7 +80,21 @@ const testBodySchema = z.object({
 
 async function resolveProjectRoot(projectPath?: string): Promise<string | null> {
   if (!projectPath) return PROJECT_ROOT;
-  return validateProjectPath(projectPath);
+  const validated = await validateProjectPath(projectPath);
+  if (validated) return validated;
+
+  // Workspace project switcher can provide sibling repo paths (outside homedir/tmp allowlist).
+  // Allow paths under current workspace root while keeping realpath boundary checks.
+  const workspaceRoot = resolve(PROJECT_ROOT, '..');
+  try {
+    const [resolvedTarget, resolvedWorkspaceRoot] = await Promise.all([realpath(resolve(projectPath)), realpath(workspaceRoot)]);
+    const rel = relative(resolvedWorkspaceRoot, resolvedTarget);
+    if (rel.startsWith('..') || rel.startsWith('/')) return null;
+    const info = await stat(resolvedTarget);
+    return info.isDirectory() ? resolvedTarget : null;
+  } catch {
+    return null;
+  }
 }
 
 function normalizeBaseUrl(baseUrl: string): string {

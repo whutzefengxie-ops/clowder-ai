@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, it } from 'node:test';
+import { mkdtemp, rm, stat } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import Fastify from 'fastify';
 import { PortDiscoveryService } from '../../../dist/domains/preview/port-discovery.js';
 import { previewRoutes } from '../../../dist/routes/preview.js';
@@ -247,8 +250,15 @@ describe('POST /api/preview/auto-open', () => {
 // F120 Phase C: screenshot upload endpoint
 describe('POST /api/preview/screenshot', () => {
   let app3;
+  /** @type {string | undefined} */
+  let previousUploadDir;
+  /** @type {string} */
+  let customUploadDir;
 
   before(async () => {
+    customUploadDir = await mkdtemp(join(tmpdir(), 'preview-screenshot-upload-'));
+    previousUploadDir = process.env.UPLOAD_DIR;
+    process.env.UPLOAD_DIR = customUploadDir;
     app3 = Fastify();
     await app3.register(previewRoutes, {
       portDiscovery: new PortDiscoveryService(),
@@ -259,6 +269,9 @@ describe('POST /api/preview/screenshot', () => {
 
   after(async () => {
     await app3.close();
+    if (previousUploadDir === undefined) delete process.env.UPLOAD_DIR;
+    else process.env.UPLOAD_DIR = previousUploadDir;
+    await rm(customUploadDir, { recursive: true, force: true });
   });
 
   it('accepts a data URL and returns upload path', async () => {
@@ -284,5 +297,20 @@ describe('POST /api/preview/screenshot', () => {
       payload: { dataUrl: 'not-a-data-url' },
     });
     assert.equal(res.statusCode, 400);
+  });
+
+  it('writes screenshot files to UPLOAD_DIR when customized', async () => {
+    const dataUrl =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==';
+    const res = await app3.inject({
+      method: 'POST',
+      url: '/api/preview/screenshot',
+      payload: { dataUrl, threadId: 'upload-dir-test-thread' },
+    });
+    assert.equal(res.statusCode, 200);
+    const body = JSON.parse(res.body);
+    const filename = body.url.replace('/uploads/', '');
+    const saved = await stat(join(customUploadDir, filename));
+    assert.equal(saved.isFile(), true);
   });
 });

@@ -1,7 +1,7 @@
 // @ts-check
 import './helpers/setup-cat-registry.js';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, realpath, rm } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
@@ -11,6 +11,11 @@ const AUTH_HEADERS = { 'x-cat-cafe-user': 'test-user' };
 /** @param {string} prefix */
 async function makeTmpDir(prefix) {
   return mkdtemp(join(homedir(), `.cat-cafe-provider-profile-route-${prefix}-`));
+}
+
+/** @param {string} prefix */
+async function makeWorkspaceDir(prefix) {
+  return mkdtemp(join(process.cwd(), '..', '..', `.cat-cafe-provider-profile-route-workspace-${prefix}-`));
 }
 
 describe('provider profiles routes', () => {
@@ -318,6 +323,37 @@ describe('provider profiles routes', () => {
       assert.match(testRes.body, /only anthropic api_key providers can be tested/i);
     } finally {
       await rm(projectDir, { recursive: true, force: true });
+      await app.close();
+    }
+  });
+
+  it('accepts workspace projectPath even when validateProjectPath allowlist excludes it', async () => {
+    const Fastify = (await import('fastify')).default;
+    const { providerProfilesRoutes } = await import('../dist/routes/provider-profiles.js');
+    const app = Fastify();
+    await app.register(providerProfilesRoutes);
+    await app.ready();
+
+    const workspaceDir = await makeWorkspaceDir('switch');
+    const previousRoots = process.env.PROJECT_ALLOWED_ROOTS;
+    const previousAppend = process.env.PROJECT_ALLOWED_ROOTS_APPEND;
+    process.env.PROJECT_ALLOWED_ROOTS = '/tmp';
+    delete process.env.PROJECT_ALLOWED_ROOTS_APPEND;
+
+    try {
+      const res = await app.inject({
+        method: 'GET',
+        url: `/api/provider-profiles?projectPath=${encodeURIComponent(workspaceDir)}`,
+        headers: AUTH_HEADERS,
+      });
+      assert.equal(res.statusCode, 200);
+      assert.equal(res.json().projectPath, await realpath(workspaceDir));
+    } finally {
+      if (previousRoots === undefined) delete process.env.PROJECT_ALLOWED_ROOTS;
+      else process.env.PROJECT_ALLOWED_ROOTS = previousRoots;
+      if (previousAppend === undefined) delete process.env.PROJECT_ALLOWED_ROOTS_APPEND;
+      else process.env.PROJECT_ALLOWED_ROOTS_APPEND = previousAppend;
+      await rm(workspaceDir, { recursive: true, force: true });
       await app.close();
     }
   });

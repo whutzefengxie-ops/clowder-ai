@@ -131,7 +131,7 @@ export const previewRoutes: FastifyPluginAsync<PreviewRouteOpts> = async (app, o
     }
     const ext = match[1] === 'jpeg' ? 'jpg' : match[1]!;
     const buffer = Buffer.from(match[2]!, 'base64');
-    const uploadDir = resolve('uploads');
+    const uploadDir = resolve(process.env.UPLOAD_DIR ?? './uploads');
     await mkdir(uploadDir, { recursive: true });
     const filename = `screenshot-${Date.now()}-${randomUUID().slice(0, 8)}.${ext}`;
     await writeFile(join(uploadDir, filename), buffer);

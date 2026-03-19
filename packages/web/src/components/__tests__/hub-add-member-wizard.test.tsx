@@ -222,4 +222,30 @@ describe('HubAddMemberWizard', () => {
     );
     expect(queryField<HTMLInputElement>(container, 'input[aria-label="Model"]').value).toBe('gemini-3.1-pro');
   });
+
+  it('uses template antigravity defaults instead of live cat values', async () => {
+    const mutatedCats: CatData[] = cats.map((cat) =>
+      cat.provider === 'antigravity'
+        ? {
+            ...cat,
+            defaultModel: 'runtime-custom-model',
+            commandArgs: ['runtime', '--bridge-port=9999'],
+          }
+        : cat,
+    );
+
+    await act(async () => {
+      root.render(React.createElement(WizardHost, { cats: mutatedCats }));
+    });
+    await flushEffects();
+
+    await click(queryButton(container, 'Antigravity'));
+    const cliInput = queryField<HTMLInputElement>(container, 'input[aria-label="CLI Command"]');
+    expect(cliInput.value).toBe('. --remote-debugging-port=9000');
+
+    await click(queryButton(container, '下一步'));
+    expect(container.textContent).toContain('gemini-3.1-pro');
+    expect(container.textContent).toContain('claude-opus-4-6');
+    expect(container.textContent).not.toContain('runtime-custom-model');
+  });
 });

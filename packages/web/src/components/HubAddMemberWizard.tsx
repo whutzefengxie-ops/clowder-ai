@@ -10,6 +10,7 @@ import {
   CLIENT_ROW_2,
   clientLabel,
   FALLBACK_ANTIGRAVITY_ARGS,
+  TEMPLATE_ANTIGRAVITY_MODELS,
   StepBadge,
 } from './hub-add-member-wizard.parts';
 import type { ProfileItem, ProviderProfilesResponse } from './hub-provider-profiles.types';
@@ -31,14 +32,10 @@ export function HubAddMemberWizard({ open, cats, onClose, onComplete }: HubAddMe
   const [defaultModel, setDefaultModel] = useState('');
   const [commandArgs, setCommandArgs] = useState(FALLBACK_ANTIGRAVITY_ARGS);
 
-  const antigravityDefaults = useMemo(() => {
-    const antigravityCats = cats.filter((cat) => cat.provider === 'antigravity');
-    const command =
-      antigravityCats.find((cat) => cat.commandArgs && cat.commandArgs.length > 0)?.commandArgs?.join(' ') ??
-      FALLBACK_ANTIGRAVITY_ARGS;
-    const models = Array.from(new Set(antigravityCats.map((cat) => cat.defaultModel).filter(Boolean)));
-    return { command, models };
-  }, [cats]);
+  const antigravityDefaults = useMemo(
+    () => ({ command: FALLBACK_ANTIGRAVITY_ARGS, models: [...TEMPLATE_ANTIGRAVITY_MODELS] }),
+    [],
+  );
 
   const availableProfiles = useMemo(
     () => (client ? filterProfiles(client, profiles) : []),
