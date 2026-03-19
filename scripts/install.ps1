@@ -269,7 +269,7 @@ if (Test-Path $envFile) {
         $trimmed = $line.Trim()
         if ($trimmed -and -not $trimmed.StartsWith("#") -and $trimmed -match '^([^=]+)=(.*)$') {
             $key = $Matches[1].Trim()
-            $val = $Matches[2].Trim()
+            $val = $Matches[2].Trim().Trim('"').Trim("'")
             if (-not [System.Environment]::GetEnvironmentVariable($key)) {
                 [System.Environment]::SetEnvironmentVariable($key, $val, "Process")
             }
