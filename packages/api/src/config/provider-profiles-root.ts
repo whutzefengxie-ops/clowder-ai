@@ -1,4 +1,4 @@
-import { lstat, readFile, realpath } from 'node:fs/promises';
+import { lstat, readFile, readdir, realpath } from 'node:fs/promises';
 import { lstatSync, readFileSync, realpathSync } from 'node:fs';
 import { basename, dirname, resolve } from 'node:path';
 import { isUnderAllowedRoot } from '../utils/project-path.js';
@@ -95,6 +95,47 @@ function resolvePathPointerSync(filePath: string, baseDir: string): string | nul
 
 export function isAllowedProviderProfilesRoot(absPath: string): boolean {
   return isUnderAllowedRoot(absPath);
+}
+
+export async function listProviderProfilesProjectRoots(projectRoot: string): Promise<string[]> {
+  const storageRoot = await resolveProviderProfilesRoot(projectRoot);
+  const roots = new Map<string, string>([[normalizePathForCompare(storageRoot), storageRoot]]);
+  const commonGitDir = resolve(storageRoot, '.git');
+  const worktreesDir = resolve(commonGitDir, 'worktrees');
+
+  let entries;
+  try {
+    entries = await readdir(worktreesDir, { withFileTypes: true });
+  } catch {
+    return Array.from(roots.values());
+  }
+
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const gitDir = resolve(worktreesDir, String(entry.name));
+    const backRef = await resolvePathPointer(resolve(gitDir, 'gitdir'), gitDir);
+    if (!backRef) continue;
+    const worktreeRoot = dirname(backRef);
+    const forwardRef = await resolveGitdirPointer(resolve(worktreeRoot, '.git'), worktreeRoot);
+    if (!forwardRef || !samePath(forwardRef, gitDir)) continue;
+
+    let commondirRaw: string;
+    try {
+      commondirRaw = await readFile(resolve(gitDir, 'commondir'), 'utf-8');
+    } catch {
+      continue;
+    }
+    const commondirValue = commondirRaw.split(/\r?\n/, 1)[0]?.trim();
+    if (!commondirValue) continue;
+    const commondirResolved = await realpathOrNull(resolve(gitDir, commondirValue));
+    if (!commondirResolved || !samePath(commondirResolved, commonGitDir)) continue;
+
+    const candidateRoot = (await realpathOrNull(worktreeRoot)) ?? resolve(worktreeRoot);
+    if (!isAllowedProviderProfilesRoot(candidateRoot)) continue;
+    roots.set(normalizePathForCompare(candidateRoot), candidateRoot);
+  }
+
+  return Array.from(roots.values());
 }
 
 export async function resolveProviderProfilesRoot(projectRoot: string): Promise<string> {

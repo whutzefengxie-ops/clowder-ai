@@ -304,6 +304,7 @@ export function toAllCatConfigs(config: CatCafeConfig): Record<string, CatConfig
     string,
     CatConfig & {
       contextBudget?: ContextBudget;
+      providerProfileId?: string;
     }
   > = {};
   for (const breed of config.breeds) {
@@ -352,6 +353,7 @@ export function toAllCatConfigs(config: CatCafeConfig): Record<string, CatConfig
           : legacyVariant.providerProfileId != null
             ? { accountRef: legacyVariant.providerProfileId }
             : {}),
+        ...(legacyVariant.providerProfileId != null ? { providerProfileId: legacyVariant.providerProfileId } : {}),
         provider: variant.provider,
         defaultModel: variant.defaultModel,
         mcpSupport: variant.mcpSupport,

@@ -21,7 +21,11 @@ import type {
   RuntimeProviderProfile,
   UpdateProviderProfileInput,
 } from './provider-profiles.types.js';
-import { resolveProviderProfilesRoot, resolveProviderProfilesRootSync } from './provider-profiles-root.js';
+import {
+  listProviderProfilesProjectRoots,
+  resolveProviderProfilesRoot,
+  resolveProviderProfilesRootSync,
+} from './provider-profiles-root.js';
 
 export type {
   AnthropicRuntimeProfile,
@@ -676,6 +680,17 @@ function collectRuntimeCatsBoundToProfile(projectRoot: string, profileId: string
   return Array.from(result);
 }
 
+async function collectRuntimeCatsBoundToProfileAcrossRoots(projectRoot: string, profileId: string): Promise<string[]> {
+  const roots = await listProviderProfilesProjectRoots(projectRoot);
+  const result = new Set<string>();
+  for (const root of roots) {
+    for (const catId of collectRuntimeCatsBoundToProfile(root, profileId)) {
+      result.add(catId);
+    }
+  }
+  return Array.from(result);
+}
+
 function isReferencedByBootstrapBindings(meta: ProviderProfilesMetaFile, profileId: string): boolean {
   return Object.values(meta.bootstrapBindings).some((binding) => binding?.accountRef === profileId);
 }
@@ -884,7 +899,7 @@ export async function deleteProviderProfile(
   if (profile.kind === 'builtin') {
     throw new Error('builtin provider cannot be deleted');
   }
-  const boundCatIds = collectRuntimeCatsBoundToProfile(projectRoot, profileId);
+  const boundCatIds = await collectRuntimeCatsBoundToProfileAcrossRoots(projectRoot, profileId);
   if (boundCatIds.length > 0) {
     throw new Error(`provider profile "${profileId}" is still referenced by runtime cats: ${boundCatIds.join(', ')}`);
   }

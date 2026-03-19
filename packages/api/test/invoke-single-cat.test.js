@@ -2659,6 +2659,80 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
     assert.equal(callbackEnv.OPENAI_API_BASE, undefined);
   });
 
+  it('F127 P2: bootstrapped seed cats follow the current bootstrap binding after activation', async () => {
+    const { bootstrapCatCatalog, resolveCatCatalogPath } = await import('../dist/config/cat-catalog-store.js');
+    const { loadCatConfig, toAllCatConfigs } = await import('../dist/config/cat-config-loader.js');
+    const { activateProviderProfile, createProviderProfile } = await import('../dist/config/provider-profiles.js');
+    const root = await mkdtemp(join(tmpdir(), 'f127-seed-bootstrap-binding-'));
+    const apiDir = join(root, 'packages', 'api');
+    await mkdir(apiDir, { recursive: true });
+    await writeFile(join(root, 'pnpm-workspace.yaml'), 'packages:\n  - "packages/*"\n', 'utf-8');
+    const templateRaw = await readFile(join(process.cwd(), '..', '..', 'cat-template.json'), 'utf-8');
+    await writeFile(join(root, 'cat-template.json'), templateRaw, 'utf-8');
+
+    const activatedProfile = await createProviderProfile(root, {
+      provider: 'openai',
+      name: 'activated-openai',
+      mode: 'api_key',
+      authType: 'api_key',
+      protocol: 'openai',
+      baseUrl: 'https://api.activated.example',
+      apiKey: 'sk-activated-openai',
+      setActive: false,
+    });
+
+    bootstrapCatCatalog(root, join(root, 'cat-template.json'));
+    const catalogPath = resolveCatCatalogPath(root);
+    const runtimeCatalog = JSON.parse(await readFile(catalogPath, 'utf-8'));
+    const codexBreed = runtimeCatalog.breeds.find((breed) => breed.catId === 'codex');
+    assert.equal(codexBreed?.variants[0]?.accountRef, 'codex');
+
+    await activateProviderProfile(root, 'openai', activatedProfile.id);
+
+    const registrySnapshot = catRegistry.getAllConfigs();
+    catRegistry.reset();
+    for (const [id, config] of Object.entries(toAllCatConfigs(loadCatConfig(catalogPath)))) {
+      catRegistry.register(id, config);
+    }
+
+    const optionsSeen = [];
+    const service = {
+      async *invoke(_prompt, options) {
+        optionsSeen.push(options ?? {});
+        yield { type: 'done', catId: 'codex', timestamp: Date.now() };
+      },
+    };
+
+    const deps = makeDeps();
+    const previousCwd = process.cwd();
+    try {
+      process.chdir(apiDir);
+      await collect(
+        invokeSingleCat(deps, {
+          catId: 'codex',
+          service,
+          prompt: 'test',
+          userId: 'user-f127-seed-bootstrap-binding',
+          threadId: 'thread-f127-seed-bootstrap-binding',
+          isLastCat: true,
+        }),
+      );
+    } finally {
+      process.chdir(previousCwd);
+      catRegistry.reset();
+      for (const [id, config] of Object.entries(registrySnapshot)) {
+        catRegistry.register(id, config);
+      }
+      await rm(root, { recursive: true, force: true });
+    }
+
+    const callbackEnv = optionsSeen[0]?.callbackEnv ?? {};
+    assert.equal(callbackEnv.CODEX_AUTH_MODE, 'api_key');
+    assert.equal(callbackEnv.OPENAI_API_KEY, 'sk-activated-openai');
+    assert.equal(callbackEnv.OPENAI_BASE_URL, 'https://api.activated.example');
+    assert.equal(callbackEnv.OPENAI_API_BASE, 'https://api.activated.example');
+  });
+
   it('F127 P1: prefers member-bound openai profile over protocol active profile', async () => {
     const { createProviderProfile } = await import('../dist/config/provider-profiles.js');
     const root = await mkdtemp(join(tmpdir(), 'f127-openai-profile-'));

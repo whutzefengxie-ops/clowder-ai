@@ -195,6 +195,53 @@ describe('provider profile store', () => {
     );
   });
 
+  it('rejects deleting an account that is still referenced by a sibling worktree runtime member', async () => {
+    const repoRoot = await makeTmpDir('shared-delete-main');
+    const runtimeRoot = await makeTmpDir('shared-delete-runtime');
+    try {
+      const runtimeGitDir = join(repoRoot, '.git', 'worktrees', 'runtime');
+      await mkdir(runtimeGitDir, { recursive: true });
+      await writeFile(join(runtimeRoot, '.git'), `gitdir: ${runtimeGitDir}\n`, 'utf-8');
+      await writeFile(join(runtimeGitDir, 'gitdir'), `${join(runtimeRoot, '.git')}\n`, 'utf-8');
+      await writeFile(join(runtimeGitDir, 'commondir'), '../..\n', 'utf-8');
+      await Promise.all([seedTemplate(repoRoot), seedTemplate(runtimeRoot)]);
+
+      const created = await createProviderProfile(runtimeRoot, {
+        displayName: 'Shared Delete Account',
+        authType: 'api_key',
+        baseUrl: 'https://api.shared-delete.dev',
+        apiKey: 'sk-shared-delete',
+      });
+
+      await createRuntimeCat(repoRoot, {
+        catId: 'shared-root-bound-cat',
+        breedId: 'shared-root-bound-cat',
+        name: '共享绑定猫',
+        displayName: '共享绑定猫',
+        avatar: '/avatars/shared.png',
+        color: { primary: '#64748b', secondary: '#cbd5e1' },
+        mentionPatterns: ['@shared-root-bound-cat'],
+        accountRef: created.id,
+        roleDescription: '跨 worktree 绑定',
+        personality: '稳定',
+        provider: 'anthropic',
+        defaultModel: 'claude-opus-4-6',
+        mcpSupport: false,
+        cli: { command: 'claude', outputFormat: 'stream-json' },
+      });
+
+      await assert.rejects(
+        deleteProviderProfile(runtimeRoot, created.id, created.id),
+        /still referenced by runtime cats: shared-root-bound-cat/i,
+      );
+    } finally {
+      await Promise.all([
+        rm(repoRoot, { recursive: true, force: true }),
+        rm(runtimeRoot, { recursive: true, force: true }),
+      ]);
+    }
+  });
+
   it('builtin accounts only allow model-list updates', async () => {
     await assert.rejects(
       updateProviderProfile(projectRoot, 'claude', 'claude', {

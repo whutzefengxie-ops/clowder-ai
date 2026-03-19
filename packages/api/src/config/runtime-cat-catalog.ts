@@ -216,7 +216,7 @@ function createBreedFromInput(input: RuntimeCatInput): CatBreed {
         mcpSupport: input.mcpSupport,
         cli: input.cli,
         ...(input.accountRef != null && input.accountRef.trim().length > 0
-          ? { accountRef: input.accountRef.trim() }
+          ? { accountRef: input.accountRef.trim(), providerProfileId: input.accountRef.trim() }
           : {}),
         ...(input.commandArgs && input.commandArgs.length > 0 ? { commandArgs: input.commandArgs } : {}),
         ...(input.contextBudget ? { contextBudget: input.contextBudget } : {}),
@@ -316,9 +316,12 @@ export function updateRuntimeCat(projectRoot: string, catId: string, patch: Runt
 
   if (patch.accountRef !== undefined) {
     if (patch.accountRef && patch.accountRef.trim().length > 0) {
-      variant.accountRef = patch.accountRef.trim();
+      const normalizedAccountRef = patch.accountRef.trim();
+      variant.accountRef = normalizedAccountRef;
+      variant.providerProfileId = normalizedAccountRef;
     } else {
       delete variant.accountRef;
+      delete variant.providerProfileId;
     }
   }
   if (patch.personality !== undefined) {
