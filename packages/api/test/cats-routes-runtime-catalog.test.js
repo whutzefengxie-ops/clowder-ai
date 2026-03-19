@@ -165,10 +165,11 @@ describe('cats routes read runtime catalog', { concurrency: false }, () => {
   it('GET /api/cats bootstraps the runtime catalog before the first read', async () => {
     const codexTemplate = makeCatalog('codex', 'Codex');
     const dareTemplate = makeCatalog('dare', 'Dare', 'dare', 'glm-4.7');
+    const antigravityTemplate = makeCatalog('antigravity', 'Antigravity', 'antigravity', 'gemini-bridge');
     const opencodeTemplate = makeCatalog('opencode', 'OpenCode', 'opencode', 'claude-opus-4-6');
     const template = {
       version: 1,
-      breeds: [...codexTemplate.breeds, ...dareTemplate.breeds, ...opencodeTemplate.breeds],
+      breeds: [...codexTemplate.breeds, ...dareTemplate.breeds, ...antigravityTemplate.breeds, ...opencodeTemplate.breeds],
     };
     const projectRoot = createTemplateOnlyProject(template);
     process.env.CAT_TEMPLATE_PATH = join(projectRoot, 'cat-template.json');
@@ -184,15 +185,15 @@ describe('cats routes read runtime catalog', { concurrency: false }, () => {
     const body = JSON.parse(res.body);
     assert.deepEqual(
       body.cats.map((cat) => cat.id),
-      ['codex'],
+      ['codex', 'dare', 'antigravity', 'opencode'],
       'first read should match the bootstrapped runtime catalog, not the raw template',
     );
 
     const runtimeCatalog = JSON.parse(readFileSync(join(projectRoot, '.cat-cafe', 'cat-catalog.json'), 'utf-8'));
     assert.deepEqual(
       runtimeCatalog.breeds.map((breed) => breed.catId),
-      ['codex'],
-      'bootstrapped runtime catalog should filter skipped clients before GET /api/cats responds',
+      ['codex', 'dare', 'antigravity', 'opencode'],
+      'bootstrapped runtime catalog should preserve non-bootstrap and skipped seed clients before GET /api/cats responds',
     );
 
     await app.close();

@@ -103,6 +103,17 @@ function resolveSelectedVariants(
   });
 }
 
+function collectBreedCatIds(breed: Record<string, unknown>): string[] {
+  const breedCatId = typeof breed.catId === 'string' ? breed.catId : null;
+  const variants = Array.isArray(breed.variants) ? (breed.variants as Record<string, unknown>[]) : [];
+  const collected = new Set<string>();
+  for (const variant of variants) {
+    const catId = typeof variant.catId === 'string' ? variant.catId : breedCatId;
+    if (catId) collected.add(catId);
+  }
+  return [...collected];
+}
+
 function fallbackAccountRefForClient(client: BuiltinAccountClient, binding: BootstrapBinding | undefined): string {
   return binding?.accountRef?.trim() || builtinAccountIdForClient(client);
 }
@@ -237,10 +248,23 @@ function filterBootstrapCatalog(template: CatCafeConfig, projectRoot: string): C
   for (const rawBreed of template.breeds as unknown as Record<string, unknown>[]) {
     const variants = Array.isArray(rawBreed.variants) ? (rawBreed.variants as Record<string, unknown>[]) : [];
     const firstClient = variants.map((variant) => providerToBootstrapClient(variant.provider)).find(Boolean) ?? null;
-    if (!firstClient) continue;
+    if (!firstClient) {
+      selectedBreeds.push(rawBreed);
+      for (const catId of collectBreedCatIds(rawBreed)) selectedCatIds.add(catId);
+      continue;
+    }
     const binding = bootstrapBindings[firstClient];
+    if (!binding || binding.mode === 'skip' || binding.enabled === false) {
+      selectedBreeds.push(rawBreed);
+      for (const catId of collectBreedCatIds(rawBreed)) selectedCatIds.add(catId);
+      continue;
+    }
     const selectedVariants = resolveSelectedVariants(rawBreed, binding);
-    if (selectedVariants.length === 0) continue;
+    if (selectedVariants.length === 0) {
+      selectedBreeds.push(rawBreed);
+      for (const catId of collectBreedCatIds(rawBreed)) selectedCatIds.add(catId);
+      continue;
+    }
     const nextBreed: Record<string, unknown> = {
       ...rawBreed,
       variants: selectedVariants,

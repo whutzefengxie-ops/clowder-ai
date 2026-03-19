@@ -25,7 +25,9 @@ function publishOwner(nextOwner: OwnerConfig): void {
 
 async function fetchOwner(): Promise<OwnerConfig> {
   const res = await apiFetch('/api/config');
-  if (!res.ok) return DEFAULT_OWNER;
+  if (!res.ok) {
+    throw new Error(`failed to load owner config: ${res.status}`);
+  }
   const body = (await res.json().catch(() => ({}))) as { config?: { owner?: OwnerConfig } };
   return body.config?.owner ?? DEFAULT_OWNER;
 }
@@ -42,10 +44,15 @@ export function useOwnerConfig(): OwnerConfig {
       };
     }
     if (!fetchOwnerPromise) {
-      fetchOwnerPromise = fetchOwner().then((nextOwner) => {
-        publishOwner(nextOwner);
-        return nextOwner;
-      });
+      fetchOwnerPromise = fetchOwner()
+        .then((nextOwner) => {
+          publishOwner(nextOwner);
+          return nextOwner;
+        })
+        .catch((error) => {
+          fetchOwnerPromise = null;
+          throw error;
+        });
     }
     let cancelled = false;
     fetchOwnerPromise
