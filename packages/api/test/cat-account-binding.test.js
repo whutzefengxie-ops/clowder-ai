@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
@@ -46,6 +47,50 @@ describe('cat account binding', () => {
       assert.ok(catConfig, 'codex should be present in bootstrapped runtime catalog');
       assert.equal(resolveBoundAccountRefForCat(projectRoot, 'codex', catConfig), 'codex-pinned');
     } finally {
+      await rm(projectRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('backfills legacy accountRef-only seed bindings before suppressing inherited bootstrap refs', async () => {
+    const { bootstrapCatCatalog, readCatCatalog, resolveCatCatalogPath } = await import('../dist/config/cat-catalog-store.js');
+    const { toAllCatConfigs } = await import('../dist/config/cat-config-loader.js');
+    const { resolveBoundAccountRefForCat } = await import('../dist/config/cat-account-binding.js');
+    const projectRoot = await mkdtemp(join(tmpdir(), 'cat-account-binding-legacy-seed-'));
+    const previousTemplatePath = process.env.CAT_TEMPLATE_PATH;
+
+    try {
+      await seedTemplate(projectRoot);
+      process.env.CAT_TEMPLATE_PATH = join(projectRoot, 'cat-template.json');
+      bootstrapCatCatalog(projectRoot, process.env.CAT_TEMPLATE_PATH);
+
+      const catalogPath = resolveCatCatalogPath(projectRoot);
+      const runtimeCatalog = JSON.parse(await readFile(catalogPath, 'utf-8'));
+      const codexBreed = runtimeCatalog.breeds.find((breed) => breed.catId === 'codex');
+      const sparkVariant = codexBreed?.variants.find((variant) => variant.catId === 'spark');
+      if (!codexBreed || !codexBreed.variants[0] || !sparkVariant) {
+        throw new Error('codex seed variants missing from bootstrapped runtime catalog');
+      }
+
+      codexBreed.variants[0].accountRef = 'codex-sponsor';
+      delete codexBreed.variants[0].providerProfileId;
+      sparkVariant.accountRef = 'codex';
+      delete sparkVariant.providerProfileId;
+      await mkdir(join(projectRoot, '.cat-cafe'), { recursive: true });
+      await writeFile(catalogPath, `${JSON.stringify(runtimeCatalog, null, 2)}\n`, 'utf-8');
+
+      const migratedCatalog = readCatCatalog(projectRoot);
+      const catConfig = toAllCatConfigs(migratedCatalog).codex;
+      assert.ok(catConfig, 'codex should still be present after migration');
+      assert.equal(resolveBoundAccountRefForCat(projectRoot, 'codex', catConfig), 'codex-sponsor');
+
+      const migratedRaw = JSON.parse(await readFile(catalogPath, 'utf-8'));
+      const migratedCodexBreed = migratedRaw.breeds.find((breed) => breed.catId === 'codex');
+      const migratedSparkVariant = migratedCodexBreed?.variants.find((variant) => variant.catId === 'spark');
+      assert.equal(migratedCodexBreed?.variants[0]?.providerProfileId, 'codex-sponsor');
+      assert.equal(migratedSparkVariant?.providerProfileId, undefined);
+    } finally {
+      if (previousTemplatePath === undefined) delete process.env.CAT_TEMPLATE_PATH;
+      else process.env.CAT_TEMPLATE_PATH = previousTemplatePath;
       await rm(projectRoot, { recursive: true, force: true });
     }
   });

@@ -17,6 +17,20 @@ function safePath(projectRoot: string, ...segments: string[]): string {
   return normalized;
 }
 
+function isWithinProjectRoot(projectRoot: string, candidatePath: string): boolean {
+  const rel = relative(resolve(projectRoot), resolve(candidatePath));
+  return rel === '' || (!rel.startsWith(`..${sep}`) && rel !== '..');
+}
+
+function resolveTemplatePath(projectRoot: string): string {
+  const envPath = process.env.CAT_TEMPLATE_PATH?.trim();
+  if (envPath) {
+    const resolvedEnvPath = resolve(envPath);
+    if (isWithinProjectRoot(projectRoot, resolvedEnvPath)) return resolvedEnvPath;
+  }
+  return resolve(projectRoot, 'cat-template.json');
+}
+
 function providerToBootstrapClient(provider: unknown): BuiltinAccountClient | null {
   switch (provider) {
     case 'anthropic':
@@ -93,11 +107,94 @@ function fallbackAccountRefForClient(client: BuiltinAccountClient, binding: Boot
   return binding?.accountRef?.trim() || builtinAccountIdForClient(client);
 }
 
+function readSeedMetadata(projectRoot: string): {
+  explicitSeedAccountRefs: Map<string, string>;
+  seedCatIdsByClient: Map<BuiltinAccountClient, Set<string>>;
+} {
+  const explicitSeedAccountRefs = new Map<string, string>();
+  const seedCatIdsByClient = new Map<BuiltinAccountClient, Set<string>>();
+
+  try {
+    const template = JSON.parse(readFileSync(resolveTemplatePath(projectRoot), 'utf-8')) as CatCafeConfig;
+    for (const breed of template.breeds as unknown as Record<string, unknown>[]) {
+      const variants = Array.isArray(breed.variants) ? (breed.variants as Record<string, unknown>[]) : [];
+      for (const variant of variants) {
+        const client = providerToBootstrapClient(variant.provider);
+        if (!client) continue;
+        const catId = typeof variant.catId === 'string' ? variant.catId : typeof breed.catId === 'string' ? breed.catId : null;
+        if (!catId) continue;
+        const clientSeedCatIds = seedCatIdsByClient.get(client) ?? new Set<string>();
+        clientSeedCatIds.add(catId);
+        seedCatIdsByClient.set(client, clientSeedCatIds);
+
+        const explicitAccountRef = resolveExplicitVariantAccountRef(variant);
+        if (explicitAccountRef) explicitSeedAccountRefs.set(catId, explicitAccountRef);
+      }
+    }
+  } catch {
+    // Keep migration best-effort when the template is unavailable.
+  }
+
+  return { explicitSeedAccountRefs, seedCatIdsByClient };
+}
+
+function resolveLegacySeedBindingBackfill(
+  projectRoot: string,
+  catalog: CatCafeConfig,
+  bootstrapBindings: Record<string, BootstrapBinding | undefined>,
+): Map<string, string> {
+  const { explicitSeedAccountRefs, seedCatIdsByClient } = readSeedMetadata(projectRoot);
+  const backfill = new Map<string, string>();
+  const observedSeedBindings = new Map<BuiltinAccountClient, Array<{ catId: string; accountRef: string }>>();
+
+  for (const breed of catalog.breeds as unknown as Record<string, unknown>[]) {
+    const variants = Array.isArray(breed.variants) ? (breed.variants as Record<string, unknown>[]) : [];
+    for (const variant of variants) {
+      const client = providerToBootstrapClient(variant.provider);
+      if (!client) continue;
+
+      const catId = typeof variant.catId === 'string' ? variant.catId : typeof breed.catId === 'string' ? breed.catId : null;
+      if (!catId) continue;
+
+      const providerProfileId = trimBinding(variant.providerProfileId);
+      const accountRef = trimBinding(variant.accountRef);
+      if (providerProfileId || !accountRef) continue;
+
+      const templateExplicitAccountRef = explicitSeedAccountRefs.get(catId);
+      if (templateExplicitAccountRef && templateExplicitAccountRef === accountRef) {
+        backfill.set(catId, accountRef);
+        continue;
+      }
+
+      if (!seedCatIdsByClient.get(client)?.has(catId)) continue;
+      const bindings = observedSeedBindings.get(client) ?? [];
+      bindings.push({ catId, accountRef });
+      observedSeedBindings.set(client, bindings);
+    }
+  }
+
+  for (const [client, bindings] of observedSeedBindings) {
+    if (bindings.length < 2) continue;
+    const uniqueAccountRefs = new Set(bindings.map((binding) => binding.accountRef));
+    if (uniqueAccountRefs.size <= 1) continue;
+
+    const inheritedAccountRef = fallbackAccountRefForClient(client, bootstrapBindings[client]);
+    for (const binding of bindings) {
+      if (binding.accountRef !== inheritedAccountRef) {
+        backfill.set(binding.catId, binding.accountRef);
+      }
+    }
+  }
+
+  return backfill;
+}
+
 function migrateExistingCatalogBindings(
   projectRoot: string,
   catalog: CatCafeConfig,
 ): { catalog: CatCafeConfig; dirty: boolean } {
   const bootstrapBindings = readBootstrapBindingsSync(projectRoot);
+  const legacySeedBindingBackfill = resolveLegacySeedBindingBackfill(projectRoot, catalog, bootstrapBindings);
   let dirty = false;
   const nextCatalog = structuredClone(catalog) as CatCafeConfig;
 
@@ -106,8 +203,15 @@ function migrateExistingCatalogBindings(
     for (const variant of variants) {
       const client = providerToBootstrapClient(variant.provider);
       if (!client) continue;
+      const catId = typeof variant.catId === 'string' ? variant.catId : typeof breed.catId === 'string' ? breed.catId : null;
       const explicitProviderProfileId = trimBinding(variant.providerProfileId);
       const existingAccountRef = typeof variant.accountRef === 'string' ? variant.accountRef.trim() : '';
+      const legacyExplicitAccountRef = catId ? legacySeedBindingBackfill.get(catId) : undefined;
+      if (!explicitProviderProfileId && existingAccountRef && legacyExplicitAccountRef === existingAccountRef) {
+        variant.providerProfileId = existingAccountRef;
+        dirty = true;
+        continue;
+      }
       if (existingAccountRef) continue;
       if (explicitProviderProfileId) {
         variant.accountRef = explicitProviderProfileId;
