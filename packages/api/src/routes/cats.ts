@@ -9,10 +9,11 @@ import { fileURLToPath } from 'node:url';
 import { type CatConfig, type CatProvider, type ContextBudget, catRegistry, type RosterEntry } from '@cat-cafe/shared';
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
+import { isSeedCat, resolveBoundAccountRefForCat } from '../config/cat-account-binding.js';
 import { bootstrapCatCatalog, resolveCatCatalogPath } from '../config/cat-catalog-store.js';
 import { getRoster, loadCatConfig, toAllCatConfigs } from '../config/cat-config-loader.js';
-import { validateRuntimeProviderBinding } from '../config/provider-binding-compat.js';
-import { resolveRuntimeProviderProfileById } from '../config/provider-profiles.js';
+import { resolveBuiltinClientForProvider, validateRuntimeProviderBinding } from '../config/provider-binding-compat.js';
+import { resolveRuntimeProviderProfileById, resolveRuntimeProviderProfileForClient } from '../config/provider-profiles.js';
 import { createRuntimeCat, deleteRuntimeCat, updateRuntimeCat } from '../config/runtime-cat-catalog.js';
 import { deleteRuntimeOverride, getRuntimeOverride, setRuntimeOverride } from '../config/session-strategy-overrides.js';
 
@@ -169,6 +170,28 @@ function resolveAccountRef(body: {
   return undefined;
 }
 
+function buildEffectiveAccountRefResolver(projectRoot: string) {
+  const inheritedBindingCache = new Map<string, Promise<string | undefined>>();
+
+  return async (cat: CatConfig & { contextBudget?: ContextBudget }): Promise<string | undefined> => {
+    const explicitAccountRef = resolveBoundAccountRefForCat(projectRoot, cat.id, cat);
+    if (explicitAccountRef !== undefined) return explicitAccountRef;
+    if (!isSeedCat(projectRoot, cat.id)) return cat.accountRef;
+
+    const builtinClient = resolveBuiltinClientForProvider(cat.provider);
+    if (!builtinClient) return cat.accountRef;
+
+    let runtimeProfilePromise = inheritedBindingCache.get(builtinClient);
+    if (!runtimeProfilePromise) {
+      runtimeProfilePromise = resolveRuntimeProviderProfileForClient(projectRoot, builtinClient).then(
+        (profile) => profile?.id,
+      );
+      inheritedBindingCache.set(builtinClient, runtimeProfilePromise);
+    }
+    return (await runtimeProfilePromise) ?? cat.accountRef;
+  };
+}
+
 async function validateAccountBindingOrThrow(
   projectRoot: string,
   client: CatProvider,
@@ -193,7 +216,11 @@ async function validateAccountBindingOrThrow(
   }
 }
 
-function toCatResponse(cat: CatConfig & { contextBudget?: ContextBudget }, metadata: CatResponseMetadata) {
+async function toCatResponse(
+  cat: CatConfig & { contextBudget?: ContextBudget },
+  metadata: CatResponseMetadata,
+  resolveEffectiveAccountRef: (cat: CatConfig & { contextBudget?: ContextBudget }) => Promise<string | undefined>,
+) {
   return {
     id: cat.id,
     name: cat.name,
@@ -202,7 +229,7 @@ function toCatResponse(cat: CatConfig & { contextBudget?: ContextBudget }, metad
     color: cat.color,
     mentionPatterns: cat.mentionPatterns,
     breedId: cat.breedId,
-    accountRef: cat.accountRef,
+    accountRef: await resolveEffectiveAccountRef(cat),
     provider: cat.provider,
     defaultModel: cat.defaultModel,
     contextBudget: cat.contextBudget,
@@ -281,8 +308,13 @@ export const catsRoutes: FastifyPluginAsync<CatsRoutesOptions> = async (app, opt
   app.get('/api/cats', async () => {
     const resolveMetadata = buildCatResponseMetadataResolver();
     const projectRoot = resolveProjectRoot();
+    const resolveEffectiveAccountRef = buildEffectiveAccountRefResolver(projectRoot);
     return {
-      cats: Object.values(getResolvedCats(projectRoot)).map((cat) => toCatResponse(cat, resolveMetadata(cat.id))),
+      cats: await Promise.all(
+        Object.values(getResolvedCats(projectRoot)).map((cat) =>
+          toCatResponse(cat, resolveMetadata(cat.id), resolveEffectiveAccountRef),
+        ),
+      ),
     };
   });
 
@@ -368,8 +400,9 @@ export const catsRoutes: FastifyPluginAsync<CatsRoutesOptions> = async (app, opt
     const resolved = await reconcileCatRegistry(projectRoot, managedIdsBefore, opts.onCatalogChanged);
     const cat = resolved[body.catId];
     const metadata = buildCatResponseMetadataResolver();
+    const resolveEffectiveAccountRef = buildEffectiveAccountRefResolver(projectRoot);
     reply.status(201);
-    return { cat: toCatResponse(cat, metadata(cat.id)), updatedBy: operator };
+    return { cat: await toCatResponse(cat, metadata(cat.id), resolveEffectiveAccountRef), updatedBy: operator };
   });
 
   app.patch<{ Params: { id: string } }>('/api/cats/:id', async (request, reply) => {
@@ -387,6 +420,7 @@ export const catsRoutes: FastifyPluginAsync<CatsRoutesOptions> = async (app, opt
 
     const body = parsed.data;
     const projectRoot = resolveProjectRoot();
+    const resolveEffectiveAccountRef = buildEffectiveAccountRefResolver(projectRoot);
     const currentCat = getResolvedCats(projectRoot)[request.params.id] ?? catRegistry.tryGet(request.params.id)?.config;
     if (!currentCat) {
       reply.status(404);
@@ -394,7 +428,8 @@ export const catsRoutes: FastifyPluginAsync<CatsRoutesOptions> = async (app, opt
     }
     const effectiveClient = body.client ?? currentCat.provider;
     const nextAccountRef = resolveAccountRef(body);
-    const effectiveAccountRef = nextAccountRef !== undefined ? (nextAccountRef ?? undefined) : currentCat.accountRef;
+    const currentEffectiveAccountRef = await resolveEffectiveAccountRef(currentCat);
+    const effectiveAccountRef = nextAccountRef !== undefined ? (nextAccountRef ?? undefined) : currentEffectiveAccountRef;
     const effectiveDefaultModel = body.defaultModel !== undefined ? body.defaultModel : currentCat.defaultModel;
     const providerConfigTouched =
       body.client !== undefined || body.defaultModel !== undefined || nextAccountRef !== undefined;
@@ -454,7 +489,7 @@ export const catsRoutes: FastifyPluginAsync<CatsRoutesOptions> = async (app, opt
       const resolved = await reconcileCatRegistry(projectRoot, managedIdsBefore, opts.onCatalogChanged);
       const cat = resolved[request.params.id];
       const metadata = buildCatResponseMetadataResolver();
-      return { cat: toCatResponse(cat, metadata(cat.id)), updatedBy: operator };
+      return { cat: await toCatResponse(cat, metadata(cat.id), resolveEffectiveAccountRef), updatedBy: operator };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       if (/not found/i.test(message)) {

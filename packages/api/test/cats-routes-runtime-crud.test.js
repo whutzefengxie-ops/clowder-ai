@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, afterEach, beforeEach, describe, it } from 'node:test';
@@ -72,6 +72,14 @@ function createProjectRoot() {
   const projectRoot = mkdtempSync(join(tmpdir(), 'cats-route-crud-'));
   tempDirs.push(projectRoot);
   writeFileSync(join(projectRoot, 'cat-template.json'), JSON.stringify(makeTemplate(), null, 2));
+  return projectRoot;
+}
+
+function createProjectRootFromRepoTemplate() {
+  const projectRoot = mkdtempSync(join(tmpdir(), 'cats-route-crud-seed-'));
+  tempDirs.push(projectRoot);
+  const repoTemplate = JSON.parse(readFileSync(join(process.cwd(), '..', '..', 'cat-template.json'), 'utf-8'));
+  writeFileSync(join(projectRoot, 'cat-template.json'), JSON.stringify(repoTemplate, null, 2));
   return projectRoot;
 }
 
@@ -581,6 +589,47 @@ describe('cats routes runtime CRUD', { concurrency: false }, () => {
     assert.equal(patchRes.statusCode, 400);
     const patchBody = JSON.parse(patchRes.body);
     assert.match(patchBody.error, /model "gpt-5\.4" is not available on provider "scoped-openai-profile"/i);
+  });
+
+  it('PATCH /api/cats/:id validates seed model edits against the active bootstrap account', async () => {
+    const projectRoot = createProjectRootFromRepoTemplate();
+    process.env.CAT_TEMPLATE_PATH = join(projectRoot, 'cat-template.json');
+
+    const { bootstrapCatCatalog } = await import('../dist/config/cat-catalog-store.js');
+    const { activateProviderProfile, createProviderProfile } = await import('../dist/config/provider-profiles.js');
+    bootstrapCatCatalog(projectRoot, process.env.CAT_TEMPLATE_PATH);
+    const sponsorProfile = await createProviderProfile(projectRoot, {
+      displayName: 'Codex Sponsor',
+      authType: 'api_key',
+      protocol: 'openai',
+      baseUrl: 'https://api.codex-sponsor.example',
+      apiKey: 'sk-codex-sponsor',
+      models: ['gpt-5.4-mini'],
+    });
+    await activateProviderProfile(projectRoot, 'openai', sponsorProfile.id);
+
+    const Fastify = (await import('fastify')).default;
+    const { catsRoutes } = await import('../dist/routes/cats.js');
+
+    const app = Fastify();
+    await app.register(catsRoutes);
+
+    const patchRes = await app.inject({
+      method: 'PATCH',
+      url: '/api/cats/codex',
+      headers: {
+        'content-type': 'application/json',
+        'x-cat-cafe-user': 'codex',
+      },
+      body: JSON.stringify({
+        defaultModel: 'gpt-5.4-mini',
+      }),
+    });
+
+    assert.equal(patchRes.statusCode, 200);
+    const patchBody = JSON.parse(patchRes.body);
+    assert.equal(patchBody.cat.defaultModel, 'gpt-5.4-mini');
+    assert.equal(patchBody.cat.accountRef, sponsorProfile.id);
   });
 
   it('PATCH /api/cats/:id allows non-provider edits for unbound opencode seed member', async () => {

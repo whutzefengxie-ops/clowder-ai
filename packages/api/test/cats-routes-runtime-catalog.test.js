@@ -81,6 +81,10 @@ function createTemplateOnlyProject(template) {
   return projectRoot;
 }
 
+function loadRepoTemplate() {
+  return JSON.parse(readFileSync(join(process.cwd(), '..', '..', 'cat-template.json'), 'utf-8'));
+}
+
 describe('cats routes read runtime catalog', { concurrency: false }, () => {
   beforeEach(() => {
     savedTemplatePath = process.env.CAT_TEMPLATE_PATH;
@@ -195,6 +199,40 @@ describe('cats routes read runtime catalog', { concurrency: false }, () => {
       ['codex', 'dare', 'antigravity', 'opencode'],
       'bootstrapped runtime catalog should preserve non-bootstrap and skipped seed clients before GET /api/cats responds',
     );
+
+    await app.close();
+  });
+
+  it('GET /api/cats recomputes seed accountRef from the active bootstrap binding', async () => {
+    const projectRoot = createTemplateOnlyProject(loadRepoTemplate());
+    process.env.CAT_TEMPLATE_PATH = join(projectRoot, 'cat-template.json');
+
+    const { bootstrapCatCatalog } = await import('../dist/config/cat-catalog-store.js');
+    const { activateProviderProfile, createProviderProfile } = await import('../dist/config/provider-profiles.js');
+    bootstrapCatCatalog(projectRoot, process.env.CAT_TEMPLATE_PATH);
+    const sponsorProfile = await createProviderProfile(projectRoot, {
+      displayName: 'Codex Sponsor',
+      authType: 'api_key',
+      protocol: 'openai',
+      baseUrl: 'https://api.codex-sponsor.example',
+      apiKey: 'sk-codex-sponsor',
+      models: ['gpt-5.4-mini'],
+    });
+    await activateProviderProfile(projectRoot, 'openai', sponsorProfile.id);
+
+    const Fastify = (await import('fastify')).default;
+    const { catsRoutes } = await import('../dist/routes/cats.js');
+
+    const app = Fastify();
+    await app.register(catsRoutes);
+
+    const res = await app.inject({ method: 'GET', url: '/api/cats' });
+    assert.equal(res.statusCode, 200);
+    const body = JSON.parse(res.body);
+    const codex = body.cats.find((cat) => cat.id === 'codex');
+    assert.ok(codex, 'codex should be listed');
+    assert.equal(codex.source, 'seed');
+    assert.equal(codex.accountRef, sponsorProfile.id);
 
     await app.close();
   });
