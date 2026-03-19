@@ -255,9 +255,9 @@ if (Test-Path $envFile) {
 } else {
     Write-Warn ".env.example not found - creating minimal .env"
     @"
-FRONTEND_PORT=3003
-API_SERVER_PORT=3004
-NEXT_PUBLIC_API_URL=http://localhost:3004
+FRONTEND_PORT=3004
+API_SERVER_PORT=3003
+NEXT_PUBLIC_API_URL=http://localhost:3003
 REDIS_PORT=6379
 "@ | Out-File -FilePath $envFile -Encoding utf8
     Write-Ok "Minimal .env created"
@@ -400,7 +400,7 @@ $startCmd = ".\scripts\start-windows.ps1"
 Write-Host "    $startCmd" -ForegroundColor White
 Write-Host ""
 $frontendPort = Get-InstallerEnvValueFromFile -EnvFile $envFile -Key "FRONTEND_PORT"
-if (-not $frontendPort) { $frontendPort = "3003" }
+if (-not $frontendPort) { $frontendPort = "3004" }
 Write-Host "  Then open http://localhost:$frontendPort" -ForegroundColor Cyan
 Write-Host ""
 

@@ -59,7 +59,9 @@ function envQuote(value) {
 
 function applyEnvChanges(envFile, setPairs, deleteKeys) {
   const existing = existsSync(envFile)
-    ? readFileSync(envFile, 'utf8').split(/\r?\n/).filter((line, index, lines) => !(index === lines.length - 1 && line === ''))
+    ? readFileSync(envFile, 'utf8')
+        .split(/\r?\n/)
+        .filter((line, index, lines) => !(index === lines.length - 1 && line === ''))
     : [];
   const setMap = new Map();
   for (const pair of setPairs) {
@@ -92,7 +94,6 @@ function readJson(file, fallback) {
   }
 }
 
-const DEFAULT_SUBSCRIPTION_PROFILE_ID = 'anthropic-subscription-default';
 const INSTALLER_PROFILE_ID = 'installer-managed';
 
 function createDefaultProfiles() {
@@ -219,7 +220,8 @@ function removeClaudeProfile(projectDir) {
   profiles.providers.anthropic = {
     ...anthropic,
     profiles: nextProfiles,
-    activeProfileId: anthropic.activeProfileId === INSTALLER_PROFILE_ID ? (nextProfiles[0]?.id ?? '') : anthropic.activeProfileId,
+    activeProfileId:
+      anthropic.activeProfileId === INSTALLER_PROFILE_ID ? (nextProfiles[0]?.id ?? '') : anthropic.activeProfileId,
   };
   if (secrets?.providers?.anthropic?.[INSTALLER_PROFILE_ID]) {
     delete secrets.providers.anthropic[INSTALLER_PROFILE_ID];

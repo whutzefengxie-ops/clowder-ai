@@ -69,8 +69,8 @@ if (-not $pnpmCommand) {
 Write-Ok "pnpm: $pnpmCommand"
 
 # -- Ports ---------------------------------------------------
-$ApiPort = if ($env:API_SERVER_PORT) { $env:API_SERVER_PORT } else { "3004" }
-$WebPort = if ($env:FRONTEND_PORT) { $env:FRONTEND_PORT } else { "3003" }
+$ApiPort = if ($env:API_SERVER_PORT) { $env:API_SERVER_PORT } else { "3003" }
+$WebPort = if ($env:FRONTEND_PORT) { $env:FRONTEND_PORT } else { "3004" }
 $RedisPort = if ($env:REDIS_PORT) { $env:REDIS_PORT } else { "6379" }
 $RunDir = Join-Path $ProjectRoot ".cat-cafe/run/windows"
 $ApiPidFile = Join-Path $RunDir "api-$ApiPort.pid"

@@ -27,8 +27,8 @@ Write-Host "============================="
 
 # Load .env for port config
 $envFile = Join-Path (Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)) ".env"
-$ApiPort = 3004
-$WebPort = 3003
+$ApiPort = 3003
+$WebPort = 3004
 $RedisPort = 6379
 
 if (Test-Path $envFile) {
