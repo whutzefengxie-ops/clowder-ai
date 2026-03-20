@@ -79,6 +79,7 @@ export function IdentitySection({
         ariaLabel="Description"
         value={form.roleDescription}
         onChange={(value) => onChange({ roleDescription: value })}
+        required
         placeholder="角色定位，如 代码审查专家"
       />
 

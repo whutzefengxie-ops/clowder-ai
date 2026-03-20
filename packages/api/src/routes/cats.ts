@@ -43,7 +43,7 @@ const baseCatSchema = z.object({
   name: z.string().min(1),
   displayName: z.string().min(1),
   nickname: z.string().optional(),
-  avatar: z.string().min(1),
+  avatar: z.string().min(1).optional(),
   color: colorSchema,
   mentionPatterns: z.array(z.string().min(1)).min(1),
   accountRef: z.string().min(1).optional(),
@@ -340,13 +340,14 @@ export const catsRoutes: FastifyPluginAsync<CatsRoutesOptions> = async (app, opt
     const accountRef = resolveAccountRef(body);
     try {
       await validateAccountBindingOrThrow(projectRoot, body.client, accountRef, body.defaultModel);
+      const resolvedAvatar = body.avatar ?? '/avatars/default.png';
       if (body.client === 'antigravity') {
         createRuntimeCat(projectRoot, {
           catId: body.catId,
           name: body.name,
           displayName: body.displayName,
           nickname: body.nickname,
-          avatar: body.avatar,
+          avatar: resolvedAvatar,
           color: body.color,
           mentionPatterns: body.mentionPatterns,
           ...(accountRef !== undefined ? { accountRef: accountRef ?? undefined } : {}),
@@ -372,7 +373,7 @@ export const catsRoutes: FastifyPluginAsync<CatsRoutesOptions> = async (app, opt
           name: body.name,
           displayName: body.displayName,
           nickname: body.nickname,
-          avatar: body.avatar,
+          avatar: resolvedAvatar,
           color: body.color,
           mentionPatterns: body.mentionPatterns,
           ...(accountRef !== undefined ? { accountRef: accountRef ?? undefined } : {}),
