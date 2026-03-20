@@ -38,6 +38,13 @@ export function validateRuntimeProviderBinding(
   profile: RuntimeProviderProfile,
   defaultModel?: string | null,
 ): string | null {
+  // Gemini CLI currently only supports builtin Google auth in our runtime.
+  // API-key profiles (especially third-party endpoints) are intentionally blocked
+  // for provider="google" to enforce the hard constraint at server side.
+  if (provider === 'google' && profile.kind !== 'builtin') {
+    return 'client "google" only supports builtin Gemini auth';
+  }
+
   const expectedClient = resolveBuiltinClientForProvider(provider);
   if (expectedClient && profile.kind === 'builtin' && profile.client && profile.client !== expectedClient) {
     return `bound provider profile "${profile.id}" is incompatible with client "${provider}"`;

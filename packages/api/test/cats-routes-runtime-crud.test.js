@@ -581,6 +581,52 @@ describe('cats routes runtime CRUD', { concurrency: false }, () => {
     }
   });
 
+  it('POST /api/cats rejects non-builtin provider bindings for google client', async () => {
+    const projectRoot = createProjectRoot();
+    process.env.CAT_TEMPLATE_PATH = join(projectRoot, 'cat-template.json');
+
+    const { createProviderProfile } = await import('../dist/config/provider-profiles.js');
+    const apiKeyProfile = await createProviderProfile(projectRoot, {
+      displayName: 'Gemini Proxy',
+      authType: 'api_key',
+      protocol: 'openai',
+      baseUrl: 'https://proxy.example/openrouter',
+      apiKey: 'sk-openrouter-proxy',
+      models: ['openrouter/google/gemini-3-flash-preview'],
+    });
+
+    const Fastify = (await import('fastify')).default;
+    const { catsRoutes } = await import('../dist/routes/cats.js');
+
+    const app = Fastify();
+    await app.register(catsRoutes);
+
+    const createRes = await app.inject({
+      method: 'POST',
+      url: '/api/cats',
+      headers: {
+        'content-type': 'application/json',
+        'x-cat-cafe-user': 'codex',
+      },
+      body: JSON.stringify({
+        catId: 'runtime-gemini-non-builtin',
+        name: 'runtime-gemini-non-builtin',
+        displayName: 'runtime-gemini-non-builtin',
+        avatar: '/avatars/runtime.png',
+        color: { primary: '#0f172a', secondary: '#e2e8f0' },
+        mentionPatterns: ['@runtime-gemini-non-builtin'],
+        roleDescription: '审查',
+        client: 'google',
+        providerProfileId: apiKeyProfile.id,
+        defaultModel: 'openrouter/google/gemini-3-flash-preview',
+      }),
+    });
+
+    assert.equal(createRes.statusCode, 400);
+    const createBody = JSON.parse(createRes.body);
+    assert.match(createBody.error, /only supports builtin Gemini auth/i);
+  });
+
   it('PATCH /api/cats/:id rejects models that are not available on the bound provider profile', async () => {
     const projectRoot = createProjectRoot();
     process.env.CAT_TEMPLATE_PATH = join(projectRoot, 'cat-template.json');
