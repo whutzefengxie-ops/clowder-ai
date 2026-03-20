@@ -15,6 +15,7 @@
  *   result/success → 跳过 (done 在循环后 yield)
  */
 
+import { execSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { isAbsolute, resolve } from 'node:path';
 import { type CatId, createCatId } from '@cat-cafe/shared';
@@ -52,6 +53,16 @@ function formatThinkingSignatureRescueError(sessionId: string | undefined): stri
 }
 
 const IS_WINDOWS = process.platform === 'win32';
+
+function isClaudeCliAvailable(): boolean {
+  try {
+    const cmd = IS_WINDOWS ? 'where claude' : 'which claude';
+    execSync(cmd, { stdio: 'ignore', timeout: 5000 });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export { pickGitBashPathFromWhere } from './claude-agent-win.js';
 
@@ -212,6 +223,17 @@ export class ClaudeAgentService implements AgentService {
     };
 
     try {
+      if (!isClaudeCliAvailable()) {
+        yield {
+          type: 'error' as const,
+          catId: this.catId,
+          content:
+            'Claude CLI 未安装。请先运行 `npm install -g @anthropic-ai/claude-code` 安装 Claude CLI，再重试。',
+          timestamp: Date.now(),
+        };
+        return;
+      }
+
       let sawResultError = false;
       const envOverrides = buildClaudeEnvOverrides(options?.callbackEnv);
 
