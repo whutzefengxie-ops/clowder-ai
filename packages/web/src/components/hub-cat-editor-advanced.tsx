@@ -64,6 +64,7 @@ export function AdvancedRuntimeSection({
           onChange={(value) => onChange({ maxPromptTokens: value })}
           inputMode="numeric"
           tone="success"
+          placeholder="留空默认 48000"
         />
         <TextField
           label="Max Context Tokens"
@@ -71,6 +72,7 @@ export function AdvancedRuntimeSection({
           onChange={(value) => onChange({ maxContextTokens: value })}
           inputMode="numeric"
           tone="success"
+          placeholder="留空默认 128000"
         />
         <TextField
           label="Max Messages"
@@ -78,6 +80,7 @@ export function AdvancedRuntimeSection({
           onChange={(value) => onChange({ maxMessages: value })}
           inputMode="numeric"
           tone="success"
+          placeholder="留空默认 50"
         />
         <TextField
           label="Max Content Length Per Msg"
@@ -86,6 +89,7 @@ export function AdvancedRuntimeSection({
           onChange={(value) => onChange({ maxContentLengthPerMsg: value })}
           inputMode="numeric"
           tone="success"
+          placeholder="留空默认 16000"
         />
         <SelectField
           label="Session Chain"
