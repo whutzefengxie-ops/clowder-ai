@@ -277,8 +277,16 @@ export function ThreadItem({
           )}
         </div>
       </div>
-      {/* Bottom row: time + badge (parent) or @handle (child) + status */}
+      {/* Bottom row: remaining participant avatars + time + badge/handle + status */}
       <div className="flex items-center gap-1">
+        {/* Remaining participant avatars (first one is already the big avatar on the left) */}
+        {participants.length > 1 && (
+          <div className="flex items-center -space-x-1">
+            {participants.slice(1).map((catId) => (
+              <CatAvatar key={catId} catId={catId} size={14} />
+            ))}
+          </div>
+        )}
         <span className="text-[10px] text-gray-400">{formatRelativeTime(lastActiveAt, true)}</span>
         {/* Parent thread: show "N 子线程" badge next to time */}
         {childCount != null && childCount > 0 && (
