@@ -145,57 +145,38 @@ export function HubOwnerEditor({ open, owner, onClose, onSaved }: HubOwnerEditor
           </button>
         </div>
 
-        <div className="space-y-4 px-6 py-5">
+        <div className="max-h-[70vh] space-y-4 overflow-y-auto px-6 py-5">
           <PersistenceBanner />
 
-          <SectionCard title="Owner 身份">
-            <div className="grid gap-4 md:grid-cols-[1.2fr_0.8fr]">
-              <TextField label="Owner Name" value={name} onChange={setName} />
+          <SectionCard title="身份信息">
+            <TextField label="名称" ariaLabel="Owner Name" value={name} onChange={setName} required placeholder="Owner 显示名称" />
 
-              <div className="rounded-[20px] border border-[#E8DCCF] bg-white/80 p-4">
-                <div className="flex items-center gap-3">
-                  <div
-                    className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full text-sm font-bold text-white"
-                    style={{ backgroundColor: colorPrimary }}
-                  >
-                    {avatar ? (
-                      // biome-ignore lint/performance/noImgElement: owner avatar may be runtime upload URL
-                      <img src={avatar} alt="Owner avatar preview" className="h-full w-full object-cover" />
-                    ) : (
-                      'ME'
-                    )}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-[#2D2118]">{name.trim() || 'ME'}</p>
-                    <p className="mt-1 text-xs text-[#8A776B]">{mentionPatterns.join('  ') || '@owner'}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-[#5C4B42]">Avatar</span>
-                <span className="text-xs text-[#8A776B]">仅显示预览，不回填上传路径</span>
-              </div>
+            <div className="flex items-center gap-3">
+              <span className="w-[140px] shrink-0 text-[13px] font-medium text-[#5C4B42]">Avatar</span>
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="flex w-full items-center gap-3 rounded-2xl border border-[#E8DCCF] bg-white/80 p-3 text-left transition hover:border-[#D49266]"
+                className="flex items-center gap-2 rounded-lg border border-[#E8DCCF] bg-[#F7F3F0] px-3 py-1.5 text-sm text-[#5C4B42] transition hover:border-[#D49266]"
               >
-                <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[#E8DCCF] bg-[#F7F3F0] text-xs text-[#8A776B]">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[#E8DCCF] bg-white text-[10px] text-[#8A776B]">
                   {avatar ? (
                     // biome-ignore lint/performance/noImgElement: owner avatar may be runtime upload URL
                     <img src={avatar} alt="Owner avatar preview" className="h-full w-full object-cover" />
                   ) : (
-                    'Avatar'
+                    'ME'
                   )}
                 </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-[#2D2118]">{uploadingAvatar ? '上传中…' : '点击上传头像'}</p>
-                  <p className="mt-1 text-xs text-[#8A776B]">支持 png / jpg / webp，上传后仅显示头像预览</p>
-                </div>
+                <span>{uploadingAvatar ? '上传中…' : '点击上传'}</span>
               </button>
+              {avatar ? (
+                <button
+                  type="button"
+                  onClick={() => setAvatar('')}
+                  className="text-xs text-[#8A776B] hover:text-[#E29578]"
+                >
+                  清除
+                </button>
+              ) : null}
               <input
                 ref={fileInputRef}
                 type="file"
@@ -209,76 +190,62 @@ export function HubOwnerEditor({ open, owner, onClose, onSaved }: HubOwnerEditor
                   });
                 }}
               />
-              {avatar ? (
-                <div className="flex justify-end">
-                  <button
-                    type="button"
-                    onClick={() => setAvatar('')}
-                    className="rounded-full bg-[#F7F3F0] px-3 py-1.5 text-xs font-semibold text-[#8A776B] transition hover:bg-[#EFE5DD]"
-                  >
-                    清除头像
-                  </button>
-                </div>
-              ) : null}
             </div>
 
-            <div className="grid gap-3 md:grid-cols-2">
-              <label className="flex items-center justify-between rounded-2xl border border-[#E8DCCF] bg-white/80 px-3 py-2.5 text-sm text-[#5C4B42]">
-                <span className="font-medium">Primary</span>
-                <div className="flex items-center gap-3">
-                  <span className="h-8 w-8 rounded-lg border border-white shadow-sm" style={{ backgroundColor: colorPrimary }} />
+            <div className="flex items-center gap-3">
+              <span className="w-[140px] shrink-0 text-[13px] font-medium text-[#5C4B42]">Background Color</span>
+              <div className="flex items-center gap-2">
+                <label title="Primary">
                   <input
                     type="color"
                     aria-label="Owner Color Primary"
                     value={colorPrimary}
                     onChange={(event) => setColorPrimary(event.target.value)}
-                    className="h-8 w-10 cursor-pointer rounded border-0 bg-transparent p-0"
+                    className="h-8 w-8 cursor-pointer rounded border-0 bg-transparent p-0"
                   />
-                </div>
-              </label>
-              <label className="flex items-center justify-between rounded-2xl border border-[#E8DCCF] bg-white/80 px-3 py-2.5 text-sm text-[#5C4B42]">
-                <span className="font-medium">Secondary</span>
-                <div className="flex items-center gap-3">
-                  <span
-                    className="h-8 w-8 rounded-lg border border-white shadow-sm"
-                    style={{ backgroundColor: colorSecondary }}
-                  />
+                </label>
+                <label title="Secondary">
                   <input
                     type="color"
                     aria-label="Owner Color Secondary"
                     value={colorSecondary}
                     onChange={(event) => setColorSecondary(event.target.value)}
-                    className="h-8 w-10 cursor-pointer rounded border-0 bg-transparent p-0"
+                    className="h-8 w-8 cursor-pointer rounded border-0 bg-transparent p-0"
                   />
-                </div>
-              </label>
+                </label>
+              </div>
             </div>
           </SectionCard>
 
-          <SectionCard title="称呼与 @ 标签" description="这些标签会回写到 Owner 配置里，用于总览卡和路由识别。">
-            <div className="space-y-2">
-              <span className="text-sm font-medium text-[#5C4B42]">别名</span>
-              <TagEditor
-                tags={aliases}
-                onChange={setAliases}
-                addLabel="+ 添加别名"
-                placeholder="例如 共创伙伴"
-                emptyLabel="(无)"
-                tone="orange"
-              />
+          <SectionCard title="别名与 @ 路由">
+            <div className="flex items-start gap-3">
+              <span className="w-[140px] shrink-0 pt-1 text-[13px] font-medium text-[#5C4B42]">别名</span>
+              <div className="min-w-0 flex-1">
+                <TagEditor
+                  tags={aliases}
+                  onChange={setAliases}
+                  addLabel="+ 添加"
+                  placeholder="例如 共创伙伴"
+                  emptyLabel="(无)"
+                  tone="orange"
+                />
+              </div>
             </div>
 
-            <div className="space-y-2">
-              <span className="text-sm font-medium text-[#5C4B42]">Mention Tags</span>
-              <TagEditor
-                tags={mentionPatterns}
-                onChange={(next) => setMentionPatterns(next.map(normalizeMentionTag).filter(Boolean))}
-                addLabel="+ 添加标签"
-                placeholder="@owner"
-                emptyLabel="至少保留一个标签"
-                tone="green"
-                normalize={normalizeMentionTag}
-              />
+            <div className="flex items-start gap-3">
+              <span className="w-[140px] shrink-0 pt-1 text-[13px] font-medium text-[#5C4B42]">@ 标签</span>
+              <div className="min-w-0 flex-1">
+                <TagEditor
+                  tags={mentionPatterns}
+                  onChange={(next) => setMentionPatterns(next.map(normalizeMentionTag).filter(Boolean))}
+                  addLabel="+ 添加"
+                  placeholder="@owner"
+                  emptyLabel="(至少保留 1 个，否则无法 @)"
+                  tone="green"
+                  normalize={normalizeMentionTag}
+                  minCount={1}
+                />
+              </div>
             </div>
           </SectionCard>
 
