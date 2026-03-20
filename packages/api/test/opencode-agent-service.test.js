@@ -63,6 +63,12 @@ const TEXT_RESPONSE = {
   sessionID: 'ses_test123',
   part: { type: 'text', text: 'Hello from opencode!', time: { start: 1773304958493, end: 1773304958493 } },
 };
+const EMPTY_TEXT_RESPONSE = {
+  type: 'text',
+  timestamp: 1773304958495,
+  sessionID: 'ses_test123',
+  part: { type: 'text', text: '' },
+};
 
 const TOOL_USE = {
   type: 'tool_use',
@@ -120,6 +126,19 @@ describe('OpenCodeAgentService', () => {
     const toolMsg = messages.find((m) => m.type === 'tool_use');
     assert.ok(toolMsg, 'expected tool_use message');
     assert.strictEqual(toolMsg.toolName, 'bash');
+  });
+
+  test('drops empty text chunks (prevents blank assistant bubbles)', async () => {
+    const proc = createMockProcess();
+    const spawnFn = mock.fn(() => proc);
+    const service = new OpenCodeAgentService({ catId: 'opencode', spawnFn, model: 'claude-haiku-4-5' });
+    const promise = collect(service.invoke('Say hello'));
+    emitOpenCodeEvents(proc, [STEP_START, EMPTY_TEXT_RESPONSE, STEP_FINISH]);
+    const messages = await promise;
+
+    const textMsgs = messages.filter((m) => m.type === 'text');
+    assert.equal(textMsgs.length, 0, 'empty text chunk should be ignored');
+    assert.ok(messages.some((m) => m.type === 'done'), 'done should still be emitted');
   });
 
   test('passes --format json and -m model in CLI args', async () => {
