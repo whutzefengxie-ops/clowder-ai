@@ -24,6 +24,7 @@ export function AdvancedRuntimeSection({
   codexSettings,
   loadingCodexSettings,
   codexSettingsError,
+  codexSettingsEditable,
   showCodexSettings,
   onChange,
   onStrategyChange,
@@ -37,6 +38,7 @@ export function AdvancedRuntimeSection({
   codexSettings: CodexRuntimeSettings | null;
   loadingCodexSettings: boolean;
   codexSettingsError: string | null;
+  codexSettingsEditable: boolean;
   showCodexSettings: boolean;
   onChange: (patch: FormPatch) => void;
   onStrategyChange: (patch: Partial<StrategyFormState>) => void;
@@ -154,6 +156,11 @@ export function AdvancedRuntimeSection({
           {codexSettingsError ? (
             <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600">{codexSettingsError}</p>
           ) : null}
+          {!loadingCodexSettings && !codexSettingsEditable ? (
+            <p className="rounded-xl border border-[#F5D2B8] bg-[#FFF4EC] px-3 py-2 text-xs leading-5 text-[#C27D52]">
+              Codex 配置基线未加载成功，以下 3 项已禁用；请刷新后重试，避免保存时误以为已生效。
+            </p>
+          ) : null}
           <p className="text-center text-xs font-semibold text-[#B59A88]">── Codex 专属 (仅 Client=Codex 时显示) ──</p>
           <p className="rounded-xl border border-[#CFE5D5] bg-[#F5FBF6] px-3 py-2 text-xs leading-5 text-[#6C7A6D]">
             成员资料与 Codex 执行参数收敛到同一个入口保存。保存后会分别写入成员 overlay 与全局运行配置。
@@ -165,6 +172,7 @@ export function AdvancedRuntimeSection({
               value={effectiveCodexSettings.sandboxMode}
               options={CODEX_SANDBOX_OPTIONS}
               onChange={(value) => onCodexChange({ sandboxMode: value as CodexRuntimeSettings['sandboxMode'] })}
+              disabled={!codexSettingsEditable}
               tone="success"
             />
             <SelectField
@@ -173,6 +181,7 @@ export function AdvancedRuntimeSection({
               value={effectiveCodexSettings.approvalPolicy}
               options={CODEX_APPROVAL_OPTIONS}
               onChange={(value) => onCodexChange({ approvalPolicy: value as CodexRuntimeSettings['approvalPolicy'] })}
+              disabled={!codexSettingsEditable}
               tone="success"
             />
             <SelectField
@@ -181,6 +190,7 @@ export function AdvancedRuntimeSection({
               value={effectiveCodexSettings.authMode}
               options={CODEX_AUTH_MODE_OPTIONS}
               onChange={(value) => onCodexChange({ authMode: value as CodexRuntimeSettings['authMode'] })}
+              disabled={!codexSettingsEditable}
               tone="success"
             />
           </div>

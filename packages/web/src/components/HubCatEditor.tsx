@@ -61,6 +61,7 @@ export function HubCatEditor({ cat, draft, open, onClose, onSaved }: HubCatEdito
     return selectedProfile?.models ?? [];
   }, [form.client, selectedProfile]);
   const showCodexSettings = form.client === 'openai';
+  const codexSettingsEditable = !showCodexSettings || codexSettingsBaseline !== null;
 
   useEffect(() => {
     if (!open) return;
@@ -236,13 +237,13 @@ export function HubCatEditor({ cat, draft, open, onClose, onSaved }: HubCatEdito
   const handleSave = async () => {
     setSaving(true);
     setError(null);
+    const rollbackSteps: Array<() => Promise<void>> = [];
+    const rollbackMutations = async () => {
+      for (const rollback of rollbackSteps.reverse()) {
+        await rollback().catch(() => {});
+      }
+    };
     try {
-      const rollbackSteps: Array<() => Promise<void>> = [];
-      const rollbackMutations = async () => {
-        for (const rollback of rollbackSteps.reverse()) {
-          await rollback().catch(() => {});
-        }
-      };
       const catPayload = buildCatPayload(form, cat);
       const rollbackCatPayload = cat ? buildCatPayload(initialState(cat, null), cat) : null;
       const nextStrategyPayload = cat && strategyForm ? buildStrategyPayload(strategyForm) : null;
@@ -344,6 +345,7 @@ export function HubCatEditor({ cat, draft, open, onClose, onSaved }: HubCatEdito
       await onSaved();
       onClose();
     } catch (err) {
+      await rollbackMutations();
       setError(err instanceof Error ? err.message : '保存失败');
     } finally {
       setSaving(false);
@@ -432,6 +434,7 @@ export function HubCatEditor({ cat, draft, open, onClose, onSaved }: HubCatEdito
             codexSettings={codexSettings}
             loadingCodexSettings={loadingCodexSettings}
             codexSettingsError={codexSettingsError}
+            codexSettingsEditable={codexSettingsEditable}
             showCodexSettings={showCodexSettings}
             onChange={patchForm}
             onStrategyChange={patchStrategy}

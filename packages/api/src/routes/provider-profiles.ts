@@ -1,5 +1,5 @@
 import { realpath, stat } from 'node:fs/promises';
-import { relative, resolve } from 'node:path';
+import { relative, resolve, win32 } from 'node:path';
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import {
@@ -94,7 +94,7 @@ async function resolveProjectRoot(projectPath?: string): Promise<string | null> 
       realpath(workspaceRoot),
     ]);
     const rel = relative(resolvedWorkspaceRoot, resolvedTarget);
-    if (rel.startsWith('..') || rel.startsWith('/')) return null;
+    if (win32.isAbsolute(rel) || rel.startsWith('..') || rel.startsWith('/') || rel.startsWith('\\')) return null;
     const info = await stat(resolvedTarget);
     return info.isDirectory() ? resolvedTarget : null;
   } catch {

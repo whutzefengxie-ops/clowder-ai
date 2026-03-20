@@ -48,6 +48,7 @@ const MOCK_ENV_SUMMARY = {
       category: 'storage',
       sensitive: false,
       maskMode: 'url',
+      runtimeEditable: false,
       currentValue: 'redis://***@localhost:6379/15',
     },
     {
@@ -143,19 +144,16 @@ describe('HubEnvFilesTab', () => {
     expect(container.textContent).toContain('当前环境变量、配置文件、数据目录三段式不变');
     expect(container.textContent).toContain('变量值可直接编辑，保存后自动回填 .env');
     expect(container.textContent).toContain('写回 .env 后需重启相关服务生效');
-    expect(container.textContent).toContain('当前值已做凭证脱敏；修改时请填写完整连接串');
+    expect(container.textContent).toContain('URL 型连接串当前值已脱敏');
     expect(container.querySelector('input[aria-label="API_SERVER_PORT"]')).toBeNull();
     expect(container.querySelector('input[aria-label="PREVIEW_GATEWAY_PORT"]')).toBeNull();
     expect(container.querySelector('input[aria-label="FRONTEND_URL"]')).toBeTruthy();
-    expect(container.querySelector('input[aria-label="REDIS_URL"]')).toBeTruthy();
+    expect(container.querySelector('input[aria-label="REDIS_URL"]')).toBeNull();
     expect(container.querySelector('input[aria-label="OPENAI_API_KEY"]')).toBeNull();
     expect(container.textContent).toContain('***');
 
     const frontendUrlInput = container.querySelector('input[aria-label="FRONTEND_URL"]') as HTMLInputElement;
-    const redisUrlInput = container.querySelector('input[aria-label="REDIS_URL"]') as HTMLInputElement;
-    expect(redisUrlInput.value).toBe('');
     await changeField(frontendUrlInput, 'http://localhost:3200');
-    await changeField(redisUrlInput, 'redis://cache-user:secret@localhost:6380/16');
 
     const saveButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === '保存到 .env');
     await act(async () => {
@@ -169,8 +167,7 @@ describe('HubEnvFilesTab', () => {
     expect(String(patchCall?.[1]?.body)).not.toContain('PREVIEW_GATEWAY_PORT');
     expect(String(patchCall?.[1]?.body)).toContain('FRONTEND_URL');
     expect(String(patchCall?.[1]?.body)).toContain('http://localhost:3200');
-    expect(String(patchCall?.[1]?.body)).toContain('REDIS_URL');
-    expect(String(patchCall?.[1]?.body)).toContain('redis://cache-user:secret@localhost:6380/16');
+    expect(String(patchCall?.[1]?.body)).not.toContain('REDIS_URL');
     expect(String(patchCall?.[1]?.body)).not.toContain('OPENAI_API_KEY');
     expect(container.textContent).toContain('已写回 .env 并刷新摘要；部分变量需重启相关服务生效');
   });

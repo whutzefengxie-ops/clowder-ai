@@ -484,7 +484,7 @@ describe('cats routes runtime CRUD', { concurrency: false }, () => {
     assert.match(patchBody.error, /provider "claude-oauth" not found/i);
   });
 
-  it('POST /api/cats allows generic api_key bindings even when legacy protocol metadata does not match the selected client', async () => {
+  it('POST /api/cats rejects api_key bindings when profile protocol does not match selected client', async () => {
     const projectRoot = createProjectRoot();
     process.env.CAT_TEMPLATE_PATH = join(projectRoot, 'cat-template.json');
 
@@ -525,10 +525,9 @@ describe('cats routes runtime CRUD', { concurrency: false }, () => {
       }),
     });
 
-    assert.equal(createRes.statusCode, 201);
+    assert.equal(createRes.statusCode, 400);
     const createBody = JSON.parse(createRes.body);
-    assert.equal(createBody.cat.id, 'runtime-opencode-mismatch');
-    assert.equal(createBody.cat.accountRef, mismatchedProfile.id);
+    assert.match(createBody.error, /incompatible with client "opencode"/i);
   });
 
   it('POST /api/cats rejects builtin bindings from the wrong client family even when protocol matches', async () => {

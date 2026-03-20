@@ -71,13 +71,22 @@ describe('env-registry', () => {
     assert.equal(redis.maskMode, 'url');
   });
 
-  it('marks bootstrap server ports as runtime-editable in hub env editor under F127 semantics', () => {
+  it('keeps API server port bootstrap-only while allowing preview gateway hot edits', () => {
     const apiPort = ENV_VARS.find((v) => v.name === 'API_SERVER_PORT');
     const previewPort = ENV_VARS.find((v) => v.name === 'PREVIEW_GATEWAY_PORT');
     assert.ok(apiPort, 'API_SERVER_PORT should be in registry');
     assert.ok(previewPort, 'PREVIEW_GATEWAY_PORT should be in registry');
-    assert.equal(apiPort.runtimeEditable, true);
+    assert.equal(apiPort.runtimeEditable, false);
     assert.equal(previewPort.runtimeEditable, true);
+  });
+
+  it('marks CAT_TEMPLATE_PATH and REDIS_URL as bootstrap-only in hub env editor', () => {
+    const templatePath = ENV_VARS.find((v) => v.name === 'CAT_TEMPLATE_PATH');
+    const redisUrl = ENV_VARS.find((v) => v.name === 'REDIS_URL');
+    assert.ok(templatePath, 'CAT_TEMPLATE_PATH should be in registry');
+    assert.ok(redisUrl, 'REDIS_URL should be in registry');
+    assert.equal(templatePath.runtimeEditable, false);
+    assert.equal(redisUrl.runtimeEditable, false);
   });
 
   it('marks client-bundled NEXT_PUBLIC vars as bootstrap-only in the hub env editor', () => {
@@ -423,7 +432,7 @@ describe('PATCH /api/config/env (route)', () => {
     }
   });
 
-  it('accepts server port env vars from hub writes under F127 semantics', async () => {
+  it('rejects API_SERVER_PORT from hub writes but keeps PREVIEW_GATEWAY_PORT editable', async () => {
     const { configRoutes } = await import('../dist/routes/config.js');
     const tempRoot = mkdtempSync(resolve(tmpdir(), 'cat-cafe-env-'));
     const envFilePath = resolve(tempRoot, '.env');
@@ -446,7 +455,8 @@ describe('PATCH /api/config/env (route)', () => {
           updates: [{ name: 'API_SERVER_PORT', value: '3203' }],
         },
       });
-      assert.equal(apiPortRes.statusCode, 200);
+      assert.equal(apiPortRes.statusCode, 400);
+      assert.match(JSON.parse(apiPortRes.payload).error, /not editable/i);
 
       const previewPortRes = await app.inject({
         method: 'PATCH',
@@ -459,8 +469,42 @@ describe('PATCH /api/config/env (route)', () => {
       assert.equal(previewPortRes.statusCode, 200);
 
       const nextEnv = readFileSync(envFilePath, 'utf8');
-      assert.match(nextEnv, /API_SERVER_PORT=3203/);
+      assert.match(nextEnv, /API_SERVER_PORT=3003/);
       assert.match(nextEnv, /PREVIEW_GATEWAY_PORT=4200/);
+    } finally {
+      await app.close();
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects REDIS_URL from hub writes because runtime redis clients are bootstrapped at startup', async () => {
+    const { configRoutes } = await import('../dist/routes/config.js');
+    const tempRoot = mkdtempSync(resolve(tmpdir(), 'cat-cafe-env-'));
+    const envFilePath = resolve(tempRoot, '.env');
+    writeFileSync(envFilePath, 'REDIS_URL=redis://localhost:6399/15\n', 'utf8');
+
+    const app = Fastify({ logger: false });
+    try {
+      await configRoutes(app, {
+        projectRoot: tempRoot,
+        envFilePath,
+        auditLog: { append: async () => {} },
+      });
+      await app.ready();
+
+      const res = await app.inject({
+        method: 'PATCH',
+        url: '/api/config/env',
+        headers: { 'x-cat-cafe-user': 'codex' },
+        payload: {
+          updates: [{ name: 'REDIS_URL', value: 'redis://localhost:6398/15' }],
+        },
+      });
+
+      assert.equal(res.statusCode, 400);
+      const body = JSON.parse(res.payload);
+      assert.match(body.error, /not editable/i);
+      assert.equal(readFileSync(envFilePath, 'utf8'), 'REDIS_URL=redis://localhost:6399/15\n');
     } finally {
       await app.close();
       rmSync(tempRoot, { recursive: true, force: true });

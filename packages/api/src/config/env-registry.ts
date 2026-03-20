@@ -76,7 +76,7 @@ export const ENV_VARS: EnvDefinition[] = [
     description: 'API 服务端口',
     category: 'server',
     sensitive: false,
-    runtimeEditable: true,
+    runtimeEditable: false,
   },
   {
     name: 'PREVIEW_GATEWAY_PORT',
@@ -174,6 +174,7 @@ export const ENV_VARS: EnvDefinition[] = [
     category: 'storage',
     sensitive: false,
     maskMode: 'url',
+    runtimeEditable: false,
   },
   {
     name: 'MEMORY_STORE',
@@ -310,6 +311,7 @@ export const ENV_VARS: EnvDefinition[] = [
     description: '猫猫模板文件路径',
     category: 'cli',
     sensitive: false,
+    runtimeEditable: false,
   },
   {
     name: 'CAT_CAFE_MCP_SERVER_PATH',
