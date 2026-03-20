@@ -97,6 +97,29 @@ test('client-auth remove drops the installer api key account and restores oauth 
   }
 });
 
+test('client-auth set oauth restores builtin bindings for dare and opencode', () => {
+  const projectRoot = mkdtempSync(join(tmpdir(), 'clowder-install-client-auth-oauth-'));
+
+  try {
+    runHelper(['client-auth', 'set', '--project-dir', projectRoot, '--client', 'dare', '--mode', 'oauth']);
+    runHelper(['client-auth', 'set', '--project-dir', projectRoot, '--client', 'opencode', '--mode', 'oauth']);
+
+    const { profiles } = readInstallerState(projectRoot);
+    assert.deepEqual(profiles.bootstrapBindings.dare, {
+      enabled: true,
+      mode: 'oauth',
+      accountRef: 'dare',
+    });
+    assert.deepEqual(profiles.bootstrapBindings.opencode, {
+      enabled: true,
+      mode: 'oauth',
+      accountRef: 'opencode',
+    });
+  } finally {
+    rmSync(projectRoot, { recursive: true, force: true });
+  }
+});
+
 test('claude-profile create and remove keeps installer-managed account in sync', () => {
   const projectRoot = mkdtempSync(join(tmpdir(), 'clowder-install-claude-profile-'));
 
@@ -337,7 +360,9 @@ test('claude-profile set preserves non-anthropic bindings when migrating a legac
       mode: 'api_key',
       accountRef: 'openai-sponsor',
     });
-    assert.equal(profiles.providers.some((profile) => profile.id === 'openai-sponsor'), true);
+    const openaiSponsor = profiles.providers.find((profile) => profile.id === 'openai-sponsor');
+    assert.equal(Boolean(openaiSponsor), true);
+    assert.equal(openaiSponsor?.protocol, 'openai');
     assert.equal(secrets.profiles['openai-sponsor'].apiKey, 'openai-key');
     assert.equal(secrets.profiles['installer-managed'].apiKey, 'claude-key');
   } finally {

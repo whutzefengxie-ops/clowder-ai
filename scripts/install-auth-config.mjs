@@ -142,15 +142,19 @@ function normalizeClient(rawClient) {
 
 function defaultBindingForClient(client) {
   if (DEFAULT_OAUTH_CLIENTS.has(client)) {
-    return {
-      enabled: true,
-      mode: 'oauth',
-      accountRef: builtinAccountIdForClient(client),
-    };
+    return oauthBindingForClient(client);
   }
   return {
     enabled: false,
     mode: 'skip',
+  };
+}
+
+function oauthBindingForClient(client) {
+  return {
+    enabled: true,
+    mode: 'oauth',
+    accountRef: builtinAccountIdForClient(client),
   };
 }
 
@@ -206,12 +210,14 @@ function normalizeProfile(profile, now) {
 
   const id = profile?.id?.trim();
   if (!id) return null;
+  const protocol = normalizeClient(profile.protocol ?? profile.provider);
   return {
     id,
     displayName: profile.displayName?.trim() || profile.name?.trim() || id,
     kind: 'api_key',
     authType: 'api_key',
     builtin: false,
+    ...(protocol ? { protocol } : {}),
     ...(normalizeBaseUrl(profile.baseUrl) ? { baseUrl: normalizeBaseUrl(profile.baseUrl) } : {}),
     ...(normalizeModels(profile.models) ? { models: normalizeModels(profile.models) } : {}),
     createdAt: profile.createdAt || now,
@@ -226,8 +232,12 @@ function normalizeBootstrapBindings(rawBindings, providers) {
 
   for (const spec of BUILTIN_ACCOUNT_SPECS) {
     const candidate = rawBindings?.[spec.client];
-    if (!candidate || candidate.mode === 'oauth') {
+    if (!candidate) {
       next[spec.client] = defaults[spec.client];
+      continue;
+    }
+    if (candidate.mode === 'oauth' && candidate.enabled !== false) {
+      next[spec.client] = oauthBindingForClient(spec.client);
       continue;
     }
     if (candidate.mode === 'skip' || candidate.enabled === false) {
@@ -405,7 +415,7 @@ function upsertInstallerApiKeyAccount(projectDir, client, options) {
 
 function setClientOauthBinding(projectDir, client) {
   const { profileFile, secretsFile, profiles, secrets } = readState(projectDir);
-  profiles.bootstrapBindings[client] = defaultBindingForClient(client);
+  profiles.bootstrapBindings[client] = oauthBindingForClient(client);
   writeState(profileFile, secretsFile, profiles, secrets);
 }
 
@@ -436,7 +446,7 @@ function removeInstallerApiKeyAccount(projectDir, client, profileId) {
   const secrets = normalizeSecretsFile(readJson(secretsFile, null));
   profiles.providers = profiles.providers.filter((profile) => profile.id !== profileId);
   delete secrets.profiles[profileId];
-  profiles.bootstrapBindings[client] = defaultBindingForClient(client);
+  profiles.bootstrapBindings[client] = oauthBindingForClient(client);
   writeState(profileFile, secretsFile, profiles, secrets);
 }
 
