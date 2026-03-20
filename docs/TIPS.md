@@ -28,6 +28,7 @@ Please implement this quickly.
 Inline mentions (mid-sentence) don't trigger routing. To mention multiple cats, put each on its own line.
 
 Common mentions:
+- `@opus` — deep architecture, system design, complex reasoning
 - `@sonnet` — fast and flexible, great for everyday tasks
 - `@codex` — code review, bug hunting, implementation
 - `@gemini` — aesthetics, UX design, creative direction
@@ -46,6 +47,8 @@ Managing conversations from Feishu (Lark):
 | `/threads` | List all conversations |
 | `/use <id>` | Switch to a specific conversation |
 | `/where` | Show which conversation you're in |
+
+Voice messages and file transfer are supported both ways.
 
 > Telegram adapter is in progress — same commands will apply.
 
