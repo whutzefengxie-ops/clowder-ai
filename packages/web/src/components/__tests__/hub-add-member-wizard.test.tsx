@@ -243,8 +243,8 @@ describe('HubAddMemberWizard', () => {
     await click(queryButton(container, 'OpenCode'));
     await click(queryButton(container, 'Codex Sponsor'));
 
-    // The hint text about providerId/modelId is still shown as informational.
-    expect(container.textContent).toContain('providerId/modelId');
+    // Soft hint shown because pre-filled model lacks a `/` prefix.
+    expect(container.textContent).toContain('建议使用');
 
     await click(queryButton(container, '创建后继续编辑'));
     await flushEffects();

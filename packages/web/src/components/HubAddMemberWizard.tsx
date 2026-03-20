@@ -298,9 +298,9 @@ export function HubAddMemberWizard({ open, onClose, onComplete }: HubAddMemberWi
                 />
               </label>
             )}
-            {client === 'opencode' ? (
+            {client === 'opencode' && defaultModel.trim() && !defaultModel.includes('/') ? (
               <p className="rounded-2xl border border-dashed border-[#E8DCCF] bg-white/80 px-4 py-2 text-xs leading-5 text-[#8A776B]">
-                OpenCode 的 Model 必须使用 `providerId/modelId` 格式（例如 `openai/gpt-5.4`）。
+                建议使用 `providerId/modelId` 格式（例如 `openai/gpt-5.4`），部分 provider 需要前缀才能正确路由。
               </p>
             ) : null}
           </section>
