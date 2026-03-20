@@ -34,6 +34,8 @@ export interface ThreadItemProps {
   onToggleExpand?: () => void;
   /** Thread hierarchy: this thread is a child of another thread */
   isChildThread?: boolean;
+  /** Thread hierarchy: this is the last child (renders └── instead of ├──) */
+  isLastChild?: boolean;
 }
 
 export function ThreadItem({
@@ -57,6 +59,7 @@ export function ThreadItem({
   isExpanded,
   onToggleExpand,
   isChildThread,
+  isLastChild,
 }: ThreadItemProps) {
   const { getCatById } = useCatData();
   const canDelete = id !== 'default' && onDelete;
@@ -117,8 +120,24 @@ export function ThreadItem({
       onClick={() => onSelect(id)}
       title={tooltip}
     >
-      {/* Child thread tree-line connector */}
-      {isChildThread && <div className="absolute left-7 top-0 bottom-0 w-px bg-gray-200" />}
+      {/* Child thread tree-line connector: ├── (mid) or └── (last) */}
+      {isChildThread && (
+        <>
+          {/* Vertical line — full height for mid-children, half height for last */}
+          <div className={`absolute left-7 top-0 w-px bg-gray-200 ${isLastChild ? 'h-5' : 'bottom-0'}`} />
+          {/* Horizontal branch */}
+          <div className="absolute left-7 top-5 w-3 h-px bg-gray-200" />
+        </>
+      )}
+      {/* Child thread cat avatar + @handle */}
+      {isChildThread && preferredCats && preferredCats.length > 0 && (
+        <div className="flex items-center gap-1 mb-1">
+          <CatAvatar catId={preferredCats[0]} size={18} />
+          <span className="text-[10px] text-gray-400">
+            @{getCatById(preferredCats[0])?.id ?? preferredCats[0]}
+          </span>
+        </div>
+      )}
       {/* Title row */}
       <div className="flex items-start justify-between gap-1 mb-1">
         {childCount != null && childCount > 0 && onToggleExpand && (

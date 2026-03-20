@@ -430,7 +430,7 @@ export function ThreadSidebar({ onClose, className, onBootcampClick }: ThreadSid
           />
           {isParent &&
             expanded &&
-            children.map((child) => (
+            children.map((child, idx) => (
               <ThreadItem
                 key={child.id}
                 id={child.id}
@@ -449,6 +449,7 @@ export function ThreadSidebar({ onClose, className, onBootcampClick }: ThreadSid
                 threadState={getThreadState(child.id)}
                 preferredCats={child.preferredCats}
                 isChildThread
+                isLastChild={idx === children.length - 1}
               />
             ))}
         </div>
