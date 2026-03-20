@@ -744,12 +744,15 @@ configure_agent_auth() {
         _INSTALLER_API_KEY="$key" "${install_args[@]}"
         ok "$name: API key profile created in .cat-cafe/"
     else
-        # No key provided — set OAuth mode
-        case "$cmd" in
-            claude) remove_claude_installer_profile ;;
-            codex) set_codex_oauth_mode ;;
-            gemini) set_gemini_oauth_mode ;;
-        esac
+        # No key provided — set OAuth mode via unified path
+        # Also remove any stale installer API Key profile for this client
+        node scripts/install-auth-config.mjs client-auth remove \
+            --project-dir "$PROJECT_DIR" \
+            --client "$cmd" 2>/dev/null || true
+        node scripts/install-auth-config.mjs client-auth set \
+            --project-dir "$PROJECT_DIR" \
+            --client "$cmd" \
+            --mode oauth
         warn "$name: no key provided, keeping OAuth"
     fi
 }
