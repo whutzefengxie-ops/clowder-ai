@@ -39,7 +39,7 @@ const CATS: CatData[] = [
     breedDisplayName: '布偶猫',
     nickname: '宪宪',
     provider: 'anthropic',
-    providerProfileId: 'Claude (OAuth)',
+    accountRef: 'claude',
     defaultModel: 'claude-opus-4-5',
     color: { primary: '#6366f1', secondary: '#818cf8' },
     mentionPatterns: ['@opus', '@布偶猫'],
@@ -61,7 +61,7 @@ const CATS: CatData[] = [
     breedDisplayName: '缅因猫',
     nickname: '砚砚',
     provider: 'openai',
-    providerProfileId: 'Name1 (API Key)',
+    accountRef: 'sponsor1',
     defaultModel: 'codex',
     color: { primary: '#22c55e', secondary: '#4ade80' },
     mentionPatterns: ['@codex', '@缅因猫'],
@@ -124,8 +124,8 @@ describe('CatOverviewTab', () => {
     expect(html).toContain('布偶猫 · 宪宪');
     expect(html).toContain('缅因猫 · 砚砚');
     expect(html).toContain('孟加拉猫 · 阿吉');
-    expect(html).toContain('Claude · claude-opus-4-5-20250214 · OAuth 订阅');
-    expect(html).toContain('OpenAI · codex-2025-03 · Name1 (API Key)');
+    expect(html).toContain('内置 OAuth 账号');
+    expect(html).toContain('API Key · sponsor1');
     expect(html).toContain('已启用');
     expect(html).toContain('@布偶猫');
     expect(html).toContain('只能编辑，不能新增或删除');

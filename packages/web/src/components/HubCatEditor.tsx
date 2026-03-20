@@ -58,13 +58,8 @@ export function HubCatEditor({ cat, draft, open, onClose, onSaved }: HubCatEdito
   );
   const modelOptions = useMemo(() => {
     if (form.client === 'antigravity') return [];
-    const currentModel = form.defaultModel.trim();
-    const profileModels = selectedProfile?.models ?? [];
-    if (currentModel && !profileModels.includes(currentModel)) {
-      return [currentModel, ...profileModels];
-    }
-    return profileModels;
-  }, [form.client, form.defaultModel, selectedProfile]);
+    return selectedProfile?.models ?? [];
+  }, [form.client, selectedProfile]);
   const showCodexSettings = form.client === 'openai';
 
   useEffect(() => {

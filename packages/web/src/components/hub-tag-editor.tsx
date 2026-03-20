@@ -68,6 +68,7 @@ export function TagEditor({
   lockedTags = [],
   tone = 'purple',
   normalize = normalizeTag,
+  minCount = 0,
 }: {
   tags: string[];
   onChange: (nextTags: string[]) => void;
@@ -77,6 +78,7 @@ export function TagEditor({
   lockedTags?: string[];
   tone?: 'purple' | 'green' | 'orange';
   normalize?: (value: string) => string;
+  minCount?: number;
 }) {
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState('');
@@ -101,7 +103,7 @@ export function TagEditor({
           emptyLabel={emptyLabel}
           tone={tone}
           lockedTags={lockedTags}
-          onRemove={(tag) => onChange(tags.filter((item) => item !== tag))}
+          onRemove={tags.length > minCount ? (tag) => onChange(tags.filter((item) => item !== tag)) : undefined}
         />
         <button
           type="button"

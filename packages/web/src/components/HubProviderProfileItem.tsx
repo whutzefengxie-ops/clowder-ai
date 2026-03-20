@@ -20,10 +20,8 @@ interface HubProviderProfileItemProps {
   onDelete: (profileId: string) => void;
 }
 
-function summaryText(profile: ProfileItem): string {
-  if (profile.builtin) {
-    return builtinClientLabel(profile.client) ?? '';
-  }
+function summaryText(profile: ProfileItem): string | null {
+  if (profile.builtin) return null;
   const host = profile.baseUrl?.replace(/^https?:\/\//, '') ?? '(未设置)';
   return `${host} · ${profile.hasApiKey ? '已配置' : '未配置'}`;
 }
@@ -114,7 +112,7 @@ export function HubProviderProfileItem({ profile, busy, onSave, onDelete }: HubP
               <span className="rounded-full bg-[#F3E8FF] px-2.5 py-1 text-[11px] font-semibold text-[#9D7BC7]">api_key</span>
             ) : null}
           </div>
-          <p className="text-sm text-[#8A776B]">{summaryText(profile)}</p>
+          {summaryText(profile) ? <p className="text-sm text-[#8A776B]">{summaryText(profile)}</p> : null}
           <div className="space-y-2">
             <p className="text-xs font-semibold text-[#8A776B]">可用模型</p>
             <TagEditor
@@ -123,6 +121,7 @@ export function HubProviderProfileItem({ profile, busy, onSave, onDelete }: HubP
               addLabel="+ 添加"
               placeholder="输入模型名"
               emptyLabel="(暂无模型)"
+              minCount={1}
               onChange={(nextModels) => {
                 if (busy) return;
                 void onSave(profile.id, {

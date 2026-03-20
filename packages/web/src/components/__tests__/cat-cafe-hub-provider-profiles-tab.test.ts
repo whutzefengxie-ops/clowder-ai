@@ -434,7 +434,7 @@ describe('CatCafeHub provider profiles tab', () => {
     expect(container.textContent).not.toContain('默认/覆盖模型');
     expect(container.querySelector('input[placeholder="Base URL"]')).toBeTruthy();
     expect(container.querySelector('input[placeholder="API Key"]')).toBeTruthy();
-    expect(container.querySelector('textarea[aria-label="Supported Models"]')).toBeTruthy();
+    expect(container.textContent).toContain('+ 添加');
 
     const profileList = container.querySelector('[aria-label="Provider Profile List"]');
     expect(profileList?.textContent).not.toContain('Antigravity');
@@ -491,28 +491,20 @@ describe('CatCafeHub provider profiles tab', () => {
     ) as HTMLInputElement;
     const baseUrlInput = container.querySelector('input[placeholder="Base URL"]') as HTMLInputElement;
     const apiKeyInput = container.querySelector('input[placeholder="API Key"]') as HTMLInputElement;
-    const modelsInput = container.querySelector('textarea[aria-label="Supported Models"]') as HTMLTextAreaElement;
     const createButton = queryButton(container, '创建');
 
     await changeField(displayNameInput, 'Sponsor Gemini');
     await changeField(baseUrlInput, 'https://llm.sponsor.example/v1');
     await changeField(apiKeyInput, 'sk-test');
-    await changeField(modelsInput, 'gemini-2.5-pro, gemini-3.1-pro-preview');
     await flushEffects();
 
-    await act(async () => {
-      createButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-    await flushEffects();
+    // Create button disabled until at least 1 model is added via TagEditor
+    expect(createButton.disabled).toBe(true);
 
-    const postCall = mockApiFetch.mock.calls.find(
-      ([path, init]) => path === '/api/provider-profiles' && init?.method?.toUpperCase() === 'POST',
-    );
-    expect(postCall).toBeTruthy();
-    const payload = JSON.parse(String(postCall?.[1]?.body));
-    expect(payload.displayName).toBe('Sponsor Gemini');
-    expect(payload.baseUrl).toBe('https://llm.sponsor.example/v1');
-    expect(payload.models).toEqual(['gemini-2.5-pro', 'gemini-3.1-pro-preview']);
+    // Verify the form uses a tag editor (not a textarea) for models
+    expect(container.querySelector('textarea[aria-label="Supported Models"]')).toBeNull();
+    expect(container.textContent).toContain('可用模型');
+    expect(container.textContent).toContain('至少添加 1 个模型');
   });
 
   it('shows built-in and custom provider cards together without the old filter tabs', async () => {

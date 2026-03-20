@@ -15,10 +15,6 @@ import {
 import type { ProviderProfilesResponse } from './hub-provider-profiles.types';
 import { getProjectPaths, projectDisplayName } from './ThreadSidebar/thread-utils';
 
-function parseModelsInput(raw: string): string[] {
-  return Array.from(new Set(raw.split(/[\n,]+/).map((value) => value.trim()).filter(Boolean)));
-}
-
 export function HubProviderProfilesTab() {
   const threads = useChatStore((s) => s.threads);
   const knownProjects = useMemo(() => getProjectPaths(threads), [threads]);
@@ -31,7 +27,7 @@ export function HubProviderProfilesTab() {
   const [createDisplayName, setCreateDisplayName] = useState('');
   const [createBaseUrl, setCreateBaseUrl] = useState('');
   const [createApiKey, setCreateApiKey] = useState('');
-  const [createModelsText, setCreateModelsText] = useState('');
+  const [createModels, setCreateModels] = useState<string[]>([]);
 
   const fetchProfiles = useCallback(async (forProject?: string) => {
     setError(null);
@@ -105,13 +101,13 @@ export function HubProviderProfilesTab() {
           authType: 'api_key',
           baseUrl: createBaseUrl.trim(),
           apiKey: createApiKey.trim(),
-          models: parseModelsInput(createModelsText),
+          models: createModels,
         }),
       });
       setCreateDisplayName('');
       setCreateBaseUrl('');
       setCreateApiKey('');
-      setCreateModelsText('');
+      setCreateModels([]);
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -123,7 +119,7 @@ export function HubProviderProfilesTab() {
     createApiKey,
     createBaseUrl,
     createDisplayName,
-    createModelsText,
+    createModels,
     projectPath,
     refresh,
   ]);
@@ -213,12 +209,12 @@ export function HubProviderProfilesTab() {
         displayName={createDisplayName}
         baseUrl={createBaseUrl}
         apiKey={createApiKey}
-        modelsText={createModelsText}
+        models={createModels}
         busy={busyId === 'create'}
         onDisplayNameChange={setCreateDisplayName}
         onBaseUrlChange={setCreateBaseUrl}
         onApiKeyChange={setCreateApiKey}
-        onModelsTextChange={setCreateModelsText}
+        onModelsChange={setCreateModels}
         onCreate={createProfile}
       />
       <p className="text-xs leading-5 text-[#B59A88]">

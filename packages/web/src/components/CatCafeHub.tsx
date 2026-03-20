@@ -6,7 +6,6 @@ import { useChatStore } from '@/stores/chatStore';
 import { apiFetch } from '@/utils/api-client';
 import { BrakeSettingsPanel } from './BrakeSettingsPanel';
 import { HubClaudeRescueSection } from './HubClaudeRescueSection';
-import { HubAddMemberWizard } from './HubAddMemberWizard';
 import { CatOverviewTab, type ConfigData, SystemTab } from './config-viewer-tabs';
 import { HubCapabilityTab } from './HubCapabilityTab';
 import { HubCommandsTab } from './HubCommandsTab';
@@ -45,7 +44,6 @@ export function CatCafeHub() {
   const [config, setConfig] = useState<ConfigData | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [capTabEverOpened, setCapTabEverOpened] = useState(false);
-  const [wizardOpen, setWizardOpen] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
   const [ownerEditorOpen, setOwnerEditorOpen] = useState(false);
   const [editingCat, setEditingCat] = useState<(typeof cats)[number] | null>(null);
@@ -87,25 +85,17 @@ export function CatCafeHub() {
   const openAddMember = useCallback(() => {
     setEditingCat(null);
     setCreateDraft(null);
-    setWizardOpen(true);
+    setEditorOpen(true);
   }, []);
 
   const openEditMember = useCallback((cat: (typeof cats)[number]) => {
     setCreateDraft(null);
-    setWizardOpen(false);
     setEditingCat(cat);
     setEditorOpen(true);
   }, []);
 
   const openOwnerEditor = useCallback(() => {
     setOwnerEditorOpen(true);
-  }, []);
-
-  const handleCreateFlowComplete = useCallback((draft: Parameters<typeof HubCatEditor>[0]['draft']) => {
-    setCreateDraft(draft);
-    setWizardOpen(false);
-    setEditingCat(null);
-    setEditorOpen(true);
   }, []);
 
   const closeEditor = useCallback(() => {
@@ -258,7 +248,6 @@ export function CatCafeHub() {
             {tab === 'leaderboard' && <HubLeaderboardTab />}
           </div>
         </div>
-        <HubAddMemberWizard open={wizardOpen} onClose={() => setWizardOpen(false)} onComplete={handleCreateFlowComplete} />
         <HubCatEditor open={editorOpen} cat={editingCat} draft={createDraft} onClose={closeEditor} onSaved={handleEditorSaved} />
         <HubOwnerEditor
           open={ownerEditorOpen}
