@@ -284,6 +284,81 @@ describe('HubCatEditor', () => {
     expect(onSaved).toHaveBeenCalledTimes(1);
   });
 
+  it('resets defaultModel when switching Provider to prevent stale model carry-over', async () => {
+    mockApiFetch.mockResolvedValue(
+      jsonResponse({
+        projectPath: '/tmp/project',
+        activeProfileId: null,
+        providers: [
+          {
+            id: 'claude',
+            provider: 'claude',
+            displayName: 'Claude (OAuth)',
+            name: 'Claude (OAuth)',
+            authType: 'oauth',
+            builtin: true,
+            client: 'anthropic',
+            models: ['claude-opus-4-6', 'claude-sonnet-4-5'],
+            hasApiKey: false,
+            createdAt: '',
+            updatedAt: '',
+          },
+          {
+            id: 'codex-sponsor',
+            provider: 'codex-sponsor',
+            displayName: 'Codex Sponsor',
+            name: 'Codex Sponsor',
+            authType: 'api_key',
+            builtin: false,
+            models: ['gpt-5.4-mini'],
+            hasApiKey: true,
+            baseUrl: 'https://proxy.example',
+            createdAt: '',
+            updatedAt: '',
+          },
+        ],
+      }),
+    );
+
+    await act(async () => {
+      root.render(
+        React.createElement(HubCatEditor, {
+          open: true,
+          cat: {
+            id: 'opus',
+            displayName: 'Opus',
+            breedDisplayName: 'Ragdoll',
+            nickname: '',
+            provider: 'anthropic',
+            accountRef: 'claude',
+            defaultModel: 'claude-opus-4-6',
+            color: { primary: '#000', secondary: '#fff' },
+            mentionPatterns: ['@opus'],
+            avatar: '',
+            roleDescription: '',
+            personality: '',
+            source: 'seed',
+          },
+          onClose: vi.fn(),
+          onSaved: vi.fn(),
+        }),
+      );
+    });
+    await flushEffects();
+
+    // Initially model should be claude-opus-4-6
+    const modelSelect = queryField<HTMLSelectElement>(container, 'select[aria-label="Model"]');
+    expect(modelSelect.value).toBe('claude-opus-4-6');
+
+    // Switch Provider to codex-sponsor (API Key)
+    await changeField(queryField(container, 'select[aria-label="Provider"]'), 'codex-sponsor', 'change');
+    await flushEffects();
+
+    // defaultModel should have been reset (not still 'claude-opus-4-6')
+    const modelSelectAfter = queryField<HTMLSelectElement>(container, 'select[aria-label="Model"]');
+    expect(modelSelectAfter.value).not.toBe('claude-opus-4-6');
+  });
+
   it('switches to Antigravity branch and shows CLI command field', async () => {
     mockApiFetch.mockResolvedValue(
       jsonResponse({
