@@ -30,23 +30,25 @@ export function HubProviderProfileItem({ profile, busy, onSave, onDelete }: HubP
   const [editDisplayName, setEditDisplayName] = useState(profile.displayName);
   const [editBaseUrl, setEditBaseUrl] = useState(profile.baseUrl ?? '');
   const [editApiKey, setEditApiKey] = useState('');
+  const [editModels, setEditModels] = useState<string[]>(profile.models ?? []);
 
   const startEdit = useCallback(() => {
     setEditDisplayName(profile.displayName);
     setEditBaseUrl(profile.baseUrl ?? '');
     setEditApiKey('');
+    setEditModels(profile.models ?? []);
     setEditing(true);
-  }, [profile.baseUrl, profile.displayName]);
+  }, [profile.baseUrl, profile.displayName, profile.models]);
 
   const saveEdit = useCallback(async () => {
     await onSave(profile.id, {
       displayName: editDisplayName.trim(),
       ...(profile.authType === 'api_key' ? { baseUrl: editBaseUrl.trim() } : {}),
       ...(editApiKey.trim() ? { apiKey: editApiKey.trim() } : {}),
-      ...(profile.models ? { models: profile.models } : {}),
+      models: editModels,
     });
     setEditing(false);
-  }, [editApiKey, editBaseUrl, editDisplayName, onSave, profile.authType, profile.id, profile.models]);
+  }, [editApiKey, editBaseUrl, editDisplayName, editModels, onSave, profile.authType, profile.id]);
 
   if (editing) {
     return (
@@ -66,12 +68,26 @@ export function HubProviderProfileItem({ profile, busy, onSave, onDelete }: HubP
                 placeholder="API 服务地址，如 https://api.example.com/v1"
                 className="w-full rounded border border-[#E8DCCF] bg-white px-3 py-2 text-sm placeholder:text-[#C4B5A8]"
               />
-              <input
-                value={editApiKey}
-                onChange={(e) => setEditApiKey(e.target.value)}
-                placeholder={profile.hasApiKey ? 'API Key（留空保持不变）' : 'sk-xxxxxxxxxxxxxxxx'}
-                className="w-full rounded border border-[#E8DCCF] bg-white px-3 py-2 text-sm placeholder:text-[#C4B5A8]"
-              />
+              <div className="relative">
+                <input
+                  value={editApiKey}
+                  onChange={(e) => setEditApiKey(e.target.value)}
+                  placeholder={profile.hasApiKey ? '已配置 sk-••••••••（留空保持不变）' : 'sk-xxxxxxxxxxxxxxxx'}
+                  className="w-full rounded border border-[#E8DCCF] bg-white px-3 py-2 text-sm placeholder:text-[#C4B5A8]"
+                />
+              </div>
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-[#8A776B]">可用模型</p>
+                <TagEditor
+                  tags={editModels}
+                  tone="purple"
+                  addLabel="+ 添加模型"
+                  placeholder="输入模型名，如 gpt-4o"
+                  emptyLabel="(至少添加 1 个模型)"
+                  minCount={1}
+                  onChange={setEditModels}
+                />
+              </div>
             </>
           ) : null}
         </div>
