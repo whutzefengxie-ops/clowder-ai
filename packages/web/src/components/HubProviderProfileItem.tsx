@@ -52,29 +52,26 @@ export function HubProviderProfileItem({ profile, busy, onSave, onDelete }: HubP
   if (editing) {
     return (
       <div className="space-y-3 rounded-[20px] border-2 border-[#E8C9AF] bg-[#FFF8F2] p-[18px]">
-        <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+        <div className="space-y-2">
           <input
             value={editDisplayName}
             onChange={(e) => setEditDisplayName(e.target.value)}
             placeholder="账号显示名"
-            className="rounded border border-[#E8DCCF] bg-white px-3 py-2 text-sm"
+            className="w-full rounded border border-[#E8DCCF] bg-white px-3 py-2 text-sm placeholder:text-[#C4B5A8]"
           />
-          <div className="rounded border border-[#E8DCCF] bg-white px-3 py-2 text-sm text-[#8A776B]">
-            {profile.builtin ? `${builtinClientLabel(profile.client)} · 内置` : 'API Key 账号'}
-          </div>
           {profile.authType === 'api_key' ? (
             <>
               <input
                 value={editBaseUrl}
                 onChange={(e) => setEditBaseUrl(e.target.value)}
-                placeholder="Base URL"
-                className="rounded border border-[#E8DCCF] bg-white px-3 py-2 text-sm md:col-span-2"
+                placeholder="API 服务地址，如 https://api.example.com/v1"
+                className="w-full rounded border border-[#E8DCCF] bg-white px-3 py-2 text-sm placeholder:text-[#C4B5A8]"
               />
               <input
                 value={editApiKey}
                 onChange={(e) => setEditApiKey(e.target.value)}
-                placeholder={profile.hasApiKey ? 'API Key（留空保持不变）' : 'API Key'}
-                className="rounded border border-[#E8DCCF] bg-white px-3 py-2 text-sm md:col-span-2"
+                placeholder={profile.hasApiKey ? 'API Key（留空保持不变）' : 'sk-xxxxxxxxxxxxxxxx'}
+                className="w-full rounded border border-[#E8DCCF] bg-white px-3 py-2 text-sm placeholder:text-[#C4B5A8]"
               />
             </>
           ) : null}

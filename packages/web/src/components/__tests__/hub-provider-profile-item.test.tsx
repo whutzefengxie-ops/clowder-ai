@@ -118,7 +118,7 @@ describe('HubProviderProfileItem', () => {
       queryButton(container, '编辑').dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
-    const baseUrlInput = container.querySelector('input[placeholder="Base URL"]') as HTMLInputElement | null;
+    const baseUrlInput = container.querySelector('input[placeholder*="API 服务地址"]') as HTMLInputElement | null;
     if (!baseUrlInput) throw new Error('Missing Base URL input');
     await act(async () => {
       const descriptor = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(baseUrlInput), 'value');
