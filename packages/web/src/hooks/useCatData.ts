@@ -26,6 +26,7 @@ export interface CatData {
   provider: string;
   defaultModel: string;
   commandArgs?: string[];
+  cliConfigArgs?: string[];
   contextBudget?: {
     maxPromptTokens: number;
     maxContextTokens: number;
