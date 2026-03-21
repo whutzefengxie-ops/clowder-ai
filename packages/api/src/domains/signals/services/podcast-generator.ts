@@ -196,9 +196,9 @@ export async function generateScriptViaThread(
         status: 'failed',
         error: governanceErrorCode,
       });
-    } else {
-      await deps.invocationRecordStore.update(createResult.invocationId, { status: 'succeeded' });
+      throw new Error(`Governance bootstrap required for thread project: ${governanceErrorCode}`);
     }
+    await deps.invocationRecordStore.update(createResult.invocationId, { status: 'succeeded' });
   } catch (err) {
     await deps.invocationRecordStore.update(createResult.invocationId, {
       status: 'failed',

@@ -224,6 +224,8 @@ async function dispatchToTarget(
 
     orch.registerDispatch(requestId, targetCatId, controller);
 
+    // F130: track governance block errorCode (scoped outside try for post-try guard)
+    let governanceErrorCode: string | undefined;
     try {
       socketManager.broadcastToRoom(`thread:${threadId}`, 'intent_mode', {
         threadId,
@@ -232,8 +234,6 @@ async function dispatchToTarget(
         invocationId: createResult.invocationId,
       });
 
-      // F130: track governance block errorCode
-      let governanceErrorCode: string | undefined;
       for await (const msg of router.routeExecution(
         userId,
         messageContent,
@@ -271,6 +271,15 @@ async function dispatchToTarget(
     // or flush result — the partial/empty text would produce a misleading summary.
     if (controller.signal.aborted) {
       log.info({ requestId, targetCatId }, '[F086] Multi-mention dispatch aborted, skipping recordResponse');
+      return;
+    }
+
+    // F130: Governance blocked — don't record empty response as "(空回答)"
+    if (governanceErrorCode) {
+      log.info(
+        { requestId, targetCatId, governanceErrorCode },
+        '[F130] Multi-mention governance blocked, skipping recordResponse',
+      );
       return;
     }
 
