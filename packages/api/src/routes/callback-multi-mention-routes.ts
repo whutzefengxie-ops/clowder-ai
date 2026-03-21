@@ -330,12 +330,16 @@ async function dispatchToTarget(
         );
       }
     }
-    // Record failure response in orchestrator
-    orch.recordResponse(
+    // Record failure response in orchestrator + mirror done-path cleanup
+    const errStatus = orch.recordResponse(
       requestId,
       targetCatId,
       `[dispatch error: ${err instanceof Error ? err.message : String(err)}]`,
     );
+    if (errStatus === 'done') {
+      cancelTimeout(requestId);
+      await flushResult(deps, requestId, threadId, userId, log);
+    }
   } finally {
     // F122 AC-A7: unconditional slot release — covers early return, registerDispatch
     // throw, routeExecution crash, and normal completion. InvocationTracker.complete()
