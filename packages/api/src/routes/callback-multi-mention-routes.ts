@@ -282,6 +282,11 @@ async function dispatchToTarget(
         { requestId, targetCatId, governanceErrorCode, newStatus },
         '[F130] Multi-mention governance blocked, recorded failure response',
       );
+      // Mirror normal completion: if all targets responded, cancel timeout and flush
+      if (newStatus === 'done') {
+        cancelTimeout(requestId);
+        await flushResult(deps, requestId, threadId, userId, log);
+      }
       return;
     }
 
