@@ -54,14 +54,43 @@ function formatThinkingSignatureRescueError(sessionId: string | undefined): stri
 
 const IS_WINDOWS = process.platform === 'win32';
 
-function isClaudeCliAvailable(): boolean {
+/**
+ * Resolve the full path to the `claude` CLI binary.
+ * On bare machines the install script places it under ~/.local/bin or ~/.claude/bin,
+ * which may not be in the Node.js process's inherited PATH.
+ */
+function resolveClaudeCommand(): string {
+  // Fast path: already in PATH
   try {
     const cmd = IS_WINDOWS ? 'where claude' : 'which claude';
-    execSync(cmd, { stdio: 'ignore', timeout: 5000 });
-    return true;
+    const result = execSync(cmd, { timeout: 5000, encoding: 'utf-8' }).trim();
+    if (result) return result.split('\n')[0].trim();
   } catch {
-    return false;
+    // fall through to manual search
   }
+
+  if (!IS_WINDOWS) {
+    const home = process.env.HOME ?? '';
+    const candidates = [
+      resolve(home, '.local', 'bin', 'claude'),
+      resolve(home, '.claude', 'bin', 'claude'),
+      resolve(home, '.claude', 'local', 'bin', 'claude'),
+    ];
+    for (const candidate of candidates) {
+      if (existsSync(candidate)) return candidate;
+    }
+  }
+
+  // Fall back to bare command name (will ENOENT if not found)
+  return 'claude';
+}
+
+let _resolvedClaudeCommand: string | null = null;
+function getClaudeCommand(): string {
+  if (_resolvedClaudeCommand === null) {
+    _resolvedClaudeCommand = resolveClaudeCommand();
+  }
+  return _resolvedClaudeCommand;
 }
 
 export { pickGitBashPathFromWhere } from './claude-agent-win.js';
@@ -223,18 +252,13 @@ export class ClaudeAgentService implements AgentService {
     };
 
     try {
-      if (!isClaudeCliAvailable()) {
-        const msg = 'Claude CLI 未安装。请先运行 `npm install -g @anthropic-ai/claude-code` 安装 Claude CLI，再重试。';
-        yield { type: 'error' as const, catId: this.catId, error: msg, metadata, timestamp: Date.now() };
-        yield { type: 'done' as const, catId: this.catId, metadata, timestamp: Date.now() };
-        return;
-      }
+      const claudeCommand = getClaudeCommand();
 
       let sawResultError = false;
       const envOverrides = buildClaudeEnvOverrides(options?.callbackEnv);
 
       const cliOpts = {
-        command: 'claude' as const,
+        command: claudeCommand,
         args,
         ...(options?.workingDirectory ? { cwd: options.workingDirectory } : {}),
         env: envOverrides,
