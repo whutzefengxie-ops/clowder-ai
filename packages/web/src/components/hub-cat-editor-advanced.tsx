@@ -113,7 +113,11 @@ export function AdvancedRuntimeSection({
               />
             </label>
             <p className="text-[11px] leading-4 text-[#8A776B]">
-              传递给 CLI 的 --config 参数。每行一条，格式为 key=&quot;value&quot;。会覆盖默认值。
+              每行一条 key=&quot;value&quot;。Codex 直接透传为 --config；OpenCode 映射为 --variant/--agent。
+              参考：
+              <a href="https://github.com/openai/codex" target="_blank" rel="noreferrer" className="underline">Codex</a>
+              {' · '}
+              <a href="https://opencode.ai/docs/cli" target="_blank" rel="noreferrer" className="underline">OpenCode</a>
             </p>
           </>
         ) : null}
