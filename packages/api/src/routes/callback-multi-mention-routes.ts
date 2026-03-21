@@ -274,11 +274,13 @@ async function dispatchToTarget(
       return;
     }
 
-    // F130: Governance blocked — don't record empty response as "(空回答)"
+    // F130: Governance blocked — record failure so orchestrator advances (not timeout)
     if (governanceErrorCode) {
+      const govMsg = `[治理拦截] 项目需要初始化治理后才能派遣 (${governanceErrorCode})`;
+      const newStatus = orch.recordResponse(requestId, targetCatId, govMsg);
       log.info(
-        { requestId, targetCatId, governanceErrorCode },
-        '[F130] Multi-mention governance blocked, skipping recordResponse',
+        { requestId, targetCatId, governanceErrorCode, newStatus },
+        '[F130] Multi-mention governance blocked, recorded failure response',
       );
       return;
     }
