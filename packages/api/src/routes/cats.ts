@@ -538,7 +538,6 @@ export const catsRoutes: FastifyPluginAsync<CatsRoutesOptions> = async (app, opt
         ...(body.available !== undefined ? { available: body.available } : {}),
         ...(body.cliConfigArgs !== undefined ? { cliConfigArgs: body.cliConfigArgs } : {}),
       });
-
       const resolved = await reconcileCatRegistry(projectRoot, managedIdsBefore, opts.onCatalogChanged);
       const cat = resolved[request.params.id];
       const metadata = buildCatResponseMetadataResolver(projectRoot);
