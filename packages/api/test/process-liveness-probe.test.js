@@ -7,10 +7,7 @@ import { test } from 'node:test';
 
 const { ProcessLivenessProbe } = await import('../dist/utils/ProcessLivenessProbe.js');
 
-async function waitForBusySilent(
-  probe,
-  { timeoutMs = 3_000, burnMs = 180, settleMs = 40 } = {},
-) {
+async function waitForBusySilent(probe, { timeoutMs = 3_000, burnMs = 180, settleMs = 40 } = {}) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const burnUntil = Date.now() + burnMs;
