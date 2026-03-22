@@ -661,7 +661,9 @@ test('B4: yields alive_but_silent warning during CLI silence', async () => {
         command: 'codex',
         args: [],
         timeoutMs: 500,
-        livenessProbe: { sampleIntervalMs: 30, softWarningMs: 80, stallWarningMs: 300 },
+        // Keep a clear margin above the final quiet window so CI scheduling jitter
+        // cannot turn an "active stderr" case into a false silent warning.
+        livenessProbe: { sampleIntervalMs: 30, softWarningMs: 160, stallWarningMs: 320 },
       },
       { spawnFn },
     ),
@@ -722,7 +724,7 @@ test('timeout includes rawArchivePath when passed in options', async () => {
     ),
   );
 
-  await new Promise((r) => setTimeout(r, 100));
+  await new Promise((r) => setTimeout(r, 60));
   proc.stdout.end();
 
   const results = await promise;
