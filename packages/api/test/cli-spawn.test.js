@@ -6,6 +6,7 @@
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
+import { clearTimeout as clearKeepAliveTimeout, setTimeout as setKeepAliveTimeout } from 'node:timers';
 import { mock, test } from 'node:test';
 
 const { spawnCli, isCliError, isCliTimeout, isLivenessWarning, KILL_GRACE_MS, SEMANTIC_COMPLETION_GRACE_MS } =
@@ -13,11 +14,16 @@ const { spawnCli, isCliError, isCliTimeout, isLivenessWarning, KILL_GRACE_MS, SE
 
 /** Helper: collect all items from async iterable */
 async function collect(iterable) {
+  const keepAlive = setKeepAliveTimeout(() => {}, 15_000);
   const items = [];
-  for await (const item of iterable) {
-    items.push(item);
+  try {
+    for await (const item of iterable) {
+      items.push(item);
+    }
+    return items;
+  } finally {
+    clearKeepAliveTimeout(keepAlive);
   }
-  return items;
 }
 
 /**

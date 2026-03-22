@@ -61,8 +61,10 @@ function emitGeminiEvents(proc, events) {
   for (const event of events) {
     proc.stdout.write(`${JSON.stringify(event)}\n`);
   }
+  proc.stdout.once('finish', () => {
+    proc._emitter.emit('exit', 0, null);
+  });
   proc.stdout.end();
-  proc._emitter.emit('exit', 0, null);
 }
 
 // ===== gemini-cli adapter tests =====
