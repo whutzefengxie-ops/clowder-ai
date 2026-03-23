@@ -118,13 +118,16 @@ export class DareAgentService implements AgentService {
     // P1-1: cwd must ALWAYS be darePath (where `python -m client` can find the module).
     // Thread's workingDirectory goes to --workspace instead.
     const cwd = this.darePath;
+    // Prefer DARE repo's own venv python (has required deps like openai)
+    const venvPython = cwd ? join(cwd, '.venv', 'bin', 'python') : undefined;
+    const pythonCmd = venvPython && existsSync(venvPython) ? venvPython : 'python';
     // P1-3: Pass API key via child env, not CLI args (avoids ps/audit leakage)
     const childEnv = this.buildEnv(options?.callbackEnv);
     const metadata: MessageMetadata = { provider: 'dare', model: effectiveModel };
 
     try {
       const cliOpts = {
-        command: 'python' as const,
+        command: pythonCmd,
         args,
         ...(cwd ? { cwd } : {}),
         env: childEnv,
