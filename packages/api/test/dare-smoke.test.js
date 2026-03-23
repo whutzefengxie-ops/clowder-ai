@@ -13,9 +13,14 @@
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
 import { describe, test } from 'node:test';
-import { DareAgentService } from '../dist/domains/cats/services/agents/providers/DareAgentService.js';
+import {
+  DareAgentService,
+  resolveVendorDarePath,
+} from '../dist/domains/cats/services/agents/providers/DareAgentService.js';
 
-const DARE_PATH = process.env.DARE_PATH || '/tmp/cat-cafe-reviews/Deterministic-Agent-Runtime-Engine';
+// F132: prefer env DARE_PATH > vendor/dare-cli (project root) > legacy /tmp path
+const LEGACY_DARE_PATH = '/tmp/cat-cafe-reviews/Deterministic-Agent-Runtime-Engine';
+const DARE_PATH = process.env.DARE_PATH || resolveVendorDarePath() || LEGACY_DARE_PATH;
 const HAS_DARE = existsSync(`${DARE_PATH}/client/__main__.py`);
 const HAS_KEY = !!process.env.OPENROUTER_API_KEY;
 
