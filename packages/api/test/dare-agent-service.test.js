@@ -459,10 +459,25 @@ describe('resolveVendorDarePath (F132)', () => {
   });
 
   test('does not depend on process.cwd()', () => {
+    const originalCwd = process.cwd();
     const result1 = resolveVendorDarePath();
-    // Same call, same result — purely derived from module location
-    const result2 = resolveVendorDarePath();
-    assert.strictEqual(result1, result2);
+    // Change cwd and verify result is identical
+    process.chdir('/tmp');
+    try {
+      const result2 = resolveVendorDarePath();
+      assert.strictEqual(result1, result2, 'resolveVendorDarePath must not vary with cwd');
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
+
+  test('resolves to project root, not packages/ (P1 depth check)', () => {
+    const result = resolveVendorDarePath();
+    // Must NOT contain packages/ in the vendor path
+    assert.ok(
+      !result.includes(join('packages', 'vendor')),
+      `path should be at project root, not inside packages/: ${result}`,
+    );
   });
 });
 

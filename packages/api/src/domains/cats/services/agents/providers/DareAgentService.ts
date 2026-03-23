@@ -68,7 +68,8 @@ const ADAPTER_ENDPOINT_ENV: Record<string, string> = {
  * packages/api/src/domains/cats/services/agents/providers/ → 8 levels up = project root
  */
 export function resolveVendorDarePath(): string {
-  return join(__dirname, '..', '..', '..', '..', '..', '..', '..', 'vendor', 'dare-cli');
+  // packages/api/{src|dist}/domains/cats/services/agents/providers → 8 levels to root
+  return join(__dirname, '..', '..', '..', '..', '..', '..', '..', '..', 'vendor', 'dare-cli');
 }
 
 /**
