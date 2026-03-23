@@ -78,7 +78,7 @@ export class DareAgentService implements AgentService {
     this.model = options?.model ?? getCatModel(this.catId as string);
     this.endpoint =
       options?.endpoint ?? process.env[DARE_ENDPOINT_ENV] ?? process.env[this.getAdapterEndpointEnvName()];
-    this.apiKey = options?.apiKey ?? process.env[DARE_API_KEY_ENV];
+    this.apiKey = options?.apiKey;
     this.darePath = options?.darePath ?? process.env.DARE_PATH ?? resolveDefaultDarePath();
     this.spawnFn = options?.spawnFn;
   }
@@ -243,7 +243,7 @@ export class DareAgentService implements AgentService {
     // P1-3: Pass API key via env vars (not CLI args) to avoid ps/audit leakage
     const apiKeyEnvName = this.getAdapterApiKeyEnvName();
     const apiKey =
-      callbackEnv?.[DARE_API_KEY_ENV] ?? callbackEnv?.[apiKeyEnvName] ?? this.apiKey ?? process.env[apiKeyEnvName];
+      callbackEnv?.[DARE_API_KEY_ENV] ?? callbackEnv?.[apiKeyEnvName] ?? this.apiKey;
     if (apiKey) {
       env[apiKeyEnvName] = apiKey;
     }
