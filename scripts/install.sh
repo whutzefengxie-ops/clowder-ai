@@ -846,7 +846,7 @@ else
     info "  Non-interactive — skipping auth. Run each CLI to log in: claude / codex / gemini"
     if [[ -n "$DARE_VENDOR_DIR" ]]; then
         info "  Dare (狸花猫): set OPENROUTER_API_KEY in .env or run:"
-        info "    node scripts/install-auth-config.mjs client-auth set --project-dir . --client dare --mode api_key --api-key YOUR_KEY"
+        info "    node scripts/install-auth-config.mjs client-auth set --project-dir $PROJECT_DIR --client dare --mode api_key --api-key YOUR_KEY"
     fi
 fi
 
