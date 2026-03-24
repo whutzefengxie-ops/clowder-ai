@@ -2653,7 +2653,7 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
       authType: 'api_key',
       protocol: 'openai',
       apiKey: 'sk-stale-openai',
-      setActive: true,
+      setActive: false,
     });
 
     const optionsSeen = [];
@@ -2942,6 +2942,9 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
     await mkdir(apiDir, { recursive: true });
     await writeFile(join(root, 'pnpm-workspace.yaml'), 'packages:\n  - "packages/*"\n', 'utf-8');
 
+    const savedGlobalRoot = process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT;
+    process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT = root;
+
     const optionsSeen = [];
     const service = {
       async *invoke(_prompt, options) {
@@ -2966,6 +2969,8 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
       );
     } finally {
       process.chdir(previousCwd);
+      if (savedGlobalRoot === undefined) delete process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT;
+      else process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT = savedGlobalRoot;
       await rm(root, { recursive: true, force: true });
     }
 
