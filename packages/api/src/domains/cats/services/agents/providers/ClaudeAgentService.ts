@@ -20,6 +20,7 @@ import { isAbsolute, resolve } from 'node:path';
 import { type CatId, createCatId } from '@cat-cafe/shared';
 import { getCatEffort } from '../../../../../config/cat-config-loader.js';
 import { getCatModel } from '../../../../../config/cat-models.js';
+import { createModuleLogger } from '../../../../../infrastructure/logger.js';
 import { formatCliExitError } from '../../../../../utils/cli-format.js';
 import { formatCliNotFoundError, resolveCliCommand } from '../../../../../utils/cli-resolve.js';
 import { isCliError, isCliTimeout, isLivenessWarning, spawnCli } from '../../../../../utils/cli-spawn.js';
@@ -36,6 +37,8 @@ const ANTHROPIC_PROFILE_MODE_KEY = 'CAT_CAFE_ANTHROPIC_PROFILE_MODE';
 const ANTHROPIC_PROFILE_API_KEY = 'CAT_CAFE_ANTHROPIC_API_KEY';
 const ANTHROPIC_PROFILE_BASE_URL = 'CAT_CAFE_ANTHROPIC_BASE_URL';
 const ANTHROPIC_MODEL_OVERRIDE_KEY = 'CAT_CAFE_ANTHROPIC_MODEL_OVERRIDE';
+
+const claudeLog = createModuleLogger('claude-agent');
 
 function isInvalidThinkingSignatureMessage(message: string | undefined): boolean {
   if (!message) return false;
@@ -73,7 +76,12 @@ function buildClaudeEnvOverrides(callbackEnv?: Record<string, string>): Record<s
   if (mode === 'api_key') {
     const apiKey = callbackEnv?.[ANTHROPIC_PROFILE_API_KEY]?.trim();
     const baseUrl = callbackEnv?.[ANTHROPIC_PROFILE_BASE_URL]?.trim();
-    if (apiKey) env.ANTHROPIC_API_KEY = apiKey;
+    if (apiKey) {
+      env.ANTHROPIC_API_KEY = apiKey;
+      // BigModel/MaaS docs use AUTH_TOKEN instead of API_KEY — set both for compatibility.
+      // Some Claude CLI versions may use different auth headers depending on which var is set.
+      env.ANTHROPIC_AUTH_TOKEN = apiKey;
+    }
     if (baseUrl) {
       // Claude CLI internally appends /v1 to the base URL.
       // If the user configured it with /v1 already, strip it to prevent
@@ -82,10 +90,37 @@ function buildClaudeEnvOverrides(callbackEnv?: Record<string, string>): Record<s
       const cleanUrl = baseUrl.replace(/\/v1\/?$/, '');
       env.ANTHROPIC_BASE_URL = cleanUrl;
     }
+
+    // Unified model mapping for api_key mode: always inject ANTHROPIC_DEFAULT_*_MODEL
+    // env vars so the model name reaches the upstream API exactly as configured.
+    // Claude CLI uses env var mapping to resolve the actual model name at the API level.
+    // Disable nonessential traffic (model validation against /v1/models) which fails
+    // on third-party APIs that don't list claude-* model names (e.g. BigModel/MaaS).
+    // See: https://docs.bigmodel.cn/cn/guide/develop/claude
+    // BigModel/MaaS recommended env vars to suppress model validation and experimental features
+    // that may interfere with third-party API compatibility.
+    env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = '1';
+    env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = '1';
+    env.ENABLE_TOOL_SEARCH = '0';
+    const modelOverride = callbackEnv?.[ANTHROPIC_MODEL_OVERRIDE_KEY]?.trim();
+    const effectiveModel = modelOverride || undefined;
+    if (effectiveModel) {
+      env.ANTHROPIC_DEFAULT_OPUS_MODEL = effectiveModel;
+      env.ANTHROPIC_DEFAULT_SONNET_MODEL = effectiveModel;
+      env.ANTHROPIC_DEFAULT_HAIKU_MODEL = effectiveModel;
+    }
   } else if (mode === 'subscription') {
-    // Subscription mode: explicitly clear inherited key-based env vars.
+    // Subscription mode: explicitly clear all api_key env vars that may have been
+    // inherited from the parent process (e.g. if a previous api_key invocation ran).
     env.ANTHROPIC_API_KEY = null;
+    env.ANTHROPIC_AUTH_TOKEN = null;
     env.ANTHROPIC_BASE_URL = null;
+    env.ANTHROPIC_DEFAULT_OPUS_MODEL = null;
+    env.ANTHROPIC_DEFAULT_SONNET_MODEL = null;
+    env.ANTHROPIC_DEFAULT_HAIKU_MODEL = null;
+    env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = null;
+    env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = null;
+    env.ENABLE_TOOL_SEARCH = null;
   }
   return env;
 }
@@ -157,6 +192,13 @@ export class ClaudeAgentService implements AgentService {
 
     // Profile-level model override (e.g. "opus[1m]") takes precedence over constructor model
     const effectiveModel = options?.callbackEnv?.[ANTHROPIC_MODEL_OVERRIDE_KEY]?.trim() || this.model;
+    // In api_key mode, pass --model with a tier alias ('opus') so the CLI resolves it
+    // via ANTHROPIC_DEFAULT_OPUS_MODEL env var. Passing the actual model name (e.g. 'glm-5')
+    // fails validation because the CLI doesn't recognize non-Claude model names. Omitting
+    // --model entirely also fails because the CLI defaults to 'claude-opus-4-6' and validates
+    // it against the third-party API which doesn't list Claude models.
+    // See: https://docs.bigmodel.cn/cn/guide/develop/claude
+    const isApiKeyMode = options?.callbackEnv?.[ANTHROPIC_PROFILE_MODE_KEY] === 'api_key';
     const args: string[] = [
       '-p',
       effectivePrompt,
@@ -165,7 +207,7 @@ export class ClaudeAgentService implements AgentService {
       '--include-partial-messages',
       '--verbose',
       '--model',
-      effectiveModel,
+      isApiKeyMode ? 'opus' : effectiveModel,
       '--effort',
       getCatEffort(this.catId as string),
       '--permission-mode',
@@ -228,6 +270,21 @@ export class ClaudeAgentService implements AgentService {
 
       let sawResultError = false;
       const envOverrides = buildClaudeEnvOverrides(options?.callbackEnv);
+
+      // Debug: log CLI args + processed env vars (secrets redacted)
+      {
+        const safeEnv = Object.fromEntries(
+          Object.entries(envOverrides).filter(
+            ([k, v]) =>
+              v !== null &&
+              !k.includes('API_KEY') &&
+              !k.includes('AUTH_TOKEN') &&
+              !k.includes('SECRET') &&
+              !k.includes('CALLBACK_TOKEN'),
+          ),
+        );
+        claudeLog.info({ catId: this.catId, cliArgs: args, envOverrides: safeEnv }, 'Claude CLI spawn params');
+      }
 
       const cliOpts = {
         command: claudeCommand,
