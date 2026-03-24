@@ -280,7 +280,7 @@ describe('HubCatEditor', () => {
     await changeField(queryField(container, 'select[aria-label="Client"]'), 'openai', 'change');
     await flushEffects();
     await changeField(queryField(container, 'select[aria-label="认证信息"]'), 'codex-sponsor', 'change');
-    await changeField(queryField(container, 'select[aria-label="Model"]'), 'gpt-5.4-mini', 'change');
+    await changeField(queryField(container, 'input[aria-label="Model"]'), 'gpt-5.4-mini');
 
     const saveButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === '保存');
     await act(async () => {
@@ -442,16 +442,16 @@ describe('HubCatEditor', () => {
     await flushEffects();
 
     // Initially model should be claude-opus-4-6
-    const modelSelect = queryField<HTMLSelectElement>(container, 'select[aria-label="Model"]');
-    expect(modelSelect.value).toBe('claude-opus-4-6');
+    const modelInput = queryField<HTMLInputElement>(container, 'input[aria-label="Model"]');
+    expect(modelInput.value).toBe('claude-opus-4-6');
 
     // Switch Provider to codex-sponsor (API Key)
     await changeField(queryField(container, 'select[aria-label="认证信息"]'), 'codex-sponsor', 'change');
     await flushEffects();
 
     // defaultModel should have been reset (not still 'claude-opus-4-6')
-    const modelSelectAfter = queryField<HTMLSelectElement>(container, 'select[aria-label="Model"]');
-    expect(modelSelectAfter.value).not.toBe('claude-opus-4-6');
+    const modelInputAfter = queryField<HTMLInputElement>(container, 'input[aria-label="Model"]');
+    expect(modelInputAfter.value).not.toBe('claude-opus-4-6');
   });
 
   it('switches to Antigravity branch and shows CLI command field', async () => {
@@ -1248,7 +1248,7 @@ describe('HubCatEditor', () => {
     await changeField(queryField(container, 'select[aria-label="Client"]'), 'openai', 'change');
     await flushEffects();
     await changeField(queryField(container, 'select[aria-label="认证信息"]'), 'codex-sponsor', 'change');
-    await changeField(queryField(container, 'select[aria-label="Model"]'), 'gpt-5.4-mini', 'change');
+    await changeField(queryField(container, 'input[aria-label="Model"]'), 'gpt-5.4-mini');
     await changeField(queryField(container, 'input[aria-label="Max Prompt Tokens"]'), '48000');
 
     const saveButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === '保存');
@@ -1810,7 +1810,7 @@ describe('HubCatEditor', () => {
     });
 
     await changeField(queryField(container, 'select[aria-label="认证信息"]'), 'codex-sponsor', 'change');
-    await changeField(queryField(container, 'select[aria-label="Model"]'), 'gpt-5.4', 'change');
+    await changeField(queryField(container, 'input[aria-label="Model"]'), 'gpt-5.4');
     await changeField(queryField(container, 'select[aria-label^="Codex Sandbox"]'), 'workspace-write', 'change');
     await changeField(queryField(container, 'select[aria-label^="Codex Approval"]'), 'on-request', 'change');
     await changeField(queryField(container, 'select[aria-label^="Codex Auth Mode"]'), 'oauth', 'change');

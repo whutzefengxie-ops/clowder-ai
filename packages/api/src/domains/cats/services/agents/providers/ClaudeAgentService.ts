@@ -31,8 +31,6 @@ import { extractImagePaths } from '../providers/image-paths.js';
 import { findGitBashPath } from './claude-agent-win.js';
 import { extractClaudeUsage, isResultErrorEvent, transformClaudeEvent } from './claude-ndjson-parser.js';
 
-const log = createModuleLogger('claude-agent');
-
 const PERMISSION_MODE = 'bypassPermissions';
 
 const ANTHROPIC_PROFILE_MODE_KEY = 'CAT_CAFE_ANTHROPIC_PROFILE_MODE';
@@ -40,12 +38,7 @@ const ANTHROPIC_PROFILE_API_KEY = 'CAT_CAFE_ANTHROPIC_API_KEY';
 const ANTHROPIC_PROFILE_BASE_URL = 'CAT_CAFE_ANTHROPIC_BASE_URL';
 const ANTHROPIC_MODEL_OVERRIDE_KEY = 'CAT_CAFE_ANTHROPIC_MODEL_OVERRIDE';
 
-/** Default fallback model for Claude CLI when the real model is set via env var mapping. */
-const ANTHROPIC_CLI_FALLBACK_MODEL = 'claude-opus-4-6';
-
-function isKnownAnthropicModel(model: string): boolean {
-  return model.startsWith('claude-');
-}
+const claudeLog = createModuleLogger('claude-agent');
 
 function isInvalidThinkingSignatureMessage(message: string | undefined): boolean {
   if (!message) return false;
@@ -83,7 +76,12 @@ function buildClaudeEnvOverrides(callbackEnv?: Record<string, string>): Record<s
   if (mode === 'api_key') {
     const apiKey = callbackEnv?.[ANTHROPIC_PROFILE_API_KEY]?.trim();
     const baseUrl = callbackEnv?.[ANTHROPIC_PROFILE_BASE_URL]?.trim();
-    if (apiKey) env.ANTHROPIC_API_KEY = apiKey;
+    if (apiKey) {
+      env.ANTHROPIC_API_KEY = apiKey;
+      // BigModel/MaaS docs use AUTH_TOKEN instead of API_KEY — set both for compatibility.
+      // Some Claude CLI versions may use different auth headers depending on which var is set.
+      env.ANTHROPIC_AUTH_TOKEN = apiKey;
+    }
     if (baseUrl) {
       // Claude CLI internally appends /v1 to the base URL.
       // If the user configured it with /v1 already, strip it to prevent
@@ -93,22 +91,36 @@ function buildClaudeEnvOverrides(callbackEnv?: Record<string, string>): Record<s
       env.ANTHROPIC_BASE_URL = cleanUrl;
     }
 
-    // Model mapping for third-party Anthropic-compatible APIs (e.g. BigModel, MaaS).
-    // Claude CLI rejects non-Anthropic model names via --model. Use the env var
-    // mapping mechanism (ANTHROPIC_DEFAULT_*_MODEL) to pass custom model names:
-    // Claude CLI will receive --model claude-opus-4-6 (a known name) but
-    // the env var maps it to the actual model (e.g. glm-5) at the API level.
+    // Unified model mapping for api_key mode: always inject ANTHROPIC_DEFAULT_*_MODEL
+    // env vars so the model name reaches the upstream API exactly as configured.
+    // Claude CLI uses env var mapping to resolve the actual model name at the API level.
+    // Disable nonessential traffic (model validation against /v1/models) which fails
+    // on third-party APIs that don't list claude-* model names (e.g. BigModel/MaaS).
+    // See: https://docs.bigmodel.cn/cn/guide/develop/claude
+    // BigModel/MaaS recommended env vars to suppress model validation and experimental features
+    // that may interfere with third-party API compatibility.
+    env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = '1';
+    env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = '1';
+    env.ENABLE_TOOL_SEARCH = '0';
     const modelOverride = callbackEnv?.[ANTHROPIC_MODEL_OVERRIDE_KEY]?.trim();
     const effectiveModel = modelOverride || undefined;
-    if (effectiveModel && !isKnownAnthropicModel(effectiveModel)) {
+    if (effectiveModel) {
       env.ANTHROPIC_DEFAULT_OPUS_MODEL = effectiveModel;
       env.ANTHROPIC_DEFAULT_SONNET_MODEL = effectiveModel;
       env.ANTHROPIC_DEFAULT_HAIKU_MODEL = effectiveModel;
     }
   } else if (mode === 'subscription') {
-    // Subscription mode: explicitly clear inherited key-based env vars.
+    // Subscription mode: explicitly clear all api_key env vars that may have been
+    // inherited from the parent process (e.g. if a previous api_key invocation ran).
     env.ANTHROPIC_API_KEY = null;
+    env.ANTHROPIC_AUTH_TOKEN = null;
     env.ANTHROPIC_BASE_URL = null;
+    env.ANTHROPIC_DEFAULT_OPUS_MODEL = null;
+    env.ANTHROPIC_DEFAULT_SONNET_MODEL = null;
+    env.ANTHROPIC_DEFAULT_HAIKU_MODEL = null;
+    env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = null;
+    env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = null;
+    env.ENABLE_TOOL_SEARCH = null;
   }
   return env;
 }
@@ -180,12 +192,13 @@ export class ClaudeAgentService implements AgentService {
 
     // Profile-level model override (e.g. "opus[1m]") takes precedence over constructor model
     const effectiveModel = options?.callbackEnv?.[ANTHROPIC_MODEL_OVERRIDE_KEY]?.trim() || this.model;
-    // For api_key mode with non-Anthropic model names (e.g. glm-5), use a standard
-    // model for --model (env var mapping handles the actual model). This prevents
-    // Claude CLI from rejecting unknown model names.
+    // In api_key mode, pass --model with a tier alias ('opus') so the CLI resolves it
+    // via ANTHROPIC_DEFAULT_OPUS_MODEL env var. Passing the actual model name (e.g. 'glm-5')
+    // fails validation because the CLI doesn't recognize non-Claude model names. Omitting
+    // --model entirely also fails because the CLI defaults to 'claude-opus-4-6' and validates
+    // it against the third-party API which doesn't list Claude models.
+    // See: https://docs.bigmodel.cn/cn/guide/develop/claude
     const isApiKeyMode = options?.callbackEnv?.[ANTHROPIC_PROFILE_MODE_KEY] === 'api_key';
-    const cliModel =
-      isApiKeyMode && !isKnownAnthropicModel(effectiveModel) ? ANTHROPIC_CLI_FALLBACK_MODEL : effectiveModel;
     const args: string[] = [
       '-p',
       effectivePrompt,
@@ -194,7 +207,7 @@ export class ClaudeAgentService implements AgentService {
       '--include-partial-messages',
       '--verbose',
       '--model',
-      cliModel,
+      isApiKeyMode ? 'opus' : effectiveModel,
       '--effort',
       getCatEffort(this.catId as string),
       '--permission-mode',
@@ -243,9 +256,7 @@ export class ClaudeAgentService implements AgentService {
 
     try {
       const claudeCommand = resolveCliCommand('claude');
-      log.debug({ catId: this.catId, resolved: claudeCommand ?? null }, 'Resolving claude CLI command');
       if (!claudeCommand) {
-        log.warn({ catId: this.catId }, 'Claude CLI not found');
         yield {
           type: 'error' as const,
           catId: this.catId,
@@ -260,30 +271,20 @@ export class ClaudeAgentService implements AgentService {
       let sawResultError = false;
       const envOverrides = buildClaudeEnvOverrides(options?.callbackEnv);
 
-      // Debug: log full invocation details (env values redacted by pino redact paths)
-      const safeEnvSummary: Record<string, string> = {};
-      for (const [k, v] of Object.entries(envOverrides)) {
-        if (v === null) {
-          safeEnvSummary[k] = '(cleared)';
-        } else if (/key|secret|token|password/i.test(k)) {
-          safeEnvSummary[k] = v.slice(0, 6) + '***';
-        } else {
-          safeEnvSummary[k] = v;
-        }
+      // Debug: log CLI args + processed env vars (secrets redacted)
+      {
+        const safeEnv = Object.fromEntries(
+          Object.entries(envOverrides).filter(
+            ([k, v]) =>
+              v !== null &&
+              !k.includes('API_KEY') &&
+              !k.includes('AUTH_TOKEN') &&
+              !k.includes('SECRET') &&
+              !k.includes('CALLBACK_TOKEN'),
+          ),
+        );
+        claudeLog.info({ catId: this.catId, cliArgs: args, envOverrides: safeEnv }, 'Claude CLI spawn params');
       }
-      log.debug(
-        {
-          catId: this.catId,
-          command: claudeCommand,
-          model: effectiveModel,
-          sessionId: options?.sessionId,
-          invocationId: options?.invocationId,
-          cwd: options?.workingDirectory,
-          envOverrides: safeEnvSummary,
-          argCount: args.length,
-        },
-        'Invoking Claude CLI',
-      );
 
       const cliOpts = {
         command: claudeCommand,
@@ -299,15 +300,7 @@ export class ClaudeAgentService implements AgentService {
         ? options.spawnCliOverride(cliOpts)
         : spawnCli(cliOpts, this.spawnFn ? { spawnFn: this.spawnFn } : undefined);
 
-      let eventCount = 0;
-      let textEventCount = 0;
       for await (const event of events) {
-        eventCount++;
-        const evtType =
-          typeof event === 'object' && event !== null && 'type' in event
-            ? String((event as Record<string, unknown>).type)
-            : '__unknown';
-        log.debug({ catId: this.catId, eventIndex: eventCount, type: evtType }, 'CLI event received');
         if (isCliTimeout(event)) {
           // F118 AC-C3: Forward timeout diagnostics before error
           yield {
@@ -373,14 +366,10 @@ export class ClaudeAgentService implements AgentService {
 
         const fromResultError = isResultErrorEvent(event);
         let result = transformClaudeEvent(event, this.catId, streamState);
-        if (result === null) {
-          log.debug({ catId: this.catId, eventIndex: eventCount, rawType: evtType }, 'Event dropped by transform');
-          continue;
-        }
+        if (result === null) continue;
 
         if (Array.isArray(result)) {
           for (const msg of result) {
-            if (msg.type === 'text') textEventCount++;
             // Capture sessionId into metadata
             if (msg.type === 'session_init' && msg.sessionId) {
               metadata.sessionId = msg.sessionId;
@@ -400,21 +389,10 @@ export class ClaudeAgentService implements AgentService {
             }
             sawResultError = true;
           }
-          if (result.type === 'text') textEventCount++;
           yield { ...result, metadata };
         }
       }
 
-      log.debug(
-        { catId: this.catId, totalEvents: eventCount, textEvents: textEventCount, sessionId: metadata.sessionId },
-        'Claude CLI invocation completed',
-      );
-      if (textEventCount === 0) {
-        log.warn(
-          { catId: this.catId, totalEvents: eventCount },
-          'Claude CLI produced 0 text events — will show as silent_completion',
-        );
-      }
       yield { type: 'done', catId: this.catId, metadata, timestamp: Date.now() };
     } catch (err) {
       yield {

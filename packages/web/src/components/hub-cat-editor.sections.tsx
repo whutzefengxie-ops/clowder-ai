@@ -369,27 +369,19 @@ export function AccountSection({
                 <p className="whitespace-pre-wrap text-[11px] leading-4 text-[#8A776B]">{callHint}</p>
               </div>
             ) : null}
-            {modelOptions.length > 0 ? (
-              <SelectField
-                label="Model"
-                value={form.defaultModel}
-                options={modelOptions.map((model) => ({ value: model, label: model }))}
-                onChange={(value) => onChange({ defaultModel: value })}
-                required
-              />
-            ) : (
-              <TextField
-                label="Model"
-                value={form.defaultModel}
-                onChange={(value) => onChange({ defaultModel: value })}
-                required
-                placeholder={
-                  form.client === 'opencode'
-                    ? '例如 openai/gpt-5.4 或 openrouter/google/gemini-3-flash-preview'
-                    : '模型标识符，如 claude-sonnet-4-5'
-                }
-              />
-            )}
+            <ComboField
+              label="Model"
+              ariaLabel="Model"
+              value={form.defaultModel}
+              onChange={(value) => onChange({ defaultModel: value })}
+              suggestions={modelOptions}
+              required
+              placeholder={
+                form.client === 'opencode'
+                  ? '例如 openai/gpt-5.4 或 openrouter/google/gemini-3-flash-preview'
+                  : '模型标识符，如 claude-sonnet-4-5'
+              }
+            />
             {form.client === 'opencode' && selectedProfile?.authType === 'api_key' ? (
               <ComboField
                 label="Provider 名称"

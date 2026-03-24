@@ -61,8 +61,18 @@ export function validateModelFormatForProvider(
   if (!trimmedModel) return null;
   if (profileKind === 'api_key') {
     // api_key always requires ocProviderName — runtime config generation depends on it
-    if (!ocProviderName?.trim()) {
+    const trimmedOcProvider = ocProviderName?.trim();
+    if (!trimmedOcProvider) {
       return 'client "opencode" with API key auth requires an OpenCode Provider name (e.g. anthropic, openai, maas)';
+    }
+    // If model already has provider/ prefix, it must match ocProviderName to avoid
+    // generating a runtime config where the provider block and model prefix disagree.
+    const slashIdx = trimmedModel.indexOf('/');
+    if (slashIdx > 0) {
+      const modelPrefix = trimmedModel.slice(0, slashIdx);
+      if (modelPrefix !== trimmedOcProvider) {
+        return `model prefix "${modelPrefix}" does not match Provider name "${trimmedOcProvider}". Use "${trimmedOcProvider}/${trimmedModel.slice(slashIdx + 1)}" or change the Provider name to "${modelPrefix}"`;
+      }
     }
     return null;
   }
@@ -91,10 +101,9 @@ export function validateRuntimeProviderBinding(
   // API Key accounts declare their own protocol — don't reject based on provider mismatch.
   // The invocation chain uses account.protocol for env var injection.
 
-  const trimmedModel = defaultModel?.trim().replace(/\x1B\[[^m]*m|\[\d+m\]/g, '');
-  if (trimmedModel && profile.models?.length && !profile.models.includes(trimmedModel)) {
-    return `model "${trimmedModel}" is not available on provider "${profile.id}"`;
-  }
+  // Model-in-profile validation removed: users may specify any model for any profile.
+  // If the model is unsupported, the downstream CLI/client will report the error at
+  // invocation time — we no longer gate at the binding level.
 
   return null;
 }

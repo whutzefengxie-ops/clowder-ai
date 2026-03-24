@@ -56,6 +56,13 @@ import {
 import { SessionMutex } from './SessionMutex.js';
 import type { TaskProgressItem, TaskProgressStatus, TaskProgressStore } from './TaskProgressStore.js';
 
+/** Ensure defaultModel is present in the models list for runtime config generation. */
+function ensureModelInList(models: string[], defaultModel: string): string[] {
+  const bare = defaultModel.includes('/') ? defaultModel.split('/').pop()! : defaultModel;
+  if (models.includes(bare) || models.includes(defaultModel)) return models;
+  return [...models, bare];
+}
+
 /** F118: Module-level singleton — guards per-cliSessionId serialization */
 const sessionMutex = new SessionMutex();
 
@@ -740,7 +747,7 @@ export async function* invokeSingleCat(deps: InvocationDeps, params: InvocationP
           ocProviderName === 'anthropic' ? 'anthropic' : ocProviderName === 'google' ? 'google' : 'openai';
         const configPath = writeOpenCodeRuntimeConfig(projectRoot, catId as string, {
           providerName: ocProviderName,
-          models: resolvedAccount.models ?? [defaultModel],
+          models: ensureModelInList(resolvedAccount.models ?? [], defaultModel),
           defaultModel: assembledModel,
           apiType,
         });
@@ -1244,6 +1251,29 @@ export async function* invokeSingleCat(deps: InvocationDeps, params: InvocationP
         ...(sessionId ? { sessionId } : {}),
         ...baseOptions,
       };
+      // Debug: log invoke parameters (whitelist only — no secrets) per 铲屎官 request
+      if (attempt === 0) {
+        const SAFE_ENV_KEYS = new Set([
+          'CAT_CAFE_EFFECTIVE_PROTOCOL',
+          'CAT_CAFE_ANTHROPIC_PROFILE_MODE',
+          'CAT_CAFE_ANTHROPIC_MODEL_OVERRIDE',
+          'CAT_CAFE_ANTHROPIC_BASE_URL',
+          'ANTHROPIC_BASE_URL',
+          'ANTHROPIC_DEFAULT_OPUS_MODEL',
+          'ANTHROPIC_DEFAULT_SONNET_MODEL',
+          'ANTHROPIC_DEFAULT_HAIKU_MODEL',
+          'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC',
+          'OPENAI_BASE_URL',
+          'OPENAI_API_BASE',
+          'CODEX_AUTH_MODE',
+          'OPENCODE_CONFIG',
+          'GEMINI_BASE_URL',
+        ]);
+        const safeEnv = Object.fromEntries(
+          Object.entries(options.callbackEnv ?? {}).filter(([k]) => SAFE_ENV_KEYS.has(k)),
+        );
+        log.info({ catId, model: defaultModel, provider, sessionId, callbackEnv: safeEnv }, 'invoke params');
+      }
       let suppressedMissingSessionError: AgentMessage | undefined;
       let suppressedPromptLimitError: AgentMessage | undefined;
       let suppressedTransientCliError: AgentMessage | undefined;
