@@ -280,4 +280,36 @@ server.listen(3002,'127.0.0.1',()=>setInterval(()=>{},1000));`,
     assert.match(result.stderr, /API port appears active/);
     assert.doesNotMatch(result.stdout, /STARTED:/);
   });
+
+  it('reads API_SERVER_PORT from runtime .env before allowing restart', async () => {
+    const projectDir = createTempProject('runtime-port-from-env-file');
+    seedRuntimeDependencyMarkers(projectDir);
+    writeFileSync(join(projectDir, '.env'), 'API_SERVER_PORT=3010\n');
+
+    const server = spawn(
+      process.execPath,
+      [
+        '-e',
+        `const net=require('node:net');
+const server=net.createServer((socket)=>{socket.on('error',()=>{}); socket.end();});
+server.listen(3010,'127.0.0.1',()=>setInterval(()=>{},1000));`,
+      ],
+      { stdio: 'ignore' },
+    );
+    tempProcs.push(server);
+    await waitForLocalPort(3010);
+
+    const result = spawnSync('bash', [join(projectDir, 'scripts', 'runtime-worktree.sh'), 'start', '--no-sync'], {
+      cwd: projectDir,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        CAT_CAFE_RUNTIME_DIR: projectDir,
+      },
+    });
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /API port appears active/);
+    assert.doesNotMatch(result.stdout, /STARTED:/);
+  });
 });

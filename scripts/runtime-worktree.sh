@@ -81,6 +81,24 @@ abs_path() {
   printf '%s/%s\n' "${dir%/}" "${base%/}"
 }
 
+read_env_file_value() {
+  local env_file="$1"
+  local key="$2"
+  [ -f "$env_file" ] || return 1
+
+  env -i HOME="$HOME" PATH="$PATH" bash -c '
+    set -a
+    source "$1" >/dev/null 2>&1
+    eval "printf %s \"\${'"$2"':-}\""
+  ' _ "$env_file"
+}
+
+runtime_env_value() {
+  local runtime_dir
+  runtime_dir="$(abs_path "$RUNTIME_DIR")"
+  read_env_file_value "$runtime_dir/.env" "$1"
+}
+
 require_git_repo() {
   git -C "$PROJECT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1 \
     || die "project dir is not a git repository: $PROJECT_DIR"
@@ -145,7 +163,9 @@ port_is_listening() {
 }
 
 is_api_running() {
-  local port="${API_SERVER_PORT:-3004}"
+  local port
+  port="$(runtime_env_value API_SERVER_PORT 2>/dev/null || true)"
+  port="${port:-${API_SERVER_PORT:-3004}}"
   port_is_listening "$port"
 }
 

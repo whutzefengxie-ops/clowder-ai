@@ -522,6 +522,34 @@ describe('DingTalkAdapter', () => {
       assert.ok(sendCalls[0].content.includes('🔊'));
     });
 
+    it('falls back to fileName when absPath is provided without URL', async () => {
+      const adapter = makeAdapter();
+      const sendCalls = [];
+      adapter._injectSendMessage(async (params) => {
+        sendCalls.push(params);
+      });
+
+      await adapter.sendMedia('staff_001', { type: 'file', absPath: '/tmp/report.pdf', fileName: 'report.pdf' });
+      assert.equal(sendCalls.length, 1);
+      assert.equal(sendCalls[0].msgType, 'text');
+      assert.ok(sendCalls[0].content.includes('📎'));
+      assert.ok(sendCalls[0].content.includes('report.pdf'));
+    });
+
+    it('falls back to absPath basename for local images without URL', async () => {
+      const adapter = makeAdapter();
+      const sendCalls = [];
+      adapter._injectSendMessage(async (params) => {
+        sendCalls.push(params);
+      });
+
+      await adapter.sendMedia('staff_001', { type: 'image', absPath: '/tmp/generated-photo.png' });
+      assert.equal(sendCalls.length, 1);
+      assert.equal(sendCalls[0].msgType, 'text');
+      assert.ok(sendCalls[0].content.includes('🖼️'));
+      assert.ok(sendCalls[0].content.includes('generated-photo.png'));
+    });
+
     it('handles missing URL gracefully', async () => {
       const adapter = makeAdapter();
       const sendCalls = [];

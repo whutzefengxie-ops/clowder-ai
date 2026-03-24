@@ -11,6 +11,7 @@
 
 import type { RichBlock } from '@cat-cafe/shared';
 import type { FastifyBaseLogger } from 'fastify';
+import { basename } from 'node:path';
 import type { MessageEnvelope } from '../ConnectorMessageFormatter.js';
 import type { IStreamableOutboundAdapter } from '../OutboundDeliveryHook.js';
 
@@ -328,18 +329,25 @@ export class DingTalkAdapter implements IStreamableOutboundAdapter {
    */
   async sendMedia(
     externalChatId: string,
-    payload: { type: 'image' | 'file' | 'audio'; url?: string; [key: string]: unknown },
+    payload: { type: 'image' | 'file' | 'audio'; url?: string; absPath?: string; fileName?: string; [key: string]: unknown },
   ): Promise<void> {
-    const url = payload.url;
+    const url = typeof payload.url === 'string' && payload.url.length > 0 ? payload.url : undefined;
+    const mediaReference =
+      url ??
+      (typeof payload.fileName === 'string' && payload.fileName.length > 0
+        ? payload.fileName
+        : typeof payload.absPath === 'string' && payload.absPath.length > 0
+          ? basename(payload.absPath)
+          : undefined);
 
     if (payload.type === 'image' && url) {
       await this.sendDingTalkImageMessage(externalChatId, url);
       return;
     }
 
-    if (url) {
+    if (mediaReference) {
       const label = payload.type === 'image' ? '🖼️' : payload.type === 'audio' ? '🔊' : '📎';
-      await this.sendReply(externalChatId, `${label} ${url}`);
+      await this.sendReply(externalChatId, `${label} ${mediaReference}`);
       return;
     }
     this.log.warn({ type: payload.type }, '[DingTalkAdapter] sendMedia: no URL available, skipping');
