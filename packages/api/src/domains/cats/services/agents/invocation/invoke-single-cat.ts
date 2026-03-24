@@ -730,9 +730,11 @@ export async function* invokeSingleCat(deps: InvocationDeps, params: InvocationP
       const assembledModel = defaultModel.includes('/') ? defaultModel : `${ocProviderName}/${defaultModel}`;
       callbackEnv.CAT_CAFE_ANTHROPIC_MODEL_OVERRIDE = assembledModel;
       try {
-        // Map account protocol to apiType for correct npm adapter selection:
-        // anthropic→@ai-sdk/anthropic, openai→@ai-sdk/openai-compatible, google→@ai-sdk/google
-        const apiType = (effectiveProtocol as 'openai' | 'anthropic' | 'google') || undefined;
+        // Infer apiType from ocProviderName (not effectiveProtocol — protocol UI was removed).
+        // Most third-party APIs are OpenAI-compatible; only "anthropic" and "google" need
+        // their native adapters. This covers maas, deepseek, openrouter, etc. as openai.
+        const apiType: 'openai' | 'anthropic' | 'google' =
+          ocProviderName === 'anthropic' ? 'anthropic' : ocProviderName === 'google' ? 'google' : 'openai';
         const configPath = writeOpenCodeRuntimeConfig(projectRoot, catId as string, {
           providerName: ocProviderName,
           models: resolvedAccount.models ?? [defaultModel],

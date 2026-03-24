@@ -264,6 +264,23 @@ describe('generateOpenCodeRuntimeConfig', () => {
     assert.deepStrictEqual(modelKeys, ['glm-5'], 'model key must match what -m routes to');
   });
 
+  test('default apiType is openai (openai-compatible) when omitted', () => {
+    // Covers the "no protocol on profile" scenario (protocol UI removed).
+    // Most third-party APIs (maas, deepseek, etc.) are OpenAI-compatible.
+    const config = generateOpenCodeRuntimeConfig({
+      providerName: 'maas',
+      models: ['glm-5'],
+      defaultModel: 'maas/glm-5',
+      // apiType intentionally omitted — should default to 'openai'
+    });
+
+    assert.strictEqual(
+      config.provider.maas.npm,
+      '@ai-sdk/openai-compatible',
+      'omitted apiType must default to @ai-sdk/openai-compatible (not @ai-sdk/anthropic)',
+    );
+  });
+
   test('omits model field when defaultModel is not provided', () => {
     const config = generateOpenCodeRuntimeConfig({
       providerName: 'maas',
