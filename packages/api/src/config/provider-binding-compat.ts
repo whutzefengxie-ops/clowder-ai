@@ -39,15 +39,16 @@ function resolveExpectedProtocolForProvider(provider: CatProvider): ProviderProf
 }
 
 /**
- * Returns an error string when the model does not follow "providerId/modelId" convention for opencode.
- * The opencode CLI expects this format for routing; bare models like "glm-5" need a provider prefix.
+ * Returns an error string when the opencode provider binding is incomplete.
  *
- * Skipped when profileKind is "api_key" — api_key members store bare model names (e.g. "glm-5")
- * and the provider prefix is supplied by the separate ocProviderName field on the member config.
- * Runtime assembly happens in invoke-single-cat.ts: `${ocProviderName}/${defaultModel}`.
+ * For api_key profiles: ocProviderName is **always required**. The runtime generates a
+ * per-catId config file and assembles `${ocProviderName}/${defaultModel}` for -m routing.
+ * Built-in provider names (anthropic, openai, openrouter) and custom names (maas, deepseek)
+ * are both valid — "anthropic" as ocProviderName is just the special case that was previously
+ * handled as a separate code path (Path B). Now unified into one mechanism.
  *
- * For builtin auth (OAuth), the model must already include the provider prefix since there's
- * no separate provider name field — opencode's builtin providers handle routing by convention.
+ * For builtin auth (OAuth): the model should use "providerId/modelId" format (e.g. openai/gpt-5.4)
+ * since opencode's built-in provider registry handles routing natively.
  */
 export function validateModelFormatForProvider(
   provider: CatProvider,
@@ -58,16 +59,16 @@ export function validateModelFormatForProvider(
   if (provider !== 'opencode') return null;
   const trimmedModel = defaultModel?.trim();
   if (!trimmedModel) return null;
-  const slashIndex = trimmedModel.indexOf('/');
-  const isBareModel = !(slashIndex > 0 && slashIndex < trimmedModel.length - 1);
   if (profileKind === 'api_key') {
-    // api_key + bare model requires ocProviderName for runtime assembly
-    if (isBareModel && !ocProviderName?.trim()) {
-      return 'client "opencode" with API key auth requires an OpenCode Provider name when using a bare model (no provider/ prefix)';
+    // api_key always requires ocProviderName — runtime config generation depends on it
+    if (!ocProviderName?.trim()) {
+      return 'client "opencode" with API key auth requires an OpenCode Provider name (e.g. anthropic, openai, maas)';
     }
     return null;
   }
-  if (!isBareModel) return null;
+  // builtin/OAuth: recommend provider/model format for native routing
+  const slashIndex = trimmedModel.indexOf('/');
+  if (slashIndex > 0 && slashIndex < trimmedModel.length - 1) return null;
   return 'client "opencode" recommends model format "providerId/modelId" (e.g. openai/gpt-5.4)';
 }
 

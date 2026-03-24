@@ -721,28 +721,28 @@ export async function* invokeSingleCat(deps: InvocationDeps, params: InvocationP
       if (resolvedAccount.baseUrl) callbackEnv.DARE_ENDPOINT = resolvedAccount.baseUrl;
     }
 
-    // F189: OpenCode custom provider config injection.
-    // When opencode + api_key + ocProviderName is set, generate a per-catId runtime config
-    // and assemble the full model string as `ocProviderName/defaultModel` for -m routing.
-    // This lets opencode route to custom providers (e.g. maas/glm-5, deepseek/deepseek-r2).
+    // F189: OpenCode unified custom provider config injection.
+    // All opencode + api_key members go through this path — ocProviderName is always required
+    // by validation. Built-in provider names (anthropic, openai) and custom names (maas, deepseek)
+    // are both handled identically: generate a per-catId runtime config, assemble provider/model.
     const ocProviderName = catConfig?.ocProviderName?.trim();
     if (provider === 'opencode' && resolvedAccount?.authType === 'api_key' && ocProviderName && defaultModel) {
-      // Assemble full model: ocProviderName/defaultModel (e.g. "maas" + "glm-5" → "maas/glm-5")
-      // The model override ensures OpenCodeAgentService passes the assembled name to -m flag.
-      const assembledModel = defaultModel.includes('/')
-        ? defaultModel // already has prefix (e.g. user typed "maas/glm-5" directly)
-        : `${ocProviderName}/${defaultModel}`;
+      const assembledModel = defaultModel.includes('/') ? defaultModel : `${ocProviderName}/${defaultModel}`;
       callbackEnv.CAT_CAFE_ANTHROPIC_MODEL_OVERRIDE = assembledModel;
       try {
+        // Map account protocol to apiType for correct npm adapter selection:
+        // anthropic→@ai-sdk/anthropic, openai→@ai-sdk/openai-compatible, google→@ai-sdk/google
+        const apiType = (effectiveProtocol as 'openai' | 'anthropic' | 'google') || undefined;
         const configPath = writeOpenCodeRuntimeConfig(projectRoot, catId as string, {
           providerName: ocProviderName,
           models: resolvedAccount.models ?? [defaultModel],
           defaultModel: assembledModel,
+          apiType,
         });
         callbackEnv.OPENCODE_CONFIG = configPath;
         if (resolvedAccount.apiKey) callbackEnv[OC_API_KEY_ENV] = resolvedAccount.apiKey;
         if (resolvedAccount.baseUrl) callbackEnv[OC_BASE_URL_ENV] = resolvedAccount.baseUrl;
-        log.info({ catId, configPath, provider: ocProviderName }, 'OpenCode runtime config written');
+        log.info({ catId, configPath, provider: ocProviderName, apiType }, 'OpenCode runtime config written');
       } catch (err) {
         log.warn({ catId, err }, 'Failed to write OpenCode runtime config — falling back to env vars');
       }
