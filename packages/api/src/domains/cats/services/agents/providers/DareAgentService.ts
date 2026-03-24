@@ -58,6 +58,13 @@ const ADAPTER_ENDPOINT_ENV: Record<string, string> = {
   anthropic: 'ANTHROPIC_BASE_URL',
 };
 
+/**
+ * DARE tools that require approval beyond the built-in DEFAULT_AUTO_APPROVE_TOOLS
+ * (which only covers read_file + search_code). Without these, headless mode
+ * times out waiting for human approval that can never arrive.
+ */
+const EXTRA_AUTO_APPROVE_TOOLS: readonly string[] = ['write_file', 'write_code', 'run_command', 'run_cmd'];
+
 function resolveDefaultDarePath(): string | undefined {
   return existsSync(join(DEFAULT_DARE_PATH, 'client', '__main__.py')) ? DEFAULT_DARE_PATH : undefined;
 }
@@ -233,7 +240,11 @@ export class DareAgentService implements AgentService {
     if (sessionId) {
       args.push('--session-id', sessionId);
     }
-    args.push('--task', prompt, '--auto-approve', '--headless');
+    args.push('--task', prompt, '--auto-approve');
+    for (const tool of EXTRA_AUTO_APPROVE_TOOLS) {
+      args.push('--auto-approve-tool', tool);
+    }
+    args.push('--headless');
 
     return args;
   }
