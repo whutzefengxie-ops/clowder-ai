@@ -764,7 +764,7 @@ describe('cats routes runtime CRUD', { concurrency: false }, () => {
     assert.match(createBody.error, /only supports builtin Gemini auth/i);
   });
 
-  it('PATCH /api/cats/:id rejects models that are not available on the bound provider profile', async () => {
+  it('PATCH /api/cats/:id allows models not in the bound profile model list (validated at invocation)', async () => {
     const projectRoot = createProjectRoot();
     process.env.CAT_TEMPLATE_PATH = join(projectRoot, 'cat-template.json');
 
@@ -806,6 +806,7 @@ describe('cats routes runtime CRUD', { concurrency: false }, () => {
     });
     assert.equal(createRes.statusCode, 201);
 
+    // Model not in profile's models list — should still succeed (no longer gated at binding level)
     const patchRes = await app.inject({
       method: 'PATCH',
       url: '/api/cats/runtime-codex-scoped-profile',
@@ -818,9 +819,7 @@ describe('cats routes runtime CRUD', { concurrency: false }, () => {
       }),
     });
 
-    assert.equal(patchRes.statusCode, 400);
-    const patchBody = JSON.parse(patchRes.body);
-    assert.match(patchBody.error, /model "gpt-5\.4" is not available on provider "scoped-openai-profile"/i);
+    assert.equal(patchRes.statusCode, 200);
   });
 
   it('PATCH /api/cats/:id validates seed model edits against the active bootstrap account', async () => {

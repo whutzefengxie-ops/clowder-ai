@@ -88,10 +88,11 @@ function buildClaudeEnvOverrides(callbackEnv?: Record<string, string>): Record<s
 
     // Unified model mapping for api_key mode: always inject ANTHROPIC_DEFAULT_*_MODEL
     // env vars so the model name reaches the upstream API exactly as configured.
-    // Claude CLI receives --model claude-opus-4-6 (a known name) while env vars
-    // map it to the actual model (e.g. glm-5 or claude-sonnet-4-6) at the API level.
-    // This avoids two code paths (direct --model vs env mapping) and prevents
-    // CLI model validation issues with third-party Anthropic-compatible APIs.
+    // Claude CLI uses env var mapping to resolve the actual model name at the API level.
+    // Disable nonessential traffic (model validation against /v1/models) which fails
+    // on third-party APIs that don't list claude-* model names (e.g. BigModel/MaaS).
+    // See: https://docs.bigmodel.cn/cn/guide/develop/claude
+    env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = '1';
     const modelOverride = callbackEnv?.[ANTHROPIC_MODEL_OVERRIDE_KEY]?.trim();
     const effectiveModel = modelOverride || undefined;
     if (effectiveModel) {
