@@ -2643,6 +2643,9 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
     await mkdir(isolatedApiDir, { recursive: true });
     await writeFile(join(isolatedRepoRoot, 'pnpm-workspace.yaml'), 'packages:\n  - "packages/*"\n', 'utf-8');
 
+    const savedGlobalRoot = process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT;
+    process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT = staleTemplateRoot;
+
     await createProviderProfile(staleTemplateRoot, {
       provider: 'openai',
       name: 'stale-openai',
@@ -2681,6 +2684,8 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
       process.chdir(previousCwd);
       if (previousTemplatePath === undefined) delete process.env.CAT_TEMPLATE_PATH;
       else process.env.CAT_TEMPLATE_PATH = previousTemplatePath;
+      if (savedGlobalRoot === undefined) delete process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT;
+      else process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT = savedGlobalRoot;
       await rm(staleTemplateRoot, { recursive: true, force: true });
       await rm(isolatedRepoRoot, { recursive: true, force: true });
     }
@@ -2978,6 +2983,9 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
     await mkdir(apiDir, { recursive: true });
     await writeFile(join(root, 'pnpm-workspace.yaml'), 'packages:\n  - "packages/*"\n', 'utf-8');
 
+    const savedGlobalRoot = process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT;
+    process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT = root;
+
     const boundProfile = await createProviderProfile(root, {
       provider: 'openai',
       name: 'bound-openai',
@@ -3032,6 +3040,8 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
       );
     } finally {
       process.chdir(previousCwd);
+      if (savedGlobalRoot === undefined) delete process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT;
+      else process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT = savedGlobalRoot;
       catRegistry.reset();
       for (const [id, config] of Object.entries(registrySnapshot)) {
         catRegistry.register(id, config);
@@ -3046,6 +3056,9 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
     const apiDir = join(root, 'packages', 'api');
     await mkdir(apiDir, { recursive: true });
     await writeFile(join(root, 'pnpm-workspace.yaml'), 'packages:\n  - "packages/*"\n', 'utf-8');
+
+    const savedGlobalRoot = process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT;
+    process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT = root;
 
     const openrouterProfile = await createProviderProfile(root, {
       provider: 'openai',
@@ -3096,6 +3109,8 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
       assert.ok(messages.some((m) => m.type === 'done'));
     } finally {
       process.chdir(previousCwd);
+      if (savedGlobalRoot === undefined) delete process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT;
+      else process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT = savedGlobalRoot;
       catRegistry.reset();
       for (const [id, config] of Object.entries(registrySnapshot)) {
         catRegistry.register(id, config);
@@ -3116,6 +3131,10 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
     const apiDir = join(root, 'packages', 'api');
     await mkdir(apiDir, { recursive: true });
     await writeFile(join(root, 'pnpm-workspace.yaml'), 'packages:\n  - "packages/*"\n', 'utf-8');
+
+    const savedGlobalRoot = process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT;
+    process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT = root;
+
     await createProviderProfile(root, {
       provider: 'anthropic',
       name: 'sponsor-gateway',
@@ -3223,6 +3242,8 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
       process.chdir(previousCwd);
       if (previousProxyEnabled === undefined) delete process.env.ANTHROPIC_PROXY_ENABLED;
       else process.env.ANTHROPIC_PROXY_ENABLED = previousProxyEnabled;
+      if (savedGlobalRoot === undefined) delete process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT;
+      else process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT = savedGlobalRoot;
       await rm(root, { recursive: true, force: true });
     }
   });
@@ -3242,6 +3263,10 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
     const apiDir = join(root, 'packages', 'api');
     await mkdir(apiDir, { recursive: true });
     await writeFile(join(root, 'pnpm-workspace.yaml'), 'packages:\n  - "packages/*"\n', 'utf-8');
+
+    const savedGlobalRoot = process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT;
+    process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT = root;
+
     await createProviderProfile(root, {
       provider: 'anthropic',
       name: 'sponsor-gateway',
@@ -3349,6 +3374,8 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
       process.chdir(previousCwd);
       if (previousProxyEnabled === undefined) delete process.env.ANTHROPIC_PROXY_ENABLED;
       else process.env.ANTHROPIC_PROXY_ENABLED = previousProxyEnabled;
+      if (savedGlobalRoot === undefined) delete process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT;
+      else process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT = savedGlobalRoot;
       _clearTestStrategyOverrides();
       await rm(root, { recursive: true, force: true });
     }
@@ -3369,6 +3396,10 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
     const apiDir = join(root, 'packages', 'api');
     await mkdir(apiDir, { recursive: true });
     await writeFile(join(root, 'pnpm-workspace.yaml'), 'packages:\n  - "packages/*"\n', 'utf-8');
+
+    const savedGlobalRoot = process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT;
+    process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT = root;
+
     await createProviderProfile(root, {
       provider: 'anthropic',
       name: 'sponsor-gateway',
@@ -3462,6 +3493,8 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
       process.chdir(previousCwd);
       if (previousProxyEnabled === undefined) delete process.env.ANTHROPIC_PROXY_ENABLED;
       else process.env.ANTHROPIC_PROXY_ENABLED = previousProxyEnabled;
+      if (savedGlobalRoot === undefined) delete process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT;
+      else process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT = savedGlobalRoot;
       _clearTestStrategyOverrides();
       await rm(root, { recursive: true, force: true });
     }
