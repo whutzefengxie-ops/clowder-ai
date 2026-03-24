@@ -2569,6 +2569,8 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
     const { createProviderProfile } = await import('../dist/config/provider-profiles.js');
     const templateRoot = await mkdtemp(join(tmpdir(), 'f127-active-template-'));
     await writeFile(join(templateRoot, 'cat-template.json'), '{}', 'utf-8');
+    const savedGlobalRoot = process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT;
+    process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT = templateRoot;
     const boundProfile = await createProviderProfile(templateRoot, {
       provider: 'openai',
       name: 'template-bound-openai',
@@ -2618,6 +2620,8 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
     } finally {
       if (previousTemplatePath === undefined) delete process.env.CAT_TEMPLATE_PATH;
       else process.env.CAT_TEMPLATE_PATH = previousTemplatePath;
+      if (savedGlobalRoot === undefined) delete process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT;
+      else process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT = savedGlobalRoot;
       catRegistry.reset();
       for (const [id, config] of Object.entries(registrySnapshot)) {
         catRegistry.register(id, config);

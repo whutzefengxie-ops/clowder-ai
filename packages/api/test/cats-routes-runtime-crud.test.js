@@ -495,6 +495,7 @@ describe('cats routes runtime CRUD', { concurrency: false }, () => {
     const projectRoot = createProjectRoot();
     process.env.CAT_TEMPLATE_PATH = join(projectRoot, 'cat-template.json');
 
+    process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT = projectRoot;
     const { createProviderProfile } = await import('../dist/config/provider-profiles.js');
     const crossProtocolProfile = await createProviderProfile(projectRoot, {
       displayName: 'OpenAI Key Profile',
@@ -540,6 +541,7 @@ describe('cats routes runtime CRUD', { concurrency: false }, () => {
     const projectRoot = createProjectRoot();
     process.env.CAT_TEMPLATE_PATH = join(projectRoot, 'cat-template.json');
 
+    process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT = projectRoot;
     const { createProviderProfile } = await import('../dist/config/provider-profiles.js');
     const openaiProfile = await createProviderProfile(projectRoot, {
       displayName: 'OpenAI Key Profile',
@@ -722,6 +724,7 @@ describe('cats routes runtime CRUD', { concurrency: false }, () => {
     const projectRoot = createProjectRoot();
     process.env.CAT_TEMPLATE_PATH = join(projectRoot, 'cat-template.json');
 
+    process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT = projectRoot;
     const { createProviderProfile } = await import('../dist/config/provider-profiles.js');
     const apiKeyProfile = await createProviderProfile(projectRoot, {
       displayName: 'Gemini Proxy',
@@ -768,6 +771,7 @@ describe('cats routes runtime CRUD', { concurrency: false }, () => {
     const projectRoot = createProjectRoot();
     process.env.CAT_TEMPLATE_PATH = join(projectRoot, 'cat-template.json');
 
+    process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT = projectRoot;
     const { createProviderProfile } = await import('../dist/config/provider-profiles.js');
     const boundProfile = await createProviderProfile(projectRoot, {
       displayName: 'Scoped OpenAI Profile',
@@ -826,6 +830,7 @@ describe('cats routes runtime CRUD', { concurrency: false }, () => {
     const projectRoot = createProjectRootFromRepoTemplate();
     process.env.CAT_TEMPLATE_PATH = join(projectRoot, 'cat-template.json');
 
+    process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT = projectRoot;
     const { bootstrapCatCatalog } = await import('../dist/config/cat-catalog-store.js');
     const { activateProviderProfile, createProviderProfile } = await import('../dist/config/provider-profiles.js');
     bootstrapCatCatalog(projectRoot, process.env.CAT_TEMPLATE_PATH);
