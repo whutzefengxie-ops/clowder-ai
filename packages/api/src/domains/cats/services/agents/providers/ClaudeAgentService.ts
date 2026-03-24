@@ -37,8 +37,6 @@ const ANTHROPIC_PROFILE_API_KEY = 'CAT_CAFE_ANTHROPIC_API_KEY';
 const ANTHROPIC_PROFILE_BASE_URL = 'CAT_CAFE_ANTHROPIC_BASE_URL';
 const ANTHROPIC_MODEL_OVERRIDE_KEY = 'CAT_CAFE_ANTHROPIC_MODEL_OVERRIDE';
 
-/** Default fallback model for Claude CLI when the real model is set via env var mapping. */
-const ANTHROPIC_CLI_FALLBACK_MODEL = 'claude-opus-4-6';
 
 function isInvalidThinkingSignatureMessage(message: string | undefined): boolean {
   if (!message) return false;
@@ -175,11 +173,12 @@ export class ClaudeAgentService implements AgentService {
 
     // Profile-level model override (e.g. "opus[1m]") takes precedence over constructor model
     const effectiveModel = options?.callbackEnv?.[ANTHROPIC_MODEL_OVERRIDE_KEY]?.trim() || this.model;
-    // In api_key mode, always use the fallback model for --model and let env var
-    // mapping (ANTHROPIC_DEFAULT_*_MODEL) handle the actual model name. This gives
-    // a single uniform path regardless of whether the model is claude-* or third-party.
+    // In api_key mode, omit --model entirely and let ANTHROPIC_DEFAULT_*_MODEL env vars
+    // handle model selection. Passing --model causes Claude CLI to validate the model name
+    // against the API's /v1/models endpoint, which fails on third-party APIs that don't
+    // list claude-* models. Without --model, the CLI uses its default tier and the env vars
+    // override the actual model used at the API level.
     const isApiKeyMode = options?.callbackEnv?.[ANTHROPIC_PROFILE_MODE_KEY] === 'api_key';
-    const cliModel = isApiKeyMode ? ANTHROPIC_CLI_FALLBACK_MODEL : effectiveModel;
     const args: string[] = [
       '-p',
       effectivePrompt,
@@ -187,8 +186,7 @@ export class ClaudeAgentService implements AgentService {
       'stream-json',
       '--include-partial-messages',
       '--verbose',
-      '--model',
-      cliModel,
+      ...(isApiKeyMode ? [] : ['--model', effectiveModel]),
       '--effort',
       getCatEffort(this.catId as string),
       '--permission-mode',
