@@ -69,6 +69,19 @@ export function generateOpenCodeConfig(options: OpenCodeConfigOptions): OpenCode
 export const OC_API_KEY_ENV = 'CAT_CAFE_OC_API_KEY';
 export const OC_BASE_URL_ENV = 'CAT_CAFE_OC_BASE_URL';
 
+/**
+ * Maps our api type shorthand to the npm package name expected by opencode.
+ * opencode uses Vercel AI SDK adapters — the `npm` field in provider config
+ * specifies which adapter to load.
+ *
+ * @see https://opencode.ai/docs/providers
+ */
+const NPM_ADAPTER_FOR_API_TYPE: Record<string, string> = {
+  openai: '@ai-sdk/openai-compatible',
+  anthropic: '@ai-sdk/anthropic',
+  google: '@ai-sdk/google',
+};
+
 export interface OpenCodeRuntimeConfigOptions {
   /** Provider name as registered in opencode (e.g. "maas", "deepseek") */
   providerName: string;
@@ -83,17 +96,31 @@ export interface OpenCodeRuntimeConfigOptions {
 /**
  * Generate an opencode runtime config object for a custom provider.
  * Credentials use {env:VAR} substitution — actual values are passed via child process env.
+ *
+ * Config shape follows official opencode format:
+ *   provider.<id>.npm   — Vercel AI SDK adapter package
+ *   provider.<id>.models — keyed object { modelId: { name } }
+ *   provider.<id>.options — { baseURL, apiKey } with {env:VAR} substitution
+ *
+ * @see https://opencode.ai/docs/providers
+ * @see https://opencode.ai/docs/models
  */
 export function generateOpenCodeRuntimeConfig(options: OpenCodeRuntimeConfigOptions): OpenCodeConfig {
   const { providerName, models, defaultModel, apiType = 'openai' } = options;
+
+  // models: keyed object where key = model ID used in `-m provider/modelId`
+  const modelsMap: Record<string, { name: string }> = {};
+  for (const modelName of models) {
+    modelsMap[modelName] = { name: modelName };
+  }
 
   return {
     $schema: 'https://opencode.ai/config.json',
     ...(defaultModel ? { model: defaultModel } : {}),
     provider: {
       [providerName]: {
-        api: apiType,
-        models: models.map((name) => ({ name })),
+        npm: NPM_ADAPTER_FOR_API_TYPE[apiType] ?? NPM_ADAPTER_FOR_API_TYPE.openai,
+        models: modelsMap,
         options: {
           baseURL: `{env:${OC_BASE_URL_ENV}}`,
           apiKey: `{env:${OC_API_KEY_ENV}}`,

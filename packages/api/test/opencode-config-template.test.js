@@ -200,7 +200,7 @@ describe('parseOpenCodeModel', () => {
 });
 
 describe('generateOpenCodeRuntimeConfig', () => {
-  test('generates config with custom provider and {env:VAR} credentials', () => {
+  test('generates config with custom provider and {env:VAR} credentials (official format)', () => {
     const config = generateOpenCodeRuntimeConfig({
       providerName: 'maas',
       models: ['glm-5', 'glm-4-plus'],
@@ -212,8 +212,11 @@ describe('generateOpenCodeRuntimeConfig', () => {
     assert.ok(config.provider.maas, 'must have custom provider block');
 
     const provider = config.provider.maas;
-    assert.strictEqual(provider.api, 'openai', 'default api type is openai');
-    assert.deepStrictEqual(provider.models, [{ name: 'glm-5' }, { name: 'glm-4-plus' }]);
+    // Official format: npm adapter, not "api" shorthand
+    assert.strictEqual(provider.npm, '@ai-sdk/openai-compatible', 'default npm adapter is openai-compatible');
+    assert.strictEqual(provider.api, undefined, 'must not use legacy "api" field');
+    // Official format: keyed object { modelId: { name } }, not array
+    assert.deepStrictEqual(provider.models, { 'glm-5': { name: 'glm-5' }, 'glm-4-plus': { name: 'glm-4-plus' } });
     assert.strictEqual(provider.options.baseURL, `{env:${OC_BASE_URL_ENV}}`);
     assert.strictEqual(provider.options.apiKey, `{env:${OC_API_KEY_ENV}}`);
   });
@@ -229,14 +232,36 @@ describe('generateOpenCodeRuntimeConfig', () => {
     assert.ok(!json.includes('sk-'), 'no hardcoded secrets allowed');
   });
 
-  test('respects explicit apiType override', () => {
+  test('respects explicit apiType override → correct npm adapter', () => {
     const config = generateOpenCodeRuntimeConfig({
       providerName: 'my-anthropic-proxy',
       models: ['claude-sonnet-4-6'],
       apiType: 'anthropic',
     });
 
-    assert.strictEqual(config.provider['my-anthropic-proxy'].api, 'anthropic');
+    assert.strictEqual(config.provider['my-anthropic-proxy'].npm, '@ai-sdk/anthropic');
+  });
+
+  test('google apiType maps to @ai-sdk/google', () => {
+    const config = generateOpenCodeRuntimeConfig({
+      providerName: 'my-google-proxy',
+      models: ['gemini-3-flash'],
+      apiType: 'google',
+    });
+
+    assert.strictEqual(config.provider['my-google-proxy'].npm, '@ai-sdk/google');
+  });
+
+  test('models keyed object keys match -m routing (modelId is the key)', () => {
+    const config = generateOpenCodeRuntimeConfig({
+      providerName: 'maas',
+      models: ['glm-5'],
+      defaultModel: 'maas/glm-5',
+    });
+
+    // When opencode CLI receives `-m maas/glm-5`, it looks up provider.maas.models["glm-5"]
+    const modelKeys = Object.keys(config.provider.maas.models);
+    assert.deepStrictEqual(modelKeys, ['glm-5'], 'model key must match what -m routes to');
   });
 
   test('omits model field when defaultModel is not provided', () => {

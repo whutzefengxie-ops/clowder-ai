@@ -42,21 +42,22 @@ function resolveExpectedProtocolForProvider(provider: CatProvider): ProviderProf
  * Returns an error string when the model does not follow "providerId/modelId" convention for opencode.
  * The opencode CLI expects this format; bare models like "glm-5" become "glm-5/" at runtime.
  * Server-side callers MUST reject; frontend shows the same message as a pre-flight hint.
- * Skipped when profileKind is "api_key" — API key auth uses credentials directly.
+ *
+ * This check applies regardless of profileKind — even api_key auth needs the provider
+ * prefix because opencode routes to custom providers via the model prefix (e.g. maas/glm-5).
+ * Without it, runtime config injection in invoke-single-cat.ts cannot determine the provider name.
  */
 export function validateModelFormatForProvider(
   provider: CatProvider,
   defaultModel?: string | null,
-  profileKind?: ProviderProfileKind,
+  _profileKind?: ProviderProfileKind,
 ): string | null {
   if (provider !== 'opencode') return null;
-  // API key auth uses credentials directly — provider/model format not required
-  if (profileKind === 'api_key') return null;
   const trimmedModel = defaultModel?.trim();
   if (!trimmedModel) return null;
   const slashIndex = trimmedModel.indexOf('/');
   if (slashIndex > 0 && slashIndex < trimmedModel.length - 1) return null;
-  return 'client "opencode" recommends model format "providerId/modelId" (e.g. openai/gpt-5.4)';
+  return 'client "opencode" requires model format "providerId/modelId" (e.g. openai/gpt-5.4, maas/glm-5)';
 }
 
 export function validateRuntimeProviderBinding(
