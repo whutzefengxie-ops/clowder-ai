@@ -330,7 +330,20 @@ export function AccountSection({
                 }
               />
             )}
-            {form.client === 'opencode' && form.defaultModel.trim() && !form.defaultModel.includes('/') ? (
+            {form.client === 'opencode' && selectedProfile?.authType === 'api_key' ? (
+              <TextField
+                label="Provider 名称"
+                ariaLabel="OC Provider Name"
+                value={form.ocProviderName}
+                onChange={(value) => onChange({ ocProviderName: value })}
+                required
+                placeholder="如 anthropic、openai、openrouter、maas"
+              />
+            ) : null}
+            {form.client === 'opencode' &&
+            form.defaultModel.trim() &&
+            !form.defaultModel.includes('/') &&
+            !form.ocProviderName.trim() ? (
               <div className="rounded-[10px] border border-dashed border-[#DCC9B8] bg-[#F7F3F0] px-3 py-2">
                 <p className="text-[11px] leading-4 text-[#8A776B]">
                   建议使用 `providerId/modelId` 格式（例如 `openai/gpt-5.4`），部分 provider 需要前缀才能正确路由。

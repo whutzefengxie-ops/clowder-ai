@@ -281,9 +281,9 @@ export function HubCatEditor({ cat, draft, open, onClose, onSaved }: HubCatEdito
       if (!form.defaultModel.trim()) {
         errors.account = true;
         errorMessages.push('Model');
-      } else if (form.client === 'opencode' && !form.defaultModel.includes('/') && !form.ocProviderName.trim()) {
+      } else if (form.client === 'opencode' && selectedProfile?.authType === 'api_key' && !form.ocProviderName.trim()) {
         errors.account = true;
-        errorMessages.push('OpenCode 裸模型名需填写 Provider 名称，或使用 provider/model 格式');
+        errorMessages.push('OpenCode API Key 认证需填写 Provider 名称');
       }
       if (splitMentionPatterns(form.mentionPatterns).length === 0) {
         errors.routing = true;
