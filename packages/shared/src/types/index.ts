@@ -85,6 +85,7 @@ export type {
   GovernancePackMeta,
   GovernanceRule,
   McpServerDescriptor,
+  McpTransport,
   McpToolInfo,
   SkillHealthSummary,
 } from './capability.js';
