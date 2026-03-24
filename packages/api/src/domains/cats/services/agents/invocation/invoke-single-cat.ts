@@ -34,6 +34,12 @@ import type { AgentPaneRegistry } from '../../../../terminal/agent-pane-registry
 import type { TmuxGateway } from '../../../../terminal/tmux-gateway.js';
 import { createPromptDigest } from '../../context/prompt-digest.js';
 import { AuditEventTypes, getEventAuditLog } from '../../orchestration/EventAuditLog.js';
+import {
+  OC_API_KEY_ENV,
+  OC_BASE_URL_ENV,
+  parseOpenCodeModel,
+  writeOpenCodeRuntimeConfig,
+} from '../providers/opencode-config-template.js';
 
 const log = createModuleLogger('invoke');
 
@@ -718,6 +724,29 @@ export async function* invokeSingleCat(deps: InvocationDeps, params: InvocationP
     if (provider === 'dare' && resolvedAccount?.authType === 'api_key') {
       if (resolvedAccount.apiKey) callbackEnv.DARE_API_KEY = resolvedAccount.apiKey;
       if (resolvedAccount.baseUrl) callbackEnv.DARE_ENDPOINT = resolvedAccount.baseUrl;
+    }
+
+    // F189: OpenCode custom provider config injection.
+    // When opencode + api_key with a "providerName/modelName" model string,
+    // generate a per-catId runtime config file with {env:VAR} credential substitution.
+    // This lets opencode route to custom providers (e.g. maas/glm-5, deepseek/deepseek-r2).
+    if (provider === 'opencode' && resolvedAccount?.authType === 'api_key' && defaultModel) {
+      const parsed = parseOpenCodeModel(defaultModel);
+      if (parsed) {
+        try {
+          const configPath = writeOpenCodeRuntimeConfig(projectRoot, catId as string, {
+            providerName: parsed.providerName,
+            models: resolvedAccount.models ?? [parsed.modelName],
+            defaultModel,
+          });
+          callbackEnv.OPENCODE_CONFIG = configPath;
+          if (resolvedAccount.apiKey) callbackEnv[OC_API_KEY_ENV] = resolvedAccount.apiKey;
+          if (resolvedAccount.baseUrl) callbackEnv[OC_BASE_URL_ENV] = resolvedAccount.baseUrl;
+          log.info({ catId, configPath, provider: parsed.providerName }, 'OpenCode runtime config written');
+        } catch (err) {
+          log.warn({ catId, err }, 'Failed to write OpenCode runtime config — falling back to env vars');
+        }
+      }
     }
 
     // F-BLOAT: Only inject staticIdentity (systemPrompt) on new sessions for cats
