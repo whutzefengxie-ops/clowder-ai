@@ -18,6 +18,15 @@ async function collect(iterable) {
   return msgs;
 }
 
+async function withKeepAlive(promise, ms = 1_000) {
+  const keepAlive = setTimeout(() => {}, ms);
+  try {
+    return await promise;
+  } finally {
+    clearTimeout(keepAlive);
+  }
+}
+
 let invokeSingleCat;
 let savedAuditLogDir;
 let savedCliTimeoutMs;
@@ -73,15 +82,17 @@ describe('invocation-level hard timeout (F089)', () => {
     };
 
     const start = Date.now();
-    const msgs = await collect(
-      invokeSingleCat(makeDeps(), {
-        catId: 'codex',
-        service: hangingService,
-        prompt: 'test',
-        userId: 'user1',
-        threadId: 'thread-hang',
-        isLastCat: true,
-      }),
+    const msgs = await withKeepAlive(
+      collect(
+        invokeSingleCat(makeDeps(), {
+          catId: 'codex',
+          service: hangingService,
+          prompt: 'test',
+          userId: 'user1',
+          threadId: 'thread-hang',
+          isLastCat: true,
+        }),
+      ),
     );
     const elapsed = Date.now() - start;
 
@@ -102,15 +113,17 @@ describe('invocation-level hard timeout (F089)', () => {
       },
     };
 
-    const msgs = await collect(
-      invokeSingleCat(makeDeps(), {
-        catId: 'codex',
-        service: hangingService,
-        prompt: 'test',
-        userId: 'user1',
-        threadId: 'thread-final',
-        isLastCat: true,
-      }),
+    const msgs = await withKeepAlive(
+      collect(
+        invokeSingleCat(makeDeps(), {
+          catId: 'codex',
+          service: hangingService,
+          prompt: 'test',
+          userId: 'user1',
+          threadId: 'thread-final',
+          isLastCat: true,
+        }),
+      ),
     );
 
     const doneMsg = msgs.find((m) => m.type === 'done');
