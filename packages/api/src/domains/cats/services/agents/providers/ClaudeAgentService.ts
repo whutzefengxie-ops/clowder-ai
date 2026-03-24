@@ -18,9 +18,9 @@
 import { existsSync } from 'node:fs';
 import { isAbsolute, resolve } from 'node:path';
 import { type CatId, createCatId } from '@cat-cafe/shared';
-import { createModuleLogger } from '../../../../../infrastructure/logger.js';
 import { getCatEffort } from '../../../../../config/cat-config-loader.js';
 import { getCatModel } from '../../../../../config/cat-models.js';
+import { createModuleLogger } from '../../../../../infrastructure/logger.js';
 import { formatCliExitError } from '../../../../../utils/cli-format.js';
 import { formatCliNotFoundError, resolveCliCommand } from '../../../../../utils/cli-resolve.js';
 import { isCliError, isCliTimeout, isLivenessWarning, spawnCli } from '../../../../../utils/cli-spawn.js';
@@ -39,7 +39,6 @@ const ANTHROPIC_PROFILE_BASE_URL = 'CAT_CAFE_ANTHROPIC_BASE_URL';
 const ANTHROPIC_MODEL_OVERRIDE_KEY = 'CAT_CAFE_ANTHROPIC_MODEL_OVERRIDE';
 
 const claudeLog = createModuleLogger('claude-agent');
-
 
 function isInvalidThinkingSignatureMessage(message: string | undefined): boolean {
   if (!message) return false;
@@ -276,8 +275,12 @@ export class ClaudeAgentService implements AgentService {
       {
         const safeEnv = Object.fromEntries(
           Object.entries(envOverrides).filter(
-            ([k, v]) => v !== null && !k.includes('API_KEY') && !k.includes('AUTH_TOKEN') && !k.includes('SECRET')
-              && !k.includes('CALLBACK_TOKEN'),
+            ([k, v]) =>
+              v !== null &&
+              !k.includes('API_KEY') &&
+              !k.includes('AUTH_TOKEN') &&
+              !k.includes('SECRET') &&
+              !k.includes('CALLBACK_TOKEN'),
           ),
         );
         claudeLog.info({ catId: this.catId, cliArgs: args, envOverrides: safeEnv }, 'Claude CLI spawn params');
