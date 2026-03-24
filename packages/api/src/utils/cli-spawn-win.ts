@@ -46,6 +46,20 @@ export function resolveCmdShimScript(command: string): string | null {
     resolvedShimCache.delete(command);
   }
 
+  // Strategy 0: if command is already a full .cmd path, parse it directly
+  // (resolveCliCommand may return the full path from `where`)
+  if (/\.cmd$/i.test(command) && existsSync(command)) {
+    const shimContent = readFileSync(command, 'utf-8');
+    const shimDir = command.replace(/[/\\][^/\\]+$/, '');
+    for (const match of shimContent.matchAll(/%~?dp0\\([^"\r\n]*?\.js)/gi)) {
+      const scriptPath = join(shimDir, match[1].replace(/\\/g, '/'));
+      if (existsSync(scriptPath)) {
+        resolvedShimCache.set(command, scriptPath);
+        return scriptPath;
+      }
+    }
+  }
+
   // Strategy 1: parse the .cmd shim selected by PATH via `where`
   try {
     const whereOutput = execSync(`where ${command}.cmd`, {
@@ -72,8 +86,10 @@ export function resolveCmdShimScript(command: string): string | null {
   }
 
   // Strategy 2: known paths as a fallback when PATH probing fails
+  // Extract bare command name if command is a full path (e.g. "C:\...\codex.cmd" → "codex")
   const appData = process.env.APPDATA;
-  const knownPaths = KNOWN_SHIM_SCRIPTS[command];
+  const bareCommand = command.replace(/^.*[/\\]/, '').replace(/\.cmd$/i, '');
+  const knownPaths = KNOWN_SHIM_SCRIPTS[command] ?? KNOWN_SHIM_SCRIPTS[bareCommand];
   if (appData && knownPaths) {
     for (const relPath of knownPaths) {
       const candidate = join(appData, 'npm', 'node_modules', relPath);
