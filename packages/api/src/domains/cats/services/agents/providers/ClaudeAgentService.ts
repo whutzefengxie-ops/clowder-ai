@@ -40,10 +40,6 @@ const ANTHROPIC_MODEL_OVERRIDE_KEY = 'CAT_CAFE_ANTHROPIC_MODEL_OVERRIDE';
 /** Default fallback model for Claude CLI when the real model is set via env var mapping. */
 const ANTHROPIC_CLI_FALLBACK_MODEL = 'claude-opus-4-6';
 
-function isKnownAnthropicModel(model: string): boolean {
-  return model.startsWith('claude-');
-}
-
 function isInvalidThinkingSignatureMessage(message: string | undefined): boolean {
   if (!message) return false;
   return /Invalid [`'"]?signature[`'"]? in [`'"]?thinking[`'"]? block/i.test(message);
@@ -90,14 +86,15 @@ function buildClaudeEnvOverrides(callbackEnv?: Record<string, string>): Record<s
       env.ANTHROPIC_BASE_URL = cleanUrl;
     }
 
-    // Model mapping for third-party Anthropic-compatible APIs (e.g. BigModel, MaaS).
-    // Claude CLI rejects non-Anthropic model names via --model. Use the env var
-    // mapping mechanism (ANTHROPIC_DEFAULT_*_MODEL) to pass custom model names:
-    // Claude CLI will receive --model claude-opus-4-6 (a known name) but
-    // the env var maps it to the actual model (e.g. glm-5) at the API level.
+    // Unified model mapping for api_key mode: always inject ANTHROPIC_DEFAULT_*_MODEL
+    // env vars so the model name reaches the upstream API exactly as configured.
+    // Claude CLI receives --model claude-opus-4-6 (a known name) while env vars
+    // map it to the actual model (e.g. glm-5 or claude-sonnet-4-6) at the API level.
+    // This avoids two code paths (direct --model vs env mapping) and prevents
+    // CLI model validation issues with third-party Anthropic-compatible APIs.
     const modelOverride = callbackEnv?.[ANTHROPIC_MODEL_OVERRIDE_KEY]?.trim();
     const effectiveModel = modelOverride || undefined;
-    if (effectiveModel && !isKnownAnthropicModel(effectiveModel)) {
+    if (effectiveModel) {
       env.ANTHROPIC_DEFAULT_OPUS_MODEL = effectiveModel;
       env.ANTHROPIC_DEFAULT_SONNET_MODEL = effectiveModel;
       env.ANTHROPIC_DEFAULT_HAIKU_MODEL = effectiveModel;
@@ -177,12 +174,11 @@ export class ClaudeAgentService implements AgentService {
 
     // Profile-level model override (e.g. "opus[1m]") takes precedence over constructor model
     const effectiveModel = options?.callbackEnv?.[ANTHROPIC_MODEL_OVERRIDE_KEY]?.trim() || this.model;
-    // For api_key mode with non-Anthropic model names (e.g. glm-5), use a standard
-    // model for --model (env var mapping handles the actual model). This prevents
-    // Claude CLI from rejecting unknown model names.
+    // In api_key mode, always use the fallback model for --model and let env var
+    // mapping (ANTHROPIC_DEFAULT_*_MODEL) handle the actual model name. This gives
+    // a single uniform path regardless of whether the model is claude-* or third-party.
     const isApiKeyMode = options?.callbackEnv?.[ANTHROPIC_PROFILE_MODE_KEY] === 'api_key';
-    const cliModel =
-      isApiKeyMode && !isKnownAnthropicModel(effectiveModel) ? ANTHROPIC_CLI_FALLBACK_MODEL : effectiveModel;
+    const cliModel = isApiKeyMode ? ANTHROPIC_CLI_FALLBACK_MODEL : effectiveModel;
     const args: string[] = [
       '-p',
       effectivePrompt,
