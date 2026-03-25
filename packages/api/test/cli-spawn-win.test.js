@@ -235,7 +235,7 @@ test('escapeBashArg preserves CJK characters (UTF-8 safe)', () => {
 });
 
 test('escapeBashArg handles double quotes, backslashes and shell metacharacters without extra escaping', () => {
-  assert.equal(escapeBashArg('say "hi"'), "'say \"hi\"'");
+  assert.equal(escapeBashArg('say "hi"'), '\'say "hi"\'');
   assert.equal(escapeBashArg('a\\b'), "'a\\b'");
   assert.equal(escapeBashArg('$HOME'), "'$HOME'");
   assert.equal(escapeBashArg('a&b|c'), "'a&b|c'");
