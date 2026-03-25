@@ -4,9 +4,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 
-const { resolveCmdShimScript, resolveWindowsShimSpawn, escapeCmdArg } = await import('../dist/utils/cli-spawn-win.js');
+const { resolveCmdShimScript, resolveWindowsShimSpawn, escapeCmdArg, extractBareName, parseShimFile } = await import('../dist/utils/cli-spawn-win.js');
 
-test('resolveCmdShimScript supports %dp0 shims and keeps scanning where results until one resolves', () => {
+test('resolveCmdShimScript supports %dp0 shims and keeps scanning where results until one resolves', { skip: process.platform === 'win32' && 'uses fake where shell script (Unix only)' }, () => {
   const tempRoot = mkdtempSync(join(tmpdir(), 'cli-spawn-win-'));
   const originalPath = process.env.PATH;
   const fakeBin = join(tempRoot, 'bin');
@@ -39,7 +39,7 @@ test('resolveCmdShimScript supports %dp0 shims and keeps scanning where results 
   }
 });
 
-test('resolveCmdShimScript ignores the node.exe prelude and resolves the real script target', () => {
+test('resolveCmdShimScript ignores the node.exe prelude and resolves the real script target', { skip: process.platform === 'win32' && 'uses fake where shell script (Unix only)' }, () => {
   const tempRoot = mkdtempSync(join(tmpdir(), 'cli-spawn-win-node-prelude-'));
   const originalPath = process.env.PATH;
   const fakeBin = join(tempRoot, 'bin');
@@ -72,7 +72,7 @@ test('resolveCmdShimScript ignores the node.exe prelude and resolves the real sc
   }
 });
 
-test('resolveCmdShimScript prefers the shim selected by PATH over APPDATA fallback scripts', () => {
+test('resolveCmdShimScript prefers the shim selected by PATH over APPDATA fallback scripts', { skip: process.platform === 'win32' && 'uses fake where shell script (Unix only)' }, () => {
   const tempRoot = mkdtempSync(join(tmpdir(), 'cli-spawn-win-path-first-'));
   const originalPath = process.env.PATH;
   const originalAppData = process.env.APPDATA;
@@ -112,7 +112,7 @@ test('resolveCmdShimScript prefers the shim selected by PATH over APPDATA fallba
   }
 });
 
-test('resolveCmdShimScript revalidates cached shim targets after upgrades move the entrypoint', () => {
+test('resolveCmdShimScript revalidates cached shim targets after upgrades move the entrypoint', { skip: process.platform === 'win32' && 'uses fake where shell script (Unix only)' }, () => {
   const tempRoot = mkdtempSync(join(tmpdir(), 'cli-spawn-win-cache-refresh-'));
   const originalPath = process.env.PATH;
   const fakeBin = join(tempRoot, 'bin');
@@ -209,4 +209,136 @@ test('escapeCmdArg caret-escapes cmd.exe metacharacters', () => {
   assert.equal(escapeCmdArg('a!b'), '"a^!b"');
   assert.equal(escapeCmdArg('a(b)c'), '"a^(b^)c"');
   assert.equal(escapeCmdArg('(group)'), '"^(group^)"');
+});
+
+// --- extractBareName tests ---
+
+test('extractBareName strips .cmd extension from full path', () => {
+  assert.equal(extractBareName('C:\\Users\\Admin\\bin\\claude.cmd'), 'claude');
+});
+
+test('extractBareName strips .exe and .bat extensions case-insensitively', () => {
+  assert.equal(extractBareName('C:\\tools\\node.EXE'), 'node');
+  assert.equal(extractBareName('/usr/local/bin/script.BAT'), 'script');
+});
+
+test('extractBareName returns bare name unchanged', () => {
+  assert.equal(extractBareName('claude'), 'claude');
+  assert.equal(extractBareName('codex'), 'codex');
+});
+
+test('extractBareName handles forward-slash paths', () => {
+  assert.equal(extractBareName('C:/Users/Admin/AppData/npm/claude.cmd'), 'claude');
+});
+
+// --- parseShimFile tests ---
+
+test('parseShimFile extracts script path from %dp0 shim', () => {
+  const tempRoot = mkdtempSync(join(tmpdir(), 'cli-spawn-win-parse-'));
+  mkdirSync(join(tempRoot, 'node_modules', 'pkg'), { recursive: true });
+
+  const cmdPath = join(tempRoot, 'test.cmd');
+  const scriptPath = join(tempRoot, 'node_modules', 'pkg', 'cli.js');
+
+  writeFileSync(cmdPath, '@"%dp0\\node_modules\\pkg\\cli.js" %*\n', 'utf8');
+  writeFileSync(scriptPath, 'console.log("ok");\n', 'utf8');
+
+  try {
+    assert.equal(parseShimFile(cmdPath), scriptPath);
+  } finally {
+    rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('parseShimFile extracts script path from %~dp0 shim', () => {
+  const tempRoot = mkdtempSync(join(tmpdir(), 'cli-spawn-win-parse-tilde-'));
+  mkdirSync(join(tempRoot, 'node_modules', 'pkg'), { recursive: true });
+
+  const cmdPath = join(tempRoot, 'test.cmd');
+  const scriptPath = join(tempRoot, 'node_modules', 'pkg', 'cli.js');
+
+  writeFileSync(
+    cmdPath,
+    '@IF EXIST "%~dp0\\node.exe" (\r\n  "%~dp0\\node.exe" "%~dp0\\node_modules\\pkg\\cli.js" %*\r\n)\r\n',
+    'utf8',
+  );
+  writeFileSync(scriptPath, 'console.log("ok");\n', 'utf8');
+
+  try {
+    assert.equal(parseShimFile(cmdPath), scriptPath);
+  } finally {
+    rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('parseShimFile returns null for non-existent file', () => {
+  assert.equal(parseShimFile(join(tmpdir(), 'nonexistent-1234.cmd')), null);
+});
+
+test('parseShimFile returns null when referenced script does not exist', () => {
+  const tempRoot = mkdtempSync(join(tmpdir(), 'cli-spawn-win-parse-missing-'));
+  const cmdPath = join(tempRoot, 'test.cmd');
+
+  writeFileSync(cmdPath, '@"%dp0\\node_modules\\pkg\\missing.js" %*\n', 'utf8');
+
+  try {
+    assert.equal(parseShimFile(cmdPath), null);
+  } finally {
+    rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
+// --- resolveCmdShimScript full-path tests ---
+
+test('resolveCmdShimScript resolves full .cmd path directly without where fallback', () => {
+  const tempRoot = mkdtempSync(join(tmpdir(), 'cli-spawn-win-fullpath-'));
+  mkdirSync(join(tempRoot, 'node_modules', 'pkg'), { recursive: true });
+
+  const cmdPath = join(tempRoot, 'test-fullpath.cmd');
+  const scriptPath = join(tempRoot, 'node_modules', 'pkg', 'cli.js');
+
+  writeFileSync(cmdPath, '@"%dp0\\node_modules\\pkg\\cli.js" %*\n', 'utf8');
+  writeFileSync(scriptPath, 'console.log("ok");\n', 'utf8');
+
+  try {
+    const resolved = resolveCmdShimScript(cmdPath);
+    assert.equal(resolved, scriptPath);
+  } finally {
+    rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('resolveCmdShimScript with full path does NOT fall back to where when parsing fails', { skip: process.platform === 'win32' && 'uses fake where shell script (Unix only)' }, () => {
+  const tempRoot = mkdtempSync(join(tmpdir(), 'cli-spawn-win-no-fallback-'));
+  const originalPath = process.env.PATH;
+  const fakeBin = join(tempRoot, 'bin');
+  const shimDir = join(tempRoot, 'shim');
+  const whereDir = join(tempRoot, 'where-target');
+
+  mkdirSync(fakeBin, { recursive: true });
+  mkdirSync(shimDir, { recursive: true });
+  mkdirSync(join(whereDir, 'node_modules', 'pkg'), { recursive: true });
+
+  const badCmdPath = join(shimDir, 'test-no-fallback.cmd');
+  const whereCmd = join(whereDir, 'test-no-fallback.cmd');
+  const whereScript = join(whereDir, 'node_modules', 'pkg', 'cli.js');
+  const fakeWhere = join(fakeBin, 'where');
+
+  // Full-path .cmd points to missing script → parsing should fail
+  writeFileSync(badCmdPath, '@"%dp0\\missing\\cli.js" %*\n', 'utf8');
+  // where would find a different .cmd that resolves successfully
+  writeFileSync(whereCmd, '@"%dp0\\node_modules\\pkg\\cli.js" %*\n', 'utf8');
+  writeFileSync(whereScript, 'console.log("where-found");\n', 'utf8');
+  writeFileSync(fakeWhere, `#!/bin/sh\nprintf '%s\n' '${whereCmd}'\n`, 'utf8');
+  chmodSync(fakeWhere, 0o755);
+
+  try {
+    process.env.PATH = `${fakeBin}:${originalPath ?? ''}`;
+    // Pass the full path — should NOT fall back to bare name `where` search
+    const resolved = resolveCmdShimScript(badCmdPath);
+    assert.equal(resolved, null, 'full-path failure must NOT fall back to where');
+  } finally {
+    process.env.PATH = originalPath;
+    rmSync(tempRoot, { recursive: true, force: true });
+  }
 });
