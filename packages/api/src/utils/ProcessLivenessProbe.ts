@@ -134,14 +134,7 @@ export class ProcessLivenessProbe {
     if (process.platform === 'win32') {
       // PID is alive (checked above). Without CPU data, assume busy if silent.
       this.cpuGrowing = true;
-      const silenceMs = Date.now() - this.lastActivityAt;
-      if (silenceMs >= this.config.stallWarningMs && !this.stallWarningEmitted) {
-        this.stallWarningEmitted = true;
-        this.warningQueue.push(this.makeWarning('suspected_stall', silenceMs));
-      } else if (silenceMs >= this.config.softWarningMs && !this.softWarningEmitted) {
-        this.softWarningEmitted = true;
-        this.warningQueue.push(this.makeWarning('alive_but_silent', silenceMs));
-      }
+      this.emitSilenceWarnings();
       return;
     }
 
@@ -157,16 +150,20 @@ export class ProcessLivenessProbe {
       this.cpuGrowing = this.currCpuTimeMs > this.prevCpuTimeMs;
 
       // Check warning thresholds
-      const silenceMs = Date.now() - this.lastActivityAt;
-
-      if (silenceMs >= this.config.stallWarningMs && !this.stallWarningEmitted) {
-        this.stallWarningEmitted = true;
-        this.warningQueue.push(this.makeWarning('suspected_stall', silenceMs));
-      } else if (silenceMs >= this.config.softWarningMs && !this.softWarningEmitted) {
-        this.softWarningEmitted = true;
-        this.warningQueue.push(this.makeWarning('alive_but_silent', silenceMs));
-      }
+      this.emitSilenceWarnings();
     });
+  }
+
+  /** Emit soft/stall warnings based on silence duration (shared by Windows and Unix paths) */
+  private emitSilenceWarnings(): void {
+    const silenceMs = Date.now() - this.lastActivityAt;
+    if (silenceMs >= this.config.stallWarningMs && !this.stallWarningEmitted) {
+      this.stallWarningEmitted = true;
+      this.warningQueue.push(this.makeWarning('suspected_stall', silenceMs));
+    } else if (silenceMs >= this.config.softWarningMs && !this.softWarningEmitted) {
+      this.softWarningEmitted = true;
+      this.warningQueue.push(this.makeWarning('alive_but_silent', silenceMs));
+    }
   }
 
   private makeWarning(level: 'alive_but_silent' | 'suspected_stall', silenceDurationMs: number): LivenessWarningEvent {

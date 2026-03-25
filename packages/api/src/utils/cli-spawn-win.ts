@@ -8,7 +8,7 @@
 
 import { execSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 
 /**
  * Cache for resolved shim scripts to avoid repeated filesystem lookups.
@@ -36,8 +36,7 @@ export interface WindowsShimSpawn {
  *      'claude' → 'claude'
  */
 function extractBareName(command: string): string {
-  const base = command.replace(/\\/g, '/').split('/').pop() ?? command;
-  return base.replace(/\.(cmd|exe|bat)$/i, '');
+  return basename(command).replace(/\.(cmd|exe|bat)$/i, '');
 }
 
 /**
@@ -48,7 +47,7 @@ function extractBareName(command: string): string {
 function parseShimFile(cmdPath: string): string | null {
   if (!existsSync(cmdPath)) return null;
   const shimContent = readFileSync(cmdPath, 'utf-8');
-  const shimDir = cmdPath.replace(/[/\\][^/\\]+$/, '');
+  const shimDir = dirname(cmdPath);
 
   // Pattern 1: npm standard shims — "%~dp0\..." or "%dp0\..." relative paths
   for (const match of shimContent.matchAll(/%~?dp0\\([^"\r\n]*?\.js)/gi)) {
@@ -105,7 +104,7 @@ export function resolveCmdShimScript(command: string): string | null {
   // Strategy 1b: locate via `where` using the bare name
   try {
     const whereTarget = isFullPath ? bareName : command;
-    const whereOutput = execSync(`where ${whereTarget}.cmd`, {
+    const whereOutput = execSync(`where "${whereTarget}.cmd"`, {
       encoding: 'utf-8',
       timeout: 5000,
     }).trim();
