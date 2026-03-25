@@ -129,7 +129,23 @@ export class ProcessLivenessProbe {
       return;
     }
 
-    // Sample CPU time via ps
+    // Windows: `ps` is not available. Use process.kill(pid, 0) for liveness
+    // and skip CPU sampling (treat as busy-silent when no output).
+    if (process.platform === 'win32') {
+      // PID is alive (checked above). Without CPU data, assume busy if silent.
+      this.cpuGrowing = true;
+      const silenceMs = Date.now() - this.lastActivityAt;
+      if (silenceMs >= this.config.stallWarningMs && !this.stallWarningEmitted) {
+        this.stallWarningEmitted = true;
+        this.warningQueue.push(this.makeWarning('suspected_stall', silenceMs));
+      } else if (silenceMs >= this.config.softWarningMs && !this.softWarningEmitted) {
+        this.softWarningEmitted = true;
+        this.warningQueue.push(this.makeWarning('alive_but_silent', silenceMs));
+      }
+      return;
+    }
+
+    // Sample CPU time via ps (Unix only)
     execFile('ps', ['-o', 'cputime=', '-p', String(this.pid)], (err, stdout) => {
       if (err) {
         // ps failed — process likely dead
