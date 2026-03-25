@@ -8,7 +8,7 @@
 
 import { execSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
-import { basename, dirname, join } from 'node:path';
+import { dirname, join } from 'node:path';
 
 /**
  * Cache for resolved shim scripts to avoid repeated filesystem lookups.
@@ -36,7 +36,9 @@ export interface WindowsShimSpawn {
  *      'claude' → 'claude'
  */
 export function extractBareName(command: string): string {
-  return basename(command).replace(/\.(cmd|exe|bat)$/i, '');
+  // Use both / and \ as separators so Windows-style paths work on Linux CI too
+  const base = command.replace(/^.*[/\\]/, '');
+  return base.replace(/\.(cmd|exe|bat)$/i, '');
 }
 
 /**
