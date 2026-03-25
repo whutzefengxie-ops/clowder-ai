@@ -4,7 +4,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 
-const { resolveCmdShimScript, resolveWindowsShimSpawn, escapeCmdArg } = await import('../dist/utils/cli-spawn-win.js');
+const { resolveCmdShimScript, resolveWindowsShimSpawn, escapeCmdArg, escapeBashArg } = await import(
+  '../dist/utils/cli-spawn-win.js'
+);
 
 test('resolveCmdShimScript supports %dp0 shims and keeps scanning where results until one resolves', () => {
   const tempRoot = mkdtempSync(join(tmpdir(), 'cli-spawn-win-'));
@@ -209,4 +211,32 @@ test('escapeCmdArg caret-escapes cmd.exe metacharacters', () => {
   assert.equal(escapeCmdArg('a!b'), '"a^!b"');
   assert.equal(escapeCmdArg('a(b)c'), '"a^(b^)c"');
   assert.equal(escapeCmdArg('(group)'), '"^(group^)"');
+});
+
+// ── escapeBashArg ──
+
+test('escapeBashArg wraps all arguments in single quotes', () => {
+  assert.equal(escapeBashArg('hello'), "'hello'");
+  assert.equal(escapeBashArg('simple-arg'), "'simple-arg'");
+});
+
+test('escapeBashArg preserves spaces without extra escaping', () => {
+  assert.equal(escapeBashArg('hello world'), "'hello world'");
+});
+
+test('escapeBashArg escapes internal single quotes', () => {
+  assert.equal(escapeBashArg("it's"), "'it'\\''s'");
+  assert.equal(escapeBashArg("can't stop"), "'can'\\''t stop'");
+});
+
+test('escapeBashArg preserves CJK characters (UTF-8 safe)', () => {
+  const prompt = '你是 claude-claude（claude-claude），由 Anthropic 提供的 AI 猫猫。';
+  assert.equal(escapeBashArg(prompt), `'${prompt}'`);
+});
+
+test('escapeBashArg handles double quotes, backslashes and shell metacharacters without extra escaping', () => {
+  assert.equal(escapeBashArg('say "hi"'), "'say \"hi\"'");
+  assert.equal(escapeBashArg('a\\b'), "'a\\b'");
+  assert.equal(escapeBashArg('$HOME'), "'$HOME'");
+  assert.equal(escapeBashArg('a&b|c'), "'a&b|c'");
 });
