@@ -36,7 +36,7 @@ test('detects dead process (PID does not exist)', async () => {
   probe.stop();
 });
 
-test('classifies as busy-silent when CPU grows but no output', async () => {
+test('classifies as busy-silent when CPU grows but no output (Unix only)', { skip: process.platform === 'win32' && 'busy-silent requires ps CPU sampling (Unix only)' }, async () => {
   const probe = new ProcessLivenessProbe(process.pid, { sampleIntervalMs: 100 });
   probe.start();
   const reachedBusySilent = await waitForBusySilent(probe);
@@ -88,7 +88,7 @@ test('notifyActivity resets silence timer and clears warning state', async () =>
   probe.stop();
 });
 
-test('shouldExtendTimeout returns true when busy-silent', async () => {
+test('shouldExtendTimeout returns true when busy-silent (Unix only)', { skip: process.platform === 'win32' && 'busy-silent requires ps CPU sampling (Unix only)' }, async () => {
   const probe = new ProcessLivenessProbe(process.pid, { sampleIntervalMs: 100 });
   probe.start();
   const reachedBusySilent = await waitForBusySilent(probe);
@@ -119,4 +119,56 @@ test('parseCpuTime handles h:mm:ss format', () => {
 test('parseCpuTime handles empty/invalid input', () => {
   assert.equal(parseCpuTime(''), 0);
   assert.equal(parseCpuTime('  '), 0);
+});
+
+// --- Windows platform guard tests ---
+
+test('on Windows, sampleOnce sets cpuGrowing=false (conservative idle-silent)', async () => {
+  // This test runs on Windows where the platform guard is active.
+  // The probe should classify silent processes as idle-silent (not busy-silent),
+  // preserving stall detection semantics.
+  if (process.platform !== 'win32') {
+    // On non-Windows, the Unix ps-based path runs instead — skip.
+    return;
+  }
+
+  const probe = new ProcessLivenessProbe(process.pid, {
+    sampleIntervalMs: 30,
+    softWarningMs: 200,
+    stallWarningMs: 500,
+  });
+  probe.start();
+  // Wait past sampleIntervalMs so silence kicks in
+  await new Promise((r) => setTimeout(r, 80));
+
+  const state = probe.getState();
+  // On Windows, with cpuGrowing=false, the state should be idle-silent (not busy-silent)
+  assert.equal(state, 'idle-silent', 'Windows guard must set cpuGrowing=false → idle-silent');
+  assert.equal(probe.shouldExtendTimeout(), false, 'idle-silent must NOT extend timeout');
+  probe.stop();
+});
+
+test('on Windows, silence warnings still fire correctly', async () => {
+  if (process.platform !== 'win32') {
+    return;
+  }
+
+  const probe = new ProcessLivenessProbe(process.pid, {
+    sampleIntervalMs: 20,
+    softWarningMs: 50,
+    stallWarningMs: 150,
+  });
+  probe.start();
+  await new Promise((r) => setTimeout(r, 200));
+
+  const warnings = probe.drainWarnings();
+  assert.ok(
+    warnings.some((w) => w.level === 'alive_but_silent'),
+    'should emit alive_but_silent warning on Windows',
+  );
+  assert.ok(
+    warnings.some((w) => w.level === 'suspected_stall'),
+    'should emit suspected_stall warning on Windows',
+  );
+  probe.stop();
 });
