@@ -2639,6 +2639,8 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
     await mkdir(isolatedApiDir, { recursive: true });
     await writeFile(join(isolatedRepoRoot, 'pnpm-workspace.yaml'), 'packages:\n  - "packages/*"\n', 'utf-8');
 
+    const prevGlobalRoot = process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT;
+    process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT = staleTemplateRoot;
     await createProviderProfile(staleTemplateRoot, {
       provider: 'openai',
       name: 'stale-openai',
@@ -2648,6 +2650,8 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
       apiKey: 'sk-stale-openai',
       setActive: true,
     });
+    // Switch global root to the isolated repo so the stale profile is invisible
+    process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT = isolatedRepoRoot;
 
     const optionsSeen = [];
     const service = {
@@ -2677,6 +2681,8 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
       process.chdir(previousCwd);
       if (previousTemplatePath === undefined) delete process.env.CAT_TEMPLATE_PATH;
       else process.env.CAT_TEMPLATE_PATH = previousTemplatePath;
+      if (prevGlobalRoot === undefined) delete process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT;
+      else process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT = prevGlobalRoot;
       await rm(staleTemplateRoot, { recursive: true, force: true });
       await rm(isolatedRepoRoot, { recursive: true, force: true });
     }
@@ -2697,6 +2703,8 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
     await writeFile(join(root, 'pnpm-workspace.yaml'), 'packages:\n  - "packages/*"\n', 'utf-8');
     const templateRaw = await readFile(join(process.cwd(), '..', '..', 'cat-template.json'), 'utf-8');
     await writeFile(join(root, 'cat-template.json'), templateRaw, 'utf-8');
+    const prevGlobalRoot = process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT;
+    process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT = root;
 
     const activatedProfile = await createProviderProfile(root, {
       provider: 'openai',
@@ -2751,6 +2759,8 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
       for (const [id, config] of Object.entries(registrySnapshot)) {
         catRegistry.register(id, config);
       }
+      if (prevGlobalRoot === undefined) delete process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT;
+      else process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT = prevGlobalRoot;
       await rm(root, { recursive: true, force: true });
     }
 
@@ -2920,6 +2930,8 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
     const apiDir = join(root, 'packages', 'api');
     await mkdir(apiDir, { recursive: true });
     await writeFile(join(root, 'pnpm-workspace.yaml'), 'packages:\n  - "packages/*"\n', 'utf-8');
+    const prevGlobalRoot = process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT;
+    process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT = root;
 
     const optionsSeen = [];
     const service = {
@@ -2945,6 +2957,8 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
       );
     } finally {
       process.chdir(previousCwd);
+      if (prevGlobalRoot === undefined) delete process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT;
+      else process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT = prevGlobalRoot;
       await rm(root, { recursive: true, force: true });
     }
 
@@ -3449,5 +3463,44 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
       _clearTestStrategyOverrides();
       await rm(root, { recursive: true, force: true });
     }
+  });
+
+  it('F101: game thread projectPath (games/*) does not trigger governance gate', async () => {
+    const optionsSeen = [];
+    const service = {
+      async *invoke(_prompt, options) {
+        optionsSeen.push(options ?? {});
+        yield { type: 'done', catId: 'opus', timestamp: Date.now() };
+      },
+    };
+
+    const deps = {
+      ...makeDeps(),
+      threadStore: {
+        get: async () => ({ projectPath: 'games/werewolf', createdBy: 'user1' }),
+        updateParticipantActivity: async () => {},
+      },
+    };
+
+    const msgs = await collect(
+      invokeSingleCat(deps, {
+        catId: 'opus',
+        service,
+        prompt: 'test game briefing',
+        userId: 'user1',
+        threadId: 'thread-game-werewolf',
+        isLastCat: true,
+      }),
+    );
+
+    assert.ok(
+      !msgs.some((m) => m.type === 'system_info' && m.content?.includes('governance_blocked')),
+      'game thread must NOT trigger governance_blocked',
+    );
+    assert.ok(
+      msgs.some((m) => m.type === 'done'),
+      'should reach done (service was invoked)',
+    );
+    assert.equal(optionsSeen[0]?.workingDirectory, undefined, 'workingDirectory must be undefined for game threads');
   });
 });
