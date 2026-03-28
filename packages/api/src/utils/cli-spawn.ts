@@ -415,6 +415,12 @@ function defaultSpawn(
       });
     }
     // Prefer Git Bash (UTF-8 native) over cmd.exe (GBK codepage corrupts CJK args)
+    if (args.some((a) => a.includes('\n') || a.includes('\r'))) {
+      log.warn(
+        { command },
+        'Multiline args detected in Windows shell fallback — newlines will be collapsed to spaces to prevent CMD %* truncation',
+      );
+    }
     const gitBash = findGitBashPath();
     if (gitBash) {
       log.debug({ command, shell: gitBash }, 'Windows shim unresolved, falling back to Git Bash');
