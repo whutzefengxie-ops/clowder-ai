@@ -43,8 +43,18 @@ export function extractBareName(command: string): string {
 }
 
 /**
+ * Resolve a candidate script path from a shim-relative path fragment.
+ * Normalises backslashes, strips trailing `%*` tokens, and joins with the base directory.
+ */
+function cleanShimRelPath(raw: string): string {
+  return raw.replace(/\\/g, '/').replace(/\s+%\*.*$/, '');
+}
+
+/**
  * Try to extract an entry script from a .cmd shim file by parsing its content.
- * Handles standard npm shims that use %~dp0\..., %dp0\..., or %dp0%\... relative paths.
+ * Handles:
+ *  - Standard npm shims using %~dp0\..., %dp0\..., or %dp0%\... relative paths
+ *  - Custom shims using %ENV_VAR%\... absolute paths (e.g. %APPDATA%\npm\node_modules\...)
  * Prefers .js matches, falls back to extensionless entrypoints.
  */
 export function parseShimFile(cmdPath: string): string | null {
@@ -52,28 +62,72 @@ export function parseShimFile(cmdPath: string): string | null {
   const shimContent = readFileSync(cmdPath, 'utf-8');
   const shimDir = dirname(cmdPath);
 
-  // Match %~dp0\..., %dp0\..., and %dp0%\... relative paths
-  // Capture everything after the dp0 prefix up to a quote or line end
-  const matches = [...shimContent.matchAll(/%~?dp0%?\\([^"\r\n]+)/gi)];
+  // ── Pass 1: %~dp0 / %dp0 / %dp0% relative paths (standard npm shims) ──
+  const dp0Matches = [...shimContent.matchAll(/%~?dp0%?\\([^"\r\n]+)/gi)];
 
-  // First pass: prefer paths ending in .js
-  for (const match of matches) {
-    const raw = match[1].replace(/\\/g, '/').replace(/\s+%\*.*$/, '');
+  for (const match of dp0Matches) {
+    const raw = cleanShimRelPath(match[1]);
     if (/\.js$/i.test(raw)) {
       const scriptPath = join(shimDir, raw);
       if (existsSync(scriptPath)) return scriptPath;
     }
   }
-
-  // Second pass: extensionless entrypoints (e.g. opencode-ai/bin/opencode)
-  for (const match of matches) {
-    const raw = match[1].replace(/\\/g, '/').replace(/\s+%\*.*$/, '');
+  for (const match of dp0Matches) {
+    const raw = cleanShimRelPath(match[1]);
     if (!/\.\w+$/i.test(raw) && !/^node(\.exe)?$/i.test(raw.split('/').pop() ?? '')) {
       const scriptPath = join(shimDir, raw);
       if (existsSync(scriptPath)) return scriptPath;
     }
   }
 
+  // ── Pass 2: %ENV_VAR%\... absolute paths (custom shims, e.g. %APPDATA%\npm\...) ──
+  const envMatches = [...shimContent.matchAll(/%([A-Z_][A-Z0-9_]*)%\\([^"\r\n]+)/gi)];
+  for (const match of envMatches) {
+    const varName = match[1].toUpperCase();
+    if (/^~?dp0$/i.test(varName)) continue; // Already handled in Pass 1
+    const envValue = process.env[varName];
+    if (!envValue) continue;
+    const raw = cleanShimRelPath(match[2]);
+    if (/\.js$/i.test(raw)) {
+      const scriptPath = join(envValue, raw);
+      if (existsSync(scriptPath)) return scriptPath;
+    }
+  }
+  for (const match of envMatches) {
+    const varName = match[1].toUpperCase();
+    if (/^~?dp0$/i.test(varName)) continue;
+    const envValue = process.env[varName];
+    if (!envValue) continue;
+    const raw = cleanShimRelPath(match[2]);
+    if (!/\.\w+$/i.test(raw) && !/^node(\.exe)?$/i.test(raw.split('/').pop() ?? '')) {
+      const scriptPath = join(envValue, raw);
+      if (existsSync(scriptPath)) return scriptPath;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Search well-known global install directories for a CLI tool's entry script.
+ * Checks npm (%APPDATA%/npm) and pnpm (%LOCALAPPDATA%/pnpm/global/5) prefixes.
+ */
+export function findKnownScript(bareName: string): string | null {
+  const knownPaths = KNOWN_SHIM_SCRIPTS[bareName];
+  if (!knownPaths) return null;
+
+  const prefixes: string[] = [];
+  const appData = process.env.APPDATA;
+  if (appData) prefixes.push(join(appData, 'npm', 'node_modules'));
+  const localAppData = process.env.LOCALAPPDATA;
+  if (localAppData) prefixes.push(join(localAppData, 'pnpm', 'global', '5', 'node_modules'));
+
+  for (const prefix of prefixes) {
+    for (const relPath of knownPaths) {
+      const candidate = join(prefix, relPath);
+      if (existsSync(candidate)) return candidate;
+    }
+  }
   return null;
 }
 
@@ -86,11 +140,12 @@ export function parseShimFile(cmdPath: string): string | null {
  * Strategy:
  * 1a. If command is a full path to an existing .cmd file, parse it directly
  * 1b. If command is a bare name, locate via `where` and parse
- * 2. Fall back to known paths under %APPDATA%/npm/node_modules
+ * 2. Fall back to known global install paths (APPDATA/npm, LOCALAPPDATA/pnpm)
  * 3. Cache result (null = not resolvable, use shell fallback)
  *
  * Important: when a full path is provided, we do NOT fall back to bare-name
  * `where` lookup — this avoids silently resolving to a different CLI version.
+ * However, we DO fall back to findKnownScript (canonical entry points are safe).
  */
 export function resolveCmdShimScript(command: string): string | null {
   const cached = resolvedShimCache.get(command);
@@ -112,6 +167,12 @@ export function resolveCmdShimScript(command: string): string | null {
     }
     // Full path provided but parsing failed — do NOT fall back to `where`
     // to avoid resolving to a different CLI version on PATH.
+    // DO fall back to findKnownScript (canonical entry points are safe).
+    const knownResult = findKnownScript(bareName);
+    if (knownResult) {
+      resolvedShimCache.set(command, knownResult);
+      return knownResult;
+    }
   }
 
   // Strategy 1b: bare command name — locate via `where`
@@ -133,18 +194,11 @@ export function resolveCmdShimScript(command: string): string | null {
     }
   }
 
-  // Strategy 2: known paths — only for bare command names (not full paths,
-  // which represent a caller-selected install that must not be remapped)
-  const appData = process.env.APPDATA;
-  const knownPaths = KNOWN_SHIM_SCRIPTS[bareName];
-  if (!isFullPath && appData && knownPaths) {
-    for (const relPath of knownPaths) {
-      const candidate = join(appData, 'npm', 'node_modules', relPath);
-      if (existsSync(candidate)) {
-        resolvedShimCache.set(command, candidate);
-        return candidate;
-      }
-    }
+  // Strategy 2: known global install paths (npm + pnpm)
+  const knownResult = findKnownScript(bareName);
+  if (!isFullPath && knownResult) {
+    resolvedShimCache.set(command, knownResult);
+    return knownResult;
   }
 
   resolvedShimCache.set(command, null);
@@ -174,6 +228,9 @@ export function resolveWindowsShimSpawn(
  * Then applies cmd.exe-level escaping: % doubled, metacharacters (including parentheses) caret-escaped.
  */
 export function escapeCmdArg(arg: string): string {
+  // Collapse newlines to spaces — CMD's %* truncates at the first newline,
+  // silently dropping all subsequent arguments. Lossy but far safer than truncation.
+  arg = arg.replace(/\r?\n/g, ' ');
   if (!/[\s"&|<>^%!\\()]/.test(arg)) return arg;
   // MSVC CRT escaping: process each character, tracking backslash runs
   let crtEscaped = '';
@@ -203,6 +260,9 @@ export function escapeCmdArg(arg: string): string {
  * Single-quote wrapping with internal single-quote escaping.
  */
 export function escapeBashArg(arg: string): string {
+  // Collapse newlines — Git Bash may delegate to cmd.exe for .cmd files,
+  // where %* truncation would silently drop subsequent arguments.
+  arg = arg.replace(/\r?\n/g, ' ');
   return `'${arg.replace(/'/g, "'\\''")}'`;
 }
 
