@@ -1,19 +1,31 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { CatSelector } from './CatSelector';
 
 interface ThreadCatSettingsProps {
   threadId: string;
   currentCats: string[];
   onSave: (threadId: string, cats: string[]) => void | Promise<void>;
+  triggerLabel?: string;
+  triggerIcon?: ReactNode;
+  triggerClassName?: string;
+  triggerRole?: 'menuitem';
 }
 
 /**
  * F32-b Phase 3: Inline popover to edit a thread's preferredCats.
  * Shown as a small icon button; opens CatSelector in a positioned dropdown.
  */
-export function ThreadCatSettings({ threadId, currentCats, onSave }: ThreadCatSettingsProps) {
+export function ThreadCatSettings({
+  threadId,
+  currentCats,
+  onSave,
+  triggerLabel,
+  triggerIcon,
+  triggerClassName,
+  triggerRole,
+}: ThreadCatSettingsProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [selectedCats, setSelectedCats] = useState<string[]>(currentCats);
   const [isSaving, setIsSaving] = useState(false);
@@ -75,28 +87,45 @@ export function ThreadCatSettings({ threadId, currentCats, onSave }: ThreadCatSe
           e.stopPropagation();
           setIsOpen(!isOpen);
         }}
-        className={`p-0.5 rounded transition-all ${
-          currentCats.length > 0
-            ? 'text-cocreator-primary'
-            : 'opacity-0 group-hover:opacity-100 text-gray-300 hover:text-cocreator-primary'
-        }`}
+        className={
+          triggerClassName ??
+          `p-0.5 rounded transition-all ${
+            currentCats.length > 0
+              ? 'text-cafe-accent'
+              : 'opacity-0 group-hover:opacity-100 text-cafe-muted hover:text-cafe-accent'
+          }`
+        }
         title="设置默认猫猫"
+        role={triggerRole}
       >
-        <svg className="w-3 h-3" viewBox="0 0 16 16" fill="currentColor">
-          <path d="M8 1C4.7 1 2 3.2 2 6c0 1.4.7 2.6 1.7 3.5-.1.8-.4 1.6-.9 2.3a.5.5 0 00.4.8c1.2 0 2.3-.5 3.1-1.1.5.1 1.1.2 1.7.2 3.3 0 6-2.2 6-5S11.3 1 8 1z" />
-        </svg>
+        {triggerLabel ? (
+          <>
+            {triggerIcon}
+            <span>{triggerLabel}</span>
+          </>
+        ) : (
+          <svg className="w-3 h-3" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M8 1C4.7 1 2 3.2 2 6c0 1.4.7 2.6 1.7 3.5-.1.8-.4 1.6-.9 2.3a.5.5 0 00.4.8c1.2 0 2.3-.5 3.1-1.1.5.1 1.1.2 1.7.2 3.3 0 6-2.2 6-5S11.3 1 8 1z" />
+          </svg>
+        )}
       </button>
       {isOpen && (
         <div
           style={getPopoverStyle()}
-          className="bg-white rounded-lg shadow-lg border border-gray-200 p-3 z-50"
+          data-thread-action-popover="true"
+          className="bg-cafe-surface rounded-lg shadow-lg border border-cafe z-50 flex flex-col"
           onClick={(e) => e.stopPropagation()}
         >
-          <CatSelector selectedCats={selectedCats} onSelectionChange={setSelectedCats} />
-          {saveError && <p className="text-[10px] text-red-500 mt-1">保存失败，请重试</p>}
-          <div className="flex items-center justify-between mt-3 pt-2 border-t border-gray-100">
+          <div className="p-3 overflow-y-auto max-h-[50vh]">
+            <CatSelector selectedCats={selectedCats} onSelectionChange={setSelectedCats} />
+          </div>
+          {saveError && <p className="text-micro text-conn-red-text px-3 mt-1">保存失败，请重试</p>}
+          <div className="flex items-center justify-between px-3 pb-3 pt-2 border-t border-cafe-subtle flex-shrink-0">
             {selectedCats.length > 0 && (
-              <button onClick={() => setSelectedCats([])} className="text-[10px] text-gray-400 hover:text-red-400">
+              <button
+                onClick={() => setSelectedCats([])}
+                className="text-micro text-cafe-muted hover:text-conn-red-text"
+              >
                 清除
               </button>
             )}
@@ -106,14 +135,14 @@ export function ThreadCatSettings({ threadId, currentCats, onSave }: ThreadCatSe
                   setIsOpen(false);
                   setSelectedCats(currentCats);
                 }}
-                className="text-xs px-2 py-0.5 rounded text-gray-500 hover:bg-gray-100"
+                className="text-xs px-2 py-0.5 rounded text-cafe-secondary hover:bg-cafe-surface-elevated"
               >
                 取消
               </button>
               <button
                 onClick={() => void handleSave()}
                 disabled={!hasChanged || isSaving}
-                className="text-xs px-2 py-0.5 rounded bg-cocreator-primary text-white hover:bg-cocreator-dark disabled:opacity-40"
+                className="text-xs px-2 py-0.5 rounded bg-cafe-accent text-[var(--cafe-surface)] hover:bg-cafe-interactive disabled:opacity-40"
               >
                 {isSaving ? '...' : '保存'}
               </button>

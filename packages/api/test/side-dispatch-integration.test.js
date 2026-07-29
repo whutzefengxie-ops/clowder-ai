@@ -229,6 +229,10 @@ describe('AC-A7: QueueProcessor slot-aware — opus completion dequeues only opu
     // Complete opus → should try to auto-dequeue
     await processor.onInvocationComplete('t1', 'opus', 'succeeded');
 
+    // executeEntry is fire-and-forget with async gaps (emitQueueUpdated enrichment).
+    // Wait for it to reach routeExecution before asserting.
+    await new Promise((r) => setTimeout(r, 50));
+
     // Verify router was called (auto-dequeued an entry)
     assert.ok(deps.router.routeExecution.mock.calls.length > 0, 'auto-dequeue triggered execution');
   });
@@ -274,7 +278,7 @@ describe('AC-A9: InvocationTracker used as unified SlotTracker', () => {
 
     // Active slots lists both
     const slots = tracker.getActiveSlots('t1');
-    assert.deepEqual(slots.sort(), ['codex', 'opus']);
+    assert.deepEqual(slots.map((s) => s.catId).sort(), ['codex', 'opus']);
 
     // Cancel main → side survives
     tracker.cancel('t1', 'opus', 'u1');

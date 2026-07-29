@@ -37,6 +37,7 @@ function makeThreadState(messages: ChatMessage[]): ThreadState {
     intentMode: null,
     targetCats: [],
     catStatuses: {},
+    catStatusDetails: {},
     catInvocations: {},
     activeInvocations: {},
     currentGame: null,
@@ -46,6 +47,10 @@ function makeThreadState(messages: ChatMessage[]): ThreadState {
     queue: [],
     queuePaused: false,
     queueFull: false,
+    workspaceWorktreeId: null,
+    workspaceOpenTabs: [],
+    workspaceOpenFilePath: null,
+    workspaceOpenFileLine: null,
   };
 }
 

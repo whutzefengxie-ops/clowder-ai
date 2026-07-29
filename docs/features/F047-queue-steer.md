@@ -17,7 +17,7 @@ created: 2026-02-28
 
 ## Why
 
-team lead在 Codex 原生体验中使用 **Steer**：当消息在队列里等待时，点击 Steer 会让“那条排队消息”立刻进入猫的处理流程（而不是只能撤回/重排/再发一条）。
+operator在 Codex 原生体验中使用 **Steer**：当消息在队列里等待时，点击 Steer 会让“那条排队消息”立刻进入猫的处理流程（而不是只能撤回/重排/再发一条）。
 
 ## What
 
@@ -56,6 +56,15 @@ team lead在 Codex 原生体验中使用 **Steer**：当消息在队列里等待
 - Modal offers two choices:
   - 立即执行（取消当前猫）
   - 提到队首（不取消）
+
+### Reorder（F175 扩展）
+
+F175 在 Steer 基础上扩展了用户可控编排能力：
+
+- **Drag & Drop 排序**：QueuePanel 支持拖动排序（`@dnd-kit`），拖拽后通过 `PATCH /queue/reorder` 批量设置 position
+- **Reorder API**：`PATCH /api/threads/:threadId/queue/reorder`，body: `{ positions: [{ entryId, position }] }`
+- **排序语义**：显式 position（用户手动拖动）仅在同 user 内覆盖 `priority`，未手动排序的 entry 仍按 `priority > createdAt`
+- **Optimistic UI**：前端立即按 comparator 重排，失败时 rollback
 
 ## Key Decisions
 

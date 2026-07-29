@@ -19,9 +19,10 @@ import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
-import { after, before, beforeEach, describe, mock, test } from 'node:test';
+import { after, afterEach, before, beforeEach, describe, mock, test } from 'node:test';
 import Fastify from 'fastify';
 import { migrateRouterOpts } from '../helpers/agent-registry-helpers.js';
+import { fakeL0Compiler } from '../helpers/fake-l0-compiler.js';
 
 // --- Imports (from dist) ---
 
@@ -50,9 +51,27 @@ function createMockProcess() {
   const stdout = new PassThrough();
   const stderr = new PassThrough();
   const emitter = new EventEmitter();
+  const originalEmit = emitter.emit.bind(emitter);
+  emitter.emit = (event, ...args) => {
+    const emitted = originalEmit(event, ...args);
+    if (event === 'exit') {
+      process.nextTick(() => originalEmit('close', ...args));
+    }
+    return emitted;
+  };
+  let stdinData = '';
   const proc = {
     stdout,
     stderr,
+    // Incident 2026-05-29: prompt 走 stdin（不进 argv）。捕获写入供断言。
+    stdin: {
+      write: (chunk) => {
+        stdinData += typeof chunk === 'string' ? chunk : chunk.toString('utf8');
+        return true;
+      },
+      end: () => {},
+      on: () => proc.stdin,
+    },
     pid: process.pid,
     exitCode: null,
     kill: mock.fn(() => {
@@ -69,6 +88,9 @@ function createMockProcess() {
     once: (event, listener) => {
       emitter.once(event, listener);
       return proc;
+    },
+    get stdinData() {
+      return stdinData;
     },
     _emitter: emitter,
   };
@@ -118,13 +140,38 @@ function createTrackingSpawnFn(eventsFn) {
   const calls = [];
   const spawnFn = mock.fn((_cmd, _args, options) => {
     const proc = createMockProcess();
-    calls.push({ args: _args, options, proc });
+    calls.push({ cmd: _cmd, args: _args, options, proc });
     // Schedule events on next tick so caller can start reading
     process.nextTick(() => emitEvents(proc, eventsFn(calls.length)));
     return proc;
   });
   spawnFn._calls = calls;
   return spawnFn;
+}
+
+function createTrackingPlainTextSpawnFn(outputFn) {
+  const calls = [];
+  const spawnFn = mock.fn((_cmd, _args, options) => {
+    const proc = createMockProcess();
+    calls.push({ cmd: _cmd, args: _args, options, proc });
+    process.nextTick(() => {
+      const output = outputFn(calls.length);
+      if (output.stderr) proc.stderr.write(output.stderr);
+      if (output.stdout) proc.stdout.write(output.stdout);
+      proc.stdout.end();
+      proc.stderr.end();
+      const exitCode = output.exitCode === undefined ? 0 : output.exitCode;
+      proc._emitter.emit('exit', exitCode, null);
+    });
+    return proc;
+  });
+  spawnFn._calls = calls;
+  return spawnFn;
+}
+
+function commandName(command) {
+  const parts = command.split(/[\\/]/);
+  return parts[parts.length - 1].replace(/\.cmd$/i, '');
 }
 
 /** Mock SocketManager */
@@ -153,15 +200,51 @@ function installFakeCliPath() {
     writeExecutable('claude.cmd', content);
     writeExecutable('codex.cmd', content);
     writeExecutable('gemini.cmd', content);
+    writeExecutable('agy.cmd', content);
   } else {
     const content = '#!/bin/sh\nexit 0\n';
     writeExecutable('claude', content);
     writeExecutable('codex', content);
     writeExecutable('gemini', content);
+    writeExecutable('agy', content);
   }
 
   return dir;
 }
+
+let originalGlobalConfigRoot;
+let originalHome;
+let originalGeminiAdapter;
+let testGlobalConfigRoot;
+
+before(() => {
+  originalGlobalConfigRoot = process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT;
+  originalHome = process.env.HOME;
+  originalGeminiAdapter = process.env.GEMINI_ADAPTER;
+});
+
+beforeEach(async () => {
+  // Isolate catalog/credential writes so invoke-single-cat never touches repo-root config.
+  testGlobalConfigRoot = mkdtempSync(join(tmpdir(), 'cat-cafe-wiring-global-'));
+  process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT = testGlobalConfigRoot;
+  process.env.HOME = testGlobalConfigRoot;
+
+  const { resetMigrationState } = await import('../../dist/config/catalog-accounts.js');
+  resetMigrationState();
+});
+
+afterEach(() => {
+  if (testGlobalConfigRoot) {
+    rmSync(testGlobalConfigRoot, { recursive: true, force: true });
+    testGlobalConfigRoot = undefined;
+  }
+  if (originalGlobalConfigRoot === undefined) delete process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT;
+  else process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT = originalGlobalConfigRoot;
+  if (originalHome === undefined) delete process.env.HOME;
+  else process.env.HOME = originalHome;
+  if (originalGeminiAdapter === undefined) delete process.env.GEMINI_ADAPTER;
+  else process.env.GEMINI_ADAPTER = originalGeminiAdapter;
+});
 
 // ===================================================================
 // Test Suite: AgentRouter + Services wiring
@@ -198,7 +281,7 @@ describe('AgentRouter + Services wiring', () => {
     const router = new AgentRouter(
       await migrateRouterOpts({
         claudeService: new ClaudeAgentService({ spawnFn: claudeSpawn }),
-        codexService: new CodexAgentService({ spawnFn: codexSpawn }),
+        codexService: new CodexAgentService({ l0CompilerFn: fakeL0Compiler, spawnFn: codexSpawn }),
         geminiService: new GeminiAgentService({ spawnFn: geminiSpawn, adapter: 'gemini-cli' }),
         registry,
         messageStore,
@@ -217,13 +300,15 @@ describe('AgentRouter + Services wiring', () => {
 
   test('passes callbackEnv to Codex service', async () => {
     const claudeSpawn = createTrackingSpawnFn(() => claudeEvents('s-1', 'hi'));
-    const codexSpawn = createTrackingSpawnFn(() => codexEvents('t-1', 'hi'));
+    // F177-H: this wiring test only verifies callbackEnv. Give the real Codex service a legal
+    // routing exit so the server-side remedial guard does not intentionally invoke it twice.
+    const codexSpawn = createTrackingSpawnFn(() => codexEvents('t-1', 'hi\n@co-creator'));
     const geminiSpawn = createTrackingSpawnFn(() => geminiEvents('g-1', 'hi'));
 
     const router = new AgentRouter(
       await migrateRouterOpts({
         claudeService: new ClaudeAgentService({ spawnFn: claudeSpawn }),
-        codexService: new CodexAgentService({ spawnFn: codexSpawn }),
+        codexService: new CodexAgentService({ l0CompilerFn: fakeL0Compiler, spawnFn: codexSpawn }),
         geminiService: new GeminiAgentService({ spawnFn: geminiSpawn, adapter: 'gemini-cli' }),
         registry,
         messageStore,
@@ -246,7 +331,7 @@ describe('AgentRouter + Services wiring', () => {
     const router = new AgentRouter(
       await migrateRouterOpts({
         claudeService: new ClaudeAgentService({ spawnFn: claudeSpawn }),
-        codexService: new CodexAgentService({ spawnFn: codexSpawn }),
+        codexService: new CodexAgentService({ l0CompilerFn: fakeL0Compiler, spawnFn: codexSpawn }),
         geminiService: new GeminiAgentService({ spawnFn: geminiSpawn, adapter: 'gemini-cli' }),
         registry,
         messageStore,
@@ -256,9 +341,49 @@ describe('AgentRouter + Services wiring', () => {
     await collect(router.route('user-1', '@gemini hello'));
 
     assert.equal(geminiSpawn._calls.length, 1);
+    const call = geminiSpawn._calls[0];
+    assert.equal(commandName(call.cmd), 'gemini');
+    assert.ok(call.args.includes('-o'), 'gemini-cli fallback should request stream-json output');
+    assert.ok(call.args.includes('stream-json'), 'gemini-cli fallback should remain NDJSON-based');
+    assert.equal(call.args.includes('--print'), false, 'gemini-cli fallback must not use agy --print mode');
     const spawnOpts = geminiSpawn._calls[0].options;
     assert.ok(spawnOpts.env.CAT_CAFE_INVOCATION_ID);
     assert.ok(spawnOpts.env.CAT_CAFE_CALLBACK_TOKEN);
+  });
+
+  test('routes Gemini through antigravity-cli plain-text adapter by default', async () => {
+    delete process.env.GEMINI_ADAPTER;
+    const claudeSpawn = createTrackingSpawnFn(() => claudeEvents('s-1', 'hi'));
+    const codexSpawn = createTrackingSpawnFn(() => codexEvents('t-1', 'hi'));
+    const agySpawn = createTrackingPlainTextSpawnFn(() => ({
+      stdout: 'CAT_CAFE_AGY_ROUTE_OK\n',
+    }));
+
+    const router = new AgentRouter(
+      await migrateRouterOpts({
+        claudeService: new ClaudeAgentService({ spawnFn: claudeSpawn }),
+        codexService: new CodexAgentService({ l0CompilerFn: fakeL0Compiler, spawnFn: codexSpawn }),
+        geminiService: new GeminiAgentService({ spawnFn: agySpawn }),
+        registry,
+        messageStore,
+      }),
+    );
+
+    const msgs = await collect(router.route('user-1', '@gemini hello'));
+
+    assert.equal(agySpawn._calls.length, 1);
+    const call = agySpawn._calls[0];
+    assert.equal(commandName(call.cmd), 'agy');
+    assert.ok(call.args.includes('--print'), 'default antigravity-cli route should use agy --print');
+    assert.ok(call.args.includes('--add-dir'), 'default antigravity-cli route should bind the working directory');
+    const modelIdx = call.args.indexOf('--model');
+    assert.ok(modelIdx >= 0, 'default antigravity-cli route should pass runtime-owned --model');
+    assert.equal(call.args[modelIdx + 1], 'Gemini 3.1 Pro (High)');
+    assert.ok(
+      msgs.some((m) => m.type === 'text' && m.content === 'CAT_CAFE_AGY_ROUTE_OK'),
+      'route should surface plain-text AGY stdout',
+    );
+    assert.equal(msgs.at(-1)?.type, 'done');
   });
 
   // --- InvocationRegistry 接线验证 ---
@@ -271,7 +396,7 @@ describe('AgentRouter + Services wiring', () => {
     const router = new AgentRouter(
       await migrateRouterOpts({
         claudeService: new ClaudeAgentService({ spawnFn: claudeSpawn }),
-        codexService: new CodexAgentService({ spawnFn: codexSpawn }),
+        codexService: new CodexAgentService({ l0CompilerFn: fakeL0Compiler, spawnFn: codexSpawn }),
         geminiService: new GeminiAgentService({ spawnFn: geminiSpawn, adapter: 'gemini-cli' }),
         registry,
         messageStore,
@@ -297,7 +422,7 @@ describe('AgentRouter + Services wiring', () => {
     const router = new AgentRouter(
       await migrateRouterOpts({
         claudeService: new ClaudeAgentService({ spawnFn: claudeSpawn }),
-        codexService: new CodexAgentService({ spawnFn: codexSpawn }),
+        codexService: new CodexAgentService({ l0CompilerFn: fakeL0Compiler, spawnFn: codexSpawn }),
         geminiService: new GeminiAgentService({ spawnFn: geminiSpawn, adapter: 'gemini-cli' }),
         registry,
         messageStore,
@@ -307,10 +432,11 @@ describe('AgentRouter + Services wiring', () => {
     await collect(router.route('user-1', 'hello'));
 
     const env = claudeSpawn._calls[0].options.env;
-    const record = registry.verify(env.CAT_CAFE_INVOCATION_ID, env.CAT_CAFE_CALLBACK_TOKEN);
-    assert.ok(record, 'credentials should be verifiable');
-    assert.equal(record.userId, 'user-1');
-    assert.equal(record.catId, 'opus');
+    // F174 Phase A/B: verify() returns Promise<VerifyResult>
+    const result = await registry.verify(env.CAT_CAFE_INVOCATION_ID, env.CAT_CAFE_CALLBACK_TOKEN);
+    assert.equal(result.ok, true, 'credentials should be verifiable');
+    assert.equal(result.record.userId, 'user-1');
+    assert.equal(result.record.catId, 'opus');
   });
 
   // --- MessageStore 接线验证 ---
@@ -323,7 +449,7 @@ describe('AgentRouter + Services wiring', () => {
     const router = new AgentRouter(
       await migrateRouterOpts({
         claudeService: new ClaudeAgentService({ spawnFn: claudeSpawn }),
-        codexService: new CodexAgentService({ spawnFn: codexSpawn }),
+        codexService: new CodexAgentService({ l0CompilerFn: fakeL0Compiler, spawnFn: codexSpawn }),
         geminiService: new GeminiAgentService({ spawnFn: geminiSpawn, adapter: 'gemini-cli' }),
         registry,
         messageStore,
@@ -347,7 +473,7 @@ describe('AgentRouter + Services wiring', () => {
     const router = new AgentRouter(
       await migrateRouterOpts({
         claudeService: new ClaudeAgentService({ spawnFn: claudeSpawn }),
-        codexService: new CodexAgentService({ spawnFn: codexSpawn }),
+        codexService: new CodexAgentService({ l0CompilerFn: fakeL0Compiler, spawnFn: codexSpawn }),
         geminiService: new GeminiAgentService({ spawnFn: geminiSpawn, adapter: 'gemini-cli' }),
         registry,
         messageStore,
@@ -376,7 +502,7 @@ describe('AgentRouter + Services wiring', () => {
     const router = new AgentRouter(
       await migrateRouterOpts({
         claudeService: new ClaudeAgentService({ spawnFn: claudeSpawn }),
-        codexService: new CodexAgentService({ spawnFn: codexSpawn }),
+        codexService: new CodexAgentService({ l0CompilerFn: fakeL0Compiler, spawnFn: codexSpawn }),
         geminiService: new GeminiAgentService({ spawnFn: geminiSpawn, adapter: 'gemini-cli' }),
         registry,
         messageStore,
@@ -411,7 +537,7 @@ describe('AgentRouter + Services wiring', () => {
     const router = new AgentRouter(
       await migrateRouterOpts({
         claudeService: new ClaudeAgentService({ spawnFn: claudeSpawn }),
-        codexService: new CodexAgentService({ spawnFn: codexSpawn }),
+        codexService: new CodexAgentService({ l0CompilerFn: fakeL0Compiler, spawnFn: codexSpawn }),
         geminiService: new GeminiAgentService({ spawnFn: geminiSpawn, adapter: 'gemini-cli' }),
         registry,
         messageStore,
@@ -422,10 +548,11 @@ describe('AgentRouter + Services wiring', () => {
     await collect(router.route('user-1', '#execute @opus @codex hello', thread.id));
 
     // Codex spawn should receive prompt containing opus's reply (serial chain)
+    // Incident 2026-05-29: prompt 走 stdin（不进 argv）。argv 末尾是 '-'，prompt 内容在 stdin。
     const codexArgs = codexSpawn._calls[0].args;
-    // The prompt is the last positional arg for fresh codex calls
-    const prompt = codexArgs[codexArgs.length - 1];
-    assert.ok(prompt.includes('cat1 reply'), `codex prompt should contain opus reply, got: ${prompt}`);
+    assert.equal(codexArgs[codexArgs.length - 1], '-', 'codex prompt 走 stdin，argv 末尾是 -');
+    const prompt = codexSpawn._calls[0].proc.stdinData;
+    assert.ok(prompt.includes('cat1 reply'), `codex stdin prompt should contain opus reply, got: ${prompt}`);
   });
 
   test('yields isFinal=true only on last cat done (#execute serial)', async () => {
@@ -436,7 +563,7 @@ describe('AgentRouter + Services wiring', () => {
     const router = new AgentRouter(
       await migrateRouterOpts({
         claudeService: new ClaudeAgentService({ spawnFn: claudeSpawn }),
-        codexService: new CodexAgentService({ spawnFn: codexSpawn }),
+        codexService: new CodexAgentService({ l0CompilerFn: fakeL0Compiler, spawnFn: codexSpawn }),
         geminiService: new GeminiAgentService({ spawnFn: geminiSpawn, adapter: 'gemini-cli' }),
         registry,
         messageStore,
@@ -484,7 +611,7 @@ describe('MCP callback end-to-end flow', () => {
     const router = new AgentRouter(
       await migrateRouterOpts({
         claudeService: new ClaudeAgentService({ spawnFn: claudeSpawn }),
-        codexService: new CodexAgentService({ spawnFn: codexSpawn }),
+        codexService: new CodexAgentService({ l0CompilerFn: fakeL0Compiler, spawnFn: codexSpawn }),
         geminiService: new GeminiAgentService({ spawnFn: geminiSpawn, adapter: 'gemini-cli' }),
         registry,
         messageStore,
@@ -502,9 +629,8 @@ describe('MCP callback end-to-end flow', () => {
     const response = await app.inject({
       method: 'POST',
       url: '/api/callbacks/post-message',
+      headers: { 'x-invocation-id': env.CAT_CAFE_INVOCATION_ID, 'x-callback-token': env.CAT_CAFE_CALLBACK_TOKEN },
       payload: {
-        invocationId: env.CAT_CAFE_INVOCATION_ID,
-        callbackToken: env.CAT_CAFE_CALLBACK_TOKEN,
         content: 'Callback message from cat!',
       },
     });
@@ -534,7 +660,7 @@ describe('MCP callback end-to-end flow', () => {
     const router = new AgentRouter(
       await migrateRouterOpts({
         claudeService: new ClaudeAgentService({ spawnFn: claudeSpawn }),
-        codexService: new CodexAgentService({ spawnFn: codexSpawn }),
+        codexService: new CodexAgentService({ l0CompilerFn: fakeL0Compiler, spawnFn: codexSpawn }),
         geminiService: new GeminiAgentService({ spawnFn: geminiSpawn, adapter: 'gemini-cli' }),
         registry,
         messageStore,
@@ -545,13 +671,14 @@ describe('MCP callback end-to-end flow', () => {
     await collect(router.route('user-1', '@opus help'));
 
     // 2. Create a fresh invocation for opus (simulating a new CLI invocation)
-    const { invocationId, callbackToken } = registry.create('user-1', 'opus');
+    const { invocationId, callbackToken } = await registry.create('user-1', 'opus');
 
     // 3. Query pending mentions
     const app = await createApp();
     const response = await app.inject({
       method: 'GET',
-      url: `/api/callbacks/pending-mentions?invocationId=${invocationId}&callbackToken=${callbackToken}`,
+      url: '/api/callbacks/pending-mentions',
+      headers: { 'x-invocation-id': invocationId, 'x-callback-token': callbackToken },
     });
 
     assert.equal(response.statusCode, 200);

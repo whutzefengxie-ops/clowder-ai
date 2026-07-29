@@ -19,13 +19,12 @@ const MOCK_CATS = [
     nickname: '宪宪',
     color: { primary: '#9B7EBD', secondary: '#E8D5F5' },
     mentionPatterns: ['@opus'],
-    provider: 'anthropic',
-    providerProfileId: 'claude-oauth',
+    clientId: 'anthropic',
+    accountRef: 'claude-oauth',
     defaultModel: 'claude-opus-4-6',
     avatar: '/avatars/opus.png',
     roleDescription: '架构',
     personality: '稳重',
-    source: 'seed',
   },
   {
     id: 'codex',
@@ -33,13 +32,12 @@ const MOCK_CATS = [
     nickname: '砚砚',
     color: { primary: '#5B8C5A', secondary: '#D4E6D3' },
     mentionPatterns: ['@codex'],
-    provider: 'openai',
-    providerProfileId: 'codex-oauth',
+    clientId: 'openai',
+    accountRef: 'codex-oauth',
     defaultModel: 'gpt-5.4',
     avatar: '/avatars/codex.png',
     roleDescription: 'review',
     personality: 'rigorous',
-    source: 'seed',
   },
   {
     id: 'spark',
@@ -47,13 +45,12 @@ const MOCK_CATS = [
     nickname: 'Spark',
     color: { primary: '#5B8C5A', secondary: '#D4E6D3' },
     mentionPatterns: ['@spark'],
-    provider: 'openai',
-    providerProfileId: 'codex-sponsor',
+    clientId: 'openai',
+    accountRef: 'codex-sponsor',
     defaultModel: 'gpt-5.4-mini',
     avatar: '/avatars/spark.png',
     roleDescription: 'fast coding',
     personality: 'sharp',
-    source: 'runtime',
   },
   {
     id: 'gemini25',
@@ -61,13 +58,12 @@ const MOCK_CATS = [
     nickname: 'Gemini 2.5',
     color: { primary: '#EAA54B', secondary: '#F8E7C7' },
     mentionPatterns: ['@gemini25'],
-    provider: 'google',
-    providerProfileId: 'gemini-oauth',
+    clientId: 'google',
+    accountRef: 'gemini-oauth',
     defaultModel: 'gemini-2.5-pro',
     avatar: '/avatars/gemini25.png',
     roleDescription: 'design',
     personality: 'bold',
-    source: 'seed',
   },
   {
     id: 'antigravity',
@@ -75,12 +71,11 @@ const MOCK_CATS = [
     nickname: '豹猫',
     color: { primary: '#C97A35', secondary: '#F5E4D0' },
     mentionPatterns: ['@antigravity'],
-    provider: 'antigravity',
+    clientId: 'antigravity',
     defaultModel: 'gemini-3.1-pro',
     avatar: '/avatars/antigravity.png',
     roleDescription: 'bridge',
     personality: 'curious',
-    source: 'seed',
   },
 ];
 
@@ -132,7 +127,7 @@ function jsonResponse(payload: unknown): Response {
 
 function defaultQuotaApiFetch(path: string) {
   if (path === '/api/quota') return Promise.resolve(jsonResponse(MOCK_QUOTA_RESPONSE));
-  if (path === '/api/provider-profiles') {
+  if (path === '/api/accounts') {
     return Promise.resolve(
       jsonResponse({
         projectPath: '/tmp/project',
@@ -149,8 +144,10 @@ function defaultQuotaApiFetch(path: string) {
             displayName: 'Claude (OAuth)',
             name: 'Claude (OAuth)',
             authType: 'oauth',
-            protocol: 'anthropic',
             builtin: true,
+            clientId: 'anthropic',
+            protocol: 'anthropic',
+
             mode: 'subscription',
             models: ['claude-opus-4-6'],
             hasApiKey: false,
@@ -163,8 +160,10 @@ function defaultQuotaApiFetch(path: string) {
             displayName: 'Codex (OAuth)',
             name: 'Codex (OAuth)',
             authType: 'oauth',
-            protocol: 'openai',
             builtin: true,
+            clientId: 'openai',
+            protocol: 'openai',
+
             mode: 'subscription',
             models: ['gpt-5.4'],
             hasApiKey: false,
@@ -177,8 +176,10 @@ function defaultQuotaApiFetch(path: string) {
             displayName: 'Gemini (OAuth)',
             name: 'Gemini (OAuth)',
             authType: 'oauth',
-            protocol: 'google',
             builtin: true,
+            clientId: 'google',
+            protocol: 'google',
+
             mode: 'subscription',
             models: ['gemini-2.5-pro'],
             hasApiKey: false,
@@ -191,8 +192,9 @@ function defaultQuotaApiFetch(path: string) {
             displayName: 'Codex Sponsor',
             name: 'Codex Sponsor',
             authType: 'api_key',
-            protocol: 'openai',
             builtin: false,
+            protocol: 'openai',
+
             mode: 'api_key',
             models: ['gpt-5.4-mini'],
             hasApiKey: true,
@@ -256,7 +258,7 @@ describe('HubQuotaBoardTab v2 — glanceable quota board', () => {
 
   it('renders F127 group headings on static render', () => {
     const html = renderToStaticMarkup(React.createElement(HubQuotaBoardTab));
-    expect(html).toContain('内置账号额度（按账号配置）');
+    expect(html).toContain('OAuth 账号额度（按账号配置）');
     expect(html).toContain('API Key 额度（按账号配置）');
     expect(html).toContain('F127 变化说明');
   });
@@ -297,7 +299,7 @@ describe('HubQuotaBoardTab — account pool grouping', () => {
     });
     await flushEffects();
 
-    expect(container.textContent).toContain('内置账号额度（按账号配置）');
+    expect(container.textContent).toContain('OAuth 账号额度（按账号配置）');
     expect(container.textContent).toContain('API Key 额度（按账号配置）');
     expect(container.textContent).toContain('Claude (OAuth)');
     expect(container.textContent).toContain('Codex (OAuth)');
@@ -351,7 +353,7 @@ describe('HubQuotaBoardTab — account pool grouping', () => {
 
   it('shows a visible error banner when provider profiles fail to load', async () => {
     mockApiFetch.mockImplementation((path: string) => {
-      if (path === '/api/provider-profiles') return Promise.resolve(new Response('{}', { status: 503 }));
+      if (path === '/api/accounts') return Promise.resolve(new Response('{}', { status: 503 }));
       return defaultQuotaApiFetch(path);
     });
 
@@ -362,6 +364,194 @@ describe('HubQuotaBoardTab — account pool grouping', () => {
 
     expect(container.textContent).toContain('账号配置加载失败 (503)');
     expect(container.textContent).toContain('额度池成员归属可能不完整');
+  });
+
+  it('refreshes only providers represented by configured subscription accounts', async () => {
+    const calls: Array<{ path: string; init?: RequestInit }> = [];
+    mockApiFetch.mockImplementation((path: string, init?: RequestInit) => {
+      calls.push({ path, init });
+      if (path === '/api/quota/refresh/official') {
+        return Promise.resolve(jsonResponse({ ok: true }));
+      }
+      if (path === '/api/quota/refresh/claude') {
+        return Promise.resolve(jsonResponse({ claude: { platform: 'claude' } }));
+      }
+      if (path === '/api/quota/refresh/kimi') {
+        return Promise.resolve(jsonResponse({ kimi: { status: 'ok' }, source: 'cli', fallbackUsed: false }));
+      }
+      return defaultQuotaApiFetch(path);
+    });
+
+    await act(async () => {
+      root.render(React.createElement(HubQuotaBoardTab));
+    });
+    await flushEffects();
+    calls.length = 0;
+
+    const refreshButton = Array.from(container.querySelectorAll('button')).find(
+      (node) => node.textContent?.trim() === '刷新全部',
+    );
+    expect(refreshButton).toBeTruthy();
+
+    await act(async () => {
+      refreshButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushEffects();
+
+    expect(calls.map((call) => call.path)).toContain('/api/quota/refresh/official');
+    expect(calls.map((call) => call.path)).toContain('/api/quota/refresh/claude');
+    expect(calls.map((call) => call.path)).not.toContain('/api/quota/refresh/kimi');
+    const officialCall = calls.find((call) => call.path === '/api/quota/refresh/official');
+    expect(JSON.parse(String(officialCall?.init?.body))).toEqual({
+      interactive: true,
+      providers: ['claude', 'codex'],
+    });
+    for (const call of calls.filter((entry) => entry.path.startsWith('/api/quota/refresh/'))) {
+      expect(call.init?.body).toBeTruthy();
+      expect(new Headers(call.init?.headers).get('content-type')).toBe('application/json');
+    }
+  });
+
+  it('surfaces partial official warnings returned with HTTP 200', async () => {
+    const warning = 'Claude OAuth failed: upstream unavailable';
+    mockApiFetch.mockImplementation((path: string) => {
+      if (path === '/api/quota/refresh/official') {
+        return Promise.resolve(jsonResponse({ ok: true, codexItems: 1, claudeItems: 0, warnings: [warning] }));
+      }
+      if (path === '/api/quota/refresh/claude') {
+        return Promise.resolve(jsonResponse({ claude: { platform: 'claude' } }));
+      }
+      return defaultQuotaApiFetch(path);
+    });
+
+    await act(async () => {
+      root.render(React.createElement(HubQuotaBoardTab));
+    });
+    await flushEffects();
+
+    const refreshButton = Array.from(container.querySelectorAll('button')).find(
+      (node) => node.textContent?.trim() === '刷新全部',
+    );
+    await act(async () => {
+      refreshButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushEffects();
+
+    expect(container.textContent).toContain(warning);
+  });
+
+  it('refreshes only Codex for the current Codex OAuth plus DeepSeek API-key configuration', async () => {
+    const calls: Array<{ path: string; init?: RequestInit }> = [];
+    mockApiFetch.mockImplementation((path: string, init?: RequestInit) => {
+      calls.push({ path, init });
+      if (path === '/api/accounts') {
+        return Promise.resolve(
+          jsonResponse({
+            projectPath: '/tmp/project',
+            providers: [
+              {
+                id: 'my-codex-account',
+                clientId: 'openai',
+                displayName: 'my-codex-account',
+                name: 'my-codex-account',
+                authType: 'oauth',
+                builtin: true,
+                mode: 'subscription',
+                hasApiKey: false,
+                createdAt: '',
+                updatedAt: '',
+              },
+              {
+                id: 'my-deepseek-account',
+                displayName: 'my-deepseek-account',
+                name: 'my-deepseek-account',
+                authType: 'api_key',
+                builtin: false,
+                mode: 'api_key',
+                hasApiKey: true,
+                createdAt: '',
+                updatedAt: '',
+              },
+            ],
+          }),
+        );
+      }
+      if (path === '/api/quota/refresh/official') return Promise.resolve(jsonResponse({ ok: true }));
+      return defaultQuotaApiFetch(path);
+    });
+
+    await act(async () => {
+      root.render(React.createElement(HubQuotaBoardTab));
+    });
+    await flushEffects();
+
+    const codexAccountLabel = Array.from(container.querySelectorAll('span')).find(
+      (node) => node.textContent?.trim() === 'my-codex-account',
+    );
+    const codexAccountCard = codexAccountLabel?.parentElement?.parentElement;
+    expect(codexAccountCard).toBeTruthy();
+    expect(codexAccountCard?.textContent).toContain('5小时使用限额');
+    expect(codexAccountCard?.textContent).toContain('100% 剩余');
+
+    calls.length = 0;
+
+    const refreshButton = Array.from(container.querySelectorAll('button')).find(
+      (node) => node.textContent?.trim() === '刷新全部',
+    );
+    await act(async () => {
+      refreshButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushEffects();
+
+    expect(calls.map((call) => call.path)).toEqual(['/api/quota/refresh/official', '/api/quota']);
+    expect(JSON.parse(String(calls[0]?.init?.body))).toEqual({ interactive: true, providers: ['codex'] });
+  });
+
+  it('does not surface cached Kimi failures when Kimi is not configured', async () => {
+    mockApiFetch.mockImplementation((path: string) => {
+      if (path === '/api/quota') {
+        return Promise.resolve(
+          jsonResponse({
+            ...MOCK_QUOTA_RESPONSE,
+            kimi: {
+              platform: 'kimi',
+              usageItems: [],
+              error: 'Kimi CLI should not have been called',
+              lastChecked: '2026-07-18T06:40:00.000Z',
+            },
+          }),
+        );
+      }
+      if (path === '/api/accounts') {
+        return Promise.resolve(
+          jsonResponse({
+            projectPath: '/tmp/project',
+            providers: [
+              {
+                id: 'my-codex-account',
+                clientId: 'openai',
+                displayName: 'my-codex-account',
+                name: 'my-codex-account',
+                authType: 'oauth',
+                builtin: true,
+                mode: 'subscription',
+                hasApiKey: false,
+                createdAt: '',
+                updatedAt: '',
+              },
+            ],
+          }),
+        );
+      }
+      return defaultQuotaApiFetch(path);
+    });
+
+    await act(async () => {
+      root.render(React.createElement(HubQuotaBoardTab));
+    });
+    await flushEffects();
+
+    expect(container.textContent).not.toContain('Kimi CLI should not have been called');
   });
 });
 
@@ -432,6 +622,17 @@ describe('quota-cards — pool grouping and row rendering', () => {
     expect(html).toContain('剩余');
   });
 
+  it('converts used percentages to remaining percentages for a consistent display', async () => {
+    const { QuotaPoolRow } = await import('@/components/quota-cards');
+    const html = renderToStaticMarkup(
+      React.createElement(QuotaPoolRow, {
+        item: { label: '每周使用限额', usedPercent: 27, percentKind: 'used', poolId: 'codex-main' },
+      }),
+    );
+    expect(html).toContain('73% 剩余');
+    expect(html).not.toContain('27% 已用');
+  });
+
   it('progress bar uses green for healthy remaining (97%), red for low remaining (10%)', async () => {
     const { QuotaPoolRow } = await import('@/components/quota-cards');
     // 97% remaining = 3% used = healthy → should be green
@@ -440,7 +641,7 @@ describe('quota-cards — pool grouping and row rendering', () => {
         item: { label: 'test', usedPercent: 97, percentKind: 'remaining' },
       }),
     );
-    expect(healthyHtml).toContain('bg-emerald-500');
+    expect(healthyHtml).toContain('bg-[var(--semantic-success)]');
     expect(healthyHtml).not.toContain('bg-rose-500');
 
     // 10% remaining = 90% used = danger → should be red
@@ -450,7 +651,7 @@ describe('quota-cards — pool grouping and row rendering', () => {
       }),
     );
     expect(dangerHtml).toContain('bg-rose-500');
-    expect(dangerHtml).not.toContain('bg-emerald-500');
+    expect(dangerHtml).not.toContain('bg-[var(--semantic-success)]');
   });
 
   it('renders resetsAt as formatted time when resetsText is absent', async () => {

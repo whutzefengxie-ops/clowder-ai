@@ -8,7 +8,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react-dom/test-utils';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CatInvocationInfo } from '@/stores/chat-types';
-import { SessionChainPanel } from '../SessionChainPanel';
+import { __resetSessionChainCacheForTest, SessionChainPanel } from '../SessionChainPanel';
 
 beforeAll(() => {
   (globalThis as { React?: typeof React }).React = React;
@@ -29,21 +29,24 @@ vi.mock('../ContextHealthBar', () => ({
     React.createElement('div', { 'data-testid': `health-bar-${props.catId}` }),
 }));
 
-// F33: Stub useCatData for BindNewSessionSection
+// useCatData stub — mirrors cat-config.json so SessionChainPanel can pull
+// border/badge colors from cat.color.primary instead of a hardcoded table.
+const MOCK_CATS: Record<string, { id: string; displayName: string; color: { primary: string; secondary: string } }> = {
+  opus: { id: 'opus', displayName: '布偶猫', color: { primary: '#9B7EBD', secondary: '#E8DFF5' } },
+  codex: { id: 'codex', displayName: '缅因猫', color: { primary: '#5B8C5A', secondary: '#D4E6D3' } },
+  gemini: { id: 'gemini', displayName: '暹罗猫', color: { primary: '#4A90E2', secondary: '#D8E6F8' } },
+  kimi: { id: 'kimi', displayName: '梵花猫', color: { primary: '#4B5563', secondary: '#E5E7EB' } },
+  gpt52: { id: 'gpt52', displayName: '缅因猫', color: { primary: '#66BB6A', secondary: '#C8E6C9' } },
+  'opus-45': { id: 'opus-45', displayName: '布偶猫', color: { primary: '#7E57C2', secondary: '#E1D5F0' } },
+  'opus-47': { id: 'opus-47', displayName: '布偶猫', color: { primary: '#7B1FA2', secondary: '#E1BEE7' } },
+  sonnet: { id: 'sonnet', displayName: '布偶猫', color: { primary: '#B39DDB', secondary: '#EDE7F6' } },
+};
+
 vi.mock('@/hooks/useCatData', () => ({
   useCatData: () => ({
-    cats: [
-      { id: 'opus', displayName: '布偶猫', color: { primary: '#7C3AED', secondary: '#EDE9FE' } },
-      { id: 'codex', displayName: '缅因猫', color: { primary: '#059669', secondary: '#D1FAE5' } },
-    ],
+    cats: Object.values(MOCK_CATS),
     isLoading: false,
-    getCatById: (id: string) => {
-      const map: Record<string, unknown> = {
-        opus: { id: 'opus', displayName: '布偶猫' },
-        codex: { id: 'codex', displayName: '缅因猫' },
-      };
-      return map[id];
-    },
+    getCatById: (id: string) => MOCK_CATS[id],
     getCatsByBreed: () => new Map(),
   }),
   formatCatName: (cat: { displayName: string; variantLabel?: string }) =>
@@ -52,6 +55,12 @@ vi.mock('@/hooks/useCatData', () => ({
 
 vi.mock('../status-helpers', () => ({
   truncateId: (id: string, len: number) => (id.length > len ? `${id.slice(0, len)}…` : id),
+}));
+
+// Stub next/link — render as <a> so we can assert href
+vi.mock('next/link', () => ({
+  default: (props: { href: string; className?: string; children: React.ReactNode }) =>
+    React.createElement('a', { href: props.href, className: props.className }, props.children),
 }));
 
 const origCreateElement = document.createElement.bind(document);
@@ -63,6 +72,7 @@ beforeEach(() => {
   document.body.appendChild(container);
   root = createRoot(container);
   mockApiFetch = vi.fn();
+  __resetSessionChainCacheForTest();
 });
 
 afterEach(() => {
@@ -89,6 +99,16 @@ function mockSessionsResponse(sessions: unknown[]) {
   });
 }
 
+/** Sealed section is default-collapsed; click the toggle to expand it. */
+function expandSealed() {
+  const toggle = container.querySelector('[data-testid="sealed-toggle"]') as HTMLElement | null;
+  if (toggle) {
+    act(() => {
+      toggle.click();
+    });
+  }
+}
+
 describe('F24: SessionChainPanel', () => {
   it('renders panel with bind section even when API returns empty sessions (F33)', async () => {
     mockSessionsResponse([]);
@@ -97,7 +117,7 @@ describe('F24: SessionChainPanel', () => {
     // Panel should render (F33: always visible for external session binding)
     expect(container.querySelector('section')).not.toBeNull();
     // No session cards, but bind section available
-    expect(container.textContent).toContain('0 sessions');
+    expect(container.textContent).toContain('0 total');
     expect(container.textContent).toContain('绑定外部 Session');
   });
 
@@ -116,7 +136,138 @@ describe('F24: SessionChainPanel', () => {
     ]);
     renderPanel('thread-1');
     await flushFetch();
-    expect(container.textContent).toContain('2 sessions');
+    expect(container.textContent).toContain('1 active');
+    expect(container.textContent).toContain('2 total');
+  });
+
+  it('collapses repeated 0-msg tool_conflict retry corpses into one summary (F201-churn)', async () => {
+    const corpse = (seq: number) => ({
+      id: `corpse-${seq}`,
+      catId: 'antig-opus',
+      seq,
+      status: 'sealed',
+      messageCount: 0,
+      createdAt: Date.now() - (10 - seq) * 1000,
+      sealedAt: Date.now() - (10 - seq) * 1000,
+      sealReason: 'tool_conflict',
+    });
+    mockSessionsResponse([
+      {
+        id: 'real-sealed',
+        catId: 'antig-opus',
+        seq: 9,
+        status: 'sealed',
+        messageCount: 12,
+        createdAt: Date.now() - 5000,
+        sealedAt: Date.now() - 4000,
+        sealReason: 'runtime_disconnected',
+      },
+      corpse(1),
+      corpse(2),
+      corpse(3),
+      corpse(4),
+    ]);
+    renderPanel('thread-1');
+    await flushFetch();
+    expandSealed();
+    // F201-churn: 4 empty (0-msg) tool_conflict retry corpses collapse into ONE summary,
+    // leaving only the real sealed session as a full card. Transparency preserved via the
+    // summary's visible count; the UI no longer litters one corpse card per F201 retry.
+    const sealedCards = container.querySelectorAll('[data-testid="session-card-sealed"]');
+    expect(sealedCards.length).toBe(1);
+    const summary = container.querySelector('[data-testid="session-card-retry-collapsed"]');
+    expect(summary).not.toBeNull();
+    expect(summary?.textContent).toContain('4');
+    expect(summary?.textContent).toContain('重试残骸');
+  });
+
+  it('collapses repeated runtime-tagged retry fragments without relying on sealReason heuristics', async () => {
+    const fragment = (seq: number) => ({
+      id: `fragment-${seq}`,
+      catId: 'antig-opus',
+      seq,
+      status: 'sealed',
+      messageCount: 0,
+      createdAt: Date.now() - (10 - seq) * 1000,
+      sealedAt: Date.now() - (10 - seq) * 1000,
+      sealReason: 'model_capacity',
+      runtimeSession: {
+        runtime: 'antigravity-desktop',
+        runtimeSessionId: `cascade-fragment-${seq}`,
+        lifecycleState: 'sealed',
+        lastObservedAt: Date.now() - (10 - seq) * 1000,
+        retryFragment: {
+          kind: 'retry',
+          retryReason: 'model_capacity',
+          nextRuntimeSessionId: `cascade-next-${seq}`,
+          detectedAt: Date.now() - (10 - seq) * 1000,
+        },
+      },
+    });
+    mockSessionsResponse([fragment(1), fragment(2), fragment(3)]);
+    renderPanel('thread-1');
+    await flushFetch();
+    expandSealed();
+    expect(container.querySelectorAll('[data-testid="session-card-sealed"]').length).toBe(0);
+    const summary = container.querySelector('[data-testid="session-card-retry-collapsed"]');
+    expect(summary).not.toBeNull();
+    expect(summary?.textContent).toContain('3');
+    expect(summary?.textContent).toContain('重试片段');
+  });
+
+  it('collapses a single runtime-tagged retry fragment', async () => {
+    mockSessionsResponse([
+      {
+        id: 'fragment-single',
+        catId: 'antig-opus',
+        seq: 1,
+        status: 'sealed',
+        messageCount: 0,
+        createdAt: Date.now() - 5000,
+        sealedAt: Date.now() - 4000,
+        sealReason: 'model_capacity',
+        runtimeSession: {
+          runtime: 'antigravity-desktop',
+          runtimeSessionId: 'cascade-fragment-single',
+          lifecycleState: 'sealed',
+          lastObservedAt: Date.now() - 4000,
+          retryFragment: {
+            kind: 'retry',
+            retryReason: 'model_capacity',
+            nextRuntimeSessionId: 'cascade-next-single',
+            detectedAt: Date.now() - 4000,
+          },
+        },
+      },
+    ]);
+    renderPanel('thread-1');
+    await flushFetch();
+    expandSealed();
+    expect(container.querySelectorAll('[data-testid="session-card-sealed"]').length).toBe(0);
+    const summary = container.querySelector('[data-testid="session-card-retry-collapsed"]');
+    expect(summary).not.toBeNull();
+    expect(summary?.textContent).toContain('1');
+    expect(summary?.textContent).toContain('重试片段');
+  });
+
+  it('does NOT collapse in-flight sealing 0-msg tool_conflict records (砚砚 review P2)', async () => {
+    // requestSeal() writes sealReason while status is still 'sealing' (async-finalizes to 'sealed'
+    // later) — a sealing record must keep its own card (live status + 查看/解封), NOT be folded.
+    const sealingCorpseLike = (seq: number) => ({
+      id: `sealing-${seq}`,
+      catId: 'antig-opus',
+      seq,
+      status: 'sealing',
+      messageCount: 0,
+      createdAt: Date.now() - (10 - seq) * 1000,
+      sealReason: 'tool_conflict',
+    });
+    mockSessionsResponse([sealingCorpseLike(1), sealingCorpseLike(2)]);
+    renderPanel('thread-1');
+    await flushFetch();
+    expandSealed();
+    expect(container.querySelector('[data-testid="session-card-retry-collapsed"]')).toBeNull();
+    expect(container.querySelectorAll('[data-testid="session-card-sealed"]').length).toBe(2);
   });
 
   it('renders active session with seq number, cat badge, and clickable session ID', async () => {
@@ -126,13 +277,50 @@ describe('F24: SessionChainPanel', () => {
     renderPanel('thread-1');
     await flushFetch();
     expect(container.textContent).toContain('Session #3');
-    expect(container.textContent).toContain('opus');
+    expect(container.textContent).toContain('布偶猫');
     expect(container.textContent).toContain('Active');
     expect(container.textContent).toContain('8 msgs');
     // Session ID should be visible (truncated) with copy title
     const idBtn = container.querySelector('button[title*="ses_abc12345xyz"]');
     expect(idBtn).not.toBeNull();
     expect(idBtn?.textContent).toContain('ses_abc123');
+  });
+
+  it('renders Antigravity runtime session identity and unexpected switch diagnostics', async () => {
+    mockSessionsResponse([
+      {
+        id: 'session-new',
+        cliSessionId: 'cascade-new-unexpected',
+        catId: 'opus',
+        seq: 1,
+        status: 'active',
+        messageCount: 1,
+        createdAt: Date.now() - 5000,
+        runtimeSession: {
+          runtime: 'antigravity-desktop',
+          runtimeSessionId: 'cascade-new-unexpected',
+          lifecycleState: 'active',
+          lastObservedAt: Date.now() - 1000,
+          unexpectedRuntimeSessionSwitch: {
+            detectedAt: Date.now() - 1000,
+            previousSessionId: 'session-old',
+            previousRuntimeSessionId: 'cascade-old-unexpected',
+            currentRuntimeSessionId: 'cascade-new-unexpected',
+            reason: 'missing_previous_runtime_session_id',
+          },
+        },
+      },
+    ]);
+
+    renderPanel('thread-1');
+    await flushFetch();
+
+    expect(container.querySelector('[data-testid="runtime-session-summary"]')).not.toBeNull();
+    expect(container.textContent).toContain('runtime');
+    expect(container.textContent).toContain('antigravity-desktop');
+    expect(container.textContent).toContain('unexpected switch');
+    expect(container.querySelector('button[title*="cascade-new-unexpected"]')).not.toBeNull();
+    expect(container.querySelector('button[title*="cascade-old-unexpected"]')).not.toBeNull();
   });
 
   it('renders ContextHealthBar for active session with health data', async () => {
@@ -208,11 +396,12 @@ describe('F24: SessionChainPanel', () => {
     ]);
     renderPanel('thread-1');
     await flushFetch();
+    expect(container.textContent).toContain('Sealed');
+    expandSealed();
     expect(container.textContent).toContain('Session #1');
     expect(container.textContent).toContain('Session #2');
     expect(container.textContent).toContain('compact');
     expect(container.textContent).toContain('threshold');
-    expect(container.textContent).toContain('Sealed');
     // Both sealed sessions should have clickable ID buttons
     expect(container.querySelector('button[title*="seal_aaa111"]')).not.toBeNull();
     expect(container.querySelector('button[title*="seal_bbb222"]')).not.toBeNull();
@@ -224,7 +413,31 @@ describe('F24: SessionChainPanel', () => {
     ]);
     renderPanel('thread-1');
     await flushFetch();
+    expandSealed();
     expect(container.textContent).toContain('sealing');
+  });
+
+  it('renders kimi colors from cat.color (border inline style)', async () => {
+    // kimi primary #4B5563 → 75,85,99
+    mockSessionsResponse([
+      { id: 'kimi_s1', catId: 'kimi', seq: 0, status: 'active', messageCount: 2, createdAt: Date.now() },
+    ]);
+    renderPanel('thread-1');
+    await flushFetch();
+    const card = container.querySelector(
+      '[data-testid="session-card-active"][data-cat-id="kimi"]',
+    ) as HTMLElement | null;
+    expect(card).not.toBeNull();
+    expect(card!.style.boxShadow).toMatch(/rgba?\(75,\s*85,\s*99/);
+  });
+
+  it('renders cat displayName in the active session badge', async () => {
+    mockSessionsResponse([
+      { id: 's1', catId: 'kimi', seq: 0, status: 'active', messageCount: 2, createdAt: Date.now() },
+    ]);
+    renderPanel('thread-1');
+    await flushFetch();
+    expect(container.textContent).toContain('梵花猫');
   });
 
   it('shows post-compact safety alert when sessionSealed is true', async () => {
@@ -399,21 +612,21 @@ describe('F24: SessionChainPanel', () => {
     renderPanel('thread-1');
     await flushFetch();
     // Should not crash; panel still renders (F33: bind section always present)
-    expect(container.textContent).toContain('0 sessions');
+    expect(container.textContent).toContain('0 total');
     expect(container.textContent).not.toContain('Session #');
   });
 
-  it('renders singular "session" for count of 1', async () => {
+  it('renders active and total counts in header', async () => {
     mockSessionsResponse([
       { id: 's1', catId: 'opus', seq: 0, status: 'active', messageCount: 1, createdAt: Date.now() },
     ]);
     renderPanel('thread-1');
     await flushFetch();
-    expect(container.textContent).toContain('1 session');
-    expect(container.textContent).not.toContain('1 sessions');
+    expect(container.textContent).toContain('1 active');
+    expect(container.textContent).toContain('1 total');
   });
 
-  it('clears stale sessions on thread switch when fetch fails (P2 regression)', async () => {
+  it('keeps stale data visible on thread switch when fetch fails (stale-while-revalidate)', async () => {
     // First thread loads successfully
     mockSessionsResponse([
       { id: 's1', catId: 'opus', seq: 0, status: 'active', messageCount: 5, createdAt: Date.now() },
@@ -422,18 +635,16 @@ describe('F24: SessionChainPanel', () => {
     await flushFetch();
     expect(container.textContent).toContain('Session #1');
 
-    // Switch to thread-2, but fetch fails
+    // Switch to thread-2, but fetch fails — stale data stays visible
     mockApiFetch.mockResolvedValue({ ok: false, status: 500 });
     renderPanel('thread-2');
     await flushFetch();
 
-    // Old thread-1 data must be gone
-    expect(container.textContent).not.toContain('Session #1');
-    // Panel still renders (F33: bind section), but no session cards
-    expect(container.textContent).toContain('0 sessions');
+    // Stale-while-revalidate: old data remains visible on transient error
+    expect(container.textContent).toContain('Session #1');
   });
 
-  it('clears stale sessions on thread switch when fetch throws', async () => {
+  it('keeps stale data visible on thread switch when fetch throws (stale-while-revalidate)', async () => {
     mockSessionsResponse([
       {
         id: 's1',
@@ -447,99 +658,213 @@ describe('F24: SessionChainPanel', () => {
     ]);
     renderPanel('thread-A');
     await flushFetch();
+    expandSealed();
     expect(container.textContent).toContain('Session #1');
 
-    // Switch to thread-B, but fetch throws network error
+    // Switch to thread-B, but fetch throws — stale data stays visible
     mockApiFetch.mockRejectedValue(new Error('network error'));
     renderPanel('thread-B');
     await flushFetch();
 
-    // Old thread-A data must be gone
-    expect(container.textContent).not.toContain('Session #1');
-    // Panel still renders (F33: bind section), but no session cards
-    expect(container.textContent).toContain('0 sessions');
+    // Stale-while-revalidate: old data remains visible on transient error
+    expect(container.textContent).toContain('Session #1');
   });
 
-  it('applies codex green colors to active session border and badge', async () => {
+  it('disables unseal button on stale data during AND after failed refetch (stale barrier)', async () => {
+    // Load sealed session for thread-1
+    mockSessionsResponse([
+      {
+        id: 's1',
+        catId: 'opus',
+        seq: 0,
+        status: 'sealed',
+        messageCount: 5,
+        createdAt: Date.now() - 60000,
+        sealedAt: Date.now(),
+      },
+    ]);
+    renderPanel('thread-1');
+    await flushFetch();
+    expandSealed();
+
+    const findUnsealBtn = () => {
+      const buttons = Array.from(container.querySelectorAll('button'));
+      return buttons.find((b) => b.textContent?.includes('解封')) as HTMLButtonElement | undefined;
+    };
+
+    // Unseal button should be enabled for fresh data
+    expect(findUnsealBtn()!.disabled).toBe(false);
+
+    // Switch to thread-2, fetch fails — stale data from thread-1 stays visible
+    mockApiFetch.mockRejectedValue(new Error('network error'));
+    renderPanel('thread-2');
+    await flushFetch();
+
+    // Unseal button must stay DISABLED even after loading finishes,
+    // because data belongs to thread-1 not thread-2 (entity mismatch)
+    const staleBtn = findUnsealBtn();
+    expect(staleBtn).toBeDefined();
+    expect(staleBtn!.disabled).toBe(true);
+
+    // Also verify stale indicator is shown
+    expect(container.textContent).toContain('Refreshing...');
+  });
+
+  it('replaces stale data when new thread fetch succeeds (stale-while-revalidate)', async () => {
+    // First thread loads
+    mockSessionsResponse([
+      { id: 's1', catId: 'opus', seq: 0, status: 'active', messageCount: 5, createdAt: Date.now() },
+    ]);
+    renderPanel('thread-1');
+    await flushFetch();
+    expect(container.textContent).toContain('Session #1');
+
+    // Switch to thread-2 with different data — old data replaced
+    mockSessionsResponse([
+      { id: 's2', catId: 'codex', seq: 0, status: 'active', messageCount: 3, createdAt: Date.now() },
+    ]);
+    renderPanel('thread-2');
+    await flushFetch();
+
+    // New data visible, old data gone
+    expect(container.textContent).toContain('缅因猫');
+    expect(container.textContent).toContain('1 total');
+  });
+
+  it('reuses per-thread session cache immediately when revisiting a thread during revalidate', async () => {
+    let resolveThread1Revisit!: (value: unknown) => void;
+    const thread1Revisit = new Promise((resolve) => {
+      resolveThread1Revisit = resolve;
+    });
+
+    mockApiFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          sessions: [{ id: 's1', catId: 'opus', seq: 0, status: 'active', messageCount: 5, createdAt: Date.now() }],
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          sessions: [{ id: 's2', catId: 'codex', seq: 5, status: 'active', messageCount: 3, createdAt: Date.now() }],
+        }),
+      })
+      .mockImplementationOnce(() => thread1Revisit);
+
+    renderPanel('thread-1');
+    await flushFetch();
+    expect(container.textContent).toContain('Session #1');
+
+    renderPanel('thread-2');
+    await flushFetch();
+    expect(container.textContent).toContain('Session #6');
+    expect(container.textContent).toContain('缅因猫');
+
+    renderPanel('thread-1');
+    await flushFetch();
+
+    // Cache should win immediately while revalidate is still in flight.
+    expect(container.textContent).toContain('Session #1');
+    expect(container.textContent).not.toContain('Session #6');
+
+    resolveThread1Revisit({
+      ok: true,
+      json: async () => ({
+        sessions: [{ id: 's1b', catId: 'opus', seq: 1, status: 'active', messageCount: 6, createdAt: Date.now() }],
+      }),
+    });
+    await flushFetch();
+
+    expect(container.textContent).toContain('Session #2');
+    expect(container.textContent).not.toContain('Session #6');
+  });
+
+  it('applies codex green colors from cat.color (border + badge inline style)', async () => {
+    // codex primary #5B8C5A → 91,140,90
+    // F056: badge bg/text derived via OKLCH badgeBackground()/contrastingText()
     mockSessionsResponse([
       { id: 's1', catId: 'codex', seq: 0, status: 'active', messageCount: 3, createdAt: Date.now() },
     ]);
     renderPanel('thread-1');
     await flushFetch();
-    // Border should use codex green, not opus purple
-    const card = container.querySelector('.border-codex-primary\\/40');
+    const card = container.querySelector(
+      '[data-testid="session-card-active"][data-cat-id="codex"]',
+    ) as HTMLElement | null;
     expect(card).not.toBeNull();
-    // Badge should use codex colors
-    const badge = container.querySelector('.bg-codex-light.text-codex-dark');
-    expect(badge).not.toBeNull();
-    expect(badge?.textContent).toContain('codex');
-    // Must NOT have opus purple
-    expect(container.querySelector('.border-opus-primary\\/40')).toBeNull();
-    expect(container.querySelector('.bg-opus-light')).toBeNull();
+    expect(card!.style.boxShadow).toMatch(/rgba?\(91,\s*140,\s*90/);
+    const badge = container.querySelector(
+      '[data-testid="session-badge-active"][data-cat-id="codex"]',
+    ) as HTMLElement | null;
+    expect(badge?.textContent).toContain('缅因猫');
+    // F056: badge colors are oklch-derived from primary hex (secondary removed)
+    expect(badge!.style.backgroundColor).toMatch(/oklch\(/);
+    expect(badge!.style.color).toMatch(/oklch\(/);
   });
 
-  it('applies gemini blue colors to active session border and badge', async () => {
+  it('applies gemini colors from cat.color', async () => {
+    // gemini primary #4A90E2 → 74,144,226
     mockSessionsResponse([
       { id: 's1', catId: 'gemini', seq: 0, status: 'active', messageCount: 2, createdAt: Date.now() },
     ]);
     renderPanel('thread-1');
     await flushFetch();
-    const card = container.querySelector('.border-gemini-primary\\/40');
+    const card = container.querySelector(
+      '[data-testid="session-card-active"][data-cat-id="gemini"]',
+    ) as HTMLElement | null;
     expect(card).not.toBeNull();
-    const badge = container.querySelector('.bg-gemini-light.text-gemini-dark');
-    expect(badge).not.toBeNull();
+    expect(card!.style.boxShadow).toMatch(/rgba?\(74,\s*144,\s*226/);
   });
 
-  it('applies dare amber colors to active session border and badge', async () => {
-    mockSessionsResponse([
-      { id: 's1', catId: 'dare', seq: 0, status: 'active', messageCount: 2, createdAt: Date.now() },
-    ]);
-    renderPanel('thread-1');
-    await flushFetch();
-    const card = container.querySelector('.border-dare-primary\\/40');
-    expect(card).not.toBeNull();
-    const badge = container.querySelector('.bg-dare-light.text-dare-dark');
-    expect(badge).not.toBeNull();
-  });
-
-  it('applies maine-coon variant green shades for gpt52', async () => {
+  it('applies gpt52 (maine-coon variant) colors from cat.color', async () => {
+    // gpt52 primary #66BB6A → 102,187,106
     mockSessionsResponse([
       { id: 's1', catId: 'gpt52', seq: 0, status: 'active', messageCount: 2, createdAt: Date.now() },
     ]);
     renderPanel('thread-1');
     await flushFetch();
-    expect(container.innerHTML).toContain('border-[#66BB6A66]');
-    expect(container.innerHTML).toContain('bg-[#C8E6C9]');
-    expect(container.innerHTML).toContain('text-[#2E7D32]');
-    expect(container.querySelector('.bg-gray-200.text-gray-600')).toBeNull();
+    const card = container.querySelector(
+      '[data-testid="session-card-active"][data-cat-id="gpt52"]',
+    ) as HTMLElement | null;
+    expect(card).not.toBeNull();
+    expect(card!.style.boxShadow).toMatch(/rgba?\(102,\s*187,\s*106/);
   });
 
-  it('applies ragdoll variant purple shades for opus-45 and sonnet', async () => {
+  it('applies opus-45 and sonnet (ragdoll variant) distinct colors from cat.color', async () => {
+    // opus-45 primary #7E57C2 → 126,87,194; sonnet primary #B39DDB → 179,157,219
     mockSessionsResponse([
       { id: 's1', catId: 'opus-45', seq: 0, status: 'active', messageCount: 2, createdAt: Date.now() },
       { id: 's2', catId: 'sonnet', seq: 1, status: 'active', messageCount: 2, createdAt: Date.now() },
     ]);
     renderPanel('thread-1');
     await flushFetch();
-    expect(container.innerHTML).toContain('border-[#7E57C266]');
-    expect(container.innerHTML).toContain('bg-[#E1D5F0]');
-    expect(container.innerHTML).toContain('text-[#5E35B1]');
-    expect(container.innerHTML).toContain('border-[#B39DDB66]');
-    expect(container.innerHTML).toContain('bg-[#EDE7F6]');
-    expect(container.innerHTML).toContain('text-[#6A1B9A]');
+    const opus45 = container.querySelector(
+      '[data-testid="session-card-active"][data-cat-id="opus-45"]',
+    ) as HTMLElement | null;
+    const sonnet = container.querySelector(
+      '[data-testid="session-card-active"][data-cat-id="sonnet"]',
+    ) as HTMLElement | null;
+    expect(opus45).not.toBeNull();
+    expect(sonnet).not.toBeNull();
+    expect(opus45!.style.boxShadow).toMatch(/rgba?\(126,\s*87,\s*194/);
+    expect(sonnet!.style.boxShadow).toMatch(/rgba?\(179,\s*157,\s*219/);
   });
 
-  it('applies gray fallback colors for unknown catId', async () => {
+  it('falls back to neutral gray when cat is missing from cat-config (badge background)', async () => {
+    // Fallback: primary #9CA3AF. F056: badge bg/text derived via OKLCH.
     mockSessionsResponse([
       { id: 's1', catId: 'unknown-cat', seq: 0, status: 'active', messageCount: 1, createdAt: Date.now() },
     ]);
     renderPanel('thread-1');
     await flushFetch();
-    const card = container.querySelector('.border-gray-300\\/40');
-    expect(card).not.toBeNull();
-    const badge = container.querySelector('.bg-gray-200.text-gray-600');
+    const badge = container.querySelector(
+      '[data-testid="session-badge-active"][data-cat-id="unknown-cat"]',
+    ) as HTMLElement | null;
     expect(badge).not.toBeNull();
-    expect(badge?.textContent).toContain('unknown-cat');
+    expect(badge!.textContent).toContain('unknown-cat');
+    // F056: badge colors are oklch-derived from fallback #9CA3AF (secondary removed)
+    expect(badge!.style.backgroundColor).toMatch(/oklch\(/);
+    expect(badge!.style.color).toMatch(/oklch\(/);
   });
 
   it('discards stale response when slow thread-1 fetch resolves after thread-2 (P1 race condition)', async () => {
@@ -594,6 +919,109 @@ describe('F24: SessionChainPanel', () => {
     expect(container.textContent).not.toContain('Session #1');
   });
 
+  describe('cat color rendering — driven by cat-config.json (no hardcoded table)', () => {
+    // Helper: extract numeric RGB triple from any inline color value.
+    function rgbTripleOf(value: string): [number, number, number] | null {
+      // Accepts "rgb(r, g, b)", "rgba(r, g, b, a)" — jsdom always serialises as rgb/rgba.
+      const m = value.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+      return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : null;
+    }
+
+    it('opus-47 active session uses cat.color.primary (#7B1FA2 → 123,31,162) for border, not gray fallback', async () => {
+      // opus-47 was missing from the legacy hardcoded CAT_SESSION_COLORS table,
+      // so before the fix it fell through to the gray DEFAULT_SESSION_COLORS.
+      mockSessionsResponse([
+        { id: 's_47', catId: 'opus-47', seq: 0, status: 'active', messageCount: 1, createdAt: Date.now() },
+      ]);
+      renderPanel('thread-1');
+      await flushFetch();
+      const card = container.querySelector(
+        '[data-testid="session-card-active"][data-cat-id="opus-47"]',
+      ) as HTMLElement | null;
+      expect(card).not.toBeNull();
+      const triple = rgbTripleOf(card!.style.boxShadow);
+      expect(triple).toEqual([123, 31, 162]);
+    });
+
+    it('opus-47 active session badge uses oklch-derived colors from cat.color.primary', async () => {
+      // F056: secondary removed — badge bg/text derived via OKLCH from primary
+      mockSessionsResponse([
+        { id: 's_47', catId: 'opus-47', seq: 0, status: 'active', messageCount: 1, createdAt: Date.now() },
+      ]);
+      renderPanel('thread-1');
+      await flushFetch();
+      const badge = container.querySelector(
+        '[data-testid="session-badge-active"][data-cat-id="opus-47"]',
+      ) as HTMLElement | null;
+      expect(badge).not.toBeNull();
+      // F056: badge colors are oklch-derived from primary #7B1FA2 (secondary removed)
+      expect(badge!.style.backgroundColor).toMatch(/oklch\(/);
+      expect(badge!.style.color).toMatch(/oklch\(/);
+    });
+
+    it('sealed session for opus-47 also uses cat.color (parity with active card)', async () => {
+      mockSessionsResponse([
+        {
+          id: 'seal_47',
+          catId: 'opus-47',
+          seq: 0,
+          status: 'sealed',
+          messageCount: 5,
+          createdAt: Date.now() - 60000,
+          sealedAt: Date.now(),
+        },
+      ]);
+      renderPanel('thread-1');
+      await flushFetch();
+      expandSealed();
+      const card = container.querySelector(
+        '[data-testid="session-card-sealed"][data-cat-id="opus-47"]',
+      ) as HTMLElement | null;
+      expect(card).not.toBeNull();
+      expect(rgbTripleOf(card!.style.boxShadow)).toEqual([123, 31, 162]);
+    });
+
+    it('falls back to neutral gray (#9CA3AF → 156,163,175) for unknown catId', async () => {
+      mockSessionsResponse([
+        { id: 's_x', catId: 'unknown-cat', seq: 0, status: 'active', messageCount: 1, createdAt: Date.now() },
+      ]);
+      renderPanel('thread-1');
+      await flushFetch();
+      const card = container.querySelector(
+        '[data-testid="session-card-active"][data-cat-id="unknown-cat"]',
+      ) as HTMLElement | null;
+      expect(card).not.toBeNull();
+      expect(rgbTripleOf(card!.style.boxShadow)).toEqual([156, 163, 175]);
+    });
+
+    it('does not emit any of the legacy hardcoded color tokens', async () => {
+      mockSessionsResponse([
+        { id: 's1', catId: 'codex', seq: 0, status: 'active', messageCount: 1, createdAt: Date.now() },
+        { id: 's2', catId: 'gemini', seq: 1, status: 'active', messageCount: 1, createdAt: Date.now() },
+        { id: 's3', catId: 'opus-45', seq: 2, status: 'active', messageCount: 1, createdAt: Date.now() },
+        { id: 's4', catId: 'gpt52', seq: 3, status: 'active', messageCount: 1, createdAt: Date.now() },
+      ]);
+      renderPanel('thread-1');
+      await flushFetch();
+      const html = container.innerHTML;
+      // Legacy semantic tokens
+      expect(html).not.toContain('border-codex-primary');
+      expect(html).not.toContain('bg-codex-light');
+      expect(html).not.toContain('text-codex-dark');
+      expect(html).not.toContain('border-gemini-primary');
+      expect(html).not.toContain('border-opus-45-primary');
+      expect(html).not.toContain('border-kimi-primary');
+      expect(html).not.toContain('border-opus-primary');
+      // Legacy arbitrary hex tokens for gpt52 / opus-45 / sonnet
+      expect(html).not.toContain('border-[#66BB6A66]');
+      expect(html).not.toContain('border-[#7E57C266]');
+      expect(html).not.toContain('border-[#B39DDB66]');
+      // Legacy gray fallback class
+      expect(html).not.toContain('border-cafe/40');
+      expect(html).not.toContain('bg-cafe-surface-elevated');
+    });
+  });
+
   describe('F33: bind new external session', () => {
     it('hides bind UI for default thread (system-owned, bind returns 403)', async () => {
       mockSessionsResponse([
@@ -639,13 +1067,14 @@ describe('F24: SessionChainPanel', () => {
         bindBtn?.click();
       });
 
-      // Should show codex (no active session) but not opus (has active session)
+      // Should show codex (no active session) but not opus (has active session).
+      // Asserting on option value (catId) instead of displayName so that other
+      // ragdoll-family variants (sonnet/opus-45/opus-47) don't accidentally match.
       const select = container.querySelector('select');
       expect(select).not.toBeNull();
-      const options = Array.from(select!.querySelectorAll('option'));
-      const optionTexts = options.map((o) => o.textContent);
-      expect(optionTexts.some((t) => t?.includes('缅因猫'))).toBe(true);
-      expect(optionTexts.some((t) => t?.includes('布偶猫'))).toBe(false);
+      const optionValues = Array.from(select!.querySelectorAll('option')).map((o) => (o as HTMLOptionElement).value);
+      expect(optionValues).toContain('codex');
+      expect(optionValues).not.toContain('opus');
     });
   });
 
@@ -771,6 +1200,115 @@ describe('F24: SessionChainPanel', () => {
       await flushFetch();
 
       expect(container.textContent).toContain('err');
+    });
+  });
+
+  describe('collapse toggle', () => {
+    it('active Session Chain: click header hides active cards, click again restores', async () => {
+      mockSessionsResponse([
+        { id: 's1', catId: 'opus', seq: 0, status: 'active', messageCount: 5, createdAt: Date.now() },
+      ]);
+      renderPanel('thread-1');
+      await flushFetch();
+
+      // Default: expanded — active card visible
+      expect(container.querySelector('[data-testid="session-card-active"]')).not.toBeNull();
+      expect(container.textContent).toContain('Session #1');
+      // Header shows counts
+      expect(container.textContent).toContain('1 active');
+
+      // Click Session Chain header to collapse
+      const chainHeader = Array.from(container.querySelectorAll('button')).find((b) =>
+        b.textContent?.includes('Session Chain'),
+      );
+      expect(chainHeader).toBeTruthy();
+      act(() => {
+        chainHeader?.click();
+      });
+
+      // Collapsed: active card hidden, but header/count still visible
+      expect(container.querySelector('[data-testid="session-card-active"]')).toBeNull();
+      expect(container.textContent).toContain('1 active');
+      expect(container.textContent).toContain('Session Chain');
+
+      // Click again to expand
+      act(() => {
+        chainHeader?.click();
+      });
+
+      // Restored: active card visible again
+      expect(container.querySelector('[data-testid="session-card-active"]')).not.toBeNull();
+      expect(container.textContent).toContain('Session #1');
+    });
+
+    it('Sealed section: default collapsed, click expands, click collapses', async () => {
+      mockSessionsResponse([
+        {
+          id: 'seal1',
+          catId: 'opus',
+          seq: 0,
+          status: 'sealed',
+          messageCount: 10,
+          createdAt: Date.now() - 60000,
+          sealedAt: Date.now(),
+          sealReason: 'compact',
+        },
+      ]);
+      renderPanel('thread-1');
+      await flushFetch();
+
+      // Default: collapsed — sealed card hidden, but toggle visible
+      expect(container.querySelector('[data-testid="session-card-sealed"]')).toBeNull();
+      expect(container.textContent).toContain('Sealed');
+
+      // Click to expand
+      expandSealed();
+
+      // Expanded: sealed card visible
+      expect(container.querySelector('[data-testid="session-card-sealed"]')).not.toBeNull();
+      expect(container.textContent).toContain('Session #1');
+      expect(container.textContent).toContain('compact');
+
+      // Click to collapse again
+      expandSealed(); // toggles back
+
+      // Collapsed again
+      expect(container.querySelector('[data-testid="session-card-sealed"]')).toBeNull();
+    });
+  });
+
+  describe('F252: Story Player entry point', () => {
+    it('does NOT render standalone replay link for sealed sessions (AC-E1 sunset)', async () => {
+      mockSessionsResponse([
+        {
+          id: 'ses_sealed_replay',
+          catId: 'opus',
+          seq: 0,
+          status: 'sealed',
+          messageCount: 10,
+          createdAt: Date.now() - 60000,
+          sealedAt: Date.now() - 30000,
+        },
+      ]);
+      renderPanel('thread-1');
+      await flushFetch();
+      expandSealed();
+
+      // AC-E1: standalone session replay route is sunset — canonical entry
+      // is Theater Overlay via ThreadItem, not a per-session link here
+      const replayLink = container.querySelector('a[href="/story/session:ses_sealed_replay"]');
+      expect(replayLink).toBeNull();
+    });
+
+    it('does NOT render replay link for active sessions', async () => {
+      mockSessionsResponse([
+        { id: 'ses_active_no_replay', catId: 'opus', seq: 0, status: 'active', messageCount: 5, createdAt: Date.now() },
+      ]);
+      renderPanel('thread-1');
+      await flushFetch();
+
+      const replayLink = container.querySelector('a[href*="/story/session:"]');
+      expect(replayLink).toBeNull();
     });
   });
 });

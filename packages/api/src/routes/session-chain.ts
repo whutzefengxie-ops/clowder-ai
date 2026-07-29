@@ -12,12 +12,15 @@ import { type CatId, catRegistry } from '@cat-cafe/shared';
 import type { FastifyInstance, FastifyPluginOptions } from 'fastify';
 import { z } from 'zod';
 import { AuditEventTypes, getEventAuditLog } from '../domains/cats/services/orchestration/EventAuditLog.js';
+import type { RuntimeSessionMetadata } from '../domains/cats/services/runtime-session/RuntimeSessionMetadata.js';
+import type { IRuntimeSessionStore } from '../domains/cats/services/runtime-session/RuntimeSessionStore.js';
 import { backfillBoundSessionHistory } from '../domains/cats/services/session/BoundSessionHistoryImporter.js';
 import type { ISessionSealer } from '../domains/cats/services/session/SessionSealer.js';
 import type { TranscriptReader } from '../domains/cats/services/session/TranscriptReader.js';
 import type { IMessageStore } from '../domains/cats/services/stores/ports/MessageStore.js';
 import type { ISessionChainStore } from '../domains/cats/services/stores/ports/SessionChainStore.js';
 import type { IThreadStore } from '../domains/cats/services/stores/ports/ThreadStore.js';
+import { canAccessThread, isSharedDefaultThread } from '../domains/guides/guide-state-access.js';
 import { resolveUserId } from '../utils/request-identity.js';
 
 const bindSessionSchema = z.object({
@@ -30,24 +33,87 @@ interface SessionChainRouteOptions extends FastifyPluginOptions {
   messageStore?: IMessageStore;
   transcriptReader?: TranscriptReader;
   sessionSealer?: ISessionSealer;
+  runtimeSessionStore?: IRuntimeSessionStore;
+}
+
+interface RuntimeSessionSummary {
+  runtime: RuntimeSessionMetadata['runtime'];
+  runtimeSessionId: string;
+  runtimeConversationId?: string;
+  lifecycleState: RuntimeSessionMetadata['lifecycle']['state'];
+  lastObservedAt: number;
+  retryFragment?: RuntimeSessionMetadata['lifecycle']['retryFragment'];
+  unexpectedRuntimeSessionSwitch?: RuntimeSessionMetadata['lifecycle']['unexpectedRuntimeSessionSwitch'];
+}
+
+function canAccessSessionRecord(
+  thread: {
+    id: string;
+    createdBy: string;
+    externalRuntimeAnchorState?: { userId: string } | undefined;
+  } | null,
+  session: { userId: string } | null,
+  userId: string,
+): boolean {
+  if (!thread || !session) return false;
+  if (thread.createdBy === userId) return true;
+  if (thread.externalRuntimeAnchorState?.userId === userId && session.userId === userId) return true;
+  return isSharedDefaultThread(thread) && session.userId === userId;
+}
+
+function formatRuntimeSessionSummary(metadata: RuntimeSessionMetadata): RuntimeSessionSummary {
+  return {
+    runtime: metadata.runtime,
+    runtimeSessionId: metadata.runtimeSessionId,
+    ...('runtimeConversationId' in metadata && metadata.runtimeConversationId
+      ? { runtimeConversationId: metadata.runtimeConversationId }
+      : {}),
+    lifecycleState: metadata.lifecycle.state,
+    lastObservedAt: metadata.lifecycle.lastObservedAt,
+    ...(metadata.lifecycle.retryFragment ? { retryFragment: metadata.lifecycle.retryFragment } : {}),
+    ...(metadata.lifecycle.unexpectedRuntimeSessionSwitch
+      ? { unexpectedRuntimeSessionSwitch: metadata.lifecycle.unexpectedRuntimeSessionSwitch }
+      : {}),
+  };
+}
+
+async function attachRuntimeSessionSummary<T extends { id: string }>(
+  session: T,
+  runtimeSessionStore?: IRuntimeSessionStore,
+): Promise<T & { runtimeSession?: RuntimeSessionSummary }> {
+  if (!runtimeSessionStore) return session;
+  const metadata = await runtimeSessionStore.getBySessionId(session.id);
+  if (!metadata) return session;
+  return {
+    ...session,
+    runtimeSession: formatRuntimeSessionSummary(metadata),
+  };
+}
+
+async function attachRuntimeSessionSummaries<T extends { id: string }>(
+  sessions: T[],
+  runtimeSessionStore?: IRuntimeSessionStore,
+): Promise<Array<T & { runtimeSession?: RuntimeSessionSummary }>> {
+  if (!runtimeSessionStore) return sessions;
+  return Promise.all(sessions.map((session) => attachRuntimeSessionSummary(session, runtimeSessionStore)));
 }
 
 export async function sessionChainRoutes(app: FastifyInstance, opts: SessionChainRouteOptions): Promise<void> {
-  const { sessionChainStore, threadStore, messageStore, transcriptReader, sessionSealer } = opts;
+  const { sessionChainStore, threadStore, messageStore, transcriptReader, sessionSealer, runtimeSessionStore } = opts;
 
   app.get<{
     Params: { threadId: string };
     Querystring: { catId?: string };
   }>('/api/threads/:threadId/sessions', async (request, reply) => {
-    const userId = resolveUserId(request);
+    const userId = resolveUserId(request, { defaultUserId: 'default-user' });
     if (!userId) {
       reply.status(401);
-      return { error: 'Identity required (X-Cat-Cafe-User header or userId query)' };
+      return { error: 'Identity required (session cookie or X-Cat-Cafe-User header)' };
     }
 
     const { threadId } = request.params;
     const thread = await threadStore.get(threadId);
-    if (!thread || thread.createdBy !== userId) {
+    if (!canAccessThread(thread, userId)) {
       reply.status(403);
       return { error: 'Access denied' };
     }
@@ -65,21 +131,27 @@ export async function sessionChainRoutes(app: FastifyInstance, opts: SessionChai
         return { error: `Cannot query sessions for cat '${catId}' — you are '${callerCatId}'` };
       }
       const sessions = await sessionChainStore.getChain(effectiveCatId as CatId, threadId);
-      return reply.send({ sessions });
+      const visibleSessions = isSharedDefaultThread(thread)
+        ? sessions.filter((session) => session.userId === userId)
+        : sessions;
+      return reply.send({ sessions: await attachRuntimeSessionSummaries(visibleSessions, runtimeSessionStore) });
     }
 
-    // No catId filter at all (hub UI god-view) — return all sessions for the thread
+    // No catId filter at all (hub UI god-view) — default thread stays user-scoped.
     const sessions = await sessionChainStore.getChainByThread(threadId);
-    return reply.send({ sessions });
+    const visibleSessions = isSharedDefaultThread(thread)
+      ? sessions.filter((session) => session.userId === userId)
+      : sessions;
+    return reply.send({ sessions: await attachRuntimeSessionSummaries(visibleSessions, runtimeSessionStore) });
   });
 
   app.get<{
     Params: { sessionId: string };
   }>('/api/sessions/:sessionId', async (request, reply) => {
-    const userId = resolveUserId(request);
+    const userId = resolveUserId(request, { defaultUserId: 'default-user' });
     if (!userId) {
       reply.status(401);
-      return { error: 'Identity required (X-Cat-Cafe-User header or userId query)' };
+      return { error: 'Identity required (session cookie or X-Cat-Cafe-User header)' };
     }
 
     const { sessionId } = request.params;
@@ -94,12 +166,12 @@ export async function sessionChainRoutes(app: FastifyInstance, opts: SessionChai
       reply.status(404);
       return { error: 'Thread not found' };
     }
-    if (thread.createdBy !== userId) {
+    if (!canAccessSessionRecord(thread, session, userId)) {
       reply.status(403);
       return { error: 'Access denied' };
     }
 
-    return reply.send(session);
+    return reply.send(await attachRuntimeSessionSummary(session, runtimeSessionStore));
   });
 
   // POST /api/sessions/:sessionId/unseal — Manual fallback (#F062)
@@ -108,10 +180,10 @@ export async function sessionChainRoutes(app: FastifyInstance, opts: SessionChai
   app.post<{
     Params: { sessionId: string };
   }>('/api/sessions/:sessionId/unseal', async (request, reply) => {
-    const userId = resolveUserId(request);
+    const userId = resolveUserId(request, { defaultUserId: 'default-user' });
     if (!userId) {
       reply.status(401);
-      return { error: 'Identity required (X-Cat-Cafe-User header or userId query)' };
+      return { error: 'Identity required (session cookie or X-Cat-Cafe-User header)' };
     }
 
     const { sessionId } = request.params;
@@ -125,7 +197,7 @@ export async function sessionChainRoutes(app: FastifyInstance, opts: SessionChai
       reply.status(404);
       return { error: 'Thread not found' };
     }
-    if (thread.createdBy !== userId) {
+    if (!canAccessSessionRecord(thread, session, userId)) {
       reply.status(403);
       return { error: 'Access denied' };
     }
@@ -212,15 +284,15 @@ export async function sessionChainRoutes(app: FastifyInstance, opts: SessionChai
   });
 
   // PATCH /api/threads/:threadId/sessions/:catId/bind — Manual bind (#72)
-  // Allows 铲屎官 to bind a known-good CLI session ID to a cat's thread session.
+  // Allows co-creator to bind a known-good CLI session ID to a cat's thread session.
   // If active session exists → update cliSessionId; otherwise → create new session.
   app.patch<{
     Params: { threadId: string; catId: string };
   }>('/api/threads/:threadId/sessions/:catId/bind', async (request, reply) => {
-    const userId = resolveUserId(request);
+    const userId = resolveUserId(request, { defaultUserId: 'default-user' });
     if (!userId) {
       reply.status(401);
-      return { error: 'Identity required (X-Cat-Cafe-User header or userId query)' };
+      return { error: 'Identity required (session cookie or X-Cat-Cafe-User header)' };
     }
 
     const { threadId, catId } = request.params;
@@ -246,13 +318,17 @@ export async function sessionChainRoutes(app: FastifyInstance, opts: SessionChai
       reply.status(404);
       return { error: 'Thread not found' };
     }
-    if (thread.createdBy !== userId) {
+    if (!canAccessThread(thread, userId)) {
       reply.status(403);
       return { error: 'Access denied' };
     }
 
     // Check for active session
     const active = await sessionChainStore.getActive(catId as CatId, threadId);
+    if (active && !canAccessSessionRecord(thread, active, userId)) {
+      reply.status(403);
+      return { error: 'Access denied' };
+    }
 
     let session;
     let mode: 'updated' | 'created';

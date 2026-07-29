@@ -21,6 +21,8 @@ const useCatDataSpy = vi.fn(() => ({
 
 vi.mock('@/hooks/useCatData', () => ({
   useCatData: useCatDataSpy,
+  formatCatName: (cat: { displayName: string; variantLabel?: string }) =>
+    cat.variantLabel ? `${cat.displayName}（${cat.variantLabel}）` : cat.displayName,
 }));
 
 // ── Stub TTS hook (ChatMessage uses it) ──
@@ -73,7 +75,7 @@ describe('ChatMessage getCatById prop injection (R24 P2-1)', () => {
       displayName: '布偶猫',
       color: { primary: '#9B7EBD', secondary: '#E8DFF5' },
       breedId: 'ragdoll',
-      provider: 'anthropic',
+      clientId: 'anthropic',
       defaultModel: 'claude-sonnet-4-5-20250929',
       avatar: '/avatars/opus.png',
       mentionPatterns: [],

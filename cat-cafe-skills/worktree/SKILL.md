@@ -3,7 +3,7 @@ name: worktree
 description: >
   创建 Git worktree 隔离开发环境，含 Redis 6398 安全配置。
   Use when: 开始任何代码修改、新功能开发、bug fix。
-  Not for: 纯文档修改（≤5 行）、不涉及代码的讨论。
+  Not for: 纯文档修改（≤5 行）、不涉及代码/脚本/API/第一方执行面的讨论。
   Output: 隔离的 worktree + 正确的 Redis/环境配置。
 triggers:
   - "开始开发"
@@ -14,7 +14,7 @@ renamed-from: using-git-worktrees
 
 # Worktree
 
-开始任何非 trivial 的功能开发前，必须拉 worktree 隔离，不要直接在 main 上改代码。
+开始任何非 trivial 的功能开发前，必须拉 worktree 隔离，不要直接在 main 上改代码。Skill / MCP description 如果改到 API route、localhost、script、CLI command、第一方执行面，即使是 ≤5 行，也不按“纯文档免验证”处理：至少 commit 前跑 `pnpm check`；非 trivial 行为改动仍应开 worktree。
 
 ## 开工前 Recall（F102 记忆系统）🔴
 
@@ -74,8 +74,8 @@ echo "ahead=$AHEAD behind=$BEHIND"
 git worktree add ../cat-cafe-{feature-name} -b feat/{feature-name}
 cd ../cat-cafe-{feature-name}
 
-# 2. 安装依赖
-pnpm install
+# 2. 安装依赖（必须清除 NODE_ENV，否则跳过 devDeps 导致 build 失败！）
+env -u NODE_ENV pnpm install
 
 # 3. 创建 .env（Redis 隔离，必须！）
 cat > .env <<EOF
@@ -94,11 +94,65 @@ pnpm test
 
 | Redis | 端口 | 用途 |
 |-------|------|------|
-| **用户 Redis** | **6399** | 铲屎官的数据，🔴 圣域，只读 |
+| **用户 Redis** | **6399** | operator的数据，🔴 圣域，只读 |
 | **开发 Redis** | **6398** | 猫猫开发测试，随便折腾 |
 
 **Worktree 中启动服务 = 必须用 6398。**
-不设置 REDIS_URL 就启动服务 = 回落到 6399 = 数据丢失风险。
+不设置 REDIS_URL 就启动服务 = 回落到 6399 = 数据丢失风险（LL-015）。
+
+## 多 Worktree 并发：WORKTREE_PORT_OFFSET
+
+F182 大赛 / 多猫并发开发时，6 个 worktree 同时跑各自服务不打架。
+
+**OFFSET 必须 ≤ 0**（向下减避 production Redis (sacred)），范围 [-100, 0]，10 倍数。`offset=0` 留给 alpha 默认。
+
+| OFFSET | Redis | API | Web | NEXT_PUBLIC_API_URL |
+|---|---|---|---|---|
+| 0（alpha 默认） | 6398 | 3102 | 5102 | http://localhost:3102 |
+| -10 | 6388 | 3112 | 5112 | http://localhost:3112 |
+| -20 | 6378 | 3122 | 5122 | http://localhost:3122 |
+| ... | ... | ... | ... | ... |
+| -60 | 6338 | 3162 | 5162 | http://localhost:3162 |
+
+派生公式：`非 Redis = base - OFFSET`（OFFSET 是负数 → 端口向上加），`Redis = 6398 + OFFSET`（向下减）。
+
+### 启用方式
+
+```bash
+# 1. .env 设置 OFFSET + 禁用 sidecar（多猫并发 worktree 默认）
+cat > .env <<EOF
+WORKTREE_PORT_OFFSET=-10
+PREVIEW_GATEWAY_PORT=0
+ANTHROPIC_PROXY_ENABLED=0
+ASR_ENABLED=0
+TTS_ENABLED=0
+LLM_POSTPROCESS_ENABLED=0
+EMBED_ENABLED=0
+EMBED_MODE=off
+EOF
+
+# 2. 启动用 pnpm dev:direct 或 bash scripts/start-dev.sh
+#    ⚠️ 不要用 `pnpm dev`！它走 pnpm -r --parallel run dev，绕过 OFFSET preflight
+pnpm dev:direct
+```
+
+### 优先级（重要）
+
+OFFSET 非 0 时，**派生值优先级高于 `.env` 和 `CAT_CAFE_RESPECT_DOTENV_PORTS`**。即使 `.env` 里硬写了 `REDIS_URL=...:6398` 也会被派生值覆盖。这是 LL-015 防回归——避免"端口数字看起来对了但 ioredis 实际连了 6399"的事故。
+
+### 诊断
+
+```bash
+pnpm check:worktree-port-offset   # 验证全部 7 个大赛 OFFSET 派生 + 端口无冲突
+```
+
+诊断脚本是 CI 用，**不是唯一 gate**——唯一 gate 是 `start-dev.sh` 内置 preflight（启动时主动派生端口、强制 export sidecar=0、unset Redis dir 让重派生；OFFSET 派生失败 / production data boundary 6399 拒绝启动）。
+
+### Sidecar 处理
+
+多 worktree 并发默认**全禁用** sidecar（Preview Gateway / Anthropic Proxy / Whisper / TTS / LLM Postprocess / Embedding）。OFFSET 模式下 preflight 会**主动 export 0** 这些 sidecar 标志（不依赖用户 .env），即便用户配置了 `EMBED_MODE=on` 或 profile=dev 想拉起 proxy 也会被覆盖——无需用户手动禁用。启用 sidecar 但又不 offset 化 → 端口冲突。
+
+详细设计见 *(internal reference removed)*。
 
 ## 合入后清理
 
@@ -115,6 +169,28 @@ git worktree prune
 git worktree list             # 列出所有 worktree
 git branch --merged main      # 哪些分支已合入
 ```
+
+## Commit / Stash 溯源 Footer（F193 Phase E）
+
+当当前 worktree 的改动来自跨 thread 投递、跨 feature 调查、或你预期后续猫需要反查来源 thread 时，在 commit body 或 stash message 末尾加：
+
+```text
+Thread-Context: threadId=<threadId> invocationId=<invocationId> catId=<catId>
+```
+
+示例：
+
+```text
+Why: Add read-side affordance so search/list_recent results show where to cross-post.
+
+[Maine Coon/GPT-5.5🐾]
+Thread-Context: threadId=[thread-id] invocationId=0001780508313338 catId=codex
+```
+
+规则：
+- 只在有明确 thread context 时写；拿不到 `invocationId` 就省略该键，不要猜。
+- 不通过 hook 自动改写或拒绝提交；这是降摩擦溯源字段，不是新门禁。
+- stash 只写 tracked 临时现场；多 session 工作目录里仍禁止 `git stash -u`，避免清掉别人未跟踪产物。
 
 ## Codex `apply_patch` 陷阱（开发猫必读）
 

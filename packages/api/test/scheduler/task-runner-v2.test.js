@@ -365,3 +365,905 @@ describe('TaskRunnerV2', () => {
     runnerWithResolver.stop();
   });
 });
+
+describe('TaskRunnerV2 — dynamic task first-tick deferral', () => {
+  let db, ledger;
+  const noop = () => {};
+  const silentLogger = { info: noop, error: noop };
+
+  beforeEach(async () => {
+    db = new Database(':memory:');
+    const { applyMigrations } = await import('../../dist/domains/memory/schema.js');
+    const { RunLedger } = await import('../../dist/infrastructure/scheduler/RunLedger.js');
+    applyMigrations(db);
+    ledger = new RunLedger(db);
+  });
+
+  it('registerDynamic while runner started does NOT fire immediately (interval task)', async () => {
+    const { TaskRunnerV2 } = await import('../../dist/infrastructure/scheduler/TaskRunnerV2.js');
+    const runner = new TaskRunnerV2({ logger: silentLogger, ledger });
+    let executeCount = 0;
+
+    // Start the runner first (no tasks yet)
+    runner.start();
+
+    // Now register a dynamic task with a long interval
+    runner.registerDynamic(
+      {
+        id: 'deferred-test',
+        profile: 'awareness',
+        trigger: { type: 'interval', ms: 60_000 },
+        admission: {
+          gate: async () => ({ run: true, workItems: [{ signal: 'go', subjectKey: 'k' }] }),
+        },
+        run: {
+          overlap: 'skip',
+          timeoutMs: 5000,
+          execute: async () => {
+            executeCount++;
+          },
+        },
+        state: { runLedger: 'sqlite' },
+        outcome: { whenNoSignal: 'drop' },
+        enabled: () => true,
+      },
+      'dyn-def-1',
+    );
+
+    // Wait enough for setTimeout(0) to fire if it were scheduled
+    await new Promise((r) => setTimeout(r, 50));
+
+    assert.equal(executeCount, 0, 'dynamic task should NOT fire immediately upon registration');
+    runner.stop();
+  });
+
+  it('start() still fires built-in tasks immediately (backwards compat)', async () => {
+    const { TaskRunnerV2 } = await import('../../dist/infrastructure/scheduler/TaskRunnerV2.js');
+    const runner = new TaskRunnerV2({ logger: silentLogger, ledger });
+    let executeCount = 0;
+
+    // Register task BEFORE start (simulates boot-time built-in registration)
+    runner.register({
+      id: 'builtin-test',
+      profile: 'poller',
+      trigger: { type: 'interval', ms: 60_000 },
+      admission: {
+        gate: async () => ({ run: true, workItems: [{ signal: 'go', subjectKey: 'k' }] }),
+      },
+      run: {
+        overlap: 'skip',
+        timeoutMs: 5000,
+        execute: async () => {
+          executeCount++;
+        },
+      },
+      state: { runLedger: 'sqlite' },
+      outcome: { whenNoSignal: 'drop' },
+      enabled: () => true,
+    });
+
+    runner.start();
+
+    // Wait for setTimeout(0) to fire
+    await new Promise((r) => setTimeout(r, 50));
+
+    assert.equal(executeCount, 1, 'built-in task should fire immediately on start()');
+    runner.stop();
+  });
+});
+
+describe('TaskRunnerV2 — self-echo suppression (AC-D2)', () => {
+  let db, ledger, emissionStore;
+  const noop = () => {};
+  const silentLogger = { info: noop, error: noop };
+
+  beforeEach(async () => {
+    db = new Database(':memory:');
+    const { applyMigrations } = await import('../../dist/domains/memory/schema.js');
+    const { RunLedger } = await import('../../dist/infrastructure/scheduler/RunLedger.js');
+    const { EmissionStore } = await import('../../dist/infrastructure/scheduler/EmissionStore.js');
+    applyMigrations(db);
+    ledger = new RunLedger(db);
+    emissionStore = new EmissionStore(db);
+  });
+
+  it('active emission on thread → workItem skipped with SKIP_SELF_ECHO', async () => {
+    const { TaskRunnerV2 } = await import('../../dist/infrastructure/scheduler/TaskRunnerV2.js');
+    const runner = new TaskRunnerV2({ logger: silentLogger, ledger, emissionStore });
+    const executed = [];
+    runner.register({
+      id: 'echo-test',
+      profile: 'poller',
+      trigger: { type: 'interval', ms: 999999 },
+      admission: {
+        gate: async () => ({
+          run: true,
+          workItems: [
+            { signal: 'go', subjectKey: 'thread-abc123' },
+            { signal: 'go', subjectKey: 'thread-def456' },
+          ],
+        }),
+      },
+      run: {
+        overlap: 'skip',
+        timeoutMs: 5000,
+        execute: async (_signal, key) => {
+          executed.push(key);
+        },
+      },
+      state: { runLedger: 'sqlite' },
+      outcome: { whenNoSignal: 'drop' },
+      enabled: () => true,
+    });
+
+    // Record emission: echo-test posted to thread-abc123 recently
+    emissionStore.record({
+      originTaskId: 'echo-test',
+      threadId: 'abc123',
+      messageId: 'msg-1',
+      suppressionMs: 60_000,
+    });
+
+    await runner.triggerNow('echo-test');
+
+    // thread-abc123 should be skipped, thread-def456 should execute
+    assert.deepEqual(executed, ['thread-def456']);
+    const rows = ledger.query('echo-test', 10);
+    const echoSkip = rows.find((r) => r.outcome === 'SKIP_SELF_ECHO');
+    assert.ok(echoSkip, 'should have SKIP_SELF_ECHO record');
+    assert.equal(echoSkip.subject_key, 'thread-abc123');
+    runner.stop();
+  });
+
+  it('no emissionStore → no suppression (backwards compat)', async () => {
+    const { TaskRunnerV2 } = await import('../../dist/infrastructure/scheduler/TaskRunnerV2.js');
+    const runner = new TaskRunnerV2({ logger: silentLogger, ledger });
+    const executed = [];
+    runner.register({
+      id: 'no-echo',
+      profile: 'poller',
+      trigger: { type: 'interval', ms: 999999 },
+      admission: {
+        gate: async () => ({
+          run: true,
+          workItems: [{ signal: 'go', subjectKey: 'thread-abc123' }],
+        }),
+      },
+      run: {
+        overlap: 'skip',
+        timeoutMs: 5000,
+        execute: async (_signal, key) => {
+          executed.push(key);
+        },
+      },
+      state: { runLedger: 'sqlite' },
+      outcome: { whenNoSignal: 'drop' },
+      enabled: () => true,
+    });
+
+    await runner.triggerNow('no-echo');
+    assert.deepEqual(executed, ['thread-abc123']);
+    runner.stop();
+  });
+
+  it('P1-D2: successful RUN_DELIVERED on thread workItem records emission', async () => {
+    const { TaskRunnerV2 } = await import('../../dist/infrastructure/scheduler/TaskRunnerV2.js');
+    const runner = new TaskRunnerV2({ logger: silentLogger, ledger, emissionStore });
+    runner.register({
+      id: 'emit-record-test',
+      profile: 'poller',
+      trigger: { type: 'interval', ms: 120_000 },
+      admission: {
+        gate: async () => ({
+          run: true,
+          workItems: [{ signal: 'go', subjectKey: 'thread-abc123' }],
+        }),
+      },
+      run: {
+        overlap: 'skip',
+        timeoutMs: 5000,
+        execute: async () => {},
+      },
+      state: { runLedger: 'sqlite' },
+      outcome: { whenNoSignal: 'drop' },
+      enabled: () => true,
+    });
+
+    await runner.triggerNow('emit-record-test');
+
+    // After successful execute, pipeline should have recorded an emission
+    const active = emissionStore.listActive();
+    assert.equal(active.length, 1, 'should record emission after thread-scoped RUN_DELIVERED');
+    assert.equal(active[0].originTaskId, 'emit-record-test');
+    assert.equal(active[0].threadId, 'abc123');
+    runner.stop();
+  });
+
+  it('P1-D2: failed execute does NOT record emission', async () => {
+    const { TaskRunnerV2 } = await import('../../dist/infrastructure/scheduler/TaskRunnerV2.js');
+    const runner = new TaskRunnerV2({ logger: silentLogger, ledger, emissionStore });
+    runner.register({
+      id: 'emit-fail-test',
+      profile: 'poller',
+      trigger: { type: 'interval', ms: 120_000 },
+      admission: {
+        gate: async () => ({
+          run: true,
+          workItems: [{ signal: 'go', subjectKey: 'thread-xyz789' }],
+        }),
+      },
+      run: {
+        overlap: 'skip',
+        timeoutMs: 5000,
+        execute: async () => {
+          throw new Error('boom');
+        },
+      },
+      state: { runLedger: 'sqlite' },
+      outcome: { whenNoSignal: 'drop' },
+      enabled: () => true,
+    });
+
+    await runner.triggerNow('emit-fail-test');
+
+    // Failed execute should NOT record emission
+    const active = emissionStore.listActive();
+    assert.equal(active.length, 0, 'should NOT record emission on RUN_FAILED');
+    runner.stop();
+  });
+
+  it('P1-D2: non-thread workItems do NOT record emission', async () => {
+    const { TaskRunnerV2 } = await import('../../dist/infrastructure/scheduler/TaskRunnerV2.js');
+    const runner = new TaskRunnerV2({ logger: silentLogger, ledger, emissionStore });
+    runner.register({
+      id: 'emit-pr-test',
+      profile: 'poller',
+      trigger: { type: 'interval', ms: 120_000 },
+      admission: {
+        gate: async () => ({
+          run: true,
+          workItems: [{ signal: 'go', subjectKey: 'pr-42' }],
+        }),
+      },
+      run: {
+        overlap: 'skip',
+        timeoutMs: 5000,
+        execute: async () => {},
+      },
+      state: { runLedger: 'sqlite' },
+      outcome: { whenNoSignal: 'drop' },
+      enabled: () => true,
+    });
+
+    await runner.triggerNow('emit-pr-test');
+
+    const active = emissionStore.listActive();
+    assert.equal(active.length, 0, 'should NOT record emission for non-thread workItems');
+    runner.stop();
+  });
+
+  it('non-thread subjectKeys are never suppressed', async () => {
+    const { TaskRunnerV2 } = await import('../../dist/infrastructure/scheduler/TaskRunnerV2.js');
+    const runner = new TaskRunnerV2({ logger: silentLogger, ledger, emissionStore });
+    const executed = [];
+    runner.register({
+      id: 'pr-task',
+      profile: 'poller',
+      trigger: { type: 'interval', ms: 999999 },
+      admission: {
+        gate: async () => ({
+          run: true,
+          workItems: [{ signal: 'go', subjectKey: 'pr-42' }],
+        }),
+      },
+      run: {
+        overlap: 'skip',
+        timeoutMs: 5000,
+        execute: async (_signal, key) => {
+          executed.push(key);
+        },
+      },
+      state: { runLedger: 'sqlite' },
+      outcome: { whenNoSignal: 'drop' },
+      enabled: () => true,
+    });
+
+    // Even if there's somehow an emission for this task, pr- keys shouldn't be checked
+    await runner.triggerNow('pr-task');
+    assert.deepEqual(executed, ['pr-42']);
+    runner.stop();
+  });
+});
+
+describe('TaskRunnerV2 — governance controls (AC-D1)', () => {
+  let db, ledger, globalControlStore;
+  const noop = () => {};
+  const silentLogger = { info: noop, error: noop };
+
+  const makeTask = (id, overrides = {}) => ({
+    id,
+    profile: 'poller',
+    trigger: { type: 'interval', ms: 999999 },
+    admission: {
+      gate: async () => ({ run: true, workItems: [{ signal: 'go', subjectKey: 'k' }] }),
+    },
+    run: { overlap: 'skip', timeoutMs: 5000, execute: async () => {} },
+    state: { runLedger: 'sqlite' },
+    outcome: { whenNoSignal: 'drop' },
+    enabled: () => true,
+    ...overrides,
+  });
+
+  beforeEach(async () => {
+    db = new Database(':memory:');
+    const { applyMigrations } = await import('../../dist/domains/memory/schema.js');
+    const { RunLedger } = await import('../../dist/infrastructure/scheduler/RunLedger.js');
+    const { GlobalControlStore } = await import('../../dist/infrastructure/scheduler/GlobalControlStore.js');
+    applyMigrations(db);
+    ledger = new RunLedger(db);
+    globalControlStore = new GlobalControlStore(db);
+  });
+
+  it('global pause → automatic tick records SKIP_GLOBAL_PAUSE', async () => {
+    const { TaskRunnerV2 } = await import('../../dist/infrastructure/scheduler/TaskRunnerV2.js');
+    const runner = new TaskRunnerV2({ logger: silentLogger, ledger, globalControlStore });
+    let ran = false;
+    runner.register(
+      makeTask('gov-test', {
+        run: {
+          overlap: 'skip',
+          timeoutMs: 5000,
+          execute: async () => {
+            ran = true;
+          },
+        },
+      }),
+    );
+
+    globalControlStore.setGlobalEnabled(false, 'maintenance', 'test');
+    await runner.triggerNow('gov-test');
+
+    assert.ok(!ran, 'execute should NOT have run');
+    const rows = ledger.query('gov-test', 10);
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].outcome, 'SKIP_GLOBAL_PAUSE');
+    runner.stop();
+  });
+
+  it('global pause → triggerNow with manual=true still executes', async () => {
+    const { TaskRunnerV2 } = await import('../../dist/infrastructure/scheduler/TaskRunnerV2.js');
+    const runner = new TaskRunnerV2({ logger: silentLogger, ledger, globalControlStore });
+    let ran = false;
+    runner.register(
+      makeTask('gov-manual', {
+        run: {
+          overlap: 'skip',
+          timeoutMs: 5000,
+          execute: async () => {
+            ran = true;
+          },
+        },
+      }),
+    );
+
+    globalControlStore.setGlobalEnabled(false, 'maintenance', 'test');
+    await runner.triggerNow('gov-manual', { manual: true });
+
+    assert.ok(ran, 'execute SHOULD run for manual trigger');
+    const rows = ledger.query('gov-manual', 10);
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].outcome, 'RUN_DELIVERED');
+    runner.stop();
+  });
+
+  it('task override disabled → automatic tick records SKIP_TASK_OVERRIDE', async () => {
+    const { TaskRunnerV2 } = await import('../../dist/infrastructure/scheduler/TaskRunnerV2.js');
+    const runner = new TaskRunnerV2({ logger: silentLogger, ledger, globalControlStore });
+    let ran = false;
+    runner.register(
+      makeTask('task-override-test', {
+        run: {
+          overlap: 'skip',
+          timeoutMs: 5000,
+          execute: async () => {
+            ran = true;
+          },
+        },
+      }),
+    );
+
+    globalControlStore.setTaskOverride('task-override-test', false, 'test');
+    await runner.triggerNow('task-override-test');
+
+    assert.ok(!ran, 'execute should NOT have run');
+    const rows = ledger.query('task-override-test', 10);
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].outcome, 'SKIP_TASK_OVERRIDE');
+    runner.stop();
+  });
+
+  it('task override disabled → triggerNow with manual=true still executes', async () => {
+    const { TaskRunnerV2 } = await import('../../dist/infrastructure/scheduler/TaskRunnerV2.js');
+    const runner = new TaskRunnerV2({ logger: silentLogger, ledger, globalControlStore });
+    let ran = false;
+    runner.register(
+      makeTask('task-override-manual', {
+        run: {
+          overlap: 'skip',
+          timeoutMs: 5000,
+          execute: async () => {
+            ran = true;
+          },
+        },
+      }),
+    );
+
+    globalControlStore.setTaskOverride('task-override-manual', false, 'test');
+    await runner.triggerNow('task-override-manual', { manual: true });
+
+    assert.ok(ran, 'execute SHOULD run for manual trigger');
+    const rows = ledger.query('task-override-manual', 10);
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].outcome, 'RUN_DELIVERED');
+    runner.stop();
+  });
+
+  it('no globalControlStore → pipeline runs normally (backwards compat)', async () => {
+    const { TaskRunnerV2 } = await import('../../dist/infrastructure/scheduler/TaskRunnerV2.js');
+    const runner = new TaskRunnerV2({ logger: silentLogger, ledger });
+    let ran = false;
+    runner.register(
+      makeTask('no-store', {
+        run: {
+          overlap: 'skip',
+          timeoutMs: 5000,
+          execute: async () => {
+            ran = true;
+          },
+        },
+      }),
+    );
+
+    await runner.triggerNow('no-store');
+    assert.ok(ran, 'should run when no globalControlStore');
+    runner.stop();
+  });
+
+  it('P1-D1: getTaskSummaries() returns effectiveEnabled reflecting global pause', async () => {
+    const { TaskRunnerV2 } = await import('../../dist/infrastructure/scheduler/TaskRunnerV2.js');
+    const runner = new TaskRunnerV2({ logger: silentLogger, ledger, globalControlStore });
+    runner.register(makeTask('sum-test'));
+
+    // Global enabled → effectiveEnabled should be true
+    let summaries = runner.getTaskSummaries();
+    assert.equal(summaries[0].effectiveEnabled, true);
+
+    // Global paused → effectiveEnabled should be false
+    globalControlStore.setGlobalEnabled(false, 'test pause', 'test');
+    summaries = runner.getTaskSummaries();
+    assert.equal(summaries[0].effectiveEnabled, false);
+    assert.equal(summaries[0].enabled, true, 'task.enabled itself unchanged');
+    runner.stop();
+  });
+
+  it('P1-D1: getTaskSummaries() effectiveEnabled reflects task override', async () => {
+    const { TaskRunnerV2 } = await import('../../dist/infrastructure/scheduler/TaskRunnerV2.js');
+    const runner = new TaskRunnerV2({ logger: silentLogger, ledger, globalControlStore });
+    runner.register(makeTask('override-sum'));
+
+    // Task override disabled → effectiveEnabled false
+    globalControlStore.setTaskOverride('override-sum', false, 'test');
+    const summaries = runner.getTaskSummaries();
+    assert.equal(summaries[0].effectiveEnabled, false);
+    assert.equal(summaries[0].enabled, true, 'task.enabled itself unchanged');
+    runner.stop();
+  });
+});
+
+// ─── #605: setTimeout 32-bit overflow regression ──────────
+
+describe('TaskRunnerV2 — cron setTimeout overflow (#605)', () => {
+  let db, ledger;
+  const noop = () => {};
+  const logMessages = [];
+  const capturingLogger = {
+    info: (msg) => logMessages.push(msg),
+    error: noop,
+  };
+
+  beforeEach(async () => {
+    db = new Database(':memory:');
+    const { applyMigrations } = await import('../../dist/domains/memory/schema.js');
+    const { RunLedger } = await import('../../dist/infrastructure/scheduler/RunLedger.js');
+    applyMigrations(db);
+    ledger = new RunLedger(db);
+    logMessages.length = 0;
+  });
+
+  it('far-future cron does NOT rapid-fire — delay is chunked (#605 regression)', async () => {
+    // Bug: Node clamps setTimeout(fn, n) where n > 2^31-1 to ~1ms, causing
+    // yearly crons to fire immediately in a tight loop. The fix chunks long
+    // delays into MAX_TIMER_DELAY steps that only reschedule, never execute.
+    //
+    // Pick a month ~6 months from now so next-fire is always >24.8 days,
+    // making this test deterministic year-round.
+    const safeMonth = ((new Date().getMonth() + 6) % 12) + 1;
+    const { TaskRunnerV2 } = await import('../../dist/infrastructure/scheduler/TaskRunnerV2.js');
+    const runner = new TaskRunnerV2({ logger: capturingLogger, ledger });
+    let executeCount = 0;
+
+    runner.register({
+      id: 'yearly-cron',
+      profile: 'awareness',
+      trigger: { type: 'cron', expression: `0 0 1 ${safeMonth} *` },
+      admission: {
+        gate: async () => ({ run: true, workItems: [{ signal: 'go', subjectKey: 'k' }] }),
+      },
+      run: {
+        overlap: 'skip',
+        timeoutMs: 5000,
+        execute: async () => {
+          executeCount++;
+        },
+      },
+      state: { runLedger: 'sqlite' },
+      outcome: { whenNoSignal: 'drop' },
+      enabled: () => true,
+    });
+    runner.start();
+
+    // Without the fix, Node would clamp the >24.8-day delay to ~1ms
+    // and executePipeline would fire repeatedly within milliseconds.
+    await new Promise((r) => setTimeout(r, 200));
+
+    assert.equal(executeCount, 0, 'yearly cron must NOT fire — delay should be chunked, not clamped to ~1ms');
+    assert.ok(
+      logMessages.some((m) => m.includes('chunking')),
+      'should log chunking message for oversized delay',
+    );
+    const rows = ledger.query('yearly-cron', 10);
+    assert.equal(rows.length, 0, 'no ledger entries — executePipeline should not have been called');
+    runner.stop();
+  });
+
+  it('cancelled cron task does not resurrect via chunk callback', async () => {
+    // When a long-delay cron enters the chunking path, stopping the runner
+    // must prevent the chunk callback from rescheduling the task.
+    const safeMonth = ((new Date().getMonth() + 6) % 12) + 1;
+    const { TaskRunnerV2 } = await import('../../dist/infrastructure/scheduler/TaskRunnerV2.js');
+    const runner = new TaskRunnerV2({ logger: capturingLogger, ledger });
+    let executeCount = 0;
+
+    runner.register({
+      id: 'cancel-yearly',
+      profile: 'awareness',
+      trigger: { type: 'cron', expression: `0 0 1 ${safeMonth} *` },
+      admission: {
+        gate: async () => ({ run: true, workItems: [{ signal: 'go', subjectKey: 'k' }] }),
+      },
+      run: {
+        overlap: 'skip',
+        timeoutMs: 5000,
+        execute: async () => {
+          executeCount++;
+        },
+      },
+      state: { runLedger: 'sqlite' },
+      outcome: { whenNoSignal: 'drop' },
+      enabled: () => true,
+    });
+    runner.start();
+
+    // Verify chunking was entered
+    assert.ok(
+      logMessages.some((m) => m.includes('cancel-yearly') && m.includes('chunking')),
+      'should enter chunking path',
+    );
+
+    // Stop the runner — clears all timers and timers map
+    runner.stop();
+
+    // After stop, timers.has(task.id) returns false, so even if a chunk
+    // callback somehow fired it would not reschedule or execute.
+    assert.equal(executeCount, 0, 'execute must not run after stop');
+  });
+});
+
+// ─── #415: once trigger ─────────────────────────────────────
+
+describe('TaskRunnerV2 — once trigger (#415)', () => {
+  let db, ledger, dynamicTaskStore;
+  const noop = () => {};
+  const silentLogger = { info: noop, error: noop };
+
+  beforeEach(async () => {
+    db = new Database(':memory:');
+    const { applyMigrations } = await import('../../dist/domains/memory/schema.js');
+    const { RunLedger } = await import('../../dist/infrastructure/scheduler/RunLedger.js');
+    const { DynamicTaskStore } = await import('../../dist/infrastructure/scheduler/DynamicTaskStore.js');
+    applyMigrations(db);
+    ledger = new RunLedger(db);
+    dynamicTaskStore = new DynamicTaskStore(db);
+  });
+
+  const makeOnceTask = (id, fireAt, overrides = {}) => ({
+    id,
+    profile: 'awareness',
+    trigger: { type: 'once', fireAt },
+    admission: {
+      gate: async () => ({ run: true, workItems: [{ signal: 'go', subjectKey: 'once-k' }] }),
+    },
+    run: { overlap: 'skip', timeoutMs: 5000, execute: async () => {} },
+    state: { runLedger: 'sqlite' },
+    outcome: { whenNoSignal: 'drop' },
+    enabled: () => true,
+    ...overrides,
+  });
+
+  it('once trigger fires after delay and records RUN_DELIVERED', async () => {
+    const { TaskRunnerV2 } = await import('../../dist/infrastructure/scheduler/TaskRunnerV2.js');
+    const runner = new TaskRunnerV2({ logger: silentLogger, ledger, dynamicTaskStore });
+    let executed = false;
+
+    runner.registerDynamic(
+      makeOnceTask('once-fire', Date.now() + 80, {
+        run: {
+          overlap: 'skip',
+          timeoutMs: 5000,
+          execute: async () => {
+            executed = true;
+          },
+        },
+      }),
+      'dyn-once-1',
+    );
+    runner.start();
+    await new Promise((r) => setTimeout(r, 200));
+
+    assert.ok(executed, 'once task should have fired');
+    const rows = ledger.query('once-fire', 10);
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].outcome, 'RUN_DELIVERED');
+    runner.stop();
+  });
+
+  it('once trigger auto-retires: unregisters from runner + removes from store', async () => {
+    const { TaskRunnerV2 } = await import('../../dist/infrastructure/scheduler/TaskRunnerV2.js');
+    const runner = new TaskRunnerV2({ logger: silentLogger, ledger, dynamicTaskStore });
+
+    // Seed the dynamic store so retire can clean it up
+    dynamicTaskStore.insert({
+      id: 'dyn-retire-1',
+      templateId: 'reminder',
+      trigger: { type: 'once', fireAt: Date.now() + 50 },
+      params: { message: 'test' },
+      display: { label: 'test', category: 'system' },
+      deliveryThreadId: null,
+      enabled: true,
+      createdBy: 'test',
+      createdAt: new Date().toISOString(),
+    });
+
+    runner.registerDynamic(makeOnceTask('dyn-retire-1', Date.now() + 50), 'dyn-retire-1');
+    runner.start();
+    await new Promise((r) => setTimeout(r, 250));
+
+    // Should be unregistered from runner
+    assert.ok(
+      !runner.getRegisteredTasks().includes('dyn-retire-1'),
+      'task should be unregistered after once execution',
+    );
+    // Should be removed from store
+    assert.equal(
+      dynamicTaskStore.getById('dyn-retire-1'),
+      null,
+      'task should be removed from DynamicTaskStore after once execution',
+    );
+    runner.stop();
+  });
+
+  it('live-registered once trigger with past fireAt fires immediately (processing delay)', async () => {
+    const { TaskRunnerV2 } = await import('../../dist/infrastructure/scheduler/TaskRunnerV2.js');
+    const runner = new TaskRunnerV2({ logger: silentLogger, ledger, dynamicTaskStore });
+    let executed = false;
+
+    // Live registration (not hydration) — should fire even if slightly past
+    runner.registerDynamic(
+      makeOnceTask('once-past', Date.now() - 5000, {
+        run: {
+          overlap: 'skip',
+          timeoutMs: 5000,
+          execute: async () => {
+            executed = true;
+          },
+        },
+      }),
+      'dyn-past-1',
+    );
+    runner.start();
+    await new Promise((r) => setTimeout(r, 100));
+
+    assert.ok(executed, 'live-registered once task with past fireAt should fire immediately');
+    runner.stop();
+  });
+
+  it('hydrated once trigger with past fireAt is cancelled (missed window, not executed)', async () => {
+    const { TaskRunnerV2 } = await import('../../dist/infrastructure/scheduler/TaskRunnerV2.js');
+    const runner = new TaskRunnerV2({ logger: silentLogger, ledger, dynamicTaskStore });
+    let executed = false;
+
+    // Seed the store with a past-due once task (simulates restart scenario)
+    const pastFireAt = Date.now() - 60_000;
+    dynamicTaskStore.insert({
+      id: 'dyn-missed-1',
+      templateId: 'reminder',
+      trigger: { type: 'once', fireAt: pastFireAt },
+      params: { message: 'should not fire' },
+      display: { label: '错过的提醒', category: 'system' },
+      deliveryThreadId: null,
+      enabled: true,
+      createdBy: 'test',
+      createdAt: new Date(pastFireAt - 60_000).toISOString(),
+    });
+
+    // Provide a template that tracks execution
+    const templateGetter = {
+      get: (id) => {
+        if (id !== 'reminder') return null;
+        return {
+          templateId: 'reminder',
+          label: 'Reminder',
+          category: 'system',
+          description: 'test',
+          subjectKind: 'none',
+          defaultTrigger: { type: 'cron', expression: '0 9 * * *' },
+          paramSchema: {},
+          createSpec: (instanceId, params) =>
+            makeOnceTask(instanceId, params.trigger.fireAt, {
+              run: {
+                overlap: 'skip',
+                timeoutMs: 5000,
+                execute: async () => {
+                  executed = true;
+                },
+              },
+            }),
+        };
+      },
+    };
+
+    const loaded = runner.hydrateDynamic(dynamicTaskStore, templateGetter);
+
+    // Should NOT have been loaded
+    assert.equal(loaded, 0, 'past-due once task should not be hydrated');
+
+    // Should be removed from store
+    assert.equal(dynamicTaskStore.getById('dyn-missed-1'), null, 'past-due once task should be removed from store');
+
+    // Should NOT be registered in runner
+    assert.ok(!runner.getRegisteredTasks().includes('dyn-missed-1'), 'past-due once task should not be in runner');
+
+    // Should have recorded SKIP_MISSED_WINDOW in ledger
+    const rows = ledger.query('dyn-missed-1', 10);
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].outcome, 'SKIP_MISSED_WINDOW');
+
+    // Execute should never have been called
+    assert.ok(!executed, 'past-due once task should NOT execute');
+    runner.stop();
+  });
+
+  it('hydrated once trigger with past fireAt sends missed-window notification', async () => {
+    const { TaskRunnerV2 } = await import('../../dist/infrastructure/scheduler/TaskRunnerV2.js');
+    const notifyCalls = [];
+    const runner = new TaskRunnerV2({
+      logger: silentLogger,
+      ledger,
+      dynamicTaskStore,
+      notifyLifecycle: (notice) => notifyCalls.push(notice),
+    });
+
+    const pastFireAt = Date.now() - 120_000;
+    dynamicTaskStore.insert({
+      id: 'dyn-notify-1',
+      templateId: 'reminder',
+      trigger: { type: 'once', fireAt: pastFireAt },
+      params: { message: 'weather check', triggerUserId: 'user-42' },
+      display: { label: '天气查询', category: 'system' },
+      deliveryThreadId: 'thread-abc',
+      enabled: true,
+      createdBy: 'opus',
+      createdAt: new Date(pastFireAt - 60_000).toISOString(),
+    });
+
+    const templateGetter = { get: () => null };
+    runner.hydrateDynamic(dynamicTaskStore, templateGetter);
+
+    assert.equal(notifyCalls.length, 1, 'should have sent missed-window notification');
+    assert.equal(notifyCalls[0].threadId, 'thread-abc');
+    assert.equal(notifyCalls[0].userId, 'user-42');
+    assert.equal(notifyCalls[0].toast.lifecycleEvent, 'missed_window');
+    assert.ok(notifyCalls[0].toast.title.includes('错过执行窗口'), 'notification title should mention missed window');
+    assert.ok(notifyCalls[0].toast.message.includes('天气查询'), 'notification should include task label');
+    assert.ok(notifyCalls[0].toast.message.includes('自动取消'), 'notification should explain auto-cancel');
+    runner.stop();
+  });
+
+  it('hydrated missed hold-ball once task records ball.hold_expired before retiring', async () => {
+    const { TaskRunnerV2 } = await import('../../dist/infrastructure/scheduler/TaskRunnerV2.js');
+    const events = [];
+    const runner = new TaskRunnerV2({
+      logger: silentLogger,
+      ledger,
+      dynamicTaskStore,
+      ballCustody: {
+        async record(event) {
+          events.push(event);
+        },
+      },
+    });
+
+    const pastFireAt = Date.now() - 120_000;
+    dynamicTaskStore.insert({
+      id: 'hold-ball-missed-1',
+      templateId: 'reminder',
+      trigger: { type: 'once', fireAt: pastFireAt },
+      params: { message: 'wake me', targetCatId: 'codex', triggerUserId: 'user-42' },
+      display: { label: '持球唤醒 (codex)', category: 'system' },
+      deliveryThreadId: 'thread-hold-missed',
+      enabled: true,
+      createdBy: 'hold-ball:codex',
+      createdAt: new Date(pastFireAt - 60_000).toISOString(),
+    });
+
+    runner.hydrateDynamic(dynamicTaskStore, { get: () => null });
+
+    assert.equal(dynamicTaskStore.getById('hold-ball-missed-1'), null, 'missed hold-ball task should be retired');
+    assert.equal(events.length, 1, 'missed hold-ball task should emit one expiry event');
+    assert.equal(events[0].kind, 'ball.hold_expired');
+    assert.equal(events[0].sourceEventId, `holdexp:thread-hold-missed:codex:${pastFireAt}`);
+    assert.equal(events[0].subjectKey, 'ball:thread:thread-hold-missed');
+    assert.deepEqual(events[0].payload, { catId: 'codex', fireAt: pastFireAt });
+    runner.stop();
+  });
+
+  it('once trigger does NOT fire before fireAt', async () => {
+    const { TaskRunnerV2 } = await import('../../dist/infrastructure/scheduler/TaskRunnerV2.js');
+    const runner = new TaskRunnerV2({ logger: silentLogger, ledger, dynamicTaskStore });
+    let executed = false;
+
+    runner.registerDynamic(
+      makeOnceTask('once-future', Date.now() + 10_000, {
+        run: {
+          overlap: 'skip',
+          timeoutMs: 5000,
+          execute: async () => {
+            executed = true;
+          },
+        },
+      }),
+      'dyn-future-1',
+    );
+    runner.start();
+    await new Promise((r) => setTimeout(r, 100));
+
+    assert.ok(!executed, 'once task should NOT fire before fireAt');
+    runner.stop();
+  });
+
+  it('getTaskSummaries includes once trigger info', async () => {
+    const { TaskRunnerV2 } = await import('../../dist/infrastructure/scheduler/TaskRunnerV2.js');
+    const runner = new TaskRunnerV2({ logger: silentLogger, ledger, dynamicTaskStore });
+    const fireAt = Date.now() + 60_000;
+
+    runner.registerDynamic(makeOnceTask('once-summary', fireAt), 'dyn-sum-1');
+
+    const summaries = runner.getTaskSummaries();
+    const s = summaries.find((t) => t.id === 'once-summary');
+    assert.ok(s, 'should find once task in summaries');
+    assert.equal(s.trigger.type, 'once');
+    assert.equal(s.trigger.fireAt, fireAt);
+    assert.equal(s.source, 'dynamic');
+    runner.stop();
+  });
+});

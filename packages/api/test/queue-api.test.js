@@ -40,6 +40,9 @@ function buildDeps(overrides = {}) {
       broadcastToRoom: mock.fn(),
       emitToUser: mock.fn(),
     },
+    messageStore: {
+      markCanceled: mock.fn(async () => ({ deliveryStatus: 'canceled' })),
+    },
     ...overrides,
   };
 }
@@ -395,6 +398,29 @@ describe('Queue Management API', () => {
     assert.equal(res.statusCode, 409);
   });
 
+  it('PATCH /queue/:entryId/move rejects system continuation entries (409)', async () => {
+    const continuation = enqueueEntry(deps.invocationQueue, {
+      content: 'continue sealed work',
+      source: 'agent',
+      sourceCategory: 'continuation',
+      continuationKey: 't1:opus:inv-1:sess-1:1',
+      autoExecute: true,
+    });
+    enqueueEntry(deps.invocationQueue, { content: 'user work', targetCats: ['codex'] });
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/threads/t1/queue/${continuation.entry.id}/move`,
+      headers: { 'x-cat-cafe-user': 'user-a', 'content-type': 'application/json' },
+      payload: { direction: 'down' },
+    });
+    const body = JSON.parse(res.body);
+
+    assert.equal(res.statusCode, 409);
+    assert.equal(body.code, 'ENTRY_POSITION_LOCKED');
+    assert.equal(deps.invocationQueue.list('t1', 'user-a')[0].id, continuation.entry.id);
+  });
+
   // ── Functional: POST steer ──
 
   it('POST /queue/:entryId/steer promote moves entry to front of queued entries', async () => {
@@ -412,6 +438,27 @@ describe('Queue Management API', () => {
     const queue = deps.invocationQueue.list('t1', 'user-a');
     assert.equal(queue[0].content, 'second');
     assert.equal(queue[1].content, 'first');
+  });
+
+  it('POST /queue/:entryId/steer promote rejects system continuation entries (409)', async () => {
+    const continuation = enqueueEntry(deps.invocationQueue, {
+      content: 'continue sealed work',
+      source: 'agent',
+      sourceCategory: 'continuation',
+      continuationKey: 't1:opus:inv-1:sess-1:1',
+      autoExecute: true,
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/threads/t1/queue/${continuation.entry.id}/steer`,
+      headers: { 'x-cat-cafe-user': 'user-a', 'content-type': 'application/json' },
+      payload: { mode: 'promote' },
+    });
+    const body = JSON.parse(res.body);
+
+    assert.equal(res.statusCode, 409);
+    assert.equal(body.code, 'ENTRY_POSITION_LOCKED');
   });
 
   it('POST /queue/:entryId/steer returns 409 when entry is processing', async () => {
@@ -480,6 +527,153 @@ describe('Queue Management API', () => {
     });
     assert.equal(res.statusCode, 200);
     assert.equal(deps.queueProcessor.releaseSlot.mock.calls.length, 1);
+  });
+
+  it('POST /queue/:entryId/steer immediate TOMBSTONES a pre-start in-flight entry instead of force-releasing (race-safe, 云端 R3 P1)', async () => {
+    // In-flight entry A occupies the opus per-cat slot (processing), e.g. its executeEntry is in the
+    // pre-start create-await window so invocationTracker.has(opus) is false. The user steers a second
+    // opus entry B. Force-releasing A's slot would double-start opus once create returns; instead
+    // steer must TOMBSTONE A (removeProcessed) so executeEntry self-aborts, and NOT force-release.
+    const a = enqueueEntry(deps.invocationQueue, { content: 'inflight', targetCats: ['opus'] });
+    deps.invocationQueue.markProcessing('t1', 'user-a'); // A → processing (holds opus slot)
+    const b = enqueueEntry(deps.invocationQueue, { content: 'steered', targetCats: ['opus'] });
+
+    deps.invocationTracker.has = mock.fn(() => false); // pre-start: tracker not yet registered
+    // Precondition: A holds the opus slot (in-flight).
+    assert.equal(deps.invocationQueue.findProcessingByCat('t1', 'opus')?.id, a.entry.id);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/threads/t1/queue/${b.entry.id}/steer`,
+      headers: { 'x-cat-cafe-user': 'user-a', 'content-type': 'application/json' },
+      payload: { mode: 'immediate' },
+    });
+
+    // Deferred response (not QUEUE_BUSY, not synchronous start) — B runs via tryAutoExecute after
+    // A's executeEntry self-aborts.
+    assert.equal(res.statusCode, 202);
+    const body = res.json();
+    assert.equal(body.deferred, true);
+    assert.equal(body.code, 'PREEMPT_PENDING_PRESTART');
+
+    // A was tombstoned (removed) so executeEntry self-aborts at its post-startAll guard.
+    assert.equal(deps.invocationQueue.findProcessingByCat('t1', 'opus'), null, 'in-flight A must be tombstoned');
+    // Race-safe: NO force slot-release, NO cancel of a non-existent tracker invocation.
+    assert.equal(deps.queueProcessor.releaseSlot.mock.calls.length, 0, 'must NOT force-release a pre-start slot');
+    assert.equal(deps.invocationTracker.cancel.mock.calls.length, 0);
+    // B was promoted to run next.
+    assert.equal(deps.invocationQueue.list('t1', 'user-a')[0].id, b.entry.id);
+  });
+
+  it('POST /queue/:entryId/steer immediate must NOT tombstone ANOTHER user’s pre-start entry (云端 R4 P1-b cross-user)', async () => {
+    // user-b holds the opus slot via an in-flight (pre-start) entry; user-a steers their own opus
+    // entry. The cross-user guard must reject (INVOCATION_ACTIVE) and leave user-b's entry intact —
+    // one user cannot interrupt another's in-flight invocation by steering their own.
+    const other = enqueueEntry(deps.invocationQueue, {
+      userId: 'user-b',
+      content: 'other-inflight',
+      targetCats: ['opus'],
+    });
+    deps.invocationQueue.markProcessing('t1', 'user-b'); // user-b's entry → processing (holds opus slot)
+    const mine = enqueueEntry(deps.invocationQueue, { userId: 'user-a', content: 'mine', targetCats: ['opus'] });
+
+    deps.invocationTracker.has = mock.fn(() => false); // pre-start: tracker not yet registered
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/threads/t1/queue/${mine.entry.id}/steer`,
+      headers: { 'x-cat-cafe-user': 'user-a', 'content-type': 'application/json' },
+      payload: { mode: 'immediate' },
+    });
+
+    assert.equal(res.statusCode, 409);
+    assert.equal(res.json().code, 'INVOCATION_ACTIVE');
+    // user-b's in-flight entry must NOT be tombstoned.
+    assert.equal(
+      deps.invocationQueue.findProcessingByCat('t1', 'opus')?.id,
+      other.entry.id,
+      "other user's entry intact",
+    );
+  });
+
+  it('POST /queue/:entryId/steer immediate NEVER force-releases an occupied slot — always tombstones (云端 R6: age unsound)', async () => {
+    // 云端 R3–R6 converged: an occupied slot with has()=false is always "executeEntry pending in
+    // create-await"; steer cannot tell a slow-but-live create from a hung one (create awaits an
+    // unbounded Redis eval), so NO age threshold is sound. Even an "old" processing entry must be
+    // tombstoned (not force-released) — a force-release would double-start if create later resumes.
+    enqueueEntry(deps.invocationQueue, { userId: 'user-a', content: 'old-inflight', targetCats: ['opus'] });
+    deps.invocationQueue.markProcessing('t1', 'user-a');
+    const old = deps.invocationQueue.findProcessingByCat('t1', 'opus');
+    old.processingStartedAt = Date.now() - 60 * 60_000; // 1h old — still must NOT force-release
+    const steered = enqueueEntry(deps.invocationQueue, { userId: 'user-a', content: 'steered', targetCats: ['opus'] });
+
+    deps.invocationTracker.has = mock.fn(() => false);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/threads/t1/queue/${steered.entry.id}/steer`,
+      headers: { 'x-cat-cafe-user': 'user-a', 'content-type': 'application/json' },
+      payload: { mode: 'immediate' },
+    });
+
+    // Sound: tombstone + 202-deferred, regardless of entry age. NO force-release (double-start risk).
+    assert.equal(res.statusCode, 202);
+    assert.equal(res.json().code, 'PREEMPT_PENDING_PRESTART');
+    assert.equal(deps.queueProcessor.releaseSlot.mock.calls.length, 0, 'must NEVER force-release by age');
+  });
+
+  it('POST /queue/:entryId/steer immediate marks the TOMBSTONED user message canceled (云端 R7 P1 F117)', async () => {
+    // Tombstoning an in-flight user entry must mirror withdraw/clear F117 cleanup: its message would
+    // otherwise stay permanently 'queued' (undelivered + excluded from context) since executeEntry
+    // self-aborts before its markDelivered block.
+    enqueueEntry(deps.invocationQueue, { userId: 'user-a', content: 'inflight', targetCats: ['opus'] });
+    deps.invocationQueue.markProcessing('t1', 'user-a');
+    const inflight = deps.invocationQueue.findProcessingByCat('t1', 'opus');
+    inflight.messageId = 'msg-inflight'; // user message backing the in-flight entry
+    const steered = enqueueEntry(deps.invocationQueue, { userId: 'user-a', content: 'steered', targetCats: ['opus'] });
+
+    deps.invocationTracker.has = mock.fn(() => false);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/threads/t1/queue/${steered.entry.id}/steer`,
+      headers: { 'x-cat-cafe-user': 'user-a', 'content-type': 'application/json' },
+      payload: { mode: 'immediate' },
+    });
+
+    assert.equal(res.statusCode, 202);
+    assert.equal(deps.messageStore.markCanceled.mock.calls.length, 1, 'tombstoned message must be marked canceled');
+    assert.equal(deps.messageStore.markCanceled.mock.calls[0].arguments[0], 'msg-inflight');
+    const del = deps.socketManager.emitToUser.mock.calls.find((c) => c.arguments[1] === 'message_deleted');
+    assert.ok(del, 'message_deleted must be emitted');
+    assert.equal(del.arguments[2].messageId, 'msg-inflight');
+  });
+
+  it('POST /queue/:entryId/steer immediate does NOT emit message_deleted when markCanceled is no-op (phantom-emit guard)', async () => {
+    // If the message was already canceled/delivered, markCanceled returns null (CAS no-op).
+    // The truthy gate must suppress the message_deleted emit — otherwise the client would
+    // flash-delete a delivered message or duplicate-delete an already-canceled one.
+    enqueueEntry(deps.invocationQueue, { userId: 'user-a', content: 'inflight', targetCats: ['opus'] });
+    deps.invocationQueue.markProcessing('t1', 'user-a');
+    const inflight = deps.invocationQueue.findProcessingByCat('t1', 'opus');
+    inflight.messageId = 'msg-already-delivered';
+    const steered = enqueueEntry(deps.invocationQueue, { userId: 'user-a', content: 'steered', targetCats: ['opus'] });
+
+    deps.invocationTracker.has = mock.fn(() => false);
+    // Override: markCanceled returns null (CAS no-op — message already delivered/canceled)
+    deps.messageStore.markCanceled = mock.fn(async () => null);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/threads/t1/queue/${steered.entry.id}/steer`,
+      headers: { 'x-cat-cafe-user': 'user-a', 'content-type': 'application/json' },
+      payload: { mode: 'immediate' },
+    });
+
+    assert.equal(res.statusCode, 202);
+    assert.equal(deps.messageStore.markCanceled.mock.calls.length, 1, 'markCanceled must be called');
+    const del = deps.socketManager.emitToUser.mock.calls.find((c) => c.arguments[1] === 'message_deleted');
+    assert.equal(del, undefined, 'message_deleted must NOT be emitted when cancel is a no-op');
   });
 
   it('POST /queue/:entryId/steer immediate scopes cancel broadcast to steered cat only (P1 cloud review)', async () => {
@@ -559,6 +753,7 @@ describe('Queue Management API', () => {
     const body = JSON.parse(res.body);
     assert.equal(body.ok, true);
     assert.equal(body.cancelled, true);
+    assert.deepEqual(deps.invocationTracker.cancel.mock.calls[0].arguments, ['t1', 'opus', 'user-a', 'user_cancel']);
 
     // Should broadcast done for opus
     const doneCalls = deps.socketManager.broadcastAgentMessage.mock.calls.filter((c) => c.arguments[0].type === 'done');
@@ -577,5 +772,104 @@ describe('Queue Management API', () => {
     assert.equal(res.statusCode, 404);
     const body = JSON.parse(res.body);
     assert.equal(body.code, 'CAT_NOT_ACTIVE');
+  });
+
+  // ── F175 Task 6: PATCH /queue/reorder ──
+
+  it('PATCH /queue/reorder sets positions on multiple entries (F175)', async () => {
+    const r1 = enqueueEntry(deps.invocationQueue, { content: 'a' });
+    const r2 = enqueueEntry(deps.invocationQueue, { content: 'b' });
+    const r3 = enqueueEntry(deps.invocationQueue, { content: 'c' });
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/api/threads/t1/queue/reorder',
+      headers: { 'x-cat-cafe-user': 'user-a', 'content-type': 'application/json' },
+      payload: {
+        positions: [
+          { entryId: r3.entry.id, position: 0 },
+          { entryId: r1.entry.id, position: 1 },
+          { entryId: r2.entry.id, position: 2 },
+        ],
+      },
+    });
+    assert.equal(res.statusCode, 200);
+
+    const next = deps.invocationQueue.peekOldestAcrossUsers('t1');
+    assert.equal(next.content, 'c', 'entry c should be first after reorder');
+
+    const emitCalls = deps.socketManager.emitToUser.mock.calls;
+    const updateCall = emitCalls.find((c) => c.arguments[1] === 'queue_updated');
+    assert.ok(updateCall);
+    assert.equal(updateCall.arguments[2].action, 'reordered');
+  });
+
+  it('PATCH /queue/reorder rejects position on processing entry (F175)', async () => {
+    enqueueEntry(deps.invocationQueue, { content: 'a' });
+    deps.invocationQueue.markProcessing('t1', 'user-a');
+    const entries = deps.invocationQueue.list('t1', 'user-a');
+    const processingEntry = entries.find((e) => e.status === 'processing');
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/api/threads/t1/queue/reorder',
+      headers: { 'x-cat-cafe-user': 'user-a', 'content-type': 'application/json' },
+      payload: { positions: [{ entryId: processingEntry.id, position: 0 }] },
+    });
+    assert.equal(res.statusCode, 400);
+  });
+
+  it('PATCH /queue/reorder rejects position on system continuation entry (F175)', async () => {
+    const continuation = enqueueEntry(deps.invocationQueue, {
+      content: 'continue sealed work',
+      source: 'agent',
+      sourceCategory: 'continuation',
+      continuationKey: 't1:opus:inv-1:sess-1:1',
+      autoExecute: true,
+    });
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/api/threads/t1/queue/reorder',
+      headers: { 'x-cat-cafe-user': 'user-a', 'content-type': 'application/json' },
+      payload: { positions: [{ entryId: continuation.entry.id, position: 99 }] },
+    });
+    const body = JSON.parse(res.body);
+
+    assert.equal(res.statusCode, 409);
+    assert.equal(body.code, 'ENTRY_POSITION_LOCKED');
+    assert.equal(deps.invocationQueue.list('t1', 'user-a')[0].id, continuation.entry.id);
+  });
+
+  it('PATCH /queue/reorder rejects invalid body (F175)', async () => {
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/api/threads/t1/queue/reorder',
+      headers: { 'x-cat-cafe-user': 'user-a', 'content-type': 'application/json' },
+      payload: { positions: 'not-an-array' },
+    });
+    assert.equal(res.statusCode, 400);
+  });
+
+  it('P2-4: PATCH /queue/reorder does not partial-write on failure', async () => {
+    const r1 = enqueueEntry(deps.invocationQueue, { content: 'a' });
+    enqueueEntry(deps.invocationQueue, { content: 'b' });
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/api/threads/t1/queue/reorder',
+      headers: { 'x-cat-cafe-user': 'user-a', 'content-type': 'application/json' },
+      payload: {
+        positions: [
+          { entryId: r1.entry.id, position: 5 },
+          { entryId: 'nonexistent', position: 0 },
+        ],
+      },
+    });
+    assert.equal(res.statusCode, 400);
+
+    const entries = deps.invocationQueue.list('t1', 'user-a');
+    const first = entries.find((e) => e.id === r1.entry.id);
+    assert.equal(first.position, undefined, 'first entry position should NOT be written when batch fails');
   });
 });

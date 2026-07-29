@@ -8,6 +8,7 @@
 import assert from 'node:assert/strict';
 import { beforeEach, describe, it } from 'node:test';
 import { GameOrchestrator } from '../dist/domains/cats/services/game/GameOrchestrator.js';
+import './helpers/setup-cat-registry.js';
 
 // GameAutoPlayer not needed for these orchestrator-level tests
 
@@ -123,7 +124,7 @@ function makeSeats() {
     { seatId: 'P3', actorType: 'cat', actorId: 'gemini', role: 'seer', alive: true, properties: {} },
     { seatId: 'P4', actorType: 'cat', actorId: 'gpt52', role: 'guard', alive: true, properties: {} },
     { seatId: 'P5', actorType: 'cat', actorId: 'sonnet', role: 'villager', alive: true, properties: {} },
-    { seatId: 'P6', actorType: 'cat', actorId: 'dare', role: 'villager', alive: true, properties: {} },
+    { seatId: 'P6', actorType: 'cat', actorId: 'kimi', role: 'villager', alive: true, properties: {} },
     { seatId: 'P7', actorType: 'cat', actorId: 'spark', role: 'villager', alive: true, properties: {} },
   ];
 }
@@ -145,8 +146,8 @@ describe('Phase H P1 Fixes — definition-level regression guards', () => {
     );
   });
 
-  it('P1-2 guard: observerUserId flows through to messageStore in all modes', async () => {
-    // Behavioral test: start game in PLAYER mode, trigger announce, verify userId in messageStore
+  it('P1-2 guard: game announces persist as canonical system messages', async () => {
+    // Behavioral test: start game in PLAYER mode, trigger dawn announce, verify system identity in messageStore
     const { GameOrchestrator } = await import('../dist/domains/cats/services/game/GameOrchestrator.js');
     const store = createStubGameStore();
     const socket = createStubSocket();
@@ -204,14 +205,10 @@ describe('Phase H P1 Fixes — definition-level regression guards', () => {
     if (rt.currentPhase === 'night_resolve') await forceTick();
     await new Promise((r) => setTimeout(r, 50));
 
-    // Verify: ALL messageStore messages use the game creator's userId, not 'system'
-    assert.ok(msgStore.messages.length > 0, 'Should have at least one announce message');
-    for (const msg of msgStore.messages) {
-      assert.equal(
-        msg.userId,
-        'user-behavioral-test',
-        `All game messages must use creator userId (got userId=${msg.userId} for content="${msg.content?.slice(0, 40)}")`,
-      );
+    const announceMessages = msgStore.messages.filter((msg) => msg.catId === 'system');
+    assert.ok(announceMessages.length > 0, 'Should have at least one canonical system announce message');
+    for (const msg of announceMessages) {
+      assert.equal(msg.userId, 'system', 'game announce must use canonical system userId');
     }
   });
 
@@ -241,6 +238,7 @@ describe('Phase H P1 Fixes — definition-level regression guards', () => {
         async update() {},
         async delete() {},
         async updateThinkingMode() {},
+        async updatePin() {},
       },
       messageStore: routeMsgStore,
     });
@@ -254,7 +252,7 @@ describe('Phase H P1 Fixes — definition-level regression guards', () => {
         playerCount: 7,
         humanRole: 'player',
         voiceMode: false,
-        catIds: ['opus', 'codex', 'gemini', 'gpt52', 'sonnet', 'dare'],
+        catIds: ['opus', 'codex', 'gemini', 'gpt52', 'sonnet', 'kimi'],
       },
     });
 
@@ -317,14 +315,18 @@ describe('Phase H P1 Fixes — definition-level regression guards', () => {
             createdAt: Date.now(),
           };
         },
+        async updatePin() {},
       },
       gameStore: routeStore,
       invocationTracker: {
         has: () => false,
         isDeleting: () => false,
         tryStartThread: () => new AbortController(),
+        tryStartThreadAll: () => new AbortController(),
         start: () => new AbortController(),
+        startAll: () => new AbortController(),
         complete: () => {},
+        completeAll: () => {},
       },
       invocationRecordStore: {
         create: async () => ({ outcome: 'created', invocationId: 'inv-stub' }),
@@ -477,13 +479,13 @@ describe('Phase H P1 Fixes', () => {
       assert.ok(lw.payload.text.length > 0, 'last_words should have text content');
 
       // Verify messageStore got the speech
-      const speechMessages = msgStore.messages.filter((m) => m.catId === 'dare');
-      assert.ok(speechMessages.length > 0, 'messageStore should have speech message from exiled player (dare)');
+      const speechMessages = msgStore.messages.filter((m) => m.catId === 'kimi');
+      assert.ok(speechMessages.length > 0, 'messageStore should have speech message from exiled player (kimi)');
     });
   });
 
-  describe('P1-2: messageStore uses game-creator userId, not system', () => {
-    it('player mode: announce messages use creating userId, not system', async () => {
+  describe('P1-2: messageStore uses canonical system identity for game announces', () => {
+    it('player mode: announce messages use userId=system + catId=system', async () => {
       const game = await orchestrator.startGame({
         threadId: 'thread-p1-2',
         definition: makeWerewolfDefinition(),
@@ -542,17 +544,12 @@ describe('Phase H P1 Fixes', () => {
       // Wait for fire-and-forget promises
       await new Promise((r) => setTimeout(r, 50));
 
-      const announceMessages = msgStore.messages.filter((m) => m.catId === null);
-      assert.ok(announceMessages.length > 0, 'Should have announce messages in messageStore');
+      const announceMessages = msgStore.messages.filter((m) => m.catId === 'system');
+      assert.ok(announceMessages.length > 0, 'Should have canonical system announce messages in messageStore');
 
-      // P1-2: All messages should use the creating user's ID, NOT 'system'
-      for (const msg of msgStore.messages) {
-        assert.notEqual(
-          msg.userId,
-          'system',
-          `Message should not have userId=system (got: ${JSON.stringify({ catId: msg.catId, content: msg.content?.slice(0, 40) })})`,
-        );
-        assert.equal(msg.userId, 'user-landy', 'Message userId should be the game creator');
+      for (const msg of announceMessages) {
+        assert.equal(msg.userId, 'system', 'announce userId should be canonical system');
+        assert.equal(msg.catId, 'system', 'announce catId should be canonical system');
       }
     });
   });

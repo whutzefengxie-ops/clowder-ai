@@ -4,15 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 
-const {
-  resolveCmdShimScript,
-  resolveWindowsShimSpawn,
-  escapeCmdArg,
-  escapeBashArg,
-  extractBareName,
-  parseShimFile,
-  findKnownScript,
-} = await import('../dist/utils/cli-spawn-win.js');
+const { resolveCmdShimScript, resolveWindowsShimSpawn, escapeCmdArg, extractBareName, parseShimFile, findSystemNode } =
+  await import('../dist/utils/cli-spawn-win.js');
 
 test(
   'resolveCmdShimScript supports %dp0 shims and keeps scanning where results until one resolves',
@@ -179,14 +172,27 @@ test(
   },
 );
 
-test('resolveWindowsShimSpawn uses the current Node executable for direct shim launches', () => {
+test('resolveWindowsShimSpawn uses the system Node executable for direct shim launches', () => {
   const shimScript = join(tmpdir(), 'codex-shim-target.js');
+  const systemNode = findSystemNode();
+  assert.ok(systemNode, 'findSystemNode() must locate a node binary on CI');
 
   const resolved = resolveWindowsShimSpawn('codex', ['--json'], shimScript);
 
   assert.deepEqual(resolved, {
-    command: process.execPath,
+    command: systemNode,
     args: [shimScript, '--json'],
+  });
+});
+
+test('resolveWindowsShimSpawn directly launches native exe shim targets', () => {
+  const shimExe = join(tmpdir(), 'claude.exe');
+
+  const resolved = resolveWindowsShimSpawn('claude', ['--print'], shimExe);
+
+  assert.deepEqual(resolved, {
+    command: shimExe,
+    args: ['--print'],
   });
 });
 
@@ -395,6 +401,23 @@ test('parseShimFile resolves extensionless entrypoints when no .js match exists'
   }
 });
 
+test('parseShimFile resolves native exe entrypoints when the shim directly launches a CLI binary', () => {
+  const tempRoot = mkdtempSync(join(tmpdir(), 'cli-spawn-win-parse-native-exe-'));
+  mkdirSync(join(tempRoot, 'node_modules', '@anthropic-ai', 'claude-code', 'bin'), { recursive: true });
+
+  const cmdPath = join(tempRoot, 'claude.cmd');
+  const exePath = join(tempRoot, 'node_modules', '@anthropic-ai', 'claude-code', 'bin', 'claude.exe');
+
+  writeFileSync(cmdPath, '"%dp0%\\node_modules\\@anthropic-ai\\claude-code\\bin\\claude.exe" %*\r\n', 'utf8');
+  writeFileSync(exePath, 'MZ fake native exe', 'utf8');
+
+  try {
+    assert.equal(parseShimFile(cmdPath), exePath);
+  } finally {
+    rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
 test('parseShimFile prefers .js match over extensionless when both exist', () => {
   const tempRoot = mkdtempSync(join(tmpdir(), 'cli-spawn-win-parse-prefer-js-'));
   mkdirSync(join(tempRoot, 'node_modules', 'pkg', 'bin'), { recursive: true });
@@ -413,6 +436,137 @@ test('parseShimFile prefers .js match over extensionless when both exist', () =>
   } finally {
     rmSync(tempRoot, { recursive: true, force: true });
   }
+});
+
+test('parseShimFile resolves absolute %APPDATA% paths in .cmd shims (#284)', () => {
+  const tempRoot = mkdtempSync(join(tmpdir(), 'cli-spawn-win-appdata-shim-'));
+  const originalAppData = process.env.APPDATA;
+  const fakeAppData = join(tempRoot, 'appdata');
+
+  mkdirSync(join(fakeAppData, 'npm', 'node_modules', '@anthropic-ai', 'claude-code'), { recursive: true });
+
+  const cmdPath = join(tempRoot, 'claude.cmd');
+  const scriptPath = join(fakeAppData, 'npm', 'node_modules', '@anthropic-ai', 'claude-code', 'cli.js');
+
+  writeFileSync(
+    cmdPath,
+    '@IF EXIST "%~dp0\\node.exe" (\r\n  "%~dp0\\node.exe" "%APPDATA%\\npm\\node_modules\\@anthropic-ai\\claude-code\\cli.js" %*\r\n) ELSE (\r\n  node "%APPDATA%\\npm\\node_modules\\@anthropic-ai\\claude-code\\cli.js" %*\r\n)\r\n',
+    'utf8',
+  );
+  writeFileSync(scriptPath, 'console.log("ok");\n', 'utf8');
+
+  try {
+    process.env.APPDATA = fakeAppData;
+    const resolved = parseShimFile(cmdPath);
+    assert.equal(resolved, scriptPath);
+  } finally {
+    if (originalAppData === undefined) {
+      delete process.env.APPDATA;
+    } else {
+      process.env.APPDATA = originalAppData;
+    }
+    rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('parseShimFile prefers relative %dp0 paths over absolute %APPDATA% paths', () => {
+  const tempRoot = mkdtempSync(join(tmpdir(), 'cli-spawn-win-prefer-rel-'));
+  const originalAppData = process.env.APPDATA;
+  const fakeAppData = join(tempRoot, 'appdata');
+
+  mkdirSync(join(tempRoot, 'node_modules', 'pkg'), { recursive: true });
+  mkdirSync(join(fakeAppData, 'npm', 'node_modules', 'pkg'), { recursive: true });
+
+  const cmdPath = join(tempRoot, 'test.cmd');
+  const relScript = join(tempRoot, 'node_modules', 'pkg', 'cli.js');
+  const absScript = join(fakeAppData, 'npm', 'node_modules', 'pkg', 'cli.js');
+
+  writeFileSync(
+    cmdPath,
+    '@"%dp0\\node_modules\\pkg\\cli.js" "%APPDATA%\\npm\\node_modules\\pkg\\cli.js" %*\r\n',
+    'utf8',
+  );
+  writeFileSync(relScript, 'console.log("rel");\n', 'utf8');
+  writeFileSync(absScript, 'console.log("abs");\n', 'utf8');
+
+  try {
+    process.env.APPDATA = fakeAppData;
+    const resolved = parseShimFile(cmdPath);
+    assert.equal(resolved, relScript, 'relative path should be preferred over absolute');
+  } finally {
+    if (originalAppData === undefined) {
+      delete process.env.APPDATA;
+    } else {
+      process.env.APPDATA = originalAppData;
+    }
+    rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('parseShimFile resolves native .exe entrypoints when no .js or extensionless match (#234)', () => {
+  const tempRoot = mkdtempSync(join(tmpdir(), 'cli-spawn-win-exe-target-'));
+  mkdirSync(join(tempRoot, 'node_modules', '@anthropic-ai', 'claude-code', 'bin'), { recursive: true });
+
+  const cmdPath = join(tempRoot, 'claude.cmd');
+  const exePath = join(tempRoot, 'node_modules', '@anthropic-ai', 'claude-code', 'bin', 'claude.exe');
+
+  writeFileSync(
+    cmdPath,
+    '@IF EXIST "%~dp0\\node.exe" (\r\n  "%~dp0\\node.exe" "%~dp0\\node_modules\\@anthropic-ai\\claude-code\\bin\\claude.exe" %*\r\n)\r\n',
+    'utf8',
+  );
+  writeFileSync(exePath, 'MZ fake exe', 'utf8');
+
+  try {
+    const resolved = parseShimFile(cmdPath);
+    assert.equal(resolved, exePath, 'must resolve to claude.exe, not node.exe');
+  } finally {
+    rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('parseShimFile skips sibling node.exe and resolves claude.exe in native .exe pass (#247 regression)', () => {
+  const tempRoot = mkdtempSync(join(tmpdir(), 'cli-spawn-win-exe-node-sibling-'));
+  mkdirSync(join(tempRoot, 'node_modules', '@anthropic-ai', 'claude-code', 'bin'), { recursive: true });
+
+  const cmdPath = join(tempRoot, 'claude.cmd');
+  const fakeNodeExe = join(tempRoot, 'node.exe');
+  const claudeExe = join(tempRoot, 'node_modules', '@anthropic-ai', 'claude-code', 'bin', 'claude.exe');
+
+  writeFileSync(
+    cmdPath,
+    [
+      '@ECHO off',
+      'SETLOCAL',
+      'SET dp0=%~dp0',
+      'IF EXIST "%dp0%\\node.exe" (',
+      '  "%dp0%\\node.exe" "%dp0%\\node_modules\\@anthropic-ai\\claude-code\\bin\\claude.exe" %*',
+      ') ELSE (',
+      '  "%dp0%\\node_modules\\@anthropic-ai\\claude-code\\bin\\claude.exe" %*',
+      ')',
+    ].join('\r\n'),
+    'utf8',
+  );
+  writeFileSync(fakeNodeExe, 'MZ fake node', 'utf8');
+  writeFileSync(claudeExe, 'MZ fake claude', 'utf8');
+
+  try {
+    const resolved = parseShimFile(cmdPath);
+    assert.equal(resolved, claudeExe, 'must resolve to claude.exe, not node.exe');
+  } finally {
+    rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('resolveWindowsShimSpawn spawns native .exe directly instead of via node (#234)', () => {
+  const exePath = join(tmpdir(), 'claude-shim-exe-test.exe');
+
+  const resolved = resolveWindowsShimSpawn('claude', ['--json', '-p', 'hello'], exePath);
+
+  assert.deepEqual(resolved, {
+    command: exePath,
+    args: ['--json', '-p', 'hello'],
+  });
 });
 
 // --- resolveCmdShimScript full-path tests ---
@@ -499,122 +653,4 @@ test('resolveCmdShimScript with full .exe path does NOT fall back to APPDATA kno
     }
     rmSync(tempRoot, { recursive: true, force: true });
   }
-});
-
-// ── Layer 1 tests: %ENV_VAR% shim parsing & findKnownScript fallback ──
-
-test('parseShimFile resolves %APPDATA% style env-var paths in .cmd shims', () => {
-  const tempRoot = mkdtempSync(join(tmpdir(), 'cli-spawn-win-envvar-'));
-  const originalAppData = process.env.APPDATA;
-  const shimDir = join(tempRoot, 'shim');
-  const fakeAppData = join(tempRoot, 'appdata');
-  const scriptDir = join(fakeAppData, 'npm', 'node_modules', 'pkg');
-
-  mkdirSync(shimDir, { recursive: true });
-  mkdirSync(scriptDir, { recursive: true });
-
-  const cmdPath = join(shimDir, 'mypkg.cmd');
-  const scriptPath = join(scriptDir, 'cli.js');
-
-  // Shim uses %APPDATA%\... (non-dp0 env var pattern)
-  writeFileSync(cmdPath, '@"%APPDATA%\\npm\\node_modules\\pkg\\cli.js" %*\r\n', 'utf8');
-  writeFileSync(scriptPath, 'console.log("ok");\n', 'utf8');
-
-  try {
-    process.env.APPDATA = fakeAppData;
-    const result = parseShimFile(cmdPath);
-    assert.equal(result, scriptPath, 'should resolve %APPDATA% env-var path in shim');
-  } finally {
-    if (originalAppData === undefined) {
-      delete process.env.APPDATA;
-    } else {
-      process.env.APPDATA = originalAppData;
-    }
-    rmSync(tempRoot, { recursive: true, force: true });
-  }
-});
-
-test('parseShimFile prefers %dp0 matches over %ENV_VAR% matches', () => {
-  const tempRoot = mkdtempSync(join(tmpdir(), 'cli-spawn-win-dp0-priority-'));
-  const originalAppData = process.env.APPDATA;
-  const shimDir = join(tempRoot, 'shim');
-  const fakeAppData = join(tempRoot, 'appdata');
-
-  mkdirSync(shimDir, { recursive: true });
-  mkdirSync(join(shimDir, 'node_modules', 'pkg'), { recursive: true });
-  mkdirSync(join(fakeAppData, 'npm', 'node_modules', 'pkg'), { recursive: true });
-
-  const cmdPath = join(shimDir, 'mypkg.cmd');
-  const dp0Script = join(shimDir, 'node_modules', 'pkg', 'cli.js');
-  const envScript = join(fakeAppData, 'npm', 'node_modules', 'pkg', 'cli.js');
-
-  // Shim contains BOTH patterns — dp0 should win
-  writeFileSync(
-    cmdPath,
-    '@"%APPDATA%\\npm\\node_modules\\pkg\\cli.js" %*\r\n@"%~dp0\\node_modules\\pkg\\cli.js" %*\r\n',
-    'utf8',
-  );
-  writeFileSync(dp0Script, 'console.log("dp0");\n', 'utf8');
-  writeFileSync(envScript, 'console.log("env");\n', 'utf8');
-
-  try {
-    process.env.APPDATA = fakeAppData;
-    const result = parseShimFile(cmdPath);
-    assert.equal(result, dp0Script, 'dp0 pattern should take priority over env-var pattern');
-  } finally {
-    if (originalAppData === undefined) {
-      delete process.env.APPDATA;
-    } else {
-      process.env.APPDATA = originalAppData;
-    }
-    rmSync(tempRoot, { recursive: true, force: true });
-  }
-});
-
-test('resolveCmdShimScript falls back to findKnownScript when full .cmd path parsing fails', () => {
-  const tempRoot = mkdtempSync(join(tmpdir(), 'cli-spawn-win-fullpath-fallback-'));
-  const originalAppData = process.env.APPDATA;
-  const shimDir = join(tempRoot, 'shim');
-  const appDataDir = join(tempRoot, 'appdata');
-
-  mkdirSync(shimDir, { recursive: true });
-  mkdirSync(join(appDataDir, 'npm', 'node_modules', '@anthropic-ai', 'claude-code'), {
-    recursive: true,
-  });
-
-  // Create an unparseable .cmd (no recognizable patterns)
-  const cmdPath = join(shimDir, 'claude.cmd');
-  writeFileSync(cmdPath, '@echo off\nREM some custom wrapper\n', 'utf8');
-
-  // Create the known script at the APPDATA location
-  const knownScript = join(appDataDir, 'npm', 'node_modules', '@anthropic-ai', 'claude-code', 'cli.js');
-  writeFileSync(knownScript, 'console.log("ok");\n', 'utf8');
-
-  try {
-    process.env.APPDATA = appDataDir;
-    const resolved = resolveCmdShimScript(cmdPath);
-    assert.equal(resolved, knownScript, 'full .cmd path failure should fall back to findKnownScript');
-  } finally {
-    if (originalAppData === undefined) {
-      delete process.env.APPDATA;
-    } else {
-      process.env.APPDATA = originalAppData;
-    }
-    rmSync(tempRoot, { recursive: true, force: true });
-  }
-});
-
-// ── Layer 2 tests: newline sanitization in escape functions ──
-
-test('escapeCmdArg collapses newlines to spaces', () => {
-  const result = escapeCmdArg('hello\nworld --flag\r\nvalue');
-  assert.ok(!result.includes('\n'), 'output must not contain \\n');
-  assert.ok(!result.includes('\r'), 'output must not contain \\r');
-  assert.ok(result.includes('hello world --flag value'), 'newlines should become spaces');
-});
-
-test('escapeBashArg collapses newlines to spaces', () => {
-  const result = escapeBashArg('hello\nworld');
-  assert.ok(!result.includes('\n'), 'output must not contain \\n');
-  assert.ok(result.includes('hello world'), 'newlines should become spaces');
 });

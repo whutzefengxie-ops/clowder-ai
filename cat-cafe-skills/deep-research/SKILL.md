@@ -2,7 +2,7 @@
 name: deep-research
 description: >
   多源深度调研管道（Web Deep Research + Coder 合成 + 云端模型咨询）。
-  Use when: 技术问题需要多源调查、设计决策需要证据、铲屎官说"调研"/"research"、需要咨询云端模型。
+  Use when: 技术问题需要多源调查、设计决策需要证据、operator说"调研"/"research"、需要咨询云端模型。
   Not for: 简单搜索（直接用 WebSearch）、已有结论的确认。
   Output: 调研报告 + 证据合成 或 咨询文档（含回填区）。
 triggers:
@@ -18,7 +18,7 @@ renamed-from: deep-research-pipeline
 
 两种模式：
 - **Mode A: 多源调研**：Web 猫（网络搜索）+ Coder 猫（代码判断）+ GPT-5.2 Pro（审阅）= 三角验证
-- **Mode B: 云端模型咨询**：本地猫总结背景 → 铲屎官发给云端模型 → 回填结果 → 本地猫综合
+- **Mode B: 云端模型咨询**：本地猫总结背景 → operator发给云端模型 → 回填结果 → 本地猫综合
 
 ## 两种猫，各有分工
 
@@ -33,11 +33,36 @@ renamed-from: deep-research-pipeline
 - 纯代码问题（用 Explore agent）
 - 项目文档里已有答案
 
+## 文件组织规范（铁律）
+
+**一个研究课题 = 一个子目录**。只要产出超过 1 个文件，就必须建子目录，禁止在 `project-research/` 平铺散落。
+
+```
+project-research/YYYY-MM-DD-{topic}/
+├── prompt.md                          # Step 1 研究提示词（同时保留到 docs/prompts/ 的副本）
+├── {provider}-response.md             # Step 2 云端 deep research 原文
+│   例：claude-response.md / gemini-response.md / gpt-response.md
+├── gpt-pro-review.md                  # Step 3 GPT Pro 审阅（可选）
+├── {cat}-synthesis.md                 # Step 4 猫猫独立综合分析
+│   例：opus-synthesis.md / codex-synthesis.md / opus47-synthesis.md
+├── {cat}-点评.md                      # 非代码猫的风格点评（如Siamese）
+└── synthesis.md                       # 最终合并综合（如果有）
+```
+
+**命名规则**：
+- `{topic}` 用英文 kebab-case（如 `finance-provider-stack`、`memory-architecture`）
+- `{provider}` = 云端模型标识：`claude` / `gemini` / `gpt` / `gpt-pro`
+- `{cat}` = 猫猫名：`opus` / `opus47` / `codex` / `gemini-cat`（避免和 provider 名冲突时加 `-cat`）
+- 如果只有 1 个文件（如单次 Mode B 咨询），可以不建子目录，直接放 `project-research/`
+
+**Mode B 咨询归属**：如果咨询是某个已有研究课题的一部分，文件放进该课题子目录（不另建目录）。
+
 ## 四步流程
 
 **Step 1 — 写 Prompt 并落盘**
 ```
-docs/prompts/YYYY-MM-DD-{topic}-research-prompt.md
+project-research/YYYY-MM-DD-{topic}/prompt.md
+（同时复制一份到 docs/prompts/YYYY-MM-DD-{topic}-research-prompt.md，向后兼容）
 ```
 模板见下方。写完再发，不要边写边发。
 
@@ -48,40 +73,36 @@ docs/prompts/YYYY-MM-DD-{topic}-research-prompt.md
   Gemini Deep Research
   ChatGPT Deep Research  ← 可能先问澄清问题，答完后把 Q&A 追加到另外两路的 prompt
 ```
-结果存：*(internal reference removed)*（chatgpt / claude-ai / gemini）
+结果存：`project-research/YYYY-MM-DD-{topic}/{provider}-response.md`
 
 **Step 3 — GPT-5.2 Pro 审阅**
 输入三份报告 → 找逻辑漏洞、弱证据、三方分歧
-存：`gpt-pro-review.md`（注意：Pro 是审阅者，不是调研者，不要让他搜索）
+存：`project-research/YYYY-MM-DD-{topic}/gpt-pro-review.md`（注意：Pro 是审阅者，不是调研者，不要让他搜索）
 
 **Step 4 — Coder 猫综合 + 决策**
 读全部四份文档 → 对照实际 codebase 验证 → 标注"直接可用/需验证/项目特殊约束"
-存：`synthesis.md` → 和铲屎官讨论 → 落到 ADR
+如果多只猫并行综合，每只猫存自己的：`{cat}-synthesis.md`
+最终合并版：`synthesis.md` → 和operator讨论 → 落到 ADR
 
 ## Prompt 模板（Step 1）
 
-```markdown
-# {Topic} 调研
+**使用 8 槽位骨架模板**：`cat-cafe-skills/refs/research-prompt-template.md`
 
-> 委托人：{who}  日期：YYYY-MM-DD
+8 个槽位：
+1. `Problem Frame` — 任务边界 + 非目标
+2. `Current Hypotheses` — 我们的假设 + 证据缺口
+3. `Disconfirm First` — 先找反例（反确认偏误）
+4. `Source Mix Quota` — 来源配额（论文/工程/开源/竞品）
+5. `Local Constraints` — 我们的约束（多引擎/人在环/知识在 repo）
+6. `Output Schema` — 支持/反对/未定 + 置信度
+7. `Decision Interface` — 映射到 采纳/试点/搁置
+8. `Risk Register` — 如果结论错了炸在哪
 
-## 背景
-{为什么需要这个调研，哪些项目上下文是相关的}
+**发送前自动注入**（模板底部有清单）：当前 Feature spec、相关 ADR、最近教训、BACKLOG 上下文。
 
-## 需要调研的问题
-1. {具体问题 + 范围}
-2. {具体问题}
+**收到后 Quality Gate**（模板底部有标准）：反例覆盖、来源多样性、约束对齐、可行动、风险意识。
 
-## 输出要求
-- 每个结论标注信息来源（URL 或文档名）
-- 区分"已确认"和"推测"
-- 给出推荐方向 + 风险
-
-## 参考资料
-{相关项目文档链接或已有代码路径}
-```
-
-详细模板见 `../refs/` 目录。
+实战范例：*(internal reference removed)*
 
 ## Quota 意识
 
@@ -161,6 +182,15 @@ docs/prompts/YYYY-MM-DD-{topic}-research-prompt.md
 | 忽略三方分歧 | 分歧 = 最有价值的信号，必须分析 |
 | Coder 猫盲信 web 报告 | 必须对照实际 codebase 验证 |
 
+## Step 5 — 在交接前持久化调研产出
+
+如果调研结果需要被后续 session、其他猫、或人类继续使用，就在结束该流程前 commit。
+- 在 worktree 里：commit 到当前分支
+- 在共享 main worktree：commit + push，确保其他 session 能看到
+- 多次 Edit 更新：每次重大更新后追加 commit
+
+**验证**：在总结 / handoff 里记录 commit SHA。`git log --oneline -1` 显示刚才的 commit。
+
 ## Next Step
 
 → `collaborative-thinking`（讨论调研结论，形成决策）
@@ -180,14 +210,14 @@ docs/prompts/YYYY-MM-DD-{topic}-research-prompt.md
 - 需要 GPT Pro 帮忙审阅/补充观点
 - 需要外部专家视角
 - 本地调研完成后，想要第三方验证
-- 铲屎官说"问一下云端的 xxx"
+- operator说"问一下云端的 xxx"
 
 ## 三步流程
 
 **Step 1 — 本地猫创建咨询文档**
 
 ```
-docs/research/YYYY-MM-DD-{topic}-{model}-consult.md
+project-research/YYYY-MM-DD-{topic}-{model}-consult.md
 ```
 
 文档结构（三部分）：
@@ -198,7 +228,7 @@ docs/research/YYYY-MM-DD-{topic}-{model}-consult.md
 {自包含的背景 + 我们的现状 + 已有结论 + 请求}
 
 ## Part 2: 云端模型回答（待回填）
-> 铲屎官粘贴回答到这里
+> operator粘贴回答到这里
 
 [待回填]
 
@@ -208,7 +238,7 @@ docs/research/YYYY-MM-DD-{topic}-{model}-consult.md
 [待撰写]
 ```
 
-**Step 2 — 铲屎官发送 + 回填**
+**Step 2 — operator发送 + 回填**
 
 1. 复制 Part 1 发给云端模型
 2. 把回答粘贴到 Part 2
@@ -258,7 +288,7 @@ docs/research/YYYY-MM-DD-{topic}-{model}-consult.md
 | **结构化** | 用表格/列表呈现已有结论，便于云端模型快速理解 |
 | **明确请求** | 说清楚要什么（案例/审阅/建议），不要让模型猜 |
 | **留回填区** | Part 2 和 Part 3 结构清晰，方便后续操作 |
-| **追溯链** | 文档放在 *(internal reference removed)*，关联到原始 thread |
+| **追溯链** | 文档放在 `project-research/`，关联到原始 thread |
 
 ## 常见错误
 
@@ -271,10 +301,14 @@ docs/research/YYYY-MM-DD-{topic}-{model}-consult.md
 
 ## 文件命名规范
 
+**独立咨询**（不属于某个研究课题）：
 ```
-docs/research/YYYY-MM-DD-{topic}-{model}-consult.md
+project-research/YYYY-MM-DD-{topic}-{model}-consult.md
 ```
+例如：`2026-03-08-model-agent-platform-gpt-pro-consult.md`
 
-例如：
-- `2026-03-08-model-agent-platform-gpt-pro-consult.md`
-- `2026-03-05-mcp-security-claude-pro-consult.md`
+**属于已有课题的咨询**：放进课题子目录
+```
+project-research/YYYY-MM-DD-{topic}/{model}-consult.md
+```
+例如：*(internal reference removed)*

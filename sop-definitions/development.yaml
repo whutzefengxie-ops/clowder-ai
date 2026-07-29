@@ -1,0 +1,206 @@
+id: development
+domain: engineering
+label: Development SOP
+description: Clowder AI coding feature lifecycle. This is the runtime SOP definition used by WorkflowSop.
+stages:
+  - id: kickoff
+    label: 立项
+    suggested_skill: feat-lifecycle
+    hard_rules:
+      - id: kickoff-ac-checklist
+        text: Feature spec 必须有 AC + 需求点 checklist
+        severity: blocker
+        predicate:
+          type: manual_only
+          reason: Feature spec completeness is reviewed from docs and operator context; no stable machine artifact yet.
+    pitfalls:
+      - id: kickoff-no-unconfirmed-implementation
+        text: 没有co-creator确认就直接开始实现
+        severity: warn
+        predicate:
+          type: manual_only
+          reason: operator confirmation is conversational intent, not yet represented as a structured event.
+
+  - id: impl
+    label: 实现
+    suggested_skill: writing-plans
+    hard_rules:
+      - id: impl-main-sync-before-worktree
+        text: worktree 开之前必须 main 双向同步 (ahead=0 behind=0)
+        severity: blocker
+        predicate:
+          type: git_state_predicate
+          repository: cat-cafe
+          branch: main
+          checks: [ahead_zero, behind_zero]
+          before_command: git worktree add
+      - id: impl-redis-6398-only
+        text: Redis 只用 6398，禁碰 6399
+        severity: blocker
+        predicate:
+          type: env_check
+          key: REDIS_URL
+          must_include: ":6398"
+          must_not_include: ":6399"
+      - id: impl-design-gate-before-code
+        text: 跳过 Design Gate（含 User Journey 落盘）直接写代码
+        severity: blocker
+        predicate:
+          type: manual_only
+          reason: Design Gate evidence and User Journey section are feature-doc fields; upgrade to feature_doc_readiness_check when checker script is available.
+          future_candidate: feature_doc_readiness_check
+      - id: impl-user-journey-missing
+        text: 用户可感知 Feature 缺 User Journey 段（或 user_journey_exempt）
+        severity: blocker
+        predicate:
+          type: command_pattern
+          must_match: pnpm check:features|node scripts/check-feature-truth
+          reason: "check-feature-truth.mjs now checks changed feature docs for ## User Journey presence. F252 root cause — session vs thread scope mismatch went undetected because journey was never written down."
+    pitfalls:
+      - id: impl-post-compact-recall-loss
+        text: 压缩后忘了当前在做什么
+        severity: warn
+        predicate:
+          type: manual_only
+          reason: Current runtime has no stable post-compact recall-failure telemetry.
+          future_candidate: trace_pattern_post_compact_recall
+      - id: impl-convention-graph-before-convention-edit
+        text: 改 MCP tool / skill manifest / route / callback 等约定面前，先用 convention graph 查影响面；stale=true 先 reindex
+        severity: warn
+        predicate:
+          type: manual_only
+          reason: Convention graph CLI usage is not yet emitted as structured telemetry.
+          future_candidate: convention_graph_usage_event
+
+  - id: quality_gate
+    label: 自检
+    suggested_skill: quality-gate
+    hard_rules:
+      - id: quality-gate-vision-coverage
+        text: 自检报告必须包含愿景覆盖度
+        severity: blocker
+        predicate:
+          type: manual_only
+          reason: Vision coverage has no machine-checkable report artifact yet; upgrade when quality-gate emits structured evidence.
+          future_candidate: quality_gate_report_artifact
+    pitfalls:
+      - id: quality-gate-full-test-evidence
+        text: 声称完成但没跑全量测试
+        severity: blocker
+        predicate:
+          type: command_pattern
+          must_match: pnpm gate|pnpm test|pnpm --filter .* test|node --test
+
+  - id: fresh_context
+    label: Fresh-Context Pre-Review
+    suggested_skill: fresh-context-review
+    optional: true
+    hard_rules: []
+    pitfalls:
+      - id: fresh-context-not-approval
+        text: Fresh-context 是 finding generator，不是 approval authority——不产出 verdict，不记入 Review Provenance Matrix
+        severity: warn
+        predicate:
+          type: manual_only
+          reason: Fresh-context output is free-form finding list, not a structured verdict event.
+
+  - id: review
+    label: Review
+    suggested_skill: request-review
+    hard_rules:
+      - id: review-no-self-review
+        text: 同一个体不能 review 自己的代码
+        severity: blocker
+        predicate:
+          type: handle_check
+          constraint: reviewer_not_author
+      - id: review-original-requirements
+        text: Review 请求必须附原始需求摘录
+        severity: blocker
+        predicate:
+          type: manual_only
+          reason: Review packet content is free-form markdown; no structured requirement-excerpt field yet.
+          future_candidate: review_packet_schema
+    pitfalls:
+      - id: review-retrigger-after-p1
+        text: 收到 P1 修完后没 re-trigger review
+        severity: blocker
+        predicate:
+          type: command_sequence
+          must_include:
+            - git push
+            - gh pr comment
+          absent:
+            - "@codex review"
+
+  - id: merge
+    label: 合入
+    suggested_skill: merge-gate
+    hard_rules:
+      - id: merge-github-squash-only
+        text: 必须用 gh pr merge --squash（禁止本地 squash）
+        severity: blocker
+        predicate:
+          type: command_pattern
+          must_match: gh pr merge .*--squash
+          must_not_match: git merge --squash|git reset --soft
+      - id: merge-cloud-review-sha-dedup
+        text: 云端 review 同一 SHA 不重复触发
+        severity: warn
+        predicate:
+          type: sha_dedup
+          scope: cloud_review
+      - id: merge-feature-doc-truth
+        text: merge 前核对 feature doc 是否说真话（Status/AC/Phase vs 代码现实），merge 后记录已合入状态
+        severity: blocker
+        predicate:
+          type: manual_only
+          reason: Claimed-done vs code-real reconciliation is semantic; check-feature-truth mechanically guards only obvious status/timeline drift. Detailed pre/post steps live in merge-gate SKILL Step 7.5.
+          future_candidate: feature_doc_truth_check
+    pitfalls:
+      - id: merge-local-squash-close
+        text: 本地 squash + push + gh pr close（PR 显示 closed 不是 merged）
+        severity: blocker
+        predicate:
+          type: command_sequence
+          anti_pattern:
+            - git push
+            - gh pr close
+          absent:
+            - gh pr merge
+      - id: merge-runtime-update-after-merge
+        text: 合入后擅自更新 runtime
+        severity: blocker
+        predicate:
+          type: command_sequence
+          cwd_contains: cat-cafe-runtime
+          anti_pattern:
+            - git pull
+            - pnpm start|runtime:start|restart
+
+  - id: completion
+    label: 完成
+    suggested_skill: feat-lifecycle
+    hard_rules:
+      - id: completion-vision-guardian
+        text: feat close 前必须跨猫愿景守护
+        severity: blocker
+        predicate:
+          type: manual_only
+          reason: Guardian identity and signoff are still conversational/thread-state artifacts.
+          future_candidate: guardian_signoff_event
+      - id: completion-pr-merged-feature-check
+        text: PR merged + check:features 通过
+        severity: blocker
+        predicate:
+          type: command_sequence
+          must_include:
+            - gh pr view
+            - pnpm check:features
+    pitfalls:
+      - id: completion-missing-guardian-handoff
+        text: 没有 @ 其他猫做愿景守护就直接 close
+        severity: blocker
+        predicate:
+          type: handle_check
+          constraint: guardian_handoff_present

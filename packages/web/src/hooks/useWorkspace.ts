@@ -1,11 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useChatStore } from '@/stores/chatStore';
-import { apiFetch } from '@/utils/api-client';
+import { API_URL, apiFetch } from '@/utils/api-client';
+import { buildWorktreeAliasMap, resolveListedWorktreeId } from '@/utils/worktree-id-alias';
 
 export interface WorktreeEntry {
   id: string;
+  canonicalId?: string | null;
   root: string;
   branch: string;
   head: string;
@@ -55,6 +57,8 @@ export function useWorkspace() {
   const worktreeId = useChatStore((s) => s.workspaceWorktreeId);
   const openFilePath = useChatStore((s) => s.workspaceOpenFilePath);
   const setWorktreeId = useChatStore((s) => s.setWorkspaceWorktreeId);
+  const normalizeWorktreeId = useChatStore((s) => s.normalizeWorkspaceWorktreeId);
+  const setWorktreeAliases = useChatStore((s) => s.setWorkspaceWorktreeAliases);
   const projectPath = useChatStore((s) => s.currentProjectPath);
 
   const [worktrees, setWorktrees] = useState<WorktreeEntry[]>([]);
@@ -62,6 +66,7 @@ export function useWorkspace() {
   const [file, setFile] = useState<FileData | null>(null);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Fetch worktrees — re-fetches when project changes
@@ -77,16 +82,20 @@ export function useWorkspace() {
         const data = await res.json();
         const newList: typeof worktrees = data.worktrees ?? [];
         setWorktrees(newList);
+        const worktreeAliases = buildWorktreeAliasMap(newList);
+        setWorktreeAliases(worktreeAliases, projectPath);
         // Auto-select first worktree if none selected or current was removed
-        const currentStillExists = worktreeId && newList.some((w: { id: string }) => w.id === worktreeId);
-        if (!currentStillExists && newList.length > 0) {
+        const listedWorktreeId = resolveListedWorktreeId(newList, worktreeId, worktreeAliases);
+        if (listedWorktreeId && listedWorktreeId !== worktreeId) {
+          normalizeWorktreeId(listedWorktreeId);
+        } else if (!listedWorktreeId && newList.length > 0) {
           setWorktreeId(newList[0].id);
         }
       }
     } catch {
       /* ignore */
     }
-  }, [worktreeId, setWorktreeId, projectPath]);
+  }, [worktreeId, setWorktreeId, normalizeWorktreeId, setWorktreeAliases, projectPath]);
 
   useEffect(() => {
     fetchWorktrees();
@@ -171,6 +180,83 @@ export function useWorkspace() {
     else setFile(null);
   }, [openFilePath, fetchFile]);
 
+  // File-change watcher: auto-reload when file is modified externally
+  const [pendingExternalSha, setPendingExternalSha] = useState<string | null>(null);
+  const editDirtyRef = useRef(false);
+  const fileShaRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    fileShaRef.current = file?.sha256 ?? null;
+  }, [file?.sha256]);
+
+  const setEditDirty = useCallback(
+    (dirty: boolean) => {
+      editDirtyRef.current = dirty;
+      if (!dirty && pendingExternalSha) {
+        setPendingExternalSha(null);
+        if (openFilePath) fetchFile(openFilePath);
+      }
+    },
+    [pendingExternalSha, openFilePath, fetchFile],
+  );
+
+  const applyExternalChange = useCallback(() => {
+    setPendingExternalSha(null);
+    if (openFilePath) fetchFile(openFilePath);
+  }, [openFilePath, fetchFile]);
+
+  const dismissExternalChange = useCallback(() => {
+    setPendingExternalSha(null);
+  }, []);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional reset on file switch
+  useEffect(() => {
+    setPendingExternalSha(null);
+  }, [openFilePath]);
+
+  useEffect(() => {
+    if (!worktreeId || !openFilePath) return;
+    let cancelled = false;
+    let cleanup: (() => void) | null = null;
+
+    import('socket.io-client').then(({ io }) => {
+      if (cancelled) return;
+      const apiUrl = new URL(API_URL);
+      const socket = io(`${apiUrl.protocol}//${apiUrl.host}`, {
+        transports: ['websocket'],
+        forceNew: true,
+      });
+
+      socket.on('connect', () => {
+        socket.emit('workspace:watch-file', {
+          worktreeId,
+          path: openFilePath,
+          sha256: fileShaRef.current,
+        });
+      });
+
+      socket.on('workspace:file-changed', (data: { worktreeId: string; path: string; sha256: string }) => {
+        if (data.path !== openFilePath || data.worktreeId !== worktreeId) return;
+        if (data.sha256 === fileShaRef.current) return;
+        if (editDirtyRef.current) {
+          setPendingExternalSha(data.sha256);
+        } else {
+          fetchFile(openFilePath);
+        }
+      });
+
+      cleanup = () => {
+        socket.emit('workspace:unwatch-file');
+        socket.disconnect();
+      };
+    });
+
+    return () => {
+      cancelled = true;
+      cleanup?.();
+    };
+  }, [worktreeId, openFilePath, fetchFile]);
+
   // Single-mode search helper (filename or content)
   const searchSingle = useCallback(
     async (query: string, type: 'content' | 'filename'): Promise<SearchResult[]> => {
@@ -179,7 +265,10 @@ export function useWorkspace() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ worktreeId, query, type }),
       });
-      if (!res.ok) return [];
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({ error: 'Failed to search workspace' }));
+        throw new Error(data.error ?? 'Failed to search workspace');
+      }
       const data = await res.json();
       return (data.results ?? []) as SearchResult[];
     },
@@ -190,7 +279,7 @@ export function useWorkspace() {
   const search = useCallback(
     async (query: string, type: 'content' | 'filename' | 'all' = 'content') => {
       if (!worktreeId || !query.trim()) return;
-      setLoading(true);
+      setSearchLoading(true);
       setError(null);
       try {
         if (type === 'all') {
@@ -209,9 +298,10 @@ export function useWorkspace() {
           setSearchResults(results);
         }
       } catch {
-        /* ignore */
+        setSearchResults([]);
+        setError('Failed to search workspace');
       } finally {
-        setLoading(false);
+        setSearchLoading(false);
       }
     },
     [worktreeId, searchSingle],
@@ -241,7 +331,9 @@ export function useWorkspace() {
     file,
     searchResults,
     loading,
+    searchLoading,
     error,
+    pendingExternalSha,
     fetchWorktrees,
     fetchTree,
     fetchSubtree,
@@ -249,5 +341,8 @@ export function useWorkspace() {
     search,
     setSearchResults,
     revealInFinder,
+    setEditDirty,
+    applyExternalChange,
+    dismissExternalChange,
   };
 }

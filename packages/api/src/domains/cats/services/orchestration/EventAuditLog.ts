@@ -199,6 +199,8 @@ export const AuditEventTypes = {
   SERVER_SHUTDOWN: 'server_shutdown',
   /** 运行时配置被更新 */
   CONFIG_UPDATED: 'config_updated',
+  /** 敏感环境变量被写入（owner-only, keys-only audit） */
+  ENV_SENSITIVE_WRITE: 'env_sensitive_write',
 
   // === 消息级审计 (茶话会夺魂 bug fix #37) ===
 
@@ -230,6 +232,8 @@ export const AuditEventTypes = {
 
   /** 手动绑定 CLI session (#72) */
   SESSION_BIND: 'session_bind',
+  /** F211 Phase B: External IDE-direct runtime session registration */
+  EXTERNAL_RUNTIME_SESSION_REGISTERED: 'external_runtime_session_registered',
 
   // === Push Delivery Diagnostics ===
 
@@ -250,9 +254,15 @@ export const AuditEventTypes = {
   BROWSER_PREVIEW_CLOSE: 'browser_preview_close',
   /** 浏览器预览导航 */
   BROWSER_PREVIEW_NAVIGATE: 'browser_preview_navigate',
+  /** Workspace 面板导航 */
+  WORKSPACE_NAVIGATE: 'workspace_navigate',
 
   // === Session Sealing (F118) ===
 
+  /** requestSeal() accepted — session transitioning active → sealing */
+  SEAL_REQUESTED: 'seal_requested',
+  /** finalize() completed cleanly — session sealed with transcript + digest written. Not emitted on partial finalize (doFinalize failed but status forced to sealed). */
+  SEAL_FINALIZED: 'seal_finalized',
   /** finalize() failed or timed out */
   SEAL_FINALIZE_FAILED: 'seal_finalize_failed',
 } as const;

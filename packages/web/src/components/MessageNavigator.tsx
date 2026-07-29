@@ -1,8 +1,10 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { type CatData, formatCatName, useCatData } from '@/hooks/useCatData';
 import { useCoCreatorConfig } from '@/hooks/useCoCreatorConfig';
+import { catColorVar } from '@/lib/cat-slug';
+import { CAT_COLORS } from '@/lib/color-defaults';
 import type { ChatMessage as ChatMessageData } from '@/stores/chatStore';
 import { scrollToMessage } from '@/utils/scrollToMessage';
 
@@ -11,52 +13,40 @@ const MAX_DOTS = 18;
 
 type CatLookup = (id: string) => CatData | undefined;
 
-// Some variants use non-hyphen catIds (e.g. gpt52/sonnet/spark/gemini25 in cat-config.json).
-// During the brief pre-/api/cats state, we only have 3 base cats in fallback CAT_CONFIGS,
-// so we map these variant ids to a base cat for color/name consistency.
+// Some variants use non-hyphen catIds (e.g. gpt52/sonnet/spark/gemini25 in the runtime cat config).
+// During the brief pre-/api/cats state, the cat list may be empty, so we map
+// variant ids to a base color only. Identity text keeps the raw-id fallback
+// until the runtime roster can resolve the exact member.
 const VARIANT_BASE_FALLBACK: Record<string, string> = {
   gpt52: 'codex',
   spark: 'codex',
   sonnet: 'opus',
   gemini25: 'gemini',
-  'dare-agent': 'dare',
 };
 
-const FALLBACK_CAT_META: Record<string, { label: string; color: string }> = {
-  opus: { label: '布偶猫', color: '#9B7EBD' },
-  codex: { label: '缅因猫', color: '#5B8C5A' },
-  gemini: { label: '暹罗猫', color: '#5B9BD5' },
-  dare: { label: '狸花猫', color: '#D4A76A' },
+const FALLBACK_CAT_COLORS: Record<string, string> = {
+  opus: CAT_COLORS.opus.primary,
+  codex: CAT_COLORS.codex.primary,
+  gemini: CAT_COLORS.gemini.primary,
+  kimi: CAT_COLORS.kimi.primary,
 };
 
-function resolveFallbackCatMeta(catId: string): { baseId: string; label: string; color: string } | undefined {
+function resolveFallbackCatColor(catId: string): string | undefined {
   const normalizedId = catId.toLowerCase();
-  const direct = FALLBACK_CAT_META[normalizedId];
-  if (direct) return { baseId: normalizedId, ...direct };
+  const direct = FALLBACK_CAT_COLORS[normalizedId];
+  if (direct) return direct;
 
   const base = normalizedId.split('-')[0];
-  if (base && base !== normalizedId && FALLBACK_CAT_META[base]) {
-    return { baseId: base, ...FALLBACK_CAT_META[base] };
-  }
+  if (base && base !== normalizedId && FALLBACK_CAT_COLORS[base]) return FALLBACK_CAT_COLORS[base];
 
   const mappedBase = VARIANT_BASE_FALLBACK[normalizedId];
-  if (mappedBase && FALLBACK_CAT_META[mappedBase]) {
-    return { baseId: mappedBase, ...FALLBACK_CAT_META[mappedBase] };
-  }
+  if (mappedBase && FALLBACK_CAT_COLORS[mappedBase]) return FALLBACK_CAT_COLORS[mappedBase];
 
   return undefined;
 }
 
 function resolveCatById(getCatById: CatLookup, catId: string): CatData | undefined {
-  const normalizedId = catId.toLowerCase();
-  const direct = getCatById(normalizedId);
-  if (direct) return direct;
-  // F32-b P4: tolerate multi-variant ids (e.g. opus-45) even before /api/cats loads
-  const base = normalizedId.split('-')[0];
-  if (base && base !== normalizedId) return getCatById(base);
-  const mappedBase = VARIANT_BASE_FALLBACK[normalizedId];
-  if (mappedBase) return getCatById(mappedBase);
-  return undefined;
+  return getCatById(catId.toLowerCase());
 }
 
 function getSenderLabel(
@@ -72,17 +62,11 @@ function getSenderLabel(
   if (!isAssistant) return '系统';
   if (!catId) return '系统';
   const cat = resolveCat(catId);
-  if (!cat) {
-    const fallback = resolveFallbackCatMeta(catId);
-    if (!fallback) return catId;
-    return fallback.baseId === catId.toLowerCase() ? fallback.label : `${fallback.label}（${catId}）`;
-  }
-  const baseName = formatCatName(cat);
-  return cat.id === catId ? baseName : `${cat.displayName}（${catId}）`;
+  return cat ? formatCatName(cat) : catId;
 }
 
 function formatTime(ts: number): string {
-  return new Date(ts).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+  return new Date(ts).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
 }
 
 function truncateContent(content: string, maxLen: number): string {
@@ -98,7 +82,6 @@ export function MessageNavigator({ messages, scrollContainerRef }: MessageNaviga
   const { getCatById } = useCatData();
   const coCreator = useCoCreatorConfig();
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
-  const [viewport, setViewport] = useState({ top: 0, height: 1 });
   const trackRef = useRef<HTMLDivElement>(null);
 
   const resolveCat = useCallback((catId: string) => resolveCatById(getCatById, catId), [getCatById]);
@@ -123,30 +106,6 @@ export function MessageNavigator({ messages, scrollContainerRef }: MessageNaviga
     });
   }, [navItems]);
 
-  // Sync viewport indicator with scroll position
-  const updateViewport = useCallback(() => {
-    const el = scrollContainerRef.current;
-    if (!el) return;
-    const { scrollTop, scrollHeight, clientHeight } = el;
-    if (scrollHeight <= clientHeight) {
-      setViewport({ top: 0, height: 1 });
-      return;
-    }
-    setViewport({
-      top: scrollTop / scrollHeight,
-      height: clientHeight / scrollHeight,
-    });
-  }, [scrollContainerRef]);
-
-  // Re-bind on navItems change so ref.current is re-read if container remounts (P3 fix)
-  useEffect(() => {
-    const el = scrollContainerRef.current;
-    if (!el) return;
-    updateViewport();
-    el.addEventListener('scroll', updateViewport, { passive: true });
-    return () => el.removeEventListener('scroll', updateViewport);
-  }, [scrollContainerRef, updateViewport]);
-
   // Click on track background → scroll proportionally
   const handleTrackClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
@@ -170,20 +129,8 @@ export function MessageNavigator({ messages, scrollContainerRef }: MessageNaviga
   return (
     <div className="absolute right-0.5 top-2 bottom-2 w-5 z-10">
       <div ref={trackRef} className="relative h-full cursor-pointer" onClick={handleTrackClick}>
-        {/* Track rail */}
-        <div className="absolute left-1/2 top-0 bottom-0 w-px bg-gray-200 -translate-x-1/2" />
-
-        {/* Viewport indicator (scrollbar thumb) — P2 fix: clamp to prevent overflow */}
-        {(() => {
-          const thumbH = Math.max(viewport.height * 100, 5);
-          const thumbTop = Math.min(viewport.top * 100, 100 - thumbH);
-          return (
-            <div
-              className="absolute left-1/2 -translate-x-1/2 w-2.5 rounded-full bg-gray-300/50 transition-all duration-100 pointer-events-none"
-              style={{ top: `${thumbTop}%`, height: `${thumbH}%` }}
-            />
-          );
-        })()}
+        {/* Track rail — thin connecting line between dots */}
+        <div className="absolute left-1/2 top-0 bottom-0 w-px bg-[var(--console-border-soft)] -translate-x-1/2" />
 
         {/* Sampled dots */}
         {sampledItems.map(({ msg, sourceIdx }, idx) => {
@@ -191,14 +138,14 @@ export function MessageNavigator({ messages, scrollContainerRef }: MessageNaviga
           const isOwner = msg.type === 'user' && !msg.catId;
           const isAssistant = msg.type === 'assistant' || (msg.type === 'user' && !!msg.catId);
           const cat = isAssistant && msg.catId ? resolveCat(msg.catId) : undefined;
-          const fallback = isAssistant && msg.catId ? resolveFallbackCatMeta(msg.catId) : undefined;
-          const className = isOwner ? 'bg-cocreator-primary' : cat || fallback ? '' : 'bg-gray-400';
+          const fallbackColor = isAssistant && msg.catId ? resolveFallbackCatColor(msg.catId) : undefined;
+          const className = isOwner ? 'bg-cafe-accent' : cat || fallbackColor ? '' : 'bg-gray-400';
           const style = isOwner
             ? undefined
             : cat
-              ? { backgroundColor: cat.color.primary }
-              : fallback
-                ? { backgroundColor: fallback.color }
+              ? { backgroundColor: catColorVar(cat.id, 'primary') }
+              : fallbackColor
+                ? { backgroundColor: fallbackColor }
                 : undefined;
 
           return (
@@ -245,13 +192,13 @@ function NavTooltip({
 
   return (
     <div
-      className="absolute right-full mr-2 -translate-y-1/2 bg-gray-900/90 text-white text-xs rounded-lg px-2.5 py-1.5 max-w-[200px] pointer-events-none whitespace-nowrap z-50"
+      className="absolute right-full mr-2 -translate-y-1/2 bg-cafe-surface-sunken text-cafe text-xs rounded-lg px-2.5 py-1.5 max-w-[200px] pointer-events-none whitespace-nowrap z-50"
       style={{ top: `${topPercent}%` }}
     >
       <div className="font-medium">
         {senderName} · {formatTime(message.timestamp)}
       </div>
-      <div className="text-gray-300 truncate mt-0.5">{truncateContent(message.content, 40)}</div>
+      <div className="text-cafe-muted truncate mt-0.5">{truncateContent(message.content, 40)}</div>
     </div>
   );
 }

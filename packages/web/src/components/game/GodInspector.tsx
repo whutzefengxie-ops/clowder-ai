@@ -1,5 +1,7 @@
 'use client';
 
+import { useState } from 'react';
+
 export interface NightBallotRow {
   seatId: string;
   target: string;
@@ -63,6 +65,7 @@ export interface GodButtonVisibility {
   showPause: boolean;
   showResume: boolean;
   showSkip: boolean;
+  showStop: boolean;
 }
 
 export function deriveGodButtons(status: string): GodButtonVisibility {
@@ -70,6 +73,7 @@ export function deriveGodButtons(status: string): GodButtonVisibility {
     showPause: status === 'playing',
     showResume: status === 'paused',
     showSkip: status === 'playing',
+    showStop: status === 'playing' || status === 'paused',
   };
 }
 
@@ -113,6 +117,7 @@ export function GodInspector({
 }: GodInspectorProps) {
   const buttons = deriveGodButtons(gameStatus ?? '');
   const nightBallotRows = godEvents ? deriveNightBallotRows(godEvents, currentRound) : [];
+  const [stopping, setStopping] = useState(false);
   return (
     <div
       data-testid="god-inspector"
@@ -133,7 +138,7 @@ export function GodInspector({
         </div>
       )}
       {/* Section 1: Seat Matrix */}
-      <span className="text-ww-dim text-[10px] font-bold font-mono tracking-widest">座位表</span>
+      <span className="text-ww-dim text-micro font-bold font-mono tracking-widest">座位表</span>
       <div data-testid="seat-matrix" className="flex flex-col gap-1">
         {seats.map((seat) => {
           const roleColor = getRoleColor(seat.faction);
@@ -146,15 +151,15 @@ export function GodInspector({
                 isWolf ? 'bg-ww-danger-soft' : 'bg-ww-card'
               }${!seat.alive ? ' opacity-40' : ''}`}
             >
-              <span className="text-[10px] font-mono font-semibold" style={{ color: roleColor }}>
+              <span className="text-micro font-mono font-semibold" style={{ color: roleColor }}>
                 {seat.seatId}
               </span>
-              <span className="text-[10px] font-medium" style={{ color: roleColor }}>
+              <span className="text-micro font-medium" style={{ color: roleColor }}>
                 {seat.role}
                 {!seat.alive ? ' 💀' : ''}
               </span>
               <span
-                className={`text-[9px] font-mono font-medium ${
+                className={`text-micro font-mono font-medium ${
                   seat.status.includes('已行动')
                     ? 'text-ww-success'
                     : seat.status.includes('行动中')
@@ -175,19 +180,19 @@ export function GodInspector({
       <div className="h-px bg-ww-card w-full" />
 
       {/* Section 2: Night Timeline */}
-      <span className="text-ww-dim text-[10px] font-bold font-mono tracking-widest">夜晚时间线</span>
+      <span className="text-ww-dim text-micro font-bold font-mono tracking-widest">夜晚时间线</span>
       <div data-testid="night-timeline" className="flex flex-col gap-1.5">
         {nightSteps.map((step) => {
           const si = STATUS_ICONS[step.status] ?? { icon: '○', color: 'var(--ww-text-dim)' };
           return (
             <div key={`${step.roleName}-${step.status}`} className="flex items-center gap-2 w-full">
-              <span className="text-[10px] font-mono font-bold" style={{ color: si.color }}>
+              <span className="text-micro font-mono font-bold" style={{ color: si.color }}>
                 {si.icon}
               </span>
-              <span className="text-[11px] font-medium" style={{ color: getRoleColor(step.roleName.toLowerCase()) }}>
+              <span className="text-xs font-medium" style={{ color: getRoleColor(step.roleName.toLowerCase()) }}>
                 {step.roleName}
               </span>
-              <span className="text-[10px] font-mono text-ww-dim">{step.detail}</span>
+              <span className="text-micro font-mono text-ww-dim">{step.detail}</span>
             </div>
           );
         })}
@@ -197,7 +202,7 @@ export function GodInspector({
       {nightBallotRows.length > 0 && (
         <>
           <div className="h-px bg-ww-card w-full" />
-          <span className="text-ww-dim text-[10px] font-bold font-mono tracking-widest">狼人投票</span>
+          <span className="text-ww-dim text-micro font-bold font-mono tracking-widest">狼人投票</span>
           <div data-testid="night-ballot-panel" className="flex flex-col gap-1">
             {nightBallotRows.map((row) => (
               <div
@@ -206,10 +211,10 @@ export function GodInspector({
                   row.source === 'fallback' ? 'bg-ww-danger-soft' : 'bg-ww-card'
                 }`}
               >
-                <span className="text-[10px] font-mono font-semibold text-ww-danger">{row.seatId}</span>
-                <span className="text-[10px] font-mono text-ww-dim">→</span>
-                <span className="text-[10px] font-mono font-semibold text-ww-main">{row.target}</span>
-                {row.source === 'fallback' && <span className="text-[9px] font-mono text-ww-danger">系统代行</span>}
+                <span className="text-micro font-mono font-semibold text-ww-danger">{row.seatId}</span>
+                <span className="text-micro font-mono text-ww-dim">→</span>
+                <span className="text-micro font-mono font-semibold text-ww-main">{row.target}</span>
+                {row.source === 'fallback' && <span className="text-micro font-mono text-ww-danger">系统代行</span>}
               </div>
             ))}
           </div>
@@ -220,7 +225,7 @@ export function GodInspector({
       <div className="h-px bg-ww-card w-full" />
 
       {/* Section 3: Scope Filter */}
-      <span className="text-ww-dim text-[10px] font-bold font-mono tracking-widest">阵营筛选</span>
+      <span className="text-ww-dim text-micro font-bold font-mono tracking-widest">阵营筛选</span>
       <div data-testid="scope-tabs" className="flex gap-1">
         {SCOPE_TABS.map((tab) => {
           const isActive = scopeFilter === tab.key;
@@ -230,7 +235,7 @@ export function GodInspector({
               key={tab.key}
               data-testid={`scope-${tab.key}`}
               onClick={() => onScopeChange(tab.key)}
-              className={`text-[10px] font-mono rounded-md px-3 py-1.5 ${
+              className={`text-micro font-mono rounded-md px-3 py-1.5 ${
                 isActive ? 'bg-ww-danger text-ww-main font-bold' : 'bg-ww-card'
               }`}
               style={!isActive && tab.color ? { color: tab.color } : undefined}
@@ -242,17 +247,17 @@ export function GodInspector({
       </div>
 
       {/* Section 4: God Actions (hidden in detective mode) */}
-      {!isDetective && (buttons.showPause || buttons.showResume || buttons.showSkip) && (
+      {!isDetective && (buttons.showPause || buttons.showResume || buttons.showSkip || buttons.showStop) && (
         <>
           <div className="h-px bg-ww-card w-full" />
-          <span className="text-ww-dim text-[10px] font-bold font-mono tracking-widest">GOD ACTIONS</span>
+          <span className="text-ww-dim text-micro font-bold font-mono tracking-widest">GOD ACTIONS</span>
           <div data-testid="god-actions" className="flex gap-2">
             {buttons.showPause && (
               <button
                 type="button"
                 data-testid="god-pause"
                 onClick={() => onGodAction?.('pause')}
-                className="flex-1 text-[11px] font-bold rounded-md px-3 py-2 bg-ww-info text-ww-base hover:brightness-90 transition-colors"
+                className="flex-1 text-xs font-bold rounded-md px-3 py-2 bg-ww-info text-ww-base hover:brightness-90 transition-colors"
               >
                 暂停
               </button>
@@ -262,7 +267,7 @@ export function GodInspector({
                 type="button"
                 data-testid="god-resume"
                 onClick={() => onGodAction?.('resume')}
-                className="flex-1 text-[11px] font-bold rounded-md px-3 py-2 bg-ww-success text-ww-base hover:brightness-90 transition-colors"
+                className="flex-1 text-xs font-bold rounded-md px-3 py-2 bg-ww-success text-ww-base hover:brightness-90 transition-colors"
               >
                 继续
               </button>
@@ -272,12 +277,26 @@ export function GodInspector({
                 type="button"
                 data-testid="god-skip"
                 onClick={() => onGodAction?.('skip_phase')}
-                className="flex-1 text-[11px] font-bold rounded-md px-3 py-2 bg-ww-card text-ww-muted hover:brightness-110 transition-colors"
+                className="flex-1 text-xs font-bold rounded-md px-3 py-2 bg-ww-card text-ww-muted hover:brightness-110 transition-colors"
               >
                 跳过阶段
               </button>
             )}
           </div>
+          {buttons.showStop && (
+            <button
+              type="button"
+              data-testid="god-stop"
+              disabled={stopping}
+              onClick={() => {
+                setStopping(true);
+                onGodAction?.('stop');
+              }}
+              className={`w-full text-xs font-bold rounded-md px-3 py-2 transition-colors ${stopping ? 'bg-ww-card text-ww-dim cursor-wait' : 'bg-ww-danger text-ww-base hover:brightness-90'}`}
+            >
+              {stopping ? '停止中...' : '强制停止游戏'}
+            </button>
+          )}
         </>
       )}
     </div>

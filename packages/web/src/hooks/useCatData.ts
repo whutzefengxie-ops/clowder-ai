@@ -3,12 +3,13 @@
 /**
  * F32-b Phase 3: Central hook for dynamic cat data from /api/cats.
  * Fetches once per session, caches module-level. All consumers share same data.
- * Falls back to static CAT_CONFIGS from @cat-cafe/shared during initial load.
  */
 
-import { CAT_CONFIGS } from '@cat-cafe/shared';
 import { useEffect, useMemo, useState } from 'react';
+import { formatCatDisplayName } from '@/lib/cat-display-name';
+import { UNKNOWN_CAT_COLOR } from '@/lib/color-defaults';
 import { refreshMentionData } from '@/lib/mention-highlight';
+import { sortCatsByOrder } from '@/lib/sort-cats-by-order';
 import { apiFetch } from '@/utils/api-client';
 import { refreshSpeechAliases } from '@/utils/transcription-corrector';
 
@@ -21,13 +22,34 @@ export interface CatData {
   mentionPatterns: string[];
   breedId?: string;
   accountRef?: string;
-  /** Legacy compatibility while older runtime data is migrated. */
-  providerProfileId?: string;
-  provider: string;
+  /** clowder-ai#340 P5: CLI client identity (renamed from provider). */
+  clientId: string;
   defaultModel: string;
+  cli?: {
+    command?: string;
+    outputFormat?: string;
+    defaultArgs?: string[];
+    effort?: string;
+  };
   commandArgs?: string[];
   cliConfigArgs?: string[];
-  ocProviderName?: string;
+  /** clowder-ai#340 P5: Model provider name (renamed from ocProviderName). */
+  provider?: string;
+  /** F161: ACP transport config. Presence means this member runs through ACP instead of legacy CLI. */
+  acp?: {
+    command: string;
+    startupArgs: string[];
+    /** F161 Phase C: wire transport. 'stdio' (default) or 'httpstream'. */
+    transport?: 'stdio' | 'httpstream';
+    /** Required for httpstream until ACP publishes a stable HTTP transport spec. */
+    experimental?: boolean;
+    mcpWhitelist?: string[];
+    supportsMultiplexing?: boolean;
+    pool?: {
+      maxLiveProcesses?: number;
+      idleTtlMs?: number;
+    };
+  };
   contextBudget?: {
     maxPromptTokens: number;
     maxContextTokens: number;
@@ -41,14 +63,25 @@ export interface CatData {
   caution?: string | null;
   strengths?: string[];
   sessionChain?: boolean;
+  /** #712: MCP support toggle — when false, disables all MCP for this cat. */
+  mcpSupport?: boolean;
   /** F32-b P4: Human-readable variant label (e.g. "4.5", "Sonnet") */
   variantLabel?: string;
   /** F32-b P4: Whether this is the default variant for its breed */
   isDefaultVariant?: boolean;
   /** F32-b P4: Breed-level display name (e.g. "布偶猫"), for group headings */
   breedDisplayName?: string;
-  /** F127: Seed cats come from cat-template.json; runtime cats are added later */
-  source: 'seed' | 'runtime';
+  voiceConfig?: {
+    voice: string;
+    langCode: string;
+    speed?: number;
+    refAudio?: string;
+    refText?: string;
+    instruct?: string;
+    temperature?: number;
+  };
+  /** F149: Adapter mode for Google provider cats (ACP vs legacy CLI) */
+  adapterMode?: 'acp' | 'cli';
   /** F127: Roster metadata used by Hub ownership/lead markers */
   roster?: {
     family: string;
@@ -62,6 +95,7 @@ export interface CatData {
 // ── Module-level cache ──────────────────────────────────
 let _cached: CatData[] | null = null;
 let _fetchPromise: Promise<FetchResult> | null = null;
+let _catOrder: string[] = [];
 const _listeners = new Set<(cats: CatData[]) => void>();
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 10_000;
@@ -72,42 +106,33 @@ function notifyListeners(cats: CatData[]): void {
   }
 }
 
-function buildFallbackCats(): CatData[] {
-  return Object.values(CAT_CONFIGS).map((c) => ({
-    id: c.id as string,
-    displayName: c.displayName,
-    nickname: c.nickname,
-    color: { primary: c.color.primary, secondary: c.color.secondary },
-    mentionPatterns: [...c.mentionPatterns],
-    breedId: undefined,
-    provider: c.provider,
-    defaultModel: c.defaultModel,
-    avatar: c.avatar,
-    roleDescription: c.roleDescription,
-    personality: c.personality,
-    teamStrengths: c.teamStrengths,
-    caution: c.caution,
-    strengths: c.strengths ? [...c.strengths] : undefined,
-    sessionChain: c.sessionChain,
-    roster: null,
-    source: 'seed',
-  }));
-}
-
 interface FetchResult {
   cats: CatData[];
   fromApi: boolean;
 }
 
+async function fetchCatOrder(): Promise<string[]> {
+  try {
+    const res = await apiFetch('/api/config/cat-order');
+    if (!res.ok) return [];
+    const data = await res.json();
+    if (!Array.isArray(data?.catOrder)) return [];
+    return (data.catOrder as unknown[]).filter((id): id is string => typeof id === 'string');
+  } catch {
+    return [];
+  }
+}
+
 async function fetchCats(): Promise<FetchResult> {
   try {
-    const res = await apiFetch('/api/cats');
-    if (!res.ok) return { cats: buildFallbackCats(), fromApi: false };
-    const data = await res.json();
-    const cats = Array.isArray(data?.cats) ? normalizeCats(data.cats) : null;
-    return cats ? { cats, fromApi: true } : { cats: buildFallbackCats(), fromApi: false };
+    const [catsRes, orderIds] = await Promise.all([apiFetch('/api/cats'), fetchCatOrder()]);
+    _catOrder = orderIds;
+    if (!catsRes.ok) return { cats: [], fromApi: false };
+    const data = await catsRes.json();
+    const normalized = Array.isArray(data?.cats) ? normalizeCats(data.cats) : null;
+    return { cats: normalized ? sortCatsByOrder(normalized, _catOrder) : [], fromApi: normalized !== null };
   } catch {
-    return { cats: buildFallbackCats(), fromApi: false };
+    return { cats: [], fromApi: false };
   }
 }
 
@@ -118,11 +143,12 @@ function normalizeCats(rawCats: unknown[]): CatData[] {
       ...cat,
       id: cat.id ?? '',
       displayName: cat.displayName ?? cat.id ?? '',
-      color: cat.color ?? { primary: '#000000', secondary: '#ffffff' },
+      color: cat.color ?? UNKNOWN_CAT_COLOR,
       mentionPatterns: Array.isArray(cat.mentionPatterns) ? cat.mentionPatterns : [],
-      accountRef: cat.accountRef ?? cat.providerProfileId,
-      provider: cat.provider ?? 'openai',
+      accountRef: cat.accountRef,
+      clientId: cat.clientId ?? 'openai',
       defaultModel: cat.defaultModel ?? '',
+      cli: cat.cli,
       avatar: cat.avatar ?? '',
       roleDescription: cat.roleDescription ?? '',
       personality: cat.personality ?? '',
@@ -131,31 +157,46 @@ function normalizeCats(rawCats: unknown[]): CatData[] {
       strengths: Array.isArray(cat.strengths) ? cat.strengths : undefined,
       sessionChain: cat.sessionChain,
       roster: cat.roster ?? null,
-      source: cat.source ?? 'seed',
     };
   });
 }
 
 async function refreshCatsNow(): Promise<FetchResult> {
+  const prev = _cached;
   _cached = null;
   _fetchPromise = fetchCats();
   const result = await _fetchPromise;
   if (result.fromApi) {
     _cached = result.cats;
   } else {
+    // Preserve previous cache on failure — avoids false-empty states during transient outages
+    _cached = prev;
     _fetchPromise = null;
   }
-  refreshMentionData(result.cats);
-  refreshSpeechAliases(result.cats);
-  notifyListeners(result.cats);
-  return result;
+  const effective = result.fromApi ? result.cats : (_cached ?? []);
+  refreshMentionData(effective);
+  refreshSpeechAliases(effective);
+  notifyListeners(effective);
+  return { cats: effective, fromApi: result.fromApi };
 }
 
 // ── Hook ────────────────────────────────────────────────
 
-export function useCatData() {
-  const [cats, setCats] = useState<CatData[]>(() => _cached ?? buildFallbackCats());
-  const [isLoading, setIsLoading] = useState(!_cached);
+interface UseCatDataOptions {
+  /**
+   * Subscribe to the shared registry without starting a request.
+   *
+   * Leaf presentation components use this mode because the Console shell already
+   * owns registry loading. It keeps name projection reactive without turning each
+   * label into an independent data-fetch boundary.
+   */
+  fetch?: boolean;
+}
+
+export function useCatData({ fetch: shouldFetch = true }: UseCatDataOptions = {}) {
+  const [cats, setCats] = useState<CatData[]>(() => _cached ?? []);
+  const [isLoading, setIsLoading] = useState(shouldFetch && !_cached);
+  const [hasFetched, setHasFetched] = useState(!!_cached);
   const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
@@ -170,6 +211,11 @@ export function useCatData() {
   }, []);
 
   useEffect(() => {
+    if (!shouldFetch) {
+      setCats(_cached ?? []);
+      setIsLoading(false);
+      return;
+    }
     if (_cached) {
       setCats(_cached);
       setIsLoading(false);
@@ -198,19 +244,21 @@ export function useCatData() {
       if (!cancelled) {
         setCats(result);
         setIsLoading(false);
+        if (fromApi) setHasFetched(true);
       }
     });
     return () => {
       cancelled = true;
       clearTimeout(retryTimer);
     };
-  }, [retryCount]);
+  }, [retryCount, shouldFetch]);
 
   const refresh = useMemo(
     () => async () => {
       setIsLoading(true);
       const result = await refreshCatsNow();
       setCats(result.cats);
+      if (result.fromApi) setHasFetched(true);
       setIsLoading(false);
       return result.cats;
     },
@@ -235,22 +283,52 @@ export function useCatData() {
     };
   }, [cats]);
 
-  return { cats, isLoading, getCatById, getCatsByBreed, refresh };
+  return { cats, isLoading, hasFetched, getCatById, getCatsByBreed, refresh };
 }
 
 /** Format cat name with optional variant label for multi-variant disambiguation */
 export function formatCatName(cat: { displayName: string; variantLabel?: string }): string {
-  return cat.variantLabel ? `${cat.displayName}（${cat.variantLabel}）` : cat.displayName;
+  return formatCatDisplayName(cat);
 }
 
-/** Get cached cats synchronously (for non-hook contexts). Returns fallback if not loaded. */
+/** Get cached cats synchronously (for non-hook contexts). Returns empty if not loaded. */
 export function getCachedCats(): CatData[] {
-  return _cached ?? buildFallbackCats();
+  return _cached ?? [];
 }
 
 /** Reset module-level cache (for testing) */
 export function _resetCatDataCache(): void {
   _cached = null;
   _fetchPromise = null;
+  _catOrder = [];
+  _saveSeq = 0;
+  _lastSuccessSeq = 0;
   _listeners.clear();
+}
+
+let _saveSeq = 0;
+let _lastSuccessSeq = 0;
+
+/**
+ * F166: Persist custom cat order and update the cached list optimistically.
+ * Throws on network failure — callers are expected to roll back UI state.
+ * Uses monotonic sequences: _saveSeq tracks all requests, _lastSuccessSeq tracks
+ * the newest successful one. Stale success still updates cache if no newer success exists.
+ */
+export async function saveCatOrder(catOrder: string[]): Promise<void> {
+  const mySeq = ++_saveSeq;
+  const res = await apiFetch('/api/config/cat-order', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ catOrder }),
+  });
+  if (!res.ok) throw new Error(`Failed to save cat order: ${res.status}`);
+  if (mySeq <= _lastSuccessSeq) return;
+  _lastSuccessSeq = mySeq;
+  _catOrder = catOrder;
+  if (_cached) {
+    const reordered = sortCatsByOrder(_cached, catOrder);
+    _cached = reordered;
+    notifyListeners(reordered);
+  }
 }

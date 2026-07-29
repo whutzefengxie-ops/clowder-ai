@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { useAgentMessages } from '@/hooks/useAgentMessages';
 import { useChatCommands } from '@/hooks/useChatCommands';
 import type { DeliveryMode } from '@/stores/chat-types';
@@ -30,7 +31,19 @@ export function useSendMessage(activeThreadId?: string) {
     setHasActiveInvocation,
     setThreadLoading,
     setThreadHasActiveInvocation,
-  } = useChatStore();
+  } = useChatStore(
+    useShallow((s) => ({
+      addMessage: s.addMessage,
+      addMessageToThread: s.addMessageToThread,
+      removeMessage: s.removeMessage,
+      removeThreadMessage: s.removeThreadMessage,
+      replaceThreadMessageId: s.replaceThreadMessageId,
+      setLoading: s.setLoading,
+      setHasActiveInvocation: s.setHasActiveInvocation,
+      setThreadLoading: s.setThreadLoading,
+      setThreadHasActiveInvocation: s.setThreadHasActiveInvocation,
+    })),
+  );
   const { resetRefs } = useAgentMessages();
   const { processCommand } = useChatCommands();
   const [uploadStatus, setUploadStatus] = useState<UploadStatus>('idle');
@@ -60,6 +73,7 @@ export function useSendMessage(activeThreadId?: string) {
       overrideThreadId?: string,
       whisper?: WhisperOptions,
       deliveryMode?: DeliveryMode,
+      replyToId?: string,
     ) => {
       const activeThread = activeThreadId ?? useChatStore.getState().currentThreadId;
       const threadId = overrideThreadId ?? activeThread;
@@ -71,11 +85,28 @@ export function useSendMessage(activeThreadId?: string) {
       setUploadError(null);
       setUploadStatus(hasImages ? 'uploading' : 'idle');
 
+      // #699: Capture replyToMessage BEFORE any await — ChatInput calls clearReplyTo()
+      // immediately after onSend, so the store will be cleared by the time processCommand yields.
+      const capturedReplyTarget = replyToId ? useChatStore.getState().replyToMessage : undefined;
+
       const wasCommand = await processCommand(content, threadId);
       if (wasCommand) return;
 
       const clientMessageId = createClientId();
       const optimisticMessageId = `user-${clientMessageId}`;
+
+      // #699: Build optimistic replyPreview from captured data (not store — already cleared)
+      let replyPreview: ChatMessageData['replyPreview'] | undefined;
+      if (replyToId && capturedReplyTarget) {
+        const PREVIEW_MAX = 80;
+        replyPreview = {
+          senderCatId: capturedReplyTarget.senderCatId,
+          content:
+            capturedReplyTarget.content.length > PREVIEW_MAX
+              ? capturedReplyTarget.content.slice(0, PREVIEW_MAX)
+              : capturedReplyTarget.content,
+        };
+      }
 
       // Create user message
       const userMsg: ChatMessageData = {
@@ -84,6 +115,7 @@ export function useSendMessage(activeThreadId?: string) {
         content,
         timestamp: Date.now(),
         ...(whisper ? { visibility: whisper.visibility, whisperTo: whisper.whisperTo } : {}),
+        ...(replyToId ? { replyTo: replyToId, ...(replyPreview ? { replyPreview } : {}) } : {}),
       };
       if (images && images.length > 0) {
         userMsg.contentBlocks = [
@@ -155,6 +187,7 @@ export function useSendMessage(activeThreadId?: string) {
               formData.append('whisperTo', catId);
             }
           }
+          if (replyToId) formData.append('replyTo', replyToId);
           for (const img of images) {
             formData.append('images', img);
           }
@@ -180,6 +213,7 @@ export function useSendMessage(activeThreadId?: string) {
               idempotencyKey: clientMessageId,
               ...(whisper ? { visibility: whisper.visibility, whisperTo: whisper.whisperTo } : {}),
               ...deliveryModePayload,
+              ...(replyToId ? { replyTo: replyToId } : {}),
             }),
           });
           if (!res.ok) {
@@ -193,6 +227,8 @@ export function useSendMessage(activeThreadId?: string) {
         }
         setUploadStatus('idle');
         setUploadError(null);
+        // Guide engine: signal that message was sent (advance confirm steps on chat.input)
+        window.dispatchEvent(new CustomEvent('guide:confirm', { detail: { target: 'chat.input' } }));
       } catch (err) {
         // F39: Only clear invocation flags for normal (non-queue, non-force) sends.
         // Queue sends never set them. Force sends target a thread where a cat is

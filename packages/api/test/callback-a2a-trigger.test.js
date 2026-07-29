@@ -34,7 +34,14 @@ describe('triggerA2AInvocation (fallback path)', () => {
       start() {
         return abortController;
       },
+      startAll() {
+        return new AbortController();
+      },
+      tryStartThreadAll() {
+        return new AbortController();
+      },
       complete() {},
+      completeAll() {},
     };
 
     const mockRouter = {
@@ -162,7 +169,14 @@ describe('triggerA2AInvocation (fallback path)', () => {
       start() {
         return new AbortController();
       },
+      startAll() {
+        return new AbortController();
+      },
+      tryStartThreadAll() {
+        return new AbortController();
+      },
       complete() {},
+      completeAll() {},
     };
 
     const mockRouter = {
@@ -233,7 +247,14 @@ describe('triggerA2AInvocation (fallback path)', () => {
       start() {
         return new AbortController();
       },
+      startAll() {
+        return new AbortController();
+      },
+      tryStartThreadAll() {
+        return new AbortController();
+      },
       complete() {},
+      completeAll() {},
     };
 
     const mockRouter = {
@@ -281,8 +302,13 @@ describe('triggerA2AInvocation (fallback path)', () => {
     // triggerA2AInvocation is fire-and-forget; wait for background task to flush.
     await new Promise((resolve) => setTimeout(resolve, 20));
 
-    assert.equal(roomEvents.length, 1, 'should emit intent_mode once execution starts');
-    assert.equal(roomEvents[0].event, 'intent_mode');
+    // #768: intent_mode is deferred to first CLI event; routeExecution threw before yielding,
+    // so intent_mode must NOT be broadcast.
+    assert.equal(
+      roomEvents.filter((e) => e.event === 'intent_mode').length,
+      0,
+      '#768: intent_mode must NOT be broadcast when routeExecution throws before yielding',
+    );
     assert.equal(
       agentBroadcasts.some((b) => b.msg.type === 'error'),
       true,
@@ -298,6 +324,82 @@ describe('triggerA2AInvocation (fallback path)', () => {
       true,
       'failed status should be persisted',
     );
+  });
+
+  test('#768 regression: intent_mode IS broadcast once CLI produces first event (a2a path)', async () => {
+    const { triggerA2AInvocation } = await import('../dist/routes/callback-a2a-trigger.js');
+
+    const roomEvents = [];
+    const mockInvocationRecordStore = {
+      create() {
+        return { outcome: 'created', invocationId: 'inv-768-ok' };
+      },
+      update() {},
+    };
+
+    const mockInvocationTracker = {
+      has() {
+        return false;
+      },
+      start() {
+        return new AbortController();
+      },
+      startAll() {
+        return new AbortController();
+      },
+      tryStartThreadAll() {
+        return new AbortController();
+      },
+      complete() {},
+      completeAll() {},
+    };
+
+    const mockRouter = {
+      async *routeExecution() {
+        yield { type: 'text', catId: 'codex', content: 'hello', timestamp: Date.now() };
+        yield { type: 'done', catId: 'codex', isFinal: true, timestamp: Date.now() };
+      },
+    };
+
+    const mockSocketManager = {
+      broadcastAgentMessage() {},
+      broadcastToRoom(room, event, payload) {
+        roomEvents.push({ room, event, payload });
+      },
+    };
+
+    const mockLog = { error() {}, warn() {}, info() {} };
+
+    await triggerA2AInvocation(
+      {
+        router: mockRouter,
+        invocationRecordStore: mockInvocationRecordStore,
+        socketManager: mockSocketManager,
+        invocationTracker: mockInvocationTracker,
+        log: mockLog,
+      },
+      {
+        targetCats: ['codex'],
+        content: '@缅因猫\nreview',
+        userId: 'user-1',
+        threadId: 't-768-ok',
+        triggerMessage: {
+          id: 'msg-768-ok',
+          threadId: 't-768-ok',
+          userId: 'user-1',
+          catId: 'opus',
+          content: 'test',
+          mentions: [],
+          timestamp: Date.now(),
+        },
+      },
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    const intentEvents = roomEvents.filter((e) => e.event === 'intent_mode');
+    assert.equal(intentEvents.length, 1, '#768: intent_mode must be broadcast exactly once when CLI yields');
+    assert.equal(intentEvents[0].payload.threadId, 't-768-ok');
   });
 
   test('calls queueProcessor.onInvocationComplete on success', async () => {
@@ -324,7 +426,14 @@ describe('triggerA2AInvocation (fallback path)', () => {
       start() {
         return new AbortController();
       },
+      startAll() {
+        return new AbortController();
+      },
+      tryStartThreadAll() {
+        return new AbortController();
+      },
       complete() {},
+      completeAll() {},
     };
 
     const mockRouter = {
@@ -397,7 +506,14 @@ describe('triggerA2AInvocation (fallback path)', () => {
       start() {
         return new AbortController();
       },
+      startAll() {
+        return new AbortController();
+      },
+      tryStartThreadAll() {
+        return new AbortController();
+      },
       complete() {},
+      completeAll() {},
     };
 
     const mockRouter = {
@@ -473,7 +589,14 @@ describe('triggerA2AInvocation (fallback path)', () => {
         setTimeout(() => abortController.abort(), 5);
         return abortController;
       },
+      startAll() {
+        return new AbortController();
+      },
+      tryStartThreadAll() {
+        return new AbortController();
+      },
       complete() {},
+      completeAll() {},
     };
 
     const mockRouter = {
@@ -523,6 +646,78 @@ describe('triggerA2AInvocation (fallback path)', () => {
     assert.equal(completions.length, 1, 'onInvocationComplete must be called on abort');
     assert.equal(completions[0].threadId, 't-queue-cancel');
     assert.equal(completions[0].status, 'canceled');
+  });
+
+  test('F222 P1: A2A direct routeExecution passes frustrationAutoIssueEligible=false', async () => {
+    const { triggerA2AInvocation } = await import('../dist/routes/callback-a2a-trigger.js');
+
+    let capturedOpts;
+    const mockRouterCapture = {
+      async *routeExecution(_userId, _content, _threadId, _messageId, _targetCats, _intent, opts) {
+        capturedOpts = opts;
+        yield { type: 'done', catId: 'codex', isFinal: true, timestamp: Date.now() };
+      },
+    };
+
+    const mockInvocationRecordStore = {
+      create() {
+        return { outcome: 'created', invocationId: 'inv-f222' };
+      },
+      update() {},
+    };
+    const mockInvocationTracker = {
+      has() {
+        return false;
+      },
+      start() {
+        return new AbortController();
+      },
+      startAll() {
+        return new AbortController();
+      },
+      tryStartThreadAll() {
+        return new AbortController();
+      },
+      complete() {},
+      completeAll() {},
+    };
+    const mockQueueProcessor = { async onInvocationComplete() {} };
+    const mockSocketManager = { broadcastAgentMessage() {}, broadcastToRoom() {} };
+    const mockLog = { error() {}, warn() {}, info() {} };
+
+    await triggerA2AInvocation(
+      {
+        router: mockRouterCapture,
+        invocationRecordStore: mockInvocationRecordStore,
+        socketManager: mockSocketManager,
+        invocationTracker: mockInvocationTracker,
+        queueProcessor: mockQueueProcessor,
+        log: mockLog,
+      },
+      {
+        targetCats: ['codex'],
+        content: '@缅因猫\nreview',
+        userId: 'user-1',
+        threadId: 't-f222-provenance',
+        triggerMessage: {
+          id: 'msg-f222',
+          threadId: 't-f222-provenance',
+          userId: 'user-1',
+          catId: 'opus',
+          content: 'test',
+          mentions: [],
+          timestamp: Date.now(),
+        },
+      },
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 80));
+
+    assert.equal(
+      capturedOpts?.frustrationAutoIssueEligible,
+      false,
+      'A2A direct execution must suppress frustration detection',
+    );
   });
 });
 
@@ -690,7 +885,14 @@ describe('enqueueA2ATargets (F27 primary path)', () => {
         startCalled++;
         return new AbortController();
       },
+      startAll() {
+        return new AbortController();
+      },
+      tryStartThreadAll() {
+        return new AbortController();
+      },
       complete() {},
+      completeAll() {},
     };
 
     const mockInvocationRecordStore = {
@@ -764,7 +966,14 @@ describe('enqueueA2ATargets (F27 primary path)', () => {
         startCalled++;
         return new AbortController();
       },
+      startAll() {
+        return new AbortController();
+      },
+      tryStartThreadAll() {
+        return new AbortController();
+      },
       complete() {},
+      completeAll() {},
     };
 
     const mockInvocationRecordStore = {
@@ -859,7 +1068,14 @@ describe('enqueueA2ATargets (F27 primary path)', () => {
       start() {
         return new AbortController();
       },
+      startAll() {
+        return new AbortController();
+      },
+      tryStartThreadAll() {
+        return new AbortController();
+      },
       complete() {},
+      completeAll() {},
     };
 
     const mockRouter = {
@@ -933,7 +1149,14 @@ describe('enqueueA2ATargets (F27 primary path)', () => {
       start() {
         return new AbortController();
       },
+      startAll() {
+        return new AbortController();
+      },
+      tryStartThreadAll() {
+        return new AbortController();
+      },
       complete() {},
+      completeAll() {},
     };
 
     let routeCalled = 0;
@@ -1003,7 +1226,6 @@ describe('enqueueA2ATargets F122B (InvocationQueue path)', () => {
         return false;
       },
       backfillMessageId() {},
-      appendMergedMessageId() {},
       list() {
         return [{ id: 'q-1', status: 'queued' }];
       },
@@ -1036,7 +1258,14 @@ describe('enqueueA2ATargets F122B (InvocationQueue path)', () => {
           start() {
             return new AbortController();
           },
+          startAll() {
+            return new AbortController();
+          },
+          tryStartThreadAll() {
+            return new AbortController();
+          },
           complete() {},
+          completeAll() {},
         },
         queueProcessor: mockQueueProcessor,
         invocationQueue: mockInvocationQueue,
@@ -1057,6 +1286,7 @@ describe('enqueueA2ATargets F122B (InvocationQueue path)', () => {
     assert.equal(enqueueCalls[0].source, 'agent');
     assert.equal(enqueueCalls[0].autoExecute, true);
     assert.equal(enqueueCalls[0].callerCatId, 'codex');
+    assert.equal(enqueueCalls[0].a2aTriggerMessageId, 'msg-trigger');
     assert.equal(enqueueCalls[0].targetCats[0], 'opus');
     assert.equal(tryAutoExecuteCalls.length, 1, 'should trigger tryAutoExecute');
     const queueUpdated = emitCalls.find((c) => c.event === 'queue_updated');
@@ -1097,7 +1327,14 @@ describe('enqueueA2ATargets F122B (InvocationQueue path)', () => {
           start() {
             return new AbortController();
           },
+          startAll() {
+            return new AbortController();
+          },
+          tryStartThreadAll() {
+            return new AbortController();
+          },
           complete() {},
+          completeAll() {},
         },
         queueProcessor: {
           onInvocationComplete() {},
@@ -1122,10 +1359,14 @@ describe('enqueueA2ATargets F122B (InvocationQueue path)', () => {
     assert.deepEqual(result.enqueued, []);
   });
 
-  test('deduplicates — skips targets already queued as agent entries', async () => {
+  test('F-coalesce: merges into a queued agent entry instead of dispatching a duplicate', async () => {
+    // Contract change (F-coalesce): a repeated same-turn handoff to a cat that already has a QUEUED
+    // agent entry is now MERGED into that entry (caller intent preserved) rather than skip-dropped
+    // (old behaviour lost the follow-up). A new (non-duplicate) cat still enqueues normally.
     const { enqueueA2ATargets } = await import('../dist/routes/callback-a2a-trigger.js');
 
     const enqueueCalls = [];
+    const coalesceCalls = [];
     const mockInvocationQueue = {
       enqueue(input) {
         enqueueCalls.push(input);
@@ -1134,12 +1375,17 @@ describe('enqueueA2ATargets F122B (InvocationQueue path)', () => {
       countAgentEntriesForThread() {
         return 0;
       },
-      // opus already has a queued agent entry
-      hasQueuedAgentForCat(_threadId, catId) {
-        return catId === 'opus';
+      // opus already has a queued agent entry → returned as in-flight for coalescing
+      findInFlightAgentEntry(_threadId, catId) {
+        return catId === 'opus'
+          ? { id: 'q-existing', userId: 'system', status: 'queued', source: 'agent', targetCats: ['opus'] }
+          : null;
+      },
+      coalesceContentIntoQueuedAgent(_threadId, _userId, entryId, content, messageId) {
+        coalesceCalls.push({ entryId, content, messageId });
+        return true;
       },
       backfillMessageId() {},
-      appendMergedMessageId() {},
       list() {
         return [];
       },
@@ -1156,7 +1402,14 @@ describe('enqueueA2ATargets F122B (InvocationQueue path)', () => {
           start() {
             return new AbortController();
           },
+          startAll() {
+            return new AbortController();
+          },
+          tryStartThreadAll() {
+            return new AbortController();
+          },
           complete() {},
+          completeAll() {},
         },
         queueProcessor: {
           onInvocationComplete() {},
@@ -1177,10 +1430,15 @@ describe('enqueueA2ATargets F122B (InvocationQueue path)', () => {
       },
     );
 
-    // opus should be skipped (already queued), codex should enqueue
-    assert.equal(enqueueCalls.length, 1, 'should only enqueue non-duplicate cat');
+    // opus → coalesced into its queued entry (no new enqueue); codex → enqueued fresh
+    assert.equal(coalesceCalls.length, 1, 'opus handoff should be coalesced into the queued entry');
+    assert.equal(coalesceCalls[0].entryId, 'q-existing');
+    assert.equal(enqueueCalls.length, 1, 'only the non-duplicate cat creates a new entry');
     assert.equal(enqueueCalls[0].targetCats[0], 'codex');
-    assert.deepEqual(result.enqueued, ['codex']);
+    // Split semantics: codex is a NEW route (enqueued → body.routed); opus is a MERGE (coalesced,
+    // NOT a new route). Conflating them would falsely report opus as "已路由" (gate regression).
+    assert.deepEqual(result.enqueued, ['codex'], 'only the fresh dispatch is a new route');
+    assert.deepEqual(result.coalesced, ['opus'], 'the merged cat is reported as coalesced, not routed');
   });
 
   test('depth limit enforced per-target — multi-target stops at limit (cloud P1)', async () => {
@@ -1201,7 +1459,6 @@ describe('enqueueA2ATargets F122B (InvocationQueue path)', () => {
         return false;
       },
       backfillMessageId() {},
-      appendMergedMessageId() {},
       list() {
         return [];
       },
@@ -1218,7 +1475,14 @@ describe('enqueueA2ATargets F122B (InvocationQueue path)', () => {
           start() {
             return new AbortController();
           },
+          startAll() {
+            return new AbortController();
+          },
+          tryStartThreadAll() {
+            return new AbortController();
+          },
           complete() {},
+          completeAll() {},
         },
         queueProcessor: {
           onInvocationComplete() {},
@@ -1279,7 +1543,14 @@ describe('enqueueA2ATargets F122B (InvocationQueue path)', () => {
           start() {
             return new AbortController();
           },
+          startAll() {
+            return new AbortController();
+          },
+          tryStartThreadAll() {
+            return new AbortController();
+          },
           complete() {},
+          completeAll() {},
         },
         queueProcessor: {
           onInvocationComplete() {},

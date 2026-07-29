@@ -6,6 +6,7 @@ import {
   CODEX_AUTH_MODE_OPTIONS,
   CODEX_SANDBOX_OPTIONS,
   type CodexRuntimeSettings,
+  getCliEffortOptionsForClient,
   type HubCatEditorFormState,
   SESSION_CHAIN_OPTIONS,
   SESSION_STRATEGY_OPTIONS,
@@ -50,6 +51,8 @@ export function AdvancedRuntimeSection({
     approvalPolicy: 'on-request' as const,
     authMode: 'oauth' as const,
   };
+  const cliEffortOptions = getCliEffortOptionsForClient(form.clientId, form.defaultModel);
+  const sessionChainEnabled = form.sessionChain === 'true' && (strategyForm?.sessionChainEnabled ?? true);
 
   return (
     <SectionCard
@@ -57,7 +60,7 @@ export function AdvancedRuntimeSection({
       description="contextBudget + Session 策略 + Client 特有参数。标有 (Codex) 的参数仅在选择对应 Client 时显示。"
       tone="success"
     >
-      <p className="text-xs leading-5 text-[#6C7A6D]">
+      <p className="text-xs leading-5 text-[var(--console-runtime-hint)]">
         上下文预算会随成员配置一起持久化到运行时 catalog。4 项要么全部留空，要么全部填写。
       </p>
       <div className="space-y-2">
@@ -101,44 +104,59 @@ export function AdvancedRuntimeSection({
           onChange={(value) => onChange({ sessionChain: value as HubCatEditorFormState['sessionChain'] })}
           tone="success"
         />
-        {form.client === 'openai' || form.client === 'opencode' ? (
+        {cliEffortOptions ? (
+          <>
+            <TextField
+              label="CLI Effort"
+              value={form.cliEffort}
+              onChange={(value) => onChange({ cliEffort: value })}
+              placeholder="留空使用 Client 默认值；也可输入原生值，例如 ultra"
+              suggestions={cliEffortOptions}
+              tone="success"
+            />
+            <p className="-mt-1 text-label leading-4 text-cafe-muted">
+              维护 preset：{cliEffortOptions.join(' / ')}。也可直接输入所选 CLI 支持的原生值；CLI
+              会返回其自身的校验错误。
+            </p>
+          </>
+        ) : null}
+        {form.clientId !== 'antigravity' && form.clientId !== 'catagent' ? (
           <div className="space-y-1">
-            <p className="text-sm font-medium text-[#3D2E22]">额外 CLI 参数</p>
+            <p className="text-sm font-medium text-cafe">额外 CLI 参数</p>
             <TagEditor
               tags={form.cliConfigArgs}
               onChange={(nextTags) => onChange({ cliConfigArgs: nextTags })}
               addLabel="+ 添加参数"
-              placeholder={
-                form.client === 'opencode' ? '例如 --variant low' : '例如 --config model_reasoning_effort="low"'
-              }
+              placeholder="例如 --model xxx 或 --flag value"
               emptyLabel="无额外参数"
               tone="green"
             />
-            <p className="text-[11px] leading-4 text-[#8A776B]">
-              每条直接追加到 CLI 命令，不做隐式转换。 参考：
-              {form.client === 'opencode' ? (
-                <a href="https://opencode.ai/docs/cli" target="_blank" rel="noreferrer" className="underline">
-                  OpenCode CLI
-                </a>
-              ) : (
-                <a href="https://github.com/openai/codex" target="_blank" rel="noreferrer" className="underline">
-                  Codex CLI
-                </a>
-              )}
+            <p className="text-label leading-4 text-cafe-muted">
+              每条直接追加到 CLI 命令，与系统参数重复时以用户参数为准。`CLI Effort` 请优先用上面的结构化字段。
             </p>
           </div>
         ) : null}
       </div>
 
       {cat ? (
-        <div className="space-y-3 rounded-2xl border border-[#DCE9E0] bg-white/80 p-4">
-          {loadingStrategy ? <p className="text-sm text-[#7F7168]">Session 策略加载中...</p> : null}
+        <div className="space-y-3 rounded-[14px] bg-[var(--console-runtime-group-bg)] p-[14px]">
+          {loadingStrategy ? <p className="text-sm text-cafe-secondary">Session 策略加载中...</p> : null}
           {strategyError ? (
-            <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600">{strategyError}</p>
+            <p className="rounded-[20px] border border-conn-red-ring bg-conn-red-bg px-3 py-2 text-sm text-conn-red-text">
+              {strategyError}
+            </p>
           ) : null}
-          {strategyForm ? (
+          {strategyForm && !sessionChainEnabled ? (
+            <div className="rounded-[10px] bg-[var(--console-field-bg)] px-4 py-3 text-xs leading-5 text-[var(--cafe-accent)]">
+              <p className="font-semibold">Session Chain 未开启</p>
+              <p>
+                当前成员不会记录或续接 Session Chain，下面的 Session 策略不会生效；先开启 Session Chain 后再配置策略。
+              </p>
+            </div>
+          ) : null}
+          {strategyForm && sessionChainEnabled ? (
             <div className="space-y-4">
-              <div className="rounded-2xl border border-[#CFE5D5] bg-[#F5FBF6] px-4 py-3 text-xs leading-5 text-[#6C7A6D]">
+              <div className="rounded-[10px] bg-[var(--console-runtime-field-bg)] px-4 py-3 text-xs leading-5 text-[var(--console-runtime-hint)]">
                 阈值基于 context 填充率 = 当前 tokens / Max Context Tokens。拖动滑条调节百分比。
               </div>
               <div className="space-y-2">
@@ -152,16 +170,28 @@ export function AdvancedRuntimeSection({
                   tone="success"
                 />
                 <RangeField
-                  label="Session Warn Threshold"
+                  label={strategyForm.strategy === 'compress' ? 'Session Observe Threshold' : 'Session Warn Threshold'}
                   value={strategyForm.warnThreshold}
                   onChange={(value) => onStrategyChange({ warnThreshold: value })}
-                  hint="context 填充到此比例时前端弹出警告提示"
+                  hint={
+                    strategyForm.strategy === 'compress'
+                      ? 'context 填充到此比例时前端弹出观测提示（compress 下仅观测，不触发封印）'
+                      : 'context 填充到此比例时前端弹出警告提示'
+                  }
                 />
                 <RangeField
-                  label="Session Action Threshold"
+                  label={
+                    strategyForm.strategy === 'compress'
+                      ? 'Session Observe Threshold (upper)'
+                      : 'Session Action Threshold'
+                  }
                   value={strategyForm.actionThreshold}
                   onChange={(value) => onStrategyChange({ actionThreshold: value })}
-                  hint="context 填充到此比例时触发 Session 策略动作（如 handoff 换 session）"
+                  hint={
+                    strategyForm.strategy === 'compress'
+                      ? 'compress 策略下此阈值仅用于观测，不触发封印。Session 会在 CLI 压缩后继续存活'
+                      : 'context 填充到此比例时触发 Session 策略动作（如 handoff 换 session）'
+                  }
                 />
                 {strategyForm.strategy === 'hybrid' ? (
                   <TextField
@@ -179,18 +209,20 @@ export function AdvancedRuntimeSection({
       ) : null}
 
       {showCodexSettings ? (
-        <div className="space-y-3 rounded-2xl border border-[#DCE9E0] bg-white/80 p-4">
-          {loadingCodexSettings ? <p className="text-sm text-[#7F7168]">Codex 运行参数加载中...</p> : null}
+        <div className="space-y-3 rounded-[14px] bg-[var(--console-runtime-group-bg)] p-[14px]">
+          {loadingCodexSettings ? <p className="text-sm text-cafe-secondary">Codex 运行参数加载中...</p> : null}
           {codexSettingsError ? (
-            <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600">{codexSettingsError}</p>
+            <p className="rounded-[20px] border border-conn-red-ring bg-conn-red-bg px-3 py-2 text-sm text-conn-red-text">
+              {codexSettingsError}
+            </p>
           ) : null}
           {!loadingCodexSettings && !codexSettingsEditable ? (
-            <p className="rounded-xl border border-[#F5D2B8] bg-[#FFF4EC] px-3 py-2 text-xs leading-5 text-[#C27D52]">
+            <p className="rounded-[10px] bg-[var(--console-field-bg)] px-3 py-2 text-xs leading-5 text-[var(--cafe-accent)]">
               Codex 配置基线未加载成功，以下 3 项已禁用；请刷新后重试，避免保存时误以为已生效。
             </p>
           ) : null}
-          <p className="text-center text-xs font-semibold text-[#B59A88]">── Codex 专属 (仅 Client=Codex 时显示) ──</p>
-          <p className="rounded-xl border border-[#CFE5D5] bg-[#F5FBF6] px-3 py-2 text-xs leading-5 text-[#6C7A6D]">
+          <p className="text-center text-xs font-semibold text-cafe-muted">── Codex 专属 (仅 Client=Codex 时显示) ──</p>
+          <p className="rounded-[10px] bg-[var(--console-runtime-field-bg)] px-3 py-2 text-xs leading-5 text-[var(--console-runtime-hint)]">
             成员资料与 Codex 执行参数收敛到同一个入口保存。保存后会分别写入成员 overlay 与全局运行配置。
           </p>
           <div className="space-y-2">

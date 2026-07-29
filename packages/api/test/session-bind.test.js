@@ -1,6 +1,6 @@
 /**
  * Session Manual Bind Tests
- * F24 Phase B / BACKLOG #72: 铲屎官手动绑定 CLI Session ID
+ * F24 Phase B / BACKLOG #72: co-creator手动绑定 CLI Session ID
  *
  * PATCH /api/threads/:threadId/sessions/:catId/bind
  * Body: { cliSessionId: string }
@@ -137,12 +137,13 @@ describe('Session bind API route', () => {
     return { app, sessionChainStore, threadStore };
   }
 
-  test('returns 401 without identity', async () => {
+  test('returns 401 without identity for untrusted browser origin', async () => {
     const { app } = await buildApp();
     try {
       const res = await app.inject({
         method: 'PATCH',
         url: '/api/threads/thread-1/sessions/opus/bind',
+        headers: { origin: 'https://evil.example' },
         payload: { cliSessionId: 'cli-new' },
       });
       assert.equal(res.statusCode, 401);
@@ -266,6 +267,49 @@ describe('Session bind API route', () => {
         method: 'PATCH',
         url: `/api/threads/${thread.id}/sessions/opus/bind`,
         headers: { 'x-cat-cafe-user': 'hacker' },
+        payload: { cliSessionId: 'cli-evil' },
+      });
+
+      assert.equal(res.statusCode, 403);
+    } finally {
+      await app.close();
+    }
+  });
+
+  test('returns 403 for non-default system-owned thread', async () => {
+    const { app, threadStore } = await buildApp();
+    try {
+      const thread = await threadStore.create('system', 'System Thread');
+
+      const res = await app.inject({
+        method: 'PATCH',
+        url: `/api/threads/${thread.id}/sessions/opus/bind`,
+        headers: { 'x-cat-cafe-user': 'other-user' },
+        payload: { cliSessionId: 'cli-system' },
+      });
+
+      assert.equal(res.statusCode, 403);
+    } finally {
+      await app.close();
+    }
+  });
+
+  test('returns 403 when default-thread active session belongs to another user', async () => {
+    const { app, threadStore, sessionChainStore } = await buildApp();
+    try {
+      const thread = await threadStore.get('default');
+
+      sessionChainStore.create({
+        cliSessionId: 'cli-owner',
+        threadId: thread.id,
+        catId: 'opus',
+        userId: 'owner-user',
+      });
+
+      const res = await app.inject({
+        method: 'PATCH',
+        url: `/api/threads/${thread.id}/sessions/opus/bind`,
+        headers: { 'x-cat-cafe-user': 'attacker-user' },
         payload: { cliSessionId: 'cli-evil' },
       });
 

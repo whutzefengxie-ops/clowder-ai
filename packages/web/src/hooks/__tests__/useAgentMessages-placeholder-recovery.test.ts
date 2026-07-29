@@ -20,12 +20,17 @@ const mockRequestStreamCatchUp = vi.fn();
 const mockSetMessageMetadata = vi.fn();
 const mockSetMessageThinking = vi.fn();
 const mockSetMessageStreamInvocation = vi.fn();
+const mockPatchMessage = vi.fn();
 
 const mockAddMessageToThread = vi.fn();
 const mockClearThreadActiveInvocation = vi.fn();
 const mockResetThreadInvocationState = vi.fn();
 const mockSetThreadMessageStreaming = vi.fn();
 const mockGetThreadState = vi.fn(() => ({ messages: [] }));
+// F183 B1.2.2: active text stream → reducer → replaceMessages
+const mockReplaceMessages = vi.fn((msgs: unknown[]) => {
+  storeState.messages = msgs as typeof storeState.messages;
+});
 
 const storeState = {
   messages: [] as Array<{
@@ -35,7 +40,7 @@ const storeState = {
     content: string;
     isStreaming?: boolean;
     origin?: 'stream' | 'callback';
-    extra?: { stream?: { invocationId?: string } };
+    extra?: { stream?: { invocationId?: string; turnInvocationId?: string } };
     timestamp: number;
   }>,
   catInvocations: {} as Record<string, { invocationId?: string }>,
@@ -56,8 +61,11 @@ const storeState = {
   setMessageMetadata: mockSetMessageMetadata,
   setMessageThinking: mockSetMessageThinking,
   setMessageStreamInvocation: mockSetMessageStreamInvocation,
+  patchMessage: mockPatchMessage,
 
   addMessageToThread: mockAddMessageToThread,
+  replaceMessages: mockReplaceMessages,
+  hasMore: true,
   clearThreadActiveInvocation: mockClearThreadActiveInvocation,
   resetThreadInvocationState: mockResetThreadInvocationState,
   setThreadMessageStreaming: mockSetThreadMessageStreaming,
@@ -104,7 +112,10 @@ describe('useAgentMessages placeholder recovery', () => {
     storeState.catInvocations = {};
     storeState.activeInvocations = {};
     mockAddMessage.mockClear();
+    mockAppendToMessage.mockClear();
+    mockAppendToolEvent.mockClear();
     mockAppendRichBlock.mockClear();
+    mockPatchMessage.mockClear();
     mockSetMessageThinking.mockClear();
   });
 
@@ -176,10 +187,9 @@ describe('useAgentMessages placeholder recovery', () => {
     expect(mockAppendRichBlock).toHaveBeenCalledWith('msg-live-2', expect.objectContaining({ id: 'rb-1' }));
   });
 
-  it('seeds a new stream bubble with invocationId from activeInvocations before invocation_created arrives', () => {
-    storeState.activeInvocations = {
-      'inv-active-1': { catId: 'opus', mode: 'execute' },
-    };
+  it('seeds a new stream bubble with invocationId when tool_use carries msg.invocationId explicitly', () => {
+    // F173 hotfix: bubble creation uses ONLY explicit msg.invocationId (no catInvocations /
+    // activeInvocations fallback). Tool events that carry invocationId bind directly.
 
     act(() => {
       root.render(React.createElement(Harness));
@@ -189,6 +199,7 @@ describe('useAgentMessages placeholder recovery', () => {
       captured?.handleAgentMessage({
         type: 'tool_use',
         catId: 'opus',
+        invocationId: 'inv-active-1',
         toolName: 'command_execution',
         toolInput: { command: 'git status' },
       });
@@ -204,12 +215,9 @@ describe('useAgentMessages placeholder recovery', () => {
     );
   });
 
-  it('records bubble timeline when activeInvocations late-binds a new stream bubble', () => {
-    configureDebug({ enabled: true });
-    ensureWindowDebugApi();
-    storeState.activeInvocations = {
-      'inv-active-1': { catId: 'opus', mode: 'execute' },
-    };
+  it('creates an UNBOUND placeholder when tool_use arrives before invocation_created (no msg.invocationId)', () => {
+    // F173 hotfix: without explicit invocationId, bubble is unbound. invocation_created's
+    // rebind step (exercised in useAgentMessages-invocation-created.test.ts) will bind it.
 
     act(() => {
       root.render(React.createElement(Harness));
@@ -219,6 +227,81 @@ describe('useAgentMessages placeholder recovery', () => {
       captured?.handleAgentMessage({
         type: 'tool_use',
         catId: 'opus',
+        toolName: 'command_execution',
+        toolInput: { command: 'git status' },
+      });
+    });
+
+    const created = mockAddMessage.mock.calls.find(
+      ([m]) => m.type === 'assistant' && m.catId === 'opus' && m.origin === 'stream',
+    )?.[0];
+    expect(created).toBeTruthy();
+    expect(created?.extra?.stream?.invocationId).toBeUndefined();
+  });
+
+  it('does not reuse an existing post_msg callback bubble as the active stream/tool container', () => {
+    storeState.messages = [
+      {
+        id: 'msg-callback-post',
+        type: 'assistant',
+        catId: 'opus',
+        content: 'post_msg speech should stay separate',
+        isStreaming: false,
+        origin: 'callback',
+        extra: { stream: { invocationId: 'inv-parent', turnInvocationId: 'turn-active' } },
+        timestamp: Date.now() - 1000,
+      },
+    ];
+
+    act(() => {
+      root.render(React.createElement(Harness));
+    });
+
+    act(() => {
+      captured?.handleAgentMessage({
+        type: 'tool_use',
+        catId: 'opus',
+        invocationId: 'inv-parent',
+        turnInvocationId: 'turn-active',
+        toolName: 'command_execution',
+        toolInput: { command: 'git status' },
+      });
+    });
+
+    expect(mockAppendToolEvent).not.toHaveBeenCalledWith('msg-callback-post', expect.anything());
+    const streamBubble = mockAddMessage.mock.calls
+      .map(([m]) => m)
+      .find((m) => m.type === 'assistant' && m.origin === 'stream');
+    const callbackBubble = storeState.messages.find((m) => m.id === 'msg-callback-post');
+    expect(streamBubble).toMatchObject({
+      type: 'assistant',
+      catId: 'opus',
+      origin: 'stream',
+      isStreaming: true,
+      extra: { stream: { invocationId: 'inv-parent', turnInvocationId: 'turn-active' } },
+    });
+    expect(callbackBubble).toMatchObject({
+      type: 'assistant',
+      catId: 'opus',
+      origin: 'callback',
+      content: 'post_msg speech should stay separate',
+      isStreaming: false,
+    });
+  });
+
+  it('records bubble timeline with explicit invocationId when tool_use binds the bubble', () => {
+    configureDebug({ enabled: true });
+    ensureWindowDebugApi();
+
+    act(() => {
+      root.render(React.createElement(Harness));
+    });
+
+    act(() => {
+      captured?.handleAgentMessage({
+        type: 'tool_use',
+        catId: 'opus',
+        invocationId: 'inv-active-1',
         toolName: 'command_execution',
         toolInput: { command: 'git status' },
       });
@@ -263,7 +346,12 @@ describe('useAgentMessages placeholder recovery', () => {
       });
     });
 
-    const localBubble = mockAddMessage.mock.calls.at(-1)?.[0];
+    // F183 B1.2.3: new stream bubble may go via reducer + replaceMessages instead of addMessage
+    const localBubble =
+      mockAddMessage.mock.calls.at(-1)?.[0] ??
+      (mockReplaceMessages.mock.calls.at(-1)?.[0] as Array<{ id?: string; catId?: string }> | undefined)?.find?.(
+        (m) => m.catId === 'opus',
+      );
     expect(localBubble?.id).toBeTruthy();
 
     // Hydration replaces the optimistic/local bubble with the persisted server message.
@@ -311,14 +399,50 @@ describe('useAgentMessages placeholder recovery', () => {
       });
     });
 
-    expect(mockAddMessage).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: 'assistant',
-        catId: 'codex',
-        origin: 'stream',
-        replyTo: 'msg-parent-1',
-        replyPreview: { senderCatId: 'opus', content: '@缅因猫 帮忙看一下' },
-      }),
+    // F183 B1.2.3 wire-up: new stream bubble 走 reducer + replaceMessages，
+    // replyTo/replyPreview 走 mockPatchMessage 单独 patch。检查最终状态而非 API。
+    const newBubble =
+      storeState.messages.find((m) => m.catId === 'codex' && m.origin === 'stream') ??
+      mockAddMessage.mock.calls.map((c) => c[0]).find((m) => m.catId === 'codex' && m.origin === 'stream');
+    expect(newBubble).toMatchObject({ type: 'assistant', catId: 'codex', origin: 'stream' });
+    // replyTo/replyPreview should be set via either addMessage payload or follow-up patchMessage
+    const patchedReply = mockPatchMessage.mock.calls.find(
+      (c) => c[1]?.replyTo === 'msg-parent-1' && c[1]?.replyPreview?.senderCatId === 'opus',
     );
+    expect(
+      newBubble?.replyTo === 'msg-parent-1' || !!patchedReply,
+      'replyTo + replyPreview must be applied via addMessage or follow-up patchMessage',
+    ).toBe(true);
+  });
+
+  it('replaces stream bubble content instead of appending on replace-mode text', () => {
+    storeState.messages = [
+      {
+        id: 'msg-live-rewrite',
+        type: 'assistant',
+        catId: 'opus',
+        content: '第一段。第二段。',
+        isStreaming: true,
+        origin: 'stream',
+        timestamp: Date.now(),
+      },
+    ];
+
+    act(() => {
+      root.render(React.createElement(Harness));
+    });
+
+    act(() => {
+      captured?.handleAgentMessage({
+        type: 'text',
+        catId: 'opus',
+        content: '第一段。插入一句。第二段。',
+        textMode: 'replace',
+        origin: 'stream',
+      });
+    });
+
+    expect(mockPatchMessage).toHaveBeenCalledWith('msg-live-rewrite', { content: '第一段。插入一句。第二段。' });
+    expect(mockAppendToMessage).not.toHaveBeenCalled();
   });
 });

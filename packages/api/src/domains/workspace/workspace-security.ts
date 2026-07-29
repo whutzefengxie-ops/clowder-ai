@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import { mkdir, readFile, realpath, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, relative, resolve, sep } from 'node:path';
 import { promisify } from 'node:util';
+import { resolveStartupProjectRoot } from '../../utils/startup-root.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -66,6 +67,20 @@ export async function resolveWorkspacePath(root: string, userPath: string): Prom
     if (!real.startsWith(realRoot + sep) && real !== realRoot) {
       throw new WorkspaceSecurityError('Symlink escapes workspace root', 'TRAVERSAL');
     }
+    // Re-check denylist on the realpath result — a symlink named "safe"
+    // pointing to ".env" would pass the pre-realpath check above but the
+    // resolved target must still be denied.
+    const realRel = relative(realRoot, real);
+    for (const seg of realRel.split(sep)) {
+      if (DENYLIST_DIRS.has(seg)) {
+        throw new WorkspaceSecurityError(`Access denied: ${seg}`, 'DENIED');
+      }
+      for (const pat of DENYLIST_PATTERNS) {
+        if (pat.test(seg)) {
+          throw new WorkspaceSecurityError(`Access denied: ${seg}`, 'DENIED');
+        }
+      }
+    }
   } catch (e) {
     if (e instanceof WorkspaceSecurityError) throw e;
     // ENOENT = file doesn't exist yet; traversal check above covers it
@@ -82,7 +97,7 @@ export async function resolveWorkspacePath(root: string, userPath: string): Prom
  * Returns true if the path should be blocked.
  */
 export function isDenylisted(relPath: string): boolean {
-  const segments = relPath.split(sep);
+  const segments = relPath.split(/[\\/]/);
   for (const seg of segments) {
     if (DENYLIST_DIRS.has(seg)) return true;
     for (const pat of DENYLIST_PATTERNS) {
@@ -94,14 +109,42 @@ export function isDenylisted(relPath: string): boolean {
 
 export interface WorktreeEntry {
   id: string;
+  canonicalId?: string;
   root: string;
   branch: string;
   head: string;
 }
 
+function worktreeIdForRoot(root: string): string {
+  return basename(root).replace(/[^a-zA-Z0-9_-]/g, '_');
+}
+
+function isGitWorktreeUnavailableError(err: unknown): boolean {
+  const code = typeof err === 'object' && err !== null && 'code' in err ? String((err as { code?: unknown }).code) : '';
+  const stderr =
+    typeof err === 'object' && err !== null && 'stderr' in err ? String((err as { stderr?: unknown }).stderr) : '';
+  return code === 'ENOENT' || (code === '128' && stderr.includes('not a git repository'));
+}
+
+function fallbackWorktreeEntry(cwd: string): WorktreeEntry {
+  const root = resolveStartupProjectRoot(cwd);
+  return {
+    id: worktreeIdForRoot(root),
+    root,
+    branch: 'exported',
+    head: 'nogit',
+  };
+}
+
 export async function listWorktrees(repoRoot?: string): Promise<WorktreeEntry[]> {
   const cwd = repoRoot ?? process.cwd();
-  const { stdout } = await execFileAsync('git', ['worktree', 'list', '--porcelain'], { cwd });
+  let stdout: string;
+  try {
+    ({ stdout } = await execFileAsync('git', ['worktree', 'list', '--porcelain'], { cwd }));
+  } catch (err) {
+    if (isGitWorktreeUnavailableError(err)) return [fallbackWorktreeEntry(cwd)];
+    throw err;
+  }
   const entries: WorktreeEntry[] = [];
   let current: Partial<WorktreeEntry> = {};
 
@@ -111,7 +154,7 @@ export async function listWorktrees(repoRoot?: string): Promise<WorktreeEntry[]>
       const root = line.slice('worktree '.length);
       current = {
         root,
-        id: basename(root).replace(/[^a-zA-Z0-9_-]/g, '_'),
+        id: worktreeIdForRoot(root),
         branch: 'HEAD',
         head: '',
       };

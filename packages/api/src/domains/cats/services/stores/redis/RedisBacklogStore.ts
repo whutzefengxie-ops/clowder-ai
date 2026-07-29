@@ -23,7 +23,7 @@ import { generateSortableId } from '../ports/MessageStore.js';
 import { BacklogKeys } from '../redis-keys/backlog-keys.js';
 import { makeCatActor, makeCreatorActor, makeUserActor } from '../shared/backlog-audit-actors.js';
 
-const DEFAULT_TTL = 90 * 24 * 60 * 60; // 90 days
+const DEFAULT_TTL = 0; // persistent — set >0 via env to enable expiry
 
 /**
  * KEYS[1] = backlog:item:{id}
@@ -363,15 +363,11 @@ export class RedisBacklogStore implements IBacklogStore {
 
   constructor(redis: RedisClient, options?: { ttlSeconds?: number }) {
     this.redis = redis;
-    const ttl = options?.ttlSeconds;
-    if (ttl === undefined) {
-      this.ttlSeconds = DEFAULT_TTL;
-    } else if (!Number.isFinite(ttl)) {
-      this.ttlSeconds = DEFAULT_TTL;
-    } else if (ttl <= 0) {
+    const raw = options?.ttlSeconds ?? DEFAULT_TTL;
+    if (!Number.isFinite(raw) || raw <= 0) {
       this.ttlSeconds = null;
     } else {
-      this.ttlSeconds = Math.floor(ttl);
+      this.ttlSeconds = Math.floor(raw);
     }
   }
 
@@ -907,6 +903,7 @@ export class RedisBacklogStore implements IBacklogStore {
     if (item.dispatchAttemptId) result.dispatchAttemptId = item.dispatchAttemptId;
     if (item.pendingThreadId) result.pendingThreadId = item.pendingThreadId;
     if (item.kickoffMessageId) result.kickoffMessageId = item.kickoffMessageId;
+    if (item.projectId) result.projectId = item.projectId;
     return result;
   }
 
@@ -936,6 +933,7 @@ export class RedisBacklogStore implements IBacklogStore {
       ...(data.dispatchAttemptId ? { dispatchAttemptId: data.dispatchAttemptId } : {}),
       ...(data.pendingThreadId ? { pendingThreadId: data.pendingThreadId } : {}),
       ...(data.kickoffMessageId ? { kickoffMessageId: data.kickoffMessageId } : {}),
+      ...(data.projectId ? { projectId: data.projectId } : {}),
       ...(approvedAt ? { approvedAt } : {}),
       ...(dispatchedAt ? { dispatchedAt } : {}),
     };

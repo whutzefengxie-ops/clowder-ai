@@ -43,7 +43,7 @@ describe('formatThreadAsMarkdown', () => {
       makeMessage({ content: '你好布偶猫', timestamp: new Date('2026-02-07T10:30:00').getTime() }),
       makeMessage({
         catId: 'opus',
-        content: '你好铲屎官！',
+        content: '你好co-creator！',
         timestamp: new Date('2026-02-07T10:31:00').getTime(),
         id: 'msg-2',
       }),
@@ -55,8 +55,31 @@ describe('formatThreadAsMarkdown', () => {
     assert.ok(md.includes('thread-1'));
     assert.ok(md.includes('布偶猫'));
     assert.ok(md.includes('你好布偶猫'));
-    assert.ok(md.includes('你好铲屎官！'));
-    assert.ok(md.includes('铲屎官'));
+    assert.ok(md.includes('你好co-creator！'));
+    assert.ok(md.includes('co-creator'));
+  });
+
+  test('uses consistent timezone basis across header and message body', () => {
+    // P1 fix (砚砚 review 2026-05-29): formatMessage was hardcoded to UTC for
+    // prompt-side cats, but export's header/footer use local time via
+    // formatDatetime() — producing a single export file with the header in
+    // local time and the body in UTC ("[03:00 UTC ...]"), a 7h gap on PDT
+    // hosts. Pin the contract: header and body must share the same timezone
+    // basis (export is human-facing, so both should be local).
+    const ts = new Date('2026-05-29T03:00:00Z').getTime();
+    const thread = makeThread({ participants: [] });
+    const messages = [makeMessage({ content: 'hi', timestamp: ts })];
+
+    const md = formatThreadAsMarkdown(thread, messages);
+
+    const d = new Date(ts);
+    const pad = (n) => n.toString().padStart(2, '0');
+    const localHm = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+
+    // Body line `[HH:mm sender] content` must use the same local basis as the header.
+    assert.ok(md.includes(localHm), `body should use local time matching header; got:\n${md.slice(0, 400)}`);
+    // And must not mix in UTC-tagged body times alongside the local header/footer.
+    assert.ok(!/\d\d:\d\d UTC/.test(md), 'export must not mix UTC-tagged body times with local header/footer');
   });
 
   test('handles empty messages with only header', () => {
@@ -85,7 +108,7 @@ describe('formatThreadAsMarkdown', () => {
 
     const md = formatThreadAsMarkdown(thread, messages);
 
-    assert.ok(md.includes('铲屎官'));
+    assert.ok(md.includes('co-creator'));
     assert.ok(md.includes('布偶猫'));
     assert.ok(md.includes('缅因猫'));
     assert.ok(md.includes('请问一下'));
@@ -126,7 +149,7 @@ describe('formatThreadAsText', () => {
       makeMessage({ content: '你好布偶猫', timestamp: new Date('2026-02-07T10:30:00').getTime() }),
       makeMessage({
         catId: 'opus',
-        content: '你好铲屎官！',
+        content: '你好co-creator！',
         timestamp: new Date('2026-02-07T10:31:00').getTime(),
         id: 'msg-2',
       }),
@@ -144,7 +167,7 @@ describe('formatThreadAsText', () => {
 
     // Should include message content
     assert.ok(txt.includes('你好布偶猫'));
-    assert.ok(txt.includes('你好铲屎官！'));
+    assert.ok(txt.includes('你好co-creator！'));
   });
 
   test('handles empty messages', () => {

@@ -10,48 +10,55 @@ const mockSetTargetCats = vi.fn();
 const mockSetCurrentThread = vi.fn();
 const mockClearUnread = vi.fn();
 const mockHandleAgentMessage = vi.fn();
+const mockThinkingIndicator = vi.fn((props?: unknown) => {
+  void props;
+  return null;
+});
 
 let capturedSocketCallbacks: {
   onIntentMode?: (data: { threadId: string; mode: string; targetCats: string[] }) => void;
   onMessage?: (msg: unknown) => void;
 } | null = null;
 
-const mockStoreState = () => ({
-  messages: [],
-  isLoading: false,
-  hasActiveInvocation: false,
-  intentMode: null,
-  targetCats: [],
-  catStatuses: {},
-  catInvocations: {},
-  activeInvocations: {},
-  addMessage: vi.fn(),
-  removeMessage: vi.fn(),
-  setLoading: mockSetLoading,
-  setHasActiveInvocation: mockSetHasActiveInvocation,
-  setIntentMode: mockSetIntentMode,
-  setTargetCats: mockSetTargetCats,
-  clearCatStatuses: vi.fn(),
-  setCurrentThread: mockSetCurrentThread,
-  updateThreadTitle: vi.fn(),
-  setCurrentGame: vi.fn(),
-  currentGame: null,
+function createMockStoreState() {
+  return {
+    messages: [],
+    isLoading: false,
+    hasActiveInvocation: false,
+    intentMode: null,
+    targetCats: [] as string[],
+    catStatuses: {} as Record<string, string>,
+    catInvocations: {},
+    activeInvocations: {},
+    addMessage: vi.fn(),
+    removeMessage: vi.fn(),
+    setLoading: mockSetLoading,
+    setHasActiveInvocation: mockSetHasActiveInvocation,
+    setIntentMode: mockSetIntentMode,
+    setTargetCats: mockSetTargetCats,
+    clearCatStatuses: vi.fn(),
+    setCurrentThread: mockSetCurrentThread,
+    updateThreadTitle: vi.fn(),
+    setCurrentGame: vi.fn(),
+    currentGame: null,
 
-  viewMode: 'single' as const,
-  setViewMode: vi.fn(),
-  clearUnread: mockClearUnread,
-  confirmUnreadAck: vi.fn(),
-  armUnreadSuppression: vi.fn(),
-  splitPaneThreadIds: [],
-  setSplitPaneThreadIds: vi.fn(),
-  setSplitPaneTarget: vi.fn(),
-  threads: [],
-});
+    viewMode: 'single' as const,
+    setViewMode: vi.fn(),
+    clearUnread: mockClearUnread,
+    confirmUnreadAck: vi.fn(),
+    armUnreadSuppression: vi.fn(),
+    splitPaneThreadIds: [],
+    setSplitPaneThreadIds: vi.fn(),
+    setSplitPaneTarget: vi.fn(),
+    threads: [],
+  };
+}
+
+let storeState = createMockStoreState();
 
 vi.mock('@/stores/chatStore', () => {
-  const hook = (selector?: (s: ReturnType<typeof mockStoreState>) => unknown) => {
-    const state = mockStoreState();
-    return selector ? selector(state) : state;
+  const hook = (selector?: (s: ReturnType<typeof createMockStoreState>) => unknown) => {
+    return selector ? selector(storeState) : storeState;
   };
   return { useChatStore: hook };
 });
@@ -108,20 +115,36 @@ vi.mock('@/hooks/useAuthorization', () => ({
 
 vi.mock('@/hooks/useSplitPaneKeys', () => ({ useSplitPaneKeys: vi.fn() }));
 
-vi.mock('@/components/ChatMessage', () => ({ ChatMessage: () => null }));
-vi.mock('@/components/ChatInput', () => ({ ChatInput: () => null }));
-vi.mock('@/components/ThreadSidebar', () => ({ ThreadSidebar: () => null }));
-vi.mock('@/components/RightStatusPanel', () => ({ RightStatusPanel: () => null }));
-vi.mock('@/components/ParallelStatusBar', () => ({ ParallelStatusBar: () => null }));
-vi.mock('@/components/ThinkingIndicator', () => ({ ThinkingIndicator: () => null }));
-vi.mock('@/components/A2ACollapsible', () => ({ A2ACollapsible: () => null }));
-vi.mock('@/components/ConfirmDialog', () => ({ ConfirmDialog: () => null }));
-vi.mock('@/components/ExportButton', () => ({ ExportButton: () => null }));
-vi.mock('@/components/MessageNavigator', () => ({ MessageNavigator: () => null }));
-vi.mock('@/components/MessageActions', () => ({
+vi.mock('../AuthorizationCard', () => ({ AuthorizationCard: () => null }));
+vi.mock('../BootcampListModal', () => ({ BootcampListModal: () => null }));
+vi.mock('../BootstrapOrchestrator', () => ({ BootstrapOrchestrator: () => null }));
+vi.mock('../ChatContainerHeader', () => ({ ChatContainerHeader: () => null }));
+vi.mock('../ChatInput', () => ({ ChatInput: () => null }));
+vi.mock('../ChatMessage', () => ({ ChatMessage: () => null }));
+vi.mock('../game/GameOverlayConnector', () => ({ GameOverlayConnector: () => null }));
+vi.mock('../HubListModal', () => ({ HubListModal: () => null }));
+vi.mock('../MessageActions', () => ({
   MessageActions: ({ children }: { children: React.ReactNode }) => children,
 }));
-vi.mock('@/components/CatCafeHub', () => ({ CatCafeHub: () => null }));
+vi.mock('../MessageNavigator', () => ({ MessageNavigator: () => null }));
+vi.mock('../MobileStatusSheet', () => ({ MobileStatusSheet: () => null }));
+vi.mock('../ParallelStatusBar', () => ({ ParallelStatusBar: () => null }));
+vi.mock('../ProjectSetupCard', () => ({ ProjectSetupCard: () => null }));
+vi.mock('../QueuePanel', () => ({ QueuePanel: () => null }));
+vi.mock('../RightStatusPanel', () => ({ RightStatusPanel: () => null }));
+vi.mock('../ScrollToBottomButton', () => ({ ScrollToBottomButton: () => null }));
+vi.mock('../SplitPaneView', () => ({
+  SplitPaneView: ({ children }: { children?: React.ReactNode }) => children ?? null,
+}));
+vi.mock('../ThinkingIndicator', () => ({
+  ThinkingIndicator: (props: unknown) => mockThinkingIndicator(props),
+}));
+vi.mock('../ThreadExecutionBar', () => ({ ThreadExecutionBar: () => null }));
+vi.mock('../ThreadSidebar', () => ({ ThreadSidebar: () => null }));
+vi.mock('../VoteActiveBar', () => ({ VoteActiveBar: () => null }));
+vi.mock('../VoteConfigModal', () => ({ VoteConfigModal: () => null }));
+vi.mock('../WorkspacePanel', () => ({ WorkspacePanel: () => null }));
+vi.mock('../workspace/ResizeHandle', () => ({ ResizeHandle: () => null }));
 
 describe('ChatContainer intent_mode loading lock', () => {
   let container: HTMLDivElement;
@@ -141,6 +164,7 @@ describe('ChatContainer intent_mode loading lock', () => {
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
+    storeState = createMockStoreState();
     capturedSocketCallbacks = null;
     mockSetLoading.mockClear();
     mockSetHasActiveInvocation.mockClear();
@@ -149,6 +173,7 @@ describe('ChatContainer intent_mode loading lock', () => {
     mockSetCurrentThread.mockClear();
     mockClearUnread.mockClear();
     mockHandleAgentMessage.mockClear();
+    mockThinkingIndicator.mockClear();
   });
 
   afterEach(() => {
@@ -192,6 +217,35 @@ describe('ChatContainer intent_mode loading lock', () => {
     });
 
     expect(mockSetHasActiveInvocation).toHaveBeenCalledWith(true);
+  });
+
+  it('renders ThinkingIndicator when a single active slot exists even if intentMode is missing', () => {
+    storeState.hasActiveInvocation = true;
+    storeState.activeInvocations = {
+      'inv-1': { catId: 'opencode', mode: 'execute', startedAt: Date.now() },
+    };
+    storeState.intentMode = null;
+    storeState.targetCats = [];
+
+    act(() => {
+      root.render(React.createElement(ChatContainer, { threadId: 'thread-1' }));
+    });
+
+    expect(mockThinkingIndicator).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders ThinkingIndicator during single-cat spawn_started before intent_mode registers a slot', () => {
+    storeState.hasActiveInvocation = true;
+    storeState.activeInvocations = {};
+    storeState.intentMode = null;
+    storeState.targetCats = ['codex'];
+    storeState.catStatuses = { codex: 'spawning' };
+
+    act(() => {
+      root.render(React.createElement(ChatContainer, { threadId: 'thread-1' }));
+    });
+
+    expect(mockThinkingIndicator).toHaveBeenCalledTimes(1);
   });
 
   // Cross-thread guard has moved to useSocket (dual-pointer guard).

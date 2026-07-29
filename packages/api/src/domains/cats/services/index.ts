@@ -10,8 +10,8 @@ export { invokeSingleCat } from './agents/invocation/invoke-single-cat.js';
 export { buildMcpCallbackInstructions, needsMcpInjection } from './agents/invocation/McpPromptInjector.js';
 export { ClaudeAgentService } from './agents/providers/ClaudeAgentService.js';
 export { CodexAgentService } from './agents/providers/CodexAgentService.js';
-export { DareAgentService } from './agents/providers/DareAgentService.js';
 export { GeminiAgentService } from './agents/providers/GeminiAgentService.js';
+export { KimiAgentService } from './agents/providers/KimiAgentService.js';
 export { OpenCodeAgentService } from './agents/providers/OpenCodeAgentService.js';
 export { AgentRegistry } from './agents/registry/AgentRegistry.js';
 export type { AgentRouterOptions } from './agents/routing/AgentRouter.js';
@@ -24,7 +24,12 @@ export { assembleContext, formatMessage } from './context/ContextAssembler.js';
 export type { Intent, IntentResult } from './context/IntentParser.js';
 export { parseIntent, stripIntentTags } from './context/IntentParser.js';
 export type { InvocationContext } from './context/SystemPromptBuilder.js';
-export { buildInvocationContext, buildStaticIdentity, buildSystemPrompt } from './context/SystemPromptBuilder.js';
+export {
+  buildInvocationContext,
+  buildStaticIdentity,
+  buildStaticIdentityPackOnly,
+  buildSystemPrompt,
+} from './context/SystemPromptBuilder.js';
 // Game engine (F101)
 export { GameEngine } from './game/GameEngine.js';
 export type { GameOrchestratorDeps, StartGameInput } from './game/GameOrchestrator.js';

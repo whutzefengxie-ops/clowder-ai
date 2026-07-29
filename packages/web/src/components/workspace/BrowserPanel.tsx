@@ -21,6 +21,10 @@ interface BrowserPanelProps {
   initialPort?: number;
   /** Initial path for deep-linking (e.g. "/dashboard" from auto-open) */
   initialPath?: string;
+  /** Hide toolbar/tabs/console — used in focus mode */
+  previewOnly?: boolean;
+  /** Called when user navigates to a new port/path — keeps parent state in sync */
+  onNavigate?: (port: number, path: string) => void;
 }
 
 interface PreviewStatus {
@@ -33,7 +37,7 @@ interface PreviewStatus {
  * The iframe loads through the Preview Gateway (独立 origin) to strip X-Frame-Options
  * and isolate cookies/storage from Hub.
  */
-export function BrowserPanel({ initialPort, initialPath }: BrowserPanelProps) {
+export function BrowserPanel({ initialPort, initialPath, previewOnly, onNavigate }: BrowserPanelProps) {
   const [gatewayPort, setGatewayPort] = useState<number>(0);
   const [targetPort, setTargetPort] = useState(initialPort ?? 0);
   const [urlInput, setUrlInput] = useState(
@@ -50,12 +54,15 @@ export function BrowserPanel({ initialPort, initialPath }: BrowserPanelProps) {
   const { consoleEntries, consoleOpen, setConsoleOpen, isCapturing, screenshotUrl, handleScreenshot, clearConsole } =
     usePreviewBridge(iframeRef, gatewayPort);
 
-  // Helper: update active viewport state
   const activateView = useCallback((port: number, path: string) => {
     setTargetPort(port);
     setTargetPath(path);
     setUrlInput(port ? `localhost:${port}${path !== '/' ? path : ''}` : '');
   }, []);
+
+  useEffect(() => {
+    if (onNavigate) onNavigate(targetPort, targetPath);
+  }, [targetPort, targetPath, onNavigate]);
 
   // Fetch gateway port on mount
   useEffect(() => {
@@ -67,7 +74,6 @@ export function BrowserPanel({ initialPort, initialPath }: BrowserPanelProps) {
       .catch(() => setError('Preview gateway not available'));
   }, []);
 
-  // If initialPort/initialPath changes, add or activate a tab
   useEffect(() => {
     if (!initialPort) return;
     const path = initialPath ?? '/';
@@ -103,11 +109,9 @@ export function BrowserPanel({ initialPort, initialPath }: BrowserPanelProps) {
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Build gateway URL using URL API to handle paths with query params correctly
   const gatewayUrl = (() => {
     if (!targetPort || !gatewayPort) return '';
     const url = new URL(`http://localhost:${gatewayPort}`);
-    // Parse targetPath which may contain query string (e.g. /dashboard?foo=1)
     const qIdx = targetPath.indexOf('?');
     if (qIdx >= 0) {
       url.pathname = targetPath.slice(0, qIdx);
@@ -234,24 +238,26 @@ export function BrowserPanel({ initialPort, initialPath }: BrowserPanelProps) {
   }, [activateView]);
 
   return (
-    <div className="flex flex-col h-full bg-[#FDF8F3]">
-      <BrowserToolbar
-        urlInput={urlInput}
-        onUrlChange={setUrlInput}
-        onNavigate={handleNavigate}
-        onBack={handleBack}
-        onForward={handleForward}
-        onRefresh={handleRefresh}
-        onScreenshot={handleScreenshot}
-        isCapturing={isCapturing}
-        hasTarget={!!targetPort}
-        consoleOpen={consoleOpen}
-        onConsoleToggle={() => setConsoleOpen((v) => !v)}
-        consoleCount={consoleEntries.length}
-      />
+    <div className="flex flex-col h-full bg-[var(--ws-surface)]">
+      {!previewOnly && (
+        <BrowserToolbar
+          urlInput={urlInput}
+          onUrlChange={setUrlInput}
+          onNavigate={handleNavigate}
+          onBack={handleBack}
+          onForward={handleForward}
+          onRefresh={handleRefresh}
+          onScreenshot={handleScreenshot}
+          isCapturing={isCapturing}
+          hasTarget={!!targetPort}
+          consoleOpen={consoleOpen}
+          onConsoleToggle={() => setConsoleOpen((v) => !v)}
+          consoleCount={consoleEntries.length}
+        />
+      )}
 
       {/* Tab bar — only show when there are tabs */}
-      {tabs.length > 0 && (
+      {!previewOnly && tabs.length > 0 && (
         <BrowserTabBar
           tabs={tabs}
           activeTabId={activeTabId}
@@ -261,19 +267,19 @@ export function BrowserPanel({ initialPort, initialPath }: BrowserPanelProps) {
         />
       )}
 
-      {hmrStatus !== 'idle' && (
+      {!previewOnly && hmrStatus !== 'idle' && (
         <div
-          className={`flex items-center gap-1.5 px-3 py-1 text-[11px] border-b ${hmrStatus === 'connected' ? 'bg-[#FFF5F2] border-[#FFDDD2]' : 'bg-[#FFF0ED] border-[#FFD4CC]'} text-[#5a4a42]/70`}
+          className={`flex items-center gap-1.5 px-3 py-1 text-xs border-b ${hmrStatus === 'connected' ? 'bg-[var(--ws-surface-hover)] border-[var(--console-border-soft)]' : 'bg-[var(--ws-surface-alert)] border-[var(--console-border-soft)]'} text-[var(--ws-text)]/70`}
         >
           <span
-            className={`w-1.5 h-1.5 rounded-full inline-block ${hmrStatus === 'connected' ? 'bg-green-500' : 'bg-red-400'}`}
+            className={`w-1.5 h-1.5 rounded-full inline-block ${hmrStatus === 'connected' ? 'bg-conn-green-text' : 'bg-[var(--semantic-critical)]'}`}
           />
           {hmrStatus === 'connected' ? (
             <span>HMR connected · localhost:{targetPort}</span>
           ) : (
             <span>
               HMR disconnected.{' '}
-              <button type="button" className="underline hover:text-[#E29578]" onClick={handleRefresh}>
+              <button type="button" className="underline hover:text-[var(--ws-accent)]" onClick={handleRefresh}>
                 Retry
               </button>
             </span>
@@ -281,17 +287,18 @@ export function BrowserPanel({ initialPort, initialPath }: BrowserPanelProps) {
         </div>
       )}
 
-      {/* Error banner */}
-      {error && <div className="px-3 py-1.5 text-xs text-red-600 bg-red-50/80 border-b border-red-100">{error}</div>}
-
-      {/* Hub URL warning banner */}
-      {warning && !error && (
-        <div className="px-3 py-1.5 text-xs text-amber-700 bg-amber-50/80 border-b border-amber-100">{warning}</div>
+      {error && (
+        <div className="px-3 py-1.5 text-xs text-conn-red-text bg-conn-red-bg/80 border-b border-[var(--semantic-critical-surface)]">
+          {error}
+        </div>
       )}
-
-      {/* Screenshot success toast */}
+      {warning && !error && (
+        <div className="px-3 py-1.5 text-xs text-conn-amber-text bg-conn-amber-bg/80 border-b border-[var(--semantic-warning-surface)]">
+          {warning}
+        </div>
+      )}
       {screenshotUrl && (
-        <div className="px-3 py-1.5 text-xs text-green-700 bg-green-50/80 border-b border-green-100">
+        <div className="px-3 py-1.5 text-xs text-conn-green-text bg-conn-green-bg/80 border-b border-[var(--semantic-success-surface)]">
           Screenshot saved:{' '}
           <a href={screenshotUrl} target="_blank" rel="noreferrer" className="underline">
             {screenshotUrl}
@@ -302,8 +309,8 @@ export function BrowserPanel({ initialPort, initialPath }: BrowserPanelProps) {
       {gatewayUrl ? (
         <div className="relative flex-1">
           {isLoading && (
-            <div className="absolute inset-0 flex items-center justify-center bg-[#FDF8F3]/80 z-10">
-              <div className="text-xs text-[#5a4a42]/50">Loading preview...</div>
+            <div className="absolute inset-0 flex items-center justify-center bg-[var(--ws-surface)]/80 z-10">
+              <div className="text-xs text-[var(--ws-text)]/50">Loading preview...</div>
             </div>
           )}
           <iframe
@@ -321,7 +328,7 @@ export function BrowserPanel({ initialPort, initialPath }: BrowserPanelProps) {
           />
         </div>
       ) : (
-        <div className="flex-1 flex items-center justify-center text-[#5a4a42]/40 text-sm text-center">
+        <div className="flex-1 flex items-center justify-center text-[var(--ws-text)]/40 text-sm text-center">
           <div>
             <div className="text-3xl mb-3 opacity-30">🌐</div>
             <p>Enter a localhost URL to preview</p>
@@ -330,18 +337,20 @@ export function BrowserPanel({ initialPort, initialPath }: BrowserPanelProps) {
       )}
 
       {/* Console panel */}
-      {consoleOpen && <ConsolePanel entries={consoleEntries} onClear={clearConsole} />}
+      {!previewOnly && consoleOpen && <ConsolePanel entries={consoleEntries} onClear={clearConsole} />}
 
-      <div className="flex items-center px-2 py-0.5 border-t border-[#FFDDD2] text-[10px] text-[#5a4a42]/40 bg-white/40">
-        {targetPort && gatewayPort ? (
-          <span className="flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
-            localhost:{targetPort} via gateway:{gatewayPort}
-          </span>
-        ) : (
-          <span>No preview</span>
-        )}
-      </div>
+      {!previewOnly && (
+        <div className="flex items-center px-2 py-0.5 console-divider-t text-micro text-[var(--ws-text)]/40 bg-cafe-surface/40">
+          {targetPort && gatewayPort ? (
+            <span className="flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-conn-green-text inline-block" />
+              localhost:{targetPort} via gateway:{gatewayPort}
+            </span>
+          ) : (
+            <span>No preview</span>
+          )}
+        </div>
+      )}
     </div>
   );
 }

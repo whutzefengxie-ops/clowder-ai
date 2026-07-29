@@ -1,7 +1,7 @@
 'use client';
 
 import type { CatData } from '@/hooks/useCatData';
-import type { BuiltinAccountClient, ProfileItem } from './hub-provider-profiles.types';
+import type { BuiltinAccountClient, ProfileItem } from './hub-accounts.types';
 import type { CodexUsageItem, QuotaResponse } from './quota-cards';
 
 export interface AccountQuotaPool {
@@ -24,32 +24,10 @@ const BUILTIN_CLIENT_LABELS: Record<BuiltinAccountClient, string> = {
   anthropic: 'Claude',
   openai: 'Codex',
   google: 'Gemini',
-  dare: 'Dare',
+  kimi: 'Kimi',
   opencode: 'OpenCode',
+  acp: 'ACP',
 };
-
-const BUILTIN_ACCOUNT_IDS: Record<BuiltinAccountClient, string> = {
-  anthropic: 'claude',
-  openai: 'codex',
-  google: 'gemini',
-  dare: 'dare',
-  opencode: 'opencode',
-};
-
-function builtinDisplayName(client: BuiltinAccountClient): string {
-  switch (client) {
-    case 'anthropic':
-      return 'Claude (OAuth)';
-    case 'openai':
-      return 'Codex (OAuth)';
-    case 'google':
-      return 'Gemini (OAuth)';
-    case 'dare':
-      return 'Dare (client-auth)';
-    case 'opencode':
-      return 'OpenCode (client-auth)';
-  }
-}
 
 function uniqueTags(tags: string[]): string[] {
   return [...new Set(tags.filter(Boolean))];
@@ -60,15 +38,15 @@ function memberTag(cat: CatData): string {
 }
 
 function fallbackAccountRef(cat: CatData): string | null {
-  switch (cat.provider) {
+  switch (cat.clientId) {
     case 'anthropic':
       return 'claude';
     case 'openai':
       return 'codex';
     case 'google':
       return 'gemini';
-    case 'dare':
-      return 'dare';
+    case 'kimi':
+      return 'kimi';
     case 'opencode':
       return 'opencode';
     default:
@@ -80,35 +58,37 @@ function memberTagsForAccount(cats: CatData[], accountId: string): string[] {
   return uniqueTags(
     cats
       .filter((cat) => {
-        const boundAccountRef = cat.accountRef?.trim() || cat.providerProfileId?.trim() || fallbackAccountRef(cat);
+        const boundAccountRef = cat.accountRef?.trim() || fallbackAccountRef(cat);
         return boundAccountRef === accountId;
       })
       .map(memberTag),
   );
 }
 
-function builtinQuotaItems(accountId: string, quota: QuotaResponse | null): CodexUsageItem[] {
-  switch (accountId) {
-    case 'claude':
+function builtinQuotaItems(clientId: BuiltinAccountClient | undefined, quota: QuotaResponse | null): CodexUsageItem[] {
+  switch (clientId) {
+    case 'anthropic':
       return quota?.claude.usageItems ?? [];
-    case 'codex':
+    case 'openai':
       return quota?.codex.usageItems ?? [];
-    case 'gemini':
+    case 'google':
       return quota?.gemini?.usageItems ?? [];
+    case 'kimi':
+      return quota?.kimi?.usageItems ?? [];
     default:
       return [];
   }
 }
 
-function builtinEmptyText(accountId: string): string {
-  switch (accountId) {
-    case 'claude':
-    case 'codex':
+function builtinEmptyText(clientId: BuiltinAccountClient | undefined): string {
+  switch (clientId) {
+    case 'anthropic':
+    case 'openai':
       return '暂无数据，点击刷新获取';
-    case 'gemini':
+    case 'google':
       return '暂无数据（需 ClaudeBar 推送）';
-    case 'dare':
-      return 'Dare 不单独上报官方额度，实际额度取决于绑定账号';
+    case 'kimi':
+      return '默认通过 Kimi CLI /usage 获取；如需 API 降级，配置 KIMI_QUOTA_API_FALLBACK_ENABLED=1 与 KIMI_AUTH_TOKEN';
     case 'opencode':
       return 'OpenCode 不单独上报官方额度，实际额度取决于绑定账号';
     default:
@@ -121,27 +101,18 @@ export function buildAccountQuotaGroups(
   profiles: ProfileItem[],
   cats: CatData[],
 ): AccountQuotaPoolGroup[] {
-  const builtinProfiles =
-    profiles.filter((profile) => profile.builtin).length > 0
-      ? profiles.filter((profile) => profile.builtin)
-      : (Object.entries(BUILTIN_ACCOUNT_IDS) as Array<[BuiltinAccountClient, string]>).map(([client, id]) => ({
-          id,
-          displayName: builtinDisplayName(client),
-          client,
-          builtin: true,
-          authType: 'oauth' as const,
-        }));
+  const oauthProfiles = profiles.filter((profile) => profile.authType === 'oauth');
 
-  const builtinPools = builtinProfiles.map<AccountQuotaPool>((profile) => ({
+  const builtinPools = oauthProfiles.map<AccountQuotaPool>((profile) => ({
     id: profile.id,
-    title: profile.displayName || BUILTIN_CLIENT_LABELS[profile.client ?? 'anthropic'],
-    items: builtinQuotaItems(profile.id, quota),
+    title: profile.displayName || BUILTIN_CLIENT_LABELS[profile.clientId ?? 'anthropic'],
+    items: builtinQuotaItems(profile.clientId, quota),
     memberTags: memberTagsForAccount(cats, profile.id),
-    emptyText: builtinEmptyText(profile.id),
+    emptyText: builtinEmptyText(profile.clientId),
   }));
 
   const apiKeyPools = profiles
-    .filter((profile) => profile.authType === 'api_key' && !profile.builtin)
+    .filter((profile) => profile.authType === 'api_key')
     .map<AccountQuotaPool>((profile) => ({
       id: profile.id,
       title: profile.displayName,
@@ -150,7 +121,7 @@ export function buildAccountQuotaGroups(
       emptyText: '按账单周期计费，暂不展示官方用量',
     }));
 
-  const antigravityMemberTags = uniqueTags(cats.filter((cat) => cat.provider === 'antigravity').map(memberTag));
+  const antigravityMemberTags = uniqueTags(cats.filter((cat) => cat.clientId === 'antigravity').map(memberTag));
   const antigravityPools: AccountQuotaPool[] =
     antigravityMemberTags.length > 0 || (quota?.antigravity?.usageItems.length ?? 0) > 0
       ? [
@@ -167,8 +138,8 @@ export function buildAccountQuotaGroups(
   const groups: AccountQuotaPoolGroup[] = [
     {
       id: 'builtin',
-      title: '内置账号额度（按账号配置）',
-      description: '固定内置账号包括 Claude / Codex / Gemini / Dare / OpenCode，每个账号下方反向显示绑定成员。',
+      title: 'OAuth 账号额度（按账号配置）',
+      description: 'OAuth 账号包括 Claude / Codex / Gemini / Kimi / OpenCode，每个账号下方反向显示绑定成员。',
       pools: builtinPools,
     },
     {

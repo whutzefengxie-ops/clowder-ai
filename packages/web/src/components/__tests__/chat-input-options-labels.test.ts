@@ -8,12 +8,11 @@ const FAKE_CATS: CatData[] = [
     displayName: '暹罗猫',
     color: { primary: '#5B9BD5', secondary: '#D6E9F8' },
     mentionPatterns: ['暹罗', '暹罗猫', 'gemini'],
-    provider: 'google',
+    clientId: 'google',
     defaultModel: 'gemini-3-pro',
     avatar: '/avatars/gemini.png',
     roleDescription: '视觉设计师',
     personality: '活泼有创意',
-    source: 'seed',
   },
 ];
 
@@ -24,24 +23,22 @@ const MIXED_CATS: CatData[] = [
     displayName: '布偶猫(快)',
     color: { primary: '#9B7EBD', secondary: '#E8D5F5' },
     mentionPatterns: [],
-    provider: 'anthropic',
+    clientId: 'anthropic',
     defaultModel: 'opus-fast',
     avatar: '/avatars/opus.png',
     roleDescription: '快速变体',
     personality: 'kind',
-    source: 'seed',
   },
   {
     id: 'spark',
     displayName: '火花猫',
     color: { primary: '#F59E0B', secondary: '#FDE68A' },
     mentionPatterns: ['spark'],
-    provider: 'openai',
+    clientId: 'openai',
     defaultModel: 'gpt-5.4-mini',
     avatar: '/avatars/spark.png',
     roleDescription: '精确点改',
     personality: 'fast',
-    source: 'seed',
     roster: {
       family: 'maine-coon',
       roles: ['coder'],
@@ -63,22 +60,36 @@ describe('chat input mention option labels', () => {
 
   it('only uses the first mention pattern for autocomplete insert text', () => {
     const options = buildCatOptions(FAKE_CATS);
-    expect(options[0]?.insert).toBe('@暹罗 ');
-    expect(options[0]?.insert).not.toBe('@暹罗猫 ');
-    expect(options[0]?.insert).not.toBe('@gemini ');
+    const gemini = options.find((opt) => opt.id === 'gemini');
+    expect(gemini?.insert).toBe('@暹罗 ');
+    expect(gemini?.insert).not.toBe('@暹罗猫 ');
+    expect(gemini?.insert).not.toBe('@gemini ');
   });
 });
 
 describe('buildCatOptions vs buildWhisperOptions split', () => {
   it('buildCatOptions filters out cats with empty mentionPatterns', () => {
     const options = buildCatOptions(MIXED_CATS);
-    expect(options).toHaveLength(1);
-    expect(options[0].id).toBe('gemini');
+    const individuals = options.filter((opt) => !opt.isGroup);
+    expect(individuals).toHaveLength(1);
+    expect(individuals[0].id).toBe('gemini');
   });
 
   it('buildCatOptions filters out unavailable cats even when they have mention patterns', () => {
     const options = buildCatOptions(MIXED_CATS);
     expect(options.map((option) => option.id)).not.toContain('spark');
+  });
+
+  it('buildCatOptions places group mentions (@thread, @all) after individual cats', () => {
+    const options = buildCatOptions(FAKE_CATS);
+    const groups = options.filter((opt) => opt.isGroup);
+    expect(groups.length).toBeGreaterThanOrEqual(2);
+    expect(groups.find((g) => g.insert === '@thread ')).toBeDefined();
+    expect(groups.find((g) => g.insert === '@all ')).toBeDefined();
+    // Individual cats come before group mentions (groups are low-frequency)
+    const lastIndividualIdx = options.reduce((max, opt, i) => (!opt.isGroup ? i : max), -1);
+    const firstGroupIdx = options.findIndex((opt) => opt.isGroup);
+    expect(lastIndividualIdx).toBeLessThan(firstGroupIdx);
   });
 
   it('buildWhisperOptions includes cats with empty mentionPatterns', () => {

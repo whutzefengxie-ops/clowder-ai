@@ -10,9 +10,11 @@ import assert from 'node:assert/strict';
 import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { Readable } from 'node:stream';
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import Fastify from 'fastify';
 import { ensureFakeCliOnPath } from './helpers/fake-cli-path.js';
+import { fakeL0Compiler } from './helpers/fake-l0-compiler.js';
 
 ensureFakeCliOnPath('claude');
 ensureFakeCliOnPath('codex');
@@ -110,6 +112,16 @@ describe('saveUploadedImages', () => {
 });
 
 describe('extractImagePaths', () => {
+  it('uses packages/api/uploads as the default upload dir regardless of cwd', async () => {
+    const { getDefaultUploadDir } = await import('../dist/utils/upload-paths.js');
+
+    const dir = getDefaultUploadDir();
+    assert.ok(
+      dir.endsWith('/packages/api/uploads'),
+      `expected default upload dir to end with /packages/api/uploads, got ${dir}`,
+    );
+  });
+
   it('extracts absolute paths from /uploads/ URLs', async () => {
     const { extractImagePaths } = await import('../dist/domains/cats/services/agents/providers/image-paths.js');
 
@@ -155,12 +167,13 @@ describe('Claude CLI image fallback', () => {
   it('does not use unsupported --images flag, grants image dir access, and appends local path hints', async () => {
     const spawnArgs = [];
     const mockSpawnFn = (cmd, args, opts) => {
-      spawnArgs.push({ cmd, args: [...args], opts });
-      return createMockProcess([]);
+      const proc = createMockProcess([]);
+      spawnArgs.push({ cmd, args: [...args], opts, proc });
+      return proc;
     };
 
     const { ClaudeAgentService } = await import('../dist/domains/cats/services/agents/providers/ClaudeAgentService.js');
-    const service = new ClaudeAgentService({ spawnFn: mockSpawnFn });
+    const service = new ClaudeAgentService({ l0CompilerFn: fakeL0Compiler, spawnFn: mockSpawnFn });
 
     for await (const _ of service.invoke('test', {
       contentBlocks: [
@@ -177,9 +190,11 @@ describe('Claude CLI image fallback', () => {
     assert.equal(imgIdx, -1, 'should not pass unsupported --images flag');
     const addDirIdx = args.indexOf('--add-dir');
     assert.ok(addDirIdx >= 0, 'should pass --add-dir for image directory');
-    const prompt = args.find((a) => typeof a === 'string' && a.includes('[Local image path:'));
-    assert.ok(prompt, 'prompt should include local image path hint');
-    assert.ok(prompt.includes('photo.png'));
+    // #840 R2: prompt now flows via stdin, not argv. Verify the image hint is
+    // appended to the prompt content delivered to the CLI.
+    const stdinContent = spawnArgs[0].proc.stdinWrites.join('');
+    assert.ok(stdinContent.includes('[Local image path:'), 'stdin prompt should include local image path hint');
+    assert.ok(stdinContent.includes('photo.png'));
   });
 });
 
@@ -192,7 +207,7 @@ describe('Codex CLI image text fallback', () => {
     };
 
     const { CodexAgentService } = await import('../dist/domains/cats/services/agents/providers/CodexAgentService.js');
-    const service = new CodexAgentService({ spawnFn: mockSpawnFn });
+    const service = new CodexAgentService({ l0CompilerFn: fakeL0Compiler, spawnFn: mockSpawnFn });
 
     for await (const _ of service.invoke('review this', {
       contentBlocks: [{ type: 'image', url: '/uploads/screenshot.png' }],
@@ -420,24 +435,49 @@ function createMockFile(filename, mimetype, buffer) {
 }
 
 function createMockProcess(events) {
-  const { Readable } = require('node:stream');
-
   const stdoutData = `${events.map((e) => JSON.stringify(e)).join('\n')}\n`;
   const stdout = Readable.from(stdoutData);
   const stderr = Readable.from('');
 
-  return {
+  // #840 R2: capture stdin writes (main prompt now streams via stdin, not argv).
+  const stdinWrites = [];
+  const stdin = {
+    write: (chunk) => {
+      stdinWrites.push(typeof chunk === 'string' ? chunk : chunk.toString());
+      return true;
+    },
+    end: () => {},
+    on: () => stdin,
+  };
+
+  const child = {
     stdout,
     stderr,
+    stdin,
+    stdinWrites, // test inspection hook
     on: (event, cb) => {
       if (event === 'close') setTimeout(() => cb(0, null), 10);
+      if (event === 'exit') setTimeout(() => cb(0, null), 8);
       if (event === 'error') {
         /* no-op */
       }
-      return { stdout, stderr, on: () => ({}) };
+      return child;
+    },
+    // #840 R2: cli-spawn uses child.once('exit'/'close'/'error') in its
+    // lifecycle handling. Add a minimal `once` shim that mirrors `on` so the
+    // mock satisfies both APIs (real Node ChildProcess inherits from
+    // EventEmitter, which provides both).
+    once: (event, cb) => {
+      if (event === 'close') setTimeout(() => cb(0, null), 10);
+      if (event === 'exit') setTimeout(() => cb(0, null), 8);
+      if (event === 'error') {
+        /* no-op */
+      }
+      return child;
     },
     kill: () => true,
     killed: false,
     pid: 12345,
   };
+  return child;
 }

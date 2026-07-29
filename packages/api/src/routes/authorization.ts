@@ -1,5 +1,5 @@
 /**
- * Authorization Management Routes — 铲屎官审批 + 规则管理 + 审计查询
+ * Authorization Management Routes — co-creator审批 + 规则管理 + 审计查询
  * 安全: X-Cat-Cafe-User header（兼容 legacy x-user-id）
  */
 
@@ -10,31 +10,28 @@ import type { AuthorizationManager } from '../domains/cats/services/auth/Authori
 import type { IAuthorizationAuditStore } from '../domains/cats/services/stores/ports/AuthorizationAuditStore.js';
 import type { IAuthorizationRuleStore } from '../domains/cats/services/stores/ports/AuthorizationRuleStore.js';
 import type { SocketManager } from '../infrastructure/websocket/index.js';
+import { resolveHeaderUserId } from '../utils/request-identity.js';
 
 export interface AuthorizationRoutesOptions {
   authManager: AuthorizationManager;
   ruleStore: IAuthorizationRuleStore;
   auditStore: IAuthorizationAuditStore;
   socketManager: SocketManager;
+  onPermissionCancel?: (input: {
+    toolName: string;
+    paramsSummary?: string;
+    catId: string;
+    threadId: string;
+    userId: string;
+    /** F192 AC-G10: structured cancel reason from frontend popup */
+    cancelReason?: string;
+    /** F222 UX-3: user clicked "取消并反馈" — trigger immediate auto-issue */
+    withFeedback?: boolean;
+  }) => void;
 }
 
-function resolveAuthorizationUserId(request: {
-  headers: Record<string, string | string[] | undefined>;
-}): string | null {
-  const fromPrimary = request.headers['x-cat-cafe-user'];
-  if (typeof fromPrimary === 'string' && fromPrimary.trim().length > 0) return fromPrimary.trim();
-  if (Array.isArray(fromPrimary) && typeof fromPrimary[0] === 'string' && fromPrimary[0].trim().length > 0) {
-    return fromPrimary[0].trim();
-  }
-
-  // Legacy compatibility: old clients used x-user-id
-  const fromLegacy = request.headers['x-user-id'];
-  if (typeof fromLegacy === 'string' && fromLegacy.trim().length > 0) return fromLegacy.trim();
-  if (Array.isArray(fromLegacy) && typeof fromLegacy[0] === 'string' && fromLegacy[0].trim().length > 0) {
-    return fromLegacy[0].trim();
-  }
-
-  return null;
+function resolveAuthorizationUserId(request: import('fastify').FastifyRequest): string | null {
+  return resolveHeaderUserId(request);
 }
 
 const respondSchema = z.object({
@@ -42,6 +39,8 @@ const respondSchema = z.object({
   granted: z.boolean(),
   scope: z.enum(['once', 'thread', 'global']),
   reason: z.string().max(1000).optional(),
+  /** F222 UX-3: true when user clicked "取消并反馈" */
+  withFeedback: z.boolean().optional(),
 });
 
 const addRuleSchema = z.object({
@@ -54,9 +53,9 @@ const addRuleSchema = z.object({
 });
 
 export const authorizationRoutes: FastifyPluginAsync<AuthorizationRoutesOptions> = async (app, opts) => {
-  const { authManager, ruleStore, auditStore, socketManager } = opts;
+  const { authManager, ruleStore, auditStore, socketManager, onPermissionCancel } = opts;
 
-  // POST /api/authorization/respond — 铲屎官审批
+  // POST /api/authorization/respond — co-creator审批
   app.post('/api/authorization/respond', async (request, reply) => {
     const userId = resolveAuthorizationUserId(request);
     if (!userId) {
@@ -70,11 +69,28 @@ export const authorizationRoutes: FastifyPluginAsync<AuthorizationRoutesOptions>
       return { error: 'Invalid request body', details: parseResult.error.issues };
     }
 
-    const { requestId, granted, scope, reason } = parseResult.data;
+    const { requestId, granted, scope, reason, withFeedback } = parseResult.data;
     const updated = await authManager.respond(requestId, granted, scope, userId, reason);
     if (!updated) {
       reply.status(404);
       return { error: 'Request not found or already resolved' };
+    }
+
+    // F192 Phase G: Record permission cancel as task outcome signal
+    if (!granted && onPermissionCancel) {
+      try {
+        onPermissionCancel({
+          toolName: updated.action,
+          paramsSummary: updated.context,
+          catId: updated.catId,
+          threadId: updated.threadId,
+          userId,
+          cancelReason: reason,
+          withFeedback: withFeedback ?? false,
+        });
+      } catch {
+        // Best-effort: don't fail the authorization response if recording fails
+      }
     }
 
     // Broadcast resolution to frontend

@@ -1,14 +1,27 @@
-import { CAT_CONFIGS } from '@cat-cafe/shared';
 import { create } from 'zustand';
 import { getBubbleInvocationId } from '@/debug/bubbleIdentity';
+import { isBubbleInvariantStrictModeOn, recordBubbleInvariantViolation } from '@/debug/bubbleInvariantDiagnostics';
 import { recordDebugEvent } from '@/debug/invocationEventDebug';
+import { getCachedCats } from '@/hooks/useCatData';
+import { formatCatDisplayName } from '@/lib/cat-display-name';
+import { inferFileKind, inferRenderMode } from '@/lib/file-kind';
+import {
+  resolveNavigateTargetWorktreeId,
+  scopeWorktreeAliases,
+  type WorktreeAliasMap,
+} from '@/utils/worktree-id-alias';
+import { saveThreadMessages as saveMessagesSnapshot, saveThreads as saveThreadsSnapshot } from '../utils/offline-store';
+import { findBubbleStoreInvariantViolations } from './bubble-invariants';
 import type {
   CatInvocationInfo,
   CatStatusType,
   ChatMessage,
   ChatMessageMetadata,
   ChatMessagePatch,
+  ComposerDraftInsert,
   GameState,
+  PresentationLockSnapshot,
+  PresentationSurfaceState,
   QueueEntry,
   RichBlock,
   Thread,
@@ -17,6 +30,7 @@ import type {
   ToolEvent,
 } from './chat-types';
 import { DEFAULT_THREAD_STATE } from './chat-types';
+import { crossesUserTurnBoundary } from './turn-boundary';
 
 // Re-export types so existing consumers keep working with `import { ... } from '@/stores/chatStore'`
 export type {
@@ -49,37 +63,158 @@ export { DEFAULT_THREAD_STATE } from './chat-types';
 // ── Helpers ──
 
 /** Snapshot the flat active-thread fields into a ThreadState object */
+/**
+ * F173 a2a-handoff bug fix: insert message at correct chronological position
+ * if it carries `extra.systemKind === 'a2a_routing'`; otherwise simple append.
+ *
+ * Why narrow scope: addMessage is the streaming hot path (chunks every few ms,
+ * dedup logic above). A global timestamp sort would touch F173 streaming/dedup
+ * invariants and add O(n) per insert. Marker-gated insert avoids both.
+ *
+ * Why needed: a2a_handoff routing pill ("X → Y") emitted by route-serial.ts
+ * arrives over WebSocket, can race against the next cat's stream bubble. If
+ * the bubble arrives first (already appended), the handoff appended later
+ * shows up visually after the bubble it was supposed to precede.
+ */
+function insertOrAppendMessage(messages: ChatMessage[], msg: ChatMessage): ChatMessage[] {
+  if (msg.extra?.systemKind !== 'a2a_routing') {
+    return [...messages, msg];
+  }
+  // Linear scan from the end. Tie-break rules for a2a_routing:
+  // - Strictly older (cur.ts < msg.ts): insert right after — handoff lands here.
+  // - Same ts AND cur is also a2a_routing: insert AFTER cur to preserve
+  //   arrival/server-emit order (multi-target handoffs from same backend yield).
+  //   Without this, two same-ms handoffs would reverse order.
+  //   砚砚 R2 P2.
+  // - Same ts but cur is non-routing (bubble): skip — handoff biases EARLIER
+  //   so routing semantically precedes the bubble. Cloud Codex R2 P2-1.
+  // - Newer (cur.ts > msg.ts): skip.
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const cur = messages[i]!;
+    if (cur.timestamp < msg.timestamp) {
+      const next = messages.slice();
+      next.splice(i + 1, 0, msg);
+      return next;
+    }
+    if (cur.timestamp === msg.timestamp && cur.extra?.systemKind === 'a2a_routing') {
+      const next = messages.slice();
+      next.splice(i + 1, 0, msg);
+      return next;
+    }
+  }
+  // All existing messages are newer (or are equal-ts non-routing bubbles) — insert at front
+  return [msg, ...messages];
+}
+
 function snapshotActive(s: ChatState): ThreadState {
   return {
     messages: s.messages,
     isLoading: s.isLoading,
     isLoadingHistory: s.isLoadingHistory,
     hasMore: s.hasMore,
+    hasDraft: s.hasDraft,
     hasActiveInvocation: s.hasActiveInvocation,
     activeInvocations: s.activeInvocations,
     intentMode: s.intentMode,
     targetCats: s.targetCats,
     catStatuses: s.catStatuses,
+    catStatusDetails: s.catStatusDetails,
     catInvocations: s.catInvocations,
     currentGame: s.currentGame,
     unreadCount: 0, // active thread always 0
     hasUserMention: false,
-    lastActivity: Date.now(),
+    // If the thread is actively streaming, Date.now() is correct — there IS real activity.
+    // Otherwise, preserve the real timestamp so a mere thread switch doesn't reorder the sidebar.
+    lastActivity: s.hasActiveInvocation
+      ? Date.now()
+      : Math.max(
+          s.threadStates[s.currentThreadId]?.lastActivity ?? 0,
+          s.messages.length > 0
+            ? (s.messages[s.messages.length - 1].deliveredAt ?? s.messages[s.messages.length - 1].timestamp)
+            : 0,
+        ),
     queue: s.queue,
     queuePaused: s.queuePaused,
     queuePauseReason: s.queuePauseReason,
     queueFull: s.queueFull,
     queueFullSource: s.queueFullSource,
+    workspaceWorktreeId: s.workspaceWorktreeId,
+    workspaceOpenTabs: s.workspaceOpenTabs,
+    workspaceOpenFilePath: s.workspaceOpenFilePath,
+    workspaceOpenFileLine: s.workspaceOpenFileLine,
+  };
+}
+
+/** F173 Phase A — ThreadRuntimeWriter mirror helper.
+ *  When a setThreadX writes to the active thread's flat state, this also mirrors
+ *  the same patch into threadStates[currentThreadId] so threadStates is always
+ *  the source of truth (flat is a compatibility mirror, KD-2).
+ *
+ *  Returns the threadStates patch only — the caller must spread the flat patch
+ *  alongside this to emit a single zustand set() with both halves.
+ *
+ *  Pass the *new* values (post-mutation) so the mirror reflects the same outcome
+ *  as the flat update.
+ */
+function mirrorActiveToThreadStates(
+  state: ChatState,
+  threadId: string,
+  patch: Partial<ThreadState>,
+): { threadStates: Record<string, ThreadState> } {
+  const baseThreadState = state.threadStates[threadId] ?? snapshotActive(state);
+  // F173 receive-review fix for砚砚 P1-2 — do NOT stamp lastActivity on mirror.
+  // Mirror is field synchronization, not "real activity occurred". stampThreadCompletion
+  // handles completion timing. Stamping here would break the sidebar sort stability
+  // invariant: redundant setX calls on inactive threads would falsely bump their position.
+  return {
+    threadStates: {
+      ...state.threadStates,
+      [threadId]: {
+        ...baseThreadState,
+        ...patch,
+      },
+    },
+  };
+}
+
+/** F173 Phase A — receive-review fix for砚砚 P1-2.
+ *  Convenience wrapper: mirror an active-thread flat patch to threadStates[currentThreadId]
+ *  in a single set() call, eliminating the "active flat write skips mirror" gap.
+ */
+function mirrorActiveFlat(
+  state: ChatState,
+  patch: Partial<ThreadState>,
+): { threadStates: Record<string, ThreadState> } {
+  return mirrorActiveToThreadStates(state, state.currentThreadId, patch);
+}
+
+/** Stamp completion time into threadStates for a given thread.
+ *  Centralizes the "real activity just ended" semantic so all invocation-clearing
+ *  paths share one definition. Optional `patch` merges extra fields before stamping. */
+function stampThreadCompletion(
+  threadStates: Record<string, ThreadState>,
+  threadId: string,
+  patch?: Partial<ThreadState>,
+): Record<string, ThreadState> {
+  const existing = threadStates[threadId];
+  return {
+    ...threadStates,
+    [threadId]: {
+      ...(existing ?? { ...DEFAULT_THREAD_STATE }),
+      ...patch,
+      lastActivity: Date.now(),
+    },
   };
 }
 
 /** Flatten a ThreadState into partial ChatState fields */
 function flattenThread(ts: ThreadState): Partial<ChatState> {
-  return {
+  const result: Partial<ChatState> = {
     messages: ts.messages,
     isLoading: ts.isLoading,
     isLoadingHistory: ts.isLoadingHistory,
     hasMore: ts.hasMore,
+    hasDraft: ts.hasDraft ?? false,
     hasActiveInvocation: ts.hasActiveInvocation,
     activeInvocations: ts.activeInvocations,
     intentMode: ts.intentMode,
@@ -92,12 +227,22 @@ function flattenThread(ts: ThreadState): Partial<ChatState> {
     queuePauseReason: ts.queuePauseReason,
     queueFull: ts.queueFull,
     queueFullSource: ts.queueFullSource,
+    workspaceOpenTabs: ts.workspaceOpenTabs,
+    workspaceOpenFilePath: ts.workspaceOpenFilePath,
+    workspaceOpenFileLine: ts.workspaceOpenFileLine,
   };
+  // Only restore worktreeId if the thread had one set — avoids wiping
+  // the global selection for threads that never opened workspace.
+  if (ts.workspaceWorktreeId != null) {
+    result.workspaceWorktreeId = ts.workspaceWorktreeId;
+  }
+  return result;
 }
 
 const MAX_BLOB_MESSAGES = 200;
 
 const UI_THINKING_EXPANDED_KEY = 'catcafe.ui.thinkingExpandedByDefault';
+const THINKING_CHUNK_SEPARATOR = '\n\n---\n\n';
 
 function loadUiThinkingExpandedByDefault(): boolean {
   if (typeof window === 'undefined') return false;
@@ -115,6 +260,76 @@ function persistUiThinkingExpandedByDefault(next: boolean) {
   } catch {
     // ignore storage failures (privacy mode, quota, etc.)
   }
+}
+
+function renderThinkingChunks(chunks: string[]): string {
+  return chunks.join(THINKING_CHUNK_SEPARATOR);
+}
+
+function getThinkingChunks(message: Pick<ChatMessage, 'thinking' | 'thinkingChunks'>): string[] {
+  if (message.thinkingChunks && message.thinkingChunks.length > 0) {
+    if (!message.thinking || renderThinkingChunks(message.thinkingChunks) === message.thinking) {
+      return message.thinkingChunks;
+    }
+  }
+  return message.thinking ? [message.thinking] : [];
+}
+
+function appendThinkingChunk(
+  message: Pick<ChatMessage, 'thinking' | 'thinkingChunks'>,
+  next: string,
+): Pick<ChatMessage, 'thinking' | 'thinkingChunks'> {
+  const existingChunks = getThinkingChunks(message);
+  if (existingChunks.length === 0) {
+    return { thinking: next, thinkingChunks: [next] };
+  }
+  const lastChunk = existingChunks.at(-1)!;
+  if (lastChunk === next) {
+    return {
+      thinking: renderThinkingChunks(existingChunks),
+      thinkingChunks: existingChunks,
+    };
+  }
+  if (next.startsWith(lastChunk)) {
+    const thinkingChunks = [...existingChunks.slice(0, -1), next];
+    return {
+      thinking: renderThinkingChunks(thinkingChunks),
+      thinkingChunks,
+    };
+  }
+  if (lastChunk.startsWith(next)) {
+    return {
+      thinking: renderThinkingChunks(existingChunks),
+      thinkingChunks: existingChunks,
+    };
+  }
+  const thinkingChunks = [...existingChunks, next];
+  return {
+    thinking: renderThinkingChunks(thinkingChunks),
+    thinkingChunks,
+  };
+}
+
+export type BubbleExpandState = 'expanded' | 'collapsed';
+export type BubbleOverride = 'global' | 'expanded' | 'collapsed';
+
+export interface GlobalBubbleDefaults {
+  thinking: BubbleExpandState;
+  cliOutput: BubbleExpandState;
+}
+
+/**
+ * Resolve whether a bubble type should be expanded.
+ * Priority: thread override > global config > fallback (collapsed).
+ */
+export function resolveBubbleExpanded(
+  threadOverride: BubbleOverride | undefined,
+  globalDefault: BubbleExpandState,
+): boolean {
+  if (threadOverride && threadOverride !== 'global') {
+    return threadOverride === 'expanded';
+  }
+  return globalDefault === 'expanded';
 }
 
 function revokeBlobUrls(messages: ChatMessage[]) {
@@ -140,6 +355,29 @@ function collectBlobUrls(messages: ChatMessage[]): Set<string> {
     }
   }
   return blobUrls;
+}
+
+/**
+ * F183 Phase E AC-E2 (砚砚 R2 P1 fix) — strict-only invariant forward for
+ * caller-driven writers (replaceMessages, replaceThreadMessages,
+ * hydrateThread). When `BUBBLE_INVARIANT_STRICT=1` /
+ * `NEXT_PUBLIC_BUBBLE_INVARIANT_STRICT=1` /
+ * `localStorage[catcafe.bubbleInvariantStrict]==='1'` is on, runs the
+ * post-mutation duplicate-identity scan and forwards each violation to
+ * `recordBubbleInvariantViolation` (which throws under strict). Off mode is
+ * a 1-instruction early-out — no O(n) cost in production hot paths.
+ */
+function forwardStoreInvariantViolationsStrict(messages: ChatMessage[], threadId: string | null): void {
+  if (!isBubbleInvariantStrictModeOn()) return;
+  if (!threadId) return;
+  const violations = findBubbleStoreInvariantViolations(messages, {
+    threadId,
+    eventType: 'history_hydrate',
+    sourcePath: 'hydration',
+  });
+  for (const v of violations) {
+    recordBubbleInvariantViolation(v, 'warn');
+  }
 }
 
 function revokeRemovedBlobUrls(previousMessages: ChatMessage[], nextMessages: ChatMessage[]) {
@@ -226,12 +464,13 @@ function fireOwnerMentionNotification(msg: ChatMessage) {
     Notification.requestPermission();
     return;
   }
-  const catConfig = CAT_CONFIGS[msg.catId ?? ''];
-  const catName = catConfig?.displayName ?? msg.catId ?? '猫猫';
+  const cats = getCachedCats();
+  const catData = cats.find((c) => c.id === msg.catId);
+  const catName = catData ? formatCatDisplayName(catData) : (msg.catId ?? '猫猫');
   const preview = typeof msg.content === 'string' ? msg.content.replace(/\n/g, ' ').slice(0, 120) : '';
   new Notification(`${catName} @ 了你`, {
     body: preview,
-    icon: catConfig?.avatar ?? '/favicon.ico',
+    icon: catData?.avatar ?? '/favicon.ico',
     tag: `cocreator-mention-${msg.id}`,
   });
 }
@@ -252,6 +491,11 @@ function fireOwnerMentionNotification(msg: ChatMessage) {
 function findAssistantDuplicate(messages: ChatMessage[], incoming: ChatMessage): number {
   if (incoming.type !== 'assistant' || !incoming.catId) return -1;
 
+  // #814: Explicit post_message callbacks are independent messages — never merge.
+  // post_message is a cat-initiated separate communication (e.g., @mention to another cat),
+  // not a duplicate of the same response arriving via stream+callback paths.
+  if (incoming.origin === 'callback' && incoming.extra?.isExplicitPost) return -1;
+
   const incomingInvId = getBubbleInvocationId(incoming);
 
   // Phase 1: Hard rule — scan ALL same-cat assistants for exact invocationId match.
@@ -260,15 +504,26 @@ function findAssistantDuplicate(messages: ChatMessage[], incoming: ChatMessage):
     for (let i = messages.length - 1; i >= 0; i--) {
       const existing = messages[i]!;
       if (existing.type !== 'assistant' || existing.catId !== incoming.catId) continue;
+      // #814: explicit post_message is standalone — never match as merge target,
+      // even though it carries stream.invocationId for #573 correlation.
+      // Without this guard, a stream chunk arriving after F5/hydration would
+      // match the hydrated explicit post by invocationId and overwrite it.
+      if (existing.extra?.isExplicitPost) continue;
       const existingInvId = getBubbleInvocationId(existing);
-      if (existingInvId === incomingInvId) return i;
+      if (existingInvId === incomingInvId) {
+        if (existing.id !== incoming.id && crossesUserTurnBoundary(messages, existing, incoming)) continue;
+        return i;
+      }
     }
   }
 
-  // Phase 2: Bridge/soft rules — check only the MOST RECENT same-cat assistant.
-  // Bridge: callback(has invocationId) → stream(no invocationId) late-bind upgrade
-  // Soft: callback(no invocationId) → stream(no invocationId) upgrade
+  // Phase 2: Soft rule — check only the MOST RECENT same-cat assistant.
+  // Only for callbacks WITHOUT an invocationId → stream(no invocationId) upgrade.
+  // Callbacks WITH invocationId are fully handled by Phase 1 (hard match);
+  // if Phase 1 didn't match, the invocationId is stale/unrelated and soft bridge
+  // must not merge into an invocationless stream from a different invocation.
   if (incoming.origin !== 'callback') return -1;
+  if (incomingInvId) return -1;
 
   for (let i = messages.length - 1; i >= 0; i--) {
     const existing = messages[i]!;
@@ -295,14 +550,36 @@ function findAssistantDuplicate(messages: ChatMessage[], incoming: ChatMessage):
   return -1;
 }
 
+function mergeRichBlocks(existingBlocks: RichBlock[] = [], incomingBlocks: RichBlock[] = []): RichBlock[] | undefined {
+  const merged: RichBlock[] = [];
+  const seen = new Set<string>();
+  for (const block of [...existingBlocks, ...incomingBlocks]) {
+    if (seen.has(block.id)) continue;
+    seen.add(block.id);
+    merged.push(block);
+  }
+  return merged.length > 0 ? merged : undefined;
+}
+
 /** Merge incoming message into existing, preferring callback content over stream */
 function mergeAssistantBubble(existing: ChatMessage, incoming: ChatMessage): ChatMessage {
   // Bridge rule: backfill invocationId from callback into stream placeholder
   const incomingInvId = getBubbleInvocationId(incoming);
   const existingInvId = getBubbleInvocationId(existing);
-  const mergedExtra = { ...existing.extra };
-  if (incomingInvId && !existingInvId) {
-    mergedExtra.stream = { ...mergedExtra.stream, invocationId: incomingInvId };
+  const mergedExtra: ChatMessage['extra'] = { ...existing.extra, ...incoming.extra };
+  const mergedRichBlocks = mergeRichBlocks(existing.extra?.rich?.blocks, incoming.extra?.rich?.blocks);
+  if (mergedRichBlocks) {
+    mergedExtra.rich = { v: 1, blocks: mergedRichBlocks };
+  }
+  const needsStreamMerge = [existing.extra?.stream, incoming.extra?.stream, incomingInvId && !existingInvId].some(
+    Boolean,
+  );
+  if (needsStreamMerge) {
+    mergedExtra.stream = {
+      ...existing.extra?.stream,
+      ...incoming.extra?.stream,
+      ...(incomingInvId && !existingInvId ? { invocationId: incomingInvId } : {}),
+    };
   }
   if (incoming.extra?.crossPost) {
     mergedExtra.crossPost = incoming.extra.crossPost;
@@ -317,7 +594,10 @@ function mergeAssistantBubble(existing: ChatMessage, incoming: ChatMessage): Cha
     isStreaming: false,
     // Merge metadata (incoming takes precedence)
     ...(incoming.metadata ? { metadata: incoming.metadata } : {}),
-    // Preserve extra from existing (CLI Output) + merge stream identity + crossPost
+    ...(incoming.deliveredAt ? { deliveredAt: incoming.deliveredAt } : {}),
+    ...(incoming.replyTo ? { replyTo: incoming.replyTo } : {}),
+    ...(incoming.replyPreview ? { replyPreview: incoming.replyPreview } : {}),
+    // Preserve extra from existing (CLI Output/rich blocks) + merge callback metadata
     extra: Object.keys(mergedExtra).length > 0 ? mergedExtra : undefined,
     ...(incoming.mentionsUser ? { mentionsUser: true } : {}),
   };
@@ -330,8 +610,12 @@ function updateThreadMessage(
   updater: (message: ChatMessage) => ChatMessage,
 ): ChatState | Partial<ChatState> {
   if (threadId === state.currentThreadId) {
+    // F173 KD-2 (PR-C Task 10): mirror message edits to threadStates[active]
+    // so reconcile / streaming-flag flips stay in lockstep with flat.
+    const messages = state.messages.map((m) => (m.id === messageId ? updater(m) : m));
     return {
-      messages: state.messages.map((m) => (m.id === messageId ? updater(m) : m)),
+      messages,
+      ...mirrorActiveFlat(state, { messages }),
     };
   }
 
@@ -351,12 +635,13 @@ function updateThreadMessage(
 
 // ── Store interface ──
 
-interface ChatState {
+export interface ChatState {
   // Per-thread state (flat — reflects the active thread for backward compat)
   messages: ChatMessage[];
   isLoading: boolean;
   isLoadingHistory: boolean;
   hasMore: boolean;
+  hasDraft: boolean;
   /** Whether the thread has an active invocation (broader than isLoading — stays true during A2A chains) */
   hasActiveInvocation: boolean;
   /** F108: Per-invocation slot tracking — key=invocationId, value=slot info */
@@ -364,6 +649,8 @@ interface ChatState {
   intentMode: 'execute' | 'ideate' | null;
   targetCats: string[];
   catStatuses: Record<string, CatStatusType>;
+  /** F198 Phase C AC-C3: daemon detail text per catId */
+  catStatusDetails: Record<string, string>;
   catInvocations: Record<string, CatInvocationInfo>;
   /** F101: Active game in current thread */
   currentGame: GameState | null;
@@ -395,14 +682,34 @@ interface ChatState {
   _pendingAckCount: Record<string, number>;
   threads: Thread[];
   isLoadingThreads: boolean;
+  /** F164: True when messages are from offline snapshot, not fresh API data */
+  isOfflineSnapshot: boolean;
   /** UI: Whether Thinking blocks should be expanded by default (global preference). */
   uiThinkingExpandedByDefault: boolean;
+  /** Global bubble display defaults from Config Hub (server-side). */
+  globalBubbleDefaults: GlobalBubbleDefaults;
 
   // ── Active-thread actions (operate on flat state) ──
   addMessage: (msg: ChatMessage) => void;
   removeMessage: (id: string) => void;
   prependHistory: (msgs: ChatMessage[], hasMore: boolean) => void;
   replaceMessages: (msgs: ChatMessage[], hasMore: boolean) => void;
+  /** F173 Phase C Task 5+6+7 — single hydration entry point.
+   *  Server GET is authoritative: replaces flat messages AND overwrites
+   *  IDB snapshot in one atomic call. Use this instead of bare
+   *  replaceMessages + saveMessagesSnapshot whenever a server GET response
+   *  fully replaces the current thread timeline. AC-C10. */
+  hydrateThread: (threadId: string, msgs: ChatMessage[], hasMore: boolean) => void;
+  /**
+   * F183 Phase B1.7 — thread-scoped reducer write entry point. Mirror of
+   * `replaceMessages` but for arbitrary thread (current OR background).
+   * Used by `handleBackgroundAgentMessage` to apply reducer's nextMessages
+   * to the target thread's state. Unlike `hydrateThread` (server-authoritative
+   * hydration with IDB persist), this is for per-event reducer mutations:
+   * no IDB write, no hasMore-required (defaults to existing thread.hasMore),
+   * mirrors flat when threadId === currentThreadId.
+   */
+  replaceThreadMessages: (threadId: string, msgs: ChatMessage[], hasMore?: boolean) => void;
   replaceMessageId: (fromId: string, toId: string) => void;
   patchMessage: (id: string, patch: ChatMessagePatch) => void;
   appendToLastMessage: (content: string) => void;
@@ -414,9 +721,10 @@ interface ChatState {
   updateRichBlock: (messageId: string, blockId: string, patch: Record<string, unknown>) => void;
   setStreaming: (id: string, streaming: boolean) => void;
   setLoading: (loading: boolean) => void;
+  setThreadHasDraft: (threadId: string, hasDraft: boolean) => void;
   setHasActiveInvocation: (v: boolean) => void;
   /** F108: Register a new active invocation slot */
-  addActiveInvocation: (invocationId: string, catId: string, mode: string) => void;
+  addActiveInvocation: (invocationId: string, catId: string, mode: string, startedAt?: number) => void;
   /** F108: Remove an active invocation slot; derives hasActiveInvocation */
   removeActiveInvocation: (invocationId: string) => void;
   /** F108: Clear all active invocations (timeout/error/stop recovery) */
@@ -433,11 +741,117 @@ interface ChatState {
   /** F045: Set or append extended thinking content on an assistant message */
   setMessageThinking: (messageId: string, thinking: string) => void;
   /** F081: Persist stream invocation identity onto a message for replace/hydration reconcile */
-  setMessageStreamInvocation: (messageId: string, invocationId: string) => void;
+  setMessageStreamInvocation: (messageId: string, invocationId: string, turnInvocationId?: string) => void;
   clearMessages: () => void;
   /** Bug C: Monotonic counter + target threadId — increment to request a history catch-up fetch */
-  streamCatchUpVersion: number;
-  streamCatchUpThreadId: string | null;
+  /**
+   * F183 Phase C — per-thread catch-up version (cloud P2 fix 2026-05-02).
+   *
+   * Per-thread version counter; bumped by requestStreamCatchUp(threadId).
+   * useChatHistory subscribes to its own thread's version via
+   * `streamCatchUpVersionByThread[threadId]` — independent of other threads.
+   *
+   * Replaces the previous single-slot `(streamCatchUpVersion, streamCatchUpThreadId)`
+   * design where a later request from thread B would overwrite thread A's
+   * pending catch-up signal, silently losing the active gap recovery.
+   */
+  streamCatchUpVersionByThread: Record<string, number>;
+  /**
+   * F183 Phase C cloud R3 P2 + R4 P1 fix (2026-05-02) — per-thread consumed
+   * version marker. Bumped by useChatHistory **only on successful fetch**
+   * (not on retry exhaustion — cloud R4 P1). Effect gates on `current >
+   * consumed` to prevent thread-switch re-mounts from re-firing
+   * already-succeeded triggers, while leaving failed catch-ups eligible
+   * for retry on remount (consumed unchanged → version > consumed → effect
+   * re-runs with fresh retry cycle).
+   */
+  lastConsumedCatchUpVersionByThread: Record<string, number>;
+  /**
+   * F183 Phase C — per-thread pending catch-up target seq (砚砚 R5 P1 + R6 P1
+   * fix 2026-05-02). On gap, processThreadSeq records the triggering `incomingSeq`
+   * here and does NOT advance `lastSeqByThread` (cloud P1 watermark
+   * preservation). When useChatHistory's fetchHistory succeeds, it calls
+   * `acknowledgeCatchUp(threadId, capturedTargetSeq)` where capturedTargetSeq
+   * is the pending value snapshot at fetch START. The ack advances
+   * `lastSeqByThread[threadId]` to capturedTargetSeq and only clears pending
+   * when pending still equals capturedTargetSeq (no mid-flight refresh).
+   *
+   * If a newer gap arrived during fetch flight, pending was already refreshed
+   * to a higher value — keep it; next fetchHistory captures the new target
+   * and acks that. This avoids the "stale fetch advances lastSeq past actual
+   * snapshot coverage" race (砚砚 R6 P1).
+   *
+   * If fetch fails / is canceled, pending stays — next gap event refreshes
+   * it; subsequent live events keep firing 'gap' until catchup eventually
+   * succeeds. Without this ack mechanism, gap → fetch success would leave
+   * `lastSeq=5` forever while server emits 9/10/11... — perpetual gap state,
+   * violating Phase C goal of "no F5 needed".
+   */
+  pendingCatchUpTargetSeqByThread: Record<string, number>;
+  /**
+   * F183 Phase C — thread-scoped per-thread `lastSeq` ledger (KD-9).
+   * Maps threadId → highest seq seen so far. Used for gap detection in
+   * `useAgentMessages.handleAgentMessage`. seq=0 means "no seq tracking yet"
+   * (e.g. legacy producer or session start) — first event with seq>0 initializes.
+   */
+  lastSeqByThread: Record<string, number>;
+  /**
+   * F183 Phase C — per-thread server seq epoch (server boot UUID).
+   * Maps threadId → epoch last seen for that thread. When server restarts,
+   * its epoch changes and `seq` resets to 1; client compares incoming
+   * `seqEpoch` to `lastSeqEpochByThread[threadId]`. Mismatch → reset lastSeq
+   * + trigger catch-up (full fetch). Empty string = no epoch tracking yet.
+   */
+  lastSeqEpochByThread: Record<string, string>;
+  /** F183 Phase C — update lastSeq for a thread (single-writer, no monotonicity guard at store; caller responsibility). */
+  setLastSeq: (threadId: string, seq: number) => void;
+  /** F183 Phase C — update lastSeqEpoch for a thread (paired with setLastSeq on epoch change). */
+  setLastSeqEpoch: (threadId: string, epoch: string) => void;
+  /**
+   * F183 Phase C 砚砚 R5 P1 fix — record pending catch-up target seq for thread.
+   * Called by processThreadSeq's gap branch with `incomingSeq` (always >= prior
+   * pending value due to monotonicity invariant within an epoch). Cleared by
+   * `acknowledgeCatchUp(threadId, ackedTargetSeq)` only if pending still
+   * matches the ackedTargetSeq captured at fetch START (砚砚 R6 P1 race fix).
+   */
+  setPendingCatchUpTargetSeq: (threadId: string, seq: number) => void;
+  /**
+   * F183 Phase C cloud R3 P2 fix — mark catch-up version consumed for thread.
+   * Called by useChatHistory after fetch resolves (success or exhausted
+   * retries) to prevent thread-switch re-mounts from re-firing.
+   */
+  setLastConsumedCatchUpVersion: (threadId: string, version: number) => void;
+  /**
+   * F183 Phase C 砚砚 R5 P1 + R6 P1 fix — acknowledge successful catch-up.
+   *
+   * Advances `lastSeqByThread[threadId]` to the **caller-captured** target seq
+   * (the pending value at the moment fetchHistory was kicked off — NOT the
+   * current pending value at ack time). Clears pending only if pending still
+   * equals `ackedTargetSeq`; if a newer gap updated pending during fetch
+   * flight, keep the newer pending for the next fetch's ack to cover.
+   *
+   * 砚砚 R6 P1 race fix: without the captured-target binding, a stale fetch
+   * (started for pending=8, completed after pending was refreshed to 12)
+   * would prematurely advance lastSeq to 12 and clear the pending — but the
+   * snapshot returned by the stale fetch may not include events 9..12.
+   * Subsequent live events route as 'advance' and the missing range is lost.
+   *
+   * Defensive: never decrease lastSeq via ack (max with current value).
+   * If no pending, no-op (catch-up triggered by something other than gap
+   * detection, e.g. F069 onMessageRestored).
+   */
+  acknowledgeCatchUp: (threadId: string, ackedTargetSeq: number) => void;
+  /**
+   * Request full catch-up replay for a thread.
+   * Consumed by `useChatHistory` which fires HTTP `fetchHistory({replace: true})`
+   * after a small delay; reducer stable-key dedup reconciles duplicates.
+   *
+   * F183 Phase C: fired on gap (incomingSeq > lastSeq+1) or epoch change
+   * (server restart). Replaces the prior 5min DONE_TIMEOUT trigger. Unconditional
+   * full fetch — there is intentionally no `fromSeq` ranged-replay parameter:
+   * the consumer is HTTP fetch + reducer dedup (no ranged WebSocket replay
+   * handler), and exposing fromSeq would create a contract that nobody honors.
+   */
   requestStreamCatchUp: (threadId: string) => void;
   /** F101: Update current game state */
   setCurrentGame: (game: GameState | null) => void;
@@ -447,12 +861,18 @@ interface ChatState {
   setCurrentThread: (threadId: string) => void;
   setCurrentProject: (projectPath: string) => void;
   setLoadingThreads: (loading: boolean) => void;
+  setOfflineSnapshot: (v: boolean) => void;
   updateThreadTitle: (threadId: string, title: string) => void;
+  updateThreadParticipants: (threadId: string, participants: string[]) => void;
   updateThreadPin: (threadId: string, pinned: boolean) => void;
   updateThreadFavorite: (threadId: string, favorited: boolean) => void;
   updateThreadThinkingMode: (threadId: string, mode: 'debug' | 'play') => void;
 
   updateThreadPreferredCats: (threadId: string, preferredCats: string[]) => void;
+  updateThreadLabels: (threadId: string, labels: string[]) => Promise<void>;
+  updateThreadBubbleDisplay: (threadId: string, field: 'bubbleThinking' | 'bubbleCli', value: BubbleOverride) => void;
+  setGlobalBubbleDefaults: (defaults: GlobalBubbleDefaults) => void;
+  fetchGlobalBubbleDefaults: () => Promise<void>;
   setUiThinkingExpandedByDefault: (next: boolean) => void;
 
   // ── Multi-thread actions (new) ──
@@ -468,12 +888,23 @@ interface ChatState {
   setThreadMessageMetadata: (threadId: string, messageId: string, metadata: ChatMessageMetadata) => void;
   setThreadMessageUsage: (threadId: string, messageId: string, usage: TokenUsage) => void;
   setThreadMessageThinking: (threadId: string, messageId: string, thinking: string) => void;
-  setThreadMessageStreamInvocation: (threadId: string, messageId: string, invocationId: string) => void;
+  setThreadMessageStreamInvocation: (
+    threadId: string,
+    messageId: string,
+    invocationId: string,
+    turnInvocationId?: string,
+  ) => void;
   setThreadMessageStreaming: (threadId: string, messageId: string, streaming: boolean) => void;
   setThreadLoading: (threadId: string, loading: boolean) => void;
   setThreadHasActiveInvocation: (threadId: string, active: boolean) => void;
   /** F108: Add an active invocation to a thread (background or active) */
-  addThreadActiveInvocation: (threadId: string, invocationId: string, catId: string, mode: string) => void;
+  addThreadActiveInvocation: (
+    threadId: string,
+    invocationId: string,
+    catId: string,
+    mode: string,
+    startedAt?: number,
+  ) => void;
   /** F108: Remove an active invocation from a thread; derives hasActiveInvocation */
   removeThreadActiveInvocation: (threadId: string, invocationId: string) => void;
   /** F108: Clear all active invocations for a thread (cancel fallback when invocationId unknown) */
@@ -492,7 +923,11 @@ interface ChatState {
   armUnreadSuppression: (threadId: string) => void;
   /** F069: Initialize unread state from API (page load recovery) */
   initThreadUnread: (threadId: string, unreadCount: number, hasUserMention: boolean) => void;
-  updateThreadCatStatus: (threadId: string, catId: string, status: CatStatusType) => void;
+  updateThreadCatStatus: (threadId: string, catId: string, status: CatStatusType, detail?: string) => void;
+  /** F173 PR-C Task 10: clear targetCats / catStatuses + mark stale catInvocations completed
+   *  for a specific thread. Mirrors flat when active. Replaces the flat-only clearCatStatuses
+   *  inside reconcile / hydration paths so KD-2 mirror invariant holds. */
+  clearThreadCatStatuses: (threadId: string) => void;
   /** Batch content-append + metadata + streaming + catStatus into a single set() to prevent
    *  React update-depth overflow during high-frequency background streaming. */
   batchStreamChunkUpdate: (params: {
@@ -528,12 +963,19 @@ interface ChatState {
       catId: string | null;
       timestamp: number;
       contentBlocks?: readonly unknown[];
+      extra?: Record<string, unknown>;
+      origin?: 'stream' | 'callback' | 'briefing';
+      replyTo?: string;
+      replyPreview?: { senderCatId: string | null; content: string; deleted?: boolean; kind?: string };
+      mentionsUser?: boolean;
     }>,
   ) => void;
 
   // ── F63: Workspace Explorer ──
-  rightPanelMode: 'status' | 'workspace';
+  rightPanelMode: 'status' | 'workspace' | 'transcript';
   workspaceWorktreeId: string | null;
+  workspaceWorktreeAliases: WorktreeAliasMap;
+  workspaceWorktreeAliasesProjectPath: string | null;
   workspaceOpenTabs: string[];
   workspaceOpenFilePath: string | null;
   workspaceOpenFileLine: number | null;
@@ -542,8 +984,12 @@ interface ChatState {
   /** @internal Last workspace-file-set event context (timestamp + threadId).
    * Used by WorkspacePanel to distinguish fresh navigate from stale leftovers on mount. */
   _workspaceFileSetAt: { ts: number; threadId: string | null };
-  setRightPanelMode: (mode: 'status' | 'workspace') => void;
+  setRightPanelMode: (mode: 'status' | 'workspace' | 'transcript') => void;
+  /** 显式关闭右侧 panel 时退出 workspace/transcript mode（否则 ChatContainer auto-open effect 立即重开，关不掉）。 */
+  closeRightPanel: () => void;
   setWorkspaceWorktreeId: (id: string | null) => void;
+  normalizeWorkspaceWorktreeId: (id: string | null) => void;
+  setWorkspaceWorktreeAliases: (aliases: WorktreeAliasMap, projectPath?: string) => void;
   setWorkspaceOpenFile: (
     path: string | null,
     line?: number | null,
@@ -557,27 +1003,52 @@ interface ChatState {
   workspaceRevealPath: string | null;
   setWorkspaceRevealPath: (path: string | null, originThreadId?: string | null) => void;
 
-  // Phase H + F139: Workspace mode (dev tools / knowledge feed / schedule panel)
-  workspaceMode: 'dev' | 'knowledge' | 'schedule';
-  setWorkspaceMode: (mode: 'dev' | 'knowledge' | 'schedule') => void;
+  // F063: Presentation Lock — freeze workspace during demos
+  presentationLock: PresentationLockSnapshot | null;
+  enablePresentationLock: () => void;
+  disablePresentationLock: () => void;
+  replacePresentationLockTarget: (snapshot: PresentationLockSnapshot) => void;
+  setPresentationLockViewport: (scrollTop: number) => void;
+  workspaceScrollTop: number | null;
+
+  // F226: Presentation Surface — file/md tear-off floating window
+  presentationSurface: PresentationSurfaceState | null;
+  detachToFloat: () => void;
+  dockBack: () => void;
+  closeFloat: () => void;
+  minimizeFloat: (minimized: boolean) => void;
+  setFloatPos: (pos: { x: number; y: number }) => void;
+  setFloatSize: (size: { width: number; height: number }) => void;
+  toggleMaximize: () => void;
+
+  // Phase H + F139 + F160 + F168 + F246: Workspace mode
+  // F233 Phase C C3: 'trajectory' — feat 球权轨迹时间轴
+  workspaceMode: 'dev' | 'recall' | 'schedule' | 'tasks' | 'community' | 'artifacts' | 'approval' | 'trajectory';
+  setWorkspaceMode: (
+    mode: 'dev' | 'recall' | 'schedule' | 'tasks' | 'community' | 'artifacts' | 'approval' | 'trajectory',
+  ) => void;
+
+  // ── F195 Phase C: Floating transcript window ──
+  floatingTranscriptVisible: boolean;
+  setFloatingTranscriptVisible: (visible: boolean) => void;
 
   // ── F120: Preview auto-open (always-mounted listener) ──
   pendingPreviewAutoOpen: { port: number; path: string } | null;
   setPendingPreviewAutoOpen: (data: { port: number; path: string }) => void;
   consumePreviewAutoOpen: () => { port: number; path: string } | null;
 
-  // ── F63-AC15: Code-to-chat reference ──
-  pendingChatInsert: { threadId: string; text: string } | null;
-  setPendingChatInsert: (insert: { threadId: string; text: string } | null) => void;
-
-  // ── Hub modal (F12) ──
-  hubState: { open: boolean; tab?: string } | null;
-  openHub: (tab?: string) => void;
-  closeHub: () => void;
+  // ── F63-AC15: Code-to-chat reference ── #706: typed ComposerDraftInsert for recall-edit
+  pendingChatInsert: ComposerDraftInsert | null;
+  setPendingChatInsert: (insert: ComposerDraftInsert | null) => void;
 
   // ── F079: Vote modal ──
   showVoteModal: boolean;
   setShowVoteModal: (show: boolean) => void;
+
+  // ── #699: Reply-to (quote) state (threadId scoped for split-pane safety) ──
+  replyToMessage: { id: string; content: string; senderCatId: string | null; threadId: string } | null;
+  setReplyTo: (msg: { id: string; content: string; senderCatId: string | null; threadId: string }) => void;
+  clearReplyTo: () => void;
 }
 
 export const useChatStore = create<ChatState>((set, get) => ({
@@ -585,11 +1056,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
   isLoading: false,
   isLoadingHistory: false,
   hasMore: true,
+  hasDraft: false,
   hasActiveInvocation: false,
   activeInvocations: {},
   intentMode: null,
   targetCats: [],
   catStatuses: {},
+  catStatusDetails: {},
   catInvocations: {},
   currentGame: null,
   queue: [],
@@ -606,8 +1079,45 @@ export const useChatStore = create<ChatState>((set, get) => ({
   _unreadSuppressedUntil: {},
   _pendingAckCount: {},
   threads: [],
-  isLoadingThreads: false,
+  isLoadingThreads: true,
+  isOfflineSnapshot: false,
   uiThinkingExpandedByDefault: loadUiThinkingExpandedByDefault(),
+  globalBubbleDefaults: {
+    // Always start collapsed — server config overwrites via fetchGlobalBubbleDefaults().
+    // Previously used localStorage as initial fallback, but this races with thread loading:
+    // threads can finish before config, causing a flash of expanded bubbles from stale localStorage.
+    thinking: 'collapsed',
+    cliOutput: 'collapsed',
+  },
+
+  setGlobalBubbleDefaults: (defaults) => set({ globalBubbleDefaults: defaults }),
+
+  fetchGlobalBubbleDefaults: async () => {
+    try {
+      const { apiFetch } = await import('@/utils/api-client');
+      const res = await apiFetch('/api/config');
+      if (!res.ok) return;
+      const data = await res.json();
+      const ui = data.config?.ui;
+      if (ui?.bubbleDefaults) {
+        set({
+          globalBubbleDefaults: {
+            thinking: ui.bubbleDefaults.thinking ?? 'collapsed',
+            cliOutput: ui.bubbleDefaults.cliOutput ?? 'collapsed',
+          },
+        });
+      }
+    } catch {
+      // Fallback to existing defaults on network error
+    }
+  },
+
+  updateThreadBubbleDisplay: (threadId, field, value) =>
+    set((state) => ({
+      threads: state.threads.map((t) =>
+        t.id === threadId ? { ...t, [field]: value === 'global' ? undefined : value } : t,
+      ),
+    })),
 
   setUiThinkingExpandedByDefault: (next) => {
     persistUiThinkingExpandedByDefault(next);
@@ -686,37 +1196,87 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const updateMsgs = (msgs: ChatMessage[]) => {
         // Update deliveredAt on existing messages
         const updated = msgs.map((m) => (idSet.has(m.id) ? { ...m, deliveredAt } : m));
+        const insertedIds = new Set<string>();
+        const mentionMessages: ChatMessage[] = [];
         // F117: Insert user bubbles for queue-sent messages not yet in the store
         if (serverMessages) {
           const existingIds = new Set(updated.map((m) => m.id));
           for (const sm of serverMessages) {
-            if (!existingIds.has(sm.id)) {
-              updated.push({
-                id: sm.id,
-                type: 'user',
-                content: sm.content,
-                timestamp: sm.timestamp,
-                deliveredAt,
-                contentBlocks: sm.contentBlocks as ChatMessage['contentBlocks'],
-              });
+            if (existingIds.has(sm.id)) continue;
+            const incoming: ChatMessage = {
+              id: sm.id,
+              // #607: cat-originated messages (A2A triggers) have catId set
+              type: sm.catId ? 'assistant' : 'user',
+              content: sm.content,
+              timestamp: sm.timestamp,
+              deliveredAt,
+              ...(sm.catId ? { catId: sm.catId } : {}),
+              contentBlocks: sm.contentBlocks as ChatMessage['contentBlocks'],
+              ...(sm.extra ? { extra: sm.extra as ChatMessage['extra'] } : {}),
+              ...(sm.origin ? { origin: sm.origin } : {}),
+              ...(sm.replyTo ? { replyTo: sm.replyTo } : {}),
+              ...(sm.replyPreview ? { replyPreview: sm.replyPreview as ChatMessage['replyPreview'] } : {}),
+              ...(sm.mentionsUser ? { mentionsUser: true } : {}),
+            };
+
+            const dupIdx = findAssistantDuplicate(updated, incoming);
+            if (dupIdx >= 0) {
+              const existing = updated[dupIdx]!;
+              updated[dupIdx] = {
+                ...mergeAssistantBubble(existing, incoming),
+                id: incoming.id,
+              };
+              existingIds.add(incoming.id);
+              if (incoming.mentionsUser && !existing.mentionsUser) {
+                mentionMessages.push(incoming);
+              }
+            } else {
+              updated.push(incoming);
+              existingIds.add(incoming.id);
+              insertedIds.add(incoming.id);
+              if (incoming.mentionsUser) {
+                mentionMessages.push(incoming);
+              }
             }
           }
           // Re-sort: delivered messages use deliveredAt so they appear at delivery
           // position (current tail), not their original send-time slot.
           updated.sort((a, b) => (a.deliveredAt ?? a.timestamp) - (b.deliveredAt ?? b.timestamp));
         }
-        return updated;
+        return { messages: updated, insertedIds, mentionMessages };
       };
 
       if (threadId === state.currentThreadId) {
-        return { messages: updateMsgs(state.messages) };
+        const result = updateMsgs(state.messages);
+        if (typeof document !== 'undefined' && !document.hasFocus()) {
+          const newMention = result.mentionMessages[0];
+          if (newMention) {
+            fireOwnerMentionNotification(newMention);
+          }
+        }
+        return { messages: result.messages };
       }
-      const existing = state.threadStates[threadId];
-      if (!existing) return state;
+      const existing = state.threadStates[threadId] || { ...DEFAULT_THREAD_STATE };
+      const result = updateMsgs(existing.messages);
+      const newInserts = result.insertedIds.size;
+      const newMentionMsg = result.mentionMessages[0];
+      if (newMentionMsg) {
+        fireOwnerMentionNotification(newMentionMsg);
+      }
       return {
         threadStates: {
           ...state.threadStates,
-          [threadId]: { ...existing, messages: updateMsgs(existing.messages) },
+          [threadId]: {
+            ...existing,
+            messages: result.messages,
+            ...(newInserts > 0
+              ? {
+                  unreadCount: existing.unreadCount + newInserts,
+                  lastActivity: deliveredAt,
+                }
+              : {}),
+            ...(newMentionMsg ? { hasUserMention: true } : {}),
+          },
         },
       };
     }),
@@ -724,6 +1284,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
   // ── F63: Workspace Explorer ──
   rightPanelMode: 'status' as const,
   workspaceWorktreeId: null,
+  workspaceWorktreeAliases: {},
+  workspaceWorktreeAliasesProjectPath: null,
   workspaceOpenTabs: [],
   workspaceOpenFilePath: null,
   workspaceOpenFileLine: null,
@@ -731,6 +1293,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
   workspaceEditTokenExpiry: null,
   _workspaceFileSetAt: { ts: 0, threadId: null },
   setRightPanelMode: (mode) => set({ rightPanelMode: mode }),
+  // F232 P2（云端 round 5）：workspace/transcript mode 被 ChatContainer auto-open effect 强制开，
+  // 显式关闭 panel 时必须先退出这两个 mode 回 status，否则 effect 立即重开（关不掉）。status 无此问题，保留。
+  closeRightPanel: () =>
+    set((s) => ({
+      rightPanelMode:
+        s.rightPanelMode === 'workspace' || s.rightPanelMode === 'transcript' ? 'status' : s.rightPanelMode,
+    })),
   setWorkspaceWorktreeId: (id) => {
     // Guard: skip destructive reset when worktreeId is unchanged.
     // setWorkspaceWorktreeId unconditionally clears openFilePath/openTabs,
@@ -745,14 +1314,61 @@ export const useChatStore = create<ChatState>((set, get) => ({
       workspaceEditToken: null,
       workspaceEditTokenExpiry: null,
     });
+    const lock = get().presentationLock;
+    if (lock) {
+      set({
+        presentationLock: { ...lock, worktreeId: id, tabs: [], filePath: null, line: null, scrollTop: null },
+        workspaceScrollTop: null,
+      });
+    }
   },
+  normalizeWorkspaceWorktreeId: (id) =>
+    set((state) => {
+      if (id === state.workspaceWorktreeId) return state;
+      const oldWorktreeId = state.workspaceWorktreeId;
+      const lock = state.presentationLock;
+      return {
+        workspaceWorktreeId: id,
+        workspaceEditToken: null,
+        workspaceEditTokenExpiry: null,
+        ...(lock
+          ? {
+              presentationLock: {
+                ...lock,
+                worktreeId: lock.worktreeId === oldWorktreeId ? id : lock.worktreeId,
+                ownerWorkspace:
+                  lock.ownerWorkspace.worktreeId === oldWorktreeId
+                    ? { ...lock.ownerWorkspace, worktreeId: id }
+                    : lock.ownerWorkspace,
+              },
+            }
+          : {}),
+      };
+    }),
+  setWorkspaceWorktreeAliases: (aliases, projectPath) =>
+    set({
+      workspaceWorktreeAliases: aliases,
+      workspaceWorktreeAliasesProjectPath: projectPath ?? get().currentProjectPath,
+    }),
   setWorkspaceOpenFile: (path, line, targetWorktreeId, originThreadId) => {
     if (path) {
       const stamp = { ts: Date.now(), threadId: originThreadId ?? get().currentThreadId };
+      const currentWorktreeId = get().workspaceWorktreeId;
+      const state = get();
+      const scopedAliases = scopeWorktreeAliases(
+        state.workspaceWorktreeAliases,
+        state.workspaceWorktreeAliasesProjectPath,
+        state.currentProjectPath,
+      );
+      const effectiveTargetWorktreeId = resolveNavigateTargetWorktreeId(
+        currentWorktreeId,
+        targetWorktreeId,
+        scopedAliases,
+      );
       // Switch worktree if a different one is specified
-      if (targetWorktreeId && targetWorktreeId !== get().workspaceWorktreeId) {
+      if (effectiveTargetWorktreeId && effectiveTargetWorktreeId !== currentWorktreeId) {
         set({
-          workspaceWorktreeId: targetWorktreeId,
+          workspaceWorktreeId: effectiveTargetWorktreeId,
           workspaceOpenTabs: [path],
           workspaceOpenFilePath: path,
           workspaceOpenFileLine: line ?? null,
@@ -772,6 +1388,24 @@ export const useChatStore = create<ChatState>((set, get) => ({
           _workspaceFileSetAt: stamp,
         });
       }
+      const lock = get().presentationLock;
+      if (lock) {
+        const newWorktreeId = get().workspaceWorktreeId ?? lock.worktreeId;
+        const worktreeChanged = newWorktreeId !== lock.worktreeId;
+        const lockTabs = worktreeChanged ? [path] : lock.tabs.includes(path) ? lock.tabs : [...lock.tabs, path];
+        const fileChanged = path !== lock.filePath;
+        set({
+          presentationLock: {
+            ...lock,
+            filePath: path,
+            line: line ?? null,
+            tabs: lockTabs,
+            worktreeId: newWorktreeId,
+            scrollTop: fileChanged || worktreeChanged ? null : lock.scrollTop,
+          },
+          ...((fileChanged || worktreeChanged) && { workspaceScrollTop: null }),
+        });
+      }
     } else {
       set({
         workspaceOpenFilePath: null,
@@ -788,6 +1422,19 @@ export const useChatStore = create<ChatState>((set, get) => ({
       set({ workspaceOpenTabs: newTabs, workspaceOpenFilePath: next, workspaceOpenFileLine: null });
     } else {
       set({ workspaceOpenTabs: newTabs });
+    }
+    const lock = get().presentationLock;
+    if (lock) {
+      const lockOldTabs = lock.tabs;
+      const lockNewTabs = lockOldTabs.filter((t) => t !== path);
+      let filePath = lock.filePath;
+      let { line: lockLine } = lock;
+      if (filePath === path) {
+        const idx = lockOldTabs.indexOf(path);
+        filePath = lockNewTabs[Math.min(idx, lockNewTabs.length - 1)] ?? null;
+        lockLine = null;
+      }
+      set({ presentationLock: { ...lock, tabs: lockNewTabs, filePath, line: lockLine } });
     }
   },
   restoreWorkspaceTabs: (tabs, openFile) => {
@@ -813,9 +1460,176 @@ export const useChatStore = create<ChatState>((set, get) => ({
       _workspaceFileSetAt: { ts: Date.now(), threadId: originThreadId ?? state.currentThreadId },
     })),
 
+  // F063: Presentation Lock
+  presentationLock: null,
+  enablePresentationLock: () =>
+    set((state) => ({
+      presentationLock: {
+        ownerThreadId: state.currentThreadId,
+        ownerWorkspace: {
+          worktreeId: state.workspaceWorktreeId,
+          filePath: state.workspaceOpenFilePath,
+          line: state.workspaceOpenFileLine,
+          tabs: state.workspaceOpenTabs,
+        },
+        worktreeId: state.workspaceWorktreeId,
+        filePath: state.workspaceOpenFilePath,
+        line: state.workspaceOpenFileLine,
+        tabs: state.workspaceOpenTabs,
+        scrollTop: null,
+      },
+    })),
+  disablePresentationLock: () =>
+    set((state) => {
+      if (!state.presentationLock) return {};
+      if (state.presentationLock.ownerThreadId === state.currentThreadId) {
+        const ow = state.presentationLock.ownerWorkspace;
+        return {
+          presentationLock: null,
+          workspaceScrollTop: null,
+          workspaceWorktreeId: ow.worktreeId,
+          workspaceOpenTabs: ow.tabs,
+          workspaceOpenFilePath: ow.filePath,
+          workspaceOpenFileLine: ow.line,
+        };
+      }
+      const threadState = state.threadStates[state.currentThreadId];
+      const restored = flattenThread(threadState ?? { ...DEFAULT_THREAD_STATE });
+      return {
+        presentationLock: null,
+        workspaceScrollTop: null,
+        ...(restored.workspaceWorktreeId !== undefined && {
+          workspaceWorktreeId: restored.workspaceWorktreeId,
+        }),
+        workspaceOpenTabs: restored.workspaceOpenTabs ?? [],
+        workspaceOpenFilePath: restored.workspaceOpenFilePath ?? null,
+        workspaceOpenFileLine: restored.workspaceOpenFileLine ?? null,
+      };
+    }),
+  replacePresentationLockTarget: (snapshot) =>
+    set((state) => (state.presentationLock ? { presentationLock: snapshot } : {})),
+  setPresentationLockViewport: (scrollTop) =>
+    set((state) => {
+      if (!state.presentationLock) return {};
+      return {
+        presentationLock: { ...state.presentationLock, scrollTop },
+        workspaceScrollTop: scrollTop,
+      };
+    }),
+  workspaceScrollTop: null,
+
+  // F226: Presentation Surface — file/md tear-off floating window
+  presentationSurface: null,
+  detachToFloat: () =>
+    set((state) => {
+      const filePath = state.workspaceOpenFilePath;
+      if (!filePath) return {};
+      const W = 420;
+      const H = 320;
+      const vw = typeof window !== 'undefined' ? window.innerWidth : 1280;
+      const vh = typeof window !== 'undefined' ? window.innerHeight : 800;
+      return {
+        presentationSurface: {
+          content: {
+            worktreeId: state.workspaceWorktreeId,
+            filePath,
+            tabs: state.workspaceOpenTabs,
+            fileKind: inferFileKind(filePath),
+            renderMode: inferRenderMode(filePath),
+            line: state.workspaceOpenFileLine,
+            // F226 云端 P2: snapshot the tracked presentation viewport (recorded by
+            // setPresentationLockViewport) so dock-back restores the reader's scroll position
+            // instead of jumping a long doc back to the top. Null when no viewport was tracked.
+            scrollTop: state.workspaceScrollTop,
+            title: filePath.split('/').pop() ?? filePath,
+          },
+          // 右下角默认位置（烁烁 UX：避免压住右侧 workspace mode tab 按钮条）
+          pos: { x: Math.max(16, vw - W - 24), y: Math.max(16, vh - H - 80) },
+          size: { width: W, height: H },
+          minimized: false,
+          maximized: false,
+          preMaximizeGeometry: null,
+        },
+      };
+    }),
+  // dock-back contract (砚砚 P1.2): switch docked back to dev + restore file snapshot
+  dockBack: () =>
+    set((state) => {
+      const surface = state.presentationSurface;
+      if (!surface) return {};
+      const c = surface.content;
+      return {
+        presentationSurface: null,
+        workspaceMode: 'dev' as const,
+        rightPanelMode: 'workspace' as const,
+        workspaceWorktreeId: c.worktreeId,
+        workspaceOpenFilePath: c.filePath,
+        workspaceOpenTabs: c.tabs,
+        workspaceOpenFileLine: c.line,
+        // F226 云端 P2: restore the snapped viewport so a long doc returns to where the presenter
+        // was (WorkspacePanel.restoreScrollTop consumes workspaceScrollTop while presentationLock holds).
+        workspaceScrollTop: c.scrollTop,
+        // F226 云端 P2: edit tokens are worktree-bound. dock-back restores worktreeId directly, so a
+        // token obtained in the interim worktree (while the docked panel was freed) must be cleared —
+        // normal worktree switches clear it (see setWorkspaceWorktreeId); otherwise edits / file-mgmt
+        // in the restored worktree fail with a stale token until the user forces a refresh.
+        workspaceEditToken: null,
+        workspaceEditTokenExpiry: null,
+      };
+    }),
+  // close/minimize must NOT mutate docked mode (砚砚 P1.2)
+  closeFloat: () => set((state) => (state.presentationSurface ? { presentationSurface: null } : {})),
+  minimizeFloat: (minimized) =>
+    set((state) =>
+      state.presentationSurface ? { presentationSurface: { ...state.presentationSurface, minimized } } : {},
+    ),
+  setFloatPos: (pos) =>
+    set((state) => (state.presentationSurface ? { presentationSurface: { ...state.presentationSurface, pos } } : {})),
+  setFloatSize: (size) =>
+    set((state) => (state.presentationSurface ? { presentationSurface: { ...state.presentationSurface, size } } : {})),
+  // F226 尺寸快捷: 一键适配 PPT (16:9 居中放大) ↔ 恢复手动尺寸。记 pre-maximize geometry → toggle 不用重新拖。
+  toggleMaximize: () =>
+    set((state) => {
+      const s = state.presentationSurface;
+      if (!s) return {};
+      if (s.maximized) {
+        // restore：回到 maximize 前的手动尺寸/位置
+        const pre = s.preMaximizeGeometry;
+        return {
+          presentationSurface: {
+            ...s,
+            maximized: false,
+            preMaximizeGeometry: null,
+            ...(pre ? { pos: pre.pos, size: pre.size } : {}),
+          },
+        };
+      }
+      // maximize：按 PPT 16:9 适配 viewport（~85%）并居中，一键看清 PPT 图
+      const vw = typeof window !== 'undefined' ? window.innerWidth : 1280;
+      const vh = typeof window !== 'undefined' ? window.innerHeight : 800;
+      const W = Math.round(Math.min(vw * 0.85, (vh * 0.85 * 16) / 9));
+      const H = Math.round((W * 9) / 16);
+      return {
+        presentationSurface: {
+          ...s,
+          maximized: true,
+          preMaximizeGeometry: { pos: s.pos, size: s.size },
+          pos: { x: Math.round((vw - W) / 2), y: Math.max(16, Math.round((vh - H) / 2)) },
+          size: { width: W, height: H },
+        },
+      };
+    }),
+
   // Phase H: Workspace mode
   workspaceMode: 'dev' as const,
   setWorkspaceMode: (mode) => set({ workspaceMode: mode, rightPanelMode: 'workspace' }),
+
+  // F195 Phase C: Floating transcript window
+  floatingTranscriptVisible: false,
+  setFloatingTranscriptVisible: (visible) => {
+    set({ floatingTranscriptVisible: visible });
+    if (visible) set({ rightPanelMode: 'status' });
+  },
 
   // ── F120: Preview auto-open ──
   pendingPreviewAutoOpen: null,
@@ -830,11 +1644,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
   pendingChatInsert: null,
   setPendingChatInsert: (insert) => set({ pendingChatInsert: insert }),
 
-  hubState: null,
-  openHub: (tab) => set({ hubState: { open: true, tab } }),
-  closeHub: () => set({ hubState: null }),
   showVoteModal: false,
   setShowVoteModal: (show) => set({ showVoteModal: show }),
+
+  // ── #699: Reply-to (quote) state ──
+  replyToMessage: null,
+  setReplyTo: (msg) => set({ replyToMessage: msg }),
+  clearReplyTo: () => set({ replyToMessage: null }),
 
   // ── Active-thread actions ──
 
@@ -866,7 +1682,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         return { messages };
       }
 
-      const messages = [...state.messages, msg];
+      const messages = insertOrAppendMessage(state.messages, msg);
       if (messages.length > MAX_BLOB_MESSAGES) {
         revokeBlobUrls(messages.slice(0, messages.length - MAX_BLOB_MESSAGES));
       }
@@ -889,11 +1705,93 @@ export const useChatStore = create<ChatState>((set, get) => ({
       return { messages: [...newMsgs, ...state.messages], hasMore };
     }),
 
-  replaceMessages: (msgs, hasMore) =>
+  replaceMessages: (msgs, hasMore) => {
+    // F183 Phase E AC-E2 (砚砚 R2 P1 fix): caller-driven writer must forward
+    // post-mutation invariant violations to the diagnostic layer so strict
+    // mode (BUBBLE_INVARIANT_STRICT=1 / NEXT_PUBLIC_*=1 / localStorage) can
+    // throw on bypass-of-reducer mutations. No-op when strict is off — keeps
+    // production hot path free of the O(n) scan.
+    forwardStoreInvariantViolationsStrict(msgs, get().currentThreadId);
     set((state) => {
       revokeRemovedBlobUrls(state.messages, msgs);
       return { messages: msgs, hasMore };
-    }),
+    });
+  },
+
+  // F183 Phase B1.7 — see interface comment.
+  replaceThreadMessages: (threadId, msgs, hasMore) => {
+    // F183 Phase E AC-E2 (砚砚 R2 P1 fix): same strict-gate as replaceMessages
+    forwardStoreInvariantViolationsStrict(msgs, threadId);
+    return set((state) => {
+      if (threadId === state.currentThreadId) {
+        revokeRemovedBlobUrls(state.messages, msgs);
+        const nextHasMore = hasMore ?? state.hasMore;
+        return {
+          messages: msgs,
+          hasMore: nextHasMore,
+          ...mirrorActiveFlat(state, { messages: msgs, hasMore: nextHasMore }),
+        };
+      }
+      const baseThreadState = state.threadStates[threadId] ?? { ...DEFAULT_THREAD_STATE };
+      revokeRemovedBlobUrls(baseThreadState.messages, msgs);
+      const nextHasMore = hasMore ?? baseThreadState.hasMore;
+      return {
+        threadStates: {
+          ...state.threadStates,
+          [threadId]: { ...baseThreadState, messages: msgs, hasMore: nextHasMore },
+        },
+      };
+    });
+  },
+
+  hydrateThread: (threadId, msgs, hasMore) => {
+    // F173 Phase C Task 5+6+7 — atomic server-authoritative hydration that
+    // honors KD-2 (threadStates is the writer source, flat is compat mirror).
+    //
+    // 砚砚 P1 (PR #1413): bare replaceMessages + IDB write doesn't mirror
+    // to threadStates → background hydrate would pollute flat / current-
+    // thread updates wouldn't keep threadStates in sync. This action is
+    // *the* thread-scoped writer for hydration:
+    //   - current thread: write flat + mirror to threadStates (single set())
+    //   - non-current thread: write only threadStates, never touch flat
+    //
+    // F183 Phase E AC-E2 (砚砚 R2 P1 fix): same strict-gate as the other
+    // caller-driven writers. Runs only when strict mode is on.
+    forwardStoreInvariantViolationsStrict(msgs, threadId);
+    set((state) => {
+      if (threadId === state.currentThreadId) {
+        revokeRemovedBlobUrls(state.messages, msgs);
+        return {
+          messages: msgs,
+          hasMore,
+          ...mirrorActiveFlat(state, { messages: msgs, hasMore }),
+        };
+      }
+      // background hydrate — confined to threadStates, flat untouched.
+      // 砚砚 P1 round 2 (PR #1413): cannot use mirrorActiveToThreadStates
+      // here because its fallback base is snapshotActive(state) — that
+      // would leak the active thread's liveness/queue/workspace into the
+      // background thread when threadStates[threadId] doesn't exist yet.
+      // Use DEFAULT_THREAD_STATE as base for never-seen threads instead.
+      const baseThreadState = state.threadStates[threadId] ?? { ...DEFAULT_THREAD_STATE };
+      // Cloud Codex P2 (PR #1413): revoke blob: URLs dropped by hydration
+      // to avoid leaking object URLs (locally uploaded images stay alive
+      // until reload otherwise). No-op when prev messages is [].
+      revokeRemovedBlobUrls(baseThreadState.messages, msgs);
+      return {
+        threadStates: {
+          ...state.threadStates,
+          [threadId]: { ...baseThreadState, messages: msgs, hasMore },
+        },
+      };
+    });
+    // IDB overwrite (fire-and-forget). Only persist when thread is still
+    // current — avoids race against a thread switch that already cleared
+    // the outgoing thread's IDB snapshot.
+    if (get().currentThreadId === threadId) {
+      void saveMessagesSnapshot(threadId, msgs, hasMore).catch(() => {});
+    }
+  },
 
   replaceMessageId: (fromId, toId) =>
     set((state) => {
@@ -965,43 +1863,120 @@ export const useChatStore = create<ChatState>((set, get) => ({
       messages: state.messages.map((m) => (m.id === id ? { ...m, isStreaming: streaming } : m)),
     })),
 
-  setLoading: (loading) => set({ isLoading: loading }),
-  setHasActiveInvocation: (v) => set({ hasActiveInvocation: v }),
-  /** F108: Register a new active invocation slot */
-  addActiveInvocation: (invocationId, catId, mode) =>
+  setLoading: (loading) => set((state) => ({ isLoading: loading, ...mirrorActiveFlat(state, { isLoading: loading }) })),
+  setThreadHasDraft: (threadId, hasDraft) =>
     set((state) => {
-      const activeInvocations = { ...state.activeInvocations, [invocationId]: { catId, mode, startedAt: Date.now() } };
-      return { activeInvocations, hasActiveInvocation: true };
+      if (threadId === state.currentThreadId) {
+        if (state.hasDraft === hasDraft) return state;
+        return { hasDraft };
+      }
+
+      const existing = state.threadStates[threadId] ?? { ...DEFAULT_THREAD_STATE };
+      if ((existing.hasDraft ?? false) === hasDraft) return state;
+      return {
+        threadStates: {
+          ...state.threadStates,
+          [threadId]: {
+            ...existing,
+            hasDraft,
+          },
+        },
+      };
+    }),
+  setHasActiveInvocation: (v) =>
+    set((state) => {
+      // Stamp completion time when transitioning active → inactive on the current thread,
+      // so snapshotActive sees real completion time instead of stale message timestamps.
+      if (!v && state.hasActiveInvocation) {
+        return {
+          hasActiveInvocation: false,
+          threadStates: stampThreadCompletion(state.threadStates, state.currentThreadId, {
+            hasActiveInvocation: false,
+          }),
+        };
+      }
+      return { hasActiveInvocation: v, ...mirrorActiveFlat(state, { hasActiveInvocation: v }) };
+    }),
+  /** F108: Register a new active invocation slot */
+  addActiveInvocation: (invocationId, catId, mode, startedAt?) =>
+    set((state) => {
+      const activeInvocations = {
+        ...state.activeInvocations,
+        [invocationId]: { catId, mode, startedAt: startedAt ?? Date.now() },
+      };
+      return {
+        activeInvocations,
+        hasActiveInvocation: true,
+        ...mirrorActiveFlat(state, { activeInvocations, hasActiveInvocation: true }),
+      };
     }),
   /** F108: Remove an active invocation slot; derives hasActiveInvocation */
   removeActiveInvocation: (invocationId) =>
     set((state) => {
       if (!(invocationId in state.activeInvocations)) {
-        return { hasActiveInvocation: Object.keys(state.activeInvocations).length > 0 };
+        const hasActive = Object.keys(state.activeInvocations).length > 0;
+        if (!hasActive && state.hasActiveInvocation) {
+          return {
+            hasActiveInvocation: false,
+            threadStates: stampThreadCompletion(state.threadStates, state.currentThreadId, {
+              hasActiveInvocation: false,
+            }),
+          };
+        }
+        return { hasActiveInvocation: hasActive, ...mirrorActiveFlat(state, { hasActiveInvocation: hasActive }) };
       }
       const rest = Object.fromEntries(Object.entries(state.activeInvocations).filter(([k]) => k !== invocationId));
-      return { activeInvocations: rest, hasActiveInvocation: Object.keys(rest).length > 0 };
+      const hasActive = Object.keys(rest).length > 0;
+      // When the last invocation ends, stamp the completion time into threadStates
+      // so snapshotActive's idle branch picks up the real "just finished streaming" time.
+      return {
+        activeInvocations: rest,
+        hasActiveInvocation: hasActive,
+        ...(!hasActive
+          ? {
+              threadStates: stampThreadCompletion(state.threadStates, state.currentThreadId, {
+                activeInvocations: rest,
+                hasActiveInvocation: hasActive,
+              }),
+            }
+          : mirrorActiveFlat(state, { activeInvocations: rest, hasActiveInvocation: hasActive })),
+      };
     }),
   /** F108: Clear all active invocations (timeout/error/stop recovery) */
-  clearAllActiveInvocations: () => set({ activeInvocations: {}, hasActiveInvocation: false }),
+  clearAllActiveInvocations: () =>
+    set((state) => ({
+      activeInvocations: {},
+      hasActiveInvocation: false,
+      threadStates: stampThreadCompletion(state.threadStates, state.currentThreadId, {
+        activeInvocations: {},
+        hasActiveInvocation: false,
+      }),
+    })),
   setLoadingHistory: (loading) => set({ isLoadingHistory: loading }),
-  setIntentMode: (mode) => set({ intentMode: mode }),
+  setIntentMode: (mode) => set((state) => ({ intentMode: mode, ...mirrorActiveFlat(state, { intentMode: mode }) })),
 
   setTargetCats: (cats) =>
     set((state) => {
-      if (cats.length === 0) return { targetCats: [], catStatuses: {} };
+      if (cats.length === 0) {
+        return { targetCats: [], catStatuses: {}, ...mirrorActiveFlat(state, { targetCats: [], catStatuses: {} }) };
+      }
       const merged = [...new Set([...state.targetCats, ...cats])];
       const statuses = { ...state.catStatuses };
       for (const c of cats) {
         if (!(c in statuses)) statuses[c] = 'pending' as const;
       }
-      return { targetCats: merged, catStatuses: statuses };
+      return {
+        targetCats: merged,
+        catStatuses: statuses,
+        ...mirrorActiveFlat(state, { targetCats: merged, catStatuses: statuses }),
+      };
     }),
 
   setCatStatus: (catId, status) =>
     set((state) => {
       if (state.catStatuses[catId] === status) return state;
-      return { catStatuses: { ...state.catStatuses, [catId]: status } };
+      const catStatuses = { ...state.catStatuses, [catId]: status };
+      return { catStatuses, ...mirrorActiveFlat(state, { catStatuses }) };
     }),
 
   clearCatStatuses: () =>
@@ -1021,16 +1996,75 @@ export const useChatStore = create<ChatState>((set, get) => ({
           cleanedInvocations[catId] = info;
         }
       }
-      return { targetCats: [], catStatuses: {}, catInvocations: cleanedInvocations };
+      return {
+        targetCats: [],
+        catStatuses: {},
+        catStatusDetails: {},
+        catInvocations: cleanedInvocations,
+        ...mirrorActiveFlat(state, {
+          targetCats: [],
+          catStatuses: {},
+          catStatusDetails: {},
+          catInvocations: cleanedInvocations,
+        }),
+      };
+    }),
+
+  /** F173 PR-C Task 10: thread-scoped equivalent of clearCatStatuses.
+   *  Active path: clears flat targetCats / catStatuses + marks stale catInvocations
+   *  completed AND mirrors to threadStates[active] (KD-2). Background path: same
+   *  cleanup applied directly to threadStates[threadId]; flat untouched. */
+  clearThreadCatStatuses: (threadId) =>
+    set((state) => {
+      const cleanInvocations = (
+        src: Record<string, import('./chat-types').CatInvocationInfo>,
+      ): Record<string, import('./chat-types').CatInvocationInfo> => {
+        const out: Record<string, import('./chat-types').CatInvocationInfo> = {};
+        for (const [catId, info] of Object.entries(src)) {
+          if (info.taskProgress?.snapshotStatus === 'running') {
+            out[catId] = { ...info, taskProgress: { ...info.taskProgress, snapshotStatus: 'completed' } };
+          } else {
+            out[catId] = info;
+          }
+        }
+        return out;
+      };
+      if (threadId === state.currentThreadId) {
+        const cleaned = cleanInvocations(state.catInvocations);
+        const patch = { targetCats: [] as string[], catStatuses: {}, catStatusDetails: {}, catInvocations: cleaned };
+        return {
+          targetCats: [],
+          catStatuses: {},
+          catStatusDetails: {},
+          catInvocations: cleaned,
+          ...mirrorActiveFlat(state, patch),
+        };
+      }
+      const existing = state.threadStates[threadId];
+      if (!existing) return state;
+      const cleaned = cleanInvocations(existing.catInvocations);
+      return {
+        threadStates: {
+          ...state.threadStates,
+          [threadId]: {
+            ...existing,
+            targetCats: [],
+            catStatuses: {},
+            catStatusDetails: {},
+            catInvocations: cleaned,
+          },
+        },
+      };
     }),
 
   setCatInvocation: (catId, info) =>
-    set((state) => ({
-      catInvocations: {
+    set((state) => {
+      const catInvocations = {
         ...state.catInvocations,
         [catId]: { ...state.catInvocations[catId], ...info },
-      },
-    })),
+      };
+      return { catInvocations, ...mirrorActiveFlat(state, { catInvocations }) };
+    }),
 
   setMessageUsage: (messageId, usage) =>
     set((state) => ({
@@ -1050,12 +2084,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   setMessageThinking: (messageId, thinking) =>
     set((state) => ({
-      messages: state.messages.map((m) =>
-        m.id === messageId ? { ...m, thinking: m.thinking ? `${m.thinking}\n\n---\n\n${thinking}` : thinking } : m,
-      ),
+      messages: state.messages.map((m) => (m.id === messageId ? { ...m, ...appendThinkingChunk(m, thinking) } : m)),
     })),
 
-  setMessageStreamInvocation: (messageId, invocationId) =>
+  setMessageStreamInvocation: (messageId, invocationId, turnInvocationId) =>
     set((state) => ({
       messages: state.messages.map((m) =>
         m.id === messageId
@@ -1063,7 +2095,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
               ...m,
               extra: {
                 ...m.extra,
-                stream: { ...m.extra?.stream, invocationId },
+                stream: {
+                  ...m.extra?.stream,
+                  invocationId,
+                  // F194 Phase Z3 R10 P1-1 (砚砚): preserve dual id contract — bubble identity SoT = turn,
+                  // chain SoT = parent. Caller passes both; without turn, leave key untouched (legacy bubble).
+                  ...(turnInvocationId ? { turnInvocationId } : {}),
+                },
               },
             }
           : m,
@@ -1076,25 +2114,122 @@ export const useChatStore = create<ChatState>((set, get) => ({
       return { messages: [], hasMore: true };
     }),
 
-  streamCatchUpVersion: 0,
-  streamCatchUpThreadId: null,
+  /**
+   * F183 Phase C — per-thread catch-up version (cloud P2 fix 2026-05-02).
+   * Map<threadId, version>. requestStreamCatchUp(tid) bumps version[tid].
+   * useChatHistory subscribes to its specific thread's version slot.
+   */
+  streamCatchUpVersionByThread: {} as Record<string, number>,
+  /** F183 Phase C cloud R3 P2 fix — last consumed version per thread. */
+  lastConsumedCatchUpVersionByThread: {} as Record<string, number>,
+  /**
+   * F183 Phase C — pending catch-up target seq per thread (砚砚 R5 P1 fix).
+   * Cleared by acknowledgeCatchUp after fetchHistory success.
+   */
+  pendingCatchUpTargetSeqByThread: {} as Record<string, number>,
+  /**
+   * F183 Phase C — per-thread lastSeq ledger. Initialized empty.
+   * Updated on each incoming event with seq>0. F5/reload re-hydrates
+   * via thread state load.
+   */
+  lastSeqByThread: {},
+  /** F183 Phase C — per-thread server seq epoch (boot UUID); initialized empty. */
+  lastSeqEpochByThread: {},
+  setLastSeq: (threadId: string, seq: number) =>
+    set((state) => {
+      // F183 Phase C — allow non-monotonic writes only when seq=0 reset (test/hydration);
+      // monotonicity invariant is enforced by caller (handleAgentMessage), not store.
+      if (state.lastSeqByThread[threadId] === seq) return state;
+      return { lastSeqByThread: { ...state.lastSeqByThread, [threadId]: seq } };
+    }),
+  setLastSeqEpoch: (threadId: string, epoch: string) =>
+    set((state) => {
+      if (state.lastSeqEpochByThread[threadId] === epoch) return state;
+      return { lastSeqEpochByThread: { ...state.lastSeqEpochByThread, [threadId]: epoch } };
+    }),
+  setPendingCatchUpTargetSeq: (threadId: string, seq: number) =>
+    set((state) => {
+      if (state.pendingCatchUpTargetSeqByThread[threadId] === seq) return state;
+      return {
+        pendingCatchUpTargetSeqByThread: {
+          ...state.pendingCatchUpTargetSeqByThread,
+          [threadId]: seq,
+        },
+      };
+    }),
+  setLastConsumedCatchUpVersion: (threadId: string, version: number) =>
+    set((state) => {
+      if (state.lastConsumedCatchUpVersionByThread[threadId] === version) return state;
+      return {
+        lastConsumedCatchUpVersionByThread: {
+          ...state.lastConsumedCatchUpVersionByThread,
+          [threadId]: version,
+        },
+      };
+    }),
+  acknowledgeCatchUp: (threadId: string, ackedTargetSeq: number) =>
+    set((state) => {
+      if (typeof ackedTargetSeq !== 'number' || ackedTargetSeq <= 0) return state;
+      const pending = state.pendingCatchUpTargetSeqByThread[threadId];
+      const currentLastSeq = state.lastSeqByThread[threadId] ?? 0;
+      // Defensive: never decrease lastSeq via ack (out-of-order ack arrivals).
+      const nextLastSeq = Math.max(currentLastSeq, ackedTargetSeq);
+      const lastSeqPatch =
+        nextLastSeq !== currentLastSeq
+          ? { lastSeqByThread: { ...state.lastSeqByThread, [threadId]: nextLastSeq } }
+          : {};
+      // 砚砚 R6 P1 race fix: only clear pending if it matches ackedTargetSeq.
+      // If pending was refreshed during fetch flight (newer gap arrived),
+      // keep the newer pending — next fetchHistory will ack it.
+      if (typeof pending === 'number' && pending === ackedTargetSeq) {
+        const nextPending = { ...state.pendingCatchUpTargetSeqByThread };
+        delete nextPending[threadId];
+        return { ...lastSeqPatch, pendingCatchUpTargetSeqByThread: nextPending };
+      }
+      // pending !== ackedTarget (or no pending) — keep pending; only advance lastSeq if changed
+      return Object.keys(lastSeqPatch).length > 0 ? lastSeqPatch : state;
+    }),
   requestStreamCatchUp: (threadId: string) =>
     set((state) => ({
-      streamCatchUpVersion: state.streamCatchUpVersion + 1,
-      streamCatchUpThreadId: threadId,
+      // F183 Phase C cloud P2 fix: per-thread version (no global trample).
+      // Each thread independently tracks its catch-up trigger; bg gap on
+      // thread B no longer overwrites active thread A's pending signal.
+      streamCatchUpVersionByThread: {
+        ...state.streamCatchUpVersionByThread,
+        [threadId]: (state.streamCatchUpVersionByThread[threadId] ?? 0) + 1,
+      },
     })),
 
   setCurrentGame: (game) => set({ currentGame: game }),
 
   // ── Thread management ──
 
-  setThreads: (threads) => set({ threads }),
-  setCurrentProject: (projectPath) => set({ currentProjectPath: projectPath }),
+  setThreads: (threads) => {
+    set({ threads });
+    // F164: Write-through to IndexedDB (fire-and-forget)
+    void saveThreadsSnapshot(threads).catch(() => {});
+  },
+  setCurrentProject: (projectPath) =>
+    set((state) =>
+      state.currentProjectPath === projectPath
+        ? state
+        : {
+            currentProjectPath: projectPath,
+            workspaceWorktreeAliases: {},
+            workspaceWorktreeAliasesProjectPath: projectPath,
+          },
+    ),
   setLoadingThreads: (loading) => set({ isLoadingThreads: loading }),
+  setOfflineSnapshot: (v) => set({ isOfflineSnapshot: v }),
 
   updateThreadTitle: (threadId, title) =>
     set((state) => ({
       threads: state.threads.map((t) => (t.id === threadId ? { ...t, title } : t)),
+    })),
+
+  updateThreadParticipants: (threadId, participants) =>
+    set((state) => ({
+      threads: state.threads.map((t) => (t.id === threadId ? { ...t, participants } : t)),
     })),
 
   updateThreadPin: (threadId, pinned) =>
@@ -1123,6 +2258,29 @@ export const useChatStore = create<ChatState>((set, get) => ({
       ),
     })),
 
+  updateThreadLabels: async (threadId, labels) => {
+    const prev = get().threads.find((t) => t.id === threadId)?.labels;
+    set((state) => ({
+      threads: state.threads.map((t) =>
+        t.id === threadId ? { ...t, labels: labels.length > 0 ? labels : undefined } : t,
+      ),
+    }));
+    try {
+      const { apiFetch } = await import('@/utils/api-client');
+      const res = await apiFetch(`/api/threads/${threadId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ labels }),
+      });
+      if (!res.ok) throw new Error(`PATCH labels failed: ${res.status}`);
+    } catch {
+      set((state) => ({
+        threads: state.threads.map((t) => (t.id === threadId ? { ...t, labels: prev } : t)),
+      }));
+      throw new Error('Failed to save labels');
+    }
+  },
+
   /**
    * Switch active thread.
    * Saves current flat state into threadStates map, then restores the target thread's state.
@@ -1133,9 +2291,52 @@ export const useChatStore = create<ChatState>((set, get) => ({
       if (threadId === state.currentThreadId) return state;
 
       // Save current flat state to map
-      const saved = snapshotActive(state);
+      let saved = snapshotActive(state);
+
+      // F063 Presentation Lock: flat workspace fields reflect the lock overlay,
+      // not the outgoing thread's real state. We must restore the correct workspace:
+      // - Lock owner: use the lock snapshot (that IS the owner's pre-lock workspace)
+      // - Non-owner: use its previous threadStates entry (or defaults)
+      if (state.presentationLock) {
+        const lock = state.presentationLock;
+        const isOwner = state.currentThreadId === lock.ownerThreadId;
+        if (isOwner) {
+          saved = {
+            ...saved,
+            workspaceWorktreeId: lock.ownerWorkspace.worktreeId,
+            workspaceOpenTabs: lock.ownerWorkspace.tabs,
+            workspaceOpenFilePath: lock.ownerWorkspace.filePath,
+            workspaceOpenFileLine: lock.ownerWorkspace.line,
+          };
+        } else {
+          const prevThreadState = state.threadStates[state.currentThreadId];
+          saved = {
+            ...saved,
+            workspaceWorktreeId: prevThreadState?.workspaceWorktreeId ?? null,
+            workspaceOpenTabs: prevThreadState?.workspaceOpenTabs ?? [],
+            workspaceOpenFilePath: prevThreadState?.workspaceOpenFilePath ?? null,
+            workspaceOpenFileLine: prevThreadState?.workspaceOpenFileLine ?? null,
+          };
+        }
+      }
+
+      // F164: Write-through outgoing thread's messages to IndexedDB (fire-and-forget)
+      // Always write — even empty arrays — so server-cleared threads don't leave stale snapshots
+      void saveMessagesSnapshot(state.currentThreadId, saved.messages, saved.hasMore).catch(() => {});
       // Load target thread state (or defaults for first visit)
       const loaded = state.threadStates[threadId] ?? { ...DEFAULT_THREAD_STATE };
+      const flattened = flattenThread(loaded);
+
+      // F063 Presentation Lock: overlay locked workspace fields so the visible
+      // workspace doesn't change on thread switch (AC-PL1).
+      if (state.presentationLock) {
+        const lock = state.presentationLock;
+        flattened.workspaceWorktreeId = lock.worktreeId;
+        flattened.workspaceOpenTabs = lock.tabs;
+        flattened.workspaceOpenFilePath = lock.filePath;
+        flattened.workspaceOpenFileLine = lock.line;
+        flattened.workspaceScrollTop = lock.scrollTop;
+      }
 
       return {
         currentThreadId: threadId,
@@ -1143,7 +2344,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
           ...state.threadStates,
           [state.currentThreadId]: saved,
         },
-        ...flattenThread(loaded),
+        ...flattened,
+        // #934: Clear reply-to on switch — ChatInput will restore from threadReplyDrafts on mount.
+        // This prevents stale reply context from the outgoing thread leaking into the new thread.
+        replyToMessage: null,
       };
     }),
 
@@ -1177,10 +2381,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
           if (msg.mentionsUser && typeof document !== 'undefined' && !document.hasFocus()) {
             fireOwnerMentionNotification(msg);
           }
-          return { messages };
+          return {
+            messages,
+            ...mirrorActiveToThreadStates(state, threadId, { messages }),
+          };
         }
 
-        const messages = [...state.messages, msg];
+        const messages = insertOrAppendMessage(state.messages, msg);
         if (messages.length > MAX_BLOB_MESSAGES) {
           revokeBlobUrls(messages.slice(0, messages.length - MAX_BLOB_MESSAGES));
         }
@@ -1190,7 +2397,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
         if (msg.mentionsUser && typeof document !== 'undefined' && !document.hasFocus()) {
           fireOwnerMentionNotification(msg);
         }
-        return { messages };
+        return {
+          messages,
+          ...mirrorActiveToThreadStates(state, threadId, { messages }),
+        };
       }
 
       // Background thread — update map + increment unread
@@ -1236,7 +2446,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           ...state.threadStates,
           [threadId]: {
             ...existing,
-            messages: [...existing.messages, msg],
+            messages: insertOrAppendMessage(existing.messages, msg),
             unreadCount: existing.unreadCount + 1,
             hasUserMention: existing.hasUserMention || !!msg.mentionsUser,
             lastActivity: Date.now(),
@@ -1335,11 +2545,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
   setThreadCatInvocation: (threadId, catId, info) =>
     set((state) => {
       if (threadId === state.currentThreadId) {
+        const catInvocations = {
+          ...state.catInvocations,
+          [catId]: { ...state.catInvocations[catId], ...info },
+        };
         return {
-          catInvocations: {
-            ...state.catInvocations,
-            [catId]: { ...state.catInvocations[catId], ...info },
-          },
+          catInvocations,
+          ...mirrorActiveToThreadStates(state, threadId, { catInvocations }),
         };
       }
       const existing = state.threadStates[threadId] ?? { ...DEFAULT_THREAD_STATE };
@@ -1380,17 +2592,19 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set((state) =>
       updateThreadMessage(state, threadId, messageId, (m) => ({
         ...m,
-        thinking: m.thinking ? `${m.thinking}\n\n---\n\n${thinking}` : thinking,
+        ...appendThinkingChunk(m, thinking),
       })),
     ),
 
-  setThreadMessageStreamInvocation: (threadId, messageId, invocationId) =>
+  setThreadMessageStreamInvocation: (threadId, messageId, invocationId, turnInvocationId) =>
     set((state) =>
       updateThreadMessage(state, threadId, messageId, (m) => ({
         ...m,
         extra: {
           ...m.extra,
-          stream: { ...m.extra?.stream, invocationId },
+          // F194 Phase Z3 R12 P1 (砚砚): preserve dual id — invocationId=parent (chain SoT),
+          // turnInvocationId=child (bubble SoT). Background bind same contract as active.
+          stream: { ...m.extra?.stream, invocationId, ...(turnInvocationId ? { turnInvocationId } : {}) },
         },
       })),
     ),
@@ -1408,7 +2622,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
   setThreadLoading: (threadId, loading) =>
     set((state) => {
       if (threadId === state.currentThreadId) {
-        return { isLoading: loading };
+        return {
+          isLoading: loading,
+          ...mirrorActiveToThreadStates(state, threadId, { isLoading: loading }),
+        };
       }
       const existing = state.threadStates[threadId] ?? { ...DEFAULT_THREAD_STATE };
       return {
@@ -1427,7 +2644,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
   setThreadHasActiveInvocation: (threadId, active) =>
     set((state) => {
       if (threadId === state.currentThreadId) {
-        return { hasActiveInvocation: active };
+        return {
+          hasActiveInvocation: active,
+          ...mirrorActiveToThreadStates(state, threadId, { hasActiveInvocation: active }),
+        };
       }
       const existing = state.threadStates[threadId] ?? { ...DEFAULT_THREAD_STATE };
       return {
@@ -1443,19 +2663,24 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }),
 
   /** F108: Add an active invocation to a thread (background or active) */
-  addThreadActiveInvocation: (threadId, invocationId, catId, mode) =>
+  addThreadActiveInvocation: (threadId, invocationId, catId, mode, startedAt?) =>
     set((state) => {
+      const ts = startedAt ?? Date.now();
       if (threadId === state.currentThreadId) {
         const activeInvocations = {
           ...state.activeInvocations,
-          [invocationId]: { catId, mode, startedAt: Date.now() },
+          [invocationId]: { catId, mode, startedAt: ts },
         };
-        return { activeInvocations, hasActiveInvocation: true };
+        return {
+          activeInvocations,
+          hasActiveInvocation: true,
+          ...mirrorActiveToThreadStates(state, threadId, { activeInvocations, hasActiveInvocation: true }),
+        };
       }
       const existing = state.threadStates[threadId] ?? { ...DEFAULT_THREAD_STATE };
       const activeInvocations = {
         ...existing.activeInvocations,
-        [invocationId]: { catId, mode, startedAt: Date.now() },
+        [invocationId]: { catId, mode, startedAt: ts },
       };
       return {
         threadStates: {
@@ -1470,21 +2695,21 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set((state) => {
       if (threadId === state.currentThreadId) {
         const rest = Object.fromEntries(Object.entries(state.activeInvocations).filter(([k]) => k !== invocationId));
-        return { activeInvocations: rest, hasActiveInvocation: Object.keys(rest).length > 0 };
+        const hasActiveInvocation = Object.keys(rest).length > 0;
+        return {
+          activeInvocations: rest,
+          hasActiveInvocation,
+          ...mirrorActiveToThreadStates(state, threadId, { activeInvocations: rest, hasActiveInvocation }),
+        };
       }
       const existing = state.threadStates[threadId];
       if (!existing) return state;
       const rest = Object.fromEntries(Object.entries(existing.activeInvocations).filter(([k]) => k !== invocationId));
       return {
-        threadStates: {
-          ...state.threadStates,
-          [threadId]: {
-            ...existing,
-            activeInvocations: rest,
-            hasActiveInvocation: Object.keys(rest).length > 0,
-            lastActivity: Date.now(),
-          },
-        },
+        threadStates: stampThreadCompletion(state.threadStates, threadId, {
+          activeInvocations: rest,
+          hasActiveInvocation: Object.keys(rest).length > 0,
+        }),
       };
     }),
 
@@ -1492,20 +2717,22 @@ export const useChatStore = create<ChatState>((set, get) => ({
   clearAllThreadActiveInvocations: (threadId) =>
     set((state) => {
       if (threadId === state.currentThreadId) {
-        return { activeInvocations: {}, hasActiveInvocation: false };
+        return {
+          activeInvocations: {},
+          hasActiveInvocation: false,
+          threadStates: stampThreadCompletion(state.threadStates, state.currentThreadId, {
+            activeInvocations: {},
+            hasActiveInvocation: false,
+          }),
+        };
       }
       const existing = state.threadStates[threadId];
       if (!existing) return state;
       return {
-        threadStates: {
-          ...state.threadStates,
-          [threadId]: {
-            ...existing,
-            activeInvocations: {},
-            hasActiveInvocation: false,
-            lastActivity: Date.now(),
-          },
-        },
+        threadStates: stampThreadCompletion(state.threadStates, threadId, {
+          activeInvocations: {},
+          hasActiveInvocation: false,
+        }),
       };
     }),
 
@@ -1514,7 +2741,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
   setThreadIntentMode: (threadId, mode) =>
     set((state) => {
       if (threadId === state.currentThreadId) {
-        return { intentMode: mode, catStatuses: {} };
+        return {
+          intentMode: mode,
+          catStatuses: {},
+          catStatusDetails: {},
+          ...mirrorActiveToThreadStates(state, threadId, { intentMode: mode, catStatuses: {}, catStatusDetails: {} }),
+        };
       }
       const existing = state.threadStates[threadId] ?? { ...DEFAULT_THREAD_STATE };
       return {
@@ -1524,6 +2756,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
             ...existing,
             intentMode: mode,
             catStatuses: {},
+            catStatusDetails: {},
             lastActivity: Date.now(),
           },
         },
@@ -1536,13 +2769,23 @@ export const useChatStore = create<ChatState>((set, get) => ({
   setThreadTargetCats: (threadId, cats) =>
     set((state) => {
       if (threadId === state.currentThreadId) {
-        if (cats.length === 0) return { targetCats: [], catStatuses: {} };
+        if (cats.length === 0) {
+          return {
+            targetCats: [],
+            catStatuses: {},
+            ...mirrorActiveToThreadStates(state, threadId, { targetCats: [], catStatuses: {} }),
+          };
+        }
         const merged = [...new Set([...state.targetCats, ...cats])];
         const statuses = { ...state.catStatuses };
         for (const c of cats) {
           if (!(c in statuses)) statuses[c] = 'pending' as const;
         }
-        return { targetCats: merged, catStatuses: statuses };
+        return {
+          targetCats: merged,
+          catStatuses: statuses,
+          ...mirrorActiveToThreadStates(state, threadId, { targetCats: merged, catStatuses: statuses }),
+        };
       }
       const existing = state.threadStates[threadId] ?? { ...DEFAULT_THREAD_STATE };
       if (cats.length === 0) {
@@ -1579,10 +2822,21 @@ export const useChatStore = create<ChatState>((set, get) => ({
   replaceThreadTargetCats: (threadId, cats) =>
     set((state) => {
       if (threadId === state.currentThreadId) {
-        if (cats.length === 0) return { targetCats: [], catStatuses: {} };
+        if (cats.length === 0) {
+          return {
+            targetCats: [],
+            catStatuses: {},
+            ...mirrorActiveToThreadStates(state, threadId, { targetCats: [], catStatuses: {} }),
+          };
+        }
         const statuses: Record<string, CatStatusType> = {};
         for (const c of cats) statuses[c] = 'pending' as const;
-        return { targetCats: [...cats], catStatuses: statuses };
+        const targetCats = [...cats];
+        return {
+          targetCats,
+          catStatuses: statuses,
+          ...mirrorActiveToThreadStates(state, threadId, { targetCats, catStatuses: statuses }),
+        };
       }
       const existing = state.threadStates[threadId] ?? { ...DEFAULT_THREAD_STATE };
       if (cats.length === 0) {
@@ -1719,20 +2973,28 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }),
 
   /** Update a specific cat's status in a background thread (for sidebar indicators) */
-  updateThreadCatStatus: (threadId, catId, status) =>
+  updateThreadCatStatus: (threadId, catId, status, detail) =>
     set((state) => {
       if (threadId === state.currentThreadId) {
-        if (state.catStatuses[catId] === status) return state;
-        return { catStatuses: { ...state.catStatuses, [catId]: status } };
+        if (state.catStatuses[catId] === status && !detail) return state;
+        const catStatuses = { ...state.catStatuses, [catId]: status };
+        const catStatusDetails = detail ? { ...state.catStatusDetails, [catId]: detail } : state.catStatusDetails;
+        return {
+          catStatuses,
+          catStatusDetails,
+          ...mirrorActiveToThreadStates(state, threadId, { catStatuses, catStatusDetails }),
+        };
       }
       const existing = state.threadStates[threadId] ?? { ...DEFAULT_THREAD_STATE };
-      if (existing.catStatuses[catId] === status) return state;
+      if (existing.catStatuses[catId] === status && !detail) return state;
+      const catStatusDetails = detail ? { ...existing.catStatusDetails, [catId]: detail } : existing.catStatusDetails;
       return {
         threadStates: {
           ...state.threadStates,
           [threadId]: {
             ...existing,
             catStatuses: { ...existing.catStatuses, [catId]: status },
+            catStatusDetails,
             lastActivity: Date.now(),
           },
         },
@@ -1753,9 +3015,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
       if (threadId === state.currentThreadId) {
         const statusChanged = state.catStatuses[catId] !== catStatus;
+        const messages = state.messages.map(applyMessageUpdate);
+        const newCatStatuses = statusChanged ? { ...state.catStatuses, [catId]: catStatus } : state.catStatuses;
         return {
-          messages: state.messages.map(applyMessageUpdate),
-          ...(statusChanged ? { catStatuses: { ...state.catStatuses, [catId]: catStatus } } : {}),
+          messages,
+          ...(statusChanged ? { catStatuses: newCatStatuses } : {}),
+          ...mirrorActiveToThreadStates(state, threadId, {
+            messages,
+            ...(statusChanged ? { catStatuses: newCatStatuses } : {}),
+          }),
         };
       }
 
@@ -1778,9 +3046,19 @@ export const useChatStore = create<ChatState>((set, get) => ({
   /** Clear hasActiveInvocation for a specific thread (active or background) */
   clearThreadActiveInvocation: (threadId) =>
     set((state) => {
-      // Active thread — clear flat state
+      // Active-thread clear is used by hydration/reconciliation paths to drop stale slots.
+      // Do not stamp lastActivity here: that would turn routine state repair into fake recency.
+      // Real completion paths stamp via removeActiveInvocation / setHasActiveInvocation(false) /
+      // clearAllActiveInvocations / resetThreadInvocationState.
       if (threadId === state.currentThreadId) {
-        return { hasActiveInvocation: false, activeInvocations: {} };
+        // F173 KD-2 (PR-C Task 10): mirror to threadStates[active] so reconcile
+        // sees the same view it would on a background thread.
+        const patch = { hasActiveInvocation: false, activeInvocations: {} };
+        return {
+          hasActiveInvocation: false,
+          activeInvocations: {},
+          ...mirrorActiveFlat(state, patch),
+        };
       }
       // Background thread — update in threadStates map (no-op if unknown)
       const ts = state.threadStates[threadId];
@@ -1804,23 +3082,19 @@ export const useChatStore = create<ChatState>((set, get) => ({
         catStatuses: {} as Record<string, CatStatusType>,
       };
 
-      // Active thread — clear flat state
+      // Active thread — clear flat state + stamp completion time
       if (threadId === state.currentThreadId) {
-        return resetPatch;
+        return {
+          ...resetPatch,
+          threadStates: stampThreadCompletion(state.threadStates, state.currentThreadId),
+        };
       }
 
       // Background thread — update in threadStates map (no-op if unknown)
       const ts = state.threadStates[threadId];
       if (!ts) return state;
       return {
-        threadStates: {
-          ...state.threadStates,
-          [threadId]: {
-            ...ts,
-            ...resetPatch,
-            lastActivity: Date.now(),
-          },
-        },
+        threadStates: stampThreadCompletion(state.threadStates, threadId, resetPatch),
       };
     }),
 

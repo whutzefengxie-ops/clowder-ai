@@ -13,7 +13,7 @@ import { z } from 'zod';
  */
 export const sendMessageSchema = z
   .object({
-    content: z.string().min(1).max(10000),
+    content: z.string().min(1).max(100000),
     /** Legacy fallback only; preferred identity source is X-Cat-Cafe-User header. */
     userId: z.string().min(1).max(100).optional(),
     mentions: z.array(catIdSchema()).optional(),
@@ -26,6 +26,8 @@ export const sendMessageSchema = z
     whisperTo: z.array(catIdSchema()).optional(),
     /** F39: Delivery mode. undefined = smart default (queue when active, immediate otherwise). */
     deliveryMode: z.enum(['immediate', 'queue', 'force']).optional(),
+    /** #699: ID of message being replied to (quote). */
+    replyTo: z.string().min(1).max(100).optional(),
   })
   .refine((data) => data.visibility !== 'whisper' || (data.whisperTo && data.whisperTo.length > 0), {
     message: 'whisperTo must be non-empty when visibility is whisper',

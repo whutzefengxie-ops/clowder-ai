@@ -25,7 +25,7 @@ export function MetadataBadge({ metadata }: MetadataBadgeProps) {
   return (
     <button
       onClick={() => setExpanded((v) => !v)}
-      className="mt-1 text-[10px] text-gray-400 hover:text-gray-500 transition-colors cursor-pointer select-none flex items-center gap-0 flex-wrap"
+      className="mt-1 text-micro text-cafe-muted hover:text-cafe-secondary transition-colors cursor-pointer select-none flex items-center gap-0 flex-wrap"
     >
       <span>
         {metadata.model || 'unknown'} · {metadata.provider || 'unknown'}
@@ -33,42 +33,48 @@ export function MetadataBadge({ metadata }: MetadataBadgeProps) {
 
       {hasTokens && (
         <span className="ml-1 animate-fade-in">
-          <span className="text-gray-300"> · </span>
+          <span className="text-cafe-muted"> · </span>
           {usage.inputTokens != null && (
             <span className="tabular-nums">
               {formatTokenCount(usage.inputTokens)}
-              <span className="text-gray-300">↓</span>
+              <span className="text-cafe-muted">↓</span>
             </span>
           )}
           {usage.outputTokens != null && (
             <span className="tabular-nums ml-0.5">
               {formatTokenCount(usage.outputTokens)}
-              <span className="text-gray-300">↑</span>
+              <span className="text-cafe-muted">↑</span>
             </span>
           )}
           {!usage.inputTokens && !usage.outputTokens && usage.totalTokens != null && (
             <span className="tabular-nums">
               {formatTokenCount(usage.totalTokens)}
-              <span className="text-gray-300">tok</span>
+              <span className="text-cafe-muted">tok</span>
             </span>
           )}
           {cachePct != null && cachePct > 0 && (
             <>
-              <span className="text-gray-300"> · </span>
-              <span className="text-emerald-500/80 tabular-nums">cached {cachePct}%</span>
+              <span className="text-cafe-muted"> · </span>
+              <span className="text-conn-emerald-text/80 tabular-nums">cached {cachePct}%</span>
             </>
           )}
           {usage.costUsd != null && (
             <>
-              <span className="text-gray-300"> · </span>
-              <span className="text-amber-500 animate-cost-glow tabular-nums">{formatCost(usage.costUsd)}</span>
+              <span className="text-cafe-muted"> · </span>
+              <span
+                className="text-conn-amber-text animate-cost-glow tabular-nums"
+                title={usage.costEstimated ? '估算值 (基于定价表)' : undefined}
+              >
+                {usage.costEstimated ? '~' : ''}
+                {formatCost(usage.costUsd)}
+              </span>
             </>
           )}
         </span>
       )}
 
       {expanded && metadata.sessionId && (
-        <span className="ml-1 text-gray-300">· {metadata.sessionId.slice(0, 12)}...</span>
+        <span className="ml-1 text-cafe-muted">· {metadata.sessionId.slice(0, 12)}...</span>
       )}
     </button>
   );

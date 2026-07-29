@@ -26,6 +26,288 @@ describe('MessageStore', () => {
     assert.equal(store.size, 1);
   });
 
+  test('append() rejects timestamps outside the sortable-ID-safe Date domain before side effects', async () => {
+    const { MessageStore } = await import('../dist/domains/cats/services/stores/ports/MessageStore.js');
+
+    const invalidTimestamps = [
+      -1,
+      1.5,
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      Number.NEGATIVE_INFINITY,
+      8_640_000_000_000_001,
+      -8_640_000_000_000_001,
+    ];
+    for (const timestamp of invalidTimestamps) {
+      let listenerCalls = 0;
+      const store = new MessageStore({ onAppend: () => listenerCalls++ });
+
+      assert.throws(
+        () =>
+          store.append({
+            userId: 'user-1',
+            catId: null,
+            content: 'must not persist',
+            mentions: [],
+            timestamp,
+            idempotencyKey: 'invalid-date',
+          }),
+        { name: 'RangeError', message: /non-negative integer ECMAScript Date/ },
+      );
+      assert.equal(store.size, 0, `timestamp ${String(timestamp)} must not append`);
+      assert.equal(listenerCalls, 0, `timestamp ${String(timestamp)} must not notify`);
+    }
+  });
+
+  test('append() admits non-negative integer ECMAScript Date boundaries', async () => {
+    const { MessageStore } = await import('../dist/domains/cats/services/stores/ports/MessageStore.js');
+    const store = new MessageStore();
+
+    for (const timestamp of [0, 1, 8_640_000_000_000_000]) {
+      const stored = store.append({
+        userId: 'user-1',
+        catId: null,
+        content: 'valid Date input',
+        mentions: [],
+        timestamp,
+      });
+      assert.equal(stored.timestamp, timestamp);
+    }
+    assert.equal(store.size, 3);
+  });
+
+  test('append() rejects transition-owned delivery metadata before side effects and permits a queued retry', async () => {
+    const { MessageStore } = await import('../dist/domains/cats/services/stores/ports/MessageStore.js');
+    let listenerCalls = 0;
+    const store = new MessageStore({ onAppend: () => listenerCalls++ });
+    const base = {
+      userId: 'user-1',
+      catId: null,
+      content: 'delivery ownership probe',
+      mentions: [],
+      timestamp: 100,
+      threadId: 'thread-append-delivery-owner',
+      idempotencyKey: 'append-delivery-owner',
+    };
+    const invalidMetadata = [
+      { deliveredAt: undefined },
+      { deliveredAt: 100.5, deliveryStatus: 'delivered' },
+      { deliveredAt: Number.POSITIVE_INFINITY, deliveryStatus: 'delivered' },
+      { deliveredAt: 101, deliveryStatus: 'delivered' },
+      { deliveryStatus: 'delivered' },
+      { deliveryStatus: 'canceled' },
+    ];
+
+    for (const metadata of invalidMetadata) {
+      assert.throws(() => store.append({ ...base, ...metadata }), {
+        name: 'TypeError',
+        message: /append.*delivery metadata|transition owner/i,
+      });
+      assert.equal(store.size, 0, 'ownership rejection must not append');
+      assert.equal(listenerCalls, 0, 'ownership rejection must not notify listeners');
+    }
+
+    const queued = store.append({ ...base, deliveryStatus: 'queued' });
+    assert.equal(queued.deliveryStatus, 'queued');
+    assert.equal(queued.deliveredAt, undefined);
+    assert.deepEqual(store.getById(queued.id), queued);
+    assert.equal(store.size, 1);
+    assert.equal(listenerCalls, 1);
+  });
+
+  test('markCanceled() transitions only queued messages and preserves legacy/delivered state', async () => {
+    const { MessageStore } = await import('../dist/domains/cats/services/stores/ports/MessageStore.js');
+    const store = new MessageStore();
+    const base = {
+      userId: 'user-cancel-owner',
+      catId: null,
+      mentions: [],
+      threadId: 'thread-cancel-owner',
+    };
+    const queued = store.append({ ...base, content: 'queued', timestamp: 100, deliveryStatus: 'queued' });
+    const legacy = store.append({ ...base, content: 'legacy', timestamp: 110 });
+    const delivered = store.append({ ...base, content: 'delivered', timestamp: 120, deliveryStatus: 'queued' });
+    store.markDelivered(delivered.id, 200);
+
+    const legacyBefore = { ...legacy };
+    const deliveredBefore = { ...delivered };
+
+    const canceled = store.markCanceled(queued.id);
+    assert.equal(canceled.deliveryStatus, 'canceled');
+    assert.equal(canceled.deliveredAt, undefined);
+
+    assert.equal(store.markCanceled(legacy.id), null);
+    assert.deepEqual(store.getById(legacy.id), legacyBefore);
+    assert.equal(store.markCanceled(delivered.id), null);
+    assert.deepEqual(store.getById(delivered.id), deliveredBefore);
+
+    const canceledBefore = { ...canceled };
+    assert.equal(store.markCanceled(queued.id), null);
+    assert.deepEqual(store.getById(queued.id), canceledBefore, 'repeated cancellation must preserve state');
+  });
+
+  test('markDelivered() rejects unsafe order timestamps before state transition and permits a valid retry', async () => {
+    const { MessageStore } = await import('../dist/domains/cats/services/stores/ports/MessageStore.js');
+    const invalidTimestamps = [
+      -1,
+      1.5,
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      Number.NEGATIVE_INFINITY,
+      8_640_000_000_000_001,
+      -8_640_000_000_000_001,
+    ];
+    const validTimestamps = [0, 8_640_000_000_000_000];
+
+    for (const [index, deliveredAt] of invalidTimestamps.entries()) {
+      const store = new MessageStore();
+      const queued = store.append({
+        userId: 'user-1',
+        catId: null,
+        content: `queued ${index}`,
+        mentions: [],
+        timestamp: 100 + index,
+        threadId: 'thread-delivery-admission',
+        deliveryStatus: 'queued',
+      });
+      const before = { ...queued };
+
+      assert.throws(() => store.markDelivered(queued.id, deliveredAt), {
+        name: 'RangeError',
+        message: /non-negative integer ECMAScript Date/,
+      });
+      assert.deepEqual(store.getById(queued.id), before, `invalid ${String(deliveredAt)} must not mutate message`);
+      assert.equal(queued.deliveryStatus, 'queued');
+      assert.equal(queued.deliveredAt, undefined);
+
+      const validDeliveredAt = validTimestamps[index] ?? 1_000 + index;
+      const delivered = store.markDelivered(queued.id, validDeliveredAt);
+      assert.equal(delivered.deliveryStatus, 'delivered');
+      assert.equal(delivered.deliveredAt, validDeliveredAt);
+
+      const afterDelivery = { ...delivered };
+      assert.throws(() => store.markDelivered(queued.id, deliveredAt), RangeError);
+      assert.deepEqual(store.getById(queued.id), afterDelivery, 'invalid input must not be state-dependent');
+    }
+  });
+
+  test('markDelivered() recovery preserves bounded effective-order pagination', async () => {
+    const { MessageStore } = await import('../dist/domains/cats/services/stores/ports/MessageStore.js');
+    const { collectAllThreadMessages } = await import(
+      '../dist/domains/cats/services/agents/routing/thread-artifacts-aggregator.js'
+    );
+    const store = new MessageStore();
+    const threadId = 'thread-delivery-admission-pagination';
+    const first = store.append({
+      userId: 'user-1',
+      catId: null,
+      content: 'first',
+      mentions: [],
+      timestamp: 100,
+      threadId,
+      deliveryStatus: 'queued',
+    });
+    const second = store.append({
+      userId: 'user-1',
+      catId: null,
+      content: 'second',
+      mentions: [],
+      timestamp: 200,
+      threadId,
+      deliveryStatus: 'queued',
+    });
+
+    assert.throws(() => store.markDelivered(first.id, Number.POSITIVE_INFINITY), RangeError);
+    store.markDelivered(first.id, 300);
+    store.markDelivered(second.id, 400);
+
+    const collected = await collectAllThreadMessages(store, threadId, undefined, 1);
+    assert.deepEqual(
+      collected.map((message) => message.id),
+      [second.id, first.id],
+      'one-record pages must return both messages exactly once after a valid retry',
+    );
+  });
+
+  test('admitted timestamp classes preserve chronological ID and delivery-cursor order', async () => {
+    const { generateSortableId } = await import('../dist/domains/cats/services/stores/ports/MessageStore.js');
+    const { DeliveryCursorStore } = await import('../dist/domains/cats/services/stores/ports/DeliveryCursorStore.js');
+    const timestamps = [0, 1, 8_640_000_000_000_000];
+    const ids = timestamps.map((timestamp) => generateSortableId(timestamp));
+
+    assert.deepEqual([...ids].sort(), ids, 'IDs must sort in the same order as admitted timestamps');
+
+    const cursorStore = new DeliveryCursorStore();
+    for (const id of ids) {
+      await cursorStore.ackCursor('user-1', 'opus', 'thread-sortable-domain', id);
+      assert.equal(await cursorStore.getCursor('user-1', 'opus', 'thread-sortable-domain'), id);
+    }
+  });
+
+  test('expired cursor recovery preserves order across admitted timestamp boundaries', async () => {
+    const { MessageStore, generateSortableId } = await import(
+      '../dist/domains/cats/services/stores/ports/MessageStore.js'
+    );
+    const store = new MessageStore();
+    const later = [2, 8_640_000_000_000_000].map((timestamp) =>
+      store.append({
+        userId: 'user-1',
+        catId: null,
+        content: `timestamp ${timestamp}`,
+        mentions: [],
+        timestamp,
+        threadId: 'thread-expired-cursor',
+      }),
+    );
+    const expiredCursor = generateSortableId(1);
+
+    assert.deepEqual(
+      store.getByThreadAfter('thread-expired-cursor', expiredCursor).map((message) => message.id),
+      later.map((message) => message.id),
+    );
+  });
+
+  test('augmentStreamMetadata() enriches callback messages without replacing canonical content', async () => {
+    const { MessageStore } = await import('../dist/domains/cats/services/stores/ports/MessageStore.js');
+
+    const store = new MessageStore();
+    const callbackMsg = store.append({
+      userId: 'user-1',
+      catId: 'opus',
+      content: 'Callback content remains canonical',
+      mentions: [],
+      timestamp: 1,
+      origin: 'callback',
+      extra: { rich: { v: 1, blocks: [{ id: 'callback-card', kind: 'card', v: 1, title: 'Callback' }] } },
+    });
+
+    const updated = store.augmentStreamMetadata(callbackMsg.id, {
+      thinking: 'stream thinking',
+      metadata: { provider: 'mock', model: 'test' },
+      toolEvents: [{ id: 'tool-1', type: 'tool_use', label: 'post_message', timestamp: 2 }],
+      mentionsUser: true,
+      extra: {
+        stream: { invocationId: 'parent-inv' },
+        tracing: { traceId: 'trace-1', spanId: 'span-1' },
+        rich: { v: 1, blocks: [{ id: 'stream-card', kind: 'card', v: 1, title: 'Stream' }] },
+      },
+    });
+
+    assert.ok(updated);
+    assert.equal(updated.content, 'Callback content remains canonical');
+    assert.equal(updated.origin, 'callback');
+    assert.equal(updated.thinking, 'stream thinking');
+    assert.deepEqual(updated.metadata, { provider: 'mock', model: 'test' });
+    assert.equal(updated.toolEvents.length, 1);
+    assert.equal(updated.mentionsUser, true);
+    assert.deepEqual(updated.extra.stream, { invocationId: 'parent-inv' });
+    assert.deepEqual(updated.extra.tracing, { traceId: 'trace-1', spanId: 'span-1' });
+    assert.deepEqual(
+      updated.extra.rich.blocks.map((block) => block.id),
+      ['callback-card', 'stream-card'],
+    );
+  });
+
   test('getRecent() returns last N messages', async () => {
     const { MessageStore } = await import('../dist/domains/cats/services/stores/ports/MessageStore.js');
 
@@ -436,5 +718,114 @@ describe('MessageStore', () => {
     const deleted = store.hardDelete(msg.id, 'admin');
     assert.ok(deleted);
     assert.equal(deleted.thinking, undefined, 'thinking must be cleared on hard delete');
+  });
+
+  // --- System-user visibility (scheduler messages must be visible to all) ---
+
+  test('getByThread() includes scheduler messages when filtering by userId', async () => {
+    const { MessageStore } = await import('../dist/domains/cats/services/stores/ports/MessageStore.js');
+
+    const store = new MessageStore();
+    store.append({ userId: 'user-1', catId: 'opus', content: 'hello', mentions: [], timestamp: 1, threadId: 'th' });
+    store.append({
+      userId: 'scheduler',
+      catId: 'system',
+      content: '[定时任务] reminder',
+      mentions: [],
+      timestamp: 2,
+      threadId: 'th',
+    });
+    store.append({ userId: 'user-2', catId: null, content: 'other user', mentions: [], timestamp: 3, threadId: 'th' });
+
+    const msgs = store.getByThread('th', 50, 'user-1');
+    assert.equal(msgs.length, 2, 'should include own message + scheduler message');
+    assert.equal(msgs[0].content, 'hello');
+    assert.equal(msgs[1].content, '[定时任务] reminder');
+  });
+
+  test('getByThreadBefore() includes scheduler messages when filtering by userId', async () => {
+    const { MessageStore } = await import('../dist/domains/cats/services/stores/ports/MessageStore.js');
+
+    const store = new MessageStore();
+    store.append({ userId: 'user-1', catId: 'opus', content: 'hello', mentions: [], timestamp: 100, threadId: 'th' });
+    store.append({
+      userId: 'scheduler',
+      catId: 'system',
+      content: '[定时任务] reminder',
+      mentions: [],
+      timestamp: 200,
+      threadId: 'th',
+    });
+    store.append({ userId: 'user-1', catId: null, content: 'follow-up', mentions: [], timestamp: 300, threadId: 'th' });
+
+    const msgs = store.getByThreadBefore('th', 350, 50, undefined, 'user-1');
+    assert.equal(msgs.length, 3, 'should include all own messages + scheduler');
+    assert.equal(msgs[1].userId, 'scheduler');
+  });
+
+  test('getByThreadAfter() includes scheduler messages when filtering by userId', async () => {
+    const { MessageStore } = await import('../dist/domains/cats/services/stores/ports/MessageStore.js');
+
+    const store = new MessageStore();
+    const first = store.append({
+      userId: 'user-1',
+      catId: null,
+      content: 'start',
+      mentions: [],
+      timestamp: 100,
+      threadId: 'th',
+    });
+    store.append({
+      userId: 'scheduler',
+      catId: 'system',
+      content: '[定时任务] digest',
+      mentions: [],
+      timestamp: 200,
+      threadId: 'th',
+    });
+    store.append({ userId: 'user-2', catId: null, content: 'other', mentions: [], timestamp: 300, threadId: 'th' });
+
+    const msgs = store.getByThreadAfter('th', first.id, undefined, 'user-1');
+    assert.equal(msgs.length, 1, 'should include scheduler message after cursor');
+    assert.equal(msgs[0].userId, 'scheduler');
+  });
+
+  test('P1: forged userId=scheduler with non-system catId does NOT bypass filter', async () => {
+    const { MessageStore } = await import('../dist/domains/cats/services/stores/ports/MessageStore.js');
+
+    const store = new MessageStore();
+    store.append({ userId: 'user-1', catId: 'opus', content: 'legit', mentions: [], timestamp: 1, threadId: 'th' });
+    store.append({
+      userId: 'scheduler',
+      catId: 'opus',
+      content: 'forged system message',
+      mentions: [],
+      timestamp: 2,
+      threadId: 'th',
+    });
+
+    const msgs = store.getByThread('th', 50, 'user-1');
+    assert.equal(msgs.length, 1, 'forged scheduler message must NOT bypass userId filter');
+    assert.equal(msgs[0].content, 'legit');
+  });
+
+  test('getByThread() includes system messages persisted with catId=null when filtering by userId', async () => {
+    const { MessageStore } = await import('../dist/domains/cats/services/stores/ports/MessageStore.js');
+
+    const store = new MessageStore();
+    store.append({ userId: 'user-1', catId: null, content: 'hello', mentions: [], timestamp: 1, threadId: 'th' });
+    store.append({
+      userId: 'system',
+      catId: null,
+      content: 'Error: stream_idle_stall: Gemini stopped responding',
+      mentions: [],
+      timestamp: 2,
+      threadId: 'th',
+    });
+
+    const msgs = store.getByThread('th', 50, 'user-1');
+    assert.equal(msgs.length, 2, 'should include own message + persisted system error');
+    assert.equal(msgs[1].userId, 'system');
+    assert.equal(msgs[1].catId, null);
   });
 });

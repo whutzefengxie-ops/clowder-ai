@@ -65,14 +65,13 @@ describe('POST /api/callbacks/start-vote', () => {
   test('starts a vote with valid credentials', async () => {
     const app = await createApp();
     const thread = threadStore.create('user-1', 'Test');
-    const { invocationId, callbackToken } = registry.create('user-1', 'opus', thread.id);
+    const { invocationId, callbackToken } = await registry.create('user-1', 'opus', thread.id);
 
     const res = await app.inject({
       method: 'POST',
       url: '/api/callbacks/start-vote',
+      headers: { 'x-invocation-id': invocationId, 'x-callback-token': callbackToken },
       payload: {
-        invocationId,
-        callbackToken,
         question: 'REST 还是 GraphQL？',
         options: ['REST', 'GraphQL'],
         voters: ['codex', 'gemini'],
@@ -91,14 +90,13 @@ describe('POST /api/callbacks/start-vote', () => {
   test('broadcasts vote_started via WebSocket', async () => {
     const app = await createApp();
     const thread = threadStore.create('user-1', 'Test');
-    const { invocationId, callbackToken } = registry.create('user-1', 'opus', thread.id);
+    const { invocationId, callbackToken } = await registry.create('user-1', 'opus', thread.id);
 
     await app.inject({
       method: 'POST',
       url: '/api/callbacks/start-vote',
+      headers: { 'x-invocation-id': invocationId, 'x-callback-token': callbackToken },
       payload: {
-        invocationId,
-        callbackToken,
         question: '哪个方案？',
         options: ['A', 'B'],
         voters: ['codex'],
@@ -114,14 +112,13 @@ describe('POST /api/callbacks/start-vote', () => {
   test('persists vote notification message with @mentions', async () => {
     const app = await createApp();
     const thread = threadStore.create('user-1', 'Test');
-    const { invocationId, callbackToken } = registry.create('user-1', 'opus', thread.id);
+    const { invocationId, callbackToken } = await registry.create('user-1', 'opus', thread.id);
 
     await app.inject({
       method: 'POST',
       url: '/api/callbacks/start-vote',
+      headers: { 'x-invocation-id': invocationId, 'x-callback-token': callbackToken },
       payload: {
-        invocationId,
-        callbackToken,
         question: '谁最坏？',
         options: ['opus', 'codex'],
         voters: ['codex', 'gemini'],
@@ -139,15 +136,14 @@ describe('POST /api/callbacks/start-vote', () => {
   test('returns 409 when active vote already exists', async () => {
     const app = await createApp();
     const thread = threadStore.create('user-1', 'Test');
-    const { invocationId, callbackToken } = registry.create('user-1', 'opus', thread.id);
+    const { invocationId, callbackToken } = await registry.create('user-1', 'opus', thread.id);
 
     // First vote
     await app.inject({
       method: 'POST',
       url: '/api/callbacks/start-vote',
+      headers: { 'x-invocation-id': invocationId, 'x-callback-token': callbackToken },
       payload: {
-        invocationId,
-        callbackToken,
         question: 'Q1?',
         options: ['A', 'B'],
         voters: ['codex'],
@@ -158,9 +154,8 @@ describe('POST /api/callbacks/start-vote', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/callbacks/start-vote',
+      headers: { 'x-invocation-id': invocationId, 'x-callback-token': callbackToken },
       payload: {
-        invocationId,
-        callbackToken,
         question: 'Q2?',
         options: ['C', 'D'],
         voters: ['codex'],
@@ -178,9 +173,8 @@ describe('POST /api/callbacks/start-vote', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/callbacks/start-vote',
+      headers: { 'x-invocation-id': 'fake-id', 'x-callback-token': 'fake-token' },
       payload: {
-        invocationId: 'fake-id',
-        callbackToken: 'fake-token',
         question: 'Q?',
         options: ['A', 'B'],
         voters: ['codex'],
@@ -193,14 +187,13 @@ describe('POST /api/callbacks/start-vote', () => {
   test('returns 400 with fewer than 2 options', async () => {
     const app = await createApp();
     const thread = threadStore.create('user-1', 'Test');
-    const { invocationId, callbackToken } = registry.create('user-1', 'opus', thread.id);
+    const { invocationId, callbackToken } = await registry.create('user-1', 'opus', thread.id);
 
     const res = await app.inject({
       method: 'POST',
       url: '/api/callbacks/start-vote',
+      headers: { 'x-invocation-id': invocationId, 'x-callback-token': callbackToken },
       payload: {
-        invocationId,
-        callbackToken,
         question: 'Q?',
         options: ['A'],
         voters: ['codex'],
@@ -214,14 +207,13 @@ describe('POST /api/callbacks/start-vote', () => {
   test('createdBy is userId, initiatedByCat is catId', async () => {
     const app = await createApp();
     const thread = threadStore.create('user-1', 'Test');
-    const { invocationId, callbackToken } = registry.create('user-1', 'opus', thread.id);
+    const { invocationId, callbackToken } = await registry.create('user-1', 'opus', thread.id);
 
     const res = await app.inject({
       method: 'POST',
       url: '/api/callbacks/start-vote',
+      headers: { 'x-invocation-id': invocationId, 'x-callback-token': callbackToken },
       payload: {
-        invocationId,
-        callbackToken,
         question: 'Q?',
         options: ['A', 'B'],
         voters: ['codex'],
@@ -237,16 +229,15 @@ describe('POST /api/callbacks/start-vote', () => {
   test('rejects stale invocation with 200 stale_ignored', async () => {
     const app = await createApp();
     const thread = threadStore.create('user-1', 'Test');
-    const old = registry.create('user-1', 'opus', thread.id);
+    const old = await registry.create('user-1', 'opus', thread.id);
     // Create a newer invocation for same cat+thread, making `old` stale
-    registry.create('user-1', 'opus', thread.id);
+    await registry.create('user-1', 'opus', thread.id);
 
     const res = await app.inject({
       method: 'POST',
       url: '/api/callbacks/start-vote',
+      headers: { 'x-invocation-id': old.invocationId, 'x-callback-token': old.callbackToken },
       payload: {
-        invocationId: old.invocationId,
-        callbackToken: old.callbackToken,
         question: 'Q?',
         options: ['A', 'B'],
         voters: ['codex'],
@@ -262,14 +253,13 @@ describe('POST /api/callbacks/start-vote', () => {
   test('returns 404 for non-existent thread', async () => {
     const app = await createApp();
     // Create invocation with a threadId that does NOT exist in threadStore
-    const { invocationId, callbackToken } = registry.create('user-1', 'opus', 'non-existent-thread');
+    const { invocationId, callbackToken } = await registry.create('user-1', 'opus', 'non-existent-thread');
 
     const res = await app.inject({
       method: 'POST',
       url: '/api/callbacks/start-vote',
+      headers: { 'x-invocation-id': invocationId, 'x-callback-token': callbackToken },
       payload: {
-        invocationId,
-        callbackToken,
         question: 'Q?',
         options: ['A', 'B'],
         voters: ['codex'],
@@ -284,14 +274,13 @@ describe('POST /api/callbacks/start-vote', () => {
   test('defaults to non-anonymous and 120s timeout', async () => {
     const app = await createApp();
     const thread = threadStore.create('user-1', 'Test');
-    const { invocationId, callbackToken } = registry.create('user-1', 'opus', thread.id);
+    const { invocationId, callbackToken } = await registry.create('user-1', 'opus', thread.id);
 
     const res = await app.inject({
       method: 'POST',
       url: '/api/callbacks/start-vote',
+      headers: { 'x-invocation-id': invocationId, 'x-callback-token': callbackToken },
       payload: {
-        invocationId,
-        callbackToken,
         question: 'Q?',
         options: ['A', 'B'],
         voters: ['codex'],
@@ -332,7 +321,10 @@ describe('POST /api/callbacks/start-vote', () => {
       },
       invocationTracker: {
         start: () => new AbortController(),
+        startAll: () => new AbortController(),
+        tryStartThreadAll: () => new AbortController(),
         complete: () => {},
+        completeAll: () => {},
         has: () => false,
         getActiveSlots: () => [],
       },
@@ -346,14 +338,13 @@ describe('POST /api/callbacks/start-vote', () => {
     });
 
     const thread = threadStore.create('user-1', 'Test');
-    const { invocationId, callbackToken } = registry.create('user-1', 'opus', thread.id);
+    const { invocationId, callbackToken } = await registry.create('user-1', 'opus', thread.id);
 
     const res = await app.inject({
       method: 'POST',
       url: '/api/callbacks/start-vote',
+      headers: { 'x-invocation-id': invocationId, 'x-callback-token': callbackToken },
       payload: {
-        invocationId,
-        callbackToken,
         question: '哪个方案好？',
         options: ['A', 'B'],
         voters: ['codex', 'gemini'],
@@ -368,7 +359,7 @@ describe('POST /api/callbacks/start-vote', () => {
     assert.ok(dispatched, 'voter cats should be dispatched after start-vote');
   });
 
-  test('voters > MAX_QUEUE_DEPTH: first 5 enqueued, remaining fall back to direct dispatch', async () => {
+  test('voters > MAX_QUEUE_DEPTH: all enqueued (F175: agent source bypasses depth limit)', async () => {
     const { callbacksRoutes } = await import('../dist/routes/callbacks.js');
     const { InvocationQueue } = await import('../dist/domains/cats/services/agents/invocation/InvocationQueue.js');
 
@@ -395,7 +386,10 @@ describe('POST /api/callbacks/start-vote', () => {
       },
       invocationTracker: {
         start: () => new AbortController(),
+        startAll: () => new AbortController(),
+        tryStartThreadAll: () => new AbortController(),
         complete: () => {},
+        completeAll: () => {},
         has: () => false,
         getActiveSlots: () => [],
       },
@@ -409,28 +403,116 @@ describe('POST /api/callbacks/start-vote', () => {
     });
 
     const thread = threadStore.create('user-1', 'Test');
-    const { invocationId, callbackToken } = registry.create('user-1', 'opus', thread.id);
+    const { invocationId, callbackToken } = await registry.create('user-1', 'opus', thread.id);
 
     // 7 voters: queue can hold 5, remaining 2 should fall back to direct dispatch
     const res = await app.inject({
       method: 'POST',
       url: '/api/callbacks/start-vote',
+      headers: { 'x-invocation-id': invocationId, 'x-callback-token': callbackToken },
       payload: {
-        invocationId,
-        callbackToken,
         question: 'Overflow test?',
         options: ['A', 'B'],
-        voters: ['codex', 'gemini', 'sonnet', 'gpt52', 'spark', 'dare', 'antigravity'],
+        voters: ['codex', 'gemini', 'sonnet', 'gpt52', 'spark', 'antig-opus'],
       },
     });
 
     assert.equal(res.statusCode, 200);
 
-    // Queue should have exactly 5 entries (MAX_QUEUE_DEPTH)
+    // F175: agent source bypasses MAX_QUEUE_DEPTH — all 6 voters should be enqueued
     const queueEntries = invocationQueue.listAutoExecute?.(thread.id) ?? [];
-    assert.equal(queueEntries.length, 5, 'queue should hold exactly 5 entries (MAX_QUEUE_DEPTH)');
+    assert.equal(queueEntries.length, 6, 'all 6 voters should be enqueued (agent bypasses depth limit)');
 
-    // Fallback direct dispatch should have been called with the remaining 2
-    assert.equal(fallbackTargets.length, 2, 'remaining 2 voters should fall back to direct dispatch');
+    // No fallback needed — all fit in queue
+    assert.equal(fallbackTargets.length, 0, 'no fallback needed when agent source bypasses depth limit');
+  });
+
+  // F216 AC-D5: coalesced voters must NOT be counted as missed → no direct dispatch fallback.
+  test('coalesced voter does NOT trigger direct dispatch fallback (F216 AC-D5)', async () => {
+    const { callbacksRoutes } = await import('../dist/routes/callbacks.js');
+    const { InvocationQueue } = await import('../dist/domains/cats/services/agents/invocation/InvocationQueue.js');
+
+    const fallbackTargets = [];
+    const invocationQueue = new InvocationQueue();
+
+    // Pre-enqueue an entry for 'codex' from caller 'opus' — second handoff will coalesce.
+    invocationQueue.enqueue({
+      threadId: '', // placeholder — will be set by the real thread below
+      userId: 'user-1',
+      content: 'pre-existing task for codex',
+      source: 'agent',
+      targetCats: ['codex'],
+      intent: 'execute',
+      autoExecute: true,
+      callerCatId: 'opus',
+    });
+
+    const app = Fastify();
+    await app.register(callbacksRoutes, {
+      registry,
+      messageStore,
+      socketManager,
+      threadStore,
+      router: {
+        routeExecution: async function* () {
+          yield { type: 'done', catId: 'opus', timestamp: Date.now() };
+        },
+      },
+      invocationRecordStore: {
+        create: async (opts) => {
+          fallbackTargets.push(...opts.targetCats);
+          return { outcome: 'created', invocationId: `inv-${Date.now()}` };
+        },
+        update: async () => {},
+      },
+      invocationTracker: {
+        start: () => new AbortController(),
+        startAll: () => new AbortController(),
+        tryStartThreadAll: () => new AbortController(),
+        complete: () => {},
+        completeAll: () => {},
+        has: () => false,
+        getActiveSlots: () => [],
+      },
+      invocationQueue,
+      queueProcessor: {
+        onInvocationComplete: async () => {},
+        tryAutoExecute: async () => {},
+        registerEntryCompleteHook: () => {},
+        unregisterEntryCompleteHook: () => {},
+      },
+    });
+
+    const thread = threadStore.create('user-1', 'Test');
+
+    // Now enqueue with the real threadId so coalesce can find it
+    invocationQueue.enqueue({
+      threadId: thread.id,
+      userId: 'user-1',
+      content: 'pre-existing task for codex',
+      source: 'agent',
+      targetCats: ['codex'],
+      intent: 'execute',
+      autoExecute: true,
+      callerCatId: 'opus',
+    });
+
+    const { invocationId, callbackToken } = await registry.create('user-1', 'opus', thread.id);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/callbacks/start-vote',
+      headers: { 'x-invocation-id': invocationId, 'x-callback-token': callbackToken },
+      payload: {
+        question: 'Coalesce test?',
+        options: ['A', 'B'],
+        voters: ['codex', 'gemini'], // codex will coalesce, gemini will enqueue
+      },
+    });
+
+    assert.equal(res.statusCode, 200);
+    // 'codex' should have coalesced (not missed), 'gemini' should have enqueued (not missed).
+    // Neither should have triggered direct dispatch fallback.
+    assert.equal(fallbackTargets.length, 0, 'coalesced voter must NOT trigger direct fallback (AC-D5)');
   });
 });

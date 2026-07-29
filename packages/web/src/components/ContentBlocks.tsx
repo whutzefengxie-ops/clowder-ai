@@ -18,11 +18,12 @@ export function ContentBlocks({ blocks }: { blocks: MessageContent[] }) {
           const src = block.url.startsWith('/uploads/') ? `${API_URL}${block.url}` : block.url;
           return (
             // biome-ignore lint/performance/noImgElement: uploaded images cannot use next/image
+            // eslint-disable-next-line @next/next/no-img-element
             <img
               key={i}
               src={src}
               alt="attached image"
-              className="max-w-full sm:max-w-sm rounded-lg mt-2 border border-gray-200 cursor-pointer hover:opacity-90 transition-opacity"
+              className="max-w-full sm:max-w-sm rounded-lg mt-2 border border-cafe cursor-pointer hover:opacity-90 transition-opacity"
               onClick={() => setLightboxSrc(src)}
             />
           );

@@ -15,14 +15,19 @@ import { getDefaultCatId } from '../../config/cat-config-loader.js';
 import type { InvocationQueue } from '../../domains/cats/services/agents/invocation/InvocationQueue.js';
 import type { InvocationTracker } from '../../domains/cats/services/agents/invocation/InvocationTracker.js';
 import type { QueueProcessor } from '../../domains/cats/services/agents/invocation/QueueProcessor.js';
+import { stampVisibleTurn } from '../../domains/cats/services/agents/invocation/visible-turn.js';
 import type { AgentRouter } from '../../domains/cats/services/agents/routing/AgentRouter.js';
 import type { PersistenceContext } from '../../domains/cats/services/agents/routing/route-helpers.js';
 import type { IInvocationRecordStore } from '../../domains/cats/services/stores/ports/InvocationRecordStore.js';
+import type { IMessageStore } from '../../domains/cats/services/stores/ports/MessageStore.js';
 import { mergeTokenUsage, type TokenUsage } from '../../domains/cats/services/types.js';
 import type { SocketManager } from '../../infrastructure/websocket/index.js';
-import { getMultiMentionOrchestrator } from '../../routes/callback-multi-mention-routes.js';
+import { emitQueueUpdated, enrichQueueEntries } from '../../utils/queue-enrichment.js';
+
 import type { OutboundDeliveryHook, ThreadMeta } from '../connectors/OutboundDeliveryHook.js';
 import type { StreamingOutboundHook } from '../connectors/StreamingOutboundHook.js';
+
+export type TriggerOutcome = 'dispatched' | 'enqueued' | 'full';
 
 export interface ConnectorInvokeTriggerOptions {
   readonly router: AgentRouter;
@@ -36,14 +41,27 @@ export interface ConnectorInvokeTriggerOptions {
   readonly threadMetaLookup?: (threadId: string) => ThreadMeta | undefined | Promise<ThreadMeta | undefined>;
   /** Per-cat outbound deliver timeout in ms (default 10000). Prevents hanging deliver from blocking cleanup. */
   readonly deliverTimeoutMs?: number;
+  /** #706: MessageStore for queue enrichment (messagePreview in queue_updated SSE). */
+  readonly messageStore?: IMessageStore;
   readonly log: FastifyBaseLogger;
 }
 
 export interface ConnectorTriggerPolicy {
-  /** urgent: preempt active invocation, normal: enqueue behind active work */
+  /** F175: urgent entries get priority dequeue, no preemption */
   readonly priority?: 'urgent' | 'normal';
   /** optional reason for diagnostics */
   readonly reason?: string;
+  /** F175: origin category for visual grouping */
+  readonly sourceCategory?: 'ci' | 'review' | 'conflict' | 'scheduled' | 'a2a' | 'issue';
+  /** F140 Phase C: hint which Skill to auto-load (not a hard constraint — cat can override) */
+  readonly suggestedSkill?: string;
+  /**
+   * Optional queue coalescing key for connector bursts that supersede earlier queued work.
+   * Later hits reuse the first queued entry: messageIds are merged, but the original content/body stays in place.
+   * Once that entry is already processing, follow-up feedback gets a fresh queued wake-up.
+   * Queue metadata may still upgrade, e.g. normal COMMENTED feedback becoming urgent CHANGES_REQUESTED.
+   */
+  readonly coalesceKey?: string;
 }
 
 /**
@@ -83,7 +101,7 @@ export class ConnectorInvokeTrigger {
    * @param message   The connector message content (used as invocation trigger)
    * @param messageId The stored connector message ID (for InvocationRecord backfill)
    */
-  trigger(
+  async trigger(
     threadId: string,
     catId: CatId,
     userId: string,
@@ -92,152 +110,175 @@ export class ConnectorInvokeTrigger {
     contentBlocks?: readonly MessageContent[],
     policy?: ConnectorTriggerPolicy,
     sender?: { id: string; name?: string },
-  ): void {
+  ): Promise<TriggerOutcome> {
     const { invocationTracker } = this.opts;
     const priority = policy?.priority ?? 'normal';
 
-    // Urgent connector policy: preempt active invocation in the same thread.
-    // Used for GitHub review comments so cats don't get stuck behind long queue chatter.
-    if (priority === 'urgent' && invocationTracker.has(threadId, catId)) {
-      this.handleUrgentTrigger(threadId, catId, userId, message, messageId, policy?.reason, sender).catch((err) => {
-        this.opts.log.error(`[ConnectorInvokeTrigger] Unhandled: ${err instanceof Error ? err.message : String(err)}`);
+    // F185 AC-1: thread-level queue/processingSlots gate
+    if (this.opts.queueProcessor?.isThreadBusy(threadId)) {
+      return this.enqueueWhileActive(
+        threadId,
+        catId,
+        userId,
+        message,
+        messageId,
+        sender,
+        priority,
+        policy?.sourceCategory,
+        policy?.suggestedSkill,
+        policy?.coalesceKey,
+      );
+    }
+
+    // F185 AC-2: atomic thread-level acquire — TOCTOU-safe
+    const controller = invocationTracker.tryStartThread(threadId, catId, userId, [catId]);
+    if (!controller) {
+      return this.enqueueWhileActive(
+        threadId,
+        catId,
+        userId,
+        message,
+        messageId,
+        sender,
+        priority,
+        policy?.sourceCategory,
+        policy?.suggestedSkill,
+        policy?.coalesceKey,
+      );
+    }
+
+    // Admission is not accepted until the idempotent InvocationRecord exists.
+    // Creating it inside the detached background promise used to let callers observe
+    // `dispatched` even when durable admission subsequently failed.
+    let invocationId: string;
+    try {
+      const createResult = await this.opts.invocationRecordStore.create({
+        threadId,
+        userId,
+        targetCats: [catId],
+        intent: 'execute',
+        idempotencyKey: `connector-${messageId}`,
       });
-      return;
+      if (createResult.outcome === 'duplicate') {
+        invocationTracker.complete(threadId, catId, controller);
+        this.opts.log.info(`[ConnectorInvokeTrigger] Duplicate invocation for message ${messageId}, skipping`);
+        return 'dispatched';
+      }
+      invocationId = createResult.invocationId;
+    } catch (err) {
+      invocationTracker.complete(threadId, catId, controller);
+      this.opts.queueProcessor?.onInvocationComplete(threadId, catId, 'failed').catch(() => {
+        /* best-effort: release any queued work after failed direct admission */
+      });
+      this.opts.log.error(
+        { err, threadId, catId, messageId },
+        '[ConnectorInvokeTrigger] Durable invocation admission failed',
+      );
+      throw err;
     }
 
-    // Normal connector policy: if this cat is already running in this thread, enqueue.
-    if (invocationTracker.has(threadId, catId)) {
-      this.enqueueWhileActive(threadId, catId, userId, message, messageId, sender);
-      return;
-    }
-
-    // No active invocation → direct execution (existing flow)
-    this.executeInBackground(threadId, catId, userId, message, messageId, undefined, contentBlocks).catch((err) => {
-      // Last-resort guard: prevent unhandledRejection from pre-try errors
+    // AC-2+3: dispatch with acquired controller and already-durable invocation record.
+    this.executeInBackground(
+      threadId,
+      catId,
+      userId,
+      message,
+      messageId,
+      invocationId,
+      contentBlocks,
+      policy?.suggestedSkill,
+      sender,
+      controller,
+    ).catch((err) => {
       this.opts.log.error(`[ConnectorInvokeTrigger] Unhandled: ${err instanceof Error ? err.message : String(err)}`);
     });
+    return 'dispatched';
   }
 
-  private enqueueWhileActive(
+  private async enqueueWhileActive(
     threadId: string,
     catId: CatId,
     userId: string,
     message: string,
     messageId: string,
     sender?: { id: string; name?: string },
-  ): 'full' | 'enqueued' | 'merged' {
+    priority: 'urgent' | 'normal' = 'normal',
+    sourceCategory?: string,
+    suggestedSkill?: string,
+    coalesceKey?: string,
+  ): Promise<'full' | 'enqueued'> {
     const { invocationQueue, socketManager, log } = this.opts;
+
+    if (invocationQueue.hasEntryWithMessageId(threadId, messageId)) {
+      log.info(
+        { threadId, messageId },
+        '[ConnectorInvokeTrigger] Duplicate connector message already queued, skipping',
+      );
+      return 'enqueued';
+    }
+
     const result = invocationQueue.enqueue({
       threadId,
       userId,
       content: message,
+      ...(coalesceKey
+        ? {
+            idempotencyKey: `connector:${sourceCategory ?? 'generic'}:${coalesceKey}`,
+            dedupeProcessing: false,
+          }
+        : {}),
       source: 'connector',
       targetCats: [catId],
       intent: 'execute',
+      priority,
+      ...(sourceCategory
+        ? { sourceCategory: sourceCategory as 'ci' | 'review' | 'conflict' | 'scheduled' | 'a2a' | 'issue' }
+        : {}),
       ...(sender ? { senderMeta: sender } : {}),
+      ...(suggestedSkill ? { suggestedSkill } : {}),
     });
 
     if (result.outcome === 'full') {
+      const fullQueue = await enrichQueueEntries(
+        invocationQueue.list(threadId, userId),
+        this.opts.messageStore ?? null,
+      );
       socketManager.emitToUser(userId, 'queue_full_warning', {
         threadId,
         source: 'connector',
         queueSize: invocationQueue.size(threadId, userId),
-        queue: invocationQueue.list(threadId, userId),
+        queue: fullQueue,
       });
+      socketManager.broadcastAgentMessage(
+        {
+          type: 'system_info',
+          catId: getDefaultCatId(),
+          content: JSON.stringify({ type: 'connector_skip', reason: 'queue_full', threadId }),
+          timestamp: Date.now(),
+        },
+        threadId,
+      );
       log.warn({ threadId, catId, userId }, '[ConnectorInvokeTrigger] Queue full, connector message not enqueued');
       return 'full';
     }
 
     if (result.entry) {
-      if (result.outcome === 'enqueued') {
-        invocationQueue.backfillMessageId(threadId, userId, result.entry.id, messageId);
-      } else if (result.outcome === 'merged') {
-        invocationQueue.appendMergedMessageId(threadId, userId, result.entry.id, messageId);
-      }
+      invocationQueue.backfillMessageId(threadId, userId, result.entry.id, messageId);
     }
 
-    socketManager.emitToUser(userId, 'queue_updated', {
+    await emitQueueUpdated(
+      socketManager,
+      userId,
       threadId,
-      queue: invocationQueue.list(threadId, userId),
-      action: result.outcome,
-    });
+      invocationQueue.list(threadId, userId),
+      this.opts.messageStore ?? null,
+      result.outcome,
+    );
     log.info(
       { threadId, catId, outcome: result.outcome },
       '[ConnectorInvokeTrigger] Queued (active invocation running)',
     );
     return result.outcome;
-  }
-
-  private async handleUrgentTrigger(
-    threadId: string,
-    catId: CatId,
-    userId: string,
-    message: string,
-    messageId: string,
-    reason?: string,
-    sender?: { id: string; name?: string },
-  ): Promise<void> {
-    const { invocationTracker, invocationRecordStore, log } = this.opts;
-    const idempotencyKey = `connector-${messageId}`;
-    const activeOwner = invocationTracker.getUserId(threadId, catId);
-    if (activeOwner && activeOwner !== userId) {
-      this.enqueueWhileActive(threadId, catId, userId, message, messageId, sender);
-      return;
-    }
-
-    // Claim idempotency winner before any cancel side-effect.
-    const createResult = await invocationRecordStore.create({
-      threadId,
-      userId,
-      targetCats: [catId],
-      intent: 'execute',
-      idempotencyKey,
-    });
-    if (createResult.outcome === 'duplicate') {
-      log.info(
-        { threadId, catId, invocationId: createResult.invocationId },
-        '[ConnectorInvokeTrigger] Urgent duplicate ignored',
-      );
-      return;
-    }
-
-    const cancelResult = invocationTracker.cancel(threadId, catId, userId, 'preempted');
-    // F108 P1-4 fix: abort only the target cat's dispatches, not the entire thread
-    getMultiMentionOrchestrator().abortBySlot(threadId, catId);
-    log.info(
-      { threadId, catId, cancelled: cancelResult.cancelled, reason: reason ?? 'connector_urgent' },
-      '[ConnectorInvokeTrigger] Urgent connector preempt',
-    );
-
-    if (cancelResult.cancelled || !invocationTracker.has(threadId, catId)) {
-      if (cancelResult.cancelled) {
-        this.opts.queueProcessor?.clearPause(threadId, catId);
-      }
-      await this.executeInBackground(threadId, catId, userId, message, messageId, createResult.invocationId);
-      return;
-    }
-
-    if (invocationTracker.has(threadId, catId)) {
-      // Avoid queue race: enqueue first while thread is still observed active.
-      const enqueueOutcome = this.enqueueWhileActive(threadId, catId, userId, message, messageId, sender);
-      if (enqueueOutcome !== 'full') {
-        await invocationRecordStore.update(createResult.invocationId, {
-          status: 'canceled',
-          error: 'urgent preempt fallback to queue',
-        });
-        return;
-      }
-      const activeOwner = invocationTracker.getUserId(threadId, catId);
-      if (activeOwner && activeOwner !== userId) {
-        await invocationRecordStore.update(createResult.invocationId, {
-          status: 'failed',
-          error: 'urgent fallback queue full with owner mismatch',
-        });
-        return;
-      }
-    }
-
-    await this.executeInBackground(threadId, catId, userId, message, messageId, createResult.invocationId);
   }
 
   private async executeInBackground(
@@ -248,37 +289,37 @@ export class ConnectorInvokeTrigger {
     messageId: string,
     existingInvocationId?: string,
     contentBlocks?: readonly MessageContent[],
+    suggestedSkill?: string,
+    sender?: { id: string; name?: string },
+    preAcquiredController?: AbortController,
   ): Promise<void> {
     const { router, socketManager, invocationRecordStore, invocationTracker, invocationQueue, log } = this.opts;
     const targetCats: CatId[] = [catId];
     let finalStatus: 'succeeded' | 'failed' | 'canceled' = 'failed';
 
-    // ① Atomic create InvocationRecord
-    const createResult = existingInvocationId
-      ? { outcome: 'created' as const, invocationId: existingInvocationId }
-      : await invocationRecordStore.create({
-          threadId,
-          userId,
-          targetCats,
-          intent: 'execute',
-          idempotencyKey: `connector-${messageId}`,
-        });
-
-    if (createResult.outcome === 'duplicate') {
-      log.info(`[ConnectorInvokeTrigger] Duplicate invocation for message ${messageId}, skipping`);
-      return;
-    }
-
-    // Tracker started here — must be completed in finally no matter what
-    const controller = invocationTracker.start(threadId, catId, userId, targetCats);
+    // R1-P1 fix: move controller before try so finally always releases it (even if create() throws)
+    const controller = preAcquiredController ?? invocationTracker.start(threadId, catId, userId, targetCats);
 
     const HEARTBEAT_INTERVAL_MS = 30_000;
     let heartbeatInterval: ReturnType<typeof setInterval> | undefined;
+    let invocationId: string | undefined;
+    // R4 fix: hoist above try so catch can await it for correct failure cleanup
+    // (onStreamEnd → cleanupPlaceholders, per messages.ts cleanupStreamingOnFailure).
+    let streamStartPromise: Promise<void> | undefined;
 
     try {
+      // ① InvocationRecord was created synchronously by trigger() before it reported
+      // `dispatched`. QueueProcessor owns the separate queued-admission path.
+      if (!existingInvocationId) {
+        throw new Error('Connector invocation reached execution without a durable invocation record');
+      }
+      const createResult = { outcome: 'created' as const, invocationId: existingInvocationId };
+
+      invocationId = createResult.invocationId;
+
       if (controller?.signal.aborted) {
         finalStatus = 'canceled';
-        await invocationRecordStore.update(createResult.invocationId, { status: 'canceled' });
+        await invocationRecordStore.update(invocationId, { status: 'canceled' });
         log.warn(`[ConnectorInvokeTrigger] Thread ${threadId} is being deleted, skipping`);
         return;
       }
@@ -295,7 +336,8 @@ export class ConnectorInvokeTrigger {
       // ③ Set status running + broadcast intent
       await invocationRecordStore.update(createResult.invocationId, { status: 'running' });
 
-      socketManager.broadcastToRoom(`thread:${threadId}`, 'intent_mode', { threadId, mode: 'execute', targetCats });
+      // #768: Defer intent_mode broadcast until CLI produces first event.
+      let intentModeBroadcast = false;
 
       // ④ Run routeExecution and broadcast each agent message
       const cursorBoundaries = new Map<string, string>();
@@ -315,27 +357,65 @@ export class ConnectorInvokeTrigger {
       // Phase 4: Start streaming placeholder on external platforms
       // Fire-and-forget for the loop, but save the promise so onStreamEnd can await it
       // to prevent race (onStreamEnd before onStreamStart finishes registering sessions).
-      let streamStartPromise: Promise<void> | undefined;
       if (this.opts.streamingHook) {
         streamStartPromise = this.opts.streamingHook
-          .onStreamStart(threadId, catId, createResult.invocationId)
+          .onStreamStart(threadId, catId, createResult.invocationId, sender)
           .catch((err) => {
             log.warn({ err, threadId }, '[ConnectorInvokeTrigger] StreamingHook.onStreamStart failed');
           });
       }
 
-      const intent = { intent: 'execute' as const, explicit: false, promptTags: [] as string[] };
+      // F151: Deliver per-cat turns inside the loop to preserve ordering when
+      // post_message callbacks from later cats interleave with earlier outboundTurns.
+      const deliveredTurnIndices = new Set<number>();
+      const DELIVER_TIMEOUT_MS = this.opts.deliverTimeoutMs ?? 10_000;
+
+      // Start threadMeta lookup early — resolved lazily when first delivery needs it.
+      let threadMeta: ThreadMeta | undefined;
+      let threadMetaPromise: Promise<ThreadMeta | undefined> | undefined;
+      if (this.opts.outboundHook && this.opts.threadMetaLookup) {
+        const rawResult = this.opts.threadMetaLookup(threadId);
+        if (rawResult) {
+          const LOOKUP_TIMEOUT_MS = 2000;
+          threadMetaPromise = Promise.race([
+            Promise.resolve(rawResult).catch((err: unknown) => {
+              log.warn({ err, threadId }, '[ConnectorInvokeTrigger] threadMetaLookup late rejection');
+              return undefined;
+            }),
+            new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), LOOKUP_TIMEOUT_MS)),
+          ]);
+        }
+      }
+
+      // F140 Phase C: suggestedSkill flows via promptTags → SystemPromptBuilder (hint, not directive)
+      const promptTags: string[] = suggestedSkill ? [`skill:${suggestedSkill}`] : [];
+      const intent = { intent: 'execute' as const, explicit: false, promptTags };
 
       for await (const msg of router.routeExecution(userId, message, threadId, messageId, targetCats, intent, {
         ...(contentBlocks ? { contentBlocks } : {}),
         ...(controller?.signal ? { signal: controller.signal } : {}),
-        queueHasQueuedMessages: (tid: string) => invocationQueue.hasQueuedUserMessagesForThread(tid),
+        queueHasQueuedMessages: (tid: string) => invocationQueue.hasQueuedNonAgentForThread(tid),
+        deferA2AEnqueue: (e) => invocationQueue.enqueue(e as any),
         hasQueuedOrActiveAgentForCat: (tid: string, catId: string) =>
           invocationQueue.hasActiveOrQueuedAgentForCat(tid, catId),
         cursorBoundaries,
         persistenceContext,
         parentInvocationId: createResult.invocationId,
+        // F222 P1: Connector-triggered execution is not user-origin — suppress frustration detection
+        frustrationAutoIssueEligible: false,
+        // #949 P2: Connector-sourced flows have no ball-pass expectation — suppress verdict warning
+        verdictPassWarningEnabled: false,
       })) {
+        // #768: Broadcast intent_mode on first CLI event — proves CLI is alive.
+        if (!intentModeBroadcast) {
+          socketManager.broadcastToRoom(`thread:${threadId}`, 'intent_mode', {
+            threadId,
+            mode: 'execute',
+            targetCats,
+            invocationId: createResult.invocationId,
+          });
+          intentModeBroadcast = true;
+        }
         // F39 bugfix: stop broadcasting after cancel (drain pipe buffer silently)
         if (controller?.signal.aborted) break;
         if (msg.type === 'done' && msg.catId) {
@@ -356,6 +436,43 @@ export class ConnectorInvokeTrigger {
           }
           // Close current turn — next text message starts a new turn
           currentTurnCatId = undefined;
+          // F151: Deliver completed cat's turns immediately to preserve ordering
+          // when post_message callbacks from later cats fire during the loop.
+          if (this.opts.outboundHook) {
+            if (threadMetaPromise) {
+              threadMeta = await threadMetaPromise;
+              threadMetaPromise = undefined;
+            }
+            for (let i = 0; i < outboundTurns.length; i++) {
+              if (deliveredTurnIndices.has(i)) continue;
+              const turn = outboundTurns[i];
+              if (turn.catId !== msg.catId) continue;
+              const turnContent = turn.textParts.join('');
+              if (!turnContent && !turn.richBlocks?.length) continue;
+              try {
+                await Promise.race([
+                  this.opts.outboundHook.deliver(
+                    threadId,
+                    turnContent,
+                    turn.catId as CatId,
+                    turn.richBlocks,
+                    threadMeta,
+                    undefined,
+                    messageId,
+                  ),
+                  new Promise<void>((_, reject) =>
+                    setTimeout(() => reject(new Error('deliver timeout')), DELIVER_TIMEOUT_MS),
+                  ),
+                ]);
+                deliveredTurnIndices.add(i);
+              } catch (err) {
+                log.error(
+                  { err, threadId, catId: turn.catId },
+                  '[ConnectorInvokeTrigger] Mid-loop delivery failed, will retry in final phase',
+                );
+              }
+            }
+          }
         }
         // Collect text content for outbound delivery (final-only)
         if (msg.type === 'text' && typeof msg.content === 'string') {
@@ -376,7 +493,11 @@ export class ConnectorInvokeTrigger {
             });
           }
         }
-        socketManager.broadcastAgentMessage({ ...msg, invocationId: createResult.invocationId }, threadId);
+        // F194 Phase Z9 (砚砚 R1 P1-2): unified visible turn stamp via helper.
+        socketManager.broadcastAgentMessage(
+          { ...msg, ...stampVisibleTurn(createResult.invocationId, msg.invocationId) },
+          threadId,
+        );
       }
 
       // ⑤ Finalize: abort guard → persistence check → ack + succeeded
@@ -438,33 +559,17 @@ export class ConnectorInvokeTrigger {
           '[ConnectorInvokeTrigger] Outbound delivery check',
         );
         if (this.opts.outboundHook && hasContent) {
-          // Best-effort threadMeta lookup — must not block invocation completion
-          let threadMeta;
-          try {
-            const LOOKUP_TIMEOUT_MS = 2000;
-            const rawResult = this.opts.threadMetaLookup?.(threadId);
-            if (rawResult) {
-              const lookupPromise = Promise.resolve(rawResult).catch((err: unknown) => {
-                log.warn({ err, threadId }, '[ConnectorInvokeTrigger] threadMetaLookup late rejection');
-                return undefined;
-              });
-              const timeout = new Promise<undefined>((resolve) =>
-                setTimeout(() => resolve(undefined), LOOKUP_TIMEOUT_MS),
-              );
-              threadMeta = await Promise.race([lookupPromise, timeout]);
-            }
-          } catch (lookupErr) {
-            log.warn(
-              { err: lookupErr, threadId },
-              '[ConnectorInvokeTrigger] threadMetaLookup failed, falling back to plain reply',
-            );
+          // Resolve threadMeta if not yet done (no mid-loop delivery happened)
+          if (threadMetaPromise) {
+            threadMeta = await threadMetaPromise;
+            threadMetaPromise = undefined;
           }
 
           // ISSUE-9 + Cloud-P1-4: deliver per-turn (ordered, supports A→B→A ping-pong)
-          const DELIVER_TIMEOUT_MS = this.opts.deliverTimeoutMs ?? 10_000;
-          // Filter out empty turns (silent cats with no text or richBlocks)
+          // F151: skip turns already delivered mid-loop
           const nonEmptyTurns = outboundTurns.filter(
-            (t) => t.textParts.length > 0 || (t.richBlocks && t.richBlocks.length > 0),
+            (t, i) =>
+              !deliveredTurnIndices.has(i) && (t.textParts.length > 0 || (t.richBlocks && t.richBlocks.length > 0)),
           );
 
           let deliveryFailed = false;
@@ -523,7 +628,8 @@ export class ConnectorInvokeTrigger {
               deliveryFailed = true;
               log.error({ err, threadId }, '[ConnectorInvokeTrigger] Outbound delivery error');
             }
-          } else {
+          } else if (deliveredTurnIndices.size === 0) {
+            // Fallback: no per-turn delivery happened — deliver all content as one
             const richBlocks = persistenceContext.richBlocks;
             const deliverPromise = this.opts.outboundHook.deliver(
               threadId,
@@ -554,25 +660,69 @@ export class ConnectorInvokeTrigger {
               log.warn({ err, threadId }, '[ConnectorInvokeTrigger] StreamingHook.cleanupPlaceholders failed');
             });
           } else if (deliveryFailed && this.opts.streamingHook?.cleanupPlaceholders) {
-            // Cloud-R4-P2: schedule late-success cleanup — if timed-out deliveries
-            // eventually succeed, clean up placeholder cards so the user doesn't see
-            // a stale "thinking…" card alongside the real response.
             const cleanupHook = this.opts.streamingHook;
             const scopedInvocationId = createResult.invocationId;
             Promise.allSettled(inflightDeliverPromises).then((results) => {
-              const allSucceeded = results.every((r) => r.status === 'fulfilled');
-              if (allSucceeded) {
+              if (results.every((r) => r.status === 'fulfilled')) {
                 cleanupHook.cleanupPlaceholders(threadId, scopedInvocationId).catch((err) => {
-                  log.warn({ err, threadId }, '[ConnectorInvokeTrigger] Late-success placeholder cleanup failed');
+                  log.warn(
+                    { err, threadId },
+                    '[ConnectorInvokeTrigger] Placeholder cleanup failed after late-success delivery',
+                  );
                 });
               }
             });
           }
-        } else if (this.opts.streamingHook?.cleanupPlaceholders) {
-          // Cloud-P1-R3: silent invocation (no content) — still clean up placeholder
-          await this.opts.streamingHook.cleanupPlaceholders(threadId, createResult.invocationId).catch((err) => {
-            log.warn({ err, threadId }, '[ConnectorInvokeTrigger] StreamingHook.cleanupPlaceholders failed (silent)');
-          });
+        } else {
+          // R6+R7 fix: deliver fallback FIRST (with timeout), then cleanup placeholder
+          // only on success — preserves "thinking" card if delivery fails (Cloud P2).
+          // Timeout prevents adapter hang from blocking finally (Cloud P1).
+          // R7: late-success cleanup mirrors normal content-delivery pattern (lines 641-653).
+          let silentDeliveryOk = !this.opts.outboundHook; // no hook → proceed to cleanup
+          let silentDeliverPromise: Promise<void> | undefined;
+          if (this.opts.outboundHook) {
+            silentDeliverPromise = this.opts.outboundHook.deliver(
+              threadId,
+              '处理完成，但未产生回复内容。',
+              catId,
+              undefined,
+              undefined,
+              undefined,
+              messageId,
+            );
+            try {
+              await Promise.race([
+                silentDeliverPromise,
+                new Promise<void>((_, reject) =>
+                  setTimeout(() => reject(new Error('deliver timeout')), DELIVER_TIMEOUT_MS),
+                ),
+              ]);
+              silentDeliveryOk = true;
+            } catch (deliverErr) {
+              log.error({ err: deliverErr, threadId }, '[ConnectorInvokeTrigger] Silent-path outbound delivery failed');
+            }
+          }
+          if (silentDeliveryOk && this.opts.streamingHook?.cleanupPlaceholders) {
+            await this.opts.streamingHook.cleanupPlaceholders(threadId, createResult.invocationId).catch((err) => {
+              log.warn({ err, threadId }, '[ConnectorInvokeTrigger] StreamingHook.cleanupPlaceholders failed (silent)');
+            });
+          } else if (silentDeliverPromise && this.opts.streamingHook?.cleanupPlaceholders) {
+            // R7: timeout fired but delivery may still succeed — defer cleanup to late-success
+            const cleanupHook = this.opts.streamingHook;
+            const scopedInvocationId = createResult.invocationId;
+            silentDeliverPromise
+              .then(() => {
+                cleanupHook.cleanupPlaceholders(threadId, scopedInvocationId).catch((err) => {
+                  log.warn(
+                    { err, threadId },
+                    '[ConnectorInvokeTrigger] Silent late-success placeholder cleanup failed',
+                  );
+                });
+              })
+              .catch(() => {
+                /* delivery truly failed — thinking card stays as fallback UX */
+              });
+          }
         }
       }
 
@@ -584,13 +734,18 @@ export class ConnectorInvokeTrigger {
       log.error(`[ConnectorInvokeTrigger] Invocation failed: ${errorMsg}`);
 
       // Best-effort status update — don't let this throw mask the original error
-      try {
-        await invocationRecordStore.update(createResult.invocationId, {
-          status: 'failed',
-          error: errorMsg,
-        });
-      } catch {
-        /* best-effort */
+      if (invocationId) {
+        try {
+          await invocationRecordStore.update(invocationId, {
+            status: 'failed',
+            error: errorMsg,
+          });
+        } catch (statusErr) {
+          log.warn(
+            { err: statusErr, invocationId },
+            '[ConnectorInvokeTrigger] invocation status update failed (best-effort)',
+          );
+        }
       }
 
       socketManager.broadcastAgentMessage(
@@ -603,14 +758,63 @@ export class ConnectorInvokeTrigger {
         },
         threadId,
       );
+
+      // R4 fix (#873): correct failure cleanup — onStreamEnd transitions sessions
+      // from active → pendingCleanup; cleanupPlaceholders alone is a no-op on active
+      // sessions. Matches messages.ts cleanupStreamingOnFailure() sequence.
+      if (this.opts.streamingHook) {
+        try {
+          const STREAM_START_TIMEOUT_MS = 5000;
+          if (streamStartPromise) {
+            await Promise.race([streamStartPromise, new Promise<void>((r) => setTimeout(r, STREAM_START_TIMEOUT_MS))]);
+          }
+          await this.opts.streamingHook.onStreamEnd(threadId, '', invocationId);
+          await this.opts.streamingHook.cleanupPlaceholders?.(threadId, invocationId);
+        } catch (cleanupErr) {
+          log.warn({ err: cleanupErr, threadId }, '[ConnectorInvokeTrigger] Error-path streaming cleanup failed');
+        }
+      }
+
+      // #873: Deliver error message to external IM platform so user sees a reply (not silence)
+      // R6 fix: timeout prevents adapter hang from blocking finally (Cloud P1).
+      if (this.opts.outboundHook) {
+        const ERROR_DELIVER_TIMEOUT_MS = this.opts.deliverTimeoutMs ?? 10_000;
+        try {
+          await Promise.race([
+            this.opts.outboundHook.deliver(
+              threadId,
+              '抱歉，处理消息时遇到问题，请稍后重试。',
+              catId,
+              undefined,
+              undefined,
+              undefined,
+              messageId,
+            ),
+            new Promise<void>((_, reject) =>
+              setTimeout(() => reject(new Error('deliver timeout')), ERROR_DELIVER_TIMEOUT_MS),
+            ),
+          ]);
+        } catch (deliverErr) {
+          log.error({ err: deliverErr, threadId }, '[ConnectorInvokeTrigger] Error-path outbound delivery failed');
+        }
+      }
     } finally {
       if (heartbeatInterval) clearInterval(heartbeatInterval);
       invocationTracker.complete(threadId, catId, controller);
       // F39 P1 fix: Notify queue processor for auto-dequeue chain
-      // (same pattern as messages.ts and invocations.ts)
       this.opts.queueProcessor?.onInvocationComplete(threadId, catId, finalStatus).catch(() => {
         /* best-effort, don't crash background task */
       });
+      // F151: Signal adapters that this invocation's delivery batch is complete.
+      // Fires on both success AND failure — failed invocations must close the task
+      // immediately instead of waiting for TASK_TIMEOUT_MS (P2-1 review fix).
+      if (this.opts.streamingHook?.notifyDeliveryBatchDone) {
+        const threadStillBusy =
+          invocationTracker.has(threadId) || (this.opts.queueProcessor?.isThreadBusy(threadId) ?? false);
+        this.opts.streamingHook.notifyDeliveryBatchDone(threadId, !threadStillBusy).catch((err) => {
+          log.warn({ err, threadId }, '[ConnectorInvokeTrigger] notifyDeliveryBatchDone failed');
+        });
+      }
     }
   }
 }

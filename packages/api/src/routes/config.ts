@@ -8,15 +8,41 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import { resolve } from 'node:path';
+import { catRegistry } from '@cat-cafe/shared';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { collectConfigSnapshot } from '../config/ConfigRegistry.js';
 import { configStore } from '../config/ConfigStore.js';
+import {
+  clearRuntimeDefaultCatId,
+  getDefaultCatId,
+  hasRuntimeDefaultCatOverride,
+  isCatAvailable,
+  setRuntimeDefaultCatId,
+} from '../config/cat-config-loader.js';
+import { configEventBus, createChangeSetId } from '../config/config-event-bus.js';
 import type { ConfigSnapshot } from '../config/config-snapshot.js';
-import { buildEnvSummary, ENV_CATEGORIES, isEditableEnvVarName } from '../config/env-registry.js';
+import {
+  buildEnvSummary,
+  ENV_CATEGORIES,
+  filterSensitiveEditableKeys,
+  hasSensitiveEditableVars,
+  isEditableEnvVarName,
+} from '../config/env-registry.js';
 import { updateRuntimeCoCreator } from '../config/runtime-cat-catalog.js';
+import { isValidTimeZone } from '../config/time-zone.js';
 import { AuditEventTypes, getEventAuditLog } from '../domains/cats/services/orchestration/EventAuditLog.js';
+// F212 Phase F (cloud codex R4 P2-#2 on fc69597675): import logger's captured LOG_DIR
+// so env-summary returns the path the active pino destination is actually writing to.
+// Reading process.env.LOG_DIR here would diverge from logger after a runtime
+// `PATCH /api/config/env` LOG_DIR edit — env-summary would lie about effective path.
+import { LOG_DIR_PATH } from '../infrastructure/logger.js';
 import { resolveActiveProjectRoot } from '../utils/active-project-root.js';
+import { isDirectLoopbackRequest } from '../utils/loopback-request.js';
+import { resolveOwnerGate } from '../utils/owner-gate.js';
+import { resolveHeaderUserId } from '../utils/request-identity.js';
+import { getDefaultUploadDir } from '../utils/upload-paths.js';
+import { configCatOrderRoutes } from './config-cat-order.js';
 
 const patchSchema = z.object({
   key: z.string().min(1),
@@ -27,10 +53,17 @@ const envPatchSchema = z.object({
   updates: z.array(z.object({ name: z.string().min(1), value: z.string().nullable() })).min(1),
 });
 
+const timeZonePatchSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .refine(isValidTimeZone, { message: 'timeZone must be a valid IANA timezone' });
+
 const coCreatorPatchSchema = z.object({
   name: z.string().trim().min(1),
   aliases: z.array(z.string().trim().min(1)),
   mentionPatterns: z.array(z.string().trim().min(1)).min(1),
+  timeZone: timeZonePatchSchema.optional(),
   avatar: z.string().trim().nullable().optional(),
   color: z
     .object({
@@ -71,7 +104,7 @@ function resolveOperator(raw: unknown): string | null {
   return null;
 }
 
-function formatEnvFileValue(value: string): string {
+export function formatEnvFileValue(value: string): string {
   const escapedControlChars = value.replace(/\r/g, '\\r').replace(/\n/g, '\\n');
   if (/^[A-Za-z0-9_./:@-]+$/.test(escapedControlChars)) return escapedControlChars;
   return `"${escapedControlChars
@@ -81,7 +114,7 @@ function formatEnvFileValue(value: string): string {
     .replace(/`/g, '\\`')}"`;
 }
 
-function applyEnvUpdatesToFile(contents: string, updates: Map<string, string | null>): string {
+export function applyEnvUpdatesToFile(contents: string, updates: Map<string, string | null>): string {
   const lines = contents === '' ? [] : contents.split(/\r?\n/);
   const seen = new Set<string>();
   const nextLines: string[] = [];
@@ -120,6 +153,8 @@ export async function configRoutes(app: FastifyInstance, opts: ConfigRoutesOptio
   const projectRoot = opts.projectRoot ?? resolveActiveProjectRoot();
   const envFilePath = opts.envFilePath ?? resolve(projectRoot, '.env');
 
+  await app.register(configCatOrderRoutes, { projectRoot });
+
   app.get('/api/config', async () => ({
     config: collectConfigSnapshot(),
   }));
@@ -130,7 +165,7 @@ export async function configRoutes(app: FastifyInstance, opts: ConfigRoutesOptio
       reply.status(400);
       return { error: 'Invalid request', details: parsed.error.issues };
     }
-    const operator = resolveOperator(request.headers['x-cat-cafe-user']);
+    const operator = resolveHeaderUserId(request);
     if (!operator) {
       reply.status(400);
       return { error: 'Identity required (X-Cat-Cafe-User header)' };
@@ -183,7 +218,7 @@ export async function configRoutes(app: FastifyInstance, opts: ConfigRoutesOptio
       reply.status(400);
       return { error: 'Invalid request', details: parsed.error.issues };
     }
-    const operator = resolveOperator(request.headers['x-cat-cafe-user']);
+    const operator = resolveHeaderUserId(request);
     if (!operator) {
       reply.status(400);
       return { error: 'Identity required (X-Cat-Cafe-User header)' };
@@ -194,6 +229,7 @@ export async function configRoutes(app: FastifyInstance, opts: ConfigRoutesOptio
         name: parsed.data.name,
         aliases: parsed.data.aliases,
         mentionPatterns: parsed.data.mentionPatterns,
+        ...(parsed.data.timeZone !== undefined ? { timeZone: parsed.data.timeZone } : {}),
         ...(parsed.data.avatar !== undefined ? { avatar: parsed.data.avatar } : {}),
         ...(parsed.data.color !== undefined ? { color: parsed.data.color } : {}),
       });
@@ -211,6 +247,7 @@ export async function configRoutes(app: FastifyInstance, opts: ConfigRoutesOptio
           operator,
           name: next.coCreator.name,
           mentionPatterns: next.coCreator.mentionPatterns,
+          timeZone: next.coCreator.timeZone,
         },
       });
     } catch (err) {
@@ -239,10 +276,16 @@ export async function configRoutes(app: FastifyInstance, opts: ConfigRoutesOptio
         homeDir: home,
         dataDirs: {
           auditLogs: resolve(apiCwd, process.env.AUDIT_LOG_DIR ?? './data/audit-logs'),
-          runtimeLogs: resolve(apiCwd, './data/logs/api'),
+          // F212 Phase F (cloud codex R3 P2 on 3083d7c5f + R4 P2-#2 on fc69597675): use
+          // the path the pino destination CAPTURED at logger import. Reading process.env.
+          // LOG_DIR directly would let runtime `PATCH /api/config/env` edits change what
+          // env-summary returns while pino keeps writing to the import-time value — the
+          // AC-F5 hint would then point users to a directory that has no current logs.
+          // Single source of truth = LOG_DIR_PATH.
+          runtimeLogs: LOG_DIR_PATH,
           cliArchive: resolve(apiCwd, process.env.CLI_RAW_ARCHIVE_DIR ?? './data/cli-raw-archive'),
           redisDevSandbox: resolve(home, '.cat-cafe/redis-dev-sandbox'),
-          uploads: resolve(apiCwd, process.env.UPLOAD_DIR ?? './uploads'),
+          uploads: getDefaultUploadDir(process.env.UPLOAD_DIR),
         },
       },
     };
@@ -254,11 +297,13 @@ export async function configRoutes(app: FastifyInstance, opts: ConfigRoutesOptio
       reply.status(400);
       return { error: 'Invalid request', details: parsed.error.issues };
     }
-    const operator = resolveOperator(request.headers['x-cat-cafe-user']);
+    const operator = resolveHeaderUserId(request);
     if (!operator) {
       reply.status(400);
       return { error: 'Identity required (X-Cat-Cafe-User header)' };
     }
+    const sessionUserId = (request as FastifyRequest & { sessionUserId?: string }).sessionUserId;
+    const sessionOperator = typeof sessionUserId === 'string' && sessionUserId.trim() ? sessionUserId.trim() : null;
 
     const updates = new Map<string, string | null>();
     for (const update of parsed.data.updates) {
@@ -267,6 +312,39 @@ export async function configRoutes(app: FastifyInstance, opts: ConfigRoutesOptio
         return { error: `Env var '${update.name}' is not editable from Hub` };
       }
       updates.set(update.name, update.value);
+    }
+
+    // Sensitive env writes require session-auth (not forgeable header identity)
+    // + loopback guard: non-localhost requests without a configured owner are
+    // rejected to prevent LAN/Tailscale write-through in single-user mode.
+    const touchesSensitive = hasSensitiveEditableVars(updates.keys());
+    if (touchesSensitive) {
+      if (!sessionOperator) {
+        reply.status(401);
+        return { error: 'Sensitive env writes require session authentication' };
+      }
+      // Network guard: when DEFAULT_OWNER_USER_ID is unset, only direct
+      // loopback requests (no proxy) are trusted. Proxied or remote requests
+      // must have a configured owner. Same pattern as connector guards.
+      if (!isDirectLoopbackRequest(request) && !process.env.DEFAULT_OWNER_USER_ID?.trim()) {
+        reply.status(403);
+        return {
+          error: 'Sensitive env writes from non-localhost require DEFAULT_OWNER_USER_ID to be configured',
+        };
+      }
+      const gateResult = resolveOwnerGate(sessionOperator, {
+        errorMessage: 'Sensitive env vars can only be modified by the owner',
+      });
+      if (gateResult) {
+        reply.status(gateResult.status);
+        return { error: gateResult.error };
+      }
+    }
+
+    // Snapshot old values for no-op detection
+    const oldValues = new Map<string, string | undefined>();
+    for (const name of updates.keys()) {
+      oldValues.set(name, process.env[name]);
     }
 
     const current = existsSync(envFilePath) ? readFileSync(envFilePath, 'utf8') : '';
@@ -278,19 +356,115 @@ export async function configRoutes(app: FastifyInstance, opts: ConfigRoutesOptio
       else process.env[name] = value;
     }
 
+    // Only emit if at least one key actually changed
+    const changedKeys = [...updates.entries()]
+      .filter(([name, value]) => (value ?? '') !== (oldValues.get(name) ?? ''))
+      .map(([name]) => name);
+    if (changedKeys.length > 0) {
+      configEventBus.emitChange({
+        source: 'env',
+        scope: 'key',
+        changedKeys,
+        changeSetId: createChangeSetId(),
+        timestamp: Date.now(),
+      });
+    }
+
+    const auditOperator = touchesSensitive ? sessionOperator! : (sessionOperator ?? operator);
     try {
       await auditLog.append({
         type: AuditEventTypes.CONFIG_UPDATED,
         data: {
           target: '.env',
           keys: [...updates.keys()],
-          operator,
+          operator: auditOperator,
         },
       });
+      if (touchesSensitive) {
+        await auditLog.append({
+          type: AuditEventTypes.ENV_SENSITIVE_WRITE,
+          data: {
+            keys: filterSensitiveEditableKeys(updates.keys()),
+            operator: auditOperator,
+          },
+        });
+      }
     } catch (err) {
       request.log.warn({ err, keys: [...updates.keys()] }, 'env config audit append failed');
     }
 
     return { ok: true, envFilePath, summary: buildEnvSummary() };
+  });
+
+  // ── F154 AC-A4: Default cat runtime override (owner-gated) ──────────
+
+  function persistDefaultCatToEnv(catId: string | null): void {
+    const current = existsSync(envFilePath) ? readFileSync(envFilePath, 'utf8') : '';
+    const updates = new Map<string, string | null>([['DEFAULT_CAT_ID', catId]]);
+    const next = applyEnvUpdatesToFile(current, updates);
+    writeFileSync(envFilePath, next, 'utf8');
+    if (catId) process.env.DEFAULT_CAT_ID = catId;
+    else delete process.env.DEFAULT_CAT_ID;
+  }
+
+  app.get('/api/config/default-cat', async () => ({
+    catId: getDefaultCatId(),
+    isOverride: hasRuntimeDefaultCatOverride(),
+  }));
+
+  const defaultCatPutSchema = z.object({
+    catId: z.string().min(1).nullable(),
+  });
+
+  app.put('/api/config/default-cat', async (request: FastifyRequest, reply: FastifyReply) => {
+    const operator = resolveHeaderUserId(request);
+    if (!operator) {
+      reply.status(400);
+      return { error: 'Identity required (X-Cat-Cafe-User header)' };
+    }
+
+    // Network guard: default-cat writes persist to .env — when
+    // DEFAULT_OWNER_USER_ID is unset, restrict to direct loopback to
+    // prevent LAN/proxied clients from changing the default cat via
+    // forgeable X-Cat-Cafe-User header (#794 P2).
+    if (!isDirectLoopbackRequest(request) && !process.env.DEFAULT_OWNER_USER_ID?.trim()) {
+      reply.status(403);
+      return { error: 'Default cat changes from non-localhost require DEFAULT_OWNER_USER_ID to be configured' };
+    }
+
+    const gateResult = resolveOwnerGate(operator, {
+      errorMessage: 'Only the owner can change the default cat',
+    });
+    if (gateResult) {
+      reply.status(gateResult.status);
+      return { error: gateResult.error };
+    }
+
+    const parsed = defaultCatPutSchema.safeParse(request.body);
+    if (!parsed.success) {
+      reply.status(400);
+      return { error: 'Invalid request', details: parsed.error.issues };
+    }
+
+    if (parsed.data.catId === null) {
+      persistDefaultCatToEnv(null);
+      clearRuntimeDefaultCatId();
+      return { ok: true, catId: getDefaultCatId(), isOverride: false };
+    }
+
+    // Validate catId is registered
+    if (!catRegistry.has(parsed.data.catId)) {
+      reply.status(400);
+      return { error: `Unknown catId: ${parsed.data.catId}` };
+    }
+
+    if (!isCatAvailable(parsed.data.catId)) {
+      reply.status(400);
+      return { error: `Cat ${parsed.data.catId} is unavailable` };
+    }
+
+    persistDefaultCatToEnv(parsed.data.catId);
+    setRuntimeDefaultCatId(parsed.data.catId);
+    return { ok: true, catId: parsed.data.catId, isOverride: true };
   });
 }

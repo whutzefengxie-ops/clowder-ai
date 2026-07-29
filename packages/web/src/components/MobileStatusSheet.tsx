@@ -2,9 +2,17 @@
 
 import { useMemo } from 'react';
 import { formatCatName, useCatData } from '@/hooks/useCatData';
+import { catColorVar } from '@/lib/cat-slug';
 import { CatTokenUsage } from './CatTokenUsage';
 import type { RightStatusPanelProps } from './RightStatusPanel';
-import { modeLabel, statusLabel, statusTone, truncateId } from './status-helpers';
+import {
+  collectSnapshotActiveCats,
+  deriveActiveCats,
+  modeLabel,
+  statusLabel,
+  statusTone,
+  truncateId,
+} from './status-helpers';
 
 interface MobileStatusSheetProps extends RightStatusPanelProps {
   open: boolean;
@@ -22,21 +30,18 @@ export function MobileStatusSheet({
   targetCats,
   catStatuses,
   catInvocations,
+  activeInvocations,
+  hasActiveInvocation,
   threadId,
   messageSummary,
 }: MobileStatusSheetProps) {
   const { getCatById } = useCatData();
 
   const activeCats = useMemo(() => {
-    const snapshotCats = Object.entries(catInvocations)
-      .filter(([, inv]) => {
-        const taskProgress = inv.taskProgress;
-        if (!taskProgress || taskProgress.tasks.length === 0) return false;
-        return taskProgress.snapshotStatus !== 'completed';
-      })
-      .map(([catId]) => catId);
-    return Array.from(new Set([...targetCats, ...snapshotCats]));
-  }, [targetCats, catInvocations]);
+    const snapshotCats = collectSnapshotActiveCats(catInvocations);
+    // F194 Phase Z5 AC-Z15 R7 (cloud Codex P2): 跨 panel coherence — see RightStatusPanel comment.
+    return deriveActiveCats({ targetCats, snapshotCats, activeInvocations, hasActiveInvocation, intentMode });
+  }, [targetCats, catInvocations, activeInvocations, hasActiveInvocation, intentMode]);
 
   const allParticipants = useMemo(() => {
     return [...new Set([...activeCats, ...Object.keys(catInvocations)])];
@@ -46,7 +51,7 @@ export function MobileStatusSheet({
     <>
       {/* Backdrop */}
       <div
-        className={`fixed inset-0 bg-black/30 z-40 transition-opacity lg:hidden ${
+        className={`fixed inset-0 bg-[var(--console-overlay-backdrop)] z-40 backdrop-blur-sm transition-opacity lg:hidden ${
           open ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
         onClick={onClose}
@@ -55,16 +60,20 @@ export function MobileStatusSheet({
 
       {/* Sheet */}
       <div
-        className={`fixed inset-x-0 bottom-0 z-50 bg-white rounded-t-2xl shadow-2xl transition-transform duration-300 ease-out lg:hidden max-h-[70vh] overflow-y-auto safe-area-bottom ${
+        className={`fixed inset-x-0 bottom-0 z-50 bg-cafe-surface rounded-t-2xl shadow-2xl transition-transform duration-300 ease-out lg:hidden max-h-[70vh] overflow-y-auto safe-area-bottom ${
           open ? 'translate-y-0' : 'translate-y-full'
         }`}
       >
         {/* Handle bar + header */}
-        <div className="sticky top-0 bg-white rounded-t-2xl pt-3 pb-2 px-4 border-b border-gray-100 z-10">
-          <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-2" />
+        <div className="sticky top-0 bg-cafe-surface rounded-t-2xl pt-3 pb-2 px-4 border-b border-cafe-subtle z-10">
+          <div className="w-10 h-1 bg-cafe-surface-sunken rounded-full mx-auto mb-2" />
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-bold text-cafe-black">状态面板</h2>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1 -mr-1" aria-label="关闭状态面板">
+            <button
+              onClick={onClose}
+              className="text-cafe-muted hover:text-cafe-secondary p-1 -mr-1"
+              aria-label="关闭状态面板"
+            >
               <svg className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
                 <path
                   fillRule="evenodd"
@@ -74,22 +83,22 @@ export function MobileStatusSheet({
               </svg>
             </button>
           </div>
-          <p className="text-xs text-gray-500 mt-1">
+          <p className="text-xs text-cafe-secondary mt-1">
             当前模式: <span className="font-medium">{modeLabel(intentMode)}</span>
           </p>
         </div>
 
         <div className="p-4 space-y-3">
           {/* ── Cat status ── */}
-          <section className="rounded-lg border border-gray-200 bg-gray-50/70 p-3">
-            <h3 className="text-xs font-semibold text-gray-700 mb-2">
+          <section className="rounded-lg bg-cafe-surface-elevated/70 p-3">
+            <h3 className="text-xs font-semibold text-cafe-secondary mb-2">
               {activeCats.length > 0 ? '当前调用' : '猫猫状态'}
             </h3>
             {activeCats.length > 0 ? (
               <div className="space-y-2">
                 {activeCats.map((catId) => {
                   const cat = getCatById(catId);
-                  const dotColor = cat?.color.primary ?? '#9CA3AF';
+                  const dotColor = catColorVar(catId, 'primary');
                   const status = catStatuses[catId] ?? 'pending';
                   const inv = catInvocations[catId];
                   return (
@@ -100,7 +109,7 @@ export function MobileStatusSheet({
                             className="inline-block h-2.5 w-2.5 rounded-full"
                             style={{ backgroundColor: dotColor }}
                           />
-                          <span className="text-xs text-gray-700">{cat ? formatCatName(cat) : catId}</span>
+                          <span className="text-xs text-cafe-secondary">{cat ? formatCatName(cat) : catId}</span>
                         </div>
                         <span className={`text-xs font-medium ${statusTone(status)}`}>{statusLabel(status)}</span>
                       </div>
@@ -118,10 +127,10 @@ export function MobileStatusSheet({
                 {allParticipants.map((catId) => {
                   const cat = getCatById(catId);
                   return (
-                    <div key={catId} className="flex items-center gap-2 text-xs text-gray-500">
+                    <div key={catId} className="flex items-center gap-2 text-xs text-cafe-secondary">
                       <span
                         className="inline-block h-2 w-2 rounded-full opacity-60"
-                        style={{ backgroundColor: cat?.color.primary ?? '#9CA3AF' }}
+                        style={{ backgroundColor: catColorVar(catId, 'primary') }}
                       />
                       {cat ? formatCatName(cat) : catId}
                     </div>
@@ -129,14 +138,14 @@ export function MobileStatusSheet({
                 })}
               </div>
             ) : (
-              <div className="text-xs text-gray-400">空闲</div>
+              <div className="text-xs text-cafe-muted">空闲</div>
             )}
           </section>
 
           {/* ── Message stats ── */}
-          <section className="rounded-lg border border-gray-200 bg-gray-50/70 p-3">
-            <h3 className="text-xs font-semibold text-gray-700 mb-2">消息统计</h3>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-700">
+          <section className="rounded-lg bg-cafe-surface-elevated/70 p-3">
+            <h3 className="text-xs font-semibold text-cafe-secondary mb-2">消息统计</h3>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-cafe-secondary">
               <div>总数</div>
               <div className="text-right font-medium">{messageSummary.total}</div>
               <div>猫猫消息</div>
@@ -147,12 +156,12 @@ export function MobileStatusSheet({
           </section>
 
           {/* ── Thread info ── */}
-          <section className="rounded-lg border border-gray-200 bg-gray-50/70 p-3">
-            <h3 className="text-xs font-semibold text-gray-700 mb-2">对话信息</h3>
-            <div className="text-xs text-gray-500">
+          <section className="rounded-lg bg-cafe-surface-elevated/70 p-3">
+            <h3 className="text-xs font-semibold text-cafe-secondary mb-2">对话信息</h3>
+            <div className="text-xs text-cafe-secondary">
               Thread:{' '}
               <button
-                className="text-gray-600 font-mono hover:text-gray-800 transition-colors"
+                className="text-cafe-secondary font-mono hover:text-cafe transition-colors"
                 title={`点击复制: ${threadId}`}
                 onClick={() => {
                   void navigator.clipboard.writeText(threadId);

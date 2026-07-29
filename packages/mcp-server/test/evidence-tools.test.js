@@ -13,6 +13,7 @@ describe('MCP Evidence Tools', () => {
   beforeEach(() => {
     originalEnv = { ...process.env };
     process.env.CAT_CAFE_API_URL = 'http://127.0.0.1:3004';
+    delete process.env.CAT_CAFE_THREAD_ID;
     originalFetch = globalThis.fetch;
   });
 
@@ -56,15 +57,87 @@ describe('MCP Evidence Tools', () => {
     assert.equal(parsed.searchParams.get('q'), 'hindsight');
     assert.equal(parsed.searchParams.get('scope'), 'docs');
     assert.equal(parsed.searchParams.get('mode'), 'hybrid');
+    assert.equal(parsed.searchParams.get('dimension'), 'project');
   });
 
-  test('handleSearchEvidence includes degraded header when API responds with degraded=true', async () => {
+  test('handleSearchEvidence forwards current thread and renders suggested cross-post action', async () => {
+    const { handleSearchEvidence } = await import('../dist/tools/evidence-tools.js');
+    process.env.CAT_CAFE_THREAD_ID = 'thread-current';
+
+    /** @type {string | URL | undefined} */
+    let capturedUrl;
+    globalThis.fetch = async (url) => {
+      capturedUrl = url;
+      return {
+        ok: true,
+        json: async () => ({
+          degraded: false,
+          results: [
+            {
+              title: 'Other thread hit',
+              anchor: 'thread:other',
+              snippet: 'finding',
+              confidence: 'high',
+              sourceType: 'discussion',
+              suggestedAction: {
+                type: 'cross_post',
+                threadId: 'thread-other',
+                reason: 'Search result came from another thread; dispatch relevant findings back to that thread.',
+                source: 'search_evidence',
+              },
+            },
+          ],
+        }),
+      };
+    };
+
+    const result = await handleSearchEvidence({ query: 'finding', scope: 'threads' });
+
+    assert.equal(result.isError, undefined);
+    assert.ok(capturedUrl, 'expected fetch to be called');
+    const parsed = new URL(String(capturedUrl));
+    assert.equal(parsed.searchParams.get('currentThreadId'), 'thread-current');
+    const text = result.content[0].text;
+    assert.ok(text.includes('suggested_action: cat_cafe_cross_post_message(threadId="thread-other"'));
+    assert.ok(text.includes('content="@target-cat\\n..."'));
+    assert.ok(text.includes('routing: replace @target-cat with the cat handle to wake in the target thread'));
+    assert.ok(text.includes('reason: Search result came from another thread'));
+  });
+
+  test('handleSearchEvidence preserves explicit dimension overrides', async () => {
+    const { handleSearchEvidence } = await import('../dist/tools/evidence-tools.js');
+
+    /** @type {string | URL | undefined} */
+    let capturedUrl;
+    globalThis.fetch = async (url) => {
+      capturedUrl = url;
+      return {
+        ok: true,
+        json: async () => ({ results: [], degraded: false }),
+      };
+    };
+
+    const result = await handleSearchEvidence({
+      query: 'cross-collection',
+      dimension: 'all',
+    });
+
+    assert.equal(result.isError, undefined);
+    assert.ok(capturedUrl, 'expected fetch to be called');
+
+    const parsed = new URL(String(capturedUrl));
+    assert.equal(parsed.searchParams.get('dimension'), 'all');
+  });
+
+  test('handleSearchEvidence renders raw_lexical_only as graceful degradation, not store error', async () => {
     const { handleSearchEvidence } = await import('../dist/tools/evidence-tools.js');
 
     globalThis.fetch = async () => ({
       ok: true,
       json: async () => ({
         degraded: true,
+        degradeReason: 'raw_lexical_only',
+        effectiveMode: 'lexical',
         results: [
           {
             title: 'Decision A',
@@ -81,8 +154,455 @@ describe('MCP Evidence Tools', () => {
 
     assert.equal(result.isError, undefined);
     assert.ok(
-      result.content[0].text.includes('[DEGRADED] Evidence store error — results may be incomplete'),
-      'expected degraded header in response text',
+      result.content[0].text.includes('depth=raw currently uses lexical retrieval only'),
+      'expected graceful raw degrade message in response text',
+    );
+    assert.ok(!result.content[0].text.includes('Evidence store error'), 'must not misreport graceful degradation');
+  });
+
+  test('HW-4 根因②b: renders sourcePath machine line for path-based consumption match', async () => {
+    const { handleSearchEvidence } = await import('../dist/tools/evidence-tools.js');
+
+    globalThis.fetch = async () => ({
+      ok: true,
+      json: async () => ({
+        degraded: false,
+        results: [
+          {
+            title: 'F200 Memory Recall Eval',
+            anchor: 'F200',
+            snippet: 'eval substrate',
+            confidence: 'high',
+            sourceType: 'feature',
+            sourcePath: 'docs/features/F200-memory-recall-eval.md',
+          },
+        ],
+      }),
+    });
+
+    const result = await handleSearchEvidence({ query: 'F200' });
+    const text = result.content[0].text;
+    assert.ok(
+      text.includes('sourcePath: docs/features/F200-memory-recall-eval.md'),
+      'expected stable `sourcePath:` machine line in rendered output (deriveSearchEvidence parses it)',
+    );
+  });
+
+  test('renders entity match explanations returned by search_evidence API', async () => {
+    const { handleSearchEvidence } = await import('../dist/tools/evidence-tools.js');
+
+    globalThis.fetch = async () => ({
+      ok: true,
+      json: async () => ({
+        degraded: false,
+        results: [
+          {
+            title: 'Vision discussion',
+            anchor: 'thread:vision',
+            snippet: 'operator asked about entity anchors',
+            confidence: 'high',
+            sourceType: 'discussion',
+            matchReason: 'entity:person:landy',
+            entityMatches: [
+              {
+                entityId: 'person:landy',
+                type: 'person',
+                canonicalName: 'You',
+                matchedAlias: 'operator',
+                surface: 'co-creator',
+                source: 'passage',
+                docAnchor: 'thread:vision',
+                passageId: 'p1',
+                provenance: [{ source: 'F209 Phase B MCP contract test' }],
+                why: 'query operator matched entity person:landy via alias co-creator',
+              },
+            ],
+          },
+        ],
+      }),
+    });
+
+    const result = await handleSearchEvidence({ query: 'operator', mode: 'hybrid' });
+    const text = result.content[0].text;
+
+    assert.ok(text.includes('match: entity:person:landy'), 'should keep coarse entity match reason');
+    assert.ok(text.includes('entity: person:landy'), 'should render entity id');
+    assert.ok(text.includes('matchedAlias=operator'), 'should render the query alias');
+    assert.ok(text.includes('surface=co-creator'), 'should render the matched surface');
+    assert.ok(
+      text.includes('why: query operator matched entity person:landy via alias co-creator'),
+      'should render entity match why explanation',
+    );
+    assert.ok(text.includes('provenance: F209 Phase B MCP contract test'), 'should render entity match provenance');
+  });
+
+  test('renders typed drillDown hints returned by search_evidence API', async () => {
+    const { handleSearchEvidence } = await import('../dist/tools/evidence-tools.js');
+
+    globalThis.fetch = async () => ({
+      ok: true,
+      json: async () => ({
+        degraded: false,
+        results: [
+          {
+            title: 'Vision discussion',
+            anchor: 'thread:vision',
+            snippet: 'operator asked about drill-down readers',
+            confidence: 'high',
+            sourceType: 'discussion',
+            drillDown: {
+              tool: 'cat_cafe_get_thread_context',
+              params: { threadId: 'thread_vision', messageId: 'msg-42', before: '3', after: '3' },
+              hint: 'get_thread_context(threadId="thread_vision", messageId="msg-42", before=3, after=3)',
+            },
+          },
+        ],
+      }),
+    });
+
+    const result = await handleSearchEvidence({ query: 'drill-down', mode: 'hybrid' });
+    const text = result.content[0].text;
+
+    assert.ok(text.includes('drillDown: cat_cafe_get_thread_context'), 'should render drillDown tool');
+    assert.ok(text.includes('threadId=thread_vision'), 'should render threadId param');
+    assert.ok(text.includes('messageId=msg-42'), 'should render messageId param');
+    assert.ok(text.includes('before=3'), 'should render before window');
+    assert.ok(text.includes('after=3'), 'should render after window');
+    assert.ok(text.includes('hint: get_thread_context'), 'should render drillDown hint');
+  });
+
+  test('Hook F-1: appends Read reminder when high/mid doc anchors present', async () => {
+    const { handleSearchEvidence } = await import('../dist/tools/evidence-tools.js');
+
+    globalThis.fetch = async () => ({
+      ok: true,
+      json: async () => ({
+        degraded: false,
+        results: [
+          {
+            title: 'F177 Harness Update',
+            anchor: 'F177',
+            snippet: 'hotfix governance',
+            confidence: 'high',
+            sourceType: 'feature',
+          },
+          {
+            title: 'Session about testing',
+            anchor: 'thread:abc123',
+            snippet: 'discussed tests',
+            confidence: 'high',
+            sourceType: 'thread',
+          },
+          {
+            title: 'ADR-019 Hooks',
+            anchor: 'doc:decisions/019',
+            snippet: 'hook architecture',
+            confidence: 'mid',
+            sourceType: 'decision',
+          },
+        ],
+      }),
+    });
+
+    const result = await handleSearchEvidence({ query: 'F177 hooks' });
+    const text = result.content[0].text;
+
+    assert.ok(text.includes('Evidence search results:'), 'should include evidence result marker');
+    assert.ok(text.includes('Found 3 result(s) for "F177 hooks":'), 'should include query in result header');
+    assert.ok(
+      text.includes('📌 高置信度文档命中 2 个'),
+      'should count only doc-type hits (feature+decision, not thread)',
+    );
+    assert.ok(text.includes('F177'), 'should list feature anchor');
+    assert.ok(text.includes('doc:decisions/019'), 'should list decision anchor');
+    assert.ok(text.includes('摘要是索引，不是答案'), 'should include Read advice');
+  });
+
+  test('Hook F-1: no reminder when only thread/low-confidence results', async () => {
+    const { handleSearchEvidence } = await import('../dist/tools/evidence-tools.js');
+
+    globalThis.fetch = async () => ({
+      ok: true,
+      json: async () => ({
+        degraded: false,
+        results: [
+          {
+            title: 'Thread discussion',
+            anchor: 'thread:xyz',
+            snippet: 'some chat',
+            confidence: 'high',
+            sourceType: 'thread',
+          },
+          {
+            title: 'Low feature',
+            anchor: 'F999',
+            snippet: 'barely relevant',
+            confidence: 'low',
+            sourceType: 'feature',
+          },
+        ],
+      }),
+    });
+
+    const result = await handleSearchEvidence({ query: 'random' });
+    const text = result.content[0].text;
+
+    assert.ok(!text.includes('📌 高置信度文档命中'), 'should not show reminder for non-doc or low-confidence results');
+  });
+
+  test('Hook F-3: appends invocation search count', async () => {
+    const { handleSearchEvidence } = await import('../dist/tools/evidence-tools.js');
+
+    globalThis.fetch = async () => ({
+      ok: true,
+      json: async () => ({
+        degraded: false,
+        results: [
+          {
+            title: 'Test',
+            anchor: 'test',
+            snippet: 'test',
+            confidence: 'low',
+            sourceType: 'feature',
+          },
+        ],
+      }),
+    });
+
+    const result = await handleSearchEvidence({ query: 'depth test' });
+    const text = result.content[0].text;
+
+    assert.ok(text.includes('📊 本轮第'), 'should include invocation search depth counter');
+    assert.ok(text.includes('次搜索'), 'should show search count');
+  });
+
+  test('Hook F-3: empty results still show depth counter (P2-2 fix)', async () => {
+    const { handleSearchEvidence } = await import('../dist/tools/evidence-tools.js');
+
+    globalThis.fetch = async () => ({
+      ok: true,
+      json: async () => ({
+        degraded: false,
+        results: [],
+      }),
+    });
+
+    const result = await handleSearchEvidence({ query: 'nonexistent topic' });
+    const text = result.content[0].text;
+
+    assert.ok(
+      text.includes('Evidence search results: No results found for: nonexistent topic'),
+      'empty results should include evidence result marker',
+    );
+    assert.ok(text.includes('No results found'), 'should report no results');
+    assert.ok(text.includes('📊 本轮第'), 'empty results must still include depth counter');
+    assert.ok(text.includes('次搜索'), 'empty results must still show search count');
+  });
+
+  test('handleSearchEvidence includes query in error output for frontend correlation', async () => {
+    const { handleSearchEvidence } = await import('../dist/tools/evidence-tools.js');
+
+    globalThis.fetch = async () => {
+      throw new Error('connection refused');
+    };
+
+    const result = await handleSearchEvidence({ query: 'quoted "topic"' });
+    const text = result.content[0].text;
+
+    assert.equal(result.isError, true);
+    assert.ok(
+      text.includes('Evidence search request failed for "quoted \\"topic\\"": connection refused'),
+      'should include JSON-quoted query in request error output',
+    );
+  });
+
+  test('intent=coverage formats CoverageSearchResult matrix instead of crashing (P1-2)', async () => {
+    const { handleSearchEvidence } = await import('../dist/tools/evidence-tools.js');
+
+    globalThis.fetch = async () => ({
+      ok: true,
+      json: async () => ({
+        query: 'production data boundary',
+        totalHits: 2,
+        bySource: {
+          docs: { count: 1, cap: 25 },
+          threads: { count: 1, cap: 20 },
+          conventionGraph: { count: 0, cap: 10 },
+        },
+        matrix: [
+          {
+            anchor: 'docs/iron-rules.md',
+            title: 'Redis production Redis (sacred)',
+            kind: 'lesson',
+            matchType: 'direct',
+            confidence: 0.95,
+            source: 'docs',
+          },
+          {
+            anchor: 'thread:redis-debug',
+            title: 'Redis port 事故',
+            kind: 'discussion',
+            matchType: 'alias',
+            confidence: 0.7,
+            source: 'threads',
+            expansionProvenance: {
+              source: 'frontmatter-alias',
+              via: 'keyword:6399',
+              confidence: 'heuristic',
+            },
+          },
+        ],
+        gaps: [],
+      }),
+    });
+
+    const result = await handleSearchEvidence({ query: 'production data boundary', intent: 'coverage' });
+
+    assert.equal(result.isError, undefined, 'should not crash on coverage response shape');
+    const text = result.content[0].text;
+    assert.ok(text.includes('2'), 'should show total hits');
+    assert.ok(text.includes('Redis production Redis (sacred)'), 'should render matrix item titles');
+    assert.ok(text.includes('docs/iron-rules.md'), 'should render anchors');
+    assert.ok(text.includes('direct'), 'should show match types');
+    assert.ok(text.includes('alias'), 'should show indirect match types');
+    assert.ok(text.includes('frontmatter-alias'), 'should show expansion provenance');
+  });
+
+  test('search_evidence description warns coverage tasks are not single-query exhaustive', async () => {
+    const { evidenceTools } = await import('../dist/tools/evidence-tools.js');
+    const description = evidenceTools[0].description;
+
+    assert.ok(description.includes('coverage'), 'description should name coverage/source-map intent');
+    assert.ok(description.includes('memory-search-best-practices'), 'description should point to the search skill');
+    assert.ok(description.includes('docs + threads'), 'description should recommend multi-scope coverage searches');
+  });
+
+  // ── F256 Phase B: expansion hints formatting ──────────────────────────
+
+  test('F256 Phase B: renders "📎 Related directions" block when expansionHints present', async () => {
+    const { handleSearchEvidence } = await import('../dist/tools/evidence-tools.js');
+
+    globalThis.fetch = async () => ({
+      ok: true,
+      json: async () => ({
+        degraded: false,
+        results: [
+          {
+            title: 'Routing System',
+            anchor: 'F102-routing',
+            snippet: 'core routing',
+            confidence: 'high',
+            sourceType: 'feature',
+          },
+        ],
+        expansionHints: [
+          {
+            anchor: 'F208-capability-profile',
+            title: 'Capability Profile Routing',
+            kind: 'feature',
+            sourcePath: 'features/F208.md',
+            provenance: {
+              source: 'frontmatter-alias',
+              via: 'keyword:routing',
+              confidence: 'heuristic',
+            },
+          },
+          {
+            anchor: 'thread-abc123-digest',
+            title: 'Discussion about routing',
+            kind: 'thread',
+            provenance: {
+              source: 'source-thread',
+              via: 'thread-abc123',
+              confidence: 'heuristic',
+            },
+          },
+        ],
+      }),
+    });
+
+    const result = await handleSearchEvidence({ query: 'routing' });
+    const text = result.content[0].text;
+
+    assert.ok(text.includes('📎 Related directions'), 'should render expansion hints header');
+    assert.ok(text.includes('F208-capability-profile'), 'should render frontmatter-alias hint anchor');
+    assert.ok(text.includes('Capability Profile Routing'), 'should render hint title');
+    // AC-B2 (砚砚 P2): provenance shows source type + via
+    assert.ok(
+      text.includes('[frontmatter-alias: keyword:routing]'),
+      'should render provenance source type + via (砚砚 P2 fix)',
+    );
+    assert.ok(text.includes('thread-abc123-digest'), 'should render source-thread hint anchor');
+    assert.ok(text.includes('[source-thread: thread-abc123]'), 'should render source-thread provenance (砚砚 P2 fix)');
+  });
+
+  test('F256 Phase B: no "📎 Related directions" block when expansionHints absent', async () => {
+    const { handleSearchEvidence } = await import('../dist/tools/evidence-tools.js');
+
+    globalThis.fetch = async () => ({
+      ok: true,
+      json: async () => ({
+        degraded: false,
+        results: [
+          {
+            title: 'Some Feature',
+            anchor: 'F100',
+            snippet: 'basic feature',
+            confidence: 'high',
+            sourceType: 'feature',
+          },
+        ],
+        // No expansionHints field
+      }),
+    });
+
+    const result = await handleSearchEvidence({ query: 'basic' });
+    const text = result.content[0].text;
+
+    assert.ok(!text.includes('📎 Related directions'), 'should NOT render expansion block when hints absent');
+  });
+
+  test('F256 Phase B: include_expansion=false sends param to API', async () => {
+    const { handleSearchEvidence } = await import('../dist/tools/evidence-tools.js');
+
+    /** @type {string | URL | undefined} */
+    let capturedUrl;
+    globalThis.fetch = async (url) => {
+      capturedUrl = url;
+      return {
+        ok: true,
+        json: async () => ({ results: [], degraded: false }),
+      };
+    };
+
+    await handleSearchEvidence({ query: 'test', include_expansion: false });
+
+    assert.ok(capturedUrl, 'expected fetch to be called');
+    const parsed = new URL(String(capturedUrl));
+    assert.equal(parsed.searchParams.get('include_expansion'), 'false', 'should pass include_expansion=false to API');
+  });
+
+  test('F256 Phase B: include_expansion=true does NOT send param to API (default)', async () => {
+    const { handleSearchEvidence } = await import('../dist/tools/evidence-tools.js');
+
+    /** @type {string | URL | undefined} */
+    let capturedUrl;
+    globalThis.fetch = async (url) => {
+      capturedUrl = url;
+      return {
+        ok: true,
+        json: async () => ({ results: [], degraded: false }),
+      };
+    };
+
+    await handleSearchEvidence({ query: 'test', include_expansion: true });
+
+    assert.ok(capturedUrl, 'expected fetch to be called');
+    const parsed = new URL(String(capturedUrl));
+    assert.equal(
+      parsed.searchParams.get('include_expansion'),
+      null,
+      'should not send include_expansion when true (default)',
     );
   });
 });

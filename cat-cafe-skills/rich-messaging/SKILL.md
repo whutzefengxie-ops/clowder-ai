@@ -1,8 +1,9 @@
 ---
 name: rich-messaging
+tips_exempt: file kind docs sync only — existing capability-rich-messaging tip covers the skill; sourceRef stays at wakeup-index
 description: >
   富媒体消息发送：语音、图片、卡片、清单、代码 diff、交互选择。
-  Use when: 发语音、发图、发卡片、展示结构化信息、庆祝、给我听听、给我看看、让用户选、确认操作。
+  Use when: 发语音、发图、发卡片、展示结构化信息、长结构化汇报、想发一堆文字/日志/步骤、庆祝、给我听听、给我看看、让用户选、确认操作。
   Not for: 纯文字聊天、技术讨论、日常回复。
   Output: rich block 附着在消息上。
 triggers:
@@ -21,6 +22,11 @@ triggers:
   - "rich block"
   - "checklist"
   - "发个清单"
+  - "想发一堆文字"
+  - "发日志"
+  - "发步骤"
+  - "长结构化汇报"
+  - "结构化汇报"
   - "庆祝一下"
   - "展示一下"
   - "给我听听"
@@ -36,22 +42,29 @@ triggers:
 
 你可以发送富媒体消息——语音、图片、卡片、清单、代码 diff、交互选择。不只是打字！
 
+**不只是对话**：定时任务唤醒你后，你依然拥有全部 rich block 能力——发图、发语音、发 HTML 面板、发交互选择，都可以。
+
 ## 首次使用
 
 **每个 session 首次发 rich block 前，先调 `get_rich_block_rules` 获取完整字段规格。**
 本 skill 只给决策指引和最小示例，细则在 MCP 工具里。
 
-## 七种 Rich Block 一览
+## 默认触发：长结构化汇报
+
+当你想发一堆文字、日志、步骤，或回复已经有 3+ 结构化信号（列表、表格、代码块、diff、状态字段、行动项）时，默认用 1-2 句自然语言摘要 + `cat_cafe_create_rich_block`。纯长 Markdown 只在 rich block 不适合或工具不可用时使用，并说明原因。
+
+## 八种 Rich Block 一览
 
 | Kind | 什么时候用 | 关键字段 |
 |------|-----------|---------|
-| **audio** | 打招呼、表达情感、庆祝、鼓励 | `text`（短句口语化） |
+| **audio** | 打招呼、表达情感、庆祝、鼓励、定时播报 | `text`（短句口语化） |
 | **card** | 状态报告、决策摘要、review 结论 | `title` + `tone` |
 | **checklist** | 待办、验证步骤、行动项 | `items` |
 | **diff** | 代码修改建议、重构对比 | `filePath` + `diff` |
-| **media_gallery** | 截图、设计稿、多图对比 | `items` (url) |
+| **file** | 发送已有文件、文档、音视频成片；`video/*` 可内联播放 | `url` + `fileName` |
+| **media_gallery** | 发送已有图片（头像、照片）、截图、设计稿、多图对比 | `items` (url) |
 | **interactive** | 让用户选方案、勾选项、确认操作 | `interactiveType` + `options` (id+label) |
-| **html_widget** | 简单可视化：图表、计算器、CSS 动画、可交互 HTML 组件 | `html`（完整 HTML/JS/CSS 代码字符串） |
+| **html_widget** | 你写的 HTML 直接挂上去：图表、计算器、CSS 动画、数据面板 | `html`（完整 HTML/JS/CSS 代码字符串） |
 
 ## 最小工作示例
 
@@ -79,6 +92,12 @@ triggers:
 {"id": "d1", "kind": "diff", "v": 1, "filePath": "src/foo.ts", "diff": "- old line\n+ new line", "languageHint": "typescript"}
 ```
 
+### 文件（file）
+
+```json
+{"id": "f1", "kind": "file", "v": 1, "url": "/uploads/final-cut.mp4", "fileName": "final-cut.mp4", "mimeType": "video/mp4"}
+```
+
 ### 图片画廊（media_gallery）
 
 ```json
@@ -100,7 +119,7 @@ triggers:
 {"id": "hw1", "kind": "html_widget", "v": 1, "html": "<div style='padding:20px'><canvas id='c'></canvas><script>const c=document.getElementById('c').getContext('2d');c.fillStyle='#E29578';c.fillRect(0,0,100,50);</script></div>"}
 ```
 
-铲屎官拍板："简单的用富文本，复杂的用猫主动打开浏览器。"
+operator拍板："简单的用富文本，复杂的用猫主动打开浏览器。"
 - 用 sandboxed iframe `srcdoc` 渲染，**禁止** `allow-same-origin`（比 browser panel 更严格）
 - 适合：Chart.js 图表、CSS 动画、计算器等纯前端组件
 - 不适合：需要网络请求、需要访问外部资源的复杂应用（那些用 `browser-preview` skill）
@@ -108,7 +127,25 @@ triggers:
 ## 发送方式
 
 用 MCP 工具 `cat_cafe_create_rich_block`，参数 `block` 传 JSON 字符串。
-发 block 前**先写 1-2 句自然语言摘要**（post_message），再发 block。
+发 block 前**先写 1-2 句自然语言摘要**，再发 block。
+
+如果图片来源是本地文件（例如 Codex CLI / 本地脚本刚生成的 PNG）：
+
+**优先使用 F172 共享发布合约**（自动处理 uploadDir 解析 + 幂等 + 富块生成）：
+- Codex `image_gen`：自动扫描 `~/.codex/generated_images/<sessionId>/`，无需手动操作
+- Antigravity 生成：工具结果中的文件路径自动检测并发布
+- 其他来源：调用 `publishGeneratedImage({ sourcePath, mimeType, publicationKey, provider, toolName })` 手动发布
+
+发布后自动获得 `/uploads/...` 稳定 URL + `media_gallery` 富块，无需手动复制或验证。
+
+**仅当共享合约不可用时**才手动复制到 runtime 的 uploadDir。
+
+如果你要发的是**已有文件或本地成片视频**：
+
+- 用 `kind:"file"`，不是 `media_gallery`
+- `url` 必须是 `/uploads/...`、`/api/...` 或 `https://...`
+- `mimeType` 以 `video/` 开头时，Web UI 会渲染内联 `<video>` 播放器
+- **当前自动发布合约只覆盖图片**；本地视频/通用文件没有 `publishGeneratedVideo()`，需要你先显式放到 `/uploads/...`
 
 ## 三条纪律
 
@@ -120,10 +157,14 @@ triggers:
 
 | 错误 | 后果 | 正确做法 |
 |------|------|----------|
-| 不知道自己能发语音 | 铲屎官说"发语音"你说"我是文字猫" | 你可以！用 audio block |
+| 不知道自己能发语音 | operator说"发语音"你说"我是文字猫" | 你可以！用 audio block |
+| "发图"只想到 image-generation | 走 Chrome MCP 现场生成，慢且不稳定 | 先看家里有没有已有图片（`/avatars/`、`/uploads/`），有就 media_gallery 直接发 |
+| 本地成片视频只贴文件路径 | 前端拿不到，线程里也没有内联播放器 | 先把视频放到 `/uploads/...`，再用 `file` rich block；`mimeType:"video/mp4"` 时会内联播放 |
+| 本地生成图直接用 `file://` 或源码仓路径 | rich block 发得出去，但前端取不到 | 用 `publishGeneratedImage()` 发布到 `/uploads/...`（F172 共享合约自动解析 uploadDir） |
 | audio 写长段话 | 合成效果差 | 短句口语化，1-2 句 |
-| 只发 block 不写文字 | 猫猫朋友看不懂上下文 | 先 post_message 再 block |
+| 只发 block 不写文字 | 猫猫朋友看不懂上下文 | 先写 1-2 句自然语言摘要，再发 block |
 | `"type"` 而不是 `"kind"` | block 创建失败 | 字段是 `kind` 不是 `type` |
+| 播客生成超时就重复提交 | 产生多个重复 artifact | `signal_generate_podcast` 是异步落库——MCP 120s 超时 ≠ 任务失败，TTS 合成需 3-5 分钟。超时后用 `signal_list_studies` 检查 artifact 状态，不要重复调用 |
 
 ## 和其他 skill 的区别
 

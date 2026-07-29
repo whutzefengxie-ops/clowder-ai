@@ -16,6 +16,72 @@ import { dirname, join, win32 } from 'node:path';
 const resolvedShimCache = new Map<string, string | null>();
 
 /**
+ * Cache for system Node.js path lookup (null = not found).
+ */
+let cachedSystemNodePath: string | undefined | null;
+
+/**
+ * Find the system Node.js executable (cross-platform).
+ *
+ * External CLI shim scripts (.js entry points installed via npm) must always be
+ * executed with the system Node.js — never with process.execPath. In dev mode
+ * process.execPath happens to be system node, but in packaged Electron it points
+ * to the Electron binary whose module resolver can't find global npm packages.
+ * Rather than detecting Electron as a special case, we unconditionally resolve
+ * the system node for external shims: if we don't bundle it, we don't run it
+ * with our own runtime.
+ *
+ * Tries `where node.exe` (Windows) then `which node` (Unix/macOS) so the
+ * function works on all platforms — including CI environments where
+ * process.platform may be patched to 'win32' for testing.
+ *
+ * Returns null if not found — caller should fall back to shell mode.
+ */
+export function findSystemNode(): string | null {
+  if (cachedSystemNodePath !== undefined) return cachedSystemNodePath ?? null;
+  // Try both Windows and Unix commands. Each command uses an explicit shell
+  // to avoid Node.js selecting cmd.exe when process.platform is patched to
+  // 'win32' in tests — on macOS/Linux cmd.exe doesn't exist (ENOENT).
+  const commands: Array<{ cmd: string; shell?: string }> = [
+    { cmd: 'where node.exe' }, // Windows default shell (cmd.exe / ComSpec)
+    { cmd: 'which node', shell: '/bin/sh' }, // explicit Unix shell
+  ];
+  for (const { cmd, shell } of commands) {
+    try {
+      const output = execSync(cmd, { encoding: 'utf-8', timeout: 5000, shell }).trim();
+      for (const line of output.split(/\r?\n/)) {
+        const candidate = line.trim();
+        if (!candidate) continue;
+        if (existsSync(candidate)) {
+          cachedSystemNodePath = candidate;
+          return candidate;
+        }
+      }
+    } catch {
+      // Command failed or timed out — try next
+    }
+  }
+  // Fallback: probe standard Windows Node.js install locations when PATH
+  // doesn't include Node (common in packaged Electron apps).
+  if (process.platform === 'win32') {
+    const programFiles = process.env.PROGRAMFILES ?? 'C:\\Program Files';
+    const standardPaths = [
+      join(programFiles, 'nodejs', 'node.exe'),
+      'C:\\Program Files\\nodejs\\node.exe',
+      'C:\\Program Files (x86)\\nodejs\\node.exe',
+    ];
+    for (const candidate of standardPaths) {
+      if (existsSync(candidate)) {
+        cachedSystemNodePath = candidate;
+        return candidate;
+      }
+    }
+  }
+  cachedSystemNodePath = null;
+  return null;
+}
+
+/**
  * Known npm-global paths for common CLI tools on Windows.
  * Checked first for fast resolution before falling back to `where`.
  */
@@ -26,12 +92,18 @@ const KNOWN_SHIM_SCRIPTS: Record<string, string[]> = {
   opencode: ['opencode-ai/bin/opencode'],
 };
 
-/** pnpm global store layout version — determines the directory structure under LOCALAPPDATA/pnpm/global/ */
-const PNPM_GLOBAL_STORE_LAYOUT = '5';
-
 export interface WindowsShimSpawn {
   command: string;
   args: string[];
+}
+
+export type WindowsSpawnMode = 'shim' | 'native-exe' | 'git-bash' | 'cmd';
+
+export interface WindowsSpawnPlan {
+  command: string;
+  args: string[];
+  mode: WindowsSpawnMode;
+  shell?: true | string;
 }
 
 /**
@@ -46,91 +118,51 @@ export function extractBareName(command: string): string {
 }
 
 /**
- * Normalise a path fragment extracted from a .cmd shim file.
- * Converts backslashes to forward slashes and strips trailing `%*` parameter tokens
- * (which are CMD argument-forwarding syntax, not part of the path).
- */
-function cleanShimRelPath(raw: string): string {
-  return raw.replace(/\\/g, '/').replace(/\s+%\*.*$/, '');
-}
-
-/**
- * Try to resolve an entry script from a list of regex matches.
- * First prefers paths ending in `.js`, then falls back to extensionless entrypoints
- * (skipping `node.exe` prelude references).
- */
-function resolveShimMatches(
-  matches: { raw: string; base: string }[],
-): string | null {
-  for (const { raw, base } of matches) {
-    if (/\.js$/i.test(raw)) {
-      const scriptPath = join(base, raw);
-      if (existsSync(scriptPath)) return scriptPath;
-    }
-  }
-  for (const { raw, base } of matches) {
-    if (!/\.\w+$/i.test(raw) && !/^node(\.exe)?$/i.test(raw.split('/').pop() ?? '')) {
-      const scriptPath = join(base, raw);
-      if (existsSync(scriptPath)) return scriptPath;
-    }
-  }
-  return null;
-}
-
-/**
  * Try to extract an entry script from a .cmd shim file by parsing its content.
- * Handles:
- *  - Standard npm shims using %~dp0\..., %dp0\..., or %dp0%\... relative paths
- *  - Custom shims using %ENV_VAR%\... absolute paths (e.g. %APPDATA%\npm\node_modules\...)
- * Prefers .js matches, falls back to extensionless entrypoints.
+ * Handles both relative (%~dp0, %dp0, %dp0%) and absolute (%APPDATA%, etc.) paths.
+ * Prefers .js matches, falls back to extensionless entrypoints, then native .exe entrypoints.
  */
 export function parseShimFile(cmdPath: string): string | null {
   if (!existsSync(cmdPath)) return null;
   const shimContent = readFileSync(cmdPath, 'utf-8');
   const shimDir = dirname(cmdPath);
 
-  // ── Pass 1: %~dp0 / %dp0 / %dp0% relative paths (standard npm shims) ──
-  const dp0Matches = [...shimContent.matchAll(/%~?dp0%?\\([^"\r\n]+)/gi)];
-  const dp0Candidates = dp0Matches.map((m) => ({ raw: cleanShimRelPath(m[1]), base: shimDir }));
-  const dp0Result = resolveShimMatches(dp0Candidates);
-  if (dp0Result) return dp0Result;
+  const candidates: string[] = [];
 
-  // ── Pass 2: %ENV_VAR%\... absolute paths (custom shims, e.g. %APPDATA%\npm\...) ──
-  const envMatches = [...shimContent.matchAll(/%([A-Z_][A-Z0-9_]*)%\\([^"\r\n]+)/gi)];
-  const envCandidates: { raw: string; base: string }[] = [];
-  for (const match of envMatches) {
-    const varName = match[1].toUpperCase();
-    if (/^~?dp0$/i.test(varName)) continue; // Already handled in Pass 1
-    const envValue = process.env[varName];
-    if (!envValue) continue;
-    envCandidates.push({ raw: cleanShimRelPath(match[2]), base: envValue });
+  // Relative paths: %~dp0\..., %dp0\..., %dp0%\...
+  for (const match of shimContent.matchAll(/%~?dp0%?\\([^"\r\n]+)/gi)) {
+    const raw = match[1].replace(/\\/g, '/').replace(/\s+%\*.*$/, '');
+    candidates.push(join(shimDir, raw));
   }
-  const envResult = resolveShimMatches(envCandidates);
-  if (envResult) return envResult;
 
-  return null;
-}
+  // Absolute paths via environment variables (#284): %APPDATA%\..., %LOCALAPPDATA%\..., etc.
+  for (const match of shimContent.matchAll(/%([A-Z_][A-Z0-9_]*)%\\([^"\r\n]+)/gi)) {
+    if (/^~?dp0$/i.test(match[1])) continue;
+    const envValue = process.env[match[1]];
+    if (!envValue) continue;
+    const raw = match[2].replace(/\\/g, '/').replace(/\s+%\*.*$/, '');
+    candidates.push(join(envValue, raw));
+  }
 
-/**
- * Search well-known global install directories for a CLI tool's entry script.
- * Checks npm (%APPDATA%/npm) and pnpm (%LOCALAPPDATA%/pnpm/global/5) prefixes.
- */
-export function findKnownScript(bareName: string): string | null {
-  const knownPaths = KNOWN_SHIM_SCRIPTS[bareName];
-  if (!knownPaths) return null;
+  for (const scriptPath of candidates) {
+    if (/\.js$/i.test(scriptPath) && existsSync(scriptPath)) return scriptPath;
+  }
 
-  const prefixes: string[] = [];
-  const appData = process.env.APPDATA;
-  if (appData) prefixes.push(join(appData, 'npm', 'node_modules'));
-  const localAppData = process.env.LOCALAPPDATA;
-  if (localAppData) prefixes.push(join(localAppData, 'pnpm', 'global', PNPM_GLOBAL_STORE_LAYOUT, 'node_modules'));
-
-  for (const prefix of prefixes) {
-    for (const relPath of knownPaths) {
-      const candidate = join(prefix, relPath);
-      if (existsSync(candidate)) return candidate;
+  for (const scriptPath of candidates) {
+    const tail = scriptPath.split(/[/\\]/).pop() ?? '';
+    if (!/\.\w+$/i.test(tail) && !/^node(\.exe)?$/i.test(tail) && existsSync(scriptPath)) {
+      return scriptPath;
     }
   }
+
+  // Third pass: native .exe entrypoints (e.g. claude.exe in Claude Code 2.1+)
+  for (const scriptPath of candidates) {
+    const tail = scriptPath.split(/[/\\]/).pop() ?? '';
+    if (/\.exe$/i.test(tail) && !/^node(\.exe)?$/i.test(tail) && existsSync(scriptPath)) {
+      return scriptPath;
+    }
+  }
+
   return null;
 }
 
@@ -143,12 +175,11 @@ export function findKnownScript(bareName: string): string | null {
  * Strategy:
  * 1a. If command is a full path to an existing .cmd file, parse it directly
  * 1b. If command is a bare name, locate via `where` and parse
- * 2. Fall back to known global install paths (APPDATA/npm, LOCALAPPDATA/pnpm)
+ * 2. Fall back to known paths under %APPDATA%/npm/node_modules
  * 3. Cache result (null = not resolvable, use shell fallback)
  *
  * Important: when a full path is provided, we do NOT fall back to bare-name
  * `where` lookup — this avoids silently resolving to a different CLI version.
- * However, we DO fall back to findKnownScript (canonical entry points are safe).
  */
 export function resolveCmdShimScript(command: string): string | null {
   const cached = resolvedShimCache.get(command);
@@ -170,12 +201,6 @@ export function resolveCmdShimScript(command: string): string | null {
     }
     // Full path provided but parsing failed — do NOT fall back to `where`
     // to avoid resolving to a different CLI version on PATH.
-    // DO fall back to findKnownScript (canonical entry points are safe).
-    const knownResult = findKnownScript(bareName);
-    if (knownResult) {
-      resolvedShimCache.set(command, knownResult);
-      return knownResult;
-    }
   }
 
   // Strategy 1b: bare command name — locate via `where`
@@ -197,13 +222,17 @@ export function resolveCmdShimScript(command: string): string | null {
     }
   }
 
-  // Strategy 2: known global install paths (npm + pnpm) — only for bare names
-  // (full paths already attempted findKnownScript in Strategy 1a above)
-  if (!isFullPath) {
-    const knownResult = findKnownScript(bareName);
-    if (knownResult) {
-      resolvedShimCache.set(command, knownResult);
-      return knownResult;
+  // Strategy 2: known paths — only for bare command names (not full paths,
+  // which represent a caller-selected install that must not be remapped)
+  const appData = process.env.APPDATA;
+  const knownPaths = KNOWN_SHIM_SCRIPTS[bareName];
+  if (!isFullPath && appData && knownPaths) {
+    for (const relPath of knownPaths) {
+      const candidate = join(appData, 'npm', 'node_modules', relPath);
+      if (existsSync(candidate)) {
+        resolvedShimCache.set(command, candidate);
+        return candidate;
+      }
     }
   }
 
@@ -218,9 +247,83 @@ export function resolveWindowsShimSpawn(
 ): WindowsShimSpawn | null {
   const shimScript = shimScriptOverride ?? resolveCmdShimScript(command);
   if (!shimScript) return null;
+  if (/\.exe$/i.test(shimScript)) {
+    return {
+      command: shimScript,
+      args: [...args],
+    };
+  }
+  // External CLI shim scripts belong to the user's system, not to us.
+  // Always use the system node to run them — never process.execPath,
+  // which may be Electron, a bundled runtime, or anything else we control.
+  const systemNode = findSystemNode();
+  if (!systemNode) return null; // Fall through to shell mode
   return {
-    command: process.execPath,
+    command: systemNode,
     args: [shimScript, ...args],
+  };
+}
+
+/**
+ * Whether to spawn a Windows native .exe directly via argv (no shell).
+ *
+ * Recent Anthropic / Codex CLI releases ship as standalone PE32+ binaries
+ * (e.g. `claude.exe` 250MB+). They have no .cmd shim parseable by
+ * resolveCmdShimScript — bin/claude.exe is the entry, and the npm shim
+ * (when present) just re-launches the same .exe. Falling through to the
+ * Git Bash shell path passes the (potentially huge) prompt as a `-c`
+ * string, where any unbalanced quote in the multi-line content triggers
+ * `bash: -c: line N: unexpected EOF` (exit 2) before claude.exe even
+ * starts.
+ *
+ * Native exe + argv mode skips shell parsing entirely — child_process
+ * passes args via the Win32 CreateProcess argv array, so quoting is the
+ * exe's problem (it is, in fact, well-behaved).
+ */
+export function shouldDirectSpawnNativeExe(
+  command: string,
+  options: { platform?: NodeJS.Platform; exists?: (p: string) => boolean } = {},
+): boolean {
+  const platform = options.platform ?? process.platform;
+  if (platform !== 'win32') return false;
+  if (!/\.exe$/i.test(command)) return false;
+  const fileExists = options.exists ?? existsSync;
+  return fileExists(command);
+}
+
+export function resolveWindowsSpawnPlan(command: string, args: readonly string[]): WindowsSpawnPlan {
+  const shimSpawn = resolveWindowsShimSpawn(command, args);
+  if (shimSpawn) {
+    return {
+      command: shimSpawn.command,
+      args: shimSpawn.args,
+      mode: 'shim',
+    };
+  }
+
+  if (shouldDirectSpawnNativeExe(command)) {
+    return {
+      command,
+      args: [...args],
+      mode: 'native-exe',
+    };
+  }
+
+  const gitBash = findGitBashPath();
+  if (gitBash) {
+    return {
+      command: escapeBashArg(command),
+      args: args.map(escapeBashArg),
+      mode: 'git-bash',
+      shell: gitBash,
+    };
+  }
+
+  return {
+    command: escapeCmdArg(command),
+    args: args.map(escapeCmdArg),
+    mode: 'cmd',
+    shell: true,
   };
 }
 
@@ -234,9 +337,6 @@ export function resolveWindowsShimSpawn(
  * Then applies cmd.exe-level escaping: % doubled, metacharacters (including parentheses) caret-escaped.
  */
 export function escapeCmdArg(arg: string): string {
-  // Collapse newlines to spaces — CMD's %* truncates at the first newline,
-  // silently dropping all subsequent arguments. Lossy but far safer than truncation.
-  arg = arg.replace(/\r?\n/g, ' ');
   if (!/[\s"&|<>^%!\\()]/.test(arg)) return arg;
   // MSVC CRT escaping: process each character, tracking backslash runs
   let crtEscaped = '';
@@ -266,9 +366,6 @@ export function escapeCmdArg(arg: string): string {
  * Single-quote wrapping with internal single-quote escaping.
  */
 export function escapeBashArg(arg: string): string {
-  // Collapse newlines — Git Bash may delegate to cmd.exe for .cmd files,
-  // where %* truncation would silently drop subsequent arguments.
-  arg = arg.replace(/\r?\n/g, ' ');
   return `'${arg.replace(/'/g, "'\\''")}'`;
 }
 

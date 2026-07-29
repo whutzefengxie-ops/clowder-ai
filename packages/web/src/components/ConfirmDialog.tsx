@@ -53,10 +53,16 @@ export function ConfirmDialog({
   const isDanger = variant === 'danger';
 
   return (
-    <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={onCancel}>
-      <div className="bg-white rounded-xl shadow-xl p-6 max-w-sm w-full mx-4" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="fixed inset-0 bg-[var(--console-overlay-backdrop)] backdrop-blur-sm flex items-center justify-center z-[100]"
+      onClick={onCancel}
+    >
+      <div
+        className="bg-cafe-surface rounded-xl shadow-xl p-6 max-w-sm w-full mx-4"
+        onClick={(e) => e.stopPropagation()}
+      >
         <h3 className="text-base font-semibold mb-2">{title}</h3>
-        <p className="text-sm text-gray-600 mb-4 whitespace-pre-wrap">{message}</p>
+        <p className="text-sm text-cafe-secondary mb-4 whitespace-pre-wrap">{message}</p>
         {requireInput && (
           <input
             ref={inputRef}
@@ -64,21 +70,21 @@ export function ConfirmDialog({
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             placeholder={inputPlaceholder}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-blue-300"
+            className="w-full border border-cafe rounded-lg px-3 py-2 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-[var(--semantic-info)]"
           />
         )}
         <div className="flex justify-end gap-2">
           <button
             onClick={onCancel}
-            className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+            className="px-4 py-2 text-sm text-cafe-secondary hover:bg-cafe-surface-elevated rounded-lg transition-colors"
           >
             {cancelLabel}
           </button>
           <button
             onClick={onConfirm}
             disabled={!canConfirm}
-            className={`px-4 py-2 text-sm text-white rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
-              isDanger ? 'bg-red-500 hover:bg-red-600' : 'bg-blue-500 hover:bg-blue-600'
+            className={`px-4 py-2 text-sm text-[var(--cafe-surface)] rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+              isDanger ? 'bg-semantic-critical hover:opacity-90' : 'bg-semantic-info hover:opacity-90'
             }`}
           >
             {confirmLabel}

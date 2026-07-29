@@ -35,6 +35,27 @@ describe('SessionChainStore', () => {
     assert.equal(record.createdAt, record.updatedAt);
   });
 
+  test('create() and update() preserve workspace binding metadata', async () => {
+    const store = await createStore();
+    const record = store.create({
+      ...BASE_INPUT,
+      workingDirectory: '/repo-a',
+      workspaceFingerprint: '/repo-a',
+    });
+
+    assert.equal(record.workingDirectory, '/repo-a');
+    assert.equal(record.workspaceFingerprint, '/repo-a');
+
+    store.update(record.id, {
+      workingDirectory: '/repo-b',
+      workspaceFingerprint: '/repo-b',
+    });
+
+    const updated = store.get(record.id);
+    assert.equal(updated.workingDirectory, '/repo-b');
+    assert.equal(updated.workspaceFingerprint, '/repo-b');
+  });
+
   test('create() auto-increments seq for same cat+thread', async () => {
     const store = await createStore();
     const r0 = store.create(BASE_INPUT);
@@ -190,6 +211,23 @@ describe('SessionChainStore', () => {
     assert.equal(store.getActive('opus', 'thread-1'), null);
   });
 
+  test('update() active restores active index and can clear seal metadata', async () => {
+    const store = await createStore();
+    const record = store.create(BASE_INPUT);
+    const sealedAt = Date.now();
+
+    store.update(record.id, { status: 'sealed', sealReason: 'external_registration_failed', sealedAt });
+    assert.equal(store.getActive('opus', 'thread-1'), null);
+
+    store.update(record.id, { status: 'active', sealReason: null, sealedAt: null });
+
+    const reopened = store.get(record.id);
+    assert.equal(reopened.status, 'active');
+    assert.equal(reopened.sealReason, undefined);
+    assert.equal(reopened.sealedAt, undefined);
+    assert.equal(store.getActive('opus', 'thread-1')?.id, record.id);
+  });
+
   test('getByCliSessionId() returns correct record', async () => {
     const store = await createStore();
     const record = store.create(BASE_INPUT);
@@ -317,5 +355,58 @@ describe('SessionChainStore', () => {
     // Reset to 0
     store.update(record.id, { consecutiveRestoreFailures: 0 });
     assert.equal(store.get(record.id).consecutiveRestoreFailures, 0);
+  });
+
+  // ── F198 Bug #3: chainKey stable conversation anchor (bg carrier) ──
+
+  test('create() persists chainKey when provided', async () => {
+    const store = await createStore();
+    const record = store.create({ ...BASE_INPUT, chainKey: 'bg:thread-1:opus' });
+    assert.equal(record.chainKey, 'bg:thread-1:opus');
+  });
+
+  test('getByChainKey() returns the record for a known chainKey', async () => {
+    const store = await createStore();
+    const created = store.create({ ...BASE_INPUT, chainKey: 'bg:thread-1:opus' });
+    const found = store.getByChainKey('bg:thread-1:opus');
+    assert.ok(found, 'should find record by chainKey');
+    assert.equal(found.id, created.id);
+  });
+
+  test('getByChainKey() returns null for an unknown chainKey', async () => {
+    const store = await createStore();
+    store.create({ ...BASE_INPUT, chainKey: 'bg:thread-1:opus' });
+    assert.equal(store.getByChainKey('bg:thread-2:opus'), null);
+  });
+
+  test('getByChainKey() returns the record even after it is sealed (write tolerance)', async () => {
+    const store = await createStore();
+    const created = store.create({ ...BASE_INPUT, chainKey: 'bg:thread-1:opus' });
+    store.update(created.id, { status: 'sealed' });
+    const found = store.getByChainKey('bg:thread-1:opus');
+    assert.ok(found, 'sealed record must still be reachable by chainKey');
+    assert.equal(found.id, created.id);
+    assert.equal(found.status, 'sealed');
+  });
+
+  test('update() persists latestResumeSessionId', async () => {
+    const store = await createStore();
+    const created = store.create({ ...BASE_INPUT, chainKey: 'bg:thread-1:opus' });
+    const uuid = '7c77a04d-1111-2222-3333-444455556666';
+    store.update(created.id, { latestResumeSessionId: uuid });
+    assert.equal(store.get(created.id).latestResumeSessionId, uuid);
+  });
+
+  test('getByChainKey() isolates distinct chainKeys', async () => {
+    const store = await createStore();
+    const a = store.create({ ...BASE_INPUT, cliSessionId: 'cli-a', chainKey: 'bg:thread-1:opus' });
+    const b = store.create({
+      ...BASE_INPUT,
+      cliSessionId: 'cli-b',
+      threadId: 'thread-2',
+      chainKey: 'bg:thread-2:opus',
+    });
+    assert.equal(store.getByChainKey('bg:thread-1:opus').id, a.id);
+    assert.equal(store.getByChainKey('bg:thread-2:opus').id, b.id);
   });
 });

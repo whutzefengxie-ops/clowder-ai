@@ -43,6 +43,41 @@ function makeStubSocketManager() {
   };
 }
 
+function makeInvocationRecordStore(records = {}) {
+  const byId = new Map(Object.entries(records));
+  return {
+    create: () => {
+      throw new Error('not implemented');
+    },
+    get: async (id) => byId.get(id) ?? null,
+    update: () => {
+      throw new Error('not implemented');
+    },
+    getByIdempotencyKey: () => null,
+    // F194 Phase B contract: enumerate running records scoped to (threadId, userId).
+    // Required by getThreadLiveInvocations canonical liveness helper.
+    listRunningByThread: (threadId, userId) => {
+      const out = [];
+      for (const r of byId.values()) {
+        if (r?.status === 'running' && r.threadId === threadId && r.userId === userId) out.push(r);
+      }
+      return out;
+    },
+  };
+}
+
+function makeInvocationTracker({ activeSlotsByThread = {}, userIds = {} } = {}) {
+  return {
+    has: (threadId, catId) =>
+      catId
+        ? Boolean(activeSlotsByThread[threadId]?.some((slot) => slot.catId === catId))
+        : Boolean(activeSlotsByThread[threadId]?.length),
+    getUserId: (threadId, catId) => userIds[`${threadId}:${catId}`] ?? null,
+    cancel: () => ({ cancelled: false, catIds: [] }),
+    getActiveSlots: (threadId) => activeSlotsByThread[threadId] ?? [],
+  };
+}
+
 describe('GET /api/messages — draft merge (#80)', () => {
   /** @type {MessageStore} */
   let messageStore;
@@ -64,6 +99,48 @@ describe('GET /api/messages — draft merge (#80)', () => {
       draftStore,
     });
     return app;
+  }
+
+  async function buildAppWithInvocationRecords(records) {
+    const app = Fastify({ logger: false });
+    await app.register(messagesRoutes, {
+      registry: makeStubRegistry(),
+      messageStore,
+      socketManager: makeStubSocketManager(),
+      router: makeStubRouter(),
+      draftStore,
+      invocationRecordStore: makeInvocationRecordStore(records),
+    });
+    return app;
+  }
+
+  async function buildAppWithInvocationRecordStore(invocationRecordStore, invocationTracker) {
+    const app = Fastify({ logger: false });
+    await app.register(messagesRoutes, {
+      registry: makeStubRegistry(),
+      messageStore,
+      socketManager: makeStubSocketManager(),
+      router: makeStubRouter(),
+      draftStore,
+      invocationRecordStore,
+      ...(invocationTracker ? { invocationTracker } : {}),
+    });
+    return app;
+  }
+
+  function makeInvocationRecord(invocationId, status, ts = Date.now()) {
+    return {
+      id: invocationId,
+      threadId: 'thread-1',
+      userId: 'user-1',
+      userMessageId: 'msg-user',
+      targetCats: ['opus'],
+      intent: 'execute',
+      status,
+      idempotencyKey: `key-${invocationId}`,
+      createdAt: ts - 1000,
+      updatedAt: ts,
+    };
   }
 
   it('includes active drafts on first page (no cursor)', async () => {
@@ -181,6 +258,326 @@ describe('GET /api/messages — draft merge (#80)', () => {
     // Formal message should still be there
     const formal = body.messages.find((m) => m.content === 'Completed message');
     assert(formal, 'Formal message should be present');
+  });
+
+  it('keeps draft when invocation record is still running (F173 hotfix3)', async () => {
+    const ts = Date.now();
+    draftStore.upsert({
+      userId: 'user-1',
+      threadId: 'thread-1',
+      invocationId: 'inv-running',
+      catId: 'opus',
+      content: 'Still streaming...',
+      updatedAt: ts,
+    });
+
+    const app = await buildAppWithInvocationRecords({
+      'inv-running': makeInvocationRecord('inv-running', 'running', ts),
+    });
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/messages?threadId=thread-1',
+      headers: { 'x-cat-cafe-user': 'user-1' },
+    });
+
+    assert.equal(res.statusCode, 200);
+    const body = JSON.parse(res.body);
+    const draft = body.messages.find((m) => m.id === 'draft-inv-running');
+    assert(draft, 'Running invocation draft should remain visible');
+    assert.equal(draft.content, 'Still streaming...');
+    assert.equal(draftStore.getByThread('user-1', 'thread-1').length, 1, 'Running draft should not be deleted');
+  });
+
+  it('keeps draft visible when invocation record is missing but tracker slot is active', async () => {
+    const ts = Date.now();
+    draftStore.upsert({
+      userId: 'user-1',
+      threadId: 'thread-1',
+      invocationId: 'inv-tracker-live',
+      catId: 'opus',
+      content: 'Streaming draft backed by tracker',
+      updatedAt: ts,
+    });
+
+    const app = await buildAppWithInvocationRecordStore(
+      makeInvocationRecordStore({}),
+      makeInvocationTracker({
+        activeSlotsByThread: { 'thread-1': [{ catId: 'opus', startedAt: ts - 1000 }] },
+        userIds: { 'thread-1:opus': 'user-1' },
+      }),
+    );
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/messages?threadId=thread-1',
+      headers: { 'x-cat-cafe-user': 'user-1' },
+    });
+
+    assert.equal(res.statusCode, 200);
+    const body = JSON.parse(res.body);
+    const draft = body.messages.find((m) => m.id === 'draft-inv-tracker-live');
+    assert(draft, 'Tracker-active draft should remain visible even when record store is stale');
+    assert.equal(draft.content, 'Streaming draft backed by tracker');
+    assert.equal(draftStore.getByThread('user-1', 'thread-1').length, 1, 'Tracker-active draft should not be deleted');
+  });
+
+  it('keeps draft visible when invocation record is terminal but tracker slot is active', async () => {
+    const ts = Date.now();
+    draftStore.upsert({
+      userId: 'user-1',
+      threadId: 'thread-1',
+      invocationId: 'inv-terminal-record-tracker-live',
+      catId: 'opus',
+      content: 'Tracker wins over stale terminal record',
+      updatedAt: ts,
+    });
+
+    const app = await buildAppWithInvocationRecordStore(
+      makeInvocationRecordStore({
+        'inv-terminal-record-tracker-live': makeInvocationRecord('inv-terminal-record-tracker-live', 'failed', ts),
+      }),
+      makeInvocationTracker({
+        activeSlotsByThread: { 'thread-1': [{ catId: 'opus', startedAt: ts - 1000 }] },
+        userIds: { 'thread-1:opus': 'user-1' },
+      }),
+    );
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/messages?threadId=thread-1',
+      headers: { 'x-cat-cafe-user': 'user-1' },
+    });
+
+    assert.equal(res.statusCode, 200);
+    const body = JSON.parse(res.body);
+    const draft = body.messages.find((m) => m.id === 'draft-inv-terminal-record-tracker-live');
+    assert(draft, 'Tracker-active draft should remain visible when record status is stale');
+    assert.equal(draftStore.getByThread('user-1', 'thread-1').length, 1, 'Tracker-active draft should not be deleted');
+  });
+
+  it('keeps draft visible when tracker liveness lookup fails', async () => {
+    const ts = Date.now();
+    draftStore.upsert({
+      userId: 'user-1',
+      threadId: 'thread-1',
+      invocationId: 'inv-tracker-lookup-error',
+      catId: 'opus',
+      content: 'Draft should survive tracker lookup errors',
+      updatedAt: ts,
+    });
+
+    const app = await buildAppWithInvocationRecordStore(makeInvocationRecordStore({}), {
+      ...makeInvocationTracker(),
+      getActiveSlots: () => {
+        throw new Error('tracker unavailable');
+      },
+    });
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/messages?threadId=thread-1',
+      headers: { 'x-cat-cafe-user': 'user-1' },
+    });
+
+    assert.equal(res.statusCode, 200);
+    const body = JSON.parse(res.body);
+    const draft = body.messages.find((m) => m.id === 'draft-inv-tracker-lookup-error');
+    assert(draft, 'Tracker lookup failure should fail open and keep the draft visible');
+    assert.equal(
+      draftStore.getByThread('user-1', 'thread-1').length,
+      1,
+      'Tracker lookup failure should not delete draft',
+    );
+  });
+
+  it('does not treat a newer tracker slot within the prior skew window as proof for an older draft', async () => {
+    const ts = Date.now();
+    draftStore.upsert({
+      userId: 'user-1',
+      threadId: 'thread-1',
+      invocationId: 'inv-old-draft',
+      catId: 'opus',
+      content: 'Old draft from previous invocation',
+      updatedAt: ts,
+    });
+
+    const app = await buildAppWithInvocationRecordStore(
+      makeInvocationRecordStore({}),
+      makeInvocationTracker({
+        activeSlotsByThread: { 'thread-1': [{ catId: 'opus', startedAt: ts + 500 }] },
+        userIds: { 'thread-1:opus': 'user-1' },
+      }),
+    );
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/messages?threadId=thread-1',
+      headers: { 'x-cat-cafe-user': 'user-1' },
+    });
+
+    assert.equal(res.statusCode, 200);
+    const body = JSON.parse(res.body);
+    const oldDraft = body.messages.find((m) => m.id === 'draft-inv-old-draft');
+    assert.equal(oldDraft, undefined, 'Newer tracker slot inside the old skew window must not revive an older draft');
+    assert.equal(
+      draftStore.getByThread('user-1', 'thread-1').length,
+      1,
+      'Filtered draft should remain for TTL cleanup',
+    );
+  });
+
+  it('does not revive an older draft that was merely touched after a newer tracker slot started', async () => {
+    const ts = Date.now();
+    draftStore.upsert({
+      userId: 'user-1',
+      threadId: 'thread-1',
+      invocationId: 'inv-old-touched-draft',
+      catId: 'opus',
+      content: 'Old draft touched by stale tool heartbeat',
+      createdAt: ts - 5000,
+      updatedAt: ts + 1000,
+    });
+
+    const app = await buildAppWithInvocationRecordStore(
+      makeInvocationRecordStore({}),
+      makeInvocationTracker({
+        activeSlotsByThread: { 'thread-1': [{ catId: 'opus', startedAt: ts }] },
+        userIds: { 'thread-1:opus': 'user-1' },
+      }),
+    );
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/messages?threadId=thread-1',
+      headers: { 'x-cat-cafe-user': 'user-1' },
+    });
+
+    assert.equal(res.statusCode, 200);
+    const body = JSON.parse(res.body);
+    const oldDraft = body.messages.find((m) => m.id === 'draft-inv-old-touched-draft');
+    assert.equal(oldDraft, undefined, 'Newer tracker slot must not revive a draft created before that slot');
+    assert.equal(
+      draftStore.getByThread('user-1', 'thread-1').length,
+      1,
+      'Filtered draft should remain for TTL cleanup',
+    );
+  });
+
+  it('filters orphan draft without deleting it when invocation record is missing (F173 hotfix3)', async () => {
+    const ts = Date.now();
+    draftStore.upsert({
+      userId: 'user-1',
+      threadId: 'thread-1',
+      invocationId: 'inv-orphan',
+      catId: 'opus',
+      content: 'Zombie draft from missing invocation',
+      updatedAt: ts,
+    });
+
+    const app = await buildAppWithInvocationRecords({});
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/messages?threadId=thread-1',
+      headers: { 'x-cat-cafe-user': 'user-1' },
+    });
+
+    assert.equal(res.statusCode, 200);
+    const body = JSON.parse(res.body);
+    const orphan = body.messages.find((m) => m.id === 'draft-inv-orphan');
+    assert.equal(orphan, undefined, 'Orphan draft should not appear in GET /api/messages response');
+    assert.equal(draftStore.getByThread('user-1', 'thread-1').length, 1, 'GET should not delete orphan drafts');
+  });
+
+  it('filters draft without deleting it when invocation record is no longer running (F173 hotfix3)', async () => {
+    const ts = Date.now();
+    draftStore.upsert({
+      userId: 'user-1',
+      threadId: 'thread-1',
+      invocationId: 'inv-failed',
+      catId: 'opus',
+      content: 'Failed invocation draft',
+      updatedAt: ts,
+    });
+
+    const app = await buildAppWithInvocationRecords({
+      'inv-failed': makeInvocationRecord('inv-failed', 'failed', ts),
+    });
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/messages?threadId=thread-1',
+      headers: { 'x-cat-cafe-user': 'user-1' },
+    });
+
+    assert.equal(res.statusCode, 200);
+    const body = JSON.parse(res.body);
+    const failedDraft = body.messages.find((m) => m.id === 'draft-inv-failed');
+    assert.equal(failedDraft, undefined, 'Non-running invocation draft should not appear');
+    assert.equal(draftStore.getByThread('user-1', 'thread-1').length, 1, 'GET should not delete non-running drafts');
+  });
+
+  for (const status of ['succeeded', 'canceled']) {
+    it(`filters draft without deleting it when invocation record is ${status} (F173 hotfix3)`, async () => {
+      const ts = Date.now();
+      const invocationId = `inv-${status}`;
+      draftStore.upsert({
+        userId: 'user-1',
+        threadId: 'thread-1',
+        invocationId,
+        catId: 'opus',
+        content: `${status} invocation draft`,
+        updatedAt: ts,
+      });
+
+      const app = await buildAppWithInvocationRecords({
+        [invocationId]: makeInvocationRecord(invocationId, status, ts),
+      });
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/messages?threadId=thread-1',
+        headers: { 'x-cat-cafe-user': 'user-1' },
+      });
+
+      assert.equal(res.statusCode, 200);
+      const body = JSON.parse(res.body);
+      const terminalDraft = body.messages.find((m) => m.id === `draft-${invocationId}`);
+      assert.equal(terminalDraft, undefined, 'Terminal invocation draft should not appear');
+      assert.equal(draftStore.getByThread('user-1', 'thread-1').length, 1, 'GET should not delete terminal drafts');
+    });
+  }
+
+  it('keeps draft visible when invocation record lookup fails (F173 hotfix3)', async () => {
+    const ts = Date.now();
+    draftStore.upsert({
+      userId: 'user-1',
+      threadId: 'thread-1',
+      invocationId: 'inv-redis-blip',
+      catId: 'opus',
+      content: 'Draft during transient invocation store failure',
+      updatedAt: ts,
+    });
+
+    const app = await buildAppWithInvocationRecordStore({
+      create: () => {
+        throw new Error('not implemented');
+      },
+      get: async () => {
+        throw new Error('transient redis read failure');
+      },
+      update: () => {
+        throw new Error('not implemented');
+      },
+      getByIdempotencyKey: () => null,
+    });
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/messages?threadId=thread-1',
+      headers: { 'x-cat-cafe-user': 'user-1' },
+    });
+
+    assert.equal(res.statusCode, 200);
+    const body = JSON.parse(res.body);
+    const draft = body.messages.find((m) => m.id === 'draft-inv-redis-blip');
+    assert(draft, 'Draft should remain visible when liveness lookup is unavailable');
+    assert.equal(
+      draftStore.getByThread('user-1', 'thread-1').length,
+      1,
+      'Draft should not be deleted when liveness lookup fails',
+    );
   });
 
   it('userId isolation: cannot see other user drafts', async () => {
@@ -409,10 +806,13 @@ describe('GET /api/messages — draft merge (#80)', () => {
 
     // Bug B: stream identity must be included for frontend reconciliation
     assert.equal(draft.origin, 'stream', 'Draft should have origin: stream');
+    // F194 Phase Z9 AC-Z25 (KD-28): draft now stamps both invocationId (parent
+    // chain) and turnInvocationId (per-visible-cat-turn). Draft has only one
+    // identity (its own invocationId) so both fields = invocationId.
     assert.deepEqual(
       draft.extra?.stream,
-      { invocationId: 'inv-contract' },
-      'Draft should have extra.stream.invocationId',
+      { invocationId: 'inv-contract', turnInvocationId: 'inv-contract' },
+      'Draft should have extra.stream.invocationId + turnInvocationId (Z9 unconditional stamp)',
     );
   });
 

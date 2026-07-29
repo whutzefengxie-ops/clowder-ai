@@ -10,10 +10,13 @@ import Fastify from 'fastify';
 describe('callback-memory-routes DI (IEvidenceStore path)', () => {
   let app;
   let registerFn;
+  let registerAuthHook;
 
   beforeEach(async () => {
     const mod = await import('../../dist/routes/callback-memory-routes.js');
     registerFn = mod.registerCallbackMemoryRoutes;
+    const authMod = await import('../../dist/routes/callback-auth-prehandler.js');
+    registerAuthHook = authMod.registerCallbackAuthHook;
   });
 
   afterEach(async () => {
@@ -22,12 +25,16 @@ describe('callback-memory-routes DI (IEvidenceStore path)', () => {
 
   function createMockRegistry() {
     return {
-      verify: () => ({
-        invocationId: 'inv-1',
-        catId: 'opus',
-        userId: 'user-1',
-        threadId: 'thread-1',
-        callbackToken: 'tok-1',
+      // F174 Phase A: verify() returns VerifyResult discriminated union
+      verify: async () => ({
+        ok: true,
+        record: {
+          invocationId: 'inv-1',
+          catId: 'opus',
+          userId: 'user-1',
+          threadId: 'thread-1',
+          callbackToken: 'tok-1',
+        },
       }),
     };
   }
@@ -44,8 +51,8 @@ describe('callback-memory-routes DI (IEvidenceStore path)', () => {
     };
 
     app = Fastify();
+    registerAuthHook(app, createMockRegistry());
     await registerFn(app, {
-      registry: createMockRegistry(),
       markerQueue: mockMarkerQueue,
     });
     await app.ready();
@@ -53,9 +60,8 @@ describe('callback-memory-routes DI (IEvidenceStore path)', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/callbacks/retain-memory',
+      headers: { 'x-invocation-id': 'inv-1', 'x-callback-token': 'tok-1' },
       payload: {
-        invocationId: 'inv-1',
-        callbackToken: 'tok-1',
         content: 'Lesson: always check Redis port',
         tags: 'kind:lesson',
       },
@@ -92,15 +98,16 @@ describe('callback-memory-routes DI (IEvidenceStore path)', () => {
     };
 
     app = Fastify();
+    registerAuthHook(app, createMockRegistry());
     await registerFn(app, {
-      registry: createMockRegistry(),
       evidenceStore: mockStore,
     });
     await app.ready();
 
     const res = await app.inject({
       method: 'GET',
-      url: '/api/callbacks/search-evidence?invocationId=inv-1&callbackToken=tok-1&q=prompt+audit',
+      url: '/api/callbacks/search-evidence?q=prompt+audit',
+      headers: { 'x-invocation-id': 'inv-1', 'x-callback-token': 'tok-1' },
     });
 
     assert.equal(res.statusCode, 200);
@@ -126,8 +133,8 @@ describe('callback-memory-routes DI (IEvidenceStore path)', () => {
     };
 
     app = Fastify();
+    registerAuthHook(app, createMockRegistry());
     await registerFn(app, {
-      registry: createMockRegistry(),
       reflectionService: mockReflection,
     });
     await app.ready();
@@ -135,9 +142,8 @@ describe('callback-memory-routes DI (IEvidenceStore path)', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/callbacks/reflect',
+      headers: { 'x-invocation-id': 'inv-1', 'x-callback-token': 'tok-1' },
       payload: {
-        invocationId: 'inv-1',
-        callbackToken: 'tok-1',
         query: 'What patterns do we use?',
       },
     });
@@ -163,8 +169,8 @@ describe('callback-memory-routes DI (IEvidenceStore path)', () => {
     };
 
     app = Fastify();
+    registerAuthHook(app, createMockRegistry());
     await registerFn(app, {
-      registry: createMockRegistry(),
       markerQueue: mockMarkerQueue,
     });
     await app.ready();
@@ -172,9 +178,8 @@ describe('callback-memory-routes DI (IEvidenceStore path)', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/callbacks/retain-memory',
+      headers: { 'x-invocation-id': 'inv-1', 'x-callback-token': 'tok-1' },
       payload: {
-        invocationId: 'inv-1',
-        callbackToken: 'tok-1',
         content: 'Important architectural decision',
         metadata: { custom: 'value' },
       },

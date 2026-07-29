@@ -13,25 +13,42 @@ import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import type { InvocationTracker } from '../domains/cats/services/agents/invocation/InvocationTracker.js';
 import type { TaskProgressStore } from '../domains/cats/services/agents/invocation/TaskProgressStore.js';
+import {
+  aggregateThreadArtifacts,
+  collectAllThreadMessages,
+} from '../domains/cats/services/agents/routing/thread-artifacts-aggregator.js';
+import { resolveBootcampWorkspaceRoot } from '../domains/cats/services/bootcamp/workspace-root.js';
 import { AuditEventTypes, getEventAuditLog } from '../domains/cats/services/orchestration/EventAuditLog.js';
+import type { TranscriptWriter } from '../domains/cats/services/session/TranscriptWriter.js';
 import type { IBacklogStore } from '../domains/cats/services/stores/ports/BacklogStore.js';
 import type { DeliveryCursorStore } from '../domains/cats/services/stores/ports/DeliveryCursorStore.js';
 import type { IDraftStore } from '../domains/cats/services/stores/ports/DraftStore.js';
 import type { IMemoryStore } from '../domains/cats/services/stores/ports/MemoryStore.js';
 import type { IMessageStore } from '../domains/cats/services/stores/ports/MessageStore.js';
+import type { ISessionChainStore } from '../domains/cats/services/stores/ports/SessionChainStore.js';
 import type { ITaskStore } from '../domains/cats/services/stores/ports/TaskStore.js';
 import type { IThreadReadStateStore } from '../domains/cats/services/stores/ports/ThreadReadStateStore.js';
 import type {
   BootcampStateV1,
+  ILabelStore,
   IThreadStore,
+  Thread,
   ThreadRoutingPolicyV1,
 } from '../domains/cats/services/stores/ports/ThreadStore.js';
+import { SYSTEM_USER_IDS } from '../domains/cats/services/stores/visibility.js';
 import { createModuleLogger } from '../infrastructure/logger.js';
-import { validateProjectPath } from '../utils/project-path.js';
-import { resolveUserId } from '../utils/request-identity.js';
+import { CHATGPT_CHAT_URL_REGEX } from '../utils/chatgpt-chat-url.js';
+import { migrateStoredProjectPath, resolvePersistentProjectPathDetailed } from '../utils/persistent-project-path.js';
+import { resolveStrictUserId, resolveUserId } from '../utils/request-identity.js';
 import { getMultiMentionOrchestrator } from './callback-multi-mention-routes.js';
 
 const log = createModuleLogger('routes/threads');
+const WRITE_OPS = new Set(['edit', 'create', 'delete']);
+
+interface ThreadIndexBuilder {
+  markThreadDirty(threadId: string): void;
+  flushDirtyThreads?(): number | Promise<number>;
+}
 
 export interface ThreadsRoutesOptions {
   threadStore: IThreadStore;
@@ -53,20 +70,68 @@ export interface ThreadsRoutesOptions {
   readStateStore?: IThreadReadStateStore;
   /** F095 Phase C: validate backlogItemId on thread creation */
   backlogStore?: IBacklogStore;
+  /** B-4: Cascade delete guide session when thread is deleted */
+  guideSessionStore?: import('../domains/guides/GuideSessionRepository.js').IGuideSessionStore;
+  /** F187: Label store for validating label IDs on thread update */
+  labelStore?: ILabelStore;
+  /** F102: keep thread evidence search in sync after title-only updates */
+  indexBuilder?: ThreadIndexBuilder;
+  /** F232: active session lookup for pre-seal file artifact visibility. */
+  sessionChainStore?: ISessionChainStore;
+  /** F232: in-memory transcript buffer reader for pre-seal file artifact visibility. */
+  transcriptWriter?: TranscriptWriter;
+  /**
+   * F229: Reserved — no longer used by GET /api/threads.
+   * createdBy=userId (P1 fix) means threadStore.list(userId) already returns concierge threads;
+   * threadKind='concierge' filter handles default exclusion / includeConcierge=true inclusion.
+   */
+  conciergeThreadService?: import('../domains/concierge/ConciergeThreadService.js').ConciergeThreadService;
 }
 
-/** F087: Bootcamp state Zod schema */
+async function collectLiveFileLedger(
+  sessionChainStore: ISessionChainStore | undefined,
+  transcriptWriter: TranscriptWriter | undefined,
+  threadId: string,
+  userId: string,
+): Promise<Array<{ ref: string; label: string; updatedAt: number; updatedBy: string }>> {
+  if (!sessionChainStore || !transcriptWriter) return [];
+
+  try {
+    const sessions = await Promise.resolve(sessionChainStore.getChainByThread(threadId));
+    const activeSessions = sessions.filter((session) => session.status === 'active' && session.userId === userId);
+    const fileArrays = await Promise.all(
+      activeSessions.map(async (session) => {
+        const files = await transcriptWriter.getFilesTouched(session.id, {
+          threadId,
+          catId: session.catId,
+        });
+        return files
+          .filter((file) => file.ops.some((op) => WRITE_OPS.has(op)))
+          .map((file) => ({
+            ref: file.path,
+            label: file.path.split('/').pop() ?? file.path,
+            updatedAt: session.updatedAt,
+            updatedBy: session.catId,
+          }));
+      }),
+    );
+    return fileArrays.flat();
+  } catch {
+    return [];
+  }
+}
+
+/** F087: Bootcamp state Zod schema (F171 v2 flow) */
 const bootcampPhaseSchema = z.enum([
-  'phase-0-select-cat',
   'phase-1-intro',
   'phase-2-env-check',
   'phase-3-config-help',
-  'phase-3.5-advanced',
   'phase-4-task-select',
   'phase-5-kickoff',
   'phase-6-design',
   'phase-7-dev',
-  'phase-8-review',
+  'phase-7.5-add-teammate',
+  'phase-8-collab',
   'phase-9-complete',
   'phase-10-retro',
   'phase-11-farewell',
@@ -77,6 +142,9 @@ const bootcampStateSchema = z
     phase: bootcampPhaseSchema,
     leadCat: catIdSchema().optional(),
     selectedTaskId: z.string().max(50).optional(),
+    /** F171: sub-step for add-teammate / farewell console guide overlay.
+     *  Free-form string — guide flows evolve and rigid enums cause silent PATCH failures. */
+    guideStep: z.string().max(50).nullable().optional(),
     envCheck: z
       .record(z.object({ ok: z.boolean(), version: z.string().optional(), note: z.string().optional() }))
       .optional(),
@@ -112,7 +180,47 @@ const listThreadsSchema = z.object({
   featureIds: z.string().trim().min(1).max(2000).optional(),
   /** F095 Phase D: When true, list soft-deleted threads (trash bin) instead of active threads. */
   deleted: z.union([z.boolean(), z.string().trim().min(1).max(8)]).optional(),
+  /**
+   * F229: When true, include concierge threads in the list (default: excluded).
+   * Used by the concierge surface to load the per-user concierge thread.
+   */
+  includeConcierge: z.union([z.boolean(), z.string().trim().min(1).max(8)]).optional(),
 });
+
+async function resolveCreateThreadProjectPath(
+  projectPath: string | undefined,
+  bootcampState: BootcampStateV1 | undefined,
+): Promise<{ ok: true; projectPath: string | undefined } | { ok: false; statusCode: number; error: string }> {
+  if (bootcampState && (!projectPath || projectPath === 'default')) {
+    const bootcampWorkspace = await resolveBootcampWorkspaceRoot();
+    if (!bootcampWorkspace.ok) {
+      return {
+        ok: false,
+        statusCode: 500,
+        error: bootcampWorkspace.error,
+      };
+    }
+
+    return { ok: true, projectPath: bootcampWorkspace.projectPath };
+  }
+
+  if (projectPath && projectPath !== 'default') {
+    const resolved = await resolvePersistentProjectPathDetailed(projectPath);
+    if (!resolved.ok) {
+      const runtimeConfigError = ['runtime_root_invalid', 'runtime_workspace_missing'].includes(resolved.reason);
+      return {
+        ok: false,
+        statusCode: runtimeConfigError ? 500 : 400,
+        error: runtimeConfigError
+          ? `Unable to resolve persistent workspace: ${resolved.message ?? resolved.reason}`
+          : 'Invalid projectPath: must be an existing directory under allowed roots',
+      };
+    }
+    return { ok: true, projectPath: resolved.path };
+  }
+
+  return { ok: true, projectPath };
+}
 
 function parseOptionalBooleanQuery(value: string | boolean | undefined): boolean | undefined {
   if (value === undefined) return undefined;
@@ -121,6 +229,47 @@ function parseOptionalBooleanQuery(value: string | boolean | undefined): boolean
   if (normalized === 'true' || normalized === '1') return true;
   if (normalized === 'false' || normalized === '0') return false;
   return undefined;
+}
+
+export function sanitizeThreadForResponse(thread: Thread, _userId: string): Thread {
+  // Cloud Codex P2: strip internal-only fields that should not appear in API responses.
+  // pendingContinuation is per-cat/user session state — not client-visible.
+  // F247 AC-B1c-1: cloudCatBindings is owner-only operational sidecar — not visible via
+  //   default thread GET. Owner-only access goes through `/api/threads/:id/cloud-bindings`.
+  //   Defense-in-depth: Redis-backed threads already exclude this field via separate
+  //   hash storage (not hydrated by `.get()`); this strip protects the in-memory path.
+  const hasPendingContinuation = !!thread.pendingContinuation;
+  const hasCloudCatBindings = !!thread.cloudCatBindings;
+  // #872: threadMetadata is accessed via dedicated MCP tools only — strip from general APIs
+  // to avoid bloating thread list responses with worktree paths and notes.
+  const hasThreadMetadata = !!thread.threadMetadata;
+  if (!hasPendingContinuation && !hasCloudCatBindings && !hasThreadMetadata) return thread;
+  const { pendingContinuation: _pc, cloudCatBindings: _ccb, threadMetadata: _tm, ...sanitized } = thread;
+  return sanitized as Thread;
+}
+
+async function migrateRuntimeProjectPath(thread: Thread, threadStore: IThreadStore): Promise<Thread> {
+  if (!thread.projectPath || thread.projectPath === 'default' || thread.projectPath.startsWith('games/')) {
+    return thread;
+  }
+  const previousProjectPath = thread.projectPath;
+  const migratedProjectPath = await migrateStoredProjectPath(previousProjectPath);
+  if (migratedProjectPath === previousProjectPath) return thread;
+  const projectPath = migratedProjectPath ?? 'default';
+
+  try {
+    await threadStore.updateProjectPath(thread.id, projectPath);
+  } catch (err) {
+    log.warn(
+      { err, threadId: thread.id, previousProjectPath, projectPath },
+      'failed to persist runtime projectPath migration during thread read',
+    );
+  }
+  return { ...thread, projectPath };
+}
+
+function isConciergeThread(thread: Thread): boolean {
+  return thread.threadKind === 'concierge';
 }
 
 const threadRoutingRuleSchema = z
@@ -165,6 +314,17 @@ const updateThreadSchema = z
     voiceMode: z.boolean().optional(),
     /** F087: Update bootcamp state. null clears. */
     bootcampState: bootcampStateSchema.nullable().optional(),
+    /** Bubble display overrides: thinking block expand/collapse. */
+    bubbleThinking: z.enum(['global', 'expanded', 'collapsed']).optional(),
+    /** Bubble display overrides: CLI output block expand/collapse. */
+    bubbleCli: z.enum(['global', 'expanded', 'collapsed']).optional(),
+    /** F168: Preferred workspace mode for auto-switch on thread open. null clears. */
+    preferredWorkspaceMode: z
+      .enum(['dev', 'recall', 'schedule', 'tasks', 'community', 'artifacts', 'approval', 'trajectory'])
+      .nullable()
+      .optional(),
+    /** F187: Thread label IDs. */
+    labels: z.array(z.string().trim().min(1).max(50)).max(20).optional(),
   })
   .strict()
   .refine(
@@ -176,14 +336,18 @@ const updateThreadSchema = z
       data.preferredCats !== undefined ||
       data.routingPolicy !== undefined ||
       data.voiceMode !== undefined ||
-      data.bootcampState !== undefined,
+      data.bootcampState !== undefined ||
+      data.bubbleThinking !== undefined ||
+      data.bubbleCli !== undefined ||
+      data.preferredWorkspaceMode !== undefined ||
+      data.labels !== undefined,
     {
       message: 'At least one field must be provided',
     },
   );
 
 export const threadsRoutes: FastifyPluginAsync<ThreadsRoutesOptions> = async (app, opts) => {
-  const { threadStore, messageStore, taskProgressStore } = opts;
+  const { threadStore, messageStore, taskProgressStore, taskStore } = opts;
 
   // POST /api/threads - 创建对话
   app.post('/api/threads', async (request, reply) => {
@@ -193,25 +357,28 @@ export const threadsRoutes: FastifyPluginAsync<ThreadsRoutesOptions> = async (ap
       return { error: 'Invalid request body', details: parseResult.error.issues };
     }
 
-    const { userId: legacyUserId, title, projectPath, preferredCats, pinned, backlogItemId } = parseResult.data;
+    const {
+      userId: legacyUserId,
+      title,
+      projectPath,
+      preferredCats,
+      pinned,
+      backlogItemId,
+      bootcampState,
+    } = parseResult.data;
     const userId = resolveUserId(request, { fallbackUserId: legacyUserId });
     if (!userId) {
       reply.status(401);
-      return { error: 'Identity required (X-Cat-Cafe-User header or userId query)' };
+      return { error: 'Identity required (session cookie or X-Cat-Cafe-User header)' };
     }
 
-    // Validate projectPath is a real directory under allowed roots
-    let thread;
-    if (projectPath && projectPath !== 'default') {
-      const validated = await validateProjectPath(projectPath);
-      if (!validated) {
-        reply.status(400);
-        return { error: 'Invalid projectPath: must be an existing directory under allowed roots' };
-      }
-      thread = await threadStore.create(userId, title, validated);
-    } else {
-      thread = await threadStore.create(userId, title, projectPath);
+    const resolvedProjectPath = await resolveCreateThreadProjectPath(projectPath, bootcampState as BootcampStateV1);
+    if (!resolvedProjectPath.ok) {
+      reply.status(resolvedProjectPath.statusCode);
+      return { error: resolvedProjectPath.error };
     }
+
+    let thread: Thread = await threadStore.create(userId, title, resolvedProjectPath.projectPath);
 
     // F32-b Phase 2: Set preferred cats if provided at creation time
     if (preferredCats && preferredCats.length > 0) {
@@ -241,14 +408,13 @@ export const threadsRoutes: FastifyPluginAsync<ThreadsRoutesOptions> = async (ap
     }
 
     // F087: Set bootcamp state if provided at creation time
-    const { bootcampState } = parseResult.data;
     if (bootcampState) {
       await threadStore.updateBootcampState(thread.id, bootcampState as BootcampStateV1);
       thread = (await threadStore.get(thread.id)) ?? thread;
     }
 
     reply.status(201);
-    return thread;
+    return sanitizeThreadForResponse(await migrateRuntimeProjectPath(thread, threadStore), userId);
   });
 
   // GET /api/threads - 列出用户的对话
@@ -265,19 +431,55 @@ export const threadsRoutes: FastifyPluginAsync<ThreadsRoutesOptions> = async (ap
       hasBacklogItemId: hasBacklogItemIdRaw,
       featureIds,
       deleted: deletedRaw,
+      includeConcierge: includeConciergeRaw,
     } = parseResult.data;
     const hasBacklogItemId = parseOptionalBooleanQuery(hasBacklogItemIdRaw);
     const showDeleted = parseOptionalBooleanQuery(deletedRaw);
+    const includeConcierge = parseOptionalBooleanQuery(includeConciergeRaw);
     const userId = resolveUserId(request, { defaultUserId: 'default-user' });
     if (!userId) return { threads: [] };
 
     // F095 Phase D: Return soft-deleted threads when deleted=true
     if (showDeleted) {
-      const deletedThreads = await threadStore.listDeleted(userId);
+      let deletedThreads = await Promise.all(
+        (await threadStore.listDeleted(userId)).map(async (thread) =>
+          sanitizeThreadForResponse(await migrateRuntimeProjectPath(thread, threadStore), userId),
+        ),
+      );
+      // F229: Apply the same concierge exclusion to the trash view.
+      // Without this, a soft-deleted concierge thread appears in the default trash list;
+      // after /api/concierge/thread creates a replacement and the old thread is restored,
+      // two live concierge threads can exist for the same user.
+      if (!includeConcierge) {
+        deletedThreads = deletedThreads.filter((t) => !isConciergeThread(t));
+      }
       return { threads: deletedThreads };
     }
 
-    let threads = projectPath ? await threadStore.listByProject(userId, projectPath) : await threadStore.list(userId);
+    const migratedProjectPath = projectPath ? await migrateStoredProjectPath(projectPath) : undefined;
+    if (projectPath && migratedProjectPath === null) return { threads: [] };
+    const projectPathMatches =
+      projectPath && migratedProjectPath
+        ? await Promise.all(
+            [...new Set([projectPath, migratedProjectPath])].map((path) => threadStore.listByProject(userId, path)),
+          )
+        : null;
+    let threads = projectPathMatches
+      ? [...new Map(projectPathMatches.flat().map((thread) => [thread.id, thread] as const)).values()]
+      : await threadStore.list(userId);
+    threads = await Promise.all(
+      threads.map(async (thread) =>
+        sanitizeThreadForResponse(await migrateRuntimeProjectPath(thread, threadStore), userId),
+      ),
+    );
+
+    // F229: Exclude concierge threads from default sidebar listing.
+    // createdBy=userId (P1 fix) means threadStore.list(userId) includes concierge threads;
+    // threadKind='concierge' is the filter signal at this route layer.
+    // includeConcierge=true opt-in exposes them (used by the concierge surface itself).
+    if (!includeConcierge) {
+      threads = threads.filter((t) => !isConciergeThread(t));
+    }
 
     // F058 Phase G: Match threads by feature IDs in titles
     if (featureIds) {
@@ -384,7 +586,8 @@ export const threadsRoutes: FastifyPluginAsync<ThreadsRoutesOptions> = async (ap
       reply.status(404);
       return { error: 'Thread not found' };
     }
-    return thread;
+    const userId = resolveUserId(request, { defaultUserId: 'default-user' }) ?? 'default-user';
+    return sanitizeThreadForResponse(await migrateRuntimeProjectPath(thread, threadStore), userId);
   });
 
   // PATCH /api/threads/:id - 更新标题/置顶/收藏
@@ -402,9 +605,29 @@ export const threadsRoutes: FastifyPluginAsync<ThreadsRoutesOptions> = async (ap
       return { error: 'Thread not found' };
     }
 
-    const { title, pinned, favorited, thinkingMode, preferredCats, routingPolicy, voiceMode, bootcampState } =
-      parseResult.data;
-    if (title !== undefined) await threadStore.updateTitle(id, title);
+    const {
+      title,
+      pinned,
+      favorited,
+      thinkingMode,
+      preferredCats,
+      routingPolicy,
+      voiceMode,
+      bootcampState,
+      bubbleThinking,
+      bubbleCli,
+      preferredWorkspaceMode,
+      labels,
+    } = parseResult.data;
+    if (title !== undefined) {
+      await threadStore.updateTitle(id, title);
+      try {
+        opts.indexBuilder?.markThreadDirty(id);
+        await opts.indexBuilder?.flushDirtyThreads?.();
+      } catch (err) {
+        log.warn({ err, threadId: id }, 'failed to refresh thread evidence index after title update');
+      }
+    }
     if (pinned !== undefined) await threadStore.updatePin(id, pinned);
     if (favorited !== undefined) await threadStore.updateFavorite(id, favorited);
     if (thinkingMode !== undefined) await threadStore.updateThinkingMode(id, thinkingMode);
@@ -416,14 +639,147 @@ export const threadsRoutes: FastifyPluginAsync<ThreadsRoutesOptions> = async (ap
     if (bootcampState !== undefined) {
       await threadStore.updateBootcampState(id, bootcampState as BootcampStateV1 | null);
     }
+    if (bubbleThinking !== undefined) await threadStore.updateBubbleDisplay(id, 'bubbleThinking', bubbleThinking);
+    if (bubbleCli !== undefined) await threadStore.updateBubbleDisplay(id, 'bubbleCli', bubbleCli);
+    if (preferredWorkspaceMode !== undefined) {
+      await threadStore.updatePreferredWorkspaceMode(id, preferredWorkspaceMode);
+    }
+    if (labels !== undefined) {
+      if (labels.length > 0 && opts.labelStore) {
+        const userId = resolveUserId(request) ?? 'default-user';
+        const userLabels = await opts.labelStore.list(userId);
+        const validIds = new Set(userLabels.map((l) => l.id));
+        const invalid = labels.filter((lid) => !validIds.has(lid));
+        if (invalid.length > 0) {
+          reply.status(400);
+          return { error: 'Invalid label IDs', invalidIds: invalid };
+        }
+      }
+      await threadStore.updateLabels(id, labels);
+    }
 
     const updated = await threadStore.get(id);
     if (!updated) {
       reply.status(404);
       return { error: 'Thread not found' };
     }
+    const patchUserId = resolveUserId(request, { defaultUserId: 'default-user' }) ?? 'default-user';
+    return sanitizeThreadForResponse(updated, patchUserId);
+  });
 
-    return updated;
+  // ─── F247 AC-B1c-1: cloudCatBindings owner-only endpoints ───
+  //
+  // Per KD-20 / KD-21, these are owner-only operational sidecar endpoints. The same
+  // data MUST NOT leak through the default `GET /api/threads/:id` (stripped by
+  // `sanitizeThreadForResponse`) nor through `get_thread_context` / thread export /
+  // cross-post / memory index paths (see AC-B1c-8 privacy fixtures).
+
+  const cloudBindingPatchSchema = z
+    .object({
+      catId: catIdSchema(),
+      /** ChatGPT chat URL — must match CHATGPT_CHAT_URL_REGEX. `null` clears the binding. */
+      chatUrl: z
+        .union([
+          z.string().regex(CHATGPT_CHAT_URL_REGEX, 'chatUrl must be canonical https://chatgpt.com/c/<id>'),
+          z.null(),
+        ])
+        .nullable(),
+    })
+    .strict();
+
+  // GET /api/threads/:id/cloud-bindings — STRICT user-owned only.
+  // Returns `{ bindings: Record<catId, chatUrl> }`. Empty object when no bindings.
+  //
+  // Auth model (R3-hardened defense-in-depth):
+  //   1. resolveStrictUserId: session cookie / non-browser header only. null → 401.
+  //   2. Reserved-identity reject: `system` / `scheduler` literals MUST NOT acquire
+  //      ownership via `x-cat-cafe-user` header. These are internal-only emitters
+  //      (orchestrator messages, scheduled tasks); accepting them as user-supplied
+  //      identity would let any non-browser caller spoof system owners.
+  //   3. System-thread reject: cloud bindings are user-owned operational sidecar;
+  //      system threads (default lobby / connector hub / eval domain / etc.) have
+  //      no user-owner semantics for this feature → 403 (NOT 404, so the caller
+  //      knows the thread exists but the endpoint is N/A).
+  //   4. Strict literal owner match: `thread.createdBy === userId`.
+  //
+  // History:
+  //   - R0: `resolveUserId(... defaultUserId: 'default-user')` + `createdBy === 'system'`
+  //         exemption (copied from reveal endpoint) → ANYONE could read system thread
+  //         bindings, even un-authed (gpt52 R2 P0).
+  //   - R1: strict resolver only, but `x-cat-cafe-user: system` header still spoofed
+  //         system owner on system threads (gpt52 R3 P0). Codified by a wishful test.
+  //   - R2 (here): reject reserved identities at auth layer + reject system-owned
+  //         threads at thread layer → no spoof path remains. Echoes F077 R9 fix
+  //         pattern + F24 P1-3 reserved-identity discipline.
+  app.get<{ Params: { id: string } }>('/api/threads/:id/cloud-bindings', async (request, reply) => {
+    const { id } = request.params;
+    const userId = resolveStrictUserId(request);
+    if (!userId) {
+      reply.status(401);
+      return { error: 'Authentication required' };
+    }
+    if (SYSTEM_USER_IDS.has(userId)) {
+      // Reserved internal identity cannot be acquired through user-facing endpoints.
+      reply.status(401);
+      return { error: 'Reserved internal identity cannot be used' };
+    }
+    const thread = await threadStore.get(id);
+    if (!thread || thread.deletedAt) {
+      reply.status(404);
+      return { error: 'Thread not found' };
+    }
+    if (SYSTEM_USER_IDS.has(thread.createdBy)) {
+      // System threads have no user-owner semantics for cloud bindings.
+      reply.status(403);
+      return { error: 'Cloud cat bindings are not supported on system-owned threads' };
+    }
+    if (thread.createdBy !== userId) {
+      reply.status(403);
+      return { error: 'Only the thread owner can read cloud cat bindings' };
+    }
+    const bindings = await threadStore.getCloudCatBindings(id);
+    return { bindings };
+  });
+
+  // PATCH /api/threads/:id/cloud-bindings — STRICT user-owned only.
+  // Body: `{ catId: string, chatUrl: string | null }`. `chatUrl=null` clears the catId binding.
+  // URL must match CHATGPT_CHAT_URL_REGEX (AC-B1c-11). Returns `{ bindings: ... }` post-update.
+  //
+  // Auth model: same 4 layers as GET (strict resolver / reserved-identity reject /
+  // system-thread reject / literal owner match). See GET doc above for history.
+  app.patch<{ Params: { id: string } }>('/api/threads/:id/cloud-bindings', async (request, reply) => {
+    const { id } = request.params;
+    const userId = resolveStrictUserId(request);
+    if (!userId) {
+      reply.status(401);
+      return { error: 'Authentication required' };
+    }
+    if (SYSTEM_USER_IDS.has(userId)) {
+      reply.status(401);
+      return { error: 'Reserved internal identity cannot be used' };
+    }
+    const parseResult = cloudBindingPatchSchema.safeParse(request.body);
+    if (!parseResult.success) {
+      reply.status(400);
+      return { error: 'Invalid request body', details: parseResult.error.issues };
+    }
+    const thread = await threadStore.get(id);
+    if (!thread || thread.deletedAt) {
+      reply.status(404);
+      return { error: 'Thread not found' };
+    }
+    if (SYSTEM_USER_IDS.has(thread.createdBy)) {
+      reply.status(403);
+      return { error: 'Cloud cat bindings are not supported on system-owned threads' };
+    }
+    if (thread.createdBy !== userId) {
+      reply.status(403);
+      return { error: 'Only the thread owner can update cloud cat bindings' };
+    }
+    const { catId, chatUrl } = parseResult.data;
+    await threadStore.updateCloudCatBinding(id, catId as CatId, chatUrl);
+    const bindings = await threadStore.getCloudCatBindings(id);
+    return { bindings };
   });
 
   // DELETE /api/threads/:id - 删除对话 (with cascade delete)
@@ -449,12 +805,30 @@ export const threadsRoutes: FastifyPluginAsync<ThreadsRoutesOptions> = async (ap
     try {
       const thread = await threadStore.get(id);
 
+      // F095 Phase G + F192 livefix: Protect system threads from casual deletion.
+      // Covers both IM Hub (connectorHubState) and eval domain (systemKind) threads.
+      // Requires explicit ?force=true query param to proceed.
+      if (thread?.connectorHubState || thread?.systemKind) {
+        const { force } = request.query as { force?: string };
+        if (force !== 'true') {
+          reply.status(403);
+          return {
+            error: 'System thread protected',
+            detail: '系统级 thread 需要确认才能删除',
+            code: 'SYSTEM_THREAD_PROTECTED',
+          };
+        }
+      }
+
       // F095 Phase D: Soft-delete instead of hard delete — data preserved for trash bin
       const deleted = await threadStore.softDelete(id);
       if (!deleted) {
         reply.status(400);
         return { error: 'Cannot delete this thread' };
       }
+
+      // B-4: Cascade delete guide session to prevent stale sessions on deleted threads
+      void opts.guideSessionStore?.delete(id).catch(() => {});
 
       // I-2: Audit thread deletion for traceability (best-effort, don't block response)
       const userId = resolveUserId(request, {});
@@ -489,6 +863,13 @@ export const threadsRoutes: FastifyPluginAsync<ThreadsRoutesOptions> = async (ap
       return { error: 'Thread not found' };
     }
 
+    if (isConciergeThread(thread)) {
+      reply.status(400);
+      return {
+        error: 'Concierge threads cannot be restored through the generic trash endpoint; use /api/concierge/thread',
+      };
+    }
+
     const restored = await threadStore.restore(id);
     if (!restored) {
       reply.status(400);
@@ -496,7 +877,9 @@ export const threadsRoutes: FastifyPluginAsync<ThreadsRoutesOptions> = async (ap
     }
 
     const updated = await threadStore.get(id);
-    return updated;
+    if (!updated) return { error: 'Thread not found after restore' };
+    const restoreUserId = resolveUserId(request, { defaultUserId: 'default-user' }) ?? 'default-user';
+    return sanitizeThreadForResponse(updated, restoreUserId);
   });
 
   // F045: GET /api/threads/:threadId/task-progress — task progress snapshot for page refresh persistence
@@ -521,6 +904,104 @@ export const threadsRoutes: FastifyPluginAsync<ThreadsRoutesOptions> = async (ap
 
     const snapshot = taskProgressStore ? await taskProgressStore.getThreadSnapshots(threadId) : {};
     return { threadId, taskProgress: snapshot };
+  });
+
+  // F232: GET /api/threads/:threadId/artifacts — aggregate thread products (rich blocks + PR tasks + file ledger)
+  app.get<{ Params: { threadId: string } }>('/api/threads/:threadId/artifacts', async (request, reply) => {
+    const userId = resolveUserId(request, {});
+    if (!userId) {
+      reply.status(401);
+      return { error: 'Identity required' };
+    }
+
+    const { threadId } = request.params;
+    const thread = await threadStore.get(threadId);
+    if (!thread) {
+      reply.status(404);
+      return { error: 'Thread not found' };
+    }
+
+    if (thread.createdBy !== userId && thread.createdBy !== 'system') {
+      reply.status(403);
+      return { error: 'Access denied' };
+    }
+
+    // P1 fix (砚砚 review): 分页扫全量消息，getByThread 默认 limit=50 会吞掉 >50 条 thread 的早期产物
+    const messages = messageStore ? await collectAllThreadMessages(messageStore, threadId, userId) : [];
+    const allTasks = taskStore ? await taskStore.listByThread(threadId) : [];
+    // F232 P1 (cloud review): system thread（createdBy='system'，shared default thread）任何认证用户
+    // 都通过上面的 access guard，但 PR tracking task 带注册者 userId（user-specific）。必须按 userId 过滤，
+    // 否则 shared system thread 上 Alice 会看到 Bob 的 PR titles/refs。messages 已由
+    // collectAllThreadMessages(userId) scoped；ledger 是 thread 级产物记录（updatedBy=cat/'user'，非
+    // user 私有数据），无需过滤。
+    const prTasks = allTasks.filter((t) => t.kind === 'pr_tracking' && t.userId === userId);
+    const mem = await threadStore.getThreadMemory(threadId);
+    // P1 fix (砚砚 review): ledger 含 file/plan/feature-doc 文档产物（F148 类型），不止 file；都映射为面板 file 类，不静默丢
+    const persistedFileLedger = (mem?.recentArtifacts ?? []).filter(
+      (a) => a.type === 'file' || a.type === 'plan' || a.type === 'feature-doc',
+    );
+    const liveFileLedger = await collectLiveFileLedger(opts.sessionChainStore, opts.transcriptWriter, threadId, userId);
+    const fileLedger = [...persistedFileLedger, ...liveFileLedger];
+    const artifacts = aggregateThreadArtifacts({ messages, prTasks, fileLedger });
+    return { threadId, artifacts };
+  });
+
+  // F232 Phase B: GET /api/artifacts — global artifact aggregation across all user threads (AC-B1, AC-B2).
+  // Iterates all threads calling aggregateThreadArtifacts() per thread (reuses Phase A pipeline).
+  app.get('/api/artifacts', async (request, reply) => {
+    const userId = resolveUserId(request, {});
+    if (!userId) {
+      reply.status(401);
+      return { error: 'Identity required' };
+    }
+
+    const userThreads = await threadStore.list(userId);
+
+    // Parallel aggregation across all threads (AC-B2: reuse pipeline)
+    const perThread = await Promise.all(
+      userThreads.map(async (thread) => {
+        const messages = messageStore ? await collectAllThreadMessages(messageStore, thread.id, userId) : [];
+        const allTasks = taskStore ? await taskStore.listByThread(thread.id) : [];
+        const prTasks = allTasks.filter((t) => t.kind === 'pr_tracking' && t.userId === userId);
+        const mem = await threadStore.getThreadMemory(thread.id);
+        const fileLedger = (mem?.recentArtifacts ?? []).filter(
+          (a) => a.type === 'file' || a.type === 'plan' || a.type === 'feature-doc',
+        );
+        const artifacts = aggregateThreadArtifacts({
+          messages,
+          prTasks,
+          fileLedger,
+        });
+        return artifacts.map((a) => ({
+          ...a,
+          threadId: thread.id,
+          threadTitle: thread.title ?? thread.id,
+        }));
+      }),
+    );
+
+    // Flatten + sort descending by createdAt
+    let all = perThread.flat().sort((a, b) => b.createdAt - a.createdAt);
+
+    // F232 Phase B: server-side query param filtering (AC-B1)
+    const { type, cat, q } = request.query as { type?: string; cat?: string; q?: string };
+    if (type) {
+      all = all.filter((a) => a.type === type);
+    }
+    if (cat) {
+      // Normalize null catId → '—' sentinel (same as client-side extractCatChips)
+      all = all.filter((a) => (a.catId ?? '—') === cat);
+    }
+    if (q) {
+      // Normalize: Fastify may expose duplicate ?q= as array; take first element
+      const qStr = Array.isArray(q) ? q[0] : q;
+      if (typeof qStr === 'string') {
+        const lower = qStr.toLowerCase();
+        all = all.filter((a) => a.name && a.name.toLowerCase().includes(lower));
+      }
+    }
+
+    return { artifacts: all, total: all.length };
   });
 
   // F35: PATCH /api/threads/:id/reveal — reveal all whispers in a thread

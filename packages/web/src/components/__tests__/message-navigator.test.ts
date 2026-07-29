@@ -67,7 +67,7 @@ describe('MessageNavigator', () => {
     const msgs = [makeMsg('m1', 'user'), makeMsg('m2', 'assistant', 'opus'), makeMsg('m3', 'assistant', 'codex')];
     const html = render(msgs);
 
-    expect(html).toContain('bg-cocreator-primary');
+    expect(html).toContain('bg-cafe-accent');
     expect(html).toContain('#9B7EBD');
     expect(html).toContain('#5B8C5A');
   });
@@ -76,11 +76,11 @@ describe('MessageNavigator', () => {
     const msgs = [makeMsg('m1', 'user'), makeMsg('m2', 'assistant', 'opus-45'), makeMsg('m3', 'assistant', 'spark')];
     const html = render(msgs);
 
-    // base colors come from shared fallback CAT_CONFIGS (opus/codex)
+    // base colors come from useCatData (populated by /api/cats)
     expect(html).toContain('#9B7EBD');
     expect(html).toContain('#5B8C5A');
-    expect(html).toContain('跳转到 布偶猫（opus-45） 的消息');
-    expect(html).toContain('跳转到 缅因猫（spark） 的消息');
+    expect(html).toContain('跳转到 opus-45 的消息');
+    expect(html).toContain('跳转到 spark 的消息');
   });
 
   it('resolves non-hyphen variant catIds during fallback', () => {
@@ -92,33 +92,31 @@ describe('MessageNavigator', () => {
     ];
     const html = render(msgs);
 
-    // base colors come from shared fallback CAT_CONFIGS
+    // base colors come from useCatData
     expect(html).toContain('#5B8C5A'); // codex
     expect(html).toContain('#9B7EBD'); // opus
     expect(html).toContain('#5B9BD5'); // gemini
 
-    expect(html).toContain('跳转到 缅因猫（gpt52） 的消息');
-    expect(html).toContain('跳转到 布偶猫（sonnet） 的消息');
-    expect(html).toContain('跳转到 暹罗猫（gemini25） 的消息');
+    expect(html).toContain('跳转到 gpt52 的消息');
+    expect(html).toContain('跳转到 sonnet 的消息');
+    expect(html).toContain('跳转到 gemini25 的消息');
   });
 
   it('treats messages with catId as assistant even when type is user', () => {
     const msgs = [makeMsg('m1', 'user'), makeMsg('m2', 'user', 'gpt52'), makeMsg('m3', 'assistant', 'codex')];
     const html = render(msgs);
 
-    expect(html).toContain('跳转到 缅因猫（gpt52） 的消息');
+    expect(html).toContain('跳转到 gpt52 的消息');
 
     const ownerLabels = html.match(/跳转到 始皇帝 的消息/g) ?? [];
     expect(ownerLabels.length).toBe(1);
   });
 
-  it('applies dare fallback color and labels before /api/cats loads', () => {
-    const msgs = [makeMsg('m1', 'user'), makeMsg('m2', 'assistant', 'dare'), makeMsg('m3', 'assistant', 'dare-agent')];
+  it('applies kimi fallback color but keeps the raw id until /api/cats loads', () => {
+    const msgs = [makeMsg('m1', 'user'), makeMsg('m2', 'assistant', 'kimi'), makeMsg('m3', 'assistant', 'codex')];
     const html = render(msgs);
 
-    expect(html).toContain('#D4A76A');
-    expect(html).toContain('跳转到 狸花猫 的消息');
-    expect(html).toContain('跳转到 狸花猫（dare-agent） 的消息');
+    expect(html).toContain('跳转到 kimi 的消息');
   });
 
   it('includes accessibility labels', () => {
@@ -126,7 +124,7 @@ describe('MessageNavigator', () => {
     const html = render(msgs);
 
     expect(html).toContain('跳转到 始皇帝 的消息');
-    expect(html).toContain('跳转到 缅因猫 的消息');
+    expect(html).toContain('跳转到 codex 的消息');
   });
 
   it('samples at fixed intervals when messages exceed MAX_DOTS (18)', () => {
@@ -142,12 +140,16 @@ describe('MessageNavigator', () => {
     expect(buttons.length).toBe(18);
   });
 
-  it('renders viewport indicator track', () => {
+  it('renders 1px connecting rail, no viewport thumb', () => {
     const msgs = [makeMsg('m1', 'user'), makeMsg('m2', 'assistant', 'opus'), makeMsg('m3', 'assistant', 'codex')];
     const html = render(msgs);
 
-    // Track rail (thin line) and viewport indicator should be present
-    expect(html).toContain('bg-gray-200');
-    expect(html).toContain('bg-gray-300/50');
+    expect(html).toContain('--console-border-soft');
+    expect(html).toContain('w-px');
+    expect(html).not.toContain('w-1.5');
+    expect(html).not.toContain('opacity-40');
+    expect(html).not.toContain('bg-gray-200');
+    expect(html).not.toContain('bg-gray-300/50');
+    expect(html).toContain('rounded-full');
   });
 });

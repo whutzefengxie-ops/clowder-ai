@@ -3,6 +3,13 @@
  * 导出所有 Zod schemas
  */
 
+// F142 Command schemas (slash command manifest validation)
+export type { ManifestSlashCommand } from './command.schema.js';
+export {
+  ManifestSlashCommandSchema,
+  ManifestSlashCommandsSchema,
+  slashCommandNameSchema,
+} from './command.schema.js';
 export type { SendMessageRequest } from './message.schema.js';
 export {
   CodeContentSchema,
@@ -62,3 +69,60 @@ export {
   SignalSourceSchema,
   SignalTierSchema,
 } from './signals.schema.js';
+// F093 World Engine schemas (world entities + protocols + actions)
+export type {
+  CanonPromotionRecord,
+  CanonStatus,
+  CanonSummaryEntry,
+  CareLoopHint,
+  CharacterCoreIdentity,
+  CharacterGrowthState,
+  CharacterInnerDrive,
+  CharacterMaskOverlay,
+  CharacterRecord,
+  CharacterRelationshipTension,
+  CharacterVoiceAndImage,
+  JsonPatchOperation,
+  RelationshipBond,
+  SceneRecord,
+  SceneStatus,
+  WorldAction,
+  WorldActionEnvelope,
+  WorldActorKind,
+  WorldActorRef,
+  WorldContextEnvelope,
+  WorldEventEntry,
+  WorldEventType,
+  WorldMode,
+  WorldRecallResult,
+  WorldRecord,
+  WorldStatus,
+} from './world.js';
+export {
+  CanonPromotionRecordSchema,
+  CanonStatusSchema,
+  CanonSummaryEntrySchema,
+  CareLoopHintSchema,
+  CharacterCoreIdentitySchema,
+  CharacterGrowthStateSchema,
+  CharacterInnerDriveSchema,
+  CharacterMaskOverlaySchema,
+  CharacterRecordSchema,
+  CharacterRelationshipTensionSchema,
+  CharacterVoiceAndImageSchema,
+  JsonPatchOperationSchema,
+  RelationshipBondSchema,
+  SceneRecordSchema,
+  SceneStatusSchema,
+  WorldActionEnvelopeSchema,
+  WorldActionSchema,
+  WorldActorKindSchema,
+  WorldActorRefSchema,
+  WorldContextEnvelopeSchema,
+  WorldEventEntrySchema,
+  WorldEventTypeSchema,
+  WorldModeSchema,
+  WorldRecallResultSchema,
+  WorldRecordSchema,
+  WorldStatusSchema,
+} from './world.js';

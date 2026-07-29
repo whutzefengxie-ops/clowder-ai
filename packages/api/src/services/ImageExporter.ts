@@ -1,4 +1,6 @@
-import puppeteer, { type Browser } from 'puppeteer';
+import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
+import puppeteer, { type Browser } from 'puppeteer-core';
 import sharp from 'sharp';
 import { createModuleLogger } from '../infrastructure/logger.js';
 
@@ -7,6 +9,76 @@ const log = createModuleLogger('image-exporter');
 /** Chunk height for scroll-and-stitch. 4000px is well under Chrome's ~16384 GPU limit. */
 const CHUNK_HEIGHT = 4000;
 const VIEWPORT_WIDTH = 1280;
+
+function resolveConfiguredChromePath(): string | null {
+  const envPath = process.env.CHROME_EXECUTABLE_PATH;
+  if (!envPath) return null;
+  if (fs.existsSync(envPath)) {
+    log.info({ path: envPath }, 'Using CHROME_EXECUTABLE_PATH from env');
+    return envPath;
+  }
+  log.warn({ path: envPath }, 'CHROME_EXECUTABLE_PATH set but file not found, falling back to auto-detect');
+  return null;
+}
+
+function findLinuxBrowserCandidates(): string[] {
+  const candidates: string[] = [];
+  for (const name of ['google-chrome', 'google-chrome-stable', 'microsoft-edge', 'chromium', 'chromium-browser']) {
+    try {
+      const resolved = execFileSync('which', [name], { encoding: 'utf8' }).trim();
+      if (resolved) candidates.push(resolved);
+    } catch {
+      // not found, continue
+    }
+  }
+  return candidates;
+}
+
+function browserCandidatesForPlatform(): string[] {
+  if (process.platform === 'darwin') {
+    return [
+      '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+      '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
+      '/Applications/Chromium.app/Contents/MacOS/Chromium',
+    ];
+  }
+
+  if (process.platform === 'win32') {
+    return [
+      process.env.PROGRAMFILES ? `${process.env.PROGRAMFILES}\\Google\\Chrome\\Application\\chrome.exe` : null,
+      process.env['PROGRAMFILES(X86)']
+        ? `${process.env['PROGRAMFILES(X86)']}\\Google\\Chrome\\Application\\chrome.exe`
+        : null,
+      process.env.PROGRAMFILES ? `${process.env.PROGRAMFILES}\\Microsoft\\Edge\\Application\\msedge.exe` : null,
+    ].filter((candidate): candidate is string => Boolean(candidate));
+  }
+
+  if (process.platform === 'linux') return findLinuxBrowserCandidates();
+  return [];
+}
+
+/**
+ * Detect a Chromium-based browser executable on the system.
+ * Priority: CHROME_EXECUTABLE_PATH env > system Chrome > Edge > Chromium.
+ * CDP (Chrome DevTools Protocol) requires a Chromium-based browser —
+ * Firefox/Safari are not supported.
+ */
+function detectChromePath(): string {
+  const configuredPath = resolveConfiguredChromePath();
+  if (configuredPath) return configuredPath;
+
+  const candidates = browserCandidatesForPlatform();
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      log.info({ path: candidate }, 'Detected Chromium-based browser');
+      return candidate;
+    }
+  }
+
+  throw new Error(
+    `No Chromium-based browser found. Set CHROME_EXECUTABLE_PATH or install Chrome/Edge/Chromium. Searched: ${candidates.join(', ')}`,
+  );
+}
 
 /**
  * ImageExporter service for capturing screenshots of web pages using Chrome headless.
@@ -25,6 +97,7 @@ export class ImageExporter {
     try {
       if (!this.browser) {
         this.browser = await puppeteer.launch({
+          executablePath: detectChromePath(),
           headless: true,
           args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
         });
@@ -44,11 +117,12 @@ export class ImageExporter {
         timeout: 30000,
       });
 
-      // Wait for messages to render (export mode uses flow layout, no data-chat-container)
-      await page.waitForSelector('[data-message-id]', { timeout: 15000 });
+      // Wait for messages AND cat data to fully load and render.
+      // data-export-ready is set by ChatContainer when !isLoadingHistory && messages.length > 0 && !isLoadingCatData.
+      await page.waitForSelector('[data-export-ready="true"]', { timeout: 20000 });
 
-      // Let React settle
-      await this.waitForPaint(page);
+      // Wait for React to finish rendering all messages (height stabilizes)
+      await this.waitForStableHeight(page);
 
       const pageHeight = await page.evaluate(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -95,6 +169,14 @@ export class ImageExporter {
         if (chunkH < CHUNK_HEIGHT) {
           await page.setViewport({ width: VIEWPORT_WIDTH, height: chunkH });
           await this.waitForPaint(page);
+          // Re-scroll after resize: with the larger viewport, scrollTo(y) above was
+          // clamped to maxScrollTop (= pageHeight - oldViewportHeight). After shrinking
+          // the viewport, maxScrollTop increases, so we can now reach y.
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await page.evaluate((scrollY: number) => {
+            (globalThis as any).window.scrollTo(0, scrollY);
+          }, y);
+          await this.waitForPaint(page);
         }
 
         const chunk = (await page.screenshot({ type: 'png' })) as Buffer;
@@ -128,6 +210,36 @@ export class ImageExporter {
     } catch (error) {
       throw new Error(`Screenshot capture failed: ${error instanceof Error ? error.message : String(error)}`);
     }
+  }
+
+  /**
+   * Wait until document.scrollHeight stabilizes (no change for multiple consecutive checks).
+   * Handles React rendering large message lists that may take many frames to commit.
+   */
+  private async waitForStableHeight(page: puppeteer.Page, maxWait = 8000, interval = 300): Promise<void> {
+    const requiredStableChecks = 3;
+    let lastHeight = 0;
+    let stableChecks = 0;
+    const start = Date.now();
+
+    while (Date.now() - start < maxWait) {
+      const height = await page.evaluate(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        () => (globalThis as any).document.documentElement.scrollHeight as number,
+      );
+      if (height === lastHeight && height > 0) {
+        stableChecks++;
+        if (stableChecks >= requiredStableChecks) {
+          log.info({ height, elapsed: Date.now() - start }, 'Page height stabilized');
+          return;
+        }
+      } else {
+        stableChecks = 0;
+        lastHeight = height;
+      }
+      await new Promise<void>((resolve) => setTimeout(resolve, interval));
+    }
+    log.warn({ lastHeight, elapsed: Date.now() - start }, 'Page height did not stabilize within maxWait, proceeding');
   }
 
   /** Wait for two animation frames (one paint cycle). */

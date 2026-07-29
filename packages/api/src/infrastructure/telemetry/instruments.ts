@@ -1,0 +1,610 @@
+/**
+ * F152: First batch of OTel instruments for Clowder AI observability.
+ *
+ * All instruments use the `cat_cafe.` prefix and are bound by the
+ * MetricAttributeAllowlist Views (D2 enforcement).
+ */
+
+import { metrics } from '@opentelemetry/api';
+
+// Lazy meter: deferred until first use so the SDK's MeterProvider is registered.
+// Static imports (e.g. AntigravityAgentService) cause this module to load before
+// initTelemetry() → sdk.start(), which would bind instruments to NoopMeterProvider.
+let _meter: ReturnType<typeof metrics.getMeter> | null = null;
+function meter() {
+  if (!_meter) _meter = metrics.getMeter('cat-cafe-api', '0.1.0');
+  return _meter;
+}
+
+// Helper: create a lazy instrument that defers creation until first access.
+function lazy<T extends object>(factory: () => T): T {
+  let inst: T | undefined;
+  return new Proxy({} as T, {
+    get(_, prop) {
+      if (!inst) inst = factory();
+      return (inst as Record<string | symbol, unknown>)[prop];
+    },
+  });
+}
+
+export const invocationDuration = lazy(() =>
+  meter().createHistogram('cat_cafe.invocation.duration', {
+    description: 'Duration of a single cat invocation',
+    unit: 's',
+  }),
+);
+
+export const llmCallDuration = lazy(() =>
+  meter().createHistogram('cat_cafe.llm.call.duration', {
+    description: 'Duration of a single LLM API call',
+    unit: 's',
+  }),
+);
+
+export const agentLiveness = lazy(() =>
+  meter().createObservableGauge('cat_cafe.agent.liveness', {
+    description: 'Agent process liveness state (0=dead, 1=idle-silent, 2=busy-silent, 3=active)',
+  }),
+);
+
+export const activeInvocations = lazy(() =>
+  meter().createUpDownCounter('cat_cafe.invocation.active', { description: 'Number of currently active invocations' }),
+);
+
+export const tokenUsage = lazy(() =>
+  meter().createCounter('cat_cafe.token.usage', { description: 'Cumulative token consumption', unit: 'tokens' }),
+);
+
+export const guideTransitions = lazy(() =>
+  meter().createCounter('cat_cafe.guide.transitions', { description: 'Guide lifecycle state transitions' }),
+);
+
+export const inlineActionChecked = lazy(() =>
+  meter().createCounter('cat_cafe.a2a.inline_action.checked', {
+    description: 'Total inline action @mention detection invocations',
+  }),
+);
+
+export const inlineActionDetected = lazy(() =>
+  meter().createCounter('cat_cafe.a2a.inline_action.detected', {
+    description: 'Inline action @mention strict detection hits',
+  }),
+);
+
+export const inlineActionShadowMiss = lazy(() =>
+  meter().createCounter('cat_cafe.a2a.inline_action.shadow_miss', {
+    description: 'Shadow detection: inline @ found but no action keyword (potential vocab gap)',
+  }),
+);
+
+export const inlineActionFeedbackWritten = lazy(() =>
+  meter().createCounter('cat_cafe.a2a.inline_action.feedback_written', {
+    description: 'Inline action mention routing feedback persisted',
+  }),
+);
+
+export const inlineActionFeedbackWriteFailed = lazy(() =>
+  meter().createCounter('cat_cafe.a2a.inline_action.feedback_write_failed', {
+    description: 'Inline action mention routing feedback write failure',
+  }),
+);
+
+export const inlineActionHintEmitted = lazy(() =>
+  meter().createCounter('cat_cafe.a2a.inline_action.hint_emitted', {
+    description: 'Inline action hint system message sent to user',
+  }),
+);
+
+export const inlineActionHintEmitFailed = lazy(() =>
+  meter().createCounter('cat_cafe.a2a.inline_action.hint_emit_failed', {
+    description: 'Inline action hint system message send failure',
+  }),
+);
+
+export const inlineActionRoutedSetSkip = lazy(() =>
+  meter().createCounter('cat_cafe.a2a.inline_action.routed_set_skip', {
+    description: 'Inline action @mention skipped because already routed via line-start',
+  }),
+);
+
+export const lineStartDetected = lazy(() =>
+  meter().createCounter('cat_cafe.a2a.line_start.detected', {
+    description: 'Line-start @mention detected (baseline for model format compliance)',
+  }),
+);
+
+export const geminiContextFallback = lazy(() =>
+  meter().createCounter('cat_cafe.gemini.context_fill_fallback', {
+    description: 'Gemini cumulative-only context signal observed without per-turn token data',
+  }),
+);
+
+export const l1StreakWarnCount = lazy(() =>
+  meter().createCounter('cat_cafe.a2a.l1.streak_warn_count', {
+    description: 'L1 ping-pong streak warning threshold reached',
+  }),
+);
+
+export const l1StreakBreakCount = lazy(() =>
+  meter().createCounter('cat_cafe.a2a.l1.streak_break_count', {
+    description: 'L1 ping-pong circuit-break triggered',
+  }),
+);
+
+/**
+ * F192 eval:a2a verdict `2026-06-18-eval-a2a-c1-zombie-hold-semantics-fix`
+ * (砚砚): split the original `c1.zombie_hold_count` into two metrics by
+ * wake-delay-bucket semantics. Routed at fire time in
+ * `callback-hold-ball-c1-emit.ts` based on the `bucketWakeDelay()` result:
+ *
+ *   - `prior_overdue` + `prior_imminent` → `c1.hold_zombie_count`
+ *     (scheduler stuck or wake interrupted <60s — actionable signal,
+ *     consumed under `frictionCounts` in f167-eval's `buildC1`)
+ *   - `prior_short` + `prior_long` → `c1.hold_replacement_count`
+ *     (benign single-slot replacement churn per F167 Phase G KD-23 —
+ *     R1 P1 #1: consumed under `activationCounts` so the generic friction
+ *     grader never sees it; pre-split shape would re-create the 06-18
+ *     false positive under the renamed metric)
+ *
+ * No legacy alias; clean rename. Producer (callback-hold-ball-c1-emit),
+ * sample extractor (c1-hold-sample-evidence), and eval consumer
+ * (f167-eval / attribution) updated together — bundle PR avoids the
+ * historical risk of partial migrations.
+ */
+export const c1HoldZombieCount = lazy(() =>
+  meter().createCounter('cat_cafe.a2a.c1.hold_zombie_count', {
+    description: 'Prior hold cancelled with wake-delay bucket overdue/imminent (true zombie suppression)',
+  }),
+);
+
+export const c1HoldReplacementCount = lazy(() =>
+  meter().createCounter('cat_cafe.a2a.c1.hold_replacement_count', {
+    description: 'Prior hold cancelled with wake-delay bucket short/long (benign single-slot replacement churn)',
+  }),
+);
+
+/**
+ * F167 gate-keeping thread guard outcomes.
+ *
+ * Attributes:
+ *   tool ∈ { register_pr_tracking, register_issue_tracking, hold_ball }
+ *   outcome ∈ { blocked, override_used, guard_skipped }
+ *
+ * `blocked` = guard refused (守门 thread, no override) — desired enforcement; healthy ↑.
+ * `override_used` = caller asserted downstream-owner role — review for misuse if rate > 30%.
+ * `guard_skipped` = threadStore抖动 fail-open — should stay near zero in steady state.
+ *
+ * See gate-keeping-guard.ts + F167 Phase 6 in
+ * docs/plans/2026-06-17-f167-gate-keeping-thread-guard.md.
+ */
+export const gateKeepingHarnessAttemptCount = lazy(() =>
+  meter().createCounter('cat_cafe.harness.gate_keeping_attempt_count', {
+    description:
+      'F167 trigger-time gate-keeping thread guard outcomes (blocked / override_used / guard_skipped) per tool',
+  }),
+);
+
+export const c1HoldCancelCount = lazy(() =>
+  meter().createCounter('cat_cafe.a2a.c1.hold_cancel_count', {
+    description: 'Pending hold cancelled by user message',
+  }),
+);
+
+export const c2VerdictHintEmitted = lazy(() =>
+  meter().createCounter('cat_cafe.a2a.c2.verdict_hint_emitted', {
+    description: 'C2 exit-check verdict-no-pass hint emitted (split from mixed hint_emitted)',
+  }),
+);
+
+export const c2VoidHoldHintEmitted = lazy(() =>
+  meter().createCounter('cat_cafe.a2a.c2.void_hold_hint_emitted', {
+    description: 'C2 exit-check void-hold hint emitted (split from mixed hint_emitted)',
+  }),
+);
+
+export const c2VerdictWithoutPassCount = lazy(() =>
+  meter().createCounter('cat_cafe.a2a.c2.verdict_without_pass_count', {
+    description: 'C2 forced-pass trigger count (verdict issued without explicit pass)',
+  }),
+);
+
+// Denominator for C2 friction ratios. Incremented every time the verdict-without-pass
+// exit-check actually evaluates a turn, so attribution can compute a real
+// `verdict_without_pass_count / c2.checked` ratio instead of fabricating 100% when no
+// denominator exists (F167 eval:a2a 2026-05-29 over-escalation root cause).
+export const c2ExitChecked = lazy(() =>
+  meter().createCounter('cat_cafe.a2a.c2.exit_checked', {
+    description: 'C2 exit-check evaluations performed (denominator for verdict_without_pass ratio)',
+  }),
+);
+
+// Separate denominator for the void-hold check, which runs as its own guard later in
+// the route (not the verdict-without-pass exit check). Grading void_hold_hint_emitted
+// against c2.exit_checked would divide by the wrong count and suppress real void-hold
+// signals (cloud review PR #1941 P2).
+export const c2VoidHoldChecked = lazy(() =>
+  meter().createCounter('cat_cafe.a2a.c2.void_hold_checked', {
+    description: 'C2 void-hold check evaluations performed (denominator for void_hold_hint ratio)',
+  }),
+);
+
+export const antigravityStreamErrorBuffered = lazy(() =>
+  meter().createCounter('cat_cafe.antigravity.stream_error.buffered_total', {
+    description: 'Buffered Antigravity stream_error after partial text while waiting for a recovery tail',
+  }),
+);
+
+export const antigravityStreamErrorRecovered = lazy(() =>
+  meter().createCounter('cat_cafe.antigravity.stream_error.recovered_total', {
+    description: 'Buffered Antigravity stream_error later recovered by additional streamed text',
+  }),
+);
+
+export const antigravityStreamErrorExpired = lazy(() =>
+  meter().createCounter('cat_cafe.antigravity.stream_error.expired_total', {
+    description: 'Buffered Antigravity stream_error expired without recovery and was surfaced',
+  }),
+);
+
+export const invocationCompleted = lazy(() =>
+  meter().createCounter('cat_cafe.invocation.completed', {
+    description: 'Invocation completion count by cat and outcome',
+  }),
+);
+
+export const threadDuration = lazy(() =>
+  meter().createHistogram('cat_cafe.thread.duration', {
+    description: 'Thread age from creation to invocation end',
+    unit: 's',
+  }),
+);
+
+export const sessionRounds = lazy(() =>
+  meter().createHistogram('cat_cafe.session.rounds', {
+    description: 'Cumulative session round count reported each round',
+  }),
+);
+
+export const catInvocationCount = lazy(() =>
+  meter().createCounter('cat_cafe.cat.invocation.count', {
+    description: 'Cat invocation count by agent and trigger type',
+  }),
+);
+
+export const catResponseDuration = lazy(() =>
+  meter().createHistogram('cat_cafe.cat.response.duration', {
+    description: 'End-to-end cat response duration from message receipt to final reply',
+    unit: 's',
+  }),
+);
+
+// --- F153 Phase I: Step Summary counters ---
+
+/**
+ * Counter: A2A mention_dispatch span occurrences.
+ * Increments at every `cat_cafe.mention_dispatch` span creation (in-process or callback path).
+ * Attributes (allowlist-filtered): only `agent.id` (mentioner cat) — never invocationId/threadId
+ * (metric-allowlist forbids high-cardinality). Omit `agent.id` when source cat is unknown
+ * (e.g. callback path without sourceCatId).
+ */
+export const a2aDispatchCount = lazy(() =>
+  meter().createCounter('cat_cafe.a2a.dispatch.count', {
+    description: 'A2A mention_dispatch span occurrences (F153 Phase I)',
+  }),
+);
+
+// --- F174 Phase D1: callback auth observability ---
+
+/**
+ * Counter: callback auth failures by reason / tool / cat.
+ * Attributes (allowlist-filtered):
+ *   - callback.reason: expired | invalid_token | unknown_invocation | missing_creds | stale_invocation
+ *   - callback.tool: refresh-token | post-message | register-pr-tracking | retain-memory | ...
+ *   - agent.id: cat that experienced the failure (omitted when unknown)
+ */
+export const callbackAuthFailures = lazy(() =>
+  meter().createCounter('cat_cafe.callback_auth.failures', {
+    description: 'Callback auth 401 failures by reason / tool / cat (F174 Phase D1)',
+  }),
+);
+
+// --- F236 Track-1: anchor-first telemetry (chars + request/response volume substrate) ---
+
+/**
+ * F236 Phase A made the anchor-first callback read-tools (pending-mentions /
+ * thread-context / list-tasks) return head/tail previews + drill pointers
+ * instead of full bodies, to shrink agent token load. The chars/省 signal was
+ * previously only `app.log.info` (ephemeral stdout). Track-1 funnels it through
+ * `anchor-telemetry.ts` so it ALSO lands as OTel metrics — a queryable
+ * chars + request/response VOLUME substrate.
+ *
+ * Scope (砚砚 eval-owner ruling iii): Track-1 ships chars (the 省/savings signal)
+ * and request/response volume ONLY. These are low-cardinality aggregate counters
+ * with NO join keys, so they are NOT an open-rate numerator/denominator and do
+ * NOT support a per-tool drill↔preview open-rate (that needs a cross-endpoint /
+ * per-item correlated event model — Track-2's scope, not computed here).
+ *
+ * Attributes (allowlist-filtered): `anchor.tool` only (bounded 4-value set).
+ */
+
+/**
+ * Counter: an anchor preview payload was returned, per tool.
+ * Request/response VOLUME — explicitly NOT an open-rate numerator/denominator.
+ */
+export const anchorReturnedCount = lazy(() =>
+  meter().createCounter('cat_cafe.anchor.returned.count', {
+    description:
+      'Anchor-first preview payload returned, by tool — request/response volume, NOT an open-rate numerator/denominator (F236 Track-1)',
+  }),
+);
+
+/** Histogram: chars returned in an anchor preview payload, per tool (the 省/savings signal). */
+export const anchorReturnedChars = lazy(() =>
+  meter().createHistogram('cat_cafe.anchor.returned.chars', {
+    description: 'Chars returned in an anchor-first preview payload, by tool — the 省/savings signal (F236 Track-1)',
+    unit: 'characters',
+  }),
+);
+
+/**
+ * Counter: a full drill (mode=full body served) was served, per tool.
+ * Request/response VOLUME — explicitly NOT an open-rate numerator/denominator.
+ */
+export const anchorFullDrillCount = lazy(() =>
+  meter().createCounter('cat_cafe.anchor.full_drill.count', {
+    description:
+      'Anchor full-drill (full body served) by tool — request/response volume, NOT an open-rate numerator/denominator (F236 Track-1)',
+  }),
+);
+
+/** Histogram: chars served in a full drill, per tool (the 省/savings signal). */
+export const anchorFullDrillChars = lazy(() =>
+  meter().createHistogram('cat_cafe.anchor.full_drill.chars', {
+    description:
+      'Chars served in an anchor full-drill (full body served) by tool — the 省/savings signal (F236 Track-1)',
+    unit: 'characters',
+  }),
+);
+
+// --- F231 AC-C3: Profile update eval counters (KD-10: zero-activation detection) ---
+
+/** Counter: profile update proposed (cat → operator card). */
+export const profileUpdateProposed = lazy(() =>
+  meter().createCounter('cat_cafe.profile_update.proposed', {
+    description: 'Profile update proposals created (F231 C3 eval)',
+  }),
+);
+
+/** Counter: profile update approved (operator → primer written). */
+export const profileUpdateApproved = lazy(() =>
+  meter().createCounter('cat_cafe.profile_update.approved', {
+    description: 'Profile update proposals approved and written (F231 C3 eval)',
+  }),
+);
+
+/** Counter: profile update rejected (operator → no write). */
+export const profileUpdateRejected = lazy(() =>
+  meter().createCounter('cat_cafe.profile_update.rejected', {
+    description: 'Profile update proposals rejected (F231 C3 eval)',
+  }),
+);
+
+/** Counter: distillation trigger fired on session seal (KD-10 eval). */
+export const profileDistillationTriggered = lazy(() =>
+  meter().createCounter('cat_cafe.profile_update.distillation_triggered', {
+    description: 'Profile distillation trigger fired on session-seal event (F231 C3/KD-10 eval)',
+  }),
+);
+
+// --- F167 Phase O PR-O2: Claim Grounding Shadow Telemetry ---
+
+/**
+ * Total grounding checks initiated per tool call.
+ * Attributes: callback.tool (hold_ball / register_pr_tracking / register_issue_tracking)
+ */
+export const groundingCheckTotal = lazy(() =>
+  meter().createCounter('cat_cafe.a2a.grounding.check_total', {
+    description: 'F167 Phase O grounding check invocations per stateful tool call (shadow mode)',
+  }),
+);
+
+/**
+ * Claim-level verdict outcomes.
+ * Attributes: grounding.claim_type × grounding.verdict × callback.tool
+ */
+export const groundingVerdictTotal = lazy(() =>
+  meter().createCounter('cat_cafe.a2a.grounding.verdict_total', {
+    description: 'F167 Phase O claim grounding verdict outcomes (verified/mismatch/insufficient)',
+  }),
+);
+
+/**
+ * Per-resolver invocation count.
+ * Attributes: grounding.source_tier × status (resolver id)
+ */
+export const groundingResolverTotal = lazy(() =>
+  meter().createCounter('cat_cafe.a2a.grounding.resolver_total', {
+    description: 'F167 Phase O resolver invocations (per resolver × source tier)',
+  }),
+);
+
+/**
+ * Resolver cache hits.
+ * Attributes: status (resolver id)
+ */
+export const groundingCacheHitTotal = lazy(() =>
+  meter().createCounter('cat_cafe.a2a.grounding.cache_hit_total', {
+    description: 'F167 Phase O resolver cache hits',
+  }),
+);
+
+/**
+ * Budget exhaustion events per grounding check.
+ * Attributes: callback.tool × grounding.action_family
+ */
+export const groundingBudgetExhaustedTotal = lazy(() =>
+  meter().createCounter('cat_cafe.a2a.grounding.budget_exhausted_total', {
+    description: 'F167 Phase O resolver budget exhausted (verdict forced to insufficient)',
+  }),
+);
+
+// --- F167 Phase O PR-O3: Hold-ball misuse detection counters ---
+
+/**
+ * Counts attempts to call hold_ball with wakeAfterMs but no waitSourceRef.
+ * Schema now rejects these (PR-O3), so this counter tracks how often cats
+ * still TRY the misuse pattern — feeds F192 weekly verdict to measure
+ * whether the cognitive fix (soft layer) is landing.
+ */
+export const holdBallUngroundedTimerReject = lazy(() =>
+  meter().createCounter('cat_cafe.a2a.hold_ball.ungrounded_timer_reject', {
+    description: 'F167 PR-O3: hold_ball called with wakeAfterMs but no waitSourceRef (schema rejected)',
+  }),
+);
+
+/**
+ * Counts attempts to use the removed 'pending_input' kind in waitSourceRef.
+ * This backdoor let cats express "wait for human reply" through hold_ball
+ * instead of using @co-creator.
+ */
+export const holdBallPendingInputReject = lazy(() =>
+  meter().createCounter('cat_cafe.a2a.hold_ball.pending_input_reject', {
+    description: 'F167 PR-O3: hold_ball called with pending_input kind (backdoor removed, schema rejected)',
+  }),
+);
+
+// --- F254 AC-B5: Freshness gate + notice + re-invoke telemetry ---
+
+/** Gate held: post_message/cross_post blocked because thread has unseen messages. */
+export const freshnessGateHeld = lazy(() =>
+  meter().createCounter('cat_cafe.freshness.gate_held', {
+    description: 'F254 freshness gate held decisions (unseen messages blocked side-effect)',
+  }),
+);
+
+/** Gate forward: post_message/cross_post allowed (no unseen, or acknowledged). */
+export const freshnessGateForward = lazy(() =>
+  meter().createCounter('cat_cafe.freshness.gate_forward', {
+    description: 'F254 freshness gate forward decisions (side-effect allowed)',
+  }),
+);
+
+/** Notice attached: content-free "you have unseen messages" notice delivered to cat. */
+export const freshnessNoticeAttached = lazy(() =>
+  meter().createCounter('cat_cafe.freshness.notice_attached', {
+    description: 'F254 content-free freshness notice attached to read-only tool response',
+  }),
+);
+
+/** Notice acked: cat advanced seenCursor past notice (implicitly read the messages). */
+export const freshnessNoticeAcked = lazy(() =>
+  meter().createCounter('cat_cafe.freshness.notice_acked', {
+    description: 'F254 freshness notice implicitly acked (seenCursor caught up)',
+  }),
+);
+
+/** Notice deferred: cat held_ball despite unresolved notices (chose to exit without reading). */
+export const freshnessNoticeDeferred = lazy(() =>
+  meter().createCounter('cat_cafe.freshness.notice_deferred', {
+    description: 'F254 freshness notice deferred at hold_ball (cat exited without reading)',
+  }),
+);
+
+/** Re-invoke triggered: invocation ended with unresolved high-priority notices → re-invoke queued. */
+export const freshnessReinvokeTriggered = lazy(() =>
+  meter().createCounter('cat_cafe.freshness.reinvoke_triggered', {
+    description: 'F254 freshness re-invoke triggered (unresolved notices → new invocation)',
+  }),
+);
+
+/** Re-invoke skipped: invocation ended but re-invoke not needed (cursor caught up, quota, etc). */
+export const freshnessReinvokeSkipped = lazy(() =>
+  meter().createCounter('cat_cafe.freshness.reinvoke_skipped', {
+    description: 'F254 freshness re-invoke skipped (cursor caught up / quota / already handled)',
+  }),
+);
+
+/** Liveness state type. */
+export type LivenessState = 'dead' | 'idle-silent' | 'busy-silent' | 'active';
+
+/** Map liveness state string to numeric gauge value. */
+export function livenessStateToNumber(state: LivenessState): number {
+  switch (state) {
+    case 'dead':
+      return 0;
+    case 'idle-silent':
+      return 1;
+    case 'busy-silent':
+      return 2;
+    case 'active':
+      return 3;
+  }
+}
+
+// --- Liveness probe registry for ObservableGauge ---
+
+interface LivenessProbeRef {
+  catId: string;
+  getState: () => LivenessState;
+}
+
+const activeProbes = new Map<string, LivenessProbeRef>();
+let callbackRegistered = false;
+
+function ensureCallback() {
+  if (callbackRegistered) return;
+  callbackRegistered = true;
+  agentLiveness.addCallback((result) => {
+    for (const [, probe] of activeProbes) {
+      result.observe(livenessStateToNumber(probe.getState()), { 'agent.id': probe.catId });
+    }
+  });
+}
+
+/** Register a liveness probe for ObservableGauge polling. */
+export function registerLivenessProbe(invocationId: string, catId: string, getState: () => LivenessState): void {
+  ensureCallback();
+  activeProbes.set(invocationId, { catId, getState });
+}
+
+/** Unregister a liveness probe when invocation ends. */
+export function unregisterLivenessProbe(invocationId: string): void {
+  activeProbes.delete(invocationId);
+}
+
+// Pre-touch counters that may never fire in normal operation so they
+// appear in Prometheus output (eval can distinguish 0 from absent).
+export function warmupCounters(): void {
+  l1StreakWarnCount.add(0);
+  l1StreakBreakCount.add(0);
+  c1HoldZombieCount.add(0);
+  c1HoldReplacementCount.add(0);
+  c1HoldCancelCount.add(0);
+  c2VerdictHintEmitted.add(0);
+  c2VoidHoldHintEmitted.add(0);
+  c2VerdictWithoutPassCount.add(0);
+  c2ExitChecked.add(0);
+  c2VoidHoldChecked.add(0);
+  // F231 AC-C3: profile update pipeline counters
+  profileUpdateProposed.add(0);
+  profileUpdateApproved.add(0);
+  profileUpdateRejected.add(0);
+  profileDistillationTriggered.add(0);
+  // F167 Phase O PR-O2: claim grounding shadow telemetry
+  groundingCheckTotal.add(0);
+  groundingVerdictTotal.add(0);
+  groundingResolverTotal.add(0);
+  groundingCacheHitTotal.add(0);
+  groundingBudgetExhaustedTotal.add(0);
+  // F167 PR-O3: hold_ball misuse detection
+  holdBallUngroundedTimerReject.add(0);
+  holdBallPendingInputReject.add(0);
+  // F254 AC-B5: freshness gate + notice + re-invoke
+  freshnessGateHeld.add(0);
+  freshnessGateForward.add(0);
+  freshnessNoticeAttached.add(0);
+  freshnessNoticeAcked.add(0);
+  freshnessNoticeDeferred.add(0);
+  freshnessReinvokeTriggered.add(0);
+  freshnessReinvokeSkipped.add(0);
+}

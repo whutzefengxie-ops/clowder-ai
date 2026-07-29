@@ -9,6 +9,7 @@ import type { ConnectorSource } from '@cat-cafe/shared';
 import type { FastifyBaseLogger } from 'fastify';
 import type { ConnectorDeliveryDeps } from './deliver-connector-message.js';
 import { deliverConnectorMessage } from './deliver-connector-message.js';
+import { getMaxSeverity } from './severity-parser.js';
 
 // ── Domain Types (KD-8: richer model) ──────────────────────────────
 
@@ -17,9 +18,13 @@ export interface PrFeedbackComment {
   readonly author: string;
   readonly body: string;
   readonly createdAt: string;
+  readonly commitId?: string;
   readonly commentType: 'inline' | 'conversation';
   readonly filePath?: string;
   readonly line?: number;
+  /** GitHub author_association field. Used by delivery policy to silence OWNER/MEMBER activity.
+   * Undefined when fetched via legacy paths or when association is unavailable. */
+  readonly authorAssociation?: string;
 }
 
 export interface PrReviewDecision {
@@ -28,11 +33,22 @@ export interface PrReviewDecision {
   readonly state: 'APPROVED' | 'CHANGES_REQUESTED' | 'DISMISSED' | 'COMMENTED';
   readonly body: string;
   readonly submittedAt: string;
+  readonly commitId?: string;
+  /** GitHub author_association field. Used by delivery policy to silence OWNER/MEMBER activity.
+   * Undefined when fetched via legacy paths or when association is unavailable. */
+  readonly authorAssociation?: string;
+}
+
+export interface ReviewFeedbackRoutingAudit {
+  readonly kind: 'legacy-auto-rotated-repaired';
+  readonly previousThreadId: string;
+  readonly repairedThreadId: string;
 }
 
 export interface ReviewFeedbackSignal {
   readonly repoFullName: string;
   readonly prNumber: number;
+  readonly routingAudit?: ReviewFeedbackRoutingAudit;
   readonly newComments: readonly PrFeedbackComment[];
   readonly newDecisions: readonly PrReviewDecision[];
 }
@@ -57,13 +73,13 @@ export class ReviewFeedbackRouter {
 
   async route(
     signal: ReviewFeedbackSignal,
-    tracking: { threadId: string; catId: string; userId: string },
+    tracking: { threadId: string; catId: string; userId: string; trackingInstructions?: string },
   ): Promise<ReviewFeedbackRouteResult> {
-    if (signal.newComments.length === 0 && signal.newDecisions.length === 0) {
+    if (signal.newComments.length === 0 && signal.newDecisions.length === 0 && !signal.routingAudit) {
       return { kind: 'skipped', reason: 'no new feedback' };
     }
 
-    const content = buildReviewFeedbackContent(signal);
+    const content = buildReviewFeedbackContent(signal, tracking.trackingInstructions);
 
     const source: ConnectorSource = {
       connector: 'github-review-feedback',
@@ -97,15 +113,32 @@ export class ReviewFeedbackRouter {
 
 // ── Message Formatting (OQ-2: three-section aggregation) ───────────
 
-export function buildReviewFeedbackContent(signal: ReviewFeedbackSignal): string {
-  const lines: string[] = [`📋 **Review Feedback** — PR #${signal.prNumber} (${signal.repoFullName})`];
+export function buildReviewFeedbackContent(signal: ReviewFeedbackSignal, trackingInstructions?: string): string {
+  const lines: string[] = [];
+
+  // F140 Phase E.1: prepend severity header when comments/decisions contain
+  // a recognized P0/P1/P2 marker. Replaces the email-channel "Review 检测到 Px"
+  // header so polling can surface severity without dual-channel notifications.
+  const maxSev = getMaxSeverity(signal.newComments, signal.newDecisions);
+  if (maxSev) {
+    lines.push(`**Review 检测到 ${maxSev}**`, '');
+  }
+
+  if (signal.routingAudit) {
+    lines.push(...formatRoutingAudit(signal.routingAudit), '');
+  }
+
+  lines.push(`📋 **Review Feedback** — PR #${signal.prNumber} (${signal.repoFullName})`);
 
   // Section 1: Review Decisions
   if (signal.newDecisions.length > 0) {
     lines.push('', '--- Review Decisions ---');
     for (const d of signal.newDecisions) {
       const emoji = decisionEmoji(d.state);
-      const bodySnippet = d.body ? ` — ${d.body.slice(0, 120)}` : '';
+      // F202 Phase 2C (AC-C4): wrap external content as untrusted
+      const bodySnippet = d.body
+        ? ` — [UNTRUSTED EXTERNAL CONTENT] ${d.body.slice(0, 120).replace(/[\r\n]+/g, ' ')}`
+        : '';
       lines.push(`${emoji} **${d.author}**: ${d.state}${bodySnippet}`);
     }
   }
@@ -116,7 +149,8 @@ export function buildReviewFeedbackContent(signal: ReviewFeedbackSignal): string
     lines.push('', `--- Inline Comments (${inline.length}) ---`);
     for (const c of inline) {
       const location = c.filePath ? `\`${c.filePath}${c.line ? `:${c.line}` : ''}\`` : '';
-      const bodySnippet = c.body.slice(0, 120);
+      // F202 Phase 2C (AC-C4): wrap external content as untrusted — flatten newlines to prevent escape
+      const bodySnippet = `[UNTRUSTED EXTERNAL CONTENT] ${c.body.slice(0, 120).replace(/[\r\n]+/g, ' ')}`;
       lines.push(`💬 **${c.author}** ${location}: ${bodySnippet}`);
     }
   }
@@ -126,7 +160,8 @@ export function buildReviewFeedbackContent(signal: ReviewFeedbackSignal): string
   if (conversation.length > 0) {
     lines.push('', `--- PR Conversation (${conversation.length}) ---`);
     for (const c of conversation) {
-      const bodySnippet = c.body.slice(0, 120);
+      // F202 Phase 2C (AC-C4): wrap external content as untrusted — flatten newlines to prevent escape
+      const bodySnippet = `[UNTRUSTED EXTERNAL CONTENT] ${c.body.slice(0, 120).replace(/[\r\n]+/g, ' ')}`;
       lines.push(`💬 **${c.author}**: ${bodySnippet}`);
     }
   }
@@ -145,7 +180,27 @@ export function buildReviewFeedbackContent(signal: ReviewFeedbackSignal): string
     lines.push('- 操作: 阅读评论内容，需要回复则回复，需要修改则按 `receive-review` 模式处理');
   }
 
+  // F202 Phase 2C (AC-C2): append user-provided tracking instructions
+  if (trackingInstructions) {
+    lines.push('', '📌 **Tracking Instructions**', trackingInstructions);
+  }
+
   return lines.join('\n');
+}
+
+function formatRoutingAudit(audit: ReviewFeedbackRoutingAudit): string[] {
+  switch (audit.kind) {
+    case 'legacy-auto-rotated-repaired':
+      return [
+        '⚠️ **PR review feedback 路由异常已修复**',
+        `检测到 PR tracking task 指向 auto-rotated thread \`${audit.previousThreadId}\`，已修回注册 thread \`${audit.repairedThreadId}\`。`,
+        '后续 review feedback 会继续投回注册 thread。',
+      ];
+    default: {
+      const _exhaustive: never = audit.kind;
+      return _exhaustive;
+    }
+  }
 }
 
 function decisionEmoji(state: PrReviewDecision['state']): string {

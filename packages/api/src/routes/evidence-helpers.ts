@@ -1,7 +1,32 @@
 import { access, readdir, readFile } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 
-export type EvidenceSourceType = 'decision' | 'phase' | 'discussion' | 'commit';
+import type { SuggestedCrossPostAction } from '@cat-cafe/shared';
+import type { EntityMatch, EvidenceDrillDown } from '../domains/memory/interfaces.js';
+
+export interface EvidenceFreshness {
+  status: 'fresh' | 'stale' | 'unknown';
+  checkedAt: string;
+  headCommit?: string;
+  watermarkCommit?: string;
+  reason?: 'commit_match' | 'commit_mismatch' | 'watermark_missing' | 'head_unavailable';
+}
+
+export interface EvidenceReimportTrigger {
+  status: 'triggered' | 'cooldown' | 'skipped' | 'disabled' | 'failed';
+  reason?: string;
+  nextAllowedAt?: string;
+}
+
+export type EvidenceSourceType =
+  | 'decision'
+  | 'phase'
+  | 'feature'
+  | 'lesson'
+  | 'research'
+  | 'knowledge'
+  | 'discussion'
+  | 'commit';
 export type EvidenceConfidence = 'high' | 'mid' | 'low';
 export type EvidenceStatus = 'draft' | 'pending' | 'published' | 'archived';
 
@@ -11,8 +36,50 @@ export interface EvidenceResult {
   snippet: string;
   confidence: EvidenceConfidence;
   sourceType: EvidenceSourceType;
+  /** F102 Batch 3: knowledge dimension origin — project or global */
+  source?: 'project' | 'global';
   status?: EvidenceStatus;
+  /** F163 Phase E: document authority — orthogonal to confidence (which reflects rank) */
+  authority?: string;
+  /** F163: boost source attribution — what F163 mechanisms affected this result's ranking */
+  boostSource: BoostSource[];
+  /** AC-I9: passage-level detail when depth=raw */
+  passages?: Array<{
+    docAnchor?: string;
+    passageId: string;
+    content: string;
+    speaker?: string;
+    createdAt?: string;
+    threadId?: string;
+    messageId?: string;
+    context?: Array<{
+      docAnchor?: string;
+      passageId: string;
+      content: string;
+      speaker?: string;
+      createdAt?: string;
+      threadId?: string;
+      messageId?: string;
+    }>;
+  }>;
+  /** DF-3: explainability — which field matched (always present) */
+  matchReason?: string;
+  /** F209 Phase B: entity alias / mention explanation for retrieval-anchor hits */
+  entityMatches?: EntityMatch[];
+  /** F209 Phase C: typed bounded reader hint for opening the exact source window */
+  drillDown?: EvidenceDrillDown;
+  /** F200 HW-4 根因②b (砚砚 P1-2): source file path for path-based
+   * consumption match (shell-read / Read). Sourced from evidenceStore
+   * search item (interfaces.ts sourcePath); structured chain, not text-parse. */
+  sourcePath?: string;
+  /** DF-3: explainability — scoring breakdown (only with explain=true) */
+  rankingFactors?: { bm25Score?: number; consumptionPrior?: number; mmrPenalty?: number };
+  /** F193 Phase E: read-side affordance for cross-thread dispatch. */
+  suggestedAction?: SuggestedCrossPostAction;
 }
+
+/** F163: Boost source attribution (search-path reranking, not injection) */
+export type BoostSource = 'authority_boost' | 'retrieval_rerank' | 'compression_summary' | 'legacy';
 
 export function normalizeTags(input: string | string[] | undefined, defaultOrigin = 'origin:git'): string[] {
   const defaults = ['project:cat-cafe', defaultOrigin];
@@ -49,10 +116,52 @@ export function shouldDegradeToDocs(err: unknown): boolean {
   return false;
 }
 
+/** Map an EvidenceKind (from index) to a display source type */
+export function mapKindToSourceType(kind: string): EvidenceSourceType {
+  switch (kind) {
+    case 'decision':
+      return 'decision';
+    case 'plan':
+      return 'phase';
+    case 'feature':
+      return 'feature';
+    case 'lesson':
+      return 'lesson';
+    case 'research':
+      return 'research';
+    case 'pack-knowledge':
+      return 'knowledge';
+    case 'session':
+    case 'thread':
+    case 'discussion':
+      return 'discussion';
+    default:
+      return 'commit';
+  }
+}
+
+export function sanitizeEvidenceDrillDown(drillDown?: EvidenceDrillDown): EvidenceDrillDown | undefined {
+  if (!drillDown) return undefined;
+  if (drillDown.tool === 'cat_cafe_read_file_slice') {
+    const filePath = drillDown.params.path;
+    if (!filePath || isAbsolute(filePath)) return undefined;
+  }
+  return drillDown;
+}
+
 /** Map a file path to a source type */
 export function classifySource(path: string): EvidenceSourceType {
   if (path.includes('decisions')) return 'decision';
   if (path.includes('phases')) return 'phase';
+  if (path.includes('features')) return 'feature';
+  if (
+    path.includes('lessons') ||
+    path.includes('reflections') ||
+    path.includes('postmortems') ||
+    path.includes('episodes')
+  )
+    return 'lesson';
+  if (path.includes('research')) return 'research';
   if (path.includes('discussions')) return 'discussion';
   return 'commit';
 }
@@ -102,6 +211,7 @@ export async function searchDocs(docsRoot: string, query: string, limit: number)
         snippet,
         confidence: 'low',
         sourceType: classifySource(relative('', relPath)),
+        boostSource: ['legacy'],
       });
     }
 

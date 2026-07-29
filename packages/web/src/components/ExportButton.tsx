@@ -60,7 +60,7 @@ export function ExportButton({ threadId }: { threadId: string }) {
       <button
         onClick={() => setMenuOpen((v) => !v)}
         disabled={loading}
-        className="p-1 rounded-lg hover:bg-cocreator-light transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        className="flex h-8 w-8 items-center justify-center rounded-full bg-transparent text-cafe-secondary transition-colors hover:text-cafe-accent disabled:opacity-50 disabled:cursor-not-allowed"
         title="导出对话"
         aria-label="导出对话"
       >
@@ -68,7 +68,7 @@ export function ExportButton({ threadId }: { threadId: string }) {
           <svg
             viewBox="0 0 24 24"
             fill="none"
-            className="w-5 h-5 animate-spin text-gray-500"
+            className="w-4 h-4 animate-spin text-cafe-secondary"
             stroke="currentColor"
             strokeWidth="2"
           >
@@ -76,20 +76,20 @@ export function ExportButton({ threadId }: { threadId: string }) {
             <path d="M12 2a10 10 0 019.8 8" />
           </svg>
         ) : (
-          <DownloadIcon className="w-5 h-5 text-gray-500" />
+          <DownloadIcon className="w-4 h-4 text-cafe-secondary" />
         )}
       </button>
 
       {menuOpen && (
-        <div className="absolute right-0 top-full mt-1 w-52 bg-cafe-white border border-cocreator-light rounded-lg shadow-lg z-50 py-1">
+        <div className="absolute right-0 top-full mt-1 w-52 bg-[var(--console-card-bg)] border border-[var(--console-border-soft)] rounded-lg shadow-lg z-50 py-1">
           {EXPORT_OPTIONS.map((opt) => (
             <button
               key={opt.format}
               onClick={() => handleExport(opt.format)}
-              className="w-full text-left px-3 py-2 text-sm hover:bg-cocreator-light transition-colors flex items-center justify-between"
+              className="w-full text-left px-3 py-2 text-sm hover:bg-[var(--console-hover-bg)] transition-colors flex items-center justify-between"
             >
               <span className="text-cafe-black">{opt.label}</span>
-              <span className="text-xs text-gray-400">{opt.description}</span>
+              <span className="text-xs text-cafe-muted">{opt.description}</span>
             </button>
           ))}
         </div>

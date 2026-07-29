@@ -12,8 +12,9 @@
 [![pnpm](https://img.shields.io/badge/pnpm-9+-F69220?logo=pnpm&logoColor=white)](https://pnpm.io/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5+-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+[![LINUX DO](https://img.shields.io/badge/LINUX-DO-FFB003.svg?logo=data:image/svg%2bxml;base64,DQo8c3ZnIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgd2lkdGg9IjEwMCIgaGVpZ2h0PSIxMDAiPjxwYXRoIGQ9Ik00Ni44Mi0uMDU1aDYuMjVxMjMuOTY5IDIuMDYyIDM4IDIxLjQyNmM1LjI1OCA3LjY3NiA4LjIxNSAxNi4xNTYgOC44NzUgMjUuNDV2Ni4yNXEtMi4wNjQgMjMuOTY4LTIxLjQzIDM4LTExLjUxMiA3Ljg4NS0yNS40NDUgOC44NzRoLTYuMjVxLTIzLjk3LTIuMDY0LTM4LjAwNC0yMS40M1EuOTcxIDY3LjA1Ni0uMDU0IDUzLjE4di02LjQ3M0MxLjM2MiAzMC43ODEgOC41MDMgMTguMTQ4IDIxLjM3IDguODE3IDI5LjA0NyAzLjU2MiAzNy41MjcuNjA0IDQ2LjgyMS0uMDU2IiBzdHlsZT0ic3Ryb2tlOm5vbmU7ZmlsbC1ydWxlOmV2ZW5vZGQ7ZmlsbDojZWNlY2VjO2ZpbGwtb3BhY2l0eToxIi8+PHBhdGggZD0iTTQ3LjI2NiAyLjk1N3EyMi41My0uNjUgMzcuNzc3IDE1LjczOGE0OS43IDQ5LjcgMCAwIDEgNi44NjcgMTAuMTU3cS00MS45NjQuMjIyLTgzLjkzIDAgOS43NS0xOC42MTYgMzAuMDI0LTI0LjM4N2E2MSA2MSAwIDAgMSA5LjI2Mi0xLjUwOCIgc3R5bGU9InN0cm9rZTpub25lO2ZpbGwtcnVsZTpldmVub2RkO2ZpbGw6IzE5MTkxOTtmaWxsLW9wYWNpdHk6MSIvPjxwYXRoIGQ9Ik03Ljk4IDcwLjkyNmMyNy45NzctLjAzNSA1NS45NTQgMCA4My45My4xMTNRODMuNDI2IDg3LjQ3MyA2Ni4xMyA5NC4wODZxLTE4LjgxIDYuNTQ0LTM2LjgzMi0xLjg5OC0xNC4yMDMtNy4wOS0yMS4zMTctMjEuMjYyIiBzdHlsZT0ic3Ryb2tlOm5vbmU7ZmlsbC1ydWxlOmV2ZW5vZGQ7ZmlsbDojZjlhZjAwO2ZpbGwtb3BhY2l0eToxIi8+PC9zdmc+)](https://linux.do/t/topic/1900303)
 
-**English** | [中文](README.zh-CN.md)
+**English** | [中文](README.zh-CN.md) | [日本語](README.ja-JP.md)
 
 </div>
 
@@ -56,19 +57,33 @@ Most frameworks help you *call* agents. Clowder helps them *work together*.
 
 ## Supported Agents
 
-Clowder is model-agnostic. Each agent CLI plugs in via a unified output adapter:
+Clowder is model-agnostic. Each agent CLI/adapter plugs in through a unified message layer:
 
 | Agent CLI | Model Family | Output Format | MCP | Status |
 |-----------|-------------|---------------|-----|--------|
 | [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | Claude (Opus / Sonnet / Haiku) | stream-json | Yes | Shipped |
 | [Codex CLI](https://github.com/openai/codex) | GPT / Codex | json | Yes | Shipped |
-| [Gemini CLI](https://github.com/google-gemini/gemini-cli) | Gemini | stream-json | Yes | Shipped |
-| [Antigravity](https://github.com/nolanzandi/antigravity-cli) | Multi-model | cdp-bridge | No | Shipped |
+| [Antigravity CLI](https://antigravity.google/cli) | Gemini / Google account-selected | plain text (`agy --print`) | CLI-managed | Default for non-ACP Gemini routes |
+| [Gemini CLI](https://github.com/google-gemini/gemini-cli) | Gemini | stream-json / ACP | Yes | ACP default where configured; explicit fallback elsewhere |
+| [Antigravity Desktop](https://antigravity.google/) | Multi-model | cdp-bridge | Callback bridge | Opt-in legacy |
 | [opencode](https://github.com/sst/opencode) | Multi-model | ndjson | Yes | Shipped |
 
+> Google consumer Gemini CLI / Gemini Code Assist individual requests stop on 2026-06-18, so non-ACP Gemini routes default to Antigravity CLI. Catalog entries with ACP still use `gemini --acp` until `agy` exposes a supported ACP mode; use `GEMINI_ADAPTER=gemini-cli` only for explicit enterprise/API-key fallback routes.
 > Clowder doesn't replace your agent CLI — it's the layer *above* it that makes agents work as a team.
 
 ## Quick Start
+
+### Option A: Desktop Installer (Recommended)
+
+If a desktop release asset is available on the [Releases page](https://github.com/zts212653/clowder-ai/releases), use it first:
+
+- **Windows**: download the `.exe` installer, run it, then launch Clowder AI from the desktop shortcut or Start menu.
+- **macOS**: download the `.dmg`, drag the app to Applications, then open it. If macOS blocks the unsigned app on first launch, right-click the app and choose **Open**.
+- **Linux**: no desktop installer yet. Use the source setup below or the one-line Linux installer.
+
+The desktop installer bundles the app runtime, portable Node.js, and Redis, so regular users do **not** need to run `pnpm install` or `pnpm build`. After launch, open **Hub → System Settings → Account Configuration** to connect your model providers and CLI accounts.
+
+### Option B: Source Setup
 
 **Prerequisites:** [Node.js 20+](https://nodejs.org/) · [pnpm 9+](https://pnpm.io/) · [Redis 7+](https://redis.io/) *(optional — use `--memory` to skip)* · Git
 
@@ -83,11 +98,14 @@ pnpm install
 # 3. Build all packages (required before first start)
 pnpm build
 
-# 4. Configure — add at least one model API key
+# 4. Configure infrastructure (API keys are added in the UI after launch)
 cp .env.example .env
 
 # 5. Start (auto-creates runtime worktree, starts Redis + API + Frontend)
 pnpm start
+
+# Pin to a specific release? Use start:direct instead (won't auto-update):
+#   git checkout <tag> && pnpm start:direct   # e.g. v0.4.2
 
 # 6. Optional: run in background (daemon mode)
 pnpm start --daemon
@@ -96,15 +114,44 @@ pnpm start:status
 pnpm stop
 ```
 
-Open `http://localhost:3003` and start talking to your team.
+Open `http://localhost:3003` → go to **Hub → System Settings → Account Configuration** to add your model API keys (Claude, GPT, Gemini, or third-party providers like Kimi, GLM, MiniMax).
 
 > **One-line alternative (Linux):** `bash scripts/install.sh` handles Node, pnpm, Redis, dependencies, `.env`, and first launch in one step. Options: `--start` (auto-start), `--memory` (skip Redis), `--registry=URL` (custom npm mirror). On **Windows**, use `scripts/install.ps1` then `scripts/start-windows.ps1`.
 
-**Full setup guide** (API keys, CLI auth, voice, Feishu/Telegram, troubleshooting): **[SETUP.opensource.md](SETUP.opensource.md)**
+**Full setup guide** (API keys, CLI auth, voice, Feishu/Telegram, troubleshooting): **[SETUP.md](SETUP.md)**
+
+> **Want to stay on a specific version?** See [Running a Specific Version](SETUP.md#running-a-specific-version-without-auto-update) in the setup guide.
 
 > **CVO Bootcamp is live!** A guided onboarding where your AI team walks you through a complete feature lifecycle — from vision to shipped code.
 
 ![CVO Bootcamp onboarding](https://github.com/user-attachments/assets/9d9c8d89-27fe-4788-812a-ffc28f47d3f9)
+
+## Upgrading
+
+### Desktop App (In-App Update)
+
+The desktop app checks for updates at startup and once every 24 hours while it remains running. Automatic checks stay silent unless a new version is available; then a dialog lets you **Download**, **Skip**, or decide **Later**.
+
+- **Windows (installer)**: the update downloads the new `.exe` and runs it with elevation (UAC prompt) — the app closes, the installer runs silently, and the app restarts automatically.
+- **macOS**: the update downloads the new `.dmg` — drag it to Applications to replace the old version.
+- **Windows (portable)**: in-app update opens the release page — download and extract the new zip manually.
+
+**If an update fails:**
+
+1. On next launch, a recovery dialog appears with **Retry Install**, **Open Installer Location**, **View Log**, or **Ignore**.
+2. The downloaded installer is preserved at a fixed location — you can rerun it manually **without opening the app**:
+   - **Windows**: `%LOCALAPPDATA%\Clowder AI\updates\` (e.g. `ClowderAI-Setup-0.12.0.exe`)
+   - **macOS**: `~/Library/Application Support/Clowder AI/updates/`
+3. You can also manually download the latest release from the [Releases page](https://github.com/zts212653/clowder-ai/releases) and install it over the existing version. User data (threads, memories, configuration) is preserved across upgrades.
+
+### Source Setup
+
+```bash
+git pull origin main
+pnpm install
+pnpm build
+pnpm start
+```
 
 ## The Iron Laws
 
@@ -214,7 +261,7 @@ Hit the Hub button to open the floating command center. Tabs include:
 | **Skills** | On-demand skills loaded by agents (TDD, debugging, review, etc.) |
 | **Quota Board** | Real-time token usage and cost tracking per agent |
 | **Routing Policy** | How tasks get routed — which agent handles what |
-| **Provider Profiles** | Model configurations, API keys, output format per provider |
+| **Account Configuration** | Add model API keys, configure OAuth, manage provider profiles (Claude, GPT, Gemini, Kimi, GLM, MiniMax, etc.) |
 
 <details><summary>📹 Demo: Hub & Mission Hub walkthrough</summary>
 
@@ -356,7 +403,7 @@ We build in the open. Here's where we are.
 
 | Feature | Status |
 |---------|--------|
-| Multi-User Collaboration (OAuth + ACL) | Spec |
+| Multi-User Collaboration (OAuth + Provider Profiles) | Phase 1 Done |
 | Mission Hub (cross-project command center) | Phase 2 Done |
 | Cold-Start Verifier | Spec |
 
@@ -411,6 +458,7 @@ We're not building tools. We're building homes.
 
 - **[Tutorials](https://github.com/zts212653/cat-cafe-tutorials)** — Step-by-step guides for building with Clowder AI
 - **[SETUP.md](SETUP.md)** — Full installation and configuration guide
+- **[Third-Party AI Provider Guide](SETUP.md#model-access-ui)** — Configure Kimi, GLM, MiniMax, Qwen, OpenRouter, and other providers
 - **[Tips](docs/TIPS.md)** — Magic words, @mentions, voice companion, and other usage tips
 - **[docs/](docs/)** — Architecture decisions, feature specs, and lessons learned
 

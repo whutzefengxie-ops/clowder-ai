@@ -3,27 +3,28 @@ feature_ids: [F137]
 related_features: [F088, F132]
 topics: [gateway, connector, weixin, wechat, personal-im, ilink-bot, chat-platform]
 doc_kind: spec
-created: 2026-07-19
+status: done
+created: 2026-03-23
 ---
 
 # F137: WeChat Personal Gateway — 微信个人号 iLink Bot 接入
 
-> **Status**: done | **Completed**: 2026-03-25 | **Owner**: 金渐层 | **Priority**: P1
+> **Status**: done | **Completed**: 2026-03-28 | **Owner**: 金渐层 | **Priority**: P1
 >
 > **分工**：金渐层（@opencode）实现 → Maine Coon（@codex）review → Ragdoll（@opus）愿景守护
 > 实现过程中不 @ Ragdoll，保持 owner 上下文干净。每个 Phase PR merge 后触发愿景守护。
 
 ## Why
 
-F088 + F132 覆盖了**企业级 IM**（飞书、Telegram、钉钉、企业微信），但team lead的个人微信——12 亿用户量级的国民级 IM——一直无法接入。2026 年 7 月，腾讯微信正式开放 **iLink Bot 协议**（灰度中），允许个人微信号直接与 AI Bot 交互（扫码登录、长轮询收消息、HTTP 发消息），无需企业资质、无需公网 URL、无需 XML/AES 加解密。
+F088 + F132 覆盖了**企业级 IM**（飞书、Telegram、钉钉、企业微信），但operator的个人微信——12 亿用户量级的国民级 IM——一直无法接入。2026 年 3 月，腾讯微信正式开放 **iLink Bot 协议**（灰度中），允许个人微信号直接与 AI Bot 交互（扫码登录、长轮询收消息、HTTP 发消息），无需企业资质、无需公网 URL、无需 XML/AES 加解密。
 
-team experience：*"那我们是不是可以学习 @tencent-weixin/openclaw-weixin 这个的实现模式！把我们的猫猫接入微信！！？"*
+operator experience：*"那我们是不是可以学习 @tencent-weixin/openclaw-weixin 这个的实现模式！把我们的猫猫接入微信！！？"*
 
-team experience：*"你也得复用那些基础设施，就不要自己做一套"*
+operator experience：*"你也得复用那些基础设施，就不要自己做一套"*
 
-team experience：*"如果这个有配置需要配置，有配置哈，我们也在得在那边能够显示我们的这个配置才可以"*（指 IM Hub 配置向导）
+operator experience：*"如果这个有配置需要配置，有配置哈，我们也在得在那边能够显示我们的这个配置才可以"*（指 IM Hub 配置向导）
 
-team lead确认已被灰度到 ClawBot（iLink Bot）功能。
+operator确认已被灰度到 ClawBot（iLink Bot）功能。
 
 **为什么独立于 F132**：F132 是**企业微信**（WeCom），走 WebSocket SDK / HTTP callback + AES/XML；F137 是**个人微信**，走 iLink Bot HTTP 长轮询，协议、认证、能力完全不同。两者平行但互不依赖。
 
@@ -101,9 +102,9 @@ team lead确认已被灰度到 ClawBot（iLink Bot）功能。
 - 入站图片: CDN 下载 → AES-128-ECB 解密
 - 实现 `sendMedia?(externalChatId, payload)` 接口
 
-### 富媒体能力调研（2026-07-25）
+### 富媒体能力调研（2026-03-25）
 
-> team lead提问：*"个人微信能接入和飞书那样超级多的富文本包括文件的传输 音频 图片等等吗？"*
+> operator提问：*"个人微信能接入和飞书那样超级多的富文本包括文件的传输 音频 图片等等吗？"*
 
 **~~结论（已过时）：收入方向支持图片/文件/语音；发出方向目前只能纯文本。~~**
 
@@ -119,9 +120,9 @@ team lead确认已被灰度到 ClawBot（iLink Bot）功能。
 | 4 | FILE | 已实现（CDN 下载 + AES 解密） | 已实现（CDN 上传 + `file_item`） |
 | 5 | VIDEO | 协议有定义（`video_item`），代码未实现 | 协议支持，代码未实现 |
 
-#### 出站限制的技术根因
+#### 历史误判：出站不是只能发文本
 
-`/ilink/bot/sendmessage` API 的 `item_list` 仅支持 `text_item`（`type=1`）。`WeixinAdapter.sendMessageApi()`（第 642 行）构造的请求体：
+早期调研曾误判 `/ilink/bot/sendmessage` API 的 `item_list` 仅支持 `text_item`（`type=1`）。当时 `WeixinAdapter.sendMessageApi()` 构造的请求体只有文本：
 
 ```json
 {
@@ -133,7 +134,7 @@ team lead确认已被灰度到 ClawBot（iLink Bot）功能。
 }
 ```
 
-**~~之前结论有误~~**：iLink `sendmessage` API **支持发送图片/文件/语音/视频**——通过 `item_list` 中的 `image_item`/`file_item`/`voice_item`/`video_item`。需要先调 `getuploadurl` 获取 CDN 上传地址，用 AES-128-ECB 加密后上传，拿到 `filekey` + `encrypt_query_param` + `aes_key` 后放入 item。官方 `@tencent-weixin/openclaw-weixin@2.0.1` 的 `send-media.ts` + `cdn/upload.ts` 有完整实现。
+**更正**：iLink `sendmessage` API **支持发送图片/文件/语音/视频**——通过 `item_list` 中的 `image_item`/`file_item`/`voice_item`/`video_item`。需要先调 `getuploadurl` 获取 CDN 上传地址，用 AES-128-ECB 加密后上传，拿到 `filekey` + `encrypt_query_param` + `aes_key` 后放入 item。官方 `@tencent-weixin/openclaw-weixin@2.0.1` 的 `send-media.ts` + `cdn/upload.ts` 有完整实现。
 
 > 纠正来源：2026-03-25 Ragdoll核实 openclaw v2.0.1 源码 `sendImageMessageWeixin` / `uploadFileToWeixin` 确认。
 
@@ -144,8 +145,8 @@ team lead确认已被灰度到 ClawBot（iLink Bot）功能。
 | 文字收/发 | ✅ | ✅ | Phase A 已完成 |
 | 图片收 | ✅ CDN URL | ✅ CDN 下载 + AES 解密 | Phase B 完成 |
 | 图片发 | ✅ CDN 上传 + `image_item` | ✅ `sendMedia()` 已实现 | Phase B 完成 |
-| 语音收 | ✅ CDN | ⚠️ 语音转文字已实现，CDN 下载未接入 | Phase B 部分 |
-| 语音发 | ✅ CDN 上传 | ✅ `sendMedia(audio)` 已实现 | Phase B 完成 |
+| 语音收 | ✅ CDN | ⚠️ 默认用 iLink 转写文本；原始 SILK 需 `WEIXIN_CAPTURE_INBOUND_VOICE_MEDIA=1` 才接入 | Phase B 部分 |
+| 语音发 | ✅ CDN 上传 | ⚠️ `sendMedia(audio)` 已实现，但原生 `voice_item` 仍未实测稳定；需走 2026-05-14 修复队列 | Phase B 部分 |
 | 文件收 | ✅ CDN | ✅ CDN 下载 + AES 解密 | Phase B 完成 |
 | 文件发 | ✅ CDN 上传 | ✅ `sendMedia(file)` 已实现 | Phase B 完成 |
 | 视频收 | ✅ 协议定义 | ❌ 完全没做 | 低优先级 |
@@ -173,7 +174,7 @@ team lead确认已被灰度到 ClawBot（iLink Bot）功能。
 
 ### Phase C: IM Hub 配置向导 + 健壮性
 
-**IM Hub QR 登录 UI**（team lead明确要求：*"能不能做到im hub内？我点击获取二维码 然后给我二维码 我点击扫码完成 然后挂上这个？"*）：
+**IM Hub QR 登录 UI**（operator明确要求：*"能不能做到im hub内？我点击获取二维码 然后给我二维码 我点击扫码完成 然后挂上这个？"*）：
 
 扩展 `HubConnectorConfigTab.tsx`（现有 265 行，已有飞书/Telegram/钉钉配置）：
 
@@ -192,7 +193,7 @@ team lead确认已被灰度到 ClawBot（iLink Bot）功能。
    - 轮询 `GET /api/connector/weixin/qrcode-status?qrPayload=<hex>`，间隔 2~3s
    - 状态映射：`0` → 等待扫码 → `1` → 已扫码待确认 → `4` → 成功
    - 超时处理：60s 无扫码自动过期，提示重新获取
-   - team experience：*"扫码之后得自动 poll！不要我还要给你发个消息才能 poll"*
+   - operator experience：*"扫码之后得自动 poll！不要我还要给你发个消息才能 poll"*
 
 4. **扫码完成 → 自动激活（零用户干预）**：
    - poll 到 `confirmed` 后自动调用 `POST /api/connector/weixin/activate`
@@ -251,26 +252,38 @@ team lead确认已被灰度到 ClawBot（iLink Bot）功能。
 - Pencil 绘制 SVG 图标，无 emoji
 - Maine Coon (codex) R2 放行 + 云端 Codex review 无 P1/P2
 
+### Phase D（断开连接 + 解绑）✅
+
+> **反思**：Phase A-C 只做了"连接"方向，没有做"断开"。能连接就必须能断开——这是 UX 完整性的基本功。立项时应该主动挖掘这类隐含需求，而不是等operator发现了才补。
+
+- [x] AC-D1: IM Hub 配置卡片在已连接状态下显示"断开连接"按钮
+- [x] AC-D2: 点击"断开连接"后停止长轮询 + 清除 bot_token/context_tokens + 状态回到"未配置"
+- [x] AC-D3: 断开后微信端不再收到 bot 消息（session 自然过期或主动 revoke）
+- [x] AC-D4: 配置卡片展示解绑说明文案（微信端操作路径：设置 → 账号与安全 → 登录设备管理）
+- [x] AC-D5: 断开连接不影响已有 thread 和历史消息
+
 ## 需求点 Checklist
 
-| ID | 需求点（team experience/转述） | AC 编号 | 验证方式 | 状态 |
+| ID | 需求点（operator experience/转述） | AC 编号 | 验证方式 | 状态 |
 |----|---------------------------|---------|----------|------|
 | R1 | "把我们的猫猫接入微信" | AC-A1~A7 | test + manual DM | [x] |
 | R2 | "你也得复用那些基础设施，就不要自己做一套" | AC-A5, AC-C4 | code review: 公共层 diff = 0 | [x] |
 | R3 | "也得接入我们的消息管线，都得是一样的" | AC-A5, AC-A6 | /new /threads /use /where 可用 | [x] |
 | R4 | "如果有配置需要配置...在那边能够显示" | AC-C1 | IM Hub 配置向导可见 | [x] |
 | R5 | "按照我们的开发速度，不需要一天" | Phase A 优先 | Phase A 独立可用 | [x] |
+| R6 | "我们这里是不是可以写清楚怎么样不绑定？" + "我们可以做一个按钮？" | AC-D1~D5 | IM Hub 断开按钮 + 解绑说明 | [x] |
 
 ### 覆盖检查
 - [x] 每个需求点都能映射到至少一个 AC
 - [x] 每个 AC 都有验证方式
 - [x] 前端需求已准备需求→证据映射表（若适用）— Phase C IM Hub AC-C1 已完成
+- [x] Phase D 需求已覆盖（断开连接 + 解绑说明）
 
 ## Dependencies
 
 - **Evolved from**: F088（Multi-Platform Chat Gateway — 复用其三层架构和全部公共层）
 - **Related**: F132（DingTalk + WeCom — 姐妹 feature，企业微信 vs 个人微信）
-- **External**: 腾讯微信 iLink Bot 协议（灰度阶段，team lead已获权限）
+- **External**: 腾讯微信 iLink Bot 协议（灰度阶段，operator已获权限）
 
 ## Risk
 
@@ -288,7 +301,7 @@ team lead确认已被灰度到 ClawBot（iLink Bot）功能。
 
 **状态**: 🟢 Fixed — PR #701 squash merge (40639bd4)
 
-**现象**（2026-07-24 Alpha 实测，3 次复现）：
+**现象**（2026-03-24 Alpha 实测，3 次复现）：
 - ✅ 微信扫码登录成功 → 长轮询启动
 - ✅ 微信发消息 → iLink `getupdates` 正常接收 → ConnectorRouter 路由 → 创建 thread + binding → 猫猫 invocation 创建 → 猫猫处理完成
 - ❌ 猫猫回复 **从未** 到达微信端 — 微信 DM 窗口无任何新消息
@@ -313,10 +326,10 @@ team lead确认已被灰度到 ClawBot（iLink Bot）功能。
 cat-cafe:connector-binding:weixin:o9cq8008zWwzHxRSAQqEgo5Sz34g@im.wechat
   connectorId: weixin
   externalChatId: o9cq8008zWwzHxRSAQqEgo5Sz34g@im.wechat
-  threadId: thread_mn45go5om80e4v98
+  threadId: [thread-id]
   userId: default-user
   createdAt: 1774328644432
-  hubThreadId: thread_mn45nbswl44j0aei
+  hubThreadId: [thread-id]
 ```
 
 **关键发现 — 双 invocation ID**：
@@ -336,7 +349,7 @@ cat-cafe:connector-binding:weixin:o9cq8008zWwzHxRSAQqEgo5Sz34g@im.wechat
 
 **状态**: 🟢 Fixed — PR #704 + #708 + #710 + #711 累积修复，E2E 三轮验证通过 (2026-03-24)
 
-**现象**：team lead发第一条微信消息 → 猫猫回复 → 微信收到 ✅。发第二条 → 猫猫回复 → 微信收不到 ❌（或延迟 3-5 分钟才收到）。
+**现象**：operator发第一条微信消息 → 猫猫回复 → 微信收到 ✅。发第二条 → 猫猫回复 → 微信收不到 ❌（或延迟 3-5 分钟才收到）。
 
 **根因（多层）**：
 1. **iLink `context_token` 单次消费**（PR #704）：第一次 `sendmessage` + `FINISH` 后 token 作废，后续用同一 token 被静默丢弃
@@ -363,7 +376,7 @@ cat-cafe:connector-binding:weixin:o9cq8008zWwzHxRSAQqEgo5Sz34g@im.wechat
 
 ### BUG-4：A→B→C 接力链只送达 A，B/C 静默丢失
 
-**现象**：team lead在微信端发消息触发 A→B→C 猫猫接力链时，只收到 A 的回复，B 和 C 的回复静默丢失。iLink API 均返回 200 OK。
+**现象**：operator在微信端发消息触发 A→B→C 猫猫接力链时，只收到 A 的回复，B 和 C 的回复静默丢失。iLink API 均返回 200 OK。
 
 **根因**：`context_token` 单次消费（iLink 协议约束）+ 3s debounce 阻塞 deliver loop。A 的 `flushReply()` 消费 token 后删除，B/C 的 `sendReply()` 到达时已无 token，静默跳过（`WeixinAdapter.ts:519-524`）。
 
@@ -376,8 +389,8 @@ cat-cafe:connector-binding:weixin:o9cq8008zWwzHxRSAQqEgo5Sz34g@im.wechat
 **BUG-4b/4c 后续修复**（PR #740，2026-03-25，commit 08c663fb）：
 - **BUG-4b**：`ConnectorInvokeTrigger` 合并判断 `every()` → `some()`。原逻辑要求所有绑定 connector 都是单 token 才合并，但 weixin+feishu 混合绑定时 `every()` 返回 false，导致不合并。修正为 `some()` — 只要有一个是 weixin 就合并。
 - **BUG-4c**：`QueueProcessor` 完全缺失 BUG-4 合并逻辑。当 queued invocations 产出多 turn WeChat 输出时，每个 turn 独立 deliver，第一个消费 token 后后续静默丢失。新增完整合并路径（含 `getConnectorIds` 检测 + `SINGLE_TOKEN_CONNECTORS` + 猫名前缀 + 分隔线）。
-- **BUG-4c P1**（云端 review 发现）：QueueProcessor merge 路径丢弃 richBlocks。修复：合并循环中用 `renderAllRichBlocksPlaintext` 将 richBlocks 渲染为纯文本后嵌入合并内容。
-- **验证**：83 pass（42 ConnectorInvokeTrigger + 41 QueueProcessor）。Gate 全绿，云端 review 两轮通过。
+- **BUG-4c P1**（remote review 发现）：QueueProcessor merge 路径丢弃 richBlocks。修复：合并循环中用 `renderAllRichBlocksPlaintext` 将 richBlocks 渲染为纯文本后嵌入合并内容。
+- **验证**：83 pass（42 ConnectorInvokeTrigger + 41 QueueProcessor）。Gate 全绿，remote review 两轮通过。
 
 ### BUG-5：context_token "单次消费"是误判 — 实际可重复使用
 
@@ -403,18 +416,59 @@ cat-cafe:connector-binding:weixin:o9cq8008zWwzHxRSAQqEgo5Sz34g@im.wechat
 - BUG-4 系列的 merge 逻辑（ConnectorInvokeTrigger + QueueProcessor 合并多 turn）不再是 WeChat 接龙的必要条件——但保留为可选的用户体验优化（合并消息 vs 多条碎片消息）
 - `SINGLE_TOKEN_CONNECTORS` 常量和相关 merge 判断可以后续清理
 
+## 2026-05-14 Hermes 最新对比审计
+
+**范围边界**：本节只记录 Cat Cafe 自身个人微信 iLink Bot 适配需要补齐的协议/可靠性问题。HermesClaw 的"同一个个人微信账号被 Hermes/OpenClaw/OpenCode 多 runtime 共享"本地代理模式不纳入 F137；我们只需要让猫猫自己的微信通道可靠工作。
+
+**核对来源**：
+- Hermes Agent latest main（本轮拉到 `ddb8d8fa`，2026-05-14）`gateway/platforms/weixin.py`
+- HermesClaw latest（`d018f6a`，2026-04-29）仅用于识别非目标范围
+- 本仓库现状：`packages/api/src/infrastructure/connectors/adapters/WeixinAdapter.ts`、`weixin-cdn.ts`、`packages/api/test/weixin-adapter.test.js`、`weixin-cdn.test.js`
+
+### 需要修复
+
+| ID | 严重度 | 问题 | 当前证据 | 修复方向 | 状态 |
+|----|--------|------|----------|----------|------|
+| H1 | P1 | `getuploadurl` 只支持 `upload_param`，不支持 `upload_full_url` | `uploadMediaToCdn()` 在无 `upload_param` 时直接 throw；Hermes 兼容 `upload_full_url`，且确认两种上传都用 `POST` | `callGetUploadUrl()` 返回 `upload_param? + upload_full_url?`；优先 `upload_full_url`，否则构造 CDN URL；补 `weixin-cdn.test.js` | fixed in PR #1675 |
+| H2 | P1 | 入站媒体只支持 `encrypt_query_param`，不支持 `full_url` | `downloadMediaFromCdn()` 只拼 `/download?encrypted_query_param=`；Hermes 对 `full_url` 做 WeChat CDN allowlist 后直下 | `platformKey` 支持 `{ fullUrl, aesKey }`；仅允许 WeChat CDN host，防 SSRF；图片/文件/语音解析都写入 fullUrl | fixed in PR #1675 |
+| H3 | P1 | 猫猫发语音仍未有可靠默认路径 | 当前默认 `.silk` 走原生 `voice_item` minimal；历史验证出现"1 秒假语音/完全消失"；Hermes 最新明确不把原生 voice bubble 当可靠路径，`send_voice()` 强制走 file attachment fallback | 默认把 outbound audio 作为可播放文件发送，原生 `voice_item` 只保留在显式实验 env 下；补一条端到端测试证明 voiceMode audio 不静默丢弃且微信端至少收到可播放附件 | fixed in PR #1675 |
+| H4 | P1 | `sendmessage/sendMedia` 对 iLink `-2` 错误分流不足 | Hermes 区分 `-2 unknown error` stale-session 与 `-2` frequency limit，并做 backoff/retry；我们现在非 0 直接 throw | 增加错误分类：`-14`/`-2 unknown error` 触发重新扫码状态，频控 `-2` 做有限 retry/backoff；覆盖 text + media | fixed in PR #1675 |
+| H5 | P2 | `context_token` 和 `get_updates_buf` 只在内存 | 重启后失去 peer token/cursor；Hermes 按 account+peer 落盘恢复 | 将 token/cursor 持久化到 connector state/Redis；断开连接时清理 | fixed in PR #1675 |
+| H6 | P2 | 入站 dedup 只依赖 message id | Hermes 有 message id + 内容指纹二级 dedup；iLink 重放若换 id，可能二次触发猫猫 | 为 weixin 入站加短 TTL 内容指纹 dedup（chatId + normalized text/media hash） | fixed in PR #1675 |
+| H7 | P3 | 视频收发未实现 | 协议和 Hermes 都支持 `video_item`；F137 矩阵仍标低优先级 | 仅在用户需要视频时实现 inbound/outbound video | defer |
+| H8 | P3 | Markdown/长文本体验偏保守 | 我们 `stripMarkdownForWeixin()` 去格式；Hermes 保留部分 Markdown 并做 code block/长行 wrap | 后续可把 strip 改成 WeChat-friendly formatter；不阻塞可靠性 | defer |
+
+### 语音结论
+
+猫猫"发语音"的目标应先定义为 **微信端可靠收到可播放音频**，不应先执着于原生微信语音气泡。历史验证已经证明 `voice_item` 的 metadata/playtime/encode_type 组合不稳定，minimal 模式也只到过"可见但 1 秒假语音"。Hermes 最新选择把 `send_voice()` 降级成 file attachment，是对这个事实的保守工程判断。
+
+F137 下一轮修复应把 **file attachment 作为默认成功路径**，把 `voice_item` 作为显式实验开关：
+
+| 路径 | 默认性 | 目标 |
+|------|--------|------|
+| `audio` → WAV/MP3/M4A 文件附件 | 默认 | 保证微信端可收到、可播放，不再静默丢弃 |
+| `audio` → WAV→SILK→`voice_item` | 实验开关 | 继续探索原生语音气泡，但不作为 AC 成功条件 |
+| inbound voice raw SILK capture | 可选开关 | 默认用 iLink 转写文本；需要原始语音时再打开 |
+
+### 不做
+
+| 项 | 原因 |
+|----|------|
+| HermesClaw/Clawbot 同号多 runtime 代理 | 这是"多个 runtime 共享一个 iLink token"的问题，不是猫猫自身个人微信能力；operator本轮明确排除 |
+| 普通微信群完整支持 | iLink Bot 侧是否投递普通群事件仍不稳定；等腾讯能力明确后再做，不在本轮修复队列 |
+
 ## Key Decisions
 
 | # | 决策 | 理由 | 日期 |
 |---|------|------|------|
-| KD-1 | 独立 Feature（不合入 F132） | 个人微信 vs 企业微信：协议（iLink HTTP vs WS/callback）、认证（扫码 vs appKey）、能力完全不同 | 2026-07-19 |
-| KD-2 | 直接实现 iLink 协议，不引入 `weixin-agent-sdk` | SDK 太薄（仅封装 fetch），我们需要完整控制长轮询生命周期 + ConnectorRouter 集成 | 2026-07-19 |
-| KD-3 | 仅实现 `IOutboundAdapter`，不实现 `IStreamableOutboundAdapter` | iLink Bot 不支持消息编辑/流式更新，`message_state: GENERATING` 在 bot 窗口无效。用 typing 状态 + final 发送 | 2026-07-19 |
-| KD-4 | adapter-only 扩展，公共层零改动 | F088/F132 已验证，duck typing 能力发现天然支持 | 2026-07-19 |
-| KD-5 | Phase A 优先文本双向，媒体和 IM Hub 放后续 Phase | team lead期望快速可用（"两小时后就能用"），文本覆盖 90% 日常场景 | 2026-07-19 |
+| KD-1 | 独立 Feature（不合入 F132） | 个人微信 vs 企业微信：协议（iLink HTTP vs WS/callback）、认证（扫码 vs appKey）、能力完全不同 | 2026-03-23 |
+| KD-2 | 直接实现 iLink 协议，不引入 `weixin-agent-sdk` | SDK 太薄（仅封装 fetch），我们需要完整控制长轮询生命周期 + ConnectorRouter 集成 | 2026-03-23 |
+| KD-3 | 仅实现 `IOutboundAdapter`，不实现 `IStreamableOutboundAdapter` | iLink Bot 不支持消息编辑/流式更新，`message_state: GENERATING` 在 bot 窗口无效。用 typing 状态 + final 发送 | 2026-03-23 |
+| KD-4 | adapter-only 扩展，公共层零改动 | F088/F132 已验证，duck typing 能力发现天然支持 | 2026-03-23 |
+| KD-5 | Phase A 优先文本双向，媒体和 IM Hub 放后续 Phase | operator期望快速可用（"两小时后就能用"），文本覆盖 90% 日常场景 | 2026-03-23 |
 
 ## Review Gate
 
 - Phase A: 跨 family review（Maine Coon @codex）
 - Phase B: 跨 family review（Maine Coon @codex）— AES 加解密需额外审查
-- Phase C: 前端走 Design Gate（IM Hub 配置向导 UX → team lead确认）
+- Phase C: 前端走 Design Gate（IM Hub 配置向导 UX → operator确认）

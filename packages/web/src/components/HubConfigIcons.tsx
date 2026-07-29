@@ -1,6 +1,8 @@
-import type { ReactNode } from 'react';
+'use client';
 
-// ── Per-platform visual config (matches .pen wireframe Screen C) ──
+import { type ReactNode, useState } from 'react';
+
+// ── Manifest-driven visual config (F240: replaces hardcoded PLATFORM_VISUALS) ──
 
 export interface PlatformVisual {
   iconBg: string;
@@ -15,54 +17,50 @@ const SVG_PROPS = {
   strokeLinejoin: 'round' as const,
 };
 
-export const PLATFORM_VISUALS: Record<string, PlatformVisual> = {
-  feishu: {
-    iconBg: '#DBEAFE',
-    iconColor: '#2563EB',
-    icon: (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img src="/images/connectors/feishu.png" alt="Feishu" className="w-[18px] h-[18px]" />
-    ),
-  },
-  telegram: {
-    iconBg: '#E0F2FE',
-    iconColor: '#0284C7',
-    icon: (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img src="/images/connectors/telegram.png" alt="Telegram" className="w-[18px] h-[18px]" />
-    ),
-  },
-  weixin: {
-    iconBg: '#D1FAE5',
-    iconColor: '#07C160',
-    icon: (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img src="/images/connectors/weixin.png" alt="WeChat" className="w-[18px] h-[18px]" />
-    ),
-  },
-  dingtalk: {
-    iconBg: '#CFFAFE',
-    iconColor: '#3296FA',
-    icon: (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img src="/images/connectors/dingtalk.png" alt="DingTalk" className="w-[18px] h-[18px]" />
-    ),
-  },
-};
+/** Name-initial text avatar — first character as fallback icon. */
+function NameInitial({ name }: { name: string }) {
+  return <span className="text-sm font-bold leading-none">{name.charAt(0)}</span>;
+}
 
-export const DEFAULT_VISUAL: PlatformVisual = {
-  iconBg: '#F3F4F6',
-  iconColor: '#6B7280',
-  icon: (
-    <svg className="w-[18px] h-[18px]" viewBox="0 0 24 24" stroke="currentColor" {...SVG_PROPS}>
-      <path d="M12 12m-10 0a10 10 0 1 0 20 0a10 10 0 1 0-20 0" />
-    </svg>
-  ),
-};
+/**
+ * Connector icon with 404 fallback.
+ * Uses native <img> instead of next/image — SVG files render correctly
+ * and external plugin icons don't need next.config image domain allowlist.
+ * On load error, swaps to name-initial text avatar.
+ */
+function ConnectorIcon({ src, name }: { src: string; name: string }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return <NameInitial name={name} />;
+  /* eslint-disable-next-line @next/next/no-img-element */
+  return <img src={src} alt="" width={18} height={18} className="object-contain" onError={() => setFailed(true)} />;
+}
+
+/** Build visual from manifest icon + themeColor — no per-platform hardcoded map. */
+export function buildPlatformVisual(platform: PlatformStatus): PlatformVisual {
+  const icon = platform.icon;
+  const themeColor = platform.themeColor;
+
+  // Render file-based icon (PNG or SVG) when src is available
+  let iconElement: ReactNode;
+  if (icon?.src) {
+    iconElement = <ConnectorIcon src={icon.src} name={platform.name} />;
+  } else {
+    iconElement = <NameInitial name={platform.name} />;
+  }
+
+  if (!themeColor) {
+    return { iconBg: 'var(--conn-gray-bg)', iconColor: 'var(--conn-icon-default)', icon: iconElement };
+  }
+  return {
+    iconBg: `color-mix(in srgb, ${themeColor} 12%, transparent)`,
+    iconColor: themeColor,
+    icon: iconElement,
+  };
+}
 
 export function StepBadge({ num }: { num: number }) {
   return (
-    <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-500 text-white text-[11px] font-bold flex-shrink-0">
+    <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-conn-blue-text text-[var(--cafe-surface)] text-xs font-bold flex-shrink-0">
       {num}
     </span>
   );
@@ -84,6 +82,14 @@ export function ChevronDown() {
   );
 }
 
+export function TrashIcon() {
+  return (
+    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" stroke="currentColor" {...SVG_PROPS}>
+      <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M10 11v6M14 11v6" />
+    </svg>
+  );
+}
+
 export function ExternalLinkIcon() {
   return (
     <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" stroke="currentColor" {...SVG_PROPS}>
@@ -96,7 +102,7 @@ export function ExternalLinkIcon() {
 
 export function WifiIcon() {
   return (
-    <svg className="w-3.5 h-3.5 text-gray-500" viewBox="0 0 24 24" stroke="currentColor" {...SVG_PROPS}>
+    <svg className="w-3.5 h-3.5 text-cafe-secondary" viewBox="0 0 24 24" stroke="currentColor" {...SVG_PROPS}>
       <path d="M5 13a10 10 0 0 1 14 0" />
       <path d="M8.5 16.5a5 5 0 0 1 7 0" />
       <path d="M2 8.82a15 15 0 0 1 20 0" />
@@ -107,7 +113,12 @@ export function WifiIcon() {
 
 export function TriangleAlertIcon() {
   return (
-    <svg className="w-4 h-4 text-amber-600 flex-shrink-0" viewBox="0 0 24 24" stroke="currentColor" {...SVG_PROPS}>
+    <svg
+      className="w-4 h-4 text-conn-amber-text flex-shrink-0"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      {...SVG_PROPS}
+    >
       <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
       <path d="M12 9v4" />
       <path d="M12 17h.01" />
@@ -119,7 +130,7 @@ export function TriangleAlertIcon() {
 export function StatusDotConnected() {
   return (
     <svg className="w-2.5 h-2.5 flex-shrink-0" viewBox="0 0 10 10">
-      <circle cx="5" cy="5" r="5" fill="#16A34A" />
+      <circle cx="5" cy="5" r="5" fill="var(--semantic-success)" />
     </svg>
   );
 }
@@ -128,7 +139,7 @@ export function StatusDotConnected() {
 export function StatusDotIdle() {
   return (
     <svg className="w-2.5 h-2.5 flex-shrink-0" viewBox="0 0 10 10">
-      <circle cx="5" cy="5" r="4" fill="none" stroke="#9CA3AF" strokeWidth="2" />
+      <circle cx="5" cy="5" r="4" fill="none" stroke="var(--neutral-400)" strokeWidth="2" />
     </svg>
   );
 }
@@ -174,4 +185,85 @@ export function LockIcon() {
       <path d="M7 11V7a5 5 0 0 1 10 0v4" />
     </svg>
   );
+}
+
+// ── Connector config types & helpers ──
+
+export interface PlatformFieldStatus {
+  envName: string;
+  label: string;
+  sensitive: boolean;
+  /** Field type from manifest (AC-A24). Frontend renders generically based on this. */
+  type?: 'input' | 'select' | 'toggle' | 'list';
+  /** Select options (only for type: select). */
+  options?: Array<{ value: string; label: string }>;
+  currentValue: string | null;
+}
+
+export interface PlatformStepStatus {
+  text: string;
+  mode?: string;
+}
+
+/** Action definition from YAML manifest (AC-A26). */
+export interface PlatformActionDef {
+  id: string;
+  label: string;
+  render: string;
+  resultRender?: string;
+  next?: string;
+  rollback?: string;
+  timeout?: number;
+}
+
+/** Operation definition + runtime state (AC-A26). */
+export interface PlatformOperationStatus {
+  name: string;
+  label: string;
+  actions: PlatformActionDef[];
+  currentAction?: string;
+  lastResult?: { render: string; data: unknown; label?: string };
+  updatedAt?: number;
+}
+
+export interface PlatformStatus {
+  id: string;
+  name: string;
+  nameEn: string;
+  /** 'external' for user-installed connectors. Absent = builtin. */
+  source?: 'builtin' | 'external';
+  configured: boolean;
+  connectionState?: 'connected' | 'disconnected' | 'reconnecting' | 'unknown';
+  lastHeartbeat?: number | null;
+  fields: PlatformFieldStatus[];
+  docsUrl: string;
+  steps: PlatformStepStatus[];
+  /** Manifest icon (AC-A23). */
+  icon?: { type: string; src?: string; iconId?: string };
+  /** Theme color from manifest (AC-A23). */
+  themeColor?: string;
+  /** Operation definitions + state for ActionRenderer (AC-A26). */
+  operations?: PlatformOperationStatus[];
+  /** AC-A25: manifest-driven permission label — renders HubPermissionsTab when present. */
+  permissionLabel?: string;
+  /** F240: YAML-declared health-check — controls test button visibility. */
+  testable?: boolean;
+}
+
+export function connStatePill(p: PlatformStatus): { label: string; className: string } {
+  if (p.connectionState === 'connected')
+    return { label: '已连接', className: 'bg-conn-emerald-bg text-conn-emerald-text' };
+  if (p.connectionState === 'reconnecting')
+    return { label: '重连中', className: 'bg-conn-amber-bg text-conn-amber-text' };
+  if (p.connectionState === 'disconnected' && p.configured)
+    return { label: '已配置', className: 'bg-conn-amber-bg text-conn-amber-text' };
+  if (p.configured) return { label: '已配置', className: 'bg-conn-amber-bg text-conn-amber-text' };
+  return { label: '未配置', className: 'bg-cafe-surface-sunken text-cafe-muted' };
+}
+
+export function formatHeartbeat(ts: number): string {
+  const ago = Math.floor((Date.now() - ts) / 1000);
+  if (ago < 60) return `${ago}s ago`;
+  if (ago < 3600) return `${Math.floor(ago / 60)}m ago`;
+  return `${Math.floor(ago / 3600)}h ago`;
 }

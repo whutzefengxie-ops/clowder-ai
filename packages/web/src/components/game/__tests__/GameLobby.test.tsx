@@ -12,11 +12,10 @@ const mockCats: React.ComponentProps<typeof GameLobby>['cats'] = [
     color: { primary: '#8B5CF6', secondary: '#7C3AED' },
     avatar: '/avatars/opus.png',
     mentionPatterns: ['opus'],
-    provider: 'anthropic',
+    clientId: 'anthropic',
     defaultModel: 'claude-opus-4-6',
     roleDescription: '架构',
     personality: '',
-    source: 'seed',
   },
   {
     id: 'sonnet',
@@ -24,11 +23,10 @@ const mockCats: React.ComponentProps<typeof GameLobby>['cats'] = [
     color: { primary: '#6366F1', secondary: '#4F46E5' },
     avatar: '/avatars/sonnet.png',
     mentionPatterns: ['sonnet'],
-    provider: 'anthropic',
+    clientId: 'anthropic',
     defaultModel: 'claude-sonnet',
     roleDescription: '快速',
     personality: '',
-    source: 'seed',
   },
   {
     id: 'codex',
@@ -36,11 +34,10 @@ const mockCats: React.ComponentProps<typeof GameLobby>['cats'] = [
     color: { primary: '#10B981', secondary: '#059669' },
     avatar: '/avatars/codex.png',
     mentionPatterns: ['codex'],
-    provider: 'openai',
+    clientId: 'openai',
     defaultModel: 'gpt-5.3-codex',
     roleDescription: 'review',
     personality: '',
-    source: 'seed',
   },
 ];
 

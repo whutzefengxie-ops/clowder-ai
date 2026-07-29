@@ -1,6 +1,8 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { useCallback, useMemo } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { useCatData } from '@/hooks/useCatData';
 import { useChatStore } from '@/stores/chatStore';
 import { apiFetch } from '@/utils/api-client';
@@ -83,8 +85,8 @@ function formatConfigForDisplay(config: ConfigSnapshot): string {
   if (config.cats) {
     lines.push('猫猫配置');
     for (const [id, cat] of Object.entries(config.cats)) {
-      const c = cat as { displayName: string; provider: string; model: string; mcpSupport: boolean };
-      lines.push(`  ${c.displayName} (${id}): ${c.provider}/${c.model} ${c.mcpSupport ? '[MCP]' : ''}`);
+      const c = cat as { displayName: string; clientId: string; model: string; mcpSupport: boolean };
+      lines.push(`  ${c.displayName} (${id}): ${c.clientId}/${c.model} ${c.mcpSupport ? '[MCP]' : ''}`);
     }
     lines.push('');
   }
@@ -124,7 +126,8 @@ function formatConfigForDisplay(config: ConfigSnapshot): string {
  * Returns true if the input was a command that was handled.
  */
 export function useChatCommands() {
-  const { addMessage } = useChatStore();
+  const router = useRouter();
+  const { addMessage } = useChatStore(useShallow((s) => ({ addMessage: s.addMessage })));
   const { cats } = useCatData();
 
   // Build dynamic mention pattern → catId resolver from cat data
@@ -145,7 +148,7 @@ export function useChatCommands() {
     const regex =
       allPatterns.length > 0
         ? new RegExp(`@(${allPatterns.map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})`, 'gi')
-        : /@(opus|codex|gemini|dare|dare-agent)/gi; // fallback
+        : /@(opus|codex|gemini)/gi; // fallback
     return { regex, resolve: (name: string) => patternToCatId.get(name.toLowerCase()) };
   }, [cats]);
 
@@ -163,19 +166,30 @@ export function useChatCommands() {
           timestamp: Date.now(),
         });
       };
-      // /help — open Hub to commands tab (F12)
+      // /help — show available commands as system message
       if (trimmed === '/help') {
-        useChatStore.getState().openHub('commands');
+        addMessage({
+          id: `help-${Date.now()}`,
+          type: 'system',
+          variant: 'info',
+          content: [
+            '**可用命令**',
+            '`/config set <key> <value>` — 热更新配置',
+            '`/config` — 打开设置页面',
+            '`/help` — 显示此帮助',
+          ].join('\n'),
+          timestamp: Date.now(),
+        });
         return true;
       }
 
-      // /config command — open hub or hot-update
+      // /config command — open settings or hot-update
       if (isCommandInvocation(trimmed, '/config')) {
         const configArgs = trimmed.slice('/config'.length).trim();
 
-        // /config (no args) — open Hub to system tab (F12)
+        // /config (no args) — navigate to Settings page
         if (!configArgs) {
-          useChatStore.getState().openHub('system');
+          router.push('/settings?s=system');
           return true;
         }
 

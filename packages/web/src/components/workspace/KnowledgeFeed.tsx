@@ -9,7 +9,15 @@ interface Marker {
   source: string;
   status: string;
   targetKind?: string;
+  sourceCollectionId?: string;
+  sourceSensitivity?: string;
   createdAt: string;
+}
+
+interface CollectionOption {
+  id: string;
+  displayName: string;
+  sensitivity: string;
 }
 
 interface FeedData {
@@ -31,6 +39,8 @@ export function KnowledgeFeed() {
   const [loading, setLoading] = useState(true);
   // pendingCount reserved for badge display in mode switcher
   const [, setPendingCount] = useState(0);
+  const [collections, setCollections] = useState<CollectionOption[]>([]);
+  const [approveErrors, setApproveErrors] = useState<Record<string, string>>({});
 
   const fetchFeed = useCallback(async () => {
     try {
@@ -49,19 +59,71 @@ export function KnowledgeFeed() {
 
   useEffect(() => {
     fetchFeed();
-    // Refresh every 60s
     const interval = setInterval(fetchFeed, 60000);
     return () => clearInterval(interval);
   }, [fetchFeed]);
 
-  const handleApprove = useCallback(
-    async (markerId: string) => {
+  useEffect(() => {
+    (async () => {
       try {
-        await apiFetch('/api/knowledge/approve', {
+        const res = await apiFetch('/api/library/catalog');
+        if (res.ok) {
+          const json = await res.json();
+          const active = (json.collections ?? [])
+            .filter((c: { manifest: { status?: string } }) => (c.manifest.status ?? 'active') === 'active')
+            .map((c: { manifest: CollectionOption }) => ({
+              id: c.manifest.id,
+              displayName: c.manifest.displayName,
+              sensitivity: c.manifest.sensitivity,
+            }));
+          setCollections(active);
+        }
+      } catch {
+        // fail-open
+      }
+    })();
+  }, []);
+
+  const handleApprove = useCallback(
+    async (markerId: string, targetCollectionId?: string) => {
+      try {
+        setApproveErrors((prev) => {
+          const next = { ...prev };
+          delete next[markerId];
+          return next;
+        });
+
+        const payload: Record<string, unknown> = { markerId };
+        if (targetCollectionId) payload.targetCollectionId = targetCollectionId;
+
+        const res = await apiFetch('/api/knowledge/approve', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ markerId }),
+          body: JSON.stringify(payload),
         });
+
+        if (!res.ok) {
+          const err = await res.json();
+          if (res.status === 400 && typeof err.error === 'string' && err.error.includes('visibility-widening')) {
+            const confirmed = globalThis.confirm(err.detail ?? 'This action widens visibility. Proceed?');
+            if (!confirmed) return;
+
+            const retryRes = await apiFetch('/api/knowledge/approve', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ ...payload, confirmVisibilityWidening: true }),
+            });
+            if (!retryRes.ok) {
+              const retryErr = await retryRes.json();
+              setApproveErrors((prev) => ({ ...prev, [markerId]: retryErr.error ?? 'Approve failed' }));
+              return;
+            }
+          } else {
+            setApproveErrors((prev) => ({ ...prev, [markerId]: err.error ?? 'Approve failed' }));
+            return;
+          }
+        }
+
         fetchFeed();
       } catch {
         // fail-open
@@ -104,7 +166,7 @@ export function KnowledgeFeed() {
 
   if (loading) {
     return (
-      <div className="flex-1 flex items-center justify-center text-cocreator-dark/40 text-xs">
+      <div className="flex-1 flex items-center justify-center text-cafe-interactive/40 text-xs">
         Loading knowledge feed...
       </div>
     );
@@ -112,7 +174,7 @@ export function KnowledgeFeed() {
 
   const tabs: Array<{ key: FeedTab; label: string; count?: number }> = [
     { key: 'review', label: '待确认', count: data?.needsReview.length },
-    { key: 'settled', label: '已沉淀', count: data?.settled.length },
+    { key: 'settled', label: '已确认', count: data?.settled.length },
     { key: 'frequent', label: '高频' },
     { key: 'upgrade', label: '升级' },
   ];
@@ -123,25 +185,25 @@ export function KnowledgeFeed() {
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Tabs */}
-      <div className="flex border-b border-cocreator-light/40">
+      <div className="flex border-b border-cafe-subtle/40">
         {tabs.map((tab) => (
           <button
             key={tab.key}
             type="button"
             onClick={() => setActiveTab(tab.key)}
-            className={`flex items-center gap-1 px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wider transition-colors ${
+            className={`flex items-center gap-1 px-2 py-1.5 text-xs font-medium transition-colors ${
               activeTab === tab.key
-                ? 'text-cocreator-primary border-b-2 border-cocreator-primary'
-                : 'text-cocreator-dark/40 hover:text-cocreator-dark/60'
+                ? 'border-b-2 border-[var(--console-button-emphasis)] text-[var(--console-button-emphasis)]'
+                : 'text-cafe-muted hover:text-cafe-secondary'
             }`}
           >
             {tab.label}
             {tab.count != null && tab.count > 0 && (
               <span
-                className={`text-[9px] rounded-full px-1.5 py-0.5 ${
+                className={`text-micro rounded-full px-1.5 py-0.5 ${
                   activeTab === tab.key
-                    ? 'bg-cocreator-primary text-white'
-                    : 'bg-cocreator-light/60 text-cocreator-dark/50'
+                    ? 'bg-[var(--console-active-bg)] text-[var(--console-button-emphasis)]'
+                    : 'bg-cafe-surface-sunken/60 text-cafe-interactive/50'
                 }`}
               >
                 {tab.count}
@@ -154,7 +216,7 @@ export function KnowledgeFeed() {
       {/* Feed items */}
       <div className="flex-1 overflow-y-auto px-2 py-2 space-y-2">
         {currentItems.length === 0 ? (
-          <div className="text-center text-cocreator-dark/40 text-xs py-8">
+          <div className="text-center text-cafe-interactive/40 text-xs py-8">
             {activeTab === 'review'
               ? '没有待确认的知识'
               : activeTab === 'frequent'
@@ -169,6 +231,8 @@ export function KnowledgeFeed() {
               key={marker.id}
               marker={marker}
               tab={activeTab}
+              collections={collections}
+              error={approveErrors[marker.id]}
               onApprove={handleApprove}
               onReject={handleReject}
               onUndo={handleUndo}
@@ -179,10 +243,10 @@ export function KnowledgeFeed() {
 
       {/* Stats bar */}
       {data?.stats && (
-        <div className="flex items-center justify-center gap-3 px-3 py-1.5 border-t border-cocreator-light/40 bg-cocreator-bg/30">
-          <span className="text-[10px] font-semibold text-blue-600">{data.stats.decisions} decisions</span>
-          <span className="text-[10px] font-semibold text-amber-600">{data.stats.lessons} lessons</span>
-          <span className="text-[10px] font-semibold text-green-600">{data.stats.methods} methods</span>
+        <div className="flex items-center justify-center gap-3 px-3 py-1.5 border-t border-cafe-subtle/40 bg-cafe-surface/30">
+          <span className="text-micro font-semibold text-[var(--semantic-info)]">{data.stats.decisions} decisions</span>
+          <span className="text-micro font-semibold text-conn-amber-text">{data.stats.lessons} lessons</span>
+          <span className="text-micro font-semibold text-conn-green-text">{data.stats.methods} methods</span>
         </div>
       )}
     </div>
@@ -193,38 +257,44 @@ export function KnowledgeFeed() {
 function KnowledgeCard({
   marker,
   tab,
+  collections,
+  error,
   onApprove,
   onReject,
   onUndo,
 }: {
   marker: Marker;
   tab: FeedTab;
-  onApprove: (id: string) => void;
+  collections: CollectionOption[];
+  error?: string;
+  onApprove: (id: string, collectionId?: string) => void;
   onReject: (id: string) => void;
   onUndo: (id: string) => void;
 }) {
+  const [selectedCollection, setSelectedCollection] = useState('');
+  const isPrivateSource = marker.sourceSensitivity === 'private' || marker.sourceSensitivity === 'restricted';
   // Parse kind from content: "[decision] title: claim"
   const kindMatch = marker.content.match(/^\[(decision|lesson|method)\]\s*/i);
   const kind = kindMatch?.[1]?.toLowerCase() ?? 'lesson';
   const title = marker.content.replace(/^\[(decision|lesson|method)\]\s*/i, '');
 
   const kindColors: Record<string, { bg: string; text: string }> = {
-    decision: { bg: 'bg-blue-50', text: 'text-blue-700' },
-    lesson: { bg: 'bg-amber-50', text: 'text-amber-700' },
-    method: { bg: 'bg-green-50', text: 'text-green-700' },
+    decision: { bg: 'bg-conn-blue-bg', text: 'text-[var(--semantic-info)]' },
+    lesson: { bg: 'bg-conn-amber-bg', text: 'text-conn-amber-text' },
+    method: { bg: 'bg-conn-green-bg', text: 'text-conn-green-text' },
   };
   const colors = kindColors[kind] ?? kindColors.lesson!;
 
   return (
-    <div className="bg-white rounded-lg border border-cocreator-light/60 p-2.5 space-y-1.5">
+    <div className="bg-cafe-surface rounded-lg border border-cafe-subtle/60 p-2.5 space-y-1.5">
       {/* Top row: kind badge + status */}
       <div className="flex items-center justify-between">
-        <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${colors.bg} ${colors.text}`}>
+        <span className={`text-micro font-semibold px-1.5 py-0.5 rounded-full ${colors.bg} ${colors.text}`}>
           {kind}
         </span>
         {tab === 'settled' && (
-          <span className="text-[9px] font-medium text-green-600 bg-green-50 px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
-            <span>&#10003;</span> 已沉淀
+          <span className="text-micro font-medium text-conn-green-text bg-conn-green-bg px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
+            <span>&#10003;</span> 已确认
           </span>
         )}
       </div>
@@ -233,25 +303,44 @@ function KnowledgeCard({
       <div className="text-xs font-semibold text-cafe-black leading-snug">{title}</div>
 
       {/* Source */}
-      <div className="text-[10px] text-cocreator-dark/40">{marker.source}</div>
+      <div className="text-micro text-cafe-interactive/40">{marker.source}</div>
 
       {/* Actions */}
       {tab === 'review' && (
-        <div className="flex items-center justify-end gap-1.5 pt-0.5">
-          <button
-            type="button"
-            onClick={() => onApprove(marker.id)}
-            className="text-[10px] font-semibold text-white bg-cocreator-primary rounded px-2 py-1 hover:opacity-90 transition-opacity"
-          >
-            Approve
-          </button>
-          <button
-            type="button"
-            onClick={() => onReject(marker.id)}
-            className="text-[10px] font-medium text-cocreator-dark/50 hover:text-cocreator-dark/80 transition-colors px-1.5 py-1"
-          >
-            Dismiss
-          </button>
+        <div className="space-y-1.5 pt-0.5">
+          {collections.length > 0 && (
+            <select
+              value={selectedCollection}
+              onChange={(e) => setSelectedCollection(e.target.value)}
+              className="w-full text-micro bg-cafe-surface-sunken/40 border border-cafe-subtle/60 rounded px-1.5 py-1 text-cafe-interactive/70"
+            >
+              <option value="" disabled={isPrivateSource}>
+                自动选择
+              </option>
+              {collections.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.displayName} ({c.sensitivity})
+                </option>
+              ))}
+            </select>
+          )}
+          {error && <div className="text-micro text-conn-red-text bg-conn-red-bg/30 rounded px-1.5 py-1">{error}</div>}
+          <div className="flex items-center justify-end gap-1.5">
+            <button
+              type="button"
+              onClick={() => onApprove(marker.id, selectedCollection || undefined)}
+              className="text-micro font-semibold text-[var(--cafe-surface)] bg-cafe-accent rounded px-2 py-1 hover:opacity-90 transition-opacity"
+            >
+              Approve
+            </button>
+            <button
+              type="button"
+              onClick={() => onReject(marker.id)}
+              className="text-micro font-medium text-cafe-interactive/50 hover:text-cafe-interactive/80 transition-colors px-1.5 py-1"
+            >
+              Dismiss
+            </button>
+          </div>
         </div>
       )}
       {tab === 'settled' && (
@@ -259,7 +348,7 @@ function KnowledgeCard({
           <button
             type="button"
             onClick={() => onUndo(marker.id)}
-            className="text-[10px] font-medium text-cocreator-primary hover:underline"
+            className="text-micro font-medium text-cafe-accent hover:underline"
           >
             撤回
           </button>

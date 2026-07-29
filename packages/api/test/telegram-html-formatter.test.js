@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { formatTelegramHtml } from '../dist/infrastructure/connectors/adapters/telegram-html-formatter.js';
+import { formatTelegramHtml } from '../dist/infrastructure/connectors/im-connectors/telegram/telegram-html-formatter.js';
 
 describe('formatTelegramHtml', () => {
   it('formats card with title and body', () => {
@@ -42,11 +42,12 @@ describe('formatTelegramHtml', () => {
     assert.ok(html.includes('&amp;'));
   });
 
-  it('respects Telegram 4096 char limit with truncation', () => {
+  it('returns full HTML without truncation (adapter splits long content)', () => {
     const longBody = 'x'.repeat(5000);
     const blocks = [{ id: 'b1', kind: 'card', v: 1, title: 'Big', bodyMarkdown: longBody }];
     const html = formatTelegramHtml(blocks, '布偶猫');
-    assert.ok(html.length <= 4096);
+    assert.ok(html.length > 4096, 'formatter must not truncate — adapter handles splitting');
+    assert.ok(html.includes('x'.repeat(100)), 'full body content must be present');
   });
 
   it('formats audio block with text', () => {

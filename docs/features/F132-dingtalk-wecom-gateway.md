@@ -8,7 +8,7 @@ created: 2026-03-22
 
 # F132: DingTalk + WeCom Chat Gateway — 钉钉/企微接入
 
-> **Status**: in-progress | **Owner**: Ragdoll | **Priority**: P1
+> **Status**: done | **Phase A-E Completed**: 2026-04-14 | **Owner**: Ragdoll | **Priority**: P1
 >
 > **分工**：金渐层（@opencode）实现 → Maine Coon（@codex）review → Ragdoll（@opus）愿景守护
 > 实现过程中不 @ Ragdoll，保持 owner 上下文干净。每个 Phase PR merge 后触发愿景守护。
@@ -17,7 +17,7 @@ created: 2026-03-22
 
 Cat Café 已通过 F088 建立了飞书和 Telegram 的双向 DM 通道，但国内企业级 IM 还有两个主力平台未覆盖：**钉钉**（阿里系，6 亿+用户）和**企业微信**（腾讯系，与微信互通）。三者合计覆盖国内企业即时通讯 90%+ 的份额。
 
-team experience：*"我们需要接入钉钉和企业微信，必须复用我们的 channel 等等架构设计，学习飞书的接入"*
+operator experience：*"我们需要接入钉钉和企业微信，必须复用我们的 channel 等等架构设计，学习飞书的接入"*
 
 F088 已验证的三层架构（Principal Link / Session Binding / Command Layer）+ adapter-only-protocol 原则天然支持新平台扩展——新增 adapter 无需改动公共层。本 feature 的核心工作是：为钉钉和企微写 adapter，复用 F088 全部公共基础设施。
 
@@ -196,6 +196,32 @@ F088 已验证的三层架构（Principal Link / Session Binding / Command Layer
 | media | Image element | Picture msg | SDK 上传 | 临时素材 API |
 | streaming | edit card | card streaming | replyStream | ❌ final-only |
 
+### Phase E: WeCom Bot Guided Setup — 企微 Bot 快速接入向导
+
+> **前置**：Phase B~D 已 merged。企微 adapter 代码完整可用，但operator因手动配置太麻烦一直没验证。本阶段降低接入摩擦。
+
+**问题**：当前企微 Bot 接入需要手动创建 bot → 复制 botId + secret → 粘贴到 .env 或 Hub 表单 → 重启服务。飞书/微信都有一键/扫码流程，企微还是"手抄凭证"模式。
+
+**方案**（路线 A — 无需 WeCom ISV 注册）：
+
+**后端**：
+- `POST /api/connector/wecom-bot/validate` — 拿用户填的 `botId` + `secret` 试连 WebSocket，5s 超时返回 success/fail
+- `POST /api/connector/wecom-bot/disconnect` — 清除凭证 + 停止 adapter
+- **动态激活**：validate 成功后自动保存凭证 + 启动 adapter（不需要重启服务），参照微信 `startWeixinPolling()` 模式
+
+**前端**：
+- `WeComBotSetupPanel.tsx` — 参照 `FeishuQrPanel.tsx` 组件模式：
+  1. 步骤引导：① 登录企微管理后台创建 AI Bot → ② 复制 Bot ID + Secret → ③ 粘贴验证
+  2. 凭证输入表单（botId + secret）
+  3. "测试并连接"按钮（调 validate 端点，真连 WebSocket）
+  4. 连接状态指示器（testing → connected ✅ / error ❌）
+  5. 已连接时显示绿色标记 + 断开连接按钮
+
+**不做什么**：
+- 不做 WeCom ISV 第三方授权（需要在 WeCom 开放平台注册服务商，太重）
+- 不改公共层
+- 不影响已有的 wecom-agent 手动配置流程（Agent 5 个凭证 + 公网回调，不适合向导化）
+
 ## Acceptance Criteria
 
 ### Phase A（DingTalk Adapter — DM 基础）
@@ -224,39 +250,46 @@ F088 已验证的三层架构（Principal Link / Session Binding / Command Layer
 - [x] AC-A2.6: 复用 IM Hub 群聊抽象（bootstrap routing + ConnectorRouter + OutboundDeliveryHook）
 - [x] AC-A2.7: 公共层零改动
 
-### Phase B（WeCom Bot Adapter）
-- [ ] AC-B1: 企微 Bot WebSocket 连接 + 心跳 + 重连
-- [ ] AC-B2: Bot DM 消息入站解析正确（text + image + voice）
-- [ ] AC-B3: 猫猫回复通过 `replyStream` 流式发送（真流式）
-- [ ] AC-B4: 模板卡片发送 + 更新
-- [ ] AC-B5: 图片/语音双向收发（SDK 内置）
-- [ ] AC-B6: 复用 ConnectorRouter/CommandLayer/BindingStore，公共层零改动
+### Phase B（WeCom Bot Adapter）✅ PR #804 merged
+- [x] AC-B1: 企微 Bot WebSocket 连接 + 心跳 + 重连
+- [x] AC-B2: Bot DM 消息入站解析正确（text + image + voice）
+- [x] AC-B3: 猫猫回复通过 `replyStream` 流式发送（真流式）
+- [x] AC-B4: 模板卡片发送 + 更新
+- [x] AC-B5: 图片/语音双向收发（SDK 内置）
+- [x] AC-B6: 复用 ConnectorRouter/CommandLayer/BindingStore，公共层零改动
 
-### Phase C（WeCom Agent Adapter）
-- [ ] AC-C1: 回调 URL 验证（echostr challenge + AES 解密）通过
-- [ ] AC-C2: SHA1 签名校验 + AES-256-CBC 消息解密正确
-- [ ] AC-C3: XML → JSON 转换正确（`fast-xml-parser`）
-- [ ] AC-C4: 猫猫回复通过 `message/send` API 发送（text + markdown + 图文卡片）
-- [ ] AC-C5: 图片/语音通过临时素材 API 收发
-- [ ] AC-C6: final-only 模式（无 streaming），长回复分块发送
-- [ ] AC-C7: 公共层零改动
+### Phase C（WeCom Agent Adapter）✅ PR #808 merged
+- [x] AC-C1: 回调 URL 验证（echostr challenge + AES 解密）通过
+- [x] AC-C2: SHA1 签名校验 + AES-256-CBC 消息解密正确
+- [x] AC-C3: XML → JSON 转换正确（`fast-xml-parser`）
+- [x] AC-C4: 猫猫回复通过 `message/send` API 发送（text + markdown + 图文卡片）
+- [x] AC-C5: 图片/语音通过临时素材 API 收发
+- [x] AC-C6: final-only 模式（无 streaming），长回复分块发送
+- [x] AC-C7: 公共层零改动
 
-### Phase D（Bootstrap + 富文本映射 + 文档）
-- [ ] AC-D1: connector-gateway-bootstrap 动态注册三个 adapter（有 env var 才启用）
-- [ ] AC-D2: MessageEnvelope → 各平台原生卡片映射完整
-- [ ] AC-D3: Rich blocks 在所有平台正确降级
-- [ ] AC-D4: IM 接入指南文档覆盖钉钉 + 企微 Bot + 企微 Agent 配置步骤
-- [ ] AC-D5: 现有飞书/Telegram 功能无回归
+### Phase D（Bootstrap + 富文本映射 + 文档）✅ PR #1018 merged
+- [x] AC-D1: connector-gateway-bootstrap 动态注册三个 adapter（有 env var 才启用）
+- [x] AC-D2: MessageEnvelope → 各平台原生卡片映射完整
+- [x] AC-D3: Rich blocks 在所有平台正确降级
+- [x] AC-D4: IM 接入指南文档覆盖钉钉 + 企微 Bot + 企微 Agent 配置步骤
+- [x] AC-D5: 现有飞书/Telegram 功能无回归
+
+### Phase E（WeCom Bot Guided Setup — 快速接入向导） ✅
+- [x] AC-E1: Hub UI 展示 WeCom Bot 步骤向导（3 步：创建 bot → 复制凭证 → 粘贴验证）
+- [x] AC-E2: "测试并连接"按钮真正验证 WebSocket 连接（不是 stub），5s 超时返回结果
+- [x] AC-E3: 验证通过后自动保存凭证并激活 adapter（不需要重启服务）
+- [x] AC-E4: 已连接状态显示绿色标记 + 断开连接按钮（清凭证 + 停 adapter）
+- [x] AC-E5: 公共层零改动
 
 ## 需求点 Checklist
 
-| ID | 需求点（team experience/转述） | AC 编号 | 验证方式 | 状态 |
+| ID | 需求点（operator experience/转述） | AC 编号 | 验证方式 | 状态 |
 |----|---------------------------|---------|----------|------|
 | R1 | "接入钉钉" | AC-A1~A7 | test + manual DM | [x] |
-| R2 | "接入企业微信" | AC-B1~B6, AC-C1~C7 | test + manual DM（两种模式） | [ ] |
-| R3 | "必须复用我们的 channel 等等架构设计" | AC-A6, AC-A1.6, AC-A2.7, AC-B6, AC-C7 | code review: 公共层 diff = 0 | [ ] |
-| R4 | "学习飞书的接入" | AC-D2~D3 | adapter 结构对照 FeishuAdapter | [ ] |
-| R5 | 参考 OpenClaw 生态 | KD-1, KD-4 | 设计文档引用 + 调研综合报告 | [ ] |
+| R2 | "接入企业微信" | AC-B1~B6, AC-C1~C7 | test + manual DM（两种模式） | [x] |
+| R3 | "必须复用我们的 channel 等等架构设计" | AC-A6, AC-A1.6, AC-A2.7, AC-B6, AC-C7 | code review: 公共层 diff = 0 | [x] |
+| R4 | "学习飞书的接入" | AC-D2~D3 | adapter 结构对照 FeishuAdapter | [x] |
+| R5 | 参考 OpenClaw 生态 | KD-1, KD-4 | 设计文档引用 + 调研综合报告 | [x] |
 | R6 | "富文本/媒体原生发送都支持完整" | AC-A1.1~A1.5 | 语音/文件/图片原生发送，不降级 | [x] |
 | R7 | "群聊对接飞书 IM Hub 抽象" | AC-A2.1~A2.7 | 群聊收发 + @回复 + 名称解析 | [x] |
 
@@ -289,10 +322,31 @@ F088 已验证的三层架构（Principal Link / Session Binding / Command Layer
 |---|------|------|------|
 | KD-1 | 参考 OpenClaw 社区插件架构，不引入 ChannelPlugin 接口 | OpenClaw 社区有成熟钉钉/企微插件（`largezhou`、`YanHaidao`、`toboto` 等），验证了 adapter-only 模式。我们的三层架构已足够 | 2026-03-22 |
 | KD-2 | adapter-only 扩展，公共层零改动 | F088 架构验证 + duck typing 能力发现天然支持 | 2026-03-22 |
-| KD-3 | ~~DM-only MVP~~ → 钉钉分三步：DM 基础(A) → 媒体原生发送(A.1) → 群聊(A.2) | team lead确认"先把富文本/媒体原生发送都支持完整，然后再完整地做群聊" | 2026-03-22→03-23 |
+| KD-3 | ~~DM-only MVP~~ → 钉钉分三步：DM 基础(A) → 媒体原生发送(A.1) → 群聊(A.2) | operator确认"先把富文本/媒体原生发送都支持完整，然后再完整地做群聊" | 2026-03-22→03-23 |
 | KD-4 | **企微拆两个 connector**：`wecom-bot`（WebSocket + 流式）+ `wecom-agent`（HTTP callback + AES/XML） | GPT Pro 调研确认：身份、协议、流式能力完全不同，硬揉一个 adapter 会把 Principal Link 和 Session Binding 搅成毛线球。OpenClaw 生态的 `YanHaidao/wecom` 已验证 dual-mode 架构 | 2026-03-22 |
 | KD-5 | 钉钉用 AI Card 做流式，不用 plain message edit | 钉钉 plain message 不支持编辑，但 AI Card 支持 create → streaming update → finish 状态机。`soimy/openclaw-channel-dingtalk` 已验证此路径 | 2026-03-22 |
-| KD-6 | 钉钉群聊须对齐飞书 F134 IM Hub 抽象 | team experience"群聊你也得对接上飞书有的功能或者他们的抽象你要接入，IM Hub 里群聊怎么映射你们也要这么干" | 2026-03-23 |
+| KD-6 | 钉钉群聊须对齐飞书 F134 IM Hub 抽象 | operator experience"群聊你也得对接上飞书有的功能或者他们的抽象你要接入，IM Hub 里群聊怎么映射你们也要这么干" | 2026-03-23 |
+| KD-7 | **新 IM 接入 11 步清单**（统一架构指南） | 基于飞书/钉钉/Telegram/微信四个已接入平台的模式提炼，新平台改 11 个位置、公共层零改动。详见下方「新 IM 接入清单」 | 2026-03-27 |
+| KD-8 | **企微 Bot 走引导式设置，不走 ISV 扫码授权** | WeCom 没有飞书/微信那样的 QR-to-credential 协议。ClawPro 的扫码授权需要注册 WeCom 服务商（ISV），太重。用引导向导 + 实时 WebSocket 验证，3 分钟完成接入 | 2026-04-14 |
+
+## 新 IM 接入清单（KD-7 — Adapter-Only Extension）
+
+接入一个新 IM 平台需要改动以下 11 个位置，公共层（ConnectorRouter / OutboundDeliveryHook / StreamingOutboundHook / CommandLayer / BindingStore）**零改动**。
+
+| # | Layer | 文件 | 改什么 |
+|---|-------|------|--------|
+| 1 | Shared | `packages/shared/src/types/connector.ts` | 新增 `ConnectorDefinition`（id, displayName, icon PNG, color, tailwindTheme） |
+| 2 | API | `packages/api/src/.../adapters/XxxAdapter.ts` | **新建** adapter。实现 `IOutboundAdapter`（基础）或 `IStreamableOutboundAdapter`（流式）。含 `parseEvent()` / `sendReply()` / `sendFormattedReply()` / `sendMedia()` + 流式 `sendPlaceholder()` / `editMessage()` |
+| 3 | API | `packages/api/src/.../connector-gateway-bootstrap.ts` | env guard → 实例化 → 注册到 adapters Map → `connectorRouter.route()` 8 参数调用 → media download fn → webhook handler / long-poll / stream |
+| 4 | API | `packages/api/src/.../media/ConnectorMediaService.ts` | 新增 `setXxxDownloadFn()` — 平台专属媒体下载 |
+| 5 | API | `packages/api/src/config/connector-secrets-allowlist.ts` | 加入新平台 env var 名（否则 `/api/config/secrets` 拒绝写入） |
+| 6 | API | `packages/api/src/routes/connector-hub.ts` | 新增 `PlatformDef`（fields / docsUrl / steps 向导） |
+| 7 | Web | `packages/web/src/components/HubConfigIcons.tsx` | 新增 `PLATFORM_VISUALS`（iconBg / iconColor / brand PNG） |
+| 8 | Web | `packages/web/src/components/HubListModal.tsx` | 新增 `CONNECTOR_LABELS` 条目 |
+| 9 | Config | `.env.example` | 新增注释块 |
+| 11 | Test | adapter 单测 + `connector-bubble-theme.test.ts` | parseEvent / sendReply / sendMedia / 气泡主题 |
+
+> 此清单来源于 2026-03-27 operator要求"列出来我们现在要接入一个新 IM 要做什么"。
 
 ## Review Gate
 
@@ -300,3 +354,4 @@ F088 已验证的三层架构（Principal Link / Session Binding / Command Layer
 - Phase B: 跨 family review（Maine Coon）
 - Phase C: 跨 family review（Maine Coon）— AES/XML 安全实现需额外审查
 - Phase D: 可与 Phase C 合并 review
+- Phase E: 跨 family review（Maine Coon）— 前端 + 后端联动验证

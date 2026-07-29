@@ -2,8 +2,12 @@
 
 import assert from 'node:assert';
 import { beforeEach, describe, it } from 'node:test';
-import { buildCiMessageContent, CiCdRouter } from '../dist/infrastructure/email/CiCdRouter.js';
-import { MemoryPrTrackingStore } from '../dist/infrastructure/email/PrTrackingStore.js';
+import {
+  buildCiMessageContent,
+  buildLifecycleMessageContent,
+  CiCdRouter,
+} from '../dist/infrastructure/email/CiCdRouter.js';
+import { createPrTrackingTaskStore } from './helpers/pr-tracking-test-helper.js';
 
 // ─── Lightweight mocks ─────────────────────────────────────────────
 
@@ -74,8 +78,8 @@ function makePollResult(overrides = {}) {
 // ─── Tests ─────────────────────────────────────────────────────────
 
 describe('CiCdRouter', () => {
-  /** @type {MemoryPrTrackingStore} */
-  let prTrackingStore;
+  /** @type {ReturnType<typeof createPrTrackingTaskStore>} */
+  let prTracking;
   /** @type {ReturnType<typeof mockMessageStore>} */
   let messageMock;
   /** @type {ReturnType<typeof mockSocketManager>} */
@@ -83,14 +87,14 @@ describe('CiCdRouter', () => {
 
   function createRouter() {
     return new CiCdRouter({
-      prTrackingStore,
+      taskStore: prTracking.taskStore,
       deliveryDeps: { messageStore: messageMock.store, socketManager: socketMock.manager },
       log: noopLog(),
     });
   }
 
   beforeEach(() => {
-    prTrackingStore = new MemoryPrTrackingStore();
+    prTracking = createPrTrackingTaskStore();
     messageMock = mockMessageStore();
     socketMock = mockSocketManager();
   });
@@ -102,7 +106,7 @@ describe('CiCdRouter', () => {
       const router = createRouter();
       const result = await router.route(makePollResult());
       assert.strictEqual(result.kind, 'skipped');
-      assert.ok(result.reason.includes('No tracking entry'));
+      assert.ok(result.reason.includes('No tracking'));
       assert.strictEqual(messageMock.messages.length, 0);
     });
   });
@@ -112,7 +116,7 @@ describe('CiCdRouter', () => {
   describe('delivery', () => {
     it('delivers CI failure message to tracked thread (AC-A1)', async () => {
       const router = createRouter();
-      prTrackingStore.register({
+      prTracking.register({
         repoFullName: 'zts212653/cat-cafe',
         prNumber: 42,
         catId: 'opus',
@@ -133,15 +137,58 @@ describe('CiCdRouter', () => {
       assert.strictEqual(messageMock.messages[0].source.connector, 'github-ci');
     });
 
-    it('delivers CI success message to tracked thread (AC-A3)', async () => {
+    it('suppresses CI success delivery for review intent while preserving CI state', async () => {
       const router = createRouter();
-      prTrackingStore.register({
+      const task = prTracking.register({
         repoFullName: 'zts212653/cat-cafe',
         prNumber: 42,
         catId: 'opus',
         threadId: 'thread-abc',
         userId: 'user-1',
       });
+      prTracking.taskStore.patchAutomationState(task.id, { intent: 'review' });
+
+      const result = await router.route(makePollResult({ aggregateBucket: 'pass', checks: [] }));
+
+      assert.strictEqual(result.kind, 'skipped');
+      assert.ok(result.reason.includes('review intent'));
+      assert.strictEqual(messageMock.messages.length, 0);
+
+      const updated = prTracking.taskStore.getBySubject('pr:zts212653/cat-cafe#42');
+      assert.ok(updated, 'entry should still exist after silent CI pass');
+      assert.strictEqual(updated.automationState?.ci?.headSha, 'abc1234567890');
+      assert.strictEqual(updated.automationState?.ci?.lastFingerprint, 'abc1234567890:pass');
+      assert.strictEqual(updated.automationState?.ci?.lastBucket, 'pass');
+      assert.strictEqual(updated.automationState?.ci?.lastNotifiedAt, undefined);
+    });
+
+    it('suppresses CI success delivery when intent is absent (defaults to review)', async () => {
+      const router = createRouter();
+      prTracking.register({
+        repoFullName: 'zts212653/cat-cafe',
+        prNumber: 42,
+        catId: 'opus',
+        threadId: 'thread-abc',
+        userId: 'user-1',
+      });
+
+      const result = await router.route(makePollResult({ aggregateBucket: 'pass', checks: [] }));
+
+      assert.strictEqual(result.kind, 'skipped');
+      assert.ok(result.reason.includes('review intent'));
+      assert.strictEqual(messageMock.messages.length, 0);
+    });
+
+    it('delivers CI success message to tracked thread for merge intent (AC-A3)', async () => {
+      const router = createRouter();
+      const task = prTracking.register({
+        repoFullName: 'zts212653/cat-cafe',
+        prNumber: 42,
+        catId: 'opus',
+        threadId: 'thread-abc',
+        userId: 'user-1',
+      });
+      prTracking.taskStore.patchAutomationState(task.id, { intent: 'merge' });
 
       const result = await router.route(makePollResult({ aggregateBucket: 'pass', checks: [] }));
 
@@ -155,7 +202,7 @@ describe('CiCdRouter', () => {
 
     it('returns full formatted content in notified result (P2-1 regression)', async () => {
       const router = createRouter();
-      prTrackingStore.register({
+      prTracking.register({
         repoFullName: 'zts212653/cat-cafe',
         prNumber: 42,
         catId: 'opus',
@@ -179,7 +226,7 @@ describe('CiCdRouter', () => {
 
     it('skips pending CI without sending message', async () => {
       const router = createRouter();
-      prTrackingStore.register({
+      prTracking.register({
         repoFullName: 'zts212653/cat-cafe',
         prNumber: 42,
         catId: 'opus',
@@ -200,7 +247,7 @@ describe('CiCdRouter', () => {
   describe('T1: same SHA dedup', () => {
     it('same SHA + same bucket notifies only once (AC-A4)', async () => {
       const router = createRouter();
-      prTrackingStore.register({
+      prTracking.register({
         repoFullName: 'zts212653/cat-cafe',
         prNumber: 42,
         catId: 'opus',
@@ -221,13 +268,14 @@ describe('CiCdRouter', () => {
 
     it('fail then success on same SHA notifies both (AC-A5)', async () => {
       const router = createRouter();
-      prTrackingStore.register({
+      const task = prTracking.register({
         repoFullName: 'zts212653/cat-cafe',
         prNumber: 42,
         catId: 'opus',
         threadId: 'thread-abc',
         userId: 'user-1',
       });
+      prTracking.taskStore.patchAutomationState(task.id, { intent: 'merge' });
 
       const failPoll = makePollResult({ headSha: 'sha-fixed', aggregateBucket: 'fail' });
       const passPoll = makePollResult({ headSha: 'sha-fixed', aggregateBucket: 'pass', checks: [] });
@@ -249,7 +297,7 @@ describe('CiCdRouter', () => {
   describe('T2: new push resets fingerprint', () => {
     it('SHA change re-notifies even for same conclusion (AC-A9)', async () => {
       const router = createRouter();
-      prTrackingStore.register({
+      prTracking.register({
         repoFullName: 'zts212653/cat-cafe',
         prNumber: 42,
         catId: 'opus',
@@ -270,12 +318,152 @@ describe('CiCdRouter', () => {
     });
   });
 
-  // ── T3: Merged/closed auto remove (AC-A8) ──────────────────────
+  // ── T3: Merged/closed lifecycle close (AC-A8 + terminal notification) ──
 
-  describe('T3: merged/closed auto remove', () => {
-    it('merged PR is removed from tracking store (AC-A8)', async () => {
+  describe('T3: merged/closed lifecycle close', () => {
+    it('merged PR marks task done AND delivers terminal lifecycle notification', async () => {
       const router = createRouter();
-      prTrackingStore.register({
+      prTracking.register({
+        repoFullName: 'zts212653/clowder-ai',
+        prNumber: 42,
+        catId: 'opus',
+        threadId: 'thread-abc',
+        userId: 'user-1',
+      });
+
+      const result = await router.route(makePollResult({ repoFullName: 'zts212653/clowder-ai', prState: 'merged' }));
+
+      assert.strictEqual(result.kind, 'lifecycle');
+      if (result.kind === 'lifecycle') {
+        assert.strictEqual(result.prState, 'merged');
+        assert.strictEqual(result.threadId, 'thread-abc');
+        assert.strictEqual(result.catId, 'opus');
+        assert.ok(result.messageId, 'delivered message id must be returned');
+      }
+
+      // #320: merged/closed sets status=done (not delete)
+      const entry = prTracking.taskStore.getBySubject('pr:zts212653/clowder-ai#42');
+      assert.ok(entry, 'task should still exist');
+      assert.strictEqual(entry.status, 'done');
+
+      assert.strictEqual(messageMock.messages.length, 1);
+      const msg = messageMock.messages[0];
+      assert.strictEqual(msg.threadId, 'thread-abc');
+      assert.ok(msg.mentions.includes('opus'));
+      assert.ok(msg.content.includes('merge'), 'content should state the PR merged');
+      assert.ok(msg.content.includes('#42'));
+      assert.strictEqual(msg.source.url, 'https://github.com/zts212653/clowder-ai/pull/42');
+    });
+
+    it('closed PR marks task done AND delivers closed (unmerged) notification', async () => {
+      const router = createRouter();
+      prTracking.register({
+        repoFullName: 'zts212653/cat-cafe',
+        prNumber: 42,
+        catId: 'opus',
+        threadId: 'thread-abc',
+        userId: 'user-1',
+      });
+
+      const result = await router.route(makePollResult({ prState: 'closed' }));
+
+      assert.strictEqual(result.kind, 'lifecycle');
+      if (result.kind === 'lifecycle') {
+        assert.strictEqual(result.prState, 'closed');
+      }
+
+      const entry = prTracking.taskStore.getBySubject('pr:zts212653/cat-cafe#42');
+      assert.ok(entry, 'task should still exist');
+      assert.strictEqual(entry.status, 'done');
+
+      assert.strictEqual(messageMock.messages.length, 1);
+      assert.ok(
+        messageMock.messages[0].content.includes('未合并'),
+        'closed wording must distinguish unmerged closure from merge',
+      );
+    });
+
+    it('skips terminal lifecycle delivery when the same terminal state was already processed', async () => {
+      const router = createRouter();
+      const task = prTracking.register({
+        repoFullName: 'zts212653/cat-cafe',
+        prNumber: 42,
+        catId: 'opus',
+        threadId: 'thread-abc',
+        userId: 'user-1',
+      });
+      prTracking.taskStore.update(task.id, { status: 'done' });
+      prTracking.taskStore.patchAutomationState(task.id, { ci: { prState: 'merged' } });
+
+      const result = await router.route(makePollResult({ prState: 'merged' }));
+
+      assert.strictEqual(result.kind, 'skipped');
+      if (result.kind === 'skipped') {
+        assert.ok(result.reason.includes('already processed'));
+      }
+      const entry = prTracking.taskStore.getBySubject('pr:zts212653/cat-cafe#42');
+      assert.strictEqual(entry?.status, 'done');
+      assert.strictEqual(messageMock.messages.length, 0);
+    });
+
+    it('still delivers terminal lifecycle when review feedback marked the task done first', async () => {
+      const router = createRouter();
+      const task = prTracking.register({
+        repoFullName: 'zts212653/cat-cafe',
+        prNumber: 42,
+        catId: 'opus',
+        threadId: 'thread-abc',
+        userId: 'user-1',
+      });
+      prTracking.taskStore.update(task.id, { status: 'done' });
+
+      const result = await router.route(makePollResult({ prState: 'merged' }));
+
+      assert.strictEqual(result.kind, 'lifecycle');
+      if (result.kind === 'lifecycle') {
+        assert.strictEqual(result.prState, 'merged');
+        assert.strictEqual(result.threadId, 'thread-abc');
+        assert.strictEqual(result.catId, 'opus');
+      }
+      const entry = prTracking.taskStore.getBySubject('pr:zts212653/cat-cafe#42');
+      assert.strictEqual(entry?.status, 'done');
+      assert.strictEqual(entry?.automationState?.ci?.prState, 'merged');
+      assert.strictEqual(messageMock.messages.length, 1);
+    });
+
+    it('appends trackingInstructions to the terminal notification (post-merge checklist)', async () => {
+      const router = createRouter();
+      const task = prTracking.register({
+        repoFullName: 'zts212653/cat-cafe',
+        prNumber: 42,
+        catId: 'opus',
+        threadId: 'thread-abc',
+        userId: 'user-1',
+      });
+      prTracking.taskStore.patchAutomationState(task.id, {
+        trackingInstructions: 'merge 后：验证 main 生效 + 标任务 done',
+      });
+
+      await router.route(makePollResult({ prState: 'merged' }));
+
+      assert.strictEqual(messageMock.messages.length, 1);
+      const content = messageMock.messages[0].content;
+      assert.ok(content.includes('Tracking Instructions'));
+      assert.ok(content.includes('merge 后：验证 main 生效 + 标任务 done'));
+    });
+
+    it('delivery failure degrades to skipped but still marks task done (no poller crash)', async () => {
+      const failingStore = /** @type {any} */ ({
+        append() {
+          throw new Error('message store down');
+        },
+      });
+      const router = new CiCdRouter({
+        taskStore: prTracking.taskStore,
+        deliveryDeps: { messageStore: failingStore },
+        log: noopLog(),
+      });
+      prTracking.register({
         repoFullName: 'zts212653/cat-cafe',
         prNumber: 42,
         catId: 'opus',
@@ -286,15 +474,26 @@ describe('CiCdRouter', () => {
       const result = await router.route(makePollResult({ prState: 'merged' }));
 
       assert.strictEqual(result.kind, 'skipped');
-      assert.ok(result.reason.includes('merged'));
-
-      const entry = prTrackingStore.get('zts212653/cat-cafe', 42);
-      assert.strictEqual(entry, null);
+      if (result.kind === 'skipped') {
+        assert.ok(result.reason.includes('merged'));
+      }
+      const entry = prTracking.taskStore.getBySubject('pr:zts212653/cat-cafe#42');
+      assert.strictEqual(entry?.status, 'done', 'done-marking must survive delivery failure');
     });
+  });
 
-    it('closed PR is removed from tracking store', async () => {
-      const router = createRouter();
-      prTrackingStore.register({
+  // ── F192 Phase G: onPrLifecycle callback ────────────────────────
+
+  describe('F192 Phase G: onPrLifecycle callback', () => {
+    it('emits merge event on merged PR', async () => {
+      const events = [];
+      const router = new CiCdRouter({
+        taskStore: prTracking.taskStore,
+        deliveryDeps: { messageStore: messageMock.store, socketManager: socketMock.manager },
+        log: noopLog(),
+        onPrLifecycle: (e) => events.push(e),
+      });
+      prTracking.register({
         repoFullName: 'zts212653/cat-cafe',
         prNumber: 42,
         catId: 'opus',
@@ -302,13 +501,160 @@ describe('CiCdRouter', () => {
         userId: 'user-1',
       });
 
-      const result = await router.route(makePollResult({ prState: 'closed' }));
+      await router.route(makePollResult({ prState: 'merged' }));
 
-      assert.strictEqual(result.kind, 'skipped');
-      assert.ok(result.reason.includes('closed'));
+      assert.strictEqual(events.length, 1);
+      assert.strictEqual(events[0].type, 'merge');
+      assert.strictEqual(events[0].outcome, 'success');
+      assert.strictEqual(events[0].threadId, 'thread-abc');
+      assert.strictEqual(events[0].ref, 'PR#42');
+    });
 
-      const entry = prTrackingStore.get('zts212653/cat-cafe', 42);
-      assert.strictEqual(entry, null);
+    it('does NOT emit on closed PR (closed ≠ revert)', async () => {
+      const events = [];
+      const router = new CiCdRouter({
+        taskStore: prTracking.taskStore,
+        deliveryDeps: { messageStore: messageMock.store, socketManager: socketMock.manager },
+        log: noopLog(),
+        onPrLifecycle: (e) => events.push(e),
+      });
+      prTracking.register({
+        repoFullName: 'zts212653/cat-cafe',
+        prNumber: 42,
+        catId: 'opus',
+        threadId: 'thread-abc',
+        userId: 'user-1',
+      });
+
+      await router.route(makePollResult({ prState: 'closed' }));
+
+      assert.strictEqual(events.length, 0, 'closed PR must not emit A1 signal');
+    });
+
+    it('does NOT emit on open PR', async () => {
+      const events = [];
+      const router = new CiCdRouter({
+        taskStore: prTracking.taskStore,
+        deliveryDeps: { messageStore: messageMock.store, socketManager: socketMock.manager },
+        log: noopLog(),
+        onPrLifecycle: (e) => events.push(e),
+      });
+      prTracking.register({
+        repoFullName: 'zts212653/cat-cafe',
+        prNumber: 42,
+        catId: 'opus',
+        threadId: 'thread-abc',
+        userId: 'user-1',
+      });
+
+      await router.route(makePollResult({ prState: 'open', aggregateBucket: 'pass' }));
+
+      assert.strictEqual(events.length, 0);
+    });
+  });
+
+  // ── P1-3 fix: CiCdRouter emits community events to eventLog ────────
+  // Plan: PR lifecycle canonical detection point is CiCdRouter (not ReviewFeedbackTaskSpec).
+  // CiCdRouter is the first to detect merged/closed; ReviewFeedbackTaskSpec races.
+  // dedup via sourceEventId ensures both can fire without double-projection.
+
+  describe('P1-3: community event emission on PR lifecycle (eventLog)', () => {
+    function makeMockEventLog() {
+      /** @type {{ sourceEventId: string; kind: string; subjectKey: string }[]} */
+      const appended = [];
+      return {
+        log: /** @type {any} */ ({
+          /** @param {any} event */
+          append(event) {
+            appended.push({ sourceEventId: event.sourceEventId, kind: event.kind, subjectKey: event.subjectKey });
+            return Promise.resolve({ appended: true, sequence: appended.length });
+          },
+        }),
+        appended,
+      };
+    }
+
+    it('emits pr.merged event to eventLog when PR merges (P1-3)', async () => {
+      const { log: eventLog, appended } = makeMockEventLog();
+      const router = new CiCdRouter({
+        taskStore: prTracking.taskStore,
+        deliveryDeps: { messageStore: messageMock.store, socketManager: socketMock.manager },
+        log: noopLog(),
+        eventLog,
+      });
+      prTracking.register({
+        repoFullName: 'zts212653/cat-cafe',
+        prNumber: 42,
+        catId: 'opus',
+        threadId: 'thread-abc',
+        userId: 'user-1',
+      });
+
+      await router.route(makePollResult({ prState: 'merged' }));
+
+      assert.strictEqual(appended.length, 1, 'expected exactly one community event appended');
+      assert.strictEqual(appended[0].kind, 'pr.merged');
+      assert.ok(appended[0].subjectKey.includes('42'), 'subjectKey should contain PR number');
+    });
+
+    it('emits pr.closed event to eventLog when PR closes without merge (P1-3)', async () => {
+      const { log: eventLog, appended } = makeMockEventLog();
+      const router = new CiCdRouter({
+        taskStore: prTracking.taskStore,
+        deliveryDeps: { messageStore: messageMock.store, socketManager: socketMock.manager },
+        log: noopLog(),
+        eventLog,
+      });
+      prTracking.register({
+        repoFullName: 'zts212653/cat-cafe',
+        prNumber: 42,
+        catId: 'opus',
+        threadId: 'thread-abc',
+        userId: 'user-1',
+      });
+
+      await router.route(makePollResult({ prState: 'closed' }));
+
+      assert.strictEqual(appended.length, 1, 'expected exactly one community event appended');
+      assert.strictEqual(appended[0].kind, 'pr.closed');
+    });
+
+    it('does not throw when eventLog is not provided (backward compat)', async () => {
+      // No eventLog → existing tests should be unaffected
+      const router = createRouter();
+      prTracking.register({
+        repoFullName: 'zts212653/cat-cafe',
+        prNumber: 42,
+        catId: 'opus',
+        threadId: 'thread-abc',
+        userId: 'user-1',
+      });
+      const result = await router.route(makePollResult({ prState: 'merged' }));
+      assert.strictEqual(result.kind, 'lifecycle');
+    });
+
+    it('continues routing even if eventLog.append throws (best-effort)', async () => {
+      const router = new CiCdRouter({
+        taskStore: prTracking.taskStore,
+        deliveryDeps: { messageStore: messageMock.store, socketManager: socketMock.manager },
+        log: noopLog(),
+        eventLog: /** @type {any} */ ({
+          append() {
+            return Promise.reject(new Error('redis down'));
+          },
+        }),
+      });
+      prTracking.register({
+        repoFullName: 'zts212653/cat-cafe',
+        prNumber: 42,
+        catId: 'opus',
+        threadId: 'thread-abc',
+        userId: 'user-1',
+      });
+
+      // Must not throw
+      const result = await router.route(makePollResult({ prState: 'merged' }));
+      assert.strictEqual(result.kind, 'lifecycle');
     });
   });
 
@@ -317,44 +663,96 @@ describe('CiCdRouter', () => {
   describe('patchCiState preservation (AC-A10)', () => {
     it('CI delivery does not change registeredAt', async () => {
       const router = createRouter();
-      const registered = prTrackingStore.register({
+      const registered = prTracking.register({
         repoFullName: 'zts212653/cat-cafe',
         prNumber: 42,
         catId: 'opus',
         threadId: 'thread-abc',
         userId: 'user-1',
       });
-      const originalRegisteredAt = registered.registeredAt;
+      const originalCreatedAt = registered.createdAt;
 
       await router.route(makePollResult({ aggregateBucket: 'fail' }));
 
-      const updated = prTrackingStore.get('zts212653/cat-cafe', 42);
+      const updated = prTracking.taskStore.getBySubject('pr:zts212653/cat-cafe#42');
       assert.ok(updated, 'entry should still exist after CI delivery');
-      assert.strictEqual(updated.registeredAt, originalRegisteredAt);
-      assert.ok(updated.lastCiFingerprint);
-      assert.strictEqual(updated.lastCiBucket, 'fail');
+      assert.strictEqual(updated.createdAt, originalCreatedAt);
+      assert.ok(updated.automationState?.ci?.lastFingerprint);
+      assert.strictEqual(updated.automationState?.ci?.lastBucket, 'fail');
     });
   });
 
   // ── CI tracking disabled ────────────────────────────────────────
 
   describe('ciTrackingEnabled toggle', () => {
-    it('skips PR when ciTrackingEnabled is false', async () => {
+    it('skips PR when ci tracking is disabled', async () => {
       const router = createRouter();
-      prTrackingStore.register({
+      const task = prTracking.register({
         repoFullName: 'zts212653/cat-cafe',
         prNumber: 42,
         catId: 'opus',
         threadId: 'thread-abc',
         userId: 'user-1',
       });
-      prTrackingStore.patchCiState('zts212653/cat-cafe', 42, { ciTrackingEnabled: false });
+      prTracking.taskStore.patchAutomationState(task.id, { ci: { enabled: false } });
 
       const result = await router.route(makePollResult());
 
       assert.strictEqual(result.kind, 'skipped');
       assert.ok(result.reason.includes('disabled'));
       assert.strictEqual(messageMock.messages.length, 0);
+    });
+
+    it('R2-P1-A: automation off calls notifySkip with threadId and reason', async () => {
+      const skipCalls = /** @type {Array<{threadId: string, reason: string}>} */ ([]);
+      const router = new CiCdRouter({
+        taskStore: prTracking.taskStore,
+        deliveryDeps: { messageStore: messageMock.store, socketManager: socketMock.manager },
+        log: noopLog(),
+        notifySkip: (threadId, reason) => {
+          skipCalls.push({ threadId, reason });
+        },
+      });
+      const task = prTracking.register({
+        repoFullName: 'zts212653/cat-cafe',
+        prNumber: 42,
+        catId: 'opus',
+        threadId: 'thread-abc',
+        userId: 'user-1',
+      });
+      prTracking.taskStore.patchAutomationState(task.id, { ci: { enabled: false } });
+
+      await router.route(makePollResult());
+
+      assert.strictEqual(skipCalls.length, 1, 'notifySkip must be called for automation off');
+      assert.strictEqual(skipCalls[0].threadId, 'thread-abc');
+      assert.strictEqual(skipCalls[0].reason, 'ci_automation_disabled');
+    });
+
+    it('cloud-P2: automation off notifySkip fires only once across multiple polls', async () => {
+      const skipCalls = /** @type {Array<{threadId: string, reason: string}>} */ ([]);
+      const router = new CiCdRouter({
+        taskStore: prTracking.taskStore,
+        deliveryDeps: { messageStore: messageMock.store, socketManager: socketMock.manager },
+        log: noopLog(),
+        notifySkip: (threadId, reason) => {
+          skipCalls.push({ threadId, reason });
+        },
+      });
+      const task = prTracking.register({
+        repoFullName: 'zts212653/cat-cafe',
+        prNumber: 42,
+        catId: 'opus',
+        threadId: 'thread-abc',
+        userId: 'user-1',
+      });
+      prTracking.taskStore.patchAutomationState(task.id, { ci: { enabled: false } });
+
+      await router.route(makePollResult());
+      await router.route(makePollResult());
+      await router.route(makePollResult());
+
+      assert.strictEqual(skipCalls.length, 1, 'notifySkip must fire only once, not on every poll cycle');
     });
   });
 
@@ -363,7 +761,7 @@ describe('CiCdRouter', () => {
   describe('realtime connector event', () => {
     it('broadcasts connector_message to thread room', async () => {
       const router = createRouter();
-      prTrackingStore.register({
+      prTracking.register({
         repoFullName: 'zts212653/cat-cafe',
         prNumber: 42,
         catId: 'opus',
@@ -386,7 +784,7 @@ describe('CiCdRouter', () => {
   describe('pending updates headSha', () => {
     it('pending poll updates headSha without notifying', async () => {
       const router = createRouter();
-      prTrackingStore.register({
+      prTracking.register({
         repoFullName: 'zts212653/cat-cafe',
         prNumber: 42,
         catId: 'opus',
@@ -396,10 +794,141 @@ describe('CiCdRouter', () => {
 
       await router.route(makePollResult({ headSha: 'new-sha', aggregateBucket: 'pending' }));
 
-      const entry = prTrackingStore.get('zts212653/cat-cafe', 42);
+      const entry = prTracking.taskStore.getBySubject('pr:zts212653/cat-cafe#42');
       assert.ok(entry, 'entry should exist with updated headSha');
-      assert.strictEqual(entry.headSha, 'new-sha');
+      assert.strictEqual(entry.automationState?.ci?.headSha, 'new-sha');
       assert.strictEqual(messageMock.messages.length, 0);
+    });
+  });
+
+  // ── F208 AC-E2: distillation checkpoint on merge path ────────────
+
+  describe('F208 AC-E2: distillation checkpoint on merge path', () => {
+    it('calls onFeatPhaseClose when merged PR has feature-bearing trackingInstructions', async () => {
+      const calls = [];
+      const mockCheckpoint = {
+        onFeatPhaseClose: async (ctx) => {
+          calls.push(ctx);
+          return { fired: true, sourceId: `feat-phase-close:${ctx.featureId}:${ctx.phaseLabel}` };
+        },
+      };
+      const router = new CiCdRouter({
+        taskStore: prTracking.taskStore,
+        deliveryDeps: { messageStore: messageMock.store, socketManager: socketMock.manager },
+        log: noopLog(),
+        distillationCheckpoint: /** @type {any} */ (mockCheckpoint),
+      });
+      const task = prTracking.register({
+        repoFullName: 'zts212653/cat-cafe',
+        prNumber: 2467,
+        catId: 'opus',
+        threadId: 'thread-f208',
+        userId: 'user-1',
+      });
+      prTracking.taskStore.patchAutomationState(task.id, {
+        trackingInstructions: 'F208 AC-E2 cloud re-review. Phase E checkpoint wiring.',
+      });
+
+      await router.route(makePollResult({ repoFullName: 'zts212653/cat-cafe', prNumber: 2467, prState: 'merged' }));
+
+      assert.strictEqual(calls.length, 1, 'onFeatPhaseClose must be called on merge');
+      assert.strictEqual(calls[0].featureId, 'F208');
+      assert.strictEqual(calls[0].phaseLabel, 'E');
+      assert.strictEqual(calls[0].prNumber, 2467);
+      assert.strictEqual(calls[0].repoFullName, 'zts212653/cat-cafe');
+      assert.strictEqual(calls[0].authorCatId, 'opus');
+      assert.strictEqual(calls[0].threadId, 'thread-f208');
+    });
+
+    it('does NOT call onFeatPhaseClose for closed PR (only merge)', async () => {
+      const calls = [];
+      const mockCheckpoint = {
+        onFeatPhaseClose: async (ctx) => {
+          calls.push(ctx);
+          return { fired: true, sourceId: 'test' };
+        },
+      };
+      const router = new CiCdRouter({
+        taskStore: prTracking.taskStore,
+        deliveryDeps: { messageStore: messageMock.store, socketManager: socketMock.manager },
+        log: noopLog(),
+        distillationCheckpoint: /** @type {any} */ (mockCheckpoint),
+      });
+      const task = prTracking.register({
+        repoFullName: 'zts212653/cat-cafe',
+        prNumber: 99,
+        catId: 'opus',
+        threadId: 'thread-x',
+        userId: 'user-1',
+      });
+      prTracking.taskStore.patchAutomationState(task.id, {
+        trackingInstructions: 'F167 Phase O fix.',
+      });
+
+      await router.route(makePollResult({ repoFullName: 'zts212653/cat-cafe', prNumber: 99, prState: 'closed' }));
+
+      assert.strictEqual(calls.length, 0, 'closed PR must not fire distillation checkpoint');
+    });
+
+    it('does NOT call onFeatPhaseClose when no feature ID in trackingInstructions', async () => {
+      const calls = [];
+      const mockCheckpoint = {
+        onFeatPhaseClose: async (ctx) => {
+          calls.push(ctx);
+          return { fired: true, sourceId: 'test' };
+        },
+      };
+      const router = new CiCdRouter({
+        taskStore: prTracking.taskStore,
+        deliveryDeps: { messageStore: messageMock.store, socketManager: socketMock.manager },
+        log: noopLog(),
+        distillationCheckpoint: /** @type {any} */ (mockCheckpoint),
+      });
+      prTracking.register({
+        repoFullName: 'zts212653/cat-cafe',
+        prNumber: 50,
+        catId: 'opus',
+        threadId: 'thread-y',
+        userId: 'user-1',
+      });
+      // No trackingInstructions with feature ID, title doesn't match either
+
+      await router.route(makePollResult({ repoFullName: 'zts212653/cat-cafe', prNumber: 50, prState: 'merged' }));
+
+      assert.strictEqual(calls.length, 0, 'no feature ID → no checkpoint');
+    });
+
+    it('continues routing when onFeatPhaseClose throws (best-effort)', async () => {
+      const mockCheckpoint = {
+        onFeatPhaseClose: async () => {
+          throw new Error('store unavailable');
+        },
+      };
+      const router = new CiCdRouter({
+        taskStore: prTracking.taskStore,
+        deliveryDeps: { messageStore: messageMock.store, socketManager: socketMock.manager },
+        log: noopLog(),
+        distillationCheckpoint: /** @type {any} */ (mockCheckpoint),
+      });
+      const task = prTracking.register({
+        repoFullName: 'zts212653/cat-cafe',
+        prNumber: 77,
+        catId: 'opus',
+        threadId: 'thread-z',
+        userId: 'user-1',
+      });
+      prTracking.taskStore.patchAutomationState(task.id, {
+        trackingInstructions: 'F100 Phase A test.',
+      });
+
+      // Must not throw — checkpoint failure is best-effort
+      const result = await router.route(
+        makePollResult({ repoFullName: 'zts212653/cat-cafe', prNumber: 77, prState: 'merged' }),
+      );
+      assert.strictEqual(result.kind, 'lifecycle');
+      if (result.kind === 'lifecycle') {
+        assert.strictEqual(result.prState, 'merged');
+      }
     });
   });
 });
@@ -441,5 +970,35 @@ describe('buildCiMessageContent', () => {
     assert.ok(content.includes('CI 通过'));
     assert.ok(content.includes('def7890'));
     assert.ok(!content.includes('失败的检查'));
+  });
+});
+
+describe('buildLifecycleMessageContent', () => {
+  it('formats merged lifecycle message with tracking instructions', () => {
+    const content = buildLifecycleMessageContent(
+      {
+        repoFullName: 'org/repo',
+        prNumber: 10,
+        prState: 'merged',
+      },
+      'verify main and close task',
+    );
+
+    assert.ok(content.includes('PR 已 merge'));
+    assert.ok(content.includes('PR #10'));
+    assert.ok(content.includes('Tracking Instructions'));
+    assert.ok(content.includes('verify main and close task'));
+  });
+
+  it('formats closed lifecycle message as unmerged', () => {
+    const content = buildLifecycleMessageContent({
+      repoFullName: 'org/repo',
+      prNumber: 11,
+      prState: 'closed',
+    });
+
+    assert.ok(content.includes('PR 已关闭'));
+    assert.ok(content.includes('未合并'));
+    assert.ok(content.includes('PR #11'));
   });
 });

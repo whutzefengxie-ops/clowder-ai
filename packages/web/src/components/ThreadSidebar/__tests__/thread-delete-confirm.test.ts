@@ -49,8 +49,10 @@ const mockStore: Record<string, unknown> = {
   updateThreadFavorite: vi.fn(),
   updateThreadPreferredCats: vi.fn(),
   threadStates: {},
+  clearUnread: vi.fn(),
   clearAllUnread: vi.fn(),
   initThreadUnread: vi.fn(),
+  fetchGlobalBubbleDefaults: vi.fn(),
 };
 vi.mock('@/stores/chatStore', () => {
   const hook = Object.assign(
@@ -122,7 +124,17 @@ describe('Thread delete confirmation (I-1)', () => {
   }
 
   function findDeleteButton(): HTMLButtonElement | undefined {
-    return Array.from(container.querySelectorAll('button')).find((b) => b.getAttribute('title') === '删除对话');
+    return Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.trim() === '删除对话');
+  }
+
+  function openActionsMenu() {
+    const moreBtn = Array.from(container.querySelectorAll('button')).find(
+      (b) => b.getAttribute('title') === '更多操作',
+    );
+    expect(moreBtn, 'more actions button should exist for non-default thread').toBeTruthy();
+    act(() => {
+      moreBtn?.click();
+    });
   }
 
   /** F095 defaults all sections collapsed. Click expand-all first. */
@@ -140,9 +152,10 @@ describe('Thread delete confirmation (I-1)', () => {
     });
     await flush();
     expandAll();
+    openActionsMenu();
 
     const deleteBtn = findDeleteButton();
-    expect(deleteBtn, 'delete button should exist for non-default thread').toBeTruthy();
+    expect(deleteBtn, 'delete menu item should exist for non-default thread').toBeTruthy();
 
     act(() => {
       deleteBtn?.click();
@@ -166,6 +179,7 @@ describe('Thread delete confirmation (I-1)', () => {
     });
     await flush();
     expandAll();
+    openActionsMenu();
 
     const deleteBtn = findDeleteButton();
     act(() => {
@@ -189,6 +203,7 @@ describe('Thread delete confirmation (I-1)', () => {
     });
     await flush();
     expandAll();
+    openActionsMenu();
 
     const deleteBtn = findDeleteButton();
     act(() => {

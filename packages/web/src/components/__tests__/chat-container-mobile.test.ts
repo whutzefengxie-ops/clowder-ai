@@ -2,6 +2,7 @@ import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatContainer } from '@/components/ChatContainer';
+import { useSidebarStore } from '@/stores/sidebarStore';
 
 const mockStoreState = () => ({
   messages: [],
@@ -79,37 +80,42 @@ vi.mock('@/hooks/useChatSocketCallbacks', () => ({
 }));
 
 // Stub child components to isolate ChatContainer behavior
-vi.mock('@/components/ChatMessage', () => ({ ChatMessage: () => null }));
-vi.mock('@/components/ChatInput', () => ({ ChatInput: () => null }));
-vi.mock('@/components/ChatContainerHeader', () => ({
+vi.mock('../ChatMessage', () => ({ ChatMessage: () => null }));
+vi.mock('../ChatInput', () => ({ ChatInput: () => null }));
+vi.mock('../ChatContainerHeader', () => ({
   ChatContainerHeader: (props: { onToggleSidebar: () => void; onOpenMobileStatus: () => void }) =>
     React.createElement(
       'div',
       { 'data-testid': 'header' },
-      React.createElement('button', { 'data-testid': 'sidebar-toggle', onClick: props.onToggleSidebar }),
-      React.createElement('button', { 'data-testid': 'mobile-status-trigger', onClick: props.onOpenMobileStatus }),
+      React.createElement('button', {
+        type: 'button',
+        'data-testid': 'sidebar-toggle',
+        onClick: props.onToggleSidebar,
+      }),
+      React.createElement('button', {
+        type: 'button',
+        'data-testid': 'mobile-status-trigger',
+        onClick: props.onOpenMobileStatus,
+      }),
     ),
 }));
-vi.mock('@/components/ThreadSidebar', () => ({
+vi.mock('../ThreadSidebar', () => ({
   ThreadSidebar: (props: { onClose: () => void }) =>
     React.createElement('div', { 'data-testid': 'sidebar', onClick: props.onClose }, 'Sidebar'),
 }));
-vi.mock('@/components/RightStatusPanel', () => ({ RightStatusPanel: () => null }));
-vi.mock('@/components/MobileStatusSheet', () => ({
+vi.mock('../RightStatusPanel', () => ({ RightStatusPanel: () => null }));
+vi.mock('../MobileStatusSheet', () => ({
   MobileStatusSheet: (props: { open: boolean }) =>
     React.createElement('div', { 'data-testid': 'mobile-status', 'data-open': String(props.open) }),
 }));
-vi.mock('@/components/ParallelStatusBar', () => ({ ParallelStatusBar: () => null }));
-vi.mock('@/components/ThinkingIndicator', () => ({ ThinkingIndicator: () => null }));
-vi.mock('@/components/A2ACollapsible', () => ({ A2ACollapsible: () => null }));
-vi.mock('@/components/ConfirmDialog', () => ({ ConfirmDialog: () => null }));
-vi.mock('@/components/MessageNavigator', () => ({ MessageNavigator: () => null }));
-vi.mock('@/components/MessageActions', () => ({
+vi.mock('../ParallelStatusBar', () => ({ ParallelStatusBar: () => null }));
+vi.mock('../ThinkingIndicator', () => ({ ThinkingIndicator: () => null }));
+vi.mock('../MessageNavigator', () => ({ MessageNavigator: () => null }));
+vi.mock('../MessageActions', () => ({
   MessageActions: ({ children }: { children: React.ReactNode }) => children,
 }));
-vi.mock('@/components/CatCafeHub', () => ({ CatCafeHub: () => null }));
-vi.mock('@/components/SplitPaneView', () => ({ SplitPaneView: () => null }));
-vi.mock('@/components/AuthorizationCard', () => ({ AuthorizationCard: () => null }));
+vi.mock('../SplitPaneView', () => ({ SplitPaneView: () => null }));
+vi.mock('../AuthorizationCard', () => ({ AuthorizationCard: () => null }));
 
 describe('ChatContainer mobile interactions', () => {
   let container: HTMLDivElement;
@@ -139,6 +145,7 @@ describe('ChatContainer mobile interactions', () => {
   }
 
   beforeEach(() => {
+    useSidebarStore.setState({ isOpen: false });
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -168,7 +175,7 @@ describe('ChatContainer mobile interactions', () => {
     });
     expect(container.querySelector('[data-testid="sidebar"]')).toBeTruthy();
     // Backdrop should also appear
-    expect(container.querySelector('[class*="bg-black"]')).toBeTruthy();
+    expect(container.querySelector('[class*="console-overlay-backdrop"]')).toBeTruthy();
   });
 
   it('closes sidebar when backdrop is clicked', () => {
@@ -182,7 +189,7 @@ describe('ChatContainer mobile interactions', () => {
     });
     expect(container.querySelector('[data-testid="sidebar"]')).toBeTruthy();
     // Click backdrop
-    const backdrop = container.querySelector('[class*="bg-black"]') as HTMLElement;
+    const backdrop = container.querySelector('[class*="console-overlay-backdrop"]') as HTMLElement;
     act(() => {
       backdrop.click();
     });
@@ -205,11 +212,14 @@ describe('ChatContainer mobile interactions', () => {
     expect(statusSheetAfter.getAttribute('data-open')).toBe('true');
   });
 
-  it('auto-opens sidebar on desktop viewport', () => {
+  it('auto-opens sidebar store on desktop but does not render mobile overlay', () => {
     mockMatchMedia(true);
     act(() => {
       root.render(React.createElement(ChatContainer, { threadId: 'test-thread' }));
     });
-    expect(container.querySelector('[data-testid="sidebar"]')).toBeTruthy();
+    // Desktop: sidebar store is open (AppShell renders the desktop sidebar)
+    expect(useSidebarStore.getState().isOpen).toBe(true);
+    // Mobile overlay must NOT mount — desktop sidebar lives in AppShell
+    expect(container.querySelector('[data-testid="sidebar"]')).toBeNull();
   });
 });

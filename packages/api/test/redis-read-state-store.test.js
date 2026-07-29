@@ -10,11 +10,15 @@
 
 import assert from 'node:assert/strict';
 import { after, before, beforeEach, describe, it } from 'node:test';
-import { assertRedisIsolationOrThrow, cleanupPrefixedRedisKeys } from './helpers/redis-test-helpers.js';
+import {
+  assertRedisIsolationOrThrow,
+  cleanupPrefixedRedisKeys,
+  redisIsolationSkipReason,
+} from './helpers/redis-test-helpers.js';
 
 const REDIS_URL = process.env.REDIS_URL;
 
-describe('RedisThreadReadStateStore', { skip: !REDIS_URL ? 'REDIS_URL not set' : false }, () => {
+describe('RedisThreadReadStateStore', { skip: redisIsolationSkipReason(REDIS_URL) }, () => {
   let RedisThreadReadStateStore;
   let RedisMessageStore;
   let createRedisClient;
@@ -231,7 +235,7 @@ describe('RedisThreadReadStateStore', { skip: !REDIS_URL ? 'REDIS_URL not set' :
     await messageStore.append({
       userId: 'user1',
       catId: 'opus',
-      content: '@铲屎官 look',
+      content: '@co-creator look',
       mentions: [],
       mentionsUser: true,
       timestamp: Date.now() - 1000,

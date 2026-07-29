@@ -6,7 +6,7 @@
 
 你的 AI agent 和一支真正团队之间，缺的就是这一层。
 
-[English](README.md) | **中文**
+[English](README.md) | **中文** | [日本語](README.ja-JP.md)
 
 </div>
 
@@ -51,19 +51,33 @@
 
 ## 支持的 Agent
 
-Clowder 不绑定模型。当前支持的 Agent CLI：
+Clowder 不绑定模型。当前支持的 Agent CLI / adapter：
 
 | Agent CLI | 模型家族 | 输出格式 | MCP | 状态 |
 |-----------|---------|---------|-----|------|
 | [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | Claude (Opus / Sonnet / Haiku) | stream-json | 是 | 已发布 |
 | [Codex CLI](https://github.com/openai/codex) | GPT / Codex | json | 是 | 已发布 |
-| [Gemini CLI](https://github.com/google-gemini/gemini-cli) | Gemini | stream-json | 是 | 已发布 |
-| [Antigravity](https://github.com/nolanzandi/antigravity-cli) | 多模型 | cdp-bridge | 否 | 已发布 |
+| [Antigravity CLI](https://antigravity.google/cli) | Gemini / Google 账号侧选型 | plain text (`agy --print`) | CLI 管理 | 非 ACP Gemini 路线默认 |
+| [Gemini CLI](https://github.com/google-gemini/gemini-cli) | Gemini | stream-json / ACP | 是 | 配了 ACP 时仍默认；其它路径显式 fallback |
+| [Antigravity Desktop](https://antigravity.google/) | 多模型 | cdp-bridge | 回调桥 | legacy opt-in |
 | [opencode](https://github.com/sst/opencode) | 多模型 | ndjson | 是 | 已发布 |
 
+> Google consumer Gemini CLI / Gemini Code Assist individual 请求在 2026-06-18 停止服务，所以非 ACP Gemini 路线默认走 Antigravity CLI。已经配置 ACP 的 catalog 仍走 `gemini --acp`，直到 `agy` 暴露受支持的 ACP 模式；只有明确的 enterprise/API-key fallback 才显式设置 `GEMINI_ADAPTER=gemini-cli`。
 > Clowder 不替代你的 Agent CLI — 它是 CLI *之上*的那一层，让 agent 们作为团队协作。
 
 ## 快速开始
+
+### 方式 A：桌面安装包（推荐）
+
+如果 [Releases 页面](https://github.com/zts212653/clowder-ai/releases) 已经提供桌面安装包，普通用户优先走这条：
+
+- **Windows**：下载 `.exe` 安装包，双击安装，然后从桌面快捷方式或开始菜单启动 Clowder AI。
+- **macOS**：下载 `.dmg`，拖到 Applications 后打开。首次启动如果被 macOS 拦截，右键应用选择 **打开**。
+- **Linux**：暂时没有桌面安装包，请走下面的源码安装，或使用 Linux 一键安装脚本。
+
+桌面安装包会自带应用运行时、便携 Node.js 和 Redis，普通用户不需要手动执行 `pnpm install` 或 `pnpm build`。启动后进入 **Hub → 系统配置 → 账号配置**，连接模型 provider 和 CLI 账号即可。
+
+### 方式 B：源码安装
 
 **前置要求：** [Node.js 20+](https://nodejs.org/) · [pnpm 9+](https://pnpm.io/) · [Redis 7+](https://redis.io/) *（可选 — 用 `--memory` 跳过）* · Git
 
@@ -78,11 +92,14 @@ pnpm install
 # 3. 构建所有包（首次启动前必需）
 pnpm build
 
-# 4. 配置 — 至少添加一个模型 API key
+# 4. 配置基础设施（API key 在启动后通过前端 UI 添加）
 cp .env.example .env
 
 # 5. 启动（自动创建运行时 worktree，启动 Redis + API + 前端）
 pnpm start
+
+# 想固定在某个版本？用 start:direct（不会自动更新）：
+#   git checkout <tag> && pnpm start:direct   # 如 v0.4.2
 
 # 6. 可选：后台启动（daemon 模式）
 pnpm start --daemon
@@ -91,15 +108,44 @@ pnpm start:status
 pnpm stop
 ```
 
-打开 `http://localhost:3003`，开始和你的团队对话。
+打开 `http://localhost:3003` → 进入 **Hub → 系统配置 → 账号配置** 添加模型 API key（Claude、GPT、Gemini，或第三方 provider 如 Kimi、GLM、MiniMax）。
 
 > **一键替代方案（Linux）：** `bash scripts/install.sh` 一步搞定 Node、pnpm、Redis、依赖、`.env` 和首次启动。可选参数：`--start`（自动启动）、`--memory`（跳过 Redis）、`--registry=URL`（国内镜像）。**Windows** 用户请使用 `scripts/install.ps1`，然后 `scripts/start-windows.ps1`。
 
-**完整安装指南**（API key 配置、CLI 认证、语音、飞书/Telegram、常见问题）：**[SETUP.opensource.zh-CN.md](SETUP.opensource.zh-CN.md)**
+**完整安装指南**（API key 配置、CLI 认证、语音、飞书/Telegram、常见问题）：**[SETUP.zh-CN.md](SETUP.zh-CN.md)**
+
+> **想固定在某个版本？** 参阅安装指南中的[运行指定版本](SETUP.zh-CN.md#运行指定版本不自动更新)章节。
 
 > **CVO 训练营已上线！** AI 团队亲自带你走完一个完整的 feature 生命周期 — 从愿景表达到代码上线。
 
 ![CVO 训练营](https://github.com/user-attachments/assets/9d9c8d89-27fe-4788-812a-ffc28f47d3f9)
+
+## 升级
+
+### 桌面应用（应用内更新）
+
+桌面应用会在启动时检查一次更新，持续运行期间每 24 小时再检查一次。自动检查仅在发现新版本时弹窗，可以选择 **下载**、**跳过此版本** 或 **稍后再说**；没有更新或网络失败时保持静默。
+
+- **Windows（安装包版）**：更新会下载新的 `.exe`，通过 UAC 提权运行 — 应用关闭，安装程序静默运行，之后应用自动重启。
+- **macOS**：更新会下载新的 `.dmg` — 拖到 Applications 覆盖旧版本即可。
+- **Windows（便携版）**：应用内更新会打开 Release 页面 — 手动下载并解压新 zip 覆盖即可。
+
+**如果更新失败：**
+
+1. 下次启动时会弹出恢复对话框，可选 **重试安装**、**打开安装包位置**、**查看日志** 或 **忽略**。
+2. 下载的安装包会保留在固定位置 — 无需打开应用即可手动重跑：
+   - **Windows**: `%LOCALAPPDATA%\Clowder AI\updates\`（如 `ClowderAI-Setup-0.12.0.exe`）
+   - **macOS**: `~/Library/Application Support/Clowder AI/updates/`
+3. 也可以从 [Releases 页面](https://github.com/zts212653/clowder-ai/releases) 手动下载最新版本覆盖安装。用户数据（聊天记录、记忆、配置）在升级过程中会被保留。
+
+### 源码安装
+
+```bash
+git pull origin main
+pnpm install
+pnpm build
+pnpm start
+```
 
 ## 四条铁律
 
@@ -210,7 +256,7 @@ https://github.com/user-attachments/assets/cf75fb92-ce20-4a0d-8b2b-c288ce9bfb48
 | **Skills** | 按需加载的技能（TDD、调试、审查等） |
 | **Quota Board** | 实时 token 用量和费用追踪 |
 | **Routing Policy** | 任务路由策略 — 哪只猫处理什么类型的任务 |
-| **Provider Profiles** | 模型配置、API 密钥、每个 provider 的输出格式 |
+| **账号配置** | 添加模型 API key、配置 OAuth、管理 Provider Profile（Claude、GPT、Gemini、Kimi、GLM、MiniMax 等） |
 
 <details><summary>📹 演示：Hub & 作战中枢操作演示</summary>
 
@@ -352,7 +398,7 @@ https://github.com/user-attachments/assets/349d53e7-5285-4638-ade2-901766af03e8
 
 | 功能 | 状态 |
 |------|------|
-| 多用户协作（OAuth + ACL） | 规划中 |
+| 多用户协作（OAuth + Provider Profiles） | Phase 1 完成 |
 | 作战中枢（跨项目指挥面板） | Phase 2 完成 |
 | 冷启动验证器 | 规划中 |
 
@@ -407,6 +453,7 @@ AI 不一定是冰冷的 API 和无状态调用。它可以是陪伴——有持
 
 - **[教程](https://github.com/zts212653/cat-cafe-tutorials)** — Clowder AI 的分步教程
 - **[SETUP.zh-CN.md](SETUP.zh-CN.md)** — 完整安装和配置指南
+- **[第三方 AI Provider 配置指南](SETUP.zh-CN.md#模型接入ui)** — 配置 Kimi、GLM、MiniMax、Qwen、OpenRouter 等国产/第三方模型
 - **[使用小 Tips](docs/TIPS.md)** — Magic Words、@提及、语音陪伴等使用技巧
 - **[docs/](docs/)** — 架构决策、功能规格、经验教训
 

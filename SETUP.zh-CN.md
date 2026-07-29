@@ -15,6 +15,22 @@
 
 ## 快速开始
 
+### 先选安装路径
+
+对大多数非开发者用户，如果 Releases 里已经有桌面安装包，优先走安装包：
+
+| 平台 | 推荐路径 | 说明 |
+|------|----------|------|
+| Windows | 从 [Releases](https://github.com/zts212653/clowder-ai/releases) 下载 `.exe` 安装包 | 自带运行时、便携 Node.js、Redis、桌面快捷方式和首次启动配置生成 |
+| macOS | 从 [Releases](https://github.com/zts212653/clowder-ai/releases) 下载 `.dmg` | 拖到 Applications；如果未签名应用被拦截，右键 → **打开** |
+| Linux | 源码安装或 `bash scripts/install.sh` | 暂时没有桌面 AppImage |
+
+启动桌面应用后，进入 **Hub → 系统配置 → 账号配置**，连接 provider API key 和 CLI 账号。安装包负责准备本地运行时，但不会替你完成第三方 provider 登录。
+
+如果你要开发 Clowder、运行指定分支，或者你的平台暂时没有桌面安装包，再走下面的源码安装。
+
+### 源码安装
+
 ```bash
 # 1. 克隆
 git clone https://github.com/zts212653/clowder-ai.git
@@ -26,15 +42,16 @@ pnpm install
 # 3. 构建（必需 — 为工作区包生成 dist/）
 pnpm build
 
-# 4. 配置环境
+# 4. 配置基础设施（API key 在启动后通过前端 UI 添加）
 cp .env.example .env
-# 编辑 .env — 添加模型 API key 或配置 CLI 认证（见下方）
 
 # 5. 启动
 pnpm start
 # 如果报 "target path exists" 错误，改用：
 #   pnpm start:direct
 ```
+
+如果要给记忆系统开启本地语义 rerank，请在 Console 设置里安装并启用 **Embedding** 服务。安装器会在 `~/.cat-cafe/embed-venv` 创建与你平台匹配的后端（Apple Silicon 用 MLX，其它平台用 fastembed/ONNX 或 `sentence-transformers`）。在 Windows 上，当 Console 记录该服务已安装且已启用后，`pnpm start` / `pnpm start:direct` 会自动拉起 `scripts/services/embed-server.ps1`；如果你在 Console 里卸载或禁用该服务，就不会自动启动。
 
 `pnpm start` 使用**运行时 worktree** 架构：首次运行时自动创建隔离的 `../cat-cafe-runtime` worktree，同步到 `origin/main`，构建，启动 Redis，然后启动前端（端口 3003）+ API（端口 3004）。这样你的开发目录保持干净。
 
@@ -60,16 +77,65 @@ your-projects/
 | `pnpm start --memory` | 同上，但跳过 Redis（纯内存，重启数据丢失） |
 | `pnpm start --quick` | 同上，但跳过重编译（用已有 `dist/`） |
 | `pnpm start --daemon` | 同上，但后台运行（日志输出到 `cat-cafe-daemon.log`） |
-| `pnpm start:direct` | 跳过 worktree — 直接在当前目录启动 dev server |
+| `pnpm start:direct` | 跳过 worktree — 从当前 checkout 启动，不自动更新（[详情](#运行指定版本不自动更新)） |
 | `pnpm stop` | 停止后台 daemon |
 | `pnpm start:status` | 查看 daemon 是否在运行 |
 | `pnpm runtime:init` | 只创建运行时 worktree（不启动） |
-| `pnpm runtime:sync` | 只同步 worktree 到 origin/main（不启动） |
 | `pnpm runtime:status` | 显示 worktree 路径、分支、HEAD、ahead/behind |
+
+> 运行时契约（ADR-039 被动冻结）：`pnpm start` 是单一入口，sync+build+restart 一次完成。已移除独立 sync 命令以防止 stale-dist 崩溃（详见 ADR-039）。
 
 首次运行自动创建 `../cat-cafe-runtime`。后续运行做 fast-forward 同步后启动。
 
 > **自定义运行时路径：** 设置 `CAT_CAFE_RUNTIME_DIR` 使用不同位置：`CAT_CAFE_RUNTIME_DIR=../my-clowder-runtime pnpm start`
+
+## 运行指定版本（不自动更新）
+
+默认情况下，`pnpm start` 会自动同步到最新的 `origin/main`。如果你想**停留在某个特定版本** — 为了稳定性、可复现性，或者暂时不想更新 — 请使用 `pnpm start:direct`。
+
+### 方式一：Checkout 到某个 Release Tag
+
+Clowder 在 [Releases 页面](https://github.com/zts212653/clowder-ai/releases)发布带标签的版本（`v0.1.0`、`v0.2.0`、`v0.3.0`、`v0.4.0` 等）。运行指定版本：
+
+```bash
+# 1. 克隆（或用你已有的 clone）
+git clone https://github.com/zts212653/clowder-ai.git
+cd clowder-ai
+
+# 2. 切换到你想要的版本
+git checkout v0.4.0          # 或者 Releases 页面上的任意 tag
+
+# 3. 安装 + 构建
+pnpm install
+pnpm build
+
+# 4. 配置基础设施（API key 在启动后通过 UI 添加）
+cp .env.example .env
+
+# 5. 直接启动（跳过 worktree，不会自动更新）
+pnpm start:direct
+
+# 不需要 Redis？用内存模式
+pnpm start:direct -- --memory
+```
+
+### 方式二：停留在当前 commit
+
+如果你已经 clone 好了并且对当前版本满意，只需用 `pnpm start:direct` 代替 `pnpm start`：
+
+```bash
+pnpm start:direct            # 从当前 checkout 启动，不同步
+pnpm start:direct -- --quick # 也跳过重编译
+```
+
+### 为什么用 `pnpm start:direct`？
+
+| 命令 | 自动同步到最新？ | 创建 worktree？ | 适用场景 |
+|------|----------------|----------------|---------|
+| `pnpm start` | **是** — 同步到 `origin/main` | 是 | 始终运行最新版本 |
+| `pnpm start:direct` | **否** — 从当前 checkout 运行 | 否 | 固定在特定版本或分支 |
+
+> **后续更新：** 准备好更新时，执行 `git fetch && git checkout v0.5.0`（或者新版本 tag），然后 `pnpm install && pnpm build && pnpm start:direct` 即可。
 
 ## 后台 / Daemon 模式
 
@@ -131,26 +197,11 @@ sudo journalctl -u clowder-ai -f
 
 ## 配置
 
-### 模型 API Key（推荐）
+### 基础设施（`.env`）
 
-如果直接使用 API key，至少需要一个模型 provider 才能有一个可用的 agent。建议三个都配，这样才能完整体验多 agent 协作。
+`.env` 文件只配置**基础设施** — 端口、Redis 和可选的服务 URL。模型 API key 通过 Web UI 管理（见下方）。
 
-> **用 CLI 认证？** 如果你已经通过 `claude`、`codex` 或 `gemini` CLI 工具登录认证，可以跳过 API key — CLI 订阅会处理认证。API key 只在直接调用 API 时需要。
-
-```bash
-# Claude（布偶猫/宪宪）— 推荐作为主力
-ANTHROPIC_API_KEY=your-anthropic-api-key
-
-# GPT / Codex（缅因猫/砚砚）— 代码审查专家
-OPENAI_API_KEY=your-openai-api-key
-
-# Gemini（暹罗猫/烁烁）— 视觉设计
-GOOGLE_API_KEY=...
-```
-
-### Redis
-
-Redis 是线程、消息、任务和记忆的持久化存储。
+**Redis** — 线程、消息、任务和记忆的持久化存储：
 
 ```bash
 REDIS_URL=redis://localhost:6399
@@ -160,15 +211,78 @@ REDIS_URL=redis://localhost:6399
 
 **没有 Redis？** 用 `pnpm start --memory` 启动纯内存模式（重启后数据丢失 — 试玩够用了）。
 
-### 前端
+**前端：**
 
 ```bash
 NEXT_PUBLIC_API_URL=http://localhost:3004
 ```
 
+### 模型接入（UI）
+
+启动后，打开 `http://localhost:3003`，进入 **Hub → 系统配置 → 账号配置** 来配置模型 provider。
+
+账号分两种类型：
+
+| 类型 | 工作方式 | 适用 Provider |
+|------|---------|--------------|
+| **内置（OAuth / CLI 订阅）** | 通过 provider 的 CLI 工具认证（`claude`、`codex`、`gemini`），无需 API key — CLI 订阅自动处理认证 | Claude、GPT/Codex、Gemini |
+| **API Key** | 输入 API key + base URL 直接调用 API。兼容任何 OpenAI 或 Anthropic 协议的端点 | Claude、GPT、Gemini、**Kimi、GLM、MiniMax、Qwen、OpenRouter** 等 |
+
+**步骤：**
+1. 在账号配置页点击 **"添加账号"**
+2. 选择一个 provider 或添加自定义 provider
+3. 内置 provider：选择 OAuth/订阅模式（CLI 已认证则无需 key）
+4. API key provider：输入 API key，可选填自定义 base URL
+5. 点击 **保存**
+
+**添加国产 / 第三方 provider（Kimi、GLM、MiniMax、Qwen、OpenRouter）：**
+
+这些 provider 以 API key 账号形式配置，需要填写自定义 base URL。在**账号配置** UI 中添加新账号，选择 provider，输入 API key，填入该 provider 的 OpenAI 兼容端点 URL，选择对应协议，点击**保存**。
+
+**示例 — 阿里百炼（Qwen）：**
+
+![百炼 Provider 账号配置](docs/setup/setup-provider-bailian.png)
+
+> **兼容模式：** 系统仍会从 `.env` 读取 `ANTHROPIC_API_KEY`、`OPENAI_API_KEY`、`GOOGLE_API_KEY` 作为兜底，但这条路径已不推荐。新安装请统一用 UI 配置。
+
+### 成员配置
+
+给团队成员（猫猫）绑定特定的 provider：
+
+1. 进入 **Hub → 成员协作 → 总览**
+2. 每个成员可以绑定账号配置中的一个 provider 账号
+3. 内置 provider 支持 OAuth；第三方 provider 使用 API key 账号
+
+![成员绑定百炼 Provider](docs/setup/setup-member-binding.png)
+
 ## 可选功能
 
-只要有模型访问（API key 或 CLI 认证）+ Redis（或 `--memory` 模式），Clowder 就能开箱即用。以下功能全是可选的。
+只要有模型访问 + Redis（或 `--memory` 模式），Clowder 就能开箱即用。以下功能全是可选的。
+
+### 设计工具（Pencil MCP）
+
+设计任务、UI 迭代、截图、设计转代码等工作流需要在编辑器（VS Code、Cursor 或 Antigravity）中安装 [Pencil](https://marketplace.visualstudio.com/items?itemName=highagency.pencildev)。
+
+不装 Pencil：Clowder 照常运行，编码任务不受影响，设计任务退化为纯文本指导。
+
+**自动配置：** 能力编排器会自动检测你的 Pencil 安装，按以下顺序扫描：
+
+1. `PENCIL_MCP_BIN` 环境变量（显式路径 — 最高优先级）
+2. `~/.antigravity/extensions/highagency.pencildev-*/`
+3. `~/.vscode/extensions/highagency.pencildev-*/`
+4. `~/.cursor/extensions/highagency.pencildev-*/`
+5. `~/.vscode-insiders/extensions/highagency.pencildev-*/`
+
+自动选择所有编辑器中最新的版本。当两个编辑器安装了相同版本时，优先选择 Antigravity。
+
+**环境变量覆盖：**
+
+| 变量 | 用途 | 示例 |
+|------|------|------|
+| `PENCIL_MCP_BIN` | 强制指定 Pencil 二进制路径 | `/path/to/mcp-server-darwin-arm64` |
+| `PENCIL_MCP_APP` | 强制连接到指定编辑器 | `vscode`、`antigravity`、`cursor`、`vscode-insiders` |
+
+**诊断：** `pnpm mcp:doctor` 显示 MCP 就绪状态（ready / missing / unresolved）。
 
 ### 语音输入 / 输出
 
@@ -200,8 +314,9 @@ NEXT_PUBLIC_LLM_POSTPROCESS_URL=http://localhost:9878
 ./scripts/tts-server.sh                    # 默认: Qwen3-TTS（三猫声线）
 TTS_PROVIDER=edge-tts ./scripts/tts-server.sh  # edge-tts 备选（无需 GPU）
 
-# ASR（语音转文字）— 需要 Python 3 + ffmpeg
-./scripts/qwen3-asr-server.sh             # Qwen3-ASR 服务器
+# ASR（语音转文字）— 需要 Python 3 + ffmpeg，统一 whisper-stt 服务
+WHISPER_MODEL=mlx-community/Qwen3-ASR-1.7B-8bit ./scripts/services/whisper-server.sh  # Qwen3-ASR
+WHISPER_MODEL=mlx-community/whisper-large-v3-turbo ./scripts/services/whisper-server.sh # Whisper
 ```
 
 > **系统依赖**：音频处理需要 `ffmpeg`。安装方式：`brew install ffmpeg`（macOS）或 `apt install ffmpeg`（Linux）。
@@ -385,10 +500,9 @@ pnpm stop               # 停止后台 daemon
 pnpm start:status       # 查看 daemon 是否在运行
                         # 查看日志: tail -f cat-cafe-daemon.log
 
-# === 运行时 Worktree ===
+# === 运行时 Worktree (ADR-039 被动冻结) ===
 pnpm runtime:init       # 创建运行时 worktree（仅首次）
-pnpm runtime:sync       # 同步 worktree 到 origin/main
-pnpm runtime:start      # 同步 + 从 worktree 启动
+pnpm runtime:start      # 单一入口：sync + build + start（无独立 sync）
 pnpm runtime:status     # 查看 worktree 状态
 
 # === 构建和测试 ===
@@ -450,8 +564,9 @@ API_SERVER_HOST=0.0.0.0
 # 前端 URL — 用于 CORS 和重定向
 FRONTEND_URL=https://your-domain.com
 
-# API URL — 前端需要能访问到 API
-NEXT_PUBLIC_API_URL=http://your-domain.com:3004
+# API URL — 反向代理场景通常不需要设置（自动探测）。
+# 仅在 API 使用独立域名等非标准端点时设置。
+# NEXT_PUBLIC_API_URL=https://api.your-domain.com
 
 # Redis — 如果在其他机器上
 REDIS_URL=redis://your-redis-host:6399
@@ -474,11 +589,16 @@ NEXT_PUBLIC_LLM_POSTPROCESS_URL=http://your-llm-host:9878
 
 API 自动接受以下来源的请求：
 - `localhost` / `127.0.0.1`（任意端口）
-- RFC 1918 内网地址（`10.x.x.x`、`172.16-31.x.x`、`192.168.x.x`）
-- Tailscale IP（`100.x.x.x`）
 - 你设置的 `FRONTEND_URL`
 
-大多数局域网 / VPN 场景不需要额外的 CORS 配置。
+如果你是直接通过局域网 / Tailscale IP 打开 Cat Cafe（例如 `http://192.168.x.x:3003` 或 `http://100.x.x.x:3003`），还需要在 `.env` 里加上：
+
+```bash
+API_SERVER_HOST=0.0.0.0
+CORS_ALLOW_PRIVATE_NETWORK=true
+```
+
+这个显式开关会信任 RFC 1918 内网地址（`10.x.x.x`、`172.16-31.x.x`、`192.168.x.x`）和 Tailscale IP（`100.x.x.x`）上的浏览器。如果你走反向代理或固定 `FRONTEND_URL`，通常不需要额外打开这个选项。
 
 ## 常见问题
 
@@ -493,9 +613,11 @@ API 自动接受以下来源的请求：
 - 确认 Redis 已安装：`redis-server --version`
 
 **没有 agent 响应？**
-- 检查 `.env` 里有有效的 API key，或确认 CLI 认证正常（`claude --version`、`codex --version`）
+- 检查是否已在 **Hub → 系统配置 → 账号配置** 中添加了至少一个 provider 账号
+- 如果用 CLI 认证，确认认证正常（`claude --version`、`codex --version`）
 - 看终端里 API 日志有没有认证错误
 
 **前端连不上 API？**
-- 确认设了 `NEXT_PUBLIC_API_URL=http://localhost:3004`
+- 本地开发确认 `.env` 里有 `NEXT_PUBLIC_API_URL=http://localhost:3004`
+- 反向代理场景下前端会自动探测同源 API —— 确保 Nginx 把 `/api/` 和 `/socket.io/` 代理到 3004 端口
 - API 必须在前端加载前启动

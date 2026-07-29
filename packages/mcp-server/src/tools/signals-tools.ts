@@ -74,10 +74,7 @@ function formatArticleLine(article: SignalArticleLike): string {
 
 export const signalListInboxInputSchema = {
   limit: z.number().int().min(1).max(100).optional().describe('Max inbox items to return (default: 20)'),
-  tier: z
-    .union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)])
-    .optional()
-    .describe('Filter by signal tier'),
+  tier: z.enum(['1', '2', '3', '4']).optional().describe('Filter by signal tier (1-4)'),
   source: z.string().min(1).max(200).optional().describe('Filter by source id'),
 };
 
@@ -91,10 +88,7 @@ export const signalSearchInputSchema = {
   limit: z.number().int().min(1).max(100).optional().describe('Max search results (default: 20)'),
   status: z.enum(['inbox', 'read', 'starred', 'archived']).optional().describe('Filter by signal article status'),
   source: z.string().min(1).max(200).optional().describe('Filter by source id'),
-  tier: z
-    .union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)])
-    .optional()
-    .describe('Filter by signal tier'),
+  tier: z.enum(['1', '2', '3', '4']).optional().describe('Filter by signal tier (1-4)'),
   dateFrom: z.string().optional().describe('ISO date/time lower bound for fetchedAt'),
   dateTo: z.string().optional().describe('ISO date/time upper bound for fetchedAt'),
 };
@@ -110,7 +104,7 @@ export const signalSummarizeInputSchema = {
 
 export async function handleSignalListInbox(input: {
   limit?: number | undefined;
-  tier?: 1 | 2 | 3 | 4 | undefined;
+  tier?: '1' | '2' | '3' | '4' | undefined;
   source?: string | undefined;
 }): Promise<ToolResult> {
   const params = new URLSearchParams();
@@ -163,7 +157,7 @@ export async function handleSignalSearch(input: {
   limit?: number | undefined;
   status?: 'inbox' | 'read' | 'starred' | 'archived' | undefined;
   source?: string | undefined;
-  tier?: 1 | 2 | 3 | 4 | undefined;
+  tier?: '1' | '2' | '3' | '4' | undefined;
   dateFrom?: string | undefined;
   dateTo?: string | undefined;
 }): Promise<ToolResult> {
@@ -238,7 +232,7 @@ export const signalsTools = [
   {
     name: 'signal_list_inbox',
     description:
-      'List recent signal articles from inbox. Use when 铲屎官 asks to check signals, or when you need to browse unread articles. ' +
+      'List recent signal articles from inbox. Use when co-creator asks to check signals, or when you need to browse unread articles. ' +
       'Supports optional limit, tier, and source filters. ' +
       'TIER GUIDE: T1 = critical/breaking, T2 = important, T3 = interesting, T4 = low priority. ' +
       'Returns article IDs needed for other signal tools (get_article, mark_read, start_study).',
@@ -250,7 +244,7 @@ export const signalsTools = [
     description:
       'Get full signal article detail by id or URL. Returns title, content, source, tier, timestamps, and metadata. ' +
       'Use when you need to read the full content of a specific article. ' +
-      'PARAM GUIDE: Use id (from list_inbox/search results) OR url (if 铲屎官 shared a link) — not both.',
+      'PARAM GUIDE: Use id (from list_inbox/search results) OR url (if co-creator shared a link) — not both.',
     inputSchema: signalGetArticleInputSchema,
     handler: handleSignalGetArticle,
   },
@@ -266,7 +260,7 @@ export const signalsTools = [
   {
     name: 'signal_mark_read',
     description:
-      'Mark a signal article as read. Use after you or 铲屎官 have reviewed an article. ' +
+      'Mark a signal article as read. Use after you or co-creator have reviewed an article. ' +
       'This removes it from the inbox view.',
     inputSchema: signalMarkReadInputSchema,
     handler: handleSignalMarkRead,

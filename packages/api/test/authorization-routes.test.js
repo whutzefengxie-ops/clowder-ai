@@ -1,6 +1,6 @@
 /**
  * Authorization Routes Tests
- * 猫猫授权 HTTP 端点 — callback-auth (猫端) + authorization (铲屎官端)
+ * 猫猫授权 HTTP 端点 — callback-auth (猫端) + authorization (co-creator端)
  *
  * Uses Fastify injection (no real HTTP server).
  */
@@ -18,6 +18,7 @@ const { AuthorizationAuditStore } = await import(
 const { AuthorizationManager } = await import('../dist/domains/cats/services/auth/AuthorizationManager.js');
 const { callbackAuthRoutes } = await import('../dist/routes/callback-auth.js');
 const { authorizationRoutes } = await import('../dist/routes/authorization.js');
+// registerCallbackAuthHook is called internally by callbackAuthRoutes
 
 function createMockSocketManager() {
   const events = [];
@@ -53,7 +54,7 @@ describe('POST /api/callbacks/request-permission', () => {
 
   async function createApp() {
     const app = Fastify();
-    await app.register(callbackAuthRoutes, { registry, authManager });
+    await app.register(callbackAuthRoutes, { authManager, registry });
     return app;
   }
 
@@ -67,11 +68,12 @@ describe('POST /api/callbacks/request-permission', () => {
       createdBy: 'user-1',
     });
 
-    const { invocationId, callbackToken } = registry.create('user-1', 'codex', 'thread-1');
+    const { invocationId, callbackToken } = await registry.create('user-1', 'codex', 'thread-1');
     const res = await app.inject({
       method: 'POST',
       url: '/api/callbacks/request-permission',
-      payload: { invocationId, callbackToken, action: 'git_commit', reason: 'fix bug' },
+      headers: { 'x-invocation-id': invocationId, 'x-callback-token': callbackToken },
+      payload: { action: 'git_commit', reason: 'fix bug' },
     });
 
     assert.equal(res.statusCode, 200);
@@ -89,11 +91,12 @@ describe('POST /api/callbacks/request-permission', () => {
       createdBy: 'user-1',
     });
 
-    const { invocationId, callbackToken } = registry.create('user-1', 'codex', 'thread-1');
+    const { invocationId, callbackToken } = await registry.create('user-1', 'codex', 'thread-1');
     const res = await app.inject({
       method: 'POST',
       url: '/api/callbacks/request-permission',
-      payload: { invocationId, callbackToken, action: 'file_delete', reason: 'cleanup' },
+      headers: { 'x-invocation-id': invocationId, 'x-callback-token': callbackToken },
+      payload: { action: 'file_delete', reason: 'cleanup' },
     });
 
     assert.equal(res.statusCode, 200);
@@ -102,12 +105,13 @@ describe('POST /api/callbacks/request-permission', () => {
 
   test('returns pending when no rule and timeout', async () => {
     const app = await createApp();
-    const { invocationId, callbackToken } = registry.create('user-1', 'codex', 'thread-1');
+    const { invocationId, callbackToken } = await registry.create('user-1', 'codex', 'thread-1');
 
     const res = await app.inject({
       method: 'POST',
       url: '/api/callbacks/request-permission',
-      payload: { invocationId, callbackToken, action: 'git_push', reason: 'deploy' },
+      headers: { 'x-invocation-id': invocationId, 'x-callback-token': callbackToken },
+      payload: { action: 'git_push', reason: 'deploy' },
     });
 
     assert.equal(res.statusCode, 200);
@@ -121,21 +125,22 @@ describe('POST /api/callbacks/request-permission', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/callbacks/request-permission',
-      payload: { invocationId: 'bad', callbackToken: 'bad', action: 'x', reason: 'y' },
+      headers: { 'x-invocation-id': 'bad', 'x-callback-token': 'bad' },
+      payload: { action: 'x', reason: 'y' },
     });
 
     assert.equal(res.statusCode, 401);
   });
 
-  test('rejects missing fields', async () => {
+  test('rejects invalid credentials (missing fields test now returns 401)', async () => {
     const app = await createApp();
     const res = await app.inject({
       method: 'POST',
       url: '/api/callbacks/request-permission',
-      payload: { invocationId: 'x', callbackToken: 'y' },
+      headers: { 'x-invocation-id': 'x', 'x-callback-token': 'y' },
     });
 
-    assert.equal(res.statusCode, 400);
+    assert.equal(res.statusCode, 401);
   });
 });
 
@@ -158,26 +163,28 @@ describe('GET /api/callbacks/permission-status', () => {
 
   async function createApp() {
     const app = Fastify();
-    await app.register(callbackAuthRoutes, { registry, authManager });
+    await app.register(callbackAuthRoutes, { authManager, registry });
     return app;
   }
 
   test('returns status for existing request', async () => {
     const app = await createApp();
-    const { invocationId, callbackToken } = registry.create('user-1', 'codex', 'thread-1');
+    const { invocationId, callbackToken } = await registry.create('user-1', 'codex', 'thread-1');
 
     // Create a pending request first
     const createRes = await app.inject({
       method: 'POST',
       url: '/api/callbacks/request-permission',
-      payload: { invocationId, callbackToken, action: 'git_commit', reason: 'fix' },
+      headers: { 'x-invocation-id': invocationId, 'x-callback-token': callbackToken },
+      payload: { action: 'git_commit', reason: 'fix' },
     });
     const { requestId } = JSON.parse(createRes.body);
 
     // Query status
     const res = await app.inject({
       method: 'GET',
-      url: `/api/callbacks/permission-status?invocationId=${invocationId}&callbackToken=${callbackToken}&requestId=${requestId}`,
+      url: `/api/callbacks/permission-status?requestId=${requestId}`,
+      headers: { 'x-invocation-id': invocationId, 'x-callback-token': callbackToken },
     });
 
     assert.equal(res.statusCode, 200);
@@ -190,13 +197,12 @@ describe('GET /api/callbacks/permission-status', () => {
   test('returns 403 when requestId belongs to different cat/thread', async () => {
     const app = await createApp();
     // Cat A creates a request
-    const catA = registry.create('user-1', 'codex', 'thread-1');
+    const catA = await registry.create('user-1', 'codex', 'thread-1');
     const createRes = await app.inject({
       method: 'POST',
       url: '/api/callbacks/request-permission',
+      headers: { 'x-invocation-id': catA.invocationId, 'x-callback-token': catA.callbackToken },
       payload: {
-        invocationId: catA.invocationId,
-        callbackToken: catA.callbackToken,
         action: 'git_commit',
         reason: 'fix',
       },
@@ -204,10 +210,11 @@ describe('GET /api/callbacks/permission-status', () => {
     const { requestId } = JSON.parse(createRes.body);
 
     // Cat B (different cat/thread) tries to query it
-    const catB = registry.create('user-1', 'opus', 'thread-2');
+    const catB = await registry.create('user-1', 'opus', 'thread-2');
     const res = await app.inject({
       method: 'GET',
-      url: `/api/callbacks/permission-status?invocationId=${catB.invocationId}&callbackToken=${catB.callbackToken}&requestId=${requestId}`,
+      url: `/api/callbacks/permission-status?requestId=${requestId}`,
+      headers: { 'x-invocation-id': catB.invocationId, 'x-callback-token': catB.callbackToken },
     });
 
     assert.equal(res.statusCode, 403);
@@ -216,13 +223,12 @@ describe('GET /api/callbacks/permission-status', () => {
   test('returns 403 when same cat/thread but different invocation', async () => {
     const app = await createApp();
     // Invocation A creates a request
-    const invocA = registry.create('user-1', 'codex', 'thread-1');
+    const invocA = await registry.create('user-1', 'codex', 'thread-1');
     const createRes = await app.inject({
       method: 'POST',
       url: '/api/callbacks/request-permission',
+      headers: { 'x-invocation-id': invocA.invocationId, 'x-callback-token': invocA.callbackToken },
       payload: {
-        invocationId: invocA.invocationId,
-        callbackToken: invocA.callbackToken,
         action: 'git_commit',
         reason: 'fix',
       },
@@ -230,10 +236,11 @@ describe('GET /api/callbacks/permission-status', () => {
     const { requestId } = JSON.parse(createRes.body);
 
     // Invocation B (same cat, same thread, different invocation) tries to query
-    const invocB = registry.create('user-1', 'codex', 'thread-1');
+    const invocB = await registry.create('user-1', 'codex', 'thread-1');
     const res = await app.inject({
       method: 'GET',
-      url: `/api/callbacks/permission-status?invocationId=${invocB.invocationId}&callbackToken=${invocB.callbackToken}&requestId=${requestId}`,
+      url: `/api/callbacks/permission-status?requestId=${requestId}`,
+      headers: { 'x-invocation-id': invocB.invocationId, 'x-callback-token': invocB.callbackToken },
     });
 
     assert.equal(res.statusCode, 403, 'same cat+thread but different invocation must be rejected');
@@ -241,18 +248,19 @@ describe('GET /api/callbacks/permission-status', () => {
 
   test('returns 404 for nonexistent request', async () => {
     const app = await createApp();
-    const { invocationId, callbackToken } = registry.create('user-1', 'codex', 'thread-1');
+    const { invocationId, callbackToken } = await registry.create('user-1', 'codex', 'thread-1');
 
     const res = await app.inject({
       method: 'GET',
-      url: `/api/callbacks/permission-status?invocationId=${invocationId}&callbackToken=${callbackToken}&requestId=nonexistent`,
+      url: `/api/callbacks/permission-status?requestId=nonexistent`,
+      headers: { 'x-invocation-id': invocationId, 'x-callback-token': callbackToken },
     });
 
     assert.equal(res.statusCode, 404);
   });
 });
 
-// ---- Authorization Routes (铲屎官-facing) ----
+// ---- Authorization Routes (co-creator-facing) ----
 
 describe('POST /api/authorization/respond', () => {
   let authManager;
@@ -300,7 +308,7 @@ describe('POST /api/authorization/respond', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/authorization/respond',
-      headers: { 'x-user-id': 'user-1' },
+      headers: { 'x-cat-cafe-user': 'user-1' },
       payload: {
         requestId: record.requestId,
         granted: true,
@@ -352,14 +360,14 @@ describe('POST /api/authorization/respond', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/authorization/respond',
-      headers: { 'x-user-id': 'user-1' },
+      headers: { 'x-cat-cafe-user': 'user-1' },
       payload: { requestId: 'nonexistent', granted: true, scope: 'once' },
     });
 
     assert.equal(res.statusCode, 404);
   });
 
-  test('returns 401 without x-user-id', async () => {
+  test('returns 401 without identity header', async () => {
     const app = await createApp();
     const res = await app.inject({
       method: 'POST',
@@ -368,6 +376,82 @@ describe('POST /api/authorization/respond', () => {
     });
 
     assert.equal(res.statusCode, 401);
+  });
+
+  test('F222 UX-3: withFeedback=true passes through to onPermissionCancel', async () => {
+    const cancelCalls = [];
+    const app = Fastify();
+    await app.register(authorizationRoutes, {
+      authManager,
+      ruleStore,
+      auditStore,
+      socketManager,
+      onPermissionCancel: (input) => cancelCalls.push(input),
+    });
+
+    const record = pendingStore.create({
+      invocationId: 'inv-feedback',
+      catId: 'codex',
+      threadId: 'thread-fb',
+      action: 'git_push',
+      reason: 'push to main',
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/authorization/respond',
+      headers: { 'x-cat-cafe-user': 'user-feedback' },
+      payload: {
+        requestId: record.requestId,
+        granted: false,
+        scope: 'once',
+        reason: 'wrong_direction',
+        withFeedback: true,
+      },
+    });
+
+    assert.equal(res.statusCode, 200);
+    assert.equal(cancelCalls.length, 1);
+    assert.equal(cancelCalls[0].withFeedback, true);
+    assert.equal(cancelCalls[0].toolName, 'git_push');
+    assert.equal(cancelCalls[0].userId, 'user-feedback');
+    assert.equal(cancelCalls[0].cancelReason, 'wrong_direction');
+  });
+
+  test('F222 UX-3: withFeedback defaults to false when not provided', async () => {
+    const cancelCalls = [];
+    const app = Fastify();
+    await app.register(authorizationRoutes, {
+      authManager,
+      ruleStore,
+      auditStore,
+      socketManager,
+      onPermissionCancel: (input) => cancelCalls.push(input),
+    });
+
+    const record = pendingStore.create({
+      invocationId: 'inv-nofb',
+      catId: 'opus',
+      threadId: 'thread-nofb',
+      action: 'rm_file',
+      reason: 'cleanup',
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/authorization/respond',
+      headers: { 'x-cat-cafe-user': 'user-nofb' },
+      payload: {
+        requestId: record.requestId,
+        granted: false,
+        scope: 'once',
+        reason: 'skip',
+      },
+    });
+
+    assert.equal(res.statusCode, 200);
+    assert.equal(cancelCalls.length, 1);
+    assert.equal(cancelCalls[0].withFeedback, false);
   });
 });
 
@@ -393,7 +477,7 @@ describe('GET /api/authorization/pending', () => {
     const res = await app.inject({
       method: 'GET',
       url: '/api/authorization/pending',
-      headers: { 'x-user-id': 'user-1' },
+      headers: { 'x-cat-cafe-user': 'user-1' },
     });
 
     assert.equal(res.statusCode, 200);
@@ -422,7 +506,7 @@ describe('GET /api/authorization/pending', () => {
     const res = await app.inject({
       method: 'GET',
       url: '/api/authorization/pending?threadId=t1',
-      headers: { 'x-user-id': 'user-1' },
+      headers: { 'x-cat-cafe-user': 'user-1' },
     });
 
     assert.equal(res.statusCode, 200);
@@ -481,7 +565,7 @@ describe('Authorization Rules API', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/authorization/rules',
-      headers: { 'x-user-id': 'user-1' },
+      headers: { 'x-cat-cafe-user': 'user-1' },
       payload: {
         catId: 'codex',
         action: 'git_*',
@@ -505,7 +589,7 @@ describe('Authorization Rules API', () => {
     const res = await app.inject({
       method: 'GET',
       url: '/api/authorization/rules',
-      headers: { 'x-user-id': 'user-1' },
+      headers: { 'x-cat-cafe-user': 'user-1' },
     });
 
     assert.equal(res.statusCode, 200);
@@ -524,7 +608,7 @@ describe('Authorization Rules API', () => {
     const res = await app.inject({
       method: 'DELETE',
       url: `/api/authorization/rules/${rule.id}`,
-      headers: { 'x-user-id': 'user-1' },
+      headers: { 'x-cat-cafe-user': 'user-1' },
     });
 
     assert.equal(res.statusCode, 200);
@@ -535,7 +619,7 @@ describe('Authorization Rules API', () => {
     const res = await app.inject({
       method: 'DELETE',
       url: '/api/authorization/rules/nonexistent',
-      headers: { 'x-user-id': 'user-1' },
+      headers: { 'x-cat-cafe-user': 'user-1' },
     });
 
     assert.equal(res.statusCode, 404);
@@ -571,7 +655,7 @@ describe('GET /api/authorization/audit', () => {
     const res = await app.inject({
       method: 'GET',
       url: '/api/authorization/audit',
-      headers: { 'x-user-id': 'user-1' },
+      headers: { 'x-cat-cafe-user': 'user-1' },
     });
 
     assert.equal(res.statusCode, 200);

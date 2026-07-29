@@ -19,9 +19,16 @@ import { execFile } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { readdir, readFile, stat } from 'node:fs/promises';
-import { dirname, extname, join, relative } from 'node:path';
+import { dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { promisify } from 'node:util';
+import { isAbsoluteFilesystemPath, normalizeWorkspaceRelativePath } from '@cat-cafe/shared/utils';
 import type { FastifyPluginAsync } from 'fastify';
+import {
+  AuditEventTypes,
+  type EventAuditLog,
+  getEventAuditLog,
+} from '../domains/cats/services/orchestration/EventAuditLog.js';
+import { guessMime, readWorkspaceFilePreview } from '../domains/workspace/workspace-file-read.js';
 import {
   addLinkedRoot,
   getLinkedRootsAsync,
@@ -31,6 +38,7 @@ import {
   registerWorktrees,
   removeLinkedRoot,
   resolveWorkspacePath,
+  resolveWorktreeIdByPath,
   WorkspaceSecurityError,
 } from '../domains/workspace/workspace-security.js';
 
@@ -39,47 +47,76 @@ const MAX_FILE_SIZE = 1024 * 1024; // 1 MB text preview
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10 MB image preview
 const MAX_SEARCH_RESULTS = 100;
 const MAX_TREE_DEPTH = 5;
+const MAX_CONTENT_SEARCH_FILE_SIZE = 10 * 1024 * 1024; // 10 MB per searchable text file
 
-const MIME_MAP: Record<string, string> = {
-  '.ts': 'text/typescript',
-  '.tsx': 'text/tsx',
-  '.js': 'text/javascript',
-  '.jsx': 'text/jsx',
-  '.json': 'application/json',
-  '.md': 'text/markdown',
-  '.css': 'text/css',
-  '.html': 'text/html',
-  '.svg': 'image/svg+xml',
-  '.png': 'image/png',
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.gif': 'image/gif',
-  '.webp': 'image/webp',
-  '.ico': 'image/x-icon',
-  '.yaml': 'text/yaml',
-  '.yml': 'text/yaml',
-  '.toml': 'text/toml',
-  '.sh': 'text/x-shellscript',
-  '.py': 'text/x-python',
-  // Audio
-  '.mp3': 'audio/mpeg',
-  '.wav': 'audio/wav',
-  '.m4a': 'audio/mp4',
-  '.ogg': 'audio/ogg',
-  '.flac': 'audio/flac',
-  // Video
-  '.mp4': 'video/mp4',
-  '.webm': 'video/webm',
-  '.mov': 'video/quicktime',
-};
+export type ResolveWorktreeIdByPathForNavigate = (root: string) => Promise<string>;
 
-function guessMime(filepath: string): string {
-  return MIME_MAP[extname(filepath)] ?? 'text/plain';
+export interface WorktreeCanonicalizationFallbackProbe {
+  reason: 'resolve_failed';
+  requestedWorktreeId: string;
+  errorName: string;
+  errorMessage: string;
+  errorCode?: string;
 }
 
-function sha256(content: string): string {
-  return createHash('sha256').update(content).digest('hex');
+export interface WorktreeCanonicalizationProbe {
+  worktreeId: string;
+  canonicalized: boolean;
+  fallback?: WorktreeCanonicalizationFallbackProbe;
 }
+
+function getErrorCode(error: unknown): string | undefined {
+  if (!error) return undefined;
+  if (typeof error !== 'object') return undefined;
+  if (!('code' in error)) return undefined;
+  const code = (error as { code?: unknown }).code;
+  return typeof code === 'string' ? code : undefined;
+}
+
+export async function canonicalizeNavigateWorktreeId(
+  requestedWorktreeId: string,
+  root: string,
+  resolver: ResolveWorktreeIdByPathForNavigate = resolveWorktreeIdByPath,
+): Promise<WorktreeCanonicalizationProbe> {
+  try {
+    const resolvedWorktreeId = await resolver(root);
+    return {
+      worktreeId: resolvedWorktreeId,
+      canonicalized: resolvedWorktreeId !== requestedWorktreeId,
+    };
+  } catch (error) {
+    const errorCode = getErrorCode(error);
+    return {
+      worktreeId: requestedWorktreeId,
+      canonicalized: false,
+      fallback: {
+        reason: 'resolve_failed',
+        requestedWorktreeId,
+        errorName: error instanceof Error ? error.name : 'Error',
+        errorMessage: error instanceof Error ? error.message : String(error),
+        ...(errorCode ? { errorCode } : {}),
+      },
+    };
+  }
+}
+
+const CONTENT_SEARCH_EXTENSIONS = new Set([
+  '.ts',
+  '.tsx',
+  '.js',
+  '.jsx',
+  '.json',
+  '.md',
+  '.mdx',
+  '.txt',
+  '.css',
+  '.html',
+  '.yaml',
+  '.yml',
+  '.toml',
+  '.sh',
+  '.py',
+]);
 
 interface TreeNode {
   name: string;
@@ -88,7 +125,135 @@ interface TreeNode {
   children?: TreeNode[];
 }
 
-const SKIP_DIRS = new Set(['node_modules', '.next', 'dist', '.git', '.turbo', 'coverage']);
+const SKIP_DIRS = new Set(['node_modules', '.next', 'dist', '.git', '.turbo', 'coverage', '.claude']);
+
+interface WorkspaceSearchResult {
+  path: string;
+  line: number;
+  content: string;
+  contextBefore: string;
+  contextAfter: string;
+}
+
+async function listWorkspaceFiles(root: string): Promise<string[]> {
+  // Use -prune to skip entire directory trees efficiently.
+  // Hidden dirs (.*) are pruned in one rule — covers .venv, .git, .claude,
+  // .next, .playwright-mcp, .idea, etc. without listing each one.
+  const { stdout } = await execFileAsync(
+    'find',
+    [
+      root,
+      '(',
+      '-name',
+      '.*',
+      '-not',
+      '-name',
+      '.',
+      '-type',
+      'd',
+      ')',
+      '-prune',
+      '-o',
+      '(',
+      '-name',
+      'node_modules',
+      '-type',
+      'd',
+      ')',
+      '-prune',
+      '-o',
+      '(',
+      '-name',
+      'dist',
+      '-type',
+      'd',
+      ')',
+      '-prune',
+      '-o',
+      '(',
+      '-name',
+      'secrets',
+      '-type',
+      'd',
+      ')',
+      '-prune',
+      '-o',
+      '-type',
+      'f',
+      '-not',
+      '-name',
+      '.env*',
+      '-not',
+      '-name',
+      '*.pem',
+      '-not',
+      '-name',
+      '*.key',
+      '-not',
+      '-name',
+      'id_rsa*',
+      '-print',
+    ],
+    { timeout: 5000, maxBuffer: 10 * 1024 * 1024 },
+  );
+
+  return stdout
+    .trim()
+    .split('\n')
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b));
+}
+
+function isContentSearchable(relPath: string): boolean {
+  return CONTENT_SEARCH_EXTENSIONS.has(extname(relPath).toLowerCase());
+}
+
+async function searchWorkspaceContent(
+  root: string,
+  query: string,
+  limit: number,
+): Promise<{ results: WorkspaceSearchResult[]; truncated: boolean }> {
+  const files = await listWorkspaceFiles(root);
+  const normalizedQuery = query.toLowerCase();
+  const results: WorkspaceSearchResult[] = [];
+  let truncated = false;
+
+  for (const fullPath of files) {
+    if (results.length >= limit) {
+      truncated = true;
+      break;
+    }
+
+    const relPath = normalizeWorkspaceRelativePath(relative(root, fullPath));
+    if (isDenylisted(relPath) || !isContentSearchable(relPath)) continue;
+
+    const fileStat = await stat(fullPath).catch(() => null);
+    if (!fileStat || fileStat.size > MAX_CONTENT_SEARCH_FILE_SIZE) continue;
+
+    let text = '';
+    try {
+      text = await readFile(fullPath, 'utf-8');
+    } catch {
+      continue;
+    }
+
+    const lines = text.split(/\r?\n/);
+    for (let index = 0; index < lines.length; index += 1) {
+      if (!lines[index]?.toLowerCase().includes(normalizedQuery)) continue;
+
+      results.push({
+        path: relPath,
+        line: index + 1,
+        content: lines[index]?.trim() ?? '',
+        contextBefore: lines.slice(Math.max(0, index - 2), index).join('\n'),
+        contextAfter: lines.slice(index + 1, index + 3).join('\n'),
+      });
+      break;
+    }
+  }
+
+  return { results, truncated };
+}
 
 async function buildTree(root: string, dirPath: string, depth: number, maxDepth: number): Promise<TreeNode[]> {
   if (depth >= maxDepth) return [];
@@ -102,11 +267,11 @@ async function buildTree(root: string, dirPath: string, depth: number, maxDepth:
   });
 
   for (const entry of sorted) {
-    if (entry.name.startsWith('.') && entry.name !== '.claude') continue;
+    if (entry.name.startsWith('.') && entry.name !== '.claude' && entry.name !== '.kimi') continue;
     if (SKIP_DIRS.has(entry.name)) continue;
 
     const fullPath = join(dirPath, entry.name);
-    const relPath = relative(root, fullPath);
+    const relPath = normalizeWorkspaceRelativePath(relative(root, fullPath));
 
     if (entry.isDirectory()) {
       if (depth + 1 >= maxDepth) {
@@ -126,14 +291,17 @@ async function buildTree(root: string, dirPath: string, depth: number, maxDepth:
 
 interface WorkspaceRouteOpts {
   socketEmit?: (event: string, data: unknown, room: string) => void;
+  auditLog?: EventAuditLog;
+  resolveWorktreeIdByPathForNavigate?: ResolveWorktreeIdByPathForNavigate;
 }
 
 export const workspaceRoutes: FastifyPluginAsync<WorkspaceRouteOpts> = async (app, opts) => {
+  const auditLog = opts.auditLog ?? getEventAuditLog();
   // GET /api/workspace/worktrees (includes linked roots)
   app.get<{ Querystring: { repoRoot?: string } }>('/api/workspace/worktrees', async (request, reply) => {
     const { repoRoot } = request.query;
     if (repoRoot) {
-      if (!repoRoot.startsWith('/')) {
+      if (!isAbsoluteFilesystemPath(repoRoot)) {
         reply.status(400);
         return { error: 'repoRoot must be an absolute path' };
       }
@@ -149,7 +317,11 @@ export const workspaceRoutes: FastifyPluginAsync<WorkspaceRouteOpts> = async (ap
     // Prefix foreign repo worktree IDs with a short hash to prevent cross-repo collision
     if (repoRoot) {
       const prefix = createHash('sha256').update(repoRoot).digest('hex').slice(0, 6);
-      for (const e of entries) e.id = `${prefix}_${e.id}`;
+      for (const e of entries) {
+        const canonicalId = e.id;
+        e.id = `${prefix}_${canonicalId}`;
+        e.canonicalId = canonicalId;
+      }
     }
     const linked = await getLinkedRootsAsync();
     const all = [...entries, ...linked];
@@ -173,7 +345,7 @@ export const workspaceRoutes: FastifyPluginAsync<WorkspaceRouteOpts> = async (ap
       const root = await getWorktreeRoot(worktreeId);
       const resolved = subpath ? await resolveWorkspacePath(root, subpath) : root;
       const tree = await buildTree(root, resolved, 0, depth);
-      return { root: subpath || '.', worktreeId, tree };
+      return { root: subpath ? normalizeWorkspaceRelativePath(subpath) : '.', worktreeId, tree };
     } catch (e) {
       if (e instanceof WorkspaceSecurityError) {
         reply.status(e.code === 'NOT_FOUND' ? 404 : 403);
@@ -204,32 +376,20 @@ export const workspaceRoutes: FastifyPluginAsync<WorkspaceRouteOpts> = async (ap
         return { error: 'Path is a directory' };
       }
 
-      const mime = guessMime(resolved);
-      const isBinary = mime.startsWith('image/') || mime.startsWith('audio/') || mime.startsWith('video/');
-
-      if (isBinary) {
-        return {
-          path: filePath,
-          content: '',
-          sha256: '',
-          size: fileStat.size,
-          mime,
-          truncated: false,
-          binary: true,
-        };
-      }
-
-      const truncated = fileStat.size > MAX_FILE_SIZE;
-      const content = await readFile(resolved, 'utf-8');
-      const displayContent = truncated ? content.slice(0, MAX_FILE_SIZE) : content;
+      // Memory-bounded read: never pulls more than MAX_FILE_SIZE into a string.
+      // Binary detection (known media MIME + NUL-byte content sniff) and the
+      // hashing policy live in the shared helper, so this route and the
+      // file-watcher classify files identically (F063 OOM fix).
+      const preview = await readWorkspaceFilePreview(resolved, { maxBytes: MAX_FILE_SIZE });
 
       return {
         path: filePath,
-        content: displayContent,
-        sha256: sha256(content),
-        size: fileStat.size,
-        mime,
-        truncated,
+        content: preview.content,
+        sha256: preview.sha256,
+        size: preview.size,
+        mime: preview.mime,
+        truncated: preview.truncated,
+        binary: preview.binary,
       };
     } catch (e) {
       if (e instanceof WorkspaceSecurityError) {
@@ -317,49 +477,10 @@ export const workspaceRoutes: FastifyPluginAsync<WorkspaceRouteOpts> = async (ap
         // We avoid using find's -path for the query because it matches against
         // the absolute path — if the worktree root itself contains the query
         // string, nearly every file would match (P2 from cloud review).
-        const { stdout } = await execFileAsync(
-          'find',
-          [
-            root,
-            '-type',
-            'f',
-            '-not',
-            '-path',
-            '*/node_modules/*',
-            '-not',
-            '-path',
-            '*/.git/*',
-            '-not',
-            '-path',
-            '*/.next/*',
-            '-not',
-            '-path',
-            '*/dist/*',
-            '-not',
-            '-path',
-            '*/secrets/*',
-            '-not',
-            '-name',
-            '.env*',
-            '-not',
-            '-name',
-            '*.pem',
-            '-not',
-            '-name',
-            '*.key',
-            '-not',
-            '-name',
-            'id_rsa*',
-          ],
-          { timeout: 5000, maxBuffer: 1024 * 1024 },
-        );
-
+        const files = await listWorkspaceFiles(root);
         const lowerQuery = query.toLowerCase();
-        const results = stdout
-          .trim()
-          .split('\n')
-          .filter(Boolean)
-          .map((fullPath) => relative(root, fullPath))
+        const results = files
+          .map((fullPath) => normalizeWorkspaceRelativePath(relative(root, fullPath)))
           .filter((relPath) => !isDenylisted(relPath) && relPath.toLowerCase().includes(lowerQuery))
           .slice(0, limit)
           .map((relPath) => ({
@@ -373,87 +494,20 @@ export const workspaceRoutes: FastifyPluginAsync<WorkspaceRouteOpts> = async (ap
         return { query, results, totalMatches: results.length, truncated: false };
       }
 
-      // Content search using grep -rn with context
-      let grepOutput = '';
-      try {
-        const { stdout } = await execFileAsync(
-          'grep',
-          [
-            '-rn',
-            '-B2',
-            '-A2',
-            '--include=*.ts',
-            '--include=*.tsx',
-            '--include=*.js',
-            '--include=*.jsx',
-            '--include=*.json',
-            '--include=*.md',
-            '--include=*.css',
-            '--include=*.html',
-            '--include=*.yaml',
-            '--include=*.yml',
-            query,
-            root,
-          ],
-          { timeout: 10000, maxBuffer: 5 * 1024 * 1024 },
-        );
-        grepOutput = stdout;
-      } catch {
-        // grep exits 1 when no matches — that's fine
-      }
-
-      const results: Array<{
-        path: string;
-        line: number;
-        content: string;
-        contextBefore: string;
-        contextAfter: string;
-      }> = [];
-
-      const groups = grepOutput.split('--\n');
-      for (const group of groups) {
-        if (results.length >= limit) break;
-        const lines = group.trim().split('\n').filter(Boolean);
-
-        // Find the actual match line (not context lines which use -)
-        const matchLine = lines.find((l) => {
-          const m = l.match(/^(.+?):(\d+):/);
-          return m != null;
-        });
-        if (!matchLine) continue;
-
-        const match = matchLine.match(/^(.+?):(\d+):(.*)$/);
-        if (!match) continue;
-
-        const [, fullPath, lineStr, content] = match;
-        const relPath = relative(root, fullPath!);
-
-        if (relPath.includes('node_modules') || relPath.includes('.git') || isDenylisted(relPath)) continue;
-
-        const matchIdx = lines.indexOf(matchLine);
-        const beforeLines = lines.slice(0, matchIdx);
-        const afterLines = lines.slice(matchIdx + 1);
-
-        results.push({
-          path: relPath,
-          line: parseInt(lineStr!, 10),
-          content: content?.trim(),
-          contextBefore: beforeLines.map((l) => l.replace(/^.+?:\d+[:-]/, '')).join('\n'),
-          contextAfter: afterLines.map((l) => l.replace(/^.+?:\d+[:-]/, '')).join('\n'),
-        });
-      }
+      const { results, truncated } = await searchWorkspaceContent(root, query, limit);
 
       return {
         query,
         results,
         totalMatches: results.length,
-        truncated: results.length >= limit,
+        truncated,
       };
     } catch (e) {
       if (e instanceof WorkspaceSecurityError) {
         reply.status(e.code === 'NOT_FOUND' ? 404 : 403);
         return { error: e.message };
       }
+      request.log.error({ err: e }, 'workspace search failed');
       reply.status(500);
       return { error: 'Internal error' };
     }
@@ -645,6 +699,61 @@ export const workspaceRoutes: FastifyPluginAsync<WorkspaceRouteOpts> = async (ap
     }
   });
 
+  // F095 Phase F: POST /api/workspace/reveal-project — open project directory in Finder
+  app.post<{
+    Body: { projectPath: string };
+  }>('/api/workspace/reveal-project', async (request, reply) => {
+    const { projectPath } = request.body ?? {};
+    if (!projectPath) {
+      reply.status(400);
+      return { error: 'projectPath required' };
+    }
+    try {
+      // Security: validate projectPath is within a registered worktree/linked root.
+      // projectPath can be a root OR a subdirectory (e.g. packages/web inside a monorepo).
+      const allRoots = [...(await listWorktrees()), ...(await getLinkedRootsAsync())];
+      const absPath = resolve(projectPath);
+      const matchedRoot = allRoots.find((e) => {
+        const rel = relative(e.root, absPath);
+        // Guard: absolute rel = cross-drive (Windows), `..` + sep = parent traversal.
+        // Use `..${sep}` to avoid false-blocking dirs named e.g. `..cache`.
+        const escapes = rel === '..' || rel.startsWith(`..${sep}`);
+        return !isAbsolute(rel) && !escapes && resolve(e.root, rel) === absPath;
+      });
+      if (!matchedRoot) {
+        throw new WorkspaceSecurityError('Path not in any registered workspace', 'NOT_FOUND');
+      }
+      // Full security check (traversal, symlink, denylist)
+      const relPath = relative(matchedRoot.root, absPath) || '.';
+      await resolveWorkspacePath(matchedRoot.root, relPath);
+
+      const fileStat = await stat(projectPath);
+      if (!fileStat.isDirectory()) {
+        reply.status(400);
+        return { error: 'Not a directory' };
+      }
+      if (process.platform === 'darwin') {
+        await execFileAsync('open', [projectPath], { timeout: 5000 });
+      } else if (process.platform === 'win32') {
+        await execFileAsync('explorer', [projectPath], { timeout: 5000 });
+      } else {
+        await execFileAsync('xdg-open', [projectPath], { timeout: 5000 });
+      }
+      return { ok: true };
+    } catch (e) {
+      if (e instanceof WorkspaceSecurityError) {
+        reply.status(403);
+        return { error: 'Path not in a registered workspace' };
+      }
+      if ((e as NodeJS.ErrnoException).code === 'ENOENT') {
+        reply.status(404);
+        return { error: 'Directory not found' };
+      }
+      reply.status(500);
+      return { error: 'Failed to open directory' };
+    }
+  });
+
   // POST /api/workspace/navigate — F131: cat-initiated workspace panel navigation
   app.post<{
     Body: {
@@ -653,9 +762,10 @@ export const workspaceRoutes: FastifyPluginAsync<WorkspaceRouteOpts> = async (ap
       action?: 'reveal' | 'open' | 'knowledge-feed';
       line?: number;
       threadId?: string;
+      catId?: string;
     };
   }>('/api/workspace/navigate', async (request, reply) => {
-    const { worktreeId, path: filePath, action = 'reveal', line, threadId } = request.body ?? {};
+    const { worktreeId, path: filePath, action = 'reveal', line, threadId, catId } = request.body ?? {};
 
     // Phase H: knowledge-feed action switches workspace mode without requiring a file path
     // threadId is required to avoid broadcasting mode switch to all sessions
@@ -666,6 +776,19 @@ export const workspaceRoutes: FastifyPluginAsync<WorkspaceRouteOpts> = async (ap
       }
       const eventData = { path: '', worktreeId: worktreeId ?? '', action, threadId, eventId: randomUUID() };
       opts.socketEmit?.('workspace:navigate', eventData, 'workspace:global');
+      auditLog
+        .append({
+          type: AuditEventTypes.WORKSPACE_NAVIGATE,
+          threadId,
+          data: {
+            worktreeId,
+            path: '',
+            action,
+            line: undefined,
+            catId,
+          },
+        })
+        .catch(() => {});
       return { ok: true, action };
     }
 
@@ -674,8 +797,29 @@ export const workspaceRoutes: FastifyPluginAsync<WorkspaceRouteOpts> = async (ap
       return { error: 'worktreeId and path required' };
     }
 
+    let canonicalWorktreeId = worktreeId;
+    let canonicalizationProbe: WorktreeCanonicalizationProbe = {
+      worktreeId,
+      canonicalized: false,
+    };
     try {
       const root = await getWorktreeRoot(worktreeId);
+      canonicalizationProbe = await canonicalizeNavigateWorktreeId(
+        worktreeId,
+        root,
+        opts.resolveWorktreeIdByPathForNavigate,
+      );
+      canonicalWorktreeId = canonicalizationProbe.worktreeId;
+      if (canonicalizationProbe.fallback) {
+        request.log.warn(
+          {
+            worktreeId,
+            canonicalWorktreeId,
+            canonicalizeFallback: canonicalizationProbe.fallback,
+          },
+          'workspace navigate worktreeId canonicalization fallback',
+        );
+      }
       const resolved = await resolveWorkspacePath(root, filePath);
       await stat(resolved);
     } catch (e) {
@@ -691,14 +835,45 @@ export const workspaceRoutes: FastifyPluginAsync<WorkspaceRouteOpts> = async (ap
       return { error: 'Internal error' };
     }
 
-    const eventData = { path: filePath, worktreeId, action, line, threadId, eventId: randomUUID() };
-    if (worktreeId) {
-      opts.socketEmit?.('workspace:navigate', eventData, `worktree:${worktreeId}`);
+    const eventData = {
+      path: filePath,
+      worktreeId: canonicalWorktreeId,
+      action,
+      line,
+      threadId,
+      eventId: randomUUID(),
+    };
+    if (canonicalWorktreeId) {
+      opts.socketEmit?.('workspace:navigate', eventData, `worktree:${canonicalWorktreeId}`);
       opts.socketEmit?.('workspace:navigate', eventData, 'workspace:global');
     } else {
       opts.socketEmit?.('workspace:navigate', eventData, 'workspace:global');
     }
 
-    return { ok: true, path: filePath, action };
+    auditLog
+      .append({
+        type: AuditEventTypes.WORKSPACE_NAVIGATE,
+        threadId,
+        data: {
+          worktreeId: canonicalWorktreeId,
+          requestedWorktreeId: worktreeId,
+          worktreeIdCanonicalized: canonicalizationProbe.canonicalized,
+          ...(canonicalizationProbe.fallback ? { canonicalizeFallback: canonicalizationProbe.fallback } : {}),
+          path: filePath,
+          action,
+          line,
+          catId,
+        },
+      })
+      .catch(() => {});
+
+    return {
+      ok: true,
+      path: filePath,
+      action,
+      worktreeId: canonicalWorktreeId,
+      worktreeIdCanonicalized: canonicalizationProbe.canonicalized,
+      ...(canonicalizationProbe.fallback ? { canonicalizeFallback: true } : {}),
+    };
   });
 };

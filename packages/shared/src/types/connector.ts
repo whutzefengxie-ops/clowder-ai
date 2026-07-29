@@ -1,16 +1,56 @@
 /**
- * Connector Types — 外部信息源抽象
+ * Connector Types — 外部信息源 / notice transport 抽象
  *
- * Connector 是从外部系统（GitHub、iMessage、Slack 等）
- * 进入 Cat Cafe 的消息来源。每个 connector 有固定的视觉标识
- * （icon、颜色），在前端以独立气泡样式展示。
+ * Connector transport covers both:
+ * 1) true external systems（GitHub、iMessage、Slack 等）, and
+ * 2) thread-visible system notices that reuse the same persistence/socket path.
+ *
+ * Visual presentation is not implied by storage transport:
+ * - default connector messages render as ConnectorBubble
+ * - messages with `source.meta.presentation = 'system_notice'` render as in-thread notice bars
  *
  * BACKLOG #97
  */
 
 // ── Connector Source (附加到 StoredMessage) ──
 
-/** Source metadata attached to messages from external connectors. */
+/** Shared prefix for scheduler trigger messages that act as reply anchors. */
+export const SCHEDULER_TRIGGER_PREFIX = '[定时任务]';
+
+export type SchedulerLifecycleEvent =
+  | 'registered'
+  | 'paused'
+  | 'resumed'
+  | 'deleted'
+  | 'succeeded'
+  | 'failed'
+  | 'missed_window';
+
+export interface SchedulerToastPayload {
+  type: 'success' | 'error' | 'info';
+  title: string;
+  message: string;
+  duration: number;
+  lifecycleEvent: SchedulerLifecycleEvent;
+}
+
+export interface SchedulerMessageExtra {
+  scheduler?: {
+    hiddenTrigger?: boolean;
+    toast?: SchedulerToastPayload;
+  };
+}
+
+export type ReplyPreviewKind = 'scheduler_trigger';
+
+export interface ReplyPreview {
+  senderCatId: string | null;
+  content: string;
+  deleted?: true;
+  kind?: ReplyPreviewKind;
+}
+
+/** Source metadata attached to connector-transport messages. */
 export interface ConnectorSource {
   /** Stable connector identifier (used for routing + styling) */
   readonly connector: string;
@@ -20,7 +60,7 @@ export interface ConnectorSource {
   readonly icon: string;
   /** Link to original source (e.g., PR URL) */
   readonly url?: string;
-  /** Connector-specific metadata (not rendered, for debugging/routing) */
+  /** Connector-specific metadata (e.g. presentation='system_notice', debugging, routing) */
   readonly meta?: Readonly<Record<string, unknown>>;
   /** F134: Original sender info for group chat messages (message-level binding, not thread-level) */
   readonly sender?: { readonly id: string; readonly name?: string };
@@ -28,28 +68,26 @@ export interface ConnectorSource {
 
 // ── Connector Definition (registry entry) ──
 
-/** Tailwind CSS class strings for connector bubble styling. */
-export interface ConnectorTailwindTheme {
-  readonly avatar: string;
-  readonly label: string;
-  readonly labelLink: string;
-  readonly bubble: string;
-}
+/** How a connector's avatar icon is rendered.
+ *  - `svg`: maps to a React SVG component by `iconId` or renders a bundled SVG file from `src`
+ *  - `png`: renders an image from `src` path */
+export type ConnectorIconSpec =
+  | { readonly type: 'svg'; readonly iconId: string; readonly src?: string }
+  | { readonly type: 'png'; readonly src: string };
 
-/** Static definition of a connector type for frontend rendering. */
+/** Static definition of a connector type for frontend rendering.
+ *  Every connector shares the same metadata shape: name + themeColor + icon.
+ *  The OKLCH pipeline derives bubble/surface/ring colors from `themeColor`. */
 export interface ConnectorDefinition {
   readonly id: string;
+  /** Display name shown next to the message bubble. */
   readonly displayName: string;
-  readonly icon: string;
-  readonly color: {
-    /** Primary accent color (border, label) */
-    readonly primary: string;
-    /** Secondary background color (bubble fill) */
-    readonly secondary: string;
-  };
+  /** Avatar icon spec — single source of truth for icon rendering. */
+  readonly icon: ConnectorIconSpec;
+  /** Theme color hex — single source for OKLCH hue/chroma derivation + avatar ring.
+   *  Avatar bg is computed via `tintedLight(themeColor, 0.5)`. */
+  readonly themeColor: string;
   readonly description: string;
-  /** Tailwind theme for ConnectorBubble rendering. If omitted, default theme is used. */
-  readonly tailwindTheme?: ConnectorTailwindTheme;
 }
 
 // ── Thread Binding (external platform ↔ Clowder AI thread) ──
@@ -75,166 +113,186 @@ export interface OutboundDeliveryTarget {
 // ── Connector Registry ──
 
 const CONNECTOR_DEFINITIONS: readonly ConnectorDefinition[] = [
+  // ── GitHub connectors ──
   {
     id: 'github-review',
     displayName: 'GitHub Review',
-    icon: 'github',
-    color: { primary: '#2563EB', secondary: '#EFF6FF' },
+    icon: { type: 'svg', iconId: 'github' },
+    themeColor: '#778899',
     description: 'GitHub PR review 邮件通知',
-    tailwindTheme: {
-      avatar: 'bg-slate-100 ring-2 ring-slate-200',
-      label: 'text-slate-700',
-      labelLink: 'text-slate-700 hover:text-slate-900',
-      bubble: 'border border-slate-200 bg-slate-50',
-    },
   },
   {
     id: 'github-ci',
     displayName: 'GitHub CI/CD',
-    icon: 'github',
-    color: { primary: '#2563EB', secondary: '#EFF6FF' },
+    icon: { type: 'svg', iconId: 'github' },
+    themeColor: '#778899',
     description: 'GitHub CI/CD 状态通知',
-    tailwindTheme: {
-      avatar: 'bg-slate-100 ring-2 ring-slate-200',
-      label: 'text-slate-700',
-      labelLink: 'text-slate-700 hover:text-slate-900',
-      bubble: 'border border-slate-200 bg-slate-50',
-    },
   },
   {
     id: 'github-conflict',
     displayName: 'PR Conflict',
-    icon: 'github',
-    color: { primary: '#D97706', secondary: '#FFFBEB' },
+    icon: { type: 'svg', iconId: 'github' },
+    themeColor: '#475569',
     description: 'GitHub PR 冲突状态通知',
-    tailwindTheme: {
-      avatar: 'bg-amber-100 ring-2 ring-amber-200',
-      label: 'text-amber-700',
-      labelLink: 'text-amber-700 hover:text-amber-900',
-      bubble: 'border border-amber-200 bg-amber-50',
-    },
   },
   {
     id: 'github-review-feedback',
     displayName: 'Review Feedback',
-    icon: 'github',
-    color: { primary: '#475569', secondary: '#F8FAFC' },
+    icon: { type: 'svg', iconId: 'github' },
+    themeColor: '#64748B',
     description: 'GitHub PR review feedback 通知',
-    tailwindTheme: {
-      avatar: 'bg-slate-100 ring-2 ring-slate-200',
-      label: 'text-slate-700',
-      labelLink: 'text-slate-700 hover:text-slate-900',
-      bubble: 'border border-slate-200 bg-slate-50',
-    },
+  },
+  {
+    id: 'github-issue-comment',
+    displayName: 'Issue Comment',
+    icon: { type: 'svg', iconId: 'github' },
+    themeColor: '#778899',
+    description: 'GitHub issue comment 通知',
   },
   {
     id: 'github-repo-event',
     displayName: 'Repo Inbox',
-    icon: 'github',
-    color: { primary: '#24292e', secondary: '#F6F8FA' },
+    icon: { type: 'svg', iconId: 'github' },
+    themeColor: '#94A3B8',
     description: 'GitHub 仓库事件通知（新 PR / 新 Issue）',
-    tailwindTheme: {
-      avatar: 'bg-gray-100 ring-2 ring-gray-300',
-      label: 'text-gray-800',
-      labelLink: 'text-gray-800 hover:text-black',
-      bubble: 'border border-gray-300 bg-gray-50',
-    },
   },
+  // ── System connectors ──
   {
     id: 'vote-result',
     displayName: '投票结果',
-    icon: 'ballot',
-    color: { primary: '#7C3AED', secondary: '#F5F3FF' },
+    icon: { type: 'svg', iconId: 'ballot' },
+    themeColor: '#7C3AED',
     description: '投票系统自动汇总结果',
-    tailwindTheme: {
-      avatar: 'bg-purple-100 ring-2 ring-purple-200',
-      label: 'text-purple-700',
-      labelLink: 'text-purple-700 hover:text-purple-900',
-      bubble: 'border border-purple-200 bg-purple-50',
-    },
   },
   {
     id: 'multi-mention-result',
     displayName: 'Multi-Mention 结果',
-    icon: 'users',
-    color: { primary: '#059669', secondary: '#ECFDF5' },
+    icon: { type: 'svg', iconId: 'users' },
+    themeColor: '#059669',
     description: '多猫 @mention 聚合结果',
-    tailwindTheme: {
-      avatar: 'bg-emerald-100 ring-2 ring-emerald-200',
-      label: 'text-emerald-700',
-      labelLink: 'text-emerald-700 hover:text-emerald-900',
-      bubble: 'border border-emerald-200 bg-emerald-50',
-    },
   },
   {
-    id: 'feishu',
-    displayName: '飞书',
-    icon: '/images/connectors/feishu.png',
-    color: { primary: '#3370FF', secondary: '#E8F0FE' },
-    description: '飞书机器人',
-    tailwindTheme: {
-      avatar: 'bg-blue-100 ring-2 ring-blue-200',
-      label: 'text-blue-700',
-      labelLink: 'text-blue-700 hover:text-blue-900',
-      bubble: 'border border-blue-200 bg-blue-50',
-    },
+    id: 'scheduler',
+    displayName: '定时任务',
+    icon: { type: 'svg', iconId: 'scheduler' },
+    themeColor: '#F59E0B',
+    description: '定时任务投递',
   },
   {
-    id: 'telegram',
-    displayName: 'Telegram',
-    icon: '/images/connectors/telegram.png',
-    color: { primary: '#0088CC', secondary: '#E3F2FD' },
-    description: 'Telegram Bot',
-    tailwindTheme: {
-      avatar: 'bg-sky-100 ring-2 ring-sky-200',
-      label: 'text-sky-700',
-      labelLink: 'text-sky-700 hover:text-sky-900',
-      bubble: 'border border-sky-200 bg-sky-50',
-    },
+    id: 'hold-ball',
+    displayName: '持球通知',
+    icon: { type: 'svg', iconId: 'hold-ball' },
+    themeColor: '#D97706',
+    description: '猫猫持球等待中',
   },
   {
-    id: 'dingtalk',
-    displayName: '钉钉',
-    icon: '/images/connectors/dingtalk.png',
-    color: { primary: '#3296FA', secondary: '#E8F4FE' },
-    description: '钉钉企业内部应用',
-    tailwindTheme: {
-      avatar: 'bg-cyan-100 ring-2 ring-cyan-200',
-      label: 'text-cyan-700',
-      labelLink: 'text-cyan-700 hover:text-cyan-900',
-      bubble: 'border border-cyan-200 bg-cyan-50',
-    },
-  },
-  {
-    id: 'weixin',
-    displayName: '微信',
-    icon: '/images/connectors/weixin.png',
-    color: { primary: '#07C160', secondary: '#E8F8EE' },
-    description: '微信个人号 iLink Bot',
-    tailwindTheme: {
-      avatar: 'bg-green-100 ring-2 ring-green-200',
-      label: 'text-green-700',
-      labelLink: 'text-green-700 hover:text-green-900',
-      bubble: 'border border-green-200 bg-green-50',
-    },
+    id: 'callback-auth',
+    displayName: '认证回调',
+    icon: { type: 'svg', iconId: 'auth-key' },
+    themeColor: '#475569',
+    description: '外部回调认证通知',
   },
   {
     id: 'system-command',
     displayName: 'Clowder AI',
-    icon: 'settings',
-    color: { primary: '#6B7280', secondary: '#F9FAFB' },
+    icon: { type: 'svg', iconId: 'settings' },
+    themeColor: '#6B7280',
     description: '系统命令响应',
+  },
+  // ── IM connectors (PNG icons) ──
+  {
+    id: 'feishu',
+    displayName: '飞书',
+    icon: { type: 'png', src: '/images/connectors/feishu.png' },
+    themeColor: '#3370FF',
+    description: '飞书机器人',
+  },
+  {
+    id: 'telegram',
+    displayName: 'Telegram',
+    icon: { type: 'png', src: '/images/connectors/telegram.png' },
+    themeColor: '#0088CC',
+    description: 'Telegram Bot',
+  },
+  {
+    id: 'dingtalk',
+    displayName: '钉钉',
+    icon: { type: 'png', src: '/images/connectors/dingtalk.png' },
+    themeColor: '#3296FA',
+    description: '钉钉企业内部应用',
+  },
+  {
+    id: 'xiaoyi',
+    displayName: '小艺 APP',
+    icon: { type: 'png', src: '/images/connectors/xiaoyi.png' },
+    themeColor: '#CF0A2C',
+    description: '华为小艺 OpenClaw 模式',
+  },
+  {
+    id: 'wecom-bot',
+    displayName: '企业微信',
+    icon: { type: 'png', src: '/images/connectors/wecom-bot.png' },
+    themeColor: '#4F46E5',
+    description: '企业微信智能机器人 (WebSocket)',
+  },
+  {
+    id: 'wecom-agent',
+    displayName: '企微自建应用',
+    icon: { type: 'png', src: '/images/connectors/wecom-agent.png' },
+    themeColor: '#7C3AED',
+    description: '企业微信自建应用 (HTTP 回调)',
+  },
+  {
+    id: 'weixin',
+    displayName: '微信',
+    icon: { type: 'png', src: '/images/connectors/weixin.png' },
+    themeColor: '#07C160',
+    description: '微信个人号 iLink Bot',
   },
 ] as const;
 
 const connectorMap = new Map<string, ConnectorDefinition>(CONNECTOR_DEFINITIONS.map((d) => [d.id, d]));
+
+/** Static IDs from compile-time definitions — immune to runtime registration. */
+const staticConnectorIds = new Set(CONNECTOR_DEFINITIONS.map((d) => d.id));
+
+/**
+ * Check whether an ID belongs to a static (compile-time) connector definition.
+ * Unlike `getConnectorDefinition()`, this is NOT affected by runtime
+ * `registerConnectorDefinition()` calls — safe for hot-reload ID conflict checks.
+ */
+export function isStaticConnectorId(id: string): boolean {
+  return staticConnectorIds.has(id);
+}
+
+/**
+ * Register a connector definition at runtime (F240 dynamic plugins).
+ * External IM connector plugins call this to make their definition
+ * available to frontend rendering (icon, color, displayName).
+ * Built-in definitions cannot be overridden.
+ */
+export function registerConnectorDefinition(def: ConnectorDefinition): void {
+  if (staticConnectorIds.has(def.id)) return;
+  connectorMap.set(def.id, def);
+}
+
+/**
+ * Unregister a runtime-added connector definition (F240 plugin uninstall).
+ * Static (compile-time) definitions are immune — only dynamically registered
+ * entries can be removed.
+ */
+export function unregisterConnectorDefinition(id: string): void {
+  if (!staticConnectorIds.has(id)) {
+    connectorMap.delete(id);
+  }
+}
 
 /** Look up a connector definition by ID. */
 export function getConnectorDefinition(connectorId: string): ConnectorDefinition | undefined {
   return connectorMap.get(connectorId);
 }
 
-/** Get all registered connector definitions. */
+/** Get all registered connector definitions (built-in + dynamically registered). */
 export function getAllConnectorDefinitions(): readonly ConnectorDefinition[] {
-  return CONNECTOR_DEFINITIONS;
+  return Array.from(connectorMap.values());
 }

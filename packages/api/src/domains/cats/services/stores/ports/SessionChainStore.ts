@@ -11,26 +11,42 @@ import type { CatId, SessionRecord } from '@cat-cafe/shared';
 
 export interface CreateSessionInput {
   cliSessionId: string;
+  workingDirectory?: string;
+  workspaceFingerprint?: string;
   threadId: string;
   catId: CatId;
   userId: string;
+  reuseExistingCliSession?: boolean;
+  /**
+   * F198 Bug #3: stable conversation anchor for bg carrier
+   * (`bg:${threadId}:${catId}`). When set, the record is indexed by chainKey
+   * so session_init can reuse it across daemon sessionId rotation instead of
+   * seal+create. Undefined for non-bg providers.
+   */
+  chainKey?: string;
 }
 
 export type SessionRecordPatch = Partial<
   Pick<
     SessionRecord,
     | 'cliSessionId'
+    | 'workingDirectory'
+    | 'workspaceFingerprint'
     | 'status'
     | 'contextHealth'
     | 'lastUsage'
     | 'messageCount'
-    | 'sealReason'
-    | 'sealedAt'
     | 'updatedAt'
     | 'compressionCount'
+    | 'continuityCapsule'
     | 'consecutiveRestoreFailures'
+    | 'latestResumeSessionId'
+    | 'catHandoffNote'
   >
->;
+> & {
+  sealReason?: SessionRecord['sealReason'] | null;
+  sealedAt?: number | null;
+};
 
 export interface ISessionChainStore {
   /** Create SessionRecord (seq auto-increments, status=active) */
@@ -47,6 +63,12 @@ export interface ISessionChainStore {
   update(id: string, patch: SessionRecordPatch): SessionRecord | null | Promise<SessionRecord | null>;
   /** Look up by CLI session ID */
   getByCliSessionId(cliSessionId: string): SessionRecord | null | Promise<SessionRecord | null>;
+  /**
+   * F198 Bug #3: Look up by chainKey (stable bg conversation anchor). Returns
+   * the record regardless of status (unlike getActive) so a sealed record is
+   * still reachable for write-tolerance during concurrent edges.
+   */
+  getByChainKey(chainKey: string): SessionRecord | null | Promise<SessionRecord | null>;
   /** Atomically increment compressionCount and return the new value. Returns null if session not found. */
   incrementCompressionCount(id: string): number | null | Promise<number | null>;
   /** F118: List IDs of all sessions currently in 'sealing' status (for global reaper). */
@@ -67,14 +89,26 @@ export class SessionChainStore implements ISessionChainStore {
   private activeIndex = new Map<string, string>();
   /** cliSessionId → record ID */
   private cliIndex = new Map<string, string>();
+  /** F198 Bug #3: chainKey (stable bg conversation anchor) → record ID */
+  private chainKeyIndex = new Map<string, string>();
 
-  private chainKey(catId: string, threadId: string): string {
+  /** Composite key for the per-(catId,threadId) chain/active indexes. */
+  private catThreadKey(catId: string, threadId: string): string {
     return `${catId}:${threadId}`;
   }
 
   create(input: CreateSessionInput): SessionRecord {
+    if (input.reuseExistingCliSession) {
+      const existingId = this.cliIndex.get(input.cliSessionId);
+      if (existingId) {
+        const existing = this.records.get(existingId);
+        if (existing) return existing;
+        this.cliIndex.delete(input.cliSessionId);
+      }
+    }
+
     const now = Date.now();
-    const key = this.chainKey(input.catId, input.threadId);
+    const key = this.catThreadKey(input.catId, input.threadId);
 
     // Compute next seq
     const chain = this.chains.get(key) ?? [];
@@ -84,6 +118,8 @@ export class SessionChainStore implements ISessionChainStore {
     const record: SessionRecord = {
       id,
       cliSessionId: input.cliSessionId,
+      ...(input.workingDirectory ? { workingDirectory: input.workingDirectory } : {}),
+      ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
       threadId: input.threadId,
       catId: input.catId,
       userId: input.userId,
@@ -92,6 +128,7 @@ export class SessionChainStore implements ISessionChainStore {
       messageCount: 0,
       createdAt: now,
       updatedAt: now,
+      ...(input.chainKey ? { chainKey: input.chainKey } : {}),
     };
 
     this.records.set(id, record);
@@ -99,6 +136,7 @@ export class SessionChainStore implements ISessionChainStore {
     this.chains.set(key, chain);
     this.activeIndex.set(key, id);
     this.cliIndex.set(input.cliSessionId, id);
+    if (input.chainKey) this.chainKeyIndex.set(input.chainKey, id);
 
     // Trim if over capacity — prefer evicting sealed/non-active records
     if (this.records.size > MAX_RECORDS) {
@@ -121,7 +159,7 @@ export class SessionChainStore implements ISessionChainStore {
   }
 
   getActive(catId: CatId, threadId: string): SessionRecord | null {
-    const activeId = this.activeIndex.get(this.chainKey(catId, threadId));
+    const activeId = this.activeIndex.get(this.catThreadKey(catId, threadId));
     if (!activeId) return null;
     const record = this.records.get(activeId);
     if (!record || record.status !== 'active') return null;
@@ -129,7 +167,7 @@ export class SessionChainStore implements ISessionChainStore {
   }
 
   getChain(catId: CatId, threadId: string): SessionRecord[] {
-    const chain = this.chains.get(this.chainKey(catId, threadId)) ?? [];
+    const chain = this.chains.get(this.catThreadKey(catId, threadId)) ?? [];
     return chain
       .map((id) => this.records.get(id))
       .filter((r): r is SessionRecord => r != null)
@@ -159,11 +197,14 @@ export class SessionChainStore implements ISessionChainStore {
       record.cliSessionId = patch.cliSessionId;
       this.cliIndex.set(patch.cliSessionId, id);
     }
+    if (patch.workingDirectory !== undefined) record.workingDirectory = patch.workingDirectory;
+    if (patch.workspaceFingerprint !== undefined) record.workspaceFingerprint = patch.workspaceFingerprint;
     if (patch.status !== undefined) {
       record.status = patch.status;
-      // If sealed/sealing, remove from active index
-      if (patch.status !== 'active') {
-        const key = this.chainKey(record.catId, record.threadId);
+      const key = this.catThreadKey(record.catId, record.threadId);
+      if (patch.status === 'active') {
+        this.activeIndex.set(key, id);
+      } else {
         if (this.activeIndex.get(key) === id) {
           this.activeIndex.delete(key);
         }
@@ -172,11 +213,20 @@ export class SessionChainStore implements ISessionChainStore {
     if (patch.contextHealth !== undefined) record.contextHealth = patch.contextHealth;
     if (patch.lastUsage !== undefined) record.lastUsage = patch.lastUsage;
     if (patch.messageCount !== undefined) record.messageCount = patch.messageCount;
-    if (patch.sealReason !== undefined) record.sealReason = patch.sealReason;
-    if (patch.sealedAt !== undefined) record.sealedAt = patch.sealedAt;
+    if ('sealReason' in patch) {
+      if (patch.sealReason === null) delete record.sealReason;
+      else if (patch.sealReason !== undefined) record.sealReason = patch.sealReason;
+    }
+    if ('sealedAt' in patch) {
+      if (patch.sealedAt === null) delete record.sealedAt;
+      else if (patch.sealedAt !== undefined) record.sealedAt = patch.sealedAt;
+    }
     if (patch.compressionCount !== undefined) record.compressionCount = patch.compressionCount;
+    if (patch.continuityCapsule !== undefined) record.continuityCapsule = patch.continuityCapsule;
     if (patch.consecutiveRestoreFailures !== undefined)
       record.consecutiveRestoreFailures = patch.consecutiveRestoreFailures;
+    if (patch.latestResumeSessionId !== undefined) record.latestResumeSessionId = patch.latestResumeSessionId;
+    if (patch.catHandoffNote !== undefined) record.catHandoffNote = patch.catHandoffNote;
     record.updatedAt = patch.updatedAt ?? Date.now();
 
     return record;
@@ -185,6 +235,14 @@ export class SessionChainStore implements ISessionChainStore {
   getByCliSessionId(cliSessionId: string): SessionRecord | null {
     const id = this.cliIndex.get(cliSessionId);
     if (!id) return null;
+    return this.records.get(id) ?? null;
+  }
+
+  getByChainKey(chainKey: string): SessionRecord | null {
+    const id = this.chainKeyIndex.get(chainKey);
+    if (!id) return null;
+    // No status filter (unlike getActive): a sealed record must remain
+    // reachable so a concurrent done write during a seal edge keeps its state.
     return this.records.get(id) ?? null;
   }
 
@@ -252,8 +310,15 @@ export class SessionChainStore implements ISessionChainStore {
     if (!record) return;
 
     this.cliIndex.delete(record.cliSessionId);
+    // F198 Bug #3 (cloud review P1): only drop the chainKey index if it still
+    // points at THIS record. After a sealed→fresh re-create, a newer active
+    // record owns the same chainKey, so evicting the old sealed one must not
+    // delete the live index (mirrors the activeIndex ownership check below).
+    if (record.chainKey && this.chainKeyIndex.get(record.chainKey) === id) {
+      this.chainKeyIndex.delete(record.chainKey);
+    }
 
-    const key = this.chainKey(record.catId, record.threadId);
+    const key = this.catThreadKey(record.catId, record.threadId);
     if (this.activeIndex.get(key) === id) {
       this.activeIndex.delete(key);
     }

@@ -41,7 +41,37 @@ export type ResumeFailureKind = 'missing_session' | 'cli_exit' | 'auth' | 'inval
 export function classifyResumeFailure(message: string | undefined): ResumeFailureKind | null {
   if (!message) return null;
 
-  if (/No conversation found with session ID/i.test(message)) {
+  // Claude: "No conversation found with session ID: <uuid>"
+  // Codex:  "no rollout found for thread id <uuid>"
+  // Gemini: "Error resuming session: Invalid session identifier \"<id>\""
+  //   (narrowed to "Invalid session identifier" to avoid matching auth/rate-limit
+  //   errors that also start with "Error resuming session:")
+  // OpenCode: "Session not found"
+  if (
+    /(No conversation found with session ID|no rollout found|missing_rollout|Invalid session identifier|Session not found)/i.test(
+      message,
+    )
+  ) {
+    return 'missing_session';
+  }
+  // Kimi: -32603 is a generic JSON-RPC internal error. Only classify as missing_session
+  // when the error message contains evidence of bootstrap CWD deletion:
+  //   os.getcwd() → FileNotFoundError → -32603.
+  // Generic -32603 must be preserved as real errors (return null → transient retry path).
+  if (
+    /ACP error -32603/i.test(message) &&
+    /(FileNotFoundError|os\.getcwd|No such file or directory|bootstrap.*cwd|cwd.*deleted)/i.test(message)
+  ) {
+    return 'missing_session';
+  }
+  // Codex/other providers: daemon marks session as "interrupted" after our stall auto-kill
+  // (SIGTERM via ProcessLivenessProbe idle-silent detection) or CLI timeout. Subsequent resume
+  // attempts fail with messages like "interrupted", "already interrupted", "session was
+  // interrupted", or "session terminated". Without this classifier, the error falls through
+  // to null → no self-heal → SessionChainStore retains the stale sessionId → every subsequent
+  // invocation attempts to resume the interrupted session → cascading failure.
+  // Route to 'missing_session' → self-heal drops stale sessionId and retries fresh.
+  if (/\b(session[- _]*(was[- _]*)?interrupted|already[- _]*interrupted|session[- _]*terminated)\b/i.test(message)) {
     return 'missing_session';
   }
   if (/CLI 异常退出 \(code:\s*(?:\d+|null)(?:,\s*signal:\s*[^)]+)?\)/i.test(message)) {
@@ -65,12 +95,100 @@ export function isMissingClaudeSessionError(message: string | undefined): boolea
   return classifyResumeFailure(message) === 'missing_session';
 }
 
+/**
+ * clowder-ai#1038: opencode's "Session not found" surfaces in `msg.metadata.cliDiagnostics`
+ * (stderr excerpt), NOT in the formatted `msg.error` string (which is the generic
+ * `opencode CLI: CLI 异常退出 (code: 1, signal: none)`). So `isMissingClaudeSessionError(msg.error)`
+ * misses it and the error would fall into the transient-retry path (Path B), which re-runs the
+ * same stale `--session`. Detect via the classified `reasonCode` instead so it routes to the
+ * session self-heal path (Path A: drop sessionId + retry fresh), mirroring Claude/Codex/Gemini.
+ */
+export function isSessionNotFoundDiagnostic(
+  metadata: { cliDiagnostics?: { reasonCode?: string } } | undefined,
+): boolean {
+  return metadata?.cliDiagnostics?.reasonCode === 'session_not_found';
+}
+
 export function isTransientCliExitCode1(message: string | undefined): boolean {
   if (!message) return false;
-  return /CLI 异常退出 \(code:\s*1(?:,\s*signal:\s*none)?\)/i.test(message);
+  if (!/CLI 异常退出 \(code:\s*1(?:,\s*signal:\s*none)?\)/i.test(message)) return false;
+  // Context-window overflow is NOT recoverable by retrying — a second resume
+  // writes the same user turn into the rollout JSONL again (see bug-report
+  // 2026-04-19-codex-transient-retry-context-overflow).
+  if (/ran out of room|context window|context_window/i.test(message)) return false;
+  return true;
+}
+
+/** Transient ACP prompt failure: Google API connection dropped mid-stream.
+ *  "Premature close" = HTTP/2 stream reset or TCP drop from upstream. */
+export function isTransientAcpPromptFailure(message: string | undefined): boolean {
+  if (!message) return false;
+  return /Premature close|ECONNRESET|socket hang up/i.test(message);
 }
 
 export function isPromptTokenLimitExceededError(message: string | undefined): boolean {
   if (!message) return false;
   return /(prompt token count|input tokens?).*exceeds the limit of \d+/i.test(message);
+}
+
+export function isContextWindowOverflowError(message: string | undefined): boolean {
+  if (!message) return false;
+  return /ran out of room|context window|context_window/i.test(message);
+}
+
+export function isCliTimeoutError(message: string | undefined): boolean {
+  if (!message) return false;
+  return /CLI (?:响应超时|idle-silent 超时)/i.test(message);
+}
+
+/** F215: Detect malformed tool-call error emitted by ClaudeAgentService (form A / B).
+ *  Used in invoke-single-cat to trigger seal+fresh-context+46接力 fallback chain. */
+export function isMalformedToolCallError(message: string | undefined): boolean {
+  if (!message) return false;
+  return message.startsWith('malformed_toolcall:');
+}
+
+/* ── Pre-flight timeout guard ────────────────────────────── */
+
+/**
+ * Maximum time (ms) for any single pre-flight async operation (Redis reads,
+ * session chain lookups, thread store reads) before the invocation generator
+ * gives up and proceeds with a safe fallback.
+ *
+ * Without this guard, a hung Redis/store operation blocks the generator
+ * indefinitely — the finally block never runs, InvocationTracker never
+ * clears, and the thread is permanently "busy."
+ */
+export const PREFLIGHT_TIMEOUT_MS = Number(process.env.CAT_CAFE_PREFLIGHT_TIMEOUT_MS) || 30_000;
+
+/**
+ * Race a promise against a preflight timeout and an optional AbortSignal.
+ * If the timeout or signal fires first, the returned promise rejects.
+ * The original promise is NOT cancelled (no way to do so generically)
+ * but the caller can proceed instead of hanging forever.
+ */
+export async function preflightRace<T>(promise: Promise<T>, label: string, signal?: AbortSignal): Promise<T> {
+  if (signal?.aborted) throw signal.reason;
+
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const cleanup = (): void => {
+    if (timer) clearTimeout(timer);
+  };
+
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`preflight_timeout: ${label}`)), PREFLIGHT_TIMEOUT_MS);
+    // Keep the process alive until the preflight guard actually fires.
+    // Unref'ing this timer lets Node exit early when the raced promise never settles.
+  });
+
+  const parts: Promise<T | never>[] = [promise, timeoutPromise];
+  if (signal) {
+    parts.push(
+      new Promise<never>((_, reject) => {
+        signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+      }),
+    );
+  }
+
+  return Promise.race(parts).finally(cleanup);
 }

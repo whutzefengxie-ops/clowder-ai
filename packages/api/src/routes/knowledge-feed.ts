@@ -7,15 +7,28 @@
 
 import type Database from 'better-sqlite3';
 import type { FastifyInstance } from 'fastify';
-import type { IMarkerQueue } from '../domains/memory/interfaces.js';
+import { CollectionIndexBuilder } from '../domains/memory/CollectionIndexBuilder.js';
+import { COLLECTION_SENSITIVITY_ORDER } from '../domains/memory/collection-types.js';
+import type {
+  IEvidenceStore,
+  IMarkerQueue,
+  IMaterializationService,
+  MaterializeOptions,
+} from '../domains/memory/interfaces.js';
+import type { LibraryCatalog } from '../domains/memory/LibraryCatalog.js';
+import type { SqliteEvidenceStore } from '../domains/memory/SqliteEvidenceStore.js';
+import { resolveCollectionScanner } from '../domains/memory/scanner-resolver.js';
 
 interface KnowledgeFeedDeps {
   markerQueue: IMarkerQueue;
   db: Database.Database;
+  materializationService?: IMaterializationService;
+  catalog?: LibraryCatalog;
+  collectionStores?: Map<string, IEvidenceStore>;
 }
 
 export async function knowledgeFeedRoutes(app: FastifyInstance, deps: KnowledgeFeedDeps) {
-  const { markerQueue, db } = deps;
+  const { markerQueue, db, materializationService, catalog } = deps;
 
   // GET /api/knowledge/feed — List candidates grouped by status
   app.get('/api/knowledge/feed', async (_req, reply) => {
@@ -67,14 +80,92 @@ export async function knowledgeFeedRoutes(app: FastifyInstance, deps: KnowledgeF
     }
   });
 
-  // POST /api/knowledge/approve — Approve a candidate
-  app.post<{ Body: { markerId: string; targetPath?: string } }>('/api/knowledge/approve', async (req, reply) => {
+  // POST /api/knowledge/approve — Approve a candidate (F186: collection-aware routing)
+  app.post<{
+    Body: {
+      markerId: string;
+      targetPath?: string;
+      targetCollectionId?: string;
+      confirmVisibilityWidening?: boolean;
+    };
+  }>('/api/knowledge/approve', async (req, reply) => {
     try {
-      const { markerId } = req.body;
+      const { markerId, targetCollectionId, confirmVisibilityWidening } = req.body;
       if (!markerId) return reply.status(400).send({ error: 'markerId required' });
 
-      await markerQueue.transition(markerId, 'approved');
-      return { status: 'approved', markerId };
+      if (!targetCollectionId) {
+        const markers = await markerQueue.list();
+        const marker = markers.find((m) => m.id === markerId);
+        const srcId = marker?.sourceCollectionId;
+        const srcSens = marker?.sourceSensitivity ?? (srcId && catalog ? catalog.get(srcId)?.sensitivity : undefined);
+        if (srcSens === 'private' || srcSens === 'restricted') {
+          return reply.status(400).send({
+            error: 'targetCollectionId required for private/restricted source markers',
+          });
+        }
+      }
+
+      if (targetCollectionId) {
+        if (!catalog) {
+          return reply.status(400).send({ error: 'Collection catalog unavailable' });
+        }
+        const target = catalog.get(targetCollectionId);
+        if (!target) {
+          return reply.status(400).send({ error: `Unknown target collection: ${targetCollectionId}` });
+        }
+        if ((target.status ?? 'active') === 'archived') {
+          return reply.status(409).send({ error: `Target collection is archived: ${targetCollectionId}` });
+        }
+        const markers = await markerQueue.list();
+        const marker = markers.find((m) => m.id === markerId);
+        const sourceId = marker?.sourceCollectionId;
+        const source = sourceId ? catalog.get(sourceId) : undefined;
+        const sourceSensitivity = marker?.sourceSensitivity ?? source?.sensitivity;
+        if (sourceSensitivity && sourceId !== targetCollectionId) {
+          const sourceRank =
+            COLLECTION_SENSITIVITY_ORDER[sourceSensitivity as keyof typeof COLLECTION_SENSITIVITY_ORDER];
+          const targetRank = COLLECTION_SENSITIVITY_ORDER[target.sensitivity];
+          if (sourceRank == null) {
+            return reply.status(400).send({
+              error: `visibility-widening blocked: unrecognized source sensitivity "${sourceSensitivity}"`,
+            });
+          }
+          if (targetRank > sourceRank && confirmVisibilityWidening !== true) {
+            return reply.status(400).send({
+              error: 'visibility-widening requires confirmation',
+              detail: `Promoting from ${sourceSensitivity} (${sourceId ?? 'unknown source collection'}) to ${target.sensitivity} (${targetCollectionId}) widens visibility. Set confirmVisibilityWidening: true to proceed.`,
+            });
+          }
+        }
+        if (!deps.collectionStores?.has(targetCollectionId)) {
+          return reply.status(400).send({ error: `Target collection store unavailable: ${targetCollectionId}` });
+        }
+      }
+
+      await markerQueue.transition(markerId, 'approved', targetCollectionId ? { targetCollectionId } : undefined);
+
+      let materialized;
+      if (materializationService) {
+        try {
+          const opts: MaterializeOptions = {};
+          if (targetCollectionId && catalog) {
+            const manifest = catalog.get(targetCollectionId);
+            if (manifest) opts.targetRoot = manifest.root;
+            const targetStore = deps.collectionStores?.get(targetCollectionId);
+            if (targetStore && manifest) {
+              const scanner = resolveCollectionScanner(manifest);
+              opts.indexBuilder = new CollectionIndexBuilder(targetStore as SqliteEvidenceStore, manifest, scanner);
+            } else {
+              opts.indexBuilder = null;
+            }
+          }
+          materialized = await materializationService.materialize(markerId, opts);
+        } catch {
+          // Materialize failure is non-fatal — marker stays approved
+        }
+      }
+
+      return { status: 'approved', markerId, materialized, targetCollectionId };
     } catch (err) {
       reply.status(500).send({ error: 'Failed to approve candidate' });
     }

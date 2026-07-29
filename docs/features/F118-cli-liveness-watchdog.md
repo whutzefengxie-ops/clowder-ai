@@ -8,11 +8,11 @@ created: 2026-03-14
 
 # F118: CLI Liveness Watchdog & Session Recovery — CLI 进程活性守卫 + 会话恢复
 
-> **Status**: done | **Owner**: Ragdoll + Maine Coon | **Priority**: P0 | **Completed**: 2026-03-14 | **Follow-up Hardening**: closed (PR #492, 2026-03-16)
+> **Status**: done (Phase D closed) | **Owner**: Ragdoll + Maine Coon | **Priority**: P0 | **Completed**: 2026-03-14 | **Follow-up Hardening**: closed (PR #492, 2026-03-16) | **GAP-2**: Phase D closed — D1 merged (PR #1105), D2 merged (PR #1108), D3+D4 merged (PR #1109), all 2026-04-12
 
 ## Why
 
-### team experience
+### operator experience
 
 > "这两天 Codex 的 CLI 经常会出现这种情况……反正不知道为什么跑着跑着 @它没反应……我们这里的问题可观测性不足，不知道到底是我们的问题还是 Codex CLI 的问题"
 >
@@ -22,7 +22,7 @@ created: 2026-03-14
 
 **现象 1 — Maine Coon 1800s 静默超时（Cat Café 内部）**
 
-- Thread: `thread_mmq8de3e0o4p1407` / session `019cec11-32cf-74b2-af27-469c43644c37`
+- Thread: `[thread-id]` / session `019cec11-32cf-74b2-af27-469c43644c37`
 - 表现：Codex CLI 吐出 `thread.started` 后 30 分钟完全静默，被 watchdog 杀掉
 - Raw archive 只有两行：`thread.started` → `__cliTimeout`（零中间事件）
 - **硬证据**：同一 `cliSessionId` 在挂住期间被另一颗 invocation 成功 resume 使用（审计日志 04:46:16–04:48:02 PDT）
@@ -30,9 +30,9 @@ created: 2026-03-14
 
 **现象 2 — Maine Coon半初始化失败（Cat Café 内部）** ⚠️ 高度一致，非独立证明并发 resume
 
-- Thread: `thread_mmq9wjiiht3k5vb3` / session `019cec37-8def-75e3-951e-bbc04c1febf9`
+- Thread: `[thread-id]` / session `019cec37-8def-75e3-951e-bbc04c1febf9`
 - 表现：session chain 登记了 `cliSessionId`，raw archive 收到 `thread.started`，但 Codex 本地 `~/.codex/sessions/` 无 rollout 文件
-- team lead执行 `codex resume` 发现 session 不存在
+- operator执行 `codex resume` 发现 session 不存在
 - 与现象 1 的故障模式一致（只有 `thread.started` + `__cliTimeout`），但未独立证明存在并发 resume
 - Invocation: `dfe13a22-aa7a-4fd4-863d-962f52e0002e`（04:59:49 → 05:29:50 PDT / 11:59:49 → 12:29:50 UTC）
 
@@ -149,14 +149,14 @@ created: 2026-03-14
 
 ## 需求点 Checklist
 
-| ID | 需求点（team experience/转述） | AC 编号 | 验证方式 | 状态 |
+| ID | 需求点（operator experience/转述） | AC 编号 | 验证方式 | 状态 |
 |----|---------------------------|---------|----------|------|
 | R1 | "跑着跑着@它没反应" — 并发 resume 导致静默 | AC-A1, AC-A4 | test | [x] |
 | R2 | "不知道到底是我们的问题还是 Codex CLI 的问题" — 可观测性不足 | AC-A3, AC-A5 | test | [x] |
 | R3 | "本质是我们的 CLI 都没有心跳" — 无进程活性检测 | AC-B1, AC-B2, AC-B3 | test | [x] |
 | R4 | "万一有进程但是假死咋办" — 假死检测 | AC-B1, AC-B2 | test | [x] |
 | R5 | 社区反馈：tool 执行中 stdout 静默窗口导致误杀 | AC-B1 | test | [x] |
-| R6 | team lead不想等 30 分钟才知道出问题了 | AC-B4, AC-B5, AC-C1, AC-C2 | screenshot | [x] |
+| R6 | operator不想等 30 分钟才知道出问题了 | AC-B4, AC-B5, AC-C1, AC-C2 | screenshot | [x] |
 
 ### 覆盖检查
 - [x] 每个需求点都能映射到至少一个 AC
@@ -165,7 +165,7 @@ created: 2026-03-14
 
 ## Community Issue Coverage (Scope Extension 2026-03-14)
 
-> **决策**：三猫 + team lead共识，社区 issue #86/#98/#99 统一归入 F118，扩展 scope 为 liveness + recovery + audit closure 完整链路，不新开 F121。
+> **决策**：三猫 + operator共识，社区 issue #86/#98/#99 统一归入 F118，扩展 scope 为 liveness + recovery + audit closure 完整链路，不新开 F121。
 > **Triage 报告**：`docs/ops/2026-03-14-community-issue-triage-tokenfelix.md`
 > **贡献者**：TokenFelix (whutzefengxie-ops)
 
@@ -234,16 +234,30 @@ CLI 挂了 (liveness, Phase A+B ✅)
 
 **测试覆盖**：14 个测试（10 count-cap + 4 token-budget），覆盖 cursor=undefined、stale cursor 大批量、fallback 注入不回归、极端 token 压力（200 条长消息 ~500K tokens >> 160K budget）
 
+### GAP-2: Circuit Breaker failure count 在 `cli_session_replaced` 时被洗掉（2026-04-11）
+
+**现象**：两个线程的 `@gpt52` mention 5+ 分钟无响应。session chain 显示 `seq0` sealed（`cli_session_replaced`），`seq1` active 但 `messageCount=0`。
+
+**根因**：AC-C6 的 overflow circuit breaker 实现有 loophole。`invoke-single-cat.ts:1109` 在收到新 `session_init`（CLI 换了 session）时，通过 `sessionChainStore.create()` 创建新 active record，但**不继承** `consecutiveRestoreFailures`。新 record 从 0 开始 → 熔断阈值（3）永远达不到 → 循环卡死无限重复。
+
+**发现者**：Maine Coon(GPT-5.4) 在侦探猫猫调查中定位，Ragdoll(Opus) 代码验证确认。
+
+**D1 已合入**（PR #1105, 2026-04-12）：`create()` + immediate `update()` 继承 `consecutiveRestoreFailures`，熔断器现在能正确触发。
+
+**D2 已合入**（PR #1108, 2026-04-12）：`spawn_started` socket event + per-cat spawning UI + D1 P3 多轮替换回归测试。填补 intent_mode 盲区（0-2min），ThinkingIndicator 显示"启动中..."。
+
+**D3+D4 已合入**（PR #1109, 2026-04-12）：纵深防御层。D3: InvocationTracker TTL guard — `has()` 对超过 75min（2.5× CLI timeout）的 slot 自动清理返回 false。D4: QueueProcessor zombie defense — `processingSlots` 从 `Set` 改为 `Map<string, number>`（记录 startedAt），三入口加 `sweepZombieSlots()`，双重确认（TTL 超时 + tracker.has() 为 false）防误杀。Phase D 全部完成。
+
 ## Key Decisions
 
 | # | 决策 | 理由 | 日期 |
 |---|------|------|------|
-| KD-1 | Bug + Enhancement 合并为一个 Feature | team lead："拆的越复杂，实现出来距离愿景越远" | 2026-03-14 |
+| KD-1 | Bug + Enhancement 合并为一个 Feature | operator："拆的越复杂，实现出来距离愿景越远" | 2026-03-14 |
 | KD-2 | Session mutex 放在会话复用层，不修改 InvocationTracker | InvocationTracker 是 threadId:catId slot guard，不是 session 级串行化 | 2026-03-14 |
 | KD-3 | 进程活性用 CPU 时间采样而不是单纯 kill -0 | kill -0 只能检测 PID 存在，不能检测假死 | 2026-03-14 |
 | KD-4 | SessionMutex 默认 queue/fail-fast，不默认抢占旧请求 | 防止后来的 thread 杀掉健康请求（Maine Coon review P1） | 2026-03-14 |
 | KD-5 | CPU 增长只影响状态判定，不无限重置 timer；需 bounded extension + hard cap | 防 busy-loop/livelock 永不超时（Maine Coon review P1） | 2026-03-14 |
-| KD-6 | 社区 #86/#98/#99 归入 F118，扩展 scope 为 liveness + recovery + audit closure，不开 F121 | 一条因果链不拆两个 feature，管理成本 > 边界清晰收益（三猫 + team lead共识） | 2026-03-14 |
+| KD-6 | 社区 #86/#98/#99 归入 F118，扩展 scope 为 liveness + recovery + audit closure，不开 F121 | 一条因果链不拆两个 feature，管理成本 > 边界清晰收益（三猫 + operator共识） | 2026-03-14 |
 
 ## Review Gate
 

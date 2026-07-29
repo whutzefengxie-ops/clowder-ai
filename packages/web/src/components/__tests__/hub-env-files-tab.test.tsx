@@ -73,6 +73,24 @@ const MOCK_ENV_SUMMARY = {
   },
 };
 
+const MOCK_SYSTEM_STATUS_REDIS = {
+  storageMode: 'redis',
+  storage: {
+    mode: 'redis',
+    persistent: true,
+    warning: null,
+  },
+};
+
+const MOCK_SYSTEM_STATUS_MEMORY = {
+  storageMode: 'memory',
+  storage: {
+    mode: 'memory',
+    persistent: false,
+    warning: 'Memory mode: data will be lost on restart.',
+  },
+};
+
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -83,6 +101,9 @@ function jsonResponse(body: unknown, status = 200): Response {
 function defaultEnvApiFetch(path: string, init?: RequestInit) {
   if (path === '/api/config/env-summary' && !init?.method) {
     return Promise.resolve(jsonResponse(MOCK_ENV_SUMMARY));
+  }
+  if (path === '/api/system/status' && !init?.method) {
+    return Promise.resolve(jsonResponse(MOCK_SYSTEM_STATUS_REDIS));
   }
   if (path === '/api/config/env' && init?.method === 'PATCH') {
     return Promise.resolve(jsonResponse({ ok: true }));
@@ -132,6 +153,34 @@ describe('HubEnvFilesTab', () => {
     vi.clearAllMocks();
   });
 
+  it('renders persistent Redis storage mode as a subtle healthy status', async () => {
+    await act(async () => {
+      root.render(React.createElement(HubEnvFilesTab));
+    });
+    await flushEffects();
+
+    expect(mockApiFetch).toHaveBeenCalledWith('/api/system/status');
+    expect(container.textContent).toContain('Redis persistent mode');
+    expect(container.textContent).not.toContain('Memory mode — data will be lost on restart');
+  });
+
+  it('renders memory storage mode as a visible data-loss warning', async () => {
+    mockApiFetch.mockImplementation((path: string, init?: RequestInit) => {
+      if (path === '/api/system/status' && !init?.method) {
+        return Promise.resolve(jsonResponse(MOCK_SYSTEM_STATUS_MEMORY));
+      }
+      return defaultEnvApiFetch(path, init);
+    });
+
+    await act(async () => {
+      root.render(React.createElement(HubEnvFilesTab));
+    });
+    await flushEffects();
+
+    expect(container.textContent).toContain('Memory mode — data will be lost on restart');
+    expect(container.textContent).not.toContain('Redis persistent mode');
+  });
+
   it('renders editable env vars, keeps credentials masked, and saves back to .env', async () => {
     await act(async () => {
       root.render(React.createElement(HubEnvFilesTab));
@@ -144,7 +193,6 @@ describe('HubEnvFilesTab', () => {
     expect(container.textContent).toContain('.cat-cafe/cat-catalog.json');
     expect(container.textContent).toContain('当前环境变量、配置文件、数据目录三段式不变');
     expect(container.textContent).toContain('变量值可直接编辑，保存后自动回填 .env');
-    expect(container.textContent).toContain('写回 .env 后需重启相关服务生效');
     expect(container.textContent).toContain('URL 型连接串当前值已脱敏');
     expect(container.querySelector('input[aria-label="API_SERVER_PORT"]')).toBeNull();
     expect(container.querySelector('input[aria-label="PREVIEW_GATEWAY_PORT"]')).toBeNull();

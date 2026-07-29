@@ -16,10 +16,10 @@ import type { InvocationRegistry } from '../domains/cats/services/agents/invocat
 import { getRichBlockBuffer } from '../domains/cats/services/agents/invocation/RichBlockBuffer.js';
 import { PandocService } from '../infrastructure/document/PandocService.js';
 import type { SocketManager } from '../infrastructure/websocket/index.js';
-import { callbackAuthSchema } from './callback-auth-schema.js';
-import { EXPIRED_CREDENTIALS_ERROR } from './callback-errors.js';
+import { getDefaultUploadDir } from '../utils/upload-paths.js';
+import { requireCallbackAuth } from './callback-auth-prehandler.js';
 
-const generateDocumentSchema = callbackAuthSchema.extend({
+const generateDocumentSchema = z.object({
   /** Markdown content to convert */
   markdown: z.string().min(1).max(500_000),
   /** Desired output format */
@@ -38,21 +38,19 @@ export function registerCallbackDocumentRoutes(
   const pandocService = new PandocService(app.log);
 
   app.post('/api/callbacks/generate-document', async (request, reply) => {
+    const record = requireCallbackAuth(request, reply);
+    if (!record) return;
+
     const parsed = generateDocumentSchema.safeParse(request.body);
     if (!parsed.success) {
       reply.status(400);
       return { error: 'Invalid request body', details: parsed.error.issues };
     }
 
-    const { invocationId, callbackToken, markdown, format, baseName } = parsed.data;
+    const { markdown, format, baseName } = parsed.data;
+    const invocationId = record.invocationId;
 
-    const record = deps.registry.verify(invocationId, callbackToken);
-    if (!record) {
-      reply.status(401);
-      return EXPIRED_CREDENTIALS_ERROR;
-    }
-
-    if (!deps.registry.isLatest(invocationId)) {
+    if (!(await deps.registry.isLatest(invocationId))) {
       return { status: 'stale_ignored' };
     }
 
@@ -64,7 +62,7 @@ export function registerCallbackDocumentRoutes(
     }
 
     // Copy generated file to uploads directory (P1-1: ensure dir exists)
-    const uploadDir = resolve(process.env.UPLOAD_DIR ?? './uploads');
+    const uploadDir = getDefaultUploadDir(process.env.UPLOAD_DIR);
     await mkdir(uploadDir, { recursive: true });
     const uniqueName = `doc-${randomBytes(6).toString('hex')}-${result.fileName}`;
     const destPath = resolve(uploadDir, uniqueName);
@@ -91,12 +89,14 @@ export function registerCallbackDocumentRoutes(
 
     const isNew = getRichBlockBuffer().add(record.threadId, record.catId as string, fileBlock, invocationId);
 
+    // #454: include invocationId so frontend can exact-match callback to stream bubble
     if (isNew) {
       deps.socketManager.broadcastAgentMessage(
         {
           type: 'system_info' as const,
           catId: record.catId,
           content: JSON.stringify({ type: 'rich_block', block: fileBlock }),
+          invocationId,
           timestamp: Date.now(),
         },
         record.threadId,

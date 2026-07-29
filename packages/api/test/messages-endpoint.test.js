@@ -69,6 +69,136 @@ describe('GET /api/messages', () => {
     assert.equal(body.messages[1].content, 'hi there');
   });
 
+  it('preserves explicit post flag with stream identity in history response', async () => {
+    messageStore.append({
+      userId: 'default-user',
+      catId: 'opus',
+      content: 'standalone post',
+      mentions: [],
+      timestamp: 2000,
+      threadId: 'thread-explicit',
+      extra: {
+        isExplicitPost: true,
+        stream: { invocationId: 'inv-parent', turnInvocationId: 'turn-explicit' },
+      },
+    });
+
+    const res = await app.inject({ method: 'GET', url: '/api/messages?threadId=thread-explicit' });
+    const body = JSON.parse(res.body);
+
+    assert.equal(body.messages.length, 1);
+    assert.equal(body.messages[0].extra?.isExplicitPost, true);
+    assert.deepEqual(body.messages[0].extra?.stream, {
+      invocationId: 'inv-parent',
+      turnInvocationId: 'turn-explicit',
+    });
+  });
+
+  it('maps canonical system messages to type=system', async () => {
+    messageStore.append({
+      userId: 'system',
+      catId: 'system',
+      content: '🐺 狼人请睁眼',
+      mentions: [],
+      timestamp: 1000,
+    });
+
+    const res = await app.inject({ method: 'GET', url: '/api/messages' });
+    const body = JSON.parse(res.body);
+
+    assert.equal(body.messages.length, 1);
+    assert.equal(body.messages[0].type, 'system');
+    assert.equal(body.messages[0].catId, 'system');
+  });
+
+  it('returns persisted system error messages with catId=null as type=system', async () => {
+    messageStore.append({
+      userId: 'default-user',
+      catId: null,
+      content: 'ping gemini',
+      mentions: ['gemini'],
+      timestamp: 1000,
+      threadId: 'thread-1',
+    });
+    messageStore.append({
+      userId: 'system',
+      catId: null,
+      content: 'Error: stream_idle_stall: Gemini stopped responding',
+      mentions: [],
+      timestamp: 2000,
+      threadId: 'thread-1',
+    });
+
+    const res = await app.inject({ method: 'GET', url: '/api/messages?threadId=thread-1' });
+    const body = JSON.parse(res.body);
+
+    assert.equal(body.messages.length, 2);
+    assert.equal(body.messages[1].type, 'system');
+    assert.equal(body.messages[1].catId, null);
+    assert.match(body.messages[1].content, /^Error: stream_idle_stall/);
+  });
+
+  it('keeps persisted source-backed notices on the connector path even when userId=system', async () => {
+    messageStore.append({
+      userId: 'system',
+      catId: null,
+      content: '想交接给 @codex？把它单独放到新起一行开头，才能触发交接。',
+      mentions: [],
+      timestamp: 2500,
+      threadId: 'thread-connector-notice',
+      source: {
+        connector: 'inline-mention-hint',
+        label: '路由提示',
+        icon: '💡',
+        meta: { presentation: 'system_notice', noticeTone: 'info' },
+      },
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/messages?threadId=thread-connector-notice',
+    });
+    const body = JSON.parse(res.body);
+
+    assert.equal(body.messages.length, 1);
+    assert.equal(body.messages[0].type, 'connector');
+    assert.equal(body.messages[0].catId, null);
+    assert.equal(body.messages[0].source.connector, 'inline-mention-hint');
+    assert.equal(body.messages[0].source.meta.presentation, 'system_notice');
+  });
+
+  it('maps a2a_routing system messages to type=system with extra.systemKind', async () => {
+    messageStore.append({
+      userId: 'system',
+      catId: null,
+      content: '布偶猫 → 缅因猫',
+      mentions: [],
+      timestamp: 3000,
+      threadId: 'thread-routing',
+      extra: {
+        systemKind: 'a2a_routing',
+        a2aRouting: { fromCatId: 'codex', targetCatId: 'opus-47', invocationId: 'inv-routing' },
+      },
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/messages?threadId=thread-routing',
+    });
+    const body = JSON.parse(res.body);
+
+    assert.equal(body.messages.length, 1);
+    assert.equal(body.messages[0].type, 'system');
+    assert.equal(body.messages[0].catId, null);
+    assert.equal(body.messages[0].content, '布偶猫 → 缅因猫');
+    assert.equal(body.messages[0].extra.systemKind, 'a2a_routing');
+    assert.deepEqual(body.messages[0].extra.a2aRouting, {
+      fromCatId: 'codex',
+      targetCatId: 'opus-47',
+      invocationId: 'inv-routing',
+    });
+  });
+
   it('respects limit parameter', async () => {
     for (let i = 0; i < 10; i++) {
       messageStore.append({
@@ -281,7 +411,8 @@ describe('GET /api/messages', () => {
 
     const res = await app.inject({
       method: 'GET',
-      url: '/api/messages?userId=alice',
+      url: '/api/messages',
+      headers: { 'x-cat-cafe-user': 'alice' },
     });
     const body = JSON.parse(res.body);
     assert.equal(body.messages.length, 1);
@@ -416,7 +547,9 @@ describe('GET /api/messages', () => {
   });
 });
 
-describe('GET /api/messages with summaryStore (P1-B integration)', () => {
+// Auto-summary disabled (clowder-ai#343): summaries no longer merged into GET timeline.
+// SummaryStore still persisted for memory infrastructure / future Thread Recap.
+describe('GET /api/messages — summary NOT in timeline (clowder-ai#343)', () => {
   let app;
   let messageStore;
   let summaryStore;
@@ -445,8 +578,7 @@ describe('GET /api/messages with summaryStore (P1-B integration)', () => {
     if (app) await app.close();
   });
 
-  it('includes summary items with type "summary" in timeline', async () => {
-    // Seed messages
+  it('summaries exist in store but do NOT appear in timeline', async () => {
     messageStore.append({
       userId: 'default-user',
       catId: null,
@@ -461,119 +593,22 @@ describe('GET /api/messages with summaryStore (P1-B integration)', () => {
       mentions: [],
       timestamp: 2000,
     });
-
-    // Create a summary between the two messages
-    const s = summaryStore.create({
+    summaryStore.create({
       threadId: 'default',
       topic: '测试纪要',
       conclusions: ['结论一'],
       openQuestions: [],
       createdBy: 'system',
     });
-    // Backdate to fit in message window
-    Object.defineProperty(s, 'createdAt', { value: 1500, writable: false });
 
     const res = await app.inject({ method: 'GET', url: '/api/messages' });
     const body = JSON.parse(res.body);
 
-    assert.equal(body.messages.length, 3);
-    // Sorted by timestamp: msg@1000, summary@1500, msg@2000
-    assert.equal(body.messages[0].type, 'user');
-    assert.equal(body.messages[1].type, 'summary');
-    assert.equal(body.messages[1].content, '测试纪要');
-    assert.ok(body.messages[1].summary, 'summary item should have summary field');
-    assert.equal(body.messages[1].summary.createdBy, 'system');
-    assert.deepEqual(body.messages[1].summary.conclusions, ['结论一']);
-    assert.equal(body.messages[2].type, 'assistant');
-  });
-
-  it('includes summary with createdAt > newest message on first page (boundary)', async () => {
-    // Seed messages
-    for (let i = 0; i < 3; i++) {
-      messageStore.append({
-        userId: 'default-user',
-        catId: 'opus',
-        content: `msg ${i}`,
-        mentions: [],
-        timestamp: 1000 + i * 100,
-      });
-    }
-    // Summary AFTER all messages (createdAt = 1300 > newest msg at 1200)
-    const s = summaryStore.create({
-      threadId: 'default',
-      topic: '后置纪要',
-      conclusions: [],
-      openQuestions: [],
-      createdBy: 'system',
-    });
-    Object.defineProperty(s, 'createdAt', { value: 1300, writable: false });
-
-    const res = await app.inject({ method: 'GET', url: '/api/messages' });
-    const body = JSON.parse(res.body);
-
-    // Should include all 3 messages + 1 summary = 4 items
-    assert.equal(body.messages.length, 4);
-    // Summary should be last (highest timestamp)
-    const last = body.messages[body.messages.length - 1];
-    assert.equal(last.type, 'summary');
-    assert.equal(last.content, '后置纪要');
-  });
-
-  it('excludes summary with createdAt >= beforeTs during pagination', async () => {
-    for (let i = 0; i < 5; i++) {
-      messageStore.append({
-        userId: 'default-user',
-        catId: null,
-        content: `msg ${i}`,
-        mentions: [],
-        timestamp: 1000 + i * 100,
-      });
-    }
-    // Summary at timestamp 1250 (between msg2@1200 and msg3@1300)
-    const s = summaryStore.create({
-      threadId: 'default',
-      topic: '分页纪要',
-      conclusions: [],
-      openQuestions: [],
-      createdBy: 'system',
-    });
-    Object.defineProperty(s, 'createdAt', { value: 1250, writable: false });
-
-    // Paginate with before=1250 — summary at 1250 should be EXCLUDED (>= beforeTs)
-    const res = await app.inject({
-      method: 'GET',
-      url: '/api/messages?before=1250&limit=50',
-    });
-    const body = JSON.parse(res.body);
-
-    const summaryItems = body.messages.filter((m) => m.type === 'summary');
-    assert.equal(summaryItems.length, 0, 'summary at beforeTs should be excluded');
-  });
-
-  it('does not include summaries from other threads', async () => {
-    messageStore.append({
-      userId: 'default-user',
-      catId: null,
-      content: 'hello',
-      mentions: [],
-      timestamp: 1000,
-    });
-
-    // Summary in a different thread
-    const s = summaryStore.create({
-      threadId: 'other-thread',
-      topic: '其他线程纪要',
-      conclusions: [],
-      openQuestions: [],
-      createdBy: 'system',
-    });
-    Object.defineProperty(s, 'createdAt', { value: 1500, writable: false });
-
-    const res = await app.inject({ method: 'GET', url: '/api/messages' });
-    const body = JSON.parse(res.body);
-
-    assert.equal(body.messages.length, 1);
-    assert.equal(body.messages[0].type, 'user');
+    assert.equal(body.messages.length, 2, 'only messages, no summary injection');
+    assert.ok(
+      body.messages.every((m) => m.type !== 'summary'),
+      'no summary type in response',
+    );
   });
 });
 
@@ -606,8 +641,8 @@ describe('GET /api/messages summary + pagination contract', () => {
     if (app) await app.close();
   });
 
-  it('hasMore reflects message count, not total timeline items', async () => {
-    // 5 messages — with limit=3, hasMore should be true
+  // Auto-summary disabled (clowder-ai#343): summaries no longer merged into timeline
+  it('timeline does NOT inject summaries (clowder-ai#343)', async () => {
     for (let i = 0; i < 5; i++) {
       messageStore.append({
         userId: 'default-user',
@@ -617,15 +652,13 @@ describe('GET /api/messages summary + pagination contract', () => {
         timestamp: 1000 + i * 100,
       });
     }
-    // 1 summary in the latest page window
-    const s = summaryStore.create({
+    summaryStore.create({
       threadId: 'default',
       topic: '分页纪要',
       conclusions: [],
       openQuestions: [],
       createdBy: 'system',
     });
-    Object.defineProperty(s, 'createdAt', { value: 1350, writable: false });
 
     const res = await app.inject({
       method: 'GET',
@@ -633,68 +666,10 @@ describe('GET /api/messages summary + pagination contract', () => {
     });
     const body = JSON.parse(res.body);
 
-    // hasMore=true based on messages (5 > 3)
     assert.equal(body.hasMore, true);
-    // Total items = 3 messages + 1 summary = 4 (exceeds limit)
-    // This is the documented contract: summaries are bonus items
-    const msgCount = body.messages.filter((m) => m.type !== 'summary').length;
     const sumCount = body.messages.filter((m) => m.type === 'summary').length;
-    assert.equal(msgCount, 3, 'message count should respect limit');
-    assert.equal(sumCount, 1, 'summary injected as bonus item');
-    assert.equal(body.messages.length, 4, 'total = messages + summaries');
-  });
-
-  it('multi-page timeline includes summaries only in correct page', async () => {
-    // 6 messages across the timeline
-    for (let i = 0; i < 6; i++) {
-      messageStore.append({
-        userId: 'default-user',
-        catId: null,
-        content: `msg ${i}`,
-        mentions: [],
-        timestamp: 1000 + i * 100, // 1000, 1100, 1200, 1300, 1400, 1500
-      });
-    }
-    // Summary at 1250 (between msg2@1200 and msg3@1300)
-    const s = summaryStore.create({
-      threadId: 'default',
-      topic: '中间纪要',
-      conclusions: ['c1'],
-      openQuestions: [],
-      createdBy: 'system',
-    });
-    Object.defineProperty(s, 'createdAt', { value: 1250, writable: false });
-
-    // Page 1: limit=3 → newest 3 messages (msg3, msg4, msg5)
-    const page1 = await app.inject({
-      method: 'GET',
-      url: '/api/messages?limit=3',
-    });
-    const body1 = JSON.parse(page1.body);
-    assert.equal(body1.hasMore, true);
-    // msg3@1300 is the oldest on page 1; summary@1250 < 1300 → excluded
-    const page1Summaries = body1.messages.filter((m) => m.type === 'summary');
-    assert.equal(page1Summaries.length, 0, 'summary before page window excluded');
-
-    // Page 2: before=1300 (oldest of page 1), limit=3
-    const page2 = await app.inject({
-      method: 'GET',
-      url: '/api/messages?before=1300&limit=3',
-    });
-    const body2 = JSON.parse(page2.body);
-    assert.equal(body2.hasMore, false);
-    // Page 2 has msg0@1000, msg1@1100, msg2@1200
-    // Summary@1250 >= minTs(1000) AND < beforeTs(1300) → included
-    const page2Summaries = body2.messages.filter((m) => m.type === 'summary');
-    assert.equal(page2Summaries.length, 1, 'summary in correct page window');
-    assert.equal(page2Summaries[0].content, '中间纪要');
-
-    // Verify: union of all non-summary items = all 6 messages
-    const allMsgs = [
-      ...body2.messages.filter((m) => m.type !== 'summary'),
-      ...body1.messages.filter((m) => m.type !== 'summary'),
-    ].map((m) => m.content);
-    assert.deepEqual(allMsgs, ['msg 0', 'msg 1', 'msg 2', 'msg 3', 'msg 4', 'msg 5']);
+    assert.equal(sumCount, 0, 'summaries should not appear in timeline');
+    assert.equal(body.messages.length, 3, 'only messages, no summary injection');
   });
 });
 
@@ -838,5 +813,242 @@ describe('POST /api/messages delete-guard protection', () => {
 
     guard.release();
     await app.close();
+  });
+});
+
+// --- Internal message filtering (context_briefing + routing-guard-failure) ---
+
+describe('GET /api/messages internal message filtering', () => {
+  let app;
+  let messageStore;
+
+  beforeEach(async () => {
+    const { MessageStore } = await import('../dist/domains/cats/services/stores/ports/MessageStore.js');
+    const { InvocationRegistry } = await import(
+      '../dist/domains/cats/services/agents/invocation/InvocationRegistry.js'
+    );
+    const { messagesRoutes } = await import('../dist/routes/messages.js');
+
+    messageStore = new MessageStore();
+    app = Fastify();
+    await app.register(messagesRoutes, {
+      registry: new InvocationRegistry(),
+      messageStore,
+      socketManager: { broadcastAgentMessage: () => {} },
+    });
+    await app.ready();
+  });
+
+  afterEach(async () => {
+    if (app) await app.close();
+  });
+
+  it('filters context_briefing messages from API response', async () => {
+    messageStore.append({
+      userId: 'default-user',
+      catId: null,
+      content: 'user msg',
+      mentions: [],
+      timestamp: 1000,
+    });
+    messageStore.append({
+      userId: 'system',
+      catId: null,
+      content: 'briefing nav',
+      mentions: [],
+      timestamp: 2000,
+      origin: 'briefing',
+      extra: { systemKind: 'context_briefing' },
+    });
+    messageStore.append({
+      userId: 'default-user',
+      catId: 'opus',
+      content: 'cat reply',
+      mentions: [],
+      timestamp: 3000,
+    });
+
+    const res = await app.inject({ method: 'GET', url: '/api/messages' });
+    const body = JSON.parse(res.body);
+    assert.equal(body.messages.length, 2);
+    assert.equal(body.messages[0].content, 'user msg');
+    assert.equal(body.messages[1].content, 'cat reply');
+  });
+
+  it('filters routing-guard-failure connector messages from API response', async () => {
+    messageStore.append({
+      userId: 'default-user',
+      catId: null,
+      content: 'user msg',
+      mentions: [],
+      timestamp: 1000,
+    });
+    messageStore.append({
+      userId: 'system',
+      catId: null,
+      content: 'route guard failed',
+      mentions: [],
+      timestamp: 2000,
+      source: { connector: 'routing-guard-failure', detail: 'test' },
+    });
+
+    const res = await app.inject({ method: 'GET', url: '/api/messages' });
+    const body = JSON.parse(res.body);
+    assert.equal(body.messages.length, 1);
+    assert.equal(body.messages[0].content, 'user msg');
+  });
+
+  it('preserves F233 duty briefing (origin=briefing without systemKind)', async () => {
+    messageStore.append({
+      userId: 'system',
+      catId: null,
+      content: 'duty briefing',
+      mentions: [],
+      timestamp: 1000,
+      origin: 'briefing',
+      extra: { rich: { v: 1, blocks: [{ id: 'duty-briefing', kind: 'card', v: 1, title: 'Duty' }] } },
+    });
+
+    const res = await app.inject({ method: 'GET', url: '/api/messages' });
+    const body = JSON.parse(res.body);
+    assert.equal(body.messages.length, 1);
+    assert.equal(body.messages[0].content, 'duty briefing');
+  });
+
+  it('loop-scans past large internal message clusters for pagination', async () => {
+    // Regression: fixed overscan=20 would return {messages:[], hasMore:true}
+    // when >20 consecutive internal messages exist between visible ones.
+    const threadId = 'thread-internal-cluster';
+
+    // Oldest visible message
+    messageStore.append({
+      threadId,
+      userId: 'default-user',
+      catId: null,
+      content: 'oldest visible',
+      mentions: [],
+      timestamp: 100,
+    });
+
+    // 25 consecutive internal context_briefing messages
+    for (let i = 0; i < 25; i++) {
+      messageStore.append({
+        threadId,
+        userId: 'system',
+        catId: null,
+        content: `briefing-${i}`,
+        mentions: [],
+        timestamp: 200 + i,
+        origin: 'briefing',
+        extra: { systemKind: 'context_briefing' },
+      });
+    }
+
+    // Newest visible message
+    messageStore.append({
+      threadId,
+      userId: 'default-user',
+      catId: null,
+      content: 'newest visible',
+      mentions: [],
+      timestamp: 300,
+    });
+
+    // Request with limit=1, cursor before newest visible
+    // This forces pagination to walk through the 25 internal messages
+    const cursor = `301:zzz`;
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/messages?threadId=${threadId}&limit=1&before=${cursor}`,
+    });
+    const body = JSON.parse(res.body);
+
+    // Must return the newest visible message, not an empty page
+    assert.equal(body.messages.length, 1, 'should return 1 visible message, not empty page');
+    assert.equal(body.messages[0].content, 'newest visible');
+    assert.equal(body.hasMore, true, 'should indicate more messages exist');
+  });
+
+  it('scans past 300+ consecutive internal messages to reach buried visible (R4 regression)', async () => {
+    // R3/R4 review (gpt52): the scan must reach visible messages regardless
+    // of cluster size. This test places the ONLY visible message behind 300
+    // internal messages — the loop must walk through all of them. A fixed
+    // iteration cap (MAX_ITERATIONS=10) or scan limit (MAX_RAW_SCANNED=10000)
+    // would fail this test if the cluster exceeded the cap.
+    const threadId = 'thread-mega-cluster';
+    const CLUSTER_SIZE = 300;
+
+    // Only visible message — buried at the bottom behind the cluster
+    messageStore.append({
+      threadId,
+      userId: 'default-user',
+      catId: null,
+      content: 'buried visible',
+      mentions: [],
+      timestamp: 100,
+    });
+
+    // 300 consecutive internal context_briefing messages on top
+    for (let i = 0; i < CLUSTER_SIZE; i++) {
+      messageStore.append({
+        threadId,
+        userId: 'system',
+        catId: null,
+        content: `briefing-${i}`,
+        mentions: [],
+        timestamp: 200 + i,
+        origin: 'briefing',
+        extra: { systemKind: 'context_briefing' },
+      });
+    }
+
+    // Cursor after all messages — forces scan through the entire cluster
+    const cursor = `${200 + CLUSTER_SIZE + 1}:zzz`;
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/messages?threadId=${threadId}&limit=1&before=${cursor}`,
+    });
+    const body = JSON.parse(res.body);
+
+    // Must reach the buried visible message, not return empty page
+    assert.equal(body.messages.length, 1, 'must reach buried visible past 300 internal');
+    assert.equal(body.messages[0].content, 'buried visible');
+    assert.equal(body.hasMore, false, 'no more messages after the only visible one');
+  });
+
+  it('returns hasMore=false when store is exhausted after filtering', async () => {
+    const threadId = 'thread-exhausted';
+
+    messageStore.append({
+      threadId,
+      userId: 'default-user',
+      catId: null,
+      content: 'only visible',
+      mentions: [],
+      timestamp: 100,
+    });
+
+    // A few internal messages after
+    for (let i = 0; i < 3; i++) {
+      messageStore.append({
+        threadId,
+        userId: 'system',
+        catId: null,
+        content: `briefing-${i}`,
+        mentions: [],
+        timestamp: 200 + i,
+        origin: 'briefing',
+        extra: { systemKind: 'context_briefing' },
+      });
+    }
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/messages?threadId=${threadId}&limit=50`,
+    });
+    const body = JSON.parse(res.body);
+    assert.equal(body.messages.length, 1);
+    assert.equal(body.messages[0].content, 'only visible');
+    assert.equal(body.hasMore, false, 'store exhausted — no more messages');
   });
 });

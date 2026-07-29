@@ -1,9 +1,9 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
 import { KeyboardEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useCatData } from '@/hooks/useCatData';
 import { reconnectGame } from '@/hooks/useGameReconnect';
+import { useIMEGuard } from '@/hooks/useIMEGuard';
 import { usePathCompletion } from '@/hooks/usePathCompletion';
 import type { UploadStatus, WhisperOptions } from '@/hooks/useSendMessage';
 import type { DeliveryMode } from '@/stores/chat-types';
@@ -13,14 +13,7 @@ import { apiFetch } from '@/utils/api-client';
 import { compressImage } from '@/utils/compressImage';
 import { ChatInputActionButton } from './ChatInputActionButton';
 import { ChatInputMenus } from './ChatInputMenus';
-import {
-  buildCatOptions,
-  buildWhisperOptions,
-  type CatOption,
-  detectMenuTrigger,
-  GAME_LIST,
-  WEREWOLF_MODES,
-} from './chat-input-options';
+import { buildCatOptions, type CatOption, detectMenuTrigger, GAME_LIST, WEREWOLF_MODES } from './chat-input-options';
 import { deriveImageLifecycleStatus, isImageLifecycleBlockingSend } from './chat-input-upload-state';
 import { GameLobby, type GameStartPayload } from './game/GameLobby';
 import { HistorySearchModal } from './HistorySearchModal';
@@ -28,14 +21,39 @@ import { ImagePreview } from './ImagePreview';
 import { AttachIcon } from './icons/AttachIcon';
 import { MobileInputToolbar } from './MobileInputToolbar';
 import { PathCompletionMenu } from './PathCompletionMenu';
+import { ReplyPreviewBar } from './ReplyPreviewBar';
+import { pushThreadRouteWithHistory } from './ThreadSidebar/thread-navigation';
+import {
+  hasPendingThreadDraft,
+  syncDraftToStorage,
+  syncReplyDraftToStorage,
+  threadDrafts,
+  threadImageDrafts,
+  threadReplyDrafts,
+} from './thread-drafts';
+import { WhisperCatSelector, WhisperTargetChips } from './WhisperCatSelector';
 
 /** Module-level draft storage — survives component unmount/remount across thread switches */
-export const threadDrafts = new Map<string, string>();
+export {
+  syncDraftToStorage,
+  syncReplyDraftToStorage,
+  threadDrafts,
+  threadImageDrafts,
+  threadReplyDrafts,
+} from './thread-drafts';
+
+const MAX_IMAGE_DRAFT_THREADS = 5;
 
 interface ChatInputProps {
   /** Thread ID for draft persistence — drafts are saved per-thread */
   threadId?: string;
-  onSend: (content: string, images?: File[], whisper?: WhisperOptions, deliveryMode?: DeliveryMode) => void;
+  onSend: (
+    content: string,
+    images?: File[],
+    whisper?: WhisperOptions,
+    deliveryMode?: DeliveryMode,
+    replyToId?: string,
+  ) => void;
   onStop?: () => void;
   disabled?: boolean;
   hasActiveInvocation?: boolean;
@@ -55,8 +73,30 @@ export function ChatInput({
   uploadError = null,
 }: ChatInputProps) {
   const { cats } = useCatData();
+  const ime = useIMEGuard();
   const catOptions = useMemo(() => buildCatOptions(cats), [cats]);
-  const whisperOptions = useMemo(() => buildWhisperOptions(cats), [cats]);
+  // F108 Scene 2: whisper-eligible cats (CatData[] for WhisperCatSelector)
+  const whisperCats = useMemo(() => cats.filter((c) => c.roster?.available !== false), [cats]);
+
+  // #699: Reply-to (quote) state — thread-scoped to prevent split-pane leaks
+  const rawReplyToMessage = useChatStore((s) => s.replyToMessage);
+  const setReplyToStore = useChatStore((s) => s.setReplyTo);
+  const clearReplyTo = useChatStore((s) => s.clearReplyTo);
+  // Only surface the reply when it belongs to this ChatInput's thread
+  const replyToMessage = rawReplyToMessage?.threadId === threadId ? rawReplyToMessage : null;
+  const replyHydrationThreadRef = useRef<string | null>(null);
+  const replyPersistenceThreadRef = useRef<string | null>(null);
+
+  // #934: Restore reply context from thread draft store before mount-time persistence.
+  // ChatInput is keyed by threadId so this runs once per thread visit.
+  useLayoutEffect(() => {
+    if (!threadId || replyHydrationThreadRef.current === threadId) return;
+    replyHydrationThreadRef.current = threadId;
+    const savedReply = threadReplyDrafts.get(threadId);
+    if (savedReply && rawReplyToMessage?.threadId !== threadId) {
+      setReplyToStore(savedReply);
+    }
+  }, [threadId, rawReplyToMessage, setReplyToStore]);
 
   // F122B AC-B10: track which cats are actively executing (for whisper disable)
   const activeInvocations = useChatStore((s) => s.activeInvocations);
@@ -81,10 +121,18 @@ export function ChatInput({
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [mentionStart, setMentionStart] = useState(-1);
   const [mentionFilter, setMentionFilter] = useState('');
-  const [images, setImages] = useState<File[]>([]);
+  const [images, setImages] = useState<File[]>(() => (threadId ? (threadImageDrafts.get(threadId) ?? []) : []));
   const [isPreparingImages, setIsPreparingImages] = useState(false);
   const [whisperMode, setWhisperMode] = useState(false);
   const [whisperTargets, setWhisperTargets] = useState<Set<string>>(new Set());
+
+  // F108B AC-B7: In whisper mode, check if SELECTED targets are busy (not thread-level).
+  // When all whisper targets are idle → show Send button, not Queue.
+  const whisperTargetsAllIdle = useMemo(() => {
+    if (!whisperMode || whisperTargets.size === 0) return false;
+    return ![...whisperTargets].some((catId) => activeCatIds.has(catId));
+  }, [whisperMode, whisperTargets, activeCatIds]);
+
   const [mobileToolbar, setMobileToolbar] = useState(false);
   const [ghostSuggestion, setGhostSuggestion] = useState<string | null>(null);
   const ghostRef = useRef<string | null>(null);
@@ -97,9 +145,12 @@ export function ChatInput({
   const imageLifecycleStatus = deriveImageLifecycleStatus(isPreparingImages, uploadStatus);
   const sendTemporarilyDisabled = isImageLifecycleBlockingSend(imageLifecycleStatus);
 
-  // F63-AC15: consume pendingChatInsert from workspace (thread-guarded)
+  // F63-AC15: consume pendingChatInsert (ComposerDraftInsert) from workspace (thread-guarded)
+  // #706: restores text, image attachments, and quote state from recall-edit
+  // Phase 2 (#833 merged): replyToId → setReplyTo() restores ReplyPreviewBar
   const pendingChatInsert = useChatStore((s) => s.pendingChatInsert);
   const setPendingChatInsert = useChatStore((s) => s.setPendingChatInsert);
+  const setThreadHasDraft = useChatStore((s) => s.setThreadHasDraft);
   useEffect(() => {
     if (!pendingChatInsert) return;
     if (pendingChatInsert.threadId !== threadId) return;
@@ -107,9 +158,62 @@ export function ChatInput({
       const separator = prev && !prev.endsWith('\n') ? '\n' : '';
       return prev + separator + pendingChatInsert.text;
     });
+    // #706: Restore images from recalled queue message.
+    // Writes to threadImageDrafts directly so files survive unmount if the user
+    // switches threads while fetches are in-flight.
+    if (pendingChatInsert.imageUrls?.length) {
+      const urls = pendingChatInsert.imageUrls;
+      const targetThreadId = pendingChatInsert.threadId;
+      void (async () => {
+        setIsPreparingImages(true);
+        try {
+          const restored: File[] = [];
+          for (const url of urls) {
+            if (restored.length >= 5) break;
+            try {
+              const res = await apiFetch(url);
+              if (!res.ok) continue; // Skip images that return non-2xx (stale/cleaned-up uploads)
+              const blob = await res.blob();
+              const ext = url.split('.').pop() ?? 'png';
+              const name = `recalled-${Date.now()}-${restored.length}.${ext}`;
+              restored.push(new File([blob], name, { type: blob.type || `image/${ext}` }));
+            } catch {
+              // Best-effort: skip images that fail to fetch
+            }
+          }
+          if (restored.length > 0) {
+            // Persist to module-level draft so data survives component unmount
+            const existing = threadImageDrafts.get(targetThreadId) ?? [];
+            const merged = [...existing, ...restored].slice(0, 5);
+            threadImageDrafts.set(targetThreadId, merged);
+            setThreadHasDraft(targetThreadId, true);
+            // Also update local state if still mounted on the same thread
+            setImages((prev) => [...prev, ...restored].slice(0, 5));
+          }
+        } finally {
+          setIsPreparingImages(false);
+        }
+      })();
+    }
+    // #706 Phase 2: Restore quote composing state from recall-edit.
+    // Always calls setReplyTo when replyToId is present so the re-sent
+    // message preserves its quote relationship. If the parent message
+    // isn't loaded in the client store (e.g. after a page reload with
+    // partial history), falls back to a placeholder — the replyTo ID
+    // is still sent to the server on submit.
+    if (pendingChatInsert.replyToId) {
+      const { messages: storeMessages, setReplyTo } = useChatStore.getState();
+      const parentMsg = storeMessages.find((m) => m.id === pendingChatInsert.replyToId);
+      setReplyTo({
+        id: pendingChatInsert.replyToId,
+        content: parentMsg?.content ?? '(原消息未加载)',
+        senderCatId: parentMsg?.catId ?? null,
+        threadId,
+      });
+    }
     setPendingChatInsert(null);
     textareaRef.current?.focus();
-  }, [pendingChatInsert, setPendingChatInsert, threadId]);
+  }, [pendingChatInsert, setPendingChatInsert, setThreadHasDraft, threadId]);
 
   const handleTranscript = useCallback((text: string) => {
     setInput((prev) => {
@@ -150,16 +254,29 @@ export function ChatInput({
           whisperMode && whisperTargets.size > 0
             ? { visibility: 'whisper' as const, whisperTo: [...whisperTargets] }
             : undefined;
-        onSend(trimmed, images.length > 0 ? images : undefined, whisper, deliveryMode);
+        onSend(trimmed, images.length > 0 ? images : undefined, whisper, deliveryMode, replyToMessage?.id);
         setInput('');
         ghostRef.current = null;
         setGhostSuggestion(null);
         setImages([]);
         setShowMentions(false);
         setShowGameMenu(false);
+        // Only clear reply if it belongs to this thread (preserve other thread's reply in split-pane)
+        if (replyToMessage) clearReplyTo();
       }
     },
-    [input, disabled, onSend, images, sendTemporarilyDisabled, whisperMode, whisperTargets, addHistoryEntry],
+    [
+      input,
+      disabled,
+      onSend,
+      images,
+      sendTemporarilyDisabled,
+      whisperMode,
+      whisperTargets,
+      addHistoryEntry,
+      replyToMessage,
+      clearReplyTo,
+    ],
   );
 
   const handleSend = useCallback(() => doSend(undefined), [doSend]);
@@ -171,7 +288,6 @@ export function ChatInput({
     setShowGameMenu(false);
   }, []);
 
-  const router = useRouter();
   const [gameStarting, setGameStarting] = useState(false);
 
   const startGame = useCallback(
@@ -200,7 +316,7 @@ export function ChatInput({
         }
         // Success — dismiss lobby and navigate
         setLobbyMode(null);
-        router.push(`/thread/${data.gameThreadId}`);
+        pushThreadRouteWithHistory(data.gameThreadId, typeof window !== 'undefined' ? window : undefined);
         // Hydrate game state immediately (socket reconnect won't fire for same connection)
         reconnectGame(data.gameThreadId).catch(() => {});
       } catch (err) {
@@ -217,7 +333,7 @@ export function ChatInput({
         setGameStarting(false);
       }
     },
-    [closeMenus, disabled, sendTemporarilyDisabled, gameStarting, router],
+    [closeMenus, disabled, sendTemporarilyDisabled, gameStarting],
   );
 
   const insertMention = useCallback(
@@ -247,13 +363,24 @@ export function ChatInput({
         setShowGameMenu(false);
         setMentionStart(trigger.start);
         setMentionFilter(trigger.filter);
-        setSelectedIdx(0);
+        // Bare @ defaults to first individual cat so Enter doesn't accidentally
+        // insert a group mention like @thread.  When filter is active the user is
+        // intentionally narrowing, so start at 0.
+        if (trigger.filter) {
+          setSelectedIdx(0);
+        } else {
+          const idx = catOptions.findIndex((opt) => !opt.isGroup);
+          // idx = -1 when no individual cats loaded yet → point past all options
+          // so the existing Enter guard (opt === undefined → closeMenus) fires
+          // instead of accidentally inserting @thread
+          setSelectedIdx(idx >= 0 ? idx : catOptions.length);
+        }
       } else {
         closeMenus();
         setMentionFilter('');
       }
     },
-    [closeMenus],
+    [closeMenus, catOptions],
   );
 
   const handleHistorySelect = useCallback(
@@ -270,7 +397,7 @@ export function ChatInput({
   );
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.nativeEvent.isComposing) return;
+    if (ime.isComposing()) return;
 
     // F080: Ctrl+R opens history search (clear any active menus first)
     if (e.ctrlKey && e.key === 'r') {
@@ -381,8 +508,8 @@ export function ChatInput({
 
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      // F39: Enter while cat running → queue send; normal otherwise
-      if (hasActiveInvocation) handleQueueSend();
+      // F39+F108B: Enter while cat running → queue send; whisper to idle targets → normal send
+      if (hasActiveInvocation && !whisperTargetsAllIdle) handleQueueSend();
       else handleSend();
     }
   };
@@ -458,12 +585,12 @@ export function ChatInput({
   // Reconcile whisperTargets: remove invalid ids + remove newly-active cats (B10)
   useEffect(() => {
     if (!whisperMode) return;
-    const validIds = new Set(whisperOptions.map((c) => c.id));
+    const validIds = new Set(whisperCats.map((c) => c.id));
     setWhisperTargets((prev) => {
       const filtered = new Set([...prev].filter((id) => validIds.has(id) && !activeCatIds.has(id)));
       return filtered.size === prev.size ? prev : filtered;
     });
-  }, [whisperOptions, whisperMode, activeCatIds]);
+  }, [whisperCats, whisperMode, activeCatIds]);
 
   const handleGameClick = useCallback(() => {
     setShowMentions(false);
@@ -476,22 +603,42 @@ export function ChatInput({
   const handleWhisperToggle = useCallback(() => {
     setWhisperMode((prev) => {
       if (!prev) {
-        // Entering whisper mode — auto-select idle cats only (B10: executing cats excluded)
-        setWhisperTargets(new Set(whisperOptions.filter((c) => !activeCatIds.has(c.id)).map((c) => c.id)));
+        // F108B P1-1: Default to NO cats selected (design spec Scene 1: "默认都不选")
+        setWhisperTargets(new Set());
       }
       return !prev;
     });
-  }, [whisperOptions, activeCatIds]);
+  }, []);
 
-  // Sync input text to module-level draft map (covers all sources: typing, voice, mentions)
+  // Sync input text + images + reply context to module-level draft maps (covers all sources: typing, voice, mentions)
   // useLayoutEffect runs synchronously before browser paint and before unmount,
   // ensuring the draft is written to the Map before the component is destroyed
   // on thread switch (key={threadId}). useEffect would lose the final keystroke.
   useLayoutEffect(() => {
     if (!threadId) return;
-    if (input) threadDrafts.set(threadId, input);
-    else threadDrafts.delete(threadId);
-  }, [input, threadId]);
+    const hasDraft = input.trim().length > 0 || images.length > 0;
+    const firstPersistenceForThread = replyPersistenceThreadRef.current !== threadId;
+    const replyDraft = replyToMessage ?? (firstPersistenceForThread ? (threadReplyDrafts.get(threadId) ?? null) : null);
+    syncDraftToStorage(threadId, input || undefined);
+    // #934: Persist reply context alongside text/image drafts
+    syncReplyDraftToStorage(threadId, replyDraft);
+    if (images.length > 0) {
+      threadImageDrafts.delete(threadId); // move to end (Map insertion order)
+      threadImageDrafts.set(threadId, images);
+      // LRU eviction: keep only the most recent N threads with image drafts
+      while (threadImageDrafts.size > MAX_IMAGE_DRAFT_THREADS) {
+        const oldest = threadImageDrafts.keys().next().value;
+        if (oldest !== undefined) {
+          threadImageDrafts.delete(oldest);
+          setThreadHasDraft(oldest, hasPendingThreadDraft(oldest));
+        }
+      }
+    } else {
+      threadImageDrafts.delete(threadId);
+    }
+    setThreadHasDraft(threadId, hasDraft || Boolean(replyDraft));
+    replyPersistenceThreadRef.current = threadId;
+  }, [input, images, threadId, setThreadHasDraft, replyToMessage]);
 
   // F080: recalculate ghost suggestion whenever input changes (covers all setInput paths)
   useEffect(() => {
@@ -527,13 +674,23 @@ export function ChatInput({
   }, [activeMenu, closeMenus]);
 
   return (
-    <div className="border-t border-cocreator-light bg-cocreator-bg relative safe-area-bottom">
+    <div className="relative bg-[var(--console-shell-bg)] safe-area-bottom">
       {/* F39: Queue status bar — visible when cat is running */}
       {hasActiveInvocation && (
-        <div className="px-4 pt-2 flex items-center gap-2">
-          <span className="inline-block w-2 h-2 rounded-full bg-[#9B7EBD] animate-pulse" />
-          <span className="text-xs text-[#9B7EBD] font-medium">猫猫正在回复中...</span>
-          <span className="text-xs text-gray-400">继续输入，消息会排队</span>
+        <div data-testid="active-invocation-banner" className="px-4 pt-2 flex items-center gap-2">
+          <span className="inline-block w-2 h-2 rounded-full bg-[var(--color-cocreator-primary)] animate-pulse" />
+          <span className="text-xs text-[var(--color-cocreator-primary)] font-medium">猫猫正在回复中...</span>
+          <span className="text-xs text-cafe-muted flex-1">继续输入，消息会排队</span>
+          {onStop && (
+            <button
+              type="button"
+              data-testid="banner-cancel-btn"
+              onClick={onStop}
+              className="text-xs text-cafe-muted hover:text-cafe-primary transition-colors px-2 py-0.5 rounded-md hover:bg-cafe-surface-elevated flex-shrink-0"
+            >
+              取消
+            </button>
+          )}
         </div>
       )}
 
@@ -572,53 +729,39 @@ export function ChatInput({
         menuRef={menuRef}
       />
 
+      {whisperMode && !showMentions && !showGameMenu && (
+        <WhisperCatSelector
+          cats={whisperCats}
+          selected={whisperTargets}
+          activeCatIds={activeCatIds}
+          onToggle={toggleWhisperTarget}
+        />
+      )}
+
       {imageLifecycleStatus === 'preparing' && (
-        <div className="px-4 pt-2 text-xs text-gray-500" role="status">
+        <div className="px-4 pt-2 text-xs text-cafe-secondary" role="status">
           图片处理中，完成后可发送
         </div>
       )}
       {imageLifecycleStatus === 'uploading' && (
-        <div className="px-4 pt-2 text-xs text-indigo-500" role="status">
+        <div className="px-4 pt-2 text-xs text-[var(--semantic-info)]" role="status">
           图片上传中，请稍候...
         </div>
       )}
       {imageLifecycleStatus === 'failed' && uploadError && (
-        <div className="px-4 pt-2 text-xs text-red-500" role="alert">
+        <div className="px-4 pt-2 text-xs text-conn-red-text" role="alert">
           图片发送失败：{uploadError}
         </div>
       )}
 
       {whisperMode && (
-        <div className="px-4 pt-2 flex items-center gap-2 flex-wrap">
-          <span className="text-xs text-amber-600 font-medium">悄悄话发给:</span>
-          {whisperOptions.map((cat) => {
-            const isActive = activeCatIds.has(cat.id);
-            const isSelected = whisperTargets.has(cat.id);
-            return (
-              <button
-                key={cat.id}
-                onClick={() => !isActive && toggleWhisperTarget(cat.id)}
-                disabled={isActive}
-                className={`text-xs px-2 py-0.5 rounded-full border transition-colors ${
-                  isActive
-                    ? 'text-gray-300 border-gray-200 bg-gray-50 cursor-not-allowed'
-                    : isSelected
-                      ? 'border-current bg-amber-50 font-medium'
-                      : 'text-gray-400 border-gray-200 hover:border-gray-400'
-                }`}
-                style={!isActive && isSelected ? { color: cat.color } : undefined}
-                title={isActive ? `${cat.label.replace('@', '')} 执行中，不可选` : undefined}
-              >
-                {cat.label.replace('@', '')}
-                {isActive && ' ⏳'}
-              </button>
-            );
-          })}
-          {whisperTargets.size === 0 && <span className="text-xs text-red-400">请至少选一只猫猫</span>}
-        </div>
+        <WhisperTargetChips cats={whisperCats} selected={whisperTargets} onToggle={toggleWhisperTarget} />
       )}
 
       <ImagePreview files={images} onRemove={handleRemoveImage} />
+
+      {/* #699: Reply preview bar — matches ReplyPill styling with sender theme color */}
+      {replyToMessage && <ReplyPreviewBar replyToMessage={replyToMessage} cats={cats} onClear={clearReplyTo} />}
 
       <input
         ref={fileInputRef}
@@ -643,14 +786,14 @@ export function ChatInput({
         />
       )}
 
-      <div className="flex gap-2 items-end p-4 pt-2">
+      <div className="flex gap-2 items-center p-4 pt-2" data-testid="chat-input-composer-row">
         {/* Mobile: + toggle button */}
         <button
           onClick={() => setMobileToolbar((v) => !v)}
           className={`p-3 rounded-xl transition-all md:hidden ${
             mobileToolbar
-              ? 'text-cocreator-primary bg-cocreator-light rotate-45'
-              : 'text-gray-400 hover:text-cocreator-primary hover:bg-white'
+              ? 'text-cafe-accent bg-cafe-surface-sunken rotate-45'
+              : 'text-cafe-muted hover:text-cafe-accent hover:bg-cafe-surface'
           }`}
           aria-label="展开工具栏"
         >
@@ -667,7 +810,7 @@ export function ChatInput({
         <button
           onClick={() => fileInputRef.current?.click()}
           disabled={disabled || sendTemporarilyDisabled || images.length >= 5}
-          className="hidden md:block p-3 rounded-xl text-gray-400 hover:text-cocreator-primary hover:bg-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          className="hidden md:block p-3 rounded-xl text-cafe-muted hover:text-cafe-accent hover:bg-cafe-surface disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
           aria-label="Attach images"
         >
           <AttachIcon className="w-5 h-5" />
@@ -678,8 +821,8 @@ export function ChatInput({
           disabled={disabled || sendTemporarilyDisabled}
           className={`hidden md:block p-3 rounded-xl transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${
             whisperMode
-              ? 'text-amber-500 bg-amber-50 ring-1 ring-amber-300'
-              : 'text-gray-400 hover:text-amber-500 hover:bg-white'
+              ? 'text-cafe-accent bg-accent-50'
+              : 'text-cafe-muted hover:text-cafe-accent hover:bg-cafe-surface'
           }`}
           aria-label="Whisper mode"
           title="悄悄话模式"
@@ -697,7 +840,7 @@ export function ChatInput({
           ref={gameBtnRef}
           onClick={handleGameClick}
           disabled={disabled || sendTemporarilyDisabled}
-          className="hidden md:block p-3 rounded-xl text-gray-400 hover:text-indigo-500 hover:bg-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          className="hidden md:block p-3 rounded-xl text-cafe-muted hover:text-cafe-accent hover:bg-cafe-surface disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
           aria-label="Game mode"
           title="游戏模式"
         >
@@ -706,20 +849,26 @@ export function ChatInput({
           </svg>
         </button>
 
-        <div className="flex-1 relative">
+        <div className="flex-1 relative" data-bootcamp-step="chat-input" data-guide-id="chat.input">
           <textarea
             ref={textareaRef}
             value={input}
             onChange={handleChange}
             onKeyDown={handleKeyDown}
+            onCompositionStart={ime.onCompositionStart}
+            onCompositionEnd={ime.onCompositionEnd}
             onPaste={handlePaste}
             placeholder={
-              whisperMode ? '悄悄话...' : hasActiveInvocation ? '继续输入，消息会排队...' : '输入消息... (@ 召唤猫猫)'
-            }
-            className={`w-full resize-none rounded-xl border p-3 text-sm focus:outline-none focus:ring-2 placeholder:text-gray-400 ${
               whisperMode
-                ? 'border-amber-300 bg-amber-50/50 focus:ring-amber-400'
-                : 'border-cocreator-light bg-white focus:ring-cocreator-primary'
+                ? '悄悄话...'
+                : hasActiveInvocation && !whisperTargetsAllIdle
+                  ? '继续输入，消息会排队...'
+                  : '输入消息... (@ 召唤猫猫)'
+            }
+            className={`w-full resize-none rounded-xl border p-3 text-sm focus:outline-none focus:ring-2 placeholder:text-cafe-muted ${
+              whisperMode
+                ? 'border-cafe-accent/30 bg-accent-50/50 focus:ring-cafe-accent'
+                : 'border-[var(--console-border-soft)] bg-transparent focus:bg-[var(--console-card-bg)] focus:ring-[var(--console-input-stroke)]'
             }`}
             rows={1}
             disabled={disabled}
@@ -731,7 +880,7 @@ export function ChatInput({
               aria-hidden="true"
             >
               <span className="invisible">{input}</span>
-              <span className="text-gray-400">{ghostSuggestion.slice(input.length)}</span>
+              <span className="text-cafe-muted">{ghostSuggestion.slice(input.length)}</span>
             </div>
           )}
         </div>
@@ -744,7 +893,7 @@ export function ChatInput({
           onForceSend={handleForceSend}
           disabled={disabled}
           sendDisabled={sendTemporarilyDisabled}
-          hasActiveInvocation={hasActiveInvocation}
+          hasActiveInvocation={whisperTargetsAllIdle ? false : hasActiveInvocation}
           hasText={!!input.trim()}
         />
       </div>

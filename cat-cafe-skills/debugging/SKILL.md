@@ -22,6 +22,50 @@ triggers:
 
 ## 核心知识
 
+### Runtime Preflight Gate（运行时异常硬门禁）
+
+**如果 bug 涉及 runtime 行为**（前端显示异常、API 返回错误、猫猫行为异常、stream 错误等），**在进入 Phase 1 之前**必须先完成三件套验证：
+
+**手动三件套**（按顺序执行，收集 7 个字段）：
+
+```bash
+# 1. 找到 API 监听进程（绑端口，不用 grep 猜）
+export API_PORT="${API_SERVER_PORT:-3004}"
+lsof -iTCP:"$API_PORT" -sTCP:LISTEN -P -n 2>/dev/null | awk 'NR>1{print "PORT="ENVIRON["API_PORT"], "PID="$2}'
+
+# 2. 进程启动时间
+ps -p <PID> -o lstart=
+
+# 3. Runtime worktree HEAD vs 目标 commit
+git -C <runtime-worktree> log --oneline -1        # HEAD=
+TARGET_COMMIT=<你预期的commit>
+# 判断进程是否在 commit 之后启动：比较 commit 时间 vs 进程启动时间
+
+# 4. 当前 PID 在最新日志中的行数
+grep -c "<PID>" <最新日志文件路径>                  # LOG_EVIDENCE=
+```
+
+收集到的 7 个字段：
+
+```
+PORT=3004              ← 默认 API 端口（3003=前端），只取 LISTEN PID
+PID=53507              ← 精确到监听进程（排除浏览器等客户端连接）
+START_TIME=...         ← 进程启动时间
+HEAD=abc1234 ...       ← runtime worktree HEAD
+TARGET_COMMIT=f78c984  ← 你预期的 commit
+PROCESS_AFTER_TARGET=yes/no  ← 进程是否在 commit 之后启动
+LOG_EVIDENCE=...       ← 当前 PID 在最新日志中的行数
+```
+
+**这 7 行没拿到之前，唯一允许说的话是"我还没查完"。**
+
+以下断言**必须附带 preflight 输出**，否则禁止说出：
+- "runtime 没更新" / "代码没编译" / "没重启" / "还是旧代码"
+
+**为什么这是硬门禁**：启动脚本会自动拉代码并编译。"没更新"本来就不太可能发生。在没有证据的情况下说"没更新" = 把自己的 bug 甩锅给operator。这不是懒，是推卸责任。
+
+> 来源：operator多次纠正（2026-04-05 定为 P0），Maine Coon协助定位根因 + 方案审查。
+
 ### 4 阶段流水线
 
 每个阶段必须完成才能进入下一个。
@@ -64,7 +108,7 @@ triggers:
 - 修复需要"大规模重构"才能落地
 - 每次修复都在别处制造新症状
 
-停下来和铲屎官讨论是继续修还是重新设计。
+停下来和operator讨论是继续修还是重新设计。
 
 ### Bug Report 五件套（存档格式）
 
@@ -83,6 +127,8 @@ triggers:
 ```
 收到 bug / 看到失败
   ↓
+涉及 runtime？→ 是 → Runtime Preflight Gate（三件套）
+  ↓ 否 / 三件套完成
 填诊断胶囊（8 栏工作模板）← 入口！
   ↓
 Phase 1: 根因调查（胶囊驱动）
@@ -93,7 +139,7 @@ Phase 3: 假设验证（最小变更，一次一个）
   ↓ 假设确认？
 Phase 4: 先写失败测试 → 修复 → 验证
   ↓ 修复 3 次仍未解决？
-停下来 → 质疑架构 → 找铲屎官讨论
+停下来 → 质疑架构 → 找operator讨论
   ↓ 修复完成
 整理五件套存档（从胶囊提炼）
 ```
@@ -117,6 +163,7 @@ Phase 4: 先写失败测试 → 修复 → 验证
 - "跳过测试，我手工验一下"
 - "同时改几个地方"
 - "再试一次修复"（已经失败 2 次以上）
+- **"可能没更新/没编译/没重启"**（没跑三件套就说 = 推卸责任）
 
 ## Common Mistakes
 
@@ -126,7 +173,7 @@ Phase 4: 先写失败测试 → 修复 → 验证
 | 看到症状就提修复方案 | Phase 1 根因调查必须完成才能提方案 |
 | 多组件系统直接猜原因 | 加诊断桩，收集每层边界的证据 |
 | 修完直接 push，不写测试 | 先写失败测试复现 bug，再修，再验证 |
-| 第 3 次修复还在叠加 | 停下来，质疑架构，找铲屎官 |
+| 第 3 次修复还在叠加 | 停下来，质疑架构，找operator |
 | 错误信息略读 | 完整读 stack trace，记录行号和错误码 |
 
 ## 和其他 skill 的区别

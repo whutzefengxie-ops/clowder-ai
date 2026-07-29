@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { beforeEach, describe, it } from 'node:test';
 import Database from 'better-sqlite3';
 import { SqliteEvidenceStore } from '../../dist/domains/memory/SqliteEvidenceStore.js';
@@ -12,9 +15,9 @@ import { VectorStore } from '../../dist/domains/memory/VectorStore.js';
  * - hybrid = BM25 + NN → RRF fusion
  */
 
-function setupStore() {
+async function setupStore() {
   const store = new SqliteEvidenceStore(':memory:');
-  store.initialize();
+  await store.initialize();
 
   const db = store.getDb();
 
@@ -33,13 +36,13 @@ function setupStore() {
   return { store, vectorStore, db };
 }
 
-function seedDocs(store) {
-  store.upsert([
+async function seedDocs(store) {
+  await store.upsert([
     {
       anchor: 'doc-cat-names',
       kind: 'lesson',
       status: 'active',
-      title: 'Cat Cafe 花名册 — 名字的由来',
+      title: 'Clowder AI 花名册 — 名字的由来',
       summary: '宪宪来自 Constitutional AI 的宪，砚砚来自 Codex 的砚，烁烁来自 Gemini 的烁',
       updatedAt: new Date().toISOString(),
     },
@@ -79,9 +82,10 @@ function seedVectors(vectorStore) {
 }
 
 // Mock embedding service that returns controlled vectors
-function createMockEmbedding(queryResponse) {
+function createMockEmbedding(queryResponse, options = {}) {
   return {
     isReady: () => true,
+    reprobeIfNeeded: options.reprobeIfNeeded ?? (async () => {}),
     embed: async (texts) => [queryResponse],
     getModelInfo: () => ({ modelId: 'test', modelRev: 'test', dim: 3 }),
     load: async () => {},
@@ -92,15 +96,15 @@ function createMockEmbedding(queryResponse) {
 describe('Search Mode Split (KD-44)', () => {
   let store, vectorStore, db;
 
-  beforeEach(() => {
-    const setup = setupStore();
+  beforeEach(async () => {
+    const setup = await setupStore();
     store = setup.store;
     vectorStore = setup.vectorStore;
     db = setup.db;
 
     if (!vectorStore) return; // skip if no sqlite-vec
 
-    seedDocs(store);
+    await seedDocs(store);
     seedVectors(vectorStore);
 
     // Wire embedding deps — query for "naming" is close to doc-cat-names vector
@@ -113,6 +117,25 @@ describe('Search Mode Split (KD-44)', () => {
     const results = await store.search('Redis keyPrefix', { mode: 'lexical', limit: 5 });
     assert.ok(results.length > 0, 'should find redis doc via BM25');
     assert.equal(results[0].anchor, 'doc-redis-pitfall');
+  });
+
+  it('lexical mode: does not reprobe embedding readiness', async () => {
+    const lexicalStore = new SqliteEvidenceStore(':memory:');
+    await lexicalStore.initialize();
+    await seedDocs(lexicalStore);
+    let reprobeCalls = 0;
+    const mockEmbed = createMockEmbedding(new Float32Array([0.85, 0.15, 0.0]), {
+      reprobeIfNeeded: async () => {
+        reprobeCalls++;
+      },
+    });
+    lexicalStore.setEmbedDeps({ embedding: mockEmbed, vectorStore: { search: () => [] }, mode: 'on' });
+
+    const results = await lexicalStore.search('Redis keyPrefix', { mode: 'lexical', limit: 5 });
+
+    assert.ok(results.length > 0, 'lexical search should still return BM25 hits');
+    assert.equal(results[0].anchor, 'doc-redis-pitfall');
+    assert.equal(reprobeCalls, 0, 'pure lexical search must not depend on embedding readiness probes');
   });
 
   it('lexical mode: does NOT find semantically-similar docs without keyword match', async () => {
@@ -192,16 +215,167 @@ describe('Search Mode Split (KD-44)', () => {
     const results = await store.search('naming', { mode: 'semantic', scope: 'docs', limit: 5 });
     for (const r of results) {
       assert.notEqual(r.kind, 'session', 'scope=docs should exclude sessions');
+      assert.notEqual(r.kind, 'thread', 'scope=docs should exclude thread digests');
     }
+  });
+
+  it('semantic mode scope=docs keeps discussion docs but excludes thread digests', async () => {
+    if (!vectorStore) return;
+    await store.upsert([
+      {
+        anchor: 'doc-f148-discussion',
+        kind: 'discussion',
+        status: 'active',
+        title: 'F148 design discussion',
+        summary: 'vector-only-zebra discussion doc',
+        updatedAt: new Date().toISOString(),
+      },
+      {
+        anchor: 'thread-thread_f148',
+        kind: 'thread',
+        status: 'active',
+        title: 'F148 thread digest',
+        summary: 'vector-only-zebra thread digest',
+        updatedAt: new Date().toISOString(),
+      },
+    ]);
+    vectorStore.upsert('doc-f148-discussion', new Float32Array([0.56, 0.56, 0.56]));
+    vectorStore.upsert('thread-thread_f148', new Float32Array([0.57, 0.57, 0.57]));
+    const mockEmbed = createMockEmbedding(new Float32Array([0.58, 0.58, 0.58]));
+    store.setEmbedDeps({ embedding: mockEmbed, vectorStore, mode: 'on' });
+
+    const results = await store.search('vector-only-zebra', { mode: 'semantic', scope: 'docs', limit: 3 });
+    const anchors = results.map((r) => r.anchor);
+
+    assert.ok(anchors.includes('doc-f148-discussion'), 'scope=docs should keep discussion documents');
+    assert.ok(!anchors.includes('thread-thread_f148'), 'scope=docs should exclude thread digests');
+  });
+
+  it('hybrid mode scope=docs keeps discussion docs but excludes thread digests', async () => {
+    if (!vectorStore) return;
+    await store.upsert([
+      {
+        anchor: 'doc-f148-discussion-hybrid',
+        kind: 'discussion',
+        status: 'active',
+        title: 'F148 hybrid discussion',
+        summary: 'vector-only-zebra hybrid discussion doc',
+        updatedAt: new Date().toISOString(),
+      },
+      {
+        anchor: 'thread-thread_f148_hybrid',
+        kind: 'thread',
+        status: 'active',
+        title: 'F148 hybrid thread digest',
+        summary: 'vector-only-zebra hybrid thread digest',
+        updatedAt: new Date().toISOString(),
+      },
+    ]);
+    vectorStore.upsert('doc-f148-discussion-hybrid', new Float32Array([0.56, 0.56, 0.56]));
+    vectorStore.upsert('thread-thread_f148_hybrid', new Float32Array([0.57, 0.57, 0.57]));
+    const mockEmbed = createMockEmbedding(new Float32Array([0.58, 0.58, 0.58]));
+    store.setEmbedDeps({ embedding: mockEmbed, vectorStore, mode: 'on' });
+
+    const results = await store.search('vector-only-zebra', {
+      mode: 'hybrid',
+      scope: 'docs',
+      limit: 3,
+    });
+    const anchors = results.map((r) => r.anchor);
+
+    assert.ok(anchors.includes('doc-f148-discussion-hybrid'), 'hybrid docs search should keep discussion docs');
+    assert.ok(!anchors.includes('thread-thread_f148_hybrid'), 'hybrid docs search should exclude thread digests');
+  });
+
+  it('semantic mode filters by provenanceTier (P1-3 fix)', async () => {
+    if (!vectorStore) return;
+    // Add provenance to existing docs
+    await store.upsert([
+      {
+        anchor: 'doc-cat-names',
+        kind: 'lesson',
+        status: 'active',
+        title: 'Clowder AI 花名册 — 名字的由来',
+        summary: '宪宪来自 Constitutional AI 的宪',
+        updatedAt: new Date().toISOString(),
+        provenance: { tier: 'authoritative', source: 'docs/cat-names.md' },
+      },
+      {
+        anchor: 'doc-redis-pitfall',
+        kind: 'lesson',
+        status: 'active',
+        title: 'Redis keyPrefix 陷阱',
+        summary: 'ioredis keyPrefix 不影响 eval 脚本内的 KEYS 参数',
+        updatedAt: new Date().toISOString(),
+        provenance: { tier: 'soft_clue', source: 'CHANGELOG.md' },
+      },
+    ]);
+    // Re-seed vectors for the updated docs
+    vectorStore.upsert('doc-cat-names', new Float32Array([0.9, 0.1, 0.0]));
+    vectorStore.upsert('doc-redis-pitfall', new Float32Array([0.85, 0.1, 0.05]));
+
+    // Mock embed returns a vector close to both docs
+    const mockEmbed = createMockEmbedding(new Float32Array([0.88, 0.1, 0.02]));
+    store.setEmbedDeps({ embedding: mockEmbed, vectorStore, mode: 'on' });
+
+    const authOnly = await store.search('cat naming', {
+      mode: 'semantic',
+      provenanceTier: 'authoritative',
+      limit: 10,
+    });
+    assert.ok(
+      authOnly.every((r) => r.provenance?.tier === 'authoritative'),
+      'semantic mode should respect provenanceTier filter',
+    );
+  });
+
+  it('hybrid mode filters by provenanceTier (P1-3 fix)', async () => {
+    if (!vectorStore) return;
+    // Add provenance to existing docs
+    await store.upsert([
+      {
+        anchor: 'doc-cat-names',
+        kind: 'lesson',
+        status: 'active',
+        title: 'Clowder AI 花名册 — 名字的由来',
+        summary: '宪宪来自 Constitutional AI 的宪',
+        updatedAt: new Date().toISOString(),
+        provenance: { tier: 'authoritative', source: 'docs/cat-names.md' },
+      },
+      {
+        anchor: 'doc-redis-pitfall',
+        kind: 'lesson',
+        status: 'active',
+        title: 'Redis keyPrefix 陷阱',
+        summary: 'ioredis keyPrefix 不影响 eval 脚本内的 KEYS 参数',
+        updatedAt: new Date().toISOString(),
+        provenance: { tier: 'soft_clue', source: 'CHANGELOG.md' },
+      },
+    ]);
+    vectorStore.upsert('doc-cat-names', new Float32Array([0.9, 0.1, 0.0]));
+    vectorStore.upsert('doc-redis-pitfall', new Float32Array([0.85, 0.1, 0.05]));
+
+    const mockEmbed = createMockEmbedding(new Float32Array([0.88, 0.1, 0.02]));
+    store.setEmbedDeps({ embedding: mockEmbed, vectorStore, mode: 'on' });
+
+    const authOnly = await store.search('花名册', {
+      mode: 'hybrid',
+      provenanceTier: 'authoritative',
+      limit: 10,
+    });
+    assert.ok(
+      authOnly.every((r) => r.provenance?.tier === 'authoritative'),
+      'hybrid mode should respect provenanceTier filter',
+    );
   });
 });
 
 describe('G-4: drillDown hints', () => {
   it('thread results get drillDown hint', async () => {
     const store = new SqliteEvidenceStore(':memory:');
-    store.initialize();
+    await store.initialize();
 
-    store.upsert([
+    await store.upsert([
       {
         anchor: 'thread-abc123',
         kind: 'thread',
@@ -239,9 +413,9 @@ describe('G-4: drillDown hints', () => {
 
   it('session results get drillDown hint', async () => {
     const store = new SqliteEvidenceStore(':memory:');
-    store.initialize();
+    await store.initialize();
 
-    store.upsert([
+    await store.upsert([
       {
         anchor: 'session-xyz789',
         kind: 'session',
@@ -262,11 +436,146 @@ describe('G-4: drillDown hints', () => {
     }
   });
 
+  it('sourcePath results get file slice drillDown hint', async () => {
+    const store = new SqliteEvidenceStore(':memory:', undefined, { sourceRoot: process.cwd() });
+    await store.initialize();
+
+    await store.upsert([
+      {
+        anchor: 'doc-f209',
+        kind: 'feature',
+        status: 'active',
+        title: 'F209 Evidence Recall',
+        summary: 'typed drill-down readers',
+        sourcePath: 'docs/features/F209-evidence-recall-optimization.md',
+        updatedAt: new Date().toISOString(),
+      },
+    ]);
+
+    const results = await store.search('typed drill-down', { limit: 5 });
+    const docResult = results.find((r) => r.anchor === 'doc-f209');
+
+    assert.ok(docResult?.drillDown, 'sourcePath result should have drillDown');
+    assert.equal(docResult.drillDown.tool, 'cat_cafe_read_file_slice');
+    assert.equal(docResult.drillDown.params.path, 'docs/features/F209-evidence-recall-optimization.md');
+    assert.equal(docResult.drillDown.params.startLine, '1');
+    assert.equal(docResult.drillDown.params.endLine, '120');
+  });
+
+  it('docs-root sourcePath results get repo-readable file slice drillDown path', async () => {
+    const docsRoot = join(process.cwd(), 'docs');
+    const store = new SqliteEvidenceStore(':memory:', undefined, { sourceRoot: docsRoot });
+    await store.initialize();
+
+    await store.upsert([
+      {
+        anchor: 'doc-f209-docs-root',
+        kind: 'feature',
+        status: 'active',
+        title: 'F209 Evidence Recall Docs Root',
+        summary: 'typed drill-down readers from docs root',
+        sourcePath: 'features/F209-evidence-recall-optimization.md',
+        updatedAt: new Date().toISOString(),
+      },
+    ]);
+
+    const results = await store.search('docs root', { limit: 5 });
+    const docResult = results.find((r) => r.anchor === 'doc-f209-docs-root');
+
+    assert.ok(docResult?.drillDown, 'docs-root sourcePath result should have drillDown');
+    assert.equal(docResult.drillDown.tool, 'cat_cafe_read_file_slice');
+    assert.equal(docResult.drillDown.params.path, 'docs/features/F209-evidence-recall-optimization.md');
+  });
+
+  it('sourcePath file slice drillDown is omitted when a relative path has no source root', async () => {
+    const store = new SqliteEvidenceStore(':memory:');
+    await store.initialize();
+
+    await store.upsert([
+      {
+        anchor: 'doc-f209-no-root',
+        kind: 'feature',
+        status: 'active',
+        title: 'F209 Evidence Recall No Root',
+        summary: 'typed drill-down readers without source root',
+        sourcePath: 'docs/features/F209-evidence-recall-optimization.md',
+        updatedAt: new Date().toISOString(),
+      },
+    ]);
+
+    const results = await store.search('without source root', { limit: 5 });
+    const docResult = results.find((r) => r.anchor === 'doc-f209-no-root');
+
+    assert.ok(docResult, 'sourcePath result should still be searchable');
+    assert.equal(docResult.drillDown, undefined);
+  });
+
+  it('sourcePath file slice drillDown uses virtual collection paths without leaking the store source root', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'f209-source-root-'));
+    try {
+      const store = new SqliteEvidenceStore(':memory:', undefined, {
+        sourceRoot: root,
+        sourceRef: 'world:test',
+      });
+      await store.initialize();
+
+      await store.upsert([
+        {
+          anchor: 'world:test/doc/source',
+          kind: 'feature',
+          status: 'active',
+          title: 'External Collection Source',
+          summary: 'collection-backed typed reader source root',
+          sourcePath: 'docs/source.md',
+          updatedAt: new Date().toISOString(),
+        },
+      ]);
+
+      const results = await store.search('collection-backed typed reader', { limit: 5 });
+      const docResult = results.find((r) => r.anchor === 'world:test/doc/source');
+
+      assert.ok(docResult?.drillDown, 'sourcePath result should have drillDown');
+      assert.equal(docResult.drillDown.tool, 'cat_cafe_read_file_slice');
+      assert.equal(docResult.drillDown.params.path, 'cat-cafe://collection/world%3Atest/docs/source.md');
+      assert.ok(!docResult.drillDown.params.path.includes(root), 'drillDown path must not leak host source root');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('sourcePath file slice drillDown is omitted when a relative path escapes the source root', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'f209-source-root-'));
+    try {
+      const store = new SqliteEvidenceStore(':memory:', undefined, { sourceRoot: root });
+      await store.initialize();
+
+      await store.upsert([
+        {
+          anchor: 'world:test/doc/escape',
+          kind: 'feature',
+          status: 'active',
+          title: 'Escaping Collection Source',
+          summary: 'collection-backed typed reader source root escape',
+          sourcePath: '../outside.md',
+          updatedAt: new Date().toISOString(),
+        },
+      ]);
+
+      const results = await store.search('source root escape', { limit: 5 });
+      const docResult = results.find((r) => r.anchor === 'world:test/doc/escape');
+
+      assert.ok(docResult, 'sourcePath result should still be searchable');
+      assert.equal(docResult.drillDown, undefined);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('scope=threads returns kind=thread (not session) with drillDown', async () => {
     const store = new SqliteEvidenceStore(':memory:');
-    store.initialize();
+    await store.initialize();
 
-    store.upsert([
+    await store.upsert([
       {
         anchor: 'thread-t1',
         kind: 'thread',

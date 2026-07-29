@@ -66,15 +66,14 @@ describe('MCP Prompt Injection E2E', () => {
     assert.ok(instructions.includes('post-message'));
 
     // 4. Create real credentials (same as invokeSingleCat does)
-    const { invocationId, callbackToken } = registry.create('user-1', 'codex', 'thread-e2e');
+    const { invocationId, callbackToken } = await registry.create('user-1', 'codex', 'thread-e2e');
 
     // 5. Simulate what Codex would do: POST to post-message with env var values
     const response = await app.inject({
       method: 'POST',
       url: '/api/callbacks/post-message',
+      headers: { 'x-invocation-id': invocationId, 'x-callback-token': callbackToken },
       payload: {
-        invocationId,
-        callbackToken,
         content: 'Hello from Codex via HTTP callback!',
       },
     });
@@ -102,13 +101,13 @@ describe('MCP Prompt Injection E2E', () => {
     messageStore.append({
       userId: 'user-1',
       catId: 'opus',
-      content: '你好铲屎官',
+      content: '你好co-creator',
       mentions: [],
       timestamp: Date.now() + 1,
       threadId: 'thread-e2e',
     });
 
-    const { invocationId, callbackToken } = registry.create('user-1', 'gemini', 'thread-e2e');
+    const { invocationId, callbackToken } = await registry.create('user-1', 'gemini', 'thread-e2e');
 
     // Verify instructions reference the tool name (skill-based)
     const instructions = buildMcpCallbackInstructions({});
@@ -117,7 +116,8 @@ describe('MCP Prompt Injection E2E', () => {
     // Simulate Gemini calling GET thread-context with query params
     const response = await app.inject({
       method: 'GET',
-      url: `/api/callbacks/thread-context?invocationId=${invocationId}&callbackToken=${callbackToken}`,
+      url: '/api/callbacks/thread-context',
+      headers: { 'x-invocation-id': invocationId, 'x-callback-token': callbackToken },
     });
 
     assert.equal(response.statusCode, 200, `expected 200, got ${response.statusCode}: ${response.body}`);
@@ -127,14 +127,15 @@ describe('MCP Prompt Injection E2E', () => {
   });
 
   test('injected pending-mentions endpoint succeeds with real credentials', async () => {
-    const { invocationId, callbackToken } = registry.create('user-1', 'codex', 'thread-e2e');
+    const { invocationId, callbackToken } = await registry.create('user-1', 'codex', 'thread-e2e');
 
     const instructions = buildMcpCallbackInstructions({});
     assert.ok(instructions.includes('pending-mentions'));
 
     const response = await app.inject({
       method: 'GET',
-      url: `/api/callbacks/pending-mentions?invocationId=${invocationId}&callbackToken=${callbackToken}`,
+      url: '/api/callbacks/pending-mentions',
+      headers: { 'x-invocation-id': invocationId, 'x-callback-token': callbackToken },
     });
 
     assert.equal(response.statusCode, 200, `expected 200, got ${response.statusCode}: ${response.body}`);
@@ -143,7 +144,7 @@ describe('MCP Prompt Injection E2E', () => {
   });
 
   test('injected update-task endpoint succeeds with real credentials', async () => {
-    const { invocationId, callbackToken } = registry.create('user-1', 'gemini', 'thread-e2e');
+    const { invocationId, callbackToken } = await registry.create('user-1', 'gemini', 'thread-e2e');
 
     // Create a task in the same thread
     const task = taskStore.create({
@@ -160,9 +161,8 @@ describe('MCP Prompt Injection E2E', () => {
     const response = await app.inject({
       method: 'POST',
       url: '/api/callbacks/update-task',
+      headers: { 'x-invocation-id': invocationId, 'x-callback-token': callbackToken },
       payload: {
-        invocationId,
-        callbackToken,
         taskId: task.id,
         status: 'doing',
         why: '正在绘制中',

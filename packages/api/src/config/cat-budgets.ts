@@ -1,6 +1,6 @@
 /**
  * Cat Context Budget Configuration
- * 优先级: 环境变量 > cat-config.json > 硬编码默认值
+ * 优先级: 环境变量 > 解析后的运行时猫配置 > 硬编码默认值
  *
  * 环境变量 (最高优先级, 覆盖单个字段):
  *   CAT_OPUS_MAX_PROMPT_TOKENS   → 布偶猫 prompt token 上限
@@ -8,7 +8,7 @@
  *   CAT_GEMINI_MAX_PROMPT_TOKENS → 暹罗猫 prompt token 上限
  *   MAX_PROMPT_TOKENS            → 全局默认 token (fallback)
  *
- * 或直接修改项目根目录的 cat-config.json
+ * 或修改 repo 根 `cat-template.json` / 运行时 `.cat-cafe/cat-catalog.json`
  */
 
 import type { ContextBudget } from '@cat-cafe/shared';
@@ -31,11 +31,14 @@ const BUDGET_ENV_KEYS = {
  * Per-message content is still truncated by maxContentLengthPerMsg.
  */
 const DEFAULT_BUDGETS: Record<string, ContextBudget> = {
-  // Keep these in sync with project cat-config.json defaults (方案 A) so
+  // Keep these in sync with project cat-template defaults so
   // missing/invalid config doesn't silently regress budgets.
-  ragdoll: { maxPromptTokens: 180000, maxContextTokens: 160000, maxMessages: 200, maxContentLengthPerMsg: 10000 },
-  'maine-coon': { maxPromptTokens: 240000, maxContextTokens: 216000, maxMessages: 200, maxContentLengthPerMsg: 10000 },
-  siamese: { maxPromptTokens: 350000, maxContextTokens: 300000, maxMessages: 300, maxContentLengthPerMsg: 15000 },
+  ragdoll: { maxPromptTokens: 180000, maxContextTokens: 160000, maxMessages: 200, maxContentLengthPerMsg: 100000 },
+  'maine-coon': { maxPromptTokens: 240000, maxContextTokens: 216000, maxMessages: 200, maxContentLengthPerMsg: 100000 },
+  siamese: { maxPromptTokens: 350000, maxContextTokens: 300000, maxMessages: 300, maxContentLengthPerMsg: 100000 },
+  // Spark is a known built-in variant with a smaller context window than the
+  // maine-coon breed default; keep it stable even if runtime config loading fails.
+  spark: { maxPromptTokens: 64000, maxContextTokens: 40000, maxMessages: 100, maxContentLengthPerMsg: 100000 },
 };
 
 /** F32-a: Conservative fallback for unknown/dynamic cats — use smallest built-in budget */
@@ -43,10 +46,10 @@ const GLOBAL_FALLBACK_BUDGET: ContextBudget = {
   maxPromptTokens: 100000,
   maxContextTokens: 60000,
   maxMessages: 200,
-  maxContentLengthPerMsg: 10000,
+  maxContentLengthPerMsg: 100000,
 };
 
-// Cache from cat-config.json
+// Cache from resolved runtime cat config
 let cachedJsonBudgets: Record<string, ContextBudget> | null = null;
 
 function loadBudgetsFromJson(): Record<string, ContextBudget> {
@@ -75,7 +78,7 @@ function loadBudgetsFromJson(): Record<string, ContextBudget> {
     }
     return cachedJsonBudgets;
   } catch {
-    // cat-config.json doesn't exist or is invalid
+    // Runtime cat config doesn't exist or is invalid
     cachedJsonBudgets = {};
     return cachedJsonBudgets;
   }
@@ -83,7 +86,7 @@ function loadBudgetsFromJson(): Record<string, ContextBudget> {
 
 /**
  * Get context budget for a cat.
- * Priority: env var override (maxPromptTokens only) > cat-config.json > hardcoded defaults
+ * Priority: env var override (maxPromptTokens only) > resolved runtime cat config > hardcoded defaults
  */
 export function getCatContextBudget(catName: string): ContextBudget {
   // 1. Get base budget from JSON or default (resolve breedId for DEFAULT_BUDGETS)
@@ -91,8 +94,8 @@ export function getCatContextBudget(catName: string): ContextBudget {
   const breedId = resolveBreedId(catName);
   const baseBudget: ContextBudget =
     jsonBudgets[catName] ??
-    (breedId ? DEFAULT_BUDGETS[breedId] : undefined) ??
     DEFAULT_BUDGETS[catName] ??
+    (breedId ? DEFAULT_BUDGETS[breedId] : undefined) ??
     GLOBAL_FALLBACK_BUDGET; // F32-a: conservative fallback for dynamic cats
 
   // 2. Check for per-cat env var override

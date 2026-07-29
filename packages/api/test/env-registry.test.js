@@ -9,7 +9,15 @@ import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { afterEach, describe, it } from 'node:test';
 import Fastify from 'fastify';
-import { buildEnvSummary, ENV_CATEGORIES, ENV_VARS, maskUrlCredentials } from '../dist/config/env-registry.js';
+import {
+  buildEnvSummary,
+  ENV_CATEGORIES,
+  ENV_VARS,
+  hasSensitiveEditableVars,
+  isEditableEnvVar,
+  isSensitiveEditableEnvVar,
+  maskUrlCredentials,
+} from '../dist/config/env-registry.js';
 
 // Save and restore env vars around tests
 const savedEnv = {};
@@ -65,6 +73,35 @@ describe('env-registry', () => {
     assert.equal(apiKey.sensitive, true);
   });
 
+  it('registers KIMI_QUOTA_API_FALLBACK_ENABLED as bootstrap-only quota config', () => {
+    const def = ENV_VARS.find((v) => v.name === 'KIMI_QUOTA_API_FALLBACK_ENABLED');
+    assert.ok(def, 'KIMI_QUOTA_API_FALLBACK_ENABLED should be in registry');
+    assert.equal(def.category, 'quota');
+    assert.equal(def.runtimeEditable, false);
+    assert.equal(def.hubVisible, false);
+  });
+
+  it('exposes official quota credential configuration in Hub as bootstrap-only paths', () => {
+    const summaryNames = new Set(buildEnvSummary().map((entry) => entry.name));
+    for (const name of ['QUOTA_OFFICIAL_REFRESH_ENABLED', 'CLAUDE_CREDENTIALS_PATH', 'CODEX_CREDENTIALS_PATH']) {
+      const def = ENV_VARS.find((entry) => entry.name === name);
+      assert.ok(def, `${name} should be registered`);
+      assert.ok(summaryNames.has(name), `${name} should be visible in Hub`);
+    }
+    for (const name of ['CLAUDE_CREDENTIALS_PATH', 'CODEX_CREDENTIALS_PATH']) {
+      const def = ENV_VARS.find((entry) => entry.name === name);
+      assert.equal(def.runtimeEditable, false, `${name} should require restart instead of a misleading hot edit`);
+    }
+  });
+
+  it('registers KIMI_CONFIG_FILE as bootstrap-only kimi config', () => {
+    const def = ENV_VARS.find((v) => v.name === 'KIMI_CONFIG_FILE');
+    assert.ok(def, 'KIMI_CONFIG_FILE should be in registry');
+    assert.equal(def.category, 'kimi');
+    assert.equal(def.runtimeEditable, false);
+    assert.equal(def.hubVisible, false);
+  });
+
   it('REDIS_URL has maskMode url', () => {
     const redis = ENV_VARS.find((v) => v.name === 'REDIS_URL');
     assert.ok(redis, 'REDIS_URL should be in registry');
@@ -100,6 +137,62 @@ describe('env-registry', () => {
   it('no HINDSIGHT_* vars remain after D-1 cleanup', () => {
     const hindsightVars = ENV_VARS.filter((v) => v.name.startsWith('HINDSIGHT_'));
     assert.equal(hindsightVars.length, 0, 'All HINDSIGHT_* vars should be removed');
+  });
+
+  it('marks GITHUB_MCP_PAT, F102_API_KEY as sensitive + runtimeEditable (#340 P6: OPENAI_API_KEY removed)', () => {
+    for (const name of ['GITHUB_MCP_PAT', 'F102_API_KEY']) {
+      const def = ENV_VARS.find((v) => v.name === name);
+      assert.ok(def, `${name} should be in registry`);
+      assert.equal(def.sensitive, true, `${name} should be sensitive`);
+      assert.equal(def.runtimeEditable, true, `${name} should be runtimeEditable`);
+      assert.ok(isSensitiveEditableEnvVar(def), `${name} should pass isSensitiveEditableEnvVar`);
+    }
+    // #340 P6: OPENAI_API_KEY is no longer runtimeEditable (managed by accounts system)
+    const openai = ENV_VARS.find((v) => v.name === 'OPENAI_API_KEY');
+    assert.ok(openai, 'OPENAI_API_KEY should still be in registry');
+    assert.equal(openai.sensitive, true, 'OPENAI_API_KEY should remain sensitive');
+    assert.ok(!openai.runtimeEditable, 'OPENAI_API_KEY should not be runtimeEditable');
+  });
+
+  it('hasSensitiveEditableVars detects whitelisted sensitive vars', () => {
+    assert.ok(hasSensitiveEditableVars(['GITHUB_MCP_PAT']));
+    assert.ok(hasSensitiveEditableVars(['FRONTEND_URL', 'F102_API_KEY']));
+    assert.ok(!hasSensitiveEditableVars(['FRONTEND_URL', 'AUDIT_LOG_DIR']));
+    assert.ok(!hasSensitiveEditableVars(['OPENAI_API_KEY']), 'OPENAI_API_KEY is no longer editable (#340 P6)');
+  });
+
+  it('marks DEFAULT_OWNER_USER_ID as non-editable (trust anchor)', () => {
+    const def = ENV_VARS.find((v) => v.name === 'DEFAULT_OWNER_USER_ID');
+    assert.ok(def, 'DEFAULT_OWNER_USER_ID should be in registry');
+    assert.equal(def.runtimeEditable, false, 'trust anchor must not be editable from Hub');
+  });
+
+  it('locks startup-only telemetry vars as non-editable and hot-reloadable ones as editable (F153 Phase K)', () => {
+    const STARTUP_ONLY = [
+      'OTEL_SDK_DISABLED',
+      'TELEMETRY_HMAC_SALT',
+      'PROMETHEUS_PORT',
+      'OTEL_EXPORTER_OTLP_ENDPOINT',
+      'TELEMETRY_EXPORT_RAW_SYSTEM_IDS',
+      // BurnRateMonitor caches thresholds at construction — env change
+      // without restart has no effect (cloud review P1, PR #2594).
+      'TELEMETRY_ALERT_ERROR_RATE',
+      'TELEMETRY_ALERT_P95_LATENCY_S',
+      'TELEMETRY_ALERT_ACTIVE_INVOCATIONS',
+    ];
+    const HOT_RELOADABLE = ['PROMPT_CAPTURE', 'PROMPT_CAPTURE_CATS'];
+    for (const name of STARTUP_ONLY) {
+      const def = ENV_VARS.find((v) => v.name === name);
+      assert.ok(def, `${name} should be in registry`);
+      assert.equal(def.runtimeEditable, false, `${name} is startup-only — must not be editable from Hub`);
+      assert.equal(isEditableEnvVar(def), false, `${name} must be rejected by isEditableEnvVar`);
+    }
+    for (const name of HOT_RELOADABLE) {
+      const def = ENV_VARS.find((v) => v.name === name);
+      assert.ok(def, `${name} should be in registry`);
+      assert.equal(def.runtimeEditable, true, `${name} is hot-reloadable — must be editable from Hub`);
+      assert.equal(isEditableEnvVar(def), true, `${name} must pass isEditableEnvVar`);
+    }
   });
 });
 
@@ -231,6 +324,59 @@ describe('GET /api/config/env-summary (route)', () => {
 
     await app.close();
   });
+
+  // F212 Phase F (cloud codex R3 P2 on 3083d7c5f + R4 P2-#2 on fc69597675):
+  // env-summary.runtimeLogs MUST equal logger's CAPTURED LOG_DIR_PATH — not
+  // process.env.LOG_DIR read at request time. Runtime `PATCH /api/config/env` LOG_DIR
+  // edit would change process.env but pino destination is already bound to the
+  // captured path → users following the AC-F5 hint would grep an empty new directory.
+  it('AC-F5 (R3+R4): runtimeLogs equals logger captured LOG_DIR_PATH (single source of truth)', async () => {
+    const { configRoutes } = await import('../dist/routes/config.js');
+    const { LOG_DIR_PATH } = await import('../dist/infrastructure/logger.js');
+    const app = Fastify({ logger: false });
+    try {
+      await configRoutes(app);
+      await app.ready();
+      const res = await app.inject({ method: 'GET', url: '/api/config/env-summary' });
+      const body = JSON.parse(res.payload);
+      assert.equal(
+        body.paths.dataDirs.runtimeLogs,
+        LOG_DIR_PATH,
+        'runtimeLogs MUST equal logger LOG_DIR_PATH (R3+R4 single-source fix)',
+      );
+      assert.ok(body.paths.dataDirs.runtimeLogs.startsWith('/'), 'absolute path');
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('AC-F5 (R4 P2-#2): runtime process.env.LOG_DIR mutation MUST NOT change reported runtimeLogs', async () => {
+    const { configRoutes } = await import('../dist/routes/config.js');
+    const { LOG_DIR_PATH } = await import('../dist/infrastructure/logger.js');
+    // Mutate AFTER logger already captured (simulates runtime PATCH /api/config/env).
+    const mutatedPath = mkdtempSync(resolve(tmpdir(), 'cat-cafe-mutated-log-'));
+    setEnv('LOG_DIR', mutatedPath);
+    const app = Fastify({ logger: false });
+    try {
+      await configRoutes(app);
+      await app.ready();
+      const res = await app.inject({ method: 'GET', url: '/api/config/env-summary' });
+      const body = JSON.parse(res.payload);
+      assert.equal(
+        body.paths.dataDirs.runtimeLogs,
+        LOG_DIR_PATH,
+        'env-summary ignores runtime mutation — stays on captured logger path',
+      );
+      assert.notEqual(
+        body.paths.dataDirs.runtimeLogs,
+        mutatedPath,
+        'mutated env value MUST NOT propagate (R4 P2-#2 regression guard)',
+      );
+    } finally {
+      await app.close();
+      rmSync(mutatedPath, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('PATCH /api/config/env (route)', () => {
@@ -357,11 +503,12 @@ describe('PATCH /api/config/env (route)', () => {
     }
   });
 
-  it('rejects sensitive env vars from hub writes', async () => {
+  it('rejects OPENAI_API_KEY env write since it is no longer runtimeEditable (#340 P6)', async () => {
     const { configRoutes } = await import('../dist/routes/config.js');
     const tempRoot = mkdtempSync(resolve(tmpdir(), 'cat-cafe-env-'));
     const envFilePath = resolve(tempRoot, '.env');
     writeFileSync(envFilePath, 'OPENAI_API_KEY=sk-old\n', 'utf8');
+    setEnv('DEFAULT_OWNER_USER_ID', undefined);
 
     const app = Fastify({ logger: false });
     try {
@@ -381,10 +528,44 @@ describe('PATCH /api/config/env (route)', () => {
         },
       });
 
+      // #340 P6: OPENAI_API_KEY is no longer runtimeEditable (managed by accounts system)
       assert.equal(res.statusCode, 400);
-      const body = JSON.parse(res.payload);
-      assert.match(body.error, /not editable/);
       assert.equal(readFileSync(envFilePath, 'utf8'), 'OPENAI_API_KEY=sk-old\n');
+    } finally {
+      await app.close();
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects CONNECTOR_GATEWAY_AUTOSTART hub writes because IM autostart is a startup trust boundary', async () => {
+    const { configRoutes } = await import('../dist/routes/config.js');
+    const tempRoot = mkdtempSync(resolve(tmpdir(), 'cat-cafe-env-'));
+    const envFilePath = resolve(tempRoot, '.env');
+    writeFileSync(envFilePath, 'CONNECTOR_GATEWAY_AUTOSTART=0\n', 'utf8');
+    setEnv('CONNECTOR_GATEWAY_AUTOSTART', '0');
+
+    const app = Fastify({ logger: false });
+    try {
+      await configRoutes(app, {
+        projectRoot: tempRoot,
+        envFilePath,
+        auditLog: { append: async () => {} },
+      });
+      await app.ready();
+
+      const res = await app.inject({
+        method: 'PATCH',
+        url: '/api/config/env',
+        headers: { 'x-cat-cafe-user': 'codex' },
+        payload: {
+          updates: [{ name: 'CONNECTOR_GATEWAY_AUTOSTART', value: '1' }],
+        },
+      });
+
+      assert.equal(res.statusCode, 400);
+      assert.match(JSON.parse(res.payload).error, /not editable/i);
+      assert.equal(readFileSync(envFilePath, 'utf8'), 'CONNECTOR_GATEWAY_AUTOSTART=0\n');
+      assert.equal(process.env.CONNECTOR_GATEWAY_AUTOSTART, '0');
     } finally {
       await app.close();
       rmSync(tempRoot, { recursive: true, force: true });
@@ -545,6 +726,53 @@ describe('PATCH /api/config/env (route)', () => {
       const body = JSON.parse(res.payload);
       assert.match(body.error, /not editable/i);
       assert.equal(readFileSync(envFilePath, 'utf8'), 'REDIS_URL=redis://localhost:6399/15\n');
+    } finally {
+      await app.close();
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects startup-only telemetry vars from hub writes (F153 Phase K regression)', async () => {
+    const { configRoutes } = await import('../dist/routes/config.js');
+    const tempRoot = mkdtempSync(resolve(tmpdir(), 'cat-cafe-env-'));
+    const envFilePath = resolve(tempRoot, '.env');
+    writeFileSync(envFilePath, 'OTEL_SDK_DISABLED=false\nPROMETHEUS_PORT=9464\n', 'utf8');
+
+    const app = Fastify({ logger: false });
+    try {
+      await configRoutes(app, {
+        projectRoot: tempRoot,
+        envFilePath,
+        auditLog: { append: async () => {} },
+      });
+      await app.ready();
+
+      // Startup-only telemetry var must be rejected
+      const otelRes = await app.inject({
+        method: 'PATCH',
+        url: '/api/config/env',
+        headers: { 'x-cat-cafe-user': 'codex' },
+        payload: {
+          updates: [{ name: 'OTEL_SDK_DISABLED', value: 'true' }],
+        },
+      });
+      assert.equal(otelRes.statusCode, 400, 'OTEL_SDK_DISABLED should be rejected');
+      assert.match(JSON.parse(otelRes.payload).error, /not editable/i);
+
+      // BurnRateMonitor caches thresholds at construction — must also be rejected
+      const alertRes = await app.inject({
+        method: 'PATCH',
+        url: '/api/config/env',
+        headers: { 'x-cat-cafe-user': 'codex' },
+        payload: {
+          updates: [{ name: 'TELEMETRY_ALERT_ERROR_RATE', value: '0.5' }],
+        },
+      });
+      assert.equal(alertRes.statusCode, 400, 'TELEMETRY_ALERT_ERROR_RATE should be rejected (startup-only)');
+
+      // Verify .env file unchanged for startup-only var
+      const envContent = readFileSync(envFilePath, 'utf8');
+      assert.match(envContent, /OTEL_SDK_DISABLED=false/, 'startup-only var must not be written');
     } finally {
       await app.close();
       rmSync(tempRoot, { recursive: true, force: true });

@@ -28,7 +28,7 @@ function noopLog() {
  */
 function mockRouter(opts = {}) {
   const calls =
-    /** @type {Array<{userId: string, message: string, threadId: string, userMessageId: string, targetCats: string[], intent: object}>} */ ([]);
+    /** @type {Array<{userId: string, message: string, threadId: string, userMessageId: string, targetCats: string[], intent: object, options?: object}>} */ ([]);
   const ackCalls = /** @type {Array<{userId: string, threadId: string}>} */ ([]);
 
   return {
@@ -37,7 +37,7 @@ function mockRouter(opts = {}) {
     /** @type {any} */
     router: {
       async *routeExecution(userId, message, threadId, userMessageId, targetCats, intent, options) {
-        calls.push({ userId, message, threadId, userMessageId, targetCats, intent });
+        calls.push({ userId, message, threadId, userMessageId, targetCats, intent, options });
 
         if (opts.throwError) throw opts.throwError;
 
@@ -137,6 +137,7 @@ function mockInvocationRecordStore() {
 
 function mockInvocationTracker() {
   const starts = /** @type {Array<{threadId: string, catId: string}>} */ ([]);
+  const tryStartThreadCalls = /** @type {Array<{threadId: string, catId: string}>} */ ([]);
   const completes = /** @type {Array<{threadId: string, catId: string}>} */ ([]);
   const cancelCalls = /** @type {Array<{threadId: string, catId: string, userId: (string|undefined)}>} */ ([]);
   let aborted = false;
@@ -146,6 +147,7 @@ function mockInvocationTracker() {
 
   return {
     starts,
+    tryStartThreadCalls,
     completes,
     cancelCalls,
     setAborted(val) {
@@ -167,6 +169,11 @@ function mockInvocationTracker() {
         starts.push({ threadId, catId });
         const controller = { signal: { aborted } };
         return controller;
+      },
+      tryStartThread(threadId, catId, _userId, _catIds) {
+        tryStartThreadCalls.push({ threadId, catId });
+        if (activeSlots.has(threadId)) return null;
+        return { signal: { aborted } };
       },
       complete(threadId, catId, _controller) {
         completes.push({ threadId, catId });
@@ -251,6 +258,19 @@ describe('ConnectorInvokeTrigger', () => {
     assert.deepStrictEqual(routerMock.calls[0].targetCats, ['opus']);
   });
 
+  it('F222 P1: connector direct routeExecution passes frustrationAutoIssueEligible=false', async () => {
+    const trigger = createTrigger();
+    trigger.trigger('thread-1', /** @type {any} */ ('opus'), 'user-1', 'Review msg', 'msg-f222');
+    await waitForTrigger();
+
+    assert.strictEqual(routerMock.calls.length, 1);
+    assert.strictEqual(
+      routerMock.calls[0].options?.frustrationAutoIssueEligible,
+      false,
+      'connector direct execution must suppress frustration detection',
+    );
+  });
+
   it('broadcasts agent messages to WebSocket room', async () => {
     const trigger = createTrigger();
     trigger.trigger('thread-1', /** @type {any} */ ('opus'), 'user-1', 'Review msg', 'msg-1');
@@ -270,7 +290,7 @@ describe('ConnectorInvokeTrigger', () => {
 
   it('updates InvocationRecord through lifecycle: userMessageId → running → succeeded', async () => {
     const trigger = createTrigger();
-    trigger.trigger('thread-1', /** @type {any} */ ('opus'), 'user-1', 'msg', 'msg-1');
+    await trigger.trigger('thread-1', /** @type {any} */ ('opus'), 'user-1', 'msg', 'msg-1');
     await waitForTrigger();
 
     // Check update sequence
@@ -303,7 +323,7 @@ describe('ConnectorInvokeTrigger', () => {
     trigger.trigger('thread-1', /** @type {any} */ ('opus'), 'user-1', 'msg', 'msg-1');
     await waitForTrigger();
 
-    assert.strictEqual(trackerMock.starts.length, 1);
+    assert.strictEqual(trackerMock.tryStartThreadCalls.length, 1);
     assert.strictEqual(trackerMock.completes.length, 1);
     assert.strictEqual(trackerMock.completes[0].threadId, 'thread-1');
   });
@@ -376,14 +396,36 @@ describe('ConnectorInvokeTrigger', () => {
     };
 
     const trigger = createTrigger();
-    trigger.trigger('thread-1', /** @type {any} */ ('opus'), 'user-1', 'msg', 'msg-1');
+    await assert.rejects(
+      trigger.trigger('thread-1', /** @type {any} */ ('opus'), 'user-1', 'msg', 'msg-1'),
+      /create boom/,
+    );
     await waitForTrigger();
 
-    // Should NOT start tracker (create failed before start)
+    // start() not called (F185: tryStartThread used instead)
     assert.strictEqual(trackerMock.starts.length, 0);
+    // F185: tryStartThread WAS called (controller pre-acquired in trigger)
+    assert.strictEqual(trackerMock.tryStartThreadCalls.length, 1, 'controller was pre-acquired');
+    // R1-P1 FIX: controller must be released even when create() throws
+    assert.strictEqual(trackerMock.completes.length, 1, 'pre-acquired controller must be released on create failure');
     // Should NOT call routeExecution
     assert.strictEqual(routerMock.calls.length, 0);
     // No unhandledRejection = test process survives
+  });
+
+  it('PR #1181 P1: dispatched is returned only after the invocation record is durable', async () => {
+    recordMock.store.create = async () => {
+      throw new Error('record store unavailable');
+    };
+
+    const trigger = createTrigger();
+    await assert.rejects(
+      trigger.trigger('thread-1', /** @type {any} */ ('opus'), 'user-1', 'msg', 'msg-durable-admission'),
+      /record store unavailable/,
+    );
+
+    assert.strictEqual(routerMock.calls.length, 0, 'execution must not start without a durable invocation record');
+    assert.strictEqual(trackerMock.completes.length, 1, 'failed admission must release the pre-acquired controller');
   });
 
   it('R1-P1 regression: userMessageId backfill throws → tracker completes, status=failed', async () => {
@@ -402,7 +444,7 @@ describe('ConnectorInvokeTrigger', () => {
     await waitForTrigger();
 
     // Tracker must have been started AND completed (no leak)
-    assert.strictEqual(trackerMock.starts.length, 1, 'tracker should start');
+    assert.strictEqual(trackerMock.tryStartThreadCalls.length, 1, 'tracker should start via tryStartThread');
     assert.strictEqual(trackerMock.completes.length, 1, 'tracker must complete even on backfill error');
 
     // Should NOT call routeExecution (error happened before)
@@ -589,8 +631,9 @@ describe('ConnectorInvokeTrigger', () => {
     assert.deepStrictEqual(deliverOrder, ['opus', 'codex'], 'Should deliver in cat order, not race order');
   });
 
-  it('cloud-P1: does NOT deliver empty reply for silent invocation (no text, no richBlocks)', async () => {
-    // Router yields only 'done' — no text, no richBlocks
+  it('cloud-P1: delivers fallback message for silent invocation (#873)', async () => {
+    // Router yields only 'done' — no text, no richBlocks.
+    // #873 fix: silent path now delivers a fallback so IM users aren't left hanging.
     const silentRouter = /** @type {any} */ ({
       async *routeExecution(userId, message, threadId, userMessageId, targetCats, intent, options) {
         yield {
@@ -615,7 +658,9 @@ describe('ConnectorInvokeTrigger', () => {
     trigger.trigger('thread-1', /** @type {any} */ ('opus'), 'user-1', 'msg', 'msg-1');
     await waitForTrigger();
 
-    assert.strictEqual(deliverCalls.length, 0, 'Should NOT deliver empty reply for silent cat');
+    assert.strictEqual(deliverCalls.length, 1, 'Should deliver fallback for silent invocation');
+    assert.strictEqual(deliverCalls[0].catId, 'opus');
+    assert.ok(deliverCalls[0].content, 'Fallback content should be non-empty');
   });
 
   it('cloud-P1: hanging deliver does not block tracker cleanup', async () => {
@@ -694,7 +739,9 @@ describe('ConnectorInvokeTrigger', () => {
     assert.strictEqual(cleanupCalled, true, 'cleanup must run after late-success delivery');
   });
 
-  it('cloud-R4-P2: late-failure delivery does NOT trigger deferred cleanup', async () => {
+  it('cloud-R5-P1: late-failure delivery must NOT trigger cleanup (preserve placeholder as fallback)', async () => {
+    // R5-P1 design: on delivery failure, placeholder is preserved so next retry/invocation can
+    // consume it. Calling cleanupPlaceholders on failure would incorrectly finalize the card.
     /** @type {(err: Error) => void} */
     let rejectDeliver = () => {};
     const deliverPromise = new Promise((_, rej) => {
@@ -723,11 +770,126 @@ describe('ConnectorInvokeTrigger', () => {
     trigger.trigger('thread-1', /** @type {any} */ ('opus'), 'user-1', 'msg', 'msg-1');
 
     await new Promise((r) => setTimeout(r, 200));
-    assert.strictEqual(cleanupCalled, false, 'cleanup must NOT run after timeout');
+    assert.strictEqual(cleanupCalled, false, 'cleanup must NOT run before inflight promises settle');
 
     rejectDeliver(new Error('connector down'));
     await new Promise((r) => setTimeout(r, 100));
-    assert.strictEqual(cleanupCalled, false, 'cleanup must NOT run when delivery truly failed');
+    assert.strictEqual(
+      cleanupCalled,
+      false,
+      'cleanup must NOT run after hard delivery failure (R5-P1: preserve placeholder)',
+    );
+  });
+
+  it('R7: silent fallback late-success triggers deferred placeholder cleanup', async () => {
+    // Silent invocation (only done, no text) → deliver times out → deliver later succeeds
+    // → cleanupPlaceholders must be called on late-success (R7 fix).
+    const silentRouter = /** @type {any} */ ({
+      async *routeExecution(_u, _m, _t, _mid, targetCats, _i, _o) {
+        yield {
+          type: 'done',
+          catId: targetCats[0],
+          content: '',
+          timestamp: Date.now(),
+          metadata: { usage: { inputTokens: 0, outputTokens: 0 } },
+        };
+      },
+      async ackCollectedCursors() {},
+    });
+
+    /** @type {() => void} */
+    let resolveDeliver = () => {};
+    const deliverPromise = new Promise((r) => {
+      resolveDeliver = r;
+    });
+    const outboundHook = {
+      deliver: async () => {
+        await deliverPromise;
+      },
+    };
+    let cleanupCalled = false;
+    const streamingHook = {
+      async onStreamStart() {},
+      async onStreamChunk() {},
+      async onStreamEnd() {},
+      cleanupPlaceholders: async () => {
+        cleanupCalled = true;
+      },
+    };
+
+    const trigger = createTrigger({
+      router: silentRouter,
+      outboundHook,
+      streamingHook,
+      deliverTimeoutMs: 50,
+    });
+    trigger.trigger('thread-1', /** @type {any} */ ('opus'), 'user-1', 'msg', 'msg-1');
+
+    // Wait for timeout to fire
+    await new Promise((r) => setTimeout(r, 200));
+    assert.strictEqual(cleanupCalled, false, 'cleanup must NOT run immediately after silent timeout');
+
+    // Late-success: deliver finally resolves
+    resolveDeliver();
+    await new Promise((r) => setTimeout(r, 100));
+    assert.strictEqual(cleanupCalled, true, 'cleanup must run after silent late-success delivery (R7)');
+  });
+
+  it('R7: silent fallback late-failure must NOT trigger cleanup (preserve placeholder)', async () => {
+    // Silent invocation → deliver times out → deliver later rejects
+    // → cleanupPlaceholders must NOT be called (thinking card stays as fallback UX).
+    const silentRouter = /** @type {any} */ ({
+      async *routeExecution(_u, _m, _t, _mid, targetCats, _i, _o) {
+        yield {
+          type: 'done',
+          catId: targetCats[0],
+          content: '',
+          timestamp: Date.now(),
+          metadata: { usage: { inputTokens: 0, outputTokens: 0 } },
+        };
+      },
+      async ackCollectedCursors() {},
+    });
+
+    /** @type {(err: Error) => void} */
+    let rejectDeliver = () => {};
+    const deliverPromise = new Promise((_, rej) => {
+      rejectDeliver = rej;
+    });
+    const outboundHook = {
+      deliver: async () => {
+        await deliverPromise;
+      },
+    };
+    let cleanupCalled = false;
+    const streamingHook = {
+      async onStreamStart() {},
+      async onStreamChunk() {},
+      async onStreamEnd() {},
+      cleanupPlaceholders: async () => {
+        cleanupCalled = true;
+      },
+    };
+
+    const trigger = createTrigger({
+      router: silentRouter,
+      outboundHook,
+      streamingHook,
+      deliverTimeoutMs: 50,
+    });
+    trigger.trigger('thread-1', /** @type {any} */ ('opus'), 'user-1', 'msg', 'msg-1');
+
+    await new Promise((r) => setTimeout(r, 200));
+    assert.strictEqual(cleanupCalled, false, 'cleanup must NOT run after silent timeout');
+
+    // Late-failure: deliver rejects
+    rejectDeliver(new Error('connector down'));
+    await new Promise((r) => setTimeout(r, 100));
+    assert.strictEqual(
+      cleanupCalled,
+      false,
+      'cleanup must NOT run after silent hard failure (R7: preserve placeholder)',
+    );
   });
 
   it('cloud-P1-4: A→B→A ping-pong delivers 3 separate turns (not merged by catId)', async () => {
@@ -905,7 +1067,7 @@ describe('ConnectorInvokeTrigger', () => {
       assert.deepStrictEqual(entries[0].targetCats, ['opus']);
     });
 
-    it('preempts active invocation for urgent connector triggers', async () => {
+    it('urgent connector enqueues with priority instead of preempting (F175)', async () => {
       trackerMock.setActive('thread-1', 'user-1');
       const trigger = createTrigger();
       trigger.trigger(
@@ -922,46 +1084,40 @@ describe('ConnectorInvokeTrigger', () => {
       );
       await waitForTrigger();
 
-      // Should execute directly instead of queueing
-      assert.strictEqual(routerMock.calls.length, 1, 'Should execute immediately for urgent connector');
-      assert.strictEqual(recordMock.creates.length, 1, 'Should create invocation record');
-      assert.strictEqual(queue.list('thread-1', 'user-1').length, 0, 'Should not enqueue urgent connector');
+      assert.strictEqual(trackerMock.cancelCalls.length, 0, 'F175: no preemption — active signal must not be aborted');
+      assert.strictEqual(routerMock.calls.length, 0, 'Should not execute directly — goes through queue');
 
-      // Should attempt to cancel active invocation owned by same user
-      assert.strictEqual(trackerMock.cancelCalls.length, 1, 'Should call invocationTracker.cancel');
-      assert.deepStrictEqual(trackerMock.cancelCalls[0], { threadId: 'thread-1', catId: 'opus', userId: 'user-1' });
+      const entries = queue.list('thread-1', 'user-1');
+      assert.strictEqual(entries.length, 1, 'Should enqueue urgent message');
+      assert.strictEqual(entries[0].priority, 'urgent', 'Entry should carry urgent priority');
+      assert.strictEqual(entries[0].messageId, 'msg-urgent-1');
     });
 
-    it('clears queue pause before urgent preempt replacement execution', async () => {
+    it('urgent connector passes sourceCategory to queue entry (F175)', async () => {
       trackerMock.setActive('thread-1', 'user-1');
-      const clearPauseCalls = /** @type {Array<{threadId: string, catId: string}>} */ ([]);
-      const mockQueueProcessor = /** @type {any} */ ({
-        clearPause(threadId, catId) {
-          clearPauseCalls.push({ threadId, catId });
-        },
-        async onInvocationComplete() {},
-      });
-      const trigger = createTrigger({ queueProcessor: mockQueueProcessor });
+      const trigger = createTrigger();
       trigger.trigger(
         'thread-1',
         /** @type {any} */ ('opus'),
         'user-1',
-        'Urgent review msg',
-        'msg-urgent-clear-pause',
+        'Review with category',
+        'msg-cat-1',
         undefined,
-        { priority: 'urgent', reason: 'github_review' },
+        {
+          priority: 'urgent',
+          reason: 'github_review',
+          sourceCategory: 'review',
+        },
       );
       await waitForTrigger();
 
-      assert.strictEqual(routerMock.calls.length, 1, 'Should execute urgent replacement');
-      assert.deepStrictEqual(
-        clearPauseCalls,
-        [{ threadId: 'thread-1', catId: 'opus' }],
-        'Should clear stale pause before replacement execution',
-      );
+      const entries = queue.list('thread-1', 'user-1');
+      assert.strictEqual(entries.length, 1);
+      assert.strictEqual(entries[0].sourceCategory, 'review', 'sourceCategory should be preserved on queue entry');
+      assert.strictEqual(entries[0].priority, 'urgent');
     });
 
-    it('does not preempt when urgent cancel is denied (owner mismatch)', async () => {
+    it('urgent connector with owner mismatch still enqueues without cancel (F175)', async () => {
       trackerMock.setActive('thread-1', 'owner-user');
       const trigger = createTrigger();
       trigger.trigger(
@@ -978,234 +1134,23 @@ describe('ConnectorInvokeTrigger', () => {
       );
       await waitForTrigger();
 
-      // owner mismatch should enqueue without attempting cancel
-      assert.strictEqual(trackerMock.cancelCalls.length, 0, 'Should not call cancel when active owner differs');
-      assert.strictEqual(routerMock.calls.length, 0, 'Should not execute when cancel denied');
+      assert.strictEqual(trackerMock.cancelCalls.length, 0, 'F175: no cancel calls for any urgent trigger');
+      assert.strictEqual(routerMock.calls.length, 0, 'Should not execute directly');
 
       const entries = queue.list('thread-1', 'user-2');
-      assert.strictEqual(entries.length, 1, 'Should enqueue urgent connector when cancel denied');
-      assert.strictEqual(entries[0].messageId, 'msg-urgent-2');
+      assert.strictEqual(entries.length, 1, 'Should enqueue urgent connector');
+      assert.strictEqual(entries[0].priority, 'urgent');
     });
 
-    it('skips urgent preempt when create returns duplicate idempotency key', async () => {
+    it('normal priority connector enqueues with priority normal (F175)', async () => {
       trackerMock.setActive('thread-1', 'user-1');
-      recordMock.setDuplicate();
       const trigger = createTrigger();
-      trigger.trigger(
-        'thread-1',
-        /** @type {any} */ ('opus'),
-        'user-1',
-        'Urgent duplicate review msg',
-        'msg-dup-1',
-        undefined,
-        {
-          priority: 'urgent',
-          reason: 'github_review',
-        },
-      );
+      trigger.trigger('thread-1', /** @type {any} */ ('opus'), 'user-1', 'Normal msg', 'msg-normal-1');
       await waitForTrigger();
 
-      // Existing invocation should remain untouched.
-      assert.strictEqual(trackerMock.cancelCalls.length, 0, 'Should not cancel active invocation on duplicate');
-      assert.strictEqual(routerMock.calls.length, 0, 'Should not execute duplicate urgent connector');
-      assert.strictEqual(recordMock.creates.length, 1, 'Should only perform create duplicate check');
-      assert.strictEqual(queue.list('thread-1', 'user-1').length, 0, 'Should not enqueue duplicate urgent connector');
-    });
-
-    it('does not cancel winner invocation when duplicate urgent trigger races', async () => {
-      trackerMock.setActive('thread-1', 'user-1');
-      let createCallCount = 0;
-      /** @type {() => void} */
-      let releaseFirstCreate;
-      const firstCreatePending = new Promise((resolve) => {
-        releaseFirstCreate = resolve;
-      });
-
-      recordMock.store.create = async (input) => {
-        recordMock.creates.push(input);
-        createCallCount++;
-        if (createCallCount === 1) {
-          await firstCreatePending;
-          return { outcome: 'created', invocationId: 'inv-1' };
-        }
-        return { outcome: 'duplicate', invocationId: 'inv-1' };
-      };
-
-      const trigger = createTrigger();
-      trigger.trigger(
-        'thread-1',
-        /** @type {any} */ ('opus'),
-        'user-1',
-        'Urgent duplicate race',
-        'msg-dup-race',
-        undefined,
-        {
-          priority: 'urgent',
-          reason: 'github_review',
-        },
-      );
-
-      // Let first trigger enter create() await, then send duplicate.
-      await Promise.resolve();
-      trigger.trigger(
-        'thread-1',
-        /** @type {any} */ ('opus'),
-        'user-1',
-        'Urgent duplicate race',
-        'msg-dup-race',
-        undefined,
-        {
-          priority: 'urgent',
-          reason: 'github_review',
-        },
-      );
-
-      await waitForTrigger();
-      assert.strictEqual(trackerMock.cancelCalls.length, 0, 'Duplicate trigger must not cancel before winner resolves');
-
-      releaseFirstCreate();
-      await waitForTrigger();
-
-      assert.strictEqual(recordMock.creates.length, 2, 'Both urgent triggers should attempt create');
-      assert.strictEqual(trackerMock.cancelCalls.length, 1, 'Only create winner should cancel active invocation');
-      assert.strictEqual(routerMock.calls.length, 1, 'Only winner should execute');
-      assert.strictEqual(queue.list('thread-1', 'user-1').length, 0, 'Duplicate should not enqueue');
-    });
-
-    it('falls through to direct execution when active invocation ends before urgent fallback', async () => {
-      trackerMock.setActive('thread-1', 'user-1');
-      recordMock.setBeforeCreate(() => {
-        // Simulate race: active invocation completes while urgent path awaits create.
-        trackerMock.clearActive('thread-1');
-      });
-      const trigger = createTrigger();
-      trigger.trigger(
-        'thread-1',
-        /** @type {any} */ ('opus'),
-        'user-1',
-        'Urgent review after race',
-        'msg-urgent-race',
-        undefined,
-        { priority: 'urgent', reason: 'github_review' },
-      );
-      await waitForTrigger();
-
-      assert.strictEqual(routerMock.calls.length, 1, 'Should execute directly when thread no longer active');
-      assert.strictEqual(recordMock.creates.length, 1, 'Should create invocation record');
-      assert.strictEqual(queue.list('thread-1', 'user-1').length, 0, 'Should not enqueue when thread is idle');
-    });
-
-    it('enqueues fallback before awaited update to avoid urgent queue race', async () => {
-      trackerMock.setActive('thread-1', 'user-1');
-      trackerMock.setCancelDenied(true);
-      recordMock.setBeforeUpdate(() => {
-        // Simulate race: active invocation ends while urgent fallback awaits status update.
-        trackerMock.clearActive('thread-1');
-      });
-      const trigger = createTrigger();
-      trigger.trigger(
-        'thread-1',
-        /** @type {any} */ ('opus'),
-        'user-1',
-        'Urgent review fallback race',
-        'msg-urgent-fallback-race',
-        undefined,
-        { priority: 'urgent', reason: 'github_review' },
-      );
-      await waitForTrigger();
-
-      assert.strictEqual(trackerMock.cancelCalls.length, 1, 'Should attempt cancel once');
-      assert.strictEqual(routerMock.calls.length, 0, 'Should not execute fallback inline while cancel denied');
-      assert.strictEqual(
-        queue.list('thread-1', 'user-1').length,
-        1,
-        'Fallback entry should already be enqueued before awaited update',
-      );
-      const canceledUpdates = recordMock.updates.filter((update) => update.data.status === 'canceled');
-      assert.strictEqual(
-        canceledUpdates.length,
-        1,
-        'Fallback invocation should be marked canceled after queue handoff',
-      );
-    });
-
-    it('falls back to direct execution when urgent fallback queue is full', async () => {
-      trackerMock.setActive('thread-1', 'user-1');
-      trackerMock.setCancelDenied(true);
-      const trigger = createTrigger();
-
-      // Fill queue to MAX_QUEUE_DEPTH with non-mergeable entries.
-      const cats = ['codex', 'opus', 'codex', 'opus', 'codex'];
-      for (let i = 0; i < 5; i++) {
-        trigger.trigger('thread-1', /** @type {any} */ (cats[i]), 'user-1', `prefill ${i}`, `msg-prefill-${i}`);
-        await waitForTrigger();
-      }
-
-      trigger.trigger(
-        'thread-1',
-        /** @type {any} */ ('opus'),
-        'user-1',
-        'Urgent when queue full',
-        'msg-urgent-full',
-        undefined,
-        {
-          priority: 'urgent',
-          reason: 'github_review',
-        },
-      );
-      await waitForTrigger();
-
-      assert.strictEqual(trackerMock.cancelCalls.length, 1, 'Should attempt cancel once');
-      assert.strictEqual(routerMock.calls.length, 1, 'Should execute directly when fallback enqueue is full');
-      assert.strictEqual(
-        queue.list('thread-1', 'user-1').length,
-        5,
-        'Queue should remain full without fallback enqueue',
-      );
-      const canceledFallback = recordMock.updates.filter(
-        (update) => update.data.status === 'canceled' && update.data.error === 'urgent preempt fallback to queue',
-      );
-      assert.strictEqual(canceledFallback.length, 0, 'Direct fallback must not mark invocation canceled');
-    });
-
-    it('does not execute urgent fallback on queue-full owner-mismatch race', async () => {
-      trackerMock.setActive('thread-1', 'user-1');
-      // Fill user-1 queue to full so urgent fallback enqueue returns full.
-      const cats = ['codex', 'opus', 'codex', 'opus', 'codex'];
-      for (let i = 0; i < 5; i++) {
-        queue.enqueue({
-          threadId: 'thread-1',
-          userId: 'user-1',
-          content: `prefill ${i}`,
-          source: 'connector',
-          targetCats: [/** @type {any} */ (cats[i])],
-          intent: 'execute',
-        });
-      }
-      // Race: owner changes after initial getUserId() but before cancel().
-      recordMock.setBeforeCreate(() => {
-        trackerMock.setActive('thread-1', 'owner-user');
-      });
-
-      const trigger = createTrigger();
-      trigger.trigger(
-        'thread-1',
-        /** @type {any} */ ('opus'),
-        'user-1',
-        'Urgent owner mismatch + queue full',
-        'msg-urgent-owner-race',
-        undefined,
-        { priority: 'urgent', reason: 'github_review' },
-      );
-      await waitForTrigger();
-
-      assert.strictEqual(trackerMock.cancelCalls.length, 1, 'Should attempt cancel once');
-      assert.strictEqual(routerMock.calls.length, 0, 'Must not execute when queue is full and owner changed');
-      const failedUpdates = recordMock.updates.filter(
-        (update) =>
-          update.data.status === 'failed' && update.data.error === 'urgent fallback queue full with owner mismatch',
-      );
-      assert.strictEqual(failedUpdates.length, 1, 'Should mark provisional invocation as failed');
+      const entries = queue.list('thread-1', 'user-1');
+      assert.strictEqual(entries.length, 1);
+      assert.strictEqual(entries[0].priority, 'normal', 'Default priority should be normal');
     });
 
     it('emits queue_updated after enqueue', async () => {
@@ -1237,30 +1182,106 @@ describe('ConnectorInvokeTrigger', () => {
       assert.ok(entries[1].content.includes('Second review'));
     });
 
-    it('emits queue_full_warning when queue is full', async () => {
+    it('coalesces queued connector messages with the same policy coalesceKey and preserves first content', async () => {
+      trackerMock.setActive('thread-1');
+      const trigger = createTrigger();
+      const policy = {
+        priority: 'normal',
+        reason: 'github_review_feedback',
+        sourceCategory: 'review',
+        coalesceKey: 'pr:owner/repo#42:review-feedback',
+      };
+
+      trigger.trigger('thread-1', /** @type {any} */ ('opus'), 'user-1', 'First review', 'msg-1', undefined, policy);
+      await waitForTrigger();
+      trigger.trigger('thread-1', /** @type {any} */ ('opus'), 'user-1', 'Second review', 'msg-2', undefined, policy);
+      await waitForTrigger();
+
+      const entries = queue.list('thread-1', 'user-1');
+      assert.strictEqual(entries.length, 1, 'same PR review feedback should keep one queued invocation');
+      assert.strictEqual(entries[0].content, 'First review', 'coalescing keeps first queued content as canonical');
+      assert.strictEqual(entries[0].messageId, 'msg-1');
+      assert.deepStrictEqual(entries[0].mergedMessageIds, ['msg-2']);
+    });
+
+    it('upgrades coalesced review feedback when a later event is urgent', async () => {
+      trackerMock.setActive('thread-1');
+      const trigger = createTrigger();
+      const coalesceKey = 'pr:owner/repo#42:review-feedback';
+
+      trigger.trigger('thread-1', /** @type {any} */ ('opus'), 'user-1', 'Commented review', 'msg-1', undefined, {
+        priority: 'normal',
+        reason: 'github_review_feedback',
+        sourceCategory: 'review',
+        coalesceKey,
+      });
+      await waitForTrigger();
+      trigger.trigger('thread-1', /** @type {any} */ ('opus'), 'user-1', 'Changes requested', 'msg-2', undefined, {
+        priority: 'urgent',
+        reason: 'github_review_feedback',
+        sourceCategory: 'review',
+        suggestedSkill: 'receive-review',
+        coalesceKey,
+      });
+      await waitForTrigger();
+
+      const entries = queue.list('thread-1', 'user-1');
+      assert.strictEqual(entries.length, 1, 'same PR review feedback should keep one queued invocation');
+      assert.strictEqual(entries[0].content, 'Commented review', 'coalescing still keeps first content canonical');
+      assert.strictEqual(entries[0].priority, 'urgent', 'later CHANGES_REQUESTED should upgrade queue priority');
+      assert.strictEqual(entries[0].suggestedSkill, 'receive-review');
+      assert.strictEqual(entries[0].messageId, 'msg-1');
+      assert.deepStrictEqual(entries[0].mergedMessageIds, ['msg-2']);
+    });
+
+    it('queues follow-up review feedback when the previous coalesced wake-up is already processing', async () => {
+      trackerMock.setActive('thread-1');
+      const trigger = createTrigger();
+      const coalesceKey = 'pr:owner/repo#42:review-feedback';
+      const policy = {
+        priority: 'normal',
+        reason: 'github_review_feedback',
+        sourceCategory: 'review',
+        suggestedSkill: 'receive-review',
+        coalesceKey,
+      };
+
+      trigger.trigger('thread-1', /** @type {any} */ ('opus'), 'user-1', 'First review', 'msg-1', undefined, policy);
+      await waitForTrigger();
+      const first = queue.markProcessing('thread-1', 'user-1');
+      assert.ok(first, 'first coalesced wake-up should be processing');
+
+      trigger.trigger('thread-1', /** @type {any} */ ('opus'), 'user-1', 'Second review', 'msg-2', undefined, policy);
+      await waitForTrigger();
+      trigger.trigger('thread-1', /** @type {any} */ ('opus'), 'user-1', 'Third review', 'msg-3', undefined, policy);
+      await waitForTrigger();
+
+      const entries = queue.list('thread-1', 'user-1');
+      const processingEntries = entries.filter((entry) => entry.status === 'processing');
+      const queuedEntries = entries.filter((entry) => entry.status === 'queued');
+
+      assert.strictEqual(processingEntries.length, 1, 'the in-flight wake-up remains processing');
+      assert.strictEqual(queuedEntries.length, 1, 'follow-up feedback gets a fresh queued wake-up');
+      assert.strictEqual(queuedEntries[0].content, 'Second review');
+      assert.strictEqual(queuedEntries[0].messageId, 'msg-2');
+      assert.deepStrictEqual(queuedEntries[0].mergedMessageIds, ['msg-3']);
+    });
+
+    it('connector messages bypass MAX_QUEUE_DEPTH (F175)', async () => {
       trackerMock.setActive('thread-1');
       const trigger = createTrigger();
 
-      // Fill the queue (5 entries = MAX_QUEUE_DEPTH)
-      // Use different targetCats to prevent merge
-      const cats = ['opus', 'codex', 'opus', 'codex', 'opus'];
-      for (let i = 0; i < 5; i++) {
-        trigger.trigger('thread-1', /** @type {any} */ (cats[i]), 'user-1', `msg ${i}`, `msg-${i}`);
+      // Enqueue 7 connector messages — all should succeed (no depth limit for connector)
+      for (let i = 0; i < 7; i++) {
+        trigger.trigger('thread-1', /** @type {any} */ ('opus'), 'user-1', `msg ${i}`, `msg-${i}`);
         await waitForTrigger();
       }
 
-      // 6th message should trigger full warning
-      trigger.trigger('thread-1', /** @type {any} */ ('codex'), 'user-1', 'overflow msg', 'msg-overflow');
-      await waitForTrigger();
-
       const fullWarning = socketMock.userEmits.find((e) => e.event === 'queue_full_warning');
-      assert.ok(fullWarning, 'Should emit queue_full_warning');
-      assert.strictEqual(fullWarning.data.source, 'connector');
+      assert.strictEqual(fullWarning, undefined, 'No queue_full_warning for connector source');
 
-      // Should NOT have emitted queue_updated for the overflow
-      const lastUpdate = socketMock.userEmits.filter((e) => e.event === 'queue_updated');
-      // 5 successful enqueues = 5 queue_updated events (but not 6)
-      assert.strictEqual(lastUpdate.length, 5);
+      const entries = queue.list('thread-1', 'user-1');
+      assert.strictEqual(entries.length, 7, 'All 7 connector messages should be enqueued');
     });
 
     it('P1 fix: direct execution calls queueProcessor.onInvocationComplete on success', async () => {
@@ -1268,6 +1289,8 @@ describe('ConnectorInvokeTrigger', () => {
       // so queued follow-ups stall forever. This test verifies the fix.
       const qpCalls = /** @type {Array<{threadId: string, catId: string, status: string}>} */ ([]);
       const mockQueueProcessor = /** @type {any} */ ({
+        isThreadBusy: () => false,
+        isCatBusy: () => false,
         async onInvocationComplete(threadId, catId, status) {
           qpCalls.push({ threadId, catId, status });
         },
@@ -1286,6 +1309,8 @@ describe('ConnectorInvokeTrigger', () => {
     it('P1 fix: direct execution calls queueProcessor.onInvocationComplete on failure', async () => {
       const qpCalls = /** @type {Array<{threadId: string, catId: string, status: string}>} */ ([]);
       const mockQueueProcessor = /** @type {any} */ ({
+        isThreadBusy: () => false,
+        isCatBusy: () => false,
         async onInvocationComplete(threadId, catId, status) {
           qpCalls.push({ threadId, catId, status });
         },
@@ -1311,6 +1336,232 @@ describe('ConnectorInvokeTrigger', () => {
       assert.strictEqual(routerMock.calls.length, 1);
       // Queue should be empty
       assert.strictEqual(queue.list('thread-1', 'user-1').length, 0);
+    });
+  });
+
+  describe('F140 Phase C: suggestedSkill through queue path (F175)', () => {
+    it('suggestedSkill is preserved on queue entry when urgent enqueues (F175)', async () => {
+      trackerMock.setActive('thread-1', 'user-1');
+      const trigger = createTrigger();
+      const policy = { priority: 'urgent', reason: 'github_ci_failure', suggestedSkill: 'merge-gate' };
+      trigger.trigger('thread-1', /** @type {any} */ ('opus'), 'user-1', 'CI failed', 'msg-skill', undefined, policy);
+      await waitForTrigger();
+
+      assert.strictEqual(routerMock.calls.length, 0, 'F175: urgent does not execute directly');
+      const entries = queue.list('thread-1', 'user-1');
+      assert.strictEqual(entries.length, 1, 'Should enqueue urgent message');
+      assert.strictEqual(entries[0].priority, 'urgent');
+    });
+
+    it('connector retry with same messageId does not create duplicate queue entry', async () => {
+      trackerMock.setActive('thread-1', 'user-1');
+      const trigger = createTrigger();
+      const policy = { priority: 'urgent', reason: 'webhook_retry' };
+
+      // First trigger — should enqueue
+      const r1 = await trigger.trigger(
+        'thread-1',
+        /** @type {any} */ ('opus'),
+        'user-1',
+        'CI failed',
+        'msg-retry-1',
+        undefined,
+        policy,
+      );
+      assert.strictEqual(r1, 'enqueued');
+      assert.strictEqual(queue.list('thread-1', 'user-1').length, 1);
+
+      // Second trigger with same messageId — should be deduped
+      const r2 = await trigger.trigger(
+        'thread-1',
+        /** @type {any} */ ('opus'),
+        'user-1',
+        'CI failed',
+        'msg-retry-1',
+        undefined,
+        policy,
+      );
+      assert.strictEqual(r2, 'enqueued', 'Duplicate should return enqueued (idempotent)');
+      assert.strictEqual(queue.list('thread-1', 'user-1').length, 1, 'Queue should still have exactly 1 entry');
+
+      // Different messageId — should enqueue normally
+      const r3 = await trigger.trigger(
+        'thread-1',
+        /** @type {any} */ ('opus'),
+        'user-1',
+        'New event',
+        'msg-different',
+        undefined,
+        policy,
+      );
+      assert.strictEqual(r3, 'enqueued');
+      assert.strictEqual(queue.list('thread-1', 'user-1').length, 2, 'Different messageId should enqueue');
+    });
+
+    it('suggestedSkill passes through to direct execution when no active invocation', async () => {
+      const trigger = createTrigger();
+      const policy = { priority: 'urgent', reason: 'github_ci_failure', suggestedSkill: 'merge-gate' };
+      trigger.trigger('thread-1', /** @type {any} */ ('opus'), 'user-1', 'CI failed', 'msg-urgent', undefined, policy);
+      await waitForTrigger();
+
+      assert.strictEqual(routerMock.calls.length, 1, 'Should execute directly when idle');
+      const intent = routerMock.calls[0].intent;
+      assert.ok(intent, 'intent should exist');
+      assert.ok(Array.isArray(intent.promptTags), 'promptTags should be an array');
+      assert.ok(
+        intent.promptTags.includes('skill:merge-gate'),
+        `promptTags should include 'skill:merge-gate' but got: ${JSON.stringify(intent.promptTags)}`,
+      );
+    });
+
+    it('queued path preserves suggestedSkill in QueueEntry (#564 regression)', async () => {
+      trackerMock.setActive('thread-1', 'user-1');
+      const trigger = createTrigger();
+      const policy = { priority: 'urgent', reason: 'github_ci_failure', suggestedSkill: 'receive-review' };
+      trigger.trigger(
+        'thread-1',
+        /** @type {any} */ ('opus'),
+        'user-1',
+        'Review changes requested',
+        'msg-queue-skill',
+        undefined,
+        policy,
+      );
+      await waitForTrigger();
+
+      const entries = queue.list('thread-1', 'user-1');
+      assert.strictEqual(entries.length, 1, 'Should enqueue');
+      assert.strictEqual(
+        entries[0].suggestedSkill,
+        'receive-review',
+        'suggestedSkill must be preserved in queue entry',
+      );
+    });
+  });
+
+  // ── F185: thread-level busy gate (AC-1/AC-2) ──
+
+  describe('F185: thread-level busy gate', () => {
+    it('AC-1: enqueues when queueProcessor.isThreadBusy returns true', async () => {
+      const mockQueueProcessor = /** @type {any} */ ({
+        isThreadBusy: () => true,
+        isCatBusy: () => false,
+        async onInvocationComplete() {},
+      });
+      const trigger = createTrigger({ queueProcessor: mockQueueProcessor });
+      const outcome = await trigger.trigger('thread-1', /** @type {any} */ ('opus'), 'user-1', 'Review msg', 'msg-1');
+      await waitForTrigger();
+
+      assert.strictEqual(outcome, 'enqueued', 'should enqueue when thread is busy');
+      assert.strictEqual(routerMock.calls.length, 0, 'should NOT dispatch');
+      assert.strictEqual(queue.list('thread-1', 'user-1').length, 1);
+    });
+
+    it('AC-2: enqueues when tryStartThread returns null (thread busy in tracker)', async () => {
+      const mockQueueProcessor = /** @type {any} */ ({
+        isThreadBusy: () => false,
+        isCatBusy: () => false,
+        async onInvocationComplete() {},
+      });
+      // Mock tryStartThread returning null (thread already has active invocation)
+      trackerMock.tracker.tryStartThread = (_threadId, _catId) => null;
+      const trigger = createTrigger({ queueProcessor: mockQueueProcessor });
+      const outcome = await trigger.trigger('thread-1', /** @type {any} */ ('opus'), 'user-1', 'Review msg', 'msg-1');
+      await waitForTrigger();
+
+      assert.strictEqual(outcome, 'enqueued', 'should enqueue when tryStartThread fails');
+      assert.strictEqual(routerMock.calls.length, 0, 'should NOT dispatch');
+    });
+
+    it('AC-2: dispatches when tryStartThread returns controller', async () => {
+      const mockQueueProcessor = /** @type {any} */ ({
+        isThreadBusy: () => false,
+        isCatBusy: () => false,
+        async onInvocationComplete() {},
+      });
+      const acquiredController = new AbortController();
+      trackerMock.tracker.tryStartThread = (_threadId, _catId) => acquiredController;
+      const trigger = createTrigger({ queueProcessor: mockQueueProcessor });
+      const outcome = await trigger.trigger('thread-1', /** @type {any} */ ('opus'), 'user-1', 'Review msg', 'msg-1');
+      await waitForTrigger();
+
+      assert.strictEqual(outcome, 'dispatched', 'should dispatch when tryStartThread succeeds');
+      assert.strictEqual(routerMock.calls.length, 1, 'should call routeExecution');
+    });
+
+    it('AC-10: connector + different cat busy in thread → enqueues (thread-level gate)', async () => {
+      // Scenario: opus is running, connector targets codex — should still queue (thread-level)
+      trackerMock.setActive('thread-1', 'user-1');
+      const trigger = createTrigger();
+      const outcome = await trigger.trigger(
+        'thread-1',
+        /** @type {any} */ ('codex'),
+        'user-1',
+        'CI notification',
+        'msg-ci',
+      );
+
+      assert.strictEqual(outcome, 'enqueued', 'connector must queue when ANY cat is busy in thread');
+      assert.strictEqual(routerMock.calls.length, 0, 'should NOT dispatch concurrently');
+    });
+
+    it('AC-3: reuses tryStartThread controller (no separate start() call)', async () => {
+      const mockQueueProcessor = /** @type {any} */ ({
+        isThreadBusy: () => false,
+        isCatBusy: () => false,
+        async onInvocationComplete() {},
+      });
+      const acquiredController = new AbortController();
+      trackerMock.tracker.tryStartThread = (_threadId, _catId) => acquiredController;
+      const trigger = createTrigger({ queueProcessor: mockQueueProcessor });
+      trigger.trigger('thread-1', /** @type {any} */ ('opus'), 'user-1', 'msg', 'msg-1');
+      await waitForTrigger();
+
+      // start() should NOT have been called (tryStartThread already registered the slot)
+      assert.strictEqual(trackerMock.starts.length, 0, 'should NOT call start() when tryStartThread was used');
+      // complete() should still be called for cleanup
+      assert.strictEqual(trackerMock.completes.length, 1, 'should call complete()');
+    });
+
+    it('R2-P1-B: duplicate invocation does not notify queueProcessor with failed status', async () => {
+      const onCompleteCalls = /** @type {Array<{threadId: string, catId: string, status: string}>} */ ([]);
+      const mockQueueProcessor = /** @type {any} */ ({
+        isThreadBusy: () => false,
+        isCatBusy: () => false,
+        async onInvocationComplete(threadId, catId, status) {
+          onCompleteCalls.push({ threadId, catId, status });
+        },
+      });
+      recordMock.setDuplicate();
+      const trigger = createTrigger({ queueProcessor: mockQueueProcessor });
+      trigger.trigger('thread-1', /** @type {any} */ ('opus'), 'user-1', 'msg', 'msg-dup');
+      await waitForTrigger();
+
+      // Duplicate should NOT cause onInvocationComplete('failed')
+      const failedCalls = onCompleteCalls.filter((c) => c.status === 'failed');
+      assert.strictEqual(failedCalls.length, 0, 'duplicate must not trigger failed onInvocationComplete');
+    });
+
+    it('R2-P1-A: queue full emits system_info via broadcastAgentMessage', async () => {
+      const mockFullQueue = /** @type {any} */ ({
+        hasEntryWithMessageId: () => false,
+        enqueue: () => ({ outcome: 'full' }),
+        size: () => 5,
+        list: () => [],
+        hasQueuedUserMessagesForThread: () => false,
+        hasActiveOrQueuedAgentForCat: () => false,
+      });
+      trackerMock.setActive('thread-1', 'user-1');
+      const trigger = createTrigger({ invocationQueue: mockFullQueue });
+      const outcome = await trigger.trigger('thread-1', /** @type {any} */ ('opus'), 'user-1', 'overflow', 'mid-full');
+
+      assert.strictEqual(outcome, 'full');
+      const systemInfoMsgs = socketMock.broadcasts.filter(
+        (b) => b.msg.type === 'system_info' && b.threadId === 'thread-1',
+      );
+      assert.ok(systemInfoMsgs.length > 0, 'queue full must emit system_info to thread');
+      const parsed = JSON.parse(systemInfoMsgs[0].msg.content);
+      assert.strictEqual(parsed.reason, 'queue_full', 'system_info reason must be queue_full');
     });
   });
 });

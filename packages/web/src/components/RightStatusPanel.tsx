@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { formatCatName, useCatData } from '@/hooks/useCatData';
+import { catColorVar } from '@/lib/cat-slug';
 import type { CatInvocationInfo } from '@/stores/chatStore';
 import { useChatStore } from '@/stores/chatStore';
 import { apiFetch } from '@/utils/api-client';
@@ -9,7 +10,16 @@ import { AuditExplorerPanel } from './audit/AuditExplorerPanel';
 import { CatTokenUsage } from './CatTokenUsage';
 import { PlanBoardPanel } from './PlanBoardPanel';
 import { SessionChainPanel } from './SessionChainPanel';
-import { type CatStatus, type IntentMode, modeLabel, statusLabel, statusTone, truncateId } from './status-helpers';
+import { settingsResourceCardClass } from './SettingsResourceCard';
+import {
+  type CatStatus,
+  collectSnapshotActiveCats,
+  deriveActiveCats,
+  type IntentMode,
+  modeLabel,
+  statusLabel,
+  statusTone,
+} from './status-helpers';
 import { CatInvocationTime, CollapsibleIds } from './status-panel-parts';
 
 export interface RightStatusPanelProps {
@@ -17,6 +27,8 @@ export interface RightStatusPanelProps {
   targetCats: string[];
   catStatuses: Record<string, CatStatus>;
   catInvocations: Record<string, CatInvocationInfo>;
+  activeInvocations?: Record<string, { catId: string; mode: string; startedAt?: number }>;
+  hasActiveInvocation?: boolean;
   threadId: string;
   messageSummary: {
     total: number;
@@ -25,8 +37,10 @@ export interface RightStatusPanelProps {
     evidence: number;
     followup: number;
   };
-  /** Panel width in px (clowder-ai#28: drag-to-resize). Falls back to 288 (w-72). */
+  /** Panel width in px (clowder-ai#28: drag-to-resize). Falls back to 304. */
   width?: number;
+  /** Allow tests to render history section expanded (SSR default: collapsed). */
+  initialHistoryOpen?: boolean;
 }
 
 /* ── Cat invocation card (shared between active/history) ──── */
@@ -43,19 +57,21 @@ function CatInvocationCard({
 }) {
   const { getCatById } = useCatData();
   const cat = getCatById(catId);
-  const dotColor = cat?.color.primary ?? '#9CA3AF';
+  const dotColor = catColorVar(cat?.id, 'primary');
   return (
     <div className="text-xs">
-      <div className="flex items-center gap-1.5 mb-1">
+      <div className="flex items-center gap-1.5 mb-1 min-w-0">
         <span
-          className={`inline-block h-2.5 w-2.5 rounded-full ${isActive ? 'animate-pulse' : ''}`}
+          className={`shrink-0 inline-block h-2.5 w-2.5 rounded-full ${isActive ? 'animate-pulse' : ''}`}
           style={{ backgroundColor: dotColor }}
         />
-        <span className="font-medium text-gray-700">{cat ? formatCatName(cat) : catId}</span>
+        <span className="truncate min-w-0 font-medium text-cafe-secondary">{cat ? formatCatName(cat) : catId}</span>
         {inv.sessionSeq !== undefined && (
           <span
-            className={`text-[10px] px-1 py-0.5 rounded ${
-              inv.sessionSealed ? 'bg-amber-100 text-amber-600' : 'bg-gray-100 text-gray-500'
+            className={`shrink-0 text-micro px-1 py-0.5 rounded ${
+              inv.sessionSealed
+                ? 'bg-conn-amber-bg text-conn-amber-text'
+                : 'bg-cafe-surface-elevated text-cafe-secondary'
             }`}
             title={inv.sessionSealed ? `会话 #${inv.sessionSeq} 已封存` : `会话 #${inv.sessionSeq}`}
           >
@@ -108,13 +124,13 @@ function ThinkingModeToggle({ threadId }: { threadId: string }) {
   }, [threadId, isDebug, mode, updateLocal]);
 
   return (
-    <div className="flex items-center justify-between">
-      <span>
-        心里话: <span className="font-medium">{isDebug ? '🔍 调试' : '🎭 游戏'}</span>
+    <div className="flex items-center justify-between gap-2 min-w-0">
+      <span className="truncate min-w-0">
+        心里话: <span className="font-medium">{isDebug ? '调试' : '游戏'}</span>
       </span>
       <button
         onClick={toggle}
-        className="text-[11px] px-2 py-0.5 rounded-full border border-gray-300 hover:border-gray-400 hover:bg-gray-100 transition-colors"
+        className="shrink-0 rounded-full px-3 py-1 text-label transition-colors hover:text-cafe"
         title={isDebug ? '切换到游戏模式（猫猫互相看不到心里话）' : '切换到调试模式（猫猫互相分享心里话）'}
       >
         {isDebug ? '切换游戏' : '切换调试'}
@@ -123,23 +139,82 @@ function ThinkingModeToggle({ threadId }: { threadId: string }) {
   );
 }
 
-/** Global UI preference: default expand/collapse for Thinking blocks */
-function ThinkingDefaultExpandToggle() {
-  const expanded = useChatStore((s) => s.uiThinkingExpandedByDefault);
-  const setExpanded = useChatStore((s) => s.setUiThinkingExpandedByDefault);
-  const toggle = useCallback(() => setExpanded(!expanded), [expanded, setExpanded]);
+const BUBBLE_LABELS: Record<string, string> = {
+  global: '跟随全局',
+  expanded: '展开',
+  collapsed: '折叠',
+};
+const BUBBLE_CYCLE: Record<string, 'expanded' | 'collapsed' | 'global'> = {
+  global: 'expanded',
+  expanded: 'collapsed',
+  collapsed: 'global',
+};
+
+/** Thread-level bubble display override (three-state: global / expanded / collapsed) */
+function BubbleDisplayToggle({
+  threadId,
+  label,
+  field,
+}: {
+  threadId: string;
+  label: string;
+  field: 'bubbleThinking' | 'bubbleCli';
+}) {
+  const thread = useChatStore((s) => s.threads.find((t) => t.id === threadId));
+  const isLoadingThreads = useChatStore((s) => s.isLoadingThreads);
+  const updateLocal = useChatStore((s) => s.updateThreadBubbleDisplay);
+  const globalBubbleDefaults = useChatStore((s) => s.globalBubbleDefaults);
+  const bubbleRestorePending = isLoadingThreads && !thread;
+  const current = thread?.[field] ?? 'global';
+  const currentEffective =
+    current === 'global'
+      ? field === 'bubbleThinking'
+        ? globalBubbleDefaults.thinking
+        : globalBubbleDefaults.cliOutput
+      : current;
+  const next = bubbleRestorePending
+    ? null
+    : current === 'global'
+      ? currentEffective === 'expanded'
+        ? 'collapsed'
+        : 'expanded'
+      : BUBBLE_CYCLE[current];
+  const currentLabel = bubbleRestorePending
+    ? '恢复中'
+    : current === 'global'
+      ? `${BUBBLE_LABELS.global}（当前${BUBBLE_LABELS[currentEffective]}）`
+      : BUBBLE_LABELS[current];
+  const pendingRef = useRef(false);
+
+  const cycle = useCallback(async () => {
+    if (pendingRef.current || bubbleRestorePending || !next) return;
+    pendingRef.current = true;
+    updateLocal(threadId, field, next);
+    try {
+      const res = await apiFetch(`/api/threads/${threadId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [field]: next }),
+      });
+      if (!res.ok) updateLocal(threadId, field, current);
+    } catch {
+      updateLocal(threadId, field, current);
+    } finally {
+      pendingRef.current = false;
+    }
+  }, [threadId, field, next, current, updateLocal, bubbleRestorePending]);
 
   return (
-    <div className="flex items-center justify-between">
-      <span>
-        Thinking 默认: <span className="font-medium">{expanded ? '📖 展开' : '🧻 折叠'}</span>
+    <div className="flex items-center justify-between gap-2 min-w-0">
+      <span className="truncate min-w-0">
+        {label}: <span className="font-medium">{currentLabel}</span>
       </span>
       <button
-        onClick={toggle}
-        className="text-[11px] px-2 py-0.5 rounded-full border border-gray-300 hover:border-gray-400 hover:bg-gray-100 transition-colors"
-        title={expanded ? '切换为默认折叠（减少滚动）' : '切换为默认展开（便于调试）'}
+        onClick={cycle}
+        disabled={bubbleRestorePending}
+        className="shrink-0 rounded-full px-3 py-1 text-label transition-colors hover:text-cafe"
       >
-        {expanded ? '默认折叠' : '默认展开'}
+        {bubbleRestorePending ? '恢复中...' : BUBBLE_LABELS[next as keyof typeof BUBBLE_LABELS]}
       </button>
     </div>
   );
@@ -191,15 +266,15 @@ function RevealWhispersButton({ threadId }: { threadId: string }) {
   }, [threadId, status]);
 
   return (
-    <div className="flex items-center justify-between">
-      <span>悄悄话:</span>
+    <div className="flex items-center justify-between gap-2 min-w-0">
+      <span className="shrink-0">悄悄话:</span>
       {status === 'done' ? (
-        <span className="text-[11px] text-green-600">已揭秘 {revealedCount} 条</span>
+        <span className="shrink-0 text-label text-conn-emerald-text">已揭秘 {revealedCount} 条</span>
       ) : (
         <button
           onClick={handleReveal}
           disabled={status === 'pending'}
-          className="text-[11px] px-2 py-0.5 rounded-full border border-amber-300 text-amber-600 hover:border-amber-400 hover:bg-amber-50 transition-colors disabled:opacity-50"
+          className="shrink-0 rounded-full px-3 py-1 text-label text-conn-amber-text transition-colors hover:opacity-90 disabled:opacity-50"
           title="揭晓本线程所有悄悄话"
         >
           {status === 'pending' ? '揭秘中...' : '揭秘全部'}
@@ -210,6 +285,7 @@ function RevealWhispersButton({ threadId }: { threadId: string }) {
 }
 
 const LOGS_DIR = 'packages/api/data/logs/api';
+const SIDEBAR_CARD = settingsResourceCardClass;
 
 function parseLogFilename(name: string): { date: string; seq: number } | null {
   const m = name.match(/^api\.(\d{4}-\d{2}-\d{2})\.(\d+)\.log$/);
@@ -261,17 +337,15 @@ function RuntimeLogsButton() {
   }, [setRevealPath, setOpenFile]);
 
   return (
-    <section className="rounded-lg border border-gray-200 bg-gray-50/70 p-3">
-      <div className="flex items-center justify-between">
-        <h3 className="text-xs font-semibold text-gray-700">运行日志</h3>
-        <button
-          onClick={handleClick}
-          className="text-[11px] px-2 py-0.5 rounded-full border border-gray-300 hover:border-gray-400 hover:bg-gray-100 transition-colors"
-          title="在 Workspace 面板中打开运行日志目录"
-        >
-          查看日志
-        </button>
-      </div>
+    <section className={`${SIDEBAR_CARD} flex items-center justify-between px-3 py-2`}>
+      <h3 className="text-label font-bold text-cafe">运行日志</h3>
+      <button
+        onClick={handleClick}
+        className="text-label font-bold text-cafe transition-colors hover:text-cafe"
+        title="在 Workspace 面板中打开运行日志目录"
+      >
+        查看日志
+      </button>
     </section>
   );
 }
@@ -281,36 +355,35 @@ export function RightStatusPanel({
   targetCats,
   catStatuses,
   catInvocations,
+  activeInvocations,
+  hasActiveInvocation,
   threadId,
   messageSummary,
   width,
+  initialHistoryOpen = false,
 }: RightStatusPanelProps) {
   // F26: Split into active (working now) vs history (appeared before)
+  // review-#784 P2 + AC-Z15: pass intentMode so deriveActiveCats preserves the
+  // full targetCats union during ideate rounds (matches ParallelStatusBar /
+  // MobileStatusSheet behavior; without this, finished-cat slots get demoted
+  // to history while the round is still running).
   const { activeCats, historyCats } = useMemo(() => {
-    const snapshotCats = Object.entries(catInvocations)
-      .filter(([, inv]) => {
-        const taskProgress = inv.taskProgress;
-        if (!taskProgress || taskProgress.tasks.length === 0) return false;
-        return taskProgress.snapshotStatus !== 'completed';
-      })
-      .map(([catId]) => catId);
-    const active = Array.from(new Set([...targetCats, ...snapshotCats]));
+    const snapshotCats = collectSnapshotActiveCats(catInvocations);
+    const active = deriveActiveCats({ targetCats, snapshotCats, activeInvocations, hasActiveInvocation, intentMode });
     const allParticipants = new Set([...active, ...Object.keys(catInvocations)]);
     const history = [...allParticipants].filter((c) => !active.includes(c));
     return { activeCats: active, historyCats: history };
-  }, [targetCats, catInvocations]);
+  }, [targetCats, catInvocations, activeInvocations, hasActiveInvocation, intentMode]);
 
   const { getCatById } = useCatData();
-  const [historyOpen, setHistoryOpen] = useState(false);
-  const [viewSessionId, setViewSessionId] = useState<string | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(initialHistoryOpen);
+  const [viewSession, setViewSession] = useState<{ id: string; catId?: string } | null>(null);
 
   // Clear session viewer when switching threads
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally reset on threadId change only
   React.useEffect(() => {
-    setViewSessionId(null);
+    setViewSession(null);
   }, [threadId]);
-
-  const openHub = useChatStore((s) => s.openHub);
 
   const copyText = useCallback((value: string) => {
     void navigator.clipboard.writeText(value);
@@ -318,75 +391,75 @@ export function RightStatusPanel({
 
   return (
     <aside
-      className="hidden lg:flex border-l border-cocreator-light bg-white/90 px-4 py-4 flex-col gap-4 overflow-y-auto"
-      style={{ width: width ?? 288, flexShrink: 0 }}
+      className="hidden lg:flex flex-col gap-3 overflow-y-auto px-4 py-[18px]"
+      data-console-panel="status"
+      style={{
+        width: width ?? 304,
+        flexShrink: 0,
+        background: 'var(--console-shell-bg)',
+      }}
     >
-      <div>
-        <h2 className="text-sm font-bold text-cafe-black">状态栏</h2>
-        <p className="text-xs text-gray-500 mt-1">
-          当前模式: <span className="font-medium">{modeLabel(intentMode)}</span>
-        </p>
+      <div className="px-0.5 pb-1">
+        <p className="text-sm font-bold text-cafe">状态栏</p>
+        <span className="text-micro text-cafe-secondary">当前模式：{modeLabel(intentMode)}</span>
       </div>
 
-      {/* ── Active cats: currently working ──────────────── */}
-      <section className="rounded-lg border border-gray-200 bg-gray-50/70 p-3">
-        <div className="flex items-center justify-between mb-2">
-          <h3 className="text-xs font-semibold text-gray-700">{activeCats.length > 0 ? '当前调用' : '猫猫状态'}</h3>
-          <button
-            onClick={() => openHub()}
-            className="text-base text-gray-400 hover:text-blue-600 hover:rotate-45 transition-all duration-200"
-            title="Clowder AI Hub"
-          >
-            &#9881;
-          </button>
-        </div>
-        {activeCats.length > 0 ? (
-          <div className="space-y-3">
-            {activeCats.map((catId) => {
+      <section className={`${SIDEBAR_CARD} p-2.5`}>
+        <h3 className="text-label font-bold text-cafe mb-2">猫猫状态</h3>
+        <div className="space-y-2">
+          {activeCats.length > 0 ? (
+            activeCats.map((catId) => {
               const cat = getCatById(catId);
-              const dotColor = cat?.color.primary ?? '#9CA3AF';
+              const dotColor = catColorVar(cat?.id, 'primary');
               const status = catStatuses[catId] ?? 'pending';
               const inv = catInvocations[catId];
               return (
-                <div key={catId}>
+                <div key={catId} className="console-list-card rounded-xl p-2">
                   <div className="flex items-center justify-between mb-1">
                     <div className="flex items-center gap-2">
                       <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: dotColor }} />
-                      <span className="text-xs text-gray-700">{cat ? formatCatName(cat) : catId}</span>
+                      <span className="text-xs text-cafe-secondary">{cat ? formatCatName(cat) : catId}</span>
                     </div>
                     <span className={`text-xs font-medium ${statusTone(status)}`}>{statusLabel(status)}</span>
                   </div>
                   {inv && <CatInvocationCard catId={catId} inv={inv} onCopy={copyText} isActive />}
                 </div>
               );
-            })}
-          </div>
-        ) : (
-          <div className="text-xs text-gray-400">空闲</div>
-        )}
+            })
+          ) : (
+            <div className="text-label text-cafe-muted">空闲</div>
+          )}
+        </div>
       </section>
 
-      {/* ── History cats: appeared before but not in current round ── */}
       {historyCats.length > 0 && (
-        <section className="rounded-lg border border-gray-200 bg-gray-50/70 p-3">
+        <section className={`${SIDEBAR_CARD} p-2.5`}>
           <button
             onClick={() => setHistoryOpen((v) => !v)}
-            className="w-full flex items-center justify-between text-xs font-semibold text-gray-500 hover:text-gray-700"
+            className="w-full flex items-center justify-between text-label font-bold text-cafe hover:text-cafe"
           >
             <span>历史参与 ({historyCats.length})</span>
-            <span className="text-[10px]">{historyOpen ? '▲' : '▼'}</span>
+            <svg
+              className={`w-3 h-3 transition-transform ${historyOpen ? 'rotate-180' : ''}`}
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <path d="M6 9l6 6 6-6" />
+            </svg>
           </button>
           {historyOpen && (
-            <div className="mt-2 space-y-2">
+            <div className="p-2.5 space-y-2">
               {historyCats.map((catId) => {
                 const inv = catInvocations[catId];
                 if (!inv) {
                   const cat = getCatById(catId);
                   return (
-                    <div key={catId} className="flex items-center gap-2 text-xs text-gray-400">
+                    <div key={catId} className="flex items-center gap-2 text-xs text-cafe-muted">
                       <span
                         className="inline-block h-2 w-2 rounded-full opacity-50"
-                        style={{ backgroundColor: cat?.color.primary ?? '#9CA3AF' }}
+                        style={{ backgroundColor: catColorVar(cat?.id, 'primary') }}
                       />
                       {cat ? formatCatName(cat) : catId}
                     </div>
@@ -399,43 +472,43 @@ export function RightStatusPanel({
         </section>
       )}
 
-      {/* ── Message stats (collapsible) ───────────────── */}
-      <section className="rounded-lg border border-gray-200 bg-gray-50/70 p-3">
-        <h3 className="text-xs font-semibold text-gray-700 mb-2">消息统计</h3>
-        <div className="grid grid-cols-2 gap-2 text-xs text-gray-700">
-          <div>总数</div>
-          <div className="text-right font-medium">{messageSummary.total}</div>
-          <div>猫猫消息</div>
-          <div className="text-right font-medium">{messageSummary.assistant}</div>
-          <div>系统消息</div>
-          <div className="text-right font-medium">{messageSummary.system}</div>
-          <div>Evidence</div>
-          <div className="text-right font-medium">{messageSummary.evidence}</div>
-          <div>Follow-up</div>
-          <div className="text-right font-medium">{messageSummary.followup}</div>
+      <section className={`${SIDEBAR_CARD} p-2.5`}>
+        <h3 className="text-label font-bold text-cafe mb-2">消息统计</h3>
+        <div className="console-list-card rounded-xl p-2.5 text-label text-cafe-secondary space-y-1">
+          <div>
+            总数 {messageSummary.total} 猫猫消息 {messageSummary.assistant}
+          </div>
+          <div>
+            系统消息 {messageSummary.system} Evidence {messageSummary.evidence}
+          </div>
+          <div>Follow-up {messageSummary.followup}</div>
         </div>
       </section>
 
       <PlanBoardPanel threadId={threadId} catInvocations={catInvocations} />
 
-      <SessionChainPanel threadId={threadId} catInvocations={catInvocations} onViewSession={setViewSessionId} />
+      <SessionChainPanel
+        threadId={threadId}
+        catInvocations={catInvocations}
+        onViewSession={(id, catId) => setViewSession({ id, catId })}
+      />
 
-      <section className="rounded-lg border border-gray-200 bg-gray-50/70 p-3">
-        <h3 className="text-xs font-semibold text-gray-700 mb-2">对话信息</h3>
-        <div className="text-xs text-gray-500 space-y-2">
-          <div>
-            Thread:{' '}
+      <section className={`${SIDEBAR_CARD} p-2.5`}>
+        <h3 className="text-label font-bold text-cafe mb-2">对话信息</h3>
+        <div className="console-list-card rounded-xl p-2.5 text-label text-cafe-secondary space-y-1.5">
+          <div className="flex items-baseline gap-1 min-w-0">
+            <span className="shrink-0">Thread:</span>
             <button
-              className="text-gray-600 font-mono hover:text-gray-800 cursor-pointer transition-colors"
+              className="truncate min-w-0 text-cafe-secondary font-mono hover:text-cafe cursor-pointer transition-colors"
               title={`点击复制: ${threadId}`}
               onClick={() => copyText(threadId)}
             >
-              {truncateId(threadId, 12)}
+              {threadId}
             </button>
           </div>
-          <ThinkingDefaultExpandToggle />
+          <BubbleDisplayToggle threadId={threadId} label="Thinking" field="bubbleThinking" />
+          <BubbleDisplayToggle threadId={threadId} label="CLI 气泡" field="bubbleCli" />
           <ThinkingModeToggle threadId={threadId} />
-
           <RevealWhispersButton threadId={threadId} />
         </div>
       </section>
@@ -443,11 +516,11 @@ export function RightStatusPanel({
       <AuditExplorerPanel
         key={threadId}
         threadId={threadId}
-        externalSessionId={viewSessionId}
-        onCloseSession={() => setViewSessionId(null)}
+        externalSessionId={viewSession?.id ?? null}
+        externalSessionCatId={viewSession?.catId}
+        onCloseSession={() => setViewSession(null)}
       />
 
-      {/* ── F130: Runtime logs quick-access ────────────── */}
       <RuntimeLogsButton />
     </aside>
   );

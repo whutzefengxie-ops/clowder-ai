@@ -8,6 +8,7 @@ export type DebugEventName =
   | 'queue_paused'
   | 'agent_message'
   | 'bubble_lifecycle'
+  | 'bubble_invariant_violation'
   | 'done'
   | 'rejoin_rooms';
 
@@ -26,8 +27,20 @@ export const EVENT_KEYS = [
   'hasActiveInvocation',
   'reason',
   'catId',
+  'actorId',
   'messageId',
+  'existingMessageId',
+  'incomingMessageId',
   'invocationId',
+  'canonicalInvocationId',
+  'bubbleKind',
+  'eventType',
+  'originPhase',
+  'sourcePath',
+  'seq',
+  'recoveryAction',
+  'violationKind',
+  'level',
   'origin',
 ] as const;
 
@@ -48,9 +61,21 @@ export type StoredDebugEvent = {
   hasActiveInvocation?: boolean;
   reason?: string;
   catId?: string;
+  actorId?: string;
   messageId?: string;
+  existingMessageId?: string | null;
+  incomingMessageId?: string | null;
   invocationId?: string;
-  origin?: 'stream' | 'callback';
+  canonicalInvocationId?: string;
+  bubbleKind?: string;
+  eventType?: string;
+  originPhase?: string;
+  sourcePath?: string;
+  seq?: number | null;
+  recoveryAction?: string;
+  violationKind?: string;
+  level?: 'warn' | 'error';
+  origin?: 'stream' | 'callback' | 'briefing';
 };
 
 export type DebugEventInput = Partial<StoredDebugEvent> & {
@@ -66,6 +91,17 @@ export type DebugConfigureInput = {
 
 export type DebugDumpOptions = {
   rawThreadId?: boolean;
+};
+
+export type DebugExportOptions = DebugDumpOptions & {
+  kind?: 'events' | 'bubbleTimeline';
+  label?: string;
+};
+
+export type DebugExportResult = {
+  ok: boolean;
+  path: string;
+  count: number;
 };
 
 export type DebugDumpResult = {
@@ -93,6 +129,7 @@ export type DebugWindowApi = {
   configure: (input: DebugConfigureInput) => DebugStatus;
   dump: (options?: DebugDumpOptions) => string;
   dumpBubbleTimeline: (options?: DebugDumpOptions) => string;
+  exportToRuntime: (options?: DebugExportOptions) => Promise<DebugExportResult>;
   clear: () => void;
   status: () => DebugStatus;
 };

@@ -41,6 +41,7 @@ function buildThreadBState(cachedAssistantTs: number) {
     intentMode: 'execute' as const,
     targetCats: ['opus'],
     catStatuses: { opus: 'streaming' as const },
+    catStatusDetails: {},
     catInvocations: {},
     currentGame: null,
 
@@ -52,6 +53,10 @@ function buildThreadBState(cachedAssistantTs: number) {
     queuePauseReason: undefined,
     queueFull: false,
     queueFullSource: undefined,
+    workspaceWorktreeId: null,
+    workspaceOpenTabs: [],
+    workspaceOpenFilePath: null,
+    workspaceOpenFileLine: null,
   };
 }
 
@@ -231,6 +236,249 @@ describe('useChatHistory replace hydration', () => {
     expect(useChatStore.getState().messages.find((m) => m.id === 'draft-inv-1')).toBeUndefined();
   });
 
+  it('reconciles an invocationless live stream bubble with the matching server draft', async () => {
+    const history = installDeferredHistoryResponse();
+    const cachedAssistantTs = Date.now() - 1000;
+    const liveTs = Date.now();
+    mountReplaceHydrationThread(
+      makeThreadBState(cachedAssistantTs, {
+        catInvocations: {},
+      }),
+    );
+
+    act(() => {
+      useChatStore.getState().addMessage({
+        id: 'local-stream-opus',
+        type: 'assistant',
+        catId: 'opus',
+        content: 'server draft content plus local CLI output already visible',
+        toolEvents: [{ id: 'tool-live-1', type: 'tool_use', label: 'Bash', timestamp: liveTs }],
+        timestamp: liveTs,
+        isStreaming: true,
+        origin: 'stream',
+      });
+    });
+
+    await history.waitUntilPending();
+    history.expectPending();
+
+    await history.resolve({
+      messages: [
+        { id: 'b1', catId: 'opus', content: 'cached assistant', timestamp: cachedAssistantTs },
+        {
+          id: 'draft-inv-live',
+          catId: 'opus',
+          content: 'server draft content',
+          origin: 'stream',
+          timestamp: liveTs + 500,
+          isDraft: true,
+          extra: { stream: { invocationId: 'inv-live' } },
+        },
+      ],
+      hasMore: false,
+    });
+
+    const messages = useChatStore.getState().messages;
+    const opusMessages = messages.filter((m) => m.type === 'assistant' && m.catId === 'opus');
+
+    expect(messages.map((m) => m.id)).toEqual(['b1', 'local-stream-opus']);
+    expect(opusMessages).toHaveLength(2);
+    expect(messages.find((m) => m.id === 'draft-inv-live')).toBeUndefined();
+    expect(messages.find((m) => m.id === 'local-stream-opus')).toMatchObject({
+      content: 'server draft content plus local CLI output already visible',
+      extra: { stream: { invocationId: 'inv-live' } },
+    });
+  });
+
+  it('does not bind a stale invocationless stream bubble to an unrelated server draft', async () => {
+    const history = installDeferredHistoryResponse();
+    const now = Date.now();
+    const cachedAssistantTs = now - 10_000;
+    mountReplaceHydrationThread(
+      makeThreadBState(cachedAssistantTs, {
+        catInvocations: {},
+      }),
+    );
+
+    act(() => {
+      useChatStore.getState().addMessage({
+        id: 'stale-local-stream-opus',
+        type: 'assistant',
+        catId: 'opus',
+        content: 'previous run output',
+        timestamp: now - 5_000,
+        isStreaming: true,
+        origin: 'stream',
+      });
+    });
+
+    await history.waitUntilPending();
+    history.expectPending();
+
+    await history.resolve({
+      messages: [
+        { id: 'b1', catId: 'opus', content: 'cached assistant', timestamp: cachedAssistantTs },
+        {
+          id: 'draft-inv-new-run',
+          catId: 'opus',
+          content: 'new run authoritative draft',
+          origin: 'stream',
+          timestamp: now,
+          isDraft: true,
+          extra: { stream: { invocationId: 'inv-new-run' } },
+        },
+      ],
+      hasMore: false,
+    });
+
+    const messages = useChatStore.getState().messages;
+    expect(messages.map((m) => m.id)).toEqual(['b1', 'stale-local-stream-opus', 'draft-inv-new-run']);
+    expect(messages.find((m) => m.id === 'stale-local-stream-opus')?.extra?.stream?.invocationId).toBeUndefined();
+    expect(messages.find((m) => m.id === 'draft-inv-new-run')).toMatchObject({
+      content: 'new run authoritative draft',
+      extra: { stream: { invocationId: 'inv-new-run' } },
+    });
+  });
+
+  it('does not bind a tool-only invocationless stream bubble to a textless server draft', async () => {
+    const history = installDeferredHistoryResponse();
+    const now = Date.now();
+    const cachedAssistantTs = now - 10_000;
+    mountReplaceHydrationThread(
+      makeThreadBState(cachedAssistantTs, {
+        catInvocations: {},
+      }),
+    );
+
+    act(() => {
+      useChatStore.getState().addMessage({
+        id: 'tool-only-local-stream-opus',
+        type: 'assistant',
+        catId: 'opus',
+        content: '',
+        toolEvents: [{ id: 'old-tool-1', type: 'tool_use', label: 'Read file', timestamp: now - 1_000 }],
+        timestamp: now - 1_000,
+        isStreaming: true,
+        origin: 'stream',
+      });
+    });
+
+    await history.waitUntilPending();
+    history.expectPending();
+
+    await history.resolve({
+      messages: [
+        { id: 'b1', catId: 'opus', content: 'cached assistant', timestamp: cachedAssistantTs },
+        {
+          id: 'draft-inv-new-run',
+          catId: 'opus',
+          content: '',
+          origin: 'stream',
+          timestamp: now,
+          isDraft: true,
+          extra: { stream: { invocationId: 'inv-new-run' } },
+        },
+      ],
+      hasMore: false,
+    });
+
+    const messages = useChatStore.getState().messages;
+    expect(messages.map((m) => m.id)).toEqual(['b1', 'tool-only-local-stream-opus', 'draft-inv-new-run']);
+    expect(messages.find((m) => m.id === 'tool-only-local-stream-opus')?.extra?.stream?.invocationId).toBeUndefined();
+    expect(messages.find((m) => m.id === 'draft-inv-new-run')).toMatchObject({
+      extra: { stream: { invocationId: 'inv-new-run' } },
+    });
+  });
+
+  it('Phase C Task 9 — drops orphan draft from IDB cache when no live invocation claims it', async () => {
+    const history = installDeferredHistoryResponse();
+    const cachedAssistantTs = Date.now() - 1000;
+    // Cached state: contains a stale `draft-orphan-inv` from F164 IDB cache —
+    // this draft was filtered by hotfix3 backend but the cache write happened
+    // before that fix shipped. catInvocations is empty (no live invocation
+    // claims the orphan — Phase C Task 9 should detect this and drop).
+    const cachedMessages: ChatMessage[] = [
+      {
+        id: 'b1',
+        type: 'assistant',
+        catId: 'opus',
+        content: 'cached assistant',
+        timestamp: cachedAssistantTs,
+      },
+      {
+        id: 'draft-orphan-inv',
+        type: 'assistant',
+        catId: 'opus',
+        content: 'stale orphan draft from IDB cache',
+        timestamp: cachedAssistantTs + 100,
+        origin: 'stream',
+        extra: { stream: { invocationId: 'orphan-inv' } },
+      },
+    ];
+    mountReplaceHydrationThread({
+      ...makeThreadBState(cachedAssistantTs, {
+        catInvocations: {}, // 关键：没有 live invocation 关联 'orphan-inv'
+      }),
+      messages: cachedMessages,
+    });
+
+    await history.waitUntilPending();
+    history.expectPending();
+
+    // Server (post-hotfix3) returns clean — no orphan draft
+    await history.resolve({
+      messages: [{ id: 'b1', catId: 'opus', content: 'cached assistant', timestamp: cachedAssistantTs }],
+      hasMore: false,
+    });
+
+    // Pre-Task-9: ghost-tolerance push path would preserve draft-orphan-inv
+    // Post-Task-9: knownToLiveInvocation guard drops it
+    expect(useChatStore.getState().messages.map((m) => m.id)).toEqual(['b1']);
+    expect(useChatStore.getState().messages.find((m) => m.id === 'draft-orphan-inv')).toBeUndefined();
+  });
+
+  it('Phase C Task 9 — preserves just-completed local bubble (msg-* id) when catInvocations cleared by done handler (cloud P1 regression)', async () => {
+    // Cloud Codex P1: original guard dropped any local-only msg whose
+    // invocationId was not in catInvocations. But catInvocations is cleared
+    // by the done handler before server persists — a legitimate completed
+    // bubble (msg-{inv}-{cat}) on fast thread switch would disappear.
+    // Guard now narrowed to id startsWith 'draft-' only.
+    const history = installDeferredHistoryResponse();
+    const cachedAssistantTs = Date.now() - 1000;
+    const cachedMessages: ChatMessage[] = [
+      { id: 'b1', type: 'assistant', catId: 'opus', content: 'cached assistant', timestamp: cachedAssistantTs },
+      {
+        // msg-* shape (NOT draft-*) — live just-completed bubble
+        id: 'msg-just-completed-inv-opus',
+        type: 'assistant',
+        catId: 'opus',
+        content: 'just-completed answer not yet persisted to history',
+        timestamp: cachedAssistantTs + 100,
+        origin: 'stream',
+        isStreaming: false,
+        extra: { stream: { invocationId: 'just-completed-inv' } },
+      },
+    ];
+    mountReplaceHydrationThread({
+      ...makeThreadBState(cachedAssistantTs, {
+        catInvocations: {}, // cleared by done handler — invocationId 'just-completed-inv' not tracked
+      }),
+      messages: cachedMessages,
+    });
+
+    await history.waitUntilPending();
+    history.expectPending();
+
+    // Server hasn't persisted the just-completed bubble yet (lag)
+    await history.resolve({
+      messages: [{ id: 'b1', catId: 'opus', content: 'cached assistant', timestamp: cachedAssistantTs }],
+      hasMore: false,
+    });
+
+    // Just-completed bubble must survive (not a ghost — it's a real answer)
+    expect(useChatStore.getState().messages.map((m) => m.id)).toEqual(['b1', 'msg-just-completed-inv-opus']);
+  });
+
   it('prefers a richer server stream message over a local placeholder for the same invocation', async () => {
     const history = installDeferredHistoryResponse();
     const cachedAssistantTs = Date.now() - 1000;
@@ -326,6 +574,144 @@ describe('useChatHistory replace hydration', () => {
     );
   });
 
+  it('preserves a newer local assistant turn when a legacy parent invocation is reused after a user turn', async () => {
+    const history = installDeferredHistoryResponse();
+    const now = Date.now();
+    const cachedMessages: ChatMessage[] = [
+      { id: 'user-1', type: 'user', content: 'first prompt', timestamp: now - 5_000 },
+      {
+        id: 'reply-1',
+        type: 'assistant',
+        catId: 'opus',
+        content: 'first answer',
+        origin: 'callback',
+        timestamp: now - 4_000,
+        extra: { stream: { invocationId: 'legacy-parent' } },
+      },
+      { id: 'user-2', type: 'user', content: 'second prompt', timestamp: now - 3_000 },
+    ];
+    mountReplaceHydrationThread({
+      ...makeThreadBState(now - 5_000, {
+        catInvocations: { opus: { invocationId: 'legacy-parent', startedAt: now - 2_500 } },
+      }),
+      messages: cachedMessages,
+    });
+
+    act(() => {
+      useChatStore.getState().addMessage({
+        id: 'reply-2-live',
+        type: 'assistant',
+        catId: 'opus',
+        content: 'second answer still streaming locally',
+        timestamp: now - 1_000,
+        isStreaming: true,
+        origin: 'stream',
+        extra: { stream: { invocationId: 'legacy-parent' } },
+      });
+    });
+
+    await history.waitUntilPending();
+    history.expectPending();
+
+    await history.resolve({
+      messages: [
+        { id: 'user-1', type: 'user', content: 'first prompt', timestamp: now - 5_000 },
+        {
+          id: 'reply-1',
+          catId: 'opus',
+          content: 'first answer',
+          origin: 'callback',
+          timestamp: now - 4_000,
+          extra: { stream: { invocationId: 'legacy-parent' } },
+        },
+        { id: 'user-2', type: 'user', content: 'second prompt', timestamp: now - 3_000 },
+      ],
+      hasMore: false,
+    });
+
+    expect(useChatStore.getState().messages.map((m) => m.id)).toEqual(['user-1', 'reply-1', 'user-2', 'reply-2-live']);
+    expect(useChatStore.getState().messages.find((m) => m.id === 'reply-1')?.content).toBe('first answer');
+    expect(useChatStore.getState().messages.find((m) => m.id === 'reply-2-live')).toEqual(
+      expect.objectContaining({
+        content: 'second answer still streaming locally',
+        isStreaming: true,
+        origin: 'stream',
+      }),
+    );
+  });
+
+  it('preserves local CLI payload when hydration returns the same callback id without tool metadata', async () => {
+    const history = installDeferredHistoryResponse();
+    const cachedAssistantTs = Date.now() - 1_000;
+    const now = Date.now();
+    mountReplaceHydrationThread({
+      messages: [
+        {
+          id: 'server-callback-tools-1',
+          type: 'assistant',
+          catId: 'opus',
+          content: 'final callback answer',
+          origin: 'callback',
+          timestamp: now - 2_000,
+          isStreaming: false,
+          thinking: 'local thinking that should not disappear',
+          toolEvents: [{ id: 'te-local-1', type: 'tool_use', label: 'Read file', timestamp: now - 1_800 }],
+          extra: { stream: { invocationId: 'inv-tools-1' } },
+        },
+      ],
+      isLoading: false,
+      isLoadingHistory: false,
+      hasMore: true,
+      hasActiveInvocation: false,
+      activeInvocations: {},
+      intentMode: null,
+      targetCats: [],
+      catStatuses: {},
+      catStatusDetails: {},
+      catInvocations: {},
+      currentGame: null,
+      unreadCount: 1,
+      hasUserMention: false,
+      lastActivity: cachedAssistantTs,
+      queue: [],
+      queuePaused: false,
+      queuePauseReason: undefined,
+      queueFull: false,
+      queueFullSource: undefined,
+      workspaceWorktreeId: null,
+      workspaceOpenTabs: [],
+      workspaceOpenFilePath: null,
+      workspaceOpenFileLine: null,
+    });
+
+    await history.waitUntilPending();
+    history.expectPending();
+
+    await history.resolve({
+      messages: [
+        {
+          id: 'server-callback-tools-1',
+          catId: 'opus',
+          content: 'final callback answer',
+          origin: 'callback',
+          timestamp: now,
+        },
+      ],
+      hasMore: false,
+    });
+
+    expect(useChatStore.getState().messages).toEqual([
+      expect.objectContaining({
+        id: 'server-callback-tools-1',
+        origin: 'callback',
+        content: 'final callback answer',
+        thinking: 'local thinking that should not disappear',
+        extra: { stream: { invocationId: 'inv-tools-1' } },
+        toolEvents: [expect.objectContaining({ id: 'te-local-1', type: 'tool_use', label: 'Read file' })],
+      }),
+    ]);
+  });
+
   it('thread switch rehydrates a cached duplicate invocation pair down to one formal callback bubble', async () => {
     const history = installDeferredHistoryResponse();
     const now = Date.now();
@@ -358,6 +744,7 @@ describe('useChatHistory replace hydration', () => {
       intentMode: null,
       targetCats: [],
       catStatuses: {},
+      catStatusDetails: {},
       catInvocations: {},
       currentGame: null,
       unreadCount: 0,
@@ -368,6 +755,10 @@ describe('useChatHistory replace hydration', () => {
       queuePauseReason: undefined,
       queueFull: false,
       queueFullSource: undefined,
+      workspaceWorktreeId: null,
+      workspaceOpenTabs: [],
+      workspaceOpenFilePath: null,
+      workspaceOpenFileLine: null,
     });
 
     await history.waitUntilPending();
@@ -463,6 +854,7 @@ describe('useChatHistory replace hydration', () => {
         catId: 'codex',
         content: 'partial draft content',
         thinking: 'draft thinking',
+        thinkingChunks: ['draft thinking'],
         toolEvents: [{ id: 'te-draft-1', type: 'tool_use' as const, label: 'Read file', timestamp: now - 10 }],
         origin: 'stream' as const,
         extra: { stream: { invocationId: 'inv-2' } },
@@ -526,6 +918,84 @@ describe('useChatHistory replace hydration', () => {
         ],
       }),
     );
+    expect(useChatStore.getState().messages.find((m) => m.id === 'server-msg-2')?.thinkingChunks).toBeUndefined();
+  });
+
+  it('reconciles local stream placeholder against the LATER history bubble when history has dual-bubble for one invocation (cloud P1 — last-wins streamKey)', async () => {
+    // Cloud Codex P1 (PR #1521): refactor to unified stable-identity Map
+    // changed streamKey collision behavior from last-wins (Map.set overwrite)
+    // to first-wins (`!has(streamKey)` guard). When a single invocation has
+    // both a stream bubble and a later callback bubble persisted to history
+    // (legacy/migration scenario), reconciliation must target the LATER
+    // (callback) bubble — otherwise a richer local placeholder can replace
+    // the earlier stream bubble, leaving a stale local row pretending to be
+    // the stream bubble while the authoritative callback already exists at
+    // the next index. Test guards against the first-wins regression.
+    const history = installDeferredHistoryResponse();
+    const cachedAssistantTs = Date.now() - 5_000;
+    const now = Date.now();
+
+    mountReplaceHydrationThread(
+      makeThreadBState(cachedAssistantTs, {
+        catInvocations: { opus: { invocationId: 'inv-dual', startedAt: now - 3_000 } },
+      }),
+    );
+
+    // Local stream placeholder: richer content than server-stream-X so that
+    // the same-phase richness comparison would prefer local over stream-X
+    // — this is what makes the regression visible (last-wins safely
+    // routes local to callback-X where phase priority drops it).
+    act(() => {
+      useChatStore.getState().addMessage({
+        id: 'live-stream-X',
+        type: 'assistant',
+        catId: 'opus',
+        content: 'LOCAL_LIVE_PLACEHOLDER_RICHER_THAN_THIN_SERVER_STREAM',
+        timestamp: now - 1_500,
+        isStreaming: true,
+        origin: 'stream',
+        extra: { stream: { invocationId: 'inv-dual' } },
+      });
+    });
+
+    await history.waitUntilPending();
+    history.expectPending();
+
+    await history.resolve({
+      messages: [
+        { id: 'b1', catId: 'opus', content: 'cached assistant', timestamp: cachedAssistantTs },
+        // Earlier stream bubble (thin) — would be the first-wins target.
+        {
+          id: 'server-stream-X',
+          catId: 'opus',
+          content: 'thin',
+          origin: 'stream',
+          timestamp: now - 2_000,
+          extra: { stream: { invocationId: 'inv-dual' } },
+        },
+        // Later callback bubble (final state) — must be the reconciliation target.
+        {
+          id: 'server-callback-X',
+          catId: 'opus',
+          content: 'final callback answer',
+          origin: 'callback',
+          timestamp: now - 1_000,
+          extra: { stream: { invocationId: 'inv-dual' } },
+        },
+      ],
+      hasMore: false,
+    });
+
+    // Z11 correction: hydrate keeps stream work-log and callback post_message as separate bubbles.
+    // Local placeholder is still reconciled away (phase priority drops local).
+    expect(useChatStore.getState().messages.map((m) => m.id)).toEqual(['b1', 'server-stream-X', 'server-callback-X']);
+    expect(useChatStore.getState().messages.find((m) => m.id === 'live-stream-X')).toBeUndefined();
+    const stream = useChatStore.getState().messages.find((m) => m.id === 'server-stream-X');
+    const callback = useChatStore.getState().messages.find((m) => m.id === 'server-callback-X');
+    expect(stream?.origin).toBe('stream');
+    expect(stream?.content).toContain('thin');
+    expect(callback?.origin).toBe('callback');
+    expect(callback?.content).toContain('final callback answer');
   });
 
   it('preserves local blob URLs when a kept stream bubble survives replace hydration', async () => {

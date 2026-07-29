@@ -6,15 +6,23 @@
 import { Server as HttpServer } from 'node:http';
 import { createCatId } from '@cat-cafe/shared';
 import { Server, Socket } from 'socket.io';
-import { resolveFrontendCorsOrigins } from '../../config/frontend-origin.js';
+import { isOriginAllowed, resolveFrontendCorsOrigins } from '../../config/frontend-origin.js';
 import type {
   CancelResult,
   InvocationTracker,
 } from '../../domains/cats/services/agents/invocation/InvocationTracker.js';
 import type { AgentMessage } from '../../domains/cats/services/types.js';
 import { createModuleLogger } from '../logger.js';
+import { BroadcastRateMonitor, type BroadcastRateMonitorOptions } from './BroadcastRateMonitor.js';
+import { ThreadSequencer } from './ThreadSequencer.js';
 
 const log = createModuleLogger('ws');
+
+interface QueueProcessorLike {
+  clearPause(threadId: string, catId?: string): void;
+  releaseSlot(threadId: string, catId: string): void;
+  suppressAutoResume(threadId: string, catId: string): void;
+}
 
 /**
  * Build the sequence of AgentMessages to broadcast after a successful cancel.
@@ -23,13 +31,14 @@ const log = createModuleLogger('ws');
 export function buildCancelMessages(result: CancelResult): AgentMessage[] {
   if (!result.cancelled) return [];
   const catIds = result.catIds.length > 0 ? result.catIds : ['opus'];
+  const primaryCatId = catIds[0] ?? 'opus';
   const now = Date.now();
   const messages: AgentMessage[] = [];
 
   // Single system_info to avoid "cancel chorus"
   messages.push({
     type: 'system_info',
-    catId: createCatId(catIds[0]!),
+    catId: createCatId(primaryCatId),
     content: '⏹ 已取消',
     timestamp: now,
   });
@@ -50,19 +59,86 @@ export function buildCancelMessages(result: CancelResult): AgentMessage[] {
 export class SocketManager {
   private io: Server;
   private invocationTracker: InvocationTracker | null;
+  private queueProcessor: QueueProcessorLike | null;
   private multiMentionOrchestrator: {
     abortByThread(threadId: string): number;
     abortBySlot?(threadId: string, catId: string): number;
   } | null;
+  /**
+   * F183 Phase C — thread-scoped monotonic sequence number (KD-9).
+   * Each broadcastAgentMessage increments per-thread counter and injects seq
+   * into the emitted payload. Client uses seq for gap detection + catchup.
+   *
+   * In-memory only — single-instance deploy assumption (KD-9 拒绝 multi-instance
+   * 分布式 sequencer over-engineering). API restart resets seq; client sees
+   * `seq=1` after restart, treats it as seed (no false gap).
+   *
+   * Extracted to ThreadSequencer for unit testability without HttpServer.
+   */
+  private sequencer: ThreadSequencer = new ThreadSequencer();
+  /**
+   * F183 Phase C2/C3 — per-thread emit rate monitor (observability for
+   * backpressure root cause investigation). Logs structured warnings when
+   * a thread sustains > 200 events/sec for 1s. Replaces unfindable historical
+   * literal "in-process app-server event stream lagged; dropped N events"
+   * (字面源 grep 不到 — 见 BroadcastRateMonitor.ts 注释 + AC-C3 spec)。
+   * Public for test/admin introspection via getStats(threadId).
+   */
+  readonly rateMonitor: BroadcastRateMonitor;
 
-  constructor(httpServer: HttpServer, invocationTracker?: InvocationTracker) {
+  constructor(
+    httpServer: HttpServer,
+    invocationTracker?: InvocationTracker,
+    rateMonitorOptions?: BroadcastRateMonitorOptions,
+  ) {
     this.invocationTracker = invocationTracker ?? null;
+    this.queueProcessor = null;
     this.multiMentionOrchestrator = null;
+    // F183 Phase C2/C3 — backpressure observability. onWarn forwards to module
+    // logger as structured `broadcast_rate_warn` event (replaces unfindable
+    // historical literal "in-process app-server event stream lagged ...").
+    this.rateMonitor = new BroadcastRateMonitor({
+      ...(rateMonitorOptions ?? {}),
+      onWarn:
+        rateMonitorOptions?.onWarn ??
+        ((event) => {
+          log.warn(
+            {
+              event: 'broadcast_rate_warn',
+              threadId: event.threadId,
+              windowCount: event.windowCount,
+              threshold: event.threshold,
+              windowMs: event.windowMs,
+              timestamp: event.timestamp,
+            },
+            'Broadcast rate exceeded threshold (per-thread sliding window)',
+          );
+        }),
+    });
     const corsOrigins = resolveFrontendCorsOrigins(process.env, console);
     this.io = new Server(httpServer, {
       cors: {
         origin: corsOrigins,
         credentials: true,
+      },
+      // F156: Guard WebSocket upgrades. Socket.IO's `cors` only protects HTTP
+      // long-polling; WebSocket upgrades bypass CORS entirely. This hook is
+      // the real security boundary against cross-site WebSocket hijacking.
+      // Ref: OpenClaw ClawJacked (2026-02), CVE-2026-25253.
+      allowRequest: (req, callback) => {
+        const origin = req.headers.origin;
+        if (!origin) {
+          // No Origin header = non-browser client (curl, MCP, etc.).
+          // In single-user mode this is safe to allow.
+          callback(null, true);
+          return;
+        }
+        if (isOriginAllowed(origin, corsOrigins)) {
+          callback(null, true);
+          return;
+        }
+        log.warn({ origin }, 'WebSocket upgrade rejected: origin not in allowlist');
+        callback('Origin not allowed', false);
       },
     });
 
@@ -71,9 +147,10 @@ export class SocketManager {
 
   private setupEventHandlers(): void {
     this.io.on('connection', (socket: Socket) => {
-      const authUserId = typeof socket.handshake.auth?.userId === 'string' ? socket.handshake.auth.userId.trim() : '';
-      const queryUserId = typeof socket.handshake.query.userId === 'string' ? socket.handshake.query.userId.trim() : '';
-      const userId = authUserId || queryUserId || 'anonymous';
+      // F156: Server determines identity — never trust client-supplied userId.
+      // In single-user mode, all connections are 'default-user'.
+      // F077 will replace this with session/cookie-based identity.
+      const userId = 'default-user';
       log.info({ socketId: socket.id, userId }, 'Client connected');
       log.debug(
         {
@@ -86,9 +163,9 @@ export class SocketManager {
       );
 
       // F39: Auto-join user-scoped room for emitToUser (multi-tab support)
-      if (userId !== 'anonymous') {
-        socket.join(`user:${userId}`);
-      }
+      // F156: userId is always 'default-user' in single-user mode (F077 will
+      // derive it from session). Auto-join is unconditional.
+      socket.join(`user:${userId}`);
 
       socket.on('disconnect', () => {
         log.info({ socketId: socket.id }, 'Client disconnected');
@@ -98,6 +175,18 @@ export class SocketManager {
         // Validate room name format — only allow known prefixes
         if (!/^(thread:|worktree:|preview:global$|workspace:global$|user:)/.test(room)) {
           log.warn({ socketId: socket.id, room }, 'Attempted to join invalid room');
+          return;
+        }
+        // F156: Room ACL — user: rooms are identity-scoped
+        if (room.startsWith('user:') && room !== `user:${userId}`) {
+          log.warn({ socketId: socket.id, room, userId }, 'Room ACL denied: cannot join another user room');
+          return;
+        }
+        // F156 B-3: Global rooms carry metadata (file paths, worktreeIds, preview ports).
+        // Require authenticated userId. In single-user mode userId is always set;
+        // F077 will add workspace membership check for multi-user.
+        if ((room === 'workspace:global' || room === 'preview:global') && !userId) {
+          log.warn({ socketId: socket.id, room }, 'Global room requires authentication');
           return;
         }
         socket.join(room);
@@ -117,23 +206,73 @@ export class SocketManager {
           log.warn({ socketId: socket.id, threadId: data.threadId }, 'Cancel attempt without room membership');
           return;
         }
+        // F211-REG6 instrument (observation-only): SocketManager hardcodes 'user_cancel' for every
+        // WS cancel_invocation, but the operator reported spurious cancels he never triggered (Timeline
+        // 2026-05-29: WS flapped 6× in 2min). msSinceConnect is the discriminator — a cancel arriving
+        // milliseconds after a (re)connect is almost certainly reconnect/teardown noise, not a
+        // deliberate Stop click. Pin the real trigger before changing any attribution behavior.
+        log.info(
+          {
+            event: 'f211_reg6_ws_cancel_received',
+            socketId: socket.id,
+            threadId: data.threadId,
+            catId: data.catId ?? null,
+            scope: data.catId ? 'slot' : 'all',
+            msSinceConnect: Date.now() - socket.handshake.issued,
+            transport: socket.conn.transport.name,
+          },
+          'F211-REG6: cancel_invocation received — capturing real trigger provenance (genuine Stop vs reconnect-spurious)',
+        );
         if (data.catId) {
           // F108: Slot-specific cancel
-          const result = this.invocationTracker.cancel(data.threadId, data.catId, userId);
+          const result = this.invocationTracker.cancel(data.threadId, data.catId, userId, 'user_cancel');
           if (result.cancelled) {
-            const catIds = result.catIds.length > 0 ? result.catIds : [data.catId];
-            log.info({ threadId: data.threadId, catId: data.catId, cats: catIds }, 'Cancelled slot');
-            for (const msg of buildCancelMessages(result)) {
+            // F-parallel-cancel: scope the cancel broadcast + slot cleanup to the REQUESTED cat
+            // only. result.catIds carries the whole startAll batch (per-slot stores all catIds),
+            // so broadcasting it cleared sibling cats in the UI — this is the most direct cause of
+            // "取消一只两只一起取消" from the real Stop button. Mirrors queue.ts:568-575 scoped fix.
+            const scopedResult = { ...result, catIds: [data.catId] };
+            log.info({ threadId: data.threadId, catId: data.catId }, 'Cancelled slot (scoped)');
+            for (const msg of buildCancelMessages(scopedResult)) {
               this.broadcastAgentMessage(msg, data.threadId);
             }
+            this.queueProcessor?.clearPause(data.threadId, data.catId);
+            this.queueProcessor?.releaseSlot(data.threadId, data.catId);
           }
           // F108 + F086: Also abort multi-mention dispatches for this specific cat
           this.multiMentionOrchestrator?.abortBySlot?.(data.threadId, data.catId);
         } else {
-          // Backward compat: cancel all slots in thread
-          this.invocationTracker.cancelAll(data.threadId);
-          this.multiMentionOrchestrator?.abortByThread(data.threadId);
-          log.info({ threadId: data.threadId, socketId: socket.id, userId }, 'Cancelled all invocations');
+          // F156: Pass userId to cancelAll so it only cancels this user's invocations.
+          // cancelAll returns the catIds that were actually cancelled, so we can
+          // scope the orchestrator abort to just those cats — not the entire thread.
+          // Use 'cancel_all' (not 'user_cancel') so QueueProcessor.executeEntry can
+          // distinguish "stop everything" from single-cat cancel. Only 'cancel_all'
+          // triggers suppressAutoResume; single-cat 'user_cancel' still auto-resumes.
+          const cancelledCatIds = this.invocationTracker.cancelAll(data.threadId, userId, 'cancel_all');
+          if (cancelledCatIds.length > 0) {
+            for (const msg of buildCancelMessages({ cancelled: true, catIds: cancelledCatIds })) {
+              this.broadcastAgentMessage(msg, data.threadId);
+            }
+            for (const catId of cancelledCatIds) {
+              this.queueProcessor?.clearPause(data.threadId, catId);
+              this.queueProcessor?.releaseSlot(data.threadId, catId);
+              // Suppress auto-resume for BOTH paths:
+              // - Queued invocations: executeEntry also sets suppress (belt-and-suspenders)
+              // - Direct invocations (messages.ts): only this external call covers them
+              //   because they don't go through executeEntry
+              // Protected by: cancel_all reason (not single-cat), status-gate, 60s TTL
+              this.queueProcessor?.suppressAutoResume(data.threadId, catId);
+            }
+          }
+          // F156 P1-fix: Use per-cat abortBySlot instead of thread-wide abortByThread.
+          // abortByThread would kill other users' multi-mention dispatches too.
+          for (const catId of cancelledCatIds) {
+            this.multiMentionOrchestrator?.abortBySlot?.(data.threadId, catId);
+          }
+          log.info(
+            { threadId: data.threadId, socketId: socket.id, userId, cancelledCatIds },
+            'Cancelled all invocations',
+          );
         }
       });
     });
@@ -147,15 +286,45 @@ export class SocketManager {
     this.multiMentionOrchestrator = orch;
   }
 
+  /** Wire QueueProcessor after bootstrap so WebSocket stop can mirror REST cancel cleanup. */
+  setQueueProcessor(queueProcessor: QueueProcessorLike): void {
+    this.queueProcessor = queueProcessor;
+  }
+
   /**
    * Broadcast agent message to a thread room.
    * Always scoped to a room — defaults to 'thread:default' when threadId is omitted.
    * Never broadcasts globally to prevent cross-thread message leak.
+   *
+   * F183 Phase C — injects thread-scoped monotonic seq + sequencer epoch into the
+   * emitted payload for client gap detection (KD-9). Caller-supplied `seq>0` is
+   * preserved as a transport hint (e.g. test fixtures injecting deterministic
+   * seq); production callers should leave `seq` undefined and let sequencer
+   * assign. Epoch is always overwritten with current sequencer epoch (caller
+   * can't fake epoch — server-controlled identity).
+   *
+   * Cloud R3 P2 fix (2026-05-02): when override is used, bump sequencer to
+   * `max(current, override)` so subsequent auto-assigned seqs stay monotonic.
+   * Without this, `next()` would reuse lower numbers after override path,
+   * causing clients to treat fresh events as 'late'/'gap'.
    */
   broadcastAgentMessage(message: AgentMessage, threadId?: string): void {
     const tid = threadId ?? 'default';
     const room = `thread:${tid}`;
-    this.io.to(room).emit('agent_message', { ...message, threadId: tid });
+    const seqOverride = message.seq;
+    let seq: number;
+    if (typeof seqOverride === 'number' && seqOverride > 0) {
+      seq = seqOverride;
+      // Preserve monotonicity for subsequent auto-assigned seqs (cloud R3 P2)
+      this.sequencer.bumpTo(tid, seqOverride);
+    } else {
+      seq = this.sequencer.next(tid);
+    }
+    const seqEpoch = this.sequencer.epoch;
+    // F183 Phase C2/C3 — record per-thread emit rate; warn callback fires when
+    // sliding-window count exceeds threshold (debounced per thread).
+    this.rateMonitor.record(tid);
+    this.io.to(room).emit('agent_message', { ...message, threadId: tid, seq, seqEpoch });
   }
 
   broadcastToRoom(room: string, event: string, data: unknown): void {

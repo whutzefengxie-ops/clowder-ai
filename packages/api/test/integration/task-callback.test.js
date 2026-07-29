@@ -6,7 +6,8 @@
  */
 
 import assert from 'node:assert/strict';
-import { beforeEach, describe, test } from 'node:test';
+import { before, beforeEach, describe, test } from 'node:test';
+import '../helpers/setup-cat-registry.js';
 import Fastify from 'fastify';
 
 const { InvocationRegistry } = await import('../../dist/domains/cats/services/agents/invocation/InvocationRegistry.js');
@@ -57,7 +58,7 @@ describe('Task Callback Integration', () => {
     const app = await createApp();
 
     // Create invocation for opus
-    const { invocationId, callbackToken } = registry.create('user-1', 'opus', 'thread-1');
+    const { invocationId, callbackToken } = await registry.create('user-1', 'opus', 'thread-1');
 
     // Create a task owned by opus
     const task = taskStore.create({
@@ -71,9 +72,8 @@ describe('Task Callback Integration', () => {
     const response = await app.inject({
       method: 'POST',
       url: '/api/callbacks/update-task',
+      headers: { 'x-invocation-id': invocationId, 'x-callback-token': callbackToken },
       payload: {
-        invocationId,
-        callbackToken,
         taskId: task.id,
         status: 'doing',
       },
@@ -112,7 +112,7 @@ describe('Task Callback Integration', () => {
     const app = await createApp();
 
     // Invocation for codex
-    const { invocationId, callbackToken } = registry.create('user-1', 'codex', 'thread-1');
+    const { invocationId, callbackToken } = await registry.create('user-1', 'codex', 'thread-1');
 
     // Task owned by opus
     const task = taskStore.create({
@@ -126,9 +126,8 @@ describe('Task Callback Integration', () => {
     const response = await app.inject({
       method: 'POST',
       url: '/api/callbacks/update-task',
+      headers: { 'x-invocation-id': invocationId, 'x-callback-token': callbackToken },
       payload: {
-        invocationId,
-        callbackToken,
         taskId: task.id,
         status: 'done',
       },
@@ -140,7 +139,7 @@ describe('Task Callback Integration', () => {
   test('MCP update-task allows unowned task', async () => {
     const app = await createApp();
 
-    const { invocationId, callbackToken } = registry.create('user-1', 'opus', 'thread-1');
+    const { invocationId, callbackToken } = await registry.create('user-1', 'opus', 'thread-1');
 
     // Task with no owner
     const task = taskStore.create({
@@ -153,9 +152,8 @@ describe('Task Callback Integration', () => {
     const response = await app.inject({
       method: 'POST',
       url: '/api/callbacks/update-task',
+      headers: { 'x-invocation-id': invocationId, 'x-callback-token': callbackToken },
       payload: {
-        invocationId,
-        callbackToken,
         taskId: task.id,
         status: 'doing',
       },
@@ -169,7 +167,7 @@ describe('Task Callback Integration', () => {
     const app = await createApp();
 
     // Invocation in thread-A
-    const { invocationId, callbackToken } = registry.create('user-1', 'opus', 'thread-A');
+    const { invocationId, callbackToken } = await registry.create('user-1', 'opus', 'thread-A');
 
     // Task in thread-B
     const task = taskStore.create({
@@ -183,9 +181,8 @@ describe('Task Callback Integration', () => {
     const response = await app.inject({
       method: 'POST',
       url: '/api/callbacks/update-task',
+      headers: { 'x-invocation-id': invocationId, 'x-callback-token': callbackToken },
       payload: {
-        invocationId,
-        callbackToken,
         taskId: task.id,
         status: 'done',
       },
@@ -193,5 +190,109 @@ describe('Task Callback Integration', () => {
 
     assert.equal(response.statusCode, 403);
     assert.match(response.json().error, /different thread/);
+  });
+
+  // --- F160: cat_cafe_create_task ---
+
+  test('MCP create-task succeeds with valid input', async () => {
+    const app = await createApp();
+    const { invocationId, callbackToken } = await registry.create('user-1', 'opus', 'thread-1');
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/callbacks/create-task',
+      payload: {
+        invocationId,
+        callbackToken,
+        title: 'Fix login bug',
+        why: 'Users are getting 500 errors on login',
+      },
+    });
+
+    assert.equal(response.statusCode, 201);
+    const body = response.json();
+    assert.equal(body.status, 'ok');
+    assert.equal(body.task.title, 'Fix login bug');
+    assert.equal(body.task.kind, 'work');
+    assert.equal(body.task.threadId, 'thread-1');
+    assert.equal(body.task.createdBy, 'opus');
+    assert.equal(body.task.status, 'todo');
+
+    const events = socketManager.getEvents();
+    const createEvent = events.find((e) => e.event === 'task_created');
+    assert.ok(createEvent, 'task_created event should be broadcast');
+    assert.equal(createEvent.room, 'thread:thread-1');
+  });
+
+  test('MCP create-task rejects invalid credentials', async () => {
+    const app = await createApp();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/callbacks/create-task',
+      payload: {
+        invocationId: 'bad-id',
+        callbackToken: 'bad-token',
+        title: 'Some task',
+      },
+    });
+
+    assert.equal(response.statusCode, 401);
+  });
+
+  test('MCP create-task enforces kind=work even if kind field sent (AC-A4 regression guard)', async () => {
+    const app = await createApp();
+    const { invocationId, callbackToken } = await registry.create('user-1', 'opus', 'thread-1');
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/callbacks/create-task',
+      payload: {
+        invocationId,
+        callbackToken,
+        title: 'PR #42',
+        kind: 'pr_tracking',
+      },
+    });
+
+    assert.equal(response.statusCode, 201);
+    assert.equal(response.json().task.kind, 'work', 'kind must be forced to work regardless of input');
+  });
+
+  test('MCP create-task with ownerCatId', async () => {
+    const app = await createApp();
+    const { invocationId, callbackToken } = await registry.create('user-1', 'opus', 'thread-1');
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/callbacks/create-task',
+      payload: {
+        invocationId,
+        callbackToken,
+        title: 'Review docs',
+        why: 'Needs fresh eyes',
+        ownerCatId: 'codex',
+      },
+    });
+
+    assert.equal(response.statusCode, 201);
+    assert.equal(response.json().task.ownerCatId, 'codex');
+  });
+
+  test('MCP create-task rejects empty title', async () => {
+    const app = await createApp();
+    const { invocationId, callbackToken } = await registry.create('user-1', 'opus', 'thread-1');
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/callbacks/create-task',
+      payload: {
+        invocationId,
+        callbackToken,
+        title: '',
+      },
+    });
+
+    assert.equal(response.statusCode, 400);
   });
 });

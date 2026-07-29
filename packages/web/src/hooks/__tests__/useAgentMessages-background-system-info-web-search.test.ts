@@ -1,0 +1,782 @@
+import { describe, expect, it, vi } from 'vitest';
+import type { HandleBackgroundMessageOptions } from '@/hooks/useAgentMessages';
+import { consumeBackgroundSystemInfo } from '@/hooks/useAgentMessages';
+
+function createMockStore(overrides: Record<string, unknown> = {}) {
+  return {
+    addMessageToThread: vi.fn(),
+    removeThreadMessage: vi.fn(),
+    appendToThreadMessage: vi.fn(),
+    appendToolEventToThread: vi.fn(),
+    appendRichBlockToThread: vi.fn(),
+    setThreadCatInvocation: vi.fn(),
+    setThreadMessageMetadata: vi.fn(),
+    setThreadMessageUsage: vi.fn(),
+    setThreadMessageThinking: vi.fn(),
+    setThreadMessageStreamInvocation: vi.fn(),
+    setThreadMessageStreaming: vi.fn(),
+    setThreadLoading: vi.fn(),
+    setThreadHasActiveInvocation: vi.fn(),
+    addThreadActiveInvocation: vi.fn(),
+    removeThreadActiveInvocation: vi.fn(),
+    updateThreadCatStatus: vi.fn(),
+    batchStreamChunkUpdate: vi.fn(),
+    clearThreadActiveInvocation: vi.fn(),
+    replaceThreadMessageId: vi.fn(),
+    patchThreadMessage: vi.fn(),
+    getThreadState: vi.fn(() => ({ messages: [], catStatuses: {}, catInvocations: {} })),
+    ...overrides,
+  };
+}
+
+function createMockOptions(storeOverrides: Record<string, unknown> = {}) {
+  return {
+    store: createMockStore(storeOverrides),
+    bgStreamRefs: new Map(),
+    finalizedBgRefs: new Map(),
+    nextBgSeq: (() => {
+      let i = 0;
+      return () => ++i;
+    })(),
+    addToast: vi.fn(),
+    clearDoneTimeout: vi.fn(),
+  } as unknown as HandleBackgroundMessageOptions;
+}
+
+describe('consumeBackgroundSystemInfo web_search', () => {
+  it('consumes web_search JSON (does not fall back to raw JSON system bubble)', () => {
+    const options = createMockOptions();
+
+    const msg = {
+      type: 'system_info',
+      catId: 'codex',
+      threadId: 'thread-1',
+      content: JSON.stringify({ type: 'web_search', catId: 'codex', count: 1 }),
+      timestamp: Date.now(),
+    };
+
+    const result = consumeBackgroundSystemInfo(msg, undefined, options);
+
+    expect(result.consumed).toBe(true);
+  });
+
+  // F210 H3: background path agy_trajectory_progress → 累积到 thread 级 catStatusDetails（折叠单行），
+  // 不渲染 raw JSON system bubble（承接 H1-hotfix）。砚砚 scope：active+background 都覆盖。
+  it('consumes agy_trajectory_progress → updateThreadCatStatus detail, no raw bubble (H3 background)', () => {
+    const options = createMockOptions();
+    const msg = {
+      type: 'system_info',
+      catId: 'gemini',
+      threadId: 'thread-1',
+      content: JSON.stringify({
+        type: 'agy_trajectory_progress',
+        idx: 4,
+        stepType: 15,
+        status: 1,
+        label: 'AGY trajectory step #4 (assistant activity) running',
+      }),
+      timestamp: Date.now(),
+    };
+
+    const result = consumeBackgroundSystemInfo(msg, undefined, options);
+
+    expect(result.consumed).toBe(true);
+    expect(options.store.updateThreadCatStatus).toHaveBeenCalledWith(
+      'thread-1',
+      'gemini',
+      'streaming',
+      expect.stringContaining('AGY working · 5 steps · assistant activity'),
+    );
+    // 不刷 system bubble（per-step）
+    expect(options.store.addMessageToThread).not.toHaveBeenCalled();
+  });
+
+  it('consumes invocation_created and resets stale taskProgress for that cat', () => {
+    const options = createMockOptions({
+      getThreadState: vi.fn(() => ({
+        messages: [],
+        catStatuses: {},
+        catInvocations: {
+          codex: {
+            invocationId: 'inv-old',
+            taskProgress: {
+              tasks: [{ id: 'task-1', subject: 'stale', status: 'in_progress' }],
+              lastUpdate: Date.now() - 1_000,
+            },
+          },
+        },
+      })),
+    });
+
+    const msg = {
+      type: 'system_info',
+      catId: 'codex',
+      threadId: 'thread-1',
+      content: JSON.stringify({ type: 'invocation_created', invocationId: 'inv-new-2' }),
+      timestamp: Date.now(),
+    };
+
+    const result = consumeBackgroundSystemInfo(msg, undefined, options);
+
+    expect(result.consumed).toBe(true);
+    expect(options.store.setThreadCatInvocation).toHaveBeenCalledWith(
+      'thread-1',
+      'codex',
+      expect.objectContaining({
+        invocationId: 'inv-new-2',
+        taskProgress: expect.objectContaining({
+          tasks: [],
+          snapshotStatus: 'running',
+          lastInvocationId: 'inv-new-2',
+        }),
+      }),
+    );
+  });
+
+  it('binds invocation identity onto an existing background streaming bubble', () => {
+    const options = createMockOptions({
+      getThreadState: vi.fn(() => ({
+        messages: [
+          {
+            id: 'bg-msg-1',
+            type: 'assistant',
+            catId: 'codex',
+            content: 'partial chunk',
+            isStreaming: true,
+            timestamp: Date.now(),
+          },
+        ],
+        catStatuses: {},
+        catInvocations: {},
+      })),
+    });
+
+    const msg = {
+      type: 'system_info',
+      catId: 'codex',
+      threadId: 'thread-1',
+      content: JSON.stringify({ type: 'invocation_created', invocationId: 'inv-new-3' }),
+      timestamp: Date.now(),
+    };
+
+    const result = consumeBackgroundSystemInfo(msg, undefined, options);
+
+    expect(result.consumed).toBe(true);
+    expect(options.store.setThreadMessageStreamInvocation).toHaveBeenCalledWith(
+      'thread-1',
+      'bg-msg-1',
+      'inv-new-3',
+      undefined,
+    );
+  });
+
+  it('finalizes stale same-cat background stream before binding a new invocation', () => {
+    const options = createMockOptions({
+      getThreadState: vi.fn(() => ({
+        messages: [
+          {
+            id: 'bg-old-bound',
+            type: 'assistant',
+            catId: 'codex',
+            content: 'previous invocation finished in backend',
+            isStreaming: true,
+            origin: 'stream',
+            extra: {
+              stream: {
+                invocationId: 'parent-old',
+                turnInvocationId: 'turn-old',
+              },
+            },
+            timestamp: Date.now() - 1_000,
+          },
+          {
+            id: 'bg-new-placeholder',
+            type: 'assistant',
+            catId: 'codex',
+            content: '',
+            isStreaming: true,
+            origin: 'stream',
+            timestamp: Date.now(),
+          },
+        ],
+        catStatuses: {},
+        catInvocations: {},
+      })),
+    });
+
+    const msg = {
+      type: 'system_info',
+      catId: 'codex',
+      threadId: 'thread-1',
+      invocationId: 'parent-new',
+      turnInvocationId: 'turn-new',
+      content: JSON.stringify({ type: 'invocation_created', invocationId: 'turn-new' }),
+      timestamp: Date.now(),
+    };
+
+    const result = consumeBackgroundSystemInfo(
+      msg,
+      { id: 'bg-old-bound', threadId: 'thread-1', catId: 'codex' },
+      options,
+    );
+
+    expect(result.consumed).toBe(true);
+    expect(options.store.setThreadMessageStreaming).toHaveBeenCalledWith('thread-1', 'bg-old-bound', false);
+    expect(options.store.setThreadMessageStreamInvocation).toHaveBeenCalledWith(
+      'thread-1',
+      'bg-new-placeholder',
+      'parent-new',
+      'turn-new',
+    );
+  });
+
+  // F194 Phase Z3 R12 (砚砚 R13 RED requirement): background invocation_created with dual id
+  // (msg.invocationId=parent + msg.turnInvocationId=child) must call setThreadMessageStreamInvocation
+  // with parent + turnInvocationId, so existing stream bubble preserves dual id contract.
+  it('Z3 R12: background invocation_created with dual id rebinds existing stream bubble with turnInvocationId', () => {
+    const options = createMockOptions({
+      getThreadState: vi.fn(() => ({
+        messages: [
+          {
+            id: 'bg-msg-z3',
+            type: 'assistant',
+            catId: 'codex',
+            content: 'partial chunk',
+            isStreaming: true,
+            timestamp: Date.now(),
+          },
+        ],
+        catStatuses: {},
+        catInvocations: {},
+      })),
+    });
+
+    const msg = {
+      type: 'system_info',
+      catId: 'codex',
+      threadId: 'thread-1',
+      invocationId: 'parent-chain-z3',
+      turnInvocationId: 'turn-codex-z3',
+      content: JSON.stringify({ type: 'invocation_created', invocationId: 'turn-codex-z3' }),
+      timestamp: Date.now(),
+    };
+
+    const result = consumeBackgroundSystemInfo(msg, undefined, options);
+
+    expect(result.consumed).toBe(true);
+    // Critical: setThreadMessageStreamInvocation must be called with FOUR args (parent + turnInvocationId)
+    // so dual id contract (AC-Z8/Z9) survives background bind. Without this, bubble stays parent-only
+    // → same parent multi-turn merges in background path.
+    expect(options.store.setThreadMessageStreamInvocation).toHaveBeenCalledWith(
+      'thread-1',
+      'bg-msg-z3',
+      'parent-chain-z3',
+      'turn-codex-z3',
+    );
+  });
+
+  it('formats a2a_pingpong_terminated as readable system notice text', () => {
+    const options = createMockOptions();
+    options.resolveCatName = (catId) => ({ sonnet: '布偶猫（sonnet）', gpt52: '缅因猫（gpt52）' })[catId] ?? catId;
+
+    const msg = {
+      type: 'system_info',
+      catId: 'sonnet',
+      threadId: 'thread-1',
+      content: JSON.stringify({
+        type: 'a2a_pingpong_terminated',
+        fromCatId: 'sonnet',
+        targetCatId: 'gpt52',
+        pairCount: 4,
+      }),
+      timestamp: Date.now(),
+    };
+
+    const result = consumeBackgroundSystemInfo(msg, undefined, options);
+
+    expect(result.consumed).toBe(false);
+    expect(result.variant).toBe('info');
+    expect(result.content).toBe('🏓 布偶猫（sonnet） ↔ 缅因猫（gpt52） 已连续互相 @ 4 轮，链路已熔断。');
+  });
+});
+
+describe('consumeBackgroundSystemInfo rich_block placeholder', () => {
+  it('creates placeholder with origin:"stream" when no existing bubble (Bug B regression)', () => {
+    const options = createMockOptions();
+    const block = { id: 'rb-1', kind: 'audio', v: 1, url: '/api/tts/audio/test.wav', mimeType: 'audio/wav' };
+    const msg = {
+      type: 'system_info',
+      catId: 'opus',
+      threadId: 'thread-1',
+      content: JSON.stringify({ type: 'rich_block', block }),
+      timestamp: Date.now(),
+    };
+
+    const result = consumeBackgroundSystemInfo(msg, undefined, options);
+
+    expect(result.consumed).toBe(true);
+    // Placeholder must be created with origin: 'stream' (not 'callback')
+    expect(options.store.addMessageToThread).toHaveBeenCalledWith(
+      'thread-1',
+      expect.objectContaining({
+        type: 'assistant',
+        catId: 'opus',
+        content: '',
+        isStreaming: true,
+        origin: 'stream',
+      }),
+    );
+    // Rich block must be appended to the placeholder
+    expect(options.store.appendRichBlockToThread).toHaveBeenCalledWith(
+      'thread-1',
+      expect.stringContaining('bg-rich-'),
+      block,
+    );
+  });
+
+  it('appends rich block to existing callback bubble without creating placeholder', () => {
+    const options = createMockOptions({
+      getThreadState: vi.fn(() => ({
+        messages: [{ id: 'cb-msg-1', type: 'assistant', catId: 'opus', origin: 'callback', content: 'done' }],
+        catStatuses: {},
+        catInvocations: {},
+      })),
+    });
+    const block = { id: 'rb-2', kind: 'audio', v: 1, url: '/api/tts/audio/test2.wav', mimeType: 'audio/wav' };
+    const msg = {
+      type: 'system_info',
+      catId: 'opus',
+      threadId: 'thread-1',
+      content: JSON.stringify({ type: 'rich_block', block }),
+      timestamp: Date.now(),
+    };
+
+    const result = consumeBackgroundSystemInfo(msg, undefined, options);
+
+    expect(result.consumed).toBe(true);
+    // Should NOT create a new placeholder
+    expect(options.store.addMessageToThread).not.toHaveBeenCalled();
+    // Should append to existing callback bubble
+    expect(options.store.appendRichBlockToThread).toHaveBeenCalledWith('thread-1', 'cb-msg-1', block);
+  });
+
+  it('uses messageId correlation when provided', () => {
+    const options = createMockOptions({
+      getThreadState: vi.fn(() => ({
+        messages: [
+          { id: 'target-msg', type: 'assistant', catId: 'opus', origin: 'callback', content: 'response' },
+          { id: 'other-msg', type: 'assistant', catId: 'opus', origin: 'callback', content: 'later' },
+        ],
+        catStatuses: {},
+        catInvocations: {},
+      })),
+    });
+    const block = { id: 'rb-3', kind: 'audio', v: 1, url: '/api/tts/audio/test3.wav', mimeType: 'audio/wav' };
+    const msg = {
+      type: 'system_info',
+      catId: 'opus',
+      threadId: 'thread-1',
+      content: JSON.stringify({ type: 'rich_block', block, messageId: 'target-msg' }),
+      timestamp: Date.now(),
+    };
+
+    const result = consumeBackgroundSystemInfo(msg, undefined, options);
+
+    expect(result.consumed).toBe(true);
+    expect(options.store.appendRichBlockToThread).toHaveBeenCalledWith('thread-1', 'target-msg', block);
+  });
+
+  it('AC-Z17: reuses finalized background stream bubble for late rich_block instead of creating bg-rich placeholder', () => {
+    const options = createMockOptions({
+      getThreadState: vi.fn(() => ({
+        messages: [
+          {
+            id: 'bg-finalized-msg',
+            type: 'assistant',
+            catId: 'opus',
+            origin: 'stream',
+            isStreaming: false,
+            content: '🎵 已发！',
+            timestamp: Date.now() - 1000,
+          },
+        ],
+        catStatuses: {},
+        catInvocations: {},
+      })),
+    });
+    options.finalizedBgRefs.set('thread-1::opus', 'bg-finalized-msg');
+    const block = { id: 'rb-z17-bg', kind: 'audio', v: 1, url: '/api/tts/audio/late.wav', mimeType: 'audio/wav' };
+    const msg = {
+      type: 'system_info',
+      catId: 'opus',
+      threadId: 'thread-1',
+      content: JSON.stringify({ type: 'rich_block', block }),
+      timestamp: Date.now(),
+    };
+
+    const result = consumeBackgroundSystemInfo(msg, undefined, options);
+
+    expect(result.consumed).toBe(true);
+    expect(options.store.addMessageToThread).not.toHaveBeenCalled();
+    expect(options.store.appendRichBlockToThread).toHaveBeenCalledWith('thread-1', 'bg-finalized-msg', block);
+  });
+
+  it('does not reuse a finalized background bubble for a rich_block with a new invocation id', () => {
+    const options = createMockOptions({
+      getThreadState: vi.fn(() => ({
+        messages: [
+          {
+            id: 'bg-finalized-old-msg',
+            type: 'assistant',
+            catId: 'opus',
+            origin: 'stream',
+            isStreaming: false,
+            content: 'old voice done',
+            timestamp: Date.now() - 1000,
+          },
+        ],
+        catStatuses: {},
+        catInvocations: {},
+      })),
+    });
+    options.finalizedBgRefs.set('thread-1::opus', 'bg-finalized-old-msg');
+    const block = {
+      id: 'rb-new-invocation',
+      kind: 'audio',
+      v: 1,
+      url: '/api/tts/audio/new.wav',
+      mimeType: 'audio/wav',
+    };
+    const msg = {
+      type: 'system_info',
+      catId: 'opus',
+      threadId: 'thread-1',
+      invocationId: 'inv-new-bg',
+      content: JSON.stringify({ type: 'rich_block', block }),
+      timestamp: Date.now(),
+    };
+
+    const result = consumeBackgroundSystemInfo(msg, undefined, options);
+
+    expect(result.consumed).toBe(true);
+    expect(options.store.appendRichBlockToThread).not.toHaveBeenCalledWith('thread-1', 'bg-finalized-old-msg', block);
+    expect(options.store.addMessageToThread).toHaveBeenCalledWith(
+      'thread-1',
+      expect.objectContaining({
+        catId: 'opus',
+        origin: 'stream',
+        extra: {
+          stream: { invocationId: 'inv-new-bg' },
+        },
+      }),
+    );
+    const targetId = vi.mocked(options.store.addMessageToThread).mock.calls[0]?.[1]?.id;
+    expect(targetId).toEqual(expect.stringMatching(/^bg-rich-/));
+    expect(options.store.appendRichBlockToThread).toHaveBeenCalledWith('thread-1', targetId, block);
+  });
+});
+
+describe('consumeBackgroundSystemInfo liveness_warning', () => {
+  it('consumes liveness_warning and updates catStatus + invocation snapshot (F118 parity)', () => {
+    const options = createMockOptions();
+
+    const msg = {
+      type: 'system_info',
+      catId: 'opus',
+      threadId: 'thread-1',
+      content: JSON.stringify({
+        type: 'liveness_warning',
+        __livenessWarning: true,
+        state: 'busy-silent',
+        silenceDurationMs: 160094,
+        level: 'alive_but_silent',
+        cpuTimeMs: 12700,
+        processAlive: true,
+      }),
+      timestamp: Date.now(),
+    };
+
+    const result = consumeBackgroundSystemInfo(msg, undefined, options);
+
+    expect(result.consumed).toBe(true);
+    // Must update catStatus so ThinkingIndicator renders amber warning (not raw JSON)
+    expect(options.store.updateThreadCatStatus).toHaveBeenCalledWith('thread-1', 'opus', 'alive_but_silent');
+    // Must set invocation snapshot for the warning UI to display details
+    expect(options.store.setThreadCatInvocation).toHaveBeenCalledWith(
+      'thread-1',
+      'opus',
+      expect.objectContaining({
+        livenessWarning: expect.objectContaining({
+          level: 'alive_but_silent',
+          state: 'busy-silent',
+          silenceDurationMs: 160094,
+          cpuTimeMs: 12700,
+          processAlive: true,
+        }),
+      }),
+    );
+  });
+
+  it('consumes suspected_stall level', () => {
+    const options = createMockOptions();
+
+    const msg = {
+      type: 'system_info',
+      catId: 'codex',
+      threadId: 'thread-2',
+      content: JSON.stringify({
+        type: 'liveness_warning',
+        __livenessWarning: true,
+        state: 'idle-silent',
+        silenceDurationMs: 300000,
+        level: 'suspected_stall',
+        cpuTimeMs: 0,
+        processAlive: true,
+      }),
+      timestamp: Date.now(),
+    };
+
+    const result = consumeBackgroundSystemInfo(msg, undefined, options);
+
+    expect(result.consumed).toBe(true);
+    expect(options.store.updateThreadCatStatus).toHaveBeenCalledWith('thread-2', 'codex', 'suspected_stall');
+  });
+
+  it('consumes timeout_diagnostics without rendering raw JSON', () => {
+    const options = createMockOptions();
+
+    const msg = {
+      type: 'system_info',
+      catId: 'opus',
+      threadId: 'thread-1',
+      content: JSON.stringify({
+        type: 'timeout_diagnostics',
+        catId: 'opus',
+        firstEvent: 'item.streaming',
+        lastEvent: 'item.completed',
+        durationMs: 45000,
+      }),
+      timestamp: Date.now(),
+    };
+
+    const result = consumeBackgroundSystemInfo(msg, undefined, options);
+
+    expect(result.consumed).toBe(true);
+    // Should NOT create any message bubble
+    expect(options.store.addMessageToThread).not.toHaveBeenCalled();
+  });
+});
+
+// #966: provider_capability background handler — mirror of foreground handler.
+// Without this handler, kimi invocations in background threads surface raw-JSON bubbles.
+describe('consumeBackgroundSystemInfo provider_capability (#966)', () => {
+  it('consumes provider_capability silently (no raw JSON bubble)', () => {
+    const options = createMockOptions();
+    const msg = {
+      type: 'system_info',
+      catId: 'kimi',
+      threadId: 'thread-bg',
+      content: JSON.stringify({
+        type: 'provider_capability',
+        capability: 'thinking',
+        status: 'unavailable',
+        provider: 'kimi',
+        reason: 'kimi-cli 本次流式输出未提供可解析的 think/reasoning 内容',
+      }),
+      timestamp: Date.now(),
+    };
+
+    const result = consumeBackgroundSystemInfo(msg, undefined, options);
+
+    expect(result.consumed).toBe(true);
+    expect(options.store.addMessageToThread).not.toHaveBeenCalled();
+    expect(options.store.setThreadCatInvocation).toHaveBeenCalledWith('thread-bg', 'kimi', {
+      providerCapabilities: {
+        thinking: expect.objectContaining({
+          status: 'unavailable',
+          provider: 'kimi',
+          reason: expect.any(String),
+        }),
+      },
+    });
+  });
+
+  it('merges multiple capabilities without clobbering (read-merge-write)', () => {
+    const options = createMockOptions({
+      getThreadState: vi.fn(() => ({
+        messages: [],
+        catStatuses: {},
+        catInvocations: {
+          kimi: {
+            providerCapabilities: {
+              thinking: { status: 'unavailable', provider: 'kimi', reason: 'n/a', receivedAt: 1000 },
+            },
+          },
+        },
+      })),
+    });
+    const msg = {
+      type: 'system_info',
+      catId: 'kimi',
+      threadId: 'thread-bg',
+      content: JSON.stringify({
+        type: 'provider_capability',
+        capability: 'image_input',
+        status: 'limited',
+        provider: 'kimi',
+        reason: 'max 4 images',
+      }),
+      timestamp: Date.now(),
+    };
+
+    const result = consumeBackgroundSystemInfo(msg, undefined, options);
+
+    expect(result.consumed).toBe(true);
+    const call = vi.mocked(options.store.setThreadCatInvocation).mock.calls[0];
+    expect(call?.[2]?.providerCapabilities).toMatchObject({
+      thinking: { status: 'unavailable' },
+      image_input: { status: 'limited', provider: 'kimi' },
+    });
+  });
+
+  it('coerces unknown status to unavailable', () => {
+    const options = createMockOptions();
+    const msg = {
+      type: 'system_info',
+      catId: 'kimi',
+      threadId: 'thread-bg',
+      content: JSON.stringify({
+        type: 'provider_capability',
+        capability: 'thinking',
+        status: 'bogus',
+        provider: 'kimi',
+        reason: '',
+      }),
+      timestamp: Date.now(),
+    };
+
+    const result = consumeBackgroundSystemInfo(msg, undefined, options);
+
+    expect(result.consumed).toBe(true);
+    const call = vi.mocked(options.store.setThreadCatInvocation).mock.calls[0];
+    expect(call?.[2]?.providerCapabilities?.thinking?.status).toBe('unavailable');
+  });
+
+  it('uses msg.catId fallback when parsed.catId is empty string', () => {
+    const options = createMockOptions();
+    const msg = {
+      type: 'system_info',
+      catId: 'kimi',
+      threadId: 'thread-bg',
+      content: JSON.stringify({
+        type: 'provider_capability',
+        catId: '',
+        capability: 'thinking',
+        status: 'unavailable',
+        provider: 'kimi',
+        reason: '',
+      }),
+      timestamp: Date.now(),
+    };
+
+    const result = consumeBackgroundSystemInfo(msg, undefined, options);
+
+    expect(result.consumed).toBe(true);
+    // Should use msg.catId='kimi' because parsed.catId='' is falsy with ||
+    expect(options.store.setThreadCatInvocation).toHaveBeenCalledWith('thread-bg', 'kimi', expect.any(Object));
+  });
+});
+
+describe('consumeBackgroundSystemInfo warning + telemetry suppression', () => {
+  it('converts warning JSON to readable text (not raw JSON bubble)', () => {
+    const options = createMockOptions();
+
+    const msg = {
+      type: 'system_info',
+      catId: 'opus',
+      threadId: 'thread-1',
+      content: JSON.stringify({ type: 'warning', message: 'API rate limit approaching' }),
+      timestamp: Date.now(),
+    };
+
+    const result = consumeBackgroundSystemInfo(msg, undefined, options);
+
+    // warning is NOT consumed (it renders as a readable system message, not suppressed)
+    expect(result.consumed).toBe(false);
+    expect(result.content).toBe('⚠️ API rate limit approaching');
+  });
+
+  it('suppresses strategy_allow_compress telemetry', () => {
+    const options = createMockOptions();
+
+    const msg = {
+      type: 'system_info',
+      catId: 'opus',
+      threadId: 'thread-1',
+      content: JSON.stringify({ type: 'strategy_allow_compress', allowCompress: true }),
+      timestamp: Date.now(),
+    };
+
+    const result = consumeBackgroundSystemInfo(msg, undefined, options);
+
+    expect(result.consumed).toBe(true);
+    expect(options.store.addMessageToThread).not.toHaveBeenCalled();
+  });
+
+  it('suppresses tool_activity telemetry after tool_use carries the visible tool event', () => {
+    const options = createMockOptions();
+
+    const msg = {
+      type: 'system_info',
+      catId: 'antig-opus',
+      threadId: 'thread-1',
+      content: JSON.stringify({ type: 'tool_activity', toolName: 'view_file' }),
+      timestamp: Date.now(),
+    };
+
+    const result = consumeBackgroundSystemInfo(msg, undefined, options);
+
+    expect(result.consumed).toBe(true);
+    expect(options.store.addMessageToThread).not.toHaveBeenCalled();
+  });
+
+  it('suppresses mcp_server_status telemetry', () => {
+    const options = createMockOptions();
+
+    const msg = {
+      type: 'system_info',
+      catId: 'opus',
+      threadId: 'thread-1',
+      content: JSON.stringify({
+        type: 'mcp_server_status',
+        provider: 'claude',
+        pendingMeaning: 'deferred_tool_loading',
+        counts: { connected: 1, pending: 1, failed: 0, disabled: 0, 'needs-auth': 0 },
+        servers: [{ name: 'MCP_DOCKER', status: 'pending' }],
+      }),
+      timestamp: Date.now(),
+    };
+
+    const result = consumeBackgroundSystemInfo(msg, undefined, options);
+
+    expect(result.consumed).toBe(true);
+    expect(options.store.addMessageToThread).not.toHaveBeenCalled();
+  });
+
+  it('suppresses resume_failure_stats telemetry', () => {
+    const options = createMockOptions();
+
+    const msg = {
+      type: 'system_info',
+      catId: 'opus',
+      threadId: 'thread-1',
+      content: JSON.stringify({ type: 'resume_failure_stats', failures: 2, recovered: 1 }),
+      timestamp: Date.now(),
+    };
+
+    const result = consumeBackgroundSystemInfo(msg, undefined, options);
+
+    expect(result.consumed).toBe(true);
+    expect(options.store.addMessageToThread).not.toHaveBeenCalled();
+  });
+});

@@ -7,6 +7,7 @@
  * P2:   multipart 路径需要提取 idempotencyKey
  */
 
+import './helpers/setup-cat-registry.js';
 import assert from 'node:assert/strict';
 import { describe, mock, test } from 'node:test';
 
@@ -55,7 +56,7 @@ describe('P1-2: resolveTargetsAndIntent persist writes participants', () => {
     let counter = 0;
     return {
       create: () => ({ invocationId: `inv-${++counter}`, callbackToken: `tok-${counter}` }),
-      verify: () => null,
+      verify: async () => ({ ok: false, reason: 'unknown_invocation' }),
     };
   }
 
@@ -68,6 +69,7 @@ describe('P1-2: resolveTargetsAndIntent persist writes participants', () => {
         rows.push(stored);
         return stored;
       },
+      getById: (id) => rows.find((m) => m.id === `msg-${id}` || m.id === id) ?? null,
       getRecent: () => [],
       getMentionsFor: () => [],
       getBefore: () => [],
@@ -261,12 +263,23 @@ describe('R2: delete-guard race via POST /api/messages route', () => {
         ctrl.abort();
         return ctrl;
       },
+      tryStartThreadAll: () => {
+        const ctrl = new AbortController();
+        ctrl.abort();
+        return ctrl;
+      },
       start: () => {
         const ctrl = new AbortController();
         ctrl.abort();
         return ctrl;
       },
+      startAll: () => {
+        const ctrl = new AbortController();
+        ctrl.abort();
+        return ctrl;
+      },
       complete: () => {},
+      completeAll: () => {},
     };
 
     const threadStore = {

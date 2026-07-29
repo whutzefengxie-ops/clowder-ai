@@ -10,14 +10,13 @@ import Fastify from 'fastify';
 const INVOCATION_ID = 'inv-test-001';
 const CALLBACK_TOKEN = 'token-test-001';
 
-// Minimal InvocationRegistry stub
+// Minimal InvocationRegistry stub — returns VerifyResult (F174 Phase A)
 function createStubRegistry() {
   return {
-    verify(invId, token) {
-      if (invId === INVOCATION_ID && token === CALLBACK_TOKEN) {
-        return { catId: 'opus', threadId: 'thread-1', userId: 'test-user' };
-      }
-      return null;
+    async verify(invId, token) {
+      if (invId !== INVOCATION_ID) return { ok: false, reason: 'unknown_invocation' };
+      if (token !== CALLBACK_TOKEN) return { ok: false, reason: 'invalid_token' };
+      return { ok: true, record: { catId: 'opus', threadId: 'thread-1', userId: 'test-user' } };
     },
   };
 }
@@ -61,6 +60,7 @@ function createInMemoryWorkflowSopStore() {
       const sop = existing
         ? {
             ...existing,
+            sopDefinitionId: input.sopDefinitionId ?? existing.sopDefinitionId ?? 'development',
             stage: input.stage ?? existing.stage,
             batonHolder: input.batonHolder ?? existing.batonHolder,
             version: existing.version + 1,
@@ -70,6 +70,7 @@ function createInMemoryWorkflowSopStore() {
         : {
             featureId,
             backlogItemId,
+            sopDefinitionId: input.sopDefinitionId ?? 'development',
             stage: input.stage ?? 'kickoff',
             batonHolder: input.batonHolder ?? updatedBy,
             nextSkill: null,
@@ -99,12 +100,13 @@ describe('WorkflowSop callback route', () => {
 
   before(async () => {
     const module = await import('../dist/routes/callback-workflow-sop-routes.js');
+    const { registerCallbackAuthHook } = await import('../dist/routes/callback-auth-prehandler.js');
 
     workflowSopStore = createInMemoryWorkflowSopStore();
 
     app = Fastify();
+    registerCallbackAuthHook(app, createStubRegistry());
     module.registerCallbackWorkflowSopRoutes(app, {
-      registry: createStubRegistry(),
       workflowSopStore,
       backlogStore: createStubBacklogStore(),
     });
@@ -119,10 +121,12 @@ describe('WorkflowSop callback route', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/callbacks/update-workflow-sop',
-      headers: { 'content-type': 'application/json' },
+      headers: {
+        'content-type': 'application/json',
+        'x-invocation-id': INVOCATION_ID,
+        'x-callback-token': CALLBACK_TOKEN,
+      },
       payload: {
-        invocationId: INVOCATION_ID,
-        callbackToken: CALLBACK_TOKEN,
         backlogItemId: 'item-1',
         featureId: 'F073',
         stage: 'impl',
@@ -132,19 +136,55 @@ describe('WorkflowSop callback route', () => {
     assert.equal(res.statusCode, 200);
     const sop = JSON.parse(res.payload);
     assert.equal(sop.featureId, 'F073');
+    assert.equal(sop.sopDefinitionId, 'development');
     assert.equal(sop.stage, 'impl');
     assert.equal(sop.updatedBy, 'opus'); // extracted from invocation context
     assert.equal(sop.version, 1);
+  });
+
+  it('accepts runtime sopDefinitionId via callback and rejects schema-only stubs', async () => {
+    const ok = await app.inject({
+      method: 'POST',
+      url: '/api/callbacks/update-workflow-sop',
+      headers: {
+        'content-type': 'application/json',
+        'x-invocation-id': INVOCATION_ID,
+        'x-callback-token': CALLBACK_TOKEN,
+      },
+      payload: {
+        backlogItemId: 'item-1',
+        featureId: 'F073',
+        sopDefinitionId: 'development',
+        stage: 'impl',
+      },
+    });
+    assert.equal(ok.statusCode, 200);
+    assert.equal(JSON.parse(ok.payload).sopDefinitionId, 'development');
+
+    const bad = await app.inject({
+      method: 'POST',
+      url: '/api/callbacks/update-workflow-sop',
+      headers: {
+        'content-type': 'application/json',
+        'x-invocation-id': INVOCATION_ID,
+        'x-callback-token': CALLBACK_TOKEN,
+      },
+      payload: {
+        backlogItemId: 'item-1',
+        featureId: 'F073',
+        sopDefinitionId: 'video-cocreation',
+        stage: 'impl',
+      },
+    });
+    assert.equal(bad.statusCode, 400);
   });
 
   it('rejects invalid credentials', async () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/callbacks/update-workflow-sop',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', 'x-invocation-id': 'bad-id', 'x-callback-token': 'bad-token' },
       payload: {
-        invocationId: 'bad-id',
-        callbackToken: 'bad-token',
         backlogItemId: 'item-1',
         featureId: 'F073',
       },
@@ -156,10 +196,12 @@ describe('WorkflowSop callback route', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/callbacks/update-workflow-sop',
-      headers: { 'content-type': 'application/json' },
+      headers: {
+        'content-type': 'application/json',
+        'x-invocation-id': INVOCATION_ID,
+        'x-callback-token': CALLBACK_TOKEN,
+      },
       payload: {
-        invocationId: INVOCATION_ID,
-        callbackToken: CALLBACK_TOKEN,
         backlogItemId: 'nonexistent',
         featureId: 'F073',
       },
@@ -171,10 +213,12 @@ describe('WorkflowSop callback route', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/callbacks/update-workflow-sop',
-      headers: { 'content-type': 'application/json' },
+      headers: {
+        'content-type': 'application/json',
+        'x-invocation-id': INVOCATION_ID,
+        'x-callback-token': CALLBACK_TOKEN,
+      },
       payload: {
-        invocationId: INVOCATION_ID,
-        callbackToken: CALLBACK_TOKEN,
         // missing backlogItemId and featureId
       },
     });

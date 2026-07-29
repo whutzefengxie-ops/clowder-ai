@@ -1,3 +1,9 @@
+import type { CliDiagnostics, ReplyPreview, SchedulerMessageExtra } from '@cat-cafe/shared';
+
+// F212 Phase B: re-export so existing web imports (panel + tests) can pull the contract via the
+// canonical chat-types entry point without each consumer reaching into @cat-cafe/shared.
+export type { CliDiagnostics } from '@cat-cafe/shared';
+
 /** Content block types matching backend MessageContent */
 export interface TextContent {
   type: 'text';
@@ -21,6 +27,8 @@ export interface TokenUsage {
   cacheReadTokens?: number;
   cacheCreationTokens?: number;
   costUsd?: number;
+  /** True when costUsd is estimated from a pricing table, not reported by CLI */
+  costEstimated?: boolean;
   durationMs?: number;
   durationApiMs?: number;
   numTurns?: number;
@@ -45,6 +53,7 @@ export interface EvidenceResultData {
   snippet: string;
   confidence: 'high' | 'mid' | 'low';
   sourceType: 'decision' | 'phase' | 'discussion' | 'commit';
+  authority?: string;
 }
 
 export interface EvidenceData {
@@ -89,6 +98,8 @@ export interface RichCardBlock {
   fields?: Array<{ label: string; value: string }>;
   /** F066 Phase 4: Optional action buttons */
   actions?: CardAction[];
+  /** F174 D2b-1: opaque metadata for sub-renderer detection (e.g. callback_auth_failure) */
+  meta?: Record<string, unknown>;
 }
 
 export interface RichDiffBlock {
@@ -130,6 +141,13 @@ export interface RichAudioBlock {
   mimeType?: string;
 }
 
+/** F155: Direct action for interactive options that bypass the chat message pipeline */
+export interface OptionAction {
+  type: 'callback';
+  endpoint: string;
+  payload?: Record<string, unknown>;
+}
+
 /** F096: Interactive block option */
 export interface InteractiveOption {
   id: string;
@@ -144,6 +162,8 @@ export interface InteractiveOption {
   customInput?: boolean;
   /** Placeholder text for the custom input field */
   customInputPlaceholder?: string;
+  /** F155: When present, clicking calls the endpoint directly instead of sending a chat message */
+  action?: OptionAction;
 }
 
 /** F096: Interactive rich block — user can select/confirm within the block */
@@ -210,6 +230,13 @@ export interface ConnectorSourceData {
   sender?: { id: string; name?: string };
 }
 
+/** Structured identity-bearing notice retained for reactive render-time projection. */
+export interface SystemInfoProjection {
+  readonly v: 1;
+  readonly payload: Record<string, unknown>;
+  readonly fallbackCatId?: string;
+}
+
 export interface ChatMessage {
   id: string;
   type: 'user' | 'assistant' | 'system' | 'summary' | 'connector';
@@ -238,37 +265,87 @@ export interface ChatMessage {
   extra?: {
     rich?: { v: 1; blocks: RichBlock[] };
     crossPost?: { sourceThreadId: string; sourceInvocationId?: string };
-    /** F081: Stream identity for continuity / hydration reconcile */
-    stream?: { invocationId?: string };
+    /** F081: Stream identity for continuity / hydration reconcile.
+     *  F194 Phase Z3: dual id —
+     *    - `invocationId` is the parent/chain invocation id (liveness/queue/cancel/A2A scope, legacy)
+     *    - `turnInvocationId` is the per-cat-turn invocation id (bubble identity stable key — required
+     *      for same-parent multi-turn-same-cat bubbles to NOT merge; see砚砚 catch 2026-05-09 17:32)
+     *  Frontend `getBubbleInvocationId` prefers `turnInvocationId` (fallback `invocationId` for legacy).
+     *  F194 Phase Z11: when projection merges a stream record + a post_message callback into one
+     *  canonical bubble (Z8 KD-27), the bubble origin becomes `callback`. ChatMessage then loses the
+     *  CLI Output stdout (it only feeds content to toCliEvents when origin==='stream'). To keep CLI
+     *  Output behavior consistent regardless of post_msg, projection exposes:
+     *    - `cliStdout`: the stream-origin content portion → ChatMessage feeds this to the CLI Output
+     *    - `speechContent`: the callback-origin content portion → ChatMessage renders this as the
+     *      main bubble body (the post_msg speech), instead of the full concat
+     *  Both are set ONLY when a group contains BOTH stream and callback records (the merge case);
+     *  pure-stream / pure-callback groups leave them undefined so existing rendering is unchanged. */
+    stream?: {
+      invocationId?: string;
+      turnInvocationId?: string;
+      textMode?: 'append' | 'replace';
+      cliStdout?: string;
+      speechContent?: string;
+    };
     /** F098-C1: Explicit target cats from post_message API */
     targetCats?: string[];
+    /** #814: True when message originated from an explicit post_message callback (not stream duplicate) */
+    isExplicitPost?: boolean;
+    /** Scheduler presentation metadata (hidden trigger / ephemeral lifecycle toast) */
+    scheduler?: SchedulerMessageExtra['scheduler'];
     /** F118 AC-C3: Timeout diagnostics for enhanced error display */
     timeoutDiagnostics?: TimeoutDiagnostics;
+    /** F212 Phase B: structured CLI error diagnostics for folded panel display
+     *  (reasonCode → SVG icon + humanized summary/hint + opt-in safeExcerpt).
+     *  Populated by useAgentMessages error-path from BackgroundAgentMessage.metadata.cliDiagnostics. */
+    cliDiagnostics?: CliDiagnostics;
     /** F070: Governance blocked data for actionable bootstrap card */
     governanceBlocked?: {
       projectPath: string;
       reasonKind: 'needs_bootstrap' | 'needs_confirmation' | 'files_missing';
       invocationId?: string;
     };
+    /**
+     * F173 a2a-handoff bug fix: marker for system messages that must be
+     * timestamp-ordered into the message list (not appended at end).
+     * a2a_handoff: routing pill (for example "缅因猫(codex) → 布偶猫(Opus 4.7)")
+     * emitted by route-serial,
+     * which can arrive after the next cat's stream bubble due to WebSocket
+     * pipeline race; without marker it ends up visually after the bubble it
+     * should precede.
+     */
+    systemKind?: 'a2a_routing' | 'context_briefing';
+    /** Machine-readable A2A route metadata. The visible pill text is human-readable; this survives F5. */
+    a2aRouting?: { fromCatId?: string; targetCatId?: string; invocationId?: string };
+    /** Original visible system_info payload; content remains the persisted fallback copy. */
+    systemInfo?: SystemInfoProjection;
   };
-  /** A2A chain group ID — messages in the same A2A chain share this ID */
-  a2aGroupId?: string;
   /** F045: Extended thinking content, rendered as collapsible block inside assistant bubble */
   thinking?: string;
-  /** Message origin: stream = CLI stdout (thinking), callback = MCP post_message (speech) */
-  origin?: 'stream' | 'callback';
+  /** Internal chunk boundaries for robust thinking dedupe when payloads contain the visual separator. */
+  thinkingChunks?: string[];
+  /** Message origin: stream = CLI stdout (thinking), callback = MCP post_message (speech), briefing = F148 Phase E context briefing */
+  origin?: 'stream' | 'callback' | 'briefing';
   /** F35: Message visibility. undefined/public = visible to all */
   visibility?: 'public' | 'whisper';
   /** F35: Whisper recipients (cat IDs). Only meaningful when visibility='whisper' */
   whisperTo?: string[];
   /** F35: Timestamp when whisper was revealed (made public) */
   revealedAt?: number;
-  /** F057-C2: Whether this message mentions the user (@user / @铲屎官) */
+  /** F057-C2: Whether this message mentions the user (@user / @co-creator) */
   mentionsUser?: boolean;
   /** F121: ID of the message this is replying to */
   replyTo?: string;
   /** F121: Server-hydrated reply preview (sender + truncated content) */
-  replyPreview?: { senderCatId: string | null; content: string; deleted?: true };
+  replyPreview?: ReplyPreview;
+  /**
+   * F183 Phase D — set when this message was hydrated from the IndexedDB
+   * snapshot (offline-store). Used by `mergeReplaceHydrationMessages` to
+   * differentiate cache-derived vs live state: cache copies do NOT get the
+   * preserve-local treatment when API history wins. Stripped before
+   * persisting back to IDB so the marker doesn't leak into the snapshot.
+   */
+  cachedFrom?: 'idb';
 }
 
 export type ChatMessagePatch = Omit<Partial<ChatMessage>, 'id' | 'type'>;
@@ -287,6 +364,10 @@ export interface Thread {
   favoritedAt?: number | null;
   /** CLI stream visibility mode: play = 💭心里话 hidden cross-cat, debug = 💭心里话 shared cross-cat. 🧠Thinking (extended reasoning) is NEVER shared regardless of mode. */
   thinkingMode?: 'debug' | 'play';
+  /** UI bubble display override: thinking block expand/collapse. 'global' = follow config hub default. */
+  bubbleThinking?: 'global' | 'expanded' | 'collapsed';
+  /** UI bubble display override: CLI output block expand/collapse. 'global' = follow config hub default. */
+  bubbleCli?: 'global' | 'expanded' | 'collapsed';
   /** F32-b: Thread-level default cat preference */
   preferredCats?: string[];
   /** F049: workflow phase for mission-control dispatch */
@@ -295,18 +376,25 @@ export interface Thread {
   backlogItemId?: string;
   /** F042: Thread-scoped routing policy (intent/scope). */
   routingPolicy?: ThreadRoutingPolicyV1;
+  /** Thread hierarchy: parent thread ID for orchestrated sub-threads. */
+  parentThreadId?: string;
   /** F095 Phase D: Soft-delete timestamp. Null/undefined = not deleted. */
   deletedAt?: number | null;
-  /** F087: CVO Bootcamp onboarding state. */
+  /** F087: operator Bootcamp onboarding state. */
   bootcampState?: BootcampStateV1;
+  /** F192 livefix: System thread kind for sidebar grouping (connector_hub | eval_domain). */
+  systemKind?: 'connector_hub' | 'eval_domain';
   /** F088 Phase G: Connector Hub thread state — marks this thread as an IM Hub. */
   connectorHubState?: ConnectorHubStateV1;
+  /** F187: User-defined label IDs for thread categorization. */
+  labels?: string[];
 }
 
-/** F087: Bootcamp state for CVO onboarding threads */
+/** F087: Bootcamp state for operator onboarding threads */
 export interface BootcampStateV1 {
   v: 1;
   phase: string;
+  guideStep?: string | null;
   leadCat?: string;
   selectedTaskId?: string;
   envCheck?: Record<string, { ok: boolean; version?: string; note?: string }>;
@@ -345,6 +433,8 @@ export interface ContextHealthData {
   windowTokens: number;
   fillRatio: number;
   source: 'exact' | 'approx';
+  /** Backend usage field that fed usedTokens. Older records may omit it. */
+  usedFrom?: 'last_turn' | 'input' | 'total';
   measuredAt: number;
 }
 
@@ -386,7 +476,13 @@ export interface CompactBoundaryTelemetry {
 
 export interface CatInvocationInfo {
   sessionId?: string;
+  /** Chain/parent invocation id (legacy SoT, liveness/queue/cancel scope). F194 Phase Z3 keeps
+   *  this for backward compat with hydration code that reads `catInvocations[catId].invocationId`. */
   invocationId?: string;
+  /** F194 Phase Z3 (砚砚 R P1-1): per-cat-turn invocation id, used for bubble identity stable key.
+   *  Stamped into formal/live message `extra.stream.turnInvocationId` so frontend bubble dedup
+   *  uses the turn dimension (prevents same-parent multi-turn-same-cat bubble merge). */
+  turnInvocationId?: string;
   durationMs?: number;
   startedAt?: number;
   usage?: TokenUsage;
@@ -404,6 +500,24 @@ export interface CatInvocationInfo {
   taskProgress?: TaskProgressState;
   /** F118 Phase C: Latest liveness warning snapshot */
   livenessWarning?: LivenessWarningSnapshot;
+  /** #939 part A (kimi auth dual-path): Latest provider capability reports keyed by capability
+   *  name (e.g. 'thinking', 'image_input'). Backend emits these as `system_info` events with
+   *  inner type `provider_capability`. Stored silently — MUST NOT render as a user-facing
+   *  system bubble (that was the bug: frontend fell through to default addMessage path and
+   *  surfaced raw JSON, which users read as "thinking failed"). A dedicated capability UI
+   *  (tooltip / status badge) is a future follow-up; for now the data is preserved here so
+   *  such UI can read it. */
+  providerCapabilities?: Record<string, ProviderCapabilityReport>;
+}
+
+/** #939 part A (kimi auth dual-path): per-capability report from a provider backend.
+ *  Populated by the `provider_capability` system_info handler in useAgentMessages.ts;
+ *  consumed silently there so the bubble layer never sees these. */
+export interface ProviderCapabilityReport {
+  status: 'available' | 'limited' | 'unavailable';
+  reason: string;
+  provider: string;
+  receivedAt: number;
 }
 
 /** F118 Phase C: Liveness warning snapshot from ProcessLivenessProbe */
@@ -428,7 +542,14 @@ export interface TimeoutDiagnostics {
   rawArchivePath?: string;
 }
 
-export type CatStatusType = 'pending' | 'streaming' | 'done' | 'error' | 'alive_but_silent' | 'suspected_stall';
+export type CatStatusType =
+  | 'spawning'
+  | 'pending'
+  | 'streaming'
+  | 'done'
+  | 'error'
+  | 'alive_but_silent'
+  | 'suspected_stall';
 
 /** F39: Queue entry from backend InvocationQueue */
 export interface QueueEntry {
@@ -447,6 +568,37 @@ export interface QueueEntry {
   autoExecute?: boolean;
   /** F122B: which cat initiated this entry (for A2A handoff display) */
   callerCatId?: string;
+  /** F175: dequeue priority */
+  priority?: 'urgent' | 'normal';
+  /** F175: source category for visual grouping */
+  sourceCategory?: 'ci' | 'review' | 'conflict' | 'scheduled' | 'a2a' | 'continuation' | 'issue';
+  /** Queue-internal dedup key for continuation work. */
+  continuationKey?: string;
+  /** F175: explicit dequeue position from drag-reorder */
+  position?: number;
+  /** #706: Server-enriched message preview for QueuePanel display + recall-edit.
+   *  Attached by emitQueueUpdated() at push time via messageStore join. */
+  messagePreview?: {
+    contentBlocks?: ReadonlyArray<{ type: string; url?: string; text?: string; alt?: string }>;
+    replyTo?: string;
+  };
+}
+
+/** #706: Typed composer draft for recall-edit and cross-feature insert.
+ *  Carries all state needed to restore the composer to a previous message's state.
+ *  Consumed by ChatInput — when pendingChatInsert is set, the composer restores
+ *  text, images, and (after #833) the quoted reply context. */
+export interface ComposerDraftInsert {
+  threadId: string;
+  text: string;
+  imageUrls?: string[];
+  /** Message ID of the quoted parent — maps to messagePreview.replyTo from queue enrichment.
+   *  After #833 merge: ChatInput consumes this to restore quote composing state. */
+  replyToId?: string;
+  /** Pre-resolved reply preview — avoids an extra hydrate when restoring quote UI.
+   *  Populated from backend-enriched messagePreview (visibility-filtered by
+   *  resolveVisibleReplyParent on the server side). */
+  replyToPreview?: ReplyPreview;
 }
 
 /** F39: Message delivery mode — undefined = smart default, 'queue' = enqueue, 'force' = cancel + execute */
@@ -467,6 +619,7 @@ export interface ThreadState {
   isLoading: boolean;
   isLoadingHistory: boolean;
   hasMore: boolean;
+  hasDraft?: boolean;
   /** Whether the thread has an active invocation (broader than isLoading — stays true during A2A chains) */
   hasActiveInvocation: boolean;
   /** F108: Per-invocation slot tracking — key=invocationId, value=slot info */
@@ -474,6 +627,8 @@ export interface ThreadState {
   intentMode: 'execute' | 'ideate' | null;
   targetCats: string[];
   catStatuses: Record<string, CatStatusType>;
+  /** F198 Phase C AC-C3: daemon detail text per catId, shown in status dot tooltip */
+  catStatusDetails: Record<string, string>;
   catInvocations: Record<string, CatInvocationInfo>;
   /** F101: Active game in this thread */
   currentGame: GameState | null;
@@ -491,6 +646,53 @@ export interface ThreadState {
   queueFull: boolean;
   /** F39: Who triggered the full warning */
   queueFullSource?: 'user' | 'connector';
+  /** F063: Active worktree per thread (null = inherit global, non-null = restore on switch) */
+  workspaceWorktreeId: string | null;
+  /** F063: Workspace open tabs per thread */
+  workspaceOpenTabs: string[];
+  /** F063: Currently displayed file per thread */
+  workspaceOpenFilePath: string | null;
+  /** F063: Scroll-to line per thread */
+  workspaceOpenFileLine: number | null;
+}
+
+/** F063: Presentation Lock — frozen workspace snapshot for demo mode */
+export interface PresentationLockSnapshot {
+  ownerThreadId: string;
+  ownerWorkspace: {
+    worktreeId: string | null;
+    filePath: string | null;
+    line: number | null;
+    tabs: string[];
+  };
+  worktreeId: string | null;
+  filePath: string | null;
+  line: number | null;
+  tabs: string[];
+  scrollTop: number | null;
+}
+
+/** F226: Presentation Surface — file/md tear-off floating window for demo mode */
+export interface PresentationSurfaceContent {
+  worktreeId: string | null;
+  filePath: string;
+  tabs: string[];
+  fileKind: 'file' | 'image' | 'markdown';
+  renderMode: 'rendered' | 'raw';
+  line: number | null;
+  scrollTop: number | null;
+  title: string;
+}
+
+export interface PresentationSurfaceState {
+  content: PresentationSurfaceContent;
+  pos: { x: number; y: number };
+  size: { width: number; height: number };
+  minimized: boolean;
+  /** F226 尺寸快捷: 一键适配 PPT 的放大态 */
+  maximized: boolean;
+  /** geometry before maximize — toggle restores the user's manual size/pos so they needn't re-drag */
+  preMaximizeGeometry: { pos: { x: number; y: number }; size: { width: number; height: number } } | null;
 }
 
 /** F097: CLI Output unified event stream */
@@ -511,10 +713,12 @@ export const DEFAULT_THREAD_STATE: ThreadState = {
   isLoading: false,
   isLoadingHistory: false,
   hasMore: true,
+  hasDraft: false,
   hasActiveInvocation: false,
   intentMode: null,
   targetCats: [],
   catStatuses: {},
+  catStatusDetails: {},
   catInvocations: {},
   currentGame: null,
   unreadCount: 0,
@@ -524,4 +728,8 @@ export const DEFAULT_THREAD_STATE: ThreadState = {
   activeInvocations: {},
   queuePaused: false,
   queueFull: false,
+  workspaceWorktreeId: null,
+  workspaceOpenTabs: [],
+  workspaceOpenFilePath: null,
+  workspaceOpenFileLine: null,
 };

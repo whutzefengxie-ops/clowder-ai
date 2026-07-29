@@ -9,6 +9,10 @@ import {
   MANAGED_BLOCK_START,
 } from '../../dist/config/governance/governance-pack.js';
 
+const expectedFrontendPort = process.env.FRONTEND_PORT ?? '3003';
+const expectedApiPort = process.env.API_SERVER_PORT ?? '3004';
+const expectedRuntimePortsText = `frontend ${expectedFrontendPort} and API ${expectedApiPort}`;
+
 describe('governance-pack', () => {
   it('managed block has start/end markers', () => {
     const block = getGovernanceManagedBlock('claude');
@@ -18,7 +22,7 @@ describe('governance-pack', () => {
 
   it('contains internal port 3003 (transformed by sync pipeline for open-source)', () => {
     const block = getGovernanceManagedBlock('claude');
-    assert.ok(block.includes('3003'), 'Source should use internal port 3003');
+    assert.ok(block.includes(expectedFrontendPort), `Source should use frontend port ${expectedFrontendPort}`);
   });
 
   it('contains internal port 6399 (transformed by sync pipeline for open-source)', () => {
@@ -26,10 +30,35 @@ describe('governance-pack', () => {
     assert.ok(block.includes('6399'), 'Source should use internal port 6399');
   });
 
-  it('port reservation concept is present', () => {
+  it('public local defaults guidance is present', () => {
     const block = getGovernanceManagedBlock('claude');
-    assert.ok(block.includes('local defaults'), 'Port defaults guidance should be present');
+    assert.ok(block.includes('Public local defaults'), 'Port defaults guidance should be present');
     assert.ok(block.includes('production Redis'), 'Redis port guidance should be present');
+  });
+
+  it('self context keeps Clowder AI runtime defaults wording', () => {
+    const block = getGovernanceManagedBlock('claude', 'self');
+    assert.ok(block.includes('Public local defaults'), 'self context should describe Clowder AI local defaults');
+    assert.ok(block.includes(`use ${expectedRuntimePortsText}`), 'self context should keep runtime usage wording');
+    assert.ok(
+      !block.includes('Avoid using these ports for this project'),
+      'self context should not use avoidance wording',
+    );
+  });
+
+  it('external context reserves Clowder AI runtime ports instead of telling projects to use them', () => {
+    const block = getGovernanceManagedBlock('claude', 'external');
+    assert.ok(block.includes('Clowder AI runtime ports'), 'external context should name Clowder AI runtime ports');
+    assert.ok(block.includes(`${expectedRuntimePortsText} are reserved by Clowder AI`));
+    assert.ok(block.includes("Avoid using these ports for this project's dev servers."));
+    assert.ok(
+      !block.includes('Public local defaults'),
+      'external context should not advertise Clowder AI ports as defaults',
+    );
+    assert.ok(
+      !block.includes(`use ${expectedRuntimePortsText}`),
+      'external context must not instruct projects to use Clowder AI ports',
+    );
   });
 
   it('managed block includes governance rules from shared-rules', () => {
@@ -54,6 +83,7 @@ describe('governance-pack', () => {
     assert.ok(getGovernanceManagedBlock('claude').includes('claude'));
     assert.ok(getGovernanceManagedBlock('codex').includes('codex'));
     assert.ok(getGovernanceManagedBlock('gemini').includes('gemini'));
+    assert.ok(getGovernanceManagedBlock('kimi').includes('kimi'));
   });
 
   it('pack version is semver', () => {
@@ -64,6 +94,10 @@ describe('governance-pack', () => {
     const a = computePackChecksum();
     const b = computePackChecksum();
     assert.strictEqual(a, b);
+  });
+
+  it('checksum differs between self and external managed block contexts', () => {
+    assert.notEqual(computePackChecksum('self'), computePackChecksum('external'));
   });
 
   it('checksum is a 12-char hex string', () => {
@@ -77,7 +111,7 @@ describe('governance-pack', () => {
     assert.ok(block.includes('cat-cafe-skills'));
   });
 
-  it('pack version is 1.3.0', () => {
-    assert.equal(GOVERNANCE_PACK_VERSION, '1.3.0');
+  it('pack version is 1.4.1', () => {
+    assert.equal(GOVERNANCE_PACK_VERSION, '1.4.1');
   });
 });

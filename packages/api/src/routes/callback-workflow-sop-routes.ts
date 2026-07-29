@@ -1,16 +1,16 @@
+import { DEVELOPMENT_SOP_STAGE_IDS, SOP_DEFINITION_IDS } from '@cat-cafe/shared';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import type { InvocationRegistry } from '../domains/cats/services/agents/invocation/InvocationRegistry.js';
 import type { IBacklogStore } from '../domains/cats/services/stores/ports/BacklogStore.js';
 import type { IWorkflowSopStore } from '../domains/cats/services/stores/ports/WorkflowSopStore.js';
 import { VersionConflictError } from '../domains/cats/services/stores/ports/WorkflowSopStore.js';
-import { callbackAuthSchema } from './callback-auth-schema.js';
-import { EXPIRED_CREDENTIALS_ERROR } from './callback-errors.js';
+import { requireCallbackAuth } from './callback-auth-prehandler.js';
 
-const updateWorkflowSopCallbackSchema = callbackAuthSchema.extend({
+const updateWorkflowSopCallbackSchema = z.object({
   backlogItemId: z.string().min(1),
   featureId: z.string().min(1),
-  stage: z.enum(['kickoff', 'impl', 'quality_gate', 'review', 'merge', 'completion']).optional(),
+  sopDefinitionId: z.enum(SOP_DEFINITION_IDS).optional(),
+  stage: z.enum(DEVELOPMENT_SOP_STAGE_IDS).optional(),
   batonHolder: z.string().min(1).optional(),
   nextSkill: z.string().nullable().optional(),
   resumeCapsule: z
@@ -34,26 +34,23 @@ const updateWorkflowSopCallbackSchema = callbackAuthSchema.extend({
 export function registerCallbackWorkflowSopRoutes(
   app: FastifyInstance,
   deps: {
-    registry: InvocationRegistry;
     workflowSopStore: IWorkflowSopStore;
     backlogStore: IBacklogStore;
   },
 ): void {
-  const { registry, workflowSopStore, backlogStore } = deps;
+  const { workflowSopStore, backlogStore } = deps;
 
   app.post('/api/callbacks/update-workflow-sop', async (request, reply) => {
+    const record = requireCallbackAuth(request, reply);
+    if (!record) return;
+
     const parsed = updateWorkflowSopCallbackSchema.safeParse(request.body);
     if (!parsed.success) {
       reply.status(400);
       return { error: 'Invalid request body', details: parsed.error.issues };
     }
 
-    const { invocationId, callbackToken, backlogItemId, featureId, ...rest } = parsed.data;
-    const record = registry.verify(invocationId, callbackToken);
-    if (!record) {
-      reply.status(401);
-      return EXPIRED_CREDENTIALS_ERROR;
-    }
+    const { backlogItemId, featureId, ...rest } = parsed.data;
 
     // Verify backlog item exists and belongs to this user (P1-2: user scope)
     const item = await backlogStore.get(backlogItemId, record.userId);
@@ -68,6 +65,7 @@ export function registerCallbackWorkflowSopRoutes(
     try {
       const input = {
         ...(rest.stage !== undefined ? { stage: rest.stage } : {}),
+        ...(rest.sopDefinitionId !== undefined ? { sopDefinitionId: rest.sopDefinitionId } : {}),
         ...(rest.batonHolder !== undefined ? { batonHolder: rest.batonHolder } : {}),
         ...(rest.nextSkill !== undefined ? { nextSkill: rest.nextSkill } : {}),
         ...(rest.resumeCapsule !== undefined ? { resumeCapsule: rest.resumeCapsule } : {}),

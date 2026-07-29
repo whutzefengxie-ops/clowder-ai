@@ -110,44 +110,61 @@ export function ChatInputMenus({
       {showMentions && (
         <div
           ref={menuRef}
-          className="absolute bottom-full left-4 mb-2 bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden w-64 z-10 max-h-80 flex flex-col"
+          className="absolute bottom-full left-4 mb-2 bg-cafe-surface-elevated rounded-xl shadow-lg border border-cafe overflow-hidden w-64 z-10 max-h-80 flex flex-col"
         >
           <div ref={scrollRef} className="overflow-y-auto flex-1">
             {catOptions.map((opt, i) => (
               <button
                 key={opt.id}
                 ref={i === selectedIdx ? selectedRef : undefined}
-                className={`w-full text-left px-4 py-2.5 flex items-center gap-3 transition-colors ${i === selectedIdx ? 'bg-gray-50' : 'hover:bg-gray-50'}`}
+                className={`w-full text-left px-4 py-2.5 flex items-center gap-3 transition-colors ${i === selectedIdx ? 'bg-cafe-surface-sunken' : 'hover:bg-cafe-surface-elevated'}`}
                 onMouseEnter={() => onSelectIdx(i)}
                 onMouseDown={(e) => {
                   e.preventDefault();
                   onInsertMention(opt);
                 }}
               >
-                <img
-                  src={opt.avatar}
-                  alt={opt.label}
-                  className="w-7 h-7 rounded-full"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).style.display = 'none';
-                  }}
-                />
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm font-semibold" style={{ color: opt.color }}>
-                    {opt.label}
+                {opt.isGroup ? (
+                  <div className="w-7 h-7 rounded-full bg-cafe-surface flex items-center justify-center shrink-0">
+                    <svg className="w-4 h-4 text-cafe-muted" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                      <path d="M7 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm7.5 1a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5ZM1.615 16.428a1.224 1.224 0 0 1-.569-1.175 6.002 6.002 0 0 1 11.908 0c.058.467-.172.92-.57 1.174A9.953 9.953 0 0 1 7 18a9.953 9.953 0 0 1-5.385-1.572ZM14.5 16h-.106c.07-.297.088-.611.048-.933a7.47 7.47 0 0 0-1.588-3.755 4.502 4.502 0 0 1 5.874 2.636.818.818 0 0 1-.36.98A7.465 7.465 0 0 1 14.5 16Z" />
+                    </svg>
                   </div>
-                  <div className="text-xs text-gray-400">{opt.desc}</div>
+                ) : (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img
+                    src={opt.avatar}
+                    alt={opt.label}
+                    className="w-7 h-7 rounded-full"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = 'none';
+                    }}
+                  />
+                )}
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="text-sm font-semibold truncate" style={{ color: opt.color }}>
+                      {opt.label}
+                    </span>
+                    {opt.isCloud && opt.providerLabel && (
+                      <span className="shrink-0 text-micro leading-tight px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 dark:bg-blue-950 dark:text-blue-400">
+                        {'☁️ '}
+                        {opt.providerLabel}
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-xs text-cafe-muted">{opt.desc}</div>
                 </div>
               </button>
             ))}
           </div>
           {canScrollDown && (
-            <div className="px-4 py-1 text-[10px] text-gray-400 text-center border-t border-gray-100 bg-gradient-to-t from-white shrink-0">
+            <div className="px-4 py-1 text-micro text-cafe-muted text-center border-t border-cafe-subtle bg-gradient-to-t from-[var(--cafe-surface-elevated)] shrink-0">
               ↓ 还有更多猫猫
             </div>
           )}
-          {catOptions.length === 0 && <div className="px-4 py-2.5 text-xs text-gray-400">无匹配猫猫</div>}
-          <div className="px-4 py-1.5 text-xs text-gray-300 border-t border-gray-100 shrink-0">
+          {catOptions.length === 0 && <div className="px-4 py-2.5 text-xs text-cafe-muted">无匹配猫猫</div>}
+          <div className="px-4 py-1.5 text-xs text-cafe-muted border-t border-cafe-subtle shrink-0">
             {'\u2191\u2193 \u9009\u62E9 \u00B7 Enter \u786E\u8BA4 \u00B7 Esc \u5173\u95ED'}
           </div>
         </div>
@@ -156,26 +173,26 @@ export function ChatInputMenus({
       {showGameMenu && gameStep === 'list' && (
         <div
           ref={menuRef}
-          className="absolute bottom-full left-4 mb-2 bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden w-72 z-10"
+          className="absolute bottom-full left-4 mb-2 bg-cafe-surface rounded-xl shadow-lg border border-cafe overflow-hidden w-72 z-10"
         >
-          <div className="px-4 py-2 text-xs text-gray-400 font-medium border-b border-gray-100">选择游戏</div>
+          <div className="px-4 py-2 text-xs text-cafe-muted font-medium border-b border-cafe-subtle">选择游戏</div>
           {GAME_LIST.map((game, i) => (
             <button
               key={game.id}
               data-testid={`game-item-${game.id}`}
-              className={`w-full text-left px-4 py-3 flex items-center gap-3 transition-colors ${i === selectedIdx ? 'bg-indigo-50' : 'hover:bg-gray-50'}`}
+              className={`w-full text-left px-4 py-3 flex items-center gap-3 transition-colors ${i === selectedIdx ? 'bg-accent-50' : 'hover:bg-cafe-surface-elevated'}`}
               onMouseEnter={() => onSelectIdx(i)}
               onMouseDown={(e) => {
                 e.preventDefault();
                 handleGameDrillIn();
               }}
             >
-              <WolfIcon className="w-6 h-6 text-indigo-500" />
+              <WolfIcon className="w-6 h-6 text-cafe-accent" />
               <div>
-                <div className="text-sm font-semibold text-gray-700">{game.label}</div>
-                <div className="text-xs text-gray-400">{game.desc}</div>
+                <div className="text-sm font-semibold text-cafe-secondary">{game.label}</div>
+                <div className="text-xs text-cafe-muted">{game.desc}</div>
               </div>
-              <svg className="ml-auto w-4 h-4 text-gray-300" viewBox="0 0 20 20" fill="currentColor">
+              <svg className="ml-auto w-4 h-4 text-cafe-muted" viewBox="0 0 20 20" fill="currentColor">
                 <path
                   fillRule="evenodd"
                   d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
@@ -184,17 +201,17 @@ export function ChatInputMenus({
               </svg>
             </button>
           ))}
-          <div className="px-4 py-1.5 text-xs text-gray-300 border-t border-gray-100">Enter 选择 · Esc 关闭</div>
+          <div className="px-4 py-1.5 text-xs text-cafe-muted border-t border-cafe-subtle">Enter 选择 · Esc 关闭</div>
         </div>
       )}
 
       {showGameMenu && gameStep === 'modes' && (
         <div
           ref={menuRef}
-          className="absolute bottom-full left-4 mb-2 bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden w-72 z-10"
+          className="absolute bottom-full left-4 mb-2 bg-cafe-surface rounded-xl shadow-lg border border-cafe overflow-hidden w-72 z-10"
         >
           <button
-            className="w-full text-left px-4 py-2 text-xs text-indigo-500 font-medium border-b border-gray-100 hover:bg-indigo-50 transition-colors flex items-center gap-1"
+            className="w-full text-left px-4 py-2 text-xs text-cafe-accent font-medium border-b border-cafe-subtle hover:bg-accent-50 transition-colors flex items-center gap-1"
             onMouseDown={(e) => {
               e.preventDefault();
               onGameStepChange('list');
@@ -216,22 +233,22 @@ export function ChatInputMenus({
               <button
                 key={mode.id}
                 data-testid={`game-mode-${mode.id}`}
-                className={`w-full text-left px-4 py-2.5 flex items-center gap-3 transition-colors ${i === selectedIdx ? 'bg-indigo-50' : 'hover:bg-gray-50'}`}
+                className={`w-full text-left px-4 py-2.5 flex items-center gap-3 transition-colors ${i === selectedIdx ? 'bg-accent-50' : 'hover:bg-cafe-surface-elevated'}`}
                 onMouseEnter={() => onSelectIdx(i)}
                 onMouseDown={(e) => {
                   e.preventDefault();
                   onSendCommand(mode.command);
                 }}
               >
-                <IconComponent className="w-5 h-5 text-indigo-400" />
+                <IconComponent className="w-5 h-5 text-cafe-accent" />
                 <div>
-                  <div className="text-sm font-semibold text-gray-700">{mode.label}</div>
-                  <div className="text-xs text-gray-400">{mode.desc}</div>
+                  <div className="text-sm font-semibold text-cafe-secondary">{mode.label}</div>
+                  <div className="text-xs text-cafe-muted">{mode.desc}</div>
                 </div>
               </button>
             );
           })}
-          <div className="px-4 py-1.5 text-xs text-gray-300 border-t border-gray-100">
+          <div className="px-4 py-1.5 text-xs text-cafe-muted border-t border-cafe-subtle">
             {'\u2191\u2193 \u9009\u62E9 \u00B7 Enter \u786E\u8BA4 \u00B7 Esc \u5173\u95ED'}
           </div>
         </div>

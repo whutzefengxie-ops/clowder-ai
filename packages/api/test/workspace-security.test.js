@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { mkdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { beforeEach, describe, it } from 'node:test';
 
 describe('workspace-security', () => {
@@ -140,6 +140,11 @@ describe('workspace-security', () => {
     assert.ok(mod.isDenylisted('.git/HEAD'));
   });
 
+  it('isDenylisted blocks normalized POSIX paths on every host platform', () => {
+    assert.ok(mod.isDenylisted('secrets/nested/token.txt'));
+    assert.ok(mod.isDenylisted('.git/hooks/pre-commit'));
+  });
+
   it('isDenylisted allows safe paths', () => {
     assert.ok(!mod.isDenylisted('src/index.ts'));
     assert.ok(!mod.isDenylisted('packages/api/src/routes/workspace.ts'));
@@ -147,6 +152,39 @@ describe('workspace-security', () => {
   });
 
   // -- Worktree listing --
+
+  it('listWorktrees falls back to a startup-style project root when cwd is not a git checkout', async () => {
+    const publicRoot = join(tmpdir(), `public-export-${Date.now()}`);
+    await mkdir(join(publicRoot, 'cat-cafe-skills'), { recursive: true });
+    await writeFile(join(publicRoot, 'cat-cafe-skills', 'manifest.yaml'), 'skills: {}\n');
+
+    try {
+      const entries = await mod.listWorktrees(publicRoot);
+      assert.deepEqual(entries, [
+        {
+          id: basename(publicRoot).replace(/[^a-zA-Z0-9_-]/g, '_'),
+          root: publicRoot,
+          branch: 'exported',
+          head: 'nogit',
+        },
+      ]);
+    } finally {
+      await rm(publicRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('getWorktreeRoot can resolve registry aliases when cwd is not a git checkout', async () => {
+    const publicRoot = join(tmpdir(), `public-registry-${Date.now()}`);
+    await mkdir(join(publicRoot, 'cat-cafe-skills'), { recursive: true });
+    await writeFile(join(publicRoot, 'cat-cafe-skills', 'manifest.yaml'), 'skills: {}\n');
+    mod.registerWorktrees([{ id: 'registered-public-root', root: publicRoot, branch: 'test', head: 'abc123' }]);
+
+    try {
+      assert.equal(await mod.getWorktreeRoot('registered-public-root', publicRoot), publicRoot);
+    } finally {
+      await rm(publicRoot, { recursive: true, force: true });
+    }
+  });
 
   it('listWorktrees returns at least one entry', async () => {
     const entries = await mod.listWorktrees();

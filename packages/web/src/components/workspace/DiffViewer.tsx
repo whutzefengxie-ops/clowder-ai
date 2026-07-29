@@ -117,15 +117,15 @@ function pairLines(lines: DiffLine[]): SidePair[] {
 const lineStyles: Record<DiffLine['type'], string> = {
   add: 'bg-green-900/30 text-green-300',
   remove: 'bg-red-900/30 text-red-300',
-  context: 'text-gray-400',
-  header: 'bg-blue-900/20 text-blue-400 italic',
+  context: 'text-cafe-muted',
+  header: 'bg-[var(--semantic-info-surface)] text-[var(--semantic-info)] italic',
 };
 
 const gutterStyles: Record<DiffLine['type'], string> = {
-  add: 'bg-green-900/40 text-green-500',
-  remove: 'bg-red-900/40 text-red-500',
-  context: 'text-gray-600',
-  header: 'bg-blue-900/20 text-blue-500',
+  add: 'bg-green-900/40 text-conn-emerald-text',
+  remove: 'bg-red-900/40 text-conn-red-text',
+  context: 'text-cafe-secondary',
+  header: 'bg-[var(--semantic-info-surface)] text-conn-blue-text',
 };
 
 const prefixMap: Record<DiffLine['type'], string> = {
@@ -139,23 +139,19 @@ const prefixMap: Record<DiffLine['type'], string> = {
 
 function UnifiedView({ hunks }: { hunks: DiffHunk[] }) {
   return (
-    <table className="w-full text-[11px] font-mono border-collapse">
+    <table className="w-full text-xs font-mono border-collapse">
       <tbody>
         {hunks.map((hunk, hi) =>
           hunk.lines.map((line, li) => (
             <tr key={`${hi}-${li}`} className={lineStyles[line.type]}>
-              <td
-                className={`w-10 text-right px-1.5 select-none border-r border-gray-700/50 ${gutterStyles[line.type]}`}
-              >
+              <td className={`w-10 text-right px-1.5 select-none console-divider-r ${gutterStyles[line.type]}`}>
                 {line.oldLine ?? ''}
               </td>
-              <td
-                className={`w-10 text-right px-1.5 select-none border-r border-gray-700/50 ${gutterStyles[line.type]}`}
-              >
+              <td className={`w-10 text-right px-1.5 select-none console-divider-r ${gutterStyles[line.type]}`}>
                 {line.newLine ?? ''}
               </td>
               <td className="px-2 whitespace-pre overflow-x-auto">
-                <span className="select-none text-gray-600 mr-1">{prefixMap[line.type]}</span>
+                <span className="select-none text-cafe-secondary mr-1">{prefixMap[line.type]}</span>
                 {line.content}
               </td>
             </tr>
@@ -170,29 +166,29 @@ function SideBySideView({ hunks }: { hunks: DiffHunk[] }) {
   const pairs = useMemo(() => hunks.flatMap((h) => pairLines(h.lines)), [hunks]);
 
   return (
-    <table className="w-full text-[11px] font-mono border-collapse">
+    <table className="w-full text-xs font-mono border-collapse">
       <tbody>
         {pairs.map((pair, i) => (
           <tr key={i}>
             {/* Left (old) */}
             <td
-              className={`w-8 text-right px-1 select-none border-r border-gray-700/50 ${pair.left ? gutterStyles[pair.left.type] : 'bg-gray-900/50'}`}
+              className={`w-8 text-right px-1 select-none console-divider-r ${pair.left ? gutterStyles[pair.left.type] : 'bg-cafe-surface-sunken/50'}`}
             >
               {pair.left?.oldLine ?? ''}
             </td>
             <td
-              className={`w-1/2 px-2 whitespace-pre overflow-x-auto ${pair.left ? lineStyles[pair.left.type] : 'bg-gray-900/50'}`}
+              className={`w-1/2 px-2 whitespace-pre overflow-x-auto ${pair.left ? lineStyles[pair.left.type] : 'bg-cafe-surface-sunken/50'}`}
             >
               {pair.left?.content ?? ''}
             </td>
             {/* Right (new) */}
             <td
-              className={`w-8 text-right px-1 select-none border-l border-r border-gray-700/50 ${pair.right ? gutterStyles[pair.right.type] : 'bg-gray-900/50'}`}
+              className={`w-8 text-right px-1 select-none console-divider-l console-divider-r ${pair.right ? gutterStyles[pair.right.type] : 'bg-cafe-surface-sunken/50'}`}
             >
               {pair.right?.newLine ?? ''}
             </td>
             <td
-              className={`w-1/2 px-2 whitespace-pre overflow-x-auto ${pair.right ? lineStyles[pair.right.type] : 'bg-gray-900/50'}`}
+              className={`w-1/2 px-2 whitespace-pre overflow-x-auto ${pair.right ? lineStyles[pair.right.type] : 'bg-cafe-surface-sunken/50'}`}
             >
               {pair.right?.content ?? ''}
             </td>
@@ -222,7 +218,7 @@ export function DiffViewer({ diff, filePath, compact }: DiffViewerProps) {
 
   if (filtered.length === 0) {
     return (
-      <div className="p-4 text-center text-gray-500 text-xs">
+      <div className="p-4 text-center text-cafe-secondary text-xs">
         {diff.trim() ? 'No parseable diff hunks found' : 'No changes'}
       </div>
     );
@@ -235,10 +231,10 @@ export function DiffViewer({ diff, filePath, compact }: DiffViewerProps) {
           <button
             type="button"
             onClick={() => setMode('unified')}
-            className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${
+            className={`px-2 py-0.5 rounded text-micro font-medium transition-colors ${
               mode === 'unified'
-                ? 'bg-cocreator-primary/80 text-white'
-                : 'text-gray-500 hover:text-gray-300 hover:bg-white/10'
+                ? 'bg-cafe-accent/80 text-[var(--cafe-surface)]'
+                : 'text-cafe-secondary hover:text-cafe-muted hover:bg-cafe-surface/10'
             }`}
           >
             Unified
@@ -246,27 +242,27 @@ export function DiffViewer({ diff, filePath, compact }: DiffViewerProps) {
           <button
             type="button"
             onClick={() => setMode('split')}
-            className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${
+            className={`px-2 py-0.5 rounded text-micro font-medium transition-colors ${
               mode === 'split'
-                ? 'bg-cocreator-primary/80 text-white'
-                : 'text-gray-500 hover:text-gray-300 hover:bg-white/10'
+                ? 'bg-cafe-accent/80 text-[var(--cafe-surface)]'
+                : 'text-cafe-secondary hover:text-cafe-muted hover:bg-cafe-surface/10'
             }`}
           >
             Side-by-side
           </button>
-          <span className="ml-auto text-[10px] text-gray-500">
+          <span className="ml-auto text-micro text-cafe-secondary">
             {filtered.length} file{filtered.length !== 1 ? 's' : ''} changed
           </span>
         </div>
       )}
       {filtered.map((file) => (
-        <div key={file.path} className="rounded border border-gray-700/50 overflow-hidden">
+        <div key={file.path} className="rounded border border-[var(--console-border-soft)] overflow-hidden">
           {!compact && (
-            <div className="bg-[#1E1E24] px-3 py-1.5 text-[11px] font-mono text-gray-300 border-b border-gray-700/50 truncate">
+            <div className="bg-[var(--ws-editor-bg)] px-3 py-1.5 text-xs font-mono text-cafe-muted console-divider-b truncate">
               {file.path}
             </div>
           )}
-          <div className="overflow-x-auto bg-[#16161c]">
+          <div className="overflow-x-auto bg-[var(--ws-editor-deep)]">
             {mode === 'unified' ? <UnifiedView hunks={file.hunks} /> : <SideBySideView hunks={file.hunks} />}
           </div>
         </div>

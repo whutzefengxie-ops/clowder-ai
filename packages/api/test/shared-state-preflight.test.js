@@ -12,6 +12,8 @@
  * E: git not available → { ok: true } (fail-open)
  * F: non-shared-state files ignored
  * G: no upstream + no origin + no merge-base → { ok: true } (fail-open)
+ * H: non-main branch, unpushed → { ok: true } (skip unpushed, enforced at merge-gate)
+ * I: non-main branch, uncommitted → { ok: false } (uncommitted still detected)
  */
 import assert from 'node:assert/strict';
 import { execSync } from 'node:child_process';
@@ -158,42 +160,48 @@ describe('checkSharedStatePreflight (integration)', () => {
     assert.deepEqual(result, { ok: true }, 'should fail-open when git is unavailable');
   });
 
-  it('falls back to origin/<branch> when no upstream tracking (new branch)', () => {
-    const repo = createTempRepo('noupstream');
+  it('skips unpushed check on non-main branches (worktree / feature branch)', () => {
+    const repo = createTempRepo('feature-skip');
     const bare = addBareRemote(repo);
     tempDirs.push(repo, bare);
 
-    // Create a new branch, push it with tracking so origin/<branch> exists
+    // Create a feature branch with committed shared-state — unpushed should be skipped
     execSync('git checkout -b feat/test-branch', { cwd: repo, stdio: 'ignore' });
-    execSync('git push -u origin feat/test-branch', { cwd: repo, stdio: 'ignore' });
-    // Unset upstream tracking to test origin/<branch> fallback
-    execSync('git branch --unset-upstream', { cwd: repo, stdio: 'ignore' });
-
-    // Commit shared-state file
     writeFileSync(join(repo, 'cat-template.json'), '{}');
     execSync('git add cat-template.json && git commit -m "add config"', { cwd: repo, stdio: 'ignore' });
 
     const result = checkSharedStatePreflight(repo);
-    assert.equal(result.ok, false);
-    assert.deepEqual(result.unpushedFiles, ['cat-template.json']);
+    assert.deepEqual(result, { ok: true }, 'feature branch should skip unpushed check');
   });
 
-  it('falls back to merge-base when origin/<branch> does not exist (brand new branch)', () => {
-    const repo = createTempRepo('mergebase');
+  it('still detects uncommitted shared-state on non-main branches', () => {
+    const repo = createTempRepo('feature-uncommitted');
     const bare = addBareRemote(repo);
     tempDirs.push(repo, bare);
 
-    // Create a new branch that does NOT exist on remote
-    execSync('git checkout -b feat/brand-new', { cwd: repo, stdio: 'ignore' });
+    // Create a feature branch with staged (uncommitted) shared-state — should warn
+    execSync('git checkout -b feat/dirty-worktree', { cwd: repo, stdio: 'ignore' });
+    writeFileSync(join(repo, 'cat-template.json'), '{}');
+    execSync('git add cat-template.json', { cwd: repo, stdio: 'ignore' });
 
-    // Commit shared-state file on the new branch
+    const result = checkSharedStatePreflight(repo);
+    assert.equal(result.ok, false, 'uncommitted shared-state on feature branch should still be detected');
+    assert.deepEqual(result.uncommittedFiles, ['cat-template.json']);
+    assert.equal(result.unpushedFiles, undefined, 'unpushed should not be checked on feature branch');
+  });
+
+  it('skips unpushed check on brand-new branches without remote', () => {
+    const repo = createTempRepo('brand-new-skip');
+    const bare = addBareRemote(repo);
+    tempDirs.push(repo, bare);
+
+    execSync('git checkout -b feat/brand-new', { cwd: repo, stdio: 'ignore' });
     mkdirSync(join(repo, 'docs'), { recursive: true });
     writeFileSync(join(repo, 'docs/ROADMAP.md'), '# New');
     execSync('git add docs/ROADMAP.md && git commit -m "add backlog on new branch"', { cwd: repo, stdio: 'ignore' });
 
     const result = checkSharedStatePreflight(repo);
-    assert.equal(result.ok, false, 'should detect via merge-base fallback');
-    assert.deepEqual(result.unpushedFiles, ['docs/ROADMAP.md']);
+    assert.deepEqual(result, { ok: true }, 'brand-new feature branch should skip unpushed check');
   });
 
   it('returns ok:true when local is only behind upstream (no local unpushed commits)', () => {
@@ -221,20 +229,44 @@ describe('checkSharedStatePreflight (integration)', () => {
     assert.deepEqual(result, { ok: true }, 'behind-only should NOT report unpushed files');
   });
 
+  it('ignores upstream-only shared-state drift when branch is both ahead and behind', () => {
+    const repo = createTempRepo('diverged');
+    const bare = addBareRemote(repo);
+    tempDirs.push(repo, bare);
+
+    // Remote adds shared-state drift after local clone point.
+    const cloneA = mkdtempSync(join(tmpdir(), 'ss-test-diverged-remote-'));
+    tempDirs.push(cloneA);
+    execSync(`git clone ${bare} .`, { cwd: cloneA, stdio: 'ignore' });
+    execSync('git config user.email "a@test.com"', { cwd: cloneA, stdio: 'ignore' });
+    execSync('git config user.name "A"', { cwd: cloneA, stdio: 'ignore' });
+    mkdirSync(join(cloneA, 'docs'), { recursive: true });
+    writeFileSync(join(cloneA, 'docs/ROADMAP.md'), '# remote shared-state drift');
+    execSync('git add docs/ROADMAP.md && git commit -m "remote backlog drift" && git push', {
+      cwd: cloneA,
+      stdio: 'ignore',
+    });
+
+    // Local repo makes an unrelated commit and fetches remote, producing ahead+behind.
+    writeFileSync(join(repo, 'notes.txt'), 'local only');
+    execSync('git add notes.txt && git commit -m "local unrelated change"', { cwd: repo, stdio: 'ignore' });
+    execSync('git fetch origin', { cwd: repo, stdio: 'ignore' });
+
+    const result = checkSharedStatePreflight(repo);
+    assert.deepEqual(result, { ok: true }, 'diverged branch should ignore shared-state files changed only on upstream');
+  });
+
   it('returns ok:true when no upstream + no origin/<branch> + no merge-base (fail-open)', () => {
     // Create a completely isolated repo with no remote at all
     const repo = createTempRepo('isolated');
     tempDirs.push(repo);
 
-    // Create a new branch (no remote, no origin/main)
-    execSync('git checkout -b feat/orphan', { cwd: repo, stdio: 'ignore' });
-
-    // Commit shared-state file — but since there's no remote, nothing to compare against
+    // Stay on main — no remote means fail-open for the unpushed check
     writeFileSync(join(repo, 'cat-template.json'), '{}');
     execSync('git add cat-template.json && git commit -m "add config"', { cwd: repo, stdio: 'ignore' });
 
     const result = checkSharedStatePreflight(repo);
-    // Fail-open: no way to determine if it's pushed or not
-    assert.deepEqual(result, { ok: true }, 'should fail-open when no merge-base available');
+    // Fail-open: no remote to compare against
+    assert.deepEqual(result, { ok: true }, 'should fail-open when no remote available');
   });
 });

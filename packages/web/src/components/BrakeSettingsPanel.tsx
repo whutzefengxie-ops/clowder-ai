@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef } from 'react';
 import { useBrakeStore } from '@/stores/brakeStore';
+import { HubIcon } from './hub-icons';
 
 export function BrakeSettingsPanel() {
   const { settingsEnabled, settingsThreshold, settingsLoading, loadSettings, saveSettings } = useBrakeStore();
@@ -30,31 +31,33 @@ export function BrakeSettingsPanel() {
   );
 
   if (settingsLoading) {
-    return <p className="text-sm text-gray-500 py-4">加载中…</p>;
+    return <p className="text-sm text-cafe-secondary py-4">加载中…</p>;
   }
 
   return (
     <div className="space-y-4">
       <div>
-        <h3 className="text-base font-semibold text-gray-900">🐾 健康守护</h3>
-        <p className="text-sm text-gray-500 mt-1">三猫会在你连续工作一段时间后提醒你休息</p>
+        <h3 className="text-base font-semibold text-cafe flex items-center gap-1.5">
+          <HubIcon name="heart-pulse" className="h-4 w-4" /> 健康守护
+        </h3>
+        <p className="text-sm text-cafe-secondary mt-1">三猫会在你连续工作一段时间后提醒你休息</p>
       </div>
 
-      <div className="rounded-lg border border-gray-200 bg-gray-50/70 p-4 space-y-4">
+      <div className="console-list-card rounded-xl bg-[var(--console-card-bg)] p-4 space-y-4 shadow-[var(--shadow-elevation-2)]">
         {/* Toggle */}
         <div className="flex items-center justify-between">
-          <span className="text-sm font-medium text-gray-700">启用健康守护</span>
+          <span className="text-sm font-medium text-cafe-secondary">启用健康守护</span>
           <button
             type="button"
             role="switch"
             aria-checked={settingsEnabled}
             onClick={handleToggle}
             className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ${
-              settingsEnabled ? 'bg-blue-600' : 'bg-gray-200'
+              settingsEnabled ? 'bg-cafe-accent' : 'bg-cafe-surface'
             }`}
           >
             <span
-              className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow ring-0 transition-transform duration-200 ${
+              className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-cafe-surface shadow ring-0 transition-transform duration-200 ${
                 settingsEnabled ? 'translate-x-5' : 'translate-x-0'
               }`}
             />
@@ -64,8 +67,8 @@ export function BrakeSettingsPanel() {
         {/* Threshold slider */}
         <div className={settingsEnabled ? '' : 'opacity-50 pointer-events-none'}>
           <div className="flex items-center justify-between mb-1">
-            <span className="text-sm text-gray-600">提醒间隔</span>
-            <span className="text-sm font-mono font-semibold text-gray-900">{settingsThreshold} 分钟</span>
+            <span className="text-sm text-cafe-secondary">提醒间隔</span>
+            <span className="text-sm font-mono font-semibold text-cafe">{settingsThreshold} 分钟</span>
           </div>
           <input
             type="range"
@@ -74,17 +77,17 @@ export function BrakeSettingsPanel() {
             step={15}
             value={settingsThreshold}
             onChange={handleThresholdChange}
-            className="w-full accent-blue-600"
+            className="w-full accent-[var(--cafe-accent)]"
           />
-          <div className="flex justify-between text-xs text-gray-400 mt-0.5">
+          <div className="flex justify-between text-xs text-cafe-muted mt-0.5">
             <span>30 min</span>
             <span>240 min</span>
           </div>
         </div>
 
         {/* Night mode info */}
-        <div className="rounded-md bg-indigo-50 border border-indigo-100 px-3 py-2">
-          <p className="text-xs text-indigo-600 flex items-center gap-1">
+        <div className="rounded-[10px] bg-[var(--console-field-bg,var(--console-card-bg))] px-3 py-2">
+          <p className="text-xs text-cafe-accent flex items-center gap-1">
             <svg
               className="w-3.5 h-3.5 flex-shrink-0"
               fill="none"

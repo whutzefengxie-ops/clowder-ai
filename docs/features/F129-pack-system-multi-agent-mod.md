@@ -1,6 +1,6 @@
 ---
 feature_ids: [F129]
-related_features: [F032, F059, F093, F127]
+related_features: [F032, F059, F093, F127, F146]
 topics: [ecosystem, open-source, multi-agent, sharing, pack]
 doc_kind: spec
 created: 2026-03-19
@@ -13,10 +13,10 @@ created: 2026-03-19
 ## Why
 
 > "如果我是一个金融从业者，我用你们如何构建一套金融的猫猫协作？如何分享？如果我是一个喜欢 AI 恋爱的玩家我要怎么样？如果我是一个跑团爱好者？如果我是律师？……me & world & cats，我可以是任何身份的我。"
-> — team lead，2026-03-19
+> — operator，2026-03-19
 
 > "好像无意间搞出了团队 skills 或者说 multi-agent 的 skills 体系，和单 agent 的差别在于 shared-rules.md"
-> — team lead，2026-03-19
+> — operator，2026-03-19
 
 Cat Café 的 coding 基石已经成熟（120+ features，cat-config + skills + shared-rules 体系经过验证）。但 Cat Café 从来不只是 coding 协作平台——是 **Cats & U**，猫猫和你，一起创造，一起生活。
 
@@ -182,11 +182,11 @@ OpenClaw 在 v2026.3.22（2026-03-22）做了底层架构大换血（12 breaking
 - Pack Remix：下载→修改→再发布的 patch 机制
 - 公共知识流动，私有 Growth 不外泄
 
-### Phase C: Capability Pack + Marketplace
+### Phase C: Capability Pack + Composer
 
 - MCP Capability Pack 运行时加载
 - Pack Composer（零代码图形化捏世界/捏猫/捏流程工坊）
-- 社区 Registry / Marketplace
+- Marketplace 分发由 F146 承接（F129 作为 Pack 生产侧与消费侧）
 
 ## Acceptance Criteria
 
@@ -203,18 +203,22 @@ OpenClaw 在 v2026.3.22（2026-03-22）做了底层架构大换血（12 breaking
 - [x] AC-A10: `knowledge/` 检索必须 pack-scoped，不得进入全局 shared evidence / Core Rails（防止跨世界知识污染）
 
 ### Phase B（示范 Packs + Remix）
-- [ ] AC-B1: 当前 cat-config + shared-rules + skills 成功导出为 "Coding World" Pack
-- [ ] AC-B2: 至少 1 个非 Coding 示范 Pack 可运行（如 TRPG 或深夜陪伴）
-- [ ] AC-B3: Pack Remix 机制可用——下载、修改、再发布
-- [ ] AC-B4: Growth Layer（私有关系/记忆）不随 Pack 外发
-- [ ] AC-B5: OpenClaw Bundle importer MVP（至少支持 SKILL.md subtype，映射到 workflows/defaults/masks）
-- [ ] AC-B6: SillyTavern Character Card V2/V3 + World Book → Pack importer MVP（映射到 masks/knowledge）
-- [ ] AC-B7: Pack export / remix 默认不包含 Growth 原始数据；只允许导出蒸馏后的方法论补丁或模板变更（KD-11 硬边界）
 
-### Phase C（Capability Pack + Marketplace）
+#### Phase B-α（Dogfood Export + Demo Packs）✅
+- [x] AC-B1: 当前 cat-config + shared-rules + skills 成功导出为 "Coding World" Pack
+- [x] AC-B2: 至少 1 个非 Coding 示范 Pack 可运行（如 TRPG 或深夜陪伴）
+- [x] AC-B4: Growth Layer（私有关系/记忆）不随 Pack 外发
+- [x] AC-B7: Pack export / remix 默认不包含 Growth 原始数据；只允许导出蒸馏后的方法论补丁或模板变更（KD-11 硬边界）
+
+#### Phase B-β（Import + Remix）📋
+- [ ] AC-B3: Pack Remix 机制可用——下载、修改、再发布
+- [ ] AC-B5: OpenClaw Bundle importer MVP（至少支持 SKILL.md subtype，映射到 workflows/defaults/masks；字段映射依赖 F146 Phase R 跨生态 schema 对照矩阵）
+- [ ] AC-B6: SillyTavern Character Card V2/V3 + World Book → Pack importer MVP（映射到 masks/knowledge；字段映射依赖 F146 Phase R 跨生态 schema 对照矩阵）
+
+### Phase C（Capability Pack + Composer）
 - [ ] AC-C1: MCP Capability Pack 运行时加载可用
 - [ ] AC-C2: Pack Composer 图形化工坊 MVP 可用
-- [ ] AC-C3: 社区 Registry 上线
+- [ ] AC-C3: Pack 能被 F146 Marketplace 发现并生成可执行 installPlan（F129 作为 consumer）
 
 ## Dependencies
 
@@ -222,6 +226,7 @@ OpenClaw 在 v2026.3.22（2026-03-22）做了底层架构大换血（12 breaking
 - **Related**: F059（开源计划 — Pack 是开源生态的核心分发单元）
 - **Related**: F093（Cats & U 世界引擎 — World Layer 架构，Pack 是其分享机制）
 - **Related**: F127（猫猫管理重构 — 动态创建猫，Pack masks 的运行时基础）
+- **Related**: F146（MCP Marketplace Control Plane — 承接 Marketplace/Registry 分发职责；F129 B-β importer 映射依赖 F146 Phase R 对照矩阵）
 
 ## Risk
 
@@ -240,7 +245,7 @@ OpenClaw 在 v2026.3.22（2026-03-22）做了底层架构大换血（12 breaking
 | KD-1 | 术语统一为 Pack（不叫 Plugin/Mod/Seed） | 三猫共识：Pack 直观、无歧义、和游戏 mod 类比对齐 | 2026-03-19 |
 | KD-2 | Pack = 声明式 mod，不是代码插件 | 零代码覆盖 90% 创作需求；同权脚本插件在 lesson-07 已列为禁区 | 2026-03-19 |
 | KD-3 | Core Identity Layer 不可插件化 | F093 铁律：身份不可污染，信任是地基 | 2026-03-19 |
-| KD-4 | shared-rules 是 Pack 的灵魂，不是 masks | team lead洞察：multi-agent 和 single-agent 的分水岭是协作规范 | 2026-03-19 |
+| KD-4 | shared-rules 是 Pack 的灵魂，不是 masks | operator洞察：multi-agent 和 single-agent 的分水岭是协作规范 | 2026-03-19 |
 | KD-5 | Experience = Me × Pack + Growth | Maine Coon提出：Me 不打包、Growth 私有、只有 Pack 可分享 | 2026-03-19 |
 | KD-6 | World Driver 声明 resolver: code/agent/hybrid | Maine Coon提出：不同世界有不同运转方式，需要显式声明。`agent`（非 `llm`）：Cat Café 是 multi-agent 架构，世界推进由猫猫 agent 决策，不是裸调 LLM API | 2026-03-19 |
 | KD-7 | v1 先 Git URL 安装，不做 marketplace | 去中心化更符合"种子自由生长"，降低首发基建成本 | 2026-03-19 |
@@ -252,3 +257,4 @@ OpenClaw 在 v2026.3.22（2026-03-22）做了底层架构大换血（12 breaking
 ## Review Gate
 
 - Phase A: 跨家族 review（Maine Coon GPT-5.4）
+- Phase B-α: 跨家族 review（Maine Coon Codex Spark, R1-R4, 9 issues fixed）

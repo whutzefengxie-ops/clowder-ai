@@ -27,6 +27,18 @@ describe('bubbleIdentity', () => {
     expect(getBubbleInvocationId(msg)).toBe('inv-1');
   });
 
+  it('does not expose stable invocation identity for explicit posts', () => {
+    const msg = makeAssistantMessage({
+      extra: {
+        isExplicitPost: true,
+        stream: { invocationId: 'inv-explicit' },
+      },
+    });
+
+    expect(getBubbleInvocationId(msg)).toBeUndefined();
+    expect(getBubbleIdentityKey(msg)).toBeUndefined();
+  });
+
   it('falls back to draft message id for invocationId', () => {
     const msg = makeAssistantMessage({
       id: 'draft-inv-2',
@@ -101,6 +113,60 @@ describe('bubbleIdentity', () => {
       isUnstable: true,
       originPhase: 'draft',
       key: 'opus:inv-7:text',
+    });
+  });
+
+  // F194 Phase Z3 (砚砚 catch 2026-05-09 17:32 — bubble identity uses parent id 合并 same-cat multi-turn)
+  describe('F194 Phase Z3: dual id (parent vs turn) — turnInvocationId 优先', () => {
+    it('prefers turnInvocationId over invocationId (parent) — same parent + same cat 多 turn 不合并', () => {
+      const parentId = 'parent-chain-1';
+      const opusTurn1 = makeAssistantMessage({
+        id: 'msg-opus-1',
+        catId: 'opus',
+        extra: {
+          stream: {
+            invocationId: parentId,
+            turnInvocationId: 'turn-opus-1',
+          },
+        },
+      });
+      const opusTurn3 = makeAssistantMessage({
+        id: 'msg-opus-3',
+        catId: 'opus',
+        extra: {
+          stream: {
+            invocationId: parentId,
+            turnInvocationId: 'turn-opus-3',
+          },
+        },
+      });
+
+      expect(getBubbleInvocationId(opusTurn1)).toBe('turn-opus-1');
+      expect(getBubbleInvocationId(opusTurn3)).toBe('turn-opus-3');
+      expect(getBubbleIdentityKey(opusTurn1)).not.toBe(getBubbleIdentityKey(opusTurn3));
+    });
+
+    it('falls back to invocationId (parent) when turnInvocationId absent — legacy compat', () => {
+      const legacyMsg = makeAssistantMessage({
+        extra: { stream: { invocationId: 'legacy-parent-id' } },
+      });
+      expect(getBubbleInvocationId(legacyMsg)).toBe('legacy-parent-id');
+    });
+
+    it('describeBubbleIdentity uses turnInvocationId in key (not parent)', () => {
+      const msg = makeAssistantMessage({
+        id: 'msg-z3-describe',
+        catId: 'opus',
+        extra: {
+          stream: {
+            invocationId: 'parent-z3',
+            turnInvocationId: 'turn-z3',
+          },
+        },
+      });
+      const desc = describeBubbleIdentity(msg);
+      expect(desc.invocationId).toBe('turn-z3');
+      expect(desc.key).toBe('opus:turn-z3:text');
     });
   });
 

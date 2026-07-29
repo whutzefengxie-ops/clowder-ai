@@ -23,7 +23,7 @@ vi.mock('@/utils/api-client', () => ({
                 displayName: '布偶猫',
                 color: { primary: '#9B7EBD', secondary: '#E8DFF5' },
                 mentionPatterns: ['@opus'],
-                provider: 'anthropic',
+                clientId: 'anthropic',
                 defaultModel: 'claude-opus-4-6',
                 avatar: '🐱',
                 roleDescription: 'test',
@@ -34,7 +34,7 @@ vi.mock('@/utils/api-client', () => ({
                 displayName: '缅因猫',
                 color: { primary: '#4CAF50', secondary: '#C8E6C9' },
                 mentionPatterns: ['@codex'],
-                provider: 'openai',
+                clientId: 'openai',
                 defaultModel: 'gpt-5.3-codex',
                 avatar: '🐱',
                 roleDescription: 'test',
@@ -115,7 +115,7 @@ describe('ThreadExecutionBar (F122B AC-B8 + B8/B9 polish)', () => {
 
     const dot = container.querySelector('.animate-pulse') as HTMLElement;
     expect(dot).toBeTruthy();
-    expect(dot.style.backgroundColor).toBe('rgb(76, 175, 80)'); // #4CAF50
+    expect(dot.style.backgroundColor).toBe('var(--color-codex-primary)');
   });
 
   it('deduplicates same cat from multiple invocations', async () => {

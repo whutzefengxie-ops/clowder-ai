@@ -34,6 +34,7 @@ const mockGetThreadState: ReturnType<
         isStreaming?: boolean;
         timestamp: number;
       }>;
+      activeInvocations?: Record<string, { catId: string; mode: string }>;
     }
   >
 > = vi.fn(() => ({
@@ -71,10 +72,16 @@ const storeState = {
   requestStreamCatchUp: mockRequestStreamCatchUp,
 
   addMessageToThread: mockAddMessageToThread,
+  // F183 B1.2.3: active stream new-bubble path → reducer → replaceMessages
+  replaceMessages: vi.fn((msgs: unknown[]) => {
+    storeState.messages = msgs as typeof storeState.messages;
+  }),
+  hasMore: true,
   clearThreadActiveInvocation: mockClearThreadActiveInvocation,
   resetThreadInvocationState: mockResetThreadInvocationState,
   setThreadMessageStreaming: mockSetThreadMessageStreaming,
   getThreadState: mockGetThreadState,
+  activeInvocations: {} as Record<string, { catId: string; mode: string }>,
   currentThreadId: 'thread-1',
 };
 
@@ -131,6 +138,7 @@ describe('useAgentMessages loading lifecycle', () => {
     mockSetThreadMessageStreaming.mockClear();
     mockGetThreadState.mockClear();
     mockGetThreadState.mockImplementation(() => ({ messages: [] }));
+    storeState.activeInvocations = {};
     storeState.currentThreadId = 'thread-1';
   });
 
@@ -317,7 +325,7 @@ describe('useAgentMessages loading lifecycle', () => {
       captured?.handleStop(cancelInvocation, 'thread-2');
     });
 
-    expect(cancelInvocation).toHaveBeenCalledWith('thread-2');
+    expect(cancelInvocation).toHaveBeenCalledWith('thread-2', undefined);
     expect(mockResetThreadInvocationState).toHaveBeenCalledWith('thread-2');
     expect(mockSetThreadMessageStreaming).toHaveBeenCalledWith('thread-2', 'bg-stream-1', false);
 
@@ -327,6 +335,55 @@ describe('useAgentMessages loading lifecycle', () => {
     expect(mockSetIntentMode).not.toHaveBeenCalledWith(null);
     expect(mockClearCatStatuses).not.toHaveBeenCalled();
     expect(mockSetStreaming).not.toHaveBeenCalled();
+  });
+
+  it('stopping a background thread derives catId from the TARGET thread slots', () => {
+    const cancelInvocation = vi.fn();
+    storeState.activeInvocations = {
+      'inv-active': { catId: 'codex', mode: 'execute' },
+    };
+
+    mockGetThreadState.mockImplementation(((tid?: string) => {
+      if (tid === 'thread-2') {
+        return {
+          messages: [] as Array<{
+            id: string;
+            type: string;
+            catId?: string;
+            content: string;
+            isStreaming?: boolean;
+            timestamp: number;
+          }>,
+          activeInvocations: {
+            'inv-bg': { catId: 'opus', mode: 'execute' },
+          },
+        };
+      }
+      return {
+        messages: [] as Array<{
+          id: string;
+          type: string;
+          catId?: string;
+          content: string;
+          isStreaming?: boolean;
+          timestamp: number;
+        }>,
+        activeInvocations: {
+          'inv-active': { catId: 'codex', mode: 'execute' },
+        },
+      };
+    }) as unknown as typeof mockGetThreadState);
+
+    act(() => {
+      root.render(React.createElement(Harness));
+    });
+
+    act(() => {
+      captured?.handleStop(cancelInvocation, 'thread-2');
+    });
+
+    expect(cancelInvocation).toHaveBeenCalledWith('thread-2', 'opus');
+    expect(mockResetThreadInvocationState).toHaveBeenCalledWith('thread-2');
   });
 
   it('stopping a background thread clears its pending timeout guard', () => {

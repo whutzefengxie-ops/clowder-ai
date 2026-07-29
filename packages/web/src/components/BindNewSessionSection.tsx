@@ -6,25 +6,29 @@
 // biome-ignore lint/correctness/noUnusedImports: React needed for JSX in vitest environment
 import React, { useState } from 'react';
 import { formatCatName, useCatData } from '@/hooks/useCatData';
+import { useIMEGuard } from '@/hooks/useIMEGuard';
 import { apiFetch } from '@/utils/api-client';
 
 export interface BindNewSessionSectionProps {
   threadId: string;
   activeCatIds: Set<string>;
   onBound: () => void;
+  disabled?: boolean;
 }
 
-export function BindNewSessionSection({ threadId, activeCatIds, onBound }: BindNewSessionSectionProps) {
+export function BindNewSessionSection({ threadId, activeCatIds, onBound, disabled }: BindNewSessionSectionProps) {
   const { cats } = useCatData();
   const [expanded, setExpanded] = useState(false);
   const [selectedCat, setSelectedCat] = useState('');
   const [sessionId, setSessionId] = useState('');
   const [status, setStatus] = useState<'idle' | 'saving' | 'ok' | 'error'>('idle');
+  const ime = useIMEGuard();
 
   // Cats that don't yet have an active session in this thread
   const availableCats = cats.filter((c) => !activeCatIds.has(c.id));
 
   const handleBind = async () => {
+    if (disabled) return;
     const trimmed = sessionId.trim();
     if (!trimmed || !selectedCat || status === 'saving') return;
     setStatus('saving');
@@ -56,7 +60,8 @@ export function BindNewSessionSection({ threadId, activeCatIds, onBound }: BindN
       <button
         type="button"
         onClick={() => setExpanded(true)}
-        className="text-[10px] text-gray-400 hover:text-gray-600 transition-colors mt-1"
+        disabled={disabled}
+        className="text-micro text-cafe-muted hover:text-cafe-secondary transition-colors mt-1 disabled:opacity-40 disabled:cursor-not-allowed"
       >
         + 绑定外部 Session
       </button>
@@ -64,16 +69,16 @@ export function BindNewSessionSection({ threadId, activeCatIds, onBound }: BindN
   }
 
   return (
-    <div className="mt-2 p-2 rounded border border-dashed border-gray-300 bg-white">
+    <div className="mt-2 p-2 rounded-lg bg-[var(--console-shell-bg)]">
       <div className="flex items-center justify-between mb-1.5">
-        <span className="text-[10px] font-medium text-gray-600">绑定外部 Session</span>
+        <span className="text-micro font-medium text-cafe-secondary">绑定外部 Session</span>
         <button
           type="button"
           onClick={() => {
             setExpanded(false);
             setStatus('idle');
           }}
-          className="text-[9px] text-gray-400 hover:text-gray-600"
+          className="text-micro text-cafe-muted hover:text-cafe-secondary"
         >
           ✕
         </button>
@@ -82,7 +87,7 @@ export function BindNewSessionSection({ threadId, activeCatIds, onBound }: BindN
         <select
           value={selectedCat}
           onChange={(e) => setSelectedCat(e.target.value)}
-          className="w-full text-[11px] px-2 py-1 rounded border border-gray-200 bg-gray-50 focus:outline-none focus:ring-1 focus:ring-cocreator-primary"
+          className="w-full text-xs px-2 py-1 rounded-[10px] border-transparent bg-[var(--console-field-bg,var(--console-card-bg))] focus:outline-none focus:ring-1 focus:ring-cafe-accent"
         >
           <option value="">选择猫猫...</option>
           {availableCats.map((cat) => (
@@ -94,19 +99,21 @@ export function BindNewSessionSection({ threadId, activeCatIds, onBound }: BindN
         <input
           value={sessionId}
           onChange={(e) => setSessionId(e.target.value)}
+          onCompositionStart={ime.onCompositionStart}
+          onCompositionEnd={ime.onCompositionEnd}
           onKeyDown={(e) => {
-            if (e.nativeEvent.isComposing) return;
+            if (ime.isComposing()) return;
             if (e.key === 'Enter') void handleBind();
           }}
           placeholder="CLI Session ID"
           maxLength={500}
-          className="w-full text-[11px] font-mono px-2 py-1 rounded border border-gray-200 bg-gray-50 focus:outline-none focus:ring-1 focus:ring-cocreator-primary"
+          className="w-full text-xs font-mono px-2 py-1 rounded-[10px] border-transparent bg-[var(--console-field-bg,var(--console-card-bg))] focus:outline-none focus:ring-1 focus:ring-cafe-accent"
         />
         <button
           type="button"
           onClick={() => void handleBind()}
-          disabled={status === 'saving' || !sessionId.trim() || !selectedCat}
-          className="w-full text-[10px] px-2 py-1 rounded bg-gray-200 hover:bg-gray-300 disabled:opacity-40 transition-colors"
+          disabled={status === 'saving' || !sessionId.trim() || !selectedCat || disabled}
+          className="w-full text-micro px-2 py-1 rounded bg-cafe-surface hover:bg-[var(--console-hover-bg)] disabled:opacity-40 transition-colors"
         >
           {status === 'saving'
             ? '绑定中...'

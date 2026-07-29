@@ -23,7 +23,7 @@ describe('Session Chain Routes', () => {
   let SessionChainStore;
   let sessionChainRoutes;
 
-  async function setup(threadStoreOverride, sealerOverride) {
+  async function setup(threadStoreOverride, sealerOverride, runtimeSessionStoreOverride) {
     const storeMod = await import('../dist/domains/cats/services/stores/ports/SessionChainStore.js');
     const routeMod = await import('../dist/routes/session-chain.js');
     SessionChainStore = storeMod.SessionChainStore;
@@ -43,29 +43,35 @@ describe('Session Chain Routes', () => {
       reconcileStuck: async () => 0,
       reconcileAllStuck: async () => 0,
     };
-    await app.register(sessionChainRoutes, { sessionChainStore: store, threadStore, sessionSealer: mockSealer });
+    await app.register(sessionChainRoutes, {
+      sessionChainStore: store,
+      threadStore,
+      sessionSealer: mockSealer,
+      ...(runtimeSessionStoreOverride ? { runtimeSessionStore: runtimeSessionStoreOverride } : {}),
+    });
     await app.ready();
     return store;
   }
 
   // --- P1: Auth / identity tests ---
 
-  it('GET /api/threads/:threadId/sessions returns 401 without identity', async () => {
+  it('GET /api/threads/:threadId/sessions returns 401 without identity for untrusted browser origin', async () => {
     await setup();
     const res = await app.inject({
       method: 'GET',
       url: '/api/threads/thread-1/sessions',
-      // no X-Cat-Cafe-User header, no userId query
+      headers: { origin: 'https://evil.example' },
     });
     assert.equal(res.statusCode, 401);
   });
 
-  it('GET /api/sessions/:sessionId returns 401 without identity', async () => {
+  it('GET /api/sessions/:sessionId returns 401 without identity for untrusted browser origin', async () => {
     const store = await setup();
     const record = store.create({ cliSessionId: 'cli-1', threadId: 'thread-1', catId: 'opus', userId: 'user-1' });
     const res = await app.inject({
       method: 'GET',
       url: `/api/sessions/${record.id}`,
+      headers: { origin: 'https://evil.example' },
     });
     assert.equal(res.statusCode, 401);
   });
@@ -88,6 +94,104 @@ describe('Session Chain Routes', () => {
       url: `/api/sessions/${record.id}`,
       headers: { 'x-cat-cafe-user': 'other-user' },
     });
+    assert.equal(res.statusCode, 403);
+  });
+
+  it('GET /api/threads/default/sessions allows system-owned default thread', async () => {
+    const store = await setup(
+      mockThreadStore({
+        default: { id: 'default', createdBy: 'system' },
+      }),
+    );
+    store.create({ cliSessionId: 'cli-default-1', threadId: 'default', catId: 'opus', userId: 'default-user' });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/threads/default/sessions',
+      headers: { 'x-cat-cafe-user': 'default-user' },
+    });
+    assert.equal(res.statusCode, 200);
+    const body = JSON.parse(res.payload);
+    assert.equal(body.sessions.length, 1);
+  });
+
+  it('GET /api/threads/default/sessions filters default-thread sessions to the caller', async () => {
+    const store = await setup(
+      mockThreadStore({
+        default: { id: 'default', createdBy: 'system' },
+      }),
+    );
+    store.create({ cliSessionId: 'cli-default-owner', threadId: 'default', catId: 'opus', userId: 'owner-user' });
+    store.create({ cliSessionId: 'cli-default-other', threadId: 'default', catId: 'codex', userId: 'other-user' });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/threads/default/sessions',
+      headers: { 'x-cat-cafe-user': 'owner-user' },
+    });
+
+    assert.equal(res.statusCode, 200);
+    const body = JSON.parse(res.payload);
+    assert.equal(body.sessions.length, 1);
+    assert.equal(body.sessions[0].userId, 'owner-user');
+  });
+
+  it('GET /api/sessions/:sessionId allows records under system-owned default thread', async () => {
+    const store = await setup(
+      mockThreadStore({
+        default: { id: 'default', createdBy: 'system' },
+      }),
+    );
+    const record = store.create({
+      cliSessionId: 'cli-default-2',
+      threadId: 'default',
+      catId: 'opus',
+      userId: 'default-user',
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/sessions/${record.id}`,
+      headers: { 'x-cat-cafe-user': 'default-user' },
+    });
+    assert.equal(res.statusCode, 200);
+  });
+
+  it('GET /api/sessions/:sessionId rejects other users on system-owned default thread', async () => {
+    const store = await setup(
+      mockThreadStore({
+        default: { id: 'default', createdBy: 'system' },
+      }),
+    );
+    const record = store.create({
+      cliSessionId: 'cli-default-owner',
+      threadId: 'default',
+      catId: 'opus',
+      userId: 'owner-user',
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/sessions/${record.id}`,
+      headers: { 'x-cat-cafe-user': 'attacker-user' },
+    });
+
+    assert.equal(res.statusCode, 403);
+  });
+
+  it('GET /api/threads/:threadId/sessions rejects system-owned non-default threads', async () => {
+    await setup(
+      mockThreadStore({
+        'system-thread': { id: 'system-thread', createdBy: 'system' },
+      }),
+    );
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/threads/system-thread/sessions',
+      headers: { 'x-cat-cafe-user': 'other-user' },
+    });
+
     assert.equal(res.statusCode, 403);
   });
 
@@ -118,6 +222,100 @@ describe('Session Chain Routes', () => {
     assert.equal(res.statusCode, 200);
     const body = JSON.parse(res.payload);
     assert.equal(body.sessions.length, 2);
+  });
+
+  it('GET /api/threads/:threadId/sessions includes runtime sidecar summaries when present', async () => {
+    const { RuntimeSessionStore } = await import(
+      '../dist/domains/cats/services/runtime-session/RuntimeSessionStore.js'
+    );
+    const runtimeSessionStore = new RuntimeSessionStore();
+    const store = await setup(undefined, undefined, runtimeSessionStore);
+    const record = store.create({
+      cliSessionId: 'cascade-new',
+      threadId: 'thread-1',
+      catId: 'opus',
+      userId: 'user-1',
+    });
+    runtimeSessionStore.upsert({
+      sessionId: record.id,
+      runtime: 'antigravity-desktop',
+      runtimeSessionId: 'cascade-new',
+      runtimeConversationId: 'conversation-new',
+      threadId: 'thread-1',
+      catId: 'opus',
+      userId: 'user-1',
+      surface: 'cat-cafe-dispatch',
+      identityHistory: [{ catId: 'opus', model: 'claude-opus-4-6', from: 1000, source: 'session_init' }],
+      lifecycle: {
+        state: 'active',
+        startedAt: 1000,
+        lastObservedAt: 2000,
+        retryFragment: {
+          kind: 'retry',
+          retryReason: 'tool_conflict',
+          nextRuntimeSessionId: 'cascade-next',
+          detectedAt: 2000,
+        },
+        unexpectedRuntimeSessionSwitch: {
+          detectedAt: 2000,
+          previousSessionId: 'session-old',
+          previousRuntimeSessionId: 'cascade-old',
+          currentRuntimeSessionId: 'cascade-new',
+          reason: 'missing_previous_runtime_session_id',
+        },
+      },
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/threads/thread-1/sessions',
+      headers: { 'x-cat-cafe-user': 'user-1' },
+    });
+
+    assert.equal(res.statusCode, 200);
+    const body = JSON.parse(res.payload);
+    assert.equal(body.sessions.length, 1);
+    assert.deepEqual(body.sessions[0].runtimeSession, {
+      runtime: 'antigravity-desktop',
+      runtimeSessionId: 'cascade-new',
+      runtimeConversationId: 'conversation-new',
+      lifecycleState: 'active',
+      lastObservedAt: 2000,
+      retryFragment: {
+        kind: 'retry',
+        retryReason: 'tool_conflict',
+        nextRuntimeSessionId: 'cascade-next',
+        detectedAt: 2000,
+      },
+      unexpectedRuntimeSessionSwitch: {
+        detectedAt: 2000,
+        previousSessionId: 'session-old',
+        previousRuntimeSessionId: 'cascade-old',
+        currentRuntimeSessionId: 'cascade-new',
+        reason: 'missing_previous_runtime_session_id',
+      },
+    });
+  });
+
+  it('GET /api/threads/:threadId/sessions keeps legacy CLI sessions independent from runtime sidecars', async () => {
+    const { RuntimeSessionStore } = await import(
+      '../dist/domains/cats/services/runtime-session/RuntimeSessionStore.js'
+    );
+    const runtimeSessionStore = new RuntimeSessionStore();
+    const store = await setup(undefined, undefined, runtimeSessionStore);
+    store.create({ cliSessionId: 'cli-legacy-1', threadId: 'thread-1', catId: 'opus', userId: 'user-1' });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/threads/thread-1/sessions',
+      headers: { 'x-cat-cafe-user': 'user-1' },
+    });
+
+    assert.equal(res.statusCode, 200);
+    const body = JSON.parse(res.payload);
+    assert.equal(body.sessions.length, 1);
+    assert.equal(body.sessions[0].cliSessionId, 'cli-legacy-1');
+    assert.equal(body.sessions[0].runtimeSession, undefined);
   });
 
   it('GET /api/threads/:threadId/sessions?catId=opus filters by cat', async () => {
@@ -188,7 +386,7 @@ describe('Session Chain Routes', () => {
     assert.equal(body.contextHealth.source, 'exact');
   });
 
-  it('POST /api/sessions/:sessionId/unseal returns 401 without identity', async () => {
+  it('POST /api/sessions/:sessionId/unseal returns 401 without identity for untrusted browser origin', async () => {
     const store = await setup();
     const sealed = store.create({ cliSessionId: 'cli-sealed', threadId: 'thread-1', catId: 'opus', userId: 'user-1' });
     store.update(sealed.id, { status: 'sealed', sealReason: 'threshold', sealedAt: Date.now(), updatedAt: Date.now() });
@@ -196,6 +394,7 @@ describe('Session Chain Routes', () => {
     const res = await app.inject({
       method: 'POST',
       url: `/api/sessions/${sealed.id}/unseal`,
+      headers: { origin: 'https://evil.example' },
     });
     assert.equal(res.statusCode, 401);
   });
@@ -310,5 +509,56 @@ describe('Session Chain Routes', () => {
     assert.equal(res.statusCode, 409);
     const body = JSON.parse(res.payload);
     assert.equal(body.activeSessionId, active.id);
+  });
+
+  it('POST /api/sessions/:sessionId/unseal rejects system-owned non-default threads', async () => {
+    const store = await setup(
+      mockThreadStore({
+        'system-thread': { id: 'system-thread', createdBy: 'system' },
+      }),
+    );
+    const sealed = store.create({
+      cliSessionId: 'cli-system-thread',
+      threadId: 'system-thread',
+      catId: 'opus',
+      userId: 'system',
+    });
+    store.update(sealed.id, { status: 'sealed', sealReason: 'threshold', sealedAt: Date.now(), updatedAt: Date.now() });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/sessions/${sealed.id}/unseal`,
+      headers: { 'x-cat-cafe-user': 'other-user' },
+    });
+
+    assert.equal(res.statusCode, 403);
+  });
+
+  it('POST /api/sessions/:sessionId/unseal rejects other users on system-owned default thread', async () => {
+    const store = await setup(
+      mockThreadStore({
+        default: { id: 'default', createdBy: 'system' },
+      }),
+    );
+    const sealed = store.create({
+      cliSessionId: 'cli-default-sealed',
+      threadId: 'default',
+      catId: 'opus',
+      userId: 'owner-user',
+    });
+    store.update(sealed.id, {
+      status: 'sealed',
+      sealReason: 'threshold',
+      sealedAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/sessions/${sealed.id}/unseal`,
+      headers: { 'x-cat-cafe-user': 'attacker-user' },
+    });
+
+    assert.equal(res.statusCode, 403);
   });
 });

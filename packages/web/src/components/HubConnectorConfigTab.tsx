@@ -1,51 +1,76 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { useGuideStore } from '@/stores/guideStore';
 import { apiFetch } from '@/utils/api-client';
+import { ConnectorActionBar } from './ConnectorActionBar';
 import {
-  ChevronDown,
-  ChevronRight,
-  DEFAULT_VISUAL,
+  buildPlatformVisual,
+  connStatePill,
   ExternalLinkIcon,
-  LockIcon,
-  PLATFORM_VISUALS,
-  StatusDotConnected,
-  StatusDotIdle,
+  formatHeartbeat,
+  type PlatformStatus,
   StepBadge,
-  TriangleAlertIcon,
-  WifiIcon,
+  TrashIcon,
 } from './HubConfigIcons';
-import { WeixinQrPanel } from './WeixinQrPanel';
+import { settingsResourceCardClass } from './SettingsResourceCard';
+import { ActionRenderer } from './settings/primitives/ActionRenderer';
+import { ConfigFieldRenderer } from './settings/primitives/ConfigFieldRenderer';
 
-interface PlatformFieldStatus {
-  envName: string;
-  label: string;
-  sensitive: boolean;
-  currentValue: string | null;
-}
+const HubPermissionsTab = lazy(() => import('./HubPermissionsTab'));
 
-interface PlatformStepStatus {
-  text: string;
-  mode?: string;
-}
+const REDACTED_PLACEHOLDER = '••••••';
+type SaveResult = { type: 'success' | 'error'; message: string };
 
-interface PlatformStatus {
-  id: string;
-  name: string;
-  nameEn: string;
-  configured: boolean;
-  fields: PlatformFieldStatus[];
-  docsUrl: string;
-  steps: PlatformStepStatus[];
-}
-
-export function HubConnectorConfigTab() {
+export function HubConnectorConfigTab({ refreshKey }: { refreshKey?: number }) {
+  const activeGuideStep = useGuideStore((s) => {
+    const session = s.session;
+    if (!session || session.currentStepIndex >= session.flow.steps.length) return null;
+    return session.flow.steps[session.currentStepIndex];
+  });
   const [platforms, setPlatforms] = useState<PlatformStatus[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
-  const [saving, setSaving] = useState(false);
-  const [saveResult, setSaveResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [savingById, setSavingById] = useState<Record<string, boolean>>({});
+  const [testingById, setTestingById] = useState<Record<string, boolean>>({});
+  const [saveResultsById, setSaveResultsById] = useState<Record<string, SaveResult | undefined>>({});
+  const [uninstallingId, setUninstallingId] = useState<string | null>(null);
+  const expandedIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    expandedIdRef.current = expandedId;
+  }, [expandedId]);
+
+  const clearSaveResult = (platformId: string) => {
+    setSaveResultsById((prev) => {
+      const next = { ...prev };
+      delete next[platformId];
+      return next;
+    });
+  };
+
+  const setSavingFor = (platformId: string, active: boolean) => {
+    setSavingById((prev) => {
+      const next = { ...prev };
+      if (active) next[platformId] = true;
+      else delete next[platformId];
+      return next;
+    });
+  };
+
+  const setTestingFor = (platformId: string, active: boolean) => {
+    setTestingById((prev) => {
+      const next = { ...prev };
+      if (active) next[platformId] = true;
+      else delete next[platformId];
+      return next;
+    });
+  };
+
+  const setSaveResultFor = (platformId: string, result: SaveResult) => {
+    setSaveResultsById((prev) => ({ ...prev, [platformId]: result }));
+  };
 
   const fetchStatus = useCallback(async () => {
     setIsLoading(true);
@@ -53,7 +78,8 @@ export function HubConnectorConfigTab() {
       const res = await apiFetch('/api/connector/status');
       if (!res.ok) return;
       const data = await res.json();
-      setPlatforms(data.platforms ?? []);
+      const all: PlatformStatus[] = data.platforms ?? [];
+      setPlatforms(all);
     } catch {
       // fall through
     } finally {
@@ -61,258 +87,294 @@ export function HubConnectorConfigTab() {
     }
   }, []);
 
+  const handleUninstallPlugin = useCallback(
+    async (id: string) => {
+      if (!window.confirm(`确定要卸载插件 ${id} 吗？`)) return;
+      setUninstallingId(id);
+      try {
+        const res = await apiFetch(`/api/connectors/plugins/${encodeURIComponent(id)}`, { method: 'DELETE' });
+        if (res.ok) {
+          await fetchStatus();
+        }
+      } catch {
+        // silent
+      } finally {
+        setUninstallingId(null);
+      }
+    },
+    [fetchStatus],
+  );
+
   useEffect(() => {
     fetchStatus();
-  }, [fetchStatus]);
+  }, [fetchStatus, refreshKey]);
 
   const handleExpand = (platformId: string) => {
+    const guideToggleTarget = `connector.${platformId}`;
     if (expandedId === platformId) {
+      if (activeGuideStep?.advance === 'click' && activeGuideStep.target === guideToggleTarget) {
+        return;
+      }
       setExpandedId(null);
       setFieldValues({});
-      setSaveResult(null);
+      clearSaveResult(platformId);
       return;
     }
     setExpandedId(platformId);
     setFieldValues({});
-    setSaveResult(null);
+    clearSaveResult(platformId);
   };
 
   const handleSave = async (platform: PlatformStatus) => {
-    // Sensitive fields must be set in .env manually — only non-sensitive can be patched
-    const updates = platform.fields
-      .filter((f) => !f.sensitive && fieldValues[f.envName] !== undefined)
-      .map((f) => ({ name: f.envName, value: fieldValues[f.envName] }));
+    // F240: save to .cat-cafe config store via PUT /api/connectors/:id/config (not legacy /api/config/secrets)
+    const fields = platform.fields
+      .filter((f) => fieldValues[f.envName] !== undefined)
+      .map((f) => ({ name: f.envName, value: fieldValues[f.envName] || null }));
 
-    if (updates.length === 0) {
-      setSaveResult({ type: 'error', message: '请填写至少一个非敏感配置项（敏感字段需手动编辑 .env）' });
+    if (fields.length === 0) {
+      setSaveResultFor(platform.id, { type: 'error', message: '请填写至少一个配置项' });
       return;
     }
 
-    setSaving(true);
-    setSaveResult(null);
+    if (fields.some((f) => f.value?.includes(REDACTED_PLACEHOLDER))) {
+      setSaveResultFor(platform.id, { type: 'error', message: '不能保存脱敏占位符，请输入新的完整凭据' });
+      return;
+    }
+
+    setSavingFor(platform.id, true);
+    clearSaveResult(platform.id);
     try {
-      const res = await apiFetch('/api/config/env', {
-        method: 'PATCH',
+      const res = await apiFetch(`/api/connectors/${encodeURIComponent(platform.id)}/config`, {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ updates }),
+        body: JSON.stringify({ fields }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        setSaveResult({ type: 'error', message: data.error ?? '保存失败' });
+        setSaveResultFor(platform.id, { type: 'error', message: data.error ?? '保存失败' });
         return;
       }
-      setSaveResult({ type: 'success', message: '配置已保存。需重启 API 服务使连接器生效。' });
-      setFieldValues({});
+      setSaveResultFor(platform.id, { type: 'success', message: '配置已保存，连接器正在自动重连...' });
+      if (expandedIdRef.current === platform.id) setFieldValues({});
       await fetchStatus();
     } catch {
-      setSaveResult({ type: 'error', message: '网络错误' });
+      setSaveResultFor(platform.id, { type: 'error', message: '网络错误' });
     } finally {
-      setSaving(false);
+      setSavingFor(platform.id, false);
+    }
+  };
+
+  const handleTest = async (platform: PlatformStatus) => {
+    setTestingFor(platform.id, true);
+    clearSaveResult(platform.id);
+    try {
+      const res = await apiFetch(`/api/connector/${encodeURIComponent(platform.id)}/test`, {
+        method: 'POST',
+      });
+      const data = (await res.json().catch(() => ({}))) as { valid?: boolean; error?: string };
+      if (data.valid) {
+        setSaveResultFor(platform.id, { type: 'success', message: '连接正常' });
+      } else {
+        setSaveResultFor(platform.id, { type: 'error', message: data.error || '连接失败' });
+      }
+    } catch {
+      setSaveResultFor(platform.id, { type: 'error', message: '网络错误' });
+    } finally {
+      setTestingFor(platform.id, false);
     }
   };
 
   if (isLoading) {
-    return <p className="text-center text-gray-400 py-8 text-sm">加载中...</p>;
+    return <p className="text-center text-cafe-muted py-8 text-sm">加载中...</p>;
   }
 
   if (platforms.length === 0) {
-    return <p className="text-center text-gray-400 py-8 text-sm">无法加载平台配置信息</p>;
+    return <p className="text-center text-cafe-muted py-8 text-sm">无法加载平台配置信息</p>;
   }
 
   return (
     <div className="space-y-3">
       {platforms.map((platform) => {
         const isExpanded = expandedId === platform.id;
-        const v = PLATFORM_VISUALS[platform.id] ?? DEFAULT_VISUAL;
-        // Resolve current connection mode for mode-filtered steps
-        const modeField = platform.fields.find((f) => f.envName === 'FEISHU_CONNECTION_MODE');
+        const v = buildPlatformVisual(platform);
+        // Generic mode-driver: find select field whose options match step mode values
+        const stepModes = new Set(platform.steps.filter((s) => s.mode).map((s) => s.mode));
+        const modeField =
+          stepModes.size > 0
+            ? platform.fields.find((f) => f.type === 'select' && f.options?.some((o) => stepModes.has(o.value)))
+            : undefined;
         const selectedMode = modeField
-          ? (fieldValues['FEISHU_CONNECTION_MODE'] ?? modeField.currentValue ?? 'webhook')
+          ? (fieldValues[modeField.envName] ?? modeField.currentValue ?? modeField.options?.[0]?.value)
           : undefined;
         const filteredSteps = platform.steps.filter((s) => !s.mode || s.mode === selectedMode);
         const guideSteps = filteredSteps.slice(0, -1);
+        const hasVisibleConfigFields = platform.fields.length > 0;
+        const hasActionBar =
+          hasVisibleConfigFields || platform.testable === true || saveResultsById[platform.id] !== undefined;
 
         return (
           <div
             key={platform.id}
-            className="border border-gray-200 rounded-2xl overflow-hidden"
+            className="console-list-card rounded-xl overflow-hidden shadow-[var(--console-shadow-soft)] hover:shadow-md"
             data-testid={`platform-card-${platform.id}`}
+            data-guide-id={`connector.${platform.id}`}
+            data-active={isExpanded ? 'true' : 'false'}
           >
-            <button
-              type="button"
+            <div
+              role="button"
+              tabIndex={0}
               onClick={() => handleExpand(platform.id)}
-              className={`w-full flex items-center gap-3 px-4 py-3.5 transition-colors ${isExpanded ? 'bg-sky-50' : 'hover:bg-gray-50'}`}
+              onKeyDown={(e) => e.key === 'Enter' && handleExpand(platform.id)}
+              className="flex w-full items-center gap-3 px-4 py-3 cursor-pointer transition-colors"
             >
               <span
-                className="flex items-center justify-center w-9 h-9 rounded-[10px] shrink-0"
+                className="flex h-9 w-9 items-center justify-center rounded-xl shrink-0 overflow-hidden"
                 style={{ backgroundColor: v.iconBg, color: v.iconColor }}
               >
                 {v.icon}
               </span>
-              <span className="flex-1 text-left min-w-0">
-                <span className="block text-[15px] font-semibold text-gray-900">
-                  {platform.name} {platform.nameEn !== platform.name ? platform.nameEn : ''}
+              <span className="flex-1 text-left min-w-0 space-y-1">
+                <span className="flex items-center gap-1.5 text-sm font-semibold text-cafe">
+                  {platform.name}
+                  {platform.nameEn !== platform.name ? ` ${platform.nameEn}` : ''}
+                  {platform.source === 'external' && (
+                    <span className="rounded bg-cafe-surface-sunken px-1.5 py-0.5 text-micro font-medium text-cafe-muted">
+                      外部
+                    </span>
+                  )}
                 </span>
-                <span
-                  className={`flex items-center gap-1 text-xs ${platform.configured ? 'text-green-600' : 'text-gray-400'}`}
-                >
-                  {platform.configured ? <StatusDotConnected /> : <StatusDotIdle />}
-                  {platform.configured ? '已配置' : '未配置'}
-                </span>
+                {platform.lastHeartbeat && (
+                  <span className="block text-xs text-cafe-muted">{formatHeartbeat(platform.lastHeartbeat)}</span>
+                )}
               </span>
-              <span className="text-gray-400 shrink-0">{isExpanded ? <ChevronDown /> : <ChevronRight />}</span>
-            </button>
+              <span
+                className={`shrink-0 rounded-xl px-2.5 py-1 text-xs font-semibold ${connStatePill(platform).className}`}
+              >
+                {connStatePill(platform).label}
+              </span>
+              {platform.source === 'external' && (
+                <button
+                  type="button"
+                  disabled={uninstallingId === platform.id}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleUninstallPlugin(platform.id);
+                  }}
+                  className="shrink-0 rounded-lg p-1.5 text-cafe-muted transition-colors hover:bg-conn-red-bg hover:text-conn-red-text disabled:opacity-50"
+                  title="卸载插件"
+                >
+                  <TrashIcon />
+                </button>
+              )}
+            </div>
 
-            {isExpanded && platform.id === 'weixin' && (
-              <div className="border-t border-gray-100 px-4 py-4 space-y-3.5">
-                {filteredSteps.map((step, idx) => (
-                  <div key={idx} className="space-y-1.5">
-                    <div className="flex items-center gap-1.5">
-                      <StepBadge num={idx + 1} />
-                      <span className="text-[13px] font-medium text-gray-900">{step.text}</span>
+            {isExpanded && (
+              <div className="px-4 py-4 space-y-4">
+                <div className={`${settingsResourceCardClass} overflow-hidden`}>
+                  {/* Section header — themed from manifest */}
+                  <div className="px-4 py-3 flex items-center gap-3" style={{ backgroundColor: v.iconBg }}>
+                    <div
+                      className="w-9 h-9 rounded-lg flex items-center justify-center overflow-hidden"
+                      style={{ color: v.iconColor }}
+                    >
+                      {v.icon}
                     </div>
-                    {idx === 0 && (
-                      <div className="ml-[26px]">
-                        <WeixinQrPanel configured={platform.configured} />
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {isExpanded && platform.id !== 'weixin' && (
-              <div className="border-t border-gray-100 px-4 py-4 space-y-3.5">
-                {guideSteps.map((step, idx) => (
-                  <div key={idx} className="space-y-1.5">
-                    <div className="flex items-center gap-1.5">
-                      <StepBadge num={idx + 1} />
-                      <span className="text-[13px] font-medium text-gray-900">{step.text}</span>
+                    <div>
+                      <div className="font-semibold text-sm">基础配置</div>
+                      <div className="text-xs text-cafe-secondary">应用凭证与连接设置</div>
                     </div>
-                    {idx === 0 && (
-                      <a
-                        href={platform.docsUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-1.5 text-xs text-blue-600 bg-sky-50 rounded-lg px-3 py-2 hover:bg-sky-100 transition-colors ml-[26px]"
-                      >
-                        <ExternalLinkIcon />
-                        <span>{new URL(platform.docsUrl).hostname} → 查看官方文档</span>
-                      </a>
-                    )}
                   </div>
-                ))}
 
-                <div className="space-y-2">
-                  <div className="flex items-center gap-1.5">
-                    <StepBadge num={guideSteps.length + 1} />
-                    <span className="text-[13px] font-medium text-gray-900">填写应用凭证</span>
-                  </div>
-                  <div className="ml-[26px] space-y-2.5">
-                    {platform.fields.map((field) => (
-                      <div key={field.envName}>
-                        <label
-                          htmlFor={`config-${field.envName}`}
-                          className="block text-xs font-medium text-gray-500 mb-1"
-                        >
-                          {field.label}
-                          {field.sensitive && (
-                            <span className="text-amber-500 ml-1 inline-flex align-middle">
-                              <LockIcon />
-                            </span>
-                          )}
-                        </label>
-                        {field.sensitive ? (
-                          <div className="w-full h-9 flex items-center px-3 text-[13px] bg-gray-50 border border-gray-200 rounded-lg text-gray-400">
-                            {field.currentValue ?? '••••••••••••••••'}
-                            <span className="ml-auto text-[10px] text-amber-600 whitespace-nowrap">编辑 .env</span>
+                  <div className="p-4 space-y-3.5">
+                    {/* Guide steps from manifest */}
+                    {guideSteps.map((step, idx) => (
+                      <div key={step.text} className="space-y-1.5">
+                        <div className="flex items-center gap-1.5">
+                          <StepBadge num={idx + 1} />
+                          <span className="text-sm font-medium text-cafe">{step.text}</span>
+                        </div>
+                        {idx === 0 && (
+                          <div className="ml-[26px] space-y-2.5">
+                            {platform.docsUrl && URL.canParse(platform.docsUrl) && (
+                              <a
+                                href={platform.docsUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="console-inline-link"
+                              >
+                                <ExternalLinkIcon />
+                                <span>{new URL(platform.docsUrl).hostname} → 查看官方文档</span>
+                              </a>
+                            )}
                           </div>
-                        ) : field.envName === 'FEISHU_CONNECTION_MODE' ? (
-                          <select
-                            id={`config-${field.envName}`}
-                            value={fieldValues[field.envName] ?? field.currentValue ?? 'webhook'}
-                            onChange={(e) => setFieldValues((prev) => ({ ...prev, [field.envName]: e.target.value }))}
-                            className="w-full h-9 px-3 text-[13px] bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-colors"
-                            data-testid={`field-${field.envName}`}
-                          >
-                            <option value="webhook">Webhook（需公网 URL）</option>
-                            <option value="websocket">WebSocket 长连接（无需公网）</option>
-                          </select>
-                        ) : (
-                          <input
-                            id={`config-${field.envName}`}
-                            type="text"
-                            placeholder={field.currentValue ?? '未设置'}
-                            value={fieldValues[field.envName] ?? ''}
-                            onChange={(e) => setFieldValues((prev) => ({ ...prev, [field.envName]: e.target.value }))}
-                            className="w-full h-9 px-3 text-[13px] bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-colors"
-                            data-testid={`field-${field.envName}`}
-                          />
                         )}
                       </div>
                     ))}
-                  </div>
-                </div>
 
-                <div className="space-y-2">
-                  <div className="flex items-center gap-1.5">
-                    <StepBadge num={filteredSteps.length} />
-                    <span className="text-[13px] font-medium text-gray-900">测试连接并保存</span>
-                  </div>
-                  {saveResult && (
-                    <div
-                      className={`text-xs px-3 py-2 rounded-lg ml-[26px] ${
-                        saveResult.type === 'success'
-                          ? 'bg-green-50 text-green-700 border border-green-200'
-                          : 'bg-red-50 text-red-700 border border-red-200'
-                      }`}
-                      data-testid="save-result"
-                    >
-                      {saveResult.message}
-                    </div>
-                  )}
-                  <div className="flex items-center gap-2 ml-[26px]">
-                    <button
-                      type="button"
-                      className="flex items-center gap-1.5 px-4 py-2 text-[13px] font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                      onClick={() => setSaveResult({ type: 'success', message: '连接测试功能即将上线' })}
-                    >
-                      <WifiIcon />
-                      测试连接
-                    </button>
-                    {platform.fields.some((f) => !f.sensitive) ? (
-                      <button
-                        type="button"
-                        onClick={() => handleSave(platform)}
-                        disabled={saving}
-                        className="px-4 py-2 text-[13px] font-semibold text-white bg-blue-500 hover:bg-blue-600 rounded-lg transition-colors disabled:opacity-50"
-                        data-testid={`save-${platform.id}`}
-                      >
-                        {saving ? '保存中...' : '保存配置'}
-                      </button>
-                    ) : (
-                      <div className="flex-1 text-xs bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-amber-700">
-                        <p className="font-medium flex items-center gap-1">
-                          <LockIcon /> 所有凭证为敏感字段，请手动配置：
-                        </p>
-                        <code className="block mt-1 text-[11px] bg-amber-100 rounded px-2 py-1 font-mono select-all">
-                          {platform.fields.map((f) => `${f.envName}=your_value`).join('\n')}
-                        </code>
-                        <p className="mt-1 text-[11px]">写入 .env 文件后重启 API 服务生效</p>
+                    {/* Operations (ActionRenderer) — from YAML manifest */}
+                    {platform.operations && platform.operations.length > 0 && (
+                      <div className="ml-[26px] space-y-2.5">
+                        {platform.operations.map((op) => (
+                          <ActionRenderer
+                            key={op.name}
+                            connectorId={platform.id}
+                            operation={op}
+                            configured={platform.configured}
+                            pendingConfigValues={fieldValues}
+                            onStatusChange={() => void fetchStatus()}
+                            themeColor={platform.themeColor}
+                          />
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Config fields (ConfigFieldRenderer) — from YAML manifest */}
+                    {hasVisibleConfigFields && (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-1.5">
+                          <StepBadge num={guideSteps.length + 1} />
+                          <span className="text-sm font-medium text-cafe">填写应用凭证</span>
+                        </div>
+                        <div className="ml-[26px] space-y-2.5">
+                          {platform.fields.map((field) => (
+                            <ConfigFieldRenderer
+                              key={field.envName}
+                              field={field}
+                              value={fieldValues[field.envName] ?? ''}
+                              onChange={(envName, val) => setFieldValues((prev) => ({ ...prev, [envName]: val }))}
+                            />
+                          ))}
+                        </div>
                       </div>
                     )}
                   </div>
                 </div>
+
+                {platform.permissionLabel && (
+                  <Suspense fallback={<p className="text-xs text-cafe-muted">加载中...</p>}>
+                    <HubPermissionsTab connectorId={platform.id} connectorLabel={platform.permissionLabel} />
+                  </Suspense>
+                )}
+
+                {hasActionBar && (
+                  <ConnectorActionBar
+                    platformId={platform.id}
+                    saveResult={saveResultsById[platform.id] ?? null}
+                    saving={savingById[platform.id] === true}
+                    onSave={() => handleSave(platform)}
+                    showSave={hasVisibleConfigFields}
+                    showTest={platform.testable === true}
+                    testing={testingById[platform.id] === true}
+                    onTest={() => handleTest(platform)}
+                  />
+                )}
               </div>
             )}
           </div>
         );
       })}
 
-      <div className="flex items-center gap-2 bg-amber-50 border border-yellow-300 rounded-[10px] px-3.5 py-2.5">
-        <TriangleAlertIcon />
-        <span className="text-xs font-medium text-amber-800">修改配置后需重启 API 生效</span>
-      </div>
+      <p className="mt-4 text-xs text-cafe-muted">配置保存后自动生效，无需重启</p>
     </div>
   );
 }

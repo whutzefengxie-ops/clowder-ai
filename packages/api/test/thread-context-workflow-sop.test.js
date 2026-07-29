@@ -44,6 +44,7 @@ describe('GET thread-context with workflowSop', () => {
         const sop = {
           featureId,
           backlogItemId,
+          sopDefinitionId: 'development',
           stage: 'impl',
           batonHolder: updatedBy,
           nextSkill: 'tdd',
@@ -89,7 +90,7 @@ describe('GET thread-context with workflowSop', () => {
     threadStore.linkBacklogItem(thread.id, 'item-73');
 
     // Create invocation for this thread
-    const { invocationId, callbackToken } = registry.create('user-1', 'opus', thread.id);
+    const { invocationId, callbackToken } = await registry.create('user-1', 'opus', thread.id);
 
     // Seed workflow SOP for the backlog item
     await workflowSopStore.upsert('item-73', 'F073', {}, 'opus');
@@ -106,16 +107,20 @@ describe('GET thread-context with workflowSop', () => {
 
     const response = await app.inject({
       method: 'GET',
-      url: `/api/callbacks/thread-context?invocationId=${invocationId}&callbackToken=${callbackToken}`,
+      url: '/api/callbacks/thread-context',
+      headers: { 'x-invocation-id': invocationId, 'x-callback-token': callbackToken },
     });
 
     assert.equal(response.statusCode, 200);
     const body = JSON.parse(response.body);
     assert.ok(body.workflowSop, 'workflowSop should be present');
     assert.equal(body.workflowSop.featureId, 'F073');
+    assert.equal(body.workflowSop.sopDefinitionId, 'development');
     assert.equal(body.workflowSop.stage, 'impl');
     assert.equal(body.workflowSop.batonHolder, 'opus');
     assert.equal(body.workflowSop.nextSkill, 'tdd');
+    assert.equal(body.workflowSop.suggestedSkill, 'tdd');
+    assert.equal(body.workflowSop.suggestedSkillSource, 'override');
     assert.deepEqual(body.workflowSop.resumeCapsule, {
       goal: 'Build F073',
       done: ['types'],
@@ -127,12 +132,31 @@ describe('GET thread-context with workflowSop', () => {
     assert.equal(body.workflowSop.updatedAt, undefined);
   });
 
-  test('does not return workflowSop when thread has no backlogItemId', async () => {
+  test('returns thread context without workflowSop when stored SOP stage is invalid even with nextSkill override', async () => {
     const app = await createApp();
 
-    // Thread without linked backlog item
-    const thread = threadStore.create('user-1', 'plain thread', 'default');
-    const { invocationId, callbackToken } = registry.create('user-1', 'opus', thread.id);
+    const thread = threadStore.create('user-1', 'F073 test', 'default');
+    threadStore.linkBacklogItem(thread.id, 'item-invalid-sop');
+    const { invocationId, callbackToken } = await registry.create('user-1', 'opus', thread.id);
+
+    workflowSopStore._store.set('item-invalid-sop', {
+      featureId: 'F073',
+      backlogItemId: 'item-invalid-sop',
+      sopDefinitionId: 'development',
+      stage: 'retired_stage',
+      batonHolder: 'opus',
+      nextSkill: 'tdd',
+      resumeCapsule: { goal: 'Build F073', done: ['types'], currentFocus: 'Redis store' },
+      checks: {
+        remoteMainSynced: 'attested',
+        qualityGatePassed: 'unknown',
+        reviewApproved: 'unknown',
+        visionGuardDone: 'unknown',
+      },
+      version: 1,
+      updatedAt: Date.now(),
+      updatedBy: 'opus',
+    });
 
     messageStore.append({
       userId: 'user-1',
@@ -145,7 +169,36 @@ describe('GET thread-context with workflowSop', () => {
 
     const response = await app.inject({
       method: 'GET',
-      url: `/api/callbacks/thread-context?invocationId=${invocationId}&callbackToken=${callbackToken}`,
+      url: '/api/callbacks/thread-context',
+      headers: { 'x-invocation-id': invocationId, 'x-callback-token': callbackToken },
+    });
+
+    assert.equal(response.statusCode, 200);
+    const body = JSON.parse(response.body);
+    assert.equal(body.workflowSop, undefined, 'invalid stored SOP data should not break thread-context');
+    assert.equal(body.messages[0].preview, 'Hello'); // F236: anchor preview replaces full content
+  });
+
+  test('does not return workflowSop when thread has no backlogItemId', async () => {
+    const app = await createApp();
+
+    // Thread without linked backlog item
+    const thread = threadStore.create('user-1', 'plain thread', 'default');
+    const { invocationId, callbackToken } = await registry.create('user-1', 'opus', thread.id);
+
+    messageStore.append({
+      userId: 'user-1',
+      catId: null,
+      threadId: thread.id,
+      content: 'Hello',
+      mentions: [],
+      timestamp: Date.now(),
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/callbacks/thread-context',
+      headers: { 'x-invocation-id': invocationId, 'x-callback-token': callbackToken },
     });
 
     assert.equal(response.statusCode, 200);
@@ -165,7 +218,7 @@ describe('GET thread-context with workflowSop', () => {
 
     // Create invocation for user-1 in their own thread
     const ownThread = threadStore.create('user-1', 'My thread', 'default');
-    const { invocationId, callbackToken } = registry.create('user-1', 'opus', ownThread.id);
+    const { invocationId, callbackToken } = await registry.create('user-1', 'opus', ownThread.id);
 
     // Add a message so thread-context has content
     messageStore.append({
@@ -180,7 +233,8 @@ describe('GET thread-context with workflowSop', () => {
     // Try to read other user's thread context with override
     const response = await app.inject({
       method: 'GET',
-      url: `/api/callbacks/thread-context?invocationId=${invocationId}&callbackToken=${callbackToken}&threadId=${otherThread.id}`,
+      url: `/api/callbacks/thread-context?threadId=${otherThread.id}`,
+      headers: { 'x-invocation-id': invocationId, 'x-callback-token': callbackToken },
     });
 
     assert.equal(response.statusCode, 200);
@@ -194,7 +248,7 @@ describe('GET thread-context with workflowSop', () => {
 
     const thread = threadStore.create('user-1', 'F073 test', 'default');
     threadStore.linkBacklogItem(thread.id, 'item-no-sop');
-    const { invocationId, callbackToken } = registry.create('user-1', 'opus', thread.id);
+    const { invocationId, callbackToken } = await registry.create('user-1', 'opus', thread.id);
 
     messageStore.append({
       userId: 'user-1',
@@ -207,7 +261,8 @@ describe('GET thread-context with workflowSop', () => {
 
     const response = await app.inject({
       method: 'GET',
-      url: `/api/callbacks/thread-context?invocationId=${invocationId}&callbackToken=${callbackToken}`,
+      url: '/api/callbacks/thread-context',
+      headers: { 'x-invocation-id': invocationId, 'x-callback-token': callbackToken },
     });
 
     assert.equal(response.statusCode, 200);

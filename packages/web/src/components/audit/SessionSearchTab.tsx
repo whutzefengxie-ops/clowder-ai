@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useCallback, useState } from 'react';
+import { useIMEGuard } from '@/hooks/useIMEGuard';
 import { apiFetch } from '@/utils/api-client';
 
 interface SearchHit {
@@ -22,10 +23,11 @@ export interface SessionSearchTabProps {
 
 const KIND_BADGE: Record<string, { bg: string; text: string }> = {
   digest: { bg: 'bg-blue-100', text: 'text-blue-700' },
-  event: { bg: 'bg-gray-100', text: 'text-gray-600' },
+  event: { bg: 'bg-cafe-surface-elevated', text: 'text-cafe-secondary' },
 };
 
 export function SessionSearchTab({ threadId, onViewSession }: SessionSearchTabProps) {
+  const ime = useIMEGuard();
   const [query, setQuery] = useState('');
   const [scope, setScope] = useState<'both' | 'digests' | 'transcripts'>('both');
   const [hits, setHits] = useState<SearchHit[] | null>(null);
@@ -64,40 +66,45 @@ export function SessionSearchTab({ threadId, onViewSession }: SessionSearchTabPr
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
+          onCompositionStart={ime.onCompositionStart}
+          onCompositionEnd={ime.onCompositionEnd}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && ime.isComposing()) e.preventDefault();
+          }}
           placeholder="搜索 session 内容..."
-          className="flex-1 text-xs border border-gray-200 rounded px-2 py-1 focus:outline-none focus:border-blue-300"
+          className="flex-1 text-xs rounded-[10px] border-transparent bg-[var(--console-field-bg,var(--console-card-bg))] px-2 py-1 focus:outline-none focus:ring-1 focus:ring-cafe-accent"
         />
         <button
           type="submit"
           disabled={loading || !query.trim()}
-          className="text-[11px] px-2 py-1 rounded bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-50 transition-colors"
+          className="rounded-lg bg-cafe-accent px-3 py-1.5 text-xs font-semibold text-[var(--cafe-surface)] transition-colors hover:bg-cafe-accent-hover disabled:opacity-50"
         >
           搜索
         </button>
       </form>
 
-      <div className="flex items-center gap-1 text-[10px] text-gray-400">
+      <div className="flex items-center gap-1 text-micro text-cafe-muted">
         <span>范围:</span>
         {(['both', 'transcripts', 'digests'] as const).map((s) => (
           <button
             type="button"
             key={s}
             onClick={() => setScope(s)}
-            className={`px-1.5 py-0.5 rounded ${scope === s ? 'bg-blue-50 text-blue-600' : 'hover:bg-gray-100'}`}
+            className={`px-1.5 py-0.5 rounded ${scope === s ? 'bg-conn-blue-bg text-conn-blue-text' : 'hover:bg-cafe-surface-elevated'}`}
           >
             {s === 'both' ? '全部' : s === 'transcripts' ? '对话' : '摘要'}
           </button>
         ))}
       </div>
 
-      {loading && <div className="text-xs text-gray-400 py-2">搜索中...</div>}
-      {error && <div className="text-xs text-red-500 py-2">搜索失败</div>}
+      {loading && <div className="text-xs text-cafe-muted py-2">搜索中...</div>}
+      {error && <div className="text-xs text-conn-red-text py-2">搜索失败</div>}
 
       {hits !== null &&
         !loading &&
         !error &&
         (hits.length === 0 ? (
-          <div className="text-xs text-gray-400 py-2">无匹配结果</div>
+          <div className="text-xs text-cafe-muted py-2">无匹配结果</div>
         ) : (
           <div className="space-y-1.5 max-h-48 overflow-y-auto">
             {hits.map((hit, i) => {
@@ -105,24 +112,24 @@ export function SessionSearchTab({ threadId, onViewSession }: SessionSearchTabPr
               return (
                 <div
                   key={`${hit.sessionId}-${hit.kind}-${i}`}
-                  className="rounded border border-gray-100 px-2 py-1.5 hover:bg-gray-50 transition-colors"
+                  className="rounded-lg bg-[var(--console-shell-bg)] px-2 py-1.5 hover:bg-cafe-surface-elevated transition-colors"
                 >
-                  <div className="flex items-center gap-1.5 text-[11px]">
-                    <span className={`px-1 py-0.5 rounded text-[9px] font-medium ${badge.bg} ${badge.text}`}>
+                  <div className="flex items-center gap-1.5 text-xs">
+                    <span className={`px-1 py-0.5 rounded text-micro font-medium ${badge.bg} ${badge.text}`}>
                       {hit.kind}
                     </span>
                     <button
                       type="button"
                       data-testid="search-result-session"
                       onClick={() => onViewSession?.(hit.sessionId)}
-                      className="font-mono text-blue-500 hover:text-blue-700 hover:underline"
+                      className="font-mono text-conn-blue-text hover:text-conn-blue-text hover:underline"
                     >
                       {hit.sessionId}
                     </button>
                   </div>
-                  <p className="text-[11px] text-gray-700 mt-0.5">{hit.snippet}</p>
+                  <p className="text-xs text-cafe-secondary mt-0.5">{hit.snippet}</p>
                   {hit.pointer.eventNo != null && (
-                    <span className="text-[9px] text-gray-400">event #{hit.pointer.eventNo}</span>
+                    <span className="text-micro text-cafe-muted">event #{hit.pointer.eventNo}</span>
                   )}
                 </div>
               );

@@ -15,9 +15,18 @@
 import type { CatId } from '@cat-cafe/shared';
 import type { RedisClient } from '@cat-cafe/shared/utils';
 import { createModuleLogger } from '../../../../../infrastructure/logger.js';
-import type { AppendMessageInput, StoredMessage } from '../ports/MessageStore.js';
-import { DEFAULT_THREAD_ID, generateSortableId, isDelivered } from '../ports/MessageStore.js';
+import type { AppendMessageInput, StoredMessage, StreamMetadataAugmentInput } from '../ports/MessageStore.js';
+import {
+  applyStreamMetadataAugment,
+  assertValidAppendDeliveryMetadata,
+  assertValidStoredMessageTimestamp,
+  DEFAULT_THREAD_ID,
+  generateSortableId,
+  isDelivered,
+} from '../ports/MessageStore.js';
 import { MessageKeys } from '../redis-keys/message-keys.js';
+import { isSystemUserMessage } from '../visibility.js';
+import { CANCEL_LUA, DELIVER_LUA, REASSIGN_LUA } from './redis-message-delivery-lua-scripts.js';
 import {
   safeParseConnectorSource,
   safeParseContentBlocks,
@@ -25,12 +34,29 @@ import {
   safeParseMentions,
   safeParseMetadata,
   safeParseToolEvents,
+  serializeExtra,
 } from './redis-message-parsers.js';
 
 const log = createModuleLogger('redis-message-store');
 
 const DEFAULT_LIMIT = 50;
-const DEFAULT_TTL_SECONDS = 7 * 24 * 60 * 60; // 7 days
+const DEFAULT_TTL_SECONDS = 0; // persistent — set >0 via env to enable expiry
+
+const REDIS_NUMBER_ALIASES = new Map<string, number>([
+  ['', Number.NaN],
+  ['inf', Number.POSITIVE_INFINITY],
+  ['+inf', Number.POSITIVE_INFINITY],
+  ['-inf', Number.NEGATIVE_INFINITY],
+]);
+
+function parseRedisNumber(raw: string): number {
+  const value = raw.trim();
+  return REDIS_NUMBER_ALIASES.get(value) ?? Number(value);
+}
+
+function parseStoredMessageTimestamp(raw: string | undefined): number {
+  return parseRedisNumber(raw ?? '0');
+}
 
 export class RedisMessageStore {
   private readonly redis: RedisClient;
@@ -48,19 +74,28 @@ export class RedisMessageStore {
   ) {
     this.redis = redis;
     this.onAppend = options?.onAppend;
-    const ttl = options?.ttlSeconds;
-    if (ttl === undefined) {
-      this.ttlSeconds = DEFAULT_TTL_SECONDS;
-    } else if (!Number.isFinite(ttl)) {
-      this.ttlSeconds = DEFAULT_TTL_SECONDS;
-    } else if (ttl <= 0) {
+    const raw = options?.ttlSeconds ?? DEFAULT_TTL_SECONDS;
+    if (!Number.isFinite(raw) || raw <= 0) {
       this.ttlSeconds = null;
     } else {
-      this.ttlSeconds = Math.floor(ttl);
+      this.ttlSeconds = Math.floor(raw);
     }
   }
 
+  /** Resolve ioredis keyPrefix (SCAN doesn't auto-apply it) */
+  private get keyPrefix(): string {
+    return (this.redis.options as { keyPrefix?: string }).keyPrefix ?? '';
+  }
+
+  /** Strip keyPrefix from a raw SCAN key for use with normal commands (which auto-prefix) */
+  private stripPrefix(rawKey: string): string {
+    const p = this.keyPrefix;
+    return p && rawKey.startsWith(p) ? rawKey.slice(p.length) : rawKey;
+  }
+
   async append(msg: AppendMessageInput): Promise<StoredMessage> {
+    assertValidAppendDeliveryMetadata(msg);
+    assertValidStoredMessageTimestamp(msg.timestamp);
     const threadId = msg.threadId ?? DEFAULT_THREAD_ID;
     const id = generateSortableId(msg.timestamp);
     const idempotencyIndexKey = msg.idempotencyKey
@@ -112,7 +147,7 @@ export class RedisMessageStore {
       contentBlocks: msg.contentBlocks ? JSON.stringify(msg.contentBlocks) : '',
       toolEvents: msg.toolEvents ? JSON.stringify(msg.toolEvents) : '',
       metadata: msg.metadata ? JSON.stringify(msg.metadata) : '',
-      extra: msg.extra ? JSON.stringify(msg.extra) : '',
+      extra: msg.extra ? serializeExtra(msg.extra) : '',
       mentions: JSON.stringify(msg.mentions),
       timestamp: String(msg.timestamp),
       ...(msg.thinking ? { thinking: msg.thinking } : {}),
@@ -191,6 +226,14 @@ export class RedisMessageStore {
 
   async getById(id: string): Promise<StoredMessage | null> {
     const data = await this.redis.hgetall(MessageKeys.detail(id));
+    return this.hydrateHash(data);
+  }
+
+  /**
+   * Convert a Redis hash (Record<string, string> from HGETALL) into a StoredMessage.
+   * Shared by getById (direct HGETALL) and parseLuaHgetall (Lua-returned HGETALL).
+   */
+  private hydrateHash(data: Record<string, string>): StoredMessage | null {
     if (!data || !data.id) return null;
 
     const contentBlocks = safeParseContentBlocks(data.contentBlocks);
@@ -210,12 +253,12 @@ export class RedisMessageStore {
       ...(parsedMetadata ? { metadata: parsedMetadata } : {}),
       ...(parsedExtra ? { extra: parsedExtra } : {}),
       mentions: safeParseMentions(data.mentions),
-      timestamp: parseInt(data.timestamp ?? '0', 10),
+      timestamp: parseStoredMessageTimestamp(data.timestamp),
       ...(deletedAt ? { deletedAt, deletedBy: data.deletedBy ?? '' } : {}),
       ...(data._tombstone === '1' ? { _tombstone: true as const } : {}),
       ...(data.thinking ? { thinking: data.thinking } : {}),
-      ...(data.origin === 'stream' || data.origin === 'callback'
-        ? { origin: data.origin as 'stream' | 'callback' }
+      ...(data.origin === 'stream' || data.origin === 'callback' || data.origin === 'briefing'
+        ? { origin: data.origin as 'stream' | 'callback' | 'briefing' }
         : {}),
       ...(data.visibility === 'whisper' ? { visibility: 'whisper' as const } : {}),
       ...(data.whisperTo ? { whisperTo: safeParseMentions(data.whisperTo) } : {}),
@@ -226,6 +269,111 @@ export class RedisMessageStore {
       ...(data.mentionsUser === '1' ? { mentionsUser: true } : {}),
       ...(data.replyTo ? { replyTo: data.replyTo } : {}),
     };
+  }
+
+  /**
+   * Parse a Lua HGETALL return (flat [key, val, key, val, ...] array) into StoredMessage.
+   * Used by CAS methods (markDelivered, markCanceled, reassignUserId) to hydrate
+   * the winning hash state atomically — no separate getById round-trip needed,
+   * eliminating the gap where a transient failure could lose the CAS receipt.
+   */
+  private parseLuaHgetall(result: unknown): StoredMessage | null {
+    if (!Array.isArray(result)) return null;
+    const data: Record<string, string> = {};
+    for (let i = 0; i < result.length; i += 2) {
+      data[result[i] as string] = result[i + 1] as string;
+    }
+    return this.hydrateHash(data);
+  }
+
+  /** Scan all stored message hashes (Redis-only repair helper). */
+  async scanAll(): Promise<StoredMessage[]> {
+    const matchPattern = `${this.keyPrefix}${MessageKeys.detail('*')}`;
+    const messages: StoredMessage[] = [];
+    let cursor = '0';
+    do {
+      const [nextCursor, keys] = await this.redis.scan(cursor, 'MATCH', matchPattern, 'COUNT', 100);
+      cursor = nextCursor;
+      if (keys.length > 0) {
+        const pipeline = this.redis.pipeline();
+        for (const key of keys) {
+          pipeline.hgetall(this.stripPrefix(key));
+        }
+        const results = await pipeline.exec();
+        for (const entry of results ?? []) {
+          const [err, data] = entry!;
+          if (err || !data || typeof data !== 'object') continue;
+          const d = data as Record<string, string>;
+          if (!d.id) continue;
+          const msg = await this.getById(d.id);
+          if (msg) messages.push(msg);
+        }
+      }
+    } while (cursor !== '0');
+    return messages;
+  }
+
+  /**
+   * F233: List messages that carry cross-post metadata (extra.crossPost.sourceThreadId).
+   * Uses SCAN + pipeline HGET to check the `extra` field efficiently, then hydrates
+   * only matching messages. For the FeatTrajectoryCollectorScheduler's CrossPostCollector.
+   */
+  async listCrossPostMessages(): Promise<StoredMessage[]> {
+    const matchPattern = `${this.keyPrefix}${MessageKeys.detail('*')}`;
+    const results: StoredMessage[] = [];
+    let cursor = '0';
+    do {
+      const [nextCursor, keys] = await this.redis.scan(cursor, 'MATCH', matchPattern, 'COUNT', 200);
+      cursor = nextCursor;
+      if (keys.length === 0) continue;
+      // Pipeline: fetch only the `extra` field to check for cross-post metadata
+      const pipeline = this.redis.pipeline();
+      for (const key of keys) pipeline.hget(this.stripPrefix(key), 'extra');
+      const extraResults = await pipeline.exec();
+      // Collect IDs of messages with cross-post metadata
+      const matchedIds: string[] = [];
+      for (let i = 0; i < (extraResults?.length ?? 0); i++) {
+        const [err, extraRaw] = extraResults![i]!;
+        if (err || !extraRaw || typeof extraRaw !== 'string') continue;
+        try {
+          const parsed = JSON.parse(extraRaw);
+          if (parsed?.crossPost?.sourceThreadId) {
+            // Extract ID from key: strip prefix, then strip "msg:" prefix
+            const stripped = this.stripPrefix(keys[i]);
+            const id = stripped.replace(/^msg:/, '');
+            matchedIds.push(id);
+          }
+        } catch {
+          // malformed JSON — skip
+        }
+      }
+      // Hydrate matched messages — only include delivered ones
+      for (const id of matchedIds) {
+        const msg = await this.getById(id);
+        if (msg && (!msg.deliveryStatus || msg.deliveryStatus === 'delivered')) {
+          results.push(msg);
+        }
+      }
+    } while (cursor !== '0');
+    return results;
+  }
+
+  /**
+   * Reassign a message to a different userId and move user-timeline membership.
+   * PR #1193: atomic Lua — derives currentUserId and effectiveOrder from the hash
+   * inside the script, eliminating stale-snapshot races with markDelivered.
+   */
+  async reassignUserId(id: string, nextUserId: string): Promise<StoredMessage | null> {
+    const hashKey = MessageKeys.detail(id);
+    const ttlArg = String(this.ttlSeconds ?? 0);
+    const result = await this.redis.eval(REASSIGN_LUA, 1, hashKey, id, nextUserId, this.keyPrefix, ttlArg);
+
+    // -1 = message not found in hash
+    if (result === -1) return null;
+    // 0 = same user (no-op) — no mutation committed, safe to read separately
+    if (result === 0) return this.getById(id);
+    // CAS won: result is HGETALL flat array — hydrate atomically (no getById gap)
+    return this.parseLuaHgetall(result);
   }
 
   async getRecent(limit?: number, userId?: string): Promise<StoredMessage[]> {
@@ -372,7 +520,32 @@ export class RedisMessageStore {
   async getByThread(threadId: string, limit?: number, userId?: string): Promise<StoredMessage[]> {
     const n = limit ?? DEFAULT_LIMIT;
     const key = MessageKeys.thread(threadId);
-    return this.fetchDeliveredDesc(key, n, userId ? (m) => m.userId === userId : undefined);
+    return this.fetchDeliveredDesc(key, n, userId ? (m) => m.userId === userId || isSystemUserMessage(m) : undefined);
+  }
+
+  async getByThreadIncludingQueued(threadId: string, limit?: number, userId?: string): Promise<StoredMessage[]> {
+    const n = limit ?? DEFAULT_LIMIT;
+    const key = MessageKeys.thread(threadId);
+    const CHUNK = Math.max(n, 50);
+    const result: StoredMessage[] = [];
+    let offset = 0;
+
+    while (result.length < n) {
+      const ids = await this.redis.zrevrange(key, offset, offset + CHUNK - 1);
+      if (ids.length === 0) break;
+      const messages = await this.hydrateMessages(ids);
+      for (const msg of messages) {
+        if (msg.deletedAt) continue;
+        if (msg.deliveryStatus === 'canceled') continue;
+        if (userId && msg.userId !== userId && !isSystemUserMessage(msg)) continue;
+        result.push(msg);
+        if (result.length >= n) break;
+      }
+      if (ids.length < CHUNK) break;
+      offset += CHUNK;
+    }
+
+    return result.slice(0, n).reverse();
   }
 
   /**
@@ -423,7 +596,7 @@ export class RedisMessageStore {
     const messages = await this.hydrateMessages(ids, { includeDeleted: true });
     const delivered = messages.filter(isDelivered);
     if (!userId) return delivered;
-    return delivered.filter((m) => m.userId === userId);
+    return delivered.filter((m) => m.userId === userId || isSystemUserMessage(m));
   }
 
   async getByThreadBefore(
@@ -435,7 +608,7 @@ export class RedisMessageStore {
   ): Promise<StoredMessage[]> {
     const n = limit ?? DEFAULT_LIMIT;
     const key = MessageKeys.thread(threadId);
-    const userFilter = userId ? (m: StoredMessage) => m.userId === userId : undefined;
+    const userFilter = userId ? (m: StoredMessage) => m.userId === userId || isSystemUserMessage(m) : undefined;
 
     if (!beforeId) {
       // F117: Chunked desc scan — collect N delivered, scan until full or exhausted
@@ -521,7 +694,7 @@ export class RedisMessageStore {
       for (const id of chunk) {
         if (filtered.length >= limit) break;
         const score = await this.redis.zscore(key, id);
-        if (score !== null && parseInt(score, 10) === timestamp && id >= beforeId) {
+        if (score !== null && parseRedisNumber(score) === timestamp && id >= beforeId) {
           continue;
         }
         filtered.push(id);
@@ -557,7 +730,7 @@ export class RedisMessageStore {
       const validIds: string[] = [];
       for (const id of chunk) {
         const score = await this.redis.zscore(key, id);
-        if (score !== null && Number.parseInt(score, 10) === timestamp && id >= beforeId) {
+        if (score !== null && parseRedisNumber(score) === timestamp && id >= beforeId) {
           continue;
         }
         validIds.push(id);
@@ -690,44 +863,106 @@ export class RedisMessageStore {
     return count;
   }
 
-  /** F096: Update message extra data (for interactive block state persistence). */
+  /** F096: Update message extra data (merge semantics — preserves existing fields). */
   async updateExtra(id: string, extra: NonNullable<StoredMessage['extra']>): Promise<StoredMessage | null> {
     const msg = await this.getById(id);
     if (!msg) return null;
-    await this.redis.hset(MessageKeys.detail(id), { extra: JSON.stringify(extra) });
-    msg.extra = extra;
+    const merged = { ...msg.extra, ...extra };
+    await this.redis.hset(MessageKeys.detail(id), { extra: serializeExtra(merged) });
+    msg.extra = merged;
     return msg;
   }
 
-  /** F098-D: Mark a queued message as delivered (set deliveredAt timestamp). */
+  async augmentStreamMetadata(id: string, patch: StreamMetadataAugmentInput): Promise<StoredMessage | null> {
+    const msg = await this.getById(id);
+    if (!msg) return null;
+    const augmented = applyStreamMetadataAugment(msg, patch);
+    const fields: Record<string, string> = {};
+    if (patch.thinking && augmented.thinking) fields.thinking = augmented.thinking;
+    if (patch.metadata && augmented.metadata) fields.metadata = JSON.stringify(augmented.metadata);
+    if (patch.toolEvents?.length && augmented.toolEvents) fields.toolEvents = JSON.stringify(augmented.toolEvents);
+    if (patch.replyTo && augmented.replyTo) fields.replyTo = augmented.replyTo;
+    if (patch.mentionsUser && augmented.mentionsUser) fields.mentionsUser = '1';
+    if (patch.extra && augmented.extra) fields.extra = serializeExtra(augmented.extra);
+    if (Object.keys(fields).length > 0) {
+      await this.redis.hset(MessageKeys.detail(id), fields);
+    }
+    return augmented;
+  }
+
+  /**
+   * F098-D: Mark a queued message as delivered at an admitted non-negative integral Date value.
+   * PR #1193: atomic Lua — reads userId/threadId inside the script so concurrent
+   * reassignUserId cannot cause the score update to land on a stale user key.
+   */
   async markDelivered(id: string, deliveredAt: number): Promise<StoredMessage | null> {
-    const msg = await this.getById(id);
-    if (!msg) return null;
-    if (msg.deliveryStatus !== 'queued') return msg; // only transition queued → delivered
-    const pipeline = this.redis.multi();
-    pipeline.hset(MessageKeys.detail(id), {
-      deliveredAt: String(deliveredAt),
-      deliveryStatus: 'delivered',
-    });
-    // Update sorted set scores so history queries return messages at delivery
-    // position, not original send-time slot (Bug A: queue message ordering).
-    const scoreStr = String(deliveredAt);
-    pipeline.zadd(MessageKeys.thread(msg.threadId), scoreStr, id);
-    pipeline.zadd(MessageKeys.TIMELINE, scoreStr, id);
-    pipeline.zadd(MessageKeys.user(msg.userId), scoreStr, id);
-    await pipeline.exec();
-    msg.deliveredAt = deliveredAt;
-    msg.deliveryStatus = 'delivered';
-    return msg;
+    assertValidStoredMessageTimestamp(deliveredAt);
+    const hashKey = MessageKeys.detail(id);
+    // Atomic CAS: queued → delivered, anything else → no-op.
+    // Lua returns HGETALL on CAS win (no separate getById round-trip needed).
+    const result = await this.redis.eval(DELIVER_LUA, 1, hashKey, id, String(deliveredAt), this.keyPrefix);
+    if (result === 0) return null;
+    return this.parseLuaHgetall(result);
   }
 
-  /** F117: Mark a queued message as canceled (withdraw/clear). */
+  /**
+   * F117: Mark a queued message as canceled (withdraw/clear).
+   * PR #1193: CAS guard — only transitions queued → canceled. A delivered or
+   * immediate message is left untouched (no-op), preventing cancel from
+   * overwriting a completed delivery.
+   */
   async markCanceled(id: string): Promise<StoredMessage | null> {
-    const msg = await this.getById(id);
-    if (!msg) return null;
-    await this.redis.hset(MessageKeys.detail(id), { deliveryStatus: 'canceled' });
-    msg.deliveryStatus = 'canceled';
-    return msg;
+    const hashKey = MessageKeys.detail(id);
+    // Atomic CAS: queued → canceled, anything else → no-op.
+    // Lua returns HGETALL on CAS win (no separate getById round-trip needed).
+    const result = await this.redis.eval(CANCEL_LUA, 1, hashKey);
+    if (result === 0) return null;
+    return this.parseLuaHgetall(result);
+  }
+
+  /**
+   * Atomic content-dedup claim via SET NX PX. Returns true on first claim within the window,
+   * false if an identical claim is still live (concurrent or recent byte-identical post). This
+   * is the race-safe gate for the callback exact-duplicate scan.
+   */
+  async claimContentDedupKey(key: string, ttlMs: number): Promise<boolean> {
+    const claimed = await this.redis.set(
+      MessageKeys.contentDedup(key),
+      '1',
+      'PX',
+      Math.max(1, Math.floor(ttlMs)),
+      'NX',
+    );
+    return claimed === 'OK';
+  }
+
+  /**
+   * #697: Scan for message IDs matching a given deliveryStatus.
+   * Uses SCAN + pipeline HGET pattern (same as InvocationRecordStore.scanByStatus).
+   * Called by StartupReconciler to find orphaned queued messages after restart.
+   */
+  async scanByDeliveryStatus(status: string): Promise<string[]> {
+    const matchPattern = `${this.keyPrefix}${MessageKeys.detail('*')}`;
+    const ids: string[] = [];
+    let cursor = '0';
+    do {
+      const [nextCursor, keys] = await this.redis.scan(cursor, 'MATCH', matchPattern, 'COUNT', 200);
+      cursor = nextCursor;
+      if (keys.length > 0) {
+        const pipeline = this.redis.pipeline();
+        for (const key of keys) {
+          pipeline.hget(this.stripPrefix(key), 'deliveryStatus');
+        }
+        const results = await pipeline.exec();
+        for (let i = 0; i < keys.length; i++) {
+          const [err, val] = results?.[i] ?? [null, null];
+          if (!err && val === status) {
+            ids.push(this.stripPrefix(keys[i]!).replace(/^msg:/, ''));
+          }
+        }
+      }
+    } while (cursor !== '0');
+    return ids;
   }
 
   /** Hydrate message IDs into full StoredMessage objects */
@@ -766,11 +1001,13 @@ export class RedisMessageStore {
         ...(parsedMetadata ? { metadata: parsedMetadata } : {}),
         ...(parsedExtra ? { extra: parsedExtra } : {}),
         mentions: safeParseMentions(d.mentions),
-        timestamp: parseInt(d.timestamp ?? '0', 10),
+        timestamp: parseStoredMessageTimestamp(d.timestamp),
         ...(deletedAt ? { deletedAt, deletedBy: d.deletedBy ?? '' } : {}),
         ...(d._tombstone === '1' ? { _tombstone: true as const } : {}),
         ...(d.thinking ? { thinking: d.thinking } : {}),
-        ...(d.origin === 'stream' || d.origin === 'callback' ? { origin: d.origin as 'stream' | 'callback' } : {}),
+        ...(d.origin === 'stream' || d.origin === 'callback' || d.origin === 'briefing'
+          ? { origin: d.origin as 'stream' | 'callback' | 'briefing' }
+          : {}),
         ...(d.visibility === 'whisper' ? { visibility: 'whisper' as const } : {}),
         ...(d.whisperTo ? { whisperTo: safeParseMentions(d.whisperTo) } : {}),
         ...(d.revealedAt ? { revealedAt: parseInt(d.revealedAt, 10) } : {}),

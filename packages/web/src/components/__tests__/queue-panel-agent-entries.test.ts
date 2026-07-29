@@ -17,6 +17,18 @@ vi.mock('@/hooks/useCoCreatorConfig', () => ({
   }),
 }));
 
+const TEST_CATS = [
+  { id: 'codex', displayName: '缅因猫', variantLabel: 'sol' },
+  { id: 'opus', displayName: '布偶猫', variantLabel: 'Fable' },
+];
+
+vi.mock('@/hooks/useCatData', () => ({
+  useCatData: () => ({
+    cats: TEST_CATS,
+    getCatById: (id: string) => TEST_CATS.find((cat) => cat.id === id),
+  }),
+}));
+
 vi.mock('@/utils/api-client', () => ({
   apiFetch: vi.fn(async () => ({ ok: true, json: async () => ({}) })),
 }));
@@ -78,7 +90,8 @@ describe('QueuePanel agent entry rendering (F122B AC-B7)', () => {
 
     const text = container.textContent ?? '';
     // Agent entry should show handoff format
-    expect(text).toContain('codex → opus');
+    expect(text).toContain('缅因猫（sol） → 布偶猫（Fable）');
+    expect(text).not.toContain('codex → opus');
     // User entry should show configured co-creator name
     expect(text).toContain('始皇帝');
   });
@@ -95,7 +108,7 @@ describe('QueuePanel agent entry rendering (F122B AC-B7)', () => {
     useChatStore.setState({ queue: [AGENT_ENTRY] });
     act(() => root.render(React.createElement(QueuePanel, { threadId: 'thread-1' })));
 
-    const agentRow = container.querySelector('.bg-\\[\\#F3EEFA\\]');
+    const agentRow = container.querySelector('.bg-\\[var\\(--color-cocreator-surface\\)\\]');
     expect(agentRow).not.toBeNull();
   });
 
@@ -106,7 +119,7 @@ describe('QueuePanel agent entry rendering (F122B AC-B7)', () => {
     const text = container.textContent ?? '';
     expect(text).not.toContain('自动');
     expect(text).not.toContain('→');
-    const agentRow = container.querySelector('.bg-\\[\\#F3EEFA\\]');
+    const agentRow = container.querySelector('.bg-\\[var\\(--color-cocreator-surface\\)\\]');
     expect(agentRow).toBeNull();
   });
 

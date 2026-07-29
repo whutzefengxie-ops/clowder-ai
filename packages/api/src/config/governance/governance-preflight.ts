@@ -6,7 +6,7 @@
  * so the caller can surface instructions instead of silently blocking.
  * Fixes: clowder-ai#123 (preflight blocks new projects without guidance)
  */
-import { lstat, readFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { isSameProject } from '../../utils/monorepo-root.js';
 import type { Provider } from './governance-pack.js';
@@ -25,18 +25,14 @@ const CAT_PROVIDER_MAP: Record<string, Provider> = {
   anthropic: 'claude',
   openai: 'codex',
   google: 'gemini',
+  kimi: 'kimi',
 };
 
 const PROVIDER_CONFIG_FILE: Record<Provider, string> = {
   claude: 'CLAUDE.md',
   codex: 'AGENTS.md',
   gemini: 'GEMINI.md',
-};
-
-const PROVIDER_SKILLS_DIR: Record<Provider, string> = {
-  claude: '.claude/skills',
-  codex: '.codex/skills',
-  gemini: '.gemini/skills',
+  kimi: 'KIMI.md',
 };
 
 export async function checkGovernancePreflight(
@@ -71,9 +67,6 @@ export async function checkGovernancePreflight(
 
   const govProvider = catProvider ? CAT_PROVIDER_MAP[catProvider] : undefined;
   const configFile = govProvider ? PROVIDER_CONFIG_FILE[govProvider] : 'CLAUDE.md';
-  const skillsDirs = govProvider
-    ? [PROVIDER_SKILLS_DIR[govProvider]]
-    : ['.claude/skills', '.codex/skills', '.gemini/skills'];
 
   try {
     const content = await readFile(join(projectPath, configFile), 'utf-8');
@@ -94,27 +87,10 @@ export async function checkGovernancePreflight(
     };
   }
 
-  let hasSkillsLink = false;
-  for (const dir of skillsDirs) {
-    try {
-      const stat = await lstat(join(projectPath, dir));
-      if (stat.isSymbolicLink()) {
-        hasSkillsLink = true;
-        break;
-      }
-    } catch {
-      // continue
-    }
-  }
-  if (!hasSkillsLink) {
-    const dirLabel = govProvider ? PROVIDER_SKILLS_DIR[govProvider] : 'skills';
-    return {
-      ready: false,
-      needsBootstrap: true,
-      reason: `No ${dirLabel} symlink in ${projectPath}. Governance bootstrap may have failed.`,
-      bootstrapCommand: `POST /api/governance/confirm { "projectPath": "${projectPath}" }`,
-    };
-  }
-
+  // Skills check removed: skill deployment (symlinks) is a separate concern
+  // handled by drift detection (F228). When all skills are globally disabled,
+  // governance bootstrap legitimately creates zero symlinks — that is NOT a
+  // governance failure. The old check caused false governance_blocked when
+  // F228 changed the symlink layout or when no skills were enabled.
   return { ready: true };
 }

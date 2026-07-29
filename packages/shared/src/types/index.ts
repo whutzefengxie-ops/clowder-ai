@@ -3,6 +3,35 @@
  * 导出所有类型定义
  */
 
+// F093 World Engine types (re-exported from schemas for convenience)
+export type {
+  CanonPromotionRecord,
+  CanonStatus,
+  CanonSummaryEntry,
+  CareLoopHint,
+  CharacterCoreIdentity,
+  CharacterGrowthState,
+  CharacterInnerDrive,
+  CharacterMaskOverlay,
+  CharacterRecord,
+  CharacterRelationshipTension,
+  CharacterVoiceAndImage,
+  JsonPatchOperation,
+  RelationshipBond,
+  SceneRecord,
+  SceneStatus,
+  WorldAction,
+  WorldActionEnvelope,
+  WorldActorKind,
+  WorldActorRef,
+  WorldContextEnvelope,
+  WorldEventEntry,
+  WorldEventType,
+  WorldMode,
+  WorldRecallResult,
+  WorldRecord,
+  WorldStatus,
+} from '../schemas/world.js';
 // A2A Protocol types (F050 Phase 3)
 export type {
   A2AAgentCard,
@@ -14,6 +43,22 @@ export type {
   A2ATask,
   A2ATaskStatus,
 } from './a2a.js';
+// F178 Phase B: agent-key record + verify result
+export type { AgentKeyRecord, AgentKeyVerifyResult } from './agent-key.js';
+// F178 Phase B: agent-key reason taxonomy
+export {
+  AGENT_KEY_FAILURE_REASONS,
+  type AgentKeyFailureReason,
+  isAgentKeyFailureReason,
+} from './agent-key-reasons.js';
+// Approval Hub types (F246 统一审批中心)
+export type {
+  ApprovalFeatureId,
+  ApprovalItem,
+  ApprovalItemStatus,
+  SettledApprovalItem,
+  SettledStatus,
+} from './approval-hub.js';
 // Authorization types (猫猫授权系统)
 export type {
   AuthorizationAuditEntry,
@@ -57,6 +102,17 @@ export type {
   ThreadPhase,
   UpdateBacklogDispatchProgressInput,
 } from './backlog.js';
+// F233 Phase B + Phase C: Ball Custody event-stream types (event-sourcing; impl stays in api)
+export type {
+  BallCustodyEvent,
+  BallCustodyProjection,
+  BallEuthanasiaKind, // Phase C C1a (KD-C1/C2): cloud R1 P2 修正 — C1b/C1c consumers 经 @cat-cafe/shared barrel 拿 type
+  BallEventClassification,
+  BallEventKind,
+  BallIntent,
+  BallResolveMode,
+  BallState,
+} from './ball-custody.js';
 // Brake types (F085 Phase 4 — 平台级健康守护)
 export type {
   BrakeCheckinRequest,
@@ -65,11 +121,35 @@ export type {
   BrakeSettings,
   BrakeState,
 } from './brake.js';
+// F183 Phase B0: Bubble pipeline identity contract + invariant diagnostics
+export {
+  BUBBLE_EVENT_TYPES,
+  BUBBLE_KINDS,
+  type BubbleEventType,
+  type BubbleInvariantViolation,
+  type BubbleKind,
+  type BubbleOriginPhase,
+  type BubbleRecoveryAction,
+  type BubbleSourcePath,
+  type BubbleStableIdentity,
+  type BubbleViolationKind,
+  isBubbleEventType,
+  isBubbleKind,
+} from './bubble-pipeline.js';
+// F174 Phase A: shared reason taxonomy for callback auth failures
+export {
+  CALLBACK_AUTH_FAILURE_REASONS,
+  type CallbackAuthFailureReason,
+  isCallbackAuthFailureReason,
+} from './callback-auth-reasons.js';
+// F178 Phase B: unified callback principal (KD-3)
+export type { CallbackPrincipal } from './callback-principal.js';
 // Capability types (F041 统一能力模型)
 export type {
   BootstrapAction,
   BootstrapReport,
   CapabilitiesConfig,
+  CapabilityAuditEntry,
   CapabilityBoardItem,
   CapabilityBoardResponse,
   CapabilityEntry,
@@ -84,25 +164,34 @@ export type {
   GovernanceHealthSummary,
   GovernancePackMeta,
   GovernanceRule,
+  LockVersion,
+  McpDeleteParams,
+  McpEnvEntry,
+  McpInstallPreview,
+  McpInstallRequest,
   McpServerDescriptor,
+  McpSyncState,
   McpToolInfo,
+  McpTransport,
+  ProbeState,
   SkillHealthSummary,
 } from './capability.js';
 // Cat types
 export type {
+  AgyProfileConfig,
   CatColor,
   CatConfig,
+  /** @deprecated clowder-ai#340: Use ClientId instead. */
   CatProvider,
   CatState,
   CatStatus,
-} from './cat.js';
-export {
-  CAT_CONFIGS,
-  findCatByMention,
-  getAllCatIds,
+  ClientId,
 } from './cat.js';
 // Cat breed/variant types (Breed+Variant two-layer schema)
 export type {
+  // F136 Phase 4: Account config types
+  AccountConfig,
+  AccountProtocol,
   CatBreed,
   CatCafeConfig,
   CatCafeConfigV1,
@@ -113,23 +202,157 @@ export type {
   // F067: Co-Creator config for @ mention routing
   CoCreatorConfig,
   ContextBudget,
+  CredentialEntry,
   MissionHubSelfClaimScope,
   // F032: Roster types for collaboration rules
   ReviewPolicy,
   Roster,
   RosterEntry,
 } from './cat-breed.js';
+// F182: Cat routing error types
+export type { CatAlternative, CatRoutingError } from './cat-routing.js';
+// F212: CLI error diagnostics (cross-package data contract; classifier/sanitizer impl stays in api)
+export type { CliDiagnostics, CliErrorReasonCode } from './cli-diagnostics.js';
+export type { BuiltinAccountClient } from './client-routing.js';
+export {
+  builtinAccountFamilyForClient,
+  builtinAccountIdForClient,
+  protocolForClient,
+} from './client-routing.js';
+// Command types (F142 Phase B — slash command framework)
+export type {
+  CommandSource,
+  CommandSurface,
+  ParsedCommand,
+  SlashCommandDefinition,
+} from './command.js';
+// Community Ops Event types (F168 Phase A/B — event-sourcing engine)
+export type {
+  CommunityClosureWaiver,
+  CommunityEvent,
+  CommunityEventClassification,
+  CommunityEventKind,
+  CommunityNextOwner,
+  CommunityObjectProjection,
+  CommunityObjectState,
+  GitHubAuthorAssociation,
+} from './community-event.js';
+export type {
+  CommunityIssueItem,
+  CommunityRepoConfig,
+  ConsensusResult,
+  ConsensusState,
+  CreateCommunityIssueInput,
+  DirectionCardPayload,
+  GuardianAssignment,
+  IntakeChecklistItem,
+  IssueState,
+  IssueType,
+  ParseRouteRecommendationResult,
+  PrBoardGroup,
+  QuestionGrade,
+  QuestionId,
+  QuestionResult,
+  ReplyState,
+  RouteAcceptance,
+  RouteRecommendation,
+  RouteSource,
+  TriageConfidence,
+  TriageEntry,
+  UpdateCommunityIssueInput,
+  Verdict,
+} from './community-issue.js';
+// Community Issue types (F168 社区事务编排引擎)
+export {
+  DEFAULT_INTAKE_CHECKLIST,
+  deriveTriageConfidence,
+  parseRouteRecommendation,
+  validateIntakeChecklist,
+} from './community-issue.js';
+// Community Issue Draft types (F235)
+export type {
+  CommunityIssueDraft,
+  CommunityIssueDraftId,
+  CommunityIssueDraftSourceType,
+  CommunityIssueDraftStatus,
+  CreateCommunityIssueDraftInput,
+} from './community-issue-draft.js';
+export { createCommunityIssueDraft, generateCommunityIssueDraftId } from './community-issue-draft.js';
+// F168 Phase C: Community Role Registry (engine routes by role, never cat name)
+export {
+  COMMUNITY_ROLES,
+  type CommunityRole,
+  isCommunityRole,
+  isRoleCapability,
+  ROLE_CAPABILITIES,
+  type RoleCapability,
+  type RoleExecutor,
+  type RoleResolver,
+} from './community-role.js';
+// F229: 猫猫球前台猫 shared types
+export type {
+  ConciergeBallState,
+  ConciergeCardAction,
+  ConciergeConfig,
+  ConciergeThreadKind,
+  ConfirmationStatus,
+  GateKeepingThreadKind,
+  InvestigationAnchor,
+  InvestigationJob,
+  InvestigationJobStatus,
+  InvestigationReport,
+  PendingConfirmation,
+  RelayReceipt,
+  RelayReceiptStatus,
+  ThreadKind,
+  TriagePlan,
+  TriagePlanIntent,
+  TriagePlanResult,
+  TriagePlanStatus,
+  TriagePlanTarget,
+} from './concierge.js';
+export {
+  BALL_SIZE_DEFAULT,
+  BALL_SIZE_MAX,
+  BALL_SIZE_MIN,
+  CONCIERGE_CONFIG_DEFAULTS,
+  clampBallSize,
+} from './concierge.js';
+// Unified Config Field types (F240 KD-15 — shared by Plugin + IM Connector)
+export type {
+  ActionDef,
+  ConfigField,
+  ConfigFieldType,
+  InputConfigField,
+  ListConfigField,
+  OperationConfigField,
+  OperationState,
+  SelectConfigField,
+  ToggleConfigField,
+  ValueConfigField,
+} from './config-field.js';
+export { isOperationField, isValueField } from './config-field.js';
+export { decodeFieldValue, encodeFieldValue } from './config-field-codec.js';
 // Connector types (F97 外部信息源抽象)
 export type {
   ConnectorDefinition,
+  ConnectorIconSpec,
   ConnectorSource,
-  ConnectorTailwindTheme,
   ConnectorThreadBinding,
   OutboundDeliveryTarget,
+  ReplyPreview,
+  ReplyPreviewKind,
+  SchedulerLifecycleEvent,
+  SchedulerMessageExtra,
+  SchedulerToastPayload,
 } from './connector.js';
 export {
   getAllConnectorDefinitions,
   getConnectorDefinition,
+  isStaticConnectorId,
+  registerConnectorDefinition,
+  SCHEDULER_TRIGGER_PREFIX,
+  unregisterConnectorDefinition,
 } from './connector.js';
 // Deliberate types (4-E 两轮制 - 类型预埋)
 export type {
@@ -138,11 +361,89 @@ export type {
   DeliberateSession,
   DeliberateTransition,
 } from './deliberate.js';
+// Dispatch proposal types (F246 Phase B: F193 E3 cross-thread dispatch)
+export type { DispatchProposal, DispatchProposalStatus, EffectClass } from './dispatch-proposal.js';
+// Dossier distillation proposal types (F208 Phase E 画像蒸馏)
+export type {
+  DistillationEvidenceRef,
+  DistillationProposalStatus,
+  DistillationSourceEvent,
+  DossierDistillationProposal,
+} from './dossier-distillation.js';
+export {
+  DISTILLATION_SOURCE_EVENTS,
+  isDistillationSourceEvent,
+} from './dossier-distillation.js';
+// F233 Phase A: 值班简报 DTO (pure-projection aggregator output; impl stays in api)
+export type { BallEntry, BallEntryKind, DutyBriefing, DutyBriefingCounts } from './duty-briefing.js';
+// F227: Event Memory types (cognitive-transition event index)
+export {
+  COGNITIVE_TRANSITIONS,
+  type CognitiveTransition,
+  EVENT_CONFIDENCES,
+  EVENT_TRIGGERS,
+  type EventConfidence,
+  type EventMemoryId,
+  type EventMemoryRecord,
+  type EventTrigger,
+  generateEventId,
+  isEventMemoryRecord,
+  isValidOwnerUserId,
+  type StoredEventMemory,
+} from './event-memory.js';
 // External project types (F076 跨项目作战面板)
 export type {
   CreateExternalProjectInput,
   ExternalProject,
 } from './external-project.js';
+// F233 Phase C C2a: Feat Trajectory types (OQ-8 三源 source-contract: event-stream / historical-stitched / git-ref-snapshot)
+export type {
+  BallShapedTrajectoryKind,
+  FeatThreadJoinMethod,
+  FeatThreadJoinProvenance,
+  FeatTrajectoryEntry,
+  FeatTrajectoryKind,
+  FeatTrajectoryProjection,
+  FeatTrajectorySource,
+  GitRefEntryIdParts,
+  GitRefSnapshot,
+  GitShapedTrajectoryKind,
+  HistoricalTrajectoryKind,
+  StaleBucket,
+  TrajectoryProvenance,
+} from './feat-trajectory.js';
+export { makeGitRefEntryId } from './feat-trajectory.js';
+// F245: Friction Signal Eval types
+export type {
+  ActionableFrictionCandidate,
+  ClassifiedFrictionCluster,
+  FrictionChannel,
+  FrictionCluster,
+  FrictionClusterActionability,
+  FrictionClusterMember,
+  FrictionFollowupDraft,
+  FrictionRollupInput,
+  FrictionRollupReport,
+  FrictionRollupSourceSelector,
+  FrictionRootCause,
+  FrictionSensorForm,
+  FrictionSeverity,
+  FrictionSignal,
+  FrictionTailSummary,
+  ReferenceOnlyFrictionCluster,
+} from './friction-signal.js';
+// F222: Frustration Auto-Issue types
+export type {
+  CreateFrustrationIssueInput,
+  FrustrationContextMessage,
+  FrustrationContextToolCall,
+  FrustrationIssue,
+  FrustrationIssueContext,
+  FrustrationIssueId,
+  FrustrationIssueStatus,
+  FrustrationSignalType,
+} from './frustration-issue.js';
+export { createFrustrationIssue, generateFrustrationIssueId } from './frustration-issue.js';
 // Game engine types (F101)
 export type {
   ActionDefinition,
@@ -176,6 +477,7 @@ export {
 export type {
   CatId,
   MessageId,
+  ProposalId,
   SessionId,
   ThreadId,
   UserId,
@@ -183,14 +485,25 @@ export type {
 export {
   createCatId,
   createMessageId,
+  createProposalId,
   createSessionId,
   createThreadId,
   createUserId,
   generateId,
   generateMessageId,
+  generateProposalId,
   generateSessionId,
   generateThreadId,
 } from './ids.js';
+// F237: Injection Trace types (v0 — observability layer)
+export type {
+  DeliveryChannel,
+  InjectionStage,
+  InjectionTraceDetail,
+  InjectionTraceSummary,
+  ObservedSegment,
+  StageDeliveryDecision,
+} from './injection-trace.js';
 // Intent Card + Need Audit types (F076 需求翻译官)
 export type {
   CreateIntentCardInput,
@@ -230,11 +543,48 @@ export type {
   LimbActionLogEntry,
   LimbAuthLevel,
   LimbCapability,
+  LimbCommandParamSchema,
+  LimbCommandSchema,
   LimbInvokeResult,
   LimbLease,
   LimbNodeRecord,
   LimbNodeStatus,
 } from './limb.js';
+// Marketplace types (F146 MCP Marketplace Control Plane)
+export type {
+  InstallMode,
+  InstallPlan,
+  MarketplaceAdapter,
+  MarketplaceArtifactKind,
+  MarketplaceEcosystem,
+  MarketplaceSearchQuery,
+  MarketplaceSearchResult,
+  TrustLevel,
+} from './marketplace.js';
+export {
+  INSTALL_MODES,
+  MARKETPLACE_ARTIFACT_KINDS,
+  MARKETPLACE_ECOSYSTEMS,
+  TRUST_LEVELS,
+} from './marketplace.js';
+// Meeting types (F195 Phase C — Meeting Copilot)
+export type {
+  MeetingParticipant,
+  MeetingSession,
+  MeetingStatus,
+  ParticipantRole,
+} from './meeting.js';
+export {
+  createMeetingSession,
+  transitionMeetingStatus,
+  validateParticipant,
+} from './meeting.js';
+// Meeting context block (F195 Phase C — untrusted transcript isolation)
+export type {
+  MeetingContextBlock,
+  MeetingContextProvenance,
+} from './meeting-context-block.js';
+export { createMeetingContextBlock } from './meeting-context-block.js';
 // Memory types (F3-lite 显式记忆)
 export type {
   MemoryEntry,
@@ -257,6 +607,16 @@ export {
   createCatMessage,
   createUserMessage,
 } from './message.js';
+// Mount Rules types (F228 Skill 挂载规则解耦)
+export type {
+  CustomMountPointRule,
+  MountRuleEntry,
+  MountRules,
+  SkillsSyncState,
+  StandardMountPointId,
+  StandardMountPointRule,
+} from './mount-rules.js';
+export { DEFAULT_MOUNT_RULES, STANDARD_MOUNT_POINT_IDS } from './mount-rules.js';
 // Multi-mention types (F086 Cat Orchestration)
 export type {
   MultiMentionRequest,
@@ -295,6 +655,65 @@ export type {
   ResolverType,
   WorkflowAction,
 } from './pack.js';
+// Plugin Framework types (F202 声明式插件注册)
+export type {
+  PluginConfigField,
+  PluginHealthCheck,
+  PluginInfo,
+  PluginManifest,
+  PluginResourceDef,
+  PluginResourceStatus,
+  PluginStatus,
+} from './plugin.js';
+export type {
+  CollectionSignalKind,
+  ProfileUpdateApproveOverrides,
+  ProfileUpdateProposal,
+  ProfileUpdateProposalStatus,
+  ProfileUpdateSignalProvenance,
+  ProfileUpdateTargetLayer,
+} from './profile-update.js';
+// Profile update proposal types (F231 Phase C 养熟循环)
+export {
+  COLLECTION_SIGNAL_KINDS,
+  isAllowedCollectionSignal,
+} from './profile-update.js';
+export type {
+  ActiveParticipantInput,
+  AssemblerInput,
+  BootcampInput,
+  CallableMentionsData,
+  CatConfigSnapshot,
+  CrossThreadHintInput,
+  DirectMessageInfo,
+  GovernanceTier,
+  HookManifest,
+  HookResolver,
+  HookStage,
+  PingPongInput,
+  PromptPatch,
+  RegisteredHook,
+  ResolveResult,
+  RoutingMode,
+  SafetyTier,
+  SopStageInput,
+  TeammateSnapshot,
+  TraceEvent,
+  TraceEventDisabled,
+  TraceEventFired,
+  TraceEventObserved,
+  TraceEventSkipped,
+  TraceEventSummary,
+  TransparencyTier,
+  WorldContextInput,
+} from './prompt-hook.js';
+// Proposal types (F128 Cat Thread Proposal)
+export type {
+  ProposalApproveOverrides,
+  ProposalStatus,
+  ReportingMode,
+  ThreadProposal,
+} from './proposal.js';
 // Reflux types (F076 Phase 2 — 回流)
 export type {
   CreateRefluxPatternInput,
@@ -324,11 +743,12 @@ export type {
   RichMediaGalleryBlock,
   RichMessageExtra,
 } from './rich.js';
-export { normalizeRichBlock } from './rich.js';
+export { isValidRichBlock, normalizeRichBlock } from './rich.js';
 // Session chain types (F24 Session Chain + Context Health)
 export type {
   ContextHealth,
   ContextHealthConfig,
+  ContextManagementHint,
   SealReason,
   SealResult,
   SessionRecord,
@@ -338,6 +758,12 @@ export type {
   SessionUsageSnapshot,
   StrategyAction,
 } from './session.js';
+// Session handoff proposal types (F225 Cat-Initiated Session Handoff)
+export type {
+  CatHandoffNote,
+  HandoffProposalStatus,
+  SessionHandoffProposal,
+} from './session-handoff-proposal.js';
 // Signals types (F21 Signal Hunter)
 export type {
   SignalArticle,
@@ -352,6 +778,17 @@ export type {
   SignalSourceSchedule,
   SignalTier,
 } from './signals.js';
+// Skill security types (F146 Phase C)
+export type {
+  ContentScanFinding,
+  InstallPolicy,
+  PolicyEvaluation,
+  SkillFingerprint,
+  SkillPermissionSet,
+  SkillSecurityEntry,
+  SkillSecurityStatus,
+} from './skill-security.js';
+export { DEFAULT_INSTALL_POLICY } from './skill-security.js';
 // Slice types (F076 Phase 2 — 切片)
 export type {
   CreateSliceInput,
@@ -360,6 +797,32 @@ export type {
   SliceType,
   UpdateSliceInput,
 } from './slice.js';
+// SOP definition generated truth source (#748)
+export {
+  DEVELOPMENT_SOP_DEFINITION,
+  DEVELOPMENT_SOP_STAGE_IDS,
+  type DevelopmentSopStageId,
+  getSopDefinition,
+  isSopDefinitionId,
+  normalizeSopDefinitionId,
+  type ResolvedWorkflowSopSkill,
+  type RuntimeSopStageId,
+  resolveWorkflowSopSkill,
+  SOP_DEFINITION_IDS,
+  SOP_DEFINITIONS,
+  type SopDefinition,
+  type SopDefinitionId,
+} from './sop-definition.generated.js';
+// F252: Story Annotation types (Phase D — annotations at arbitrary timeline points)
+export type { AnnotationSet, StoryAnnotation } from './story-annotation.js';
+// F252: Story Rendering types (Phase C BFF → Frontend)
+export type {
+  CausalEdgeDTO,
+  FeatureStoryRenderingDTO,
+  SwimlaneDTO,
+  TimelineMilestoneDTO,
+  TrajectoryMarkerDTO,
+} from './story-rendering.js';
 // STT types (F088 Phase 6 — Speech-to-Text)
 export type { ISttProvider, SttTranscribeRequest, SttTranscribeResult } from './stt.js';
 // Study types (F091 Signal Study Mode)
@@ -377,11 +840,36 @@ export type {
 } from './summary.js';
 // Task types (毛线球)
 export type {
+  AutomationState,
+  CiAutomationState,
+  ConflictAutomationState,
   CreateTaskInput,
+  DispatchGateState,
+  IssueAutomationState,
+  IssuePendingWake,
+  ReviewAutomationState,
+  SuggestedCrossPostAction,
+  SuggestedCrossPostActionSource,
   TaskItem,
+  TaskKind,
+  TaskProbeSpec,
   TaskStatus,
   UpdateTaskInput,
 } from './task.js';
+export { extractFeatureIds, isTrackingKind } from './task.js';
+// F193 Phase E: SuggestedCrossPostAction + DispatchGateState re-exported via task.ts
+// (canonical source: cross-thread-affordance.ts; E2/E4 consumers can also import directly)
+export type { CancelReasonValue, PermissionCancelEvent } from './task-outcome.js';
+// Task Outcome types (F192 Phase G)
+export { CANCEL_REASON_OPTIONS } from './task-outcome.js';
+// F232: thread artifacts panel DTO
+export type {
+  GlobalArtifactDTO,
+  GlobalArtifactsResponse,
+  ThreadArtifactDTO,
+  ThreadArtifactsResponse,
+  ThreadArtifactType,
+} from './thread-artifact.js';
 // TTS types (F34 TTS Provider)
 export type {
   ITtsProvider,
@@ -395,6 +883,8 @@ export type {
   VoiceStreamEvent,
   VoiceStreamStartEvent,
 } from './tts.js';
+// User preferences types (F166 猫猫排序自定义)
+export type { UserPreferences } from './user-preferences.js';
 // Workflow SOP types (F073 告示牌)
 export type {
   CheckStatus,

@@ -13,8 +13,8 @@ triggers:
   - "github-review-feedback"
 ---
 
-> **SOP 位置**: 本 skill 是 `docs/SOP.md` Step 3b 的执行细节。
-> **上一步**: `request-review` (Step 3a) | **下一步**: `merge-gate` (Step 4)
+> **SOP 位置**: 本 skill 是 `sop-definitions/development.yaml` stage `review` 的反馈处理执行细节。
+> **上一步**: `request-review` | **下一步**: `merge-gate`
 
 # Receive Review
 
@@ -24,7 +24,7 @@ triggers:
 
 | 来源 | 说明 |
 |------|------|
-| 铲屎官/猫猫转述 | 手动告知 review 结果 |
+| operator/猫猫转述 | 手动告知 review 结果 |
 | `github-review-feedback` connector 通知 | F140 自动投递：review decisions（approved/changes_requested）+ inline/conversation comments |
 | 云端 Codex review | 通过 ReviewRouter 投递的 email review 结果 |
 
@@ -38,7 +38,7 @@ triggers:
 2. `CHANGES_REQUESTED` → 直接进入下方 Red→Green 流程
 3. `APPROVED` → 不需要 receive-review，检查是否可以走 merge-gate
 4. `COMMENTED` → 判断是否需要代码修改，需要则进入 Red→Green 流程
-5. 处理完成后通知铲屎官结果（KD-13: 事后通知）
+5. 处理完成后通知operator结果（KD-13: 事后通知）
 
 详见 `refs/pr-signals.md` Phase B 自动响应行为。
 
@@ -49,9 +49,33 @@ triggers:
 | 类型 | 特征 | 处理 |
 |------|------|------|
 | **代码级** | bug / edge case / 性能 / 命名 | Red→Green 修复流程 |
-| **愿景级** | "这不是铲屎官要的" / "缺了多项目管理" / "UI 不可用" | STOP → 回读原始需求 → 升级铲屎官 |
+| **愿景级** | "这不是operator要的" / "缺了多项目管理" / "UI 不可用" | STOP → 回读原始需求 → 升级operator |
 
-> **愿景级反馈不能用代码 patch 修补设计问题。** 先对照铲屎官原话验证 reviewer 说得对吗；如确实偏离，升级铲屎官确认偏差范围，再重新设计。
+> **愿景级反馈不能用代码 patch 修补设计问题。** 先对照operator experience验证 reviewer 说得对吗；如确实偏离，升级operator确认偏差范围，再重新设计。
+
+### Reviewer Delta Annotation（F253 AC-B2）
+
+当 review request 附有 **Fresh-Context Findings** 节时，reviewer 在自己的 findings 中标注 delta tag，量化 cross-model review 增值：
+
+| Tag | 含义 | 用途 |
+|-----|------|------|
+| `[FC:covered]` | 该 finding 已被 fresh-context 发现 | 量化 fresh-context 覆盖率 |
+| `[FC:new]` | 该 finding 是 fresh-context **未发现**的新发现 | 量化正式 reviewer 增值（reviewer delta metric） |
+| `[FC:N/A]` | 该 finding 不适用 delta 标注（如愿景级/架构级） | 排除非代码 finding |
+
+**Annotation 格式**：在 finding 行末加 tag
+
+```
+P2-1: 边界条件未处理 — src/foo.ts:42 [FC:covered]
+P1-1: Race condition in concurrent writes — src/bar.ts:18 [FC:new]
+P3-1: 建议重新考虑整体架构方向 [FC:N/A]
+```
+
+**注意**：
+- 标注是 lightweight annotation，不增加 review 流程摩擦
+- Review request 无 Fresh-Context Findings 节时（未触发 fresh-context），不标注
+- Delta 数据自然累积在 review 记录中，Phase C `eval:qc` 聚合分析
+- 标注不影响 finding 的 severity 判定或处理流程
 
 ### 禁止的响应（表演性同意）
 
@@ -70,10 +94,20 @@ triggers:
 - 建议会破坏现有功能
 - Reviewer 缺少完整上下文
 - 违反 YAGNI（过度设计）
-- 与架构决策/铲屎官要求冲突
-- 建议会让实现**更偏离**铲屎官原始需求
+- 与架构决策/operator要求冲突
+- 建议会让实现**更偏离**operator原始需求
 
 如果你 push back 了但你错了：陈述事实然后继续，不要长篇道歉。
+
+### Fallback 层数检测（F177 Phase D）🔴
+
+Review 代码时，自动执行 `node scripts/check-fallback-layers.mjs` 检测 fallback 模式增长。
+同一文件新增 ≥3 层 fallback → 触发坐标系自检（三问）：
+1. 这个 fix 是在修坐标系，还是在给错误坐标系打补丁？
+2. 能否用坐标变换（换一个问题分解方式）消除这些 fallback 层？
+3. 每一层 fallback 为什么不能去掉？
+
+review 报告中必须包含 fallback 层数分析结果。
 
 **Review 有零分歧 = 走过场**（反顺从规则）。真正的 review 需要技术争论。
 
@@ -82,12 +116,13 @@ triggers:
 ```
 WHEN 收到 review 反馈:
 
-1. READ  — 完整读完，不要边读边反应
+1. READ  — 完整读完，不要边读边反应。**R2+ 时额外动作**：回看上轮 finding 列表，标注每个 finding 的 failure-mode 类型，用于 AUDIT 步骤的同型判别
 2. CLASSIFY — 区分愿景级 vs 代码级；按 P1/P2/P3 分优先级
 3. CLARIFY — 有不清晰的问题先全部问清，再动手
 4. VERIFY — reviewer 说的问题真的存在吗？（见下方三道门）
-5. FIX — 通过验证的问题 Red→Green 逐个修复
-6. CONFIRM — 修完回给 reviewer 确认，不能自判"改对了"
+5. AUDIT — failure-mode sweep（见下方 §16e 判别）
+6. FIX — 通过验证的问题 + audit 发现的同类问题 Red→Green 修复
+7. CONFIRM — 修完回给 reviewer 确认，不能自判"改对了"
 ```
 
 ### VERIFY 三道门（少一道不准照改）
@@ -104,15 +139,42 @@ WHEN 收到 review 反馈:
    - 改完跑一遍最关键的用户路径（不是只跑测试）
    - 功能死了 → 回滚，review 建议作废，不管它理论上多优雅
 
-**特别注意**：云端 reviewer（Codex cloud）没有运行环境，判断基于静态分析和理论推理。你有本地环境 → **你的实测证据 > 他的理论推理**。
+**特别注意**：remote reviewer（Codex cloud）没有运行环境，判断基于静态分析和理论推理。你有本地环境 → **你的实测证据 > 他的理论推理**。
 
 **修复顺序**：P1（blocking）→ P2（必须修）→ P3（讨论后当场修或放下，不记 BACKLOG）
 
 **澄清原则**：有任何问题不清晰，先 STOP，全部问清再动手。部分理解 = 错误实现。
 
+### AUDIT — Failure-Mode Sweep（shared-rules §16e）
+
+VERIFY 完所有 findings 之后、动手修之前，做一次 failure-mode 判别：
+
+**判别问**：这些通过验证的 P1/P2 里，有没有 ≥2 个属于**同一类 failure mode**？（边界遗漏、null 不安全、错误处理不一致、状态转换缺路径、类型假设不安全……）
+
+- **有** → 做 failure-mode audit 再修：
+  1. **抽象**：一句话说清它们违反了什么不变量
+  2. **扫描**：带着这个不变量 grep 本 PR diff 里所有同类位置（sibling call sites、同性质边界群）
+  3. **防护**：能否加类型/封装/测试让它不可能再违反
+  4. **自报告**：audit 结果写进修复确认信，让 reviewer 不用下轮再 grep 同型
+- **没有**（全是独立、不同类的点问题）→ 跳过 audit，直接进 FIX
+
+**R2+ 额外检查**：如果本轮的 finding 和上轮是**同型**——不管数量多少，**强制 audit**。同型第二次出现 = author 上轮没泛化，这次必须补上。
+
+**≥3 轮升级规则（F229 PR-A1 20 轮教训）🔴**：同一状态对象的 finding 连续 **≥3 轮**出现（哪怕每轮都"修好了"）= 不是你修得不对，是 **plan/spec 层欠状态机的边**——代码层 audit 扫不出"spec 没定义 restore boundary"这种上游缺失。停手，@ plan/spec 作者按 writing-plans「Stateful Object Gate」补状态转移表 + 不变量，补完再继续修。**别一个人打到 R20**（PR #2202：实现猫每轮诚实修好当轮 finding，但缺这个升级出口，20 轮才合入）。
+
+> **为什么在 FIX 之前**：先 audit 再修 = 一次修完所有同类；先修再 audit = 改了一个又发现三个，反复 rebase。
+
 ## Red→Green 修复流程
 
 对每个 P1/P2 问题：
+
+**Step 0: 创建修复任务**（F160 Phase C — 在动手修之前）
+调用 `cat_cafe_create_task` 为每个 P1/P2 创建独立跟踪任务：
+- title: `[P{N}] {问题摘要}`（如 `[P2] TaskComposer HTTP 错误时丢失输入`）
+- why: reviewer 的原始描述（≤120 字）
+- 修复完成后 `cat_cafe_update_task` 状态改为 `done`
+
+**Gotcha**: 不要为 P3 创建任务——P3 当场修或放下，不记 BACKLOG 也不记毛线球。
 
 ```
 1. 理解问题
@@ -127,11 +189,18 @@ WHEN 收到 review 反馈:
 
 ## 修复后确认（硬规则）
 
-**修复完成 ≠ 可以合入。必须回给 reviewer 确认。**
+**修复完成 ≠ 可以合入。必须回到原 feedback source 确认。**
+
+| Feedback source | 修复后动作 |
+|-----------------|------------|
+| 本地猫 reviewer | `@reviewer` 发送修复确认请求；等 reviewer 明确放行当前 SHA |
+| cloud / GitHub review | 在 GitHub 回复或标注修复证据，push 新 SHA 后**只重新触发 cloud review**，等 PR tracking / review feedback；不要 @ 本地旧 reviewer |
+| CI / PR check | 修复后 rerun/check gate；若只是外部 check gate，不需要本地 reviewer 续签 |
+| operator / 愿景级 feedback | 回读原始需求；需要价值取舍时带 Decision Packet 给operator |
 
 ```
-❌ 错误：修复 → 自己判断"改对了" → 合入 main
-✅ 正确：修复 → 回给 reviewer → reviewer 确认 → 进 merge-gate
+❌ 错误：cloud P2 修复 → @ 本地旧 reviewer 续签 → 等 cloud → 再 @ 本地 reviewer
+✅ 正确：cloud P2 修复 → re-trigger cloud review → 等 PR truth source；local peer 只在非 cloud 行为 delta / scope 扩大时介入
 ```
 
 确认信格式（简要，详细版见 `refs/` 如有需要）：
@@ -146,11 +215,16 @@ WHEN 收到 review 反馈:
 
 测试结果：pnpm test → {X} passed, 0 failed
 Commit: {sha} — {message}
+Fresh-Context Delta: {N} FC:covered, {M} FC:new, {K} FC:N/A <!-- 仅 review request 含 FC 节时 -->
 
 请确认修复，确认后执行合入。
 ```
 
-**云端 review 修了 P1/P2 → 必须 re-trigger 云端 review，不能自判通过直接合入。**
+修复完成后（F160 Phase C）：
+- 每个 P1/P2 修复任务 → `cat_cafe_update_task` 状态改为 `done`
+- 回到原 feedback source 确认（硬规则不变）
+
+**remote review 修了 P1/P2 → 必须 re-trigger remote review，不能自判通过直接合入，也不能把 cloud gate 投射成本地旧 reviewer。**
 
 ## Reviewer 验证 UX/前端改动（硬规则）
 
@@ -187,9 +261,11 @@ Reviewer 在 review 过程中发现 author 触发以下任一条件，可直接�
 | 没写 Red 测试直接改代码 | 先写失败测试，确认红灯，再修 |
 | 修完自判"对了"直接合入 | 必须回给 reviewer 确认 |
 | 全盘接受，零 push back | 有技术理由必须说出来 |
-| 愿景级问题用代码 patch | STOP，升级铲屎官，不要硬修 |
-| 云端 P1 修完不 re-trigger | 必须重新触发云端 review |
+| 愿景级问题用代码 patch | STOP，升级operator，不要硬修 |
+| 云端 P1 修完不 re-trigger | 必须重新触发remote review |
 | 前端改动只看代码不开浏览器 | 涉及 UX 必须打开浏览器实操验证 |
+| 只修 reviewer 指的那一个点（补锅匠） | 先判 failure mode 是否同类，是则 audit 本 PR diff 全扫再修 |
+| 同型 finding 打到 R5+ 还在逐轮修 | **第 3 轮就停**，升级 plan/spec 作者补状态机（≥3 轮升级规则）——代码层修不掉 spec 层的洞 |
 
 ## 和其他 skill 的区别
 
@@ -198,7 +274,7 @@ Reviewer 在 review 过程中发现 author 触发以下任一条件，可直接�
 | `quality-gate` | 自己检查自己（spec + 证据） | 提 review 之前 |
 | `request-review` | 发出 review 请求 | 自检通过之后 |
 | **receive-review（本 skill）** | 处理 reviewer 的反馈 | 收到 review 之后 |
-| `merge-gate` | 合入前门禁 + PR + 云端 review | reviewer 放行之后 |
+| `merge-gate` | 合入前门禁 + PR + remote review | reviewer 放行之后 |
 
 ### Review 沙盒生命周期
 
@@ -212,4 +288,4 @@ Reviewer 在 review 期间创建的沙盒：
 
 ## 下一步
 
-Reviewer 放行（"LGTM"/"通过"/"可以合入"）→ **直接加载 `merge-gate`** skill（SOP Step 4）。不要停下来问铲屎官（§17）。
+Reviewer 放行（"LGTM"/"通过"/"可以合入"）→ **直接加载 `merge-gate`** skill（SOP stage `merge`）。不要停下来问operator（§17）。

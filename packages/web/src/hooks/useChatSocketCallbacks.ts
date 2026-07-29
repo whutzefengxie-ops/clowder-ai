@@ -1,9 +1,11 @@
 import type { GameView } from '@cat-cafe/shared';
 import { useMemo } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import type { SocketCallbacks } from '@/hooks/useSocket';
-import { type ChatMessage as ChatMessageData, useChatStore } from '@/stores/chatStore';
+import { type Thread, useChatStore } from '@/stores/chatStore';
 import { useGameStore } from '@/stores/gameStore';
 import { type TaskItem, useTaskStore } from '@/stores/taskStore';
+import { apiFetch } from '@/utils/api-client';
 
 interface ExternalDeps {
   threadId: string;
@@ -14,6 +16,7 @@ interface ExternalDeps {
   handleAuthRequest: NonNullable<SocketCallbacks['onAuthorizationRequest']>;
   handleAuthResponse: NonNullable<SocketCallbacks['onAuthorizationResponse']>;
   onNavigateToThread?: (threadId: string) => void;
+  onIndexEvent?: SocketCallbacks['onIndexEvent'];
 }
 
 /**
@@ -29,16 +32,29 @@ export function useChatSocketCallbacks({
   handleAuthRequest,
   handleAuthResponse,
   onNavigateToThread,
+  onIndexEvent,
 }: ExternalDeps): SocketCallbacks {
   const {
     updateThreadTitle,
+    updateThreadParticipants,
     setLoading,
     setHasActiveInvocation,
     setIntentMode,
     setTargetCats,
-    addMessage,
-    removeMessage,
-  } = useChatStore();
+    removeThreadMessage,
+    requestStreamCatchUp,
+  } = useChatStore(
+    useShallow((s) => ({
+      updateThreadTitle: s.updateThreadTitle,
+      updateThreadParticipants: s.updateThreadParticipants,
+      setLoading: s.setLoading,
+      setHasActiveInvocation: s.setHasActiveInvocation,
+      setIntentMode: s.setIntentMode,
+      setTargetCats: s.setTargetCats,
+      removeThreadMessage: s.removeThreadMessage,
+      requestStreamCatchUp: s.requestStreamCatchUp,
+    })),
+  );
   const { addTask, updateTask } = useTaskStore();
 
   return useMemo<SocketCallbacks>(
@@ -48,7 +64,17 @@ export function useChatSocketCallbacks({
         handleAgentMessage(msg);
         return true;
       },
-      onThreadUpdated: (data) => updateThreadTitle(data.threadId, data.title),
+      onThreadUpdated: (data) => {
+        if (data.title !== undefined) updateThreadTitle(data.threadId, data.title);
+        if (data.participants !== undefined) updateThreadParticipants(data.threadId, data.participants);
+        if (data.bootcampState !== undefined) {
+          useChatStore.setState((state) => ({
+            threads: state.threads.map((t) =>
+              t.id === data.threadId ? { ...t, bootcampState: data.bootcampState as Thread['bootcampState'] } : t,
+            ),
+          }));
+        }
+      },
       onIntentMode: (data) => {
         // Socket layer (useSocket) already applies dual-pointer guard + background routing.
         // This callback only fires for the truly active thread.
@@ -57,41 +83,39 @@ export function useChatSocketCallbacks({
         setIntentMode(data.mode as 'ideate' | 'execute');
         setTargetCats((data as { targetCats?: string[] }).targetCats ?? []);
       },
-      onTaskCreated: (task) => addTask(task as unknown as TaskItem),
-      onTaskUpdated: (task) => updateTask(task as unknown as TaskItem),
-      onThreadSummary: (summary) => {
-        const s = summary as {
-          id: string;
-          threadId: string;
-          topic: string;
-          conclusions: string[];
-          openQuestions: string[];
-          createdBy: string;
-          createdAt: number;
-        };
-        addMessage({
-          id: `summary-${s.id}`,
-          type: 'summary',
-          content: s.topic,
-          timestamp: s.createdAt,
-          summary: {
-            id: s.id,
-            topic: s.topic,
-            conclusions: s.conclusions,
-            openQuestions: s.openQuestions,
-            createdBy: s.createdBy,
-          },
-        } as ChatMessageData);
+      onSpawnStarted: (data) => {
+        // F118 D2: Earliest signal — fires before intent_mode.
+        // Per-cat setCatStatus('spawning') is handled by the socket layer.
+        setLoading(true);
+        setHasActiveInvocation(true);
+        setTargetCats(data.targetCats ?? []);
       },
+      onTaskCreated: (task) => {
+        const t = task as Record<string, unknown>;
+        if (t.threadId !== threadId || t.kind === 'pr_tracking') return;
+        addTask(task as unknown as TaskItem);
+      },
+      onTaskUpdated: (task) => {
+        const t = task as Record<string, unknown>;
+        if (t.threadId !== threadId || t.kind === 'pr_tracking') return;
+        updateTask(task as unknown as TaskItem);
+      },
+      // onThreadSummary removed (clowder-ai#343): summaries no longer injected into chat flow.
       onHeartbeat: (data) => {
         if (data.threadId === threadId) resetTimeout();
       },
-      onMessageDeleted: (data: { messageId: string }) => removeMessage(data.messageId),
-      onMessageRestored: () => {
-        /* re-fetching history if needed */
+      onMessageDeleted: (data: { messageId: string; threadId: string }) =>
+        removeThreadMessage(data.threadId, data.messageId),
+      onMessageRestored: (data: { messageId: string; threadId: string }) => {
+        requestStreamCatchUp(data.threadId);
       },
       onThreadBranched: () => {
-        /* branch navigation handled by the action initiator */
+        void apiFetch('/api/threads')
+          .then((res) => (res.ok ? res.json() : null))
+          .then((data) => {
+            if (data?.threads) useChatStore.getState().setThreads(data.threads);
+          })
+          .catch(() => {});
       },
       onAuthorizationRequest: handleAuthRequest,
       onAuthorizationResponse: handleAuthResponse,
@@ -107,23 +131,28 @@ export function useChatSocketCallbacks({
           onNavigateToThread?.(data.gameThreadId);
         }
       },
+      // B-5: Guide events now flow directly from useSocket → guideStore.reduceServerEvent
+      // (CustomEvent bridge removed — no onGuideStart/onGuideControl/onGuideComplete needed)
+      onIndexEvent,
     }),
     [
       handleAgentMessage,
       updateThreadTitle,
+      updateThreadParticipants,
       setLoading,
       setHasActiveInvocation,
       setIntentMode,
       setTargetCats,
       addTask,
       updateTask,
-      addMessage,
-      removeMessage,
+      removeThreadMessage,
+      requestStreamCatchUp,
       resetTimeout,
       clearDoneTimeout,
       handleAuthRequest,
       handleAuthResponse,
       onNavigateToThread,
+      onIndexEvent,
       threadId,
       userId,
     ],

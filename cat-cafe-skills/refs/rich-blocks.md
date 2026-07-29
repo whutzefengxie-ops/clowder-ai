@@ -1,10 +1,12 @@
 # Rich Blocks Reference
 
-> 降级自 `using-rich-blocks` skill。按需查阅。
+> 降级自 `rich-messaging` skill。按需查阅。
 
 ## 何时用 Rich Block
 
 结构化信息默认用 rich block；随意聊天用纯文本。发 block 前先写 1-2 句自然语言摘要。
+
+**适用场景**：不只是对话！定时任务唤醒、主动触发、connector 通知等场景中，猫同样拥有全部 rich block 能力。
 
 ### 用 rich block
 
@@ -13,10 +15,11 @@
 | card | Review 结论、状态报告、决策摘要 |
 | diff | 代码修改建议、重构前后对比 |
 | checklist | 待办项、检查清单、验证步骤 |
-| media_gallery | 截图、设计稿、多图对比 |
-| audio | 问候、情感表达（系统自动合成语音） |
+| file | 已有文件、成片视频、导出物；`video/*` 文件会内联播放 |
+| media_gallery | 发送已有图片（头像、照片）、截图、设计稿、多图对比 — 不需要现场生成！ |
+| audio | 问候、情感表达、定时播报（系统自动合成语音） |
 | interactive | 需要用户选择/确认的场景（选方案、选猫、确认操作） |
-| html_widget | 数据可视化、交互 demo、mini 工具（沙盒 iframe） |
+| html_widget | 数据可视化、自己写的 HTML 面板、交互 demo、mini 工具（沙盒 iframe） |
 
 ### 不用 rich block
 
@@ -31,8 +34,11 @@
 | card | title | bodyMarkdown, tone (info/success/warning/danger), fields |
 | diff | filePath, diff | languageHint |
 | checklist | items (id+text) | title |
+| file | url, fileName | mimeType, fileSize |
 | media_gallery | items (url) | title, alt, caption |
 | audio | text | — |
+| interactive | interactiveType, options (id+label) | title, description, maxSelect, allowRandom, messageTemplate |
+| html_widget | html | title, height (50-2000, default 300) |
 
 ### media_gallery 图片 URL 规范
 
@@ -46,13 +52,30 @@
 | `https://...` | `https://example.com/img.png` | 外部链接 |
 
 **禁止**：`/api/connector-media/../assets/...` 等含 `../` 的路径 — 会被路径遍历保护拒绝，前端裂图。
-| interactive | interactiveType, options (id+label) | title, description, maxSelect, allowRandom, messageTemplate |
-| html_widget | html | title, height (50-2000, default 300) |
+
+### 关于本地生成图的额外说明（F172 共享发布合约）
+
+Codex `image_gen` 和 Antigravity 生成的图片现已**自动发布**：
+- Codex：`CodexAgentService` 在 invocation 结束后自动扫描 `~/.codex/generated_images/<sessionId>/` 并发布
+- Antigravity：`AntigravityAgentService` 自动从工具结果中检测图片路径并发布
+- 两者都通过 `publishGeneratedImage()` 合约，自动解析当前 runtime 的 `uploadDir`、生成幂等文件名、返回 `/uploads/...` URL + `media_gallery` 富块
+
+**手动发布**（仅当自动路径不适用时）：调用 `publishGeneratedImage({ sourcePath, mimeType, publicationKey, provider, toolName })`。
+
+不要把”源码仓里存在这个文件”和”当前 API 正在服务这个文件”混为一谈。runtime 可能跑在另一套 worktree / 另一份 `packages/api/uploads/`。
+
+### file 文件 / 视频 URL 规范
+
+`file.url` 同样只接受 `/uploads/...`、`/api/...` 或 `https://...`。
+
+- 文档、压缩包等普通文件：显示下载卡片
+- `mimeType` 以 `video/` 开头，或文件名扩展是 `mp4/mov/webm/avi/mkv/m4v/ogv`：Web UI 直接渲染内联 `<video>` 播放器
+- 当前共享自动发布合约只覆盖图片；**本地视频/通用文件还没有自动 publish helper**，需要先显式放到 `/uploads/...`
 
 ## 创建方式
 
-1. **HTTP Callback（推荐）** — 见 `refs/mcp-callbacks.md` create-rich-block 端点
-2. **MCP Tool** — `cat_cafe_create_rich_block`
+1. **MCP Tool（推荐）** — `cat_cafe_create_rich_block`
+2. **Callback surface reference** — 见 `refs/mcp-callbacks.md` 的工具映射表；不要手写第一方 HTTP callback 作为主路径
 3. **Inline Text（fallback）**：
 ````
 ```cc_rich
@@ -60,7 +83,7 @@
 ```
 ````
 
-优先用 HTTP callback。`cc_rich` 仅在 HTTP 不可用时使用。
+优先用 `cat_cafe_create_rich_block`。`cc_rich` 仅在 MCP/callback surface 不可用时使用。
 
 ### interactive 类型
 
