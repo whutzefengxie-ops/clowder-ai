@@ -21,6 +21,9 @@ interface RenderProbe {
 
 type AgentHookHealthDisplayStatus = AgentHookHealthStatus | 'unknown';
 
+/** Fetched status plus the transient UI states the card renders on top of it. */
+type ToneStatus = AgentHookHealthStatus | 'syncing' | 'synced' | 'error' | 'uninitialised';
+
 const STATUS_LABELS: Record<AgentHookHealthDisplayStatus, string> = {
   configured: '正常',
   missing: '缺失',
@@ -78,7 +81,17 @@ export function shouldRenderAgentHookHealthNotice({ health, error, syncing, sync
   return !!health && health.status !== 'configured';
 }
 
-function toneFor(status: AgentHookHealthStatus | 'syncing' | 'synced' | 'error') {
+/**
+ * The hook maps the API's `missing .cat-cafe/` 400 onto a lone `project`
+ * target. Syncing cannot fix that from the UI, so it gets its own copy and
+ * hides the sync button rather than inviting a click that 400s again.
+ */
+export function isUninitialisedProject(health: AgentHookStatusResponse | null): boolean {
+  const targets = targetsFor(health);
+  return health?.status === 'unsupported' && targets.length === 1 && targets[0]?.name === 'project';
+}
+
+function toneFor(status: ToneStatus) {
   if (['synced', 'configured'].includes(status)) {
     return {
       icon: 'check',
@@ -111,6 +124,14 @@ function toneFor(status: AgentHookHealthStatus | 'syncing' | 'synced' | 'error')
       classes: 'border-conn-slate-ring bg-conn-slate-bg text-conn-slate-text',
     };
   }
+  if (status === 'uninitialised') {
+    return {
+      icon: 'info',
+      title: '该项目尚未初始化',
+      body: '项目缺少 .cat-cafe/ 目录，因此不会套用本机的 Hook、Skills 和 MCP 配置。先初始化该项目，再回来同步。',
+      classes: 'border-conn-slate-ring bg-conn-slate-bg text-conn-slate-text',
+    };
+  }
   return {
     icon: 'alert-triangle',
     title: 'Agent 运行环境需要同步',
@@ -125,6 +146,21 @@ function previewTargets(health: AgentHookStatusResponse | null): AgentHookTarget
     .slice(0, 5);
 }
 
+/** Transient UI states win over the fetched status; `uninitialised` outranks the raw `unsupported`. */
+function resolveDisplayStatus({
+  health,
+  error,
+  syncing,
+  synced,
+  uninitialised,
+}: RenderProbe & { uninitialised: boolean }): ToneStatus {
+  if (error) return 'error';
+  if (syncing) return 'syncing';
+  if (synced) return 'synced';
+  if (uninitialised) return 'uninitialised';
+  return health ? health.status : 'error';
+}
+
 export function AgentHookHealthNotice({
   health,
   error,
@@ -135,10 +171,11 @@ export function AgentHookHealthNotice({
 }: AgentHookHealthNoticeProps) {
   if (!shouldRenderAgentHookHealthNotice({ health, error, syncing, synced })) return null;
 
-  const currentStatus = error ? 'error' : syncing ? 'syncing' : synced ? 'synced' : health ? health.status : 'error';
+  const uninitialised = isUninitialisedProject(health);
+  const currentStatus = resolveDisplayStatus({ health, error, syncing, synced, uninitialised });
   const tone = toneFor(currentStatus);
   const problematicTargets = previewTargets(health);
-  const canSync = !syncing && currentStatus !== 'synced';
+  const canSync = !syncing && currentStatus !== 'synced' && !uninitialised;
 
   return (
     <div data-testid="agent-hook-health-notice" className={`rounded-lg border p-3 ${tone.classes} ${className}`}>
