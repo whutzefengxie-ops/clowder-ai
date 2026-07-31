@@ -87,15 +87,12 @@ describe('useAgentHookHealth', () => {
     expect(statuses).toContain('configured');
   });
 
-  it('surfaces an uninitialised project as unsupported rather than an error', async () => {
-    vi.mocked(apiFetch).mockResolvedValue({
-      ok: false,
-      status: 400,
-      json: async () => ({ error: 'Project not initialized (missing .cat-cafe/)' }),
-    } as Response);
+  function mock400(error: string) {
+    vi.mocked(apiFetch).mockResolvedValue({ ok: false, status: 400, json: async () => ({ error }) } as Response);
+  }
 
+  async function renderErrorProbe() {
     const result: { status: string | null; error: string | null } = { status: null, error: null };
-
     function ErrorProbe() {
       const { health, error } = useAgentHookHealth({ enabled: true });
       useEffect(() => {
@@ -104,39 +101,23 @@ describe('useAgentHookHealth', () => {
       }, [health?.status, error]);
       return null;
     }
-
     await act(async () => {
       root.render(<ErrorProbe />);
       await flushPromises();
     });
+    return result;
+  }
 
+  it('surfaces an uninitialised project as unsupported rather than an error', async () => {
+    mock400('Project not initialized (missing .cat-cafe/)');
+    const result = await renderErrorProbe();
     expect(result.status).toBe('unsupported');
     expect(result.error).toBeNull();
   });
 
   it('still reports other 400 responses as errors', async () => {
-    vi.mocked(apiFetch).mockResolvedValue({
-      ok: false,
-      status: 400,
-      json: async () => ({ error: 'projectPath must be an absolute path' }),
-    } as Response);
-
-    const result: { status: string | null; error: string | null } = { status: null, error: null };
-
-    function ErrorProbe() {
-      const { health, error } = useAgentHookHealth({ enabled: true });
-      useEffect(() => {
-        result.status = health?.status ?? null;
-        result.error = error;
-      }, [health?.status, error]);
-      return null;
-    }
-
-    await act(async () => {
-      root.render(<ErrorProbe />);
-      await flushPromises();
-    });
-
+    mock400('projectPath must be an absolute path');
+    const result = await renderErrorProbe();
     expect(result.status).toBeNull();
     expect(result.error).toContain('400');
   });

@@ -22,7 +22,7 @@ interface RenderProbe {
 type AgentHookHealthDisplayStatus = AgentHookHealthStatus | 'unknown';
 
 /** Fetched status plus the transient UI states the card renders on top of it. */
-type ToneStatus = AgentHookHealthStatus | 'syncing' | 'synced' | 'error' | 'uninitialised';
+type ToneStatus = AgentHookHealthStatus | 'syncing' | 'synced' | 'uninitialised';
 
 const STATUS_LABELS: Record<AgentHookHealthDisplayStatus, string> = {
   configured: '正常',
@@ -86,7 +86,7 @@ export function shouldRenderAgentHookHealthNotice({ health, error, syncing, sync
  * target. Syncing cannot fix that from the UI, so it gets its own copy and
  * hides the sync button rather than inviting a click that 400s again.
  */
-export function isUninitialisedProject(health: AgentHookStatusResponse | null): boolean {
+function isUninitialisedProject(health: AgentHookStatusResponse | null): boolean {
   const targets = targetsFor(health);
   return health?.status === 'unsupported' && targets.length === 1 && targets[0]?.name === 'project';
 }
@@ -147,17 +147,11 @@ function previewTargets(health: AgentHookStatusResponse | null): AgentHookTarget
 }
 
 /** Transient UI states win over the fetched status; `uninitialised` outranks the raw `unsupported`. */
-function resolveDisplayStatus({
-  health,
-  error,
-  syncing,
-  synced,
-  uninitialised,
-}: RenderProbe & { uninitialised: boolean }): ToneStatus {
+function resolveDisplayStatus({ health, error, syncing, synced }: RenderProbe): ToneStatus {
   if (error) return 'error';
   if (syncing) return 'syncing';
   if (synced) return 'synced';
-  if (uninitialised) return 'uninitialised';
+  if (isUninitialisedProject(health)) return 'uninitialised';
   return health ? health.status : 'error';
 }
 
@@ -171,11 +165,10 @@ export function AgentHookHealthNotice({
 }: AgentHookHealthNoticeProps) {
   if (!shouldRenderAgentHookHealthNotice({ health, error, syncing, synced })) return null;
 
-  const uninitialised = isUninitialisedProject(health);
-  const currentStatus = resolveDisplayStatus({ health, error, syncing, synced, uninitialised });
+  const currentStatus = resolveDisplayStatus({ health, error, syncing, synced });
   const tone = toneFor(currentStatus);
   const problematicTargets = previewTargets(health);
-  const canSync = !syncing && currentStatus !== 'synced' && !uninitialised;
+  const canSync = !syncing && currentStatus !== 'synced' && currentStatus !== 'uninitialised';
 
   return (
     <div data-testid="agent-hook-health-notice" className={`rounded-lg border p-3 ${tone.classes} ${className}`}>

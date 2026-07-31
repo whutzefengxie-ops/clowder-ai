@@ -57,6 +57,8 @@ To enable local semantic rerank for the memory system, install the **Embedding**
 
 > **Tip:** If `pnpm start` fails because `../cat-cafe-runtime` already exists, use `pnpm start:direct` instead — it runs directly in your current checkout without creating a worktree. You can also set a custom path: `CAT_CAFE_RUNTIME_DIR=../my-runtime pnpm start`.
 
+> **⚠️ Windows — Redis is not bundled.** On Windows, if no Redis binary is found, `start-windows.ps1` **silently falls back to the in-memory store** (`MEMORY_STORE=1`) and keeps running — sessions and memory are then lost on every restart, with no error. Install Redis first with `scripts/install.ps1` (full installer, writes `REDIS_URL` to `.env`), or fetch just the portable binary via the `Ensure-WindowsRedis` helper in `scripts/install-windows-helpers.ps1`. Only `--memory` should ever run without Redis; unintended in-memory mode is the #1 cause of "all my sessions disappeared".
+
 Open `http://localhost:3003` and start talking to your team.
 
 > **Alternative — One-line installer (Linux):** `bash scripts/install.sh` handles Node, pnpm, Redis, dependencies, `.env`, and first launch in one step. On **Windows**, use `scripts/install.ps1` then `scripts/start-windows.ps1`.
@@ -73,7 +75,7 @@ your-projects/
 
 | Command | What it does |
 |---------|-------------|
-| `pnpm start` | Init (first time) → sync to origin/main → build → start Redis + API + Frontend |
+| `pnpm start` | Init (first time) → sync to origin/main → build → start Redis[^win-redis] + API + Frontend |
 | `pnpm start --memory` | Same, but skip Redis (in-memory store, data lost on restart) |
 | `pnpm start --quick` | Same, but skip rebuild (use existing `dist/`) |
 | `pnpm start --daemon` | Same, but run in background (logs to `cat-cafe-daemon.log`) |
@@ -82,6 +84,8 @@ your-projects/
 | `pnpm start:status` | Check if daemon is running |
 | `pnpm runtime:init` | Only create the runtime worktree (no start) |
 | `pnpm runtime:status` | Show worktree path, branch, HEAD, ahead/behind |
+
+[^win-redis]: **Windows only:** "start Redis" requires a Redis binary to be present. If none is found, `start-windows.ps1` silently falls back to the in-memory store and data is lost on restart — see the Windows warning above. Linux/macOS installs Redis via `scripts/install.sh`.
 
 > Runtime contract (ADR-039 passive frozen): `pnpm start` is the single entry; sync+build+restart are folded into one command. There is no standalone sync — that was removed to prevent stale-dist crashes (see ADR-039).
 
