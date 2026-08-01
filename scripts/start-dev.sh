@@ -56,6 +56,42 @@ source "$SCRIPT_DIR/lib/redis-rdb-first.sh"
 source "$SCRIPT_DIR/download-source-overrides.sh"
 cd "$PROJECT_DIR"
 
+# 自动检测并添加便携式 Redis 到 PATH
+detect_portable_redis() {
+    # 如果 redis-server 已在 PATH 中，直接返回
+    command -v redis-server &> /dev/null && return 0
+
+    # 搜索路径列表：当前项目 + 相邻的 runtime worktree
+    local search_paths=(
+        "$PROJECT_DIR/.cat-cafe/redis"
+        "$PROJECT_DIR/../clowder-ai-runtime/.cat-cafe/redis"
+        "$PROJECT_DIR/../../clowder-ai-runtime/.cat-cafe/redis"
+    )
+
+    for base_path in "${search_paths[@]}"; do
+        [ -d "$base_path" ] || continue
+
+        # 按平台搜索
+        local portable_redis_dirs=(
+            "$base_path/windows/current/Redis-"*"-Windows-x64-msys2"
+            "$base_path/linux/current/redis-"*
+            "$base_path/macos/current/redis-"*
+        )
+
+        for redis_dir in "${portable_redis_dirs[@]}"; do
+            if [ -d "$redis_dir" ] && [ -f "$redis_dir/redis-server" ]; then
+                export PATH="$redis_dir:$PATH"
+                echo "  检测到便携式 Redis: $redis_dir"
+                return 0
+            fi
+        done
+    done
+
+    return 1
+}
+
+detect_portable_redis
+
 echo "🐱 Clowder AI 启动"
 echo "================"
 
