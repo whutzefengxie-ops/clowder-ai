@@ -52,6 +52,18 @@ describe('SecretScanner', () => {
     assert.equal(findings[0].type, 'high-entropy-secret');
   });
 
+  it('does not suppress low-segment-entropy slash-separated passwords', () => {
+    const contents = [
+      'password = correcthorse/batterystaple/orangeplanet\n',
+      'api_key = abcd1234/efgh5678/ijkl9012/mnop3456\n',
+    ];
+    for (const content of contents) {
+      const findings = SecretScanner.scan(content, 'env.md');
+      assert.equal(findings.length, 1);
+      assert.equal(findings[0].type, 'high-entropy-secret');
+    }
+  });
+
   it('returns empty for safe content', () => {
     const content = '# Design Notes\n\nThis is a safe document about architecture.\n';
     const findings = SecretScanner.scan(content, 'design.md');
