@@ -401,7 +401,7 @@ describe('F167 Phase T route custody stop gate', () => {
     });
     const service = createSequenceService('codex', ['Original answer.', 'Structured transition complete.']);
 
-    const { metadataAugments } = await runRoute(service, 'thread-child-truth', {
+    const { appended, yielded, metadataAugments } = await runRoute(service, 'thread-child-truth', {
       projectionService: projection,
       turnExecutionStore,
       routeOptions: {
@@ -416,8 +416,9 @@ describe('F167 Phase T route custody stop gate', () => {
       },
     });
 
+    const executions = await turnExecutionStore.listByParent('parent-stop-gate');
     assert.deepEqual(
-      (await turnExecutionStore.listByParent('parent-stop-gate')).map((record) => ({
+      executions.map((record) => ({
         executionKind: record.executionKind,
         status: record.status,
         routingGuardReason: record.causal?.routingGuardReason,
@@ -431,7 +432,33 @@ describe('F167 Phase T route custody stop gate', () => {
       metadataAugments.some((entry) =>
         entry.patch.extra?.auxiliaryTurnExecutions?.some((execution) => execution.executionKind === 'routing_guard'),
       ),
-      'persisted visible output must point to the structured remedial child',
+      'persisted visible output must retain the structured remedial child as auxiliary execution truth',
+    );
+
+    const ordinaryExecution = executions.find((record) => record.executionKind === 'ordinary');
+    const routingGuardExecution = executions.find((record) => record.executionKind === 'routing_guard');
+    assert.deepEqual(
+      appended.map((message) => ({
+        content: message.content,
+        turnInvocationId: message.extra?.stream?.turnInvocationId,
+      })),
+      [{ content: 'Original answer.', turnInvocationId: ordinaryExecution.invocationId }],
+      'synthetic remedial output must not replace or append another visible assistant message',
+    );
+    assert.notEqual(appended[0].extra?.stream?.turnInvocationId, routingGuardExecution.invocationId);
+    assert.ok(
+      yielded.some(
+        (message) =>
+          message.type === 'text' &&
+          message.content === 'Original answer.' &&
+          message.invocationId === ordinaryExecution.invocationId,
+      ),
+      'live visible text must keep the ordinary invocation identity',
+    );
+    assert.equal(
+      yielded.some((message) => message.type === 'text' && message.content === 'Structured transition complete.'),
+      false,
+      'synthetic remedial prose must stay hidden from the live stream',
     );
   });
 });
