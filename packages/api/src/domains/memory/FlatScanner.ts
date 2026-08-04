@@ -124,6 +124,7 @@ export function scanRelativePath(root: string, target: string): string {
   return relative(root, target).replaceAll('\\', '/');
 }
 
+/** Stops traversal at nested repositories, linked worktrees, and symlinked Git metadata. */
 export function isNestedGitRoot(dir: string): boolean {
   try {
     const marker = lstatSync(join(dir, '.git'));

@@ -97,6 +97,7 @@ function isSlashSeparatedSchemaFieldList(value: string, line: string): boolean {
   const schemaSuffixes = fields.filter((field) => SCHEMA_FIELD_SUFFIX_RE.test(field)).length;
   return (
     fields.length >= 3 &&
+    new Set(fields).size === fields.length &&
     schemaSuffixes >= 2 &&
     fields.every((field) => SCHEMA_FIELD_RE.test(field) && /[A-Z_]/.test(field) && shannonEntropy(field) <= 3.5)
   );
