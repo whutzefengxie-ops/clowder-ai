@@ -93,6 +93,27 @@ describe('FlatScanner', () => {
     assert.equal(scanner.discover(tmpDir).length, 1);
   });
 
+  it('does not descend into nested git repositories or linked worktrees', () => {
+    writeFileSync(join(tmpDir, 'workspace.md'), '# Workspace');
+
+    const nestedRepo = join(tmpDir, 'clowder-ai-main');
+    mkdirSync(join(nestedRepo, '.git'), { recursive: true });
+    writeFileSync(join(nestedRepo, 'README.md'), '# Nested repository');
+
+    const linkedWorktree = join(tmpDir, 'clowder-ai-runtime');
+    mkdirSync(linkedWorktree);
+    writeFileSync(join(linkedWorktree, '.git'), 'gitdir: ../.git/worktrees/runtime\n');
+    writeFileSync(join(linkedWorktree, 'README.md'), '# Linked worktree');
+
+    const scanner = new FlatScanner('test:docs');
+    const results = scanner.discover(tmpDir);
+
+    assert.deepEqual(
+      results.map((result) => result.item.sourcePath),
+      ['workspace.md'],
+    );
+  });
+
   it('respects depth limit of 10', () => {
     let dir = tmpDir;
     for (let i = 0; i < 12; i++) {
