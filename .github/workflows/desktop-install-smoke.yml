@@ -149,6 +149,33 @@ jobs:
         run: |
           node desktop/scripts/smoke-installed-layout.mjs --root "${{ env.INSTALL_DIR }}" --platform win32
 
+      - name: Start the installed runtime and verify it serves
+        if: always()
+        shell: pwsh
+        run: |
+          # Drives the INSTALLED ServiceManager under plain Node: bundled Redis,
+          # API and Next.js start exactly as the shell starts them, then the API,
+          # the Web UI and the Web origin's /api rewrite are polled over HTTP.
+          node desktop/scripts/smoke-runtime.js --root "${{ env.INSTALL_DIR }}" --timeout 240
+          Write-Host "runtime smoke exit code: $LASTEXITCODE"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Show the runtime logs when the smoke failed
+        if: failure()
+        shell: pwsh
+        run: |
+          $logs = Join-Path $env:LOCALAPPDATA 'Clowder AI\data\logs'
+          Write-Host "log dir: $logs (exists: $(Test-Path $logs))"
+          if (Test-Path $logs) {
+            Get-ChildItem $logs -Recurse -File | Select-Object FullName, Length | Format-Table -AutoSize
+            foreach ($file in @('desktop.log', 'main.log')) {
+              $p = Join-Path $logs $file
+              if (Test-Path $p) { Write-Host "--- $file (tail) ---"; Get-Content $p -Tail 60 }
+            }
+            $apiLog = Join-Path $logs 'api\api.log'
+            if (Test-Path $apiLog) { Write-Host '--- api\api.log (tail) ---'; Get-Content $apiLog -Tail 80 }
+          }
+
       - name: Report what the install contains
         if: always()
         shell: pwsh
@@ -167,6 +194,12 @@ jobs:
         shell: pwsh
         run: |
           $target = "${{ env.INSTALL_DIR }}"
+          # The runtime smoke stops its own children; this is a bounded safety net
+          # so a failed smoke cannot leave file locks behind for the uninstaller.
+          Get-Process -ErrorAction SilentlyContinue |
+            Where-Object { $_.Path -and $_.Path.StartsWith($target) } |
+            Stop-Process -Force -ErrorAction SilentlyContinue
+          Start-Sleep -Seconds 2
           $uninstaller = Join-Path $target 'unins000.exe'
           if (Test-Path $uninstaller) {
             $proc = Start-Process -FilePath $uninstaller `
