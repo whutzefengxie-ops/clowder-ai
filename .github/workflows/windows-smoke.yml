@@ -75,6 +75,11 @@ jobs:
       # the decision logic honest without needing an installer.
       - name: Desktop installed-layout checks
         run: node --test desktop/scripts/lib/installed-layout.test.mjs
+      # The Web build wrapper spawned node_modules/.bin tools without a shell,
+      # which is ENOENT on Windows — this is what made the Windows installer
+      # impossible to build. Windows-only in effect; harmless elsewhere.
+      - name: Web build signal-exit wrapper tests
+        run: node --test scripts/run-preserving-signal-exit.test.mjs
       # Platform-agnostic desktop tests, wired here because this workflow is the
       # one that reliably runs on PRs (the public test lane is currently red on
       # main before it reaches desktop/*.test.js).
