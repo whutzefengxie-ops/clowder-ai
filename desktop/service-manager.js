@@ -60,7 +60,8 @@ function resolveAppVersion() {
 
 // Desktop log alongside API logs in the user data directory.
 // Prior location (os.tmpdir()) was hard to find for debugging.
-const USER_DATA_DIR = resolveUserDataDir();const LOG_DIR_DESKTOP = path.join(USER_DATA_DIR, 'data', 'logs');
+const USER_DATA_DIR = resolveUserDataDir();
+const LOG_DIR_DESKTOP = path.join(USER_DATA_DIR, 'data', 'logs');
 try {
   fs.mkdirSync(LOG_DIR_DESKTOP, { recursive: true });
 } catch {}
@@ -163,7 +164,11 @@ class ServiceManager {
     // Resolved before Redis so ownership of an already-listening Redis can be
     // proven instead of assumed.
     const instanceFile = instanceFilePath(userDataDir);
-    const { record: instance, created, replacedCorrupt } = loadOrCreateInstance({
+    const {
+      record: instance,
+      created,
+      replacedCorrupt,
+    } = loadOrCreateInstance({
       filePath: instanceFile,
       appVersion: resolveAppVersion(),
     });
@@ -613,7 +618,9 @@ class ServiceManager {
 
     const reply = await this._redisCommand(this.redisPort, ['SET', INSTANCE_MARKER_KEY, instanceId]);
     if (reply.kind === 'unreachable' || reply.kind === 'error') {
-      log(`WARNING: could not write ${INSTANCE_MARKER_KEY} on port ${this.redisPort}; the next run will refuse to adopt this Redis`);
+      log(
+        `WARNING: could not write ${INSTANCE_MARKER_KEY} on port ${this.redisPort}; the next run will refuse to adopt this Redis`,
+      );
       return;
     }
 
