@@ -17,6 +17,15 @@ export {
   handleAudioReadTranscript,
 } from './audio-tools.js';
 export {
+  autoDreamTools,
+  handleListDiaries,
+  handleReadDiary,
+  handleSettlePresentLoop,
+  listDiariesToolInputSchema,
+  readDiaryToolInputSchema,
+  settlePresentLoopToolInputSchema,
+} from './auto-dream-tools.js';
+export {
   callbackEvidenceSearchInputSchema,
   callbackMemoryTools,
   callbackReflectInputSchema,
@@ -27,34 +36,73 @@ export {
 } from './callback-memory-tools.js';
 export {
   ackMentionsInputSchema,
+  admitEntrustedWorkInputSchema,
   callbackTools,
-  checkPermissionStatusInputSchema,
+  closeEntrustedWorkInputSchema,
   crossPostMessageInputSchema,
   featIndexInputSchema,
   getPendingMentionsInputSchema,
   getThreadCatsInputSchema,
   getThreadContextInputSchema,
+  getWorkflowSopInputSchema,
   handleAckMentions,
-  handleCheckPermissionStatus,
+  handleAdmitEntrustedWork,
+  handleCloseEntrustedWork,
+  handleCompleteA2ADispatch,
+  handleCompleteManagedHold,
   handleCrossPostMessage,
+  handleDrillMemoryCue,
   handleFeatIndex,
   handleGetPendingMentions,
   handleGetThreadCats,
   handleGetThreadContext,
+  handleGetWorkflowSop,
   handleListTasks,
   handleListThreads,
+  handleOfferCustody,
   handlePostMessage,
+  handleRecordMemoryCueOutcome,
   handleRegisterPrTracking,
-  handleRequestPermission,
+  handleRetryCustodyAdmission,
+  handleUpdateEntrustedWork,
   handleUpdateTask,
   listTasksInputSchema,
   listThreadsInputSchema,
+  offerCustodyInputSchema,
   postMessageInputSchema,
   registerPrTrackingInputSchema,
-  requestPermissionInputSchema,
+  retryCustodyAdmissionInputSchema,
+  updateEntrustedWorkInputSchema,
   updateTaskInputSchema,
 } from './callback-tools.js';
-
+export {
+  advanceEvolutionProgramChangeInputSchema,
+  capabilityEvolutionChangeTools,
+  handleAdvanceEvolutionProgramChange,
+} from './capability-evolution-change-tools.js';
+export {
+  capabilityEvolutionRoundTools,
+  constituteEvolutionProgramInputSchema,
+  handleConstituteEvolutionProgram,
+  handleOpenEvolutionRound,
+  handleRecordEvolutionEvaluation,
+  openEvolutionRoundInputSchema,
+  recordEvolutionEvaluationInputSchema,
+} from './capability-evolution-round-tools.js';
+export {
+  capabilityEvolutionTools,
+  getEvolutionProgramInputSchema,
+  handleGetEvolutionProgram,
+  handleStartEvolutionProgram,
+  handleUpdateEvolutionProgram,
+  startEvolutionProgramInputSchema,
+  updateEvolutionProgramInputSchema,
+} from './capability-evolution-tools.js';
+export {
+  communityRouteAcceptanceInputSchema,
+  communityRouteAcceptanceTools,
+  handleCommunityRouteAcceptance,
+} from './community-route-acceptance-tool.js';
 export {
   distillationTools,
   handleMarkGeneralizable,
@@ -64,6 +112,18 @@ export {
   nominateForGlobalInputSchema,
   reviewDistillationInputSchema,
 } from './distillation-tools.js';
+export {
+  entrustedWorkReadTools,
+  handleReadEntrustedWork,
+  readEntrustedWorkInputSchema,
+} from './entrusted-work-read-tools.js';
+export {
+  evalLifecycleTools,
+  handleProposeEvalRepair,
+  handleRecordEvalLifecycle,
+  proposeEvalRepairInputSchema,
+  recordEvalLifecycleInputSchema,
+} from './eval-lifecycle-tools.js';
 export {
   backfillEventsInputSchema,
   eventMemoryTools,
@@ -78,6 +138,11 @@ export {
   handleSearchEvidence,
   searchEvidenceInputSchema,
 } from './evidence-tools.js';
+export {
+  externalReviewVerdictInputSchema,
+  externalReviewVerdictTools,
+  handleExternalReviewVerdict,
+} from './external-review-verdict-tool.js';
 export {
   externalRuntimeSessionCallbackTools,
   externalRuntimeSessionReadTools,
@@ -141,6 +206,23 @@ export {
   limbListToolsInputSchema,
   limbTools,
 } from './limb-tools.js';
+export {
+  handleReadMeetingArtifact,
+  meetingArtifactTools,
+  readMeetingArtifactInputSchema,
+} from './meeting-artifact-tools.js';
+export {
+  createMemoryCueTools,
+  drillMemoryCueInputSchema,
+  recordMemoryCueOutcomeInputSchema,
+} from './memory-cue-tools.js';
+export {
+  handleListPawFeelInbox,
+  handleTriagePawFeel,
+  listPawFeelInboxInputSchema,
+  pawFeelDispositionTools,
+  triagePawFeelInputSchema,
+} from './paw-feel-disposition-tools.js';
 export {
   handleRunPerspective,
   perspectiveTools,
@@ -209,3 +291,13 @@ export {
   signalSummarizeInputSchema,
   signalsTools,
 } from './signals-tools.js';
+export {
+  createSkillConsumptionTools,
+  dismissSkillConsumptionInputSchema,
+  handleDismissSkillConsumption,
+  handleOpenWithWorkspaceNavigator,
+  handlePrepareSkillConsumption,
+  openWithWorkspaceNavigatorInputSchema,
+  prepareSkillConsumptionInputSchema,
+  skillConsumptionTools,
+} from './skill-consumption-tools.js';

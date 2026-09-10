@@ -80,6 +80,7 @@ function makeGitHubDeps(overrides = {}) {
     fetchOpenIssues: async () => [],
     // F202 Phase 2D: issue-tracking deps
     issueCommentRouter: stubRouter,
+    waitLifecycle: { observe: async () => ({ kind: 'state_only', reason: 'test' }) },
     fetchIssueComments: async () => [],
     fetchIssueState: async () => 'open',
     isEchoIssueComment: () => false,
@@ -306,6 +307,71 @@ describe('GitHub schedule factory registration (F202-2B Task 3)', () => {
     const spec = factory.createTaskSpec('schedule:github:cicd-check', makeGitHubDeps());
     assert.strictEqual(spec.id, 'schedule:github:cicd-check');
     assert.strictEqual(spec.profile, 'poller');
+  });
+
+  test('github.cicd-check factory uses one tick batch even when legacy single-reader wiring is present', async () => {
+    const registry = new ScheduleFactoryRegistry();
+    registerGitHubScheduleFactories(registry);
+    const factory = registry.get('github.cicd-check');
+    assert.ok(factory);
+
+    const task = {
+      id: 'task-pr-7',
+      kind: 'pr_tracking',
+      subjectKey: 'pr:owner/repo#7',
+      threadId: 'thread-7',
+      title: 'PR wait',
+      ownerCatId: 'codex-sol',
+      status: 'doing',
+      createdBy: 'codex-sol',
+      userId: 'user-1',
+      createdAt: 1,
+      updatedAt: 1,
+    };
+    let batchCalls = 0;
+    let singleCalls = 0;
+    const routed = [];
+    const spec = factory.createTaskSpec(
+      'schedule:github:cicd-check',
+      makeGitHubDeps({
+        taskStore: { listByKind: async () => [task] },
+        cicdRouter: {
+          route: async (poll) => {
+            routed.push(poll.prNumber);
+            return { kind: 'skipped', reason: 'state-only' };
+          },
+        },
+        // Reproduces the pre-fix production dependency bag. The plugin factory
+        // must not let this legacy seam disable the tick-level batch reader.
+        fetchPrStatus: async () => {
+          singleCalls += 1;
+          return null;
+        },
+        fetchPrStatuses: async (targets) => {
+          batchCalls += 1;
+          return new Map(
+            targets.map((target) => [
+              `${target.repoFullName}#${target.prNumber}`,
+              {
+                ...target,
+                headSha: 'abc123',
+                prState: 'open',
+                aggregateBucket: 'pending',
+                checks: [],
+              },
+            ]),
+          );
+        },
+      }),
+    );
+
+    const gate = await spec.admission.gate();
+    assert.equal(gate.run, true);
+    assert.equal(batchCalls, 1, 'production factory must perform one tick-level batch read');
+    assert.equal(singleCalls, 0, 'production factory must not poll each PR separately');
+    await spec.run.execute(gate.workItems[0].signal, gate.workItems[0].subjectKey, {});
+    assert.equal(singleCalls, 0, 'execute must consume the batch snapshot');
+    assert.deepEqual(routed, [7]);
   });
 
   test('github.conflict-check factory creates TaskSpec with correct instanceId', () => {
@@ -1459,7 +1525,28 @@ describe('F140 review-feedback factory preserves the registered thread', () => {
       updatedAt: Date.now(),
       userId: 'u-1',
       automationState: {
-        review: { lastCommentCursor: 0, lastDecisionCursor: 0, completedReviewCount: 99 },
+        review: {
+          lastCommentCursor: 0,
+          lastInlineCommentCursor: 0,
+          lastConversationCommentCursor: 0,
+          lastDecisionCursor: 0,
+          completedReviewCount: 99,
+        },
+        await: {
+          v: 1,
+          generation: 1,
+          subjectRef: 'pr:owner/repo#42',
+          ownerFence: { kind: 'containing_task', generation: 1 },
+          baseline: { capturedAt: 1, headSha: 'head-42' },
+          continuation: {
+            when: [{ kind: 'pr_review_decision_changed' }],
+            // biome-ignore lint/suspicious/noThenProperty: F280's frozen wait contract field.
+            then: 'Continue the review.',
+          },
+          expiresAt: Date.now() + 60_000,
+          createdAt: 1,
+          provenance: 'explicit_registration',
+        },
       },
     };
 
@@ -1566,7 +1653,28 @@ describe('F140 review-feedback factory preserves the registered thread', () => {
       updatedAt: Date.now(),
       userId: 'u-1',
       automationState: {
-        review: { lastCommentCursor: 0, lastDecisionCursor: 0, completedReviewCount: 1 },
+        review: {
+          lastCommentCursor: 0,
+          lastInlineCommentCursor: 0,
+          lastConversationCommentCursor: 0,
+          lastDecisionCursor: 0,
+          completedReviewCount: 1,
+        },
+        await: {
+          v: 1,
+          generation: 1,
+          subjectRef: 'pr:owner/repo#45',
+          ownerFence: { kind: 'containing_task', generation: 1 },
+          baseline: { capturedAt: 1, headSha: 'head-45' },
+          continuation: {
+            when: [{ kind: 'pr_review_decision_changed' }],
+            // biome-ignore lint/suspicious/noThenProperty: F280's frozen wait contract field.
+            then: 'Continue the review.',
+          },
+          expiresAt: Date.now() + 60_000,
+          createdAt: 1,
+          provenance: 'explicit_registration',
+        },
       },
     };
     const updateCalls = [];
@@ -1607,11 +1715,7 @@ describe('F140 review-feedback factory preserves the registered thread', () => {
     assert.equal(gateResult.run, true, 'gate should fire');
     await spec.run.execute(gateResult.workItems[0].signal, 'pr:owner/repo#45', {});
 
-    assert.equal(
-      routeCalls[0].tracking.threadId,
-      'th-registered',
-      'factory path must deliver legacy tasks to source thread',
-    );
+    assert.equal(routeCalls[0].tracking.taskId, 'task-legacy');
     assert.deepEqual(routeCalls[0].signal.routingAudit, {
       kind: 'legacy-auto-rotated-repaired',
       previousThreadId: 'thread_rotated_1',

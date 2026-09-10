@@ -1,6 +1,6 @@
-# Cat Cafe @提及路由系统
+# Clowder AI @提及路由系统
 
-> 面向不熟悉 Cat Cafe 内部架构的工程师的系统概览。
+> 面向不熟悉 Clowder AI 内部架构的工程师的系统概览。
 >
 > 作者：Ragdoll/claude-opus-4-6  
 > 日期：2026-06-24
@@ -9,7 +9,7 @@
 
 ## 这个系统解决什么问题？
 
-Cat Cafe 是一个多智能体系统，多个由 LLM 驱动的"猫猫"在共享对话线程中协作。用户（我们叫"operator"或"共创者"）和猫猫之间需要一种方式来指定消息发给谁。
+Clowder AI 是一个多智能体系统，多个由 LLM 驱动的"Clowder AI"在共享对话线程中协作。用户（我们叫"operator"或"共创者"）和猫猫之间需要一种方式来指定消息发给谁。
 
 `@提及` 就是这个机制。但和普通聊天软件里 `@用户` 只是一个通知不同，这里的 `@猫猫` 是一条**路由指令**——它决定下一个被唤醒的是哪个 LLM agent。搞错了意味着叫醒错误的 agent、浪费 token、或者打断对话连续性。
 
@@ -342,7 +342,7 @@ Cat Cafe 是一个多智能体系统，多个由 LLM 驱动的"猫猫"在共享�
 |----|------|---------|--------|
 | **品种层** | 出厂默认性格（如"Ragdoll温柔但有主见"） | `cat-template.json` | 共享（社区可见） |
 | **实例层** | 这只猫被培养出的独特个性 | `.cat-cafe/cat-catalog.json` | 每个安装实例（私有） |
-| **用户层** | operator是什么样的人 | `private/profile/landy-capsule.md` | 每个用户（≤300 字符硬上限） |
+| **用户层** | operator是什么样的人 | `private/profile/operator-capsule.md` | 每个用户（≤300 字符硬上限） |
 | **关系层** | 这只猫和这个人怎么配合 | `private/profile/relationship/{catId}-primer.md` | 每个（用户 × 猫）对 |
 
 **用户胶囊**（第 3 层）是"这个人是谁？"层：
@@ -373,7 +373,7 @@ Cat Cafe 是一个多智能体系统，多个由 LLM 驱动的"猫猫"在共享�
 这是**提议-审批-写入**流水线，不是自动更新。人类对自己的画像始终有最终决定权。
 
 **数据存放位置：**
-- 胶囊：`private/profile/landy-capsule.md`（300 字符画像，operator 签名）
+- 胶囊：`private/profile/operator-capsule.md`（300 字符画像，operator 签名）
 - 底片：`private/profile/relationship/{catId}-primer.md`（每猫轨迹）
 - 注入：`compile-system-prompt-l0.mjs` → `resolveUserCapsule()` → `{{USER_CAPSULE}}`
 - 更新工具：`cat_cafe_propose_profile_update` MCP 工具 → `RedisProfileUpdateProposalStore`
@@ -524,3 +524,27 @@ Cat Cafe 是一个多智能体系统，多个由 LLM 驱动的"猫猫"在共享�
 | 多猫提及超时 | 3-20 分钟 | 每请求 |
 | 上下文消息预算 | 约 20 条 | 对话历史窗口 |
 | 上下文 token 预算 | 约 2000 token | 历史总大小 |
+
+---
+
+## 附录：Queued Work / Per-Target Ack 语义
+
+> Added 2026-07-01 | 详见 ADR-040
+
+当用户发消息给正在执行的猫时，消息进入排队状态（`queued`）。排队消息的读取（read）、处理（handled）、投递（delivered）、目标消费（target consumed）是四个独立状态层：
+
+| 层 | 含义 | Scope | 影响其他猫？ |
+|----|------|-------|------------|
+| `delivery` | 消息是否进入 thread history | message-level | 否 |
+| `queued_seen` | 猫获取了排队正文 | per-cat + queue entry | 否 |
+| `queued_handled` | 猫处理完毕或显式 disposition | per-cat + queue entry | 否 |
+| `target_consumed` | 路由 work item 对该 target 猫已解决 | per-target + queue entry | 否（仅编排器聚合） |
+
+**设计规则**：read is per-cat, handled is per-cat, target consumption is per-target. Nothing is global by default.
+
+**关联 Feature**：
+- F254 产出/消费 `queued_seen`，用于抑制 freshness 重复提醒
+- F086 拥有 canonical per-target `TargetStatus` 状态机
+- F108 拥有独立 fan-out context cutoff 策略
+- F117/F039 定义 queued delivery lifecycle 底层语义
+

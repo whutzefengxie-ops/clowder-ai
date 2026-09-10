@@ -4,11 +4,16 @@ related_features: [F061, F174, F077, F086, F098, F193]
 topics: [auth, mcp, agent-key, persistent-credential, antigravity, infrastructure]
 doc_kind: spec
 created: 2026-04-26
+tips_exempt: renewed for the legacy generic-permission sunset truth sync; Remote MCP discovery is unchanged and no new user-invokable action shipped
 ---
 
 # F178: Persistent MCP Agent-Key Auth — 跨 invocation 写权限
 
 > **Status**: in-progress | **Owner**: Ragdoll（Ragdoll） | **Reviewer**: Maine Coon（Maine Coon） | **Priority**: P1
+
+Architecture cell: callback-auth
+Map delta: updated 2026-08-08
+Why: F178 owns the persistent agent-key principal and canonical sidecar lifecycle above F174 invocation credentials.
 
 ## Why
 
@@ -32,6 +37,15 @@ created: 2026-04-26
 - 与Maine Coon（Maine Coon）+ operator三方确认 5 个 Open Questions（OQ-1~OQ-5，见下）
 - 产出 agent-key schema 设计：data model, lifecycle states, security boundaries, audit semantics
 - 元审美自检（feat-lifecycle Design Gate 必问）：是"坐标变换"（agent-key 是新 first-class 概念，让 persistent vs invocation 两套语义干净分离）还是"多项式堆项"（在 callback token 上叠 long-lived 标志）？
+
+## User Journey
+
+**Scope unit**：同一 owner 下的一只 persistent cat principal（`userId × catId`）及其 `0600` sidecar。
+
+1. Runtime 启动时读取 sidecar 并向权威 registry 验证；仍健康则原样保留，不让 restart 改坏身份。
+2. Key 接近 TTL 或 registry 已遗失记录时，runtime 在 owner fence 内自动 rotate/replace，原子发布新 sidecar；用户不再去 Terminal 手动重配。
+3. Remote MCP 用该 principal 读写获授权的 thread，并继续显示正确 cat 身份。
+4. 发布或验证失败时 fail closed、撤销孤儿 issuance、保留可诊断 reason code，stdout 和文档不出现 secret。
 
 ### Phase B: CallbackPrincipal 抽象 + AgentKeyRegistry + 核心 API
 
@@ -120,7 +134,7 @@ created: 2026-04-26
 - [~] ~~AC-D5: key orphaning guard~~ → 迁移到 Phase E（AC-E1）
 
 ### Phase E（Agent-Key 自治监控 — eval 闭环）📋 backlog
-- [ ] AC-E1: Key orphaning guard：sidecar reconcile 重启时按 `catId × userId × scope` upsert/replace，连续 restart/reconcile 测试覆盖（猫自治，不需人盯）
+- [x] AC-E1: Key orphaning guard：共享 sidecar provisioner 在启动 + 每日续租中 verify/preserve/rotate/replace，原子 `0600` 发布；连续 restart、并发 reconcile、stale file、发布回滚测试覆盖（2026-08-08，F247 gpt-pro expiry 修复同轮）
 - [ ] AC-E2: Audit log 走 evidence/observability 通道 + F192 eval 闭环消费（不走 Hub UI）
 - [ ] AC-E3: Agent-key 失败率走 eval telemetry 自动告警，复用 F174 ring buffer（猫发现异常自行处理）
 - [ ] AC-E4: Thread 内 agent-key 写入标识 "by agent-key"（猫可感知出处）
@@ -154,7 +168,7 @@ created: 2026-04-26
 | KD-1 | F174 已 done，agent-key 在 F174 基建上加层而非另起独立 auth 体系 | 复用 Redis registry / 结构化错误 / Route B framework / telemetry，避免双套基础设施 | 2026-04-26（立项时） |
 | KD-2 | agent-key 是独立 first-class 概念（不是扩长 invocation token） | invocation token 必须短生命（隔离不变量），扩长会绕过 F174 Phase A 安全边界 | 2026-04-26（立项时） |
 | KD-3 | Phase B 先引入 `CallbackPrincipal`（`kind: 'invocation' \| 'agent_key'`），不把 agent-key 硬塞 `InvocationRecord` | Maine Coon提出：`request.callbackAuth` 现被当 `InvocationRecord` 用，agent-key 需要另一种 principal；否则 route 里到处 `if (agentKey)` 补丁 = 多项式堆项。Ragdoll-46 采纳 | 2026-04-26（Design Gate） |
-| KD-4 | Binding scope = per-cat-per-user，route 级 thread 语义保留 | 持久 agent 价值 = 跨 thread 主动写；per-thread 等于换笼子。但 invocation-scoped route（`request_permission` / `hold_ball` / `guide_*` 等）仍绑 thread | 2026-04-26（Design Gate） |
+| KD-4 | Binding scope = per-cat-per-user，route 级 thread 语义保留 | 持久 agent 价值 = 跨 thread 主动写；per-thread 等于换笼子。但 invocation-scoped route（`hold_ball` / `guide_*` 等）仍绑 thread；历史 `request_permission` 已由 F286 落日 | 2026-04-26（Design Gate；2026-08-24 truth sync） |
 | KD-5 | 默认全开，不做逐猫审批 | operator拍板："默认大家都开启"。用户痛点是减少限制。Hub 做 inventory/revoke/audit 管理面板 | 2026-04-26（operator拍板） |
 | KD-6 | 服务端 Redis + hash，客户端 0600 sidecar file | Redis+hash 复用 F174 范式；客户端不放 mcp_config.json（git diff / 截图 / 复制链路泄漏面） | 2026-04-26（Design Gate） |
 | KD-7 | 45d TTL + rotation API + ≤24h overlap + 实时 revocation | 90d blast radius 过大；7d grace 无必要（capability orchestrator 自动改配置） | 2026-04-26（Design Gate） |

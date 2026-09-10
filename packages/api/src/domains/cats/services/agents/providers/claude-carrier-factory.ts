@@ -16,7 +16,7 @@
  * version — no pinned binary required (2.1.170 pin removed).
  */
 import type { CatId } from '@cat-cafe/shared';
-import type { AgentMessage, AgentService, AgentServiceOptions } from '../../types.js';
+import type { AgentMessage, AgentService, AgentServiceOptions, ToolExecutionPolicy } from '../../types.js';
 import { ClaudeAgentService } from './ClaudeAgentService.js';
 import { ClaudeBgCarrierService } from './ClaudeBgCarrierService.js';
 import { ClaudeInteractivePtyCarrierService } from './ClaudeInteractivePtyCarrierService.js';
@@ -177,12 +177,38 @@ export class FallbackCarrierWrapper implements AgentService {
     return this.carrier.injectsL0Natively?.() ?? false;
   }
 
-  usesChainKeyResume(): boolean {
-    return this.carrier.usesChainKeyResume?.() ?? false;
+  supportsToolExecutionPolicy(policy: ToolExecutionPolicy): boolean {
+    return this.carrier.supportsToolExecutionPolicy?.(policy) ?? false;
   }
 
-  needsServerRoutingGuard(): boolean {
-    return this.carrier.needsServerRoutingGuard?.() ?? false;
+  freshnessCarrierCapability(): import('../../types.js').AgentFreshnessCarrierCapability {
+    return (
+      this.carrier.freshnessCarrierCapability?.() ?? {
+        provider: 'anthropic',
+        carrier: 'other',
+        deliverySemantics: 'unsupported',
+      }
+    );
+  }
+
+  contextCapability(): import('../../types.js').AgentContextCapability {
+    return (
+      this.carrier.contextCapability?.() ?? {
+        provider: 'anthropic',
+        carrier: this.activeTier,
+        reportsRuntimeWindow: false,
+        authoritativeUsage: false,
+        usageTelemetry: 'unavailable',
+        nativeWindowControl: false,
+        nativeCompressionControl: false,
+        observesCompression: false,
+        reason: 'active Claude carrier did not declare context telemetry',
+      }
+    );
+  }
+
+  usesChainKeyResume(): boolean {
+    return this.carrier.usesChainKeyResume?.() ?? false;
   }
 
   // ─── Invoke with fallback ───
@@ -270,8 +296,16 @@ export class FallbackCarrierWrapper implements AgentService {
       // Cloud P1 fix: monitor yielded errors (not just thrown) — carriers can surface
       // quota/structural failures as error messages instead of throwing.
       const fallbackCarrier = this._carrierFactory(fallbackTier, this.catId);
+      const fallbackOptions = options?.beforeProviderLaunch
+        ? {
+            ...options,
+            beforeProviderLaunch: (request: import('../../types.js').PreparedProviderRequestV1) =>
+              options.beforeProviderLaunch?.({ ...request, boundaryReason: 'provider_fallback' }) ??
+              Promise.reject(new Error('provider_launch_recorder_unavailable')),
+          }
+        : options;
       try {
-        for await (const fbMsg of fallbackCarrier.invoke(prompt, options)) {
+        for await (const fbMsg of fallbackCarrier.invoke(prompt, fallbackOptions)) {
           if (fbMsg.type === 'error' && typeof fbMsg.error === 'string') {
             const fbCls = classifyCarrierFailure(fbMsg.error);
             if (fbCls !== 'transient') {

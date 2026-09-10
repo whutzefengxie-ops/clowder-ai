@@ -4,17 +4,18 @@ related_features: [F051, F057]
 topics: [design-language, ux, branding, cat-aesthetic]
 doc_kind: feature-spec
 created: 2026-03-04
+tips_exempt: "Renewed 2026-09-05 for Phase F1: DESIGN.md design-intent governance and its lint contract are developer-facing standards, with no new user-invokable action or discovery surface."
 ---
 
-# F056: Cat Café 设计语言 — 猫猫化不是猫化
+# F056: Clowder AI 设计语言 — 猫猫化不是猫化
 
-> **Status**: doing（Phase E 11/12 done + Phase E Sweep 2026-05-25~28 完成：bubble routing 统一 / variant slug 补齐 / 350-line split / clowder-ai#784 review-response — AC-E12 Playwright baseline deferred 到集成验证） | **Owner**: Maine Coon/GPT-5.2 + Ragdoll 主导设计执行 + Ragdoll工程架构 + Siamese概念方向
+> **Status**: doing（Phase F 视觉基线换底 2026-09-04 开工：F1 DESIGN.md 真相源 + lint gate 落地，F2 token/字体迁移待 A/B 截图；Phase E 10/12 done；AC-E9 console-dev 投影 partial，AC-E12 Playwright baseline deferred） | **Owner**: Maine Coon/GPT-5.2 + Ragdoll 主导设计执行 + Ragdoll工程架构 + Siamese概念方向；Phase F 执行 Ragdoll/fable-5
 > **Priority**: P1
 > **Evolved from**: F051（猫粮看板猫爪导航概念）、F052 Phase C（跨线程气泡设计打样）
 
 ## 愿景
 
-> **一句话**：Cat Café 应该处处有猫味，但是好看有设计感的猫味——不是一只笨蛋猫猫随便画的。
+> **一句话**：Clowder AI 应该处处有猫味，但是好看有设计感的猫味——不是一只笨蛋猫猫随便画的。
 
 ### operator experience（2026-03-04）
 
@@ -27,10 +28,19 @@ created: 2026-03-04
 
 ### 期望体验
 
-operator打开 Cat Café Hub：
+operator打开 Clowder AI Hub：
 1. 第一眼就知道这是猫咖——不是因为到处贴了猫 emoji，而是**交互逻辑、微动效、色调**都让人联想到猫咖
 2. 每个新功能的 UI 都自然融入同一种设计感，不会"这个页面像 Notion 那个页面像 Discord"
 3. 猫猫彩蛋散落在细节里（像 B2 的"越用越圆润"），但不影响效率
+
+## User Journey
+
+**Scope unit**：一个带语义图标的用户可见 UI 区块。
+
+1. You 打开功能页面，看到与 Clowder AI 色彩、线宽和隐喻一致的自有 SVG，而不是随操作系统变形的原生 emoji。
+2. 图标与文字共同表达语义；装饰性 SVG 对屏幕阅读器隐藏，信息不依赖图案本身。
+3. 主题切换时，图标通过 `currentColor` 与 semantic token 自动适配，不另养一套明暗资源。
+4. 猫若在 production TSX/JSX 新增 raw pictograph，提交前检查会点名文件和行号；换成正式设计资产后才放行。
 
 ## Why
 
@@ -39,7 +49,7 @@ operator打开 Cat Café Hub：
 | 维度 | 现状 | 缺口 |
 |------|------|------|
 | 视觉一致性 | 各页面像不同 webapp 拼起来的 | 没有统一设计语言 |
-| 品牌感 | 名字叫 Cat Café，UI 是标准 SaaS | 猫味只在文案里 |
+| 品牌感 | 名字叫 Clowder AI，UI 是标准 SaaS | 猫味只在文案里 |
 | 设计复用 | 每个功能重新定义颜色/间距/组件 | 没有 design token 体系 |
 | 新功能设计指导 | 猫猫们凭直觉设计 | 没有"什么叫猫猫化"的参考标准 |
 
@@ -79,7 +89,7 @@ Layer 0: Governance — ESLint gate + visual baseline + "迁移完成"定义
 
 ### Phase A：设计基础（Design Foundation）
 
-**目标**：建立 Cat Café 设计语言的基础规范，让三猫设计新功能时有章可循。对应 Layer 1-2。
+**目标**：建立 Clowder AI 设计语言的基础规范，让三猫设计新功能时有章可循。对应 Layer 1-2。
 
 #### A1: 设计语言收敛（三猫打样竞赛 → operator定调）
 
@@ -99,7 +109,7 @@ Maine Coon发散了 5 个方向后收敛为一套：
 3. **猫咖隐喻 (Cafe Metaphors)** — 可解释的隐喻（邮戳/肉垫/香气），不堆砌猫 emoji
 4. **温润色彩 (Cozy Palette)** — 奶油白/软蓝/暖棕，single accent discipline
 
-**实践规则**（F154 事故后补充）：
+##### 实践规则（F154 事故后补充）：
 - **在地设计 (Design in Context)** — 新交互必须先放回真实页面结构中验证。先看现场，再决定放哪里、替代什么、会不会挤、对现有效率是增益还是负担。猫咖感来自"和环境自然相处"，不是把新元素硬塞进每个角落。
 
 **三猫打样竞赛结果**（operator评选）：
@@ -165,6 +175,12 @@ Token contract 落地后，分桶跑 codemod：
 - 系统消息 ⚠️/❌/✅ → alert/error/success SVG
 - 飞书/TG 纯文本 formatter 中的功能性 emoji（checklist ✅☐、audio 🔊、gallery 🖼️）
 - 前端 UI 组件中零散 emoji（PlanBoard、ThinkingIndicator、BrakeModal 等）
+
+**B0-Wave3（2026-07-26 debt freeze）**：
+- 正式产品 UI 不再新增原生 emoji / pictograph；语义图标使用 Clowder AI 自绘 SVG 或正式设计资产
+- `check-no-new-ui-emoji` 对 production TSX/JSX 的新增行做硬检查，测试/fixture 与设计过的 SVG markup 不计入
+- 兼容旧 payload 的 pictograph 解析必须迁入非 TSX/JSX parser module；production TSX/JSX 不设 parser 豁免，因为局部 diff 无法证明表达式不会进入渲染
+- 猫爪口癖只允许 `🐾` 出现在带理由标注的 JSX 关系表达文案中；该标注不放行独立图标、属性值或其他 pictograph
 
 ### Phase B：存量改造（Retrofit）
 
@@ -232,7 +248,7 @@ team experience（2026-05-21）：
 
 **特殊变量**（不属任何一类）：
 - `--scrim-{light/heavy/dim}`：遮罩半透明黑（modal/drawer/lightbox 后的 dim layer）
-- `--brand-cat-cafe-pink`：Cat Café 品牌色（目前 = App Accent，未来可拆）
+- `--brand-cat-cafe-pink`：Clowder AI 品牌色（目前 = App Accent，未来可拆）
 - `--connector-*`：5 个 IM connector 品牌色（已独立在 connector-tokens.css）
 - F155 guide engine 专属色（已独立，保持）
 
@@ -388,8 +404,8 @@ Dark mode 不能简单把黑阴影换成白阴影——业界标准是 **inset �
 #### E7：视觉回归 + WCAG 自检
 
 - Playwright 截图基线：light + dark 全套关键页面（≥10 页面） — **AC-E12 实施 plan 见下**
-- WCAG 对比度自动测试：所有 `text-on-bg` 组合 ≥ 4.5:1（脚本扫 oklch 派生对） — ✅ commit `a71b5e949`
-- ESLint 规则升级：`cafe/no-hardcoded-colors` 同时禁止 `oklch(...)` 行内字面值（必须经 token） — ✅ commit `a71b5e949`
+- WCAG 对比度自动测试：所有 `text-on-bg` 组合 ≥ 4.5:1（当前实现：`packages/web/src/lib/__tests__/f056-wcag-contrast.test.ts`）
+- ESLint 规则升级：`cafe/no-hardcoded-colors` 同时禁止 `oklch(...)` 行内字面值（当前实现：`packages/web/eslint-plugins/no-hardcoded-colors.js`）
 
 #### E12 实施 Plan（deferred）
 
@@ -481,6 +497,40 @@ Phase E 主提交（`62c93fc5`）落地后，9 个 follow-up commit 处理 bubbl
 - **Copy current mode only**：`exportText(params, mode)` 只导出当前主题配置，增加 surfaceHue/surfaceChroma 到输出
 - 删除冗余 `migrate-hardcoded-colors.mjs`（一次性批量迁移脚本，使命已完成）
 
+### Phase F：视觉基线换底 — Anthropic 暖编辑感 + Linear 精密结构（2026-09-04 开工）
+
+**触发**：2026-09-04 operator（[thread-id]）："家里的猫做的 UI 也好 UX 也好……一切涉及到审美的都非常丑"；"我的审美不行，你得自己去找给我选"；Ragdoll拿 Anthropic / Notion / Linear / Airbnb / Vercel 五家真实产品截图让他选，他选 **Anthropic + Linear**，并说"我们家最开始对标的就是 Anthropic"。
+
+**根因（三条，都有证据）**：
+1. 家里的设计真相源（`docs/design-system.md`，2026-02，Gemini 维护）是猫自己发明的审美（"Cozy, Playful"、薰衣草紫身份色），从未与任何operator认可的参照对标——猫拿猫的品味当标准，循环自证。
+2. F083 / F303 / F305 / design-in-context checklist / console-dev 四道门全是**过程门**，能保证"不出错"，保证不了"好看"；F305 明文"问题不是颜色不好看"，于是视觉审美层至今无 owner。
+3. LLM 默认审美 = 全网中位数（紫渐变、圆角卡片、emoji、通用 Tailwind）；无强参照时必然回归均值，且猫多数时候盲画（文字→代码，交付前不看渲染结果）。
+
+**市场对标（检索日期 2026-09-04，计数为当日快照、会变）**：
+- Google Stitch 开源 DESIGN.md 规格（YAML token + 设计理由）：https://github.com/google-labs-code/design.md ；CLI `@google/design.md@0.4.0`（lint / diff / export，Apache-2.0）；发布说明 https://blog.google/innovation-and-ai/models-and-research/google-labs/stitch-design-md/
+- VoltAgent/awesome-design-md：README 当日列 73 家真实站点提取的 DESIGN.md（含 Claude、Linear）：https://github.com/VoltAgent/awesome-design-md
+- OpenDesign（nexu-io/open-design，Apache-2.0）：官网当日自述 "152 design systems"，定位为 Claude Design 的开源替代：https://open-design.ai/ · https://github.com/nexu-io/open-design
+- Claude Design（Anthropic Labs，2026-04-17 公告，基于 Opus 4.7）：https://www.anthropic.com/news/claude-design-anthropic-labs
+- Atlassian 实测：DESIGN.md 把 AI slop 变成可识别的品牌感，但它是可移植的意图快照，生产 token 应从代码来：https://www.atlassian.com/blog/how-we-build/atlassians-design-md-is-here-what-we-learned-testing-portable-design-context-in-practice
+
+结论：**换底子，不换工具**。
+
+**F1（本 PR）**：
+- 仓库根目录 `DESIGN.md` 从"指针文件"升级为 Google 规格的**视觉意图 / 目标值 canonical 真相源**（design intent）：种子 = Anthropic（画布 / 衬线 display / 赭红 / 暖近黑）+ Linear（4px 节奏、32px 控件、发丝线分层、单一强调色、产品内容当主角），再按"密集协作工作区"重新定标（正文 14px、section 64px、按钮 8px、气泡 12px）。**两个真相域**：AC-F6 parity 守护落地前，运行时以 `theme-tokens.css` 为准，DESIGN.md 的值是 F2 目标；之后由测试强制一致（F305 AC-A4 的"不做运行时字面值第二拷贝"由此机制接管，F305 doc 已记录取代关系）。
+- 对比度契约按**角色配对**声明并由确定性矩阵测试守住（lint 只覆盖已声明组件对）：白字 × primary 4.6:1；链接 / 选中 / 强调文字用 `primary-active`（5.15–6.41:1），`primary` 不做正文级文字；muted 压深到 #5f5d57（四档表面 ≥ 5.0:1）；语义色永不做文字色。
+- `scripts/check-design-md.mjs` + test + `pnpm check:design-md`（接入 `pnpm check`）：linter 有任何 error / warning 即红（含 warning 负向 fixture）；test 同时守 prose 允许的全部文字 × 表面配对 ≥ 4.5:1 与 `rounded.full` = `rounded.pill` = 9999px。
+- 根 `DESIGN.md` 与 gate 脚本加入 `sync-manifest.yaml` managed_files——tombstone 指向它，公开仓不能 404。
+- `docs/design-system.md` 与 `docs/design/design-system.md` 退役为 tombstone（历史引用不改）。
+- `docs/design/console-design-system.md` 顶部加权威指针（结构判据仍归它；token 与字体声音归 DESIGN.md）。
+- `@google/design.md@0.4.0` 加入根 devDependencies。
+
+**F2（后续 PR，逐步）**：
+- token 迁移：`--accent-hue` 50→≈38、chroma 0.14→≈0.11；`--surface-hue` 80→≈75 并对齐 canvas → surface-3 四档；dark 四档对齐 `dark-canvas → dark-surface-3`；每步出 light/dark A/B 渲染截图由operator 10 秒选，选定后才落 token。
+- 字体：增加衬线 display 栈（Source Serif 4 / Songti SC / Noto Serif CJK SC），只在 ≥ 22px 的标题、空态、猫的"人话"时刻使用；正文保持 Inter。
+- 圆角 / 密度：气泡 24→12px、pill 按钮 → 8px、控件 32px。
+- 守护测试：解析 `DESIGN.md` front matter，与 `theme-tokens.css` 解析值对比（ΔE 容差），红 = 文或码漂移。
+- Design Gate 硬规则：任何视觉交付必须附渲染截图，无截图不过门（写入 design-in-context checklist，Skill PR 单独走）。
+
 ---
 
 ## Acceptance Criteria
@@ -503,6 +553,7 @@ Phase E 主提交（`62c93fc5`）落地后，9 个 follow-up commit 处理 bubbl
 - [x] AC-B0-W1: Connector 气泡图标全部替换为设计图标（PNG/SVG），向后兼容
 - [x] AC-B0-W2: Bootcamp 任务卡片/成就/排行榜 emoji → SVG（Maine Coon负责）
 - [x] AC-B0-W3: 系统消息/前端零散 emoji → 文本标签 + SVG（Maine Coon负责）
+- [x] AC-B0-W4: production UI 新增 emoji debt-freeze guard；RecallLedger 四枚原生 emoji → 自绘 SVG
 
 ### Phase B
 - [ ] AC-B1: 聊天界面全面应用新设计语言
@@ -519,19 +570,28 @@ Phase E 主提交（`62c93fc5`）落地后，9 个 follow-up commit 处理 bubbl
 - [ ] AC-D3: next-intl 接入 + 术语词表独立文件，fork 改一张表即可换术语
 - [ ] AC-D4: tenant.config 可配品牌资产（logo/favicon/themeColor/配色 preset）
 
-### Phase E（OKLCH 系统化升级 — 2026-05-21 reopened，本 branch 实施进度 11/12）
+### Phase E（OKLCH 系统化升级 — 2026-05-21 reopened，当前实施进度 10/12）
 - [x] AC-E1: theme-tokens.css 重写为 OKLCH 派生公式，七类色 token 完整落地（Neutral 11 档 / App Accent 9 档 / Cat Persona 4 档 / Semantic 5 色 / Code 7-8 色 / Chart 12 色 / Avatar Fallback 8 色） — commit `7dbaddd61`
-- [x] AC-E2: Surface 三档 light mode L 跨度 3 个点、dark mode L 跨度 6 个点（0.18/0.24/0.12，AC-E10 测试驱动校准） — commit `7dbaddd61` + `a71b5e949`
+- [x] AC-E2: Surface 三档 light mode L 跨度 3 个点、dark mode L 跨度 6 个点（0.18/0.24/0.12，AC-E10 测试驱动校准） — current truth: `packages/web/src/app/theme-tokens.css` + `f056-wcag-contrast.test.ts`
 - [x] AC-E3: Elevation 阴影双层 token（light 单层黑阴影 / dark inset 高光 + 深阴影） — commit `7dbaddd61` 落 token，commit `bb5a56b47` Tailwind boxShadow utility 覆盖让全站 54 处 `shadow-{sm/md/lg/xl}` zero-touch 吃 elevation
 - [x] AC-E4: Cat hue/chroma 注入 :root（最小路径：保留 schema `{primary, secondary}` 不变，CatHueInjector 用 `hexToOklch` 反推 hue/chroma 注入；用户改 primary hex → 全应用自动适配，无需双字段同步） — commit `f4b642f16` + `2283d4b4a`
 - [x] AC-E5: Tailwind 内置色硬编码扫荡（HubTraceTree 4 处 + SkillsContent 1 处顺手清；audit test 已 0 hit，spec 早期估的 15 处随增量 token 化已清理完毕） — commit `7dbaddd61`
 - [x] AC-E6: 12 处未读色收口（已迁 `bg-conn-amber-bg` / `bg-conn-red-bg` 等 conn-* tokens；ThreadCatStatus regression test 验证；audit test 0 hit） — 早期已落 + commit `7dbaddd61` ESLint 同步
 - [x] AC-E7: Brand alias 分层（`--brand-cat-cafe-pink` 永远不变 + `--accent-hue/chroma` 暂时 = brand） — commit `7dbaddd61`
 - [x] AC-E8: Scrim 三档 token / Chart palette 12 色 / Avatar fallback 8 色 — commit `7dbaddd61`
-- [x] AC-E9: console-dev skill Gate 2 Design-System 章节追加 OKLCH 派生 + WCAG ≥4.5:1 自检 + Cat Persona 使用边界 — commit `a71b5e949`
-- [x] AC-E10: WCAG 对比度自动测试脚本（`oklchContrast` 纯函数 + 25 个测试覆盖 Cat Persona / Neutral / Cafe Surface / Accent button / Semantic icon / Surface 三档 L 跨度） — commit `a71b5e949`
-- [x] AC-E11: ESLint `cafe/no-hardcoded-colors` 升级，禁止 className `bg-[oklch(...)]` arbitrary value + style prop 行内 `oklch()` 字面值 — commit `a71b5e949`
+- [/] AC-E9: console-dev skill Gate 2 Design-System 当前仅覆盖 token-first；OKLCH 派生、WCAG ≥4.5:1 自检与 Cat Persona 使用边界尚未完整投影，原 completion receipt 无对应仓内 commit，保持 partial
+- [x] AC-E10: WCAG 对比度自动测试脚本（`oklchContrast` 纯函数 + 25 个测试覆盖 Cat Persona / Neutral / Cafe Surface / Accent button / Semantic icon / Surface 三档 L 跨度） — current truth: `packages/web/src/lib/__tests__/f056-wcag-contrast.test.ts`
+- [x] AC-E11: ESLint `cafe/no-hardcoded-colors` 升级，禁止 className `bg-[oklch(...)]` arbitrary value + style prop 行内 `oklch()` 字面值 — current truth: `packages/web/eslint-plugins/no-hardcoded-colors.js`
 - [/] AC-E12: Playwright 截图基线 light + dark ≥10 页面 — **deferred to 阶段 2 集成验证或 maintainer 接 PR 时**（理由：worktree 阶段 1 无 .env / 无 .cat-cafe runtime data / dev server 起不起 cat-catalog API；Playwright 引入新 dev dependency 需 maintainer 一并决策；详见下方 "E12 实施 Plan"）
+
+### Phase F（视觉基线换底 — 2026-09-04 开工）
+- [x] AC-F1: 根目录 `DESIGN.md` 符合 Google DESIGN.md 规格，`pnpm check:design-md` 0 error / 0 warning；prose **允许的**文字 × 表面角色配对（ink/body/muted × canvas..surface-3、primary-active × canvas..surface-3 与 primary-soft、on-primary × primary/primary-active、on-dark/on-dark-muted × dark-canvas..dark-surface-3）全部 WCAG AA ≥ 4.5:1，由确定性矩阵测试守住；不允许的配对（primary 作正文、语义色作文字）在 prose 明文禁止 — 本 PR
+- [x] AC-F2: `docs/design-system.md` + `docs/design/design-system.md` 退役为 tombstone；`console-design-system.md` 顶部指向新权威；根 `DESIGN.md` 与 gate 脚本进入 `sync-manifest.yaml` 导出闭包 — 本 PR
+- [ ] AC-F3: token 迁移（accent hue/chroma、surface 四档、dark 四档）每步附 light/dark A/B 截图，由operator选定后落地
+- [ ] AC-F4: 衬线 display 字体栈接入，仅 ≥ 22px 场景；正文不变
+- [ ] AC-F5: 圆角 / 控件密度迁移（气泡 12px、按钮 8px、控件 32px），存量 pill 按钮清零
+- [ ] AC-F6: DESIGN.md ↔ `theme-tokens.css` 一致性守护测试落地并绿
+- [ ] AC-F7: design-in-context checklist 增加"无渲染截图不过 Design Gate"硬规则（Skill PR）
 
 ## 需求点 Checklist
 
@@ -544,6 +604,7 @@ Phase E 主提交（`62c93fc5`）落地后，9 个 follow-up commit 处理 bubbl
 | R5 | "对齐设计语言" | AC-A2 | Token 体系 + 组件库 | [/] |
 | R6 | "猫猫头像点击出信息/生活照/心情"（不是工卡，是伙伴名片） | AC-C2 | manual | [ ] |
 | R7 | "飞书系统消息充满丑陋的emoji！你自己画过svg的！"（2026-03-18）→ 回调：CafeIcons Lucide 风格"又丑又突兀"，需二次审计（KD-9） | AC-B0-W1, AC-B0-W2 | 截图对比 + grep 验证 | [/] |
+| R15 | "我们家不是说不要用 emoji 吗？需要用我们自己的 SVG 啊。你自己画也可以啊。"（2026-07-26） | AC-B0-W4 | RecallLedger DOM 回归测试 + 增量 guard | [x] |
 | R8 | "不是脚手架而是一次前端的重构，组件化起来"，"fork后编辑不要烦我们"（2026-03-27） | AC-A0-1~3, AC-A3, AC-D1~4 | 审计报告 + Storybook + dark mode 截图 + fork 定制验证 | [ ] |
 | R9 | "dark 模式下侧边栏 thread 栏 主对话栏看不出层次"（2026-05-21） | AC-E2 | dark mode 三栏截图肉眼可辨 + L 跨度自动测试 | [/] | L 跨度自动测试已绿（surface vs elevated/sunken 跨度 ≥0.05）；视觉肉眼确认 pending E12 截图
 | R10 | "卡片的阴影 light 模式下是黑色阴影，dark 模式下也应该切换"（2026-05-21） | AC-E3 | 14 处 shadow 替换 + dark mode elevation 截图证据 | [/] | Tailwind utility 覆盖让 54 处 shadow 自动吃 elevation token；视觉证据 pending E12 截图
@@ -569,7 +630,7 @@ Phase E 主提交（`62c93fc5`）落地后，9 个 follow-up commit 处理 bubbl
 | KD-6 | Phase A 就留 dark mode semantic token | 成本极低但避免后面返工 | 2026-03-04 |
 | KD-7 | 动效上限机制：只在 hover/首次/低频触发 | Maine Coon提醒，防止灵动细节拖垮性能 | 2026-03-04 |
 | KD-8 | 禁止新硬编码 hex，组件只用 `bg-cafe-surface` 等 semantic class | Tailwind 映射统一入口 | 2026-03-04 |
-| KD-9 | Icon 风格修正：CafeIcons Lucide monoline 风格与设计语言冲突，Apple emoji 在用户可见 UI 反而更贴合 Cozy Swiss 底盘。方向：用户可见处优先 Apple emoji/filled-rounded SVG，Lucide monoline 仅后台/开发工具 | operator反馈"又丑又突兀"，社区 PR (F127) 又引入了大量 emoji，触发全面审计 | 2026-03-22 |
+| KD-9 | **已由 KD-36 取代。** 当时为修正 CafeIcons Lucide monoline 的突兀感，临时允许 Apple emoji / filled-rounded SVG；该判断后来让正式 UI 再次滑回原生 emoji | operator反馈"又丑又突兀"，社区 PR (F127) 又引入了大量 emoji，触发全面审计 | 2026-03-22 |
 | KD-10 | 五层夹心架构：Layer 0 治理 → Layer 1 tokens → Layer 2 primitives → Layer 3 patterns → Layer 4 enterprise | 三方共识（Ragdoll+Maine Coon+GPT Pro），详见 GPT Pro 咨询报告 | 2026-03-27 |
 | KD-11 | 在 TW3 上做，不叠加 TW4 升级风险 | 当前 Tailwind 3.4.0，TW3→TW4 迁移是正交风险源 | 2026-03-27 |
 | KD-12 | Radix headless 做 a11y 密集型控件（Dialog/Select/Menu），shadcn 当参考不当宪法 | GPT Pro + Maine Coon共识，a11y/focus 管理自建风险高 | 2026-03-27 |
@@ -596,6 +657,9 @@ Phase E 主提交（`62c93fc5`）落地后，9 个 follow-up commit 处理 bubbl
 | KD-33 | 主题持久化：当前 localStorage（`cat-cafe:themes`），服务端持久化为 follow-up | OklchTuner 已从纯开发者工具演进为用户自定义主题入口。`themeStore.ts` 通过 Zustand + localStorage 持久化：activeId / built-in overrides / 自建主题（最多 2 个）/ 版本迁移。清浏览器数据会丢。服务端持久化（存到 `/api/config` 用户设置）独立 scope，当前 localStorage 已覆盖"同一浏览器日常使用" | 2026-05-28 |
 | KD-34 | Surface 层 hue 独立于 accent（`--surface-hue` 独立旋钮），微量色调 chroma 由 `surfaceChroma` multiplier 控制 | operator拍板：页面背景色调可独立调整（light 默认 warm beige H=80, dark 默认 warm neutral H=30），不强制跟 accent hue 走——brand 色和底色解耦；Tuner "页面层次" 4 档控制 lightness，hue/chroma 由 surfaceHue/surfaceChroma 独立控制 | 2026-05-28 |
 | KD-35 | Per-preset INIT 默认值：Light 和 Dark 各有独立 accent/surface hue+chroma（INIT_LIGHT vs INIT_DARK），migrateTunerState 按 base mode 匹配 | Light preset: accentHue=50/C=0.14, surfaceHue=80/C*=1.0; Dark preset: accentHue=35/C=0.08, surfaceHue=30/C*=0.15。themeStore 迁移时用 `initForBase(base)` 确保 custom theme 不会继承错误 preset 的默认值 | 2026-05-29 |
+| KD-36 | 正式产品 UI 的语义图标不用原生 emoji；用 Clowder AI 自绘 SVG / 正式设计资产。production TSX/JSX 不设 parser 豁免；兼容解析迁入非渲染 `.ts` 模块。非语义猫爪关系文案只走专用、可审计的窄标注 | 2026-07-26 RecallLedger 实弹反馈；恢复 Phase B-0 的原始目标，并用增量 guard 防回归 | 2026-07-26 |
+| KD-37 | 视觉基线换底：Anthropic 暖编辑感 + Linear 精密结构；根目录 `DESIGN.md` 升级为 Google DESIGN.md 规格的**视觉意图 / 目标值** canonical 真相源（AC-F6 parity 守护前运行时以 `theme-tokens.css` 为准；取代 F305 AC-A4 的历史契约），猫编的 `docs/design-system.md` 退役 | operator 2026-09-04 在五家真实产品截图中选定 Anthropic + Linear（"我们家最开始对标的就是 anthropic"）；根因是家里的设计真相源是猫自己发明的审美、过程门保证不了好看；行业已把审美标准化成 DESIGN.md 文件（Google Stitch 开源规格 + 73 家品牌提取库），换底子不换工具 | 2026-09-04 |
+| KD-38 | 视觉判断权归operator的判别器，不归猫的生成器：F2 每步 token/字体/密度迁移以 light/dark A/B 渲染截图让operator 10 秒选，猫只给可选项；任何视觉交付无渲染截图不过 Design Gate | operator"只知道丑、说不出为什么"= 稳定的判别器；猫盲画（文字→代码不看渲染）是 AI slop 的直接成因 | 2026-09-04 |
 
 ## Dependencies
 
@@ -621,3 +685,4 @@ Phase E 主提交（`62c93fc5`）落地后，9 个 follow-up commit 处理 bubbl
 - Phase A: operator + Siamese视觉 review（设计语言必须三猫+operator认可）
 - Phase B/C: 常规跨家族 review
 - Phase D: operator拍板企业定制边界 + 跨家族 review
+- Phase F: F1 文档 + gate 走跨家族 review；F2 每一步 token/字体/密度迁移以 A/B 渲染截图由operator选定，猫不自判"好看"

@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useIMEGuard } from '@/hooks/useIMEGuard';
 import { useChatStore } from '@/stores/chatStore';
+import { useSidebarProjectionStore } from '@/stores/sidebarProjectionStore';
 import { apiFetch } from '@/utils/api-client';
+import { invalidateSidebarProjection } from '@/utils/sidebar-thread-snapshot';
 
 /** Tail-preserving truncation for project chip labels.
  * The suffix usually carries the distinguishing worktree or nested directory name. */
@@ -18,8 +20,9 @@ const PROJECT_PATH_COPY_KEYS = new Set(['Enter', ' ']);
  *  Double-click the title to enter inline edit mode for renaming. */
 export function ThreadIndicator({ threadId }: { threadId: string }) {
   const threads = useChatStore((s) => s.threads);
+  const sidebarRows = useSidebarProjectionStore((state) => state.rows);
   const updateThreadTitle = useChatStore((s) => s.updateThreadTitle);
-  const currentThread = threads.find((t) => t.id === threadId);
+  const currentThread = sidebarRows.find((row) => row.id === threadId) ?? threads.find((t) => t.id === threadId);
   const [copied, setCopied] = useState(false);
   const copyResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const title = currentThread?.title ?? '未命名对话';
@@ -33,9 +36,14 @@ export function ThreadIndicator({ threadId }: { threadId: string }) {
   const ime = useIMEGuard();
   // Generation counter: prevents in-flight PATCH from polluting a different thread's state
   const editGenRef = useRef(0);
+  const editThreadRef = useRef(threadId);
+  const copyContext = `${threadId}\u0000${rawPath}`;
+  const copyContextRef = useRef(copyContext);
 
   // Reset edit state when switching threads — prevents accidental cross-thread rename
   useEffect(() => {
+    if (editThreadRef.current === threadId) return;
+    editThreadRef.current = threadId;
     editGenRef.current += 1;
     setIsEditing(false);
     setIsSaving(false);
@@ -71,6 +79,7 @@ export function ThreadIndicator({ threadId }: { threadId: string }) {
       if (res.ok) {
         const updated = await res.json();
         updateThreadTitle(threadId, updated.title ?? next);
+        void invalidateSidebarProjection();
       }
     } catch {
       // Silently ignore — title stays unchanged
@@ -85,12 +94,14 @@ export function ThreadIndicator({ threadId }: { threadId: string }) {
   }, [draftTitle, title, threadId, updateThreadTitle]);
 
   useEffect(() => {
+    if (copyContextRef.current === copyContext) return;
+    copyContextRef.current = copyContext;
     if (copyResetTimerRef.current) {
       clearTimeout(copyResetTimerRef.current);
       copyResetTimerRef.current = null;
     }
     setCopied(false);
-  }, [threadId, rawPath]);
+  }, [copyContext]);
 
   useEffect(() => {
     return () => {
@@ -158,12 +169,11 @@ export function ThreadIndicator({ threadId }: { threadId: string }) {
           className="min-w-0 flex-1 truncate rounded border border-cafe-subtle bg-transparent px-1 py-0.5 text-xs font-medium text-cafe-secondary focus:border-cafe-accent focus:outline-none disabled:opacity-70"
         />
       ) : (
-        <span
-          className="truncate min-w-0 font-medium text-cafe-secondary cursor-text"
+        <button
+          type="button"
+          className="truncate min-w-0 text-left font-medium text-cafe-secondary cursor-text"
           title={`${title}\n双击编辑标题`}
           onDoubleClick={() => setIsEditing(true)}
-          role="button"
-          tabIndex={0}
           onKeyDown={(e) => {
             if (e.key === 'F2') {
               e.preventDefault();
@@ -172,10 +182,11 @@ export function ThreadIndicator({ threadId }: { threadId: string }) {
           }}
         >
           {title}
-        </span>
+        </button>
       )}
       {projectName && !isEditing && (
-        <span
+        <button
+          type="button"
           className="flex-shrink-0 max-w-[40%] sm:max-w-[200px] overflow-hidden whitespace-nowrap text-cafe-muted cursor-pointer hover:text-cafe-secondary transition-colors"
           title={copied ? '已复制!' : `点击复制: ${copyPath}`}
           aria-label={copied ? '已复制项目路径' : `点击复制项目路径: ${copyPath}`}
@@ -186,12 +197,10 @@ export function ThreadIndicator({ threadId }: { threadId: string }) {
               handleCopyPath();
             }
           }}
-          role="button"
-          tabIndex={0}
         >
           {' '}
           · {projectChipLabel}
-        </span>
+        </button>
       )}
     </div>
   );

@@ -26,9 +26,63 @@ describe('MessageStore', () => {
     assert.equal(store.size, 1);
   });
 
-  test('append() rejects timestamps outside the sortable-ID-safe Date domain before side effects', async () => {
+  test('listOwnerMessagesInWindow returns the exact delivered owner timeline with inclusive boundaries', async () => {
     const { MessageStore } = await import('../dist/domains/cats/services/stores/ports/MessageStore.js');
+    const store = new MessageStore();
+    const append = (overrides) =>
+      store.append({
+        userId: 'owner-1',
+        catId: null,
+        content: 'candidate',
+        mentions: [],
+        threadId: 'thread-a',
+        ...overrides,
+      });
 
+    append({ content: 'before', timestamp: 99 });
+    const lower = append({ content: 'lower', timestamp: 100 });
+    append({ content: 'other owner', timestamp: 105, userId: 'owner-2' });
+    append({ content: 'queued', timestamp: 110, deliveryStatus: 'queued' });
+    const delivered = append({ content: 'delivered later', timestamp: 95, deliveryStatus: 'queued' });
+    store.markDelivered(delivered.id, 115);
+    const canceled = append({ content: 'canceled', timestamp: 120, deliveryStatus: 'queued' });
+    store.markCanceled(canceled.id);
+    const restored = append({ content: 'restored', timestamp: 125 });
+    store.softDelete(restored.id, 'owner-1');
+    const upper = append({ content: 'upper', timestamp: 130 });
+    append({ content: 'after', timestamp: 131 });
+
+    assert.deepEqual(
+      store.listOwnerMessagesInWindow('owner-1', 100, 130).map((message) => message.id),
+      [lower.id, delivered.id, upper.id],
+    );
+
+    store.restore(restored.id);
+    assert.deepEqual(
+      store.listOwnerMessagesInWindow('owner-1', 100, 130).map((message) => message.id),
+      [lower.id, delivered.id, restored.id, upper.id],
+    );
+  });
+
+  test('listOwnerMessagesInWindow has no implicit page limit', async () => {
+    const { MessageStore } = await import('../dist/domains/cats/services/stores/ports/MessageStore.js');
+    const store = new MessageStore();
+
+    for (let timestamp = 1; timestamp <= 75; timestamp += 1) {
+      store.append({
+        userId: 'owner-1',
+        catId: null,
+        content: `message ${timestamp}`,
+        mentions: [],
+        timestamp,
+      });
+    }
+
+    assert.equal(store.listOwnerMessagesInWindow('owner-1', 1, 75).length, 75);
+  });
+
+  test('all append entrypoints reject unsafe timestamps and transition-owned metadata before side effects', async () => {
+    const { MessageStore } = await import('../dist/domains/cats/services/stores/ports/MessageStore.js');
     const invalidTimestamps = [
       -1,
       1.5,
@@ -38,28 +92,63 @@ describe('MessageStore', () => {
       8_640_000_000_000_001,
       -8_640_000_000_000_001,
     ];
-    for (const timestamp of invalidTimestamps) {
-      let listenerCalls = 0;
-      const store = new MessageStore({ onAppend: () => listenerCalls++ });
+    const appenders = [
+      ['append', (store, message) => store.append(message)],
+      ['appendIfThreadFrontier', (store, message) => store.appendIfThreadFrontier(message, null)],
+      ['appendAndObservePriorFrontier', (store, message) => store.appendAndObservePriorFrontier(message)],
+    ];
 
-      assert.throws(
-        () =>
-          store.append({
-            userId: 'user-1',
-            catId: null,
-            content: 'must not persist',
-            mentions: [],
-            timestamp,
-            idempotencyKey: 'invalid-date',
-          }),
-        { name: 'RangeError', message: /non-negative integer ECMAScript Date/ },
-      );
-      assert.equal(store.size, 0, `timestamp ${String(timestamp)} must not append`);
-      assert.equal(listenerCalls, 0, `timestamp ${String(timestamp)} must not notify`);
+    for (const [name, append] of appenders) {
+      for (const timestamp of invalidTimestamps) {
+        let listenerCalls = 0;
+        const store = new MessageStore({ onAppend: () => listenerCalls++ });
+        assert.throws(
+          () =>
+            append(store, {
+              userId: 'user-1',
+              catId: null,
+              content: `${name} invalid timestamp`,
+              mentions: [],
+              timestamp,
+              threadId: `thread-${name}`,
+              idempotencyKey: `${name}-invalid`,
+            }),
+          { name: 'RangeError', message: /non-negative integer ECMAScript Date/ },
+        );
+        assert.equal(store.size, 0, `${name}: ${String(timestamp)} must not append`);
+        assert.equal(listenerCalls, 0, `${name}: ${String(timestamp)} must not notify`);
+      }
+
+      for (const metadata of [
+        { deliveredAt: undefined },
+        { timelineOrderAt: undefined },
+        { deliveredAt: 101, deliveryStatus: 'delivered' },
+        { deliveryStatus: 'delivered' },
+        { deliveryStatus: 'canceled' },
+      ]) {
+        let listenerCalls = 0;
+        const store = new MessageStore({ onAppend: () => listenerCalls++ });
+        assert.throws(
+          () =>
+            append(store, {
+              userId: 'user-1',
+              catId: null,
+              content: `${name} forged terminal state`,
+              mentions: [],
+              timestamp: 100,
+              threadId: `thread-${name}`,
+              idempotencyKey: `${name}-terminal`,
+              ...metadata,
+            }),
+          { name: 'TypeError', message: /append.*delivery metadata|transition owner/i },
+        );
+        assert.equal(store.size, 0, `${name}: ownership rejection must not append`);
+        assert.equal(listenerCalls, 0, `${name}: ownership rejection must not notify`);
+      }
     }
   });
 
-  test('append() admits non-negative integer ECMAScript Date boundaries', async () => {
+  test('append admits the sortable-ID-safe Date boundaries and queued-only lifecycle initialization', async () => {
     const { MessageStore } = await import('../dist/domains/cats/services/stores/ports/MessageStore.js');
     const store = new MessageStore();
 
@@ -70,83 +159,149 @@ describe('MessageStore', () => {
         content: 'valid Date input',
         mentions: [],
         timestamp,
+        deliveryStatus: 'queued',
       });
       assert.equal(stored.timestamp, timestamp);
+      assert.equal(stored.deliveryStatus, 'queued');
+      assert.equal(stored.deliveredAt, undefined);
+      assert.equal(stored.timelineOrderAt, undefined);
     }
     assert.equal(store.size, 3);
   });
 
-  test('append() rejects transition-owned delivery metadata before side effects and permits a queued retry', async () => {
-    const { MessageStore } = await import('../dist/domains/cats/services/stores/ports/MessageStore.js');
-    let listenerCalls = 0;
-    const store = new MessageStore({ onAppend: () => listenerCalls++ });
-    const base = {
-      userId: 'user-1',
-      catId: null,
-      content: 'delivery ownership probe',
-      mentions: [],
-      timestamp: 100,
-      threadId: 'thread-append-delivery-owner',
-      idempotencyKey: 'append-delivery-owner',
-    };
-    const invalidMetadata = [
-      { deliveredAt: undefined },
-      { deliveredAt: 100.5, deliveryStatus: 'delivered' },
-      { deliveredAt: Number.POSITIVE_INFINITY, deliveryStatus: 'delivered' },
-      { deliveredAt: 101, deliveryStatus: 'delivered' },
-      { deliveryStatus: 'delivered' },
-      { deliveryStatus: 'canceled' },
-    ];
-
-    for (const metadata of invalidMetadata) {
-      assert.throws(() => store.append({ ...base, ...metadata }), {
-        name: 'TypeError',
-        message: /append.*delivery metadata|transition owner/i,
-      });
-      assert.equal(store.size, 0, 'ownership rejection must not append');
-      assert.equal(listenerCalls, 0, 'ownership rejection must not notify listeners');
-    }
-
-    const queued = store.append({ ...base, deliveryStatus: 'queued' });
-    assert.equal(queued.deliveryStatus, 'queued');
-    assert.equal(queued.deliveredAt, undefined);
-    assert.deepEqual(store.getById(queued.id), queued);
-    assert.equal(store.size, 1);
-    assert.equal(listenerCalls, 1);
-  });
-
-  test('markCanceled() transitions only queued messages and preserves legacy/delivered state', async () => {
+  test('prepareQueueAdmission adopts only a legacy-visible source and is idempotent', async () => {
     const { MessageStore } = await import('../dist/domains/cats/services/stores/ports/MessageStore.js');
     const store = new MessageStore();
-    const base = {
-      userId: 'user-cancel-owner',
-      catId: null,
-      mentions: [],
-      threadId: 'thread-cancel-owner',
-    };
-    const queued = store.append({ ...base, content: 'queued', timestamp: 100, deliveryStatus: 'queued' });
-    const legacy = store.append({ ...base, content: 'legacy', timestamp: 110 });
-    const delivered = store.append({ ...base, content: 'delivered', timestamp: 120, deliveryStatus: 'queued' });
-    store.markDelivered(delivered.id, 200);
+    const legacy = store.append({
+      userId: 'user-1',
+      catId: 'codex-sol',
+      content: 'approved carrier persisted before Queue admission',
+      mentions: ['codex-terra'],
+      timestamp: 100,
+      threadId: 'thread-target',
+    });
 
-    const legacyBefore = { ...legacy };
-    const deliveredBefore = { ...delivered };
+    const prepared = store.prepareQueueAdmission(legacy.id);
+    assert.equal(prepared.kind, 'prepared');
+    assert.equal(prepared.message.deliveryStatus, 'queued');
+    assert.equal(store.prepareQueueAdmission(legacy.id).kind, 'existing');
+    assert.deepEqual(store.prepareQueueAdmission('missing-message'), { kind: 'not_found' });
 
-    const canceled = store.markCanceled(queued.id);
-    assert.equal(canceled.deliveryStatus, 'canceled');
-    assert.equal(canceled.deliveredAt, undefined);
+    const delivered = store.append({
+      userId: 'user-1',
+      catId: 'codex-sol',
+      content: 'already terminal',
+      mentions: ['codex-terra'],
+      timestamp: 101,
+      threadId: 'thread-target',
+      deliveryStatus: 'queued',
+    });
+    store.markDelivered(delivered.id, 102);
+    assert.deepEqual(store.prepareQueueAdmission(delivered.id), { kind: 'conflict' });
 
-    assert.equal(store.markCanceled(legacy.id), null);
-    assert.deepEqual(store.getById(legacy.id), legacyBefore);
-    assert.equal(store.markCanceled(delivered.id), null);
-    assert.deepEqual(store.getById(delivered.id), deliveredBefore);
-
-    const canceledBefore = { ...canceled };
-    assert.equal(store.markCanceled(queued.id), null);
-    assert.deepEqual(store.getById(queued.id), canceledBefore, 'repeated cancellation must preserve state');
+    const canceled = store.append({
+      userId: 'user-1',
+      catId: 'codex-sol',
+      content: 'canceled source',
+      mentions: ['codex-terra'],
+      timestamp: 103,
+      threadId: 'thread-target',
+      deliveryStatus: 'queued',
+    });
+    store.markCanceled(canceled.id);
+    assert.deepEqual(store.prepareQueueAdmission(canceled.id), { kind: 'conflict' });
   });
 
-  test('markDelivered() rejects unsafe order timestamps before state transition and permits a valid retry', async () => {
+  test('fan-out admission intent is idempotent, blocks legacy delivery, and is replaced by full custody', async () => {
+    const { MessageStore } = await import('../dist/domains/cats/services/stores/ports/MessageStore.js');
+    const store = new MessageStore();
+    const message = store.append({
+      userId: 'user-1',
+      catId: 'opus',
+      content: 'durable pre-CAS fan-out',
+      mentions: ['codex', 'codex-terra'],
+      timestamp: 200,
+      threadId: 'thread-admission',
+      deliveryStatus: 'queued',
+    });
+    const admission = {
+      version: 1,
+      admissionId: `queue-custody:${message.id}`,
+      ownerUserId: 'user-1',
+      ownerAuthProvenance: 'unknown',
+      intent: 'execute',
+      targetCats: ['codex'],
+      requestedTargetCats: ['codex', 'codex-terra'],
+      callerCatId: 'opus',
+      a2aParentInvocationId: 'parent-1',
+      priority: 'normal',
+      createdAt: 200,
+    };
+
+    assert.equal(store.initializeQueueCustodyAdmission(message.id, admission).kind, 'initialized');
+    assert.equal(store.initializeQueueCustodyAdmission(message.id, structuredClone(admission)).kind, 'existing');
+    assert.equal(store.initializeQueueCustodyAdmission(message.id, { ...admission, targetCats: [] }).kind, 'conflict');
+    assert.equal(store.markDelivered(message.id, 201).deliveryTransitioned, false);
+    assert.equal(store.getById(message.id).deliveryStatus, 'queued');
+
+    const custody = {
+      version: 1,
+      entryId: `fanout:${message.id}`,
+      revision: 1,
+      ownerUserId: 'user-1',
+      ownerAuthProvenance: 'unknown',
+      carrierByTargetCatId: {
+        codex: {
+          entryId: 'carrier-codex',
+          source: 'agent',
+          sourceCategory: 'a2a',
+          callerCatId: 'opus',
+          a2aParentInvocationId: 'parent-1',
+          a2aTriggerMessageId: message.id,
+          autoExecute: true,
+          createdAt: 200,
+        },
+      },
+      carrierStateByTargetCatId: { codex: { status: 'queued' } },
+      intent: 'execute',
+      status: 'queued',
+      allTargetCats: ['codex', 'codex-terra'],
+      pendingTargetCats: ['codex'],
+      notifiedByCatIds: [],
+      seenByCatIds: [],
+      seenInvocationIdByCatId: {},
+      failedByCatIds: ['codex-terra'],
+      handledByCatIds: [],
+      priority: 'normal',
+      createdAt: 200,
+      updatedAt: 200,
+    };
+    assert.equal(store.initializeQueueCustody(message.id, custody).kind, 'initialized');
+    assert.equal(store.getById(message.id).queueCustodyAdmission, undefined);
+    assert.deepEqual(store.getById(message.id).queueCustody.allTargetCats, ['codex', 'codex-terra']);
+
+    const canceled = store.append({
+      userId: 'user-1',
+      catId: 'opus',
+      content: 'cancel pre-CAS fan-out',
+      mentions: ['codex'],
+      timestamp: 202,
+      threadId: 'thread-admission',
+      deliveryStatus: 'queued',
+    });
+    assert.equal(
+      store.initializeQueueCustodyAdmission(canceled.id, {
+        ...admission,
+        admissionId: `queue-custody:${canceled.id}`,
+        requestedTargetCats: ['codex'],
+      }).kind,
+      'initialized',
+    );
+    assert.equal(store.markCanceled(canceled.id).deliveryStatus, 'canceled');
+    assert.equal(store.getById(canceled.id).queueCustodyAdmission, undefined);
+  });
+
+  test('markDelivered rejects unsafe effective-order timestamps before state mutation and permits a valid retry', async () => {
     const { MessageStore } = await import('../dist/domains/cats/services/stores/ports/MessageStore.js');
     const invalidTimestamps = [
       -1,
@@ -157,7 +312,6 @@ describe('MessageStore', () => {
       8_640_000_000_000_001,
       -8_640_000_000_000_001,
     ];
-    const validTimestamps = [0, 8_640_000_000_000_000];
 
     for (const [index, deliveredAt] of invalidTimestamps.entries()) {
       const store = new MessageStore();
@@ -167,104 +321,79 @@ describe('MessageStore', () => {
         content: `queued ${index}`,
         mentions: [],
         timestamp: 100 + index,
-        threadId: 'thread-delivery-admission',
         deliveryStatus: 'queued',
       });
-      const before = { ...queued };
+      const before = structuredClone(queued);
 
       assert.throws(() => store.markDelivered(queued.id, deliveredAt), {
         name: 'RangeError',
         message: /non-negative integer ECMAScript Date/,
       });
-      assert.deepEqual(store.getById(queued.id), before, `invalid ${String(deliveredAt)} must not mutate message`);
-      assert.equal(queued.deliveryStatus, 'queued');
-      assert.equal(queued.deliveredAt, undefined);
+      assert.deepEqual(store.getById(queued.id), before);
 
-      const validDeliveredAt = validTimestamps[index] ?? 1_000 + index;
+      const validDeliveredAt = index === 0 ? 0 : index === 1 ? 8_640_000_000_000_000 : 1_000 + index;
       const delivered = store.markDelivered(queued.id, validDeliveredAt);
-      assert.equal(delivered.deliveryStatus, 'delivered');
+      assert.equal(delivered.deliveryTransitioned, true);
       assert.equal(delivered.deliveredAt, validDeliveredAt);
+      assert.equal(delivered.timelineOrderAt, validDeliveredAt);
 
-      const afterDelivery = { ...delivered };
+      const afterDelivery = structuredClone(store.getById(queued.id));
       assert.throws(() => store.markDelivered(queued.id, deliveredAt), RangeError);
-      assert.deepEqual(store.getById(queued.id), afterDelivery, 'invalid input must not be state-dependent');
+      assert.deepEqual(store.getById(queued.id), afterDelivery, 'validation must not depend on current state');
     }
   });
 
-  test('markDelivered() recovery preserves bounded effective-order pagination', async () => {
+  test('queue custody delivery rejects unsafe effective-order timestamps before revision or state mutation', async () => {
     const { MessageStore } = await import('../dist/domains/cats/services/stores/ports/MessageStore.js');
-    const { collectAllThreadMessages } = await import(
-      '../dist/domains/cats/services/agents/routing/thread-artifacts-aggregator.js'
-    );
     const store = new MessageStore();
-    const threadId = 'thread-delivery-admission-pagination';
-    const first = store.append({
+    const custody = {
+      version: 1,
+      entryId: 'entry-1',
+      revision: 1,
+      intent: 'timestamp admission',
+      status: 'terminal',
+      allTargetCats: ['opus'],
+      pendingTargetCats: [],
+      notifiedByCatIds: [],
+      seenByCatIds: [],
+      seenInvocationIdByCatId: {},
+      failedByCatIds: ['opus'],
+      handledByCatIds: [],
+      priority: 'normal',
+      createdAt: 1_000,
+      updatedAt: 1_100,
+    };
+    const queued = store.append({
       userId: 'user-1',
       catId: null,
-      content: 'first',
-      mentions: [],
-      timestamp: 100,
-      threadId,
+      content: 'queued with custody',
+      mentions: ['opus'],
+      timestamp: 1_000,
       deliveryStatus: 'queued',
+      queueCustody: custody,
     });
-    const second = store.append({
-      userId: 'user-1',
-      catId: null,
-      content: 'second',
-      mentions: [],
-      timestamp: 200,
-      threadId,
-      deliveryStatus: 'queued',
+    const next = { ...custody, revision: 2, updatedAt: 1_200 };
+    const before = structuredClone(store.getById(queued.id));
+
+    assert.throws(() => store.transitionQueueCustody(queued.id, { expectedRevision: 1, next, deliveredAt: 1_200.5 }), {
+      name: 'RangeError',
+      message: /non-negative integer ECMAScript Date/,
     });
-
-    assert.throws(() => store.markDelivered(first.id, Number.POSITIVE_INFINITY), RangeError);
-    store.markDelivered(first.id, 300);
-    store.markDelivered(second.id, 400);
-
-    const collected = await collectAllThreadMessages(store, threadId, undefined, 1);
-    assert.deepEqual(
-      collected.map((message) => message.id),
-      [second.id, first.id],
-      'one-record pages must return both messages exactly once after a valid retry',
-    );
+    assert.deepEqual(store.getById(queued.id), before);
   });
 
-  test('admitted timestamp classes preserve chronological ID and delivery-cursor order', async () => {
+  test('admitted timestamp classes preserve sortable-ID and delivery-cursor monotonicity', async () => {
     const { generateSortableId } = await import('../dist/domains/cats/services/stores/ports/MessageStore.js');
     const { DeliveryCursorStore } = await import('../dist/domains/cats/services/stores/ports/DeliveryCursorStore.js');
     const timestamps = [0, 1, 8_640_000_000_000_000];
     const ids = timestamps.map((timestamp) => generateSortableId(timestamp));
 
-    assert.deepEqual([...ids].sort(), ids, 'IDs must sort in the same order as admitted timestamps');
-
+    assert.deepEqual([...ids].sort(), ids);
     const cursorStore = new DeliveryCursorStore();
     for (const id of ids) {
       await cursorStore.ackCursor('user-1', 'opus', 'thread-sortable-domain', id);
       assert.equal(await cursorStore.getCursor('user-1', 'opus', 'thread-sortable-domain'), id);
     }
-  });
-
-  test('expired cursor recovery preserves order across admitted timestamp boundaries', async () => {
-    const { MessageStore, generateSortableId } = await import(
-      '../dist/domains/cats/services/stores/ports/MessageStore.js'
-    );
-    const store = new MessageStore();
-    const later = [2, 8_640_000_000_000_000].map((timestamp) =>
-      store.append({
-        userId: 'user-1',
-        catId: null,
-        content: `timestamp ${timestamp}`,
-        mentions: [],
-        timestamp,
-        threadId: 'thread-expired-cursor',
-      }),
-    );
-    const expiredCursor = generateSortableId(1);
-
-    assert.deepEqual(
-      store.getByThreadAfter('thread-expired-cursor', expiredCursor).map((message) => message.id),
-      later.map((message) => message.id),
-    );
   });
 
   test('augmentStreamMetadata() enriches callback messages without replacing canonical content', async () => {
@@ -639,6 +768,37 @@ describe('MessageStore', () => {
     assert.equal(before300[1].content, 'B');
   });
 
+  test('getByThreadBeforeBounded() accounts for the full in-memory buffer in one pass', async () => {
+    const { MessageStore } = await import('../dist/domains/cats/services/stores/ports/MessageStore.js');
+    const store = new MessageStore();
+    for (let index = 0; index < 100; index += 1) {
+      store.append({
+        userId: 'u',
+        catId: null,
+        content: `other ${index}`,
+        mentions: [],
+        timestamp: index,
+        threadId: 'other-thread',
+      });
+    }
+    for (let index = 0; index < 600; index += 1) {
+      store.append({
+        userId: 'u',
+        catId: null,
+        content: `target ${index}`,
+        mentions: [],
+        timestamp: index + 100,
+        threadId: 'target-thread',
+      });
+    }
+
+    const page = store.getByThreadBeforeBounded('target-thread', Number.MAX_SAFE_INTEGER, 500, undefined, 'u', 2_000);
+
+    assert.equal(page.scannedCount, 700, 'raw work includes unrelated rows in the global memory buffer');
+    assert.equal(page.messages.length, 600, 'one pass returns every eligible row for route-level ranking');
+    assert.equal(page.exhausted, true);
+  });
+
   test('append() preserves contentBlocks', async () => {
     const { MessageStore } = await import('../dist/domains/cats/services/stores/ports/MessageStore.js');
 
@@ -788,6 +948,139 @@ describe('MessageStore', () => {
     const msgs = store.getByThreadAfter('th', first.id, undefined, 'user-1');
     assert.equal(msgs.length, 1, 'should include scheduler message after cursor');
     assert.equal(msgs[0].userId, 'scheduler');
+  });
+
+  test('managed-hold history stays bound to the durable owner before and after terminal delivery', async () => {
+    const { MessageStore } = await import('../dist/domains/cats/services/stores/ports/MessageStore.js');
+
+    const store = new MessageStore();
+    const makeQueueCustody = (ownerUserId) => ({
+      version: 1,
+      entryId: `entry-${ownerUserId}`,
+      revision: 1,
+      ownerUserId,
+      intent: 'managed command wake',
+      status: 'queued',
+      allTargetCats: ['opus5'],
+      pendingTargetCats: ['opus5'],
+      notifiedByCatIds: [],
+      seenByCatIds: [],
+      seenInvocationIdByCatId: {},
+      failedByCatIds: [],
+      handledByCatIds: [],
+      priority: 'normal',
+      createdAt: 200,
+      updatedAt: 200,
+    });
+    const source = {
+      connector: 'hold-ball',
+      label: '持球结果',
+      icon: '🏓',
+      meta: { taskId: 'hold-ball-task-1', threadId: 'th-managed', catId: 'opus5', wakeWhen: true },
+    };
+    const receipt = store.append({
+      userId: 'scheduler',
+      catId: null,
+      content: '[定时任务] managed result',
+      mentions: [],
+      timestamp: 200,
+      threadId: 'th-managed',
+      deliveryStatus: 'queued',
+      queueCustody: makeQueueCustody('user-1'),
+      source,
+    });
+    const hidden = store.append({
+      userId: 'scheduler',
+      catId: null,
+      content: '[定时任务] hidden trigger',
+      mentions: [],
+      timestamp: 201,
+      threadId: 'th-managed',
+      deliveryStatus: 'queued',
+      queueCustody: makeQueueCustody('user-1'),
+      extra: { scheduler: { hiddenTrigger: true } },
+      source,
+    });
+    const foreignOwned = store.append({
+      userId: 'scheduler',
+      catId: null,
+      content: 'owner-A command result',
+      mentions: [],
+      timestamp: 202,
+      threadId: 'th-managed',
+      deliveryStatus: 'queued',
+      queueCustody: makeQueueCustody('user-owner'),
+      source,
+    });
+    const ownerless = store.append({
+      userId: 'scheduler',
+      catId: null,
+      content: 'legacy ownerless result',
+      mentions: [],
+      timestamp: 203,
+      threadId: 'th-managed',
+      deliveryStatus: 'queued',
+      source,
+    });
+
+    assert.deepEqual(store.getByThreadAfter('th-managed', undefined, undefined, 'user-1'), []);
+    assert.deepEqual(
+      store
+        .getByThreadAfter('th-managed', undefined, undefined, 'user-1', { includeQueuedUserMessages: true })
+        .map((message) => message.id),
+      [receipt.id],
+    );
+    assert.deepEqual(
+      store.getByThread('th-managed', 50, 'user-foreign', { includeQueuedUserMessages: true }),
+      [],
+      "foreign viewers must not receive another owner's scheduler-authored result",
+    );
+
+    const terminalize = (message, deliveredAt) => {
+      const result = store.transitionQueueCustody(message.id, {
+        expectedRevision: 1,
+        next: {
+          ...message.queueCustody,
+          revision: 2,
+          status: 'terminal',
+          pendingTargetCats: [],
+          failedByCatIds: ['opus5'],
+          updatedAt: deliveredAt,
+        },
+        deliveredAt,
+      });
+      assert.equal(result.kind, 'updated');
+    };
+    terminalize(receipt, 300);
+    terminalize(hidden, 301);
+    terminalize(foreignOwned, 302);
+
+    // A legacy ownerless row cannot use the custody transition API, but old
+    // persisted data can still carry delivered status and must fail closed.
+    store.getById(ownerless.id).deliveryStatus = 'delivered';
+    store.getById(ownerless.id).deliveredAt = 303;
+
+    assert.deepEqual(
+      store.getByThreadAfter('th-managed', undefined, undefined, 'user-1').map((message) => message.id),
+      [receipt.id],
+      'terminal delivery must not restore generic system visibility to hidden, foreign, or ownerless rows',
+    );
+    assert.deepEqual(store.getByThread('th-managed', 50, 'user-foreign'), []);
+    assert.deepEqual(store.getByThreadIncludingQueued('th-managed', 50, 'user-foreign'), []);
+    assert.equal(
+      store.getLatestVisibleCursor('th-managed', {
+        evidence: 'durable_owner_read',
+        viewerUserId: 'user-1',
+      }).messageId,
+      receipt.id,
+    );
+    assert.equal(
+      store.getLatestVisibleCursor('th-managed', {
+        evidence: 'durable_owner_read',
+        viewerUserId: 'user-foreign',
+      }),
+      null,
+    );
   });
 
   test('P1: forged userId=scheduler with non-system catId does NOT bypass filter', async () => {

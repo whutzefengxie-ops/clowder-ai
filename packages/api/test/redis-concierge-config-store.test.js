@@ -8,20 +8,19 @@ import assert from 'node:assert/strict';
 import { after, before, beforeEach, describe, it } from 'node:test';
 import { catRegistry } from '@cat-cafe/shared';
 
-// gemini35 lives in the runtime catalog overlay (not cat-template.json).
-// Register it for tests so resolveDefaultDutyCatProfileId() finds the expected default.
+// Register gemini35 for tests so resolveDefaultDutyCatProfileId() finds the expected default.
 if (!catRegistry.has('gemini35')) {
   catRegistry.register('gemini35', {
     id: 'gemini35',
-    name: '暹罗猫 Gemini 3.5 Flash',
+    name: '暹罗猫 Gemini 3.6 Flash',
     displayName: '暹罗猫',
     avatar: '/avatars/gemini25.png',
     color: { primary: '#2563EB', secondary: '#DBEAFE' },
-    mentionPatterns: ['@gemini35'],
+    mentionPatterns: ['@gemini35', '@gemini36'],
     clientId: 'google',
-    defaultModel: 'Gemini 3.5 Flash (High)',
+    defaultModel: 'Gemini 3.6 Flash (High)',
     mcpSupport: true,
-    roleDescription: '暹罗猫 Gemini 3.5 Flash',
+    roleDescription: '暹罗猫 Gemini 3.6 Flash',
     personality: '创意灵感丰富',
   });
 }
@@ -77,12 +76,12 @@ describe('RedisConciergeConfigStore', { skip: redisIsolationSkipReason(REDIS_URL
   it('get returns defaults when no config stored', async () => {
     const config = await store.get('user-1');
     assert.equal(config.enabled, true);
-    assert.equal(config.skin, 'yanyan-codex');
+    assert.equal(config.skin, 'xianxian-codex');
     assert.equal(config.displayName, '猫猫球');
     assert.equal(config.personaTone, '温暖、简短、不啰嗦');
     assert.equal(config.proactivePolicy, 'quiet-badge');
     assert.equal(config.muted, false);
-    // dutyCatProfileId default: 'gemini35' (暹罗猫 Gemini 3.5 Flash) if in roster, else first available
+    // dutyCatProfileId default: 'gemini35' (暹罗猫 Gemini Flash) if in roster, else first available
     assert.ok(typeof config.dutyCatProfileId === 'string' && config.dutyCatProfileId.length > 0);
   });
 
@@ -99,6 +98,7 @@ describe('RedisConciergeConfigStore', { skip: redisIsolationSkipReason(REDIS_URL
     await store.put('user-2', input);
     const retrieved = await store.get('user-2');
     assert.equal(retrieved.enabled, false);
+    assert.equal(retrieved.skin, 'ragdoll-v1');
     assert.equal(retrieved.displayName, 'KittyDesk');
     assert.equal(retrieved.dutyCatProfileId, 'gpt52');
     assert.equal(retrieved.proactivePolicy, 'ambient');

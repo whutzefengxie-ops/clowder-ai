@@ -6,64 +6,59 @@
  *
  * [宪宪/Opus-46🐾]
  */
-import type { CancelBurstDetector } from './cancel-burst-detector.js';
-import { CANCEL_REASONS, type CancelReason } from './task-outcome-episode.js';
-import { buildPermissionCancelSignal } from './task-outcome-signal-builder.js';
-import type { TaskOutcomeEpisodeStore } from './task-outcome-store.js';
+import type { ManagedWorkBinding } from '@cat-cafe/shared';
+import { buildA1WorldTruthSignal } from './task-outcome-signal-builder.js';
+import type { EpisodeAttributionLookup, StoredEpisode, TaskOutcomeEpisodeStore } from './task-outcome-store.js';
 
-// ---- Permission cancel + reason normalization → episode a2 signal ----
-
-export interface PermissionCancelWiringInput {
-  toolName: string;
-  paramsSummary?: string;
-  /** Raw cancel reason from frontend; normalized to CancelReason enum (default: 'skip'). */
-  cancelReason?: string;
-  catId?: string;
+interface EpisodeSelectionInput {
   threadId: string;
-  sessionId?: string;
+  participants: string[];
+  managedWorkBinding?: ManagedWorkBinding;
+  managedWorkExpected?: boolean;
+  managedArtifactRef?: string;
 }
 
-/**
- * Normalize the cancel reason, get/create the active episode, and append
- * a `permission_cancel` a2 signal. This is the production path called by
- * index.ts onPermissionCancel (authorization callback).
- *
- * Reason normalization: if `cancelReason` is not a valid CancelReason enum
- * value, defaults to 'skip' (auth free-text is not a cancel category).
- */
-export function appendPermissionCancelToEpisode(
-  store: TaskOutcomeEpisodeStore,
-  input: PermissionCancelWiringInput,
-): SignalWiringResult {
-  const reason: CancelReason =
-    input.cancelReason && (CANCEL_REASONS as readonly string[]).includes(input.cancelReason)
-      ? (input.cancelReason as CancelReason)
-      : 'skip';
+function attributionLookup(input: EpisodeSelectionInput): EpisodeAttributionLookup {
+  if (input.managedWorkBinding) {
+    return {
+      attribution: 'managed_attributed',
+      workId: input.managedWorkBinding.workId,
+      attemptId: input.managedWorkBinding.attemptId,
+    };
+  }
+  if (input.managedWorkExpected) {
+    if (!input.managedArtifactRef) {
+      throw new Error('managed_unattributed episode lookup requires an artifact identity');
+    }
+    return { attribution: 'managed_unattributed', artifactRef: input.managedArtifactRef };
+  }
+  return { attribution: 'unmanaged_not_applicable', threadId: input.threadId };
+}
 
-  const catId = input.catId ?? 'unknown';
-  const ep =
-    store.getActiveEpisode(input.threadId) ??
-    store.createEpisode({
-      trigger: 'cat_initiated',
+function findActiveEpisode(store: TaskOutcomeEpisodeStore, input: EpisodeSelectionInput): StoredEpisode | null {
+  return store.getActiveEpisodeByAttribution(attributionLookup(input));
+}
+
+function findOrCreateEpisode(store: TaskOutcomeEpisodeStore, input: EpisodeSelectionInput): StoredEpisode {
+  const active = findActiveEpisode(store, input);
+  if (active) return active;
+  if (input.managedWorkBinding) {
+    return store.createEpisode({
+      trigger: 'task_created',
       threadId: input.threadId,
-      participants: [catId],
+      participants: input.participants,
+      attribution: 'managed_attributed',
+      workId: input.managedWorkBinding.workId,
+      attemptId: input.managedWorkBinding.attemptId,
     });
-
-  const signal = buildPermissionCancelSignal({
-    toolName: input.toolName,
-    paramsSummary: input.paramsSummary,
-    reason,
-    catId,
+  }
+  return store.createEpisode({
+    trigger: input.managedWorkExpected ? 'task_created' : 'cat_initiated',
     threadId: input.threadId,
-    sessionId: input.sessionId,
+    participants: input.participants,
+    ...(input.managedArtifactRef ? { artifacts: [input.managedArtifactRef] } : {}),
+    attribution: input.managedWorkExpected ? 'managed_unattributed' : 'unmanaged_not_applicable',
   });
-
-  store.appendSignal(ep.episodeId, {
-    category: 'a2',
-    record: signal as unknown as Record<string, unknown>,
-  });
-
-  return { episodeId: ep.episodeId, signalAppended: true };
 }
 
 // ---- Magic word ref → episode signal ----
@@ -91,15 +86,21 @@ export function appendMagicWordRefToEpisode(
   store: TaskOutcomeEpisodeStore,
   input: MagicWordRefInput,
 ): SignalWiringResult {
-  const ep =
-    store.getActiveEpisode(input.threadId) ??
-    store.createEpisode({
-      trigger: 'cat_initiated',
-      threadId: input.threadId,
-      participants: input.catId ? [input.catId] : [],
-    });
+  const key = `mwr:${input.eventId}`;
 
-  store.appendSignal(ep.episodeId, {
+  // Cross-episode dedup: if this eventId was already recorded in ANY episode,
+  // skip entirely. Prevents phantom episode creation on event replay after
+  // the original episode completes. (Day-24 verdict P1 — @gpt52 review)
+  if (store.hasSignalByIdempotencyKey(key)) {
+    return { episodeId: '', signalAppended: false };
+  }
+
+  const ep = findOrCreateEpisode(store, {
+    threadId: input.threadId,
+    participants: input.catId ? [input.catId] : [],
+  });
+
+  const result = store.appendSignal(ep.episodeId, {
     category: 'a2',
     record: {
       type: 'magic_word_ref',
@@ -109,52 +110,48 @@ export function appendMagicWordRefToEpisode(
       threadId: input.threadId,
       catId: input.catId,
     },
+    idempotencyKey: key,
   });
 
-  return { episodeId: ep.episodeId, signalAppended: true };
+  return { episodeId: ep.episodeId, signalAppended: result.appended };
 }
 
-// ---- Cancel burst check → proxy signal ----
-
-export interface CancelBurstCheckResult {
-  burst: boolean;
-  count: number;
-  episodeId?: string;
-  proxyAppended: boolean;
+export interface PrLifecycleEvidenceInput {
+  type: 'merge' | 'revert';
+  ref: string;
+  outcome: 'success' | 'failure';
+  threadId: string;
+  /** Read by CiCdRouter from TaskStore-private metadata. */
+  managedWorkBinding?: ManagedWorkBinding;
 }
 
 /**
- * Record a cancel event in the burst detector and, if a burst is detected,
- * append a `cancel_burst` proxy signal to the active episode.
- *
- * Extracted from index.ts onPermissionCancel authorization handler.
+ * Append PR lifecycle evidence using only the server-private artifact binding.
+ * A missing binding is an explicit coverage defect, never a thread-recency join.
+ * Merge remains evidence and does not terminalize the work or Episode.
  */
-export function checkAndAppendCancelBurst(
+export function appendPrLifecycleEvidenceToEpisode(
   store: TaskOutcomeEpisodeStore,
-  burstDetector: CancelBurstDetector,
-  threadId: string,
-  timestamp: number,
-): CancelBurstCheckResult {
-  const burstResult = burstDetector.record(threadId, timestamp);
-
-  if (!burstResult.burst) {
-    return { burst: false, count: burstResult.count, proxyAppended: false };
+  input: PrLifecycleEvidenceInput,
+): SignalWiringResult {
+  const idempotencyKey = `pr:${input.type}:${input.ref}:${input.outcome}`;
+  const existingEpisodeId = store.getSignalEpisodeIdByIdempotencyKey(idempotencyKey);
+  if (existingEpisodeId) {
+    return { episodeId: existingEpisodeId, signalAppended: false };
   }
 
-  const ep = store.getActiveEpisode(threadId);
-  if (!ep) {
-    return { burst: true, count: burstResult.count, proxyAppended: false };
-  }
-
-  store.appendSignal(ep.episodeId, {
-    category: 'proxy',
-    record: {
-      type: 'cancel_burst',
-      value: burstResult.count,
-      timestamp: new Date(timestamp).toISOString(),
-      threadId,
-    },
+  const episode = findOrCreateEpisode(store, {
+    threadId: input.threadId,
+    participants: [],
+    managedWorkExpected: true,
+    managedArtifactRef: input.ref,
+    ...(input.managedWorkBinding ? { managedWorkBinding: input.managedWorkBinding } : {}),
   });
-
-  return { burst: true, count: burstResult.count, episodeId: ep.episodeId, proxyAppended: true };
+  const signal = buildA1WorldTruthSignal({ type: input.type, ref: input.ref, outcome: input.outcome });
+  const result = store.appendSignal(episode.episodeId, {
+    category: 'a1',
+    record: signal as unknown as Record<string, unknown>,
+    idempotencyKey,
+  });
+  return { episodeId: episode.episodeId, signalAppended: result.appended };
 }

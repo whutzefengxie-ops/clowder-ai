@@ -6,6 +6,7 @@ import { join, resolve } from 'node:path';
 import { describe, it } from 'node:test';
 
 const HELPER_PATH = resolve(process.cwd(), 'scripts/brand-dictionary-helper.mjs');
+const WORKFLOW_PATH = resolve(process.cwd(), '.github/workflows/brand-boundary-guard.yml');
 
 // ── Unit tests for the dictionary helper module ──
 
@@ -61,6 +62,15 @@ describe('brand-dictionary-helper', () => {
       const { classifyPath } = await import(HELPER_PATH);
       const result = classifyPath('packages/web/public/concierge/skins/ragdoll-v1/pet.json');
       assert.equal(result.classification, 'brand-sensitive');
+    });
+  });
+
+  describe('classifyPath — canonical public source', () => {
+    it('classifies site/** as public-source', async () => {
+      const { classifyPath } = await import(HELPER_PATH);
+      const result = classifyPath('site/index.html');
+      assert.equal(result.classification, 'public-source');
+      assert.equal(result.risk, 'P1');
     });
   });
 
@@ -129,6 +139,14 @@ describe('brand-dictionary-helper', () => {
       const sanctum = terms.find((t) => t.id === 'l4.redis_sanctum');
       assert.ok(sanctum, 'l4.redis_sanctum term should exist');
       assert.ok(sanctum.homePatterns.includes('production data boundary'));
+    });
+
+    it('classifies bare lowercase operator as a private co-creator role variant', async () => {
+      const { getHomeTerms } = await import(HELPER_PATH);
+      const terms = getHomeTerms();
+      const coCreator = terms.find((t) => t.id === 'role.co_creator');
+      assert.ok(coCreator, 'role.co_creator term should exist');
+      assert.ok(coCreator.homePatterns.includes('operator'));
     });
   });
 
@@ -287,6 +305,23 @@ describe('brand-dictionary-helper', () => {
       assert.ok(lines.some((l) => l.includes('desktop')));
       assert.ok(lines.some((l) => l.includes('guides')));
       assert.ok(lines.some((l) => l.includes('cat-cafe-skills')));
+    });
+  });
+
+  describe('GitHub workflow live PR metadata', () => {
+    const workflow = readFileSync(WORKFLOW_PATH, 'utf-8');
+
+    it('resolves the current PR title from GitHub instead of the rerun event snapshot', () => {
+      assert.match(workflow, /gh api[^\n]+pulls\/\$\{\{ github\.event\.pull_request\.number \}\}/);
+      assert.doesNotMatch(workflow, /PR_TITLE="\$\{\{ github\.event\.pull_request\.title \}\}"/);
+    });
+
+    it('names every accepted boundary tag in remediation messages', () => {
+      assert.match(workflow, /\\\[\(intake\|brand-update\|boundary\)\\\]/);
+      assert.doesNotMatch(workflow, /\[intake\] or \[brand-update\]/);
+
+      const completeRemediations = workflow.match(/\[intake\], \[brand-update\], or \[boundary\]/g) ?? [];
+      assert.ok(completeRemediations.length >= 3, 'all error and warning paths must name the three accepted tags');
     });
   });
 });

@@ -1,7 +1,24 @@
-import type { AutomationState, CreateTaskInput, TaskItem, TaskKind, UpdateTaskInput } from '@cat-cafe/shared';
+import type {
+  AutomationState,
+  CreateTaskInput,
+  ManagedWorkBinding,
+  TaskItem,
+  TaskKind,
+  UpdateTaskInput,
+} from '@cat-cafe/shared';
 import type { ITaskStore } from '../cats/services/stores/ports/TaskStore.js';
+import type {
+  AdmitEntrustedWorkStoreInput,
+  AdmitEntrustedWorkStoreResult,
+  CloseEntrustedWorkStoreInput,
+  CloseEntrustedWorkStoreResult,
+  ReplaceAutomationStateIfGenerationInput,
+  UpdateEntrustedWorkStoreInput,
+  UpdateEntrustedWorkStoreResult,
+} from '../cats/services/stores/ports/TaskStoreContract.js';
 import type { IBallCustodyIngest } from './BallCustodyIngest.js';
 import { buildTaskBlockedEvent, buildTaskDoneEvent, buildTaskUnblockedEvent } from './ball-custody-events.js';
+import type { TaskActionSuccessorLifecycle } from './TaskActionSuccessorLifecycle.js';
 
 type MaybePromise<T> = T | Promise<T>;
 type WarnLogger = { warn: (obj: unknown, msg?: string) => void };
@@ -14,8 +31,9 @@ export function withBallCustodyTaskEvents(
   inner: ITaskStore,
   ballCustody: IBallCustodyIngest,
   logger?: WarnLogger,
+  actionLifecycle?: TaskActionSuccessorLifecycle,
 ): ITaskStore {
-  return new BallCustodyTaskStore(inner, ballCustody, logger);
+  return new BallCustodyTaskStore(inner, ballCustody, logger, actionLifecycle);
 }
 
 class BallCustodyTaskStore implements ITaskStore {
@@ -23,6 +41,7 @@ class BallCustodyTaskStore implements ITaskStore {
     private readonly inner: ITaskStore,
     private readonly ballCustody: IBallCustodyIngest,
     private readonly logger?: WarnLogger,
+    private readonly actionLifecycle?: TaskActionSuccessorLifecycle,
   ) {}
 
   create(input: CreateTaskInput): MaybePromise<TaskItem> {
@@ -36,12 +55,18 @@ class BallCustodyTaskStore implements ITaskStore {
   update(taskId: string, input: UpdateTaskInput): MaybePromise<TaskItem | null> {
     const beforeResult = this.inner.get(taskId);
     const updateAfterBefore = (before: TaskItem | null): MaybePromise<TaskItem | null> => {
-      const updatedResult = this.inner.update(taskId, input);
-      const finish = (updated: TaskItem | null): TaskItem | null => {
-        if (before && updated) this.recordStatusTransition(before, updated);
-        return updated;
+      const performUpdate = (): MaybePromise<TaskItem | null> => {
+        const updatedResult = this.inner.update(taskId, input);
+        const finish = (updated: TaskItem | null): MaybePromise<TaskItem | null> => {
+          if (!before || !updated) return updated;
+          this.recordStatusTransition(before, updated);
+          const completion = this.actionLifecycle?.completeStatusTransition(before, updated);
+          return completion ? completion.then(() => updated) : updated;
+        };
+        return isPromiseLike(updatedResult) ? updatedResult.then(finish) : finish(updatedResult);
       };
-      return isPromiseLike(updatedResult) ? updatedResult.then(finish) : finish(updatedResult);
+      const gate = before ? this.actionLifecycle?.assertUpdateAllowed(before, input) : undefined;
+      return gate ? gate.then(performUpdate) : performUpdate();
     };
 
     return isPromiseLike(beforeResult) ? beforeResult.then(updateAfterBefore) : updateAfterBefore(beforeResult);
@@ -50,12 +75,18 @@ class BallCustodyTaskStore implements ITaskStore {
   updateIfThreadId(taskId: string, expectedThreadId: string, input: UpdateTaskInput): MaybePromise<TaskItem | null> {
     const beforeResult = this.inner.get(taskId);
     const updateAfterBefore = (before: TaskItem | null): MaybePromise<TaskItem | null> => {
-      const updatedResult = this.inner.updateIfThreadId(taskId, expectedThreadId, input);
-      const finish = (updated: TaskItem | null): TaskItem | null => {
-        if (before && updated) this.recordStatusTransition(before, updated);
-        return updated;
+      const performUpdate = (): MaybePromise<TaskItem | null> => {
+        const updatedResult = this.inner.updateIfThreadId(taskId, expectedThreadId, input);
+        const finish = (updated: TaskItem | null): MaybePromise<TaskItem | null> => {
+          if (!before || !updated) return updated;
+          this.recordStatusTransition(before, updated);
+          const completion = this.actionLifecycle?.completeStatusTransition(before, updated);
+          return completion ? completion.then(() => updated) : updated;
+        };
+        return isPromiseLike(updatedResult) ? updatedResult.then(finish) : finish(updatedResult);
       };
-      return isPromiseLike(updatedResult) ? updatedResult.then(finish) : finish(updatedResult);
+      const gate = before ? this.actionLifecycle?.assertUpdateAllowed(before, input) : undefined;
+      return gate ? gate.then(performUpdate) : performUpdate();
     };
 
     return isPromiseLike(beforeResult) ? beforeResult.then(updateAfterBefore) : updateAfterBefore(beforeResult);
@@ -66,11 +97,21 @@ class BallCustodyTaskStore implements ITaskStore {
   }
 
   delete(taskId: string): MaybePromise<boolean> {
-    return this.inner.delete(taskId);
+    const actionLifecycle = this.actionLifecycle;
+    if (!actionLifecycle) return this.inner.delete(taskId);
+    return Promise.resolve(this.inner.get(taskId)).then(async (task) => {
+      if (task) await actionLifecycle.assertDeleteAllowed(task);
+      return this.inner.delete(taskId);
+    });
   }
 
   deleteByThread(threadId: string): MaybePromise<number> {
-    return this.inner.deleteByThread(threadId);
+    const actionLifecycle = this.actionLifecycle;
+    if (!actionLifecycle) return this.inner.deleteByThread(threadId);
+    return Promise.resolve(this.inner.listByThread(threadId)).then(async (tasks) => {
+      await Promise.all(tasks.map((task) => actionLifecycle.assertDeleteAllowed(task)));
+      return this.inner.deleteByThread(threadId);
+    });
   }
 
   getBySubject(subjectKey: string): MaybePromise<TaskItem | null> {
@@ -81,12 +122,57 @@ class BallCustodyTaskStore implements ITaskStore {
     return this.inner.upsertBySubject(input);
   }
 
+  upsertBySubjectWithManagedWorkBinding(input: CreateTaskInput, binding: ManagedWorkBinding): MaybePromise<TaskItem> {
+    return this.inner.upsertBySubjectWithManagedWorkBinding(input, binding);
+  }
+
   listByKind(kind: TaskKind): MaybePromise<TaskItem[]> {
     return this.inner.listByKind(kind);
   }
 
   patchAutomationState(taskId: string, patch: Partial<AutomationState>): MaybePromise<TaskItem | null> {
     return this.inner.patchAutomationState(taskId, patch);
+  }
+
+  bindManagedWorkBinding(taskId: string, binding: ManagedWorkBinding): MaybePromise<ManagedWorkBinding | null> {
+    return this.inner.bindManagedWorkBinding(taskId, binding);
+  }
+
+  getManagedWorkBinding(taskId: string): MaybePromise<ManagedWorkBinding | null> {
+    return this.inner.getManagedWorkBinding(taskId);
+  }
+
+  admitEntrustedWork(input: AdmitEntrustedWorkStoreInput): MaybePromise<AdmitEntrustedWorkStoreResult> {
+    return this.inner.admitEntrustedWork(input);
+  }
+
+  closeEntrustedWork(taskId: string, input: CloseEntrustedWorkStoreInput): MaybePromise<CloseEntrustedWorkStoreResult> {
+    const beforeResult = this.inner.get(taskId);
+    const closeAfterBefore = (before: TaskItem | null): MaybePromise<CloseEntrustedWorkStoreResult> => {
+      const closedResult = this.inner.closeEntrustedWork(taskId, input);
+      const finish = (result: CloseEntrustedWorkStoreResult): MaybePromise<CloseEntrustedWorkStoreResult> => {
+        if (!before || result.kind !== 'closed') return result;
+        this.recordStatusTransition(before, result.task);
+        const completion = this.actionLifecycle?.completeStatusTransition(before, result.task);
+        return completion ? completion.then(() => result) : result;
+      };
+      return isPromiseLike(closedResult) ? closedResult.then(finish) : finish(closedResult);
+    };
+    return isPromiseLike(beforeResult) ? beforeResult.then(closeAfterBefore) : closeAfterBefore(beforeResult);
+  }
+
+  updateEntrustedWork(
+    taskId: string,
+    input: UpdateEntrustedWorkStoreInput,
+  ): MaybePromise<UpdateEntrustedWorkStoreResult> {
+    return this.inner.updateEntrustedWork(taskId, input);
+  }
+
+  replaceAutomationStateIfGeneration(
+    taskId: string,
+    input: ReplaceAutomationStateIfGenerationInput,
+  ): MaybePromise<TaskItem | null> {
+    return this.inner.replaceAutomationStateIfGeneration(taskId, input);
   }
 
   private recordStatusTransition(before: TaskItem, updated: TaskItem): void {

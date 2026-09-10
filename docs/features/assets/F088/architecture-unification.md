@@ -7,7 +7,6 @@ created: 2026-03-10
 # F088 架构归一设计 — Known Issues 解决方案
 
 > 此文件从 `F088-multi-platform-chat-gateway.md` 拆出，保留 ISSUE-1/2 的详细解决方案和架构设计讨论。
-> 设计讨论纪要见 *(internal reference removed)*
 
 ## ISSUE-1: Connector 消息不走统一管道 — ✅ RESOLVED
 
@@ -33,7 +32,7 @@ ConnectorRouter 收到飞书消息后在 ThreadStore 创建 thread，但用 `def
 
 ### 三层架构（设计共识）
 
-> 核心结论：**统一的是 Cat Café thread/message core，不是 GitHub transport**。GitHub 也是 connector。
+> 核心结论：**统一的是 Clowder AI thread/message core，不是 GitHub transport**。GitHub 也是 connector。
 
 1. **Principal Link**: `connector + externalSenderId → internalUserId`（解决"IM 用户是谁"）
 2. **Session Binding**: `connector + externalChatId → activeThreadId` + recent threads（解决"当前指向哪个 thread"）

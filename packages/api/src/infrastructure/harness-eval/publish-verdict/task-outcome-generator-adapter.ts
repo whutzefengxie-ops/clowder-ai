@@ -33,6 +33,7 @@ export function createTaskOutcomeGeneratorAdapter(): VerdictGenerator {
       harnessFeedbackRoot: deps.harnessFeedbackRoot,
       domain,
       sourceWindow,
+      generatedAt: deps.publicationTime,
       submittedPacket: packet,
     });
     const afterPublish = buildEpisodeVerdictWriteback(
@@ -70,7 +71,7 @@ function buildEpisodeVerdictWriteback(
         `invalid_episode_verdict_writeback: episodeId '${writeback.episodeId}' is terminalState='${episode.terminalState}', expected one of ${[...VERDICTABLE_TERMINAL_STATES].join(', ')}`,
       );
     }
-    if (episode.verdict !== null) {
+    if (episode.verdict !== null && episode.verdict !== writeback.verdict) {
       throw new Error(
         `invalid_episode_verdict_writeback: episodeId '${writeback.episodeId}' already has verdict='${episode.verdict}'; refusing to overwrite task-outcome audit history`,
       );
@@ -79,7 +80,7 @@ function buildEpisodeVerdictWriteback(
 
   return () => {
     const store = new TaskOutcomeEpisodeStore(taskOutcomeDbPath);
-    const result = store.updateVerdictsIfPending(episodeVerdicts);
+    const result = store.updateVerdictsIdempotently(episodeVerdicts);
     if (!result.ok) {
       const reason =
         result.failure.current && result.failure.current.verdict !== null

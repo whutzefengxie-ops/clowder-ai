@@ -38,6 +38,9 @@ export interface ServiceManifest {
   /** Timeout in ms for deep health probe (default 20000). Must be much longer
    *  than the standard 1500ms health timeout because synthesis probes are slow. */
   deepHealthTimeoutMs?: number;
+  /** Optional health-payload identity contract. A 2xx response is not enough
+   *  when one service id can dispatch multiple model/backend implementations. */
+  healthIdentity?: 'asr-model-backend' | 'tts-stream-route-v1';
   prerequisites?: {
     runtime?: string;
     venvPath?: string;
@@ -66,6 +69,7 @@ export interface ServiceHealthResult {
   ok: boolean;
   status?: number;
   error?: string | null;
+  details?: Record<string, unknown>;
 }
 
 export interface ServiceConfig {
@@ -184,6 +188,9 @@ export const SERVICE_MANIFESTS: readonly ServiceManifest[] = [
     endpointEnvVars: ['WHISPER_URL', 'NEXT_PUBLIC_WHISPER_URL'],
     defaultEndpoint: 'http://localhost:9876',
     healthPath: '/health',
+    deepHealthPath: '/health/deep',
+    deepHealthTimeoutMs: 60_000,
+    healthIdentity: 'asr-model-backend',
     prerequisites: {
       runtime: 'python3.10+',
       venvPath: '~/.cat-cafe/whisper-venv',
@@ -223,6 +230,7 @@ export const SERVICE_MANIFESTS: readonly ServiceManifest[] = [
     defaultEndpoint: 'http://localhost:9879',
     healthPath: '/health',
     deepHealthPath: '/health/deep',
+    healthIdentity: 'tts-stream-route-v1',
     prerequisites: {
       runtime: 'python3.10+',
       venvPath: '~/.cat-cafe/tts-venv',
@@ -315,14 +323,29 @@ export const SERVICE_MANIFESTS: readonly ServiceManifest[] = [
     endpointEnvVars: ['AUDIO_SERVICE_URL'],
     defaultEndpoint: 'http://127.0.0.1:9881',
     healthPath: '/status',
+    deepHealthPath: '/health/deep',
     prerequisites: {
       runtime: 'python3.10+',
       venvPath: '~/.cat-cafe/audio-capture-venv',
-      packages: ['sounddevice', 'fastapi', 'uvicorn', 'numpy'],
-      // No models — audio-capture has no ML inference. Modal still shows
-      // install button (allModels.length === 0 short-circuits canConfirm).
-      models: [],
-      estimatedMinutes: 2,
+      packages: [
+        'aiohttp',
+        'sounddevice',
+        'numpy',
+        'torch',
+        'torchaudio',
+        'soundfile',
+        'scikit-learn',
+        'modelscope[framework]',
+      ],
+      models: [
+        serviceModel(
+          'iic/speech_campplus_sv_zh-cn_16k-common',
+          '~30MB',
+          'CAM++ speaker embedding for enrolled voices and session-local Speaker N separation',
+          true,
+        ),
+      ],
+      estimatedMinutes: 10,
     },
     scripts: {
       install: 'scripts/services/audio-capture-install.sh',
@@ -353,6 +376,11 @@ function parseEnabledEnv(value: string | undefined): boolean | null {
   if (['1', 'true', 'yes', 'on'].includes(normalized)) return true;
   if (['0', 'false', 'no', 'off', ''].includes(normalized)) return false;
   return null;
+}
+
+function getDefaultServiceModel(service: ServiceManifest): string | undefined {
+  const models = service.prerequisites?.models;
+  return (models?.find((model) => model.isDefault) ?? models?.[0])?.name;
 }
 
 export function deriveLegacyServiceConfig(
@@ -413,8 +441,8 @@ export function deriveLegacyServiceConfig(
     // instead of a "MODEL required" startup failure.  The manifest's
     // isDefault model is the single source of truth for defaults (see
     // b29c04d05 — hardcoded script defaults were removed intentionally).
-    const defaultModel = service.prerequisites?.models?.find((m) => m.isDefault) ?? service.prerequisites?.models?.[0];
-    if (defaultModel) config.selectedModel = defaultModel.name;
+    const defaultModel = getDefaultServiceModel(service);
+    if (defaultModel) config.selectedModel = defaultModel;
   }
   const portKey = PORT_ENV_VARS[service.id];
   const port = parseServicePort(portKey ? env[portKey]?.trim() : undefined);
@@ -427,7 +455,28 @@ export function resolveEffectiveServiceConfig(
   config: ServiceConfig | undefined,
   env: NodeJS.ProcessEnv = process.env,
 ): ServiceConfig | undefined {
-  return config ?? deriveLegacyServiceConfig(service, env);
+  const legacy = deriveLegacyServiceConfig(service, env);
+  // F195 historically used QWEN3_ASR_* before qwen3-asr and Whisper were
+  // unified under whisper-stt. An explicit active Qwen contract is stronger
+  // than stale persisted model identity left by a previous backend switch.
+  // Primary ASR_ENABLED/WHISPER_MODEL still wins inside deriveLegacyServiceConfig.
+  if (
+    config &&
+    service.id === 'whisper-stt' &&
+    legacy?.selectedModel?.includes('Qwen3-ASR') &&
+    config.selectedModel !== legacy.selectedModel
+  ) {
+    return { ...config, enabled: legacy.enabled, selectedModel: legacy.selectedModel };
+  }
+  const effective = config === undefined ? legacy : config;
+  if (effective === undefined) return undefined;
+  if (effective.selectedModel?.trim()) return effective;
+
+  // Older services.json rows predate explicit model selection. Start scripts
+  // now require their MODEL env, so project the manifest default into the
+  // effective config instead of repeatedly launching a guaranteed failure.
+  const defaultModel = getDefaultServiceModel(service);
+  return defaultModel ? { ...effective, selectedModel: defaultModel } : effective;
 }
 
 function replaceEndpointPort(endpoint: string | null, port: number): string | null {
@@ -534,10 +583,21 @@ export async function fetchServiceHealth(url: string, service?: ServiceManifest)
   const timeoutMs = isDeepProbe ? (service?.deepHealthTimeoutMs ?? 20_000) : 1500;
   try {
     const response = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
+    let details: Record<string, unknown> | undefined;
+    try {
+      const payload: unknown = await response.json();
+      if (typeof payload === 'object' && payload !== null && !Array.isArray(payload)) {
+        details = payload as Record<string, unknown>;
+      }
+    } catch {
+      // A malformed health response remains represented by ok/status below;
+      // identity-bound services fail closed when details are absent.
+    }
     return {
       ok: response.ok,
       status: response.status,
       error: response.ok ? null : `HTTP ${response.status}`,
+      ...(details ? { details } : {}),
     };
   } catch (error) {
     return {
@@ -545,6 +605,48 @@ export async function fetchServiceHealth(url: string, service?: ServiceManifest)
       error: error instanceof Error ? error.message : 'Service health check failed',
     };
   }
+}
+
+function expectedAsrBackend(model: string): 'mlx-audio' | 'mlx-whisper' | 'faster-whisper' {
+  if (model.includes('Qwen3-ASR')) return 'mlx-audio';
+  if (model.startsWith('mlx-community/whisper-')) return 'mlx-whisper';
+  return 'faster-whisper';
+}
+
+function logSafeIdentity(value: string): string {
+  return JSON.stringify(value.slice(0, 200));
+}
+
+export function serviceHealthIdentityMatches(
+  service: ServiceManifest,
+  config: ServiceConfig | undefined,
+  health: ServiceHealthResult,
+): { matches: boolean; reason?: string } {
+  if (!service.healthIdentity) return { matches: true };
+  if (service.healthIdentity === 'tts-stream-route-v1') {
+    const capabilities = health.details?.capabilities;
+    if (!Array.isArray(capabilities) || !capabilities.includes('speech-stream-route-v1')) {
+      return { matches: false, reason: 'health response omitted speech-stream-route-v1 capability' };
+    }
+    return { matches: true };
+  }
+  const desiredModel = config?.selectedModel?.trim();
+  if (!desiredModel) return { matches: false, reason: 'desired model is not configured' };
+  const liveModel = health.details?.model;
+  const liveBackend = health.details?.backend;
+  if (typeof liveModel !== 'string' || typeof liveBackend !== 'string') {
+    return { matches: false, reason: 'health response omitted model/backend identity' };
+  }
+  const desiredBackend = expectedAsrBackend(desiredModel);
+  if (liveModel !== desiredModel || liveBackend !== desiredBackend) {
+    return {
+      matches: false,
+      reason:
+        `desired model=${logSafeIdentity(desiredModel)} backend=${logSafeIdentity(desiredBackend)}; ` +
+        `live model=${logSafeIdentity(liveModel)} backend=${logSafeIdentity(liveBackend)}`,
+    };
+  }
+  return { matches: true };
 }
 
 export async function resolveServiceState(

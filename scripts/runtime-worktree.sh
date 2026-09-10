@@ -32,6 +32,8 @@ Usage:
   ./scripts/runtime-worktree.sh init   [--dir PATH] [--branch NAME] [--remote NAME] [--no-install]
   ./scripts/runtime-worktree.sh start  [--dir PATH] [--branch NAME] [--remote NAME] [--force] [--no-sync] [--] [start-dev args...]
   ./scripts/runtime-worktree.sh status [--dir PATH] [--branch NAME] [--remote NAME]
+  ./scripts/runtime-worktree.sh daemon-status [--dir PATH]
+  ./scripts/runtime-worktree.sh stop   [--dir PATH]
 
 Defaults:
   --dir    ../cat-cafe-runtime
@@ -394,6 +396,65 @@ ensure_runtime_branch() {
   fi
 }
 
+# The runtime worktree is a passive mirror of origin/main (ADR-039). Any commit
+# in origin/main..HEAD is, by definition, NOT reachable from the branch we sync
+# to, so a `reset --hard` would delete it from this worktree. We deliberately do
+# NOT try to prove a commit is "safe to discard" from remote-tracking refs:
+# startup only fetches origin/main, so a stale origin/* ref (whose upstream
+# branch was deleted out-of-band) makes `git branch -r --contains` claim a
+# local-only commit is remotely saved — the exact false-safe that silently loses
+# data (LL-045). Fail closed: pin every diverged commit to a backup branch
+# before printing any reset advice, and let a human decide what is disposable.
+report_diverged_runtime_commits() {
+  local sha at_risk_count=0
+  local -a at_risk_shas=()
+
+  while IFS= read -r sha; do
+    [ -n "$sha" ] || continue
+    at_risk_shas+=("$sha")
+    at_risk_count=$((at_risk_count + 1))
+  done < <(git -C "$RUNTIME_DIR" rev-list "$REMOTE_NAME/main..HEAD" 2>/dev/null)
+
+  if [ "$at_risk_count" -eq 0 ]; then
+    # Caller already asserted ahead_count>0; nothing structured to enumerate.
+    echo "  Inspect:  git -C \"$RUNTIME_DIR\" log --oneline $REMOTE_NAME/main..HEAD"
+    return 0
+  fi
+
+  local backup_branch
+  backup_branch="runtime-sanctuary-backup-$(git -C "$RUNTIME_DIR" rev-parse --short HEAD 2>/dev/null)"
+
+  echo ""
+  echo "  $at_risk_count commit(s) here are ahead of $REMOTE_NAME/main."
+  echo "  Startup only fetches $REMOTE_NAME/main, so remote-tracking refs cannot"
+  echo "  prove these are saved elsewhere — a 'reset --hard' could permanently"
+  echo "  delete this work:"
+  for sha in "${at_risk_shas[@]}"; do
+    echo "      $(git -C "$RUNTIME_DIR" log -1 --format='%h  %an: %s' "$sha" 2>/dev/null)"
+  done
+  echo ""
+
+  if git -C "$RUNTIME_DIR" rev-parse --verify --quiet "$backup_branch" >/dev/null 2>&1; then
+    echo "  Safety net already in place: branch '$backup_branch' pins these commits."
+  elif git -C "$RUNTIME_DIR" branch "$backup_branch" HEAD >/dev/null 2>&1; then
+    echo "  Safety net created: branch '$backup_branch' now pins these commits."
+  else
+    echo "  WARNING: could not create backup branch '$backup_branch' — do not reset until this work is saved."
+  fi
+
+  echo ""
+  echo "  The runtime worktree is a sanctuary: it stays a passive mirror of"
+  echo "  $REMOTE_NAME/main (ADR-039 passive-freeze contract; LL-045 / LL-078)."
+  echo "  Development belongs in a feature worktree off the main repo, never here."
+  echo ""
+  echo "  To recover, then re-run start:"
+  echo "    1. Check whether the work above already landed upstream (e.g. squashed into a PR)."
+  echo "    2. If it did not land, publish it from the backup branch first:"
+  echo "         git -C \"$RUNTIME_DIR\" push $REMOTE_NAME $backup_branch:feat/<your-branch>"
+  echo "    3. Once the work is safe, restore the mirror:"
+  echo "         git -C \"$RUNTIME_DIR\" reset --hard $REMOTE_NAME/main"
+}
+
 print_untracked_merge_blockers() {
   local found=false
   local path blocker note remaining candidate segment type existing already reported_count=0
@@ -526,9 +587,7 @@ sync_runtime_worktree() {
       ahead_count=$(git -C "$RUNTIME_DIR" rev-list --count "$REMOTE_NAME/main..HEAD" 2>/dev/null || echo 0)
       if [ "$ahead_count" -gt 0 ]; then
         echo "  Local branch is ahead of $REMOTE_NAME/main by $ahead_count commit(s) — diverged, cannot fast-forward."
-        echo "  Likely local commits on the runtime sync branch (e.g. auto-materialized lessons/docs)."
-        echo "  Inspect:  git -C \"$RUNTIME_DIR\" log --oneline $REMOTE_NAME/main..HEAD"
-        echo "  Resolve:  git -C \"$RUNTIME_DIR\" reset --hard $REMOTE_NAME/main   (discards local commits; untracked files kept)"
+        report_diverged_runtime_commits
       else
         echo "  No untracked files matching incoming tracked files were found."
         echo "  Check with:  git -C \"$RUNTIME_DIR\" status"
@@ -585,6 +644,59 @@ status_runtime_worktree() {
   echo "behind_${REMOTE_NAME}/main: $behind"
 }
 
+runtime_daemon_root() {
+  if is_git_repo; then
+    abs_path "$RUNTIME_DIR"
+  else
+    printf '%s\n' "$PROJECT_DIR"
+  fi
+}
+
+runtime_daemon_state() {
+  local command="$1"
+  local root
+  root="$(runtime_daemon_root)"
+  [ -d "$root" ] || die "runtime root not found: $root"
+  node "$SCRIPT_DIR/daemon-state.mjs" "$command" \
+    --home "$HOME" \
+    --project-root "$root" \
+    --deployment-id runtime
+}
+
+migrate_legacy_runtime_daemon_state() {
+  local root
+  root="$(runtime_daemon_root)"
+  [ -d "$root" ] || die "runtime root not found: $root"
+  node "$SCRIPT_DIR/daemon-state.mjs" migrate-legacy \
+    --legacy-pid-file "$HOME/.cat-cafe/daemon.pid" \
+    --legacy-log-path-file "$HOME/.cat-cafe/daemon.log-path" \
+    --home "$HOME" \
+    --project-root "$root" \
+    --deployment-id runtime
+}
+
+stop_runtime_daemon() {
+  export CAT_CAFE_DEPLOYMENT_ID=runtime
+  migrate_legacy_runtime_daemon_state
+  runtime_daemon_state stop
+}
+
+status_runtime_daemon() {
+  local root
+  export CAT_CAFE_DEPLOYMENT_ID=runtime
+  migrate_legacy_runtime_daemon_state
+  runtime_daemon_state status
+  root="$(runtime_daemon_root)"
+  if [ -f "$root/scripts/f247-cloud-services.mjs" ]; then
+    if node "$root/scripts/f247-cloud-services.mjs" status --summary >/dev/null 2>&1; then
+      echo "  F247 cloud: healthy"
+    else
+      echo "  F247 cloud: degraded (run pnpm cloud:doctor for details)"
+    fi
+  fi
+  echo "  stop: pnpm runtime:stop"
+}
+
 start_runtime_worktree() {
   info "preparing runtime worktree (checking ports, syncing origin/main...)"
 
@@ -597,7 +709,9 @@ start_runtime_worktree() {
     # In-place deployment: binary == workspace == PROJECT_DIR
     export CAT_CAFE_RUNTIME_ROOT="$PROJECT_DIR"
     export CAT_CAFE_WORKSPACE_ROOT="${CAT_CAFE_WORKSPACE_ROOT:-$PROJECT_DIR}"
+    export CAT_CAFE_DEPLOYMENT_ID=runtime
     export CAT_CAFE_PROVISION_GLOBAL_SIDECAR=1
+    export CONNECTOR_GATEWAY_AUTOSTART="${CONNECTOR_GATEWAY_AUTOSTART:-1}"
     # Runtime contract: passive frozen — no tsx watch auto-restart on src changes.
     # Restart only happens on explicit `pnpm start` (which runs build invariant first).
     # See docs/decisions/039-runtime-passive-freeze.md for design rationale.
@@ -637,7 +751,9 @@ start_runtime_worktree() {
   # project (the main cat-cafe repo where they're editing code).
   export CAT_CAFE_RUNTIME_ROOT="$RUNTIME_DIR"
   export CAT_CAFE_WORKSPACE_ROOT="${CAT_CAFE_WORKSPACE_ROOT:-$PROJECT_DIR}"
+  export CAT_CAFE_DEPLOYMENT_ID=runtime
   export CAT_CAFE_PROVISION_GLOBAL_SIDECAR=1
+  export CONNECTOR_GATEWAY_AUTOSTART="${CONNECTOR_GATEWAY_AUTOSTART:-1}"
   # Runtime contract: passive frozen — no tsx watch auto-restart on src changes.
   # Restart only happens on explicit `pnpm start` (which runs build invariant first).
   # See docs/decisions/039-runtime-passive-freeze.md for design rationale.
@@ -645,6 +761,7 @@ start_runtime_worktree() {
   info "exporting CAT_CAFE_RUNTIME_ROOT=$CAT_CAFE_RUNTIME_ROOT"
   info "exporting CAT_CAFE_WORKSPACE_ROOT=$CAT_CAFE_WORKSPACE_ROOT"
   info "exporting CAT_CAFE_PROVISION_GLOBAL_SIDECAR=$CAT_CAFE_PROVISION_GLOBAL_SIDECAR"
+  info "exporting CONNECTOR_GATEWAY_AUTOSTART=$CONNECTOR_GATEWAY_AUTOSTART (official runtime opt-in)"
   info "exporting CAT_CAFE_DIRECT_NO_WATCH=$CAT_CAFE_DIRECT_NO_WATCH (runtime passive-freeze)"
   # Runtime = production: auto-inject --prod-web for PWA + Tailscale support.
   # Bash 3.2 + set -u: empty-array expansion can throw "unbound variable".
@@ -720,6 +837,12 @@ case "$COMMAND" in
     ;;
   status)
     status_runtime_worktree
+    ;;
+  daemon-status)
+    status_runtime_daemon
+    ;;
+  stop)
+    stop_runtime_daemon
     ;;
   help)
     usage

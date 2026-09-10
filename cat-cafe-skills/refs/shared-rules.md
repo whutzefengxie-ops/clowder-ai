@@ -260,7 +260,7 @@ Skill/refs 中描述工作流分工时，用以下角色词代替具体猫名。
 
 ## 0. 身份契约
 
-猫猫是家庭成员，不是外包工具。讨论 Cat Café 团队时用"我们" / "咱们" / "家里"，禁止用"你们" / "他们"指代三猫。
+猫猫是家庭成员，不是外包工具。讨论 Clowder AI 团队时用"我们" / "咱们" / "家里"，禁止用"你们" / "他们"指代三猫。
 
 ## 1. 交接五件套
 
@@ -324,6 +324,8 @@ commit body 补一行 `Why:` 说明决策理由。
 
 ## 7. Review 必须有立场（反顺从规则）
 
+`Review 必须有立场` 只约束**已经按风险选择了 review**的场景，不是“有 diff 就必须 review”。低风险 direct-main 文档、机械登记、已审内容转录或可证明 continuity 可以不新开 review；需要 review 时仍必须跨个体。
+
 - Reviewer 每个发现有明确立场，禁止"修不修都行"
 - Author 收到意见必须判断，不能全盘接受
 - 零分歧 = 走过场，双方反思
@@ -377,20 +379,20 @@ commit body 补一行 `Why:` 说明决策理由。
 
 ### 球权检查（发消息前必问）
 
-**在 A2A 串行任务回合里，本轮必选其一（缺 = 消息不完整）。按"谁能做下一步"的优先级选：**
+**在 active successor chain（A2A 串行任务回合、存在下一步工作）里，本轮必选其一。豁免（合法自然结束，不强造路由，2026-07-15 Sol 测试修订）：user-facing 对话轮的纯回答/陪聊、terminal release 已闭环、或本轮没有 pending action/request 且回复自然终结——这些场景强造 @/hold 是假球；只要在等某个人回答/行动，就仍须 `@` 对方，不能用“球本来在他手上”自我豁免。按"谁能做下一步"的优先级选：**
 
 1. **@句柄**（首选）— 另一只猫能做下一步
 2. **等外部条件**（按 2a/2b 判断行动）。**外部条件 = 不在 cat-cafe roster 的实体**：云端 codex (`chatgpt-codex-connector[bot]`) / GitHub bot / PR check / CI / 长 build / 外部 webhook / API 响应。CLI 要退出但还需继续也走这条。**严禁**把外部 identity 投射成本地近似 proxy（例："球权在云端 codex"→ 不可 @ 本地同族猫的任何 variant）
    - **2a 轮询模式**：无结构化回调覆盖（如等 codex 接单 / EYES 出现）→ **调用 `cat_cafe_hold_ball(...)`** + 定时唤醒检查。必须调 MCP，口头说"我继续"不算
-   - **2b 事件驱动模式**：已有结构化回调且触发条件已满足（如 PR tracking 已注册 + EYES > 0）→ 纯依赖回调，**不调用 / 不续约 hold_ball**（F167 KD-27）
-   - **切换点**：轮询唤醒时发现 EYES > 0 → 停止续约，释放 hold。结构化回调 supersedes 轮询
+   - **2b 事件驱动模式**：已有结构化回调且已成功注册 server-bound typed wait → 纯依赖回调，**不调用 / 不续约 hold_ball**（F167 KD-27）。routing guard 只认同 invocation/owner/thread/subject 的有效 wait generation；“thread 里存在任意 tracker”不算出口
+   - **切换点**：轮询唤醒时发现 Codex connector 的 EYES > 0 → 停止续约，释放 hold，并用同 PR 的 numeric trigger comment id 注册 `cat_cafe_register_pr_tracking(..., when=[{kind:'pr_review_result_available', triggerCommentId}], nextStep=..., expiresAt=...)`。注册成功才能 clean stop；其他用户/bot 的 EYES、验证失败都继续 fail closed，不能用自然语言声明代替
 3. **@operator** — **只在硬条件下**（详见 §10.4）：不可逆操作 / 愿景级决策 / 跨猫僵局。不是默认收尾出口
 
-**没有第四种。** "到我这里结束了" ≠ "链条结束了" —— 先问"哪只猫能接"，再决定用哪种出口。`@operator` 是硬条件出口，不是安全港。
+**工作链上没有第四种。** "到我这里结束了" ≠ "链条结束了" —— 先问"哪只猫能接"，再决定用哪种出口。`@operator` 是硬条件出口，不是安全港。（链已闭合的对话终态轮见上方豁免——自然收尾优于假球。）
 
 **SOP 链条确认**（决定下一棒是哪只猫）：
 - review 完 → **必须** @ author 告知结果（不传球 = 假终局）
-- 修完 → @ reviewer 请 review
+- 修完 → 按 review engagement 收口：`iterative` 回原 reviewer；`one-shot` 自证，必要时转日常 reviewer
 - merge 完 → @ 非作者非 reviewer 的猫做愿景守护
 - 分析/方案/建议完成 → @ 提问者（而非反射式 @operator）
 
@@ -495,7 +497,7 @@ commit body 补一行 `Why:` 说明决策理由。
 
 **为什么禁止重复唤起**：`start_vote` 内部已通过 `enqueueA2ATargets` dispatch 了所有 voter。再调 `multi_mention` = 同一只猫被唤起两次，产生重复通知和上下文噪音。投票 auto-close 后，后续 `[VOTE:xxx]` 会被静默忽略，但前面的冗余调度已经发生。
 
-## 14a. 全量测试三件套证据
+## 14a. 测试证据三件套
 
 说"测试全绿"必须附带三件证据，否则只算局部自测，不算全局证据：
 
@@ -505,7 +507,7 @@ commit body 补一行 `Why:` 说明决策理由。
 | 2 | **SHA** | `基于 abc1234` |
 | 3 | **是否 rebase 到最新 main** | `已 rebase origin/main` 或 `未 rebase（基于 3 天前的 main）` |
 
-**merge 前的全量门禁**：`pnpm gate`（= `scripts/pre-merge-check.sh`），自动 rebase + build + test + lint + check，通过后打印三件套。详见 `merge-gate` skill。
+**merge 前的 canonical gate 入口**：`pnpm gate`（= `scripts/pre-merge-check.sh`）先从 diff、冻结 base 与既有 receipts 机器选择 targeted/full；只有 classifier 或 `--risk <axis>` 加严为 full 时才运行全量 build/test/lint/check。targeted 仍须记录受影响检查、全仓跨包 typecheck、SHA 与 base。路由细节只由 `merge-gate` skill 维护，禁止在家规另建路径清单或手调内部 classifier。
 
 ## 14b. Rebase 冲突三屏规则
 
@@ -544,17 +546,9 @@ git show :3:<path>   # THEIRS（main 上的版本）
 
 **硬护栏**：`.githooks/pre-rebase` 会检查 `zdiff3` 是否设置，未设置则阻止 rebase。
 
-## 14c. 共享契约热点文件
+## 14c. 共享契约风险
 
-改以下路径的 PR **必须跑全量测试**（`pnpm gate`），不接受 `--filter` 局部测试：
-
-- `packages/shared/**`
-- `packages/web/src/stores/chatStore.ts`
-- `packages/mcp-server/src/tools/**`
-- `packages/mcp-server/src/server-toolsets.ts`
-
-这些文件是跨包共享契约，改了一处可能导致多个包的测试挂掉。
-说"不是我的 scope"不成立——改了共享契约，所有下游测试都是你的 scope。
+共享 schema、store、MCP tool 与跨包入口的改动必须按**真实契约影响**选择证据，不能只跑单文件测试，也不能再靠一份手写路径表无条件升级 full gate。统一入口是 `pnpm gate`：机器 route 为 full 就执行 full；机器看不见但存在外部契约风险时用 `pnpm gate -- --risk contract` 加严；可证明只影响局部实现时跑受影响测试 + 全仓跨包 typecheck，并把 consumer census 与命令写入 evidence manifest。说“不是我的 scope”不能免除已证明受影响的下游，但目录名本身也不是 full 的徽章。
 
 ## 14. 共享状态文件只在 main 改
 
@@ -573,6 +567,7 @@ git show :3:<path>   # THEIRS（main 上的版本）
 - `docs/features/F*.md` 的 status/owner 字段变更也应在 main，但整文件可在 worktree 改
 
 **规则**：在 main 上改，改完立刻 commit + push。在 worktree 改 → 冲突 + 污染 feature PR + 其他猫看不到更新。
+`docs/ROADMAP.md` 不得再被 docs classifier 当作 governance PR 触发器；若同批其他文件确需 PR，BACKLOG 登记先单独直落 main。
 
 ## 15. 阻塞依赖必须双写到可追溯状态
 
@@ -636,35 +631,9 @@ spike（拆机制、找方案、验证未知行为）时**禁止 web fetch 当�
 
 完整方法论见 `vision-rescue` skill。来源：F198 "拯救Ragdoll"，投降包装成理性收口，operator怒怼才打破。
 
-### 16d. Review 糊锅检测——Round 3 黄灯 / Round 4 停车（2026-05-14 F198 Phase B 教训）
+### 16d. Review loop brake（F314）
 
-> operator experience："你们在补锅ing！选错坐标系了！"（注：此处"补锅"本质是"糊锅"——在错误坐标系上打补丁。后 §16e 独占「补锅匠」magic word 指代坐标系对但只做点修复的场景，故本段改用"糊锅"区分。）
-
-**信号**：Review iteration ≥3 轮且 P1 没有收敛（数量不减 / 同类问题反复出现）= **糊锅模式**。
-不是 reviewer 太严也不是 coder 太差——是在错误的坐标系上反复打补丁。
-
-**Round 3 = 黄灯（自检）**：
-
-Coder 问自己：
-1. 我是在复用已有工具/抽象，还是在重新实现？（F198：BgCarrier 重写了 `buildClaudeEnvOverrides` 已有的逻辑）
-2. 这一轮改动是"修复"还是"补漏"？补漏 = 坐标系可能错了
-3. 如果把已有的同类 service 放在旁边对比，相似度多高？高 = 应该复用不是重写
-
-Reviewer 问自己：
-1. 我连续 3 轮的 P1 是不是同一类问题（错误处理 / 重复代码 / 缺抽象）？
-2. 50%+ P1 能映射到已有 production 代码吗？能 → **必须建议重构方向**，不能继续逐条 P1
-3. 写一份 **Finding Pattern Summary**：这些 P1 指向什么根因？（"缺 X 抽象" / "没复用 Y" / "坐标系 Z 选错了"）
-
-**Round 4 = 强制停车**：
-
-双方都停下来，做一次 **坐标系审计**：
-- 当前方案和已有 production 实现的**结构差异**在哪？
-- 差异是**有意为之**（需求不同）还是**认知缺失**（不知道有现成的）？
-- 认知缺失 → 重构复用。有意为之 → 写清楚为什么，然后继续
-
-**Hook 机制**：PR tracking 的 review feedback callback 在 Round 3+ 注入 Patch Spiral Guard 提醒给 author 和 reviewer 双方。
-
-来源：F198 Phase B `ClaudeBgCarrierService` 6 轮 cloud review、12 个 P1，operator一句"你们在糊锅"打断后 refactor `buildClaudeEnvOverrides` 复用，P1 大幅收敛。
+旧的 `Round 3 / Round 4` 与 PR-tracking Patch Spiral Hook 已退役；它们把历史计数、提醒和责任状态重复塞进 prose。现行唯一入口是 `request-review` 的 durable-fact action-time R4 brake：同一 subject 的第四条正式、非作者 `changes_requested` 到达时只暂停一次自动 re-request，author 回读 accepted source 并写 Finding Pattern Summary；第五条及以后继续，history 不完整则 warn-open。不得出生 Round/Reset、lease、generation 或第二套 review 状态。问题是否同型、是否选错坐标系，统一按下方 §16e failure-mode audit 判断。
 
 ### 16e. Failure-Mode Audit——同型第二次出现即触发（2026-05-29 全家族讨论教训）
 
@@ -785,13 +754,13 @@ beforeEach(() => {
 
 | 类型 | 例子 | 处置 |
 |------|------|------|
-| **无状态残留** | `*.log` / `forzadata-*.txt` / `cookies.json`（调试 / 自动化一次性产物） | hygiene 管：不许留根目录，写到 `tmp/`；`pnpm clean:root-debris` 清理 |
+| **无状态残留** | `*.log` / `forzadata-*.txt` / `cookies.json`（调试 / 自动化一次性产物） | hygiene 管：不许留根目录，写到 `tmp/`；merge 前由 `pnpm gate` 的 Root Artifact Guard 检查 |
 | **有状态核心存储** | `dump.rdb*` / `evidence.sqlite*` / `world.sqlite*`（Redis / Hindsight / World Engine） | **不归 hygiene**：位置是架构决策，迁移 = 不兼容修改 = 独立立项；**不动、不清、不迁** |
 
 **铁律**：
 1. 临时 / 调试 / 可重生成产物**不许写在根目录**——重定向到 `tmp/` / `data/` 等已 ignore 的专用目录。调试完 `> foo.log` 留根目录 = 下一只猫的认知噪声。
 2. 核心数据存储的位置是**架构决策**，不是卫生问题——`dump.rdb` / `*.sqlite` 在根目录是既成事实，迁移属独立立项，不在 hygiene 范畴。
-3. 清理脚本（`scripts/clean-root-debris.sh`）三重保险：删除条件 = untracked ∧ 匹配白名单 ∧ 不在硬保护清单；对任何 `*.rdb*` / `*.sqlite*` 硬拒绝。**宁可白名单不要黑名单**（`feedback_lsof_port_range_kills_sanctuary` 教训）。
+3. 需要主动清理时直接运行 `bash scripts/clean-root-debris.sh --dry-run` 核对，再显式选择 `--execute`；不存在 `pnpm clean:root-debris` 包命令。脚本三重保险：删除条件 = untracked ∧ 匹配白名单 ∧ 不在硬保护清单；对任何 `*.rdb*` / `*.sqlite*` 硬拒绝。**宁可白名单不要黑名单**（`feedback_lsof_port_range_kills_sanctuary` 教训）。
 4. `.gitignore` 防垃圾进 git（已覆盖大部分），但不防运行时产物**物理堆在根目录**污染 `ls`——主防御是铁律 1 的行为约束，`.gitignore` + pre-commit Root Hygiene Guard 是兜底（拦未 ignore 的新垃圾被 commit）。
 
 ## 21. Lifecycle 不分任务类型（LL-071）

@@ -19,7 +19,13 @@ import { buildEvalCatInvocation } from '../eval-cat-invocation.js';
 import { ensureEvalDomainThreads } from '../hub/eval-hub-thread-ensure.js';
 import { inventoryLegacyTasks, type LegacyScheduledTaskLike } from '../legacy-task-cleanup.js';
 import { getEvalCatOverride } from './eval-domain-override.js';
-import { type EvalDomainRegistryEntry, parseEvalDomainRegistryFile } from './eval-domain-registry.js';
+import {
+  type EvalDomainRegistryEntry,
+  isEvalDomainRegistryYamlFile,
+  parseEvalDomainRegistryFile,
+} from './eval-domain-registry.js';
+import { dispatchEvalDomainTrigger } from './eval-domain-trigger-dispatch.js';
+import type { IEvalDomainTriggerStore } from './eval-domain-trigger-store.js';
 
 export interface EvalDomainScheduleOpts {
   harnessFeedbackRoot: string;
@@ -30,6 +36,8 @@ export interface EvalDomainScheduleOpts {
   listDynamicTasks?: () => LegacyScheduledTaskLike[];
   /** OQ-20: Redis client for reading evalCat overrides (community users may assign different cats). */
   redis?: import('ioredis').Redis;
+  /** F192 Phase I: durable receipt store shared by cron and threshold-event dispatch. */
+  triggerStore?: IEvalDomainTriggerStore;
   /**
    * cloud R6 P2 (PR-2): runtime-wired publish-verdict domain set. Bootstrap (index.ts)
    * passes `new Set(Object.keys(verdictGenerators))` here so the scheduled daily/weekly
@@ -245,38 +253,17 @@ function createEvalDomainSpec(config: EvalDomainSpecConfig): TaskSpec_P1<EvalDom
           // publish when bootstrap skipped cw generator wire (501 from handler).
           { wiredPublishDomains: config.wiredPublishDomains },
         );
-        if (ctx.deliver) {
-          const content = [
-            `## Eval Domain: ${invocation.domainId}`,
-            '',
-            invocation.instructions,
-            '',
-            '```json',
-            JSON.stringify(invocation.context, null, 2),
-            '```',
-          ].join('\n');
-          const messageId = await ctx.deliver({
-            threadId: invocation.targetThreadId,
-            content,
-            userId: 'scheduler',
-          });
-          if (ctx.invokeTrigger && messageId) {
-            const triggerUserId = config.defaultUserId ?? 'default-user';
-            try {
-              void Promise.resolve(
-                ctx.invokeTrigger.trigger(
-                  invocation.targetThreadId,
-                  invocation.evalCat.catId,
-                  triggerUserId,
-                  `${config.triggerReasonPrefix}: ${invocation.domainId}`,
-                  messageId,
-                ),
-              ).catch(() => {});
-            } catch {
-              // Best-effort: sync trigger throw should not fail the eval task
-            }
-          }
-        }
+        const triggerReason = `${config.triggerReasonPrefix}: ${invocation.domainId}`;
+        await dispatchEvalDomainTrigger({
+          domain,
+          invocation,
+          channel: 'time',
+          triggerReason,
+          store: config.triggerStore,
+          deliver: ctx.deliver,
+          invokeTrigger: ctx.invokeTrigger,
+          defaultUserId: config.defaultUserId,
+        });
       },
     },
     state: { runLedger: 'sqlite' },
@@ -298,7 +285,7 @@ function loadRegisteredDomains(harnessFeedbackRoot: string, frequency: 'daily' |
   if (!existsSync(domainsDir)) return [];
   return (
     readdirSync(domainsDir, { withFileTypes: true })
-      .filter((e) => e.isFile() && e.name.endsWith('.yaml'))
+      .filter((e) => e.isFile() && isEvalDomainRegistryYamlFile(e.name))
       .map((e) => parseEvalDomainRegistryFile(parseYaml(readFileSync(join(domainsDir, e.name), 'utf8'))))
       .filter((d) => d.frequency === frequency)
       // Sunset flag: domains marked `enabled: false` in their YAML are silently

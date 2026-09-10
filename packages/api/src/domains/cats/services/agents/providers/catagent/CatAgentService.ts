@@ -8,8 +8,16 @@
 
 import type { CatConfig, CatId } from '@cat-cafe/shared';
 import { getCatModel } from '../../../../../../config/cat-models.js';
+import { buildProviderEndpoint } from '../../../../../../config/provider-endpoint.js';
 import { createModuleLogger } from '../../../../../../infrastructure/logger.js';
-import type { AgentMessage, AgentService, AgentServiceOptions, MessageMetadata, TokenUsage } from '../../../types.js';
+import type {
+  AgentMessage,
+  AgentService,
+  AgentServiceOptions,
+  MessageMetadata,
+  PreparedProviderRequestV1,
+  TokenUsage,
+} from '../../../types.js';
 import { mergeTokenUsage } from '../../../types.js';
 import { resolveApiCredentials } from './catagent-credentials.js';
 import type { AnthropicContentBlock, AnthropicToolUseBlock } from './catagent-event-bridge.js';
@@ -111,6 +119,20 @@ export class CatAgentService implements AgentService {
     this.catConfig = options.catConfig;
   }
 
+  contextCapability(): import('../../../types.js').AgentContextCapability {
+    return {
+      provider: 'catagent',
+      carrier: 'direct_api',
+      reportsRuntimeWindow: false,
+      authoritativeUsage: true,
+      usageTelemetry: 'available',
+      nativeWindowControl: false,
+      nativeCompressionControl: false,
+      observesCompression: false,
+      reason: 'Direct API loop reports per-request input usage but no runtime window',
+    };
+  }
+
   async *invoke(prompt: string, options?: AgentServiceOptions): AsyncIterable<AgentMessage> {
     const now = Date.now();
     let model: string;
@@ -120,7 +142,18 @@ export class CatAgentService implements AgentService {
       yield* emitError('Model resolution failed — no configured model', this.catId, 'unknown', now);
       return;
     }
-    const credentials = resolveApiCredentials(this.projectRoot, this.catId as string, this.catConfig);
+    let credentials: ReturnType<typeof resolveApiCredentials>;
+    try {
+      credentials = resolveApiCredentials(this.projectRoot, this.catId as string, this.catConfig);
+    } catch (error) {
+      yield* emitError(
+        `Credential resolution failed — ${error instanceof Error ? error.message : String(error)}`,
+        this.catId,
+        model,
+        now,
+      );
+      return;
+    }
     if (!credentials) {
       yield* emitError('Credential resolution failed — no bound account', this.catId, model, now);
       return;
@@ -148,14 +181,14 @@ export class CatAgentService implements AgentService {
     for (let turn = 0; turn < MAX_TOOL_TURNS; turn++) {
       let resp: Response;
       try {
-        resp = await this.fetchApi(messages, toolSchemas, model, credentials, options);
+        resp = await this.fetchApi(messages, toolSchemas, model, credentials, options, turn);
       } catch (err: unknown) {
         yield* this.handleFetchError(err, metadata, model, totalUsage);
         return;
       }
 
       const result = yield* this.consumeTurn(resp, metadata, options?.signal);
-      totalUsage = mergeTokenUsage(totalUsage, result.turnUsage);
+      totalUsage = mergeObservedTurnUsage(totalUsage, result.turnUsage);
 
       if (result.hadStreamError) {
         const orphanTools = result.contentBlocks.filter((b): b is AnthropicToolUseBlock => b.type === 'tool_use');
@@ -304,21 +337,48 @@ export class CatAgentService implements AgentService {
     model: string,
     credentials: { apiKey: string; baseURL?: string },
     options?: AgentServiceOptions,
+    turn = 0,
   ): Promise<Response> {
-    const url = `${(credentials.baseURL ?? DEFAULT_BASE_URL).replace(/\/+$/, '')}/v1/messages`;
+    const url = buildProviderEndpoint({ protocol: 'anthropic', baseUrl: credentials.baseURL ?? DEFAULT_BASE_URL });
     const body: Record<string, unknown> = { model, max_tokens: DEFAULT_MAX_TOKENS, messages, stream: true };
     if (tools.length > 0) body.tools = tools;
     if (options?.systemPrompt) body.system = options.systemPrompt;
+    const serializedBody = JSON.stringify(body);
 
+    const initialMessage = turn === 0 && messages.length === 1 ? messages[0]?.content : undefined;
+    const preparedRequest: PreparedProviderRequestV1 = Object.freeze({
+      v: 1,
+      ...(turn > 0 ? { boundaryReason: 'provider_continuation' as const } : {}),
+      message:
+        typeof initialMessage === 'string'
+          ? Object.freeze({ body: initialMessage })
+          : Object.freeze({
+              accuracy: 'unsupported' as const,
+              injectionDecision: 'tool_payload_excluded_by_contract',
+            }),
+      nativeInstructions: Object.freeze(
+        options?.systemPrompt
+          ? [Object.freeze({ body: options.systemPrompt, injectionDecision: 'anthropic_system_field' })]
+          : [],
+      ),
+      runtime: Object.freeze({ provider: 'catagent', carrier: 'direct_api', model, protocol: 'anthropic_sse' }),
+      tools: Object.freeze({
+        finalSurface: 'exact' as const,
+        catCafeSchemas: Object.freeze(tools.map((tool) => Object.freeze({ ...tool }))),
+      }),
+      providerNativeVisibility: 'unknown' as const,
+    });
     log.info(`[${this.catId}] API call: model=${model}, turns=${messages.length}, stream=true`);
+    await options?.beforeProviderLaunch?.(preparedRequest);
     const resp = await fetch(url, {
       method: 'POST',
+      redirect: 'error',
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': credentials.apiKey,
         'anthropic-version': ANTHROPIC_API_VERSION,
       },
-      body: JSON.stringify(body),
+      body: serializedBody,
       signal: options?.signal,
     });
     if (!resp.ok) {
@@ -360,6 +420,16 @@ export class CatAgentService implements AgentService {
       yield { ...msg, metadata: { ...metadata, ...msg.metadata, usage } };
     }
   }
+}
+
+function mergeObservedTurnUsage(totalUsage: TokenUsage | undefined, turnUsage: TokenUsage): TokenUsage {
+  const merged = mergeTokenUsage(totalUsage, turnUsage);
+  if (turnUsage.lastTurnInputTokens == null) {
+    // A new request without input telemetry invalidates the prior contextual
+    // snapshot; aggregate inputTokens remains available for accounting.
+    delete merged.lastTurnInputTokens;
+  }
+  return merged;
 }
 
 function emitError(message: string, catId: CatId, model: string, timestamp: number): AgentMessage[] {

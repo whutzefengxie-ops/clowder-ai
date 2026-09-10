@@ -2,8 +2,15 @@ import { unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { CatId, StudyArtifact } from '@cat-cafe/shared';
 import { createModuleLogger } from '../../../infrastructure/logger.js';
+import {
+  isTerminalDispositionEvent,
+  PerCatTerminalDispositionCollector,
+} from '../../cats/services/agents/invocation/PerCatTerminalDispositionCollector.js';
+import type { QueueProcessor } from '../../cats/services/agents/invocation/QueueProcessor.js';
+import { requireInvocationRecordUpdate } from '../../cats/services/agents/invocation/require-invocation-record-update.js';
 import { ClaudeAgentService } from '../../cats/services/agents/providers/ClaudeAgentService.js';
 import type { AgentRouter } from '../../cats/services/agents/routing/AgentRouter.js';
+import { createA2ASlotTrackingBridge } from '../../cats/services/agents/routing/route-helpers.js';
 import type { InvocationTracker } from '../../cats/services/index.js';
 import type { AnyMessageStore } from '../../cats/services/stores/factories/MessageStoreFactory.js';
 import type { IInvocationRecordStore } from '../../cats/services/stores/ports/InvocationRecordStore.js';
@@ -31,6 +38,9 @@ export interface ThreadInvokeDeps {
   readonly router: AgentRouter;
   readonly invocationRecordStore: IInvocationRecordStore;
   readonly invocationTracker: InvocationTracker;
+  readonly queueProcessor?: Pick<QueueProcessor, 'markPromptMessagesSeen'> & {
+    enqueueRaw?: QueueProcessor['enqueueRaw'];
+  };
 }
 
 export interface PodcastRequest {
@@ -130,6 +140,63 @@ function parseScriptResponse(raw: string, mode: PodcastRequest['mode']): Podcast
   };
 }
 
+async function prepareThreadPodcastInvocation(
+  request: PodcastRequest,
+  threadId: string,
+  deps: ThreadInvokeDeps,
+  prompt: string,
+  targetCats: CatId[],
+) {
+  const admission = await deps.invocationTracker.acquireExecutionAdmission(threadId, targetCats);
+  if (!admission) {
+    throw new Error('Podcast invocation admission rejected: thread is being deleted');
+  }
+
+  const primaryCat = targetCats[0] ?? 'opus';
+  try {
+    // Write the user message only after any in-process seal activates the replacement
+    // session. The admission lease also keeps a new seal/delete out until tracker
+    // ownership is published below.
+    const userMsg = await deps.messageStore.append({
+      threadId,
+      catId: null,
+      content: prompt,
+      userId: request.requestedBy,
+      mentions: ['opus' as CatId],
+      timestamp: Date.now(),
+    });
+
+    const createResult = await deps.invocationRecordStore.create({
+      threadId,
+      userId: request.requestedBy,
+      targetCats,
+      intent: 'execute',
+      idempotencyKey: `podcast-${request.articleId}-${Date.now()}`,
+      actionLeaseCarrier: { kind: 'none' },
+    });
+
+    // Backfill userMessageId so retry endpoint can find the trigger message.
+    await deps.invocationRecordStore.update(createResult.invocationId, {
+      userMessageId: userMsg.id,
+    });
+
+    const controller = deps.invocationTracker.start(
+      threadId,
+      primaryCat,
+      request.requestedBy,
+      targetCats,
+      createResult.invocationId,
+    );
+    if (controller.signal.aborted) {
+      await deps.invocationRecordStore.update(createResult.invocationId, { status: 'canceled' });
+      throw new Error('Podcast invocation admission was lost before tracker publication');
+    }
+    return { userMsg, createResult, controller, primaryCat };
+  } finally {
+    admission.release();
+  }
+}
+
 /**
  * AC-P6: Generate script by posting a prompt into the study thread.
  * Reuses the existing message pipeline (same as GitHub/connector triggers).
@@ -141,41 +208,25 @@ export async function generateScriptViaThread(
 ): Promise<PodcastScript> {
   const prompt = buildScriptPrompt(request);
   const targetCats: CatId[] = ['opus' as CatId];
-
-  // ① Write user message into thread
-  const userMsg = await deps.messageStore.append({
+  const { userMsg, createResult, controller, primaryCat } = await prepareThreadPodcastInvocation(
+    request,
     threadId,
-    catId: null,
-    content: prompt,
-    userId: request.requestedBy,
-    mentions: ['opus' as CatId],
-    timestamp: Date.now(),
-  });
-
-  // ② Create invocation record
-  const createResult = await deps.invocationRecordStore.create({
-    threadId,
-    userId: request.requestedBy,
+    deps,
+    prompt,
     targetCats,
-    intent: 'execute',
-    idempotencyKey: `podcast-${request.articleId}-${Date.now()}`,
-  });
-
-  // ②b Backfill userMessageId so retry endpoint can find the trigger message
-  await deps.invocationRecordStore.update(createResult.invocationId, {
-    userMessageId: userMsg.id,
-  });
-
-  // ③ Track invocation
-  const primaryCat = targetCats[0] ?? 'opus';
-  const controller = deps.invocationTracker.start(threadId, primaryCat, request.requestedBy, targetCats);
+  );
 
   // ④ Route execution and collect text response
   const intent = { intent: 'execute' as const, explicit: false, promptTags: [] as string[] };
   let fullText = '';
+  const terminalDispositions = new PerCatTerminalDispositionCollector({
+    targetCatIds: targetCats,
+    isCanceled: (catId) => deps.invocationTracker.getSlotState?.(threadId, catId) === 'canceled',
+  });
 
   try {
     await deps.invocationRecordStore.update(createResult.invocationId, { status: 'running' });
+    const enqueueA2A = deps.queueProcessor?.enqueueRaw?.bind(deps.queueProcessor);
 
     for await (const msg of deps.router.routeExecution(
       request.requestedBy,
@@ -185,20 +236,39 @@ export async function generateScriptViaThread(
       targetCats,
       intent,
       {
+        ownerAuthProvenance: 'unknown',
+        humanDispositionInvocationOrigin: 'system',
         signal: controller.signal,
+        ...createA2ASlotTrackingBridge(deps.invocationTracker, controller, createResult.invocationId),
+        ...(enqueueA2A
+          ? { deferA2AEnqueue: (entry: Parameters<QueueProcessor['enqueueRaw']>[0]) => enqueueA2A(entry) }
+          : {}),
         parentInvocationId: createResult.invocationId,
+        onPromptMessagesExposed: (input) => deps.queueProcessor?.markPromptMessagesSeen(input) ?? Promise.resolve(),
         // F222 P1: System-internal podcast generation is not user-origin
         frustrationAutoIssueEligible: false,
         // #949 P2-1: No ball-pass expectation in system-internal podcast generation
         verdictPassWarningEnabled: false,
       },
     )) {
+      terminalDispositions.observe(msg);
+      if (isTerminalDispositionEvent(msg) && msg.catId) {
+        deps.invocationTracker.completeSlot?.(threadId, msg.catId, controller);
+      }
       if (msg.type === 'text' && msg.content) {
         fullText += msg.content;
       }
     }
 
-    await deps.invocationRecordStore.update(createResult.invocationId, { status: 'succeeded' });
+    await requireInvocationRecordUpdate({
+      store: deps.invocationRecordStore,
+      invocationId: createResult.invocationId,
+      update: {
+        status: 'succeeded',
+        successfulCatIds: terminalDispositions.getSuccessfulCatIds() as CatId[],
+      },
+      writer: 'podcast generator',
+    });
   } catch (err) {
     await deps.invocationRecordStore.update(createResult.invocationId, {
       status: 'failed',

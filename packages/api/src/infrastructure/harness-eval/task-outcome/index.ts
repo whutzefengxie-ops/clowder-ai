@@ -10,6 +10,7 @@ export type {
   MagicWordRecord,
   PermissionCancelRecord,
   ProxySignal,
+  TaskOutcomeAttribution,
   TaskOutcomeEpisode,
   TaskOutcomeVerdict,
 } from './task-outcome-episode.js';
@@ -19,6 +20,7 @@ export {
   parseMagicWordRecord,
   parsePermissionCancelRecord,
   parseTaskOutcomeEpisode,
+  TASK_OUTCOME_ATTRIBUTIONS,
   VERDICT_CLASSES,
 } from './task-outcome-episode.js';
 
@@ -27,7 +29,6 @@ export type {
   A1WorldTruthInput,
   AssembledEpisode,
   MagicWordInput,
-  PermissionCancelInput,
   SignalAppendResult,
 } from './task-outcome-routes.js';
 export {
@@ -35,25 +36,23 @@ export {
   handleGetEpisode,
   handleListEpisodes,
   handleMagicWord,
-  handlePermissionCancel,
 } from './task-outcome-routes.js';
 
 // Signal builders
 export type {
   BuildA1WorldTruthInput,
   BuildMagicWordInput,
-  BuildPermissionCancelInput,
 } from './task-outcome-signal-builder.js';
 export {
   buildA1WorldTruthSignal,
   buildMagicWordSignal,
-  buildPermissionCancelSignal,
 } from './task-outcome-signal-builder.js';
 
 // Store
 export type {
   AppendSignalInput,
   CreateEpisodeInput,
+  EpisodeAttributionLookup,
   StoredEpisode,
   StoredSignal,
 } from './task-outcome-store.js';

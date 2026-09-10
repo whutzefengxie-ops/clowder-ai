@@ -1,5 +1,8 @@
-import type { FrictionRollupInput, FrictionRollupSourceSelector } from '@cat-cafe/shared';
+import type { FrictionRollupSourceSelector } from '@cat-cafe/shared';
 import { generateFrictionLiveVerdict } from '../friction/eval-friction-live-verdict.js';
+import { generateFrictionFindingChildren } from '../friction/friction-finding-child-artifact.js';
+import type { FrictionMeasurementCapture } from '../friction/friction-measurement-pilot.js';
+import type { FrictionRepairTargetResolver } from '../friction/friction-repair-target-resolver.js';
 import { loadDomains } from '../hub/eval-hub-read-model.js';
 import type { VerdictGenerator } from './types.js';
 import { validateFrictionRollupSelector } from './validation.js';
@@ -13,7 +16,7 @@ import { validateFrictionRollupSelector } from './validation.js';
  *      adapter self-protects for non-handler callers)
  *   2. validateFrictionRollupSelector (window finite + ordered, topN/tokenCap
  *      positive int)
- *   3. provider.resolve(selector) → FrictionRollupInput (live 4-channel rollup)
+ *   3. provider.resolve(selector) → frozen FrictionMeasurementCapture (live 4-channel rollup + validity evidence)
  *   4. Load EvalDomainRegistryEntry from registry inside isolated harness root
  *   5. generateFrictionLiveVerdict with submittedPacket (Decision 3: cat owns the
  *      verdict; generator only overrides bundle refs in evidencePacket)
@@ -24,10 +27,13 @@ import { validateFrictionRollupSelector } from './validation.js';
  */
 
 export interface FrictionMetricsProvider {
-  resolve(selector: FrictionRollupSourceSelector): Promise<FrictionRollupInput>;
+  resolve(selector: FrictionRollupSourceSelector): Promise<FrictionMeasurementCapture>;
 }
 
-export function createFrictionGeneratorAdapter(provider: FrictionMetricsProvider): VerdictGenerator {
+export function createFrictionGeneratorAdapter(
+  provider: FrictionMetricsProvider,
+  targetResolver?: FrictionRepairTargetResolver,
+): VerdictGenerator {
   return async (packet, sourceRefs, deps) => {
     const kind = (sourceRefs as { kind?: string }).kind;
     if (kind !== 'friction-rollup-snapshot') {
@@ -41,7 +47,7 @@ export function createFrictionGeneratorAdapter(provider: FrictionMetricsProvider
       throw new Error(`invalid_source_ref: ${validationError}`);
     }
 
-    const rollupInput = await provider.resolve(selector);
+    const measurementCapture = await provider.resolve(selector);
 
     const domains = loadDomains(deps.harnessFeedbackRoot);
     const domain = domains.get(packet.domainId);
@@ -56,16 +62,39 @@ export function createFrictionGeneratorAdapter(provider: FrictionMetricsProvider
       verdictId: packet.id,
       harnessFeedbackRoot: deps.harnessFeedbackRoot,
       domain,
-      rollupInput,
+      measurementCapture,
       selector,
+      generatedAt: deps.publicationTime,
       submittedPacket: packet,
     });
+
+    const findingBreakout = deps.analysisFindings
+      ? await generateFrictionFindingChildren({
+          parentPacket: artifact.packet,
+          parentBundleDir: artifact.bundleDir,
+          harnessFeedbackRoot: deps.harnessFeedbackRoot,
+          report: artifact.report,
+          selector,
+          analysisFindings: deps.analysisFindings,
+          targetResolver:
+            targetResolver ??
+            (() => {
+              throw new Error('friction_repair_target_resolver_unavailable');
+            })(),
+          ownerUserId:
+            deps.ownerUserId ??
+            (() => {
+              throw new Error('owner_user_required: friction finding target resolution requires callback owner');
+            })(),
+        })
+      : undefined;
 
     // Bundle-only: the raw rollup report is written under bundleDir/raw/, so the
     // publisher stages it via `bundleDir` — no extraStagedPaths needed.
     return {
       verdictPath: artifact.path,
       bundleDir: artifact.bundleDir,
+      ...(findingBreakout ?? {}),
     };
   };
 }

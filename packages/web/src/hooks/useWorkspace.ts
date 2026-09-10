@@ -3,7 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useChatStore } from '@/stores/chatStore';
 import { API_URL, apiFetch } from '@/utils/api-client';
-import { buildWorktreeAliasMap, resolveListedWorktreeId } from '@/utils/worktree-id-alias';
+import { buildWorktreeAliasMap, resolveListedWorktreeId, type WorktreeAliasMap } from '@/utils/worktree-id-alias';
+import { useWorkspaceSearch } from './useWorkspaceSearch';
+
+export type { SearchResult } from './useWorkspaceSearch';
 
 export interface WorktreeEntry {
   id: string;
@@ -43,14 +46,37 @@ export interface FileData {
   binary?: boolean;
 }
 
-export interface SearchResult {
-  path: string;
-  line: number;
-  content: string;
-  contextBefore: string;
-  contextAfter: string;
-  /** Which search mode produced this result (used by 'all' mode for grouping) */
-  matchType?: 'filename' | 'content';
+async function discoverWorktrees(projectPath: string): Promise<WorktreeEntry[]> {
+  const params = new URLSearchParams();
+  if (projectPath && projectPath !== 'default') params.set('repoRoot', projectPath);
+  const qs = params.toString();
+  const res = await apiFetch(`/api/workspace/worktrees${qs ? `?${qs}` : ''}`);
+  if (!res.ok) throw new Error('worktree discovery failed');
+  const data = await res.json();
+  return data.worktrees ?? [];
+}
+
+function reconcileDiscoveredWorktree(
+  entries: WorktreeEntry[],
+  projectPath: string,
+  setAliases: (aliases: WorktreeAliasMap, projectPath?: string) => void,
+  normalizeWorktreeId: (id: string | null) => void,
+  setWorktreeId: (id: string | null) => void,
+) {
+  const aliases = buildWorktreeAliasMap(entries);
+  setAliases(aliases, projectPath);
+
+  const currentId = useChatStore.getState().workspaceWorktreeId;
+  const listedId = resolveListedWorktreeId(entries, currentId, aliases);
+  if (listedId) {
+    if (listedId !== currentId) normalizeWorktreeId(listedId);
+    return;
+  }
+
+  const normalizedProjectPath = projectPath.replace(/[\\/]+$/, '');
+  const projectWorktree = entries.find((entry) => entry.root.replace(/[\\/]+$/, '') === normalizedProjectPath);
+  const discoveredId = projectWorktree?.id ?? entries[0]?.id ?? null;
+  if (discoveredId !== currentId) setWorktreeId(discoveredId);
 }
 
 export function useWorkspace() {
@@ -62,40 +88,50 @@ export function useWorkspace() {
   const projectPath = useChatStore((s) => s.currentProjectPath);
 
   const [worktrees, setWorktrees] = useState<WorktreeEntry[]>([]);
+  const [worktreesProjectPath, setWorktreesProjectPath] = useState<string | null>(null);
+  const [worktreesLoading, setWorktreesLoading] = useState(true);
+  const [worktreesError, setWorktreesError] = useState<string | null>(null);
   const [tree, setTree] = useState<TreeNode[]>([]);
   const [file, setFile] = useState<FileData | null>(null);
-  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
-  const [searchLoading, setSearchLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const worktreeRequestSeq = useRef(0);
+  const {
+    results: searchResults,
+    loading: searchLoading,
+    error: searchError,
+    search,
+    reset: resetSearch,
+  } = useWorkspaceSearch(worktreeId);
+  const projectKey = projectPath || 'default';
+  const worktreesReadyForProject = worktreesProjectPath === projectKey;
+  const currentWorktrees = worktreesReadyForProject ? worktrees : [];
 
   // Fetch worktrees — re-fetches when project changes
   const fetchWorktrees = useCallback(async () => {
+    const requestSeq = ++worktreeRequestSeq.current;
+    setWorktreesLoading(true);
+    setWorktreesError(null);
     try {
-      const params = new URLSearchParams();
-      if (projectPath && projectPath !== 'default') {
-        params.set('repoRoot', projectPath);
-      }
-      const qs = params.toString();
-      const res = await apiFetch(`/api/workspace/worktrees${qs ? `?${qs}` : ''}`);
-      if (res.ok) {
-        const data = await res.json();
-        const newList: typeof worktrees = data.worktrees ?? [];
-        setWorktrees(newList);
-        const worktreeAliases = buildWorktreeAliasMap(newList);
-        setWorktreeAliases(worktreeAliases, projectPath);
-        // Auto-select first worktree if none selected or current was removed
-        const listedWorktreeId = resolveListedWorktreeId(newList, worktreeId, worktreeAliases);
-        if (listedWorktreeId && listedWorktreeId !== worktreeId) {
-          normalizeWorktreeId(listedWorktreeId);
-        } else if (!listedWorktreeId && newList.length > 0) {
-          setWorktreeId(newList[0].id);
-        }
-      }
+      const newList = await discoverWorktrees(projectPath);
+      if (requestSeq !== worktreeRequestSeq.current) return;
+
+      setWorktrees(newList);
+      setWorktreesProjectPath(projectKey);
+      // The ordinary flow is discovery + choice, never filesystem-path entry.
+      reconcileDiscoveredWorktree(newList, projectPath, setWorktreeAliases, normalizeWorktreeId, setWorktreeId);
     } catch {
-      /* ignore */
+      if (requestSeq === worktreeRequestSeq.current) {
+        setWorktrees([]);
+        setWorktreesProjectPath(projectKey);
+        setWorktreesError('暂时没能读取工作区');
+      }
+    } finally {
+      if (requestSeq === worktreeRequestSeq.current) {
+        setWorktreesLoading(false);
+      }
     }
-  }, [worktreeId, setWorktreeId, normalizeWorktreeId, setWorktreeAliases, projectPath]);
+  }, [normalizeWorktreeId, projectKey, projectPath, setWorktreeAliases, setWorktreeId]);
 
   useEffect(() => {
     fetchWorktrees();
@@ -257,56 +293,6 @@ export function useWorkspace() {
     };
   }, [worktreeId, openFilePath, fetchFile]);
 
-  // Single-mode search helper (filename or content)
-  const searchSingle = useCallback(
-    async (query: string, type: 'content' | 'filename'): Promise<SearchResult[]> => {
-      const res = await apiFetch('/api/workspace/search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ worktreeId, query, type }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({ error: 'Failed to search workspace' }));
-        throw new Error(data.error ?? 'Failed to search workspace');
-      }
-      const data = await res.json();
-      return (data.results ?? []) as SearchResult[];
-    },
-    [worktreeId],
-  );
-
-  // Search — supports 'content', 'filename', or 'all' (fires both in parallel)
-  const search = useCallback(
-    async (query: string, type: 'content' | 'filename' | 'all' = 'content') => {
-      if (!worktreeId || !query.trim()) return;
-      setSearchLoading(true);
-      setError(null);
-      try {
-        if (type === 'all') {
-          const [fileResults, contentResults] = await Promise.all([
-            searchSingle(query, 'filename'),
-            searchSingle(query, 'content'),
-          ]);
-          // Tag each result with its match type for grouped rendering
-          const tagged: SearchResult[] = [
-            ...fileResults.map((r) => ({ ...r, matchType: 'filename' as const })),
-            ...contentResults.map((r) => ({ ...r, matchType: 'content' as const })),
-          ];
-          setSearchResults(tagged);
-        } else {
-          const results = await searchSingle(query, type);
-          setSearchResults(results);
-        }
-      } catch {
-        setSearchResults([]);
-        setError('Failed to search workspace');
-      } finally {
-        setSearchLoading(false);
-      }
-    },
-    [worktreeId, searchSingle],
-  );
-
   // Reveal file in system file manager (Finder/Explorer)
   const revealInFinder = useCallback(
     async (path: string) => {
@@ -325,13 +311,16 @@ export function useWorkspace() {
   );
 
   return {
-    worktrees,
+    worktrees: currentWorktrees,
+    worktreesLoading: !worktreesReadyForProject || worktreesLoading,
+    worktreesError: worktreesReadyForProject ? worktreesError : null,
     worktreeId,
     tree,
     file,
     searchResults,
     loading,
     searchLoading,
+    searchError,
     error,
     pendingExternalSha,
     fetchWorktrees,
@@ -339,7 +328,7 @@ export function useWorkspace() {
     fetchSubtree,
     fetchFile,
     search,
-    setSearchResults,
+    resetSearch,
     revealInFinder,
     setEditDirty,
     applyExternalChange,

@@ -8,7 +8,7 @@
 | # | 类别 | 用途 | 适用 claimType | 典型 sourceTier |
 |---|------|------|---------------|----------------|
 | 1 | **Owner / scope** | claim "这是 X 的活" / "这是我的活" | `owner` `route` | T1-T2 |
-| 2 | **Authorization** | claim "X 同意 / operator signoff / 守护猫 APPROVE" | `auth` | T0 (landy msg) / T1 (PR review) / T2 (转述) |
+| 2 | **Authorization** | claim "X 同意 / operator signoff / 守护猫 APPROVE" | `auth` | T0 (operator msg) / T1 (PR review) / T2 (转述) |
 | 3 | **Object existence / status** | claim "PR 在 / issue 已合 / branch 存在" | `object` `freshness` | T1 |
 | 4 | **Callback / wait coverage** | claim "等 X 回我" | `wait` | T0 (binding exists) / T1 |
 | 5 | **Cross-thread routing** | claim "这是 thread B 的活" | `route` `owner` | T2 (feat_index cat-writable, 与 row 1 一致) / T1 (gh api / git log signature) |
@@ -39,15 +39,24 @@
 
 #### 2a. `auth.cvo_signoff`
 
-claim "operator 同意" / "landy 签字" 后续行动。
+claim "operator 同意" / "operator 签字" 后续行动。
 
 | Resolver | sourceTier | 规则 |
 |---------|-----------|------|
-| `cat_cafe_get_message(messageId).author === 'you'` | T0 | 严格 catId 匹配；`'you'` / `'you'` handle variant 不算 |
-| feature doc `## operator Signoff` anchor 含 messageId reference | T2 | 必须能反推到原 landy messageId (T0) |
+| `cat_cafe_get_message(messageId).author === 'operator'` | T0 | 严格 catId 匹配；`'you'` / `'you'` handle variant 不算 |
+| feature doc `## operator Signoff` anchor 含 messageId reference | T2 | 必须能反推到原 operator messageId (T0) |
 
 **verdict 规则**：T2-only → `insufficient`（不放行 merge / takeover / cvo_claim）。
 转述（"X 说 operator 同意"）= T2，不 satisfy。
+
+**授权续存键（2026-07-22 修正）**：验证通过后必须分开维护两个生命周期：
+
+- **authorization key** = `actionFamily + subjectRef + direct operator messageId + authorizationScope`
+- **subject freshness key** = PR HEAD / review / check identity
+
+`scope=pull_request` 时，subject freshness key 变化只让 review / CI / gate 证据 stale，不让
+authorization key 失效；只有 operator 原话明确 `scope=exact_head`、subject 改变、动作扩大或撤回时
+才需要新授权。repo policy 规定的 `--admin` 是 merge transport，不是新的 auth claim。
 
 #### 2b. `auth.peer_instruction`
 
@@ -57,7 +66,7 @@ claim "你不用听 PR B 的 owner/reviewer" / "按我说的来" — peer A 对 
 
 | sender role | standing | 允许指令 |
 |-------------|---------|---------|
-| operator (landy) | `cvo` | yes (T0) |
+| operator (operator) | `cvo` | yes (T0) |
 | Upstream feature owner | `upstream_owner` | yes (T1, 看 feat_index + git log) |
 | Repo admin / org owner | `repo_admin` | yes (T1, gh api permission) |
 | Reviewer of target PR | `pr_reviewer` | yes for that PR scope only |
@@ -92,8 +101,10 @@ claim "reviewer 已 approve PR"。
 | `git ls-tree / cat-file` | T1 | tree/blob SHA |
 | `TaskStore.get(taskId)` | T1 | task updated_at |
 | `ThreadStore.get(threadId)` `threadKind` | T2 | thread updated_at (context signal only) |
+| `cat_cafe_get_thread_metadata()`（可选候选缩窄） | T2 | metadata updated_at；允许为空/陈旧，不能替代 canonical resolver |
 
 **Limitation**：`threadKind` 是 context signal，**不**是 truth source（R3 critical: 不能独立裁决）。
+Thread metadata 同样不是必读前置条件；仅在已有理由认为它能缩小搜索范围时可选读取，命中后仍须用上表 T0/T1 resolver 核验。
 
 ### 4. Callback / wait coverage
 
@@ -131,8 +142,8 @@ claim "reviewer 已 approve PR"。
 **关键**（cloud R4 P1#1 修正 sourceTier）：`feat_index.linked_threads` 是 **T2 (cat-writable)** —
 与 row 1 owner resolver 同源 (cat 可改)；**不**单独验证 high-risk routing。命中关键词更弱（T2）。
 high-risk action（`takeover` / `owner_reassignment` / `merge`）的 `verified` verdict 必须 ≥1 个
-T0/T1 evidence（per INV-O3）；T2-only feat_index 命中 → `insufficient` → 需要独立 GitHub/git/landy
-T0/T1 evidence (gh api / git log signature / landy messageId) 二次 confirm。
+T0/T1 evidence（per INV-O3）；T2-only feat_index 命中 → `insufficient` → 需要独立 GitHub/git/operator
+T0/T1 evidence (gh api / git log signature / operator messageId) 二次 confirm。
 
 ### 6. Capability / role fit
 
@@ -159,7 +170,8 @@ T0/T1 evidence (gh api / git log signature / landy messageId) 二次 confirm。
 | source message timestamp | T2 | message ts |
 | 当前是否有更新的 verdict 覆盖旧 claim | T1 | verdict ts |
 
-**Rule**：authorization / freshness / conflict resolver **必须** `freshnessKey` invalidation（不能仅 TTL）。
+**Rule**：freshness / conflict resolver **必须** subject freshness key invalidation（不能仅 TTL）。
+Authorization resolver 使用独立 authorization key；不得用普通 PR HEAD 变化让 PR-scoped 授权失效。
 
 ## Cache policy classed freshness
 
@@ -167,7 +179,8 @@ T0/T1 evidence (gh api / git log signature / landy messageId) 二次 confirm。
 |---------------|---------------|
 | Object existence (1, 3, 6) | TTL 60–300s OK |
 | Owner / capability (1, 6) | TTL 60–300s OK |
-| Authorization (2a/2b/2c) | **freshnessKey only** (messageId / PR head SHA / review state) |
+| operator / peer authorization (2a/2b) | **authorization key** (messageId + subjectRef + scope)；仅 exact-HEAD scope 绑定 HEAD |
+| Reviewer approval (2c) | **subject freshness key** (PR head SHA / review state) |
 | Freshness / conflict (7) | **freshnessKey only** (commit SHA / message SHA) |
 | Wait coverage (4) | TTL OK 但 `slaUntilMs` 单独校验 |
 | Cross-thread routing (5) | TTL 60s (frequent invalidation OK) |

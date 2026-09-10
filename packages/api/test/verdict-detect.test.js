@@ -47,6 +47,36 @@ describe('F167 C2 AC-C7: hasReviewVerdict', () => {
     assert.equal(hasReviewVerdict('rejected with P1 finding'), true);
   });
 
+  test('detects a genuine cat P1 verdict even when its text begins with API Error:', () => {
+    const text = 'API Error: Request rejected (429) — P1: authorization bypass';
+    assert.equal(hasReviewVerdict(text), true);
+    assert.equal(detectMatchedVerdictKeyword(text), 'reject');
+    assert.equal(
+      shouldWarnVerdictWithoutPass({
+        text,
+        lineStartMentions: [],
+        toolNames: [],
+        structuredTargetCats: [],
+      }),
+      true,
+    );
+  });
+
+  test('treats provider-like bytes as cat verdict text after typed provenance admits them', () => {
+    const text = 'API Error: upstream response — P1: provider-supplied diagnostic';
+    assert.equal(hasReviewVerdict(text), true);
+    assert.equal(detectMatchedVerdictKeyword(text), 'p1p2');
+    assert.equal(
+      shouldWarnVerdictWithoutPass({
+        text,
+        lineStartMentions: [],
+        toolNames: [],
+        structuredTargetCats: [],
+      }),
+      true,
+    );
+  });
+
   test('detects P1: / P2: with colon (classic verdict format, 2026-06-05 tuning)', () => {
     assert.equal(hasReviewVerdict('P1: logic bug in handler'), true);
     assert.equal(hasReviewVerdict('P2: nit on naming'), true);
@@ -205,7 +235,7 @@ describe('F167 C2 AC-C7: shouldWarnVerdictWithoutPass', () => {
     assert.equal(
       shouldWarnVerdictWithoutPass({
         text: 'LGTM\n@co-creator review done',
-        lineStartMentions: ['you'],
+        lineStartMentions: ['operator'],
         toolNames: [],
         structuredTargetCats: [],
       }),
@@ -288,7 +318,7 @@ describe('F167 C2 AC-C7: shouldWarnVerdictWithoutPass', () => {
 
   test('verdict + co-creator line-start mention (hasCoCreatorLineStartMention=true) → false (砚砚 GPT-5.5 fix)', () => {
     // 2026-04-25 false-positive root cause: parseA2AMentions only parses cat handles,
-    // never returns co-creator handles like 'you'. route-serial passes that empty
+    // never returns co-creator handles like 'operator'. route-serial passes that empty
     // array to shouldWarnVerdictWithoutPass, so a cat ending its summary report with
     // line-start `@co-creator` (legitimate ball-pass to co-creator) gets flagged as
     // "verdict without pass". Fix: route-serial computes hasCoCreatorLineStartMention

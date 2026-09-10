@@ -23,10 +23,10 @@ describe('F209 entity alias search', () => {
   async function seedYouEntity() {
     await store.upsertEntities([
       {
-        entityId: 'person:landy',
+        entityId: 'person:operator',
         type: 'person',
         canonicalName: 'You',
-        aliases: ['you', 'co-creator', 'operator'],
+        aliases: ['operator', 'co-creator', 'operator'],
         provenance: [{ source: 'F209 Phase B test', anchor: 'F209' }],
         updatedAt: '2026-05-22T00:00:00Z',
       },
@@ -50,11 +50,11 @@ describe('F209 entity alias search', () => {
     const results = await store.search('operator', { scope: 'docs', limit: 5, explain: true });
 
     assert.equal(results[0].anchor, 'F209-alias-doc');
-    assert.equal(results[0].matchReason, 'entity:person:landy');
-    assert.equal(results[0].entityMatches?.[0]?.entityId, 'person:landy');
+    assert.equal(results[0].matchReason, 'entity:person:operator');
+    assert.equal(results[0].entityMatches?.[0]?.entityId, 'person:operator');
     assert.equal(results[0].entityMatches?.[0]?.type, 'person');
     assert.equal(results[0].entityMatches?.[0]?.surface, 'co-creator');
-    assert.match(results[0].entityMatches?.[0]?.why ?? '', /operator.*person:landy.*co-creator/);
+    assert.match(results[0].entityMatches?.[0]?.why ?? '', /operator.*person:operator.*co-creator/);
   });
 
   it('limits entity doc hits by distinct anchors instead of raw mention rows', async () => {
@@ -205,13 +205,13 @@ describe('F209 entity alias search', () => {
     assert.equal(results[0].passages?.[0]?.passageId, 'msg-entity');
     assert.equal(results[0].passages?.[0]?.messageId, 'entity');
     assert.match(results[0].passages?.[0]?.content ?? '', /co-creator/);
-    assert.equal(results[0].entityMatches?.[0]?.entityId, 'person:landy');
+    assert.equal(results[0].entityMatches?.[0]?.entityId, 'person:operator');
   });
 
   it('deduplicates entity raw passage hits before applying the mention pool limit', async () => {
     await store.upsertEntities([
       {
-        entityId: 'person:landy',
+        entityId: 'person:operator',
         type: 'person',
         canonicalName: 'You',
         aliases: ['operator'],
@@ -262,7 +262,7 @@ describe('F209 entity alias search', () => {
     for (let index = 0; index < 25; index += 1) {
       const surface = `crowded-alias-${index}`;
       insertMention.run(
-        'person:landy',
+        'person:operator',
         'thread-thread_entity_dedupe',
         'msg-crowded',
         surface,
@@ -273,7 +273,7 @@ describe('F209 entity alias search', () => {
       );
     }
     insertMention.run(
-      'person:landy',
+      'person:operator',
       'thread-thread_entity_dedupe',
       'msg-rare',
       'rare-alias',
@@ -321,7 +321,7 @@ describe('F209 entity alias search', () => {
 
     const projectOnly = await resolver.resolve('operator', { dimension: 'project', limit: 5 });
     assert.equal(projectOnly.results[0].anchor, 'F209-private-entity-note');
-    assert.equal(projectOnly.results[0].entityMatches?.[0]?.entityId, 'person:landy');
+    assert.equal(projectOnly.results[0].entityMatches?.[0]?.entityId, 'person:operator');
   });
 
   it('works through collection search while preserving private collection redaction', async () => {
@@ -337,10 +337,10 @@ describe('F209 entity alias search', () => {
     for (const targetStore of [internalStore, privateStore]) {
       await targetStore.upsertEntities([
         {
-          entityId: 'person:landy',
+          entityId: 'person:operator',
           type: 'person',
           canonicalName: 'You',
-          aliases: ['you', 'co-creator', 'operator'],
+          aliases: ['operator', 'co-creator', 'operator'],
           provenance: [{ source: 'F209 Phase B test' }],
           updatedAt: '2026-05-22T00:00:00Z',
         },
@@ -406,11 +406,12 @@ describe('F209 entity alias search', () => {
       libraryResult.results.map((r) => r.anchor),
       ['F209-internal-alias-note'],
     );
-    assert.equal(libraryResult.results[0].entityMatches?.[0]?.entityId, 'person:landy');
+    assert.equal(libraryResult.results[0].entityMatches?.[0]?.entityId, 'person:operator');
 
     const privateResult = await resolver.resolve('operator', {
       dimension: 'collection',
       collections: ['world:private-family'],
+      authorizedCollections: ['world:private-family'],
       limit: 5,
     });
     assert.equal(privateResult.results[0].anchor, 'private-family-alias-note');
@@ -471,5 +472,52 @@ describe('F209 entity alias search', () => {
 
     const limited = await store.search('operator', { mode: 'semantic', scope: 'docs', limit: 1 });
     assert.equal(limited.length, 1, 'entity merge must still honor the requested limit');
+  });
+
+  it('demotes superseded entity-prepended semantic and hybrid results before the final top-k cut', async () => {
+    const { VectorStore } = await import('../../dist/domains/memory/VectorStore.js');
+    const { ensureVectorTable } = await import('../../dist/domains/memory/schema.js');
+
+    await seedYouEntity();
+    await store.upsert([
+      {
+        anchor: 'superseded-entity-hit',
+        kind: 'feature',
+        status: 'superseded',
+        title: 'Superseded entity hit',
+        summary: 'co-creator appears in this stale entity-only document.',
+        updatedAt: '2026-05-20T00:00:00Z',
+      },
+      {
+        anchor: 'active-vector-hit',
+        kind: 'feature',
+        status: 'active',
+        title: 'Active semantic vector hit',
+        summary: 'This result has no entity alias but is the closest active embedding hit.',
+        updatedAt: '2026-05-22T00:00:00Z',
+      },
+    ]);
+
+    const db = store.getDb();
+    sqliteVec.load(db);
+    ensureVectorTable(db, 3);
+    const vectorStore = new VectorStore(db, 3);
+    vectorStore.upsert('superseded-entity-hit', new Float32Array([0, 1, 0]));
+    vectorStore.upsert('active-vector-hit', new Float32Array([1, 0, 0]));
+    store.setEmbedDeps({
+      embedding: createEmbedding(new Float32Array([1, 0, 0])),
+      vectorStore,
+      mode: 'on',
+    });
+
+    for (const mode of ['semantic', 'hybrid']) {
+      const results = await store.search('operator', { mode, scope: 'docs', limit: 1 });
+
+      assert.equal(
+        results[0]?.anchor,
+        'active-vector-hit',
+        `${mode} should not let stale entity hits preempt active vectors`,
+      );
+    }
   });
 });

@@ -8,7 +8,7 @@ created: 2026-05-06
 
 # F188: Library Stewardship — 图书馆管护与成长
 
-> **Status**: done | **Completed (A-J)**: 2026-05-26 | **Reopened**: 2026-06-09 (Phase K) | **Phase K Closed**: 2026-06-19 (PR #2414, merge `1ec99732`) | **Infra Fix**: 2026-06-19 (PR #2419 — alpha:start build-freshness gate, ADR-039 parity) | **Owner**: Ragdoll | **Priority**: P1
+> **Status**: done | **Completed (A-J)**: 2026-05-26 | **Reopened**: 2026-06-09 (Phase K) | **Phase K Closed**: 2026-06-19 (PR #2414, merge `1ec99732`) | **Infra Fix**: 2026-06-19 (PR #2419 — alpha:start build-freshness gate, ADR-039 parity) | **Temporal Debt Fix**: 2026-07-05 (PR #2755, merge `17edde5e`) | **Owner**: Ragdoll | **Priority**: P1
 
 ## Why
 
@@ -84,12 +84,12 @@ PR #1790 把 Health Dashboard 的问题数主动 surfacing 到 MemoryNav 后，o
 - 稀疏图应能直接解释关系（边标签或 Inspector 关系列表）；密集图可以隐藏边标签，但必须能通过 hover/click 获得 relation/provenance。
 
 **Graph Query Resolution（Phase C query follow-up）**：
-当前 Graph 输入框实际是精确 anchor lookup，但用户会自然把它当成搜索框使用。`harness`、`operator的工资`、`landy 最喜欢什么猫` 这类输入不是 anchor，却代表用户想从记忆库里找到一个可画图的知识节点。Graph 入口必须先定义从自然查询到 graph anchor 的解析契约，不能再用 "No graph data for this anchor" 把搜索失败伪装成 graph 为空。
+当前 Graph 输入框实际是精确 anchor lookup，但用户会自然把它当成搜索框使用。`harness`、`operator的工资`、`operator 最喜欢什么猫` 这类输入不是 anchor，却代表用户想从记忆库里找到一个可画图的知识节点。Graph 入口必须先定义从自然查询到 graph anchor 的解析契约，不能再用 "No graph data for this anchor" 把搜索失败伪装成 graph 为空。
 
 输入语义：
 - 精确 anchor：`F186` / `f186` / `doc:...` / `thread-...` / `global:...` 等已存在 anchor，直接解析为 graph center。
 - 主题关键词：`harness`、`Redis persistence` 等普通搜索词，先执行 evidence search，返回候选 anchor 列表，由用户选择后再画 graph。
-- 自然语言问题：`landy 最喜欢什么猫` 这类 query 只能基于已索引 evidence 生成候选；没有证据时明确 no-match，不允许编造节点或答案。
+- 自然语言问题：`operator 最喜欢什么猫` 这类 query 只能基于已索引 evidence 生成候选；没有证据时明确 no-match，不允许编造节点或答案。
 
 候选选择：
 - 候选项至少展示 `anchor`、title、kind、collection/source、命中理由（如 title/path/content snippet）。
@@ -417,6 +417,7 @@ evaluator 在 status endpoint handler 里聚合**四类**输入 → 计算 warni
 | F200 consumption 自动等同 truth verification | F200 明确只评估 navigation utility，不评估文档真伪/authority | 如需让 usage signal 参与 verification，必须先在 F188/F200 之间定义人工/猫审确认边界 |
 | operator逐篇验证 unverified docs | 724 次点击不是可用 workflow，且违背 Phase E dogfood 结论 | 仅当猫猫批处理后剩下少量高风险/事实争议项，才上升给operator |
 | 无 dry-run 直接批量改 runtime evidence DB | edge/authority migration 都可能影响 recall/graph 结果，必须可解释可回滚 | 只允许在 dry-run report + 备份/副本验证后 apply |
+| M1 历史层退役/封存机制 | 当前无真实遗忘请求；S3 是合成审计，先登记不施工 | 首个真实遗忘请求触及 thread / message passage / provenance 历史层时升 P1；实现方向必须是 retire/seal + redaction，不是级联物理删除 |
 
 ## Dependencies
 

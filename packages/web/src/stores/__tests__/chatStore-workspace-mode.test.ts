@@ -3,7 +3,14 @@ import { useChatStore } from '../chatStore';
 
 describe('chatStore workspaceMode', () => {
   beforeEach(() => {
-    useChatStore.setState({ workspaceMode: 'dev', rightPanelMode: 'status' });
+    useChatStore.setState({
+      currentThreadId: 'thread-a',
+      workspaceMode: 'dev',
+      workspaceOpenRequest: null,
+      workspaceOpenRevision: 0,
+      rightPanelMode: 'status',
+      rightPanelOpen: false,
+    });
   });
 
   it('setWorkspaceMode accepts tasks mode', () => {
@@ -11,6 +18,31 @@ describe('chatStore workspaceMode', () => {
     setWorkspaceMode('tasks');
     expect(useChatStore.getState().workspaceMode).toBe('tasks');
     expect(useChatStore.getState().rightPanelMode).toBe('workspace');
+    expect(useChatStore.getState()).toMatchObject({
+      rightPanelOpen: true,
+      workspaceOpenRevision: 1,
+      workspaceOpenRequest: {
+        revision: 1,
+        threadId: 'thread-a',
+        target: { kind: 'mode', mode: 'tasks' },
+      },
+    });
+  });
+
+  it('uses one monotonic transient request for repeated explicit mode navigation', () => {
+    const { setWorkspaceMode, consumeWorkspaceOpenRequest } = useChatStore.getState();
+    setWorkspaceMode('approval');
+    consumeWorkspaceOpenRequest(1);
+    setWorkspaceMode('approval');
+
+    expect(useChatStore.getState()).toMatchObject({
+      workspaceOpenRevision: 2,
+      workspaceOpenRequest: {
+        revision: 2,
+        threadId: 'thread-a',
+        target: { kind: 'mode', mode: 'approval' },
+      },
+    });
   });
 
   it('setWorkspaceMode still works for existing modes', () => {
@@ -28,6 +60,32 @@ describe('chatStore workspaceMode', () => {
     setWorkspaceMode('artifacts');
     expect(useChatStore.getState().workspaceMode).toBe('artifacts');
     expect(useChatStore.getState().rightPanelMode).toBe('workspace');
+  });
+
+  it('setWorkspaceMode accepts eval mode', () => {
+    const { setWorkspaceMode } = useChatStore.getState();
+    setWorkspaceMode('eval');
+    expect(useChatStore.getState().workspaceMode).toBe('eval');
+    expect(useChatStore.getState().rightPanelMode).toBe('workspace');
+  });
+
+  it('restores mode and surface without reopening a manually folded Workspace', () => {
+    useChatStore.setState({
+      rightPanelMode: 'status',
+      workspaceMode: 'dev',
+      workspaceSurface: 'home',
+    });
+
+    const { restoreWorkspaceMode, restoreWorkspaceSurface } = useChatStore.getState();
+    restoreWorkspaceMode('tasks');
+    restoreWorkspaceSurface('files');
+
+    expect(useChatStore.getState()).toMatchObject({
+      rightPanelMode: 'status',
+      workspaceMode: 'tasks',
+      workspaceSurface: 'files',
+      workspaceOpenRequest: null,
+    });
   });
 
   // 云端 round 5 P2：workspace/transcript 被 ChatContainer auto-open effect 强制开，

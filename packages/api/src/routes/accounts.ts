@@ -7,12 +7,13 @@ import { existsSync } from 'node:fs';
 import { realpath, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { relative, resolve, win32 } from 'node:path';
-import type { AccountConfig } from '@cat-cafe/shared';
+import { type AccountConfig, builtinAccountFamilyForRef } from '@cat-cafe/shared';
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
+import { inspectAccountCatalog, readAccountStoreSnapshot } from '../config/account-store-snapshot.js';
 import { resolveCatCatalogPath } from '../config/cat-catalog-store.js';
 import { loadCatConfig, toAllCatConfigs } from '../config/cat-config-loader.js';
-import { deleteCatalogAccount, readCatalogAccounts, writeCatalogAccount } from '../config/catalog-accounts.js';
+import { deleteCatalogAccount, writeCatalogAccount } from '../config/catalog-accounts.js';
 import { configEventBus, createChangeSetId } from '../config/config-event-bus.js';
 import { deleteCredential, hasCredential, writeCredential } from '../config/credentials.js';
 
@@ -22,28 +23,10 @@ import { redirectRuntimeProjectPath, resolvePersistentProjectPathDetailed } from
 import { resolveUserId } from '../utils/request-identity.js';
 
 // clowder-ai#340: Derive client identity from well-known account IDs, not stored protocol.
-const BUILTIN_CLIENT_FOR_ID: Record<string, string> = {
-  claude: 'anthropic',
-  codex: 'openai',
-  gemini: 'google',
-  kimi: 'kimi',
-  opencode: 'opencode',
-  // Canonical OAuth IDs (reachable via deriveAccountId slugging display names)
-  anthropic: 'anthropic',
-  openai: 'openai',
-  google: 'google',
-  // builtin_* prefixed (explicit reserved form):
-  builtin_anthropic: 'anthropic',
-  builtin_openai: 'openai',
-  builtin_google: 'google',
-  builtin_kimi: 'kimi',
-  builtin_opencode: 'opencode',
-};
-
 /** Synthesize a ProviderProfileView-compatible object from AccountConfig. */
 function accountToView(id: string, account: AccountConfig, apiKeyPresent: boolean) {
   const isBuiltin = account.authType === 'oauth';
-  const builtinClient = BUILTIN_CLIENT_FOR_ID[id];
+  const builtinClient = builtinAccountFamilyForRef(id);
   const clientId = account.clientId ?? (isBuiltin ? builtinClient : undefined);
   return {
     id,
@@ -54,6 +37,9 @@ function accountToView(id: string, account: AccountConfig, apiKeyPresent: boolea
     ...(clientId ? { clientId } : {}),
     ...(account.baseUrl ? { baseUrl: account.baseUrl } : {}),
     models: account.models ? [...account.models] : [],
+    ...(account.modelAliases && Object.keys(account.modelAliases).length > 0
+      ? { modelAliases: { ...account.modelAliases } }
+      : {}),
     hasApiKey: apiKeyPresent,
     mode: account.authType === 'api_key' ? ('api_key' as const) : ('subscription' as const),
     ...(account.envVars && Object.keys(account.envVars).length > 0 ? { envVars: { ...account.envVars } } : {}),
@@ -63,13 +49,14 @@ function accountToView(id: string, account: AccountConfig, apiKeyPresent: boolea
 }
 
 /** Derive a slug-like ID from display name, avoiding collisions with existing accounts. */
-function deriveAccountId(displayName: string, existingIds: Set<string>): string {
-  const seed =
+function deriveAccountId(displayName: string, existingIds: Set<string>, customApiKey: boolean): string {
+  let seed =
     displayName
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '')
       .slice(0, 40) || `account-${Date.now()}`;
+  if (customApiKey && builtinAccountFamilyForRef(seed)) seed = `custom-${seed}`;
   if (!existingIds.has(seed)) return seed;
   let counter = 2;
   while (existingIds.has(`${seed}-${counter}`)) counter += 1;
@@ -122,6 +109,27 @@ const envVarsSchema = z
     }
     return Object.keys(filtered).length > 0 ? filtered : undefined;
   });
+const modelAliasKeySchema = z.string().refine((key) => key.trim().length > 0, 'model alias key cannot be blank');
+const modelAliasesSchema = z
+  .record(modelAliasKeySchema, z.string().trim().min(1))
+  .superRefine((aliases, ctx) => {
+    const normalizedKeys = new Set<string>();
+    for (const key of Object.keys(aliases)) {
+      const normalizedKey = key.trim();
+      if (normalizedKeys.has(normalizedKey)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [key],
+          message: 'model alias keys must be unique after trimming',
+        });
+      }
+      normalizedKeys.add(normalizedKey);
+    }
+  })
+  .transform((aliases) =>
+    Object.fromEntries(Object.entries(aliases).map(([key, upstreamId]) => [key.trim(), upstreamId])),
+  )
+  .optional();
 
 const authTypeEnum = z.enum(['oauth', 'api_key']);
 const modeEnum = z.enum(['subscription', 'api_key']);
@@ -155,10 +163,14 @@ const createBodySchema = z
           .pipe(z.string().min(1)),
       )
       .optional(),
+    modelAliases: modelAliasesSchema,
     /** F171: User-defined env vars injected into agent subprocess. */
     envVars: envVarsSchema,
   })
   .superRefine((value, ctx) => {
+    if ((value.authType ?? 'api_key') === 'api_key' && !value.clientId) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['clientId'], message: 'API key accounts require clientId' });
+    }
     if (!value.name && !value.displayName) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -189,6 +201,7 @@ const updateBodySchema = z.object({
         .pipe(z.string().min(1)),
     )
     .optional(),
+  modelAliases: modelAliasesSchema,
   /** F171: User-defined env vars injected into agent subprocess. */
   envVars: envVarsSchema,
 });
@@ -242,14 +255,16 @@ export const accountsRoutes: FastifyPluginAsync = async (app) => {
       return { error: 'Invalid project path: must be an existing directory under allowed roots' };
     }
 
-    const accounts = readCatalogAccounts(projectRoot);
-    const providers = Object.entries(accounts).map(([id, account]) =>
-      accountToView(id, account, hasCredential(id, projectRoot)),
-    );
-    return {
-      projectPath: projectRoot,
-      providers,
-    };
+    try {
+      const snapshot = inspectAccountCatalog(projectRoot);
+      const providers = Object.entries(snapshot.entries).map(([id, entry]) =>
+        accountToView(id, entry.account, entry.credential !== undefined),
+      );
+      return { projectPath: projectRoot, providers, unavailableAccounts: snapshot.unavailableAccounts };
+    } catch (error) {
+      reply.status(400);
+      return { error: error instanceof Error ? error.message : String(error) };
+    }
   });
 
   app.post('/api/accounts', async (request, reply) => {
@@ -279,13 +294,14 @@ export const accountsRoutes: FastifyPluginAsync = async (app) => {
         ...(body.clientId ? { clientId: body.clientId } : {}),
         ...(body.baseUrl ? { baseUrl: body.baseUrl } : {}),
         ...(body.models ? { models: body.models } : {}),
+        ...(body.modelAliases && Object.keys(body.modelAliases).length > 0 ? { modelAliases: body.modelAliases } : {}),
         ...((body.displayName ?? body.name) ? { displayName: body.displayName ?? body.name } : {}),
         ...(body.envVars && Object.keys(body.envVars).length > 0 ? { envVars: body.envVars } : {}),
       };
-      const existingAccounts = readCatalogAccounts(projectRoot);
       const profileId = deriveAccountId(
         body.displayName ?? body.name ?? body.provider ?? 'custom',
-        new Set(Object.keys(existingAccounts)),
+        new Set(readAccountStoreSnapshot(projectRoot).refs),
+        account.authType === 'api_key',
       );
       writeCatalogAccount(projectRoot, profileId, account);
       if (body.apiKey) writeCredential(profileId, { apiKey: body.apiKey }, projectRoot);
@@ -326,7 +342,7 @@ export const accountsRoutes: FastifyPluginAsync = async (app) => {
     const params = request.params as { profileId: string };
 
     try {
-      const existing = readCatalogAccounts(projectRoot)[params.profileId];
+      const existing = readAccountStoreSnapshot(projectRoot).resolve(params.profileId).account;
       if (!existing) {
         reply.status(404);
         return { error: `Account "${params.profileId}" not found` };
@@ -348,6 +364,13 @@ export const accountsRoutes: FastifyPluginAsync = async (app) => {
           ? { models: parsed.data.models }
           : existing.models
             ? { models: [...existing.models] }
+            : {}),
+        ...('modelAliases' in parsed.data
+          ? parsed.data.modelAliases && Object.keys(parsed.data.modelAliases).length > 0
+            ? { modelAliases: parsed.data.modelAliases }
+            : {}
+          : existing.modelAliases && Object.keys(existing.modelAliases).length > 0
+            ? { modelAliases: { ...existing.modelAliases } }
             : {}),
         ...('envVars' in parsed.data
           ? parsed.data.envVars && Object.keys(parsed.data.envVars).length > 0
@@ -404,8 +427,7 @@ export const accountsRoutes: FastifyPluginAsync = async (app) => {
     const params = request.params as { profileId: string };
 
     try {
-      const accounts = readCatalogAccounts(projectRoot);
-      const accountExists = Object.hasOwn(accounts, params.profileId);
+      const accountExists = readAccountStoreSnapshot(projectRoot).resolve(params.profileId).account !== undefined;
 
       // Check the runtime catalog for dangling references. Template is bootstrap-only
       // and is not part of runtime binding truth after catalog creation.

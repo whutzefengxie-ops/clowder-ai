@@ -4,7 +4,7 @@ related_features: [F154, F078, F200, F192, F203, F209]
 topics: [routing, capability-profile, dynamic-routing, eval, open-source]
 doc_kind: spec
 created: 2026-05-20
-tips_exempt: "Internal infrastructure (cat dossier distillation pipeline) — no user-visible capability surface"
+tips_exempt: "2026-09-02 public identity and provenance projection only; dossier distillation and routing evidence remain internal agent infrastructure with no new user-invokable surface."
 ---
 
 # F208: Capability Profile Routing — 能力画像档案 + 认知路由
@@ -67,7 +67,7 @@ L0 **不进 native system prompt**（动态画像会 stale hardcode，Maine Coon
 **三源合成（分域）**：愿景/taste/体验域 → operator 体感最高；技术/协作/盲点域 →
 peer 评价 + eval/trajectory 最高；自我反思优先级最低。
 
-**三态演化**：baseline（landy + 四猫画像，开源初始版）/ accumulated（其他团队
+**三态演化**：baseline（operator + 四猫画像，开源初始版）/ accumulated（其他团队
 fork 后按领域累积）/ evolving（eval 回流持续刷新）。
 
 **L1 画像 6 字段 schema**：① 原生峰值 ② 被低估能力 ③ 坏直觉 ④ 召唤反信号
@@ -116,7 +116,7 @@ settings 独立 section（与成员管理平级，不复用 F154 member overview
   到 `cat-dossier.md` → git commit + push（KD-18，v1 不自动 commit main）
 - **安全锁**：`baseHash` 防 stale write（dossier 是共享文件多猫并行）；`sourceId`
   幂等（同事件不重复蒸馏）；`evidenceRefs` 空 = 创建失败（fail-closed，FM-2）
-- **开源 baseline 打包**：**空模板 + Cat Café 示例档案**（示例标 demo，不作别人
+- **开源 baseline 打包**：**空模板 + Clowder AI 示例档案**（示例标 demo，不作别人
   团队默认画像——别人的猫不是我们的猫）+ cold-start routing section（OQ-7 缓解）
 
 ## Acceptance Criteria
@@ -151,7 +151,7 @@ settings 独立 section（与成员管理平级，不复用 F154 member overview
 - [x] AC-E1: `DossierDistillationProposal` schema + store（Redis TTL=0，KD-17 契约），幂等（同 sourceId 不重复创建）。**Includes state machine endpoints (enabling AC-E2/E3)**：6 REST endpoints (CRUD + state transitions)，apply 只 mark status 不 git commit（KD-18 v1）
 - [x] AC-E2: 蒸馏 checkpoint 接入 feat-lifecycle close + review-complete 流程（事件触发，非 cron）
 - [x] AC-E3: operator 在 Hub approve proposal 后，持球猫可 apply draft → cat-dossier.md → git commit + push（KD-18）
-- [x] AC-E4: 开源 baseline 打包 = 空模板 + Cat Café 示例档案（示例标 demo）+ cold-start routing section（OQ-7 缓解）
+- [x] AC-E4: 开源 baseline 打包 = 空模板 + Clowder AI 示例档案（示例标 demo）+ cold-start routing section（OQ-7 缓解）
 
 ## Dependencies
 

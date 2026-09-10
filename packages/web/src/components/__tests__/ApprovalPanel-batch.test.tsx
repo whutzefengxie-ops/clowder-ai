@@ -5,21 +5,23 @@
  * calls, non-inline items excluded, clear selection.
  */
 
-import type { ApprovalItem } from '@cat-cafe/shared';
+import type { ApprovalHubItem } from '@cat-cafe/shared';
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { anchoredApprovalNavigation } from '@/test-support/approval-navigation';
 
 // --- Mock data ---
 const NOW = Date.now();
-const SAMPLE_ITEMS: ApprovalItem[] = [
+const SAMPLE_ITEMS: ApprovalHubItem[] = [
   {
     proposalId: 'dp-inline-1',
     sourceFeatureId: 'F193',
-    sourceThreadId: 'thread-1',
+    navigation: anchoredApprovalNavigation('thread-1'),
     requesterCatId: 'opus',
     ownerUserId: 'user-1',
-    status: 'pending',
+    resolution: 'open',
+    materialization: { state: 'not_started' },
     summary: 'Inline item A',
     detail: {},
     inlineApprovable: true,
@@ -28,10 +30,11 @@ const SAMPLE_ITEMS: ApprovalItem[] = [
   {
     proposalId: 'dp-inline-2',
     sourceFeatureId: 'F193',
-    sourceThreadId: 'thread-2',
+    navigation: anchoredApprovalNavigation('thread-2'),
     requesterCatId: 'sonnet',
     ownerUserId: 'user-1',
-    status: 'pending',
+    resolution: 'open',
+    materialization: { state: 'not_started' },
     summary: 'Inline item B',
     detail: {},
     inlineApprovable: true,
@@ -40,10 +43,11 @@ const SAMPLE_ITEMS: ApprovalItem[] = [
   {
     proposalId: 'dp-jump-1',
     sourceFeatureId: 'F128',
-    sourceThreadId: 'thread-3',
+    navigation: anchoredApprovalNavigation('thread-3'),
     requesterCatId: 'opus',
     ownerUserId: 'user-1',
-    status: 'pending',
+    resolution: 'open',
+    materialization: { state: 'not_started' },
     summary: 'Jump-only item C',
     detail: {},
     inlineApprovable: false,
@@ -51,7 +55,7 @@ const SAMPLE_ITEMS: ApprovalItem[] = [
   },
 ];
 
-let mockItems: ApprovalItem[] = [];
+let mockItems: ApprovalHubItem[] = [];
 let mockCount = 0;
 let mockIsLoading = false;
 let mockError: string | null = null;
@@ -147,6 +151,36 @@ describe('F246 AC-D5: ApprovalPanel batch operations', () => {
 
     const batchBar = container.querySelector('[data-testid="approval-batch-bar"]');
     expect(batchBar).toBeNull();
+  });
+
+  it('batch bar hidden when the only inline item requires an entity conflict decision', async () => {
+    mockItems = [
+      {
+        ...SAMPLE_ITEMS[0],
+        proposalId: 'f260-conflict',
+        sourceFeatureId: 'F260',
+        detail: { conflict: { reason: 'surface-collision' } },
+      },
+    ];
+    mockCount = 1;
+    await act(async () => root.render(React.createElement(ApprovalPanel)));
+
+    expect(container.querySelector('[data-testid="approval-batch-bar"]')).toBeNull();
+  });
+
+  it('batch bar hidden when the only inline item requires claim selection', async () => {
+    mockItems = [
+      {
+        ...SAMPLE_ITEMS[0],
+        proposalId: 'f276-claim-select',
+        sourceFeatureId: 'F276',
+        decisionMode: 'claim-select',
+      },
+    ];
+    mockCount = 1;
+    await act(async () => root.render(React.createElement(ApprovalPanel)));
+
+    expect(container.querySelector('[data-testid="approval-batch-bar"]')).toBeNull();
   });
 
   it('select toggle shows "全选可操作" when nothing selected', async () => {
@@ -247,7 +281,11 @@ describe('F246 AC-D5: ApprovalPanel batch operations', () => {
       root.render(React.createElement(ApprovalPanel));
     });
 
-    // Click a feature filter chip (e.g. F128) — testid is approval-filter-feature-{key}
+    const filterTrigger = container.querySelector('[data-testid="approval-filter-feature-trigger"]');
+    await act(async () => {
+      filterTrigger!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    // Pick F128 from the compact type menu.
     const filterChip = container.querySelector('[data-testid="approval-filter-feature-F128"]');
     expect(filterChip).not.toBeNull();
     await act(async () => {
@@ -311,7 +349,11 @@ describe('F246 AC-D5: ApprovalPanel batch operations', () => {
     // Batch bar should be visible initially (F193 inline items exist)
     expect(container.querySelector('[data-testid="approval-batch-bar"]')).not.toBeNull();
 
-    // Click F128 filter — filtered view now contains only dp-jump-1 (not inlineApprovable)
+    // Pick F128 — filtered view now contains only dp-jump-1 (not inlineApprovable)
+    const filterTrigger = container.querySelector('[data-testid="approval-filter-feature-trigger"]');
+    await act(async () => {
+      filterTrigger!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
     const filterChip = container.querySelector('[data-testid="approval-filter-feature-F128"]');
     expect(filterChip).not.toBeNull();
     await act(async () => {

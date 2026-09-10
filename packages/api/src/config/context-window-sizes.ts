@@ -1,87 +1,28 @@
 /**
- * Context Window Size Fallback Table
- * F24: Hardcoded model → context window mapping for cats whose CLI
- * doesn't report window size (Codex exec, Gemini -p).
+ * Context Window Size — Runtime Helpers
  *
- * Claude CLI reports exact values via modelUsage[model].contextWindow,
- * so these entries are fallback only.
- * Update when new models are released or window sizes change.
+ * The static model → context window catalog lives in
+ * `@cat-cafe/shared` (single source of truth for
+ * both API Auto-mode resolution and Web draft compatibility preview).
+ *
+ * This module re-exports the catalog lookup and adds runtime-only
+ * helpers: known-minimum floors (stale-CLI correction) and the
+ * composite `resolveContextWindow` that merges carrier reports with
+ * catalog + floor.
  */
 
-export const CONTEXT_WINDOW_SIZES: Record<string, number> = {
-  // Claude (exact values from CLI, these are fallback)
-  'claude-opus-4-6': 200_000,
-  'claude-sonnet-4-5': 200_000,
-  'claude-haiku-4-5': 200_000,
-  // Fable 5: native 1M context — the maximum is also the default (no [1m]
-  // suffix needed). Also listed in KNOWN_MIN_CONTEXT_WINDOWS below because
-  // stale CLIs (≤2.1.177) mis-REPORT it as 200K, which this table alone
-  // cannot fix (CLI report outranks the fallback table).
-  'claude-fable-5': 1_000_000,
-  // Codex/GPT
-  'gpt-5.3': 128_000,
-  'gpt-5.2': 128_000,
-  'gpt-5.1-codex': 400_000,
-  o3: 200_000,
-  'o4-mini': 200_000,
-  // MiniMax
-  'MiniMax-M3': 1_000_000,
-  'minimax-m3': 1_000_000,
-  // Gemini
-  'gemini-2.5-pro': 1_000_000,
-  'gemini-2.5-flash': 1_000_000,
-  'gemini-3-pro': 1_000_000,
-  'gemini-3.1-pro-preview': 1_000_000,
-};
+// Re-export catalog lookup so existing API consumers keep their import path.
+export { CONTEXT_WINDOW_SIZES, getContextWindowFallback } from '@cat-cafe/shared';
 
-/**
- * clowder#915 R5 cloud P2: when opencode runs against a model NOT in the
- * fallback table (GLM-5.1, openrouter custom names, etc.), the F24
- * context_health block silently skips and handoff never fires. This is
- * a last-resort default used ONLY when both `usage.contextWindowSize`
- * AND `getContextWindowFallback(model)` return undefined.
- *
- * 128_000 was chosen as a middle-ground: covers GLM-5.1 (128k), most
- * GPT 128k variants, and stays safely under Claude (200k) so the
- * 0.85 seal threshold trips around 108k — safely before any real
- * provider's hard limit.
- *
- * Critical: this is a LAST-RESORT — known models (claude-opus-4-6,
- * gpt-5.x, etc.) MUST resolve through the fallback table first so we
- * use their precise window. Putting this unconditionally on the
- * transformer would defeat the table for opencode's default
- * claude-opus-4-6 (200k → wrongly capped at 128k).
- */
-export const OPENCODE_DEFAULT_CONTEXT_WINDOW = 128_000;
+import { getContextWindowFallback, stripProviderPrefix } from '@cat-cafe/shared';
 
-// Normalize provider-prefixed model IDs before lookup. The account routing
-// path in invoke-single-cat sets `callbackEnv.CAT_CAFE_ANTHROPIC_MODEL_OVERRIDE`
-// to a `safeProvider/model` form (see L1459 `safeProvider/safeModel`), and
-// OpenCodeAgentService propagates that prefixed string as `metadata.model`.
-// Without normalization, lookups like `anthropic/claude-opus-4-6` or
-// `openai-compat/gpt-5.3` would miss the table entirely → no windowSize →
-// F24 context_health silently skipped → opencode handoff (clowder#915)
-// bypassed in production. (clowder#915 R2 cloud P1)
-//
-// Use lastIndexOf to handle multi-segment prefixes like `openai-compat/x/y`
-// (defensive — current code emits at most one slash, but the cost is the
-// same and we don't want to be the next migration's footgun).
-function stripProviderPrefix(model: string): string {
-  const slashAt = model.lastIndexOf('/');
-  return slashAt >= 0 ? model.slice(slashAt + 1) : model;
-}
-
+/** Local prefix-match helper for the small runtime-only floor table. */
 function lookupWithPrefixMatch(table: Record<string, number>, bare: string): number | undefined {
-  if (table[bare]) return table[bare];
-  // Prefix match (e.g. 'claude-opus-4-6-20260101' matches 'claude-opus-4-6')
+  if (table[bare] != null) return table[bare];
   for (const [key, value] of Object.entries(table)) {
     if (bare.startsWith(key)) return value;
   }
   return undefined;
-}
-
-export function getContextWindowFallback(model: string): number | undefined {
-  return lookupWithPrefixMatch(CONTEXT_WINDOW_SIZES, stripProviderPrefix(model));
 }
 
 /**
@@ -118,10 +59,10 @@ export function getKnownMinContextWindow(model: string): number | undefined {
 }
 
 /**
- * Single resolution point for "how big is this session's context window":
- * CLI-reported value → fallback table, then raised to any known
- * authoritative floor. Callers needing a provider-specific last resort
- * (e.g. opencode's 128K default) apply it AFTER this returns undefined.
+ * Model/runtime discovery primitive used by the member capacity resolver:
+ * CLI-reported value → versioned model catalog, then raised to a known
+ * authoritative floor. Undefined stays unresolved; callers must not invent a
+ * provider-wide last resort.
  */
 export function resolveContextWindow(reported: number | undefined, model: string): number | undefined {
   const base = reported ?? getContextWindowFallback(model);

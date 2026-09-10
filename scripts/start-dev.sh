@@ -46,6 +46,25 @@
 set -e
 set -o pipefail
 
+print_start_dev_usage() {
+    printf '%s\n' \
+        'Usage:' \
+        '  ./scripts/start-dev.sh [--quick] [--memory|--no-redis] [--prod-web] [--debug]' \
+        '                         [--profile=dev|production|opensource] [--daemon|-d]' \
+        '                         [--allow-account-regression] (accept new account unavailability)' \
+        '                         [--] [--npm-registry=URL] [--pip-index-url=URL] [--hf-endpoint=URL]' \
+        '  ./scripts/start-dev.sh --stop|stop' \
+        '  ./scripts/start-dev.sh --status|status' \
+        '  ./scripts/start-dev.sh --help|-h|help'
+}
+
+case "${1:-}" in
+    --help|-h|help)
+        print_start_dev_usage
+        exit 0
+        ;;
+esac
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 source "$SCRIPT_DIR/lib/node-runtime-guard.sh"
@@ -73,6 +92,7 @@ PROD_WEB=false
 DEBUG_MODE=false
 PROFILE=""
 DAEMON_MODE=false
+ALLOW_ACCOUNT_REGRESSION=false
 for arg in "$@"; do
     case $arg in
         --quick|-q) QUICK_MODE=true ;;
@@ -81,6 +101,8 @@ for arg in "$@"; do
         --debug) DEBUG_MODE=true ;;
         --profile=*) PROFILE="${arg#*=}" ;;
         --daemon|-d) DAEMON_MODE=true ;;
+        --allow-account-regression) ALLOW_ACCOUNT_REGRESSION=true ;;
+        --cat-cafe-daemon-token=*) ;;
         *)
             parse_manual_download_source_arg "$arg" || true
             ;;
@@ -108,7 +130,17 @@ CLI_ANTHROPIC_PROXY_PORT_OVERRIDE="${ANTHROPIC_PROXY_PORT-}"
 CLI_WHISPER_PORT_OVERRIDE="${WHISPER_PORT-}"
 CLI_TTS_PORT_OVERRIDE="${TTS_PORT-}"
 CLI_LLM_POSTPROCESS_PORT_OVERRIDE="${LLM_POSTPROCESS_PORT-}"
+CLI_WORKTREE_PORT_OFFSET_OVERRIDE="${WORKTREE_PORT_OFFSET-}"
+CLI_CAT_CAFE_RESPECT_DOTENV_PORTS_OVERRIDE="${CAT_CAFE_RESPECT_DOTENV_PORTS-}"
 CLI_CAT_CAFE_PROVISION_GLOBAL_SIDECAR_OVERRIDE="${CAT_CAFE_PROVISION_GLOBAL_SIDECAR-}"
+CLI_CONNECTOR_GATEWAY_AUTOSTART_OVERRIDE="${CONNECTOR_GATEWAY_AUTOSTART-}"
+CLI_CAT_CAFE_RUNTIME_ROOT_OVERRIDE="${CAT_CAFE_RUNTIME_ROOT-}"
+CLI_CAT_CAFE_WORKSPACE_ROOT_OVERRIDE="${CAT_CAFE_WORKSPACE_ROOT-}"
+CLI_CAT_CAFE_RUNTIME_DIR_OVERRIDE="${CAT_CAFE_RUNTIME_DIR-}"
+CLI_CAT_CAFE_RUNTIME_BRANCH_OVERRIDE="${CAT_CAFE_RUNTIME_BRANCH-}"
+CLI_CAT_CAFE_MCP_SERVER_PATH_OVERRIDE="${CAT_CAFE_MCP_SERVER_PATH-}"
+CLI_CAT_CAFE_STRICT_PROFILE_DEFAULTS_OVERRIDE="${CAT_CAFE_STRICT_PROFILE_DEFAULTS-}"
+CLI_CAT_CAFE_DEPLOYMENT_ID_OVERRIDE="${CAT_CAFE_DEPLOYMENT_ID-}"
 
 clear_inherited_profile_env() {
     [ "${CAT_CAFE_STRICT_PROFILE_DEFAULTS:-0}" = "1" ] || return 0
@@ -135,7 +167,7 @@ if [ -f .env.local ]; then
     set +a
 fi
 
-PREFER_DOTENV_PORTS="${CAT_CAFE_RESPECT_DOTENV_PORTS:-0}"
+PREFER_DOTENV_PORTS="${CLI_CAT_CAFE_RESPECT_DOTENV_PORTS_OVERRIDE:-${CAT_CAFE_RESPECT_DOTENV_PORTS:-0}}"
 
 restore_cli_override() {
     local name="$1"
@@ -156,12 +188,91 @@ if [ "$PREFER_DOTENV_PORTS" != "1" ]; then
     restore_cli_override "WHISPER_PORT" "$CLI_WHISPER_PORT_OVERRIDE"
     restore_cli_override "TTS_PORT" "$CLI_TTS_PORT_OVERRIDE"
     restore_cli_override "LLM_POSTPROCESS_PORT" "$CLI_LLM_POSTPROCESS_PORT_OVERRIDE"
+    restore_cli_override "WORKTREE_PORT_OFFSET" "$CLI_WORKTREE_PORT_OFFSET_OVERRIDE"
 fi
 
 if [ -n "$CLI_CAT_CAFE_PROVISION_GLOBAL_SIDECAR_OVERRIDE" ]; then
     export CAT_CAFE_PROVISION_GLOBAL_SIDECAR="$CLI_CAT_CAFE_PROVISION_GLOBAL_SIDECAR_OVERRIDE"
 else
     unset CAT_CAFE_PROVISION_GLOBAL_SIDECAR
+fi
+
+# Runtime binary/workspace ownership belongs to the launching entrypoint. A
+# checkout's dotenv may provide defaults, but must not redirect an explicit
+# alpha/runtime wrapper back into another checkout after startup begins.
+restore_cli_override "CAT_CAFE_RUNTIME_ROOT" "$CLI_CAT_CAFE_RUNTIME_ROOT_OVERRIDE"
+restore_cli_override "CAT_CAFE_WORKSPACE_ROOT" "$CLI_CAT_CAFE_WORKSPACE_ROOT_OVERRIDE"
+restore_cli_override "CAT_CAFE_MCP_SERVER_PATH" "$CLI_CAT_CAFE_MCP_SERVER_PATH_OVERRIDE"
+if [ -n "$CLI_CAT_CAFE_DEPLOYMENT_ID_OVERRIDE" ]; then
+    export CAT_CAFE_DEPLOYMENT_ID="$CLI_CAT_CAFE_DEPLOYMENT_ID_OVERRIDE"
+else
+    unset CAT_CAFE_DEPLOYMENT_ID
+fi
+
+is_legacy_managed_runtime_handoff() {
+    # Launchers before clowder-ai#1282 sync the runtime worktree before
+    # executing this script but cannot inject the newer connector lifecycle
+    # flag. Recognize only that exact managed-runtime topology; ambient env or
+    # dotenv values must not grant connector autostart to direct/dev/review
+    # checkouts.
+    [ -z "$CLI_CONNECTOR_GATEWAY_AUTOSTART_OVERRIDE" ] || return 1
+    [ "$PROD_WEB" = "true" ] || return 1
+    [ "$PROFILE" = "opensource" ] || return 1
+    [ "$CLI_CAT_CAFE_STRICT_PROFILE_DEFAULTS_OVERRIDE" = "1" ] || return 1
+    [ -n "$CLI_CAT_CAFE_RUNTIME_ROOT_OVERRIDE" ] || return 1
+    [ -n "$CLI_CAT_CAFE_WORKSPACE_ROOT_OVERRIDE" ] || return 1
+
+    local runtime_root workspace_root project_root expected_runtime_root expected_runtime_branch
+    local actual_runtime_branch launcher_source worktree_listing line
+    runtime_root="$(cd "$CLI_CAT_CAFE_RUNTIME_ROOT_OVERRIDE" 2>/dev/null && pwd -P)" || return 1
+    workspace_root="$(cd "$CLI_CAT_CAFE_WORKSPACE_ROOT_OVERRIDE" 2>/dev/null && pwd -P)" || return 1
+    project_root="$(cd "$PROJECT_DIR" 2>/dev/null && pwd -P)" || return 1
+    [ "$runtime_root" = "$project_root" ] || return 1
+    [ "$runtime_root" != "$workspace_root" ] || return 1
+
+    if [ -n "$CLI_CAT_CAFE_RUNTIME_DIR_OVERRIDE" ]; then
+        case "$CLI_CAT_CAFE_RUNTIME_DIR_OVERRIDE" in
+            /*) expected_runtime_root="$(cd "$CLI_CAT_CAFE_RUNTIME_DIR_OVERRIDE" 2>/dev/null && pwd -P)" || return 1 ;;
+            *) expected_runtime_root="$(cd "$workspace_root/$CLI_CAT_CAFE_RUNTIME_DIR_OVERRIDE" 2>/dev/null && pwd -P)" || return 1 ;;
+        esac
+    else
+        expected_runtime_root="$(cd "$workspace_root/../cat-cafe-runtime" 2>/dev/null && pwd -P)" || return 1
+    fi
+    [ "$runtime_root" = "$expected_runtime_root" ] || return 1
+
+    expected_runtime_branch="${CLI_CAT_CAFE_RUNTIME_BRANCH_OVERRIDE:-runtime/main-sync}"
+    actual_runtime_branch="$(git -C "$runtime_root" symbolic-ref --quiet HEAD 2>/dev/null)" || return 1
+    [ "$actual_runtime_branch" = "refs/heads/$expected_runtime_branch" ] || return 1
+
+    worktree_listing="$(git -C "$workspace_root" worktree list --porcelain 2>/dev/null)" || return 1
+    while IFS= read -r line; do
+        [ "$line" = "worktree $runtime_root" ] && break
+    done <<< "$worktree_listing"
+    [ "$line" = "worktree $runtime_root" ] || return 1
+
+    # Read the committed launcher provenance, not the just-synced runtime
+    # copy. A compatible legacy launcher has the managed-runtime exec handoff
+    # but no connector lifecycle injection yet. The target must also match the
+    # runtime manager's selected path and branch, so an arbitrary registered
+    # feature worktree cannot acquire authority from the remaining markers.
+    launcher_source="$(git -C "$workspace_root" show HEAD:scripts/runtime-worktree.sh 2>/dev/null)" || return 1
+    [[ "$launcher_source" == *'exec env CAT_CAFE_STRICT_PROFILE_DEFAULTS=1 ./scripts/start-dev.sh --prod-web --profile=opensource'* ]] || return 1
+    [[ "$launcher_source" != *'CONNECTOR_GATEWAY_AUTOSTART'* ]] || return 1
+    return 0
+}
+
+# Connector autostart is runtime lifecycle authority, not dotenv configuration.
+# Only an entrypoint's inherited environment may grant or deny it. The narrow
+# compatibility branch handles a pre-clowder-ai#1282 launcher that demonstrably
+# handed off to its registered official runtime worktree before this script
+# loaded.
+if [ -n "$CLI_CONNECTOR_GATEWAY_AUTOSTART_OVERRIDE" ]; then
+    export CONNECTOR_GATEWAY_AUTOSTART="$CLI_CONNECTOR_GATEWAY_AUTOSTART_OVERRIDE"
+elif is_legacy_managed_runtime_handoff; then
+    export CONNECTOR_GATEWAY_AUTOSTART=1
+    echo -e "${YELLOW}⚠️  检测到旧版 managed-runtime 启动器；已为本次官方 runtime 启动恢复 IM connector autostart。请更新启动器 checkout。${NC}" >&2
+else
+    unset CONNECTOR_GATEWAY_AUTOSTART
 fi
 
 # === F182 大赛 / 多 worktree 并发：WORKTREE_PORT_OFFSET 派生 + 主动覆盖 ===
@@ -464,14 +575,46 @@ REDIS_DBFILE=${REDIS_DBFILE:-dump.rdb}
 REDIS_PIDFILE="${REDIS_DATA_DIR}/redis-${REDIS_PORT}.pid"
 REDIS_LOGFILE="${REDIS_DATA_DIR}/redis-${REDIS_PORT}.log"
 STARTED_REDIS=false
+F247_CLOUD_OWNER_FILE=""
+REDIS_DEV_LEASE_FILE=""
 CLEANUP_RUNNING=false
 MANAGED_PIDS=()
-DAEMON_STATE_DIR="${HOME}/.cat-cafe"
-DAEMON_PID_FILE="${DAEMON_STATE_DIR}/daemon.pid"
-DAEMON_LOG_PATH_FILE="${DAEMON_STATE_DIR}/daemon.log-path"
+REDIS_LEASE_HELPER="$PROJECT_DIR/packages/api/scripts/redis-test-lease-cli.mjs"
+# The API shutdown path closes Fastify hooks, including active audio capture
+# finalization. One second was too short once Redis/telemetry cleanup preceded
+# app.close(), so managed children get a bounded graceful window before KILL.
+MANAGED_SHUTDOWN_GRACE_SECONDS="${MANAGED_SHUTDOWN_GRACE_SECONDS:-8}"
+DAEMON_DEPLOYMENT_ID="${CAT_CAFE_DEPLOYMENT_ID:-worktree}"
+DAEMON_STATE_HELPER="$SCRIPT_DIR/daemon-state.mjs"
 DAEMON_LOG_FILE="${PROJECT_DIR}/cat-cafe-daemon.log"
+LEGACY_DAEMON_PID_FILE="${HOME}/.cat-cafe/daemon.pid"
+LEGACY_DAEMON_LOG_PATH_FILE="${HOME}/.cat-cafe/daemon.log-path"
 
 export MESSAGE_TTL_SECONDS THREAD_TTL_SECONDS TASK_TTL_SECONDS SUMMARY_TTL_SECONDS
+
+daemon_state() {
+    local command="$1"
+    shift
+    node "$DAEMON_STATE_HELPER" "$command" "$@" \
+        --home "$HOME" \
+        --project-root "$PROJECT_DIR" \
+        --deployment-id "$DAEMON_DEPLOYMENT_ID"
+}
+
+maybe_migrate_legacy_daemon_state() {
+    [ "$DAEMON_DEPLOYMENT_ID" = "runtime" ] || return 0
+    daemon_state migrate-legacy \
+        --legacy-pid-file "$LEGACY_DAEMON_PID_FILE" \
+        --legacy-log-path-file "$LEGACY_DAEMON_LOG_PATH_FILE"
+}
+
+daemon_stop_hint() {
+    case "$DAEMON_DEPLOYMENT_ID" in
+        runtime) printf '%s' "pnpm runtime:stop" ;;
+        alpha) printf '%s' "pnpm alpha:stop" ;;
+        *) printf '%s' "pnpm dev:stop" ;;
+    esac
+}
 
 register_managed_pid() {
     local pid="${1:-}"
@@ -511,6 +654,35 @@ redis_ping() {
     else
         redis-cli -p "$REDIS_PORT" ping &> /dev/null
     fi
+}
+
+register_redis_dev_lease() {
+    [ "$USE_REDIS" = true ] || return 0
+    case "$DAEMON_DEPLOYMENT_ID" in
+        runtime|alpha) return 0 ;;
+    esac
+    case "$REDIS_PORT" in
+        6099|6398|6399|6401) return 0 ;;
+    esac
+
+    local redis_pid
+    redis_pid="$(redis-cli -p "$REDIS_PORT" INFO server 2>/dev/null | tr -d '\r' | awk -F: '$1 == "process_id" { print $2; exit }')"
+    if [[ ! "$redis_pid" =~ ^[0-9]+$ ]]; then
+        echo -e "${RED}  ✗ 无法确认 Redis (端口 $REDIS_PORT) 的进程身份，拒绝留下无 owner 的 dev 实例${NC}" >&2
+        return 1
+    fi
+    if ! REDIS_DEV_LEASE_FILE="$(node "$REDIS_LEASE_HELPER" register-dev --port "$REDIS_PORT" --redis-pid "$redis_pid" --data-dir "$REDIS_DATA_DIR" --owner-pid "$$" --project-root "$PROJECT_DIR")"; then
+        REDIS_DEV_LEASE_FILE=""
+        echo -e "${RED}  ✗ 无法登记 Redis dev owner lease，拒绝继续启动${NC}" >&2
+        return 1
+    fi
+    echo "  ✓ Redis dev owner 已登记 (端口 $REDIS_PORT, pid $redis_pid)"
+}
+
+remove_redis_dev_lease() {
+    [ -n "$REDIS_DEV_LEASE_FILE" ] || return 0
+    node "$REDIS_LEASE_HELPER" remove-dev --lease-file "$REDIS_DEV_LEASE_FILE" 2>/dev/null || true
+    REDIS_DEV_LEASE_FILE=""
 }
 
 probe_port_with_dev_tcp() {
@@ -670,10 +842,16 @@ terminate_pid_tree_with_signal() {
 
 terminate_managed_pids() {
     local pid
+    local signaled=false
     for pid in "${MANAGED_PIDS[@]}"; do
+        if kill -0 "$pid" 2>/dev/null; then
+            signaled=true
+        fi
         terminate_pid_tree_with_signal TERM "$pid"
     done
-    sleep 1
+    if [ "$signaled" = true ]; then
+        sleep "$MANAGED_SHUTDOWN_GRACE_SECONDS"
+    fi
     for pid in "${MANAGED_PIDS[@]}"; do
         if kill -0 "$pid" 2>/dev/null; then
             terminate_pid_tree_with_signal KILL "$pid"
@@ -1114,6 +1292,55 @@ configure_mcp_server_path() {
     fi
 }
 
+maybe_start_f247_cloud_services() {
+    if [ "${CAT_CAFE_F247_CLOUD_AUTOSTART:-1}" = "0" ]; then
+        echo -e "${YELLOW}  ⚠ F247 cloud supporting services auto-start disabled (CAT_CAFE_F247_CLOUD_AUTOSTART=0)${NC}"
+        return 0
+    fi
+
+    local helper="$PROJECT_DIR/scripts/f247-cloud-services.mjs"
+    if [ ! -f "$helper" ]; then
+        return 0
+    fi
+
+    echo ""
+    echo -e "${CYAN}检查 F247 云端猫 supporting services...${NC}"
+    F247_CLOUD_OWNER_FILE="$(mktemp "${TMPDIR:-/tmp}/cat-cafe-f247-owner.XXXXXX")"
+    rm -f "$F247_CLOUD_OWNER_FILE"
+    if ! node "$helper" start --optional --owner-file="$F247_CLOUD_OWNER_FILE"; then
+        node "$helper" stop-owned --owner-file="$F247_CLOUD_OWNER_FILE" >/dev/null 2>&1 || true
+        rm -f "$F247_CLOUD_OWNER_FILE"
+        F247_CLOUD_OWNER_FILE=""
+        echo -e "${YELLOW}  ⚠ F247 cloud supporting services degraded; local Clowder AI startup will continue.${NC}"
+        return 0
+    fi
+
+    if [ ! -s "$F247_CLOUD_OWNER_FILE" ]; then
+        rm -f "$F247_CLOUD_OWNER_FILE"
+        F247_CLOUD_OWNER_FILE=""
+    fi
+}
+
+print_f247_cloud_status_summary() {
+    if [ "${CAT_CAFE_F247_CLOUD_AUTOSTART:-1}" = "0" ]; then
+        echo "  F247 cloud: disabled (CAT_CAFE_F247_CLOUD_AUTOSTART=0)"
+        return 0
+    fi
+
+    local helper="$PROJECT_DIR/scripts/f247-cloud-services.mjs"
+    if [ ! -f "$helper" ]; then
+        echo "  F247 cloud: unavailable (lifecycle helper missing)"
+        return 0
+    fi
+
+    if node "$helper" status --summary >/dev/null 2>&1; then
+        echo "  F247 cloud: healthy"
+    else
+        echo "  F247 cloud: degraded (run pnpm cloud:doctor for details)"
+    fi
+    return 0
+}
+
 # 检查/启动 Redis
 # USE_REDIS=true (默认): 尝试启动 Redis, 失败则拒绝启动
 # USE_REDIS=false (--memory): 跳过 Redis, 强制内存存储
@@ -1186,12 +1413,22 @@ cleanup() {
 
     terminate_managed_pids
 
+    # 只关闭本 launcher session 实际启动且身份仍匹配的 F247 supporting services。
+    # 全局 cloud:stop 是显式运维动作，不能由任意 start-dev cleanup 代行。
+    local cloud_helper="$PROJECT_DIR/scripts/f247-cloud-services.mjs"
+    if [ -n "$F247_CLOUD_OWNER_FILE" ] && [ -f "$cloud_helper" ]; then
+        node "$cloud_helper" stop-owned --owner-file="$F247_CLOUD_OWNER_FILE" 2>/dev/null || true
+    fi
+    [ -n "$F247_CLOUD_OWNER_FILE" ] && rm -f "$F247_CLOUD_OWNER_FILE"
+    F247_CLOUD_OWNER_FILE=""
+
     # 关闭我们启动的专属 Redis (不影响其他 Redis 实例)
     if [ "$USE_REDIS" = true ] && [ "$STARTED_REDIS" = true ] && redis_ping; then
         archive_redis_snapshot "pre-stop"
         redis-cli -p "$REDIS_PORT" shutdown save &> /dev/null || true
         echo "  Redis (端口 $REDIS_PORT) 已关闭"
     fi
+    remove_redis_dev_lease
     wait 2>/dev/null || true
     # Only remove PID file if we are the daemon that wrote it (avoid orphaning a parallel daemon)
     if [ -f "$DAEMON_PID_FILE" ] && [ "$(cat "$DAEMON_PID_FILE" 2>/dev/null)" = "$$" ]; then
@@ -1280,10 +1517,44 @@ ensure_api_native_addons() {
     echo -e "${GREEN}  ✓ better-sqlite3 native 依赖已匹配当前 Node${NC}"
 }
 
+check_runtime_account_bindings() {
+    [ "${CAT_CAFE_DEPLOYMENT_ID:-}" = "runtime" ] || return 0
+    local checker="$PROJECT_DIR/packages/api/dist/scripts/runtime-account-preflight/cli.js"
+    local head package status=0
+    head=$(git -C "$PROJECT_DIR" rev-parse HEAD 2>/dev/null || true)
+    for package in shared api; do
+        if [ -z "$head" ] || [ ! -f "$PROJECT_DIR/packages/$package/dist/index.js" ] || \
+           [ "$(cat "$PROJECT_DIR/packages/$package/dist/.build-commit" 2>/dev/null)" != "$head" ]; then
+            echo "[accounts] Preflight unknown: candidate $package build invariant missing/stale. Continuing without a replacement availability claim; use the runtime wrapper to rebuild." >&2
+            return 0
+        fi
+    done
+    if [ ! -f "$checker" ]; then
+        echo "[accounts] Preflight unknown: candidate account preflight is missing. Continuing without an availability claim." >&2
+        return 0
+    fi
+    # The wrapper built the candidate; dotenv/root ownership have resolved.
+    # The checker compares the live API with that candidate, not with an empty
+    # baseline: existing rejected accounts must not make runtime unrestartable.
+    local args=(--api-port "$API_PORT")
+    [ "$ALLOW_ACCOUNT_REGRESSION" != true ] || args+=(--allow-account-regression)
+    node "$checker" "${args[@]}" || status=$?
+    if [ "$status" -eq 2 ]; then
+        # No services are owned yet; leave the existing runtime untouched.
+        trap - EXIT INT TERM
+        return 2
+    fi
+    if [ "$status" -ne 0 ]; then
+        echo "[accounts] Preflight unknown: checker failed; continuing partial startup without an availability claim." >&2
+    fi
+    return 0
+}
+
 # 主函数
 main() {
     guard_main_branch_start
     guard_runtime_redis_sanctuary
+    check_runtime_account_bindings || return $?
 
     # 1. 杀掉残余进程
     echo ""
@@ -1313,10 +1584,10 @@ main() {
         echo -e "${YELLOW}跳过构建 (--quick 模式)${NC}"
     fi
 
-    # 4. 检查外部依赖
     echo ""
     echo -e "${CYAN}检查依赖...${NC}"
     setup_storage
+    register_redis_dev_lease
     configure_mcp_server_path
     echo "  数据保留 (秒): message=${MESSAGE_TTL_SECONDS} thread=${THREAD_TTL_SECONDS} task=${TASK_TTL_SECONDS} summary=${SUMMARY_TTL_SECONDS}"
     echo "  注: 0 表示永久保留（不自动过期）"
@@ -1366,7 +1637,14 @@ main() {
     echo "  启动 API Server (端口 $API_PORT)..."
     background_eval_with_null_stdin "$API_LAUNCH_CMD"
     API_PID=$!
-    wait_for_port_or_exit "$API_PORT" "API Server" "$API_PID" "${API_WAIT_TIMEOUT:-60}" || exit 1
+    # 默认 120s（原 60s）：随 memory 语料/Redis 数据集增长，API 冷启动要建 evidence/embedding
+    # 索引，实测已达 ~73s（Redis 653MB/17.6万 key），60s 窗口会误判超时把整个 runtime 拆掉。
+    # 这是止血；治本（boot embedding 异步化 + dev Redis 瘦身）另开 investigation。
+    wait_for_port_or_exit "$API_PORT" "API Server" "$API_PID" "${API_WAIT_TIMEOUT:-120}" || exit 1
+
+    # F247 principal health is authenticated by the API, so supporting cloud
+    # services can only be judged after the API has completed cold-start.
+    maybe_start_f247_cloud_services
 
     # Frontend
     if [ "$PROD_WEB" = true ]; then
@@ -1433,66 +1711,27 @@ fi
 
 # --stop: 停止后台运行的 daemon
 if [[ "${1:-}" == "--stop" ]] || [[ "${1:-}" == "stop" ]]; then
-    if [ ! -f "$DAEMON_PID_FILE" ]; then
-        echo "没有找到运行中的 daemon（$DAEMON_PID_FILE 不存在）"
-        exit 1
-    fi
-    DAEMON_PID=$(cat "$DAEMON_PID_FILE")
-    if kill -0 "$DAEMON_PID" 2>/dev/null; then
-        echo "正在停止 Clowder AI daemon (PID: $DAEMON_PID)..."
-        kill -TERM "$DAEMON_PID" 2>/dev/null || true
-        for i in $(seq 1 15); do
-            kill -0 "$DAEMON_PID" 2>/dev/null || break
-            sleep 1
-        done
-        if kill -0 "$DAEMON_PID" 2>/dev/null; then
-            echo "  进程未响应 TERM，发送 KILL..."
-            kill -KILL "$DAEMON_PID" 2>/dev/null || true
-        fi
-        rm -f "$DAEMON_PID_FILE"
-        rm -f "$DAEMON_LOG_PATH_FILE"
-        echo "Clowder AI daemon 已停止 🐾"
-    else
-        echo "Daemon 进程 (PID: $DAEMON_PID) 已不存在，清理 PID 文件"
-        rm -f "$DAEMON_PID_FILE"
-        rm -f "$DAEMON_LOG_PATH_FILE"
-    fi
+    maybe_migrate_legacy_daemon_state
+    daemon_state stop
+    echo "Clowder AI $DAEMON_DEPLOYMENT_ID daemon 已停止 🐾"
     exit 0
 fi
 
 if [[ "${1:-}" == "--status" ]] || [[ "${1:-}" == "status" ]]; then
-    if [ ! -f "$DAEMON_PID_FILE" ]; then
-        echo "Clowder AI daemon 未运行（无 PID 文件）"
-        exit 1
-    fi
-    DAEMON_PID=$(cat "$DAEMON_PID_FILE")
-    if kill -0 "$DAEMON_PID" 2>/dev/null; then
-        REAL_LOG="$DAEMON_LOG_FILE"
-        [ -f "$DAEMON_LOG_PATH_FILE" ] && REAL_LOG=$(cat "$DAEMON_LOG_PATH_FILE")
-        echo -e "${GREEN}Clowder AI daemon 运行中${NC} (PID: $DAEMON_PID)"
-        [ -f "$REAL_LOG" ] && echo "  日志: $REAL_LOG"
-        echo "  停止: pnpm stop  或  ./scripts/start-dev.sh --stop"
-        echo "  查看日志: tail -f $REAL_LOG"
-    else
-        echo "Daemon 进程 (PID: $DAEMON_PID) 已不存在，清理 PID 文件"
-        rm -f "$DAEMON_PID_FILE"
-        exit 1
-    fi
+    maybe_migrate_legacy_daemon_state
+    daemon_state status
+    print_f247_cloud_status_summary
+    echo "  停止: $(daemon_stop_hint)"
+    echo "  查看日志: tail -f $DAEMON_LOG_FILE"
     exit 0
 fi
 
 if [ "$DAEMON_MODE" = true ]; then
-    if [ -f "$DAEMON_PID_FILE" ]; then
-        EXISTING_PID=$(cat "$DAEMON_PID_FILE")
-        if kill -0 "$EXISTING_PID" 2>/dev/null; then
-            echo -e "${RED}Clowder AI daemon 已在运行 (PID: $EXISTING_PID)${NC}"
-            echo "  停止: pnpm stop  或  ./scripts/start-dev.sh --stop"
-            echo "  查看日志: tail -f $DAEMON_LOG_FILE"
-            exit 1
-        else
-            rm -f "$DAEMON_PID_FILE"
-        fi
-    fi
+    # Report a known regression to the caller before preparing a daemon or
+    # claiming that it started. The child rechecks immediately before cleanup.
+    check_runtime_account_bindings || exit $?
+    maybe_migrate_legacy_daemon_state
+    daemon_state prepare
 
     RESTART_ARGS=()
     for arg in "$@"; do
@@ -1502,20 +1741,31 @@ if [ "$DAEMON_MODE" = true ]; then
         esac
     done
 
-    mkdir -p "$DAEMON_STATE_DIR"
+    DAEMON_LAUNCH_TOKEN=$(node -e "console.log(require('node:crypto').randomUUID())")
     echo "🐱 Clowder AI 以后台模式启动..."
+    echo "  Deployment: $DAEMON_DEPLOYMENT_ID"
     echo "  日志输出: $DAEMON_LOG_FILE"
-    nohup "$0" "${RESTART_ARGS[@]}" > "$DAEMON_LOG_FILE" 2>&1 &
+    nohup "$0" "${RESTART_ARGS[@]}" --cat-cafe-daemon-token="$DAEMON_LAUNCH_TOKEN" > "$DAEMON_LOG_FILE" 2>&1 &
     DAEMON_PID=$!
     disown "$DAEMON_PID"
-    echo "$DAEMON_PID" > "$DAEMON_PID_FILE"
-    echo "$DAEMON_LOG_FILE" > "$DAEMON_LOG_PATH_FILE"
+    if ! daemon_state write \
+        --pid "$DAEMON_PID" \
+        --launch-token "$DAEMON_LAUNCH_TOKEN" \
+        --log-file "$DAEMON_LOG_FILE" \
+        --frontend-port "$WEB_PORT" \
+        --api-port "$API_PORT" \
+        --redis-port "$REDIS_PORT" \
+        --preview-port "${PREVIEW_GATEWAY_PORT:-0}"; then
+        kill "$DAEMON_PID" 2>/dev/null || true
+        echo -e "${RED}  无法确认 daemon 归属，已终止本次新进程。${NC}" >&2
+        exit 1
+    fi
     echo -e "${GREEN}  Daemon PID: $DAEMON_PID${NC}"
     echo ""
     echo "管理命令:"
     echo "  查看状态: pnpm start:status"
     echo "  查看日志: tail -f $DAEMON_LOG_FILE"
-    echo "  停止服务: pnpm stop"
+    echo "  停止服务: $(daemon_stop_hint)"
     trap - EXIT INT TERM
     exit 0
 fi

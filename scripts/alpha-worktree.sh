@@ -41,6 +41,7 @@ Usage:
   ./scripts/alpha-worktree.sh sync   [--dir PATH] [--branch NAME] [--remote NAME] [--force] [--no-install]
   ./scripts/alpha-worktree.sh start  [--dir PATH] [--branch NAME] [--remote NAME] [--force] [--no-sync] [--no-install] [--no-quick] [--] [start-dev args...]
   ./scripts/alpha-worktree.sh status [--dir PATH] [--branch NAME] [--remote NAME]
+  ./scripts/alpha-worktree.sh stop   [--dir PATH]
 
 Defaults:
   --dir    ../cat-cafe-alpha
@@ -186,6 +187,7 @@ export EMBED_MODE=off
 export AUDIO_SERVICE_ENABLED=0
 export AUDIO_SERVICE_PORT=$ALPHA_AUDIO_PORT
 export CONNECTOR_GATEWAY_AUTOSTART=0
+export CAT_CAFE_F247_CLOUD_AUTOSTART=0
 EOF
 }
 
@@ -237,6 +239,13 @@ source_env_if_present() {
 }
 
 apply_alpha_env() {
+  # Alpha is a complete runtime checkout. Do not inherit binary/workspace paths
+  # from whichever Clowder AI runtime happened to launch this command, otherwise
+  # the API can boot from alpha while routing MCP tools through stale dist files.
+  export CAT_CAFE_RUNTIME_ROOT="$ALPHA_DIR"
+  export CAT_CAFE_WORKSPACE_ROOT="$PROJECT_DIR"
+  export CAT_CAFE_DEPLOYMENT_ID=alpha
+  export CAT_CAFE_MCP_SERVER_PATH="$ALPHA_DIR/packages/mcp-server/dist/index.js"
   export REDIS_PORT="$ALPHA_REDIS_PORT"
   export REDIS_URL="redis://localhost:$ALPHA_REDIS_PORT"
   export REDIS_PROFILE="$ALPHA_REDIS_PROFILE"
@@ -253,6 +262,7 @@ apply_alpha_env() {
   export AUDIO_SERVICE_ENABLED=0
   export AUDIO_SERVICE_PORT="$ALPHA_AUDIO_PORT"
   export CONNECTOR_GATEWAY_AUTOSTART=0
+  export CAT_CAFE_F247_CLOUD_AUTOSTART=0
   # Alpha shares ~/.cat-cafe/services.json with runtime — persistent config
   # overrides env-level EMBED_ENABLED=0 etc. Tell the API guard to block
   # sidecar lifecycle mutations and auto-start reconciliation.
@@ -397,6 +407,17 @@ status_alpha_worktree() {
   echo "env_source: $env_source_display"
 }
 
+stop_alpha_daemon() {
+  local root
+  root="$(abs_path "$ALPHA_DIR")"
+  [ -d "$root" ] || die "alpha root not found: $root"
+  export CAT_CAFE_DEPLOYMENT_ID=alpha
+  node "$SCRIPT_DIR/daemon-state.mjs" stop \
+    --home "$HOME" \
+    --project-root "$root" \
+    --deployment-id alpha
+}
+
 # ADR-039-alpha: build-freshness gate for alpha worktree (mirrors runtime-worktree.sh Invariant 3).
 #
 # Why: alpha:start syncs origin/main (ff-only), which moves HEAD and brings in new TypeScript
@@ -539,6 +560,9 @@ case "$COMMAND" in
     ;;
   status)
     status_alpha_worktree
+    ;;
+  stop)
+    stop_alpha_daemon
     ;;
   help|-h|--help)
     usage

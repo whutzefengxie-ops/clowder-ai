@@ -13,6 +13,7 @@ import 'fake-indexeddb/auto';
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ThreadChatHistoryAdmissionProvider } from '@/components/thread-chat/ThreadChatRuntimeProvider';
 import { useChatStore } from '@/stores/chatStore';
 import { apiFetch } from '@/utils/api-client';
 import { _resetDBForTest, saveThreadActiveState } from '@/utils/offline-store';
@@ -22,9 +23,13 @@ vi.mock('@/utils/api-client', () => ({
   apiFetch: vi.fn(),
 }));
 
-function HookHost({ threadId }: { threadId: string }) {
+function HookProbe({ threadId }: { threadId: string }) {
   useChatHistory(threadId);
   return null;
+}
+
+function HookHost({ threadId }: { threadId: string }) {
+  return React.createElement(ThreadChatHistoryAdmissionProvider, null, React.createElement(HookProbe, { threadId }));
 }
 
 describe('F194 Phase Z10 AC-Z28 — server-idle wins reverse race (砚砚 R1 P1)', () => {
@@ -156,5 +161,46 @@ describe('F194 Phase Z10 AC-Z28 — server-idle wins reverse race (砚砚 R1 P1)
 
     const threadState = useChatStore.getState().threadStates['thread-z10'];
     expect(threadState?.hasActiveInvocation).toBe(true);
+  });
+
+  it('F254 AC-D14a: server lifecycle snapshot hydrates the execution bar after F5', async () => {
+    const lifecycle = {
+      stage: 'active' as const,
+      lastActivityAt: 2_500,
+      recoveryAttempt: 0,
+      threadId: 'codex-thread-1',
+      turnId: 'turn-1',
+      turnStartSent: true,
+      turnAccepted: true,
+      itemObserved: true,
+    };
+    apiFetchMock.mockImplementation((url: string) => {
+      if (typeof url === 'string' && url.includes('/queue')) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              queue: [],
+              paused: false,
+              activeInvocations: [{ catId: 'codex', startedAt: 2_000, appServerLifecycle: lifecycle }],
+            }),
+            { status: 200 },
+          ),
+        );
+      }
+      return Promise.resolve(
+        new Response(JSON.stringify({ messages: [], hasMore: false, tasks: [] }), { status: 200 }),
+      );
+    });
+
+    await act(async () => {
+      root.render(React.createElement(HookHost, { threadId: 'thread-z10' }));
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    });
+
+    const state = useChatStore.getState();
+    expect(state.catInvocations.codex?.appServerLifecycle).toEqual(lifecycle);
+    expect(state.catStatuses.codex).toBe('streaming');
   });
 });

@@ -55,11 +55,20 @@ describe('parseDirection', () => {
       content: 'cross post content',
       extra: { crossPost: { sourceThreadId: 'thread_abc12345xyz' } },
     };
-    expect(parseDirection(msg, getMocks)).toEqual({
+    expect(parseDirection(msg, getMocks, 'thread_target')).toEqual({
       type: 'crossPost',
       targets: ['abc12345'],
       arrow: '↗',
     });
+  });
+
+  it('does not render legacy self-referential crossPost metadata as a cross-thread direction', () => {
+    const msg = {
+      origin: 'callback' as const,
+      content: 'same-thread coordination callback',
+      extra: { crossPost: { sourceThreadId: 'thread_same' } },
+    };
+    expect(parseDirection(msg, getMocks, 'thread_same')).toBeNull();
   });
 
   it('parses whisper direction from whisperTo (highest priority)', () => {
@@ -143,7 +152,7 @@ describe('parseDirection', () => {
     // getMentionToCat maps @co-creator/@co-creator to __co-creator__ — must not leak into UI
     const ownerToCat: Record<string, string> = {
       ...mockToCat,
-      landy: '__co-creator__',
+      operator: '__co-creator__',
       'co-creator': '__co-creator__',
     };
     const ownerAliases = Object.keys(ownerToCat).sort((a, b) => b.length - a.length);

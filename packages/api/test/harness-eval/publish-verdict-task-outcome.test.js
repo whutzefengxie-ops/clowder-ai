@@ -7,6 +7,7 @@ import { EventMemoryStore } from '../../dist/domains/memory/EventMemoryStore.js'
 import { handlePublishVerdict } from '../../dist/infrastructure/harness-eval/publish-verdict/publish-verdict.js';
 import { createTaskOutcomeGeneratorAdapter } from '../../dist/infrastructure/harness-eval/publish-verdict/task-outcome-generator-adapter.js';
 import { TaskOutcomeEpisodeStore } from '../../dist/infrastructure/harness-eval/task-outcome/task-outcome-store.js';
+import { seedCanonicalMeasurementCensusState } from './publish-verdict-fixtures.js';
 
 const root = mkdtempSync(join(tmpdir(), 'publish-verdict-taskoutcome-'));
 const harnessFeedbackRoot = join(root, 'docs/harness-feedback');
@@ -81,7 +82,7 @@ async function seedWindow(taskOutcomeDbPath = join(root, 'task-outcome-episodes.
       relatedHarness: ['F227'],
       confidence: 'high',
     },
-    'you',
+    'operator',
   );
   return { baseMs, episodeId: ep.episodeId, taskOutcomeDbPath };
 }
@@ -112,12 +113,13 @@ function buildPacket(overrides = {}) {
 function buildMockGitPublisher(isoName, commitSha, prNumber) {
   return {
     async publishOnIsolatedWorktree(opts) {
-      const iso = join(root, '..', isoName);
+      const iso = join(root, isoName);
       mkdirSync(join(iso, 'docs', 'harness-feedback', 'eval-domains'), { recursive: true });
       writeFileSync(
         join(iso, 'docs', 'harness-feedback', 'eval-domains', 'eval-task-outcome.yaml'),
         readFileSync(join(harnessFeedbackRoot, 'eval-domains', 'eval-task-outcome.yaml'), 'utf8'),
       );
+      seedCanonicalMeasurementCensusState(iso);
       await (await opts.stage(iso)).afterPublish?.();
       rmSync(iso, { recursive: true, force: true });
       return { commitSha, prUrl: `https://github.com/zts212653/clowder-ai/pull/${prNumber}` };
@@ -145,7 +147,7 @@ describe('handlePublishVerdict end-to-end with task-outcome generator', () => {
         packet: buildPacket(),
         domain: 'eval:task-outcome',
         catId: 'opus-47',
-        ownerUserId: 'you',
+        ownerUserId: 'operator',
         sourceRefs: {
           kind: 'task-outcome-snapshot',
           windowStartMs: baseMs - 60_000,
@@ -178,7 +180,7 @@ describe('handlePublishVerdict end-to-end with task-outcome generator', () => {
         packet: buildPacket({ id: 'vhp-task-outcome-e2e-configured-db' }),
         domain: 'eval:task-outcome',
         catId: 'opus-47',
-        ownerUserId: 'you',
+        ownerUserId: 'operator',
         sourceRefs: {
           kind: 'task-outcome-snapshot',
           windowStartMs: baseMs - 60_000,
@@ -208,7 +210,7 @@ describe('handlePublishVerdict end-to-end with task-outcome generator', () => {
         packet: buildPacket({ id: 'vhp-task-outcome-e2e-writeback' }),
         domain: 'eval:task-outcome',
         catId: 'opus-47',
-        ownerUserId: 'you',
+        ownerUserId: 'operator',
         sourceRefs: {
           kind: 'task-outcome-snapshot',
           windowStartMs: seeded.baseMs - 60_000,
@@ -236,12 +238,13 @@ describe('handlePublishVerdict end-to-end with task-outcome generator', () => {
     const generator = createTaskOutcomeGeneratorAdapter();
     const failingGitPublisher = {
       async publishOnIsolatedWorktree(opts) {
-        const iso = join(root, '..', 'task-outcome-writeback-publish-fail-iso');
+        const iso = join(root, 'task-outcome-writeback-publish-fail-iso');
         mkdirSync(join(iso, 'docs', 'harness-feedback', 'eval-domains'), { recursive: true });
         writeFileSync(
           join(iso, 'docs', 'harness-feedback', 'eval-domains', 'eval-task-outcome.yaml'),
           readFileSync(join(harnessFeedbackRoot, 'eval-domains', 'eval-task-outcome.yaml'), 'utf8'),
         );
+        seedCanonicalMeasurementCensusState(iso);
         await opts.stage(iso);
         rmSync(iso, { recursive: true, force: true });
         throw new Error('simulated gh pr create failure');
@@ -258,7 +261,7 @@ describe('handlePublishVerdict end-to-end with task-outcome generator', () => {
         packet: buildPacket({ id: 'vhp-task-outcome-e2e-writeback-publish-fail' }),
         domain: 'eval:task-outcome',
         catId: 'opus-47',
-        ownerUserId: 'you',
+        ownerUserId: 'operator',
         sourceRefs: {
           kind: 'task-outcome-snapshot',
           windowStartMs: seeded.baseMs - 60_000,
@@ -298,7 +301,7 @@ describe('handlePublishVerdict end-to-end with task-outcome generator', () => {
         packet: buildPacket({ id: invalidVerdictId }),
         domain: 'eval:task-outcome',
         catId: 'opus-47',
-        ownerUserId: 'you',
+        ownerUserId: 'operator',
         sourceRefs: {
           kind: 'task-outcome-snapshot',
           windowStartMs: seeded.baseMs - 60_000,
@@ -332,7 +335,7 @@ describe('handlePublishVerdict end-to-end with task-outcome generator', () => {
         packet: buildPacket({ id: invalidVerdictId }),
         domain: 'eval:task-outcome',
         catId: 'opus-47',
-        ownerUserId: 'you',
+        ownerUserId: 'operator',
         sourceRefs: {
           kind: 'task-outcome-snapshot',
           windowStartMs: seeded.baseMs - 120_000,

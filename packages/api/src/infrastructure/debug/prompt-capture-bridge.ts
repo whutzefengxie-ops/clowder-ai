@@ -1,6 +1,9 @@
 /**
- * F153 Prompt X-Ray: Thin bridge between invoke-single-cat and PromptCaptureStore.
- * Fire-and-forget — never blocks invocation.
+ * F153 Prompt X-Ray legacy bridge.
+ *
+ * F299 Phase D removed every production caller. The export remains only so
+ * existing captures and compatibility tests can be read until the legacy ring
+ * expires; new invocations use transcript-owned request-generation evidence.
  *
  * AC-G10 (Phase G native L0 closure / KD-44): when the caller flags an F203
  * native-L0 provider, this bridge asynchronously fetches the compiled L0 via
@@ -57,9 +60,10 @@ export interface CaptureInput {
    * Test seam — replaces the L0 fetcher (default `compileL0ViaSubprocess`).
    * Production callers leave this undefined.
    */
-  nativeL0Fetcher?: (catId: string) => Promise<string>;
+  nativeL0Fetcher?: (catId: string, userId: string) => Promise<string>;
 }
 
+/** @deprecated F299 request generations are the sole production writer. */
 export function capturePromptIfEnabled(input: CaptureInput): void {
   if (!isPromptCaptureEnabled(input.catId)) return;
 
@@ -78,7 +82,7 @@ async function runCapture(input: CaptureInput): Promise<void> {
   if (input.nativeL0Provider) {
     const fetcher = input.nativeL0Fetcher ?? defaultFetcher;
     try {
-      const l0 = await fetcher(input.catId);
+      const l0 = await fetcher(input.catId, input.userId);
       if (l0 && l0.trim().length > 0) {
         nativeSystemPrompt = l0;
         nativeSystemPromptSource = 'f203-l0';
@@ -132,8 +136,8 @@ async function runCapture(input: CaptureInput): Promise<void> {
 }
 
 /** Default L0 fetcher — module-level so tests can override via input.nativeL0Fetcher. */
-async function defaultFetcher(catId: string): Promise<string> {
-  return compileL0ViaSubprocess({ catId });
+async function defaultFetcher(catId: string, userId: string): Promise<string> {
+  return compileL0ViaSubprocess({ catId, userId });
 }
 
 export function getPromptCaptureStore(): PromptCaptureStore {

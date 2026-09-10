@@ -1,3 +1,4 @@
+import { buildConciergeDraftPrompt, validateCapabilityTipInventory } from '@cat-cafe/shared';
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -55,6 +56,34 @@ describe('F244 CapabilityTipStrip', () => {
     vi.clearAllMocks();
   });
 
+  it('teaches the shipped F294 message-selection entry and export actions', () => {
+    const tip = (rawTips as readonly (SeedTip & { body?: string })[]).find(
+      (candidate) => candidate.id === 'feature-f294-selective-message-bundles',
+    );
+
+    expect(tip).toBeDefined();
+    expect(tip?.body).toContain('多选消息');
+    expect(tip?.body).toContain('导出');
+    expect(tip?.body).toContain('目标 Thread');
+    expect(tip?.body).toContain('接收猫');
+    expect(tip?.body).toContain('合并卡');
+    expect(tip?.body).not.toContain('从消息的“更多”');
+    expect(tip?.body).not.toContain('移动端长按进入多选');
+  });
+
+  it('teaches that F277 Groups are created deliberately and do not change the default list', () => {
+    const tip = (rawTips as readonly (SeedTip & { body?: string })[]).find(
+      (candidate) => candidate.id === 'feature-f277-thread-attention-navigation',
+    );
+
+    expect(tip).toBeDefined();
+    expect(tip?.body).toContain('长按');
+    expect(tip?.body).toContain('拖');
+    expect(tip?.body).toContain('Group');
+    expect(tip?.body).toContain('默认');
+    expect(tip?.body).not.toContain('相关对话会在侧边栏收成');
+  });
+
   it('shimmer placeholder has accessible status label (not hidden by aria-hidden)', async () => {
     await render(
       <CapabilityTipStrip
@@ -86,15 +115,16 @@ describe('F244 CapabilityTipStrip', () => {
     );
     // Container renders immediately (with shimmer placeholder)
     expect(container.querySelector('[data-testid="capability-tip-strip"]')).not.toBeNull();
-    // But no tip content yet (no "Tip" label, no "了解更多" button)
-    expect(container.querySelector('[data-testid="capability-tip-learn-more"]')).toBeNull();
+    // But no tip content or action yet.
+    const actionSelector = '[data-testid="capability-tip-learn-more"], [data-testid="capability-tip-open-surface"]';
+    expect(container.querySelector(actionSelector)).toBeNull();
 
     await act(async () => {
       vi.advanceTimersByTime(6000);
     });
     // After delay: tip content appears
     expect(container.querySelector('[data-testid="capability-tip-strip"]')).not.toBeNull();
-    expect(container.querySelector('[data-testid="capability-tip-learn-more"]')).not.toBeNull();
+    expect(container.querySelector(actionSelector)).not.toBeNull();
   });
 
   it('does not default omitted audience to all-only tips', async () => {
@@ -134,36 +164,40 @@ describe('F244 CapabilityTipStrip', () => {
 
   it('records the context that matched the selected tip', async () => {
     const recordCapabilityTipEventMock = vi.mocked(recordCapabilityTipEvent);
+    const contexts = ['pet_waiting_for_user', 'long_running'] as const;
 
     await render(
-      <CapabilityTipStrip
-        surface="assistant_stream_bubble"
-        contexts={['pet_waiting_for_user', 'long_running']}
-        firstDelayMs={0}
-        rotateMs={12000}
-      />,
+      <CapabilityTipStrip surface="assistant_stream_bubble" contexts={contexts} firstDelayMs={0} rotateMs={12000} />,
     );
     await act(async () => {
       vi.advanceTimersByTime(0);
       await Promise.resolve();
     });
 
+    const tipId = container.querySelector('[data-testid="capability-tip-strip"]')?.getAttribute('data-tip-id');
+    const selectedTip = (rawTips as readonly SeedTip[]).find((tip) => tip.id === tipId);
+    const matchedContext = contexts.find((context) => selectedTip?.contexts.includes(context));
+    expect(matchedContext).toBeDefined();
+
     expect(recordCapabilityTipEventMock).toHaveBeenCalledWith(
       expect.objectContaining({
         event: 'capability_tip_exposed',
-        context: 'long_running',
+        context: matchedContext,
       }),
     );
 
-    const button = container.querySelector('[data-testid="capability-tip-learn-more"]') as HTMLButtonElement | null;
+    const actionControl = container.querySelector<HTMLElement>(
+      '[data-testid="capability-tip-learn-more"], [data-testid="capability-tip-open-surface"]',
+    );
+    expect(actionControl).not.toBeNull();
     act(() => {
-      button?.click();
+      actionControl?.click();
     });
 
     expect(recordCapabilityTipEventMock).toHaveBeenCalledWith(
       expect.objectContaining({
         event: 'capability_tip_action',
-        context: 'long_running',
+        context: matchedContext,
       }),
     );
   });
@@ -233,6 +267,11 @@ describe('F244 CapabilityTipStrip', () => {
       vi.advanceTimersByTime(0);
     });
 
+    // Read which tip was actually selected — inventory order may change as tips are added.
+    const strip = container.querySelector('[data-testid="capability-tip-strip"]');
+    const selectedTipId = strip?.getAttribute('data-tip-id');
+    expect(selectedTipId).toBeTruthy();
+
     const button = container.querySelector('[data-testid="capability-tip-learn-more"]') as HTMLButtonElement | null;
     expect(button).not.toBeNull();
     expect(button?.getAttribute('title')).toContain('不会自动发送');
@@ -243,7 +282,14 @@ describe('F244 CapabilityTipStrip', () => {
 
     const state = useConciergeStore.getState();
     expect(state.surfaceState).toBe('bubble');
-    expect(state.pendingPrompt).toContain('解释这个 tip');
-    expect(state.pendingPrompt).toContain('tipId');
+
+    // Assert the draft matches buildConciergeDraftPrompt for the actual selected tip.
+    // Covers both custom draftPrompt and fallback paths without locking into inventory order.
+    const parsedInventory = validateCapabilityTipInventory(rawTips);
+    if (!parsedInventory.success) throw new Error('Inventory is invalid');
+    const parsedTips = parsedInventory.tips ?? [];
+    const selectedTip = parsedTips.find((t) => t.id === selectedTipId);
+    if (!selectedTip) throw new Error(`Selected tip not found: ${selectedTipId}`);
+    expect(state.pendingPrompt).toBe(buildConciergeDraftPrompt(selectedTip));
   });
 });

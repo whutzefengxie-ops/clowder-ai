@@ -1,11 +1,7 @@
 ---
 name: rich-messaging
-tips_exempt: file kind docs sync only — existing capability-rich-messaging tip covers the skill; sourceRef stays at wakeup-index
-description: >
-  富媒体消息发送：语音、图片、卡片、清单、代码 diff、交互选择。
-  Use when: 发语音、发图、发卡片、展示结构化信息、长结构化汇报、想发一堆文字/日志/步骤、庆祝、给我听听、给我看看、让用户选、确认操作。
-  Not for: 纯文字聊天、技术讨论、日常回复。
-  Output: rich block 附着在消息上。
+tips_exempt: Chat-visible delivery routing extends the existing capability-rich-messaging tip; sourceRef stays at wakeup-index
+description: 在当前 Chat 直接交付可看、可听或可操作产物（语音、图片、截图、HTML/demo、卡片、清单、diff、交互选择），无需用户说“富文本”；纯文字与讨论/修改 HTML 源码不使用，复杂 localhost 应用用 browser-preview。
 triggers:
   - "发语音"
   - "说一句"
@@ -18,6 +14,9 @@ triggers:
   - "看图"
   - "截图给我看"
   - "screenshot"
+  - "画个 HTML 展示"
+  - "做个 demo 给我看"
+  - "在 Chat 里展示"
   - "发个卡片"
   - "rich block"
   - "checklist"
@@ -48,6 +47,19 @@ triggers:
 
 **每个 session 首次发 rich block 前，先调 `get_rich_block_rules` 获取完整字段规格。**
 本 skill 只给决策指引和最小示例，细则在 MCP 工具里。
+
+## 默认触发：Chat 内可见交付
+
+统一判断不是用户有没有说“富文本”，而是：**用户是否要在当前 Clowder AI Chat 里直接看到、听到或操作结果。** 命中时，生成一个本地文件或贴源码路径都不算完成；产物必须进入 rich block 或 Browser panel。不要求用户说出“富文本”这个实现词。
+
+| 用户真正要的交付 | 默认执行面 |
+|---|---|
+| 自包含 HTML、demo、图表、计算器、小交互 | `html_widget` |
+| 已有截图、图片、设计稿或多图对比 | `media_gallery` |
+| 复杂 localhost 页面、多组件或多页面应用 | `browser-preview` |
+| 需要新生成一张图片 | `image-generation`，生成后仍要发布回 Chat |
+
+反例：讨论 HTML 渲染原理、修改 `index.html`、review 一段前端源码，不等于要求可视交付，不应自动发 rich block。灰例“做完整页面让我看”默认走 `browser-preview`，不是把完整应用硬塞进 `html_widget`。
 
 ## 默认触发：长结构化汇报
 
@@ -111,7 +123,7 @@ triggers:
 ```
 
 4 种 interactiveType：`select`（单选）、`multi-select`（多选）、`card-grid`（卡片网格）、`confirm`（确认/取消）。
-用户选择后 block 自动 disabled + 结果持久化。详见 `refs/rich-blocks.md`。
+用户选择后 block 自动 disabled + 结果持久化。详见 `../.cat-cafe-shared-refs/rich-blocks.md`。
 
 ### 内联 HTML Widget（html_widget）
 
@@ -123,6 +135,21 @@ operator拍板："简单的用富文本，复杂的用猫主动打开浏览器�
 - 用 sandboxed iframe `srcdoc` 渲染，**禁止** `allow-same-origin`（比 browser panel 更严格）
 - 适合：Chart.js 图表、CSS 动画、计算器等纯前端组件
 - 不适合：需要网络请求、需要访问外部资源的复杂应用（那些用 `browser-preview` skill）
+
+#### 内联 `on*` 会被剥掉
+
+DOMPurify 静默剥掉所有 `on*` 属性——widget 照常渲染，点击不生效，不报错。`<script>` 保留，从里面绑事件：
+
+```html
+<!-- 不行：onclick 被剥掉 -->
+<button onclick="show()">点我</button>
+
+<!-- 可以：从 <script> 绑 -->
+<button id="btn">点我</button>
+<script>document.getElementById('btn').addEventListener('click', e => e.target.textContent = '点了')</script>
+```
+
+轻交互用 `<details><summary>` 或 CSS `:hover`，不用 JS。
 
 ## 发送方式
 
@@ -151,7 +178,7 @@ operator拍板："简单的用富文本，复杂的用猫主动打开浏览器�
 
 1. **先文字后块** — 先用 `post_message` 写 1-2 句自然语言，再发 rich block
 2. **audio 只说短句** — 口语化、1-2 句，不要长篇朗读
-3. **不确定就纯文本** — 不知道该用哪种 block？那就别用
+3. **先判交付面，再判 block** — 只有交付意图本身不清楚时才退回纯文本；不能因为用户没说“富文本”就退回
 
 ## 常见错误
 
@@ -169,9 +196,9 @@ operator拍板："简单的用富文本，复杂的用猫主动打开浏览器�
 ## 和其他 skill 的区别
 
 - `request-review` / `quality-gate`：这些 skill 的**产出**可能包含 card/checklist block，但**何时用 block、怎么调**看这个 skill
-- `refs/rich-blocks.md`：更详细的字段规格参考，本 skill 是精简决策版
+- `../.cat-cafe-shared-refs/rich-blocks.md`：更详细的字段规格参考，本 skill 是精简决策版
 
 ## 参考
 
-- 完整字段规格：`refs/rich-blocks.md`
+- 完整字段规格：`../.cat-cafe-shared-refs/rich-blocks.md`
 - MCP 工具实时规则：`get_rich_block_rules`

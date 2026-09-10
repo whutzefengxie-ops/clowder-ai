@@ -6,12 +6,25 @@
  * subsequent PR-C).
  */
 
-import type { CatId } from '@cat-cafe/shared';
+import type { CatId, CloudBridgeFailureDiagnosticV1, CloudBridgeOutboundReceiptV1 } from '@cat-cafe/shared';
+
+/**
+ * Server-authored provenance for one exact cloud dispatch child.
+ *
+ * Queue carriers preserve this value unchanged; route layers must not
+ * reconstruct it from display text or the current queue row.
+ */
+export interface CloudDispatchProvenance {
+  readonly sourceMessageId: string;
+  readonly sourceSender: CloudBridgeOutboundReceiptV1['sourceSender'];
+  readonly calledByCatId: CatId;
+  readonly intent: string;
+}
 
 /**
  * Parameters passed to the bridge when a local cat @ mentions a cloud cat.
  *
- * The bridge uses these to build a 5-field thread runtime delta payload
+ * The bridge uses these to build a source-bound thread runtime delta payload
  * (KD-21 / AC-B1c-12) and inject it into the cloud cat's ChatGPT chat.
  */
 export interface CloudInvokeDispatchParams {
@@ -37,6 +50,8 @@ export interface CloudInvokeDispatchParams {
    * builder, not by the caller).
    */
   readonly intent: string;
+  /** Exact persisted source message ID: return anchor and Host idempotency key. */
+  readonly sourceMessageId: string;
 }
 
 /**
@@ -85,17 +100,44 @@ export interface IPinchTabBridgeAdapter {
  * Bridge dispatch outcome — observable for tests + logging.
  */
 export type BridgeDispatchOutcome =
-  | { readonly kind: 'sent'; readonly capturedUrl: string }
-  | { readonly kind: 'fallback'; readonly reason: BridgeFallbackReason }
-  | { readonly kind: 'error'; readonly message: string };
+  | {
+      readonly kind: 'sent';
+      readonly capturedUrl: string;
+      readonly transport?: 'host' | 'legacy-pinchtab';
+      readonly hostMessageId?: string;
+      readonly idempotentReplay?: boolean;
+    }
+  | {
+      readonly kind: 'fallback';
+      readonly reason: BridgeFallbackReason;
+      readonly detail?: string;
+      readonly idempotentReplay?: boolean;
+    }
+  | {
+      readonly kind: 'error';
+      readonly reason: Extract<BridgeFallbackReason, 'host-append-failed' | 'inject-failed'>;
+      readonly message: string;
+      readonly detail?: string;
+      readonly idempotentReplay?: boolean;
+      readonly failureDiagnostic?: CloudBridgeFailureDiagnosticV1;
+    };
 
-export type BridgeFallbackReason = 'adapter-not-ready' | 'no-adapter' | 'invalid-captured-url' | 'inject-failed';
+export type BridgeFallbackReason =
+  | 'adapter-not-ready'
+  | 'no-adapter'
+  | 'needs-binding'
+  | 'invalid-captured-url'
+  | 'inject-failed'
+  | 'host-append-failed'
+  | 'missing-source-message-id'
+  | 'incomplete-dispatch-provenance'
+  | 'legacy-delivery-unverified';
 
 /**
- * The cloud invoke bridge — invoked fire-and-forget from `invokeSingleCat`
- * when KD-17 guard fires. Implementation is responsible for:
+ * The cloud invoke bridge — awaited by `invokeSingleCat` only until a bounded
+ * transport receipt/failure is known. Implementation is responsible for:
  *
- *  1. Building the 5-field delta payload (AC-B1c-12) with JSON.stringify
+ *  1. Building the source-bound delta payload (AC-B1c-12) with JSON.stringify
  *     safety (AC-B1c-10).
  *  2. Reading the binding from the thread metadata.
  *  3. Invoking the PinchTab adapter (if ready) — AC-B1c-3 in PR-C.
@@ -103,9 +145,11 @@ export type BridgeFallbackReason = 'adapter-not-ready' | 'no-adapter' | 'invalid
  *  5. Emitting a `system_info` fallback notification to the local thread
  *     when adapter is unreachable / errors (AC-B1c-4).
  *
- * The interface returns `void` because `invokeSingleCat` MUST NOT block on
- * bridge dispatch — fire-and-forget per AC-B1c-2.
+ * The interface returns the bounded transport outcome. The local invocation
+ * waits only for this receipt/failure boundary — never for the cloud cat's
+ * eventual MCP response — so it can publish one truthful status and settle
+ * the exact source carrier.
  */
 export interface ICloudInvokeBridge {
-  dispatch(params: CloudInvokeDispatchParams): Promise<void>;
+  dispatch(params: CloudInvokeDispatchParams): Promise<BridgeDispatchOutcome>;
 }

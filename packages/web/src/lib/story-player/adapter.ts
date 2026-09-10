@@ -15,6 +15,7 @@ import {
   formatSessionSealRequested,
   formatVisibleSystemInfo,
 } from '@/hooks/system-info-visible';
+import { resolveProviderSemanticMessage } from '@/lib/provider-semantic-registry';
 import type { RawTranscriptEvent, ReplayEvent, ReplayEventType } from './types';
 
 // ---------------------------------------------------------------------------
@@ -87,6 +88,16 @@ function classifyEvent(
   evtType: string,
   event: Record<string, unknown>,
 ): { replayType: ReplayEventType; role: string; contentOverride?: string } | null {
+  const extra =
+    typeof event.extra === 'object' && event.extra !== null ? (event.extra as Record<string, unknown>) : null;
+  const semanticCandidate = event.semanticEvent ?? extra?.semanticEvent;
+  if (semanticCandidate !== undefined) {
+    const semantic = resolveProviderSemanticMessage(semanticCandidate);
+    if (semantic.action === 'suppress') return null;
+    if (semantic.action === 'replace') {
+      return { replayType: 'system', role: 'system', contentOverride: semantic.projection.content };
+    }
+  }
   if (MESSAGE_TYPES.has(evtType)) {
     return { replayType: 'message', role: TYPE_TO_ROLE[evtType] ?? evtType };
   }
@@ -95,6 +106,9 @@ function classifyEvent(
   }
   if (evtType === 'thinking') {
     return { replayType: 'thinking', role: 'assistant' };
+  }
+  if (evtType === 'cli_stdout') {
+    return { replayType: 'cli_stdout', role: 'assistant' };
   }
   // system_info may carry thinking content as JSON: { type: 'thinking', text: '...' }.
   // Some system_info payloads are visible live-chat notices; format them through

@@ -2,8 +2,7 @@
 
 import { useCallback, useMemo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import type { UploadStatus, WhisperOptions } from '@/hooks/useSendMessage';
-import type { DeliveryMode } from '@/stores/chat-types';
+import { type UploadStatus, useSendMessage } from '@/hooks/useSendMessage';
 import { type Thread, useChatStore } from '@/stores/chatStore';
 import { ChatInput } from './ChatInput';
 import { PawIcon } from './icons/PawIcon';
@@ -11,15 +10,8 @@ import { MiniThreadSidebar } from './MiniThreadSidebar';
 import { SplitPaneCell, SplitPanePlaceholder } from './SplitPaneCell';
 
 interface SplitPaneViewProps {
-  onSend: (
-    content: string,
-    images?: File[],
-    overrideThreadId?: string,
-    whisper?: WhisperOptions,
-    deliveryMode?: DeliveryMode,
-    replyToId?: string,
-  ) => void;
-  onStop: (overrideThreadId?: string) => void;
+  isReadonly?: boolean;
+  onSend: ReturnType<typeof useSendMessage>['handleSend'];
   uploadStatus?: UploadStatus;
   uploadError?: string | null;
   /** Switch from split to single mode, focusing the given thread */
@@ -32,7 +24,13 @@ const PANE_COUNT = 4;
  * Split-pane mode: 2x2 grid of mini chat views + mini sidebar + shared input.
  * The shared input bar sends to the currently selected pane (splitPaneTargetId).
  */
-export function SplitPaneView({ onSend, onStop, uploadStatus, uploadError, onZoomToThread }: SplitPaneViewProps) {
+export function SplitPaneView({
+  isReadonly = false,
+  onSend,
+  uploadStatus,
+  uploadError,
+  onZoomToThread,
+}: SplitPaneViewProps) {
   const { threads, splitPaneThreadIds, splitPaneTargetId, setSplitPaneTarget, setSplitPaneThreadIds, getThreadState } =
     useChatStore(
       useShallow((s) => ({
@@ -84,9 +82,6 @@ export function SplitPaneView({ onSend, onStop, uploadStatus, uploadError, onZoo
     },
     [splitPaneThreadIds, splitPaneTargetId, paneSlots, setSplitPaneThreadIds, setSplitPaneTarget],
   );
-
-  const targetThreadState = splitPaneTargetId ? getThreadState(splitPaneTargetId) : null;
-  const isTargetActiveInvocation = targetThreadState?.hasActiveInvocation ?? false;
 
   const handleBackToSingle = useCallback(() => {
     const target = splitPaneTargetId ?? splitPaneThreadIds[0];
@@ -156,12 +151,29 @@ export function SplitPaneView({ onSend, onStop, uploadStatus, uploadError, onZoo
             <ChatInput
               key={splitPaneTargetId ?? 'no-target'}
               threadId={splitPaneTargetId ?? undefined}
-              onSend={(content, images, whisper, deliveryMode, replyToId) =>
-                onSend(content, images, splitPaneTargetId ?? undefined, whisper, deliveryMode, replyToId)
+              onSend={(content, images, whisper, deliveryMode, replyToId, messageDisposition, contextAttachments) =>
+                contextAttachments?.length
+                  ? onSend(
+                      content,
+                      images,
+                      splitPaneTargetId ?? undefined,
+                      whisper,
+                      deliveryMode,
+                      replyToId,
+                      messageDisposition,
+                      contextAttachments,
+                    )
+                  : onSend(
+                      content,
+                      images,
+                      splitPaneTargetId ?? undefined,
+                      whisper,
+                      deliveryMode,
+                      replyToId,
+                      messageDisposition,
+                    )
               }
-              onStop={() => onStop(splitPaneTargetId ?? undefined)}
-              disabled={!splitPaneTargetId}
-              hasActiveInvocation={isTargetActiveInvocation}
+              disabled={!splitPaneTargetId || isReadonly}
               uploadStatus={uploadStatus}
               uploadError={uploadError}
             />
@@ -170,4 +182,12 @@ export function SplitPaneView({ onSend, onStop, uploadStatus, uploadError, onZoo
       </div>
     </div>
   );
+}
+
+type SplitPaneChatViewProps = Pick<SplitPaneViewProps, 'isReadonly' | 'onZoomToThread'>;
+
+/** Production split-preview adapter: one target-aware send lifecycle for its shared composer. */
+export function SplitPaneChatView(props: SplitPaneChatViewProps) {
+  const { handleSend, uploadStatus, uploadError } = useSendMessage();
+  return <SplitPaneView {...props} onSend={handleSend} uploadStatus={uploadStatus} uploadError={uploadError} />;
 }

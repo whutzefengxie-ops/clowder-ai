@@ -37,10 +37,18 @@
  */
 
 import { accessSync, existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { catRegistry } from '@cat-cafe/shared';
-import { getDossierRosterSummary, hasDossierEntry } from '@cat-cafe/shared/dossier';
+import { getDossierL0Pronouns, getDossierL0RoutingNote, getDossierL0SelfDescription } from '@cat-cafe/shared/dossier';
+import {
+  CURRENT_RELATIONSHIP_PROFILE_URI,
+  DEFAULT_PROFILE_USER_ID,
+  profileUserRelativePath,
+  relationshipPrimerRelativePath,
+  renderUserCapsuleSection,
+} from '@cat-cafe/shared/profile-contract';
 import YAML from 'yaml';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -161,6 +169,17 @@ export function filterAvailableTeammates(allConfigs, currentCatId, isAvailableFn
   return Object.entries(allConfigs).filter(([id]) => id !== currentCatId && isAvailableFn(id));
 }
 
+/**
+ * Relationship persona ownership is explicit catalog data. UI breed grouping,
+ * model names, and client providers are not stable identity boundaries.
+ */
+export function resolveRelationshipKey(config, catId) {
+  if (!config.relationshipKey) {
+    throw new Error(`No relationshipKey configured for catId "${catId}"; refusing breed/model inference`);
+  }
+  return config.relationshipKey;
+}
+
 function workflowTriggersBasePath(filename) {
   return resolve(PROMPT_TEMPLATES_DIR, filename);
 }
@@ -223,8 +242,13 @@ function buildIdentityBlock(config, runtimeModel) {
   if (config.nickname) {
     lines.push(`昵称 "${config.nickname}" 的由来见 \`docs/stories/cat-names/\`。`);
   }
-  lines.push(`角色：${config.roleDescription}`);
-  lines.push(`性格：${config.personality}`);
+  const selfDescription = getDossierL0SelfDescription(config.catId, REPO_ROOT);
+  if (selfDescription) {
+    lines.push(`角色与自我校准：${selfDescription}`);
+  } else {
+    lines.push(`角色：${config.roleDescription}`);
+    lines.push(`性格：${config.personality}`);
+  }
   // Bug fix: CLI 不传 runtimeModel 导致 L0 缺模型号，猫读 CLAUDE.md 硬编码签名出错。
   // fallback 链：runtimeModel（显式传入）> resolveModel（env override）> defaultModel。
   const resolvedModel = runtimeModel || resolveModel(config.catId ?? '', config);
@@ -263,20 +287,21 @@ function buildRosterRow(id, cfg) {
   const mention = cfg.mentionPatterns?.[0] ?? `@${id}`;
   const model = resolveModel(id, cfg);
   const cell = model ? `${mention} · ${model}` : mention;
-  // F208 KD-12: dossier l0RosterSummary → legacy teamStrengths → roleDescription
-  const dossierSummary = getDossierRosterSummary(id, REPO_ROOT);
-  // KD-9: warn only for tracked cats (have dossier entry) missing l0RosterSummary.
-  // Runtime/custom cats with no dossier entry silently use config fallback.
-  if (!dossierSummary && hasDossierEntry(id, REPO_ROOT)) {
-    console.warn(
-      `[F208 KD-9] cat "${id}" has dossier entry but missing l0RosterSummary — falling back to config.teamStrengths`,
-    );
-  }
-  const strengths = dossierSummary ?? cfg.teamStrengths ?? cfg.roleDescription;
+  const pronouns = getDossierL0Pronouns(id, REPO_ROOT)?.split('/')[0]?.trim();
+  // Chinese L0 only needs the Chinese pronoun. The dossier marker limits this
+  // scarce surface to evidence-backed repeat failures instead of every profile.
+  // Prefer the shorter nickname for marked rows so the reminder is token-negative.
+  const baseLabel = rosterLabel(cfg);
+  const label = pronouns ? `${cfg.nickname ?? baseLabel}（${pronouns}）` : baseLabel;
   const hasRestrictions = cfg.restrictions && cfg.restrictions.length > 0;
   const restrictions = hasRestrictions ? `**硬限制**：${cfg.restrictions.join('、')}` : null;
-  const caution = [cfg.caution ?? null, restrictions].filter(Boolean).join('；') || '—';
-  return `| ${rosterLabel(cfg)} | ${cell} | ${strengths} | ${caution} |`;
+  // F234 Phase L0-GD: the always-on roster is a routing contract, not a
+  // capability dossier. Prefer the explicit compact route note; keep config
+  // caution as a compatibility fallback for runtime/custom cats that have not
+  // yet acquired a structured dossier profile. Hard restrictions always stay.
+  const routingNote = getDossierL0RoutingNote(id, REPO_ROOT) ?? cfg.caution;
+  const routeContract = [routingNote, restrictions].filter(Boolean).join('；') || '—';
+  return `| ${label} | ${cell} | ${routeContract} |`;
 }
 
 function buildTeammateRoster(currentCatId) {
@@ -288,11 +313,21 @@ function buildTeammateRoster(currentCatId) {
   );
   if (teammates.length === 0) return '（无其他可用队友）';
 
-  const rows = ['## 队友名册', '| 猫猫 | @mention · 当前模型 | 擅长 | 注意 |', '|------|---------|------|------|'];
+  const rows = ['## 队友名册', '| 猫猫 | @mention · 当前模型 | 路由边界 |', '|------|---------|------|'];
   for (const [id, cfg] of teammates) {
     rows.push(buildRosterRow(id, cfg));
   }
   return rows.join('\n');
+}
+
+/**
+ * Resolve the production L0 coverage cohort from the same catalog/availability
+ * truth used by compilation. Tests and diagnostics must not maintain a second
+ * hand-written cat list.
+ */
+export async function getAvailableL0CatIds() {
+  await bootstrapCatRegistry();
+  return Object.keys(catRegistry.getAllConfigs()).filter((id) => _isCatAvailable(id, _loadedConfig));
 }
 
 // F203 Phase B fix: 现有 SystemPromptBuilder.ts:554 对 breedId 不在
@@ -329,112 +364,49 @@ function renderCvoRef() {
 
 // ─── F231: User profile capsule resolution ────────────────────────────────
 // Contract (F231 spec KD-7 + Phase A plan §三):
-//   profileDir priority: function param > env CAT_CAFE_PROFILE_DIR > default 'private/profile'
-//   capsulePath = join(profileDir, 'landy-capsule.md')
+//   profileDir is supplied by the canonical data-root repository; this compiler never guesses cwd.
+//   capsulePath = join(profileDir, 'operator-capsule.md')
 //   Three states:
 //     missing/unreadable → '' (empty string, no heading — backward compat)
 //     ≤300 Unicode chars  → '## 主人画像\n\n{body}' + optional primer pointer
 //     >300 Unicode chars  → throw (compilation must fail loudly)
-//   Primer pointer: if relationship/{catId}-primer.md exists → append reference line
+//   Primer pointer: if relationship/{relationshipKey}-primer.md exists → append logical URI
 //   Pointer line does NOT count toward 300-char limit.
-
-const USER_CAPSULE_CHAR_LIMIT = 300;
-
-/**
- * Strip metadata (YAML frontmatter or markdown heading/blockquote metadata)
- * from capsule content. Returns the body after the metadata-terminating `---`.
- *
- * Handles both formats:
- *   YAML:     ---\nkey: val\n---\nbody   → body (after 2nd ---)
- *   Markdown: # Title\n> meta\n---\nbody → body (after 1st ---)
- *
- * If no `---` separator found, returns the entire content trimmed.
- *
- * IMPORTANT (gpt52 review P1): uses FIRST metadata-terminating `---`, NOT last.
- * "Last ---" would silently eat body content if the capsule contains `---`
- * horizontal rules (e.g. "Body one\n---\nBody two" → only "Body two").
- */
-function stripCapsuleMetadata(raw) {
-  const lines = raw.trim().split('\n');
-
-  // Case 1: YAML frontmatter — starts with `---` on line 0
-  if (lines[0].trim() === '---') {
-    // Find closing `---` (skip line 0, the opening fence)
-    for (let i = 1; i < lines.length; i++) {
-      if (lines[i].trim() === '---') {
-        return lines
-          .slice(i + 1)
-          .join('\n')
-          .trim();
-      }
-    }
-    // Unclosed YAML frontmatter → treat everything after line 0 as body
-    return lines.slice(1).join('\n').trim();
-  }
-
-  // Case 2: Heading/blockquote metadata (# Title / > meta / ---)
-  // Find FIRST `---` separator — that terminates the metadata block
-  for (let i = 0; i < lines.length; i++) {
-    if (lines[i].trim() === '---') {
-      return lines
-        .slice(i + 1)
-        .join('\n')
-        .trim();
-    }
-  }
-
-  // No metadata separator found → return entire content
-  return raw.trim();
-}
 
 /**
  * Resolve user profile capsule for L0 injection.
  *
- * @param {string} profileDir - directory containing landy-capsule.md
- * @param {string} catId - current cat ID (for primer pointer lookup)
- * @returns {string} formatted injection section, or '' if capsule missing
+ * @param {string} profileDir - directory containing operator-capsule.md
+ * @param {string} relationshipKey - stable persona key from CatConfig.relationshipKey
+ * @returns {string} available capsule section and/or logical relationship-profile pointer
  * @throws {Error} if capsule exceeds 300 Unicode characters
  */
-export function resolveUserCapsule(profileDir, catId) {
-  const capsulePath = resolve(profileDir, 'landy-capsule.md');
+export function resolveUserCapsule(profileDir, relationshipKey) {
+  const capsulePath = resolve(profileDir, 'operator-capsule.md');
+  const primerPath = resolve(profileDir, relationshipPrimerRelativePath(relationshipKey));
+  let primerEntry = '';
+  try {
+    accessSync(primerPath);
+    primerEntry = `关系轨迹: ${CURRENT_RELATIONSHIP_PROFILE_URI}（cat_cafe_read_profile 按需读）`;
+  } catch {
+    // No primer for this persona — no pointer line.
+  }
 
-  // State 1: missing / unreadable → empty (backward compat for community users)
+  // State 1: missing / unreadable → primer entry only, if one exists.
+  // Capsule and primer are independently optional profile layers.
   let raw;
   try {
     raw = readFileSync(capsulePath, 'utf8');
   } catch {
-    return '';
+    return primerEntry;
   }
 
-  // Strip metadata (YAML frontmatter or markdown heading/blockquote metadata)
-  const body = stripCapsuleMetadata(raw);
-  if (!body) return '';
-
-  // Count visible characters (Chinese "字数" convention):
-  // Letters, CJK chars, punctuation count; whitespace does not.
-  // This matches spec intent: "300字" = 300 visible chars, not 300 code points.
-  const charCount = [...body.replace(/\s/g, '')].length;
-
-  // State 3: overlong → throw (compilation must fail loudly per KD-7)
-  if (charCount > USER_CAPSULE_CHAR_LIMIT) {
-    throw new Error(
-      `USER_CAPSULE exceeds ${USER_CAPSULE_CHAR_LIMIT}-character limit: ${charCount} characters in ${capsulePath}. ` +
-        `Capsule must be ≤${USER_CAPSULE_CHAR_LIMIT} chars (KD-7). Trim content or move overflow to primer.`,
-    );
-  }
-
-  // State 2: valid → build section with heading
-  let section = `## 主人画像\n\n${body}`;
-
-  // Primer pointer: check if relationship/{catId}-primer.md exists
-  const primerPath = resolve(profileDir, `relationship/${catId}-primer.md`);
-  try {
-    accessSync(primerPath);
-    // Use standard logical path (not fixture path) for human-readable pointer
-    section += `\n\n关系轨迹: private/profile/relationship/${catId}-primer.md（开局可读，按需 recall）`;
-  } catch {
-    // No primer for this cat — no pointer line
-  }
+  // The same pure transform is used by F299 when binding durable profile
+  // evidence, so the sourceRef describes these exact bytes rather than a
+  // later profile revision.
+  let section = renderUserCapsuleSection(raw);
+  if (!section) return primerEntry;
+  if (primerEntry) section += `\n\n${primerEntry}`;
 
   return section;
 }
@@ -465,12 +437,14 @@ export async function compileL0(options) {
     .join('\n');
   const governanceL0 = await _loadCompiledGovernanceL0(REPO_ROOT);
 
-  // F231: resolve user capsule (profileDir > env > default 'private/profile')
-  // Note: REPO_ROOT default only works when script runs from actual project dir.
-  // In symlink/packaged layouts, caller (l0-compiler.ts) passes --profile-dir
-  // explicitly via subprocess args (gpt52 review P1 fix).
-  const resolvedProfileDir = profileDir ?? process.env.CAT_CAFE_PROFILE_DIR ?? resolve(REPO_ROOT, 'private/profile');
-  const capsuleSection = resolveUserCapsule(resolvedProfileDir, catId);
+  // Runtime callers pass a user-scoped profileDir. Direct compiles use the same
+  // canonical repository contract for the default user; legacy worktree-local
+  // private/profile trees are migration inputs only.
+  const canonicalDataDir = resolve(process.env.CAT_CAFE_DATA_DIR ?? resolve(homedir(), '.cat-cafe'));
+  const resolvedProfileDir =
+    profileDir ?? resolve(canonicalDataDir, ...profileUserRelativePath(DEFAULT_PROFILE_USER_ID).split('/'));
+  const relationshipKey = resolveRelationshipKey(config, catId);
+  const capsuleSection = resolveUserCapsule(resolvedProfileDir, relationshipKey);
 
   // Load L1-L7 section templates (static content extracted to individual files)
   let result = template;

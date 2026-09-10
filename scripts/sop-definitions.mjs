@@ -15,8 +15,11 @@ const STUB_DIR = 'sop-definitions/stubs';
 const VALID_SEVERITIES = new Set(['blocker', 'warn', 'info']);
 const VALID_OWNER_TYPES = new Set(['stage_suggested_skill', 'skill']);
 const VALID_PREDICATE_TYPES = new Set([
+  'changed_files_require_command',
+  'co_creation_docs_lane',
   'command_pattern',
   'command_sequence',
+  'design_gate_evidence',
   'sha_dedup',
   'env_check',
   'git_state_predicate',
@@ -24,40 +27,29 @@ const VALID_PREDICATE_TYPES = new Set([
   'manual_only',
 ]);
 
+const PREDICATE_KEY_ALIASES = {
+  future_candidate: 'futureCandidate',
+  must_include: 'mustInclude',
+  must_not_include: 'mustNotInclude',
+  must_match: 'mustMatch',
+  must_not_match: 'mustNotMatch',
+  anti_pattern: 'antiPattern',
+  cwd_contains: 'cwdContains',
+  before_command: 'beforeCommand',
+  include_globs: 'includeGlobs',
+  classifier_required_globs: 'classifierRequiredGlobs',
+  exclude_globs: 'excludeGlobs',
+  classifier_match: 'classifierMatch',
+  worktree_match: 'worktreeMatch',
+  pull_request_match: 'pullRequestMatch',
+  cloud_review_match: 'cloudReviewMatch',
+  full_gate_match: 'fullGateMatch',
+  consumer_globs: 'consumerGlobs',
+  canonical_helper_pattern: 'canonicalHelperPattern',
+};
+
 function toCamelRule(raw, kind, stageSuggestedSkill) {
-  const predicate = raw?.predicate && typeof raw.predicate === 'object' ? { ...raw.predicate } : undefined;
-  if (predicate && Object.hasOwn(predicate, 'future_candidate')) {
-    predicate.futureCandidate = predicate.future_candidate;
-    delete predicate.future_candidate;
-  }
-  if (predicate && Object.hasOwn(predicate, 'must_include')) {
-    predicate.mustInclude = predicate.must_include;
-    delete predicate.must_include;
-  }
-  if (predicate && Object.hasOwn(predicate, 'must_not_include')) {
-    predicate.mustNotInclude = predicate.must_not_include;
-    delete predicate.must_not_include;
-  }
-  if (predicate && Object.hasOwn(predicate, 'must_match')) {
-    predicate.mustMatch = predicate.must_match;
-    delete predicate.must_match;
-  }
-  if (predicate && Object.hasOwn(predicate, 'must_not_match')) {
-    predicate.mustNotMatch = predicate.must_not_match;
-    delete predicate.must_not_match;
-  }
-  if (predicate && Object.hasOwn(predicate, 'anti_pattern')) {
-    predicate.antiPattern = predicate.anti_pattern;
-    delete predicate.anti_pattern;
-  }
-  if (predicate && Object.hasOwn(predicate, 'cwd_contains')) {
-    predicate.cwdContains = predicate.cwd_contains;
-    delete predicate.cwd_contains;
-  }
-  if (predicate && Object.hasOwn(predicate, 'before_command')) {
-    predicate.beforeCommand = predicate.before_command;
-    delete predicate.before_command;
-  }
+  const predicate = normalizePredicate(raw?.predicate);
 
   return {
     id: raw?.id,
@@ -67,6 +59,17 @@ function toCamelRule(raw, kind, stageSuggestedSkill) {
     owner: raw?.owner ?? { type: 'stage_suggested_skill', skill: stageSuggestedSkill },
     predicate,
   };
+}
+
+function normalizePredicate(raw) {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const predicate = { ...raw };
+  for (const [sourceKey, targetKey] of Object.entries(PREDICATE_KEY_ALIASES)) {
+    if (!Object.hasOwn(predicate, sourceKey)) continue;
+    predicate[targetKey] = predicate[sourceKey];
+    delete predicate[sourceKey];
+  }
+  return predicate;
 }
 
 function normalizeDefinition(raw, sourcePath) {
@@ -153,6 +156,21 @@ function validatePredicate(predicate, path, errors) {
   }
 
   switch (predicate.type) {
+    case 'changed_files_require_command':
+      requireArray(predicate.includeGlobs, `${path}.predicate.include_globs`, errors);
+      if (!hasStringOrArray(predicate.mustMatch)) {
+        errors.push(`${path}.predicate changed_files_require_command requires must_match`);
+      }
+      break;
+    case 'co_creation_docs_lane':
+      requireArray(predicate.includeGlobs, `${path}.predicate.include_globs`, errors);
+      requireArray(predicate.classifierRequiredGlobs, `${path}.predicate.classifier_required_globs`, errors);
+      requireString(predicate.classifierMatch, `${path}.predicate.classifier_match`, errors);
+      requireString(predicate.worktreeMatch, `${path}.predicate.worktree_match`, errors);
+      requireString(predicate.pullRequestMatch, `${path}.predicate.pull_request_match`, errors);
+      requireString(predicate.cloudReviewMatch, `${path}.predicate.cloud_review_match`, errors);
+      requireString(predicate.fullGateMatch, `${path}.predicate.full_gate_match`, errors);
+      break;
     case 'command_pattern':
       if (!hasStringOrArray(predicate.mustMatch) && !hasStringOrArray(predicate.mustNotMatch)) {
         errors.push(`${path}.predicate command_pattern requires must_match or must_not_match`);
@@ -165,6 +183,20 @@ function validatePredicate(predicate, path, errors) {
         !hasStringOrArray(predicate.absent)
       ) {
         errors.push(`${path}.predicate command_sequence requires must_include, anti_pattern, or absent`);
+      }
+      break;
+    case 'design_gate_evidence':
+      requireArray(predicate.consumerGlobs, `${path}.predicate.consumer_globs`, errors);
+      if (!hasStringOrArray(predicate.consumerGlobs)) {
+        errors.push(`${path}.predicate design_gate_evidence requires non-empty consumer_globs`);
+      }
+      requireString(predicate.canonicalHelperPattern, `${path}.predicate.canonical_helper_pattern`, errors);
+      if (typeof predicate.canonicalHelperPattern === 'string') {
+        try {
+          new RegExp(predicate.canonicalHelperPattern);
+        } catch {
+          errors.push(`${path}.predicate.canonical_helper_pattern must be a valid regular expression`);
+        }
       }
       break;
     case 'sha_dedup':

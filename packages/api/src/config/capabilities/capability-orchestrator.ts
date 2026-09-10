@@ -6,7 +6,7 @@
  * 生成三猫 CLI 的 MCP 配置文件。
  *
  * 首次运行时自动从现有 CLI 配置中发现外部 MCP 服务器，
- * 连同 Cat Café 自有 MCP 一起写入 capabilities.json。
+ * 连同 Clowder AI 自有 MCP 一起写入 capabilities.json。
  */
 
 import { AsyncLocalStorage } from 'node:async_hooks';
@@ -30,6 +30,11 @@ import {
   writeGeminiMcpConfig,
 } from './mcp-config-adapters.js';
 import { CAT_CAFE_SPLIT_ENTRYPOINTS } from './mcp-constants.js';
+import {
+  isRetiredGithubMcpCapability,
+  isRetiredGithubMcpDescriptor,
+  retireGithubMcpCapabilities,
+} from './retired-github-mcp.js';
 
 // #712: Re-export shared MCP constants from mcp-constants.ts (single source of truth).
 // Consumers import from this file for backwards compatibility.
@@ -74,6 +79,7 @@ const CAPABILITIES_FILENAME = 'capabilities.json';
 const CONFIG_SUBDIR = '.cat-cafe';
 const MCP_RESOLVED_FILENAME = 'mcp-resolved.json';
 
+const ANTIGRAVITY_IDE_EXTENSIONS_DIR = resolve(homedir(), '.antigravity-ide/extensions');
 const PENCIL_EXTENSIONS_DIR = resolve(homedir(), '.antigravity/extensions');
 const VSCODE_EXTENSIONS_DIR = resolve(homedir(), '.vscode/extensions');
 const CURSOR_EXTENSIONS_DIR = resolve(homedir(), '.cursor/extensions');
@@ -126,6 +132,7 @@ export type ResolvedMcpState = Record<string, ResolvedMcpStateEntry>;
 interface PencilResolveOptions {
   env?: NodeJS.ProcessEnv;
   projectRoot?: string;
+  antigravityIdeDir?: string;
   antigravityDir?: string;
   vscodeDir?: string;
   cursorDir?: string;
@@ -134,7 +141,8 @@ interface PencilResolveOptions {
 
 type PencilCommandResolution = { command: string; args: string[] } | null;
 type PencilCommandResolver = (options?: PencilResolveOptions) => Promise<PencilCommandResolution>;
-type PencilApp = 'antigravity' | 'vscode';
+type PencilApp = 'antigravity_ide' | 'antigravity' | 'visual_studio_code' | 'vscode';
+type PencilAppFamily = 'antigravity' | 'vscode';
 interface PencilInstallCandidate {
   app: PencilApp;
   binaryPath: string;
@@ -438,19 +446,33 @@ export function deduplicateDiscoveredMcpServers<T extends DiscoveredMcpLike>(ser
 /** Normalize a raw app name to the PencilApp union. Returns undefined for unknown values. */
 function normalizePencilApp(raw?: string): PencilApp | undefined {
   const v = raw?.trim().toLowerCase();
-  if (v === 'antigravity') return 'antigravity';
-  if (v === 'vscode' || v === 'cursor' || v === 'vscode-insiders' || v === 'visual_studio_code') return 'vscode';
+  if (v === 'antigravity_ide') return 'antigravity_ide';
+  if (v === 'antigravity') return 'antigravity_ide';
+  if (v === 'visual_studio_code') return 'visual_studio_code';
+  if (v === 'vscode' || v === 'vscode-insiders') return 'visual_studio_code';
+  if (v === 'cursor') return 'vscode';
   return undefined;
+}
+
+function pencilAppFamily(app: PencilApp): PencilAppFamily {
+  return app === 'antigravity' || app === 'antigravity_ide' ? 'antigravity' : 'vscode';
 }
 
 function inferPencilApp(command: string, envApp?: string): PencilApp {
   const normalized = normalizePencilApp(envApp);
   if (normalized) return normalized;
   if (
-    command.includes(`${sep}.vscode${sep}extensions${sep}`) ||
+    command.includes(`${sep}.antigravity-ide${sep}extensions${sep}`) ||
+    command.includes('/.antigravity-ide/extensions/')
+  ) {
+    return 'antigravity_ide';
+  }
+  if (command.includes(`${sep}.vscode${sep}extensions${sep}`) || command.includes('/.vscode/extensions/')) {
+    return 'visual_studio_code';
+  }
+  if (
     command.includes(`${sep}.cursor${sep}extensions${sep}`) ||
     command.includes(`${sep}.vscode-insiders${sep}extensions${sep}`) ||
-    command.includes('/.vscode/extensions/') ||
     command.includes('/.cursor/extensions/') ||
     command.includes('/.vscode-insiders/extensions/')
   ) {
@@ -501,8 +523,9 @@ export async function resolvePencilCommand(
 
   const allCandidates = (
     await Promise.all([
+      collectAccessiblePencilCandidates(options.antigravityIdeDir ?? ANTIGRAVITY_IDE_EXTENSIONS_DIR, 'antigravity_ide'),
       collectAccessiblePencilCandidates(options.antigravityDir ?? PENCIL_EXTENSIONS_DIR, 'antigravity'),
-      collectAccessiblePencilCandidates(options.vscodeDir ?? VSCODE_EXTENSIONS_DIR, 'vscode'),
+      collectAccessiblePencilCandidates(options.vscodeDir ?? VSCODE_EXTENSIONS_DIR, 'visual_studio_code'),
       collectAccessiblePencilCandidates(options.cursorDir ?? CURSOR_EXTENSIONS_DIR, 'vscode'),
       collectAccessiblePencilCandidates(options.vscodeInsidersDir ?? VSCODE_INSIDERS_EXTENSIONS_DIR, 'vscode'),
     ])
@@ -511,18 +534,33 @@ export async function resolvePencilCommand(
     .sort((a, b) => {
       const versionCmp = comparePencilDirs(a.dirName, b.dirName);
       if (versionCmp !== 0) return versionCmp;
-      // Tie-break: prefer antigravity over vscode (specialty editor; if installed, user likely prefers it)
-      return (a.app === 'antigravity' ? 1 : 0) - (b.app === 'antigravity' ? 1 : 0);
+      // Tie-break: prefer the current Antigravity IDE host, then the legacy
+      // Antigravity host, over general-purpose editors.
+      const appPriority: Record<PencilApp, number> = {
+        vscode: 0,
+        visual_studio_code: 1,
+        antigravity: 2,
+        antigravity_ide: 3,
+      };
+      return appPriority[a.app] - appPriority[b.app];
     });
 
-  // PENCIL_MCP_APP (without PENCIL_MCP_BIN) filters candidates to the preferred app.
-  // Normalize aliases (cursor, vscode-insiders → vscode) to match candidate app values.
-  // Falls back to all candidates if the preferred app has no installations.
-  const preferredApp = normalizePencilApp(env.PENCIL_MCP_APP?.trim());
+  // A canonical host id names one live editor socket, so prefer that exact
+  // installation even when a legacy sibling has a higher extension version.
+  // Legacy aliases select a compatible editor family. If neither is installed,
+  // fall back to any usable Pencil host rather than disabling the capability.
+  const rawPreferredApp = env.PENCIL_MCP_APP?.trim().toLowerCase();
+  const preferredApp = normalizePencilApp(rawPreferredApp);
+  const preferredFamily = preferredApp ? pencilAppFamily(preferredApp) : undefined;
+  const canonicalHostSelected = rawPreferredApp === 'antigravity_ide' || rawPreferredApp === 'visual_studio_code';
+  const exactCandidates = canonicalHostSelected
+    ? allCandidates.filter((candidate) => candidate.app === preferredApp)
+    : [];
+  const familyCandidates = preferredFamily
+    ? allCandidates.filter((candidate) => pencilAppFamily(candidate.app) === preferredFamily)
+    : [];
   const candidates =
-    preferredApp && allCandidates.some((c) => c.app === preferredApp)
-      ? allCandidates.filter((c) => c.app === preferredApp)
-      : allCandidates;
+    exactCandidates.length > 0 ? exactCandidates : familyCandidates.length > 0 ? familyCandidates : allCandidates;
 
   const latest = candidates[candidates.length - 1];
   if (latest) {
@@ -831,6 +869,7 @@ export async function discoverExternalMcpServersTagged(paths: DiscoveryPaths): P
   // Deduplicate using the same enabled-preference logic as deduplicateDiscoveredMcpServers.
   const byName = new Map<string, TaggedMcpServer>();
   for (const tagged of all) {
+    if (isRetiredGithubMcpDescriptor(tagged.server)) continue;
     const existing = byName.get(tagged.server.name);
     if (!existing || shouldReplaceDiscoveredMcpServer(existing.server, tagged.server)) {
       byName.set(tagged.server.name, tagged);
@@ -840,7 +879,7 @@ export async function discoverExternalMcpServersTagged(paths: DiscoveryPaths): P
 }
 
 /**
- * Build the Cat Café own MCP server descriptor.
+ * Build the Clowder AI own MCP server descriptor.
  * Uses the same resolution logic as ClaudeAgentService.
  */
 export function buildCatCafeMcpDescriptor(projectRoot: string): McpServerDescriptor {
@@ -874,7 +913,7 @@ const CAT_CAFE_SUPPLEMENTAL_SPLIT_SERVERS = [
 ] as const;
 
 /**
- * Resolve the runtime binary root (where Cat Café MCP server code lives).
+ * Resolve the runtime binary root (where Clowder AI MCP server code lives).
  * codex peer review (PR #1414): explicit `opts.catCafeRepoRoot` from the
  * production route is auto-detected via `resolveMainRepoPath()` (first git
  * worktree line), which returns the canonical main repo even when API is
@@ -1244,7 +1283,7 @@ export function ensureCatCafeMainServer(
 }
 
 /**
- * Rewrite managed Cat Café MCP command paths to a stable repo root.
+ * Rewrite managed Clowder AI MCP command paths to a stable repo root.
  * This prevents global provider configs from pinning deleted feature worktrees.
  */
 export function realignManagedCatCafeServerPaths(
@@ -1346,7 +1385,7 @@ export async function bootstrapCapabilities(
 }
 
 /**
- * #1049: Ensure all managed Cat Café split MCP servers exist in capabilities.json.
+ * #1049: Ensure all managed Clowder AI split MCP servers exist in capabilities.json.
  *
  * Catches the gap where capabilities.json exists but managed MCPs are partially
  * or entirely missing (e.g., manual deletion, corrupt bootstrap, or migration
@@ -1515,7 +1554,8 @@ export function healCatCafeMcpTopology(
   config: CapabilitiesConfig,
   opts?: { catCafeRepoRoot?: string; projectRoot?: string },
 ): { migrated: boolean; config: CapabilitiesConfig } {
-  const a = migrateLegacyCatCafeCapability(config, opts);
+  const retired = retireGithubMcpCapabilities(config);
+  const a = migrateLegacyCatCafeCapability(retired.config, opts);
   // #1049: ensure managed splits AFTER legacy migration (codex review PR #13 P1).
   // Legacy migration converts overrides→blockedCats; running ensureCoreManagedMcps
   // first would skip that conversion, silently re-enabling blocked cats.
@@ -1524,7 +1564,7 @@ export function healCatCafeMcpTopology(
   const c = ensureCatCafeMainServer(b.config, opts);
   const d = realignManagedCatCafeServerPaths(c.config, opts);
   return {
-    migrated: a.migrated || z.migrated || b.migrated || c.migrated || d.migrated,
+    migrated: retired.migrated || a.migrated || z.migrated || b.migrated || c.migrated || d.migrated,
     config: d.config,
   };
 }
@@ -1597,6 +1637,7 @@ export function resolveServersForCat(
 
   for (const cap of config.capabilities) {
     if (cap.type !== 'mcp') continue;
+    if (isRetiredGithubMcpCapability(cap)) continue;
 
     // Priority: mcpServerOverride > mcpServer
     const mcpServer = cap.mcpServerOverride ?? cap.mcpServer;
@@ -1631,10 +1672,15 @@ export function resolveServersForCat(
 
     const desc: McpServerDescriptor = {
       name,
+      capabilityId: cap.id,
       command: mcpServer.command,
       args: mcpServer.args ?? [],
       enabled,
-      source: cap.source,
+      // Plugin MCPs are stored as source=cat-cafe + pluginId so capability
+      // governance can distinguish them from user-owned externals. Runtime
+      // descriptors must expose their actual ownership so writers neither
+      // grant built-in-only privileges nor miss plugin name migrations.
+      source: cap.pluginId ? 'plugin' : cap.source,
     };
     if (mcpServer.transport) desc.transport = mcpServer.transport;
     if (mcpServer.resolver) desc.resolver = mcpServer.resolver;

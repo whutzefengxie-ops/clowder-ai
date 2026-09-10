@@ -4,8 +4,8 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { lazy, Suspense, useCallback, useState } from 'react';
 import { useApprovalHubSync } from '@/hooks/useApprovalHub';
 import { usePinnedSections } from '@/hooks/usePinnedSections';
-import { useApprovalHubStore } from '@/stores/approvalHubStore';
 import { useChatStore } from '@/stores/chatStore';
+import { AttentionRailButtons } from './attention/AttentionRailButtons';
 import { ConciergeRailToggle } from './concierge/ConciergeRailToggle';
 import { HubIcon } from './hub-icons';
 import { MemoryIcon } from './icons/MemoryIcon';
@@ -17,7 +17,9 @@ const OklchTuner = lazy(() => import('./dev/OklchTuner').then((m) => ({ default:
 
 const NAV_ITEMS = [
   { id: 'home', path: '/', label: '对话', match: (p: string) => p === '/' || p.startsWith('/thread/') },
+  { id: 'starry', path: '/starry', label: '猫猫星球', match: (p: string) => p.startsWith('/starry') },
   { id: 'memory', path: '/memory', label: '记忆', match: (p: string) => p.startsWith('/memory') },
+  { id: 'collective', path: '/collective', label: 'Collective', match: (p: string) => p.startsWith('/collective') },
   { id: 'mission', path: '/mission-hub', label: 'Mission Hub', match: (p: string) => p.startsWith('/mission') },
   { id: 'signals', path: '/signals', label: '信号', match: (p: string) => p.startsWith('/signals') },
 ] as const;
@@ -51,6 +53,18 @@ function MissionIcon({ className = 'w-5 h-5' }: { className?: string }) {
   );
 }
 
+function CollectiveIcon({ className = 'w-5 h-5' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={className}>
+      <title>Collective</title>
+      <circle cx="7" cy="8" r="3" />
+      <circle cx="17" cy="8" r="3" />
+      <circle cx="12" cy="17" r="3" />
+      <path d="m9.5 10 1.2 4M14.5 10l-1.2 4M10 8h4" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 function SignalIcon({ className = 'w-5 h-5' }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={className}>
@@ -61,6 +75,17 @@ function SignalIcon({ className = 'w-5 h-5' }: { className?: string }) {
         strokeLinejoin="round"
       />
       <line x1="4" y1="22" x2="4" y2="15" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function PlanetIcon({ className = 'w-5 h-5' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={className}>
+      <title>猫猫星球</title>
+      <circle cx="12" cy="12" r="4.5" />
+      <path d="M3.4 14.7c1.8 2.2 6.6 1.7 10.8-.5 4.2-2.1 7.1-5.1 6.4-6.7-.5-1.1-2.7-1.2-5.5-.4" strokeLinecap="round" />
+      <path d="m18.7 3.6.4 1.1 1.1.4-1.1.4-.4 1.1-.4-1.1-1.1-.4 1.1-.4.4-1.1Z" fill="currentColor" stroke="none" />
     </svg>
   );
 }
@@ -81,8 +106,10 @@ function SettingsIcon({ className = 'w-5 h-5' }: { className?: string }) {
 
 const ICON_MAP: Record<string, ({ className }: { className?: string }) => JSX.Element> = {
   home: ChatIcon,
+  starry: PlanetIcon,
   signals: SignalIcon,
   memory: MemoryIcon,
+  collective: CollectiveIcon,
   mission: MissionIcon,
   settings: SettingsIcon,
 };
@@ -149,69 +176,6 @@ function PinnedSections({ pinned, onNav }: { pinned: readonly string[]; onNav: (
         );
       })}
     </>
-  );
-}
-
-function BellIcon({ className = 'w-5 h-5' }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={className}>
-      <title>审批中心</title>
-      <path
-        d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function ApprovalHubButton() {
-  const count = useApprovalHubStore((s) => s.count);
-  const fetchPending = useApprovalHubStore((s) => s.fetchPending);
-  const setWorkspaceMode = useChatStore((s) => s.setWorkspaceMode);
-  const workspaceMode = useChatStore((s) => s.workspaceMode);
-  const rightPanelMode = useChatStore((s) => s.rightPanelMode);
-  const setRightPanelMode = useChatStore((s) => s.setRightPanelMode);
-
-  const handleClick = useCallback(() => {
-    // F246 Phase C: bell click → workspace approval tab (replaces drawer toggle)
-    if (workspaceMode === 'approval' && rightPanelMode === 'workspace') {
-      // Already on approval tab + workspace open → toggle close
-      setRightPanelMode('status');
-    } else {
-      // Open workspace panel and switch to approval tab
-      setWorkspaceMode('approval');
-      // Refresh pending approvals on open (preserves old drawer toggle semantics)
-      fetchPending();
-    }
-  }, [workspaceMode, rightPanelMode, setWorkspaceMode, setRightPanelMode, fetchPending]);
-
-  return (
-    <button
-      type="button"
-      onClick={handleClick}
-      className="relative flex h-10 w-10 items-center justify-center rounded-lg transition-all hover:bg-[var(--console-rail-item)] hover:shadow-[var(--console-rail-shadow)]"
-      title={count > 0 ? `${count} 项待审批` : '审批中心'}
-      data-testid="approval-hub-button"
-    >
-      <BellIcon className="h-5 w-5" />
-      {count > 0 && (
-        <span
-          className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full text-micro font-bold flex items-center justify-center"
-          style={{
-            backgroundColor: 'var(--semantic-warning)',
-            color: 'var(--cafe-accent-foreground)',
-            maxWidth: '22px',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}
-          data-testid="approval-hub-badge"
-        >
-          {count > 99 ? '99+' : String(count)}
-        </span>
-      )}
-    </button>
   );
 }
 
@@ -314,6 +278,7 @@ export function ActivityBar({ className }: ActivityBarProps) {
                 : 'hover:bg-[var(--console-rail-item)] hover:shadow-[var(--console-rail-shadow)]'
             }`}
             title={item.label}
+            aria-label={item.label}
             aria-current={active ? 'page' : undefined}
             data-guide-id={`nav.${item.id}`}
           >
@@ -327,8 +292,8 @@ export function ActivityBar({ className }: ActivityBarProps) {
       </Suspense>
 
       <div className="mt-auto flex flex-col items-center gap-1.5">
-        {/* F246: Approval Hub bell icon with badge count */}
-        <ApprovalHubButton />
+        {/* F246 remains the approval bell; F310 Needs Me is a sibling Workspace destination. */}
+        <AttentionRailButtons />
         {/* F229: concierge re-entry —唤回入口，muted 时是唯一入口 (INV-3) */}
         <ConciergeRailToggle />
         <PresentationRailToggle />

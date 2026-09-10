@@ -82,18 +82,48 @@ function mockInvocationRecordStore() {
   let counter = 0;
   const creates = /** @type {any[]} */ ([]);
   const updates = /** @type {any[]} */ ([]);
+  const records = new Map();
   return {
     creates,
     updates,
+    records,
     /** @type {any} */
     store: {
       async create(input) {
         creates.push(input);
         counter++;
-        return { outcome: 'created', invocationId: `inv-${counter}` };
+        const invocationId = `inv-${counter}`;
+        records.set(invocationId, {
+          id: invocationId,
+          ...input,
+          userMessageId: null,
+          status: 'queued',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        });
+        return { outcome: 'created', invocationId };
       },
       async update(id, data) {
         updates.push({ id, data });
+        const record = records.get(id);
+        if (!record) return null;
+        if (data.expectedStatus !== undefined && record.status !== data.expectedStatus) return null;
+        const { expectedStatus: _expectedStatus, ...patch } = data;
+        const updated = { ...record, ...patch, updatedAt: Date.now() };
+        records.set(id, updated);
+        return updated;
+      },
+      async get(id) {
+        const record = records.get(id);
+        return record === undefined ? null : record;
+      },
+      async getByIdempotencyKey() {
+        return null;
+      },
+      async listRunningByThread(threadId, userId) {
+        return [...records.values()].filter(
+          (record) => record.threadId === threadId && record.userId === userId && record.status === 'running',
+        );
       },
     },
   };
@@ -203,6 +233,7 @@ describe('Queue Integration (E2E scenarios)', () => {
 
     // 2. Enqueue a user message (simulating what POST /api/messages does)
     const result = queue.enqueue({
+      ownerAuthProvenance: 'unknown',
       threadId: 'thread-1',
       userId: 'user-1',
       content: 'Fix the bug',
@@ -226,10 +257,52 @@ describe('Queue Integration (E2E scenarios)', () => {
     assert.strictEqual(queue.list('thread-1', 'user-1').length, 0);
   });
 
+  it('E2E: queued work waits behind a manual-seal CAS without running or terminalizing', async () => {
+    const { InvocationTracker } = await import('../dist/domains/cats/services/agents/invocation/InvocationTracker.js');
+    const tracker = new InvocationTracker();
+    const guard = tracker.guardSessionSeal('thread-1', 'opus');
+    assert.equal(guard.acquired, true);
+    const localProcessor = new QueueProcessor({
+      queue,
+      invocationTracker: tracker,
+      invocationRecordStore: recordMock.store,
+      router: routerMock.router,
+      socketManager: socketMock.manager,
+      messageStore: /** @type {any} */ ({ getById: async () => null }),
+      log: noopLog(),
+    });
+    queue.enqueue({
+      ownerAuthProvenance: 'unknown',
+      threadId: 'thread-1',
+      userId: 'user-1',
+      content: 'Run only after the old session pointer is cleared',
+      source: 'user',
+      targetCats: ['opus'],
+      intent: 'execute',
+      autoExecute: true,
+    });
+
+    const start = await localProcessor.processNext('thread-1', 'user-1');
+    assert.equal(start.started, true);
+    await settle(25);
+    assert.equal(routerMock.calls.length, 0, 'route execution must not start under the seal guard');
+    assert.equal(
+      [...recordMock.records.values()].some((record) => record.status === 'running'),
+      false,
+      'the queued InvocationRecord must not be marked running under the seal guard',
+    );
+
+    guard.release();
+    await settle(150);
+    assert.equal(routerMock.calls.length, 1, 'the same queued turn must retry after the seal CAS releases');
+    assert.equal(queue.list('thread-1', 'user-1').length, 0);
+  });
+
   it('E2E: cancel → queue paused → processNext → resumes', async () => {
     // 1. Enqueue a message
     trackerMock.setActive('thread-1');
     queue.enqueue({
+      ownerAuthProvenance: 'unknown',
       threadId: 'thread-1',
       userId: 'user-1',
       content: 'Continue working',
@@ -306,6 +379,7 @@ describe('Queue Integration (E2E scenarios)', () => {
     // Setup: active invocation + one queued message
     trackerMock.setActive('thread-1');
     queue.enqueue({
+      ownerAuthProvenance: 'unknown',
       threadId: 'thread-1',
       userId: 'user-1',
       content: 'Queued msg',
@@ -343,6 +417,7 @@ describe('Queue Integration (E2E scenarios)', () => {
     // 1. Active invocation running
     trackerMock.setActive('thread-1');
     queue.enqueue({
+      ownerAuthProvenance: 'unknown',
       threadId: 'thread-1',
       userId: 'user-1',
       content: 'Queued msg',
@@ -378,7 +453,19 @@ describe('Queue Integration (E2E scenarios)', () => {
     // Router yields one msg, then aborts (simulating external cancel), then ends normally
     const ackCalls = /** @type {any[]} */ ([]);
     const customRouter = {
-      async *routeExecution(_userId, _message, _threadId, _userMessageId, _targetCats, _intent, _options) {
+      async *routeExecution(_userId, _message, _threadId, _userMessageId, _targetCats, _intent, options) {
+        const startedAt = Date.now();
+        yield {
+          type: 'system_info',
+          catId: 'opus',
+          content: JSON.stringify({
+            type: 'invocation_created',
+            invocationId: 'child-abort-test',
+            parentInvocationId: options.parentInvocationId,
+            startedAt,
+          }),
+          timestamp: startedAt,
+        };
         yield { type: 'text', catId: 'opus', content: 'partial', timestamp: Date.now() };
         // External cancel while connector is streaming
         controller.abort();
@@ -429,6 +516,7 @@ describe('Queue Integration (E2E scenarios)', () => {
 
     // 2. autoExecute entry for gpt52 is enqueued
     const enqResult = queue.enqueue({
+      ownerAuthProvenance: 'unknown',
       threadId: 'thread-1',
       userId: 'agent-user',
       content: 'P1 修完，请 review',
@@ -505,6 +593,7 @@ describe('Queue Integration (E2E scenarios)', () => {
     activeSlots.add('thread-1:opus');
 
     queue.enqueue({
+      ownerAuthProvenance: 'unknown',
       threadId: 'thread-1',
       userId: 'agent-user',
       content: 'review request for codex',
@@ -514,6 +603,7 @@ describe('Queue Integration (E2E scenarios)', () => {
       autoExecute: true,
     });
     queue.enqueue({
+      ownerAuthProvenance: 'unknown',
       threadId: 'thread-1',
       userId: 'agent-user',
       content: 'review request for opus',
@@ -545,6 +635,7 @@ describe('Queue Integration (E2E scenarios)', () => {
     // 1. Active invocation + queued message
     trackerMock.setActive('thread-1');
     queue.enqueue({
+      ownerAuthProvenance: 'unknown',
       threadId: 'thread-1',
       userId: 'user-1',
       content: 'Queued msg',

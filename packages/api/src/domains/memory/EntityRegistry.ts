@@ -1,8 +1,14 @@
 // F209 Phase B: deterministic entity registry / alias dictionary.
 
+import { createHash } from 'node:crypto';
+import type { EntityConflictContext, EntityConflictResolutionRequest } from '@cat-cafe/shared';
 import type Database from 'better-sqlite3';
+import { type EntityConflictMutationResult, resolveEntityConflict } from './entity-conflict-mutation.js';
+import { inspectEntityConflict, isEntityVisibleToUser } from './entity-conflict-resolution.js';
+import { EntityRegistryMutationWriter, normalizeEntityAlias } from './entity-registry-mutation.js';
 import type {
   EntityMatch,
+  EntityMutationContext,
   EntityProvenance,
   EntityRecord,
   EntityType,
@@ -12,11 +18,20 @@ import type {
   QueryEntityMatch,
 } from './interfaces.js';
 
+export { EntityConflictInvalidResolutionError, EntityConflictStaleError } from './entity-conflict-mutation.js';
+export { EntitySurfaceConflictError, normalizeEntityAlias } from './entity-registry-mutation.js';
+
 interface EntityRow {
   entity_id: string;
   entity_type: string;
   canonical_name: string;
   provenance_json: string;
+  /** F260: entity stance (default 'unknown', schema V29 migration). */
+  stance: string;
+  /** F260: visibility scope (default 'workspace', schema V29 migration). KD-7. */
+  visibility_scope: string;
+  /** F260: entity lifecycle status (default 'active', schema V29 migration). */
+  status: string;
   created_at: string;
   updated_at: string;
 }
@@ -36,6 +51,9 @@ interface MentionRow extends EntityRow {
 interface CompiledAliasRow extends AliasRow {
   matchesNormalizedText: (textNorm: string) => boolean;
 }
+
+type StoredEntityRecord = EntityRecord &
+  Required<Pick<EntityRecord, 'stance' | 'visibilityScope' | 'status' | 'createdAt'>>;
 
 export interface EntityMentionDocFilters {
   kind?: EvidenceKind;
@@ -61,8 +79,31 @@ export interface EntityMentionPassageHit {
   createdAt?: string;
 }
 
-export function normalizeEntityAlias(value: string): string {
-  return value.normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase();
+export type EntityAliasResolutionOutcome =
+  | { status: 'not_available'; registryRevision: string }
+  | { status: 'resolved'; registryRevision: string; match: QueryEntityMatch }
+  | { status: 'ambiguous'; registryRevision: string; matches: QueryEntityMatch[] };
+
+/** Stable content revision for one complete, persisted Entity identity projection. */
+export function entitySourceRevision(entity: StoredEntityRecord): string {
+  const aliases = [...entity.aliases].sort((left, right) => {
+    const normalized = normalizeEntityAlias(left).localeCompare(normalizeEntityAlias(right));
+    if (normalized !== 0) return normalized;
+    return left.localeCompare(right);
+  });
+  const projection = {
+    entityId: entity.entityId,
+    type: entity.type,
+    canonicalName: entity.canonicalName,
+    aliases,
+    provenance: entity.provenance,
+    stance: entity.stance,
+    visibilityScope: entity.visibilityScope,
+    status: entity.status,
+    createdAt: entity.createdAt,
+    updatedAt: entity.updatedAt,
+  };
+  return `sha256:${createHash('sha256').update(JSON.stringify(projection)).digest('hex')}`;
 }
 
 export function aliasMatchesText(text: string, alias: string): boolean {
@@ -75,61 +116,23 @@ export function aliasMatchesText(text: string, alias: string): boolean {
 export class EntityRegistryStore {
   constructor(private readonly db: Database.Database) {}
 
-  upsert(entities: EntityRecord[]): boolean {
-    const entityStmt = this.db.prepare(`
-      INSERT INTO entity_registry
-      (entity_id, entity_type, canonical_name, provenance_json, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?)
-      ON CONFLICT(entity_id) DO UPDATE SET
-        entity_type = excluded.entity_type,
-        canonical_name = excluded.canonical_name,
-        provenance_json = excluded.provenance_json,
-        updated_at = excluded.updated_at
-    `);
-    const existingEntityStmt = this.db.prepare('SELECT * FROM entity_registry WHERE entity_id = ?');
-    const existingAliasesStmt = this.db.prepare(
-      'SELECT alias, alias_norm FROM entity_aliases WHERE entity_id = ? ORDER BY alias_norm, alias',
-    );
-    const deleteAliasesStmt = this.db.prepare('DELETE FROM entity_aliases WHERE entity_id = ?');
-    const aliasStmt = this.db.prepare(`
-      INSERT OR REPLACE INTO entity_aliases
-      (entity_id, alias, alias_norm, provenance_json, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `);
-
-    const tx = this.db.transaction((records: EntityRecord[]) => {
-      let changed = false;
-      for (const entity of records) {
-        const existing = existingEntityStmt.get(entity.entityId) as EntityRow | undefined;
-        const aliases = uniqueAliases(entity.aliases);
-        const createdAt = existing?.created_at ?? entity.createdAt ?? entity.updatedAt;
-        const provenanceJson = JSON.stringify(entity.provenance);
-        const existingAliases = existingAliasesStmt.all(entity.entityId) as Array<{
-          alias: string;
-          alias_norm: string;
-        }>;
-        if (entitySeedUnchanged(existing, existingAliases, entity, aliases, provenanceJson)) continue;
-
-        changed = true;
-        entityStmt.run(entity.entityId, entity.type, entity.canonicalName, provenanceJson, createdAt, entity.updatedAt);
-        deleteAliasesStmt.run(entity.entityId);
-        for (const alias of aliases) {
-          aliasStmt.run(
-            entity.entityId,
-            alias,
-            normalizeEntityAlias(alias),
-            provenanceJson,
-            createdAt,
-            entity.updatedAt,
-          );
-        }
-      }
-      return changed;
-    });
-    return tx(entities) as boolean;
+  upsert(entities: EntityRecord[], context: EntityMutationContext = { source: 'system' }): boolean {
+    return new EntityRegistryMutationWriter(this.db).upsert(entities, context);
   }
 
-  get(entityId: string): EntityRecord | null {
+  inspectConflict(incoming: EntityRecord, viewerUserId?: string): EntityConflictContext | null {
+    return inspectEntityConflict(this.db, incoming, viewerUserId);
+  }
+
+  resolveConflict(
+    incoming: EntityRecord,
+    resolution: EntityConflictResolutionRequest,
+    context: EntityMutationContext,
+  ): EntityConflictMutationResult {
+    return resolveEntityConflict(this.db, incoming, resolution, context);
+  }
+
+  get(entityId: string): StoredEntityRecord | null {
     const row = this.db.prepare('SELECT * FROM entity_registry WHERE entity_id = ?').get(entityId) as
       | EntityRow
       | undefined;
@@ -143,6 +146,9 @@ export class EntityRegistryStore {
       canonicalName: row.canonical_name,
       aliases: aliasRows.map((a) => a.alias),
       provenance: parseProvenance(row.provenance_json),
+      stance: row.stance,
+      visibilityScope: row.visibility_scope,
+      status: row.status,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };
@@ -162,14 +168,98 @@ export class EntityRegistryStore {
         canonicalName: row.canonical_name,
         matchedAlias: row.alias,
         provenance: parseProvenance(row.provenance_json),
+        sourceRevision: this.sourceRevisionForEntity(row.entity_id),
       });
     }
     return matches;
   }
 
+  resolveExactAlias(alias: string, viewerUserId: string): QueryEntityMatch[] {
+    const normalizedAlias = normalizeEntityAlias(alias);
+    if (!normalizedAlias) return [];
+    const matches: QueryEntityMatch[] = [];
+    const seen = new Set<string>();
+    for (const row of this.loadAliases({ includeCanonical: true })) {
+      if (
+        row.status !== 'active' ||
+        !isEntityVisibleToUser(row.visibility_scope, viewerUserId) ||
+        normalizeEntityAlias(row.alias_norm || row.alias) !== normalizedAlias ||
+        seen.has(row.entity_id)
+      ) {
+        continue;
+      }
+      seen.add(row.entity_id);
+      matches.push({
+        entityId: row.entity_id,
+        type: row.entity_type as EntityType,
+        canonicalName: row.canonical_name,
+        matchedAlias: row.alias,
+        provenance: parseProvenance(row.provenance_json),
+        sourceRevision: this.sourceRevisionForEntity(row.entity_id),
+      });
+    }
+    return matches.sort((left, right) => left.entityId.localeCompare(right.entityId));
+  }
+
+  /**
+   * Typed exact-alias read over the existing registry. The registry revision
+   * binds absence and ambiguity as well as a resolved identity; it is not a
+   * second registry or an external read endpoint.
+   */
+  resolveExactAliasOutcome(alias: string, viewerUserId: string): EntityAliasResolutionOutcome {
+    const matches = this.resolveExactAlias(alias, viewerUserId);
+    const registryRevision = this.visibleRegistryRevision(viewerUserId);
+    if (matches.length === 0) return { status: 'not_available', registryRevision };
+    if (matches.length === 1) return { status: 'resolved', registryRevision, match: matches[0] };
+    return { status: 'ambiguous', registryRevision, matches };
+  }
+
+  /**
+   * Fail-closed freshness check for downstream consumers of an Entity identity
+   * root. Hidden, retired, missing, and corrected projections all return false
+   * without exposing the current projection.
+   */
+  isCurrentVisibleRevision(entityId: string, expectedRevision: string, viewerUserId: string): boolean {
+    const entity = this.get(entityId);
+    if (!entity || entity.status !== 'active' || !isEntityVisibleToUser(entity.visibilityScope, viewerUserId)) {
+      return false;
+    }
+    return entitySourceRevision(entity) === expectedRevision;
+  }
+
+  private sourceRevisionForEntity(entityId: string): string {
+    const entity = this.get(entityId);
+    if (!entity) throw new Error(`Entity projection disappeared while resolving ${entityId}`);
+    return entitySourceRevision(entity);
+  }
+
+  private visibleRegistryRevision(viewerUserId: string): string {
+    const rows = this.db
+      .prepare("SELECT entity_id FROM entity_registry WHERE status = 'active' ORDER BY entity_id")
+      .all() as Array<{ entity_id: string }>;
+    const revisions = rows.flatMap((row) => {
+      const entity = this.get(row.entity_id);
+      if (!entity) return [];
+      if (!isEntityVisibleToUser(entity.visibilityScope, viewerUserId)) return [];
+      return [entitySourceRevision(entity)];
+    });
+    return `sha256:${createHash('sha256').update(JSON.stringify(revisions)).digest('hex')}`;
+  }
+
   refreshMentions(docAnchors?: string[]): void {
-    const aliases = compileAliases(this.loadAliases({ includeCanonical: true }));
-    this.deleteMentions(docAnchors);
+    this.refreshMentionSubset(docAnchors);
+  }
+
+  /** Rebuild only the derived mention rows owned by entities changed in one mutation. */
+  refreshMentionsForEntities(entityIds: string[]): void {
+    const uniqueEntityIds = [...new Set(entityIds)];
+    if (uniqueEntityIds.length === 0) return;
+    this.refreshMentionSubset(undefined, uniqueEntityIds);
+  }
+
+  private refreshMentionSubset(docAnchors?: string[], entityIds?: string[]): void {
+    const aliases = compileAliases(this.loadAliases({ includeCanonical: true, entityIds }));
+    this.deleteMentions(docAnchors, entityIds);
     if (aliases.length === 0) return;
 
     const insertStmt = this.db.prepare(`
@@ -284,21 +374,27 @@ export class EntityRegistryStore {
     return { passages, matchesByAnchor };
   }
 
-  private loadAliases(options: { includeCanonical?: boolean } = {}): AliasRow[] {
+  private loadAliases(options: { includeCanonical?: boolean; entityIds?: string[] } = {}): AliasRow[] {
+    const entityIds = options.entityIds?.length ? [...new Set(options.entityIds)] : undefined;
+    const entityFilter = entityIds ? ` WHERE a.entity_id IN (${entityIds.map(() => '?').join(',')})` : '';
     const rows = this.db
       .prepare(
         `SELECT r.*, a.alias, a.alias_norm, a.provenance_json
          FROM entity_aliases a
          JOIN entity_registry r ON r.entity_id = a.entity_id
+         ${entityFilter}
          ORDER BY length(a.alias_norm) DESC, a.alias_norm`,
       )
-      .all() as AliasRow[];
+      .all(...(entityIds ?? [])) as AliasRow[];
     if (!options.includeCanonical) return rows;
 
     const seen = new Set(
       rows.map((row) => `${row.entity_id}\u0000${normalizeEntityAlias(row.alias_norm || row.alias)}`),
     );
-    const entityRows = this.db.prepare('SELECT * FROM entity_registry').all() as EntityRow[];
+    const registryFilter = entityIds ? ` WHERE entity_id IN (${entityIds.map(() => '?').join(',')})` : '';
+    const entityRows = this.db
+      .prepare(`SELECT * FROM entity_registry${registryFilter}`)
+      .all(...(entityIds ?? [])) as EntityRow[];
     for (const entity of entityRows) {
       const aliasNorm = normalizeEntityAlias(entity.canonical_name);
       const key = `${entity.entity_id}\u0000${aliasNorm}`;
@@ -313,13 +409,22 @@ export class EntityRegistryStore {
     return rows.sort((a, b) => b.alias_norm.length - a.alias_norm.length || a.alias_norm.localeCompare(b.alias_norm));
   }
 
-  private deleteMentions(docAnchors?: string[]): void {
-    if (!docAnchors?.length) {
+  private deleteMentions(docAnchors?: string[], entityIds?: string[]): void {
+    const clauses: string[] = [];
+    const params: string[] = [];
+    if (docAnchors?.length) {
+      clauses.push(`doc_anchor IN (${docAnchors.map(() => '?').join(',')})`);
+      params.push(...docAnchors);
+    }
+    if (entityIds?.length) {
+      clauses.push(`entity_id IN (${entityIds.map(() => '?').join(',')})`);
+      params.push(...entityIds);
+    }
+    if (clauses.length === 0) {
       this.db.exec('DELETE FROM entity_mentions');
       return;
     }
-    const placeholders = docAnchors.map(() => '?').join(',');
-    this.db.prepare(`DELETE FROM entity_mentions WHERE doc_anchor IN (${placeholders})`).run(...docAnchors);
+    this.db.prepare(`DELETE FROM entity_mentions WHERE ${clauses.join(' AND ')}`).run(...params);
   }
 
   private selectDocs(docAnchors?: string[]): Array<{
@@ -589,33 +694,4 @@ function compileAliasMatcher(aliasNorm: string): ((textNorm: string) => boolean)
   const escaped = aliasNorm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const pattern = new RegExp(`(^|[^\\p{L}\\p{N}_@-])${escaped}(?=$|[^\\p{L}\\p{N}_@-])`, 'u');
   return (textNorm) => pattern.test(textNorm);
-}
-
-function uniqueAliases(aliases: string[]): string[] {
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const alias of aliases) {
-    const norm = normalizeEntityAlias(alias);
-    if (!norm || seen.has(norm)) continue;
-    seen.add(norm);
-    out.push(alias);
-  }
-  return out;
-}
-
-function entitySeedUnchanged(
-  existing: EntityRow | undefined,
-  existingAliases: Array<{ alias: string; alias_norm: string }>,
-  entity: EntityRecord,
-  aliases: string[],
-  provenanceJson: string,
-): boolean {
-  if (!existing) return false;
-  if (existing.entity_type !== entity.type) return false;
-  if (existing.canonical_name !== entity.canonicalName) return false;
-  if (existing.provenance_json !== provenanceJson) return false;
-  const currentAliases = existingAliases.map((row) => `${row.alias_norm}\u0000${row.alias}`).sort();
-  const nextAliases = aliases.map((alias) => `${normalizeEntityAlias(alias)}\u0000${alias}`).sort();
-  if (currentAliases.length !== nextAliases.length) return false;
-  return currentAliases.every((alias, index) => alias === nextAliases[index]);
 }

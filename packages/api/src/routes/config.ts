@@ -24,14 +24,17 @@ import { configEventBus, createChangeSetId } from '../config/config-event-bus.js
 import type { ConfigSnapshot } from '../config/config-snapshot.js';
 import {
   buildEnvSummary,
+  buildSystemEnvSummary,
   ENV_CATEGORIES,
   filterSensitiveEditableKeys,
   hasSensitiveEditableVars,
   isEditableEnvVarName,
+  SETTINGS_GROUPS,
 } from '../config/env-registry.js';
 import { updateRuntimeCoCreator } from '../config/runtime-cat-catalog.js';
 import { isValidTimeZone } from '../config/time-zone.js';
 import { AuditEventTypes, getEventAuditLog } from '../domains/cats/services/orchestration/EventAuditLog.js';
+import type { IThreadStore } from '../domains/cats/services/stores/ports/ThreadStore.js';
 // F212 Phase F (cloud codex R4 P2-#2 on fc69597675): import logger's captured LOG_DIR
 // so env-summary returns the path the active pino destination is actually writing to.
 // Reading process.env.LOG_DIR here would diverge from logger after a runtime
@@ -43,6 +46,8 @@ import { resolveOwnerGate } from '../utils/owner-gate.js';
 import { resolveHeaderUserId } from '../utils/request-identity.js';
 import { getDefaultUploadDir } from '../utils/upload-paths.js';
 import { configCatOrderRoutes } from './config-cat-order.js';
+import { configMessageDispositionRoutes } from './config-message-disposition.js';
+import { configThreadAttentionRoutes } from './config-thread-attention.js';
 
 const patchSchema = z.object({
   key: z.string().min(1),
@@ -84,6 +89,7 @@ interface ConfigRoutesOptions {
   };
   envFilePath?: string;
   projectRoot?: string;
+  threadStore?: Pick<IThreadStore, 'list' | 'getThreadMetadata' | 'atomicMergeThreadMetadata'>;
 }
 
 function getSnapshotValue(snapshot: ConfigSnapshot, key: string): unknown {
@@ -154,6 +160,8 @@ export async function configRoutes(app: FastifyInstance, opts: ConfigRoutesOptio
   const envFilePath = opts.envFilePath ?? resolve(projectRoot, '.env');
 
   await app.register(configCatOrderRoutes, { projectRoot });
+  await app.register(configMessageDispositionRoutes, { projectRoot });
+  await app.register(configThreadAttentionRoutes, { projectRoot, threadStore: opts.threadStore });
 
   app.get('/api/config', async () => ({
     config: collectConfigSnapshot(),
@@ -265,7 +273,12 @@ export async function configRoutes(app: FastifyInstance, opts: ConfigRoutesOptio
     return handleCoCreatorPatch(request, reply);
   });
 
-  app.get('/api/config/env-summary', async () => {
+  app.get('/api/config/env-summary', async (request) => {
+    const { surface } = request.query as { surface?: string };
+    if (surface === 'system') {
+      return { groups: SETTINGS_GROUPS, variables: buildSystemEnvSummary() };
+    }
+
     const apiCwd = process.cwd();
     const home = os.homedir();
     return {

@@ -8,8 +8,10 @@ import type {
   DeliverOpts,
   FetchResult,
   GateCtx,
+  RunLedgerRow,
   RunOutcome,
   ScheduleInvokeTrigger,
+  ScheduleRunTiming,
   TaskSpec_P1,
 } from './types.js';
 
@@ -30,34 +32,69 @@ export interface PipelineContext {
   emissionStore?: EmissionStore;
   /** Phase 3B (AC-D1): manual triggers bypass global pause + task overrides */
   isManualTrigger?: boolean;
+  /** Wall-clock schedule metadata for this fire, if known. */
+  schedule?: ScheduleRunTiming;
   /** Phase 4 (AC-H1): deliver message to a thread */
   deliver?: (opts: DeliverOpts) => Promise<string>;
   /** Phase 4 (AC-H2): fetch web content with browser-automation routing */
-  fetchContent?: (url: string) => Promise<FetchResult>;
+  fetchContent?: (url: string, signal?: AbortSignal) => Promise<FetchResult>;
   /** Phase 4b: invoke a cat to handle a scheduled task (fire-and-forget) */
   invokeTrigger?: ScheduleInvokeTrigger;
   /** F233 PR3: optional ball-custody event sink for scheduler-originated events. */
   ballCustody?: IBallCustodyIngest;
+  managedCommandWakeRecovery?: (taskId: string) => Promise<'missing' | 'pending' | 'recovered'>;
   /** #415: per-workItem outcome callback (used for failure notifications) */
   onItemOutcome?: (taskId: string, subjectKey: string, outcome: RunOutcome, errorSummary: string | null) => void;
 }
 
-function withTimeout(promise: Promise<void>, ms: number, taskId: string): Promise<void> {
-  return new Promise<void>((resolve, reject) => {
-    const timer = setTimeout(() => {
-      reject(new Error(`[scheduler] ${taskId}: execute timed out after ${ms}ms`));
+function ledgerTimingFields(
+  task: AnyTaskSpec,
+  schedule: ScheduleRunTiming | undefined,
+  isManualTrigger: boolean | undefined,
+): Pick<
+  RunLedgerRow,
+  'scheduled_at' | 'fired_at' | 'lateness_ms' | 'missed_slots' | 'trigger_kind' | 'misfire_policy'
+> {
+  return {
+    scheduled_at: schedule?.scheduledAt ?? null,
+    fired_at: schedule?.firedAt ?? null,
+    lateness_ms: schedule?.latenessMs ?? null,
+    missed_slots: schedule?.missedSlots ?? null,
+    trigger_kind: schedule?.triggerKind ?? (isManualTrigger ? 'manual' : task.trigger.type),
+    misfire_policy: schedule?.misfirePolicy ?? null,
+  };
+}
+
+async function withTimeout(
+  promise: Promise<void>,
+  ms: number,
+  taskId: string,
+  controller: AbortController,
+): Promise<void> {
+  let timeoutError: Error | null = null;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => {
+      timeoutError = new Error(`[scheduler] ${taskId}: execute timed out after ${ms}ms`);
+      reject(timeoutError);
+      controller.abort(timeoutError);
     }, ms);
-    promise.then(
-      () => {
-        clearTimeout(timer);
-        resolve();
-      },
-      (err) => {
-        clearTimeout(timer);
-        reject(err);
-      },
-    );
   });
+
+  try {
+    await Promise.race([promise, timeout]);
+  } catch (error) {
+    if (timeoutError) {
+      // Cancellation is not terminal until the underlying execution has
+      // observed the signal and finished its cleanup. This preserves the
+      // existing task-level overlap lock without inventing another lock.
+      await promise.catch(() => {});
+      throw timeoutError;
+    }
+    throw error;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 export async function executeTaskPipeline(ctx: PipelineContext): Promise<void> {
@@ -72,13 +109,16 @@ export async function executeTaskPipeline(ctx: PipelineContext): Promise<void> {
     globalControlStore,
     emissionStore,
     isManualTrigger,
+    schedule,
     deliver,
     fetchContent,
     invokeTrigger,
     ballCustody,
+    managedCommandWakeRecovery,
     onItemOutcome,
   } = ctx;
   const startMs = Date.now();
+  const timing = ledgerTimingFields(task, schedule, isManualTrigger);
   const tickCount = (tickCounts.get(task.id) ?? 0) + 1;
   tickCounts.set(task.id, tickCount);
 
@@ -97,6 +137,7 @@ export async function executeTaskPipeline(ctx: PipelineContext): Promise<void> {
         started_at: new Date(startMs).toISOString(),
         assigned_cat_id: null,
         error_summary: null,
+        ...timing,
       });
       return;
     }
@@ -111,6 +152,7 @@ export async function executeTaskPipeline(ctx: PipelineContext): Promise<void> {
         started_at: new Date(startMs).toISOString(),
         assigned_cat_id: null,
         error_summary: null,
+        ...timing,
       });
       return;
     }
@@ -128,6 +170,7 @@ export async function executeTaskPipeline(ctx: PipelineContext): Promise<void> {
       started_at: new Date(startMs).toISOString(),
       assigned_cat_id: null,
       error_summary: null,
+      ...timing,
     });
     return;
   }
@@ -154,6 +197,7 @@ export async function executeTaskPipeline(ctx: PipelineContext): Promise<void> {
           started_at: new Date(startMs).toISOString(),
           assigned_cat_id: null,
           error_summary: null,
+          ...timing,
         });
       }
       return;
@@ -163,8 +207,6 @@ export async function executeTaskPipeline(ctx: PipelineContext): Promise<void> {
     const assignedCatId = task.actor && actorResolver ? actorResolver(task.actor.role, task.actor.costTier) : null;
 
     // Step 4 + 5: Execute per workItem → ledger per subject
-    const pendingExecutes: Promise<void>[] = [];
-
     for (const item of gateResult.workItems) {
       const itemStartMs = Date.now();
 
@@ -181,25 +223,81 @@ export async function executeTaskPipeline(ctx: PipelineContext): Promise<void> {
             started_at: new Date(itemStartMs).toISOString(),
             assigned_cat_id: null,
             error_summary: null,
+            ...timing,
           });
           continue;
         }
       }
 
       let outcome: RunOutcome = 'RUN_DELIVERED';
+      const executeController = new AbortController();
+      const deliveredMessageIds = new Set<string>();
+      const pendingTriggerEffects = new Set<Promise<unknown>>();
+      const cancellationAwareDeliver = deliver
+        ? async (opts: DeliverOpts): Promise<string> => {
+            executeController.signal.throwIfAborted();
+            const messageId = await deliver(opts);
+            deliveredMessageIds.add(messageId);
+            return messageId;
+          }
+        : undefined;
+      const cancellationAwareFetch = fetchContent
+        ? async (url: string): Promise<FetchResult> => {
+            executeController.signal.throwIfAborted();
+            const result = await fetchContent(url, executeController.signal);
+            executeController.signal.throwIfAborted();
+            return result;
+          }
+        : undefined;
+      const cancellationAwareInvokeTrigger: ScheduleInvokeTrigger | undefined = invokeTrigger
+        ? {
+            trigger(...args: Parameters<ScheduleInvokeTrigger['trigger']>) {
+              // A trigger carrying a message persisted by this same work item is
+              // the bounded completion of that delivery, even if timeout fired
+              // while the message write was settling. Unrelated new triggers
+              // remain fail-fast after cancellation.
+              const effect = Promise.resolve()
+                .then(() => {
+                  if (!deliveredMessageIds.has(args[4])) executeController.signal.throwIfAborted();
+                  return invokeTrigger.trigger(...args);
+                })
+                .finally(() => pendingTriggerEffects.delete(effect));
+              pendingTriggerEffects.add(effect);
+              return effect;
+            },
+          }
+        : undefined;
+      const cancellationAwareWakeRecovery = managedCommandWakeRecovery
+        ? async (taskId: string): Promise<'missing' | 'pending' | 'recovered'> => {
+            executeController.signal.throwIfAborted();
+            const result = await managedCommandWakeRecovery(taskId);
+            return result;
+          }
+        : undefined;
       // Phase 2: pass context spec through ExecuteContext
-      const rawExecute = task.run.execute(item.signal, item.subjectKey, {
-        assignedCatId,
-        context: task.context,
-        deliver,
-        fetchContent,
-        invokeTrigger,
-        ballCustody,
+      const rawExecute = Promise.resolve().then(async () => {
+        try {
+          await task.run.execute(item.signal, item.subjectKey, {
+            signal: executeController.signal,
+            assignedCatId,
+            context: task.context,
+            schedule,
+            deliver: cancellationAwareDeliver,
+            fetchContent: cancellationAwareFetch,
+            invokeTrigger: cancellationAwareInvokeTrigger,
+            ballCustody,
+            managedCommandWakeRecovery: cancellationAwareWakeRecovery,
+          });
+        } finally {
+          // Some legacy templates intentionally detach best-effort triggers.
+          // They may ignore the result, but terminal truth must still wait for
+          // the external dispatch attempt to settle.
+          await Promise.allSettled([...pendingTriggerEffects]);
+        }
       });
-      pendingExecutes.push(rawExecute.catch(() => {}));
       let errorSummary: string | null = null;
       try {
-        await withTimeout(rawExecute, task.run.timeoutMs, task.id);
+        await withTimeout(rawExecute, task.run.timeoutMs, task.id, executeController);
       } catch (err) {
         outcome = 'RUN_FAILED';
         errorSummary = err instanceof Error ? err.message.slice(0, 500) : String(err).slice(0, 500);
@@ -215,6 +313,7 @@ export async function executeTaskPipeline(ctx: PipelineContext): Promise<void> {
         started_at: new Date(itemStartMs).toISOString(),
         assigned_cat_id: assignedCatId,
         error_summary: errorSummary,
+        ...timing,
       });
 
       // #415: notify on outcome (used for failure notifications)
@@ -237,8 +336,6 @@ export async function executeTaskPipeline(ctx: PipelineContext): Promise<void> {
     logger.info(
       `[scheduler] ${task.id}: tick completed, ${gateResult.workItems.length} items (${Date.now() - startMs}ms)`,
     );
-
-    await Promise.allSettled(pendingExecutes);
   } finally {
     running.set(task.id, false);
   }

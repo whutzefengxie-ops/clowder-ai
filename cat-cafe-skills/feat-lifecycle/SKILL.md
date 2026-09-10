@@ -2,8 +2,8 @@
 name: feat-lifecycle
 description: >
   Feature 立项、讨论、完成的全生命周期管理。
-  Use when: 开个新功能、new feature、F0xx、立项、feature 完成、验收通过、讨论新功能需求。
-  Not for: 代码实现、review、merge（那些有专门的 skill）。
+  Use when: 开个新功能、new feature、F0xx、立项、feature 完成、验收通过、讨论新功能需求，或operator说“先看真页面”要求恢复既有 F083 Design Gate。
+  Not for: 不涉及 Feature/Design Gate 真相更新的纯代码实现、review、merge（那些有专门的 skill）。
   Output: Feature 聚合文件 + BACKLOG 索引 + 真相源同步。
 triggers:
   - "开个新功能"
@@ -14,6 +14,7 @@ triggers:
   - "F0xx done"
   - "验收通过"
   - "讨论新功能需求"
+  - "先看真页面"
 argument-hint: "[阶段: kickoff|discussion|completion] [F0xx 或主题]"
 ---
 
@@ -73,11 +74,11 @@ search_evidence("{topic}", scope="all")  # 找历史讨论 + thread
 
 2. **创建聚合文件** `docs/features/Fxxx-name.md`（kebab-case 文件名）
 
-   **从标准模板创建**：复制 `cat-cafe-skills/refs/feature-doc-template.md` 中「模板正文」部分，替换占位符（`{NNN}`/`{Feature Name}`/`{YYYY-MM-DD}` 等）。模板包含 Dashboard parser 所需的全部硬性格式。
+   **从标准模板创建**：复制 `../.cat-cafe-shared-refs/feature-doc-template.md` 中「模板正文」部分，替换占位符（`{NNN}`/`{Feature Name}`/`{YYYY-MM-DD}` 等）。模板包含 Dashboard parser 所需的全部硬性格式。
 
    轻量 Feature（≤1 Phase）可省略 Timeline/Review Gate/Links/Key Decisions，但 Frontmatter + Status 行 + Why + Current State + What + User Journey（或 `user_journey_exempt`）+ AC + Dependencies 必须保留（全新能力的 Current State 写 "N/A（无既有基线）"，不是删段）。
 
-   并在 spec 中补一节：`## 需求点 Checklist`（模板见 `cat-cafe-skills/refs/requirements-checklist-template.md`）
+   并在 spec 中补一节：`## 需求点 Checklist`（模板见 `../.cat-cafe-shared-refs/requirements-checklist-template.md`）
 
    **F244 Tips Contribution**：若 feature 有用户可见能力/工作流变化，在 spec 中保留 `## Tips Contribution（F244）`：
    - 计划新增/更新 1-2 条 tips，指向现有 truth source。
@@ -150,16 +151,27 @@ Step 2 写完 spec，Why / 现状 / AC 逐条过这道自检：
 
 ## Design Gate (设计确认) 🔴
 
-**Discussion → writing-plans 之间的必经关卡。UX 没确认，不准开 worktree。User Journey 没落盘，不准过 Design Gate。**
+**Discussion → writing-plans 之间的必经关卡。UX 没确认，不准进入正式产品实现；隔离 worktree
+可承载真实壳体验稿。User Journey 没落盘，不准过 Design Gate。**
 
-按功能类型分流确认：
+先按主要功能类型分流，再判断是否叠加了**用户可见表面**；两者不是互斥分类：
 
 | 类型 | 判断标准 | 确认人 | 方式 |
 |------|---------|--------|------|
-| **前端 UI/UX** | 用户能看到的改动 | **operator** | wireframe → operator OK 后继续 |
+| **前端 UI/UX** | 新增或实质改变用户可见布局/交互 | **operator** | 真实产品壳中的主旅程 + 默认状态 + 窄屏状态 → operator OK 后继续 |
 | **纯后端** | API/数据模型/内部逻辑 | **其他猫猫** | `collaborative-thinking` 讨论达成共识 |
 | **架构级** | 跨模块、新基础设施 | **猫猫讨论 → operator拍板** | 先出方案再上报 |
 | **Trivial** | ≤5 行、纯重构、文档 | 跳过 | 跳过 Design Gate，按 SOP 例外路径判断 |
+
+**叠加触发（F305）**：主要类型即使是纯后端或架构，只要同一改动新增或实质改变用户可见
+布局/交互，就同时走前端 UI/UX 确认；后端/架构确认不能替代体验确认。小型文字、间距或颜色
+修正若不改变用户任务、布局或交互，仍走 Trivial，不扩大门禁。
+
+**“先看真页面”快捷入口（F305 → F083）**：这句话不是新 Magic Word、stage 或 skill。
+收到后停止用 schema、字段表、设计说明或抽象 wireframe 证明体验成立；把当前方案放回真实
+Clowder AI 产品壳，展示主旅程、默认状态与窄屏状态，并逐项使用
+`../.cat-cafe-shared-refs/design-in-context-checklist.md`。正式 UI 实现和合入必须等这个方向确认；
+体验稿本身可以留在隔离预览 worktree。
 
 **前置检查（F086 M2）**：
 开 Design Gate 前，先做触发器 E "新领域侦查"：
@@ -168,7 +180,7 @@ Step 2 写完 spec，Why / 现状 / AC 逐条过这道自检：
 3. 搜 `feature-discussions/` 看有没有前人讨论过类似问题
 4. 把发现记录到 Design Gate 讨论里（避免重复造轮子）
 
-详见 `shared-rules.md` §13 元思考触发器。先搜现状，再开讨论。
+详见 `../.cat-cafe-shared-refs/shared-rules.md` §13 元思考触发器。先搜现状，再开讨论。
 
 **User Journey 前置门禁（F252 教训）🔴**：
 
@@ -181,6 +193,16 @@ Step 2 写完 spec，Why / 现状 / AC 逐条过这道自检：
 | Flow 用用户语言 | ✅ | "点击 thread 标题看回放"，不是"调用 StoryPlayer.replay()" |
 | operator口述期望已回填 | ✅ | Discussion 落盘 ≠ spec 记录（F252 直接原因） |
 | 非用户可感知 | — | 写 `user_journey_exempt: {reason}`，不能靠缺段默认跳过 |
+
+**真实交互 claim 证据（不新增 stage）**：只有交付声明包含编辑、输入、批注、聊天/讨论、发送、审批、拖动/加节点或可恢复草稿时，现有 Design Gate 追加一行 claim→证据；不因 `concept_story` 的预设叙事、播放或场景控制而误触发。
+
+对 `product_experience_gate`、`journey_validation` 或同等真实交互 claim，必须记录并提供可重放浏览器旅程：核心输入为语义控件、核心动作有 handler/状态后果、fixture 外的陌生 sentinel 在动作后进入 DOM 或声明的 browser store。声称可恢复/持久化时才加刷新恢复断言；没有该 claim 不强加 storage。批注、聊天/讨论、协同记录或历史写清用户语义与因果，不能只说“右栏变化”。截图/视频只能证明外观，不能单独通过这项验收。
+
+`pnpm check:design-gate-real-interaction` 守住静态布景的 RED/GREEN 回归 fixture；它不替代每个 Demo 在 Contract 中列出的 exact 可重放浏览器旅程。
+
+若本轮声明已接入真实产品或具备成熟文档编辑能力，必须同时提交 `docs/design-gate-claims/<id>.json`。命令会消费该文件并核验真实入口→宿主→surface 的逐跳 import/mount；编辑器 claim 另核验 manifest 引擎依赖、adapter 的五项实现 token 与实际挂载，并拒绝原生输入框。没有 product/editor claim 的普通 demo 不需要为了过门补空 contract。
+
+**产品宿主与编辑器 claim 证据（同属现有 Design Gate）**：若交付声称已进入现有 Workspace / Collective，必须记录**真实产品宿主**的用户入口、目标组件路径与**宿主挂载证据**；单独 `/dev` route、自造导航或**独立复制壳**只能算组件实验，不能推进正式后端阶段。若交付声称共同编辑文档、稳定选区批注、Agent patch 审阅或版本撤销，必须点名**成熟编辑器引擎**并覆盖 `human_edit / selection_anchor / annotation / patch_review / version_undo` 五项**编辑器适配契约**；原生 `textarea`、`contenteditable` 或分段输入框不能冒充文档编辑器。
 
 **架构归属一问（F191）🔴**：
 
@@ -199,42 +221,108 @@ Why: 一句话
 
 答不出来 → Design Gate 不放行。禁止用新 Feature 私造 `Store` / `Queue` / `Router` / `Adapter` 来绕开已有 cell。
 
+### Architecture / contract integrity admission（F303）🔴
+
+F191 三行先回答归属；随后只在以下三个客观事实任一命中时，把对应 claim 纳入
+architecture / contract 风险核验。它仍属于现有 Design Gate，不是新 stage。
+
+F303 trigger set (three-item OR; no fourth trigger):
+
+- `consumer_delta`: 新增或搬动 route、surface、后台 job 或 caller，并复用既有 auth、policy、resolver、cursor 或 lifecycle 语义。
+- `authority_delta`: 重构、迁移或 single-writer 收敛改变 canonical owner、writer 或 read path。
+- `preservation_boundary_delta`: 出现“保持既有行为”“不改变鉴权”“Map delta: none”“只做 projection”等 preservation claim，且 diff 触及对应 consumer 或 authority boundary。
+
+重复事故 family 与 route-local 分叉只作为 admission 后的证据深度 prior，不是第四个
+trigger。普通增量仍只写 `Architecture cell / Map delta / Why`，不要求永久 consumer Matrix。
+
+命中任一项的 eligible spec/plan 在 F191 三行后追加：
+
+```markdown
+Canonical source: {repo-relative path#symbol | doc path#anchor}
+Consumer evidence: {rerunnable LSP/rg command + relevant output | explicit references + why automatic scan cannot express the boundary}
+Claim guard: {claim} → {test/lint/guard/self-check command or test name} → red when {input or condition}
+```
+
+- `Canonical source` 必须是可检查存在性的 exact ref，不能只写 Feature 名或自然语言 owner。
+- 代码符号 consumer 用可重跑的 LSP find-references / `rg` 命令与相关输出。
+- 只有 MCP tool、skill、workflow callback 等约定面适用 F242 convention graph；工具无法表达的语义边界改用显式 references，并写明无法自动扫描的理由。
+- `Claim guard` 必须指向一个具体 test/lint/guard/self-check 命令或测试名，并说明什么输入或条件会使它变红。
+
+缺少上述任一项，eligible change 不通过 Design Gate。重构、迁移或 single-writer eligible
+change 还必须追加：
+
+```markdown
+Characterization/contract test: {command or test name}
+Code-derived consumer census: {rerunnable command + relevant output}
+Migration/restart/rollback evidence: {only when persistence or runtime semantics migrate}
+```
+
+前两项缺一即不通过；只有持久化或运行语义迁移时才要求第三项。不要为普通增量填空白
+字段，也不要把这份 change-local evidence 扩成 registry、dashboard 或永久 Matrix。
+
+F277 related-set / attention projection 只能作为显式关系的展示证据；它不能提供或推断
+work、custody、completion、acceptance truth。需要这些事实时回到各自 canonical owner。
+
+**主动交互反馈出生三问（F281 / ADR-038）🔴**：
+
+当 Feature 新增或改造“猫主动发起 proposal / candidate / wait，人类作 disposition”的交互面时，
+Design Gate 必须记录以下三项：
+
+```yaml
+human_disposition_feedback:
+  feedback_expression: structured reasons + other + optional skip
+  episode_truth: canonical owner-scoped TTL=0 store + authenticated query + deletion closure
+  consumer: named consumer + exact scope + invalidator
+```
+
+- `feedback_expression` 只有 binary approve/reject → 不通过；跳过 feedback 可以，但不得生成空 envelope。
+- `episode_truth` 只有 UI toast / log / transient callback → 不通过。
+- `consumer` 未点名，或 scope 允许从一个 subject 泛化为 lane/global policy → 不通过；别采死遥测。
+- auth/ownership 4xx、CAS/race conflict、内部 retry、`AbortController` 终止、纯 UI dismiss 不属于此触发器。
+
+确定契约用 schema/test/guard；运行健康走 F153；只有不确定效用且有明确
+keep/tune/sunset consumer 时才走 eval-design。完整判据与 F281 dogfood 见
+`docs/decisions/038-l0-staging-protocol.md`「主动交互面的反馈出生三件套」。
+
 **Eval Contract 门禁（F192）🔴**：
 
-harness / skill / MCP / shared-rules 类 feature 的 spec **必须含 `## Eval / Tracking Contract` 节**，否则 Design Gate 不通过。
+harness / skill / MCP / shared-rules 类 feature 的 spec，**若含"不确定效用"类 claim（ADR-031 v3.4 机制选择第三行：效果未知 + 明确 consumer + keep/tune/sunset 决策），必须含 `## Eval / Tracking Contract` 节**，否则 Design Gate 不通过。
 
-**触发条件**（判断标准：改动会改变猫猫行为模式 → 填）：
-- 新增 skill / 新增 MCP tool / 新增 shared-rules section / 新增 SOP step
-- 现有规则/工具的显著行为变更
+**触发条件**（两问都 yes 才填）：
+- 改动会改变猫猫行为模式？（新增 skill / MCP tool / shared-rules section / SOP step / 显著行为变更）
+- 存在效用不确定、且有明确 verdict consumer 的 claim？
 
-**不触发**：typo / wording 微调 / 纯重构（行为不变）/ 文档补充
+**不触发**：typo / wording 微调 / 纯重构（行为不变）/ 文档补充 / 只有确定契约或原始运行健康信号。未触发时不要创建空白或 N/A Eval 节。
 
-**4 项必填**（模板见 *(internal reference removed)*）：
+**触发即 4 项必填**（模板见 *(internal reference removed)*）：
 1. Primary Users + Activation Signal
 2. Friction Metric
 3. Regression Fixture（最少 1 条，建议 2-5）
 4. Sunset Signal（**空填 = 不通过，不设 reviewer 签字降级**——KD-4）
 
-**Harness 方法论教学（F218 / ADR-031）🔴**：
+**Harness 方法论教学（F218 / ADR-031 v3.4 机制选择）🔴**：
 
-凡是 harness / skill / MCP / shared-rules / SOP / L0 等会改变猫猫行为模式的 feature，Design Gate 必须写出 **软+硬+eval** 三层计划；不是每层都要很重，但漏掉任何一层都要说明理由。
+凡是 harness / skill / MCP / shared-rules / SOP / L0 等会改变猫猫行为模式的 feature，Design Gate 对需要机制保障的 claim/decision 逐项记录 `claim → 选中机制 → 验证证据或 consumer`。**只记录实际选中的机制，不枚举未选类别、不填 N/A**。同一 feature 可含多类 claim，逐项选，不给整项贴单一标签。
 
-| 层 | 承重 | 常见载体 |
+ADR-031 v3.4 选择器速查：
+
+| 机制 | 承重 | 常见载体 |
 |----|------|----------|
-| Soft | 让猫在正确认知路径上想起该动作 | L0 触发句 / skill description / SOP 教学 |
-| Hard | 不靠自觉也能挡住或暴露错误 | test / linter / schema / runtime guard / compile gate |
-| Eval | 持续检验这条 harness 是否真的让行为变好 | F192 fixture / regression case / friction metric / sunset signal |
+| Convention/skill | 让猫在正确认知路径上想起该动作 | L0 触发句 / skill description / SOP 教学 |
+| Test/guard | 不靠自觉也能挡住或暴露错误 | test / linter / schema / runtime guard / compile gate |
+| Eval | 检验"效用不确定"的机制是否真的让行为变好 | F192 fixture / regression case / friction metric / sunset signal |
+| Observability | 原始运行健康信号供诊断与 SLO | logs / traces / metrics（默认留在 F153；若升为带 utility claim + consumer + verdict 的估计量，再走 Eval Contract） |
 
-一句话判断：只写 Soft = 希望猫下次记得；只有 Soft + Hard = 修了但不知道会不会长期有效；Soft + Hard + Eval 才是 ADR-031 的完整 harness loop。
+一句话判断：**机制是按问题选的工具箱，不是待填清单**——claim 配错机制（工程 telemetry 硬挂 Eval Hub / 确定契约硬造 friction metric）和该配未配同样是 Design Gate 打回理由（LL-095）。
 
 **在地设计检查 (Design in Context) 🔴**：
-凡是改动或往已有页面/组件添加新 UI 元素，必须逐项过 `cat-cafe-skills/refs/design-in-context-checklist.md`。禁止在真空中凭想象画已有页面的布局。
+凡是改动或往已有页面/组件添加新 UI 元素，必须逐项过 `../.cat-cafe-shared-refs/design-in-context-checklist.md`。禁止在真空中凭想象画已有页面的布局。
 
 **现场可感知性自检 (In-context Observability) 🔴**：
 
 > **核心铁律**：**统计是事后审计，现场可感知性是第一入口。**
 
-凡是涉及 **agent 状态 / runtime failure / 后台任务 / auth & degradation / diagnostics / health & status / 跨猫协作可见性** 的 feature，必须逐项过 `cat-cafe-skills/refs/in-context-observability-checklist.md`，并在 Design Gate 讨论文档里产出 `in_context_observability` 决策字段（`primary_surface` / `why_not_dashboard_only` / `deep_dive_surface` / `noise_dedup_policy`）。缺字段 = Design Gate 不放行。
+凡是涉及 **agent 状态 / runtime failure / 后台任务 / auth & degradation / diagnostics / health & status / 跨猫协作可见性** 的 feature，必须逐项过 `../.cat-cafe-shared-refs/in-context-observability-checklist.md`，并在 Design Gate 讨论文档里产出 `in_context_observability` 决策字段（`primary_surface` / `why_not_dashboard_only` / `deep_dive_surface` / `noise_dedup_policy`）。缺字段 = Design Gate 不放行。
 
 类比范式：memory entity 自带状态、browser-preview 把页面端上桌——entity carries its own state, surface it where it happens。反面：Datadog/前 agent 时代的 stats dashboard，等用户主动切到 tab 才看到数字 +1。
 
@@ -242,12 +330,12 @@ harness / skill / MCP / shared-rules 类 feature 的 spec **必须含 `## Eval /
 
 **流程**：
 1. 判断功能类型 → 选择确认路径
-2. 前端：画 wireframe（Pencil / 文字版 ASCII）→ 发operator → 等 OK
+2. 前端：在真实产品壳做可见体验稿（可先用 Pencil 探索）→ 展示主旅程、默认与窄屏 → 等 OK
 3. 后端：`collaborative-thinking` → 拉相关猫讨论 API 契约/数据模型
-4. 架构：猫猫讨论 → 结论给operator → **必须附 Decision Packet**（格式见 `refs/decision-matrix.md`）→ operator拍板
+4. 架构：猫猫讨论 → 结论给operator → **必须附 Decision Packet**（格式见 `../.cat-cafe-shared-refs/decision-matrix.md`）→ operator拍板
 5. 确认产出归档 `feature-discussions/{date}-{fid}-design/`
 
-**Design Gate OQ 升级规则**：先判断可逆性维度（见 `refs/decision-matrix.md`）——回滚成本低+不碰愿景/安全/外部契约/显著成本 → 猫猫自决，不升级 operator。需要升级时，OQ 必须用 Decision Packet 格式，不能只列"模糊问题清单"。
+**Design Gate OQ 升级规则**：先判断可逆性维度（见 `../.cat-cafe-shared-refs/decision-matrix.md`）——回滚成本低+不碰愿景/安全/外部契约/显著成本 → 猫猫自决，不升级 operator。需要升级时，OQ 必须用 Decision Packet 格式，不能只列"模糊问题清单"。
 
 **元审美自检**（Design Gate 必问，F163 教训 + F167 Round 4 canon 化）🔴
 
@@ -405,7 +493,7 @@ User Journey 验收表（守护猫必须输出）：
 
 **Step 1: Close Gate Report（F177 Phase A）🔴**
 
-输出 **CloseGateReport**（schema 见 `cat-cafe-skills/refs/close-gate.md`）——逐条列明每个 AC 的证据和处置：
+输出 **CloseGateReport**（schema 见 `../.cat-cafe-shared-refs/close-gate.md`）——逐条列明每个 AC 的证据和处置：
 
 ```
 AC-A1 ✅ met — commit abc123 + test_xxx

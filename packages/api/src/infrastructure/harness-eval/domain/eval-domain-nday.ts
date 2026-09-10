@@ -21,7 +21,12 @@ import {
   evaluatePublishPrereq,
 } from './eval-domain-daily.js';
 import { getEvalCatOverride } from './eval-domain-override.js';
-import { type EvalDomainRegistryEntry, parseEvalDomainRegistryFile } from './eval-domain-registry.js';
+import {
+  type EvalDomainRegistryEntry,
+  isEvalDomainRegistryYamlFile,
+  parseEvalDomainRegistryFile,
+} from './eval-domain-registry.js';
+import { dispatchEvalDomainTrigger } from './eval-domain-trigger-dispatch.js';
 
 // ---- N-day cadence helpers ----
 
@@ -42,7 +47,7 @@ function loadNDayDomains(harnessFeedbackRoot: string): EvalDomainRegistryEntry[]
   const domainsDir = join(harnessFeedbackRoot, 'eval-domains');
   if (!existsSync(domainsDir)) return [];
   return readdirSync(domainsDir, { withFileTypes: true })
-    .filter((e) => e.isFile() && e.name.endsWith('.yaml'))
+    .filter((e) => e.isFile() && isEvalDomainRegistryYamlFile(e.name))
     .map((e) => parseEvalDomainRegistryFile(parseYaml(readFileSync(join(domainsDir, e.name), 'utf8'))))
     .filter((d) => parseNDayFrequency(d.frequency) !== null)
     .filter((d) => d.enabled !== false);
@@ -191,56 +196,23 @@ export function createEvalDomainNDaySpec(opts: EvalDomainScheduleOpts): TaskSpec
           { wiredPublishDomains: opts.wiredPublishDomains },
         );
 
-        if (ctx.deliver) {
-          const content = [
-            `## Eval Domain: ${invocation.domainId}`,
-            '',
-            invocation.instructions,
-            '',
-            '```json',
-            JSON.stringify(invocation.context, null, 2),
-            '```',
-          ].join('\n');
+        const dispatch = await dispatchEvalDomainTrigger({
+          domain,
+          invocation,
+          channel: 'time',
+          triggerReason: `N-day eval: ${invocation.domainId}`,
+          store: opts.triggerStore,
+          deliver: ctx.deliver,
+          invokeTrigger: ctx.invokeTrigger,
+          defaultUserId: opts.defaultUserId,
+        });
 
-          const messageId = await ctx.deliver({
-            threadId: invocation.targetThreadId,
-            content,
-            userId: 'scheduler',
-          });
-
-          // F245 PR2 (gpt52 R1 P1 fix): await trigger BEFORE writing Redis.
-          // If trigger fails, eval cat was never notified — do NOT trip the N-day
-          // gate (original order wrote Redis before trigger, causing a silent N-day
-          // skip on transient trigger failure even though no eval ran).
-          //
-          // No invokeTrigger = message is in thread, EYES-driven pickup = dispatched.
-          let triggered = !ctx.invokeTrigger;
-          if (ctx.invokeTrigger && messageId) {
-            const triggerUserId = opts.defaultUserId ?? 'default-user';
-            try {
-              const outcome = await ctx.invokeTrigger.trigger(
-                invocation.targetThreadId,
-                invocation.evalCat.catId,
-                triggerUserId,
-                `N-day eval: ${invocation.domainId}`,
-                messageId,
-              );
-              // Cloud R3 P1: treat 'full' (queue at capacity, invocation dropped) the same
-              // as a throw — Redis NOT written so the domain retries on the next daily probe
-              // rather than being silently suppressed for a full N-day window.
-              triggered = outcome !== 'full';
-            } catch {
-              // Trigger failed — Redis NOT written, domain retried on next daily probe
-            }
-          }
-
-          // Write last-dispatch only when trigger succeeded (or no trigger available)
-          if (opts.redis && triggered) {
-            try {
-              await opts.redis.set(`eval-nday-last-dispatch:${domain.domainId}`, Date.now().toString());
-            } catch {
-              // Best-effort: Redis write failure should not fail the eval task
-            }
+        // Preserve the N-day cadence only after accepted/already-settled dispatch.
+        if (opts.redis && ['dispatched', 'deduped', 'cooldown'].includes(dispatch.outcome)) {
+          try {
+            await opts.redis.set(`eval-nday-last-dispatch:${domain.domainId}`, Date.now().toString());
+          } catch {
+            // Best-effort: Redis write failure should not fail the eval task
           }
         }
       },

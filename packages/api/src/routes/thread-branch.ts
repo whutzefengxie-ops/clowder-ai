@@ -141,7 +141,9 @@ export const threadBranchRoutes: FastifyPluginAsync<ThreadBranchRoutesOptions> =
 
     // ③ Get all visible messages up to and including fromMessage
     // getByThread filters soft-deleted/tombstone — cannot branch from deleted messages
-    const allMessages = await messageStore.getByThread(id, 10000);
+    const allMessages = await messageStore.getByThread(id, 10000, undefined, {
+      includeQueuedCatMessages: true,
+    });
     const cutIndex = allMessages.findIndex((m) => m.id === fromMessageId);
     if (cutIndex === -1) {
       reply.status(400);
@@ -151,7 +153,12 @@ export const threadBranchRoutes: FastifyPluginAsync<ThreadBranchRoutesOptions> =
 
     // ④ Create new thread with "(分支)" suffix
     const branchTitle = sourceThread.title ? `${sourceThread.title} (分支)` : '分支对话';
-    const newThread = await threadStore.create(userId, branchTitle, sourceThread.projectPath);
+    const branchedAt = Date.now();
+    const newThread = await threadStore.create(userId, branchTitle, sourceThread.projectPath, id, undefined, {
+      sourceThreadId: id,
+      sourceMessageId: fromMessageId,
+      branchedAt,
+    });
 
     // ⑤ Copy participants + messages inside guarded block; rollback on any failure
     try {

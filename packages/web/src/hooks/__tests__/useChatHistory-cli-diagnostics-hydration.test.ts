@@ -9,6 +9,7 @@
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ThreadChatHistoryAdmissionProvider } from '@/components/thread-chat/ThreadChatRuntimeProvider';
 import { useChatStore } from '@/stores/chatStore';
 import { apiFetch } from '@/utils/api-client';
 import { useChatHistory } from '../useChatHistory';
@@ -19,12 +20,16 @@ vi.mock('@/utils/api-client', () => ({
 
 let capturedHook: ReturnType<typeof useChatHistory> | null = null;
 
-function HookHost({ threadId }: { threadId: string }) {
+function HookProbe({ threadId }: { threadId: string }) {
   capturedHook = useChatHistory(threadId);
   return React.createElement('div', {
     ref: capturedHook.scrollContainerRef,
     style: { height: '100px', overflow: 'auto' },
   });
+}
+
+function HookHost({ threadId }: { threadId: string }) {
+  return React.createElement(ThreadChatHistoryAdmissionProvider, null, React.createElement(HookProbe, { threadId }));
 }
 
 const STORED_DIAGNOSTICS = {
@@ -171,5 +176,84 @@ describe('F212 Phase B — cold hydration restores cliDiagnostics (云端 codex 
 
     const messages = useChatStore.getState().messages;
     expect(messages[0].extra?.cliDiagnostics).toBeUndefined();
+  });
+
+  it('preserves the durable F254 accident-recovery marker on cold hydration', async () => {
+    const recovery = {
+      kind: 'f254_withheld_message',
+      cvoDecisionRef: '0001783820437069-000027-a6cebcce',
+      recoveredAt: 1700000005000,
+    };
+    apiFetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        messages: [
+          {
+            id: 'msg-recovered-1',
+            type: 'assistant',
+            catId: 'fable-5',
+            content: '买到了，正在回家。',
+            extra: { recovery },
+            timestamp: 1700000000000,
+          },
+        ],
+        tasks: [],
+        hasMore: false,
+      }),
+    } as Response);
+
+    await act(async () => {
+      root.render(React.createElement(HookHost, { threadId: 'thread-cli-diag' }));
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const hydrated = useChatStore.getState().messages[0].extra as { recovery?: typeof recovery } | undefined;
+    expect(hydrated?.recovery).toEqual(recovery);
+  });
+
+  it('preserves the durable F254 supplement projection on cold hydration', async () => {
+    const freshnessSupplement = {
+      type: 'freshness_supplement' as const,
+      supplementId: 'f254-supplement:msg-original:1',
+      lineageId: 'msg-original',
+      originalMessageId: 'msg-original',
+      threadId: 'thread-cli-diag',
+      catId: 'codex-sol',
+      seq: 1 as const,
+      status: 'declined' as const,
+      requiredCount: 1,
+      terminalReason: 'checked_no_supplement_needed',
+      updatedAt: 1700000005000,
+    };
+    apiFetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        messages: [
+          {
+            id: 'msg-original',
+            type: 'assistant',
+            catId: 'codex-sol',
+            content: '原回复持续可见。',
+            extra: { freshnessSupplement },
+            timestamp: 1700000000000,
+          },
+        ],
+        tasks: [],
+        hasMore: false,
+      }),
+    } as Response);
+
+    await act(async () => {
+      root.render(React.createElement(HookHost, { threadId: 'thread-cli-diag' }));
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(useChatStore.getState().messages[0].extra?.freshnessSupplement).toEqual(freshnessSupplement);
   });
 });

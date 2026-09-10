@@ -1,18 +1,30 @@
 'use client';
 
-import { useCallback, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useRef } from 'react';
 import { shouldFoldText, TEXT_FOLD_THRESHOLD } from '@/utils/textFold';
 import { MarkdownContent } from './MarkdownContent';
+import { useMessageDisclosureState } from './message-disclosure-state';
 
 const COLLAPSED_MAX_HEIGHT = 320;
 
-export function CollapsibleMarkdown({ content, className }: { content: string; className?: string }) {
+export function CollapsibleMarkdown({
+  content,
+  className,
+  disclosureKey,
+}: {
+  content: string;
+  className?: string;
+  disclosureKey?: string;
+}) {
   const fold = shouldFoldText(content);
-  const [expanded, setExpanded] = useState(false);
+  const isExport =
+    typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('export') === 'true';
+  const { expanded, setExpanded } = useMessageDisclosureState(disclosureKey, false);
   const collapsed = fold && !expanded;
   const lineCount = content.split('\n').length;
   const hasMounted = useRef(false);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: expanded is intentional — dispatch on toggle
   useLayoutEffect(() => {
     if (!hasMounted.current) {
       hasMounted.current = true;
@@ -23,9 +35,9 @@ export function CollapsibleMarkdown({ content, className }: { content: string; c
     }
   }, [expanded]);
 
-  const toggle = useCallback(() => setExpanded((v) => !v), []);
+  const toggle = useCallback(() => setExpanded((v) => !v), [setExpanded]);
 
-  if (!fold) {
+  if (!fold || isExport) {
     return <MarkdownContent content={content} className={className} />;
   }
 

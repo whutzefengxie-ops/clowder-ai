@@ -2,20 +2,17 @@
 
 import { useEffect, useRef } from 'react';
 
-export type SteerMode = 'immediate' | 'promote';
-
 export function SteerQueuedEntryModal({
-  mode,
+  source = 'queued',
   onCancel,
   onConfirm,
-  onModeChange,
 }: {
-  mode: SteerMode;
+  source?: 'draft' | 'queued';
   onCancel: () => void;
   onConfirm: () => void;
-  onModeChange: (mode: SteerMode) => void;
 }) {
   const modalRef = useRef<HTMLDivElement>(null);
+  const isDraft = source === 'draft';
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -36,56 +33,39 @@ export function SteerQueuedEntryModal({
     >
       <div ref={modalRef} className="bg-cafe-surface rounded-2xl shadow-2xl w-full max-w-[520px] mx-4 overflow-hidden">
         <div className="px-6 pt-6 pb-4">
-          <h2 className="text-lg font-semibold text-cafe-black">Steer 这条排队消息</h2>
-          <p className="text-sm text-cafe-secondary mt-1">选择你希望如何处理这条 queued 消息：</p>
+          <h2 className="text-lg font-semibold text-cafe-black">Steer（强制停止并发送此消息）</h2>
+          <p className="text-sm text-cafe-secondary mt-1">
+            {isDraft
+              ? '会停止目标当前回复，然后立即发送当前输入的消息。'
+              : '会停止目标当前回复，然后立即发送这条排队消息。'}
+          </p>
         </div>
 
-        <div className="px-6 pb-5 space-y-3">
-          {/* 安全默认选项置顶，防止惯性误触 */}
-          <button
-            type="button"
-            data-testid="steer-mode-promote"
-            onClick={() => onModeChange('promote')}
-            className={`w-full text-left p-4 rounded-xl border transition-colors ${
-              mode === 'promote'
-                ? 'border-[var(--color-cocreator-primary)]'
-                : 'border-cafe hover:border-cafe bg-cafe-surface'
-            }`}
-            style={
-              mode === 'promote'
-                ? { backgroundColor: 'color-mix(in oklch, var(--color-cocreator-primary) 5%, transparent)' }
-                : undefined
-            }
-          >
-            <div className="text-sm font-medium text-cafe">提到队首（不取消）</div>
-            <div className="text-xs text-cafe-secondary mt-1">只调整顺序；当前猫跑完后优先执行这条消息。</div>
-          </button>
-
-          {/* 高风险选项置底，选中时用警告色强调破坏性 */}
-          <button
-            type="button"
-            data-testid="steer-mode-immediate"
-            onClick={() => onModeChange('immediate')}
-            className={`w-full text-left p-4 rounded-xl border transition-colors ${
-              mode === 'immediate' ? 'border-[var(--conn-amber-ring)]' : 'border-cafe hover:border-cafe bg-cafe-surface'
-            }`}
-            style={mode === 'immediate' ? { backgroundColor: 'var(--conn-amber-bg)' } : undefined}
-          >
-            <div
-              className="text-sm font-medium"
-              style={{ color: mode === 'immediate' ? 'var(--conn-amber-text)' : undefined }}
-            >
-              ⚠️ 立即执行（必要时中断目标猫）
+        <div className="px-6 pb-5">
+          <div className="w-full p-4 rounded-xl border border-[var(--conn-amber-ring)] bg-[var(--conn-amber-bg)]">
+            <div className="flex items-center gap-2 text-sm font-medium text-[var(--conn-amber-text)]">
+              <svg
+                aria-hidden="true"
+                className="h-4 w-4 flex-shrink-0"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+                <line x1="12" x2="12" y1="9" y2="13" />
+                <line x1="12" x2="12.01" y1="17" y2="17" />
+              </svg>
+              <span>会停止当前回复后发送此消息</span>
             </div>
             <div className="text-xs text-cafe-secondary mt-1">
-              若目标猫正在执行，会先 cancel 该猫当前 invocation；若目标猫空闲，则直接执行这条排队消息。
+              {isDraft
+                ? '这不是“追加到当前回复”；当前回复会被停止。已经完成的回复仍会保留在聊天记录中。'
+                : '旧回复会被停止；系统只以这条已持久化消息启动一次。已经完成的回复仍会保留在聊天记录中。'}
             </div>
-            {mode === 'immediate' && (
-              <div className="text-xs mt-2" style={{ color: 'var(--conn-amber-text)' }}>
-                ⚠️ 警告：此操作会强行掐断当前正在运行的猫，可能导致进行中的工作丢失。
-              </div>
-            )}
-          </button>
+          </div>
         </div>
 
         <div className="px-6 pb-6 flex items-center justify-between">
@@ -102,7 +82,7 @@ export function SteerQueuedEntryModal({
             onClick={onConfirm}
             className="text-sm px-4 py-2 rounded-full bg-[var(--color-cocreator-primary)] text-[var(--cafe-surface)] hover:opacity-90 transition-colors"
           >
-            确认
+            停止并发送
           </button>
         </div>
       </div>

@@ -28,6 +28,20 @@ export interface CapabilityTextEvent {
   structuredSignalCount: number;
 }
 
+export interface CapabilityPromptEvent {
+  invocationId: string;
+  sourceMessageId: string;
+  timestamp: number;
+  content: string;
+}
+
+export type CapabilityPromptUnavailableEvent = {
+  invocationId: string;
+  timestamp: number;
+  reason: string;
+  status: 'historical_unavailable' | 'rejected';
+};
+
 export interface NormalizedTranscriptToolUse {
   invocationId: string;
   eventNo: number;
@@ -52,6 +66,7 @@ export interface NormalizedCapabilityUsageCandidate {
   source: 'tool' | 'audit';
   sourceId: string;
   capability: CapabilityName;
+  invocationId?: string;
   threadId?: string;
   catId?: string;
   sessionId?: string;
@@ -59,6 +74,9 @@ export interface NormalizedCapabilityUsageCandidate {
   timestamp: number;
   action?: string;
   path?: string;
+  conventionGraphDomain?: string;
+  conventionGraphCoverageKeys?: string[];
+  conventionGraphTargetPaths?: string[];
   successful: boolean;
 }
 
@@ -71,6 +89,9 @@ export interface CapabilityInvocationTrace {
   endTime: number;
   changedFiles: string[];
   referencedPaths: string[];
+  promptEvents: CapabilityPromptEvent[];
+  promptUnavailableReasons: string[];
+  promptFallbackAllowed: boolean;
   textEvents: CapabilityTextEvent[];
   transcriptToolUses: NormalizedTranscriptToolUse[];
   normalizedUsageCandidates: NormalizedCapabilityUsageCandidate[];
@@ -99,6 +120,8 @@ export interface CapabilityTraceInput {
   worktreeId?: string;
   family?: string;
   transcriptEvents: TranscriptEvent[];
+  promptEvents?: CapabilityPromptEvent[];
+  promptUnavailableEvents?: CapabilityPromptUnavailableEvent[];
   toolEvents: ToolEvent[];
   skillLoadEvents?: SkillLoadedEvent[];
   auditEvents?: AuditEvent[];
@@ -129,6 +152,7 @@ export interface FileChangeThenCapabilityPredicate {
   capability: CapabilityName;
   includeGlobs: string[];
   excludeGlobs?: string[];
+  evidenceWindow?: 'current_next' | 'pre_change';
   requirePathMention?: boolean;
   requireLivePreview?: boolean;
 }

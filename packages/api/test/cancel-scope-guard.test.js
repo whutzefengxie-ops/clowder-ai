@@ -73,7 +73,7 @@ function makeTracker({ activeSlots = {} } = {}) {
     cancelAll: (tid, uid, reason) => {
       const catIds = cancelAllReturnFn(tid, uid);
       cancelAllCalls.push({ tid, uid, reason, catIds });
-      return catIds;
+      return { catIds, executionIds: [] };
     },
     cancelAllCalls,
   };
@@ -82,9 +82,13 @@ function makeTracker({ activeSlots = {} } = {}) {
 function makeQueueProcessor() {
   const actions = [];
   return {
+    canReleaseSlotForUser: () => true,
+    suppressAutoResume: (tid, cid, executionIds = []) =>
+      actions.push({ op: 'suppressAutoResume', tid, cid, executionIds }),
     clearPause: (tid, cid) => actions.push({ op: 'clearPause', tid, cid }),
     releaseSlot: (tid, cid) => actions.push({ op: 'releaseSlot', tid, cid }),
     releaseThread: (tid) => actions.push({ op: 'releaseThread', tid }),
+    retireThreadPrestartProcessingGroups: async () => ({ outcome: 'none', retiredCatIds: [] }),
     hasActiveExecution: () => false,
     isCatBusy: () => false,
     actions,
@@ -177,6 +181,8 @@ describe('force-reset: does not affect other users processingSlots (P1 scope gua
     // User B's codex slot must NOT have been released
     const releaseCodexSlot = qp.actions.find((a) => a.op === 'releaseSlot' && a.cid === CAT_CODEX);
     assert.equal(releaseCodexSlot, undefined, 'user B codex slot must NOT be released by user A force-reset');
+    const suppressCodex = qp.actions.find((a) => a.op === 'suppressAutoResume' && a.cid === CAT_CODEX);
+    assert.equal(suppressCodex, undefined, 'user B codex slot must NOT be fenced by user A force-reset');
   });
 });
 

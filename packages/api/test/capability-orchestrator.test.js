@@ -521,6 +521,7 @@ describe('resolvePencilBinary', () => {
       return;
     }
     const knownRoots = [
+      join(homedir(), '.antigravity-ide', 'extensions'),
       join(homedir(), '.antigravity', 'extensions'),
       join(homedir(), '.vscode', 'extensions'),
       join(homedir(), '.cursor', 'extensions'),
@@ -557,6 +558,7 @@ describe('resolvePencilBinary', () => {
     await mkdir(join(vscodeInsidersDir, 'highagency.pencildev-1.0.0-universal', 'out'), { recursive: true });
 
     const result = await resolvePencilBinary({
+      antigravityIdeDir: join(antigravityDir, 'missing-ide'),
       antigravityDir,
       cursorDir,
       vscodeInsidersDir,
@@ -592,13 +594,14 @@ describe('resolvePencilCommand', () => {
 
     const resolved = await resolvePencilCommand({
       env: { PENCIL_MCP_BIN: explicitBin, PENCIL_MCP_APP: 'vscode' },
+      antigravityIdeDir: join(dir, 'ag-ide-empty'),
       antigravityDir,
       vscodeDir: join(dir, 'vscode'),
     });
 
     assert.deepEqual(resolved, {
       command: explicitBin,
-      args: ['--app', 'vscode'],
+      args: ['--app', 'visual_studio_code'],
     });
   });
 
@@ -608,13 +611,63 @@ describe('resolvePencilCommand', () => {
     await writeExecutable(join(vscodeDir, 'highagency.pencildev-0.6.41-universal', PENCIL_BINARY_SUFFIX));
 
     const resolved = await resolvePencilCommand({
+      antigravityIdeDir: join(dir, 'missing-ag-ide'),
       antigravityDir: join(dir, 'missing-ag'),
       vscodeDir,
     });
 
     assert.ok(resolved);
     assert.ok(resolved.command.includes('.vscode/extensions'));
-    assert.deepEqual(resolved.args, ['--app', 'vscode']);
+    assert.deepEqual(resolved.args, ['--app', 'visual_studio_code']);
+  });
+
+  it('discovers Antigravity IDE and emits its live Pencil app identifier', async () => {
+    const antigravityIdeDir = join(dir, '.antigravity-ide', 'extensions');
+    const vscodeDir = join(dir, '.vscode', 'extensions');
+    await mkdir(join(antigravityIdeDir, 'highagency.pencildev-0.6.70-universal', 'out'), { recursive: true });
+    await writeExecutable(join(antigravityIdeDir, 'highagency.pencildev-0.6.70-universal', PENCIL_BINARY_SUFFIX));
+    await mkdir(join(vscodeDir, 'highagency.pencildev-0.6.69', 'out'), { recursive: true });
+    await writeExecutable(join(vscodeDir, 'highagency.pencildev-0.6.69', PENCIL_BINARY_SUFFIX));
+
+    const resolved = await resolvePencilCommand({
+      antigravityIdeDir,
+      antigravityDir: join(dir, 'legacy-ag-empty'),
+      vscodeDir,
+      cursorDir: join(dir, 'cursor-empty'),
+      vscodeInsidersDir: join(dir, 'insiders-empty'),
+    });
+
+    assert.ok(resolved);
+    assert.ok(
+      resolved.command.includes('.antigravity-ide/extensions'),
+      `expected Antigravity IDE path, got: ${resolved.command}`,
+    );
+    assert.deepEqual(resolved.args, ['--app', 'antigravity_ide']);
+  });
+
+  it('keeps an explicit canonical host ahead of a newer legacy-family install', async () => {
+    const antigravityIdeDir = join(dir, '.antigravity-ide', 'extensions');
+    const antigravityDir = join(dir, '.antigravity', 'extensions');
+    await mkdir(join(antigravityIdeDir, 'highagency.pencildev-0.6.70-universal', 'out'), { recursive: true });
+    await writeExecutable(join(antigravityIdeDir, 'highagency.pencildev-0.6.70-universal', PENCIL_BINARY_SUFFIX));
+    await mkdir(join(antigravityDir, 'highagency.pencildev-0.6.99-universal', 'out'), { recursive: true });
+    await writeExecutable(join(antigravityDir, 'highagency.pencildev-0.6.99-universal', PENCIL_BINARY_SUFFIX));
+
+    const resolved = await resolvePencilCommand({
+      env: { PENCIL_MCP_APP: 'antigravity_ide' },
+      antigravityIdeDir,
+      antigravityDir,
+      vscodeDir: join(dir, 'vscode-empty'),
+      cursorDir: join(dir, 'cursor-empty'),
+      vscodeInsidersDir: join(dir, 'insiders-empty'),
+    });
+
+    assert.ok(resolved);
+    assert.ok(
+      resolved.command.includes('.antigravity-ide/extensions'),
+      `canonical host must not be replaced by a newer legacy install: ${resolved.command}`,
+    );
+    assert.deepEqual(resolved.args, ['--app', 'antigravity_ide']);
   });
 
   it('prefers Antigravity over VS Code when both have the same version', async () => {
@@ -627,6 +680,7 @@ describe('resolvePencilCommand', () => {
     await writeExecutable(join(vscodeDir, 'highagency.pencildev-0.6.40', PENCIL_BINARY_SUFFIX));
 
     const resolved = await resolvePencilCommand({
+      antigravityIdeDir: join(dir, 'ag-ide-empty'),
       antigravityDir,
       vscodeDir,
       cursorDir: join(dir, 'cursor-empty'),
@@ -649,6 +703,7 @@ describe('resolvePencilCommand', () => {
 
     const resolved = await resolvePencilCommand({
       env: { PENCIL_MCP_APP: 'antigravity' },
+      antigravityIdeDir: join(dir, 'ag-ide-empty'),
       antigravityDir,
       vscodeDir,
       cursorDir: join(dir, 'cursor-empty'),
@@ -671,6 +726,7 @@ describe('resolvePencilCommand', () => {
 
     const resolved = await resolvePencilCommand({
       env: { PENCIL_MCP_APP: 'vscode-insiders' },
+      antigravityIdeDir: join(dir, 'ag-ide-empty'),
       antigravityDir,
       vscodeDir,
       cursorDir: join(dir, 'cursor-empty'),
@@ -679,7 +735,7 @@ describe('resolvePencilCommand', () => {
 
     assert.ok(resolved);
     assert.ok(resolved.command.includes('vsc'), `expected VS Code path, got: ${resolved.command}`);
-    assert.deepEqual(resolved.args, ['--app', 'vscode']);
+    assert.deepEqual(resolved.args, ['--app', 'visual_studio_code']);
   });
 
   it('PENCIL_MCP_APP falls back to any candidate if preferred app has no installations', async () => {
@@ -689,6 +745,7 @@ describe('resolvePencilCommand', () => {
 
     const resolved = await resolvePencilCommand({
       env: { PENCIL_MCP_APP: 'antigravity' },
+      antigravityIdeDir: join(dir, 'ag-ide-empty'),
       antigravityDir: join(dir, 'ag-empty'),
       vscodeDir,
       cursorDir: join(dir, 'cursor-empty'),
@@ -696,7 +753,7 @@ describe('resolvePencilCommand', () => {
     });
 
     assert.ok(resolved, 'should fall back to VS Code when Antigravity is empty');
-    assert.deepEqual(resolved.args, ['--app', 'vscode']);
+    assert.deepEqual(resolved.args, ['--app', 'visual_studio_code']);
   });
 });
 
@@ -786,6 +843,31 @@ describe('bootstrapCapabilities', () => {
     const persisted = await readCapabilitiesConfig(dir);
     assert.ok(persisted);
     assert.equal(persisted.capabilities.length, 7);
+  });
+
+  it('does not rediscover a retired GitHub MCP from existing harness config', async () => {
+    const claudeFile = join(dir, '.mcp.json');
+    await writeFile(
+      claudeFile,
+      JSON.stringify({
+        mcpServers: {
+          github: { type: 'http', url: 'https://api.githubcopilot.com/mcp/' },
+          filesystem: { command: 'npx', args: ['-y', '@mcp/fs'] },
+        },
+      }),
+    );
+
+    const config = await bootstrapCapabilities(dir, {
+      claudeConfig: claudeFile,
+      codexConfig: join(dir, 'nonexistent.toml'),
+      geminiConfig: join(dir, 'nonexistent.json'),
+    });
+
+    assert.equal(
+      config.capabilities.some((cap) => cap.id === 'github'),
+      false,
+    );
+    assert.ok(config.capabilities.some((cap) => cap.id === 'filesystem'));
   });
 
   it('normalizes pencil into a resolver-backed capability on bootstrap', async () => {
@@ -1924,7 +2006,7 @@ describe('ensureCatCafeMainServer (F193 Phase C semantics)', () => {
         source: 'external',
         mcpServer: { command: 'node', args: ['/repo/packages/mcp-server/dist/limb.js'] },
       },
-      // User-added external MCP entries (filesystem, github, etc.)
+      // User-added external MCP entries unrelated to retired GitHub MCP.
       {
         id: 'filesystem',
         type: 'mcp',
@@ -1933,11 +2015,11 @@ describe('ensureCatCafeMainServer (F193 Phase C semantics)', () => {
         mcpServer: { command: 'npx', args: ['@modelcontextprotocol/server-filesystem', '/tmp'] },
       },
       {
-        id: 'github-mcp',
+        id: 'example-mcp',
         type: 'mcp',
         enabled: false,
         source: 'external',
-        mcpServer: { command: 'docker', args: ['run', 'github-mcp'] },
+        mcpServer: { command: 'docker', args: ['run', 'example-mcp'] },
       },
     ]);
 
@@ -1952,10 +2034,10 @@ describe('ensureCatCafeMainServer (F193 Phase C semantics)', () => {
     const fs = result.config.capabilities.find((c) => c.id === 'filesystem');
     assert.ok(fs);
     assert.deepEqual(fs.mcpServer.args, ['@modelcontextprotocol/server-filesystem', '/tmp']);
-    const gh = result.config.capabilities.find((c) => c.id === 'github-mcp');
-    assert.ok(gh);
-    assert.equal(gh.enabled, false, 'user-disabled external must stay disabled');
-    assert.deepEqual(gh.mcpServer.args, ['run', 'github-mcp']);
+    const example = result.config.capabilities.find((c) => c.id === 'example-mcp');
+    assert.ok(example);
+    assert.equal(example.enabled, false, 'user-disabled external must stay disabled');
+    assert.deepEqual(example.mcpServer.args, ['run', 'example-mcp']);
   });
 
   // Cloud codex review #1883 P1 (2026-05-24): the external limb must be
@@ -2145,6 +2227,74 @@ describe('inheritFullyBlockedMcpCapabilitiesForNewCat', () => {
 // ────────── Resolve per-cat ──────────
 
 describe('resolveServersForCat', () => {
+  it('filters retired GitHub MCP entries while preserving unrelated user servers', () => {
+    const config = makeConfig([
+      {
+        id: 'github',
+        type: 'mcp',
+        enabled: true,
+        source: 'plugin',
+        pluginId: 'github',
+        mcpServer: { transport: 'streamableHttp', url: 'https://api.githubcopilot.com/mcp/' },
+      },
+      {
+        id: 'legacy-github',
+        type: 'mcp',
+        enabled: true,
+        source: 'external',
+        mcpServer: { command: 'npx', args: ['-y', '@anthropic-ai/mcp-server-github'] },
+      },
+      {
+        id: 'github',
+        type: 'mcp',
+        enabled: true,
+        source: 'external',
+        mcpServer: { command: 'node', args: ['custom-non-mcp-tool.js'] },
+      },
+      {
+        id: 'filesystem',
+        type: 'mcp',
+        enabled: true,
+        source: 'external',
+        mcpServer: { command: 'npx', args: ['-y', '@mcp/fs'] },
+      },
+    ]);
+
+    const servers = resolveServersForCat(config, 'opus');
+    assert.equal(
+      servers.some((server) => server.url === 'https://api.githubcopilot.com/mcp/'),
+      false,
+    );
+    assert.equal(
+      servers.some((server) => server.args.includes('@anthropic-ai/mcp-server-github')),
+      false,
+    );
+    assert.ok(servers.some((server) => server.args.includes('custom-non-mcp-tool.js')));
+    assert.ok(servers.some((server) => server.name === 'filesystem'));
+  });
+
+  it('carries the original capability id as managed-name ownership provenance', () => {
+    const config = makeConfig([
+      {
+        id: 'plugin:video-gen:protocol-server',
+        type: 'mcp',
+        enabled: true,
+        source: 'cat-cafe',
+        pluginId: 'video-gen',
+        mcpServer: { command: 'node', args: ['protocol-server.js'] },
+      },
+    ]);
+
+    const [server] = resolveServersForCat(config, 'opus');
+    assert.equal(server.name, 'plugin__video-gen__protocol-server');
+    assert.equal(server.capabilityId, 'plugin:video-gen:protocol-server');
+    assert.equal(
+      server.source,
+      'plugin',
+      'pluginId must become runtime plugin provenance even when stored source is cat-cafe',
+    );
+  });
+
   it('applies global enabled state', () => {
     const config = makeConfig([
       {
@@ -2566,7 +2716,7 @@ describe('generateCliConfigs', () => {
       resolver: 'pencil',
       status: 'resolved',
       command: explicitBin,
-      args: ['--app', 'vscode'],
+      args: ['--app', 'visual_studio_code'],
     });
   });
 
@@ -2694,6 +2844,33 @@ describe('generateCliConfigs', () => {
 // ────────── healCatCafeMcpTopology shared chain (cloud round 7 P1) ──────────
 
 describe('healCatCafeMcpTopology (F193 Phase C shared migration chain)', () => {
+  it('removes retired GitHub MCP capabilities from persisted topology', () => {
+    const config = makeConfig([
+      {
+        id: 'github-mcp-server',
+        type: 'mcp',
+        enabled: true,
+        source: 'external',
+        mcpServer: { command: 'docker', args: ['run', 'ghcr.io/github/github-mcp-server'] },
+      },
+      {
+        id: 'custom',
+        type: 'mcp',
+        enabled: true,
+        source: 'external',
+        mcpServer: { command: 'node', args: ['custom.js'] },
+      },
+    ]);
+
+    const result = healCatCafeMcpTopology(config, { catCafeRepoRoot: '/healed-root' });
+    assert.equal(result.migrated, true);
+    assert.equal(
+      result.config.capabilities.some((cap) => cap.id === 'github-mcp-server'),
+      false,
+    );
+    assert.ok(result.config.capabilities.some((cap) => cap.id === 'custom'));
+  });
+
   // codex round 7 P1 (PR #1605): write paths must run the same chain as GET
   // so legacy-only configs auto-migrate before any mutation lands.
   it('legacy-only cat-cafe -> 5 splits + no main (full migration chain)', () => {

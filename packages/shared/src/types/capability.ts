@@ -45,6 +45,8 @@ export type McpTransport = 'stdio' | 'streamableHttp';
 export interface McpServerDescriptor {
   /** MCP server name (e.g. 'cat-cafe', 'filesystem') */
   name: string;
+  /** Original capability ID used to prove ownership of managed name migrations. */
+  capabilityId?: string;
   /** Transport type (default: 'stdio'). TD104: 'streamableHttp' for URL-based servers. */
   transport?: McpTransport;
   /** Optional local resolver hint for machine-specific stdio servers (e.g. pencil). */
@@ -96,7 +98,7 @@ export interface CapabilityEntry {
    */
   overrides?: CatCapabilityOverride[];
   /** MCP server descriptor (only for type: 'mcp') */
-  mcpServer?: Omit<McpServerDescriptor, 'name' | 'enabled' | 'source'>;
+  mcpServer?: Omit<McpServerDescriptor, 'name' | 'capabilityId' | 'enabled' | 'source'>;
   /** Source origin: cat-cafe = built-in managed, external = user-installed, plugin = plugin-installed */
   source: 'cat-cafe' | 'external' | 'plugin';
   /**
@@ -132,7 +134,7 @@ export interface CapabilityEntry {
    * Absent = use global mcpServer.
    * Only meaningful for type: 'mcp' in project-level capabilities.json.
    */
-  mcpServerOverride?: Omit<McpServerDescriptor, 'name' | 'enabled' | 'source'>;
+  mcpServerOverride?: Omit<McpServerDescriptor, 'name' | 'capabilityId' | 'enabled' | 'source'>;
   /**
    * Which external config file this MCP was discovered from.
    * e.g. "claude-project", "codex-user", "gemini-user", "kimi-project".
@@ -339,6 +341,20 @@ export interface GovernanceFinding {
   readonly status: 'present' | 'missing' | 'stale';
 }
 
+export type GovernanceProvider = 'claude' | 'codex' | 'gemini' | 'kimi';
+
+/** F302: exact opt-in materialization chosen by the user. */
+export interface GovernanceSelection {
+  readonly projectGuide?: {
+    readonly thinEntrypoints: readonly ('claude' | 'gemini')[];
+  };
+  readonly projectSkills?: {
+    readonly skillIds: readonly string[];
+    readonly providers: readonly GovernanceProvider[];
+  };
+  readonly docsLifecycle?: boolean;
+}
+
 /** F070: Bootstrap operation report (persisted for audit) */
 export interface BootstrapReport {
   readonly projectPath: string;
@@ -346,12 +362,19 @@ export interface BootstrapReport {
   readonly packVersion: string;
   readonly actions: readonly BootstrapAction[];
   readonly dryRun: boolean;
+  readonly selection: GovernanceSelection;
+  readonly previewChecksum: string;
 }
 
 export interface BootstrapAction {
   readonly file: string;
-  readonly action: 'created' | 'updated' | 'skipped' | 'symlinked';
+  readonly action: 'created' | 'updated' | 'skipped' | 'symlinked' | 'deleted';
   readonly reason: string;
+  readonly group?: 'project-guide' | 'project-skills' | 'docs-lifecycle' | 'legacy-cleanup';
+  /** Generated content only; never captures pre-existing user content. */
+  readonly content?: string;
+  readonly contentHash?: string;
+  readonly symlinkTarget?: string;
 }
 
 /** F070 Phase 2: Structured mission context for external project dispatch */

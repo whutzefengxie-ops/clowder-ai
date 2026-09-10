@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, it } from 'node:test';
@@ -457,6 +457,67 @@ describe('agent hook sync targets', () => {
     assert.equal(capExists, false, 'capabilities.json should not be created when ownerAuthorized is omitted');
     assert.ok(result.targets.length > 0);
   });
+
+  it('uses an explicit Clowder AI project as the skill and MCP truth root', async () => {
+    const catCafeRoot = await createProjectRoot();
+    const catCafeHome = await mkdtemp(join(tmpdir(), 'agent-hooks-cat-cafe-home-'));
+    const skillName = 'debugging';
+    const skillSource = join(catCafeRoot, 'cat-cafe-skills', skillName);
+    const skillLink = join(catCafeRoot, '.claude', 'skills', skillName);
+    const capDir = join(catCafeRoot, '.cat-cafe');
+
+    try {
+      await mkdir(skillSource, { recursive: true });
+      await writeFile(join(catCafeRoot, 'cat-cafe-skills', 'manifest.yaml'), 'version: 1\n', 'utf-8');
+      await writeFile(join(skillSource, 'SKILL.md'), '# debugging\n', 'utf-8');
+      await mkdir(join(catCafeRoot, '.claude', 'skills'), { recursive: true });
+      await symlink(skillSource, skillLink);
+      await mkdir(capDir, { recursive: true });
+      await writeFile(
+        join(capDir, 'capabilities.json'),
+        JSON.stringify(
+          {
+            version: 2,
+            capabilities: [
+              {
+                id: skillName,
+                type: 'skill',
+                enabled: true,
+                source: 'cat-cafe',
+                mountPaths: ['claude'],
+                globalEnabled: true,
+              },
+              {
+                id: 'local-cat-cafe-mcp',
+                type: 'mcp',
+                enabled: true,
+                source: 'cat-cafe',
+                mcpServer: { command: 'node', args: [join(catCafeRoot, 'packages/mcp-server/dist/local.js')] },
+                globalEnabled: true,
+              },
+            ],
+          },
+          null,
+          2,
+        ),
+        'utf-8',
+      );
+
+      const status = await getAgentHookStatus({
+        projectRoot,
+        targetRoot: catCafeHome,
+        capabilityProjectRoot: catCafeRoot,
+      });
+      const skills = status.targets.find((target) => target.name === 'skills');
+      const mcp = status.targets.find((target) => target.name === 'mcp');
+
+      assert.equal(skills?.status, 'configured');
+      assert.equal(mcp?.status, 'configured');
+    } finally {
+      await rm(catCafeRoot, { recursive: true, force: true });
+      await rm(catCafeHome, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('agent hook routes', () => {
@@ -702,12 +763,12 @@ describe('agent hook routes', () => {
     assert.equal(res.statusCode, 400, 'invalid projectPath must fail loud with 400');
     const body = JSON.parse(res.payload);
     assert.ok(body.error, 'response must include error message');
+    assert.equal(body.code, 'INVALID_PROJECT_PATH', 'response must carry the machine-readable code');
     // Must NOT contain health targets (which would mean it read host state)
     assert.equal(body.targets, undefined, 'must not return host health targets');
   });
 
-  it('GET rejects explicit uninitialized projectPath (no .cat-cafe/) instead of falling back to host', async () => {
-    // A valid directory that is not initialized as a project must not fall back to host
+  it('GET treats a valid sidecar-free project as having no project capability overrides', async () => {
     const uninitDir = await mkdtemp(join(tmpdir(), 'agent-hooks-uninit-'));
     try {
       const res = await app.inject({
@@ -715,10 +776,11 @@ describe('agent hook routes', () => {
         url: `/api/agent-hooks/status?projectPath=${encodeURIComponent(uninitDir)}`,
         headers: SESSION_HEADERS,
       });
-      assert.equal(res.statusCode, 400, 'uninitialized projectPath must fail loud with 400');
+      assert.equal(res.statusCode, 200);
       const body = JSON.parse(res.payload);
-      assert.ok(body.error, 'response must include error message');
-      assert.equal(body.targets, undefined, 'must not return host health targets');
+      assert.equal(body.targets.find((target) => target.name === 'skills')?.reason, 'no project capabilities');
+      assert.equal(body.targets.find((target) => target.name === 'mcp')?.reason, 'no project capabilities');
+      await assert.rejects(readFile(join(uninitDir, '.cat-cafe', 'capabilities.json'), 'utf8'));
     } finally {
       await rm(uninitDir, { recursive: true, force: true });
     }
@@ -734,10 +796,11 @@ describe('agent hook routes', () => {
     assert.equal(res.statusCode, 400, 'invalid projectPath must fail loud with 400');
     const body = JSON.parse(res.payload);
     assert.ok(body.error, 'response must include error message');
+    assert.equal(body.code, 'INVALID_PROJECT_PATH', 'response must carry the machine-readable code');
     assert.equal(body.targets, undefined, 'must not return sync results');
   });
 
-  it('POST rejects explicit uninitialized projectPath instead of mutating host capabilities', async () => {
+  it('POST syncs hook files for a sidecar-free project without creating project capabilities', async () => {
     const uninitDir = await mkdtemp(join(tmpdir(), 'agent-hooks-uninit-sync-'));
     try {
       const res = await app.inject({
@@ -746,10 +809,10 @@ describe('agent hook routes', () => {
         headers: SESSION_HEADERS,
         payload: { projectPath: uninitDir },
       });
-      assert.equal(res.statusCode, 400, 'uninitialized projectPath must fail loud with 400');
+      assert.equal(res.statusCode, 200);
       const body = JSON.parse(res.payload);
-      assert.ok(body.error, 'response must include error message');
-      assert.equal(body.targets, undefined, 'must not return sync results');
+      assert.equal(body.status, 'configured');
+      await assert.rejects(readFile(join(uninitDir, '.cat-cafe', 'capabilities.json'), 'utf8'));
     } finally {
       await rm(uninitDir, { recursive: true, force: true });
     }

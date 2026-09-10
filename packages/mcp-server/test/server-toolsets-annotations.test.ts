@@ -7,7 +7,9 @@ import {
   buildLimbTools,
   buildMemoryTools,
   buildSignalTools,
+  CANONICAL_TOOL_REGISTRY,
   EXPLICIT_TOOL_ANNOTATIONS,
+  projectSchemaDeliveryMeta,
 } from '../src/server-toolsets.js';
 
 /**
@@ -24,12 +26,46 @@ import {
  */
 
 describe('F247 R8 P1-1: EXPLICIT_TOOL_ANNOTATIONS regression guard', () => {
-  describe('cloud-pro-phase0 10 whitelist (砚砚 ChatGPT 端实测 surface)', () => {
+  it('projects only accepted always-visible delivery policy to Anthropic metadata', () => {
+    for (const definition of CANONICAL_TOOL_REGISTRY) {
+      assert.equal(
+        projectSchemaDeliveryMeta(definition),
+        undefined,
+        `${definition.name} must not become always-visible before an accepted pilot`,
+      );
+    }
+
+    const fixture = CANONICAL_TOOL_REGISTRY[0];
+    assert.deepEqual(
+      projectSchemaDeliveryMeta({
+        ...fixture,
+        policy: {
+          ...fixture.policy,
+          schemaDelivery: { policy: 'always-visible', evidenceRef: fixture.policy.schemaDelivery.evidenceRef },
+        },
+      }),
+      { 'anthropic/alwaysLoad': true },
+    );
+  });
+
+  it('derives every SDK annotation from the canonical governance contract', () => {
+    assert.equal(Object.keys(EXPLICIT_TOOL_ANNOTATIONS).length, CANONICAL_TOOL_REGISTRY.length);
+    for (const definition of CANONICAL_TOOL_REGISTRY) {
+      assert.equal(
+        EXPLICIT_TOOL_ANNOTATIONS[definition.name],
+        definition.annotations,
+        `${definition.name} annotations must be the canonical derived object`,
+      );
+    }
+  });
+
+  describe('cloud-pro-phase0 12 whitelist (砚砚 ChatGPT 端实测 surface)', () => {
     const cloudProPhase0Whitelist = [
-      // 5 collab
+      // 6 collab
       'cat_cafe_post_message',
       'cat_cafe_cross_post_message',
       'cat_cafe_get_thread_context',
+      'cat_cafe_get_workflow_sop',
       'cat_cafe_get_message',
       'cat_cafe_list_threads',
       // 5 memory
@@ -38,6 +74,8 @@ describe('F247 R8 P1-1: EXPLICIT_TOOL_ANNOTATIONS regression guard', () => {
       'cat_cafe_list_recent',
       'cat_cafe_list_session_chain',
       'cat_cafe_read_session_digest',
+      // 1 authenticated current-persona profile
+      'cat_cafe_read_profile',
     ];
 
     for (const name of cloudProPhase0Whitelist) {
@@ -50,9 +88,10 @@ describe('F247 R8 P1-1: EXPLICIT_TOOL_ANNOTATIONS regression guard', () => {
       });
     }
 
-    it('read tools (8/10) all have readOnlyHint=true', () => {
+    it('read tools (10/12) all have readOnlyHint=true', () => {
       const reads = [
         'cat_cafe_get_thread_context',
+        'cat_cafe_get_workflow_sop',
         'cat_cafe_get_message',
         'cat_cafe_list_threads',
         'cat_cafe_search_evidence',
@@ -60,6 +99,7 @@ describe('F247 R8 P1-1: EXPLICIT_TOOL_ANNOTATIONS regression guard', () => {
         'cat_cafe_list_recent',
         'cat_cafe_list_session_chain',
         'cat_cafe_read_session_digest',
+        'cat_cafe_read_profile',
       ];
       for (const r of reads) {
         assert.equal(EXPLICIT_TOOL_ANNOTATIONS[r].readOnlyHint, true, `${r} must be readOnlyHint=true`);
@@ -67,7 +107,7 @@ describe('F247 R8 P1-1: EXPLICIT_TOOL_ANNOTATIONS regression guard', () => {
       }
     });
 
-    it('write tools (2/10) are non-destructive', () => {
+    it('write tools (2/12) are non-destructive', () => {
       for (const w of ['cat_cafe_post_message', 'cat_cafe_cross_post_message']) {
         assert.equal(EXPLICIT_TOOL_ANNOTATIONS[w].readOnlyHint, false);
         assert.equal(EXPLICIT_TOOL_ANNOTATIONS[w].destructiveHint, false);
@@ -84,6 +124,7 @@ describe('F247 R8 P1-1: EXPLICIT_TOOL_ANNOTATIONS regression guard', () => {
         'cat_cafe_list_recent',
         'cat_cafe_list_threads',
         'cat_cafe_read_session_digest',
+        'cat_cafe_read_profile',
       ]) {
         assert.equal(EXPLICIT_TOOL_ANNOTATIONS[r].openWorldHint, false, `${r} should not be openWorld`);
       }
@@ -128,8 +169,7 @@ describe('F247 R8 P1-1: EXPLICIT_TOOL_ANNOTATIONS regression guard', () => {
       'cat_cafe_library_archive',
       'cat_cafe_library_rebuild',
       'signal_delete_article',
-      // R8.2 砚砚 finding: remove/unregister/unlink tools must be destructive
-      'cat_cafe_remove_scheduled_task', // "stops the task and deletes it permanently"
+      // R8.2 砚砚 finding: unregister/unlink tools must be destructive
       'cat_cafe_unregister_tracking', // stops all automated PR/CI/issue notifications, deletes association
       'signal_link_thread', // action=unlink branch DELETEs association (max-risk path)
     ];
@@ -142,6 +182,17 @@ describe('F247 R8 P1-1: EXPLICIT_TOOL_ANNOTATIONS regression guard', () => {
         assert.equal(ann.readOnlyHint, false, `${name} destructive cannot be read-only`);
       });
     }
+  });
+
+  it('F246 Wave 1 marks schedule removal as a non-destructive proposal write', () => {
+    const ann = EXPLICIT_TOOL_ANNOTATIONS.cat_cafe_remove_scheduled_task;
+    assert.ok(ann);
+    assert.equal(ann.readOnlyHint, false);
+    assert.equal(
+      ann.destructiveHint,
+      false,
+      'verified cat removal creates an Approval Hub proposal and cannot delete before operator approval',
+    );
   });
 
   describe('F197 PR#1058 P1-1: limb_invoke_tool max-risk annotation', () => {

@@ -1,27 +1,27 @@
-import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
+import { memo, type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { useCatData } from '@/hooks/useCatData';
 import { useIMEGuard } from '@/hooks/useIMEGuard';
 import { resolveCatDisplayName } from '@/lib/cat-display-name';
 import { catColorVar } from '@/lib/cat-slug';
-import type { ThreadState } from '@/stores/chat-types';
 import { useLabelStore } from '@/stores/label-store';
-import { API_URL, apiFetch } from '@/utils/api-client';
+import type { SidebarPresence, SidebarSystemKind } from '@/stores/sidebarProjectionStore';
 // F174 D2b-2 (rev): per-cat callback-auth dot was rejected (co-creator alpha 反馈
 // "莫名其妙的颜色" — 16px participant avatars lacked any affordance). Status now
 // surfaces system-level via <CallbackAuthHealthIndicator /> in ChatContainerHeader,
 // and per-cat (with "AFFECTED CATS" affordance) inside HubCallbackAuthPanel.
 import { CatAvatar } from '../CatAvatar';
+import { ExportButton } from '../ExportButton';
 import { HubIcon } from '../icons/HubIcon';
 import { PawIcon } from '../icons/PawIcon';
 import { ThreadCatStatus } from '../ThreadCatStatus';
-import { ThreadCatSettings } from './ThreadCatSettings';
-import { ThreadLabelPicker } from './ThreadLabelPicker';
-import { formatRelativeTime } from './thread-utils';
+import { useSidebarDraftDecoration } from './sidebar-draft-decoration';
+import { ThreadSettingsPanel } from './ThreadSettingsPanel';
+import { formatRelativeTime, formatSidebarStatusTime } from './thread-utils';
 
 export interface ThreadItemProps {
   id: string;
   title: string | null;
-  participants: string[];
+  participants: readonly string[];
   lastActiveAt: number;
   isActive: boolean;
   onSelect: (id: string) => void;
@@ -31,19 +31,24 @@ export interface ThreadItemProps {
   onToggleFavorite?: (id: string, favorited: boolean) => void | Promise<void>;
   onUpdatePreferredCats?: (id: string, cats: string[]) => void | Promise<void>;
   onUpdateLabels?: (id: string, labels: string[]) => void | Promise<void>;
+  /** F277: accessible fallback for entering conversation-group arrange mode. */
+  onOrganize?: (id: string) => void;
   /** F252 Phase E: open Meow Theater replay for this thread */
   onReplay?: (id: string) => void;
   isPinned?: boolean;
   isFavorited?: boolean;
-  threadState?: ThreadState;
+  presence: SidebarPresence;
+  unreadCount: number;
+  hasUserMention: boolean;
   projectPath?: string;
   indented?: boolean;
-  preferredCats?: string[];
-  threadLabels?: string[];
+  preferredCats?: readonly string[];
+  threadLabels?: readonly string[];
   isHubThread?: boolean;
+  systemKind?: SidebarSystemKind | null;
 }
 
-export function ThreadItem({
+function ThreadItemComponent({
   id,
   title,
   participants,
@@ -56,16 +61,21 @@ export function ThreadItem({
   onToggleFavorite,
   onUpdatePreferredCats,
   onUpdateLabels,
+  onOrganize,
   isPinned,
   isFavorited,
-  threadState,
+  presence,
+  unreadCount,
+  hasUserMention,
   projectPath,
   indented,
   preferredCats,
   threadLabels,
   isHubThread,
+  systemKind,
   onReplay,
 }: ThreadItemProps) {
+  const hasDraftDecoration = useSidebarDraftDecoration(id);
   const { getCatById } = useCatData();
   const canDelete = id !== 'default' && onDelete;
   const canRename = id !== 'default' && onRename;
@@ -74,11 +84,19 @@ export function ThreadItem({
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isMoreOpen, setIsMoreOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [draftTitle, setDraftTitle] = useState(title ?? '');
   const inputRef = useRef<HTMLInputElement>(null);
   const moreButtonRef = useRef<HTMLButtonElement>(null);
   const moreMenuRef = useRef<HTMLDivElement>(null);
   const ime = useIMEGuard();
+  const [, refreshWorkingClock] = useState(0);
+
+  useEffect(() => {
+    if (presence.status !== 'working' || presence.activeSince === undefined) return;
+    const timer = window.setInterval(() => refreshWorkingClock((tick) => tick + 1), 60_000);
+    return () => window.clearInterval(timer);
+  }, [presence.status, presence.activeSince]);
 
   useEffect(() => {
     if (!isEditing) setDraftTitle(title ?? '');
@@ -100,7 +118,6 @@ export function ThreadItem({
       const target = e.target as Node | null;
       if (!target) return;
       if (moreButtonRef.current?.contains(target) || moreMenuRef.current?.contains(target)) return;
-      if (target instanceof Element && target.closest('[data-thread-action-popover="true"]')) return;
       setIsMoreOpen(false);
     };
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -138,7 +155,7 @@ export function ThreadItem({
 
   // Build hover tooltip: full title + participants + time (clowder-ai#29)
   const displayTitle = title ?? (id === 'default' ? '大厅' : '未命名对话');
-  const hasDraft = !isActive && (threadState?.hasDraft ?? false);
+  const hasDraft = !isActive && hasDraftDecoration;
   const participantNames = participants.map((catId) => resolveCatDisplayName(catId, getCatById)).join(', ');
   const tooltipLines = [displayTitle];
   if (participantNames) tooltipLines.push(`参与: ${participantNames}`);
@@ -146,49 +163,34 @@ export function ThreadItem({
   tooltipLines.push(formatRelativeTime(lastActiveAt, false));
   const tooltip = tooltipLines.join('\n');
   const hasMoreActions = id !== 'default' && !isEditing;
-  const menuTriggerClassName =
-    'flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-cafe-secondary hover:bg-cafe-surface-elevated transition-colors';
+  const compactStatusTime = formatSidebarStatusTime(presence, lastActiveAt);
 
   const startRename = useCallback(() => {
     setIsMoreOpen(false);
+    setIsSettingsOpen(false);
     setIsEditing(true);
   }, []);
 
-  const exportThread = useCallback(() => {
+  const startThreadSettings = useCallback(() => {
     setIsMoreOpen(false);
-    // #580: fetch+blob instead of window.open to carry auth headers
-    void apiFetch(`/api/export/thread/${id}?format=md`)
-      .then((res) => (res.ok ? res.blob() : Promise.reject(new Error('export failed'))))
-      .then((blob) => {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `thread-${id}.md`;
-        a.click();
-        URL.revokeObjectURL(url);
-      })
-      .catch(() => {
-        // Fallback: window.open if fetch fails
-        window.open(`${API_URL}/api/export/thread/${id}?format=md`);
-      });
-  }, [id]);
+    setIsSettingsOpen(true);
+  }, []);
 
   const startReplay = useCallback(() => {
     setIsMoreOpen(false);
     onReplay?.(id);
   }, [id, onReplay]);
 
+  const startOrganize = useCallback(() => {
+    setIsMoreOpen(false);
+    onOrganize?.(id);
+  }, [id, onOrganize]);
+
   const toggleFavorite = useCallback(() => {
     if (!onToggleFavorite) return;
     setIsMoreOpen(false);
     void onToggleFavorite(id, !isFavorited);
   }, [id, isFavorited, onToggleFavorite]);
-
-  const togglePin = useCallback(() => {
-    if (!onTogglePin) return;
-    setIsMoreOpen(false);
-    void onTogglePin(id, !isPinned);
-  }, [id, isPinned, onTogglePin]);
 
   const deleteThread = useCallback(() => {
     if (!onDelete) return;
@@ -200,14 +202,21 @@ export function ThreadItem({
     <div
       data-thread-id={id}
       aria-current={isActive ? 'page' : undefined}
-      className={`group relative mx-2 rounded-xl ${indented ? 'pl-5 pr-3' : 'px-3'} py-2 transition-colors cursor-pointer ${
+      className={`group relative mx-2 rounded-xl ${indented ? 'pl-5 pr-3' : 'px-3'} py-2.5 transition-colors cursor-pointer ${
         isActive ? 'bg-[var(--console-active-bg)]' : 'hover:bg-[var(--console-hover-bg)]'
       }`}
-      onClick={() => onSelect(id)}
-      title={tooltip}
+      onClick={(event) => {
+        if (
+          event.target instanceof Element &&
+          event.target.closest('[data-thread-settings-panel="true"], [role="menu"]')
+        ) {
+          return;
+        }
+        onSelect(id);
+      }}
     >
       {/* Title row */}
-      <div className="mb-1 flex items-center justify-between gap-1">
+      <div className="mb-1.5 flex items-start justify-between gap-1">
         {isEditing ? (
           <input
             ref={inputRef}
@@ -239,18 +248,18 @@ export function ThreadItem({
             {canPin && (
               <button
                 type="button"
-                className={`inline-flex flex-shrink-0 rounded transition-colors hover:bg-[var(--console-hover-bg)] hover:text-cafe-interactive ${
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void onTogglePin(id, !isPinned);
+                }}
+                className={`inline-flex flex-shrink-0 p-0.5 rounded transition-all hover:bg-[var(--console-hover-bg)] hover:text-cafe-interactive ${
                   isPinned
                     ? 'text-cafe-accent'
-                    : 'text-cafe-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100'
+                    : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100 text-cafe-muted hover:text-cafe-accent'
                 }`}
                 aria-label={isPinned ? `取消置顶 ${displayTitle}` : `置顶 ${displayTitle}`}
                 title={isPinned ? '取消置顶' : '置顶'}
-                data-testid={`thread-pin-toggle-${id}`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  togglePin();
-                }}
+                data-testid="thread-pin-button"
               >
                 <PinIcon />
               </button>
@@ -271,8 +280,18 @@ export function ThreadItem({
               </span>
             )}
             {isHubThread && <HubIcon className="w-3.5 h-3.5 inline-block mr-1 text-cafe-accent align-text-bottom" />}
+            {systemKind === 'cat_bedroom' && (
+              <span
+                className="inline-flex shrink-0 items-center rounded-full border border-cafe-subtle bg-cafe-surface-elevated px-1.5 py-0.5 text-micro leading-none text-cafe-accent"
+                title="猫的私人卧室"
+                data-testid="thread-system-kind"
+              >
+                猫卧室
+              </span>
+            )}
             <span
-              className={`min-w-0 flex-1 line-clamp-2 text-xs leading-5 ${isActive ? 'font-medium text-cafe-black' : 'text-cafe-secondary'}`}
+              title={tooltip}
+              className={`min-w-0 flex-1 line-clamp-2 text-sm leading-normal ${isActive ? 'font-medium text-cafe-black' : 'text-cafe-secondary'}`}
             >
               {title ?? (id === 'default' ? '大厅' : '未命名对话')}
             </span>
@@ -282,9 +301,11 @@ export function ThreadItem({
           {hasMoreActions && (
             <div className="relative">
               <button
+                type="button"
                 ref={moreButtonRef}
                 onClick={(e) => {
                   e.stopPropagation();
+                  setIsSettingsOpen(false);
                   setIsMoreOpen((open) => !open);
                 }}
                 className={`p-0.5 rounded transition-all ${
@@ -304,42 +325,25 @@ export function ThreadItem({
                   role="menu"
                   aria-label="对话操作"
                   className="absolute right-0 top-5 z-50 min-w-[144px] rounded-lg border border-cafe bg-cafe-surface py-1 shadow-lg"
-                  onClick={(e) => e.stopPropagation()}
                 >
-                  {onUpdatePreferredCats && (
-                    <ThreadCatSettings
-                      threadId={id}
-                      currentCats={preferredCats ?? []}
-                      onSave={onUpdatePreferredCats}
-                      triggerIcon={<DefaultCatIcon />}
-                      triggerLabel="设置默认猫猫"
-                      triggerClassName={menuTriggerClassName}
-                      triggerRole="menuitem"
-                    />
+                  <ThreadActionMenuItem icon={<SettingsIcon />} onClick={startThreadSettings}>
+                    对话设置
+                  </ThreadActionMenuItem>
+                  {onOrganize && (
+                    <ThreadActionMenuItem icon={<OrganizeIcon />} onClick={startOrganize}>
+                      整理 Group
+                    </ThreadActionMenuItem>
                   )}
                   {canRename && (
                     <ThreadActionMenuItem icon={<RenameIcon />} onClick={startRename}>
                       重命名对话
                     </ThreadActionMenuItem>
                   )}
-                  <ThreadActionMenuItem icon={<ExportIcon />} onClick={exportThread}>
-                    导出对话
-                  </ThreadActionMenuItem>
+                  <ExportButton threadId={id} variant="thread-menu" onSelect={() => setIsMoreOpen(false)} />
                   {onReplay && (
                     <ThreadActionMenuItem icon={<ReplayIcon />} onClick={startReplay}>
                       回放剧场
                     </ThreadActionMenuItem>
-                  )}
-                  {onUpdateLabels && (
-                    <ThreadLabelPicker
-                      threadId={id}
-                      currentLabels={threadLabels ?? []}
-                      onSave={onUpdateLabels}
-                      triggerIcon={<LabelIcon />}
-                      triggerLabel="标签管理"
-                      triggerClassName={menuTriggerClassName}
-                      triggerRole="menuitem"
-                    />
                   )}
                   {canFavorite && (
                     <ThreadActionMenuItem icon={<StarIcon filled={isFavorited} />} onClick={toggleFavorite}>
@@ -361,58 +365,72 @@ export function ThreadItem({
         </div>
       </div>
       {/* Bottom row: avatars + status + compact time */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1">
-          {participants.length > 0 ? (
-            participants.map((catId) => <CatAvatar key={catId} catId={catId} size={16} />)
-          ) : id !== 'default' ? (
-            <>
-              <PawIcon className="text-xs" />
-              <span className="text-micro text-cafe-muted">还没有猫猫加入</span>
-            </>
-          ) : null}
-          {preferredCats && preferredCats.length > 0 && (
-            <div
-              className="flex items-center gap-0.5 ml-1"
-              title={`默认: ${preferredCats.map((id) => resolveCatDisplayName(id, getCatById)).join(', ')}`}
-            >
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="h-2.5 w-2.5 text-cafe-muted shrink-0"
+      <div className="flex min-w-0 items-center justify-between">
+        <div className="flex min-w-0 items-center gap-1">
+          {/* ring-2 paints 2px beyond each avatar box; keep that paint inside the horizontal clip boundary. */}
+          <div
+            data-testid="thread-participant-metadata"
+            className="flex min-w-0 items-center gap-1 overflow-x-clip overflow-y-visible px-0.5"
+          >
+            {participants.length > 0 ? (
+              participants.map((catId) => <CatAvatar key={catId} catId={catId} size={16} />)
+            ) : id !== 'default' ? (
+              <>
+                <PawIcon className="text-xs" />
+                <span className="text-micro text-cafe-muted">还没有猫猫加入</span>
+              </>
+            ) : null}
+            {preferredCats && preferredCats.length > 0 && (
+              <div
+                className="ml-1 flex items-center gap-0.5"
+                title={`默认: ${preferredCats.map((id) => resolveCatDisplayName(id, getCatById)).join(', ')}`}
               >
-                <path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 18a6 6 0 1 0 0-12 6 6 0 0 0 0 12zM12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4z" />
-              </svg>
-              {preferredCats.map((catId) => (
-                <span
-                  key={catId}
-                  className="inline-block w-1.5 h-1.5 rounded-full"
-                  style={{ backgroundColor: catColorVar(catId, 'primary') }}
-                />
-              ))}
-            </div>
-          )}
-          <LabelDots labels={threadLabels} />
-          {threadState && (
-            <ThreadCatStatus
-              threadState={threadState}
-              unreadCount={threadState.unreadCount}
-              hasUserMention={threadState.hasUserMention}
-            />
-          )}
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="h-2.5 w-2.5 shrink-0 text-cafe-muted"
+                >
+                  <path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 18a6 6 0 1 0 0-12 6 6 0 0 0 0 12zM12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4z" />
+                </svg>
+                {preferredCats.map((catId) => (
+                  <span
+                    key={catId}
+                    className="inline-block h-1.5 w-1.5 rounded-full"
+                    style={{ backgroundColor: catColorVar(catId, 'primary') }}
+                  />
+                ))}
+              </div>
+            )}
+            <LabelDots labels={threadLabels ? [...threadLabels] : undefined} />
+          </div>
+          <ThreadCatStatus presence={presence} unreadCount={unreadCount} hasUserMention={hasUserMention} />
         </div>
         <div className="flex items-center gap-1.5 flex-shrink-0">
           {hasDraft && <span className="text-micro font-medium text-conn-red-text">[草稿]</span>}
-          <span className="text-micro text-cafe-muted">{formatRelativeTime(lastActiveAt, true)}</span>
+          <span className="text-micro text-cafe-muted">{compactStatusTime}</span>
         </div>
       </div>
+      <ThreadSettingsPanel
+        open={isSettingsOpen}
+        threadId={id}
+        threadTitle={displayTitle}
+        currentCats={[...(preferredCats ?? [])]}
+        currentLabels={[...(threadLabels ?? [])]}
+        onSavePreferredCats={onUpdatePreferredCats}
+        onSaveLabels={onUpdateLabels}
+        onClose={() => setIsSettingsOpen(false)}
+        returnFocusRef={moreButtonRef}
+      />
     </div>
   );
 }
+
+export const ThreadItem = memo(ThreadItemComponent);
 
 // ─── Small icon components ───
 
@@ -455,10 +473,20 @@ function MoreVerticalIcon() {
   );
 }
 
-function DefaultCatIcon() {
+function SettingsIcon() {
   return (
-    <svg className="w-3 h-3" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-      <path d="M8 1C4.7 1 2 3.2 2 6c0 1.4.7 2.6 1.7 3.5-.1.8-.4 1.6-.9 2.3a.5.5 0 00.4.8c1.2 0 2.3-.5 3.1-1.1.5.1 1.1.2 1.7.2 3.3 0 6-2.2 6-5S11.3 1 8 1z" />
+    <svg
+      className="w-3 h-3"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="8" cy="8" r="2.25" />
+      <path d="M6.8 1.8h2.4l.45 1.5c.35.14.68.33.98.56l1.52-.37 1.2 2.08-1.06 1.12c.03.2.05.42.05.63s-.02.42-.05.63l1.06 1.12-1.2 2.08-1.52-.37c-.3.23-.63.42-.98.56l-.45 1.5H6.8l-.45-1.5a4.7 4.7 0 0 1-.98-.56l-1.52.37-1.2-2.08 1.06-1.12a4.5 4.5 0 0 1 0-1.26L2.65 5.57l1.2-2.08 1.52.37c.3-.23.63-.42.98-.56l.45-1.5Z" />
     </svg>
   );
 }
@@ -472,20 +500,31 @@ function RenameIcon() {
   );
 }
 
+function OrganizeIcon() {
+  return (
+    <svg
+      className="h-3 w-3"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="2" y="3" width="5" height="4" rx="1" />
+      <rect x="9" y="3" width="5" height="4" rx="1" />
+      <rect x="4.5" y="9" width="7" height="4" rx="1" />
+      <path d="M4.5 7.5v1M11.5 7.5v1" />
+    </svg>
+  );
+}
+
 /** F252 Phase E: play/replay icon for Meow Theater */
 function ReplayIcon() {
   return (
     <svg className="w-3 h-3" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
       <path d="M4 2.5a.5.5 0 01.8-.4l8 6a.5.5 0 010 .8l-8 6a.5.5 0 01-.8-.4v-12z" />
-    </svg>
-  );
-}
-
-function ExportIcon() {
-  return (
-    <svg className="w-3 h-3" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-      <path d="M2.75 14A1.75 1.75 0 011 12.25v-2.5a.75.75 0 011.5 0v2.5c0 .138.112.25.25.25h10.5a.25.25 0 00.25-.25v-2.5a.75.75 0 011.5 0v2.5A1.75 1.75 0 0113.25 14H2.75z" />
-      <path d="M7.25 7.689V2a.75.75 0 011.5 0v5.689l1.97-1.969a.749.749 0 111.06 1.06l-3.25 3.25a.749.749 0 01-1.06 0L4.22 6.78a.749.749 0 111.06-1.06l1.97 1.969z" />
     </svg>
   );
 }

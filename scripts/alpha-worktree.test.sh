@@ -41,8 +41,66 @@ test_print_alpha_env_exports() {
   assert_contains "$output" "export TTS_ENABLED=0" "should disable TTS sidecar"
   assert_contains "$output" "export LLM_POSTPROCESS_ENABLED=0" "should disable LLM postprocess sidecar"
   assert_contains "$output" "export CONNECTOR_GATEWAY_AUTOSTART=0" "should disable preconfigured IM connector autostart"
+  assert_contains "$output" "export CAT_CAFE_F247_CLOUD_AUTOSTART=0" "should disable F247 cloud supporting services autostart"
+  if [[ "$output" == *"CAT_CAFE_F307_WORKBENCH_GATE_ACTIVATION"* ]]; then
+    echo "FAIL: alpha should not need an F307-only activation export"
+    return 1
+  fi
   echo "PASS: alpha env exports are fixed to isolated defaults"
 }
+
+test_apply_alpha_env_overrides_inherited_runtime_paths() (
+  PROJECT_DIR="/tmp/cat-cafe"
+  ALPHA_DIR="/tmp/cat-cafe-alpha"
+  CAT_CAFE_RUNTIME_ROOT="/tmp/cat-cafe-runtime"
+  CAT_CAFE_WORKSPACE_ROOT="/tmp/cat-cafe-runtime"
+  CAT_CAFE_MCP_SERVER_PATH="/tmp/cat-cafe-runtime/packages/mcp-server/dist/index.js"
+
+  apply_alpha_env
+
+  [ "$CAT_CAFE_RUNTIME_ROOT" = "$ALPHA_DIR" ] || {
+    echo "FAIL: alpha should override an inherited runtime binary root"
+    exit 1
+  }
+  [ "$CAT_CAFE_WORKSPACE_ROOT" = "$PROJECT_DIR" ] || {
+    echo "FAIL: alpha should override an inherited runtime workspace root"
+    exit 1
+  }
+  [ "$CAT_CAFE_MCP_SERVER_PATH" = "$ALPHA_DIR/packages/mcp-server/dist/index.js" ] || {
+    echo "FAIL: alpha should use its freshly built MCP server"
+    exit 1
+  }
+  echo "PASS: alpha env replaces inherited runtime paths"
+)
+
+test_apply_alpha_env_needs_no_f307_client_gate() (
+  local tmp_root has_switch
+  tmp_root="$(mktemp -d)"
+  trap 'rm -rf "$tmp_root"' EXIT
+
+  PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+  ALPHA_DIR="$tmp_root/cat-cafe-alpha"
+  mkdir -p "$ALPHA_DIR/packages/web"
+  export NODE_ENV=development
+  unset CAT_CAFE_F307_WORKBENCH_GATE_ACTIVATION
+
+  apply_alpha_env
+
+  has_switch="$({
+    cd "$PROJECT_DIR/packages/web"
+    node -e "const config = require('./next.config.js'); process.stdout.write(String(Object.hasOwn(config.env || {}, 'NEXT_PUBLIC_F307_WORKBENCH_GATE_ALLOWED')))"
+  })"
+  [ "$has_switch" = "false" ] || {
+    echo "FAIL: alpha should not compile an F307-only client switch"
+    exit 1
+  }
+  if grep -q 'CAT_CAFE_F307_WORKBENCH_GATE_ACTIVATION' "$ALPHA_DIR/packages/web/.env.local"; then
+    echo "FAIL: alpha web env should not persist an F307-only activation"
+    exit 1
+  fi
+
+  echo "PASS: alpha needs no F307-only activation gate"
+)
 
 test_init_and_sync_alpha_worktree_ff_only() {
   local tmp_root origin_dir src_dir alpha_dir initial_head expected_head synced_head
@@ -403,6 +461,8 @@ test_build_alpha_stale_packages_rebuilds_when_head_moved() {
 
 test_usage_includes_alpha_commands
 test_print_alpha_env_exports
+test_apply_alpha_env_overrides_inherited_runtime_paths
+test_apply_alpha_env_needs_no_f307_client_gate
 test_init_and_sync_alpha_worktree_ff_only
 test_ensure_alpha_branch_repairs_detached_worktree
 test_migrate_legacy_main_test_worktree_to_alpha_location

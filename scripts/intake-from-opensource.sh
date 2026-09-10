@@ -43,6 +43,7 @@ RECORD_DECISION=false
 DECISION=""
 VALIDATE_INBOUND=false
 FROM_INDEX=false
+STATE_MIGRATION_ADVISORY=false
 INTENT_ISSUE=""
 ABSORB_PR=""
 REVIEW_PROOF=""
@@ -65,6 +66,7 @@ for arg in "$@"; do
     --record) RECORD_DECISION=true ;;
     --validate-inbound) VALIDATE_INBOUND=true ;;
     --from-index) FROM_INDEX=true ;;
+    --state-migration-advisory) STATE_MIGRATION_ADVISORY=true ;;
   esac
 done
 # Handle space-separated args
@@ -102,7 +104,7 @@ is_public_only() {
 # Helper: scripts/brand-dictionary-helper.mjs provides CLI + module interface.
 #
 # Classify a path via the dictionary helper.  Returns the inbound classification
-# from path_policies (manual-port / brand-sensitive / public-only / pass-through / safe-cherry-pick).
+# from path_policies (manual-port / public-source / brand-sensitive / public-only / pass-through / safe-cherry-pick).
 classify_path() {
   local path="$1"
   local result
@@ -117,6 +119,16 @@ is_manual_port() {
   local cls
   cls=$(classify_path "$path")
   [ "$cls" = "manual-port" ]
+}
+
+# public-source: canonical home source intentionally contains public brand copy.
+# It is exempt from public-term contamination checks, but community changes must
+# still be manually ported into that source instead of being skipped as public-only.
+is_public_source() {
+  local path="$1"
+  local cls
+  cls=$(classify_path "$path")
+  [ "$cls" = "public-source" ]
 }
 
 # pass-through: file is exempt from both brand guard and intake classification.
@@ -177,9 +189,165 @@ HIGH_RISK_PATTERNS=(
   "scripts/sync-*.sh"
 )
 
+is_test_or_doc_path() {
+  local path="$1"
+  case "$path" in
+    docs/*|*/test/*|*/tests/*|*.test.*|*.spec.*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# A 1224-class change is not identified by one scary filename. It is a
+# distributed state-machine migration: persistent representation + multiple
+# readers/writers + an activation/backfill surface. Keeping these dimensions
+# separate avoids quarantining an ordinary isolated store fix.
+is_stateful_migration_core() {
+  local path="$1"
+  if is_test_or_doc_path "$path"; then return 1; fi
+  case "$path" in
+    packages/api/src/*/stores/*|packages/api/src/*Store.ts|packages/api/src/*store*.ts) return 0 ;;
+    packages/api/src/*redis*.ts|packages/shared/src/*redis*.ts|*lua*.ts) return 0 ;;
+    packages/api/src/*cursor*.ts|packages/shared/src/*cursor*.ts) return 0 ;;
+    packages/api/scripts/*cursor*|packages/api/scripts/*migrat*|packages/api/scripts/*persist*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+is_stateful_migration_consumer() {
+  local path="$1"
+  if is_test_or_doc_path "$path"; then return 1; fi
+  case "$path" in
+    packages/api/src/routes/*.ts) return 0 ;;
+    packages/api/src/*freshness*|packages/api/src/*read-state*|packages/api/src/*unseen*) return 0 ;;
+    packages/api/src/*briefing*|packages/api/src/*closure*|packages/api/src/*supplement*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+is_stateful_migration_rollout() {
+  local path="$1"
+  if is_test_or_doc_path "$path"; then return 1; fi
+  case "$path" in
+    *activation*|*feature-flag*|*migration*|*migrate*|*backfill*|*persist*) return 0 ;;
+    packages/api/src/config/env-registry.ts) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+detect_stateful_migration_quarantine() {
+  local files="$1"
+  local file
+  STATE_CORE_FILES=""
+  STATE_CORE_COUNT=0
+  STATE_CONSUMER_FILES=""
+  STATE_CONSUMER_COUNT=0
+  STATE_ROLLOUT_FILES=""
+  STATE_ROLLOUT_COUNT=0
+  STATEFUL_MIGRATION_QUARANTINE=false
+
+  while IFS= read -r file; do
+    [ -z "$file" ] && continue
+    if is_stateful_migration_core "$file"; then
+      STATE_CORE_FILES="${STATE_CORE_FILES}  ${file}\n"
+      STATE_CORE_COUNT=$((STATE_CORE_COUNT + 1))
+    fi
+    if is_stateful_migration_consumer "$file"; then
+      STATE_CONSUMER_FILES="${STATE_CONSUMER_FILES}  ${file}\n"
+      STATE_CONSUMER_COUNT=$((STATE_CONSUMER_COUNT + 1))
+    fi
+    if is_stateful_migration_rollout "$file"; then
+      STATE_ROLLOUT_FILES="${STATE_ROLLOUT_FILES}  ${file}\n"
+      STATE_ROLLOUT_COUNT=$((STATE_ROLLOUT_COUNT + 1))
+    fi
+  done <<< "$files"
+
+  # Aggregate risk matters more than any one path. The threshold requires a
+  # persistent-state core, at least two downstream consumers, and rollout or a
+  # broad enough core to imply migration. An isolated store correction does
+  # not satisfy this shape.
+  if [ "$STATE_CORE_COUNT" -ge 3 ] && [ "$STATE_CONSUMER_COUNT" -ge 2 ] \
+    && { [ "$STATE_ROLLOUT_COUNT" -ge 1 ] || [ "$STATE_CORE_COUNT" -ge 5 ]; }; then
+    STATEFUL_MIGRATION_QUARANTINE=true
+  fi
+}
+
+evaluate_source_head_soak() {
+  local pr_info="$1"
+  local soak_end_at="${2:-}"
+  local evaluation
+
+  evaluation=$(PR_JSON="$pr_info" SOAK_END_AT="$soak_end_at" node -e '
+const pr = JSON.parse(process.env.PR_JSON || "{}");
+const headRefOid = String(pr.headRefOid || "");
+const endRaw = String(process.env.SOAK_END_AT || "");
+const end = endRaw ? Date.parse(endRaw) : Date.now();
+if (!headRefOid || !Number.isFinite(end)) {
+  process.exit(2);
+}
+
+// Commit author/committer dates are contributor-controlled and do not prove
+// when an exact candidate first existed on the PR. Use only GitHub-created
+// evidence that is bound to the current HEAD: a check on statusCheckRollup,
+// or a submitted review whose commit oid matches headRefOid.
+const checks = Array.isArray(pr.statusCheckRollup) ? pr.statusCheckRollup : [];
+const reviews = Array.isArray(pr.reviews) ? pr.reviews : [];
+const witnesses = [
+  ...checks.flatMap((check) => [
+    { at: check?.startedAt, kind: "check" },
+    { at: check?.createdAt, kind: "check" },
+    { at: check?.completedAt, kind: "check" },
+  ]),
+  ...reviews
+    .filter((review) => String(review?.commit?.oid || "") === headRefOid)
+    .map((review) => ({ at: review?.submittedAt, kind: "review" })),
+]
+  .map((witness) => ({ ...witness, timestamp: Date.parse(String(witness.at || "")) }))
+  .filter((witness) => Number.isFinite(witness.timestamp) && witness.timestamp <= end)
+  .sort((a, b) => a.timestamp - b.timestamp);
+
+if (witnesses.length === 0) {
+  process.stdout.write("||UNVERIFIABLE|none");
+  process.exit(0);
+}
+
+const firstWitness = witnesses[0];
+const start = firstWitness.timestamp;
+const fullDays = Math.floor((end - start) / 86400000);
+process.stdout.write(
+  `${String(firstWitness.at)}|${fullDays}|${fullDays >= 7 ? "PASS" : "MISSED"}|${firstWitness.kind}`,
+);
+' 2>/dev/null || true)
+
+  if [ -z "$evaluation" ]; then
+    SOURCE_HEAD_WITNESSED_AT=""
+    SOURCE_HEAD_SOAK_DAYS=""
+    SOURCE_HEAD_SOAK_STATUS=""
+    SOURCE_HEAD_WITNESS_KIND=""
+    return 1
+  fi
+
+  IFS='|' read -r SOURCE_HEAD_WITNESSED_AT SOURCE_HEAD_SOAK_DAYS SOURCE_HEAD_SOAK_STATUS SOURCE_HEAD_WITNESS_KIND <<< "$evaluation"
+  [ -n "$SOURCE_HEAD_SOAK_STATUS" ] && [ -n "$SOURCE_HEAD_WITNESS_KIND" ]
+}
+
+print_stateful_migration_quarantine() {
+  echo -e "${RED}⛔ STATEFUL MIGRATION QUARANTINE (1224-class)${NC}"
+  echo "  Detected: $STATE_CORE_COUNT persistent-state core, $STATE_CONSUMER_COUNT consumer, $STATE_ROLLOUT_COUNT rollout/backfill file(s)"
+  echo -e "  ${RED}HOLD: split representation contract, historical backfill, consumer migration, and activation/rollback into reviewable stages.${NC}"
+  echo "  Public merge requires a minimum 7-day source quarantine on the exact final source/fork HEAD."
+  echo "  The clock starts at the first durable GitHub check/review witness for that SHA; commit dates are not proof."
+  echo "  A new final SHA resets that pre-merge clock; post-merge waiting cannot repair a miss."
+  echo "  Required proof: historical-state replay, mixed-version consumer matrix, rollback/off-mode semantics, and exact-HEAD review."
+  echo "  Source/fork soak is additional evidence; it cannot replace home historical-state replay."
+}
+
 is_high_risk() {
   local path="$1"
   local pattern
+  if is_test_or_doc_path "$path"; then return 1; fi
+  if is_stateful_migration_core "$path" || is_stateful_migration_consumer "$path" || is_stateful_migration_rollout "$path"; then
+    return 0
+  fi
   for pattern in "${HIGH_RISK_PATTERNS[@]}"; do
     case "$path" in
       $pattern) return 0 ;;
@@ -217,6 +385,10 @@ BRAND_EXPECTATIONS=(
   # Outbound sync transforms 3002→3004; intake must catch un-reversed port references.
   "packages/api/src/infrastructure/connectors/im-connectors/weixin/WeixinAdapter.ts|must_not_contain|localhost:3004|Weixin media fallback should use runtime API_SERVER_PORT not hardcoded opensource port"
   "packages/api/src/infrastructure/connectors/im-connectors/weixin/WeixinAdapter.ts|must_not_contain|localhost:3003|Weixin media fallback should not reference opensource frontend port"
+  # API port drift guard — outbound sync transforms 3002→3004; intake must catch un-reversed drift.
+  # These are high-risk files checked out from clowder-ai during intake.
+  "packages/api/src/index.ts|must_not_contain|?? '3004'|API server port fallback should be 3002 (home), not 3004 (opensource)"
+  "packages/api/src/domains/cats/services/agents/routing/AgentRouter.ts|must_not_contain|?? '3004'|AgentRouter API port fallback should be 3002 (home), not 3004 (opensource)"
   # favicon.svg file
   "packages/web/public/icons/favicon.svg|file_exists||favicon SVG must exist"
 )
@@ -452,7 +624,7 @@ run_brand_validation() {
           # Skip brand-validation toolchain files — they reference brand terms as
           # detection constants, not as content that needs sanitization.
           case "$bsf" in
-            scripts/intake-from-opensource.sh|scripts/brand-dictionary-helper.mjs|scripts/brand-dictionary-helper.test.mjs) continue ;;
+            scripts/intake-from-opensource.sh|scripts/sync-to-opensource.sh|scripts/brand-dictionary-helper.mjs|scripts/brand-dictionary-helper.test.mjs) continue ;;
           esac
           # Skip already-checked files (dedup)
           if echo "$checked_files" | grep -qF "$bsf"; then continue; fi
@@ -481,13 +653,84 @@ review_proof_contains_head() {
   return 1
 }
 
+review_proof_has_blocking_verdict() {
+  REVIEW_PROOF_TEXT="$1" node - <<'NODE'
+const text = String(process.env.REVIEW_PROOF_TEXT || '').replace(/[`*_]/g, ' ');
+const blockingPatterns = [
+  /\bCHANGES[_ -]?REQUESTED\b/i,
+  /\bREQUEST(?:ED)?[_ -]?CHANGES\b/i,
+  /\bBLOCKED\b/i,
+  /\bBLOCKING\s*[:#-]/i,
+  /(?:^|\n)\s*(?:VERDICT\s*[:#-]\s*)?BLOCK\s*(?:$|\n|[:#-])/i,
+  /\b(?:do\s+not|don't|cannot|can't|can\s+not|unable\s+to)\s+approve\b/i,
+  /\b(?:not|never)\s+(?:yet\s+)?(?:approved?|approval|LGTM|pass(?:ed)?)\b/i,
+  /\bno\s+LGTM\b/i,
+  /\b(?:approv(?:e|ed|al)|LGTM|pass(?:ed)?)\s+(?:pending|withheld)\b/i,
+  /\b(?:pending|withheld|awaiting)\s+(?:approv(?:e|ed|al)|LGTM|pass(?:ed)?)\b/i,
+  /\bwaiting\s+for\s+(?:approval|approve|approved|LGTM|pass(?:ed)?)\b/i,
+];
+process.exit(blockingPatterns.some((pattern) => pattern.test(text)) ? 0 : 1);
+NODE
+}
+
+review_proof_has_non_blocking_verdict() {
+  REVIEW_PROOF_TEXT="$1" node - <<'NODE'
+const text = String(process.env.REVIEW_PROOF_TEXT || '').replace(/[`*_]/g, ' ');
+const passPatterns = [
+  /\bAPPROV(?:E|ED)\b/i,
+  /\bLGTM\b/i,
+  /\bPASS(?:ED)?\b/i,
+  /\bNO\s+(?:BLOCKING|P[12]|MAJOR)\s+(?:FINDINGS?|ISSUES?)\b/i,
+  /\bNO\s+FINDINGS?\b/i,
+  /\bDID(?:\s+NOT|N'T)\s+FIND\s+(?:ANY\s+)?(?:(?:BLOCKING|P[12]|MAJOR)\s+)?(?:FINDINGS?|ISSUES?)\b/i,
+];
+process.exit(passPatterns.some((pattern) => pattern.test(text)) ? 0 : 1);
+NODE
+}
+
+validate_review_proof_verdict() {
+  local proof_kind="$1"
+  local proof_id="$2"
+  local proof_body="$3"
+  local proof_state="${4:-}"
+  local proof_label="$proof_kind"
+  if [ -n "$proof_id" ]; then
+    proof_label="$proof_kind:$proof_id"
+  fi
+
+  local proof_state_upper
+  proof_state_upper="$(printf '%s' "$proof_state" | tr '[:lower:]' '[:upper:]')"
+  case "$proof_state_upper" in
+    CHANGES_REQUESTED|DISMISSED|PENDING)
+      echo -e "${RED}✗ review-proof ($proof_label) has blocking GitHub review state $proof_state_upper${NC}"
+      return 1
+      ;;
+    APPROVED)
+      return 0
+      ;;
+  esac
+
+  if review_proof_has_blocking_verdict "$proof_body"; then
+    echo -e "${RED}✗ review-proof ($proof_label) contains a blocking verdict${NC}"
+    return 1
+  fi
+
+  if ! review_proof_has_non_blocking_verdict "$proof_body"; then
+    echo -e "${RED}✗ review-proof ($proof_label) must include explicit non-blocking verdict (APPROVE/LGTM/PASS or the standard Codex clean verdict)${NC}"
+    return 1
+  fi
+}
+
 validate_review_proof_continuity() {
   local absorb_pr_head="$1"
   local review_proof_mode="$2"
   local absorb_pr_head_short="${absorb_pr_head:0:8}"
 
   if [ "$review_proof_mode" = "file" ]; then
-    if review_proof_contains_head "$(cat "$REVIEW_PROOF" 2>/dev/null || true)" "$absorb_pr_head" "$absorb_pr_head_short"; then
+    local proof_body
+    proof_body="$(cat "$REVIEW_PROOF" 2>/dev/null || true)"
+    if review_proof_contains_head "$proof_body" "$absorb_pr_head" "$absorb_pr_head_short"; then
+      validate_review_proof_verdict "file" "" "$proof_body" || return 1
       return 0
     fi
     echo -e "${RED}✗ --review-proof file must mention absorb PR current HEAD ($absorb_pr_head_short)${NC}"
@@ -505,6 +748,7 @@ validate_review_proof_continuity() {
   local proof_commit=""
   local proof_kind=""
   local proof_id=""
+  local proof_state=""
 
   if [[ "$REVIEW_PROOF" =~ \#issuecomment-([0-9]+)$ ]]; then
     proof_kind="issuecomment"
@@ -525,6 +769,7 @@ validate_review_proof_continuity() {
     fi
     proof_body=$(echo "$proof_json" | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')); console.log(String(d.body||''))")
     proof_commit=$(echo "$proof_json" | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')); console.log(String(d.commit_id||''))")
+    proof_state=$(echo "$proof_json" | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')); console.log(String(d.state||''))")
   elif [[ "$REVIEW_PROOF" =~ \#discussion_r([0-9]+)$ ]]; then
     proof_kind="discussion"
     proof_id="${BASH_REMATCH[1]}"
@@ -540,6 +785,8 @@ validate_review_proof_continuity() {
     echo "  This guard must verify review evidence against absorb PR current HEAD."
     return 1
   fi
+
+  validate_review_proof_verdict "$proof_kind" "$proof_id" "$proof_body" "$proof_state" || return 1
 
   if [ -n "$proof_commit" ] && [ "$proof_commit" = "$absorb_pr_head" ]; then
     return 0
@@ -657,7 +904,109 @@ process.stdout.write(extras.join("\n"));
   return 0
 }
 
+validate_absorb_pr_validation_evidence() {
+  local absorb_pr_files="${1:-}"
+  local absorb_pr_body="${2:-}"
+
+  if [ -z "$absorb_pr_files" ]; then
+    absorb_pr_files=$(resolve_absorb_pr_brand_scope || true)
+  fi
+
+  local evidence_ok
+  evidence_ok=$(ABSORB_PR_FILES="$absorb_pr_files" ABSORB_PR_BODY="$absorb_pr_body" node -e '
+const files = String(process.env.ABSORB_PR_FILES || "")
+  .split("\n")
+  .map((line) => line.trim())
+  .filter(Boolean);
+const body = String(process.env.ABSORB_PR_BODY || "").replace(/\r/g, "");
+const touchesA2A = files.includes("packages/api/src/domains/cats/services/agents/routing/a2a-mentions.ts");
+if (!touchesA2A) {
+  console.log("yes");
+  process.exit(0);
+}
+
+const hasFullA2ATest = body.split("\n").some((rawLine) => {
+  const line = rawLine.replace(/[`*_]/g, "").trim();
+  if (!/(^|[\s/])(?:packages\/api\/)?test\/a2a-mentions\.test\.js\b/.test(line)) return false;
+  if (/--test-name-pattern(?:\b|=)/.test(line)) return false;
+  return /\b(node\s+--test|--test|pnpm|with-test-home\.sh)\b/.test(line);
+});
+
+console.log(hasFullA2ATest ? "yes" : "no");
+')
+
+  if [ "$evidence_ok" != "yes" ]; then
+    echo -e "${RED}✗ Absorb PR #$ABSORB_PR changes a2a-mentions routing but Validation lacks a full a2a-mentions.test.js run${NC}"
+    echo "  Required evidence: node --test packages/api/test/a2a-mentions.test.js"
+    echo "  Named subtest runs with --test-name-pattern are not enough for routing-surface intake."
+    return 1
+  fi
+
+  return 0
+}
+
 run_absorbed_record_guard() {
+  SOURCE_STATEFUL_MIGRATION_QUARANTINE=false
+  SOURCE_HEAD_SOAK_STATUS=""
+  local source_pr_info
+  source_pr_info=$(gh pr view "$PR_NUMBER" --repo "$TARGET_REPO" --json state,mergedAt,mergeCommit,changedFiles,headRefOid,reviews,statusCheckRollup 2>/dev/null || true)
+  if [ -z "$source_pr_info" ]; then
+    echo -e "${RED}✗ Cannot fetch source PR #$PR_NUMBER from $TARGET_REPO for migration quarantine${NC}"
+    return 1
+  fi
+
+  local source_pr_state
+  source_pr_state=$(echo "$source_pr_info" | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')); console.log(String(d.state||''))")
+  local source_pr_files
+  if ! source_pr_files=$(gh api --paginate "repos/$TARGET_REPO/pulls/$PR_NUMBER/files" --jq '.[].filename' 2>/dev/null); then
+    echo -e "${RED}✗ Cannot fetch source PR #$PR_NUMBER files for migration quarantine${NC}"
+    return 1
+  fi
+  if [ -z "$source_pr_files" ]; then
+    local source_changed_files
+    source_changed_files=$(echo "$source_pr_info" | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')); const n=d.changedFiles; console.log(Number.isInteger(n)&&n>=0?String(n):'invalid')")
+    if [ "$SKIP_ABSORBED_GUARD" = true ] && [ "$source_pr_state" = "MERGED" ] && [ "$source_changed_files" = "0" ]; then
+      echo -e "${YELLOW}⚠ Source PR #$PR_NUMBER is a merged zero-diff historical backfill; no source files exist to quarantine${NC}"
+      return 0
+    fi
+    echo -e "${RED}✗ Cannot resolve source PR #$PR_NUMBER files for migration quarantine${NC}"
+    return 1
+  fi
+  detect_stateful_migration_quarantine "$source_pr_files"
+
+  if [ "$STATEFUL_MIGRATION_QUARANTINE" = true ]; then
+    SOURCE_STATEFUL_MIGRATION_QUARANTINE=true
+    if [ "$SKIP_ABSORBED_GUARD" = true ]; then
+      echo -e "${RED}✗ 1224-class stateful migration quarantine cannot use --skip-absorbed-guard${NC}"
+      echo "  Reject it or use the default intake lane with quarantine and replay evidence."
+      return 1
+    fi
+
+    local source_merged_at
+    source_merged_at=$(echo "$source_pr_info" | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')); console.log(String(d.mergedAt||''))")
+    if [ "$source_pr_state" != "MERGED" ] || [ -z "$source_merged_at" ]; then
+      echo -e "${RED}✗ 1224-class source PR must be MERGED before home absorption${NC}"
+      echo "  Its quarantine clock belongs to the final source/fork HEAD before public merge."
+      return 1
+    fi
+
+    if ! evaluate_source_head_soak "$source_pr_info" "$source_merged_at"; then
+      echo -e "${RED}✗ Cannot evaluate the exact source/fork HEAD soak for 1224-class intake${NC}"
+      echo "  Required GitHub facts: headRefOid, mergedAt, and exact-HEAD check/review evidence."
+      return 1
+    fi
+
+    if [ "$SOURCE_HEAD_SOAK_STATUS" = "PASS" ]; then
+      echo -e "${YELLOW}⚠ Source/fork pre-merge soak: PASS — exact HEAD witnessed for ${SOURCE_HEAD_SOAK_DAYS} full day(s). Evidence guard remains active.${NC}"
+    elif [ "$SOURCE_HEAD_SOAK_STATUS" = "MISSED" ]; then
+      echo -e "${YELLOW}⚠ Source/fork pre-merge soak: MISSED — exact HEAD witnessed for only ${SOURCE_HEAD_SOAK_DAYS} full day(s).${NC}"
+      echo "  Post-merge waiting cannot turn MISSED into PASS; an explicit disposition and all migration proofs remain required."
+    else
+      echo -e "${YELLOW}⚠ Source/fork pre-merge soak: UNVERIFIABLE — no durable pre-merge check/review witness binds the exact final HEAD.${NC}"
+      echo "  Commit timestamps are not accepted as soak evidence; an explicit disposition and all migration proofs remain required."
+    fi
+  fi
+
   if [ "$SKIP_ABSORBED_GUARD" = true ]; then
     echo -e "${YELLOW}⚠ --skip-absorbed-guard enabled: bypassing absorbed intake strict guard${NC}"
     return 0
@@ -803,6 +1152,50 @@ run_absorbed_record_guard() {
     return 1
   fi
 
+  if [ "$SOURCE_STATEFUL_MIGRATION_QUARANTINE" = true ]; then
+    if [ "$SOURCE_HEAD_SOAK_STATUS" != "PASS" ]; then
+      local source_soak_disposition_ok
+      source_soak_disposition_ok=$(ISSUE_JSON="$intent_info" ABSORB_JSON="$absorb_pr_info" EXPECTED_STATUS="$SOURCE_HEAD_SOAK_STATUS" node -e '
+const issue = JSON.parse(process.env.ISSUE_JSON || "{}");
+const absorb = JSON.parse(process.env.ABSORB_JSON || "{}");
+const text = `${String(issue.body || "")}\n${String(absorb.body || "")}`
+  .replace(/[`*_]/g, " ");
+const expected = String(process.env.EXPECTED_STATUS || "");
+const marker = new RegExp(`Source\\/fork pre-merge soak\\s*:\\s*${expected}`, "i");
+console.log(marker.test(text) ? "yes" : "no");
+')
+      if [ "$source_soak_disposition_ok" != "yes" ]; then
+        echo -e "${RED}✗ 1224-class source pre-merge soak is ${SOURCE_HEAD_SOAK_STATUS} and lacks an explicit disposition marker${NC}"
+        echo "  Required exact marker (in Intake Issue or absorb PR):"
+        echo "    Source/fork pre-merge soak: ${SOURCE_HEAD_SOAK_STATUS}"
+        echo "  This records the defect honestly; it does not replace replay evidence or exact-HEAD review."
+        return 1
+      fi
+    fi
+
+    local migration_evidence_ok
+    migration_evidence_ok=$(ISSUE_JSON="$intent_info" ABSORB_JSON="$absorb_pr_info" node -e '
+const issue = JSON.parse(process.env.ISSUE_JSON || "{}");
+const absorb = JSON.parse(process.env.ABSORB_JSON || "{}");
+const text = `${String(issue.body || "")}\n${String(absorb.body || "")}`
+  .replace(/[`*_]/g, " ");
+const required = [
+  /Historical[- ]state replay\s*:\s*PASS/i,
+  /Mixed[- ]version consumer matrix\s*:\s*PASS/i,
+  /Rollback\/off[- ]mode semantics\s*:\s*PASS/i,
+];
+console.log(required.every((pattern) => pattern.test(text)) ? "yes" : "no");
+')
+    if [ "$migration_evidence_ok" != "yes" ]; then
+      echo -e "${RED}✗ 1224-class absorb PR is missing mandatory migration evidence${NC}"
+      echo "  Required exact evidence markers (in Intake Issue or absorb PR):"
+      echo "    Historical-state replay: PASS"
+      echo "    Mixed-version consumer matrix: PASS"
+      echo "    Rollback/off-mode semantics: PASS"
+      return 1
+    fi
+  fi
+
   local scope_issue_ids
   scope_issue_ids=$(echo "$absorb_pr_info" | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')); const body=String(d.body||''); const ids=[...body.matchAll(/Closes\\s+(?:cat-cafe#|#)(\\d+)\\b/ig)].map((m)=>m[1]); process.stdout.write([...new Set(ids)].join('\\n'))")
 
@@ -866,6 +1259,7 @@ run_absorbed_record_guard() {
   done <<< "$scope_issue_ids"
 
   validate_absorb_pr_scope_alignment "$scope_issue_bodies_b64" "${BRAND_SCOPE_FILES:-}" || return 1
+  validate_absorb_pr_validation_evidence "${BRAND_SCOPE_FILES:-}" "$(echo "$absorb_pr_info" | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')); console.log(String(d.body||''))")" || return 1
   validate_review_proof_continuity "$absorb_pr_head" "$review_proof_mode" || return 1
 
   echo -e "${GREEN}✓ Absorbed intake strict guard passed.${NC}"
@@ -877,7 +1271,7 @@ run_absorbed_record_guard() {
 }
 
 if [ "$VALIDATE_INBOUND" = true ]; then
-  echo -e "${GREEN}=== 🛡 Inbound Brand Guard ===${NC}"
+  echo -e "${GREEN}=== 🛡 Inbound Guard ===${NC}"
   echo ""
   VALIDATION_SCOPE_FILES=""
   VALIDATION_SCOPE_LABEL="local changed"
@@ -885,6 +1279,20 @@ if [ "$VALIDATE_INBOUND" = true ]; then
     VALIDATION_SCOPE_LABEL="staged"
   fi
   if VALIDATION_SCOPE_FILES=$(resolve_local_brand_scope); then
+    detect_stateful_migration_quarantine "$VALIDATION_SCOPE_FILES"
+    if [ "$STATEFUL_MIGRATION_QUARANTINE" = true ]; then
+      print_stateful_migration_quarantine
+      echo ""
+      if [ "$STATE_MIGRATION_ADVISORY" = true ]; then
+        echo -e "${YELLOW}⚠ Pre-commit advisory: this commit is not blocked.${NC}"
+        echo "  If this staged shape came from a community PR, stop and run --mode=risk-check;"
+        echo "  the intake record lane remains fail-closed for quarantine and evidence."
+        echo ""
+      else
+        echo -e "${RED}✗ 1224-class staged migration blocked before commit.${NC}"
+        exit 2
+      fi
+    fi
     if [ -z "$VALIDATION_SCOPE_FILES" ]; then
       echo "  Brand Guard scope: 0 $VALIDATION_SCOPE_LABEL file(s)"
       echo -e "${GREEN}✓ No brand violations detected. Safe to commit.${NC}"
@@ -986,6 +1394,10 @@ if [ "$RECORD_DECISION" = true ]; then
     echo -e "${RED}✗ PR #$PR_NUMBER is $PR_REC_STATE, not MERGED.${NC}"; exit 1
   fi
   PR_MERGE_SHA=$(echo "$PR_MERGE_INFO" | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')); console.log((d.mergeCommit||{}).oid||'')")
+  if [ -z "$PR_MERGE_SHA" ]; then
+    echo -e "${RED}✗ PR #$PR_NUMBER has no merge commit SHA; refusing to record intake provenance.${NC}"
+    exit 1
+  fi
   PR_NUMBER_ENV="$PR_NUMBER" \
   PR_MERGE_SHA_ENV="$PR_MERGE_SHA" \
   DECISION_ENV="$DECISION" \
@@ -998,12 +1410,23 @@ if [ "$RECORD_DECISION" = true ]; then
     const prNumber = Number(process.env.PR_NUMBER_ENV || '0');
     const decision = process.env.DECISION_ENV || '';
     const ledger = JSON.parse(fs.readFileSync('$INTAKE_LEDGER', 'utf-8'));
-    if (ledger.entries.some(e => e.pr_number === prNumber && e.action !== 'force_advance')) {
-      console.log('⚠ PR #' + prNumber + ' already recorded. Skipping.'); process.exit(0);
+    const existing = ledger.entries.find(e => e.pr_number === prNumber && e.action !== 'force_advance');
+    if (existing && existing.decision === decision) {
+      console.log('⚠ PR #' + prNumber + ' already recorded as ' + decision + '. Skipping.'); process.exit(0);
+    }
+    if (existing && !(existing.decision === 'public-only' && decision === 'absorbed')) {
+      console.error('✗ PR #' + prNumber + ' is already recorded as ' + existing.decision +
+        '; only the monotonic public-only → absorbed upgrade is supported.');
+      process.exit(1);
+    }
+    const mergeCommit = process.env.PR_MERGE_SHA_ENV || '';
+    if (existing && existing.target_merge_commit && existing.target_merge_commit !== mergeCommit) {
+      console.error('✗ PR #' + prNumber + ' merge commit changed since the provisional record; refusing reclassification.');
+      process.exit(1);
     }
     const entry = {
       pr_number: prNumber,
-      target_merge_commit: process.env.PR_MERGE_SHA_ENV || '',
+      target_merge_commit: mergeCommit,
       decision,
       timestamp: new Date().toISOString(),
     };
@@ -1023,10 +1446,20 @@ if [ "$RECORD_DECISION" = true ]; then
         entry.review_proof = reviewProof;
       }
     }
-    ledger.entries.push(entry);
+    if (existing) {
+      entry.previous_decision = existing.decision;
+      entry.previous_timestamp = existing.timestamp;
+      Object.assign(existing, entry);
+    } else {
+      ledger.entries.push(entry);
+    }
     fs.writeFileSync('$INTAKE_LEDGER', JSON.stringify(ledger, null, 2) + '\n');
     const mergeShort = (process.env.PR_MERGE_SHA_ENV || '').slice(0, 12);
-    console.log('✓ Recorded PR #' + prNumber + ' → ' + decision + ' (merge: ' + mergeShort + ')');
+    if (existing) {
+      console.log('✓ Upgraded PR #' + prNumber + ': public-only → absorbed (merge: ' + mergeShort + ')');
+    } else {
+      console.log('✓ Recorded PR #' + prNumber + ' → ' + decision + ' (merge: ' + mergeShort + ')');
+    }
   "
   # Auto-attempt advance-ledger after successful record
   echo ""
@@ -1140,6 +1573,45 @@ if [ "$ADVANCE_LEDGER" = true ]; then
   exit 0
 fi
 
+post_review_continuity_comment() {
+  local absorb_pr="$1"
+  local proof_url="$2"
+  local proof_commit="$3"
+  local current_head="$4"
+  local delta_files="$5"
+  local marker="<!-- cat-cafe:intake-review-continuity:$absorb_pr:$current_head -->"
+
+  if gh api --paginate "repos/$SOURCE_REPO/issues/$absorb_pr/comments" --jq '.[].body' 2>/dev/null | grep -Fq "$marker"; then
+    echo -e "${GREEN}✓ Review continuity evidence comment already exists.${NC}"
+    return 0
+  fi
+
+  {
+    echo "$marker"
+    echo "## Intake Review Continuity"
+    echo ""
+    echo '`--verify-merge-ready` passed after the intake ledger commit advanced this PR beyond the formal review commit.'
+    echo ""
+    echo "- Review proof: $proof_url"
+    echo "- Reviewed commit: \`$proof_commit\`"
+    echo "- Current PR HEAD: \`$current_head\`"
+    echo "- Continuity verdict: post-review delta is non-behavioral."
+    echo ""
+    echo "Delta files:"
+    if [ -z "$delta_files" ]; then
+      echo "- none"
+    else
+      while IFS= read -r f; do
+        [ -z "$f" ] && continue
+        echo "- \`$f\`"
+      done <<< "$delta_files"
+    fi
+    echo ""
+    echo "[intake-from-opensource.sh]"
+  } | gh pr comment "$absorb_pr" --repo "$SOURCE_REPO" --body-file - >/dev/null
+  echo -e "${GREEN}✓ Posted review continuity evidence comment.${NC}"
+}
+
 # ── Verify merge readiness (post-record continuity check) ──
 if [ "$VERIFY_MERGE_READY" = true ]; then
   if [ -z "$ABSORB_PR" ]; then
@@ -1230,6 +1702,7 @@ if [ "$VERIFY_MERGE_READY" = true ]; then
   vmr_delta_files=$(git diff --name-only "$vmr_proof_commit".."$vmr_current_head" 2>/dev/null || true)
   if [ -z "$vmr_delta_files" ]; then
     echo -e "${GREEN}✓ Merge ready: no file changes between review proof and current HEAD.${NC}"
+    post_review_continuity_comment "$ABSORB_PR" "$vmr_proof_url" "$vmr_proof_commit" "$vmr_current_head" "$vmr_delta_files"
     exit 0
   fi
 
@@ -1247,6 +1720,7 @@ if [ "$VERIFY_MERGE_READY" = true ]; then
     echo -e "${GREEN}✓ Merge ready: post-review delta is non-behavioral (ledger/mailbox only).${NC}"
     echo "  Delta files:"
     echo "$vmr_delta_files" | sed 's/^/    /'
+    post_review_continuity_comment "$ABSORB_PR" "$vmr_proof_url" "$vmr_proof_commit" "$vmr_current_head" "$vmr_delta_files"
     exit 0
   else
     echo -e "${RED}✗ Post-review delta contains behavioral changes:${NC}"
@@ -1262,6 +1736,7 @@ fi
 if [ -z "$PR_NUMBER" ]; then
   echo "Usage:"
   echo "  bash scripts/intake-from-opensource.sh --pr <N> --mode=plan              # Analyze PR"
+  echo "  bash scripts/intake-from-opensource.sh --pr <N> --mode=risk-check        # Pre-merge 1224-class risk alarm"
   echo "  bash scripts/intake-from-opensource.sh --record --pr <N> --decision <D>  # Record decision"
   echo "    absorbed (default lane) requires: --intent-issue <I> --absorb-pr <P> --review-proof <URL|file>"
   echo "      review-proof must cover absorb PR current HEAD (comment/review URL or file with SHA)"
@@ -1283,7 +1758,7 @@ echo "Mode: $MODE"
 echo ""
 
 # Fetch PR info
-PR_INFO=$(gh pr view "$PR_NUMBER" --repo "$TARGET_REPO" --json title,state,author,mergedAt,mergeCommit 2>/dev/null || true)
+PR_INFO=$(gh pr view "$PR_NUMBER" --repo "$TARGET_REPO" --json title,state,author,mergedAt,mergeCommit,headRefOid,reviews,statusCheckRollup 2>/dev/null || true)
 if [ -z "$PR_INFO" ]; then
   echo -e "${RED}✗ Cannot fetch PR #$PR_NUMBER from $TARGET_REPO${NC}"
   exit 1
@@ -1300,8 +1775,9 @@ echo -e "${BLUE}State:${NC}  $PR_STATE"
 echo -e "${BLUE}Merged:${NC} $PR_MERGED"
 echo ""
 
-# P1-2: Block plan on unmerged PRs — intake operates on landed facts, not candidates
-if [ "$PR_STATE" != "MERGED" ]; then
+# P1-2: Plan operates on landed facts. Risk-check intentionally runs before
+# merge so a 1224-class change can be stopped while it is still cheap to split.
+if [ "$PR_STATE" != "MERGED" ] && [ "$MODE" != "risk-check" ]; then
   echo -e "${RED}✗ PR #$PR_NUMBER is $PR_STATE, not MERGED.${NC}"
   echo "  Intake operates on PRs that have landed in clowder-ai main."
   echo "  Merge the PR first, then re-run intake."
@@ -1342,6 +1818,7 @@ HIGH_RISK_FILES=""
 HIGH_RISK_COUNT=0
 PASSTHROUGH_FILES=""
 PASSTHROUGH_COUNT=0
+detect_stateful_migration_quarantine "$FILES"
 
 while IFS= read -r file; do
   [ -z "$file" ] && continue
@@ -1357,7 +1834,7 @@ while IFS= read -r file; do
   elif is_high_risk "$file"; then
     HIGH_RISK_FILES="${HIGH_RISK_FILES}  ${file}\n"
     HIGH_RISK_COUNT=$((HIGH_RISK_COUNT + 1))
-  elif is_manual_port "$file"; then
+  elif is_public_source "$file" || is_manual_port "$file"; then
     MANUAL_FILES="${MANUAL_FILES}  ${file}\n"
     MANUAL_COUNT=$((MANUAL_COUNT + 1))
   else
@@ -1391,6 +1868,30 @@ if [ "$HIGH_RISK_COUNT" -gt 0 ]; then
   echo ""
 fi
 
+if [ "$STATEFUL_MIGRATION_QUARANTINE" = true ]; then
+  print_stateful_migration_quarantine
+  if [ "$MODE" = "risk-check" ]; then
+    RISK_SOAK_END_AT=""
+    if [ "$PR_STATE" = "MERGED" ]; then
+      RISK_SOAK_END_AT="$PR_MERGED"
+    fi
+    if ! evaluate_source_head_soak "$PR_INFO" "$RISK_SOAK_END_AT"; then
+      echo -e "  ${RED}Source/fork pre-merge soak: UNVERIFIABLE — cannot resolve the final HEAD or evaluation boundary.${NC}"
+    elif [ "$SOURCE_HEAD_SOAK_STATUS" = "PASS" ]; then
+      echo -e "  ${YELLOW}Source/fork pre-merge soak: PASS — exact HEAD has a ${SOURCE_HEAD_SOAK_DAYS}-day durable GitHub witness; the 1224-class HOLD still requires maintainer disposition and proofs.${NC}"
+    elif [ "$SOURCE_HEAD_SOAK_STATUS" = "UNVERIFIABLE" ]; then
+      echo -e "  ${RED}Source/fork pre-merge soak: UNVERIFIABLE — no durable check/review witness binds the exact final HEAD.${NC}"
+      echo "  Commit timestamps do not start the clock; run an exact-HEAD check or review to create a witness."
+    elif [ "$PR_STATE" = "MERGED" ]; then
+      echo -e "  ${RED}Source/fork pre-merge soak: MISSED — exact HEAD was witnessed for only ${SOURCE_HEAD_SOAK_DAYS} full day(s) before public merge.${NC}"
+      echo "  Post-merge waiting cannot turn MISSED into PASS; record the disposition and keep all migration proofs."
+    else
+      echo -e "  ${RED}Source/fork pre-merge soak: INCOMPLETE — exact HEAD has a ${SOURCE_HEAD_SOAK_DAYS}-day durable GitHub witness; a new final SHA resets the clock.${NC}"
+    fi
+  fi
+  echo ""
+fi
+
 if [ "$MANUAL_COUNT" -gt 0 ]; then
   echo -e "${YELLOW}⚠ manual-port ($MANUAL_COUNT files)${NC} — has outbound transforms, review diff manually"
   echo -e "$MANUAL_FILES"
@@ -1420,6 +1921,16 @@ echo -e "  ${YELLOW}Manual:${NC} $MANUAL_COUNT  (needs human review)"
 echo -e "  ${BLUE}Skip:${NC}   $PUBLIC_COUNT  (public-only)"
 if [ "$PASSTHROUGH_COUNT" -gt 0 ]; then
   echo -e "  ${BLUE}Pass:${NC}   $PASSTHROUGH_COUNT  (exempt)"
+fi
+
+if [ "$MODE" = "risk-check" ]; then
+  echo ""
+  if [ "$STATEFUL_MIGRATION_QUARANTINE" = true ]; then
+    echo -e "${RED}✗ 1224-class risk-check failed closed.${NC}"
+    exit 2
+  fi
+  echo -e "${GREEN}✓ No 1224-class stateful migration risk detected.${NC}"
+  exit 0
 fi
 
 if [ "$MODE" = "plan" ]; then

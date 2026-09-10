@@ -1,6 +1,4 @@
-import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
 import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
 import { getAgentHookStatus, syncAgentHooks } from '../agent-hooks/index.js';
 import { findMonorepoRoot } from '../utils/monorepo-root.js';
@@ -77,7 +75,7 @@ function isTrustedLocalApiRequest(request: FastifyRequest): boolean {
 
 /**
  * Validate an explicit project path using the shared project-path validator
- * (canonicalization, symlink resolution, denylist) and verify .cat-cafe/ exists.
+ * (canonicalization, symlink resolution, denylist).
  *
  * @returns `{ ok: true, path }` when valid, `{ ok: false, error }` when invalid.
  *          Returns `{ ok: true, path: null }` when no explicit path was supplied
@@ -85,16 +83,16 @@ function isTrustedLocalApiRequest(request: FastifyRequest): boolean {
  */
 async function validateExplicitProjectPath(
   rawPath: string | null,
-): Promise<{ ok: true; path: string | null } | { ok: false; error: string }> {
+): Promise<{ ok: true; path: string | null } | { ok: false; code: 'INVALID_PROJECT_PATH'; error: string }> {
   if (!rawPath) return { ok: true, path: null };
 
   const validated = await resolvePersistentProjectPath(rawPath);
   if (!validated) {
-    return { ok: false, error: `Invalid project path: not found, denied, or not a directory: ${rawPath}` };
-  }
-
-  if (!existsSync(join(validated, '.cat-cafe'))) {
-    return { ok: false, error: `Project not initialized (missing .cat-cafe/): ${validated}` };
+    return {
+      ok: false,
+      code: 'INVALID_PROJECT_PATH',
+      error: `Invalid project path: not found, denied, or not a directory: ${rawPath}`,
+    };
   }
 
   return { ok: true, path: validated };
@@ -128,7 +126,7 @@ export const agentHooksRoutes: FastifyPluginAsync<AgentHooksRouteOptions> = asyn
     const projectValidation = await validateExplicitProjectPath(nonEmptyString(query.projectPath));
     if (!projectValidation.ok) {
       reply.status(400);
-      return { error: projectValidation.error };
+      return { error: projectValidation.error, code: projectValidation.code };
     }
     const resolved = resolveOptions(options, request, projectValidation.path);
     if (!resolved) {
@@ -150,7 +148,7 @@ export const agentHooksRoutes: FastifyPluginAsync<AgentHooksRouteOptions> = asyn
     const projectValidation = await validateExplicitProjectPath(nonEmptyString(body?.projectPath));
     if (!projectValidation.ok) {
       reply.status(400);
-      return { error: projectValidation.error };
+      return { error: projectValidation.error, code: projectValidation.code };
     }
     const resolved = resolveOptions(options, request, projectValidation.path);
     if (!resolved) {

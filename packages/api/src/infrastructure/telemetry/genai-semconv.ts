@@ -37,10 +37,16 @@ export const TOOL_CATEGORY = 'tool.category';
 export const ROUTING_STRATEGY = 'cat_cafe.routing.strategy';
 export const ROUTING_TARGET_CATS = 'cat_cafe.routing.target_cats';
 export const ROUTING_INTENT = 'cat_cafe.routing.intent';
+/** Bounded F177 event-wait resolver reject reason (12 enum values maximum). */
+export const ROUTING_EVENT_WAIT_REASON = 'routing_event_wait_reason';
+/** F167 Phase S bounded successor cardinality mode: single | parallel. */
+export const ACTION_SUCCESSOR_MODE = 'action_successor.mode';
 
 // --- F174 Phase D1: callback auth failure attributes ---
 export const CALLBACK_TOOL = 'callback.tool';
 export const CALLBACK_REASON = 'callback.reason';
+/** Bounded F254 relevance suppressions; values come from FreshnessRelevanceReason. */
+export const FRESHNESS_RELEVANCE_REASON = 'freshness.relevance_reason';
 
 // --- F236 Track-1: anchor-first telemetry attributes ---
 /**
@@ -67,6 +73,18 @@ export const GROUNDING_CLAIM_TYPE = 'grounding.claim_type';
 export const GROUNDING_VERDICT = 'grounding.verdict';
 export const GROUNDING_ACTION_FAMILY = 'grounding.action_family';
 export const GROUNDING_SOURCE_TIER = 'grounding.source_tier';
+
+// --- F296 B4b: bounded context-projection metric attributes ---
+// These keys are metric-safe only because every producer value is normalized
+// through the closed contract in context-projection-telemetry-contract.ts.
+// IDs, epochs, refs and body-bearing values are intentionally absent.
+export const CONTEXT_PROJECTION_DISPOSITION = 'context_projection.disposition';
+export const CONTEXT_PROJECTION_REASON = 'context_projection.reason';
+export const CONTEXT_PROJECTION_TRANSITION = 'context_projection.transition';
+export const CONTEXT_PROJECTION_MODE = 'context_projection.mode';
+export const CONTEXT_PROJECTION_DELTA_SIZE = 'context_projection.delta_size';
+export const CONTEXT_PROJECTION_TIER = 'context_projection.tier';
+export const CONTEXT_PROJECTION_LEDGER_OUTCOME = 'context_projection.ledger_outcome';
 
 // --- Route aggregate attributes (set at route completion) ---
 export const ROUTE_TOTAL_CATS_INVOKED = 'route.total_cats_invoked';

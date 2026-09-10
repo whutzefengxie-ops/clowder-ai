@@ -1,6 +1,12 @@
 import type { HandlerError } from './types.js';
 
 export function mapPublishVerdictError(message: string): HandlerError | null {
+  if (message.startsWith('invalid_analysis_findings')) {
+    return { status: 400, error: 'invalid_analysis_findings', detail: message };
+  }
+  if (message.startsWith('measurement_validity_gate')) {
+    return { status: 409, error: 'measurement_validity_gate', detail: message };
+  }
   if (message.startsWith('verdict_already_exists_on_main')) {
     return { status: 409, error: 'verdict_already_exists', detail: message };
   }

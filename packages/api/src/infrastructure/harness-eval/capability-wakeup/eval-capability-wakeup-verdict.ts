@@ -36,6 +36,7 @@ export function buildCapabilityWakeupVerdictHandoff(input: {
   const packet = parseVerdictHandoffPacket({
     id: `vhp_eval_capability_wakeup_${slug(createdAt)}_${slug(input.capability)}`,
     domainId: domain.domainId,
+    findingKey: input.capability,
     createdAt,
     phenomenon: `${input.capability} miss rate ${(missRate * 100).toFixed(0)}% (${misses.length}/${denominator})`,
     harnessUnderEval: {
@@ -50,9 +51,7 @@ export function buildCapabilityWakeupVerdictHandoff(input: {
           ? misses.map((trial) => `attribution:${trial.ruleId}:${trial.window.currentInvocationId}`)
           : ['attribution:no-finding'],
       metricRefs: ['miss_rate', 'miss_count', 'negative_count', 'false_positive_count'],
-      sampleTraceRefs: relevant
-        .map((trial) => `session:${trial.sessionId}/invocation:${trial.window.currentInvocationId}`)
-        .slice(0, 5) || ['session:unknown'],
+      sampleTraceRefs: invocationSampleRefs(relevant),
     },
     dailyTrend: {
       window: `${domain.sla.reevalWithinHours}h`,
@@ -98,6 +97,19 @@ export function buildCapabilityWakeupVerdictHandoff(input: {
     throw new Error(handoffDecision.reason ?? 'capability wakeup verdict handoff packet is incomplete');
   }
   return packet;
+}
+
+function invocationSampleRefs(trials: ClassifiedCapabilityWakeupTrial[]): string[] {
+  return [
+    ...new Set(
+      trials
+        .slice(0, 5)
+        .flatMap((trial) => [
+          `session:${trial.sessionId}/invocation:${trial.window.currentInvocationId}`,
+          `inv:${trial.window.currentInvocationId}`,
+        ]),
+    ),
+  ];
 }
 
 function dominantMissLabel(trials: ClassifiedCapabilityWakeupTrial[]): CapabilityMissLabel {

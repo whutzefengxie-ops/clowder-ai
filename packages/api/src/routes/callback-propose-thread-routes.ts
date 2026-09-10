@@ -9,10 +9,11 @@
  * proposal-routes.ts.
  */
 
-import type { CatId, ThreadProposal } from '@cat-cafe/shared';
-import { catIdSchema, generateProposalId } from '@cat-cafe/shared';
+import type { ApprovalEnvelope, CatId, ThreadProposal } from '@cat-cafe/shared';
+import { catIdSchema, generateProposalId, suggestedReportingModeForWorkMode } from '@cat-cafe/shared';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { ApprovalIngress } from '../domains/approval-hub/ApprovalIngress.js';
 import type { InvocationRegistry } from '../domains/cats/services/agents/invocation/InvocationRegistry.js';
 import type { IMessageStore } from '../domains/cats/services/stores/ports/MessageStore.js';
 import type { IProposalStore } from '../domains/cats/services/stores/ports/ProposalStore.js';
@@ -30,6 +31,8 @@ const proposeThreadCallbackSchema = z.object({
   initialMessage: z.string().max(4000).optional(),
   // F128 Phase AA (AC-AA1): reporting contract. Omitted → default final-only (supersedes Phase Y AC-Y6 none).
   reportingMode: z.enum(['none', 'final-only', 'state-transitions', 'blocking-ack']).optional(),
+  // F277: explicit placement role. `unknown` is projection-only and intentionally rejected.
+  declaredWorkMode: z.enum(['subtask', 'parallel', 'investigation', 'standalone']).optional(),
   // F128: explicit project ownership for the child thread. Validated against allowed roots
   // (resolvePersistentProjectPath) — NOT hardcoded. Omitted → inherit source thread's projectPath;
   // supplied-but-invalid → 400 (fail loud, never silently fall back to default).
@@ -44,10 +47,12 @@ export interface ProposeThreadDeps {
   threadStore: IThreadStore;
   messageStore: IMessageStore;
   socketManager: SocketManager;
+  approvalIngress?: ApprovalIngress;
 }
 
 export function registerCallbackProposeThreadRoutes(app: FastifyInstance, deps: ProposeThreadDeps): void {
   const { registry, proposalStore, threadStore, messageStore, socketManager } = deps;
+  const approvalIngress = deps.approvalIngress ?? new ApprovalIngress({ messageStore, socketManager });
 
   app.post('/api/callbacks/propose-thread', async (request, reply) => {
     const record = requireCallbackAuth(request, reply);
@@ -65,6 +70,7 @@ export function registerCallbackProposeThreadRoutes(app: FastifyInstance, deps: 
       preferredCats,
       initialMessage: rawInitialMessage,
       reportingMode,
+      declaredWorkMode,
       projectPath: explicitProjectPath,
       parentThreadId,
       clientRequestId,
@@ -78,10 +84,19 @@ export function registerCallbackProposeThreadRoutes(app: FastifyInstance, deps: 
     // as mentions — dispatch then walks `preferredCats` in the wrong order.
     // Normalize at the propose boundary so the persisted card text matches
     // how the cat would have written @mentions in the same thread.
-    const initialMessage = rawInitialMessage ? normalizeCatIdMentionsInText(rawInitialMessage) : rawInitialMessage;
+    const initialMessage = rawInitialMessage ? normalizeCatIdMentionsInText(rawInitialMessage) : undefined;
 
     if (!(await registry.isLatest(invocationId))) {
       return { status: 'stale_ignored' };
+    }
+
+    // The approval origin is the exact message that caused this invocation. Direct user
+    // turns intentionally have no a2aTriggerMessageId (that field controls reply threading),
+    // so use the dedicated turn origin and keep the A2A field as a legacy-record fallback.
+    const originMessageId = record.originTriggerMessageId ?? record.a2aTriggerMessageId;
+    if (!originMessageId) {
+      reply.status(400);
+      return { error: 'Exact source message is required for an approval proposal' };
     }
 
     // Idempotency fast path: only return success if the proposal is fully VISIBLE — i.e. the
@@ -93,25 +108,20 @@ export function registerCallbackProposeThreadRoutes(app: FastifyInstance, deps: 
       const cached = await proposalStore.getDedupProposalId(record.userId, clientRequestId);
       if (cached) {
         const proposal = await proposalStore.get(cached);
-        if (proposal && proposal.cardMessageId) {
-          return { proposalId: proposal.proposalId, status: proposal.status, deduped: true };
-        }
-        if (proposal && !proposal.cardMessageId) {
-          const recoveredId = await findCardMessageInThread(messageStore, proposal.sourceThreadId, proposal.proposalId);
-          if (recoveredId) {
-            // best-effort backfill so subsequent retries skip the scan
-            try {
-              await proposalStore.setCardMessageId(proposal.proposalId, recoveredId);
-            } catch {
-              // ignore; we can still answer this request
-            }
-            return { proposalId: proposal.proposalId, status: proposal.status, deduped: true };
+        if (proposal) {
+          const legacyResponse = await visibleLegacyProposalResponse(approvalIngress, proposalStore, proposal);
+          if (legacyResponse) return legacyResponse;
+          if (!proposal.publication) {
+            reply.status(503);
+            reply.header('retry-after', '1');
+            return { error: 'Legacy proposal card is not visible; retry shortly', status: 'retryable' };
           }
-          reply.status(503);
-          reply.header('retry-after', '1');
+          const envelope = await publishThreadApproval(approvalIngress, proposalStore, proposal);
           return {
-            error: 'Proposal in-flight (card pending); retry shortly',
-            status: 'retryable',
+            proposalId: proposal.proposalId,
+            status: proposal.status,
+            messageId: envelope.approvalCardRef.messageId,
+            deduped: true,
           };
         }
         // Cached but proposal missing — winner crashed before persisting; let the
@@ -176,34 +186,26 @@ export function registerCallbackProposeThreadRoutes(app: FastifyInstance, deps: 
         // (cardMessageId set). If marker is missing, try the same source-thread self-heal as
         // the fast path before reporting in-flight.
         const canonical = await proposalStore.get(winningId);
-        if (canonical && !canonical.cardMessageId) {
-          const recoveredId = await findCardMessageInThread(
-            messageStore,
-            canonical.sourceThreadId,
-            canonical.proposalId,
-          );
-          if (recoveredId) {
-            try {
-              await proposalStore.setCardMessageId(canonical.proposalId, recoveredId);
-            } catch {
-              // ignore
-            }
-            return { proposalId: winningId, status: canonical.status, deduped: true };
-          }
-        }
-        if (!canonical || !canonical.cardMessageId) {
+        if (!canonical) {
           reply.status(503);
           reply.header('retry-after', '1');
           return {
-            error: canonical
-              ? 'Proposal in-flight by a concurrent request (card pending); retry shortly'
-              : 'Proposal reservation in-flight by a concurrent request; retry shortly',
+            error: 'Proposal reservation in-flight by a concurrent request; retry shortly',
             status: 'retryable',
           };
         }
+        const legacyResponse = await visibleLegacyProposalResponse(approvalIngress, proposalStore, canonical);
+        if (legacyResponse) return legacyResponse;
+        if (!canonical.publication) {
+          reply.status(503);
+          reply.header('retry-after', '1');
+          return { error: 'Legacy proposal card is not visible; retry shortly', status: 'retryable' };
+        }
+        const envelope = await publishThreadApproval(approvalIngress, proposalStore, canonical);
         return {
           proposalId: winningId,
           status: canonical.status,
+          messageId: envelope.approvalCardRef.messageId,
           deduped: true,
         };
       }
@@ -220,6 +222,7 @@ export function registerCallbackProposeThreadRoutes(app: FastifyInstance, deps: 
         sourceThreadId: record.threadId,
         sourceInvocationId: invocationId,
         sourceCatId: record.catId,
+        sourceMessageId: originMessageId,
         title,
         reason,
         parentThreadId: resolvedParentThreadId,
@@ -227,7 +230,8 @@ export function registerCallbackProposeThreadRoutes(app: FastifyInstance, deps: 
         projectPath: resolvedProjectPath,
         createdBy: record.userId,
         ...(initialMessage ? { initialMessage } : {}),
-        ...(reportingMode ? { reportingMode } : {}),
+        reportingMode: reportingMode ?? suggestedReportingModeForWorkMode(declaredWorkMode),
+        ...(declaredWorkMode ? { declaredWorkMode } : {}),
       });
     } catch (err) {
       // Critical: if we reserved a dedup key but failed to create the proposal it points at,
@@ -243,29 +247,11 @@ export function registerCallbackProposeThreadRoutes(app: FastifyInstance, deps: 
       throw err;
     }
 
-    // Render the proposal as a card in the source thread so the user sees + acts on it.
-    // The card is the ONLY user-facing approval entry point (no pending dashboard fallback),
-    // so if appending it fails we must NOT leave a phantom proposal — delete it and release
-    // the dedup so retries can re-create a visible card.
-    const cardBlock = buildProposalCardBlock(proposal);
-    let stored;
+    let envelope: ApprovalEnvelope;
     try {
-      stored = await messageStore.append({
-        userId: record.userId,
-        catId: record.catId,
-        content: `提议新建 thread：${title}`,
-        mentions: [],
-        timestamp: Date.now(),
-        threadId: record.threadId,
-        extra: { rich: { v: 1 as const, blocks: [cardBlock] } },
-      });
+      envelope = await publishThreadApproval(approvalIngress, proposalStore, proposal);
     } catch (err) {
-      try {
-        await proposalStore.delete(proposal.proposalId);
-      } catch {
-        // best-effort cleanup
-      }
-      if (reservedDedup && clientRequestId) {
+      if (reservedDedup && clientRequestId && !(await proposalStore.get(proposal.proposalId))) {
         try {
           await proposalStore.releaseDedup(record.userId, clientRequestId, proposal.proposalId);
         } catch {
@@ -275,67 +261,53 @@ export function registerCallbackProposeThreadRoutes(app: FastifyInstance, deps: 
       throw err;
     }
 
-    // Card is now persisted — mark the proposal as visible so the dedup fast path can return
-    // it as a successful prior result on retries. Marker write failures are degraded to a
-    // warning rather than rolling back (the card is already on the user's screen). Subsequent
-    // retries can self-heal via fast-path source-thread scan + backfill.
-    const warnings: string[] = [];
-    try {
-      await proposalStore.setCardMessageId(proposal.proposalId, stored.id);
-    } catch (err) {
-      warnings.push(`setCardMessageId failed: ${err instanceof Error ? err.message : String(err)}`);
-    }
-
-    socketManager.broadcastToRoom(`thread:${record.threadId}`, 'connector_message', {
-      threadId: record.threadId,
-      message: {
-        id: stored.id,
-        type: 'cat',
-        catId: record.catId,
-        content: stored.content,
-        timestamp: stored.timestamp,
-        extra: stored.extra,
-      },
-    });
-    socketManager.emitToUser(record.userId, 'proposal_created', proposal);
-
     return {
       proposalId: proposal.proposalId,
       status: proposal.status,
-      messageId: stored.id,
-      ...(warnings.length > 0 ? { warnings } : {}),
+      messageId: envelope.approvalCardRef.messageId,
     };
   });
 }
 
-/**
- * Best-effort recovery: scan a source thread for the rich card belonging to proposalId.
- * The card's first rich block uses id `proposal-{proposalId}` (see buildProposalCardBlock),
- * which makes the lookup deterministic without adding a new store index.
- *
- * Limit choice: messageStore.getByThread defaults to a small page (~50). For a self-heal
- * scan we need a much wider window so old proposals whose marker write failed long ago can
- * still recover after the thread accumulated more activity. SELF_HEAL_SCAN_LIMIT is set high
- * enough to cover practically any thread (well above realistic chat lengths) without paging.
- */
-const SELF_HEAL_SCAN_LIMIT = 10000;
+async function visibleLegacyProposalResponse(
+  ingress: ApprovalIngress,
+  store: IProposalStore,
+  proposal: ThreadProposal,
+) {
+  if (proposal.publication) return null;
+  const cardMessageId =
+    proposal.cardMessageId ??
+    (await ingress.recoverLegacyCard({
+      producerId: 'F128',
+      canonicalProposalId: proposal.proposalId,
+      ownerUserId: proposal.createdBy,
+      cardThreadId: proposal.sourceThreadId,
+      cardBlockId: buildProposalCardBlock(proposal).id,
+    }));
+  if (!cardMessageId) return null;
+  if (!proposal.cardMessageId) await store.setCardMessageId(proposal.proposalId, cardMessageId);
+  return {
+    proposalId: proposal.proposalId,
+    status: proposal.status,
+    messageId: cardMessageId,
+    deduped: true as const,
+  };
+}
 
-async function findCardMessageInThread(
-  messageStore: IMessageStore,
-  threadId: string,
-  proposalId: string,
-): Promise<string | null> {
-  try {
-    const messages = await messageStore.getByThread(threadId, SELF_HEAL_SCAN_LIMIT);
-    const target = `proposal-${proposalId}`;
-    for (const msg of messages) {
-      const blocks = msg.extra?.rich?.blocks ?? [];
-      for (const block of blocks) {
-        if (block.id === target) return msg.id;
-      }
-    }
-  } catch {
-    // self-heal is best-effort; swallow store errors
-  }
-  return null;
+function publishThreadApproval(ingress: ApprovalIngress, store: IProposalStore, proposal: ThreadProposal) {
+  if (!proposal.sourceMessageId) throw new Error('F128 Phase-I proposal is missing its persisted source message');
+  return ingress.publish(
+    {
+      producerId: 'F128',
+      canonicalProposalId: proposal.proposalId,
+      ownerUserId: proposal.createdBy,
+      requesterCatId: proposal.sourceCatId,
+      originRef: { kind: 'message', threadId: proposal.sourceThreadId, messageId: proposal.sourceMessageId },
+      cardThreadId: proposal.sourceThreadId,
+      cardContent: `提议新建 thread：${proposal.title}`,
+      cardBlock: buildProposalCardBlock(proposal),
+      createdAt: proposal.createdAt,
+    },
+    store,
+  );
 }

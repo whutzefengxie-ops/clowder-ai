@@ -1,11 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { RoutingContextLedger } from '@/components/routing-context/RoutingContextLedger';
 import { useCatData } from '@/hooks/useCatData';
 import { catDossierCoversStrengths, useDossierProfiles } from '@/hooks/useDossierProfiles';
 import { apiFetch } from '@/utils/api-client';
 import { ConnectorPluginInstallButton } from '../ConnectorPluginInstallButton';
 import { CatOverviewTab, type ConfigData } from '../config-viewer-tabs';
+import { DesktopUpdateSettingsPanel } from '../DesktopUpdateSettingsPanel';
 import { HubAccountsTab } from '../HubAccountsTab';
 import { HubCatEditor } from '../HubCatEditor';
 import { HubCoCreatorEditor } from '../HubCoCreatorEditor';
@@ -16,8 +18,10 @@ import { useConfirm } from '../useConfirm';
 import { VoiceSettingsPanel } from '../VoiceSettingsPanel';
 import { CatDossierContent } from './CatDossierContent';
 import { ConciergeSettingsContent } from './ConciergeSettingsContent';
+import { HubSystemSettingsTab } from './HubSystemSettingsTab';
 import { MarketplaceContent } from './MarketplaceContent';
 import { McpManageContent } from './McpManageContent';
+import { OpenTeamWorkspaceButton } from './OpenTeamWorkspaceButton';
 import { OpsContent } from './OpsContent';
 import { PluginsContent } from './PluginsContent';
 import { SettingsText } from './primitives';
@@ -145,42 +149,59 @@ export function SettingsContent({ section, initialEditCatId }: SettingsContentPr
 
   if (section === 'marketplace') return <MarketplaceContent />;
   if (section === 'skills') return <SkillsContent />;
-  if (section === 'profiles') return <CatDossierContent />;
+  if (section === 'profiles') {
+    return (
+      <div className="space-y-4">
+        <div className="flex justify-end">
+          <OpenTeamWorkspaceButton />
+        </div>
+        <CatDossierContent />
+      </div>
+    );
+  }
 
   const meta = SETTINGS_SECTIONS.find((item) => item.id === section) ?? SETTINGS_SECTIONS[0];
 
   const content = (() => {
     switch (meta.id) {
       case 'members':
-        if (fetchError)
-          return (
-            <SettingsText as="p" variant="sm" tone="red">
-              {fetchError}
-            </SettingsText>
-          );
-        return config ? (
-          <CatOverviewTab
-            config={config}
-            cats={cats}
-            onAddMember={() => {
-              setEditingCat(null);
-              setCreateDraft(null);
-              setEditorOpen(true);
-            }}
-            onEditMember={(cat) => {
-              setCreateDraft(null);
-              setEditingCat(cat);
-              setEditorOpen(true);
-            }}
-            onEditCoCreator={() => setCoCreatorEditorOpen(true)}
-            onDeleteMember={handleDeleteMember}
-            onToggleAvailability={handleToggleAvailability}
-            togglingCatId={togglingCatId}
-          />
-        ) : (
-          <SettingsText as="p" variant="sm" tone="muted">
-            加载中...
-          </SettingsText>
+        return (
+          <div className="space-y-8">
+            {fetchError ? (
+              <SettingsText as="p" variant="sm" tone="red">
+                {fetchError}
+              </SettingsText>
+            ) : config ? (
+              <CatOverviewTab
+                config={config}
+                cats={cats}
+                onAddMember={() => {
+                  setEditingCat(null);
+                  setCreateDraft(null);
+                  setEditorOpen(true);
+                }}
+                onEditMember={(cat) => {
+                  setCreateDraft(null);
+                  setEditingCat(cat);
+                  setEditorOpen(true);
+                }}
+                onEditCoCreator={() => setCoCreatorEditorOpen(true)}
+                onDeleteMember={handleDeleteMember}
+                onToggleAvailability={handleToggleAvailability}
+                togglingCatId={togglingCatId}
+              />
+            ) : (
+              <SettingsText as="p" variant="sm" tone="muted">
+                加载中...
+              </SettingsText>
+            )}
+            <div className="space-y-3">
+              <div className="flex justify-end">
+                <OpenTeamWorkspaceButton />
+              </div>
+              <RoutingContextLedger />
+            </div>
+          </div>
         );
       case 'accounts':
         return <HubAccountsTab />;
@@ -204,7 +225,13 @@ export function SettingsContent({ section, initialEditCatId }: SettingsContentPr
           </div>
         );
       case 'system':
-        return <HubEnvFilesTab excludeCategories={['connector']} />;
+        return (
+          <div className="space-y-6">
+            <DesktopUpdateSettingsPanel />
+            <HubSystemSettingsTab />
+            <HubEnvFilesTab excludeCategories={['connector']} />
+          </div>
+        );
       case 'notify':
         return <PushSettingsPanel />;
       case 'ops':

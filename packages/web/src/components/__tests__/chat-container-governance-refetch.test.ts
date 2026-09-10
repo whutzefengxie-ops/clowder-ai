@@ -2,6 +2,15 @@ import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatContainer } from '@/components/ChatContainer';
+import { ThreadChatRuntimeProvider } from '@/components/thread-chat';
+
+function renderChatContainer(threadId: string) {
+  return React.createElement(
+    ThreadChatRuntimeProvider,
+    { routeThreadId: threadId },
+    React.createElement(ChatContainer, { threadId }),
+  );
+}
 
 type StoreState = {
   messages: [];
@@ -29,6 +38,7 @@ type StoreState = {
   currentProjectPath: string;
   clearUnread: ReturnType<typeof vi.fn>;
   confirmUnreadAck: ReturnType<typeof vi.fn>;
+  settleUnreadAck: ReturnType<typeof vi.fn>;
   armUnreadSuppression: ReturnType<typeof vi.fn>;
   splitPaneThreadIds: string[];
   setSplitPaneThreadIds: ReturnType<typeof vi.fn>;
@@ -56,6 +66,12 @@ type StoreState = {
 
 const mockGovRefetch = vi.fn();
 const mockUseAgentHookHealth = vi.fn();
+const mockAgentHookRefresh = vi.fn();
+let mockGovernanceStatus = {
+  isEmptyDir: false,
+  isGitRepo: true,
+  gitAvailable: true,
+};
 
 const staleAgentHookHealth = {
   status: 'missing',
@@ -97,6 +113,7 @@ const makeStoreState = (): StoreState => ({
   currentProjectPath: '/tmp/demo-project',
   clearUnread: vi.fn(),
   confirmUnreadAck: vi.fn(),
+  settleUnreadAck: vi.fn(),
   armUnreadSuppression: vi.fn(),
   splitPaneThreadIds: [],
   setSplitPaneThreadIds: vi.fn(),
@@ -209,10 +226,6 @@ vi.mock('@/hooks/useSendMessage', () => ({
   useSendMessage: () => ({ handleSend: vi.fn(), uploadStatus: null, uploadError: null }),
 }));
 
-vi.mock('@/hooks/useAuthorization', () => ({
-  useAuthorization: () => ({ pending: [], respond: vi.fn(), handleAuthRequest: vi.fn(), handleAuthResponse: vi.fn() }),
-}));
-
 vi.mock('@/hooks/useSplitPaneKeys', () => ({ useSplitPaneKeys: vi.fn() }));
 vi.mock('@/hooks/useChatSocketCallbacks', () => ({ useChatSocketCallbacks: () => ({}) }));
 vi.mock('@/hooks/useCatData', () => ({
@@ -225,23 +238,15 @@ vi.mock('@/hooks/useCatData', () => ({
     refresh: async () => [],
   }),
 }));
-vi.mock('@/hooks/usePreviewAutoOpen', () => ({ usePreviewAutoOpen: vi.fn() }));
 vi.mock('@/hooks/useWorkspaceNavigate', () => ({ useWorkspaceNavigate: vi.fn() }));
 vi.mock('@/hooks/useGovernanceStatus', () => ({
   useGovernanceStatus: () => ({
-    status: {
-      ready: true,
-      needsBootstrap: false,
-      needsConfirmation: false,
-      isEmptyDir: false,
-      isGitRepo: true,
-      gitAvailable: true,
-    },
+    status: mockGovernanceStatus,
     refetch: mockGovRefetch,
   }),
 }));
 vi.mock('@/hooks/useAgentHookHealth', () => ({
-  useAgentHookHealth: (options: { enabled?: boolean } = {}) => mockUseAgentHookHealth(options),
+  useAgentHookHealth: (options: { enabled?: boolean; projectPath?: string } = {}) => mockUseAgentHookHealth(options),
 }));
 vi.mock('@/hooks/useIndexState', () => ({
   useIndexState: () => ({
@@ -270,18 +275,22 @@ vi.mock('../MessageNavigator', () => ({ MessageNavigator: () => null }));
 vi.mock('../MessageActions', () => ({
   MessageActions: ({ children }: { children: React.ReactNode }) => children,
 }));
-vi.mock('../MobileStatusSheet', () => ({ MobileStatusSheet: () => null }));
 vi.mock('../QueuePanel', () => ({ QueuePanel: () => null }));
 vi.mock('../ThreadExecutionBar', () => ({ ThreadExecutionBar: () => null }));
 vi.mock('../VoteActiveBar', () => ({ VoteActiveBar: () => null }));
 vi.mock('../ScrollToBottomButton', () => ({ ScrollToBottomButton: () => null }));
-vi.mock('../SplitPaneView', () => ({ SplitPaneView: () => null }));
-vi.mock('../AuthorizationCard', () => ({ AuthorizationCard: () => null }));
+vi.mock('../SplitPaneView', () => ({
+  SplitPaneView: () => null,
+  SplitPaneChatView: () => null,
+}));
 vi.mock('../WorkspacePanel', () => ({ WorkspacePanel: () => null }));
 vi.mock('../BootstrapOrchestrator', () => ({ BootstrapOrchestrator: () => null }));
 vi.mock('../BootcampListModal', () => ({ BootcampListModal: () => null }));
 vi.mock('@/components/HubListModal', () => ({ HubListModal: () => null }));
-vi.mock('@/components/ProjectSetupCard', () => ({ ProjectSetupCard: () => null }));
+vi.mock('@/components/ProjectSetupCard', () => ({
+  ProjectSetupCard: ({ onComplete }: { onComplete: () => void }) =>
+    React.createElement('button', { 'data-testid': 'project-setup-complete', onClick: onComplete }, 'complete setup'),
+}));
 vi.mock('@/components/game/GameOverlayConnector', () => ({ GameOverlayConnector: () => null }));
 vi.mock('@/components/icons/PawIcon', () => ({ PawIcon: () => null }));
 vi.mock('@/components/icons/BootcampIcon', () => ({ BootcampIcon: () => null }));
@@ -307,13 +316,21 @@ describe('ChatContainer governance refetch', () => {
     root = createRoot(container);
     storeState = makeStoreState();
     mockGovRefetch.mockReset();
+    mockAgentHookRefresh.mockReset();
+    mockGovernanceStatus = {
+      isEmptyDir: false,
+      isGitRepo: true,
+      gitAvailable: true,
+    };
     mockUseAgentHookHealth.mockReset();
     mockUseAgentHookHealth.mockReturnValue({
       health: null,
       error: null,
       syncing: false,
       synced: false,
+      syncAttempted: false,
       sync: vi.fn(),
+      refresh: mockAgentHookRefresh,
     });
   });
 
@@ -326,13 +343,13 @@ describe('ChatContainer governance refetch', () => {
 
   it('does not refetch governance status when switching threads within the same project', async () => {
     await act(async () => {
-      root.render(React.createElement(ChatContainer, { threadId: 'thread-a' }));
+      root.render(renderChatContainer('thread-a'));
     });
 
     expect(mockGovRefetch).not.toHaveBeenCalled();
 
     await act(async () => {
-      root.render(React.createElement(ChatContainer, { threadId: 'thread-b' }));
+      root.render(renderChatContainer('thread-b'));
     });
 
     expect(mockGovRefetch).not.toHaveBeenCalled();
@@ -345,14 +362,38 @@ describe('ChatContainer governance refetch', () => {
       error: null,
       syncing: false,
       synced: false,
+      syncAttempted: false,
       sync: vi.fn(),
+      refresh: mockAgentHookRefresh,
     });
 
     await act(async () => {
-      root.render(React.createElement(ChatContainer, { threadId: 'thread-a' }));
+      root.render(renderChatContainer('thread-a'));
     });
 
-    expect(mockUseAgentHookHealth).toHaveBeenCalledWith({ enabled: false });
+    expect(mockUseAgentHookHealth).toHaveBeenCalledWith({ enabled: false, projectPath: 'default' });
     expect(container.textContent).not.toContain('Agent 运行 Hook 需要同步');
+  });
+
+  it('refreshes governance and agent-hook health after project setup completes', async () => {
+    mockGovernanceStatus = {
+      isEmptyDir: true,
+      isGitRepo: false,
+      gitAvailable: true,
+    };
+
+    await act(async () => {
+      root.render(renderChatContainer('thread-a'));
+    });
+
+    const complete = container.querySelector<HTMLButtonElement>('[data-testid="project-setup-complete"]');
+    expect(complete).not.toBeNull();
+
+    await act(async () => {
+      complete?.click();
+    });
+
+    expect(mockGovRefetch).toHaveBeenCalledTimes(1);
+    expect(mockAgentHookRefresh).toHaveBeenCalledTimes(1);
   });
 });

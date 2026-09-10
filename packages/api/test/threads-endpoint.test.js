@@ -62,6 +62,22 @@ describe('Thread API', () => {
     assert.deepEqual(body.participants, []);
   });
 
+  it('POST /api/threads atomically persists the preferred cat and pin for a new meeting destination', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/threads',
+      payload: { userId: 'alice', title: 'Meeting destination', preferredCats: ['codex-sol'], pinned: true },
+    });
+
+    assert.equal(res.statusCode, 201);
+    const body = JSON.parse(res.body);
+    assert.deepEqual(body.preferredCats, ['codex-sol']);
+    assert.equal(body.pinned, true);
+    const stored = await threadStore.get(body.id);
+    assert.deepEqual(stored.preferredCats, ['codex-sol']);
+    assert.equal(stored.pinned, true);
+  });
+
   it('POST /api/threads keeps omitted projectPath as default', async () => {
     const res = await app.inject({
       method: 'POST',
@@ -289,6 +305,42 @@ describe('Thread API', () => {
     assert.ok(titles.includes('Thread A'));
     assert.ok(titles.includes('Thread B'));
     assert.ok(!titles.includes('Thread C'));
+  });
+
+  it('GET /api/threads?view=sidebar omits threadMemory without changing the default thread contract', async () => {
+    const thread = threadStore.create('alice', 'Sidebar summary', '/projects/cat-cafe');
+    threadStore.updateThreadMemory(thread.id, {
+      version: 1,
+      updatedAt: Date.now(),
+      sessionsIncorporated: 3,
+      summary: 'A deliberately large memory payload that belongs in thread detail, not the sidebar list.',
+      decisions: ['Keep detailed memory out of list projections.'],
+      openQuestions: [],
+    });
+    threadStore.updatePin(thread.id, true);
+
+    const [defaultRes, sidebarRes] = await Promise.all([
+      app.inject({
+        method: 'GET',
+        url: '/api/threads',
+        headers: { 'x-cat-cafe-user': 'alice' },
+      }),
+      app.inject({
+        method: 'GET',
+        url: '/api/threads?view=sidebar',
+        headers: { 'x-cat-cafe-user': 'alice' },
+      }),
+    ]);
+
+    assert.equal(defaultRes.statusCode, 200);
+    assert.equal(sidebarRes.statusCode, 200);
+    const defaultThread = JSON.parse(defaultRes.body).threads.find((candidate) => candidate.id === thread.id);
+    const sidebarThread = JSON.parse(sidebarRes.body).threads.find((candidate) => candidate.id === thread.id);
+    assert.equal(defaultThread.threadMemory.summary.startsWith('A deliberately large'), true);
+    assert.equal('threadMemory' in sidebarThread, false);
+    assert.equal(sidebarThread.title, 'Sidebar summary');
+    assert.equal(sidebarThread.projectPath, '/projects/cat-cafe');
+    assert.equal(sidebarThread.pinned, true);
   });
 
   it('GET /api/threads migrates legacy runtime paths before exposing project selectors', async () => {
@@ -597,6 +649,21 @@ describe('Thread API', () => {
     assert.equal(res.statusCode, 200);
     const body = JSON.parse(res.body);
     assert.equal(body.title, 'New Title');
+  });
+
+  it('PATCH /api/threads/:id persists the explicitly selected cat for retry delivery', async () => {
+    const thread = threadStore.create('default-user', 'Meeting destination without a cat');
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/threads/${thread.id}`,
+      payload: { preferredCats: ['codex-sol'] },
+    });
+
+    assert.equal(res.statusCode, 200);
+    const body = JSON.parse(res.body);
+    assert.deepEqual(body.preferredCats, ['codex-sol']);
+    assert.deepEqual((await threadStore.get(thread.id)).preferredCats, ['codex-sol']);
   });
 
   it('PATCH /api/threads/:id marks renamed threads dirty for evidence search', async () => {
@@ -914,6 +981,20 @@ describe('Thread API', () => {
     assert.equal(JSON.parse(fetched.body).preferredWorkspaceMode, 'community');
   });
 
+  it('PATCH /api/threads/:id persists the distinct F310 product Schedule destination', async () => {
+    const thread = threadStore.create('alice', 'Entrusted work Schedule');
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/threads/${thread.id}`,
+      payload: { preferredWorkspaceMode: 'product-schedule' },
+    });
+    assert.equal(res.statusCode, 200);
+    assert.equal(JSON.parse(res.body).preferredWorkspaceMode, 'product-schedule');
+
+    const fetched = await app.inject({ method: 'GET', url: `/api/threads/${thread.id}` });
+    assert.equal(JSON.parse(fetched.body).preferredWorkspaceMode, 'product-schedule');
+  });
+
   it('PATCH /api/threads/:id rejects invalid preferredWorkspaceMode', async () => {
     const thread = threadStore.create('alice', 'Bad Mode Thread');
 
@@ -952,6 +1033,20 @@ describe('Thread API', () => {
     });
     assert.equal(res.statusCode, 200);
     assert.equal(JSON.parse(res.body).preferredWorkspaceMode, 'approval');
+  });
+
+  it('PATCH /api/threads/:id accepts preferredWorkspaceMode: eval (F248 Phase D)', async () => {
+    const thread = threadStore.create('alice', 'F248 Eval Thread');
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/threads/${thread.id}`,
+      payload: { preferredWorkspaceMode: 'eval' },
+    });
+    assert.equal(res.statusCode, 200);
+    assert.equal(JSON.parse(res.body).preferredWorkspaceMode, 'eval');
+
+    const fetched = await app.inject({ method: 'GET', url: `/api/threads/${thread.id}` });
+    assert.equal(JSON.parse(fetched.body).preferredWorkspaceMode, 'eval');
   });
 });
 

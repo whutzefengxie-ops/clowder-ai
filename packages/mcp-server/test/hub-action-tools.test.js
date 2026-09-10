@@ -73,6 +73,16 @@ test('exports first-party Hub action tools in the MCP toolset', () => {
   );
 });
 
+test('workspace navigate description distinguishes request acceptance from visible delivery', () => {
+  const workspaceTool = hubActionTools.find((tool) => tool.name === 'cat_cafe_workspace_navigate');
+  assert.match(workspaceTool.description, /deliveryStatus/);
+  assert.match(workspaceTool.description, /applied.*queued.*blocked.*unconfirmed/);
+  assert.match(workspaceTool.description, /ok:true.*not.*visible/i);
+  assert.match(workspaceTool.description, /threadId.*required.*agent-key/i);
+  assert.match(workspaceTool.inputSchema.threadId.description, /required.*agent-key/i);
+  assert.match(workspaceTool.inputSchema.threadId.description, /omit.*invocation/i);
+});
+
 test('cat_cafe_workspace_navigate posts a typed workspace navigate request', async () => {
   await withCallbackServer(async (requests) => {
     const result = await handleWorkspaceNavigate({
@@ -102,6 +112,25 @@ test('cat_cafe_workspace_navigate posts a typed workspace navigate request', asy
   });
 });
 
+test('cat_cafe_workspace_navigate accepts a Codex-native absolute path without a worktreeId hint', async () => {
+  await withCallbackServer(async (requests) => {
+    const result = await handleWorkspaceNavigate({
+      path: '/home/user/cat-cafe/docs/VISION.md',
+      action: 'open',
+      threadId: 'thread-native-path',
+      catId: 'codex-sol',
+    });
+
+    assert.equal(result.isError, undefined);
+    assert.deepEqual(requests[0].body, {
+      path: '/home/user/cat-cafe/docs/VISION.md',
+      action: 'open',
+      threadId: 'thread-native-path',
+      catId: 'codex-sol',
+    });
+  });
+});
+
 test('cat_cafe_preview_open posts a typed preview auto-open request', async () => {
   await withCallbackServer(async (requests) => {
     const result = await handlePreviewOpen({
@@ -123,6 +152,42 @@ test('cat_cafe_preview_open posts a typed preview auto-open request', async () =
       worktreeId: 'cat-cafe',
       threadId: 'thread-f223',
       catId: 'codex',
+    });
+  });
+});
+
+test('cat_cafe_preview_open forwards a bounded visible-page admission contract', async () => {
+  await withCallbackServer(async (requests) => {
+    const visiblePageAdmission = {
+      expectedClientRevision: 'b'.repeat(40),
+      requiredDom: [
+        {
+          selector: '[data-testid="f307-experience-workbench"]',
+          attributes: {
+            'data-layout-owner': 'f307',
+            'data-layout-hydrated': 'true',
+            'data-surface-count': '0',
+            'data-workbench-focus': 'home',
+            'data-zero-topology-contract': 'canonical-home',
+          },
+          textIncludes: ['你想打开什么？'],
+        },
+      ],
+      forbiddenText: ['工作台已清空'],
+    };
+    const result = await handlePreviewOpen({
+      port: 3011,
+      path: '/threads/thread-f307?f307WorkbenchGate=true',
+      threadId: 'thread-f307',
+      visiblePageAdmission,
+    });
+
+    assert.equal(result.isError, undefined);
+    assert.deepEqual(requests[0].body, {
+      port: 3011,
+      path: '/threads/thread-f307?f307WorkbenchGate=true',
+      threadId: 'thread-f307',
+      visiblePageAdmission,
     });
   });
 });
@@ -151,6 +216,61 @@ test('Hub action tools use variant-scoped agent-key credentials when requested',
       assert.equal(requests[0].headers['x-agent-key-secret'], 'agent-key-secret');
       assert.equal(requests[0].headers['x-invocation-id'], undefined);
       assert.equal(requests[0].headers['x-callback-token'], undefined);
+    });
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('agent-key workspace navigation fails before HTTP when threadId is missing', async () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'cat-cafe-hub-action-agent-key-thread-'));
+  try {
+    await withCallbackServer(async (requests) => {
+      delete process.env.CAT_CAFE_INVOCATION_ID;
+      delete process.env.CAT_CAFE_CALLBACK_TOKEN;
+      const keyFile = join(tempDir, 'antig-opus.secret');
+      writeFileSync(keyFile, 'agent-key-secret\n', { mode: 0o600 });
+      process.env.CAT_CAFE_AGENT_KEY_FILES = JSON.stringify({ 'antig-opus': keyFile });
+
+      const result = await handleWorkspaceNavigate({
+        path: 'docs/features/F223-capability-surface-registry.md',
+        action: 'open',
+        worktreeId: 'cat-cafe',
+        catId: 'antig-opus',
+        agentKeyCatId: 'antig-opus',
+      });
+
+      assert.equal(result.isError, true);
+      assert.match(result.content[0].text, /threadId.*required.*agent-key/i);
+      assert.equal(requests.length, 0);
+    });
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('invocation-auth workspace navigation may omit threadId even when agentKeyCatId is present', async () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'cat-cafe-hub-action-invocation-thread-'));
+  try {
+    await withCallbackServer(async (requests) => {
+      const keyFile = join(tempDir, 'antig-opus.secret');
+      writeFileSync(keyFile, 'agent-key-secret\n', { mode: 0o600 });
+      process.env.CAT_CAFE_AGENT_KEY_FILES = JSON.stringify({ 'antig-opus': keyFile });
+
+      const result = await handleWorkspaceNavigate({
+        path: 'docs/features/F223-capability-surface-registry.md',
+        action: 'open',
+        worktreeId: 'cat-cafe',
+        catId: 'codex-sol',
+        agentKeyCatId: 'antig-opus',
+      });
+
+      assert.equal(result.isError, undefined);
+      assert.equal(requests.length, 1);
+      assert.equal(requests[0].headers['x-invocation-id'], 'inv-f223');
+      assert.equal(requests[0].headers['x-callback-token'], 'token-f223');
+      assert.equal(requests[0].headers['x-agent-key-secret'], undefined);
+      assert.equal(requests[0].body.threadId, undefined);
     });
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
