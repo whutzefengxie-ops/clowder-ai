@@ -64,6 +64,7 @@
       "redis-ownership.js",
       "renderer-link-policy.js",
       "service-manager.js",
+      "shutdown-plan.js",
       "startup-warning.js",
       "update-checker.js",
       "update-downloader.js",

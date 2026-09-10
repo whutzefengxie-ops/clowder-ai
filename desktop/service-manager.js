@@ -17,6 +17,7 @@ const {
   parseReply,
 } = require('./redis-ownership');
 const { instanceFilePath, loadOrCreateInstance, saveInstance } = require('./desktop-instance');
+const { formatShutdownPlan, orderShutdownTargets, remainingBudget, stageTimeoutMs } = require('./shutdown-plan');
 
 const POLL_INTERVAL_MS = 500;
 const MAX_WAIT_MS = 120_000;
@@ -957,24 +958,48 @@ class ServiceManager {
   }
 
   async stopAll() {
-    const KILL_TIMEOUT_MS = 5000;
-    const killPromises = [];
+    const targets = orderShutdownTargets(Object.keys(this.procs));
+    if (targets.length === 0) return;
 
-    for (const [name, proc] of Object.entries(this.procs)) {
-      if (!proc || proc.killed) continue;
+    const startedAt = Date.now();
+    log(`[desktop] ordered shutdown: ${formatShutdownPlan(targets)}`);
+
+    // Sequential on purpose. Killing everything at once loses the guarantee
+    // that Redis outlives the API's final writes; each stage waits for the
+    // previous one to actually exit before the next begins. The whole teardown
+    // stays inside TOTAL_SHUTDOWN_BUDGET_MS so the Windows installer's bounded
+    // coordinated-quit window is never overrun.
+    for (const target of targets) {
+      const proc = this.procs[target.name];
+      if (!proc) continue;
       // Skip children that already exited on their own — their PID may have
       // been reused by Windows, so taskkill could hit an unrelated process.
       if (proc.exitCode !== null || proc.signalCode !== null) {
-        log(`[desktop] ${name} already exited (code=${proc.exitCode}), skipping`);
+        log(`[desktop] ${target.name} already exited (code=${proc.exitCode}), skipping`);
         continue;
       }
-      log(`[desktop] stopping ${name} (pid=${proc.pid})...`);
-
-      killPromises.push(this._killProcessTree(name, proc, KILL_TIMEOUT_MS));
+      const timeoutMs = stageTimeoutMs(target, remainingBudget(startedAt));
+      log(`[desktop] stopping ${target.name} (pid=${proc.pid}) — ${target.reason}`);
+      await this._killProcessTree(target.name, proc, timeoutMs);
     }
 
-    await Promise.allSettled(killPromises);
     this.procs = {};
+  }
+
+  // Resolve once the child has exited, or false after the bound elapses.
+  // Used to make shutdown ordering real rather than nominal.
+  _waitForExit(proc, timeoutMs) {
+    return new Promise((resolve) => {
+      if (proc.exitCode !== null || proc.signalCode !== null) {
+        resolve(true);
+        return;
+      }
+      const timer = setTimeout(() => resolve(false), timeoutMs);
+      proc.once('exit', () => {
+        clearTimeout(timer);
+        resolve(true);
+      });
+    });
   }
 
   async _killProcessTree(name, proc, timeoutMs) {
@@ -987,7 +1012,8 @@ class ServiceManager {
       // On Windows, proc.kill('SIGTERM') only kills the direct child process.
       // Child processes spawned by it (e.g., cmd.exe → node, or node → workers)
       // become orphans. Use taskkill /T (tree) /F (force) to kill the entire
-      // process tree rooted at the PID.
+      // process tree rooted at the PID. taskkill without /F is a no-op for
+      // console children, so there is no graceful window worth waiting for.
       try {
         execSync(`taskkill /PID ${proc.pid} /T /F`, {
           timeout: timeoutMs,
@@ -999,27 +1025,21 @@ class ServiceManager {
         // taskkill exits non-zero if the process is already gone — that's fine
         log(`[${name}] taskkill: ${err.message}`);
       }
+      // Confirm the exit so the next stage starts from a settled state.
+      await this._waitForExit(proc, 2000);
       return;
     }
 
-    // macOS/Linux: SIGTERM first, then SIGKILL after timeout
+    // macOS/Linux: SIGTERM first, then SIGKILL after the grace period.
     proc.kill('SIGTERM');
 
-    const exited = await new Promise((resolve) => {
-      if (proc.exitCode !== null) return resolve(true);
-      const timer = setTimeout(() => resolve(false), timeoutMs);
-      proc.once('exit', () => {
-        clearTimeout(timer);
-        resolve(true);
-      });
-    });
+    if (await this._waitForExit(proc, timeoutMs)) return;
 
-    if (!exited) {
-      log(`[${name}] did not exit after SIGTERM, sending SIGKILL`);
-      try {
-        proc.kill('SIGKILL');
-      } catch {}
-    }
+    log(`[${name}] did not exit after SIGTERM, sending SIGKILL`);
+    try {
+      proc.kill('SIGKILL');
+    } catch {}
+    await this._waitForExit(proc, 2000);
   }
 }
 
