@@ -70,6 +70,11 @@ jobs:
       # build scripts or the README drift away from it.
       - name: Desktop runtime-manifest consistency guard
         run: node --test desktop/scripts/lib/runtime-manifest.test.mjs
+      # Decides whether an INSTALLED tree is usable. The real check runs against
+      # a freshly installed app (see ci/desktop-install-smoke); these cases keep
+      # the decision logic honest without needing an installer.
+      - name: Desktop installed-layout checks
+        run: node --test desktop/scripts/lib/installed-layout.test.mjs
       # Platform-agnostic desktop tests, wired here because this workflow is the
       # one that reliably runs on PRs (the public test lane is currently red on
       # main before it reaches desktop/*.test.js).
