@@ -1,0 +1,156 @@
+name: Desktop Windows Install Smoke
+
+# ─────────────────────────────────────────────────────────────────────────────
+# VERIFICATION HARNESS ONLY — not part of the product release pipeline.
+#
+# The one claim the rest of the desktop work cannot verify from source:
+# "a machine with no Node, pnpm or Redis can install this and still run it".
+#
+# This job builds the real installer, installs it silently into a scratch
+# directory on a runner that has no reason to contain Clowder's runtime, runs
+# desktop/scripts/smoke-installed-layout.mjs against the INSTALLED tree, and
+# then uninstalls.
+#
+# Targets branch `feat/desktop-install-hardening` (env.TARGET_REF). Triggered by
+# pushing to this branch. Delete the branch when done.
+# ─────────────────────────────────────────────────────────────────────────────
+
+on:
+  push:
+    branches:
+      - ci/desktop-install-smoke
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  TARGET_REF: feat/desktop-install-hardening
+  PROBE_VERSION: 0.0.0-smoke
+  INSTALL_DIR: C:\ci-clowder
+
+jobs:
+  windows-install-smoke:
+    name: Build, install, verify, uninstall
+    runs-on: windows-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_REF }}
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Host facts
+        shell: pwsh
+        run: |
+          Write-Host "ref   : ${{ env.TARGET_REF }}"
+          Write-Host "head  : $(git rev-parse --short HEAD)"
+          Write-Host "node  : $(node --version)"
+          Get-PSDrive C | Select-Object @{n='FreeGB';e={[math]::Round($_.Free/1GB,1)}} | Format-Table
+
+      - name: State the pre-condition this job depends on
+        shell: pwsh
+        run: |
+          # The point of the smoke test is that these are ABSENT from PATH.
+          foreach ($tool in @('node', 'pnpm', 'redis-server')) {
+            $found = Get-Command $tool -ErrorAction SilentlyContinue
+            if ($found) { Write-Host "$tool is on PATH at $($found.Source) (runner image provides it)" }
+            else { Write-Host "$tool is NOT on PATH" }
+          }
+          Write-Host "The installed tree must work from its own bundled runtime regardless."
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+          $env:Path += ";C:\Program Files (x86)\Inno Setup 6"
+          iscc.exe /? | Select-Object -First 1
+
+      - name: Build the Windows installer
+        shell: pwsh
+        env:
+          CATCAFE_VERSION: ${{ env.PROBE_VERSION }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          .\desktop\scripts\build-desktop.ps1
+
+      - name: Locate the installer
+        id: installer
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem dist\ClowderAI-Setup-*.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $exe) { throw "No installer was produced under dist\" }
+          "path=$($exe.FullName)" >> $env:GITHUB_OUTPUT
+          Write-Host "Installer: $($exe.FullName) ($([math]::Round($exe.Length / 1MB, 2)) MB)"
+
+      - name: Free build intermediates before installing
+        shell: pwsh
+        run: |
+          # The installer is already compiled; these only eat the disk that the
+          # extraction now needs.
+          foreach ($dir in @('bundled', 'desktop-dist')) {
+            if (Test-Path $dir) {
+              Remove-Item $dir -Recurse -Force -ErrorAction SilentlyContinue
+              Write-Host "removed $dir"
+            }
+          }
+          Get-PSDrive C | Select-Object @{n='FreeGB';e={[math]::Round($_.Free/1GB,1)}} | Format-Table
+
+      - name: Install silently into a scratch directory
+        shell: pwsh
+        run: |
+          $target = "${{ env.INSTALL_DIR }}"
+          if (Test-Path $target) { Remove-Item $target -Recurse -Force }
+          $proc = Start-Process -FilePath "${{ steps.installer.outputs.path }}" `
+            -ArgumentList "/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-", "/DIR=$target" `
+            -Wait -PassThru
+          Write-Host "installer exit code: $($proc.ExitCode)"
+          if ($proc.ExitCode -ne 0) { throw "Installer failed with exit code $($proc.ExitCode)" }
+          Write-Host "--- top level of $target ---"
+          Get-ChildItem $target | Select-Object Mode, Name | Format-Table -AutoSize
+          Write-Host "--- setup log tail (if any) ---"
+          Get-ChildItem "$env:TEMP\Setup Log*.txt" -ErrorAction SilentlyContinue |
+            Sort-Object LastWriteTime -Descending | Select-Object -First 1 |
+            ForEach-Object { Get-Content $_.FullName -Tail 25 }
+
+      - name: Smoke-test the INSTALLED tree
+        shell: pwsh
+        run: |
+          node desktop/scripts/smoke-installed-layout.mjs --root "${{ env.INSTALL_DIR }}" --platform win32
+
+      - name: Report what the install contains
+        if: always()
+        shell: pwsh
+        run: |
+          $target = "${{ env.INSTALL_DIR }}"
+          if (-not (Test-Path $target)) { Write-Host "install dir missing"; exit 0 }
+          foreach ($rel in @('.cat-cafe\desktop-config.json', 'node', '.cat-cafe\redis\windows', 'packages\api', 'packages\web', 'desktop-dist')) {
+            $p = Join-Path $target $rel
+            Write-Host ("{0,-40} {1}" -f $rel, (Test-Path $p))
+          }
+          Write-Host "--- desktop-config.json ---"
+          Get-Content (Join-Path $target '.cat-cafe\desktop-config.json') -ErrorAction SilentlyContinue
+
+      - name: Uninstall and verify cleanup
+        if: always()
+        shell: pwsh
+        run: |
+          $target = "${{ env.INSTALL_DIR }}"
+          $uninstaller = Join-Path $target 'unins000.exe'
+          if (Test-Path $uninstaller) {
+            $proc = Start-Process -FilePath $uninstaller `
+              -ArgumentList "/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART" -Wait -PassThru
+            Write-Host "uninstaller exit code: $($proc.ExitCode)"
+          } else {
+            Write-Host "uninstaller not found at $uninstaller"
+          }
+          Start-Sleep -Seconds 5
+          foreach ($rel in @('desktop-dist', 'node', 'packages')) {
+            Write-Host ("leftover {0,-16} {1}" -f $rel, (Test-Path (Join-Path $target $rel)))
+          }
