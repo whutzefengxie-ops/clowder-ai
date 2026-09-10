@@ -75,6 +75,10 @@ jobs:
       # the decision logic honest without needing an installer.
       - name: Desktop installed-layout checks
         run: node --test desktop/scripts/lib/installed-layout.test.mjs
+      # The runtime smoke starts from an installed tree (see ci/desktop-install-smoke);
+      # these cases cover the decisions it makes about what to probe.
+      - name: Desktop runtime-smoke helper tests
+        run: node --test desktop/scripts/smoke-runtime.test.js
       # The Web build wrapper spawned node_modules/.bin tools without a shell,
       # which is ENOENT on Windows — this is what made the Windows installer
       # impossible to build. Windows-only in effect; harmless elsewhere.
