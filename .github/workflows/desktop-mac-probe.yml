@@ -20,6 +20,12 @@ name: Desktop macOS Probe
 # ─────────────────────────────────────────────────────────────────────────────
 
 on:
+  # Branch-scoped push trigger: a brand-new workflow file is only dispatchable
+  # once it exists on the default branch, so this probe is fired by pushing to
+  # its own branch instead. Never merges; delete the branch when done.
+  push:
+    branches:
+      - ci/desktop-mac-probe
   workflow_dispatch:
 
 permissions:
