@@ -227,3 +227,17 @@ describe('ServiceManager: runtime status carries the ports', () => {
     assert.deepEqual({ frontend: second.frontendPort, api: second.apiPort }, chosen);
   });
 });
+
+describe('ServiceManager: the port constraints are documented', () => {
+  it('keeps the read-only install limitation in the desktop README', () => {
+    const readme = fs.readFileSync(path.resolve(__dirname, 'README.md'), 'utf8');
+
+    // This constraint is easy to lose and expensive to rediscover: a per-machine
+    // install cannot rewrite the built routes-manifest, so a moved API port has
+    // to fail loudly rather than serve a UI whose /api points elsewhere.
+    assert.match(readme, /安装目录只读时端口无法迁移/, 'README must state the read-only limitation');
+    assert.match(readme, /routes-manifest\.json/, 'README must name the file that pins the API origin');
+    assert.match(readme, /api = web \+ 1/, 'README must state the adjacent-port rule');
+    assert.match(readme, /clowder:desktop:instance/, 'README must explain Redis ownership');
+  });
+});

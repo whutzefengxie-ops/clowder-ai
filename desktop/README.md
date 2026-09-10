@@ -258,10 +258,21 @@ pnpm desktop:installer
 | 问题 | 可能原因 | 解决方式 |
 |------|---------|---------|
 | `app` 为 undefined | `ELECTRON_RUN_AS_NODE=1` 被继承 | Windows 用 `pnpm desktop:dev`；Unix 用 `pnpm desktop:dev:unix`，或手动清理该环境变量 |
-| API 启动失败（Redis PING failed） | Redis 未找到且环境变量冲突 | 检查 `cat-cafe-desktop.log`，确认 `MEMORY_STORE=1` 已正确设置 |
-| Next.js 启动超时 | `.cmd` 批处理在 spawn 中静默失败 | `service-manager.js` 已自动绕过 `.cmd`，直接调用 `node next/dist/bin/next` |
+| API 启动失败（Redis 连接失败） | 没有可用的 Redis 且降级被拒 | 查看 `desktop.log`；运行时会在**内存模式**下弹窗告知（会话不落盘），并给出原因与恢复入口 |
+| Next.js 启动超时 | entry 解析失败或端口被占 | `service-manager.js` 直接以 `node next/dist/bin/next` 启动（绕过 `.cmd`），并显式绑定 `--hostname 127.0.0.1`；端口冲突见下方「端口与实例」 |
 | 找不到 `node` | PATH 未包含 Node.js | 安装包已 bundle 便携版 Node.js；开发模式确保 Node.js 在系统 PATH 中 |
 | 安装包过大 | 包含完整运行时环境 | 正常，`pnpm deploy` 扁平化包 + Electron + Node.js + Redis |
+
+### 端口与实例
+
+桌面实例在启动时解析端口，并把选择记在用户数据目录（`data/desktop-instance.json`）。
+
+- **Web 端口与 API 端口必须相邻**（`api = web + 1`）。前端依据 `location.port + 1` 推导 API 地址，两者一旦错开就会「页面能开、请求全错」。
+- 默认从 **3003/3004** 开始找第一对**两个都空闲**的端口；上次用过的端口会被记住。
+- **Redis 不会被"顺手续用"**：只有带本实例标记（`clowder:desktop:instance`）的 Redis 才会被采纳；否则该实例会在空闲端口上另起自己的 Redis，**绝不读写别人的库**。
+- ⚠️ **安装目录只读时端口无法迁移**。Next.js 在**构建时**就把 API 地址写进 `.next/routes-manifest.json`，改变端口必须改写该文件；而 per-machine 安装位于 `Program Files`（运行时只读）。此时若 3003/3004 被占用，应用会**明确报错退出**，而不是启动一个 `/api` 指向别处的界面。
+  - 解决：释放 3003/3004，或改为按用户安装/便携包（目录可写）。
+- API 的网关与预览端口（如 4100）也可能与同机其他 Clowder 实例冲突；同一台机器上并行跑多个实例时请确保它们使用不同的数据目录。
 
 ## 平台支持
 
