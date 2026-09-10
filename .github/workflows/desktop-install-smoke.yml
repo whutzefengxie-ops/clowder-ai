@@ -149,6 +149,39 @@ jobs:
         run: |
           node desktop/scripts/smoke-installed-layout.mjs --root "${{ env.INSTALL_DIR }}" --platform win32
 
+      - name: Ensure a clean runtime environment before the smoke
+        if: always()
+        shell: pwsh
+        run: |
+          # GitHub runners are NOT clean between runs: an earlier attempt of this
+          # workflow left a Redis owned by another instance AND processes holding
+          # 3003/3004/4100, which made the runtime smoke fail with EADDRINUSE.
+          # Report who holds what, then stop anything left under the install dir
+          # so the smoke starts from a known state.
+          Write-Host '--- Clowder ports before the smoke ---'
+          foreach ($port in 3003, 3004, 4100, 6399) {
+            $conns = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue
+            if (-not $conns) { Write-Host "  ${port}: free" }
+            foreach ($c in $conns) {
+              $owner = Get-Process -Id $c.OwningProcess -ErrorAction SilentlyContinue
+              Write-Host ("  {0}: pid={1} name={2} path={3}" -f $port, $c.OwningProcess, $owner.ProcessName, $owner.Path)
+            }
+          }
+          Write-Host '--- processes under the install dir ---'
+          Get-CimInstance Win32_Process |
+            Where-Object { $_.ExecutablePath -and $_.ExecutablePath.StartsWith("${{ env.INSTALL_DIR }}") } |
+            Select-Object ProcessId, ParentProcessId, Name, ExecutablePath | Format-Table -AutoSize
+
+          Write-Host '--- stopping leftovers ---'
+          Get-Process -ErrorAction SilentlyContinue |
+            Where-Object { $_.Path -and $_.Path.StartsWith("${{ env.INSTALL_DIR }}") } |
+            Stop-Process -Force -ErrorAction SilentlyContinue
+          Start-Sleep -Seconds 3
+          foreach ($port in 3003, 3004, 4100, 6399) {
+            $still = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue
+            Write-Host ("  after cleanup {0}: {1}" -f $port, $(if ($still) { 'STILL HELD' } else { 'free' }))
+          }
+
       - name: Start the installed runtime and verify it serves
         if: always()
         shell: pwsh
