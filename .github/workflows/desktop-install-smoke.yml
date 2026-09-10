@@ -78,7 +78,14 @@ jobs:
           CATCAFE_VERSION: ${{ env.PROBE_VERSION }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # Timed on purpose: one earlier run sat in the install step for 35+
+          # minutes and there was no record to compare against. These numbers go
+          # to the job summary so a recurrence is visible instead of anecdotal.
+          $started = Get-Date
           .\desktop\scripts\build-desktop.ps1
+          $seconds = [math]::Round(((Get-Date) - $started).TotalSeconds, 1)
+          "build_seconds=$seconds" | Out-File -FilePath "$env:TEMP\ci-timings.txt" -Append -Encoding utf8
+          Write-Host "build took ${seconds}s"
 
       - name: Locate the installer
         id: installer
@@ -119,7 +126,11 @@ jobs:
             -PassThru
           Write-Host "installer pid: $($proc.Id)"
 
+          $installStarted = Get-Date
           $finished = $proc.WaitForExit(1500000)  # 25 minutes
+          $installSeconds = [math]::Round(((Get-Date) - $installStarted).TotalSeconds, 1)
+          "install_seconds=$installSeconds" | Out-File -FilePath "$env:TEMP\ci-timings.txt" -Append -Encoding utf8
+          Write-Host "install took ${installSeconds}s (finished: $finished)"
           if ($finished) {
             Write-Host "installer exit code: $($proc.ExitCode)"
           } else {
@@ -272,3 +283,20 @@ jobs:
           foreach ($rel in @('desktop-dist', 'node', 'packages')) {
             Write-Host ("leftover {0,-16} {1}" -f $rel, (Test-Path (Join-Path $target $rel)))
           }
+
+      - name: Timing summary
+        if: always()
+        shell: pwsh
+        run: |
+          $file = "$env:TEMP\ci-timings.txt"
+          $lines = if (Test-Path $file) { Get-Content $file } else { @('(no timings recorded)') }
+          Write-Host '--- desktop install smoke timings ---'
+          $lines | ForEach-Object { Write-Host "  $_" }
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value '## Desktop install smoke timings'
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ''
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value '```'
+          $lines | ForEach-Object { Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value $_ }
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value '```'
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ''
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value 'The install step once sat for 35+ minutes with no record to compare against; these numbers make a recurrence visible.'
+
