@@ -161,14 +161,16 @@ Write-Step "Step 3/8 - Bundle Redis portable + Node.js"
 $bundledNode = Join-Path (Join-Path $ProjectRoot "bundled") "node"
 
 # Detect build-machine Node version so the bundled runtime matches the ABI
-# that native modules were compiled against.
-$buildNodeVersion = $null
+# that native modules were compiled against. Never guess — a mismatched or
+# unsupported bundled Node yields an installer whose API dies at startup with
+# NODE_MODULE_VERSION errors. Logic lives in lib/Resolve-BuildNode.ps1 so it can
+# be unit-tested without manipulating PATH.
+. (Join-Path $PSScriptRoot "lib\Resolve-BuildNode.ps1")
 try {
-    $buildNodeVersion = (node --version 2>$null).Trim()
-} catch {}
-if (-not $buildNodeVersion) {
-    Write-Warn "Could not detect build-machine Node version; defaulting to v22.12.0"
-    $buildNodeVersion = "v22.12.0"
+    $buildNodeVersion = Resolve-BuildNodeVersion -ProjectRoot $ProjectRoot
+} catch {
+    Write-Err $_.Exception.Message
+    exit 1
 }
 $buildNodeMajor = $buildNodeVersion.TrimStart('v').Split('.')[0]
 

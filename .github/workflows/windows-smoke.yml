@@ -61,3 +61,7 @@ jobs:
       # instead of the requested arch (measured on run 34461497456).
       - name: Desktop macOS bundle arch-guard tests
         run: node --test desktop/scripts/lib/mac-native-arch.test.mjs
+      # The Windows installer bundles a portable Node runtime. Guessing its
+      # version produced installers whose API could not load native modules.
+      - name: Desktop build Node-version guard tests
+        run: node --test desktop/scripts/lib/resolve-build-node.test.js
