@@ -119,7 +119,7 @@ jobs:
           node-version: 24
           cache: pnpm
 
-      - name: Baseline build (official path: identity=null + codesign --deep)
+      - name: Baseline build (official path, identity null plus codesign deep)
         env:
           CATCAFE_VERSION: 0.0.0-probe
         run: |
@@ -136,7 +136,7 @@ jobs:
           echo "--- baseline signature (ad-hoc via codesign --deep) ---"
           codesign -dv "$APP" 2>&1 | head -10
 
-      - name: Re-pack with electron-builder's OWN signing (identity "-")
+      - name: Re-pack with electron-builder own signing (identity dash)
         run: |
           set +e
           node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('desktop/package.json','utf8'));p.build.mac.identity='-';fs.writeFileSync('desktop/package.json',JSON.stringify(p,null,2));console.log('patched mac.identity ->',p.build.mac.identity)"
