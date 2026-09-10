@@ -3,26 +3,20 @@ name: Desktop macOS Probe
 # ─────────────────────────────────────────────────────────────────────────────
 # VERIFICATION HARNESS ONLY — not part of the product release pipeline.
 #
-# Answers two open questions about the Clowder AI desktop packaging with
-# measurements taken on a real macOS host:
+# Exercises the macOS dual-arch fix on branch `feat/desktop-install-hardening`
+# (see env.TARGET_REF) against a real macOS host:
 #
-#   Probe A: `desktop/scripts/build-mac.sh` defaults to ARCHS=(arm64 x64) and
-#            runs a SINGLE `pnpm install`/`pnpm deploy` on the build host. Does
-#            the non-host arch .app therefore ship host-arch native modules
-#            (better-sqlite3 / node-pty / sqlite-vec / sharp)?
+#   Probe 1: default build on an arm64 host must package the HOST arch only and
+#            pass the new architecture guard.
+#   Probe 2: `--arch both` on an arm64 host must now FAIL CLOSED, naming the two
+#            modules that previously shipped silently in the x64 DMG
+#            (better_sqlite3.node, vec0.dylib). Before the fix this build
+#            succeeded and produced a broken x64 installer.
 #
-#   Probe B: the code comments around desktop/package.json `mac.identity: null`
-#            claim electron-builder's own signing hits EMFILE once afterPack has
-#            injected three node_modules trees. Does re-enabling EB signing
-#            (identity "-") actually reproduce that failure?
-#
-# Trigger manually: gh workflow run desktop-mac-probe.yml --ref <branch>
+# Triggered by pushing to this branch. Delete the branch when done.
 # ─────────────────────────────────────────────────────────────────────────────
 
 on:
-  # Branch-scoped push trigger: a brand-new workflow file is only dispatchable
-  # once it exists on the default branch, so this probe is fired by pushing to
-  # its own branch instead. Never merges; delete the branch when done.
   push:
     branches:
       - ci/desktop-mac-probe
@@ -31,14 +25,19 @@ on:
 permissions:
   contents: read
 
+env:
+  TARGET_REF: feat/desktop-install-hardening
+  PROBE_VERSION: 0.0.0-probe
+
 jobs:
-  probe-a-dual-arch:
-    name: Probe A - dual arch on one host
+  probe-host-default:
+    name: Probe 1 - host-arch default passes the guard
     runs-on: macos-latest
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ env.TARGET_REF }}
           fetch-depth: 0
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
@@ -48,70 +47,54 @@ jobs:
 
       - name: Host facts
         run: |
-          echo "host arch          : $(uname -m)"
-          echo "node               : $(node -v)"
-          echo "ulimit -n (soft)   : $(ulimit -n)"
-          echo "ulimit -n (hard)   : $(ulimit -Hn)"
+          echo "host arch : $(uname -m)"
+          echo "ref       : ${{ env.TARGET_REF }}"
+          echo "head      : $(git rev-parse --short HEAD)"
 
-      - name: Build BOTH archs on this single host (no --arch flag)
+      - name: Unit tests (arch guard decision logic)
+        run: node --test desktop/scripts/lib/mac-native-arch.test.mjs
+
+      - name: Build with the DEFAULT arch set (no --arch flag)
         env:
-          CATCAFE_VERSION: 0.0.0-probe
+          CATCAFE_VERSION: ${{ env.PROBE_VERSION }}
         run: |
           chmod +x desktop/scripts/build-mac.sh
-          # Deliberately WITHOUT --arch: default ARCHS=("arm64" "x64") reproduces
-          # the local developer path (one host, one dependency install).
-          ./desktop/scripts/build-mac.sh 2>&1 | tail -40
-          echo "=================== dist ==================="
-          ls -la dist/ || true
+          ./desktop/scripts/build-mac.sh 2>&1 | tail -45
 
-      - name: Probe A results
+      - name: Assert a single host-arch DMG was produced and the guard passed
         run: |
-          set +e
-          report() {
-            APP="$1"; LABEL="$2"
-            echo "############################################################"
-            echo "## $LABEL"
-            echo "## $APP"
-            echo "############################################################"
-            if [ ! -d "$APP" ]; then echo "!! bundle missing"; return; fi
-            echo "-- total files in bundle: $(find "$APP" | wc -l)"
-            echo ""
-            echo "-- bundled Node runtime --"
-            find "$APP" -path '*/node/bin/node' 2>/dev/null | while read -r f; do
-              printf '   %s :: %s\n' "$(lipo -archs "$f" 2>/dev/null)" "${f#$APP/}"
-            done
-            echo ""
-            echo "-- KEY native modules (module :: archs :: path) --"
-            for m in better_sqlite3.node pty.node vec0.dylib sharp.node; do
-              find "$APP" -name "$m" 2>/dev/null | while read -r f; do
-                printf '   %-22s :: %-10s :: %s\n' "$m" "$(lipo -archs "$f" 2>/dev/null)" "${f#$APP/}"
-              done
-            done
-            echo ""
-            echo "-- arch histogram over ALL Mach-O .node/.dylib in bundle --"
-            find "$APP" \( -name '*.node' -o -name '*.dylib' \) 2>/dev/null | while read -r f; do
-              lipo -archs "$f" 2>/dev/null
-            done | sort | uniq -c | sort -rn
-            echo ""
-          }
-          report "desktop/dist/mac-arm64/Clowder AI.app" "arm64 TARGET bundle"
-          report "desktop/dist/mac/Clowder AI.app"       "x64 TARGET bundle"
+          set -e
+          echo "--- dist ---"; ls -la dist/
+          count="$(ls dist/*.dmg 2>/dev/null | wc -l | tr -d ' ')"
+          if [ "$count" != "1" ]; then
+            echo "FAIL: expected exactly 1 DMG for a host-arch default build, got $count"
+            exit 1
+          fi
+          if ! ls dist/*arm64*.dmg >/dev/null 2>&1; then
+            echo "FAIL: the host-arch DMG is not the expected arm64 artifact"
+            exit 1
+          fi
+          if ls dist/*x64*.dmg >/dev/null 2>&1; then
+            echo "FAIL: a foreign-arch DMG was produced by a host-arch default build"
+            exit 1
+          fi
+          echo "OK: host-arch default produced exactly one arm64 DMG"
 
-      - name: Upload DMGs
+      - uses: actions/upload-artifact@v4
         if: always()
-        uses: actions/upload-artifact@v4
         with:
-          name: probe-a-dmgs
+          name: probe1-host-default-dmg
           path: dist/*.dmg
           if-no-files-found: warn
 
-  probe-b-signing:
-    name: Probe B - electron-builder signing vs EMFILE
+  probe-dual-arch-must-fail:
+    name: Probe 2 - dual arch must fail closed
     runs-on: macos-latest
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ env.TARGET_REF }}
           fetch-depth: 0
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
@@ -119,40 +102,31 @@ jobs:
           node-version: 24
           cache: pnpm
 
-      - name: Baseline build (official path, identity null plus codesign deep)
-        env:
-          CATCAFE_VERSION: 0.0.0-probe
-        run: |
-          chmod +x desktop/scripts/build-mac.sh
-          ./desktop/scripts/build-mac.sh --arch arm64 2>&1 | tail -25
-
-      - name: Measure bundle shape and fd limits
-        run: |
-          APP="desktop/dist/mac-arm64/Clowder AI.app"
-          echo "ulimit -n soft : $(ulimit -n)"
-          echo "ulimit -n hard : $(ulimit -Hn)"
-          echo "files in .app  : $(find "$APP" | wc -l)"
-          echo "node_modules dirs injected by afterPack: $(find "$APP" -type d -name node_modules | wc -l)"
-          echo "--- baseline signature (ad-hoc via codesign --deep) ---"
-          codesign -dv "$APP" 2>&1 | head -10
-
-      - name: Re-pack with electron-builder own signing (identity dash)
+      - name: Build BOTH archs on one host (the guard must reject this)
         run: |
           set +e
-          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('desktop/package.json','utf8'));p.build.mac.identity='-';fs.writeFileSync('desktop/package.json',JSON.stringify(p,null,2));console.log('patched mac.identity ->',p.build.mac.identity)"
-
-          cd desktop
-          npx electron-builder --mac dir --arm64 > /tmp/eb-sign.log 2>&1
+          chmod +x desktop/scripts/build-mac.sh
+          ./desktop/scripts/build-mac.sh --arch both > /tmp/dual.log 2>&1
           CODE=$?
-          echo ""
-          echo "electron-builder exit code: $CODE"
-          echo "==================== tail of electron-builder output ===================="
-          tail -70 /tmp/eb-sign.log
-          echo "==================== error / EMFILE scan ===================="
-          grep -niE 'emfile|too many open files|error|failed|cannot|sign' /tmp/eb-sign.log | head -40
-          echo "==================== resulting signature ===================="
-          cd ..
-          codesign -dv "desktop/dist/mac-arm64/Clowder AI.app" 2>&1 | head -10
-          echo ""
-          echo "VERDICT_HINT: exit 0 => EB signing did NOT hit EMFILE; non-zero => reproduced"
+          echo "build-mac.sh exit code: $CODE"
+          echo "==================== tail of build output ===================="
+          tail -60 /tmp/dual.log
+          echo "==================== guard verdict ===================="
+          if [ "$CODE" -eq 0 ]; then
+            echo "FAIL: the dual-arch build SUCCEEDED — the guard did not fire"
+            exit 1
+          fi
+          grep -q "architecture check failed for x64" /tmp/dual.log \
+            || { echo "FAIL: guard did not report an x64 architecture failure"; exit 1; }
+          grep -q "better_sqlite3.node" /tmp/dual.log \
+            || { echo "FAIL: better-sqlite3 was not named as an offender"; exit 1; }
+          grep -q "vec0.dylib" /tmp/dual.log \
+            || { echo "FAIL: sqlite-vec was not named as an offender"; exit 1; }
+          grep -q "refusing to package a DMG" /tmp/dual.log \
+            || { echo "FAIL: the build did not fail closed"; exit 1; }
+          if ls dist/*x64*.dmg >/dev/null 2>&1; then
+            echo "FAIL: a broken x64 DMG was produced despite the guard"
+            exit 1
+          fi
+          echo "OK: guard detected the host-arch leak and refused to package the x64 DMG"
           exit 0
