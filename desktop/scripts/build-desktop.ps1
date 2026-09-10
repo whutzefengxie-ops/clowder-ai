@@ -237,7 +237,25 @@ if (Test-Path $redisBin) {
     if ($env:GITHUB_TOKEN) {
         $headers["Authorization"] = "Bearer $($env:GITHUB_TOKEN)"
     }
-    $releaseApi = "https://api.github.com/repos/redis-windows/redis-windows/releases/latest"
+    # Pin the Redis release. This used to follow releases/latest, which silently
+    # changed the bundled Redis version between builds — it had already advanced
+    # to the 8.x line while the macOS build stayed on 7.4.1. The pin lives in
+    # desktop/runtime-manifest.json so there is exactly one place to change it.
+    $manifestPath = Join-Path (Join-Path $ProjectRoot "desktop") "runtime-manifest.json"
+    if (-not (Test-Path $manifestPath)) {
+        Write-Err "Missing $manifestPath — the Redis pin cannot be resolved."
+        Write-Err "Fix: restore desktop/runtime-manifest.json, which declares redis.win32.version."
+        exit 1
+    }
+    $redisVersion = (Get-Content $manifestPath -Raw | ConvertFrom-Json).redis.win32.version
+    if (-not $redisVersion) {
+        Write-Err "desktop/runtime-manifest.json does not declare redis.win32.version."
+        Write-Err "Fix: add redis.win32.version (e.g. \"8.10.1\") before rerunning this build."
+        exit 1
+    }
+    $assetPattern = "^Redis-" + [regex]::Escape($redisVersion) + "-Windows-x64-msys2\.zip$"
+    $releaseApi = "https://api.github.com/repos/redis-windows/redis-windows/releases/tags/$redisVersion"
+    Write-Host "  Pinned Redis $redisVersion (desktop/runtime-manifest.json)" -ForegroundColor Gray
     # P1-3: Retry up to 3 times, then fail-closed in CI (release builds must include Redis).
     $redisDownloaded = $false
     for ($redisAttempt = 1; $redisAttempt -le 3; $redisAttempt++) {
@@ -247,8 +265,10 @@ if (Test-Path $redisBin) {
         }
         try {
             $release = Invoke-RestMethod -Uri $releaseApi -Headers $headers -TimeoutSec 30
-            $asset = $release.assets | Where-Object { $_.name -match "^Redis-.*-Windows-x64-msys2\.zip$" } | Select-Object -First 1
-            if (-not $asset) { throw "No Redis Windows asset found in release" }
+            $asset = $release.assets | Where-Object { $_.name -match $assetPattern } | Select-Object -First 1
+            if (-not $asset) {
+                throw "Release $redisVersion has no asset matching $assetPattern (available: $($release.assets.name -join ', '))"
+            }
             $zipPath = Join-Path $bundledRedis "redis-windows.zip"
             Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zipPath -Headers $headers -UseBasicParsing -TimeoutSec 120
             $extractDir = Join-Path $bundledRedis "_extract"
@@ -267,7 +287,8 @@ if (Test-Path $redisBin) {
         }
     }
     if (-not $redisDownloaded) {
-        Write-Err "Redis download failed after 3 attempts — any publishable installer must include Redis"
+        Write-Err "Redis $redisVersion download failed after 3 attempts — any publishable installer must include Redis."
+        Write-Err "Fix: check access to api.github.com, or point redis.win32.version in desktop/runtime-manifest.json at a release that exists."
         exit 1
     }
     # Verify redis-server.exe actually landed (guards against corrupt/empty archives)

@@ -196,7 +196,9 @@ bold "Step 4/6 — Build Redis portable from source"
 # No official pre-compiled macOS binary exists for Redis. We compile from
 # source (~30s per arch on modern Mac). For the non-native arch we use
 # `arch -x86_64` (requires Rosetta 2 on Apple Silicon hosts).
-REDIS_VERSION="7.4.1"
+# Version has exactly one home: desktop/runtime-manifest.json.
+REDIS_VERSION="$(node "${SCRIPT_DIR}/lib/read-runtime-manifest.mjs" redis.darwin.version)" \
+  || die "Could not read redis.darwin.version from desktop/runtime-manifest.json (see the error above)"
 REDIS_URL="https://download.redis.io/releases/redis-${REDIS_VERSION}.tar.gz"
 
 build_redis() {
