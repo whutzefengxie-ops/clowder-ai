@@ -156,15 +156,39 @@ jobs:
           # Drives the INSTALLED ServiceManager under plain Node: bundled Redis,
           # API and Next.js start exactly as the shell starts them, then the API,
           # the Web UI and the Web origin's /api rewrite are polled over HTTP.
+          #
+          # The first attempt at this ran against a runner that still had a
+          # Clowder AI user data directory, so it ADOPTED an existing Redis
+          # instead of starting the bundled one — precisely the path the check
+          # exists to prove. Isolating LOCALAPPDATA makes pass 1 start from
+          # nothing, and pass 2 prove the instance record is reused.
+          $isolated = 'C:\ci-userdata'
+          if (Test-Path $isolated) { Remove-Item $isolated -Recurse -Force }
+          New-Item -ItemType Directory -Path $isolated -Force | Out-Null
+          $env:LOCALAPPDATA = $isolated
+          Write-Host "isolated user data dir: $isolated"
+
+          Write-Host ''
+          Write-Host '=== pass 1: clean state — must CREATE the instance and START the bundled Redis ==='
           node desktop/scripts/smoke-runtime.js --root "${{ env.INSTALL_DIR }}" --timeout 240
-          Write-Host "runtime smoke exit code: $LASTEXITCODE"
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ($LASTEXITCODE -ne 0) { Write-Host "pass 1 failed ($LASTEXITCODE)"; exit $LASTEXITCODE }
+          Write-Host "--- user data produced by pass 1 ---"
+          Get-ChildItem $isolated -Recurse -Depth 2 -ErrorAction SilentlyContinue |
+            Select-Object -First 25 FullName | Format-Table -AutoSize
+
+          Write-Host ''
+          Write-Host '=== pass 2: existing state — must LOAD the instance and remember the ports ==='
+          node desktop/scripts/smoke-runtime.js --root "${{ env.INSTALL_DIR }}" --timeout 240
+          if ($LASTEXITCODE -ne 0) { Write-Host "pass 2 failed ($LASTEXITCODE)"; exit $LASTEXITCODE }
+          Write-Host 'both passes served'
 
       - name: Show the runtime logs when the smoke failed
         if: failure()
         shell: pwsh
         run: |
-          $logs = Join-Path $env:LOCALAPPDATA 'Clowder AI\data\logs'
+          # The runtime smoke runs with an isolated LOCALAPPDATA (see above), and
+          # env does not carry across steps, so point at it explicitly.
+          $logs = 'C:\ci-userdata\Clowder AI\data\logs'
           Write-Host "log dir: $logs (exists: $(Test-Path $logs))"
           if (Test-Path $logs) {
             Get-ChildItem $logs -Recurse -File | Select-Object FullName, Length | Format-Table -AutoSize
@@ -175,6 +199,9 @@ jobs:
             $apiLog = Join-Path $logs 'api\api.log'
             if (Test-Path $apiLog) { Write-Host '--- api\api.log (tail) ---'; Get-Content $apiLog -Tail 80 }
           }
+          Write-Host "--- instance record ---"
+          $record = 'C:\ci-userdata\Clowder AI\data\desktop-instance.json'
+          if (Test-Path $record) { Get-Content $record } else { Write-Host "no instance record at $record" }
 
       - name: Report what the install contains
         if: always()
