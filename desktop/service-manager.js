@@ -18,6 +18,8 @@ const {
 } = require('./redis-ownership');
 const { instanceFilePath, loadOrCreateInstance, saveInstance } = require('./desktop-instance');
 const { formatShutdownPlan, orderShutdownTargets, remainingBudget, stageTimeoutMs } = require('./shutdown-plan');
+const { DEFAULT_FRONTEND_PORT, normalizeRememberedPair, portPairCandidates } = require('./port-pair');
+const { describeRewrites, hasApiRewrites, retargetManifest, serializeManifest } = require('./routes-manifest');
 
 const POLL_INTERVAL_MS = 500;
 const MAX_WAIT_MS = 120_000;
@@ -130,6 +132,10 @@ class ServiceManager {
     this.redisPort = DEFAULT_REDIS_PORT;
     // Set when an existing Redis was refused; drives the user-facing warning.
     this.redisRefusal = null;
+    // Set once prepareRuntime() has loaded the instance and resolved the ports.
+    this.prepared = false;
+    // Recorded by prepareRuntime() and re-thrown by startAll() (single error path).
+    this.prepareError = null;
   }
 
   /**
@@ -141,7 +147,57 @@ class ServiceManager {
       memoryMode: this.memoryMode,
       redisPort: this.redisPort,
       redisRefusal: this.redisRefusal ? { ...this.redisRefusal } : null,
+      frontendPort: this.frontendPort,
+      apiPort: this.apiPort,
     };
+  }
+
+  /**
+   * Load the instance identity and pick the Web/API ports.
+   *
+   * Idempotent: the shell calls it before it needs the renderer and updater
+   * origins, and startAll() calls it again, so either order works.
+   */
+  async prepareRuntime() {
+    if (this.prepared) return this.getRuntimeStatus();
+
+    const userDataDir = this._getUserDataDir();
+    this._ensureUserDataDir(userDataDir);
+
+    const instanceFile = instanceFilePath(userDataDir);
+    const {
+      record: instance,
+      created,
+      replacedCorrupt,
+    } = loadOrCreateInstance({ filePath: instanceFile, appVersion: resolveAppVersion() });
+    this.instance = instance;
+
+    if (created) {
+      saveInstance({ filePath: instanceFile, record: instance });
+      log(
+        `Desktop instance ${replacedCorrupt ? 'record replaced (missing/corrupt)' : 'created'}: ${instance.instanceId}`,
+      );
+    } else {
+      log(`Desktop instance loaded: ${instance.instanceId} (redisPort=${instance.redisPort ?? 'unset'})`);
+    }
+
+    await this._resolvePortsDeferred(instanceFile);
+
+    this.prepared = true;
+    return this.getRuntimeStatus();
+  }
+
+  // Port resolution can fail (every candidate pair is taken). The shell calls
+  // prepareRuntime() before it can show a startup error, so the failure is
+  // recorded here and re-thrown by startAll(), keeping a single startup-error
+  // path in the shell. The origins computed in between are moot: startup fails.
+  async _resolvePortsDeferred(instanceFile) {
+    try {
+      await this._resolvePorts(instanceFile);
+    } catch (err) {
+      this.prepareError = err;
+      log(`Port resolution failed: ${err.message}`);
+    }
   }
 
   async startAll() {
@@ -177,27 +233,11 @@ class ServiceManager {
     // NOTE: workspace junction repair must happen at install time (admin).
     // Runtime repair in Program Files fails with EPERM for non-admin users.
 
-    // ---- Instance identity ----
-    // Resolved before Redis so ownership of an already-listening Redis can be
-    // proven instead of assumed.
-    const instanceFile = instanceFilePath(userDataDir);
-    const {
-      record: instance,
-      created,
-      replacedCorrupt,
-    } = loadOrCreateInstance({
-      filePath: instanceFile,
-      appVersion: resolveAppVersion(),
-    });
-    this.instance = instance;
-    if (created) {
-      saveInstance({ filePath: instanceFile, record: instance });
-      log(
-        `Desktop instance ${replacedCorrupt ? 'record replaced (missing/corrupt)' : 'created'}: ${instance.instanceId}`,
-      );
-    } else {
-      log(`Desktop instance loaded: ${instance.instanceId} (redisPort=${instance.redisPort ?? 'unset'})`);
-    }
+    // ---- Instance identity + Web/API ports ----
+    // Also callable from the shell before startAll(), because the renderer and
+    // updater origins depend on the ports. Idempotent.
+    await this.prepareRuntime();
+    if (this.prepareError) throw this.prepareError;
 
     // ---- Redis ----
     this.onStatus('Starting Redis...');
@@ -716,7 +756,109 @@ class ServiceManager {
     });
   }
 
+  // Pick the first candidate port pair whose BOTH members are free, and remember
+  // it so the next launch lands on the same pair.
+  async _resolvePorts(instanceFile) {
+    const remembered = normalizeRememberedPair(this.instance);
+    const candidates = remembered ? [remembered, ...portPairCandidates()] : portPairCandidates();
+    const seen = new Set();
+
+    for (const pair of candidates) {
+      if (seen.has(pair.frontend)) continue;
+      seen.add(pair.frontend);
+
+      const busy = (await Promise.all([this._isPortOpen(pair.frontend), this._isPortOpen(pair.api)])).some(Boolean);
+      if (busy) {
+        log(`Port pair ${pair.frontend}/${pair.api} is in use — trying the next candidate`);
+        continue;
+      }
+
+      this.frontendPort = pair.frontend;
+      this.apiPort = pair.api;
+      log(`Using Web port ${pair.frontend} and API port ${pair.api}`);
+      if (!remembered || remembered.frontend !== pair.frontend) this._rememberPorts(instanceFile);
+      return;
+    }
+
+    throw new Error(
+      `No free Web/API port pair found among ${seen.size} candidates starting at ${DEFAULT_FRONTEND_PORT}.\n` +
+        '  why: the desktop needs two adjacent free ports, because the renderer derives the API port as frontend + 1.\n' +
+        `  fix: stop whatever holds ports ${DEFAULT_FRONTEND_PORT}-${DEFAULT_FRONTEND_PORT + seen.size}, then restart Clowder AI.`,
+    );
+  }
+
+  _rememberPorts(instanceFile) {
+    try {
+      this.instance = { ...this.instance, frontendPort: this.frontendPort, apiPort: this.apiPort };
+      saveInstance({ filePath: instanceFile, record: this.instance });
+    } catch (err) {
+      log(`Could not persist the Web/API ports: ${err.message}`);
+    }
+  }
+
+  /**
+   * Point the built Next.js rewrites at the API port this run is using.
+   *
+   * Next resolves `rewrites()` at build time into .next/routes-manifest.json, and
+   * `next start` routes from that file — re-evaluating next.config.js at start
+   * has no effect (measured). So a non-default API port can only be applied by
+   * rewriting the manifest before the server starts.
+   *
+   * The manifest lives in the install directory, which is read-only for a
+   * per-machine install. When the port has moved and the file cannot be written
+   * this fails loudly on purpose: starting the Web server anyway would serve a UI
+   * whose server-side /api, /socket.io and /uploads routes point elsewhere, which
+   * looks like "the app opened but nothing works".
+   */
+  _retargetRoutesManifest() {
+    const manifestPath = path.join(this.root, 'packages', 'web', '.next', 'routes-manifest.json');
+    const apiOrigin = `http://127.0.0.1:${this.apiPort}`;
+
+    if (!fs.existsSync(manifestPath)) {
+      log(`No routes-manifest.json at ${manifestPath} — skipping retarget (the Web server will not route /api)`);
+      return;
+    }
+
+    let manifest;
+    try {
+      manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    } catch (err) {
+      throw new Error(
+        `Could not parse ${manifestPath}: ${err.message}\n` +
+          '  why: the API origin baked into the build cannot be verified or retargeted.\n' +
+          '  fix: reinstall Clowder AI, or rebuild the Web package.',
+      );
+    }
+
+    if (!hasApiRewrites(manifest)) {
+      log('routes-manifest.json has no absolute API rewrites — leaving it untouched');
+      return;
+    }
+
+    const patched = retargetManifest(manifest, { apiOrigin });
+    if (serializeManifest(patched) === serializeManifest(manifest)) {
+      log(`routes-manifest.json already targets ${apiOrigin}`);
+      return;
+    }
+
+    try {
+      fs.writeFileSync(manifestPath, serializeManifest(patched), 'utf8');
+    } catch (err) {
+      throw new Error(
+        `Could not retarget ${manifestPath} to ${apiOrigin}: ${err.message}\n` +
+          '  why: the install directory is read-only, so the API origin baked in at build time cannot follow a moved port.\n' +
+          '  fix: free the default ports 3003/3004, or install Clowder AI per-user so its files stay writable.',
+      );
+    }
+
+    for (const line of describeRewrites(patched)) log(`  retargeted ${line}`);
+  }
+
   _startNextJs() {
+    // Rewrites are read from the build output, not from next.config.js, so the
+    // manifest has to be correct before the server starts.
+    this._retargetRoutesManifest();
+
     const webDir = path.join(this.root, 'packages', 'web');
     const nodeExe = resolveNode(this.root) || 'node';
 

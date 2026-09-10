@@ -91,6 +91,9 @@ jobs:
           desktop/service-manager-redis-ownership.test.js
           desktop/service-manager-loopback.test.js
           desktop/service-manager-shutdown.test.js
+          desktop/service-manager-ports.test.js
           desktop/service-manager.test.js
+          desktop/port-pair.test.js
+          desktop/routes-manifest.test.js
           desktop/shutdown-plan.test.js
           desktop/startup-warning.test.js
