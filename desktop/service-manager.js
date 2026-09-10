@@ -9,9 +9,21 @@ const fs = require('node:fs');
 const os = require('node:os');
 const crypto = require('node:crypto');
 
+const {
+  INSTANCE_MARKER_KEY,
+  encodeCommand,
+  evaluateRedisOwnership,
+  formatOwnershipRefusal,
+  parseReply,
+} = require('./redis-ownership');
+const { instanceFilePath, loadOrCreateInstance, saveInstance } = require('./desktop-instance');
+
 const POLL_INTERVAL_MS = 500;
 const MAX_WAIT_MS = 120_000;
 const REDIS_FALLBACK_PORT_CHECK_MS = 5_000;
+// Default Redis port for a desktop instance. Never assumed to be ours: an
+// existing listener has to prove ownership via INSTANCE_MARKER_KEY first.
+const DEFAULT_REDIS_PORT = 6399;
 
 const IS_WIN = process.platform === 'win32';
 const IS_MAC = process.platform === 'darwin';
@@ -37,10 +49,18 @@ function resolveUserDataDir() {
   return path.join(base, brandName);
 }
 
+// Recorded in the instance file for diagnostics only (never used for logic).
+function resolveAppVersion() {
+  try {
+    return require('./package.json').version || null;
+  } catch {
+    return null;
+  }
+}
+
 // Desktop log alongside API logs in the user data directory.
 // Prior location (os.tmpdir()) was hard to find for debugging.
-const USER_DATA_DIR = resolveUserDataDir();
-const LOG_DIR_DESKTOP = path.join(USER_DATA_DIR, 'data', 'logs');
+const USER_DATA_DIR = resolveUserDataDir();const LOG_DIR_DESKTOP = path.join(USER_DATA_DIR, 'data', 'logs');
 try {
   fs.mkdirSync(LOG_DIR_DESKTOP, { recursive: true });
 } catch {}
@@ -98,6 +118,12 @@ class ServiceManager {
     this.onStatus = onStatus || (() => {});
     this.procs = {};
     this.memoryMode = false;
+    // Instance identity + the Redis port this instance actually uses. Resolved
+    // in startAll() before any service is spawned.
+    this.instance = null;
+    this.redisPort = DEFAULT_REDIS_PORT;
+    // Set when an existing Redis was refused; drives the user-facing warning.
+    this.redisRefusal = null;
   }
 
   async startAll() {
@@ -133,10 +159,28 @@ class ServiceManager {
     // NOTE: workspace junction repair must happen at install time (admin).
     // Runtime repair in Program Files fails with EPERM for non-admin users.
 
+    // ---- Instance identity ----
+    // Resolved before Redis so ownership of an already-listening Redis can be
+    // proven instead of assumed.
+    const instanceFile = instanceFilePath(userDataDir);
+    const { record: instance, created, replacedCorrupt } = loadOrCreateInstance({
+      filePath: instanceFile,
+      appVersion: resolveAppVersion(),
+    });
+    this.instance = instance;
+    if (created) {
+      saveInstance({ filePath: instanceFile, record: instance });
+      log(
+        `Desktop instance ${replacedCorrupt ? 'record replaced (missing/corrupt)' : 'created'}: ${instance.instanceId}`,
+      );
+    } else {
+      log(`Desktop instance loaded: ${instance.instanceId} (redisPort=${instance.redisPort ?? 'unset'})`);
+    }
+
     // ---- Redis ----
     this.onStatus('Starting Redis...');
     await this._startRedis(userDataDir);
-    log(`Redis phase complete. memoryMode=${this.memoryMode}`);
+    log(`Redis phase complete. memoryMode=${this.memoryMode}, redisPort=${this.redisPort}`);
 
     // ---- API ----
     this.onStatus('Starting API server...');
@@ -431,6 +475,52 @@ class ServiceManager {
     };
   }
 
+  /**
+   * Decide which Redis port this instance may use.
+   *
+   * A responding Redis is NOT proof of ownership: it may belong to a Clowder
+   * server, a system service, or another desktop instance. Only a matching
+   * instance marker is accepted; otherwise that database is left untouched and
+   * this instance starts its own Redis on a free port.
+   *
+   * @returns {Promise<{action: 'adopt'|'start'|'memory', port?: number}>}
+   */
+  async _resolveRedisPort(preferredPort) {
+    if (!(await this._isPortOpen(preferredPort))) return { action: 'start', port: preferredPort };
+
+    const probe = await this._redisCommand(preferredPort, ['GET', INSTANCE_MARKER_KEY]);
+    if (probe.kind === 'unreachable') {
+      log(`Port ${preferredPort} occupied by a non-Redis listener — using memory store`);
+      return { action: 'memory' };
+    }
+
+    const instanceId = this.instance?.instanceId;
+    const ownership = evaluateRedisOwnership({ instanceId, markerValue: probe.value });
+    if (ownership.canAdopt) {
+      log(`Adopting existing Redis on ${preferredPort}: ${ownership.reason}`);
+      return { action: 'adopt', port: preferredPort };
+    }
+
+    log(
+      formatOwnershipRefusal({
+        port: preferredPort,
+        instanceId,
+        verdict: ownership.verdict,
+        reason: ownership.reason,
+      }),
+    );
+    this.redisRefusal = { port: preferredPort, verdict: ownership.verdict, reason: ownership.reason };
+    this.onStatus(`Port ${preferredPort} belongs to another Redis — starting a private one`);
+
+    const alternative = await this._findFreePort();
+    if (!alternative) {
+      log('No free port available for a private Redis — using memory store');
+      return { action: 'memory' };
+    }
+    log(`Private Redis port: ${alternative} (${preferredPort} is taken by another instance)`);
+    return { action: 'start', port: alternative };
+  }
+
   async _startRedis(userDataDir) {
     // Windows:   .cat-cafe/redis/windows/redis-server.exe
     // macOS:     .cat-cafe/redis/darwin-{arm64|x64}/redis-server
@@ -439,39 +529,61 @@ class ServiceManager {
     const redisDir = path.join(this.root, '.cat-cafe', 'redis', platformSeg);
     const portableRedis = path.join(redisDir, `redis-server${EXE_SUFFIX}`);
 
-    // Already running — verify it is actually Redis
-    if (await this._isPortOpen(6399)) {
-      const isRedis = await this._verifyRedisPing(6399);
-      if (isRedis) {
-        this.onStatus('Redis already running on 6399');
-        return;
-      }
-      log('Port 6399 occupied by non-Redis — using memory store');
+    // ---- Ownership check on the remembered/default port ----
+    const preferredPort = this.instance?.redisPort || DEFAULT_REDIS_PORT;
+    const decision = await this._resolveRedisPort(preferredPort);
+
+    if (decision.action === 'memory') {
       this.memoryMode = true;
       return;
     }
 
-    const hasPortable = fs.existsSync(portableRedis);
-    const hasSystem = await this._commandExists('redis-server');
+    this.redisPort = decision.port;
+    if (decision.action === 'adopt') {
+      this.onStatus(`Redis already running on ${this.redisPort} (owned by this instance)`);
+      return;
+    }
 
-    if (!hasPortable && !hasSystem) {
-      log('Redis not found — using memory store');
+    const launch = await this._resolveRedisCommand(portableRedis, redisDir);
+    if (!launch) {
       this.memoryMode = true;
       return;
     }
 
-    // Persist data to writable user directory so sessions survive app restart.
-    const redisDataDir = path.join(userDataDir, 'data', 'redis');
-    let redisCmd = 'redis-server';
-    // Cap maxclients to a conservative desktop value so Redis does not emit a
-    // scary "Server can't set maximum open files" warning on low-ulimit systems
-    // (e.g. packaged Windows installs where the default 10000 exceeds the
-    // process file descriptor limit).  512 is far above local desktop needs.
-    const redisArgs = [
+    this._startProcess('redis', launch.cmd, this._redisArgs(userDataDir), { cwd: launch.cwd });
+    const redisReady = await this._waitForPortWithFallback(this.redisPort, 'Redis', 'redis');
+    if (!redisReady) {
+      this._abandonRedis();
+      return;
+    }
+
+    await this._claimRedis(userDataDir);
+  }
+
+  // Resolve which redis-server to launch: the packaged portable build wins,
+  // otherwise fall back to a system install. The specific reason is logged on
+  // failure so the memory-store fallback is never silent.
+  async _resolveRedisCommand(portableRedis, redisDir) {
+    if (fs.existsSync(portableRedis)) {
+      if (this._testRedisBinary(portableRedis, redisDir)) return { cmd: portableRedis, cwd: redisDir };
+      log('Redis binary test failed — using memory store');
+      return null;
+    }
+    if (await this._commandExists('redis-server')) return { cmd: 'redis-server', cwd: this.root };
+    log('Redis not found — using memory store');
+    return null;
+  }
+
+  // Data lives in the writable user directory so sessions survive a restart.
+  // maxclients is capped to a conservative desktop value so Redis does not emit
+  // a "can't set maximum open files" warning on low-ulimit systems (e.g. the
+  // packaged Windows build, whose default 10000 exceeds the fd limit).
+  _redisArgs(userDataDir) {
+    return [
       '--port',
-      '6399',
+      String(this.redisPort),
       '--dir',
-      redisDataDir,
+      path.join(userDataDir, 'data', 'redis'),
       '--save',
       '60 1',
       '--appendonly',
@@ -479,31 +591,80 @@ class ServiceManager {
       '--maxclients',
       '512',
     ];
-    let redisCwd = this.root;
+  }
 
-    if (hasPortable) {
-      redisCmd = portableRedis;
-      redisCwd = redisDir;
-      const canRun = this._testRedisBinary(portableRedis, redisDir);
-      if (!canRun) {
-        log('Redis binary test failed — using memory store');
-        this.memoryMode = true;
-        return;
-      }
+  _abandonRedis() {
+    log('Redis failed to start — using memory store');
+    this.memoryMode = true;
+    if (this.procs.redis && !this.procs.redis.killed) {
+      try {
+        this.procs.redis.kill();
+      } catch {}
+    }
+    delete this.procs.redis;
+  }
+
+  // Claim a freshly started Redis so a later run can prove ownership, and
+  // remember the port so a crashed run is re-adopted instead of spawning a
+  // second Redis against the same data directory.
+  async _claimRedis(userDataDir) {
+    const instanceId = this.instance?.instanceId;
+    if (!instanceId) return;
+
+    const reply = await this._redisCommand(this.redisPort, ['SET', INSTANCE_MARKER_KEY, instanceId]);
+    if (reply.kind === 'unreachable' || reply.kind === 'error') {
+      log(`WARNING: could not write ${INSTANCE_MARKER_KEY} on port ${this.redisPort}; the next run will refuse to adopt this Redis`);
+      return;
     }
 
-    this._startProcess('redis', redisCmd, redisArgs, { cwd: redisCwd });
-    const redisReady = await this._waitForPortWithFallback(6399, 'Redis', 'redis');
-    if (!redisReady) {
-      log('Redis failed to start — using memory store');
-      this.memoryMode = true;
-      if (this.procs.redis && !this.procs.redis.killed) {
+    try {
+      this.instance = { ...this.instance, redisPort: this.redisPort };
+      saveInstance({ filePath: instanceFilePath(userDataDir), record: this.instance });
+    } catch (err) {
+      log(`Could not persist the Redis port for this instance: ${err.message}`);
+    }
+  }
+
+  // Ask the OS for a free loopback port for a private Redis instance.
+  _findFreePort() {
+    return new Promise((resolve) => {
+      const srv = net.createServer();
+      srv.once('error', () => resolve(null));
+      srv.listen(0, '127.0.0.1', () => {
+        const { port } = srv.address();
+        srv.close(() => resolve(port));
+      });
+    });
+  }
+
+  // Send one Redis command over a raw socket and parse the reply.
+  // Returns { kind: 'unreachable' } when the listener is not a usable Redis.
+  _redisCommand(port, args) {
+    return new Promise((resolve) => {
+      const sock = new net.Socket();
+      sock.setTimeout(1500);
+      let buffer = '';
+      let settled = false;
+      const finish = (result) => {
+        if (settled) return;
+        settled = true;
         try {
-          this.procs.redis.kill();
+          sock.destroy();
         } catch {}
-      }
-      delete this.procs.redis;
-    }
+        resolve(result);
+      };
+
+      sock.once('connect', () => sock.write(encodeCommand(args)));
+      sock.on('data', (data) => {
+        buffer += data.toString();
+        const reply = parseReply(buffer);
+        if (reply.complete) finish(reply);
+      });
+      sock.once('error', () => finish({ kind: 'unreachable' }));
+      sock.once('timeout', () => finish({ kind: 'unreachable' }));
+      sock.once('close', () => finish({ kind: 'unreachable' }));
+      sock.connect(port, '127.0.0.1');
+    });
   }
 
   _testRedisBinary(exe, cwd) {
@@ -625,7 +786,9 @@ class ServiceManager {
       env.MEMORY_STORE = '1';
       delete env.REDIS_URL;
     } else {
-      env.REDIS_URL = 'redis://localhost:6399';
+      // Use the port this instance actually started/owns, which may differ from
+      // DEFAULT_REDIS_PORT when another Redis already held the default.
+      env.REDIS_URL = `redis://127.0.0.1:${this.redisPort}`;
     }
 
     // Apply API-specific env overrides (writable paths, telemetry salt, etc.)
@@ -696,30 +859,6 @@ class ServiceManager {
       });
       request.once('error', () => resolve(false));
       request.once('close', () => resolve(false));
-    });
-  }
-
-  _verifyRedisPing(port) {
-    return new Promise((resolve) => {
-      const sock = new net.Socket();
-      sock.setTimeout(1000);
-      let buffer = '';
-      sock.once('connect', () => {
-        sock.write('PING\r\n');
-      });
-      sock.on('data', (data) => {
-        buffer += data.toString();
-        if (buffer.includes('+PONG')) {
-          sock.destroy();
-          resolve(true);
-        }
-      });
-      sock.once('error', () => resolve(false));
-      sock.once('timeout', () => {
-        sock.destroy();
-        resolve(false);
-      });
-      sock.connect(port, '127.0.0.1');
     });
   }
 
