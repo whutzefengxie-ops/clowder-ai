@@ -1,0 +1,152 @@
+name: Desktop macOS Probe
+
+# ─────────────────────────────────────────────────────────────────────────────
+# VERIFICATION HARNESS ONLY — not part of the product release pipeline.
+#
+# Answers two open questions about the Clowder AI desktop packaging with
+# measurements taken on a real macOS host:
+#
+#   Probe A: `desktop/scripts/build-mac.sh` defaults to ARCHS=(arm64 x64) and
+#            runs a SINGLE `pnpm install`/`pnpm deploy` on the build host. Does
+#            the non-host arch .app therefore ship host-arch native modules
+#            (better-sqlite3 / node-pty / sqlite-vec / sharp)?
+#
+#   Probe B: the code comments around desktop/package.json `mac.identity: null`
+#            claim electron-builder's own signing hits EMFILE once afterPack has
+#            injected three node_modules trees. Does re-enabling EB signing
+#            (identity "-") actually reproduce that failure?
+#
+# Trigger manually: gh workflow run desktop-mac-probe.yml --ref <branch>
+# ─────────────────────────────────────────────────────────────────────────────
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe-a-dual-arch:
+    name: Probe A - dual arch on one host
+    runs-on: macos-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Host facts
+        run: |
+          echo "host arch          : $(uname -m)"
+          echo "node               : $(node -v)"
+          echo "ulimit -n (soft)   : $(ulimit -n)"
+          echo "ulimit -n (hard)   : $(ulimit -Hn)"
+
+      - name: Build BOTH archs on this single host (no --arch flag)
+        env:
+          CATCAFE_VERSION: 0.0.0-probe
+        run: |
+          chmod +x desktop/scripts/build-mac.sh
+          # Deliberately WITHOUT --arch: default ARCHS=("arm64" "x64") reproduces
+          # the local developer path (one host, one dependency install).
+          ./desktop/scripts/build-mac.sh 2>&1 | tail -40
+          echo "=================== dist ==================="
+          ls -la dist/ || true
+
+      - name: Probe A results
+        run: |
+          set +e
+          report() {
+            APP="$1"; LABEL="$2"
+            echo "############################################################"
+            echo "## $LABEL"
+            echo "## $APP"
+            echo "############################################################"
+            if [ ! -d "$APP" ]; then echo "!! bundle missing"; return; fi
+            echo "-- total files in bundle: $(find "$APP" | wc -l)"
+            echo ""
+            echo "-- bundled Node runtime --"
+            find "$APP" -path '*/node/bin/node' 2>/dev/null | while read -r f; do
+              printf '   %s :: %s\n' "$(lipo -archs "$f" 2>/dev/null)" "${f#$APP/}"
+            done
+            echo ""
+            echo "-- KEY native modules (module :: archs :: path) --"
+            for m in better_sqlite3.node pty.node vec0.dylib sharp.node; do
+              find "$APP" -name "$m" 2>/dev/null | while read -r f; do
+                printf '   %-22s :: %-10s :: %s\n' "$m" "$(lipo -archs "$f" 2>/dev/null)" "${f#$APP/}"
+              done
+            done
+            echo ""
+            echo "-- arch histogram over ALL Mach-O .node/.dylib in bundle --"
+            find "$APP" \( -name '*.node' -o -name '*.dylib' \) 2>/dev/null | while read -r f; do
+              lipo -archs "$f" 2>/dev/null
+            done | sort | uniq -c | sort -rn
+            echo ""
+          }
+          report "desktop/dist/mac-arm64/Clowder AI.app" "arm64 TARGET bundle"
+          report "desktop/dist/mac/Clowder AI.app"       "x64 TARGET bundle"
+
+      - name: Upload DMGs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: probe-a-dmgs
+          path: dist/*.dmg
+          if-no-files-found: warn
+
+  probe-b-signing:
+    name: Probe B - electron-builder signing vs EMFILE
+    runs-on: macos-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Baseline build (official path: identity=null + codesign --deep)
+        env:
+          CATCAFE_VERSION: 0.0.0-probe
+        run: |
+          chmod +x desktop/scripts/build-mac.sh
+          ./desktop/scripts/build-mac.sh --arch arm64 2>&1 | tail -25
+
+      - name: Measure bundle shape and fd limits
+        run: |
+          APP="desktop/dist/mac-arm64/Clowder AI.app"
+          echo "ulimit -n soft : $(ulimit -n)"
+          echo "ulimit -n hard : $(ulimit -Hn)"
+          echo "files in .app  : $(find "$APP" | wc -l)"
+          echo "node_modules dirs injected by afterPack: $(find "$APP" -type d -name node_modules | wc -l)"
+          echo "--- baseline signature (ad-hoc via codesign --deep) ---"
+          codesign -dv "$APP" 2>&1 | head -10
+
+      - name: Re-pack with electron-builder's OWN signing (identity "-")
+        run: |
+          set +e
+          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('desktop/package.json','utf8'));p.build.mac.identity='-';fs.writeFileSync('desktop/package.json',JSON.stringify(p,null,2));console.log('patched mac.identity ->',p.build.mac.identity)"
+
+          cd desktop
+          npx electron-builder --mac dir --arm64 > /tmp/eb-sign.log 2>&1
+          CODE=$?
+          echo ""
+          echo "electron-builder exit code: $CODE"
+          echo "==================== tail of electron-builder output ===================="
+          tail -70 /tmp/eb-sign.log
+          echo "==================== error / EMFILE scan ===================="
+          grep -niE 'emfile|too many open files|error|failed|cannot|sign' /tmp/eb-sign.log | head -40
+          echo "==================== resulting signature ===================="
+          cd ..
+          codesign -dv "desktop/dist/mac-arm64/Clowder AI.app" 2>&1 | head -10
+          echo ""
+          echo "VERDICT_HINT: exit 0 => EB signing did NOT hit EMFILE; non-zero => reproduced"
+          exit 0
