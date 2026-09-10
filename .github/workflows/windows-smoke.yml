@@ -68,10 +68,12 @@ jobs:
       # Platform-agnostic desktop tests, wired here because this workflow is the
       # one that reliably runs on PRs (the public test lane is currently red on
       # main before it reaches desktop/*.test.js).
-      - name: Desktop Redis ownership + instance identity tests
+      - name: Desktop runtime tests (Redis ownership, instance, loopback, warnings)
         run: >-
           node --test
           desktop/redis-ownership.test.js
           desktop/desktop-instance.test.js
           desktop/service-manager-redis-ownership.test.js
+          desktop/service-manager-loopback.test.js
           desktop/service-manager.test.js
+          desktop/startup-warning.test.js

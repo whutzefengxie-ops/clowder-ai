@@ -18,6 +18,7 @@ const { safeErrorMessage, safeHost } = require('./update-network-diagnostics');
 const { DESKTOP_APP_ID } = require('./app-identity');
 const { createDesktopUpdateRuntime } = require('./desktop-update-runtime');
 const { ensureValidMacInstallLocation } = require('./mac-install-location');
+const { confirmStartupWarning } = require('./startup-warning');
 const {
   createDesktopTray,
   createManualUpdateHandler,
@@ -301,6 +302,8 @@ app.on('ready', async () => {
     dbg('startAll() called');
     await services.startAll();
     await refreshRendererLinkOrigins();
+    const warningDeps = { status: services.getRuntimeStatus(), dialog, onQuit: quitApp, log: dbg };
+    if (!(await confirmStartupWarning(warningDeps))) return;
     dbg('startAll() done — creating main window');
     createMainWindow();
   } catch (err) {

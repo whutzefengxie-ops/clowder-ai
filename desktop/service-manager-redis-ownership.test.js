@@ -249,3 +249,34 @@ describe('ServiceManager: Redis launch resolution', () => {
     ]);
   });
 });
+
+describe('ServiceManager: runtime status for the shell', () => {
+  it('exposes memory mode and the refused port', async () => {
+    await withListener({ markerValue: 'some-other-instance' }, async ({ port }) => {
+      const { sm, userDataDir } = await makeServiceManager(port);
+
+      await sm._startRedis(userDataDir);
+
+      const status = sm.getRuntimeStatus();
+      assert.equal(status.memoryMode, true);
+      assert.equal(status.redisRefusal.port, port);
+      assert.equal(status.redisRefusal.verdict, 'foreign');
+    });
+  });
+
+  it('returns a copy so a caller cannot mutate internal state', async () => {
+    await withListener({ markerValue: OUR_ID }, async ({ port }) => {
+      const { sm, userDataDir } = await makeServiceManager(port);
+
+      await sm._startRedis(userDataDir);
+
+      const status = sm.getRuntimeStatus();
+      status.memoryMode = 'tampered';
+      status.redisRefusal = { port: 1 };
+
+      assert.equal(sm.memoryMode, false);
+      assert.equal(sm.redisRefusal, null);
+      assert.equal(sm.getRuntimeStatus().redisPort, port);
+    });
+  });
+});

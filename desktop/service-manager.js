@@ -24,6 +24,10 @@ const REDIS_FALLBACK_PORT_CHECK_MS = 5_000;
 // Default Redis port for a desktop instance. Never assumed to be ours: an
 // existing listener has to prove ownership via INSTANCE_MARKER_KEY first.
 const DEFAULT_REDIS_PORT = 6399;
+// The desktop UI and API are loopback-only. `next start` binds 0.0.0.0 unless
+// told otherwise, which would publish the UI — and, through its same-origin
+// /api rewrite, the API — to the local network.
+const LOOPBACK_HOST = '127.0.0.1';
 
 const IS_WIN = process.platform === 'win32';
 const IS_MAC = process.platform === 'darwin';
@@ -125,6 +129,18 @@ class ServiceManager {
     this.redisPort = DEFAULT_REDIS_PORT;
     // Set when an existing Redis was refused; drives the user-facing warning.
     this.redisRefusal = null;
+  }
+
+  /**
+   * Runtime facts the shell needs in order to warn about a degraded start.
+   * Returns a copy so callers cannot mutate internal state.
+   */
+  getRuntimeStatus() {
+    return {
+      memoryMode: this.memoryMode,
+      redisPort: this.redisPort,
+      redisRefusal: this.redisRefusal ? { ...this.redisRefusal } : null,
+    };
   }
 
   async startAll() {
@@ -732,11 +748,11 @@ class ServiceManager {
     let cmd, args;
     if (nextJs) {
       cmd = nodeExe;
-      args = [nextJs, 'start', '--port', String(this.frontendPort)];
+      args = [nextJs, ...this._nextStartArgs(this.frontendPort)];
     } else if (IS_WIN) {
       cmd = 'cmd.exe';
       const localNext = path.join(webDir, 'node_modules', '.bin', 'next.cmd');
-      args = ['/c', fs.existsSync(localNext) ? localNext : 'next.cmd', 'start', '--port', String(this.frontendPort)];
+      args = ['/c', fs.existsSync(localNext) ? localNext : 'next.cmd', ...this._nextStartArgs(this.frontendPort)];
     } else {
       // macOS/Linux fallback: spawn node against any next binary on PATH.
       // In practice 'deployed' above is always found after pnpm deploy, so
@@ -747,6 +763,14 @@ class ServiceManager {
 
     log(`Starting Next.js: ${cmd} ${args.join(' ')}`);
     this._startProcess('web', cmd, args, { cwd: webDir });
+  }
+
+  // `next start` binds 0.0.0.0 unless --hostname says otherwise, which would
+  // expose the desktop UI (and its /api, /socket.io and /uploads rewrites) to
+  // the local network. The API already defaults to 127.0.0.1, so the Web UI is
+  // pinned to loopback to match.
+  _nextStartArgs(frontendPort) {
+    return ['start', '--port', String(frontendPort), '--hostname', LOOPBACK_HOST];
   }
 
   _startProcess(name, cmd, args, opts = {}) {
