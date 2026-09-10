@@ -105,21 +105,46 @@ jobs:
       - name: Install silently into a scratch directory
         shell: pwsh
         run: |
+          # Bounded on purpose: the first run of this workflow sat in the install
+          # for 35+ minutes with no way to see why. Now the wait is capped and the
+          # step always dumps the Inno log and the live process tree, so a hang
+          # produces a diagnosis instead of silence.
           $target = "${{ env.INSTALL_DIR }}"
+          $log = "C:\ci-install.log"
           if (Test-Path $target) { Remove-Item $target -Recurse -Force }
+          if (Test-Path $log) { Remove-Item $log -Force }
+
           $proc = Start-Process -FilePath "${{ steps.installer.outputs.path }}" `
-            -ArgumentList "/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-", "/DIR=$target" `
-            -Wait -PassThru
-          Write-Host "installer exit code: $($proc.ExitCode)"
-          if ($proc.ExitCode -ne 0) { throw "Installer failed with exit code $($proc.ExitCode)" }
-          Write-Host "--- top level of $target ---"
-          Get-ChildItem $target | Select-Object Mode, Name | Format-Table -AutoSize
-          Write-Host "--- setup log tail (if any) ---"
-          Get-ChildItem "$env:TEMP\Setup Log*.txt" -ErrorAction SilentlyContinue |
-            Sort-Object LastWriteTime -Descending | Select-Object -First 1 |
-            ForEach-Object { Get-Content $_.FullName -Tail 25 }
+            -ArgumentList "/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-", "/LOG=$log", "/DIR=$target" `
+            -PassThru
+          Write-Host "installer pid: $($proc.Id)"
+
+          $finished = $proc.WaitForExit(1500000)  # 25 minutes
+          if ($finished) {
+            Write-Host "installer exit code: $($proc.ExitCode)"
+          } else {
+            Write-Warning "installer still running after 25 minutes — treating it as a hang"
+            Write-Host "--- processes still alive under the installer ---"
+            Get-CimInstance Win32_Process |
+              Where-Object { $_.ParentProcessId -eq $proc.Id } |
+              Select-Object ProcessId, ParentProcessId, Name, CommandLine | Format-List
+            Write-Host "--- tar / powershell / msiexec processes on the box ---"
+            Get-CimInstance Win32_Process |
+              Where-Object { $_.Name -match '^(tar|powershell|pwsh|msiexec|cmd)\.exe$' } |
+              Select-Object ProcessId, ParentProcessId, Name, CommandLine | Format-Table -AutoSize -Wrap
+            Write-Host "--- stopping the installer tree so the checks below can run ---"
+            & taskkill /PID $proc.Id /T /F 2>&1 | Out-Null
+          }
+
+          Write-Host "--- install log tail ---"
+          if (Test-Path $log) { Get-Content $log -Tail 60 } else { Write-Host "no log at $log" }
+
+          if (-not $finished) {
+            throw "Installer did not finish within 25 minutes; diagnostics above."
+          }
 
       - name: Smoke-test the INSTALLED tree
+        if: always()
         shell: pwsh
         run: |
           node desktop/scripts/smoke-installed-layout.mjs --root "${{ env.INSTALL_DIR }}" --platform win32
