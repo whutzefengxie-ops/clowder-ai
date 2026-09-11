@@ -29,8 +29,8 @@
       "id": "redis-version-across-platforms",
       "detail": "darwin ships Redis 7.4.1 while win32 ships Redis 8.10.1.",
       "why": "win32 used a moving `releases/latest` target and had already advanced to the 8.x line while darwin stayed on 7.4.1. Both are now pinned, but not to the same value.",
-      "decisionNeeded": "Unifying the two platforms on one Redis line changes the on-disk format that existing users already have; a downgrade can make Redis refuse to load an existing data directory. This is a product/data-compatibility decision, not a build-script detail, so the divergence is declared here rather than silently resolved.",
-      "owner": "unassigned"
+      "decision": "Accepted: each platform stays pinned where it is. Unifying them would change the on-disk format that existing users already have, and a downgrade can make Redis refuse to load an existing data directory; that is a product/data-compatibility decision, and the owner chose to keep the divergence rather than resolve it inside a build script.",
+      "decidedIn": "PR #11 review"
     }
   ]
 }

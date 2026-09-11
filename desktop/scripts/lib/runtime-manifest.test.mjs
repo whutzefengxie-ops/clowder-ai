@@ -69,6 +69,16 @@ describe('runtime-manifest: the shipped manifest', () => {
     assert.equal(divergence.declared, true, 'a divergence must be declared');
     assert.equal(divergence.id, REDIS_DIVERGENCE_ID);
   });
+
+  it('records the divergence as a decision, not as an open question', () => {
+    const entry = MANIFEST.knownDivergence.find((item) => item.id === REDIS_DIVERGENCE_ID);
+
+    // A divergence that is merely tolerated rots into an accident. The owner
+    // reviewed it and chose to keep it, so that outcome is recorded here.
+    assert.ok(entry.decision, 'the accepted decision must be written down');
+    assert.equal(entry.owner, undefined, 'there should be no unassigned owner left behind');
+    assert.equal(entry.decisionNeeded, undefined, 'the open question must be resolved, not left open');
+  });
 });
 
 describe('runtime-manifest: validator rejects incoherent manifests', () => {
