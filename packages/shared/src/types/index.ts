@@ -269,7 +269,15 @@ export type {
 export type { CatAlternative, CatRoutingError } from './cat-routing.js';
 // F212: CLI error diagnostics (cross-package data contract; classifier/sanitizer impl stays in api)
 export type { CliActiveWriterRecoveryState, CliDiagnostics, CliErrorReasonCode } from './cli-diagnostics.js';
-export type { ClientDescriptor, ClientProbeSpec, ClientToolId, InstallHint } from './client-descriptor.js';
+export type {
+  ClientDescriptor,
+  ClientProbeSpec,
+  ClientToolId,
+  InstallHint,
+  ProviderAvailability,
+  ProviderAvailabilityReport,
+  ProviderAvailabilityStatus,
+} from './client-descriptor.js';
 // Provider/client descriptor registry — single source of truth for ClientId → CLI mapping
 export {
   CLIENT_DESCRIPTORS,

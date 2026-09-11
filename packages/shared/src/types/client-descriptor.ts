@@ -310,3 +310,52 @@ export function installHintForCommand(command: string, platform?: NodeJS.Platfor
   if (alt) return resolved === 'win32' && alt.win32 ? alt.win32 : alt.default;
   return formatInstallHint(descriptor, resolved);
 }
+
+/**
+ * Availability status vocabulary, deliberately the same words the agent-hook health surface
+ * uses (`configured | missing | unsupported | error`) so the UI needs one status language
+ * rather than two.
+ */
+export type ProviderAvailabilityStatus = 'configured' | 'missing' | 'unsupported' | 'error';
+
+/**
+ * One provider's detected availability.
+ *
+ * This is the wire contract between the API and the web, defined here so both packages agree
+ * on the shape instead of the web re-declaring it — re-declaration is exactly how the ClientId
+ * whitelist drifted into five copies in the first place.
+ */
+export interface ProviderAvailability {
+  clientId: ClientId;
+  /** CLI tool identity, or null for clients with no local binary. */
+  toolId: ClientToolId | null;
+  label: string;
+  installed: boolean;
+  /** The binary that resolved; the first candidate when none did. */
+  command: string;
+  /** Absolute path when resolved; absent when missing. */
+  resolvedPath?: string;
+  /**
+   * How the binary was found. `env-override` means the `CAT_<CLIENT>_PATH` escape hatch was
+   * used, which is how an operator pins a binary that is not on the process's PATH.
+   */
+  resolvedVia: 'env-override' | 'path' | 'unavailable';
+  /** Only populated when version probing is enabled and the CLI answered. */
+  version?: string;
+  /** Whether an API key env var for this provider is present (does not prove auth works). */
+  hasApiKey: boolean;
+  status: ProviderAvailabilityStatus;
+  /** Actionable reason when status is not `configured`. */
+  reason?: string;
+  /** Copy-pasteable install command. */
+  installHint: string;
+  /** False for clients backed by a bridge/remote instead of a spawnable CLI. */
+  localCli: boolean;
+}
+
+export interface ProviderAvailabilityReport {
+  detectedAt: string;
+  /** Whether this report attempted version probes. */
+  versionProbeEnabled: boolean;
+  providers: ProviderAvailability[];
+}

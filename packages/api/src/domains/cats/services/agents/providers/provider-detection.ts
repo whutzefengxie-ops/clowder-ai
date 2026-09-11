@@ -25,48 +25,13 @@ import {
   CLIENT_DESCRIPTORS,
   type ClientDescriptor,
   type ClientId,
-  type ClientToolId,
   formatInstallHint,
+  type ProviderAvailability,
+  type ProviderAvailabilityReport,
 } from '@cat-cafe/shared';
 import { resolveCliCommand } from '../../../../../utils/cli-resolve.js';
 
-/** Mirrors the agent-hook health vocabulary so the UI has one status language. */
-export type ProviderAvailabilityStatus = 'configured' | 'missing' | 'unsupported' | 'error';
-
-export interface ProviderAvailability {
-  clientId: ClientId;
-  /** CLI tool identity, or null for clients with no local binary. */
-  toolId: ClientToolId | null;
-  label: string;
-  installed: boolean;
-  /** The binary that resolved; the first candidate when none did. */
-  command: string;
-  /** Absolute path when resolved; absent when missing. */
-  resolvedPath?: string;
-  /**
-   * How the binary was found. `env-override` means the `CAT_<CLIENT>_PATH` escape hatch was
-   * used, which is how an operator pins a binary that is not on the daemon's PATH.
-   */
-  resolvedVia: 'env-override' | 'path' | 'unavailable';
-  /** Only populated when version probing is enabled and the CLI answered. */
-  version?: string;
-  /** Whether an API key env var for this provider is present (does not prove auth works). */
-  hasApiKey: boolean;
-  status: ProviderAvailabilityStatus;
-  /** Actionable reason when status is not `configured`. */
-  reason?: string;
-  /** Copy-pasteable install command. */
-  installHint: string;
-  /** False for clients backed by a bridge/remote instead of a spawnable CLI. */
-  localCli: boolean;
-}
-
-export interface ProviderAvailabilityReport {
-  detectedAt: string;
-  /** Whether this report attempted version probes. */
-  versionProbeEnabled: boolean;
-  providers: ProviderAvailability[];
-}
+export type { ProviderAvailability, ProviderAvailabilityReport, ProviderAvailabilityStatus } from '@cat-cafe/shared';
 
 /** Injectables — tests substitute all three so no real PATH or subprocess is touched. */
 export interface ProviderDetectionDeps {
