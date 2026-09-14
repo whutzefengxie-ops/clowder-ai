@@ -297,6 +297,27 @@ export function formatInstallHint(descriptor: ClientDescriptor, platform?: NodeJ
 }
 
 /**
+ * Provider markers that mean "this member never dispatches to a local CLI".
+ *
+ * Codifies behaviour the backend already implements by hardcoding the same literal in five
+ * places (`routes/cats.ts` — where the `cli` block is deliberately omitted for such a member —
+ * plus `route-serial.ts`, `route-parallel.ts`, `invoke-single-cat.ts` and
+ * `RuntimeCapabilityDescriptor.ts`). It is declared here so an availability consumer can ask
+ * the question without adding a sixth copy; those five sites should consume this constant in a
+ * follow-up.
+ *
+ * It is NOT a capability descriptor: it answers only "does this member spawn a local CLI at
+ * all", which is the one member-level fact an availability verdict depends on.
+ */
+export const CLOUD_ONLY_PROVIDER_MARKERS = ['openai-chatgpt-pro'] as const;
+
+/** Whether a member's `provider` marks it as cloud-only (no local CLI dispatch). */
+export function isCloudOnlyProviderMarker(provider: string | null | undefined): boolean {
+  if (!provider) return false;
+  return (CLOUD_ONLY_PROVIDER_MARKERS as readonly string[]).includes(provider);
+}
+
+/**
  * Install hint for a bare command name, e.g. the `command` a caller passed to
  * `formatCliNotFoundError`. Returns undefined when no descriptor claims the command, so the
  * caller keeps its own generic fallback.

@@ -4,6 +4,7 @@ import {
   CREATABLE_CLIENT_IDS,
   getCliEffortOptionsForProvider,
   getClientDescriptor,
+  isCloudOnlyProviderMarker,
   builtinAccountIdForClient as sharedBuiltinAccountIdForClient,
 } from '@cat-cafe/shared';
 import type { CatData } from '@/hooks/useCatData';
@@ -156,6 +157,42 @@ export function usesCliTransport(form: Pick<HubCatEditorFormState, 'clientId' | 
       form.clientId === 'kimi' ||
       form.clientId === 'opencode')
   );
+}
+
+/** How the member being edited reaches a runtime. */
+export type MemberCliDispatch =
+  | { kind: 'cli' }
+  | { kind: 'acp'; command: string }
+  | { kind: 'cloud'; provider: string }
+  | { kind: 'none' };
+
+/**
+ * Whether — and through what — this member dispatches to a local runtime.
+ *
+ * Availability is probed per clientId, but the *need* is per member, and the two diverge in both
+ * directions:
+ *
+ *  - a cloud-only marker (`provider: 'openai-chatgpt-pro'`) means no local CLI is ever spawned,
+ *    so a clientId-level "未安装" would be a false alarm pointing at a pointless install;
+ *  - an ACP member spawns a user-configured command (`variant.acp.command`, resolved through
+ *    `resolveCliCommandOrBare`) that the probe never inspects, so "无需本机 CLI" would hide
+ *    exactly the failure this card exists to surface;
+ *  - bridge/remote clients (antigravity / catagent / a2a) genuinely have no local binary.
+ *
+ * Only `kind: 'cli'` may be answered by the clientId-level probe.
+ */
+export function resolveMemberCliDispatch(
+  form: Pick<HubCatEditorFormState, 'clientId' | 'provider' | 'acpEnabled' | 'acpCommand'>,
+): MemberCliDispatch {
+  if (isCloudOnlyProviderMarker(form.provider)) {
+    return { kind: 'cloud', provider: form.provider };
+  }
+  if (form.acpEnabled) {
+    const command = form.acpCommand.trim();
+    return { kind: 'acp', command: command.length > 0 ? command : '(未配置命令)' };
+  }
+  if (usesCliTransport(form)) return { kind: 'cli' };
+  return { kind: 'none' };
 }
 
 export function splitMentionPatterns(raw: string): string[] {

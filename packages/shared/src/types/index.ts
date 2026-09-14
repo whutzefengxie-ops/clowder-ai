@@ -282,6 +282,7 @@ export type {
 export {
   CLIENT_DESCRIPTORS,
   CLIENT_IDS,
+  CLOUD_ONLY_PROVIDER_MARKERS,
   CREATABLE_CLIENT_IDS,
   creatableClientIds,
   defaultCliForClient,
@@ -289,6 +290,7 @@ export {
   getClientDescriptor,
   getClientDescriptorByCommand,
   installHintForCommand,
+  isCloudOnlyProviderMarker,
   localCliClientIds,
 } from './client-descriptor.js';
 export type { BuiltinAccountClient } from './client-routing.js';

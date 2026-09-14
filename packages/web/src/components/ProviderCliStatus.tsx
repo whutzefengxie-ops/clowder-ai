@@ -1,26 +1,34 @@
 'use client';
 
 /**
- * Machine-local CLI availability for the currently selected client.
+ * Machine-local CLI availability for the member being edited.
  *
  * Read-only by design: a member's `cli` block is server-derived from the descriptor registry,
  * so this card never offers to edit it. Its job is to answer the question the editor could not
  * answer before — "is the CLI this member needs actually installed here?" — and, when it is
  * not, to hand over the exact install command instead of letting the first task fail.
  *
+ * It only answers that question for members that dispatch through the standard local CLI path.
+ * Availability is probed per clientId, but the need is per member and the two diverge: a
+ * cloud-only member spawns no local CLI at all, an ACP member spawns a user-configured command
+ * the probe never inspects, and bridge/remote clients have no local binary. For those the card
+ * states the situation instead of reporting a binary the member will never run. See
+ * `resolveMemberCliDispatch`.
+ *
  * Detection is user-triggered rather than fetched on mount, on purpose. A self-fetching child
  * fires its request before its parent's effects do (React runs effects bottom-up), which
  * silently reorders any caller that queues responses in call order — it broke
  * `hub-cat-editor.test.tsx` exactly that way. It also means merely opening the editor would
- * touch the filesystem. One explicit click keeps both the cost and the side effect in the
- * user's hands.
+ * touch the filesystem.
  *
- * Fails soft: a failed request renders a muted line, never an error state that blocks the form.
+ * Neither a failed request nor a failed re-check may read as "not installed": the first shows
+ * an unavailable notice, the second keeps the previous results on screen.
  */
 
 import type { ProviderAvailability } from '@cat-cafe/shared';
 import { type ReactNode, useCallback, useState } from 'react';
 import { apiFetch } from '@/utils/api-client';
+import type { MemberCliDispatch } from './hub-cat-editor.model';
 
 interface ClientsResponse {
   detectedAt?: string;
@@ -30,6 +38,8 @@ interface ClientsResponse {
 
 interface ProviderCliStatusProps {
   clientId: string;
+  /** How the edited member reaches a runtime; only `cli` may be answered by the probe. */
+  dispatch: MemberCliDispatch;
 }
 
 type Phase = 'idle' | 'loading' | 'ready' | 'failed';
@@ -47,7 +57,28 @@ function StatusPill({ tone, children }: { tone: 'ok' | 'missing' | 'neutral'; ch
 const ACTION_BUTTON_CLASS =
   'rounded-lg border border-[var(--console-border-soft)] px-2 py-0.5 text-xs text-cafe-muted transition hover:border-conn-amber-ring disabled:opacity-50';
 
-export function ProviderCliStatus({ clientId }: ProviderCliStatusProps) {
+/** Members the clientId-level probe cannot speak for. */
+function NonCliDispatchNotice({ dispatch }: { dispatch: Exclude<MemberCliDispatch, { kind: 'cli' }> }) {
+  if (dispatch.kind === 'cloud') {
+    return (
+      <p className="text-xs leading-5 text-cafe-muted">
+        该成员由云端提供（provider：{dispatch.provider}），不派发本机 CLI，无需检测。
+      </p>
+    );
+  }
+  if (dispatch.kind === 'acp') {
+    return (
+      <p className="break-all text-xs leading-5 text-cafe-muted">
+        该成员使用 ACP 自定义命令：{dispatch.command}。CLI 探测不检查自定义命令，请在终端确认它可直接执行。
+      </p>
+    );
+  }
+  return (
+    <p className="text-xs leading-5 text-cafe-muted">该成员不通过标准本地 CLI 派发（bridge / 远程），无需检测。</p>
+  );
+}
+
+export function ProviderCliStatus({ clientId, dispatch }: ProviderCliStatusProps) {
   const [phase, setPhase] = useState<Phase>('idle');
   const [providers, setProviders] = useState<ProviderAvailability[] | null>(null);
   // Kept separate from `phase` on purpose: a re-detect must not blank the results the user is
@@ -55,8 +86,10 @@ export function ProviderCliStatus({ clientId }: ProviderCliStatusProps) {
   // gating the button on it was both a dead branch and a TypeScript error (TS2367) under the
   // production build.
   const [refreshing, setRefreshing] = useState(false);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
 
   const load = useCallback(async (options: { refresh?: boolean } = {}) => {
+    setRefreshError(null);
     if (options.refresh) {
       setRefreshing(true);
     } else {
@@ -71,6 +104,12 @@ export function ProviderCliStatus({ clientId }: ProviderCliStatusProps) {
       setProviders(Array.isArray(body.providers) ? body.providers : []);
       setPhase('ready');
     } catch {
+      if (options.refresh) {
+        // Keep what the user is reading. A re-check is owner-gated, so a 403 here is an
+        // expected outcome for a non-owner, not a reason to blank a good report.
+        setRefreshError('重新检测失败，下面显示的仍是上一次的结果。');
+        return;
+      }
       // Availability is advisory — an unreachable endpoint must not look like "not installed".
       setProviders(null);
       setPhase('failed');
@@ -78,6 +117,10 @@ export function ProviderCliStatus({ clientId }: ProviderCliStatusProps) {
       if (options.refresh) setRefreshing(false);
     }
   }, []);
+
+  if (dispatch.kind !== 'cli') {
+    return <NonCliDispatchNotice dispatch={dispatch} />;
+  }
 
   if (phase === 'idle') {
     return (
@@ -115,6 +158,8 @@ export function ProviderCliStatus({ clientId }: ProviderCliStatusProps) {
           重新检测
         </button>
       </div>
+
+      {refreshError ? <p className="text-xs leading-5 text-conn-amber-text">{refreshError}</p> : null}
 
       {current && (
         <div className="space-y-1">

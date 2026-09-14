@@ -10,6 +10,7 @@ import {
   type CodexRuntimeSettings,
   getCliEffortOptionsForClient,
   type HubCatEditorFormState,
+  resolveMemberCliDispatch,
   type StrategyFormState,
   usesCliTransport,
 } from './hub-cat-editor.model';
@@ -67,7 +68,7 @@ export function AdvancedRuntimeSection({
       tone="success"
     >
       <div className="space-y-2">
-        <ProviderCliStatus clientId={form.clientId} />
+        <ProviderCliStatus clientId={form.clientId} dispatch={resolveMemberCliDispatch(form)} />
         <TextField
           label="Context Window"
           value={form.contextWindow}

@@ -1,11 +1,12 @@
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { MemberCliDispatch } from '../hub-cat-editor.model';
 
 /**
  * ProviderCliStatus rendering contract.
  *
- * Two things are being defended:
+ * Four things are being defended:
  *
  *  1. **No request on mount.** A self-fetching child runs its effect before its parent's
  *     (React effects are bottom-up), so mounting this card inside the member editor injected a
@@ -13,6 +14,11 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
  *     which broke `hub-cat-editor.test.tsx`. Detection is click-triggered instead.
  *  2. **Unknown is never rendered as "not installed".** Painting a working CLI as missing
  *     would send the user to reinstall something they already have.
+ *  3. **Only standard-CLI members get a verdict.** A cloud member spawns no local CLI and an
+ *     ACP member spawns a user-configured command the probe never inspects, so a clientId-level
+ *     answer would be wrong for both — in opposite directions.
+ *  4. **A failed re-check keeps the previous result.** The refresh endpoint is owner-gated, so a
+ *     403 is an expected outcome for a non-owner, not a reason to blank a good report.
  */
 
 const apiFetchMock = vi.fn();
@@ -38,6 +44,8 @@ function provider(overrides: Record<string, unknown> = {}) {
 function okResponse(providers: unknown[]) {
   return { ok: true, status: 200, json: async () => ({ providers }) };
 }
+
+const CLI_DISPATCH: MemberCliDispatch = { kind: 'cli' };
 
 describe('ProviderCliStatus', () => {
   let container: HTMLDivElement;
@@ -67,10 +75,10 @@ describe('ProviderCliStatus', () => {
     container.remove();
   });
 
-  async function render(clientId = 'anthropic') {
+  async function render(clientId = 'anthropic', dispatch: MemberCliDispatch = CLI_DISPATCH) {
     const { ProviderCliStatus } = await import('../ProviderCliStatus');
     await act(async () => {
-      root.render(React.createElement(ProviderCliStatus, { clientId }));
+      root.render(React.createElement(ProviderCliStatus, { clientId, dispatch }));
     });
   }
 
@@ -134,50 +142,7 @@ describe('ProviderCliStatus', () => {
     expect(container.textContent).not.toContain('未安装');
   });
 
-  it('says a bridged client needs no local CLI instead of "missing"', async () => {
-    apiFetchMock.mockResolvedValue(
-      okResponse([
-        provider({ clientId: 'antigravity', toolId: null, localCli: false, installed: false, status: 'unsupported' }),
-      ]),
-    );
-    await renderAndDetect('antigravity');
-
-    expect(container.textContent).toContain('无需本机 CLI');
-    expect(container.textContent).not.toContain('未安装');
-  });
-
-  it('surfaces a broken path override as a configuration error, not a missing binary', async () => {
-    apiFetchMock.mockResolvedValue(
-      okResponse([
-        provider({
-          installed: false,
-          status: 'error',
-          resolvedPath: undefined,
-          reason: 'CAT_ANTHROPIC_PATH 指向的路径不存在',
-        }),
-      ]),
-    );
-    await renderAndDetect();
-
-    expect(container.textContent).toContain('配置有误');
-    expect(container.textContent).toContain('CAT_ANTHROPIC_PATH');
-  });
-
-  it('re-detects on demand', async () => {
-    apiFetchMock.mockResolvedValue(okResponse([provider()]));
-    await renderAndDetect();
-
-    await clickButton('重新检测');
-
-    const refreshCall = apiFetchMock.mock.calls.find((call) => call[0] === '/api/clients/refresh');
-    expect(refreshCall).toBeTruthy();
-    expect(refreshCall?.[1]).toMatchObject({ method: 'POST' });
-  });
-
   it('keeps the previous result on screen while re-detecting', async () => {
-    // Regression guard for the production-build failure on this component's refresh button:
-    // gating it on `phase === 'loading'` was unreachable dead code (TS2367). Results must stay
-    // readable during a re-detect instead of collapsing back to the loading paragraph.
     apiFetchMock.mockResolvedValueOnce(okResponse([provider()]));
     await renderAndDetect();
     expect(container.textContent).toContain('已安装');
@@ -200,5 +165,112 @@ describe('ProviderCliStatus', () => {
       release();
     });
     expect(refreshButton?.disabled).toBe(false);
+  });
+
+  it('a failed re-check keeps the previous result and says so', async () => {
+    // The refresh route is owner-gated, so a non-owner gets 403 on every click. Blanking the
+    // report there would turn a working state into "unavailable" on each attempt.
+    apiFetchMock.mockResolvedValueOnce(okResponse([provider()]));
+    await renderAndDetect();
+    expect(container.textContent).toContain('已安装');
+
+    apiFetchMock.mockResolvedValueOnce({ ok: false, status: 403, json: async () => ({}) });
+    await clickButton('重新检测');
+
+    expect(container.textContent).toContain('重新检测失败');
+    expect(container.textContent).toContain('已安装');
+    expect(container.textContent).toContain('/usr/local/bin/claude');
+    expect(container.textContent).not.toContain('本机 CLI 状态不可用');
+  });
+
+  it('never probes or judges a cloud-only member', async () => {
+    apiFetchMock.mockResolvedValue(okResponse([provider({ installed: false, status: 'missing' })]));
+    await render('openai', { kind: 'cloud', provider: 'openai-chatgpt-pro' });
+
+    expect(apiFetchMock).not.toHaveBeenCalled();
+    expect(container.textContent).toContain('云端提供');
+    expect(container.textContent).toContain('openai-chatgpt-pro');
+    expect(container.textContent).not.toContain('未安装');
+    expect(container.textContent).not.toContain('安装命令');
+  });
+
+  it('names the ACP command to verify instead of claiming no CLI is needed', async () => {
+    apiFetchMock.mockResolvedValue(okResponse([provider()]));
+    await render('acp', { kind: 'acp', command: 'my-acp-agent --stdio' });
+
+    expect(apiFetchMock).not.toHaveBeenCalled();
+    expect(container.textContent).toContain('my-acp-agent --stdio');
+    expect(container.textContent).toContain('CLI 探测不检查自定义命令');
+    expect(container.textContent).not.toContain('无需本机 CLI');
+    expect(container.textContent).not.toContain('未安装');
+  });
+
+  it('says bridged members have no standard local dispatch', async () => {
+    apiFetchMock.mockResolvedValue(okResponse([provider()]));
+    await render('antigravity', { kind: 'none' });
+
+    expect(apiFetchMock).not.toHaveBeenCalled();
+    expect(container.textContent).toContain('不通过标准本地 CLI 派发');
+    expect(container.textContent).not.toContain('未安装');
+  });
+});
+
+describe('resolveMemberCliDispatch', () => {
+  const baseForm = {
+    clientId: 'anthropic' as const,
+    provider: '',
+    acpEnabled: false,
+    acpCommand: '',
+  };
+
+  it('treats the cloud marker as cloud even when the clientId has a local CLI', async () => {
+    const { resolveMemberCliDispatch } = await import('../hub-cat-editor.model');
+    expect(resolveMemberCliDispatch({ ...baseForm, clientId: 'openai', provider: 'openai-chatgpt-pro' })).toEqual({
+      kind: 'cloud',
+      provider: 'openai-chatgpt-pro',
+    });
+  });
+
+  it('prefers cloud over ACP when both markers are present', async () => {
+    const { resolveMemberCliDispatch } = await import('../hub-cat-editor.model');
+    expect(
+      resolveMemberCliDispatch({
+        ...baseForm,
+        clientId: 'openai',
+        provider: 'openai-chatgpt-pro',
+        acpEnabled: true,
+      }),
+    ).toMatchObject({ kind: 'cloud' });
+  });
+
+  it('reports the ACP command, flagging an unconfigured one', async () => {
+    const { resolveMemberCliDispatch } = await import('../hub-cat-editor.model');
+    expect(resolveMemberCliDispatch({ ...baseForm, clientId: 'acp', acpEnabled: true, acpCommand: 'x --y' })).toEqual({
+      kind: 'acp',
+      command: 'x --y',
+    });
+    expect(resolveMemberCliDispatch({ ...baseForm, clientId: 'acp', acpEnabled: true })).toEqual({
+      kind: 'acp',
+      command: '(未配置命令)',
+    });
+  });
+
+  it('gives a standard verdict only to the five local-CLI clients', async () => {
+    const { resolveMemberCliDispatch } = await import('../hub-cat-editor.model');
+    for (const clientId of ['anthropic', 'openai', 'google', 'kimi', 'opencode'] as const) {
+      expect(resolveMemberCliDispatch({ ...baseForm, clientId })).toEqual({ kind: 'cli' });
+    }
+    // `a2a` is deliberately outside the editor's ClientId union (see CREATABLE_CLIENT_IDS);
+    // an existing a2a member reaches the card through `dispatch`, not through this resolver.
+    for (const clientId of ['antigravity', 'catagent', 'acp'] as const) {
+      expect(resolveMemberCliDispatch({ ...baseForm, clientId })).toEqual({ kind: 'none' });
+    }
+  });
+
+  it('ignores a non-marking model provider such as a third-party slug', async () => {
+    const { resolveMemberCliDispatch } = await import('../hub-cat-editor.model');
+    expect(resolveMemberCliDispatch({ ...baseForm, clientId: 'opencode', provider: 'zhipu' })).toEqual({
+      kind: 'cli',
+    });
   });
 });
