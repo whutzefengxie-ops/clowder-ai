@@ -239,23 +239,46 @@ if (Test-Path $redisBin) {
     }
     # Pin the Redis release. This used to follow releases/latest, which silently
     # changed the bundled Redis version between builds — it had already advanced
-    # to the 8.x line while the macOS build stayed on 7.4.1. The pin lives in
-    # desktop/runtime-manifest.json so there is exactly one place to change it.
+    # to the 8.x line while the macOS build stayed on 7.4.1.
+    #
+    # Both the version and the asset-name shape belong to the manifest, and both
+    # are read through the manifest reader so this script goes through
+    # validateRuntimeManifest like the macOS build and the CLI do. Reading the
+    # version with ConvertFrom-Json skipped that validation entirely, and composing
+    # the asset pattern from a literal suffix here meant that editing
+    # assetNameTemplate (with its unit test kept green) left this script looking
+    # for the old asset name — the same silent drift this manifest exists to stop.
     $manifestPath = Join-Path (Join-Path $ProjectRoot "desktop") "runtime-manifest.json"
     if (-not (Test-Path $manifestPath)) {
         Write-Err "Missing $manifestPath — the Redis pin cannot be resolved."
         Write-Err "Fix: restore desktop/runtime-manifest.json, which declares redis.win32.version."
         exit 1
     }
-    $redisVersion = (Get-Content $manifestPath -Raw | ConvertFrom-Json).redis.win32.version
-    if (-not $redisVersion) {
-        Write-Err "desktop/runtime-manifest.json does not declare redis.win32.version."
-        Write-Err "Fix: add redis.win32.version (e.g. \"8.10.1\") before rerunning this build."
+    $manifestReader = Join-Path (Join-Path $PSScriptRoot "lib") "read-runtime-manifest.mjs"
+    if (-not (Test-Path $manifestReader)) {
+        Write-Err "Missing $manifestReader — the Redis pin cannot be resolved."
+        Write-Err "Fix: restore desktop/scripts/lib/read-runtime-manifest.mjs."
         exit 1
     }
-    $assetPattern = "^Redis-" + [regex]::Escape($redisVersion) + "-Windows-x64-msys2\.zip$"
+    $redisVersionRaw = & node $manifestReader "redis.win32.version"
+    if ($LASTEXITCODE -ne 0 -or -not $redisVersionRaw) {
+        Write-Err "Could not read redis.win32.version from desktop/runtime-manifest.json (see the reason above)."
+        Write-Err "Fix: restore the redis.win32.version pin, then re-run this build."
+        exit 1
+    }
+    $redisVersion = "$redisVersionRaw".Trim()
+    $redisTemplateRaw = & node $manifestReader "redis.win32.assetNameTemplate"
+    if ($LASTEXITCODE -ne 0 -or -not $redisTemplateRaw) {
+        Write-Err "Could not read redis.win32.assetNameTemplate from desktop/runtime-manifest.json (see the reason above)."
+        Write-Err "Fix: restore redis.win32.assetNameTemplate, then re-run this build."
+        exit 1
+    }
+    # Only the {version} substitution happens here. The manifest validator rejects a
+    # template without that placeholder, so the name shape still has one owner.
+    $redisAssetName = "$redisTemplateRaw".Trim().Replace("{version}", $redisVersion)
+    $assetPattern = "^" + [regex]::Escape($redisAssetName) + "$"
     $releaseApi = "https://api.github.com/repos/redis-windows/redis-windows/releases/tags/$redisVersion"
-    Write-Host "  Pinned Redis $redisVersion (desktop/runtime-manifest.json)" -ForegroundColor Gray
+    Write-Host "  Pinned Redis $redisVersion asset $redisAssetName (desktop/runtime-manifest.json)" -ForegroundColor Gray
     # P1-3: Retry up to 3 times, then fail-closed in CI (release builds must include Redis).
     $redisDownloaded = $false
     for ($redisAttempt = 1; $redisAttempt -le 3; $redisAttempt++) {

@@ -154,8 +154,11 @@ bold "Step 3/6 — Bundle Node.js portable (arm64 + x64)"
 # matches the bundled runtime. Same rationale as the Windows build.
 BUILD_NODE_VERSION="$(node --version 2>/dev/null || echo '')"
 if [[ -z "$BUILD_NODE_VERSION" ]]; then
-  warn "node not on PATH; defaulting to v24.16.0"
-  BUILD_NODE_VERSION="v24.16.0"
+  # Never guess. A hardcoded fallback here is the same defect the Windows build
+  # had: the bundled portable Node must match the Node that compiled the native
+  # modules (better-sqlite3, sqlite-vec, sharp), so a wrong guess ships a DMG
+  # whose API dies on load with NODE_MODULE_VERSION errors.
+  die "node not on PATH. Why: the bundled portable Node must match the Node that compiled the native modules (better-sqlite3 / sqlite-vec / sharp); defaulting to a guessed version ships a DMG whose API cannot load them. Fix: install Node >= $(node "${SCRIPT_DIR}/lib/read-runtime-manifest.mjs" node.minMajor) and re-run this build."
 fi
 BUILD_NODE_MAJOR="${BUILD_NODE_VERSION#v}"
 BUILD_NODE_MAJOR="${BUILD_NODE_MAJOR%%.*}"

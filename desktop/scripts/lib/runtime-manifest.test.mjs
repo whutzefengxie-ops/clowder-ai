@@ -255,4 +255,44 @@ describe('runtime-manifest: consistency with the rest of the repo', () => {
       `desktop/README.md should state the Node requirement as >= ${major}`,
     );
   });
+
+  // The field and the script that needs it were once disconnected: the manifest
+  // declared `assetNameTemplate`, nothing but a unit test read it, and the Windows
+  // build composed the pattern from its own literal. Renaming the upstream asset
+  // then meant editing the manifest AND the script — and editing only the manifest
+  // kept every test green while the build kept asking for the old name. These two
+  // assertions are what make "one source of truth" checkable rather than claimed.
+  it('has build-desktop.ps1 take the Windows asset pattern from the manifest', () => {
+    const source = readRepoFile(path.join('desktop', 'scripts', 'build-desktop.ps1'));
+
+    assert.doesNotMatch(
+      source,
+      /Windows-x64-msys2/,
+      'build-desktop.ps1 must not carry its own copy of the Redis asset-name shape; read redis.win32.assetNameTemplate',
+    );
+    assert.match(
+      source,
+      /assetNameTemplate/,
+      'build-desktop.ps1 should read the asset-name template from the manifest',
+    );
+    assert.match(
+      source,
+      /read-runtime-manifest\.mjs/,
+      'build-desktop.ps1 should read through the manifest reader, so validateRuntimeManifest applies to it',
+    );
+  });
+
+  it('has build-mac.sh fail closed when the build host has no Node', () => {
+    const source = readRepoFile(path.join('desktop', 'scripts', 'build-mac.sh'));
+
+    // It used to warn and substitute a hardcoded version, which is the same defect
+    // the Windows build had: the bundled Node must match the Node that compiled the
+    // native modules, so a guess ships a DMG whose API dies on load.
+    assert.doesNotMatch(
+      source,
+      /defaulting to v\d/,
+      'build-mac.sh must not default to a hardcoded Node version when node is missing',
+    );
+    assert.match(source, /die "node not on PATH/, 'build-mac.sh should die when node is not on PATH');
+  });
 });
