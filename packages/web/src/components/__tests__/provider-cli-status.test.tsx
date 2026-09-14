@@ -173,4 +173,32 @@ describe('ProviderCliStatus', () => {
     expect(refreshCall).toBeTruthy();
     expect(refreshCall?.[1]).toMatchObject({ method: 'POST' });
   });
+
+  it('keeps the previous result on screen while re-detecting', async () => {
+    // Regression guard for the production-build failure on this component's refresh button:
+    // gating it on `phase === 'loading'` was unreachable dead code (TS2367). Results must stay
+    // readable during a re-detect instead of collapsing back to the loading paragraph.
+    apiFetchMock.mockResolvedValueOnce(okResponse([provider()]));
+    await renderAndDetect();
+    expect(container.textContent).toContain('已安装');
+
+    let release: () => void = () => {};
+    apiFetchMock.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = () => resolve(okResponse([provider()]));
+        }),
+    );
+    await clickButton('重新检测');
+
+    const refreshButton = [...container.querySelectorAll('button')].find((el) => el.textContent?.includes('重新检测'));
+    expect(refreshButton?.disabled).toBe(true);
+    expect(container.textContent).toContain('已安装');
+    expect(container.textContent).not.toContain('正在检测本机已安装的 CLI');
+
+    await act(async () => {
+      release();
+    });
+    expect(refreshButton?.disabled).toBe(false);
+  });
 });

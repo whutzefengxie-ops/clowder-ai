@@ -50,9 +50,18 @@ const ACTION_BUTTON_CLASS =
 export function ProviderCliStatus({ clientId }: ProviderCliStatusProps) {
   const [phase, setPhase] = useState<Phase>('idle');
   const [providers, setProviders] = useState<ProviderAvailability[] | null>(null);
+  // Kept separate from `phase` on purpose: a re-detect must not blank the results the user is
+  // already reading. `phase === 'loading'` is unreachable once results are on screen, so
+  // gating the button on it was both a dead branch and a TypeScript error (TS2367) under the
+  // production build.
+  const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async (options: { refresh?: boolean } = {}) => {
-    setPhase('loading');
+    if (options.refresh) {
+      setRefreshing(true);
+    } else {
+      setPhase('loading');
+    }
     try {
       const res = options.refresh
         ? await apiFetch('/api/clients/refresh', { method: 'POST' })
@@ -65,6 +74,8 @@ export function ProviderCliStatus({ clientId }: ProviderCliStatusProps) {
       // Availability is advisory — an unreachable endpoint must not look like "not installed".
       setProviders(null);
       setPhase('failed');
+    } finally {
+      if (options.refresh) setRefreshing(false);
     }
   }, []);
 
@@ -98,7 +109,7 @@ export function ProviderCliStatus({ clientId }: ProviderCliStatusProps) {
         <button
           type="button"
           onClick={() => void load({ refresh: true })}
-          disabled={phase === 'loading'}
+          disabled={refreshing}
           className={ACTION_BUTTON_CLASS}
         >
           重新检测
