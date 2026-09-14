@@ -624,9 +624,13 @@ describe('tryCliProbe (unit)', () => {
     assert.equal(result, null, 'agy is currently unprobeable');
   });
 
-  test('gemini stays probeable so a legacy google install is still verified', async () => {
-    // The wizard now sends the binary that actually resolved, so a machine carrying only the
-    // legacy CLI must keep reaching a real probe instead of falling through to "skipped".
+  test('gemini: has a probe spec — but that does not prove a google member will run', async () => {
+    // Kept as a fact about the probe table, NOT as evidence that a google member is verified.
+    // GeminiAgentService picks its binary from `GEMINI_ADAPTER` (default `antigravity-cli` →
+    // `agy`) and never reads the member's `cli.command`, so on a machine carrying only `gemini`
+    // a green probe here would certify a binary the member does not spawn. The wizard therefore
+    // sends google's canonical command (`agy`), which has no spec, and the connectivity step
+    // reports "unverified" rather than a pass.
     const { tryCliProbe } = await import('../dist/routes/first-run-quest.js');
     const result = await tryCliProbe('gemini', { spawnFn: createMockSpawn({ stdout: 'pong' }) });
     assert.ok(result, 'gemini must have a probe spec');
