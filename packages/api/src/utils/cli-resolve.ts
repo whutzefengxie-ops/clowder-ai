@@ -29,13 +29,26 @@ export function isExecutableFileAt(path: string): boolean {
 /**
  * Absolute path pinned for this command by its `CAT_<CLIENT>_PATH` escape hatch, if set.
  *
- * The env var name comes from the descriptor registry, so there is no second command-name table
- * here. Before this existed, only the availability probe read these variables, which made them a
- * false guarantee: setting one turned the probe green (and silenced the missing-CLI guidance)
- * while the launch path still resolved by PATH and failed.
+ * Only the client's **canonical** command (`defaultCli.command`) can be pinned. A pin answers
+ * "which binary should this client run", never "does this other candidate exist" — two different
+ * questions in this codebase:
+ *
+ *  - kimi's service uses `resolveCliCommand('kimi-cli')` as a *legacy discriminator* (`isLegacy`,
+ *    `isKimiNativeL0ChannelAvailable`). Letting a pin answer for `kimi-cli` pinned the discriminator
+ *    to legacy forever, so pointing `CAT_KIMI_PATH` at the modern `kimi` made the service launch
+ *    that binary with the legacy argument set and drop the native `--agent-file` L0 channel.
+ *  - `commands[0]` is the wrong field to key on for the same reason: it is the *detection* candidate
+ *    order, and for kimi it is the legacy name.
+ *
+ * The env var name still comes from the descriptor registry, so there is no second name table here.
+ * Before this existed, only the availability probe read these variables, which made them a false
+ * guarantee: setting one turned the probe green (and silenced the missing-CLI guidance) while the
+ * launch path still resolved by PATH and failed.
  */
 function pinnedPathFor(command: string): string | null {
-  const envVar = getClientDescriptorByCommand(command)?.pathEnvVar;
+  const descriptor = getClientDescriptorByCommand(command);
+  if (!descriptor || command !== descriptor.defaultCli.command) return null;
+  const envVar = descriptor.pathEnvVar;
   if (!envVar) return null;
   const raw = process.env[envVar]?.trim();
   return raw ? raw : null;

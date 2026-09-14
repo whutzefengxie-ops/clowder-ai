@@ -868,7 +868,7 @@ export const ENV_VARS: EnvDefinition[] = [
     name: 'CAT_ANTHROPIC_PATH',
     defaultValue: '(未设置)',
     description:
-      '把 Claude CLI 固定到指定二进制路径。可用性探测与成员启动都读取它；路径无效时视为"未找到"而不回退到 PATH，避免启动到非预期二进制',
+      '把 Claude CLI 固定到指定二进制路径。可用性探测与标准 CLI 启动路径都读取它；路径无效时视为"未找到"而不回退到 PATH。注意：ACP 与 Claude 后台 carrier 在解析失败时会退回按裸命令名尝试，这两条路径仍可能走 PATH',
     category: 'cli',
     sensitive: false,
     restartRequired: true,
