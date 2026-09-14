@@ -70,14 +70,19 @@ describe('runtime-manifest: the shipped manifest', () => {
     assert.equal(divergence.id, REDIS_DIVERGENCE_ID);
   });
 
-  it('records the divergence as a decision, not as an open question', () => {
+  it('marks the divergence as pending maintainer decision, not as settled', () => {
     const entry = MANIFEST.knownDivergence.find((item) => item.id === REDIS_DIVERGENCE_ID);
 
-    // A divergence that is merely tolerated rots into an accident. The owner
-    // reviewed it and chose to keep it, so that outcome is recorded here.
-    assert.ok(entry.decision, 'the accepted decision must be written down');
-    assert.equal(entry.owner, undefined, 'there should be no unassigned owner left behind');
-    assert.equal(entry.decisionNeeded, undefined, 'the open question must be resolved, not left open');
+    // An earlier revision of this file recorded the divergence as decided and
+    // cited a bare "#11". That number means different things in different
+    // repositories, so it was not evidence of any decision — nobody here has
+    // the authority to settle a cross-platform data-format question anyway.
+    // The honest state is "declared, pinned, awaiting the maintainer".
+    assert.equal(entry.status, 'pending_maintainer_decision');
+    assert.equal(entry.decision, undefined, 'no decision has been made, so none may be recorded');
+    assert.equal(entry.decidedIn, undefined, 'with no decision there is no provenance to cite');
+    assert.ok(entry.proposal, 'a pending item must still say what we propose');
+    assert.ok(entry.riskOfUnifying, 'and why unifying is not a mechanical change');
   });
 });
 
@@ -144,6 +149,41 @@ describe('runtime-manifest: validator rejects incoherent manifests', () => {
     delete manifest.redis.win32.version;
 
     assert.throws(() => redisVersionFor(manifest, 'win32'), /no Redis version for platform "win32"/);
+  });
+
+  // Provenance is only provenance if a reader can resolve it. "#11" cannot:
+  // clowder-ai#11 and a fork's PR #11 are different objects, and an upstream
+  // reviewer caught exactly this in a shipped decision record.
+  it('REJECTS a decision cited by bare number', () => {
+    for (const bad of ['#11', 'PR #11', '11', 'see the linked PR']) {
+      const manifest = clone();
+      manifest.knownDivergence[0].decision = 'keep the pins';
+      manifest.knownDivergence[0].decidedIn = bad;
+
+      assert.throws(
+        () => validateRuntimeManifest(manifest),
+        /bare issue or PR number resolves differently/,
+        `reference: ${bad}`,
+      );
+    }
+  });
+
+  it('ACCEPTS a repository-qualified decision reference', () => {
+    for (const good of ['zts212653/clowder-ai#123', 'https://github.com/zts212653/clowder-ai/pull/123']) {
+      const manifest = clone();
+      manifest.knownDivergence[0].decision = 'keep the pins';
+      manifest.knownDivergence[0].decidedIn = good;
+
+      assert.equal(validateRuntimeManifest(manifest), manifest, `reference: ${good}`);
+    }
+  });
+
+  it('does not require provenance for an entry that declares no decision', () => {
+    const manifest = clone();
+    assert.equal(manifest.knownDivergence[0].decision, undefined);
+    delete manifest.knownDivergence[0].decidedIn;
+
+    assert.equal(validateRuntimeManifest(manifest), manifest);
   });
 });
 

@@ -98,6 +98,29 @@ function assertWindowsAssetTemplate(manifest) {
 }
 
 /**
+ * A recorded decision must be verifiable by a reader who only has THIS repo.
+ *
+ * A bare "#123" resolves differently in every repository — clowder-ai#11 is not
+ * a fork's PR #11 — so it is not provenance at all. This rule exists because
+ * exactly that mistake shipped once and was caught in upstream review.
+ */
+function assertDivergenceProvenance(manifest) {
+  for (const entry of manifest.knownDivergence ?? []) {
+    if (!entry || typeof entry !== 'object' || !entry.decision) continue;
+
+    const reference = String(entry.decidedIn ?? '');
+    const repoQualified = /^https?:\/\//i.test(reference) || /^[\w.-]+\/[\w.-]+#\d+$/.test(reference);
+    if (!repoQualified) {
+      fail(
+        `runtime-manifest.json records a decision for "${entry.id}" with decidedIn ${JSON.stringify(entry.decidedIn)}.`,
+        'a bare issue or PR number resolves differently in every repository, so no reader can verify the decision.',
+        'use a repository-qualified reference such as "owner/repo#123" or a full URL, or mark the entry as pending instead of decided.',
+      );
+    }
+  }
+}
+
+/**
  * Validate the manifest's shape.
  *
  * Deliberately does not check cross-platform divergence: that check needs
@@ -111,6 +134,7 @@ function validateRuntimeShape(manifest) {
   assertTargetsPresent(manifest);
   for (const target of manifest.targets) assertTargetHasRedis(manifest, target);
   assertWindowsAssetTemplate(manifest);
+  assertDivergenceProvenance(manifest);
   return manifest;
 }
 
