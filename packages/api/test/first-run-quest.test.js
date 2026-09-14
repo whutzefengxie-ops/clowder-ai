@@ -636,4 +636,30 @@ describe('tryCliProbe (unit)', () => {
     assert.ok(result, 'gemini must have a probe spec');
     assert.equal(result.ok, true);
   });
+
+  test('resolveProbeCliName: the descriptor decides, not the builtin account table', async () => {
+    // The account table's `google` entry is the ACCOUNT id `gemini`; the canonical binary is
+    // `agy`. Reading the account table as a CLI name is what made an omitted `client` field probe
+    // `gemini` for google — the same probe-target/executing-binary gap the web side was fixed for.
+    const { resolveProbeCliName } = await import('../dist/routes/first-run-quest.js');
+
+    assert.equal(resolveProbeCliName(undefined, 'google'), 'agy');
+    assert.equal(resolveProbeCliName(undefined, 'anthropic'), 'claude');
+    assert.equal(resolveProbeCliName(undefined, 'openai'), 'codex');
+    assert.equal(resolveProbeCliName(undefined, 'opencode'), 'opencode');
+    // kimi must be the canonical `kimi`, not `kimi-cli`: that is the detection candidate order,
+    // and `CLI_PROBE_SPECS` does not key on it.
+    assert.equal(resolveProbeCliName(undefined, 'kimi'), 'kimi');
+
+    // An explicit caller value still wins — the route must not second-guess the wizard.
+    assert.equal(resolveProbeCliName('gemini', 'google'), 'gemini');
+
+    // A known clientId with no probe spec no longer reads as "未知的 client"; it reaches the
+    // route's skipped/unverified answer, which is the honest outcome (the client is known, only
+    // its probe is missing).
+    assert.equal(resolveProbeCliName(undefined, 'acp'), 'acp');
+
+    // Unknown clientId keeps the previous contract.
+    assert.equal(resolveProbeCliName(undefined, 'not-a-client'), null);
+  });
 });

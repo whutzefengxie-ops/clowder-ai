@@ -269,15 +269,7 @@ export type {
 export type { CatAlternative, CatRoutingError } from './cat-routing.js';
 // F212: CLI error diagnostics (cross-package data contract; classifier/sanitizer impl stays in api)
 export type { CliActiveWriterRecoveryState, CliDiagnostics, CliErrorReasonCode } from './cli-diagnostics.js';
-export type {
-  ClientDescriptor,
-  ClientProbeSpec,
-  ClientToolId,
-  InstallHint,
-  ProviderAvailability,
-  ProviderAvailabilityReport,
-  ProviderAvailabilityStatus,
-} from './client-descriptor.js';
+export type { ClientDescriptor, ClientProbeSpec, ClientToolId, InstallHint } from './client-descriptor.js';
 // Provider/client descriptor registry — single source of truth for ClientId → CLI mapping
 export {
   CLIENT_DESCRIPTORS,
@@ -1295,6 +1287,13 @@ export type {
   ThreadProposal,
 } from './proposal.js';
 export { suggestedReportingModeForWorkMode } from './proposal.js';
+// Provider availability — the API↔web wire contract, kept separate from the registry so that
+// registry module stays inside the repo's file-size limit.
+export type {
+  ProviderAvailability,
+  ProviderAvailabilityReport,
+  ProviderAvailabilityStatus,
+} from './provider-availability.js';
 export {
   isProviderSemanticEvent,
   normalizeThreadGoalObjective,
