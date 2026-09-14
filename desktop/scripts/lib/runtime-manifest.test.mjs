@@ -282,7 +282,7 @@ describe('runtime-manifest: consistency with the rest of the repo', () => {
     );
   });
 
-  it('has build-mac.sh fail closed when the build host has no Node', () => {
+  it('has build-mac.sh fail closed on the host Node, matching the Windows rule', () => {
     const source = readRepoFile(path.join('desktop', 'scripts', 'build-mac.sh'));
 
     // It used to warn and substitute a hardcoded version, which is the same defect
@@ -294,5 +294,38 @@ describe('runtime-manifest: consistency with the rest of the repo', () => {
       'build-mac.sh must not default to a hardcoded Node version when node is missing',
     );
     assert.match(source, /die "node not on PATH/, 'build-mac.sh should die when node is not on PATH');
+
+    // The first version of that message asked node to read the required major — on
+    // the one branch where node is by definition absent. It printed
+    // "install Node >=  " plus a "command not found". A fix that needs the very
+    // thing it is telling you to install is not a fix.
+    assert.doesNotMatch(
+      source,
+      /die\s+"[^"]*\$\(node\s/,
+      'a failure message must not need node to describe how to fix the missing node',
+    );
+
+    // And the floor has to be enforced, not merely mentioned: the Windows build
+    // throws below engines.node, and a host that is too old bundles a portable Node
+    // this project does not support.
+    assert.match(
+      source,
+      /-lt "\$REQUIRED_NODE_MAJOR"/,
+      'build-mac.sh should compare the host Node major against the declared floor',
+    );
+    // `[[ 22 -lt "not-a-number" ]]` prints an arithmetic error and evaluates FALSE,
+    // so without this the gate would skip itself and continue — fail-open. The
+    // manifest reader rejects a non-numeric node.minMajor, but the comparison must
+    // not depend on that guarantee to stay safe.
+    assert.match(
+      source,
+      /\[\[ "\$REQUIRED_NODE_MAJOR" =~ \^\[0-9\]\+\$ \]\]/,
+      'the floor must be validated as numeric before it is compared',
+    );
+    assert.match(
+      source,
+      /read-runtime-manifest\.mjs" node\.minMajor/,
+      'the floor should come from the manifest, which the test above keeps equal to package.json engines.node',
+    );
   });
 });

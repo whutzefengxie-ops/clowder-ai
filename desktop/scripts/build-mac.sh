@@ -8,7 +8,7 @@
 #
 # Prerequisites on the build machine:
 #   - macOS 13+ (Xcode Command Line Tools: xcode-select --install)
-#   - pnpm, node (any LTS), bash, curl, tar, make
+#   - pnpm, node (the major package.json engines.node requires), bash, curl, tar, make
 #   - For x64 Redis on Apple Silicon: Rosetta 2 (softwareupdate --install-rosetta)
 #
 # Usage:
@@ -152,17 +152,30 @@ fi
 bold "Step 3/6 — Bundle Node.js portable (arm64 + x64)"
 # Detect build-machine Node version so native modules (better-sqlite3) ABI
 # matches the bundled runtime. Same rationale as the Windows build.
+#
+# The floor is enforced here, not just documented: the Windows build throws when
+# the host Node is below the declared minimum (lib/Resolve-BuildNode.ps1), and a
+# host that is too old bundles a portable Node this project does not support.
 BUILD_NODE_VERSION="$(node --version 2>/dev/null || echo '')"
 if [[ -z "$BUILD_NODE_VERSION" ]]; then
-  # Never guess. A hardcoded fallback here is the same defect the Windows build
-  # had: the bundled portable Node must match the Node that compiled the native
-  # modules (better-sqlite3, sqlite-vec, sharp), so a wrong guess ships a DMG
-  # whose API dies on load with NODE_MODULE_VERSION errors.
-  die "node not on PATH. Why: the bundled portable Node must match the Node that compiled the native modules (better-sqlite3 / sqlite-vec / sharp); defaulting to a guessed version ships a DMG whose API cannot load them. Fix: install Node >= $(node "${SCRIPT_DIR}/lib/read-runtime-manifest.mjs" node.minMajor) and re-run this build."
+  # Never guess a version, and never try to read the floor from this branch:
+  # node is precisely what is missing, so a command substitution here would
+  # print an empty requirement (plus "command not found") instead of the fix.
+  die "node not on PATH. Why: the bundled portable Node must match the Node that compiled the native modules (better-sqlite3 / sqlite-vec / sharp), so a guessed version ships a DMG whose API cannot load them. Fix: install the Node major declared in package.json engines.node, then re-run this build."
 fi
 BUILD_NODE_MAJOR="${BUILD_NODE_VERSION#v}"
 BUILD_NODE_MAJOR="${BUILD_NODE_MAJOR%%.*}"
-echo "  Build-machine Node: ${BUILD_NODE_VERSION} (major=${BUILD_NODE_MAJOR})"
+REQUIRED_NODE_MAJOR="$(node "${SCRIPT_DIR}/lib/read-runtime-manifest.mjs" node.minMajor)" \
+  || die "Could not read node.minMajor from desktop/runtime-manifest.json (see the error above)"
+# `[[ 22 -lt "not-a-number" ]]` prints an arithmetic error and evaluates false, so
+# an unvalidated floor would skip the check and let the build continue. Keep the
+# gate fail-closed even if the reader's guarantee ever changes.
+[[ "$REQUIRED_NODE_MAJOR" =~ ^[0-9]+$ ]] \
+  || die "desktop/runtime-manifest.json node.minMajor is not a number (got \"${REQUIRED_NODE_MAJOR}\"). Why: the host Node floor cannot be compared against a non-numeric value. Fix: set node.minMajor to a positive integer (e.g. 24) in desktop/runtime-manifest.json."
+if [[ "$BUILD_NODE_MAJOR" -lt "$REQUIRED_NODE_MAJOR" ]]; then
+  die "build-machine Node ${BUILD_NODE_VERSION} is older than the >=${REQUIRED_NODE_MAJOR} required by desktop/runtime-manifest.json node.minMajor (the same floor package.json engines.node declares). Why: the bundled runtime would ship a Node version this project does not support, and the native modules were compiled against a newer ABI. Fix: upgrade to Node >= ${REQUIRED_NODE_MAJOR} and re-run this build."
+fi
+echo "  Build-machine Node: ${BUILD_NODE_VERSION} (major=${BUILD_NODE_MAJOR}, required >=${REQUIRED_NODE_MAJOR})"
 
 download_node() {
   local arch="$1"  # arm64 | x64
