@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, win32 } from 'node:path';
 import { beforeEach, describe, it } from 'node:test';
 
 describe('FlatScanner', () => {
@@ -93,16 +93,41 @@ describe('FlatScanner', () => {
     assert.equal(scanner.discover(tmpDir).length, 1);
   });
 
-  it('skips worktrees/ directories (container-project duplicate regression)', () => {
+  // Upstream review on #1451: the skip must be bound to a real Git boundary, not to a directory
+  // name — a plain `worktrees/` directory holds ordinary documents and must still be indexed.
+  it('indexes a plain worktrees/ directory that has no Git marker (review fix)', () => {
     writeFileSync(join(tmpDir, 'doc.md'), '# Doc');
-    mkdirSync(join(tmpDir, 'worktrees', 'feat-x', 'docs'), { recursive: true });
-    writeFileSync(join(tmpDir, 'worktrees', 'feat-x', 'docs', 'dup.md'), '# Dup');
+    mkdirSync(join(tmpDir, 'worktrees'));
+    writeFileSync(join(tmpDir, 'worktrees', 'guide.md'), '# Guide');
+
+    const results = new FlatScanner('test:docs').discover(tmpDir);
+
+    assert.equal(results.length, 2, 'a plain worktrees/ dir must not be silently dropped');
+    assert.ok(
+      results.some((r) => r.item.anchor === 'test:docs:doc/worktrees/guide'),
+      `expected the worktrees/guide anchor, got: ${results.map((r) => r.item.anchor).join(', ')}`,
+    );
+  });
+
+  // Matrix requested by the review: plain worktrees dir indexed / real worktree skipped from the
+  // parent root / the same worktree still indexed when bound directly.
+  it('matrix: real worktree root is skipped from the parent but indexed when bound directly', () => {
+    writeFileSync(join(tmpDir, 'root.md'), '# Root');
+    mkdirSync(join(tmpDir, 'worktrees', 'wt', 'docs'), { recursive: true });
+    writeFileSync(join(tmpDir, 'worktrees', 'wt', '.git'), 'gitdir: ../../.git/worktrees/wt');
+    writeFileSync(join(tmpDir, 'worktrees', 'wt', 'docs', 'inner.md'), '# Inner');
 
     const scanner = new FlatScanner('test:docs');
-    const results = scanner.discover(tmpDir);
-
-    assert.equal(results.length, 1, 'worktrees/ must not be scanned');
-    assert.equal(results[0].item.anchor, 'test:docs:doc/doc');
+    assert.deepEqual(
+      scanner.discover(tmpDir).map((r) => r.item.sourcePath),
+      ['root.md'],
+      'the real worktree must not leak into the parent collection',
+    );
+    assert.deepEqual(
+      scanner.discover(join(tmpDir, 'worktrees', 'wt')).map((r) => r.item.sourcePath),
+      ['docs/inner.md'],
+      'the same worktree must still be indexable when it is the collection root',
+    );
   });
 
   it('does not descend into nested git repositories', () => {
@@ -122,6 +147,18 @@ describe('FlatScanner', () => {
 
     assert.equal(results.length, 1, 'only the root document should be discovered');
     assert.equal(results[0].item.anchor, 'test:docs:doc/doc');
+  });
+
+  // win32 contract: `path.relative` yields `\` on Windows, which used to defeat `exclude` matching
+  // and leak the separator into anchors (`doc/private\secret`) — cross-platform drift.
+  it('normalizes win32 relative paths before exclude matching and anchoring', async () => {
+    const { toPosixRelative, matchGlob } = await import('../../dist/domains/memory/FlatScanner.js');
+    const rel = win32.relative('C:\\project', 'C:\\project\\private\\secret.md');
+
+    assert.equal(rel, 'private\\secret.md', 'precondition: win32.relative emits backslashes');
+    assert.equal(matchGlob('private/**', rel), false, 'the raw win32 path escapes the exclude glob');
+    assert.equal(toPosixRelative(rel), 'private/secret.md');
+    assert.equal(matchGlob('private/**', toPosixRelative(rel)), true, 'normalized path must match');
   });
 
   it('respects depth limit of 10', () => {

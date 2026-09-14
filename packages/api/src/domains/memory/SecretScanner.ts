@@ -24,21 +24,18 @@ const CODE_FENCE_RE = /^\s{0,3}[`~]{3,}/;
 const PLACEHOLDER_RE = /EXAMPLE|PLACEHOLDER|YOUR[_-]|REPLACE|CHANGEME|xxx/i;
 
 /**
- * The entropy fallback only applies to a real assignment shape: the credential-ish key must sit in
- * key position — line start behind an optional list bullet, quote, `export`/`const`-style keyword,
- * or a dotted/namespaced prefix (`cfg.apiKey =`). Prose that merely *mentions* a key
- * (e.g. "（correlation key = messageId/taskId/…）") is documentation, not an assignment.
+ * The entropy fallback only runs when a credential-ish key sits in **key position** — i.e. it is the
+ * assignment target of the line, optionally behind a list bullet, quote, dotted/namespaced prefix
+ * (`cfg.apiKey =`) or a shell/PowerShell assignment keyword (`export`/`readonly`/`declare -x`/
+ * `$env:`). Prose that merely *mentions* a key (e.g. "（correlation key = messageId/taskId/…）")
+ * is documentation, not an assignment, and must not be reported.
+ *
+ * This gate is deliberately key-side only: a value-side exemption would have to excuse real
+ * high-entropy assignments (a passphrase like "CorrectHorse/BatteryStaple/…" is indistinguishable
+ * from an identifier enumeration), so no value shape is blanket-exempted.
  */
 const ASSIGNMENT_KEY_RE =
-  /^[\s>*\-•]*(?:(?:export|const|let|var|set)\s+)?(?:[\w$]+(?:\.[\w$]+|\[[^\]]*\])*\.)?["'`]?[\w.-]*(?:key|token|secret|password|credential|auth)[\w.-]*["'`]?\*{0,2}\s*[:=]/i;
-
-/** `/`, `.`, `-` or `_`-joined runs of identifier/path segments (`messageId/taskId/sourceTool`, `docs/eval-domains/publish`) are enumerations, not secrets. */
-const IDENTIFIER_CHAIN_RE = /^[A-Za-z][A-Za-z0-9_-]*(?:[/.][A-Za-z][A-Za-z0-9_-]*)+$/;
-
-function isIdentifierEnumeration(value: string): boolean {
-  // Only digit-free chains qualify: real high-entropy secrets almost always carry digits.
-  return IDENTIFIER_CHAIN_RE.test(value) && !/\d/.test(value);
-}
+  /^[\s>*\-•]*(?:(?:export|readonly|declare|typeset|local|set|env)(?:\s+-{1,2}[A-Za-z][\w-]*)*\s+|\$env:|\$\{env:)?(?:[\w$]+(?:\.[\w$]+|\[[^\]]*\])*\.)?["'`]?[\w.-]*(?:key|token|secret|password|credential|auth)[\w.-]*["'`]?\*{0,2}\s*[:=]/i;
 
 export class SecretScanner {
   static scan(content: string, filePath: string): SecretFinding[] {
@@ -71,12 +68,7 @@ export class SecretScanner {
 
       if (!found && ASSIGNMENT_KEY_RE.test(line)) {
         const valueMatch = line.match(/[:=]\s*["']?([A-Za-z0-9_\-/.+=]{32,})["']?/);
-        if (
-          valueMatch &&
-          !PLACEHOLDER_RE.test(valueMatch[1]) &&
-          !isIdentifierEnumeration(valueMatch[1]) &&
-          shannonEntropy(valueMatch[1]) > 3.5
-        ) {
+        if (valueMatch && !PLACEHOLDER_RE.test(valueMatch[1]) && shannonEntropy(valueMatch[1]) > 3.5) {
           findings.push({
             type: 'high-entropy-secret',
             file: filePath,

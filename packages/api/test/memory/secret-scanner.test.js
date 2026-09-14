@@ -48,14 +48,42 @@ describe('SecretScanner', () => {
     assert.equal(SecretScanner.scan(content, 'F236.md').length, 0);
   });
 
-  it('does not flag identifier enumerations even in key position (F236 regression)', () => {
+  // Upstream review on #1451 (issue #1450): once a credential key sits in explicit assignment
+  // position, no value shape may be blanket-exempted — a real passphrase has exactly the shape of
+  // an identifier enumeration. The F236 false positive is fixed by the key-position gate above,
+  // not by a value-side exemption, so these chains are reported by design.
+  it('flags a digit-free identifier chain in explicit assignment position (reviewed tradeoff)', () => {
     const content = '- key = messageId/taskId/sourceTool/previewEventId\n';
-    assert.equal(SecretScanner.scan(content, 'notes.md').length, 0);
+    const findings = SecretScanner.scan(content, 'notes.md');
+    assert.equal(findings.length, 1);
+    assert.equal(findings[0].type, 'high-entropy-secret');
   });
 
-  it('does not flag path-like enumerations in key position', () => {
+  it('flags a digit-free path chain in explicit assignment position (reviewed tradeoff)', () => {
     const content = 'auth = docs/harness-feedback/eval-domains/publish\n';
-    assert.equal(SecretScanner.scan(content, 'notes.md').length, 0);
+    assert.equal(SecretScanner.scan(content, 'notes.md').length, 1);
+  });
+
+  it('flags a digit-free slash-separated passphrase (review counter-example)', () => {
+    const content = 'password = "CorrectHorse/BatteryStaple/PurpleCloud/Sunshine"\n';
+    const findings = SecretScanner.scan(content, 'env.md');
+    assert.equal(findings.length, 1);
+    assert.equal(findings[0].type, 'high-entropy-secret');
+  });
+
+  it('flags shell and PowerShell assignment forms (review counter-examples)', () => {
+    const forms = [
+      '$env:API_TOKEN = "Kj8sLq/2mNp9Rt/4vWx7YzAbCdEfGhIjKlMn"',
+      'readonly API_TOKEN="Kj8sLq/2mNp9Rt/4vWx7YzAbCdEfGhIjKlMn"',
+      'declare -x API_TOKEN="Kj8sLq/2mNp9Rt/4vWx7YzAbCdEfGhIjKlMn"',
+      'export API_TOKEN="Kj8sLq/2mNp9Rt/4vWx7YzAbCdEfGhIjKlMn"',
+      '  API_TOKEN="Kj8sLq/2mNp9Rt/4vWx7YzAbCdEfGhIjKlMn"',
+    ];
+    for (const form of forms) {
+      const findings = SecretScanner.scan(`${form}\n`, 'env.md');
+      assert.equal(findings.length, 1, `must flag: ${form}`);
+      assert.equal(findings[0].type, 'high-entropy-secret');
+    }
   });
 
   it('still flags assignment-style high-entropy secrets containing separators', () => {
