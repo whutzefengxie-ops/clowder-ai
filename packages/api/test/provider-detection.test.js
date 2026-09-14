@@ -13,6 +13,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { mock, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { CLIENT_DESCRIPTORS } from '@cat-cafe/shared';
 
 const { detectProviderAvailability } = await import(
   '../dist/domains/cats/services/agents/providers/provider-detection.js'
@@ -42,17 +43,38 @@ test('resolves a CLI on PATH and reports where it came from', async () => {
   assert.match(openai.reason, /未在本机找到/);
 });
 
-test('a missing-CLI reason names the command its escape hatch can actually pin', async () => {
+test('a missing-CLI reason pins exactly the canonical command, for every client', async () => {
   const resolveCommand = mock.fn(() => null);
   const report = await detectProviderAvailability({ resolveCommand, env: {} });
 
-  const google = byId(report, 'google');
-  assert.equal(google.status, 'missing');
-  assert.match(google.reason, /agy \/ gemini/, 'the probe lists every candidate it checked');
-  // The pin answers for the canonical command only. Promising a bare "point it at the binary"
-  // would send a `GEMINI_ADAPTER=gemini-cli` operator to a variable that cannot fix the launch
-  // (probe green, launch still fails) — the false guarantee this PR keeps having to remove.
-  assert.match(google.reason, /CAT_GOOGLE_PATH 指向 agy 二进制/);
+  const withPin = CLIENT_DESCRIPTORS.filter((descriptor) => descriptor.pathEnvVar);
+  assert.ok(withPin.length > 0, 'expected at least one client with a path escape hatch');
+  for (const descriptor of withPin) {
+    const reason = byId(report, descriptor.clientId).reason;
+    assert.ok(reason, `${descriptor.clientId} must explain the miss`);
+    assert.match(reason, /未在本机找到/);
+    assert.ok(
+      reason.includes(descriptor.commands.join(' / ')),
+      `${descriptor.clientId} must list every candidate it checked`,
+    );
+    // The pin answers for the canonical command only (cli-resolve.ts `pinnedPathFor`). A generic
+    // "point it at the binary" — or the canonical/alias pair reversed — would send a
+    // `GEMINI_ADAPTER=gemini-cli` / legacy-`kimi-cli` operator to a variable that cannot fix the
+    // launch (probe green, launch still fails). The phrase is asserted in full rather than by
+    // substring of the command name: `kimi` is a prefix of its own alias `kimi-cli`.
+    const promise = reason.slice(reason.lastIndexOf('或设置'));
+    assert.ok(
+      promise.includes(`${descriptor.pathEnvVar} 指向 ${descriptor.defaultCli.command} 二进制`),
+      `${descriptor.pathEnvVar} must be offered for ${descriptor.defaultCli.command}, got "${promise}"`,
+    );
+    for (const alias of descriptor.commands.filter((command) => command !== descriptor.defaultCli.command)) {
+      assert.equal(
+        promise.includes(alias),
+        false,
+        `${descriptor.pathEnvVar} must not be offered against alias ${alias} (got "${promise}")`,
+      );
+    }
+  }
 });
 
 test('an explicit path override wins and is reported as such', async () => {

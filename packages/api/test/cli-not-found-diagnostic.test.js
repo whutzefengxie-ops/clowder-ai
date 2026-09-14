@@ -11,7 +11,7 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { CLIENT_DESCRIPTORS } from '@cat-cafe/shared';
+import { CLIENT_DESCRIPTORS, installHintForCommand } from '@cat-cafe/shared';
 
 const { buildCliNotFoundDiagnostic } = await import('../dist/utils/cli-diagnostics.js');
 const { TRIGGERING_REASON_CODES } = await import('../dist/domains/cats/services/frustration/FrustrationDetector.js');
@@ -55,10 +55,13 @@ test('advertises the path escape hatch only for the command the pin can answer f
         false,
         `${descriptor.pathEnvVar} must not be offered for alias ${alias} — the pin cannot fix it`,
       );
+      // Suppressing the useless hint must not leave the alias without advice that works: it still
+      // has to carry its own install command (every alias, not just the one we happened to sample).
+      const install = installHintForCommand(alias, 'linux');
+      assert.ok(install, `${alias} should resolve an install hint`);
+      assert.ok(aliasHint.includes(install), `${alias} must still be told how to install itself`);
     }
   }
-  // The alias still gets advice that works.
-  assert.match(buildCliNotFoundDiagnostic('gemini', 'linux').publicHint, /@google\/gemini-cli/);
   // No env var exists for a command outside the descriptor registry, so none may be invented.
   const unknown = buildCliNotFoundDiagnostic('some-future-cli', 'linux');
   assert.equal(/CAT_/.test(unknown.publicHint), false);
