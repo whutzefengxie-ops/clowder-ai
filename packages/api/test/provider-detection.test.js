@@ -42,6 +42,19 @@ test('resolves a CLI on PATH and reports where it came from', async () => {
   assert.match(openai.reason, /未在本机找到/);
 });
 
+test('a missing-CLI reason names the command its escape hatch can actually pin', async () => {
+  const resolveCommand = mock.fn(() => null);
+  const report = await detectProviderAvailability({ resolveCommand, env: {} });
+
+  const google = byId(report, 'google');
+  assert.equal(google.status, 'missing');
+  assert.match(google.reason, /agy \/ gemini/, 'the probe lists every candidate it checked');
+  // The pin answers for the canonical command only. Promising a bare "point it at the binary"
+  // would send a `GEMINI_ADAPTER=gemini-cli` operator to a variable that cannot fix the launch
+  // (probe green, launch still fails) — the false guarantee this PR keeps having to remove.
+  assert.match(google.reason, /CAT_GOOGLE_PATH 指向 agy 二进制/);
+});
+
 test('an explicit path override wins and is reported as such', async () => {
   const resolveCommand = mock.fn(() => null);
   const report = await detectProviderAvailability({

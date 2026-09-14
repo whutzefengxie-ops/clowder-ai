@@ -11,6 +11,7 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { CLIENT_DESCRIPTORS } from '@cat-cafe/shared';
 
 const { buildCliNotFoundDiagnostic } = await import('../dist/utils/cli-diagnostics.js');
 const { TRIGGERING_REASON_CODES } = await import('../dist/domains/cats/services/frustration/FrustrationDetector.js');
@@ -33,10 +34,35 @@ test('carries the platform-appropriate install command', () => {
   assert.match(buildCliNotFoundDiagnostic('agy', 'darwin').publicHint, /install\.sh/);
 });
 
-test('names the path escape hatch without inventing one for unknown commands', () => {
-  assert.match(buildCliNotFoundDiagnostic('kimi', 'linux').publicHint, /CAT_<CLIENT>_PATH/);
+test('advertises the path escape hatch only for the command the pin can answer for', () => {
+  // `CAT_<CLIENT>_PATH` pins the client's canonical command (utils/cli-resolve.ts
+  // `pinnedPathFor`), so a fixed "set CAT_<CLIENT>_PATH" sentence sent alias failures
+  // (gemini under GEMINI_ADAPTER=gemini-cli, kimi-cli) to a variable that cannot fix them:
+  // the availability probe turns green because its override branch only reads the env var,
+  // while the launch path keeps resolving the alias through PATH and keeps failing.
+  const withPin = CLIENT_DESCRIPTORS.filter((descriptor) => descriptor.pathEnvVar);
+  assert.ok(withPin.length > 0, 'expected at least one client with a path escape hatch');
+  for (const descriptor of withPin) {
+    const canonicalHint = buildCliNotFoundDiagnostic(descriptor.defaultCli.command, 'linux').publicHint;
+    assert.ok(
+      canonicalHint.includes(descriptor.pathEnvVar),
+      `${descriptor.pathEnvVar} must be offered for its canonical command ${descriptor.defaultCli.command}`,
+    );
+    for (const alias of descriptor.commands.filter((command) => command !== descriptor.defaultCli.command)) {
+      const aliasHint = buildCliNotFoundDiagnostic(alias, 'linux').publicHint;
+      assert.equal(
+        aliasHint.includes(descriptor.pathEnvVar),
+        false,
+        `${descriptor.pathEnvVar} must not be offered for alias ${alias} — the pin cannot fix it`,
+      );
+    }
+  }
+  // The alias still gets advice that works.
+  assert.match(buildCliNotFoundDiagnostic('gemini', 'linux').publicHint, /@google\/gemini-cli/);
+  // No env var exists for a command outside the descriptor registry, so none may be invented.
   const unknown = buildCliNotFoundDiagnostic('some-future-cli', 'linux');
-  assert.match(unknown.publicHint, /CAT_<CLIENT>_PATH/);
+  assert.equal(/CAT_/.test(unknown.publicHint), false);
+  assert.match(unknown.publicHint, /PATH/);
   assert.equal(/undefined|\[object/.test(unknown.publicHint), false, 'no templating leftovers');
 });
 

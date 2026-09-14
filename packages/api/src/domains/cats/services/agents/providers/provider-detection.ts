@@ -48,7 +48,13 @@ export interface ProviderDetectionDeps {
 
 function reasonForMissing(descriptor: ClientDescriptor, installHint: string): string {
   const commands = descriptor.commands.join(' / ');
-  const escapeHatch = descriptor.pathEnvVar ? `，或设置 ${descriptor.pathEnvVar} 指向二进制` : '';
+  // The pin answers for the client's canonical command only (cli-resolve.ts `pinnedPathFor`), so
+  // name that command rather than promising a generic "point it at the binary": google's
+  // candidates are `agy` / `gemini`, but `CAT_GOOGLE_PATH` cannot make a failing `gemini`
+  // resolve. A generic sentence here would reproduce the probe-green/launch-fail guarantee.
+  const escapeHatch = descriptor.pathEnvVar
+    ? `，或设置 ${descriptor.pathEnvVar} 指向 ${descriptor.defaultCli.command} 二进制`
+    : '';
   return `${descriptor.label} CLI (${commands}) 未在本机找到。已检查 PATH 与常见安装目录。请运行 \`${installHint}\` 安装后重试${escapeHatch}。`;
 }
 

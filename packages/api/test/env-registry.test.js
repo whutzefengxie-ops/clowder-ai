@@ -131,15 +131,28 @@ describe('env-registry', () => {
     // verbatim via GET /api/config/env-summary, so a stale claim is a user-visible false guarantee.
     const aliased = CLIENT_DESCRIPTORS.filter((descriptor) => descriptor.pathEnvVar && descriptor.commands.length > 1);
     assert.ok(aliased.length > 0, 'expected at least one CLI client with candidate aliases');
+    const SCOPE_LOCUTION = '只对规范命令 ';
     for (const descriptor of aliased) {
       const def = ENV_VARS.find((v) => v.name === descriptor.pathEnvVar);
       assert.ok(def, `${descriptor.pathEnvVar} should be registered`);
-      assert.match(def.description, /只对规范命令/, `${def.name} must state that only the canonical command is pinned`);
+      const at = def.description.indexOf(SCOPE_LOCUTION);
+      assert.ok(at >= 0, `${def.name} must state which command the pin governs`);
+      // The scope clause is what sits between the locution and the first clause break. A bare
+      // substring check is not enough here: `kimi` is a prefix of the alias `kimi-cli`, so
+      // "只对规范命令 kimi-cli 生效" (the claim reversed) still contains "只对规范命令 kimi".
+      const rest = def.description.slice(at + SCOPE_LOCUTION.length);
+      const end = rest.search(/[；;：:。]/);
+      const scope = end === -1 ? rest : rest.slice(0, end);
       assert.ok(
-        def.description.includes(descriptor.defaultCli.command),
-        `${def.name} must name the canonical command it pins (${descriptor.defaultCli.command})`,
+        scope.includes(descriptor.defaultCli.command),
+        `${def.name}: scope clause must name the canonical command (${descriptor.defaultCli.command}), got "${scope}"`,
       );
       for (const alias of descriptor.commands.filter((command) => command !== descriptor.defaultCli.command)) {
+        assert.equal(
+          scope.includes(alias),
+          false,
+          `${def.name}: alias ${alias} must not be presented as the pin scope (got "${scope}")`,
+        );
         assert.ok(def.description.includes(alias), `${def.name} must name the uncovered candidate ${alias}`);
       }
     }

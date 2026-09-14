@@ -13,7 +13,7 @@
  */
 
 import type { CliActiveWriterRecoveryState, CliDiagnostics, CliErrorReasonCode } from '@cat-cafe/shared';
-import { installHintForCommand } from '@cat-cafe/shared';
+import { getClientDescriptorByCommand, installHintForCommand } from '@cat-cafe/shared';
 import { CLASSIFIER_PATTERNS } from './cli-error-patterns.js';
 import { sanitizeCliStderr } from './sanitize-cli-stderr.js';
 
@@ -159,9 +159,32 @@ const REASON_TEXT: Record<CliErrorReasonCode, { summary: string; hint: string }>
   },
   cli_not_found: {
     summary: 'CLI 未安装',
-    hint: '这台机器上没有找到该 CLI，所以还没有启动任何进程——不是你的额度或配置问题。按下面的安装命令装好后重试；也可以设置 CAT_<CLIENT>_PATH 环境变量把它固定到指定二进制路径。',
+    // The `CAT_<CLIENT>_PATH` escape hatch is appended by buildCliNotFoundDiagnostic, and only
+    // for the command the pin can actually answer for. Do not put it back in this constant:
+    // as a fixed sentence it also reached failures (gemini under GEMINI_ADAPTER=gemini-cli,
+    // kimi-cli) whose command the pin cannot fix — see pathEscapeHatchFor.
+    hint: '这台机器上没有找到该 CLI，所以还没有启动任何进程——不是你的额度或配置问题。',
   },
 };
+
+/**
+ * The `CAT_<CLIENT>_PATH` escape hatch, but only where it can actually help.
+ *
+ * `pinnedPathFor` (utils/cli-resolve.ts) returns the pin for the client's **canonical** command
+ * only. Advertising it unconditionally — which a fixed sentence in REASON_TEXT did — made the
+ * not-found hint worse than useless for candidate aliases: setting `CAT_GOOGLE_PATH` for a
+ * failing `gemini` (`GEMINI_ADAPTER=gemini-cli`) turns the availability probe green, because
+ * the probe's override branch only looks at the env var, while the launch path keeps resolving
+ * `gemini` through PATH and keeps failing. Same class of false guarantee this module's
+ * cli_not_found code exists to avoid.
+ */
+function pathEscapeHatchFor(command: string): string {
+  const descriptor = getClientDescriptorByCommand(command);
+  const envVar = descriptor?.pathEnvVar;
+  if (!envVar) return '';
+  if (descriptor.defaultCli.command !== command) return '';
+  return `也可以设置 ${envVar} 环境变量把它固定到指定二进制路径。`;
+}
 
 /**
  * Diagnostics for "the binary is not installed".
@@ -181,11 +204,16 @@ export function buildCliNotFoundDiagnostic(
 ): CliDiagnostics {
   const text = REASON_TEXT.cli_not_found;
   const hint = installHintForCommand(command, platform);
+  const escapeHatch = pathEscapeHatchFor(command);
+  const segments = [text.hint];
+  if (hint) segments.push(`安装命令：${hint}。`);
+  if (escapeHatch) segments.push(escapeHatch);
+  else if (!hint) segments.push('请把该 CLI 安装到 PATH 上后重试。');
   return {
     reasonCode: 'cli_not_found',
     publicSummary: `${command} CLI 未找到`,
     // Plain text only — the panel renders publicHint verbatim in a <span> (no markdown).
-    publicHint: hint ? `${text.hint}安装命令：${hint}` : text.hint,
+    publicHint: segments.join(''),
     debugRef: { command, signal: null },
   };
 }
