@@ -156,6 +156,42 @@ describe('SecretScanner', () => {
     }
   });
 
+  // A documentation link after a key-ish label must not be reported. Scanning the line for *any*
+  // `[:=]` let the `:` of `https:` supply a 32+ character "value", and a finding here means the
+  // whole collection is purged and the project is pinned to `failed`.
+  it('does not flag a key label followed by a documentation URL', () => {
+    const lines = [
+      'api_key: https://console.cloud.google.com/apis/credentials',
+      'token: https://github.com/settings/tokens/new',
+      'secret = https://example.com/a/very/long/path/to/some/resource',
+      'api_key = "short" # then https://example.com/a/very/long/path/here',
+    ];
+    for (const line of lines) {
+      assert.equal(SecretScanner.scan(`${line}\n`, 'docs.md').length, 0, `must not flag: ${line}`);
+    }
+  });
+
+  // The baseline gate was not anchored, so it reported assignments behind Markdown markers and
+  // preceding shell assignments; the anchored gate must keep them.
+  it('flags assignments behind markdown markers and preceding shell assignments', () => {
+    const value = 'Kj8sLq2mNp9Rt4vWx7YzAbCdEfGhIjKlMnOpQrSt';
+    const forms = [
+      `1. api_key = "${value}"`,
+      `1) api_key = "${value}"`,
+      `# api_key = "${value}"`,
+      `+ api_key = "${value}"`,
+      `- [ ] api_key = "${value}"`,
+      `- [x] api_key = "${value}"`,
+      `| api_key = "${value}" |`,
+      `FOO=1 API_TOKEN="${value}"`,
+    ];
+    for (const form of forms) {
+      const findings = SecretScanner.scan(`${form}\n`, 'env.md');
+      assert.equal(findings.length, 1, `must flag: ${form}`);
+      assert.equal(findings[0].type, 'high-entropy-secret');
+    }
+  });
+
   it('still flags assignment-style high-entropy secrets containing separators', () => {
     const content = 'token = "Kj8sLq/2mNp9Rt/4vWx7YzAbCdEfGhIjKlMn"\n';
     const findings = SecretScanner.scan(content, 'env.md');
