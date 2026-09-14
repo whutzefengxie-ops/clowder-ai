@@ -8,6 +8,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { afterEach, describe, it } from 'node:test';
+import { CLIENT_DESCRIPTORS } from '@cat-cafe/shared';
 import Fastify from 'fastify';
 import {
   buildEnvSummary,
@@ -121,6 +122,27 @@ describe('env-registry', () => {
     assert.ok(def, 'CONNECTOR_GATEWAY_AUTOSTART should be in registry');
     assert.doesNotMatch(def.description, /\.env/);
     assert.match(def.description, /启动进程环境|wrapper/);
+  });
+
+  it('scopes every CAT_<CLIENT>_PATH description to the command the pin actually answers for', () => {
+    // Regression guard: `CAT_GOOGLE_PATH` shipped copy claiming it pinned `agy` and the legacy
+    // `gemini` candidate "同时生效" in the same commit that narrowed the pin to the canonical
+    // command only (`pinnedPathFor` in utils/cli-resolve.ts). Hub shows these descriptions
+    // verbatim via GET /api/config/env-summary, so a stale claim is a user-visible false guarantee.
+    const aliased = CLIENT_DESCRIPTORS.filter((descriptor) => descriptor.pathEnvVar && descriptor.commands.length > 1);
+    assert.ok(aliased.length > 0, 'expected at least one CLI client with candidate aliases');
+    for (const descriptor of aliased) {
+      const def = ENV_VARS.find((v) => v.name === descriptor.pathEnvVar);
+      assert.ok(def, `${descriptor.pathEnvVar} should be registered`);
+      assert.match(def.description, /只对规范命令/, `${def.name} must state that only the canonical command is pinned`);
+      assert.ok(
+        def.description.includes(descriptor.defaultCli.command),
+        `${def.name} must name the canonical command it pins (${descriptor.defaultCli.command})`,
+      );
+      for (const alias of descriptor.commands.filter((command) => command !== descriptor.defaultCli.command)) {
+        assert.ok(def.description.includes(alias), `${def.name} must name the uncovered candidate ${alias}`);
+      }
+    }
   });
 
   it('REDIS_URL has maskMode url', () => {

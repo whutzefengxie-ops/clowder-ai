@@ -884,7 +884,8 @@ export const ENV_VARS: EnvDefinition[] = [
   {
     name: 'CAT_GOOGLE_PATH',
     defaultValue: '(未设置)',
-    description: '把 Gemini / Antigravity CLI 固定到指定二进制路径；对 agy 与 legacy gemini 两个候选名同时生效',
+    description:
+      '把 Antigravity CLI 固定到指定二进制路径。只对规范命令 agy 生效；候选名 gemini 不被覆盖——GEMINI_ADAPTER=gemini-cli 时执行侧按 PATH 解析 gemini，不读此变量（此时可用性探测仍会显示"已配置"）。其余行为同 CAT_ANTHROPIC_PATH',
     category: 'cli',
     sensitive: false,
     restartRequired: true,
@@ -892,7 +893,8 @@ export const ENV_VARS: EnvDefinition[] = [
   {
     name: 'CAT_KIMI_PATH',
     defaultValue: '(未设置)',
-    description: '把 Kimi CLI 固定到指定二进制路径（行为同 CAT_ANTHROPIC_PATH）',
+    description:
+      '把 Kimi CLI 固定到指定二进制路径。只对规范命令 kimi 生效：服务在 PATH 上找到 legacy kimi-cli 时会优先执行它且不读此变量（因此路径填错也可能仍能启动）。其余行为同 CAT_ANTHROPIC_PATH',
     category: 'cli',
     sensitive: false,
     restartRequired: true,
