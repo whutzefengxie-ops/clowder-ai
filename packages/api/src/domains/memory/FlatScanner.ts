@@ -3,6 +3,7 @@
 import { existsSync, lstatSync, readdirSync, readFileSync } from 'node:fs';
 import { basename, join, relative } from 'node:path';
 import type { RepoScanner, ScannedEvidence } from './interfaces.js';
+import { toPosixPath } from './path-utils.js';
 
 const SKIP_DIRS = new Set([
   'node_modules',
@@ -37,16 +38,6 @@ const SKIP_DIRS = new Set([
 
 const MAX_DEPTH = 10;
 
-/**
- * Anchors and `exclude` globs are POSIX-style identifiers, but `path.relative` yields `\` on
- * Windows — which both defeats exclude matching (`private/**` never matches `private\secret.md`)
- * and leaks the separator into anchors (`doc/private\secret`), drifting them across platforms.
- * Normalize every relative path before it is matched or turned into an anchor.
- */
-export function toPosixRelative(relPath: string): string {
-  return relPath.replace(/\\/g, '/');
-}
-
 export class FlatScanner implements RepoScanner {
   constructor(
     protected readonly collectionId: string,
@@ -79,7 +70,7 @@ export class FlatScanner implements RepoScanner {
         if (stat.isSymbolicLink()) continue;
         if (stat.isDirectory()) {
           if (SKIP_DIRS.has(entry)) continue;
-          if (this.isExcluded(toPosixRelative(relative(root, fullPath)))) continue;
+          if (this.isExcluded(toPosixPath(relative(root, fullPath)))) continue;
           // A nested repository (`.git` directory, or worktree-style `.git` file) owns its own
           // collection; descending into it would duplicate its documents into this one. The skip is
           // bound to this real Git boundary on purpose — a plain `worktrees/` directory holds
@@ -87,7 +78,7 @@ export class FlatScanner implements RepoScanner {
           if (existsSync(join(fullPath, '.git'))) continue;
           this.walkDir(fullPath, root, results, depth + 1);
         } else if (stat.isFile() && entry.endsWith('.md')) {
-          if (this.isExcluded(toPosixRelative(relative(root, fullPath)))) continue;
+          if (this.isExcluded(toPosixPath(relative(root, fullPath)))) continue;
           const evidence = this.parseFile(fullPath, root);
           if (evidence) results.push(evidence);
         }
@@ -105,7 +96,7 @@ export class FlatScanner implements RepoScanner {
       return null;
     }
 
-    const rel = toPosixRelative(relative(root, filePath));
+    const rel = toPosixPath(relative(root, filePath));
     const stem = basename(filePath, '.md');
     const anchor = `${this.collectionId}:doc/${rel.replace(/\.md$/, '')}`;
     const title = extractTitle(content) ?? stem;

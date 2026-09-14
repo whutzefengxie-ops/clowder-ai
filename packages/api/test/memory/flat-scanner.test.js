@@ -152,13 +152,14 @@ describe('FlatScanner', () => {
   // win32 contract: `path.relative` yields `\` on Windows, which used to defeat `exclude` matching
   // and leak the separator into anchors (`doc/private\secret`) — cross-platform drift.
   it('normalizes win32 relative paths before exclude matching and anchoring', async () => {
-    const { toPosixRelative, matchGlob } = await import('../../dist/domains/memory/FlatScanner.js');
+    const { matchGlob } = await import('../../dist/domains/memory/FlatScanner.js');
+    const { toPosixPath } = await import('../../dist/domains/memory/path-utils.js');
     const rel = win32.relative('C:\\project', 'C:\\project\\private\\secret.md');
 
     assert.equal(rel, 'private\\secret.md', 'precondition: win32.relative emits backslashes');
     assert.equal(matchGlob('private/**', rel), false, 'the raw win32 path escapes the exclude glob');
-    assert.equal(toPosixRelative(rel), 'private/secret.md');
-    assert.equal(matchGlob('private/**', toPosixRelative(rel)), true, 'normalized path must match');
+    assert.equal(toPosixPath(rel), 'private/secret.md');
+    assert.equal(matchGlob('private/**', toPosixPath(rel)), true, 'normalized path must match');
   });
 
   it('respects depth limit of 10', () => {
