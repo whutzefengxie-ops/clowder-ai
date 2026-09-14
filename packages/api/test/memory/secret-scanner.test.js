@@ -86,6 +86,24 @@ describe('SecretScanner', () => {
     }
   });
 
+  // Review on #1451 (round 2): widening the gate to shell prefixes dropped the JS/TS declaration
+  // grammar it already had, and the braced PowerShell form never consumed its closing `}`.
+  it('flags JS/TS declaration and braced PowerShell assignment forms (review counter-examples)', () => {
+    const value = 'Kj8sLq2mNp9Rt4vWx7YzAbCdEfGhIjKlMnOpQrSt';
+    const forms = [
+      `const API_TOKEN = "${value}"`,
+      `let apiKey = "${value}"`,
+      `var authSecret = "${value}"`,
+      `export const API_TOKEN = "${value}"`,
+      `\${env:API_TOKEN} = "${value}"`,
+    ];
+    for (const form of forms) {
+      const findings = SecretScanner.scan(`${form}\n`, 'env.md');
+      assert.equal(findings.length, 1, `must flag: ${form}`);
+      assert.equal(findings[0].type, 'high-entropy-secret');
+    }
+  });
+
   it('still flags assignment-style high-entropy secrets containing separators', () => {
     const content = 'token = "Kj8sLq/2mNp9Rt/4vWx7YzAbCdEfGhIjKlMn"\n';
     const findings = SecretScanner.scan(content, 'env.md');

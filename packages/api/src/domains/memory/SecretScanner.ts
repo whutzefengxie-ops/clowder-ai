@@ -26,16 +26,17 @@ const PLACEHOLDER_RE = /EXAMPLE|PLACEHOLDER|YOUR[_-]|REPLACE|CHANGEME|xxx/i;
 /**
  * The entropy fallback only runs when a credential-ish key sits in **key position** — i.e. it is the
  * assignment target of the line, optionally behind a list bullet, quote, dotted/namespaced prefix
- * (`cfg.apiKey =`) or a shell/PowerShell assignment keyword (`export`/`readonly`/`declare -x`/
- * `$env:`). Prose that merely *mentions* a key (e.g. "（correlation key = messageId/taskId/…）")
- * is documentation, not an assignment, and must not be reported.
+ * (`cfg.apiKey =`), a JS/TS declaration (`const|let|var`, including `export const`) or a
+ * shell/PowerShell assignment keyword (`export`/`readonly`/`declare -x`/`$env:NAME`/`${env:NAME}`).
+ * Prose that merely *mentions* a key (e.g. "（correlation key = messageId/taskId/…）") is
+ * documentation, not an assignment, and must not be reported.
  *
  * This gate is deliberately key-side only: a value-side exemption would have to excuse real
  * high-entropy assignments (a passphrase like "CorrectHorse/BatteryStaple/…" is indistinguishable
  * from an identifier enumeration), so no value shape is blanket-exempted.
  */
 const ASSIGNMENT_KEY_RE =
-  /^[\s>*\-•]*(?:(?:export|readonly|declare|typeset|local|set|env)(?:\s+-{1,2}[A-Za-z][\w-]*)*\s+|\$env:|\$\{env:)?(?:[\w$]+(?:\.[\w$]+|\[[^\]]*\])*\.)?["'`]?[\w.-]*(?:key|token|secret|password|credential|auth)[\w.-]*["'`]?\*{0,2}\s*[:=]/i;
+  /^[\s>*\-•]*(?:(?:export|readonly|declare|typeset|local|set|env|const|let|var)(?:\s+-{1,2}[A-Za-z][\w-]*)*\s+)*(?:\$(?:env|\{env):)?(?:[\w$]+(?:\.[\w$]+|\[[^\]]*\])*\.)?["'`]?[\w.-]*(?:key|token|secret|password|credential|auth)[\w.-]*["'`]?\}?\*{0,2}\s*[:=]/i;
 
 export class SecretScanner {
   static scan(content: string, filePath: string): SecretFinding[] {

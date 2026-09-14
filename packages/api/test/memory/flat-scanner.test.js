@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, win32 } from 'node:path';
+import { join, sep, win32 } from 'node:path';
 import { beforeEach, describe, it } from 'node:test';
 
 describe('FlatScanner', () => {
@@ -149,6 +149,35 @@ describe('FlatScanner', () => {
     assert.equal(results[0].item.anchor, 'test:docs:doc/doc');
   });
 
+  // Review on #1451 (round 2): an existence check on the `.git` name treated any stray file as a
+  // repository boundary and dropped the whole subtree.
+  it('keeps indexing a subtree whose `.git` file is not a worktree marker (review counter-example)', () => {
+    writeFileSync(join(tmpDir, 'root.md'), '# Root');
+    mkdirSync(join(tmpDir, 'nested', 'docs'), { recursive: true });
+    writeFileSync(join(tmpDir, 'nested', '.git'), 'ordinary text');
+    writeFileSync(join(tmpDir, 'nested', 'docs', 'guide.md'), '# Guide');
+
+    const results = new FlatScanner('test:docs').discover(tmpDir);
+
+    assert.deepEqual(
+      results.map((r) => r.item.sourcePath).sort(),
+      ['nested/docs/guide.md', 'root.md'],
+      'a stray .git file must not drop the subtree',
+    );
+  });
+
+  it('skips a subtree whose `.git` file carries a gitdir marker (boundary control)', () => {
+    writeFileSync(join(tmpDir, 'root.md'), '# Root');
+    mkdirSync(join(tmpDir, 'nested', 'docs'), { recursive: true });
+    writeFileSync(join(tmpDir, 'nested', '.git'), 'gitdir: ../../.git/worktrees/nested\n');
+    writeFileSync(join(tmpDir, 'nested', 'docs', 'guide.md'), '# Guide');
+
+    assert.deepEqual(
+      new FlatScanner('test:docs').discover(tmpDir).map((r) => r.item.sourcePath),
+      ['root.md'],
+    );
+  });
+
   // win32 contract: `path.relative` yields `\` on Windows, which used to defeat `exclude` matching
   // and leak the separator into anchors (`doc/private\secret`) — cross-platform drift.
   it('normalizes win32 relative paths before exclude matching and anchoring', async () => {
@@ -158,8 +187,13 @@ describe('FlatScanner', () => {
 
     assert.equal(rel, 'private\\secret.md', 'precondition: win32.relative emits backslashes');
     assert.equal(matchGlob('private/**', rel), false, 'the raw win32 path escapes the exclude glob');
-    assert.equal(toPosixPath(rel), 'private/secret.md');
-    assert.equal(matchGlob('private/**', toPosixPath(rel)), true, 'normalized path must match');
+    if (sep === '\\') {
+      assert.equal(toPosixPath(rel), 'private/secret.md');
+      assert.equal(matchGlob('private/**', toPosixPath(rel)), true, 'normalized path must match');
+    } else {
+      // On POSIX a literal backslash is a filename character, so the helper must not rewrite it.
+      assert.equal(toPosixPath(rel), rel);
+    }
   });
 
   it('respects depth limit of 10', () => {

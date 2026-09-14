@@ -1,6 +1,6 @@
 // F186 Phase B: Level 0 scanner — indexes any markdown directory without structure assumptions
 
-import { existsSync, lstatSync, readdirSync, readFileSync } from 'node:fs';
+import { lstatSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { basename, join, relative } from 'node:path';
 import type { RepoScanner, ScannedEvidence } from './interfaces.js';
 import { toPosixPath } from './path-utils.js';
@@ -71,11 +71,12 @@ export class FlatScanner implements RepoScanner {
         if (stat.isDirectory()) {
           if (SKIP_DIRS.has(entry)) continue;
           if (this.isExcluded(toPosixPath(relative(root, fullPath)))) continue;
-          // A nested repository (`.git` directory, or worktree-style `.git` file) owns its own
-          // collection; descending into it would duplicate its documents into this one. The skip is
-          // bound to this real Git boundary on purpose — a plain `worktrees/` directory holds
-          // ordinary documents and must still be indexed.
-          if (existsSync(join(fullPath, '.git'))) continue;
+          // A nested repository (`.git` directory, or a worktree/submodule-style `gitdir:` file) owns
+          // its own collection; descending into it would duplicate its documents into this one.
+          // Existence of a `.git` name alone is not proof of that boundary — a stray file (or a
+          // symlink to arbitrary content) used to drop the whole subtree silently. A plain
+          // `worktrees/` directory holds ordinary documents and must still be indexed.
+          if (isGitRepositoryRoot(fullPath)) continue;
           this.walkDir(fullPath, root, results, depth + 1);
         } else if (stat.isFile() && entry.endsWith('.md')) {
           if (this.isExcluded(toPosixPath(relative(root, fullPath)))) continue;
@@ -154,6 +155,29 @@ function extractSectionKeywords(content: string): string[] {
     if (heading && heading.length <= 80) keywords.push(heading);
   }
   return keywords;
+}
+
+/**
+ * True when `dirPath` is a real repository boundary: `.git` as a directory, or `.git` as a *file*
+ * whose content is a worktree/submodule `gitdir:` marker. Mere existence of the `.git` name is not
+ * proof — treating a stray file (or a symlink to arbitrary content) as a boundary silently dropped
+ * the whole subtree from the index.
+ */
+function isGitRepositoryRoot(dirPath: string): boolean {
+  const gitPath = join(dirPath, '.git');
+  let stat: ReturnType<typeof statSync>;
+  try {
+    stat = statSync(gitPath);
+  } catch {
+    return false;
+  }
+  if (stat.isDirectory()) return true;
+  if (!stat.isFile()) return false;
+  try {
+    return /^\s*gitdir:\s*\S+/m.test(readFileSync(gitPath, 'utf-8').slice(0, 512));
+  } catch {
+    return false;
+  }
 }
 
 export function matchGlob(pattern: string, path: string): boolean {
