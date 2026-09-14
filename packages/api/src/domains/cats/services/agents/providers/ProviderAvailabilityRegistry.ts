@@ -4,19 +4,18 @@
  * Two properties matter to callers:
  *
  *  - **Copy-on-write publish.** A round stores a whole new report rather than mutating the
- *    previous one, so a reader never observes a half-updated provider set and never blocks on
- *    a round in flight.
- *  - **Detection is advisory, never a gate on its own.** A report can be stale (the machine can
- *    change between rounds), so consumers that want to refuse work must check freshness via
- *    {@link ProviderAvailabilityRegistry.getFreshReport} instead of reading a snapshot forever.
- *    This is why `seed()` exists separately from `refresh()`: hydrating the persisted snapshot
- *    gives the first paint something to show without pretending it is current.
+ *    previous one, so a reader never observes a half-updated provider set and never blocks on a
+ *    round in flight.
+ *  - **Detection is advisory, never a gate on its own.** The machine can change between rounds,
+ *    so a report is only as good as its age. That age is derived from the report's own
+ *    `detectedAt` — there is deliberately no second "published at" clock — which is what makes
+ *    {@link ProviderAvailabilityRegistry.getAgeMs} safe to hand to a consumer: hydrating a
+ *    persisted snapshot at startup cannot make yesterday's findings look like today's.
  */
 
 import { createModuleLogger } from '../../../../../infrastructure/logger.js';
 import {
   detectProviderAvailability,
-  type ProviderAvailability,
   type ProviderAvailabilityReport,
   type ProviderDetectionDeps,
 } from './provider-detection.js';
@@ -42,19 +41,23 @@ export function resolveDiscoveryIntervalMs(env: NodeJS.ProcessEnv = process.env)
 export interface ProviderAvailabilityRegistryDeps extends ProviderDetectionDeps {
   /** Called after every successful publish (persistence, metrics). Must not throw. */
   onReport?: (report: ProviderAvailabilityReport) => void;
-  /** Injected for tests so no real timer is created. */
+  /** Injected for tests so age is deterministic. */
   now?: () => number;
 }
 
 export class ProviderAvailabilityRegistry {
   private report: ProviderAvailabilityReport | null = null;
-  private publishedAtMs: number | null = null;
   private inflight: Promise<ProviderAvailabilityReport> | null = null;
   private timer: ReturnType<typeof setInterval> | null = null;
 
   constructor(private readonly deps: ProviderAvailabilityRegistryDeps = {}) {}
 
-  /** Publish a report without running detection (startup hydration from the snapshot). */
+  /**
+   * Publish a report without running detection — startup hydration from the persisted snapshot.
+   *
+   * Hydration is not evidence: the seeded report keeps the `detectedAt` it was written with, so
+   * it is reported as exactly as old as it is.
+   */
   seed(report: ProviderAvailabilityReport): void {
     this.publish(report, false);
   }
@@ -64,20 +67,19 @@ export class ProviderAvailabilityRegistry {
     return this.report;
   }
 
-  /** Age of the latest report in ms, or null when nothing has been published. */
-  getAgeMs(): number | null {
-    if (this.publishedAtMs === null) return null;
-    return (this.deps.now ?? Date.now)() - this.publishedAtMs;
-  }
-
   /**
-   * Latest report only if it is younger than `maxAgeMs`. Returns null otherwise, which callers
-   * must treat as "unknown" — never as "missing".
+   * Age of the latest report in ms, derived from its own `detectedAt`.
+   *
+   * Returns null when nothing is published **or when the timestamp is unreadable** — callers
+   * must read null as "unknown", never as "fresh" and never as "missing". Deriving the age from
+   * the report (rather than stamping a publish clock) is what keeps this honest for a hydrated
+   * snapshot: see the class comment.
    */
-  getFreshReport(maxAgeMs: number): ProviderAvailabilityReport | null {
-    const age = this.getAgeMs();
-    if (this.report === null || age === null || age > maxAgeMs) return null;
-    return this.report;
+  getAgeMs(): number | null {
+    if (this.report === null) return null;
+    const detectedAtMs = Date.parse(this.report.detectedAt);
+    if (Number.isNaN(detectedAtMs)) return null;
+    return Math.max(0, (this.deps.now ?? Date.now)() - detectedAtMs);
   }
 
   /**
@@ -140,7 +142,6 @@ export class ProviderAvailabilityRegistry {
 
   private publish(report: ProviderAvailabilityReport, notify: boolean): void {
     this.report = report;
-    this.publishedAtMs = (this.deps.now ?? Date.now)();
     if (!notify) return;
     const installed = report.providers.filter((provider) => provider.installed).map((p) => p.clientId);
     log.info({ installed }, 'provider availability detected');

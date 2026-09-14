@@ -41,8 +41,8 @@ function provider(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function okResponse(providers: unknown[]) {
-  return { ok: true, status: 200, json: async () => ({ providers }) };
+function okResponse(providers: unknown[], ageMs: number | null = 0) {
+  return { ok: true, status: 200, json: async () => ({ providers, ageMs }) };
 }
 
 const CLI_DISPATCH: MemberCliDispatch = { kind: 'cli' };
@@ -140,6 +140,34 @@ describe('ProviderCliStatus', () => {
 
     expect(container.textContent).toContain('本机 CLI 状态不可用');
     expect(container.textContent).not.toContain('未安装');
+  });
+
+  it('offers a retry after a failed load', async () => {
+    // Detection is click-triggered, so without this the user is stuck for the rest of the mount.
+    apiFetchMock.mockRejectedValueOnce(new Error('offline'));
+    await renderAndDetect();
+    expect(container.textContent).toContain('本机 CLI 状态不可用');
+
+    apiFetchMock.mockResolvedValueOnce(okResponse([provider()]));
+    await clickButton('重试');
+
+    expect(container.textContent).toContain('已安装');
+    expect(container.textContent).not.toContain('本机 CLI 状态不可用');
+  });
+
+  it('shows how old the report is', async () => {
+    apiFetchMock.mockResolvedValue(okResponse([provider()], 45 * 60_000));
+    await renderAndDetect();
+
+    expect(container.textContent).toContain('报告时间：45 分钟前');
+  });
+
+  it('says the age is unknown rather than implying it was just checked', async () => {
+    apiFetchMock.mockResolvedValue(okResponse([provider()], null));
+    await renderAndDetect();
+
+    expect(container.textContent).toContain('报告时间：未知');
+    expect(container.textContent).not.toContain('刚刚');
   });
 
   it('keeps the previous result on screen while re-detecting', async () => {

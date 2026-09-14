@@ -99,8 +99,11 @@ test('a throwing onReport hook never fails the round', async () => {
   assert.equal(registry.getReport().providers.length, 9);
 });
 
-test('report age is explicit and staleness is queryable', async () => {
-  let now = 1_000;
+test('age comes from the report itself, so hydration cannot launder a stale snapshot', async () => {
+  // The injected clock is only meaningful for seeded reports, whose `detectedAt` the test
+  // controls. A real round stamps its own `detectedAt` from the wall clock, so that half is
+  // asserted with a tolerance instead of an exact fake-clock delta.
+  let now = Date.now();
   const registry = new ProviderAvailabilityRegistry({
     resolveCommand: () => null,
     env: {},
@@ -108,16 +111,36 @@ test('report age is explicit and staleness is queryable', async () => {
   });
 
   assert.equal(registry.getAgeMs(), null, 'nothing published yet');
-  assert.equal(registry.getFreshReport(1_000), null, 'no report is never a fresh report');
 
+  // A snapshot written by a previous process three days ago. Seeding it must NOT reset its age:
+  // stamping a "published at" clock here would make `/api/clients` report a fresh ageMs next to
+  // a days-old detectedAt, and would let a consumer treat days-stale findings as current.
+  const threeDaysMs = 3 * 24 * 60 * 60 * 1000;
+  const oldDetectedAt = new Date(now - threeDaysMs).toISOString();
+  registry.seed(report([provider()], oldDetectedAt));
+  assert.equal(registry.getAgeMs(), threeDaysMs);
+  assert.equal(registry.getReport().detectedAt, oldDetectedAt);
+
+  // Age tracks the clock, it is not frozen at publish time.
+  now += 4_000;
+  assert.equal(registry.getAgeMs(), threeDaysMs + 4_000);
+
+  // A real round is current by construction.
   await registry.refresh();
-  assert.equal(registry.getAgeMs(), 0);
-  assert.ok(registry.getFreshReport(1_000));
+  const freshAge = registry.getAgeMs();
+  assert.ok(freshAge !== null && freshAge < 5_000, `a fresh round should be near-zero age, got ${freshAge}`);
+});
 
-  now = 5_000;
-  assert.equal(registry.getAgeMs(), 4_000);
-  assert.equal(registry.getFreshReport(1_000), null, 'a stale report must not read as current');
-  assert.ok(registry.getFreshReport(10_000));
+test('an unreadable timestamp reads as unknown, never as fresh', () => {
+  const registry = new ProviderAvailabilityRegistry({ resolveCommand: () => null, env: {}, now: () => 5_000 });
+  registry.seed(report([provider()], 'not-a-timestamp'));
+  assert.equal(registry.getAgeMs(), null, 'unknown age must not be presented as age 0');
+});
+
+test('a future timestamp does not produce a negative age', () => {
+  const registry = new ProviderAvailabilityRegistry({ resolveCommand: () => null, env: {}, now: () => 5_000 });
+  registry.seed(report([provider()], new Date(9_000).toISOString()));
+  assert.equal(registry.getAgeMs(), 0);
 });
 
 test('resolveDiscoveryIntervalMs validates and defaults', () => {

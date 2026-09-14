@@ -32,7 +32,8 @@ import type { MemberCliDispatch } from './hub-cat-editor.model';
 
 interface ClientsResponse {
   detectedAt?: string;
-  ageMs?: number;
+  /** Age of the report in ms, derived server-side from `detectedAt`. `null` = unknown. */
+  ageMs?: number | null;
   providers?: ProviderAvailability[];
 }
 
@@ -56,6 +57,24 @@ function StatusPill({ tone, children }: { tone: 'ok' | 'missing' | 'neutral'; ch
 
 const ACTION_BUTTON_CLASS =
   'rounded-lg border border-[var(--console-border-soft)] px-2 py-0.5 text-xs text-cafe-muted transition hover:border-conn-amber-ring disabled:opacity-50';
+
+/**
+ * Render the report's age.
+ *
+ * The card shows the age rather than a bare verdict because a verdict is only as good as when it
+ * was taken; whether an age counts as "too old to act on" is a caller decision, so no threshold
+ * is applied here. `null` means the server could not derive an age, which must read as unknown —
+ * never as just-checked.
+ */
+function formatReportAge(ageMs: number | null | undefined): string {
+  if (ageMs === null || ageMs === undefined) return '未知（无法判断是否过期）';
+  if (ageMs < 60_000) return '刚刚';
+  const minutes = Math.floor(ageMs / 60_000);
+  if (minutes < 60) return `${minutes} 分钟前`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} 小时前`;
+  return `${Math.floor(hours / 24)} 天前`;
+}
 
 /** Members the clientId-level probe cannot speak for. */
 function NonCliDispatchNotice({ dispatch }: { dispatch: Exclude<MemberCliDispatch, { kind: 'cli' }> }) {
@@ -81,6 +100,7 @@ function NonCliDispatchNotice({ dispatch }: { dispatch: Exclude<MemberCliDispatc
 export function ProviderCliStatus({ clientId, dispatch }: ProviderCliStatusProps) {
   const [phase, setPhase] = useState<Phase>('idle');
   const [providers, setProviders] = useState<ProviderAvailability[] | null>(null);
+  const [reportAgeMs, setReportAgeMs] = useState<number | null | undefined>(undefined);
   // Kept separate from `phase` on purpose: a re-detect must not blank the results the user is
   // already reading. `phase === 'loading'` is unreachable once results are on screen, so
   // gating the button on it was both a dead branch and a TypeScript error (TS2367) under the
@@ -102,6 +122,7 @@ export function ProviderCliStatus({ clientId, dispatch }: ProviderCliStatusProps
       if (!res.ok) throw new Error(`clients request failed (${res.status})`);
       const body = (await res.json()) as ClientsResponse;
       setProviders(Array.isArray(body.providers) ? body.providers : []);
+      setReportAgeMs(body.ageMs);
       setPhase('ready');
     } catch {
       if (options.refresh) {
@@ -135,7 +156,17 @@ export function ProviderCliStatus({ clientId, dispatch }: ProviderCliStatusProps
   }
 
   if (phase === 'failed') {
-    return <p className="text-xs leading-5 text-cafe-muted">本机 CLI 状态不可用（/api/clients 请求失败）</p>;
+    // Detection is click-triggered, so without a retry here a failed first attempt would leave
+    // the user with no way back inside this mount — they would have to close and reopen the
+    // editor. Network blips and an API that is still starting are the ordinary cases.
+    return (
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-[var(--console-border-soft)] bg-cafe-surface-canvas p-3">
+        <span className="text-xs leading-5 text-cafe-muted">本机 CLI 状态不可用（/api/clients 请求失败）</span>
+        <button type="button" onClick={() => void load()} className={ACTION_BUTTON_CLASS}>
+          重试
+        </button>
+      </div>
+    );
   }
 
   if (phase === 'loading' || !providers) {
@@ -180,6 +211,8 @@ export function ProviderCliStatus({ clientId, dispatch }: ProviderCliStatusProps
           )}
         </div>
       )}
+
+      <p className="text-xs leading-5 text-cafe-muted">报告时间：{formatReportAge(reportAgeMs)}</p>
 
       <p className="text-xs leading-5 text-cafe-muted">
         {installed.length > 0

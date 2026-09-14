@@ -44,7 +44,10 @@ export const clientsRoutes: FastifyPluginAsync<ClientsRouteOptions> = async (app
     const report = registry?.getReport() ?? (await detectProviderAvailability());
     return {
       detectedAt: report.detectedAt,
-      ageMs: registry?.getAgeMs() ?? 0,
+      // Derived from `detectedAt`, so the two can never disagree. `null` means the age is unknown
+      // and must NOT be read as fresh; only the registry-less path below detects live, and that
+      // is the one case where 0 is honest.
+      ageMs: registry ? registry.getAgeMs() : 0,
       discoveryIntervalMs: resolveDiscoveryIntervalMs(),
       discoveryIntervalEnv: PROVIDER_DISCOVERY_INTERVAL_ENV,
       providers: report.providers,
@@ -72,6 +75,6 @@ export const clientsRoutes: FastifyPluginAsync<ClientsRouteOptions> = async (app
     }
 
     const report = await registry.refresh();
-    return { detectedAt: report.detectedAt, ageMs: registry.getAgeMs() ?? 0, providers: report.providers };
+    return { detectedAt: report.detectedAt, ageMs: registry.getAgeMs(), providers: report.providers };
   });
 };
