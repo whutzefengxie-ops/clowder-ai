@@ -136,6 +136,26 @@ describe('SecretScanner', () => {
     }
   });
 
+  // The gate is now shape-generic: any whitespace-free decoration before the assignment operator is
+  // accepted, so new spellings cannot regress one by one (const/let/var → $VAR → $scope: → [type]$VAR).
+  it('flags arbitrary variable decoration before the assignment operator', () => {
+    const value = 'Kj8sLq2mNp9Rt4vWx7YzAbCdEfGhIjKlMnOpQrSt';
+    const forms = [
+      `[string]$API_TOKEN = "${value}"`,
+      `[string]$API_TOKEN="${value}"`,
+      `$script:API_TOKEN = "${value}"`,
+      `$global:API_TOKEN = "${value}"`,
+      `env:API_TOKEN = "${value}"`,
+      `"API_TOKEN" = "${value}"`,
+      `$cfg.apiKey = "${value}"`,
+    ];
+    for (const form of forms) {
+      const findings = SecretScanner.scan(`${form}\n`, 'env.md');
+      assert.equal(findings.length, 1, `must flag: ${form}`);
+      assert.equal(findings[0].type, 'high-entropy-secret');
+    }
+  });
+
   it('still flags assignment-style high-entropy secrets containing separators', () => {
     const content = 'token = "Kj8sLq/2mNp9Rt/4vWx7YzAbCdEfGhIjKlMn"\n';
     const findings = SecretScanner.scan(content, 'env.md');
