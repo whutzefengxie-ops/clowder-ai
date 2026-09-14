@@ -104,6 +104,18 @@ describe('SecretScanner', () => {
     }
   });
 
+  // Same family as the counter-examples above: a bare shell variable is an assignment target too.
+  // `$VAR` was caught by the pre-anchoring baseline and regressed when the gate was anchored;
+  // `${VAR}` was never caught, so both are pinned here.
+  it('flags bare and braced shell variable assignments', () => {
+    const value = 'Kj8sLq2mNp9Rt4vWx7YzAbCdEfGhIjKlMnOpQrSt';
+    for (const form of [`$API_TOKEN = "${value}"`, `\${API_TOKEN} = "${value}"`]) {
+      const findings = SecretScanner.scan(`${form}\n`, 'env.md');
+      assert.equal(findings.length, 1, `must flag: ${form}`);
+      assert.equal(findings[0].type, 'high-entropy-secret');
+    }
+  });
+
   it('still flags assignment-style high-entropy secrets containing separators', () => {
     const content = 'token = "Kj8sLq/2mNp9Rt/4vWx7YzAbCdEfGhIjKlMn"\n';
     const findings = SecretScanner.scan(content, 'env.md');
