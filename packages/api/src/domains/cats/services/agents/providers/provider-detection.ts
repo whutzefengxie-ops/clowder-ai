@@ -20,7 +20,6 @@
  * module contains no per-provider tables.
  */
 
-import { statSync } from 'node:fs';
 import {
   CLIENT_DESCRIPTORS,
   type ClientDescriptor,
@@ -28,7 +27,7 @@ import {
   type ProviderAvailability,
   type ProviderAvailabilityReport,
 } from '@cat-cafe/shared';
-import { resolveCliCommand } from '../../../../../utils/cli-resolve.js';
+import { isExecutableFileAt, resolveCliCommand } from '../../../../../utils/cli-resolve.js';
 
 export type { ProviderAvailability, ProviderAvailabilityReport, ProviderAvailabilityStatus } from '@cat-cafe/shared';
 
@@ -43,16 +42,8 @@ export interface ProviderDetectionDeps {
   env?: NodeJS.ProcessEnv;
   /** Resolve a bare command name to an absolute path, or null when not found. */
   resolveCommand?: (command: string) => string | null;
-  /** Whether an absolute path is an existing regular file. */
+  /** Whether an absolute path is an existing regular file. Defaults to the resolver's own test. */
   isExecutableFile?: (path: string) => boolean;
-}
-
-function defaultIsExecutableFile(path: string): boolean {
-  try {
-    return statSync(path).isFile();
-  } catch {
-    return false;
-  }
 }
 
 function reasonForMissing(descriptor: ClientDescriptor, installHint: string): string {
@@ -151,7 +142,7 @@ export async function detectProviderAvailability(
   const resolved: Required<Pick<ProviderDetectionDeps, 'env' | 'resolveCommand' | 'isExecutableFile'>> = {
     env: deps.env ?? process.env,
     resolveCommand: deps.resolveCommand ?? resolveCliCommand,
-    isExecutableFile: deps.isExecutableFile ?? defaultIsExecutableFile,
+    isExecutableFile: deps.isExecutableFile ?? isExecutableFileAt,
   };
 
   const providers = CLIENT_DESCRIPTORS.map((descriptor) => {

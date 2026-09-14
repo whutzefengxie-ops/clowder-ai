@@ -5,11 +5,47 @@
  */
 
 import { execSync } from 'node:child_process';
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync, statSync } from 'node:fs';
 import { resolve, win32 } from 'node:path';
-import { installHintForCommand } from '@cat-cafe/shared';
+import { getClientDescriptorByCommand, installHintForCommand } from '@cat-cafe/shared';
 
 const IS_WINDOWS = process.platform === 'win32';
+
+/**
+ * Whether `path` names an existing regular file.
+ *
+ * Exported because the availability probe must apply the *same* usability test as the resolver:
+ * if the two disagree about whether an operator-pinned path is usable, the probe reports a
+ * verdict the launch path will not reproduce — the exact false positive this predicate prevents.
+ */
+export function isExecutableFileAt(path: string): boolean {
+  try {
+    return statSync(path).isFile();
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Absolute path pinned for this command by its `CAT_<CLIENT>_PATH` escape hatch, if set.
+ *
+ * The env var name comes from the descriptor registry, so there is no second command-name table
+ * here. Before this existed, only the availability probe read these variables, which made them a
+ * false guarantee: setting one turned the probe green (and silenced the missing-CLI guidance)
+ * while the launch path still resolved by PATH and failed.
+ */
+function pinnedPathFor(command: string): string | null {
+  const envVar = getClientDescriptorByCommand(command)?.pathEnvVar;
+  if (!envVar) return null;
+  const raw = process.env[envVar]?.trim();
+  return raw ? raw : null;
+}
+
+/**
+ * Commands whose cached resolution came from a pin. Needed so that removing the pin later lets
+ * the cache fall back to a PATH resolution instead of serving the pinned binary forever.
+ */
+const pinnedCommands = new Set<string>();
 
 /**
  * Common install directories for CLI tools (non-Windows, relative to $HOME).
@@ -106,6 +142,24 @@ export function invalidateCliCommand(commandOrPath: string): void {
  * spawn ENOENT in a loop until process restart.
  */
 export function resolveCliCommand(command: string, opts?: { skipPathProbe?: boolean }): string | null {
+  // An explicit `CAT_<CLIENT>_PATH` pin wins outright, and an unusable pin is a hard miss rather
+  // than a silent fall-through to a different binary than the operator named. The availability
+  // probe applies the same rule, which is what makes its "configured" verdict predictive of the
+  // launch path instead of a separate claim.
+  const pinned = pinnedPathFor(command);
+  if (pinned !== null) {
+    if (!isExecutableFileAt(pinned)) {
+      resolvedCache.delete(command);
+      pinnedCommands.delete(command);
+      return null;
+    }
+    resolvedCache.set(command, pinned);
+    pinnedCommands.add(command);
+    return pinned;
+  }
+  // The pin was removed since the last resolve: drop the value it wrote so PATH decides again.
+  if (pinnedCommands.delete(command)) resolvedCache.delete(command);
+
   const cached = resolvedCache.get(command);
   if (cached !== undefined) {
     if (existsSync(cached)) return cached;

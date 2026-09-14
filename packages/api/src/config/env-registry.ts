@@ -868,7 +868,7 @@ export const ENV_VARS: EnvDefinition[] = [
     name: 'CAT_ANTHROPIC_PATH',
     defaultValue: '(未设置)',
     description:
-      '把 Claude CLI 固定到指定二进制路径，覆盖 PATH 探测。路径无效时报错而不回退到 PATH，避免启动到非预期二进制',
+      '把 Claude CLI 固定到指定二进制路径。可用性探测与成员启动都读取它；路径无效时视为"未找到"而不回退到 PATH，避免启动到非预期二进制',
     category: 'cli',
     sensitive: false,
     restartRequired: true,
@@ -876,7 +876,7 @@ export const ENV_VARS: EnvDefinition[] = [
   {
     name: 'CAT_OPENAI_PATH',
     defaultValue: '(未设置)',
-    description: '把 Codex CLI 固定到指定二进制路径，覆盖 PATH 探测（行为同 CAT_ANTHROPIC_PATH）',
+    description: '把 Codex CLI 固定到指定二进制路径（行为同 CAT_ANTHROPIC_PATH）',
     category: 'cli',
     sensitive: false,
     restartRequired: true,
@@ -884,7 +884,7 @@ export const ENV_VARS: EnvDefinition[] = [
   {
     name: 'CAT_GOOGLE_PATH',
     defaultValue: '(未设置)',
-    description: '把 Gemini / Antigravity CLI（agy）固定到指定二进制路径，覆盖 PATH 探测',
+    description: '把 Gemini / Antigravity CLI 固定到指定二进制路径；对 agy 与 legacy gemini 两个候选名同时生效',
     category: 'cli',
     sensitive: false,
     restartRequired: true,
@@ -892,7 +892,7 @@ export const ENV_VARS: EnvDefinition[] = [
   {
     name: 'CAT_KIMI_PATH',
     defaultValue: '(未设置)',
-    description: '把 Kimi CLI 固定到指定二进制路径，覆盖 PATH 探测',
+    description: '把 Kimi CLI 固定到指定二进制路径（行为同 CAT_ANTHROPIC_PATH）',
     category: 'cli',
     sensitive: false,
     restartRequired: true,
@@ -900,7 +900,7 @@ export const ENV_VARS: EnvDefinition[] = [
   {
     name: 'CAT_OPENCODE_PATH',
     defaultValue: '(未设置)',
-    description: '把 OpenCode CLI 固定到指定二进制路径，覆盖 PATH 探测',
+    description: '把 OpenCode CLI 固定到指定二进制路径（行为同 CAT_ANTHROPIC_PATH）',
     category: 'cli',
     sensitive: false,
     restartRequired: true,

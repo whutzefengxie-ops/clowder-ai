@@ -26,6 +26,7 @@
  */
 
 import type { ProviderAvailability } from '@cat-cafe/shared';
+import { getClientDescriptor } from '@cat-cafe/shared';
 import { type ReactNode, useCallback, useState } from 'react';
 import { apiFetch } from '@/utils/api-client';
 import type { MemberCliDispatch } from './hub-cat-editor.model';
@@ -175,6 +176,11 @@ export function ProviderCliStatus({ clientId, dispatch }: ProviderCliStatusProps
 
   const current = providers.find((provider) => provider.clientId === clientId);
   const installed = providers.filter((provider) => provider.installed && provider.localCli);
+  // The canonical command for this client, per the descriptor registry. A resolved candidate that
+  // differs (google's legacy `gemini` vs its default `agy`) is worth naming, but it is NOT by
+  // itself a warning: some providers probe candidates in their own order, so a difference does not
+  // imply a mismatch.
+  const expectedCommand = getClientDescriptor(clientId)?.defaultCli.command;
 
   return (
     <div className="space-y-2 rounded-xl border border-[var(--console-border-soft)] bg-cafe-surface-canvas p-3">
@@ -202,12 +208,29 @@ export function ProviderCliStatus({ clientId, dispatch }: ProviderCliStatusProps
             {current.status === 'error' && <StatusPill tone="missing">配置有误</StatusPill>}
             {current.version && <span className="text-xs text-cafe-muted">{current.version}</span>}
           </div>
+          {current.status === 'configured' && (
+            <p className="break-all text-xs leading-5 text-cafe-muted">
+              本机解析到：{current.command}
+              {expectedCommand && current.command !== expectedCommand
+                ? `（该 client 的默认命令是 ${expectedCommand}）`
+                : ''}
+            </p>
+          )}
           {current.status === 'configured' && current.resolvedPath && (
             <p className="break-all text-xs leading-5 text-cafe-muted">路径：{current.resolvedPath}</p>
           )}
           {current.reason && <p className="text-xs leading-5 text-conn-amber-text">{current.reason}</p>}
           {(current.status === 'missing' || current.status === 'error') && (
             <p className="break-all text-xs leading-5 text-cafe-muted">安装命令：{current.installHint}</p>
+          )}
+          {current.status === 'configured' && (
+            // "已安装" is a statement about this machine, not about this member. Which binary the
+            // member actually spawns is decided at runtime — a provider adapter can pick a
+            // different candidate than the one that resolved here, and detection has no way to
+            // know. Saying so keeps the pill from reading as "this member will work".
+            <p className="text-xs leading-5 text-cafe-muted">
+              该成员实际执行的二进制由运行时决定，此处只报告本机解析结果。
+            </p>
           )}
         </div>
       )}

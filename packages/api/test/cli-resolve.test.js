@@ -527,3 +527,86 @@ test(
     }
   },
 );
+
+// --- CAT_<CLIENT>_PATH pin ---
+//
+// The pin only ever reached the availability probe before this, so setting one turned the probe
+// green while the launch path still resolved by PATH. These assert the launch path honours it, so
+// that a "configured" verdict is predictive of what will actually be spawned.
+
+function withPinnedEnv(envVar, value, command, assertion) {
+  const previous = process.env[envVar];
+  try {
+    if (value === undefined) delete process.env[envVar];
+    else process.env[envVar] = value;
+    invalidateCliCommand(command);
+    assertion();
+  } finally {
+    if (previous === undefined) delete process.env[envVar];
+    else process.env[envVar] = previous;
+    invalidateCliCommand(command);
+  }
+}
+
+test('a pinned CAT_<CLIENT>_PATH wins over PATH on the launch path', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'cli-pin-'));
+  const pinned = join(dir, 'claude');
+  writeFileSync(pinned, '#!/bin/sh\n');
+  try {
+    withPinnedEnv('CAT_ANTHROPIC_PATH', pinned, 'claude', () => {
+      assert.equal(resolveCliCommand('claude'), pinned);
+    });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('the same pin covers every command that maps to that client', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'cli-pin-google-'));
+  const pinned = join(dir, 'agy');
+  writeFileSync(pinned, '#!/bin/sh\n');
+  try {
+    withPinnedEnv('CAT_GOOGLE_PATH', pinned, 'agy', () => {
+      assert.equal(resolveCliCommand('agy'), pinned);
+      // `gemini` maps to the same client, so the operator pinned it too.
+      invalidateCliCommand('gemini');
+      assert.equal(resolveCliCommand('gemini'), pinned);
+      invalidateCliCommand('gemini');
+    });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('an unusable pin is a hard miss, never a silent fall-through to a different binary', () => {
+  // Missing path…
+  withPinnedEnv('CAT_ANTHROPIC_PATH', join(tmpdir(), 'definitely-not-installed-claude'), 'claude', () => {
+    assert.equal(resolveCliCommand('claude'), null);
+  });
+  // …and a path that exists but is a directory: the probe applies the same isFile test, so the
+  // resolver must not accept it either.
+  const dir = mkdtempSync(join(tmpdir(), 'cli-pin-dir-'));
+  try {
+    withPinnedEnv('CAT_ANTHROPIC_PATH', dir, 'claude', () => {
+      assert.equal(resolveCliCommand('claude'), null);
+    });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('removing the pin lets PATH decide again instead of serving the pinned binary', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'cli-pin-drop-'));
+  const pinned = join(dir, 'claude');
+  writeFileSync(pinned, '#!/bin/sh\n');
+  try {
+    withPinnedEnv('CAT_ANTHROPIC_PATH', pinned, 'claude', () => {
+      assert.equal(resolveCliCommand('claude'), pinned);
+    });
+    // The helper restored the previous env (unset) and invalidated, so a fresh resolve must not
+    // hand back the pinned path from the cache.
+    assert.notEqual(resolveCliCommand('claude'), pinned);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

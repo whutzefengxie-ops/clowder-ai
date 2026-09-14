@@ -162,6 +162,33 @@ describe('ProviderCliStatus', () => {
     expect(container.textContent).toContain('报告时间：45 分钟前');
   });
 
+  it('names the resolved binary and says the runtime decides what actually runs', async () => {
+    // "已安装" is a claim about this machine, not about this member: a provider adapter can spawn a
+    // different candidate than the one that resolved here. The card must not let the green pill
+    // read as "this member will work".
+    apiFetchMock.mockResolvedValue(okResponse([provider()]));
+    await renderAndDetect();
+
+    expect(container.textContent).toContain('本机解析到：claude');
+    expect(container.textContent).toContain('该成员实际执行的二进制由运行时决定');
+  });
+
+  it('names the client default when the resolved candidate differs from it', async () => {
+    // google's canonical command is `agy`; a machine with only the legacy CLI resolves `gemini`.
+    apiFetchMock.mockResolvedValue(
+      okResponse([
+        provider({ clientId: 'google', toolId: 'agy', label: 'Gemini', command: 'gemini', status: 'configured' }),
+      ]),
+    );
+    await renderAndDetect('google');
+
+    expect(container.textContent).toContain('本机解析到：gemini');
+    expect(container.textContent).toContain('该 client 的默认命令是 agy');
+    // A difference is worth naming, not alarming: some providers probe candidates in their own
+    // order, so this must not become a warning-coloured claim.
+    expect(container.querySelector('.text-conn-red-text')).toBeNull();
+  });
+
   it('says the age is unknown rather than implying it was just checked', async () => {
     apiFetchMock.mockResolvedValue(okResponse([provider()], null));
     await renderAndDetect();
