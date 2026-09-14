@@ -27,8 +27,10 @@ const PLACEHOLDER_RE = /EXAMPLE|PLACEHOLDER|YOUR[_-]|REPLACE|CHANGEME|xxx/i;
  * The entropy fallback only runs when a credential-ish key sits in **key position** — i.e. it is the
  * assignment target of the line, optionally behind a list bullet, quote, dotted/namespaced prefix
  * (`cfg.apiKey =`), a JS/TS declaration (`const|let|var`, including `export const`), or a
- * shell/PowerShell variable reference (`$NAME`, `${NAME}`, `$env:NAME`, `${env:NAME}`) with the
- * shell assignment keywords (`export`/`readonly`/`declare -x`).
+ * shell/PowerShell variable reference. The variable decoration is intentionally *generic* rather
+ * than a list of known scopes: `$NAME`, `${NAME}`, and any scope-qualified form
+ * (`$env:`/`$script:`/`$global:`/`$using:`/`${env:…}`, or bare `env:`), because hardcoding `env:`
+ * silently dropped the sibling scopes the pre-anchoring implementation used to report.
  * Prose that merely *mentions* a key (e.g. "（correlation key = messageId/taskId/…）") is
  * documentation, not an assignment, and must not be reported.
  *
@@ -37,7 +39,7 @@ const PLACEHOLDER_RE = /EXAMPLE|PLACEHOLDER|YOUR[_-]|REPLACE|CHANGEME|xxx/i;
  * from an identifier enumeration), so no value shape is blanket-exempted.
  */
 const ASSIGNMENT_KEY_RE =
-  /^[\s>*\-•]*(?:(?:export|readonly|declare|typeset|local|set|env|const|let|var)(?:\s+-{1,2}[A-Za-z][\w-]*)*\s+)*(?:\$(?:env:|\{env:|\{)?)?(?:[\w$]+(?:\.[\w$]+|\[[^\]]*\])*\.)?["'`]?[\w.-]*(?:key|token|secret|password|credential|auth)[\w.-]*["'`]?\}?\*{0,2}\s*[:=]/i;
+  /^[\s>*\-•]*(?:(?:export|readonly|declare|typeset|local|set|env|const|let|var)(?:\s+-{1,2}[A-Za-z][\w-]*)*\s+)*(?:\$(?:\{[A-Za-z_]\w*:|[A-Za-z_]\w*:|\{)?|\{[A-Za-z_]\w*:|[A-Za-z_]\w*:)?(?:[\w$]+(?:\.[\w$]+|\[[^\]]*\])*\.)?["'`]?[\w.-]*(?:key|token|secret|password|credential|auth)[\w.-]*["'`]?\}?\*{0,2}\s*[:=]/i;
 
 export class SecretScanner {
   static scan(content: string, filePath: string): SecretFinding[] {
