@@ -202,7 +202,11 @@ export function FirstRunQuestWizard({ open, onClose, onCreated }: FirstRunQuestW
           {step === 'client' && <ClientStep onSelect={handleClientSelect} />}
           {step === 'config' && selectedClient && (
             <ConfigStep
-              client={selectedClient.client}
+              // Send the binary that actually resolved, not the descriptor-level tool id. For
+              // google those differ: the tool id is `agy`, while a machine carrying only the
+              // legacy CLI resolves `gemini` — and the probe spec table is keyed by binary name.
+              // Sending the tool id made the connectivity check silently skip on such machines.
+              client={selectedClient.cli || selectedClient.client}
               clientId={selectedClient.provider}
               onComplete={handleConfigComplete}
             />

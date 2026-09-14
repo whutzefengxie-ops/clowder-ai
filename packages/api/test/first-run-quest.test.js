@@ -606,4 +606,30 @@ describe('tryCliProbe (unit)', () => {
     assert.ok(args.includes('--print'), 'should use --print flag');
     assert.ok(args.includes('--prompt'), 'should use --prompt flag');
   });
+
+  test('agy: unprobeable, and must not be spawned to find that out', async () => {
+    // `agy` (Antigravity CLI) is what google members actually run, but CLI_PROBE_SPECS has no
+    // entry for it. Returning null is what makes the route answer `{ok: true, skipped: true}`,
+    // and the wizard is now responsible for reading that as UNVERIFIED rather than as a pass.
+    //
+    // This test fails the moment an agy spec is added, which is deliberate: adding one changes
+    // what the wizard reports for every agy machine, so it must be a thought-through change
+    // rather than a silent one.
+    const { tryCliProbe } = await import('../dist/routes/first-run-quest.js');
+    const result = await tryCliProbe('agy', {
+      spawnFn: () => {
+        throw new Error('agy must not be spawned while it has no probe spec');
+      },
+    });
+    assert.equal(result, null, 'agy is currently unprobeable');
+  });
+
+  test('gemini stays probeable so a legacy google install is still verified', async () => {
+    // The wizard now sends the binary that actually resolved, so a machine carrying only the
+    // legacy CLI must keep reaching a real probe instead of falling through to "skipped".
+    const { tryCliProbe } = await import('../dist/routes/first-run-quest.js');
+    const result = await tryCliProbe('gemini', { spawnFn: createMockSpawn({ stdout: 'pong' }) });
+    assert.ok(result, 'gemini must have a probe spec');
+    assert.equal(result.ok, true);
+  });
 });

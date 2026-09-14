@@ -39,15 +39,16 @@ export const clientsRoutes: FastifyPluginAsync<ClientsRouteOptions> = async (app
   app.get('/api/clients', async (request: FastifyRequest, reply) => {
     if (!resolveUserId(request)) return missingIdentity(reply);
 
-    // Prefer the cached report; fall back to a live round so the endpoint is useful even when
-    // the registry has not been wired (tests, or a process that failed its first round).
-    const report = registry?.getReport() ?? (await detectProviderAvailability());
+    // Prefer the cached report. A live round is the fallback for a registry that has nothing yet
+    // (its first round is still in flight, or it failed) and for a mount without a registry at
+    // all; in both of those cases the report we return was just produced, so its age is 0.
+    const cached = registry?.getReport() ?? null;
+    const report = cached ?? (await detectProviderAvailability());
     return {
       detectedAt: report.detectedAt,
       // Derived from `detectedAt`, so the two can never disagree. `null` means the age is unknown
-      // and must NOT be read as fresh; only the registry-less path below detects live, and that
-      // is the one case where 0 is honest.
-      ageMs: registry ? registry.getAgeMs() : 0,
+      // and must NOT be read as fresh.
+      ageMs: cached ? (registry?.getAgeMs() ?? null) : 0,
       discoveryIntervalMs: resolveDiscoveryIntervalMs(),
       discoveryIntervalEnv: PROVIDER_DISCOVERY_INTERVAL_ENV,
       providers: report.providers,
