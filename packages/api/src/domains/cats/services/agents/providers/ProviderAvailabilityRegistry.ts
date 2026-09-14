@@ -148,7 +148,7 @@ export class ProviderAvailabilityRegistry {
     this.publishedAtMs = (this.deps.now ?? Date.now)();
     if (!notify) return;
     const installed = report.providers.filter((provider) => provider.installed).map((p) => p.clientId);
-    log.info({ installed, versionProbeEnabled: report.versionProbeEnabled }, 'provider availability detected');
+    log.info({ installed }, 'provider availability detected');
     try {
       this.deps.onReport?.(report);
     } catch (error) {

@@ -35,8 +35,9 @@ export interface DetectedClient {
   /** Whether the CLI binary is found in PATH */
   installed: boolean;
   /**
-   * Only populated when `CAT_PROVIDER_VERSION_PROBE=1`. Version probing is opt-in because it
-   * spawns the CLI; see the module header.
+   * Reserved, and **never populated**. Detection does not spawn the CLI (LL-055), so no code
+   * path can produce a version. Kept optional so `ClientStep`'s `{c.version && ...}` render
+   * simply stays hidden, which is the behaviour LL-055 settled on.
    */
   version?: string;
   /** Whether an API key env var is set for this provider */

@@ -31,7 +31,7 @@ function provider(overrides = {}) {
 }
 
 function report(providers, detectedAt = new Date().toISOString()) {
-  return { detectedAt, versionProbeEnabled: false, providers };
+  return { detectedAt, providers };
 }
 
 test('seed publishes without running detection', () => {

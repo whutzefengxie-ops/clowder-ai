@@ -52,7 +52,7 @@ function provider(overrides = {}) {
 }
 
 function report(providers, detectedAt = new Date().toISOString()) {
-  return { detectedAt, versionProbeEnabled: false, providers };
+  return { detectedAt, providers };
 }
 
 test('round-trips a report under .cat-cafe/providers.json', () => {

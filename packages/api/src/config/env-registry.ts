@@ -856,15 +856,6 @@ export const ENV_VARS: EnvDefinition[] = [
 
   // --- cli ---
   {
-    name: 'CAT_PROVIDER_VERSION_PROBE',
-    defaultValue: '(未设置)',
-    description:
-      '设为 1 时，CLI 可用性检测额外探测版本号（会启动 CLI 进程）。默认关闭：部分 agent CLI 的版本子命令会拉起完整进程并留下孤儿（LL-055）',
-    category: 'cli',
-    sensitive: false,
-    restartRequired: true,
-  },
-  {
     name: 'CAT_PROVIDER_DISCOVERY_INTERVAL_MS',
     defaultValue: '300000',
     description: 'CLI 可用性周期复检间隔（毫秒）；0 = 只在进程启动时检测一次',

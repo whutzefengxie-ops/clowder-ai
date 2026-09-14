@@ -63,17 +63,16 @@ export interface InstallHint {
   readonly win32?: string;
 }
 
-/** How the availability probe may inspect this client. */
+/**
+ * How the availability probe may inspect this client.
+ *
+ * Deliberately carries **no** version field. LL-055 (`docs/public-lessons.md`) makes this
+ * canonical: low-cost detection / health-probe paths must not spawn a complex runtime, and its
+ * regression guard asserts that no spec declares `versionCmd` / `versionArgs`. There is
+ * therefore nothing here to declare — path existence plus the well-known fallback directories
+ * are the whole surface. Adding a version field back is a policy change, not a refactor.
+ */
 export interface ClientProbeSpec {
-  /**
-   * `path-only` resolves the binary on PATH (and the well-known fallback dirs) and never
-   * spawns anything. `path+version` additionally runs `versionArgs` — and is only invoked
-   * when the caller opts in (see `CAT_PROVIDER_VERSION_PROBE`), because spawning third-party
-   * agent CLIs for detection has produced orphaned CPU-burning processes before (LL-055).
-   */
-  readonly strategy: 'path-only' | 'path+version';
-  /** Args for the version query; required when `strategy` is `path+version`. */
-  readonly versionArgs?: readonly string[];
   /** Env var that, when set, means an API key for this provider is present. */
   readonly apiKeyEnv?: string;
 }
@@ -118,7 +117,7 @@ export interface ClientDescriptor {
   readonly creatable: boolean;
 }
 
-const NO_LOCAL_CLI_PROBE: ClientProbeSpec = { strategy: 'path-only' };
+const NO_LOCAL_CLI_PROBE: ClientProbeSpec = {};
 
 export const CLIENT_DESCRIPTORS: readonly ClientDescriptor[] = [
   {
@@ -129,7 +128,7 @@ export const CLIENT_DESCRIPTORS: readonly ClientDescriptor[] = [
     pathEnvVar: 'CAT_ANTHROPIC_PATH',
     defaultCli: { command: 'claude', outputFormat: 'stream-json' },
     installHint: { default: 'npm install -g @anthropic-ai/claude-code' },
-    probe: { strategy: 'path+version', versionArgs: ['--version'], apiKeyEnv: 'ANTHROPIC_API_KEY' },
+    probe: { apiKeyEnv: 'ANTHROPIC_API_KEY' },
     localCli: true,
     creatable: true,
   },
@@ -141,7 +140,7 @@ export const CLIENT_DESCRIPTORS: readonly ClientDescriptor[] = [
     pathEnvVar: 'CAT_OPENAI_PATH',
     defaultCli: { command: 'codex', outputFormat: 'json' },
     installHint: { default: 'npm install -g @openai/codex' },
-    probe: { strategy: 'path+version', versionArgs: ['--version'], apiKeyEnv: 'OPENAI_API_KEY' },
+    probe: { apiKeyEnv: 'OPENAI_API_KEY' },
     localCli: true,
     creatable: true,
   },
@@ -160,7 +159,7 @@ export const CLIENT_DESCRIPTORS: readonly ClientDescriptor[] = [
         'curl.exe -fsSL https://antigravity.google/cli/install.cmd -o install.cmd && install.cmd && del install.cmd',
     },
     altInstallHints: { gemini: { default: 'npm install -g @google/gemini-cli' } },
-    probe: { strategy: 'path-only', apiKeyEnv: 'GOOGLE_API_KEY' },
+    probe: { apiKeyEnv: 'GOOGLE_API_KEY' },
     localCli: true,
     creatable: true,
   },
@@ -177,7 +176,7 @@ export const CLIENT_DESCRIPTORS: readonly ClientDescriptor[] = [
       default: 'curl -fsSL https://code.kimi.com/kimi-code/install.sh | bash',
       win32: 'irm https://code.kimi.com/kimi-code/install.ps1 | iex',
     },
-    probe: { strategy: 'path-only', apiKeyEnv: 'MOONSHOT_API_KEY' },
+    probe: { apiKeyEnv: 'MOONSHOT_API_KEY' },
     localCli: true,
     creatable: true,
   },
@@ -189,7 +188,7 @@ export const CLIENT_DESCRIPTORS: readonly ClientDescriptor[] = [
     pathEnvVar: 'CAT_OPENCODE_PATH',
     defaultCli: { command: 'opencode', outputFormat: 'json' },
     installHint: { default: 'npm install -g opencode-ai' },
-    probe: { strategy: 'path-only', apiKeyEnv: 'ANTHROPIC_API_KEY' },
+    probe: { apiKeyEnv: 'ANTHROPIC_API_KEY' },
     localCli: true,
     creatable: true,
   },
@@ -340,7 +339,11 @@ export interface ProviderAvailability {
    * used, which is how an operator pins a binary that is not on the process's PATH.
    */
   resolvedVia: 'env-override' | 'path' | 'unavailable';
-  /** Only populated when version probing is enabled and the CLI answered. */
+  /**
+   * Reserved, and **never populated**. Detection must not spawn the CLI (LL-055), so no code
+   * path can produce a version. Kept so consumers that already render an optional version keep
+   * compiling and simply render nothing, exactly as `DetectedClient.version` does.
+   */
   version?: string;
   /** Whether an API key env var for this provider is present (does not prove auth works). */
   hasApiKey: boolean;
@@ -355,7 +358,5 @@ export interface ProviderAvailability {
 
 export interface ProviderAvailabilityReport {
   detectedAt: string;
-  /** Whether this report attempted version probes. */
-  versionProbeEnabled: boolean;
   providers: ProviderAvailability[];
 }

@@ -4,22 +4,22 @@
  *
  * Design rules inherited from this repo's history, not invented here:
  *
- *  - LL-055 (src extension): never boot an agent runtime just to ask it a question.
- *    `opencode version` starts a full agent process, ignores SIGTERM, and on macOS leaves an
- *    orphan at PPID=1 burning ~67% CPU. Detection therefore resolves binaries on PATH and
- *    stops there.
- *  - Version probing is opt-in (`CAT_PROVIDER_VERSION_PROBE=1`) and restricted to descriptors
- *    that declare `probe.strategy: 'path+version'`. A probe is bounded (hard timeout, then
- *    SIGKILL, plus a whole-tree kill on Windows) and a failure downgrades to "no version"
- *    rather than "not installed" — the same transient/confirmed distinction the CLI error
- *    classifier makes.
+ *  - **LL-055 is upheld literally.** Low-cost detection / health-probe paths must not spawn a
+ *    complex runtime: `opencode version` boots a full agent process, ignores SIGTERM, and on
+ *    macOS (no `PR_SET_PDEATHSIG`) leaves an orphan at PPID=1 burning ~67% CPU. Detection
+ *    therefore resolves the binary and stops — it starts no process of any kind, for any
+ *    provider. There is no version field on the descriptor and no opt-in flag, because an
+ *    opt-in version probe would still be the thing LL-055 forbids; reintroducing one is a
+ *    policy decision that belongs in an accepted issue.
  *  - Detection never mutates anything. Callers decide what to do with the report.
+ *  - A failure to *learn something* is never reported as "not installed". Only a clean
+ *    resolution miss produces `missing`; an unusable `CAT_<CLIENT>_PATH` override produces
+ *    `error`, because those need different repairs.
  *
  * The ClientId → binary mapping lives in `@cat-cafe/shared`'s descriptor registry, so this
  * module contains no per-provider tables.
  */
 
-import { execFile } from 'node:child_process';
 import { statSync } from 'node:fs';
 import {
   CLIENT_DESCRIPTORS,
@@ -33,24 +33,19 @@ import { resolveCliCommand } from '../../../../../utils/cli-resolve.js';
 
 export type { ProviderAvailability, ProviderAvailabilityReport, ProviderAvailabilityStatus } from '@cat-cafe/shared';
 
-/** Injectables — tests substitute all three so no real PATH or subprocess is touched. */
+/**
+ * Injectables — tests substitute both so no real PATH is touched.
+ *
+ * Note there is no version-probe seam: the absence of the seam is the guarantee. A test can
+ * therefore assert spawn-freedom structurally rather than by observing a mock that was never
+ * called.
+ */
 export interface ProviderDetectionDeps {
   env?: NodeJS.ProcessEnv;
   /** Resolve a bare command name to an absolute path, or null when not found. */
   resolveCommand?: (command: string) => string | null;
   /** Whether an absolute path is an existing regular file. */
   isExecutableFile?: (path: string) => boolean;
-  /** Read the CLI's own version. Only called when probing is enabled. */
-  probeVersion?: (path: string, args: readonly string[]) => Promise<string | undefined>;
-}
-
-const VERSION_PROBE_TIMEOUT_MS = 2_000;
-
-/** Env flag that turns version probing on. Absent/false keeps detection spawn-free. */
-export const VERSION_PROBE_ENV = 'CAT_PROVIDER_VERSION_PROBE';
-
-export function isVersionProbeEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
-  return env[VERSION_PROBE_ENV] === '1';
 }
 
 function defaultIsExecutableFile(path: string): boolean {
@@ -59,58 +54,6 @@ function defaultIsExecutableFile(path: string): boolean {
   } catch {
     return false;
   }
-}
-
-/**
- * Bounded version query.
- *
- * Resolves to undefined — never throws — because an unreadable version must not be reported
- * as "not installed". A `.cmd`/`.bat` shim is skipped on Windows: `execFile` cannot run a
- * batch file without a shell, and detection will not start one.
- */
-function defaultProbeVersion(path: string, args: readonly string[]): Promise<string | undefined> {
-  if (process.platform === 'win32' && /\.(cmd|bat)$/i.test(path)) return Promise.resolve(undefined);
-
-  return new Promise((resolve) => {
-    let settled = false;
-    const finish = (value: string | undefined): void => {
-      if (settled) return;
-      settled = true;
-      resolve(value);
-    };
-
-    const child = execFile(
-      path,
-      [...args],
-      { timeout: VERSION_PROBE_TIMEOUT_MS, windowsHide: true, encoding: 'utf-8' },
-      (error, stdout) => {
-        if (error) {
-          finish(undefined);
-          return;
-        }
-        const firstLine = String(stdout)
-          .split('\n')
-          .find((line) => line.trim().length > 0);
-        finish(firstLine?.trim() || undefined);
-      },
-    );
-
-    child.on('error', () => finish(undefined));
-    if (child.pid === undefined) return;
-    // Escalate past a child that ignores SIGTERM (the LL-055 failure mode) instead of waiting
-    // on a process we cannot reap.
-    const hardKill = setTimeout(() => {
-      if (settled) return;
-      try {
-        child.kill('SIGKILL');
-      } catch {
-        // Already gone.
-      }
-      finish(undefined);
-    }, VERSION_PROBE_TIMEOUT_MS + 500);
-    hardKill.unref();
-    child.on('close', () => clearTimeout(hardKill));
-  });
 }
 
 function reasonForMissing(descriptor: ClientDescriptor, installHint: string): string {
@@ -123,11 +66,10 @@ function reasonForBadOverride(descriptor: ClientDescriptor, path: string): strin
   return `${descriptor.pathEnvVar} 指向的路径不存在或不是文件：${path}。请修正该环境变量，或删除它以回退到 PATH 探测。`;
 }
 
-async function probeOne(
+function probeOne(
   descriptor: ClientDescriptor,
-  deps: Required<Pick<ProviderDetectionDeps, 'env' | 'resolveCommand' | 'isExecutableFile' | 'probeVersion'>>,
-  versionProbeEnabled: boolean,
-): Promise<ProviderAvailability> {
+  deps: Required<Pick<ProviderDetectionDeps, 'env' | 'resolveCommand' | 'isExecutableFile'>>,
+): ProviderAvailability {
   const installHint = formatInstallHint(descriptor);
   const apiKeyEnv = descriptor.probe.apiKeyEnv;
   const hasApiKey = apiKeyEnv ? Boolean(deps.env[apiKeyEnv]) : false;
@@ -164,30 +106,26 @@ async function probeOne(
         reason: reasonForBadOverride(descriptor, override),
       };
     }
-    const version = versionProbeEnabled ? await probeVersionFor(descriptor, override, deps) : undefined;
     return {
       ...base,
       installed: true,
       command: override,
       resolvedPath: override,
       resolvedVia: 'env-override',
-      ...(version ? { version } : {}),
       status: 'configured',
     };
   }
 
-  // 2. Candidate commands, highest priority first.
+  // 2. Candidate commands, highest priority first. Resolution only — nothing is executed.
   for (const command of descriptor.commands) {
     const resolved = deps.resolveCommand(command);
     if (!resolved) continue;
-    const version = versionProbeEnabled ? await probeVersionFor(descriptor, resolved, deps) : undefined;
     return {
       ...base,
       installed: true,
       command,
       resolvedPath: resolved,
       resolvedVia: 'path',
-      ...(version ? { version } : {}),
       status: 'configured',
     };
   }
@@ -202,15 +140,6 @@ async function probeOne(
   };
 }
 
-async function probeVersionFor(
-  descriptor: ClientDescriptor,
-  path: string,
-  deps: { probeVersion: (path: string, args: readonly string[]) => Promise<string | undefined> },
-): Promise<string | undefined> {
-  if (descriptor.probe.strategy !== 'path+version' || !descriptor.probe.versionArgs) return undefined;
-  return deps.probeVersion(path, descriptor.probe.versionArgs);
-}
-
 /**
  * Probe every client in the descriptor registry, in parallel.
  *
@@ -220,43 +149,34 @@ async function probeVersionFor(
 export async function detectProviderAvailability(
   deps: ProviderDetectionDeps = {},
 ): Promise<ProviderAvailabilityReport> {
-  const env = deps.env ?? process.env;
-  const resolved: Required<
-    Pick<ProviderDetectionDeps, 'env' | 'resolveCommand' | 'isExecutableFile' | 'probeVersion'>
-  > = {
-    env,
+  const resolved: Required<Pick<ProviderDetectionDeps, 'env' | 'resolveCommand' | 'isExecutableFile'>> = {
+    env: deps.env ?? process.env,
     resolveCommand: deps.resolveCommand ?? resolveCliCommand,
     isExecutableFile: deps.isExecutableFile ?? defaultIsExecutableFile,
-    probeVersion: deps.probeVersion ?? defaultProbeVersion,
   };
-  const versionProbeEnabled = isVersionProbeEnabled(env);
 
-  const providers = await Promise.all(
-    CLIENT_DESCRIPTORS.map(async (descriptor) => {
-      try {
-        return await probeOne(descriptor, resolved, versionProbeEnabled);
-      } catch (error) {
-        const installHint = formatInstallHint(descriptor, process.platform);
-        return {
-          clientId: descriptor.clientId,
-          toolId: descriptor.toolId,
-          label: descriptor.label,
-          installed: false,
-          command: descriptor.commands[0] ?? descriptor.defaultCli.command,
-          resolvedVia: 'unavailable',
-          hasApiKey: false,
-          installHint,
-          localCli: descriptor.localCli,
-          status: 'missing',
-          reason: `${descriptor.label} 探测失败：${error instanceof Error ? error.message : String(error)}。请检查 ${descriptor.pathEnvVar ?? 'PATH'} 后重试。`,
-        } satisfies ProviderAvailability;
-      }
-    }),
-  );
+  const providers = CLIENT_DESCRIPTORS.map((descriptor) => {
+    try {
+      return probeOne(descriptor, resolved);
+    } catch (error) {
+      return {
+        clientId: descriptor.clientId,
+        toolId: descriptor.toolId,
+        label: descriptor.label,
+        installed: false,
+        command: descriptor.commands[0] ?? descriptor.defaultCli.command,
+        resolvedVia: 'unavailable',
+        hasApiKey: false,
+        installHint: formatInstallHint(descriptor),
+        localCli: descriptor.localCli,
+        status: 'missing',
+        reason: `${descriptor.label} 探测失败：${error instanceof Error ? error.message : String(error)}。请检查 ${descriptor.pathEnvVar ?? 'PATH'} 后重试。`,
+      } satisfies ProviderAvailability;
+    }
+  });
 
   return {
     detectedAt: new Date().toISOString(),
-    versionProbeEnabled,
     providers,
   };
 }

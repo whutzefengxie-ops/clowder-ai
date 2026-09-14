@@ -2,22 +2,21 @@
  * provider-detection unit tests.
  *
  * Guards the two decisions that make this detector safe to run inside the API process:
- *   1. detection never spawns a CLI unless version probing is explicitly enabled (LL-055);
+ *   1. detection starts NO process at all — LL-055 is upheld literally, with no opt-in escape
+ *      hatch, and the guarantee is structural (there is no version-probe seam to stub);
  *   2. a broken `CAT_<CLIENT>_PATH` override is a hard error, never a silent fall-through to
  *      whatever PATH happens to resolve — an operator who pinned a binary must not be handed
  *      a different one.
  */
 
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { mock, test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 
-const {
-  VERSION_PROBE_ENV,
-  availabilityByClientId,
-  detectProviderAvailability,
-  installedProviders,
-  isVersionProbeEnabled,
-} = await import('../dist/domains/cats/services/agents/providers/provider-detection.js');
+const { availabilityByClientId, detectProviderAvailability, installedProviders } = await import(
+  '../dist/domains/cats/services/agents/providers/provider-detection.js'
+);
 
 function byId(report, clientId) {
   const provider = report.providers.find((p) => p.clientId === clientId);
@@ -99,51 +98,39 @@ test('clients with no local CLI are unsupported rather than missing', async () =
   );
 });
 
-test('never spawns a CLI unless version probing is opted in (LL-055)', async () => {
-  const probeVersion = mock.fn(async () => 'v9.9.9');
+test('starts no process — no version field, no opt-in flag, no spawn seam (LL-055)', async () => {
+  // LL-055 is upheld literally rather than by an opt-in: `opencode version` boots a full agent
+  // process, ignores SIGTERM, and on macOS leaves a PPID=1 orphan burning CPU. The guarantee is
+  // structural — the detector has no version-probe dependency to stub, so a test can prove the
+  // absence rather than observe a mock that merely went uncalled.
+  const module = await import('../dist/domains/cats/services/agents/providers/provider-detection.js');
+  for (const name of Object.keys(module)) {
+    assert.equal(
+      /version|spawn|exec/i.test(name),
+      false,
+      `provider-detection must not export a ${name} seam (LL-055 forbids spawning for detection)`,
+    );
+  }
+
   const report = await detectProviderAvailability({
     resolveCommand: (command) => `/usr/local/bin/${command}`,
     env: {},
   });
-  assert.equal(report.versionProbeEnabled, false);
-
-  const withProbe = await detectProviderAvailability({
-    resolveCommand: (command) => `/usr/local/bin/${command}`,
-    probeVersion,
-    env: {},
-  });
-  assert.equal(withProbe.versionProbeEnabled, false);
-  assert.equal(probeVersion.mock.callCount(), 0, 'default detection must not fork any CLI');
-  assert.equal(byId(withProbe, 'anthropic').version, undefined);
-
-  // And the same stub is never reached for the path-only providers even when enabled.
-  const enabled = await detectProviderAvailability({
-    resolveCommand: (command) => `/usr/local/bin/${command}`,
-    probeVersion,
-    env: { [VERSION_PROBE_ENV]: '1' },
-  });
-  assert.equal(enabled.versionProbeEnabled, true);
-  assert.equal(byId(enabled, 'anthropic').version, 'v9.9.9');
-  assert.equal(byId(enabled, 'openai').version, 'v9.9.9');
-  assert.equal(
-    byId(enabled, 'kimi').version,
-    undefined,
-    'kimi is path-only: probing it is exactly the LL-055 zombie case',
-  );
-  assert.equal(probeVersion.mock.callCount(), 2);
+  for (const provider of report.providers) {
+    assert.equal(provider.version, undefined, `${provider.clientId} must not report a version`);
+  }
+  assert.equal('versionProbeEnabled' in report, false, 'the report has no version-probe state');
 });
 
-test('an unreadable version downgrades to no version, never to not-installed', async () => {
-  const report = await detectProviderAvailability({
-    resolveCommand: (command) => `/usr/local/bin/${command}`,
-    probeVersion: async () => undefined,
-    env: { [VERSION_PROBE_ENV]: '1' },
-  });
-
-  const anthropic = byId(report, 'anthropic');
-  assert.equal(anthropic.installed, true, 'a failed version probe is transient, not a verdict');
-  assert.equal(anthropic.status, 'configured');
-  assert.equal(anthropic.version, undefined);
+test('the detector module imports no child-process API at all', () => {
+  // Belt and braces on the same guarantee: even an unused import would signal that a spawn path
+  // is being reintroduced. `node:fs` (statSync) is allowed; process APIs are not.
+  const source = readFileSync(
+    fileURLToPath(new URL('../src/domains/cats/services/agents/providers/provider-detection.ts', import.meta.url)),
+    'utf-8',
+  );
+  assert.equal(/from 'node:child_process'/.test(source), false, 'detection must not import node:child_process');
+  assert.equal(/execFile|spawn\(|exec\(/.test(source), false, 'detection must not execute anything');
 });
 
 test('one throwing provider cannot blank the report', async () => {
@@ -171,11 +158,4 @@ test('lookup helpers key by clientId', async () => {
     installedProviders(report).map((p) => p.clientId),
     ['openai'],
   );
-});
-
-test('isVersionProbeEnabled only accepts the exact opt-in value', () => {
-  assert.equal(isVersionProbeEnabled({}), false);
-  assert.equal(isVersionProbeEnabled({ [VERSION_PROBE_ENV]: '0' }), false);
-  assert.equal(isVersionProbeEnabled({ [VERSION_PROBE_ENV]: 'true' }), false);
-  assert.equal(isVersionProbeEnabled({ [VERSION_PROBE_ENV]: '1' }), true);
 });

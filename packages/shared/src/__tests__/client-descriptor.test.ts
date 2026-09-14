@@ -55,7 +55,7 @@ describe('client descriptor registry', () => {
     }
   });
 
-  it('keeps localCli, commands and probe strategy mutually consistent', () => {
+  it('keeps localCli, commands and toolId mutually consistent', () => {
     for (const descriptor of CLIENT_DESCRIPTORS) {
       if (descriptor.localCli) {
         expect(descriptor.commands.length, `${descriptor.clientId} is local but has no commands`).toBeGreaterThan(0);
@@ -64,25 +64,38 @@ describe('client descriptor registry', () => {
         expect(descriptor.commands, `${descriptor.clientId} has no local CLI but lists commands`).toEqual([]);
         expect(descriptor.toolId, `${descriptor.clientId} has no local CLI but claims a toolId`).toBeNull();
       }
-      if (descriptor.probe.strategy === 'path+version') {
-        expect(
-          descriptor.probe.versionArgs,
-          `${descriptor.clientId} opted into version probing without versionArgs`,
-        ).toBeDefined();
-      } else {
-        expect(descriptor.probe.versionArgs).toBeUndefined();
-      }
     }
   });
 
-  it('never spawns an agent runtime for detection unless explicitly whitelisted (LL-055)', () => {
-    // LL-055: `opencode version` boots a full agent process, ignores SIGTERM, and leaves an
-    // orphan burning CPU. Only CLIs with a documented lightweight `--version` may opt in.
-    const versionProbing = CLIENT_DESCRIPTORS.filter((d) => d.probe.strategy === 'path+version').map((d) => d.clientId);
-    expect(versionProbing.sort()).toEqual(['anthropic', 'openai']);
+  it('declares no version-spawning field on any descriptor — LL-055 regression guard', () => {
+    // LL-055 (`docs/public-lessons.md`) is canonical: low-cost detection / health-probe paths
+    // must not spawn a complex runtime, because `opencode version` boots a full agent process
+    // that ignores SIGTERM and leaves a PPID=1 orphan burning CPU. Its regression guard is
+    // "no spec may declare versionCmd / versionArgs".
+    //
+    // This assertion is deliberately absolute — there is no whitelist. Detection may resolve a
+    // binary and nothing else. Reintroducing version probing is a policy change that has to go
+    // through an accepted issue, not a descriptor edit.
     for (const descriptor of CLIENT_DESCRIPTORS) {
-      if (descriptor.probe.strategy === 'path+version') continue;
-      expect(descriptor.probe.versionArgs).toBeUndefined();
+      const probeKeys = Object.keys(descriptor.probe);
+      expect(
+        probeKeys.filter((key) => /version/i.test(key)),
+        `${descriptor.clientId} declares a version-probing field`,
+      ).toEqual([]);
+      expect(
+        probeKeys.filter((key) => key === 'strategy' || key === 'versionArgs' || key === 'versionCmd'),
+        `${descriptor.clientId} reintroduced a version probe spec`,
+      ).toEqual([]);
+    }
+  });
+
+  it('probe specs carry nothing but the API-key env var', () => {
+    // Keeps the surface honest: if a future field is added it must be a deliberate,
+    // reviewed decision rather than a silent widening of what detection is allowed to do.
+    for (const descriptor of CLIENT_DESCRIPTORS) {
+      expect(Object.keys(descriptor.probe).sort(), `${descriptor.clientId} has an unexpected probe field`).toEqual(
+        descriptor.probe.apiKeyEnv === undefined ? [] : ['apiKeyEnv'],
+      );
     }
   });
 

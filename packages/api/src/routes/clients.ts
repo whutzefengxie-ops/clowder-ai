@@ -45,7 +45,6 @@ export const clientsRoutes: FastifyPluginAsync<ClientsRouteOptions> = async (app
     return {
       detectedAt: report.detectedAt,
       ageMs: registry?.getAgeMs() ?? 0,
-      versionProbeEnabled: report.versionProbeEnabled,
       discoveryIntervalMs: resolveDiscoveryIntervalMs(),
       discoveryIntervalEnv: PROVIDER_DISCOVERY_INTERVAL_ENV,
       providers: report.providers,
