@@ -14,7 +14,7 @@ import { readFileSync } from 'node:fs';
 import { mock, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-const { availabilityByClientId, detectProviderAvailability, installedProviders } = await import(
+const { detectProviderAvailability } = await import(
   '../dist/domains/cats/services/agents/providers/provider-detection.js'
 );
 
@@ -90,9 +90,9 @@ test('clients with no local CLI are unsupported rather than missing', async () =
     assert.equal(provider.status, 'unsupported');
     assert.equal(provider.installed, false);
   }
-  const installed = installedProviders(report);
+  const installedLocal = report.providers.filter((p) => p.installed && p.localCli);
   assert.equal(
-    installed.some((p) => !p.localCli),
+    installedLocal.some((p) => !p.localCli),
     false,
     'a bridged client must never count as an installed local CLI',
   );
@@ -146,16 +146,20 @@ test('one throwing provider cannot blank the report', async () => {
   assert.match(opencode.reason, /探测失败/);
 });
 
-test('lookup helpers key by clientId', async () => {
+test('reports exactly one record per descriptor, keyed by clientId', async () => {
+  // Deliberately no convenience lookup helpers here: `installedProviders` /
+  // `availabilityByClientId` had no production consumer, so they were removed rather than
+  // shipped as speculative surface. Consumers index `report.providers` directly.
   const report = await detectProviderAvailability({
     resolveCommand: (command) => (command === 'codex' ? '/usr/local/bin/codex' : null),
     env: {},
   });
-  const map = availabilityByClientId(report);
-  assert.equal(map.get('openai').installed, true);
-  assert.equal(map.get('anthropic').installed, false);
+  const byId = new Map(report.providers.map((p) => [p.clientId, p]));
+  assert.equal(byId.size, report.providers.length, 'clientId is the key, so it must be unique');
+  assert.equal(byId.get('openai').installed, true);
+  assert.equal(byId.get('anthropic').installed, false);
   assert.deepEqual(
-    installedProviders(report).map((p) => p.clientId),
+    report.providers.filter((p) => p.installed && p.localCli).map((p) => p.clientId),
     ['openai'],
   );
 });

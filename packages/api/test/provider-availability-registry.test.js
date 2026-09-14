@@ -34,6 +34,15 @@ function report(providers, detectedAt = new Date().toISOString()) {
   return { detectedAt, providers };
 }
 
+/**
+ * Read one provider out of the published report. The registry deliberately exposes no
+ * per-client lookup — an unused convenience accessor is speculative surface — so callers
+ * index the report.
+ */
+function findProvider(registry, clientId) {
+  return registry.getReport()?.providers.find((p) => p.clientId === clientId);
+}
+
 test('seed publishes without running detection', () => {
   const resolveCommand = () => {
     throw new Error('detection must not run during seed');
@@ -43,8 +52,8 @@ test('seed publishes without running detection', () => {
   registry.seed(report([provider()]));
 
   assert.equal(registry.getReport().providers.length, 1);
-  assert.equal(registry.getProvider('anthropic').installed, true);
-  assert.equal(registry.getProvider('openai'), undefined);
+  assert.equal(findProvider(registry, 'anthropic').installed, true);
+  assert.equal(findProvider(registry, 'openai'), undefined);
 });
 
 test('refresh runs detection and notifies onReport', async () => {
@@ -59,8 +68,8 @@ test('refresh runs detection and notifies onReport', async () => {
 
   assert.equal(registry.getReport(), published);
   assert.equal(seen.length, 1, 'onReport fires once per published round');
-  assert.equal(registry.getProvider('anthropic').installed, true);
-  assert.equal(registry.getProvider('openai').installed, false);
+  assert.equal(findProvider(registry, 'anthropic').installed, true);
+  assert.equal(findProvider(registry, 'openai').installed, false);
 });
 
 test('concurrent refreshes share a single round', async () => {

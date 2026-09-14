@@ -64,11 +64,6 @@ export class ProviderAvailabilityRegistry {
     return this.report;
   }
 
-  /** Latest known availability for one client, or undefined. */
-  getProvider(clientId: string): ProviderAvailability | undefined {
-    return this.report?.providers.find((provider) => provider.clientId === clientId);
-  }
-
   /** Age of the latest report in ms, or null when nothing has been published. */
   getAgeMs(): number | null {
     if (this.publishedAtMs === null) return null;

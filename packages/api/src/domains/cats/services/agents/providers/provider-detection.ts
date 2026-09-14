@@ -24,7 +24,6 @@ import { statSync } from 'node:fs';
 import {
   CLIENT_DESCRIPTORS,
   type ClientDescriptor,
-  type ClientId,
   formatInstallHint,
   type ProviderAvailability,
   type ProviderAvailabilityReport,
@@ -179,16 +178,4 @@ export async function detectProviderAvailability(
     detectedAt: new Date().toISOString(),
     providers,
   };
-}
-
-/** Providers that are installed and backed by a local CLI. */
-export function installedProviders(report: ProviderAvailabilityReport): ProviderAvailability[] {
-  return report.providers.filter((provider) => provider.installed && provider.localCli);
-}
-
-/** Availability lookup keyed by clientId, for callers annotating member lists. */
-export function availabilityByClientId(
-  report: ProviderAvailabilityReport,
-): ReadonlyMap<ClientId, ProviderAvailability> {
-  return new Map(report.providers.map((provider) => [provider.clientId, provider]));
 }
