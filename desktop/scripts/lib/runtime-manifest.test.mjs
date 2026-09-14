@@ -20,6 +20,7 @@ import { fileURLToPath } from 'node:url';
 
 import {
   detectRedisDivergence,
+  PENDING_DECISION_STATUS,
   REDIS_DIVERGENCE_ID,
   redisVersionFor,
   redisVersionsByPlatform,
@@ -78,7 +79,7 @@ describe('runtime-manifest: the shipped manifest', () => {
     // repositories, so it was not evidence of any decision — nobody here has
     // the authority to settle a cross-platform data-format question anyway.
     // The honest state is "declared, pinned, awaiting the maintainer".
-    assert.equal(entry.status, 'pending_maintainer_decision');
+    assert.equal(entry.status, PENDING_DECISION_STATUS);
     assert.equal(entry.decision, undefined, 'no decision has been made, so none may be recorded');
     assert.equal(entry.decidedIn, undefined, 'with no decision there is no provenance to cite');
     assert.ok(entry.proposal, 'a pending item must still say what we propose');
@@ -154,24 +155,56 @@ describe('runtime-manifest: validator rejects incoherent manifests', () => {
   // Provenance is only provenance if a reader can resolve it. "#11" cannot:
   // clowder-ai#11 and a fork's PR #11 are different objects, and an upstream
   // reviewer caught exactly this in a shipped decision record.
+  //
+  // The first version of these cases set only `decision`. That made them pass
+  // against a guard which checked only `decision` — a field this manifest had
+  // already stopped using — so both the guard and its tests were validating a
+  // shape nobody writes any more. Every case below now covers the status shape too.
   it('REJECTS a decision cited by bare number', () => {
     for (const bad of ['#11', 'PR #11', '11', 'see the linked PR']) {
+      for (const claim of [
+        { decision: 'keep the pins' },
+        { status: 'accepted' },
+        { status: 'accepted', decision: 'keep the pins' },
+      ]) {
+        const manifest = clone();
+        Object.assign(manifest.knownDivergence[0], claim, { decidedIn: bad });
+
+        assert.throws(
+          () => validateRuntimeManifest(manifest),
+          /bare issue or PR number resolves differently/,
+          `reference: ${bad}, claim: ${JSON.stringify(claim)}`,
+        );
+      }
+    }
+  });
+
+  it('REJECTS a settled status that cites nothing at all', () => {
+    for (const status of ['accepted', 'decided', 'settled_by_owner']) {
       const manifest = clone();
-      manifest.knownDivergence[0].decision = 'keep the pins';
-      manifest.knownDivergence[0].decidedIn = bad;
+      manifest.knownDivergence[0].status = status;
+      delete manifest.knownDivergence[0].decidedIn;
 
       assert.throws(
         () => validateRuntimeManifest(manifest),
-        /bare issue or PR number resolves differently/,
-        `reference: ${bad}`,
+        /asserts a decision .* but cites no decidedIn/,
+        `status: ${status}`,
       );
     }
+  });
+
+  it('REJECTS an entry marked pending that also carries a decision', () => {
+    const manifest = clone();
+    manifest.knownDivergence[0].status = PENDING_DECISION_STATUS;
+    manifest.knownDivergence[0].decidedIn = 'zts212653/clowder-ai#1459';
+
+    assert.throws(() => validateRuntimeManifest(manifest), /but also carries a decision/);
   });
 
   it('ACCEPTS a repository-qualified decision reference', () => {
     for (const good of ['zts212653/clowder-ai#123', 'https://github.com/zts212653/clowder-ai/pull/123']) {
       const manifest = clone();
-      manifest.knownDivergence[0].decision = 'keep the pins';
+      manifest.knownDivergence[0].status = 'accepted';
       manifest.knownDivergence[0].decidedIn = good;
 
       assert.equal(validateRuntimeManifest(manifest), manifest, `reference: ${good}`);
@@ -180,9 +213,11 @@ describe('runtime-manifest: validator rejects incoherent manifests', () => {
 
   it('does not require provenance for an entry that declares no decision', () => {
     const manifest = clone();
-    assert.equal(manifest.knownDivergence[0].decision, undefined);
-    delete manifest.knownDivergence[0].decidedIn;
+    const entry = manifest.knownDivergence[0];
 
+    assert.equal(entry.status, PENDING_DECISION_STATUS, 'the shipped entry is the pending shape');
+    assert.equal(entry.decision, undefined);
+    assert.equal(entry.decidedIn, undefined);
     assert.equal(validateRuntimeManifest(manifest), manifest);
   });
 });

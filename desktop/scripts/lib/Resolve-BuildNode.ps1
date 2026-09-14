@@ -58,14 +58,22 @@ function Resolve-BuildNodeVersion {
         $nodeVersion = $null
     }
 
+    # Read the requirement before building any failure message. Get-RequiredNodeMajor
+    # parses package.json with ConvertFrom-Json and never calls node, so the floor is
+    # available even when node is what is missing — and it is read here rather than
+    # written into the message as a literal, because a literal would put the same
+    # fact in two places and go stale the moment engines.node moves.
+    $requiredMajor = Get-RequiredNodeMajor -ProjectRoot $ProjectRoot
+    $requirement = if ($requiredMajor) { "Node >=$requiredMajor" } else { 'a Node matching package.json engines.node' }
+
     if (-not $nodeVersion) {
-        throw @'
+        throw (@'
 Cannot detect the build-machine Node version: "node --version" failed or returned nothing.
 Why: the bundled portable Node must match the Node that compiled the native modules
      (better-sqlite3 / node-pty / sharp). Guessing a version here ships an installer
      whose API cannot load them.
-Fix: install Node >= 24, make sure it is on PATH, then re-run this build.
-'@
+Fix: install {0}, make sure it is on PATH, then re-run this build.
+'@ -f $requirement)
     }
 
     $major = 0
@@ -73,7 +81,6 @@ Fix: install Node >= 24, make sure it is on PATH, then re-run this build.
         throw "Cannot parse the build-machine Node version ""$nodeVersion"" into a major version. Fix: report this output and re-run with a standard Node release (node --version prints e.g. v24.16.0)."
     }
 
-    $requiredMajor = Get-RequiredNodeMajor -ProjectRoot $ProjectRoot
     if ($requiredMajor -and $major -lt $requiredMajor) {
         throw "Build-machine Node $nodeVersion is older than the >=$requiredMajor required by package.json engines.node. Why: the bundled runtime would ship a Node version this project does not support. Fix: upgrade to Node >= $requiredMajor and re-run this build."
     }

@@ -97,26 +97,66 @@ function assertWindowsAssetTemplate(manifest) {
   }
 }
 
+/** The one status value that means "declared, but nobody has decided this yet". */
+const PENDING_DECISION_STATUS = 'pending_maintainer_decision';
+
+/** Whether a reader who only has this repo can resolve the reference. */
+function isRepoQualifiedReference(reference) {
+  return /^https?:\/\//i.test(reference) || /^[\w.-]+\/[\w.-]+#\d+$/.test(reference);
+}
+
+/** Whether an entry claims that somebody has already reached a decision. */
+function assertsDecisionReached(entry) {
+  return Boolean(entry.decision) || (entry.status != null && entry.status !== PENDING_DECISION_STATUS);
+}
+
+/** Provenance rules for a single knownDivergence entry. */
+function assertEntryProvenance(entry) {
+  const id = entry.id ?? '(entry without id)';
+  const reference = entry.decidedIn == null ? null : String(entry.decidedIn);
+  const pending = entry.status === PENDING_DECISION_STATUS;
+
+  if (reference !== null && !isRepoQualifiedReference(reference)) {
+    fail(
+      `runtime-manifest.json records a decision for "${id}" with decidedIn ${JSON.stringify(entry.decidedIn)}.`,
+      'a bare issue or PR number resolves differently in every repository, so no reader can verify the decision.',
+      'use a repository-qualified reference such as "owner/repo#123" or a full URL, or mark the entry as pending instead of decided.',
+    );
+  }
+
+  if (reference === null && assertsDecisionReached(entry)) {
+    fail(
+      `runtime-manifest.json entry "${id}" asserts a decision (status ${JSON.stringify(entry.status ?? null)}) but cites no decidedIn.`,
+      'a decision nobody can look up is indistinguishable from an assumption, which is how an invalid one shipped before.',
+      `add decidedIn as "owner/repo#123" or a full URL, or set status to "${PENDING_DECISION_STATUS}".`,
+    );
+  }
+
+  if (pending && (entry.decision || reference !== null)) {
+    fail(
+      `runtime-manifest.json entry "${id}" is marked "${PENDING_DECISION_STATUS}" but also carries a decision.`,
+      'the two say opposite things, and whichever a reader believes, one of them is wrong.',
+      `drop the decision fields, or change status to reflect the state that was actually reached.`,
+    );
+  }
+}
+
 /**
- * A recorded decision must be verifiable by a reader who only has THIS repo.
+ * A decision must be verifiable by a reader who only has THIS repo.
  *
- * A bare "#123" resolves differently in every repository — clowder-ai#11 is not
- * a fork's PR #11 — so it is not provenance at all. This rule exists because
- * exactly that mistake shipped once and was caught in upstream review.
+ * A bare "#123" resolves differently in every repository — clowder-ai#11 is not a
+ * fork's PR #11 — so it is not provenance at all. This rule exists because exactly
+ * that mistake shipped once and was caught in upstream review.
+ *
+ * It keys off every field that can assert a decision, not off `decision` alone.
+ * The first version checked only `decision`, which this manifest had already
+ * stopped using — it records `status` — so the guard passed on the shipped file
+ * while checking nothing, and a later `status: "accepted"` with a bare number
+ * would have sailed through the very check written to stop it.
  */
 function assertDivergenceProvenance(manifest) {
   for (const entry of manifest.knownDivergence ?? []) {
-    if (!entry || typeof entry !== 'object' || !entry.decision) continue;
-
-    const reference = String(entry.decidedIn ?? '');
-    const repoQualified = /^https?:\/\//i.test(reference) || /^[\w.-]+\/[\w.-]+#\d+$/.test(reference);
-    if (!repoQualified) {
-      fail(
-        `runtime-manifest.json records a decision for "${entry.id}" with decidedIn ${JSON.stringify(entry.decidedIn)}.`,
-        'a bare issue or PR number resolves differently in every repository, so no reader can verify the decision.',
-        'use a repository-qualified reference such as "owner/repo#123" or a full URL, or mark the entry as pending instead of decided.',
-      );
-    }
+    if (entry && typeof entry === 'object') assertEntryProvenance(entry);
   }
 }
 
@@ -217,6 +257,7 @@ function windowsRedisAssetName(manifest) {
 export {
   detectRedisDivergence,
   getByPath,
+  PENDING_DECISION_STATUS,
   REDIS_DIVERGENCE_ID,
   redisVersionFor,
   redisVersionsByPlatform,

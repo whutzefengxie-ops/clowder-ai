@@ -98,9 +98,25 @@ describe(
       assert.equal(results.missing.threw, true);
       assert.match(results.missing.message, /Cannot detect the build-machine Node version/);
       assert.match(results.missing.message, /Why:/);
-      assert.match(results.missing.message, /Fix: install Node >= 24/);
+      assert.match(results.missing.message, /Fix: install Node >=24,/);
+      assert.match(results.missing.message, /then re-run this build/);
       // A thrown GetNodeVersion must be treated the same way as no output.
       assert.equal(results.noOutput.threw, true);
+    });
+
+    it('states the floor from engines.node in the missing-Node message too', () => {
+      // This message used to hardcode ">= 24" while the same file read the real
+      // requirement from package.json elsewhere — the "same fact in two places"
+      // pattern this module exists to remove, inside the module itself.
+      const bumped = runDriver(makeProject('>=26.0.0'));
+      assert.match(bumped.missing.message, /Fix: install Node >=26,/);
+      assert.doesNotMatch(bumped.missing.message, /Node >=24/);
+
+      // With no engines.node there is no number to promise, so the message must
+      // point at the declaration instead of inventing one.
+      const undeclared = runDriver(makeProject(null));
+      assert.doesNotMatch(undeclared.missing.message, /Node >=\d/);
+      assert.match(undeclared.missing.message, /Fix: install a Node matching package\.json engines\.node,/);
     });
 
     it('rejects a Node older than the engines.node requirement', () => {
