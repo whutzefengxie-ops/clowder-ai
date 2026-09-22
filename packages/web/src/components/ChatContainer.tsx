@@ -34,6 +34,7 @@ import { BootstrapOrchestrator } from './BootstrapOrchestrator';
 import { ChatContainerHeader } from './ChatContainerHeader';
 import { useConciergeConfirmations } from './concierge/useConciergeConfirmations';
 import { FirstRunQuestWizard } from './FirstRunQuestWizard';
+import { markFirstRealMessage, restoreJourneyState } from './first-run-quest/onboarding-journey';
 import { BootcampGuideOverlay } from './first-run-quest/BootcampGuideOverlay';
 import { QuestBanner } from './first-run-quest/QuestBanner';
 import { syncLocalBootcampState } from './first-run-quest/syncLocalBootcampState';
@@ -194,6 +195,7 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
   const [showBootcampList, setShowBootcampList] = useState(false);
   const [showFirstRunQuestPrompt, setShowFirstRunQuestPrompt] = useState(false);
   const [showQuestWizard, setShowQuestWizard] = useState(false);
+  const [showOnboardingHint, setShowOnboardingHint] = useState(false);
   // F106: fetch bootcamp count independently of sidebar lifecycle
   // refreshKey increments only on modal close → avoids duplicate fetch on open
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -521,6 +523,11 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
   // Subscribe reactively so the effect re-runs when guide exits (session cleared).
   const activeGuideFlowId = useGuideStore((s) => s.session?.flow.id ?? null);
   useEffect(() => {
+    if (!showOnboardingHint || showQuestWizard || activeGuideFlowId === 'first-run-entry') return;
+    if (useGuideStore.getState().completedGuides.has(`${threadId}::first-run-entry`)) return;
+    useGuideStore.getState().reduceServerEvent({ action: 'start', guideId: 'first-run-entry', threadId });
+  }, [activeGuideFlowId, showOnboardingHint, showQuestWizard, threadId]);
+  useEffect(() => {
     if (currentBootcampPhase !== 'phase-7.5-add-teammate') return;
     // Guide already running — don't re-register
     if (activeGuideFlowId === 'bootcamp-add-teammate') return;
@@ -794,9 +801,22 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
       }
       void invalidateSidebarProjection();
       navigateToThread(questThreadId);
+      setShowOnboardingHint(true);
     },
     [navigateToThread, setThreads],
   );
+
+  const handleRealOnboardingMessage = useCallback((messageThreadId?: string) => {
+    if (messageThreadId && messageThreadId !== threadId) return;
+    try {
+      const state = restoreJourneyState(localStorage.getItem('cat-cafe:onboarding-journey'));
+      if (!state || state.stage !== 'ready' || (state.threadId && state.threadId !== threadId)) return;
+      localStorage.setItem('cat-cafe:onboarding-journey', JSON.stringify(markFirstRealMessage(state)));
+      setShowOnboardingHint(false);
+    } catch {
+      /* localStorage may be unavailable */
+    }
+  }, [threadId]);
 
   const handleSearchKnowledge = useCallback(() => {
     const fromParam = threadId ? `?from=${encodeURIComponent(threadId)}` : '';
@@ -871,22 +891,30 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
           density="full"
           messageConfirmations={messageConfirmations}
           acceptUnscopedInteractiveSend
+          onRealMessageSent={() => handleRealOnboardingMessage(threadId)}
           footerRef={attachBottomChromeRef}
           timelineLead={
-            showAgentHookNotice ? (
-              <div className="mb-3 flex justify-center text-left">
-                <div className="max-w-[85%] w-full">
-                  <AgentHookHealthNotice
-                    health={agentHookHealth.health}
-                    error={agentHookHealth.error}
-                    syncing={agentHookHealth.syncing}
-                    synced={agentHookHealth.synced}
-                    syncAttempted={agentHookHealth.syncAttempted}
-                    onSync={agentHookHealth.sync}
-                  />
+            <>
+              {showOnboardingHint && (
+                <div className="mb-3 rounded-lg border border-conn-amber-ring bg-conn-amber-bg px-3 py-2 text-sm text-conn-amber-text">
+                  团队已创建。发送第一条消息后，首启旅程就完成了。成员和账号已固定在设置中。
                 </div>
-              </div>
-            ) : undefined
+              )}
+              {showAgentHookNotice ? (
+                <div className="mb-3 flex justify-center text-left">
+                  <div className="max-w-[85%] w-full">
+                    <AgentHookHealthNotice
+                      health={agentHookHealth.health}
+                      error={agentHookHealth.error}
+                      syncing={agentHookHealth.syncing}
+                      synced={agentHookHealth.synced}
+                      syncAttempted={agentHookHealth.syncAttempted}
+                      onSync={agentHookHealth.sync}
+                    />
+                  </div>
+                </div>
+              ) : undefined}
+            </>
           }
           emptyState={
             <div className="text-center mt-20">

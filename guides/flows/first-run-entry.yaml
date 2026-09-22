@@ -1,0 +1,10 @@
+# First-run quest entry reminder. It is intentionally non-blocking.
+schemaVersion: 1
+id: first-run-entry
+name: 首次协作入口
+description: 创建真实伙伴后，提醒用户发送第一句话
+steps:
+  - id: send-first-message
+    target: chat.input
+    tips: 你的真实伙伴已经准备好了，在这里发送第一句话即可开始协作
+    advance: next

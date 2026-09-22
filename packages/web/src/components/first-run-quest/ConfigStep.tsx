@@ -11,6 +11,7 @@ interface ConfigStepProps {
   client: string;
   /** Account provider key (anthropic/openai/google) — distinct from model provider. */
   clientId: string;
+  initialConfig?: { accountRef: string; model: string };
   onComplete: (config: { accountRef: string; model: string }) => void;
 }
 
@@ -25,7 +26,7 @@ function humanizeError(msg: string): string {
   return msg;
 }
 
-export function ConfigStep({ client, clientId, onComplete }: ConfigStepProps) {
+export function ConfigStep({ client, clientId, initialConfig, onComplete }: ConfigStepProps) {
   const [profiles, setProfiles] = useState<ProfileItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedProfileId, setSelectedProfileId] = useState('');
@@ -60,12 +61,15 @@ export function ConfigStep({ client, clientId, onComplete }: ConfigStepProps) {
 
   useEffect(() => {
     if (!selectedProfileId && available.length > 0) {
-      const defaultId = builtinAccountIdForClient(clientId as ClientValue) ?? available[0]?.id ?? '';
+      const restoredId = initialConfig?.accountRef && available.some((profile) => profile.id === initialConfig.accountRef)
+        ? initialConfig.accountRef
+        : '';
+      const defaultId = restoredId || builtinAccountIdForClient(clientId as ClientValue) || available[0]?.id || '';
       setSelectedProfileId(defaultId);
       setExpandedId(defaultId);
-      setSelectedModel(firstModel(available.find((p) => p.id === defaultId)));
+      setSelectedModel(initialConfig?.model || firstModel(available.find((p) => p.id === defaultId)));
     }
-  }, [available, clientId, selectedProfileId]);
+  }, [available, clientId, initialConfig, selectedProfileId]);
 
   const handleSelectProfile = (id: string) => {
     const collapse = expandedId === id && selectedProfileId === id;
