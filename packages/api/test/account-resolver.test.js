@@ -112,6 +112,7 @@ describe('account-resolver (4b unified runtime resolution)', () => {
     assert.ok(profile);
     assert.equal(profile.id, 'claude');
     assert.equal(profile.authType, 'oauth');
+    assert.equal(profile.syntheticNative, undefined, 'persisted OAuth account remains an explicit OAuth binding');
     assert.equal(profile.protocol, 'anthropic');
     assert.equal(profile.apiKey, undefined);
   });
@@ -217,6 +218,7 @@ describe('account-resolver (4b unified runtime resolution)', () => {
     assert.ok(profile);
     assert.equal(profile.id, 'claude');
     assert.equal(profile.authType, 'oauth');
+    assert.equal(profile.syntheticNative, true, 'fresh-install fallback must retain CLI-owned auth semantics');
   });
 
   it('resolveForClient finds custom account via preferredAccountRef (not protocol)', async () => {

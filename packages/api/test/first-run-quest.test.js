@@ -575,6 +575,34 @@ describe('tryCliProbe (unit)', () => {
     assert.ok(result.message.includes('OAuth'));
   });
 
+  test('claude: never returns CLI error text containing a URL credential', async () => {
+    const { tryCliProbe } = await import('../dist/routes/first-run-quest.js');
+    const secret = 'fixture-secret-credential';
+    const url = `https://user:${secret}@invalid.example/v1`;
+    const results = [
+      await tryCliProbe('claude', { execFn: createMockExec({ stdout: `Error: ${url}` }) }),
+      await tryCliProbe('claude', { execFn: createMockExec({ stderr: `Request to ${url} failed`, reject: true }) }),
+      await tryCliProbe('opencode', { spawnFn: createMockSpawn({ stdout: `Error: ${url}` }) }),
+      await tryCliProbe('codex', { spawnFn: createMockSpawn({ stderr: `Request to ${url} failed`, exitCode: 1 }) }),
+      await tryCliProbe('codex', { spawnFn: createMockSpawn({ stdout: `Error: ${url} exceeded budget` }) }),
+    ];
+    for (const result of results) {
+      assert.equal(result?.ok, false);
+      assert.ok(!JSON.stringify(result).includes(secret));
+      assert.ok(!JSON.stringify(result).includes(url));
+    }
+  });
+
+  test('a credential URL containing a success keyword does not turn a failed probe green', async () => {
+    const { tryCliProbe } = await import('../dist/routes/first-run-quest.js');
+    const url = 'https://user:fixture-rate-limit-secret@invalid.example/v1';
+    const result = await tryCliProbe('codex', {
+      spawnFn: createMockSpawn({ stderr: `Request to ${url} failed`, exitCode: 1 }),
+    });
+    assert.equal(result?.ok, false);
+    assert.ok(!JSON.stringify(result).includes(url));
+  });
+
   test('claude: includes --model in exec command string', async () => {
     const { tryCliProbe } = await import('../dist/routes/first-run-quest.js');
     const mock = createMockExec({ stdout: 'pong' });
@@ -620,7 +648,7 @@ describe('tryCliProbe (unit)', () => {
     });
     assert.ok(result);
     assert.equal(result.ok, false);
-    assert.ok(result.message.includes('异常'));
+    assert.ok(result.message.includes('错误'));
   });
 
   test('rejects model names with unsafe characters', async () => {

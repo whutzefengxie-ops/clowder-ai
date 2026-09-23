@@ -33,6 +33,8 @@ export interface RuntimeProviderProfile {
   id: string;
   authType: 'oauth' | 'api_key';
   kind?: ProviderProfileKind;
+  /** Fresh-install CLI-owned identity; its active provider is selected by the CLI config. */
+  syntheticNative?: boolean;
   client?: BuiltinAccountClient;
   /** Preserve explicit non-family identities (e.g. ACP), which must not fall back to an ID alias. */
   persistedClientId?: string;
@@ -156,6 +158,7 @@ export function resolveByAccountRef(projectRoot: string, accountRef: string): Ru
       id: accountRef,
       authType: 'oauth',
       kind: 'builtin',
+      syntheticNative: true,
       client: builtinClient,
       ...(builtinProtocol ? { protocol: builtinProtocol } : {}),
     };
@@ -190,6 +193,7 @@ export function resolveForClient(
         id: preferredAccountRef,
         authType: 'oauth',
         kind: 'builtin',
+        syntheticNative: true,
         client: builtinClient,
         ...(builtinProtocol ? { protocol: builtinProtocol } : {}),
       };
@@ -231,6 +235,7 @@ export function resolveForClient(
         id: wellKnownRef,
         authType: 'oauth',
         kind: 'builtin',
+        syntheticNative: true,
         client: builtinClient,
         ...(builtinProtocol ? { protocol: builtinProtocol } : {}),
       };
