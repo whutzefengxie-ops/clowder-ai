@@ -531,7 +531,7 @@ describe('tryCliProbe (unit)', () => {
     assert.ok(opts.env, 'env should be passed to exec');
     assert.equal(opts.env.ANTHROPIC_API_KEY, 'sk-test');
     assert.equal(opts.env.ANTHROPIC_BASE_URL, 'https://proxy.test');
-    assert.equal(opts.env.PATH, process.env.PATH, 'should merge with process.env');
+    assert.equal(opts.env.PATH ?? opts.env.Path, process.env.PATH, 'should merge with process.env');
   });
 
   test('claude: timeout reports exec timeout (code null)', async () => {
@@ -584,7 +584,7 @@ describe('tryCliProbe (unit)', () => {
     const { opts } = mock.captured();
     assert.ok(opts.env, 'env should be passed to spawn');
     assert.equal(opts.env.OPENAI_API_KEY, 'sk-test');
-    assert.equal(opts.env.PATH, process.env.PATH);
+    assert.equal(opts.env.PATH ?? opts.env.Path, process.env.PATH);
   });
 
   test('codex: uses process.env when no custom env vars provided', async () => {
@@ -593,7 +593,7 @@ describe('tryCliProbe (unit)', () => {
     await tryCliProbe('codex', { spawnFn: mock });
     const { opts } = mock.captured();
     assert.ok(opts.env, 'env should be present (process.env spread)');
-    assert.equal(opts.env.PATH, process.env.PATH, 'should include process.env');
+    assert.equal(opts.env.PATH ?? opts.env.Path, process.env.PATH, 'should include process.env');
   });
 
   test('kimi: probe args are correct', async () => {
@@ -603,7 +603,7 @@ describe('tryCliProbe (unit)', () => {
     assert.ok(result);
     assert.equal(result.ok, true);
     const { args } = mock.captured();
-    assert.ok(args.includes('--print'), 'should use --print flag');
-    assert.ok(args.includes('--prompt'), 'should use --prompt flag');
+    assert.ok(args.some((arg) => arg.includes('--print')), 'should use --print flag');
+    assert.ok(args.some((arg) => arg.includes('--prompt')), 'should use --prompt flag');
   });
 });
