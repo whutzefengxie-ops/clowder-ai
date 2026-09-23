@@ -7,6 +7,16 @@ created: 2026-09-23
 
 # Issue #1466 首启旅程：当前进展与后续实施交接
 
+## 续做记录（2026-09-23）
+
+- 已获取 `upstream/main` 的 `61389ccdd6875b2dd124775906218151c6265940`，将原有未提交工作保全为 `c49505e25`，完成合并 `1c1610014`。唯一冲突在 `packages/web/package.json` 的浏览器测试清单；解决后保留上游清单并加入首启测试。本地无未解决冲突，`upstream/main` 是当前 feature HEAD 的祖先。
+- 新增 `7bd622b04` 回归测试：空 Clowder 账号库、已探测登录的 Codex、模板默认模型时，配置页使用内置 `codex` 绑定，经连接测试后能提交配置。该测试与 native profile 单测共 3 项通过。凭证探测 4 项通过。**这些是模拟 API/凭证 fixture，不是现场 CLI 联网验收。** 当前 Windows 环境 `codex login status` 返回 `Not logged in`，因此尚未证明真实已登录 CLI 调用。
+- 合并后先构建 shared、collective-connector、collective-service（Windows 下 collective-client 的 `rm` 脚本需在 PATH 加入 Git usr/bin），随后 API `tsc --noEmit` 与 Web `tsc --noEmit` 均退出 0。原先 API TS7006 不能再当作当前失败状态；直接在未更新跨包构建产物时运行 API tsc 会出现大量陈旧类型错误。
+- API `first-run-quest.test.js` 本地运行 34 项中 30 项通过、4 项失败，失败集中于 Windows 下 CLI probe 的环境变量大小写断言和 Kimi 命令参数断言；还需按调用链定位后修复。浏览器完整旅程、真实 API＋真实 CLI、持久化首消息和安装器仍无通过证据。
+- PR #1519 **远端**仍指向 `ec0e57388`，`CONFLICTING` 且 `statusCheckRollup: []`。本地 feature HEAD 已前进，但未推送，不能把本地合并视为远端冲突已解决。当前 worktree 另有正在进行的 F155 与配置页修改；提交、推送前须核对这些文件及测试结果。
+
+以下各节记录续做之前的现场与实施顺序；涉及旧 HEAD、未提交数量和旧测试结果的表格以本节最新记录为准。
+
 记录日期：2026-09-23。本文是当前 feature worktree 的工作稿，尚未提交、合入或发布；正式文档随分支合入后进入 main 的 `docs/`。
 
 ## 1. 当前结论
