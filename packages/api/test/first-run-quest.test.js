@@ -7,7 +7,7 @@
 
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, describe, test } from 'node:test';
@@ -71,6 +71,33 @@ describe('First-Run Quest Routes', () => {
       assert.ok(typeof c.cli === 'string');
       assert.ok(typeof c.installed === 'boolean');
       assert.ok(typeof c.hasApiKey === 'boolean');
+    }
+  });
+
+  test('GET /api/first-run/available-clients projects login state without credential values', async () => {
+    const codexHome = await mkdtemp(join(homedir(), '.cat-cafe-first-run-auth-'));
+    const previousCodexHome = process.env.CODEX_HOME;
+    const marker = 'fixture-secret-must-never-leave-api';
+    try {
+      await writeFile(join(codexHome, 'auth.json'), JSON.stringify({
+        tokens: { access_token: marker, refresh_token: marker },
+      }));
+      process.env.CODEX_HOME = codexHome;
+      const app = await createApp();
+      try {
+        const res = await app.inject({ method: 'GET', url: '/api/first-run/available-clients', headers: AUTH_HEADERS });
+        assert.equal(res.statusCode, 200);
+        const codex = res.json().clients.find((client) => client.client === 'codex');
+        assert.equal(codex.authenticated, true);
+        assert.equal(codex.hasApiKey, false);
+        assert.equal(res.body.includes(marker), false);
+      } finally {
+        await app.close();
+      }
+    } finally {
+      if (previousCodexHome === undefined) delete process.env.CODEX_HOME;
+      else process.env.CODEX_HOME = previousCodexHome;
+      await rm(codexHome, { recursive: true, force: true });
     }
   });
 
