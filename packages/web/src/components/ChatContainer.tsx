@@ -32,6 +32,7 @@ import { AgentHookHealthNotice, shouldRenderAgentHookHealthNotice } from './Agen
 import { BootcampListModal } from './BootcampListModal';
 import { BootstrapOrchestrator } from './BootstrapOrchestrator';
 import { ChatContainerHeader } from './ChatContainerHeader';
+import { hydrateEvolutionFromCurrentUrl } from './capability-evolution/evolution-navigation';
 import { useConciergeConfirmations } from './concierge/useConciergeConfirmations';
 import { FirstRunQuestWizard } from './FirstRunQuestWizard';
 import { markFirstRealMessage, restoreJourneyState } from './first-run-quest/onboarding-journey';
@@ -44,7 +45,6 @@ import { GameOverlayConnector } from './game/GameOverlayConnector';
 import { BootcampIcon } from './icons/BootcampIcon';
 import { GameIcon } from './icons/GameIcon';
 import { PawIcon } from './icons/PawIcon';
-import { MobileApprovalSheet } from './MobileApprovalSheet';
 import { ParallelStatusBar } from './ParallelStatusBar';
 import { ProjectSetupCard } from './ProjectSetupCard';
 import { RightStatusPanel } from './RightStatusPanel';
@@ -100,7 +100,6 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
     settleUnreadAck,
     armUnreadSuppression,
     rightPanelMode,
-    workspaceMode,
     workspaceSurface,
     presentationLock,
     setWorkspaceMode,
@@ -120,7 +119,6 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
       settleUnreadAck: s.settleUnreadAck,
       armUnreadSuppression: s.armUnreadSuppression,
       rightPanelMode: s.rightPanelMode,
-      workspaceMode: s.workspaceMode,
       workspaceSurface: s.workspaceSurface,
       presentationLock: s.presentationLock,
       setWorkspaceMode: s.setWorkspaceMode,
@@ -615,6 +613,7 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
 
   useEffect(() => {
     hydrateInvocationTrajectoryFromCurrentUrl();
+    hydrateEvolutionFromCurrentUrl();
   }, []);
 
   // Restore projectPath from the canonical Sidebar projection; the legacy store
@@ -1130,7 +1129,7 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
       {(statusPanelOpen || workspacePanelMounted || activityPanelMounted) && (
         <div
           className={
-            !statusPanelOpen || (!isDesktop && rightPanelMode === 'workspace' && workspaceMode === 'approval')
+            !statusPanelOpen
               ? 'hidden'
               : mainAreaAttentionActive
                 ? 'absolute inset-0 z-40 flex min-h-0 flex-col overflow-hidden bg-[var(--console-panel-bg)]'
@@ -1181,6 +1180,7 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
                 <WorkspacePanel
                   threadId={threadId}
                   defaultCatId={targetCats[0] || 'opus'}
+                  visible={statusPanelOpen && rightPanelMode === 'workspace' && documentVisible}
                   statusSurface={
                     <RightStatusPanel
                       intentMode={intentMode}
@@ -1202,10 +1202,6 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
         </div>
       )}
       <FloatingTranscriptContainer />
-      <MobileApprovalSheet
-        open={!isDesktop && rightPanelMode === 'workspace' && workspaceMode === 'approval'}
-        onClose={closeStatusPanel}
-      />
       {showFirstRunQuestPrompt &&
         createPortal(
           <div className="fixed inset-0 z-[70] flex items-center justify-center bg-[var(--console-overlay-medium)] px-4 backdrop-blur-sm">
