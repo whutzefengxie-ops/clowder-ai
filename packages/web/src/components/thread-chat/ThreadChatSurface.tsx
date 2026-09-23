@@ -234,7 +234,15 @@ export function ThreadChatSurface({
             <ChatInput
               key={threadId}
               threadId={threadId}
-              onSend={async (content, images, whisper, deliveryMode, replyToId, messageDisposition, contextAttachments) => {
+              onSend={async (
+                content,
+                images,
+                whisper,
+                deliveryMode,
+                replyToId,
+                messageDisposition,
+                contextAttachments,
+              ) => {
                 const sent = await handleSend(
                   content,
                   images,

@@ -101,9 +101,13 @@ describe('FirstRunQuestWizard', () => {
     await flushEffects();
 
     // FirstRunQuestWizard uses createPortal to document.body
-    const demoButton = Array.from(document.querySelectorAll('button')).find((button) => button.textContent?.includes('开始演示'));
+    const demoButton = Array.from(document.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('开始演示'),
+    );
     expect(demoButton).toBeTruthy();
-    await act(async () => { for (let i = 0; i < 4; i += 1) demoButton?.click(); });
+    await act(async () => {
+      for (let i = 0; i < 4; i += 1) demoButton?.click();
+    });
     await flushEffects();
     expect(document.body.textContent).toContain('选择团队角色');
     expect(document.body.textContent).toContain('暂无可用角色模板');
@@ -117,8 +121,12 @@ describe('FirstRunQuestWizard', () => {
     });
     await flushEffects();
 
-    const demoButton = Array.from(document.querySelectorAll('button')).find((button) => button.textContent?.includes('开始演示'));
-    await act(async () => { for (let i = 0; i < 4; i += 1) demoButton?.click(); });
+    const demoButton = Array.from(document.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('开始演示'),
+    );
+    await act(async () => {
+      for (let i = 0; i < 4; i += 1) demoButton?.click();
+    });
     await flushEffects();
     expect(document.body.textContent).toContain('暂无可用角色模板');
   });
@@ -131,8 +139,12 @@ describe('FirstRunQuestWizard', () => {
     });
     await flushEffects();
 
-    const demoButton = Array.from(document.querySelectorAll('button')).find((button) => button.textContent?.includes('开始演示'));
-    await act(async () => { for (let i = 0; i < 4; i += 1) demoButton?.click(); });
+    const demoButton = Array.from(document.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('开始演示'),
+    );
+    await act(async () => {
+      for (let i = 0; i < 4; i += 1) demoButton?.click();
+    });
     await flushEffects();
     expect(document.body.textContent).toContain('暂无可用角色模板');
   });
@@ -212,7 +224,9 @@ describe('FirstRunQuestWizard', () => {
 
     const demoButton = Array.from(document.querySelectorAll('button')).find((b) => b.textContent?.includes('开始演示'));
     expect(demoButton).toBeTruthy();
-    await act(async () => { for (let i = 0; i < 4; i += 1) demoButton?.click(); });
+    await act(async () => {
+      for (let i = 0; i < 4; i += 1) demoButton?.click();
+    });
     await flushEffects();
 
     // Step 1: select template

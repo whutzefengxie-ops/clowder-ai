@@ -3,10 +3,10 @@ import {
   buildRealMembers,
   canContinueClientSetup,
   createJourneyState,
-  mergeDetectedAuthStatus,
   markFirstRealMessage,
-  restoreJourneyState,
+  mergeDetectedAuthStatus,
   type OnboardingClient,
+  restoreJourneyState,
 } from '../onboarding-journey';
 
 const readyClaude: OnboardingClient = {
@@ -38,9 +38,7 @@ describe('onboarding journey state', () => {
 
   it('blocks setup when there are no clients or a client is not authenticated', () => {
     expect(canContinueClientSetup([])).toBe(false);
-    expect(
-      canContinueClientSetup([{ ...readyClaude, authStatus: 'login_required' }]),
-    ).toBe(false);
+    expect(canContinueClientSetup([{ ...readyClaude, authStatus: 'login_required' }])).toBe(false);
     expect(canContinueClientSetup([readyClaude])).toBe(true);
   });
 

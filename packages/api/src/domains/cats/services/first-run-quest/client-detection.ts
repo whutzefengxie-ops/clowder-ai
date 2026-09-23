@@ -116,14 +116,20 @@ async function checkCli(spec: CliSpec, existsOnPath: ExistsOnPath, auth?: Client
  * Detect all available CLI clients in parallel.
  * Pass a stub `existsOnPath` from tests to avoid touching the real filesystem.
  */
-export async function detectAvailableClients(deps?: { existsOnPath?: ExistsOnPath; auth?: ClientAuthDeps }): Promise<DetectedClient[]> {
+export async function detectAvailableClients(deps?: {
+  existsOnPath?: ExistsOnPath;
+  auth?: ClientAuthDeps;
+}): Promise<DetectedClient[]> {
   const probe = deps?.existsOnPath ?? defaultExistsOnPath;
   const results = await Promise.all(CLI_SPECS.map((spec) => checkCli(spec, probe, deps?.auth)));
   return results;
 }
 
 /** Return only clients that are installed. */
-export async function getInstalledClients(deps?: { existsOnPath?: ExistsOnPath; auth?: ClientAuthDeps }): Promise<DetectedClient[]> {
+export async function getInstalledClients(deps?: {
+  existsOnPath?: ExistsOnPath;
+  auth?: ClientAuthDeps;
+}): Promise<DetectedClient[]> {
   const all = await detectAvailableClients(deps);
   return all.filter((c) => c.installed);
 }
