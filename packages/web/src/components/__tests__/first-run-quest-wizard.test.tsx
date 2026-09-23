@@ -165,6 +165,7 @@ describe('FirstRunQuestWizard', () => {
               label: 'Claude',
               cli: 'claude',
               installed: true,
+              authenticated: true,
               hasApiKey: false,
             },
           ],

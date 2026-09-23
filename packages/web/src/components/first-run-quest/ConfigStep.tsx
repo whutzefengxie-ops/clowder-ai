@@ -64,7 +64,8 @@ export function ConfigStep({ client, clientId, initialConfig, onComplete }: Conf
       const restoredId = initialConfig?.accountRef && available.some((profile) => profile.id === initialConfig.accountRef)
         ? initialConfig.accountRef
         : '';
-      const defaultId = restoredId || builtinAccountIdForClient(clientId as ClientValue) || available[0]?.id || '';
+      const builtinId = builtinAccountIdForClient(clientId as ClientValue);
+      const defaultId = restoredId || available.find((profile) => profile.id === builtinId)?.id || available[0]?.id || '';
       setSelectedProfileId(defaultId);
       setExpandedId(defaultId);
       setSelectedModel(initialConfig?.model || firstModel(available.find((p) => p.id === defaultId)));
@@ -214,6 +215,7 @@ export function ConfigStep({ client, clientId, initialConfig, onComplete }: Conf
       <button
         type="button"
         disabled={!canProceed}
+        data-testid="first-run-create-cat"
         onClick={() => onComplete({ accountRef: selectedProfileId, model: selectedModel })}
         className={`w-full rounded-lg py-2.5 text-sm font-semibold transition ${
           canProceed

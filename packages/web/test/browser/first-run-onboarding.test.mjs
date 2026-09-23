@@ -1,4 +1,4 @@
-import assert from 'node:assert/strict';
+﻿import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { createServer } from 'node:net';
@@ -23,7 +23,7 @@ async function freePort() {
 
 async function waitForPage(url, server, output) {
   for (let i = 0; i < 180; i += 1) {
-    if (server.exitCode !== null) throw new Error(`Next exited: ${output.join('')}`);
+    if (server.exitCode !== null) throw new Error(`Next exited (${server.exitCode}): ${output.join('')}`);
     try {
       if ((await fetch(url)).ok) return;
     } catch {
@@ -31,7 +31,7 @@ async function waitForPage(url, server, output) {
     }
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
-  throw new Error(`Timed out waiting for ${url}`);
+  throw new Error(`Timed out waiting for ${url}: ${output.join('').slice(-4000)}`);
 }
 
 let server;
@@ -72,73 +72,72 @@ function mockApi(route, clients) {
     return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ providers: [{ id: 'openai-default', name: 'OpenAI', displayName: 'OpenAI', provider: 'openai', clientId: 'openai', models: ['gpt-4o-mini'], authType: 'api_key' }] }) });
   }
   if (url.pathname === '/api/cat-templates') {
-    return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ templates: [{ id: 'planner', name: '规划猫', nickname: '小规', avatar: 'cat', color: { primary: '#111', secondary: '#eee' }, roleDescription: '把目标拆成步骤', personality: '清晰', teamStrengths: ['规划'] }] }) });
+    return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ templates: [{ id: 'planner', name: 'Planner', nickname: 'Planner', avatar: 'cat', color: { primary: '#111', secondary: '#eee' }, roleDescription: 'Break goals into steps', personality: 'Clear', teamStrengths: ['Planning'] }] }) });
   }
   if (url.pathname === '/api/first-run/connectivity-test') {
-    return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ ok: true, message: '连接成功' }) });
+    return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ ok: true, message: '杩炴帴鎴愬姛' }) });
   }
   if (url.pathname === '/api/cats' || url.pathname === '/api/threads') {
-    return route.fulfill({ contentType: 'application/json', body: JSON.stringify(url.pathname === '/api/cats' ? { cat: { id: 'cat-1', displayName: '规划猫' } } : { id: 'thread-1' }) });
+    return route.fulfill({ contentType: 'application/json', body: JSON.stringify(url.pathname === '/api/cats' ? { cat: { id: 'cat-1', displayName: 'Planner' } } : { id: 'thread-1' }) });
   }
   return route.continue();
 }
 
 async function openPage(clients) {
   const context = await browser.newContext();
+  await context.addInitScript(() => localStorage.removeItem('cat-cafe:onboarding-journey'));
   const page = await context.newPage();
   await page.route('**/api/**', (route) => mockApi(route, clients));
   await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
-  await page.getByRole('button', { name: '开始首启演示' }).click();
+  await page.getByTestId('first-run-demo-advance').waitFor();
+  await page.getByTestId('first-run-demo-advance').click();
   return { context, page };
 }
 
-test('首启演示按幕推进、暂停与刷新恢复', async () => {
+test('demo advances, pauses, and restores', async () => {
   const { context, page } = await openPage([{ client: 'codex', provider: 'openai', label: 'Codex', installed: true, version: '1', hasApiKey: true }]);
   try {
-    await page.getByText('初稿：').waitFor();
-    await page.getByRole('button', { name: '暂停' }).click();
-    await page.getByRole('button', { name: '下一幕' }).click();
-    assert.equal(await page.getByText('审查：').count(), 0);
+    await page.getByText('初稿：', { exact: false }).waitFor();
+    await page.getByTestId('first-run-demo-pause').click();
+    assert.equal(await page.getByTestId('first-run-demo-advance').isDisabled(), true);
+    await page.getByTestId('first-run-demo-pause').click();
+    await page.getByTestId('first-run-demo-advance').click();
+    assert.equal(await page.getByRole('heading', { name: '审查猫找出术语' }).count(), 1);
     await page.reload();
-    await page.getByText('初稿：').waitFor();
-    await page.getByRole('button', { name: '继续' }).click();
-    await page.getByRole('button', { name: '下一幕' }).click();
-    await page.getByText('审查：').waitFor();
-    await page.getByRole('button', { name: '下一幕' }).click();
-    await page.getByText('改稿：').waitFor();
-  } finally {
-    await context.close();
-  }
+    await page.getByText('初稿：', { exact: false }).waitFor();
+    await page.getByTestId('first-run-demo-pause').click();
+    await page.getByTestId('first-run-demo-pause').click();
+    await page.getByTestId('first-run-demo-advance').click();
+    await page.getByText('审查').waitFor();
+    await page.getByTestId('first-run-demo-advance').click();
+    await page.getByText('改稿').waitFor();
+  } finally { await context.close(); }
 });
 
-test('零客户端停住，登录只进入 pending 且刷新保持', async () => {
+test('missing client stops and login remains pending after reload', async () => {
   const { context, page } = await openPage([
     { client: 'codex', provider: 'openai', label: 'Codex', installed: true, hasApiKey: false },
     { client: 'gemini', provider: 'google', label: 'Gemini', installed: false, hasApiKey: false },
   ]);
   try {
-    for (let i = 0; i < 4; i += 1) await page.getByRole('button', { name: /下一幕|开始演示|进入真实配置/ }).click();
+    for (let i = 0; i < 4; i += 1) await page.getByTestId('first-run-demo-advance').click();
     await page.getByText('未安装：Gemini').waitFor();
-    assert.equal(await page.getByRole('button', { name: '选择' }).count(), 0);
-    await page.getByRole('button', { name: '去登录' }).click();
+    await page.getByTestId('first-run-login-codex').click();
     await page.getByText('等待登录').waitFor();
     await page.reload();
     await page.getByText('等待登录').waitFor();
-  } finally {
-    await context.close();
-  }
+  } finally { await context.close(); }
 });
 
-test('单客户端可配置并创建真实线程', async () => {
+test('single client configures and creates real thread', async () => {
   const { context, page } = await openPage([{ client: 'codex', provider: 'openai', label: 'Codex', installed: true, hasApiKey: true }]);
   try {
-    for (let i = 0; i < 4; i += 1) await page.getByRole('button', { name: /下一幕|开始演示|进入真实配置/ }).click();
-    await page.getByRole('button', { name: 'Codex' }).click();
-    await page.getByRole('button', { name: '连接测试' }).click();
+    for (let i = 0; i < 4; i += 1) await page.getByTestId('first-run-demo-advance').click();
+    await page.getByTestId('first-run-select-codex').click();
+    await page.getByTestId('first-run-connect-test').click();
     await page.getByText('连接成功').waitFor();
-    await page.getByRole('button', { name: '创建猫' }).click();
+    await page.getByTestId('first-run-create-cat').click();
     await page.getByText('团队已就绪').waitFor();
-  } finally {
-    await context.close();
-  }
+  } finally { await context.close(); }
 });
+

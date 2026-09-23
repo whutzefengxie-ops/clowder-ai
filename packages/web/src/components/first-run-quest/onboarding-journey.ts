@@ -1,4 +1,4 @@
-export type OnboardingAuthStatus = 'ready' | 'login_required' | 'pending';
+export type OnboardingAuthStatus = 'ready' | 'login_required' | 'pending' | 'not_installed';
 
 export interface OnboardingClient {
   client: string;
@@ -34,6 +34,7 @@ export interface OnboardingClientDraft {
   installed: boolean;
   version?: string;
   hasApiKey: boolean;
+  authenticated?: boolean;
   authStatus: OnboardingAuthStatus;
 }
 
@@ -87,6 +88,7 @@ export function mergeDetectedAuthStatus(
   saved?: OnboardingAuthStatus,
 ): OnboardingAuthStatus {
   if (derived === 'ready') return 'ready';
+  if (derived === 'not_installed') return 'not_installed';
   if (saved === 'pending') return 'pending';
   return derived;
 }
@@ -156,7 +158,8 @@ function isClientDraft(value: unknown): value is OnboardingClientDraft {
     typeof value.installed === 'boolean' &&
     (value.version === undefined || typeof value.version === 'string') &&
     typeof value.hasApiKey === 'boolean' &&
-    (value.authStatus === 'ready' || value.authStatus === 'login_required' || value.authStatus === 'pending')
+    (value.authenticated === undefined || typeof value.authenticated === 'boolean') &&
+    (value.authStatus === 'ready' || value.authStatus === 'login_required' || value.authStatus === 'pending' || value.authStatus === 'not_installed')
   );
 }
 

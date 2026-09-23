@@ -1,6 +1,8 @@
 'use client';
 
-import { FirstRunQuestWizard } from '@/components/FirstRunQuestWizard';
+import dynamic from 'next/dynamic';
+
+const FirstRunQuestWizard = dynamic(() => import('@/components/FirstRunQuestWizard').then((module) => module.FirstRunQuestWizard), { ssr: false });
 
 export default function FirstRunOnboardingTestPage() {
   return (
