@@ -35,8 +35,8 @@ import { ChatContainerHeader } from './ChatContainerHeader';
 import { hydrateEvolutionFromCurrentUrl } from './capability-evolution/evolution-navigation';
 import { useConciergeConfirmations } from './concierge/useConciergeConfirmations';
 import { FirstRunQuestWizard } from './FirstRunQuestWizard';
-import { markFirstRealMessage, restoreJourneyState } from './first-run-quest/onboarding-journey';
 import { BootcampGuideOverlay } from './first-run-quest/BootcampGuideOverlay';
+import { markFirstRealMessage, restoreJourneyState } from './first-run-quest/onboarding-journey';
 import { QuestBanner } from './first-run-quest/QuestBanner';
 import { syncLocalBootcampState } from './first-run-quest/syncLocalBootcampState';
 import { useFirstProjectMistakeTipGate } from './first-run-quest/useFirstProjectMistakeTipGate';
@@ -521,7 +521,7 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
   // Subscribe reactively so the effect re-runs when guide exits (session cleared).
   const activeGuideFlowId = useGuideStore((s) => s.session?.flow.id ?? null);
   useEffect(() => {
-    if (!showOnboardingHint || showQuestWizard || activeGuideFlowId === 'first-run-entry') return;
+    if (!showOnboardingHint || showQuestWizard || activeGuideFlowId) return;
     if (useGuideStore.getState().completedGuides.has(`${threadId}::first-run-entry`)) return;
     useGuideStore.getState().reduceServerEvent({ action: 'start', guideId: 'first-run-entry', threadId });
   }, [activeGuideFlowId, showOnboardingHint, showQuestWizard, threadId]);
@@ -805,17 +805,20 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
     [navigateToThread, setThreads],
   );
 
-  const handleRealOnboardingMessage = useCallback((messageThreadId?: string) => {
-    if (messageThreadId && messageThreadId !== threadId) return;
-    try {
-      const state = restoreJourneyState(localStorage.getItem('cat-cafe:onboarding-journey'));
-      if (!state || state.stage !== 'ready' || (state.threadId && state.threadId !== threadId)) return;
-      localStorage.setItem('cat-cafe:onboarding-journey', JSON.stringify(markFirstRealMessage(state)));
-      setShowOnboardingHint(false);
-    } catch {
-      /* localStorage may be unavailable */
-    }
-  }, [threadId]);
+  const handleRealOnboardingMessage = useCallback(
+    (messageThreadId?: string) => {
+      if (messageThreadId && messageThreadId !== threadId) return;
+      try {
+        const state = restoreJourneyState(localStorage.getItem('cat-cafe:onboarding-journey'));
+        if (!state || state.stage !== 'ready' || (state.threadId && state.threadId !== threadId)) return;
+        localStorage.setItem('cat-cafe:onboarding-journey', JSON.stringify(markFirstRealMessage(state)));
+        setShowOnboardingHint(false);
+      } catch {
+        /* localStorage may be unavailable */
+      }
+    },
+    [threadId],
+  );
 
   const handleSearchKnowledge = useCallback(() => {
     const fromParam = threadId ? `?from=${encodeURIComponent(threadId)}` : '';

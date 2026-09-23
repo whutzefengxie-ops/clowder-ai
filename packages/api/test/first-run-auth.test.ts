@@ -12,10 +12,14 @@ const codex = { tokens: { access_token: 'fake-access', refresh_token: 'fake-refr
 async function detect(files: Record<string, unknown>, env: NodeJS.ProcessEnv = {}) {
   return detectAvailableClients({
     existsOnPath: async () => true,
-    auth: { homeDir, env, readFile: (path: string) => {
-      if (!(path in files)) throw new Error('missing');
-      return typeof files[path] === 'string' ? files[path] as string : JSON.stringify(files[path]);
-    } },
+    auth: {
+      homeDir,
+      env,
+      readFile: (path: string) => {
+        if (!(path in files)) throw new Error('missing');
+        return typeof files[path] === 'string' ? (files[path] as string) : JSON.stringify(files[path]);
+      },
+    },
   });
 }
 
@@ -37,15 +41,67 @@ test('CODEX_HOME selects the runtime account without falling back to ambient cre
 });
 
 test('missing, malformed and incomplete credentials fail closed', async () => {
-  for (const value of ['{', [], null, {}, { tokens: { access_token: 7, refresh_token: 'x' } }, { tokens: { access_token: ' ', refresh_token: 'x' } }]) {
+  for (const value of [
+    '{',
+    [],
+    null,
+    {},
+    { tokens: { access_token: 7, refresh_token: 'x' } },
+    { tokens: { access_token: ' ', refresh_token: 'x' } },
+  ]) {
     const clients = await detect({ [codexPath]: value, [claudePath]: value });
-    assert.equal(clients.some((client) => client.authenticated), false);
+    assert.equal(
+      clients.some((client) => client.authenticated),
+      false,
+    );
   }
 });
 
 test('environment keys remain supported and whitespace keys are rejected', async () => {
-  const clients = await detect({}, { OPENAI_API_KEY: 'fake-key', ANTHROPIC_API_KEY: ' ', GEMINI_API_KEY: 'fake-gemini' });
+  const clients = await detect(
+    {},
+    { OPENAI_API_KEY: 'fake-key', ANTHROPIC_API_KEY: ' ', GEMINI_API_KEY: 'fake-gemini' },
+  );
   assert.equal(clients.find((client) => client.client === 'codex')?.authenticated, true);
   assert.equal(clients.find((client) => client.client === 'gemini')?.authenticated, true);
   assert.equal(clients.find((client) => client.client === 'claude')?.authenticated, false);
+});
+
+test('Codex CLI config with a custom endpoint and bearer value is treated as native authentication', async () => {
+  const configPath = join(homeDir, '.codex', 'config.toml');
+  const clients = await detect(
+    {
+      [configPath]: [
+        'model = "gpt-5"',
+        'model_provider = "kitcoding"',
+        '[model_providers.unrelated]',
+        'base_url = "https://unrelated.invalid/v1"',
+        'experimental_bearer_token = "unrelated-secret"',
+        '[model_providers.kitcoding]',
+        'base_url = "https://example.invalid/v1"',
+        'experimental_bearer_token = "fake-secret"',
+        '',
+      ].join('\n'),
+    },
+    {},
+  );
+  const codexClient = clients.find((client) => client.client === 'codex');
+  assert.equal(codexClient?.authenticated, true);
+  assert.equal(codexClient?.hasApiKey, false);
+  assert.equal(JSON.stringify(clients).includes('fake-secret'), false);
+});
+
+test('Codex CLI config does not authenticate from an inactive provider section', async () => {
+  const configPath = join(homeDir, '.codex', 'config.toml');
+  const clients = await detect({
+    [configPath]: [
+      'model_provider = "kitcoding"',
+      '[model_providers.unrelated]',
+      'base_url = "https://unrelated.invalid/v1"',
+      'experimental_bearer_token = "unrelated-secret"',
+      '[model_providers.kitcoding]',
+      'base_url = "https://example.invalid/v1"',
+    ].join('\n'),
+  });
+  assert.equal(clients.find((client) => client.client === 'codex')?.authenticated, false);
 });

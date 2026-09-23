@@ -79,9 +79,49 @@ describe('First-Run Quest Routes', () => {
     const previousCodexHome = process.env.CODEX_HOME;
     const marker = 'fixture-secret-must-never-leave-api';
     try {
-      await writeFile(join(codexHome, 'auth.json'), JSON.stringify({
-        tokens: { access_token: marker, refresh_token: marker },
-      }));
+      await writeFile(
+        join(codexHome, 'auth.json'),
+        JSON.stringify({
+          tokens: { access_token: marker, refresh_token: marker },
+        }),
+      );
+      process.env.CODEX_HOME = codexHome;
+      const app = await createApp();
+      try {
+        const res = await app.inject({ method: 'GET', url: '/api/first-run/available-clients', headers: AUTH_HEADERS });
+        assert.equal(res.statusCode, 200);
+        const codex = res.json().clients.find((client) => client.client === 'codex');
+        assert.equal(codex.authenticated, true);
+        assert.equal(codex.hasApiKey, false);
+        assert.equal(res.body.includes(marker), false);
+      } finally {
+        await app.close();
+      }
+    } finally {
+      if (previousCodexHome === undefined) delete process.env.CODEX_HOME;
+      else process.env.CODEX_HOME = previousCodexHome;
+      await rm(codexHome, { recursive: true, force: true });
+    }
+  });
+
+  test('GET /api/first-run/available-clients recognizes the active Codex config provider without projecting its bearer', async () => {
+    const codexHome = await mkdtemp(join(homedir(), '.cat-cafe-first-run-config-'));
+    const previousCodexHome = process.env.CODEX_HOME;
+    const marker = 'config-bearer-must-never-leave-api';
+    try {
+      await writeFile(
+        join(codexHome, 'config.toml'),
+        [
+          'model_provider = "custom"',
+          '[model_providers.unrelated]',
+          'base_url = "https://unrelated.invalid/v1"',
+          'experimental_bearer_token = "unrelated-secret"',
+          '[model_providers.custom]',
+          'base_url = "https://example.invalid/v1"',
+          `experimental_bearer_token = "${marker}"`,
+          '',
+        ].join('\n'),
+      );
       process.env.CODEX_HOME = codexHome;
       const app = await createApp();
       try {
@@ -630,7 +670,13 @@ describe('tryCliProbe (unit)', () => {
     assert.ok(result);
     assert.equal(result.ok, true);
     const { args } = mock.captured();
-    assert.ok(args.some((arg) => arg.includes('--print')), 'should use --print flag');
-    assert.ok(args.some((arg) => arg.includes('--prompt')), 'should use --prompt flag');
+    assert.ok(
+      args.some((arg) => arg.includes('--print')),
+      'should use --print flag',
+    );
+    assert.ok(
+      args.some((arg) => arg.includes('--prompt')),
+      'should use --prompt flag',
+    );
   });
 });

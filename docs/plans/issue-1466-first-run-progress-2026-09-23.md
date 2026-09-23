@@ -3,305 +3,231 @@ feature_ids: [F171, F155, F229]
 topics: [onboarding, cli-auth, desktop-installer, handoff]
 doc_kind: implementation-progress
 created: 2026-09-23
+updated: 2026-09-23
 ---
 
-# Issue #1466 首启旅程：当前进展与后续实施交接
+# Issue #1466 首启旅程：当前进展复核、PR 关系与后续收口计划
 
-## 续做记录（2026-09-23）
+> 本次更新是评审和事实整理，不继续实施功能，不修改代码，不关闭、合并或重开任何 PR。结论以当前 worktree、上游 GitHub Issue/PR 状态、已有测试记录和已保存的缺陷报告为准。
 
-- 已获取 `upstream/main` 的 `61389ccdd6875b2dd124775906218151c6265940`，将原有未提交工作保全为 `c49505e25`，完成合并 `1c1610014`。唯一冲突在 `packages/web/package.json` 的浏览器测试清单；解决后保留上游清单并加入首启测试。本地无未解决冲突，`upstream/main` 是当前 feature HEAD 的祖先。
-- 新增 `7bd622b04` 回归测试：空 Clowder 账号库、已探测登录的 Codex、模板默认模型时，配置页使用内置 `codex` 绑定，经连接测试后能提交配置。该测试与 native profile 单测共 3 项通过。凭证探测 4 项通过。**这些是模拟 API/凭证 fixture，不是现场 CLI 联网验收。** 当前 Windows 环境 `codex login status` 返回 `Not logged in`，因此尚未证明真实已登录 CLI 调用。
-- 合并后先构建 shared、collective-connector、collective-service（Windows 下 collective-client 的 `rm` 脚本需在 PATH 加入 Git usr/bin），随后 API `tsc --noEmit` 与 Web `tsc --noEmit` 均退出 0。原先 API TS7006 不能再当作当前失败状态；直接在未更新跨包构建产物时运行 API tsc 会出现大量陈旧类型错误。
-- API `first-run-quest.test.js` 本地运行 34 项中 30 项通过、4 项失败，失败集中于 Windows 下 CLI probe 的环境变量大小写断言和 Kimi 命令参数断言；还需按调用链定位后修复。浏览器完整旅程、真实 API＋真实 CLI、持久化首消息和安装器仍无通过证据。
-- PR #1519 **远端**仍指向 `ec0e57388`，`CONFLICTING` 且 `statusCheckRollup: []`。本地 feature HEAD 已前进，但未推送，不能把本地合并视为远端冲突已解决。当前 worktree 另有正在进行的 F155 与配置页修改；提交、推送前须核对这些文件及测试结果。
+## 1. 结论先行
 
-以下各节记录续做之前的现场与实施顺序；涉及旧 HEAD、未提交数量和旧测试结果的表格以本节最新记录为准。
+当前实现**没有跑偏到另一个产品方向**，而是在正确的 Issue #1466 / PR #1519 上继续推进。已经完成的是首启状态机、部分 CLI 本机身份探测、状态恢复、F155 非阻塞入口和一组定向测试；还没有完成的是原始分镜的视觉交互、CLI 原生登录/安装、真实 API/CLI/首消息链路、幂等创建、F229 身份交接和新的 Windows 安装器。
 
-记录日期：2026-09-23。本文是当前 feature worktree 的工作稿，尚未提交、合入或发布；正式文档随分支合入后进入 main 的 `docs/`。
+因此，当前最准确的判断是：
 
-## 1. 当前结论
+- **方向：符合预期。** “脚本演示 → 识别本机客户端 → 复用本机身份 → 进入真实主窗口 → 第一条真实消息”仍然是主线。
+- **实现质量：基础层明显前进，但处于部分完成。** 本地验证数量增加，之前暴露的认证来源、pending、配置恢复、昵称冲突和测试入口问题已有回应。
+- **产品完成度：尚未达到 Issue 的验收承诺。** 当前仍不能说“用户双击安装包后无需填 key 即完成一次真实合作”。
+- **交付状态：不能合入。** 远端 PR #1519 仍是 CONFLICTING，且没有 CI 检查结果；本地后续提交也没有推送到该 PR。
 
-**功能尚未完成，PR 尚不能合入，Windows 安装器尚未交付。** 已有旅程状态机和组件实现，本轮修复了部分客户端认证判定问题，并获得定向测试证据。但“脚本示范 → 我的真实伙伴 → 第一条真实消息”的完整体验还没有端到端证明，且独立检查确认了恢复、创建重试、角色交接等缺口。
+这意味着后续不需要另开一条“首启实现”路线，也不需要把 #1452 当成 #1466 的实现分支。应该继续维护已有的 #1519，并在其 exact HEAD 上完成验证和独立 review。
 
-用户最新要求是整理进展文档。本轮已停止继续修改功能；后续从本文实施队列恢复，不应根据先前 PR 标题中的 “complete” 认定工作已完成。
+## 2. 当前事实快照
 
-| 项目 | 本次核实状态 |
+| 对象 | 当前事实 |
 | --- | --- |
-| Issue | [#1466](https://github.com/zts212653/clowder-ai/issues/1466)，OPEN |
-| 正确实现 PR | [#1519](https://github.com/zts212653/clowder-ai/pull/1519)，OPEN |
-| PR 合并状态 | `CONFLICTING` |
-| PR CI | `statusCheckRollup: []`，没有检查结果，不是通过 |
-| 当前本地与远端 feature HEAD | `ec0e573887fd60bb87eed05e415ed7019c37cb3d` |
-| 未提交修改 | 12 个 tracked 文件修改、3 个新增代码/测试文件；另加本文 |
-| 本轮前端定向测试 | 4 个文件、20 项通过 |
-| 本轮凭证探测测试 | 4 项通过 |
-| 本轮 Web 类型检查 | 单独执行通过，退出码 0 |
-| 本轮 API 类型检查 | 失败：`local-trace-exporter.ts:44:30`，TS7006 |
-| 浏览器完整旅程 | 未获得通过证据；当前测试本身仍需修正 |
-| 正式独立 review | 尚无覆盖最终 HEAD 的批准 |
-| Windows 安装器 | `dist/` 未发现 `.exe` 安装器；只核实到旧 Electron unpacked 可执行文件 |
+| 产品需求 | Issue #1466，OPEN；目标是三猫脚本演示、真实客户端探测、复用已登录 CLI、首条真实消息和 F155 非阻塞入口 |
+| 首启实现 PR | PR #1519，OPEN；标题为 “feat: complete first-run onboarding journey”；正文包含 Closes #1466 |
+| #1519 远端 HEAD | ec0e573887fd60bb87eed05e415ed7019c37cb3d |
+| #1519 远端状态 | CONFLICTING；statusCheckRollup 为空；没有可称为通过的 CI 结果 |
+| 当前本地 HEAD | d336ed8119b716b5aa350f3693af2681f5e6cb97 |
+| 本地相对 origin 的状态 | 本地分支比 origin/feat/onboarding-first-run 超前 17 个提交；这些提交尚未推送到 #1519 |
+| 当前基线 | 本地 HEAD 已包含 upstream/main 的 61389ccdd6875b2dd124775906218151c6265940 |
+| 当前 worktree | 20 个 tracked 文件有修改，15 个 untracked 路径；其中包括本进展文档、缺陷报告、测试生成的隔离构建目录和新增测试/实现文件 |
+| 当前工作分支 | feat/onboarding-first-run，位于 G:\AIwork\clowder-ai\worktrees\feat-onboarding-first-run |
+| 本次评审操作 | 只读检查 Git/GitHub 和更新本文件；没有修改实现代码或操作 PR 状态 |
 
-## 2. 目标与验收边界
+工作区中 packages/web/.next-test-onboarding* 和对应临时 tsconfig 是测试生成物，不能作为功能交付内容，也不应进入提交。已有缺陷记录见 onboarding-browser-recovery/bug-report.md。
 
-核心目标：新用户双击安装包后，理解猫如何分工协作；复用本机已安装、已登录的 CLI，不必再填写 key，尽快与自己的真实伙伴开始对话。
+## 3. #1466、#1452 与 #1519 的关系
 
-完整交付必须包含：
+### 3.1 Issue #1466 是产品需求锚点
 
-1. 三猫脚本示范不调用真实模型，使用产品界面呈现协作；看见初稿、同伴反馈和改进后的结果。
-2. 示范能够暂停、继续和恢复；安装或登录中途离开后，不必重新看完示范。
-3. 复用现有 CLI 探测层，检测安装与登录状态；只向前端投影状态，不传凭证内容。
-4. 0 个客户端提供安装入口；1 个客户端生成一个真实伙伴；多个客户端按选择生成真实成员。
-5. 登录复用 CLI 自身流程；点击登录只能进入等待，真实探测成功后才能放行。
-6. 示范猫与真实成员之间有明确身份交接；解说猫成为第一位伙伴，并衔接 F229。
-7. 新安装默认钉选 `members`、`accounts`；保留用户主动取消的选择。
-8. 在真实主窗口用 F155 轻提示这两个入口，不遮挡或锁住首次输入与发送。
-9. 首条真实消息成功发送后才完成 onboarding；配置完成不等于旅程完成。
-10. 补齐可复现测试、处理上游冲突、更新原 PR，交付经过验证的 Windows 安装器。
+Issue #1466 描述的是完整的首启产品旅程：
 
-Issue 还包含应用/Web/主站图标统一、DMG 品牌视觉等内容。本轮没有实施或验收这些要求；如果最终 PR 仍保留 `Closes #1466`，必须逐项核实它们是否已有上游实现，或取得明确的范围裁定，不能静默略过。
+1. 三只猫以真实产品组件演示分工、互相 @ 和结果改进；
+2. 用户看到“示范团队”到“自己的真实伙伴”的交接；
+3. 探测本机已安装和已登录的 Claude、Codex、Gemini 等客户端；
+4. 不要求用户重新填写已经存在的 key；
+5. 对 0、1、多个客户端，以及未登录客户端分别处理；
+6. 进入真实主窗口后再以 F155 非阻塞方式提醒成员和账号入口；
+7. 第一条真实消息成功后才把首启状态置为 completed；
+8. 最终交付可安装的桌面产物和可复现的验证证据。
 
-## 3. 工作区、分支与提交
+### 3.2 PR #1519 承载 #1466 的首启实现
 
-| 坐标 | 值 |
+PR #1519 的标题是 “feat: complete first-run onboarding journey”，正文明确写了 Closes #1466，其 changed files 主要集中在：
+
+- packages/web 的首启 wizard、journey、配置、主窗口和浏览器覆盖；
+- guides/flows/first-run-entry.yaml 及 F155 引导注册；
+- 首启客户端认证状态和测试；
+- 首条真实消息完成回调、默认钉选和恢复逻辑。
+
+因此，当前继续在 feat/onboarding-first-run 上做工作，是**基于 #1519 继续完善 #1466**，这个判断是正确的。
+
+### 3.3 PR #1452 是另一条桌面安装加固工作
+
+PR #1452 的标题是 “fix(desktop): 一键安装加固 — 产物正确性 / Redis 归属 / 端口解析 / 安装与运行时验证”，其分支是 feat/desktop-install-hardening，当前 HEAD 为 a7558e0453070429651206ef773763cd415ad245，状态为 OPEN、MERGEABLE。
+
+它的主题包括：
+
+- Windows/macOS 桌面构建产物和原生模块架构；
+- Redis 归属、版本事实和持久化边界；
+- 动态端口、只读安装目录和运行时退出顺序；
+- 安装路径、构建脚本和安装后 smoke 验证。
+
+PR #1452 没有 closing issue reference，也没有在正文中关闭 #1466；它实际关联的 umbrella issue 是 #1459。所以它不是 #1466 的首启实现，也不是 #1519 的前置实现分支。
+
+两者可以有依赖关系，但不能混为同一个功能：
+
+| 关系 | 正确理解 |
 | --- | --- |
-| 项目根 | `G:\AIwork\clowder-ai` |
-| 当前开发 worktree | `G:\AIwork\clowder-ai\worktrees\feat-onboarding-first-run` |
-| 分支 | `feat/onboarding-first-run` |
-| `origin` | `https://github.com/whutzefengxie-ops/clowder-ai.git`，个人 fork |
-| `upstream` | `https://github.com/zts212653/clowder-ai.git`，PR 目标仓库 |
-| 当前 `origin/main` | `2374ca5c77721276dd813c19603f7eb63d700a48` |
-| 查询时 PR 目标 main SHA | `5968c19ad8b334ba8497fbb722b3e908b0e135e1`；继续前重新获取 |
+| 首启行为 | 继续由 #1519 负责 |
+| 桌面安装器可靠性 | 由 #1452 / #1459 这条独立工作流负责，或作为 #1466 的外部交付依赖被引用 |
+| #1466 的 Closes 关系 | 目前只有 #1519 明确关闭 #1466 |
+| 是否需要另开首启 PR | 不需要；维护者已经在 #1519 评论中要求继续维护现有 PR，不要平行重做 |
 
-**重要纠正：此前执行 `git fetch origin main` 只更新了 fork。解决 #1519 的冲突应针对最新 `upstream/main`，不能把 `origin/main` 当成 PR 目标基线。**
+本次要求中提到的 Windows .exe 是 #1466 最终交付的必要证据，但这不改变 #1452 和 #1519 的职责边界。完成 #1519 的首启行为，不能自动证明 #1452 的安装器问题已经解决；反过来，#1452 的安装 smoke 也不能证明首启旅程已经完成。
 
-已有提交：
+## 4. 对照原始预期的进展评审
 
-- `361a57ccd`：`feat(web): complete first-run onboarding journey`。
-- `ec0e57388`：`test(web): add first-run onboarding browser coverage`。
-
-PR #1452 是另一条桌面安装加固 PR，不承载本首启实现。继续维护 #1519，不新开平行实现。
-
-## 4. 已有实现与本轮变更
-
-### 4.1 已提交的基础实现
-
-- `FirstRunQuestWizard.tsx`：演示、模板、客户端、配置、创建和完成页面。
-- `onboarding-journey.ts`：旅程阶段、演示场景、暂停标记、配置草稿、真实成员投影、首消息完成函数。
-- `demo-script.ts`：`opening → draft → review → improved → handoff` 脚本文案。
-- `ChatContainer.tsx`、`ThreadChatSurface.tsx`：创建后导航及首消息完成回调。
-- `usePinnedSections.ts`：localStorage 未设置时默认 `members/accounts`，已保存的空数组仍保持空。
-- `guides/flows/first-run-entry.yaml` 与 registry：已注册首次协作引导。
-- 开发测试页面与 Playwright 测试文件：已存在，但不能据此声称 E2E 通过。
-
-这些是代码存在性说明，不等于完整验收。下面列出的缺口仍成立。
-
-### 4.2 本轮新增的认证探测
-
-新增 `packages/api/src/domains/cats/services/first-run-quest/client-auth.ts`，由已有 `client-detection.ts` 调用；API 客户端响应增加 `authenticated` 布尔字段。
-
-| 客户端 | 当前实现读取来源 | 尚需确认的边界 |
+| 预期验收项 | 当前实际情况 | 评审结论 |
 | --- | --- | --- |
-| Claude | `CLAUDE_CONFIG_DIR/.credentials.json` 或 `~/.claude/.credentials.json` 中的 `claudeAiOauth` | macOS Keychain、其他存储形态尚未覆盖 |
-| Codex | `CODEX_HOME/auth.json` 或 `~/.codex/auth.json` 中的 `tokens` | keyring 与原生 API-key 文件形态尚未覆盖 |
-| Gemini | `~/.gemini/oauth_creds.json`；支持 `GOOGLE_API_KEY/GEMINI_API_KEY` | 文件登录路径只有实现，尚无专项通过证据 |
-| OpenCode/Kimi | 现有环境变量 key 判断 | 尚无其原生登录存储探测 |
+| 三猫开场、闲置、自动输入、跑进气泡、互相 @ | 当前主要是脚本内容、状态机和手动推进页面，真实动作分镜未完成 | 方向正确，产品表现未完成 |
+| 初稿 → 同伴反馈 → 改稿 | 已有固定脚本和“术语被指出、结果变好”的内容设计 | 叙事契约已回应；仍需在真实组件上做视觉验收 |
+| 演示暂停、继续、刷新恢复 | 演示状态和配置子步骤已有持久化及恢复修复；自动动作本身还没有完整暂停语义 | 基础状态恢复合理，动画验收缺失 |
+| 0 个客户端 | 能显示未安装并重新检测 | 缺官方安装入口，不能证明安装后从当前步骤继续 |
+| 1 个已登录客户端 | 已加入 Claude/Codex/Gemini 等本机凭证存在性探测；空账号库可投影 synthetic builtin profile | 本地实现已回应关键 review；真实连接、创建和模型调用未证实 |
+| 多个客户端 | 已有选择、逐个配置、唯一昵称/提及模式和多客户端恢复修复 | API 冲突路径已改善；创建幂等和真实多成员仍未闭环 |
+| 未登录客户端 | pending 与未安装状态已区分，刷新后可以重新探测 | 仍是手动运行 CLI 的提示，没有拉起 CLI 原生登录流程 |
+| 凭证边界 | 探测返回状态，不返回 token；新增测试防止凭证值进入响应 | 边界设计合理；仍需真实跨平台存储和运行身份一致性验证 |
+| 示例团队交接真实团队 | 有文案和 handoff 状态，未配置示范猫不会被假装成真实成员 | 产品交接逻辑尚未以完整视觉和真实身份验证 |
+| 解说猫成为第一位真实伙伴并交接 F229 | 回调和概念路径已存在，F229 真实身份接线未完成 | 明确缺口 |
+| 默认钉选 members/accounts | 已实现；区分“从未设置”与“用户主动取消” | 设计上符合 Issue；仍缺新安装真实界面验收 |
+| F155 非阻塞提醒 | 已加入 nonBlocking、rail.members、rail.accounts 和非阻塞完成卡 | 本地属性和测试已补；真实主窗口输入/发送时序仍需验证 |
+| 第一条真实消息成功后完成 | 已有 onRealMessageSent 回调 | 还没有真实 API、线程、CLI 响应和失败门禁的端到端证据 |
+| 任意阶段离开后可继续 | 配置子步骤、客户端选择、检测列表和刷新恢复已有进展 | 创建响应丢失后的幂等仍是高风险 |
+| 应用/Web/主站图标与 DMG | 当前没有逐项核实记录 | 仍是待核实范围 |
+| Windows 一键安装 .exe | 没有新的 Inno Setup 安装器证据；旧 win-unpacked/Clowder AI.exe 不是安装器 | 未完成，不能用旧构建物替代 |
 
-实现只判断必要字段为非空字符串，不发网络请求、不启动 Agent、不返回 token。**字段存在仅代表检测到本地凭证，不证明凭证仍有效或模型调用成功。** 后续仍须通过连接验证/真实调用证明可用性。
+### 4.1 已经符合预期的部分
 
-本轮没有提取 quota 的凭证函数，而是新增了同类只读判断。未沿用 `CLAUDE_CREDENTIALS_PATH/CODEX_CREDENTIALS_PATH`：这些是额度面板可选账号覆盖，未证明与 CLI 执行账户一致。继续时应核对实际运行身份，不能混用不同账户的探测结果。
+当前实现没有改变原始产品原则，以下选择是合理的：
 
-### 4.3 本轮前端修正
+- 演示继续使用脚本内容，但由真实页面组件承载，而不是把 GIF 或录屏当成产品界面；
+- 把“已安装”和“已登录”分开判断，不把点击“去登录”直接当成成功；
+- 在空账号库中投影本机已登录 CLI 的 builtin 身份，不复制凭证、不创建虚假的账号记录；
+- 把 F155 做成非阻塞提醒，避免在用户第一次真实交流前插入第二套强制教程；
+- 给不同客户端生成唯一昵称和 mention patterns，避免真实 /api/cats 因别名冲突拒绝第二个成员；
+- 用 localStorage 恢复旅程时区分检测结果、用户选择、配置草稿和已完成状态；
+- 将 wizard 拆出 DemoStep.tsx 和 onboarding-storage.ts，使首启主组件回到约 327 行，符合项目文件大小约束。
 
-- `ClientStep.tsx` 不再仅因账号记录 `authType: oauth` 就认为已登录。
-- 优先消费 API 的 `authenticated`；已配置的 API-key 账号保留兼容路径。
-- `not_installed` 与等待外部登录的 `pending` 分离。
-- `pending` 显示“等待登录”；重新探测到 ready 时覆盖保存的 pending，并通知父级持久化。
-- 检测请求失败显示错误与重新检测入口，不再伪装成“未安装”。
-- 账号列表请求失败不再让整个客户端探测失败。
-- 当前“去登录”仍只设置 pending 并显示终端操作提示，**没有真正拉起 CLI**。
-- `authenticated` 在旧草稿中允许缺省，避免旧缓存仅因新增字段被全部废弃。
-- `ConfigStep.tsx` 修正默认账号选择：内置 ID 不存在时改选实际存在的账号。
-- `ProfileCard.tsx/ConfigStep.tsx` 将浏览器定位标记放回“测试连接”“创建猫猫”按钮；此前标记误放在编辑/新建账号按钮上。
+### 4.2 仍未达到预期的部分
 
-### 4.4 未提交文件清单
+最关键的差距仍集中在“真实”二字：
 
-| 路径 | 状态与用途 |
-| --- | --- |
-| `desktop/package-lock.json` | 构建遗留：仅两处版本 `0.2.0 → 0.10.1`，待清理无关变化 |
-| `packages/api/src/domains/cats/services/first-run-quest/client-detection.ts` | 接入认证状态投影 |
-| `packages/api/src/domains/cats/services/first-run-quest/client-auth.ts` | 新增，只读认证探测 |
-| `packages/api/test/first-run-auth.test.ts` | 新增，4 项凭证回归 |
-| `packages/web/package.json`、`pnpm-lock.yaml` | 上轮加入直接 Playwright 依赖，待统一测试依赖方案 |
-| `packages/web/src/app/dev/first-run-onboarding/page.tsx` | 上轮改为动态导入、关闭 SSR |
-| `packages/web/src/components/FirstRunQuestWizard.tsx` | 上轮局部修改，恢复/幂等问题尚未解决 |
-| `packages/web/src/components/__tests__/first-run-quest-wizard.test.tsx` | 补真实登录探测字段 fixture |
-| `packages/web/src/components/first-run-quest/ClientStep.tsx` | 状态推导、重新检测、错误提示 |
-| `packages/web/src/components/first-run-quest/ConfigStep.tsx` | 配置恢复、默认账号、按钮定位 |
-| `packages/web/src/components/first-run-quest/ProfileCard.tsx` | 连接测试按钮定位 |
-| `packages/web/src/components/first-run-quest/onboarding-journey.ts` | 新状态与旧草稿兼容 |
-| `packages/web/src/components/first-run-quest/__tests__/client-step.test.tsx` | 新增，3 项客户端回归 |
-| `packages/web/test/browser/first-run-onboarding.test.mjs` | 上轮未完成修改，仍有明确测试逻辑问题 |
+1. 本机凭证存在不等于 token 有效，更不等于真实模型调用成功；
+2. mock API 浏览器测试通过不等于真实 /api/cats、/api/threads 和 CLI 调用通过；
+3. pending 重新探测有出口不等于产品已经能拉起并完成 CLI 自身登录；
+4. 静态 handoff 文案不等于三猫视觉分镜、角色动作和 F229 交接已经完成；
+5. 有一个旧的 unpacked Electron 主程序不等于当前源码已经生成可安装、可启动的新 .exe；
+6. 本地分支包含修复不等于远端 #1519 已更新，也不等于 CI 已运行。
 
-## 5. 测试与构建证据
+### 4.3 是否跑偏
 
-### 5.1 本轮实际执行
+结论是“**没有产品方向跑偏，但有交付顺序和范围膨胀风险**”：
 
-| 检查 | 结果 | 证据边界 |
+- 认证探测、恢复、别名和 F155 都能追溯到 #1466 的验收条件，属于合理深化；
+- 将测试入口、诊断和隔离构建目录修好，是为了让验证可复现，不是另起产品；
+- 继续扩展到桌面安装器、品牌资产和完整动画时，需要保持与 #1452/#1459、F229 和素材生产线的边界，不要把所有问题塞进 #1519；
+- 当前最大的风险不是方向错误，而是用越来越多的定向测试替代真实用户旅程证据。后续必须把“本地单测通过”“mock 浏览器契约通过”“真实 E2E 通过”“安装器验收通过”分开记录。
+
+## 5. PR #1519 的意见是否已经纳入本进展文档
+
+已经纳入。本节把 GitHub 上当前可见的三条评论逐项登记，并区分“文档已记录”“本地实现已回应”和“远端仍未闭环”。
+
+| 来源 | 意见 | 当前处置 |
 | --- | --- | --- |
-| 新 ClientStep 3 项回归，修复前 | 3 项按预期失败 | OAuth 误判、pending 文案、失败冒充未安装 |
-| 前端定向 Vitest | 4 文件、20 项通过 | ClientStep 3、journey 7、wizard 5、pins 5；不是浏览器 E2E |
-| 新凭证回归，注入边界补齐前 | 3 失败、1 通过 | 未实现依赖注入导致 fixture 无法进入判断，不能单凭这一 RED 证明全部生产问题 |
-| 新凭证回归，补齐后 | 4 项通过 | 原生 OAuth、CODEX_HOME 隔离、损坏/缺字段、环境 key；不含真实账号联网 |
-| `pnpm --filter @cat-cafe/web exec tsc --noEmit` | 通过 | 已单独复跑，退出码 0 |
-| `pnpm --filter @cat-cafe/api exec tsc` | 失败 | `src/infrastructure/telemetry/local-trace-exporter.ts(44,30): TS7006 Parameter 'e' implicitly has an 'any' type` |
-| Web 测试包装脚本 | 环境/仓库文件缺失 | 找不到 `scripts/lib/process-resource-lease.mjs`；随后显式设置 NODE_ENV 直接跑 Vitest |
+| 维护者首轮分诊（issuecomment-5771522887） | 方向有产品锚点，但 CONFLICTING、无 CI；浏览器依赖和 Electron 网络失败不能算绿；保留 pending-login 和 first-real-message 门禁；不要另开平行实现 | 已写入本文件的交付判断。当前本地已合并上游、补测试和诊断，但远端 PR 仍旧 HEAD/冲突状态，未闭环 |
+| 设计复核（issuecomment-5771560224） | 原实现只看本地账号和环境 key，不能识别典型 CLI OAuth；pending 需要真实出口；未安装不应伪装成 pending；members/accounts 钉选入口应有轻提示 | 本地已新增 Claude/Codex/Gemini 凭证存在性探测、Codex 自定义 provider 解析、pending/未安装区分和 F155 rail 提示；仍缺 CLI 原生登录、真实身份一致性和主窗口验证 |
+| CI 状态复核（issuecomment-5771627992） | 当前没有 check 不是“全通过”，而是因冲突没有运行；刷新冲突后才有 Lint/Build/Public test 的自动证据 | 仍然成立。当前远端 statusCheckRollup 为空，本地测试不能替代远端 CI |
 
-API 报错位于本轮未修改文件，但尚未对最新 upstream 基线复验，**不能直接宣称是上游既有错误或忽略**。先同步正确基线，再定位。
+GitHub API 当前没有为 #1519 返回正式 review verdict；上述设计复核是 advisory review，维护者首轮评论是 triage/方向门禁。它们不能被写成“PR 已获正式批准”。后续 exact HEAD 稳定后，仍需要非作者独立 review、quality-gate 和 merge-gate。
 
-前端测试伴随 `act(...)` 环境警告和 Browserslist 过期提示；断言通过，但不等于运行无告警。
+## 6. 当前可用证据与证据边界
 
-### 5.2 当前没有的证据
+以下是本地已记录的最新结果。它们证明了相应层级的行为，不应被扩大解释为完整 E2E：
 
-- 没有修正后浏览器测试全部通过的结果。
-- 没有真实 API + 真实浏览器 + 首次消息持久化的完整链路证明。
-- 没有本轮 API route 测试、guide loader 测试的重新通过结果。
-- 没有本轮修改后的 production build、完整格式检查与相关门禁通过结果。
-- 没有最终安装器大小、SHA256、安装/启动验收结果。
-- 没有处理 main 冲突后的 CI 与 final HEAD 独立 review。
-
-交接摘要曾记录旧 HEAD 的 Web production build、guide loader 15 项通过；本轮没有复跑，不能用于批准当前未提交变更。
-
-### 5.3 安装产物现状
-
-本次只核实到 `desktop/dist/win-unpacked/Clowder AI.exe`，大小 **201,481,728 bytes**，文件时间显示 **2026-09-22 13:35:41**。这是 Electron unpacked 主程序，**不是一键安装器，也不能证明包含本轮代码**。
-
-已有构建入口：`desktop/scripts/build-desktop.ps1`；Inno 脚本：`desktop/installer/cat-cafe.iss`。历史交接记录的 Inno 工具位置为 `C:\Program Files (x86)\Inno Setup 6\ISCC.exe`，继续时应重新确认。
-
-## 6. 必须处理的缺口
-
-| 优先级 | 缺口与影响 | 当前证据/处理方向 |
+| 验证 | 记录结果 | 能证明什么 |
 | --- | --- | --- |
-| 高 | PR 基线仍冲突，CI 未运行 | 获取 `upstream/main`，保全未提交工作后合并/变基，不能只 fetch fork |
-| 高 | 已登录 CLI 是否能在空账号库直接完成配置尚未证明 | `ConfigStep` 仍依赖 `/api/accounts`，需验证内置账号解析/创建与实际执行环境 |
-| 高 | 配置阶段刷新回到客户端清单 | `stepForJourneyStage('setup')` 固定返回 client；保存的 configIndex 未恢复 UI 子步骤 |
-| 高 | 创建中断可能重复创建成员 | 已创建缓存仅在 ref；重开清空，catId 使用新时间戳。独立静态检查确认风险，尚未运行复现 |
-| 高 | F155 non-blocking 只有注释 | Flow 类型没有该属性；`GuideOverlay` 仍聚焦 HUD、限制 Tab，Spotlight 生成点击遮罩 |
-| 高 | 登录按钮没有拉起 CLI，0 客户端没有安装链接 | 当前仅 pending + 终端提示；不满足 issue 约定入口 |
-| 高 | Playwright 测试无法正确验证恢复与完整路径 | 初始化脚本每次刷新清空 localStorage；步数多点一次；漏选模板；fixture 字段/文案存在问题 |
-| 高 | 演示与原始分镜差距明显 | 当前静态文字卡、手动推进；缺真实消息组件、自动输入、猫动画和角色交接 |
-| 高 | F229/真实成员映射未实现 | 多客户端复用同模板形象；nickname/mentionPatterns 可能歧义，路由影响待查 |
-| 中 | 首消息成功/失败/跨线程门禁未完成验证 | 已有回调接线，但需证明失败不完成、成功才完成、正确线程归属与刷新恢复 |
-| 中 | `members/accounts` 提醒未解释入口用途 | flow 目前只有发送第一句话；rail 尚无对应引导标签 |
-| 中 | 多平台认证覆盖不足 | 明确检测范围，不把未知存储方式说成已登录/未登录的确定事实 |
-| 中 | 测试未接入自动执行契约 | 新 `first-run-auth.test.ts` 不在默认 `test/*.test.js` 范围内，需调整发现/命令 |
-| 中 | 格式与文件行数、依赖变更未收口 | 仅整理本次改动；不要对全仓自动修复或提交构建副产物 |
+| 浏览器首启契约测试 | 5/5 通过 | 在隔离 Next 构建目录和 mock API 下，演示暂停/刷新、pending 恢复、未安装重新检测、空账号库 builtin 身份和多客户端配置恢复可重放 |
+| Web 定向测试 | 9 个文件、40 项通过 | Wizard、recovery、journey、ClientStep、native profile、ConfigStep、F155 non-blocking、auto-advance、pinned sections 的本地契约 |
+| API 首启测试 | 35 项通过 | 已构建 API 产物上的首启 API 行为 |
+| 原生认证探测测试 | 4 项通过；后续 API 回归新增 6 项 | fixture 驱动的凭证文件、环境变量、Codex config provider 和凭证不外泄行为 |
+| guide loader 测试 | 16 项通过 | nonBlocking flow 的 loader/registry 语义 |
+| guide catalog 校验 | 10 个 flow 通过 | 引导清单的结构校验 |
+| Web TypeScript | 最新记录为通过 | 当前类型层没有发现阻塞性错误 |
+| API TypeScript | 最新记录为通过 | 当前 API 类型层没有发现阻塞性错误 |
+| frontmatter 与 diff 检查 | check-frontmatter --strict-delta --base upstream/main、git diff --check 通过 | 文档元数据和空白错误 |
 
-独立只读扫描来自本线程子代理 `onboarding_review`，对象是 `ec0e573` 加当时工作区变更，没有执行 E2E，没有批准最终代码。其确认的恢复、重复创建、演示、身份交接、入口及测试缺口均已纳入上表。
+证据边界如下：
 
-## 7. 后续实施顺序
+- 浏览器测试仍是 mock API 的 UI 契约测试，不是真实服务、真实数据库、真实 CLI 或真实模型调用；
+- 凭证探测测试只证明“本地凭证形态能被识别且不泄漏”，不证明凭证有效或模型调用成功；
+- 本地类型检查和定向测试不等于当前 exact HEAD 已被远端 CI 接受；
+- 旧的 Electron unpacked 产物不等于新的 Windows 安装器；
+- 当前没有真实三猫动画播放、真实 F229 交接、真实首消息成功和安装后首启的证据。
 
-### 阶段 A：保全现场并同步正确基线
+## 7. 旧文档快照中已被本次核验纠正的内容
 
-1. 回读本文、issue 原文及 #1519 最新评论，确认本地改动没有被他人继续修改。
-2. 检查 tracked/untracked 文件；保全本轮改动。不要 `reset --hard`，不要一键清理工作树或 `stash -u`。
-3. 检查桌面锁文件 diff，只还原确认无关的版本改动；必要时先留独立副本。
-4. 获取 `upstream/main` 并记录 SHA。工作区干净或安全保存后再合并；已推送 feature 优先考虑 merge，避免不必要重写历史。
-5. 逐文件解决冲突，保留上游已有功能，重新检查 API 报错与缺失测试包装依赖。
+此前文档仍保留了若干实施中间态：
 
-完成标准：明确最新目标基线、工作没有丢失、无冲突；有可重放的测试入口。
+- 本地 HEAD 曾记录为 a75a09333，现在应以 d336ed811 为准；
+- 浏览器测试曾记录为 4 项超时失败，入口问题已经修复，最新隔离测试记录为 5/5 通过；
+- 之前只记录 1 项 ConfigStep 测试，当前应记录为 Web 9 文件 40 项通过，以及 API/认证/guide 的分项结果；
+- 之前把 F155 和 native profile 写成未提交的粗略快照，当前应按 worktree 的 20 个 tracked 修改和 15 个 untracked 路径重新核对；
+- 之前的“无 CI”结论仍然有效，但原因应准确写成“远端 PR 仍冲突且没有 status checks”，不能写成“CI 失败”；
+- desktop/dist/win-unpacked/Clowder AI.exe 只能作为旧 unpacked 主程序记录，不能作为当前安装器证据。
 
-### 阶段 B：完成真实客户端到账号绑定路径
+## 8. 尚未闭环的关键问题
 
-1. 以空 Clowder 账号库 + 已登录 Claude/Codex 为首要 fixture，验证检测到配置到调用使用同一身份。
-2. 补 API route 契约测试：必须认证才能访问，只返回状态，凭证值绝不出现在 JSON/日志。
-3. 核对 CLI 的各平台凭证位置与运行 home，补已有环境 key、缺文件、损坏文件、独立 home、未知存储等分支。
-4. 让“去登录”复用可交互的 CLI 自身登录入口；固定命令白名单，不接受前端任意 shell 字符串。完成后重新探测。
-5. 为未安装客户端提供官方安装入口；准备好的单客户端不受其他未安装项阻塞。
-6. 配置屏应复用已有登录身份和合理默认模型，核实无需用户再造一份 API-key 账号；连接失败保留可恢复路径。
+按对用户承诺的影响排序，当前仍有以下问题：
 
-完成标准：0/1/多客户端都能走通；点击登录不伪造成功；真实重新探测可解除 pending。
+| 优先级 | 未闭环问题 | 为什么阻塞完成判断 |
+| --- | --- | --- |
+| P0 | 成员创建幂等 | API 成功但响应丢失后，Date.now() cat ID 和仅存 ref 的状态可能导致重复创建或无法对账 |
+| P0 | 线程创建幂等 | /api/threads 没有首启 request key，重试可能生成重复线程 |
+| P0 | 真实首消息链路 | 没有真实线程、真实 CLI、真实响应和失败不完成的 E2E 证据 |
+| P0 | 远端 PR 冲突和 CI | #1519 还没有 exact local HEAD 的自动验证 |
+| P1 | CLI 原生登录和官方安装入口 | 当前“去登录”仍提示用户手动运行 CLI；0 客户端没有正式安装链接 |
+| P1 | 三猫视觉分镜 | 静态卡和手动推进不能替代自动输入、猫进入气泡、互相 @、动作暂停/恢复 |
+| P1 | F229 交接 | 解说猫、真实前台猫和 F229 尚未证明是同一身份 |
+| P1 | 空安装自动入口 | ChatContainer 的空线程提前返回逻辑仍需在真实空安装环境验证 |
+| P1 | Windows 安装器 | 尚无基于当前源码 SHA 的 Inno Setup .exe、安装路径、大小、SHA256 和安装后首启记录 |
+| P2 | 品牌和 DMG 资产 | 应用/Web/主站图标及 DMG 背景未逐项核实 |
+| P2 | F155 生命周期 | 非阻塞、发送后结束、重复触发、取消后不重现等真实主窗口边界仍需验证 |
+| P2 | 跨平台原生身份覆盖 | Keychain、keyring、Gemini 默认模型和真实运行身份一致性仍未闭环 |
 
-### 阶段 C：修复恢复与创建幂等
+## 9. 后续收口顺序
 
-1. 状态中显式保存配置子步骤、已选择客户端、当前 configIndex 与配置草稿；重新探测结果与用户选择分开保存。
-2. 持久化每个待创建成员的稳定 ID/请求标识及服务端确认结果，重试先对账，不重新生成同一成员。
-3. 线程创建也具备稳定重试语义，处理“服务端成功、浏览器未收到响应”的窗口。
-4. 先补失败测试：第二个客户端配置时刷新、第一个成员创建成功后失败、创建后关闭重开、线程响应丢失。
-5. 校验老版本 localStorage、禁用 localStorage、撤销登录等情况，不把缓存 ready 当作永久授权。
+这里记录的是评审后的建议顺序，不代表本次继续执行：
 
-完成标准：任意节点刷新可继续；重复提交不会新增重复猫或线程；完成阶段单独保存。
+1. **先让 #1519 获得可审 exact HEAD。** 保留当前本地修改，清楚区分已提交、未提交和测试生成物；解决与 upstream/main 的冲突；推送后确认 PR HEAD、CI 和 changed files 一致。
+2. **先补可重试语义，再扩展体验。** 为成员和线程创建建立稳定 request identity，并用响应丢失、刷新、关闭重开和服务端已成功等失败测试证明不会重复创建。
+3. **完成真实客户端路径。** 固定命令白名单和官方安装入口；去登录只能进入 pending；重新探测必须读取 CLI 自身状态；登录后的探测、连接测试和实际调用必须使用同一身份。
+4. **完成真实三猫分镜与 F229 交接。** 明确示范角色和真实成员的动态映射；单客户端时诚实说明只有一位真实伙伴；自动播放、暂停、继续和刷新恢复应在真实组件中成立。
+5. **完成首条真实消息门禁。** 在真实 API、真实线程和真实 CLI 上验证发送失败不完成，其他线程消息不误完成，刷新后完成状态保持，成功响应可用。
+6. **完成安装器与品牌验收。** 如果使用 #1452 的安装加固成果，必须记录它和 #1519 的依赖关系；从可追溯源码 SHA 构建新的 .exe，记录安装器绝对路径、文件大小、SHA256、安装和启动结果。
+7. **最后走质量门禁。** 对照 Issue #1466、F155、F229 和维护者意见做 quality-gate；安排非作者独立 review；确认远端 CI 非空且通过；再进入 merge-gate。没有这些证据，不能把 Issue 标为完成。
 
-### 阶段 D：完成分镜与 F229 交接
+## 10. 当前决策记录
 
-1. 对照 issue 中的参考原型与资源，复用已有素材及真实消息组件，不另建一套与产品脱节的聊天界面。
-2. 实现脚本输入、@ 同伴、初稿/审查/改稿及可暂停播放；示范明确标识为脚本，不调用模型。
-3. 落实示范角色到真实成员的动态映射；优先让解说猫成为首位伙伴，未加入的角色明确退场。
-4. 一客户端明确提示以后可邀请更多伙伴；多成员身份、昵称和提及规则保持可区分。
-5. 核对 F229 的既有入口和默认伙伴持久化，完成交接；同步核对图标/DMG 要求的处理范围。
+- 继续维护 #1519，不另开一个平行的 #1466 实现 PR。
+- #1452 继续作为桌面安装加固线看待；其结果只有在安装器验收证据明确后，才能作为 #1466 的外部依赖被引用。
+- 本地 mock、定向测试、凭证文件存在和旧 unpacked 构建物都不代表真实 E2E 或安装器完成。
+- pending、首条真实消息和用户主动取消钉选等状态必须保持可观察、可恢复、不可伪造成功。
+- 不把远端空 CI 状态写成通过；不把 advisory review 写成正式批准。
+- 继续遵守 worktree、Redis 6398、禁止触碰生产持久化数据和禁止自审的项目约束。
 
-完成标准：用户可从动作和结果理解协作，且演示承诺与实际得到的成员一致。
-
-### 阶段 E：落实非阻塞 F155 与首条消息
-
-1. 使用 `guide-authoring` 流程补充成员/账号入口说明及标签注册；先确定当前仓库实际标签清单机制，不能照搬不存在的文件。
-2. 为 F155 补明确可消费的非阻塞契约：后端 flow loader、前端 flow 类型和 Overlay 同步支持。
-3. 非阻塞模式不抢焦点、不限制 Tab、不生成拦截点击的遮罩；退出或发送消息后正常结束，不抢占正在运行的其他引导。
-4. 保留第一句话输入，提供可编辑建议；覆盖发送失败、成功、跨线程、刷新后的 completed 状态。
-
-完成标准：提示显示时可直接点击输入与发送，入口可找到；仅真实发送成功完成 onboarding。
-
-### 阶段 F：测试、打包、提交与 review
-
-1. 修正 Playwright：新 context 自然隔离，只在首次初始化清状态；补 cli 字段、合法模板结构、正确中文文案、模板选择及准确步数。
-2. 测试失败输出 URL、DOM、console/page errors，必要时截图。保留确定性 mock 测试，明确其只证明 UI 契约。
-3. 增加真实 API 的隔离 E2E：实际建成员与线程、发送唯一文本、确认服务端接收与刷新保留；按计划增加至少一次真实 CLI 调用验收。
-4. 将新测试接入仓库自动执行；运行定向单测、API route、guide、类型、增量格式检查和 production build。
-5. 按 `quality-gate` 汇总原始需求覆盖及风险证据，清理无关构建 diff，提交推送原 feature 分支。
-6. 在新 HEAD 上构建 Windows 安装器。不要用旧 `.next`/dist/unpacked 冒充新产物；记录源码 SHA 与构建日志。
-7. 构建前审查脚本删除/重建目录的绝对路径，确认只涉及此 worktree 的生成物；使用隔离安装目录验收，保护现有数据。
-8. 输出安装器绝对路径、文件大小、SHA256，验证启动、首启界面和必要依赖；打包失败与代码测试结果分开报告。
-9. 更新 #1519 描述和证据，等待实际 CI；按最终 HEAD 安排独立 review，修复 findings 后再走合入门禁。
-
-## 8. 可复用命令
-
-以下为继续实施时的命令参考，**不代表本轮已经全部执行或通过**。
-
-```powershell
-Set-Location 'G:\AIwork\clowder-ai\worktrees\feat-onboarding-first-run'
-git status --short --branch
-git remote -v
-git fetch upstream main
-git log -1 --format='%H %s' upstream/main
-gh pr view 1519 --repo zts212653/clowder-ai --json headRefOid,baseRefOid,mergeable,statusCheckRollup
-
-# 直接运行本轮通过的前端定向测试；仓库包装脚本缺文件的问题仍需处理
-$env:NODE_ENV = 'test'
-pnpm --filter @cat-cafe/web exec vitest run src/components/first-run-quest/__tests__/client-step.test.tsx src/components/first-run-quest/__tests__/onboarding-journey.test.ts src/components/__tests__/first-run-quest-wizard.test.tsx src/hooks/__tests__/usePinnedSections.test.tsx
-node --import tsx --test packages/api/test/first-run-auth.test.ts
-pnpm --filter @cat-cafe/web exec tsc --noEmit
-pnpm --filter @cat-cafe/api exec tsc
-
-# 修正测试并准备依赖后再执行；所有服务使用本 worktree 独立端口
-pnpm --filter @cat-cafe/web exec node --test test/browser/first-run-onboarding.test.mjs
-
-# 构建前恢复适合构建的进程环境，并确认 Inno Setup/Git tar 可用
-$env:NODE_ENV = $null
-$env:Path += ';C:\Program Files (x86)\Inno Setup 6;C:\Program Files\Git\usr\bin'
-# 经路径/数据边界检查后运行 desktop/scripts/build-desktop.ps1
-# 对最终安装器执行 Get-Item 与 Get-FileHash -Algorithm SHA256
-```
-
-## 9. 继续工作的硬约束
-
-- 不在 main/master 或 `clowder-ai-main` 开发；所有代码继续放在 feature worktree。
-- 不访问生产 Redis 6399；开发/测试使用 6398；不删除、清空任何用户持久数据。
-- 不用 3003/3004 验证当前未合入代码，不以线上实例替代开发实例证据。
-- 不输出、写入报告或提交真实 token/key；不在日志中回显构建用 GitHub token。
-- 不把 mock 创建的线程叫作真实服务端 E2E；不把凭证文件存在叫作联网认证成功。
-- 不把旧 unpacked 主程序叫作安装器；不把空 CI 列表叫作通过。
-- 不自审、不冒充其他代理；独立 finding scan 不能代替最终 HEAD 批准。
-- 当前没有执行合并、推送新代码、发布安装器或关闭 issue。
-
-## 10. 下一次启动的第一项任务
-
-**先保全未提交改动，拉取并对齐 `upstream/main`，解决 #1519 冲突；随后用“空账号库 + 已登录 CLI”实证绑定路径。** 这两步决定后续修复能否基于正确代码和真实用户场景推进。不要直接进入打包，也不要先更新 PR 宣称完成。
+当前最准确的完成声明仍然是：**#1466 的首启基础实现和验证基础已经明显推进，但功能、真实体验和交付证据尚未闭环；#1519 是正确的承载 PR，#1452 是独立的桌面安装加固 PR。**

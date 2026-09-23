@@ -199,7 +199,7 @@ async function execProbe(
       return { ok: false, message: `${client} CLI 响应超时` };
     }
     if (/authentication|login|OAuth/i.test(msg + stderr)) {
-      return { ok: false, message: '需要先完成 OAuth 登录，请在终端运行一次 CLI' };
+      return { ok: false, message: '需要先完成 CLI 认证（OAuth 或 URL + Key 配置），请检查 CLI 配置后重试' };
     }
     return { ok: false, message: `${client} CLI 调用失败: ${msg.slice(0, 100)}` };
   }
@@ -298,7 +298,7 @@ function spawnProbe(
       }
 
       if (/authentication|login|OAuth/i.test(combined)) {
-        settle({ ok: false, message: '需要先完成 OAuth 登录，请在终端运行一次 CLI' });
+        settle({ ok: false, message: '需要先完成 CLI 认证（OAuth 或 URL + Key 配置），请检查 CLI 配置后重试' });
         return;
       }
       settle({ ok: false, message: `${client} CLI 调用失败 (exit ${code})` });

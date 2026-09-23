@@ -5,6 +5,7 @@ import { apiFetch } from '@/utils/api-client';
 import type { AccountsResponse, ProfileItem } from '../hub-accounts.types';
 import { builtinAccountIdForClient, type ClientValue, filterAccounts } from '../hub-cat-editor.model';
 import { type UnifiedAuthEditData, UnifiedAuthModal } from '../UnifiedAuthModal';
+import { type ClientModelDefaults, withNativeProfile } from './native-profile';
 import { ProfileCard } from './ProfileCard';
 
 interface ConfigStepProps {
@@ -12,6 +13,7 @@ interface ConfigStepProps {
   /** Account provider key (anthropic/openai/google) — distinct from model provider. */
   clientId: string;
   initialConfig?: { accountRef: string; model: string };
+  detectedOAuth?: boolean;
   onComplete: (config: { accountRef: string; model: string }) => void;
 }
 
@@ -26,7 +28,7 @@ function humanizeError(msg: string): string {
   return msg;
 }
 
-export function ConfigStep({ client, clientId, initialConfig, onComplete }: ConfigStepProps) {
+export function ConfigStep({ client, clientId, initialConfig, detectedOAuth = false, onComplete }: ConfigStepProps) {
   const [profiles, setProfiles] = useState<ProfileItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedProfileId, setSelectedProfileId] = useState('');
@@ -43,10 +45,17 @@ export function ConfigStep({ client, clientId, initialConfig, onComplete }: Conf
     const res = await apiFetch('/api/accounts');
     if (!res.ok) return [];
     const body = (await res.json()) as AccountsResponse;
-    const providers = body.providers ?? [];
+    let defaults: ClientModelDefaults | undefined;
+    if (detectedOAuth) {
+      const templates = await apiFetch('/api/cat-templates');
+      if (templates.ok)
+        defaults = ((await templates.json()) as { clientDefaults?: Record<string, ClientModelDefaults> })
+          .clientDefaults?.[client];
+    }
+    const providers = withNativeProfile(body.providers ?? [], clientId, detectedOAuth, defaults);
     setProfiles(providers);
     return providers;
-  }, []);
+  }, [client, clientId, detectedOAuth]);
 
   useEffect(() => {
     fetchProfiles()
@@ -61,11 +70,13 @@ export function ConfigStep({ client, clientId, initialConfig, onComplete }: Conf
 
   useEffect(() => {
     if (!selectedProfileId && available.length > 0) {
-      const restoredId = initialConfig?.accountRef && available.some((profile) => profile.id === initialConfig.accountRef)
-        ? initialConfig.accountRef
-        : '';
+      const restoredId =
+        initialConfig?.accountRef && available.some((profile) => profile.id === initialConfig.accountRef)
+          ? initialConfig.accountRef
+          : '';
       const builtinId = builtinAccountIdForClient(clientId as ClientValue);
-      const defaultId = restoredId || available.find((profile) => profile.id === builtinId)?.id || available[0]?.id || '';
+      const defaultId =
+        restoredId || available.find((profile) => profile.id === builtinId)?.id || available[0]?.id || '';
       setSelectedProfileId(defaultId);
       setExpandedId(defaultId);
       setSelectedModel(initialConfig?.model || firstModel(available.find((p) => p.id === defaultId)));
@@ -91,14 +102,14 @@ export function ConfigStep({ client, clientId, initialConfig, onComplete }: Conf
   };
 
   const handleTest = async () => {
-    if (!selectedProfileId || !selectedModel) return;
+    const selectedProfile = available.find((p) => p.id === selectedProfileId);
+    if (!selectedProfile || (!selectedModel && selectedProfile.authType !== 'oauth')) return;
     const sig = `${selectedProfileId}:${selectedModel}`;
     testSigRef.current = sig;
     setTesting(true);
     setTestResult(null);
     try {
-      const selectedProfile = available.find((p) => p.id === selectedProfileId);
-      const profileClientId = selectedProfile?.provider ?? clientId;
+      const profileClientId = selectedProfile.provider ?? clientId;
       const res = await apiFetch('/api/first-run/connectivity-test', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -159,7 +170,8 @@ export function ConfigStep({ client, clientId, initialConfig, onComplete }: Conf
     return <p className="py-8 text-center text-sm text-cafe-muted">加载认证配置...</p>;
   }
 
-  const canProceed = selectedProfileId && selectedModel && testResult?.ok;
+  const selectedProfile = available.find((p) => p.id === selectedProfileId);
+  const canProceed = !!selectedProfile && (!!selectedModel || selectedProfile.authType === 'oauth') && !!testResult?.ok;
 
   return (
     <div>
@@ -185,6 +197,7 @@ export function ConfigStep({ client, clientId, initialConfig, onComplete }: Conf
             onModelSelect={handleModelSelect}
             onTest={handleTest}
             onProfileRefresh={handleProfileRefresh}
+            readOnly={p.syntheticNative === true}
             onEdit={() => {
               setEditProfile({
                 id: p.id,

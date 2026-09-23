@@ -45,6 +45,8 @@ export interface OnboardingConfigDraft {
 
 export interface OnboardingSetupDraft {
   template?: OnboardingTemplateDraft;
+  step?: 'client' | 'config';
+  detectedClients?: OnboardingClientDraft[];
   clients: OnboardingClientDraft[];
   configs: Record<string, OnboardingConfigDraft>;
   configIndex: number;
@@ -159,7 +161,10 @@ function isClientDraft(value: unknown): value is OnboardingClientDraft {
     (value.version === undefined || typeof value.version === 'string') &&
     typeof value.hasApiKey === 'boolean' &&
     (value.authenticated === undefined || typeof value.authenticated === 'boolean') &&
-    (value.authStatus === 'ready' || value.authStatus === 'login_required' || value.authStatus === 'pending' || value.authStatus === 'not_installed')
+    (value.authStatus === 'ready' ||
+      value.authStatus === 'login_required' ||
+      value.authStatus === 'pending' ||
+      value.authStatus === 'not_installed')
   );
 }
 
@@ -172,6 +177,9 @@ function isSetupDraft(value: unknown): value is OnboardingSetupDraft {
   if (!isRecord(value.configs) || !Object.values(value.configs).every(isConfigDraft)) return false;
   return (
     (value.template === undefined || isTemplateDraft(value.template)) &&
+    (value.step === undefined || value.step === 'client' || value.step === 'config') &&
+    (value.detectedClients === undefined ||
+      (Array.isArray(value.detectedClients) && value.detectedClients.every(isClientDraft))) &&
     typeof value.configIndex === 'number' &&
     Number.isInteger(value.configIndex) &&
     value.configIndex >= 0 &&
@@ -205,9 +213,17 @@ export function restoreJourneyState(serialized: string | null | undefined): Onbo
         ? {}
         : {
             setup: {
-              ...(parsed.setup.template === undefined ? {} : { template: { ...parsed.setup.template, color: { ...parsed.setup.template.color } } }),
+              ...(parsed.setup.step === undefined ? {} : { step: parsed.setup.step }),
+              ...(parsed.setup.detectedClients === undefined
+                ? {}
+                : { detectedClients: parsed.setup.detectedClients.map((client) => ({ ...client })) }),
+              ...(parsed.setup.template === undefined
+                ? {}
+                : { template: { ...parsed.setup.template, color: { ...parsed.setup.template.color } } }),
               clients: parsed.setup.clients.map((client) => ({ ...client })),
-              configs: Object.fromEntries(Object.entries(parsed.setup.configs).map(([key, config]) => [key, { ...config }])),
+              configs: Object.fromEntries(
+                Object.entries(parsed.setup.configs).map(([key, config]) => [key, { ...config }]),
+              ),
               configIndex: parsed.setup.configIndex,
             },
           }),

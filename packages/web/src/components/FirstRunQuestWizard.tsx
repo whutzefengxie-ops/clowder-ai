@@ -4,54 +4,30 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useCatData } from '@/hooks/useCatData';
 import { apiFetch } from '@/utils/api-client';
+import { ClientStep, type DetectedClient } from './first-run-quest/ClientStep';
+import { ConfigStep } from './first-run-quest/ConfigStep';
+import { DemoStep } from './first-run-quest/DemoStep';
+import { nextDemoScene } from './first-run-quest/demo-script';
 import {
   buildRealMembers,
   canContinueClientSetup,
   createJourneyState,
-  restoreJourneyState,
   type OnboardingJourneyState,
+  restoreJourneyState,
 } from './first-run-quest/onboarding-journey';
-import { ClientStep, type DetectedClient } from './first-run-quest/ClientStep';
-import { ConfigStep } from './first-run-quest/ConfigStep';
+import {
+  STORAGE_KEY,
+  setupDraftForTemplate,
+  stepForJourneyStage,
+  updateJourney,
+  type WizardStep,
+} from './first-run-quest/onboarding-storage';
 import { type TemplateCard, TemplateStep } from './first-run-quest/TemplateStep';
-import { DEMO_SCENES, nextDemoScene } from './first-run-quest/demo-script';
-
-type WizardStep = 'demo' | 'template' | 'client' | 'config' | 'creating' | 'done';
 
 interface FirstRunQuestWizardProps {
   open: boolean;
   onClose: () => void;
   onCreated: (questThreadId: string, catName: string) => void;
-}
-
-const STORAGE_KEY = 'cat-cafe:onboarding-journey';
-
-function persistJourney(state: OnboardingJourneyState) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch {
-    /* localStorage may be unavailable */
-  }
-}
-
-function updateJourney(state: OnboardingJourneyState, patch: Partial<OnboardingJourneyState>): OnboardingJourneyState {
-  const next = { ...state, ...patch };
-  persistJourney(next);
-  return next;
-}
-
-function stepForJourneyStage(stage: OnboardingJourneyState['stage']): WizardStep {
-  if (stage === 'demo') return 'demo';
-  if (stage === 'handoff') return 'template';
-  if (stage === 'setup') return 'client';
-  return 'done';
-}
-
-function setupDraftForTemplate(state: OnboardingJourneyState, template: TemplateCard): OnboardingJourneyState {
-  return updateJourney(state, {
-    stage: 'setup',
-    setup: { template, clients: state.setup?.clients ?? [], configs: state.setup?.configs ?? {}, configIndex: 0 },
-  });
 }
 
 export function FirstRunQuestWizard({ open, onClose, onCreated }: FirstRunQuestWizardProps) {
@@ -67,10 +43,15 @@ export function FirstRunQuestWizard({ open, onClose, onCreated }: FirstRunQuestW
 
   useEffect(() => {
     if (!open) return;
-    const restored = restoreJourneyState(localStorage.getItem(STORAGE_KEY));
+    let restored: OnboardingJourneyState | null = null;
+    try {
+      restored = restoreJourneyState(localStorage.getItem(STORAGE_KEY));
+    } catch {
+      /* Storage may be disabled. */
+    }
     const next = restored ?? createJourneyState();
     setJourney(next);
-    setStep(stepForJourneyStage(next.stage));
+    setStep(stepForJourneyStage(next));
     setSelectedTemplate(next.setup?.template ?? null);
     setSelectedClients(next.setup?.clients ?? []);
     setConfigIndex(next.setup?.configIndex ?? 0);
@@ -83,7 +64,11 @@ export function FirstRunQuestWizard({ open, onClose, onCreated }: FirstRunQuestW
     setJourney((current) => {
       if (current.demoPaused) return current;
       const scene = nextDemoScene(current.demoScene);
-      const next = updateJourney(current, { demoScene: scene, stage: scene === 'handoff' ? 'handoff' : 'demo', demoCompletedAt: scene === 'handoff' ? Date.now() : current.demoCompletedAt });
+      const next = updateJourney(current, {
+        demoScene: scene,
+        stage: scene === 'handoff' ? 'handoff' : 'demo',
+        demoCompletedAt: scene === 'handoff' ? Date.now() : current.demoCompletedAt,
+      });
       if (scene === 'handoff') setStep('template');
       return next;
     });
@@ -101,18 +86,43 @@ export function FirstRunQuestWizard({ open, onClose, onCreated }: FirstRunQuestW
     setStep('client');
   }, []);
 
-  const handleClientSelect = useCallback((clients: DetectedClient[]) => {
-    setSelectedClients(clients);
-    setJourney((current) => updateJourney(current, {
-      stage: 'setup',
-      realMembers: buildRealMembers(clients),
-      setup: { template: current.setup?.template, clients, configs: current.setup?.configs ?? {}, configIndex: 0 },
-    }));
-    configsRef.current = new Map();
-    createdCatsRef.current = new Map();
-    setConfigIndex(0);
-    setStep('config');
-  }, []);
+  const handleClientSelect = useCallback(
+    (clients: DetectedClient[]) => {
+      if (!canContinueClientSetup(clients)) return;
+      const configs = Object.fromEntries(
+        clients.flatMap((client) => {
+          const config = journey.setup?.configs[client.client];
+          return config ? [[client.client, config]] : [];
+        }),
+      );
+      const missingIndex = clients.findIndex((client) => !configs[client.client]);
+      const nextIndex = missingIndex < 0 ? clients.length - 1 : missingIndex;
+      setSelectedClients(clients);
+      setJourney((current) =>
+        updateJourney(current, {
+          stage: 'setup',
+          realMembers: buildRealMembers(clients),
+          setup: { ...current.setup, step: 'config', clients, configs, configIndex: nextIndex },
+        }),
+      );
+      configsRef.current = new Map(Object.entries(configs));
+      createdCatsRef.current = new Map();
+      setConfigIndex(nextIndex);
+      setStep('config');
+    },
+    [journey.setup],
+  );
+
+  const goBack = () => {
+    const nextStep = step === 'config' ? 'client' : step === 'client' ? 'template' : 'demo';
+    setStep(nextStep);
+    setJourney((current) =>
+      updateJourney(current, {
+        stage: nextStep === 'client' ? 'setup' : nextStep === 'template' ? 'handoff' : 'demo',
+        setup: current.setup ? { ...current.setup, step: 'client' } : undefined,
+      }),
+    );
+  };
 
   const currentClient = selectedClients[configIndex];
   const createCat = useCallback(
@@ -123,6 +133,7 @@ export function FirstRunQuestWizard({ open, onClose, onCreated }: FirstRunQuestW
       const suffix = `${Date.now().toString(36)}-${client.client}`;
       const catId = `${selectedTemplate.id}-${suffix}`;
       const catName = `${selectedTemplate.name} · ${client.label}`;
+      const nickname = selectedTemplate.nickname ? `${selectedTemplate.nickname} · ${client.label}` : undefined;
       const response = await apiFetch('/api/cats', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -130,10 +141,10 @@ export function FirstRunQuestWizard({ open, onClose, onCreated }: FirstRunQuestW
           catId,
           name: catName,
           displayName: catName,
-          nickname: selectedTemplate.nickname,
+          nickname,
           avatar: selectedTemplate.avatar,
           color: selectedTemplate.color,
-          mentionPatterns: [`@${catName}`, ...(selectedTemplate.nickname ? [`@${selectedTemplate.nickname}`] : [])],
+          mentionPatterns: [...new Set([`@${catName}`, ...(nickname ? [`@${nickname}`] : [])])],
           roleDescription: selectedTemplate.roleDescription,
           personality: selectedTemplate.personality,
           teamStrengths: selectedTemplate.teamStrengths,
@@ -156,13 +167,17 @@ export function FirstRunQuestWizard({ open, onClose, onCreated }: FirstRunQuestW
       if (!currentClient) return;
       setError(null);
       configsRef.current.set(currentClient.client, config);
-      setJourney((current) => updateJourney(current, {
-        setup: current.setup ? {
-          ...current.setup,
-          configs: { ...current.setup.configs, [currentClient.client]: config },
-          configIndex: configIndex < selectedClients.length - 1 ? configIndex + 1 : configIndex,
-        } : undefined,
-      }));
+      setJourney((current) =>
+        updateJourney(current, {
+          setup: current.setup
+            ? {
+                ...current.setup,
+                configs: { ...current.setup.configs, [currentClient.client]: config },
+                configIndex: configIndex < selectedClients.length - 1 ? configIndex + 1 : configIndex,
+              }
+            : undefined,
+        }),
+      );
 
       if (configIndex < selectedClients.length - 1) {
         setConfigIndex((index) => index + 1);
@@ -204,7 +219,13 @@ export function FirstRunQuestWizard({ open, onClose, onCreated }: FirstRunQuestW
         });
         if (!response.ok) throw new Error('创建协作线程失败');
         const thread = (await response.json()) as { id: string };
-        setJourney((current) => updateJourney(current, { stage: 'ready', threadId: thread.id, realMembers: buildRealMembers(selectedClients) }));
+        setJourney((current) =>
+          updateJourney(current, {
+            stage: 'ready',
+            threadId: thread.id,
+            realMembers: buildRealMembers(selectedClients),
+          }),
+        );
         setStep('done');
         onCreated(thread.id, createdCatsRef.current.get(selectedClients[0]?.client ?? '')?.name ?? '你的团队');
       } catch (err) {
@@ -228,44 +249,76 @@ export function FirstRunQuestWizard({ open, onClose, onCreated }: FirstRunQuestW
   const canGoBack = step === 'template' || step === 'client' || step === 'config';
 
   return createPortal(
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-[var(--console-overlay-medium)] px-4 backdrop-blur-sm" onClick={onClose}>
-      <div className="flex max-h-[88vh] w-full max-w-lg flex-col rounded-2xl border border-conn-amber-ring bg-[var(--console-card-bg)] shadow-2xl" onClick={(event) => event.stopPropagation()}>
+    <div
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-[var(--console-overlay-medium)] px-4 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="flex max-h-[88vh] w-full max-w-lg flex-col rounded-2xl border border-conn-amber-ring bg-[var(--console-card-bg)] shadow-2xl"
+        onClick={(event) => event.stopPropagation()}
+      >
         <div className="flex items-center justify-between border-b border-[var(--semantic-warning-surface)] px-6 py-4">
           <div className="flex items-center gap-3">
             {canGoBack && (
-              <button type="button" onClick={() => setStep(step === 'config' ? 'client' : step === 'client' ? 'template' : 'demo')} className="text-sm text-cafe-muted hover:text-cafe-secondary">
+              <button type="button" onClick={goBack} className="text-sm text-cafe-muted hover:text-cafe-secondary">
                 返回
               </button>
             )}
             <h3 className="text-base font-semibold text-cafe">{title}</h3>
           </div>
-          <button type="button" onClick={onClose} className="text-xl leading-none text-cafe-muted hover:text-cafe-secondary" aria-label="关闭">×</button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-xl leading-none text-cafe-muted hover:text-cafe-secondary"
+            aria-label="关闭"
+          >
+            ×
+          </button>
         </div>
         <div className="flex-1 overflow-y-auto px-6 py-4">
-          {error && <div className="mb-3 rounded-lg border border-conn-red-ring bg-conn-red-bg p-3 text-sm text-conn-red-text">{error}</div>}
-          {step === 'demo' && (
-            <div className="space-y-4 py-4">
-              <div className="grid grid-cols-3 gap-2 text-center text-sm">
-                {journey.demoParticipants.map((name) => <div key={name} className="rounded-xl border border-[var(--console-border-soft)] p-3">🐾<div className="mt-1 font-medium text-cafe">{name}</div></div>)}
-              </div>
-              <p className="text-sm leading-6 text-cafe-secondary">先看三只演示猫如何分工、互相交接并给出结果。演示结束后，你会选择自己的客户端，创建真实团队。</p>
-              {(() => { const scene = DEMO_SCENES[journey.demoScene]; return <div className="space-y-2 rounded-xl border border-[var(--console-border-soft)] p-4"><h4 className="font-semibold text-cafe">{scene.title}</h4><p className="text-sm leading-6 text-cafe-secondary">{scene.body}</p>{scene.draft && <p className="rounded-lg bg-cafe-surface p-2 text-sm text-cafe-secondary">初稿：{scene.draft}</p>}{scene.review && <p className="rounded-lg bg-conn-amber-bg p-2 text-sm text-conn-amber-text">审查：{scene.review}</p>}{scene.improved && <p className="rounded-lg bg-conn-green-bg p-2 text-sm text-conn-green-text">改稿：{scene.improved}</p>}</div>; })()}
-              <div className="flex gap-2"><button data-testid="first-run-demo-pause" type="button" onClick={toggleDemoPause} className="flex-1 rounded-lg border border-[var(--console-border-soft)] py-2.5 text-sm font-semibold text-cafe-secondary">{journey.demoPaused ? '继续' : '暂停'}</button><button data-testid="first-run-demo-advance" type="button" onClick={advanceDemo} disabled={journey.demoPaused || journey.demoScene === 'handoff'} className="flex-1 rounded-lg bg-[var(--semantic-warning)] py-2.5 text-sm font-semibold text-[var(--cafe-surface)] disabled:opacity-50">{journey.demoScene === 'opening' ? '开始演示' : journey.demoScene === 'improved' ? '进入真实配置' : '下一幕'}</button></div>
+          {error && (
+            <div className="mb-3 rounded-lg border border-conn-red-ring bg-conn-red-bg p-3 text-sm text-conn-red-text">
+              {error}
             </div>
           )}
+          {step === 'demo' && <DemoStep journey={journey} onPause={toggleDemoPause} onAdvance={advanceDemo} />}
           {step === 'template' && <TemplateStep onSelect={handleTemplateSelect} />}
           {step === 'client' && (
             <ClientStep
-              savedClients={journey.setup?.clients}
-              onClientsChange={(clients) => setJourney((current) => updateJourney(current, {
-                setup: current.setup ? { ...current.setup, clients } : undefined,
-              }))}
+              savedClients={journey.setup?.detectedClients ?? journey.setup?.clients}
+              onClientsChange={(clients) =>
+                setJourney((current) =>
+                  updateJourney(current, {
+                    setup: current.setup ? { ...current.setup, detectedClients: clients } : undefined,
+                  }),
+                )
+              }
               onSelect={handleClientSelect}
             />
           )}
-          {step === 'config' && currentClient && <ConfigStep key={currentClient.client} client={currentClient.client} clientId={currentClient.provider} initialConfig={journey.setup?.configs[currentClient.client]} onComplete={handleConfigComplete} />}
-          {step === 'creating' && <div className="flex flex-col items-center py-12"><div className="mb-4 h-8 w-8 animate-spin rounded-full border-2 border-conn-amber-ring border-t-amber-600" /><p className="text-sm text-cafe-muted">正在创建你的真实团队...</p></div>}
-          {step === 'done' && <div className="space-y-3 py-10 text-center"><div className="text-4xl">🎉</div><p className="text-base font-semibold text-cafe">团队已就绪</p><p className="text-sm text-cafe-muted">发送第一条真实消息，开始你的协作旅程。</p></div>}
+          {step === 'config' && currentClient && (
+            <ConfigStep
+              key={currentClient.client}
+              client={currentClient.client}
+              clientId={currentClient.provider}
+              detectedOAuth={currentClient.authenticated && !currentClient.hasApiKey}
+              initialConfig={journey.setup?.configs[currentClient.client]}
+              onComplete={handleConfigComplete}
+            />
+          )}
+          {step === 'creating' && (
+            <div className="flex flex-col items-center py-12">
+              <div className="mb-4 h-8 w-8 animate-spin rounded-full border-2 border-conn-amber-ring border-t-amber-600" />
+              <p className="text-sm text-cafe-muted">正在创建你的真实团队...</p>
+            </div>
+          )}
+          {step === 'done' && (
+            <div className="space-y-3 py-10 text-center">
+              <div className="text-4xl">🎉</div>
+              <p className="text-base font-semibold text-cafe">团队已就绪</p>
+              <p className="text-sm text-cafe-muted">发送第一条真实消息，开始你的协作旅程。</p>
+            </div>
+          )}
         </div>
       </div>
     </div>,
