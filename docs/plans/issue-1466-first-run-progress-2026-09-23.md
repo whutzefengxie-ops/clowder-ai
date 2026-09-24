@@ -200,7 +200,8 @@ Error https://u:FAKE_REVIEW_SECRET@review.invalid/?key=FAKE_REVIEW_TOKEN
 | [CI 复核 5771627992](https://github.com/zts212653/clowder-ai/pull/1519#issuecomment-5771627992) | 空 checks 不等于绿色 | 原则仍成立；事实已从“冲突导致没有检查”推进到“新提交正在跑 CI”，旧 HEAD 曾有真实 Lint 失败 |
 | [作者回复 5792543123](https://github.com/zts212653/clowder-ai/pull/1519#issuecomment-5792543123)、[5792545336](https://github.com/zts212653/clowder-ai/pull/1519#issuecomment-5792545336)、[5792547371](https://github.com/zts212653/clowder-ai/pull/1519#issuecomment-5792547371) | 更新实现及验证说明 | 本轮读取 GitHub API 时三条正文已保存为乱码；已告知用户，用户负责修正，本轮不编辑公开评论 |
 | [设计复核 5792611285](https://github.com/zts212653/clowder-ai/pull/1519#issuecomment-5792611285) | 认可首启原生认证、Codex 当前 provider、pending/not_installed、F155 non-blocking 的修复；指出 Kimi/OpenCode 原生登录态仍未覆盖；确认三条作者回复发生过编码损坏；强调该评论不是正式批准 | Kimi/OpenCode 已登记为 R7/P2 覆盖缺口；评论乱码已由用户处理；本轮不把 advisory 复核当作合入批准 |
-| [维护者新要求 5793905290](https://github.com/zts212653/clowder-ai/pull/1519#issuecomment-5793905290) | 要求提交当前实现的屏幕演示并贴回 PR，标明 commit SHA、运行环境及脚本/mock API/真实 CLI/模型边界；主路径需连续展示三猫演示、已登录 CLI 探测、真实成员/线程创建、F229 前台猫交接、首句及真实模型回应；另需一段恢复场景录屏；幂等、环境 key 空账号库、F155 刷新/线程归属、认证测试进入 CI 仍要用实现和测试证据收口；录屏需遮挡个人路径和凭证；完成后再安排非作者正式 review | 已录制并归档当前 UI 的两段 **全 mock API** 演示，见第 7.2 节；真实 CLI、持久写入、F229、首句与模型回应仍未覆盖。认证 6 项测试已改接 Public test 文件发现；本次提交 CI 结果待运行后确认。完整产品演示和正式 review 仍未完成 |
+| [维护者新要求 5793905290](https://github.com/zts212653/clowder-ai/pull/1519#issuecomment-5793905290) | 要求提交当前实现的屏幕演示并贴回 PR，标明 commit SHA、运行环境及脚本/mock API/真实 CLI/模型边界；主路径需连续展示三猫演示、已登录 CLI 探测、真实成员/线程创建、F229 前台猫交接、首句及真实模型回应；另需一段恢复场景录屏；幂等、环境 key 空账号库、F155 刷新/线程归属、认证测试进入 CI 仍要用实现和测试证据收口；录屏需遮挡个人路径和凭证；完成后再安排非作者正式 review | 已录制并归档当前 UI 的两段 **全 mock API** 演示，见第 7.2 节；真实 CLI、持久写入、F229、首句与模型回应仍未覆盖。认证 6 项测试已改接 Public test 文件发现，`e6475a04b` 及 `63b226698` 的同 SHA GitHub 检查最终通过；后者 Windows Smoke 首次遇到测试临时目录清理 `EPERM`，同 SHA 重跑通过。完整产品演示和正式 review 仍未完成 |
+| [维护者文档复核 5806685454](https://github.com/zts212653/clowder-ai/pull/1519#issuecomment-5806685454) | 指出第 12 节“必须选模型／配置页卡住”不符代码；要求聚焦默认模型下探针与首条真实调用的 provider、身份、模型一致性，不把 UX 建议写成硬 AC | 已复核 `ConfigStep`、`ProfileCard` 和可选 `model` 探针，改正第 12 节确定性误述；R7 仍需纵向运行证据，UX 点击目标仍仅是待验证建议 |
 
 乱码通过直接读取 API 的 UTF-8 JSON 与 Unicode 码点再次确认，不只是终端显示问题。表现符合文本编码错配，但没有发布命令/原始文件证据，不把“PowerShell 的某个环节”写成已经证明的根因。修复后应回读 GitHub 正文确认，不仅看本地文件。
 
@@ -226,7 +227,7 @@ GitHub `reviews=[]`；设计方评论属于 advisory，维护者分诊也不是 
 
 已用 Playwright Chromium headless 录制隔离 Next dev 页面，基线 `dff40e41a`、Windows、Node v24.16.0。视频、时长、SHA256 和逐段证据边界见[录屏证据说明](../bug-report/onboarding-browser-recovery/artifacts/README.md)。两段分别显示现有示范卡片/模拟创建到“团队已就绪”，以及模拟未登录→pending→刷新→重新探测。所有 API 响应均为 fixture；没有真实 CLI、真实写入、F229 交接、首句和模型回应。真实产品录制仍需在剩余实现完成后补拍；如本机屏幕录制/真实环境不便由本执行方完成，可交由用户录制并据实标注环境与 SHA。
 
-R6 的六项认证 fixture 从 `.test.ts` 转为常规 `.test.js`，引用构建后的 API 模块；Public test resolver 已将 `test/first-run-auth.test.js` 纳入清单，本地直接运行 6/6。最终 CI 接入以本次推送后的同 SHA Public test 结果为准。
+R6 的六项认证 fixture 从 `.test.ts` 转为常规 `.test.js`，引用构建后的 API 模块；Public test resolver 已将 `test/first-run-auth.test.js` 纳入清单，本地直接运行 6/6。`e6475a04b` 与 `63b226698` 的同 SHA Public test 分片和证据汇总均已通过；这证明测试进入常规清单，但不替代真实 CLI/模型验收。
 
 ## 8. 验证结果与复现边界
 
@@ -311,7 +312,7 @@ R6 的六项认证 fixture 从 `.test.ts` 转为常规 `.test.js`，引用构建
 
 2026-09-24 追加源码核验：[Kimi CLI 数据位置文档](https://github.com/MoonshotAI/kimi-cli/blob/main/docs/en/configuration/data-locations.md)说明 OAuth 文件位于 `KIMI_SHARE_DIR/credentials/`；[实现](https://github.com/MoonshotAI/kimi-cli/blob/main/src/kimi_cli/auth/oauth.py)的 Kimi Code key 是 `oauth/kimi-code`，文件名因此为 `kimi-code.json`，token 字段为 `access_token`/`refresh_token`。Kimi 还支持 `config.toml` 的 provider `api_key`，须对齐当前 `default_model` 所指的 provider，不能只看文件存在。[OpenCode Auth 实现](https://github.com/anomalyco/opencode/blob/dev/packages/opencode/src/auth/index.ts)将 OAuth/API credential 存为 `Global.Path.data/auth.json` 的 provider 映射；`Global.Path.data` 的跨平台路径、当前选择的 provider 与 credential 对应关系还需确认。以上是上游源码事实，不等于本项目已接入或已有真实 CLI 身份一致性证据。
 
-进一步对照本项目配置页发现：`cat-template.json` 的 `clientDefaults` 目前只有 Claude/Codex/Gemini，Kimi/OpenCode 即使被标为本机已认证，也没有首启默认模型可选；`ConfigStep` 对 synthetic native 账号必须先选模型并通过连接测试。Kimi 的文件 OAuth 还要与当前 `default_model → models[].provider → providers[].oauth` 引用一致，不能因为磁盘上留有旧 token 就宣布可用。R7 的修复必须把只读认证识别、当前模型选择、probe 和实际调用身份一起验证；仅增加 `client-auth.ts` 的布尔判断会出现“检测可用但配置页卡住”的新断层。
+进一步对照本项目配置页发现：`cat-template.json` 的 `clientDefaults` 目前只有 Claude/Codex/Gemini，但这**不等于** Kimi/OpenCode 必须先选模型或会卡在配置页。`ConfigStep` 对 synthetic native OAuth 账号允许模型留空，仍可执行连接测试；测试成功后可继续创建，`ProfileCard` 明示“未指定模型，将使用 CLI 默认模型”，后端探针的 `model` 也是可选的。实际风险是：探针使用 CLI 默认值时，首次真实调用是否沿用**同一当前 provider、认证身份和模型**，尚无证据。Kimi 的文件 OAuth 还要与当前 `default_model → models[].provider → providers[].oauth` 引用一致，不能因为磁盘上留有旧 token 就宣布可用。R7 应把只读认证识别、可选默认模型、连接探针和第一条真实调用放在同一纵向验证中；只有默认值不可确定或两次调用不一致时，才需要给用户明确的模型选择与恢复入口。单补 `client-auth.ts` 的布尔判断不能证明这条链路完整。
 
 当前状态：**评论已记录，意见合理，尚未完成实现和验收。**
 
@@ -319,7 +320,7 @@ R6 的六项认证 fixture 从 `.test.ts` 转为常规 `.test.js`，引用构建
 
 本节落实用户新增的验收要求：不以“功能存在、测试通过、视频已交”替代体验判断，还要检查角色/状态连续性、首次使用负担、操作可预测性和引导是否打扰。结论是：**当前录屏完成了展示实现现状的阶段性任务，但尚不足以判定首启体验足够好；应优先减少无必要的选择和点击，而非继续增加解释页面。** 以下是评审意见与改进建议，未执行实现或 PR 修改。
 
-证据是第 7.2 节两段视频，录制代码为 `dff40e41a`，视频归档提交为 `e6475a04b2b5bb66bdd4c7693f0d8b2975e06a31`；两份 SHA256 与证据 README 一致。本轮按每 2 秒抽帧，并补查关键转场画面与对应组件代码。视频为 1440×900、25 fps、无音轨；这是画面/交互流程评审，不是实际用户研究或完整运行验收。本地另有认证实现的未提交改动，未混入本节结论。
+证据是第 7.2 节两段视频，录制代码为 `dff40e41a`，视频归档提交为 `e6475a04b2b5bb66bdd4c7693f0d8b2975e06a31`；两份 SHA256 与证据 README 一致。本轮按每 2 秒抽帧，并补查关键转场画面与对应组件代码。视频为 1440×900、25 fps、无音轨；这是画面/交互流程评审，不是实际用户研究或完整运行验收。
 
 ### 13.1 具体体验发现与建议
 
