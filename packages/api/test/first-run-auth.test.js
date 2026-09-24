@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { detectAvailableClients } from '../src/domains/cats/services/first-run-quest/client-detection.js';
+import { detectAvailableClients } from '../dist/domains/cats/services/first-run-quest/client-detection.js';
 
 const homeDir = join(process.cwd(), 'test-home-unused');
 const claudePath = join(homeDir, '.claude', '.credentials.json');
@@ -9,15 +9,15 @@ const codexPath = join(homeDir, '.codex', 'auth.json');
 const claude = { claudeAiOauth: { accessToken: 'fake-access', refreshToken: 'fake-refresh' } };
 const codex = { tokens: { access_token: 'fake-access', refresh_token: 'fake-refresh' } };
 
-async function detect(files: Record<string, unknown>, env: NodeJS.ProcessEnv = {}) {
+async function detect(files, env = {}) {
   return detectAvailableClients({
     existsOnPath: async () => true,
     auth: {
       homeDir,
       env,
-      readFile: (path: string) => {
+      readFile: (path) => {
         if (!(path in files)) throw new Error('missing');
-        return typeof files[path] === 'string' ? (files[path] as string) : JSON.stringify(files[path]);
+        return typeof files[path] === 'string' ? files[path] : JSON.stringify(files[path]);
       },
     },
   });

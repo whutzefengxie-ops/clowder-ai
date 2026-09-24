@@ -3,7 +3,7 @@ feature_ids: [F171, F155, F229]
 topics: [onboarding, cli-auth, desktop-installer, handoff, acceptance-review]
 doc_kind: implementation-progress
 created: 2026-09-23
-updated: 2026-09-23
+updated: 2026-09-24
 ---
 
 # Issue #1466 首启旅程：进展验收、PR 关系与后续收口计划
@@ -11,6 +11,8 @@ updated: 2026-09-23
 > 2026-09-23 验收快照基于 `d1b710b63`；文末附有作者针对 R1/R2 的后续修复记录。快照中的“本轮”仅指当时的只读验收，不代表后续修复状态。
 >
 > 验收基线：本地及 PR #1519 当前 HEAD `d1b710b635e516faae8b38f1552fccfc0332b19b`。主要行为测试在前一提交 `f5cdd7c2d793d6994fc74408ed89e0326007c98c` 上复跑；两者之间是 8 个文件的格式/导入排序调整，未发现改变下列结论的逻辑修改。GitHub 状态为查询时快照，后续以对应 SHA 的实际结果为准。
+>
+> **2026-09-24 更新**：前述“当前 HEAD”“CI 正在运行”均为 2026-09-23 历史快照。PR #1519 随后推进至 `dff40e41a6722cb87d0fdf875a6c5e3a1fb6fe73`，该 SHA 的 GitHub Lint、Build、Public test 分片、合同检查和 Windows 检查均已完成且通过。R1/R2 修复状态见第 11 节；新增录屏与 R6 状态见第 7.2 节。其余产品旅程未因此验收通过。
 
 ## 1. 本次验收结论
 
@@ -189,7 +191,7 @@ Error https://u:FAKE_REVIEW_SECRET@review.invalid/?key=FAKE_REVIEW_TOKEN
 
 ## 7. PR #1519 意见纳入情况
 
-前三条评审意见已纳入，下面更新实际处理状态：
+已读取 #1519 当前可见的普通评论、作者回复、正式 review 与 review thread；当前没有正式 review verdict，也没有行内 review thread。下面按评论来源记录实际处理状态：
 
 | 来源 | 原始意见 | 当前处置 |
 | --- | --- | --- |
@@ -197,10 +199,34 @@ Error https://u:FAKE_REVIEW_SECRET@review.invalid/?key=FAKE_REVIEW_TOKEN
 | [设计复核 5771560224](https://github.com/zts212653/clowder-ai/pull/1519#issuecomment-5771560224) | 探测原生 OAuth；pending 有真实出口；未安装单独状态；解释两个 rail 入口 | 已补本机凭证读取、pending 重探测、not_installed、F155 rail 说明；原生登录动作、身份一致性和 R5 仍未闭环 |
 | [CI 复核 5771627992](https://github.com/zts212653/clowder-ai/pull/1519#issuecomment-5771627992) | 空 checks 不等于绿色 | 原则仍成立；事实已从“冲突导致没有检查”推进到“新提交正在跑 CI”，旧 HEAD 曾有真实 Lint 失败 |
 | [作者回复 5792543123](https://github.com/zts212653/clowder-ai/pull/1519#issuecomment-5792543123)、[5792545336](https://github.com/zts212653/clowder-ai/pull/1519#issuecomment-5792545336)、[5792547371](https://github.com/zts212653/clowder-ai/pull/1519#issuecomment-5792547371) | 更新实现及验证说明 | 本轮读取 GitHub API 时三条正文已保存为乱码；已告知用户，用户负责修正，本轮不编辑公开评论 |
+| [设计复核 5792611285](https://github.com/zts212653/clowder-ai/pull/1519#issuecomment-5792611285) | 认可首启原生认证、Codex 当前 provider、pending/not_installed、F155 non-blocking 的修复；指出 Kimi/OpenCode 原生登录态仍未覆盖；确认三条作者回复发生过编码损坏；强调该评论不是正式批准 | Kimi/OpenCode 已登记为 R7/P2 覆盖缺口；评论乱码已由用户处理；本轮不把 advisory 复核当作合入批准 |
+| [维护者新要求 5793905290](https://github.com/zts212653/clowder-ai/pull/1519#issuecomment-5793905290) | 要求提交当前实现的屏幕演示并贴回 PR，标明 commit SHA、运行环境及脚本/mock API/真实 CLI/模型边界；主路径需连续展示三猫演示、已登录 CLI 探测、真实成员/线程创建、F229 前台猫交接、首句及真实模型回应；另需一段恢复场景录屏；幂等、环境 key 空账号库、F155 刷新/线程归属、认证测试进入 CI 仍要用实现和测试证据收口；录屏需遮挡个人路径和凭证；完成后再安排非作者正式 review | 已录制并归档当前 UI 的两段 **全 mock API** 演示，见第 7.2 节；真实 CLI、持久写入、F229、首句与模型回应仍未覆盖。认证 6 项测试已改接 Public test 文件发现；本次提交 CI 结果待运行后确认。完整产品演示和正式 review 仍未完成 |
 
 乱码通过直接读取 API 的 UTF-8 JSON 与 Unicode 码点再次确认，不只是终端显示问题。表现符合文本编码错配，但没有发布命令/原始文件证据，不把“PowerShell 的某个环节”写成已经证明的根因。修复后应回读 GitHub 正文确认，不仅看本地文件。
 
 GitHub `reviews=[]`；设计方评论属于 advisory，维护者分诊也不是 APPROVE。当前认证 GitHub 账号与 PR 作者相同，本轮不发布正式 review，也不把本地验收报告当作非作者合入批准。
+
+### 7.1 zts 新增的屏幕演示与证据要求
+
+这条评论不是“再跑一次单测”的建议，而是针对用户可见首启旅程的 **dogfood/产品验收证据要求**。它需要把当前实现实际走一遍，并让审查者能区分承诺、脚本模拟和真实运行：
+
+| 要求 | 当前状态 | 完成判据 |
+| --- | --- | --- |
+| 当前实现屏幕演示 | 两段 mock 视频已归档；PR 链接待本次推送后发布 | PR 评论提供视频链接，并注明录制 commit SHA、操作系统/运行环境、应用启动方式 |
+| 主路径连续演示 | 仅录到 mock “团队已就绪”；真实链路未完成 | 首次打开 → 三猫示范初稿/互相 `@`/改稿 → 探测本机已登录 CLI → 创建真实成员和线程 → 解说猫交接真实界面/F229 → 发送第一句并看到真实模型回应 |
+| 证据边界标注 | 已在证据 README 标注；PR 评论待发布 | 视频说明哪些是脚本、mock API、真实 CLI、真实模型；静态卡片或手动“下一幕”必须如实标注 |
+| 恢复场景演示 | 已录 mock pending→刷新→重新探测；真实登录未验证 | 至少录制一次 pending 重新探测或无客户端离开安装后返回，并展示从中断步骤继续 |
+| 安全录制 | 测试 fixture 画面已抽帧检查；视频无真实本机路径或凭证 | 遮挡个人路径、用户名、环境变量、token、URL 凭证和其他本机敏感信息 |
+| 代码/测试收口 | 部分完成 | R3–R6、创建幂等、F155 刷新/线程归属和认证测试 CI 接入仍需对应实现及测试证据 |
+| 非作者正式 review | 未开始 | 视频和剩余验收项齐备后，绑定最终 exact HEAD，安排非作者 reviewer；当前 advisory 评论不替代正式 verdict |
+
+在视频出现前，不能把“本地 mock 6/6”或“模拟调用通过”扩大成完整产品旅程已验证。视频本身也不能替代测试：它用于核验用户实际走到哪里，幂等、凭证安全、认证来源和 F155 生命周期仍需可重放的自动证据。
+
+### 7.2 当前实现录屏与 R6 更新（2026-09-24）
+
+已用 Playwright Chromium headless 录制隔离 Next dev 页面，基线 `dff40e41a`、Windows、Node v24.16.0。视频、时长、SHA256 和逐段证据边界见[录屏证据说明](../bug-report/onboarding-browser-recovery/artifacts/README.md)。两段分别显示现有示范卡片/模拟创建到“团队已就绪”，以及模拟未登录→pending→刷新→重新探测。所有 API 响应均为 fixture；没有真实 CLI、真实写入、F229 交接、首句和模型回应。真实产品录制仍需在剩余实现完成后补拍；如本机屏幕录制/真实环境不便由本执行方完成，可交由用户录制并据实标注环境与 SHA。
+
+R6 的六项认证 fixture 从 `.test.ts` 转为常规 `.test.js`，引用构建后的 API 模块；Public test resolver 已将 `test/first-run-auth.test.js` 纳入清单，本地直接运行 6/6。最终 CI 接入以本次推送后的同 SHA Public test 结果为准。
 
 ## 8. 验证结果与复现边界
 
@@ -236,11 +262,11 @@ GitHub `reviews=[]`；设计方评论属于 advisory，维护者分诊也不是 
 
 各组测试有重叠，不能把数字相加冒充新增覆盖。mock 浏览器、真实 CLI E2E、CI、正式独立 review、安装器验收是不同证据，分别记录。
 
-## 9. 后续实施与再验收顺序（本轮不执行）
+## 9. 后续实施与再验收顺序
 
 | 顺序 | 应完成的工作 | 再验收证据 |
 | --- | --- | --- |
-| 1 | 固定待验提交并完成 CI；将认证 TS 测试接入自动入口，修复标准 Web test wrapper 缺文件问题 | 同 SHA 的检查链接、可从干净 checkout 运行的命令、真实测试清单 |
+| 1 | 固定待验提交并完成 CI；认证测试已改接常规 Public test，仍需确认新 SHA 的 CI 与标准 Web test wrapper | 同 SHA 的检查链接、可从干净 checkout 运行的命令、真实测试清单 |
 | 2 | 修正 R1/R3 的认证来源和运行身份契约 | OAuth/custom provider/env key × 空账号库/已有账号的测试；探测、probe、exec/app-server 目标一致；真实自定义 provider 对话一次 |
 | 3 | 修正 R2 的错误信息边界 | 假秘密进入异常 stdout/stderr/error 后，客户端响应及相关日志不含原值 |
 | 4 | 修正 R4 的创建幂等和恢复 | 同一 journey 在丢响应、部分成功、刷新、并发重试后只对应一组成员和一个线程 |
@@ -248,7 +274,8 @@ GitHub `reviews=[]`；设计方评论属于 advisory，维护者分诊也不是 
 | 6 | 完成三猫真实组件分镜和 F229 身份交接 | 自动输入、气泡动作、互相 @、暂停/继续/刷新；0/1/多客户端的实际行为与能力提示 |
 | 7 | 真实首启端到端验收 | 空安装进入；创建真实团队/线程；发送失败不完成、其他线程不误完成、成功后状态持久；记录模型响应及耗时 |
 | 8 | 品牌与额外安装交付 | 图标/DMG视觉逐项确认；安装器单列源码 SHA、绝对路径、大小、SHA256及安装/启动结果，标明 #1452/#1459 依赖 |
-| 9 | 非作者正式 review 与合入判断 | 评审意见关闭证据、同提交 CI 完成、产品验收记录；再进入 merge-gate |
+| 9 | 将当前 mock 录屏链接贴回 PR，并在真实链路完成后补录主路径和恢复场景 | 视频标明 commit、环境、脚本/mock/真实边界；真实成员/线程、F229、首句及模型回复可见；凭证与个人信息不可见 |
+| 10 | 非作者正式 review 与合入判断 | 评审意见关闭证据、同提交 CI 完成、产品验收记录；再进入 merge-gate |
 
 建议先打通“一个已有 Codex 自定义 provider 的用户，从探测到第一条真实对话”这条最小纵向链路，再扩展多客户端和完整视觉。原始验收项没有得到明确范围调整前，不能以“后续再补”为由关闭 #1466。
 
@@ -273,3 +300,15 @@ GitHub `reviews=[]`；设计方评论属于 advisory，维护者分诊也不是 
 - **R2：API 返回已改为固定安全文案。** CLI stdout、stderr、异常 message 和启动失败不再直接回传；假 URL 凭证回归覆盖多条错误路径。另修复 URL 用户信息包含 `rate-limit` 时将失败误判为成功的问题。未声称 CLI 自身日志或其他 API 的所有错误面已完成安全审计。
 - **验证**：API 编译通过；首启连接与账号解析测试 58/58，通过；Codex 真实服务的模拟 spawn 对 auto、显式 OAuth、显式 API Key 3/3 通过；调用层 synthetic、显式 OAuth 与无绑定环境路径 3/3 通过；改动文件 Biome 无 error，`git diff --check` 通过。旧 Codex 服务全文件在本机 Windows 定向运行仍有 `path:pattern`/缺少默认模型的前置问题，不列为绿色证据。
 - **仍阻塞完整首启验收**：R3–R6、真实 CLI/模型首条对话、创建恢复、三猫视觉分镜、F229 交接、品牌资产及非作者正式 review。#1452 安装器仍按独立交付线验收。
+
+## 12. 新增覆盖缺口：Kimi/OpenCode 原生认证（R7）
+
+设计复核 5792611285 指出，当前首启客户端列表包含 Kimi 与 OpenCode，但 `client-auth.ts` 的本机凭证路径只覆盖 Claude、Codex、Gemini；Kimi/OpenCode 在没有 Clowder 账号记录或环境 key 时会直接落到未认证状态。该意见与 #1466 的“复用已登录 CLI”原则一致，不能因为评论标注为 follow-up 就从完整 Issue 验收中删除。
+
+- Kimi 可参考 `KIMI_SHARE_DIR` / `~/.kimi` 的配置边界，但仍需确认哪些字段只能用于存在性判断；不能把配置内容传到前端。
+- OpenCode 的凭证位置和登录语义尚未在本次审查中确认，不能凭名称推断路径或认证成功条件。
+- 在范围未明确缩减前，R7 作为 P2 覆盖缺口；需补 fixture、空账号库浏览器路径和真实 CLI 运行身份一致性验证。
+
+2026-09-24 追加源码核验：[Kimi CLI 数据位置文档](https://github.com/MoonshotAI/kimi-cli/blob/main/docs/en/configuration/data-locations.md)说明 OAuth 文件位于 `KIMI_SHARE_DIR/credentials/`；[实现](https://github.com/MoonshotAI/kimi-cli/blob/main/src/kimi_cli/auth/oauth.py)的 Kimi Code key 是 `oauth/kimi-code`，文件名因此为 `kimi-code.json`，token 字段为 `access_token`/`refresh_token`。Kimi 还支持 `config.toml` 的 provider `api_key`，须对齐当前 `default_model` 所指的 provider，不能只看文件存在。[OpenCode Auth 实现](https://github.com/anomalyco/opencode/blob/dev/packages/opencode/src/auth/index.ts)将 OAuth/API credential 存为 `Global.Path.data/auth.json` 的 provider 映射；`Global.Path.data` 的跨平台路径、当前选择的 provider 与 credential 对应关系还需确认。以上是上游源码事实，不等于本项目已接入或已有真实 CLI 身份一致性证据。
+
+当前状态：**评论已记录，意见合理，尚未完成实现和验收。**
