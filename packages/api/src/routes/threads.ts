@@ -762,6 +762,10 @@ export const threadsRoutes: FastifyPluginAsync<ThreadsRoutesOptions> = async (ap
         resolvedProjectPath.projectPath ?? 'default',
         bootcampState as BootcampStateV1,
       );
+      if (ensured.thread.createdBy !== userId) {
+        reply.status(409);
+        return { error: 'Onboarding journey belongs to another user' };
+      }
       reply.status(ensured.created ? 201 : 200);
       return sanitizeThreadForResponse(ensured.thread, userId);
     }
@@ -1008,6 +1012,10 @@ export const threadsRoutes: FastifyPluginAsync<ThreadsRoutesOptions> = async (ap
       return { error: 'Thread not found' };
     }
     const userId = resolveUserId(request, { defaultUserId: 'default-user' }) ?? 'default-user';
+    if (thread.createdBy !== userId && thread.createdBy !== 'system') {
+      reply.status(404);
+      return { error: 'Thread not found' };
+    }
     return sanitizeThreadForResponse(await migrateRuntimeProjectPath(thread, threadStore), userId);
   });
 
@@ -1110,6 +1118,11 @@ export const threadsRoutes: FastifyPluginAsync<ThreadsRoutesOptions> = async (ap
       reply.status(404);
       return { error: 'Thread not found' };
     }
+    const patchOwner = resolveUserId(request, { defaultUserId: 'default-user' }) ?? 'default-user';
+    if (thread.createdBy !== patchOwner && thread.createdBy !== 'system') {
+      reply.status(404);
+      return { error: 'Thread not found' };
+    }
 
     const {
       title,
@@ -1169,8 +1182,7 @@ export const threadsRoutes: FastifyPluginAsync<ThreadsRoutesOptions> = async (ap
       reply.status(404);
       return { error: 'Thread not found' };
     }
-    const patchUserId = resolveUserId(request, { defaultUserId: 'default-user' }) ?? 'default-user';
-    return sanitizeThreadForResponse(updated, patchUserId);
+    return sanitizeThreadForResponse(updated, patchOwner);
   });
 
   // ─── F247 AC-B1c-1: cloudCatBindings owner-only endpoints ───

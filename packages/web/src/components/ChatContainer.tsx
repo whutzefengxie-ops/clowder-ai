@@ -36,7 +36,11 @@ import { hydrateEvolutionFromCurrentUrl } from './capability-evolution/evolution
 import { useConciergeConfirmations } from './concierge/useConciergeConfirmations';
 import { FirstRunQuestWizard } from './FirstRunQuestWizard';
 import { BootcampGuideOverlay } from './first-run-quest/BootcampGuideOverlay';
-import { markFirstRealMessage, restoreJourneyState } from './first-run-quest/onboarding-journey';
+import {
+  canCommitFirstRealMessage,
+  markFirstRealMessage,
+  restoreJourneyState,
+} from './first-run-quest/onboarding-journey';
 import { QuestBanner } from './first-run-quest/QuestBanner';
 import { syncLocalBootcampState } from './first-run-quest/syncLocalBootcampState';
 import { useFirstProjectMistakeTipGate } from './first-run-quest/useFirstProjectMistakeTipGate';
@@ -843,26 +847,32 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
         if (!state || state.stage !== 'ready' || (state.threadId && state.threadId !== threadId)) return;
         const currentThread = useChatStore.getState().threads.find((thread) => thread.id === threadId);
         const bootcampState = currentThread?.bootcampState;
-        if (bootcampState && bootcampState.completedAt === undefined) {
-          const completed = markFirstRealMessage(state);
-          const nextBootcampState = { ...bootcampState, completedAt: completed.completedAt ?? Date.now() };
-          void apiFetch(`/api/threads/${encodeURIComponent(threadId)}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ bootcampState: nextBootcampState }),
-          })
-            .then((response) => {
-              if (!response.ok) return;
-              localStorage.setItem('cat-cafe:onboarding-journey', JSON.stringify(completed));
-              setShowOnboardingHint(false);
-              syncLocalBootcampState(threadId, nextBootcampState);
-            })
-            .catch(() => {});
-          return;
-        }
+        // Hydration is authoritative. If the thread is not in the store yet,
+        // the server state is unknown; never hide the hint or mark local state
+        // complete through that loading gap.
+        if (!bootcampState || bootcampState.completedAt !== undefined) return;
         const completed = markFirstRealMessage(state);
-        localStorage.setItem('cat-cafe:onboarding-journey', JSON.stringify(completed));
-        setShowOnboardingHint(false);
+        const nextBootcampState = { ...bootcampState, completedAt: completed.completedAt ?? Date.now() };
+        void apiFetch(`/api/threads/${encodeURIComponent(threadId)}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bootcampState: nextBootcampState }),
+        })
+          .then(async (response) => {
+            if (!response.ok) return;
+            const serverThread = (await response.json()) as {
+              bootcampState?: { journeyId?: string; completedAt?: number };
+            };
+            const serverState = serverThread.bootcampState;
+            if (!canCommitFirstRealMessage(state, bootcampState, serverState)) return;
+            const committedAt = serverState?.completedAt;
+            if (committedAt === undefined) return;
+            const committed = { ...completed, completedAt: committedAt };
+            localStorage.setItem('cat-cafe:onboarding-journey', JSON.stringify(committed));
+            setShowOnboardingHint(false);
+            syncLocalBootcampState(threadId, { ...bootcampState, ...serverState });
+          })
+          .catch(() => {});
       } catch {
         /* localStorage may be unavailable */
       }

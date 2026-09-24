@@ -167,4 +167,55 @@ describe('Bootcamp Flow Integration', () => {
     assert.equal(JSON.parse(patched.body).bootcampState.completedAt, 2000);
     await app.close();
   });
+
+  test('onboarding IDs preserve punctuation and ownership across colliding user and journey inputs', async () => {
+    const app = await createApp();
+    const payload = {
+      title: '首启协作旅程',
+      bootcampState: { v: 1, phase: 'phase-1-intro', leadCat: 'codex', startedAt: 1000, journeyId: 'journey-1234' },
+    };
+    const first = await app.inject({
+      method: 'POST',
+      url: '/api/threads',
+      headers: { 'x-cat-cafe-user': 'user.a', 'x-cat-cafe-onboarding-journey': payload.bootcampState.journeyId },
+      payload,
+    });
+    const second = await app.inject({
+      method: 'POST',
+      url: '/api/threads',
+      headers: { 'x-cat-cafe-user': 'usera', 'x-cat-cafe-onboarding-journey': payload.bootcampState.journeyId },
+      payload,
+    });
+    assert.equal(first.statusCode, 201);
+    assert.equal(second.statusCode, 201);
+    assert.notEqual(first.json().id, second.json().id);
+    const longA = await app.inject({
+      method: 'POST',
+      url: '/api/threads',
+      headers: { 'x-cat-cafe-user': 'same-user', 'x-cat-cafe-onboarding-journey': `journey-${'a'.repeat(120)}-left` },
+      payload: {
+        ...payload,
+        bootcampState: { ...payload.bootcampState, journeyId: `journey-${'a'.repeat(120)}-left` },
+      },
+    });
+    const longB = await app.inject({
+      method: 'POST',
+      url: '/api/threads',
+      headers: { 'x-cat-cafe-user': 'same-user', 'x-cat-cafe-onboarding-journey': `journey-${'a'.repeat(120)}-right` },
+      payload: {
+        ...payload,
+        bootcampState: { ...payload.bootcampState, journeyId: `journey-${'a'.repeat(120)}-right` },
+      },
+    });
+    assert.equal(longA.statusCode, 201);
+    assert.equal(longB.statusCode, 201);
+    assert.notEqual(longA.json().id, longB.json().id);
+    const foreignRead = await app.inject({
+      method: 'GET',
+      url: `/api/threads/${first.json().id}`,
+      headers: { 'x-cat-cafe-user': 'usera' },
+    });
+    assert.equal(foreignRead.statusCode, 404);
+    await app.close();
+  });
 });

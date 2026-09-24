@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildRealMembers,
+  canCommitFirstRealMessage,
   canContinueClientSetup,
   createJourneyState,
   markFirstRealMessage,
@@ -83,5 +84,21 @@ describe('onboarding journey state', () => {
     expect(completed.stage).toBe('complete');
     expect(completed.completedAt).toBe(456);
     expect(markFirstRealMessage(completed, 789)).toEqual(completed);
+  });
+
+  it('does not commit while hydration is missing or the server PATCH did not confirm completion', () => {
+    const state = createJourneyState();
+    state.stage = 'ready';
+    expect(canCommitFirstRealMessage(state, undefined, undefined)).toBe(false);
+    expect(canCommitFirstRealMessage(state, { journeyId: state.journeyId }, { journeyId: state.journeyId })).toBe(
+      false,
+    );
+    expect(
+      canCommitFirstRealMessage(
+        state,
+        { journeyId: state.journeyId },
+        { journeyId: state.journeyId, completedAt: 456 },
+      ),
+    ).toBe(true);
   });
 });

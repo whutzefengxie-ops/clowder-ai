@@ -8,6 +8,7 @@ export interface ClientAuthDeps {
   homeDir?: string;
   env?: NodeJS.ProcessEnv;
   readFile?: (path: string) => string;
+  platform?: NodeJS.Platform;
 }
 
 export interface ClientAuthResult {
@@ -44,11 +45,14 @@ function hasOpenCodeNativeAuth(home: string, env: NodeJS.ProcessEnv, deps: Clien
   const xdg = env.XDG_DATA_HOME?.trim();
   const dataDir =
     env.OPENCODE_DATA_DIR?.trim() ||
+    // OpenCode uses xdg-basedir's data directory on every platform. Keep the
+    // default aligned with the CLI (`~/.local/share`); only XDG_DATA_HOME or
+    // the explicit test/runtime override changes it.
     (xdg
       ? join(xdg, 'opencode')
-      : process.platform === 'win32'
-        ? join(env.APPDATA?.trim() || join(home, 'AppData', 'Roaming'), 'opencode')
-        : process.platform === 'darwin'
+      : (deps.platform ?? process.platform) === 'win32'
+        ? join(env.LOCALAPPDATA?.trim() || join(home, 'AppData', 'Local'), 'opencode')
+        : (deps.platform ?? process.platform) === 'darwin'
           ? join(home, 'Library', 'Application Support', 'opencode')
           : join(home, '.local', 'share', 'opencode'));
   try {
@@ -58,20 +62,19 @@ function hasOpenCodeNativeAuth(home: string, env: NodeJS.ProcessEnv, deps: Clien
       Object.values(parsed).some((value) => {
         const entry = record(value);
         if (!entry) return false;
+        const type = entry.type;
+        if (type !== 'oauth' && type !== 'api' && type !== 'wellknown') return false;
         const oauth = record(entry.oauth);
         const api = record(entry.api);
         const wellknown = record(entry.wellknown);
-        return (
-          nonEmpty(oauth?.access) ||
-          nonEmpty(oauth?.access_token) ||
-          nonEmpty(entry.access) ||
-          nonEmpty(entry.access_token) ||
-          nonEmpty(entry.refresh) ||
-          nonEmpty(entry.refresh_token) ||
-          nonEmpty(api?.key) ||
-          nonEmpty(wellknown?.key) ||
-          nonEmpty(entry.key)
-        );
+        const access = nonEmpty(oauth?.access) || nonEmpty(oauth?.access_token) || nonEmpty(entry.access);
+        const refresh = nonEmpty(oauth?.refresh) || nonEmpty(oauth?.refresh_token) || nonEmpty(entry.refresh);
+        const apiKey = nonEmpty(api?.key) || nonEmpty(wellknown?.key) || nonEmpty(entry.key);
+        return type === 'api' || type === 'wellknown'
+          ? apiKey
+          : type === 'oauth'
+            ? access && refresh
+            : access && refresh;
       })
     );
   } catch {

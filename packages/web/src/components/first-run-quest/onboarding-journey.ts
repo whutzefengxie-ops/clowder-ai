@@ -265,3 +265,19 @@ export function markFirstRealMessage(state: OnboardingJourneyState, timestamp = 
   if (state.stage !== 'ready' || state.completedAt !== undefined) return state;
   return { ...state, stage: 'complete', completedAt: timestamp };
 }
+
+/** Completion is durable only after the hydrated thread and PATCH response agree. */
+export function canCommitFirstRealMessage(
+  journey: OnboardingJourneyState,
+  hydratedThreadState: { journeyId?: string; completedAt?: number } | undefined,
+  serverState: { journeyId?: string; completedAt?: number } | undefined,
+): boolean {
+  return (
+    journey.stage === 'ready' &&
+    journey.completedAt === undefined &&
+    hydratedThreadState?.journeyId === journey.journeyId &&
+    hydratedThreadState.completedAt === undefined &&
+    serverState?.journeyId === journey.journeyId &&
+    serverState.completedAt !== undefined
+  );
+}

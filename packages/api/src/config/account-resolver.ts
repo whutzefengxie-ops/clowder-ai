@@ -230,6 +230,7 @@ export function resolveForClient(
   // This ensures installer-${client} (which holds API keys) is chosen over
   // an OAuth builtin that has no stored credential.
   const normalizedClient = normalizeToClient(client);
+  let sawIncompatibleAccount = false;
   if (normalizedClient) {
     const wellKnownId = builtinAccountIdForClient(normalizedClient);
     if (!wellKnownId) return null;
@@ -241,7 +242,13 @@ export function resolveForClient(
       const snapshot = store.resolve(id);
       if (snapshot.account) {
         const profile = accountToRuntimeProfile(id, snapshot.account, snapshot.credential);
-        if (profile.persistedClientId !== undefined && profileFamilyIdentity(profile) !== normalizedClient) continue;
+        if (profile.persistedClientId !== undefined && profileFamilyIdentity(profile) !== normalizedClient) {
+          // Do not let the synthetic builtin fallback below re-read this account
+          // through its well-known alias. A foreign persisted identity is an
+          // explicit negative signal, not an empty fresh-install catalog.
+          sawIncompatibleAccount = true;
+          continue;
+        }
         if (profile.authType === 'api_key' && profile.apiKey) return profile;
         firstMatch ??= profile;
       }
@@ -254,7 +261,9 @@ export function resolveForClient(
   if (normalizedClient) {
     const wellKnownRef = builtinAccountIdForClient(normalizedClient);
     const builtinClient = wellKnownRef ? builtinAccountFamilyForRef(wellKnownRef) : null;
-    if (builtinClient && wellKnownRef) return resolveByAccountRef(projectRoot, wellKnownRef);
+    if (builtinClient && wellKnownRef && !sawIncompatibleAccount) {
+      return resolveByAccountRef(projectRoot, wellKnownRef);
+    }
   }
 
   return null;

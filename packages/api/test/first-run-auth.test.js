@@ -14,6 +14,7 @@ async function detect(files, env = {}) {
     existsOnPath: async () => true,
     auth: {
       homeDir,
+      platform: env.__PLATFORM__ ?? 'linux',
       env,
       readFile: (path) => {
         if (!(path in files)) throw new Error('missing');
@@ -107,12 +108,33 @@ test('Codex CLI config does not authenticate from an inactive provider section',
 });
 
 test('OpenCode native auth accepts top-level OAuth credentials', async () => {
-  const authPath = join(homeDir, 'AppData', 'Roaming', 'opencode', 'auth.json');
+  const authPath = join(homeDir, '.local', 'share', 'opencode', 'auth.json');
   const clients = await detect({
     [authPath]: { anthropic: { type: 'oauth', access: 'fixture-access', refresh: 'fixture-refresh' } },
   });
   assert.equal(clients.find((client) => client.client === 'opencode')?.authenticated, true);
   assert.equal(JSON.stringify(clients).includes('fixture-access'), false);
+});
+
+test('OpenCode native auth follows xdg data roots on every host platform', async () => {
+  const linuxPath = join(homeDir, '.local', 'share', 'opencode', 'auth.json');
+  const linux = await detect({ [linuxPath]: { anthropic: { type: 'oauth', access: 'a', refresh: 'r' } } });
+  assert.equal(linux.find((client) => client.client === 'opencode')?.authenticated, true);
+  const windowsPath = join(homeDir, 'AppData', 'Local', 'opencode', 'auth.json');
+  const windows = await detect(
+    { [windowsPath]: { anthropic: { type: 'oauth', access: 'a', refresh: 'r' } } },
+    { __PLATFORM__: 'win32' },
+  );
+  assert.equal(windows.find((client) => client.client === 'opencode')?.authenticated, true);
+  const wrong = await detect(
+    {
+      [join(homeDir, 'AppData', 'Roaming', 'opencode', 'auth.json')]: {
+        anthropic: { type: 'oauth', access: 'a', refresh: 'r' },
+      },
+    },
+    { __PLATFORM__: 'linux' },
+  );
+  assert.equal(wrong.find((client) => client.client === 'opencode')?.authenticated, false);
 });
 
 test('Kimi native auth requires both access and refresh tokens', async () => {
@@ -144,4 +166,10 @@ test('OpenCode native auth honors XDG_DATA_HOME and does not expose credentials'
   );
   assert.equal(clients.find((client) => client.client === 'opencode')?.authenticated, true);
   assert.equal(JSON.stringify(clients).includes('fixture-key'), false);
+});
+
+test('OpenCode ignores an untyped auth entry instead of treating an arbitrary token as usable', async () => {
+  const authPath = join(homeDir, '.local', 'share', 'opencode', 'auth.json');
+  const clients = await detect({ [authPath]: { random: { access_token: 'fixture-token' } } });
+  assert.equal(clients.find((client) => client.client === 'opencode')?.authenticated, false);
 });

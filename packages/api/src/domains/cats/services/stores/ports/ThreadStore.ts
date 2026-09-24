@@ -23,8 +23,11 @@ export const DEFAULT_THREAD_ID = 'default';
 
 /** Stable, user-scoped identity for a first-run thread retry. */
 export function onboardingThreadId(userId: string, journeyId: string): string {
-  const normalize = (value: string, max: number) => value.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, max) || 'unknown';
-  return `onboarding-${normalize(userId, 48)}-${normalize(journeyId, 96)}`;
+  // Preserve every code point in a reversible, key-safe representation. The
+  // previous cleanup + truncation mapped `user.a`/`usera` and long journeys to
+  // the same Redis key, which could return another user's thread on retry.
+  const encode = (value: string) => Buffer.from(value, 'utf8').toString('base64url') || 'unknown';
+  return `onboarding-${encode(userId)}-${encode(journeyId)}`;
 }
 
 export interface EnsureOnboardingThreadResult {
