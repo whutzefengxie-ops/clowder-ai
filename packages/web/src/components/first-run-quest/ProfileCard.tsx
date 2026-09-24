@@ -221,7 +221,7 @@ export function ProfileCard({
               type="button"
               onClick={onTest}
               data-testid="first-run-connect-test"
-              disabled={testing || (!selectedModel && profile.authType !== 'oauth')}
+              disabled={testing || (!selectedModel && profile.authType !== 'oauth' && !profile.syntheticNative)}
               className={`flex items-center gap-1.5 rounded border px-2.5 py-1 text-xs font-medium transition-all ${
                 testing
                   ? 'cursor-wait border-conn-amber-ring bg-conn-amber-bg text-conn-amber-text'

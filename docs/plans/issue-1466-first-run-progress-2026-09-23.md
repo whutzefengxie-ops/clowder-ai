@@ -354,3 +354,35 @@ R6 的六项认证 fixture 从 `.test.ts` 转为常规 `.test.js`，引用构建
 | 异常可恢复 | 真实登录返回、失败重试、刷新、部分创建成功和丢响应均有明确状态；用户不用重新填已提供的信息或重复创建 |
 
 本轮只补充体验审查和验收建议，不把 zts 要求的阶段性录屏贬为无效，也不把它扩大为完整产品体验通过。后续应在实际主窗口以正常阅读和操作速度录制，再结合首次使用者反馈检查简化是否有效。
+## 14. 2026-09-24 复核更新：R3/R4/R5/R7 局部闭环，整体验收仍阻塞
+
+本轮根据复核意见补齐了可以在当前代码与 fixture 中验证的边界，并重新运行了定向检查。结论仍是：**Issue #1466 整体不能验收通过、不能关闭或合入；PR #1519 继续保持 `REVIEW_REQUIRED / BLOCKED`，正式非作者 review 仍为 0。**
+
+已落地并有证据的部分：
+
+- **R3 P2：环境 key + 空账号库路径**：`resolveForClient`/`resolveByAccountRef` 在空账号目录下保留环境 key 以及 CLI 自有身份；synthetic native profile 不再因为账号库为空而丢失。Codex 自定义 URL＋Key 继续保留当前 CLI provider 语义，不能用 `codex login status` 替代 URL＋Key 可用性判断。账号解析定向测试通过。
+- **R4 P2：成员与首启线程幂等**：成员 ID 由 journey/template/client 稳定派生；成员创建带 `Idempotency-Key`，目录写入使用进程内串行和文件锁；线程使用用户隔离的 journey ID，Redis 使用 Lua 原子创建。内存 store 与 Redis store 的 ensure 接口返回 `created`，所以并发首个 POST 返回 201、重试返回 200，并返回同一线程。`bootcamp-flow.test.js` 的并发/服务端完成状态测试通过。
+- **R5 P2：F155 完成状态恢复**：首句成功后先 PATCH 服务端线程的 `bootcampState.completedAt`，PATCH 成功才写本地完成状态；刷新时优先读取服务端完成状态，并校验 journey 与 thread 归属。Web onboarding 状态测试通过；这证明状态边界，不等于完整浏览器主窗口验收。
+- **R7 P2：Kimi/OpenCode 原生认证识别**：加入 Kimi `KIMI_SHARE_DIR/credentials/kimi-code.json` 与 OpenCode `XDG_DATA_HOME/opencode/auth.json` 的只读存在性识别，并只返回状态，不返回凭证内容。该部分有 fixture 覆盖，但真实 CLI 当前 provider、模型和首句调用的一致性仍未证明。
+- **凭证回显防护**：连接探测错误返回固定安全文案；fixture 验证 URL/token 不出现在响应。该结论只覆盖当前探测接口与 fixture，不扩展为所有生产错误路径已完成安全审计。
+- **项目级乱码规避**：worktree `AGENTS.md` 已加入 GitHub 中文 PR/Issue/评论的 UTF-8 无 BOM、`--body-file`/JSON 文件提交、发布后 API 回读、原位修复乱码评论的规则；根目录 AGENTS.md 中已有同一规则，后续以两处规则共同约束。
+
+本轮实际运行结果：
+
+- `pnpm --filter @cat-cafe/shared build`：通过。
+- `pnpm --filter @cat-cafe/api exec tsc --noEmit`：通过。
+- `pnpm --filter @cat-cafe/web exec tsc --noEmit --incremental false`：通过。
+- `pnpm --filter @cat-cafe/api exec node --test --test-concurrency=1 test/first-run-auth.test.js test/account-resolver.test.js`：31/31 通过。
+- `pnpm --filter @cat-cafe/api exec node --test --test-concurrency=1 test/bootcamp-flow.test.js`：2/2 通过。
+- `pnpm --filter @cat-cafe/web exec vitest run src/components/first-run-quest/__tests__/onboarding-journey.test.ts`：8/8 通过。
+- `git diff --check`：通过。Biome 定向检查未发现本轮新增格式错误，但报告了仓库既有复杂度、可访问性和 hook 依赖警告；未把这些既有警告写成整体验收通过。
+
+仍未闭环、必须保留为阻塞项：
+
+- R3/R7 只有只读检测与 fixture；真实 Codex/Kimi/OpenCode CLI 探测、当前 provider/模型绑定、网络连接和第一条真实模型回复尚无证据。
+- 真实端到端链路仍缺：成员/线程持久化后的刷新恢复、F229 交接、首句发送和真实模型回复未在同一条旅程中完成；mock API 录屏不能替代这些证据。
+- 三猫仍是静态卡片与手动“下一幕”，没有 Issue #1466 要求的真实消息组件、自然身份连续性和真实交接；主路径仍有多次机械点击，跳过演示入口和“确认已检测伙伴后直接对话”的收敛方案尚未实现。
+- “去登录”仍主要显示手动终端步骤，按钮语义和行为尚未完全一致；F155 非阻塞提示的完整生命周期、刷新恢复和线程归属仍需真实主窗口证据。
+- PR #1519 当前正式 reviews=0、review threads=0，尚未满足“非作者正式 review”要求；因此不能进入 merge-gate。
+
+因此当前状态继续标记为：**P1 修复有效，R3/R4/R5/R7 局部实现及定向测试通过；Issue #1466 整体仍未验收通过，PR 不得关闭或合入。**

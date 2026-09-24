@@ -7,6 +7,7 @@ import {
   mergeDetectedAuthStatus,
   type OnboardingClient,
   restoreJourneyState,
+  stableOnboardingMemberId,
 } from '../onboarding-journey';
 
 const readyClaude: OnboardingClient = {
@@ -25,6 +26,12 @@ describe('onboarding journey state', () => {
     expect(state.completedAt).toBeUndefined();
     expect(state.demoScene).toBe('opening');
     expect(state.demoPaused).toBe(false);
+  });
+
+  it('derives a stable member id for retries of the same journey', () => {
+    const first = stableOnboardingMemberId('journey-1234', 'planner', 'codex');
+    expect(stableOnboardingMemberId('journey-1234', 'planner', 'codex')).toBe(first);
+    expect(stableOnboardingMemberId('journey-1234', 'planner', 'claude')).not.toBe(first);
   });
 
   it('restores demo scene and pause gate', () => {

@@ -9,11 +9,12 @@ export interface ClientModelDefaults {
 export function withNativeProfile(
   profiles: ProfileItem[],
   clientId: string,
-  detectedOAuth: boolean,
+  detectedAuth: boolean | 'oauth' | 'environment',
   defaults?: ClientModelDefaults,
 ): ProfileItem[] {
   const id = builtinAccountIdForClient(clientId as ClientValue);
-  if (!detectedOAuth || !id || profiles.some((profile) => profile.id === id)) return profiles;
+  if (!detectedAuth || !id || profiles.some((profile) => profile.id === id)) return profiles;
+  const authType = detectedAuth === 'environment' ? 'api_key' : 'oauth';
   const models = [
     ...new Set([defaults?.defaultModel, ...(defaults?.models ?? [])].filter((model): model is string => !!model)),
   ];
@@ -25,13 +26,13 @@ export function withNativeProfile(
       clientId: clientId as ProfileItem['clientId'],
       name: '本机 CLI 登录',
       displayName: '本机 CLI 登录',
-      authType: 'oauth',
+      authType,
       kind: 'builtin',
       builtin: true,
       syntheticNative: true,
-      mode: 'subscription',
+      mode: authType === 'api_key' ? 'api_key' : 'subscription',
       models,
-      hasApiKey: false,
+      hasApiKey: authType === 'api_key',
       createdAt: '',
       updatedAt: '',
     },

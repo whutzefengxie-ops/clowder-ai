@@ -14,6 +14,7 @@ import {
   createJourneyState,
   type OnboardingJourneyState,
   restoreJourneyState,
+  stableOnboardingMemberId,
 } from './first-run-quest/onboarding-journey';
 import {
   STORAGE_KEY,
@@ -130,13 +131,16 @@ export function FirstRunQuestWizard({ open, onClose, onCreated }: FirstRunQuestW
       if (!selectedTemplate) throw new Error('请先选择角色模板');
       const existing = createdCatsRef.current.get(client.client);
       if (existing) return existing;
-      const suffix = `${Date.now().toString(36)}-${client.client}`;
-      const catId = `${selectedTemplate.id}-${suffix}`;
+      const catId = stableOnboardingMemberId(journey.journeyId, selectedTemplate.id, client.client);
       const catName = `${selectedTemplate.name} · ${client.label}`;
       const nickname = selectedTemplate.nickname ? `${selectedTemplate.nickname} · ${client.label}` : undefined;
       const response = await apiFetch('/api/cats', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Cat-Cafe-Onboarding-Journey': journey.journeyId,
+          'Idempotency-Key': `onboarding:${journey.journeyId}:cat:${client.client}`,
+        },
         body: JSON.stringify({
           catId,
           name: catName,
@@ -159,7 +163,7 @@ export function FirstRunQuestWizard({ open, onClose, onCreated }: FirstRunQuestW
       createdCatsRef.current.set(client.client, created);
       return created;
     },
-    [selectedTemplate],
+    [journey.journeyId, selectedTemplate],
   );
 
   const handleConfigComplete = useCallback(
@@ -206,7 +210,11 @@ export function FirstRunQuestWizard({ open, onClose, onCreated }: FirstRunQuestW
         await refresh();
         const response = await apiFetch('/api/threads', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Cat-Cafe-Onboarding-Journey': journey.journeyId,
+            'Idempotency-Key': `onboarding:${journey.journeyId}:thread`,
+          },
           body: JSON.stringify({
             title: '首启协作旅程',
             bootcampState: {
@@ -214,6 +222,7 @@ export function FirstRunQuestWizard({ open, onClose, onCreated }: FirstRunQuestW
               phase: 'phase-1-intro',
               leadCat: createdCatsRef.current.get(selectedClients[0]?.client ?? '')?.id,
               startedAt: Date.now(),
+              journeyId: journey.journeyId,
             },
           }),
         });
@@ -233,7 +242,7 @@ export function FirstRunQuestWizard({ open, onClose, onCreated }: FirstRunQuestW
         setStep('config');
       }
     },
-    [configIndex, createCat, currentClient, onCreated, refresh, selectedClients],
+    [configIndex, createCat, currentClient, journey.journeyId, onCreated, refresh, selectedClients],
   );
 
   const title = useMemo(() => {
@@ -301,7 +310,13 @@ export function FirstRunQuestWizard({ open, onClose, onCreated }: FirstRunQuestW
               key={currentClient.client}
               client={currentClient.client}
               clientId={currentClient.provider}
-              detectedOAuth={currentClient.authenticated && !currentClient.hasApiKey}
+              detectedAuth={
+                currentClient.authType === 'environment'
+                  ? 'environment'
+                  : currentClient.authenticated && !currentClient.hasApiKey
+                    ? 'oauth'
+                    : false
+              }
               initialConfig={journey.setup?.configs[currentClient.client]}
               onComplete={handleConfigComplete}
             />

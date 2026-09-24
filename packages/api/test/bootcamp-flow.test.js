@@ -137,4 +137,34 @@ describe('Bootcamp Flow Integration', () => {
     const finalThread = await threadStore.get(thread.id);
     assert.equal(finalThread.pinned, true, 'Thread should be auto-pinned after farewell');
   });
+  test('onboarding journey retries return one stable thread and preserve server completion', async () => {
+    const app = await createApp();
+    const payload = {
+      title: '首启协作旅程',
+      bootcampState: { v: 1, phase: 'phase-1-intro', leadCat: 'codex', startedAt: 1000, journeyId: 'journey-1234' },
+    };
+    const request = {
+      method: 'POST',
+      url: '/api/threads',
+      headers: { 'x-cat-cafe-user': 'user-1', 'x-cat-cafe-onboarding-journey': 'journey-1234' },
+      payload,
+    };
+    const [first, retry] = await Promise.all([app.inject(request), app.inject(request)]);
+    assert.equal(first.statusCode, 201);
+    assert.equal(retry.statusCode, 200);
+    const firstThread = JSON.parse(first.body);
+    const retryThread = JSON.parse(retry.body);
+    assert.equal(firstThread.id, retryThread.id);
+    assert.equal((await threadStore.list('user-1')).filter((thread) => thread.id === firstThread.id).length, 1);
+
+    const patched = await app.inject({
+      method: 'PATCH',
+      url: `/api/threads/${firstThread.id}`,
+      headers: { 'x-cat-cafe-user': 'user-1' },
+      payload: { bootcampState: { ...payload.bootcampState, completedAt: 2000 } },
+    });
+    assert.equal(patched.statusCode, 200);
+    assert.equal(JSON.parse(patched.body).bootcampState.completedAt, 2000);
+    await app.close();
+  });
 });

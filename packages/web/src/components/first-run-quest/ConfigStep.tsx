@@ -13,6 +13,8 @@ interface ConfigStepProps {
   /** Account provider key (anthropic/openai/google) — distinct from model provider. */
   clientId: string;
   initialConfig?: { accountRef: string; model: string };
+  detectedAuth?: boolean | 'oauth' | 'environment';
+  /** Backward-compatible test and caller alias. */
   detectedOAuth?: boolean;
   onComplete: (config: { accountRef: string; model: string }) => void;
 }
@@ -28,7 +30,15 @@ function humanizeError(msg: string): string {
   return msg;
 }
 
-export function ConfigStep({ client, clientId, initialConfig, detectedOAuth = false, onComplete }: ConfigStepProps) {
+export function ConfigStep({
+  client,
+  clientId,
+  initialConfig,
+  detectedAuth = false,
+  detectedOAuth = false,
+  onComplete,
+}: ConfigStepProps) {
+  const effectiveDetectedAuth = detectedAuth || (detectedOAuth ? 'oauth' : false);
   const [profiles, setProfiles] = useState<ProfileItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedProfileId, setSelectedProfileId] = useState('');
@@ -46,16 +56,16 @@ export function ConfigStep({ client, clientId, initialConfig, detectedOAuth = fa
     if (!res.ok) return [];
     const body = (await res.json()) as AccountsResponse;
     let defaults: ClientModelDefaults | undefined;
-    if (detectedOAuth) {
+    if (effectiveDetectedAuth) {
       const templates = await apiFetch('/api/cat-templates');
       if (templates.ok)
         defaults = ((await templates.json()) as { clientDefaults?: Record<string, ClientModelDefaults> })
           .clientDefaults?.[client];
     }
-    const providers = withNativeProfile(body.providers ?? [], clientId, detectedOAuth, defaults);
+    const providers = withNativeProfile(body.providers ?? [], clientId, effectiveDetectedAuth, defaults);
     setProfiles(providers);
     return providers;
-  }, [client, clientId, detectedOAuth]);
+  }, [client, clientId, effectiveDetectedAuth]);
 
   useEffect(() => {
     fetchProfiles()
@@ -103,7 +113,11 @@ export function ConfigStep({ client, clientId, initialConfig, detectedOAuth = fa
 
   const handleTest = async () => {
     const selectedProfile = available.find((p) => p.id === selectedProfileId);
-    if (!selectedProfile || (!selectedModel && selectedProfile.authType !== 'oauth')) return;
+    if (
+      !selectedProfile ||
+      (!selectedModel && selectedProfile.authType !== 'oauth' && !selectedProfile.syntheticNative)
+    )
+      return;
     const sig = `${selectedProfileId}:${selectedModel}`;
     testSigRef.current = sig;
     setTesting(true);
@@ -171,7 +185,10 @@ export function ConfigStep({ client, clientId, initialConfig, detectedOAuth = fa
   }
 
   const selectedProfile = available.find((p) => p.id === selectedProfileId);
-  const canProceed = !!selectedProfile && (!!selectedModel || selectedProfile.authType === 'oauth') && !!testResult?.ok;
+  const canProceed =
+    !!selectedProfile &&
+    (!!selectedModel || selectedProfile.authType === 'oauth' || selectedProfile.syntheticNative === true) &&
+    !!testResult?.ok;
 
   return (
     <div>

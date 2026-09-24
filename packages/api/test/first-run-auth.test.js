@@ -105,3 +105,43 @@ test('Codex CLI config does not authenticate from an inactive provider section',
   });
   assert.equal(clients.find((client) => client.client === 'codex')?.authenticated, false);
 });
+
+test('OpenCode native auth accepts top-level OAuth credentials', async () => {
+  const authPath = join(homeDir, 'AppData', 'Roaming', 'opencode', 'auth.json');
+  const clients = await detect({
+    [authPath]: { anthropic: { type: 'oauth', access: 'fixture-access', refresh: 'fixture-refresh' } },
+  });
+  assert.equal(clients.find((client) => client.client === 'opencode')?.authenticated, true);
+  assert.equal(JSON.stringify(clients).includes('fixture-access'), false);
+});
+
+test('Kimi native auth requires both access and refresh tokens', async () => {
+  const authPath = join(homeDir, '.kimi', 'credentials', 'kimi-code.json');
+  const clients = await detect({
+    [authPath]: { access_token: 'fixture-access', refresh_token: 'fixture-refresh' },
+  });
+  assert.equal(clients.find((client) => client.client === 'kimi')?.authenticated, true);
+  assert.equal(JSON.stringify(clients).includes('fixture-access'), false);
+});
+
+test('Kimi native auth honors an explicit KIMI_SHARE_DIR', async () => {
+  const shareDir = join(homeDir, 'custom-kimi');
+  const authPath = join(shareDir, 'credentials', 'kimi-code.json');
+  const clients = await detect(
+    { [authPath]: { access_token: 'fixture-access', refresh_token: 'fixture-refresh' } },
+    { KIMI_SHARE_DIR: shareDir },
+  );
+  assert.equal(clients.find((client) => client.client === 'kimi')?.authenticated, true);
+  assert.equal(clients.find((client) => client.client === 'kimi')?.authType, 'native');
+});
+
+test('OpenCode native auth honors XDG_DATA_HOME and does not expose credentials', async () => {
+  const dataHome = join(homeDir, 'xdg-data');
+  const authPath = join(dataHome, 'opencode', 'auth.json');
+  const clients = await detect(
+    { [authPath]: { openai: { type: 'api', key: 'fixture-key' } } },
+    { XDG_DATA_HOME: dataHome },
+  );
+  assert.equal(clients.find((client) => client.client === 'opencode')?.authenticated, true);
+  assert.equal(JSON.stringify(clients).includes('fixture-key'), false);
+});

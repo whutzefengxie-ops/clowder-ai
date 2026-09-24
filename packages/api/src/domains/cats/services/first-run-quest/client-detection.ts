@@ -40,6 +40,8 @@ export interface DetectedClient {
   hasApiKey: boolean;
   /** Whether a usable local CLI credential (or API key) was detected. */
   authenticated: boolean;
+  authType: 'environment' | 'native' | 'none';
+  accountRef?: string;
 }
 
 interface CliSpec {

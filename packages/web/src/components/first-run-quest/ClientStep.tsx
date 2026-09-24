@@ -28,6 +28,12 @@ function deriveAuthStatus(
   return 'login_required';
 }
 
+function detectedAuthType(client: Omit<DetectedClient, 'authStatus'>): 'environment' | 'native' | 'none' {
+  if (client.authType === 'environment' || client.authType === 'native' || client.authType === 'none')
+    return client.authType;
+  return client.hasApiKey ? 'environment' : client.authenticated ? 'native' : 'none';
+}
+
 function statusLabel(status: OnboardingClientDraft['authStatus']): string {
   if (status === 'ready') return '可用';
   if (status === 'pending') return '等待登录';
@@ -66,6 +72,7 @@ export function ClientStep({ onSelect, savedClients = [], onClientsChange }: Cli
         if (cancelled) return;
         const next = detected.clients.map((client) => ({
           ...client,
+          authType: detectedAuthType(client),
           authStatus: mergeDetectedAuthStatus(
             deriveAuthStatus(client, accounts.providers ?? []),
             savedRef.current.find((saved) => saved.client === client.client)?.authStatus,

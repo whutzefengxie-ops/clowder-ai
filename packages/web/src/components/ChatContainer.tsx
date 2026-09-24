@@ -205,6 +205,35 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
   const [bootcampCount, setBootcampCount] = useState(0);
   useEffect(() => {
     let cancelled = false;
+    apiFetch(`/api/threads/${encodeURIComponent(threadId)}`)
+      .then(async (res) =>
+        res.ok ? ((await res.json()) as { bootcampState?: { journeyId?: string; completedAt?: number } }) : null,
+      )
+      .then((thread) => {
+        if (cancelled) return;
+        try {
+          const journey = restoreJourneyState(localStorage.getItem('cat-cafe:onboarding-journey'));
+          setShowOnboardingHint(
+            Boolean(
+              thread?.bootcampState?.journeyId &&
+                thread.bootcampState.completedAt === undefined &&
+                journey?.threadId === threadId &&
+                journey.stage === 'ready' &&
+                journey.completedAt === undefined,
+            ),
+          );
+        } catch {
+          setShowOnboardingHint(false);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [threadId]);
+
+  useEffect(() => {
+    let cancelled = false;
     apiFetch('/api/bootcamp/threads')
       .then(async (res) => {
         if (cancelled || !res.ok) return;
@@ -490,6 +519,7 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
         const local = useChatStore.getState().threads.find((t) => t.id === threadId);
         if (thread.bootcampState || local?.bootcampState) {
           syncLocalBootcampState(threadId, thread.bootcampState);
+          if (thread.bootcampState?.completedAt !== undefined) setShowOnboardingHint(false);
         }
         const localQuest = (local as Record<string, unknown> | undefined)?.firstRunQuestState;
         if (thread.firstRunQuestState || localQuest) {
@@ -811,7 +841,27 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
       try {
         const state = restoreJourneyState(localStorage.getItem('cat-cafe:onboarding-journey'));
         if (!state || state.stage !== 'ready' || (state.threadId && state.threadId !== threadId)) return;
-        localStorage.setItem('cat-cafe:onboarding-journey', JSON.stringify(markFirstRealMessage(state)));
+        const currentThread = useChatStore.getState().threads.find((thread) => thread.id === threadId);
+        const bootcampState = currentThread?.bootcampState;
+        if (bootcampState && bootcampState.completedAt === undefined) {
+          const completed = markFirstRealMessage(state);
+          const nextBootcampState = { ...bootcampState, completedAt: completed.completedAt ?? Date.now() };
+          void apiFetch(`/api/threads/${encodeURIComponent(threadId)}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ bootcampState: nextBootcampState }),
+          })
+            .then((response) => {
+              if (!response.ok) return;
+              localStorage.setItem('cat-cafe:onboarding-journey', JSON.stringify(completed));
+              setShowOnboardingHint(false);
+              syncLocalBootcampState(threadId, nextBootcampState);
+            })
+            .catch(() => {});
+          return;
+        }
+        const completed = markFirstRealMessage(state);
+        localStorage.setItem('cat-cafe:onboarding-journey', JSON.stringify(completed));
         setShowOnboardingHint(false);
       } catch {
         /* localStorage may be unavailable */

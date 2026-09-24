@@ -36,6 +36,8 @@ export interface OnboardingClientDraft {
   hasApiKey: boolean;
   authenticated?: boolean;
   authStatus: OnboardingAuthStatus;
+  authType?: 'environment' | 'native' | 'none';
+  accountRef?: string;
 }
 
 export interface OnboardingConfigDraft {
@@ -57,6 +59,8 @@ export type DemoScene = 'opening' | 'draft' | 'review' | 'improved' | 'handoff';
 
 export interface OnboardingJourneyState {
   version: 1;
+  /** Stable client-generated identity for retries and refresh recovery. */
+  journeyId: string;
   stage: OnboardingStage;
   demoParticipants: readonly string[];
   demoScene: DemoScene;
@@ -73,12 +77,27 @@ const DEMO_PARTICIPANTS = ['规划猫', '实现猫', '审查猫'] as const;
 export function createJourneyState(): OnboardingJourneyState {
   return {
     version: 1,
+    journeyId: createJourneyId(),
     stage: 'demo',
     demoParticipants: [...DEMO_PARTICIPANTS],
     demoScene: 'opening',
     demoPaused: false,
     realMembers: [],
   };
+}
+
+function createJourneyId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  return `journey-${Math.random().toString(36).slice(2)}-${Date.now().toString(36)}`;
+}
+
+export function stableOnboardingMemberId(journeyId: string, templateId: string, client: string): string {
+  const normalize = (value: string) =>
+    value
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+  return `${normalize(templateId) || 'member'}-${normalize(journeyId).slice(0, 24)}-${normalize(client) || 'client'}`;
 }
 
 export function canContinueClientSetup(clients: readonly OnboardingClient[]): boolean {
@@ -161,6 +180,11 @@ function isClientDraft(value: unknown): value is OnboardingClientDraft {
     (value.version === undefined || typeof value.version === 'string') &&
     typeof value.hasApiKey === 'boolean' &&
     (value.authenticated === undefined || typeof value.authenticated === 'boolean') &&
+    (value.authType === undefined ||
+      value.authType === 'environment' ||
+      value.authType === 'native' ||
+      value.authType === 'none') &&
+    (value.accountRef === undefined || typeof value.accountRef === 'string') &&
     (value.authStatus === 'ready' ||
       value.authStatus === 'login_required' ||
       value.authStatus === 'pending' ||
@@ -192,6 +216,7 @@ export function restoreJourneyState(serialized: string | null | undefined): Onbo
   try {
     const parsed: unknown = JSON.parse(serialized);
     if (!isRecord(parsed) || parsed.version !== 1 || !isStage(parsed.stage)) return null;
+    if (typeof parsed.journeyId !== 'string' || parsed.journeyId.trim().length < 8) return null;
     if (!Array.isArray(parsed.demoParticipants) || !parsed.demoParticipants.every((item) => typeof item === 'string')) {
       return null;
     }
@@ -203,6 +228,7 @@ export function restoreJourneyState(serialized: string | null | undefined): Onbo
     if (parsed.completedAt !== undefined && typeof parsed.completedAt !== 'number') return null;
     return {
       version: 1,
+      journeyId: parsed.journeyId,
       stage: parsed.stage,
       demoParticipants: [...parsed.demoParticipants],
       demoScene: parsed.demoScene,

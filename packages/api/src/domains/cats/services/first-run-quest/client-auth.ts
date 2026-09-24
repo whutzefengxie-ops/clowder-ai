@@ -10,6 +10,14 @@ export interface ClientAuthDeps {
   readFile?: (path: string) => string;
 }
 
+export interface ClientAuthResult {
+  hasApiKey: boolean;
+  authenticated: boolean;
+  /** The source is intentionally descriptive only; no credential value is returned. */
+  authType: 'environment' | 'native' | 'none';
+  accountRef?: string;
+}
+
 function record(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
 }
@@ -20,6 +28,55 @@ function nonEmpty(value: unknown): boolean {
 
 function readText(path: string, deps: ClientAuthDeps): string {
   return (deps.readFile ?? ((file) => readFileSync(file, 'utf8')))(path);
+}
+
+function hasKimiNativeAuth(home: string, env: NodeJS.ProcessEnv, deps: ClientAuthDeps): boolean {
+  const shareDir = env.KIMI_SHARE_DIR?.trim() || join(home, '.kimi');
+  try {
+    const parsed = record(JSON.parse(readText(join(shareDir, 'credentials', 'kimi-code.json'), deps)));
+    return nonEmpty(parsed?.access_token) && nonEmpty(parsed?.refresh_token);
+  } catch {
+    return false;
+  }
+}
+
+function hasOpenCodeNativeAuth(home: string, env: NodeJS.ProcessEnv, deps: ClientAuthDeps): boolean {
+  const xdg = env.XDG_DATA_HOME?.trim();
+  const dataDir =
+    env.OPENCODE_DATA_DIR?.trim() ||
+    (xdg
+      ? join(xdg, 'opencode')
+      : process.platform === 'win32'
+        ? join(env.APPDATA?.trim() || join(home, 'AppData', 'Roaming'), 'opencode')
+        : process.platform === 'darwin'
+          ? join(home, 'Library', 'Application Support', 'opencode')
+          : join(home, '.local', 'share', 'opencode'));
+  try {
+    const parsed = record(JSON.parse(readText(join(dataDir, 'auth.json'), deps)));
+    return (
+      !!parsed &&
+      Object.values(parsed).some((value) => {
+        const entry = record(value);
+        if (!entry) return false;
+        const oauth = record(entry.oauth);
+        const api = record(entry.api);
+        const wellknown = record(entry.wellknown);
+        return (
+          nonEmpty(oauth?.access) ||
+          nonEmpty(oauth?.access_token) ||
+          nonEmpty(entry.access) ||
+          nonEmpty(entry.access_token) ||
+          nonEmpty(entry.refresh) ||
+          nonEmpty(entry.refresh_token) ||
+          nonEmpty(api?.key) ||
+          nonEmpty(wellknown?.key) ||
+          nonEmpty(entry.key)
+        );
+      })
+    );
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -57,24 +114,60 @@ function hasJsonAuth(client: string, parsed: Record<string, unknown> | null): bo
 export function detectClientAuth(client: string, envKey: string, deps: ClientAuthDeps = {}) {
   const env = deps.env ?? process.env;
   const hasApiKey = nonEmpty(env[envKey]) || (client === 'gemini' && nonEmpty(env.GEMINI_API_KEY));
-  if (hasApiKey) return { hasApiKey: true, authenticated: true };
+  if (hasApiKey) {
+    return {
+      hasApiKey: true,
+      authenticated: true,
+      authType: 'environment',
+      accountRef: client === 'claude' ? 'claude' : client,
+    } satisfies ClientAuthResult;
+  }
   const home = deps.homeDir ?? homedir();
   // These must match the CLI's runtime home, not the quota panel's optional account override.
   const codexHome = env.CODEX_HOME?.trim() || join(home, '.codex');
   const path = getCredentialPath(client, home, env, codexHome);
-  if (!path) return { hasApiKey: false, authenticated: false };
+  if (!path) {
+    const authenticated =
+      client === 'kimi'
+        ? hasKimiNativeAuth(home, env, deps)
+        : client === 'opencode'
+          ? hasOpenCodeNativeAuth(home, env, deps)
+          : false;
+    return {
+      hasApiKey: false,
+      authenticated,
+      authType: authenticated ? 'native' : 'none',
+      ...(authenticated ? { accountRef: client } : {}),
+    } satisfies ClientAuthResult;
+  }
   try {
     const parsed = record(JSON.parse(readText(path, deps)));
     const authenticated = hasJsonAuth(client, parsed);
-    if (authenticated || client !== 'codex') return { hasApiKey: false, authenticated };
+    if (authenticated || client !== 'codex') {
+      return {
+        hasApiKey: false,
+        authenticated,
+        authType: authenticated ? 'native' : 'none',
+        ...(authenticated ? { accountRef: client } : {}),
+      } satisfies ClientAuthResult;
+    }
+    const configAuthenticated = hasCodexConfigAuth(join(codexHome, 'config.toml'), deps);
     return {
       hasApiKey: false,
-      authenticated: hasCodexConfigAuth(join(codexHome, 'config.toml'), deps),
-    };
+      authenticated: configAuthenticated,
+      authType: configAuthenticated ? 'native' : 'none',
+      ...(configAuthenticated ? { accountRef: client } : {}),
+    } satisfies ClientAuthResult;
   } catch {
     if (client === 'codex') {
-      return { hasApiKey: false, authenticated: hasCodexConfigAuth(join(codexHome, 'config.toml'), deps) };
+      const configAuthenticated = hasCodexConfigAuth(join(codexHome, 'config.toml'), deps);
+      return {
+        hasApiKey: false,
+        authenticated: configAuthenticated,
+        authType: configAuthenticated ? 'native' : 'none',
+        ...(configAuthenticated ? { accountRef: client } : {}),
+      } satisfies ClientAuthResult;
     }
-    return { hasApiKey: false, authenticated: false };
+    return { hasApiKey: false, authenticated: false, authType: 'none' } satisfies ClientAuthResult;
   }
 }

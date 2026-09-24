@@ -154,6 +154,43 @@ export function resolveByAccountRef(projectRoot: string, accountRef: string): Ru
   const builtinClient = builtinAccountFamilyForRef(accountRef);
   const builtinProtocol = builtinClient ? protocolForClient(builtinClient) : null;
   if (builtinClient) {
+    const envKeys =
+      builtinClient === 'anthropic'
+        ? ['ANTHROPIC_API_KEY']
+        : builtinClient === 'openai'
+          ? ['OPENAI_API_KEY']
+          : builtinClient === 'google'
+            ? ['GOOGLE_API_KEY', 'GEMINI_API_KEY']
+            : builtinClient === 'kimi'
+              ? ['MOONSHOT_API_KEY']
+              : builtinClient === 'opencode'
+                ? ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'GOOGLE_API_KEY', 'GEMINI_API_KEY', 'MOONSHOT_API_KEY']
+                : [];
+    const apiKey = envKeys.map((key) => process.env[key]?.trim()).find((value) => value);
+    const baseUrl =
+      builtinClient === 'anthropic'
+        ? process.env.ANTHROPIC_BASE_URL?.trim()
+        : builtinClient === 'openai'
+          ? (process.env.OPENAI_BASE_URL ?? process.env.OPENAI_API_BASE)?.trim()
+          : builtinClient === 'google'
+            ? process.env.GEMINI_BASE_URL?.trim()
+            : builtinClient === 'kimi'
+              ? (process.env.CAT_CAFE_KIMI_BASE_URL ?? process.env.KIMI_BASE_URL)?.trim()
+              : builtinClient === 'opencode'
+                ? (process.env.CAT_CAFE_OC_BASE_URL ?? process.env.OPENCODE_BASE_URL)?.trim()
+                : undefined;
+    if (apiKey) {
+      return {
+        id: accountRef,
+        authType: 'api_key',
+        kind: 'api_key',
+        syntheticNative: true,
+        client: builtinClient,
+        ...(builtinProtocol ? { protocol: builtinProtocol } : {}),
+        ...(baseUrl ? { baseUrl } : {}),
+        apiKey,
+      };
+    }
     return {
       id: accountRef,
       authType: 'oauth',
@@ -185,20 +222,8 @@ export function resolveForClient(
   if (preferredAccountRef) {
     const preferred = store.resolve(preferredAccountRef);
     if (preferred.account) return accountToRuntimeProfile(preferredAccountRef, preferred.account, preferred.credential);
-    // Not in accounts — only allow synthetic builtin (fresh install with empty accounts).
-    const builtinClient = builtinAccountFamilyForRef(preferredAccountRef);
-    const builtinProtocol = builtinClient ? protocolForClient(builtinClient) : null;
-    if (builtinClient) {
-      return {
-        id: preferredAccountRef,
-        authType: 'oauth',
-        kind: 'builtin',
-        syntheticNative: true,
-        client: builtinClient,
-        ...(builtinProtocol ? { protocol: builtinProtocol } : {}),
-      };
-    }
-    return null;
+    // Preserve the CLI-owned identity, including a fresh-install environment key.
+    return resolveByAccountRef(projectRoot, preferredAccountRef);
   }
 
   // clowder-ai#340: Walk the full discovery chain; prefer accounts with credentials.
@@ -229,17 +254,7 @@ export function resolveForClient(
   if (normalizedClient) {
     const wellKnownRef = builtinAccountIdForClient(normalizedClient);
     const builtinClient = wellKnownRef ? builtinAccountFamilyForRef(wellKnownRef) : null;
-    const builtinProtocol = builtinClient ? protocolForClient(builtinClient) : null;
-    if (builtinClient && wellKnownRef) {
-      return {
-        id: wellKnownRef,
-        authType: 'oauth',
-        kind: 'builtin',
-        syntheticNative: true,
-        client: builtinClient,
-        ...(builtinProtocol ? { protocol: builtinProtocol } : {}),
-      };
-    }
+    if (builtinClient && wellKnownRef) return resolveByAccountRef(projectRoot, wellKnownRef);
   }
 
   return null;
