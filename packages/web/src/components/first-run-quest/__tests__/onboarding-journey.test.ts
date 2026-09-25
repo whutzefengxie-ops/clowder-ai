@@ -8,6 +8,7 @@ import {
   markFirstRealMessage,
   mergeDetectedAuthStatus,
   type OnboardingClient,
+  restoreFirstRealMessagePendingMarker,
   restoreJourneyState,
   stableOnboardingMemberId,
 } from '../onboarding-journey';
@@ -121,5 +122,15 @@ describe('onboarding journey state', () => {
     expect(actionBeforeRetry).toBe('patch');
     expect(state.completedAt).toBeUndefined();
     expect(firstRealMessageSyncAction(state, { journeyId: state.journeyId })).toBe('patch');
+  });
+
+  it('restores a pending first-message marker after refresh and rejects malformed markers', () => {
+    expect(
+      restoreFirstRealMessagePendingMarker(JSON.stringify({ journeyId: 'journey-1234', threadId: 'thread-1' })),
+    ).toEqual({ journeyId: 'journey-1234', threadId: 'thread-1' });
+    expect(restoreFirstRealMessagePendingMarker('{')).toBeNull();
+    expect(
+      restoreFirstRealMessagePendingMarker(JSON.stringify({ journeyId: 'short', threadId: 'thread-1' })),
+    ).toBeNull();
   });
 });

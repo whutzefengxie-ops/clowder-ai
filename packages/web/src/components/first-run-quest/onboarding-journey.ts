@@ -284,6 +284,25 @@ export function canCommitFirstRealMessage(
 
 export type FirstRealMessageSyncAction = 'ignore' | 'wait-for-hydration' | 'patch' | 'already-complete';
 
+export interface FirstRealMessagePendingMarker {
+  journeyId: string;
+  threadId: string;
+}
+
+export function restoreFirstRealMessagePendingMarker(
+  serialized: string | null | undefined,
+): FirstRealMessagePendingMarker | null {
+  if (!serialized) return null;
+  try {
+    const parsed: unknown = JSON.parse(serialized);
+    if (!isRecord(parsed) || typeof parsed.journeyId !== 'string' || typeof parsed.threadId !== 'string') return null;
+    if (parsed.journeyId.trim().length < 8 || parsed.threadId.trim().length === 0) return null;
+    return { journeyId: parsed.journeyId, threadId: parsed.threadId };
+  } catch {
+    return null;
+  }
+}
+
 /** Decide what to do when the first real message arrives before thread hydration. */
 export function firstRealMessageSyncAction(
   journey: OnboardingJourneyState | null,
