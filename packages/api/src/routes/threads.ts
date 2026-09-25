@@ -1012,10 +1012,6 @@ export const threadsRoutes: FastifyPluginAsync<ThreadsRoutesOptions> = async (ap
       return { error: 'Thread not found' };
     }
     const userId = resolveUserId(request, { defaultUserId: 'default-user' }) ?? 'default-user';
-    if (thread.createdBy !== userId && thread.createdBy !== 'system') {
-      reply.status(404);
-      return { error: 'Thread not found' };
-    }
     return sanitizeThreadForResponse(await migrateRuntimeProjectPath(thread, threadStore), userId);
   });
 
@@ -1119,10 +1115,6 @@ export const threadsRoutes: FastifyPluginAsync<ThreadsRoutesOptions> = async (ap
       return { error: 'Thread not found' };
     }
     const patchOwner = resolveUserId(request, { defaultUserId: 'default-user' }) ?? 'default-user';
-    if (thread.createdBy !== patchOwner && thread.createdBy !== 'system') {
-      reply.status(404);
-      return { error: 'Thread not found' };
-    }
 
     const {
       title,

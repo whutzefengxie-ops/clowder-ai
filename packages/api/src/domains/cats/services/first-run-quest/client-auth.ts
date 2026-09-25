@@ -8,7 +8,6 @@ export interface ClientAuthDeps {
   homeDir?: string;
   env?: NodeJS.ProcessEnv;
   readFile?: (path: string) => string;
-  platform?: NodeJS.Platform;
 }
 
 export interface ClientAuthResult {
@@ -48,13 +47,7 @@ function hasOpenCodeNativeAuth(home: string, env: NodeJS.ProcessEnv, deps: Clien
     // OpenCode uses xdg-basedir's data directory on every platform. Keep the
     // default aligned with the CLI (`~/.local/share`); only XDG_DATA_HOME or
     // the explicit test/runtime override changes it.
-    (xdg
-      ? join(xdg, 'opencode')
-      : (deps.platform ?? process.platform) === 'win32'
-        ? join(env.LOCALAPPDATA?.trim() || join(home, 'AppData', 'Local'), 'opencode')
-        : (deps.platform ?? process.platform) === 'darwin'
-          ? join(home, 'Library', 'Application Support', 'opencode')
-          : join(home, '.local', 'share', 'opencode'));
+    (xdg ? join(xdg, 'opencode') : join(home, '.local', 'share', 'opencode'));
   try {
     const parsed = record(JSON.parse(readText(join(dataDir, 'auth.json'), deps)));
     return (

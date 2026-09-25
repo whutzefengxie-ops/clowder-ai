@@ -281,3 +281,17 @@ export function canCommitFirstRealMessage(
     serverState.completedAt !== undefined
   );
 }
+
+export type FirstRealMessageSyncAction = 'ignore' | 'wait-for-hydration' | 'patch' | 'already-complete';
+
+/** Decide what to do when the first real message arrives before thread hydration. */
+export function firstRealMessageSyncAction(
+  journey: OnboardingJourneyState | null,
+  hydratedThreadState: { journeyId?: string; completedAt?: number } | undefined,
+): FirstRealMessageSyncAction {
+  if (!journey || journey.stage !== 'ready' || journey.completedAt !== undefined) return 'ignore';
+  if (!hydratedThreadState) return 'wait-for-hydration';
+  if (hydratedThreadState.journeyId !== journey.journeyId) return 'ignore';
+  if (hydratedThreadState.completedAt !== undefined) return 'already-complete';
+  return 'patch';
+}

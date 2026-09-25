@@ -38,6 +38,7 @@ import { FirstRunQuestWizard } from './FirstRunQuestWizard';
 import { BootcampGuideOverlay } from './first-run-quest/BootcampGuideOverlay';
 import {
   canCommitFirstRealMessage,
+  firstRealMessageSyncAction,
   markFirstRealMessage,
   restoreJourneyState,
 } from './first-run-quest/onboarding-journey';
@@ -198,6 +199,7 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
   const [showFirstRunQuestPrompt, setShowFirstRunQuestPrompt] = useState(false);
   const [showQuestWizard, setShowQuestWizard] = useState(false);
   const [showOnboardingHint, setShowOnboardingHint] = useState(false);
+  const pendingFirstRealMessageThreadRef = useRef<string | null>(null);
   // F106: fetch bootcamp count independently of sidebar lifecycle
   // refreshKey increments only on modal close → avoids duplicate fetch on open
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -847,10 +849,21 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
         if (!state || state.stage !== 'ready' || (state.threadId && state.threadId !== threadId)) return;
         const currentThread = useChatStore.getState().threads.find((thread) => thread.id === threadId);
         const bootcampState = currentThread?.bootcampState;
-        // Hydration is authoritative. If the thread is not in the store yet,
-        // the server state is unknown; never hide the hint or mark local state
-        // complete through that loading gap.
-        if (!bootcampState || bootcampState.completedAt !== undefined) return;
+        const action = firstRealMessageSyncAction(state, bootcampState);
+        if (action === 'wait-for-hydration') {
+          pendingFirstRealMessageThreadRef.current = threadId;
+          return;
+        }
+        if (action === 'ignore') return;
+        if (action === 'already-complete' && bootcampState) {
+          pendingFirstRealMessageThreadRef.current = null;
+          const completed = markFirstRealMessage(state, bootcampState.completedAt);
+          localStorage.setItem('cat-cafe:onboarding-journey', JSON.stringify(completed));
+          setShowOnboardingHint(false);
+          return;
+        }
+        if (!bootcampState) return;
+        pendingFirstRealMessageThreadRef.current = threadId;
         const completed = markFirstRealMessage(state);
         const nextBootcampState = { ...bootcampState, completedAt: completed.completedAt ?? Date.now() };
         void apiFetch(`/api/threads/${encodeURIComponent(threadId)}`, {
@@ -869,8 +882,9 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
             if (committedAt === undefined) return;
             const committed = { ...completed, completedAt: committedAt };
             localStorage.setItem('cat-cafe:onboarding-journey', JSON.stringify(committed));
+            pendingFirstRealMessageThreadRef.current = null;
             setShowOnboardingHint(false);
-            syncLocalBootcampState(threadId, { ...bootcampState, ...serverState });
+            syncLocalBootcampState(threadId, { ...bootcampState, ...serverState } as Thread['bootcampState']);
           })
           .catch(() => {});
       } catch {
@@ -879,6 +893,11 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
     },
     [threadId],
   );
+
+  useEffect(() => {
+    if (pendingFirstRealMessageThreadRef.current !== threadId || !currentBootcampState) return;
+    handleRealOnboardingMessage(threadId);
+  }, [currentBootcampState, handleRealOnboardingMessage, threadId]);
 
   const handleSearchKnowledge = useCallback(() => {
     const fromParam = threadId ? `?from=${encodeURIComponent(threadId)}` : '';

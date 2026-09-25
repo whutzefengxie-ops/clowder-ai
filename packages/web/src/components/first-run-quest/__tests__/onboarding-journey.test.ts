@@ -4,6 +4,7 @@ import {
   canCommitFirstRealMessage,
   canContinueClientSetup,
   createJourneyState,
+  firstRealMessageSyncAction,
   markFirstRealMessage,
   mergeDetectedAuthStatus,
   type OnboardingClient,
@@ -100,5 +101,25 @@ describe('onboarding journey state', () => {
         { journeyId: state.journeyId, completedAt: 456 },
       ),
     ).toBe(true);
+  });
+
+  it('records the first message before hydration and retries after the matching thread arrives', () => {
+    const state = createJourneyState();
+    state.stage = 'ready';
+    expect(firstRealMessageSyncAction(state, undefined)).toBe('wait-for-hydration');
+    expect(firstRealMessageSyncAction(state, { journeyId: 'other-journey' })).toBe('ignore');
+    expect(firstRealMessageSyncAction(state, { journeyId: state.journeyId })).toBe('patch');
+    expect(firstRealMessageSyncAction(state, { journeyId: state.journeyId, completedAt: 789 })).toBe(
+      'already-complete',
+    );
+  });
+
+  it('keeps a failed PATCH retryable instead of completing locally', () => {
+    const state = createJourneyState();
+    state.stage = 'ready';
+    const actionBeforeRetry = firstRealMessageSyncAction(state, { journeyId: state.journeyId });
+    expect(actionBeforeRetry).toBe('patch');
+    expect(state.completedAt).toBeUndefined();
+    expect(firstRealMessageSyncAction(state, { journeyId: state.journeyId })).toBe('patch');
   });
 });

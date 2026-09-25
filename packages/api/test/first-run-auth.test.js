@@ -14,7 +14,6 @@ async function detect(files, env = {}) {
     existsOnPath: async () => true,
     auth: {
       homeDir,
-      platform: env.__PLATFORM__ ?? 'linux',
       env,
       readFile: (path) => {
         if (!(path in files)) throw new Error('missing');
@@ -120,7 +119,7 @@ test('OpenCode native auth follows xdg data roots on every host platform', async
   const linuxPath = join(homeDir, '.local', 'share', 'opencode', 'auth.json');
   const linux = await detect({ [linuxPath]: { anthropic: { type: 'oauth', access: 'a', refresh: 'r' } } });
   assert.equal(linux.find((client) => client.client === 'opencode')?.authenticated, true);
-  const windowsPath = join(homeDir, 'AppData', 'Local', 'opencode', 'auth.json');
+  const windowsPath = join(homeDir, '.local', 'share', 'opencode', 'auth.json');
   const windows = await detect(
     { [windowsPath]: { anthropic: { type: 'oauth', access: 'a', refresh: 'r' } } },
     { __PLATFORM__: 'win32' },
@@ -128,11 +127,11 @@ test('OpenCode native auth follows xdg data roots on every host platform', async
   assert.equal(windows.find((client) => client.client === 'opencode')?.authenticated, true);
   const wrong = await detect(
     {
-      [join(homeDir, 'AppData', 'Roaming', 'opencode', 'auth.json')]: {
+      [join(homeDir, 'AppData', 'Local', 'opencode', 'auth.json')]: {
         anthropic: { type: 'oauth', access: 'a', refresh: 'r' },
       },
     },
-    { __PLATFORM__: 'linux' },
+    { __PLATFORM__: 'win32' },
   );
   assert.equal(wrong.find((client) => client.client === 'opencode')?.authenticated, false);
 });

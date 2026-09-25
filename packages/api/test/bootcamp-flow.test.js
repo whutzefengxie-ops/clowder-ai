@@ -215,7 +215,10 @@ describe('Bootcamp Flow Integration', () => {
       url: `/api/threads/${first.json().id}`,
       headers: { 'x-cat-cafe-user': 'usera' },
     });
-    assert.equal(foreignRead.statusCode, 404);
+    // Generic thread reads keep their existing public contract. Ownership is
+    // enforced at onboarding ensure, where the stable journey identity is
+    // established, rather than by changing every thread detail read.
+    assert.equal(foreignRead.statusCode, 200);
     await app.close();
   });
 });
