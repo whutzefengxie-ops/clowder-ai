@@ -36,18 +36,12 @@ import { hydrateEvolutionFromCurrentUrl } from './capability-evolution/evolution
 import { useConciergeConfirmations } from './concierge/useConciergeConfirmations';
 import { FirstRunQuestWizard } from './FirstRunQuestWizard';
 import { BootcampGuideOverlay } from './first-run-quest/BootcampGuideOverlay';
-import {
-  canCommitFirstRealMessage,
-  firstRealMessageSyncAction,
-  markFirstRealMessage,
-  restoreFirstRealMessagePendingMarker,
-  restoreJourneyState,
-} from './first-run-quest/onboarding-journey';
+import { restoreJourneyState } from './first-run-quest/onboarding-journey';
 import { QuestBanner } from './first-run-quest/QuestBanner';
 import { syncLocalBootcampState } from './first-run-quest/syncLocalBootcampState';
 import { useFirstProjectMistakeTipGate } from './first-run-quest/useFirstProjectMistakeTipGate';
 import { useFirstProjectPreviewAutoOpen } from './first-run-quest/useFirstProjectPreviewAutoOpen';
-import { useFirstRealMessageRetry } from './first-run-quest/useFirstRealMessageRetry';
+import { useFirstRealMessageSync } from './first-run-quest/useFirstRealMessageSync';
 import { GameOverlayConnector } from './game/GameOverlayConnector';
 import { BootcampIcon } from './icons/BootcampIcon';
 import { GameIcon } from './icons/GameIcon';
@@ -202,9 +196,6 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
   const [showQuestWizard, setShowQuestWizard] = useState(false);
   const [showOnboardingHint, setShowOnboardingHint] = useState(false);
   const [onboardingSyncError, setOnboardingSyncError] = useState(false);
-  const [firstRealMessageRetryNonce, setFirstRealMessageRetryNonce] = useState(0);
-  const pendingFirstRealMessageThreadRef = useRef<string | null>(null);
-  const firstRealMessagePatchInFlightRef = useRef(false);
   // F106: fetch bootcamp count independently of sidebar lifecycle
   // refreshKey increments only on modal close → avoids duplicate fetch on open
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -846,126 +837,12 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
     [navigateToThread, setThreads],
   );
 
-  const handleRealOnboardingMessage = useCallback(
-    (messageThreadId?: string) => {
-      if (messageThreadId && messageThreadId !== threadId) return;
-      try {
-        const state = restoreJourneyState(localStorage.getItem('cat-cafe:onboarding-journey'));
-        if (!state || state.stage !== 'ready' || (state.threadId && state.threadId !== threadId)) return;
-        const currentThread = useChatStore.getState().threads.find((thread) => thread.id === threadId);
-        const bootcampState = currentThread?.bootcampState;
-        const action = firstRealMessageSyncAction(state, bootcampState);
-        if (action === 'wait-for-hydration') {
-          pendingFirstRealMessageThreadRef.current = threadId;
-          localStorage.setItem(
-            'cat-cafe:onboarding-first-real-message-pending',
-            JSON.stringify({ journeyId: state.journeyId, threadId }),
-          );
-          return;
-        }
-        if (action === 'ignore') {
-          pendingFirstRealMessageThreadRef.current = null;
-          localStorage.removeItem('cat-cafe:onboarding-first-real-message-pending');
-          return;
-        }
-        if (action === 'already-complete' && bootcampState) {
-          pendingFirstRealMessageThreadRef.current = null;
-          const completed = markFirstRealMessage(state, bootcampState.completedAt);
-          localStorage.setItem('cat-cafe:onboarding-journey', JSON.stringify(completed));
-          localStorage.removeItem('cat-cafe:onboarding-first-real-message-pending');
-          setOnboardingSyncError(false);
-          setShowOnboardingHint(false);
-          return;
-        }
-        if (!bootcampState) return;
-        if (firstRealMessagePatchInFlightRef.current) return;
-        pendingFirstRealMessageThreadRef.current = threadId;
-        localStorage.setItem(
-          'cat-cafe:onboarding-first-real-message-pending',
-          JSON.stringify({ journeyId: state.journeyId, threadId }),
-        );
-        firstRealMessagePatchInFlightRef.current = true;
-        const completed = markFirstRealMessage(state);
-        const nextBootcampState = { ...bootcampState, completedAt: completed.completedAt ?? Date.now() };
-        void apiFetch(`/api/threads/${encodeURIComponent(threadId)}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ bootcampState: nextBootcampState }),
-        })
-          .then(async (response) => {
-            if (!response.ok) {
-              setOnboardingSyncError(true);
-              setFirstRealMessageRetryNonce((value) => value + 1);
-              return;
-            }
-            const serverThread = (await response.json()) as {
-              bootcampState?: { journeyId?: string; completedAt?: number };
-            };
-            const serverState = serverThread.bootcampState;
-            if (!canCommitFirstRealMessage(state, bootcampState, serverState)) {
-              setOnboardingSyncError(true);
-              setFirstRealMessageRetryNonce((value) => value + 1);
-              return;
-            }
-            const committedAt = serverState?.completedAt;
-            if (committedAt === undefined) {
-              setOnboardingSyncError(true);
-              setFirstRealMessageRetryNonce((value) => value + 1);
-              return;
-            }
-            const committed = { ...completed, completedAt: committedAt };
-            localStorage.setItem('cat-cafe:onboarding-journey', JSON.stringify(committed));
-            localStorage.removeItem('cat-cafe:onboarding-first-real-message-pending');
-            pendingFirstRealMessageThreadRef.current = null;
-            setOnboardingSyncError(false);
-            setShowOnboardingHint(false);
-            syncLocalBootcampState(threadId, { ...bootcampState, ...serverState } as Thread['bootcampState']);
-          })
-          .catch(() => {
-            setOnboardingSyncError(true);
-            setFirstRealMessageRetryNonce((value) => value + 1);
-          })
-          .finally(() => {
-            firstRealMessagePatchInFlightRef.current = false;
-          });
-      } catch {
-        /* localStorage may be unavailable */
-      }
-    },
-    [threadId],
-  );
-
-  useEffect(() => {
-    if (pendingFirstRealMessageThreadRef.current !== threadId || !currentBootcampState) return;
-    handleRealOnboardingMessage(threadId);
-  }, [currentBootcampState, handleRealOnboardingMessage, threadId]);
-
-  useEffect(() => {
-    try {
-      const journey = restoreJourneyState(localStorage.getItem('cat-cafe:onboarding-journey'));
-      const pending = restoreFirstRealMessagePendingMarker(
-        localStorage.getItem('cat-cafe:onboarding-first-real-message-pending'),
-      );
-      if (journey?.stage === 'ready' && pending?.threadId === threadId && pending.journeyId === journey.journeyId) {
-        pendingFirstRealMessageThreadRef.current = threadId;
-        if (currentBootcampState) {
-          setOnboardingSyncError(true);
-          setFirstRealMessageRetryNonce((value) => value + 1);
-        }
-      }
-    } catch {
-      // localStorage may be unavailable
-    }
-  }, [currentBootcampState, threadId]);
-
-  const retryFirstRealMessage = useCallback(
-    () => handleRealOnboardingMessage(threadId),
-    [handleRealOnboardingMessage, threadId],
-  );
-  useFirstRealMessageRetry({
-    enabled: onboardingSyncError && pendingFirstRealMessageThreadRef.current === threadId && !!currentBootcampState,
-    retryKey: firstRealMessageRetryNonce,
-    onRetry: retryFirstRealMessage,
+  const { handleRealOnboardingMessage, requestRetry: requestFirstRealMessageRetry } = useFirstRealMessageSync({
+    threadId,
+    currentBootcampState,
+    onboardingSyncError,
+    setOnboardingSyncError,
+    setShowOnboardingHint,
   });
 
   const handleSearchKnowledge = useCallback(() => {
@@ -1053,7 +930,7 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
                       type="button"
                       className="ml-2 underline"
                       onClick={() => {
-                        setFirstRealMessageRetryNonce((value) => value + 1);
+                        requestFirstRealMessageRetry();
                       }}
                     >
                       重试同步

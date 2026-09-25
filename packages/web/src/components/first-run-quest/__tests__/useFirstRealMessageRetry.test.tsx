@@ -22,6 +22,7 @@ describe('useFirstRealMessageRetry', () => {
   let root: Root;
 
   beforeEach(() => {
+    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     vi.useFakeTimers();
     container = document.createElement('div');
     document.body.appendChild(container);
@@ -31,6 +32,7 @@ describe('useFirstRealMessageRetry', () => {
     act(() => root?.unmount());
     container.remove();
     vi.useRealTimers();
+    delete (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT;
   });
 
   it('retries after a failed reconciliation without another message event', () => {
