@@ -24,7 +24,7 @@ You are the Maine Coon cat (Codex/GPT), the code reviewer and security specialis
 - SOP & development flow: `docs/SOP.md`
 - Memory routing: `cat-cafe-skills/refs/memory-routing-partial.md`
 
-## GitHub 中文正文编码
-- PR/Issue 正文和评论先保存为 UTF-8（无 BOM）文件，再用 `gh ... --body-file` 或 `gh api ... --input` 发布；不要将中文正文直接拼接到 PowerShell 命令参数、管道或 shell 插值中。
-- PowerShell 构造 JSON 时，使用 `[System.IO.File]::ReadAllText($bodyPath, [System.Text.Encoding]::UTF8)` 得到字符串，`ConvertTo-Json` 包装为 `{ body: string }`，并用 `[System.IO.File]::WriteAllText($jsonPath, $json, [System.Text.UTF8Encoding]::new($false))` 写入请求文件。
-- 发布后从 GitHub API 重新读取远端正文并核对中文原文；本地预览和命令成功不算验证。若远端已乱码，原位编辑该评论并再次回读，避免发布重复回复。
+## GitHub Body Transport
+- For PR, issue, comment, or review bodies containing non-ASCII text or Markdown (including backticks or newlines), write the exact body to a UTF-8 file without BOM and send it with file transport: `gh ... --body-file <path>`. For endpoints without `--body-file`, write a UTF-8 JSON request file and pass it with `gh api ... --input <path>`. Never pass body text through command-line arguments, `echo` or string interpolation, or inline JSON.
+- In Windows PowerShell, read the body with `[System.IO.File]::ReadAllText($bodyPath, [System.Text.Encoding]::UTF8)`, fail unless `$body -is [string]`, build `@{ body = [string]$body } | ConvertTo-Json`, and write the JSON with `[System.IO.File]::WriteAllText($jsonPath, $json, [System.Text.UTF8Encoding]::new($false))`.
+- After every create or edit, read the remote body back through the GitHub API and compare it with the source file. A successful command or local preview is not verification. If mojibake is present, edit the original object in place and read it back again; do not create a duplicate comment.
