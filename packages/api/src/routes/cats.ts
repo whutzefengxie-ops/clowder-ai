@@ -55,9 +55,9 @@ import { inferOpenCodeProviderFromModelName } from '../config/opencode-model.js'
 import { resolveProjectTemplatePath } from '../config/project-template-path.js';
 import { getResolvedCats } from '../config/resolved-cats.js';
 import {
-  readRuntimeCatCatalog,
   createRuntimeCat,
   deleteRuntimeCat,
+  readRuntimeCatCatalog,
   updateRuntimeCat,
   withRuntimeCatMutationLock,
 } from '../config/runtime-cat-catalog.js';
