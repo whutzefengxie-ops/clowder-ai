@@ -1,13 +1,27 @@
-import type { AwaitStateV1 } from '@cat-cafe/shared';
+import type { AwaitStateV1, DeploymentAwaitStateV1, TaskItem } from '@cat-cafe/shared';
 import type { RedisClient } from '@cat-cafe/shared/utils';
 import { rejectTypedWaitCustody, type TypedWaitCustodyGuard } from '../../../../ball-custody/TypedWaitCustodyGuard.js';
 import {
   isLiveTypedWaitRegistration,
   parseTypedWaitRegistration,
   TYPED_WAIT_REGISTRATION_FIELD,
+  type TypedWaitRegistration,
 } from '../../../../ball-custody/TypedWaitRegistration.js';
 import { TaskKeys } from '../redis-keys/task-keys.js';
 import { hydrateTask } from './RedisTaskCodec.js';
+
+type WaitStateWitness = {
+  readonly stateField: 'automationState' | 'deploymentWait';
+  readonly active: AwaitStateV1 | DeploymentAwaitStateV1 | undefined;
+};
+
+function resolveWaitState(task: TaskItem | null, receipt: TypedWaitRegistration | null): WaitStateWitness {
+  const stateField = receipt?.subjectRef.startsWith('deployment:') ? 'deploymentWait' : 'automationState';
+  return {
+    stateField,
+    active: stateField === 'deploymentWait' ? task?.deploymentWait?.await : task?.automationState?.await,
+  };
+}
 
 /** Read private proof and Task together; the Queue Lua script rechecks these fields atomically. */
 export async function readRedisTypedWaitCustodyGuards(
@@ -17,9 +31,11 @@ export async function readRedisTypedWaitCustodyGuards(
   const keys: string[] = [];
   const witnesses: Array<{
     fields: Record<string, string>;
-    expiresAt: number;
+    /** Absent for a wait with no deadline: continuous tracking never expires by time. */
+    expiresAt?: number;
+    stateField: 'automationState' | 'deploymentWait';
     identity: TypedWaitCustodyGuard['identity'];
-    active: AwaitStateV1;
+    active: AwaitStateV1 | DeploymentAwaitStateV1;
   }> = [];
   for (const guard of guards) {
     const key = TaskKeys.detail(guard.reference.taskId);
@@ -31,7 +47,7 @@ export async function readRedisTypedWaitCustodyGuards(
     }
     const receipt = parseTypedWaitRegistration(raw[TYPED_WAIT_REGISTRATION_FIELD]);
     const task = raw.id ? hydrateTask(raw) : null;
-    const active = task?.automationState?.await;
+    const { stateField, active } = resolveWaitState(task, receipt);
     if (
       !task ||
       !active ||
@@ -54,7 +70,13 @@ export async function readRedisTypedWaitCustodyGuards(
       fields[field] = raw[field] ?? '';
     }
     keys.push(key);
-    witnesses.push({ fields, expiresAt: receipt.expiresAt, identity: guard.identity, active });
+    witnesses.push({
+      fields,
+      ...(receipt.expiresAt !== undefined ? { expiresAt: receipt.expiresAt } : {}),
+      stateField,
+      identity: guard.identity,
+      active,
+    });
   }
   return { keys, witnesses };
 }
@@ -77,8 +99,8 @@ local now = tonumber(time[1]) * 1000 + math.floor(tonumber(time[2]) / 1000)
 local currentCustody = cjson.decode(custody)
 local source = cjson.decode(redis.call('HGET', KEYS[1], 'source') or '{}')
 for index, witness in ipairs(waitGuards) do
-  if tonumber(witness.expiresAt) <= now then return {-3, currentRevision} end
-  local okState, state = pcall(cjson.decode, redis.call('HGET', KEYS[5 + index], 'automationState') or '{}')
+  if witness.expiresAt ~= nil and tonumber(witness.expiresAt) <= now then return {-3, currentRevision} end
+  local okState, state = pcall(cjson.decode, redis.call('HGET', KEYS[5 + index], witness.stateField) or '{}')
   if not okState or type(state) ~= 'table' or not sameWaitJson(state.await, witness.active)
     or (type(state.waitOutcome) == 'table' and state.waitOutcome.generation == witness.active.generation) then
     return {-3, currentRevision}

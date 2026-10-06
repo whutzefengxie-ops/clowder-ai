@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import Fastify from 'fastify';
+import { buildHeldEvent, buildWakeConditionMetEvent } from '../dist/domains/ball-custody/ball-custody-events.js';
 import { ManagedHoldDispositionService } from '../dist/domains/ball-custody/ManagedHoldDispositionService.js';
 import { turnCustodyAdoptionRegistry } from '../dist/domains/ball-custody/TurnCustodyAdoptionRegistry.js';
 import { resolveTypedWaitContinuation } from '../dist/domains/ball-custody/TypedWaitContinuation.js';
@@ -18,7 +19,14 @@ async function harness(t, options = {}) {
   const messageStore = new MessageStore();
   const threadStore = new ThreadStore();
   const thread = threadStore.create('user-1', 'typed wait continuation');
-  const events = [];
+  // A real custody log. The state machine only accepts a wake from `active`, so a wake for a cat that never held
+  // the ball is not a live obligation: it is retired, and retired sources drain one at a time. The cat holds the
+  // ball first; `holdsBall: false` is the shape that used to stand in for it (wakes with no hold behind them).
+  const events =
+    options.holdsBall === false
+      ? []
+      : [buildHeldEvent({ threadId: thread.id, catId: 'opus', fireAt: 99_000, at: 1_000 })];
+  let clock = 2_000;
   const appendHold = (suffix, invocationId) => {
     const holdTaskId = `hold-${suffix}`;
     const message = messageStore.append({
@@ -48,11 +56,19 @@ async function harness(t, options = {}) {
           : {}),
       }),
     });
-    events.push({
-      kind: 'ball.wake_condition_met',
-      sourceEventId: `wake-${suffix}`,
-      payload: { taskId: holdTaskId, catId: 'opus' },
-    });
+    clock += 1_000;
+    events.push(
+      buildWakeConditionMetEvent({
+        threadId: thread.id,
+        catId: 'opus',
+        taskId: holdTaskId,
+        command: 'pnpm test',
+        exitCode: 0,
+        timedOut: false,
+        durationMs: 1,
+        at: clock,
+      }),
+    );
     return {
       kind: 'structured',
       protocol: 'hold',
@@ -122,7 +138,8 @@ async function harness(t, options = {}) {
       assert.equal(await turnCustodyAdoptionRegistry.adopt(auth.invocationId, [wake]), true);
       return wake;
     },
-    async register(when, kind = 'pr') {
+    /** `when` undefined is the normal call: the server arms its default set, comment surfaces included. */
+    async register(when, kind = 'pr', { deadline = true } = {}) {
       const response = await fetch(`${app.listeningOrigin}/api/callbacks/register-${kind}-tracking`, {
         method: 'POST',
         headers: {
@@ -133,9 +150,9 @@ async function harness(t, options = {}) {
         body: JSON.stringify({
           repoFullName: 'owner/repo',
           [`${kind}Number`]: 4513,
-          when,
+          ...(when ? { when } : {}),
           nextStep: 'Continue with the result.',
-          expiresAt: Date.now() + 60000,
+          ...(deadline ? { expiresAt: Date.now() + 60000 } : {}),
         }),
       });
       const body = await response.json();
@@ -154,6 +171,8 @@ const cases = [
   ['review thread', [{ kind: 'pr_review_thread_changed', reviewThreadIds: ['thread-1'] }]],
   ['CI terminal', [{ kind: 'pr_ci_terminal' }]],
   ['conflict', [{ kind: 'pr_became_conflicting' }]],
+  ['conversation comment', [{ kind: 'pr_conversation_comment_added', authorLogins: ['reviewer'] }]],
+  ['inline comment', [{ kind: 'pr_inline_comment_added', authorLogins: ['reviewer'] }]],
   ['anchored review', [{ kind: 'pr_review_result_available', triggerCommentId: 4936000000 }]],
   ['issue comment', [{ kind: 'issue_comment_added' }], 'issue'],
   ['issue author', [{ kind: 'issue_author_commented' }], 'issue'],
@@ -167,6 +186,32 @@ for (const [name, when, kind] of cases) {
     assert.equal((await h.resolve({ invocationId: 'unrelated-invocation' })).kind, 'reject');
   });
 }
+
+// #1392 AC-7 made the normal registration arm both comment surfaces and made the deadline optional.
+// That normal call is what a cat makes after pushing, so it has to be the one the stop gate accepts.
+for (const [kind, commentKind] of [
+  ['pr', 'pr_conversation_comment_added'],
+  ['issue', 'issue_comment_added'],
+]) {
+  test(`the normal ${kind} registration, with no conditions and no deadline, continues only its source`, async (t) => {
+    const h = await harness(t);
+    const body = await h.register(undefined, kind, { deadline: false });
+    assert.equal(body.await.expiresAt, undefined, 'the normal registration has no deadline');
+    assert.ok(
+      body.await.continuation.when.some((predicate) => predicate.kind === commentKind),
+      'and it listens to comments',
+    );
+    assert.equal((await h.resolve()).kind, 'bypass');
+    assert.equal((await h.resolve({ sourceMessageId: 'unrelated-source' })).kind, 'reject');
+    assert.equal((await h.resolve({ invocationId: 'unrelated-invocation' })).kind, 'reject');
+  });
+}
+
+test('a narrow registration without a deadline continues its source too', async (t) => {
+  const h = await harness(t);
+  await h.register([{ kind: 'pr_ci_terminal' }], 'pr', { deadline: false });
+  assert.equal((await h.resolve()).kind, 'bypass');
+});
 
 test('an old same-owner anchored review tracker cannot stand in for this invocation', async (t) => {
   const h = await harness(t);
@@ -269,6 +314,24 @@ test('multiple pending adopted sources cannot be settled by one wait registratio
   await h.register([{ kind: 'pr_ci_terminal' }]);
   for (const wake of wakes)
     assert.equal((await h.resolve({ sourceMessageId: wake.sourceMessageId, holdTaskId: wake.taskId })).kind, 'reject');
+  assert.equal((await h.resolve()).kind, 'reject');
+});
+
+test('adopted wakes whose cat does not hold the ball are retired and drain one at a time, not as a live ambiguity', async (t) => {
+  // The same two adopted sources as above, but the log has no hold behind them (`holdsBall: false`). A wake
+  // for a cat that does not hold the ball is not an obligation to act on, so source selection retires it and
+  // settles retired sources individually in durable wake order. A registration therefore binds the FIRST of
+  // them only, never both, and never a source the caller cannot name.
+  const h = await harness(t, { holdsBall: false });
+  const wakes = [await h.adoptHold('one'), await h.adoptHold('two')];
+  await h.register([{ kind: 'pr_ci_terminal' }]);
+
+  const [first, second] = wakes;
+  assert.equal((await h.resolve({ sourceMessageId: first.sourceMessageId, holdTaskId: first.taskId })).kind, 'bypass');
+  assert.equal(
+    (await h.resolve({ sourceMessageId: second.sourceMessageId, holdTaskId: second.taskId })).kind,
+    'reject',
+  );
   assert.equal((await h.resolve()).kind, 'reject');
 });
 
