@@ -265,9 +265,9 @@ function legacyProfileClient(profile: ProfileItem): BuiltinAccountClient | undef
   if (profile.clientId) return profile.clientId;
   if (profile.oauthLikeClient === 'opencode') return profile.oauthLikeClient;
   const normalizedId = `${profile.id} ${profile.provider ?? ''} ${profile.displayName} ${profile.name}`.toLowerCase();
-  if (normalizedId.includes('claude')) return 'anthropic';
-  if (normalizedId.includes('codex')) return 'openai';
-  if (normalizedId.includes('gemini')) return 'google';
+  if (normalizedId.includes('claude') || normalizedId.includes('anthropic')) return 'anthropic';
+  if (normalizedId.includes('codex') || normalizedId.includes('openai')) return 'openai';
+  if (normalizedId.includes('gemini') || normalizedId.includes('google')) return 'google';
   if (normalizedId.includes('kimi') || normalizedId.includes('moonshot')) return 'kimi';
   if (normalizedId.includes('opencode')) return 'opencode';
   if (normalizedId.includes('acp')) return 'acp';
