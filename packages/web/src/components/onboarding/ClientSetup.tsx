@@ -5,11 +5,14 @@ import { apiFetch } from '@/utils/api-client';
 import styles from './ClientSetup.module.css';
 
 interface DetectedClient {
-	name: string;
-	cliTool: string;
+	client: string; // 身份标识（anthropic, openai 等）
 	provider: string;
+	label: string; // 显示名
+	cli: string; // CLI 命令
 	installed: boolean;
 	authenticated: boolean;
+	accountRef?: string;
+	authType?: string;
 }
 
 interface ClientSetupProps {
@@ -42,25 +45,24 @@ export function ClientSetup({ onComplete }: ClientSetupProps) {
 
 			const data = await res.json();
 
-			// 使用真实字段：client (显示名), cliTool (CLI 命令), provider, installed, authenticated
-			const converted: DetectedClient[] = data.clients.map((c: {
-				client: string;
-				cliTool: string;
-				provider: string;
-				installed: boolean;
-				authenticated: boolean;
-			}) => ({
-				name: c.client, // 显示名
-				cliTool: c.cliTool, // CLI 命令（claude, codex 等）
-				provider: c.provider,
-				installed: c.installed,
-				authenticated: c.authenticated,
-			}));
+			// 使用真实字段：client (身份), provider, label (显示名), cli (CLI 命令), installed, authenticated
+			const converted: DetectedClient[] = data.clients
+				.filter((c: DetectedClient) => c.installed && c.authenticated) // 只保留已安装且已认证的
+				.map((c: DetectedClient) => ({
+					client: c.client,
+					provider: c.provider,
+					label: c.label,
+					cli: c.cli,
+					installed: c.installed,
+					authenticated: c.authenticated,
+					accountRef: c.accountRef,
+					authType: c.authType,
+				}));
 
 			setClients(converted);
 
-			// 自动选择已认证的 client
-			const autoSelected = new Set(converted.filter((c) => c.authenticated).map((c) => c.cliTool));
+			// 自动选择所有已认证的 client
+			const autoSelected = new Set(converted.map((c) => c.client));
 			setSelected(autoSelected);
 		} catch (err) {
 			setError(err instanceof Error ? err.message : 'Client 探测失败');
@@ -74,28 +76,25 @@ export function ClientSetup({ onComplete }: ClientSetupProps) {
 		detectClients();
 	}, [detectClients]);
 
-	const handleToggle = useCallback((cliTool: string, authenticated: boolean) => {
-		if (!authenticated) return; // 只能选择已认证的
+	const handleToggle = useCallback((client: string) => {
 		setSelected((prev) => {
 			const next = new Set(prev);
-			if (next.has(cliTool)) {
-				next.delete(cliTool);
+			if (next.has(client)) {
+				next.delete(client);
 			} else {
-				next.add(cliTool);
+				next.add(client);
 			}
 			return next;
 		});
 	}, []);
 
-	const canContinue = selected.size > 0 && Array.from(selected).every(
-		(cliTool) => clients.find((c) => c.cliTool === cliTool)?.authenticated
-	);
+	const canContinue = selected.size > 0;
 
 	const handleContinue = useCallback(() => {
 		if (!canContinue) return;
 		const selectedClients = clients
-			.filter((c) => selected.has(c.cliTool))
-			.map((c) => ({ name: c.name, cliTool: c.cliTool, provider: c.provider }));
+			.filter((c) => selected.has(c.client))
+			.map((c) => ({ name: c.label, cliTool: c.cli, provider: c.provider }));
 		onComplete(selectedClients);
 	}, [canContinue, clients, selected, onComplete]);
 
@@ -108,11 +107,11 @@ export function ClientSetup({ onComplete }: ClientSetupProps) {
 
 			<div className={styles.scene}>
 				<h2>6. 检测本机 client</h2>
-				<p className={styles.lead}>探测本地安装并已认证的 CLI。未认证的显示文本提示。</p>
+				<p className={styles.lead}>探测本地安装并已认证的 CLI。</p>
 
 				{clients.length === 0 && !loading && (
 					<div className={styles.notice}>
-						此功能仅在桌面应用中可用。远程 Web 应用无法探测您电脑上的 CLI。
+						未检测到已安装且已认证的 client。请先安装并认证一个支持的 CLI，完成后点击"重新检测"。
 						{error && <div className={styles.error}>{error}</div>}
 					</div>
 				)}
@@ -122,7 +121,7 @@ export function ClientSetup({ onComplete }: ClientSetupProps) {
 						<div className={styles.loading}>正在探测本机 CLI...</div>
 					) : clients.length === 0 ? (
 						<div className={styles.noClients}>
-							<p>未检测到已安装的 client。请先安装并认证一个支持的 CLI，完成后点击"重新检测"。</p>
+							<p>未检测到已安装且已认证的 client。</p>
 							<div className={styles.installLinks}>
 								<a href="https://claude.ai/code" target="_blank" rel="noopener noreferrer">
 									安装 Claude Code
@@ -135,35 +134,17 @@ export function ClientSetup({ onComplete }: ClientSetupProps) {
 					) : (
 						<div className={styles.clients}>
 							{clients.map((client) => (
-								<div
-									key={client.cliTool}
-									className={`${styles.client} ${client.authenticated ? styles.ready : ''}`}
-								>
+								<div key={client.client} className={`${styles.client} ${styles.ready}`}>
 									<input
 										type="checkbox"
-										checked={selected.has(client.cliTool)}
-										disabled={!client.authenticated}
-										onChange={() => handleToggle(client.cliTool, client.authenticated)}
+										checked={selected.has(client.client)}
+										onChange={() => handleToggle(client.client)}
 									/>
 									<div className={styles.clientInfo}>
-										<strong>{client.name}</strong>
-										<small>
-											{client.authenticated && '已认证，可绑定成员'}
-											{!client.authenticated &&
-												client.installed &&
-												`需要先在终端运行: ${client.cliTool} auth login`}
-											{!client.installed && '未安装'}
-										</small>
+										<strong>{client.label}</strong>
+										<small>已认证，可绑定成员</small>
 									</div>
-									<span
-										className={`${styles.state} ${
-											client.authenticated ? styles.stateOk : styles.statePending
-										}`}
-									>
-										{client.authenticated && '可用'}
-										{!client.authenticated && client.installed && '未认证'}
-										{!client.installed && '未安装'}
-									</span>
+									<span className={`${styles.state} ${styles.stateOk}`}>可用</span>
 								</div>
 							))}
 						</div>
