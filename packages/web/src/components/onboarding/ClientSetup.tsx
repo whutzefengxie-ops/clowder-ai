@@ -16,7 +16,9 @@ interface DetectedClient {
 }
 
 interface ClientSetupProps {
-	onComplete: (clients: Array<{ name: string; cliTool: string; provider: string }>) => void;
+	onComplete: (
+		clients: Array<{ name: string; cliTool: string; provider: string; accountRef?: string; authType?: string }>,
+	) => void;
 }
 
 /**
@@ -94,7 +96,13 @@ export function ClientSetup({ onComplete }: ClientSetupProps) {
 		if (!canContinue) return;
 		const selectedClients = clients
 			.filter((c) => selected.has(c.client))
-			.map((c) => ({ name: c.label, cliTool: c.cli, provider: c.provider }));
+			.map((c) => ({
+				name: c.label,
+				cliTool: c.cli,
+				provider: c.provider,
+				accountRef: c.accountRef,
+				authType: c.authType,
+			}));
 		onComplete(selectedClients);
 	}, [canContinue, clients, selected, onComplete]);
 
