@@ -5,8 +5,8 @@ import { apiFetch } from '@/utils/api-client';
 import styles from './MemberHandoff.module.css';
 
 interface MemberHandoffProps {
-	selectedClients: Array<{ name: string; id: string; provider: string }>;
-	onComplete: (members: Array<{ client: string; cat: string }>) => void;
+	selectedClients: Array<{ name: string; cliTool: string; provider: string }>;
+	onComplete: (members: Array<{ client: string; cat: string; catId: string }>) => void;
 }
 
 // CLI tool → clientId/provider 映射（符合 client-detection.ts CLI_SPECS）
@@ -59,7 +59,7 @@ const CAT_CONFIGS = [
 /**
  * 场景 7: 从示范团队交接到我的伙伴
  * 使用真实 API: POST /api/cats（循环创建，每个 client 一次调用）
- * 符合 cats.ts 的完整 schema，使用正确的 clientId 映射
+ * 符合 cats.ts 的完整 schema，检查 HTTP 状态，解析真实 cat.id
  */
 export function MemberHandoff({ selectedClients, onComplete }: MemberHandoffProps) {
 	const [creating, setCreating] = useState(false);
@@ -71,24 +71,23 @@ export function MemberHandoff({ selectedClients, onComplete }: MemberHandoffProp
 		setError(null);
 		setCreatedCount(0);
 
-		const createdMembers: Array<{ client: string; cat: string }> = [];
+		const createdMembers: Array<{ client: string; cat: string; catId: string }> = [];
 
 		try {
 			// 循环调用 POST /api/cats 创建每个成员
 			for (const [index, client] of selectedClients.entries()) {
 				const catConfig = CAT_CONFIGS[index % CAT_CONFIGS.length];
-				const clientMapping = CLI_TO_CLIENT_MAP[client.id];
+				const clientMapping = CLI_TO_CLIENT_MAP[client.cliTool];
 
 				if (!clientMapping) {
-					throw new Error(`不支持的 CLI 工具: ${client.id}`);
+					throw new Error(`不支持的 CLI 工具: ${client.cliTool}`);
 				}
 
-				const catId = `${catConfig.breedId}-${client.id}`;
+				const catId = `${catConfig.breedId}-${client.cliTool}`;
 
 				try {
 					// 使用 apiFetch，它会自动附加当前用户的身份信息
-					// 不手动添加 X-Cat-Cafe-User header
-					await apiFetch('/api/cats', {
+					const res = await apiFetch('/api/cats', {
 						method: 'POST',
 						headers: {
 							'Content-Type': 'application/json',
@@ -103,15 +102,25 @@ export function MemberHandoff({ selectedClients, onComplete }: MemberHandoffProp
 							roleDescription: catConfig.roleDescription,
 							personality: catConfig.personality,
 							teamStrengths: catConfig.teamStrengths,
-							clientId: clientMapping.clientId, // 使用映射后的 clientId
-							provider: clientMapping.provider, // 使用映射后的 provider
-							defaultModel: '', // 空字符串表示使用 CLI 默认模型
+							clientId: clientMapping.clientId,
+							provider: clientMapping.provider,
+							defaultModel: '',
 							mcpSupport: false,
-							// accountRef 和 cli 字段是可选的，后端会使用默认值
 						}),
 					});
 
-					createdMembers.push({ client: client.name, cat: catConfig.breedId });
+					// 检查 HTTP 状态
+					if (!res.ok) {
+						const errText = await res.text();
+						throw new Error(`HTTP ${res.status}: ${errText}`);
+					}
+
+					const data = await res.json();
+
+					// 解析真实的 cat.id（服务端可能规范化了 catId）
+					const realCatId = data.cat?.id || catId;
+
+					createdMembers.push({ client: client.name, cat: catConfig.breedId, catId: realCatId });
 					setCreatedCount((prev) => prev + 1);
 				} catch (err) {
 					// 部分失败：记录已创建的成员，抛出错误
