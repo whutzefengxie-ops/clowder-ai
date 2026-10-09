@@ -2,6 +2,16 @@
 
 > Issue #1466 的 Phase 1 实现（核心流程 MVP）
 
+## 修订记录
+
+**Revision 1 (2026-10-09)** - 响应 @codex 审核意见：
+- ✅ 修正 API 端点：使用 `/api/first-run/available-clients` 和 `POST /api/cats`
+- ✅ 移除 mock 登录按钮和 pending 状态
+- ✅ 明确部署边界：仅桌面应用支持
+- ✅ 成员创建：循环调用 `POST /api/cats`，处理部分失败
+- 🚧 应用入口集成：待集成到 App.tsx
+- 🚧 状态持久化：需要同步到 ThreadStore
+
 ## 实现的组件
 
 ### 主容器
@@ -16,13 +26,15 @@
    - 场景 5: 解说收束
 
 2. **ClientSetup.tsx** (场景 6)
-   - 真实调用 `/api/clients/detect` 探测本机 CLI
+   - 真实调用 `GET /api/first-run/available-clients` 探测本机 CLI
    - 支持 0/1/多 client 分支
-   - 登录门禁：pending 状态必须完成才能选择
-   - 模拟登录完成按钮（测试用）
+   - 未认证 CLI：显示文本提示 `需要先在终端运行: <cli> auth login`
+   - **Phase 1 简化**：不拉起登录流程，只提供文本指引
 
 3. **MemberHandoff.tsx** (场景 7)
-   - 调用 `/api/members/batch` 批量创建成员
+   - 循环调用 `POST /api/cats` 创建成员（每个 client 一次调用）
+   - 部分失败恢复：记录已创建数量，显示具体失败信息
+   - 使用固定 CAT_BREEDS（Phase 2 将改用 catRegistry）
    - 明确区分示范团队和真实团队
    - 交接文案根据成员数量动态调整
 
@@ -32,7 +44,8 @@
    - 发送第一句话后进入真实聊天界面
 
 ### 状态管理
-- `onboarding-state.ts` - 状态机设计，localStorage 持久化
+- `onboarding-state.ts` - 状态机设计，localStorage 持久化（前端临时缓存）
+- **生产需要**：同步到 ThreadStore `firstRunQuestState`（唯一真相源）
 - 支持刷新恢复（不重放已完成示范）
 
 ### 样式
@@ -40,16 +53,23 @@
 - 响应式布局（桌面 + 移动端）
 - 复用原型的配色和布局
 
+## 部署边界
+
+**仅桌面应用支持**：
+- API 服务器运行在本地（Electron 主进程），探测本机环境的 CLI
+- Web 应用场景：远程 API 无法探测用户电脑，首启旅程不可用
+
 ## 与技术方案的对应
 
 | 技术方案要求 | 实现状态 | 说明 |
 |------------|---------|------|
 | 场景 1-5 脚本演示 | ✅ | 完整实现，使用简化动画（字母头像） |
-| 场景 6 真实 client 探测 | ✅ | 调用 `/api/clients/detect` |
-| 场景 7 成员创建与交接 | ✅ | 调用 `/api/members/batch` |
+| 场景 6 真实 client 探测 | ✅ | 调用 `GET /api/first-run/available-clients` |
+| 场景 7 成员创建与交接 | ✅ | 循环调用 `POST /api/cats`，处理部分失败 |
 | 场景 8 进入真实聊天 | ✅ | 发送第一句话后调用 onComplete |
-| 状态持久化 | ⚠️ | 当前使用 localStorage，生产需改为 Redis |
+| 状态持久化 | ⚠️ | 当前使用 localStorage，需同步到 ThreadStore |
 | 刷新恢复机制 | ✅ | 完整实现 |
+| 应用入口集成 | ❌ | 待集成到 App.tsx |
 
 ## 未实现的部分（Phase 2/3）
 
