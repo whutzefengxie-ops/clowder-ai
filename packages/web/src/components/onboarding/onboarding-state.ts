@@ -14,6 +14,8 @@ export interface OnboardingState {
 		name: string;
 		cliTool: string;
 		provider: string;
+		accountRef?: string;
+		authType?: string;
 	}>;
 	members: Array<{
 		client: string;
