@@ -102,5 +102,5 @@ export function OnboardingJourney({ onComplete }: OnboardingJourneyProps) {
   }
 
   // 场景 8: 进入真实聊天
-  return <RealChatEntry members={state.members} onStart={handleChatStarted} />;
+  return <RealChatEntry members={state.members} onComplete={handleChatStarted} />;
 }
