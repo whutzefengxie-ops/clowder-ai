@@ -8,7 +8,7 @@ import { RealChatEntry } from './RealChatEntry';
 import { type OnboardingState, createInitialState, saveState, loadState } from './onboarding-state';
 
 interface OnboardingJourneyProps {
-  onComplete: (members: Array<{ client: string; cat: string }>) => void;
+  onComplete: (members: Array<{ client: string; cat: string; catId: string }>) => void;
 }
 
 /**
@@ -50,7 +50,7 @@ export function OnboardingJourney({ onComplete }: OnboardingJourneyProps) {
   }, []);
 
   const handleClientsSelected = useCallback(
-    (clients: Array<{ name: string; id: string; provider: string }>) => {
+    (clients: Array<{ name: string; cliTool: string; provider: string }>) => {
       setState((prev) => ({
         ...prev,
         selectedClients: clients,
@@ -61,7 +61,7 @@ export function OnboardingJourney({ onComplete }: OnboardingJourneyProps) {
   );
 
   const handleMembersCreated = useCallback(
-    (members: Array<{ client: string; cat: string }>) => {
+    (members: Array<{ client: string; cat: string; catId: string }>) => {
       setState((prev) => ({
         ...prev,
         members,
