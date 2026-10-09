@@ -3,13 +3,24 @@ feature_ids: [F171, F155]
 topics: [onboarding, issue-1466, technical-specification, prototype, implementation]
 doc_kind: technical_spec
 created: 2026-10-08
+updated: 2026-10-09
 related: ["zts212653/clowder-ai#1466", "zts212653/clowder-ai#1519"]
-status: draft
+status: revision-1
 ---
 
 # 首次启动用户旅程技术方案
 
 > Issue #1466 的技术实现方案，基于 v2 原型（bootcamp-onboarding-prototype-v2.html）
+
+## 修订记录
+
+**Revision 1 (2026-10-09)** - 响应 @codex 审核意见 (0001791505976851):
+- ✅ P1-1: 修正 API 端点（ClientSetup.tsx → `/api/first-run/available-clients`, MemberHandoff.tsx → loop `POST /api/cats`）
+- ✅ P1-1: 移除 mock 登录按钮和 pending 状态
+- 🚧 P1-2: 更新技术组件映射和状态存储策略（本次提交）
+- 🚧 P2-1: 应用入口集成（待实现）
+- 🚧 P2-2: 使用真实 catRegistry（待实现）
+- 🚧 P2-3: 测试覆盖（待实现）
 
 ## 1. 需求对应关系
 
@@ -139,22 +150,22 @@ const tick = () => {
 
 ### 3.1 技术组件映射
 
-| 原型部分 | 生产组件 | 技术栈 | 负责模块 |
-|---------|---------|--------|---------|
-| 场景 1-5：脚本演示 | `OnboardingDemoPlayer.tsx` | React + Framer Motion | `packages/web/src/components/onboarding/` |
-| 场景 6：client 探测 | `ClientDetection.tsx` | React + API 调用 | 复用 `client-detection.ts` |
-| 场景 7：伙伴交接 | `MemberHandoff.tsx` | React | 调用 `POST /api/members` |
-| 场景 8：真实聊天 | `ChatContainer.tsx` | 现有组件 | 无需新建 |
-| 猫的视觉素材 | Sprite sheets | PNG 序列帧 | 复用 `docs/design/assets/character-canon/` |
-| 状态持久化 | Redis | `bootcamp_progress` key | `packages/api/src/domains/onboarding/` |
+| 原型部分 | 生产组件 | 技术栈 | API 端点 | 负责模块 |
+|---------|---------|--------|----------|---------|
+| 场景 1-5：脚本演示 | `DemoScenes.tsx` | React | 无（前端脚本） | `packages/web/src/components/onboarding/` |
+| 场景 6：client 探测 | `ClientSetup.tsx` | React | `GET /api/first-run/available-clients` | `packages/api/src/routes/first-run-quest.ts` |
+| 场景 7：伙伴交接 | `MemberHandoff.tsx` | React | `POST /api/cats`（循环调用） | `packages/api/src/routes/cats.ts` |
+| 场景 8：真实聊天 | `RealChatEntry.tsx` | React | 进入现有聊天界面 | 集成到 App.tsx |
+| 猫的视觉素材 | Sprite sheets | PNG 序列帧 | 无 | 复用 `docs/design/assets/character-canon/` |
+| 状态持久化 | ThreadStore | `firstRunQuestState` | 无 | `packages/api/src/domains/cats/services/stores/ports/ThreadStore.ts` |
 
 ### 3.2 关键技术决策
 
 **1. 演示脚本与真实模型调用的边界**
 - 场景 1-5：前端预置 JSON 脚本，不调用后端
-- 场景 6：真实调用 `/api/clients/detect`
-- 场景 7：真实调用 `/api/members/create`
-- 场景 8：真实调用 Agent 服务
+- 场景 6：真实调用 `GET /api/first-run/available-clients`（已有契约，见 `first-run-quest.ts`）
+- 场景 7：循环调用 `POST /api/cats`（已有契约，见 `cats.ts`，每个 client 一次调用）
+- 场景 8：进入现有聊天界面，真实调用 Agent 服务
 
 **2. 猫的动画实现**
 - 原型使用 CSS transform + 字母头像（占位）
@@ -164,27 +175,44 @@ const tick = () => {
   - 实现"猫跑向消息气泡→缩成头像"的形变动画
 
 **3. 状态持久化策略**
-- 原型使用 `localStorage`（浏览器内演示）
-- 生产使用 Redis：
+- 原型使用 `localStorage`（浏览器内演示，仅前端临时缓存）
+- 生产使用 ThreadStore 的 `firstRunQuestState`（唯一真相源）：
   ```typescript
-  interface OnboardingProgress {
-    userId: string;
-    currentScene: number;
-    furthestScene: number;
-    completedAt?: Date;
-    selectedClients: string[];
-    createdMembers: string[];
+  // 需要扩展现有的 FirstRunQuestStateV1（见 ThreadStore.ts:422-434）
+  interface FirstRunQuestStateV2 {
+    v: 2;
+    phase: FirstRunQuestPhase;
+    scene: number; // 当前场景 (1-8)
+    furthest: number; // 用户到达的最远场景
+    startedAt: number;
+    completedAt?: number;
+    selectedClients?: Array<{ name: string; id: string; provider: string }>;
+    createdCatIds?: string[]; // 已创建的成员 ID
   }
   ```
+- 并发控制：使用 ThreadStore 的 CAS 机制
+- TTL=0：首启状态永久保留，不自动过期（符合铁律 5）
 
 **4. 客户端探测与登录流程**
-- 复用现有 `client-detection.ts` 的探测逻辑
-- 登录流程：
-  - Claude Code：检查 `~/.config/claude/session.json`
-  - Codex：调用 `codex auth status`
-  - Kimi Code：检查 `~/.kimi/credentials`
-  - Gemini CLI：调用 `gemini-cli auth check`
-- "去登录"拉起各 CLI 自己的登录流程，轮询状态直到完成
+
+**部署边界**：
+- **仅桌面应用支持**：API 服务器运行在本地（Electron 主进程），探测本机环境的 CLI
+- Web 应用场景：远程 API 无法探测用户电脑，首启旅程不可用
+
+**探测逻辑**（已有实现）：
+- API: `GET /api/first-run/available-clients`（见 `first-run-quest.ts:93-131`）
+- 使用 `detectAvailableClients()` 函数（见 `client-detection.ts`）
+- 返回格式：`{ clients: [{ name, cliTool, installed, authenticated, version? }] }`
+
+**登录流程**（Phase 1 简化方案）：
+- 场景 6 只显示已安装且已认证的 CLI
+- 未认证的 CLI 显示文本提示："需要先在终端运行 `<cli> auth login`"
+- 用户在外部完成登录后，点击"重新检测"按钮刷新状态
+- **不拉起登录流程**：没有 IPC、进程生命周期、完成事件等基础设施（Phase 3 工作）
+
+**安全边界**：
+- 凭证不传输到前端：API 只返回 `authenticated: boolean`
+- 不读取凭证内容，只检查凭证文件存在性或调用 CLI 的 `auth status` 命令
 
 **5. 与 F155 场景引导引擎的集成**
 - 场景 8 的入口提醒复用 `GuideOverlay.tsx`
@@ -209,24 +237,32 @@ const tick = () => {
 ### 3.3 实现优先级
 
 **Phase 1: 核心流程（MVP）**
-- [ ] 场景 1-5 脚本演示（可先用简化动画）
-- [ ] 场景 6 真实 client 探测
-- [ ] 场景 7 成员创建与交接
-- [ ] 场景 8 进入真实聊天
-- [ ] 状态持久化（Redis）
-- [ ] 刷新恢复机制
+- [x] 场景 1-5 脚本演示（简化动画：字母头像 + CSS transform）
+- [x] 场景 6 真实 client 探测
+  - [x] 调用 `GET /api/first-run/available-clients`
+  - [x] 0 client 分支：显示安装指引
+  - [x] 1 client 分支：自动选择
+  - [x] 多 client 分支：用户勾选
+  - [x] 未认证 CLI：显示文本提示，不拉起登录
+- [x] 场景 7 成员创建与交接
+  - [x] 循环调用 `POST /api/cats` 创建成员
+  - [x] 部分失败恢复：记录已创建的成员数量，显示错误信息
+- [x] 场景 8 进入真实聊天（简单 UI 提示）
+- [ ] 状态持久化（ThreadStore firstRunQuestState）—— 需要扩展 V2 schema
+- [ ] 应用入口集成（App.tsx）
+- [x] 刷新恢复机制（localStorage 临时实现）
 
-**Phase 2: 视觉打磨**
+**Phase 2: 视觉与引导打磨**
 - [ ] 引入 character-canon sprite sheets
 - [ ] 实现猫的跑步循环动画
 - [ ] 实现"猫→头像"形变
+- [ ] 接入 F155 Guide Engine（场景 8 入口提醒）
 - [ ] 响应式布局优化
+- [ ] 使用真实 catRegistry 替代固定 CAT_BREEDS
 
-**Phase 3: 边界情况**
-- [ ] 0 client 分支（安装指引）
-- [ ] pending 登录状态轮询
-- [ ] 多 client 按用户选择生成成员
-- [ ] 可选训练路径（阶段 8-12）
+**Phase 3: 可选扩展**
+- [ ] 可选训练路径（阶段 8-12）—— 独立 Feature，不阻塞首启核心流程
+- [ ] CLI 登录流程拉起（需要 IPC 基础设施）
 
 ### 3.4 测试策略
 
