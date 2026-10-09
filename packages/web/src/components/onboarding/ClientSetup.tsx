@@ -6,14 +6,14 @@ import styles from './ClientSetup.module.css';
 
 interface DetectedClient {
 	name: string;
-	id: string;
+	cliTool: string;
 	provider: string;
 	installed: boolean;
-	authStatus: 'ready' | 'login_required' | 'not_installed';
+	authenticated: boolean;
 }
 
 interface ClientSetupProps {
-	onComplete: (clients: Array<{ name: string; id: string; provider: string }>) => void;
+	onComplete: (clients: Array<{ name: string; cliTool: string; provider: string }>) => void;
 }
 
 /**
@@ -32,29 +32,35 @@ export function ClientSetup({ onComplete }: ClientSetupProps) {
 		setLoading(true);
 		setError(null);
 		try {
-			const response = await apiFetch<{
-				clients: Array<{
-					name: string;
-					cliTool: string;
-					installed: boolean;
-					authenticated: boolean;
-					version?: string;
-				}>;
-			}>('/api/first-run/available-clients');
+			const res = await apiFetch('/api/first-run/available-clients');
 
-			// 转换为组件所需格式
-			const converted: DetectedClient[] = response.clients.map((c) => ({
-				name: c.name,
-				id: c.cliTool,
-				provider: c.cliTool,
+			// 检查 HTTP 状态
+			if (!res.ok) {
+				const errText = await res.text();
+				throw new Error(`Client 探测失败: ${res.status} ${errText}`);
+			}
+
+			const data = await res.json();
+
+			// 使用真实字段：client (显示名), cliTool (CLI 命令), provider, installed, authenticated
+			const converted: DetectedClient[] = data.clients.map((c: {
+				client: string;
+				cliTool: string;
+				provider: string;
+				installed: boolean;
+				authenticated: boolean;
+			}) => ({
+				name: c.client, // 显示名
+				cliTool: c.cliTool, // CLI 命令（claude, codex 等）
+				provider: c.provider,
 				installed: c.installed,
-				authStatus: c.authenticated ? 'ready' : c.installed ? 'login_required' : 'not_installed',
+				authenticated: c.authenticated,
 			}));
 
 			setClients(converted);
 
 			// 自动选择已认证的 client
-			const autoSelected = new Set(converted.filter((c) => c.authStatus === 'ready').map((c) => c.id));
+			const autoSelected = new Set(converted.filter((c) => c.authenticated).map((c) => c.cliTool));
 			setSelected(autoSelected);
 		} catch (err) {
 			setError(err instanceof Error ? err.message : 'Client 探测失败');
@@ -68,25 +74,28 @@ export function ClientSetup({ onComplete }: ClientSetupProps) {
 		detectClients();
 	}, [detectClients]);
 
-	const handleToggle = useCallback((clientId: string, authStatus: string) => {
-		if (authStatus !== 'ready') return; // 只能选择已认证的
+	const handleToggle = useCallback((cliTool: string, authenticated: boolean) => {
+		if (!authenticated) return; // 只能选择已认证的
 		setSelected((prev) => {
 			const next = new Set(prev);
-			if (next.has(clientId)) {
-				next.delete(clientId);
+			if (next.has(cliTool)) {
+				next.delete(cliTool);
 			} else {
-				next.add(clientId);
+				next.add(cliTool);
 			}
 			return next;
 		});
 	}, []);
 
-	const canContinue =
-		selected.size > 0 && Array.from(selected).every((id) => clients.find((c) => c.id === id)?.authStatus === 'ready');
+	const canContinue = selected.size > 0 && Array.from(selected).every(
+		(cliTool) => clients.find((c) => c.cliTool === cliTool)?.authenticated
+	);
 
 	const handleContinue = useCallback(() => {
 		if (!canContinue) return;
-		const selectedClients = clients.filter((c) => selected.has(c.id)).map((c) => ({ name: c.name, id: c.id, provider: c.provider }));
+		const selectedClients = clients
+			.filter((c) => selected.has(c.cliTool))
+			.map((c) => ({ name: c.name, cliTool: c.cliTool, provider: c.provider }));
 		onComplete(selectedClients);
 	}, [canContinue, clients, selected, onComplete]);
 
@@ -126,25 +135,34 @@ export function ClientSetup({ onComplete }: ClientSetupProps) {
 					) : (
 						<div className={styles.clients}>
 							{clients.map((client) => (
-								<div key={client.id} className={`${styles.client} ${client.authStatus === 'ready' ? styles.ready : ''}`}>
+								<div
+									key={client.cliTool}
+									className={`${styles.client} ${client.authenticated ? styles.ready : ''}`}
+								>
 									<input
 										type="checkbox"
-										checked={selected.has(client.id)}
-										disabled={client.authStatus !== 'ready'}
-										onChange={() => handleToggle(client.id, client.authStatus)}
+										checked={selected.has(client.cliTool)}
+										disabled={!client.authenticated}
+										onChange={() => handleToggle(client.cliTool, client.authenticated)}
 									/>
 									<div className={styles.clientInfo}>
 										<strong>{client.name}</strong>
 										<small>
-											{client.authStatus === 'ready' && '已认证，可绑定成员'}
-											{client.authStatus === 'login_required' && `需要先在终端运行: ${client.id} auth login`}
-											{client.authStatus === 'not_installed' && '未安装'}
+											{client.authenticated && '已认证，可绑定成员'}
+											{!client.authenticated &&
+												client.installed &&
+												`需要先在终端运行: ${client.cliTool} auth login`}
+											{!client.installed && '未安装'}
 										</small>
 									</div>
-									<span className={`${styles.state} ${client.authStatus === 'ready' ? styles.stateOk : styles.statePending}`}>
-										{client.authStatus === 'ready' && '可用'}
-										{client.authStatus === 'login_required' && '未认证'}
-										{client.authStatus === 'not_installed' && '未安装'}
+									<span
+										className={`${styles.state} ${
+											client.authenticated ? styles.stateOk : styles.statePending
+										}`}
+									>
+										{client.authenticated && '可用'}
+										{!client.authenticated && client.installed && '未认证'}
+										{!client.installed && '未安装'}
 									</span>
 								</div>
 							))}
