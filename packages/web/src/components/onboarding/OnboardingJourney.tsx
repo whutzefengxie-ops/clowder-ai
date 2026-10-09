@@ -8,7 +8,7 @@ import { RealChatEntry } from './RealChatEntry';
 import { type OnboardingState, createInitialState, saveState, loadState } from './onboarding-state';
 
 interface OnboardingJourneyProps {
-  onComplete: (members: Array<{ client: string; cat: string; catId: string }>) => void;
+  onComplete: (message: string, members: Array<{ client: string; cat: string; catId: string }>) => void;
 }
 
 /**
@@ -71,9 +71,12 @@ export function OnboardingJourney({ onComplete }: OnboardingJourneyProps) {
     [advanceScene],
   );
 
-  const handleChatStarted = useCallback(() => {
-    onComplete(state.members);
-  }, [onComplete, state.members]);
+  const handleChatStarted = useCallback(
+    (message: string) => {
+      onComplete(message, state.members);
+    },
+    [onComplete, state.members],
+  );
 
   // 场景 1-5: 脚本演示
   if (state.scene <= 5) {
