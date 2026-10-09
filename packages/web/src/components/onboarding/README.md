@@ -8,7 +8,7 @@
 - ✅ 修正 API 端点：使用 `/api/first-run/available-clients` 和 `POST /api/cats`
 - ✅ 移除 mock 登录按钮和 pending 状态
 - ✅ 明确部署边界：仅桌面应用支持
-- ✅ 成员创建：循环调用 `POST /api/cats`，处理部分失败
+- ✅ 成员创建：循环调用 `POST /api/cats`，使用完整 schema（catId, breedId, color, mentionPatterns 等）
 - 🚧 应用入口集成：待集成到 App.tsx
 - 🚧 状态持久化：需要同步到 ThreadStore
 
@@ -33,10 +33,11 @@
 
 3. **MemberHandoff.tsx** (场景 7)
    - 循环调用 `POST /api/cats` 创建成员（每个 client 一次调用）
+   - 使用完整 schema：catId, breedId, name, displayName, color, mentionPatterns, roleDescription, personality, teamStrengths
+   - 添加 X-Cat-Cafe-User header（路由要求）
    - 部分失败恢复：记录已创建数量，显示具体失败信息
-   - 使用固定 CAT_BREEDS（Phase 2 将改用 catRegistry）
+   - 使用完整 CAT_CONFIGS（Phase 2 将改用 catRegistry）
    - 明确区分示范团队和真实团队
-   - 交接文案根据成员数量动态调整
 
 4. **RealChatEntry.tsx** (场景 8)
    - 用户可自由输入
@@ -108,8 +109,13 @@ pnpm --filter @cat-cafe/web test onboarding-state.test.ts
 ## 下一步
 
 1. 集成到 App.tsx（首启时渲染）
-2. 实现后端 API：
-   - `GET /api/clients/detect` - client 探测
-   - `POST /api/members/batch` - 批量创建成员
-3. E2E 测试覆盖
-4. 视觉打磨（Phase 2）
+2. 同步状态到 ThreadStore `firstRunQuestState`
+3. E2E 测试覆盖：
+   - 组件渲染测试
+   - API 错误处理测试
+   - 0/1/多 client 分支测试
+   - 部分失败恢复测试
+4. 视觉打磨（Phase 2）：
+   - 引入 character-canon sprite sheets
+   - 实现猫的跑步循环动画
+   - 接入 F155 Guide Engine
