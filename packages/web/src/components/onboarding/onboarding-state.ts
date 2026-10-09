@@ -6,20 +6,21 @@
 const STORAGE_KEY = 'clowder-onboarding-v2';
 
 export interface OnboardingState {
-  scene: number; // 当前场景 (1-8)
-  furthest: number; // 用户到达的最远场景
-  demoScene: number; // 演示脚本进度 (1-5)
-  demoPaused: boolean; // 演示是否暂停
-  selectedClients: Array<{
-    name: string;
-    id: string;
-    provider: string;
-  }>;
-  members: Array<{
-    client: string;
-    cat: string;
-  }>;
-  completedAt?: number;
+	scene: number; // 当前场景 (1-8)
+	furthest: number; // 用户到达的最远场景
+	demoScene: number; // 演示脚本进度 (1-5)
+	demoPaused: boolean; // 演示是否暂停
+	selectedClients: Array<{
+		name: string;
+		cliTool: string;
+		provider: string;
+	}>;
+	members: Array<{
+		client: string;
+		cat: string;
+		catId: string;
+	}>;
+	completedAt?: number;
 }
 
 export function createInitialState(): OnboardingState {
