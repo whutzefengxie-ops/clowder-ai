@@ -11,12 +11,43 @@ interface MemberHandoffProps {
 
 // 使用固定的猫品种映射（Phase 1 简化方案）
 // TODO Phase 2: 从 catRegistry 读取可用品种
-const CAT_BREEDS = ['ragdoll', 'maine-coon', 'siamese'];
+const CAT_CONFIGS = [
+	{
+		breedId: 'ragdoll',
+		name: '布偶猫',
+		displayName: '布偶猫',
+		color: { primary: '#e8a983', secondary: '#f5d4c1' },
+		roleDescription: '深度架构与系统设计',
+		personality: '谨慎思考，追求优雅方案',
+		teamStrengths: '复杂系统建模、技术方案设计',
+		mentionPatterns: ['@ragdoll', '@布偶猫'],
+	},
+	{
+		breedId: 'maine-coon',
+		name: '缅因猫',
+		displayName: '缅因猫',
+		color: { primary: '#8d9aab', secondary: '#c5cdd6' },
+		roleDescription: '代码审查与质量把关',
+		personality: '严谨细致，注重可维护性',
+		teamStrengths: '代码 review、测试覆盖、重构建议',
+		mentionPatterns: ['@maine-coon', '@缅因猫'],
+	},
+	{
+		breedId: 'siamese',
+		name: '暹罗猫',
+		displayName: '暹罗猫',
+		color: { primary: '#d7ba85', secondary: '#ebe0c8' },
+		roleDescription: '用户体验与产品思考',
+		personality: '敏锐洞察，关注体验细节',
+		teamStrengths: 'UX 设计、产品打磨、文案优化',
+		mentionPatterns: ['@siamese', '@暹罗猫'],
+	},
+];
 
 /**
  * 场景 7: 从示范团队交接到我的伙伴
  * 使用真实 API: POST /api/cats（循环创建，每个 client 一次调用）
- * 处理部分失败：记录已创建的成员 ID
+ * 符合 cats.ts 的完整 schema，处理部分失败
  */
 export function MemberHandoff({ selectedClients, onComplete }: MemberHandoffProps) {
 	const [creating, setCreating] = useState(false);
@@ -33,24 +64,35 @@ export function MemberHandoff({ selectedClients, onComplete }: MemberHandoffProp
 		try {
 			// 循环调用 POST /api/cats 创建每个成员
 			for (const [index, client] of selectedClients.entries()) {
-				const breedId = CAT_BREEDS[index % CAT_BREEDS.length];
-				const catName = `${breedId}-${client.id}`;
+				const catConfig = CAT_CONFIGS[index % CAT_CONFIGS.length];
+				const catId = `${catConfig.breedId}-${client.id}`;
 
 				try {
 					await apiFetch('/api/cats', {
 						method: 'POST',
-						headers: { 'Content-Type': 'application/json' },
+						headers: {
+							'Content-Type': 'application/json',
+							'X-Cat-Cafe-User': 'default-user', // 使用默认用户
+						},
 						body: JSON.stringify({
-							breedId,
-							name: catName,
-							displayName: `${breedId.charAt(0).toUpperCase() + breedId.slice(1).replace(/-/g, ' ')}`,
+							catId,
+							breedId: catConfig.breedId,
+							name: catConfig.name,
+							displayName: catConfig.displayName,
+							color: catConfig.color,
+							mentionPatterns: catConfig.mentionPatterns,
+							roleDescription: catConfig.roleDescription,
+							personality: catConfig.personality,
+							teamStrengths: catConfig.teamStrengths,
 							clientId: client.id,
 							provider: client.provider,
-							// 使用默认配置，后端会填充其他必需字段
+							defaultModel: '', // 空字符串表示使用 CLI 默认模型
+							mcpSupport: false,
+							// accountRef 和 cli 字段是可选的，后端会使用默认值
 						}),
 					});
 
-					createdMembers.push({ client: client.name, cat: breedId });
+					createdMembers.push({ client: client.name, cat: catConfig.breedId });
 					setCreatedCount((prev) => prev + 1);
 				} catch (err) {
 					// 部分失败：记录已创建的成员，抛出错误
@@ -71,7 +113,7 @@ export function MemberHandoff({ selectedClients, onComplete }: MemberHandoffProp
 
 	const members = selectedClients.map((client, index) => ({
 		client: client.name,
-		breed: CAT_BREEDS[index % CAT_BREEDS.length],
+		breed: CAT_CONFIGS[index % CAT_CONFIGS.length].breedId,
 	}));
 
 	const handoffText =
