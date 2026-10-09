@@ -5,7 +5,7 @@ import { apiFetch } from '@/utils/api-client';
 import styles from './MemberHandoff.module.css';
 
 interface MemberHandoffProps {
-	selectedClients: Array<{ name: string; cliTool: string; provider: string }>;
+	selectedClients: Array<{ name: string; cliTool: string; provider: string; accountRef?: string; authType?: string }>;
 	onComplete: (members: Array<{ client: string; cat: string; catId: string }>) => void;
 }
 
@@ -104,7 +104,8 @@ export function MemberHandoff({ selectedClients, onComplete }: MemberHandoffProp
 							teamStrengths: catConfig.teamStrengths,
 							clientId: clientMapping.clientId,
 							provider: clientMapping.provider,
-							defaultModel: '',
+							accountRef: client.accountRef, // 账号绑定
+							defaultModel: '', // 使用 CLI 默认模型
 							mcpSupport: false,
 						}),
 					});
