@@ -1,5 +1,24 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createInitialState, saveState, loadState, clearState, type OnboardingState } from '../onboarding-state';
+
+// Mock localStorage for Vitest
+const localStorageMock = (() => {
+	let store: Record<string, string> = {};
+	return {
+		getItem: (key: string) => store[key] || null,
+		setItem: (key: string, value: string) => {
+			store[key] = value;
+		},
+		removeItem: (key: string) => {
+			delete store[key];
+		},
+		clear: () => {
+			store = {};
+		},
+	};
+})();
+
+vi.stubGlobal('localStorage', localStorageMock);
 
 describe('onboarding-state', () => {
 	beforeEach(() => {
