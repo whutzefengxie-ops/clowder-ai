@@ -1,3 +1,4 @@
+import { createBindingUI } from './binding-ui.mjs';
 import { scenarios } from './data.mjs';
 import { renderEvents, renderMapping, renderObjects, renderPhase } from './render-detail.mjs';
 import { renderOverview } from './render-overview.mjs';
@@ -6,9 +7,17 @@ import { readState, storageKey, writeState } from './storage.mjs';
 
 const element = (id) => document.getElementById(id);
 let state = readState();
-let view = 'overview';
+let view = state.binding.status === 'ready' ? 'overview' : 'configuration';
 let selectedPhase = state.active?.phase ?? 1;
 let selectedId = state.active?.id ?? state.deliveries[0].id;
+const bindingUI = createBindingUI(() => state, replaceState, render, toast);
+function replaceState(next, nextView) {
+  state = next;
+  view = nextView;
+  selectedPhase = state.active?.phase ?? 1;
+  selectedId = state.active?.id ?? state.deliveries[0].id;
+  persist();
+}
 element('scenario').innerHTML = Object.entries(scenarios)
   .map(([key, label]) => `<option value="${key}">${label}</option>`)
   .join('');
@@ -24,12 +33,29 @@ function render() {
   element('auto-step').textContent = state.active?.phase === 7 ? '模拟程序核验通过' : '模拟 Issue 核对完成';
   element('scenario').value = state.scenario;
   element('overview').innerHTML = renderOverview(state, selectedPhase);
-  element('phase-detail').innerHTML = renderPhase(state, selectedPhase);
-  element('object-summary').innerHTML = renderObjects(state, state.active);
-  element('mapping').innerHTML = renderMapping(state, selectedId);
+  if (element('phase-detail')) element('phase-detail').innerHTML = renderPhase(state, selectedPhase);
+  if (element('object-summary')) element('object-summary').innerHTML = renderObjects(state, state.active);
+  element('mapping').innerHTML =
+    state.binding.status === 'ready'
+      ? renderMapping(state, selectedId)
+      : '<div class="notice">初始化完成后才会建立提交与对象映射。</div>';
   element('events').innerHTML = renderEvents(state);
-  for (const name of ['overview', 'mapping', 'events']) element(name).hidden = name !== view;
-  const names = { overview: '同步总览', mapping: '提交与对象映射', events: '执行记录' };
+  element('configuration').innerHTML = bindingUI.render();
+  element('repo-label').textContent =
+    state.binding.status === 'draft'
+      ? '尚未绑定仓库'
+      : state.binding.externalUrl
+          .replace(/\.git$/, '')
+          .split(/[/:]/)
+          .slice(-2)
+          .join(' / ');
+  for (const name of ['overview', 'mapping', 'events', 'configuration']) element(name).hidden = name !== view;
+  const names = {
+    overview: '同步总览',
+    mapping: '提交与对象映射',
+    events: '执行记录',
+    configuration: '仓库连接与初始化',
+  };
   element('view-name').textContent = names[view];
   for (const button of document.querySelectorAll('.nav-item')) {
     button.classList.toggle('selected', button.dataset.view === view);
@@ -61,6 +87,7 @@ async function copyCommit(commit) {
 document.addEventListener('click', (event) => {
   const button = event.target.closest('button');
   if (!button) return;
+  if (bindingUI.action(button.id)) return;
   if (button.dataset.view) {
     view = button.dataset.view;
     render();
@@ -88,24 +115,31 @@ document.addEventListener('click', (event) => {
   if (button.id === 'reset') reset(element('scenario').value);
 });
 function reset(scenario) {
-  state = createState(scenario);
+  const next = createState(scenario, state.binding);
+  next.archives = state.archives;
+  state = next;
+  bindingUI.reset();
   selectedPhase = state.active?.phase ?? 1;
   selectedId = state.active?.id ?? state.deliveries[0].id;
-  view = 'overview';
+  view = state.binding.status === 'ready' ? 'overview' : 'configuration';
   persist();
   render();
   toast('演示状态已重置');
 }
 element('scenario').addEventListener('change', (event) => reset(event.target.value));
 document.addEventListener('change', (event) => {
+  bindingUI.changed(event);
   if (event.target.id === 'mapping-delivery') {
     selectedId = event.target.value;
     render();
   }
 });
+document.addEventListener('input', (event) => bindingUI.changed(event));
+document.getElementById('configuration').addEventListener('submit', (event) => event.preventDefault());
 window.addEventListener('storage', (event) => {
   if (event.key !== storageKey) return;
   state = readState();
+  bindingUI.reset();
   selectedPhase = state.active?.phase ?? 1;
   render();
 });

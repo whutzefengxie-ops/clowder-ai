@@ -33,7 +33,7 @@ async function run() {
       const expected = (await read()).active.internalPr;
       const beforeNavigation = (await read()).internalSha;
       const [prPage] = await Promise.all([page.waitForEvent('popup'), page.locator('#open-pr').click()]);
-      await prPage.waitForURL(`**/internal/demo/core/pull/${expected}`);
+      await prPage.waitForURL(`**/internal/demo/core/pull/${expected}?binding=*`);
       assert.equal((await read()).internalSha, beforeNavigation);
       if (expected === 93) assert.doesNotMatch(await prPage.locator('#pr-content').innerText(), /第一笔审批通过/);
       await prPage.locator('#platform-note').fill(note);

@@ -9,6 +9,10 @@ const files = new Map(
   [
     'index.html',
     'styles.css',
+    'binding.css',
+    'binding.mjs',
+    'binding-ui.mjs',
+    'render-binding.mjs',
     'app.mjs',
     'data.mjs',
     'state.mjs',

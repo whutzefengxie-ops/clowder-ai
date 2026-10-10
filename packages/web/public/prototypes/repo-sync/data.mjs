@@ -41,6 +41,7 @@ export const deliveries = [
   },
 ];
 export const scenarios = {
+  unconfigured: '首次配置连接',
   waiting: '等待内部审批',
   behind: '尚未开始同步',
   timeout: 'PR 创建结果待核对',

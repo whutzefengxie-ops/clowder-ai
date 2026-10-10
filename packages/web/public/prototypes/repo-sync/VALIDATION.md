@@ -21,6 +21,9 @@ tips_exempt: 独立原型验证记录，尚未挂载正式功能。
 | 查看版本对应 | 总览三个版本卡；映射页来源提交、内部初始化与合并节点 |
 | 未合入 PR 与卡点 | 主状态、待合入数量、当前对象、九步流程与恢复入口 |
 | 正常审批路径 | 具体 PR URL 跳转；点击链接不改 main；平台合入后回读、核验、核对 Issue |
+| 仓库与分支配置 | 可填写 GitHub / 内部 Git 地址、来源 / 目标分支、网页地址、认证配置引用、平台 CLI 与起始版本 |
+| 配置状态因果 | 修改后重查；保存后等待初始化；初始化前不能同步；活动交付禁止替换绑定 |
+| 绑定与页面隔离 | PR URL 携带绑定 ID；旧绑定页面不能操作新交付；旧合成映射与记录保留在 archives |
 | 新交付不影响活动交付 | 外部更新进入队列，冻结目标保持不变 |
 | 异常恢复 | 创建超时复用 PR；插件失败后重跑；核心偏移暂停；关单补齐不重复合入 |
 | 真实用户输入 | 自定义中文 sentinel 备注进入日志，刷新后仍保留 |
@@ -29,9 +32,10 @@ tips_exempt: 独立原型验证记录，尚未挂载正式功能。
 
 本轮命令及结果：
 
-- `node --test packages/web/public/prototypes/repo-sync/state.test.mjs`：8 项通过，0 失败。新增“平台合入后先核验再更新接受游标”的测试先红后绿。
+- `node --test packages/web/public/prototypes/repo-sync/state.test.mjs packages/web/public/prototypes/repo-sync/binding.test.mjs`：13 项通过，0 失败。配置相关测试先红后绿；覆盖地址凭据拒绝、检查后修改、未完成交付保护、快照 / 保留历史初始化以及初始化前不能同步。
 - `node packages/web/public/prototypes/repo-sync/browser-check.cjs`：完整旅程通过，页面异常和 HTTP 错误均为 0；截图写入系统临时目录 `repo-sync-prototype-evidence`。
-- 项目安装的 Biome 2.4.1 对 12 个 JS 模块执行 `check`：通过，无警告；HTML／CSS 执行关闭格式化的语法与 lint 检查：通过，无警告。CSS 保留紧凑声明以遵守文件行数硬限。
+- `node packages/web/public/prototypes/repo-sync/binding-browser-check.cjs`：配置旅程通过。使用 fixture 外的仓库地址、release/2、delivery-main、完整 40 位 commit ID 与认证配置引用；验证总览 / 映射 / PR 页面反映自定义配置、刷新保留、编辑后检查失效及活动绑定保护。页面异常 / HTTP 错误均为 0，四种屏宽无横向溢出。截图位于系统临时目录 `repo-sync-binding-evidence`。
+- 项目安装的 Biome 2.4.1 对 17 个 JS 模块执行 `check`：通过，无警告；4 个 HTML／CSS 执行关闭格式化的语法与 lint 检查：通过，无警告。CSS 保留紧凑声明以遵守文件行数硬限。
 - `git diff --check`／暂存差异检查：通过。所有原型文件低于 350 行硬限；CSS 214 行超过 200 行提示线，仍低于硬限。
 - `node scripts/check-capability-tips.mjs --changed-file packages/web/public/prototypes/repo-sync/README.md`：通过，另有 17 个原有目录引用警告。
 - 不限定改动范围的 capability-tips 检查：20 个问题，均指向本分支基线已有的 Feature 文档，不涉及原型文件。未将其宣称为全仓通过。
@@ -48,3 +52,5 @@ Architecture cell：独立原型工作面，不新增生产同步服务或产品
 状态：作者自检通过；未进行独立代码审查、未推送或合入 main。
 
 本次交接调整：移除同步页审批弹窗；具体 PR 页模拟平台操作，并按 deliveryId 隔离审核记录。合入后核验、Issue 核对均标注程序自动，结果触发按钮仅在演示控制条。重新验证跨页通知、接受游标时机、顺序交付、刷新恢复及四种屏宽。
+
+仓库配置扩展：预览服务白名单新增配置模块与样式；仍只监听本机，不提供仓库访问代理。输入格式校验是真实执行的；连接 / 权限 / 分支存在性 / 祖先关系 / 树一致性仅展示待接入检查项，初始化结果明确为模拟。内置短 SHA 与用户填写完整 SHA 分别保留，展示简写不会修改数据或复制值。作者自检并不代替独立审查。

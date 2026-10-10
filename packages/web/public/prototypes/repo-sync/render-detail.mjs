@@ -1,15 +1,21 @@
-import { BASE, COMPLETE, phaseDetails } from './data.mjs';
+import { COMPLETE, phaseDetails } from './data.mjs';
 import { escapeHtml, sha } from './html.mjs';
 export function renderPhase(state, phase) {
   const [name, explanation, command] = phaseDetails[phase];
   const active = state.active;
+  const boundCommand = command
+    .replaceAll('upstream main', `upstream ${state.binding.sourceBranch}`)
+    .replaceAll('internal/main', `internal/${state.binding.targetBranch}`)
+    .replaceAll('internal main', `internal ${state.binding.targetBranch}`)
+    .replace('--base main', `--base ${state.binding.targetBranch}`)
+    .replaceAll('a17e9b40', state.binding.baseline);
   const resolved = active
-    ? command
+    ? boundCommand
         .replaceAll('delivery-041', active.id)
         .replaceAll('c2f84d91', active.target)
         .replace('--source 71', `--source ${active.issue}`)
         .replace('--id 92', `--id ${active.internalPr ?? '待创建'}`)
-    : command;
+    : boundCommand;
   return `<div class="phase-detail"><div><span class="eyebrow">步骤 ${phase} / ${COMPLETE} · ${phase === 6 ? '人工在内部平台处理' : '程序自动执行，无 Agent 依赖'}</span><h3>${name}</h3><p>${explanation}</p></div><details><summary>查看命令示意</summary><pre>${escapeHtml(resolved)}</pre><small>Git 为命令示意；repo-sync 为尚未实现的平台适配器。当前不会执行命令。</small></details></div>`;
 }
 export function renderObjects(state, delivery) {
@@ -40,8 +46,8 @@ export function renderMapping(state, selectedId) {
   const acceptedIndex = state.deliveries.findIndex((item) => item.target === state.accepted);
   const phase = state.active?.id === delivery.id ? state.active.phase : index <= acceptedIndex ? COMPLETE : 0;
   return `<section class="panel mapping-panel"><div class="section-head"><div><h2>${delivery.title}</h2><p>${delivery.id} · 落地方式 ${delivery.mode}</p></div><select id="mapping-delivery" aria-label="选择映射交付">${state.deliveries.map((item) => `<option value="${item.id}" ${item.id === delivery.id ? 'selected' : ''}>外部 PR #${item.sourcePr}</option>`).join('')}</select></div>
-    <div class="mapping-grid"><div><div class="eyebrow">外部 / 已落地提交</div><h3>GitHub main</h3><p>实际进入 main 的对象作为接收依据。</p></div><div><div class="eyebrow">内部 / 接收结果</div><h3>候选分支 → 内部 main</h3><p>提交对象 SHA 保留，接收合并节点独立。</p></div></div>
-    <div class="commit-table" role="table" aria-label="提交 ID 映射"><div class="commit-row table-head" role="row"><span role="columnheader">外部 commit ID</span><span role="columnheader">内部对应 commit ID</span><span role="columnheader">状态 / 类型</span></div>${delivery.commits.map((commit) => `<div class="commit-row" role="row"><span role="cell">${sha(commit)}</span><span role="cell">${phase >= 4 ? sha(commit) : '待搬运'}</span><span role="cell"><span class="badge ${phase >= 4 ? 'good' : 'neutral'}">${phase >= 7 ? '已随 PR 合入' : phase >= 4 ? '候选分支已接收' : '等待搬运'}</span></span></div>`).join('')}<div class="commit-row special" role="row"><span role="cell">上游初始化基线 ${sha(BASE)}</span><span role="cell">${sha('10a91f20')}</span><span role="cell">内部初始化节点</span></div>${phase >= 7 ? `<div class="commit-row special" role="row"><span role="cell">接收目标 ${sha(delivery.target)}</span><span role="cell">${sha(`1${index + 1}c79a50`)}</span><span role="cell">内部接收合并节点</span></div>` : ''}</div>
+    <div class="mapping-grid"><div><div class="eyebrow">外部 / 已落地提交</div><h3>GitHub ${escapeHtml(state.binding.sourceBranch)}</h3><p>实际进入交付分支的对象作为接收依据。</p></div><div><div class="eyebrow">内部 / 接收结果</div><h3>候选分支 → 内部 ${escapeHtml(state.binding.targetBranch)}</h3><p>提交对象 SHA 保留，接收合并节点独立。</p></div></div>
+    <div class="commit-table" role="table" aria-label="提交 ID 映射"><div class="commit-row table-head" role="row"><span role="columnheader">外部 commit ID</span><span role="columnheader">内部对应 commit ID</span><span role="columnheader">状态 / 类型</span></div>${delivery.commits.map((commit) => `<div class="commit-row" role="row"><span role="cell">${sha(commit)}</span><span role="cell">${phase >= 4 ? sha(commit) : '待搬运'}</span><span role="cell"><span class="badge ${phase >= 4 ? 'good' : 'neutral'}">${phase >= 7 ? '已随 PR 合入' : phase >= 4 ? '候选分支已接收' : '等待搬运'}</span></span></div>`).join('')}<div class="commit-row special" role="row"><span role="cell">上游初始化基线 ${sha(state.binding.baseline)}</span><span role="cell">${sha(state.binding.initialInternalSha)}</span><span role="cell">内部初始化节点</span></div>${phase >= 7 ? `<div class="commit-row special" role="row"><span role="cell">接收目标 ${sha(delivery.target)}</span><span role="cell">${sha(`1${index + 1}c79a50`)}</span><span role="cell">内部接收合并节点</span></div>` : ''}</div>
     <div class="notice">${delivery.mode === 'Squash' ? 'Squash 场景：搬运落入 main 的单个提交。PR 开发分支提交仅作为来源记录，不要求逐个重放。' : 'Merge 场景：保留上游落地对象；内部允许初始化和接收合并节点，因此 main SHA 不必相同。'}</div>
     <div class="mapping-grid"><section><h3>Issue / PR 对应关系</h3>${renderObjects(state, delivery)}</section><section><h3>程序核验规则</h3><ul class="rules"><li>是否最新：已接受上游版本 = 外部最新版本。</li><li>本次核心文件树与冻结目标一致。</li><li>内部 PR 已合入且程序核验通过，才登记已接受版本。</li><li>Issue 关闭核对内部编号，避免错误关闭同号对象。</li><li>内部定制能力在独立插件仓中管理。</li></ul></section></div></section>`;
 }

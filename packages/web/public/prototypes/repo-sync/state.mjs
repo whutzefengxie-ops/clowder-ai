@@ -1,4 +1,5 @@
-import { BASE, COMPLETE, deliveries } from './data.mjs';
+import { defaultBinding, emptyBinding } from './binding.mjs';
+import { COMPLETE, deliveries } from './data.mjs';
 
 const snapshot = (index, phase, block = null) => ({
   ...structuredClone(deliveries[index]),
@@ -7,16 +8,23 @@ const snapshot = (index, phase, block = null) => ({
   internalPr: phase >= 4 ? deliveries[index].internalPr : null,
   internalIssue: phase >= 3 ? deliveries[index].internalIssue : null,
 });
-export function createState(scenario = 'waiting') {
+export function createState(scenario = 'waiting', binding = defaultBinding()) {
   const state = {
     schema: 2,
     scenario,
     latest: deliveries[1].target,
-    accepted: BASE,
-    internalSha: '10a91f20',
+    binding: structuredClone(binding),
+    archives: [],
+    accepted: binding.baseline,
+    internalSha: binding.initialInternalSha,
     active: null,
     deliveries: structuredClone(deliveries),
-    events: [{ label: '以指定上游版本初始化内部核心仓', note: '基线 a17e9b40 → 内部初始化 10a91f20' }],
+    events: [
+      {
+        label: '以指定上游版本初始化内部核心仓（模拟）',
+        note: `基线 ${binding.baseline} → 内部初始化 ${binding.initialInternalSha}`,
+      },
+    ],
   };
   if (scenario === 'waiting') state.active = snapshot(0, 6);
   if (scenario === 'timeout') state.active = snapshot(0, 4, 'timeout');
@@ -27,6 +35,15 @@ export function createState(scenario = 'waiting') {
     state.internalSha = '12c79a50';
     state.active = snapshot(1, scenario === 'synced' ? COMPLETE : 8, scenario === 'synced' ? null : 'metadata');
   }
+  if (scenario === 'unconfigured' || binding.status !== 'ready') {
+    state.binding = scenario === 'unconfigured' ? emptyBinding() : structuredClone(binding);
+    state.accepted = null;
+    state.internalSha = null;
+    state.active = null;
+    state.scenario = 'unconfigured';
+    state.events = [{ label: '等待仓库连接配置', note: '连接、检查、保存并初始化后，才能开始接收交付。' }];
+  }
+  if (state.active) state.active.bindingId = state.binding.id;
   return state;
 }
 function log(state, label, note = '') {
@@ -57,12 +74,19 @@ const handlers = {
     log(state, '外部新交付加入队列', '当前交付目标保持冻结');
   },
   start(state) {
+    if (state.binding?.status !== 'ready') return;
     if (state.active && state.active.phase !== COMPLETE) return;
-    const index =
-      state.accepted === BASE ? 0 : state.deliveries.findIndex((item) => item.target === state.accepted) + 1;
+    const index = state.deliveries.findIndex((item) => item.target === state.accepted) + 1;
     const next = state.deliveries[index];
     if (next) {
-      state.active = { ...structuredClone(next), phase: 1, block: null, internalPr: null, internalIssue: null };
+      state.active = {
+        ...structuredClone(next),
+        bindingId: state.binding.id,
+        phase: 1,
+        block: null,
+        internalPr: null,
+        internalIssue: null,
+      };
       log(state, '已冻结同步目标', `${next.id} · ${next.target}`);
     }
   },

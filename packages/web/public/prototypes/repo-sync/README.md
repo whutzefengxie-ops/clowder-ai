@@ -21,8 +21,15 @@ tips_exempt: 独立交互原型，尚未挂载正式功能或能力目录。
 
 界面分层：接受版本总览 → 活动交付流程 → 来源／内部对象映射 → 等待或阻塞原因 → 执行记录。是否最新比较 acceptedUpstream 与 latestUpstream，不比较内部 main SHA；代码最新但元数据未补齐仍显示未完成。
 
+仓库连接扩展：导航提供“仓库连接与初始化”。配置外部 GitHub / 内部 Git 地址、来源 / 目标分支、可选内部网页地址、认证配置引用、Issue / PR 平台 CLI 及起始上游 commit ID。总览显示当前绑定；无绑定或未初始化时禁止同步。检查仅校验输入格式，不声称已验证真实访问权限。
+
+配置旅程：填写 → 本地格式检查（模拟）→ 保存新绑定 → 模拟初始化核验 → 同步下一笔。有未完成交付时禁止更换绑定；已有绑定替换时归档旧合成映射与记录。修改输入会使检查结果失效。独立快照与保留上游历史初始化区分显示；实际 Git、分支存在性、祖先关系、核心文件树和平台权限均待接入。凭据只接受配置引用名称，拒绝地址中的凭据或查询参数；不输入 Token / 密码。
+
 | 动作 | 状态后果 | 证据 |
 | --- | --- | --- |
+| 检查并保存连接 | 当前草稿通过本地格式校验后保存；修改需重查 | binding.test.mjs / binding-browser-check.cjs |
+| 模拟初始化 | 登记起始版本，之后才开放同步；总览与映射读取实际填写值 | fixture 外自定义地址 / 分支 / SHA 与刷新持久化 |
+| 尝试更换活动绑定 | 有未完成交付时拒绝替换；旧 PR URL 绑定身份校验 | 绑定保护单元与浏览器验证 |
 | 同步下一笔 | 冻结目标并准备候选，内部 main 不变化 | state.test.mjs / browser-check.cjs |
 | 继续执行 | 创建模拟 Issue、分支、PR，逐步推进 | 相同交付 ID／对象 ID |
 | 打开内部 PR | 跳到具体 PR 模拟地址，本动作不代表审批和合入 | browser-check.cjs 的 popup URL 与 main 不变断言 |
@@ -42,11 +49,11 @@ tips_exempt: 独立交互原型，尚未挂载正式功能或能力目录。
 
 命令展示中的 Git 命令表示 Git 传输；Issue／PR 使用 `repo-sync` 适配器占位命令，明确未实现。标准 Git 本身不提供创建 Issue／PR 的接口。
 
-界面 commit ID 为合成的短 SHA。首次独立快照接收在候选分支连接初始化历史，再合入目标上游版本；普通接收不重复连接。界面搬运阶段包含候选对象与内部分支推送，不表示直接推送上游 head 替换内部 main。
+内置交付 commit ID 为合成短 SHA；起始版本输入支持 7–40 位，版本卡简写显示前 8 位，悬停与复制保留完整 ID。首次独立快照接收在候选分支连接初始化历史，再合入目标上游版本；普通接收不重复连接。界面搬运阶段包含候选对象与内部分支推送，不表示直接推送上游 head 替换内部 main。
 
 运行：`node packages/web/public/prototypes/repo-sync/server.mjs`，默认只绑定 127.0.0.1:5186。服务只提供原型文件与指定主题 CSS，不暴露整个仓库。
 
-单元验证：`node --test packages/web/public/prototypes/repo-sync/state.test.mjs`。
-浏览器旅程：`node packages/web/public/prototypes/repo-sync/browser-check.cjs`；使用可用 Playwright 和安装的 Chrome，产物落入系统临时目录。
+单元验证：`node --test packages/web/public/prototypes/repo-sync/state.test.mjs packages/web/public/prototypes/repo-sync/binding.test.mjs`。
+浏览器旅程：`node packages/web/public/prototypes/repo-sync/browser-check.cjs` 与 `node packages/web/public/prototypes/repo-sync/binding-browser-check.cjs`；使用可用 Playwright 和安装的 Chrome，产物落入系统临时目录。
 
 声明边界：真实网络方向、Git 对象、平台审批与自动关闭需独立实现和验证；此原型证明 UI 状态与用户动作的因果，不证明生产同步能力。

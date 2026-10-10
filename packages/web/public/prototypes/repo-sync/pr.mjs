@@ -4,9 +4,15 @@ import { reduce } from './state.mjs';
 import { readState, storageKey, writeState } from './storage.mjs';
 
 const prNumber = Number(location.pathname.split('/').at(-1));
+const bindingId = new URL(location.href).searchParams.get('binding');
 const content = document.getElementById('pr-content');
+const bindingValid = (state) => state.binding.status === 'ready' && (!bindingId || bindingId === state.binding.id);
 function render() {
   const state = readState();
+  if (!bindingValid(state)) {
+    content.textContent = '仓库绑定已更换或尚未初始化。此旧 PR 页面不能操作当前交付，请从同步总览重新打开。';
+    return;
+  }
   const delivery = state.deliveries.find((item) => item.internalPr === prNumber);
   if (!delivery) {
     content.textContent = '此模拟 PR 没有对应交付，请返回同步总览选择一个具体 PR。';
@@ -21,16 +27,21 @@ function render() {
   const notes = state.events.filter(
     (event) => event.deliveryId === delivery.id && event.label.includes('平台 PR 合入'),
   );
-  content.innerHTML = `<section class="page-heading"><div><div class="eyebrow">PULL REQUEST · 平台页面模拟</div><h1>${escapeHtml(delivery.title)} <span class="muted">#${prNumber}</span></h1><p>sync/${delivery.id} → main · 来源：外部 PR #${delivery.sourcePr}</p></div><span class="badge ${merged ? 'good' : 'warm'}">${merged ? '已合入' : '待审核'}</span></section>
+  content.innerHTML = `<section class="page-heading"><div><div class="eyebrow">PULL REQUEST · 平台页面模拟</div><h1>${escapeHtml(delivery.title)} <span class="muted">#${prNumber}</span></h1><p>sync/${delivery.id} → ${escapeHtml(state.binding.targetBranch)} · 来源：外部 PR #${delivery.sourcePr}</p><p>${escapeHtml(state.binding.internalUrl)}</p></div><span class="badge ${merged ? 'good' : 'warm'}">${merged ? '已合入' : '待审核'}</span></section>
     <section class="panel"><div class="section-head"><div><h2>同步 PR 说明</h2><p>由确定性模板生成；此演示无需 Agent。</p></div></div><dl class="object-list"><div><dt>固定交付</dt><dd>${delivery.id}</dd></div><div><dt>来源目标</dt><dd><code>${delivery.target}</code></dd></div><div><dt>实际落地提交</dt><dd>${delivery.commits.join(' / ')}</dd></div><div><dt>Issue 对应</dt><dd>外部 #${delivery.issue} → 内部 #${delivery.internalIssue}</dd></div><div><dt>必需检查</dt><dd>${canMerge || merged ? '核心与插件检查已通过' : '当前不满足合入条件'}</dd></div></dl></section>
     ${merged ? '<div class="notice success">平台已模拟合入。同步总览会读取这个结果，再自动核验代码与 Issue 状态；无需在同步工具内再次审批。</div>' : `<section class="panel pr-review"><h2>在平台完成审核与合入</h2><p>实际使用中由内部平台执行权限、审批与分支保护。这里仅演示页面交接。</p><form id="platform-merge"><label for="platform-note">模拟审核备注</label><textarea id="platform-note" rows="3" required placeholder="输入一段演示备注" ${canMerge ? '' : 'disabled'}></textarea><button type="submit" class="button primary" ${canMerge ? '' : 'disabled'}>模拟在平台合入 PR #${prNumber}</button></form></section>`}
-    ${notes.length ? `<section class="panel pr-review"><h2>平台结果记录</h2>${notes.map((event) => `<p>${escapeHtml(event.note)}</p>`).join('')}</section>` : ''}`;
+    ${renderNotes(notes)}`;
+}
+function renderNotes(notes) {
+  return notes.length
+    ? `<section class="panel pr-review"><h2>平台结果记录</h2>${notes.map((event) => `<p>${escapeHtml(event.note)}</p>`).join('')}</section>`
+    : '';
 }
 document.addEventListener('submit', (event) => {
   if (event.target.id !== 'platform-merge') return;
   event.preventDefault();
   const state = readState();
-  if (state.active?.internalPr !== prNumber || state.active.phase !== 6 || state.active.block) {
+  if (!bindingValid(state) || state.active?.internalPr !== prNumber || state.active.phase !== 6 || state.active.block) {
     render();
     return;
   }
