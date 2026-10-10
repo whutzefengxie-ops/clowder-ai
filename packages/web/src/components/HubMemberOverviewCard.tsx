@@ -54,7 +54,7 @@ function clientRuntimeLabel(cat: CatData, configCat?: CatConfig) {
 }
 
 function accountSummary(cat: CatData) {
-  if (cat.configurationSource === 'native_tool') return cat.accountRef?.trim() || '工具当前身份';
+  if (cat.configurationSource === 'native_tool') return cat.accountRef?.trim() || '';
   const accountRef = cat.accountRef?.trim() ?? '';
   if (!accountRef) return humanizeClientId(cat.clientId);
   if (
@@ -70,8 +70,21 @@ function accountSummary(cat: CatData) {
 }
 
 function getMetaSummary(cat: CatData, configCat?: CatConfig) {
+  let modelLabel = cat.defaultModel;
+  // DSH's [provider, model] wire value stays intact; the overview needs only the model name.
+  if (cat.acp && /dsh|deepseek/i.test(JSON.stringify(cat.acp))) {
+    try {
+      const value: unknown = JSON.parse(cat.defaultModel);
+      if (Array.isArray(value) && value.length === 2 && value.every((v) => typeof v === 'string'))
+        modelLabel = value[1];
+    } catch {
+      /* Legacy plain model names remain readable. */
+    }
+  }
   if (cat.configurationSource === 'native_tool')
-    return `${clientRuntimeLabel(cat, configCat)} · ${cat.defaultModel || '跟随工具模型'} · ${accountSummary(cat)}`;
+    return [clientRuntimeLabel(cat, configCat), modelLabel || '跟随工具模型', accountSummary(cat)]
+      .filter(Boolean)
+      .join(' · ');
   if (cat.clientId === 'antigravity') {
     return `Antigravity · ${configCat?.model ?? cat.defaultModel} · CLI Bridge`;
   }
@@ -217,11 +230,8 @@ function MemberMeta({ cat, configCat }: { cat: CatData; configCat?: CatConfig })
   return (
     <>
       <span>
-        <SettingsText tone="muted" className="mr-1.5 font-mono text-micro">
-          {cat.id}
-        </SettingsText>
         {getMetaSummary(cat, configCat)}
-        {cat.adapterMode && (
+        {cat.adapterMode && cat.configurationSource !== 'native_tool' && (
           <SettingsBadge
             tone={cat.adapterMode === 'acp' || cat.codexCarrier?.effective === 'app_server' ? 'emerald' : 'slate'}
             size="xxs"
@@ -247,7 +257,6 @@ function MemberMeta({ cat, configCat }: { cat: CatData; configCat?: CatConfig })
       </span>
       <span className="mt-0.5 flex flex-wrap items-center gap-2">
         <SettingsText tone="purple">{formatMentionPreview(cat.mentionPatterns)}</SettingsText>
-        <SettingsBadge tone="emerald">Session Chain 始终可见</SettingsBadge>
       </span>
     </>
   );

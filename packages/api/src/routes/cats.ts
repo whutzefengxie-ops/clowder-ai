@@ -1,4 +1,5 @@
 import { discoverNativeRuntimes } from './native-runtimes.js';
+import { registerRuntimeCatalogRoute } from './runtime-catalog-route.js';
 /**
  * Cats API Routes
  * GET /api/cats - 获取所有猫猫信息
@@ -868,6 +869,7 @@ interface CatsRoutesOptions {
 }
 
 export const catsRoutes: FastifyPluginAsync<CatsRoutesOptions> = async (app, opts) => {
+  registerRuntimeCatalogRoute(app);
   app.get('/api/cats/native-runtimes', async () => discoverNativeRuntimes(resolveProjectRoot()));
   // GET /api/cat-templates - 获取角色模板（纯灵魂层，不含 client/model 绑定）
   app.get('/api/cat-templates', async () => {

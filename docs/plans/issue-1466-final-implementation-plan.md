@@ -21,7 +21,7 @@ status: approved-configuration-phase
 
 最终意见覆盖我们 v2 中的 A/B/C 布局待选、成员页直接管理账号、独立 identityRef 示意。旧原型留作研究与回归证据，不再作为实施规格。
 
-配套文档：[技术契约及模块改动](./issue-1466-implementation-contracts.md) · [分支收敛与冗余审计](./issue-1466-worktree-convergence.md) · [验收、依赖和交付顺序](./issue-1466-acceptance-matrix.md)。
+配套文档：[技术契约及模块改动](./issue-1466-implementation-contracts.md) · [分支收敛与冗余审计](./issue-1466-worktree-convergence.md) · [验收、依赖和交付顺序](./issue-1466-acceptance-matrix.md) · [2026-10-10 配置体验修订](./issue-1466-configuration-ux-revision.md)。
 
 ## 2. 用户体验究竟改什么
 

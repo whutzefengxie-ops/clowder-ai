@@ -220,7 +220,12 @@ export function SettingsContent({ section, initialEditCatId }: SettingsContentPr
               <div className="flex justify-end">
                 <OpenTeamWorkspaceButton />
               </div>
-              <RoutingContextLedger />
+              <details className="rounded-xl border border-[var(--console-border-soft)] p-4">
+                <summary className="cursor-pointer text-sm text-cafe-secondary">查看路由记录</summary>
+                <div className="mt-4">
+                  <RoutingContextLedger />
+                </div>
+              </details>
             </div>
           </div>
         );
@@ -232,10 +237,15 @@ export function SettingsContent({ section, initialEditCatId }: SettingsContentPr
                 className="inline-flex min-h-11 items-center text-sm text-cafe-accent"
                 href={searchParams.get('returnTo') ?? '/settings?s=members'}
               >
-                ← 返回成员编辑 / Back to member
+                {searchParams.get('lang') === 'en' ? '← Back to member' : '← 返回成员编辑'}
               </Link>
             )}
-            <HubAccountsTab />
+            <HubAccountsTab
+              initialClientId={(['anthropic', 'openai', 'google', 'kimi', 'opencode', 'acp'] as const).find(
+                (value) => value === searchParams.get('client'),
+              )}
+              toolLabel={searchParams.get('tool') ?? undefined}
+            />
           </div>
         );
       case 'im':

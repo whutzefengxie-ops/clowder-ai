@@ -1,5 +1,6 @@
 'use client';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useState } from 'react';
 import type { CatData } from '@/hooks/useCatData';
 import { MemberAdditionalFields } from './MemberAdditionalFields';
 import { MemberCloudIdentity } from './MemberCloudIdentity';
@@ -8,7 +9,7 @@ import { MemberRuntimeFields } from './MemberRuntimeFields';
 import { useMemberEditor } from './useMemberEditor';
 
 const sections = [
-  ['runtime', '模型与接入', 'Model & connection'],
+  ['runtime', '模型与工具', 'Model & tool'],
   ['identity', '身份与职责', 'Identity & role'],
   ['voice', '语音', 'Voice'],
   ['context', '上下文与会话', 'Context & sessions'],
@@ -27,6 +28,7 @@ export function MemberSettingsPage({
   onBack: () => void;
 }) {
   const router = useRouter();
+  const [runtimeValid, setRuntimeValid] = useState(true);
   const searchParams = useSearchParams();
   const english = searchParams.get('lang') === 'en';
   const toggleLanguage = () => {
@@ -49,7 +51,7 @@ export function MemberSettingsPage({
         ? 'Claude Code'
         : form.clientId;
   const accountLabel =
-    identity?.displayName || identity?.name || form.accountRef || t('工具当前身份', 'Current tool identity');
+    identity?.displayName || identity?.name || form.accountRef || t('使用工具当前配置', 'Current tool configuration');
   const query = new URLSearchParams(searchParams.toString());
   query.set('s', 'members');
   query.set('lang', english ? 'en' : 'zh');
@@ -58,6 +60,8 @@ export function MemberSettingsPage({
   const returnTo = `/settings?${query.toString()}`;
   const accountQuery = new URLSearchParams(query);
   accountQuery.set('s', 'accounts');
+  accountQuery.set('client', form.clientId);
+  accountQuery.set('tool', tool);
   accountQuery.delete('cat');
   accountQuery.delete('view');
   accountQuery.set('returnTo', returnTo);
@@ -71,14 +75,12 @@ export function MemberSettingsPage({
           </button>
           <h1 className="text-2xl font-semibold">{cat ? form.name : t('添加猫猫伙伴', 'Add a teammate')}</h1>
           <p className="mt-2 break-words text-sm text-cafe-secondary" data-testid="member-identity-summary">
-            {tool} · {accountLabel}
+            {tool}
+            {form.accountRef ? ` · ${accountLabel}` : ''}
+            {form.roleDescription ? ` · ${form.roleDescription}` : ''}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={toggleLanguage}
-          className="min-h-10 rounded-lg border border-[var(--console-border-soft)] px-3 text-sm"
-        >
+        <button type="button" onClick={toggleLanguage} className="min-h-10 px-2 text-sm text-cafe-secondary">
           {english ? '中文' : 'English'}
         </button>
       </div>
@@ -95,10 +97,10 @@ export function MemberSettingsPage({
         <>
           {!cat && (
             <section className="mb-6 rounded-2xl border border-[var(--console-border-soft)] bg-[var(--console-card-bg)] p-5">
-              <h2 className="text-lg font-semibold">{t('先认识一位伙伴', 'Meet your teammate')}</h2>
+              <h2 className="text-lg font-semibold">{t('选择伙伴模板', 'Choose a teammate')}</h2>
               <p className="mb-4 mt-1 text-sm text-cafe-secondary">
                 {t(
-                  '模板带来名字和个性，工具可以换；模型与强度跟随工具。',
+                  '选一个喜欢的伙伴，或从空白开始。',
                   'A template brings a name and personality. Tools can change; models and effort inherit.',
                 )}
               </p>
@@ -109,13 +111,12 @@ export function MemberSettingsPage({
                     type="button"
                     onClick={() => editor.chooseTemplate(template)}
                     aria-pressed={draft.templateId === template.id}
-                    className={`flex items-center gap-3 rounded-xl border p-4 text-left ${draft.templateId === template.id ? 'border-cafe-accent bg-[var(--console-field-bg)]' : 'border-[var(--console-border-soft)]'}`}
+                    className={`flex items-center gap-2 rounded-xl border p-2 text-left ${draft.templateId === template.id ? 'border-cafe-accent bg-[var(--console-field-bg)]' : 'border-[var(--console-border-soft)]'}`}
                   >
                     {/* Local template assets are already validated by the template API. */}
-                    <img src={template.avatar} alt="" className="h-12 w-12 rounded-full object-cover" />
+                    <img src={template.avatar} alt="" className="h-8 w-8 rounded-full object-cover" />
                     <span className="min-w-0">
                       <strong className="block text-sm">{template.nickname || template.name}</strong>
-                      <span className="mt-1 block text-sm text-cafe-secondary">{template.roleDescription}</span>
                     </span>
                   </button>
                 ))}
@@ -123,7 +124,7 @@ export function MemberSettingsPage({
                   type="button"
                   onClick={() => editor.chooseTemplate(null)}
                   aria-pressed={!draft.templateId}
-                  className="min-h-20 rounded-xl border border-dashed border-[var(--console-border-soft)] px-4 text-sm"
+                  className="min-h-11 rounded-xl border border-dashed border-[var(--console-border-soft)] px-4 text-sm"
                 >
                   + {t('从空白开始', 'Start from scratch')}
                 </button>
@@ -167,20 +168,24 @@ export function MemberSettingsPage({
                 <button
                   type="button"
                   key={key}
-                  onClick={() => editor.setSection(key)}
+                  onClick={() => {
+                    editor.setSection(key);
+                    document.getElementById('member-field-panel')?.scrollIntoView?.({ block: 'nearest' });
+                  }}
                   aria-current={section === key ? 'page' : undefined}
                   className={`min-h-11 shrink-0 rounded-xl px-3 py-3 text-left text-sm ${section === key ? 'bg-[var(--console-field-bg)] font-semibold text-cafe-accent' : 'text-cafe-secondary'}`}
                 >
                   {t(zh, en)}
                   {key === 'runtime' && (
                     <span className="mt-1 block text-sm font-normal">
-                      {form.defaultModel || t('跟随工具', 'Inherited')}
+                      {form.defaultModel ? t('已指定模型', 'Model selected') : t('跟随工具', 'Inherited')}
                     </span>
                   )}
                 </button>
               ))}
             </nav>
             <fieldset
+              id="member-field-panel"
               disabled={saving}
               className="min-w-0 rounded-2xl border border-[var(--console-border-soft)] bg-[var(--console-card-bg)] p-5 sm:p-6"
             >
@@ -195,6 +200,7 @@ export function MemberSettingsPage({
                     t={t}
                     accountHref={accountHref}
                     editing={Boolean(cat)}
+                    onValidityChange={setRuntimeValid}
                   />
                 )
               ) : (
@@ -222,20 +228,6 @@ export function MemberSettingsPage({
               )}
             </fieldset>
           </div>
-          {baseline && (
-            <details className="mt-5 rounded-xl border border-[var(--console-border-soft)] p-4 text-sm">
-              <summary className="cursor-pointer">
-                {t('已保存偏好', 'Saved preferences')} · {baseline.defaultModel || t('跟随', 'Inherited')} ·{' '}
-                {baseline.cli?.effort || t('跟随', 'Inherited')}
-              </summary>
-              <p className="mt-3">
-                {t(
-                  '当前会话实际采用值：请在对应对话中查看。本页没有当前回合的采用回执。',
-                  'Actual values belong to each conversation. This page has no receipt for a current turn.',
-                )}
-              </p>
-            </details>
-          )}
           {editor.error && (
             <div role="alert" className="mt-4 rounded-xl bg-conn-red-bg p-4 text-sm text-conn-red-text">
               {editor.error}
@@ -289,7 +281,14 @@ export function MemberSettingsPage({
                 </button>
                 <button
                   type="button"
-                  disabled={saving || !form.name.trim()}
+                  disabled={
+                    saving ||
+                    !form.name.trim() ||
+                    (!runtimeValid &&
+                      (!baseline ||
+                        form.defaultModel !== baseline.defaultModel ||
+                        form.cliEffort !== (baseline.cli?.effort ?? '')))
+                  }
                   onClick={() => void editor.save()}
                   className="min-h-11 rounded-lg bg-cafe-accent px-5 text-sm font-semibold text-[var(--cafe-surface)] disabled:opacity-50"
                 >

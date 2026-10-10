@@ -61,6 +61,18 @@ test('native role create, independent override and reset round-trip without acco
       assert.equal(patch.statusCode, 200, patch.body);
       assert.equal(patch.json().cat.defaultModel, '');
       assert.equal(patch.json().cat.cli.effort, 'low');
+      const nativeLevel = clientId === 'acp' ? 'off' : clientId === 'openai' ? 'ultra' : 'xhigh';
+      const advertised = await app.inject({
+        method: 'PATCH',
+        url: `/api/cats/${id}`,
+        headers,
+        payload: {
+          cli: { effort: nativeLevel },
+          defaultModel: clientId === 'acp' ? '["deepseek-official","deepseek-v4-pro"]' : 'native-advertised-model',
+        },
+      });
+      assert.equal(advertised.statusCode, 200, advertised.body);
+      assert.equal(advertised.json().cat.cli.effort, nativeLevel);
       const reset = await app.inject({
         method: 'PATCH',
         url: `/api/cats/${id}`,

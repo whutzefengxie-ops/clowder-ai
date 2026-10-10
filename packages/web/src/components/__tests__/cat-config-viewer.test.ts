@@ -126,7 +126,7 @@ describe('CatOverviewTab', () => {
     expect(html).toContain('#E29578');
     expect(html).toContain('/avatars/owner-custom.png');
     expect(html.indexOf('Co-worker')).toBeLessThan(html.indexOf('布偶猫 · 宪宪'));
-    expect(html).toContain('全部');
+    expect(html).toContain('选择伙伴，调整工具、模型与个性');
     expect(html).toContain('CLI（OAuth）');
     expect(html).toContain('CLI（配置）');
     expect(html).toContain('已停用');

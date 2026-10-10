@@ -77,7 +77,7 @@ describe('CatOverviewTab drag & drop (F166)', () => {
     });
     expect(container.querySelector('[data-testid="cat-card-A"]')?.textContent).toContain('company-codex');
   });
-  it('shows always-visible Session Chain state regardless of the legacy byte', async () => {
+  it('omits repetitive session-chain implementation badges regardless of the legacy byte', async () => {
     const cats = [minimalCat('A', true), minimalCat('B', false)];
     const config = { coCreator: null, cats: {} } as unknown as import('../config-viewer-types').ConfigData;
 
@@ -85,8 +85,8 @@ describe('CatOverviewTab drag & drop (F166)', () => {
       root.render(React.createElement(CatOverviewTab, { config, cats }));
     });
 
-    expect(container.querySelector('[data-testid="cat-card-A"]')?.textContent).toContain('Session Chain 始终可见');
-    expect(container.querySelector('[data-testid="cat-card-B"]')?.textContent).toContain('Session Chain 始终可见');
+    expect(container.querySelector('[data-testid="cat-card-A"]')?.textContent).not.toContain('Session Chain 始终可见');
+    expect(container.querySelector('[data-testid="cat-card-B"]')?.textContent).not.toContain('Session Chain 始终可见');
   });
 
   it('rolls back local order and shows error when saveCatOrder rejects', async () => {
