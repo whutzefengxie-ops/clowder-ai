@@ -5,3 +5,4 @@ export const escapeHtml = (value) =>
   );
 export const sha = (value) =>
   `<button type="button" class="sha" data-copy="${escapeHtml(value)}" aria-label="复制提交 ${escapeHtml(value)}">${escapeHtml(value)} <span>⧉</span></button>`;
+export const internalPrHref = (id) => `/internal/demo/core/pull/${Number(id)}`;

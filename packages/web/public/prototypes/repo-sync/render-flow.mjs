@@ -1,4 +1,4 @@
-import { phases } from './data.mjs';
+import { COMPLETE, phases } from './data.mjs';
 import { escapeHtml } from './html.mjs';
 export function renderFlow(active, selectedPhase) {
   return phases
@@ -8,7 +8,7 @@ export function renderFlow(active, selectedPhase) {
 }
 function renderNode(name, phase, active, selectedPhase) {
   const now = active?.phase === phase;
-  const done = Boolean(active && phase < active.phase) || (phase === 8 && now);
+  const done = Boolean(active && phase < active.phase) || (phase === COMPLETE && now);
   let tone = '';
   let label = '待执行';
   if (done) {
@@ -23,14 +23,14 @@ function renderNode(name, phase, active, selectedPhase) {
     }
   }
   const selected = selectedPhase === phase;
-  return `<button type="button" class="flow-node ${tone} ${selected ? 'focused' : ''}" data-phase="${phase}" aria-pressed="${selected}"><span class="node-circle">${done ? '✓' : phase}</span><strong>${name}</strong><small>${label}</small></button>`;
+  return `<button type="button" class="flow-node ${tone} ${selected ? 'focused' : ''}" data-phase="${phase}" aria-pressed="${selected}"><span class="node-circle">${done ? '✓' : phase}</span><strong>${name}</strong><small>${label}</small><small class="step-owner">${phase === 6 ? '人工 · 平台' : '程序 · 自动'}</small></button>`;
 }
 export function renderQueue(state, current) {
   const acceptedIndex = state.deliveries.findIndex((item) => item.target === state.accepted);
   return state.deliveries
     .map((item, index) => {
       const active = item.id === state.active?.id;
-      const done = index <= acceptedIndex && (!active || state.active.phase === 8);
+      const done = index <= acceptedIndex && (!active || state.active.phase === COMPLETE);
       let tone = '';
       let mark = '○';
       let label = '待同步';

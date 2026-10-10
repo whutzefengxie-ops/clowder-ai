@@ -7,7 +7,7 @@ const { chromium } = require(
     join(homedir(), '.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright'),
 );
 const evidence = process.env.REPO_SYNC_EVIDENCE || join(tmpdir(), 'repo-sync-prototype-evidence');
-const key = 'clowder-repo-sync-demo-v1';
+const key = 'clowder-repo-sync-demo-v2';
 async function run() {
   await mkdir(evidence, { recursive: true });
   const browser = await chromium.launch({
@@ -22,16 +22,33 @@ async function run() {
       if (response.status() >= 400) errors.push(`${response.status()} ${response.url()}`);
     });
     await page.goto('http://127.0.0.1:5186');
-    await page.locator('#approve').waitFor();
+    await page.locator('#open-pr').waitFor();
+    assert.equal(await page.locator('#approval-dialog').count(), 0);
     const read = () => page.evaluate((storageKey) => JSON.parse(localStorage.getItem(storageKey)), key);
     const scenario = async (name) => {
       await page.locator('#scenario').selectOption(name);
       await page.locator('#overview').waitFor({ state: 'visible' });
     };
     const approve = async (note) => {
-      await page.locator('#approve').click();
-      await page.locator('#approval-note').fill(note);
-      await page.getByRole('button', { name: '通过审批并模拟合入' }).click();
+      const expected = (await read()).active.internalPr;
+      const beforeNavigation = (await read()).internalSha;
+      const [prPage] = await Promise.all([page.waitForEvent('popup'), page.locator('#open-pr').click()]);
+      await prPage.waitForURL(`**/internal/demo/core/pull/${expected}`);
+      assert.equal((await read()).internalSha, beforeNavigation);
+      if (expected === 93) assert.doesNotMatch(await prPage.locator('#pr-content').innerText(), /第一笔审批通过/);
+      await prPage.locator('#platform-note').fill(note);
+      await prPage.screenshot({ path: join(evidence, '07-specific-pr-page.png'), fullPage: true });
+      await prPage.getByRole('button', { name: `模拟在平台合入 PR #${expected}` }).click();
+      await page.locator('#auto-step').waitFor({ state: 'visible' });
+      assert.equal((await read()).active.phase, 7);
+      await prPage.close();
+    };
+    const finish = async () => {
+      await page.locator('#auto-step').click();
+      assert.equal((await read()).active.phase, 8);
+      assert.equal((await read()).accepted, (await read()).active.target);
+      await page.locator('#auto-step').click();
+      assert.equal((await read()).active.phase, 9);
     };
     await page.screenshot({ path: join(evidence, '01-overview-desktop.png'), fullPage: true });
     await scenario('waiting');
@@ -42,9 +59,9 @@ async function run() {
     await approve('sentinel-用户输入-20261010-α');
     let state = await read();
     assert.equal(state.active.phase, 7);
-    assert.equal(state.accepted, frozen);
+    assert.notEqual(state.accepted, frozen);
     assert.notEqual(state.accepted, state.internalSha);
-    await page.locator('#advance').click();
+    await finish();
     await page.locator('[data-view="events"]').first().click();
     assert.match(await page.locator('#events').innerText(), /sentinel-用户输入-20261010-α/);
     await page.reload();
@@ -56,11 +73,11 @@ async function run() {
     for (let i = 0; i < 5; i++) await page.locator('#advance').click();
     assert.equal((await read()).internalSha, '10a91f20');
     await approve('第一笔审批通过');
-    await page.locator('#advance').click();
+    await finish();
     await page.locator('#start').click();
     for (let i = 0; i < 5; i++) await page.locator('#advance').click();
     await approve('第二笔审批通过');
-    await page.locator('#advance').click();
+    await finish();
     assert.match(await page.locator('.hero h2').innerText(), /已接收外部最新版本/);
     state = await read();
     assert.equal(state.latest, state.accepted);
@@ -72,13 +89,13 @@ async function run() {
     assert.equal((await read()).active.phase, 5);
     await scenario('plugin');
     const before = (await read()).internalSha;
-    assert.equal(await page.locator('#approve').count(), 0);
+    assert.equal(await page.locator('#open-pr').count(), 0);
     assert.match(await page.locator('#object-summary').innerText(), /候选与目标一致/);
     assert.match(await page.locator('#object-summary').innerText(), /检查失败/);
     await page.screenshot({ path: join(evidence, '05-plugin-blocked.png'), fullPage: true });
     await page.locator('#recover').click();
     assert.equal((await read()).internalSha, before);
-    await page.locator('#approve').waitFor();
+    await page.locator('#open-pr').waitFor();
     await scenario('drift');
     assert.equal(await page.locator('#recover').isDisabled(), true);
     await scenario('metadata');

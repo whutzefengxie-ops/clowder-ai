@@ -1,4 +1,4 @@
-import { BASE, deliveries } from './data.mjs';
+import { BASE, COMPLETE, deliveries } from './data.mjs';
 
 const snapshot = (index, phase, block = null) => ({
   ...structuredClone(deliveries[index]),
@@ -9,7 +9,7 @@ const snapshot = (index, phase, block = null) => ({
 });
 export function createState(scenario = 'waiting') {
   const state = {
-    schema: 1,
+    schema: 2,
     scenario,
     latest: deliveries[1].target,
     accepted: BASE,
@@ -25,12 +25,17 @@ export function createState(scenario = 'waiting') {
   if (scenario === 'metadata' || scenario === 'synced') {
     state.accepted = state.latest;
     state.internalSha = '12c79a50';
-    state.active = snapshot(1, scenario === 'synced' ? 8 : 7, scenario === 'synced' ? null : 'metadata');
+    state.active = snapshot(1, scenario === 'synced' ? COMPLETE : 8, scenario === 'synced' ? null : 'metadata');
   }
   return state;
 }
 function log(state, label, note = '') {
-  state.events.push({ label, note, time: new Date().toLocaleTimeString('zh-CN', { hour12: false }) });
+  state.events.push({
+    label,
+    note,
+    deliveryId: state.active?.id,
+    time: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
+  });
 }
 const handlers = {
   external(state) {
@@ -52,7 +57,7 @@ const handlers = {
     log(state, '外部新交付加入队列', '当前交付目标保持冻结');
   },
   start(state) {
-    if (state.active && state.active.phase !== 8) return;
+    if (state.active && state.active.phase !== COMPLETE) return;
     const index =
       state.accepted === BASE ? 0 : state.deliveries.findIndex((item) => item.target === state.accepted) + 1;
     const next = state.deliveries[index];
@@ -63,27 +68,27 @@ const handlers = {
   },
   advance(state) {
     const active = state.active;
-    if (!active || active.block || active.phase >= 8 || active.phase === 6) return;
+    if (!active || active.block || active.phase >= COMPLETE || active.phase === 6) return;
     active.phase += 1;
     const original = state.deliveries.find((item) => item.id === active.id);
     if (active.phase === 3) active.internalIssue = original.internalIssue;
     if (active.phase === 4) active.internalPr = original.internalPr;
-    log(state, active.phase === 8 ? '交付验收完成' : '执行步骤完成', `当前阶段 ${active.phase}`);
+    if (active.phase === 8) state.accepted = active.target;
+    log(state, active.phase === COMPLETE ? 'Issue 状态核对完成，交付完成' : '程序步骤完成', `当前阶段 ${active.phase}`);
   },
   approve(state, action) {
     const active = state.active;
     if (active?.phase !== 6 || active.block) return;
     state.internalSha = `1${state.deliveries.findIndex((item) => item.id === active.id) + 1}c79a50`;
-    state.accepted = active.target;
     active.phase = 7;
-    log(state, '内部 PR 已审批并模拟合入', action.note || '审批通过');
+    log(state, '模拟内部平台 PR 合入，等待程序核验', action.note || '平台审批通过');
   },
   recover(state) {
     const active = state.active;
     if (!active?.block || active.block === 'drift') return;
     const block = active.block;
     active.block = null;
-    active.phase = block === 'metadata' ? 8 : block === 'plugin' ? 6 : 5;
+    active.phase = block === 'metadata' ? COMPLETE : block === 'plugin' ? 6 : 5;
     log(
       state,
       block === 'timeout'
@@ -103,7 +108,7 @@ export function summary(state) {
   const acceptedIndex = state.deliveries.findIndex((item) => item.target === state.accepted);
   const behind = state.deliveries.length - acceptedIndex - 1;
   const codeLatest = state.accepted === state.latest;
-  const pending = state.active && state.active.phase < 8;
+  const pending = state.active && state.active.phase < COMPLETE;
   return {
     codeLatest,
     fullyComplete: codeLatest && !pending,

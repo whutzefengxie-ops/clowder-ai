@@ -19,8 +19,8 @@ tips_exempt: 独立原型验证记录，尚未挂载正式功能。
 | --- | --- |
 | 判断是否最新 | 比较已接受上游版本与外部最新版本；main SHA 不同仍可最新 |
 | 查看版本对应 | 总览三个版本卡；映射页来源提交、内部初始化与合并节点 |
-| 未合入 PR 与卡点 | 主状态、待合入数量、当前对象、八步流程与恢复入口 |
-| 正常审批路径 | 两笔有序交付从准备到关单；审批前 main 不变 |
+| 未合入 PR 与卡点 | 主状态、待合入数量、当前对象、九步流程与恢复入口 |
+| 正常审批路径 | 具体 PR URL 跳转；点击链接不改 main；平台合入后回读、核验、核对 Issue |
 | 新交付不影响活动交付 | 外部更新进入队列，冻结目标保持不变 |
 | 异常恢复 | 创建超时复用 PR；插件失败后重跑；核心偏移暂停；关单补齐不重复合入 |
 | 真实用户输入 | 自定义中文 sentinel 备注进入日志，刷新后仍保留 |
@@ -29,10 +29,10 @@ tips_exempt: 独立原型验证记录，尚未挂载正式功能。
 
 本轮命令及结果：
 
-- `node --test packages/web/public/prototypes/repo-sync/state.test.mjs`：7 项通过，0 失败。先观察原始状态桩测试失败，再实现并验证。
+- `node --test packages/web/public/prototypes/repo-sync/state.test.mjs`：8 项通过，0 失败。新增“平台合入后先核验再更新接受游标”的测试先红后绿。
 - `node packages/web/public/prototypes/repo-sync/browser-check.cjs`：完整旅程通过，页面异常和 HTTP 错误均为 0；截图写入系统临时目录 `repo-sync-prototype-evidence`。
-- 项目安装的 Biome 2.4.1 对 10 个 JS 模块执行 `check`：通过，无警告；HTML／CSS 执行关闭格式化的语法与 lint 检查：通过，无警告。CSS 保留紧凑声明以遵守文件行数硬限。
-- `git diff --check`／暂存差异检查：通过。所有原型文件低于 350 行硬限；CSS 207 行超过 200 行提示线，仍低于硬限。
+- 项目安装的 Biome 2.4.1 对 12 个 JS 模块执行 `check`：通过，无警告；HTML／CSS 执行关闭格式化的语法与 lint 检查：通过，无警告。CSS 保留紧凑声明以遵守文件行数硬限。
+- `git diff --check`／暂存差异检查：通过。所有原型文件低于 350 行硬限；CSS 214 行超过 200 行提示线，仍低于硬限。
 - `node scripts/check-capability-tips.mjs --changed-file packages/web/public/prototypes/repo-sync/README.md`：通过，另有 17 个原有目录引用警告。
 - 不限定改动范围的 capability-tips 检查：20 个问题，均指向本分支基线已有的 Feature 文档，不涉及原型文件。未将其宣称为全仓通过。
 - `node scripts/check-fallback-layers.mjs --base main`：执行成功，触发机械计数提示。核对后分别为输入／展示默认值、场景布尔判定、独立的本地存储与剪贴板异常处理；没有用多层兜底吞掉同步失败或自动覆盖基线。活动交付、版本与对象仍以单一状态对象为依据，不另建补偿状态源。
@@ -46,3 +46,5 @@ Architecture cell：独立原型工作面，不新增生产同步服务或产品
 运行说明：pnpm 启动包装在当前环境尝试下载不可达依赖；项目预览启动器在 Windows 无法记录进程身份。当前使用直接 Node 静态服务，不能承诺启动器托管或跨会话守护；需要重启时按 README 的 Node 命令运行。
 
 状态：作者自检通过；未进行独立代码审查、未推送或合入 main。
+
+本次交接调整：移除同步页审批弹窗；具体 PR 页模拟平台操作，并按 deliveryId 隔离审核记录。合入后核验、Issue 核对均标注程序自动，结果触发按钮仅在演示控制条。重新验证跨页通知、接受游标时机、顺序交付、刷新恢复及四种屏宽。

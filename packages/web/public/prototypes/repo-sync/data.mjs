@@ -1,4 +1,5 @@
 export const BASE = 'a17e9b40';
+export const COMPLETE = 9;
 export const phases = [
   '发现交付',
   '冻结与校验',
@@ -7,7 +8,8 @@ export const phases = [
   '创建内部 PR',
   '运行检查',
   '等待审批',
-  '验收与关单',
+  '合入后核验',
+  '核对 Issue 状态',
   '完成',
 ];
 export const deliveries = [
@@ -78,11 +80,20 @@ export const phaseDetails = [
     '比较候选核心文件树，执行测试与独立插件兼容检查。失败时不移动内部 main。',
     'repo-sync checks run --delivery delivery-041',
   ],
-  ['等待审批', '审核映射、差异和检查结果。由内部正常 PR 审批流程决定是否合入。', 'repo-sync pr inspect --id 92'],
   [
-    '验收与关单',
-    '合入后验证核心文件树、记录已接受上游版本，核对正确的内部 Issue 已关闭。',
-    'git rev-parse internal/main\nrepo-sync issue reconcile --delivery delivery-041',
+    '等待审批',
+    '人工在内部平台的具体 PR 页面审核和合入。同步工具只读取结果，点击打开 PR 不代表审批通过。',
+    'repo-sync pr inspect --id 92',
+  ],
+  [
+    '合入后核验',
+    '程序自动读取 PR 合入结果，获取实际 main，核验其文件树与目标一致、来源提交仍可达；通过后更新接受版本，无需人工验收按钮。',
+    'git fetch internal main\ngit diff --exit-code c2f84d91 internal/main -- .\ngit merge-base --is-ancestor c2f84d91 internal/main',
+  ],
+  [
+    '核对 Issue 状态',
+    '程序自动核对已映射的正确内部 Issue。平台已自动关闭则只记录；未关闭且确有本交付关闭义务时，按映射显式关闭。普通关联 Issue 保持打开。',
+    'repo-sync issue reconcile --delivery delivery-041',
   ],
   ['完成', '代码验收和元数据核对均完成，下一笔交付可以开始。', 'repo-sync ledger inspect --delivery delivery-041'],
 ];

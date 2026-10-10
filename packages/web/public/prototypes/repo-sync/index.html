@@ -23,13 +23,12 @@
   <main>
     <header class="topbar"><div>仓库工作区 <span>/</span> <strong id="view-name">同步总览</strong></div><span class="badge neutral">演示环境</span></header>
     <section class="page-heading"><div><div class="eyebrow">REPOSITORY SYNC</div><h1>单向交付接收</h1><p>从外部 main 接收通用能力，在内部完成检查与审批。</p></div><button type="button" id="demo-toggle" class="button secondary" aria-expanded="true">隐藏演示控制</button></section>
-    <div id="demo-controls" class="demo-controls"><label for="scenario">演示场景</label><select id="scenario"></select><button type="button" id="external" class="button secondary">＋ 外部新增交付</button><button type="button" id="reset" class="text-button">重置当前场景</button><small>所有操作均为模拟</small></div>
+    <div id="demo-controls" class="demo-controls"><label for="scenario">演示场景</label><select id="scenario"></select><button type="button" id="external" class="button secondary">＋ 外部新增交付</button><button type="button" id="auto-step" class="button secondary" hidden>模拟自动检查结果</button><button type="button" id="reset" class="text-button">重置当前场景</button><small>所有操作均为模拟</small></div>
     <div id="overview"></div>
     <div id="mapping" hidden></div>
     <div id="events" hidden></div>
-    <footer class="page-footer">按交付顺序同步 · 同一交付可恢复 · 内部审批后才推进 main</footer>
+    <footer class="page-footer">代码自动同步与核验 · 人工在内部平台审核 PR · Agent 为可选辅助</footer>
   </main>
-  <dialog id="approval-dialog"><form id="approval-form"><div class="eyebrow">内部审批 · 模拟操作</div><h2>审核并接收这笔交付</h2><p id="approval-context"></p><div class="notice success">核心文件树与上游目标一致，测试及插件兼容检查通过。</div><label for="approval-note">审批备注</label><textarea id="approval-note" required rows="4" placeholder="记录本次审批的依据或备注"></textarea><p class="fine">备注会保存在本机原型状态与执行记录中，请使用演示内容。</p><div class="dialog-actions"><button type="button" class="button secondary" id="cancel-approval">取消</button><button type="submit" class="button primary">通过审批并模拟合入</button></div></form></dialog>
   <dialog id="adapter-dialog"><div class="eyebrow">原型边界</div><h2>Git 与平台命令适配</h2><p>Git 负责提交对象、分支和文件树。Issue 与 PR 需要内部平台 CLI 或 API；标准 Git 没有创建这些对象的命令。</p><p>当前界面将它们统一展示为 <code>repo-sync issue / pr</code> 占位命令。落地时可接入 codehub-cli，Git 部分继续使用 Git Bash。</p><div class="notice">此原型只改变本地演示状态，不执行真实 Git、平台命令或网络同步。</div><button type="button" id="close-adapter" class="button primary">了解，返回原型</button></dialog>
   <div id="toast" role="status" aria-live="polite"></div>
   <script type="module" src="/app.mjs"></script>

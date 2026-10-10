@@ -12,6 +12,9 @@ const files = new Map(
     'app.mjs',
     'data.mjs',
     'state.mjs',
+    'storage.mjs',
+    'pr.html',
+    'pr.mjs',
     'html.mjs',
     'render-flow.mjs',
     'render-overview.mjs',
@@ -24,7 +27,10 @@ files.set('/native-console.css', resolve(cssRoot, 'console-tokens.css'));
 const port = Number(process.env.REPO_SYNC_PORT ?? 5186);
 if ([3003, 3004].includes(port)) throw new Error('Clowder AI 保留端口不可用于原型');
 createServer(async (request, response) => {
-  const path = files.get(new URL(request.url, `http://127.0.0.1:${port}`).pathname);
+  const requestedPath = new URL(request.url, `http://127.0.0.1:${port}`).pathname;
+  const path = /^\/internal\/demo\/core\/pull\/\d+$/.test(requestedPath)
+    ? resolve(root, 'pr.html')
+    : files.get(requestedPath);
   if (!path) {
     response.writeHead(404);
     response.end('Not found');

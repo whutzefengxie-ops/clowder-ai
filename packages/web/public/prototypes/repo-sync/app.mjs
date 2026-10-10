@@ -2,22 +2,10 @@ import { scenarios } from './data.mjs';
 import { renderEvents, renderMapping, renderObjects, renderPhase } from './render-detail.mjs';
 import { renderOverview } from './render-overview.mjs';
 import { createState, reduce } from './state.mjs';
+import { readState, storageKey, writeState } from './storage.mjs';
 
-const storageKey = 'clowder-repo-sync-demo-v1';
 const element = (id) => document.getElementById(id);
-let state = createState();
-try {
-  const saved = JSON.parse(localStorage.getItem(storageKey));
-  if (
-    saved?.schema === 1 &&
-    Array.isArray(saved.deliveries) &&
-    Array.isArray(saved.events) &&
-    scenarios[saved.scenario]
-  )
-    state = saved;
-} catch {
-  /* Unavailable storage or an older demo starts with synthetic defaults. */
-}
+let state = readState();
 let view = 'overview';
 let selectedPhase = state.active?.phase ?? 1;
 let selectedId = state.active?.id ?? state.deliveries[0].id;
@@ -26,12 +14,14 @@ element('scenario').innerHTML = Object.entries(scenarios)
   .join('');
 function persist() {
   try {
-    localStorage.setItem(storageKey, JSON.stringify(state));
+    writeState(state);
   } catch {
     toast('浏览器未允许本地保存，当前交互仍可使用');
   }
 }
 function render() {
+  element('auto-step').hidden = !state.active || state.active.block || ![7, 8].includes(state.active.phase);
+  element('auto-step').textContent = state.active?.phase === 7 ? '模拟程序核验通过' : '模拟 Issue 核对完成';
   element('scenario').value = state.scenario;
   element('overview').innerHTML = renderOverview(state, selectedPhase);
   element('phase-detail').innerHTML = renderPhase(state, selectedPhase);
@@ -86,14 +76,7 @@ document.addEventListener('click', (event) => {
   }
   if (button.dataset.copy) copyCommit(button.dataset.copy);
   if (['start', 'advance', 'recover', 'external'].includes(button.id)) dispatch(button.id);
-  if (button.id === 'approve') {
-    element('approval-context').textContent =
-      `外部 PR #${state.active.sourcePr} → 内部 PR #${state.active.internalPr} · 目标 ${state.active.target}`;
-    element('approval-note').value = '';
-    element('approval-dialog').showModal();
-    element('approval-note').focus();
-  }
-  if (button.id === 'cancel-approval') element('approval-dialog').close();
+  if (button.id === 'auto-step') dispatch('advance');
   if (button.id === 'adapter-button') element('adapter-dialog').showModal();
   if (button.id === 'close-adapter') element('adapter-dialog').close();
   if (button.id === 'demo-toggle') {
@@ -120,12 +103,11 @@ document.addEventListener('change', (event) => {
     render();
   }
 });
-element('approval-form').addEventListener('submit', (event) => {
-  event.preventDefault();
-  const note = element('approval-note').value.trim();
-  if (!note) return;
-  element('approval-dialog').close();
-  dispatch('approve', { note });
-  toast('模拟合入完成，下一步验收与关单');
+window.addEventListener('storage', (event) => {
+  if (event.key !== storageKey) return;
+  state = readState();
+  selectedPhase = state.active?.phase ?? 1;
+  render();
 });
+persist();
 render();

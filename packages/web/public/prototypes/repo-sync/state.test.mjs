@@ -55,3 +55,17 @@ test('an unfinished delivery cannot be replaced, including pending metadata', ()
     assert.deepEqual(reduce(state, { type: 'start' }), state);
   }
 });
+
+test('platform merge is observed before verification advances the accepted cursor', () => {
+  let state = createState('waiting');
+  const accepted = state.accepted;
+  state = reduce(state, { type: 'approve', note: 'platform-note-89' });
+  assert.equal(state.active.phase, 7);
+  assert.equal(state.accepted, accepted);
+  state = reduce(state, { type: 'advance' });
+  assert.equal(state.active.phase, 8);
+  assert.equal(state.accepted, state.active.target);
+  assert.equal(summary(state).fullyComplete, false);
+  state = reduce(state, { type: 'advance' });
+  assert.equal(state.active.phase, 9);
+});

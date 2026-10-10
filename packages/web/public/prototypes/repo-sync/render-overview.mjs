@@ -1,5 +1,5 @@
-import { phases } from './data.mjs';
-import { escapeHtml, sha } from './html.mjs';
+import { COMPLETE, phases } from './data.mjs';
+import { escapeHtml, internalPrHref, sha } from './html.mjs';
 import { renderFlow, renderQueue } from './render-flow.mjs';
 import { summary } from './state.mjs';
 
@@ -14,20 +14,21 @@ const blocks = {
   metadata: [
     '代码已最新，Issue 状态待补齐',
     '内部 PR 已合入，正确的内部 Issue 仍未关单。只补齐元数据，不重复合入。',
-    '补齐 Issue 状态',
+    '重试 Issue 状态核对',
   ],
 };
 export function nextAction(state) {
   const active = state.active;
   if (active?.block)
     return `<button type="button" id="recover" class="button primary" ${active.block === 'drift' ? 'disabled' : ''}>${blocks[active.block][2]}</button>`;
-  if (!active || active.phase === 8)
+  if (!active || active.phase === COMPLETE)
     return summary(state).behind
       ? '<button type="button" id="start" class="button primary">同步下一笔交付 →</button>'
       : '<span class="badge good">所有交付已完成</span>';
-  return active.phase === 6
-    ? '<button type="button" id="approve" class="button primary">审核内部 PR →</button>'
-    : `<button type="button" id="advance" class="button primary">${active.phase === 7 ? '完成验收与关单' : '模拟执行下一步'} →</button>`;
+  if (active.phase === 6)
+    return `<a id="open-pr" class="button primary" href="${internalPrHref(active.internalPr)}" target="_blank" rel="noopener">打开内部 PR #${active.internalPr} ↗</a>`;
+  if (active.phase >= 7) return '<span class="badge neutral">程序自动处理 · 无需人工验收</span>';
+  return '<button type="button" id="advance" class="button primary">模拟执行下一步 →</button>';
 }
 function presentation(state) {
   const status = summary(state);
@@ -40,20 +41,21 @@ function presentation(state) {
       : `内部落后 ${status.behind} 笔外部交付`;
   const current = blocked
     ? blocks[blocked][0]
-    : active && active.phase < 8
+    : active && active.phase < COMPLETE
       ? phases[active.phase]
       : status.fullyComplete
         ? '全部完成'
         : '待开始同步';
   let description = '按外部交付顺序推进。审批通过前，内部 main 保持当前版本。';
-  if (active?.phase >= 7) description = '本笔代码已接收，验收并核对工作项状态后完成交付。';
+  if (active?.phase === 7) description = '内部 PR 已合入。程序正在核对实际结果，通过后才登记已接受版本。';
+  if (active?.phase >= 8) description = '代码核验通过。程序核对正确的内部 Issue 状态后，自动完成交付。';
   if (status.fullyComplete) description = '代码与对象状态均已验收，核心文件树保持一致。';
   return { status, active, blocked, title, current, description };
 }
 export function renderOverview(state, selectedPhase) {
   const { status, active, blocked, title, current, description } = presentation(state);
   const tone = status.fullyComplete ? 'good' : blocked ? 'bad' : 'warm';
-  const queueSize = Math.max(0, status.behind - (active && active.phase < 7 ? 1 : 0));
+  const queueSize = Math.max(0, status.behind - (active && active.phase < 8 ? 1 : 0));
   return `<section class="hero ${status.fullyComplete ? 'complete' : ''}">
     <div><span class="badge ${tone}"><span class="dot"></span>${escapeHtml(current)}</span><h2>${title}</h2><p>${description}</p></div>
     <div class="hero-action">${nextAction(state)}<small>${status.pendingPr} 个内部 PR 待合入 · ${queueSize} 笔交付排队</small></div>

@@ -1,0 +1,14 @@
+import { createState } from './state.mjs';
+export const storageKey = 'clowder-repo-sync-demo-v2';
+export function readState() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(storageKey));
+    if (saved?.schema === 2 && saved.deliveries?.length && Array.isArray(saved.events)) return saved;
+  } catch {
+    /* Only synthetic demo data is stored; unavailable storage starts a new demo. */
+  }
+  return createState();
+}
+export function writeState(state) {
+  localStorage.setItem(storageKey, JSON.stringify(state));
+}
