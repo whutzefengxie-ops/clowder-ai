@@ -1,15 +1,15 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useCallback, useEffect, useState } from 'react';
 import { RoutingContextLedger } from '@/components/routing-context/RoutingContextLedger';
 import { useCatData } from '@/hooks/useCatData';
-import { catDossierCoversStrengths, useDossierProfiles } from '@/hooks/useDossierProfiles';
 import { apiFetch } from '@/utils/api-client';
 import { ConnectorPluginInstallButton } from '../ConnectorPluginInstallButton';
 import { CatOverviewTab, type ConfigData } from '../config-viewer-tabs';
 import { DesktopUpdateSettingsPanel } from '../DesktopUpdateSettingsPanel';
 import { HubAccountsTab } from '../HubAccountsTab';
-import { HubCatEditor } from '../HubCatEditor';
 import { HubCoCreatorEditor } from '../HubCoCreatorEditor';
 import { HubConnectorConfigTab } from '../HubConnectorConfigTab';
 import { HubEnvFilesTab } from '../HubEnvFilesTab';
@@ -21,6 +21,7 @@ import { ConciergeSettingsContent } from './ConciergeSettingsContent';
 import { HubSystemSettingsTab } from './HubSystemSettingsTab';
 import { MarketplaceContent } from './MarketplaceContent';
 import { McpManageContent } from './McpManageContent';
+import { MemberSettingsPage } from './members/MemberSettingsPage';
 import { OpenTeamWorkspaceButton } from './OpenTeamWorkspaceButton';
 import { OpsContent } from './OpsContent';
 import { PluginsContent } from './PluginsContent';
@@ -38,23 +39,42 @@ interface SettingsContentProps {
 }
 
 export function SettingsContent({ section, initialEditCatId }: SettingsContentProps) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const { cats, refresh } = useCatData();
   const [config, setConfig] = useState<ConfigData | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingCat, setEditingCat] = useState<(typeof cats)[number] | null>(null);
-  const [createDraft, setCreateDraft] = useState<Parameters<typeof HubCatEditor>[0]['draft']>(null);
   const [togglingCatId, setTogglingCatId] = useState<string | null>(null);
   const [coCreatorEditorOpen, setCoCreatorEditorOpen] = useState(false);
   const [imRefreshKey, setImRefreshKey] = useState(0);
   const confirm = useConfirm();
-
-  // F208 OQ-9: per-field check — badge only when dossier l0RosterSummary covers teamStrengths (KD-14)
-  const { data: dossierData } = useDossierProfiles();
-  const editingCatHasDossier = useMemo(
-    () => (editingCat ? catDossierCoversStrengths(editingCat.id, dossierData) : false),
-    [editingCat, dossierData],
-  );
+  const openMember = (cat: (typeof cats)[number] | null) => {
+    setEditingCat(cat);
+    setEditorOpen(true);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('s', 'members');
+    params.delete('returnTo');
+    if (cat) {
+      params.set('cat', cat.id);
+      params.delete('view');
+    } else {
+      params.set('view', 'add');
+      params.delete('cat');
+    }
+    router.push(`/settings?${params.toString()}`, { scroll: false });
+  };
+  const closeMember = () => {
+    setEditorOpen(false);
+    setEditingCat(null);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('s', 'members');
+    params.delete('cat');
+    params.delete('view');
+    params.delete('returnTo');
+    router.push(`/settings?${params.toString()}`, { scroll: false });
+  };
 
   const fetchData = useCallback(async () => {
     setFetchError(null);
@@ -75,23 +95,18 @@ export function SettingsContent({ section, initialEditCatId }: SettingsContentPr
     fetchData();
   }, [fetchData]);
 
-  const consumedDeepLinkRef = useRef<string | null>(null);
   useEffect(() => {
-    if (
-      initialEditCatId &&
-      section === 'members' &&
-      cats.length > 0 &&
-      consumedDeepLinkRef.current !== initialEditCatId
-    ) {
-      const cat = cats.find((c) => c.id === initialEditCatId);
-      if (cat) {
-        consumedDeepLinkRef.current = initialEditCatId;
-        setCreateDraft(null);
-        setEditingCat(cat);
-        setEditorOpen(true);
-      }
+    if (section !== 'members') return;
+    if (searchParams.get('view') === 'add') {
+      setEditingCat(null);
+      setEditorOpen(true);
+      return;
     }
-  }, [initialEditCatId, section, cats]);
+    const id = searchParams.get('cat') || initialEditCatId;
+    const selected = id ? cats.find((item) => item.id === id) : null;
+    setEditingCat(selected ?? null);
+    setEditorOpen(Boolean(selected));
+  }, [initialEditCatId, section, cats, searchParams]);
 
   const handleEditorSaved = useCallback(async () => {
     await Promise.all([fetchData(), refresh()]);
@@ -165,6 +180,20 @@ export function SettingsContent({ section, initialEditCatId }: SettingsContentPr
   const content = (() => {
     switch (meta.id) {
       case 'members':
+        if (editorOpen)
+          return (
+            <MemberSettingsPage
+              key={editingCat?.id ?? 'new'}
+              cat={editingCat}
+              cats={cats}
+              onBack={closeMember}
+              onSaved={async (saved) => {
+                await handleEditorSaved();
+                if (!editingCat) closeMember();
+                else setEditingCat(saved);
+              }}
+            />
+          );
         return (
           <div className="space-y-8">
             {fetchError ? (
@@ -175,16 +204,8 @@ export function SettingsContent({ section, initialEditCatId }: SettingsContentPr
               <CatOverviewTab
                 config={config}
                 cats={cats}
-                onAddMember={() => {
-                  setEditingCat(null);
-                  setCreateDraft(null);
-                  setEditorOpen(true);
-                }}
-                onEditMember={(cat) => {
-                  setCreateDraft(null);
-                  setEditingCat(cat);
-                  setEditorOpen(true);
-                }}
+                onAddMember={() => openMember(null)}
+                onEditMember={openMember}
                 onEditCoCreator={() => setCoCreatorEditorOpen(true)}
                 onDeleteMember={handleDeleteMember}
                 onToggleAvailability={handleToggleAvailability}
@@ -204,7 +225,19 @@ export function SettingsContent({ section, initialEditCatId }: SettingsContentPr
           </div>
         );
       case 'accounts':
-        return <HubAccountsTab />;
+        return (
+          <div className="space-y-4">
+            {searchParams.get('returnTo')?.startsWith('/settings?') && (
+              <Link
+                className="inline-flex min-h-11 items-center text-sm text-cafe-accent"
+                href={searchParams.get('returnTo') ?? '/settings?s=members'}
+              >
+                ← 返回成员编辑 / Back to member
+              </Link>
+            )}
+            <HubAccountsTab />
+          </div>
+        );
       case 'im':
         return <HubConnectorConfigTab refreshKey={imRefreshKey} />;
       case 'voice':
@@ -251,24 +284,12 @@ export function SettingsContent({ section, initialEditCatId }: SettingsContentPr
 
   return (
     <>
-      <SettingsPageHeader title={meta.label} subtitle={meta.description}>
-        {section === 'im' && <ConnectorPluginInstallButton onInstalled={() => setImRefreshKey((k) => k + 1)} />}
-      </SettingsPageHeader>
-      {content}
-      {editorOpen && (
-        <HubCatEditor
-          open
-          cat={editingCat}
-          draft={createDraft}
-          hasDossier={editingCatHasDossier}
-          onClose={() => {
-            setEditorOpen(false);
-            setEditingCat(null);
-            setCreateDraft(null);
-          }}
-          onSaved={handleEditorSaved}
-        />
+      {!(section === 'members' && editorOpen) && (
+        <SettingsPageHeader title={meta.label} subtitle={meta.description}>
+          {section === 'im' && <ConnectorPluginInstallButton onInstalled={() => setImRefreshKey((k) => k + 1)} />}
+        </SettingsPageHeader>
       )}
+      {content}
       {coCreatorEditorOpen && config && (
         <HubCoCreatorEditor
           open

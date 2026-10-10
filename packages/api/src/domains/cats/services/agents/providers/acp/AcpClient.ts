@@ -383,7 +383,12 @@ export class AcpClient {
       'ACP session/load: sending request',
     );
     const t0 = Date.now();
-    const resp = await this.sendRequest(ACP_METHODS.sessionLoad, {
+    const method =
+      !this.initResult?.agentCapabilities?.loadSession &&
+      this.initResult?.agentCapabilities?.sessionCapabilities?.resume
+        ? ACP_METHODS.sessionResume
+        : ACP_METHODS.sessionLoad;
+    const resp = await this.sendRequest(method, {
       sessionId,
       cwd: effectiveCwd,
       mcpServers: compatible,
@@ -392,25 +397,33 @@ export class AcpClient {
       { sessionId, durationMs: Date.now() - t0, hasResult: !!resp.result },
       'ACP session/load: response received',
     );
-    return resp.result as unknown as AcpNewSessionResult;
+    return {
+      ...resp.result,
+      sessionId: typeof resp.result?.sessionId === 'string' ? resp.result.sessionId : sessionId,
+    } as AcpNewSessionResult;
   }
 
-  async setSessionConfigOption(sessionId: string, configId: string, value: string): Promise<void> {
+  async setSessionConfigOption(
+    sessionId: string,
+    configId: string,
+    value: string,
+  ): Promise<Record<string, unknown> | undefined> {
     const trimmedConfigId = configId.trim();
-    const trimmedValue = value.trim();
-    if (!trimmedConfigId || !trimmedValue) return;
+    const trimmedValue = value; // ACP values are opaque, including the empty default sentinel.
+    if (!trimmedConfigId) return;
 
     log.info(
       { sessionId, configId: trimmedConfigId, value: trimmedValue, pid: this.child?.pid },
       'ACP session/set_config_option: sending request',
     );
     const t0 = Date.now();
-    await this.sendRequest(ACP_METHODS.sessionSetConfigOption, {
+    const resp = await this.sendRequest(ACP_METHODS.sessionSetConfigOption, {
       sessionId,
       configId: trimmedConfigId,
       value: trimmedValue,
     });
     log.info({ sessionId, durationMs: Date.now() - t0 }, 'ACP session/set_config_option: response received');
+    return resp.result;
   }
 
   /**

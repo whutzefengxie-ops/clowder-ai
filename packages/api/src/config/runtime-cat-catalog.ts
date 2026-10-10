@@ -75,6 +75,7 @@ export interface RuntimeCatInput {
   color: CatColor;
   mentionPatterns: string[];
   accountRef?: string;
+  configurationSource?: 'native_tool' | 'managed_account';
   roleDescription: string;
   personality?: string;
   teamStrengths?: string;
@@ -109,6 +110,7 @@ export interface RuntimeCatUpdate {
   color?: CatColor;
   mentionPatterns?: string[];
   accountRef?: string | null;
+  configurationSource?: 'native_tool' | 'managed_account' | null;
   roleDescription?: string;
   personality?: string;
   teamStrengths?: string;
@@ -310,6 +312,7 @@ function createBreedFromInput(input: RuntimeCatInput): CatBreed {
       {
         id: variantId,
         clientId: input.clientId,
+        ...(input.configurationSource ? { configurationSource: input.configurationSource } : {}),
         ...(input.variantLabel != null && input.variantLabel.trim().length > 0
           ? { variantLabel: input.variantLabel.trim() }
           : {}),
@@ -502,6 +505,10 @@ export function updateRuntimeCat(projectRoot: string, catId: string, patch: Runt
     }
   }
 
+  if (patch.configurationSource !== undefined) {
+    if (patch.configurationSource) variant.configurationSource = patch.configurationSource;
+    else delete variant.configurationSource;
+  }
   if (patch.accountRef !== undefined) {
     if (patch.accountRef && patch.accountRef.trim().length > 0) {
       variant.accountRef = patch.accountRef.trim();

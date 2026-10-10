@@ -712,6 +712,15 @@ export const ENV_VARS: EnvDefinition[] = [
     hubVisible: false,
   },
   {
+    name: 'CAT_CAFE_SESSION_COOKIE_NAME',
+    defaultValue: 'cat_cafe_session',
+    description: '独立本机环境的登录 Cookie 名称，避免同主机不同端口的实例互相覆盖会话',
+    category: 'server',
+    sensitive: false,
+    hubVisible: false,
+    runtimeEditable: false,
+  },
+  {
     name: 'CAT_CAFE_SKIP_HOMEDIR_MIGRATION',
     defaultValue: '0',
     description: '跳过 homedir credentials / legacy provider profiles 迁移（新安装或 opensource profile 可显式关闭）',

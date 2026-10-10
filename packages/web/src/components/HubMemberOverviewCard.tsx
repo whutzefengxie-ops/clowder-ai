@@ -32,6 +32,16 @@ function humanizeClientId(clientId: string) {
 }
 
 function clientRuntimeLabel(cat: CatData, configCat?: CatConfig) {
+  if (cat.configurationSource === 'native_tool' && cat.acp)
+    return /dsh|deepseek/i.test(JSON.stringify(cat.acp)) ? 'DSH' : 'ACP 工具';
+  if (cat.configurationSource === 'native_tool')
+    return cat.clientId === 'openai'
+      ? 'Codex'
+      : cat.clientId === 'anthropic'
+        ? 'Claude Code'
+        : /dsh|deepseek/i.test(JSON.stringify(cat.acp))
+          ? 'DSH'
+          : 'ACP 工具';
   const accountRef = (cat.accountRef ?? '').toLowerCase();
   if (accountRef.includes('claude')) return 'Claude';
   if (accountRef.includes('codex')) return 'Codex';
@@ -44,6 +54,7 @@ function clientRuntimeLabel(cat: CatData, configCat?: CatConfig) {
 }
 
 function accountSummary(cat: CatData) {
+  if (cat.configurationSource === 'native_tool') return '本机工具';
   const accountRef = cat.accountRef?.trim() ?? '';
   if (!accountRef) return humanizeClientId(cat.clientId);
   if (
@@ -59,6 +70,8 @@ function accountSummary(cat: CatData) {
 }
 
 function getMetaSummary(cat: CatData, configCat?: CatConfig) {
+  if (cat.configurationSource === 'native_tool')
+    return `${clientRuntimeLabel(cat, configCat)} · ${cat.defaultModel || '跟随工具模型'} · 本机工具`;
   if (cat.clientId === 'antigravity') {
     return `Antigravity · ${configCat?.model ?? cat.defaultModel} · CLI Bridge`;
   }

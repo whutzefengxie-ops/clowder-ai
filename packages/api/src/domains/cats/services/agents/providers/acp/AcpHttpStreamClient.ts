@@ -218,22 +218,35 @@ export class AcpHttpStreamClient {
       'ACP HTTP session/load',
     );
     const t0 = Date.now();
-    const resp = await this.httpRequest(ACP_METHODS.sessionLoad, {
+    const method =
+      !this.initResult?.agentCapabilities?.loadSession &&
+      this.initResult?.agentCapabilities?.sessionCapabilities?.resume
+        ? ACP_METHODS.sessionResume
+        : ACP_METHODS.sessionLoad;
+    const resp = await this.httpRequest(method, {
       sessionId,
       cwd: effectiveCwd,
       mcpServers: compatible,
     });
     log.info({ sessionId, durationMs: Date.now() - t0, hasResult: !!resp.result }, 'ACP HTTP session/load: response');
-    return resp.result as unknown as AcpNewSessionResult;
+    return {
+      ...resp.result,
+      sessionId: typeof resp.result?.sessionId === 'string' ? resp.result.sessionId : sessionId,
+    } as AcpNewSessionResult;
   }
 
-  async setSessionConfigOption(sessionId: string, configId: string, value: string): Promise<void> {
-    if (!configId.trim() || !value.trim()) return;
-    await this.httpRequest(ACP_METHODS.sessionSetConfigOption, {
+  async setSessionConfigOption(
+    sessionId: string,
+    configId: string,
+    value: string,
+  ): Promise<Record<string, unknown> | undefined> {
+    if (!configId.trim()) return;
+    const response = await this.httpRequest(ACP_METHODS.sessionSetConfigOption, {
       sessionId,
       configId: configId.trim(),
-      value: value.trim(),
+      value,
     });
+    return response.result;
   }
 
   /**
