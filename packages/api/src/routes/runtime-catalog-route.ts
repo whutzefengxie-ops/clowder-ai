@@ -73,6 +73,7 @@ export function registerRuntimeCatalogRoute(app: FastifyInstance) {
     };
     if (data.accountRef) {
       const account = resolveByAccountRef(root, data.accountRef);
+      if (!account) return { status: 'unavailable', models: [], message: 'account_unavailable' };
       return {
         ...fallback,
         models: (account?.models ?? []).map((value) => ({ value, label: value })),

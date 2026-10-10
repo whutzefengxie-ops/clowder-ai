@@ -214,6 +214,11 @@ export function MemberAdditionalFields({
             {t('声音克隆与高级设置', 'Voice cloning & advanced settings')}
           </summary>
           <div className="mt-4 space-y-4">
+            <TextField
+              label={t('自定义语言代码', 'Custom language code')}
+              value={form.voiceLangCode}
+              onChange={(voiceLangCode) => patch({ voiceLangCode })}
+            />
             {fields(
               voiceFields.filter(
                 ([key]) => !['voiceVoice', 'voiceSpeed', 'voiceLangCode', 'voiceRefAudio'].includes(key),

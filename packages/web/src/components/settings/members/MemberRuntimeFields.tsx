@@ -100,7 +100,7 @@ export function MemberRuntimeFields({
   const defaultEffort = catalog?.defaultEffort ?? (!form.accountRef ? selected?.configuredEffort : undefined);
   const models = catalog?.models.length
     ? catalog.models
-    : (identity?.models ?? selected?.models ?? []).map((value) => ({ value, label: value }));
+    : (form.accountRef ? (identity?.models ?? []) : (selected?.models ?? [])).map((value) => ({ value, label: value }));
   const model = form.defaultModel || defaultModel;
   const capabilityModel = form.clientId === 'anthropic' ? (model || 'default').replace(/\[1m\]$/, '') : model;
   const activeModel =
@@ -238,17 +238,22 @@ export function MemberRuntimeFields({
           </p>
         ) : (
           <p>
-            {catalog?.message === 'account_catalog'
-              ? t('使用此连接保存的模型清单。', 'Using the model list saved with this connection.')
-              : catalog?.message === 'custom_startup'
-                ? t(
-                    '此成员使用自定义启动配置，请按工具支持的模型选择或手动指定。',
-                    'This teammate uses a custom launch configuration; select or specify a supported model.',
-                  )
-                : t(
-                    '模型目录暂不可读取。可以继续跟随工具，或保留已有模型；稍后刷新重试。',
-                    'Model catalog unavailable. Keep inherited or saved settings, or retry with Refresh.',
-                  )}
+            {catalog?.message === 'account_unavailable'
+              ? t(
+                  '此连接暂不可读取。已保留当前选择，请在“管理连接”中检查。',
+                  'This connection is unavailable. Your selection is preserved; check Manage connections.',
+                )
+              : catalog?.message === 'account_catalog'
+                ? t('使用此连接保存的模型清单。', 'Using the model list saved with this connection.')
+                : catalog?.message === 'custom_startup'
+                  ? t(
+                      '此成员使用自定义启动配置，请按工具支持的模型选择或手动指定。',
+                      'This teammate uses a custom launch configuration; select or specify a supported model.',
+                    )
+                  : t(
+                      '模型目录暂不可读取。可以继续跟随工具，或保留已有模型；稍后刷新重试。',
+                      'Model catalog unavailable. Keep inherited or saved settings, or retry with Refresh.',
+                    )}
           </p>
         )}
         {!catalogLoading && efforts?.length === 0 && !form.cliEffort && (

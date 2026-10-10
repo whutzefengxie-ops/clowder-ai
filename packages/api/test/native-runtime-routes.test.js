@@ -96,6 +96,14 @@ test('native role create, independent override and reset round-trip without acco
     assert.equal(discovery.statusCode, 200, discovery.body);
     assert.equal(discovery.json().authenticationStatus, 'not_checked');
     assert.doesNotMatch(discovery.body, /apiKey|access_token|refresh_token/);
+    const missingAccount = await app.inject({
+      method: 'POST',
+      url: '/api/cats/runtime-models',
+      headers,
+      payload: { runtimeId: 'codex', accountRef: 'missing-connection' },
+    });
+    assert.equal(missingAccount.statusCode, 200, missingAccount.body);
+    assert.deepEqual(missingAccount.json(), { status: 'unavailable', models: [], message: 'account_unavailable' });
   } finally {
     await app.close();
     process.chdir(cwd);
