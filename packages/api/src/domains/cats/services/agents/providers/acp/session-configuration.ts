@@ -57,7 +57,9 @@ export async function applySessionConfiguration(
     ['model', preferences.model],
     ['thought_level', preferences.effort],
   ] as const) {
-    if (requested === undefined || requested === '') continue;
+    // Empty strings can be advertised opaque default sentinels. Only undefined
+    // means no preference; role inheritance is normalized before this boundary.
+    if (requested === undefined) continue;
     const option = resolveSessionOption(current, kind, requested);
     if (option.unchanged) continue;
     const response = await client.setSessionConfigOption(session.sessionId, option.configId, option.value);

@@ -1,6 +1,12 @@
 import type { CatData } from '@/hooks/useCatData';
 import type { TemplateCard } from '../../first-run-quest/TemplateStep';
-import { autoSlug, type HubCatEditorFormState, initialState, type StrategyFormState } from '../../hub-cat-editor.model';
+import {
+  autoSlug,
+  type CodexRuntimeSettings,
+  type HubCatEditorFormState,
+  initialState,
+  type StrategyFormState,
+} from '../../hub-cat-editor.model';
 
 export interface MemberDraft {
   version: 1;
@@ -10,6 +16,8 @@ export interface MemberDraft {
   section: string;
   strategy?: StrategyFormState | null;
   strategyBaseline?: StrategyFormState | null;
+  codexSettings?: CodexRuntimeSettings;
+  codexBaseline?: CodexRuntimeSettings;
 }
 
 export function changedFields(form: HubCatEditorFormState, baseline: CatData | null): number {

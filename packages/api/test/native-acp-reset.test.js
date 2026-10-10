@@ -3,6 +3,36 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { catRegistry } from '@cat-cafe/shared';
 import { AcpAgentService } from '../dist/domains/cats/services/agents/providers/acp/AcpAgentService.js';
+import {
+  captureNativeDefaults,
+  defaultsForNativeResume,
+} from '../dist/domains/cats/services/agents/providers/acp/native-session-defaults.js';
+import { applySessionConfiguration } from '../dist/domains/cats/services/agents/providers/acp/session-configuration.js';
+
+for (const [kind, category] of [
+  ['effort', 'thought_level'],
+  ['model', 'model'],
+])
+  test(`restoring a native empty-string ${kind} default sends the opaque sentinel to the original session`, async () => {
+    const session = (value) => ({
+      sessionId: 'history',
+      configOptions: [{ id: kind, category, currentValue: value, options: [{ value: '' }, { value: 'override' }] }],
+    });
+    const calls = [];
+    const client = {
+      async setSessionConfigOption(id, key, value) {
+        calls.push([id, key, value]);
+        return session(value);
+      },
+    };
+    await captureNativeDefaults(client, session(''), '/project');
+    const defaults = await defaultsForNativeResume(client, '/project', {}, async () => {
+      throw new Error('unexpected probe');
+    });
+    const adopted = await applySessionConfiguration(client, session('override'), defaults);
+    assert.deepEqual(calls, [['history', kind, '']]);
+    assert.equal(adopted.configOptions[0].currentValue, '');
+  });
 
 test('resetting native ACP preferences restores defaults in the original conversation, also after restart', async () => {
   const id = 'native-reset-test';

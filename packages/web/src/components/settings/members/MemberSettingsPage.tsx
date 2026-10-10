@@ -3,6 +3,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import type { CatData } from '@/hooks/useCatData';
 import { MemberAdditionalFields } from './MemberAdditionalFields';
 import { MemberCloudIdentity } from './MemberCloudIdentity';
+import { MemberCodexOptions } from './MemberCodexOptions';
 import { MemberRuntimeFields } from './MemberRuntimeFields';
 import { useMemberEditor } from './useMemberEditor';
 
@@ -207,6 +208,18 @@ export function MemberSettingsPage({
                   patchStrategy={editor.patchStrategy}
                 />
               )}
+              {section === 'advanced' && !cat?.identityProtection && (
+                <MemberCodexOptions
+                  form={form}
+                  authType={identity?.authType}
+                  settings={draft.codexSettings}
+                  error={editor.codexError}
+                  patch={editor.patch}
+                  patchSettings={editor.patchCodex}
+                  retry={editor.retryCodex}
+                  t={t}
+                />
+              )}
             </fieldset>
           </div>
           {baseline && (
@@ -256,6 +269,14 @@ export function MemberSettingsPage({
                 {cat
                   ? t(`${dirtyCount} 处修改未保存`, `${dirtyCount} unsaved changes`)
                   : t('准备好就可以添加伙伴', 'Ready to add your teammate')}
+                {editor.codexDirtyCount > 0 && (
+                  <span className="block text-sm">
+                    {t(
+                      `含 ${editor.codexDirtyCount} 项全局 Codex 修改`,
+                      `Includes ${editor.codexDirtyCount} global Codex changes`,
+                    )}
+                  </span>
+                )}
               </span>
               <div className="flex gap-3">
                 <button

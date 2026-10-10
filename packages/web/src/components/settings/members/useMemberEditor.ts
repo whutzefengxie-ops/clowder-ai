@@ -6,10 +6,13 @@ import type { TemplateCard } from '../../first-run-quest/TemplateStep';
 import type { AccountsResponse, ProfileItem } from '../../hub-accounts.types';
 import {
   buildCatPayload,
+  buildCodexConfigPatches,
   buildStrategyPayload,
+  type CodexRuntimeSettings,
   type HubCatEditorFormState,
   initialState,
   type StrategyFormState,
+  toCodexRuntimeSettings,
   toStrategyForm,
 } from '../../hub-cat-editor.model';
 import { buildMemberPatchPayload } from '../../hub-cat-editor.payload';
@@ -45,6 +48,8 @@ export function useMemberEditor(cat: CatData | null, cats: CatData[], onSaved: (
   const [notice, setNotice] = useState<string | null>(null);
   const [storageWarning, setStorageWarning] = useState(false);
   const [conflicted, setConflicted] = useState(false);
+  const [codexError, setCodexError] = useState<string | null>(null);
+  const [codexReload, setCodexReload] = useState(0);
   const storageKey = useRef('');
   const [reload, setReload] = useState(0);
   const stateRef = useRef(draft);
@@ -66,7 +71,8 @@ export function useMemberEditor(cat: CatData | null, cats: CatData[], onSaved: (
         setDraft(
           stored &&
             (changedFields(stored.form, stored.baseline) > 0 ||
-              JSON.stringify(stored.strategy) !== JSON.stringify(stored.strategyBaseline))
+              JSON.stringify(stored.strategy) !== JSON.stringify(stored.strategyBaseline) ||
+              JSON.stringify(stored.codexSettings) !== JSON.stringify(stored.codexBaseline))
             ? stored
             : {
                 version: 1,
@@ -107,9 +113,51 @@ export function useMemberEditor(cat: CatData | null, cats: CatData[], onSaved: (
     };
   }, [ready, cat?.id, draft.strategy]);
 
+  useEffect(() => {
+    if (
+      !ready ||
+      draft.section !== 'advanced' ||
+      draft.form.clientId !== 'openai' ||
+      draft.form.acpEnabled ||
+      cat?.identityProtection ||
+      draft.codexBaseline
+    )
+      return;
+    let cancelled = false;
+    setCodexError(null);
+    apiFetch('/api/config')
+      .then(readResponse<{ config?: Parameters<typeof toCodexRuntimeSettings>[0] }>)
+      .then((body) => {
+        if (cancelled) return;
+        if (!body.config) throw new Error('Codex 运行参数缺失，请重新读取。');
+        const settings = toCodexRuntimeSettings(body.config);
+        setDraft((previous) => ({ ...previous, codexSettings: settings, codexBaseline: settings }));
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setCodexError(err instanceof Error ? err.message : 'Codex 运行参数读取失败');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    ready,
+    draft.section,
+    draft.form.clientId,
+    draft.form.acpEnabled,
+    draft.codexBaseline,
+    cat?.identityProtection,
+    codexReload,
+  ]);
+
+  const codexDirtyCount =
+    draft.codexSettings && draft.codexBaseline
+      ? buildCodexConfigPatches(draft.codexSettings, draft.codexBaseline).length
+      : 0;
+
   const dirtyCount =
     changedFields(draft.form, draft.baseline) +
-    (JSON.stringify(draft.strategy) !== JSON.stringify(draft.strategyBaseline) ? 1 : 0);
+    (JSON.stringify(draft.strategy) !== JSON.stringify(draft.strategyBaseline) ? 1 : 0) +
+    codexDirtyCount;
   useEffect(() => {
     if (!ready) return;
     const ok = persistMemberDraft(storageKey.current, draft);
@@ -141,6 +189,11 @@ export function useMemberEditor(cat: CatData | null, cats: CatData[], onSaved: (
       ...previous,
       strategy: previous.strategy ? { ...previous.strategy, ...change } : previous.strategy,
     }));
+  const patchCodex = (change: Partial<CodexRuntimeSettings>) =>
+    setDraft((previous) => ({
+      ...previous,
+      codexSettings: previous.codexSettings ? { ...previous.codexSettings, ...change } : undefined,
+    }));
   const discard = () => {
     persistMemberDraft(storageKey.current, null);
     setDraft({ version: 1, form: initialState(cat), baseline: cat, templateId: null, section: draft.section });
@@ -166,7 +219,9 @@ export function useMemberEditor(cat: CatData | null, cats: CatData[], onSaved: (
   const save = async () => {
     const snapshot = stateRef.current;
     const { baseline } = snapshot;
-    const form = { ...snapshot.form, roleDescription: snapshot.form.roleDescription.trim() || '团队伙伴' };
+    const form = baseline
+      ? snapshot.form
+      : { ...snapshot.form, roleDescription: snapshot.form.roleDescription.trim() || '团队伙伴' };
     if (!form.name.trim()) {
       setError('请填写名字。');
       return;
@@ -182,18 +237,21 @@ export function useMemberEditor(cat: CatData | null, cats: CatData[], onSaved: (
       const payload = baseline
         ? buildMemberPatchPayload(form, baseline, context)
         : buildCatPayload(form, null, context);
+      const memberChanged = !baseline || Object.keys(payload).length > 0;
       if (baseline?.configurationRevision) Object.assign(payload, { expectedRevision: baseline.configurationRevision });
-      const result = await apiFetch(baseline ? `/api/cats/${baseline.id}` : '/api/cats', {
-        method: baseline ? 'PATCH' : 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      }).then((response) => {
-        if (response.status === 409) setConflicted(true);
-        return readResponse<{ cat: CatData }>(response);
-      });
+      const result = memberChanged
+        ? await apiFetch(baseline ? `/api/cats/${baseline.id}` : '/api/cats', {
+            method: baseline ? 'PATCH' : 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          }).then((response) => {
+            if (response.status === 409) setConflicted(true);
+            return readResponse<{ cat: CatData }>(response);
+          })
+        : { cat: baseline };
       persisted = result.cat;
       // A later strategy failure must not roll back a successful account/member write.
-      const next = { ...snapshot, baseline: persisted, form: initialState(persisted) };
+      let next = { ...snapshot, baseline: persisted, form: initialState(persisted) };
       setDraft(next);
       persistMemberDraft(storageKey.current, next);
       if (snapshot.strategy && JSON.stringify(snapshot.strategy) !== JSON.stringify(snapshot.strategyBaseline)) {
@@ -202,6 +260,27 @@ export function useMemberEditor(cat: CatData | null, cats: CatData[], onSaved: (
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(buildStrategyPayload(snapshot.strategy)),
         }).then(readResponse<unknown>);
+        next = { ...next, strategyBaseline: snapshot.strategy };
+        setDraft(next);
+        persistMemberDraft(storageKey.current, next);
+      }
+      if (snapshot.codexSettings && snapshot.codexBaseline) {
+        for (const configPatch of buildCodexConfigPatches(snapshot.codexSettings, snapshot.codexBaseline)) {
+          await apiFetch('/api/config', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(configPatch),
+          }).then(readResponse<unknown>);
+          const field =
+            configPatch.key === 'cli.codexSandboxMode'
+              ? 'sandboxMode'
+              : configPatch.key === 'cli.codexApprovalPolicy'
+                ? 'approvalPolicy'
+                : 'authMode';
+          next = { ...next, codexBaseline: { ...next.codexBaseline!, [field]: snapshot.codexSettings[field] } };
+          setDraft(next);
+          persistMemberDraft(storageKey.current, next);
+        }
       }
       persistMemberDraft(storageKey.current, null);
       setDraft({ ...next, strategyBaseline: next.strategy });
@@ -209,7 +288,7 @@ export function useMemberEditor(cat: CatData | null, cats: CatData[], onSaved: (
       await onSaved(persisted).catch(() => setNotice('配置已保存，成员列表刷新失败，请重新打开列表。'));
     } catch (err) {
       setError(
-        `${persisted ? '成员已保存，会话策略尚未保存：' : ''}${err instanceof Error ? err.message : '保存失败'}`,
+        `${persisted ? '成员已保存，部分附加设置尚未保存：' : ''}${err instanceof Error ? err.message : '保存失败'}`,
       );
     } finally {
       setSaving(false);
@@ -231,6 +310,10 @@ export function useMemberEditor(cat: CatData | null, cats: CatData[], onSaved: (
     setSection,
     chooseTemplate,
     patchStrategy,
+    patchCodex,
+    codexError,
+    codexDirtyCount,
+    retryCodex: () => setCodexReload((value) => value + 1),
     discard,
     save,
     retry: () => setReload((value) => value + 1),
