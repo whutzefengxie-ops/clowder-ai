@@ -48,7 +48,7 @@ export function RealChatEntry({ members, onComplete }: RealChatEntryProps) {
 
 					{showTip && (
 						<div className={styles.tip}>
-							<span>提示：之后可以从左侧"成员""密钥"管理伙伴和账号。</span>
+							<span>提示：之后可以从左侧“成员”“密钥”管理伙伴和账号。</span>
 							<button type="button" onClick={() => setShowTip(false)} className={styles.dismissButton}>
 								知道了
 							</button>

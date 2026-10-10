@@ -15,11 +15,32 @@ interface DemoScenesProps {
  * 场景 1-5: 脚本演示
  * 展示三猫协作改进结果的过程
  */
-export function DemoScenes({ scene, demoScene, paused, onAdvance, onUpdateDemo }: DemoScenesProps) {
+export function DemoScenes({ scene, paused, onAdvance, onUpdateDemo }: DemoScenesProps) {
   const [typingText, setTypingText] = useState('');
   const [typingIndex, setTypingIndex] = useState(0);
 
   const fullText = '帮我写一段猫咖欢迎文案，并请另一只猫帮我看看新用户是否能看懂。';
+
+  useEffect(() => {
+    if (scene !== 2 || paused || typingIndex >= fullText.length) return;
+    const timer = setTimeout(() => {
+      setTypingIndex((prev) => prev + 1);
+      setTypingText(fullText.slice(0, typingIndex + 1));
+    }, 30);
+    return () => clearTimeout(timer);
+  }, [scene, typingIndex, paused, fullText]);
+
+  useEffect(() => {
+    if (scene !== 2 || paused || typingIndex < fullText.length) return;
+    const timer = setTimeout(() => onAdvance(3), 500);
+    return () => clearTimeout(timer);
+  }, [scene, typingIndex, paused, onAdvance, fullText.length]);
+
+  useEffect(() => {
+    if (paused || (scene !== 3 && scene !== 4)) return;
+    const timer = setTimeout(() => onAdvance(scene + 1), scene === 3 ? 1800 : 2200);
+    return () => clearTimeout(timer);
+  }, [scene, paused, onAdvance]);
 
   // 场景 1: 三只猫先出现
   if (scene === 1) {
@@ -72,28 +93,6 @@ export function DemoScenes({ scene, demoScene, paused, onAdvance, onUpdateDemo }
 
   // 场景 2: 输入框自动打字
   if (scene === 2) {
-    // 自动打字效果
-    useEffect(() => {
-      if (paused || typingIndex >= fullText.length) return;
-
-      const timer = setTimeout(() => {
-        setTypingIndex((prev) => prev + 1);
-        setTypingText(fullText.slice(0, typingIndex + 1));
-      }, 30);
-
-      return () => clearTimeout(timer);
-    }, [typingIndex, paused, fullText]);
-
-    // 打字完成后自动进入下一幕
-    useEffect(() => {
-      if (typingIndex >= fullText.length && !paused) {
-        const timer = setTimeout(() => {
-          onAdvance(3);
-        }, 500);
-        return () => clearTimeout(timer);
-      }
-    }, [typingIndex, paused, onAdvance, fullText.length]);
-
     return (
       <div className={styles.container}>
         <div className={styles.header}>
@@ -127,15 +126,6 @@ export function DemoScenes({ scene, demoScene, paused, onAdvance, onUpdateDemo }
 
   // 场景 3: 一只猫接住消息并 @ 同伴
   if (scene === 3) {
-    useEffect(() => {
-      if (!paused) {
-        const timer = setTimeout(() => {
-          onAdvance(4);
-        }, 1800);
-        return () => clearTimeout(timer);
-      }
-    }, [paused, onAdvance]);
-
     return (
       <div className={styles.container}>
         <div className={styles.header}>
@@ -168,15 +158,6 @@ export function DemoScenes({ scene, demoScene, paused, onAdvance, onUpdateDemo }
 
   // 场景 4: 因为协作，结果变好了
   if (scene === 4) {
-    useEffect(() => {
-      if (!paused) {
-        const timer = setTimeout(() => {
-          onAdvance(5);
-        }, 2200);
-        return () => clearTimeout(timer);
-      }
-    }, [paused, onAdvance]);
-
     return (
       <div className={styles.container}>
         <div className={styles.header}>
@@ -207,7 +188,7 @@ export function DemoScenes({ scene, demoScene, paused, onAdvance, onUpdateDemo }
 
             <div className={styles.chat}>
               <div className={styles.msgAgent}>缅因猫：A2A 协作对新用户太难理解，建议换成日常说法。</div>
-              <div className={styles.msgCat}>布偶猫：收到，我已经把术语改成"几只猫会互相搭把手"。</div>
+              <div className={styles.msgCat}>布偶猫：收到，我已经把术语改成“几只猫会互相搭把手”。</div>
             </div>
           </div>
         </div>

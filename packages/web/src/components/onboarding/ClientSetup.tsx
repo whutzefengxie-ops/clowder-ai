@@ -119,7 +119,7 @@ export function ClientSetup({ onComplete }: ClientSetupProps) {
 
 				{clients.length === 0 && !loading && (
 					<div className={styles.notice}>
-						未检测到已安装且已认证的 client。请先安装并认证一个支持的 CLI，完成后点击"重新检测"。
+						未检测到已安装且已认证的 client。请先安装并认证一个支持的 CLI，完成后点击“重新检测”。
 						{error && <div className={styles.error}>{error}</div>}
 					</div>
 				)}
