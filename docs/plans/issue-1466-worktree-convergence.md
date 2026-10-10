@@ -3,26 +3,26 @@ feature_ids: [F171, F320]
 topics: [issue-1466, worktree, integration, traceability]
 doc_kind: audit
 created: 2026-10-10
-status: proposed-convergence-pending-review
+status: single-integration-line-active
 ---
 
 # #1466 worktree 关系、重叠与收敛
 
 > 最新用户决定：采用 #1519 唯一主线，放弃继续推进 #1453 工作线；下文“#1453 先合上游/堆叠依赖”为已撤销的历史建议。其成果只按必要能力参考，不整体合并。实施顺序为配置优化→首启引导→一键安装，本轮在独立新环境体验，不部署已有 runtime。此决定不授权删除研究证据或有修改的目录。
 
-核查时间：2026-10-10。只读执行 `git worktree list --porcelain`、各目录 `git status --porcelain`、merge-base/diff/log 及 GitHub PR 查询；fetch 仅更新 upstream/main 引用。本轮没有合并、切换 runtime、删除目录或清理未跟踪文件。
+实施前核查时间：2026-10-10。当时只读执行 `git worktree list --porcelain`、各目录 `git status --porcelain`、merge-base/diff/log 及 GitHub PR 查询；fetch 仅更新 upstream/main 引用。随后的配置实施已在 #1519 主线完成；没有合入上游、切换原 runtime、删除目录或清理未跟踪文件。
 
 工作区：`G:/AIwork/clowder-ai`。origin 为 `whutzefengxie-ops/clowder-ai`，upstream 为 `zts212653/clowder-ai`。共有 **18 个已注册 worktree**，另有 **1 个未注册残留目录**；Git clean 只说明被跟踪文件状态，不证明无忽略文件或无人使用。
 
-下列 HEAD/status 为本轮写文档前的快照；本轮新增四份方案并更新五份历史文档说明，均为 Markdown，不改变产品或原型代码。后续接手须重查状态，不按本文旧 HEAD 覆盖新工作。
+下列 HEAD/status、重叠统计及其余 worktree 状态为实施前审计快照。配置阶段的当前结果见 [交付与验证记录](issue-1466-configuration-delivery.md)。后续接手须重查状态，不按本文旧 HEAD 覆盖新工作。
 
 ## 1. 与 #1466 直接相关的工作线
 
 | 工作目录（相对工作区） | 分支 / 核查 HEAD | 当前作用 | 建议定位 |
 |---|---|---|---|
-| `worktrees/feat-onboarding-first-run` | `feat/onboarding-first-run` / `ab29b9d02` | 首启、认证状态、成员与线程幂等、真实回复同步；[PR #1519](https://github.com/zts212653/clowder-ai/pull/1519) OPEN | **拟定唯一产品集成主线**；本次新方案放此处，审核后持续更新原 PR |
-| `worktrees/feat-cli-autodetect` | `feat/cli-autodetect` / `373256c35` | 工具描述、路径探测、可用性与诊断；[PR #1453](https://github.com/zts212653/clowder-ai/pull/1453) OPEN | 共享底层依赖；保留独立 PR，不把探测重写进 #1519 |
-| `worktrees/feat-native-agent-role-config` | `feat/native-agent-role-config` / `cbab6e1fc` | 原生继承、三工具 adapter、角色编辑；v1/v2 原型与附件 | **待吸收的实现来源**；不再并行演进第二套正式设置 UI |
+| `worktrees/feat-onboarding-first-run` | `feat/onboarding-first-run`；表中其余 SHA 为实施前快照 | 配置优化及后续引导、安装；[PR #1519](https://github.com/zts212653/clowder-ai/pull/1519) | **唯一产品集成主线**；本轮配置代码和测试均在此处 |
+| `worktrees/feat-cli-autodetect` | `feat/cli-autodetect` / `373256c35` | 历史探测实现；[PR #1453](https://github.com/zts212653/clowder-ai/pull/1453) | **放弃独立推进，不再是依赖**；目录保留溯源，不整体合并 |
+| `worktrees/feat-native-agent-role-config` | `feat/native-agent-role-config` / `cbab6e1fc` | 原生继承、三工具 adapter、角色编辑；v1/v2 原型与附件 | **已按契约吸收的实现来源**；不再并行演进第二套正式设置 UI |
 | `worktrees/research-issue-1466-magpie` | `research/issue-1466-magpie` / `d1dbed36e` | 固定源码研究、低保真、探针与协议证据 | 研究归档；引用必要成果，不把研究脚本变成生产依赖 |
 | `worktrees/verify-native-agent-baseline` | `test/native-agent-role-baseline` / `3add05c16` | 临时基线对照；与当前本地 main 同提交，无独有提交 | **明确的代码快照冗余候选**；核对忽略文件/使用者后才可清理 |
 | `clowder-ai-runtime` | `runtime/upstream-main-20261010` / `3e70e1d68` | 用户当前运行现场，与已 fetch 的 upstream/main 同提交 | 部署目的地，不是开发分支；保留用户修复现场 |
@@ -32,12 +32,12 @@ status: proposed-convergence-pending-review
 ```mermaid
 flowchart LR
   Research[研究 / 低保真 / 协议探针] -. 证据 .-> Plan[最终方案：本目录]
-  Detect[CLI 探测：PR 1453] -->|上游依赖或显式堆叠| Main[首启集成：PR 1519]
+  Detect[PR 1453：放弃独立推进] -. 历史参考，无交付依赖 .-> Main[唯一集成：PR 1519]
   Native[原生角色分支：继承与 adapter] -->|按契约吸收并修正| Main
   F320[F320 上游公开同步：待具备] --> Main
-  Plan -->|用户审核后| Main
+  Plan -->|配置阶段已获用户批准| Main
   Main --> Verify[独立测试与真实调用]
-  Verify --> Runtime[经核准 SHA 部署 runtime 供用户验证]
+  Verify --> Runtime[全新独立环境供用户验证：原 runtime 不变]
   Verify --> Review[PR 独立 review / 合入]
   ABC[A/B/C 静态发布分支] -. 历史证据 .-> Plan
 ```
@@ -76,7 +76,7 @@ flowchart LR
 
 1. 先确认三个工作目录没有新提交、在跑修改或未交接工作；保存确切 SHA 与基线。当前只读审计不代表未来仍可直接操作。
 2. 以 #1519 为集成入口，保留既有 PR 讨论。先审计无关打包改动是否已在其他 PR/上游覆盖；按内容拆分，不 force-reset 整个分支。
-3. #1453 先合上游最清晰；未合时可显式依赖其受审 SHA 形成堆叠，但记录依赖，不复制提交伪装成另一实现。最终 review diff 必须排除已合的依赖。
+3. #1453 停止独立推进；#1519 不等待、不堆叠该 PR。探测与配置能力在唯一集成线上验证，旧目录保留来源证据。
 4. 将原生角色的两笔实现按功能吸收，并同时修正最终意见冲突；不无审查 merge 整分支，也不复制其旧 UI 壳。保留作者和源 SHA 溯源。
 5. F320 取得公开同步代码后接同一 accountRef 链路；未具备时继续可独立的宿主/契约工作，但真实换号验收不能签通过。
 6. 新测试集中在集成线；原生角色线冻结新增正式 UI，研究与静态附件线冻结为证据。新文档和 issue/PR 只指向一份当前实施方案。
@@ -109,7 +109,7 @@ flowchart LR
 
 ## 6. 冗余结论与保留策略
 
-- **可以收敛的是工作职责**：三个实现分支不再各自发展配置 UI；一个集成 PR 消费一个探测依赖与既有 F320。
+- **已经收敛的是工作职责**：配置代码、测试与体验环境全部来自 #1519；原生角色分支是已吸收的来源，#1453 不再承担依赖，F320 接入仍按公开接口推进。
 - **当前明确冗余候选是基线验证目录**：代码与 main 完全一致；实际清理前仍检查忽略文件、进程、使用者与备份。
 - **可在交付后归档的是研究/原型/已吸收分支**：前提是证据有稳定位置、唯一提交已保留、未跟踪文件有备份。分支可留作来源，不以删目录证明闭环。
 - **必须保留的是 runtime 和有冲突/未交接现场**。本轮未进行任何 archive、remove、reset、clean 或数据迁移。

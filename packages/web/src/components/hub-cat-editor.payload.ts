@@ -101,11 +101,22 @@ function buildAcpTransportConfig(form: HubCatEditorFormState, cat?: CatData | nu
   if (startupArgs.length === 0) throw new Error('ACP Startup Args 不能为空');
   const maxLiveProcesses = optionalPositiveInteger(form.acpMaxLiveProcesses, 'ACP Max Processes');
   const idleTtlMinutes = optionalPositiveInteger(form.acpIdleTtlMinutes, 'ACP Idle TTL');
+  const savedTtl = cat?.acp?.pool?.idleTtlMs;
+  const untouchedTtl =
+    cat?.acp && form.acpIdleTtlMinutes === (savedTtl === undefined ? '' : String(Math.round(savedTtl / 60_000)));
+  const idleTtlMs = untouchedTtl
+    ? cat.acp?.pool?.idleTtlMs
+    : idleTtlMinutes === undefined
+      ? undefined
+      : idleTtlMinutes * 60_000;
   const pool =
-    maxLiveProcesses !== undefined || idleTtlMinutes !== undefined
+    maxLiveProcesses !== undefined || idleTtlMs !== undefined
       ? {
+          ...Object.fromEntries(
+            Object.entries(cat?.acp?.pool ?? {}).filter(([key]) => key !== 'maxLiveProcesses' && key !== 'idleTtlMs'),
+          ),
           ...(maxLiveProcesses !== undefined ? { maxLiveProcesses } : {}),
-          ...(idleTtlMinutes !== undefined ? { idleTtlMs: idleTtlMinutes * 60_000 } : {}),
+          ...(idleTtlMs !== undefined ? { idleTtlMs } : {}),
         }
       : undefined;
   return {

@@ -49,6 +49,8 @@ import { createAcpSessionState, flushAcpThinking, transformAcpEvent } from './ac
 import { resolveAcpMcpServers, resolveDisabledServerIds, resolveUserProjectMcpServers } from './acp-mcp-resolver.js';
 import { callbackEnvDiagnostic, materializeSessionMcpServers } from './acp-session-env.js';
 import { applySessionConfiguration } from './session-configuration.js';
+import { captureNativeDefaults, defaultsForNativeResume } from './native-session-defaults.js';
+import { AcpSessionBindingError } from './active-session-cache.js';
 import type { AcpMcpServer, AcpNewSessionResult, AcpSessionUpdate } from './types.js';
 
 const log = createModuleLogger('acp-agent');
@@ -325,6 +327,7 @@ export class AcpAgentService implements AgentService {
       newSession(cwd: string, mcpServers?: AcpMcpServer[]): Promise<AcpNewSessionResult>;
       loadSession(sessionId: string, cwd: string, mcpServers?: AcpMcpServer[]): Promise<AcpNewSessionResult>;
       setSessionConfigOption(sessionId: string, configId: string, value: string): Promise<unknown>;
+      closeSession?(sessionId: string): Promise<void>;
       cancelSession(sessionId: string): void;
       promptStream(
         sessionId: string,
@@ -468,11 +471,20 @@ export class AcpAgentService implements AgentService {
       }
 
       const nativeTool = catRegistry.tryGet(this.catId)?.config.configurationSource === 'native_tool';
-      const configureNative = async (session: AcpNewSessionResult) => {
+      const preferences = {
+        model: getCatModel(this.catId) || undefined,
+        effort: options?.reasoningEffortOverride ?? (getCatEffort(this.catId) || undefined),
+      };
+      let nativeDefaults: { model?: string; effort?: string } = {};
+      if (nativeTool && resumeSessionId) {
+        nativeDefaults = await defaultsForNativeResume(client, cwd, preferences, () => client.newSession(cwd, []));
+      }
+      const configureNative = async (session: AcpNewSessionResult, fresh = false) => {
         if (!nativeTool) return;
+        if (fresh) nativeDefaults = await captureNativeDefaults(client, session, cwd, preferences.model);
         await applySessionConfiguration(client, session, {
-          model: getCatModel(this.catId) || undefined,
-          effort: options?.reasoningEffortOverride ?? (getCatEffort(this.catId) || undefined),
+          model: preferences.model || nativeDefaults.model,
+          effort: preferences.effort || nativeDefaults.effort,
         });
       };
       let resumedSession: AcpNewSessionResult | undefined;
@@ -506,6 +518,7 @@ export class AcpAgentService implements AgentService {
           resumeDisposition = 'resumed';
           log.info({ ...ctx, sessionId, requestedSessionId: resumeSessionId }, 'ACP session resume completed');
         } catch (err) {
+          if (err instanceof AcpSessionBindingError) throw err;
           resumeDisposition = 'load_failed_fresh';
           const errorMsg = err instanceof Error ? err.message : String(err);
           log.warn(
@@ -528,7 +541,7 @@ export class AcpAgentService implements AgentService {
           'ACP newSession starting',
         );
         const session = await client.newSession(cwd, sessionMcpServers);
-        await configureNative(session);
+        await configureNative(session, true);
         sessionId = session.sessionId;
         this.pool.rememberSession?.(this.poolKey, sessionId, lease);
         if (freshCreds) bindSessionCredentialFile(sessionId, freshCreds.path);
@@ -744,7 +757,7 @@ export class AcpAgentService implements AgentService {
           const retryCreds = prepareSessionCredentialFile(options?.callbackEnv);
           const retryConfig = buildSessionConfig(retryCreds);
           const freshSession = await client.newSession(cwd, retryConfig.mcpServers);
-          await configureNative(freshSession);
+          await configureNative(freshSession, true);
           const freshSessionId = freshSession.sessionId;
           this.pool.rememberSession?.(this.poolKey, freshSessionId, lease);
           // Replacement retry is a NEW ACP session, so it must get a fresh

@@ -22,6 +22,7 @@ import { buildChildEnv } from '../../../../../../utils/cli-spawn.js';
 import { resolveWindowsSpawnPlan } from '../../../../../../utils/cli-spawn-win.js';
 import { buildUnixSupervisedSpawnPlan } from '../../../../../../utils/cli-supervised-process.js';
 import { AcpCwdIdentityTracker } from './acp-cwd-identity.js';
+import { ActiveSessionCache, AcpSessionBindingError } from './active-session-cache.js';
 import type {
   AcpAgentRequest,
   AcpContentBlock,
@@ -164,6 +165,7 @@ interface PendingAcpRequest {
 }
 
 export class AcpClient {
+  private readonly liveSessions = new ActiveSessionCache();
   private child: ChildProcess | null = null;
   private rl: ReadlineInterface | null = null;
   private readonly pending = new Map<string, PendingAcpRequest>();
@@ -203,6 +205,7 @@ export class AcpClient {
   // ── Lifecycle ────────────────────────────────────────────────
 
   async initialize(): Promise<AcpInitializeResult> {
+    this.liveSessions.clear();
     const doSpawn = this.config.spawnFn ?? nodeSpawn;
 
     // Mirror cli-spawn.ts on Windows so ACP agents can bypass npm-global .cmd shims.
@@ -359,7 +362,7 @@ export class AcpClient {
       mcpServers: compatible,
     });
     log.info({ durationMs: Date.now() - t0, hasResult: !!resp.result }, 'ACP session/new: response received');
-    return resp.result as unknown as AcpNewSessionResult;
+    return this.liveSessions.remember(resp.result as unknown as AcpNewSessionResult, effectiveCwd, compatible);
   }
 
   async loadSession(sessionId: string, cwd?: string, mcpServers: AcpMcpServer[] = []): Promise<AcpNewSessionResult> {
@@ -388,6 +391,17 @@ export class AcpClient {
       this.initResult?.agentCapabilities?.sessionCapabilities?.resume
         ? ACP_METHODS.sessionResume
         : ACP_METHODS.sessionLoad;
+    if (!this.initResult?.agentCapabilities?.loadSession) {
+      const active = this.liveSessions.get(
+        sessionId,
+        effectiveCwd,
+        compatible,
+        !this.closed && !this.exited && !this.unquiescedSessionIds.has(sessionId),
+      );
+      if (active) return active;
+      if (this.initResult && !this.initResult.agentCapabilities?.sessionCapabilities?.resume)
+        throw new AcpSessionBindingError('ACP 工具未声明会话恢复能力，原历史已保留。');
+    }
     const resp = await this.sendRequest(method, {
       sessionId,
       cwd: effectiveCwd,
@@ -397,10 +411,20 @@ export class AcpClient {
       { sessionId, durationMs: Date.now() - t0, hasResult: !!resp.result },
       'ACP session/load: response received',
     );
-    return {
-      ...resp.result,
-      sessionId: typeof resp.result?.sessionId === 'string' ? resp.result.sessionId : sessionId,
-    } as AcpNewSessionResult;
+    return this.liveSessions.remember(
+      {
+        ...resp.result,
+        sessionId: typeof resp.result?.sessionId === 'string' ? resp.result.sessionId : sessionId,
+      } as AcpNewSessionResult,
+      effectiveCwd,
+      compatible,
+    );
+  }
+
+  async closeSession(sessionId: string): Promise<void> {
+    if (!this.initResult?.agentCapabilities?.sessionCapabilities?.close) return;
+    await this.sendRequest(ACP_METHODS.sessionClose, { sessionId });
+    this.liveSessions.forget(sessionId);
   }
 
   async setSessionConfigOption(
@@ -423,6 +447,7 @@ export class AcpClient {
       value: trimmedValue,
     });
     log.info({ sessionId, durationMs: Date.now() - t0 }, 'ACP session/set_config_option: response received');
+    this.liveSessions.update(sessionId, resp.result);
     return resp.result;
   }
 
@@ -804,6 +829,7 @@ export class AcpClient {
   }
 
   async close(): Promise<void> {
+    this.liveSessions.clear();
     if (this.closed) return;
     this.closed = true;
 
@@ -966,6 +992,7 @@ export class AcpClient {
           }
         } else {
           // Notification from agent (session/update)
+          this.liveSessions.notify(msg.params);
           for (const listener of this.notificationListeners) {
             listener(msg as unknown as AcpNotification);
           }

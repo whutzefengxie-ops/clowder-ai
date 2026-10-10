@@ -721,9 +721,7 @@ async function toCatResponse(
     // Codex carrier, so exposing one would be a lie.
     ...(cat.clientId === 'openai' && !acpConfig && cat.cli != null
       ? {
-          codexCarrier: resolveCodexCarrierTruth(
-            cat.cli.carrier ?? (cat.configurationSource === 'native_tool' ? 'app_server' : undefined),
-          ),
+          codexCarrier: resolveCodexCarrierTruth(cat.cli.carrier, process.env, cat.configurationSource),
         }
       : {}),
     contextWindow: getConfiguredMemberWindowSetting(cat),

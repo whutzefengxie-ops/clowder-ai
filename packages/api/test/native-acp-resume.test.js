@@ -63,7 +63,7 @@ test('native resume configuration rejection preserves history and prevents fresh
   const messages = [];
   for await (const message of service.invoke('continue', { sessionId: 'existing-with-history' }))
     messages.push(message);
-  assert.deepEqual(calls, ['load']);
+  assert.deepEqual(calls, ['new', 'load']);
   assert.ok(messages.some((message) => message.type === 'error'));
 });
 
@@ -71,7 +71,7 @@ test('actual load failure can still create and configure a replacement session',
   const { calls, service } = fixture(true);
   const messages = [];
   for await (const message of service.invoke('continue', { sessionId: 'missing-session' })) messages.push(message);
-  assert.deepEqual(calls, ['load', 'new', 'config', 'prompt']);
+  assert.deepEqual(calls, ['new', 'load', 'new', 'config', 'prompt']);
   assert.equal(
     messages.some((message) => message.type === 'error'),
     false,

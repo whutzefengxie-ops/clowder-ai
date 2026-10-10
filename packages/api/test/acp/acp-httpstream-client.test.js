@@ -116,6 +116,8 @@ describe('AcpHttpStreamClient', () => {
     const resumed = await client.loadSession('existing');
     assert.equal(resumed.sessionId, 'existing');
     assert.ok(requests.some((message) => message.method === 'session/resume'));
+    await client.loadSession('existing');
+    assert.equal(requests.filter((message) => message.method === 'session/resume').length, 1, 'reuse active session');
     for (const value of [' wire ', '']) {
       const receipt = await client.setSessionConfigOption('existing', ' model ', value);
       assert.deepEqual(receipt.configOptions, options);

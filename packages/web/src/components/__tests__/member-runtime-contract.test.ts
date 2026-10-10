@@ -53,4 +53,18 @@ describe('member preferences and execution identity are independent', () => {
       displayName: '新名字',
     });
   });
+  it('editing one ACP pool field preserves the exact unedited timeout', () => {
+    const acp = {
+      ...member,
+      clientId: 'acp',
+      cli: undefined,
+      acp: {
+        command: 'node',
+        startupArgs: ['entry.js', '--profile', 'acp'],
+        pool: { maxLiveProcesses: 1, idleTtlMs: 61000 },
+      },
+    } as CatData;
+    const payload = buildCatPatchPayload({ ...initialState(acp), acpMaxLiveProcesses: '2' }, acp);
+    expect(payload.acp).toMatchObject({ pool: { maxLiveProcesses: 2, idleTtlMs: 61000 } });
+  });
 });

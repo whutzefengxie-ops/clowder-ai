@@ -1,6 +1,7 @@
 /** ACP owns option ids and opaque wire values; never reconstruct provider/model strings. */
 export interface SessionConfigurationClient {
   setSessionConfigOption(sessionId: string, configId: string, value: string): Promise<unknown>;
+  closeSession?(sessionId: string): Promise<void>;
 }
 function record(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object';

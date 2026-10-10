@@ -83,6 +83,12 @@ describe('AcpClient', () => {
       assert.equal(resumed.sessionId, 'native-session');
       assert.ok(methods.includes('session/resume'));
       assert.equal(methods.includes('session/load'), false);
+      await nativeClient.loadSession('native-session');
+      assert.equal(
+        methods.filter((method) => method === 'session/resume').length,
+        1,
+        'an active resume-only session is reused',
+      );
     } finally {
       await nativeClient.close();
     }

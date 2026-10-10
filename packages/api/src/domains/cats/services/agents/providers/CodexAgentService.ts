@@ -46,7 +46,7 @@ import { getCatModel } from '../../../../../config/cat-models.js';
 import {
   type CodexCarrierMode,
   getCodexApprovalPolicy,
-  getCodexCarrierMode,
+  resolveCodexCarrierTruth,
   getCodexOAuthTransport,
   getCodexSandboxMode,
   getCodexServedModelObservation,
@@ -1198,8 +1198,10 @@ export class CodexAgentService implements AgentService {
     this.rawArchive = options?.rawArchive ?? new CliRawArchive();
     this.contextSnapshotResolver = options?.contextSnapshotResolver ?? createCodexSessionContextSnapshotResolver();
     this.cliCommand = options?.cliCommand ?? 'codex';
-    this.carrierMode = options?.carrierMode ?? catRegistry.tryGet(this.catId)?.config.cli?.carrier ??
-      (catRegistry.tryGet(this.catId)?.config.configurationSource === 'native_tool' ? 'app_server' : getCodexCarrierMode());
+    const member = catRegistry.tryGet(this.catId)?.config;
+    this.carrierMode =
+      options?.carrierMode ??
+      resolveCodexCarrierTruth(member?.cli?.carrier, process.env, member?.configurationSource).effective;
     // Clowder AI currently has no synchronous approval request/response surface.
     // Keep this explicit so a future interactive bridge changes provenance rather
     // than relying on transport names or timing heuristics.

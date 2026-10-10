@@ -43,7 +43,7 @@ flowchart LR
 
 ## 自检证据
 
-- 前端 102 项定向测试通过：成员 payload、草稿合并、旧编辑器兼容、原生工具、空账号状态、设置深链。
+- 前端定向回归覆盖成员 payload、草稿合并、旧编辑器兼容、原生工具、空账号状态、设置深链、原生账号摘要及聊天入口；本轮基础 106 项，审查修复新增 ACP 嵌套字段与聊天入口检查。
 - API 24 项原生配置 / 启动 / ACP 配置 / 续接 / 配置版本 / cookie 测试通过。
 - ACP stdio / HTTP stream 56 项回归测试通过。
 - API `tsc` 与 Web `tsc --noEmit` 通过；修改文件 Biome 检查无 error，仍有复杂度与 hook 等 warning。
@@ -51,6 +51,8 @@ flowchart LR
 - 真实浏览器：DSH 高级页保留既有 node 路径、`--profile acp`、stdio 与 pool；中文 / 英文、390×844 窄屏人工检查。
 - 本机探测：Codex `0.161.0`、Claude Code `2.1.295`、DSH `0.2.0-rc.2`。
 - DSH 真实 ACP：initialize、session/new、model 与 reasoning_effort 的 session/set_config_option 回读一致。
+- DSH 真机补验：high → low → 恢复跟随 high，恢复前后 session ID 一致，无模型 prompt；修复了 resume-only agent 拒绝重复激活同一会话的问题。
+- Windows managed launcher 的 5 秒租约实测到期后状态为 stopped，没有遗留监听进程。
 - 上述探测不等于已验证三种工具的完整真实回复、压缩会话换号续聊。
 
 ## 独立环境
@@ -81,3 +83,11 @@ CLI 配置复制至独立 HOME，原 `.codex/config.toml`、`auth.json`、Claude
 - 当前会话实际采用回执未提供给设置页，UI 不把候选 / 本机可读配置标成实际采用值。
 - 首启引导、一键安装、默认固定入口策略属于后续阶段；本次不是 #1466 的最终关闭报告。
 - 在用户验收与独立 review 完成前，不合入、不切换正式 runtime。
+
+## 独立审查修复
+
+非作者首次审查要求修改五项，本轮逐项复现后修正：ACP 显式账号进入进程环境且账号变化轮换进程池；恢复默认模型/强度回写原会话；单独改进程数保留原始 TTL；Codex 装配和 API 共用 carrier 规则；聊天头像进入同一设置详情页。
+
+ACP 的默认值来自未覆盖的 session/new 回执，按实际 client 代次、cwd、模型缓存；重启后可建立不发送 prompt 的探测会话，支持 close 的工具随后关闭它，再恢复原历史会话。活跃会话接收 setter 与 config_option_update 的完整状态更新。cwd/MCP 结构变化或未确认取消的会话不会静默续用，也不会因该错误新建空白历史；当前提示显式开启新会话。
+
+回退逻辑检查触发了计数提示。逐类核对后，新增分支分别承担原生/历史配置契约、缺失能力的明确报错、草稿存储失败提示和可读名称投影；不以默认账号替换未知账号，不以猜测模型掩盖缺失回执。配置失败与真正的 session/load 失败已分离，前者不会退回空白会话。
