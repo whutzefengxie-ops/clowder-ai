@@ -54,7 +54,7 @@ function clientRuntimeLabel(cat: CatData, configCat?: CatConfig) {
 }
 
 function accountSummary(cat: CatData) {
-  if (cat.configurationSource === 'native_tool') return '本机工具';
+  if (cat.configurationSource === 'native_tool') return cat.accountRef?.trim() || '工具当前身份';
   const accountRef = cat.accountRef?.trim() ?? '';
   if (!accountRef) return humanizeClientId(cat.clientId);
   if (
@@ -71,7 +71,7 @@ function accountSummary(cat: CatData) {
 
 function getMetaSummary(cat: CatData, configCat?: CatConfig) {
   if (cat.configurationSource === 'native_tool')
-    return `${clientRuntimeLabel(cat, configCat)} · ${cat.defaultModel || '跟随工具模型'} · 本机工具`;
+    return `${clientRuntimeLabel(cat, configCat)} · ${cat.defaultModel || '跟随工具模型'} · ${accountSummary(cat)}`;
   if (cat.clientId === 'antigravity') {
     return `Antigravity · ${configCat?.model ?? cat.defaultModel} · CLI Bridge`;
   }
@@ -171,7 +171,7 @@ export function HubOverviewToolbar({
       {onFilterChange ? (
         <SettingsFilterTabs tabs={MEMBER_FILTER_TABS} activeKey={activeFilter ?? '全部'} onTabChange={onFilterChange} />
       ) : (
-        <SettingsStatusStrip tone="muted">全部 · 已启用 · 已停用 · CLI（OAuth） · CLI（配置）</SettingsStatusStrip>
+        <SettingsStatusStrip tone="muted">选择伙伴，调整工具、模型与个性</SettingsStatusStrip>
       )}
       {onAddMember && (
         <SettingsPrimaryButton
