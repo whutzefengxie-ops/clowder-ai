@@ -1,0 +1,155 @@
+{
+  "checks": [
+    {
+      "variant": "a",
+      "check": "陌生姓名真实创建；仅覆盖思考强度，模型仍继承",
+      "passed": true
+    },
+    {
+      "variant": "a",
+      "check": "保存结果跨刷新保留",
+      "passed": true
+    },
+    {
+      "variant": "a",
+      "check": "模型与思考单项恢复互不干扰",
+      "passed": true
+    },
+    {
+      "variant": "a",
+      "check": "DSH 既有 profile：取消不写入，正常保存不丢失",
+      "passed": true
+    },
+    {
+      "variant": "a",
+      "check": "历史账号不自动迁移；取消切换不影响旧成员",
+      "passed": true
+    },
+    {
+      "variant": "a",
+      "check": "名称与别名冲突可恢复；切换工具保留各自偏好草稿",
+      "passed": true
+    },
+    {
+      "variant": "a",
+      "check": "未安装与目录失败可恢复；自定义模型草稿跨刷新保留",
+      "passed": true
+    },
+    {
+      "variant": "a",
+      "check": "对话入口产生输入驱动的调用预览，不发送真实请求",
+      "passed": true
+    },
+    {
+      "variant": "a",
+      "check": "390px 新建与旧成员编辑可操作，无横向溢出",
+      "passed": true
+    },
+    {
+      "variant": "a",
+      "check": "无页面异常；无生产 API、认证或工具调用",
+      "passed": true
+    },
+    {
+      "variant": "b",
+      "check": "陌生姓名真实创建；仅覆盖思考强度，模型仍继承",
+      "passed": true
+    },
+    {
+      "variant": "b",
+      "check": "保存结果跨刷新保留",
+      "passed": true
+    },
+    {
+      "variant": "b",
+      "check": "模型与思考单项恢复互不干扰",
+      "passed": true
+    },
+    {
+      "variant": "b",
+      "check": "DSH 既有 profile：取消不写入，正常保存不丢失",
+      "passed": true
+    },
+    {
+      "variant": "b",
+      "check": "历史账号不自动迁移；取消切换不影响旧成员",
+      "passed": true
+    },
+    {
+      "variant": "b",
+      "check": "名称与别名冲突可恢复；切换工具保留各自偏好草稿",
+      "passed": true
+    },
+    {
+      "variant": "b",
+      "check": "未安装与目录失败可恢复；自定义模型草稿跨刷新保留",
+      "passed": true
+    },
+    {
+      "variant": "b",
+      "check": "对话入口产生输入驱动的调用预览，不发送真实请求",
+      "passed": true
+    },
+    {
+      "variant": "b",
+      "check": "390px 新建与旧成员编辑可操作，无横向溢出",
+      "passed": true
+    },
+    {
+      "variant": "b",
+      "check": "无页面异常；无生产 API、认证或工具调用",
+      "passed": true
+    },
+    {
+      "variant": "c",
+      "check": "陌生姓名真实创建；仅覆盖思考强度，模型仍继承",
+      "passed": true
+    },
+    {
+      "variant": "c",
+      "check": "保存结果跨刷新保留",
+      "passed": true
+    },
+    {
+      "variant": "c",
+      "check": "模型与思考单项恢复互不干扰",
+      "passed": true
+    },
+    {
+      "variant": "c",
+      "check": "DSH 既有 profile：取消不写入，正常保存不丢失",
+      "passed": true
+    },
+    {
+      "variant": "c",
+      "check": "历史账号不自动迁移；取消切换不影响旧成员",
+      "passed": true
+    },
+    {
+      "variant": "c",
+      "check": "名称与别名冲突可恢复；切换工具保留各自偏好草稿",
+      "passed": true
+    },
+    {
+      "variant": "c",
+      "check": "未安装与目录失败可恢复；自定义模型草稿跨刷新保留",
+      "passed": true
+    },
+    {
+      "variant": "c",
+      "check": "对话入口产生输入驱动的调用预览，不发送真实请求",
+      "passed": true
+    },
+    {
+      "variant": "c",
+      "check": "390px 新建与旧成员编辑可操作，无横向溢出",
+      "passed": true
+    },
+    {
+      "variant": "c",
+      "check": "无页面异常；无生产 API、认证或工具调用",
+      "passed": true
+    }
+  ],
+  "recordedAt": "2026-10-10T06:44:01.039Z"
+}

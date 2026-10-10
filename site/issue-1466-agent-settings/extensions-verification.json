@@ -1,0 +1,155 @@
+{
+  "checks": 30,
+  "results": [
+    {
+      "variant": "a",
+      "check": "公司身份：创建、失败原条目重试、选择并独立覆盖",
+      "passed": true
+    },
+    {
+      "variant": "a",
+      "check": "分别恢复继承，保留账号与另一成员；刷新持久保留",
+      "passed": true
+    },
+    {
+      "variant": "a",
+      "check": "授权失败/身份失效阻止调用；协议错误可诊断且不自动降级（模拟）",
+      "passed": true
+    },
+    {
+      "variant": "a",
+      "check": "当前回合快照不变，后续调用换号，身份历史保留（模拟）",
+      "passed": true
+    },
+    {
+      "variant": "a",
+      "check": "仅改名称：身份、颜色、语音、上下文、交接和未知字段无损",
+      "passed": true
+    },
+    {
+      "variant": "a",
+      "check": "换工具保留身份与策略意图；不支持策略明确提示，取消不写入",
+      "passed": true
+    },
+    {
+      "variant": "a",
+      "check": "旧 openai 工具身份 + ACP 不被改成 App Server；含空格程序/argv/profile往返",
+      "passed": true
+    },
+    {
+      "variant": "a",
+      "check": "接入方式专属草稿保留；非法 argv 阻止保存，不隐式选择协议",
+      "passed": true
+    },
+    {
+      "variant": "a",
+      "check": "语音独立保存；上下文 Auto 不回填推荐值",
+      "passed": true
+    },
+    {
+      "variant": "a",
+      "check": "390px 可操作，无横向溢出、无页面异常",
+      "passed": true
+    },
+    {
+      "variant": "b",
+      "check": "公司身份：创建、失败原条目重试、选择并独立覆盖",
+      "passed": true
+    },
+    {
+      "variant": "b",
+      "check": "分别恢复继承，保留账号与另一成员；刷新持久保留",
+      "passed": true
+    },
+    {
+      "variant": "b",
+      "check": "授权失败/身份失效阻止调用；协议错误可诊断且不自动降级（模拟）",
+      "passed": true
+    },
+    {
+      "variant": "b",
+      "check": "当前回合快照不变，后续调用换号，身份历史保留（模拟）",
+      "passed": true
+    },
+    {
+      "variant": "b",
+      "check": "仅改名称：身份、颜色、语音、上下文、交接和未知字段无损",
+      "passed": true
+    },
+    {
+      "variant": "b",
+      "check": "换工具保留身份与策略意图；不支持策略明确提示，取消不写入",
+      "passed": true
+    },
+    {
+      "variant": "b",
+      "check": "旧 openai 工具身份 + ACP 不被改成 App Server；含空格程序/argv/profile往返",
+      "passed": true
+    },
+    {
+      "variant": "b",
+      "check": "接入方式专属草稿保留；非法 argv 阻止保存，不隐式选择协议",
+      "passed": true
+    },
+    {
+      "variant": "b",
+      "check": "语音独立保存；上下文 Auto 不回填推荐值",
+      "passed": true
+    },
+    {
+      "variant": "b",
+      "check": "390px 可操作，无横向溢出、无页面异常",
+      "passed": true
+    },
+    {
+      "variant": "c",
+      "check": "公司身份：创建、失败原条目重试、选择并独立覆盖",
+      "passed": true
+    },
+    {
+      "variant": "c",
+      "check": "分别恢复继承，保留账号与另一成员；刷新持久保留",
+      "passed": true
+    },
+    {
+      "variant": "c",
+      "check": "授权失败/身份失效阻止调用；协议错误可诊断且不自动降级（模拟）",
+      "passed": true
+    },
+    {
+      "variant": "c",
+      "check": "当前回合快照不变，后续调用换号，身份历史保留（模拟）",
+      "passed": true
+    },
+    {
+      "variant": "c",
+      "check": "仅改名称：身份、颜色、语音、上下文、交接和未知字段无损",
+      "passed": true
+    },
+    {
+      "variant": "c",
+      "check": "换工具保留身份与策略意图；不支持策略明确提示，取消不写入",
+      "passed": true
+    },
+    {
+      "variant": "c",
+      "check": "旧 openai 工具身份 + ACP 不被改成 App Server；含空格程序/argv/profile往返",
+      "passed": true
+    },
+    {
+      "variant": "c",
+      "check": "接入方式专属草稿保留；非法 argv 阻止保存，不隐式选择协议",
+      "passed": true
+    },
+    {
+      "variant": "c",
+      "check": "语音独立保存；上下文 Auto 不回填推荐值",
+      "passed": true
+    },
+    {
+      "variant": "c",
+      "check": "390px 可操作，无横向溢出、无页面异常",
+      "passed": true
+    }
+  ]
+}
