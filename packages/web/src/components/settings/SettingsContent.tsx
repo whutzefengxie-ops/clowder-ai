@@ -13,6 +13,7 @@ import { HubAccountsTab } from '../HubAccountsTab';
 import { HubCoCreatorEditor } from '../HubCoCreatorEditor';
 import { HubConnectorConfigTab } from '../HubConnectorConfigTab';
 import { HubEnvFilesTab } from '../HubEnvFilesTab';
+import { HubOverviewToolbar } from '../HubMemberOverviewCard';
 import { PushSettingsPanel } from '../PushSettingsPanel';
 import { useConfirm } from '../useConfirm';
 import { VoiceSettingsPanel } from '../VoiceSettingsPanel';
@@ -204,7 +205,6 @@ export function SettingsContent({ section, initialEditCatId }: SettingsContentPr
               <CatOverviewTab
                 config={config}
                 cats={cats}
-                onAddMember={() => openMember(null)}
                 onEditMember={openMember}
                 onEditCoCreator={() => setCoCreatorEditorOpen(true)}
                 onDeleteMember={handleDeleteMember}
@@ -296,6 +296,7 @@ export function SettingsContent({ section, initialEditCatId }: SettingsContentPr
     <>
       {!(section === 'members' && editorOpen) && (
         <SettingsPageHeader title={meta.label} subtitle={meta.description}>
+          {section === 'members' && config && <HubOverviewToolbar onAddMember={() => openMember(null)} />}
           {section === 'im' && <ConnectorPluginInstallButton onInstalled={() => setImRefreshKey((k) => k + 1)} />}
         </SettingsPageHeader>
       )}

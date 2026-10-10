@@ -38,17 +38,14 @@ export function MemberSessionFields({
             ]}
             onChange={(value) => patchStrategy({ strategy: value as StrategyFormState['strategy'] })}
           />
-          <p className="text-sm text-cafe-secondary">
-            {strategy.strategy === 'compress'
-              ? t(
-                  '压缩由工具管理，下面的阈值仅用于观测。',
-                  'The tool manages compression; the thresholds below are for observation.',
-                )
-              : t(
-                  '达到执行阈值后，按工具支持的能力处理会话。',
-                  'At the action threshold, apply this policy where the tool supports it.',
-                )}
-          </p>
+          {strategy.strategy === 'compress' && (
+            <p className="text-sm text-cafe-secondary">
+              {t(
+                '压缩由工具管理，下面的阈值仅用于观测。',
+                'The tool manages compression; the thresholds below are for observation.',
+              )}
+            </p>
+          )}
           <details className="rounded-xl border border-[var(--console-border-soft)] p-4">
             <summary className="cursor-pointer text-sm">
               {t('调整阈值', 'Adjust thresholds')} · {Math.round(Number(strategy.warnThreshold) * 100)}% /{' '}

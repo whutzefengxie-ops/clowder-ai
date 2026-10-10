@@ -176,11 +176,6 @@ export function MemberSettingsPage({
                   className={`min-h-11 shrink-0 rounded-xl px-3 py-3 text-left text-sm ${section === key ? 'bg-[var(--console-field-bg)] font-semibold text-cafe-accent' : 'text-cafe-secondary'}`}
                 >
                   {t(zh, en)}
-                  {key === 'runtime' && (
-                    <span className="mt-1 block text-sm font-normal">
-                      {form.defaultModel ? t('已指定模型', 'Model selected') : t('跟随工具', 'Inherited')}
-                    </span>
-                  )}
                 </button>
               ))}
             </nav>

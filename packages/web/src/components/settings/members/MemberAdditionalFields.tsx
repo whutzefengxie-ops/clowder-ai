@@ -23,7 +23,7 @@ const identityFields: MemberField[] = [
   ['variantLabel', '版本备注', 'Version label'],
 ];
 const voiceFields: MemberField[] = [
-  ['voiceVoice', '语音', 'Voice'],
+  ['voiceVoice', '音色', 'Voice'],
   ['voiceLangCode', '语言代码', 'Language code'],
   ['voiceSpeed', '语速', 'Speed'],
   ['voiceRefAudio', '参考音频', 'Reference audio'],
