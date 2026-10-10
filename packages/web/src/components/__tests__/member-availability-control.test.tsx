@@ -44,15 +44,22 @@ it('uses one accessible availability control and never opens the editor when tog
 
 it('keeps the persisted state while saving, blocks repeat clicks, and reflects the server result', async () => {
   const toggle = vi.fn();
+  const edit = vi.fn();
   await act(async () =>
-    root.render(<HubMemberOverviewCard cat={cat} onToggleAvailability={toggle} togglingAvailability />),
+    root.render(<HubMemberOverviewCard cat={cat} onEdit={edit} onToggleAvailability={toggle} togglingAvailability />),
   );
   const pending = host.querySelector<HTMLButtonElement>('[role="switch"]');
   expect(pending?.disabled).toBe(true);
   expect(pending?.getAttribute('aria-checked')).toBe('true');
   expect(pending?.getAttribute('aria-busy')).toBe('true');
   await act(async () => pending?.click());
+  await act(async () => {
+    pending?.querySelectorAll('span').forEach((child) => {
+      child.click();
+    });
+  });
   expect(toggle).not.toHaveBeenCalled();
+  expect(edit).not.toHaveBeenCalled();
   const disabled: CatData = {
     ...cat,
     roster: { family: 'test', roles: [], lead: false, available: false, evaluation: '' },
