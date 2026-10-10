@@ -1,0 +1,113 @@
+import { BASE, deliveries } from './data.mjs';
+
+const snapshot = (index, phase, block = null) => ({
+  ...structuredClone(deliveries[index]),
+  phase,
+  block,
+  internalPr: phase >= 4 ? deliveries[index].internalPr : null,
+  internalIssue: phase >= 3 ? deliveries[index].internalIssue : null,
+});
+export function createState(scenario = 'waiting') {
+  const state = {
+    schema: 1,
+    scenario,
+    latest: deliveries[1].target,
+    accepted: BASE,
+    internalSha: '10a91f20',
+    active: null,
+    deliveries: structuredClone(deliveries),
+    events: [{ label: '以指定上游版本初始化内部核心仓', note: '基线 a17e9b40 → 内部初始化 10a91f20' }],
+  };
+  if (scenario === 'waiting') state.active = snapshot(0, 6);
+  if (scenario === 'timeout') state.active = snapshot(0, 4, 'timeout');
+  if (scenario === 'plugin') state.active = snapshot(0, 5, 'plugin');
+  if (scenario === 'drift') state.active = snapshot(0, 1, 'drift');
+  if (scenario === 'metadata' || scenario === 'synced') {
+    state.accepted = state.latest;
+    state.internalSha = '12c79a50';
+    state.active = snapshot(1, scenario === 'synced' ? 8 : 7, scenario === 'synced' ? null : 'metadata');
+  }
+  return state;
+}
+function log(state, label, note = '') {
+  state.events.push({ label, note, time: new Date().toLocaleTimeString('zh-CN', { hour12: false }) });
+}
+const handlers = {
+  external(state) {
+    const number = state.deliveries.length + 41;
+    const delivery = {
+      ...deliveries[1],
+      id: `delivery-0${number}`,
+      target: `f${number}ac9021`,
+      sourcePr: number + 46,
+      internalPr: number + 52,
+      issue: number + 35,
+      internalIssue: number + 278,
+      title: `新增通用能力交付 ${number}`,
+      commits: [`f${number}ac9021`],
+      time: '刚刚',
+    };
+    state.deliveries.push(delivery);
+    state.latest = delivery.target;
+    log(state, '外部新交付加入队列', '当前交付目标保持冻结');
+  },
+  start(state) {
+    if (state.active && state.active.phase !== 8) return;
+    const index =
+      state.accepted === BASE ? 0 : state.deliveries.findIndex((item) => item.target === state.accepted) + 1;
+    const next = state.deliveries[index];
+    if (next) {
+      state.active = { ...structuredClone(next), phase: 1, block: null, internalPr: null, internalIssue: null };
+      log(state, '已冻结同步目标', `${next.id} · ${next.target}`);
+    }
+  },
+  advance(state) {
+    const active = state.active;
+    if (!active || active.block || active.phase >= 8 || active.phase === 6) return;
+    active.phase += 1;
+    const original = state.deliveries.find((item) => item.id === active.id);
+    if (active.phase === 3) active.internalIssue = original.internalIssue;
+    if (active.phase === 4) active.internalPr = original.internalPr;
+    log(state, active.phase === 8 ? '交付验收完成' : '执行步骤完成', `当前阶段 ${active.phase}`);
+  },
+  approve(state, action) {
+    const active = state.active;
+    if (active?.phase !== 6 || active.block) return;
+    state.internalSha = `1${state.deliveries.findIndex((item) => item.id === active.id) + 1}c79a50`;
+    state.accepted = active.target;
+    active.phase = 7;
+    log(state, '内部 PR 已审批并模拟合入', action.note || '审批通过');
+  },
+  recover(state) {
+    const active = state.active;
+    if (!active?.block || active.block === 'drift') return;
+    const block = active.block;
+    active.block = null;
+    active.phase = block === 'metadata' ? 8 : block === 'plugin' ? 6 : 5;
+    log(
+      state,
+      block === 'timeout'
+        ? '已查回既有 PR，继续同一交付'
+        : block === 'plugin'
+          ? '插件检查重跑通过，等待审批'
+          : 'Issue 状态已补齐，未重复合入',
+    );
+  },
+};
+export function reduce(current, action) {
+  const state = structuredClone(current);
+  handlers[action.type]?.(state, action);
+  return state;
+}
+export function summary(state) {
+  const acceptedIndex = state.deliveries.findIndex((item) => item.target === state.accepted);
+  const behind = state.deliveries.length - acceptedIndex - 1;
+  const codeLatest = state.accepted === state.latest;
+  const pending = state.active && state.active.phase < 8;
+  return {
+    codeLatest,
+    fullyComplete: codeLatest && !pending,
+    behind,
+    pendingPr: state.active?.internalPr && state.active.phase < 7 ? 1 : 0,
+  };
+}
