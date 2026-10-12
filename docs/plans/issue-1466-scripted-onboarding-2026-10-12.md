@@ -3,7 +3,7 @@ feature_ids: [F171, F155]
 topics: [issue-1466, onboarding, scripted-demo]
 doc_kind: implementation-plan
 created: 2026-10-12
-status: validating
+status: awaiting-experience-review
 tips_exempt: 本次修改的是首启引导本身；真实入口已提供可重播的发现路径，避免再叠加引导提示。
 ---
 
@@ -52,7 +52,7 @@ Architecture cell：首启 UI / Workspace browser。Map delta：内置浏览器�
 | delivered | 成果可操作；进入真实设置的按钮可用 |
 | close / replay | 关闭清理 timer；重播只重置演示自身，无持久业务删除 |
 
-测试：定时器自动旅程、暂停/恢复/损坏缓存、StrictMode 无重复步骤、无 API 调用、iframe source/ready 校验、既有远程浏览器回归、真实设置入口。浏览器验证默认首页进入→自动完成→操作成果→设置添加页，并覆盖移动/暗色、暂停刷新。
+测试：定时器自动旅程、暂停/恢复/损坏缓存、StrictMode 无重复步骤、无 API 调用、iframe source/ready 校验、既有远程浏览器回归、真实设置入口。浏览器验证默认首页进入→自动完成→操作成果→设置添加页，并覆盖移动、暂停刷新。暗色及英文完整体验仍待验收。
 
 检查命令使用当前仓库：`pnpm --filter @cat-cafe/web run test:first-run-onboarding`、定向浏览器组件 Vitest、Web 源码 TypeScript；格式化仅本次文件 `pnpm biome check --write <files>`，保留现有 CI。
 
@@ -64,10 +64,22 @@ Architecture cell：首启 UI / Workspace browser。Map delta：内置浏览器�
 - 实页路径：首页入口 → 自动团队准备与任务发布 → 六次传球 → 互审与修正 → 沙盒内成果 → “创建我的猫猫” → 现有添加页。已亲自添加任务、处理空输入、勾选全部未完成任务并核对完成提示。
 - 390px 窄屏可播放与操作成果；关闭/刷新后在原步骤暂停，点击继续才恢复。截图归档于工作区 `artifacts/issue1466-scripted-20261012/`，不放仓库根。
 - 原始 RED：缺少引导实现时两个行为测试失败。页面集成发现普通 iframe 被全站防嵌入响应头拦截；最终使用编译内置 srcDoc，未保留任何响应头例外。沙盒拒绝表单提交，改成按钮和 Enter 本地交互，浏览器复验通过。
-- 定向回归 35 文件、117 测试通过（首启、成员配置、旧引导、侧栏密度、保存 trace、现有浏览器）；后续成果与布局增量另跑 2 文件、6 测试通过。类型及格式检查以最终日志为准。
+- 最终定向回归 35 文件、118 测试通过（首启、成员配置、旧引导、侧栏密度、保存 trace、现有浏览器），见 `web-final-reviewed.log`。Web TypeScript 无错误；本次文件 Biome 无 error，保留既有 warning。
+- 非作者审查发现 P2：成果列表重绘丢失键盘焦点。先补测试确认失败，再按任务 ID 保留焦点；筛选移除任务时移到邻项，最后一项移到当前筛选按钮。`focus-red.log` / `focus-green.log` 留存，作者实页用 Tab 和空格复验三种场景，DOM 与可访问性焦点一致。
 - 本轮 tips 定向检查通过；默认跨历史分支范围的 tips 检查有既有文档缺失/过期项，未修改其它 feature 的真相声明来消除它们。
 - 五轴风险：行为=首启入口替换；数据=仅新增浏览器本地书签；安全=固定 HTML + allow-scripts 沙盒、禁止网络/表单、校验 ready 来源；契约=无后端 API 变化；不可逆=无。
 - Architecture ownership 命令在当前分支 package.json 中未提供；采用现有首启宿主与浏览器输入扩展，未新增 Store/Queue/Router。
+- Fallback 检查的播放 hook 四项分别处理书签不存在、读取损坏/受限、写入受限、无运行步骤；属于独立边界保护，不串联替代身份、账号或模型来源。
+
+## 入库截图
+
+以下为真实项目 5140 隔离实例截图，随分支入库，可由 GitHub 直接访问：
+
+![协作、审查与修正](../design/assets/issue1466-scripted-onboarding/handoff-desktop.png)
+
+![内置浏览器中的可操作成果](../design/assets/issue1466-scripted-onboarding/deliverable-desktop.png)
+
+![390px 移动端成果及真实设置入口](../design/assets/issue1466-scripted-onboarding/deliverable-mobile.png)
 
 ## 边界
 
