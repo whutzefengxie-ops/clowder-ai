@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const { mkdir } = require('node:fs/promises');
 const { homedir, tmpdir } = require('node:os');
 const { join } = require('node:path');
+const { fixture } = require('./browser-fixtures.cjs');
 const { chromium } = require(
   process.env.REPO_SYNC_PLAYWRIGHT ||
     join(homedir(), '.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright'),
@@ -24,42 +25,51 @@ async function run() {
     const read = () => page.evaluate((storageKey) => JSON.parse(localStorage.getItem(storageKey)), key);
     const config = () => page.locator('.nav-item[data-view="configuration"]').click();
     await page.goto('http://127.0.0.1:5186');
-    await page.locator('#open-pr').waitFor();
-    await config();
-    assert.match(await page.locator('#binding-lock').innerText(), /未完成交付/);
-    await page.locator('#check-binding').click();
-    assert.equal(await page.locator('#save-binding').isDisabled(), true);
-    await page.locator('#scenario').selectOption('unconfigured');
-    assert.equal((await read()).binding.status, 'draft');
-    await page.locator('.nav-item[data-view="overview"]').click();
+    assert.equal(await page.locator('#demo-controls').isVisible(), false);
     assert.equal(await page.locator('#start').count(), 0);
-    assert.match(await page.locator('.hero h2').innerText(), /先连接/);
+    await fixture(page, 'waiting');
     await config();
+    assert.match(await page.locator('#binding-lock').innerText(), /未完成同步/);
+    assert.equal(await page.locator('#edit-binding').isDisabled(), true);
+    await fixture(page, 'unconfigured');
+    await page.locator('#current-task .primary').click();
+    await page.locator('#next-binding').click();
+    assert.match(await page.locator('#wizard-error').innerText(), /地址/);
     const external = 'https://github.com/sentinel-lab/sentinel-core.git';
     const internal = 'git@codehub.example:team/sentinel-core.git';
+    const baseline = 'aa713c891234567890abcdef1234567890abcdef';
     const fields = {
       externalUrl: external,
       internalUrl: internal,
       sourceBranch: 'release/2',
       targetBranch: 'delivery-main',
-      baseline: 'aa713c891234567890abcdef1234567890abcdef',
-      internalWebUrl: 'https://codehub.example/team/sentinel-core',
-      externalProfile: 'sentinel-git',
-      internalProfile: 'sentinel-cli',
     };
     for (const [field, value] of Object.entries(fields)) await page.locator(`#config-${field}`).fill(value);
+    await page.locator('.wizard-advanced > summary').click();
+    await page.locator('#config-internalWebUrl').fill('https://codehub.example/team/sentinel-core');
+    await page.locator('#config-externalProfile').fill('sentinel-git');
+    await page.locator('#config-internalProfile').fill('sentinel-cli');
     await page.locator('#config-externalUrl').fill('https://synthetic-credential@github.com/example/core.git');
-    await page.locator('#check-binding').click();
-    assert.match(await page.locator('#config-result').innerText(), /不含凭据/);
-    assert.equal(await page.locator('#save-binding').isDisabled(), true);
+    await page.locator('#next-binding').click();
+    assert.match(await page.locator('#wizard-error').innerText(), /不含凭据/);
     assert.equal((await read()).binding.externalUrl, '');
     await page.locator('#config-externalUrl').fill(external);
+    await page.locator('#next-binding').click();
+    await page.locator('#config-baseline').fill('invalid-baseline');
+    await page.locator('#next-binding').click();
+    assert.match(await page.locator('#wizard-error').innerText(), /commit ID/);
+    await page.locator('#config-baseline').fill(baseline);
+    await page.locator('#next-binding').click();
     await page.locator('#check-binding').click();
     assert.equal(await page.locator('#save-binding').isEnabled(), true);
-    assert.match(await page.locator('#config-result').innerText(), /真实检查待接入/);
-    await page.locator('#config-sourceBranch').fill('release/3');
-    assert.equal(await page.locator('#save-binding').isDisabled(), true);
-    await page.locator('#config-sourceBranch').fill(fields.sourceBranch);
+    assert.match(await page.locator('#config-result').innerText(), /真实连接.*尚未接入/);
+    await page.locator('#previous-binding').click();
+    await page.locator('#config-baseline').fill('bb713c89');
+    await page.locator('#next-binding').click();
+    assert.equal(await page.locator('#save-binding').count(), 0);
+    await page.locator('#previous-binding').click();
+    await page.locator('#config-baseline').fill(baseline);
+    await page.locator('#next-binding').click();
     await page.locator('#check-binding').click();
     await page.evaluate(() => window.scrollTo(0, 0));
     await page.waitForFunction(() => getComputedStyle(document.getElementById('toast')).opacity === '0');
@@ -70,30 +80,32 @@ async function run() {
     assert.equal(state.accepted, null);
     assert.equal(state.active, null);
     assert.ok(state.archives.length);
+    await page.locator('#previous-binding').click();
     await page.locator('#config-baseline').fill('bb713c89');
-    assert.equal(await page.locator('#initialize-binding').isDisabled(), true);
+    await page.locator('#next-binding').click();
+    assert.equal(await page.locator('#initialize-binding').count(), 0);
     await page.reload();
+    await page.locator('#current-task .primary').click();
     await page.locator('#initialize-binding').click();
     state = await read();
     assert.equal(state.binding.status, 'ready');
-    assert.equal(state.accepted, fields.baseline);
+    assert.equal(state.accepted, baseline);
     assert.notEqual(state.internalSha, state.accepted);
-    const summary = await page.locator('#overview').innerText();
+    assert.equal(await page.locator(`#overview [data-copy="${baseline}"]`).getAttribute('title'), baseline);
+    await config();
+    const facts = await page.locator('.connection-facts').innerText();
     for (const value of [external, internal, fields.sourceBranch, fields.targetBranch])
-      assert.ok(summary.includes(value), `missing ${value}`);
-    assert.equal(
-      await page.locator(`#overview [data-copy="${fields.baseline}"]`).getAttribute('title'),
-      fields.baseline,
-    );
-    await page.locator('.nav-item[data-view="mapping"]').click();
+      assert.ok(facts.includes(value));
+    await page.locator('.config-readonly [data-view="overview"]').click();
+    await page.locator('#overview [data-map]').click();
     assert.match(await page.locator('#mapping').innerText(), /aa713c89/);
     assert.match(await page.locator('#mapping').innerText(), /1a713c89/);
     await page.reload();
     assert.equal((await read()).binding.internalUrl, internal);
-    assert.equal((await read()).accepted, fields.baseline);
-    await page.locator('#scenario').selectOption('behind');
+    assert.equal((await read()).accepted, baseline);
+    await fixture(page, 'behind');
     assert.equal((await read()).binding.externalUrl, external);
-    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.locator('#demo-toggle').click();
     await page.waitForFunction(() => getComputedStyle(document.getElementById('toast')).opacity === '0');
     await page.screenshot({ path: join(evidence, '09-configured-overview.png'), fullPage: true });
     await page.locator('#start').click();
@@ -109,9 +121,7 @@ async function run() {
     await stale.close();
     await pr.close();
     await config();
-    await page.locator('#config-internalUrl').fill('git@codehub.example:other/new-core.git');
-    await page.locator('#check-binding').click();
-    assert.equal(await page.locator('#save-binding').isDisabled(), true);
+    assert.equal(await page.locator('#edit-binding').isDisabled(), true);
     assert.equal((await read()).binding.internalUrl, internal);
     for (const width of [1440, 1024, 768, 390]) {
       await page.setViewportSize({ width, height: 1000 });
@@ -124,7 +134,7 @@ async function run() {
     }
     assert.deepEqual(errors, []);
     console.log(
-      'PASS：首次配置、凭据 URL 拒绝、编辑后重查、初始化门禁、自定义映射、刷新保留、活动绑定保护、旧 PR 拒绝与四种屏宽。',
+      'PASS：分步配置、地址凭据拒绝、编辑后重查、初始化门禁、自定义映射、刷新保留、活动绑定保护、旧 PR 拒绝与四种屏宽。',
     );
     console.log(`证据：${evidence}`);
   } finally {

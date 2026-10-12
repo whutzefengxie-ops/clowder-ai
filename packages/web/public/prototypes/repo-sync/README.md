@@ -14,19 +14,24 @@ tips_exempt: 独立交互原型，尚未挂载正式功能或能力目录。
 - demo_kind: journey_validation
 - delivery_lane: internal_product_gate
 - 主判断：用户能否直接辨认是否最新、版本对应关系、未合入 PR 与当前卡点，并在等待／失败后继续同一笔交付。
+- 本轮体验判断：用户无需先理解全部同步机制，就能在首屏判断现在由谁处理、点击哪里、点击后会发生什么。每个实际状态只有一个主操作；技术对照按需展开。配置分为地址、基线、检查与初始化三步，演示控制默认收起。
 - visual_source_of_truth: packages/web/src/app/theme-tokens.css、console-tokens.css；components/settings/SettingsShellV2.tsx 的 232px 导航、工作面及细分隔线。
 - native_elements: 直接加载当前 worktree 的原生主题 token，沿用设置功能页的导航／工作面结构。
 - surface: 单功能原型；独立预览，不声称已挂载真实应用 Host，也不替代产品主壳。
 - stylized_elements: 仅流程图、版本桥和演示控制；演示控制可以隐藏。
 - truth_label: 全部仓库、SHA、Issue、PR、命令结果都是合成数据；实际 Git、平台 CLI、网络及后端未接入。
 
-界面分层：接受版本总览 → 活动交付流程 → 交付详情与审计；提交与对象映射单独提供对应表，仓库连接提供初始化配置。审计属于具体交付与 PR，没有独立导航 tab。是否最新比较 acceptedUpstream 与 latestUpstream，不比较内部 main SHA；代码最新但元数据未补齐仍显示未完成。
+当前界面分层：当前状态与唯一主操作 → 五段进度 → 轻量版本对照 → 按需展开的技术说明 → 同步记录。导航只保留“同步工作台”和“仓库设置”；映射、检查、九步流程和审计从具体同步进入。审计属于交付与 PR，没有独立导航 tab。是否最新比较 acceptedUpstream 与 latestUpstream，不比较内部 main SHA；代码最新但元数据未补齐仍显示未完成。
 
 2026-10-12 交互修订：内部候选分支为 `sync/{deliveryId}`，目标分支使用绑定配置；内部 PR 标题为 `[上游同步] PR #{sourcePr} · {title}`。同一交付重试复用分支与 PR。配置页展示规则与预览，总览流程和 PR 页展示本次实际命名。命名规则为原型默认值，不暗示真实平台对象已创建。
 
 落地时要求交付 ID 在同一内部仓唯一，冻结后不因重试或上游新增交付而改名；演示编号仅为示例。标题中的 PR 号是外部来源号，内部 PR 编号仍由内部平台创建时生成。
 
-新增“合入后核验”和“核对 Issue 状态”场景起点。实际阶段 7 / 8 的演示推进按钮放在对应流程下方，隐藏顶部控制条后仍可操作；只浏览节点不改变实际状态，也不能越过审批。交付队列和流程入口进入同一笔交付详情，查看执行状态及审计，再跳转该内部 PR；映射页仅展示 commit / Issue / PR 对应，不重复展示审计和检查面板。
+“合入后核验”和“核对 Issue 状态”保留独立场景起点，模拟结果入口提升到首屏当前任务卡，与人工审核入口共用同一位置。隐藏顶部控制条后仍可操作；只浏览技术节点不改变实际状态，也不能越过审批。映射页仅展示 commit / Issue / PR 对应，审计和检查在本次同步详情按需展开。
+
+首次使用展示“开始配置仓库”，不直接把用户带入长表单；配置分为连接地址、起始版本、检查与初始化三步。认证引用、网页地址与 CLI 等选项默认折叠。已有连接提供只读摘要，未完成同步时禁止进入修改。没有已保存状态的浏览器从未配置开始；显式“演示场景”控件可载入预设模拟状态，正常同步入口仍不能跳过初始化。
+
+操作与结果：未配置 → 开始配置；待接收 → 同步明确的上游 PR；系统准备 → 继续演示当前准备步骤；待审批 → 跳到明确的内部 PR；核验 / 核对中 → 演示当前自动环节；阻塞 → 明确查询 / 重跑 / 查看处理方法；已最新 → 回看最近记录。历史同步只提供返回当前工作台，不能推进别的 PR。
 
 审计按 deliveryId 筛选，记录步骤、执行方、内外对象、结果和审批备注；新发现的交付日志归新交付，不归活动 PR。预置场景记录明确标注“演示预置”，旧版缺少来源身份的发现记录保留原数据并标注归属待核对，不补造关联。新记录使用北京时间的完整日期与时间。
 
@@ -56,7 +61,7 @@ tips_exempt: 独立交互原型，尚未挂载正式功能或能力目录。
 
 职责：人工只在内部平台按正常流程审核／合入 PR。准备、比对、映射、模板文档、检查、结果读取与完成登记由程序执行，不依赖 Agent。Agent 可选辅助生成可读变更说明或解释失败，不能替代版本核验、关闭依据和审批。当前没有接入模型。
 
-九步流程将“合入后核验”和“Issue 状态核对”分开。正式系统由事件／轮询自动推进，用户无需点击验收；原型在流程上下文中提供标为“演示推进”的模拟结果按钮。PR 地址 `/internal/demo/core/pull/<id>?binding=<id>` 是本地模拟，不是实际内部平台；落地时使用适配器返回的真实 URL。
+九步技术流程保留在折叠详情中；用户进度概括为准备同步、审核 PR、核验代码、核对 Issue、完成。正式系统由事件／轮询自动推进，用户无需点击验收；原型的主按钮明确写“继续演示”，不要求先理解完整技术流程。PR 地址 `/internal/demo/core/pull/<id>?binding=<id>` 是本地模拟；落地时使用适配器返回的真实 URL。
 
 命令展示中的 Git 命令表示 Git 传输；Issue／PR 使用 `repo-sync` 适配器占位命令，明确未实现。标准 Git 本身不提供创建 Issue／PR 的接口。
 
@@ -64,7 +69,7 @@ tips_exempt: 独立交互原型，尚未挂载正式功能或能力目录。
 
 运行：`node packages/web/public/prototypes/repo-sync/server.mjs`，默认只绑定 127.0.0.1:5186。服务只提供原型文件与指定主题 CSS，不暴露整个仓库。
 
-单元验证：`node --test packages/web/public/prototypes/repo-sync/state.test.mjs packages/web/public/prototypes/repo-sync/binding.test.mjs packages/web/public/prototypes/repo-sync/delivery.test.mjs`。
-浏览器旅程：`browser-check.cjs`、`binding-browser-check.cjs`、`delivery-browser-check.cjs`（均位于本目录，用 Node 执行）；使用可用 Playwright 和安装的 Chrome，产物落入系统临时目录。
+单元验证：本目录 `state.test.mjs`、`binding.test.mjs`、`delivery.test.mjs`、`workbench.test.mjs`，用 `node --test` 执行。
+浏览器旅程：`browser-check.cjs`、`binding-browser-check.cjs`、`delivery-browser-check.cjs`、`workbench-browser-check.cjs`（均位于本目录，用 Node 执行）；使用可用 Playwright 和安装的 Chrome，产物落入系统临时目录。
 
 声明边界：真实网络方向、Git 对象、平台审批与自动关闭需独立实现和验证；此原型证明 UI 状态与用户动作的因果，不证明生产同步能力。

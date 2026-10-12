@@ -18,9 +18,9 @@ test('post-merge verification has its own reachable scenario and keeps the accep
   assert.equal(verified.accepted, verified.active.target);
   assert.equal(reduce(verified, { type: 'advance' }).active.phase, 9);
 });
-test('the simulation continuation is inside the actual workflow context', () => {
+test('the simulation continuation is inside the current operation context', () => {
   const state = reduce(createState('waiting'), { type: 'approve', note: '审核备注' });
-  assert.match(renderOverview(state, 7), /<section class="panel flow-panel">[\s\S]*id="auto-step"/);
+  assert.match(renderOverview(state, 7), /id="current-task"[\s\S]*id="auto-step"/);
 });
 test('delivery audit does not include another delivery or repository-wide events', () => {
   const state = createState('behind');

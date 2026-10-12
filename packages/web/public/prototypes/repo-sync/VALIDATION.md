@@ -36,11 +36,12 @@ tips_exempt: 独立原型验证记录，尚未挂载正式功能。
 
 本轮命令及结果：
 
-- `node --test packages/web/public/prototypes/repo-sync/state.test.mjs packages/web/public/prototypes/repo-sync/binding.test.mjs packages/web/public/prototypes/repo-sync/delivery.test.mjs`：19 项通过，0 失败。本轮 6 个行为 / 回归测试均观察预期失败再修复；覆盖命名、阶段 7 接受游标、流程内演示入口、按交付筛选、新发现日志归新交付，以及旧版缺少来源身份的记录保留但不归入 PR。
+- 本目录 4 个 `*.test.mjs` 通过 `node --test` 执行：23 项通过，0 失败。新增工作台的 4 个行为测试先观察失败再实现，覆盖十种状态的唯一主操作、技术说明默认折叠、实际核验入口与历史同步不能推进别的 PR；原有 19 项仍通过，按钮位置断言跟随新体验契约改为当前操作卡，接受游标和审批等状态断言保留。
 - `node packages/web/public/prototypes/repo-sync/browser-check.cjs`：完整旅程通过，页面异常和 HTTP 错误均为 0；截图写入系统临时目录 `repo-sync-prototype-evidence`。
 - `node packages/web/public/prototypes/repo-sync/binding-browser-check.cjs`：配置旅程通过。使用 fixture 外的仓库地址、release/2、delivery-main、完整 40 位 commit ID 与认证配置引用；验证总览 / 映射 / PR 页面反映自定义配置、刷新保留、编辑后检查失效及活动绑定保护。页面异常 / HTTP 错误均为 0，四种屏宽无横向溢出。截图位于系统临时目录 `repo-sync-binding-evidence`。
 - `node packages/web/public/prototypes/repo-sync/delivery-browser-check.cjs`：通过。隐藏演示控制条后 7→8→9；点击未来节点不会改变阶段 6 或绕过审批；流程 / PR 页面包含各自审计，同一笔历史审批备注刷新保留；第二笔 PR 不含第一笔备注；新增外部交付不污染当前审计；映射页无审计面板。1440 / 1024 / 768 / 390 宽通过，页面异常 / HTTP 错误为 0；截图位于 `repo-sync-delivery-evidence`。
-- 项目安装的 Biome 2.4.1 对 22 个 JS 模块执行 `check`：通过，无警告；5 个 HTML／CSS 执行关闭格式化的语法与 lint 检查：通过，无警告。CSS 保留紧凑声明以遵守文件行数硬限。
+- `node packages/web/public/prototypes/repo-sync/workbench-browser-check.cjs`：通过。从全新未配置状态，只沿主操作完成三步配置、初始化、同步、具体 PR 审批、核验与收尾。十种场景在 1440 / 1024 / 768 / 390 宽、800 高视口中都恰有一个当前主操作，按钮首屏可见且无横向溢出。演示控制与九步技术说明默认收起，导航仅两项。页面异常 / HTTP 错误为 0；截图位于 `repo-sync-workbench-evidence`。
+- 项目安装的 Biome 2.4.1 对 27 个 JS 模块执行 `check`：通过，无警告；6 个 HTML／CSS 执行关闭格式化的语法与 lint 检查：通过，无警告。CSS 保留紧凑声明以遵守文件行数硬限。
 - `git diff --check`／暂存差异检查：通过。所有原型文件低于 350 行硬限；CSS 214 行超过 200 行提示线，仍低于硬限。
 - `node scripts/check-capability-tips.mjs --changed-file packages/web/public/prototypes/repo-sync/README.md`：通过，另有 17 个原有目录引用警告。
 - 不限定改动范围的 capability-tips 检查：20 个问题，均指向本分支基线已有的 Feature 文档，不涉及原型文件。未将其宣称为全仓通过。
@@ -67,3 +68,7 @@ Architecture cell：独立原型工作面，不新增生产同步服务或产品
 视觉参考：复用 2026-10-10 已接受的原生主题、232px 功能导航和原型截图；当前 checkout 没有 designs 目录，不虚构 .pen 对照。实物观察：命名与流程并列，推进按钮位于当前核验说明下，审计随交付下钻；桌面和手机布局均核对。仓库根目录未增加媒体文件，截图仍落入临时目录及本会话可视化目录。
 
 本轮提交后检查：`node scripts/check-fallback-layers.mjs --base eb92428f1` 读到 8 个代码文件差异，机械计数净增 12，触发提示。坐标检查结果：本轮修复日志归属并把操作放回实际交付上下文，没有补建第二套同步状态。被计数的主要是导航 / 场景布尔条件、无活动交付时的展示起点、当前冻结对象与原始记录的选择，以及测试运行时路径默认值；测试异常会明确失败，真实核验失败没有被吞掉或自动通过。旧版未知归属保留为未知，不猜测重新关联。该检查是诊断信息，不替代上述行为和浏览器证据。
+
+操作层级修订：用户反馈“界面混乱，不知道在哪里做什么”。主界面改为以当前任务推导唯一操作；完整九步、命令、对象状态和审计按需展开，不增加独立同步状态库。配置以三步向导承接首次使用，默认字段与高级选项分别呈现；新的本机浏览器从未配置开始，显式演示控件才载入模拟场景。
+
+本轮实际体验：Codex 内嵌浏览器刷新后看见未配置主入口 → 点击“开始配置仓库” → 看见第一步地址表单和唯一“下一步”按钮。四条浏览器旅程实际通过；新旅程从空状态走到内部 PR 审批并收尾。桌面 / 手机截图核对主动作、上下文和折叠层级。作者能证明操作可达、状态正确及首屏位置；界面是否让目标用户无需解释就理解，仍需用户实际试用判断，不用自动化通过代替用户判断。

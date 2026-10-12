@@ -68,27 +68,37 @@ function branch(value) {
     value.split('/').every((part) => part && !part.startsWith('.') && !part.endsWith('.') && !part.endsWith('.lock'))
   );
 }
-export function validateBinding(draft) {
+function baselineErrors(draft) {
+  const errors = [];
+  if (!/^[a-f\d]{7,40}$/i.test(draft.baseline ?? '')) errors.push('请选择有效的起始 commit ID（7–40 位十六进制）。');
+  if (!['snapshot', 'history'].includes(draft.mode)) errors.push('请选择初始化方式。');
+  return errors;
+}
+function webAddressValid(value) {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && !url.username && !url.password && !url.search && !url.hash;
+  } catch {
+    return false;
+  }
+}
+function connectionErrors(draft) {
   const errors = [];
   if (!gitAddress(draft.externalUrl, true))
     errors.push('外部地址需为 GitHub 仓库的 HTTPS 或 SSH 地址，且不含凭据、查询参数。');
   if (!gitAddress(draft.internalUrl)) errors.push('内部地址需为 HTTPS 或 SSH Git 地址，且不含凭据、查询参数。');
   if (!branch(draft.sourceBranch) || !branch(draft.targetBranch)) errors.push('分支名称格式不正确。');
-  if (!/^[a-f\d]{7,40}$/i.test(draft.baseline ?? ''))
-    errors.push('起始版本需填写 7–40 位十六进制 commit ID；真实存在性待接入核验。');
-  if (!['snapshot', 'history'].includes(draft.mode)) errors.push('请选择有效的初始化方式。');
   if (!['codehub-cli', 'platform-cli'].includes(draft.adapter)) errors.push('请选择内部平台命令适配。');
   if (![draft.externalProfile, draft.internalProfile].every((value) => /^[\w.-]{1,64}$/.test(value ?? '')))
     errors.push('凭据引用只接受本机配置名称，例如 system-git；不要填写密钥。');
-  if (draft.internalWebUrl) {
-    try {
-      const url = new URL(draft.internalWebUrl);
-      if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash) throw new Error();
-    } catch {
-      errors.push('内部网页地址需为无凭据和查询参数的 HTTPS URL。');
-    }
-  }
+  if (draft.internalWebUrl && !webAddressValid(draft.internalWebUrl))
+    errors.push('内部网页地址需为无凭据和查询参数的 HTTPS URL。');
   return errors;
+}
+export function validateBinding(draft, scope = 'all') {
+  if (scope === 'baseline') return baselineErrors(draft);
+  if (scope === 'connection') return connectionErrors(draft);
+  return [...connectionErrors(draft), ...baselineErrors(draft)];
 }
 export function saveBinding(current, draft, checkedFingerprint) {
   if (current.active && current.active.phase < COMPLETE) throw new Error('存在未完成交付，不能替换仓库绑定。');

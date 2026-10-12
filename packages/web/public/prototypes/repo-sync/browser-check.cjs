@@ -8,6 +8,7 @@ const { chromium } = require(
 );
 const evidence = process.env.REPO_SYNC_EVIDENCE || join(tmpdir(), 'repo-sync-prototype-evidence');
 const key = 'clowder-repo-sync-demo-v2';
+const { fixture } = require('./browser-fixtures.cjs');
 async function run() {
   await mkdir(evidence, { recursive: true });
   const browser = await chromium.launch({
@@ -22,12 +23,12 @@ async function run() {
       if (response.status() >= 400) errors.push(`${response.status()} ${response.url()}`);
     });
     await page.goto('http://127.0.0.1:5186');
+    await fixture(page, 'waiting');
     await page.locator('#open-pr').waitFor();
     assert.equal(await page.locator('#approval-dialog').count(), 0);
     const read = () => page.evaluate((storageKey) => JSON.parse(localStorage.getItem(storageKey)), key);
     const scenario = async (name) => {
-      await page.locator('#scenario').selectOption(name);
-      await page.locator('#overview').waitFor({ state: 'visible' });
+      await fixture(page, name);
     };
     const approve = async (note) => {
       const expected = (await read()).active.internalPr;
@@ -63,9 +64,11 @@ async function run() {
     assert.notEqual(state.accepted, state.internalSha);
     await finish();
     await page.locator('.delivery[data-delivery="delivery-041"]').click();
+    await page.locator('#delivery-audit > summary').click();
     assert.match(await page.locator('#delivery .audit-panel').innerText(), /sentinel-用户输入-20261010-α/);
     await page.reload();
     await page.locator('.delivery[data-delivery="delivery-041"]').click();
+    await page.locator('#delivery-audit > summary').click();
     assert.match(await page.locator('#delivery .audit-panel').innerText(), /sentinel-用户输入-20261010-α/);
     await page.screenshot({ path: join(evidence, '02-audit-persisted.png'), fullPage: true });
     await scenario('behind');
@@ -78,7 +81,7 @@ async function run() {
     for (let i = 0; i < 5; i++) await page.locator('#advance').click();
     await approve('第二笔审批通过');
     await finish();
-    assert.match(await page.locator('.hero h2').innerText(), /已接收外部最新版本/);
+    assert.match(await page.locator('#current-task h2').innerText(), /已接收外部最新版本/);
     state = await read();
     assert.equal(state.latest, state.accepted);
     assert.notEqual(state.internalSha, state.latest);
@@ -90,23 +93,26 @@ async function run() {
     await scenario('plugin');
     const before = (await read()).internalSha;
     assert.equal(await page.locator('#open-pr').count(), 0);
-    assert.match(await page.locator('#object-summary').innerText(), /候选与目标一致/);
-    assert.match(await page.locator('#object-summary').innerText(), /检查失败/);
+    await page.locator('.delivery[data-delivery="delivery-041"]').click();
+    await page.locator('#check-details > summary').click();
+    assert.match(await page.locator('#check-details').innerText(), /候选与目标一致/);
+    assert.match(await page.locator('#check-details').innerText(), /检查失败/);
     await page.screenshot({ path: join(evidence, '05-plugin-blocked.png'), fullPage: true });
     await page.locator('#recover').click();
     assert.equal((await read()).internalSha, before);
     await page.locator('#open-pr').waitFor();
     await scenario('drift');
+    await page.locator('#inspect-drift').click();
     assert.equal(await page.locator('#recover').isDisabled(), true);
     await scenario('metadata');
     const acceptedSha = (await read()).internalSha;
-    assert.match(await page.locator('.hero h2').innerText(), /代码已最新.*待收尾/);
+    assert.match(await page.locator('#current-task h2').innerText(), /代码已同步.*待补齐/);
     await page.screenshot({ path: join(evidence, '06-code-accepted-metadata-pending.png'), fullPage: true });
     await page.locator('#recover').click();
     assert.equal((await read()).internalSha, acceptedSha);
-    assert.match(await page.locator('.hero h2').innerText(), /已接收外部最新版本/);
+    assert.match(await page.locator('#current-task h2').innerText(), /已接收外部最新版本/);
     await scenario('waiting');
-    await page.locator('[data-view="mapping"]').first().click();
+    await page.locator('#overview [data-map]').click();
     assert.match(await page.locator('#mapping').innerText(), /bf903a62/);
     assert.match(await page.locator('#mapping').innerText(), /内部 #318/);
     await page.screenshot({ path: join(evidence, '03-commit-mapping.png'), fullPage: true });
@@ -117,6 +123,7 @@ async function run() {
     await page.keyboard.press('Escape');
     assert.equal(await page.locator('#adapter-dialog').isVisible(), false);
     await page.locator('[data-view="overview"]').first().click();
+    await page.locator('#technical-details > summary').click();
     await page.locator('[data-phase="3"]').click();
     await page.locator('#phase-detail summary').click();
     assert.match(await page.locator('#phase-detail').innerText(), /git fetch/);

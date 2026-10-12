@@ -6,64 +6,57 @@ function input(draft, name, label, hint, placeholder = '') {
   return `<label class="config-field" for="config-${name}"><span>${label}</span><input id="config-${name}" name="${name}" value="${escapeHtml(draft[name] ?? '')}" placeholder="${placeholder}" autocomplete="off" spellcheck="false"><small>${hint}</small></label>`;
 }
 export function bindingSummary(binding) {
-  if (binding?.status !== 'ready') return '';
-  return `<section class="binding-strip" aria-label="当前仓库连接"><div><small>外部 GitHub · ${escapeHtml(binding.sourceBranch)}</small><code>${escapeHtml(binding.externalUrl)}</code></div><span class="binding-arrow">→</span><div><small>内部 Git · ${escapeHtml(binding.targetBranch)}</small><code>${escapeHtml(binding.internalUrl)}</code></div><button type="button" class="text-button" data-view="configuration">管理连接 ↗</button></section>`;
+  if (binding.status !== 'ready') return '';
+  const repo = binding.externalUrl
+    .replace(/\.git$/, '')
+    .split(/[/:]/)
+    .slice(-2)
+    .join(' / ');
+  const internalRepo = binding.internalUrl
+    .replace(/\.git$/, '')
+    .split(/[/:]/)
+    .slice(-2)
+    .join(' / ');
+  return `<div class="connection-line"><span>GitHub ${escapeHtml(repo)} · ${escapeHtml(binding.sourceBranch)} <b>→</b> 内部 ${escapeHtml(internalRepo)} · ${escapeHtml(binding.targetBranch)}</span><button type="button" class="text-button" data-view="configuration">仓库设置</button></div>`;
 }
-export function renderUnboundOverview(binding) {
-  const saved = binding.status === 'saved';
-  return `<section class="hero"><div><span class="badge warm">${saved ? '等待初始化' : '尚未配置'}</span><h2>${saved ? '连接已保存，确认初始化后开始接收' : '先连接外部与内部仓库'}</h2><p>仓库、分支与起始上游版本共同确定一条接收链路。初始化前不建立映射或创建同步 PR。</p></div><button type="button" class="button primary" data-view="configuration">配置连接与初始化 →</button></section>`;
+function facts(draft) {
+  return `<dl class="connection-facts"><div><dt>外部 GitHub</dt><dd>${escapeHtml(draft.externalUrl)}<br>分支 ${escapeHtml(draft.sourceBranch)}</dd></div><div><dt>内部 Git</dt><dd>${escapeHtml(draft.internalUrl)}<br>合入分支 ${escapeHtml(draft.targetBranch)}</dd></div><div><dt>起始上游版本</dt><dd><code>${escapeHtml(draft.baseline)}</code> · ${draft.mode === 'snapshot' ? '独立快照初始化' : '保留上游历史初始化'}</dd></div></dl>`;
 }
-function checkResult(ui, checked) {
-  if (ui.errors.length)
-    return `<ul class="config-errors">${ui.errors.map((error) => `<li>${escapeHtml(error)}</li>`).join('')}</ul>`;
-  return checked
-    ? '<p class="good-text">✓ 当前配置格式校验通过（模拟检查）</p><p>真实检查待接入：外部读取权限 → 内部 Git 推送权限 → CLI 建 Issue / PR 权限 → 起始版本与文件树核验。</p>'
-    : '<p>填写后点击“检查配置”。任何修改都需要重新检查。</p>';
+function errors(ui) {
+  return ui.errors.length
+    ? `<div id="wizard-error" class="notice danger" role="alert"><ul>${ui.errors.map((error) => `<li>${escapeHtml(error)}</li>`).join('')}</ul></div>`
+    : '';
 }
-function setupSteps(draft, { saved, ready, checked, dirty }) {
-  const persisted = (saved || ready) && !dirty;
-  const done = [draft.externalUrl && draft.internalUrl, checked || persisted, persisted, ready && !dirty];
-  const labels = ['填写仓库地址', '检查配置', '保存新绑定', '初始化与核验'];
-  return `<ol class="setup-steps" aria-label="连接配置流程">${labels.map((label, index) => `<li class="${done[index] ? 'done' : ''}"><b>${index + 1}</b>${label}</li>`).join('')}</ol>`;
+function advanced(draft) {
+  return `<details class="wizard-advanced"><summary>更多连接选项（通常无需修改）</summary>${input(draft, 'internalWebUrl', '内部仓库网页地址（可选）', 'PR 的具体 URL 由平台适配器返回。')}
+    <div class="wizard-grid">${input(draft, 'externalProfile', '外部认证配置引用', '引用执行机已有配置，不填写 Token 或密码。')}${input(draft, 'internalProfile', '内部认证配置引用', '仅记录配置名称，不保存密钥。')}</div>
+    <label class="config-field" for="config-adapter"><span>Issue / PR 命令适配</span><select id="config-adapter" name="adapter"><option value="codehub-cli" ${draft.adapter === 'codehub-cli' ? 'selected' : ''}>codehub-cli</option><option value="platform-cli" ${draft.adapter === 'platform-cli' ? 'selected' : ''}>其他平台 CLI（待接入）</option></select><small>Git Bash 负责代码；平台 CLI 负责 Issue / PR。</small></label></details>`;
 }
-function configActions({ locked, saved, ready, checked, dirty }) {
-  const disabled = locked || (saved && !dirty) || !checked;
-  return `<div class="config-actions"><button type="button" id="check-binding" class="button secondary">检查配置（模拟）</button><button type="button" id="save-binding" class="button primary" ${disabled ? 'disabled' : ''}>${ready ? '保存为新绑定' : '保存连接'}</button>${saved ? `<button type="button" id="initialize-binding" class="button primary" ${dirty ? 'disabled' : ''}>模拟初始化并核对 →</button>` : ''}</div>`;
+function connectionStep(draft) {
+  return `<div class="wizard-grid"><section class="wizard-section"><h3>外部：从这里接收更新</h3>${input(draft, 'externalUrl', 'GitHub 仓库地址', '支持 HTTPS 或 SSH，地址中不要携带凭据。', 'https://github.com/example/core.git')}${input(draft, 'sourceBranch', '外部交付分支', '通常使用 main。')}</section><section class="wizard-section"><h3>内部：在这里审核与合入</h3>${input(draft, 'internalUrl', '内部 Git 仓库地址', '系统推送候选分支，并创建内部 PR。', 'git@codehub.example:team/core.git')}${input(draft, 'targetBranch', '内部合入分支', '同步 PR 将请求合入这个分支。')}</section></div>${advanced(draft)}`;
+}
+function baselineStep(draft) {
+  return `${input(draft, 'baseline', '从哪个上游 commit 开始', '本原型预填示例版本，你可以替换为其他 7–40 位 commit ID。后续从这个版本连续接收更新。')}
+    <fieldset class="init-modes"><legend>内部仓如何初始化</legend><label><input type="radio" name="mode" value="snapshot" ${draft.mode === 'snapshot' ? 'checked' : ''}><span><strong>独立快照初始化</strong><small>适合已有内部仓；内部初始 commit ID 可不同，核心文件树必须一致。</small></span></label><label><input type="radio" name="mode" value="history" ${draft.mode === 'history' ? 'checked' : ''}><span><strong>保留上游历史初始化</strong><small>适合新内部仓；沿用上游提交历史。</small></span></label></fieldset>`;
+}
+function finalStep(state, ui) {
+  const saved = state.binding.status === 'saved' && JSON.stringify(ui.draft) === JSON.stringify(state.binding);
+  const checked = ui.checked === JSON.stringify(ui.draft);
+  const status = saved ? '配置已保存，还差初始化' : checked ? '本地格式检查通过' : '确认配置，再检查并启用';
+  return `${facts(ui.draft)}<div id="config-result" class="notice ${saved || checked ? 'success' : ''}" role="status"><strong>${status}</strong><p>真实连接、权限和版本核验尚未接入；下面的操作只演示状态变化。</p></div><div class="wizard-actions"><button type="button" id="previous-binding" class="button secondary">← 上一步</button>${saved ? '<button type="button" id="initialize-binding" class="button primary">模拟初始化并开始使用 →</button>' : checked ? '<div><button type="button" id="check-binding" class="text-button">重新检查</button> <button type="button" id="save-binding" class="button primary">保存连接 →</button></div>' : '<button type="button" id="check-binding" class="button primary">检查配置（模拟）→</button>'}</div>`;
+}
+function readonlyBinding(state, ui) {
+  const locked = state.active && state.active.phase < COMPLETE;
+  return `<section class="panel config-readonly"><span class="badge good">演示连接已初始化</span><h2>当前仓库连接</h2><p>这是正在使用的接收链路，所有同步都从这个起始版本继续。</p>${facts(state.binding)}${errors(ui)}${locked ? '<div id="binding-lock" class="notice">当前有未完成同步，完成前不能更换仓库、分支或起始版本。</div>' : ''}<div class="wizard-actions">${locked ? '<button type="button" class="button primary" data-view="overview">返回当前同步 →</button><button type="button" id="edit-binding" class="button secondary" disabled>同步完成后可修改</button>' : '<button type="button" class="button secondary" data-view="overview">← 返回工作台</button><button type="button" id="edit-binding" class="button primary">修改仓库连接 →</button>'}</div><details class="wizard-advanced"><summary>查看认证配置与命名规则</summary><p>外部认证引用 ${escapeHtml(state.binding.externalProfile)} · 内部认证引用 ${escapeHtml(state.binding.internalProfile)} · ${escapeHtml(state.binding.adapter)}</p>${renderIdentity(state.active ?? state.deliveries[0], state.binding, 0)}</details></section>`;
 }
 export function renderBinding(state, ui) {
-  const draft = ui.draft;
-  const locked = state.active && state.active.phase < COMPLETE;
-  const saved = state.binding.status === 'saved';
-  const ready = state.binding.status === 'ready';
-  const checked = ui.checked === JSON.stringify(draft);
-  const dirty = JSON.stringify(draft) !== JSON.stringify(state.binding);
-  const flags = { locked, saved, ready, checked, dirty };
-  const select = (name, value) => (draft[name] === value ? 'selected' : '');
-  const mark = (value) => (draft.mode === value ? 'checked' : '');
-  return `<section class="panel config-header"><div><div class="eyebrow">REPOSITORY CONNECTION</div><h2>仓库连接与初始化</h2><p>先确定接收哪一个仓库、从哪个版本开始，再推进交付流程。</p></div><span class="badge ${ready ? 'good' : 'warm'}">${ready ? '演示绑定已初始化' : saved ? '已保存 · 等待初始化' : '尚未配置'}</span></section>
-  ${setupSteps(draft, flags)}
-  ${locked ? `<div class="notice danger" id="binding-lock"><div><strong>当前绑定有未完成交付</strong><p>${escapeHtml(state.active.id)}${state.active.internalPr ? ` · 内部 PR #${state.active.internalPr}` : ''} 尚未完成。完成后才可替换仓库、分支或起始版本；演示“首次配置连接”可体验新建流程。</p></div></div>` : ''}
-  <form id="binding-form" novalidate><div class="config-grid">
-    <section class="panel config-card"><div class="config-card-head"><span class="config-icon">↗</span><div><h3>外部代码仓</h3><p>GitHub · 通用能力的来源</p></div><span class="badge neutral">只读来源</span></div>
-      ${input(draft, 'externalUrl', 'Git 仓库地址', '支持 HTTPS 或 SSH，不在 URL 中携带 Token。', 'https://github.com/example/core.git')}
-      ${input(draft, 'sourceBranch', '外部交付分支', '只接收已合入此分支的交付，通常为 main。')}
-      ${input(draft, 'externalProfile', '外部认证配置引用', '引用同步执行机已有 Git / GitHub 认证配置；不填写凭据。')}
-    </section>
-    <section class="panel config-card"><div class="config-card-head"><span class="config-icon">↙</span><div><h3>内部代码仓</h3><p>内部 Git 平台 · 接收与审批</p></div><span class="badge neutral">内网执行</span></div>
-      ${input(draft, 'internalUrl', 'Git 仓库地址', '用于 Git 对象与候选分支推送，不直接推进目标分支。', 'git@codehub.example:team/core.git')}
-      ${input(draft, 'targetBranch', '内部合入分支', '同步 PR 的目标分支，由内部平台正常审核与合入。')}
-      ${input(draft, 'internalWebUrl', '内部仓库网页地址（可选）', '网页入口与 Git 地址分别配置；具体 PR URL 由平台适配器返回。')}
-      <div class="config-pair"><label class="config-field" for="config-adapter"><span>Issue / PR 命令适配</span><select id="config-adapter" name="adapter"><option value="codehub-cli" ${select('adapter', 'codehub-cli')}>codehub-cli</option><option value="platform-cli" ${select('adapter', 'platform-cli')}>其他平台 CLI（待接入）</option></select><small>Git Bash 负责代码；平台 CLI 负责 Issue / PR。</small></label>
-      ${input(draft, 'internalProfile', '内部认证配置引用', '仅记录执行机配置名称，不保存密钥。')}</div>
-    </section></div>
-    <section class="panel config-card baseline-card"><div class="section-head"><div><h3>初始化基线</h3><p>更换起始版本会创建新的绑定，并保留旧绑定的合成映射记录。</p></div><span class="badge neutral">一次初始化 · 后续连续接收</span></div>
-      <div class="baseline-grid">${input(draft, 'baseline', '起始上游 commit ID', '应来自外部交付分支的某个版本。实际存在性、祖先关系和文件树一致性由程序核验。', '例如 a17e9b40')}
-      <fieldset class="init-modes"><legend>内部初始化方式</legend><label><input type="radio" name="mode" value="snapshot" ${mark('snapshot')}><span><strong>独立快照初始化</strong><small>内部起始 commit ID 可以不同，核心文件树必须一致。</small></span></label><label><input type="radio" name="mode" value="history" ${mark('history')}><span><strong>保留上游历史初始化</strong><small>新仓库可沿用上游提交历史；之后仍走内部 PR。</small></span></label></fieldset></div>
-    </section>
-    <section class="panel config-card naming-rules"><h3>内部同步分支与 PR 命名</h3><p>分支：<code>sync/{交付ID}</code>；PR：<code>[上游同步] PR #{外部PR号} · {外部PR标题}</code>。下面是当前配置的名称预览。</p>${renderIdentity(state.active ?? state.deliveries[0], draft, 0)}</section>
-    <section class="panel config-checks"><div><h3>检查与保存</h3><p>演示仅执行本地格式校验，真实连通性、权限与版本核验尚未接入。</p></div>
-      <div id="config-result" role="status" aria-live="polite">${checkResult(ui, checked)}</div>
-      ${configActions(flags)}
-      <small>${saved ? '初始化采用已保存的配置。修改表单后请先重新检查并保存。' : '仅内网执行机从外部接收；核心仓不承载内部定制代码，插件仓独立管理。'}</small>
-    </section></form>`;
+  if (!ui.editing) return readonlyBinding(state, ui);
+  const labels = ['连接仓库', '选择起始版本', '检查并启用'];
+  const descriptions = [
+    '先填写来源和接收仓库。下一步再选择初始化版本。',
+    '只设置一次起始版本，之后按上游交付顺序持续同步。',
+    '核对填写的信息，保存后完成模拟初始化。',
+  ];
+  const body = ui.step === 1 ? connectionStep(ui.draft) : ui.step === 2 ? baselineStep(ui.draft) : finalStep(state, ui);
+  return `<ol class="setup-steps" aria-label="配置进度">${labels.map((label, index) => `<li class="${index + 1 <= ui.step ? 'done' : ''}"><b>${index + 1}</b>${label}</li>`).join('')}</ol><form id="binding-form" class="panel wizard-panel" novalidate><span class="eyebrow">第 ${ui.step} / 3 步 · 演示配置</span><h2>${labels[ui.step - 1]}</h2><p>${descriptions[ui.step - 1]}</p>${errors(ui)}${body}${ui.step < 3 ? `<div class="wizard-actions">${ui.step > 1 ? '<button type="button" id="previous-binding" class="button secondary">← 上一步</button>' : '<button type="button" class="text-button" data-view="overview">暂时返回工作台</button>'}<button type="button" id="next-binding" class="button primary">${ui.step === 1 ? '下一步：选择起始版本 →' : '下一步：检查配置 →'}</button></div>` : ''}${state.binding.status === 'ready' ? '<button type="button" id="cancel-binding" class="text-button">取消修改，保留当前连接</button>' : ''}</form>`;
 }

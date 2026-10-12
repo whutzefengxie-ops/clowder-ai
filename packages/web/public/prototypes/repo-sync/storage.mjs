@@ -13,7 +13,7 @@ export function readState() {
   } catch {
     /* Only synthetic demo data is stored; unavailable storage starts a new demo. */
   }
-  return createState();
+  return createState('unconfigured');
 }
 export function writeState(state) {
   localStorage.setItem(storageKey, JSON.stringify(state));
