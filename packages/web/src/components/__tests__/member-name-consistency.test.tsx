@@ -33,7 +33,7 @@ const original = {
 } as CatData;
 const sibling = { ...original, id: 'sonnet-5', displayName: '布偶猫 Sonnet', variantLabel: '5' };
 let cat: CatData, host: HTMLDivElement, root: Root;
-const saved = vi.fn(async (_cat: CatData) => {});
+const saved = vi.fn<(cat: CatData) => Promise<void>>().mockResolvedValue(undefined);
 
 beforeEach(() => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
