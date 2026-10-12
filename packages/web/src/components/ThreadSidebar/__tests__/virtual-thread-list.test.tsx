@@ -98,6 +98,29 @@ describe('VirtualThreadList nearest visibility', () => {
     delete (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT;
   });
 
+  it.each([
+    'ensureIndexVisible',
+    'scrollToIndex',
+  ] as const)('keeps an unmeasured distant row visible after %s', (method) => {
+    writeShellPresentation('v2');
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      const index = Number(this.dataset.virtualRowKey?.replace('thread-', ''));
+      return rect(0, this.dataset.virtualRowKey ? (index % 3 === 0 ? 110 : 86) : 0);
+    });
+    const handleRef = createRef<VirtualThreadListHandle>();
+    act(() => root.render(<Harness handleRef={handleRef} />));
+    const scroller = host.querySelector('[data-testid="scroller"]') as HTMLElement;
+    const list = host.querySelector('[data-testid="virtual-thread-list"]') as HTMLElement;
+    Object.defineProperty(scroller, 'clientHeight', { value: 240, configurable: true });
+    Object.defineProperty(list, 'offsetParent', { value: scroller, configurable: true });
+    act(() => handleRef.current?.[method](50));
+    const target = list.querySelector<HTMLElement>('[data-virtual-row-key="thread-50"]');
+    expect(target).not.toBeNull();
+    const top = Number.parseFloat(target?.style.top ?? 'NaN');
+    expect(top).toBeGreaterThanOrEqual(scroller.scrollTop);
+    expect(top + 86).toBeLessThanOrEqual(scroller.scrollTop + 240);
+  });
+
   it('moves only to the nearest edge and respects the sticky top inset', () => {
     const handleRef = createRef<VirtualThreadListHandle>();
     act(() => root.render(<Harness handleRef={handleRef} />));

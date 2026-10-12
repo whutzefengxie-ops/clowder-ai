@@ -48,6 +48,8 @@ export function VirtualSidebarList<T>({
 }) {
   const listRef = useRef<HTMLDivElement>(null);
   const heights = useRef(new Map<string, number>());
+  const heightRevision = useRef(0);
+  const pendingTarget = useRef<{ key: string; center: boolean } | null>(null);
   const [revision, setRevision] = useState(0);
   const [viewport, setViewport] = useState({ top: 0, height: 640 });
   // biome-ignore lint/correctness/useExhaustiveDependencies: revision invalidates the measured-height ref.
@@ -72,11 +74,17 @@ export function VirtualSidebarList<T>({
     if (!container) return;
     updateViewport();
     container.addEventListener('scroll', updateViewport, { passive: true });
+    const cancelTarget = () => {
+      pendingTarget.current = null;
+    };
+    for (const event of ['wheel', 'touchstart', 'pointerdown'])
+      container.addEventListener(event, cancelTarget, { passive: true });
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(updateViewport);
     observer?.observe(container);
     window.addEventListener('resize', updateViewport);
     return () => {
       container.removeEventListener('scroll', updateViewport);
+      for (const event of ['wheel', 'touchstart', 'pointerdown']) container.removeEventListener(event, cancelTarget);
       observer?.disconnect();
       window.removeEventListener('resize', updateViewport);
     };
@@ -100,44 +108,53 @@ export function VirtualSidebarList<T>({
           changed = true;
         }
       }
-      if (changed) setRevision((value) => value + 1);
+      if (changed) setRevision(++heightRevision.current);
     };
     measure();
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
     for (const node of nodes) observer?.observe(node);
     return () => observer?.disconnect();
   }, [measured, items, start, end]);
-  useImperativeHandle(
-    handleRef,
-    () => ({
-      scrollToIndex(index) {
-        const container = scrollContainerRef.current,
-          list = listRef.current;
-        if (!container || !list || index < 0 || index >= items.length) return;
-        container.scrollTop = Math.max(
-          0,
-          offsetTopWithin(list, container) +
-            (offsets[index] + offsets[index + 1]) / 2 -
-            (container.clientHeight || 640) / 2,
-        );
-        updateViewport();
-      },
-      ensureIndexVisible(index) {
-        const container = scrollContainerRef.current,
-          list = listRef.current;
-        if (!container || !list || index < 0 || index >= items.length) return;
-        const listTop = offsetTopWithin(list, container),
-          rowTop = listTop + offsets[index],
-          rowBottom = listTop + offsets[index + 1];
-        const inset = topInset(container),
-          bottom = container.scrollTop + (container.clientHeight || 640);
-        if (rowTop < container.scrollTop + inset) container.scrollTop = Math.max(0, rowTop - inset);
-        else if (rowBottom > bottom) container.scrollTop = rowBottom - (container.clientHeight || 640);
-        updateViewport();
-      },
-    }),
+  const alignTarget = useCallback(
+    (index: number, center: boolean) => {
+      const container = scrollContainerRef.current,
+        list = listRef.current;
+      if (!container || !list || index < 0 || index >= items.length) return false;
+      const before = container.scrollTop,
+        height = container.clientHeight || 640;
+      const rowTop = offsetTopWithin(list, container) + offsets[index];
+      const rowBottom = rowTop + offsets[index + 1] - offsets[index];
+      const inset = topInset(container);
+      if (center) container.scrollTop = Math.max(0, (rowTop + rowBottom - height) / 2);
+      else if (rowTop < before + inset || rowBottom - rowTop > height - inset)
+        container.scrollTop = Math.max(0, rowTop - inset);
+      else if (rowBottom > before + height) container.scrollTop = rowBottom - height;
+      updateViewport();
+      return Math.abs(container.scrollTop - before) > 0.5;
+    },
     [items.length, offsets, scrollContainerRef, updateViewport],
   );
+  // Measurements above can move an initially estimated destination. Finish navigation
+  // only once the rendered target and its surrounding measured rows have settled.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a changed viewport mounts the destination before its final alignment.
+  useLayoutEffect(() => {
+    const target = pendingTarget.current;
+    if (!target || revision !== heightRevision.current) return;
+    const index = items.findIndex((item) => itemKey(item) === target.key);
+    if (index < 0 || (!alignTarget(index, target.center) && (!measured || heights.current.has(target.key))))
+      pendingTarget.current = null;
+  }, [items, itemKey, measured, revision, alignTarget, viewport]);
+  useImperativeHandle(handleRef, () => {
+    const navigate = (index: number, center: boolean) => {
+      if (index < 0 || index >= items.length) return;
+      pendingTarget.current = measured ? { key: itemKey(items[index]), center } : null;
+      alignTarget(index, center);
+    };
+    return {
+      scrollToIndex: (index) => navigate(index, true),
+      ensureIndexVisible: (index) => navigate(index, false),
+    };
+  }, [items, itemKey, measured, alignTarget]);
   return (
     <div
       ref={listRef}
