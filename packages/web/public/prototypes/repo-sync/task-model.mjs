@@ -98,7 +98,7 @@ export function taskModel(state, delivery, detailsOpen = false) {
     return result(
       '系统正在处理',
       '正在准备内部 PR',
-      `当前：${phases[active.phase]}（${active.phase}/5）。正式系统自动执行；此演示逐步暂停，点击继续查看下一步结果。`,
+      `当前正在${phases[active.phase]}。下方展示各项操作的状态；点击继续，查看下一步结果。正式系统自动执行。`,
       { id: 'advance', label: '继续演示：执行下一步 →' },
     );
   if (active.phase === 6)
@@ -111,7 +111,7 @@ export function taskModel(state, delivery, detailsOpen = false) {
   const verifying = active.phase === 7;
   return result(
     '系统正在检查',
-    verifying ? 'PR 已合入，系统正在核验代码' : '代码核验通过，系统正在核对 Issue',
+    verifying ? 'PR 已合入，系统正在核验代码' : '代码核验通过，确认内部 Issue 关单结果',
     '正式系统自动完成这一环节。演示暂停在这里，点击下方按钮模拟结果并继续。',
     { id: 'auto-step', label: verifying ? '继续演示：核验通过 →' : '继续演示：完成同步 →' },
   );

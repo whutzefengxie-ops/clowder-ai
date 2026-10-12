@@ -51,6 +51,8 @@ export function existingRepositoryDeliveries() {
       internalPr: 201 + index,
       issue: 91 + index,
       internalIssue: 401 + index,
+      issueRelation: 'closes',
+      autoCloseIssue: true,
       title,
       commits,
       mode: 'Merge',

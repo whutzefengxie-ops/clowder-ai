@@ -14,6 +14,8 @@ const files = new Map(
     'workbench.css',
     'task-model.mjs',
     'render-task.mjs',
+    'progress.mjs',
+    'issues.mjs',
     'delivery.mjs',
     'audit.mjs',
     'render-delivery.mjs',

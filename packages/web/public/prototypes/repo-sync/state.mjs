@@ -3,6 +3,7 @@ import { existingRepositoryDeliveries, simulateBaselineCheck } from './baseline.
 import { defaultBinding, emptyBinding } from './binding.mjs';
 import { COMPLETE, deliveries, phases } from './data.mjs';
 import { deliveryNames } from './delivery.mjs';
+import { issueAuditMessage, platformIssueStatus, reconcileIssue } from './issues.mjs';
 
 const snapshot = (index, phase, block = null) => ({
   ...structuredClone(deliveries[index]),
@@ -12,16 +13,20 @@ const snapshot = (index, phase, block = null) => ({
   internalIssue: phase >= 3 ? deliveries[index].internalIssue : null,
 });
 function applyMergedScenario(state, scenario) {
-  if (scenario === 'verify' || scenario === 'reconcile') {
-    state.internalSha = '11c79a50';
-    state.active = snapshot(0, scenario === 'verify' ? 7 : 8);
-    if (scenario === 'reconcile') state.accepted = deliveries[0].target;
-  }
-  if (scenario === 'metadata' || scenario === 'synced') {
-    state.accepted = state.latest;
-    state.internalSha = '12c79a50';
-    state.active = snapshot(1, scenario === 'synced' ? COMPLETE : 8, scenario === 'synced' ? null : 'metadata');
-  }
+  const previews = {
+    verify: { index: 0, phase: 7, accepted: false, issueStatus: 'closed' },
+    reconcile: { index: 0, phase: 8, accepted: true, issueStatus: 'closed' },
+    'manual-close': { index: 0, phase: 8, accepted: true, issueStatus: 'open' },
+    'related-issue': { index: 0, phase: 8, accepted: true, issueStatus: 'open', relation: 'related' },
+    metadata: { index: 1, phase: 8, accepted: true, issueStatus: 'open', block: 'metadata' },
+    synced: { index: 1, phase: COMPLETE, accepted: true, issueStatus: 'closed' },
+  };
+  const preview = previews[scenario];
+  if (!preview) return;
+  state.internalSha = `1${preview.index + 1}c79a50`;
+  state.active = { ...snapshot(preview.index, preview.phase, preview.block), issueStatus: preview.issueStatus };
+  if (preview.accepted) state.accepted = state.deliveries[preview.index].target;
+  if (preview.relation) state.active.issueRelation = preview.relation;
 }
 export function createState(scenario = 'waiting', binding = defaultBinding()) {
   const state = {
@@ -135,9 +140,16 @@ const handlers = {
   advance(state) {
     const active = state.active;
     if (!active || active.block || active.phase >= COMPLETE || active.phase === 6) return;
+    if (active.phase === 8 && !reconcileIssue(state)) {
+      log(state, '关单暂停：映射或核验记录不完整', active.error.message);
+      return;
+    }
     active.phase += 1;
     const original = state.deliveries.find((item) => item.id === active.id);
-    if (active.phase === 3) active.internalIssue = original.internalIssue;
+    if (active.phase === 3) {
+      active.internalIssue = original.internalIssue;
+      active.issueStatus = original.issueStatus ?? 'open';
+    }
     if (active.phase === 4) active.internalPr = original.internalPr;
     if (active.phase === 8) state.accepted = active.target;
     const names = deliveryNames(active, state.binding);
@@ -148,13 +160,15 @@ const handlers = {
       note = `内部 PR #${active.internalPr}；${names.prTitle}；${names.candidateBranch} → ${names.targetBranch}`;
     if (active.phase === 8)
       note = `内部 ${state.internalSha} 已核验；登记已接受上游 ${active.target}；继续核对 Issue #${active.internalIssue}`;
-    log(state, active.phase === COMPLETE ? 'Issue 状态核对完成，交付完成' : `进入${phases[active.phase]}`, note);
+    if (active.phase === COMPLETE) note = issueAuditMessage(active);
+    log(state, active.phase === COMPLETE ? '关单结果确认完成，交付完成' : `进入${phases[active.phase]}`, note);
   },
   approve(state, action) {
     const active = state.active;
     if (active?.phase !== 6 || active.block) return;
     state.internalSha = `1${state.deliveries.findIndex((item) => item.id === active.id) + 1}c79a50`;
     active.phase = 7;
+    active.issueStatus = platformIssueStatus(active);
     log(state, '模拟内部平台 PR 合入，等待程序核验', action.note || '平台审批通过', active.id, '内部平台');
   },
   recover(state) {
@@ -162,6 +176,11 @@ const handlers = {
     if (!active?.block || active.block === 'drift') return;
     const block = active.block;
     active.block = null;
+    if (block === 'metadata' && !reconcileIssue(state)) {
+      log(state, '关单重试仍被阻止', active.error.message);
+      return;
+    }
+    delete active.error;
     active.phase = block === 'metadata' ? COMPLETE : block === 'plugin' ? 6 : 5;
     log(
       state,
@@ -169,7 +188,8 @@ const handlers = {
         ? '已查回既有 PR，继续同一交付'
         : block === 'plugin'
           ? '插件检查重跑通过，等待审批'
-          : 'Issue 状态已补齐，未重复合入',
+          : '关单结果已补齐，未重复合入',
+      block === 'metadata' ? issueAuditMessage(active) : '',
     );
   },
 };

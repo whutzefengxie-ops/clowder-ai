@@ -23,7 +23,7 @@ function renderNode(name, phase, active, selectedPhase) {
     }
   }
   const selected = selectedPhase === phase;
-  return `<button type="button" class="flow-node ${tone} ${selected ? 'focused' : ''}" data-phase="${phase}" aria-pressed="${selected}"><span class="node-circle">${done ? '✓' : phase}</span><strong>${name}</strong><small>${label}</small><small class="step-owner">${phase === 6 ? '人工 · 平台' : '程序 · 自动'}</small></button>`;
+  return `<button type="button" class="flow-node ${tone} ${selected ? 'focused' : ''}" data-phase="${phase}" aria-pressed="${selected}"><span class="node-circle">${now && active.block ? '×' : done ? '✓' : phase}</span><strong>${name}</strong><small>${label}</small><small class="step-owner">${phase === 6 ? '人工 · 平台' : '程序 · 自动'}</small></button>`;
 }
 export function renderQueue(state, current) {
   const acceptedIndex = state.deliveries.findIndex((item) => item.target === state.accepted);
@@ -43,6 +43,11 @@ export function renderQueue(state, current) {
         tone = 'good';
         mark = '✓';
         label = '已完成';
+      }
+      if (active && state.active.block) {
+        tone = 'bad-text';
+        mark = '×';
+        label = '执行异常';
       }
       return `<button type="button" class="delivery ${active ? 'active' : ''}" data-delivery="${item.id}"><span class="delivery-mark ${tone}">${mark}</span><div><strong>${escapeHtml(item.title)}</strong><small>外部 PR #${item.sourcePr} · ${item.mode} · ${item.commits.length} 个落地提交</small></div><span class="delivery-status">${label}<small>${item.time}</small></span></button>`;
     })

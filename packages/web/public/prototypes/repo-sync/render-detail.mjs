@@ -1,6 +1,7 @@
 import { COMPLETE, phaseDetails } from './data.mjs';
 import { deliveryPhase, prHref } from './delivery.mjs';
 import { escapeHtml, sha } from './html.mjs';
+import { issueSummary } from './issues.mjs';
 export function renderPhase(state, phase, delivery = state.active) {
   const [name, explanation, command] = phaseDetails[phase];
   const active = delivery;
@@ -28,7 +29,7 @@ export function renderObjects(state, delivery) {
   const issue = phase >= 3 ? delivery.internalIssue : null;
   const pr = phase >= 4 ? delivery.internalPr : null;
   const checks = renderChecks(active, phase);
-  return `<dl class="object-list"><div><dt>PR 对应</dt><dd>外部 #${delivery.sourcePr} <span>→</span> ${pr ? `内部 #${pr}` : '内部待创建'}</dd></div><div><dt>Issue 对应</dt><dd>外部 #${delivery.issue} <span>→</span> ${issue ? `内部 #${issue}` : '内部待创建'}</dd></div><div><dt>内部 PR</dt><dd><span class="badge ${phase >= 7 ? 'good' : 'warm'}">${phase >= 7 ? '已合入' : pr ? '未合入' : '待创建'}</span></dd></div><div><dt>内部 Issue</dt><dd>${phase === COMPLETE ? '已核对并关闭' : phase >= 7 ? '程序自动核对正确映射' : '等待内部 PR 合入'}</dd></div>${checks}</dl>`;
+  return `<dl class="object-list"><div><dt>PR 对应</dt><dd>外部 #${delivery.sourcePr} <span>→</span> ${pr ? `内部 #${pr}` : '内部待创建'}</dd></div><div><dt>Issue 对应</dt><dd>外部 #${delivery.issue} <span>→</span> ${issue ? `内部 #${issue}` : '内部待创建'}</dd></div><div><dt>内部 PR</dt><dd><span class="badge ${phase >= 7 ? 'good' : 'warm'}">${phase >= 7 ? '已合入' : pr ? '未合入' : '待创建'}</span></dd></div><div><dt>内部 Issue</dt><dd>${escapeHtml(issueSummary(active ?? delivery, phase))}</dd></div>${checks}</dl>`;
 }
 function renderChecks(active, phase) {
   let core = '待检查';

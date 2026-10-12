@@ -8,7 +8,7 @@ import { renderTask, renderVersions } from './render-task.mjs';
 
 export function renderIdentity(delivery, binding, phase) {
   const names = deliveryNames(delivery, binding);
-  return `<div class="delivery-identity"><div><small>内部候选分支 → 合入分支</small><div class="branch-path"><code>${escapeHtml(names.candidateBranch)}</code><span>→</span><code>${escapeHtml(names.targetBranch)}</code><span class="badge neutral">${phase >= 3 ? '候选已推送' : '名称预览'}</span></div></div><div><small>内部 PR 标题${phase < 4 ? '（预览）' : ''}</small><strong>${escapeHtml(names.prTitle)}</strong></div><p>分支按交付 ID 生成；同一笔交付重试复用同名分支与 PR。目标分支按仓库连接配置。</p></div>`;
+  return `<div class="delivery-identity"><div><small>内部候选分支 → 合入分支</small><div class="branch-path"><code>${escapeHtml(names.candidateBranch)}</code><span>→</span><code>${escapeHtml(names.targetBranch)}</code><span class="badge neutral">${phase >= 4 ? '候选已推送' : '名称预览'}</span></div></div><div><small>内部 PR 标题${phase < 4 ? '（预览）' : ''}</small><strong>${escapeHtml(names.prTitle)}</strong></div><p>分支按交付 ID 生成；同一笔交付重试复用同名分支与 PR。目标分支按仓库连接配置。</p></div>`;
 }
 export function renderWorkflow(state, delivery, selectedPhase, detailsOpen = false) {
   const phase = delivery ? deliveryPhase(state, delivery) : 0;

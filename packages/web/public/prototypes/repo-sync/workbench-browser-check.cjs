@@ -71,6 +71,8 @@ async function run() {
         'waiting',
         'verify',
         'reconcile',
+        'manual-close',
+        'related-issue',
         'timeout',
         'plugin',
         'drift',
@@ -105,7 +107,7 @@ async function run() {
     await page.screenshot({ path: join(evidence, '16-one-next-action-mobile.png'), fullPage: true });
     assert.deepEqual(errors, []);
     console.log(
-      'PASS：首次使用与三步配置、仅沿主按钮完成同步和 PR 审批、十一种状态唯一主入口、四种屏宽首屏可见、默认收起技术流程 / 演示控制、无页面或 HTTP 错误。',
+      'PASS：首次使用与三步配置、仅沿主按钮完成同步和 PR 审批、十三种状态唯一主入口、四种屏宽首屏可见、默认收起技术流程 / 演示控制、无页面或 HTTP 错误。',
     );
     console.log(`证据：${evidence}`);
   } finally {

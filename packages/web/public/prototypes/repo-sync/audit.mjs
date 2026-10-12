@@ -1,6 +1,7 @@
 import { phases } from './data.mjs';
 import { deliveryNames, deliveryPhase } from './delivery.mjs';
 import { escapeHtml } from './html.mjs';
+import { stepFailure } from './progress.mjs';
 
 export function seedAudit(state) {
   if (state.binding.status !== 'ready') return;
@@ -8,13 +9,14 @@ export function seedAudit(state) {
     const phase = deliveryPhase(state, delivery);
     if (!phase) continue;
     const names = deliveryNames(delivery, state.binding);
+    const failure = state.active?.id === delivery.id ? stepFailure(state.active) : null;
     state.events.push({
       deliveryId: delivery.id,
       phase,
       actor: '演示预置',
       time: '预置',
       label: `载入“${phases[phase]}”演示场景`,
-      note: `预置状态，未执行真实命令。${names.candidateBranch} → ${names.targetBranch}；来源 PR #${delivery.sourcePr}；冻结目标 ${delivery.target}。`,
+      note: `预置状态，未执行真实命令。${names.candidateBranch} → ${names.targetBranch}；来源 PR #${delivery.sourcePr}；冻结目标 ${delivery.target}。${failure ? `演示异常：${failure.code} · ${failure.message}` : ''}`,
     });
   }
 }

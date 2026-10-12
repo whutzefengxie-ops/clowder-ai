@@ -36,14 +36,15 @@ tips_exempt: 独立原型验证记录，尚未挂载正式功能。
 
 本轮命令及结果：
 
-- 本目录 6 个 `*.test.mjs` 通过 `node --test` 执行：33 项通过，0 失败。新增已有仓接管的 6 项检查先观察到行为失败，再实现；覆盖精确登记 A/B、同 SHA、缺失内部版本、核验失败、改动后重查及 20 个提交按 4 笔 PR 接收。原有 27 项仍通过。
+- 本目录 7 个 `*.test.mjs` 通过 `node --test` 执行：42 项通过，0 失败。新增子步骤 / 关单的 9 项检查先观察行为失败，再实现；覆盖子步骤直接展示、四种对应异常、Issue 准备完成后复用、确认已关闭、补充关闭、普通关联保留状态与历史结果、错误文本转义、错误内部编号阻断、保留原有关闭状态。原有 33 项仍通过。
 - `node packages/web/public/prototypes/repo-sync/browser-check.cjs`：完整旅程通过，页面异常和 HTTP 错误均为 0；截图写入系统临时目录 `repo-sync-prototype-evidence`。
 - `node packages/web/public/prototypes/repo-sync/binding-browser-check.cjs`：配置旅程通过。验证实际预填、无认证字段、空地址明确提示与点击示例恢复；使用 fixture 外的仓库地址、release/2、delivery-main、完整 40 位 commit ID，验证总览 / 映射 / PR 页面反映自定义配置、刷新保留、编辑后检查失效及活动绑定保护。页面异常 / HTTP 错误均为 0，四种屏宽无横向溢出。截图位于系统临时目录 `repo-sync-binding-evidence`。
 - `node packages/web/public/prototypes/repo-sync/delivery-browser-check.cjs`：通过。隐藏演示控制条后 7→8→9；点击未来节点不会改变阶段 6 或绕过审批；流程 / PR 页面包含各自审计，同一笔历史审批备注刷新保留；第二笔 PR 不含第一笔备注；新增外部交付不污染当前审计；映射页无审计面板。1440 / 1024 / 768 / 390 宽通过，页面异常 / HTTP 错误为 0；截图位于 `repo-sync-delivery-evidence`。
-- `node packages/web/public/prototypes/repo-sync/workbench-browser-check.cjs`：通过。从全新未配置状态，无需输入地址、基线或认证，只沿主操作完成三步配置、登记基线、同步、具体 PR 审批、核验与收尾。十一种场景在 1440 / 1024 / 768 / 390 宽、800 高视口中都恰有一个当前主操作，按钮首屏可见且无横向溢出。演示控制与九步技术说明默认收起，导航仅两项。页面异常 / HTTP 错误为 0；截图位于 `repo-sync-workbench-evidence`。
+- `node packages/web/public/prototypes/repo-sync/workbench-browser-check.cjs`：通过。从全新未配置状态，无需输入地址、基线或认证，只沿主操作完成三步配置、登记基线、同步、具体 PR 审批、核验与收尾。十三种场景在 1440 / 1024 / 768 / 390 宽、800 高视口中都恰有一个当前主操作，按钮首屏可见且无横向溢出。演示控制与命令说明默认收起，实际子步骤直接可见，导航仅两项。页面异常 / HTTP 错误为 0；截图位于 `repo-sync-workbench-evidence`。
 - `node packages/web/public/prototypes/repo-sync/adoption-browser-check.cjs`：通过。默认选择已有仓；输入 fixture 外的 40 位 A/B，切换代码树不一致与内部 HEAD 前进，两种结果都阻止保存。通过模拟核验后保存并刷新，登记后内部精确保留 B。20 个提交逐笔走完 4 个具体内部 PR 的审核、核验和 Issue 收尾；新来源游标在核验前保持旧值，初始 A/B 在完成与刷新后仍保留，配置摘要显示当前版本。四种屏宽无横向溢出，页面异常 / HTTP 错误为 0；截图位于 `repo-sync-adoption-evidence`。
-- 项目安装的 Biome 2.4.1 对 31 个 JS 模块执行 `check`：通过，无警告；6 个 HTML／CSS 执行关闭格式化的语法与 lint 检查：通过，无警告。CSS 保留紧凑声明以遵守文件行数硬限。
-- `git diff --check`／暂存差异检查：通过。所有原型文件低于 350 行硬限；CSS 214 行超过 200 行提示线，仍低于硬限。
+- `node packages/web/public/prototypes/repo-sync/progress-browser-check.cjs`：通过。五个准备子步骤逐项从当前到完成；四种失败显示对应子步骤 × 和错误码 / 说明，恢复复用既有 Issue / PR，内部 main 不重复合入。完成准备后保留同一 Issue，平台已关闭只确认；补充关闭与普通关联保留状态均验证。四种屏宽无横向溢出，页面异常 / HTTP 错误为 0；截图位于 `repo-sync-progress-evidence`。
+- 项目安装的 Biome 2.4.1 对 35 个 JS 模块执行 `check`：通过，无警告；6 个 HTML／CSS 执行关闭格式化的语法与 lint 检查：通过，无警告。CSS 保留紧凑声明以遵守文件行数硬限。
+- `git diff --check`／暂存差异检查：通过。所有原型文件低于 350 行硬限；CSS 214 行、状态模块 216 行超过 200 行提示线，仍低于硬限。
 - `node scripts/check-capability-tips.mjs --changed-file packages/web/public/prototypes/repo-sync/README.md`：通过，另有 17 个原有目录引用警告。
 - 不限定改动范围的 capability-tips 检查：20 个问题，均指向本分支基线已有的 Feature 文档，不涉及原型文件。未将其宣称为全仓通过。
 - `node scripts/check-fallback-layers.mjs --base main`：执行成功，触发机械计数提示。核对后分别为输入／展示默认值、场景布尔判定、独立的本地存储与剪贴板异常处理；没有用多层兜底吞掉同步失败或自动覆盖基线。活动交付、版本与对象仍以单一状态对象为依据，不另建补偿状态源。
@@ -89,3 +90,9 @@ Architecture cell：独立原型工作面，不新增生产同步服务或产品
 正式执行边界：A/B 对象读取、完整 SHA 解析、远端分支与 HEAD 核对、代码树比对、启用 / 同步前重新读取 B，以及 PR 增量归属仍待真实适配器实现。README 已写明确接管契约，并据 Git 官方 diff / merge-base / rev-list 文档核对命令语义。模拟通过不保证用户真实 SHA 存在或两侧内容相同。
 
 接管提交后诊断：`check-fallback-layers --base 39b2dedd5` 净增 7，主要为浏览器验证路径默认值、截图宽度选择、顶层失败退出，以及 UI 保存报告 / 捕获失败后显示错误、内部 B 缺失值校验。基线失败会清空可保存指纹，保存与启用再次校验同一报告和 A/B 指纹；捕获错误不继续登记。没有用模拟成功替代真实 Git 失败恢复，没有第二套接受游标。真实检查未接入的边界在页面、README 与本报告中明确保留。
+
+子步骤修订与 Dogfood：用户要求取消“1/5”文字提示，直接展示各大步骤下属操作，异常显示 × 和具体信息。保持首屏唯一主操作，在原五段进度下面显示准备五项、审核、合入结果读取与代码核验、Issue 状态读取与关单确认、完成登记。错误对应具体 phase，并在主步骤、子步骤、队列中标记；错误信息与历史审计均按交付归属。可选原始错误文本安全转义，不拼接为 HTML。前端新模块仍只服务原型，CSP / 网络边界不变。
+
+实际内嵌浏览器刷新后保留用户第二笔 delivery-062 / 内部 PR #202 的阶段 8，看到全部准备子步骤完成、Issue #92 → #402 已在准备阶段映射、平台已关闭待确认。未替用户点完成，未重置配置或审核备注。独立浏览器验证完三种 Issue 结果和四种错误；桌面、手机截图核对。新关单结果字段用于说明此对象发生的操作，phase / block 仍是唯一同步进度源。历史普通关联在下一笔启动后保持原状态。关单编号与原映射不符会停在阶段 8 并记录原因。
+
+本轮检查曾发现重构中的多余括号及两个复杂度提示，修复后再执行静态检查与浏览器旅程；最终无页面异常。缺失内部对象 / 代码核验、错误编号、普通关联原先已关闭的反例均已验证。实际平台自动关单、关闭关键字与内外编号兼容性仍需真实接入验证；原型只展示这些规则与结果，不执行真实关单。原型文件仍全部低于 350 行硬限。
