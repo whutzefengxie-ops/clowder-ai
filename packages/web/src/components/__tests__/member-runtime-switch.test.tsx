@@ -119,7 +119,7 @@ it('allows returning to a saved custom ACP tool that discovery does not list', a
   const custom = {
     ...cat,
     clientId: 'acp',
-    acp: { command: 'private-agent', args: ['--acp'], transport: 'stdio' },
+    acp: { command: 'private-agent', startupArgs: ['--acp'], transport: 'stdio' },
   } as CatData;
   await act(async () => root.unmount());
   root = createRoot(host);
