@@ -10,6 +10,8 @@ status: revision-1
 
 # 首次启动用户旅程技术方案
 
+> **2026-10-12 最新决定**：用户与作者确认改为“全程预置协作演示 → 内置浏览器交付可操作成果 → 设置中创建真实猫猫”。当前实施依据为 [自动协作演示方案](../plans/issue-1466-scripted-onboarding-2026-10-12.md)。下文的旧原型与真实 client 前置引导仅作历史记录；不能据此恢复旧入口。
+
 > Issue #1466 的技术实现方案，基于 v2 原型（bootcamp-onboarding-prototype-v2.html）
 
 ## 修订记录

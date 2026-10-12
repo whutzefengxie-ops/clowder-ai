@@ -34,7 +34,6 @@ import { BootstrapOrchestrator } from './BootstrapOrchestrator';
 import { ChatContainerHeader } from './ChatContainerHeader';
 import { hydrateEvolutionFromCurrentUrl } from './capability-evolution/evolution-navigation';
 import { useConciergeConfirmations } from './concierge/useConciergeConfirmations';
-import { FirstRunQuestWizard } from './FirstRunQuestWizard';
 import { BootcampGuideOverlay } from './first-run-quest/BootcampGuideOverlay';
 import { restoreJourneyState } from './first-run-quest/onboarding-journey';
 import { QuestBanner } from './first-run-quest/QuestBanner';
@@ -46,6 +45,8 @@ import { GameOverlayConnector } from './game/GameOverlayConnector';
 import { BootcampIcon } from './icons/BootcampIcon';
 import { GameIcon } from './icons/GameIcon';
 import { PawIcon } from './icons/PawIcon';
+import { DEMO_SETTINGS_URL } from './onboarding-demo/demo-story';
+import { GuidedOnboarding } from './onboarding-demo/GuidedOnboarding';
 import { ParallelStatusBar } from './ParallelStatusBar';
 import { ProjectSetupCard } from './ProjectSetupCard';
 import { RightStatusPanel } from './RightStatusPanel';
@@ -427,7 +428,6 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
   const setCurrentProject = useChatStore((s) => s.setCurrentProject);
   const storeThreads = useChatStore((s) => s.threads);
   const sidebarRows = useSidebarProjectionStore((state) => state.rows);
-  const setThreads = useChatStore((s) => s.setThreads);
   const handleSkipFirstRunQuest = useCallback(() => {
     // #707: Persist skip to localStorage so refreshing doesn't re-trigger
     try {
@@ -836,25 +836,6 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
     [setViewMode, navigateToThread],
   );
 
-  const handleQuestCreated = useCallback(
-    async (questThreadId: string) => {
-      setShowQuestWizard(false);
-      try {
-        const res = await apiFetch('/api/threads');
-        if (res.ok) {
-          const data = (await res.json()) as { threads: Thread[] };
-          setThreads(data.threads);
-        }
-      } catch {
-        // Ignore refresh errors — navigation is the priority
-      }
-      void invalidateSidebarProjection();
-      navigateToThread(questThreadId);
-      setShowOnboardingHint(false);
-    },
-    [navigateToThread, setThreads],
-  );
-
   const { handleRealOnboardingMessage, requestRetry: requestFirstRealMessageRetry } = useFirstRealMessageSync({
     threadId,
     currentBootcampState,
@@ -986,7 +967,7 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
               <PawIcon className="w-12 h-12 text-cafe-muted mx-auto mb-4" />
               <p className="text-lg text-cafe-secondary mb-1">欢迎来到 Clowder AI!</p>
               <p className="text-sm text-cafe-muted" suppressHydrationWarning>
-                {cats.length > 0 ? '选择一位伙伴，开始你的下一个目标' : '连接本机工具，配置一起做事的伙伴'}
+                {cats.length > 0 ? '选择一位伙伴，开始你的下一个目标' : '先看看猫猫如何协作，再创建自己的伙伴'}
               </p>
               {showSetupCard && govStatus && (
                 <div className="mt-6 text-left">
@@ -1055,7 +1036,7 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
                     data-testid="empty-state-bootcamp"
                   >
                     <BootcampIcon className="w-4 h-4" />
-                    配置我的伙伴
+                    看看团队如何协作
                   </button>
                 );
               })()}
@@ -1075,7 +1056,7 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
                     <QuestBanner
                       phase={questState.phase}
                       firstCatName={questState.firstCatName}
-                      onAddSecondCat={() => setShowQuestWizard(true)}
+                      onAddSecondCat={() => assignDocumentRoute(DEMO_SETTINGS_URL, window)}
                       onStartBootcamp={() => setShowBootcampList(true)}
                       onComplete={() => assignDocumentRoute('/hub', typeof window !== 'undefined' ? window : undefined)}
                     />
@@ -1296,9 +1277,9 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
               className="w-full max-w-md rounded-2xl border border-conn-amber-ring bg-[var(--console-card-bg)] p-6 shadow-2xl"
               onClick={(event) => event.stopPropagation()}
             >
-              <h3 className="text-lg font-semibold text-cafe">让你的伙伴加入 Clowder AI</h3>
+              <h3 className="text-lg font-semibold text-cafe">先看看猫猫如何一起完成任务</h3>
               <p className="mt-2 text-sm text-cafe-secondary">
-                检测本机已安装的工具，选择伙伴，然后一起完成一个小目标。
+                用约 40 秒看一次分工、传球与互审，再亲手试试成果。无需安装工具，演示后再创建自己的伙伴。
               </p>
               <div className="mt-5 flex justify-end gap-3">
                 <button
@@ -1313,18 +1294,14 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
                   onClick={handleStartFirstRunQuest}
                   className="rounded-lg bg-cafe-accent px-3 py-2 text-sm font-medium text-[var(--cafe-surface)] hover:opacity-90"
                 >
-                  配置我的伙伴
+                  看看团队如何协作
                 </button>
               </div>
             </div>
           </div>,
           document.body,
         )}
-      <FirstRunQuestWizard
-        open={showQuestWizard}
-        onClose={() => setShowQuestWizard(false)}
-        onCreated={handleQuestCreated}
-      />
+      <GuidedOnboarding open={showQuestWizard} storageScope="first-run" onClose={() => setShowQuestWizard(false)} />
       <BootcampListModal open={showBootcampList} onClose={handleBootcampModalClose} currentThreadId={threadId} />
       {showVoteModal && <VoteConfigModal onSubmit={handleVoteSubmit} onCancel={() => setShowVoteModal(false)} />}
       {/* Bootcamp guide overlay: intro phase tips + lifecycle tips (phase-7.5 uses guide engine) */}

@@ -7,6 +7,7 @@ import { previewVisiblePageAdmissionController } from '@/lib/preview-visible-pag
 import { apiFetch } from '@/utils/api-client';
 import { BrowserTabBar } from './BrowserTabBar';
 import { BrowserToolbar } from './BrowserToolbar';
+import { BundledDemoBrowser } from './BundledDemoBrowser';
 import { ConsolePanel } from './ConsolePanel';
 import { parsePreviewUrl } from './preview-url-utils';
 import { useHmrStatus } from './useHmrStatus';
@@ -20,6 +21,9 @@ export interface BrowserTab {
 }
 
 interface BrowserPanelProps {
+  /** Fixed, packaged onboarding deliverable. Does not start or probe a runtime. */
+  bundledPage?: 'onboarding-todo';
+  onBundledReady?: () => void;
   /** Initial port to preview (e.g. from port discovery toast) */
   initialPort?: number;
   /** Initial path for deep-linking (e.g. "/dashboard" from auto-open) */
@@ -40,7 +44,12 @@ interface PreviewStatus {
  * The iframe loads through the Preview Gateway (独立 origin) to strip X-Frame-Options
  * and isolate cookies/storage from Hub.
  */
-export function BrowserPanel({ initialPort, initialPath, previewOnly, onNavigate }: BrowserPanelProps) {
+export function BrowserPanel(props: BrowserPanelProps) {
+  if (props.bundledPage === 'onboarding-todo') return <BundledDemoBrowser onReady={props.onBundledReady} />;
+  return <LiveBrowserPanel {...props} />;
+}
+
+function LiveBrowserPanel({ initialPort, initialPath, previewOnly, onNavigate }: BrowserPanelProps) {
   const [gatewayPort, setGatewayPort] = useState<number>(0);
   const [targetPort, setTargetPort] = useState(initialPort ?? 0);
   const [urlInput, setUrlInput] = useState(
