@@ -49,7 +49,7 @@ export function renderQueue(state, current) {
         mark = '×';
         label = '执行异常';
       }
-      return `<button type="button" class="delivery ${active ? 'active' : ''}" data-delivery="${item.id}"><span class="delivery-mark ${tone}">${mark}</span><div><strong>${escapeHtml(item.title)}</strong><small>外部 PR #${item.sourcePr} · ${item.mode} · ${item.commits.length} 个落地提交</small></div><span class="delivery-status">${label}<small>${item.time}</small></span></button>`;
+      return `<button type="button" class="delivery ${active ? 'active' : ''}" data-delivery="${item.id}"><span class="delivery-mark ${tone}">${mark}</span><div><strong>${escapeHtml(item.title)}</strong><small>外部 PR #${item.sourcePr} · ${item.mode} · ${item.commits.length} 个落地提交</small>${item.issuePendingDeliveries?.length ? '<small>本笔完成 · Issue 保持打开，等待后续交付</small>' : ''}</div><span class="delivery-status">${label}<small>${item.time}</small></span></button>`;
     })
     .join('');
 }

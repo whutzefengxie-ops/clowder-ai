@@ -16,6 +16,7 @@ const files = new Map(
     'render-task.mjs',
     'progress.mjs',
     'issues.mjs',
+    'continuity.mjs',
     'delivery.mjs',
     'audit.mjs',
     'render-delivery.mjs',

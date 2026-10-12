@@ -29,6 +29,12 @@ function blockedTask(active) {
       '只需重试核对内部 Issue，不会再次搬运或合入代码。',
       '重试核对 Issue',
     ],
+    recovery: [
+      '系统需要核对合入结果',
+      '内部 PR 已合入，接收记录待恢复',
+      '先回读原 PR、冻结候选和实际 main。确认属于同一交付后补写两侧接受版本，再继续更新 Issue；结果冲突时暂停。',
+      '核对合入结果并恢复',
+    ],
   };
   if (active.block === 'drift')
     return result(
@@ -111,7 +117,7 @@ export function taskModel(state, delivery, detailsOpen = false) {
   const verifying = active.phase === 7;
   return result(
     '系统正在检查',
-    verifying ? 'PR 已合入，系统正在核验代码' : '代码核验通过，确认内部 Issue 关单结果',
+    verifying ? 'PR 已合入，系统正在核验代码' : '代码核验通过，更新 Issue 接收状态',
     '正式系统自动完成这一环节。演示暂停在这里，点击下方按钮模拟结果并继续。',
     { id: 'auto-step', label: verifying ? '继续演示：核验通过 →' : '继续演示：完成同步 →' },
   );

@@ -393,6 +393,8 @@ importers:
         specifier: ^5.3.3
         version: 5.9.3
 
+  packages/repo-sync: {}
+
   packages/shared:
     dependencies:
       ioredis:

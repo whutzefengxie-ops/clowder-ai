@@ -81,19 +81,26 @@ tips_exempt: 独立交互原型，尚未挂载正式功能或能力目录。
 
 ## Issue 搬运与关单结果
 
+新增共享 Issue 场景：U1/U2 两笔共用外部 #71 → 内部 #318。U1 保存本笔接收记录后 COMPLETE，Issue 保持打开并继续 U2；U2 接收条件满足后才关闭。“确认关单结果”改为“更新 Issue 接收状态”，完成不再等价于所有关联 Issue CLOSED。
+
+新增“PR 已合入、接受版本未保存”与“恢复结果冲突”场景。先保留原 delivery、Issue/PR 和内部实际 SHA，再核对合入证据；通过则补写接受游标并进入元数据，冲突则显示 × 与 `MERGE_RESULT_CONFLICT`，不重建或重新合入。
+
+这两个场景依旧是合成状态；真实 Git、台账与恢复实现见 `packages/repo-sync/README.md`，与原型在同一分支和 PR 交付。内部平台先走 Git 路径，Issue/PR 创建与状态回读由人通过平台完成，工具登记映射并提供模板。
+
 准备阶段的第一项写入操作是创建 / 复用内部 Issue，建立外部号到内部号的映射；之前先核对同步范围与基线。搬运阶段保留正确对应，内部 PR 引用内部编号。合入且代码核验后，确认的是同一个已映射 Issue 的状态：
 
 | 情况 | 操作 |
 | --- | --- |
-| 本交付应关闭，平台已经关闭 | 记录关单结果，复用对象 |
-| 本交付应关闭，内部仍打开 | 补充关闭正确映射的内部 Issue，记录结果 |
+| 接收条件全部满足，平台已经关闭 | 记录关单结果，复用对象 |
+| 接收条件全部满足，内部仍打开 | 补充关闭正确映射的内部 Issue，记录结果 |
+| 仍待后续交付 | 保存本笔接收记录，保持 Issue 打开；本笔完成后继续下一笔 |
 | 普通关联，不具有关闭义务 | 保留现有状态，仅记录核对结果；已有关闭状态也不重新打开 |
 
 关闭前必须核对来源 / 内部对象映射与本次代码核验记录；编号不匹配时阻止完成，展示 `ISSUE_MAPPING_UNVERIFIED`，不操作其他 Issue。关单失败只重试此环节，不重新建 Issue、搬运提交或合入 PR。结果保存到本笔交付，在开始下一笔后，历史详情与审计仍能说明是确认平台关单、程序补充关闭还是保留关联状态。可通过“待补充关单”和“普通关联 Issue”两个演示场景验证。
 
 真实适配器需验证内部平台的自动关单能力及关闭关系；不能把所有关联 Issue 都视作应关闭，也不能直接沿用外部编号。GitHub 对默认分支的 PR 关闭关联和 commit 关闭关键词有明确规则；保留源提交消息时，其中的本仓 Issue 编号可能与内部不同，需要在真实平台专项验证，原型不证明自动关单兼容性。参考：[GitHub 官方说明](https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/linking-a-pull-request-to-an-issue)。
 
-正式系统由事件／轮询自动推进，用户无需点击验收；原型的主按钮明确写“继续演示”。PR 地址 `/internal/demo/core/pull/<id>?binding=<id>` 是本地模拟；落地时使用适配器返回的真实 URL。
+原型模拟具备平台适配器后的自动推进，主按钮明确写“继续演示”。当前 Git 版在内部平台对象环节需要人工操作与登记，Git 核验由程序执行，不声称读取了平台审批或关单状态。原型 PR 地址 `/internal/demo/core/pull/<id>?binding=<id>` 是本地模拟；Git 版使用操作者登记的具体 PR URL。
 
 命令展示中的 Git 命令表示 Git 传输；Issue／PR 使用 `repo-sync` 适配器占位命令，明确未实现。标准 Git 本身不提供创建 Issue／PR 的接口。
 
@@ -101,7 +108,7 @@ tips_exempt: 独立交互原型，尚未挂载正式功能或能力目录。
 
 运行：`node packages/web/public/prototypes/repo-sync/server.mjs`，默认只绑定 127.0.0.1:5186。服务只提供原型文件与指定主题 CSS，不暴露整个仓库。
 
-单元验证：本目录 `state.test.mjs`、`binding.test.mjs`、`binding-ui.test.mjs`、`adoption.test.mjs`、`delivery.test.mjs`、`workbench.test.mjs`、`progress.test.mjs`，用 `node --test` 执行。
-浏览器旅程：`browser-check.cjs`、`binding-browser-check.cjs`、`adoption-browser-check.cjs`、`delivery-browser-check.cjs`、`workbench-browser-check.cjs`、`progress-browser-check.cjs`（均位于本目录，用 Node 执行）；使用可用 Playwright 和安装的 Chrome，产物落入系统临时目录。
+单元验证：本目录 `*.test.mjs`，用 `node --test` 执行；新增 `continuity.test.mjs` 验证共享 Issue 与恢复。
+浏览器旅程：`browser-check.cjs`、`binding-browser-check.cjs`、`adoption-browser-check.cjs`、`delivery-browser-check.cjs`、`workbench-browser-check.cjs`、`progress-browser-check.cjs`、`continuity-browser-check.cjs`（均位于本目录，用 Node 执行）；使用可用 Playwright 和安装的 Chrome，产物落入系统临时目录。
 
 声明边界：真实网络方向、Git 对象、平台审批与自动关闭需独立实现和验证；此原型证明 UI 状态与用户动作的因果，不证明生产同步能力。

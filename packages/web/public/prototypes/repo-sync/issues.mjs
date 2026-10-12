@@ -8,6 +8,7 @@ export function issueStatus(delivery, phase) {
 }
 export function platformIssueStatus(delivery) {
   if (delivery.issueStatus === 'closed') return 'closed';
+  if (delivery.requiredDeliveries?.length > 1) return 'open';
   return issueRelation(delivery) === 'closes' && delivery.autoCloseIssue !== false ? 'closed' : 'open';
 }
 export function reconcileIssue(state) {
@@ -25,8 +26,15 @@ export function reconcileIssue(state) {
     return false;
   }
   active.issueStatus = issueStatus(active, 8);
+  const received = state.deliveries.filter((item) => item.metadataComplete).map((item) => item.id);
+  active.issuePendingDeliveries = (active.requiredDeliveries ?? [active.id]).filter(
+    (id) => id !== active.id && !received.includes(id),
+  );
   if (issueRelation(active) === 'related') active.issueResult = 'left-unchanged';
-  else if (active.issueStatus === 'closed') active.issueResult = 'already-closed';
+  else if (active.issuePendingDeliveries.length) {
+    active.issueStatus = 'open';
+    active.issueResult = 'waiting-deliveries';
+  } else if (active.issueStatus === 'closed') active.issueResult = 'already-closed';
   else {
     active.issueStatus = 'closed';
     active.issueResult = 'closed-by-sync';
@@ -35,6 +43,8 @@ export function reconcileIssue(state) {
     issueRelation: issueRelation(active),
     issueStatus: active.issueStatus,
     issueResult: active.issueResult,
+    issuePendingDeliveries: active.issuePendingDeliveries,
+    metadataComplete: true,
   });
   return true;
 }
@@ -43,6 +53,7 @@ export function issueAuditMessage(delivery) {
     'already-closed': '平台已关闭，仅确认关单结果',
     'closed-by-sync': '同步程序补充关闭内部 Issue（模拟）',
     'left-unchanged': '普通关联，保留内部 Issue 现有状态',
+    'waiting-deliveries': `本笔接收记录已保存，Issue 保持打开；等待后续交付 ${(delivery.issuePendingDeliveries ?? []).join(' / ')}`,
   };
   return `外部 #${delivery.issue} → 内部 #${delivery.internalIssue}；${actions[delivery.issueResult]}；对象复用，交付完成`;
 }
@@ -51,8 +62,10 @@ export function issueSummary(delivery, phase) {
   const number = delivery.internalIssue ? `内部 #${delivery.internalIssue}` : '内部 Issue';
   const status = issueStatus(delivery, phase) === 'closed' ? '已关闭' : '打开';
   if (phase < 3) return '准备阶段创建 / 复用并建立映射';
+  if (delivery.issuePendingDeliveries?.length)
+    return `本笔已接收，${number} 保持打开；等待后续交付 ${delivery.issuePendingDeliveries.join(' / ')}`;
   if (issueRelation(delivery) === 'related') return `普通关联 · ${number} ${status}；保留现有状态`;
-  if (phase < 7) return `${number} 已创建并映射；等待 PR 合入后确认关单`;
+  if (phase < 7) return `${number} 已创建并映射；等待 PR 合入后更新接收状态`;
   if (delivery.issueResult === 'closed-by-sync') return `${number} 已由同步程序补充关闭`;
   if (phase >= 9) return `${number} 已关闭；确认平台关单结果`;
   return issueStatus(delivery, phase) === 'closed'

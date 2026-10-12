@@ -1,6 +1,7 @@
 import { seedAudit } from './audit.mjs';
 import { existingRepositoryDeliveries, simulateBaselineCheck } from './baseline.mjs';
 import { defaultBinding, emptyBinding } from './binding.mjs';
+import { resumeContinuity, seedContinuity } from './continuity.mjs';
 import { COMPLETE, deliveries, phases } from './data.mjs';
 import { deliveryNames } from './delivery.mjs';
 import { issueAuditMessage, platformIssueStatus, reconcileIssue } from './issues.mjs';
@@ -69,6 +70,7 @@ export function createState(scenario = 'waiting', binding = defaultBinding()) {
   if (scenario === 'plugin') state.active = snapshot(0, 5, 'plugin');
   if (scenario === 'drift') state.active = snapshot(0, 1, 'drift');
   applyMergedScenario(state, scenario);
+  seedContinuity(state, scenario);
   if (scenario === 'unconfigured' || binding.status !== 'ready') {
     state.binding = scenario === 'unconfigured' ? emptyBinding() : structuredClone(binding);
     state.accepted = null;
@@ -174,6 +176,7 @@ const handlers = {
   recover(state) {
     const active = state.active;
     if (!active?.block || active.block === 'drift') return;
+    if (resumeContinuity(state, log)) return;
     const block = active.block;
     active.block = null;
     if (block === 'metadata' && !reconcileIssue(state)) {

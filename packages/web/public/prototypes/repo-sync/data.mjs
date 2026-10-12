@@ -9,7 +9,7 @@ export const phases = [
   '运行检查',
   '等待审批',
   '合入后核验',
-  '确认关单结果',
+  '更新 Issue 接收状态',
   '完成',
 ];
 export const deliveries = [
@@ -52,6 +52,9 @@ export const scenarios = {
   reconcile: '核对 Issue 状态',
   'manual-close': 'PR 已合入 · 待补充关单',
   'related-issue': '普通关联 Issue · 保留状态',
+  'shared-issue': '同一 Issue · 分两笔交付完成',
+  'merge-interrupted': 'PR 已合入 · 接受版本未保存',
+  'merge-conflict': '恢复结果冲突 · 暂停核对',
   behind: '尚未开始同步',
   timeout: 'PR 创建结果待核对',
   plugin: '插件兼容检查失败',
@@ -101,8 +104,8 @@ export const phaseDetails = [
     'git fetch internal main\ngit diff --exit-code c2f84d91 internal/main -- .\ngit merge-base --is-ancestor c2f84d91 internal/main',
   ],
   [
-    '确认关单结果',
-    '程序自动核对已映射的正确内部 Issue。平台已自动关闭则只记录；未关闭且确有本交付关闭义务时，按映射显式关闭。普通关联 Issue 保持打开。',
+    '更新 Issue 接收状态',
+    '保存本笔接收记录，核对同一映射 Issue 的状态。仍有后续交付则保持打开，本笔仍可完成；接收条件全部满足才确认或补齐关单。普通关联保留原状态。',
     'repo-sync issue reconcile --delivery delivery-041',
   ],
   ['完成', '代码验收和元数据核对均完成，下一笔交付可以开始。', 'repo-sync ledger inspect --delivery delivery-041'],

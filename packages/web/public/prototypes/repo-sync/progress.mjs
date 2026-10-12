@@ -23,10 +23,10 @@ const groups = [
     ],
   ],
   [
-    '确认关单结果',
+    '更新 Issue 接收状态',
     [
       [8, '读取内部 Issue 状态', true],
-      [8, '确认 / 补齐关单'],
+      [8, '保存接收记录并核对状态'],
     ],
   ],
   ['完成', [[9, '记录结果并开放下一笔']]],
@@ -51,6 +51,11 @@ const failures = {
     code: 'ISSUE_CLOSE_FAILED',
     message: '内部 Issue 仍为打开状态，关单操作尚未完成。',
     detail: '演示报错：平台关单请求返回 503。代码已合入且核验通过，重试本次已映射 Issue 的关单，不重复搬运或合入。',
+  },
+  recovery: {
+    code: 'ACCEPTANCE_RECORD_MISSING',
+    message: '内部 PR 已合入，但上一次执行未保存接受版本。',
+    detail: '先核对原交付的真实结果；核验通过后补写 U/A，再补接收记录。不能直接当成核心漂移或重复合入。',
   },
 };
 export function stepFailure(delivery) {
@@ -82,7 +87,7 @@ function issueExplanation(delivery, phase) {
   if (delivery.error?.code === 'ISSUE_MAPPING_UNVERIFIED')
     return '<div class="issue-explanation"><strong>关单已暂停</strong><p>先核对本次交付的内外 Issue 对应与代码核验记录。检查通过后才允许关闭，当前保留 Issue 状态。</p></div>';
   const ordinary = issueRelation(delivery) === 'related';
-  return `<div class="issue-explanation"><strong>外部 Issue #${delivery.issue} → 内部 #${delivery.internalIssue}：准备阶段已完成创建与映射</strong><p>${escapeHtml(issueSummary(delivery, phase))}。${ordinary ? '本次交付只关联此 Issue，确认状态后登记完成。' : '确认有本交付关闭义务：平台已关则记录；仍打开则按内部映射编号补充关闭。'}</p></div>`;
+  return `<div class="issue-explanation"><strong>外部 Issue #${delivery.issue} → 内部 #${delivery.internalIssue}：准备阶段已完成创建与映射</strong><p>${escapeHtml(issueSummary(delivery, phase))}。${ordinary ? '本次交付只关联此 Issue，确认状态后登记完成。' : '本笔完成表示接收记录已保存；有后续交付时保持打开，全部接收后才确认或补齐关单。'}</p></div>`;
 }
 export function renderProgress(state, delivery) {
   const phase = deliveryPhase(state, delivery);
