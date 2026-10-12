@@ -100,7 +100,7 @@ function DemoPlayer({ storageScope, onClose }: Omit<Props, 'open'>) {
               ? '审查通过 · 试试团队交付的成果'
               : current
                 ? `${playback.index + 1} / ${DEMO_EVENTS.length} · ${current.title}`
-                : '准备好后，整个协作过程会自动进行'}
+                : '正在准备协作演示…'}
           </span>
         </div>
         <div className="grid min-h-0 flex-1 grid-rows-[minmax(120px,0.7fr)_minmax(190px,1fr)] md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] md:grid-rows-1">
@@ -113,16 +113,6 @@ function DemoPlayer({ storageScope, onClose }: Omit<Props, 'open'>) {
               稍后再看
             </button>
             <div className="flex flex-wrap items-center gap-3">
-              {playback.index === -1 && (
-                <button
-                  disabled={!playback.ready}
-                  type="button"
-                  onClick={playback.start}
-                  className="rounded-full bg-cafe-accent px-5 py-2.5 text-sm font-semibold text-[var(--cafe-surface)]"
-                >
-                  开始引导
-                </button>
-              )}
               {playback.index >= 0 && !playback.finished && (
                 <button
                   ref={playbackControl}

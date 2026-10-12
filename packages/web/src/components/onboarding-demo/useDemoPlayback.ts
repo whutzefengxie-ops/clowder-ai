@@ -16,6 +16,7 @@ export function useDemoPlayback(scope: string) {
   const [state, setState] = useState<Playback>(initial);
   const [ready, setReady] = useState(false);
   useEffect(() => {
+    let index = 0;
     try {
       const saved: unknown = JSON.parse(localStorage.getItem(key) ?? 'null');
       if (
@@ -29,11 +30,14 @@ export function useDemoPlayback(scope: string) {
         saved.index >= -1 &&
         saved.index <= DEMO_EVENTS.length
       ) {
-        setState({ version: 1, index: saved.index, paused: true });
+        index = saved.index < DEMO_EVENTS.length ? Math.max(0, saved.index) : 0;
       }
     } catch {
       /* Storage is optional; the demo also works in private browsing. */
     }
+    // Opening the demo is the user's start/continue action; a completed
+    // bookmark replays without requiring another click.
+    setState({ version: 1, index, paused: false });
     setReady(true);
   }, [key]);
   useEffect(() => {

@@ -1,7 +1,6 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { DemoInvitation } from '../../onboarding-demo/DemoInvitation';
 import { DemoTranscript } from '../../onboarding-demo/DemoTranscript';
 import { DEMO_EVENTS, DEMO_SETTINGS_URL } from '../../onboarding-demo/demo-story';
 import { GuidedOnboarding } from '../../onboarding-demo/GuidedOnboarding';
@@ -16,19 +15,6 @@ beforeEach(() => {
   root = createRoot(host);
 });
 
-it('offers setup in the initial invitation without starting or completing the demo', () => {
-  const onStart = vi.fn(),
-    onSkip = vi.fn();
-  act(() => root.render(<DemoInvitation onSkip={onSkip} onStart={onStart} />));
-  const setup = host.querySelector('a');
-  expect(setup?.getAttribute('href')).toBe(DEMO_SETTINGS_URL);
-  act(() => {
-    setup?.addEventListener('click', (event) => event.preventDefault());
-    setup?.click();
-  });
-  expect(onSkip).toHaveBeenCalledOnce();
-  expect(onStart).not.toHaveBeenCalled();
-});
 afterEach(() => {
   act(() => root.unmount());
   host.remove();

@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { useShallow } from 'zustand/react/shallow';
 import { useActiveExecutionProjection } from '@/hooks/useActiveExecutionProjection';
 import { useAgentHookHealth } from '@/hooks/useAgentHookHealth';
@@ -45,7 +44,6 @@ import { GameOverlayConnector } from './game/GameOverlayConnector';
 import { BootcampIcon } from './icons/BootcampIcon';
 import { GameIcon } from './icons/GameIcon';
 import { PawIcon } from './icons/PawIcon';
-import { DemoInvitation } from './onboarding-demo/DemoInvitation';
 import { DEMO_SETTINGS_URL } from './onboarding-demo/demo-story';
 import { GuidedOnboarding } from './onboarding-demo/GuidedOnboarding';
 import { ParallelStatusBar } from './ParallelStatusBar';
@@ -181,7 +179,7 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
   // AC-6: research=multi hint from Signal study "多猫研究" button
   const isResearchMode = searchParams?.get('research') === 'multi';
   const { clearTasks } = useTaskStore();
-  const { cats, isLoading, hasFetched } = useCatData();
+  const { cats } = useCatData();
   const workspaceWorktreeId = useChatStore((s) => s.workspaceWorktreeId);
   useTeleport(); // F227: drive the Hub to a teleport target message (thread:teleport)
   const { isOpen: sidebarOpen, open: openSidebar, close: closeSidebar, toggle: toggleSidebar } = useSidebarStore();
@@ -196,7 +194,6 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
   const [workspacePanelMounted, setWorkspacePanelMounted] = useState(rightPanelMode === 'workspace');
   const [activityPanelMounted, setActivityPanelMounted] = useState(false);
   const [showBootcampList, setShowBootcampList] = useState(false);
-  const [showFirstRunQuestPrompt, setShowFirstRunQuestPrompt] = useState(false);
   const [showQuestWizard, setShowQuestWizard] = useState(false);
   const [showOnboardingHint, setShowOnboardingHint] = useState(false);
   const [onboardingSyncError, setOnboardingSyncError] = useState(false);
@@ -429,19 +426,9 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
   const setCurrentProject = useChatStore((s) => s.setCurrentProject);
   const storeThreads = useChatStore((s) => s.threads);
   const sidebarRows = useSidebarProjectionStore((state) => state.rows);
-  const handleSkipFirstRunQuest = useCallback(() => {
-    // #707: Persist skip to localStorage so refreshing doesn't re-trigger
-    try {
-      localStorage.setItem('cat-cafe:first-run-quest-skipped', '1');
-    } catch {
-      /* localStorage may be unavailable in some contexts */
-    }
-    setShowFirstRunQuestPrompt(false);
-  }, []);
   const handleStartFirstRunQuest = useCallback(() => {
-    handleSkipFirstRunQuest();
     setShowQuestWizard(true);
-  }, [handleSkipFirstRunQuest]);
+  }, []);
   const currentBootcampState = storeThreads.find((thread) => thread.id === threadId)?.bootcampState;
   const currentBootcampPhase = currentBootcampState?.phase;
   const showFirstProjectMistakeTip = useFirstProjectMistakeTipGate({
@@ -497,27 +484,6 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
       mistakeTipAdvanceKeyRef.current = null;
     }
   }, [currentBootcampPhase, threadId]);
-  useEffect(() => {
-    // Pure backend-driven: show prompt only when no cats AND no bootcamp thread
-    const isCurrentBootcamp = Boolean(storeThreads.find((thread) => thread.id === threadId)?.bootcampState);
-    const hasAnyBootcamp = storeThreads.some((t) => t.bootcampState);
-    if (showQuestWizard || isCurrentBootcamp || hasAnyBootcamp || cats.length > 0 || isLoading) {
-      setShowFirstRunQuestPrompt(false);
-      return;
-    }
-    // Wait for thread store to populate before deciding — prevents flash on page refresh
-    if (storeThreads.length === 0) return;
-    // Only show first-run prompt after a successful cat fetch — prevents false
-    // positives when /api/cats fails transiently (returns [] on network error).
-    if (!hasFetched) return;
-    // #707: Don't re-show if user previously skipped
-    try {
-      if (localStorage.getItem('cat-cafe:first-run-quest-skipped') === '1') return;
-    } catch {
-      /* localStorage unavailable */
-    }
-    setShowFirstRunQuestPrompt(true);
-  }, [cats.length, isLoading, hasFetched, storeThreads, threadId, showQuestWizard]);
 
   // ── Data sync: re-fetch thread state ──
   // MCP callbacks update Redis directly; the companion WebSocket `thread_updated`
@@ -1050,8 +1016,7 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
           }
           footerLead={
             <>
-              {!showFirstRunQuestPrompt &&
-                !showQuestWizard &&
+              {!showQuestWizard &&
                 (() => {
                   const currentThread = storeThreads.find((thread) => thread.id === threadId);
                   const questState = (currentThread as Record<string, unknown> | undefined)?.firstRunQuestState as
@@ -1076,7 +1041,7 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
             </>
           }
           composerClassName={(() => {
-            if (showFirstRunQuestPrompt || showQuestWizard) return '';
+            if (showQuestWizard) return '';
             const currentThread = storeThreads.find((thread) => thread.id === threadId);
             const bootcampState = currentThread?.bootcampState as { phase: string } | undefined;
             if (bootcampState?.phase === 'phase-1-intro' && messages.length === 0) {
@@ -1275,18 +1240,12 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
         </div>
       )}
       <FloatingTranscriptContainer />
-      {showFirstRunQuestPrompt &&
-        !showQuestWizard &&
-        createPortal(
-          <DemoInvitation onSkip={handleSkipFirstRunQuest} onStart={handleStartFirstRunQuest} />,
-          document.body,
-        )}
       <GuidedOnboarding open={showQuestWizard} storageScope="first-run" onClose={() => setShowQuestWizard(false)} />
       <BootcampListModal open={showBootcampList} onClose={handleBootcampModalClose} currentThreadId={threadId} />
       {showVoteModal && <VoteConfigModal onSubmit={handleVoteSubmit} onCancel={() => setShowVoteModal(false)} />}
       {/* Bootcamp guide overlay: intro phase tips + lifecycle tips (phase-7.5 uses guide engine) */}
       {(() => {
-        if (showFirstRunQuestPrompt || showQuestWizard) return null;
+        if (showQuestWizard) return null;
         const bt = storeThreads.find((t) => t.id === threadId);
         const raw = bt?.bootcampState;
         if (!raw) return null;

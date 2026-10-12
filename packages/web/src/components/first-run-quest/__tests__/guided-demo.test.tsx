@@ -53,11 +53,26 @@ const acknowledge = async (source: Window | null | undefined, stage = 'final') =
   );
 };
 
+it('starts playing as soon as the demo opens without another start action', async () => {
+  await mount();
+  expect(document.body.textContent).toContain('1 / 9');
+  expect([...document.querySelectorAll('button')].some((b) => b.textContent?.trim() === '开始引导')).toBe(false);
+  expect(button('暂停')).toBeDefined();
+  await tick();
+  expect(document.body.textContent).toContain('2 / 9');
+});
+
+it('automatically replays when the user opens an already completed demo', async () => {
+  localStorage.setItem('cat-cafe:scripted-onboarding:v1:demo-user', JSON.stringify({ version: 1, index: 9 }));
+  await mount();
+  expect(document.body.textContent).toContain('1 / 9');
+  expect(button('暂停')).toBeDefined();
+});
+
 it('keeps the same browser beside the conversation from design through delivery', async () => {
   await mount();
   const frame = document.querySelector('iframe');
   expect(frame).not.toBeNull();
-  act(() => button('开始引导').click());
   for (let i = 0; i < 16; i++) {
     await tick();
     expect(document.querySelector('iframe')).toBe(frame);
@@ -69,7 +84,6 @@ it('keeps the same browser beside the conversation from design through delivery'
 
 it('automates all handoffs without clients or API calls and opens a working deliverable', async () => {
   await mount();
-  act(() => button('开始引导').click());
   for (let i = 0; i < 16; i++) await tick();
   expect(document.body.textContent).toContain('审查通过');
   expect(document.body.textContent).toContain('已修正');
@@ -84,7 +98,7 @@ it('automates all handoffs without clients or API calls and opens a working deli
 });
 
 it('ignores unrelated frames, offers retry on timeout, and accepts the current frame only', async () => {
-  localStorage.setItem('cat-cafe:scripted-onboarding:v1:demo-user', JSON.stringify({ version: 1, index: 9 }));
+  localStorage.setItem('cat-cafe:scripted-onboarding:v1:demo-user', JSON.stringify({ version: 1, index: 8 }));
   await mount();
   await acknowledge(window);
   expect(document.body.textContent).not.toContain('成果已就绪');
@@ -109,12 +123,12 @@ it('recovers corrupt bookmarks and does not skip steps under StrictMode', async 
       </StrictMode>,
     ),
   );
-  act(() => button('开始引导').click());
   expect(document.body.textContent).toContain('1 / 9');
   await tick();
   expect(document.body.textContent).toContain('2 / 9');
   act(() => root.render(<GuidedOnboarding open storageScope="another-demo" onClose={close} />));
-  expect(button('开始引导')).toBeDefined();
+  expect(button('暂停')).toBeDefined();
+  expect(document.body.textContent).toContain('1 / 9');
   expect(fetch).not.toHaveBeenCalled();
 });
 
@@ -126,7 +140,6 @@ it('works without browser storage and cleans up timers on close', async () => {
     throw new Error('blocked');
   });
   await mount();
-  act(() => button('开始引导').click());
   await tick();
   act(() => root.render(<GuidedOnboarding open={false} storageScope="demo-user" onClose={close} />));
   await tick();
@@ -135,9 +148,8 @@ it('works without browser storage and cleans up timers on close', async () => {
   vi.restoreAllMocks();
 });
 
-it('pauses the script and restores the same point paused after reopening', async () => {
+it('pauses the script and automatically continues from the same point after reopening', async () => {
   await mount();
-  act(() => button('开始引导').click());
   await tick();
   act(() => button('暂停').click());
   const before = document.querySelector('[data-testid="demo-transcript"]')?.textContent;
@@ -145,7 +157,9 @@ it('pauses the script and restores the same point paused after reopening', async
   expect(document.querySelector('[data-testid="demo-transcript"]')?.textContent).toBe(before);
   act(() => root.render(<GuidedOnboarding open={false} storageScope="demo-user" onClose={close} />));
   await mount();
-  expect(button('继续')).toBeDefined();
+  expect(button('暂停')).toBeDefined();
   expect(document.body.textContent).toContain('2 / 9');
+  await tick();
+  expect(document.body.textContent).toContain('3 / 9');
   expect(fetch).not.toHaveBeenCalled();
 });
