@@ -57,6 +57,9 @@ export const DEMO_DELIVERABLE_HTML = `<!doctype html>
     const feedback = document.querySelector('#feedback');
     const empty = document.querySelector('#empty');
     const render = () => {
+      const focused = document.activeElement;
+      const previousIndex = [...list.querySelectorAll('input')].indexOf(focused);
+      const focusedId = previousIndex >= 0 ? focused.dataset.taskId : null;
       list.replaceChildren();
       const visible = tasks.filter(task => filter === 'all' || (filter === 'done' ? task.done : !task.done));
       for (const task of visible) {
@@ -67,17 +70,9 @@ export const DEMO_DELIVERABLE_HTML = `<!doctype html>
         check.type = 'checkbox'; check.checked = task.done; check.dataset.taskId = String(task.id);
         check.disabled = ['waiting', 'design', 'architecture'].includes(stage);
         check.addEventListener('change', () => {
-          const restoreFocus = document.activeElement === check;
-          const previousIndex = visible.indexOf(task);
           task.done = check.checked;
           feedback.textContent = task.done ? '又完成了一件小事。' : '任务已恢复为未完成。';
           render();
-          if (!restoreFocus) return;
-          const remaining = [...list.querySelectorAll('input')];
-          const sameTask = remaining.find(item => item.dataset.taskId === String(task.id));
-          if (sameTask) sameTask.focus();
-          else if (remaining.length) remaining[Math.min(previousIndex, remaining.length - 1)].focus();
-          else document.querySelector('[data-filter="' + filter + '"]').focus();
         });
         const title = document.createElement('span'); title.textContent = task.title;
         label.append(check, title); row.append(label); list.append(row);
@@ -87,6 +82,13 @@ export const DEMO_DELIVERABLE_HTML = `<!doctype html>
       empty.hidden = visible.length > 0 || stage !== 'final';
       empty.textContent = filter === 'open' && remaining === 0 ? '今天的任务都完成了，做得很好！' : filter === 'done' ? '还没有已完成的任务，从一件小事开始吧。' : '还没有任务，写下今天的第一件小事吧。';
       document.querySelectorAll('[data-filter]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.filter === filter)));
+      if (focusedId !== null) {
+        const remaining = [...list.querySelectorAll('input:not(:disabled)')];
+        const sameTask = remaining.find(item => item.dataset.taskId === focusedId);
+        if (sameTask) sameTask.focus();
+        else if (remaining.length) remaining[Math.min(previousIndex, remaining.length - 1)].focus();
+        else document.querySelector('[data-filter="' + filter + '"]').focus();
+      }
     };
     const addTask = () => {
       const title = input.value.trim();

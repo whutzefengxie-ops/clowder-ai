@@ -15,6 +15,28 @@ function deliver(dom: { window: Window & typeof globalThis }, stage: string) {
   );
 }
 
+it.each([
+  ['initial', 'review'],
+  ['review', 'final'],
+])('keeps keyboard focus as preview advances from %s to %s', (from, to) => {
+  const dom = new JSDOM(DEMO_DELIVERABLE_HTML, { runScripts: 'dangerously' });
+  try {
+    const page = dom.window.document;
+    deliver(dom, from);
+    page.querySelector<HTMLInputElement>('[data-task-id="2"]')?.focus();
+    deliver(dom, to);
+    expect(page.activeElement?.getAttribute('data-task-id')).toBe('2');
+    (page.activeElement as HTMLInputElement).click();
+    expect((page.activeElement as HTMLInputElement).checked).toBe(true);
+    const input = page.querySelector<HTMLInputElement>('#new-task')!;
+    input.focus();
+    deliver(dom, to);
+    expect(page.activeElement).toBe(input);
+  } finally {
+    dom.window.close();
+  }
+});
+
 it('progressively builds the same document and retains tasks through review fixes', () => {
   const dom = new JSDOM(DEMO_DELIVERABLE_HTML, { runScripts: 'dangerously' });
   try {
