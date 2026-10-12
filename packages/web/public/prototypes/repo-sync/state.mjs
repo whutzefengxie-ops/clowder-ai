@@ -1,5 +1,7 @@
+import { seedAudit } from './audit.mjs';
 import { defaultBinding, emptyBinding } from './binding.mjs';
-import { COMPLETE, deliveries } from './data.mjs';
+import { COMPLETE, deliveries, phases } from './data.mjs';
+import { deliveryNames } from './delivery.mjs';
 
 const snapshot = (index, phase, block = null) => ({
   ...structuredClone(deliveries[index]),
@@ -8,6 +10,18 @@ const snapshot = (index, phase, block = null) => ({
   internalPr: phase >= 4 ? deliveries[index].internalPr : null,
   internalIssue: phase >= 3 ? deliveries[index].internalIssue : null,
 });
+function applyMergedScenario(state, scenario) {
+  if (scenario === 'verify' || scenario === 'reconcile') {
+    state.internalSha = '11c79a50';
+    state.active = snapshot(0, scenario === 'verify' ? 7 : 8);
+    if (scenario === 'reconcile') state.accepted = deliveries[0].target;
+  }
+  if (scenario === 'metadata' || scenario === 'synced') {
+    state.accepted = state.latest;
+    state.internalSha = '12c79a50';
+    state.active = snapshot(1, scenario === 'synced' ? COMPLETE : 8, scenario === 'synced' ? null : 'metadata');
+  }
+}
 export function createState(scenario = 'waiting', binding = defaultBinding()) {
   const state = {
     schema: 2,
@@ -30,11 +44,7 @@ export function createState(scenario = 'waiting', binding = defaultBinding()) {
   if (scenario === 'timeout') state.active = snapshot(0, 4, 'timeout');
   if (scenario === 'plugin') state.active = snapshot(0, 5, 'plugin');
   if (scenario === 'drift') state.active = snapshot(0, 1, 'drift');
-  if (scenario === 'metadata' || scenario === 'synced') {
-    state.accepted = state.latest;
-    state.internalSha = '12c79a50';
-    state.active = snapshot(1, scenario === 'synced' ? COMPLETE : 8, scenario === 'synced' ? null : 'metadata');
-  }
+  applyMergedScenario(state, scenario);
   if (scenario === 'unconfigured' || binding.status !== 'ready') {
     state.binding = scenario === 'unconfigured' ? emptyBinding() : structuredClone(binding);
     state.accepted = null;
@@ -44,14 +54,17 @@ export function createState(scenario = 'waiting', binding = defaultBinding()) {
     state.events = [{ label: '等待仓库连接配置', note: '连接、检查、保存并初始化后，才能开始接收交付。' }];
   }
   if (state.active) state.active.bindingId = state.binding.id;
+  seedAudit(state);
   return state;
 }
-function log(state, label, note = '') {
+function log(state, label, note = '', deliveryId = state.active?.id, actor = '同步程序') {
   state.events.push({
     label,
     note,
-    deliveryId: state.active?.id,
-    time: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
+    deliveryId,
+    actor,
+    phase: deliveryId === state.active?.id ? state.active.phase : 0,
+    time: new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false }),
   });
 }
 const handlers = {
@@ -71,7 +84,12 @@ const handlers = {
     };
     state.deliveries.push(delivery);
     state.latest = delivery.target;
-    log(state, '外部新交付加入队列', '当前交付目标保持冻结');
+    log(
+      state,
+      '外部新交付加入队列',
+      `来源 PR #${delivery.sourcePr} · ${delivery.target}；当前交付目标保持冻结`,
+      delivery.id,
+    );
   },
   start(state) {
     if (state.binding?.status !== 'ready') return;
@@ -87,7 +105,12 @@ const handlers = {
         internalPr: null,
         internalIssue: null,
       };
-      log(state, '已冻结同步目标', `${next.id} · ${next.target}`);
+      const names = deliveryNames(next, state.binding);
+      log(
+        state,
+        '已冻结同步目标',
+        `${next.id} · ${next.target}；基线 ${state.accepted}；${names.candidateBranch} → ${names.targetBranch}`,
+      );
     }
   },
   advance(state) {
@@ -98,14 +121,22 @@ const handlers = {
     if (active.phase === 3) active.internalIssue = original.internalIssue;
     if (active.phase === 4) active.internalPr = original.internalPr;
     if (active.phase === 8) state.accepted = active.target;
-    log(state, active.phase === COMPLETE ? 'Issue 状态核对完成，交付完成' : '程序步骤完成', `当前阶段 ${active.phase}`);
+    const names = deliveryNames(active, state.binding);
+    let note = `当前阶段：${phases[active.phase]}；冻结目标 ${active.target}`;
+    if (active.phase === 3)
+      note = `${names.candidateBranch}；接收提交 ${active.commits.join(' / ')}；Issue #${active.issue} → #${active.internalIssue}`;
+    if (active.phase === 4)
+      note = `内部 PR #${active.internalPr}；${names.prTitle}；${names.candidateBranch} → ${names.targetBranch}`;
+    if (active.phase === 8)
+      note = `内部 ${state.internalSha} 已核验；登记已接受上游 ${active.target}；继续核对 Issue #${active.internalIssue}`;
+    log(state, active.phase === COMPLETE ? 'Issue 状态核对完成，交付完成' : `进入${phases[active.phase]}`, note);
   },
   approve(state, action) {
     const active = state.active;
     if (active?.phase !== 6 || active.block) return;
     state.internalSha = `1${state.deliveries.findIndex((item) => item.id === active.id) + 1}c79a50`;
     active.phase = 7;
-    log(state, '模拟内部平台 PR 合入，等待程序核验', action.note || '平台审批通过');
+    log(state, '模拟内部平台 PR 合入，等待程序核验', action.note || '平台审批通过', active.id, '内部平台');
   },
   recover(state) {
     const active = state.active;

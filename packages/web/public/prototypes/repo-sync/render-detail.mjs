@@ -1,8 +1,9 @@
 import { COMPLETE, phaseDetails } from './data.mjs';
+import { deliveryPhase, prHref } from './delivery.mjs';
 import { escapeHtml, sha } from './html.mjs';
-export function renderPhase(state, phase) {
+export function renderPhase(state, phase, delivery = state.active) {
   const [name, explanation, command] = phaseDetails[phase];
-  const active = state.active;
+  const active = delivery;
   const boundCommand = command
     .replaceAll('upstream main', `upstream ${state.binding.sourceBranch}`)
     .replaceAll('internal/main', `internal/${state.binding.targetBranch}`)
@@ -16,7 +17,7 @@ export function renderPhase(state, phase) {
         .replace('--source 71', `--source ${active.issue}`)
         .replace('--id 92', `--id ${active.internalPr ?? '待创建'}`)
     : boundCommand;
-  return `<div class="phase-detail"><div><span class="eyebrow">步骤 ${phase} / ${COMPLETE} · ${phase === 6 ? '人工在内部平台处理' : '程序自动执行，无 Agent 依赖'}</span><h3>${name}</h3><p>${explanation}</p></div><details><summary>查看命令示意</summary><pre>${escapeHtml(resolved)}</pre><small>Git 为命令示意；repo-sync 为尚未实现的平台适配器。当前不会执行命令。</small></details></div>`;
+  return `<div id="phase-detail" class="phase-detail"><div><span class="eyebrow">步骤 ${phase} / ${COMPLETE} · ${phase === 6 ? '人工在内部平台处理' : '程序自动执行，无 Agent 依赖'}</span><h3>${name}</h3><p>${explanation}</p></div><details><summary>查看命令示意</summary><pre>${escapeHtml(resolved)}</pre><small>Git 为命令示意；repo-sync 为尚未实现的平台适配器。当前不会执行命令。</small></details></div>`;
 }
 export function renderObjects(state, delivery) {
   if (!delivery) return '<div class="empty">同步开始后，这里展示 Issue、PR 与检查状态。</div>';
@@ -43,20 +44,14 @@ function renderChecks(active, phase) {
 export function renderMapping(state, selectedId) {
   const delivery = state.deliveries.find((item) => item.id === selectedId) ?? state.active ?? state.deliveries[0];
   const index = state.deliveries.findIndex((item) => item.id === delivery.id);
-  const acceptedIndex = state.deliveries.findIndex((item) => item.target === state.accepted);
-  const phase = state.active?.id === delivery.id ? state.active.phase : index <= acceptedIndex ? COMPLETE : 0;
-  return `<section class="panel mapping-panel"><div class="section-head"><div><h2>${delivery.title}</h2><p>${delivery.id} · 落地方式 ${delivery.mode}</p></div><select id="mapping-delivery" aria-label="选择映射交付">${state.deliveries.map((item) => `<option value="${item.id}" ${item.id === delivery.id ? 'selected' : ''}>外部 PR #${item.sourcePr}</option>`).join('')}</select></div>
+  const phase = deliveryPhase(state, delivery);
+  return `<section class="panel mapping-panel"><div class="section-head"><div><h2>${delivery.title}</h2><p>${delivery.id} · 落地方式 ${delivery.mode} · 对照表不包含执行日志</p></div><select id="mapping-delivery" aria-label="选择映射交付">${state.deliveries.map((item) => `<option value="${item.id}" ${item.id === delivery.id ? 'selected' : ''}>外部 PR #${item.sourcePr}</option>`).join('')}</select></div>
     <div class="mapping-grid"><div><div class="eyebrow">外部 / 已落地提交</div><h3>GitHub ${escapeHtml(state.binding.sourceBranch)}</h3><p>实际进入交付分支的对象作为接收依据。</p></div><div><div class="eyebrow">内部 / 接收结果</div><h3>候选分支 → 内部 ${escapeHtml(state.binding.targetBranch)}</h3><p>提交对象 SHA 保留，接收合并节点独立。</p></div></div>
     <div class="commit-table" role="table" aria-label="提交 ID 映射"><div class="commit-row table-head" role="row"><span role="columnheader">外部 commit ID</span><span role="columnheader">内部对应 commit ID</span><span role="columnheader">状态 / 类型</span></div>${delivery.commits.map((commit) => `<div class="commit-row" role="row"><span role="cell">${sha(commit)}</span><span role="cell">${phase >= 4 ? sha(commit) : '待搬运'}</span><span role="cell"><span class="badge ${phase >= 4 ? 'good' : 'neutral'}">${phase >= 7 ? '已随 PR 合入' : phase >= 4 ? '候选分支已接收' : '等待搬运'}</span></span></div>`).join('')}<div class="commit-row special" role="row"><span role="cell">上游初始化基线 ${sha(state.binding.baseline)}</span><span role="cell">${sha(state.binding.initialInternalSha)}</span><span role="cell">内部初始化节点</span></div>${phase >= 7 ? `<div class="commit-row special" role="row"><span role="cell">接收目标 ${sha(delivery.target)}</span><span role="cell">${sha(`1${index + 1}c79a50`)}</span><span role="cell">内部接收合并节点</span></div>` : ''}</div>
     <div class="notice">${delivery.mode === 'Squash' ? 'Squash 场景：搬运落入 main 的单个提交。PR 开发分支提交仅作为来源记录，不要求逐个重放。' : 'Merge 场景：保留上游落地对象；内部允许初始化和接收合并节点，因此 main SHA 不必相同。'}</div>
-    <div class="mapping-grid"><section><h3>Issue / PR 对应关系</h3>${renderObjects(state, delivery)}</section><section><h3>程序核验规则</h3><ul class="rules"><li>是否最新：已接受上游版本 = 外部最新版本。</li><li>本次核心文件树与冻结目标一致。</li><li>内部 PR 已合入且程序核验通过，才登记已接受版本。</li><li>Issue 关闭核对内部编号，避免错误关闭同号对象。</li><li>内部定制能力在独立插件仓中管理。</li></ul></section></div></section>`;
+    <div class="mapping-grid"><section><h3>Issue / PR 对应关系</h3>${renderObjectMap(state, delivery, phase)}<button type="button" class="text-button" data-delivery="${escapeHtml(delivery.id)}">查看这笔交付与审计 →</button></section><section><h3>对应关系说明</h3><ul class="rules"><li>这里查看 commit、Issue、PR 的内外对应。</li><li>重试复用已登记的对象，不另建映射。</li><li>内部初始化与接收合并节点单独展示。</li><li>操作时间、结果与审批备注在交付详情及内部 PR 的审计中查看。</li></ul></section></div></section>`;
 }
-export function renderEvents(state) {
-  return `<section class="panel"><div class="section-head"><div><h2>执行记录</h2><p>本机合成状态 · 刷新后保留 · 不包含凭据</p></div><span class="badge neutral">${state.events.length} 条记录</span></div><ol class="event-list">${state.events
-    .toReversed()
-    .map(
-      (event) =>
-        `<li><span class="event-dot"></span><div><strong>${escapeHtml(event.label)}</strong><p>${escapeHtml(event.note)}</p></div><time>${event.time ?? '初始化'}</time></li>`,
-    )
-    .join('')}</ol></section>`;
+function renderObjectMap(state, delivery, phase) {
+  const mapped = state.active?.id === delivery.id ? state.active : delivery;
+  return `<dl class="object-map"><div><dt>外部 PR #${delivery.sourcePr}</dt><dd>${phase >= 4 ? `<a href="${prHref(state, mapped.internalPr)}" target="_blank" rel="noopener">内部 #${mapped.internalPr} ↗</a>` : '内部 PR 待创建'}</dd></div><div><dt>外部 Issue #${delivery.issue}</dt><dd>${phase >= 3 ? `内部 #${mapped.internalIssue}` : '内部 Issue 待映射'}</dd></div></dl>`;
 }

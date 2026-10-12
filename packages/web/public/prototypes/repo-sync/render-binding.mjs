@@ -1,5 +1,6 @@
 import { COMPLETE } from './data.mjs';
 import { escapeHtml } from './html.mjs';
+import { renderIdentity } from './render-delivery.mjs';
 
 function input(draft, name, label, hint, placeholder = '') {
   return `<label class="config-field" for="config-${name}"><span>${label}</span><input id="config-${name}" name="${name}" value="${escapeHtml(draft[name] ?? '')}" placeholder="${placeholder}" autocomplete="off" spellcheck="false"><small>${hint}</small></label>`;
@@ -59,6 +60,7 @@ export function renderBinding(state, ui) {
       <div class="baseline-grid">${input(draft, 'baseline', '起始上游 commit ID', '应来自外部交付分支的某个版本。实际存在性、祖先关系和文件树一致性由程序核验。', '例如 a17e9b40')}
       <fieldset class="init-modes"><legend>内部初始化方式</legend><label><input type="radio" name="mode" value="snapshot" ${mark('snapshot')}><span><strong>独立快照初始化</strong><small>内部起始 commit ID 可以不同，核心文件树必须一致。</small></span></label><label><input type="radio" name="mode" value="history" ${mark('history')}><span><strong>保留上游历史初始化</strong><small>新仓库可沿用上游提交历史；之后仍走内部 PR。</small></span></label></fieldset></div>
     </section>
+    <section class="panel config-card naming-rules"><h3>内部同步分支与 PR 命名</h3><p>分支：<code>sync/{交付ID}</code>；PR：<code>[上游同步] PR #{外部PR号} · {外部PR标题}</code>。下面是当前配置的名称预览。</p>${renderIdentity(state.active ?? state.deliveries[0], draft, 0)}</section>
     <section class="panel config-checks"><div><h3>检查与保存</h3><p>演示仅执行本地格式校验，真实连通性、权限与版本核验尚未接入。</p></div>
       <div id="config-result" role="status" aria-live="polite">${checkResult(ui, checked)}</div>
       ${configActions(flags)}

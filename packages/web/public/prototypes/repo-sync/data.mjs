@@ -43,6 +43,8 @@ export const deliveries = [
 export const scenarios = {
   unconfigured: '首次配置连接',
   waiting: '等待内部审批',
+  verify: '合入后核验',
+  reconcile: '核对 Issue 状态',
   behind: '尚未开始同步',
   timeout: 'PR 创建结果待核对',
   plugin: '插件兼容检查失败',

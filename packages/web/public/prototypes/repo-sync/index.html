@@ -6,6 +6,7 @@
   <link rel="stylesheet" href="/native-theme.css"><link rel="stylesheet" href="/native-console.css">
   <link rel="stylesheet" href="/styles.css">
   <link rel="stylesheet" href="/binding.css">
+  <link rel="stylesheet" href="/delivery.css">
 </head>
 <body>
   <aside class="sidebar">
@@ -15,7 +16,6 @@
     <nav aria-label="功能导航">
       <button type="button" class="nav-item selected" data-view="overview"><span>◈</span>同步总览</button>
       <button type="button" class="nav-item" data-view="mapping"><span>⇄</span>提交与对象映射</button>
-      <button type="button" class="nav-item" data-view="events"><span>≡</span>执行记录</button>
       <button type="button" class="nav-item" data-view="configuration"><span>⚙</span>仓库连接与初始化</button>
     </nav>
     <div class="sidebar-note"><span class="dot good"></span>核心仓保持上游一致<small>定制能力位于独立插件仓</small></div>
@@ -25,10 +25,10 @@
   <main>
     <header class="topbar"><div>仓库工作区 <span>/</span> <strong id="view-name">同步总览</strong></div><span class="badge neutral">演示环境</span></header>
     <section class="page-heading"><div><div class="eyebrow">REPOSITORY SYNC</div><h1>单向交付接收</h1><p>从外部指定分支接收通用能力，在内部完成检查与审批。</p></div><button type="button" id="demo-toggle" class="button secondary" aria-expanded="true">隐藏演示控制</button></section>
-    <div id="demo-controls" class="demo-controls"><label for="scenario">演示场景</label><select id="scenario"></select><button type="button" id="external" class="button secondary">＋ 外部新增交付</button><button type="button" id="auto-step" class="button secondary" hidden>模拟自动检查结果</button><button type="button" id="reset" class="text-button">重置当前场景</button><small>所有操作均为模拟</small></div>
+    <div id="demo-controls" class="demo-controls"><label for="scenario">演示场景</label><select id="scenario"></select><button type="button" id="external" class="button secondary">＋ 外部新增交付</button><button type="button" id="reset" class="text-button">重置当前场景</button><small>所有操作均为模拟</small></div>
     <div id="overview"></div>
     <div id="mapping" hidden></div>
-    <div id="events" hidden></div>
+    <div id="delivery" hidden></div>
     <div id="configuration" hidden></div>
     <footer class="page-footer">代码自动同步与核验 · 人工在内部平台审核 PR · Agent 为可选辅助</footer>
   </main>

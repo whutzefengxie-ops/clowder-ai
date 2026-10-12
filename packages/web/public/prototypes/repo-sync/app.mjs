@@ -1,6 +1,8 @@
 import { createBindingUI } from './binding-ui.mjs';
 import { scenarios } from './data.mjs';
-import { renderEvents, renderMapping, renderObjects, renderPhase } from './render-detail.mjs';
+import { deliveryPhase } from './delivery.mjs';
+import { renderDelivery } from './render-delivery.mjs';
+import { renderMapping, renderObjects } from './render-detail.mjs';
 import { renderOverview } from './render-overview.mjs';
 import { createState, reduce } from './state.mjs';
 import { readState, storageKey, writeState } from './storage.mjs';
@@ -29,17 +31,14 @@ function persist() {
   }
 }
 function render() {
-  element('auto-step').hidden = !state.active || state.active.block || ![7, 8].includes(state.active.phase);
-  element('auto-step').textContent = state.active?.phase === 7 ? '模拟程序核验通过' : '模拟 Issue 核对完成';
   element('scenario').value = state.scenario;
-  element('overview').innerHTML = renderOverview(state, selectedPhase);
-  if (element('phase-detail')) element('phase-detail').innerHTML = renderPhase(state, selectedPhase);
+  element('overview').innerHTML = view === 'delivery' ? '' : renderOverview(state, selectedPhase);
+  element('delivery').innerHTML = view === 'delivery' ? renderDelivery(state, selectedId, selectedPhase) : '';
   if (element('object-summary')) element('object-summary').innerHTML = renderObjects(state, state.active);
   element('mapping').innerHTML =
     state.binding.status === 'ready'
       ? renderMapping(state, selectedId)
       : '<div class="notice">初始化完成后才会建立提交与对象映射。</div>';
-  element('events').innerHTML = renderEvents(state);
   element('configuration').innerHTML = bindingUI.render();
   element('repo-label').textContent =
     state.binding.status === 'draft'
@@ -49,23 +48,26 @@ function render() {
           .split(/[/:]/)
           .slice(-2)
           .join(' / ');
-  for (const name of ['overview', 'mapping', 'events', 'configuration']) element(name).hidden = name !== view;
+  for (const name of ['overview', 'mapping', 'delivery', 'configuration']) element(name).hidden = name !== view;
   const names = {
     overview: '同步总览',
     mapping: '提交与对象映射',
-    events: '执行记录',
+    delivery: '交付详情与审计',
     configuration: '仓库连接与初始化',
   };
   element('view-name').textContent = names[view];
   for (const button of document.querySelectorAll('.nav-item')) {
-    button.classList.toggle('selected', button.dataset.view === view);
-    button.setAttribute('aria-current', button.dataset.view === view ? 'page' : 'false');
+    const current = button.dataset.view === view || (view === 'delivery' && button.dataset.view === 'overview');
+    button.classList.toggle('selected', current);
+    button.setAttribute('aria-current', current ? 'page' : 'false');
   }
 }
 function dispatch(type, extra = {}) {
   state = reduce(state, { type, ...extra });
-  selectedPhase = state.active?.phase ?? 1;
-  selectedId = state.active?.id ?? selectedId;
+  if (view !== 'delivery' || selectedId === state.active?.id) {
+    selectedPhase = state.active?.phase ?? 1;
+    selectedId = state.active?.id ?? selectedId;
+  }
   persist();
   render();
 }
@@ -84,23 +86,36 @@ async function copyCommit(commit) {
     toast(`提交 ID：${commit}`);
   }
 }
-document.addEventListener('click', (event) => {
-  const button = event.target.closest('button');
-  if (!button) return;
-  if (bindingUI.action(button.id)) return;
+function navigate(button) {
   if (button.dataset.view) {
     view = button.dataset.view;
     render();
+    return true;
   }
   if (button.dataset.phase) {
     selectedPhase = Number(button.dataset.phase);
     render();
+    return true;
   }
   if (button.dataset.delivery) {
     selectedId = button.dataset.delivery;
+    const delivery = state.deliveries.find((item) => item.id === selectedId);
+    selectedPhase = deliveryPhase(state, delivery) || 1;
+    view = 'delivery';
+    render();
+    return true;
+  }
+  if (button.dataset.map) {
+    selectedId = button.dataset.map;
     view = 'mapping';
     render();
+    return true;
   }
+  return false;
+}
+document.addEventListener('click', (event) => {
+  const button = event.target.closest('button');
+  if (!button || bindingUI.action(button.id) || navigate(button)) return;
   if (button.dataset.copy) copyCommit(button.dataset.copy);
   if (['start', 'advance', 'recover', 'external'].includes(button.id)) dispatch(button.id);
   if (button.id === 'auto-step') dispatch('advance');
@@ -140,7 +155,7 @@ window.addEventListener('storage', (event) => {
   if (event.key !== storageKey) return;
   state = readState();
   bindingUI.reset();
-  selectedPhase = state.active?.phase ?? 1;
+  if (view !== 'delivery' || selectedId === state.active?.id) selectedPhase = state.active?.phase ?? 1;
   render();
 });
 persist();

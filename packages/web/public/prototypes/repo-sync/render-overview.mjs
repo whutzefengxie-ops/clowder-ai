@@ -1,7 +1,9 @@
 import { COMPLETE, phases } from './data.mjs';
-import { escapeHtml, internalPrHref, sha } from './html.mjs';
+import { prHref } from './delivery.mjs';
+import { escapeHtml, sha } from './html.mjs';
 import { bindingSummary, renderUnboundOverview } from './render-binding.mjs';
-import { renderFlow, renderQueue } from './render-flow.mjs';
+import { renderWorkflow } from './render-delivery.mjs';
+import { renderQueue } from './render-flow.mjs';
 import { summary } from './state.mjs';
 
 const blocks = {
@@ -27,7 +29,7 @@ export function nextAction(state) {
       ? '<button type="button" id="start" class="button primary">同步下一笔交付 →</button>'
       : '<span class="badge good">所有交付已完成</span>';
   if (active.phase === 6)
-    return `<a id="open-pr" class="button primary" href="${internalPrHref(active.internalPr)}?binding=${encodeURIComponent(state.binding.id)}" target="_blank" rel="noopener">打开内部 PR #${active.internalPr} ↗</a>`;
+    return `<a id="open-pr" class="button primary" href="${prHref(state, active.internalPr)}" target="_blank" rel="noopener">打开内部 PR #${active.internalPr} ↗</a>`;
   if (active.phase >= 7) return '<span class="badge neutral">程序自动处理 · 无需人工验收</span>';
   return '<button type="button" id="advance" class="button primary">模拟执行下一步 →</button>';
 }
@@ -71,10 +73,7 @@ export function renderOverview(state, selectedPhase) {
     <div class="bridge-arrow">→<small>内部审批</small></div>
     <article><div class="eyebrow">内部 / CORE</div><h3>已接受上游 ${sha(state.accepted)}</h3><div class="internal-sha">内部 ${targetBranch} ${sha(state.internalSha)}</div><p>两侧分支 SHA 可不同，核验核心文件树</p></article>
   </section>
-  <section class="panel flow-panel"><div class="section-head"><div><h2>交付流程</h2><p>${active ? `${active.id} · 外部 PR #${active.sourcePr} → 内部 PR ${active.internalPr ? `#${active.internalPr}` : '待创建'}` : '从冻结目标开始，逐步构建内部可审批的交付。'}</p></div><span class="badge neutral">点击节点查看说明</span></div>
-    <div class="flow">${renderFlow(active, selectedPhase)}</div>
-    <div id="phase-detail"></div>
-  </section>
+  ${renderWorkflow(state, active, selectedPhase)}
   ${blockNotice(blocked)}
   <div class="lower-grid"><section class="panel"><div class="section-head"><div><h2>交付队列</h2><p>先完成当前交付，再接收下一笔。</p></div><span class="count">${state.deliveries.length}</span></div><div class="delivery-list">${renderQueue(state, current)}</div></section>
     <section class="panel"><div class="section-head"><div><h2>当前交付对象</h2><p>来源、内部映射与验收状态</p></div><button type="button" class="text-button" data-view="mapping">查看映射 →</button></div><div id="object-summary"></div></section></div>`;

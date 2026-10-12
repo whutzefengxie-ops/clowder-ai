@@ -62,11 +62,11 @@ async function run() {
     assert.notEqual(state.accepted, frozen);
     assert.notEqual(state.accepted, state.internalSha);
     await finish();
-    await page.locator('[data-view="events"]').first().click();
-    assert.match(await page.locator('#events').innerText(), /sentinel-用户输入-20261010-α/);
+    await page.locator('.delivery[data-delivery="delivery-041"]').click();
+    assert.match(await page.locator('#delivery .audit-panel').innerText(), /sentinel-用户输入-20261010-α/);
     await page.reload();
-    await page.locator('[data-view="events"]').first().click();
-    assert.match(await page.locator('#events').innerText(), /sentinel-用户输入-20261010-α/);
+    await page.locator('.delivery[data-delivery="delivery-041"]').click();
+    assert.match(await page.locator('#delivery .audit-panel').innerText(), /sentinel-用户输入-20261010-α/);
     await page.screenshot({ path: join(evidence, '02-audit-persisted.png'), fullPage: true });
     await scenario('behind');
     await page.locator('#start').click();
