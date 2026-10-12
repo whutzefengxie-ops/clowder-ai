@@ -1,11 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { DemoScenes } from './DemoScenes';
 import { ClientSetup } from './ClientSetup';
+import { DemoScenes } from './DemoScenes';
 import { MemberHandoff } from './MemberHandoff';
+import { createInitialState, loadState, type OnboardingState, saveState } from './onboarding-state';
 import { RealChatEntry } from './RealChatEntry';
-import { type OnboardingState, createInitialState, saveState, loadState } from './onboarding-state';
 
 interface OnboardingJourneyProps {
   onComplete: (message: string, members: Array<{ client: string; cat: string; catId: string }>) => void;

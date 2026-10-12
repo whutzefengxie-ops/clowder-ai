@@ -7,6 +7,7 @@ export interface RuntimeChoice {
   label: string;
   clientId: HubCatEditorFormState['clientId'];
   installed: boolean;
+  discoveryStatus?: 'configured' | 'acp_profile_missing' | 'not_installed';
   models: string[];
   configuredModel?: string;
   configuredEffort?: string;

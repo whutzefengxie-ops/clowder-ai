@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
-import { resolve } from 'node:path';
 import { createRequire } from 'node:module';
+import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const require = createRequire(resolve('packages/web/package.json'));
@@ -27,7 +27,11 @@ try {
 
   await page.getByRole('button', { name: '播放演示' }).click();
   await page.waitForFunction(() => document.querySelector('#typed').value.length > 25);
-  await page.waitForFunction(() => document.querySelector('.scene[data-scene="5"]').classList.contains('active'), null, { timeout: 15000 });
+  await page.waitForFunction(
+    () => document.querySelector('.scene[data-scene="5"]').classList.contains('active'),
+    null,
+    { timeout: 15000 },
+  );
   assert.match(await page.locator('.scene.active').innerText(), /刚才是演示/);
   assert.match(await page.locator('[data-scene="4"]').innerText(), /几只猫会互相搭把手/);
   await page.screenshot({ path: resolve(root, '02-collaboration-improved-result.png'), fullPage: true });
@@ -99,7 +103,9 @@ try {
   }));
   assert.ok(bounds.scrollWidth <= bounds.clientWidth + 1, `移动布局横向溢出: ${JSON.stringify(bounds)}`);
   assert.deepEqual(errors, [], `浏览器运行错误: ${errors.join('; ')}`);
-  console.log(`PASS: demo, pause, zero/one/multiple client paths, login gate, handoff, free chat, optional stages 8-12, reload, mobile. Screenshots: ${root}`);
+  console.log(
+    `PASS: demo, pause, zero/one/multiple client paths, login gate, handoff, free chat, optional stages 8-12, reload, mobile. Screenshots: ${root}`,
+  );
 } finally {
   await browser.close();
 }

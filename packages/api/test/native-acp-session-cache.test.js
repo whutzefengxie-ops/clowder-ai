@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
-  ActiveSessionCache,
   AcpSessionBindingError,
+  ActiveSessionCache,
 } from '../dist/domains/cats/services/agents/providers/acp/active-session-cache.js';
 
 test('active session receipts follow complete setter and notification updates', () => {

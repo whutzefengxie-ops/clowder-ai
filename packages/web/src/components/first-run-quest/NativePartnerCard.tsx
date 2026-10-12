@@ -1,16 +1,19 @@
 import { useState } from 'react';
 import { MemberRuntimeFields } from '../settings/members/MemberRuntimeFields';
+import { NativeInstallHelp } from './NativeInstallHelp';
 import type { NativePartner } from './native-onboarding';
 
 const chinese = (zh: string) => zh;
 export function NativePartnerCard({
   partner,
   created,
+  disabled = false,
   patch,
   onValidityChange,
 }: {
   partner: NativePartner;
   created: boolean;
+  disabled?: boolean;
   patch: (change: Partial<NativePartner>) => void;
   onValidityChange: (valid: boolean) => void;
 }) {
@@ -26,7 +29,7 @@ export function NativePartnerCard({
           type="checkbox"
           aria-label={`加入 ${runtime.label} 伙伴`}
           checked={partner.selected}
-          disabled={!available || created}
+          disabled={!available || disabled}
           onChange={(e) => patch({ selected: e.target.checked })}
           className="h-5 w-5 shrink-0 accent-[var(--color-cafe-accent)]"
         />
@@ -46,13 +49,20 @@ export function NativePartnerCard({
             {form.nickname && ` · ${form.nickname}`}
           </h3>
           <p className="mt-1 text-sm text-cafe-secondary">
-            {runtime.label} · {created ? '已添加' : available ? '已发现' : '暂不可用'}
+            {runtime.label} ·{' '}
+            {created
+              ? '已添加'
+              : available
+                ? '已发现'
+                : runtime.discoveryStatus === 'acp_profile_missing'
+                  ? '待配置 ACP'
+                  : '未检测到'}
           </p>
         </div>
         {available && (
           <button
             type="button"
-            disabled={created}
+            disabled={created || disabled}
             onClick={() => setExpanded(!expanded)}
             aria-expanded={expanded}
             className="min-h-10 shrink-0 text-sm text-cafe-accent"
@@ -68,8 +78,12 @@ export function NativePartnerCard({
             ? '需要已安装的 DSH 和 ACP profile。配置完成后重新检测。'
             : `安装并登录 ${runtime.label} 后，重新检测即可加入。`}
       </p>
+      {!available && <NativeInstallHelp runtime={runtime} />}
       {expanded && (
-        <div className="mt-4 space-y-4 border-t border-[var(--console-border-soft)] pt-4">
+        <fieldset
+          disabled={disabled || created}
+          className="mt-4 space-y-4 border-t border-[var(--console-border-soft)] pt-4"
+        >
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="text-sm">
               名字
@@ -98,7 +112,7 @@ export function NativePartnerCard({
             editing={false}
             onValidityChange={onValidityChange}
           />
-        </div>
+        </fieldset>
       )}
     </article>
   );

@@ -1,12 +1,14 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import type { CatData } from '@/hooks/useCatData';
 import { apiFetch } from '@/utils/api-client';
 import { getThreadDraft } from '../../thread-drafts';
 import { useNativeOnboarding } from '../useNativeOnboarding';
 
 vi.mock('@/utils/api-client', () => ({ apiFetch: vi.fn() }));
-vi.mock('@/hooks/useCatData', () => ({ useCatData: () => ({ cats: [], refresh: vi.fn() }) }));
+const catalog = vi.hoisted(() => ({ cats: [] as CatData[] }));
+vi.mock('@/hooks/useCatData', () => ({ useCatData: () => ({ cats: catalog.cats, refresh: vi.fn() }) }));
 let root: Root, container: HTMLDivElement;
 let setup: ReturnType<typeof useNativeOnboarding>;
 const onCreated = vi.fn();
@@ -28,6 +30,7 @@ const runtimes = [
   },
 ];
 beforeEach(() => {
+  catalog.cats = [];
   localStorage.clear();
   container = document.createElement('div');
   document.body.append(container);
@@ -65,7 +68,69 @@ it('does not write before confirmation; creates all native partners then prefill
   expect(JSON.parse(String(writes[3][1]?.body))).not.toHaveProperty('bootcampState');
   expect(onCreated).toHaveBeenCalledWith('ordinary-goal', expect.any(String));
   expect(getThreadDraft('ordinary-goal')).toContain('@codex');
+  expect(getThreadDraft('ordinary-goal')).toContain('@claude-code');
+  expect(getThreadDraft('ordinary-goal')).toContain('@dsh');
+  expect(getThreadDraft('ordinary-goal')).toContain('#execute');
+  expect(getThreadDraft('ordinary-goal')).toContain('检查前面伙伴的方案');
   expect(getThreadDraft('ordinary-goal')).toContain('3 个步骤');
+});
+
+it('puts the chosen lead first and dispatches every selected partner, but no deselected partner', async () => {
+  await act(async () => root.render(<Harness />));
+  await act(async () => {
+    setup.patchPartner(setup.draft!.partners[2].id, { selected: false });
+    setup.patch({ lead: 'claude', goal: '整理笔记' });
+  });
+  await act(async () => setup.start());
+  const message = getThreadDraft('ordinary-goal');
+  expect(message).toMatch(/^@claude-code @codex\n/);
+  expect(message).not.toContain('@dsh');
+  expect(message).toContain('汇总');
+});
+
+it('keeps a single-partner goal simple', async () => {
+  await act(async () => root.render(<Harness />));
+  await act(async () => {
+    for (const partner of setup.draft!.partners.slice(1)) setup.patchPartner(partner.id, { selected: false });
+    setup.patch({ goal: '整理笔记' });
+  });
+  await act(async () => setup.start());
+  expect(getThreadDraft('ordinary-goal')).toBe('@codex 整理笔记');
+});
+
+it('preserves deselection of an existing partner across detection refreshes', async () => {
+  catalog.cats = [
+    {
+      id: 'existing-codex',
+      displayName: '现有伙伴',
+      clientId: 'openai',
+      configurationSource: 'native_tool',
+      defaultModel: '',
+      color: { primary: '#000000', secondary: '#ffffff' },
+      mentionPatterns: ['@existing'],
+      avatar: '',
+      roleDescription: '',
+      personality: '',
+    },
+  ];
+  await act(async () => root.render(<Harness />));
+  expect(setup.draft?.partners[0].existingId).toBe('existing-codex');
+  await act(async () => setup.patchPartner('codex', { selected: false }));
+  await act(async () => setup.reload());
+  expect(setup.draft?.partners[0].selected).toBe(false);
+  await act(async () => setup.start());
+  expect(getThreadDraft('ordinary-goal')).not.toContain('@existing');
+});
+
+it('blocks starting from stale detection data after a failed refresh', async () => {
+  await act(async () => root.render(<Harness />));
+  const original = vi.mocked(apiFetch).getMockImplementation()!;
+  vi.mocked(apiFetch).mockImplementation(async (path, init) =>
+    path === '/api/cats/native-runtimes' ? response({ error: '检测服务不可用' }, 503) : original(path, init),
+  );
+  await act(async () => setup.reload());
+  await act(async () => setup.start());
+  expect(vi.mocked(apiFetch).mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
 });
 
 it('retains successful members when thread creation fails and resumes without duplicate writes', async () => {

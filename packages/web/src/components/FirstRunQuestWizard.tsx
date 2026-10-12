@@ -2,8 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { NativeGoalStep } from './first-run-quest/NativeGoalStep';
 import { NativePartnerCard } from './first-run-quest/NativePartnerCard';
-import { SMALL_GOALS } from './first-run-quest/native-onboarding';
 import { useNativeOnboarding } from './first-run-quest/useNativeOnboarding';
 
 interface FirstRunQuestWizardProps {
@@ -27,10 +27,11 @@ export function FirstRunQuestWizard({ open, onClose, onCreated }: FirstRunQuestW
     };
   }, [open]);
   if (!open) return null;
-  const { draft, loading, busy, error } = setup;
+  const { draft, loading, busy, error, errorStage } = setup;
   const selected = draft?.partners.filter((p) => p.selected) ?? [];
   const invalidSelection = selected.some((p) => invalid[p.id] || !p.form.displayName.trim());
-  const lead = selected.find((p) => p.id === draft?.lead) ?? selected[0];
+  const available =
+    draft?.partners.filter((p) => p.runtime.installed && (p.runtime.clientId !== 'acp' || p.runtime.acp)) ?? [];
 
   return createPortal(
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-[var(--console-overlay-medium)] px-3 py-4 backdrop-blur-sm">
@@ -89,10 +90,20 @@ export function FirstRunQuestWizard({ open, onClose, onCreated }: FirstRunQuestW
               role="alert"
               className="mb-4 rounded-xl border border-conn-red-ring bg-conn-red-bg p-3 text-sm text-conn-red-text"
             >
-              {error}
-              <p className="mt-1">已保存的伙伴会保留，可以重试。</p>
-              <button type="button" disabled={Boolean(busy)} onClick={setup.reload} className="mt-2 underline">
-                重新检测
+              <p className="font-medium">{errorStage === 'discovery' ? '检测未完成' : '还没保存完成'}</p>
+              <p className="mt-1">{error}</p>
+              <p className="mt-1">
+                {errorStage === 'discovery'
+                  ? '暂时无法确认本机工具状态。请检查服务连接后重试，你的选择和目标会保留。'
+                  : '已添加的伙伴会保留。再次保存会从中断处继续，不会重复添加。'}
+              </p>
+              <button
+                type="button"
+                disabled={Boolean(busy)}
+                onClick={errorStage === 'discovery' ? setup.reload : () => void setup.start()}
+                className="mt-2 underline"
+              >
+                {errorStage === 'discovery' ? '重新检测' : '重试保存'}
               </button>
             </div>
           )}
@@ -100,11 +111,28 @@ export function FirstRunQuestWizard({ open, onClose, onCreated }: FirstRunQuestW
             <p role="status" className="py-12 text-center text-cafe-muted">
               正在检测本机工具…
             </p>
-          ) : step === 'partners' ? (
+          ) : errorStage === 'discovery' ? null : step === 'partners' ? (
             <div className="space-y-3">
+              {!available.length && (
+                <div className="rounded-xl border border-conn-amber-ring bg-conn-amber-bg p-4 text-sm text-conn-amber-text">
+                  <p className="font-medium">还没有找到可用工具</p>
+                  <p className="mt-2 leading-relaxed">
+                    先安装并配置下面任意一种工具，就能加入第一位伙伴。完成后回来重新检测，也可以稍后再配置。
+                  </p>
+                </div>
+              )}
               <div className="flex items-center justify-between text-sm">
-                <span className="font-medium">推荐伙伴 · 已选择 {selected.length} 位</span>
-                <button type="button" onClick={setup.reload} className="min-h-10 text-cafe-accent">
+                <span className="font-medium">
+                  {available.length
+                    ? `发现 ${available.length} 种工具 · 已选择 ${selected.length} 位伙伴`
+                    : '支持的工具'}
+                </span>
+                <button
+                  type="button"
+                  disabled={Boolean(busy)}
+                  onClick={setup.reload}
+                  className="min-h-10 text-cafe-accent"
+                >
                   重新检测
                 </button>
               </div>
@@ -112,6 +140,7 @@ export function FirstRunQuestWizard({ open, onClose, onCreated }: FirstRunQuestW
                 <NativePartnerCard
                   key={partner.id}
                   partner={partner}
+                  disabled={Boolean(busy)}
                   created={Boolean(draft.created[partner.id] || partner.existingId)}
                   patch={(change) => setup.patchPartner(partner.id, change)}
                   onValidityChange={(valid) =>
@@ -121,9 +150,9 @@ export function FirstRunQuestWizard({ open, onClose, onCreated }: FirstRunQuestW
                   }
                 />
               ))}
-              {!selected.length && (
+              {available.length > 0 && !selected.length && (
                 <p className="rounded-lg bg-cafe-surface-canvas p-4 text-sm text-cafe-secondary">
-                  选择至少一位伙伴继续。没有找到工具？可以先在工具中完成安装和登录，再回来重新检测。
+                  选择至少一位伙伴继续。已发现的工具可以随时加入。
                 </p>
               )}
               <p className="pt-2 text-xs leading-relaxed text-cafe-muted">
@@ -132,52 +161,13 @@ export function FirstRunQuestWizard({ open, onClose, onCreated }: FirstRunQuestW
               </p>
             </div>
           ) : (
-            <div className="space-y-5">
-              <div className="flex flex-wrap gap-2">
-                {SMALL_GOALS.map((goal) => (
-                  <button
-                    key={goal.title}
-                    type="button"
-                    disabled={Boolean(busy)}
-                    onClick={() => setup.patch({ goal: goal.content })}
-                    className={`min-h-10 rounded-full border px-4 text-sm ${draft?.goal === goal.content ? 'border-cafe-accent text-cafe-accent' : 'border-[var(--console-border-soft)] text-cafe-secondary'}`}
-                  >
-                    {goal.title}
-                  </button>
-                ))}
-              </div>
-              <label className="block text-sm font-medium">
-                你想完成什么？
-                <textarea
-                  disabled={Boolean(busy)}
-                  value={draft?.goal ?? ''}
-                  onChange={(e) => setup.patch({ goal: e.target.value })}
-                  placeholder="例如：把我的想法整理为今天可以完成的三步计划"
-                  rows={5}
-                  maxLength={4000}
-                  className="mt-3 w-full resize-y rounded-xl border border-[var(--console-border-soft)] bg-cafe-surface-canvas p-4 font-normal leading-relaxed focus:border-cafe-accent"
-                />
-              </label>
-              <label className="block text-sm font-medium">
-                先和哪位伙伴开始？
-                <select
-                  disabled={Boolean(busy)}
-                  value={lead?.id ?? ''}
-                  onChange={(e) => setup.patch({ lead: e.target.value })}
-                  className="mt-3 block min-h-11 w-full rounded-lg border border-[var(--console-border-soft)] bg-cafe-surface-canvas px-3 font-normal"
-                >
-                  {selected.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.form.displayName} · {p.runtime.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div className="rounded-xl bg-cafe-surface-canvas p-4 text-sm leading-relaxed text-cafe-secondary">
-                将添加 {selected.length}{' '}
-                位伙伴并打开一段真实对话。目标会放进输入框，确认发送即可开始；其他伙伴也可以在对话中通过 @ 邀请。
-              </div>
-            </div>
+            <NativeGoalStep
+              selected={selected}
+              lead={draft?.lead ?? ''}
+              goal={draft?.goal ?? ''}
+              busy={Boolean(busy)}
+              patch={setup.patch}
+            />
           )}
         </div>
         <footer className="flex shrink-0 items-center justify-between gap-3 border-t border-[var(--console-border-soft)] px-6 py-4">
@@ -196,6 +186,7 @@ export function FirstRunQuestWizard({ open, onClose, onCreated }: FirstRunQuestW
             }
             disabled={
               loading ||
+              errorStage === 'discovery' ||
               Boolean(busy) ||
               !selected.length ||
               invalidSelection ||

@@ -28,7 +28,6 @@ import { resolveCliCommandOrBare } from '../../../../../../utils/cli-resolve.js'
 import { buildChildEnv } from '../../../../../../utils/cli-spawn.js';
 import { resolveWindowsSpawnPlan } from '../../../../../../utils/cli-spawn-win.js';
 import { buildUnixSupervisedSpawnPlan } from '../../../../../../utils/cli-supervised-process.js';
-import { ActiveSessionCache, AcpSessionBindingError } from './active-session-cache.js';
 import {
   type AcpCapacitySignal,
   type AcpClientConfig,
@@ -38,6 +37,7 @@ import {
   buildAcpSpawnLogFields,
 } from './AcpClient.js';
 import { AcpCwdIdentityTracker } from './acp-cwd-identity.js';
+import { AcpSessionBindingError, ActiveSessionCache } from './active-session-cache.js';
 import type {
   AcpAgentRequest,
   AcpInitializeResult,

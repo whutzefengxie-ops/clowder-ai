@@ -71,16 +71,19 @@ const treeScript = `
   const worker=spawn(process.execPath,['-e',
     "process.on('SIGTERM',()=>{});setInterval(()=>{},1000);process.send('ready');"
   ],{detached:true,stdio:['ignore','ignore','ignore','ipc']});
-  worker.once('message',()=>{
+  const ready=new Promise(resolve=>worker.once('message',()=>{
     worker.disconnect(); worker.unref();
-    input.on('line',line=>{
-      const msg=JSON.parse(line);
-      if(msg.method==='ready') console.log(JSON.stringify({id:msg.id,result:{pid:process.pid,worker:worker.pid}}));
-      else if(msg.method==='exit') process.exit(0);
-      else if(msg.method==='error') console.log(JSON.stringify({id:msg.id,error:{message:'private-token'}}));
-      else if(msg.method==='malformed') console.log('invalid-json-private-token');
-      else if(msg.method==='overflow') process.stdout.write('x'.repeat(4000010));
-    });
+    resolve();
+  }));
+  // Register immediately: readline emits early requests while the worker is starting.
+  input.on('line',async line=>{
+    await ready;
+    const msg=JSON.parse(line);
+    if(msg.method==='ready') console.log(JSON.stringify({id:msg.id,result:{pid:process.pid,worker:worker.pid}}));
+    else if(msg.method==='exit') process.exit(0);
+    else if(msg.method==='error') console.log(JSON.stringify({id:msg.id,error:{message:'private-token'}}));
+    else if(msg.method==='malformed') console.log('invalid-json-private-token');
+    else if(msg.method==='overflow') process.stdout.write('x'.repeat(4000010));
   });`;
 
 for (const mode of ['close', 'timeout', 'exit', 'error', 'malformed', 'overflow']) {

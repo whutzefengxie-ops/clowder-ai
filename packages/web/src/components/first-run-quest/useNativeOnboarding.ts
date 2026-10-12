@@ -6,6 +6,7 @@ import { buildCatPayload } from '../hub-cat-editor.payload';
 import type { RuntimeChoice } from '../settings/members/member-runtime-draft';
 import { syncDraftToStorage } from '../thread-drafts';
 import { type NativePartner, recommendNativePartners, SMALL_GOALS } from './native-onboarding';
+import { buildNativeTeamGoal, orderGoalPartners } from './native-team-goal';
 import type { TemplateCard } from './TemplateStep';
 
 interface CreatedPartner {
@@ -38,6 +39,7 @@ export function useNativeOnboarding(open: boolean, onCreated: (id: string, name:
   const [draft, setDraft] = useState<SetupDraft | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [errorStage, setErrorStage] = useState<'discovery' | 'save' | null>(null);
   const [busy, setBusy] = useState('');
   const [reload, setReload] = useState(0);
   const key = useRef('');
@@ -60,6 +62,7 @@ export function useNativeOnboarding(open: boolean, onCreated: (id: string, name:
     const controller = new AbortController();
     setLoading(true);
     setError('');
+    setErrorStage(null);
     void Promise.all([
       readJson<{ userId: string }>('/api/session', { signal: controller.signal }),
       readJson<{ runtimes: RuntimeChoice[] }>('/api/cats/native-runtimes', { signal: controller.signal }),
@@ -84,12 +87,14 @@ export function useNativeOnboarding(open: boolean, onCreated: (id: string, name:
           journeyId,
         ).map((partner) => {
           const previous = saved?.partners.find((p) => p.id === partner.id);
-          if (!previous?.form || partner.existingId) return partner;
+          if (!previous?.form) return partner;
           const { name, displayName, nickname, defaultModel, cliEffort } = previous.form;
           return {
             ...partner,
             selected: partner.selected && (!previous.runtime?.installed || previous.selected),
-            form: { ...partner.form, name, displayName, nickname, defaultModel, cliEffort },
+            form: partner.existingId
+              ? partner.form
+              : { ...partner.form, name, displayName, nickname, defaultModel, cliEffort },
           };
         });
         persist({
@@ -103,7 +108,10 @@ export function useNativeOnboarding(open: boolean, onCreated: (id: string, name:
         });
       })
       .catch((cause: unknown) => {
-        if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : '无法读取本机工具');
+        if (!controller.signal.aborted) {
+          setError(cause instanceof Error ? cause.message : '无法读取本机工具');
+          setErrorStage('discovery');
+        }
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
@@ -120,11 +128,15 @@ export function useNativeOnboarding(open: boolean, onCreated: (id: string, name:
   };
   const start = async () => {
     const current = latest.current;
-    if (!current || inFlight.current || !current.goal.trim()) return;
-    const selected = current.partners.filter((p) => p.selected);
+    if (!current || loading || errorStage === 'discovery' || inFlight.current || !current.goal.trim()) return;
+    const selected = orderGoalPartners(
+      current.partners.filter((p) => p.selected),
+      current.lead,
+    );
     if (!selected.length) return;
     inFlight.current = true;
     setError('');
+    setErrorStage(null);
     let progress = current;
     const headers = { 'Content-Type': 'application/json', 'X-Cat-Cafe-Onboarding-Journey': current.journeyId };
     try {
@@ -170,15 +182,22 @@ export function useNativeOnboarding(open: boolean, onCreated: (id: string, name:
         persist(progress);
       }
       if (!progress.threadId) throw new Error('对话尚未保存，请重试');
-      syncDraftToStorage(progress.threadId, `${lead.mention} ${current.goal.trim()}`);
+      syncDraftToStorage(
+        progress.threadId,
+        buildNativeTeamGoal(
+          selected.map((p) => progress.created[p.id]),
+          current.goal,
+        ),
+      );
       refresh();
       onCreated(progress.threadId, lead.name);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : '保存失败，请重试；已添加的伙伴会保留。');
+      setErrorStage('save');
     } finally {
       inFlight.current = false;
       setBusy('');
     }
   };
-  return { draft, loading, error, busy, patch, patchPartner, start, reload: () => setReload((n) => n + 1) };
+  return { draft, loading, error, errorStage, busy, patch, patchPartner, start, reload: () => setReload((n) => n + 1) };
 }

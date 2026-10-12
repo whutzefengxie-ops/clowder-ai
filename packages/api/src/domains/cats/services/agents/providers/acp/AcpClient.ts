@@ -22,7 +22,7 @@ import { buildChildEnv } from '../../../../../../utils/cli-spawn.js';
 import { resolveWindowsSpawnPlan } from '../../../../../../utils/cli-spawn-win.js';
 import { buildUnixSupervisedSpawnPlan } from '../../../../../../utils/cli-supervised-process.js';
 import { AcpCwdIdentityTracker } from './acp-cwd-identity.js';
-import { ActiveSessionCache, AcpSessionBindingError } from './active-session-cache.js';
+import { AcpSessionBindingError, ActiveSessionCache } from './active-session-cache.js';
 import type {
   AcpAgentRequest,
   AcpContentBlock,

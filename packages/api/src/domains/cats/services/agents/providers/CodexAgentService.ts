@@ -46,10 +46,10 @@ import { getCatModel } from '../../../../../config/cat-models.js';
 import {
   type CodexCarrierMode,
   getCodexApprovalPolicy,
-  resolveCodexCarrierTruth,
   getCodexOAuthTransport,
   getCodexSandboxMode,
   getCodexServedModelObservation,
+  resolveCodexCarrierTruth,
 } from '../../../../../config/codex-cli.js';
 import { estimateCostFromTokens } from '../../../../../config/model-pricing.js';
 import { createModuleLogger } from '../../../../../infrastructure/logger.js';
