@@ -108,11 +108,11 @@ function DemoPlayer({ storageScope, onClose }: Omit<Props, 'open'>) {
           <DemoWorkProduct stage={stage} onReady={() => setDelivered(true)} />
         </div>
         <footer className="border-t border-[var(--console-border-soft)] px-4 py-3 sm:px-6">
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <button type="button" onClick={onClose} className="text-sm text-cafe-secondary">
               稍后再看
             </button>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               {playback.index === -1 && (
                 <button
                   disabled={!playback.ready}
@@ -138,19 +138,21 @@ function DemoPlayer({ storageScope, onClose }: Omit<Props, 'open'>) {
                   重新看一遍
                 </button>
               )}
-              {playback.finished && delivered && (
-                <a
-                  href={DEMO_SETTINGS_URL}
-                  className="rounded-full bg-cafe-accent px-4 py-2.5 text-sm font-semibold text-[var(--cafe-surface)]"
-                >
-                  创建我的猫猫 →
-                </a>
-              )}
+              <a
+                href={DEMO_SETTINGS_URL}
+                className={
+                  playback.finished && delivered
+                    ? 'rounded-full bg-cafe-accent px-4 py-2.5 text-sm font-semibold text-[var(--cafe-surface)]'
+                    : 'rounded-full border border-[var(--console-border-soft)] px-4 py-2.5 text-sm text-cafe-accent'
+                }
+              >
+                {playback.finished && delivered ? '创建我的猫猫 →' : '直接创建我的猫猫 →'}
+              </a>
             </div>
           </div>
           {playback.finished && delivered && (
             <p className="mt-2 text-xs leading-5 text-cafe-secondary">
-              演示团队使用预置数据。接下来在设置中接入你自己的工具，创建真实伙伴。
+              成果已就绪。演示团队使用预置数据；你可以在设置中接入自己的工具，创建真实伙伴。
             </p>
           )}
         </footer>

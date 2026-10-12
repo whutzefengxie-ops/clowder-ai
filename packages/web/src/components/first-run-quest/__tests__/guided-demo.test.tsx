@@ -77,7 +77,7 @@ it('automates all handoffs without clients or API calls and opens a working deli
   const frame = document.querySelector('iframe');
   expect(frame?.title).toBe('今天待办 · 演示成果');
   expect(fetch).not.toHaveBeenCalled();
-  expect(document.querySelector('a')).toBeNull();
+  expect(document.body.textContent).not.toContain('成果已就绪');
   await acknowledge(frame?.contentWindow);
   expect(document.querySelector('a')?.getAttribute('href')).toBe('/settings?s=members&shell=v2&view=setup');
   expect(document.querySelector('a')?.textContent).toContain('创建我的猫猫');
@@ -87,14 +87,14 @@ it('ignores unrelated frames, offers retry on timeout, and accepts the current f
   localStorage.setItem('cat-cafe:scripted-onboarding:v1:demo-user', JSON.stringify({ version: 1, index: 9 }));
   await mount();
   await acknowledge(window);
-  expect(document.querySelector('a')).toBeNull();
+  expect(document.body.textContent).not.toContain('成果已就绪');
   await tick();
   expect(document.body.textContent).toContain('成果暂时没有打开');
   const oldFrame = document.querySelector('iframe')?.contentWindow;
   act(() => button('重新打开').click());
   expect(document.body.textContent).toContain('正在打开成果');
   await acknowledge(oldFrame);
-  expect(document.querySelector('a')).toBeNull();
+  expect(document.body.textContent).not.toContain('成果已就绪');
   await acknowledge(document.querySelector('iframe')?.contentWindow);
   expect(document.querySelector('a')?.textContent).toContain('创建我的猫猫');
   expect(fetch).not.toHaveBeenCalled();
@@ -146,6 +146,6 @@ it('pauses the script and restores the same point paused after reopening', async
   act(() => root.render(<GuidedOnboarding open={false} storageScope="demo-user" onClose={close} />));
   await mount();
   expect(button('继续')).toBeDefined();
-  expect(document.querySelector('[data-testid="demo-transcript"]')?.textContent).toBe(before);
+  expect(document.body.textContent).toContain('2 / 9');
   expect(fetch).not.toHaveBeenCalled();
 });

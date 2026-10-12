@@ -45,6 +45,7 @@ import { GameOverlayConnector } from './game/GameOverlayConnector';
 import { BootcampIcon } from './icons/BootcampIcon';
 import { GameIcon } from './icons/GameIcon';
 import { PawIcon } from './icons/PawIcon';
+import { DemoInvitation } from './onboarding-demo/DemoInvitation';
 import { DEMO_SETTINGS_URL } from './onboarding-demo/demo-story';
 import { GuidedOnboarding } from './onboarding-demo/GuidedOnboarding';
 import { ParallelStatusBar } from './ParallelStatusBar';
@@ -1029,15 +1030,20 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
                   );
                 }
                 return (
-                  <button
-                    type="button"
-                    onClick={handleStartFirstRunQuest}
-                    className="mt-6 inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-cafe-accent/20 bg-accent-50 text-cafe-accent hover:bg-accent-100 transition-colors text-sm font-medium"
-                    data-testid="empty-state-bootcamp"
-                  >
-                    <BootcampIcon className="w-4 h-4" />
-                    看看团队如何协作
-                  </button>
+                  <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+                    <button
+                      type="button"
+                      onClick={handleStartFirstRunQuest}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-cafe-accent/20 bg-accent-50 text-cafe-accent hover:bg-accent-100 transition-colors text-sm font-medium"
+                      data-testid="empty-state-bootcamp"
+                    >
+                      <BootcampIcon className="w-4 h-4" />
+                      看看团队如何协作
+                    </button>
+                    <a href={DEMO_SETTINGS_URL} className="px-4 py-2 text-sm text-cafe-accent">
+                      创建我的猫猫
+                    </a>
+                  </div>
                 );
               })()}
             </div>
@@ -1272,33 +1278,7 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
       {showFirstRunQuestPrompt &&
         !showQuestWizard &&
         createPortal(
-          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-[var(--console-overlay-medium)] px-4 backdrop-blur-sm">
-            <div
-              className="w-full max-w-md rounded-2xl border border-conn-amber-ring bg-[var(--console-card-bg)] p-6 shadow-2xl"
-              onClick={(event) => event.stopPropagation()}
-            >
-              <h3 className="text-lg font-semibold text-cafe">先看看猫猫如何一起完成任务</h3>
-              <p className="mt-2 text-sm text-cafe-secondary">
-                用约 40 秒看一次分工、传球与互审，再亲手试试成果。无需安装工具，演示后再创建自己的伙伴。
-              </p>
-              <div className="mt-5 flex justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={handleSkipFirstRunQuest}
-                  className="rounded-lg border border-[var(--console-border-soft)] px-3 py-2 text-sm text-cafe-secondary hover:bg-[var(--console-hover-bg)]"
-                >
-                  跳过
-                </button>
-                <button
-                  type="button"
-                  onClick={handleStartFirstRunQuest}
-                  className="rounded-lg bg-cafe-accent px-3 py-2 text-sm font-medium text-[var(--cafe-surface)] hover:opacity-90"
-                >
-                  看看团队如何协作
-                </button>
-              </div>
-            </div>
-          </div>,
+          <DemoInvitation onSkip={handleSkipFirstRunQuest} onStart={handleStartFirstRunQuest} />,
           document.body,
         )}
       <GuidedOnboarding open={showQuestWizard} storageScope="first-run" onClose={() => setShowQuestWizard(false)} />

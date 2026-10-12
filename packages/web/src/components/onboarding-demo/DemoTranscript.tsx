@@ -3,14 +3,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { DEMO_TEAM, type DemoEvent } from './demo-story';
 
-function TaskText({ text, animate }: { text: string; animate: boolean }) {
-  const [length, setLength] = useState(0);
+function TaskText({ text, active, playing }: { text: string; active: boolean; playing: boolean }) {
+  const [length, setLength] = useState(() => (playing ? 0 : text.length));
   useEffect(() => {
-    if (!animate) return;
+    if (!active || !playing) return;
     const timer = setInterval(() => setLength((current) => Math.min(text.length, current + 3)), 35);
     return () => clearInterval(timer);
-  }, [animate, text]);
-  return <>{animate ? text.slice(0, length) : text}</>;
+  }, [active, playing, text]);
+  return <>{active ? text.slice(0, length) : text}</>;
 }
 
 export function DemoTranscript({ events, playing }: { events: readonly DemoEvent[]; playing: boolean }) {
@@ -58,7 +58,7 @@ export function DemoTranscript({ events, playing }: { events: readonly DemoEvent
             </div>
             <p className="whitespace-pre-wrap text-sm leading-6">
               {event.speaker === 'user' ? (
-                <TaskText text={event.text} animate={playing && index === events.length - 1} />
+                <TaskText text={event.text} active={index === events.length - 1} playing={playing} />
               ) : (
                 event.text
               )}

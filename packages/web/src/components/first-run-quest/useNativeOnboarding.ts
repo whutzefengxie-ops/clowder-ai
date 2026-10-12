@@ -32,6 +32,15 @@ async function readJson<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+function newJourneyId(): string {
+  // getRandomValues also works on HTTP LAN origins, where randomUUID is unavailable.
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
 export function useNativeOnboarding(
   open: boolean,
   onCreated: (id: string, name: string) => void | Promise<void>,
@@ -86,7 +95,7 @@ export function useNativeOnboarding(
         } catch {
           /* A corrupt draft does not prevent setup. */
         }
-        const journeyId = saved?.journeyId ?? crypto.randomUUID();
+        const journeyId = saved?.journeyId ?? newJourneyId();
         const currentCats = mode === 'members' ? roster.cats : catsRef.current;
         const partners = recommendNativePartners(discovered.runtimes, templates.templates, currentCats, journeyId).map(
           (partner) => {

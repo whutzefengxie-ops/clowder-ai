@@ -62,6 +62,30 @@ it('creates the detected team with one confirmation without creating a conversat
   expect(onCreated).toHaveBeenCalledOnce();
 });
 
+it.each(['goal', 'members'] as const)('supports HTTP LAN and preserves the %s journey after remount', async (mode) => {
+  const nativeCrypto = globalThis.crypto;
+  vi.stubGlobal('crypto', { getRandomValues: nativeCrypto.getRandomValues.bind(nativeCrypto) });
+  try {
+    await act(async () => root.render(<Harness mode={mode} />));
+    expect(setup.error).toBe('');
+    const journey = setup.draft?.journeyId;
+    expect(journey).toMatch(/^[\da-f]{8}-[\da-f]{4}-4[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/);
+    expect(setup.draft?.partners.filter((p) => p.selected)).toHaveLength(3);
+    act(() => root.unmount());
+    root = createRoot(container);
+    await act(async () => root.render(<Harness mode={mode} />));
+    expect(setup.draft?.journeyId).toBe(journey);
+    await act(async () => setup.start());
+    const creates = vi
+      .mocked(apiFetch)
+      .mock.calls.filter(([path, init]) => path === '/api/cats' && init?.method === 'POST');
+    expect(creates).toHaveLength(3);
+    expect(creates[0][1]?.headers).toMatchObject({ 'X-Cat-Cafe-Onboarding-Journey': journey });
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
+
 it('resumes a partially created team without duplicating members or sending a task', async () => {
   const original = vi.mocked(apiFetch).getMockImplementation()!;
   let creations = 0;
