@@ -33,6 +33,8 @@ created: 2026-10-12
 
 截图存放在本机 artifacts，不包含认证值：
 
+供远端 review 直接查看的实页截图已纳入版本控制：[桌面伙伴选择](../design/assets/issue1466-native-onboarding/partners-desktop.jpg)、[窄屏小目标](../design/assets/issue1466-native-onboarding/goal-mobile.jpg)。它们来自实际项目页面，不是 HTML fixture。
+
 - `artifacts/issue1466-onboarding-user-20261012/partners-desktop.jpg`
 - `artifacts/issue1466-onboarding-user-20261012/partners-mobile.jpg`
 - `artifacts/issue1466-onboarding-user-20261012/goal-mobile.jpg`
@@ -87,3 +89,5 @@ created: 2026-10-12
 复核结论 `approved`，无剩余 P1/P2；独立重跑前端推荐/恢复 8 项、Windows 启动及原生参数边界 6 项通过。该结论限定于本轮源码/修复和隔离验收交付。
 
 审查代理的 CUA 返回空浏览器列表，无法独立操作页面；作者的真实页面操作与截图不能冒充独立浏览器审查。本轮交付用户验收，不据此宣称整个 PR 已满足合入门禁。
+
+2026-10-12 用户反馈：“我初步体验这个隔离环境认为是没问题的”，并授权推送 #1519、在 #1466 更新实际流程与未完成项，邀请 zts、mind 继续 review。这是本轮初步体验认可，不扩展为完整 issue / 安装 / F320 / 历史合入阻塞验收。

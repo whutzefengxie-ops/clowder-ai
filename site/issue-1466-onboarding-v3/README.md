@@ -7,6 +7,8 @@ created: 2026-10-12
 
 # #1466 新版首启高保真
 
+> 历史预研原型，已退出本轮交付路径。2026-10-12 用户要求直接在真实项目中配置自己的伙伴并完成小目标，不再以演示或独立 HTML 验收。当前实现见 [本机伙伴引导方案](../../docs/plans/issue-1466-native-onboarding-2026-10-12.md) 和 [真实验证记录](../../docs/plans/issue-1466-native-onboarding-validation-2026-10-12.md)。本目录保留用于追溯，不代表正式应用当前行为，也不代表原母 issue 的演示范围已获维护者关闭。
+
 设计依据与讨论逐条对照见 [体验方案](../../docs/design/onboarding-experience-2026-10-12.md)。
 本目录仅是设计原型，不被生产构建引用，不连接 API、Redis、CLI 或真实登录。
 
