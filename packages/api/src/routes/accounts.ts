@@ -26,7 +26,9 @@ import { resolveUserId } from '../utils/request-identity.js';
 /** Synthesize a ProviderProfileView-compatible object from AccountConfig. */
 function accountToView(id: string, account: AccountConfig, apiKeyPresent: boolean) {
   const builtinClient = builtinAccountFamilyForRef(id);
-  const isBuiltin = builtinClient !== null;
+  // Legacy OAuth records may predate clientId and use custom IDs (#499).
+  // Retain their CLI-managed presentation while recognizing named builtin IDs.
+  const isBuiltin = builtinClient !== null || account.authType === 'oauth';
   const clientId = account.clientId ?? (isBuiltin ? builtinClient : undefined);
   return {
     id,

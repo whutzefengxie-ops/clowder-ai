@@ -3086,7 +3086,9 @@ export async function* invokeSingleCat(deps: InvocationDeps, params: InvocationP
         if (resolvedAccount?.authType === 'api_key') {
           callbackEnv.CODEX_AUTH_MODE = 'api_key';
         } else if (effectiveAccountRef) {
-          callbackEnv.CODEX_AUTH_MODE = 'oauth';
+          // A legacy builtin ref may be a synthetic placeholder for the local
+          // CLI configuration. It is not evidence of an explicit OAuth choice.
+          callbackEnv.CODEX_AUTH_MODE = resolvedAccount?.syntheticNative ? 'auto' : 'oauth';
         }
       } else if (effectiveProtocol === 'kimi') {
         if (resolvedAccount?.authType === 'api_key' && resolvedAccount.apiKey) {

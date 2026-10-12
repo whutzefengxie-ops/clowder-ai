@@ -40,10 +40,13 @@ describe('production assembly wiring guard (F254 D2)', () => {
   // production wiring silently dropped the carrier. This source guard fails if
   // the syncAgentRegistry openai case stops feeding per-cat carrier truth into
   // CodexAgentService.
-  it('index.ts openai case passes resolveCodexCarrierTruth(config.cli?.carrier) into CodexAgentService', () => {
+  it('index.ts openai case passes per-cat carrier and configuration source into CodexAgentService', () => {
     const source = readFileSync(new URL('../src/index.ts', import.meta.url), 'utf8');
     const openaiCase = source.match(/case 'openai': \{[\s\S]*?break;\s*\}/);
     assert.ok(openaiCase, 'openai case not found in syncAgentRegistry');
-    assert.match(openaiCase[0], /carrierMode:\s*resolveCodexCarrierTruth\(config\.cli\?\.carrier\)\.effective/);
+    assert.match(
+      openaiCase[0],
+      /carrierMode:\s*resolveCodexCarrierTruth\(config\.cli\?\.carrier,\s*process\.env,\s*config\.configurationSource\)\s*\.effective/,
+    );
   });
 });

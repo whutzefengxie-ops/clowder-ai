@@ -1,16 +1,20 @@
 import { spawn } from 'node:child_process';
-import { join } from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { createInterface } from 'node:readline';
+import { CLI_PROCESS_OWNER_ENV } from '../utils/cli-process-environment.js';
 import { buildChildEnv } from '../utils/cli-spawn.js';
 import { resolveWindowsSpawnPlan } from '../utils/cli-spawn-win.js';
+import { closeCatalogProcess } from './runtime-catalog-process.js';
 import { record } from './runtime-model-catalog.js';
 
 /** Bounded discovery connection. No prompts, terminal/file access, or approvals. */
 export function catalogRpc(command: string, args: string[], cwd: string, timeoutMs = 20_000) {
   const plan = process.platform === 'win32' ? resolveWindowsSpawnPlan(command, args) : { command, args };
+  const ownerId = randomUUID();
   const child = spawn(plan.command, plan.args, {
     cwd,
-    env: buildChildEnv(undefined, { workingDirectory: cwd }),
+    env: { ...buildChildEnv(undefined, { workingDirectory: cwd }), [CLI_PROCESS_OWNER_ENV]: ownerId },
+    detached: process.platform !== 'win32',
     shell: 'shell' in plan ? plan.shell : false,
     windowsHide: true,
     stdio: ['pipe', 'pipe', 'pipe'],
@@ -28,19 +32,20 @@ export function catalogRpc(command: string, args: string[], cwd: string, timeout
   const write = (value: unknown) => {
     if (!ended) child.stdin.write(`${JSON.stringify(value)}\n`);
   };
-  child.once('error', fail);
-  child.once('exit', fail);
-  child.stdin.on('error', fail);
-  child.stderr.resume(); // Provider output can contain private configuration; never return or log it.
-  const deadline = setTimeout(() => {
+  const failAndClose = () => {
     fail();
-    void close();
-  }, timeoutMs);
+    // Explicit callers can observe cleanup failure; event handlers must not create unhandled rejections.
+    void close().catch(() => {});
+  };
+  child.once('error', failAndClose);
+  child.once('exit', failAndClose);
+  child.stdin.on('error', failAndClose);
+  child.stderr.resume(); // Provider output can contain private configuration; never return or log it.
+  const deadline = setTimeout(failAndClose, timeoutMs);
   child.stdout.on('data', (chunk) => {
     size += Buffer.byteLength(chunk);
     if (size > 4_000_000) {
-      fail();
-      void close();
+      failAndClose();
       return;
     }
   });
@@ -49,6 +54,7 @@ export function catalogRpc(command: string, args: string[], cwd: string, timeout
     try {
       envelope = record(JSON.parse(line));
     } catch {
+      failAndClose();
       return;
     }
     if (envelope.method && envelope.id !== undefined) {
@@ -62,8 +68,10 @@ export function catalogRpc(command: string, args: string[], cwd: string, timeout
     const p = pending.get(Number(envelope.id));
     if (!p) return;
     pending.delete(Number(envelope.id));
-    if (envelope.error) p.reject(new Error('catalog_unavailable'));
-    else p.resolve(envelope.result);
+    if (envelope.error) {
+      p.reject(new Error('catalog_unavailable'));
+      failAndClose();
+    } else p.resolve(envelope.result);
   });
   let closing: Promise<void> | undefined;
   function close(): Promise<void> {
@@ -71,33 +79,10 @@ export function catalogRpc(command: string, args: string[], cwd: string, timeout
     clearTimeout(deadline);
     input.close();
     fail();
-    closing = new Promise((resolve) => {
-      if (!child.pid || child.exitCode !== null) {
-        resolve();
-        return;
-      }
-      if (process.platform === 'win32') {
-        const killer = spawn(
-          join(process.env.SystemRoot ?? 'C:/Windows', 'System32/taskkill.exe'),
-          ['/PID', String(child.pid), '/T', '/F'],
-          { windowsHide: true, stdio: 'ignore' },
-        );
-        killer.once('error', () => {
-          child.kill();
-          resolve();
-        });
-        killer.once('exit', () => resolve());
-      } else {
-        child.kill('SIGTERM');
-        const timer = setTimeout(() => {
-          child.kill('SIGKILL');
-          resolve();
-        }, 1000);
-        child.once('exit', () => {
-          clearTimeout(timer);
-          resolve();
-        });
-      }
+    closing = closeCatalogProcess(child, ownerId).finally(() => {
+      child.stdin.destroy();
+      child.stdout.destroy();
+      child.stderr.destroy();
     });
     return closing;
   }

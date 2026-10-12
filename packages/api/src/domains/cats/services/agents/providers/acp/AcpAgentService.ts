@@ -48,9 +48,9 @@ import {
 import { createAcpSessionState, flushAcpThinking, transformAcpEvent } from './acp-event-transformer.js';
 import { resolveAcpMcpServers, resolveDisabledServerIds, resolveUserProjectMcpServers } from './acp-mcp-resolver.js';
 import { callbackEnvDiagnostic, materializeSessionMcpServers } from './acp-session-env.js';
-import { applySessionConfiguration } from './session-configuration.js';
-import { captureNativeDefaults, defaultsForNativeResume } from './native-session-defaults.js';
 import { AcpSessionBindingError } from './active-session-cache.js';
+import { captureNativeDefaults, defaultsForNativeResume } from './native-session-defaults.js';
+import { applySessionConfiguration } from './session-configuration.js';
 import type { AcpMcpServer, AcpNewSessionResult, AcpSessionUpdate } from './types.js';
 
 const log = createModuleLogger('acp-agent');
@@ -472,8 +472,8 @@ export class AcpAgentService implements AgentService {
 
       const nativeTool = catRegistry.tryGet(this.catId)?.config.configurationSource === 'native_tool';
       const preferences = {
-        model: getCatModel(this.catId) || undefined,
-        effort: options?.reasoningEffortOverride ?? (getCatEffort(this.catId) || undefined),
+        model: nativeTool ? getCatModel(this.catId) || undefined : undefined,
+        effort: nativeTool ? (options?.reasoningEffortOverride ?? (getCatEffort(this.catId) || undefined)) : undefined,
       };
       let nativeDefaults: { model?: string; effort?: string } = {};
       if (nativeTool && resumeSessionId) {
