@@ -81,3 +81,5 @@ flowchart LR
 - 空成员 catalog，角色模板来自项目；生产 `3003/3004/6399` 不重启、不切分支、不写入。
 
 具体验证结果另附本轮验证记录。作者自测不替代独立 review。
+
+最终用户验收入口为 `http://localhost:5138/?shell=v2`，对应独立 API `3138`、Redis `6374` 和 `artifacts/issue1466-onboarding-user-20261012`，保留首次配置状态；上面的 `5126` 实例用于作者真实调用验证。详见 [验证记录](./issue-1466-native-onboarding-validation-2026-10-12.md)。
