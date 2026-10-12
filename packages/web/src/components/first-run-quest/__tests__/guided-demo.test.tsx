@@ -34,6 +34,39 @@ const tick = async () =>
     await vi.advanceTimersByTimeAsync(10_000);
   });
 
+const acknowledge = async (source: Window | null | undefined, stage = 'final') => {
+  await act(async () =>
+    window.dispatchEvent(
+      new window.MessageEvent('message', {
+        source,
+        data: { type: 'clowder-onboarding-ready', version: 1 },
+      }),
+    ),
+  );
+  await act(async () =>
+    window.dispatchEvent(
+      new window.MessageEvent('message', {
+        source,
+        data: { type: 'clowder-onboarding-stage-ready', version: 1, stage },
+      }),
+    ),
+  );
+};
+
+it('keeps the same browser beside the conversation from design through delivery', async () => {
+  await mount();
+  const frame = document.querySelector('iframe');
+  expect(frame).not.toBeNull();
+  act(() => button('开始引导').click());
+  for (let i = 0; i < 16; i++) {
+    await tick();
+    expect(document.querySelector('iframe')).toBe(frame);
+    expect(document.querySelector('[data-testid="demo-transcript"]')?.closest('[hidden], .hidden')).toBeNull();
+  }
+  expect(document.querySelector('[data-preview-stage="final"]')).not.toBeNull();
+  expect([...document.querySelectorAll('button')].some((b) => b.textContent === '回看协作过程')).toBe(false);
+});
+
 it('automates all handoffs without clients or API calls and opens a working deliverable', async () => {
   await mount();
   act(() => button('开始引导').click());
@@ -44,47 +77,25 @@ it('automates all handoffs without clients or API calls and opens a working deli
   const frame = document.querySelector('iframe');
   expect(frame?.title).toBe('今天待办 · 演示成果');
   expect(fetch).not.toHaveBeenCalled();
-  expect(document.querySelector('a[href*="view=add"]')).toBeNull();
-  await act(async () => {
-    window.dispatchEvent(
-      new window.MessageEvent('message', {
-        source: frame?.contentWindow,
-        data: { type: 'clowder-onboarding-ready', version: 1 },
-      }),
-    );
-  });
-  expect(document.querySelector('a')?.getAttribute('href')).toBe('/settings?s=members&shell=v2&view=add');
+  expect(document.querySelector('a')).toBeNull();
+  await acknowledge(frame?.contentWindow);
+  expect(document.querySelector('a')?.getAttribute('href')).toBe('/settings?s=members&shell=v2&view=setup');
   expect(document.querySelector('a')?.textContent).toContain('创建我的猫猫');
 });
 
 it('ignores unrelated frames, offers retry on timeout, and accepts the current frame only', async () => {
   localStorage.setItem('cat-cafe:scripted-onboarding:v1:demo-user', JSON.stringify({ version: 1, index: 9 }));
   await mount();
-  act(() =>
-    window.dispatchEvent(
-      new window.MessageEvent('message', { source: window, data: { type: 'clowder-onboarding-ready', version: 1 } }),
-    ),
-  );
+  await acknowledge(window);
   expect(document.querySelector('a')).toBeNull();
   await tick();
   expect(document.body.textContent).toContain('成果暂时没有打开');
   const oldFrame = document.querySelector('iframe')?.contentWindow;
   act(() => button('重新打开').click());
   expect(document.body.textContent).toContain('正在打开成果');
-  act(() =>
-    window.dispatchEvent(
-      new window.MessageEvent('message', { source: oldFrame, data: { type: 'clowder-onboarding-ready', version: 1 } }),
-    ),
-  );
+  await acknowledge(oldFrame);
   expect(document.querySelector('a')).toBeNull();
-  act(() =>
-    window.dispatchEvent(
-      new window.MessageEvent('message', {
-        source: document.querySelector('iframe')?.contentWindow,
-        data: { type: 'clowder-onboarding-ready', version: 1 },
-      }),
-    ),
-  );
+  await acknowledge(document.querySelector('iframe')?.contentWindow);
   expect(document.querySelector('a')?.textContent).toContain('创建我的猫猫');
   expect(fetch).not.toHaveBeenCalled();
 });

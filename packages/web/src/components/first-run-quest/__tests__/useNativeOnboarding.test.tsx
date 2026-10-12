@@ -12,8 +12,8 @@ vi.mock('@/hooks/useCatData', () => ({ useCatData: () => ({ cats: catalog.cats, 
 let root: Root, container: HTMLDivElement;
 let setup: ReturnType<typeof useNativeOnboarding>;
 const onCreated = vi.fn();
-function Harness() {
-  setup = useNativeOnboarding(true, onCreated);
+function Harness({ mode = 'goal' }: { mode?: 'goal' | 'members' }) {
+  setup = useNativeOnboarding(true, onCreated, mode);
   return <p>{setup.loading ? 'loading' : setup.draft?.partners.length}</p>;
 }
 const response = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status });
@@ -40,6 +40,7 @@ beforeEach(() => {
     if (path === '/api/cats/native-runtimes') return response({ runtimes });
     if (path === '/api/cat-templates') return response({ templates: [] });
     if (path === '/api/cats') {
+      if (!init?.method) return response({ cats: catalog.cats });
       const payload = JSON.parse(String(init?.body));
       return response(
         { cat: { id: payload.catId, displayName: payload.displayName, mentionPatterns: payload.mentionPatterns } },
@@ -49,6 +50,34 @@ beforeEach(() => {
     if (path === '/api/threads') return response({ id: 'ordinary-goal' }, 201);
     throw new Error(`unexpected path ${path}`);
   });
+});
+
+it('creates the detected team with one confirmation without creating a conversation', async () => {
+  await act(async () => root.render(<Harness mode="members" />));
+  expect(setup.draft?.partners.filter((p) => p.selected)).toHaveLength(3);
+  await act(async () => setup.patch({ goal: '' }));
+  await act(async () => setup.start());
+  const writes = vi.mocked(apiFetch).mock.calls.filter(([, init]) => init?.method === 'POST');
+  expect(writes.map(([path]) => path)).toEqual(['/api/cats', '/api/cats', '/api/cats']);
+  expect(onCreated).toHaveBeenCalledOnce();
+});
+
+it('resumes a partially created team without duplicating members or sending a task', async () => {
+  const original = vi.mocked(apiFetch).getMockImplementation()!;
+  let creations = 0;
+  vi.mocked(apiFetch).mockImplementation(async (path, init) => {
+    if (path === '/api/cats' && init?.method === 'POST' && ++creations === 2)
+      return response({ error: '创建中断' }, 503);
+    return original(path, init);
+  });
+  await act(async () => root.render(<Harness mode="members" />));
+  await act(async () => setup.start());
+  expect(setup.errorStage).toBe('save');
+  expect(Object.keys(setup.draft?.created ?? {})).toHaveLength(1);
+  await act(async () => setup.start());
+  expect(creations).toBe(4);
+  expect(vi.mocked(apiFetch).mock.calls.some(([path]) => path === '/api/threads')).toBe(false);
+  expect(onCreated).toHaveBeenCalledOnce();
 });
 afterEach(() => {
   act(() => root.unmount());

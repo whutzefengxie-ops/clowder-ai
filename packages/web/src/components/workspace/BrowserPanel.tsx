@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from '
 import { useWorkspaceSurfaceVisibility } from '@/components/workbench/WorkspaceSurfaceVisibility';
 import { previewVisiblePageAdmissionController } from '@/lib/preview-visible-page-admission-controller';
 import { apiFetch } from '@/utils/api-client';
+import type { DemoPreviewStage } from '../onboarding-demo/demo-story';
 import { BrowserTabBar } from './BrowserTabBar';
 import { BrowserToolbar } from './BrowserToolbar';
 import { BundledDemoBrowser } from './BundledDemoBrowser';
@@ -23,6 +24,7 @@ export interface BrowserTab {
 interface BrowserPanelProps {
   /** Fixed, packaged onboarding deliverable. Does not start or probe a runtime. */
   bundledPage?: 'onboarding-todo';
+  bundledStage?: DemoPreviewStage;
   onBundledReady?: () => void;
   /** Initial port to preview (e.g. from port discovery toast) */
   initialPort?: number;
@@ -45,7 +47,8 @@ interface PreviewStatus {
  * and isolate cookies/storage from Hub.
  */
 export function BrowserPanel(props: BrowserPanelProps) {
-  if (props.bundledPage === 'onboarding-todo') return <BundledDemoBrowser onReady={props.onBundledReady} />;
+  if (props.bundledPage === 'onboarding-todo')
+    return <BundledDemoBrowser stage={props.bundledStage} onReady={props.onBundledReady} />;
   return <LiveBrowserPanel {...props} />;
 }
 

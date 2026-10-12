@@ -8,12 +8,14 @@ export function NativePartnerCard({
   partner,
   created,
   disabled = false,
+  compact = false,
   patch,
   onValidityChange,
 }: {
   partner: NativePartner;
   created: boolean;
   disabled?: boolean;
+  compact?: boolean;
   patch: (change: Partial<NativePartner>) => void;
   onValidityChange: (valid: boolean) => void;
 }) {
@@ -24,7 +26,7 @@ export function NativePartnerCard({
     <article
       className={`rounded-xl border p-4 ${partner.selected ? 'border-cafe-accent bg-cafe-surface' : 'border-[var(--console-border-soft)] bg-cafe-surface-canvas'}`}
     >
-      <div className="flex items-center gap-3">
+      <div className={`flex items-center ${compact ? 'gap-2' : 'gap-3'}`}>
         <input
           type="checkbox"
           aria-label={`加入 ${runtime.label} 伙伴`}
@@ -34,7 +36,7 @@ export function NativePartnerCard({
           className="h-5 w-5 shrink-0 accent-[var(--color-cafe-accent)]"
         />
         <div
-          className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full"
+          className={`flex shrink-0 items-center justify-center overflow-hidden rounded-full ${compact ? 'h-9 w-9' : 'h-12 w-12'}`}
           style={{ backgroundColor: form.colorSecondary }}
         >
           {form.avatar ? (
@@ -71,7 +73,10 @@ export function NativePartnerCard({
           </button>
         )}
       </div>
-      <p className="ml-8 mt-3 text-sm text-cafe-muted">
+      {form.roleDescription && (
+        <p className={`${compact ? '' : 'ml-8'} mt-3 text-sm text-cafe-secondary`}>{form.roleDescription}</p>
+      )}
+      <p className={`${compact ? '' : 'ml-8'} mt-3 text-sm text-cafe-muted`}>
         {available
           ? `${form.defaultModel || '模型跟随工具'} · ${form.cliEffort || '强度跟随工具'}`
           : runtime.label === 'DSH'

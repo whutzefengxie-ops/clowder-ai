@@ -23,6 +23,7 @@ import { ConciergeSettingsContent } from './ConciergeSettingsContent';
 import { HubSystemSettingsTab } from './HubSystemSettingsTab';
 import { MarketplaceContent } from './MarketplaceContent';
 import { McpManageContent } from './McpManageContent';
+import { MemberCreationPage } from './members/MemberCreationPage';
 import { MemberSettingsPage } from './members/MemberSettingsPage';
 import { OpenTeamWorkspaceButton } from './OpenTeamWorkspaceButton';
 import { OpsContent } from './OpsContent';
@@ -58,6 +59,7 @@ export function SettingsContent({ section, initialEditCatId }: SettingsContentPr
     const params = new URLSearchParams(searchParams.toString());
     params.set('s', 'members');
     params.delete('returnTo');
+    params.delete('manual');
     if (cat) {
       params.set('cat', cat.id);
       params.delete('view');
@@ -75,6 +77,7 @@ export function SettingsContent({ section, initialEditCatId }: SettingsContentPr
     params.delete('cat');
     params.delete('view');
     params.delete('returnTo');
+    params.delete('manual');
     router.push(`/settings?${params.toString()}`, { scroll: false });
   };
 
@@ -99,7 +102,7 @@ export function SettingsContent({ section, initialEditCatId }: SettingsContentPr
 
   useEffect(() => {
     if (section !== 'members') return;
-    if (searchParams.get('view') === 'add') {
+    if (searchParams.get('view') === 'add' || searchParams.get('view') === 'setup') {
       setEditingCat(null);
       setEditorOpen(true);
       return;
@@ -185,6 +188,22 @@ export function SettingsContent({ section, initialEditCatId }: SettingsContentPr
   const content = (() => {
     switch (meta.id) {
       case 'members':
+        if (editorOpen && !editingCat)
+          return (
+            <MemberCreationPage
+              key={searchParams.get('view')}
+              cats={cats}
+              onTeamCreated={async () => {
+                await fetchData();
+                closeMember();
+              }}
+              onBack={closeMember}
+              onSaved={async (_saved, trace) => {
+                await handleEditorSaved(trace);
+                closeMember();
+              }}
+            />
+          );
         if (editorOpen)
           return (
             <MemberSettingsPage

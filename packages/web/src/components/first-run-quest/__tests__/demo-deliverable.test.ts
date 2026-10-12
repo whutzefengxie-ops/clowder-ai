@@ -6,8 +6,42 @@ const { JSDOM } = createRequire(import.meta.url)('jsdom') as {
   JSDOM: new (html: string, options: { runScripts: 'dangerously' }) => { window: Window & typeof globalThis };
 };
 
+function deliver(dom: { window: Window & typeof globalThis }, stage: string) {
+  dom.window.dispatchEvent(
+    new dom.window.MessageEvent('message', {
+      source: dom.window.parent,
+      data: { type: 'clowder-onboarding-stage', version: 1, stage },
+    }),
+  );
+}
+
+it('progressively builds the same document and retains tasks through review fixes', () => {
+  const dom = new JSDOM(DEMO_DELIVERABLE_HTML, { runScripts: 'dangerously' });
+  try {
+    const page = dom.window.document;
+    const input = page.querySelector<HTMLInputElement>('#new-task')!;
+    expect(page.body.dataset.stage).toBe('waiting');
+    deliver(dom, 'design');
+    expect(input.disabled).toBe(true);
+    deliver(dom, 'initial');
+    input.value = '预览中添加的任务';
+    page.querySelector<HTMLButtonElement>('#add-task')?.click();
+    deliver(dom, 'review');
+    expect(page.querySelector('#review-notes')?.textContent).toContain('空白输入');
+    deliver(dom, 'final');
+    expect(page.querySelector('#new-task')).toBe(input);
+    expect(page.querySelector('#tasks')?.textContent).toContain('预览中添加的任务');
+    expect(page.body.dataset.stage).toBe('final');
+    deliver(dom, 'untrusted-stage');
+    expect(page.body.dataset.stage).toBe('final');
+  } finally {
+    dom.window.close();
+  }
+});
+
 it('delivers the promised add, complete, filter and reviewed empty-state interactions', () => {
   const dom = new JSDOM(DEMO_DELIVERABLE_HTML, { runScripts: 'dangerously' });
+  deliver(dom, 'final');
   try {
     const page = dom.window.document;
     const input = page.querySelector<HTMLInputElement>('#new-task');
@@ -41,6 +75,7 @@ it('delivers the promised add, complete, filter and reviewed empty-state interac
 
 it('preserves keyboard focus on toggle, then moves to a neighbour or the active filter when removed', () => {
   const dom = new JSDOM(DEMO_DELIVERABLE_HTML, { runScripts: 'dangerously' });
+  deliver(dom, 'final');
   try {
     const page = dom.window.document;
     const task = page.querySelector<HTMLInputElement>('#tasks input');

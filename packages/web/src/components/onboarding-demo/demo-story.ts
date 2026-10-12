@@ -6,6 +6,7 @@ export const DEMO_TEAM = {
 
 export type DemoCat = keyof typeof DEMO_TEAM;
 export type DemoArtifact = 'design' | 'architecture' | 'initial' | 'review' | 'final';
+export type DemoPreviewStage = DemoArtifact | 'waiting';
 export interface DemoEvent {
   id: string;
   title: string;
@@ -90,8 +91,8 @@ export const DEMO_EVENTS: readonly DemoEvent[] = [
     speaker: 'architect',
     duration: 3000,
     artifact: 'final',
-    text: '审查通过，两个问题都已修正。现在打开“今天待办”，你可以亲自添加任务、勾选完成和切换筛选。演示结束后，再创建你自己的猫猫团队。',
+    text: '审查通过，两个问题都已修正。右侧的“今天待办”就是我们一起完成的成果，你可以亲自添加任务、勾选完成和切换筛选。接下来，创建你自己的猫猫团队吧。',
   },
 ];
 
-export const DEMO_SETTINGS_URL = '/settings?s=members&shell=v2&view=add';
+export const DEMO_SETTINGS_URL = '/settings?s=members&shell=v2&view=setup';

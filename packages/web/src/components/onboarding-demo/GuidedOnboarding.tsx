@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { BrowserPanel } from '@/components/workspace/BrowserPanel';
 import { DemoTeam } from './DemoTeam';
 import { DemoTranscript } from './DemoTranscript';
 import { DemoWorkProduct } from './DemoWorkProduct';
@@ -21,7 +20,6 @@ export function GuidedOnboarding({ open, storageScope, onClose }: Props) {
 function DemoPlayer({ storageScope, onClose }: Omit<Props, 'open'>) {
   const playback = useDemoPlayback(storageScope);
   const [delivered, setDelivered] = useState(false);
-  const [view, setView] = useState<'conversation' | 'result'>('conversation');
   const dialog = useRef<HTMLDivElement>(null);
   const close = useRef<HTMLButtonElement>(null);
   const playbackControl = useRef<HTMLButtonElement>(null);
@@ -33,9 +31,6 @@ function DemoPlayer({ storageScope, onClose }: Omit<Props, 'open'>) {
       if (previous instanceof HTMLElement) previous.focus();
     };
   }, []);
-  useEffect(() => {
-    if (playback.finished) setView('result');
-  }, [playback.finished]);
   useEffect(() => {
     // Starting/replaying or auto-finishing can remove the focused control.
     // Keep keyboard users in the dialog instead of returning to the background.
@@ -50,7 +45,6 @@ function DemoPlayer({ storageScope, onClose }: Omit<Props, 'open'>) {
   const stage = [...events].reverse().find((event) => event.artifact)?.artifact;
   const replay = () => {
     setDelivered(false);
-    setView('conversation');
     playback.start();
   };
   return createPortal(
@@ -60,7 +54,7 @@ function DemoPlayer({ storageScope, onClose }: Omit<Props, 'open'>) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="guided-demo-title"
-        className="flex h-[94dvh] max-h-[900px] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-[var(--console-card-bg)] text-cafe shadow-2xl"
+        className="flex h-[94dvh] max-h-[960px] w-full max-w-[1440px] flex-col overflow-hidden rounded-2xl bg-[var(--console-card-bg)] text-cafe shadow-2xl"
         onKeyDown={(event) => {
           if (event.key === 'Escape') onClose();
           if (event.key !== 'Tab') return;
@@ -85,9 +79,9 @@ function DemoPlayer({ storageScope, onClose }: Omit<Props, 'open'>) {
             <h2 id="guided-demo-title" className="mt-1 text-xl font-semibold">
               看猫猫一起把事情做好
             </h2>
-            {view === 'conversation' && (
-              <p className="mt-1 text-xs leading-5 text-cafe-secondary">先体验协作，再创建自己的团队。无需安装工具。</p>
-            )}
+            <p className="mt-1 text-xs leading-5 text-cafe-secondary">
+              看看同一个页面如何被设计、实现和完善，再创建自己的团队。
+            </p>
           </div>
           <button
             ref={close}
@@ -99,7 +93,7 @@ function DemoPlayer({ storageScope, onClose }: Omit<Props, 'open'>) {
             ×
           </button>
         </header>
-        {view === 'conversation' && <DemoTeam active={active} />}
+        <DemoTeam active={active} />
         <div className="flex min-h-10 items-center justify-between gap-2 border-y border-[var(--console-border-soft)] px-4 py-2 text-xs sm:px-6">
           <span role="status">
             {playback.finished
@@ -108,25 +102,11 @@ function DemoPlayer({ storageScope, onClose }: Omit<Props, 'open'>) {
                 ? `${playback.index + 1} / ${DEMO_EVENTS.length} · ${current.title}`
                 : '准备好后，整个协作过程会自动进行'}
           </span>
-          {playback.finished && (
-            <button
-              type="button"
-              className="shrink-0 font-semibold text-cafe-accent"
-              onClick={() => setView(view === 'result' ? 'conversation' : 'result')}
-            >
-              {view === 'result' ? '回看协作过程' : '查看成果'}
-            </button>
-          )}
         </div>
-        <div className={view === 'conversation' ? 'flex min-h-0 flex-1' : 'hidden'}>
+        <div className="grid min-h-0 flex-1 grid-rows-[minmax(120px,0.7fr)_minmax(190px,1fr)] md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] md:grid-rows-1">
           <DemoTranscript events={events} playing={!playback.paused} />
-          <DemoWorkProduct stage={stage} />
+          <DemoWorkProduct stage={stage} onReady={() => setDelivered(true)} />
         </div>
-        {playback.finished && (
-          <div className={view === 'result' ? 'min-h-0 flex-1' : 'hidden'}>
-            <BrowserPanel bundledPage="onboarding-todo" onBundledReady={() => setDelivered(true)} />
-          </div>
-        )}
         <footer className="border-t border-[var(--console-border-soft)] px-4 py-3 sm:px-6">
           <div className="flex items-center justify-between gap-2">
             <button type="button" onClick={onClose} className="text-sm text-cafe-secondary">
@@ -158,7 +138,7 @@ function DemoPlayer({ storageScope, onClose }: Omit<Props, 'open'>) {
                   重新看一遍
                 </button>
               )}
-              {delivered && (
+              {playback.finished && delivered && (
                 <a
                   href={DEMO_SETTINGS_URL}
                   className="rounded-full bg-cafe-accent px-4 py-2.5 text-sm font-semibold text-[var(--cafe-surface)]"
@@ -168,7 +148,7 @@ function DemoPlayer({ storageScope, onClose }: Omit<Props, 'open'>) {
               )}
             </div>
           </div>
-          {delivered && (
+          {playback.finished && delivered && (
             <p className="mt-2 text-xs leading-5 text-cafe-secondary">
               演示团队使用预置数据。接下来在设置中接入你自己的工具，创建真实伙伴。
             </p>

@@ -1,6 +1,6 @@
 'use client';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useCatData } from '@/hooks/useCatData';
+import { type CatData, useCatData } from '@/hooks/useCatData';
 import { apiFetch } from '@/utils/api-client';
 import { buildCatPayload } from '../hub-cat-editor.payload';
 import type { RuntimeChoice } from '../settings/members/member-runtime-draft';
@@ -32,7 +32,11 @@ async function readJson<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-export function useNativeOnboarding(open: boolean, onCreated: (id: string, name: string) => void) {
+export function useNativeOnboarding(
+  open: boolean,
+  onCreated: (id: string, name: string) => void | Promise<void>,
+  mode: 'goal' | 'members' = 'goal',
+) {
   const { cats, refresh } = useCatData();
   const catsRef = useRef(cats);
   catsRef.current = cats;
@@ -67,10 +71,13 @@ export function useNativeOnboarding(open: boolean, onCreated: (id: string, name:
       readJson<{ userId: string }>('/api/session', { signal: controller.signal }),
       readJson<{ runtimes: RuntimeChoice[] }>('/api/cats/native-runtimes', { signal: controller.signal }),
       readJson<{ templates: TemplateCard[] }>('/api/cat-templates', { signal: controller.signal }),
+      mode === 'members'
+        ? readJson<{ cats: CatData[] }>('/api/cats', { signal: controller.signal })
+        : Promise.resolve({ cats: catsRef.current }),
     ])
-      .then(([session, discovered, templates]) => {
+      .then(([session, discovered, templates, roster]) => {
         if (controller.signal.aborted) return;
-        key.current = `cat-cafe:native-onboarding:v2:${session.userId}`;
+        key.current = `cat-cafe:${mode === 'members' ? 'native-team-setup' : 'native-onboarding'}:v2:${session.userId}`;
         let saved: SetupDraft | null = null;
         try {
           const parsed = JSON.parse(localStorage.getItem(key.current) ?? 'null') as SetupDraft | null;
@@ -80,30 +87,32 @@ export function useNativeOnboarding(open: boolean, onCreated: (id: string, name:
           /* A corrupt draft does not prevent setup. */
         }
         const journeyId = saved?.journeyId ?? crypto.randomUUID();
-        const partners = recommendNativePartners(
-          discovered.runtimes,
-          templates.templates,
-          catsRef.current,
-          journeyId,
-        ).map((partner) => {
-          const previous = saved?.partners.find((p) => p.id === partner.id);
-          if (!previous?.form) return partner;
-          const { name, displayName, nickname, defaultModel, cliEffort } = previous.form;
-          return {
-            ...partner,
-            selected: partner.selected && (!previous.runtime?.installed || previous.selected),
-            form: partner.existingId
-              ? partner.form
-              : { ...partner.form, name, displayName, nickname, defaultModel, cliEffort },
-          };
-        });
+        const currentCats = mode === 'members' ? roster.cats : catsRef.current;
+        const partners = recommendNativePartners(discovered.runtimes, templates.templates, currentCats, journeyId).map(
+          (partner) => {
+            const previous = saved?.partners.find((p) => p.id === partner.id);
+            if (!previous?.form) return partner;
+            const { name, displayName, nickname, defaultModel, cliEffort } = previous.form;
+            return {
+              ...partner,
+              selected: partner.selected && (!previous.runtime?.installed || previous.selected),
+              form: partner.existingId
+                ? partner.form
+                : { ...partner.form, name, displayName, nickname, defaultModel, cliEffort },
+            };
+          },
+        );
         persist({
           version: 2,
           journeyId,
           partners,
           goal: saved?.goal ?? SMALL_GOALS[0].content,
           lead: saved?.lead ?? partners.find((p) => p.selected)?.id ?? '',
-          created: saved?.created ?? {},
+          created: Object.fromEntries(
+            Object.entries(saved?.created ?? {}).filter(
+              ([, member]) => mode === 'goal' || roster.cats.some((cat) => cat.id === member.id),
+            ),
+          ),
           threadId: saved?.threadId,
         });
       })
@@ -117,7 +126,7 @@ export function useNativeOnboarding(open: boolean, onCreated: (id: string, name:
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [open, reload, persist]);
+  }, [open, reload, persist, mode]);
 
   const patch = (changes: Partial<SetupDraft>) => {
     if (latest.current && !inFlight.current) persist({ ...latest.current, ...changes });
@@ -128,9 +137,18 @@ export function useNativeOnboarding(open: boolean, onCreated: (id: string, name:
   };
   const start = async () => {
     const current = latest.current;
-    if (!current || loading || errorStage === 'discovery' || inFlight.current || !current.goal.trim()) return;
+    if (
+      !current ||
+      loading ||
+      errorStage === 'discovery' ||
+      inFlight.current ||
+      (mode === 'goal' && !current.goal.trim())
+    )
+      return;
     const selected = orderGoalPartners(
-      current.partners.filter((p) => p.selected),
+      current.partners.filter(
+        (p) => p.selected && p.runtime.installed && (p.runtime.clientId !== 'acp' || p.runtime.acp),
+      ),
       current.lead,
     );
     if (!selected.length) return;
@@ -171,6 +189,11 @@ export function useNativeOnboarding(open: boolean, onCreated: (id: string, name:
         persist(progress);
       }
       const lead = progress.created[selected.find((p) => p.id === current.lead)?.id ?? selected[0].id];
+      if (mode === 'members') {
+        await refresh();
+        await onCreated(lead.id, lead.name);
+        return;
+      }
       setBusy('正在准备对话…');
       if (!progress.threadId) {
         const thread = await readJson<{ id: string }>('/api/threads', {
