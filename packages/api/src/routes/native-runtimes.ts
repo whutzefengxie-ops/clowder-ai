@@ -5,6 +5,7 @@ import { catRegistry } from '@cat-cafe/shared';
 import { parse } from 'smol-toml';
 import { getAcpConfig } from '../config/cat-config-loader.js';
 import { resolveCliCommand } from '../utils/cli-resolve.js';
+import { discoverDshRuntime } from './native-dsh-discovery.js';
 
 function text(value: unknown): string | undefined {
   return typeof value === 'string' && value.length > 0 ? value : undefined;
@@ -82,5 +83,8 @@ export function discoverNativeRuntimes(projectRoot: string) {
       },
     ];
   });
-  return { runtimes: [...builtins, ...acp], authenticationStatus: 'not_checked' };
+  const dsh = acp.some((runtime) => runtime.label === 'DSH' && runtime.installed && runtime.acp)
+    ? []
+    : [discoverDshRuntime()];
+  return { runtimes: [...builtins, ...acp, ...dsh], authenticationStatus: 'not_checked' };
 }

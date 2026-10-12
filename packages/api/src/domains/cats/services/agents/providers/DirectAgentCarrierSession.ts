@@ -4,6 +4,7 @@ import { observeCliExecutionProcess } from '../../../../../utils/CliExecutionObs
 import { CliExitOutputDrain } from '../../../../../utils/CliExitOutputDrain.js';
 import type { CliExecutionOwnerRef } from '../../../../../utils/cli-process-ownership.js';
 import { buildChildEnv } from '../../../../../utils/cli-spawn.js';
+import { resolveWindowsSpawnPlan } from '../../../../../utils/cli-spawn-win.js';
 import { buildUnixSupervisedSpawnPlan } from '../../../../../utils/cli-supervised-process.js';
 import { isParseError, parseNDJSON } from '../../../../../utils/ndjson-parser.js';
 import { createStderrTail, type StderrTail } from '../../../../../utils/stderr-tail.js';
@@ -51,7 +52,7 @@ class DirectAgentCarrierSession implements AgentCarrierSession {
     const env = normalizeEnv(options.env, childCwd);
     const launch =
       process.platform === 'win32'
-        ? { command: options.command, args: [...options.args], env }
+        ? { ...resolveWindowsSpawnPlan(options.command, options.args), env }
         : buildUnixSupervisedSpawnPlan(options.command, options.args, {
             env,
             killGraceMs: 500,
@@ -59,6 +60,8 @@ class DirectAgentCarrierSession implements AgentCarrierSession {
     this.child = spawn(launch.command, launch.args, {
       ...(options.cwd ? { cwd: options.cwd } : {}),
       env: launch.env,
+      windowsHide: true,
+      shell: 'shell' in launch && typeof launch.shell === 'string' ? launch.shell : false,
       stdio: ['pipe', 'pipe', 'pipe'],
     });
     observeCliExecutionProcess(this.child, deps.executionOwner);

@@ -1,0 +1,105 @@
+import { useState } from 'react';
+import { MemberRuntimeFields } from '../settings/members/MemberRuntimeFields';
+import type { NativePartner } from './native-onboarding';
+
+const chinese = (zh: string) => zh;
+export function NativePartnerCard({
+  partner,
+  created,
+  patch,
+  onValidityChange,
+}: {
+  partner: NativePartner;
+  created: boolean;
+  patch: (change: Partial<NativePartner>) => void;
+  onValidityChange: (valid: boolean) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const { runtime, form } = partner;
+  const available = runtime.installed && (runtime.clientId !== 'acp' || Boolean(runtime.acp));
+  return (
+    <article
+      className={`rounded-xl border p-4 ${partner.selected ? 'border-cafe-accent bg-cafe-surface' : 'border-[var(--console-border-soft)] bg-cafe-surface-canvas'}`}
+    >
+      <div className="flex items-center gap-3">
+        <input
+          type="checkbox"
+          aria-label={`加入 ${runtime.label} 伙伴`}
+          checked={partner.selected}
+          disabled={!available || created}
+          onChange={(e) => patch({ selected: e.target.checked })}
+          className="h-5 w-5 shrink-0 accent-[var(--color-cafe-accent)]"
+        />
+        <div
+          className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full"
+          style={{ backgroundColor: form.colorSecondary }}
+        >
+          {form.avatar ? (
+            <img src={form.avatar} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <span>{runtime.label[0]}</span>
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <h3 className="font-semibold">
+            {form.displayName}
+            {form.nickname && ` · ${form.nickname}`}
+          </h3>
+          <p className="mt-1 text-sm text-cafe-secondary">
+            {runtime.label} · {created ? '已添加' : available ? '已发现' : '暂不可用'}
+          </p>
+        </div>
+        {available && (
+          <button
+            type="button"
+            disabled={created}
+            onClick={() => setExpanded(!expanded)}
+            aria-expanded={expanded}
+            className="min-h-10 shrink-0 text-sm text-cafe-accent"
+          >
+            {expanded ? '收起' : '调整'}
+          </button>
+        )}
+      </div>
+      <p className="ml-8 mt-3 text-sm text-cafe-muted">
+        {available
+          ? `${form.defaultModel || '模型跟随工具'} · ${form.cliEffort || '强度跟随工具'}`
+          : runtime.label === 'DSH'
+            ? '需要已安装的 DSH 和 ACP profile。配置完成后重新检测。'
+            : `安装并登录 ${runtime.label} 后，重新检测即可加入。`}
+      </p>
+      {expanded && (
+        <div className="mt-4 space-y-4 border-t border-[var(--console-border-soft)] pt-4">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="text-sm">
+              名字
+              <input
+                value={form.displayName}
+                onChange={(e) => patch({ form: { ...form, name: e.target.value, displayName: e.target.value } })}
+                className="mt-2 min-h-10 w-full rounded-lg border border-[var(--console-border-soft)] bg-cafe-surface-canvas px-3"
+              />
+            </label>
+            <label className="text-sm">
+              昵称
+              <input
+                value={form.nickname}
+                onChange={(e) => patch({ form: { ...form, nickname: e.target.value } })}
+                className="mt-2 min-h-10 w-full rounded-lg border border-[var(--console-border-soft)] bg-cafe-surface-canvas px-3"
+              />
+            </label>
+          </div>
+          <MemberRuntimeFields
+            nativeSetup
+            form={form}
+            accounts={[]}
+            patch={(change) => patch({ form: { ...form, ...change } })}
+            t={chinese}
+            accountHref="/settings?s=members"
+            editing={false}
+            onValidityChange={onValidityChange}
+          />
+        </div>
+      )}
+    </article>
+  );
+}

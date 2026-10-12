@@ -3,10 +3,12 @@ feature_ids: [F171, F155, F229, F320, F322]
 topics: [onboarding, issue-1466, prototype, user-journey]
 doc_kind: design-proposal
 created: 2026-10-12
-status: prototype-for-user-review
+status: historical-superseded
 ---
 
 # 首启高保真：看懂一次协作，确认自己的伙伴，然后开口
+
+> 已被用户否定并替代：2026-10-12 最新指令要求取消示范，直接在实际项目配置本机多位伙伴并完成小目标。实施依据见 [真实伙伴引导方案](../plans/issue-1466-native-onboarding-2026-10-12.md)。下文及 `site/issue-1466-onboarding-v3` 仅保留历史，不再作为当前产品规格。
 
 本轮继续 PR #1519 / `feat/onboarding-first-run`，交付可操作的设计原型。配置优化已获用户体验认可；本轮不部署生产、不把原型作为真实认证或模型验收。10 月 9 日草案仍为历史文档，不恢复其中已被否定的规则。
 

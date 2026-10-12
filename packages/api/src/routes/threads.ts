@@ -759,7 +759,7 @@ export const threadsRoutes: FastifyPluginAsync<ThreadsRoutesOptions> = async (ap
     }
 
     let thread: Thread;
-    if (journeyId && bootcampState && threadStore.ensureOnboardingThread) {
+    if (journeyId && threadStore.ensureOnboardingThread) {
       const ensured = await threadStore.ensureOnboardingThread(
         userId,
         journeyId,

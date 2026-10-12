@@ -358,7 +358,7 @@ export class RedisThreadStore implements IThreadStore {
     journeyId: string,
     title: string,
     projectPath: string,
-    bootcampState: BootcampStateV1,
+    bootcampState?: BootcampStateV1,
   ): Promise<EnsureOnboardingThreadResult> {
     const threadId = onboardingThreadId(userId, journeyId);
     const now = Date.now();

@@ -89,7 +89,11 @@ export function registerRuntimeCatalogRoute(app: FastifyInstance) {
     )
       return { ...fallback, message: 'custom_startup' };
     if (!runtime.installed || !runtime.command) return { ...fallback, status: 'unavailable', message: 'not_installed' };
-    const acp = runtime.id.startsWith('acp:') ? getAcpConfig(runtime.id.slice(4), root) : undefined;
+    const acp = runtime.id.startsWith('acp:')
+      ? getAcpConfig(runtime.id.slice(4), root)
+      : 'acp' in runtime
+        ? runtime.acp
+        : undefined;
     if (acp?.transport === 'httpstream') return { ...fallback, message: 'unsupported_transport' };
     const target: CatalogTarget = {
       kind: runtime.id === 'codex' ? 'codex' : runtime.id === 'claude' ? 'claude' : 'acp',

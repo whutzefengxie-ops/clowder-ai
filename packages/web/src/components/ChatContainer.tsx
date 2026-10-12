@@ -850,7 +850,7 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
       }
       void invalidateSidebarProjection();
       navigateToThread(questThreadId);
-      setShowOnboardingHint(true);
+      setShowOnboardingHint(false);
     },
     [navigateToThread, setThreads],
   );
@@ -986,7 +986,7 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
               <PawIcon className="w-12 h-12 text-cafe-muted mx-auto mb-4" />
               <p className="text-lg text-cafe-secondary mb-1">欢迎来到 Clowder AI!</p>
               <p className="text-sm text-cafe-muted" suppressHydrationWarning>
-                {cats.length > 0 ? '输入 @布偶 召唤布偶猫开始聊天' : '还没有可用成员，先开始新手教程创建第一只猫猫'}
+                {cats.length > 0 ? '选择一位伙伴，开始你的下一个目标' : '连接本机工具，配置一起做事的伙伴'}
               </p>
               {showSetupCard && govStatus && (
                 <div className="mt-6 text-left">
@@ -1050,12 +1050,12 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
                 return (
                   <button
                     type="button"
-                    onClick={() => setShowBootcampList(true)}
+                    onClick={handleStartFirstRunQuest}
                     className="mt-6 inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-cafe-accent/20 bg-accent-50 text-cafe-accent hover:bg-accent-100 transition-colors text-sm font-medium"
                     data-testid="empty-state-bootcamp"
                   >
                     <BootcampIcon className="w-4 h-4" />
-                    第一次来？开始猫猫训练营
+                    配置我的伙伴
                   </button>
                 );
               })()}
@@ -1295,9 +1295,9 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
               className="w-full max-w-md rounded-2xl border border-conn-amber-ring bg-[var(--console-card-bg)] p-6 shadow-2xl"
               onClick={(event) => event.stopPropagation()}
             >
-              <h3 className="text-lg font-semibold text-cafe">开始猫猫新手教程？</h3>
+              <h3 className="text-lg font-semibold text-cafe">让你的伙伴加入 Clowder AI</h3>
               <p className="mt-2 text-sm text-cafe-secondary">
-                当前还没有可用成员。我们可以先带你创建第一只猫猫，再开始首个协作任务。
+                检测本机已安装的工具，选择伙伴，然后一起完成一个小目标。
               </p>
               <div className="mt-5 flex justify-end gap-3">
                 <button
@@ -1312,7 +1312,7 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
                   onClick={handleStartFirstRunQuest}
                   className="rounded-lg bg-cafe-accent px-3 py-2 text-sm font-medium text-[var(--cafe-surface)] hover:opacity-90"
                 >
-                  开始教程
+                  配置我的伙伴
                 </button>
               </div>
             </div>

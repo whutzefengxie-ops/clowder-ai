@@ -914,7 +914,7 @@ export interface IThreadStore {
     journeyId: string,
     title: string,
     projectPath: string,
-    bootcampState: BootcampStateV1,
+    bootcampState?: BootcampStateV1,
   ): EnsureOnboardingThreadResult | Promise<EnsureOnboardingThreadResult>;
   ensureExternalRuntimeAnchorThread(runtime: ExternalRuntimeAnchorRuntime, userId: string): Thread | Promise<Thread>;
   updateLastActive(threadId: string): void | Promise<void>;
@@ -1046,7 +1046,7 @@ export class ThreadStore implements IThreadStore {
     journeyId: string,
     title: string,
     projectPath: string,
-    bootcampState: BootcampStateV1,
+    bootcampState?: BootcampStateV1,
   ): EnsureOnboardingThreadResult {
     const threadId = onboardingThreadId(userId, journeyId);
     const existing = this.threads.get(threadId);

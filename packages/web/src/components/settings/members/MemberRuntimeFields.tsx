@@ -25,6 +25,7 @@ export function MemberRuntimeFields({
   accountHref,
   editing,
   onValidityChange,
+  nativeSetup = false,
 }: {
   form: HubCatEditorFormState;
   accounts: ProfileItem[];
@@ -35,6 +36,8 @@ export function MemberRuntimeFields({
   accountHref: string;
   editing: boolean;
   onValidityChange?: (valid: boolean) => void;
+  /** First-run keeps the detected tool and its existing connection, exposing only model preferences. */
+  nativeSetup?: boolean;
 }) {
   const [runtimes, setRuntimes] = useState<RuntimeChoice[]>([]),
     [error, setError] = useState(false),
@@ -139,17 +142,19 @@ export function MemberRuntimeFields({
           {loading || catalogLoading ? t('读取中…', 'Loading…') : t('刷新', 'Refresh')}
         </button>
       </div>
-      <SelectField
-        label={t('使用工具', 'Tool')}
-        value={selected?.id ?? 'current'}
-        options={choices}
-        onChange={(value) => {
-          const next = tools.find((item) => item.id === value);
-          if (!next || next.id === selected?.id) return;
-          if (onToolChange) onToolChange(next);
-          else patch(runtimeDefaults(next));
-        }}
-      />
+      {!nativeSetup && (
+        <SelectField
+          label={t('使用工具', 'Tool')}
+          value={selected?.id ?? 'current'}
+          options={choices}
+          onChange={(value) => {
+            const next = tools.find((item) => item.id === value);
+            if (!next || next.id === selected?.id) return;
+            if (onToolChange) onToolChange(next);
+            else patch(runtimeDefaults(next));
+          }}
+        />
+      )}
       {error && (
         <p role="alert" className="text-sm text-conn-red-text">
           {t(
@@ -223,41 +228,45 @@ export function MemberRuntimeFields({
           </p>
         )}
       </div>
-      <div className="border-t border-[var(--console-border-soft)] pt-4">
-        {accountOptions.length > 1 ? (
-          <SelectField
-            label={t('使用连接', 'Connection')}
-            value={form.accountRef}
-            options={accountOptions}
-            onChange={(accountRef) => patch({ accountRef })}
-          />
-        ) : (
-          <p className="text-sm text-cafe-secondary">
-            {t(`使用 ${tool} 当前配置`, `Using current ${tool} configuration`)}
-          </p>
-        )}
-        <Link href={accountHref} className="mt-1 inline-flex min-h-10 items-center text-sm text-cafe-accent">
-          {t('管理连接', 'Manage connections')} →
-        </Link>
-      </div>
-      <details className="text-sm text-cafe-secondary">
-        <summary className="min-h-10 cursor-pointer py-2">{t('配置详情', 'Configuration details')}</summary>
-        <p className="mb-3">
-          {t(
-            '只调整这位伙伴的偏好。安装状态和模型目录不代表调用已验证。',
-            'Changes apply to this teammate. Installation and model discovery do not verify an invocation.',
+      {!nativeSetup && (
+        <div className="border-t border-[var(--console-border-soft)] pt-4">
+          {accountOptions.length > 1 ? (
+            <SelectField
+              label={t('使用连接', 'Connection')}
+              value={form.accountRef}
+              options={accountOptions}
+              onChange={(accountRef) => patch({ accountRef })}
+            />
+          ) : (
+            <p className="text-sm text-cafe-secondary">
+              {t(`使用 ${tool} 当前配置`, `Using current ${tool} configuration`)}
+            </p>
           )}
-        </p>
-        <SelectField
-          label={t('默认值来源', 'Default source')}
-          value={form.configurationSource ?? 'managed_account'}
-          options={[
-            { value: 'native_tool', label: t('工具配置', 'Tool configuration') },
-            { value: 'managed_account', label: t('已有连接配置', 'Existing connection configuration') },
-          ]}
-          onChange={(value) => patch({ configurationSource: value as HubCatEditorFormState['configurationSource'] })}
-        />
-      </details>
+          <Link href={accountHref} className="mt-1 inline-flex min-h-10 items-center text-sm text-cafe-accent">
+            {t('管理连接', 'Manage connections')} →
+          </Link>
+        </div>
+      )}
+      {!nativeSetup && (
+        <details className="text-sm text-cafe-secondary">
+          <summary className="min-h-10 cursor-pointer py-2">{t('配置详情', 'Configuration details')}</summary>
+          <p className="mb-3">
+            {t(
+              '只调整这位伙伴的偏好。安装状态和模型目录不代表调用已验证。',
+              'Changes apply to this teammate. Installation and model discovery do not verify an invocation.',
+            )}
+          </p>
+          <SelectField
+            label={t('默认值来源', 'Default source')}
+            value={form.configurationSource ?? 'managed_account'}
+            options={[
+              { value: 'native_tool', label: t('工具配置', 'Tool configuration') },
+              { value: 'managed_account', label: t('已有连接配置', 'Existing connection configuration') },
+            ]}
+            onChange={(value) => patch({ configurationSource: value as HubCatEditorFormState['configurationSource'] })}
+          />
+        </details>
+      )}
     </div>
   );
 }

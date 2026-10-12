@@ -1,0 +1,80 @@
+import type { CatData } from '@/hooks/useCatData';
+import { type HubCatEditorFormState, initialState } from '../hub-cat-editor.model';
+import { templateForm } from '../settings/members/member-editor-state';
+import { matchesRuntime, type RuntimeChoice, runtimeDefaults } from '../settings/members/member-runtime-draft';
+import { stableOnboardingMemberId } from './onboarding-journey';
+import type { TemplateCard } from './TemplateStep';
+
+export interface NativePartner {
+  id: string;
+  runtime: RuntimeChoice;
+  form: HubCatEditorFormState;
+  selected: boolean;
+  existingId?: string;
+}
+
+/** Registry-generated ACP ids change after creation; the launch descriptor does not. */
+function partnerKey(runtime: RuntimeChoice): string {
+  if (!runtime.acp) return runtime.id;
+  const descriptor = JSON.stringify([runtime.acp.command, runtime.acp.startupArgs, runtime.acp.transport ?? 'stdio']);
+  let hash = 2166136261;
+  for (const char of descriptor) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619);
+  return `acp-${(hash >>> 0).toString(16)}`;
+}
+
+export function recommendNativePartners(
+  runtimes: RuntimeChoice[],
+  templates: TemplateCard[],
+  cats: CatData[],
+  journeyId: string,
+): NativePartner[] {
+  const seen = new Set<string>();
+  return runtimes.flatMap((runtime) => {
+    const key = partnerKey(runtime);
+    if (seen.has(key)) return [];
+    seen.add(key);
+    const preferred =
+      runtime.clientId === 'anthropic' ? 'ragdoll' : runtime.clientId === 'openai' ? 'maine-coon' : 'dragon-li';
+    const template = templates.find((item) => item.id === preferred) ?? templates[0];
+    const form = template ? templateForm(template, cats, initialState()) : initialState();
+    if (runtime.clientId === 'acp') {
+      form.name = `${runtime.label} 伙伴`;
+      form.displayName = form.name;
+      form.nickname = runtime.label;
+      form.roleDescription = '一起分析问题、完成任务';
+    }
+    if (!form.name) form.name = form.displayName = `${runtime.label} 伙伴`;
+    const alias = `@${runtime.label.replace(/\s+/g, '-').toLowerCase()}`;
+    let uniqueAlias = alias;
+    for (let n = 2; cats.some((cat) => cat.mentionPatterns.includes(uniqueAlias)); n++) uniqueAlias = `${alias}-${n}`;
+    const catId = stableOnboardingMemberId(journeyId, 'partner', key);
+    const existing = cats.find(
+      (cat) =>
+        cat.id === catId || (cat.configurationSource === 'native_tool' && matchesRuntime(initialState(cat), runtime)),
+    );
+    return [
+      {
+        id: key,
+        runtime,
+        form: existing
+          ? initialState(existing)
+          : { ...form, ...runtimeDefaults(runtime), catId, mentionPatterns: uniqueAlias },
+        selected: runtime.installed && (runtime.clientId !== 'acp' || Boolean(runtime.acp)),
+        ...(existing ? { existingId: existing.id } : {}),
+      },
+    ];
+  });
+}
+
+export const SMALL_GOALS = [
+  {
+    title: '把想法变成行动',
+    content: '我想做一个简单的个人待办清单。请帮我梳理最小可用版本，并给出今天就能完成的 3 个步骤。先不要修改文件。',
+  },
+  {
+    title: '整理一段文字',
+    content:
+      '请把这段想法整理为清晰的待办：我想把零散的阅读笔记归档，每周选一篇写摘要，周末回顾。请给出分类建议和本周的 3 个行动项。',
+  },
+  { title: '写自己的目标', content: '' },
+] as const;

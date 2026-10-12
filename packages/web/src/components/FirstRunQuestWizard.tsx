@@ -1,341 +1,209 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useCatData } from '@/hooks/useCatData';
-import { apiFetch } from '@/utils/api-client';
-import { ClientStep, type DetectedClient } from './first-run-quest/ClientStep';
-import { ConfigStep } from './first-run-quest/ConfigStep';
-import { DemoStep } from './first-run-quest/DemoStep';
-import { nextDemoScene } from './first-run-quest/demo-script';
-import {
-  buildRealMembers,
-  canContinueClientSetup,
-  createJourneyState,
-  type OnboardingJourneyState,
-  restoreJourneyState,
-  stableOnboardingMemberId,
-} from './first-run-quest/onboarding-journey';
-import {
-  STORAGE_KEY,
-  setupDraftForTemplate,
-  stepForJourneyStage,
-  updateJourney,
-  type WizardStep,
-} from './first-run-quest/onboarding-storage';
-import { type TemplateCard, TemplateStep } from './first-run-quest/TemplateStep';
+import { NativePartnerCard } from './first-run-quest/NativePartnerCard';
+import { SMALL_GOALS } from './first-run-quest/native-onboarding';
+import { useNativeOnboarding } from './first-run-quest/useNativeOnboarding';
 
 interface FirstRunQuestWizardProps {
   open: boolean;
   onClose: () => void;
-  onCreated: (questThreadId: string, catName: string) => void;
+  onCreated: (threadId: string, catName: string) => void;
 }
 
 export function FirstRunQuestWizard({ open, onClose, onCreated }: FirstRunQuestWizardProps) {
-  const { refresh } = useCatData();
-  const [step, setStep] = useState<WizardStep>('demo');
-  const [journey, setJourney] = useState<OnboardingJourneyState>(() => createJourneyState());
-  const [selectedTemplate, setSelectedTemplate] = useState<TemplateCard | null>(null);
-  const [selectedClients, setSelectedClients] = useState<DetectedClient[]>([]);
-  const [configIndex, setConfigIndex] = useState(0);
-  const [error, setError] = useState<string | null>(null);
-  const createdCatsRef = useRef<Map<string, { id: string; name: string }>>(new Map());
-  const configsRef = useRef<Map<string, { accountRef: string; model: string }>>(new Map());
-
+  const setup = useNativeOnboarding(open, onCreated);
+  const [step, setStep] = useState<'partners' | 'goal'>('partners');
+  const [invalid, setInvalid] = useState<Record<string, boolean>>({});
+  const close = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     if (!open) return;
-    let restored: OnboardingJourneyState | null = null;
-    try {
-      restored = restoreJourneyState(localStorage.getItem(STORAGE_KEY));
-    } catch {
-      /* Storage may be disabled. */
-    }
-    const next = restored ?? createJourneyState();
-    setJourney(next);
-    setStep(stepForJourneyStage(next));
-    setSelectedTemplate(next.setup?.template ?? null);
-    setSelectedClients(next.setup?.clients ?? []);
-    setConfigIndex(next.setup?.configIndex ?? 0);
-    setError(null);
-    createdCatsRef.current = new Map();
-    configsRef.current = new Map(Object.entries(next.setup?.configs ?? {}));
+    setStep('partners');
+    const previous = document.activeElement;
+    close.current?.focus();
+    return () => {
+      if (previous instanceof HTMLElement) previous.focus();
+    };
   }, [open]);
-
-  const advanceDemo = useCallback(() => {
-    setJourney((current) => {
-      if (current.demoPaused) return current;
-      const scene = nextDemoScene(current.demoScene);
-      const next = updateJourney(current, {
-        demoScene: scene,
-        stage: scene === 'handoff' ? 'handoff' : 'demo',
-        demoCompletedAt: scene === 'handoff' ? Date.now() : current.demoCompletedAt,
-      });
-      if (scene === 'handoff') setStep('template');
-      return next;
-    });
-  }, []);
-
-  const toggleDemoPause = useCallback(() => {
-    setJourney((current) => updateJourney(current, { demoPaused: !current.demoPaused }));
-  }, []);
-
-  const handleTemplateSelect = useCallback((template: TemplateCard) => {
-    setSelectedTemplate(template);
-    setJourney((current) => setupDraftForTemplate(current, template));
-    configsRef.current = new Map();
-    createdCatsRef.current = new Map();
-    setStep('client');
-  }, []);
-
-  const handleClientSelect = useCallback(
-    (clients: DetectedClient[]) => {
-      if (!canContinueClientSetup(clients)) return;
-      const configs = Object.fromEntries(
-        clients.flatMap((client) => {
-          const config = journey.setup?.configs[client.client];
-          return config ? [[client.client, config]] : [];
-        }),
-      );
-      const missingIndex = clients.findIndex((client) => !configs[client.client]);
-      const nextIndex = missingIndex < 0 ? clients.length - 1 : missingIndex;
-      setSelectedClients(clients);
-      setJourney((current) =>
-        updateJourney(current, {
-          stage: 'setup',
-          realMembers: buildRealMembers(clients),
-          setup: { ...current.setup, step: 'config', clients, configs, configIndex: nextIndex },
-        }),
-      );
-      configsRef.current = new Map(Object.entries(configs));
-      createdCatsRef.current = new Map();
-      setConfigIndex(nextIndex);
-      setStep('config');
-    },
-    [journey.setup],
-  );
-
-  const goBack = () => {
-    const nextStep = step === 'config' ? 'client' : step === 'client' ? 'template' : 'demo';
-    setStep(nextStep);
-    setJourney((current) =>
-      updateJourney(current, {
-        stage: nextStep === 'client' ? 'setup' : nextStep === 'template' ? 'handoff' : 'demo',
-        setup: current.setup ? { ...current.setup, step: 'client' } : undefined,
-      }),
-    );
-  };
-
-  const currentClient = selectedClients[configIndex];
-  const createCat = useCallback(
-    async (client: DetectedClient, config: { accountRef: string; model: string }) => {
-      if (!selectedTemplate) throw new Error('请先选择角色模板');
-      const existing = createdCatsRef.current.get(client.client);
-      if (existing) return existing;
-      const catId = stableOnboardingMemberId(journey.journeyId, selectedTemplate.id, client.client);
-      const catName = `${selectedTemplate.name} · ${client.label}`;
-      const nickname = selectedTemplate.nickname ? `${selectedTemplate.nickname} · ${client.label}` : undefined;
-      const response = await apiFetch('/api/cats', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Cat-Cafe-Onboarding-Journey': journey.journeyId,
-          'Idempotency-Key': `onboarding:${journey.journeyId}:cat:${client.client}`,
-        },
-        body: JSON.stringify({
-          catId,
-          name: catName,
-          displayName: catName,
-          nickname,
-          avatar: selectedTemplate.avatar,
-          color: selectedTemplate.color,
-          mentionPatterns: [...new Set([`@${catName}`, ...(nickname ? [`@${nickname}`] : [])])],
-          roleDescription: selectedTemplate.roleDescription,
-          personality: selectedTemplate.personality,
-          teamStrengths: selectedTemplate.teamStrengths,
-          clientId: client.provider,
-          accountRef: config.accountRef,
-          defaultModel: config.model,
-        }),
-      });
-      if (!response.ok) throw new Error(`创建 ${client.label} 失败 (${response.status})`);
-      const body = (await response.json()) as { cat?: { id: string; displayName: string } };
-      const created = { id: body.cat?.id ?? catId, name: body.cat?.displayName ?? catName };
-      createdCatsRef.current.set(client.client, created);
-      return created;
-    },
-    [journey.journeyId, selectedTemplate],
-  );
-
-  const handleConfigComplete = useCallback(
-    async (config: { accountRef: string; model: string }) => {
-      if (!currentClient) return;
-      setError(null);
-      configsRef.current.set(currentClient.client, config);
-      setJourney((current) =>
-        updateJourney(current, {
-          setup: current.setup
-            ? {
-                ...current.setup,
-                configs: { ...current.setup.configs, [currentClient.client]: config },
-                configIndex: configIndex < selectedClients.length - 1 ? configIndex + 1 : configIndex,
-              }
-            : undefined,
-        }),
-      );
-
-      if (configIndex < selectedClients.length - 1) {
-        setConfigIndex((index) => index + 1);
-        return;
-      }
-
-      if (!canContinueClientSetup(selectedClients) || configsRef.current.size !== selectedClients.length) {
-        setError('请先完成所有客户端的安装、登录和配置');
-        setStep('client');
-        return;
-      }
-
-      setStep('creating');
-      try {
-        for (const client of selectedClients) {
-          const clientConfig = configsRef.current.get(client.client);
-          if (!clientConfig) throw new Error(`缺少 ${client.label} 的配置`);
-          await createCat(client, clientConfig);
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : '创建成员失败');
-        setStep('config');
-        return;
-      }
-      try {
-        await refresh();
-        const response = await apiFetch('/api/threads', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Cat-Cafe-Onboarding-Journey': journey.journeyId,
-            'Idempotency-Key': `onboarding:${journey.journeyId}:thread`,
-          },
-          body: JSON.stringify({
-            title: '首启协作旅程',
-            bootcampState: {
-              v: 1,
-              phase: 'phase-1-intro',
-              leadCat: createdCatsRef.current.get(selectedClients[0]?.client ?? '')?.id,
-              startedAt: Date.now(),
-              journeyId: journey.journeyId,
-            },
-          }),
-        });
-        if (!response.ok) throw new Error('创建协作线程失败');
-        const thread = (await response.json()) as { id: string };
-        setJourney((current) =>
-          updateJourney(current, {
-            stage: 'ready',
-            threadId: thread.id,
-            realMembers: buildRealMembers(selectedClients),
-          }),
-        );
-        setStep('done');
-        onCreated(thread.id, createdCatsRef.current.get(selectedClients[0]?.client ?? '')?.name ?? '你的团队');
-      } catch (err) {
-        setError(err instanceof Error ? err.message : '创建失败');
-        setStep('config');
-      }
-    },
-    [configIndex, createCat, currentClient, journey.journeyId, onCreated, refresh, selectedClients],
-  );
-
-  const title = useMemo(() => {
-    if (step === 'demo') return '认识你的协作团队';
-    if (step === 'template') return '选择团队角色';
-    if (step === 'client') return '选择协作客户端';
-    if (step === 'config') return `配置 ${currentClient?.label ?? '客户端'}`;
-    if (step === 'creating') return '正在创建团队';
-    return '团队已就绪';
-  }, [currentClient?.label, step]);
-
   if (!open) return null;
-  const canGoBack = step === 'template' || step === 'client' || step === 'config';
+  const { draft, loading, busy, error } = setup;
+  const selected = draft?.partners.filter((p) => p.selected) ?? [];
+  const invalidSelection = selected.some((p) => invalid[p.id] || !p.form.displayName.trim());
+  const lead = selected.find((p) => p.id === draft?.lead) ?? selected[0];
 
   return createPortal(
-    <div
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-[var(--console-overlay-medium)] px-4 backdrop-blur-sm"
-      onClick={onClose}
-    >
-      <div
-        className="flex max-h-[88vh] w-full max-w-lg flex-col rounded-2xl border border-conn-amber-ring bg-[var(--console-card-bg)] shadow-2xl"
-        onClick={(event) => event.stopPropagation()}
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-[var(--console-overlay-medium)] px-3 py-4 backdrop-blur-sm">
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="native-setup-title"
+        className="flex max-h-[92dvh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-[var(--console-border-soft)] bg-[var(--console-card-bg)] text-cafe shadow-2xl"
+        onKeyDown={(event) => {
+          if (event.key === 'Escape' && !busy) onClose();
+          if (event.key !== 'Tab') return;
+          const controls = Array.from(
+            event.currentTarget.querySelectorAll<HTMLElement>(
+              'button:not(:disabled), input:not(:disabled), textarea, select, summary, a[href]',
+            ),
+          ).filter((element) => element.getClientRects().length > 0);
+          const first = controls[0],
+            last = controls.at(-1);
+          if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault();
+            last?.focus();
+          } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first?.focus();
+          }
+        }}
       >
-        <div className="flex items-center justify-between border-b border-[var(--semantic-warning-surface)] px-6 py-4">
-          <div className="flex items-center gap-3">
-            {canGoBack && (
-              <button type="button" onClick={goBack} className="text-sm text-cafe-muted hover:text-cafe-secondary">
-                返回
-              </button>
-            )}
-            <h3 className="text-base font-semibold text-cafe">{title}</h3>
+        <header className="flex items-start justify-between gap-4 border-b border-[var(--console-border-soft)] px-6 py-5">
+          <div>
+            <p className="mb-2 text-xs text-cafe-muted">
+              {step === 'partners' ? '1 / 2 · 配置伙伴' : '2 / 2 · 第一个小目标'}
+            </p>
+            <h2 id="native-setup-title" className="text-xl font-semibold">
+              {step === 'partners' ? '把你的工具，变成一起做事的伙伴' : '一起完成一件小事'}
+            </h2>
+            <p className="mt-2 text-sm text-cafe-secondary">
+              {step === 'partners'
+                ? '已安装的工具会自动推荐。选择要加入的伙伴，模型和思考强度默认跟随工具。'
+                : '从一个具体、可完成的目标开始。你可以改写内容，再交给伙伴。'}
+            </p>
           </div>
           <button
+            ref={close}
             type="button"
+            aria-label="关闭伙伴配置"
+            disabled={Boolean(busy)}
             onClick={onClose}
-            className="text-xl leading-none text-cafe-muted hover:text-cafe-secondary"
-            aria-label="关闭"
+            className="min-h-10 min-w-10 rounded-lg text-xl text-cafe-muted hover:bg-[var(--console-hover-bg)]"
           >
             ×
           </button>
-        </div>
-        <div className="flex-1 overflow-y-auto px-6 py-4">
+        </header>
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
           {error && (
-            <div className="mb-3 rounded-lg border border-conn-red-ring bg-conn-red-bg p-3 text-sm text-conn-red-text">
+            <div
+              role="alert"
+              className="mb-4 rounded-xl border border-conn-red-ring bg-conn-red-bg p-3 text-sm text-conn-red-text"
+            >
               {error}
+              <p className="mt-1">已保存的伙伴会保留，可以重试。</p>
+              <button type="button" disabled={Boolean(busy)} onClick={setup.reload} className="mt-2 underline">
+                重新检测
+              </button>
             </div>
           )}
-          {step === 'demo' && <DemoStep journey={journey} onPause={toggleDemoPause} onAdvance={advanceDemo} />}
-          {step === 'template' && <TemplateStep onSelect={handleTemplateSelect} />}
-          {step === 'client' && (
-            <ClientStep
-              savedClients={journey.setup?.detectedClients ?? journey.setup?.clients}
-              onClientsChange={(clients) =>
-                setJourney((current) =>
-                  updateJourney(current, {
-                    setup: current.setup ? { ...current.setup, detectedClients: clients } : undefined,
-                  }),
-                )
-              }
-              onSelect={handleClientSelect}
-            />
-          )}
-          {step === 'config' && currentClient && (
-            <ConfigStep
-              key={currentClient.client}
-              client={currentClient.client}
-              clientId={currentClient.provider}
-              detectedAuth={
-                currentClient.authType === 'environment'
-                  ? 'environment'
-                  : currentClient.authenticated && !currentClient.hasApiKey
-                    ? 'oauth'
-                    : false
-              }
-              initialConfig={journey.setup?.configs[currentClient.client]}
-              onComplete={handleConfigComplete}
-            />
-          )}
-          {step === 'creating' && (
-            <div className="flex flex-col items-center py-12">
-              <div className="mb-4 h-8 w-8 animate-spin rounded-full border-2 border-conn-amber-ring border-t-amber-600" />
-              <p className="text-sm text-cafe-muted">正在创建你的真实团队...</p>
+          {loading ? (
+            <p role="status" className="py-12 text-center text-cafe-muted">
+              正在检测本机工具…
+            </p>
+          ) : step === 'partners' ? (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between text-sm">
+                <span className="font-medium">推荐伙伴 · 已选择 {selected.length} 位</span>
+                <button type="button" onClick={setup.reload} className="min-h-10 text-cafe-accent">
+                  重新检测
+                </button>
+              </div>
+              {draft?.partners.map((partner) => (
+                <NativePartnerCard
+                  key={partner.id}
+                  partner={partner}
+                  created={Boolean(draft.created[partner.id] || partner.existingId)}
+                  patch={(change) => setup.patchPartner(partner.id, change)}
+                  onValidityChange={(valid) =>
+                    setInvalid((current) =>
+                      current[partner.id] === !valid ? current : { ...current, [partner.id]: !valid },
+                    )
+                  }
+                />
+              ))}
+              {!selected.length && (
+                <p className="rounded-lg bg-cafe-surface-canvas p-4 text-sm text-cafe-secondary">
+                  选择至少一位伙伴继续。没有找到工具？可以先在工具中完成安装和登录，再回来重新检测。
+                </p>
+              )}
+              <p className="pt-2 text-xs leading-relaxed text-cafe-muted">
+                使用各工具已有的连接与登录配置；是否可正常调用，将在第一次真实对话中验证。以后可在“设置 →
+                成员与运行时”继续调整。
+              </p>
             </div>
-          )}
-          {step === 'done' && (
-            <div className="space-y-3 py-10 text-center">
-              <div className="text-4xl">🎉</div>
-              <p className="text-base font-semibold text-cafe">团队已就绪</p>
-              <p className="text-sm text-cafe-muted">发送第一条真实消息，开始你的协作旅程。</p>
+          ) : (
+            <div className="space-y-5">
+              <div className="flex flex-wrap gap-2">
+                {SMALL_GOALS.map((goal) => (
+                  <button
+                    key={goal.title}
+                    type="button"
+                    onClick={() => setup.patch({ goal: goal.content })}
+                    className={`min-h-10 rounded-full border px-4 text-sm ${draft?.goal === goal.content ? 'border-cafe-accent text-cafe-accent' : 'border-[var(--console-border-soft)] text-cafe-secondary'}`}
+                  >
+                    {goal.title}
+                  </button>
+                ))}
+              </div>
+              <label className="block text-sm font-medium">
+                你想完成什么？
+                <textarea
+                  value={draft?.goal ?? ''}
+                  onChange={(e) => setup.patch({ goal: e.target.value })}
+                  placeholder="例如：把我的想法整理为今天可以完成的三步计划"
+                  rows={5}
+                  maxLength={4000}
+                  className="mt-3 w-full resize-y rounded-xl border border-[var(--console-border-soft)] bg-cafe-surface-canvas p-4 font-normal leading-relaxed focus:border-cafe-accent"
+                />
+              </label>
+              <label className="block text-sm font-medium">
+                先和哪位伙伴开始？
+                <select
+                  value={lead?.id ?? ''}
+                  onChange={(e) => setup.patch({ lead: e.target.value })}
+                  className="mt-3 block min-h-11 w-full rounded-lg border border-[var(--console-border-soft)] bg-cafe-surface-canvas px-3 font-normal"
+                >
+                  {selected.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.form.displayName} · {p.runtime.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="rounded-xl bg-cafe-surface-canvas p-4 text-sm leading-relaxed text-cafe-secondary">
+                将添加 {selected.length}{' '}
+                位伙伴并打开一段真实对话。目标会放进输入框，确认发送即可开始；其他伙伴也可以在对话中通过 @ 邀请。
+              </div>
             </div>
           )}
         </div>
-      </div>
+        <footer className="flex shrink-0 items-center justify-between gap-3 border-t border-[var(--console-border-soft)] px-6 py-4">
+          <button
+            type="button"
+            disabled={Boolean(busy)}
+            onClick={step === 'goal' ? () => setStep('partners') : onClose}
+            className="min-h-11 rounded-lg px-3 text-sm text-cafe-secondary"
+          >
+            {step === 'goal' ? '返回选择伙伴' : '稍后配置'}
+          </button>
+          <button
+            type="button"
+            disabled={
+              loading ||
+              Boolean(busy) ||
+              !selected.length ||
+              invalidSelection ||
+              (step === 'goal' && !draft?.goal.trim())
+            }
+            onClick={step === 'partners' ? () => setStep('goal') : () => void setup.start()}
+            className="min-h-11 rounded-xl bg-cafe-accent px-5 text-sm font-medium text-[var(--cafe-surface)] disabled:opacity-50"
+          >
+            <span role="status">
+              {busy || (step === 'partners' ? `下一步 · 为 ${selected.length} 位伙伴设定小目标` : '保存伙伴，前往对话')}
+            </span>
+          </button>
+        </footer>
+      </section>
     </div>,
     document.body,
   );
