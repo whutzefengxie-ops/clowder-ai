@@ -33,8 +33,16 @@ async function run() {
     assert.equal(await page.locator('#edit-binding').isDisabled(), true);
     await fixture(page, 'unconfigured');
     await page.locator('#current-task .primary').click();
+    assert.equal(await page.locator('#config-externalUrl').inputValue(), 'https://github.com/demo/core.git');
+    assert.equal(await page.locator('[name="externalProfile"], [name="internalProfile"]').count(), 0);
+    await page.locator('#config-externalUrl').fill('');
+    await page.locator('#config-internalUrl').fill('');
     await page.locator('#next-binding').click();
-    assert.match(await page.locator('#wizard-error').innerText(), /地址/);
+    assert.match(await page.locator('#wizard-error').innerText(), /填入示例仓库/);
+    await page.locator('#example-binding').click();
+    assert.equal(await page.locator('#wizard-error').count(), 0);
+    assert.equal(await page.locator('#config-externalUrl').inputValue(), 'https://github.com/demo/core.git');
+    assert.equal(await page.locator('#config-internalUrl').inputValue(), 'git@codehub.example:demo/core.git');
     const external = 'https://github.com/sentinel-lab/sentinel-core.git';
     const internal = 'git@codehub.example:team/sentinel-core.git';
     const baseline = 'aa713c891234567890abcdef1234567890abcdef';
@@ -47,8 +55,6 @@ async function run() {
     for (const [field, value] of Object.entries(fields)) await page.locator(`#config-${field}`).fill(value);
     await page.locator('.wizard-advanced > summary').click();
     await page.locator('#config-internalWebUrl').fill('https://codehub.example/team/sentinel-core');
-    await page.locator('#config-externalProfile').fill('sentinel-git');
-    await page.locator('#config-internalProfile').fill('sentinel-cli');
     await page.locator('#config-externalUrl').fill('https://synthetic-credential@github.com/example/core.git');
     await page.locator('#next-binding').click();
     assert.match(await page.locator('#wizard-error').innerText(), /不含凭据/);

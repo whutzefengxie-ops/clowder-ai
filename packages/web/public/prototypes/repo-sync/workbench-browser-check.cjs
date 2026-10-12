@@ -29,11 +29,22 @@ async function run() {
     await page.locator('#current-task .primary').click();
     assert.match(await page.locator('#binding-form h2').innerText(), /连接仓库/);
     assert.equal(await page.locator('#config-baseline').count(), 0);
-    await page.locator('#config-externalUrl').fill('https://github.com/journey-lab/core.git');
-    await page.locator('#config-internalUrl').fill('git@codehub.example:journey/core.git');
+    assert.equal(await page.locator('#config-externalUrl').inputValue(), 'https://github.com/demo/core.git');
+    assert.equal(await page.locator('#config-internalUrl').inputValue(), 'git@codehub.example:demo/core.git');
+    assert.equal(await page.locator('[name="externalProfile"], [name="internalProfile"]').count(), 0);
+    for (const width of [1440, 1024, 768, 390]) {
+      await page.setViewportSize({ width, height: 1000 });
+      const sizes = await page.evaluate(() => [
+        document.documentElement.scrollWidth,
+        document.documentElement.clientWidth,
+      ]);
+      assert.ok(sizes[0] <= sizes[1], `sample configuration overflow at ${width}`);
+      if (width === 1440 || width === 390)
+        await page.screenshot({ path: join(evidence, `17-sample-repositories-${width}.png`), fullPage: true });
+    }
+    await page.setViewportSize({ width: 1440, height: 1000 });
     await page.locator('#next-binding').click();
     assert.match(await page.locator('#binding-form h2').innerText(), /起始版本/);
-    await page.locator('#config-baseline').fill('9b582f70');
     await page.locator('#next-binding').click();
     await page.locator('#check-binding').click();
     await page.locator('#save-binding').click();

@@ -22,7 +22,7 @@ tips_exempt: 独立原型验证记录，尚未挂载正式功能。
 | 查看版本对应 | 总览三个版本卡；映射页来源提交、内部初始化与合并节点 |
 | 未合入 PR 与卡点 | 主状态、待合入数量、当前对象、九步流程与恢复入口 |
 | 正常审批路径 | 具体 PR URL 跳转；点击链接不改 main；平台合入后回读、核验、核对 Issue |
-| 仓库与分支配置 | 可填写 GitHub / 内部 Git 地址、来源 / 目标分支、网页地址、认证配置引用、平台 CLI 与起始版本 |
+| 仓库与分支配置 | 可填写 GitHub / 内部 Git 地址、来源 / 目标分支、网页地址、平台 CLI 与起始版本；演示不要求认证 |
 | 配置状态因果 | 修改后重查；保存后等待初始化；初始化前不能同步；活动交付禁止替换绑定 |
 | 绑定与页面隔离 | PR URL 携带绑定 ID；旧绑定页面不能操作新交付；旧合成映射与记录保留在 archives |
 | 分支与 PR 命名 | 配置预览 / 实际流程 / PR 页共用 sync/{deliveryId} 与 [上游同步] PR #{sourcePr} · {title} |
@@ -36,12 +36,12 @@ tips_exempt: 独立原型验证记录，尚未挂载正式功能。
 
 本轮命令及结果：
 
-- 本目录 4 个 `*.test.mjs` 通过 `node --test` 执行：23 项通过，0 失败。新增工作台的 4 个行为测试先观察失败再实现，覆盖十种状态的唯一主操作、技术说明默认折叠、实际核验入口与历史同步不能推进别的 PR；原有 19 项仍通过，按钮位置断言跟随新体验契约改为当前操作卡，接受游标和审批等状态断言保留。
+- 本目录 5 个 `*.test.mjs` 通过 `node --test` 执行：27 项通过，0 失败。新增演示配置的 4 项检查覆盖零输入前进、无认证名称初始化、保留自定义地址和恢复已保存绑定；其中两个故障复现检查先观察失败再实现。原有工作台与状态机 23 项仍通过。
 - `node packages/web/public/prototypes/repo-sync/browser-check.cjs`：完整旅程通过，页面异常和 HTTP 错误均为 0；截图写入系统临时目录 `repo-sync-prototype-evidence`。
-- `node packages/web/public/prototypes/repo-sync/binding-browser-check.cjs`：配置旅程通过。使用 fixture 外的仓库地址、release/2、delivery-main、完整 40 位 commit ID 与认证配置引用；验证总览 / 映射 / PR 页面反映自定义配置、刷新保留、编辑后检查失效及活动绑定保护。页面异常 / HTTP 错误均为 0，四种屏宽无横向溢出。截图位于系统临时目录 `repo-sync-binding-evidence`。
+- `node packages/web/public/prototypes/repo-sync/binding-browser-check.cjs`：配置旅程通过。验证实际预填、无认证字段、空地址明确提示与点击示例恢复；使用 fixture 外的仓库地址、release/2、delivery-main、完整 40 位 commit ID，验证总览 / 映射 / PR 页面反映自定义配置、刷新保留、编辑后检查失效及活动绑定保护。页面异常 / HTTP 错误均为 0，四种屏宽无横向溢出。截图位于系统临时目录 `repo-sync-binding-evidence`。
 - `node packages/web/public/prototypes/repo-sync/delivery-browser-check.cjs`：通过。隐藏演示控制条后 7→8→9；点击未来节点不会改变阶段 6 或绕过审批；流程 / PR 页面包含各自审计，同一笔历史审批备注刷新保留；第二笔 PR 不含第一笔备注；新增外部交付不污染当前审计；映射页无审计面板。1440 / 1024 / 768 / 390 宽通过，页面异常 / HTTP 错误为 0；截图位于 `repo-sync-delivery-evidence`。
-- `node packages/web/public/prototypes/repo-sync/workbench-browser-check.cjs`：通过。从全新未配置状态，只沿主操作完成三步配置、初始化、同步、具体 PR 审批、核验与收尾。十种场景在 1440 / 1024 / 768 / 390 宽、800 高视口中都恰有一个当前主操作，按钮首屏可见且无横向溢出。演示控制与九步技术说明默认收起，导航仅两项。页面异常 / HTTP 错误为 0；截图位于 `repo-sync-workbench-evidence`。
-- 项目安装的 Biome 2.4.1 对 27 个 JS 模块执行 `check`：通过，无警告；6 个 HTML／CSS 执行关闭格式化的语法与 lint 检查：通过，无警告。CSS 保留紧凑声明以遵守文件行数硬限。
+- `node packages/web/public/prototypes/repo-sync/workbench-browser-check.cjs`：通过。从全新未配置状态，无需输入地址、起始版本或认证，只沿主操作完成三步配置、初始化、同步、具体 PR 审批、核验与收尾。十种场景在 1440 / 1024 / 768 / 390 宽、800 高视口中都恰有一个当前主操作，按钮首屏可见且无横向溢出。演示控制与九步技术说明默认收起，导航仅两项。页面异常 / HTTP 错误为 0；截图位于 `repo-sync-workbench-evidence`。
+- 项目安装的 Biome 2.4.1 对 28 个 JS 模块执行 `check`：通过，无警告；6 个 HTML／CSS 执行关闭格式化的语法与 lint 检查：通过，无警告。CSS 保留紧凑声明以遵守文件行数硬限。
 - `git diff --check`／暂存差异检查：通过。所有原型文件低于 350 行硬限；CSS 214 行超过 200 行提示线，仍低于硬限。
 - `node scripts/check-capability-tips.mjs --changed-file packages/web/public/prototypes/repo-sync/README.md`：通过，另有 17 个原有目录引用警告。
 - 不限定改动范围的 capability-tips 检查：20 个问题，均指向本分支基线已有的 Feature 文档，不涉及原型文件。未将其宣称为全仓通过。
@@ -74,3 +74,7 @@ Architecture cell：独立原型工作面，不新增生产同步服务或产品
 本轮实际体验：Codex 内嵌浏览器刷新后看见未配置主入口 → 点击“开始配置仓库” → 看见第一步地址表单和唯一“下一步”按钮。四条浏览器旅程实际通过；新旅程从空状态走到内部 PR 审批并收尾。桌面 / 手机截图核对主动作、上下文和折叠层级。作者能证明操作可达、状态正确及首屏位置；界面是否让目标用户无需解释就理解，仍需用户实际试用判断，不用自动化通过代替用户判断。
 
 工作台提交后诊断：`node scripts/check-fallback-layers.mjs --base f6b85c2b4` 扫描本轮 10 个代码文件，机械计数净增 6，触发坐标提示。核对后，新增的是互斥导航参数、演示场景条件、视图从同一个状态对象选择“当前 / 下一笔 / 最近记录”、输入校验与测试路径默认值。没有第二套接受游标或失败后自动合入。`taskContext` 只选择展示对象，实际 `start / advance / approve` 仍由原状态机守卫；历史详情不执行另一笔任务。向导分步检查与最终保存都走同一验证函数，最终保存仍重新校验全部字段与当前指纹。代码整理后 23 项单元检查及工作台 / 向导旅程重新通过。
+
+演示配置阻塞修复：用户截图中的两条示例地址是 placeholder，实际 value 为空。Codex 内嵌浏览器读取输入属性确认这一根因；新增单元复现先观察到 2 失败、2 通过。现已给首次使用草稿实际预填示例地址，提供明确的示例恢复按钮，并移除未实现的认证名称字段和必填校验。地址仍执行格式校验，不放宽凭据 / 查询参数拒绝；样例草稿不改变业务绑定、接受游标或初始化状态。已有自定义地址与 saved 状态保持原值，存档不删除。
+
+本轮验证：27 项单元通过；四条浏览器旅程通过，其中工作台从全新状态零输入完成配置、同步与 PR 审批收尾，配置旅程覆盖清空地址报错 → 点击示例恢复 → 自定义配置。示例设置表单在四种屏宽无横向溢出。内嵌浏览器刷新后实际显示已填入地址、无需认证说明和下一步入口；当前仅停留在配置草稿，未替用户初始化或完成审批。证据图片 `17-sample-repositories-1440.png` 与 `17-sample-repositories-390.png` 位于 `repo-sync-workbench-evidence`；仍未访问真实仓库或认证服务。

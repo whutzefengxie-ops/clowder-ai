@@ -1,3 +1,4 @@
+import { defaultBinding } from './binding.mjs';
 import { COMPLETE } from './data.mjs';
 import { escapeHtml } from './html.mjs';
 import { renderIdentity } from './render-delivery.mjs';
@@ -29,11 +30,12 @@ function errors(ui) {
 }
 function advanced(draft) {
   return `<details class="wizard-advanced"><summary>更多连接选项（通常无需修改）</summary>${input(draft, 'internalWebUrl', '内部仓库网页地址（可选）', 'PR 的具体 URL 由平台适配器返回。')}
-    <div class="wizard-grid">${input(draft, 'externalProfile', '外部认证配置引用', '引用执行机已有配置，不填写 Token 或密码。')}${input(draft, 'internalProfile', '内部认证配置引用', '仅记录配置名称，不保存密钥。')}</div>
     <label class="config-field" for="config-adapter"><span>Issue / PR 命令适配</span><select id="config-adapter" name="adapter"><option value="codehub-cli" ${draft.adapter === 'codehub-cli' ? 'selected' : ''}>codehub-cli</option><option value="platform-cli" ${draft.adapter === 'platform-cli' ? 'selected' : ''}>其他平台 CLI（待接入）</option></select><small>Git Bash 负责代码；平台 CLI 负责 Issue / PR。</small></label></details>`;
 }
 function connectionStep(draft) {
-  return `<div class="wizard-grid"><section class="wizard-section"><h3>外部：从这里接收更新</h3>${input(draft, 'externalUrl', 'GitHub 仓库地址', '支持 HTTPS 或 SSH，地址中不要携带凭据。', 'https://github.com/example/core.git')}${input(draft, 'sourceBranch', '外部交付分支', '通常使用 main。')}</section><section class="wizard-section"><h3>内部：在这里审核与合入</h3>${input(draft, 'internalUrl', '内部 Git 仓库地址', '系统推送候选分支，并创建内部 PR。', 'git@codehub.example:team/core.git')}${input(draft, 'targetBranch', '内部合入分支', '同步 PR 将请求合入这个分支。')}</section></div>${advanced(draft)}`;
+  const example = defaultBinding();
+  const usingExample = draft.externalUrl === example.externalUrl && draft.internalUrl === example.internalUrl;
+  return `<div class="demo-config"><p><strong>${usingExample ? '示例仓库已填入，可直接点击下一步。' : '仓库地址仅用于演示展示。'}</strong><span>无需登录或填写凭据，不会访问任何仓库。</span></p><button type="button" id="example-binding" class="text-button">填入示例仓库</button></div><div class="wizard-grid"><section class="wizard-section"><h3>外部：从这里接收更新</h3>${input(draft, 'externalUrl', 'GitHub 仓库地址', '支持 HTTPS 或 SSH，地址中不要携带凭据。', '请输入 GitHub 仓库地址')}${input(draft, 'sourceBranch', '外部交付分支', '通常使用 main。')}</section><section class="wizard-section"><h3>内部：在这里审核与合入</h3>${input(draft, 'internalUrl', '内部 Git 仓库地址', '演示候选分支推送与内部 PR 创建，不执行实际操作。', '请输入内部 Git 仓库地址')}${input(draft, 'targetBranch', '内部合入分支', '同步 PR 将请求合入这个分支。')}</section></div>${advanced(draft)}`;
 }
 function baselineStep(draft) {
   return `${input(draft, 'baseline', '从哪个上游 commit 开始', '本原型预填示例版本，你可以替换为其他 7–40 位 commit ID。后续从这个版本连续接收更新。')}
@@ -47,13 +49,13 @@ function finalStep(state, ui) {
 }
 function readonlyBinding(state, ui) {
   const locked = state.active && state.active.phase < COMPLETE;
-  return `<section class="panel config-readonly"><span class="badge good">演示连接已初始化</span><h2>当前仓库连接</h2><p>这是正在使用的接收链路，所有同步都从这个起始版本继续。</p>${facts(state.binding)}${errors(ui)}${locked ? '<div id="binding-lock" class="notice">当前有未完成同步，完成前不能更换仓库、分支或起始版本。</div>' : ''}<div class="wizard-actions">${locked ? '<button type="button" class="button primary" data-view="overview">返回当前同步 →</button><button type="button" id="edit-binding" class="button secondary" disabled>同步完成后可修改</button>' : '<button type="button" class="button secondary" data-view="overview">← 返回工作台</button><button type="button" id="edit-binding" class="button primary">修改仓库连接 →</button>'}</div><details class="wizard-advanced"><summary>查看认证配置与命名规则</summary><p>外部认证引用 ${escapeHtml(state.binding.externalProfile)} · 内部认证引用 ${escapeHtml(state.binding.internalProfile)} · ${escapeHtml(state.binding.adapter)}</p>${renderIdentity(state.active ?? state.deliveries[0], state.binding, 0)}</details></section>`;
+  return `<section class="panel config-readonly"><span class="badge good">演示连接已初始化</span><h2>当前仓库连接</h2><p>这是正在使用的接收链路，所有同步都从这个起始版本继续。</p>${facts(state.binding)}${errors(ui)}${locked ? '<div id="binding-lock" class="notice">当前有未完成同步，完成前不能更换仓库、分支或起始版本。</div>' : ''}<div class="wizard-actions">${locked ? '<button type="button" class="button primary" data-view="overview">返回当前同步 →</button><button type="button" id="edit-binding" class="button secondary" disabled>同步完成后可修改</button>' : '<button type="button" class="button secondary" data-view="overview">← 返回工作台</button><button type="button" id="edit-binding" class="button primary">修改仓库连接 →</button>'}</div><details class="wizard-advanced"><summary>查看命令适配与命名规则</summary><p>Issue / PR 命令适配：${escapeHtml(state.binding.adapter)}。演示无需认证，命令不实际执行。</p>${renderIdentity(state.active ?? state.deliveries[0], state.binding, 0)}</details></section>`;
 }
 export function renderBinding(state, ui) {
   if (!ui.editing) return readonlyBinding(state, ui);
   const labels = ['连接仓库', '选择起始版本', '检查并启用'];
   const descriptions = [
-    '先填写来源和接收仓库。下一步再选择初始化版本。',
+    '保留示例地址或填写自己的地址，下一步选择起始版本。',
     '只设置一次起始版本，之后按上游交付顺序持续同步。',
     '核对填写的信息，保存后完成模拟初始化。',
   ];

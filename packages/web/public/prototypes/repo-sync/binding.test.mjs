@@ -3,7 +3,7 @@ import test from 'node:test';
 import { defaultBinding, initializeBinding, saveBinding, validateBinding } from './binding.mjs';
 import { createState, reduce } from './state.mjs';
 
-test('repository config accepts GitHub HTTPS and internal SSH, with credential references only', () => {
+test('repository config accepts GitHub HTTPS and internal SSH, and rejects credentials in URLs', () => {
   const draft = {
     ...defaultBinding(),
     externalUrl: 'https://github.com/example/core.git',

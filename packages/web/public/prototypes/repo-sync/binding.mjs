@@ -14,8 +14,6 @@ export function defaultBinding() {
     initialInternalSha: '10a91f20',
     mode: 'snapshot',
     adapter: 'codehub-cli',
-    externalProfile: 'system-git',
-    internalProfile: 'internal-cli',
   };
 }
 export function emptyBinding() {
@@ -84,13 +82,13 @@ function webAddressValid(value) {
 }
 function connectionErrors(draft) {
   const errors = [];
-  if (!gitAddress(draft.externalUrl, true))
+  if (!draft.externalUrl) errors.push('请填写 GitHub 仓库地址，或点击「填入示例仓库」。');
+  else if (!gitAddress(draft.externalUrl, true))
     errors.push('外部地址需为 GitHub 仓库的 HTTPS 或 SSH 地址，且不含凭据、查询参数。');
-  if (!gitAddress(draft.internalUrl)) errors.push('内部地址需为 HTTPS 或 SSH Git 地址，且不含凭据、查询参数。');
+  if (!draft.internalUrl) errors.push('请填写内部 Git 仓库地址，或点击「填入示例仓库」。');
+  else if (!gitAddress(draft.internalUrl)) errors.push('内部地址需为 HTTPS 或 SSH Git 地址，且不含凭据、查询参数。');
   if (!branch(draft.sourceBranch) || !branch(draft.targetBranch)) errors.push('分支名称格式不正确。');
   if (!['codehub-cli', 'platform-cli'].includes(draft.adapter)) errors.push('请选择内部平台命令适配。');
-  if (![draft.externalProfile, draft.internalProfile].every((value) => /^[\w.-]{1,64}$/.test(value ?? '')))
-    errors.push('凭据引用只接受本机配置名称，例如 system-git；不要填写密钥。');
   if (draft.internalWebUrl && !webAddressValid(draft.internalWebUrl))
     errors.push('内部网页地址需为无凭据和查询参数的 HTTPS URL。');
   return errors;
@@ -122,6 +120,8 @@ export function saveBinding(current, draft, checkedFingerprint) {
     simulated: true,
     initialInternalSha: null,
   };
+  delete state.binding.externalProfile;
+  delete state.binding.internalProfile;
   state.accepted = null;
   state.internalSha = null;
   state.active = null;

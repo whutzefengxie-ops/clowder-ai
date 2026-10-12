@@ -24,6 +24,10 @@
 .config-field input:focus { outline: 2px solid var(--accent-200); border-color: var(--accent-500); }
 .config-field small { display: block; margin-top: 7px; font-size: 10px; line-height: 1.6; }
 .config-field select { width: 100%; padding-block: 10px; }
+.demo-config { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 14px; margin: 16px 0 22px; border: 1px solid var(--line); border-radius: 7px; background: var(--neutral-50); }
+.demo-config p { margin: 0; font-size: 12px; }
+.demo-config span { display: block; font-size: 11px; margin-top: 5px; color: var(--muted); }
+.demo-config button { flex-shrink: 0; }
 .config-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
 .baseline-card { margin-top: 20px; }
 .baseline-card .section-head { padding: 0; margin-bottom: 20px; }
@@ -44,6 +48,7 @@
 @media (max-width: 1150px) { .config-grid, .baseline-grid { gap: 16px; } .config-pair { grid-template-columns: 1fr; gap: 0; } }
 @media (max-width: 850px) { .binding-strip { grid-template-columns: 1fr 18px 1fr; } .binding-strip .text-button { grid-column: 3; justify-self: end; } }
 @media (max-width: 650px) {
+  .demo-config { align-items: flex-start; flex-direction: column; gap: 8px; }
   .config-grid, .baseline-grid { grid-template-columns: 1fr; }
   .config-header { align-items: flex-start; flex-direction: column; padding: 18px; }
   .config-card, .config-checks { padding: 18px; }

@@ -1,4 +1,4 @@
-import { initializeBinding, saveBinding, validateBinding } from './binding.mjs';
+import { defaultBinding, initializeBinding, saveBinding, validateBinding } from './binding.mjs';
 import { BASE, COMPLETE } from './data.mjs';
 import { renderBinding } from './render-binding.mjs';
 
@@ -6,6 +6,11 @@ export function createBindingUI(getState, replaceState, redraw, toast) {
   const ui = { draft: null, checked: null, errors: [], step: 1, editing: false };
   function reset() {
     ui.draft = structuredClone(getState().binding);
+    if (ui.draft.status === 'draft') {
+      const example = defaultBinding();
+      if (!ui.draft.externalUrl) ui.draft.externalUrl = example.externalUrl;
+      if (!ui.draft.internalUrl) ui.draft.internalUrl = example.internalUrl;
+    }
     if (!ui.draft.baseline) ui.draft.baseline = BASE;
     ui.checked = null;
     ui.errors = [];
@@ -24,6 +29,14 @@ export function createBindingUI(getState, replaceState, redraw, toast) {
     document.getElementById('wizard-error')?.replaceChildren();
   }
   const actions = {
+    'example-binding'() {
+      const example = defaultBinding();
+      for (const field of ['externalUrl', 'internalUrl', 'sourceBranch', 'targetBranch', 'internalWebUrl'])
+        ui.draft[field] = example[field];
+      ui.checked = null;
+      ui.errors = [];
+      toast('已填入示例仓库，可以直接点击下一步');
+    },
     'edit-binding'() {
       if (getState().active && getState().active.phase < COMPLETE) throw new Error('当前同步尚未完成，不能修改连接。');
       ui.editing = true;
