@@ -42,6 +42,7 @@ export const deliveries = [
 ];
 export const scenarios = {
   unconfigured: '首次配置连接',
+  'adopt-behind': '已有仓接管 · 落后 20 个提交',
   waiting: '等待内部审批',
   verify: '合入后核验',
   reconcile: '核对 Issue 状态',
@@ -70,8 +71,8 @@ export const phaseDetails = [
   ],
   [
     '搬运提交',
-    '推送已从内部 main 构造并校验的候选分支，保留上游原始对象；首次快照接收需先连接已确认的初始化历史。',
-    'git fetch upstream main\ngit switch -c sync/delivery-041 internal/main\n# 仅首次独立快照：基线树相同才连接历史\ngit merge --no-ff --allow-unrelated-histories a17e9b40\ngit merge --no-ff c2f84d91\n# 核对候选树与冻结目标相同后推送\ngit push internal sync/delivery-041',
+    '从内部当前版本构造候选分支，保留上游对象。已有仓接管先登记 A/B；若上游历史尚不可达，只在首次候选中按已核验基线连接历史，再走内部 PR。',
+    'git fetch upstream main\ngit switch -c sync/delivery-041 internal/main\ngit merge-base --is-ancestor a17e9b40 HEAD\n# 返回 0：已有上游基线历史，直接合并目标\n# 仅首次返回 1 且 A/B 树一致时，在候选中连接历史：\n# git merge --no-ff --allow-unrelated-histories a17e9b40\ngit merge --no-ff c2f84d91\n# 核对候选树与冻结目标相同后推送\ngit push internal sync/delivery-041',
   ],
   [
     '创建内部 PR',

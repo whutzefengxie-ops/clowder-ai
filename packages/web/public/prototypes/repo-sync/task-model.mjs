@@ -42,6 +42,13 @@ function blockedTask(active) {
   return result(actor, title, description, { id: 'recover', label }, 'bad');
 }
 function setupTask(binding) {
+  if (binding.status === 'saved' && binding.mode === 'adopt')
+    return result(
+      '还差一步',
+      '已有仓库连接已保存，确认基线后启用',
+      '登记外部 A 与内部 B 的对应，之后接收 A 之后的更新。演示使用模拟核验结果。',
+      { view: 'configuration', label: '继续确认基线 →' },
+    );
   return binding.status === 'saved'
     ? result('还差一步', '连接已保存，完成初始化即可使用', '继续确认起始版本并完成模拟初始化，之后就能接收上游更新。', {
         view: 'configuration',

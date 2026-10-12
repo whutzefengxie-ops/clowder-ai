@@ -18,6 +18,7 @@ const files = new Map(
     'audit.mjs',
     'render-delivery.mjs',
     'binding.mjs',
+    'baseline.mjs',
     'binding-ui.mjs',
     'render-binding.mjs',
     'app.mjs',

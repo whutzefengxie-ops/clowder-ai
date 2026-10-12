@@ -46,6 +46,7 @@ async function run() {
     const external = 'https://github.com/sentinel-lab/sentinel-core.git';
     const internal = 'git@codehub.example:team/sentinel-core.git';
     const baseline = 'aa713c891234567890abcdef1234567890abcdef';
+    const internalBaseline = 'bb824d901234567890abcdef1234567890abcdef';
     const fields = {
       externalUrl: external,
       internalUrl: internal,
@@ -65,6 +66,7 @@ async function run() {
     await page.locator('#next-binding').click();
     assert.match(await page.locator('#wizard-error').innerText(), /commit ID/);
     await page.locator('#config-baseline').fill(baseline);
+    await page.locator('#config-internalBaseline').fill(internalBaseline);
     await page.locator('#next-binding').click();
     await page.locator('#check-binding').click();
     assert.equal(await page.locator('#save-binding').isEnabled(), true);
@@ -96,7 +98,7 @@ async function run() {
     state = await read();
     assert.equal(state.binding.status, 'ready');
     assert.equal(state.accepted, baseline);
-    assert.notEqual(state.internalSha, state.accepted);
+    assert.equal(state.internalSha, internalBaseline);
     assert.equal(await page.locator(`#overview [data-copy="${baseline}"]`).getAttribute('title'), baseline);
     await config();
     const facts = await page.locator('.connection-facts').innerText();
@@ -105,7 +107,7 @@ async function run() {
     await page.locator('.config-readonly [data-view="overview"]').click();
     await page.locator('#overview [data-map]').click();
     assert.match(await page.locator('#mapping').innerText(), /aa713c89/);
-    assert.match(await page.locator('#mapping').innerText(), /1a713c89/);
+    assert.match(await page.locator('#mapping').innerText(), /bb824d90/);
     await page.reload();
     assert.equal((await read()).binding.internalUrl, internal);
     assert.equal((await read()).accepted, baseline);

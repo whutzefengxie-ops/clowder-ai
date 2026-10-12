@@ -1,4 +1,5 @@
 import { seedAudit } from './audit.mjs';
+import { existingRepositoryDeliveries, simulateBaselineCheck } from './baseline.mjs';
 import { defaultBinding, emptyBinding } from './binding.mjs';
 import { COMPLETE, deliveries, phases } from './data.mjs';
 import { deliveryNames } from './delivery.mjs';
@@ -40,6 +41,24 @@ export function createState(scenario = 'waiting', binding = defaultBinding()) {
       },
     ],
   };
+  if (scenario === 'adopt-behind') {
+    state.binding = {
+      ...state.binding,
+      mode: 'adopt',
+      internalBaseline: binding.baseline,
+      initialInternalSha: binding.baseline,
+    };
+    state.binding.baselineCheck = simulateBaselineCheck(state.binding);
+    state.internalSha = binding.baseline;
+    state.deliveries = existingRepositoryDeliveries();
+    state.latest = state.deliveries.at(-1).target;
+    state.events = [
+      {
+        label: '演示预置：已有仓库接管',
+        note: `外部 A ${binding.baseline} ↔ 内部 B ${binding.baseline}；之后 20 个提交分属 4 个 PR。`,
+      },
+    ];
+  }
   if (scenario === 'waiting') state.active = snapshot(0, 6);
   if (scenario === 'timeout') state.active = snapshot(0, 4, 'timeout');
   if (scenario === 'plugin') state.active = snapshot(0, 5, 'plugin');
@@ -162,12 +181,16 @@ export function reduce(current, action) {
 export function summary(state) {
   const acceptedIndex = state.deliveries.findIndex((item) => item.target === state.accepted);
   const behind = state.deliveries.length - acceptedIndex - 1;
+  const behindCommits = state.deliveries
+    .slice(acceptedIndex + 1)
+    .reduce((total, item) => total + item.commits.length, 0);
   const codeLatest = state.accepted === state.latest;
   const pending = state.active && state.active.phase < COMPLETE;
   return {
     codeLatest,
     fullyComplete: codeLatest && !pending,
     behind,
+    behindCommits,
     pendingPr: state.active?.internalPr && state.active.phase < 7 ? 1 : 0,
   };
 }

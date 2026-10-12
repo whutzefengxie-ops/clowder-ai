@@ -1,3 +1,4 @@
+import { assertBaselineCheck, existingRepositoryDeliveries } from './baseline.mjs';
 import { BASE, COMPLETE, deliveries } from './data.mjs';
 
 export function defaultBinding() {
@@ -26,6 +27,8 @@ export function emptyBinding() {
     internalWebUrl: '',
     baseline: '',
     initialInternalSha: null,
+    internalBaseline: '',
+    mode: 'adopt',
   };
 }
 function addressParts(value) {
@@ -69,7 +72,9 @@ function branch(value) {
 function baselineErrors(draft) {
   const errors = [];
   if (!/^[a-f\d]{7,40}$/i.test(draft.baseline ?? '')) errors.push('请选择有效的起始 commit ID（7–40 位十六进制）。');
-  if (!['snapshot', 'history'].includes(draft.mode)) errors.push('请选择初始化方式。');
+  if (!['adopt', 'snapshot', 'history'].includes(draft.mode)) errors.push('请选择已有仓接管或新仓初始化方式。');
+  if (draft.mode === 'adopt' && !/^[a-f\d]{7,40}$/i.test(draft.internalBaseline ?? ''))
+    errors.push('请填写内部当前对应的 commit B（7–40 位十六进制）。');
   return errors;
 }
 function webAddressValid(value) {
@@ -98,11 +103,12 @@ export function validateBinding(draft, scope = 'all') {
   if (scope === 'connection') return connectionErrors(draft);
   return [...connectionErrors(draft), ...baselineErrors(draft)];
 }
-export function saveBinding(current, draft, checkedFingerprint) {
+export function saveBinding(current, draft, checkedFingerprint, baselineCheck = null) {
   if (current.active && current.active.phase < COMPLETE) throw new Error('存在未完成交付，不能替换仓库绑定。');
   const errors = validateBinding(draft);
   if (errors.length) throw new Error(errors.join('\n'));
   if (checkedFingerprint !== JSON.stringify(draft)) throw new Error('请先检查当前配置；修改后需要重新检查。');
+  if (draft.mode === 'adopt') assertBaselineCheck(draft, baselineCheck);
   const state = structuredClone(current);
   state.archives ??= [];
   state.archives.push({
@@ -119,16 +125,20 @@ export function saveBinding(current, draft, checkedFingerprint) {
     status: 'saved',
     simulated: true,
     initialInternalSha: null,
+    baselineCheck: draft.mode === 'adopt' ? structuredClone(baselineCheck) : null,
+    internalBaseline: draft.mode === 'adopt' ? draft.internalBaseline : null,
   };
   delete state.binding.externalProfile;
   delete state.binding.internalProfile;
   state.accepted = null;
   state.internalSha = null;
   state.active = null;
-  state.deliveries = structuredClone(deliveries);
-  state.latest = deliveries.at(-1).target;
+  state.deliveries = draft.mode === 'adopt' ? existingRepositoryDeliveries() : structuredClone(deliveries);
+  state.latest = state.deliveries.at(-1).target;
   state.scenario = 'unconfigured';
-  state.events = [{ label: '保存新仓库绑定（模拟）', note: '旧绑定及映射已归档；等待初始化。真实连接尚未验证。' }];
+  state.events = [
+    { label: '保存新仓库绑定（模拟）', note: '旧绑定及映射已归档；等待登记基线或初始化。真实连接尚未验证。' },
+  ];
   return state;
 }
 export function initializeBinding(current) {
@@ -136,13 +146,18 @@ export function initializeBinding(current) {
   const state = structuredClone(current);
   const baseline = state.binding.baseline.toLowerCase();
   const short = baseline.slice(0, 8);
-  state.internalSha = state.binding.mode === 'history' ? baseline : `${short[0] === '1' ? '2' : '1'}${short.slice(1)}`;
+  if (state.binding.mode === 'adopt') {
+    assertBaselineCheck(state.binding, state.binding.baselineCheck);
+    state.internalSha = state.binding.internalBaseline.toLowerCase();
+  } else
+    state.internalSha =
+      state.binding.mode === 'history' ? baseline : `${short[0] === '1' ? '2' : '1'}${short.slice(1)}`;
   state.accepted = baseline;
   state.binding = { ...state.binding, status: 'ready', baseline, initialInternalSha: state.internalSha };
   state.scenario = 'behind';
   state.events.push({
-    label: '模拟初始化完成',
-    note: `上游 ${baseline} → 内部 ${state.internalSha}；模拟文件树核验通过，未执行真实 Git。`,
+    label: state.binding.mode === 'adopt' ? '登记已有仓库同步基线（模拟）' : '模拟初始化完成',
+    note: `外部 A ${baseline} ↔ 内部 B ${state.internalSha}；模拟文件树核验通过。${state.binding.mode === 'adopt' ? '保留内部既有 commit，后续从 A 之后接收。' : '未执行真实 Git。'}`,
   });
   return state;
 }

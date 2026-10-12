@@ -22,7 +22,7 @@ tips_exempt: 独立原型验证记录，尚未挂载正式功能。
 | 查看版本对应 | 总览三个版本卡；映射页来源提交、内部初始化与合并节点 |
 | 未合入 PR 与卡点 | 主状态、待合入数量、当前对象、九步流程与恢复入口 |
 | 正常审批路径 | 具体 PR URL 跳转；点击链接不改 main；平台合入后回读、核验、核对 Issue |
-| 仓库与分支配置 | 可填写 GitHub / 内部 Git 地址、来源 / 目标分支、网页地址、平台 CLI 与起始版本；演示不要求认证 |
+| 仓库与分支配置 | 可填写 GitHub / 内部 Git 地址、来源 / 目标分支、网页地址、平台 CLI 与两侧已同步基线 A/B；已有仓接管和空仓初始化分别呈现 |
 | 配置状态因果 | 修改后重查；保存后等待初始化；初始化前不能同步；活动交付禁止替换绑定 |
 | 绑定与页面隔离 | PR URL 携带绑定 ID；旧绑定页面不能操作新交付；旧合成映射与记录保留在 archives |
 | 分支与 PR 命名 | 配置预览 / 实际流程 / PR 页共用 sync/{deliveryId} 与 [上游同步] PR #{sourcePr} · {title} |
@@ -36,12 +36,13 @@ tips_exempt: 独立原型验证记录，尚未挂载正式功能。
 
 本轮命令及结果：
 
-- 本目录 5 个 `*.test.mjs` 通过 `node --test` 执行：27 项通过，0 失败。新增演示配置的 4 项检查覆盖零输入前进、无认证名称初始化、保留自定义地址和恢复已保存绑定；其中两个故障复现检查先观察失败再实现。原有工作台与状态机 23 项仍通过。
+- 本目录 6 个 `*.test.mjs` 通过 `node --test` 执行：33 项通过，0 失败。新增已有仓接管的 6 项检查先观察到行为失败，再实现；覆盖精确登记 A/B、同 SHA、缺失内部版本、核验失败、改动后重查及 20 个提交按 4 笔 PR 接收。原有 27 项仍通过。
 - `node packages/web/public/prototypes/repo-sync/browser-check.cjs`：完整旅程通过，页面异常和 HTTP 错误均为 0；截图写入系统临时目录 `repo-sync-prototype-evidence`。
 - `node packages/web/public/prototypes/repo-sync/binding-browser-check.cjs`：配置旅程通过。验证实际预填、无认证字段、空地址明确提示与点击示例恢复；使用 fixture 外的仓库地址、release/2、delivery-main、完整 40 位 commit ID，验证总览 / 映射 / PR 页面反映自定义配置、刷新保留、编辑后检查失效及活动绑定保护。页面异常 / HTTP 错误均为 0，四种屏宽无横向溢出。截图位于系统临时目录 `repo-sync-binding-evidence`。
 - `node packages/web/public/prototypes/repo-sync/delivery-browser-check.cjs`：通过。隐藏演示控制条后 7→8→9；点击未来节点不会改变阶段 6 或绕过审批；流程 / PR 页面包含各自审计，同一笔历史审批备注刷新保留；第二笔 PR 不含第一笔备注；新增外部交付不污染当前审计；映射页无审计面板。1440 / 1024 / 768 / 390 宽通过，页面异常 / HTTP 错误为 0；截图位于 `repo-sync-delivery-evidence`。
-- `node packages/web/public/prototypes/repo-sync/workbench-browser-check.cjs`：通过。从全新未配置状态，无需输入地址、起始版本或认证，只沿主操作完成三步配置、初始化、同步、具体 PR 审批、核验与收尾。十种场景在 1440 / 1024 / 768 / 390 宽、800 高视口中都恰有一个当前主操作，按钮首屏可见且无横向溢出。演示控制与九步技术说明默认收起，导航仅两项。页面异常 / HTTP 错误为 0；截图位于 `repo-sync-workbench-evidence`。
-- 项目安装的 Biome 2.4.1 对 28 个 JS 模块执行 `check`：通过，无警告；6 个 HTML／CSS 执行关闭格式化的语法与 lint 检查：通过，无警告。CSS 保留紧凑声明以遵守文件行数硬限。
+- `node packages/web/public/prototypes/repo-sync/workbench-browser-check.cjs`：通过。从全新未配置状态，无需输入地址、基线或认证，只沿主操作完成三步配置、登记基线、同步、具体 PR 审批、核验与收尾。十一种场景在 1440 / 1024 / 768 / 390 宽、800 高视口中都恰有一个当前主操作，按钮首屏可见且无横向溢出。演示控制与九步技术说明默认收起，导航仅两项。页面异常 / HTTP 错误为 0；截图位于 `repo-sync-workbench-evidence`。
+- `node packages/web/public/prototypes/repo-sync/adoption-browser-check.cjs`：通过。默认选择已有仓；输入 fixture 外的 40 位 A/B，切换代码树不一致与内部 HEAD 前进，两种结果都阻止保存。通过模拟核验后保存并刷新，登记后内部精确保留 B。20 个提交逐笔走完 4 个具体内部 PR 的审核、核验和 Issue 收尾；新来源游标在核验前保持旧值，初始 A/B 在完成与刷新后仍保留，配置摘要显示当前版本。四种屏宽无横向溢出，页面异常 / HTTP 错误为 0；截图位于 `repo-sync-adoption-evidence`。
+- 项目安装的 Biome 2.4.1 对 31 个 JS 模块执行 `check`：通过，无警告；6 个 HTML／CSS 执行关闭格式化的语法与 lint 检查：通过，无警告。CSS 保留紧凑声明以遵守文件行数硬限。
 - `git diff --check`／暂存差异检查：通过。所有原型文件低于 350 行硬限；CSS 214 行超过 200 行提示线，仍低于硬限。
 - `node scripts/check-capability-tips.mjs --changed-file packages/web/public/prototypes/repo-sync/README.md`：通过，另有 17 个原有目录引用警告。
 - 不限定改动范围的 capability-tips 检查：20 个问题，均指向本分支基线已有的 Feature 文档，不涉及原型文件。未将其宣称为全仓通过。
@@ -80,3 +81,9 @@ Architecture cell：独立原型工作面，不新增生产同步服务或产品
 本轮验证：27 项单元通过；四条浏览器旅程通过，其中工作台从全新状态零输入完成配置、同步与 PR 审批收尾，配置旅程覆盖清空地址报错 → 点击示例恢复 → 自定义配置。示例设置表单在四种屏宽无横向溢出。内嵌浏览器刷新后实际显示已填入地址、无需认证说明和下一步入口；当前仅停留在配置草稿，未替用户初始化或完成审批。证据图片 `17-sample-repositories-1440.png` 与 `17-sample-repositories-390.png` 位于 `repo-sync-workbench-evidence`；仍未访问真实仓库或认证服务。
 
 演示入口提交后诊断：`check-fallback-layers --base 5c3d438` 净增 2，提示来自空地址与非法地址的分开报错、是否展示样例提示以及截图宽度选择。两种地址错误均阻止前进；示例只填本地草稿，不是网络失败后自动回退到另一仓库，也不绕过初始化或审批。没有新增同步状态源。
+
+已有仓接管修订：用户场景为从 A 同步过一次、内部随后落后 20 个提交。旧第二步只能填来源版本，启用时还会生成模拟内部 SHA，不能表达现有 B。现新增 `adopt` 模式与 `internalBaseline`，已保存状态保留模拟核验报告；启用检查报告与仓库 / 分支 / A/B 指纹一致性，内部 SHA 直接取用户输入 B。报告明确模拟，树不一致 / B 过期时拒绝接管。新建空仓的 snapshot / history 保留原语义。新 case 是确定性的 20 个来源对象与 4 个 PR，不是访问用户远端得到的计数。
+
+本轮 Dogfood：正确 worktree 与 `127.0.0.1:5186` 的 Node 预览一致；重启当前原型进程以加载 `baseline.mjs` 白名单。Codex 内嵌浏览器保留未配置业务状态，刷新 → 配置 → 第二步，实际看见“已有内部仓：继续同步”及 A/B 两个字段。停留在该草稿让用户继续，没有替用户登记基线或审批 PR。独立浏览器上下文完整走完所有 4 笔；没有接触真实 Git 仓、凭据或生产数据。布局复用原生主题与已有设置页面，新增对应信息在已有向导内，无新主壳。全部原型文件低于 350 行。
+
+正式执行边界：A/B 对象读取、完整 SHA 解析、远端分支与 HEAD 核对、代码树比对、启用 / 同步前重新读取 B，以及 PR 增量归属仍待真实适配器实现。README 已写明确接管契约，并据 Git 官方 diff / merge-base / rev-list 文档核对命令语义。模拟通过不保证用户真实 SHA 存在或两侧内容相同。

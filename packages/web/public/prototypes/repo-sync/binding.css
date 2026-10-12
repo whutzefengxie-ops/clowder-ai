@@ -28,6 +28,8 @@
 .demo-config p { margin: 0; font-size: 12px; }
 .demo-config span { display: block; font-size: 11px; margin-top: 5px; color: var(--muted); }
 .demo-config button { flex-shrink: 0; }
+.baseline-pair { padding: 14px 16px; border: 1px solid var(--accent-200); background: var(--accent-50); border-radius: 7px; margin-bottom: 18px; font-size: 12px; }
+.baseline-pair p { margin: 7px 0 0; font-size: 11px; line-height: 1.7; }
 .config-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
 .baseline-card { margin-top: 20px; }
 .baseline-card .section-head { padding: 0; margin-bottom: 20px; }
