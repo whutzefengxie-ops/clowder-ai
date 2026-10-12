@@ -44,6 +44,8 @@ Windows 沙盒阻止 Git for Windows 的 sh 与 localhost 连接，改在授权�
 
 ## 风险与边界
 
+首次上游 CI：Lint 发现原型 4 个压缩 CSS 未格式化。已按仓库 Biome 规则格式化，将长样式按原顺序拆为职责独立的样式表；拆分前后规则拼接逐字一致，并补静态资源白名单，文件均低于 350 行。Windows 失败位于未改动的 `opencode-model-id-request.test.js` 临时目录清理 `rmSync`，EPERM；对应测试与工作流同上游基线，未与本功能混改，另行复跑核对。
+
 behavior：新增同步状态与界面；data：新私有台账，不迁移或清空现有存储；security：可信检查命令、无 shell 拼接、地址不含凭据、localhost Host/Origin/令牌及长度保护；contract：Git/gh 只读 GitHub与内部 Git；irreversible：仅条件创建候选分支，平台合入由人执行。
 
 未连接真实内网，未验证 CodeHub CLI、真实审批保护/自动关单、实际插件或依赖。支持普通 merge 或候选 fast-forward；平台特有 merge queue 等不同拓扑暂停。LFS/子模块显式阻断。Git tree 一致不等于应用可运行。
