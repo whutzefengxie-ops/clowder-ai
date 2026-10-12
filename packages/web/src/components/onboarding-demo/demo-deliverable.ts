@@ -55,8 +55,20 @@ export const DEMO_DELIVERABLE_HTML = `<!doctype html>
         const label = document.createElement('label');
         label.className = \`task\${task.done ? ' done' : ''}\`;
         const check = document.createElement('input');
-        check.type = 'checkbox'; check.checked = task.done;
-        check.addEventListener('change', () => { task.done = check.checked; feedback.textContent = task.done ? '又完成了一件小事。' : '任务已恢复为未完成。'; render(); });
+        check.type = 'checkbox'; check.checked = task.done; check.dataset.taskId = String(task.id);
+        check.addEventListener('change', () => {
+          const restoreFocus = document.activeElement === check;
+          const previousIndex = visible.indexOf(task);
+          task.done = check.checked;
+          feedback.textContent = task.done ? '又完成了一件小事。' : '任务已恢复为未完成。';
+          render();
+          if (!restoreFocus) return;
+          const remaining = [...list.querySelectorAll('input')];
+          const sameTask = remaining.find(item => item.dataset.taskId === String(task.id));
+          if (sameTask) sameTask.focus();
+          else if (remaining.length) remaining[Math.min(previousIndex, remaining.length - 1)].focus();
+          else document.querySelector('[data-filter="' + filter + '"]').focus();
+        });
         const title = document.createElement('span'); title.textContent = task.title;
         label.append(check, title); row.append(label); list.append(row);
       }

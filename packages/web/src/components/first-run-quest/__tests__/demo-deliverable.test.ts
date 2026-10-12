@@ -38,3 +38,27 @@ it('delivers the promised add, complete, filter and reviewed empty-state interac
     dom.window.close();
   }
 });
+
+it('preserves keyboard focus on toggle, then moves to a neighbour or the active filter when removed', () => {
+  const dom = new JSDOM(DEMO_DELIVERABLE_HTML, { runScripts: 'dangerously' });
+  try {
+    const page = dom.window.document;
+    const task = page.querySelector<HTMLInputElement>('#tasks input');
+    task?.focus();
+    task?.click();
+    expect(page.activeElement?.closest('label')?.textContent).toContain('看看三位伙伴如何协作');
+    page.querySelector<HTMLButtonElement>('[data-filter="open"]')?.click();
+    for (const expected of ['试着添加一件自己的小事', '创建自己的猫猫团队']) {
+      const first = page.querySelector<HTMLInputElement>('#tasks input');
+      first?.focus();
+      first?.click();
+      expect(page.activeElement?.closest('label')?.textContent).toContain(expected);
+    }
+    const last = page.querySelector<HTMLInputElement>('#tasks input');
+    last?.focus();
+    last?.click();
+    expect(page.activeElement?.getAttribute('data-filter')).toBe('open');
+  } finally {
+    dom.window.close();
+  }
+});
