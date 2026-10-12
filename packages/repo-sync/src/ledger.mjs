@@ -15,7 +15,7 @@ export function assertLedger(state) {
   )
     fail('LEDGER_INVALID', '台账缺少接受版本、队列或映射等必要字段；暂停，不能重建空台账');
   if (state.activeId !== null && typeof state.activeId !== 'string') fail('LEDGER_INVALID', '活动交付身份无效');
-  const pending = state.deliveries.filter((delivery) => delivery.status !== 'COMPLETE');
+  const pending = state.deliveries.filter((delivery) => !['COMPLETE', 'CANCELLED'].includes(delivery.status));
   if (pending.length > 1 || (pending.length === 1 && pending[0].id !== state.activeId))
     fail('LEDGER_INVALID', '未完成交付与活动身份不一致，暂停以防丢失恢复任务');
 }

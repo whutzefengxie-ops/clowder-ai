@@ -12,6 +12,11 @@ export async function dispatch(receiver, input, options) {
     pr: () => receiver.linkPr(input.url),
     recover: () => receiver.recover(),
     receipts: () => receiver.receipts(input.observations),
+    tags: () => receiver.tags(),
+    'select-tag': () => receiver.selectTag(input.tag),
+    'cancel-version': () => receiver.cancelVersion(),
+    conflict: () => receiver.conflict(input.path),
+    resolve: () => receiver.resolve(input.path, input.choice, input.content),
   };
   if (options.demoMerge)
     actions['demo-merge'] = () =>

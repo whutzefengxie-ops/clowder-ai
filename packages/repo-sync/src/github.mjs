@@ -28,6 +28,7 @@ export function githubRepository(url) {
   return `${match[1]}/${match[2]}`;
 }
 export async function discover(receiver) {
+  if (receiver.config.mode === 'version') fail('WRONG_MODE', '按版本更新从 Git 读取 tag，不扫描 Issue / PR');
   return receiver.store.locked(() => discoverLocked(receiver));
 }
 async function discoverLocked(receiver) {

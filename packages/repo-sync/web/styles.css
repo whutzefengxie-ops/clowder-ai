@@ -165,6 +165,23 @@ summary {
   color: var(--accent);
   font-size: 13px;
 }
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+th,
+td {
+  text-align: left;
+  padding: 10px;
+  border-bottom: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+.demo-links {
+  padding: 10px;
+  background: #f3ede4;
+  border-radius: 6px;
+}
 pre {
   white-space: pre-wrap;
   overflow-wrap: anywhere;

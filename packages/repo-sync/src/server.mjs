@@ -5,6 +5,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { dispatch } from './actions.mjs';
 import { body, requestPath, requireToken, send } from './http.mjs';
+import { configure } from './settings.mjs';
 
 const web = resolve(dirname(fileURLToPath(import.meta.url)), '../web');
 const assets = new Map([
@@ -13,6 +14,7 @@ const assets = new Map([
   ['/styles.css', 'styles.css'],
   ['/progress.mjs', 'progress.mjs'],
   ['/receipts.mjs', 'receipts.mjs'],
+  ['/version.mjs', 'version.mjs'],
 ]);
 export function createReceiverServer(receiver, options = {}) {
   const token = randomBytes(32).toString('hex');
@@ -29,8 +31,15 @@ export function createReceiverServer(receiver, options = {}) {
       if (request.method !== 'POST' || path !== '/api/action') return send(response, 404, { code: 'NOT_FOUND' });
       requireToken(request, token);
       const input = await body(request);
+      if (input.action === 'configure') {
+        receiver = await configure(receiver, input);
+        return get(receiver, options, token, '/api/status', response);
+      }
       const result = await dispatch(receiver, input, options);
-      return send(response, 200, { result: input.action === 'heads' ? result : null, state: await receiver.status() });
+      return send(response, 200, {
+        result: ['heads', 'tags', 'conflict'].includes(input.action) ? result : null,
+        state: await receiver.status(),
+      });
     } catch (error) {
       return sendError(response, error);
     }
@@ -46,6 +55,7 @@ function sendError(response, error) {
   return send(response, status, {
     code: error.code ?? 'INVALID_REQUEST',
     message: error.code ? error.message : '请求未完成，请核对输入与当前步骤',
+    ...(error.details ? { details: error.details } : {}),
   });
 }
 async function get(receiver, options, token, path, response) {
@@ -58,11 +68,12 @@ async function get(receiver, options, token, path, response) {
     return;
   }
   if (path !== '/api/status') return send(response, 404, { code: 'NOT_FOUND' });
-  const { sourceUrl, internalUrl, sourceBranch, targetBranch } = receiver.config;
+  const { sourceUrl, internalUrl, sourceBranch, targetBranch, mode, internalPaths, mergePaths } = receiver.config;
   return send(response, 200, {
     token,
     state: await receiver.status(),
-    config: { sourceUrl, internalUrl, sourceBranch, targetBranch },
+    config: { sourceUrl, internalUrl, sourceBranch, targetBranch, mode, internalPaths, mergePaths },
+    demoLinks: options.demoLinks,
     synthetic: Boolean(options.demoMerge),
   });
 }

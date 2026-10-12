@@ -1,18 +1,21 @@
 import { createHash } from 'node:crypto';
 import { recoverDelivery } from './acceptance.mjs';
 import { fail, objectUrl, validateConfig } from './config.mjs';
+import { readConflict, resolveConflict } from './conflicts.mjs';
 import { GitReceiver } from './git.mjs';
 import { assertLedger } from './ledger.mjs';
 import { mapIssue, recordReceipts, templates } from './metadata.mjs';
 import { checkPlan } from './plan.mjs';
 import { git } from './process.mjs';
 import { event, Store } from './store.mjs';
+import { cancelVersion, selectTag, sourceStillValid, tags, versionTemplate } from './version.mjs';
+import { VersionGitReceiver } from './version-git.mjs';
 
 export class Receiver {
   constructor(input) {
     this.config = validateConfig(input);
     this.store = new Store(this.config.stateDir);
-    this.git = new GitReceiver(this.config);
+    this.git = this.config.mode === 'version' ? new VersionGitReceiver(this.config) : new GitReceiver(this.config);
   }
   async read() {
     const state = await this.store.read();
@@ -21,7 +24,7 @@ export class Receiver {
     if (state) assertLedger(state);
     return state;
   }
-  async change(action) {
+  async change(action, preserveError = false) {
     return this.store.locked(async () => {
       const state = await this.read();
       if (!state) fail('NOT_ADOPTED', '先核验并登记两侧已有基线');
@@ -30,7 +33,7 @@ export class Receiver {
       } catch (error) {
         const delivery = this.active(state);
         if (delivery) {
-          delivery.error = { code: error.code ?? 'EXECUTION_FAILED', message: error.message };
+          recordFailure(delivery, error, preserveError);
           event(state, delivery, error.message);
         }
         await this.store.save(state);
@@ -41,7 +44,9 @@ export class Receiver {
     });
   }
   active(state) {
-    return state.deliveries.find((item) => item.id === state.activeId && item.status !== 'COMPLETE');
+    return state.deliveries.find(
+      (item) => item.id === state.activeId && !['COMPLETE', 'CANCELLED'].includes(item.status),
+    );
   }
   async adopt(upstream, internal) {
     return this.store.locked(async () => {
@@ -50,12 +55,17 @@ export class Receiver {
       upstream = await this.git.sha(upstream);
       internal = await this.git.sha(internal);
       if (heads.internal !== internal) fail('STALE_INTERNAL_HEAD', '内部基线不是当前 main，重新读取后确认');
-      if (!(await this.git.isAncestor(upstream, heads.upstream)) || !(await this.git.sameTree(upstream, internal)))
+      if (this.config.mode === 'version') await this.git.baseline(upstream, internal);
+      if (
+        !(await this.git.isAncestor(upstream, heads.upstream)) ||
+        (this.config.mode !== 'version' && !(await this.git.sameTree(upstream, internal)))
+      )
         fail('BASELINE_MISMATCH', '上游基线不在交付历史中，或两侧核心树不一致');
       if (!(await this.git.mainBoundary(upstream, heads.upstream)))
         fail('BASELINE_NOT_MAIN_BOUNDARY', '基线必须是上游 main 的实际接受边界');
       const state = {
         schema: 1,
+        mode: this.config.mode,
         bindingId: this.config.bindingId,
         initial: { upstream, internal },
         accepted: { upstream, internal },
@@ -73,6 +83,7 @@ export class Receiver {
     });
   }
   async setQueue(plans) {
+    if (this.config.mode === 'version') fail('WRONG_MODE', '按版本更新请选择目标 tag');
     return this.change(async (state) => {
       await this.replaceQueue(state, plans, await this.git.fetch());
     });
@@ -97,10 +108,11 @@ export class Receiver {
       if (!plan) fail('NO_DELIVERY', '没有待接收交付，先发现更新');
       const heads = await this.git.fetch();
       if (heads.internal !== state.accepted.internal) fail('CORE_DRIFT', '内部 main 与冻结基线不同');
-      if (!(await this.git.isAncestor(plan.target, heads.upstream)))
-        fail('SOURCE_REWRITTEN', '冻结目标已不在上游 main 历史中');
+      await sourceStillValid(this, plan, heads);
       const id = createHash('sha256')
-        .update(`${state.bindingId}:${plan.source.id}:${plan.target}`)
+        .update(
+          `${state.bindingId}:${plan.source.id}:${plan.target}${this.config.mode === 'version' ? `:${state.accepted.internal}:${state.deliveries.length}` : ''}`,
+        )
         .digest('hex')
         .slice(0, 24);
       const delivery = {
@@ -108,7 +120,7 @@ export class Receiver {
         id,
         branch: `sync/${id}`,
         base: { ...state.accepted },
-        status: 'ISSUES_REQUIRED',
+        status: this.config.mode === 'version' ? 'CODE_PREPARE_REQUIRED' : 'ISSUES_REQUIRED',
         candidate: null,
         issueResults: {},
       };
@@ -117,7 +129,13 @@ export class Receiver {
       ).split('\n');
       state.deliveries.push(delivery);
       state.activeId = id;
-      event(state, delivery, '交付已冻结；内部 Issue 在平台创建或复用，然后登记映射');
+      event(
+        state,
+        delivery,
+        this.config.mode === 'version'
+          ? '版本交付已冻结；核对文件规则后准备一个候选分支'
+          : '交付已冻结；内部 Issue 在平台创建或复用，然后登记映射',
+      );
     });
   }
   async linkIssue(sourceId, internalId, url) {
@@ -144,11 +162,19 @@ export class Receiver {
       const heads = await this.git.fetch();
       state.observedInternal = heads.internal;
       if (heads.internal !== delivery.base.internal) fail('RECOVERY_FIRST', 'main 已前进，先核对原交付合入结果');
-      if (!(await this.git.isAncestor(delivery.target, heads.upstream)))
-        fail('SOURCE_REWRITTEN', '冻结目标已不在上游交付历史中');
-      delivery.candidate ??= await this.git.candidate(delivery.base, delivery.target, delivery.id);
+      await sourceStillValid(this, delivery, heads);
+      delivery.candidate ??= await this.git.candidate(
+        delivery.base,
+        delivery.target,
+        delivery.id,
+        delivery.resolutions,
+      );
       await this.store.save(state); // Freeze the candidate before any remote effect.
       delivery.checks = await this.git.checks(delivery.candidate);
+      const checkedHeads = await this.git.fetch();
+      if (checkedHeads.internal !== delivery.base.internal)
+        fail('RECOVERY_FIRST', '检查期间内部 main 已改变，先核对原交付');
+      await sourceStillValid(this, delivery, checkedHeads);
       delivery.status = 'PUSH_RESULT_UNKNOWN';
       event(state, delivery, '候选推送意图已保存；结果不明时先读取同名 ref');
       await this.store.save(state);
@@ -162,7 +188,7 @@ export class Receiver {
     if (delivery.acceptedInternal) fail('METADATA_ONLY', '代码已接受，仅补元数据');
     if (!delivery.issues.every((issue) => state.issues[issue.sourceId]))
       fail('ISSUES_REQUIRED', '先登记全部内部 Issue 映射');
-    if (this.config.commitClosureVerified !== true)
+    if (this.config.mode !== 'version' && this.config.commitClosureVerified !== true)
       fail('PLATFORM_CLOSURE_UNVERIFIED', '先实测原始 commit 不会误关内部 Issue；配置未确认，禁止推送');
     if (!this.config.checks?.length) fail('CHECKS_REQUIRED', '至少配置一项核心/插件检查，不能把未检查当通过');
   }
@@ -201,8 +227,32 @@ export class Receiver {
       ? {
           ...state,
           active: this.active(state),
-          templates: this.active(state) ? templates(this.active(state), state.issues) : null,
+          templates: this.active(state)
+            ? this.config.mode === 'version'
+              ? versionTemplate(this.active(state))
+              : templates(this.active(state), state.issues)
+            : null,
         }
       : null;
   }
+  tags() {
+    return tags(this);
+  }
+  selectTag(name) {
+    return selectTag(this, name);
+  }
+  cancelVersion() {
+    return cancelVersion(this);
+  }
+  conflict(path) {
+    return readConflict(this, path);
+  }
+  resolve(path, choice, content) {
+    return resolveConflict(this, path, choice, content);
+  }
+}
+function recordFailure(delivery, error, preserveError) {
+  if (preserveError && delivery.error) return;
+  delivery.error = { code: error.code ?? 'EXECUTION_FAILED', message: error.message };
+  if (error.details) delivery.error.details = error.details;
 }

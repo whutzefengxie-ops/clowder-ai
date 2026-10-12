@@ -1,11 +1,13 @@
 import { progressSteps } from './progress.mjs';
 import { receiptFields } from './receipts.mjs';
+import { conflictEditor, conflictOptions, modeSettings, tagSelector, versionPreview } from './version.mjs';
 
 const content = document.getElementById('content');
 const errorPanel = document.getElementById('error');
 let snapshot;
 let view = 'workbench';
 let busy = false;
+let availableTags = [];
 const esc = (value) =>
   String(value ?? '').replace(
     /[&<>"']/g,
@@ -23,7 +25,7 @@ async function action(input) {
   if (busy) return;
   busy = true;
   errorPanel.hidden = true;
-  for (const element of document.querySelectorAll('button')) element.disabled = true;
+  for (const element of document.querySelectorAll('button, input, textarea, select')) element.disabled = true;
   try {
     const response = await fetch('/api/action', {
       method: 'POST',
@@ -31,7 +33,10 @@ async function action(input) {
       body: JSON.stringify(input),
     });
     const result = await response.json();
-    if (!response.ok) throw new Error(`${result.code}：${result.message ?? '请求失败'}`);
+    if (!response.ok)
+      throw new Error(
+        `${result.code}：${result.message ?? '请求失败'}${result.details?.paths?.length ? `\n${result.details.paths.join('\n')}` : ''}`,
+      );
     await refresh();
     return result;
   } catch (error) {
@@ -40,12 +45,12 @@ async function action(input) {
     errorPanel.hidden = false;
   } finally {
     busy = false;
-    for (const element of document.querySelectorAll('button')) element.disabled = false;
+    for (const element of document.querySelectorAll('button, input, textarea, select')) element.disabled = false;
   }
 }
 function configuration() {
   const { config, state } = snapshot;
-  return `<section class="card"><h2>仓库连接与基线</h2><div class="split"><div><small>外部来源</small>${esc(config.sourceUrl)}<p>交付分支：${esc(config.sourceBranch)}</p></div><div><small>内部接收</small>${esc(config.internalUrl)}<p>合入分支：${esc(config.targetBranch)}</p></div></div><p>地址与检查命令来自本地私有配置。凭据由 Git / gh 的现有认证管理。</p>${state ? `<h3>初始对应</h3>${sha(state.initial.upstream)} → ${sha(state.initial.internal)}<h3>当前已接受对应</h3>${sha(state.accepted.upstream)} → ${sha(state.accepted.internal)}` : `${button('heads', '读取两侧当前版本')}<form data-form="adopt"><label for="upstream">外部已同步版本 U0（完整 SHA）</label><input id="upstream" name="upstream" required><label for="internal">内部当前版本 I0（完整 SHA）</label><input id="internal" name="internal" required><p>已有仓落后时，U0 填上次已同步版本；不能直接填外部最新版本。程序核验两侧 tree、内部 HEAD 和来源历史后登记。</p><button class="primary" type="submit">核验并登记已有基线</button></form>`}</section>`;
+  return `${modeSettings(config, state, esc)}<section class="card"><h2>3 · 仓库连接与基线</h2><div class="split"><div><small>外部来源</small>${esc(config.sourceUrl)}<p>交付分支：${esc(config.sourceBranch)}</p></div><div><small>内部接收</small>${esc(config.internalUrl)}<p>合入分支：${esc(config.targetBranch)}</p></div></div><p>地址与检查命令来自本地私有配置。凭据由 Git / gh 的现有认证管理。</p>${state ? `<h3>初始对应</h3>${sha(state.initial.upstream)} → ${sha(state.initial.internal)}<h3>当前已接受对应</h3>${sha(state.accepted.upstream)} → ${sha(state.accepted.internal)}` : `${button('heads', '读取两侧当前版本')}<form data-form="adopt"><label for="upstream">外部已同步版本 U0（完整 SHA）</label><input id="upstream" name="upstream" required><label for="internal">内部当前版本 I0（完整 SHA）</label><input id="internal" name="internal" required><p>已有仓落后时，U0 填上次已同步版本；不能直接填外部最新版本。${config.mode === 'version' ? '程序核验同步范围与文件规则，允许规则内的内部差异。' : '程序核验完整文件树一致性。'}</p><button class="primary" type="submit">核验并登记已有基线</button></form>`}</section>`;
 }
 const states = {
   ISSUES_REQUIRED: [
@@ -66,7 +71,17 @@ const states = {
     '按平台实际状态保存本笔记录。有后续交付时保持打开，本笔仍可完成；接收条件满足后在平台关闭并确认。',
   ],
 };
+function versionPrimary(active, state) {
+  if (snapshot.config.mode !== 'version') return null;
+  if (!active) return state.queue.length ? button('start', `开始更新至 ${esc(state.queue[0].source.tag)} →`) : '';
+  if (active.status !== 'CODE_PREPARE_REQUIRED') return null;
+  if (active.error?.code === 'CONTENT_CONFLICT')
+    return '<a class="button primary" href="#conflict-options">解决文件冲突 →</a>';
+  return button('prepare', '合并文件、检查并推送候选 →');
+}
 function primary(active, state) {
+  const versionAction = versionPrimary(active, state);
+  if (versionAction !== null) return versionAction;
   if (!active)
     return state.queue.length
       ? button('start', `同步上游 PR #${state.queue[0].source.number} →`)
@@ -115,6 +130,8 @@ function currentForm(active, state) {
   return `<div id="${anchors[active.status] ?? 'step-content'}">${currentFormContent(active, state)}</div>`;
 }
 function currentFormContent(active, state) {
+  if (active.status === 'CODE_PREPARE_REQUIRED')
+    return `${versionPreview(active, esc, sha)}${conflictOptions(active, esc)}<section class="card"><button type="button" data-action="cancel-version">撤销未发布交付，重新选择版本</button><p>历史记录保留。已发布候选必须先恢复，不能撤销。</p></section>`;
   if (active.status === 'ISSUES_REQUIRED') return issueForms(active, state);
   if (active.status === 'PR_REQUIRED')
     return `<section class="card"><h3>内部 PR 模板</h3><pre>${esc(snapshot.state.templates.title)}\n\n${esc(snapshot.state.templates.body)}</pre><form data-form="pr"><label>内部 PR 具体链接<input name="url" type="url" required></label><button type="submit" class="primary">登记 PR，进入审核</button></form></section>`;
@@ -122,26 +139,27 @@ function currentFormContent(active, state) {
     return `<section class="card"><form data-form="receipts"><h3>确认平台实际状态并保存接收记录</h3>${receiptFields(active, state, esc, sha)}<button type="submit" class="primary">保存本笔接收记录，完成同步</button><p>此操作记录人工核对结果，不向内部平台发送关单请求。</p></form></section>`;
   return '';
 }
+function idlePresentation(state) {
+  if (!state.queue.length) return ['本轮交付已完成', '可检查新更新，也可展开每笔记录回看过程。'];
+  if (snapshot.config.mode === 'version')
+    return [`已选择 ${esc(state.queue[0].source.tag)}`, '目标与内部基线已核对，点击开始生成本次版本交付。'];
+  return ['有上游更新可以接收', '按 main 实际接受顺序逐笔处理，内部 main 在平台合入前保持原版本。'];
+}
 function workbench() {
   const state = snapshot.state;
   if (!state)
     return `<section class="card task"><h2>先确认两侧已有基线</h2><p>连接已从私有配置载入，登记外部已同步版本与内部当前版本即可开始。</p><button type="button" data-view="configuration" class="primary">配置同步基线 →</button></section>`;
   const active = state.active;
-  const [title, description] = active
-    ? taskPresentation(active, state)
-    : [
-        state.queue.length ? '有上游更新可以接收' : '本轮交付已完成',
-        state.queue.length
-          ? '按 main 实际接受顺序逐笔处理，内部 main 在平台合入前保持原版本。'
-          : '可检查新更新，也可展开每笔记录回看过程。',
-      ];
+  if (snapshot.config.mode === 'version' && !active && !state.queue.length)
+    return `${tagSelector(availableTags, esc, sha)}${versionHistory(state)}`;
+  const [title, description] = active ? taskPresentation(active, state) : idlePresentation(state);
   if (!active && !state.queue.length && state.accepted.upstream !== state.latest)
     return `<section class="card task"><h2>读取上游交付清单</h2><p>Git 已读取到更新版本。先关联 PR、Issue 与实际提交并冻结范围，再发起同步。</p>${button('discover', '检查上游更新')}</section>`;
-  return `<section class="card task"><div class="task-top"><div><span class="badge">${active ? esc(active.status) : '准备就绪'}</span><h2>${title}</h2><p>${description}</p></div><div>${primary(active, state)}</div></div>${active ? `<p>候选分支：${esc(active.branch)} → ${esc(snapshot.config.targetBranch)}</p>${workflow(active)}` : ''}</section><section class="card versions"><div><small>已接受上游</small>${sha(state.accepted.upstream)}</div><div><small>对应内部 commit</small>${sha(state.accepted.internal)}</div><div><small>冻结扫描目标</small>${sha(state.latest)}<small>${state.queue.length} 笔待完成交付</small></div></section>${active?.error ? `<div class="card bad">× ${esc(active.error.code)}<p>${esc(active.error.message)}</p></div>` : ''}${active ? currentForm(active, state) : ''}<section class="card"><h3>本轮同步与审计</h3>${
+  return `<section class="card task"><div class="task-top"><div><span class="badge">${active ? esc(active.status) : '准备就绪'}</span><h2>${title}</h2><p>${description}</p></div><div>${primary(active, state)}</div></div>${active ? `<p>候选分支：${esc(active.branch)} → ${esc(snapshot.config.targetBranch)}</p>${workflow(active)}` : ''}</section><section class="card versions"><div><small>已接受上游</small>${sha(state.accepted.upstream)}</div><div><small>对应内部 commit</small>${sha(state.accepted.internal)}</div><div><small>冻结扫描目标</small>${sha(state.latest)}<small>${state.queue.length} 笔待完成交付</small></div></section>${active?.error ? `<div class="card bad">× ${esc(active.error.code)}<p>${esc(active.error.message)}</p>${active.error.details?.paths ? `<pre>${esc(active.error.details.paths.join('\n'))}</pre>` : ''}</div>` : ''}${active ? currentForm(active, state) : ''}<section class="card"><h3>本轮同步与审计</h3>${
     state.deliveries
       .map(
         (delivery) =>
-          `<details><summary>${esc(delivery.source.title)} · ${esc(delivery.status)}</summary><p>${esc(delivery.id)} · ${esc(delivery.branch)}</p>${delivery.prUrl ? `<p><a href="${snapshot.synthetic ? `/demo/pr/${delivery.id}` : esc(delivery.prUrl)}" target="_blank" rel="noopener">打开对应内部 PR ↗</a></p>` : ''}<p>目标 ${sha(delivery.target)} → 内部 ${sha(delivery.acceptedInternal ?? '待接受')}</p><details><summary>本笔原始 commit 对应</summary><pre>${esc(delivery.commits.map((commit) => `${commit} → ${commit}`).join('\n'))}</pre><small>原始对象 SHA 保留；内部接收节点单独记录。</small></details><pre>${esc(
+          `<details><summary>${esc(delivery.source.title)} · ${esc(delivery.status)}</summary><p>${esc(delivery.id)} · ${esc(delivery.branch)}</p>${delivery.prUrl ? `<p><a href="${snapshot.synthetic ? `/demo/pr/${delivery.id}` : esc(delivery.prUrl)}" target="_blank" rel="noopener">打开对应内部 PR ↗</a></p>` : ''}<p>目标 ${sha(delivery.target)} → 内部 ${sha(delivery.acceptedInternal ?? '待接受')}</p><details><summary>${delivery.mode === 'version' ? '上游版本提交范围（不重放提交）' : '本笔原始 commit 对应'}</summary><pre>${esc(delivery.commits.map((commit) => (delivery.mode === 'version' ? commit : `${commit} → ${commit}`)).join('\n'))}</pre><small>${delivery.mode === 'version' ? '来源 SHA 用于版本追溯；内部候选是一次内容更新提交。' : '原始对象 SHA 保留；内部接收节点单独记录。'}</small></details><pre>${esc(
             state.events
               .filter((event) => event.deliveryId === delivery.id)
               .map((event) => `${event.time} ${event.message}`)
@@ -157,6 +175,11 @@ function workbench() {
   }</section>`;
 }
 function taskPresentation(active, state) {
+  if (active.status === 'CODE_PREPARE_REQUIRED' && !active.error)
+    return [
+      `准备更新至 ${esc(active.source.tag)}`,
+      '核对下方文件范围。内部专有文件保留，共同文件三方合并；只生成一个同步 PR。',
+    ];
   if (active.error) return ['执行暂停，先核对原交付', active.error.message];
   if (active.status === 'ISSUES_REQUIRED' && active.issues.every((issue) => state.issues[issue.sourceId]))
     return ['内部 Issue 已就绪，准备同步代码', '点击检查并推送候选分支。原始提交保留，内部 main 仍等待平台审批。'];
@@ -186,6 +209,11 @@ function render() {
         ? '等待内部审核'
         : '完成当前步骤';
   renderFreshness();
+  if (snapshot.demoLinks)
+    content.insertAdjacentHTML(
+      'afterbegin',
+      `<p class="demo-links">独立测试：<a href="${esc(snapshot.demoLinks.continuous)}">开发过程同步</a> · <a href="${esc(snapshot.demoLinks.version)}">按版本更新</a> · <a href="${esc(snapshot.demoLinks.conflict)}">文件冲突场景</a></p>`,
+    );
 }
 function renderFreshness() {
   if (view === 'workbench' && snapshot.state && !location.pathname.startsWith('/demo/pr/')) {
@@ -203,12 +231,20 @@ function renderFreshness() {
 document.addEventListener('click', async (event) => {
   const element = event.target.closest('button');
   if (!element) return;
+  if (element.dataset.conflictPath) {
+    const result = await action({ action: 'conflict', path: element.dataset.conflictPath });
+    if (result) document.getElementById('conflict-editor').innerHTML = conflictEditor(result.result, esc);
+  }
   if (element.dataset.view) {
     view = element.dataset.view;
     render();
   }
   if (element.dataset.action) {
     const result = await action({ action: element.dataset.action, deliveryId: snapshot.state?.active?.id });
+    if (element.dataset.action === 'tags' && result) {
+      availableTags = result.result;
+      render();
+    }
     if (element.dataset.action === 'demo-merge' && result) {
       content.innerHTML =
         '<section class="card"><h2>模拟平台已执行 Git 合入</h2><p>返回工作台核验并补写接收记录。</p><a href="/">返回工作台 →</a></section>';
@@ -224,6 +260,15 @@ document.addEventListener('submit', async (event) => {
   const form = event.target;
   const fields = Object.fromEntries(new FormData(form));
   const input = { action: form.dataset.form, ...fields };
+  if (input.action === 'configure')
+    for (const key of ['internalPaths', 'mergePaths'])
+      input[key] =
+        fields.mode === 'version'
+          ? fields[key]
+              .split(/\r?\n/)
+              .map((value) => value.trim())
+              .filter(Boolean)
+          : [];
   if (input.action === 'issue') input.sourceId = form.dataset.source;
   if (input.action === 'receipts')
     input.observations = snapshot.state.active.issues.map((issue) => ({
@@ -231,8 +276,35 @@ document.addEventListener('submit', async (event) => {
       internalId: snapshot.state.issues[issue.sourceId].internalId,
       state: fields[issue.sourceId],
     }));
-  await action(input);
+  const result = await action(input);
+  if (input.action === 'configure' && result) {
+    const confirmation = document.createElement('p');
+    confirmation.setAttribute('role', 'status');
+    confirmation.textContent = '同步方式与文件规则已保存，请登记已有基线。';
+    content.prepend(confirmation);
+  }
 });
+
+function versionHistory(state) {
+  return `<section class="card"><h3>当前已接收版本</h3><p>${esc(state.accepted.tag ?? '已登记初始基线')} · 外部 ${sha(state.accepted.upstream)} → 内部 ${sha(state.accepted.internal)}</p><h3>每次版本更新与审计</h3>${
+    state.deliveries
+      .map(
+        (delivery) =>
+          `<details><summary>${esc(delivery.source.tag)} · ${esc(delivery.status)}</summary><p>外部 ${sha(delivery.target)} → 内部 ${sha(delivery.acceptedInternal ?? '待接受')}</p>${delivery.prUrl ? `<a href="${snapshot.synthetic ? `/demo/pr/${delivery.id}` : esc(delivery.prUrl)}" target="_blank" rel="noopener">打开对应内部 PR ↗</a>` : ''}<pre>${esc(
+            state.events
+              .filter((event) => event.deliveryId === delivery.id)
+              .map((event) => `${event.time} ${event.message}`)
+              .join('\n'),
+          )}</pre></details>`,
+      )
+      .join('') || '<p>尚无版本更新记录。</p>'
+  }</section>`;
+}
+document.addEventListener('change', (event) => {
+  if (event.target.matches('[name="mode"]'))
+    document.querySelector('[data-policy]').hidden = event.target.value !== 'version';
+});
+
 refresh().catch((error) => {
   errorPanel.textContent = error.message;
   errorPanel.hidden = false;

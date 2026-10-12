@@ -1,0 +1,35 @@
+name: Repo sync Git contracts
+
+on:
+  pull_request:
+    paths:
+      - packages/repo-sync/**
+      - .github/workflows/repo-sync.yml
+  push:
+    branches: [main]
+    paths:
+      - packages/repo-sync/**
+      - .github/workflows/repo-sync.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: repo-sync-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  git-contracts:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Actual Git regression tests in isolated synthetic repositories
+        run: node --test packages/repo-sync/test/*.test.mjs

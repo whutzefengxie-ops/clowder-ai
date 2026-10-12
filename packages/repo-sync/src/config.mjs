@@ -1,9 +1,11 @@
 import { createHash } from 'node:crypto';
 import { isAbsolute, relative, resolve, sep } from 'node:path';
+import { versionPolicy } from './policy.mjs';
 
-export function fail(code, message) {
+export function fail(code, message, details) {
   const error = new Error(message);
   error.code = code;
+  if (details) error.details = details;
   throw error;
 }
 export function safeUrl(value, local = false) {
@@ -33,6 +35,7 @@ export function objectUrl(value) {
 }
 export function validateConfig(input) {
   const config = structuredClone(input);
+  validateMode(config);
   config.sourceUrl = safeUrl(config.sourceUrl, config.allowLocal === true);
   config.internalUrl = safeUrl(config.internalUrl, config.allowLocal === true);
   for (const branch of [config.sourceBranch, config.targetBranch]) {
@@ -52,7 +55,15 @@ export function validateConfig(input) {
     fail('INVALID_CAPABILITY', '关单验证声明必须是布尔值');
   checkStateLocation(config);
   config.bindingId = createHash('sha256')
-    .update(JSON.stringify([config.sourceUrl, config.internalUrl, config.sourceBranch, config.targetBranch]))
+    .update(
+      JSON.stringify([
+        config.sourceUrl,
+        config.internalUrl,
+        config.sourceBranch,
+        config.targetBranch,
+        ...(config.mode === 'version' ? [config.mode, config.internalPaths, config.mergePaths] : []),
+      ]),
+    )
     .digest('hex');
   for (const check of config.checks ?? []) {
     if (
@@ -64,6 +75,13 @@ export function validateConfig(input) {
       fail('INVALID_CHECK', '检查命令需要 executable 与字符串 args 数组');
   }
   return config;
+}
+function validateMode(config) {
+  config.mode ??= 'continuous';
+  if (!['continuous', 'version'].includes(config.mode)) fail('INVALID_MODE', '同步模式需要 continuous 或 version');
+  if (config.mode === 'version') Object.assign(config, versionPolicy(config));
+  else if (config.internalPaths?.length || config.mergePaths?.length)
+    fail('INVALID_POLICY', '开发过程同步不能配置内部文件差异');
 }
 function checkStateLocation(config) {
   for (const repository of [config.sourceUrl, config.internalUrl].filter(isAbsolute)) {

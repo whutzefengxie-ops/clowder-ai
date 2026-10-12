@@ -2,13 +2,17 @@ export function progressSteps(delivery, state) {
   const status = delivery.status;
   const pushed = ['PR_REQUIRED', 'WAITING_APPROVAL', 'CODE_ACCEPTED_PENDING_METADATA', 'COMPLETE'].includes(status);
   const complete = status === 'COMPLETE';
+  const version = delivery.mode === 'version';
   const nodes = [
     [
       '准备同步',
       [
         ['冻结范围与基线', true],
-        ['登记内部 Issue 映射', delivery.issues.every((issue) => state.issues[issue.sourceId])],
-        ['构造原始对象候选', Boolean(delivery.candidate)],
+        [
+          version ? '核对文件规则与内部差异' : '登记内部 Issue 映射',
+          version || delivery.issues.every((issue) => state.issues[issue.sourceId]),
+        ],
+        [version ? '保留内部文件与三方合并' : '构造原始对象候选', Boolean(delivery.candidate)],
         ['核心与插件检查', delivery.checks?.passed === true],
         ['推送并回读候选分支', pushed],
       ],
@@ -19,7 +23,7 @@ export function progressSteps(delivery, state) {
       '核验与接收记录',
       [
         ['核验 main 的 tree 与历史', Boolean(delivery.acceptedInternal)],
-        ['保存本笔 Issue 接收记录', complete],
+        [version ? '保存 tag 与内外 commit 对应' : '保存本笔 Issue 接收记录', complete],
       ],
     ],
     ['完成', [['记录结果并开放下一笔', complete]]],

@@ -1,8 +1,10 @@
 import { fail } from './config.mjs';
 import { event } from './store.mjs';
+import { verifyTag } from './tags.mjs';
 
 export async function recoverDelivery(receiver, state, delivery) {
   const heads = await receiver.git.fetch();
+  if (receiver.config.mode === 'version') await verifyTag(receiver.git, delivery.frozenTag);
   state.observedInternal = heads.internal;
   if (delivery.acceptedInternal) {
     if (heads.internal !== delivery.acceptedInternal)
@@ -22,6 +24,18 @@ export async function recoverDelivery(receiver, state, delivery) {
   await receiver.git.verify(delivery, heads.internal);
   delivery.acceptedInternal = heads.internal;
   state.accepted = { upstream: delivery.target, internal: heads.internal };
+  if (receiver.config.mode === 'version') {
+    state.accepted.tag = delivery.source.tag;
+    delivery.status = 'COMPLETE';
+    state.queue.shift();
+    delete delivery.error;
+    event(
+      state,
+      delivery,
+      '版本候选的文件树与内部合入历史核验通过，已保存 tag 与两侧 commit 对应；无需 Issue 接收记录',
+    );
+    return;
+  }
   delivery.status = 'CODE_ACCEPTED_PENDING_METADATA';
   delete delivery.error;
   event(state, delivery, '合入结果已归属原交付；tree、来源和内部历史核验通过，补写双游标');
@@ -30,5 +44,9 @@ async function recoverCandidate(git, delivery) {
   if (delivery.status !== 'PUSH_RESULT_UNKNOWN') return;
   const existing = await git.remoteBranch(delivery.branch);
   if (existing && existing !== delivery.candidate) fail('CANDIDATE_CONFLICT', '远端候选与冻结 head 冲突');
-  delivery.status = existing ? 'PR_REQUIRED' : 'ISSUES_REQUIRED';
+  delivery.status = existing
+    ? 'PR_REQUIRED'
+    : delivery.mode === 'version'
+      ? 'CODE_PREPARE_REQUIRED'
+      : 'ISSUES_REQUIRED';
 }
