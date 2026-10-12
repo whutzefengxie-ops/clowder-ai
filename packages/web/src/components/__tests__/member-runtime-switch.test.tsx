@@ -107,6 +107,10 @@ it('keeps the draft and exact old configuration after a rejected save', async ()
   const save = [...host.querySelectorAll('button')].find((e) => e.textContent === '保存');
   if (!save) throw Error('Save missing');
   await act(async () => save.click());
+  const write = vi
+    .mocked(apiFetch)
+    .mock.calls.find(([path, init]) => path === '/api/cats/switch-test' && init?.method === 'PATCH');
+  expect(new Headers(write?.[1]?.headers).get('x-clowder-save-id')).toMatch(/^[\da-f-]{36}$/i);
   expect(host.textContent).toContain('配置已被其他窗口修改');
   expect(host.querySelector('[data-testid=member-identity-summary]')?.textContent).toContain('Codex');
   expect(saved).not.toHaveBeenCalled();
@@ -133,4 +137,35 @@ it('allows returning to a saved custom ACP tool that discovery does not list', a
   expect(oldTool).toBeDefined();
   await choose(oldTool?.value ?? 'missing');
   expect(host.querySelector('[data-testid=member-save-bar]')).toBeNull();
+});
+
+it('keeps the save trace open through the actual editor refresh and records the UI commit', async () => {
+  await choose('codex');
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  saved.mockImplementationOnce(() => gate);
+  const originalFetch = vi.mocked(apiFetch).getMockImplementation()!;
+  vi.mocked(apiFetch).mockImplementation((path, init) =>
+    path === '/api/cats/switch-test' && init?.method === 'PATCH'
+      ? Promise.resolve(new Response(JSON.stringify({ cat: { ...cat, clientId: 'openai' } })))
+      : originalFetch(path, init),
+  );
+  const save = [...host.querySelectorAll('button')].find((e) => e.textContent === '保存')!;
+  const events = () => JSON.parse(sessionStorage.getItem('member-save-diagnostics:v1') ?? '[]')[0]?.events ?? [];
+  try {
+    await act(async () => save.click());
+    expect(saved).toHaveBeenCalled();
+    expect(events()).toEqual(expect.arrayContaining([expect.objectContaining({ phase: 'refresh', state: 'start' })]));
+    expect(events()).not.toEqual(expect.arrayContaining([expect.objectContaining({ phase: 'save', state: 'finish' })]));
+  } finally {
+    await act(async () => release());
+  }
+  expect(events()).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ phase: 'save', state: 'finish' }),
+      expect.objectContaining({ phase: 'ui.commit', state: 'finish' }),
+    ]),
+  );
 });

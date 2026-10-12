@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CatData } from '@/hooks/useCatData';
 import { API_URL, apiFetch } from '@/utils/api-client';
+import type { MemberSaveTrace } from '@/utils/member-save-trace';
 import type { TemplateCard } from '../../first-run-quest/TemplateStep';
 import type { AccountsResponse, ProfileItem } from '../../hub-accounts.types';
 import {
@@ -25,16 +26,19 @@ import {
   rebaseMemberDraft,
   templateForm,
 } from './member-editor-state';
-
 import { type RuntimeChoice, switchMemberRuntime } from './member-runtime-draft';
+import { useMemberSaveTrace } from './useMemberSaveTrace';
 
 async function readResponse<T>(response: Response): Promise<T> {
   const body = await response.json();
   if (!response.ok) throw new Error(typeof body.error === 'string' ? body.error : `请求失败 (${response.status})`);
   return body as T;
 }
-
-export function useMemberEditor(cat: CatData | null, cats: CatData[], onSaved: (cat: CatData) => Promise<void>) {
+export function useMemberEditor(
+  cat: CatData | null,
+  cats: CatData[],
+  onSaved: (cat: CatData, trace?: MemberSaveTrace) => Promise<void>,
+) {
   const [draft, setDraft] = useState<MemberDraft>({
     version: 1,
     form: initialState(cat),
@@ -46,6 +50,7 @@ export function useMemberEditor(cat: CatData | null, cats: CatData[], onSaved: (
   const [templates, setTemplates] = useState<TemplateCard[]>([]);
   const [ready, setReady] = useState(false);
   const [saving, setSaving] = useState(false);
+  const startSaveTrace = useMemberSaveTrace(saving);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [storageWarning, setStorageWarning] = useState(false);
@@ -225,7 +230,7 @@ export function useMemberEditor(cat: CatData | null, cats: CatData[], onSaved: (
 
   const save = async () => {
     const snapshot = stateRef.current;
-    const { baseline } = snapshot;
+    const { baseline, strategy } = snapshot;
     const form = baseline
       ? snapshot.form
       : { ...snapshot.form, roleDescription: snapshot.form.roleDescription.trim() || '团队伙伴' };
@@ -234,6 +239,7 @@ export function useMemberEditor(cat: CatData | null, cats: CatData[], onSaved: (
       return;
     }
     if (saving) return;
+    const trace = startSaveTrace();
     setSaving(true);
     setError(null);
     setNotice(null);
@@ -247,37 +253,43 @@ export function useMemberEditor(cat: CatData | null, cats: CatData[], onSaved: (
       const memberChanged = !baseline || Object.keys(payload).length > 0;
       if (baseline?.configurationRevision) Object.assign(payload, { expectedRevision: baseline.configurationRevision });
       const result = memberChanged
-        ? await apiFetch(baseline ? `/api/cats/${baseline.id}` : '/api/cats', {
-            method: baseline ? 'PATCH' : 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-          }).then((response) => {
-            if (response.status === 409) setConflicted(true);
-            return readResponse<{ cat: CatData }>(response);
-          })
+        ? await trace.phase('member.write', () =>
+            apiFetch(baseline ? `/api/cats/${baseline.id}` : '/api/cats', {
+              method: baseline ? 'PATCH' : 'POST',
+              headers: { 'Content-Type': 'application/json', ...trace.headers() },
+              body: JSON.stringify(payload),
+            }).then((response) => {
+              if (response.status === 409) setConflicted(true);
+              return readResponse<{ cat: CatData }>(response);
+            }),
+          )
         : { cat: baseline };
       persisted = result.cat;
       // A later strategy failure must not roll back a successful account/member write.
       let next = { ...snapshot, baseline: persisted, form: initialState(persisted), runtimeDrafts: undefined };
       setDraft(next);
       persistMemberDraft(storageKey.current, next);
-      if (snapshot.strategy && JSON.stringify(snapshot.strategy) !== JSON.stringify(snapshot.strategyBaseline)) {
-        await apiFetch(`/api/config/session-strategy/${persisted.id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(buildStrategyPayload(snapshot.strategy)),
-        }).then(readResponse<unknown>);
+      if (strategy && JSON.stringify(strategy) !== JSON.stringify(snapshot.strategyBaseline)) {
+        await trace.phase('strategy.write', () =>
+          apiFetch(`/api/config/session-strategy/${result.cat.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', ...trace.headers() },
+            body: JSON.stringify(buildStrategyPayload(strategy)),
+          }).then(readResponse<unknown>),
+        );
         next = { ...next, strategyBaseline: snapshot.strategy };
         setDraft(next);
         persistMemberDraft(storageKey.current, next);
       }
       if (snapshot.codexSettings && snapshot.codexBaseline) {
         for (const configPatch of buildCodexConfigPatches(snapshot.codexSettings, snapshot.codexBaseline)) {
-          await apiFetch('/api/config', {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(configPatch),
-          }).then(readResponse<unknown>);
+          await trace.phase('codex.write', () =>
+            apiFetch('/api/config', {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json', ...trace.headers() },
+              body: JSON.stringify(configPatch),
+            }).then(readResponse<unknown>),
+          );
           const field =
             configPatch.key === 'cli.codexSandboxMode'
               ? 'sandboxMode'
@@ -292,12 +304,16 @@ export function useMemberEditor(cat: CatData | null, cats: CatData[], onSaved: (
       persistMemberDraft(storageKey.current, null);
       setDraft({ ...next, strategyBaseline: next.strategy });
       setNotice('已保存。正在运行的回合不变，后续调用使用新设置。');
-      await onSaved(persisted).catch(() => setNotice('配置已保存，成员列表刷新失败，请重新打开列表。'));
+      await trace
+        .phase('refresh', () => onSaved(result.cat, trace))
+        .catch(() => setNotice('配置已保存，成员列表刷新失败，请重新打开列表。'));
     } catch (err) {
+      trace.fail();
       setError(
         `${persisted ? '成员已保存，部分附加设置尚未保存：' : ''}${err instanceof Error ? err.message : '保存失败'}`,
       );
     } finally {
+      trace.finish();
       setSaving(false);
     }
   };

@@ -70,6 +70,7 @@ import {
 import { deleteRuntimeOverride, getRuntimeOverride, setRuntimeOverride } from '../config/session-strategy-overrides.js';
 import type { InvocationCapacitySnapshot } from '../domains/cats/services/agents/invocation/invocation-capacity-snapshot.js';
 import { resolveActiveProjectRoot } from '../utils/active-project-root.js';
+import { saveSpan } from '../utils/member-save-diagnostics.js';
 import { resolveHeaderUserId } from '../utils/request-identity.js';
 
 const colorSchema = z.object({
@@ -693,110 +694,118 @@ async function toCatResponse(
   resolveEffectiveAccountRef: (cat: CatConfig) => Promise<string | undefined>,
   resolveContextCapacitySnapshot?: (catId: CatId) => InvocationCapacitySnapshot | undefined,
 ) {
-  const acpConfig = getAcpConfig(cat.id as string, projectRoot);
-  const contextSnapshot = resolveContextCapacitySnapshot?.(cat.id);
-  const contextCapability = contextSnapshot?.capability;
-  const effectiveAccountRef = await resolveEffectiveAccountRef(cat);
-  const persistedIdentityCat = persistedBuiltinCloudIdentityCat(projectRoot, cat);
-  const identityProtection = projectBuiltinCloudIdentityProtection(
-    builtinCloudIdentityCandidate({ cat: persistedIdentityCat, accountRef: effectiveAccountRef, acp: acpConfig }),
-  );
-  return {
-    id: cat.id,
-    name: cat.name,
-    displayName: cat.displayName,
-    nickname: cat.nickname,
-    color: cat.color,
-    mentionPatterns: cat.mentionPatterns,
-    breedId: cat.breedId,
-    relationshipKey: cat.relationshipKey,
-    accountRef: effectiveAccountRef,
-    configurationSource: cat.configurationSource,
-    configurationRevision: memberConfigurationRevision(projectRoot, cat.id),
-    clientId: cat.clientId,
-    defaultModel: cat.defaultModel,
-    cli: cat.cli,
-    // F254 D2: effective carrier truth — only for cats that actually dispatch
-    // through the local Codex CLI. Generic ACP (getAcpConfig wins in the
-    // assembly) and cloud-only cats (cli removed, F247 KD-17) never reach the
-    // Codex carrier, so exposing one would be a lie.
-    ...(cat.clientId === 'openai' && !acpConfig && cat.cli != null
-      ? {
-          codexCarrier: resolveCodexCarrierTruth(cat.cli.carrier, process.env, cat.configurationSource),
-        }
-      : {}),
-    contextWindow: getConfiguredMemberWindowSetting(cat),
-    // #1208 Items 4+6: resolved context window info + client capability for Hub display.
-    resolvedContext: (() => {
-      const capacity =
-        contextSnapshot?.capacity ??
-        resolveContextCapacity({
-          catId: cat.id as string,
-          memberWindowTokens: getConfiguredMemberWindowSetting(cat),
-          model: getCatModel(cat.id as string, cat.defaultModel),
-        });
-      const capabilityInfo = {
-        capabilityReason: contextCapability?.reason ?? 'Concrete carrier capability unavailable',
-        reportsRuntimeWindow: contextCapability?.reportsRuntimeWindow ?? false,
-        authoritativeUsage: contextCapability?.authoritativeUsage ?? false,
-        usageTelemetry: contextCapability?.usageTelemetry ?? 'unavailable',
-        nativeWindowControl: contextCapability?.nativeWindowControl ?? false,
-        nativeCompressionControl: contextCapability?.nativeCompressionControl ?? false,
-        observesCompression: contextCapability?.observesCompression ?? false,
+  return saveSpan(
+    'response.member',
+    async () => {
+      const acpConfig = getAcpConfig(cat.id as string, projectRoot);
+      const contextSnapshot = resolveContextCapacitySnapshot?.(cat.id);
+      const contextCapability = contextSnapshot?.capability;
+      const effectiveAccountRef = await resolveEffectiveAccountRef(cat);
+      const persistedIdentityCat = persistedBuiltinCloudIdentityCat(projectRoot, cat);
+      const identityProtection = projectBuiltinCloudIdentityProtection(
+        builtinCloudIdentityCandidate({ cat: persistedIdentityCat, accountRef: effectiveAccountRef, acp: acpConfig }),
+      );
+      return {
+        id: cat.id,
+        name: cat.name,
+        displayName: cat.displayName,
+        nickname: cat.nickname,
+        color: cat.color,
+        mentionPatterns: cat.mentionPatterns,
+        breedId: cat.breedId,
+        relationshipKey: cat.relationshipKey,
+        accountRef: effectiveAccountRef,
+        configurationSource: cat.configurationSource,
+        configurationRevision: memberConfigurationRevision(projectRoot, cat.id),
+        clientId: cat.clientId,
+        defaultModel: cat.defaultModel,
+        cli: cat.cli,
+        // F254 D2: effective carrier truth — only for cats that actually dispatch
+        // through the local Codex CLI. Generic ACP (getAcpConfig wins in the
+        // assembly) and cloud-only cats (cli removed, F247 KD-17) never reach the
+        // Codex carrier, so exposing one would be a lie.
+        ...(cat.clientId === 'openai' && !acpConfig && cat.cli != null
+          ? {
+              codexCarrier: resolveCodexCarrierTruth(cat.cli.carrier, process.env, cat.configurationSource),
+            }
+          : {}),
+        contextWindow: getConfiguredMemberWindowSetting(cat),
+        // #1208 Items 4+6: resolved context window info + client capability for Hub display.
+        resolvedContext: (() => {
+          const capacity =
+            contextSnapshot?.capacity ??
+            resolveContextCapacity({
+              catId: cat.id as string,
+              memberWindowTokens: getConfiguredMemberWindowSetting(cat),
+              model: getCatModel(cat.id as string, cat.defaultModel),
+            });
+          const capabilityInfo = {
+            capabilityReason: contextCapability?.reason ?? 'Concrete carrier capability unavailable',
+            reportsRuntimeWindow: contextCapability?.reportsRuntimeWindow ?? false,
+            authoritativeUsage: contextCapability?.authoritativeUsage ?? false,
+            usageTelemetry: contextCapability?.usageTelemetry ?? 'unavailable',
+            nativeWindowControl: contextCapability?.nativeWindowControl ?? false,
+            nativeCompressionControl: contextCapability?.nativeCompressionControl ?? false,
+            observesCompression: contextCapability?.observesCompression ?? false,
+          };
+          return capacity.source !== 'unresolved'
+            ? {
+                windowTokens: capacity.windowTokens,
+                inputCeilingTokens: capacity.inputCeilingTokens,
+                source: capacity.source,
+                provenance: capacity.provenance,
+                actionable: capacity.actionable,
+                ...capabilityInfo,
+              }
+            : capabilityInfo;
+        })(),
+        avatar: cat.avatar,
+        roleDescription: cat.roleDescription,
+        personality: cat.personality,
+        teamStrengths: cat.teamStrengths,
+        caution: cat.caution,
+        strengths: cat.strengths,
+        sessionChain: cat.sessionChain,
+        voiceConfig: cat.voiceConfig,
+        commandArgs: cat.commandArgs,
+        cliConfigArgs: cat.cliConfigArgs,
+        provider: cat.provider,
+        variantLabel: cat.variantLabel ?? undefined,
+        isDefaultVariant: cat.isDefaultVariant ?? undefined,
+        breedDisplayName: cat.breedDisplayName ?? undefined,
+        mcpSupport: cat.mcpSupport,
+        ...(acpConfig ? { acp: acpConfig } : {}),
+        ...(identityProtection ? { identityProtection } : {}),
+        roster: metadata.roster
+          ? {
+              family: metadata.roster.family,
+              roles: [...metadata.roster.roles],
+              lead: metadata.roster.lead,
+              available: metadata.roster.available,
+              evaluation: metadata.roster.evaluation,
+            }
+          : null,
+        // F161: adapterMode is now provider-agnostic — any clientId can have ACP config
+        adapterMode: acpConfig ? 'acp' : 'cli',
       };
-      return capacity.source !== 'unresolved'
-        ? {
-            windowTokens: capacity.windowTokens,
-            inputCeilingTokens: capacity.inputCeilingTokens,
-            source: capacity.source,
-            provenance: capacity.provenance,
-            actionable: capacity.actionable,
-            ...capabilityInfo,
-          }
-        : capabilityInfo;
-    })(),
-    avatar: cat.avatar,
-    roleDescription: cat.roleDescription,
-    personality: cat.personality,
-    teamStrengths: cat.teamStrengths,
-    caution: cat.caution,
-    strengths: cat.strengths,
-    sessionChain: cat.sessionChain,
-    voiceConfig: cat.voiceConfig,
-    commandArgs: cat.commandArgs,
-    cliConfigArgs: cat.cliConfigArgs,
-    provider: cat.provider,
-    variantLabel: cat.variantLabel ?? undefined,
-    isDefaultVariant: cat.isDefaultVariant ?? undefined,
-    breedDisplayName: cat.breedDisplayName ?? undefined,
-    mcpSupport: cat.mcpSupport,
-    ...(acpConfig ? { acp: acpConfig } : {}),
-    ...(identityProtection ? { identityProtection } : {}),
-    roster: metadata.roster
-      ? {
-          family: metadata.roster.family,
-          roles: [...metadata.roster.roles],
-          lead: metadata.roster.lead,
-          available: metadata.roster.available,
-          evaluation: metadata.roster.evaluation,
-        }
-      : null,
-    // F161: adapterMode is now provider-agnostic — any clientId can have ACP config
-    adapterMode: acpConfig ? 'acp' : 'cli',
-  };
+    },
+    { catId: cat.id },
+  );
 }
 
 async function reconcileCatRegistry(projectRoot: string, managedIdsBefore: ReadonlySet<string>) {
-  const runtimeCats = toAllCatConfigs(loadResolvedCatConfig(resolveProjectTemplatePath(projectRoot)));
-  const extraCats = catRegistry.getAllConfigs();
-  catRegistry.reset();
-  for (const [id, config] of Object.entries(runtimeCats)) {
-    catRegistry.register(id, config);
-  }
-  for (const [id, config] of Object.entries(extraCats)) {
-    if (!runtimeCats[id] && !managedIdsBefore.has(id)) catRegistry.register(id, config);
-  }
-  return catRegistry.getAllConfigs();
+  return saveSpan('catalog.reconcile', () => {
+    const runtimeCats = toAllCatConfigs(loadResolvedCatConfig(resolveProjectTemplatePath(projectRoot)));
+    const extraCats = catRegistry.getAllConfigs();
+    catRegistry.reset();
+    for (const [id, config] of Object.entries(runtimeCats)) {
+      catRegistry.register(id, config);
+    }
+    for (const [id, config] of Object.entries(extraCats)) {
+      if (!runtimeCats[id] && !managedIdsBefore.has(id)) catRegistry.register(id, config);
+    }
+    return catRegistry.getAllConfigs();
+  });
 }
 
 function getManagedCatalogIds(projectRoot: string): Set<string> {
@@ -1274,7 +1283,7 @@ export const catsRoutes: FastifyPluginAsync<CatsRoutesOptions> = async (app, opt
       reply.status(404);
       return { error: `Cat "${request.params.id}" not found` };
     }
-    const currentEffectiveAccountRef = await resolveEffectiveAccountRef(currentCat);
+    const currentEffectiveAccountRef = await saveSpan('member.account', () => resolveEffectiveAccountRef(currentCat));
     const currentAcpConfig = getAcpConfig(request.params.id as string, projectRoot);
     const persistedIdentityCat = persistedBuiltinCloudIdentityCat(projectRoot, currentCat);
     const currentIdentityProtection = projectBuiltinCloudIdentityProtection(

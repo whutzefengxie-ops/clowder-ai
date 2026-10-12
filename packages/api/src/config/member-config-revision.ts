@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { CatCafeConfig } from '@cat-cafe/shared';
+import { saveSpan } from '../utils/member-save-diagnostics.js';
 import { readCatCatalogRaw } from './cat-catalog-store.js';
 import { toAllCatConfigs } from './cat-config-loader.js';
 import { type RuntimeCatUpdate, updateRuntimeCat, withRuntimeCatMutationLock } from './runtime-cat-catalog.js';
@@ -26,8 +27,8 @@ export function updateMemberWithRevision(
   patch: RuntimeCatUpdate,
 ) {
   return withRuntimeCatMutationLock(projectRoot, () => {
-    if (expected && memberConfigurationRevision(projectRoot, catId) !== expected)
+    if (expected && saveSpan('catalog.revision', () => memberConfigurationRevision(projectRoot, catId)) !== expected)
       throw new MemberConfigurationConflict();
-    return updateRuntimeCat(projectRoot, catId, patch);
+    return saveSpan('catalog.persist', () => updateRuntimeCat(projectRoot, catId, patch));
   });
 }

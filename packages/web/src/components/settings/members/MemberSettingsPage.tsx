@@ -2,6 +2,7 @@
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 import type { CatData } from '@/hooks/useCatData';
+import type { MemberSaveTrace } from '@/utils/member-save-trace';
 import { MemberAdditionalFields } from './MemberAdditionalFields';
 import { MemberChangeSummary } from './MemberChangeSummary';
 import { MemberCloudIdentity } from './MemberCloudIdentity';
@@ -25,7 +26,7 @@ export function MemberSettingsPage({
 }: {
   cat: CatData | null;
   cats: CatData[];
-  onSaved: (cat: CatData) => Promise<void>;
+  onSaved: (cat: CatData, trace?: MemberSaveTrace) => Promise<void>;
   onBack: () => void;
 }) {
   const router = useRouter();

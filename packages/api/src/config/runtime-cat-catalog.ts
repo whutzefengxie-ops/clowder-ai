@@ -11,6 +11,7 @@ import type {
   VoiceConfig,
 } from '@cat-cafe/shared';
 import { createCatId } from '@cat-cafe/shared';
+import { saveSpan } from '../utils/member-save-diagnostics.js';
 import { clearBudgetCache } from './cat-budgets.js';
 import { bootstrapCatCatalog, readCatCatalog, resolveCatCatalogPath } from './cat-catalog-store.js';
 import type { AcpVariantConfig } from './cat-config-loader.js';
@@ -29,27 +30,29 @@ export async function withRuntimeCatMutationLock<T>(projectRoot: string, operati
     release = resolve;
   });
   runtimeCatMutationTails.set(projectRoot, current);
-  await previous;
+  await saveSpan('catalog.queue', () => previous);
   let lockFd: number | undefined;
   const lockPath = `${resolveCatCatalogPath(projectRoot)}.lock`;
   try {
     mkdirSync(dirname(lockPath), { recursive: true });
-    for (let attempt = 0; attempt < 300; attempt += 1) {
-      try {
-        lockFd = openSync(lockPath, 'wx');
-        break;
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+    await saveSpan('catalog.file_lock', async () => {
+      for (let attempt = 0; attempt < 300; attempt += 1) {
         try {
-          if (Date.now() - statSync(lockPath).mtimeMs > 30_000) unlinkSync(lockPath);
-        } catch {
-          // The writer may have released the lock between stat and unlink.
+          lockFd = openSync(lockPath, 'wx');
+          break;
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+          try {
+            if (Date.now() - statSync(lockPath).mtimeMs > 30_000) unlinkSync(lockPath);
+          } catch {
+            // The writer may have released the lock between stat and unlink.
+          }
+          await new Promise((resolve) => setTimeout(resolve, 10));
         }
-        await new Promise((resolve) => setTimeout(resolve, 10));
       }
-    }
-    if (lockFd === undefined) throw new Error('Timed out waiting for runtime cat catalog lock');
-    return operation();
+      if (lockFd === undefined) throw new Error('Timed out waiting for runtime cat catalog lock');
+    });
+    return saveSpan('catalog.write', operation);
   } finally {
     if (lockFd !== undefined) {
       closeSync(lockFd);

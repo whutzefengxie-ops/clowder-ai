@@ -137,9 +137,9 @@ interface FetchResult {
   fromApi: boolean;
 }
 
-async function fetchCatOrder(): Promise<string[]> {
+async function fetchCatOrder(headers?: HeadersInit): Promise<string[]> {
   try {
-    const res = await apiFetch('/api/config/cat-order');
+    const res = await apiFetch('/api/config/cat-order', headers ? { headers } : undefined);
     if (!res.ok) return [];
     const data = await res.json();
     if (!Array.isArray(data?.catOrder)) return [];
@@ -149,9 +149,12 @@ async function fetchCatOrder(): Promise<string[]> {
   }
 }
 
-async function fetchCats(): Promise<FetchResult> {
+async function fetchCats(headers?: HeadersInit): Promise<FetchResult> {
   try {
-    const [catsRes, orderIds] = await Promise.all([apiFetch('/api/cats'), fetchCatOrder()]);
+    const [catsRes, orderIds] = await Promise.all([
+      apiFetch('/api/cats', headers ? { headers } : undefined),
+      fetchCatOrder(headers),
+    ]);
     _catOrder = orderIds;
     if (!catsRes.ok) return { cats: [], fromApi: false };
     const data = await catsRes.json();
@@ -187,10 +190,10 @@ function normalizeCats(rawCats: unknown[]): CatData[] {
   });
 }
 
-async function refreshCatsNow(): Promise<FetchResult> {
+async function refreshCatsNow(headers?: HeadersInit): Promise<FetchResult> {
   const prev = _cached;
   _cached = null;
-  _fetchPromise = fetchCats();
+  _fetchPromise = fetchCats(headers);
   const result = await _fetchPromise;
   if (result.fromApi) {
     _cached = result.cats;
@@ -280,9 +283,9 @@ export function useCatData({ fetch: shouldFetch = true }: UseCatDataOptions = {}
   }, [retryCount, shouldFetch]);
 
   const refresh = useMemo(
-    () => async () => {
+    () => async (headers?: HeadersInit) => {
       setIsLoading(true);
-      const result = await refreshCatsNow();
+      const result = await refreshCatsNow(headers);
       setCats(result.cats);
       if (result.fromApi) setHasFetched(true);
       setIsLoading(false);

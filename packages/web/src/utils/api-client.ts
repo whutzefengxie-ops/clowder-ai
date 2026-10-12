@@ -9,6 +9,7 @@
 import { useToastStore } from '../stores/toastStore';
 import { markApiGetGeneration } from './api-get-generation';
 import { boundedFetch, waitForPromiseWithSignal } from './bounded-fetch';
+import { tagSaveRequest, traceSaveTransport } from './member-save-trace';
 
 function getBrowserLocation(): Location | null {
   if (typeof globalThis !== 'object' || globalThis === null) return null;
@@ -182,29 +183,41 @@ function withoutCallerSignal(init?: RequestInit): RequestInit | undefined {
 
 async function performApiFetch(path: string, init?: RequestInit): Promise<Response> {
   const initialSessionGate = ensureSession();
-  await waitForPromiseWithSignal(initialSessionGate, init?.signal);
+  await traceSaveTransport(init, 'session.wait', () => waitForPromiseWithSignal(initialSessionGate, init?.signal));
   const normalized = ensureBodyForMutation(init);
-  const res = await boundedFetch(
-    `${API_URL}${path}`,
-    {
-      ...normalized,
-      credentials: 'include',
-    },
-    API_REQUEST_TIMEOUT_MS,
+  const res = await traceSaveTransport(
+    init,
+    'http.attempt',
+    () =>
+      boundedFetch(
+        `${API_URL}${path}`,
+        {
+          ...normalized,
+          credentials: 'include',
+        },
+        API_REQUEST_TIMEOUT_MS,
+      ),
+    1,
   );
   if (res.status !== 401) return res;
 
   // Session expired (API restart, cookie cleared). Re-establish and retry once.
   invalidateSession(initialSessionGate);
   const refreshedSessionGate = ensureSession();
-  await waitForPromiseWithSignal(refreshedSessionGate, init?.signal);
-  const retryRes = await boundedFetch(
-    `${API_URL}${path}`,
-    {
-      ...normalized,
-      credentials: 'include',
-    },
-    API_REQUEST_TIMEOUT_MS,
+  await traceSaveTransport(init, 'session.refresh', () => waitForPromiseWithSignal(refreshedSessionGate, init?.signal));
+  const retryRes = await traceSaveTransport(
+    init,
+    'http.attempt',
+    () =>
+      boundedFetch(
+        `${API_URL}${path}`,
+        {
+          ...normalized,
+          credentials: 'include',
+        },
+        API_REQUEST_TIMEOUT_MS,
+      ),
+    2,
   );
   if (retryRes.status === 401) notifySessionFailure();
   return retryRes;
@@ -296,6 +309,7 @@ async function coordinatedGet(
  * @param options - GET generation coordination options
  */
 export async function apiFetch(path: string, init?: RequestInit, options?: ApiFetchOptions): Promise<Response> {
+  init = tagSaveRequest(init);
   if (init?.signal?.aborted) {
     throw init.signal.reason ?? new DOMException('The operation was aborted.', 'AbortError');
   }

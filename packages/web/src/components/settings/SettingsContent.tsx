@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { RoutingContextLedger } from '@/components/routing-context/RoutingContextLedger';
 import { useCatData } from '@/hooks/useCatData';
 import { apiFetch } from '@/utils/api-client';
+import type { MemberSaveTrace } from '@/utils/member-save-trace';
 import { ConnectorPluginInstallButton } from '../ConnectorPluginInstallButton';
 import { CatOverviewTab, type ConfigData } from '../config-viewer-tabs';
 import { DesktopUpdateSettingsPanel } from '../DesktopUpdateSettingsPanel';
@@ -77,10 +78,10 @@ export function SettingsContent({ section, initialEditCatId }: SettingsContentPr
     router.push(`/settings?${params.toString()}`, { scroll: false });
   };
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (headers?: HeadersInit) => {
     setFetchError(null);
     try {
-      const res = await apiFetch('/api/config');
+      const res = await apiFetch('/api/config', headers ? { headers } : undefined);
       if (!res.ok) {
         setFetchError(`配置加载失败 (${res.status})`);
         return;
@@ -109,9 +110,12 @@ export function SettingsContent({ section, initialEditCatId }: SettingsContentPr
     setEditorOpen(Boolean(selected));
   }, [initialEditCatId, section, cats, searchParams]);
 
-  const handleEditorSaved = useCallback(async () => {
-    await Promise.all([fetchData(), refresh()]);
-  }, [fetchData, refresh]);
+  const handleEditorSaved = useCallback(
+    async (trace?: MemberSaveTrace) => {
+      await Promise.all([fetchData(trace?.headers()), refresh(trace?.headers())]);
+    },
+    [fetchData, refresh],
+  );
 
   const handleToggleAvailability = useCallback(
     async (cat: (typeof cats)[number]) => {
@@ -188,8 +192,8 @@ export function SettingsContent({ section, initialEditCatId }: SettingsContentPr
               cat={editingCat}
               cats={cats}
               onBack={closeMember}
-              onSaved={async (saved) => {
-                await handleEditorSaved();
+              onSaved={async (saved, trace) => {
+                await handleEditorSaved(trace);
                 if (!editingCat) closeMember();
                 else setEditingCat(saved);
               }}
@@ -306,7 +310,7 @@ export function SettingsContent({ section, initialEditCatId }: SettingsContentPr
           open
           coCreator={config.coCreator}
           onClose={() => setCoCreatorEditorOpen(false)}
-          onSaved={handleEditorSaved}
+          onSaved={() => handleEditorSaved()}
         />
       )}
     </div>

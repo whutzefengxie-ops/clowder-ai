@@ -42,6 +42,7 @@ import type { IThreadStore } from '../domains/cats/services/stores/ports/ThreadS
 import { LOG_DIR_PATH } from '../infrastructure/logger.js';
 import { resolveActiveProjectRoot } from '../utils/active-project-root.js';
 import { isDirectLoopbackRequest } from '../utils/loopback-request.js';
+import { saveSpan } from '../utils/member-save-diagnostics.js';
 import { resolveOwnerGate } from '../utils/owner-gate.js';
 import { resolveHeaderUserId } from '../utils/request-identity.js';
 import { getDefaultUploadDir } from '../utils/upload-paths.js';
@@ -179,15 +180,15 @@ export async function configRoutes(app: FastifyInstance, opts: ConfigRoutesOptio
       return { error: 'Identity required (X-Cat-Cafe-User header)' };
     }
 
-    const before = collectConfigSnapshot();
+    const before = saveSpan('config.snapshot.before', () => collectConfigSnapshot());
     const oldValue = getSnapshotValue(before, parsed.data.key);
     try {
-      configStore.set(parsed.data.key, parsed.data.value);
+      saveSpan('config.persist', () => configStore.set(parsed.data.key, parsed.data.value));
     } catch (err) {
       reply.status(400);
       return { error: (err as Error).message };
     }
-    const after = collectConfigSnapshot();
+    const after = saveSpan('config.snapshot.after', () => collectConfigSnapshot());
     const newValue = getSnapshotValue(after, parsed.data.key);
     const riskLevel = configStore.getRiskLevel(parsed.data.key) ?? 'standard';
 
@@ -202,17 +203,19 @@ export async function configRoutes(app: FastifyInstance, opts: ConfigRoutesOptio
     }
 
     try {
-      await auditLog.append({
-        type: AuditEventTypes.CONFIG_UPDATED,
-        data: {
-          key: parsed.data.key,
-          oldValue,
-          newValue,
-          operator,
-          riskLevel,
-          source: configStore.source(parsed.data.key) ?? 'default',
-        },
-      });
+      await saveSpan('config.audit', () =>
+        auditLog.append({
+          type: AuditEventTypes.CONFIG_UPDATED,
+          data: {
+            key: parsed.data.key,
+            oldValue,
+            newValue,
+            operator,
+            riskLevel,
+            source: configStore.source(parsed.data.key) ?? 'default',
+          },
+        }),
+      );
     } catch (err) {
       request.log.warn({ err, key: parsed.data.key }, 'config audit append failed');
     }
