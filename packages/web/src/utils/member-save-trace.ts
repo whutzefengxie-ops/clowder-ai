@@ -85,7 +85,7 @@ export async function traceSaveTransport<T>(
   }
 }
 
-export function beginMemberSave(apiUrl: string) {
+export function beginMemberSave(apiUrl: string, send?: (path: string, init: RequestInit) => Promise<Response>) {
   const traceId = diagnosticId();
   const started = performance.now();
   const events: Timing[] = [];
@@ -109,14 +109,18 @@ export function beginMemberSave(apiUrl: string) {
     const batch = pending.splice(0, 120);
     // Separate best-effort request; never await delivery on the save path or recurse through apiFetch.
     try {
-      void fetch(`${apiUrl}/api/diagnostics/member-save`, {
+      const init: RequestInit = {
         method: 'POST',
         credentials: 'include',
         keepalive: true,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ traceId, events: batch }),
         signal: AbortSignal.timeout(2000),
-      }).then(
+      };
+      const delivery = send
+        ? send('/api/diagnostics/member-save', init)
+        : fetch(`${apiUrl}/api/diagnostics/member-save`, init);
+      void delivery.then(
         (response) => {
           if (!response.ok) pending = [...batch, ...pending].slice(-120);
         },

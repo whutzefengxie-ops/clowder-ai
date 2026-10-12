@@ -5,7 +5,11 @@ import type { CatData } from '@/hooks/useCatData';
 import { apiFetch } from '@/utils/api-client';
 import { MemberSettingsPage } from '../settings/members/MemberSettingsPage';
 
-vi.mock('@/utils/api-client', () => ({ apiFetch: vi.fn(), API_URL: 'isolated' }));
+vi.mock('@/utils/api-client', () => ({
+  apiFetch: vi.fn(),
+  sendMemberSaveDiagnostics: vi.fn(async () => new Response(null, { status: 204 })),
+  API_URL: 'isolated',
+}));
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: vi.fn() }),
   useSearchParams: () => new URLSearchParams('lang=zh'),

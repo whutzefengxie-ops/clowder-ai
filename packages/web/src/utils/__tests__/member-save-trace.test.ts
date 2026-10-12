@@ -116,3 +116,44 @@ it('classifies timeouts without logging their messages and tolerates disabled st
   });
   expect(() => trace.finish()).not.toThrow();
 });
+
+it('recovers telemetry session after an API restart without tracing its own upload', async () => {
+  let uploads = 0;
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(
+      async (url: string) =>
+        new Response(null, {
+          status: url.endsWith('/api/diagnostics/member-save') ? (++uploads === 1 ? 401 : 204) : 200,
+        }),
+    ),
+  );
+  const { sendMemberSaveDiagnostics } = await import('../api-client');
+  const trace = beginMemberSave('http://isolated', (_path, init) => sendMemberSaveDiagnostics(init));
+  trace.finish();
+  await vi.advanceTimersByTimeAsync(1);
+  expect(uploads).toBe(2);
+  expect(records()[0]?.events.map((e) => e.phase)).toEqual(['save', 'save']);
+});
+
+it('keeps persistent diagnostic authentication failures silent', async () => {
+  let uploads = 0;
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      if (url.endsWith('/api/diagnostics/member-save')) {
+        uploads++;
+        return new Response(null, { status: 401 });
+      }
+      return new Response(null, { status: 200 });
+    }),
+  );
+  const { sendMemberSaveDiagnostics } = await import('../api-client');
+  const { useToastStore } = await import('../../stores/toastStore');
+  useToastStore.setState({ toasts: [] });
+  const trace = beginMemberSave('http://isolated', (_path, init) => sendMemberSaveDiagnostics(init));
+  trace.finish();
+  await vi.advanceTimersByTimeAsync(1);
+  expect(uploads).toBe(2);
+  expect(useToastStore.getState().toasts).toEqual([]);
+});

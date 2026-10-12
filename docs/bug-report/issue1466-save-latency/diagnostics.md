@@ -75,6 +75,8 @@ node scripts/analyze-member-save.mjs --log <实际API日志文件> --trace <trac
 
 浏览器通过独立 `/api/diagnostics/member-save` 最佳努力批量上报，2 秒超时，不等待上报完成才结束保存。接口要求真实 session，拒绝任意字段/阶段、负数/无效耗时、超过 120 个事件或 32KiB 的请求；每分钟最多接收 3000 个事件。浏览器耗时标记 `source=browser/trustedTiming=false`，不作为鉴权或服务端事实。
 
+上报复用 API 客户端的 401 会话恢复，覆盖 API 重启后旧标签页 cookie 失效、普通写入仍能成功的情况；持续上报失败不弹错误提示。上报自身不带保存追踪头，避免递归记录。
+
 即使网络或上报失败，当前标签页 sessionStorage 的 `member-save-diagnostics:v1` 保留最近 10 次保存、每次最多 120 个事件；控制台 `[member-save]` 给出 ID 和总耗时。不要在取证前关闭该标签页。若服务端汇总明确显示缺少浏览器证据，需补充此本地记录，不能将缺失视为零耗时。页面完全崩溃且本地存储禁用时无法保全浏览器记录，但埋点不阻断保存。
 
 ## 验证证据

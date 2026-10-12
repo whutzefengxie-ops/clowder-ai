@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { API_URL } from '@/utils/api-client';
+import { API_URL, sendMemberSaveDiagnostics } from '@/utils/api-client';
 import { beginMemberSave, type MemberSaveTrace } from '@/utils/member-save-trace';
 
 /** Capture React's committed non-saving state separately from the completed async workflow. */
@@ -12,7 +12,7 @@ export function useMemberSaveTrace(saving: boolean) {
     }
   }, [saving]);
   return () => {
-    const trace = beginMemberSave(API_URL);
+    const trace = beginMemberSave(API_URL, (_path, init) => sendMemberSaveDiagnostics(init));
     pending.current = trace;
     return trace;
   };

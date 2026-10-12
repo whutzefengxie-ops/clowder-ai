@@ -181,7 +181,7 @@ function withoutCallerSignal(init?: RequestInit): RequestInit | undefined {
   return physicalInit;
 }
 
-async function performApiFetch(path: string, init?: RequestInit): Promise<Response> {
+async function performApiFetch(path: string, init?: RequestInit, notifyFailure = true): Promise<Response> {
   const initialSessionGate = ensureSession();
   await traceSaveTransport(init, 'session.wait', () => waitForPromiseWithSignal(initialSessionGate, init?.signal));
   const normalized = ensureBodyForMutation(init);
@@ -219,7 +219,7 @@ async function performApiFetch(path: string, init?: RequestInit): Promise<Respon
       ),
     2,
   );
-  if (retryRes.status === 401) notifySessionFailure();
+  if (retryRes.status === 401 && notifyFailure) notifySessionFailure();
   return retryRes;
 }
 
@@ -317,4 +317,9 @@ export async function apiFetch(path: string, init?: RequestInit, options?: ApiFe
     return coordinatedGet(path, init, options?.afterCurrentGet === true, options?.ifNoneMatch);
   }
   return performApiFetch(path, init);
+}
+
+/** Best-effort timing delivery recovers stale sessions without showing diagnostic-only failures to the user. */
+export function sendMemberSaveDiagnostics(init: RequestInit): Promise<Response> {
+  return performApiFetch('/api/diagnostics/member-save', init, false);
 }
