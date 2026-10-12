@@ -30,6 +30,7 @@ const runtimes = [
   },
 ];
 beforeEach(() => {
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
   catalog.cats = [];
   localStorage.clear();
   container = document.createElement('div');
@@ -82,7 +83,7 @@ it.each(['goal', 'members'] as const)('supports HTTP LAN and preserves the %s jo
     expect(creates).toHaveLength(3);
     expect(creates[0][1]?.headers).toMatchObject({ 'X-Cat-Cafe-Onboarding-Journey': journey });
   } finally {
-    vi.unstubAllGlobals();
+    vi.stubGlobal('crypto', nativeCrypto);
   }
 });
 
@@ -106,6 +107,7 @@ it('resumes a partially created team without duplicating members or sending a ta
 afterEach(() => {
   act(() => root.unmount());
   container.remove();
+  vi.unstubAllGlobals();
   vi.resetAllMocks();
 });
 

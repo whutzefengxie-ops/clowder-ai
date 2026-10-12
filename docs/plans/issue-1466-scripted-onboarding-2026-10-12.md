@@ -113,6 +113,26 @@ Architecture cell：首启 UI / Workspace browser。Map delta：内置浏览器�
 - 实际项目 5144 验证欢迎提示直接入口、跳过后首页入口、未开始演示直接进入设置，并发现三位推荐伙伴。留给用户的验收环境为 **5144 / API 3144 / Redis 6370**，尚未点击创建；5142 的三成员验证数据保留，进程停止以避免重复占用。
 - 旧 `FirstRunQuestWizard` / `/dev/first-run-onboarding` 保留为真实小目标的开发兼容入口；本轮修复其共享 hook 的 LAN 问题，但不把开发入口当新的首页主线。旧 `onboarding/` 原型组件也不作为生产交付证据，后续清理须保留旧 R4/R5 数据与恢复合同。
 
+## mind 定向复核后的验证优化（2026-10-12）
+
+已通读 [mind 最新复核](https://github.com/zts212653/clowder-ai/pull/1519#issuecomment-6121401373)：它针对 `509f4286` 确认真实配置独立入口、HTTP LAN journey、暂停文字三项修复局部通过，没有新增 P1/P2，也没有改变账号、按需认证、持久用户状态、F229 或 F320 的既定范围。后续 `c6bb52f09` 的一次点击自动播放继续保留上述入口与恢复能力。
+
+- 实际运行原 `useNativeOnboarding` 测试：11 条通过，但出现 188 条 React `act` 环境警告。根因是此测试未声明 `IS_REACT_ACT_ENVIRONMENT`，且 LAN 用例提前 `unstubAllGlobals` 会清除该声明。
+- 改为测试开始时声明 React act 环境；LAN 用例仅恢复 crypto，卸载之后统一还原 globals。没有屏蔽 console，也没有减少断言。相同 11 条通过，警告归零。
+- 按 mind 的六文件定向范围重跑当前源码：6 文件 / 35 条通过，act 环境警告为 0。数量与其历史 SHA 的 34 条不同，来自已落地的自动播放/重播和前置弹窗删除。
+- 当前完整工作区依赖下 `pnpm --filter @cat-cafe/shared build` exit 0；这不反证 reviewer 独立环境的准备构建诊断，也不代表新机器或其他系统已验收。
+- `c6bb52f09` CI 已终态：17 成功 / 0 失败 / 1 项预期跳过；后续测试/文档提交单独核其 CI，不沿用此 SHA 的绿灯。
+
+独立复验应从该提交自己的 checkout 开始，先安装锁文件对应的完整依赖，再生成共享包导出产物，最后运行首启测试：
+
+```sh
+pnpm install --frozen-lockfile
+pnpm --filter @cat-cafe/shared build
+pnpm --filter @cat-cafe/web run test:first-run-onboarding
+```
+
+共享包 exports 指向 `dist`，只安装 React/Vitest/jsdom 不能代替工作区依赖准备。构建有诊断时应保留其 exit code 与原日志；产物存在不等于构建通过。此优化仅涉及验证环境和说明，产品界面及演示流程沿用上一轮，生产环境无需更新。
+
 ## 第二轮入库截图
 
 以下为实际项目 5142 隔离实例截图：
