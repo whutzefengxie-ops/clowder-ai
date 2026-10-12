@@ -1,7 +1,7 @@
 'use client';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
-import type { CatData } from '@/hooks/useCatData';
+import { type CatData, formatCatName } from '@/hooks/useCatData';
 import type { MemberSaveTrace } from '@/utils/member-save-trace';
 import { MemberAdditionalFields } from './MemberAdditionalFields';
 import { MemberChangeSummary } from './MemberChangeSummary';
@@ -75,7 +75,9 @@ export function MemberSettingsPage({
           <button type="button" className="mb-3 min-h-10 text-sm text-cafe-accent" onClick={onBack}>
             ← {t('成员与运行时', 'Members & runtimes')}
           </button>
-          <h1 className="text-2xl font-semibold">{cat ? form.name : t('添加猫猫伙伴', 'Add a teammate')}</h1>
+          <h1 className="break-words text-2xl font-semibold">
+            {cat ? formatCatName(form) : t('添加猫猫伙伴', 'Add a teammate')}
+          </h1>
           <p className="mt-2 break-words text-sm text-cafe-secondary" data-testid="member-identity-summary">
             {tool}
             {form.accountRef ? ` · ${accountLabel}` : ''}
@@ -136,7 +138,7 @@ export function MemberSettingsPage({
                   {t('名字', 'Name')}
                   <input
                     className="mt-2 block w-full rounded-lg bg-[var(--console-field-bg)] p-3"
-                    value={form.name}
+                    value={form.displayName}
                     onChange={(event) => {
                       const name = event.target.value;
                       editor.patch({

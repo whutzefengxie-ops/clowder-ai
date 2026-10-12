@@ -1,5 +1,5 @@
 import type { DragEvent as ReactDragEvent } from 'react';
-import type { CatData } from '@/hooks/useCatData';
+import { type CatData, formatCatName } from '@/hooks/useCatData';
 import { CO_CREATOR_COLOR } from '@/lib/color-defaults';
 import { readableInkOn } from '@/lib/readable-ink';
 import { AvatarImageWithFallback } from './AvatarImageWithFallback';
@@ -228,6 +228,7 @@ function MemberMeta({ cat, configCat }: { cat: CatData; configCat?: CatConfig })
         ) : null}
       </span>
       <span className="mt-0.5 flex flex-wrap items-center gap-2">
+        {cat.nickname?.trim() && <span>昵称：{cat.nickname}</span>}
         <SettingsText tone="purple">{formatMentionPreview(cat.mentionPatterns)}</SettingsText>
       </span>
     </>
@@ -264,7 +265,7 @@ export function HubMemberOverviewCard({
   guideTargetId?: string;
 }) {
   const status = getStatusBadge(cat);
-  const title = [cat.breedDisplayName ?? cat.displayName, cat.nickname].filter(Boolean).join(' · ');
+  const title = formatCatName(cat);
 
   return (
     <SettingsRow

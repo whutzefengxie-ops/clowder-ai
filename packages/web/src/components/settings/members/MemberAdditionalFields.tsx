@@ -110,7 +110,7 @@ export function MemberAdditionalFields({
         {editing && <p className="text-sm text-cafe-secondary">ID · {form.catId}</p>}
         <TextField
           label={t('名字', 'Name')}
-          value={form.name}
+          value={form.displayName}
           onChange={(name) => {
             const id = autoSlug(name, form.catId);
             patch({
