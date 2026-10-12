@@ -44,7 +44,7 @@ export function FirstRunQuestWizard({ open, onClose, onCreated }: FirstRunQuestW
           if (event.key !== 'Tab') return;
           const controls = Array.from(
             event.currentTarget.querySelectorAll<HTMLElement>(
-              'button:not(:disabled), input:not(:disabled), textarea, select, summary, a[href]',
+              'button:not(:disabled), input:not(:disabled), textarea:not(:disabled), select:not(:disabled), summary, a[href]',
             ),
           ).filter((element) => element.getClientRects().length > 0);
           const first = controls[0],
@@ -138,6 +138,7 @@ export function FirstRunQuestWizard({ open, onClose, onCreated }: FirstRunQuestW
                   <button
                     key={goal.title}
                     type="button"
+                    disabled={Boolean(busy)}
                     onClick={() => setup.patch({ goal: goal.content })}
                     className={`min-h-10 rounded-full border px-4 text-sm ${draft?.goal === goal.content ? 'border-cafe-accent text-cafe-accent' : 'border-[var(--console-border-soft)] text-cafe-secondary'}`}
                   >
@@ -148,6 +149,7 @@ export function FirstRunQuestWizard({ open, onClose, onCreated }: FirstRunQuestW
               <label className="block text-sm font-medium">
                 你想完成什么？
                 <textarea
+                  disabled={Boolean(busy)}
                   value={draft?.goal ?? ''}
                   onChange={(e) => setup.patch({ goal: e.target.value })}
                   placeholder="例如：把我的想法整理为今天可以完成的三步计划"
@@ -159,6 +161,7 @@ export function FirstRunQuestWizard({ open, onClose, onCreated }: FirstRunQuestW
               <label className="block text-sm font-medium">
                 先和哪位伙伴开始？
                 <select
+                  disabled={Boolean(busy)}
                   value={lead?.id ?? ''}
                   onChange={(e) => setup.patch({ lead: e.target.value })}
                   className="mt-3 block min-h-11 w-full rounded-lg border border-[var(--console-border-soft)] bg-cafe-surface-canvas px-3 font-normal"
@@ -188,6 +191,9 @@ export function FirstRunQuestWizard({ open, onClose, onCreated }: FirstRunQuestW
           </button>
           <button
             type="button"
+            aria-label={
+              busy || (step === 'partners' ? `下一步 · 为 ${selected.length} 位伙伴设定小目标` : '保存伙伴，前往对话')
+            }
             disabled={
               loading ||
               Boolean(busy) ||

@@ -88,3 +88,21 @@ it('retains successful members when thread creation fails and resumes without du
   expect(vi.mocked(apiFetch).mock.calls.filter(([path]) => path === '/api/cats')).toHaveLength(3);
   expect(onCreated).toHaveBeenCalledOnce();
 });
+
+it('recommends a newly installed tool on refresh but preserves an explicit deselection', async () => {
+  const original = vi.mocked(apiFetch).getMockImplementation()!;
+  let installed = false;
+  vi.mocked(apiFetch).mockImplementation(async (path, init) =>
+    path === '/api/cats/native-runtimes'
+      ? response({ runtimes: runtimes.map((runtime) => ({ ...runtime, installed })) })
+      : original(path, init),
+  );
+  await act(async () => root.render(<Harness />));
+  expect(setup.draft?.partners.some((p) => p.selected)).toBe(false);
+  installed = true;
+  await act(async () => setup.reload());
+  expect(setup.draft?.partners.every((p) => p.selected)).toBe(true);
+  await act(async () => setup.patchPartner('codex', { selected: false }));
+  await act(async () => setup.reload());
+  expect(setup.draft?.partners.find((p) => p.id === 'codex')?.selected).toBe(false);
+});

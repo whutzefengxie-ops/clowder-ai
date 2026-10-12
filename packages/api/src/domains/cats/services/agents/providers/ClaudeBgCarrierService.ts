@@ -502,7 +502,7 @@ export class ClaudeBgCarrierService implements AgentService {
             carrier: 'bg_daemon',
             ...(effectiveModel ? { model: effectiveModel } : {}),
             protocol: 'job_jsonl',
-            reasoningEffort: effortLevel,
+            ...(effortLevel ? { reasoningEffort: effortLevel } : {}),
             ...(readOnly ? { toolExecutionPolicy: 'read_only' as const } : {}),
           }),
           tools: Object.freeze({

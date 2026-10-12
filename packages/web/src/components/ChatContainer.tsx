@@ -438,9 +438,9 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
     setShowFirstRunQuestPrompt(false);
   }, []);
   const handleStartFirstRunQuest = useCallback(() => {
-    setShowFirstRunQuestPrompt(false);
+    handleSkipFirstRunQuest();
     setShowQuestWizard(true);
-  }, []);
+  }, [handleSkipFirstRunQuest]);
   const currentBootcampState = storeThreads.find((thread) => thread.id === threadId)?.bootcampState;
   const currentBootcampPhase = currentBootcampState?.phase;
   const showFirstProjectMistakeTip = useFirstProjectMistakeTipGate({
@@ -500,7 +500,7 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
     // Pure backend-driven: show prompt only when no cats AND no bootcamp thread
     const isCurrentBootcamp = Boolean(storeThreads.find((thread) => thread.id === threadId)?.bootcampState);
     const hasAnyBootcamp = storeThreads.some((t) => t.bootcampState);
-    if (isCurrentBootcamp || hasAnyBootcamp || cats.length > 0 || isLoading) {
+    if (showQuestWizard || isCurrentBootcamp || hasAnyBootcamp || cats.length > 0 || isLoading) {
       setShowFirstRunQuestPrompt(false);
       return;
     }
@@ -516,7 +516,7 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
       /* localStorage unavailable */
     }
     setShowFirstRunQuestPrompt(true);
-  }, [cats.length, isLoading, hasFetched, storeThreads, threadId]);
+  }, [cats.length, isLoading, hasFetched, storeThreads, threadId, showQuestWizard]);
 
   // ── Data sync: re-fetch thread state ──
   // MCP callbacks update Redis directly; the companion WebSocket `thread_updated`
@@ -1289,6 +1289,7 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
       )}
       <FloatingTranscriptContainer />
       {showFirstRunQuestPrompt &&
+        !showQuestWizard &&
         createPortal(
           <div className="fixed inset-0 z-[70] flex items-center justify-center bg-[var(--console-overlay-medium)] px-4 backdrop-blur-sm">
             <div

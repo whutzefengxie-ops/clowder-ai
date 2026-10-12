@@ -129,7 +129,7 @@ export async function prepareClaudeSdkLaunch(input: {
     runtime: Object.freeze({
       provider: 'anthropic',
       carrier: 'agent_sdk',
-      model: effectiveModel,
+      ...(effectiveModel ? { model: effectiveModel } : {}),
       protocol: 'sdk-streaming-input',
       reasoningEffort: effort,
       ...(readOnly ? { toolExecutionPolicy: 'read_only' as const } : {}),

@@ -1,7 +1,7 @@
 import './helpers/setup-cat-registry.js';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { catRegistry } from '@cat-cafe/shared';
+import { catRegistry, sanitizedRequestedRuntimeConfigSchema } from '@cat-cafe/shared';
 import {
   ClaudeAgentService,
   resolveClaudeEffortLevel,
@@ -45,7 +45,14 @@ test('native Claude launch omits model and effort and keeps native auth environm
   const saved = process.env.ANTHROPIC_API_KEY;
   process.env.ANTHROPIC_API_KEY = 'fixture-native-auth';
   try {
-    const pending = collect(service.invoke('fixture prompt'));
+    let requested;
+    const pending = collect(
+      service.invoke('fixture prompt', {
+        beforeProviderLaunch: async (request) => {
+          requested = request.runtime;
+        },
+      }),
+    );
     await emitEvents(proc, [{ type: 'result', subtype: 'success' }]);
     await pending;
     const [, _args, options] = spawnFn.mock.calls[0].arguments;
@@ -53,6 +60,8 @@ test('native Claude launch omits model and effort and keeps native auth environm
     assert.equal(_args.includes('--effort'), false);
     assert.equal(options.env.ANTHROPIC_API_KEY, 'fixture-native-auth');
     assert.equal(_args[_args.indexOf('--setting-sources') + 1], 'project,local,user');
+    assert.equal(sanitizedRequestedRuntimeConfigSchema.safeParse(requested).success, true);
+    assert.equal(requested.reasoningEffort, undefined);
   } finally {
     if (saved === undefined) delete process.env.ANTHROPIC_API_KEY;
     else process.env.ANTHROPIC_API_KEY = saved;

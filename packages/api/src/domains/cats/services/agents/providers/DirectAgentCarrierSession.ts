@@ -17,6 +17,7 @@ const DIRECT_STDERR_TAIL_CHARS = 8192;
 export interface DirectAgentCarrierSessionDeps {
   /** Server-owned per-turn identity; never derive it from ambient or warm-host environment. */
   executionOwner?: CliExecutionOwnerRef;
+  windowsSpawnPlan?: typeof resolveWindowsSpawnPlan;
 }
 
 function normalizeEnv(input: Record<string, string | null> | undefined, workingDirectory: string): NodeJS.ProcessEnv {
@@ -52,7 +53,7 @@ class DirectAgentCarrierSession implements AgentCarrierSession {
     const env = normalizeEnv(options.env, childCwd);
     const launch =
       process.platform === 'win32'
-        ? { ...resolveWindowsSpawnPlan(options.command, options.args), env }
+        ? { ...(deps.windowsSpawnPlan ?? resolveWindowsSpawnPlan)(options.command, options.args), env }
         : buildUnixSupervisedSpawnPlan(options.command, options.args, {
             env,
             killGraceMs: 500,
@@ -61,7 +62,10 @@ class DirectAgentCarrierSession implements AgentCarrierSession {
       ...(options.cwd ? { cwd: options.cwd } : {}),
       env: launch.env,
       windowsHide: true,
-      shell: 'shell' in launch && typeof launch.shell === 'string' ? launch.shell : false,
+      shell:
+        'shell' in launch && (typeof launch.shell === 'string' || typeof launch.shell === 'boolean')
+          ? launch.shell
+          : false,
       stdio: ['pipe', 'pipe', 'pipe'],
     });
     observeCliExecutionProcess(this.child, deps.executionOwner);

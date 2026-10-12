@@ -88,7 +88,7 @@ export function useNativeOnboarding(open: boolean, onCreated: (id: string, name:
           const { name, displayName, nickname, defaultModel, cliEffort } = previous.form;
           return {
             ...partner,
-            selected: partner.selected && previous.selected,
+            selected: partner.selected && (!previous.runtime?.installed || previous.selected),
             form: { ...partner.form, name, displayName, nickname, defaultModel, cliEffort },
           };
         });
@@ -112,7 +112,7 @@ export function useNativeOnboarding(open: boolean, onCreated: (id: string, name:
   }, [open, reload, persist]);
 
   const patch = (changes: Partial<SetupDraft>) => {
-    if (latest.current) persist({ ...latest.current, ...changes });
+    if (latest.current && !inFlight.current) persist({ ...latest.current, ...changes });
   };
   const patchPartner = (id: string, change: Partial<NativePartner>) => {
     if (!latest.current) return;

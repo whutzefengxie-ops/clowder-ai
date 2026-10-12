@@ -29,6 +29,7 @@ export function recommendNativePartners(
   journeyId: string,
 ): NativePartner[] {
   const seen = new Set<string>();
+  const reservedAliases = new Set(cats.flatMap((cat) => cat.mentionPatterns.map((alias) => alias.toLowerCase())));
   return runtimes.flatMap((runtime) => {
     const key = partnerKey(runtime);
     if (seen.has(key)) return [];
@@ -46,7 +47,8 @@ export function recommendNativePartners(
     if (!form.name) form.name = form.displayName = `${runtime.label} 伙伴`;
     const alias = `@${runtime.label.replace(/\s+/g, '-').toLowerCase()}`;
     let uniqueAlias = alias;
-    for (let n = 2; cats.some((cat) => cat.mentionPatterns.includes(uniqueAlias)); n++) uniqueAlias = `${alias}-${n}`;
+    for (let n = 2; reservedAliases.has(uniqueAlias); n++) uniqueAlias = `${alias}-${n}`;
+    reservedAliases.add(uniqueAlias);
     const catId = stableOnboardingMemberId(journeyId, 'partner', key);
     const existing = cats.find(
       (cat) =>

@@ -680,7 +680,7 @@ export class ClaudeAgentService implements AgentService {
           carrier: 'print_sdk',
           ...(effectiveModel ? { model: effectiveModel } : {}),
           protocol: 'stream-json',
-          reasoningEffort: effortLevel,
+          ...(effortLevel ? { reasoningEffort: effortLevel } : {}),
           ...(readOnly ? { toolExecutionPolicy: 'read_only' as const } : {}),
         }),
         tools: Object.freeze({

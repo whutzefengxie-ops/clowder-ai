@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { CatData } from '@/hooks/useCatData';
 import { buildCatPayload } from '../../hub-cat-editor.payload';
 import { recommendNativePartners } from '../native-onboarding';
 
@@ -33,6 +34,20 @@ const runtimes = [
 ];
 
 describe('native onboarding recommendations', () => {
+  it('reserves aliases case-insensitively across existing and newly recommended partners', () => {
+    const existing = { id: 'legacy', configurationSource: 'managed_account', mentionPatterns: ['@Codex'] } as CatData;
+    const partners = recommendNativePartners(
+      [...runtimes, { ...runtimes[2], id: 'dsh-other', acp: { command: 'node', startupArgs: ['other-dsh.js'] } }],
+      templates,
+      [existing],
+      'journey-123456',
+    );
+    expect(partners.find((p) => p.id === 'codex')?.form.mentionPatterns).toBe('@codex-2');
+    expect(partners.filter((p) => p.runtime.clientId === 'acp').map((p) => p.form.mentionPatterns)).toEqual([
+      '@dsh',
+      '@dsh-2',
+    ]);
+  });
   it('recommends all three real tools with independent roles and inherited defaults', () => {
     const partners = recommendNativePartners(runtimes, templates, [], 'journey-123456');
     expect(partners).toHaveLength(3);
