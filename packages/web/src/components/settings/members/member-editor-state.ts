@@ -8,7 +8,10 @@ import {
   type StrategyFormState,
 } from '../../hub-cat-editor.model';
 
+import type { RuntimeDrafts } from './member-runtime-draft';
+
 export interface MemberDraft {
+  runtimeDrafts?: RuntimeDrafts;
   version: 1;
   form: HubCatEditorFormState;
   baseline: CatData | null;
@@ -37,7 +40,7 @@ export function rebaseMemberDraft(draft: MemberDraft, latest: CatData): MemberDr
       Object.assign(form, { [key]: draft.form[key] });
     }
   }
-  return { ...draft, baseline: latest, form };
+  return { ...draft, baseline: latest, form, runtimeDrafts: undefined };
 }
 
 export function readMemberDraft(key: string): MemberDraft | null {

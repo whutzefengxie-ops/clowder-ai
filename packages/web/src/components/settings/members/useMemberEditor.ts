@@ -26,6 +26,8 @@ import {
   templateForm,
 } from './member-editor-state';
 
+import { type RuntimeChoice, switchMemberRuntime } from './member-runtime-draft';
+
 async function readResponse<T>(response: Response): Promise<T> {
   const body = await response.json();
   if (!response.ok) throw new Error(typeof body.error === 'string' ? body.error : `请求失败 (${response.status})`);
@@ -177,11 +179,16 @@ export function useMemberEditor(cat: CatData | null, cats: CatData[], onSaved: (
     setNotice(null);
     setDraft((previous) => ({ ...previous, form: { ...previous.form, ...change } }));
   }, []);
+  const switchRuntime = (next: RuntimeChoice) => {
+    setNotice(null);
+    setDraft((previous) => switchMemberRuntime(previous, next));
+  };
   const setSection = (section: string) => setDraft((previous) => ({ ...previous, section }));
   const chooseTemplate = (template: TemplateCard | null) =>
     setDraft((previous) => ({
       ...previous,
       templateId: template?.id ?? null,
+      runtimeDrafts: undefined,
       form: template ? templateForm(template, cats, previous.form) : initialState(),
     }));
   const patchStrategy = (change: Partial<StrategyFormState>) =>
@@ -251,7 +258,7 @@ export function useMemberEditor(cat: CatData | null, cats: CatData[], onSaved: (
         : { cat: baseline };
       persisted = result.cat;
       // A later strategy failure must not roll back a successful account/member write.
-      let next = { ...snapshot, baseline: persisted, form: initialState(persisted) };
+      let next = { ...snapshot, baseline: persisted, form: initialState(persisted), runtimeDrafts: undefined };
       setDraft(next);
       persistMemberDraft(storageKey.current, next);
       if (snapshot.strategy && JSON.stringify(snapshot.strategy) !== JSON.stringify(snapshot.strategyBaseline)) {
@@ -307,6 +314,7 @@ export function useMemberEditor(cat: CatData | null, cats: CatData[], onSaved: (
     conflicted,
     refreshBaseline,
     patch,
+    switchRuntime,
     setSection,
     chooseTemplate,
     patchStrategy,

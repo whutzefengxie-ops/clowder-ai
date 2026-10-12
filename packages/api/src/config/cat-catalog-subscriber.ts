@@ -14,6 +14,8 @@ import { type ConfigChangeEvent, configEventBus } from './config-event-bus.js';
 
 export interface CatCatalogSubscriberOpts {
   onReconcile: () => Promise<void>;
+  /** Optional cache preparation; routing must already be usable when onReconcile resolves. */
+  onWarm?: () => Promise<void>;
   log: {
     info(...args: unknown[]): void;
     warn(...args: unknown[]): void;
@@ -37,6 +39,15 @@ export function createCatCatalogSubscriber(opts: CatCatalogSubscriberOpts): CatC
     // Chain onto previous reconcile — serializes concurrent events (P1-2)
     pending = pending
       .then(() => opts.onReconcile())
+      .then(() => {
+        // Saving waits for live routing, never for an optional subprocess cache warmup.
+        // The L0 cache invalidates in-flight generations on the next reconcile.
+        void Promise.resolve()
+          .then(() => opts.onWarm?.())
+          .catch((err) => {
+            opts.log.warn('[CatCatalogSubscriber] Background warmup failed (will retry on invoke):', err);
+          });
+      })
       .catch((err) => {
         opts.log.warn('[CatCatalogSubscriber] Reconcile failed:', err);
       });

@@ -3,6 +3,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 import type { CatData } from '@/hooks/useCatData';
 import { MemberAdditionalFields } from './MemberAdditionalFields';
+import { MemberChangeSummary } from './MemberChangeSummary';
 import { MemberCloudIdentity } from './MemberCloudIdentity';
 import { MemberCodexOptions } from './MemberCodexOptions';
 import { MemberRuntimeFields } from './MemberRuntimeFields';
@@ -67,7 +68,7 @@ export function MemberSettingsPage({
   accountQuery.set('returnTo', returnTo);
   const accountHref = `/settings?${accountQuery.toString()}`;
   return (
-    <div className="relative min-w-0 pb-28 text-cafe" data-testid="member-settings-page">
+    <div className="relative mx-auto w-full max-w-5xl min-w-0 pb-28 text-cafe" data-testid="member-settings-page">
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
           <button type="button" className="mb-3 min-h-10 text-sm text-cafe-accent" onClick={onBack}>
@@ -192,6 +193,8 @@ export function MemberSettingsPage({
                     form={form}
                     accounts={accounts}
                     patch={editor.patch}
+                    onToolChange={editor.switchRuntime}
+                    runtimeDrafts={draft.runtimeDrafts}
                     t={t}
                     accountHref={accountHref}
                     editing={Boolean(cat)}
@@ -252,19 +255,11 @@ export function MemberSettingsPage({
               className="sticky bottom-3 z-40 mx-auto mt-5 flex max-w-3xl flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--console-border-soft)] bg-[var(--console-card-bg)] p-4 shadow-lg"
               data-testid="member-save-bar"
             >
-              <span className="text-sm">
-                {cat
-                  ? t(`${dirtyCount} 处修改未保存`, `${dirtyCount} unsaved changes`)
-                  : t('准备好就可以添加伙伴', 'Ready to add your teammate')}
-                {editor.codexDirtyCount > 0 && (
-                  <span className="block text-sm">
-                    {t(
-                      `含 ${editor.codexDirtyCount} 项全局 Codex 修改`,
-                      `Includes ${editor.codexDirtyCount} global Codex changes`,
-                    )}
-                  </span>
-                )}
-              </span>
+              {cat ? (
+                <MemberChangeSummary draft={draft} count={dirtyCount} t={t} />
+              ) : (
+                <span className="text-sm">{t('准备好就可以添加伙伴', 'Ready to add your teammate')}</span>
+              )}
               <div className="flex gap-3">
                 <button
                   type="button"

@@ -3,32 +3,24 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { apiFetch } from '@/utils/api-client';
 import type { ProfileItem } from '../../hub-accounts.types';
-import { serializeCommandArgs } from '../../hub-cat-editor.acp';
-import {
-  builtinAccountIdForClient,
-  filterAccounts,
-  type HubCatEditorFormState,
-  splitCommandArgs,
-} from '../../hub-cat-editor.model';
+import { builtinAccountIdForClient, filterAccounts, type HubCatEditorFormState } from '../../hub-cat-editor.model';
 import { SelectField } from '../../hub-cat-editor-fields';
 import { MemberChoicePicker } from './MemberChoicePicker';
+import {
+  matchesRuntime,
+  type RuntimeChoice,
+  type RuntimeDrafts,
+  rememberedRuntimes,
+  runtimeDefaults,
+} from './member-runtime-draft';
 import { useRuntimeCatalog } from './useRuntimeCatalog';
-
-interface RuntimeChoice {
-  id: string;
-  label: string;
-  clientId: HubCatEditorFormState['clientId'];
-  installed: boolean;
-  models: string[];
-  configuredModel?: string;
-  configuredEffort?: string;
-  acp?: { command: string; startupArgs: string[]; transport?: 'stdio' | 'httpstream' };
-}
 export type MemberText = (zh: string, en: string) => string;
 export function MemberRuntimeFields({
   form,
   accounts,
   patch,
+  onToolChange,
+  runtimeDrafts,
   t,
   accountHref,
   editing,
@@ -37,6 +29,8 @@ export function MemberRuntimeFields({
   form: HubCatEditorFormState;
   accounts: ProfileItem[];
   patch: (value: Partial<HubCatEditorFormState>) => void;
+  onToolChange?: (tool: RuntimeChoice) => void;
+  runtimeDrafts?: RuntimeDrafts;
   t: MemberText;
   accountHref: string;
   editing: boolean;
@@ -46,7 +40,6 @@ export function MemberRuntimeFields({
     [error, setError] = useState(false),
     [loading, setLoading] = useState(true),
     [refresh, setRefresh] = useState(0);
-  const [pendingTool, setPendingTool] = useState<RuntimeChoice | null>(null);
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
@@ -67,13 +60,13 @@ export function MemberRuntimeFields({
       });
     return () => controller.abort();
   }, [refresh]);
-  const selected = runtimes.find(
-    (item) =>
-      item.clientId === form.clientId &&
-      (!form.acpEnabled ||
-        (item.acp?.command === form.acpCommand &&
-          JSON.stringify(item.acp.startupArgs) === JSON.stringify(splitCommandArgs(form.acpStartupArgs)))),
-  );
+  const tools = [
+    ...runtimes,
+    ...rememberedRuntimes(runtimeDrafts).filter(
+      (old) => !runtimes.some((item) => matchesRuntime(runtimeDefaults(old), item)),
+    ),
+  ];
+  const selected = tools.find((item) => matchesRuntime(form, item));
   const tool =
     selected?.label ??
     (form.clientId === 'openai'
@@ -87,7 +80,7 @@ export function MemberRuntimeFields({
   const availableAccounts = filterAccounts(form.clientId, accounts),
     identity = availableAccounts.find((item) => item.id === form.accountRef);
   const { catalog, loading: catalogLoading } = useRuntimeCatalog(
-    selected?.id,
+    selected?.id.startsWith('draft:') ? undefined : selected?.id,
     editing ? form.catId : undefined,
     form.accountRef,
     form.defaultModel,
@@ -128,29 +121,9 @@ export function MemberRuntimeFields({
       label: `${form.accountRef} · ${t('暂不可读取', 'Unavailable')}`,
       disabled: false,
     });
-  const applyTool = (next: RuntimeChoice) => {
-    patch({
-      clientId: next.clientId,
-      accountRef: '',
-      configurationSource: 'native_tool',
-      defaultModel: '',
-      cliEffort: '',
-      cliConfigArgs: [],
-      codexCarrier: next.clientId === 'openai' ? 'app_server' : '',
-      acpEnabled: !!next.acp,
-      ...(next.acp
-        ? {
-            acpCommand: next.acp.command,
-            acpStartupArgs: serializeCommandArgs(next.acp.startupArgs),
-            acpTransport: next.acp.transport ?? 'stdio',
-          }
-        : {}),
-    });
-    setPendingTool(null);
-  };
-  const choices = runtimes.map((item) => ({
+  const choices = tools.map((item) => ({
     value: item.id,
-    label: `${item.label} · ${item.installed ? t('已安装', 'Installed') : t('未找到', 'Not found')}`,
+    label: `${item.label} · ${item.id.startsWith('draft:') ? t('已保留的配置', 'Retained configuration') : item.installed ? t('已安装', 'Installed') : t('未找到', 'Not found')}`,
   }));
   if (!selected) choices.unshift({ value: 'current', label: `${tool} · ${t('当前配置', 'Current configuration')}` });
   return (
@@ -171,10 +144,10 @@ export function MemberRuntimeFields({
         value={selected?.id ?? 'current'}
         options={choices}
         onChange={(value) => {
-          const next = runtimes.find((item) => item.id === value);
+          const next = tools.find((item) => item.id === value);
           if (!next || next.id === selected?.id) return;
-          if (editing || form.accountRef || form.defaultModel || form.cliEffort) setPendingTool(next);
-          else applyTool(next);
+          if (onToolChange) onToolChange(next);
+          else patch(runtimeDefaults(next));
         }}
       />
       {error && (
@@ -185,25 +158,7 @@ export function MemberRuntimeFields({
           )}
         </p>
       )}
-      {pendingTool && (
-        <div role="alert" className="rounded-xl border border-[var(--console-border-soft)] p-4 text-sm">
-          <p>
-            {t(
-              `切换为 ${pendingTool.label}，模型和思考强度将跟随该工具。当前账号绑定和额外启动参数将清除，伙伴资料保留。`,
-              `Switch to ${pendingTool.label} and follow its defaults. Clear the account binding and extra launch arguments; keep this teammate’s profile.`,
-            )}
-          </p>
-          <div className="mt-2 flex gap-4">
-            <button type="button" onClick={() => applyTool(pendingTool)} className="min-h-10 text-cafe-accent">
-              {t('切换工具', 'Switch tool')}
-            </button>
-            <button type="button" onClick={() => setPendingTool(null)}>
-              {t('取消', 'Cancel')}
-            </button>
-          </div>
-        </div>
-      )}
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+      <div className="grid gap-4 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
         <MemberChoicePicker
           label={t('模型', 'Model')}
           value={form.defaultModel}

@@ -293,7 +293,7 @@ export function SettingsContent({ section, initialEditCatId }: SettingsContentPr
   })();
 
   return (
-    <>
+    <div className={section === 'members' ? 'mx-auto w-full max-w-5xl' : undefined}>
       {!(section === 'members' && editorOpen) && (
         <SettingsPageHeader title={meta.label} subtitle={meta.description}>
           {section === 'members' && config && <HubOverviewToolbar onAddMember={() => openMember(null)} />}
@@ -309,6 +309,6 @@ export function SettingsContent({ section, initialEditCatId }: SettingsContentPr
           onSaved={handleEditorSaved}
         />
       )}
-    </>
+    </div>
   );
 }

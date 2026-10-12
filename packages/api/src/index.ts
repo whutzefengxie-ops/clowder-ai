@@ -2143,7 +2143,7 @@ async function main(): Promise<void> {
   // Each cat gets its own AgentService instance with its catId + model.
   const agentRegistry = new AgentRegistry();
   let router!: AgentRouter;
-  const syncAgentRegistry = async (configs: Record<string, CatConfig>) => {
+  const syncAgentRegistry = async (configs: Record<string, CatConfig>, warmPrompts = true) => {
     agentRegistry.reset();
     clearL0Cache(); // Invalidate stale L0 compilations from previous sync
     const projectRoot = resolveActiveProjectRoot();
@@ -2262,7 +2262,7 @@ async function main(): Promise<void> {
     // before the first message — also bypasses Windows NTFS junction
     // issues that resolve by the time the user actually interacts (#802).
     const registeredCatIds = Object.keys(configs).filter((id) => agentRegistry.has(id));
-    await warmL0Cache(registeredCatIds, app.log);
+    if (warmPrompts) await warmL0Cache(registeredCatIds, app.log);
   };
   await syncAgentRegistry(catRegistry.getAllConfigs());
 
@@ -2294,8 +2294,13 @@ async function main(): Promise<void> {
   const catCatalogSubscriber = createCatCatalogSubscriber({
     async onReconcile() {
       app.log.info('[api] F136: Cat catalog changed, syncing agent registry...');
-      await syncAgentRegistry(catRegistry.getAllConfigs());
+      await syncAgentRegistry(catRegistry.getAllConfigs(), false);
     },
+    onWarm: () =>
+      warmL0Cache(
+        Object.keys(catRegistry.getAllConfigs()).filter((id) => agentRegistry.has(id)),
+        app.log,
+      ),
     log: app.log,
   });
 

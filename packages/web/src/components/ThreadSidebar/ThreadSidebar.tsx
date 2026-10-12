@@ -1385,7 +1385,7 @@ export function ThreadSidebar({ onClose, className, routeThreadId, activeDestina
     (row: AttentionListRow) => {
       if (row.kind === 'thread') {
         return (
-          <div key={row.key} className="h-20">
+          <div key={row.key} className={isV2 ? 'py-0.5' : 'h-20'}>
             {renderThreadItem(row.thread)}
           </div>
         );
@@ -1445,6 +1445,7 @@ export function ThreadSidebar({ onClose, className, routeThreadId, activeDestina
     [
       attentionArrangeMode,
       attentionMemberSort,
+      isV2,
       attentionPendingSort,
       attentionLoadState,
       changeAttentionMemberSort,
