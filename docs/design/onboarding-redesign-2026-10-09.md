@@ -8,6 +8,8 @@ status: historical-superseded
 
 # 首启旅程重新设计（基于真实任务驱动）
 
+> 2026-10-12：新版成员界面上的可交互高保真与最新讨论对照，见 [首启高保真体验方案](onboarding-experience-2026-10-12.md)。原型仍待用户审核；不把本历史草案重新当作实施依据。
+
 > 2026-10-10：本文保留为历史讨论，实施规格已由 [#1466 最终意见收敛方案](../plans/issue-1466-final-implementation-plan.md) 替代（新方案待用户审核）。下述“先配置后演示”“自动创建成员”“未登录仅文字指引”不能继续作为施工依据。按 zts 最终意见保留原 issue 演示范围、必要登录引导及推荐成员清单的用户确认；真实入口仍是 FirstRunQuestWizard，不把未挂载的 OnboardingJourney 当作已交付。
 
 > 基于 2026-10-09 与 co-creator 讨论和 @codex 审查反馈
