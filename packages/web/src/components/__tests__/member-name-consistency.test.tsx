@@ -33,7 +33,7 @@ const original = {
 } as CatData;
 const sibling = { ...original, id: 'sonnet-5', displayName: '布偶猫 Sonnet', variantLabel: '5' };
 let cat: CatData, host: HTMLDivElement, root: Root;
-const saved = vi.fn(async () => {});
+const saved = vi.fn(async (_cat: CatData) => {});
 
 beforeEach(() => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -44,7 +44,7 @@ beforeEach(() => {
   vi.mocked(apiFetch).mockImplementation(async (path, init) => {
     if (path === '/api/cats/opus-5' && init?.method === 'PATCH') {
       cat = { ...cat, ...JSON.parse(String(init.body)) };
-      return new Response(JSON.stringify(cat));
+      return new Response(JSON.stringify({ cat }));
     }
     const body =
       path === '/api/accounts'
@@ -117,7 +117,10 @@ it('shows a saved rename after returning to the list without changing the siblin
   await editor();
   await fill('名字', '架构伙伴');
   await click('保存');
-  expect(saved).toHaveBeenCalled();
+  expect(saved.mock.calls.at(-1)?.[0]).toEqual(cat);
+  expect(host.querySelector('h1')?.textContent).toBe('架构伙伴（5.5）');
+  expect(field('名字').value).toBe('架构伙伴');
+  expect(host.querySelector('[data-testid=member-save-bar]')).toBeNull();
   expect(cat.displayName).toBe('架构伙伴');
   expect(cat.mentionPatterns).toEqual(['@opus']);
   expect(cat.breedDisplayName).toBe('布偶猫');
@@ -133,6 +136,10 @@ it('keeps nickname edits secondary and clearing the nickname removes it without 
   await editor();
   await fill('昵称', '新昵称');
   await click('保存');
+  expect(saved.mock.calls.at(-1)?.[0]).toEqual(cat);
+  expect(host.querySelector('h1')?.textContent).toBe('布偶猫 Opus（5.5）');
+  expect(field('昵称').value).toBe('新昵称');
+  expect(host.querySelector('[data-testid=member-save-bar]')).toBeNull();
   expect(cat.name).toBe('legacy-internal-name');
   expect(cat.displayName).toBe(original.displayName);
   await overview();
