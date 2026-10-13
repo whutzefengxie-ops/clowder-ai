@@ -16,6 +16,7 @@ import {
   formatVisibleSystemInfo,
 } from '@/hooks/system-info-visible';
 import { resolveProviderSemanticMessage } from '@/lib/provider-semantic-registry';
+import { transcriptToolCallKey, transcriptToolScope } from '@/lib/transcript-tool-identity';
 import type { RawTranscriptEvent, ReplayEvent, ReplayEventType } from './types';
 
 // ---------------------------------------------------------------------------
@@ -190,22 +191,28 @@ function isToolResultError(event: Record<string, unknown>): boolean {
 }
 
 /**
- * Pre-index tool_results by sessionId:toolUseId for O(1) lookup during pairing.
- * Composite key prevents cross-session collision when providers generate
- * sequential per-session IDs (e.g. AGY's `run-command-${idx}`).
+ * Pair only prior pending calls in their execution scope. Index by use event
+ * identity so sequential legacy ID reuse cannot attach a future result.
  */
-function buildToolResultIndex(raw: RawTranscriptEvent[]): Map<string, ToolResultPayload> {
-  const index = new Map<string, ToolResultPayload>();
+function buildToolResultIndex(raw: RawTranscriptEvent[]): Map<RawTranscriptEvent, ToolResultPayload> {
+  const index = new Map<RawTranscriptEvent, ToolResultPayload>();
+  const pending = new Map<string, RawTranscriptEvent>();
   for (const evt of raw) {
+    const key = transcriptToolCallKey(evt);
+    if (!key) continue;
+    if (evt.event.type === 'tool_use') {
+      pending.set(key, evt);
+      continue;
+    }
     if ((evt.event.type as string) !== 'tool_result') continue;
-    const toolUseId = evt.event.toolUseId as string | undefined;
-    if (toolUseId) {
-      const key = `${evt.sessionId}:${toolUseId}`;
-      index.set(key, {
+    const use = pending.get(key);
+    if (use) {
+      index.set(use, {
         content: extractContent(evt.event),
         isError: isToolResultError(evt.event),
         input: normalizeToolInput(evt.event),
       });
+      pending.delete(key);
     }
   }
   return index;
@@ -221,20 +228,20 @@ function buildToolResultIndex(raw: RawTranscriptEvent[]): Map<string, ToolResult
  * mis-pair the next result (belonging to a different tool_use) with
  * the result-less file_change.
  */
-function buildPositionalOrphanPairs(raw: RawTranscriptEvent[]): Map<number, ToolResultPayload> {
-  const pairs = new Map<number, ToolResultPayload>();
+function buildPositionalOrphanPairs(raw: RawTranscriptEvent[]): Map<RawTranscriptEvent, ToolResultPayload> {
+  const pairs = new Map<RawTranscriptEvent, ToolResultPayload>();
   // Scope pending tool_use by sessionId to prevent cross-session mis-pairing
   // when thread replay interleaves events from multiple sessions (P1 fix AC-E2)
-  const pendingBySession = new Map<string, number>();
+  const pendingBySession = new Map<string, RawTranscriptEvent>();
 
   for (const evt of raw) {
     const evtType = evt.event.type as string;
-    const toolUseId = evt.event.toolUseId as string | undefined;
-    const sid = evt.sessionId;
+    const toolUseId = transcriptToolCallKey(evt);
+    const sid = transcriptToolScope(evt);
 
     if (evtType === 'tool_use' && !toolUseId) {
       // New no-id tool_use supersedes any pending one in the same session
-      pendingBySession.set(sid, evt.eventNo);
+      pendingBySession.set(sid, evt);
     } else if (evtType === 'tool_result' && !toolUseId) {
       // No-id tool_result pairs with most recent pending no-id tool_use in same session
       const pendingEventNo = pendingBySession.get(sid);
@@ -242,6 +249,7 @@ function buildPositionalOrphanPairs(raw: RawTranscriptEvent[]): Map<number, Tool
         pairs.set(pendingEventNo, {
           content: extractContent(evt.event),
           isError: isToolResultError(evt.event),
+          input: normalizeToolInput(evt.event),
         });
         pendingBySession.delete(sid);
       }
@@ -253,24 +261,21 @@ function buildPositionalOrphanPairs(raw: RawTranscriptEvent[]): Map<number, Tool
 
 /**
  * Enrich a tool_call ReplayEvent with paired tool_result data.
- * Priority: sessionId:toolUseId-based exact match → positional orphan pair.
+ * Explicit native IDs require a match; only legacy no-ID events use position.
  */
 function enrichToolCall(
   replayEvent: ReplayEvent,
-  rawEvent: Record<string, unknown>,
-  eventNo: number,
-  sessionId: string,
-  toolResults: Map<string, ToolResultPayload>,
-  orphanPairs: Map<number, ToolResultPayload>,
+  envelope: RawTranscriptEvent,
+  toolResults: Map<RawTranscriptEvent, ToolResultPayload>,
+  orphanPairs: Map<RawTranscriptEvent, ToolResultPayload>,
 ): void {
+  const rawEvent = envelope.event;
   replayEvent.toolName = normalizeToolName(rawEvent);
   replayEvent.toolInput = normalizeToolInput(rawEvent);
 
-  const toolUseId = rawEvent.toolUseId as string | undefined;
+  const toolUseId = transcriptToolCallKey(envelope);
   if (toolUseId) {
-    // Exact match by composite key (session-scoped to prevent AGY run-command-N collision)
-    const key = `${sessionId}:${toolUseId}`;
-    const matched = toolResults.get(key);
+    const matched = toolResults.get(envelope);
     if (matched) {
       replayEvent.toolResult = matched.content;
       if (matched.input !== undefined) replayEvent.toolInput = matched.input;
@@ -278,9 +283,10 @@ function enrichToolCall(
     }
   } else {
     // Positional match for orphan no-id events (e.g. Codex command_execution)
-    const orphan = orphanPairs.get(eventNo);
+    const orphan = orphanPairs.get(envelope);
     if (orphan) {
       replayEvent.toolResult = orphan.content;
+      if (orphan.input !== undefined) replayEvent.toolInput = orphan.input;
       replayEvent.toolIsError = orphan.isError;
     }
   }
@@ -327,7 +333,7 @@ export function adaptTranscriptEvents(raw: RawTranscriptEvent[]): ReplayEvent[] 
     };
 
     if (replayType === 'tool_call') {
-      enrichToolCall(replayEvent, evt.event, evt.eventNo, evt.sessionId, toolResults, orphanPairs);
+      enrichToolCall(replayEvent, evt, toolResults, orphanPairs);
     }
 
     result.push(replayEvent);

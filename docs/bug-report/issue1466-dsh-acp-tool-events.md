@@ -81,3 +81,12 @@ flowchart LR
 - 前端新增反例验证真实 active/background 处理器、classic/v2 记录、JSON 往返恢复、Story Player、调用轨迹及跨 execution 隔离。此次定向 API 回归 110 通过；受影响前端回归 87 文件、572 通过 / 1 明确跳过。原有 352 条集成回归属于前一集成提交，未冒充新增提交的全量证据。
 
 该续接修复仍不等于真实 DSH 安装、成功/失败、取消静止或跨进程恢复验收；这些边界维持前述未完成状态。
+
+### 非作者复核后的配对补齐
+
+对 `8a4b0882b` 的复核发现两处横向遗漏：Story Player 按 session/native ID 预索引最后结果，可能拿另一个 execution 的输入覆盖前一条；调用轨迹在显式 ID 未命中时仍回退同名 pending。均采纳，不将共享主投影的正确性外推到所有消费者。
+
+- 消息历史转 raw event 保留工具 `executionRef`。原始消费者统一按 thread、cat、session、工具 execution（缺失时 invocation）界定范围；旧事件缺少 execution/invocation 时仍在原 session 内处理。
+- Story Player 只消费先前存在的 pending，配对结果索引到具体 use event，避免同 session 的 legacy ID 顺序重用被未来结果覆盖。无 ID 的旧位置配对也限定同范围；显式 ID 未匹配不退化为无 ID 配对。
+- 调用轨迹按同一执行身份匹配；显式 ID 未匹配作为独立结果展示，不能更新同名调用。仅旧无 ID 事件保留同范围的名称/位置兼容。
+- 新增 5 条反例全部观察 RED：原始跨 execution、历史转换丢身份、legacy 顺序重用、orphan ID、并发同 ID 轨迹。修后及旧 Story Player/轨迹/实时输入保护集 **9 文件 / 81 pass**，前端完整类型检查另核当前源码。这是后续增量证据，不冒充再次运行前述 572 项。
