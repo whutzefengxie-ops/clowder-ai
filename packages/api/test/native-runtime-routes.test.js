@@ -92,9 +92,11 @@ test('native role create, independent override and reset round-trip without acco
     }
     const catalog = JSON.parse(readFileSync(join(root, '.cat-cafe/cat-catalog.json'), 'utf8'));
     assert.equal(catalog.breeds.find((b) => b.catId === 'native-codex').variants[0].configurationSource, 'native_tool');
-    const discovery = await app.inject('/api/cats/native-runtimes');
+    const anonymousDiscovery = await app.inject('/api/cats/native-runtimes');
+    assert.equal(anonymousDiscovery.statusCode, 401, anonymousDiscovery.body);
+    const discovery = await app.inject({ method: 'GET', url: '/api/cats/native-runtimes', headers });
     assert.equal(discovery.statusCode, 200, discovery.body);
-    assert.equal(discovery.json().authenticationStatus, 'not_checked');
+    assert.equal(discovery.json().authenticationStatus, 'local_checked');
     assert.doesNotMatch(discovery.body, /apiKey|access_token|refresh_token/);
     const missingAccount = await app.inject({
       method: 'POST',

@@ -51,4 +51,8 @@ tips_exempt: Repairs the existing first-use journey and adds local diagnostic lo
 
 取证位置（本机独立实例，未发布认证或用户内容）：`artifacts/issue1466-zero-start-20261013/production-browser-timings.json`、`before-production-switch.json`、`after-production-switch.json`、`final-perf-regression.log`、`production-build.log`、`production-homepage.jpg`、`production-demo-complete.jpg`、`production-team-setup.jpg`。
 
-截至本轮核对，远端 main 又前进至 `449134fed`，只读 merge-tree 发现新的配置/布局等合流冲突；远端旧 HEAD 的 public test 还有红灯。本次首屏修复与已部署验收不等于整条 PR 可以合入，最新 main 合流和全量 CI 仍需另行验证。
+截至本轮核对，远端 main 又前进至 `449134fed`，只读 merge-tree 发现新的配置/布局等合流冲突。本次首屏修复与已部署验收不等于整条 PR 可以合入，最新 main 合流和全量 CI 仍需另行验证。
+
+顺带定位旧 HEAD 的 public test 红灯：`native-runtime-routes.test.js` 探测 GET 没有带测试用户身份，真实返回 401；补身份后又复现旧 `not_checked` 断言，当前接口已进行本地登录检查并返回 `local_checked`。修正该测试前提，增加匿名 GET 仍应 401 的断言；真实 RED → GREEN。未修改接口、降低鉴权或伪造可用性。远端新提交的 CI 结果仍需等待，不能用这项定向通过声称全量绿灯。
+
+本轮 fallback 机械扫描以原 HEAD `8838bc10a` 为比较基准：诊断 helper 的 6 处命中包含条件校验 `||`、JSON 空值与两个浏览器存储 try/catch，不是 6 层执行降级；不能移除，否则拒绝存储会干扰核心导航。Shell 使用现有 owner 的一个临时偏好，SSR 身份使用固定快照，未新增第二套角色/认证配置 owner。既有 AppShell/身份文件累计阈值由原有分支贡献，不新增兜底链。
