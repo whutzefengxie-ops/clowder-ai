@@ -9,6 +9,20 @@ created: 2026-10-13
 
 本节 `_clowder/v1/*`、`clowder.ai/acp.v1` 均为**拟实现合同**，不是已存在的 ACP 标准或桥能力。实施冻结 schema、生成类型并以独立 bridge/client 双端测试验证。
 
+## 扩展上游状态（2026-10-13）
+
+| 合同/能力 | 上游状态与来源 | 本方案采用边界 |
+|---|---|---|
+| initialize/new/prompt/update/cancel/permission，协商后的 load/resume/elicitation/compaction | 官方 v1 文档定义的标准/可选能力 | 冻结 schema 并逐桥证明支持；文档定义不等于本机可用 |
+| `_meta`、下划线扩展方法、capability advertisement | ACP 标准允许的扩展机制 | 机制被标准允许不等于具体 `_clowder` 合同被接受 |
+| Claude `_meta.systemPrompt`、Codex AIR customInstructions | 本稿固定桥版本的 vendor 实现 | 不是跨桥标准，不声称 ACP 社区已采纳这些字段 |
+| Claude v0.70 `_session/steering` 的 preempt/abort | 固定桥现有 vendor 实现 | 不当成非打断 notice |
+| `_session/steering` + `_meta.steering.delivery: "next"` | [Claude PR #1175](https://github.com/agentclientprotocol/claude-agent-acp/pull/1175)，HEAD `bcddee2eda74cf64c8f714813a6693cb45d6d22f`：OPEN、mergedAt=null、读取的 reviews=[] | 上游候选，尚未获得接受/合入证据；先评估与本方案语义等价性 |
+| `_clowder/v1/control`、inputModes/nativeTurnIds/receipts | 本地拟议，未提交上游、未获接受回执 | 尚未实现 fork；仅双端协商的验证桥可用 |
+| `_clowder/v1/execution/read`、instructions/applied receipt、hooks/invoke、interaction/request、session/prepare 与扩展遥测/子执行 | 本地拟议，未提交上游、未获接受回执 | 若落为自维护补丁，登记 upstream SHA/patch hash/发行物/维护预算；不得写成标准 |
+
+状态区分：`standard`、`vendor_implemented`、`upstream_candidate`、`local_proposed`、`maintained_patch`。当前没有 `_clowder/v1` 的 maintained_patch 发行物。没有检索命中不能证明社区拒绝或没有其他方案；候选 OPEN 也不是 maintainer 接受。标准 `session/update.notice` 是 agent→client 展示通知，不能代替 host→SDK 的非打断输入。
+
 ## 1. Initialize 与有效能力
 
 initialize 发送 protocolVersion、clientInfo、真实 clientCapabilities。fs/terminal/elicitation/compaction/notices 仅在对应 handler、权限与消费路径完整时声明；缺省不支持。对方版本不兼容立即报告并关闭连接。标准参考：[Initialization](https://agentclientprotocol.com/protocol/v1/initialization)。

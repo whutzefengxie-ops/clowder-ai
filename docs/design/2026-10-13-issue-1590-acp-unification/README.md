@@ -77,6 +77,28 @@ A2A、云浏览器、远程 task agent 保留其不同 runtime contract，不强
 
 上述是**方案交付验收**；运行实现的 G0–G5 见 validation，当前不能标通过。
 
+## 快速决策：暂停、回滚或继续
+
+```mermaid
+flowchart TD
+  A[对当前 binding 评估新证据] --> B{身份/权限边界破坏或重复副作用?}
+  B -- 是 --> C[停止新 ACP admission，隔离受影响执行并对账]
+  B -- 否 --> D{Codex fence / Claude 非打断原型通过?}
+  D -- 否或未知 --> E[No-Go：暂停整体迁移，保留原服务，重评桥路线]
+  D -- 是 --> F{当前 Gate 有独立审查及所需证据?}
+  F -- 否 --> G[停在当前阶段，不切默认；缺证不冒充失败或通过]
+  F -- 是 --> H{差分能力或性能回归?}
+  H -- 否 --> I[只推进下一个 Gate；不继承其通过结论]
+  H -- 是 --> J{已启用 ACP rollout?}
+  J -- 否 --> K[阻断迁移并修复/复验]
+  J -- 是 --> C
+  C --> L{上游已静止且旧 native session兼容?}
+  L -- 是 --> M[下次 invocation切回旧服务，保留历史/绑定]
+  L -- 否 --> N[先收敛/隔离旧执行，再用显式新链继续；不重发原任务]
+```
+
+技术 No-Go 不等于否定 ACP 标准，也不能自动降低能力要求。携原型 raw wire/native receipt、失败反例及桥维护成本重新评估；W1 窄修复继续独立交付。完整回滚条件见 [validation](validation.md)，原型与长期补丁成本见 [feasibility-spikes](feasibility-spikes.md)。
+
 ## 判断与未决项
 
 我的判断：ACP 的扩展机制足以容纳目标合同，统一方向值得进入实现验证；现有两个桥版本不能直接证明所有原生能力等价。最先应证伪的是精确 turn 与非打断 notice，而不是重复证明单轮文本能通。

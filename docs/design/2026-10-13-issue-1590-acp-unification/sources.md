@@ -51,6 +51,12 @@ providers 相对 `packages/api/src/domains/cats/services/agents/`。有关 bridg
 
 最新 v1 页面已描述 resume/close、elicitation、compaction 等可选能力；不能继续笼统将它们写成协议永远没有。**文档存在不证明固定旧桥/安装 SDK 实现**，W0 必须冻结实际 schema 与兼容性。
 
+## 本轮反馈后的上游状态核实
+
+2026-10-13经GitHub API/CLI只读回读Claude PR [#1175](https://github.com/agentclientprotocol/claude-agent-acp/pull/1175)：HEAD `bcddee2eda74cf64c8f714813a6693cb45d6d22f`、OPEN、mergedAt=null、reviews=[]。候选diff增加delivery="next"并修改SDK输入priority；所附测试使用mock generator，不是本轮真实执行或完整freshness验收。[#871](https://github.com/agentclientprotocol/claude-agent-acp/issues/871)仍OPEN；需求描述不能覆盖后续桥已实现的steering事实。
+
+Codex expectedTurnId关键词与Claude "non-interrupting"关键词检索未命中；Claude steering检索找到包括#1175的相关讨论。该检索只用于发现候选，不证明没有其他提案/社区拒绝。本轮未发布社区消息、未获维护者接受回执。具体标准/vendor/候选/本地拟议状态见contracts表，不能给旧固定桥增加候选能力。
+
 ## 可复跑 parser 诊断
 
 [诊断脚本](evidence/characterize-claude-parser.mjs)读取实际 parser 与实际 MCP status helper，仅 transpile TypeScript，不 mock parser 分支；输入为成功、失败、child 三个合成 tool_result。
@@ -68,6 +74,8 @@ node docs/design/2026-10-13-issue-1590-acp-unification/evidence/characterize-cla
 ## 本轮交付检查与限制
 
 方案覆盖：27 项能力、24 条差分场景、W0–W7 工作单元、G0–G5 迁移门禁；来源、实际源码基线与 #1519 候选区分。
+
+本轮新增：R1/R2的W4.P/W5.P前置Go/No-Go原型与补丁长期成本量尺；R3的W2.S安全下限和W3.P完整权限接线；R4的V24-C真实crash/压缩/恢复集成设计；README回滚决策树、扩展上游状态、W4/W5成功标准和逐Gate非作者独立回执。它们是计划/验收合同的修订，P0/P1运行验证和provider修复本身仍未实施。
 
 本轮执行的是实际 parser 源码诊断、文档相对链接/路径/版本检查和 git diff 检查。独立内容复核的结果写在 [review-notes](review-notes.md)。没有修改 provider 行为、没有运行真实模型，没有迁移任何成员，ACP 全量不退化尚未被运行证明。
 

@@ -61,6 +61,10 @@ record 模板：`caseId, bindingFingerprint, baselineHead, targetHead, native/br
 
 V09 同时需要原生配置 readback 与行为反例。单纯问模型“你是谁”不能证明指令优先级；V08 的本地停止显示也不能证明上游静止。
 
+R3 的 V11 策略分支包括两种transport与真实factory：已有政策allow_once/allow_always/reject、需真人审批、无handler、handler抛错/超时、取消、非法/缺optionId、重复请求/回答、跨binding以及bridge未实际采用native权限配置。自动允许必须有政策来源；没有合法reject选项时按标准cancelled收敛，不能构造allow_once ID。沿native config→bridge→dispatcher→既有审批→wire回执→持久/UI核对，证据只覆盖当前绑定。
+
+V24 的 barrier 独立集成单元定义为 [V24-C](continuity-integration.md)，不增删27项能力/24条主场景；按子例分别验收。单元/fake通过只计L1，真实恢复/压缩/crash/首prompt因果与新进程后的持久/UI必须分别补L2/L3。
+
 ## 可执行检查入口
 
 这些脚本/测试名已在 `3add05c16` 仓库核实。新扩展测试在 W2–W5 添加；只有新测试实际落盘后才能列为已执行。
@@ -123,6 +127,23 @@ format 只处理本次源码：`pnpm biome format --write <实际变更源码文
 | G5 默认切换/退役 | 逐 binding 新 invocation 切换、旧 session兼容/回滚演练、真实产品验收与明确迁移决定 | 保留旧服务；整体统一未完成 |
 
 用户本轮接受统一方案方向，不等于已经批准生产部署、退役旧 carrier 或任何功能降级。正式默认迁移仍需具体可审查实现、证据与部署范围。
+
+### 逐 Gate 独立审查
+
+| Gate | 本 Gate 非作者审查必须检查 |
+|---|---|
+| G0 | B/R/E和版本/环境基线完整、性能/维护预算冻结，未通过删能力改变分母 |
+| G1 | tool_result修复的print/SDK/child/历史/UI证据，#1519 intake版本与回归；不外推完整ACP |
+| G2 | W2.S两transport默认拒绝与W3.P完整factory/政策/交互接线，真实身份/MCP/取消/恢复 |
+| G3 | W4.P/W5.P分别Go、完整原生增强、该carrier V24-C子集回执、补丁维护量尺与升级演练 |
+| G4 | required全矩阵L2/L3、V24-C合流、实际UI/历史/性能，无unknown充当passed |
+| G5 | 本次exact实现/配置与部署范围、session兼容、active执行不热切、回滚演练和退役条件 |
+
+每次回执包含 `gateId, binding/scope, author, independentReviewer, exactTargetHead, bridge/native/schema/patch versions, evidenceRefs, blockers, verdict, invalidationConditions`；reviewer必须不同于作者，跨家族优先。可复用同一非作者reviewer，但需要每个Gate独立判定，不复制上一Gate的批准。
+
+各Gate只在自身证据与未结blocker均满足时passed；文档review不是任一运行Gate回执。source/bridge/native/config/policy或相关源码变化后，重新审核受影响Gate；适用的既有未变证据可明确复用，不能无理由重审所有阶段，也不能不检查变化就继承绿灯。
+
+W4.P/W5.P作为增强实现前的独立Go/No-Go点，任一No-Go/unknown暂停整体迁移并重新评估，而不是等待G4才发现核心语义无法保持。只有二者Go仍不足以批准G3–G5。
 
 ## 回滚与旧 session
 
