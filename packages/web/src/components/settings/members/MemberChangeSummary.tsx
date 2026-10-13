@@ -3,6 +3,11 @@ import type { MemberText } from './MemberRuntimeFields';
 import type { MemberDraft } from './member-editor-state';
 
 const labels: Record<keyof HubCatEditorFormState, [string, string]> = {
+  agyNativeEnabled: ['Antigravity 原生运行', 'Native Antigravity'],
+  agyProfileEnabled: ['Antigravity 配置档', 'Antigravity profile'],
+  agyProfileId: ['Antigravity 配置档 ID', 'Antigravity profile ID'],
+  agyHomeRoot: ['Antigravity 用户目录', 'Antigravity home directory'],
+  agyTrustedWorkspaces: ['Antigravity 可信目录', 'Antigravity trusted workspaces'],
   catId: ['成员标识', 'Member ID'],
   name: ['名字', 'Name'],
   displayName: ['显示名称', 'Display name'],

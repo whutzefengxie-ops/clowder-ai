@@ -3,12 +3,11 @@
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
-import { RoutingContextLedger } from '@/components/routing-context/RoutingContextLedger';
 import { useCatData } from '@/hooks/useCatData';
 import { apiFetch } from '@/utils/api-client';
 import type { MemberSaveTrace } from '@/utils/member-save-trace';
 import { ConnectorPluginInstallButton } from '../ConnectorPluginInstallButton';
-import { CatOverviewTab, type ConfigData } from '../config-viewer-tabs';
+import type { ConfigData } from '../config-viewer-tabs';
 import { DesktopUpdateSettingsPanel } from '../DesktopUpdateSettingsPanel';
 import { HubAccountsTab } from '../HubAccountsTab';
 import { HubCoCreatorEditor } from '../HubCoCreatorEditor';
@@ -16,19 +15,20 @@ import { HubConnectorConfigTab } from '../HubConnectorConfigTab';
 import { HubEnvFilesTab } from '../HubEnvFilesTab';
 import { HubOverviewToolbar } from '../HubMemberOverviewCard';
 import { PushSettingsPanel } from '../PushSettingsPanel';
+import { useShellPresentation } from '../shell/shell-presentation';
 import { useConfirm } from '../useConfirm';
 import { VoiceSettingsPanel } from '../VoiceSettingsPanel';
 import { CatDossierContent } from './CatDossierContent';
 import { ConciergeSettingsContent } from './ConciergeSettingsContent';
+import { ExecutionRecordDefaultSettings } from './ExecutionRecordDefaultSettings';
 import { HubSystemSettingsTab } from './HubSystemSettingsTab';
 import { MarketplaceContent } from './MarketplaceContent';
 import { McpManageContent } from './McpManageContent';
-import { MemberCreationPage } from './members/MemberCreationPage';
-import { MemberSettingsPage } from './members/MemberSettingsPage';
+import { MessageDispositionDefaultSettings } from './MessageDispositionDefaultSettings';
+import { MemberSettingsHost } from './members/MemberSettingsHost';
 import { OpenTeamWorkspaceButton } from './OpenTeamWorkspaceButton';
 import { OpsContent } from './OpsContent';
 import { PluginsContent } from './PluginsContent';
-import { SettingsText } from './primitives';
 import { RulesPromptsContent } from './RulesPromptsContent';
 import { ServiceStatusPanel } from './ServiceStatusPanel';
 import { SettingsPageHeader } from './SettingsPageHeader';
@@ -44,7 +44,8 @@ interface SettingsContentProps {
 export function SettingsContent({ section, initialEditCatId }: SettingsContentProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { cats, refresh } = useCatData();
+  const { cats, refresh, isLoading: catsLoading, hasFetched: catsKnown } = useCatData();
+  const isV2 = useShellPresentation() === 'v2';
   const [config, setConfig] = useState<ConfigData | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
@@ -188,69 +189,31 @@ export function SettingsContent({ section, initialEditCatId }: SettingsContentPr
   const content = (() => {
     switch (meta.id) {
       case 'members':
-        if (editorOpen && !editingCat)
-          return (
-            <MemberCreationPage
-              key={searchParams.get('view')}
-              cats={cats}
-              onTeamCreated={async () => {
-                await fetchData();
-                closeMember();
-              }}
-              onBack={closeMember}
-              onSaved={async (_saved, trace) => {
-                await handleEditorSaved(trace);
-                closeMember();
-              }}
-            />
-          );
-        if (editorOpen)
-          return (
-            <MemberSettingsPage
-              key={editingCat?.id ?? 'new'}
-              cat={editingCat}
-              cats={cats}
-              onBack={closeMember}
-              onSaved={async (saved, trace) => {
-                await handleEditorSaved(trace);
-                if (!editingCat) closeMember();
-                else setEditingCat(saved);
-              }}
-            />
-          );
         return (
-          <div className="space-y-8">
-            {fetchError ? (
-              <SettingsText as="p" variant="sm" tone="red">
-                {fetchError}
-              </SettingsText>
-            ) : config ? (
-              <CatOverviewTab
-                config={config}
-                cats={cats}
-                onEditMember={openMember}
-                onEditCoCreator={() => setCoCreatorEditorOpen(true)}
-                onDeleteMember={handleDeleteMember}
-                onToggleAvailability={handleToggleAvailability}
-                togglingCatId={togglingCatId}
-              />
-            ) : (
-              <SettingsText as="p" variant="sm" tone="muted">
-                加载中...
-              </SettingsText>
-            )}
-            <div className="space-y-3">
-              <div className="flex justify-end">
-                <OpenTeamWorkspaceButton />
-              </div>
-              <details className="rounded-xl border border-[var(--console-border-soft)] p-4">
-                <summary className="cursor-pointer text-sm text-cafe-secondary">查看路由记录</summary>
-                <div className="mt-4">
-                  <RoutingContextLedger />
-                </div>
-              </details>
-            </div>
-          </div>
+          <MemberSettingsHost
+            v2={isV2}
+            editorOpen={editorOpen}
+            editingCat={editingCat}
+            cats={cats}
+            config={config}
+            configError={fetchError}
+            registryLoading={catsLoading}
+            registryKnown={catsKnown}
+            creationView={searchParams.get('view')}
+            onRetryConfig={() => void fetchData()}
+            onRetryRegistry={() => void refresh()}
+            onOpen={openMember}
+            onClose={closeMember}
+            onTeamCreated={fetchData}
+            onSaved={async (saved, trace) => {
+              await handleEditorSaved(trace);
+              setEditingCat(saved);
+            }}
+            onEditCoCreator={() => setCoCreatorEditorOpen(true)}
+            onDelete={handleDeleteMember}
+            onToggle={handleToggleAvailability}
+            togglingCatId={togglingCatId}
+          />
         );
       case 'accounts':
         return (
@@ -294,6 +257,15 @@ export function SettingsContent({ section, initialEditCatId }: SettingsContentPr
         return (
           <div className="space-y-6">
             <DesktopUpdateSettingsPanel />
+            {isV2 && (
+              <ExecutionRecordDefaultSettings
+                config={config}
+                hasLoadError={fetchError !== null}
+                onConfigChange={setConfig}
+                onRetry={() => void fetchData()}
+              />
+            )}
+            {isV2 && <MessageDispositionDefaultSettings />}
             <HubSystemSettingsTab />
             <HubEnvFilesTab excludeCategories={['connector']} />
           </div>
@@ -317,7 +289,7 @@ export function SettingsContent({ section, initialEditCatId }: SettingsContentPr
 
   return (
     <div className={section === 'members' ? 'mx-auto w-full max-w-5xl' : undefined}>
-      {!(section === 'members' && editorOpen) && (
+      {!(section === 'members' && (editorOpen || isV2)) && (
         <SettingsPageHeader title={meta.label} subtitle={meta.description}>
           {section === 'members' && config && <HubOverviewToolbar onAddMember={() => openMember(null)} />}
           {section === 'im' && <ConnectorPluginInstallButton onInstalled={() => setImRefreshKey((k) => k + 1)} />}

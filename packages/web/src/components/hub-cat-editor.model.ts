@@ -44,6 +44,11 @@ export interface HubCatEditorFormState {
   codexCarrier: '' | 'exec_json' | 'app_server';
   provider: string;
   acpEnabled: boolean;
+  agyNativeEnabled?: boolean;
+  agyProfileEnabled?: boolean;
+  agyProfileId?: string;
+  agyHomeRoot?: string;
+  agyTrustedWorkspaces?: string;
   acpTransport: 'stdio' | 'httpstream';
   acpCommand: string;
   acpStartupArgs: string;
@@ -145,9 +150,12 @@ export function getCliEffortOptionsForClient(
 }
 
 /** True only for transports that persist the generic CLI extension fields. */
-export function usesCliTransport(form: Pick<HubCatEditorFormState, 'clientId' | 'acpEnabled'>): boolean {
+export function usesCliTransport(
+  form: Pick<HubCatEditorFormState, 'clientId' | 'acpEnabled' | 'agyNativeEnabled'>,
+): boolean {
   return (
     !form.acpEnabled &&
+    !(form.clientId === 'google' && form.agyNativeEnabled) &&
     (form.clientId === 'anthropic' ||
       form.clientId === 'openai' ||
       form.clientId === 'google' ||
@@ -377,7 +385,11 @@ export function initialState(cat?: CatData | null, draft?: HubCatEditorDraft | n
         ? 'managed_account'
         : 'native_tool'),
     accountRef: cat?.accountRef ?? createDraft?.accountRef ?? '',
-    defaultModel: cat?.defaultModel ?? createDraft?.defaultModel ?? '',
+    defaultModel:
+      (cat?.agyProfile?.carrier === 'native' ? cat.agyProfile.model : undefined) ??
+      cat?.defaultModel ??
+      createDraft?.defaultModel ??
+      '',
     commandArgs: cat?.commandArgs?.join(' ') ?? createDraft?.commandArgs ?? '',
     cliConfigArgs: [...(cat?.cliConfigArgs ?? [])],
     cliEffort: persistedCliEffort ?? '',
@@ -386,6 +398,11 @@ export function initialState(cat?: CatData | null, draft?: HubCatEditorDraft | n
     provider: cat?.provider ?? '',
     acpEnabled:
       Boolean(acpConfig) || (cat?.clientId as ClientId | undefined) === 'acp' || createDraft?.clientId === 'acp',
+    agyNativeEnabled: cat?.clientId === 'google' && cat?.agyProfile?.carrier === 'native',
+    agyProfileEnabled: cat?.agyProfile ? cat.agyProfile.enabled === true : true,
+    agyProfileId: cat?.agyProfile?.profileId ?? catId,
+    agyHomeRoot: cat?.agyProfile?.homeRoot ?? '',
+    agyTrustedWorkspaces: cat?.agyProfile?.trustedWorkspaces?.join('\n') ?? '',
     acpTransport: (acpConfig?.transport as 'stdio' | 'httpstream' | undefined) ?? 'stdio',
     acpCommand:
       acpConfig?.command ??

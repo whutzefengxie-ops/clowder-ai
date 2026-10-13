@@ -46,6 +46,14 @@ class InteractionWire {
   async write(message) {
     this.writes.push(message);
     if (message.method === 'initialize') this.inbox.push({ id: message.id, result: {} });
+    if (message.method === 'config/read')
+      this.inbox.push({
+        id: message.id,
+        result: { config: { model_provider: 'local-provider', sqlite_home: this.launchEnv.CODEX_SQLITE_HOME } },
+      });
+    if (message.method === 'configRequirements/read')
+      this.inbox.push({ id: message.id, result: { requirements: null } });
+    if (message.method === 'account/read') this.inbox.push({ id: message.id, result: { account: { type: 'apiKey' } } });
     if (message.method === 'thread/start') {
       this.inbox.push({
         id: message.id,
@@ -108,13 +116,17 @@ for (const model of ['', 'role-override']) {
       for await (const message of service.invoke('fixture', {
         routeIntent: { intent: resume ? 'execute' : 'ideate', explicit: !resume },
         ...(resume ? { sessionId: 'provider-thread' } : {}),
-        agentCarrierSessionFactory: async () => wire,
+        agentCarrierSessionFactory: async (options) => {
+          wire.launchEnv = options.env;
+          return wire;
+        },
       }))
         messages.push(message);
       assert.equal(
         messages.some((message) => message.type === 'error'),
         false,
       );
+      assert.equal(wire.launchEnv.CODEX_AUTH_MODE, 'auto', 'CLI-owned provider must not be forced to OAuth');
       const turn = wire.writes.find((message) => message.method === 'turn/start');
       assert.ok(turn?.params.collaborationMode);
       assert.equal(turn.params.collaborationMode.mode, resume ? 'default' : 'plan');
@@ -156,7 +168,10 @@ test('native collaboration stops before prompt when the adopted model is unavail
   const messages = [];
   for await (const message of service.invoke('fixture', {
     routeIntent: { intent: 'ideate', explicit: true },
-    agentCarrierSessionFactory: async () => wire,
+    agentCarrierSessionFactory: async (options) => {
+      wire.launchEnv = options.env;
+      return wire;
+    },
   }))
     messages.push(message);
   assert.equal(

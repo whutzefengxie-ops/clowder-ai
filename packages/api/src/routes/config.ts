@@ -33,6 +33,7 @@ import {
 } from '../config/env-registry.js';
 import { updateRuntimeCoCreator } from '../config/runtime-cat-catalog.js';
 import { isValidTimeZone } from '../config/time-zone.js';
+import { saveCliOutputBubbleDefault } from '../config/user-preferences-store.js';
 import { AuditEventTypes, getEventAuditLog } from '../domains/cats/services/orchestration/EventAuditLog.js';
 import type { IThreadStore } from '../domains/cats/services/stores/ports/ThreadStore.js';
 // F212 Phase F (cloud codex R4 P2-#2 on fc69597675): import logger's captured LOG_DIR
@@ -44,9 +45,10 @@ import { resolveActiveProjectRoot } from '../utils/active-project-root.js';
 import { isDirectLoopbackRequest } from '../utils/loopback-request.js';
 import { saveSpan } from '../utils/member-save-diagnostics.js';
 import { resolveOwnerGate } from '../utils/owner-gate.js';
-import { resolveHeaderUserId } from '../utils/request-identity.js';
+import { resolveHeaderUserId, resolveStrictUserId } from '../utils/request-identity.js';
 import { getDefaultUploadDir } from '../utils/upload-paths.js';
 import { configCatOrderRoutes } from './config-cat-order.js';
+import { configConversationViewRoutes } from './config-conversation-view.js';
 import { configMessageDispositionRoutes } from './config-message-disposition.js';
 import { configThreadAttentionRoutes } from './config-thread-attention.js';
 
@@ -54,6 +56,39 @@ const patchSchema = z.object({
   key: z.string().min(1),
   value: z.union([z.string(), z.number(), z.boolean()]),
 });
+
+const PERSISTENT_CLI_OUTPUT_KEY = 'ui.bubble.cliOutput';
+
+type ConfigPatchValue = string | number | boolean;
+
+type ConfigPatchAuthorization = { ok: true; operator: string } | { ok: false; status: number; error: string };
+
+function authorizeConfigPatch(request: FastifyRequest, key: string): ConfigPatchAuthorization {
+  const persistentCliOutput = key === PERSISTENT_CLI_OUTPUT_KEY;
+  const operator = persistentCliOutput ? resolveStrictUserId(request) : resolveHeaderUserId(request);
+  if (!operator) {
+    return persistentCliOutput
+      ? { ok: false, status: 401, error: 'Authentication required' }
+      : { ok: false, status: 400, error: 'Identity required (X-Cat-Cafe-User header)' };
+  }
+  if (!persistentCliOutput) return { ok: true, operator };
+  const gateResult = resolveOwnerGate(operator, {
+    errorMessage: 'Only the owner can change the execution-record default',
+  });
+  return gateResult ? { ok: false, status: gateResult.status, error: gateResult.error } : { ok: true, operator };
+}
+
+function applyConfigPatch(projectRoot: string, key: string, value: ConfigPatchValue): void {
+  if (key !== PERSISTENT_CLI_OUTPUT_KEY) {
+    configStore.set(key, value);
+    return;
+  }
+  const normalized = configStore.normalize(key, value);
+  if (normalized !== 'expanded' && normalized !== 'collapsed') {
+    throw new Error(`invalid value for key '${key}': ${normalized}`);
+  }
+  saveCliOutputBubbleDefault(projectRoot, normalized);
+}
 
 const envPatchSchema = z.object({
   updates: z.array(z.object({ name: z.string().min(1), value: z.string().nullable() })).min(1),
@@ -90,7 +125,7 @@ interface ConfigRoutesOptions {
   };
   envFilePath?: string;
   projectRoot?: string;
-  threadStore?: Pick<IThreadStore, 'list' | 'getThreadMetadata' | 'atomicMergeThreadMetadata'>;
+  threadStore?: Pick<IThreadStore, 'get' | 'list' | 'getThreadMetadata' | 'atomicMergeThreadMetadata'>;
 }
 
 function getSnapshotValue(snapshot: ConfigSnapshot, key: string): unknown {
@@ -161,11 +196,12 @@ export async function configRoutes(app: FastifyInstance, opts: ConfigRoutesOptio
   const envFilePath = opts.envFilePath ?? resolve(projectRoot, '.env');
 
   await app.register(configCatOrderRoutes, { projectRoot });
+  await app.register(configConversationViewRoutes, { projectRoot, threadStore: opts.threadStore });
   await app.register(configMessageDispositionRoutes, { projectRoot });
   await app.register(configThreadAttentionRoutes, { projectRoot, threadStore: opts.threadStore });
 
   app.get('/api/config', async () => ({
-    config: collectConfigSnapshot(),
+    config: collectConfigSnapshot(projectRoot),
   }));
 
   app.patch('/api/config', async (request, reply) => {
@@ -174,21 +210,21 @@ export async function configRoutes(app: FastifyInstance, opts: ConfigRoutesOptio
       reply.status(400);
       return { error: 'Invalid request', details: parsed.error.issues };
     }
-    const operator = resolveHeaderUserId(request);
-    if (!operator) {
-      reply.status(400);
-      return { error: 'Identity required (X-Cat-Cafe-User header)' };
+    const authorization = authorizeConfigPatch(request, parsed.data.key);
+    if (!authorization.ok) {
+      reply.status(authorization.status);
+      return { error: authorization.error };
     }
 
-    const before = saveSpan('config.snapshot.before', () => collectConfigSnapshot());
+    const before = saveSpan('config.snapshot.before', () => collectConfigSnapshot(projectRoot));
     const oldValue = getSnapshotValue(before, parsed.data.key);
     try {
-      saveSpan('config.persist', () => configStore.set(parsed.data.key, parsed.data.value));
+      saveSpan('config.persist', () => applyConfigPatch(projectRoot, parsed.data.key, parsed.data.value));
     } catch (err) {
       reply.status(400);
       return { error: (err as Error).message };
     }
-    const after = saveSpan('config.snapshot.after', () => collectConfigSnapshot());
+    const after = saveSpan('config.snapshot.after', () => collectConfigSnapshot(projectRoot));
     const newValue = getSnapshotValue(after, parsed.data.key);
     const riskLevel = configStore.getRiskLevel(parsed.data.key) ?? 'standard';
 
@@ -196,7 +232,7 @@ export async function configRoutes(app: FastifyInstance, opts: ConfigRoutesOptio
       request.log.warn(
         {
           key: parsed.data.key,
-          operator,
+          operator: authorization.operator,
         },
         'high-risk config key updated',
       );
@@ -210,9 +246,12 @@ export async function configRoutes(app: FastifyInstance, opts: ConfigRoutesOptio
             key: parsed.data.key,
             oldValue,
             newValue,
-            operator,
+            operator: authorization.operator,
             riskLevel,
-            source: configStore.source(parsed.data.key) ?? 'default',
+            source:
+              parsed.data.key === PERSISTENT_CLI_OUTPUT_KEY
+                ? 'user-preferences'
+                : (configStore.source(parsed.data.key) ?? 'default'),
           },
         }),
       );
@@ -249,7 +288,7 @@ export async function configRoutes(app: FastifyInstance, opts: ConfigRoutesOptio
       return { error: err instanceof Error ? err.message : String(err) };
     }
 
-    const next = collectConfigSnapshot();
+    const next = collectConfigSnapshot(projectRoot);
     try {
       await auditLog.append({
         type: AuditEventTypes.CONFIG_UPDATED,

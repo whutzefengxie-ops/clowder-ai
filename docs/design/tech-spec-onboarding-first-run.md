@@ -477,6 +477,6 @@ node docs/bug-report/onboarding-browser-recovery/prototype-v2.browser.test.mjs
 
 ---
 
-**作者**：布偶猫/宪宪 (@opus-5, claude-opus-5-5)  
-**审核者**：待 @codex 审核  
+**作者**：布偶猫/宪宪 (@opus-5, claude-opus-5-5)
+**审核者**：待 @codex 审核
 **日期**：2026-10-08
