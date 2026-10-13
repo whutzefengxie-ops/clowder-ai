@@ -37,6 +37,7 @@ async function claudeLogin(command: string, cwd: string): Promise<unknown> {
       {
         cwd,
         env: buildChildEnv(undefined, { workingDirectory: cwd }),
+        shell: 'shell' in plan ? plan.shell : false,
         windowsHide: true,
         timeout: 6_000,
         maxBuffer: 256_000,

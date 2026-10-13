@@ -1,6 +1,22 @@
 import assert from 'node:assert/strict';
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { test } from 'node:test';
-import { nativeAuthenticationStatus } from '../src/routes/native-runtime-readiness.js';
+import { nativeAuthenticationStatus, nativeRuntimeReadiness } from '../src/routes/native-runtime-readiness.js';
+
+test('login probe honors the shell required by a Windows fallback spawn plan', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'native-login-shell-'));
+  const command = join(root, 'fake-claude.sh');
+  writeFileSync(command, '#!/bin/sh\nprintf \'{"loggedIn":true}\\n\'\n');
+  chmodSync(command, 0o755);
+  try {
+    const result = await nativeRuntimeReadiness({ id: 'claude', installed: true, command }, root);
+    assert.equal(result.status, 'configured');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 
 test('installed is not authenticated; supported CLIs report missing login before a model turn', () => {
   assert.equal(nativeAuthenticationStatus('claude', { loggedIn: false }), 'login_required');

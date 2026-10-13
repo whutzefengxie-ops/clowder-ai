@@ -1,5 +1,5 @@
 ---
-feature_ids: [F1466]
+feature_ids: [F171, F155]
 topics: [onboarding, native-runtime, authentication, member-settings]
 doc_kind: bug-report
 created: 2026-10-13
@@ -24,6 +24,9 @@ tips_exempt: Corrects existing member status and composer behavior; no new indep
 3. 列表区分未安装、待登录、待验证、真实调用成功。调用成功依据该成员的持久化 dispatch_success / health_probe 事实，覆盖第一次成功时没有旧失败原因的路径；保留路由状态的新鲜度与配额限制。
 4. 显式账户、ACP 和自定义配置参数不套用默认 CLI 的登录结果。历史配置与历史消息结构不迁移、不删除。
 5. 修正 v2 composer 内菜单锚点和收件猫宽度。经典输入框不迁移菜单位置。
+6. 登录检查沿用 Windows 命令解析器的 shell 计划，覆盖不能解析为原生 exe/npm entry 的合法启动文件。真实临时脚本回归先失败为 unknown，再修复为 configured。
+
+差异检查触发了 fallback 层数提示：新增项用于拒绝无会话请求、未知/失败观测不宣称登录、合并同一检查和兼容显式配置，不是重试认证或换供应商。成员状态仅补充既有 owner 的成功事实投影，不增加新的状态存储；保留原有路由新鲜度判断。
 
 ## 验证证据
 
