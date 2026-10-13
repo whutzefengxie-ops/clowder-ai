@@ -118,3 +118,14 @@ playground 分支的 ACP 实现验证了"配置接入"的可行性（填表 → 
 
 - Phase A: 架构级——猫猫讨论 → operator拍板（ADR-023 审批）
 - Phase B-D: 跨 family review
+
+## 2026-10-13：Issue #1590 ACP 统一路线细化
+
+本地用户授权在独立 worktree 构建完整 ACP 统一 client 方案，并要求实际能力不退化。
+方案沿 Phase D 的现有 provider 迁入目标，复用 F161/F149；不另立重复 Feature、不改原 owner/status。
+
+- [完整方案、能力矩阵与实施路线](../design/2026-10-13-issue-1590-acp-unification/README.md)
+- [#1590 的来源讨论](https://github.com/zts212653/clowder-ai/issues/1590)
+
+当前为方案草案与源码诊断，未运行真实模型或迁移默认 carrier；上游 maintainer 尚未决定默认 ACP-first。
+完整实现仍须通过方案定义的逐 binding 能力、原生增强、真实 UI/历史、取消/恢复与回滚门禁。
