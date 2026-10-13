@@ -1,3 +1,4 @@
+import { AcpPermissionDispatcher } from './acp-permission-dispatcher.js';
 /**
  * AcpHttpStreamClient — HTTP streaming transport for ACP agent processes.
  *
@@ -43,7 +44,6 @@ import type {
   AcpMcpServer,
   AcpNewSessionResult,
   AcpNotification,
-  AcpPermissionRequest,
   AcpPromptResult,
   AcpResponse,
   AcpSessionUpdate,
@@ -79,6 +79,7 @@ interface AgentResponseOptions {
 
 export class AcpHttpStreamClient {
   private child: ChildProcess | null = null;
+  private readonly permissions: AcpPermissionDispatcher;
   private closed = false;
   private exited = false;
   /** Sessions whose local prompt ended before provider completion was acknowledged. */
@@ -94,6 +95,7 @@ export class AcpHttpStreamClient {
   private readonly cwdIdentityTracker: AcpCwdIdentityTracker;
 
   constructor(private readonly config: AcpHttpStreamClientConfig) {
+    this.permissions = new AcpPermissionDispatcher(config.permissionTimeoutMs);
     this.cwdIdentityTracker = new AcpCwdIdentityTracker(this.config.cwd);
   }
 
@@ -159,11 +161,13 @@ export class AcpHttpStreamClient {
     this.child.on('error', (err) => {
       log.error('ACP HTTP process error: %s', err.message);
       this.exited = true;
+      this.permissions.close();
     });
 
     this.child.on('exit', (code, signal) => {
       log.info('ACP HTTP process exited: code=%s signal=%s', code, signal);
       this.exited = true;
+      this.permissions.close();
     });
 
     log.info(
@@ -245,6 +249,7 @@ export class AcpHttpStreamClient {
     text: string,
     options?: { timeoutMs?: number; idleWarningMs?: number; idleStallMs?: number },
   ): AsyncGenerator<AcpSessionUpdate, AcpStopReason> {
+    this.permissions.admitSession(sessionId);
     const timeoutMs = options?.timeoutMs ?? 900_000;
     const idleWarningMs = options?.idleWarningMs ?? 20_000;
     const idleStallMs = options?.idleStallMs ?? 90_000;
@@ -335,7 +340,7 @@ export class AcpHttpStreamClient {
       wakeConsumer();
     };
 
-    const handleAgentRequestFromStream = async (msg: Record<string, unknown>, msgId: string | undefined) => {
+    const handleAgentRequestFromStream = async (msg: Record<string, unknown>, msgId: string | number | undefined) => {
       const requestId = msgId ?? `synth-perm-${Date.now()}`;
       const req = { ...msg, id: requestId } as unknown as AcpAgentRequest;
       if (req.method === ACP_METHODS.requestPermission) {
@@ -469,6 +474,7 @@ export class AcpHttpStreamClient {
             if (msgId === id && !method) {
               // Final response to our prompt request — protocol is done
               finalResponseReceived = true;
+              this.permissions.settleSession(sessionId);
               const resp = msg as unknown as AcpResponse;
               if (resp.error) {
                 promptError = new AcpProtocolError(resp.error.code, resp.error.message, resp.error.data);
@@ -482,7 +488,7 @@ export class AcpHttpStreamClient {
               return;
             } else if (isAgentRequest(method, msgId)) {
               try {
-                await handleAgentRequestFromStream(msg, msgId);
+                await handleAgentRequestFromStream(msg, rawMsgId);
               } catch (err) {
                 if (controller.signal.aborted && promptError) return;
                 failPrompt(err);
@@ -506,6 +512,7 @@ export class AcpHttpStreamClient {
             const method = msg.method as string | undefined;
             if (msgId === id && !method) {
               finalResponseReceived = true;
+              this.permissions.settleSession(sessionId);
               const resp = msg as unknown as AcpResponse;
               if (resp.error) {
                 promptError = new AcpProtocolError(resp.error.code, resp.error.message, resp.error.data);
@@ -514,7 +521,7 @@ export class AcpHttpStreamClient {
                 stopReason = result.stopReason;
               }
             } else if (isAgentRequest(method, msgId)) {
-              await handleAgentRequestFromStream(msg, msgId);
+              await handleAgentRequestFromStream(msg, rawBufId);
             } else if (method && !msgId) {
               const params = (msg as unknown as AcpNotification).params as unknown as AcpSessionUpdate;
               enqueueSessionUpdate(params);
@@ -532,6 +539,7 @@ export class AcpHttpStreamClient {
           promptError = err instanceof Error ? err : new Error(String(err));
         }
       } finally {
+        this.permissions.settleSession(sessionId);
         done = true;
         wakeConsumer();
       }
@@ -553,6 +561,11 @@ export class AcpHttpStreamClient {
       if (promptError) throw promptError;
       return stopReason;
     } finally {
+      if (!finalResponseReceived) {
+        this.cancelSession(sessionId);
+        this.unquiescedSessionIds.add(sessionId);
+      }
+      this.permissions.settleSession(sessionId);
       if (idleTimer) clearTimeout(idleTimer);
       if (budgetTimer) clearTimeout(budgetTimer);
       this.sessionCancelCallbacks.delete(sessionId);
@@ -566,6 +579,8 @@ export class AcpHttpStreamClient {
    * reuse so the pool retires non-multiplexed clients after lease release.
    */
   cancelSession(sessionId: string): void {
+    if (this.permissions.isQuarantined(sessionId)) return;
+    this.permissions.cancelSession(sessionId);
     const cb = this.sessionCancelCallbacks.get(sessionId);
 
     if (this.port && !this.closed && !this.exited) {
@@ -582,6 +597,7 @@ export class AcpHttpStreamClient {
   async close(): Promise<void> {
     if (this.closed) return;
     this.closed = true;
+    this.permissions.close();
 
     if (this.child && !this.child.killed) {
       await new Promise<void>((resolve) => {
@@ -739,41 +755,12 @@ export class AcpHttpStreamClient {
     };
 
     if (req.method === ACP_METHODS.requestPermission) {
-      const respond = (result: { optionId: string }) => {
-        const acpResult = {
-          outcome: { outcome: 'selected' as const, optionId: result.optionId },
-        };
-        return this.sendAgentResponse({ jsonrpc: '2.0', id: req.id, result: acpResult }, responseOptions);
-      };
-
-      if (this.config.permissionHandler) {
-        let responsePromise: Promise<void> | null = null;
-        try {
-          this.config.permissionHandler(req, (result) => {
-            responsePromise = respond(result);
-          });
-        } catch (err) {
-          log.error('HTTP permissionHandler threw: %s', (err as Error).message);
-          await this.sendAgentResponse(
-            {
-              jsonrpc: '2.0',
-              id: req.id,
-              error: { code: -32603, message: `Permission handler error: ${(err as Error).message}` },
-            },
-            responseOptions,
-          );
-          return;
-        }
-        if (responsePromise) await responsePromise;
-      } else {
-        // Prefer allow_always (session-wide) over allow_once to avoid repeated permission
-        // prompts for every MCP tool call. Kimi sends optionId "approve_for_session" for this.
-        const params = req.params as unknown as AcpPermissionRequest;
-        const allowOption =
-          params.options?.find((o) => o.kind === 'allow_always') ??
-          params.options?.find((o) => o.kind === 'allow_once') ??
-          params.options?.[0];
-        await respond({ optionId: allowOption?.optionId ?? 'allow_once' });
+      const child = this.child;
+      const outcome = this.permissions.dispatch(req, this.config.permissionHandler, options.signal);
+      if (outcome) {
+        const result = (await outcome).resolveOutcome();
+        if (!this.closed && !this.exited && child === this.child && !options.signal?.aborted)
+          await this.sendAgentResponse({ jsonrpc: '2.0', id: req.id, result }, responseOptions);
       }
       return;
     }

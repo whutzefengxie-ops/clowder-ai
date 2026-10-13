@@ -346,8 +346,8 @@ describe('AcpHttpStreamClient', () => {
 
     assert.equal(caught, null, `Permission request should not stall: ${caught?.message}`);
     assert.ok(capturedPermissionResponse, 'client should POST a JSON-RPC response for the permission request');
-    assert.equal(capturedPermissionResponse.result?.outcome?.outcome, 'selected');
-    assert.equal(capturedPermissionResponse.result?.outcome?.optionId, 'allow_once');
+    assert.equal(capturedPermissionResponse.result?.outcome?.outcome, 'cancelled');
+    assert.equal(capturedPermissionResponse.result?.outcome?.optionId, undefined);
     assert.equal(events.at(-1)?.update?.content?.text, 'approved');
   });
 

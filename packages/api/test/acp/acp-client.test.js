@@ -351,7 +351,7 @@ describe('AcpClient', () => {
     assert.ok(!client.isAlive, 'should NOT be alive after natural exit');
   });
 
-  it('P2: custom permission handler is called instead of auto-approve', async () => {
+  it('P2: explicit permission handler is called for valid requests', async () => {
     const { child, clientStdin, agentStdout } = createMockChild();
     const permissionCalls = [];
 
@@ -377,6 +377,7 @@ describe('AcpClient', () => {
 
     await client.initialize();
 
+    client.permissions.admitSession('permission-session');
     // Simulate an agent permission request
     setImmediate(() =>
       agentStdout.write(
@@ -384,7 +385,11 @@ describe('AcpClient', () => {
           jsonrpc: '2.0',
           method: 'session/request_permission',
           id: 'perm-001',
-          params: { description: 'Write file', options: [{ optionId: 'allow_once', kind: 'allow_once' }] },
+          params: {
+            sessionId: 'permission-session',
+            description: 'Write file',
+            options: [{ optionId: 'allow_once', kind: 'allow_once' }],
+          },
         }) + '\n',
       ),
     );
@@ -407,7 +412,7 @@ describe('AcpClient', () => {
           agentRespond(agentStdout, msg.id, INIT_RESULT);
         }
         // Capture any error response sent back for the permission request
-        if (msg.id === 'perm-boom' && msg.error) {
+        if (msg.id === 'perm-boom' && msg.result?.outcome?.outcome === 'cancelled') {
           errorResponseSent = true;
         }
       }
@@ -432,7 +437,11 @@ describe('AcpClient', () => {
           jsonrpc: '2.0',
           method: 'session/request_permission',
           id: 'perm-boom',
-          params: { description: 'Dangerous op', options: [{ optionId: 'allow_once', kind: 'allow_once' }] },
+          params: {
+            sessionId: 'permission-session',
+            description: 'Dangerous op',
+            options: [{ optionId: 'allow_once', kind: 'allow_once' }],
+          },
         }) + '\n',
       ),
     );
@@ -443,7 +452,7 @@ describe('AcpClient', () => {
     // The process should still be alive (not crashed)
     assert.ok(client.isAlive, 'host should not crash from handler error');
     // The client should have sent a JSON-RPC error response back to the agent
-    assert.ok(errorResponseSent, 'should send JSON-RPC error response when handler throws');
+    assert.ok(errorResponseSent, 'should send cancelled outcome when handler throws');
   });
 
   it('F148: permission response wraps in ACP outcome envelope', async () => {
@@ -468,7 +477,7 @@ describe('AcpClient', () => {
       args: [],
       cwd: '/tmp',
       spawnFn: () => child,
-      // No permissionHandler → auto-approve path
+      // No permissionHandler → cancelled outcome
     });
 
     await client.initialize();
@@ -479,7 +488,11 @@ describe('AcpClient', () => {
           jsonrpc: '2.0',
           method: 'session/request_permission',
           id: 'perm-acp',
-          params: { description: 'Read file', options: [{ optionId: 'allow_once', kind: 'allow_once' }] },
+          params: {
+            sessionId: 'permission-session',
+            description: 'Read file',
+            options: [{ optionId: 'allow_once', kind: 'allow_once' }],
+          },
         }) + '\n',
       ),
     );
@@ -488,8 +501,8 @@ describe('AcpClient', () => {
 
     assert.ok(capturedResponse, 'should have sent a permission response');
     assert.ok(capturedResponse.outcome, 'response must have outcome wrapper');
-    assert.equal(capturedResponse.outcome.outcome, 'selected');
-    assert.equal(capturedResponse.outcome.optionId, 'allow_once');
+    assert.equal(capturedResponse.outcome.outcome, 'cancelled');
+    assert.equal(capturedResponse.outcome.optionId, undefined);
   });
 
   it('promptStream yields events as they arrive and returns stopReason', async () => {
@@ -1306,7 +1319,7 @@ describe('AcpClient', () => {
   // Gate-based test: mock agent only continues AFTER seeing a valid permission
   // response on stdin. If AcpClient doesn't send one, agent stays silent → stall.
 
-  it('permission notification (no id) is auto-approved and does not block stream', async () => {
+  it('permission notification (no id) is cancelled and does not block stream', async () => {
     const { child, clientStdin, agentStdout } = createMockChild();
     let promptId = null;
 
@@ -1352,7 +1365,7 @@ describe('AcpClient', () => {
           // If AcpClient doesn't send one, agent stays silent → stall → test fails.
           !msg.method &&
           msg.id?.toString().startsWith('synth-perm-') &&
-          msg.result?.outcome?.outcome === 'selected'
+          msg.result?.outcome?.outcome === 'cancelled'
         ) {
           // Permission response accepted — now continue
           setImmediate(() => {
