@@ -18,6 +18,7 @@ export const ShellPresentationContext = createContext<ShellPresentation | null>(
 
 export const SHELL_PRESENTATION_STORAGE_KEY = 'cat-cafe:shell-presentation';
 const SYNC_EVENT = 'cat-cafe:shell-presentation-sync';
+let transientPresentation: ShellPresentation | null = null;
 
 export function parseShellPresentation(value: unknown): ShellPresentation | null {
   return value === 'v2' || value === 'classic' ? value : null;
@@ -25,6 +26,7 @@ export function parseShellPresentation(value: unknown): ShellPresentation | null
 
 export function readShellPresentation(): ShellPresentation {
   if (typeof window === 'undefined') return 'classic';
+  if (transientPresentation) return transientPresentation;
   try {
     return parseShellPresentation(window.localStorage.getItem(SHELL_PRESENTATION_STORAGE_KEY)) ?? 'classic';
   } catch {
@@ -36,8 +38,10 @@ export function writeShellPresentation(next: ShellPresentation): void {
   if (typeof window === 'undefined') return;
   try {
     window.localStorage.setItem(SHELL_PRESENTATION_STORAGE_KEY, next);
+    transientPresentation = null;
   } catch {
-    /* Private mode / quota: the in-tab event below still flips this tab. */
+    // Keep this tab usable when private mode or quota prevents persistence.
+    transientPresentation = next;
   }
   window.dispatchEvent(new CustomEvent(SYNC_EVENT));
 }
@@ -49,7 +53,10 @@ export function parseShellPresentationParam(search: string): ShellPresentation |
 
 function subscribe(onChange: () => void): () => void {
   const onStorage = (event: StorageEvent) => {
-    if (event.key === SHELL_PRESENTATION_STORAGE_KEY) onChange();
+    if (event.key === SHELL_PRESENTATION_STORAGE_KEY || event.key === null) {
+      transientPresentation = null;
+      onChange();
+    }
   };
   window.addEventListener('storage', onStorage);
   window.addEventListener(SYNC_EVENT, onChange);

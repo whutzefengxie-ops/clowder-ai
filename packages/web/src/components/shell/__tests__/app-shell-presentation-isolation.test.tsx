@@ -107,6 +107,8 @@ describe('F322 AppShell presentation isolation', () => {
   });
   afterEach(() => {
     act(() => root.unmount());
+    vi.restoreAllMocks();
+    writeShellPresentation('classic');
     host.remove();
     window.localStorage.removeItem(SHELL_PRESENTATION_STORAGE_KEY);
     window.history.replaceState(null, '', '/');
@@ -144,6 +146,22 @@ describe('F322 AppShell presentation isolation', () => {
     );
     expect(paints[0]).toBe('v2');
     expectShell(true);
+  });
+  it('keeps the URL selection and manual changes when storage rejects writes, then accepts cross-tab changes', () => {
+    nav.search = 'shell=v2';
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('Storage denied', 'SecurityError');
+    });
+    render();
+    expectShell(true);
+    act(() => writeShellPresentation('classic'));
+    expectShell(false);
+    act(() => writeShellPresentation('v2'));
+    expectShell(true);
+    vi.restoreAllMocks();
+    window.localStorage.setItem(SHELL_PRESENTATION_STORAGE_KEY, 'classic');
+    act(() => window.dispatchEvent(new StorageEvent('storage', { key: SHELL_PRESENTATION_STORAGE_KEY })));
+    expectShell(false);
   });
   it('shows the captured Settings source after a Next address commit without a synthetic browser event', () => {
     writeShellPresentation('v2');

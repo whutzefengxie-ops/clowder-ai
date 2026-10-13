@@ -13,6 +13,7 @@ tips_exempt: Repairs the existing first-use journey and adds local diagnostic lo
 ## 根因与归属
 
 1. `useShellPresentation` 的服务端快照默认 classic，AppShell 在 passive effect 才将 URL 的 v2 写入浏览器偏好。页面与轨道各自读取旧值，形成经典 → 新版切换。修改前这两个文件与同步的 main 相同。已用首次 layout effect 观察到 classic 的失败测试，修复为当前导航意图在首次 render 生效，并将同一个结果提供给轨道与页面；用户在同一 URL 上主动修改偏好仍生效。
+   独立复核另发现浏览器拒绝 localStorage 写入时会再次退回 classic。真实 AppShell 反例已 RED → GREEN：无法持久化时由现有偏好模块保留当前 tab 的选择，恢复存储或接收跨 tab 变化时释放临时值；继续允许同 URL 手动切换。
 2. 新的 v2 首屏渲染暴露了身份缓存的 hydration 问题：另一个边界在头像水合前完成配置读取，客户端首字从服务端 M 变为首，触发 React 放弃该边界并重新绘制。`useCoCreatorConfig` 改用固定服务端快照和订阅缓存，补充真实 hydrateRoot 回归；不使用 suppressHydrationWarning 隐藏错误。
 3. 本 PR 的演示/首页创建入口使用普通 a，会整页重载并重建客户端。改为 Next Link 的站内导航，保持文档和会话初始化连续。
 4. 验收实例是 Next dev。日志记录首页首次编译 24.7 秒，设置页首次编译 8.7 秒；已热页面返回 55–123 毫秒。实际开发版诊断读取脚本解码体积 91,777,129 字节，TTFB 468ms、客户端初始化观察点 1795ms。不能把这些开发态耗时包装成发布版性能，也不能以预热一次声称首次访问已修好。
