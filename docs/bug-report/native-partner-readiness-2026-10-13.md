@@ -34,6 +34,7 @@ tips_exempt: Corrects existing member status and composer behavior; no new indep
 - API TypeScript 完整构建通过；Web 完整类型检查通过。
 - 本轮 API 原生发现/认证/目录路由/错误分类 53 项通过；Web 相关 5 个测试文件 46 项通过。另有前轮输入框与成员相关回归证据。
 - 作者在独立实例 5150/3150/6368 的真实会话中同时 @Codex 与 @Claude，两者均返回“连接验证通过”；不以 mock 引导成功作为真实连接证据。
+- 推送后首启 CI 暴露两个旧测试桩未匹配 `?refresh=1` 的失败；本地完整集合复现 138 通过 / 2 失败。保留真实刷新参数，修正模拟请求匹配并断言强制刷新；与 CI 相同的 35 文件、140 项首启测试全部通过，不修改产品行为。
 - 实例有独立配置、CLI 认证快照、Next 缓存和 Redis。未复制 CLI 会话、MCP、Hooks、Plugins；Codex 快照排除 OAuth refresh token，避免与原配置竞争刷新。原认证、生产配置和旧测试实例不改写。
 
 已检测登录仅代表本地认证证据，不能保证网络、额度及远端服务始终可用。最终运行验证及重启记录保存在隔离实例的 verification.json 与服务日志中。本报告不表示 PR 已合入或整个 issue 已关闭。

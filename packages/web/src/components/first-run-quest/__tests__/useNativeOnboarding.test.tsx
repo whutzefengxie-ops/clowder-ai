@@ -38,7 +38,7 @@ beforeEach(() => {
   root = createRoot(container);
   vi.mocked(apiFetch).mockImplementation(async (path, init) => {
     if (path === '/api/session') return response({ userId: 'owner-a' });
-    if (path === '/api/cats/native-runtimes') return response({ runtimes });
+    if (String(path).split('?')[0] === '/api/cats/native-runtimes') return response({ runtimes });
     if (path === '/api/cat-templates') return response({ templates: [] });
     if (path === '/api/cats') {
       if (!init?.method) return response({ cats: catalog.cats });
@@ -181,7 +181,9 @@ it('blocks starting from stale detection data after a failed refresh', async () 
   await act(async () => root.render(<Harness />));
   const original = vi.mocked(apiFetch).getMockImplementation()!;
   vi.mocked(apiFetch).mockImplementation(async (path, init) =>
-    path === '/api/cats/native-runtimes' ? response({ error: '检测服务不可用' }, 503) : original(path, init),
+    String(path).split('?')[0] === '/api/cats/native-runtimes'
+      ? response({ error: '检测服务不可用' }, 503)
+      : original(path, init),
   );
   await act(async () => setup.reload());
   await act(async () => setup.start());
@@ -213,7 +215,7 @@ it('recommends a newly installed tool on refresh but preserves an explicit desel
   const original = vi.mocked(apiFetch).getMockImplementation()!;
   let installed = false;
   vi.mocked(apiFetch).mockImplementation(async (path, init) =>
-    path === '/api/cats/native-runtimes'
+    String(path).split('?')[0] === '/api/cats/native-runtimes'
       ? response({ runtimes: runtimes.map((runtime) => ({ ...runtime, installed })) })
       : original(path, init),
   );
@@ -221,6 +223,7 @@ it('recommends a newly installed tool on refresh but preserves an explicit desel
   expect(setup.draft?.partners.some((p) => p.selected)).toBe(false);
   installed = true;
   await act(async () => setup.reload());
+  expect(vi.mocked(apiFetch).mock.calls.some(([path]) => path === '/api/cats/native-runtimes?refresh=1')).toBe(true);
   expect(setup.draft?.partners.every((p) => p.selected)).toBe(true);
   await act(async () => setup.patchPartner('codex', { selected: false }));
   await act(async () => setup.reload());
