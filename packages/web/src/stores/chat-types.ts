@@ -101,8 +101,10 @@ export interface ToolEvent {
   resultMeta?: string;
   /** Native provider pair key; Hub UI event ids may differ between use/result rows. */
   toolUseId?: string;
+  toolParentUseId?: string;
+  toolName?: string;
   /** Persisted tool result status; replay adapter maps error status to failed tool UI. */
-  status?: 'completed' | 'error';
+  status?: 'completed' | 'error' | 'unknown';
   timestamp: number;
 }
 

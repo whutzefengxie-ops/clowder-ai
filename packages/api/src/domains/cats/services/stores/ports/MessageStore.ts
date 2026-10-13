@@ -237,6 +237,8 @@ export interface StoredToolEvent {
    *  and to key the synthesized span on hydrate. Set by provider transformer via
    *  AgentMessage.toolUseId (AC-J2). */
   toolUseId?: string;
+  /** Native parent tool call scopes child events without replacing the native pair ID. */
+  toolParentUseId?: string;
   /** F153 Phase J AC-J7: structured execution outcome, set on tool_result events.
    *  Mapped from AgentMessage.toolResultStatus (AC-J2 execution edge); NEVER inferred
    *  from content text (KD-38 honesty). */
