@@ -15,10 +15,10 @@ tips_exempt: {reason: "修复既有工具结果与权限语义，当前阶段没
 | 阶段 | 本次实物 | 独立审查 | 尚未放行的边界 |
 |---|---|---|---|
 | W0 | 9 份冻结 Git blob hash、北向接口清单、6 个 carrier 声明、CLI/桥/SDK 版本与原生二进制 hash | 源码基线足以实施 W1 | 每个实际 binding 的 B/R/E、账号/profile、运行预算与升级演练尚未完整冻结，完整 G0 未通过 |
-| W1 | 原生 `user/tool_result` 漏接修复、原生 ID/parent/invocation 配对、raw payload、失败状态、持久/直播/重放消费点 | 两个 P2 已修，代码层通过 | 官方 SDK 的真实调用因认证未取得；完整平台调用/socket/UI 链未验收，完整 G1 未通过 |
+| W1 | 原生 `user/tool_result` 漏接修复、原生 ID/parent/invocation 配对、raw payload、失败状态、真实 CLI/官方 SDK、持久历史/UI 刷新 | 两个 P2 已修，代码与新增 SDK 证据通过 | 完整平台调用/socket/UI 链未验收，完整 G1 未通过 |
 | W2.S | STDIO/HTTP 共用 fail-closed 权限边界、factory 显式默认取消、prompt admission/generation、取消隔离 | P1/P2 全部修复，安全下限通过 | 不是 W3.P 平台 principal/policy/审批/审计，也不证明原生工具已静止 |
-| W4.P | 固定 Codex 桥原型构建、扩展到真实 `CodexAcpClient` 方法映射、可控 A→B 反例 | L1 证据边界通过 | 真实 native fence/bridge/provider 回执未取得，不 Go |
-| W5.P | 固定 Claude 桥及候选兼容性检查、next-only 回填与反例 | RED 与证据边界确认 | next-only 未通过全部合成检查；真实非打断、UUID/result、pending 人工交互未验收，不 Go |
+| W4.P | 固定桥、真实 native ID export/caller fence、有效/陈旧/非空未知/取消目标、同进程幂等、原型协商 | 核心有界 L2 经非作者确认 | 丢回执、重连/对账和完整反例统计未齐；完整原型 held/unknown，不放行全面增强 |
+| W5.P | next 的真实工具边界/UUID/result/权限等待、now 对照、后台 followup 结清补丁 | 核心有界 L2；新增回归与补丁独立定向复核 | elicitation、多个真实 notice、已排队 notice 后取消及跨版本矩阵未齐；完整原型 held/unknown |
 
 审查者：独立个体 `/root/acp_plan_review`，作者之外的本地同行。同家族审查，不称为跨家族审查；回执只覆盖各自阶段，未批准 G0、完整 G1、G3 或整体迁移。
 
@@ -36,6 +36,8 @@ tips_exempt: {reason: "修复既有工具结果与权限语义，当前阶段没
 
 真实数据 → 生产 decoder → `TranscriptWriter` 写盘 → 新 `TranscriptReader` 冷读，10 个工具事件和完整 raw output 不丢。随后在 `https://claude-w1-replay.test` 的隔离 Edge 中用生产 `ReplayMessageList`/`CliOutputBlock` 展开 5 个工具行并刷新，2 次原生失败仍可见、无 pageerror。该证据是实际组件和实际持久数据，网络夹具并非生产 API/socket；截图没有加载完整产品样式，不用于视觉验收。
 
+用户明确授权限定认证测试后，真实官方 SDK 0.3.285 → `ClaudeSdkAgentService` → 同一 decoder 完成 Read/Agent(w1-reader) 检查：374 个原始事件、29.720 秒、SDK 报告 costUsd 0.065478，5 use/5 result/2 error/2 child，service error=[]。仅选取现有用户设置中的认证/模型 env；`settingSources=[]`、禁 hooks/用户指令、2 美元上限、精确 Read 路径与 Agent 类型 allowlist，无仓库源码出站。SDK 的脱敏完整工具块在 [fixture](../../../packages/api/test/fixtures/claude-sdk-tool-results.json)，版本/原始 hash/预算与映射见 [授权执行证据](evidence/authorized-runtime.json)。两份捕获各通过持久冷读与 2 次磁盘读取的浏览器刷新，共 2 个历史检查、2 个浏览器检查。
+
 ## W2.S 的实际边界
 
 - 两条实际权限入口先观察默认 Allow 的 2 项 RED。无 handler、factory 未接审批、异常/rejection、超时、非法选择和畸形 schema 均返回 ACP `cancelled`；仅显式 handler 的合法选项才能 selected。
@@ -45,18 +47,26 @@ tips_exempt: {reason: "修复既有工具结果与权限语义，当前阶段没
 
 ## Go/No-Go 的当前结论
 
-Codex 原型在固定 `51f78d67` 的 `extMethod` 中挂接 `_clowder/v1/control`，`snapshot` 读取 native callback 所保存的 turn ID；caller `expectedTurnId` 原值经真正 `CodexAcpClient.steerTurn` 进入 native `turn/steer.expectedTurnId`。桥方法检查 1 项、可控 fake native race/idempotency 检查 2 项通过。未启动真实模型/原生 A/B 竞态，也未验证断线对账、取消全部交错，因此不能 Go；这个实现只用于原型，不是生产能力合同。
+Codex 固定 bridge 2.1.1 / `51f78d67`、native CLI 0.161.0，在 STDIO wire 注册 `_clowder/v1/control`，导出真正 native callback ID。最初仅 extMethod 未注册 wire 的调用为 `-32601`；错误包装遗漏 message 的问题也已修正并留档。最终同一 binding 的 3 个受限只读回合、79.038 秒，caller A 原值经真正 `CodexAcpClient.steerTurn` 进入 native `turn/steer.expectedTurnId`：valid A 原生回执匹配、重复 operation 只有一次 native 调用；B active 时 stale A/非空不存在 target 被 native 拒绝，B 保持原 ID；idle/取消 target 被 native 拒绝；unknown ACP session、foreign binding、空 target 分别由桥拒绝。原型协商、bundle/lock/runner hash、caller/native mapping 与 raw refs 已冻结。
 
-Claude 固定 v0.70.0 / `d0aafb1c` / SDK 0.3.232。实际 `git apply --check` 证明 #1175 完整 diff 不能直接应用到固定源码。未修桥的 3 个检查为 1 通过、2 失败；next-only 最小回填后为 2 通过、1 失败。通过项仅证明 next/UUID 输入和 idle promptRequired 分支；失败项用合成 `pendingUserInputCount=1` 对象测试保守不投递条件，不能外推为真实 SDK 已绕过审批或发生 abort。完整非打断语义和维护路线仍待证明，不据此断言 ACP 不可行。
+Codex 的模型/认证沿用户原有选择复制到私有隔离 profile，禁 hooks、项目指令、shell/编辑、apps/skills；测试仅允许 fixed fixture MCP，最多 3 个模型回合、每回合 90 秒、工具 8 秒/12 次。没有原生 USD 硬上限，不把时间/次数上限写成金额预算；native usage 留档，不从模型名猜账单。最终样本、早期失败均保留。控制缓存仍是本进程去重，丢回执/重连对账未证明，不能据此放行完整 W4.P/W4 或替换原 exact 服务。
+
+Claude 固定 v0.70.0 / `d0aafb1c` / SDK 0.3.232，实际 native CLI 2.1.296。#1175 完整 diff 不能直接应用到固定源码，采用本地 narrow patch：专门 `_clowder/v1/notice` 固定 next/promptRequired，协商声明 prototype 并返回 native input UUID；这不是上游已接受的扩展或完整生产合同。旧 pendingCount→禁止入队合成判据过强，按非作者意见改为不抢占/不代答；历史 RED 保留，未以修改测量判据宣称修好原生安全缺陷。
+
+真实 next 样本：工具完整完成并返回哨兵后，notice UUID 才 native started；原生 result 同时包含 primary/notice UUID，ACP 主请求在原生 idle 后结清。实际 `session/request_permission` 由测试 handler 延迟 3 秒：未响应时工具不执行、主请求不结清，释放后正常完成；这不是产品真人审批 UI，也不是 elicitation。idle/aftercancel notice 返回 promptRequired，无 detached 新 prompt；取消样本有本地 iterator 异常终止和随后 native error/idle，未证明 ACP wire 正常 cancelled 结清、工具静止或已排队 notice 撤销。
+
+真实 now 对照发现悬挂：工具转后台继续运行，随后 task_notification、自主 result、idle 均出现，ACP 主请求仍 90 秒超时。原文明确“未中断”，不能因文本含 interrupt 就写成工具取消。确定性回归复现 owned autonomous idle 债吞掉 steer 结清；第一次最小归属补丁又被“旧主任务迟到工具块污染新主任务”反例证伪。最终精确链为 native command UUID → model message ID → tool ID → task notification run ID → autonomous origin.runId，仅本主任务已确认拥有的 followup 不额外记该 idle 债。历史/foreign 债、原 subagent drain gate、autonomous usage/错误所有权保留；缺原生关联证据时不猜 owner。29 项受影响 steering/next 检查通过，并重跑真实 now/next；最终 now 19.236 秒正常结清，失败样本均保留。
+
+目前只能判定核心 ACP 表达/桥承接有实际可行证据。两条完整原型依然 held/unknown；按既定 Go/No-Go 规则不进入全面增强或整体迁移。剩余反例逐条补证后各自重新独立审查，不能因为 W1/W2.S 或某条 L2 通过就批准后续 Gate。
 
 原型准备脚本和检查位于 `scripts/acp-spikes/`；上游副本在 worktree 的 `.cat-cafe/tmp/acp-prototypes/`，没有嵌入 Git 仓库；研究 clone 在 workspace 根目录。未修改上游源仓，也未公开发社区消息。
 
 ## 验证与限制
 
-最终受影响检查：API build；131 项既有/入口回归；42 项新源码检查；28 项前端适配器检查；1 项浏览器重放。具体输出与 SHA 见 [机器回执](evidence/stage-validation.json)。Biome 对变更文件检查通过，保留既有 complexity/non-null 等 warning；API 类型检查及前端源码类型检查通过。
+前阶段受影响检查：API build、131 项既有/入口回归、42 项源码检查、28 项前端适配器、1 项浏览器，见 [阶段机器回执](evidence/stage-validation.json)。授权续办增加 SDK 历史/浏览器样本，实际各 2 项通过；Codex 可控检查 2 项、固定桥映射 1 项；Claude 完整受影响 steering/next 29 项、生成上游 TypeScript 编译通过，续办日志/SHA 见 [授权执行清单](evidence/authorized-runtime.json)。变更文件 Biome 检查通过，有 intentional literal-template、complexity 等 warning/info；没有使用 unsafe fix。
 
 完整 Web tsc 另有既有 `vitest.config.ts` 的重复 Vitest reporter 类型身份冲突，前端源码检查排除该配置后通过，未称整个 `pnpm lint` 通过。更宽的 print/SDK 检查曾有 6 项失败：5 项 Windows 下 MCP 参数为文件路径而测试按内联 JSON 读取，1 项 SDK `/tmp/images` 与 Windows resolved path 预期不一致。相关启动实现本次未改，失败记录保留；未单独证明这些用例的原版本执行结果，因此不能用“全量回归通过”覆盖它们。
 
-无用户设置的真实官方 SDK 测试返回 `Not logged in`。启用现有用户设置的重试被自动审批拒绝，理由为缺少对此认证来源和出站数据的明确授权；限定 Read/Agent、禁 hooks、预算/合成数据的授权问题已提出，收到答复前不重试。该限制同时阻止用认证模型完成两个原型的 L2。
+无用户设置的 SDK 曾返回 `Not logged in`；启用用户设置的尝试曾因缺少明确认证/出站范围授权被自动审批拒绝。用户随后明确答复“授权上述限定测试范围”，本轮据此完成隔离 SDK/native 检查；没有改写原认证或生产配置。账号/profile 测试绑定不等于正式成员绑定，完整 G0 的 B/R/E、成本/升级预算矩阵仍未验收。
 
 原始 JSONL、冷读历史、日志、截图均保留在本 worktree `.cat-cafe/tmp/`。不把这些夹具视作运行中的正式安装、生产账号或线上成员已更新。整体迁移保持关闭，现有 native 服务未被替换。

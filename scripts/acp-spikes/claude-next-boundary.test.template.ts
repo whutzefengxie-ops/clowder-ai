@@ -1,5 +1,5 @@
 /** Copied into the pinned upstream test tree by prepare-claude-prototype.mjs. */
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import { ClaudeAcpAgent } from '../acp-agent.js';
 
 function fixture(pendingHuman = 0) {
@@ -19,7 +19,9 @@ function fixture(pendingHuman = 0) {
     },
   };
   seam.publishGoalFromPrompt = async () => {};
-  return { agent, messages };
+  const interrupt = vi.fn();
+  (seam.sessions.session as Record<string, unknown>).query = { interrupt };
+  return { agent, messages, interrupt };
 }
 it('W5.P next delivery reaches the SDK input with a unique native message UUID', async () => {
   const { agent, messages } = fixture();
@@ -32,14 +34,18 @@ it('W5.P next delivery reaches the SDK input with a unique native message UUID',
   expect(messages[0].priority).toBe('next');
   expect(messages[0].uuid).toMatch(/^[\da-f-]{36}$/);
 });
-it('W5.P pending human input must not receive a notice capable of bypassing its boundary', async () => {
-  const { agent, messages } = fixture(1);
+it('W5.P a queued next input cannot request native preemption of pending human input', async () => {
+  const { agent, messages, interrupt } = fixture(1);
   await agent.steer({
     sessionId: 'session',
     prompt: [{ type: 'text', text: 'synthetic notice' }],
     _meta: { steering: { delivery: 'next', idleBehavior: 'promptRequired' } },
   });
-  expect(messages).toHaveLength(0);
+  // Enqueueing is not execution. Native pending/answer behavior requires the
+  // separate real SDK permission/elicitation evidence, not this fake flag.
+  expect(messages).toHaveLength(1);
+  expect(messages[0].priority).toBe('next');
+  expect(interrupt).not.toHaveBeenCalled();
 });
 it('W5.P idle requires host-owned prompt and does not start a detached native turn', async () => {
   const { agent, messages } = fixture();

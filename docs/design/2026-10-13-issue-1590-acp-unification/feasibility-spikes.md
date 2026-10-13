@@ -7,7 +7,7 @@ created: 2026-10-13
 
 # 两条 P0 原型与桥维护决策
 
-状态：原型计划，未实现/未运行。W1 先独立修漏接；W2.S 修公共 client 安全下限后运行本节原型。通过原型只允许进入对应增强实现，不等于 G3 或迁移通过。
+状态：隔离原型已运行，核心 fence/next 取得有界 L2；完整通过条件仍未全部满足，见 [执行回执](execution-evidence.md)。通过原型只允许进入对应增强实现，不等于 G3 或迁移通过。
 
 ## W4.P：Codex native fence 能否经 ACP 完整承接（R1）
 
@@ -46,6 +46,7 @@ created: 2026-10-13
 - 锁 upstream/patch/SDK/CLI 版本；协商显式 next delivery，旧桥未声明时返回 unsupported，禁止退成now/preempt。
 - fake SDK 生成 primary/notice echo、多个 result与idle、tool等待和pending权限/elicitation，检查UUID与主turn关联。
 - #1175候选diff中delivery="next"分支先于pendingUserInputCount保护选择，必须实测pending真人交互是否仍安全；不能仅保留原later分支存在就宣称其行为未变。
+- pending 时入队不等于提前执行。旧合成 `pendingUserInputCount=1 → 禁止入队` 判据过强，已按独立审查改为不抢占、不代答、回答前不执行、回答后正确结清；原 RED 留档，不把修正测量判据说成修好原生审批 bug。
 - 真正起固定 bridge/native SDK，以有界只读工具/测试工具制造当前周期；在边界前送 notice，核native cycle/abort/tool completion、输入UUID、notice消费和主invocation最终结果。
 - active/idle/too-late 明确：idle 返回 host-owned promptRequired/too_late，不自行新建 detached turn；取消不再投递pending notice；并发多个notice有序可核。
 - 普通preempt mode作为对照，证明两种模式的原生执行差异，不能只看最后答案都出现notice文本。

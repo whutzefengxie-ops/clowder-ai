@@ -51,9 +51,7 @@
       "reportsRuntimeWindow": true,
       "authoritativeUsage": true,
       "observesCompression": true,
-      "policies": [
-        "read_only"
-      ],
+      "policies": ["read_only"],
       "parser": "claude-ndjson-parser",
       "toolResultBeforeFix": "missing",
       "nativeWindowControl": false,
@@ -70,9 +68,7 @@
       "reportsRuntimeWindow": true,
       "authoritativeUsage": true,
       "observesCompression": true,
-      "policies": [
-        "read_only"
-      ],
+      "policies": ["read_only"],
       "parser": "claude-ndjson-parser",
       "toolResultBeforeFix": "missing",
       "nativeWindowControl": false,
@@ -89,9 +85,7 @@
       "reportsRuntimeWindow": false,
       "authoritativeUsage": true,
       "observesCompression": true,
-      "policies": [
-        "read_only"
-      ],
+      "policies": ["read_only"],
       "parser": "assistant_only_BgTranscriptEventConsumer",
       "toolResultBeforeFix": "user_event_not_consumed",
       "nativeWindowControl": false,
@@ -108,9 +102,7 @@
       "reportsRuntimeWindow": false,
       "authoritativeUsage": false,
       "observesCompression": false,
-      "policies": [
-        "read_only"
-      ],
+      "policies": ["read_only"],
       "parser": "pty_and_hook_sidechannel",
       "toolResultBeforeFix": "independent_consumer_not_covered_by_parser_fix",
       "nativeWindowControl": false,
@@ -124,15 +116,7 @@
       "nativeL0": true,
       "resume": "native_thread",
       "freshness": "exact_active_turn",
-      "controls": [
-        "compact",
-        "goal",
-        "review",
-        "status",
-        "capability-source",
-        "fork",
-        "experimental-realtime"
-      ],
+      "controls": ["compact", "goal", "review", "status", "capability-source", "fork", "experimental-realtime"],
       "continuityPreflight": true,
       "reportsRuntimeWindow": false,
       "authoritativeUsage": false,
@@ -184,15 +168,8 @@
     "accountEnv_OAuth_key_isolation"
   ],
   "scope": {
-    "W1": [
-      "claude_print_sdk",
-      "claude_agent_sdk",
-      "shared_persistence_and_UI_consumers"
-    ],
-    "notClaimedFixed": [
-      "bg_user_tool_result",
-      "pty_native_results"
-    ],
+    "W1": ["claude_print_sdk", "claude_agent_sdk", "shared_persistence_and_UI_consumers"],
+    "notClaimedFixed": ["bg_user_tool_result", "pty_native_results"],
     "migrationEnabled": false
   },
   "frozenProposedBudget": {
@@ -243,7 +220,7 @@
   ],
   "evidenceBoundaries": {
     "nativeCli": "real_cli_fixture_only; account mode not inferred from apiKeySource:none",
-    "sdk": "official SDK attempted with settingSources=[]; Not logged in; enabling user settings rejected by auto-review; permission pending",
+    "sdk": "authorized isolated official SDK completed; see authorized-runtime.json; full G0/G1 and production bindings not verified",
     "productionBindings": "not mutated or fully tested"
   },
   "nativeBinaries": [
@@ -270,5 +247,6 @@
       "sha256": "f71fbcb7beeae82770e9c33d1e5969999868789cacec509289331a1205816838",
       "lockSha256": "4ee8fa26495bf3e3b8c28e3d5801d230a30408404b2079321060e038b8ed46f7"
     }
-  }
+  },
+  "authorizedContinuationRef": "authorized-runtime.json"
 }

@@ -28,6 +28,8 @@ created: 2026-10-13
 
 ## 本轮用户 R1–R4 与文档/实施意见
 
+本节保留实施前的方案复核状态；随后代码、真实运行与独立审查进展见 [执行回执](execution-evidence.md)，不能将下表的历史“未实现”读作当前进度。
+
 | 反馈 | 判断与本轮处置 | 运行问题状态 |
 |---|---|---|
 | R1 P0 exact turn fence | 接受；W4.P先导出native ID、caller target原样到native fence，明确race反例/L1+L2与Go/No-Go | 尚未实现/真实验证，不能因文档修订记问题已消失 |
