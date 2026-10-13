@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { DEMO_EVENTS } from './demo-story';
+import { reportOnboardingTiming } from './onboarding-performance';
 
 interface Playback {
   version: 1;
@@ -51,7 +52,17 @@ export function useDemoPlayback(scope: string) {
   useEffect(() => {
     const event = DEMO_EVENTS[state.index];
     if (!ready || state.paused || !event) return;
-    const timer = setTimeout(() => setState((current) => ({ ...current, index: current.index + 1 })), event.duration);
+    const scheduledAt = performance.now();
+    const timer = setTimeout(() => {
+      const elapsed = performance.now() - scheduledAt;
+      reportOnboardingTiming('demo-step', {
+        step: event.id,
+        plannedMs: event.duration,
+        elapsedMs: Math.round(elapsed),
+        lateMs: Math.round(Math.max(0, elapsed - event.duration)),
+      });
+      setState((current) => ({ ...current, index: current.index + 1 }));
+    }, event.duration);
     return () => clearTimeout(timer);
   }, [ready, state.index, state.paused]);
   return {

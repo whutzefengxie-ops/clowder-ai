@@ -1,11 +1,13 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { DemoTeam } from './DemoTeam';
 import { DemoTranscript } from './DemoTranscript';
 import { DemoWorkProduct } from './DemoWorkProduct';
 import { DEMO_EVENTS, DEMO_SETTINGS_URL, type DemoCat } from './demo-story';
+import { beginOnboardingNavigation, finishOnboardingNavigation } from './onboarding-performance';
 import { useDemoPlayback } from './useDemoPlayback';
 
 interface Props {
@@ -18,6 +20,7 @@ export function GuidedOnboarding({ open, storageScope, onClose }: Props) {
 }
 
 function DemoPlayer({ storageScope, onClose }: Omit<Props, 'open'>) {
+  useEffect(() => finishOnboardingNavigation('demo-open', 'ready'), []);
   const playback = useDemoPlayback(storageScope);
   const [delivered, setDelivered] = useState(false);
   const dialog = useRef<HTMLDivElement>(null);
@@ -128,8 +131,9 @@ function DemoPlayer({ storageScope, onClose }: Omit<Props, 'open'>) {
                   重新看一遍
                 </button>
               )}
-              <a
+              <Link
                 href={DEMO_SETTINGS_URL}
+                onClick={() => beginOnboardingNavigation('team-setup')}
                 className={
                   playback.finished && delivered
                     ? 'rounded-full bg-cafe-accent px-4 py-2.5 text-sm font-semibold text-[var(--cafe-surface)]'
@@ -137,7 +141,7 @@ function DemoPlayer({ storageScope, onClose }: Omit<Props, 'open'>) {
                 }
               >
                 {playback.finished && delivered ? '创建我的猫猫 →' : '直接创建我的猫猫 →'}
-              </a>
+              </Link>
             </div>
           </div>
           {playback.finished && delivered && (

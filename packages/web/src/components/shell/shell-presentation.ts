@@ -10,9 +10,11 @@
  * can be shared by link and verified in a real browser; the choice then persists.
  */
 
-import { useSyncExternalStore } from 'react';
+import { createContext, useContext, useSyncExternalStore } from 'react';
 
 export type ShellPresentation = 'classic' | 'v2';
+/** One resolved presentation for the rail and route body during the first commit. */
+export const ShellPresentationContext = createContext<ShellPresentation | null>(null);
 
 export const SHELL_PRESENTATION_STORAGE_KEY = 'cat-cafe:shell-presentation';
 const SYNC_EVENT = 'cat-cafe:shell-presentation-sync';
@@ -58,5 +60,7 @@ function subscribe(onChange: () => void): () => void {
 }
 
 export function useShellPresentation(): ShellPresentation {
-  return useSyncExternalStore(subscribe, readShellPresentation, () => 'classic');
+  const resolved = useContext(ShellPresentationContext);
+  const stored = useSyncExternalStore<ShellPresentation>(subscribe, readShellPresentation, () => 'classic');
+  return resolved ?? stored;
 }

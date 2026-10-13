@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { NativePartnerCard } from '../../first-run-quest/NativePartnerCard';
 import { useNativeOnboarding } from '../../first-run-quest/useNativeOnboarding';
+import { finishOnboardingNavigation } from '../../onboarding-demo/onboarding-performance';
 
 export function RecommendedTeamSetup({
   onCreated,
@@ -16,6 +17,10 @@ export function RecommendedTeamSetup({
   const setup = useNativeOnboarding(true, onCreated, 'members');
   const [invalid, setInvalid] = useState<Record<string, boolean>>({});
   const { draft, loading, busy, error, errorStage } = setup;
+  useEffect(() => finishOnboardingNavigation('team-setup', 'mounted'), []);
+  useEffect(() => {
+    if (!loading) finishOnboardingNavigation('team-setup', 'ready');
+  }, [loading]);
   const available =
     draft?.partners.filter((p) => p.runtime.installed && (p.runtime.clientId !== 'acp' || p.runtime.acp)) ?? [];
   const unavailable = draft?.partners.filter((p) => !available.includes(p)) ?? [];

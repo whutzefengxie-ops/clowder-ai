@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useActiveExecutionProjection } from '@/hooks/useActiveExecutionProjection';
@@ -1081,9 +1082,9 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
                           <BootcampIcon className="w-4 h-4" />
                           看看团队如何协作
                         </button>
-                        <a href={DEMO_SETTINGS_URL} className="px-4 py-2 text-sm text-cafe-accent">
+                        <Link href={DEMO_SETTINGS_URL} className="px-4 py-2 text-sm text-cafe-accent">
                           创建我的猫猫
-                        </a>
+                        </Link>
                       </div>
                     );
                   })()}

@@ -40,7 +40,7 @@ import { captureChatReadingRef } from '@/utils/chat-scroll-memory';
 import { pushThreadRouteWithHistory } from '../../ThreadSidebar/thread-navigation';
 import type { ChatReadingPort } from '../../thread-chat/useThreadChatReadingPort';
 import { readSettingsReadingSession } from '../settings-reading-session';
-import { SHELL_PRESENTATION_STORAGE_KEY, writeShellPresentation } from '../shell-presentation';
+import { SHELL_PRESENTATION_STORAGE_KEY, useShellPresentation, writeShellPresentation } from '../shell-presentation';
 import { useSettingsReadingEntry, useSettingsReadingPort, useSettingsSourceReturn } from '../useSettingsSourceReturn';
 
 const sourceReader: ChatReadingPort = {
@@ -124,6 +124,26 @@ describe('F322 AppShell presentation isolation', () => {
     act(() => writeShellPresentation('classic'));
     expectShell(false);
     expect(draft.value).toBe('still unsent');
+  });
+  it('paints the explicit v2 URL and its route children consistently before passive effects', () => {
+    nav.search = 'shell=v2';
+    const paints: string[] = [];
+    function FirstPaintProbe() {
+      const presentation = useShellPresentation();
+      useLayoutEffect(() => {
+        paints.push(presentation);
+      }, [presentation]);
+      return <output>{presentation}</output>;
+    }
+    act(() =>
+      root.render(
+        <AppShell>
+          <FirstPaintProbe />
+        </AppShell>,
+      ),
+    );
+    expect(paints[0]).toBe('v2');
+    expectShell(true);
   });
   it('shows the captured Settings source after a Next address commit without a synthetic browser event', () => {
     writeShellPresentation('v2');
