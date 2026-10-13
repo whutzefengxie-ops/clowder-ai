@@ -11,6 +11,7 @@ import { MemberStatus } from './MemberStatus';
 import { memberStatus, memberTransport } from './member-projection';
 import { useMemberClock } from './useMemberClock';
 import type { useMemberList } from './useMemberList';
+import { useMemberLoginCheck } from './useMemberLoginCheck';
 export function MemberTable({
   config,
   visible,
@@ -39,6 +40,7 @@ export function MemberTable({
   const t = useMemberText();
   const copy = useMembersCopy();
   const now = useMemberClock(routing.data);
+  const loginFor = useMemberLoginCheck(list.allCats.some((cat) => cat.configurationSource === 'native_tool'));
   return (
     <div className="member-table-scroll">
       <table className="member-table">
@@ -157,7 +159,7 @@ export function MemberTable({
                   status={
                     routing.loading && !routing.data
                       ? { label: '读取中', detail: '', tone: 'unknown' }
-                      : memberStatus(cat, routing.data, routing.error, now)
+                      : memberStatus(cat, routing.data, routing.error, now, loginFor(cat))
                   }
                 />
               </td>

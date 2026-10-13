@@ -1,7 +1,7 @@
 .root {
-  flex: 0 1 15rem;
-  inline-size: 15rem;
-  max-inline-size: 100%;
+  flex: 0 1 auto;
+  inline-size: auto;
+  max-inline-size: min(100%, 15rem);
   min-inline-size: 3.5rem;
   margin-inline-start: auto;
 }
@@ -12,7 +12,7 @@
 }
 
 .readyName {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-inline-size: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -25,7 +25,7 @@
 }
 
 .stateName {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-inline-size: 0;
   overflow: hidden;
   text-overflow: ellipsis;

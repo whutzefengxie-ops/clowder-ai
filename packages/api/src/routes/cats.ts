@@ -1,4 +1,4 @@
-import { discoverNativeRuntimes } from './native-runtimes.js';
+import { discoverNativeRuntimesWithReadiness } from './native-runtimes.js';
 import { registerRuntimeCatalogRoute } from './runtime-catalog-route.js';
 /**
  * Cats API Routes
@@ -875,7 +875,13 @@ interface CatsRoutesOptions {
 
 export const catsRoutes: FastifyPluginAsync<CatsRoutesOptions> = async (app, opts) => {
   registerRuntimeCatalogRoute(app);
-  app.get('/api/cats/native-runtimes', async () => discoverNativeRuntimes(resolveProjectRoot()));
+  app.get('/api/cats/native-runtimes', async (request, reply) => {
+    if (!resolveHeaderUserId(request)) return reply.code(401).send({ error: '需要登录后检查本机工具' });
+    return discoverNativeRuntimesWithReadiness(
+      resolveProjectRoot(),
+      (request.query as { refresh?: string }).refresh === '1',
+    );
+  });
   // GET /api/cat-templates - 获取角色模板（纯灵魂层，不含 client/model 绑定）
   app.get('/api/cat-templates', async () => {
     try {

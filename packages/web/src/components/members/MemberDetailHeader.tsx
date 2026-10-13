@@ -7,6 +7,7 @@ import { useMemberText } from './editor-presentation';
 import { MemberStatus } from './MemberStatus';
 import { memberStatus } from './member-projection';
 import { useMemberClock } from './useMemberClock';
+import { useMemberLoginCheck } from './useMemberLoginCheck';
 export function MemberDetailHeader({
   cat,
   toggling,
@@ -19,13 +20,14 @@ export function MemberDetailHeader({
   const t = useMemberText();
   const routing = useRoutingContext();
   const now = useMemberClock(routing.data);
+  const loginFor = useMemberLoginCheck(cat.configurationSource === 'native_tool');
   return (
     <div className="member-detail-status">
       <MemberStatus
         status={
           routing.loading && !routing.data
             ? { label: '读取中', detail: '', tone: 'unknown' }
-            : memberStatus(cat, routing.data, routing.error, now)
+            : memberStatus(cat, routing.data, routing.error, now, loginFor(cat))
         }
       />
       <label className="member-enable-control">

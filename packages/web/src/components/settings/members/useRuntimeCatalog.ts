@@ -27,7 +27,10 @@ export function useRuntimeCatalog(
   const key = JSON.stringify([runtimeId, catId, accountRef, requestedModel, customStartup]);
   const context = JSON.stringify([runtimeId, catId, accountRef, customStartup]);
   useEffect(() => {
-    if (!runtimeId) return;
+    if (!runtimeId) {
+      setLoading(false);
+      return;
+    }
     const controller = new AbortController();
     setLoading(true);
     const force = refresh !== lastRefresh.current;

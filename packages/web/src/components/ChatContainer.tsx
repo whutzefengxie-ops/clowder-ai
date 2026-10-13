@@ -989,6 +989,9 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
                     <div className="mb-3 flex justify-center text-left">
                       <div className="max-w-[85%] w-full">
                         <AgentHookHealthNotice
+                          configurationOnly={
+                            cats.length > 0 && cats.every((cat) => cat.configurationSource === 'native_tool')
+                          }
                           health={agentHookHealth.health}
                           error={agentHookHealth.error}
                           syncing={agentHookHealth.syncing}

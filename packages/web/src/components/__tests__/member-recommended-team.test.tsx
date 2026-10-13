@@ -10,6 +10,7 @@ vi.mock('@/hooks/useCatData', () => ({ useCatData: () => ({ cats: [], refresh: v
 let root: Root, host: HTMLDivElement;
 let installed = true;
 let failed = false;
+let loginRequired = false;
 let existing: CatData[] = [];
 const created = vi.fn(),
   manual = vi.fn();
@@ -20,6 +21,7 @@ beforeEach(() => {
   localStorage.clear();
   installed = true;
   failed = false;
+  loginRequired = false;
   existing = [];
   host = document.createElement('div');
   document.body.append(host);
@@ -40,12 +42,21 @@ beforeEach(() => {
           },
         ],
       });
-    if (path === '/api/cats/native-runtimes')
+    if (String(path).startsWith('/api/cats/native-runtimes'))
       return failed
         ? json({ error: '检测服务离线' }, 503)
         : json({
             runtimes: [
-              { id: 'claude', label: 'Claude Code', clientId: 'anthropic', installed, models: [] },
+              {
+                id: 'claude',
+                label: 'Claude Code',
+                clientId: 'anthropic',
+                installed,
+                models: [],
+                readiness: loginRequired
+                  ? { status: 'login_required', checkedAt: 1, loginCommand: 'claude auth login' }
+                  : undefined,
+              },
               { id: 'codex', label: 'Codex', clientId: 'openai', installed, models: [] },
               {
                 id: 'dsh',
@@ -76,6 +87,14 @@ afterEach(() => {
 });
 const mount = () =>
   act(async () => root.render(<RecommendedTeamSetup onCreated={created} onManual={manual} onBack={() => {}} />));
+
+it('shows missing CLI login before creating a teammate and distinguishes creation from readiness', async () => {
+  loginRequired = true;
+  await mount();
+  expect(host.textContent).toContain('Claude Code 尚未登录');
+  expect(host.textContent).toContain('claude auth login');
+  expect(host.textContent).toContain('创建后还需登录');
+});
 
 it('detects and preselects a complete team, and creates it in one click with inherited defaults', async () => {
   await mount();

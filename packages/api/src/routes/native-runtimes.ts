@@ -6,6 +6,7 @@ import { parse } from 'smol-toml';
 import { getAcpConfig } from '../config/cat-config-loader.js';
 import { resolveCliCommand } from '../utils/cli-resolve.js';
 import { discoverDshRuntime } from './native-dsh-discovery.js';
+import { nativeRuntimeReadiness } from './native-runtime-readiness.js';
 
 function text(value: unknown): string | undefined {
   return typeof value === 'string' && value.length > 0 ? value : undefined;
@@ -87,4 +88,16 @@ export function discoverNativeRuntimes(projectRoot: string) {
     ? []
     : [discoverDshRuntime()];
   return { runtimes: [...builtins, ...acp, ...dsh], authenticationStatus: 'not_checked' };
+}
+
+/** Bounded native login checks, without prompts, model requests, or refreshing credentials. */
+export async function discoverNativeRuntimesWithReadiness(root: string, refresh = false) {
+  const found = discoverNativeRuntimes(root);
+  const runtimes = await Promise.all(
+    found.runtimes.map(async (runtime) => ({
+      ...runtime,
+      readiness: await nativeRuntimeReadiness(runtime, root, refresh),
+    })),
+  );
+  return { runtimes, authenticationStatus: 'local_checked' };
 }

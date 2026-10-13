@@ -2,6 +2,7 @@ import { type RoutingContextReadModelV1, type RoutingSubjectRefV1, routingSignal
 import type { CatData } from '@/hooks/useCatData';
 import { CLIENT_OPTIONS } from '../hub-cat-editor.model';
 import { providerDisplayName } from '../routing-context/team-member-projection';
+import type { NativeLoginState } from '../settings/members/native-login-state';
 
 export type MemberStatus = {
   label: string;
@@ -43,8 +44,17 @@ export function memberStatus(
   model: RoutingContextReadModelV1 | null,
   readError?: string | null,
   now = Date.now(),
+  login?: NativeLoginState,
 ): MemberStatus {
   if (cat.roster?.available === false) return { label: '已停用', detail: '', tone: 'unknown' };
+  if (cat.configurationSource === 'native_tool' && login?.status === 'login_required')
+    return {
+      label: '待登录',
+      detail: '请先登录对应工具，再刷新',
+      tone: 'warning',
+    };
+  if (cat.configurationSource === 'native_tool' && login?.status === 'not_installed')
+    return { label: '未安装', detail: '请先安装对应工具', tone: 'error' };
   if (readError || !model || model.resolution.state !== 'fresh')
     return { label: '未确认', detail: readError ? '当前状态读取失败' : '当前状态暂不可读', tone: 'unknown' };
   const candidate = model.resolution.snapshot.candidates.find((c) => c.binding.catId === cat.id);
@@ -67,11 +77,31 @@ export function memberStatus(
       : '记录新鲜度未确认'
     : event?.note || (reason && (reasonLabels[reason.code] ?? reasonLabels[reason.summary])) || '';
   const until = boundary.length ? Math.min(...boundary) : null;
+  // A first successful call has no earlier constraint to recover, so the owner can legitimately
+  // leave candidate.reasons empty. Its durable terminal fact is still authoritative for this cat.
+  const success = model.signalEvents.find(
+    (item) =>
+      item.subjectRef.type === 'cat' &&
+      item.subjectRef.catId === cat.id &&
+      (item.source === 'dispatch_success' || item.source === 'health_probe') &&
+      'state' in item &&
+      item.state === 'available' &&
+      !closed.has(item.eventId) &&
+      item.observedAt <= now,
+  );
+  const connected = Boolean(success);
+  if (!stale && candidate.availability === 'available' && cat.configurationSource === 'native_tool' && !connected)
+    return {
+      label: '待验证',
+      detail: login?.status === 'configured' ? '已检测登录，尚未验证实际连接' : '尚未确认登录与实际连接',
+      tone: 'unknown',
+    };
+  const sourceEvent = event ?? (!stale && candidate.availability === 'available' ? success : undefined);
   return {
     label: stale ? '未确认' : statusLabels[candidate.availability],
     detail,
     detailIsNote: !stale && Boolean(event?.note),
-    source: event && SIGNAL_SOURCE_LABELS[event.source],
+    source: sourceEvent && SIGNAL_SOURCE_LABELS[sourceEvent.source],
     until: until !== null && Number.isFinite(until) ? until : undefined,
     tone:
       stale || candidate.availability === 'unknown'

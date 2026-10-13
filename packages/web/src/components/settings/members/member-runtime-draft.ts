@@ -1,12 +1,14 @@
 import { serializeCommandArgs } from '../../hub-cat-editor.acp';
 import { type HubCatEditorFormState, initialState, splitCommandArgs } from '../../hub-cat-editor.model';
 import type { MemberDraft } from './member-editor-state';
+import type { NativeLoginState } from './native-login-state';
 
 export interface RuntimeChoice {
   id: string;
   label: string;
   clientId: HubCatEditorFormState['clientId'];
   installed: boolean;
+  readiness?: NativeLoginState;
   discoveryStatus?: 'configured' | 'acp_profile_missing' | 'not_installed';
   models: string[];
   configuredModel?: string;

@@ -78,7 +78,7 @@ export function RecommendedTeamSetup({
         ) : (
           <>
             <p className="mb-5 text-sm leading-6 text-cafe-secondary">
-              模型和思考强度默认跟随工具，使用工具当前的登录配置。检测到安装不代表已登录，创建时不会调用模型。
+              模型和思考强度默认跟随工具。已检查本机登录状态，创建不会调用模型；登录后仍需实际连接验证额度和网络。
             </p>
             {available.length ? (
               <div className="grid gap-3 lg:grid-cols-3">{available.map(card)}</div>

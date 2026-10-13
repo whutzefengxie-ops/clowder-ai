@@ -47,7 +47,7 @@ export function MemberRuntimeFields({
     const controller = new AbortController();
     setLoading(true);
     setError(false);
-    apiFetch('/api/cats/native-runtimes', { signal: controller.signal })
+    apiFetch(`/api/cats/native-runtimes${refresh ? '?refresh=1' : ''}`, { signal: controller.signal })
       .then(async (response) => {
         if (!response.ok) throw Error('discovery');
         return (await response.json()) as { runtimes: RuntimeChoice[] };
@@ -82,8 +82,10 @@ export function MemberRuntimeFields({
   const native = form.configurationSource === 'native_tool';
   const availableAccounts = filterAccounts(form.clientId, accounts),
     identity = availableAccounts.find((item) => item.id === form.accountRef);
+  const needsLogin =
+    native && !form.accountRef && !form.cliConfigArgs.length && selected?.readiness?.status === 'login_required';
   const { catalog, loading: catalogLoading } = useRuntimeCatalog(
-    selected?.id.startsWith('draft:') ? undefined : selected?.id,
+    needsLogin || selected?.id.startsWith('draft:') ? undefined : selected?.id,
     editing ? form.catId : undefined,
     form.accountRef,
     form.defaultModel,
@@ -163,6 +165,23 @@ export function MemberRuntimeFields({
           )}
         </p>
       )}
+      {needsLogin && (
+        <div role="status" className="rounded-xl bg-conn-amber-bg p-4 text-sm text-conn-amber-text">
+          <p className="font-semibold">{t(`${tool} 尚未登录`, `${tool} is not signed in`)}</p>
+          <p className="mt-2">
+            {t(
+              '先在此运行环境登录工具，再点击刷新。配置可以保存，但登录前无法回复。',
+              'Sign in to the tool in this runtime environment, then refresh. You can save the configuration, but it cannot reply before sign-in.',
+            )}
+          </p>
+          <code className="mt-2 block">{selected?.readiness?.loginCommand}</code>
+        </div>
+      )}
+      {native && !form.accountRef && selected?.readiness?.status === 'configured' && (
+        <p className="text-sm text-cafe-secondary">
+          {t('已检测登录 · 实际连接待验证', 'Sign-in detected · Connection not yet verified')}
+        </p>
+      )}
       <div className="grid gap-4 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
         <MemberChoicePicker
           label={t('模型', 'Model')}
@@ -187,7 +206,14 @@ export function MemberRuntimeFields({
         />
       </div>
       <div className="space-y-1 text-sm text-cafe-secondary" role="status">
-        {catalogLoading ? (
+        {needsLogin ? (
+          <p>
+            {t(
+              '登录后可读取模型目录；当前可以保留跟随工具设置。',
+              'Sign in to read the model catalog; inherited settings can be kept for now.',
+            )}
+          </p>
+        ) : catalogLoading ? (
           <p>{t(`正在读取 ${tool} 的模型…`, `Reading ${tool} models…`)}</p>
         ) : catalog?.status === 'live' ? (
           <p>

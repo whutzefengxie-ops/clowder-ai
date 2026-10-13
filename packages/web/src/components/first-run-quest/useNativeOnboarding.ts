@@ -78,7 +78,9 @@ export function useNativeOnboarding(
     setErrorStage(null);
     void Promise.all([
       readJson<{ userId: string }>('/api/session', { signal: controller.signal }),
-      readJson<{ runtimes: RuntimeChoice[] }>('/api/cats/native-runtimes', { signal: controller.signal }),
+      readJson<{ runtimes: RuntimeChoice[] }>(`/api/cats/native-runtimes${reload ? '?refresh=1' : ''}`, {
+        signal: controller.signal,
+      }),
       readJson<{ templates: TemplateCard[] }>('/api/cat-templates', { signal: controller.signal }),
       mode === 'members'
         ? readJson<{ cats: CatData[] }>('/api/cats', { signal: controller.signal })
