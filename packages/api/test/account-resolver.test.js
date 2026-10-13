@@ -3,26 +3,12 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, it } from 'node:test';
+import { ACCOUNT_AUTH_ENV_KEYS } from './helpers/account-auth-environment.js';
 
 describe('account-resolver (4b unified runtime resolution)', () => {
   let projectRoot;
   let previousGlobalRoot;
-  const ENV_KEYS_TO_ISOLATE = [
-    'CAT_CAFE_GLOBAL_CONFIG_ROOT',
-    'ANTHROPIC_API_KEY',
-    'OPENAI_API_KEY',
-    'GOOGLE_API_KEY',
-    'GEMINI_API_KEY',
-    'OPENAI_BASE_URL',
-    'OPENAI_API_BASE',
-    'GEMINI_BASE_URL',
-    'MOONSHOT_API_KEY',
-    'KIMI_BASE_URL',
-    'CAT_CAFE_KIMI_BASE_URL',
-    'OPENCODE_BASE_URL',
-    'CAT_CAFE_OC_BASE_URL',
-    'HOME',
-  ];
+  const ENV_KEYS_TO_ISOLATE = ['CAT_CAFE_GLOBAL_CONFIG_ROOT', ...ACCOUNT_AUTH_ENV_KEYS, 'HOME'];
   const savedEnv = {};
 
   beforeEach(async () => {

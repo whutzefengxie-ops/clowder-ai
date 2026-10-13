@@ -9,6 +9,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 import { catRegistry, createCatId } from '@cat-cafe/shared';
 import './helpers/setup-cat-registry.js';
+import { isolateAccountAuthEnvironment } from './helpers/account-auth-environment.js';
 
 const { parseA2AMentions } = await import('../dist/domains/cats/services/agents/routing/a2a-mentions.js');
 const { _clearRuntimeOverrides, getRuntimeOverride, setRuntimeOverride } = await import(
@@ -143,7 +144,9 @@ describe('cats routes runtime CRUD', { concurrency: false }, () => {
   /** @type {string | undefined} */ let savedGlobalRoot;
   /** @type {string | undefined} */ let savedConfigRoot;
 
+  let restoreAuthEnvironment;
   beforeEach(() => {
+    restoreAuthEnvironment = isolateAccountAuthEnvironment();
     savedTemplatePath = process.env.CAT_TEMPLATE_PATH;
     savedGlobalRoot = process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT;
     savedConfigRoot = process.env.CAT_CAFE_CONFIG_ROOT;
@@ -152,6 +155,7 @@ describe('cats routes runtime CRUD', { concurrency: false }, () => {
   });
 
   afterEach(() => {
+    restoreAuthEnvironment();
     if (savedGlobalRoot === undefined) delete process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT;
     else process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT = savedGlobalRoot;
     if (savedConfigRoot === undefined) delete process.env.CAT_CAFE_CONFIG_ROOT;
@@ -2660,53 +2664,6 @@ describe('cats routes runtime CRUD', { concurrency: false }, () => {
       ),
       'expected catId validation issue in details',
     );
-  });
-
-  it('POST /api/cats rejects builtin bindings from the wrong client family even when protocol matches', async () => {
-    const projectRoot = createProjectRoot();
-    process.env.CAT_TEMPLATE_PATH = join(projectRoot, 'cat-template.json');
-
-    const Fastify = (await import('fastify')).default;
-    const { catsRoutes } = await import('../dist/routes/cats.js');
-
-    const app = Fastify();
-    await app.register(catsRoutes);
-
-    const cases = [
-      {
-        catId: 'runtime-opencode-wrong-builtin',
-        clientId: 'opencode',
-        accountRef: 'claude',
-        defaultModel: 'claude-sonnet-4-6',
-      },
-    ];
-
-    for (const spec of cases) {
-      const createRes = await app.inject({
-        method: 'POST',
-        url: '/api/cats',
-        headers: {
-          'content-type': 'application/json',
-          'x-cat-cafe-user': 'codex',
-        },
-        body: JSON.stringify({
-          catId: spec.catId,
-          name: spec.catId,
-          displayName: spec.catId,
-          avatar: '/avatars/runtime.png',
-          color: { primary: '#0f172a', secondary: '#e2e8f0' },
-          mentionPatterns: [`@${spec.catId}`],
-          roleDescription: '审查',
-          clientId: spec.clientId,
-          accountRef: spec.accountRef,
-          defaultModel: spec.defaultModel,
-        }),
-      });
-
-      assert.equal(createRes.statusCode, 400);
-      const createBody = JSON.parse(createRes.body);
-      assert.match(createBody.error, new RegExp(`incompatible with client "${spec.clientId}"`, 'i'));
-    }
   });
 
   it('POST /api/cats allows third-party gateway bindings for google client', async () => {

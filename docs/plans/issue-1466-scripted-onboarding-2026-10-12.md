@@ -79,6 +79,14 @@ zts 最新冲突通知与限定复核均采纳；mind 先前对 HTTP LAN journey
 
 ## 状态与验收
 
+### 2026-10-13：认证测试前提与 dc582b899 衔接
+
+采纳 zts 新测试环境 P2，详见 [认证前提与 main 集成诊断](../bug-report/issue1466-auth-test-environment.md)。OAuth 拒绝和假 API key 继承分开测试；测试环境固定并精确恢复，补齐同型 CRUD/resolver/F320 OAuth 前提。清空和故意污染认证环境两种进程各 151 条通过；产品认证及已修 ACP 逻辑不改。
+
+main 更新到 `dc582b899` 后 PR 的冲突状态重新核实，保留 #1587 Windows 路径及输入框自适应修复，解决唯一 thread-utils 冲突。上游相关及原引导/成员/ACP Web 77 文件、491 条通过，完整前端类型通过；不沿用旧 main 的可合并或旧 HEAD CI 结论。
+
+维护者 macOS 首次预览整组 30/33 的失败保留，单独重放绿不替代首次失败；本机 Windows 9 pass / 24 POSIX skip 也不能替代 Mac。待首次失败的完整运行材料和同环境整组复验，未凭猜测修改 POSIX 清理合同。当前阶段不合入、不关闭母 issue。
+
 ### 2026-10-13：集成后的反馈修复
 
 - 采纳 zts 对 ACP 最终输入未进入用户历史的 P1，详情见 [DSH 工具事件诊断](../bug-report/issue1466-dsh-acp-tool-events.md)。终态输入通过同一调用进入实时/持久历史及回放，不重复建立工具调用。
