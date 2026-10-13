@@ -28,5 +28,27 @@ tips_exempt: Repairs the existing first-use journey and adds local diagnostic lo
 ## 验证与部署边界
 
 - 经典与新版偏好、导航、保留未发送草稿、文档语言、浮动窗口回归已通过；首屏首次绘制与身份 hydrateRoot 均观察 RED → GREEN。
-- 本轮相关首启/shell 37 文件 152 项通过；后续身份与引導定向回归 19 项通过。正式构建及实页最终耗时仍在验证中，不将当前记录当作最终性能验收。
+- 最终相关首启/shell/设置/身份回归 38 文件 156 项通过；正式 Next build（含类型检查）成功。独立复核通过源码 `0e8d3f247cf8262817651656e7befc6a3af3fafb`，原 storage P2 已闭环。
 - 继续同一 feature worktree / PR #1519；现有生产、5150 与用户 5152 数据保留。正式性能复验使用独立构建目录；API/Web 的 revision stamps 应对应真实构建，禁止绕过部署一致性保护。
+
+## 正式构建实页结果
+
+5152 Web / 3152 API 已切换到独立部署副本，版本为 `0e8d3f247cf8262817651656e7befc6a3af3fafb`；6366 Redis 保持原进程，API health revision 和 ready 均通过。重启前后 2 个角色、1 个会话的标识一致，cat-template 配置摘要一致。生产 3003/3004/6399 的监听进程未改变。
+
+| 观察点 | 正式版实测 |
+| --- | --- |
+| 首次浏览器文档 TTFB / HTML 返回 | 385ms / 396ms |
+| AppShell 客户端初始化观察点 | 743ms |
+| 已加载脚本解码体积 | 5,916,564 字节；开发版为 91,777,129 字节 |
+| 点击首页演示 → 演示挂载并自动开始 | 5ms |
+| 9 个演示阶段计划计时的实际偏差 | 1–15ms |
+| 演示成果 → 创建页挂载 | 70ms |
+| 同一次点击 → 推荐结果就绪 | 2458ms，包含 CLI 登录检测 |
+
+这些是本机各一次真实路径观察，不是跨机器基准；脚本数字是解码体积，不是传输量。`hydratedMs` 表示 AppShell effect 的初始化观察点，不能当作所有 React 边界水合完成。
+
+实页从首屏即为新版首页；正式版复测未捕获 hydration 或其他浏览器 error。演示实际自动完成设计 → 开发 → 审查 → 返工 → 复核，并在同一个右侧成果中成功添加任务。创建 Link 的 documentTimeOrigin 与首页相同，dialog 和 iframe 均清理为 0，推荐结果识别原已添加的 Codex / Claude，未重复创建角色。CLI 检测仍需约 2.4 秒，页面先显示明确的检测进度，未通过省略认证检查伪装成秒开。
+
+取证位置（本机独立实例，未发布认证或用户内容）：`artifacts/issue1466-zero-start-20261013/production-browser-timings.json`、`before-production-switch.json`、`after-production-switch.json`、`final-perf-regression.log`、`production-build.log`、`production-homepage.jpg`、`production-demo-complete.jpg`、`production-team-setup.jpg`。
+
+截至本轮核对，远端 main 又前进至 `449134fed`，只读 merge-tree 发现新的配置/布局等合流冲突；远端旧 HEAD 的 public test 还有红灯。本次首屏修复与已部署验收不等于整条 PR 可以合入，最新 main 合流和全量 CI 仍需另行验证。
