@@ -69,6 +69,7 @@ export function transformAcpToolEvent(
     timestamp,
     ...(id ? { toolUseId: id } : {}),
     ...(snapshot.name !== undefined ? { toolName: snapshot.name } : {}),
+    ...(snapshot.input !== undefined ? { toolInput: snapshot.input } : {}),
     content: toolResultText(snapshot.payload),
     toolResultStatus: inner.status === 'failed' ? 'error' : 'ok',
     ...(Object.keys(snapshot.payload).length ? { toolRawPayload: snapshot.payload } : {}),

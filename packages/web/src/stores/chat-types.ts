@@ -98,6 +98,8 @@ export interface ToolEvent {
   type: 'tool_use' | 'tool_result';
   label: string;
   detail?: string;
+  /** Terminal input for the same native tool call, separate from its output detail. */
+  inputDetail?: string;
   resultMeta?: string;
   /** Native provider pair key; Hub UI event ids may differ between use/result rows. */
   toolUseId?: string;

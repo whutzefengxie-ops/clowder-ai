@@ -3255,6 +3255,7 @@ export function handleBackgroundAgentMessage(
       type: 'tool_result',
       label: `${msg.catId} ← result`,
       detail,
+      ...(msg.toolInput !== undefined ? { inputDetail: safeJsonDetail(msg.toolInput) } : {}),
       ...(resultMeta ? { resultMeta } : {}),
       timestamp: msg.timestamp,
     };
@@ -5302,6 +5303,7 @@ export function useAgentMessages() {
           type: 'tool_result',
           label: `${msg.catId} ← result`,
           detail,
+          ...(msg.toolInput !== undefined ? { inputDetail: safeJsonDetail(msg.toolInput) } : {}),
           ...(resultMeta ? { resultMeta } : {}),
           timestamp: Date.now(),
         };

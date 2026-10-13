@@ -7,6 +7,7 @@ import { MemberAdditionalFields } from './MemberAdditionalFields';
 import { MemberChangeSummary } from './MemberChangeSummary';
 import { MemberCloudIdentity } from './MemberCloudIdentity';
 import { MemberCodexOptions } from './MemberCodexOptions';
+import { MemberDeleteButton } from './MemberDeleteButton';
 import { MemberRuntimeFields } from './MemberRuntimeFields';
 import { useMemberEditor } from './useMemberEditor';
 
@@ -23,11 +24,13 @@ export function MemberSettingsPage({
   cats,
   onSaved,
   onBack,
+  onDelete,
 }: {
   cat: CatData | null;
   cats: CatData[];
   onSaved: (cat: CatData, trace?: MemberSaveTrace) => Promise<void>;
   onBack: () => void;
+  onDelete?: () => Promise<void>;
 }) {
   const router = useRouter();
   const [runtimeValid, setRuntimeValid] = useState(true);
@@ -88,6 +91,7 @@ export function MemberSettingsPage({
           {english ? '中文' : 'English'}
         </button>
       </div>
+      {cat && onDelete && <MemberDeleteButton disabled={saving} onDelete={onDelete} t={t} />}
       {!ready ? (
         <div role="status" className="rounded-xl bg-[var(--console-card-bg)] p-6 text-sm">
           {editor.error || t('加载成员配置…', 'Loading configuration…')}

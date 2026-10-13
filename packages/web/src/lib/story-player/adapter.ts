@@ -173,6 +173,7 @@ function formatReplayVisibleSystemInfo(parsed: Record<string, unknown>) {
 interface ToolResultPayload {
   content: string;
   isError: boolean;
+  input?: string;
 }
 
 /**
@@ -203,6 +204,7 @@ function buildToolResultIndex(raw: RawTranscriptEvent[]): Map<string, ToolResult
       index.set(key, {
         content: extractContent(evt.event),
         isError: isToolResultError(evt.event),
+        input: normalizeToolInput(evt.event),
       });
     }
   }
@@ -271,6 +273,7 @@ function enrichToolCall(
     const matched = toolResults.get(key);
     if (matched) {
       replayEvent.toolResult = matched.content;
+      if (matched.input !== undefined) replayEvent.toolInput = matched.input;
       replayEvent.toolIsError = matched.isError;
     }
   } else {

@@ -187,7 +187,7 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
   // AC-6: research=multi hint from Signal study "多猫研究" button
   const isResearchMode = searchParams?.get('research') === 'multi';
   const { clearTasks } = useTaskStore();
-  const { cats, isLoading, hasFetched } = useCatData();
+  const { cats } = useCatData();
   const isV2 = useShellPresentation() === 'v2';
   const coCreator = useCoCreatorConfig();
   const workspaceWorktreeId = useChatStore((s) => s.workspaceWorktreeId);

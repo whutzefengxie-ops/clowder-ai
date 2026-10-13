@@ -154,18 +154,20 @@ export function SettingsContent({ section, initialEditCatId }: SettingsContentPr
         variant: 'danger',
         confirmLabel: '删除',
       });
-      if (!ok) return;
+      if (!ok) return false;
       setFetchError(null);
       try {
         const res = await apiFetch(`/api/cats/${cat.id}`, { method: 'DELETE' });
         if (!res.ok) {
           const payload = (await res.json().catch(() => ({}))) as Record<string, unknown>;
           setFetchError((payload.error as string) ?? `删除失败 (${res.status})`);
-          return;
+          return false;
         }
         await Promise.all([fetchData(), refresh()]);
+        return true;
       } catch {
         setFetchError('删除失败');
+        return false;
       }
     },
     [confirm, fetchData, refresh],

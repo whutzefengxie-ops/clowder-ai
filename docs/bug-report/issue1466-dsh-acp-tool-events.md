@@ -69,3 +69,15 @@ flowchart LR
 - 后续同版本实测仍需要成功/失败工具、取消后上游静止、有历史的跨进程恢复，以及角色间模型/强度/MCP/身份隔离。L0、steering、compact、子 Agent 等桥扩展独立设计，继续列为未完成。
 
 本轮修复统一进入 `feat/onboarding-first-run` / PR#1519，继续锚定 issue#1466，不另开实现线。生产环境未部署本轮 API 变更。
+
+## 2026-10-13：最终输入必须进入用户历史
+
+采纳 [zts 的续接 P1](https://github.com/zts212653/clowder-ai/pull/1519#issuecomment-6136120843)。前述 JSONL 验证不能证明历史界面正确：pending 无输入或仅有部分输入，后续 in_progress 补齐时，首次 tool_use 仍保留旧值；结果只投影输出，用户看不到最终输入。
+
+- ACP 的唯一终态结果携带快照中的 `toolInput`。服务端保存为可选 `inputDetail`，与输出 `detail` 分开；不再次发 tool_use，不重开追踪跨度。
+- 共享投影按 `executionRef + toolUseId` 将最终输入折叠回对应调用。v2 回复记录、引用校验与 classic CLI 使用同一输入；前台/后台流式处理保留该字段。原始 transcript 与消息历史转换后的 Story Player、调用轨迹均消费终态输入。
+- 旧数据没有新字段时沿用原输入；孤立结果或其他 execution 的相同 ID 不修改当前输入。历史摘要仍有原 200 字符输入 / 1500 字符输出上限，完整原始参数保留在 transcript；不宣称摘要是无限长的完整参数，也不回写旧历史。
+- `acp-final-input-history.test.js` 对完整、缺省、部分首帧输入先观察 RED，再验证转换器和可见投影。额外使用真实 `AcpAgentService → toStoredToolEvent → RedisMessageStore.append → 新 MessageStore.getById` 验证持久化边界；Redis 传输用内存 hash fixture，无生产连接。
+- 前端新增反例验证真实 active/background 处理器、classic/v2 记录、JSON 往返恢复、Story Player、调用轨迹及跨 execution 隔离。此次定向 API 回归 110 通过；受影响前端回归 87 文件、572 通过 / 1 明确跳过。原有 352 条集成回归属于前一集成提交，未冒充新增提交的全量证据。
+
+该续接修复仍不等于真实 DSH 安装、成功/失败、取消静止或跨进程恢复验收；这些边界维持前述未完成状态。

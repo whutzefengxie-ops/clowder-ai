@@ -188,6 +188,7 @@ function consumeToolResult(state: TimelineBuildState, envelope: RawTranscriptEve
   if (unmatchedIndex >= 0) state.unmatchedTools.splice(unmatchedIndex, 1);
   if (row.toolUseId) state.toolRowsById.delete(row.toolUseId);
   row.result = toolResultText(envelope.event);
+  if (envelope.event.toolInput !== undefined) row.input = envelope.event.toolInput;
   row.resultStatus = toolResultStatus(envelope.event);
   if (row.toolName === 'unknown' && typeof toolName === 'string' && toolName.length > 0) row.toolName = toolName;
   if (row.source === 'unknown') row.source = toolSource(envelope.event.toolSource);

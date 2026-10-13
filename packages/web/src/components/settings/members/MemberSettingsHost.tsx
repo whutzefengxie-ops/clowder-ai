@@ -47,7 +47,7 @@ export function MemberSettingsHost({
   onSaved: (cat: CatData, trace?: MemberSaveTrace) => Promise<void>;
   onTeamCreated: () => Promise<void>;
   onEditCoCreator: () => void;
-  onDelete: (cat: CatData) => void;
+  onDelete: (cat: CatData) => Promise<boolean>;
   onToggle: (cat: CatData) => void;
   togglingCatId: string | null;
 }) {
@@ -63,6 +63,11 @@ export function MemberSettingsHost({
   return (
     <MemberCopyProvider>
       <div ref={returnToList.host}>
+        {config && configError && (
+          <p role="alert" className="mb-4 rounded-xl bg-conn-red-bg p-4 text-sm text-conn-red-text">
+            {configError}
+          </p>
+        )}
         {v2 ? (
           <MemberListHost
             hidden={editorOpen}
@@ -111,7 +116,16 @@ export function MemberSettingsHost({
         )}
         {editorOpen &&
           (editingCat ? (
-            <MemberSettingsPage key={editingCat.id} cat={editingCat} cats={cats} onBack={close} onSaved={onSaved} />
+            <MemberSettingsPage
+              key={editingCat.id}
+              cat={editingCat}
+              cats={cats}
+              onBack={close}
+              onSaved={onSaved}
+              onDelete={async () => {
+                if (await onDelete(editingCat)) close();
+              }}
+            />
           ) : (
             <MemberCreationPage
               key={creationView}

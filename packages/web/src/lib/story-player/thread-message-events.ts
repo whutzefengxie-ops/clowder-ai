@@ -104,6 +104,7 @@ function toolEventPayload(tool: ToolEvent): Record<string, unknown> {
   }
   return {
     type: 'tool_result',
+    ...(tool.inputDetail !== undefined ? { toolInput: tool.inputDetail } : {}),
     ...(toolUseId ? { toolUseId } : {}),
     ...(tool.detail ? { content: tool.detail } : {}),
     ...(tool.status ? { status: tool.status } : {}),
