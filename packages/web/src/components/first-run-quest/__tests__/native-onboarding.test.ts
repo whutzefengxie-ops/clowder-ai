@@ -47,9 +47,9 @@ describe('native onboarding recommendations', () => {
         personality: '',
         configurationSource: 'managed_account',
         mentionPatterns: [],
-        roster: { available: false },
+        roster: { available: false, family: 'codex', roles: ['assistant'], lead: false, evaluation: '' },
       },
-    ] as CatData[];
+    ] satisfies CatData[];
     const partners = recommendNativePartners(
       [...runtimes, { ...runtimes[2], id: 'dsh-other', acp: { command: 'node', startupArgs: ['other.js'] } }],
       templates,
