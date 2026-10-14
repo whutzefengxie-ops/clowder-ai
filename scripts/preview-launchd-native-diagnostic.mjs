@@ -57,6 +57,7 @@ const config = {
     '--',
     process.execPath,
     ownProgram,
+    '--multiline-test=a\nb',
   ],
 };
 try {

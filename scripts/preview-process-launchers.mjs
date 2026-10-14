@@ -281,7 +281,7 @@ export async function launchDetached(config) {
     closeSync(logFd);
   }
   child.unref();
-  const identity = await captureIdentity(child.pid);
+  const identity = await captureDetachedIdentity(child.pid);
   if (!identity) {
     try {
       process.kill(process.platform === 'win32' ? child.pid : -child.pid, 'SIGTERM');
@@ -289,4 +289,13 @@ export async function launchDetached(config) {
     throw new Error(`started PID ${child.pid} but could not capture its process identity`);
   }
   return { origin: 'detached', pid: child.pid, ...identity };
+}
+
+async function captureDetachedIdentity(pid) {
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const identity = readProcessIdentity(pid);
+    if (identity) return identity;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  return null;
 }
