@@ -41,12 +41,22 @@ export function acpContextUsage(
 /** One tracker per invocation. Unknown experimental token scope stays raw instead of becoming spend. */
 export class AcpPromptUsageTracker {
   private readonly deltas = new Set<string>();
-  private readonly totals: TokenUsage = {};
+  private totals: TokenUsage = {};
+  private sessionId?: string;
+  private negotiated = false;
+  bind(sessionId: string, negotiated: boolean): void {
+    if (this.sessionId !== sessionId || this.negotiated !== negotiated) {
+      this.deltas.clear();
+      this.totals = {};
+    }
+    this.sessionId = sessionId;
+    this.negotiated = negotiated;
+  }
   accept(result: AcpPromptResult): { usage?: TokenUsage; scope: string; kind: string } {
     const raw = isAcpRecord(result.usage) ? result.usage : undefined;
     const ns = isAcpRecord(result._meta?.[ACP_CONTRACT_META]) ? result._meta[ACP_CONTRACT_META] : undefined;
     const meter = isAcpRecord(ns) && isAcpRecord(ns.usage) ? ns.usage : undefined;
-    if (!raw || meter?.scope !== 'prompt' || (meter.kind !== 'snapshot' && meter.kind !== 'delta'))
+    if (!this.negotiated || !raw || meter?.scope !== 'prompt' || (meter.kind !== 'snapshot' && meter.kind !== 'delta'))
       return { scope: 'unknown', kind: 'unknown' };
     if (meter.kind === 'delta') {
       if (typeof meter.id !== 'string' || !meter.id) return { scope: 'unknown', kind: 'delta_without_id' };

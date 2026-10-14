@@ -99,6 +99,7 @@ export class AcpHttpStreamClient {
   /** Sessions whose local prompt ended before provider completion was acknowledged. */
   private readonly unquiescedSessionIds = new Set<string>();
   private readonly closedSessionIds = new Set<string>();
+  private readonly sessionCloseRequests = new Map<string, Promise<void>>();
   private port: number | null = null;
   private baseUrl = '';
   private initResult: AcpInitializeResult | null = null;
@@ -262,11 +263,18 @@ export class AcpHttpStreamClient {
     );
   }
   async closeSession(sessionId: string): Promise<void> {
+    const existing = this.sessionCloseRequests.get(sessionId);
+    if (existing) return existing;
     if (this.sessionCancelCallbacks.has(sessionId))
       throw new Error('ACP session is active; close requires a settled prompt');
-    await closeAcpSession((method, params) => this.httpRequest(method, params), this.negotiated(), sessionId);
+    // Unsupported close has no side effect; an admitted close retires the binding before wire/ack.
+    if (!this.negotiated().supportsClose())
+      return closeAcpSession((method, params) => this.httpRequest(method, params), this.negotiated(), sessionId);
     this.closedSessionIds.add(sessionId);
     this.permissions.cancelSession(sessionId);
+    const closing = closeAcpSession((method, params) => this.httpRequest(method, params), this.negotiated(), sessionId);
+    this.sessionCloseRequests.set(sessionId, closing);
+    return closing;
   }
   async readExecutionBinding(sessionId: string): Promise<Record<string, unknown>> {
     return readAcpExecutionBinding((method, params) => this.httpRequest(method, params), this.negotiated(), sessionId);

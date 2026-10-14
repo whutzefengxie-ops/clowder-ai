@@ -39,10 +39,15 @@ export function transformAcpToolEvent(
   state?: AcpSessionState,
 ): AgentMessage | AgentMessage[] | null {
   const id = typeof inner.toolCallId === 'string' && inner.toolCallId.length > 0 ? inner.toolCallId : undefined;
-  if (state && id && state.finalEmittedByCallId.has(id)) return null;
-  const snapshot = mergeSnapshot(inner, id ? state?.toolCallsByCallId.get(id) : undefined);
-  const known = Boolean(state && id && state.emittedToolUseByCallId.has(id));
-  if (state && id) state.toolCallsByCallId.set(id, snapshot);
+  // Fixed Claude bridge vendor extension; this is ancestry, never approval authority.
+  const vendor = isRecord(inner._meta) && isRecord(inner._meta.claudeCode) ? inner._meta.claudeCode : undefined;
+  const parent =
+    typeof vendor?.parentToolUseId === 'string' && vendor.parentToolUseId ? vendor.parentToolUseId : undefined;
+  const key = id ? JSON.stringify([parent ?? null, id]) : undefined;
+  if (state && key && state.finalEmittedByCallId.has(key)) return null;
+  const snapshot = mergeSnapshot(inner, key ? state?.toolCallsByCallId.get(key) : undefined);
+  const known = Boolean(state && key && state.emittedToolUseByCallId.has(key));
+  if (state && key) state.toolCallsByCallId.set(key, snapshot);
   if (!snapshot.name && !known && inner.sessionUpdate === 'tool_call') {
     log.warn({ toolCallId: id, keys: Object.keys(inner) }, 'ACP tool name unavailable');
   }
@@ -52,6 +57,7 @@ export function transformAcpToolEvent(
     metadata,
     timestamp,
     ...(id ? { toolUseId: id } : {}),
+    ...(parent ? { toolParentUseId: parent } : {}),
     ...(snapshot.name !== undefined ? { toolName: snapshot.name } : {}),
     ...(snapshot.input !== undefined ? { toolInput: snapshot.input } : {}),
     ...(Object.keys(snapshot.payload).length ? { toolRawPayload: snapshot.payload } : {}),
@@ -59,7 +65,7 @@ export function transformAcpToolEvent(
   const final = inner.status === 'completed' || inner.status === 'failed';
   if (!final) {
     if (known) return null;
-    if (state && id) state.emittedToolUseByCallId.add(id);
+    if (state && key) state.emittedToolUseByCallId.add(key);
     return toolUse;
   }
   const result: AgentMessage = {
@@ -68,16 +74,17 @@ export function transformAcpToolEvent(
     metadata,
     timestamp,
     ...(id ? { toolUseId: id } : {}),
+    ...(parent ? { toolParentUseId: parent } : {}),
     ...(snapshot.name !== undefined ? { toolName: snapshot.name } : {}),
     ...(snapshot.input !== undefined ? { toolInput: snapshot.input } : {}),
     content: toolResultText(snapshot.payload),
     toolResultStatus: inner.status === 'failed' ? 'error' : 'ok',
     ...(Object.keys(snapshot.payload).length ? { toolRawPayload: snapshot.payload } : {}),
   };
-  if (state && id) {
-    state.emittedToolUseByCallId.add(id);
-    state.finalEmittedByCallId.add(id);
-    state.toolCallsByCallId.delete(id);
+  if (state && key) {
+    state.emittedToolUseByCallId.add(key);
+    state.finalEmittedByCallId.add(key);
+    state.toolCallsByCallId.delete(key);
   }
   // Orphan final observations still produce a pair, with no fabricated name or ID.
   return known ? result : [toolUse, result];

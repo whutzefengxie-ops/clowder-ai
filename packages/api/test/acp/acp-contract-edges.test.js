@@ -113,8 +113,19 @@ test('unknown prompt token scope never claims invocation cost or context', () =>
     undefined,
   );
 });
+test('reserved usage metadata cannot promote scope before initialize negotiation', () => {
+  assert.equal(
+    new AcpPromptUsageTracker().accept({
+      stopReason: 'end_turn',
+      usage: { inputTokens: 5 },
+      _meta: { [NS]: { usage: { scope: 'prompt', kind: 'snapshot' } } },
+    }).usage,
+    undefined,
+  );
+});
 test('explicit prompt snapshots replace; identified deltas add once; negative values never enter totals', () => {
   const tracker = new AcpPromptUsageTracker();
+  tracker.bind('native', true);
   const result = (kind, count, id) => ({
     stopReason: 'end_turn',
     usage: { inputTokens: count },

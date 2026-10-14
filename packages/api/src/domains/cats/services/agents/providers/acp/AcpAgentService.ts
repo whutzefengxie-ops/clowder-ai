@@ -38,7 +38,7 @@ import {
 } from './AcpClient.js';
 import { type AcpLease, type AcpProcessPool, DEFAULT_ACP_IDLE_TTL_MS, type PoolKey } from './AcpProcessPool.js';
 import { AcpSessionCancelledError } from './acp-cancellation-error.js';
-import { AcpCapabilityError } from './acp-capabilities.js';
+import { AcpCapabilityError, isAcpRecord } from './acp-capabilities.js';
 import {
   bindSessionCredentialFile,
   type PreparedCredentialEnv,
@@ -313,6 +313,19 @@ export class AcpAgentService implements AgentService {
     this.observedUsageUpdate = false; // Never carry evidence across pool generations/invocations.
     const usageTracker = new AcpPromptUsageTracker();
     const metadata: MessageMetadata = { provider: this.providerName, model: this.modelName, modelVerified: false };
+    const requiredInstruction = options?.systemPrompt ?? options?.resumeFallbackSystemPrompt;
+    if (this.executionRequirements.trustedInstructions && !requiredInstruction?.trim()) {
+      yield {
+        type: 'error',
+        catId: this.catId,
+        errorCode: 'trusted_instructions_missing',
+        error: '必需的可信指令为空，执行未启动。',
+        metadata,
+        timestamp: Date.now(),
+      };
+      yield { type: 'done', catId: this.catId, metadata, timestamp: Date.now() };
+      return;
+    }
     // Diagnostic context: threadId + invocationId for correlating thread-specific failures
     const threadId = options?.auditContext?.threadId;
     const invocationId = options?.auditContext?.invocationId;
@@ -393,9 +406,12 @@ export class AcpAgentService implements AgentService {
         : {}),
     };
     const adoptSession = async (session: AcpNewSessionResult) => {
+      const provenance = client.capabilityProvenance?.();
+      const declared = isAcpRecord(provenance?.declared) ? provenance.declared : undefined;
+      usageTracker.bind(session.sessionId, declared?.promptUsage === true);
       metadata.diagnostics = {
         ...metadata.diagnostics,
-        acpCapabilities: client.capabilityProvenance?.(),
+        acpCapabilities: provenance,
         acpInstructions: sessionOptions.instructions
           ? { revision: sessionOptions.instructions.revision, status: 'bridge_receipt_validated' }
           : { status: 'legacy_user_prefix_unverified' },
@@ -676,6 +692,10 @@ export class AcpAgentService implements AgentService {
           metadata.diagnostics = {
             ...metadata.diagnostics,
             acpPromptResult: result,
+            acpPromptReceipts: [
+              ...(Array.isArray(metadata.diagnostics?.acpPromptReceipts) ? metadata.diagnostics.acpPromptReceipts : []),
+              { sessionId, result },
+            ],
             acpPromptUsage: {
               source: 'acp.prompt_result',
               sessionId,

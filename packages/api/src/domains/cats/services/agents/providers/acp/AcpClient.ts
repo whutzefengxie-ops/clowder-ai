@@ -214,6 +214,7 @@ export class AcpClient {
    */
   private readonly sessionPromptPendingIds = new Map<string, string>();
   private readonly closedSessionIds = new Set<string>();
+  private readonly sessionCloseRequests = new Map<string, Promise<void>>();
   /** Client-level capacity signal — always captured regardless of listeners.
    *  Fallback for delayed stderr arriving after invoke listener is removed. */
   private _recentCapacitySignal: AcpCapacitySignal | null = null;
@@ -384,11 +385,18 @@ export class AcpClient {
     );
   }
   async closeSession(sessionId: string): Promise<void> {
+    const existing = this.sessionCloseRequests.get(sessionId);
+    if (existing) return existing;
     if (this.sessionPromptPendingIds.has(sessionId))
       throw new Error('ACP session is active; close requires a settled prompt');
-    await closeAcpSession((method, params) => this.sendRequest(method, params), this.negotiated(), sessionId);
+    // Unsupported close has no side effect; an admitted close retires the binding before wire/ack.
+    if (!this.negotiated().supportsClose())
+      return closeAcpSession((method, params) => this.sendRequest(method, params), this.negotiated(), sessionId);
     this.closedSessionIds.add(sessionId);
     this.permissions.cancelSession(sessionId);
+    const closing = closeAcpSession((method, params) => this.sendRequest(method, params), this.negotiated(), sessionId);
+    this.sessionCloseRequests.set(sessionId, closing);
+    return closing;
   }
   async readExecutionBinding(sessionId: string): Promise<Record<string, unknown>> {
     return readAcpExecutionBinding((method, params) => this.sendRequest(method, params), this.negotiated(), sessionId);

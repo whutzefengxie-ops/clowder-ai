@@ -25,6 +25,7 @@ export async function imageFixture(
     executionResult,
     agentPackets = [],
     packetTransform = (packets) => packets,
+    beforeResponse = () => {},
   } = {},
 ) {
   const captured = [];
@@ -103,7 +104,9 @@ export async function imageFixture(
       for (const line of chunk.toString().trim().split('\n')) {
         const message = JSON.parse(line);
         const packets = packetTransform(responses(message), message);
-        setImmediate(() => packets.forEach((packet) => stdout.write(`${JSON.stringify(packet)}\n`)));
+        Promise.resolve(beforeResponse(message)).then(() =>
+          setImmediate(() => packets.forEach((packet) => stdout.write(`${JSON.stringify(packet)}\n`))),
+        );
       }
     });
   else {
@@ -112,7 +115,9 @@ export async function imageFixture(
       for await (const chunk of req) body += chunk;
       res.setHeader('Content-Type', 'application/x-ndjson');
       const message = JSON.parse(body);
-      for (const packet of packetTransform(responses(message), message)) res.write(`${JSON.stringify(packet)}\n`);
+      const packets = packetTransform(responses(message), message);
+      await beforeResponse(message);
+      for (const packet of packets) res.write(`${JSON.stringify(packet)}\n`);
       res.end();
     });
     await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));

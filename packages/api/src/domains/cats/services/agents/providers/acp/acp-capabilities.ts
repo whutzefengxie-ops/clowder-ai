@@ -53,6 +53,7 @@ export class AcpCapabilitySnapshot {
         mcp: { http: caps.mcpCapabilities?.http === true, sse: caps.mcpCapabilities?.sse === true },
         session: { resume: isAcpRecord(caps.sessionCapabilities?.resume), close: this.supportsClose() },
         contractVersion: contract ? 1 : 'unknown',
+        promptUsage: isAcpRecord(contract?.usage) && contract.usage.scope === 'prompt',
       },
       hostConsumer: ['image', 'tool_facts', 'permission', 'session_restore', 'instruction_receipt', 'model_readback'],
       nativeVerification: 'unverified' as const,
