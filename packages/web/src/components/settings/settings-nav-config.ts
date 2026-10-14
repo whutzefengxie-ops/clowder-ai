@@ -12,14 +12,14 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     label: '成员与运行时',
     icon: 'users',
     color: 'var(--color-opus-primary)',
-    description: '选择猫猫伙伴，设置使用的工具、模型和职责。',
+    description: '管理成员、模型和接入方式，查看当前接活状态与派活偏好。',
   },
   {
     id: 'profiles',
     label: '能力画像来源',
     icon: 'file-text',
     color: 'var(--color-opus-primary)',
-    description: 'F208 能力画像的观察、证据与来源追溯；不编辑实时路由状态或协作偏好。',
+    description: '查看成员能力的观察记录、依据与来源。',
   },
   {
     id: 'accounts',

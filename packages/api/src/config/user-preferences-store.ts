@@ -52,6 +52,7 @@ export function readUserPreferences(projectRoot: string): UserPreferences {
 export function updateUserPreferences(
   projectRoot: string,
   update: (current: UserPreferences) => UserPreferences,
+  _options: { strictRead?: boolean } = {},
 ): UserPreferences {
   // The single API owner cannot yield between read and atomic rename, so same-process
   // writers cannot interleave. Cross-process writers are outside runtime ownership.

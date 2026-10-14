@@ -36,6 +36,7 @@ import { ServiceStatusPanel } from './ServiceStatusPanel';
 import { SettingsPageHeader } from './SettingsPageHeader';
 import { SettingsPlaceholder } from './SettingsPlaceholder';
 import { SkillsContent } from './SkillsContent';
+import { useSettingsDetailText } from './settings-detail.shell-copy';
 import { SETTINGS_SECTIONS } from './settings-nav-config';
 
 interface SettingsContentProps {
@@ -47,6 +48,7 @@ export function SettingsContent({ section, initialEditCatId }: SettingsContentPr
   const router = useRouter();
   const searchParams = useSearchParams();
   const accountsText = useShellCopy(accountsCopy);
+  const sectionText = useSettingsDetailText();
   const { cats, refresh, isLoading: catsLoading, hasFetched: catsKnown } = useCatData();
   const isV2 = useShellPresentation() === 'v2';
   const [config, setConfig] = useState<ConfigData | null>(null);
@@ -298,8 +300,16 @@ export function SettingsContent({ section, initialEditCatId }: SettingsContentPr
     <div className={section === 'members' ? `mx-auto w-full ${editorOpen ? 'max-w-5xl' : 'max-w-6xl'}` : undefined}>
       {!(section === 'members' && (editorOpen || isV2)) && (
         <SettingsPageHeader
-          title={section === 'accounts' ? accountsText.title : meta.label}
-          subtitle={section === 'accounts' ? accountsText.subtitle : meta.description}
+          title={section === 'accounts' ? accountsText.title : (sectionText(section)?.title ?? meta.label)}
+          subtitle={
+            section === 'accounts'
+              ? isV2
+                ? undefined
+                : accountsText.subtitle
+              : isV2
+                ? (sectionText(section)?.description ?? meta.description)
+                : meta.description
+          }
         >
           {section === 'members' && config && <HubOverviewToolbar onAddMember={() => openMember(null)} />}
           {section === 'im' && <ConnectorPluginInstallButton onInstalled={() => setImRefreshKey((k) => k + 1)} />}

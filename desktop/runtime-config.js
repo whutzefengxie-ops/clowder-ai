@@ -1,6 +1,28 @@
 const path = require('node:path');
 const fs = require('node:fs');
 
+function canonicalWithMissingSuffix(value) {
+  const suffix = [];
+  let existing = path.resolve(value);
+  while (!fs.existsSync(existing)) {
+    const parent = path.dirname(existing);
+    if (parent === existing) throw new Error('Cannot resolve desktop data boundary');
+    suffix.unshift(path.basename(existing));
+    existing = parent;
+  }
+  return path.join(fs.realpathSync.native(existing), ...suffix);
+}
+
+function assertDesktopDataBoundary(instanceRoot, installRoot) {
+  const candidate = canonicalWithMissingSuffix(instanceRoot);
+  for (const directory of ['desktop-dist', 'packages', 'node', path.join('scripts', 'node_modules')]) {
+    const payload = canonicalWithMissingSuffix(path.join(installRoot, directory));
+    const relative = path.relative(payload, candidate);
+    if (!relative || (!path.isAbsolute(relative) && relative !== '..' && !relative.startsWith(`..${path.sep}`)))
+      throw new Error(`Desktop instance root is inside the installation replacement boundary: ${directory}`);
+  }
+}
+
 /** Opt-in isolated desktop instance; ordinary launches retain all historical defaults. */
 function resolveDesktopRuntime(env = process.env, executable = process.execPath) {
   // Persisted installer identity survives upgrades launched without the original shell.
@@ -18,6 +40,10 @@ function resolveDesktopRuntime(env = process.env, executable = process.execPath)
   const instanceRoot = env.CAT_CAFE_DESKTOP_INSTANCE_ROOT;
   if (instanceRoot === undefined) return { frontendPort: 3003, apiPort: 3004, redisPort: 6399, instanceRoot: null };
   if (!instanceRoot || !path.isAbsolute(instanceRoot)) throw new Error('Desktop instance root must be absolute');
+  assertDesktopDataBoundary(
+    instanceRoot,
+    path.basename(directory).toLowerCase() === 'desktop-dist' ? path.dirname(directory) : directory,
+  );
   const port = (key) => {
     const raw = env[key];
     const value = /^\d+$/.test(raw || '') ? Number(raw) : NaN;

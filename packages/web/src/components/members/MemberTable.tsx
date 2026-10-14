@@ -1,11 +1,11 @@
 'use client';
-import { useRef } from 'react';
+import { useId, useRef } from 'react';
 import type { CatData } from '@/hooks/useCatData';
 import { AvatarImageWithFallback } from '../AvatarImageWithFallback';
-import { MemberCodexAccount } from '../codex-accounts/MemberCodexAccount';
 import type { ConfigData } from '../config-viewer-types';
 import type { RoutingContextQueryState } from '../routing-context/useRoutingContext';
 import { useMembersCopy, useMemberText } from './editor-presentation';
+import { MemberAccountName } from './MemberAccountName';
 import { MemberIdentityDetails } from './MemberIdentityDetails';
 import { MemberRuntimeSummary } from './MemberRuntimeSummary';
 import { MemberStatus } from './MemberStatus';
@@ -38,18 +38,23 @@ export function MemberTable({
   togglingCatId: string | null;
 }) {
   const dragging = useRef<string | null>(null);
+  const sortHelpId = useId();
   const t = useMemberText();
   const copy = useMembersCopy();
   const now = useMemberClock(routing.data);
   const loginFor = useMemberLoginCheck(list.allCats.some((cat) => cat.configurationSource === 'native_tool'));
   return (
     <div className="member-table-scroll">
+      <p id={sortHelpId} className="sr-only">
+        {t('拖动左侧排序；键盘用上下方向键')}
+      </p>
       <table className="member-table">
         <thead>
           <tr>
             <th aria-label={t('排序')} />
             <th>{t('成员')}</th>
             <th>{t('模型')}</th>
+            <th>{t('账号')}</th>
             <th>{t('接入方式')}</th>
             <th>{t('现在')}</th>
             <th>{t('@ 名字')}</th>
@@ -65,6 +70,7 @@ export function MemberTable({
                   {config.coCreator.name} <small>{t('所有者')}</small>
                 </button>
               </td>
+              <td>—</td>
               <td>—</td>
               <td>—</td>
               <td>—</td>
@@ -96,6 +102,7 @@ export function MemberTable({
                   type="button"
                   className="member-sort"
                   aria-label={copy.sortLabel(cat.nickname || cat.displayName)}
+                  aria-describedby={sortHelpId}
                   disabled={list.savingOrder}
                   onKeyDown={(event) => {
                     if (!['ArrowUp', 'ArrowDown'].includes(event.key)) return;
@@ -144,7 +151,9 @@ export function MemberTable({
               </td>
               <td>
                 <MemberRuntimeSummary cat={cat} />
-                <MemberCodexAccount cat={cat} accounts={list.accounts} />
+              </td>
+              <td>
+                <MemberAccountName cat={cat} accounts={list.accounts} />
               </td>
               <td>{t(memberTransport(cat))}</td>
               <td>

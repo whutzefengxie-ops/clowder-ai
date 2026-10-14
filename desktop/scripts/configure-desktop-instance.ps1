@@ -6,9 +6,58 @@ param(
   [string]$RedisPort
 )
 $ErrorActionPreference = 'Stop'
+# Resolve existing ancestors by handle so junctions and short paths cannot hide
+# data inside payloads. Missing suffixes are checked before creating any files.
+Add-Type -TypeDefinition @'
+using System;
+using System.Text;
+using System.Runtime.InteropServices;
+using Microsoft.Win32.SafeHandles;
+public static class DesktopBoundaryPath {
+  [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true)]
+  static extern SafeFileHandle CreateFile(string path, uint access, uint share, IntPtr security, uint creation, uint flags, IntPtr template);
+  [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true)]
+  static extern uint GetFinalPathNameByHandle(SafeFileHandle handle, StringBuilder result, uint size, uint flags);
+  public static string Resolve(string path) {
+    using (var handle = CreateFile(path, 0, 7, IntPtr.Zero, 3, 0x02000000, IntPtr.Zero)) {
+      if (handle.IsInvalid) throw new System.ComponentModel.Win32Exception();
+      var text = new StringBuilder(32768);
+      uint count = GetFinalPathNameByHandle(handle, text, (uint)text.Capacity, 0);
+      if (count == 0 || count >= text.Capacity) throw new System.ComponentModel.Win32Exception();
+      var final = text.ToString();
+      if (final.StartsWith(@"\\?\UNC\")) return @"\\" + final.Substring(8);
+      return final.StartsWith(@"\\?\") ? final.Substring(4) : final;
+    }
+  }
+}
+'@
+function Resolve-BoundaryPath([string]$path) {
+  $existing = [IO.Path]::GetFullPath($path)
+  $suffix = @()
+  while (-not (Test-Path -LiteralPath $existing)) {
+    $parent = [IO.Path]::GetDirectoryName($existing)
+    if (-not $parent -or $parent -eq $existing) { throw 'Cannot resolve desktop data boundary' }
+    $suffix = @([IO.Path]::GetFileName($existing)) + $suffix
+    $existing = $parent
+  }
+  $canonical = [DesktopBoundaryPath]::Resolve($existing)
+  foreach ($part in $suffix) { $canonical = Join-Path $canonical $part }
+  return $canonical.TrimEnd('\')
+}
+function Assert-DataBoundary([string]$root) {
+  $candidate = Resolve-BoundaryPath $root
+  foreach ($directory in @('desktop-dist','packages','node','scripts\node_modules')) {
+    $payload = Resolve-BoundaryPath (Join-Path $AppDir $directory)
+    if ($candidate.Equals($payload, [StringComparison]::OrdinalIgnoreCase) -or
+        $candidate.StartsWith($payload + '\', [StringComparison]::OrdinalIgnoreCase)) {
+      throw "Desktop instance root is inside the installation replacement boundary: $directory"
+    }
+  }
+}
 function Assert-Identity($identity) {
   if ($identity -isnot [pscustomobject] -or -not $identity.CAT_CAFE_DESKTOP_INSTANCE_ROOT -or
       -not [IO.Path]::IsPathRooted($identity.CAT_CAFE_DESKTOP_INSTANCE_ROOT)) { throw 'Invalid instance root' }
+  Assert-DataBoundary $identity.CAT_CAFE_DESKTOP_INSTANCE_ROOT
   $ports = @($identity.FRONTEND_PORT, $identity.API_SERVER_PORT, $identity.REDIS_PORT)
   foreach ($text in $ports) {
     if ($text -notmatch '^\d+$') { throw 'Invalid isolated port' }

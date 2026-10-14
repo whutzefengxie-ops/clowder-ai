@@ -5,6 +5,7 @@ import type { MemberDraft } from './member-editor-state';
 const labels: Record<keyof HubCatEditorFormState, [string, string]> = {
   accountBindingMode: ['账号跟随方式', 'Account binding mode'],
   agyNativeEnabled: ['Antigravity 原生运行', 'Native Antigravity'],
+  agyAutoApprove: ['Antigravity 自动审批', 'Antigravity automatic approval'],
   agyProfileEnabled: ['Antigravity 配置档', 'Antigravity profile'],
   agyProfileId: ['Antigravity 配置档 ID', 'Antigravity profile ID'],
   agyHomeRoot: ['Antigravity 用户目录', 'Antigravity home directory'],
