@@ -237,7 +237,7 @@ Type: filesandordirs; Name: "{app}\node"
 [UninstallRun]
 Filename: "powershell.exe"; \
   Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\scripts\stop-installed-desktop.ps1"" -AppDir ""{app}"""; \
-  Flags: runhidden waituntilterminated runasoriginaluser
+  Flags: runhidden waituntilterminated
 [UninstallDelete]
 ; Directories created by tar.exe extraction are not tracked by Inno Setup's
 ; built-in file registry — must be explicitly listed for clean removal.
