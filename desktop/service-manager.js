@@ -10,6 +10,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const crypto = require('node:crypto');
 const { resolveDesktopRuntime } = require('./runtime-config');
+const { initializeDesktopTemplate } = require('./desktop-template');
 
 const POLL_INTERVAL_MS = 500;
 const MAX_WAIT_MS = 120_000;
@@ -407,20 +408,12 @@ class ServiceManager {
     // the install location and tries to bootstrap .cat-cafe/cat-catalog.json
     // inside Program Files → EPERM → fallback to placeholder model names.
     const userProjectDir = path.join(userDataDir, 'project');
-    const templateSrc = path.join(this.root, 'cat-template.json');
     const templateDst = path.join(userProjectDir, 'cat-template.json');
     try {
-      if (fs.existsSync(templateSrc)) {
-        const srcStat = fs.statSync(templateSrc);
-        const dstStat = fs.existsSync(templateDst) ? fs.statSync(templateDst) : null;
-        if (!dstStat || srcStat.mtimeMs > dstStat.mtimeMs) {
-          fs.copyFileSync(templateSrc, templateDst);
-          log(`cat-template.json copied to ${templateDst}`);
-        }
-      } else {
-        log(`WARNING: cat-template.json missing at ${templateSrc}`);
-      }
+      initializeDesktopTemplate(this.root, userProjectDir);
+      log(`Persistent cat-template.json ready at ${templateDst}`);
     } catch (err) {
+      if (!fs.existsSync(templateDst)) throw new Error(`Unable to initialize persistent template: ${err.message}`);
       log(`Warning: failed to mirror cat-template.json: ${err.message}`);
     }
 

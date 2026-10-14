@@ -68,6 +68,7 @@
       "project-root.js",
       "renderer-link-policy.js",
       "service-manager.js",
+      "desktop-template.js",
       "api-startup-probe.mjs",
       "startup-state.js",
       "runtime-config.js",
