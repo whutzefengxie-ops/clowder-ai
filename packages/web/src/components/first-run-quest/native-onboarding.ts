@@ -10,6 +10,8 @@ export interface NativePartner {
   runtime: RuntimeChoice;
   form: HubCatEditorFormState;
   selected: boolean;
+  /** Persisted before POST; independent of descriptor-based UI identity and member ID. */
+  creationRequestKey?: string;
   existingId?: string;
   missingExisting?: boolean;
   recoverable?: { id: string; form: HubCatEditorFormState };
@@ -40,7 +42,7 @@ export function recommendNativePartners(
       runtime.acp?.startupArgs,
       runtime.acp?.transport ?? 'stdio',
     ]);
-    // The short digest remains a legacy lookup only; ownership uses the full descriptor.
+    // Full descriptor equality prevents short-hash collisions in the local partner index.
     const key = runtime.acp ? `acp:${encodeURIComponent(descriptor)}` : runtime.id;
     if (seen.has(descriptor)) return [];
     seen.add(descriptor);
@@ -75,6 +77,9 @@ export function recommendNativePartners(
     return [
       {
         id: key,
+        creationRequestKey: runtime.acp
+          ? `acp-${Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join('')}`
+          : key,
         runtime,
         form: existing
           ? initialState(existing)

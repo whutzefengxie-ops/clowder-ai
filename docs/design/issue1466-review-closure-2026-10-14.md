@@ -28,7 +28,7 @@ Codex App Server、Claude 原生客户端、DSH ACP 的 descriptor 与账号配�
 6. 同一请求并发或响应丢失后的重试返回原成员；不同请求占用相同短名会在持锁期间分配序号。同一请求改变配置返回 409。
 7. 重放不能提前返回：权限继承、registry reconciliation、配置发布仍执行，可恢复“已落盘、发布中断”。
 8. 已提交但没有旧回执的草稿不能凭 ID 认领。若发现对应旧伙伴，提供用户明确点击的复用入口。存量 ID、关系引用、账户和历史消息不迁移。
-9. ACP 的请求身份采用完整 command / startupArgs / transport 描述，短散列只用于旧角色查询。独立 review 提供的真实散列碰撞 `1e1unfl` / `hlxo45` 已加入“两伙伴均创建、分别恢复”的反例。
+9. ACP 的本地相等判断和伙伴索引使用完整 command / startupArgs / transport 描述，短散列只用于旧角色查询。新创建请求使用先持久化的 128 位随机 token，避免完整参数编码后超过请求头限制；服务端仍以完整 payloadHash 校验。旧 short-v1 pending 草稿保留原请求 key 和完整 body，响应丢失后的升级重试不会换归属。独立 review 提供的真实散列碰撞 `1e1unfl` / `hlxo45` 已加入“两伙伴均创建、分别恢复”的反例。
 10. 旧草稿的 existingId 必须仍在当前 roster 且 descriptor 一致；已删除成员提示确认重新创建，不能凭本地旧 existingId 回报成功。
 
 Architecture cell: identity-session（现有 runtime catalog owner）。Map delta: none。

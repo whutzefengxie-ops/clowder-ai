@@ -112,6 +112,9 @@ export function useNativeOnboarding(
             const confirmed = Boolean(previous.existingId || saved?.created[partner.id]);
             return {
               ...partner,
+              // A lost-response retry must retain the exact key of the original persisted request.
+              creationRequestKey:
+                previous.creationRequestKey ?? (saved?.idScheme ? previous.id : partner.creationRequestKey),
               existingId: confirmed && savedMember ? savedMember.id : undefined,
               missingExisting: Boolean(previous.existingId && !savedMember),
               ...(!confirmed && savedMember && !saved?.idScheme
@@ -204,7 +207,10 @@ export function useNativeOnboarding(
             }
           : await readJson<{ cat: { id: string; displayName: string; mentionPatterns: string[] } }>('/api/cats', {
               method: 'POST',
-              headers: { ...headers, 'Idempotency-Key': `onboarding:${current.journeyId}:cat:${id}` },
+              headers: {
+                ...headers,
+                'Idempotency-Key': `onboarding:${current.journeyId}:cat:${partner.creationRequestKey ?? id}`,
+              },
               body: JSON.stringify(buildCatPayload(partner.form)),
             });
         progress = {
