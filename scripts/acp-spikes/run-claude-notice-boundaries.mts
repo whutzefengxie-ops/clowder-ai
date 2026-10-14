@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { createClaudeBoundaryHarness } from './claude-boundary-harness.mjs';
+import { checkNativeHash, nativeBinding } from './claude-native-binding.mjs';
 
 if (process.env.CLOWDER_SPIKE_AUTHORIZED !== '1') throw new Error('Explicit bounded model-test authorization required');
 const ingressFault = process.env.CLOWDER_SPIKE_SDK_VARIANT === 'ingress';
@@ -25,12 +26,13 @@ await mkdir(join(dir, 'home'), { recursive: true });
 await writeFile(join(dir, 'fixture/sentinel.txt'), 'ACP-CLAUDE-BOUNDARY-SENTINEL-20261014\n');
 const trace = join(dir, 'tools.jsonl');
 await writeFile(trace, '');
-const nativePath = resolve('.cat-cafe/tmp/pinned-cli/claude-2.1.296/claude.exe');
+const nativePin = nativeBinding(process.env.CLOWDER_SPIKE_NATIVE_VERSION);
+const nativePath = resolve(`.cat-cafe/tmp/pinned-cli/claude-${nativePin.version}/claude.exe`);
 const hash = async (path: string) =>
   createHash('sha256')
     .update(await readFile(path))
     .digest('hex');
-assert.equal(await hash(nativePath), '76de74f7694a5bdc03378a5f837c9e132827bf004c98c276bc4e9094ff06769a');
+await checkNativeHash(nativePath, nativePin);
 const started = Date.now();
 const sdkPackage = JSON.parse(
   await readFile(join(bridge, 'node_modules/@anthropic-ai/claude-agent-sdk/package.json'), 'utf8'),
@@ -39,7 +41,8 @@ const outcome: Record<string, unknown> = {
   evidenceKind: 'real_native_SDK_ACP_with_synthetic_human_answer',
   bridgePin: 'd0aafb1ca26427285ffaeac8d8a4452fff28e9c3',
   sdkVersion: sdkPackage.version,
-  nativeVersion: '2.1.296',
+  nativeVersion: nativePin.version,
+  nativeSha256: nativePin.sha256,
   bundleHash: await hash(join(bridge, 'dist/acp-agent.js')),
   fixtureHash: await hash('scripts/acp-spikes/readonly-fixture-mcp.mjs'),
   hooksDisabled: true,
@@ -50,13 +53,18 @@ const outcome: Record<string, unknown> = {
   productionElicitationHandler: false,
 };
 outcome.runnerSources = await Promise.all(
-  ['run-claude-notice-boundaries.mts', 'claude-boundary-harness.mts'].map(async (file) => {
+  ['run-claude-notice-boundaries.mts', 'claude-boundary-harness.mts', 'claude-native-binding.mts'].map(async (file) => {
     const source = `scripts/acp-spikes/${file}`;
     await writeFile(join(dir, file), await readFile(source));
     return { source, sha256: await hash(source) };
   }),
 );
-outcome.executionParameters = { variant: process.env.CLOWDER_SPIKE_SDK_VARIANT ?? 'baseline', runId, authorized: true };
+outcome.executionParameters = {
+  variant: process.env.CLOWDER_SPIKE_SDK_VARIANT ?? 'baseline',
+  nativeVersion: nativePin.version,
+  runId,
+  authorized: true,
+};
 const {
   client,
   events,
