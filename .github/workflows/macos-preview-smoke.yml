@@ -45,4 +45,4 @@ jobs:
         # The ordinary preview launcher never logs user commands or environments.
         run: |
           node scripts/preview-launchd-native-diagnostic.mjs
-          node --test --test-concurrency=1 scripts/preview-launchd-identity.test.mjs scripts/preview-process.test.mjs scripts/preview-process-stop.test.mjs scripts/preview-process-cleanup.test.mjs scripts/preview-named-alpha-cleanup.test.mjs
+          node --test --test-concurrency=1 scripts/preview-lease-command.test.mjs scripts/preview-launchd-identity.test.mjs scripts/preview-process.test.mjs scripts/preview-process-stop.test.mjs scripts/preview-process-cleanup.test.mjs scripts/preview-named-alpha-cleanup.test.mjs

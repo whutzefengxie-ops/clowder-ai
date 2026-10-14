@@ -14,18 +14,32 @@ const TERM_GRACE_MS = 30_000;
 
 function parseArgs(argv) {
   const separator = argv.indexOf('--');
+  const encoded = argv[4] === '--command-base64' && argv.length === 6;
   if (
     argv[0] !== '--expires-at' ||
     !argv[1] ||
-    ![2, 4].includes(separator) ||
+    (!encoded && ![2, 4].includes(separator)) ||
+    (encoded && argv[2] !== '--completion-path') ||
     (separator === 4 && argv[2] !== '--completion-path')
   ) {
     throw new Error('usage: preview-process-lease-runner --expires-at ISO -- COMMAND [ARGS...]');
   }
   const expiresAt = Date.parse(argv[1]);
-  const command = argv.slice(separator + 1);
-  if (!Number.isFinite(expiresAt) || command.length === 0) throw new Error('invalid expiry or empty command');
-  return { command, expiresAt, completionPath: separator === 4 ? argv[3] : undefined };
+  let command = argv.slice(separator + 1);
+  if (encoded) {
+    try {
+      if (!/^[a-zA-Z0-9_-]+$/.test(argv[5])) throw new Error();
+      const bytes = Buffer.from(argv[5], 'base64url');
+      if (bytes.toString('base64url') !== argv[5]) throw new Error();
+      command = JSON.parse(bytes.toString('utf8'));
+      if (!Array.isArray(command) || !command.every((value) => typeof value === 'string')) throw new Error();
+    } catch {
+      throw new Error('invalid encoded preview command');
+    }
+  }
+  if (!Number.isFinite(expiresAt) || command.length === 0 || !command[0])
+    throw new Error('invalid expiry or empty command');
+  return { command, expiresAt, completionPath: encoded || separator === 4 ? argv[3] : undefined };
 }
 
 function signalOwnedChild(child, signal) {

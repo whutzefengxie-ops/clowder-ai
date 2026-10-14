@@ -11,6 +11,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { delimiter, isAbsolute, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const LAUNCHD_ENV_KEYS = ['HOME', 'LANG', 'LC_ALL', 'LC_CTYPE', 'PATH', 'SHELL', 'TMPDIR'];
 const SENSITIVE_ENV_KEYS = [
@@ -147,7 +148,19 @@ function stableLaunchdPath(cwd, currentPath = '') {
 function writeLaunchdPlist(config) {
   const env = cleanChildEnv();
   env.PATH = stableLaunchdPath(config.cwd, env.PATH);
-  const command = [resolveExecutable(config.command[0], config.cwd, env), ...config.command.slice(1)];
+  let args = config.command.slice(1);
+  // BSD ps escapes control characters in argv (e.g. newline => \012). Keep the
+  // supervisor's proof single-line while its child receives the original argv.
+  if (config.command[1] === fileURLToPath(new URL('./preview-process-lease-runner.mjs', import.meta.url))) {
+    const separator = args.indexOf('--');
+    if (separator < 0) throw new Error('Invalid preview lease command');
+    args = [
+      ...args.slice(0, separator),
+      '--command-base64',
+      Buffer.from(JSON.stringify(args.slice(separator + 1))).toString('base64url'),
+    ];
+  }
+  const command = [resolveExecutable(config.command[0], config.cwd, env), ...args];
   const environmentEntries = LAUNCHD_ENV_KEYS.flatMap((key) => {
     const value = env[key];
     return typeof value === 'string' && value.length > 0

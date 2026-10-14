@@ -39,6 +39,8 @@ jobs:
         run: >-
           node --test
           scripts/run-preserving-signal-exit.test.mjs
+          scripts/preview-detached-identity.test.mjs
+          scripts/preview-lease-command.test.mjs
           packages/web/test/sanitize-widget-types.test.mjs
       - name: Build the actual web application
         run: pnpm --filter @cat-cafe/web build
