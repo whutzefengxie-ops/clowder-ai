@@ -127,5 +127,5 @@ playground 分支的 ACP 实现验证了"配置接入"的可行性（填表 → 
 - [完整方案、能力矩阵与实施路线](../design/2026-10-13-issue-1590-acp-unification/README.md)
 - [#1590 的来源讨论](https://github.com/zts212653/clowder-ai/issues/1590)
 
-当前为方案草案与源码诊断，未运行真实模型或迁移默认 carrier；上游 maintainer 尚未决定默认 ACP-first。
+当前已实施 W1 的 print/SDK 结果修复、W2.S 权限安全下限与两条隔离原型，完成限定真实模型、持久历史和组件重放验证；详细范围见[执行回执](../design/2026-10-13-issue-1590-acp-unification/execution-evidence.md)。完整 G0/G1、两条原型的全部反例和整体迁移尚未放行，默认 carrier 未切换。
 完整实现仍须通过方案定义的逐 binding 能力、原生增强、真实 UI/历史、取消/恢复与回滚门禁。

@@ -306,7 +306,6 @@ interface AgentMsg {
   toolName?: string;
   /** Tool input params (for 'tool_use' events from backend) */
   toolInput?: Record<string, unknown>;
-  toolUseId?: string;
   toolParentUseId?: string;
   toolResultStatus?: 'ok' | 'error' | 'unknown';
   /** Message origin: stream = CLI stdout (thinking), callback = MCP post_message (speech) */
@@ -537,7 +536,6 @@ export interface BackgroundAgentMessage {
   toolExecutionRef?: string;
   toolName?: string;
   toolInput?: Record<string, unknown>;
-  toolUseId?: string;
   toolParentUseId?: string;
   toolResultStatus?: 'ok' | 'error' | 'unknown';
   error?: string;
@@ -3197,7 +3195,8 @@ export function handleBackgroundAgentMessage(
       isCurrentFreshParentSeed(bgActiveRef, msg.timestamp, msg.seq);
     const toolUseEventData: ToolEvent = {
       ...liveToolEventFacts(msg),
-      id: msg.toolEventId ?? `bg-tool-use-${msg.timestamp}-${options.nextBgSeq()}`,      ...(msg.toolExecutionRef ? { executionRef: msg.toolExecutionRef } : {}),
+      id: msg.toolEventId ?? `bg-tool-use-${msg.timestamp}-${options.nextBgSeq()}`,
+      ...(msg.toolExecutionRef ? { executionRef: msg.toolExecutionRef } : {}),
       type: 'tool_use',
       label: `${msg.catId} → ${toolName}`,
       ...(detail ? { detail } : {}),
@@ -3256,7 +3255,8 @@ export function handleBackgroundAgentMessage(
       isCurrentFreshParentSeed(bgActiveRef, msg.timestamp, msg.seq);
     const toolResultEventData: ToolEvent = {
       ...liveToolEventFacts(msg),
-      id: msg.toolEventId ?? `bg-tool-result-${msg.timestamp}-${options.nextBgSeq()}`,      ...(msg.toolExecutionRef ? { executionRef: msg.toolExecutionRef } : {}),
+      id: msg.toolEventId ?? `bg-tool-result-${msg.timestamp}-${options.nextBgSeq()}`,
+      ...(msg.toolExecutionRef ? { executionRef: msg.toolExecutionRef } : {}),
       type: 'tool_result',
       label: `${msg.catId} ← result`,
       detail,
@@ -5218,7 +5218,8 @@ export function useAgentMessages() {
         // 或 invocationless 回退 legacy appendToolEvent。
         const toolUseEventData: ToolEvent = {
           ...liveToolEventFacts(msg),
-          id: msg.toolEventId ?? `tool-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,          ...(msg.toolExecutionRef ? { executionRef: msg.toolExecutionRef } : {}),
+          id: msg.toolEventId ?? `tool-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          ...(msg.toolExecutionRef ? { executionRef: msg.toolExecutionRef } : {}),
           type: 'tool_use',
           label: `${msg.catId} → ${toolName}`,
           ...(detail ? { detail } : {}),
@@ -5301,7 +5302,8 @@ export function useAgentMessages() {
         // F183 Phase B1.6 — tool_result wire-up via reducer (same pattern as tool_use).
         const toolResultEventData: ToolEvent = {
           ...liveToolEventFacts(msg),
-          id: msg.toolEventId ?? `toolr-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,          ...(msg.toolExecutionRef ? { executionRef: msg.toolExecutionRef } : {}),
+          id: msg.toolEventId ?? `toolr-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          ...(msg.toolExecutionRef ? { executionRef: msg.toolExecutionRef } : {}),
           type: 'tool_result',
           label: `${msg.catId} ← result`,
           detail,

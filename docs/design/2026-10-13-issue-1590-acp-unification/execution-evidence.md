@@ -8,6 +8,8 @@ tips_exempt: {reason: "修复既有工具结果与权限语义，当前阶段没
 
 # W0/W1、W2.S 与原型执行回执
 
+2026-10-14 首批公开提交已对齐新 main 并重新复验，正式 Web tsc 本轮通过；历史捕获与当前检查的区别见 [公开 PR 回执](public-pr-evidence.md)。
+
 工作区：`G:/AIwork/clowder-ai/worktrees/feat-acp-unified-client-plan-1590`；分支 `feat/acp-unified-client-plan-1590`。生产配置、服务和历史未用于本分支验收，迁移未开启。
 
 ## 阶段与门禁

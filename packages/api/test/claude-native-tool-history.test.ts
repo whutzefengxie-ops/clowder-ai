@@ -65,8 +65,9 @@ for (const capture of ['native', 'sdk']) {
       read.events.map((e) => e.event.toolRawPayload),
       parsed.map((e) => e.toolRawPayload),
     );
-    const stored = parsed.map(toStoredToolEvent).filter((e) => e !== null);
+    const stored = parsed.map((event) => toStoredToolEvent(event, 'w1-real-invocation')).filter((e) => e !== null);
     assert.equal(stored.length, 10);
+    assert.ok(stored.every((event) => event.executionRef === 'w1-real-invocation'));
     assert.equal(stored.filter((e) => e.status === 'error').length, 2);
     assert.equal(stored.filter((e) => e.toolParentUseId).length, 4);
     await writeFile(join(parent, 'replay.json'), JSON.stringify(read.events));

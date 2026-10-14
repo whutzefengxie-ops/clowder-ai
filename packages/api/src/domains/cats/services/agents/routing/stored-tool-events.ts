@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { StoredToolEvent } from '../../stores/ports/MessageStore.js';
 import type { AgentMessage } from '../../types.js';
 
@@ -53,4 +54,3 @@ export function toStoredToolEvent(
     ...(msg.toolResultStatus ? { status: msg.toolResultStatus } : {}),
   };
 }
-import { randomUUID } from 'node:crypto';
