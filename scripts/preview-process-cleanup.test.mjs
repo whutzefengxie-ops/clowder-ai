@@ -62,7 +62,7 @@ report_cleanup null
 `
     : 'report_cleanup() { :; }'
 }
-trap 'printf "cleanup-start\\n" >> events; ${waitForWrapperExit ? 'while kill -0 "$WRAPPER_PID" 2>/dev/null; do :; done; printf "wrapper-proven-dead\\n" >> events' : `sleep ${seconds}`}; printf "cleanup-complete\\n" >> events; report_cleanup ${exitCode}; exit ${exitCode}' TERM
+trap 'trap "" INT TERM; printf "cleanup-start\\n" >> events; ${waitForWrapperExit ? 'while kill -0 "$WRAPPER_PID" 2>/dev/null; do :; done; printf "wrapper-proven-dead\\n" >> events' : `sleep ${seconds}`}; printf "cleanup-complete\\n" >> events; report_cleanup ${exitCode}; exit ${exitCode}' TERM
 printf '%s\\n' "$$" > owner.pid
 "${process.execPath}" server.cjs &
 printf '%s\\n' "$!" > server.pid
@@ -197,6 +197,11 @@ test('lease expiry also waits for a reported wrapped launcher cleanup', async (t
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   assert.match(f.events(), /cleanup-complete/, 'expiry must not truncate cleanup');
+  assert.equal(
+    f.events().match(/cleanup-start/g)?.length,
+    1,
+    'the cooperating owner drains once despite pnpm signal forwarding',
+  );
   const stopped = f.run('stop');
   assert.equal(stopped.status, 0, stopped.stderr || stopped.stdout);
 });
