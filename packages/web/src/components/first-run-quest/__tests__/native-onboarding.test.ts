@@ -17,13 +17,6 @@ const runtimes = [
   { id: 'claude', label: 'Claude Code', clientId: 'anthropic' as const, installed: true, models: ['opus'] },
   {
     id: 'codex',
-    displayName: 'Existing Codex',
-    clientId: 'openai',
-    defaultModel: 'old-model',
-    avatar: '',
-    color: { primary: '#123456', secondary: '#abcdef' },
-    roleDescription: '',
-    personality: '',
     label: 'Codex',
     clientId: 'openai' as const,
     installed: true,
@@ -43,7 +36,19 @@ const runtimes = [
 describe('native onboarding recommendations', () => {
   it('allocates short IDs in the complete existing namespace without changing runtime descriptors', () => {
     const existing = [
-      { id: 'codex', configurationSource: 'managed_account', mentionPatterns: [], roster: { available: false } },
+      {
+        id: 'codex',
+        displayName: 'Existing Codex',
+        clientId: 'openai',
+        defaultModel: 'old-model',
+        avatar: '',
+        color: { primary: '#123456', secondary: '#abcdef' },
+        roleDescription: '',
+        personality: '',
+        configurationSource: 'managed_account',
+        mentionPatterns: [],
+        roster: { available: false },
+      },
     ] as CatData[];
     const partners = recommendNativePartners(
       [...runtimes, { ...runtimes[2], id: 'dsh-other', acp: { command: 'node', startupArgs: ['other.js'] } }],
