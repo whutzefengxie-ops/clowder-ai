@@ -9,8 +9,8 @@ it('W4.P fixed upstream bridge exports native state and forwards caller target t
   vi.spyOn(agent, 'getSessionState').mockReturnValue(state);
   const native = vi.spyOn(fixture.getCodexAppServerClient(), 'turnSteer').mockResolvedValue({ turnId: 'A' });
   const snapshot = await agent.extMethod('_clowder/v1/control', { action: 'snapshot', sessionId: 'session-id' });
-  expect(snapshot.nativeTurnId).toBe('B');
-  expect(snapshot.nativeSessionId).toBe('session-id');
+  expect(snapshot['nativeTurnId']).toBe('B');
+  expect(snapshot['nativeSessionId']).toBe('session-id');
   const receipt = await agent.extMethod('_clowder/v1/control', {
     action: 'steer',
     operationId: 'operation',
@@ -24,6 +24,6 @@ it('W4.P fixed upstream bridge exports native state and forwards caller target t
     expectedTurnId: 'A',
     input: [{ type: 'text', text: 'synthetic', text_elements: [] }],
   });
-  expect(receipt.nativeTurnId).toBe('A');
+  expect(receipt['nativeTurnId']).toBe('A');
   expect(state.currentTurnId).toBe('B');
 });

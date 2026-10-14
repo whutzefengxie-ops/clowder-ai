@@ -16,6 +16,7 @@ for (const file of ['src', 'package.json', 'package-lock.json', 'tsconfig.json',
   }
 }
 await cp('scripts/acp-spikes/codex-native-fence.ts', join(target, 'src/ClowderNativeFence.ts'));
+await cp('scripts/acp-spikes/codex-control-journal.ts', join(target, 'src/codex-control-journal.ts'));
 await cp(
   'scripts/acp-spikes/codex-bridge-extension.test.template.ts',
   join(target, 'src/__tests__/clowder-fence.test.ts'),
@@ -25,7 +26,23 @@ let text = (await readFile(file, 'utf8')).replaceAll('\r\n', '\n');
 text = "import { CodexNativeFence } from './ClowderNativeFence';\n" + text;
 text = text.replace(
   '    async extMethod(method: string, params: Record<string, unknown>): Promise<Record<string, unknown>> {',
-  `    private readonly clowderFence = new CodexNativeFence(sessionId => this.getSessionState(sessionId), { steerTurn: params => this.codexAcpClient.steerTurn(params) });
+  `    private clowderControlAttempts = 0;
+    private readonly clowderFence = new CodexNativeFence(sessionId => this.getSessionState(sessionId), {
+        steerTurn: async params => {
+            const native = await this.codexAcpClient.steerTurn(params);
+            // Test-only crash window: native accepted, durable receipt not yet written.
+            if (++this.clowderControlAttempts > 1 && process.env['CLOWDER_SPIKE_LOSE_NATIVE_REPLY'] === 'after-first')
+                throw new Error('spike_lost_native_reply_after_acceptance');
+            return native;
+        },
+        readUserMessage: params => this.codexAcpClient.readClowderControlInput(params),
+    }, (() => {
+        const journalDirectory = process.env['CLOWDER_CONTROL_JOURNAL'];
+        const bindingRevision = process.env['CLOWDER_CONTROL_BINDING_REVISION'];
+        if (!journalDirectory && !bindingRevision) return undefined;
+        if (!journalDirectory || !bindingRevision) throw new Error('incomplete_control_journal_binding');
+        return { journalDirectory, bindingRevision };
+    })());
     async extMethod(method: string, params: Record<string, unknown>): Promise<Record<string, unknown>> {
         if (method === '_clowder/v1/control') {
             try { return await this.clowderFence.handle(params); }
@@ -34,6 +51,41 @@ text = text.replace(
 );
 if (!text.includes('return await this.clowderFence.handle(params)')) throw new Error('Bridge extension hook missing');
 await writeFile(file, text);
+const clientFile = join(target, 'src/CodexAcpClient.ts');
+let clientText = (await readFile(clientFile, 'utf8')).replaceAll('\r\n', '\n');
+const signatureAnchor = 'async steerTurn(params: { threadId: string, turnId: string, prompt: acp.ContentBlock[] })';
+if (!clientText.includes(signatureAnchor)) throw new Error('Codex native steer signature anchor missing');
+clientText = clientText.replace(
+  signatureAnchor,
+  'async steerTurn(params: { threadId: string, turnId: string, prompt: acp.ContentBlock[], clientUserMessageId?: string })',
+);
+clientText = clientText.replace(
+  '            expectedTurnId: params.turnId,',
+  '            expectedTurnId: params.turnId,\n            ...(params.clientUserMessageId ? { clientUserMessageId: params.clientUserMessageId } : {}),',
+);
+const readAnchor = '    async fetchAvailableModels(): Promise<Model[]> {';
+if (!clientText.includes(readAnchor)) throw new Error('Codex native history anchor missing');
+clientText = clientText.replace(
+  readAnchor,
+  `    async readClowderControlInput(params: { threadId: string, turnId: string, clientUserMessageId: string }) {
+        const history = await this.codexClient.threadReadWithHistory(params.threadId);
+        if (history.thread.id !== params.threadId) throw new Error('native_history_session_mismatch');
+        const turn = history.thread.turns.find(turn => turn.id === params.turnId);
+        const matches = turn?.items.filter(item => item.type === 'userMessage' && item.clientId === params.clientUserMessageId) ?? [];
+        if (matches.length > 1) throw new Error('native_history_ambiguous');
+        const item = matches[0];
+        if (!item || item.type !== 'userMessage' || item.clientId !== params.clientUserMessageId ||
+            item.content.some(block => block.type !== 'text')) return null;
+        const prompt = item.content.map(block => {
+            if (block.type !== 'text') throw new Error('native_history_content_mismatch');
+            return { type: 'text' as const, text: block.text };
+        });
+        return { nativeSessionId: history.thread.id, nativeTurnId: params.turnId, nativeItemId: item.id,
+            clientUserMessageId: item.clientId, prompt };
+    }
+${readAnchor}`,
+);
+await writeFile(clientFile, clientText);
 const entry = join(target, 'src/index.ts');
 let entryText = await readFile(entry, 'utf8');
 const routeAnchor =

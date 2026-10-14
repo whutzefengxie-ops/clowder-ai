@@ -4,7 +4,7 @@
 
 Codex 研究副本固定到 `51f78d67e46c3a96ee8d8bf4e43fc917ab21c73e`。从 worktree 根执行 `node scripts/acp-spikes/prepare-codex-prototype.mjs <研究副本绝对路径>`；在生成的 codex 目录执行 `npm ci --ignore-scripts`、`node build.mjs`、`node node_modules/vitest/vitest.mjs run src/__tests__/clowder-fence.test.ts`。另在 worktree 根用 API 的 tsx loader 执行 `codex-native-fence.test.ts`。
 
-Codex 扩展只做 snapshot 与 exact steer，不能作为生产控制端口。现已有真实 native ID export、caller fence、有效/陈旧/非空未知/取消目标和同进程去重证据；initialize 声明本地原型。operation 缓存、重连丢回执和对账尚未形成完整生命周期合同，完整 W4.P 仍 held。
+Codex 扩展提供 snapshot、exact steer 与 receipt，不能作为生产控制端口。现已有真实 native ID export、caller fence、有效/陈旧/非空未知/取消目标；2026-10-14 补上隔离持久认领、warm/cold 对账和 native clientId 证明，见控制恢复回执。设置 `CLOWDER_CONTROL_JOURNAL` 与冻结 `CLOWDER_CONTROL_BINDING_REVISION` 才启用持久路径；未设置时保留原型进程缓存。`CLOWDER_SPIKE_LOSE_NATIVE_REPLY=after-first` 只用于接受后故障注入。原型 journal 不承诺断电持久或活动断线存活，生产仍须复用既有 durable owner，完整 W4.P 仍 held。
 
 Claude 研究副本固定到 v0.70.0 / `d0aafb1ca26427285ffaeac8d8a4452fff28e9c3`。从 worktree 根执行 `prepare-claude-prototype.mjs <研究副本绝对路径>`；生成目录安装锁定依赖后执行 `node node_modules/vitest/vitest.mjs run src/tests/clowder-next-boundary.test.ts`。这是未修 baseline，预期 1 通过、2 失败。
 
