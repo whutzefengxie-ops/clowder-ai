@@ -4,6 +4,12 @@
   "completeW2": "unimplemented remainder",
   "G2": "held",
   "production": false,
+  "independentReview": {
+    "reviewer": "/root/acp_plan_review",
+    "exactTargetHead": "160a02218e793b6b990c576eda52eb07030abfd3",
+    "verdict": "pass for narrow initialization wiring; no P1/P2",
+    "completeW2G2OrMigrationApproved": false
+  },
   "clientContractRevision": "1",
   "module": "packages/api/src/domains/cats/services/agents/providers/acp/acp-initialize.ts",
   "supportedHostMethods": "session/request_permission via fail-closed dispatcher; no host fs/terminal/elicitation implementation",
