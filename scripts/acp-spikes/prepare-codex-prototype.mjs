@@ -1,9 +1,12 @@
 import { execFileSync } from 'node:child_process';
-import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { cp, mkdir, readFile, realpath, symlink, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 
 const source = resolve(process.argv[2] ?? '../../.research-20261013-codex-acp');
-const target = resolve('.cat-cafe/tmp/acp-prototypes/codex');
+const target = resolve(
+  '.cat-cafe/tmp/acp-prototypes',
+  process.argv.includes('--disable-auto-title') ? 'codex-no-title' : 'codex',
+);
 const pin = '51f78d67e46c3a96ee8d8bf4e43fc917ab21c73e';
 if (execFileSync('git', ['-C', source, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim() !== pin)
   throw new Error('Codex upstream pin mismatch');
@@ -122,6 +125,28 @@ loggerText = loggerText.replace(
             fs.appendFileSync(this.logFilePath, safeLine + '\\n');`,
 );
 await writeFile(loggerFile, loggerText);
+if (process.argv.includes('--disable-auto-title')) {
+  const titleFile = join(target, 'src/TitleGenerator.ts');
+  let title = await readFile(titleFile, 'utf8');
+  const anchor = '    onTurnCompleted(userPromptText: string): void {';
+  if (!title.includes(anchor)) throw new Error('Title budget anchor missing');
+  title = title.replace(
+    anchor,
+    `${anchor}\n        if (process.env['CLOWDER_SPIKE_DISABLE_AUTO_TITLE'] === '1') return;`,
+  );
+  await writeFile(titleFile, title);
+  await cp(
+    'scripts/acp-spikes/codex-title-budget.test.template.ts',
+    join(target, 'src/__tests__/clowder-title-budget.test.ts'),
+  );
+  const dependencies = resolve('.cat-cafe/tmp/acp-prototypes/codex/node_modules');
+  try {
+    await symlink(dependencies, join(target, 'node_modules'), 'junction');
+  } catch (error) {
+    if (error.code !== 'EEXIST' || (await realpath(join(target, 'node_modules'))) !== (await realpath(dependencies)))
+      throw error;
+  }
+}
 console.log(
   JSON.stringify({
     source,

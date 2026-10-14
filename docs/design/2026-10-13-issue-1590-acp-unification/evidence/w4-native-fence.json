@@ -85,11 +85,16 @@
   "model": "existing selected gpt-6.1-sol profile",
   "credentialSource": "read-only copy of selected native auth/provider config into isolated ignored home; values not published",
   "testLimits": {
-    "modelTurns": 3,
     "perTurnTimeoutMs": 90000,
     "toolDelayMs": 8000,
     "toolCalls": 12,
-    "usdHardCap": null
+    "usdHardCap": null,
+    "workloadTurnLimit": 3,
+    "observedNativeTurnStarts": 4,
+    "observedAutoTitleTurns": 1,
+    "enforcedTotalNativeTurnHardCap": false,
+    "budgetCorrectionRef": "codex-budget-audit.json",
+    "providerModelCallCount": "unknown"
   },
   "scopeNotes": [
     "unknown native nonempty turn rejected by native",

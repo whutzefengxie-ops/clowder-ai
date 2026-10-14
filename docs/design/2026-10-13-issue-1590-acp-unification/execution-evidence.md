@@ -23,7 +23,7 @@ Claude 的真实 elicitation、多 Notice、queued/SDK-ingress 取消和一次 S
 | W0 | 9 份冻结 Git blob hash、北向接口清单、6 个 carrier 声明、CLI/桥/SDK 版本与原生二进制 hash | 源码基线足以实施 W1 | 每个实际 binding 的 B/R/E、账号/profile、运行预算与升级演练尚未完整冻结，完整 G0 未通过 |
 | W1 | 原生 `user/tool_result` 漏接修复、原生 ID/parent/invocation 配对、raw payload、失败状态、真实 CLI/官方 SDK、持久历史/UI 刷新 | 两个 P2 已修，代码与新增 SDK 证据通过 | 完整平台调用/socket/UI 链未验收，完整 G1 未通过 |
 | W2.S | STDIO/HTTP 共用 fail-closed 权限边界、factory 显式默认取消、prompt admission/generation、取消隔离 | P1/P2 全部修复，安全下限通过 | 不是 W3.P 平台 principal/policy/审批/审计，也不证明原生工具已静止 |
-| W4.P | native ID/caller fence、目标反例、持久认领、丢回执/warm-cold 对账、真实活动STDIO owner退出及旧目标拒绝 | 21项反例、真实对账与追加生命周期边界经非作者复核 | 活动owner退出后turn不能继续存活；需分离consumer/owner寿命并接生产 durable owner，完整原型 held |
+| W4.P | native fence/目标反例、持久对账、owner退出反例、consumer与owner寿命分离后真实活动A跨HTTP响应断开 | 21项反例及真实生命周期机制；标题预算遗漏已纠正 | 寿命分离在test owner成立，生产consumer/owner/principal/persistence接线尚缺，完整原型 held |
 | W5.P | 非打断 next/UUID/result、真人等待、多 Notice、queued/SDK-ingress 取消、SDK0.3.285 升级及 now 对照 | 110项原型/129项 API，真实样本与三处审查问题闭环 | 私有 SDK seam 维护合同、完整升级矩阵/预算及生产交互接线仍未验收；完整原型 held |
 
 审查者：独立个体 `/root/acp_plan_review`，作者之外的本地同行。同家族审查，不称为跨家族审查；回执只覆盖各自阶段，未批准 G0、完整 G1、G3 或整体迁移。
@@ -55,7 +55,7 @@ Claude 的真实 elicitation、多 Notice、queued/SDK-ingress 取消和一次 S
 
 Codex 固定 bridge 2.1.1 / `51f78d67`、native CLI 0.161.0，在 STDIO wire 注册 `_clowder/v1/control`，导出真正 native callback ID。最初仅 extMethod 未注册 wire 的调用为 `-32601`；错误包装遗漏 message 的问题也已修正并留档。最终同一 binding 的 3 个受限只读回合、79.038 秒，caller A 原值经真正 `CodexAcpClient.steerTurn` 进入 native `turn/steer.expectedTurnId`：valid A 原生回执匹配、重复 operation 只有一次 native 调用；B active 时 stale A/非空不存在 target 被 native 拒绝，B 保持原 ID；idle/取消 target 被 native 拒绝；unknown ACP session、foreign binding、空 target 分别由桥拒绝。原型协商、bundle/lock/runner hash、caller/native mapping 与 raw refs 已冻结。
 
-Codex 的模型/认证沿用户原有选择复制到私有隔离 profile，禁 hooks、项目指令、shell/编辑、apps/skills；测试仅允许 fixed fixture MCP，最多 3 个模型回合、每回合 90 秒、工具 8 秒/12 次。没有原生 USD 硬上限，不把时间/次数上限写成金额预算；native usage 留档，不从模型名猜账单。最终样本、早期失败均保留。控制缓存仍是本进程去重，丢回执/重连对账未证明，不能据此放行完整 W4.P/W4 或替换原 exact 服务。
+Codex 的模型/认证沿用户原有选择复制到私有隔离 profile，禁 hooks、项目指令、shell/编辑、apps/skills；测试仅允许 fixed fixture MCP，首轮3个工作load turn、每回合90秒、工具8秒/12次。后续审查发现桥另发1个title turn，原“modelTurns”不是全部模型请求的硬上限，已记录真实RPC计数和未知费用，见预算纠正。没有原生USD硬上限，不从模型名猜账单。最终样本、早期失败均保留。该首轮仅桥内缓存；后续对账/寿命分离的进展见追加回执，完整W4/G3与迁移仍未放行。
 
 Claude 固定 v0.70.0 / `d0aafb1c` / SDK 0.3.232，实际 native CLI 2.1.296。#1175 完整 diff 不能直接应用到固定源码，采用本地 narrow patch：专门 `_clowder/v1/notice` 固定 next/promptRequired，协商声明 prototype 并返回 native input UUID；这不是上游已接受的扩展或完整生产合同。旧 pendingCount→禁止入队合成判据过强，按非作者意见改为不抢占/不代答；历史 RED 保留，未以修改测量判据宣称修好原生安全缺陷。
 

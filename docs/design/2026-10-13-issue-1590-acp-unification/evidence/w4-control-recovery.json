@@ -71,7 +71,13 @@
         "name": "restored",
         "pid": 13852
       }
-    ]
+    ],
+    "budgetCorrectionRef": "codex-budget-audit.json",
+    "fieldMeaning": "Historical maxModelTurns is intended ACP workload count, not a provider-model-call or total-native-turn hard limit",
+    "providerModelCallCount": "unknown",
+    "cost": "unknown",
+    "observedNativeTurnStartRequests": 1,
+    "observedAutoTitleTurns": 0
   },
   "requests": [
     {

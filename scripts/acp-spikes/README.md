@@ -6,6 +6,10 @@ Codex 研究副本固定到 `51f78d67e46c3a96ee8d8bf4e43fc917ab21c73e`。从 wor
 
 Codex 扩展提供 snapshot、exact steer 与 receipt，不能作为生产控制端口。现已有真实 native ID export、caller fence、有效/陈旧/非空未知/取消目标；2026-10-14 补上隔离持久认领、warm/cold 对账和 native clientId 证明，见控制恢复回执。设置 `CLOWDER_CONTROL_JOURNAL` 与冻结 `CLOWDER_CONTROL_BINDING_REVISION` 才启用持久路径；未设置时保留原型进程缓存。`CLOWDER_SPIKE_LOSE_NATIVE_REPLY=after-first` 只用于接受后故障注入。原型 journal 不承诺断电持久或活动断线存活，生产仍须复用既有 durable owner，完整 W4.P 仍 held。
 
+`codex-stable-owner.mts` / `run-codex-stable-owner.mts` 是专用只读、随机令牌的loopback test owner，用实际HTTP响应中断证明存活owner中的native A仍可经ACP控制。不是生产HTTP consumer/principal/lease/persistence实现。公开策略检查用fake桥，真实fixture/no-duplicate/native fence另验；原owner退出反例保持。
+
+Codex自动title也会新增native turn/start，历史计数按 `codex-budget-audit.json` 纠正。`prepare-codex-prototype.mjs --disable-auto-title` 准备独立 `codex-no-title`，链接baseline依赖后构建；`CLOWDER_SPIKE_DISABLE_AUTO_TITLE=1` 只禁测试title。用生成的clowder-title-budget检查默认行为/测试禁用，默认产品标题功能不改。最终stable owner运行器限1 ACP prompt、90秒/3秒退出grace，已观察1 native turn/start/0title，底层provider请求数和费用仍unknown、无USD硬限。须已有明确授权并设置 `CLOWDER_SPIKE_AUTHORIZED=1`，新样本名可用 `CLOWDER_SPIKE_RUN_ID`，禁止覆盖原证据。
+
 Claude 研究副本固定到 v0.70.0 / `d0aafb1ca26427285ffaeac8d8a4452fff28e9c3`。从 worktree 根执行 `prepare-claude-prototype.mjs <研究副本绝对路径>`；生成目录安装锁定依赖后执行 `node node_modules/vitest/vitest.mjs run src/tests/clowder-next-boundary.test.ts`。这是未修 baseline，预期 1 通过、2 失败。
 
 增加 `--patch-next` 回填 next 分支、窄 notice route、UUID 回执与原型协商。当前边界检查 3 通过；历史 2 通过/1 失败的“不允许 pending 时入队”判据已按独立审查纠正，真实 SDK 的未回答权限等待证据另存。完整上游 #1175 diff 与固定 v0.70.0 不兼容单独记录。
