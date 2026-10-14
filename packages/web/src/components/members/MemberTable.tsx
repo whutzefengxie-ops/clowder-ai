@@ -6,6 +6,7 @@ import { MemberCodexAccount } from '../codex-accounts/MemberCodexAccount';
 import type { ConfigData } from '../config-viewer-types';
 import type { RoutingContextQueryState } from '../routing-context/useRoutingContext';
 import { useMembersCopy, useMemberText } from './editor-presentation';
+import { MemberIdentityDetails } from './MemberIdentityDetails';
 import { MemberRuntimeSummary } from './MemberRuntimeSummary';
 import { MemberStatus } from './MemberStatus';
 import { memberStatus, memberTransport } from './member-projection';
@@ -136,24 +137,16 @@ export function MemberTable({
                   <AvatarImageWithFallback src={cat.avatar} alt="" className="member-avatar" />
                   <span>
                     <strong>{cat.nickname || cat.displayName}</strong>
-                    <small>
-                      {cat.breedDisplayName || cat.displayName} · {cat.id}
-                    </small>
+                    <small>{cat.breedDisplayName || cat.displayName}</small>
                   </span>
                 </button>
+                <MemberIdentityDetails cat={cat} onEdit={() => onEditMember(cat)} />
               </td>
               <td>
                 <MemberRuntimeSummary cat={cat} />
                 <MemberCodexAccount cat={cat} accounts={list.accounts} />
               </td>
-              <td>
-                {t(memberTransport(cat))} ·{' '}
-                {list.accounts.find((p) => p.id === cat.accountRef)?.authType === 'oauth'
-                  ? t('账号登录')
-                  : list.accounts.find((p) => p.id === cat.accountRef)?.authType === 'api_key'
-                    ? t('配置账号')
-                    : t('认证未确认')}
-              </td>
+              <td>{t(memberTransport(cat))}</td>
               <td>
                 <MemberStatus
                   status={
@@ -164,13 +157,13 @@ export function MemberTable({
                 />
               </td>
               <td>
-                <details>
+                <details className="member-aliases">
                   <summary>
                     {cat.mentionPatterns.length
                       ? copy.aliasCount(cat.mentionPatterns[0], cat.mentionPatterns.length)
                       : t('未设置')}
                   </summary>
-                  {cat.mentionPatterns.join('、')}
+                  <div>{cat.mentionPatterns.join('、')}</div>
                 </details>
               </td>
               <td>

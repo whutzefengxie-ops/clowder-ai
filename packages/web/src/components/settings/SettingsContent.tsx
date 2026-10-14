@@ -293,7 +293,7 @@ export function SettingsContent({ section, initialEditCatId }: SettingsContentPr
   })();
 
   return (
-    <div className={section === 'members' ? 'mx-auto w-full max-w-5xl' : undefined}>
+    <div className={section === 'members' ? `mx-auto w-full ${editorOpen ? 'max-w-5xl' : 'max-w-6xl'}` : undefined}>
       {!(section === 'members' && (editorOpen || isV2)) && (
         <SettingsPageHeader
           title={section === 'accounts' ? accountsText.title : meta.label}

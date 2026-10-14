@@ -69,6 +69,8 @@ export interface CatVariant {
   readonly configurationSource?: 'native_tool' | 'managed_account';
   /** A local tool's selection, or an explicit per-member exception. */
   readonly accountBindingMode?: 'follow' | 'override';
+  /** Internal creation ownership; not part of the public member projection. */
+  readonly creationReceipt?: { readonly requestHash: string; readonly payloadHash: string };
   /** clowder-ai#340 P5: CLI client identity (renamed from `provider`). */
   readonly clientId: ClientId;
   readonly defaultModel: string;

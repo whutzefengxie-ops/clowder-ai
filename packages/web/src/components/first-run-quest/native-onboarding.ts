@@ -1,5 +1,5 @@
 import type { CatData } from '@/hooks/useCatData';
-import { type HubCatEditorFormState, initialState } from '../hub-cat-editor.model';
+import { autoSlug, type HubCatEditorFormState, initialState } from '../hub-cat-editor.model';
 import { templateForm } from '../settings/members/member-editor-state';
 import { matchesRuntime, type RuntimeChoice, runtimeDefaults } from '../settings/members/member-runtime-draft';
 import { stableOnboardingMemberId } from './onboarding-journey';
@@ -11,6 +11,7 @@ export interface NativePartner {
   form: HubCatEditorFormState;
   selected: boolean;
   existingId?: string;
+  recoverable?: { id: string; form: HubCatEditorFormState };
 }
 
 /** Registry-generated ACP ids change after creation; the launch descriptor does not. */
@@ -29,11 +30,18 @@ export function recommendNativePartners(
   journeyId: string,
 ): NativePartner[] {
   const seen = new Set<string>();
+  const reservedIds = new Set(cats.map((cat) => cat.id.toLowerCase()));
   const reservedAliases = new Set(cats.flatMap((cat) => cat.mentionPatterns.map((alias) => alias.toLowerCase())));
   return runtimes.flatMap((runtime) => {
     const key = partnerKey(runtime);
-    if (seen.has(key)) return [];
-    seen.add(key);
+    const descriptor = JSON.stringify([
+      runtime.clientId,
+      runtime.acp?.command,
+      runtime.acp?.startupArgs,
+      runtime.acp?.transport ?? 'stdio',
+    ]);
+    if (seen.has(descriptor)) return [];
+    seen.add(descriptor);
     const preferred =
       runtime.clientId === 'anthropic' ? 'ragdoll' : runtime.clientId === 'openai' ? 'maine-coon' : 'dragon-li';
     const template = templates.find((item) => item.id === preferred) ?? templates[0];
@@ -49,11 +57,19 @@ export function recommendNativePartners(
     let uniqueAlias = alias;
     for (let n = 2; reservedAliases.has(uniqueAlias); n++) uniqueAlias = `${alias}-${n}`;
     reservedAliases.add(uniqueAlias);
-    const catId = stableOnboardingMemberId(journeyId, 'partner', key);
+    const legacyId = stableOnboardingMemberId(journeyId, 'partner', key);
     const existing = cats.find(
       (cat) =>
-        cat.id === catId || (cat.configurationSource === 'native_tool' && matchesRuntime(initialState(cat), runtime)),
+        (cat.id === legacyId || cat.configurationSource === 'native_tool') &&
+        matchesRuntime(initialState(cat), runtime),
     );
+    const baseId = autoSlug(runtime.label);
+    let catId = baseId;
+    for (let n = 2; reservedIds.has(catId.toLowerCase()); n++) {
+      const suffix = `-${n}`;
+      catId = `${baseId.slice(0, 40 - suffix.length).replace(/-+$/, '')}${suffix}`;
+    }
+    reservedIds.add(catId.toLowerCase());
     return [
       {
         id: key,

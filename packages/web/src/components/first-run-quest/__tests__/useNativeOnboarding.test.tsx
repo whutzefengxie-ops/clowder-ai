@@ -63,6 +63,45 @@ it('creates the detected team with one confirmation without creating a conversat
   expect(onCreated).toHaveBeenCalledOnce();
 });
 
+it('retains a legacy draft ID and custom identity when rediscovery recomputes recommendations', async () => {
+  await act(async () => root.render(<Harness mode="members" />));
+  const saved = JSON.parse(localStorage.getItem('cat-cafe:native-team-setup:v2:owner-a')!);
+  saved.partners[0].form.catId = 'partner-legacy-long-journey-codex';
+  saved.partners[0].form.cliConfigArgs = ['--settings', '/custom.json'];
+  saved.partners[0].form.accountRef = 'custom-account';
+  localStorage.setItem('cat-cafe:native-team-setup:v2:owner-a', JSON.stringify(saved));
+  act(() => root.unmount());
+  root = createRoot(container);
+  await act(async () => root.render(<Harness mode="members" />));
+  expect(setup.draft?.partners[0].form.catId).toBe('partner-legacy-long-journey-codex');
+  expect(setup.draft?.partners[0].form.accountRef).toBe('custom-account');
+  expect(setup.draft?.partners[0].form.cliConfigArgs).toEqual(['--settings', '/custom.json']);
+});
+
+it('retries a committed but unacknowledged member using the same request and payload after rediscovery', async () => {
+  const original = vi.mocked(apiFetch).getMockImplementation()!;
+  let lost = true;
+  vi.mocked(apiFetch).mockImplementation(async (path, init) => {
+    if (path === '/api/cats' && init?.method === 'POST' && lost) {
+      lost = false;
+      const form = JSON.parse(String(init.body));
+      catalog.cats = [{ ...form, id: form.catId } as CatData];
+      throw new Error('Response lost');
+    }
+    return original(path, init);
+  });
+  await act(async () => root.render(<Harness mode="members" />));
+  await act(async () => setup.start());
+  const first = vi.mocked(apiFetch).mock.calls.find(([path, init]) => path === '/api/cats' && init?.method === 'POST')!;
+  await act(async () => setup.reload());
+  await act(async () => setup.start());
+  const retry = vi
+    .mocked(apiFetch)
+    .mock.calls.filter(([path, init]) => path === '/api/cats' && init?.method === 'POST')[1];
+  expect(retry[1]?.body).toBe(first[1]?.body);
+  expect(retry[1]?.headers).toEqual(first[1]?.headers);
+});
+
 it.each(['goal', 'members'] as const)('supports HTTP LAN and preserves the %s journey after remount', async (mode) => {
   const nativeCrypto = globalThis.crypto;
   vi.stubGlobal('crypto', { getRandomValues: nativeCrypto.getRandomValues.bind(nativeCrypto) });

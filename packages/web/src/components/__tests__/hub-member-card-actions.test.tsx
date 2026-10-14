@@ -38,8 +38,8 @@ describe('Hub member actions and effective transport', () => {
     const onToggleAvailability = vi.fn();
     const onDelete = vi.fn();
     act(() => root.render(<HubMemberOverviewCard {...{ cat, onEdit, onToggleAvailability, onDelete }} />));
-    const toggle = host.querySelector<HTMLButtonElement>('button[aria-label="停用成员：Test Codex"]');
-    const remove = host.querySelector<HTMLButtonElement>('button[aria-label="删除成员"]');
+    const toggle = host.querySelector<HTMLButtonElement>('button[role="switch"][aria-label="成员启用状态：Test Codex"]');
+    const remove = host.querySelector<HTMLButtonElement>('button[aria-label="删除成员：Test Codex"]');
     expect(toggle).not.toBeNull();
     expect(remove).not.toBeNull();
     act(() => {

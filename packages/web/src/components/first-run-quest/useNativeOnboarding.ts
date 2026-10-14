@@ -2,8 +2,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { type CatData, useCatData } from '@/hooks/useCatData';
 import { apiFetch } from '@/utils/api-client';
+import { initialState } from '../hub-cat-editor.model';
 import { buildCatPayload } from '../hub-cat-editor.payload';
 import type { RuntimeChoice } from '../settings/members/member-runtime-draft';
+import { matchesRuntime } from '../settings/members/member-runtime-draft';
 import { syncDraftToStorage } from '../thread-drafts';
 import { type NativePartner, recommendNativePartners, SMALL_GOALS } from './native-onboarding';
 import { buildNativeTeamGoal, orderGoalPartners } from './native-team-goal';
@@ -16,6 +18,7 @@ interface CreatedPartner {
 }
 interface SetupDraft {
   version: 2;
+  idScheme?: 'short-v1';
   journeyId: string;
   partners: NativePartner[];
   goal: string;
@@ -101,20 +104,28 @@ export function useNativeOnboarding(
         const currentCats = mode === 'members' ? roster.cats : catsRef.current;
         const partners = recommendNativePartners(discovered.runtimes, templates.templates, currentCats, journeyId).map(
           (partner) => {
-            const previous = saved?.partners.find((p) => p.id === partner.id);
+            const previous = saved?.partners.find(
+              (p) => p.id === partner.id && p.form && matchesRuntime(p.form, partner.runtime),
+            );
             if (!previous?.form) return partner;
-            const { name, displayName, nickname, defaultModel, cliEffort } = previous.form;
+            const savedMember = currentCats.find(
+              (cat) => cat.id === previous.form.catId && matchesRuntime(initialState(cat), partner.runtime),
+            );
+            const confirmed = Boolean(previous.existingId || saved?.created[partner.id]);
             return {
               ...partner,
+              existingId: confirmed ? (savedMember?.id ?? previous.existingId) : undefined,
+              ...(!confirmed && savedMember && !saved?.idScheme
+                ? { recoverable: { id: savedMember.id, form: initialState(savedMember) } }
+                : {}),
               selected: partner.selected && (!previous.runtime?.installed || previous.selected),
-              form: partner.existingId
-                ? partner.form
-                : { ...partner.form, name, displayName, nickname, defaultModel, cliEffort },
+              form: confirmed && savedMember ? initialState(savedMember) : { ...partner.form, ...previous.form },
             };
           },
         );
         persist({
           version: 2,
+          ...(!saved || saved.idScheme ? { idScheme: 'short-v1' as const } : {}),
           journeyId,
           partners,
           goal: saved?.goal ?? SMALL_GOALS[0].content,
@@ -188,6 +199,9 @@ export function useNativeOnboarding(
             });
         progress = {
           ...progress,
+          partners: progress.partners.map((p) =>
+            p.id === id ? { ...p, form: { ...p.form, catId: result.cat.id } } : p,
+          ),
           created: {
             ...progress.created,
             [id]: {

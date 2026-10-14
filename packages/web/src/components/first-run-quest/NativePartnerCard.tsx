@@ -86,6 +86,25 @@ export function NativePartnerCard({
             : `安装并登录 ${runtime.label} 后，重新检测即可加入。`}
       </p>
       {!available && <NativeInstallHelp runtime={runtime} />}
+      {partner.recoverable && !created && (
+        <div className="mt-3 text-sm text-cafe-secondary">
+          <p>这个旧草稿的 ID 已存在，尚无可验证的创建回执。可以明确复用现有伙伴。</p>
+          <button
+            type="button"
+            disabled={disabled}
+            className="min-h-10 text-cafe-accent"
+            onClick={() =>
+              patch({
+                existingId: partner.recoverable?.id,
+                form: partner.recoverable?.form ?? form,
+                recoverable: undefined,
+              })
+            }
+          >
+            复用现有伙伴 {partner.recoverable.id}
+          </button>
+        </div>
+      )}
       {available && defaultIdentity && runtime.readiness?.status === 'login_required' && (
         <div role="status" className="mt-3 rounded-lg bg-conn-amber-bg p-3 text-sm text-conn-amber-text">
           <p className="font-medium">{runtime.label} 尚未登录</p>

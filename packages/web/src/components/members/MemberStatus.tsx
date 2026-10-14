@@ -16,7 +16,12 @@ export function MemberStatus({ status }: { status: Status }) {
         <i aria-hidden="true" />
         {t(status.label)}
       </span>
-      {detail && <small>{detail}</small>}
+      {detail && (
+        <details className="member-status-detail">
+          <summary>{t('状态详情')}</summary>
+          <small>{detail}</small>
+        </details>
+      )}
     </span>
   );
 }

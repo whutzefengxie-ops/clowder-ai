@@ -76,6 +76,7 @@ export async function withRuntimeCatMutationLock<T>(projectRoot: string, operati
 
 export interface RuntimeCatInput {
   catId: string;
+  creationReceipt?: CatVariant['creationReceipt'];
   breedId?: string;
   name: string;
   displayName: string;
@@ -325,6 +326,7 @@ function createBreedFromInput(input: RuntimeCatInput): CatBreed {
       {
         id: variantId,
         clientId: input.clientId,
+        ...(input.creationReceipt ? { creationReceipt: input.creationReceipt } : {}),
         ...(input.configurationSource ? { configurationSource: input.configurationSource } : {}),
         ...(input.variantLabel != null && input.variantLabel.trim().length > 0
           ? { variantLabel: input.variantLabel.trim() }

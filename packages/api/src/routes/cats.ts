@@ -65,6 +65,7 @@ import {
   memberConfigurationRevision,
   updateMemberWithRevision,
 } from '../config/member-config-revision.js';
+import { createOwnedRuntimeCat, MemberCreateConflict, memberCreationReceipt } from '../config/member-create-receipt.js';
 import { inferOpenCodeProviderFromModelName } from '../config/opencode-model.js';
 import { resolveProjectTemplatePath } from '../config/project-template-path.js';
 import { getResolvedCats } from '../config/resolved-cats.js';
@@ -994,27 +995,29 @@ export const catsRoutes: FastifyPluginAsync<CatsRoutesOptions> = async (app, opt
     const projectRoot = resolveProjectRoot();
     const managedIdsBefore = getManagedCatalogIds(projectRoot);
 
-    // First-run retries may arrive after a lost response. A stable catId is the
-    // idempotency key; return the persisted member instead of creating a second one.
-    const existingCat = getResolvedCats(projectRoot)[body.catId] ?? catRegistry.tryGet(body.catId)?.config;
-    if (existingCat) {
-      const metadata = buildCatResponseMetadataResolver(projectRoot);
-      const resolveEffectiveAccountRef = buildEffectiveAccountRefResolver();
-      return {
-        cat: await toCatResponse(
-          existingCat,
-          projectRoot,
-          metadata(existingCat.id),
-          resolveEffectiveAccountRef,
-          opts.resolveContextCapacitySnapshot,
-        ),
-        updatedBy: operator,
-        idempotent: true,
-      };
+    let receipt: ReturnType<typeof memberCreationReceipt>;
+    try {
+      receipt = memberCreationReceipt(
+        operator,
+        request.headers['x-cat-cafe-onboarding-journey'],
+        request.headers['idempotency-key'],
+        body,
+      );
+    } catch (error) {
+      return reply.code(409).send({
+        code: 'member_creation_conflict',
+        error: error instanceof Error ? error.message : 'Creation conflict',
+      });
     }
+    let replayed = false;
+    if (!receipt && (managedIdsBefore.has(body.catId) || catRegistry.tryGet(body.catId)))
+      return reply.code(409).send({
+        code: 'member_creation_conflict',
+        error: `Member ID "${body.catId}" is occupied; choose another ID or explicitly edit that member`,
+      });
 
     // Validate alias uniqueness across all existing members
-    if (body.mentionPatterns?.length) {
+    if (!receipt && body.mentionPatterns?.length) {
       const allConfigs = catRegistry.getAllConfigs();
       for (const pattern of body.mentionPatterns) {
         const normalized = pattern.toLowerCase();
@@ -1029,8 +1032,14 @@ export const catsRoutes: FastifyPluginAsync<CatsRoutesOptions> = async (app, opt
 
     const accountRef = resolveAccountRef(body);
     try {
-      const createRuntimeCatSerialized = (input: Parameters<typeof createRuntimeCat>[1]) =>
-        withRuntimeCatMutationLock(projectRoot, () => createRuntimeCat(projectRoot, input));
+      const createRuntimeCatSerialized = async (input: Parameters<typeof createRuntimeCat>[1]) => {
+        const result = await withRuntimeCatMutationLock(projectRoot, () =>
+          createOwnedRuntimeCat(projectRoot, input, receipt),
+        );
+        body.catId = result.id;
+        replayed = result.replayed;
+        managedIdsBefore.delete(result.id);
+      };
       /* Infer provider for opencode API-key accounts from the model name when no
          explicit provider is given. This avoids hard-coding 'openai' for all bare
          models — Anthropic/Google accounts get the correct adapter.
@@ -1187,24 +1196,8 @@ export const catsRoutes: FastifyPluginAsync<CatsRoutesOptions> = async (app, opt
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      if (message.includes('already exists')) {
-        const racedCat = getResolvedCats(projectRoot)[body.catId] ?? catRegistry.tryGet(body.catId)?.config;
-        if (racedCat) {
-          const metadata = buildCatResponseMetadataResolver(projectRoot);
-          const resolveEffectiveAccountRef = buildEffectiveAccountRefResolver();
-          return {
-            cat: await toCatResponse(
-              racedCat,
-              projectRoot,
-              metadata(racedCat.id),
-              resolveEffectiveAccountRef,
-              opts.resolveContextCapacitySnapshot,
-            ),
-            updatedBy: operator,
-            idempotent: true,
-          };
-        }
-      }
+      if (err instanceof MemberCreateConflict)
+        return reply.code(409).send({ code: 'member_creation_conflict', error: message });
       reply.status(400);
       return { error: message };
     }
@@ -1226,7 +1219,7 @@ export const catsRoutes: FastifyPluginAsync<CatsRoutesOptions> = async (app, opt
     const cat = resolved[body.catId];
     const metadata = buildCatResponseMetadataResolver(projectRoot);
     const resolveEffectiveAccountRef = buildEffectiveAccountRefResolver();
-    reply.status(201);
+    reply.status(replayed ? 200 : 201);
     return {
       cat: await toCatResponse(
         cat,
@@ -1236,6 +1229,7 @@ export const catsRoutes: FastifyPluginAsync<CatsRoutesOptions> = async (app, opt
         opts.resolveContextCapacitySnapshot,
       ),
       updatedBy: operator,
+      ...(replayed ? { idempotent: true } : {}),
     };
   });
 

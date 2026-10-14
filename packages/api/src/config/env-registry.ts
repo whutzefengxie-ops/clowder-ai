@@ -1230,13 +1230,6 @@ export const ENV_VARS: EnvDefinition[] = [
     sensitive: false,
   },
   {
-    name: 'CLAUDE_CONFIG_DIR',
-    defaultValue: '~/.claude',
-    description: 'Claude Code 配置目录；本机工具探测和模型配置读取遵从此目录',
-    category: 'cli',
-    sensitive: false,
-  },
-  {
     name: 'DSH_HOME',
     defaultValue: '~/.dsh',
     description: 'DeepSeek Harness 配置目录；只读探测已安装的 ACP profile',

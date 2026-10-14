@@ -17,7 +17,7 @@ const child = spawn(command === 'node' ? process.execPath : command, args, {
   stdio: 'inherit',
   // Windows package scripts are exposed as .cmd shims; shell resolution is
   // required when this wrapper launches them directly.
-  shell: process.platform === 'win32',
+  shell: process.platform === 'win32' && command !== 'node' && command !== process.execPath,
 });
 
 for (const signal of Object.keys(signalExitCodes)) {
