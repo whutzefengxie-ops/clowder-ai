@@ -50,6 +50,7 @@ import { getDefaultUploadDir } from '../utils/upload-paths.js';
 import { configCatOrderRoutes } from './config-cat-order.js';
 import { configConversationViewRoutes } from './config-conversation-view.js';
 import { configMessageDispositionRoutes } from './config-message-disposition.js';
+import { configOnboardingRoutes } from './config-onboarding.js';
 import { configThreadAttentionRoutes } from './config-thread-attention.js';
 
 const patchSchema = z.object({
@@ -198,6 +199,7 @@ export async function configRoutes(app: FastifyInstance, opts: ConfigRoutesOptio
   await app.register(configCatOrderRoutes, { projectRoot });
   await app.register(configConversationViewRoutes, { projectRoot, threadStore: opts.threadStore });
   await app.register(configMessageDispositionRoutes, { projectRoot });
+  await app.register(configOnboardingRoutes, { projectRoot });
   await app.register(configThreadAttentionRoutes, { projectRoot, threadStore: opts.threadStore });
 
   app.get('/api/config', async () => ({

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { DEMO_EVENTS } from './demo-story';
 import { reportOnboardingTiming } from './onboarding-performance';
 
@@ -16,6 +16,9 @@ export function useDemoPlayback(scope: string) {
   const key = `cat-cafe:scripted-onboarding:v1:${scope}`;
   const [state, setState] = useState<Playback>(initial);
   const [ready, setReady] = useState(false);
+  const [elapsedMs, setElapsedMs] = useState(0);
+  const elapsed = useRef(0);
+  const lastIndex = useRef(-1);
   useEffect(() => {
     let index = 0;
     try {
@@ -51,22 +54,51 @@ export function useDemoPlayback(scope: string) {
   }, [key, ready, state]);
   useEffect(() => {
     const event = DEMO_EVENTS[state.index];
+    if (lastIndex.current !== state.index) {
+      elapsed.current = 0;
+      setElapsedMs(0);
+      lastIndex.current = state.index;
+    }
     if (!ready || state.paused || !event) return;
     const scheduledAt = performance.now();
-    const timer = setTimeout(() => {
-      const elapsed = performance.now() - scheduledAt;
-      reportOnboardingTiming('demo-step', {
-        step: event.id,
-        plannedMs: event.duration,
-        elapsedMs: Math.round(elapsed),
-        lateMs: Math.round(Math.max(0, elapsed - event.duration)),
-      });
-      setState((current) => ({ ...current, index: current.index + 1 }));
-    }, event.duration);
-    return () => clearTimeout(timer);
+    const previousElapsed = elapsed.current;
+    const progress = setInterval(() => {
+      elapsed.current = previousElapsed + performance.now() - scheduledAt;
+      setElapsedMs(elapsed.current);
+    }, 50);
+    const timer = setTimeout(
+      () => {
+        const elapsed = performance.now() - scheduledAt;
+        reportOnboardingTiming('demo-step', {
+          step: event.id,
+          plannedMs: event.duration,
+          elapsedMs: Math.round(elapsed),
+          lateMs: Math.round(Math.max(0, elapsed - event.duration)),
+        });
+        setState((current) => ({ ...current, index: current.index + 1 }));
+      },
+      Math.max(0, event.duration - previousElapsed),
+    );
+    return () => {
+      elapsed.current = previousElapsed + performance.now() - scheduledAt;
+      clearInterval(progress);
+      clearTimeout(timer);
+    };
   }, [ready, state.index, state.paused]);
+  const event = DEMO_EVENTS[state.index];
+  const isCat = event && event.speaker !== 'user' && event.speaker !== 'system';
+  const thinkingMs = 900;
+  const typingMs = event ? Math.min(2400, Math.max(1000, event.text.length * 28)) : 0;
+  const phase: 'complete' | 'thinking' | 'typing' =
+    !isCat || elapsedMs >= thinkingMs + typingMs ? 'complete' : elapsedMs < thinkingMs ? 'thinking' : 'typing';
+  const characters =
+    event && isCat
+      ? Math.min(event.text.length, Math.floor((Math.max(0, elapsedMs - thinkingMs) / typingMs) * event.text.length))
+      : (event?.text.length ?? 0);
   return {
     ...state,
+    phase,
+    characters,
     ready,
     finished: state.index === DEMO_EVENTS.length,
     start: () => setState({ version: 1, index: 0, paused: false }),

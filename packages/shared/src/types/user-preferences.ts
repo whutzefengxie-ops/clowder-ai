@@ -54,6 +54,8 @@ export interface BubbleDefaultPreferences {
 }
 
 export interface UserPreferences {
+  /** #1466: durable personal demo receipts. Keys include operator and guide version. */
+  onboardingGuides?: Record<string, { status: 'dismissed' | 'completed'; updatedAt: number }>;
   /** F321: background curation preference and its durable first-enable boundary. */
   memoryCuration?: { enabled: boolean; startedAt?: number; curatorCatId?: string };
   /** F166: Custom display order of cats. catIds not in this list fall back to cat-template.json order. */

@@ -52,6 +52,7 @@ import { useMessageSearchHost } from './message-search/useMessageSearchHost';
 import { NewConversationPage } from './new-conversation/NewConversationPage';
 import { DEMO_SETTINGS_URL } from './onboarding-demo/demo-story';
 import { GuidedOnboarding } from './onboarding-demo/GuidedOnboarding';
+import { useDemoAdmission } from './onboarding-demo/useDemoAdmission';
 import { ParallelStatusBar } from './ParallelStatusBar';
 import { ProjectSetupCard } from './ProjectSetupCard';
 import { RuntimeUpdateRequiredDialog } from './RuntimeUpdateRequiredDialog';
@@ -505,6 +506,7 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
   const handleStartFirstRunQuest = useCallback(() => {
     setShowQuestWizard(true);
   }, []);
+  const demoAdmission = useDemoAdmission(threadId === 'default', handleStartFirstRunQuest);
   const currentBootcampState = storeThreads.find((thread) => thread.id === threadId)?.bootcampState;
   const currentBootcampPhase = currentBootcampState?.phase;
   const showFirstProjectMistakeTip = useFirstProjectMistakeTipGate({
@@ -1364,7 +1366,23 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
         </div>
       )}
       <FloatingTranscriptContainer />
-      <GuidedOnboarding open={showQuestWizard} storageScope="first-run" onClose={() => setShowQuestWizard(false)} />
+      <GuidedOnboarding
+        open={showQuestWizard}
+        storageScope={demoAdmission.storageScope}
+        onCompleted={demoAdmission.complete}
+        onClose={() => {
+          setShowQuestWizard(false);
+          demoAdmission.dismiss();
+        }}
+      />
+      {demoAdmission.error && (
+        <p role="status" className="text-sm text-cafe-secondary">
+          {demoAdmission.error}{' '}
+          <button type="button" onClick={demoAdmission.retry}>
+            重试保存引导记录
+          </button>
+        </p>
+      )}
       <BootcampListModal open={showBootcampList} onClose={handleBootcampModalClose} currentThreadId={threadId} />
       {showVoteModal && <VoteConfigModal onSubmit={handleVoteSubmit} onCancel={() => setShowVoteModal(false)} />}
       {/* Bootcamp guide overlay: intro phase tips + lifecycle tips (phase-7.5 uses guide engine) */}

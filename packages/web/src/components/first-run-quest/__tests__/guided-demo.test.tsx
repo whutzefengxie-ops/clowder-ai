@@ -1,6 +1,7 @@
 import { act, StrictMode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { DEMO_EVENTS } from '../../onboarding-demo/demo-story';
 import { GuidedOnboarding } from '../../onboarding-demo/GuidedOnboarding';
 
 let root: Root, host: HTMLDivElement;
@@ -33,6 +34,26 @@ const tick = async () =>
   act(async () => {
     await vi.advanceTimersByTimeAsync(10_000);
   });
+
+it('shows thinking then a partial response, and delays preview until the response finishes', async () => {
+  localStorage.setItem('cat-cafe:scripted-onboarding:v1:demo-user', JSON.stringify({ version: 1, index: 3 }));
+  await mount();
+  expect(document.querySelector('[data-demo-phase="thinking"]')).not.toBeNull();
+  expect(document.querySelector('[data-preview-stage="design"]')).toBeNull();
+  await act(async () => vi.advanceTimersByTimeAsync(1300));
+  const text = document.querySelector('[data-demo-phase="typing"]')?.textContent;
+  expect(text?.length).toBeGreaterThan(0);
+  expect(text).not.toContain(DEMO_EVENTS[3].text);
+  act(() => button('暂停').click());
+  await act(async () => vi.advanceTimersByTimeAsync(500));
+  expect(document.querySelector('[data-demo-phase="typing"]')?.textContent).toBe(text);
+  act(() => button('继续').click());
+  await act(async () => vi.advanceTimersByTimeAsync(2200));
+  expect([...document.querySelectorAll('[data-demo-phase="complete"]')].at(-1)?.textContent).toContain(
+    DEMO_EVENTS[3].text,
+  );
+  expect(document.querySelector('[data-preview-stage="design"]')).not.toBeNull();
+});
 
 const acknowledge = async (source: Window | null | undefined, stage = 'final') => {
   await act(async () =>
@@ -93,7 +114,7 @@ it('automates all handoffs without clients or API calls and opens a working deli
   expect(fetch).not.toHaveBeenCalled();
   expect(document.body.textContent).not.toContain('成果已就绪');
   await acknowledge(frame?.contentWindow);
-  expect(document.querySelector('a')?.getAttribute('href')).toBe('/settings?s=members&shell=v2&view=setup');
+  expect(document.querySelector('a')?.getAttribute('href')).toBe('/settings?s=members&view=setup');
   expect(document.querySelector('a')?.textContent).toContain('创建我的猫猫');
 });
 

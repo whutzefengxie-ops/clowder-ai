@@ -312,7 +312,7 @@ app.on('ready', async () => {
     dbg(`startAll() FAILED: ${err.message}`);
     dialog.showErrorBox(
       'Clowder AI - Startup Error',
-      `Failed to start services:\n${err.message}\n\nCheck logs in .cat-cafe/logs/`,
+      `Failed to start services:\n${err.message}\n\nCheck logs in ${path.join(USER_DATA_DIR, 'data', 'logs')}`,
     );
     app.quit();
   }

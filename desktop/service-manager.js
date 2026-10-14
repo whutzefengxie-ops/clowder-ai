@@ -3,6 +3,7 @@
 
 const { spawn, execSync } = require('node:child_process');
 const path = require('node:path');
+const { pathToFileURL } = require('node:url');
 const net = require('node:net');
 const http = require('node:http');
 const fs = require('node:fs');
@@ -429,7 +430,12 @@ class ServiceManager {
     }
     // cwd must be a writable dir containing pnpm-workspace.yaml so that the
     // API's findMonorepoRoot() anchors on it, not on Program Files.
-    this._startProcess('api', nodeExe, [apiEntry], { envOverrides, cwd: userProjectDir });
+    this._startProcess(
+      'api',
+      nodeExe,
+      ['--import', pathToFileURL(path.join(__dirname, 'api-startup-probe.mjs')).href, apiEntry],
+      { envOverrides, cwd: userProjectDir },
+    );
     log(`API process spawned, waiting for port ${this.apiPort}`);
     await this._waitForPort(this.apiPort, 'API');
   }

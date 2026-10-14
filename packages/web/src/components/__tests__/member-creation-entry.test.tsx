@@ -44,15 +44,15 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-it('waits for the roster before routing a fresh add page to the recommended team', async () => {
+it('keeps ordinary add usable without waiting for discovery or an empty roster', async () => {
   await render();
-  expect(host.textContent).toContain('正在读取已有伙伴');
+  expect(host.textContent).toContain('单个伙伴配置');
   state.hasFetched = true;
   state.isLoading = false;
   await render();
-  expect(host.textContent).toContain('默认团队推荐');
+  expect(host.textContent).toContain('单个伙伴配置');
   await render([{ id: 'just-created' } as CatData]);
-  expect(host.textContent).toContain('默认团队推荐');
+  expect(host.textContent).toContain('单个伙伴配置');
 });
 
 it('preserves the ordinary single-member editor for an existing team', async () => {

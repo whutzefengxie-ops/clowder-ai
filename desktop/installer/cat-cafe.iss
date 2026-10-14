@@ -71,11 +71,12 @@ Name: "{app}\node"
 ; Shipped as tar.gz and extracted post-install by Windows' built-in tar.exe.
 ; This replaces per-file Inno Setup extraction of 30K+ node_modules files,
 ; eliminating per-file NTFS + Defender overhead (10+ min → <2 min install).
-Source: "..\..\bundled\archives\deploy-api.tar.gz";        DestDir: "{app}\bundled\archives"
-Source: "..\..\bundled\archives\deploy-web.tar.gz";        DestDir: "{app}\bundled\archives"
-Source: "..\..\bundled\archives\deploy-mcp-server.tar.gz"; DestDir: "{app}\bundled\archives"
-Source: "..\..\bundled\archives\electron.tar.gz";           DestDir: "{app}\bundled\archives"
-Source: "..\..\bundled\archives\node.tar.gz";               DestDir: "{app}\bundled\archives"
+Source: "..\scripts\extract-runtime-archive.cjs"; DestDir: "{app}\scripts"
+Source: "..\..\bundled\archives\node.tar.gz"; DestDir: "{app}\bundled\archives"; AfterInstall: ExtractRuntimeArchive('node.tar.gz')
+Source: "..\..\bundled\archives\deploy-api.tar.gz"; DestDir: "{app}\bundled\archives"; AfterInstall: ExtractRuntimeArchive('deploy-api.tar.gz')
+Source: "..\..\bundled\archives\deploy-web.tar.gz"; DestDir: "{app}\bundled\archives"; AfterInstall: ExtractRuntimeArchive('deploy-web.tar.gz')
+Source: "..\..\bundled\archives\deploy-mcp-server.tar.gz"; DestDir: "{app}\bundled\archives"; AfterInstall: ExtractRuntimeArchive('deploy-mcp-server.tar.gz')
+Source: "..\..\bundled\archives\electron.tar.gz"; DestDir: "{app}\bundled\archives"; AfterInstall: ExtractRuntimeArchive('electron.tar.gz')
 ; ── Individual files (small — per-file overhead negligible) ───────────
 ; cat-template.json — the authoritative source for cat model defaults.
 ; cat-config-loader.js resolves it relative to its own location 4 dirs up
@@ -148,26 +149,6 @@ Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
 [Run]
 ; ── Extract bulk archives (tar.exe built into Windows 10 1803+) ───────
 ; Full {sys} path ensures System32\tar.exe is found regardless of WoW64 state.
-Filename: "{sys}\tar.exe"; \
-  Parameters: "-xzf ""{app}\bundled\archives\deploy-api.tar.gz"" -C ""{app}\packages\api"""; \
-  StatusMsg: "Extracting API runtime..."; \
-  Flags: runhidden waituntilterminated
-Filename: "{sys}\tar.exe"; \
-  Parameters: "-xzf ""{app}\bundled\archives\deploy-web.tar.gz"" -C ""{app}\packages\web"""; \
-  StatusMsg: "Extracting Web runtime..."; \
-  Flags: runhidden waituntilterminated
-Filename: "{sys}\tar.exe"; \
-  Parameters: "-xzf ""{app}\bundled\archives\deploy-mcp-server.tar.gz"" -C ""{app}\packages\mcp-server"""; \
-  StatusMsg: "Extracting MCP Server..."; \
-  Flags: runhidden waituntilterminated
-Filename: "{sys}\tar.exe"; \
-  Parameters: "-xzf ""{app}\bundled\archives\electron.tar.gz"" -C ""{app}\desktop-dist"""; \
-  StatusMsg: "Extracting Electron shell..."; \
-  Flags: runhidden waituntilterminated
-Filename: "{sys}\tar.exe"; \
-  Parameters: "-xzf ""{app}\bundled\archives\node.tar.gz"" -C ""{app}\node"""; \
-  StatusMsg: "Extracting Node.js runtime..."; \
-  Flags: runhidden waituntilterminated
 ; Create scripts/node_modules junction → packages/api/node_modules.
 ; compile-system-prompt-l0.mjs uses ESM imports (@cat-cafe/shared) which
 ; require a filesystem node_modules chain (NODE_PATH is ignored by ESM).
@@ -259,6 +240,29 @@ Type: filesandordirs; Name: "{app}\scripts\node_modules"
 function ShouldAutoLaunch(): Boolean;
 begin
   Result := WizardSilent and (ExpandConstant('{param:NoAutoStart|0}') <> '1');
+end;
+
+procedure ExtractRuntimeArchive(ArchiveName: String);
+var
+  ProgramPath, Arguments, AppDir: String;
+  ExitCode: Integer;
+  Started: Boolean;
+begin
+  AppDir := ExpandConstant('{app}');
+  WizardForm.StatusLabel.Caption := 'Extracting ' + ArchiveName + '...';
+  if ArchiveName = 'node.tar.gz' then begin
+    ProgramPath := ExpandConstant('{sys}\tar.exe');
+    Arguments := '-xzf "' + AppDir + '\bundled\archives\node.tar.gz" -C "' + AppDir + '\node"';
+  end else begin
+    ProgramPath := AppDir + '\node\node.exe';
+    Arguments := '"' + AppDir + '\scripts\extract-runtime-archive.cjs" "' + AppDir + '" "' + ArchiveName + '"';
+  end;
+  Started := Exec(ProgramPath, Arguments, AppDir, SW_HIDE, ewWaitUntilTerminated, ExitCode);
+  Log('Runtime extraction ' + ArchiveName + ': exit=' + IntToStr(ExitCode));
+  if (not Started) or (ExitCode <> 0) then
+    RaiseException('Runtime extraction failed: ' + ArchiveName + '. See setup log and ' + AppDir + '\.installer-logs\extract-runtime.log');
+  if (ArchiveName = 'node.tar.gz') and (not FileExists(AppDir + '\node\node.exe')) then
+    RaiseException('Bundled Node.js is incomplete. Installation cannot continue.');
 end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;

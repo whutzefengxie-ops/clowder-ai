@@ -68,6 +68,7 @@
       "project-root.js",
       "renderer-link-policy.js",
       "service-manager.js",
+      "api-startup-probe.mjs",
       "runtime-config.js",
       "runtime-web-server.js",
       "update-checker.js",

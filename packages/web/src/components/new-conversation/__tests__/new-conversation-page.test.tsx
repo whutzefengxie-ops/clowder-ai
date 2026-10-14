@@ -192,7 +192,7 @@ describe('F322 new conversation page', () => {
     );
     const watch = container.querySelector<HTMLButtonElement>('[data-testid="empty-state-bootcamp"]');
     expect(watch?.textContent).toBe(language === 'zh' ? '看看团队如何协作' : 'See the team collaborate');
-    expect(container.querySelector('a')?.getAttribute('href')).toBe('/settings?s=members&shell=v2&view=setup');
+    expect(container.querySelector('a')?.getAttribute('href')).toBe('/settings?s=members&view=setup');
     act(() => watch?.click());
     expect(show).toHaveBeenCalledOnce();
     expect(admission.send).not.toHaveBeenCalled();

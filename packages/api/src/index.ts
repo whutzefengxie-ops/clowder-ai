@@ -408,6 +408,7 @@ import { registerMessageReadDiagnostics } from './infrastructure/message-read-di
 import { runSchedulerReplyUserIdBackfill } from './infrastructure/scheduler/scheduler-reply-userid-backfill.js';
 import { securityHeadersPlugin } from './infrastructure/security-headers.js';
 import { sessionAuthPlugin, sessionRoute } from './infrastructure/session-auth.js';
+import { startupMilestone } from './infrastructure/startup-diagnostics.js';
 import { SocketManager } from './infrastructure/websocket/index.js';
 import { avatarsRoutes } from './routes/avatars.js';
 import { enqueueA2ATargets } from './routes/callback-a2a-trigger.js';
@@ -613,6 +614,7 @@ function hasRuntimeSessionDrain(service: AgentService): service is AgentService 
 }
 
 async function main(): Promise<void> {
+  startupMilestone('module-graph-loaded');
   let managedCommandWakeRecovery: ManagedCommandWakeRecoverySweep | undefined;
   const { logger: customLogger, isDebugMode, LOG_DIR_PATH } = await import('./infrastructure/logger.js');
   let sessionHookAuthenticationReady = (): boolean => false;
@@ -620,6 +622,7 @@ async function main(): Promise<void> {
   // F152: Initialize OpenTelemetry SDK (must be early, before routes)
   const { initTelemetry } = await import('./infrastructure/telemetry/init.js');
   const telemetryHandle = initTelemetry();
+  startupMilestone('telemetry-ready');
 
   const { registerMemberSaveDiagnostics } = await import('./routes/member-save-diagnostics.js');
   const { saveSpan } = await import('./utils/member-save-diagnostics.js');
@@ -1600,6 +1603,7 @@ async function main(): Promise<void> {
   // F152: Wire evidence store into /ready probe
   evidenceStoreRef = memoryServices.evidenceStore;
   app.log.info('[api] F102: SQLite memory services initialized');
+  startupMilestone('memory-services-ready');
 
   // Thread index repair: rebuild ZSet indexes from thread detail hashes if sparse.
   // Prevents "all threads disappeared" after unclean shutdown.
@@ -8131,6 +8135,7 @@ async function main(): Promise<void> {
     address = await listenBeforeTurnExecutionRecovery({
       listen: async () => {
         const listening = await app.listen({ port: PORT, host: HOST });
+        startupMilestone('http-listening');
         releaseHostListening();
         return listening;
       },

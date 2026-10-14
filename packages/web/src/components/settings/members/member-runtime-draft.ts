@@ -9,7 +9,7 @@ export interface RuntimeChoice {
   clientId: HubCatEditorFormState['clientId'];
   installed: boolean;
   readiness?: NativeLoginState;
-  discoveryStatus?: 'configured' | 'acp_profile_missing' | 'not_installed';
+  discoveryStatus?: 'configured' | 'acp_profile_missing' | 'adapter_missing' | 'not_installed';
   models: string[];
   configuredModel?: string;
   configuredEffort?: string;

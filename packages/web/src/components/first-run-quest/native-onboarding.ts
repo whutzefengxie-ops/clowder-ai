@@ -49,8 +49,9 @@ export function recommendNativePartners(
     ]);
     // Full descriptor equality prevents short-hash collisions in the local partner index.
     const key = runtime.acp ? `acp:${encodeURIComponent(descriptor)}` : runtime.id;
-    if (seen.has(descriptor)) return [];
-    seen.add(descriptor);
+    const discoveryIdentity = runtime.acp ? descriptor : runtime.id;
+    if (seen.has(discoveryIdentity)) return [];
+    seen.add(discoveryIdentity);
     const preferred =
       runtime.clientId === 'anthropic' ? 'ragdoll' : runtime.clientId === 'openai' ? 'maine-coon' : 'dragon-li';
     const template = templates.find((item) => item.id === preferred) ?? templates[0];

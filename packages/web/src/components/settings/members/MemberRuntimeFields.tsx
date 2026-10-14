@@ -6,6 +6,7 @@ import type { ProfileItem } from '../../hub-accounts.types';
 import { builtinAccountIdForClient, filterAccounts, type HubCatEditorFormState } from '../../hub-cat-editor.model';
 import { SelectField } from '../../hub-cat-editor-fields';
 import { MemberChoicePicker } from './MemberChoicePicker';
+import { MANUAL_RUNTIME_CHOICES } from './manual-runtime-choices';
 import {
   matchesRuntime,
   type RuntimeChoice,
@@ -69,6 +70,7 @@ export function MemberRuntimeFields({
     ...rememberedRuntimes(runtimeDrafts).filter(
       (old) => !runtimes.some((item) => matchesRuntime(runtimeDefaults(old), item)),
     ),
+    ...MANUAL_RUNTIME_CHOICES.filter((item) => !runtimes.some((runtime) => runtime.clientId === item.clientId)),
   ];
   const selected = tools.find((item) => matchesRuntime(form, item));
   const tool =
@@ -86,7 +88,7 @@ export function MemberRuntimeFields({
   const defaultIdentity = usesDefaultNativeIdentity(form);
   const needsLogin = defaultIdentity && selected?.readiness?.status === 'login_required';
   const { catalog, loading: catalogLoading } = useRuntimeCatalog(
-    needsLogin || selected?.id.startsWith('draft:') ? undefined : selected?.id,
+    needsLogin || selected?.id.startsWith('draft:') || selected?.id.startsWith('manual:') ? undefined : selected?.id,
     editing ? form.catId : undefined,
     form.accountRef,
     form.defaultModel,

@@ -5,6 +5,7 @@ import { catRegistry } from '@cat-cafe/shared';
 import { parse } from 'smol-toml';
 import { getAcpConfig } from '../config/cat-config-loader.js';
 import { resolveCliCommand } from '../utils/cli-resolve.js';
+import { discoverAdditionalRuntimes } from './native-additional-runtimes.js';
 import { discoverDshRuntime } from './native-dsh-discovery.js';
 import { nativeRuntimeReadiness } from './native-runtime-readiness.js';
 
@@ -87,7 +88,10 @@ export function discoverNativeRuntimes(projectRoot: string) {
   const dsh = acp.some((runtime) => runtime.label === 'DSH' && runtime.installed && runtime.acp)
     ? []
     : [discoverDshRuntime()];
-  return { runtimes: [...builtins, ...acp, ...dsh], authenticationStatus: 'not_checked' };
+  return {
+    runtimes: [...builtins, ...acp, ...dsh, ...discoverAdditionalRuntimes(home)],
+    authenticationStatus: 'not_checked',
+  };
 }
 
 /** Bounded native login checks, without prompts, model requests, or refreshing credentials. */

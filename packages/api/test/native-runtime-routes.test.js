@@ -109,7 +109,10 @@ test('native role create, independent override and reset round-trip without acco
     assert.equal(discovery.statusCode, 200, discovery.body);
     assert.equal(discovery.json().authenticationStatus, 'local_checked');
     assert.deepEqual(
-      discovery.json().runtimes.map((r) => r.readiness.status),
+      discovery
+        .json()
+        .runtimes.filter((r) => ['codex', 'claude'].includes(r.id))
+        .map((r) => r.readiness.status),
       ['configured', 'configured'],
     );
     assert.doesNotMatch(discovery.body, /apiKey|access_token|refresh_token/);

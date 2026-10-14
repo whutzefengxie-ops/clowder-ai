@@ -95,4 +95,5 @@ export const DEMO_EVENTS: readonly DemoEvent[] = [
   },
 ];
 
-export const DEMO_SETTINGS_URL = '/settings?s=members&shell=v2&view=setup';
+// Navigation must inherit the user's presentation preference, never write a shell intent.
+export const DEMO_SETTINGS_URL = '/settings?s=members&view=setup';

@@ -13,7 +13,8 @@ let failed = false;
 let loginRequired = false;
 let existing: CatData[] = [];
 const created = vi.fn(),
-  manual = vi.fn();
+  manual = vi.fn(),
+  back = vi.fn();
 const json = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status });
 const button = (name: string) => [...host.querySelectorAll('button')].find((item) => item.textContent?.includes(name))!;
 beforeEach(() => {
@@ -86,7 +87,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 const mount = () =>
-  act(async () => root.render(<RecommendedTeamSetup onCreated={created} onManual={manual} onBack={() => {}} />));
+  act(async () => root.render(<RecommendedTeamSetup onCreated={created} onManual={manual} onBack={back} />));
 
 it('shows missing CLI login before creating a teammate and distinguishes creation from readiness', async () => {
   loginRequired = true;
@@ -115,7 +116,7 @@ it('shows installation help and blocks creation when no supported tools are foun
   await mount();
   expect(host.textContent).toContain('还没有找到可加入的工具');
   expect(host.querySelector('details')?.open).toBe(true);
-  expect(button('查看我的团队').disabled).toBe(true);
+  expect(button('暂不创建').disabled).toBe(false);
   await act(async () => button('手动创建单个伙伴').click());
   expect(manual).toHaveBeenCalledOnce();
   expect(created).not.toHaveBeenCalled();
@@ -126,10 +127,32 @@ it('distinguishes discovery failure from no tools and recovers through detection
   await mount();
   expect(host.querySelector('[role="alert"]')?.textContent).toContain('暂时无法检测工具');
   expect(host.textContent).not.toContain('还没有找到可加入的工具');
-  expect(button('查看我的团队').disabled).toBe(true);
+  expect(button('暂不创建').disabled).toBe(false);
+  await act(async () => button('手动创建单个伙伴').click());
+  expect(manual).toHaveBeenCalledOnce();
   failed = false;
   await act(async () => button('重新检测').click());
   expect(button('一键创建 3 位伙伴').disabled).toBe(false);
+});
+
+it('allows one selected partner and ignores the unselected partners', async () => {
+  await mount();
+  const choices = [...host.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')];
+  act(() => choices[1].click());
+  act(() => choices[2].click());
+  await act(async () => button('一键创建 1 位伙伴').click());
+  const posts = vi.mocked(apiFetch).mock.calls.filter(([, init]) => init?.method === 'POST');
+  expect(posts).toHaveLength(1);
+  expect(JSON.parse(String(posts[0][1]?.body)).clientId).toBe('anthropic');
+  expect(created).toHaveBeenCalledOnce();
+});
+
+it('allows no selection to return without creating roles or invoking models', async () => {
+  await mount();
+  act(() => host.querySelectorAll<HTMLInputElement>('input[type="checkbox"]').forEach((choice) => choice.click()));
+  await act(async () => button('暂不创建').click());
+  expect(back).toHaveBeenCalledOnce();
+  expect(vi.mocked(apiFetch).mock.calls.some(([, init]) => init?.method)).toBe(false);
 });
 
 it('reads the real roster before recommending and does not overwrite an existing partner', async () => {

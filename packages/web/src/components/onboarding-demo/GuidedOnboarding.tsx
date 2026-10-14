@@ -14,18 +14,30 @@ interface Props {
   open: boolean;
   storageScope: string;
   onClose: () => void;
+  onCompleted?: () => void;
 }
-export function GuidedOnboarding({ open, storageScope, onClose }: Props) {
-  return open ? <DemoPlayer key={storageScope} storageScope={storageScope} onClose={onClose} /> : null;
+export function GuidedOnboarding({ open, storageScope, onClose, onCompleted }: Props) {
+  return open ? (
+    <DemoPlayer key={storageScope} storageScope={storageScope} onClose={onClose} onCompleted={onCompleted} />
+  ) : null;
 }
 
-function DemoPlayer({ storageScope, onClose }: Omit<Props, 'open'>) {
+function DemoPlayer({ storageScope, onClose, onCompleted }: Omit<Props, 'open'>) {
   useEffect(() => finishOnboardingNavigation('demo-open', 'ready'), []);
   const playback = useDemoPlayback(storageScope);
   const [delivered, setDelivered] = useState(false);
   const dialog = useRef<HTMLDivElement>(null);
   const close = useRef<HTMLButtonElement>(null);
   const playbackControl = useRef<HTMLButtonElement>(null);
+  const completionSent = useRef(false);
+  const complete = useRef(onCompleted);
+  complete.current = onCompleted;
+  useEffect(() => {
+    if (playback.finished && delivered && !completionSent.current) {
+      completionSent.current = true;
+      complete.current?.();
+    }
+  }, [playback.finished, delivered]);
   const started = playback.index >= 0;
   useEffect(() => {
     const previous = document.activeElement;
@@ -45,7 +57,8 @@ function DemoPlayer({ storageScope, onClose }: Omit<Props, 'open'>) {
   const current = DEMO_EVENTS[playback.index];
   const active =
     current && current.speaker !== 'user' && current.speaker !== 'system' ? (current.speaker as DemoCat) : undefined;
-  const stage = [...events].reverse().find((event) => event.artifact)?.artifact;
+  const completedEvents = playback.phase === 'complete' || playback.finished ? events : events.slice(0, -1);
+  const stage = [...completedEvents].reverse().find((event) => event.artifact)?.artifact;
   const replay = () => {
     setDelivered(false);
     playback.start();
@@ -107,7 +120,12 @@ function DemoPlayer({ storageScope, onClose }: Omit<Props, 'open'>) {
           </span>
         </div>
         <div className="grid min-h-0 flex-1 grid-rows-[minmax(120px,0.7fr)_minmax(190px,1fr)] md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] md:grid-rows-1">
-          <DemoTranscript events={events} playing={!playback.paused} />
+          <DemoTranscript
+            events={events}
+            playing={!playback.paused}
+            phase={playback.phase}
+            characters={playback.characters}
+          />
           <DemoWorkProduct stage={stage} onReady={() => setDelivered(true)} />
         </div>
         <footer className="border-t border-[var(--console-border-soft)] px-4 py-3 sm:px-6">

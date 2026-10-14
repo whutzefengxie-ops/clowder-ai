@@ -60,7 +60,9 @@ export function NativePartnerCard({
                 ? '已发现'
                 : runtime.discoveryStatus === 'acp_profile_missing'
                   ? '待配置 ACP'
-                  : '未检测到'}
+                  : runtime.discoveryStatus === 'adapter_missing'
+                    ? '已安装 · 待接入适配器'
+                    : '未检测到'}
           </p>
         </div>
         {available && (
@@ -81,9 +83,11 @@ export function NativePartnerCard({
       <p className={`${compact ? '' : 'ml-8'} mt-3 text-sm text-cafe-muted`}>
         {available
           ? `${form.defaultModel || '模型跟随工具'} · ${form.cliEffort || '强度跟随工具'}`
-          : runtime.label === 'DSH'
-            ? '需要已安装的 DSH 和 ACP profile。配置完成后重新检测。'
-            : `安装并登录 ${runtime.label} 后，重新检测即可加入。`}
+          : runtime.discoveryStatus === 'adapter_missing'
+            ? '已发现 Pi。需要 ACP 适配器后才能通过此入口接入。'
+            : runtime.label === 'DSH'
+              ? '需要已安装的 DSH 和 ACP profile。配置完成后重新检测。'
+              : `安装并登录 ${runtime.label} 后，重新检测即可加入。`}
       </p>
       {!available && <NativeInstallHelp runtime={runtime} />}
       {partner.missingExisting && !created && (

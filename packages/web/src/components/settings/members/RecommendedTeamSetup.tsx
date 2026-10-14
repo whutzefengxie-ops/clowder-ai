@@ -85,7 +85,7 @@ export function RecommendedTeamSetup({
         ) : (
           <>
             <p className="mb-5 text-sm leading-6 text-cafe-secondary">
-              模型和思考强度默认跟随工具。已检查本机登录状态，创建不会调用模型；登录后仍需实际连接验证额度和网络。
+              模型和思考强度默认跟随工具。按工具能力检查本机登录状态，创建不会调用模型；实际连接仍需验证额度和网络。
             </p>
             {available.length ? (
               <div className="grid gap-3 lg:grid-cols-3">{available.map(card)}</div>
@@ -120,24 +120,36 @@ export function RecommendedTeamSetup({
                 ? `已为你选好 ${pending.length} 位新伙伴`
                 : selected.length
                   ? '所选伙伴已加入团队'
-                  : '选择要加入的伙伴')}
+                  : '可以选择一位、多位，或暂不创建')}
           </p>
           <button type="button" disabled={Boolean(busy)} onClick={onManual} className="mt-2 min-h-8 text-cafe-accent">
             手动创建单个伙伴
           </button>
         </div>
-        <button
-          type="button"
-          disabled={loading || Boolean(busy) || errorStage === 'discovery' || !selected.length || invalidSelection}
-          onClick={() => void setup.start()}
-          className="min-h-11 rounded-full bg-cafe-accent px-6 text-sm font-semibold text-[var(--cafe-surface)] disabled:opacity-50"
-        >
-          {busy
-            ? '正在创建…'
-            : pending.length
-              ? `${errorStage === 'save' ? '继续创建' : '一键创建'} ${pending.length} 位伙伴`
-              : '查看我的团队'}
-        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            disabled={Boolean(busy)}
+            onClick={onBack}
+            className="min-h-11 px-3 text-sm text-cafe-secondary"
+          >
+            暂不创建
+          </button>
+          {selected.length > 0 && (
+            <button
+              type="button"
+              disabled={loading || Boolean(busy) || errorStage === 'discovery' || !selected.length || invalidSelection}
+              onClick={() => void setup.start()}
+              className="min-h-11 rounded-full bg-cafe-accent px-6 text-sm font-semibold text-[var(--cafe-surface)] disabled:opacity-50"
+            >
+              {busy
+                ? '正在创建…'
+                : pending.length
+                  ? `${errorStage === 'save' ? '继续创建' : '一键创建'} ${pending.length} 位伙伴`
+                  : '查看我的团队'}
+            </button>
+          )}
+        </div>
       </footer>
     </div>
   );

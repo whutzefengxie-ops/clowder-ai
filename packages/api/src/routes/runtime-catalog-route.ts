@@ -80,6 +80,14 @@ export function registerRuntimeCatalogRoute(app: FastifyInstance) {
         message: 'account_catalog',
       };
     }
+    // Kimi/OpenCode speak native JSON streams, not ACP JSON-RPC. Their readable
+    // model metadata remains useful without launching them with an alien protocol.
+    if (runtime.id === 'kimi' || runtime.id === 'opencode')
+      return {
+        ...fallback,
+        defaultModel: 'configuredModel' in runtime ? runtime.configuredModel : undefined,
+        message: 'configured_only',
+      };
     const member = data.catId ? catRegistry.tryGet(data.catId)?.config : undefined;
     // Arbitrary draft commands are never executable via this read-side API.
     if (
@@ -120,7 +128,10 @@ export function registerRuntimeCatalogRoute(app: FastifyInstance) {
     return {
       ...fallback,
       ...('configuredModel' in runtime
-        ? { defaultModel: runtime.configuredModel, defaultEffort: runtime.configuredEffort }
+        ? {
+            defaultModel: runtime.configuredModel,
+            defaultEffort: 'configuredEffort' in runtime ? runtime.configuredEffort : undefined,
+          }
         : {}),
       ...result,
       models: result.models.length ? result.models : fallback.models,

@@ -13,7 +13,17 @@ function TaskText({ text, active, playing }: { text: string; active: boolean; pl
   return <>{active ? text.slice(0, length) : text}</>;
 }
 
-export function DemoTranscript({ events, playing }: { events: readonly DemoEvent[]; playing: boolean }) {
+export function DemoTranscript({
+  events,
+  playing,
+  phase = 'complete',
+  characters,
+}: {
+  events: readonly DemoEvent[];
+  playing: boolean;
+  phase?: 'thinking' | 'typing' | 'complete';
+  characters?: number;
+}) {
   const list = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (list.current) list.current.scrollTop = list.current.scrollHeight;
@@ -37,6 +47,7 @@ export function DemoTranscript({ events, playing }: { events: readonly DemoEvent
       )}
       {events.map((event, index) => {
         const cat = event.speaker !== 'user' && event.speaker !== 'system' ? DEMO_TEAM[event.speaker] : null;
+        const currentPhase = index === events.length - 1 && cat ? phase : 'complete';
         if (event.speaker === 'system')
           return (
             <p
@@ -56,14 +67,29 @@ export function DemoTranscript({ events, playing }: { events: readonly DemoEvent
               <span className="text-sm font-semibold">{cat?.name ?? '你的小目标'}</span>
               <span className="text-xs text-cafe-secondary">{event.title}</span>
             </div>
-            <p className="whitespace-pre-wrap text-sm leading-6">
+            <p className="whitespace-pre-wrap text-sm leading-6" data-demo-phase={cat ? currentPhase : undefined}>
               {event.speaker === 'user' ? (
                 <TaskText text={event.text} active={index === events.length - 1} playing={playing} />
+              ) : currentPhase === 'thinking' ? (
+                <span role="status" className="text-cafe-secondary">
+                  正在思考
+                  <span aria-hidden="true" className="motion-safe:animate-pulse">
+                    …
+                  </span>
+                </span>
+              ) : currentPhase === 'typing' ? (
+                <>
+                  {event.text.slice(0, characters)}
+                  <span aria-hidden="true" className="text-cafe-accent">
+                    ▍
+                  </span>
+                  <span className="sr-only">正在输入</span>
+                </>
               ) : (
                 event.text
               )}
             </p>
-            {event.to && (
+            {event.to && currentPhase === 'complete' && (
               <div
                 data-demo-handoff={event.to}
                 className="mt-3 inline-flex rounded-full bg-[var(--console-xray-bg)] px-3 py-1 text-xs text-[var(--console-xray-text)]"

@@ -34,6 +34,19 @@ const runtimes = [
 ];
 
 describe('native onboarding recommendations', () => {
+  it('keeps distinct tools needing ACP setup visible instead of deduplicating absent descriptors', () => {
+    const pending = ['DSH', 'Pi'].map((label) => ({
+      id: label.toLowerCase(),
+      label,
+      clientId: 'acp' as const,
+      installed: true,
+      models: [],
+    }));
+    expect(recommendNativePartners(pending, templates, [], 'journey').map((p) => p.runtime.label)).toEqual([
+      'DSH',
+      'Pi',
+    ]);
+  });
   it('never treats a real short-hash collision as the same ACP partner', () => {
     const peers = ['1e1unfl', 'hlxo45'].map((profile) => ({
       ...runtimes[2],
