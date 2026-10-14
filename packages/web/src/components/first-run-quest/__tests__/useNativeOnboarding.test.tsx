@@ -43,6 +43,7 @@ beforeEach(() => {
     if (path === '/api/cats') {
       if (!init?.method) return response({ cats: catalog.cats });
       const payload = JSON.parse(String(init?.body));
+      catalog.cats.push({ ...payload, id: payload.catId } as CatData);
       return response(
         { cat: { id: payload.catId, displayName: payload.displayName, mentionPatterns: payload.mentionPatterns } },
         201,
@@ -310,7 +311,9 @@ it('retains successful members when thread creation fails and resumes without du
   expect(Object.keys(setup.draft?.created ?? {})).toHaveLength(3);
   await act(async () => setup.reload());
   await act(async () => setup.start());
-  expect(vi.mocked(apiFetch).mock.calls.filter(([path]) => path === '/api/cats')).toHaveLength(3);
+  expect(
+    vi.mocked(apiFetch).mock.calls.filter(([path, init]) => path === '/api/cats' && init?.method === 'POST'),
+  ).toHaveLength(3);
   expect(onCreated).toHaveBeenCalledOnce();
 });
 

@@ -30,6 +30,7 @@ Codex App Server、Claude 原生客户端、DSH ACP 的 descriptor 与账号配�
 8. 已提交但没有旧回执的草稿不能凭 ID 认领。若发现对应旧伙伴，提供用户明确点击的复用入口。存量 ID、关系引用、账户和历史消息不迁移。
 9. ACP 的本地相等判断和伙伴索引使用完整 command / startupArgs / transport 描述，短散列只用于旧角色查询。新创建请求使用先持久化的 128 位随机 token，避免完整参数编码后超过请求头限制；服务端仍以完整 payloadHash 校验。旧 short-v1 pending 草稿保留原请求 key 和完整 body，响应丢失后的升级重试不会换归属。独立 review 提供的真实散列碰撞 `1e1unfl` / `hlxo45` 已加入“两伙伴均创建、分别恢复”的反例。
 10. 旧草稿的 existingId 必须仍在当前 roster 且 descriptor 一致；已删除成员提示确认重新创建，不能凭本地旧 existingId 回报成功。
+11. 保留的 goal 路径也读取当前真实 roster 并执行相同的完整 descriptor 校验。旧碰撞 created 回执只恢复其匹配的成员；另一 descriptor 保留原表单，使用独立新请求创建，不能重放已明确归属第一份配置的旧请求键。安装包验证单列，不由源码或同进程 Fastify 重建冒充进程重启验收。
 
 Architecture cell: identity-session（现有 runtime catalog owner）。Map delta: none。
 原因：内部 variant 增加归属元数据，写入与恢复仍由原 owner 负责，没有平行 store/queue 或新授权面。
@@ -70,6 +71,7 @@ Codex 行内账户控件对齐最新 main 的只读摘要，修改通过成员�
 
 原生 witness 进一步确认 BSD ps 将换行显示成 `\012`。launchd lease 的子命令使用单行 base64url JSON 传输，runner 校验并解码后原样 spawn；停止仍按精确命令、出生时间和 job/PID 验证。多行、制表、回车、Unicode 和 shell 字面量参数有真实子进程检查。main 中非 macOS 路径引用了已删除的 captureIdentity，已恢复并加入 Windows/Unix 真实启动检查。
 macOS CI 显式安装全局 pnpm、Bash 和 Redis；测试保持私有 HOME、真实 Redis 保存和清理失败不能认证成功的合同。夹具的协作清理遵从正式 start-dev.sh 的屏蔽重复信号规则；已 unref 的测试进程等待退出前重新 ref，避免 Node 提前结束事件循环。
+stop fixture 统一调用生产公开的 readProcessIdentity，保持 UTC/C locale 和完整 ps 宽度；CI 再以 America/Los_Angeles 验证，产品的 PID、出生时间和命令保护不放宽。
 
 列表作者浏览器证据（源码延续证明：之后的修复未修改列表展示组件）：
 

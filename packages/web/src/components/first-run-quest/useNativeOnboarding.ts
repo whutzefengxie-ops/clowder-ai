@@ -49,9 +49,7 @@ export function useNativeOnboarding(
   onCreated: (id: string, name: string) => void | Promise<void>,
   mode: 'goal' | 'members' = 'goal',
 ) {
-  const { cats, refresh } = useCatData();
-  const catsRef = useRef(cats);
-  catsRef.current = cats;
+  const { refresh } = useCatData();
   const [draft, setDraft] = useState<SetupDraft | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -85,9 +83,7 @@ export function useNativeOnboarding(
         signal: controller.signal,
       }),
       readJson<{ templates: TemplateCard[] }>('/api/cat-templates', { signal: controller.signal }),
-      mode === 'members'
-        ? readJson<{ cats: CatData[] }>('/api/cats', { signal: controller.signal })
-        : Promise.resolve({ cats: catsRef.current }),
+      readJson<{ cats: CatData[] }>('/api/cats', { signal: controller.signal }),
     ])
       .then(([session, discovered, templates, roster]) => {
         if (controller.signal.aborted) return;
@@ -101,7 +97,7 @@ export function useNativeOnboarding(
           /* A corrupt draft does not prevent setup. */
         }
         const journeyId = saved?.journeyId ?? newJourneyId();
-        const currentCats = mode === 'members' ? roster.cats : catsRef.current;
+        const currentCats = roster.cats;
         const partners = recommendNativePartners(discovered.runtimes, templates.templates, currentCats, journeyId).map(
           (partner) => {
             const previous = saved?.partners.find((p) => p.form && matchesRuntime(p.form, partner.runtime));
@@ -109,12 +105,19 @@ export function useNativeOnboarding(
             const savedMember = currentCats.find(
               (cat) => cat.id === previous.form.catId && matchesRuntime(initialState(cat), partner.runtime),
             );
-            const confirmed = Boolean(previous.existingId || saved?.created[partner.id]);
+            const acknowledged = saved?.created[partner.id] ?? saved?.created[previous.id];
+            const confirmed = Boolean(previous.existingId || (acknowledged && savedMember?.id === acknowledged.id));
+            const receiptMismatch =
+              acknowledged &&
+              currentCats.some(
+                (cat) => cat.id === acknowledged.id && !matchesRuntime(initialState(cat), partner.runtime),
+              );
             return {
               ...partner,
               // A lost-response retry must retain the exact key of the original persisted request.
-              creationRequestKey:
-                previous.creationRequestKey ?? (saved?.idScheme ? previous.id : partner.creationRequestKey),
+              creationRequestKey: receiptMismatch
+                ? partner.creationRequestKey
+                : (previous.creationRequestKey ?? (saved?.idScheme ? previous.id : partner.creationRequestKey)),
               existingId: confirmed && savedMember ? savedMember.id : undefined,
               missingExisting: Boolean(previous.existingId && !savedMember),
               ...(!confirmed && savedMember && !saved?.idScheme
@@ -137,8 +140,7 @@ export function useNativeOnboarding(
               const previous = saved?.partners.find((p) => p.form && matchesRuntime(p.form, partner.runtime));
               const member = saved?.created[partner.id] ?? (previous && saved?.created[previous.id]);
               return member &&
-                (mode === 'goal' ||
-                  roster.cats.some((cat) => cat.id === member.id && matchesRuntime(initialState(cat), partner.runtime)))
+                roster.cats.some((cat) => cat.id === member.id && matchesRuntime(initialState(cat), partner.runtime))
                 ? [[partner.id, member] as const]
                 : [];
             }),

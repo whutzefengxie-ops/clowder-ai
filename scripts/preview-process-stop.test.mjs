@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { it } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { readProcessIdentity } from './preview-process-launchers.mjs';
 
 const SCRIPT_PATH = join(dirname(fileURLToPath(import.meta.url)), 'preview-process.mjs');
 
@@ -53,8 +54,9 @@ it(
         await new Promise((resolve) => setTimeout(resolve, 25));
       }
       const descendantPid = Number(readFileSync(descendantPidPath, 'utf8').trim());
-      const started = spawnSync('ps', ['-p', String(child.pid), '-o', 'lstart='], { encoding: 'utf8' }).stdout.trim();
-      const command = spawnSync('ps', ['-p', String(child.pid), '-o', 'command='], { encoding: 'utf8' }).stdout.trim();
+      const identity = readProcessIdentity(child.pid);
+      assert.ok(identity, 'the test-owned process must publish its canonical identity');
+      const { processStartedAt: started, processCommand: command } = identity;
       const id = createHash('sha256').update(`${root}\0${port}`).digest('hex').slice(0, 16);
       mkdirSync(stateDir, { recursive: true });
       writeFileSync(

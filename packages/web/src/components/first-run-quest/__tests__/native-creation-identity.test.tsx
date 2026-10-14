@@ -8,7 +8,8 @@ import { recommendNativePartners } from '../native-onboarding';
 import { useNativeOnboarding } from '../useNativeOnboarding';
 
 vi.mock('@/utils/api-client', () => ({ apiFetch: vi.fn() }));
-vi.mock('@/hooks/useCatData', () => ({ useCatData: () => ({ cats: [], refresh: vi.fn() }) }));
+const roster = vi.hoisted(() => ({ cats: [] as CatData[] }));
+vi.mock('@/hooks/useCatData', () => ({ useCatData: () => ({ cats: roster.cats, refresh: vi.fn() }) }));
 const storageKey = 'cat-cafe:native-team-setup:v2:owner-a';
 const runtime = {
   id: 'dsh',
@@ -22,8 +23,8 @@ const response = (data: unknown, status = 200) => new Response(JSON.stringify(da
 let root: Root, container: HTMLDivElement;
 let setup: ReturnType<typeof useNativeOnboarding>;
 const onCreated = vi.fn();
-function Harness() {
-  setup = useNativeOnboarding(true, onCreated, 'members');
+function Harness({ mode = 'members' }: { mode?: 'members' | 'goal' }) {
+  setup = useNativeOnboarding(true, onCreated, mode);
   return <p>{setup.loading ? 'loading' : setup.error}</p>;
 }
 function installDiscovery(peer: typeof runtime, cats: CatData[], post: (init: RequestInit) => Response) {
@@ -32,12 +33,14 @@ function installDiscovery(peer: typeof runtime, cats: CatData[], post: (init: Re
     if (String(path).split('?')[0] === '/api/cats/native-runtimes') return response({ runtimes: [peer] });
     if (path === '/api/cat-templates') return response({ templates: [] });
     if (path === '/api/cats') return init?.method === 'POST' ? post(init) : response({ cats });
+    if (path === '/api/threads') return response({ id: 'first-goal' }, 201);
     throw new Error(`unexpected path ${path}`);
   });
 }
 beforeEach(() => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
   localStorage.clear();
+  roster.cats = [];
   container = document.createElement('div');
   document.body.append(container);
   root = createRoot(container);
@@ -107,4 +110,51 @@ it('bounds ACP request keys independently of descriptor size and persists them b
   expect(requests[1][1]!.body).toBe(requests[0][1]!.body);
   expect(JSON.parse(String(requests[1][1]!.body)).acp.startupArgs).toEqual(peer.acp.startupArgs);
   expect(onCreated).toHaveBeenCalledOnce();
+});
+
+it.each([
+  'members',
+  'goal',
+] as const)('validates legacy created receipts against each descriptor in %s mode', async (mode) => {
+  const peers = ['1e1unfl', 'hlxo45'].map((profile) => ({
+    ...runtime,
+    acp: { ...runtime.acp, startupArgs: ['--profile', profile] },
+  }));
+  const partners = recommendNativePartners(peers, [], [], 'old-collision').map((p) => {
+    const { creationRequestKey: _unused, ...legacy } = p;
+    return { ...legacy, id: 'acp-583e2d40', form: { ...p.form, catId: 'dsh' } };
+  });
+  const key = `cat-cafe:${mode === 'members' ? 'native-team-setup' : 'native-onboarding'}:v2:owner-a`;
+  localStorage.setItem(
+    key,
+    JSON.stringify({
+      version: 2,
+      idScheme: 'short-v1',
+      journeyId: 'old-collision',
+      partners,
+      goal: '整理想法',
+      lead: 'acp-583e2d40',
+      created: { 'acp-583e2d40': { id: 'dsh', name: 'First profile', mention: '@dsh' } },
+    }),
+  );
+  roster.cats = [{ ...buildCatPayload(partners[0].form), id: 'dsh' } as CatData];
+  const writes: RequestInit[] = [];
+  installDiscovery(runtime, roster.cats, (init) => {
+    writes.push(init);
+    // The acknowledged old request belongs to the FIRST descriptor. It cannot create the second.
+    if (new Headers(init.headers).get('Idempotency-Key') === 'onboarding:old-collision:cat:acp-583e2d40')
+      return response({ error: 'receipt belongs to different configuration' }, 409);
+    return response({ cat: { id: 'dsh-2', displayName: 'Second profile', mentionPatterns: ['@dsh-2'] } }, 201);
+  });
+  const original = vi.mocked(apiFetch).getMockImplementation()!;
+  vi.mocked(apiFetch).mockImplementation(async (path, init) =>
+    String(path).startsWith('/api/cats/native-runtimes') ? response({ runtimes: peers }) : original(path, init),
+  );
+  await act(async () => root.render(<Harness mode={mode} />));
+  expect(setup.draft?.partners.map((p) => p.form.catId)).toEqual(['dsh', 'dsh']);
+  await act(async () => setup.start());
+  expect(writes).toHaveLength(1);
+  expect(JSON.parse(String(writes[0].body)).acp.startupArgs).toEqual(peers[1].acp.startupArgs);
+  expect(Object.values(setup.draft!.created).map((member) => member.id)).toEqual(['dsh', 'dsh-2']);
+  expect(setup.error).toBe('');
 });
