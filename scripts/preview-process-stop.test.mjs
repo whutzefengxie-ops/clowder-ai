@@ -100,8 +100,10 @@ it(
         );
       }
       assert.equal(stop.status, 0, stop.stderr || stop.stdout);
-      if (child.exitCode === null && child.signalCode === null)
+      if (child.exitCode === null && child.signalCode === null) {
+        child.ref(); // The fixture unrefs the child; an exit listener alone cannot keep Node's loop alive.
         await new Promise((resolve) => child.once('exit', resolve));
+      }
       assert.throws(() => process.kill(child.pid, 0), /ESRCH/);
       assert.throws(() => process.kill(descendantPid, 0), /ESRCH/);
     } finally {

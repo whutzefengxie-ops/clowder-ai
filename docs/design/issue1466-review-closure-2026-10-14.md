@@ -8,7 +8,7 @@ tips_exempt: Existing native runtime configuration tip covers this refinement; n
 
 # #1466 / PR #1519：review 收敛与成员列表整改
 
-本轮沿 `feat/onboarding-first-run` 实施，合流基线为 main `449134fed1b08e5cf2a05a72817b84f163baf180`。
+本轮沿 `feat/onboarding-first-run` 实施，已先合流 main `449134fed`，再合流新发布的 `69d968d99c898d4287e994383fd60e2be583c0b3`。
 目标是让首次创建简单、列表清晰，并补齐 reviewer 已指出的运行时与升级边界。生产环境和持久数据不重置。
 
 ## 旅程与边界
@@ -28,6 +28,8 @@ Codex App Server、Claude 原生客户端、DSH ACP 的 descriptor 与账号配�
 6. 同一请求并发或响应丢失后的重试返回原成员；不同请求占用相同短名会在持锁期间分配序号。同一请求改变配置返回 409。
 7. 重放不能提前返回：权限继承、registry reconciliation、配置发布仍执行，可恢复“已落盘、发布中断”。
 8. 已提交但没有旧回执的草稿不能凭 ID 认领。若发现对应旧伙伴，提供用户明确点击的复用入口。存量 ID、关系引用、账户和历史消息不迁移。
+9. ACP 的请求身份采用完整 command / startupArgs / transport 描述，短散列只用于旧角色查询。独立 review 提供的真实散列碰撞 `1e1unfl` / `hlxo45` 已加入“两伙伴均创建、分别恢复”的反例。
+10. 旧草稿的 existingId 必须仍在当前 roster 且 descriptor 一致；已删除成员提示确认重新创建，不能凭本地旧 existingId 回报成功。
 
 Architecture cell: identity-session（现有 runtime catalog owner）。Map delta: none。
 原因：内部 variant 增加归属元数据，写入与恢复仍由原 owner 负责，没有平行 store/queue 或新授权面。
@@ -65,6 +67,15 @@ Codex 行内账户控件对齐最新 main 的只读摘要，修改通过成员�
 | 短 ID 不能只按名称判幂等 | 同 catalog 持久归属、并发、发布中断恢复、旧草稿恢复；完整 descriptor 保留，不从短 ID 推断 adapter 或认证 |
 
 本轮不是 #1466 全 Feature 关闭声明，也不是合入许可。安装/认证恢复、F229/F320 完整验收、DSH 生命周期以及既有真实调用证据仍按原讨论分别对账；已修 ACP 历史缺陷不重开。
+
+原生 witness 进一步确认 BSD ps 将换行显示成 `\012`。launchd lease 的子命令使用单行 base64url JSON 传输，runner 校验并解码后原样 spawn；停止仍按精确命令、出生时间和 job/PID 验证。多行、制表、回车、Unicode 和 shell 字面量参数有真实子进程检查。main 中非 macOS 路径引用了已删除的 captureIdentity，已恢复并加入 Windows/Unix 真实启动检查。
+macOS CI 显式安装全局 pnpm、Bash 和 Redis；测试保持私有 HOME、真实 Redis 保存和清理失败不能认证成功的合同。夹具的协作清理遵从正式 start-dev.sh 的屏蔽重复信号规则；已 unref 的测试进程等待退出前重新 ref，避免 Node 提前结束事件循环。
+
+列表作者浏览器证据（源码延续证明：之后的修复未修改列表展示组件）：
+
+![成员列表](assets/issue1466-members-20261014/desktop.png)
+![完整配置与复制](assets/issue1466-members-20261014/details.png)
+![窄屏横向滚动](assets/issue1466-members-20261014/narrow.png)
 
 ## 验证与部署
 
