@@ -86,6 +86,9 @@ export function NativePartnerCard({
             : `安装并登录 ${runtime.label} 后，重新检测即可加入。`}
       </p>
       {!available && <NativeInstallHelp runtime={runtime} />}
+      {partner.missingExisting && !created && (
+        <p className="mt-3 text-sm text-cafe-secondary">原伙伴已不在当前名单中。确认创建后，会按保留的配置重新添加。</p>
+      )}
       {partner.recoverable && !created && (
         <div className="mt-3 text-sm text-cafe-secondary">
           <p>这个旧草稿的 ID 已存在，尚无可验证的创建回执。可以明确复用现有伙伴。</p>

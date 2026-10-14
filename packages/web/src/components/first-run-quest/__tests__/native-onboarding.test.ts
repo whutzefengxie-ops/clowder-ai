@@ -34,6 +34,16 @@ const runtimes = [
 ];
 
 describe('native onboarding recommendations', () => {
+  it('never treats a real short-hash collision as the same ACP partner', () => {
+    const peers = ['1e1unfl', 'hlxo45'].map((profile) => ({
+      ...runtimes[2],
+      label: 'DSH',
+      acp: { command: 'dsh', startupArgs: ['--profile', profile], transport: 'stdio' as const },
+    }));
+    const partners = recommendNativePartners(peers, templates, [], 'journey-123456');
+    expect(new Set(partners.map((p) => p.id)).size).toBe(2);
+    expect(partners.map((p) => p.form.catId)).toEqual(['dsh', 'dsh-2']);
+  });
   it('allocates short IDs in the complete existing namespace without changing runtime descriptors', () => {
     const existing = [
       {

@@ -63,6 +63,70 @@ it('creates the detected team with one confirmation without creating a conversat
   expect(onCreated).toHaveBeenCalledOnce();
 });
 
+it('creates both colliding ACP profiles and restores each exact draft after rediscovery', async () => {
+  const original = vi.mocked(apiFetch).getMockImplementation()!;
+  const peers = ['1e1unfl', 'hlxo45'].map((profile) => ({
+    ...runtimes[2],
+    id: `dsh-${profile}`,
+    acp: { command: 'dsh', startupArgs: ['--profile', profile], transport: 'stdio' },
+  }));
+  vi.mocked(apiFetch).mockImplementation(async (path, init) =>
+    String(path).split('?')[0] === '/api/cats/native-runtimes' ? response({ runtimes: peers }) : original(path, init),
+  );
+  await act(async () => root.render(<Harness mode="members" />));
+  const ids = setup.draft!.partners.map((p) => p.form.catId);
+  await act(async () =>
+    setup.patchPartner(setup.draft!.partners[0].id, {
+      form: { ...setup.draft!.partners[0].form, nickname: 'profile one' },
+    }),
+  );
+  await act(async () => setup.reload());
+  expect(setup.draft!.partners.map((p) => p.form.catId)).toEqual(ids);
+  expect(setup.draft!.partners[0].form.nickname).toBe('profile one');
+  await act(async () => setup.start());
+  const writes = vi
+    .mocked(apiFetch)
+    .mock.calls.filter(([path, init]) => path === '/api/cats' && init?.method === 'POST');
+  expect(writes).toHaveLength(2);
+  expect(writes[0][1]?.headers).not.toEqual(writes[1][1]?.headers);
+  expect(writes.map(([, init]) => JSON.parse(String(init?.body)).acp.startupArgs[1])).toEqual(['1e1unfl', 'hlxo45']);
+});
+
+it('does not reuse a removed existing member from a stale local draft', async () => {
+  catalog.cats = [
+    {
+      id: 'removed-codex',
+      displayName: 'Old partner',
+      clientId: 'openai',
+      configurationSource: 'native_tool',
+      defaultModel: '',
+      avatar: '',
+      color: { primary: '#123456', secondary: '#abcdef' },
+      roleDescription: '',
+      personality: '',
+      mentionPatterns: ['@old'],
+    },
+  ];
+  await act(async () => root.render(<Harness mode="members" />));
+  await act(async () => {
+    for (const p of setup.draft!.partners.slice(1)) setup.patchPartner(p.id, { selected: false });
+  });
+  await act(async () => setup.start());
+  catalog.cats = [];
+  vi.mocked(apiFetch).mockClear();
+  onCreated.mockClear();
+  await act(async () => setup.reload());
+  expect(setup.draft?.partners[0].existingId).toBeUndefined();
+  expect(setup.draft?.partners[0].missingExisting).toBe(true);
+  await act(async () => setup.start());
+  const writes = vi
+    .mocked(apiFetch)
+    .mock.calls.filter(([path, init]) => path === '/api/cats' && init?.method === 'POST');
+  expect(writes).toHaveLength(1);
+  expect(JSON.parse(String(writes[0][1]?.body)).catId).toBe('removed-codex');
+  expect(onCreated).toHaveBeenCalledOnce();
+});
+
 it('retains a legacy draft ID and custom identity when rediscovery recomputes recommendations', async () => {
   await act(async () => root.render(<Harness mode="members" />));
   const saved = JSON.parse(localStorage.getItem('cat-cafe:native-team-setup:v2:owner-a')!);

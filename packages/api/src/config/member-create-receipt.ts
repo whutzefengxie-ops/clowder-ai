@@ -31,7 +31,7 @@ export function memberCreationReceipt(
     typeof journey !== 'string' ||
     typeof key !== 'string' ||
     journey.length > 128 ||
-    key.length > 2048 ||
+    key.length > 8192 ||
     !key.startsWith(`onboarding:${journey}:cat:`)
   )
     throw new MemberCreateConflict('Invalid member creation request identity');

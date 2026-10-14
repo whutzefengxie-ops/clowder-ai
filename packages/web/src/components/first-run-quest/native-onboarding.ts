@@ -11,6 +11,7 @@ export interface NativePartner {
   form: HubCatEditorFormState;
   selected: boolean;
   existingId?: string;
+  missingExisting?: boolean;
   recoverable?: { id: string; form: HubCatEditorFormState };
 }
 
@@ -33,13 +34,14 @@ export function recommendNativePartners(
   const reservedIds = new Set(cats.map((cat) => cat.id.toLowerCase()));
   const reservedAliases = new Set(cats.flatMap((cat) => cat.mentionPatterns.map((alias) => alias.toLowerCase())));
   return runtimes.flatMap((runtime) => {
-    const key = partnerKey(runtime);
     const descriptor = JSON.stringify([
       runtime.clientId,
       runtime.acp?.command,
       runtime.acp?.startupArgs,
       runtime.acp?.transport ?? 'stdio',
     ]);
+    // The short digest remains a legacy lookup only; ownership uses the full descriptor.
+    const key = runtime.acp ? `acp:${encodeURIComponent(descriptor)}` : runtime.id;
     if (seen.has(descriptor)) return [];
     seen.add(descriptor);
     const preferred =
@@ -57,7 +59,7 @@ export function recommendNativePartners(
     let uniqueAlias = alias;
     for (let n = 2; reservedAliases.has(uniqueAlias); n++) uniqueAlias = `${alias}-${n}`;
     reservedAliases.add(uniqueAlias);
-    const legacyId = stableOnboardingMemberId(journeyId, 'partner', key);
+    const legacyId = stableOnboardingMemberId(journeyId, 'partner', partnerKey(runtime));
     const existing = cats.find(
       (cat) =>
         (cat.id === legacyId || cat.configurationSource === 'native_tool') &&

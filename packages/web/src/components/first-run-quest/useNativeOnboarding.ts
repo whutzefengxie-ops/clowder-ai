@@ -104,9 +104,7 @@ export function useNativeOnboarding(
         const currentCats = mode === 'members' ? roster.cats : catsRef.current;
         const partners = recommendNativePartners(discovered.runtimes, templates.templates, currentCats, journeyId).map(
           (partner) => {
-            const previous = saved?.partners.find(
-              (p) => p.id === partner.id && p.form && matchesRuntime(p.form, partner.runtime),
-            );
+            const previous = saved?.partners.find((p) => p.form && matchesRuntime(p.form, partner.runtime));
             if (!previous?.form) return partner;
             const savedMember = currentCats.find(
               (cat) => cat.id === previous.form.catId && matchesRuntime(initialState(cat), partner.runtime),
@@ -114,7 +112,8 @@ export function useNativeOnboarding(
             const confirmed = Boolean(previous.existingId || saved?.created[partner.id]);
             return {
               ...partner,
-              existingId: confirmed ? (savedMember?.id ?? previous.existingId) : undefined,
+              existingId: confirmed && savedMember ? savedMember.id : undefined,
+              missingExisting: Boolean(previous.existingId && !savedMember),
               ...(!confirmed && savedMember && !saved?.idScheme
                 ? { recoverable: { id: savedMember.id, form: initialState(savedMember) } }
                 : {}),
@@ -131,9 +130,15 @@ export function useNativeOnboarding(
           goal: saved?.goal ?? SMALL_GOALS[0].content,
           lead: saved?.lead ?? partners.find((p) => p.selected)?.id ?? '',
           created: Object.fromEntries(
-            Object.entries(saved?.created ?? {}).filter(
-              ([, member]) => mode === 'goal' || roster.cats.some((cat) => cat.id === member.id),
-            ),
+            partners.flatMap((partner) => {
+              const previous = saved?.partners.find((p) => p.form && matchesRuntime(p.form, partner.runtime));
+              const member = saved?.created[partner.id] ?? (previous && saved?.created[previous.id]);
+              return member &&
+                (mode === 'goal' ||
+                  roster.cats.some((cat) => cat.id === member.id && matchesRuntime(initialState(cat), partner.runtime)))
+                ? [[partner.id, member] as const]
+                : [];
+            }),
           ),
           threadId: saved?.threadId,
         });
@@ -174,6 +179,11 @@ export function useNativeOnboarding(
       current.lead,
     );
     if (!selected.length) return;
+    if (selected.some((p) => p.recoverable && !p.existingId)) {
+      setError('旧草稿的成员已存在，请先明确选择复用现有伙伴，或取消选择。');
+      setErrorStage('save');
+      return;
+    }
     inFlight.current = true;
     setError('');
     setErrorStage(null);

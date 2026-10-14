@@ -26,7 +26,9 @@ export function RecommendedTeamSetup({
   const unavailable = draft?.partners.filter((p) => !available.includes(p)) ?? [];
   const selected = available.filter((p) => p.selected);
   const pending = selected.filter((p) => !p.existingId && !draft?.created[p.id]);
-  const invalidSelection = selected.some((p) => invalid[p.id] || !p.form.displayName.trim());
+  const invalidSelection = selected.some(
+    (p) => invalid[p.id] || !p.form.displayName.trim() || Boolean(p.recoverable && !p.existingId),
+  );
   const card = (partner: NonNullable<typeof draft>['partners'][number]) => (
     <NativePartnerCard
       key={partner.id}

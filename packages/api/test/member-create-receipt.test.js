@@ -9,6 +9,7 @@ import { _resetCachedConfig } from '../dist/config/cat-config-loader.js';
 import { configEventBus } from '../dist/config/config-event-bus.js';
 import { catsRoutes } from '../dist/routes/cats.js';
 import { isolateAccountAuthEnvironment } from './helpers/account-auth-environment.js';
+import { selectFakeCodexHome } from './helpers/fake-codex-home.js';
 
 test('short names are allocated atomically and only a persisted operator/request receipt can replay', async () => {
   const root = mkdtempSync(join(tmpdir(), 'member-receipt-'));
@@ -16,11 +17,17 @@ test('short names are allocated atomically and only a persisted operator/request
   mkdirSync(join(root, '.cat-cafe'));
   writeFileSync(join(root, 'cat-template.json'), JSON.stringify(template));
   writeFileSync(join(root, '.cat-cafe/cat-catalog.json'), JSON.stringify(template));
-  const saved = new Map(['CAT_TEMPLATE_PATH', 'CAT_CAFE_GLOBAL_CONFIG_ROOT'].map((key) => [key, process.env[key]]));
+  const saved = new Map(
+    ['CAT_TEMPLATE_PATH', 'CAT_CAFE_GLOBAL_CONFIG_ROOT', 'CODEX_HOME', 'CODEX_SQLITE_HOME'].map((key) => [
+      key,
+      process.env[key],
+    ]),
+  );
   const cwd = process.cwd(),
     restore = isolateAccountAuthEnvironment();
   process.env.CAT_TEMPLATE_PATH = join(root, 'cat-template.json');
   process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT = root;
+  selectFakeCodexHome(root);
   process.chdir(root);
   let app = Fastify();
   await app.register(catsRoutes);
