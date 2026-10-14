@@ -23,7 +23,7 @@ Claude 的真实 elicitation、多 Notice、queued/SDK-ingress 取消和一次 S
 | W0 | 9 份冻结 Git blob hash、北向接口清单、6 个 carrier 声明、CLI/桥/SDK 版本与原生二进制 hash | 源码基线足以实施 W1 | 每个实际 binding 的 B/R/E、账号/profile、运行预算与升级演练尚未完整冻结，完整 G0 未通过 |
 | W1 | 原生 `user/tool_result` 漏接修复、原生 ID/parent/invocation 配对、raw payload、失败状态、真实 CLI/官方 SDK、持久历史/UI 刷新 | 两个 P2 已修，代码与新增 SDK 证据通过 | 完整平台调用/socket/UI 链未验收，完整 G1 未通过 |
 | W2.S | STDIO/HTTP 共用 fail-closed 权限边界、factory 显式默认取消、prompt admission/generation、取消隔离 | P1/P2 全部修复，安全下限通过 | 不是 W3.P 平台 principal/policy/审批/审计，也不证明原生工具已静止 |
-| W4.P | native ID/caller fence、目标反例、持久认领、丢 ACP/native 回执、warm/cold 原生历史对账 | 21项反例与真实3/0次 native steer 经非作者复核 | 活动连接中断范围、生产 durable owner 接线及完整运行预算仍未验收；完整原型 held |
+| W4.P | native ID/caller fence、目标反例、持久认领、丢回执/warm-cold 对账、真实活动STDIO owner退出及旧目标拒绝 | 21项反例、真实对账与追加生命周期边界经非作者复核 | 活动owner退出后turn不能继续存活；需分离consumer/owner寿命并接生产 durable owner，完整原型 held |
 | W5.P | 非打断 next/UUID/result、真人等待、多 Notice、queued/SDK-ingress 取消、SDK0.3.285 升级及 now 对照 | 110项原型/129项 API，真实样本与三处审查问题闭环 | 私有 SDK seam 维护合同、完整升级矩阵/预算及生产交互接线仍未验收；完整原型 held |
 
 审查者：独立个体 `/root/acp_plan_review`，作者之外的本地同行。同家族审查，不称为跨家族审查；回执只覆盖各自阶段，未批准 G0、完整 G1、G3 或整体迁移。

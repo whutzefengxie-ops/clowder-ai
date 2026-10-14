@@ -26,3 +26,11 @@ receipt 查询先复用经校验的持久原生回执；丢 native 回执时，�
 持久性证据覆盖桥进程退出/重启。临时文件 fsync 与 rename 没有证明 OS 崩溃或断电目录落盘；生产不得采用该隔离文件 journal 代替现有 durable operation owner。原子 claim 的孤儿不能靠超时偷取，数据损坏会 fail closed。真实测试在回合终态后重连，未验证活动回合在网络断线期间持续存活。
 
 非作者 `/root/acp_plan_review` 复审确认两项 P2 闭环，并核对实际 primary/restored wire 分别3/0次 steer。该回执补齐已明确的丢回执/冷恢复缺口；完整 W4.P/W4 和整体迁移仍保持 held，待全部验收条件确认。Claude 的 W5.P、正式 W3 审批、V24-C 和回滚不由该结果自动放行。
+
+## 追加：活动 STDIO owner 退出
+
+真实固定环境追加一次只读回合。fixture started后约123ms，native 接受一个 caller A 的 exact steer；随即结束 bridge 的 STDIO 输入。bridge 约2.020秒后exit0，主请求报进程退出，fixture仅started，两侧均未记录turn/completed。本次总耗时11.972秒；退出后新bridge session/load 恢复同一会话，drop后约2.746秒取得原回执且没有重发旧operation；snapshot 的当前turn为空，新operation携旧A target被实际native拒绝 `no active turn to steer`。原始wire和哈希见[追加证据](evidence/w4-active-owner-drop.json)。
+
+这里的通过只指历史对账、无重复和旧目标拒绝；**活动turn并未跨owner退出存活**。上游 index.ts 的 ACP stdin close 会结束 native stdin 并设2秒终止后备，这个生命周期需要在统一方案中明确承接。测试没有模拟socket丢失而owner仍存活，也没有与原Codex服务做同条件差分；因此不称已证明原服务能力退化或ACP协议不可行。
+
+后续应将可重连consumer与原生/bridge owner寿命分开，复用既有runtime/lease/durable owner，再实测活动A跨断连、有效A/stale A以及重复工具/控制副作用。owner已退出的旧injected回执只保留历史接受事实，不能投影为现在仍可控制的turn，不可隐式启动新turn“恢复”。完整W4.P和迁移继续held，新增范围经非作者定向复核。
