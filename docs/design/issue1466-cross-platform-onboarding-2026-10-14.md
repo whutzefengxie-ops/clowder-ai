@@ -5,6 +5,8 @@ doc_kind: implementation-plan
 created: 2026-10-14
 ---
 
+> 以下为实施前方案。当前实现、实际安装截图和剩余验收见 [Windows 实际安装验证回执](issue1466-windows-installed-verification-2026-10-14.md)。
+
 @zts212653 @mindfn 本轮先同步全部未完成项和技术方案，再实施。继续在 `feat/onboarding-first-run` / PR #1519 收敛。当前代码 HEAD `194e44f221652883c3e520da03a4512e9fcaf040`；此前逐项修复回执见 [6160982035](https://github.com/zts212653/clowder-ai/pull/1519#issuecomment-6160982035)。本条是待实施方案，不是完成或合入声明。
 
 ## 用户要走通的路径
