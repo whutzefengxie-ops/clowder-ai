@@ -20,7 +20,11 @@ test('keeps Unicode runtime files and fails on missing/unknown payloads', async 
     fs.writeFileSync(path.join(input, 'Clowder AI.exe'), 'entry witness');
     fs.mkdirSync(path.join(root, 'bundled/archives'), { recursive: true });
     await tar.c({ file: path.join(root, 'bundled/archives/electron.tar.gz'), gzip: true, cwd: input }, ['.']);
-    await extractRuntimeArchive(root, 'electron.tar.gz', tar);
+    const events = [];
+    await extractRuntimeArchive(root, 'electron.tar.gz', tar, { onProgress: (event) => events.push(event) });
+    assert.equal(events[0]?.status, 'start');
+    assert.equal(events.at(-1)?.status, 'complete');
+    assert.ok(events.at(-1).entries >= 3);
     assert.equal(fs.readFileSync(path.join(root, 'desktop-dist/中文目录/snow ☃.txt'), 'utf8'), 'unicode witness');
     await assert.rejects(extractRuntimeArchive(root, 'unknown.tar.gz', tar), /Unknown/);
     await assert.rejects(extractRuntimeArchive(root, 'deploy-api.tar.gz', tar), /ENOENT/);

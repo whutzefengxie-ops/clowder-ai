@@ -49,6 +49,8 @@ const run = (arguments_) =>
 const result = run(['install', '--prod', '--frozen-lockfile', '--config.node-linker=hoisted', '--ignore-scripts']);
 if (result.status !== 0) throw new Error(`Frozen production install failed (${result.status}): ${result.error ?? ''}`);
 await rebuildFrozenDependencies(workspace);
-const receipt = exportFrozenRuntime(workspace, out, packages, path.join(source, 'pnpm-lock.yaml'));
+const receipt = exportFrozenRuntime(workspace, out, packages, path.join(source, 'pnpm-lock.yaml'), {
+  sharedDependencies: os.platform() === 'win32',
+});
 fs.writeFileSync(path.join(out, 'frozen-install.json'), JSON.stringify({ ...receipt, workspace }, null, 2));
 console.log(JSON.stringify({ out, ...receipt }));

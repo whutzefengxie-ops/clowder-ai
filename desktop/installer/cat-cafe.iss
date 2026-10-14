@@ -6,9 +6,9 @@
 ;
 ; The installer:
 ;   1. Ships bulk tar.gz archives (deploy packages, Electron, Node.js)
-;      instead of 30K+ individual files — eliminates per-file NTFS + Defender
-;      overhead that caused 10+ min installs
-;   2. Extracts archives post-install using Windows' built-in tar.exe
+;      plus a single frozen shared dependency tree, without duplicate shell resources.
+;   2. Extracts Node with system tar, then runtime archives with bundled npm tar,
+;      integrity manifests, live progress and diagnostic heartbeats.
 ;   3. Copies small files directly (skills, docs, scripts, Redis)
 ;   4. Runs post-install-offline.ps1 for .env / skills setup
 ;   5. Runs user-level Agent CLI hook sync under the invoking user profile
@@ -70,9 +70,11 @@ Name: "{app}\node"
 ; ── Bulk archives ─────────────────────────────────────────────────────
 ; Shipped as tar.gz and extracted post-install by Windows' built-in tar.exe.
 ; This replaces per-file Inno Setup extraction of 30K+ node_modules files,
-; eliminating per-file NTFS + Defender overhead (10+ min → <2 min install).
+; Runtime extraction still creates files; actual install timings must be measured.
 Source: "..\scripts\extract-runtime-archive.cjs"; DestDir: "{app}\scripts"
+Source: "..\..\bundled\archives\*.tar.gz.json"; DestDir: "{app}\bundled\archives"
 Source: "..\..\bundled\archives\node.tar.gz"; DestDir: "{app}\bundled\archives"; AfterInstall: ExtractRuntimeArchive('node.tar.gz')
+Source: "..\..\bundled\archives\deploy-dependencies.tar.gz"; DestDir: "{app}\bundled\archives"; AfterInstall: ExtractRuntimeArchive('deploy-dependencies.tar.gz')
 Source: "..\..\bundled\archives\deploy-api.tar.gz"; DestDir: "{app}\bundled\archives"; AfterInstall: ExtractRuntimeArchive('deploy-api.tar.gz')
 Source: "..\..\bundled\archives\deploy-web.tar.gz"; DestDir: "{app}\bundled\archives"; AfterInstall: ExtractRuntimeArchive('deploy-web.tar.gz')
 Source: "..\..\bundled\archives\deploy-mcp-server.tar.gz"; DestDir: "{app}\bundled\archives"; AfterInstall: ExtractRuntimeArchive('deploy-mcp-server.tar.gz')
@@ -212,6 +214,7 @@ Filename: "{app}\desktop-dist\{#MyAppExeName}"; \
 ; Recovery: if install fails after delete, rerunning the installer restores everything.
 [InstallDelete]
 Type: filesandordirs; Name: "{app}\scripts\node_modules"
+Type: filesandordirs; Name: "{app}\node_modules"
 Type: filesandordirs; Name: "{app}\packages"
 Type: filesandordirs; Name: "{app}\desktop-dist"
 Type: filesandordirs; Name: "{app}\node"
@@ -221,6 +224,7 @@ Filename: "powershell.exe"; \
   Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\scripts\stop-installed-desktop.ps1"" -AppDir ""{app}"""; \
   Flags: runhidden waituntilterminated
 [UninstallDelete]
+Type: filesandordirs; Name: "{app}\node_modules"
 ; Directories created by tar.exe extraction are not tracked by Inno Setup's
 ; built-in file registry — must be explicitly listed for clean removal.
 Type: filesandordirs; Name: "{app}\packages"
@@ -238,6 +242,18 @@ Type: filesandordirs; Name: "{app}\scripts\node_modules"
 ; PrepareToInstall kills ONLY processes whose executable path is under {app} —
 ; no risk of killing the user's own node/redis instances running elsewhere.
 [Code]
+procedure ExtractionOutput(const S: String; const Error, FirstLine: Boolean);
+var
+  Fields: TArrayOfString;
+begin
+  Log(S);
+  if Error then exit;
+  Fields := StringSplit(S, ['|'], stAll);
+  if (GetArrayLength(Fields) <> 7) or (Fields[0] <> 'EXTRACT') then exit;
+  WizardForm.StatusLabel.Caption := 'Extracting ' + Fields[2] + ' - ' + Fields[3] + '%';
+  WizardForm.FilenameLabel.Caption := Fields[4] + ' / ' + Fields[5] + ' entries - ' + IntToStr(StrToIntDef(Fields[6], 0) div 1000) + 's (' + Fields[1] + ')';
+end;
+
 function ShouldAutoLaunch(): Boolean;
 begin
   Result := WizardSilent and (ExpandConstant('{param:NoAutoStart|0}') <> '1');
@@ -258,7 +274,11 @@ begin
     ProgramPath := AppDir + '\node\node.exe';
     Arguments := '"' + AppDir + '\scripts\extract-runtime-archive.cjs" "' + AppDir + '" "' + ArchiveName + '"';
   end;
-  Started := Exec(ProgramPath, Arguments, AppDir, SW_HIDE, ewWaitUntilTerminated, ExitCode);
+  Log('Runtime extraction starting: ' + ArchiveName);
+  if ArchiveName = 'node.tar.gz' then
+    Started := Exec(ProgramPath, Arguments, AppDir, SW_HIDE, ewWaitUntilTerminated, ExitCode)
+  else
+    Started := ExecAndLogOutput(ProgramPath, Arguments, AppDir, SW_SHOWNORMAL, ewWaitUntilTerminated, ExitCode, @ExtractionOutput);
   Log('Runtime extraction ' + ArchiveName + ': exit=' + IntToStr(ExitCode));
   if (not Started) or (ExitCode <> 0) then
     RaiseException('Runtime extraction failed: ' + ArchiveName + '. See setup log and ' + AppDir + '\.installer-logs\extract-runtime.log');

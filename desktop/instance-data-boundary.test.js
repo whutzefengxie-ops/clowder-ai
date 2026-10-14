@@ -25,7 +25,7 @@ function configure(install, root) {
     { stdio: 'pipe', timeout: 30000 },
   );
 }
-for (const directory of ['desktop-dist', 'packages', 'node', path.join('scripts', 'node_modules')]) {
+for (const directory of ['desktop-dist', 'packages', 'node', 'node_modules', path.join('scripts', 'node_modules')]) {
   test(`runtime rejects data inside replacement directory ${directory}`, () => {
     const own = fs.mkdtempSync(path.join(os.tmpdir(), 'instance-boundary-'));
     try {

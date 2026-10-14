@@ -54,6 +54,8 @@ jobs:
           desktop/service-manager.test.js
           desktop/post-install-profile.test.js
           desktop/frozen-runtime-export.test.mjs
+          desktop/extract-runtime-archive.test.cjs
+          desktop/runtime-archive-progress.test.mjs
           desktop/rebuild-frozen-dependencies.test.mjs
       - name: Build the actual web application
         run: pnpm --filter @cat-cafe/web build
@@ -164,6 +166,7 @@ jobs:
           $install = "${{ runner.temp }}\clowder-install"
           New-Item -ItemType Directory -Force -Path "$install\packages" | Out-Null
           Copy-Item -Recurse "${{ runner.temp }}\clowder-deploy-root\api" "$install\packages\api"
+          Copy-Item -Recurse "${{ runner.temp }}\clowder-deploy-root\dependencies" "$install\node_modules"
           New-Item -ItemType Directory -Force -Path "$install\.claude\hooks" | Out-Null
           Copy-Item ".claude\hooks\f24-compaction.mjs" "$install\.claude\hooks\f24-compaction.mjs"
           Write-Host "staged install root: $install"

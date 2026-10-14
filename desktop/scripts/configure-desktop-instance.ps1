@@ -46,7 +46,7 @@ function Resolve-BoundaryPath([string]$path) {
 }
 function Assert-DataBoundary([string]$root) {
   $candidate = Resolve-BoundaryPath $root
-  foreach ($directory in @('desktop-dist','packages','node','scripts\node_modules')) {
+  foreach ($directory in @('desktop-dist','packages','node','node_modules','scripts\node_modules')) {
     $payload = Resolve-BoundaryPath (Join-Path $AppDir $directory)
     if ($candidate.Equals($payload, [StringComparison]::OrdinalIgnoreCase) -or
         $candidate.StartsWith($payload + '\', [StringComparison]::OrdinalIgnoreCase)) {

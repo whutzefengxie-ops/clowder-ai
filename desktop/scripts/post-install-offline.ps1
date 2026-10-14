@@ -170,10 +170,10 @@ Write-Step "Step 3/3 - Verify"
 
 $artifacts = @(
     "packages/api/dist/index.js",
-    "packages/api/node_modules/zod",
     "packages/api/node_modules/@cat-cafe/shared/dist/index.js",
     "packages/web/.next",
-    "packages/web/node_modules/next/dist/bin/next"
+    $(if (Test-Path (Join-Path $AppDir 'node_modules/.runtime-lock.json')) { 'node_modules/next/dist/bin/next' } else { 'packages/web/node_modules/next/dist/bin/next' }),
+    $(if (Test-Path (Join-Path $AppDir 'node_modules/.runtime-lock.json')) { 'node_modules/zod' } else { 'packages/api/node_modules/zod' })
 )
 $allGood = $true
 foreach ($artifact in $artifacts) {

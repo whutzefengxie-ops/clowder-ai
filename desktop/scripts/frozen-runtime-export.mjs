@@ -30,12 +30,17 @@ export function materialize(from, to, workspace, ancestors = new Set()) {
   }
 }
 
-export function exportFrozenRuntime(workspace, out, packages, lockFile) {
+export function exportFrozenRuntime(workspace, out, packages, lockFile, { sharedDependencies = false } = {}) {
   workspace = fs.realpathSync(workspace);
   const lockHash = hash(lockFile);
   if (hash(path.join(workspace, 'pnpm-lock.yaml')) !== lockHash) throw new Error('Frozen workspace lock changed');
   if (fs.existsSync(out)) throw new Error(`Output must be new: ${out}`);
   fs.mkdirSync(out, { recursive: true });
+  if (sharedDependencies) {
+    const shared = path.join(out, 'dependencies');
+    materialize(path.join(workspace, 'node_modules'), shared, workspace);
+    fs.writeFileSync(path.join(shared, '.runtime-lock.json'), JSON.stringify({ lockHash, node: process.version }));
+  }
   for (const name of packages) {
     const source = path.join(workspace, 'packages', name);
     const destination = path.join(out, name);
@@ -47,10 +52,14 @@ export function exportFrozenRuntime(workspace, out, packages, lockFile) {
     // The entire frozen production graph is retained, including nested peer versions.
     // Workspace links in the hoisted tree become ordinary files within this output.
     const ownModules = path.join(source, 'node_modules');
-    exportModules(path.join(workspace, 'node_modules'), ownModules, path.join(destination, 'node_modules'), workspace);
+    const modules = path.join(destination, 'node_modules');
+    if (sharedDependencies) {
+      fs.mkdirSync(modules);
+      if (fs.existsSync(ownModules)) materialize(ownModules, modules, workspace);
+    } else exportModules(path.join(workspace, 'node_modules'), ownModules, modules, workspace);
     fs.writeFileSync(path.join(destination, '.runtime-lock.json'), JSON.stringify({ lockHash, node: process.version }));
   }
-  return { lockHash, packages };
+  return { lockHash, packages, sharedDependencies };
 }
 
 /** A package override replaces the entire module, never overlays old private peers. */

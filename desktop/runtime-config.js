@@ -21,7 +21,7 @@ function canonicalWithMissingSuffix(value) {
 
 function assertDesktopDataBoundary(instanceRoot, installRoot) {
   const candidate = canonicalWithMissingSuffix(instanceRoot);
-  for (const directory of ['desktop-dist', 'packages', 'node', path.join('scripts', 'node_modules')]) {
+  for (const directory of ['desktop-dist', 'packages', 'node', 'node_modules', path.join('scripts', 'node_modules')]) {
     const payload = canonicalWithMissingSuffix(path.join(installRoot, directory));
     const relative = path.relative(payload, candidate);
     if (!relative || (!path.isAbsolute(relative) && relative !== '..' && !relative.startsWith(`..${path.sep}`)))

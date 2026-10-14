@@ -249,7 +249,7 @@ if (-not $SkipElectronBuild) {
     npm ci --include=dev
         if ($LASTEXITCODE -ne 0) { Write-Err "npm install failed in desktop/"; exit 1 }
     }
-    npx electron-builder --win --dir
+    npx electron-builder --win --dir --config windows-builder.cjs
     if ($LASTEXITCODE -ne 0) { Write-Err "electron-builder failed"; exit 1 }
     Pop-Location
 
@@ -272,6 +272,7 @@ if (-not $SkipElectronBuild) {
     # Substring match avoids slash-direction issues — Windows FullName uses '\',
     # the patterns above contain no separators so they hit either way.
     $winResources = Join-Path (Join-Path $desktopDist "win-unpacked") "resources"
+    if (Test-Path (Join-Path $winResources "packages")) { throw "Windows shell duplicated runtime packages" }
     if (Test-Path $winResources) {
         $darwinLeak = Get-ChildItem -Path $winResources -Recurse -Force -ErrorAction SilentlyContinue | Where-Object {
             $_.FullName -match 'node-darwin|redis-darwin|darwin-[a-z0-9]+'
@@ -302,6 +303,7 @@ if (Test-Path $archiveDir) { Remove-Item $archiveDir -Recurse -Force }
 New-Item -ItemType Directory -Path $archiveDir -Force | Out-Null
 
 $archiveTargets = @(
+    @{ Name = "deploy-dependencies"; Src = Join-Path $deployRoot "dependencies" },
     @{ Name = "deploy-api";        Src = Join-Path $deployRoot "api" },
     @{ Name = "deploy-web";        Src = Join-Path $deployRoot "web" },
     @{ Name = "deploy-mcp-server"; Src = Join-Path $deployRoot "mcp-server" },
@@ -309,7 +311,8 @@ $archiveTargets = @(
     @{ Name = "node";              Src = Join-Path $bundledDir "node" }
 )
 
-# Prefer Git GNU tar for large build trees; installed Windows still uses System32 tar.
+# Only Node itself needs a system tar. Runtime archives use the same bundled npm
+# tar implementation as installation and include integrity/progress manifests.
 $archiveTar = (Get-Command tar.exe).Source
 $archiveTarPrefix = @()
 $gitTar = Join-Path $env:ProgramFiles "Git/usr/bin/tar.exe"
@@ -325,6 +328,11 @@ foreach ($t in $archiveTargets) {
         continue
     }
     $archivePath = Join-Path $archiveDir "$($t.Name).tar.gz"
+    if ($t.Name -ne 'node') {
+        node (Join-Path $ProjectRoot 'desktop/scripts/create-runtime-archive.mjs') $t.Src $archivePath
+        if ($LASTEXITCODE -ne 0) { throw "Runtime archive failed: $($t.Name)" }
+        continue
+    }
     $oldErrorPreference = $ErrorActionPreference
     try {
         $ErrorActionPreference = "Continue"
@@ -437,6 +445,7 @@ if (-not $SkipPortableZip) {
     Copy-ToStaging (Join-Path $deployRoot "api")         "packages\api"
     Copy-ToStaging (Join-Path $deployRoot "web")         "packages\web"
     Copy-ToStaging (Join-Path $deployRoot "mcp-server")  "packages\mcp-server"
+    Copy-ToStaging (Join-Path $deployRoot "dependencies") "node_modules"
 
     # Root config files
     foreach ($f in @("cat-template.json", "pnpm-workspace.yaml", "package.json")) {
