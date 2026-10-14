@@ -5,23 +5,20 @@
 .DESCRIPTION
   Full pipeline:
     1. Install & build the web application
-    2. pnpm deploy per runtime package (api, web) -> bundled/deploy/{api,web}/
+    2. Frozen production install -> bundled/deploy/{api,web,mcp-server}/
        with flat hoisted node_modules (real files, no junctions)
     3. Bundle Redis portable for offline install
     4. Build the Electron shell (via desktop/ npm install + electron-builder)
     5. Compile Inno Setup installer -> dist/ClowderAI-Setup-x.x.x.exe
 
-  Why pnpm deploy (not tar of root node_modules): pnpm on Windows uses
-  junctions, which require absolute paths. A tarball of node_modules bakes in
-  the build-machine absolute paths and every junction is broken after install.
-  `pnpm deploy --config.node-linker=hoisted` produces a self-contained, flat
-  node_modules with real files that is portable across machines.
+  Production dependencies use the source lock, including peer bindings.
+  Workspace links are materialized as real files for portable installation.
 
 .PARAMETER SkipWebBuild
   Skip pnpm install/build (use existing build artifacts).
 
 .PARAMETER SkipBundleDeps
-  Skip pnpm deploy step (use existing bundled/deploy/).
+  Skip frozen runtime export (use existing bundled/deploy/).
 
 .PARAMETER SkipElectronBuild
   Skip electron-builder (use existing desktop-dist/). Use desktop/package-lock.json
@@ -58,7 +55,7 @@ Write-Step "Step 1/8 - Build web application"
 if (-not $SkipWebBuild) {
     Push-Location $ProjectRoot
     pnpm install --frozen-lockfile
-    if ($LASTEXITCODE -ne 0) { pnpm install }
+    if ($LASTEXITCODE -ne 0) { throw "Frozen dependency installation failed" }
     pnpm run build
     if ($LASTEXITCODE -ne 0) { Write-Err "Build failed"; exit 1 }
     Pop-Location
@@ -67,88 +64,28 @@ if (-not $SkipWebBuild) {
     Write-Ok "Skipped (existing artifacts)"
 }
 
-# Step 2: pnpm deploy per runtime package (flat, self-contained node_modules)
-# Produces bundled/deploy/{api,web}/ with real files — no junctions, no workspace
-# references. Replaces the old "tar root node_modules" approach, which baked in
-# build-machine absolute paths via Windows junctions and broke on install.
-Write-Step "Step 2/8 - pnpm deploy runtime packages"
+# Step 2: ordinary frozen install, then materialize portable runtime trees.
+# pnpm 9 hoisted deploy disables lockfile reads; do not use it for releases.
+Write-Step "Step 2/8 - Frozen runtime packages"
 $bundledDir = Join-Path $ProjectRoot "bundled"
 $deployRoot = Join-Path $bundledDir "deploy"
 if (-not $SkipBundleDeps) {
-    if (-not (Test-Path $bundledDir)) {
-        New-Item -ItemType Directory -Path $bundledDir -Force | Out-Null
+    New-Item -ItemType Directory -Path $bundledDir -Force | Out-Null
+    $stamp = [DateTime]::UtcNow.ToString('yyyyMMddHHmmssfff')
+    $nextDeploy = Join-Path $bundledDir "deploy-$stamp"
+    node (Join-Path $ProjectRoot "desktop/scripts/frozen-runtime-deploy.mjs") $ProjectRoot $nextDeploy
+    if ($LASTEXITCODE -ne 0) { throw "Frozen runtime export failed" }
+    if (Test-Path -LiteralPath $deployRoot) {
+        Move-Item -LiteralPath $deployRoot -Destination (Join-Path $bundledDir "deploy-before-$stamp")
     }
-    if (Test-Path $deployRoot) { Remove-Item $deployRoot -Recurse -Force }
-    New-Item -ItemType Directory -Path $deployRoot -Force | Out-Null
-
-    # pnpm deploy creates .bin/ shims on Windows that Defender can lock,
-    # causing EPERM.  pnpm deploy also requires an empty target directory.
-    # Retry with a delay lets Defender finish scanning before the next attempt.
-    $defenderExclusionAdded = $false
-    $deployFailed = $false
-
-    try {
-        Add-MpPreference -ExclusionPath $deployRoot -ErrorAction Stop
-        $defenderExclusionAdded = $true
-    } catch {
-        Write-Host "  Defender exclusion skipped: $($_.Exception.Message)" -ForegroundColor Yellow
-    }
-
-    try {
-        Push-Location $ProjectRoot
-        try {
-            foreach ($pkg in @('api', 'web', 'mcp-server')) {
-                $out = Join-Path $deployRoot $pkg
-                $deployed = $false
-                for ($attempt = 1; $attempt -le 3; $attempt++) {
-                    if ($attempt -gt 1) {
-                        Write-Host "  Retry $attempt/3 for @cat-cafe/$pkg ..." -ForegroundColor Yellow
-                        Start-Sleep -Seconds 10
-                    }
-                    if (Test-Path $out) { Remove-Item $out -Recurse -Force }
-                    Write-Host "  Deploying @cat-cafe/$pkg ..." -ForegroundColor Gray
-                    $env:CAT_CAFE_SKIP_NODE_RUNTIME_GUARD = "1"
-                    pnpm --filter "@cat-cafe/$pkg" --prod --config.node-linker=hoisted deploy $out 2>&1
-                    $env:CAT_CAFE_SKIP_NODE_RUNTIME_GUARD = $null
-                    if ($LASTEXITCODE -eq 0) { $deployed = $true; break }
-                }
-                if (-not $deployed) { throw "pnpm deploy @cat-cafe/$pkg failed after 3 attempts" }
-            }
-        } finally {
-            Pop-Location
-        }
-    } catch {
-        Write-Err $_.Exception.Message
-        $deployFailed = $true
-    } finally {
-        if ($defenderExclusionAdded) {
-            try { Remove-MpPreference -ExclusionPath $deployRoot -ErrorAction SilentlyContinue } catch {}
-        }
-    }
-
-    if ($deployFailed) { exit 1 }
-
-    # Web's pre-built .next artifact is not copied by `pnpm deploy` (it's outside
-    # the package `files` field), so inject it explicitly.
-    $webNextSrc = Join-Path $ProjectRoot "packages\web\.next"
-    $webNextDst = Join-Path $deployRoot "web\.next"
-    if (Test-Path $webNextSrc) {
-        if (Test-Path $webNextDst) { Remove-Item $webNextDst -Recurse -Force }
-        Copy-Item $webNextSrc $webNextDst -Recurse
-        Write-Ok "Copied packages/web/.next -> bundled/deploy/web/.next"
-    } else {
-        Write-Err "packages/web/.next not found — did 'pnpm run build' run?"
-        exit 1
-    }
-
-    Write-Ok "Deploy artifacts ready under bundled/deploy/"
-} else {
-    if (-not (Test-Path $deployRoot)) {
-        Write-Err "bundled/deploy/ missing. Run without -SkipBundleDeps first."
-        exit 1
-    }
-    Write-Ok "Skipped (-SkipBundleDeps)"
-}
+    Move-Item -LiteralPath $nextDeploy -Destination $deployRoot
+    $webNextSrc = Join-Path $ProjectRoot "packages/web/.next"
+    if (-not (Test-Path -LiteralPath $webNextSrc)) { throw "Web build missing" }
+    Copy-Item -LiteralPath $webNextSrc -Destination (Join-Path $deployRoot "web/.next") -Recurse
+    Write-Ok "Frozen runtime artifacts ready"
+} elseif (-not (Test-Path -LiteralPath $deployRoot)) {
+    throw "bundled/deploy missing. Run without -SkipBundleDeps first."
+} else { Write-Ok "Skipped (-SkipBundleDeps)" }
 
 # Step 3: Bundle Redis portable + Node.js runtime
 Write-Step "Step 3/8 - Bundle Redis portable + Node.js"
@@ -309,7 +246,7 @@ if (-not $SkipElectronBuild) {
     Push-Location $desktopDir
     if (-not (Test-Path (Join-Path $desktopDir "node_modules"))) {
         Write-Host "  Installing desktop dependencies..."
-    npm install --include=dev
+    npm ci --include=dev
         if ($LASTEXITCODE -ne 0) { Write-Err "npm install failed in desktop/"; exit 1 }
     }
     npx electron-builder --win --dir
@@ -378,7 +315,15 @@ foreach ($t in $archiveTargets) {
         continue
     }
     $archivePath = Join-Path $archiveDir "$($t.Name).tar.gz"
-    tar -czf $archivePath -C $t.Src .
+    $oldErrorPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "Continue"
+        $tarOutput = & tar -czf $archivePath -C $t.Src . 2>&1
+        $tarExit = $LASTEXITCODE
+    } finally { $ErrorActionPreference = $oldErrorPreference }
+    $tarOutput | ForEach-Object { Write-Host $_ }
+    if ($tarExit -ne 0) { throw "tar failed for $($t.Name), exit=$tarExit, source=$($t.Src)" }
+    & tar -tzf $archivePath > $null
     if ($LASTEXITCODE -ne 0) {
         Write-Err "tar failed for $($t.Name)"
         exit 1

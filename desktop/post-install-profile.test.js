@@ -36,7 +36,13 @@ test(
         { encoding: 'utf8', windowsHide: true },
       );
       assert.equal(run.status, 0, run.stderr);
-      assert.deepEqual(JSON.parse(fs.readFileSync(result, 'utf8')), ['--project-root', base, '--target-root', profile]);
+      const args = JSON.parse(fs.readFileSync(result, 'utf8'));
+      assert.equal(args[0], '--project-root');
+      assert.equal(args[2], '--target-root');
+      assert.equal(args.length, 4);
+      // Windows PowerShell expands a short 8.3 TEMP spelling to the same long path.
+      assert.equal(fs.realpathSync(args[1]), fs.realpathSync(base));
+      assert.equal(fs.realpathSync(args[3]), fs.realpathSync(profile));
     } finally {
       fs.rmSync(base, { recursive: true, force: true });
     }

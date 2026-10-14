@@ -45,4 +45,43 @@ function readPackagedApiPort(root) {
     throw new Error('Packaged API rewrite must be a loopback origin for an isolated desktop');
   return Number(url.port);
 }
-module.exports = { resolveDesktopRuntime, rewriteDesktopLoopbackUrl, readPackagedApiPort, desktopRedirectPorts };
+function prepareDesktopInstance(app, config) {
+  if (!config.instanceRoot) return;
+  const userData = path.join(config.instanceRoot, 'electron');
+  fs.mkdirSync(userData, { recursive: true });
+  app.setPath('userData', userData);
+}
+function initializeDesktopInstance(session, config, projectRoot) {
+  if (!config.instanceRoot) return;
+  config.packagedApiPort = readPackagedApiPort(projectRoot);
+  session.defaultSession.webRequest.onBeforeRequest(
+    {
+      urls: desktopRedirectPorts(config).flatMap((port) => [
+        `http://localhost:${port}/*`,
+        `http://127.0.0.1:${port}/*`,
+      ]),
+    },
+    (details, callback) => callback({ redirectURL: rewriteDesktopLoopbackUrl(details.url, config) }),
+  );
+}
+function createDesktopLogger(userDataRoot) {
+  const directory = path.join(userDataRoot, 'data', 'logs');
+  try {
+    fs.mkdirSync(directory, { recursive: true });
+  } catch {}
+  const filename = path.join(directory, 'main.log');
+  return (message) => {
+    try {
+      fs.appendFileSync(filename, `[main ${new Date().toISOString()}] ${message}\n`);
+    } catch {}
+  };
+}
+module.exports = {
+  resolveDesktopRuntime,
+  rewriteDesktopLoopbackUrl,
+  readPackagedApiPort,
+  desktopRedirectPorts,
+  prepareDesktopInstance,
+  initializeDesktopInstance,
+  createDesktopLogger,
+};

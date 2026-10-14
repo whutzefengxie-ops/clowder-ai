@@ -100,3 +100,11 @@ Architecture cell: desktop-bootstrap（现有 ServiceManager owner）。Map delt
 部署使用新的独立 Next 构建和 deploy 目录，先记录角色、线程、消息与 catalog 摘要，再只切换隔离 Web 5152 / API 3152。
 Redis 6366、HOME、角色 catalog、历史与 SQLite 路径延用原隔离实例；生产 3003 / 3004 / 6399 不操作。
 启动后对照 build stamp、API 健康、Web 可达性和原数据回读。旧 deploy 保留用于回退。
+
+## 最新 review 与真实 Windows 安装准备
+
+- zts 6161387979：无 ACK 的旧 ACP 共享键迁移补充共享来源标记；唯一提交 descriptor 保留原 key/body，真实 POST 成功后为其他 descriptor 持久化独立键。explicit existingId 复用不充当服务端归属证明。members/goal、正常/反序探测、已提交丢 ACK/均未提交共 8 例 RED→GREEN。服务端完整 payloadHash 冲突约束保留。
+- Windows PowerShell 5 入口使用 ASCII 脚本兼容；8.3 TEMP 与长路径 fixture 按 realpath 校验同一目录。preload VM 注入真实契约所需 argv；main 实例初始化/重定向与日志职责归入 runtime-config，main 343 行。
+- 新冻结出口改用普通 pnpm 9 install --prod --frozen-lockfile --config.node-linker=hoisted。hoisted deploy 会关闭锁读取，不能通过 frozen 参数补救。源码只复制 Git 跟踪清单及显式编译 dist；不复制本地 data/.env/uploads 等运行私有文件。导出按完整包单位处理私有覆盖，保留嵌套 peer，不递归叠加旧包残留。
+- hoisted rebuild 未执行原生依赖 hook，新增按锁定 registry 包执行 install hooks；workspace prepare 仍属于源码构建阶段。新导出 API 用 Node 24 ABI137 执行 SQLite SELECT1 已成功，OTel2.6.1、ClaudeSDK0.3.285 与源锁一致。正式安装器、首次首屏、创建、模型回复与完整进程重启验收尚在进行，不能用上述包级检查替代。
+- 当前本轮引导回归 16 文件 86 项，桌面受影响回归 82 项通过；Web TypeScript noEmit 通过。最终 HEAD CI、实际 Setup.exe 全旅程和源码隔离环境重启将在实证完成后补齐。

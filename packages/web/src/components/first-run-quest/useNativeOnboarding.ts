@@ -7,7 +7,8 @@ import { buildCatPayload } from '../hub-cat-editor.payload';
 import type { RuntimeChoice } from '../settings/members/member-runtime-draft';
 import { matchesRuntime } from '../settings/members/member-runtime-draft';
 import { syncDraftToStorage } from '../thread-drafts';
-import { type NativePartner, recommendNativePartners, SMALL_GOALS } from './native-onboarding';
+import { legacyCreationKey, legacySharedKey } from './legacy-creation-key';
+import { type NativePartner, newNativeRequestKey, recommendNativePartners, SMALL_GOALS } from './native-onboarding';
 import { buildNativeTeamGoal, orderGoalPartners } from './native-team-goal';
 import type { TemplateCard } from './TemplateStep';
 
@@ -117,7 +118,10 @@ export function useNativeOnboarding(
               // A lost-response retry must retain the exact key of the original persisted request.
               creationRequestKey: receiptMismatch
                 ? partner.creationRequestKey
-                : (previous.creationRequestKey ?? (saved?.idScheme ? previous.id : partner.creationRequestKey)),
+                : saved?.idScheme
+                  ? legacyCreationKey(previous, partner, saved.partners, currentCats)
+                  : (previous.creationRequestKey ?? partner.creationRequestKey),
+              legacySharedRequestKey: saved?.idScheme ? legacySharedKey(previous, saved.partners) : undefined,
               existingId: confirmed && savedMember ? savedMember.id : undefined,
               missingExisting: Boolean(previous.existingId && !savedMember),
               ...(!confirmed && savedMember && !saved?.idScheme
@@ -134,7 +138,13 @@ export function useNativeOnboarding(
           journeyId,
           partners,
           goal: saved?.goal ?? SMALL_GOALS[0].content,
-          lead: saved?.lead ?? partners.find((p) => p.selected)?.id ?? '',
+          lead:
+            partners.find((p) => {
+              const previousLead = saved?.partners.find((old) => old.id === saved.lead);
+              return previousLead?.form && matchesRuntime(previousLead.form, p.runtime);
+            })?.id ??
+            partners.find((p) => p.selected)?.id ??
+            '',
           created: Object.fromEntries(
             partners.flatMap((partner) => {
               const previous = saved?.partners.find((p) => p.form && matchesRuntime(p.form, partner.runtime));
@@ -195,7 +205,8 @@ export function useNativeOnboarding(
     let progress = current;
     const headers = { 'Content-Type': 'application/json', 'X-Cat-Cafe-Onboarding-Journey': current.journeyId };
     try {
-      for (const partner of selected) {
+      for (const selection of selected) {
+        const partner = progress.partners.find((p) => p.id === selection.id) ?? selection;
         const id = partner.id;
         if (progress.created[id]) continue;
         setBusy(`正在添加 ${partner.form.displayName}…`);
@@ -217,9 +228,16 @@ export function useNativeOnboarding(
             });
         progress = {
           ...progress,
-          partners: progress.partners.map((p) =>
-            p.id === id ? { ...p, form: { ...p.form, catId: result.cat.id } } : p,
-          ),
+          partners: progress.partners.map((p) => {
+            if (p.id === id) return { ...p, form: { ...p.form, catId: result.cat.id } };
+            // A successful server replay/create proves which legacy key/body owns this member.
+            // Split the remaining collision before their first POST, even when the initial roster was empty.
+            return !partner.existingId &&
+              p.legacySharedRequestKey === partner.creationRequestKey &&
+              p.creationRequestKey === partner.creationRequestKey
+              ? { ...p, creationRequestKey: newNativeRequestKey() }
+              : p;
+          }),
           created: {
             ...progress.created,
             [id]: {

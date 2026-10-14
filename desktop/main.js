@@ -3,14 +3,13 @@
 
 const { app, BrowserWindow, Menu, Tray, dialog, ipcMain, net, session, shell, Notification } = require('electron');
 const path = require('node:path');
-const fs = require('node:fs');
 const { resolveProjectRootFromDir } = require('./project-root');
 const ServiceManager = require('./service-manager');
 const {
   resolveDesktopRuntime,
-  rewriteDesktopLoopbackUrl,
-  readPackagedApiPort,
-  desktopRedirectPorts,
+  initializeDesktopInstance,
+  createDesktopLogger,
+  prepareDesktopInstance,
 } = require('./runtime-config');
 const {
   createRendererLinkOrigins,
@@ -37,41 +36,25 @@ if (process.platform === 'win32') {
 
 const PROJECT_ROOT = resolveProjectRootFromDir(__dirname);
 const desktopRuntime = resolveDesktopRuntime();
-if (desktopRuntime.instanceRoot) desktopRuntime.packagedApiPort = readPackagedApiPort(PROJECT_ROOT);
 const FRONTEND_PORT = desktopRuntime.frontendPort;
 const API_PORT = desktopRuntime.apiPort;
-if (desktopRuntime.instanceRoot) {
-  fs.mkdirSync(path.join(desktopRuntime.instanceRoot, 'electron'), { recursive: true });
-  app.setPath('userData', path.join(desktopRuntime.instanceRoot, 'electron'));
-}
+prepareDesktopInstance(app, desktopRuntime);
 const APP_URL = `http://localhost:${FRONTEND_PORT}`;
 const APP_ORIGIN = new URL(APP_URL).origin;
 const API_ORIGIN = new URL(`http://localhost:${API_PORT}`).origin;
-function createBaseRendererLinkOrigins() {
-  return createRendererLinkOrigins({
+const createBaseRendererLinkOrigins = () =>
+  createRendererLinkOrigins({
     appOrigin: APP_ORIGIN,
     apiOrigin: API_ORIGIN,
     previewGatewayPort: Number.NaN,
   });
-}
 let rendererLinkOrigins = createBaseRendererLinkOrigins();
 const QUIT_FOR_UPDATE_ARG = '--quit-for-update';
 // Main process log in the user data directory alongside API + desktop logs.
 // Single source of truth: service-manager.js resolveUserDataDir() reads
 // electron-builder productName and handles legacy data directory migration.
 const userDataRoot = ServiceManager.USER_DATA_DIR;
-const mainLogDir = path.join(userDataRoot, 'data', 'logs');
-try {
-  fs.mkdirSync(mainLogDir, { recursive: true });
-} catch {}
-const DEBUG_LOG = path.join(mainLogDir, 'main.log');
-
-function dbg(msg) {
-  const line = `[main ${new Date().toISOString()}] ${msg}\n`;
-  try {
-    fs.appendFileSync(DEBUG_LOG, line);
-  } catch {}
-}
+const dbg = createDesktopLogger(userDataRoot);
 
 dbg(`Electron starting. ELECTRON_RUN_AS_NODE=${process.env.ELECTRON_RUN_AS_NODE}`);
 dbg(`process.type=${process.type}, versions.electron=${process.versions.electron}`);
@@ -261,17 +244,7 @@ app.on('ready', async () => {
   }
 
   createSplashWindow();
-  if (desktopRuntime.instanceRoot) {
-    session.defaultSession.webRequest.onBeforeRequest(
-      {
-        urls: desktopRedirectPorts(desktopRuntime).flatMap((port) => [
-          `http://localhost:${port}/*`,
-          `http://127.0.0.1:${port}/*`,
-        ]),
-      },
-      (details, callback) => callback({ redirectURL: rewriteDesktopLoopbackUrl(details.url, desktopRuntime) }),
-    );
-  }
+  initializeDesktopInstance(session, desktopRuntime, PROJECT_ROOT);
   const showAbout = () => showAboutDialog({ app, dialog, onManualUpdate: checkForUpdatesManually });
   tray = createDesktopTray({
     Menu,

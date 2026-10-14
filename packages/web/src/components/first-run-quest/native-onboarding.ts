@@ -12,10 +12,15 @@ export interface NativePartner {
   selected: boolean;
   /** Persisted before POST; independent of descriptor-based UI identity and member ID. */
   creationRequestKey?: string;
+  /** Upgrade-only marker: several old descriptors shared this pending request key. */
+  legacySharedRequestKey?: string;
   existingId?: string;
   missingExisting?: boolean;
   recoverable?: { id: string; form: HubCatEditorFormState };
 }
+
+export const newNativeRequestKey = () =>
+  `acp-${Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join('')}`;
 
 /** Registry-generated ACP ids change after creation; the launch descriptor does not. */
 function partnerKey(runtime: RuntimeChoice): string {
@@ -77,9 +82,7 @@ export function recommendNativePartners(
     return [
       {
         id: key,
-        creationRequestKey: runtime.acp
-          ? `acp-${Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join('')}`
-          : key,
+        creationRequestKey: runtime.acp ? newNativeRequestKey() : key,
         runtime,
         form: existing
           ? initialState(existing)

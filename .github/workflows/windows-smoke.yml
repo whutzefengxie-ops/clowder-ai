@@ -43,7 +43,7 @@ jobs:
           scripts/preview-lease-command.test.mjs
           packages/web/test/sanitize-widget-types.test.mjs
       - name: Desktop isolation and installer profile contracts
-        run: node --test desktop/runtime-config.test.js desktop/runtime-web-server.test.js desktop/service-manager-isolation.test.js desktop/service-manager.test.js desktop/post-install-profile.test.js
+        run: node --test desktop/runtime-config.test.js desktop/runtime-web-server.test.js desktop/service-manager-isolation.test.js desktop/service-manager.test.js desktop/post-install-profile.test.js desktop/frozen-runtime-export.test.mjs desktop/rebuild-frozen-dependencies.test.mjs
       - name: Build the actual web application
         run: pnpm --filter @cat-cafe/web build
       - name: Widget sanitization behavior
@@ -144,16 +144,15 @@ jobs:
         run: |
           echo "commit=$env:GITHUB_SHA" | Tee-Object artifact-identity.txt
           Get-Content artifact-identity.txt
-      - name: Package the API artifact (pnpm deploy)
+      - name: Package the API artifact from the source lock
         run: >-
-          $env:CAT_CAFE_SKIP_NODE_RUNTIME_GUARD = "1";
-          pnpm --filter @cat-cafe/api --prod --config.node-linker=hoisted deploy ${{ runner.temp }}\clowder-deploy
+          node desktop/scripts/frozen-runtime-deploy.mjs . ${{ runner.temp }}\clowder-deploy-root api
       - name: Stage the installed layout (installer file contract)
         shell: pwsh
         run: |
           $install = "${{ runner.temp }}\clowder-install"
           New-Item -ItemType Directory -Force -Path "$install\packages" | Out-Null
-          Copy-Item -Recurse "${{ runner.temp }}\clowder-deploy" "$install\packages\api"
+          Copy-Item -Recurse "${{ runner.temp }}\clowder-deploy-root\api" "$install\packages\api"
           New-Item -ItemType Directory -Force -Path "$install\.claude\hooks" | Out-Null
           Copy-Item ".claude\hooks\f24-compaction.mjs" "$install\.claude\hooks\f24-compaction.mjs"
           Write-Host "staged install root: $install"
