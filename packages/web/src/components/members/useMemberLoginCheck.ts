@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import type { CatData } from '@/hooks/useCatData';
 import { apiFetch } from '@/utils/api-client';
 import type { RuntimeChoice } from '../settings/members/member-runtime-draft';
+import { usesDefaultNativeIdentity } from '../settings/members/native-login-state';
 
 export function useMemberLoginCheck(enabled: boolean) {
   const [runtimes, setRuntimes] = useState<RuntimeChoice[]>([]);
@@ -31,8 +32,7 @@ export function useMemberLoginCheck(enabled: boolean) {
   }, [enabled]);
   return (cat: CatData) => {
     // The default CLI's login says nothing about a member's explicit account or custom command.
-    if (cat.configurationSource !== 'native_tool' || cat.accountRef?.trim() || cat.acp || cat.cliConfigArgs?.length)
-      return undefined;
+    if (!usesDefaultNativeIdentity(cat)) return undefined;
     const id = cat.clientId === 'openai' ? 'codex' : cat.clientId === 'anthropic' ? 'claude' : '';
     return runtimes.find((item) => item.id === id)?.readiness;
   };

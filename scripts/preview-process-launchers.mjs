@@ -40,8 +40,9 @@ export function readProcessIdentity(pid) {
       return null;
     }
   }
-  const started = spawnSync('ps', ['-p', String(pid), '-o', 'lstart='], { encoding: 'utf8' });
-  const command = spawnSync('ps', ['-p', String(pid), '-o', 'command='], { encoding: 'utf8' });
+  const env = { ...process.env, TZ: 'UTC', LANG: 'C', LC_ALL: 'C' };
+  const started = spawnSync('ps', ['-ww', '-p', String(pid), '-o', 'lstart='], { encoding: 'utf8', env });
+  const command = spawnSync('ps', ['-ww', '-p', String(pid), '-o', 'command='], { encoding: 'utf8', env });
   if (started.status !== 0 || command.status !== 0) return null;
   const processStartedAt = started.stdout.trim();
   const processCommand = command.stdout.trim();
@@ -187,6 +188,7 @@ function writeLaunchdPlist(config) {
   writeFileSync(temporaryPath, plist, { mode: 0o600 });
   chmodSync(temporaryPath, 0o600);
   renameSync(temporaryPath, config.plistPath);
+  return command;
 }
 
 export function removeLaunchdJob(config) {
@@ -197,10 +199,20 @@ export function removeLaunchdJob(config) {
   });
 }
 
-async function captureIdentity(pid) {
+export async function captureLaunchdIdentity(pid, launchdLabel, readIdentity = readProcessIdentity, proof = {}) {
+  if (!proof.expectedCommand || !proof.readJobPid) return null;
+  let birth;
   for (let attempt = 0; attempt < 20; attempt += 1) {
-    const identity = readProcessIdentity(pid);
-    if (identity) return identity;
+    if (proof.readJobPid() !== pid) return null;
+    const identity = readIdentity(pid);
+    // launchctl can publish a PID before xpcproxy execs the owned lease runner.
+    // Recording that transient argv makes the existing exact identity fence kill a healthy startup.
+    if (identity) {
+      birth ??= identity.processStartedAt;
+      if (identity.processStartedAt !== birth) return null;
+      if (identity.processCommand === proof.expectedCommand) return identity;
+      if (identity.processCommand !== `xpcproxy ${launchdLabel}`) return null;
+    }
     await new Promise((resolveWait) => setTimeout(resolveWait, 25));
   }
   return null;
@@ -219,7 +231,7 @@ async function waitForLaunchdPid(config, timeoutMs = 2_000) {
 export async function launchWithLaunchd(config) {
   mkdirSync(config.stateDir, { recursive: true, mode: 0o700 });
   removeLaunchdJob(config);
-  writeLaunchdPlist(config);
+  const expectedCommand = writeLaunchdPlist(config).join(' ');
   const bootstrap = spawnSync('launchctl', ['bootstrap', `gui/${process.getuid()}`, config.plistPath], {
     encoding: 'utf8',
     timeout: 5_000,
@@ -234,7 +246,15 @@ export async function launchWithLaunchd(config) {
     rmSync(config.plistPath, { force: true });
     throw new Error(`launchd preview exited before publishing a PID; see ${config.logPath}`);
   }
-  const identity = await captureIdentity(pid);
+  const identity = await captureLaunchdIdentity(pid, config.launchdLabel, readProcessIdentity, {
+    expectedCommand,
+    readJobPid: () => readLaunchdJob(config)?.pid,
+  });
+  if (!identity) {
+    removeLaunchdJob(config);
+    rmSync(config.plistPath, { force: true });
+    throw new Error(`launchd preview did not publish its final process identity; see ${config.logPath}`);
+  }
   return {
     origin: 'launchd',
     launchdLabel: config.launchdLabel,

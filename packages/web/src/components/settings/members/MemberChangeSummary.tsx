@@ -3,6 +3,7 @@ import type { MemberText } from './MemberRuntimeFields';
 import type { MemberDraft } from './member-editor-state';
 
 const labels: Record<keyof HubCatEditorFormState, [string, string]> = {
+  accountBindingMode: ['账号跟随方式', 'Account binding mode'],
   agyNativeEnabled: ['Antigravity 原生运行', 'Native Antigravity'],
   agyProfileEnabled: ['Antigravity 配置档', 'Antigravity profile'],
   agyProfileId: ['Antigravity 配置档 ID', 'Antigravity profile ID'],

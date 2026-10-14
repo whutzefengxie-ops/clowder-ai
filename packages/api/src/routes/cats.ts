@@ -59,6 +59,7 @@ import { reconcileCatRegistry } from '../config/cat-registry-reconciliation.js';
 import { resolveCodexCarrierTruth } from '../config/codex-cli.js';
 import { configEventBus, createChangeSetId } from '../config/config-event-bus.js';
 import { getConfiguredMemberWindowSetting, resolveContextCapacity } from '../config/context-capacity.js';
+import { readLocalAccountSelection } from '../config/local-account-selection.js';
 import {
   MemberConfigurationConflict,
   memberConfigurationRevision,
@@ -70,6 +71,7 @@ import { getResolvedCats } from '../config/resolved-cats.js';
 import {
   createRuntimeCat,
   deleteRuntimeCat,
+  readRuntimeAccountMembers,
   readRuntimeCatCatalog,
   withRuntimeCatMutationLock,
 } from '../config/runtime-cat-catalog.js';
@@ -251,6 +253,7 @@ const updateCatSchema = z.object({
     .regex(/^[a-f0-9]{64}$/)
     .optional(),
   accountRef: z.string().min(1).nullable().optional(),
+  accountBindingMode: z.enum(['follow', 'override']).optional(),
   contextWindow: z.number().int().positive().nullable().optional(),
   roleDescription: z.string().min(1).optional(),
   personality: z.string().optional(),
@@ -725,6 +728,7 @@ async function toCatResponse(
         breedId: cat.breedId,
         relationshipKey: cat.relationshipKey,
         accountRef: effectiveAccountRef,
+        accountBindingMode: cat.accountBindingMode,
         configurationSource: cat.configurationSource,
         configurationRevision: memberConfigurationRevision(projectRoot, cat.id),
         clientId: cat.clientId,
@@ -871,13 +875,14 @@ async function cleanupBlockedMcpForAllProjects(projectRoot: string, deletedCatId
 interface CatsRoutesOptions {
   onCatalogChanged?: (cats: Record<string, CatConfig>) => Promise<void> | void;
   resolveContextCapacitySnapshot?: (catId: CatId) => InvocationCapacitySnapshot | undefined;
+  nativeRuntimeDiscovery?: typeof discoverNativeRuntimesWithReadiness;
 }
 
 export const catsRoutes: FastifyPluginAsync<CatsRoutesOptions> = async (app, opts) => {
   registerRuntimeCatalogRoute(app);
   app.get('/api/cats/native-runtimes', async (request, reply) => {
     if (!resolveHeaderUserId(request)) return reply.code(401).send({ error: '需要登录后检查本机工具' });
-    return discoverNativeRuntimesWithReadiness(
+    return (opts.nativeRuntimeDiscovery ?? discoverNativeRuntimesWithReadiness)(
       resolveProjectRoot(),
       (request.query as { refresh?: string }).refresh === '1',
     );
@@ -965,6 +970,14 @@ export const catsRoutes: FastifyPluginAsync<CatsRoutesOptions> = async (app, opt
 
     const body = parsed.data;
     const createViolationFields = builtinCloudIdentityCreateViolationFields(body);
+    if (
+      body.catId === 'gpt-dot' ||
+      body.mentionPatterns?.some((pattern) => pattern.trim().toLowerCase().replace(/^@/, '') === 'dot')
+    ) {
+      return reply
+        .code(409)
+        .send({ code: 'BUILTIN_CLOUD_HANDLE_RESERVED', error: '请在 ChatGPT 云端插件中接入这只独立云端成员。' });
+    }
     if (createViolationFields.length > 0) {
       reply.status(409);
       return {
@@ -1245,6 +1258,14 @@ export const catsRoutes: FastifyPluginAsync<CatsRoutesOptions> = async (app, opt
 
     const body = parsed.data;
     const restoringBuiltinCloudIdentity = body.restoreBuiltinCloudIdentity === true;
+    if (request.params.id === 'gpt-dot') {
+      const fields = [...BUILTIN_CLOUD_IDENTITY_LOCKED_FIELDS, 'mentionPatterns', 'restoreBuiltinCloudIdentity'];
+      if (fields.some((field) => Object.hasOwn(body, field)))
+        return reply.code(409).send({
+          code: 'BUILTIN_CLOUD_IDENTITY_PROTECTED',
+          error: 'dot 的身份与连接在插件集成中管理。',
+        });
+    }
     const patchViolationFields = isBuiltinGptProIdentity(request.params.id)
       ? builtinCloudIdentityPatchViolationFields(body)
       : [];
@@ -1372,6 +1393,19 @@ export const catsRoutes: FastifyPluginAsync<CatsRoutesOptions> = async (app, opt
     // When the editor sends the old client's builtin accountRef during a provider switch,
     // rebase to the new client's builtin so validation doesn't reject the stale ref.
     const isClientSwitch = body.clientId !== undefined && body.clientId !== currentCat.clientId;
+    if (
+      body.available === true &&
+      body.accountRef === undefined &&
+      body.accountBindingMode === undefined &&
+      currentCat.accountBindingMode === 'follow' &&
+      effectiveClient === 'openai'
+    ) {
+      const selected = readLocalAccountSelection(readRuntimeAccountMembers(projectRoot), 'openai').accountRef;
+      if (selected) {
+        effectiveAccountRef = selected;
+        targetAccountRef = selected;
+      }
+    }
     if (isClientSwitch && effectiveAccountRef) {
       const oldBuiltin = resolveBuiltinClientForProvider(currentCat.clientId);
       if (oldBuiltin && builtinAccountIdForClient(oldBuiltin) === effectiveAccountRef) {
@@ -1387,6 +1421,7 @@ export const catsRoutes: FastifyPluginAsync<CatsRoutesOptions> = async (app, opt
       body.clientId !== undefined ||
       body.defaultModel !== undefined ||
       targetAccountRef !== undefined ||
+      body.accountBindingMode !== undefined ||
       body.provider !== undefined;
 
     if (providerConfigTouched && !restoringBuiltinCloudIdentity) {
@@ -1521,6 +1556,7 @@ export const catsRoutes: FastifyPluginAsync<CatsRoutesOptions> = async (app, opt
         ...(body.mentionPatterns !== undefined ? { mentionPatterns: body.mentionPatterns } : {}),
         ...(body.configurationSource !== undefined ? { configurationSource: body.configurationSource } : {}),
         ...(targetAccountRef !== undefined ? { accountRef: targetAccountRef } : {}),
+        ...(body.accountBindingMode !== undefined ? { accountBindingMode: body.accountBindingMode } : {}),
         ...(canonicalContextWindow !== undefined ? { contextWindow: canonicalContextWindow } : {}),
         ...(body.roleDescription !== undefined ? { roleDescription: body.roleDescription } : {}),
         ...(body.personality !== undefined ? { personality: body.personality } : {}),
@@ -1636,7 +1672,7 @@ export const catsRoutes: FastifyPluginAsync<CatsRoutesOptions> = async (app, opt
       reply.status(404);
       return { error: `Cat "${request.params.id}" not found` };
     }
-    if (isBuiltinGptProIdentity(request.params.id)) {
+    if (isBuiltinGptProIdentity(request.params.id) || request.params.id === 'gpt-dot') {
       reply.status(409);
       return {
         code: 'BUILTIN_CLOUD_IDENTITY_PROTECTED',

@@ -10,6 +10,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 import { catRegistry, createCatId } from '@cat-cafe/shared';
 import './helpers/setup-cat-registry.js';
 import { isolateAccountAuthEnvironment } from './helpers/account-auth-environment.js';
+import { selectFakeCodexHome } from './helpers/fake-codex-home.js';
 
 const { parseA2AMentions } = await import('../dist/domains/cats/services/agents/routing/a2a-mentions.js');
 const { _clearRuntimeOverrides, getRuntimeOverride, setRuntimeOverride } = await import(
@@ -110,6 +111,7 @@ function createProjectRoot() {
   process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT = projectRoot;
   writeFileSync(join(projectRoot, 'cat-template.json'), JSON.stringify(makeTemplate(), null, 2));
   seedCatalogFromTemplate(projectRoot);
+  selectFakeCodexHome(projectRoot);
   return projectRoot;
 }
 
@@ -127,6 +129,7 @@ function createProjectRootFromRepoTemplate() {
   const repoTemplate = JSON.parse(readFileSync(join(__dirname, '..', '..', '..', 'cat-template.json'), 'utf-8'));
   writeFileSync(templateDest, JSON.stringify(repoTemplate, null, 2));
   seedCatalogFromTemplate(projectRoot, templateDest);
+  selectFakeCodexHome(projectRoot);
   process.env.CAT_TEMPLATE_PATH = templateDest;
   return projectRoot;
 }
@@ -143,6 +146,8 @@ function removeAgyOpusFromRuntimeCatalog(projectRoot) {
 describe('cats routes runtime CRUD', { concurrency: false }, () => {
   /** @type {string | undefined} */ let savedGlobalRoot;
   /** @type {string | undefined} */ let savedConfigRoot;
+  /** @type {string | undefined} */ let savedCodexHome;
+  /** @type {string | undefined} */ let savedCodexSqliteHome;
 
   let restoreAuthEnvironment;
   beforeEach(() => {
@@ -150,12 +155,18 @@ describe('cats routes runtime CRUD', { concurrency: false }, () => {
     savedTemplatePath = process.env.CAT_TEMPLATE_PATH;
     savedGlobalRoot = process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT;
     savedConfigRoot = process.env.CAT_CAFE_CONFIG_ROOT;
+    savedCodexHome = process.env.CODEX_HOME;
+    savedCodexSqliteHome = process.env.CODEX_SQLITE_HOME;
     resetRegistryToBuiltins();
     _clearRuntimeOverrides();
   });
 
   afterEach(() => {
     restoreAuthEnvironment();
+    if (savedCodexHome === undefined) delete process.env.CODEX_HOME;
+    else process.env.CODEX_HOME = savedCodexHome;
+    if (savedCodexSqliteHome === undefined) delete process.env.CODEX_SQLITE_HOME;
+    else process.env.CODEX_SQLITE_HOME = savedCodexSqliteHome;
     if (savedGlobalRoot === undefined) delete process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT;
     else process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT = savedGlobalRoot;
     if (savedConfigRoot === undefined) delete process.env.CAT_CAFE_CONFIG_ROOT;

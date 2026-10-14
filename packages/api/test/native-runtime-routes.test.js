@@ -3,9 +3,12 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { test } from 'node:test';
+import { mock, test } from 'node:test';
 import Fastify from 'fastify';
 import { catsRoutes } from '../dist/routes/cats.js';
+import { isolateAccountAuthEnvironment } from './helpers/account-auth-environment.js';
+import { selectFakeCodexHome } from './helpers/fake-codex-home.js';
+import { fakeNativeDiscovery } from './helpers/fake-native-discovery.js';
 
 const cwd = process.cwd();
 const root = mkdtempSync(join(tmpdir(), 'native-roles-'));
@@ -20,8 +23,16 @@ process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT = root;
 process.chdir(root);
 const headers = { 'content-type': 'application/json', 'x-cat-cafe-user': 'default-user' };
 test('native role create, independent override and reset round-trip without account bindings', async () => {
+  const restoreAuth = isolateAccountAuthEnvironment();
+  const selectedHomes = new Map(
+    ['CODEX_HOME', 'CODEX_SQLITE_HOME', 'CLAUDE_CONFIG_DIR', 'DSH_HOME'].map((key) => [key, process.env[key]]),
+  );
+  selectFakeCodexHome(root);
+  process.env.CLAUDE_CONFIG_DIR = join(root, '.claude');
+  process.env.DSH_HOME = join(root, '.dsh');
+  const fixture = fakeNativeDiscovery(root, mock);
   const app = Fastify();
-  await app.register(catsRoutes);
+  await app.register(catsRoutes, { nativeRuntimeDiscovery: fixture.discover });
   try {
     for (const [id, clientId] of [
       ['native-codex', 'openai'],
@@ -97,7 +108,13 @@ test('native role create, independent override and reset round-trip without acco
     const discovery = await app.inject({ method: 'GET', url: '/api/cats/native-runtimes', headers });
     assert.equal(discovery.statusCode, 200, discovery.body);
     assert.equal(discovery.json().authenticationStatus, 'local_checked');
+    assert.deepEqual(
+      discovery.json().runtimes.map((r) => r.readiness.status),
+      ['configured', 'configured'],
+    );
     assert.doesNotMatch(discovery.body, /apiKey|access_token|refresh_token/);
+    assert.doesNotMatch(discovery.body, /fixture@example|fake-sensitive-sentinel/);
+    fixture.assertProtocol();
     const missingAccount = await app.inject({
       method: 'POST',
       url: '/api/cats/runtime-models',
@@ -108,6 +125,12 @@ test('native role create, independent override and reset round-trip without acco
     assert.deepEqual(missingAccount.json(), { status: 'unavailable', models: [], message: 'account_unavailable' });
   } finally {
     await app.close();
+    fixture.restore();
+    restoreAuth();
+    for (const [key, value] of selectedHomes) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
     process.chdir(cwd);
     process.env.CAT_TEMPLATE_PATH = savedTemplate;
     if (savedGlobal === undefined) delete process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT;

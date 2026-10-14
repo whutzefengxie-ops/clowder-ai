@@ -123,6 +123,7 @@ const catVariantSchema = z
     source: z.string().optional(), // #441: legacy field, ignored — kept in schema for old catalog read compat
     configurationSource: z.enum(['native_tool', 'managed_account']).optional(),
     accountRef: z.string().min(1).optional(), // F127: concrete account binding
+    accountBindingMode: z.enum(['follow', 'override']).optional(),
     clientId: z.string().min(1), // #252: accept unknown providers to avoid full config crash
 
     defaultModel: z.string(), // OAuth/subscription CLIs have built-in defaults; api_key validated at route level
@@ -283,6 +284,7 @@ const coCreatorConfigSchema = z.object({
 const catCafeConfigSchemaV1 = z.object({
   version: z.literal(1),
   breeds: z.array(catBreedSchema),
+  selectedAccountRefs: z.record(z.string(), z.string().min(1)).optional(),
 });
 
 /** Version 2: breeds + roster + reviewPolicy (F032) + coCreator (F067) */
@@ -290,6 +292,7 @@ const catCafeConfigSchemaV2 = z
   .object({
     version: z.literal(2),
     breeds: z.array(catBreedSchema),
+    selectedAccountRefs: z.record(z.string(), z.string().min(1)).optional(),
     roster: z.record(z.string(), rosterEntrySchema),
     reviewPolicy: reviewPolicySchema,
     coCreator: coCreatorConfigSchema.optional(),
@@ -562,6 +565,12 @@ function parseCatConfig(raw: string): CatCafeConfig {
   return result.data as unknown as CatCafeConfig;
 }
 
+/** Validate member shape without dropping fields owned by raw catalog consumers (for example ACP). */
+export function parseRawCatConfig(raw: string): CatCafeConfig {
+  parseCatConfig(raw);
+  return JSON.parse(raw) as CatCafeConfig;
+}
+
 export function loadResolvedCatConfig(templatePath?: string, options: CatCatalogReadOptions = {}): CatCafeConfig {
   const resolvedTemplatePath = templatePath ?? process.env.CAT_TEMPLATE_PATH ?? DEFAULT_CAT_TEMPLATE_PATH;
   const raw = mergeTemplateWithCatalog(resolvedTemplatePath, options) ?? readTemplate(resolvedTemplatePath);
@@ -666,6 +675,7 @@ export function toAllCatConfigs(config: CatCafeConfig): Record<string, CatConfig
         mentionPatterns,
         ...(variant.accountRef != null ? { accountRef: variant.accountRef } : {}),
         ...(variant.configurationSource ? { configurationSource: variant.configurationSource } : {}),
+        ...(variant.accountBindingMode ? { accountBindingMode: variant.accountBindingMode } : {}),
         clientId: variant.clientId as ClientId, // #252: Zod now accepts any string; downstream switch/case has default branches
         defaultModel: variant.defaultModel,
         mcpSupport: variant.mcpSupport,

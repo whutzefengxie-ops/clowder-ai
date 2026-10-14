@@ -1599,7 +1599,7 @@ describe('HubCatEditor', () => {
     );
     await flushEffects();
 
-    expect(document.body.textContent).toContain('认证信息');
+    expect(document.body.textContent).toContain('用哪个号');
     expect(document.body.textContent).not.toContain('CLI Command');
 
     await changeField(queryField(container, 'input[aria-label="Name"]'), '火花猫');
@@ -1608,7 +1608,7 @@ describe('HubCatEditor', () => {
     await changeField(queryField(container, 'textarea[aria-label="Aliases"]'), '@runtime-spark, @火花猫');
     await changeField(queryField(container, 'select[aria-label="Client"]'), 'openai', 'change');
     await flushEffects();
-    await changeField(queryField(container, 'select[aria-label="认证信息"]'), 'codex-sponsor', 'change');
+    await changeField(queryField(container, 'select[aria-label="用哪个号"]'), 'codex-sponsor', 'change');
     await changeField(queryField(container, 'input[aria-label="Model"]'), 'gpt-5.4-mini');
 
     const saveButton = Array.from(document.body.querySelectorAll('button')).find(
@@ -2243,7 +2243,7 @@ describe('HubCatEditor', () => {
     await changeField(queryField<HTMLSelectElement>(container, 'select[aria-label="Client"]'), 'google', 'change');
     await flushEffects();
     await changeField(
-      queryField<HTMLSelectElement>(container, 'select[aria-label="认证信息"]'),
+      queryField<HTMLSelectElement>(container, 'select[aria-label="用哪个号"]'),
       'gemini-oauth',
       'change',
     );
@@ -2338,7 +2338,7 @@ describe('HubCatEditor', () => {
     expect(modelInput.value).toBe('claude-opus-4-6');
 
     // Switch Provider to codex-sponsor (API Key)
-    await changeField(queryField(container, 'select[aria-label="认证信息"]'), 'codex-sponsor', 'change');
+    await changeField(queryField(container, 'select[aria-label="用哪个号"]'), 'codex-sponsor', 'change');
     await flushEffects();
 
     // defaultModel should have been reset (not still 'claude-opus-4-6')
@@ -2411,7 +2411,7 @@ describe('HubCatEditor', () => {
     expect(providerInput.value).toBe('maas');
 
     // Switch account to deepseek-key
-    await changeField(queryField(container, 'select[aria-label="认证信息"]'), 'deepseek-key', 'change');
+    await changeField(queryField(container, 'select[aria-label="用哪个号"]'), 'deepseek-key', 'change');
     await flushEffects();
 
     // provider should have been cleared (not still 'maas')
@@ -2441,7 +2441,7 @@ describe('HubCatEditor', () => {
 
     await changeField(queryField(container, 'select[aria-label="Client"]'), 'antigravity', 'change');
     expect(document.body.textContent).toContain('CLI Command');
-    expect(document.body.querySelector('select[aria-label="认证信息"]')).toBeNull();
+    expect(document.body.querySelector('select[aria-label="用哪个号"]')).toBeNull();
   });
 
   it('shows the selected client builtin account together with all API key accounts', async () => {
@@ -2501,7 +2501,7 @@ describe('HubCatEditor', () => {
 
     await changeField(queryField(container, 'select[aria-label="Client"]'), 'openai', 'change');
     await flushEffects();
-    const providerSelect = queryField<HTMLSelectElement>(container, 'select[aria-label="认证信息"]');
+    const providerSelect = queryField<HTMLSelectElement>(container, 'select[aria-label="用哪个号"]');
     const optionLabels = Array.from(providerSelect.options).map((option) => option.textContent ?? '');
     expect(optionLabels).toContain('Codex (OAuth)（OAuth）');
     expect(optionLabels).toContain('Claude Sponsor（API Key）');
@@ -2728,7 +2728,7 @@ describe('HubCatEditor', () => {
     });
     await flushEffects();
 
-    const providerSelect = queryField<HTMLSelectElement>(container, 'select[aria-label="认证信息"]');
+    const providerSelect = queryField<HTMLSelectElement>(container, 'select[aria-label="用哪个号"]');
     const optionLabels = Array.from(providerSelect.options).map((option) => option.textContent ?? '');
     expect(optionLabels).toContain('Gemini (OAuth)（内置）');
     // #470: api_key profiles WITH baseUrl (third-party proxy) now show;
@@ -3053,7 +3053,7 @@ describe('HubCatEditor', () => {
     });
     await flushEffects();
 
-    expect(queryField<HTMLSelectElement>(container, 'select[aria-label="认证信息"]').value).toBe('');
+    expect(queryField<HTMLSelectElement>(container, 'select[aria-label="用哪个号"]').value).toBe('');
 
     const saveButton = Array.from(document.body.querySelectorAll('button')).find(
       (button) => button.textContent === '保存',
@@ -3140,7 +3140,7 @@ describe('HubCatEditor', () => {
     });
     await flushEffects();
 
-    expect(queryField<HTMLSelectElement>(container, 'select[aria-label="认证信息"]').value).toBe('');
+    expect(queryField<HTMLSelectElement>(container, 'select[aria-label="用哪个号"]').value).toBe('');
 
     const saveButton = Array.from(document.body.querySelectorAll('button')).find(
       (button) => button.textContent === '保存',
@@ -3250,7 +3250,7 @@ describe('HubCatEditor', () => {
     await flushEffects();
     await flushEffects();
 
-    expect(queryField<HTMLSelectElement>(container, 'select[aria-label="认证信息"]').value).toBe('');
+    expect(queryField<HTMLSelectElement>(container, 'select[aria-label="用哪个号"]').value).toBe('');
     expect((saveButton as HTMLButtonElement).disabled).toBe(false);
   });
 
@@ -3314,7 +3314,7 @@ describe('HubCatEditor', () => {
     });
     await flushEffects();
 
-    await changeField(queryField(container, 'select[aria-label="认证信息"]'), '', 'change');
+    await changeField(queryField(container, 'select[aria-label="用哪个号"]'), '', 'change');
 
     const saveButton = Array.from(document.body.querySelectorAll('button')).find(
       (button) => button.textContent === '保存',
@@ -3545,7 +3545,7 @@ describe('HubCatEditor', () => {
     await changeField(queryField(container, 'textarea[aria-label="Aliases"]'), '@runtime-spark, @火花猫');
     await changeField(queryField(container, 'select[aria-label="Client"]'), 'openai', 'change');
     await flushEffects();
-    await changeField(queryField(container, 'select[aria-label="认证信息"]'), 'codex-sponsor', 'change');
+    await changeField(queryField(container, 'select[aria-label="用哪个号"]'), 'codex-sponsor', 'change');
     await changeField(queryField(container, 'input[aria-label="Model"]'), 'gpt-5.4-mini');
     await changeField(queryField(container, 'input[aria-label="Context Window"]'), '-1');
 
@@ -4187,7 +4187,7 @@ describe('HubCatEditor', () => {
       removeAliasButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
-    await changeField(queryField(container, 'select[aria-label="认证信息"]'), 'codex-sponsor', 'change');
+    await changeField(queryField(container, 'select[aria-label="用哪个号"]'), 'codex-sponsor', 'change');
     await changeField(queryField(container, 'input[aria-label="Model"]'), 'gpt-5.4');
     await changeField(queryField(container, 'select[aria-label^="Codex Sandbox"]'), 'workspace-write', 'change');
     await changeField(queryField(container, 'select[aria-label^="Codex Approval"]'), 'on-request', 'change');

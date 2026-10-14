@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useCatData } from '@/hooks/useCatData';
 import { apiFetch } from '@/utils/api-client';
 import type { MemberSaveTrace } from '@/utils/member-save-trace';
+import { accountsCopy } from '../accounts/accounts.shell-copy';
 import { ConnectorPluginInstallButton } from '../ConnectorPluginInstallButton';
 import type { ConfigData } from '../config-viewer-tabs';
 import { DesktopUpdateSettingsPanel } from '../DesktopUpdateSettingsPanel';
@@ -15,6 +16,7 @@ import { HubConnectorConfigTab } from '../HubConnectorConfigTab';
 import { HubEnvFilesTab } from '../HubEnvFilesTab';
 import { HubOverviewToolbar } from '../HubMemberOverviewCard';
 import { PushSettingsPanel } from '../PushSettingsPanel';
+import { useShellCopy } from '../shell/shell-copy';
 import { useShellPresentation } from '../shell/shell-presentation';
 import { useConfirm } from '../useConfirm';
 import { VoiceSettingsPanel } from '../VoiceSettingsPanel';
@@ -44,6 +46,7 @@ interface SettingsContentProps {
 export function SettingsContent({ section, initialEditCatId }: SettingsContentProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const accountsText = useShellCopy(accountsCopy);
   const { cats, refresh, isLoading: catsLoading, hasFetched: catsKnown } = useCatData();
   const isV2 = useShellPresentation() === 'v2';
   const [config, setConfig] = useState<ConfigData | null>(null);
@@ -292,7 +295,10 @@ export function SettingsContent({ section, initialEditCatId }: SettingsContentPr
   return (
     <div className={section === 'members' ? 'mx-auto w-full max-w-5xl' : undefined}>
       {!(section === 'members' && (editorOpen || isV2)) && (
-        <SettingsPageHeader title={meta.label} subtitle={meta.description}>
+        <SettingsPageHeader
+          title={section === 'accounts' ? accountsText.title : meta.label}
+          subtitle={section === 'accounts' ? accountsText.subtitle : meta.description}
+        >
           {section === 'members' && config && <HubOverviewToolbar onAddMember={() => openMember(null)} />}
           {section === 'im' && <ConnectorPluginInstallButton onInstalled={() => setImRefreshKey((k) => k + 1)} />}
         </SettingsPageHeader>

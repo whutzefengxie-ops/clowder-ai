@@ -67,6 +67,8 @@ export interface CatVariant {
   readonly accountRef?: string;
   /** Native tools own authentication and omitted model/effort defaults. */
   readonly configurationSource?: 'native_tool' | 'managed_account';
+  /** A local tool's selection, or an explicit per-member exception. */
+  readonly accountBindingMode?: 'follow' | 'override';
   /** clowder-ai#340 P5: CLI client identity (renamed from `provider`). */
   readonly clientId: ClientId;
   readonly defaultModel: string;
@@ -259,6 +261,7 @@ export interface CredentialEntry {
 export interface CatCafeConfigV1 {
   readonly version: 1;
   readonly breeds: readonly CatBreed[];
+  readonly selectedAccountRefs?: Readonly<Record<string, string>>;
 }
 
 /**
@@ -285,6 +288,7 @@ export interface CoCreatorConfig {
 export interface CatCafeConfigV2 {
   readonly version: 2;
   readonly breeds: readonly CatBreed[];
+  readonly selectedAccountRefs?: Readonly<Record<string, string>>;
   readonly roster: Roster;
   readonly reviewPolicy: ReviewPolicy;
   readonly coCreator?: CoCreatorConfig;

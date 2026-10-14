@@ -13,6 +13,7 @@ import {
   rememberedRuntimes,
   runtimeDefaults,
 } from './member-runtime-draft';
+import { usesDefaultNativeIdentity } from './native-login-state';
 import { useRuntimeCatalog } from './useRuntimeCatalog';
 export type MemberText = (zh: string, en: string) => string;
 export function MemberRuntimeFields({
@@ -82,8 +83,8 @@ export function MemberRuntimeFields({
   const native = form.configurationSource === 'native_tool';
   const availableAccounts = filterAccounts(form.clientId, accounts),
     identity = availableAccounts.find((item) => item.id === form.accountRef);
-  const needsLogin =
-    native && !form.accountRef && !form.cliConfigArgs.length && selected?.readiness?.status === 'login_required';
+  const defaultIdentity = usesDefaultNativeIdentity(form);
+  const needsLogin = defaultIdentity && selected?.readiness?.status === 'login_required';
   const { catalog, loading: catalogLoading } = useRuntimeCatalog(
     needsLogin || selected?.id.startsWith('draft:') ? undefined : selected?.id,
     editing ? form.catId : undefined,
@@ -177,7 +178,7 @@ export function MemberRuntimeFields({
           <code className="mt-2 block">{selected?.readiness?.loginCommand}</code>
         </div>
       )}
-      {native && !form.accountRef && selected?.readiness?.status === 'configured' && (
+      {defaultIdentity && selected?.readiness?.status === 'configured' && (
         <p className="text-sm text-cafe-secondary">
           {t('已检测登录 · 实际连接待验证', 'Sign-in detected · Connection not yet verified')}
         </p>

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { MemberRuntimeFields } from '../settings/members/MemberRuntimeFields';
+import { usesDefaultNativeIdentity } from '../settings/members/native-login-state';
 import { NativeInstallHelp } from './NativeInstallHelp';
 import type { NativePartner } from './native-onboarding';
 
@@ -22,6 +23,7 @@ export function NativePartnerCard({
   const [expanded, setExpanded] = useState(false);
   const { runtime, form } = partner;
   const available = runtime.installed && (runtime.clientId !== 'acp' || Boolean(runtime.acp));
+  const defaultIdentity = usesDefaultNativeIdentity(form);
   return (
     <article
       className={`rounded-xl border p-4 ${partner.selected ? 'border-cafe-accent bg-cafe-surface' : 'border-[var(--console-border-soft)] bg-cafe-surface-canvas'}`}
@@ -84,7 +86,7 @@ export function NativePartnerCard({
             : `安装并登录 ${runtime.label} 后，重新检测即可加入。`}
       </p>
       {!available && <NativeInstallHelp runtime={runtime} />}
-      {available && runtime.readiness?.status === 'login_required' && (
+      {available && defaultIdentity && runtime.readiness?.status === 'login_required' && (
         <div role="status" className="mt-3 rounded-lg bg-conn-amber-bg p-3 text-sm text-conn-amber-text">
           <p className="font-medium">{runtime.label} 尚未登录</p>
           <p className="mt-1">
@@ -93,8 +95,11 @@ export function NativePartnerCard({
           </p>
         </div>
       )}
-      {available && runtime.readiness?.status === 'configured' && (
+      {available && defaultIdentity && runtime.readiness?.status === 'configured' && (
         <p className="mt-3 text-sm text-cafe-secondary">已检测登录 · 实际连接待验证</p>
+      )}
+      {available && !defaultIdentity && (
+        <p className="mt-3 text-sm text-cafe-secondary">此连接的登录状态尚未检查 · 实际连接待验证</p>
       )}
       {expanded && (
         <fieldset

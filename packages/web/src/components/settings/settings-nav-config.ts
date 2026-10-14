@@ -23,10 +23,10 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
   },
   {
     id: 'accounts',
-    label: '账户与密钥',
+    label: '账户与登录',
     icon: 'key',
     color: 'var(--color-opus-primary)',
-    description: '管理工具使用的账户和服务连接。',
+    description: '猫登录模型用的号。登录成功后不会自动换号。',
   },
   {
     id: 'im',

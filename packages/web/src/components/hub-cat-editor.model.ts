@@ -34,6 +34,7 @@ export interface HubCatEditorFormState {
   clientId: ClientId;
   configurationSource?: 'native_tool' | 'managed_account';
   accountRef: string;
+  accountBindingMode?: 'follow' | 'override';
   defaultModel: string;
   commandArgs: string;
   cliConfigArgs: string[];
@@ -385,6 +386,7 @@ export function initialState(cat?: CatData | null, draft?: HubCatEditorDraft | n
         ? 'managed_account'
         : 'native_tool'),
     accountRef: cat?.accountRef ?? createDraft?.accountRef ?? '',
+    accountBindingMode: cat?.accountBindingMode,
     defaultModel:
       (cat?.agyProfile?.carrier === 'native' ? cat.agyProfile.model : undefined) ??
       cat?.defaultModel ??
