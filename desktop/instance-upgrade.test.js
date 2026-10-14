@@ -25,9 +25,10 @@ test('stable install marker remains authoritative after payload replacement', ()
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'stable-install-identity-'));
   const payload = path.join(root, 'desktop-dist');
   fs.mkdirSync(payload);
+  const identity = { ...saved, CAT_CAFE_DESKTOP_INSTANCE_ROOT: path.join(root, 'owned-instance') };
   try {
-    fs.writeFileSync(path.join(root, 'desktop-instance.json'), JSON.stringify(saved));
-    fs.writeFileSync(path.join(payload, 'desktop-instance.json'), JSON.stringify({ ...saved, REDIS_PORT: '6368' }));
+    fs.writeFileSync(path.join(root, 'desktop-instance.json'), JSON.stringify(identity));
+    fs.writeFileSync(path.join(payload, 'desktop-instance.json'), JSON.stringify({ ...identity, REDIS_PORT: '6368' }));
     const actual = resolveDesktopRuntime({}, path.join(payload, 'Clowder AI.exe'));
     assert.equal(actual.redisPort, 6367);
     fs.writeFileSync(path.join(root, 'desktop-instance.json'), '{bad');
