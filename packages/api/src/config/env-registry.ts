@@ -1645,6 +1645,15 @@ export const ENV_VARS: EnvDefinition[] = [
     sensitive: false,
     hubVisible: false,
   },
+  {
+    name: 'OPENCODE_CONFIG',
+    defaultValue: '~/.config/opencode/opencode.json',
+    description: 'OpenCode 本机配置文件路径；用于读取模型快捷配置，启动时读取',
+    category: 'cli',
+    sensitive: false,
+    hubVisible: false,
+    runtimeEditable: false,
+  },
 
   // --- gemini ---
   {

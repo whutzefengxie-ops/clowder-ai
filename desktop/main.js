@@ -6,7 +6,7 @@ const path = require('node:path');
 const { resolveProjectRootFromDir } = require('./project-root');
 const { installationIdentity, isInstallationShutdownRequest } = require('./installation-lifecycle');
 const ServiceManager = require('./service-manager');
-const { createStartupReporter } = require('./startup-state');
+const { createStartupReporter, showStartupFailure } = require('./startup-state');
 const {
   resolveDesktopRuntime,
   initializeDesktopInstance,
@@ -318,16 +318,7 @@ app.on('ready', async () => {
     reportStartup('failed', safeErrorMessage(err));
     sendSplashStatus('Startup failed: 请查看启动错误与日志');
     await services.stopAll();
-    const result = await dialog.showMessageBox({
-      type: 'error',
-      title: 'Clowder AI - Startup Error',
-      message: '服务启动失败',
-      detail: `${safeErrorMessage(err)}\n\n日志目录：${startupLogDir}`,
-      buttons: ['打开日志目录', '退出'],
-      defaultId: 0,
-      cancelId: 1,
-    });
-    if (result.response === 0) await shell.openPath(startupLogDir);
+    await showStartupFailure({ dialog, shell, message: safeErrorMessage(err), logDir: startupLogDir });
     await quitApp();
   }
 });

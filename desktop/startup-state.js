@@ -22,4 +22,16 @@ function createStartupReporter(logDir) {
     return state;
   };
 }
-module.exports = { createStartupReporter };
+async function showStartupFailure({ dialog, shell, message, logDir }) {
+  const result = await dialog.showMessageBox({
+    type: 'error',
+    title: 'Clowder AI - Startup Error',
+    message: '服务启动失败',
+    detail: `${message}\n\n日志目录：${logDir}`,
+    buttons: ['打开日志目录', '退出'],
+    defaultId: 0,
+    cancelId: 1,
+  });
+  if (result.response === 0) await shell.openPath(logDir);
+}
+module.exports = { createStartupReporter, showStartupFailure };
