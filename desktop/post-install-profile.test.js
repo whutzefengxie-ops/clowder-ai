@@ -41,8 +41,12 @@ test(
       assert.equal(args[2], '--target-root');
       assert.equal(args.length, 4);
       // Windows PowerShell expands a short 8.3 TEMP spelling to the same long path.
-      assert.equal(fs.realpathSync(args[1]), fs.realpathSync(base));
-      assert.equal(fs.realpathSync(args[3]), fs.realpathSync(profile));
+      const identity = (directory) => {
+        const stat = fs.statSync(directory, { bigint: true });
+        return { device: stat.dev, inode: stat.ino };
+      };
+      assert.deepEqual(identity(args[1]), identity(base));
+      assert.deepEqual(identity(args[3]), identity(profile));
     } finally {
       fs.rmSync(base, { recursive: true, force: true });
     }

@@ -20,6 +20,9 @@ test('exports frozen nested/peer versions and workspace packages as portable rea
     file('packages/api/dist/index.cjs', 'module.exports = require("nested")');
     file('packages/shared/package.json', '{"name":"@cat-cafe/shared","main":"index.cjs"}');
     file('packages/shared/index.cjs', 'module.exports = 7');
+    file('node_modules/@fastify/send/package.json', '{"name":"@fastify/send","main":"index.cjs"}');
+    file('node_modules/@fastify/send/index.cjs', 'module.exports = 5');
+    file('node_modules/@fastify/send/test/fixtures/snow \u2603/index.txt', 'fixture only');
     file('node_modules/nested/package.json', '{"name":"nested","version":"1.0.0","main":"index.cjs"}');
     file('node_modules/nested/index.cjs', 'module.exports = require("peer")');
     file('node_modules/peer/package.json', '{"name":"peer","version":"1.0.0","main":"index.cjs"}');
@@ -45,6 +48,8 @@ test('exports frozen nested/peer versions and workspace packages as portable rea
     const require = createRequire(path.join(moved, 'api/package.json'));
     assert.equal(require('./dist/index.cjs'), 2);
     assert.equal(require('@cat-cafe/shared'), 7);
+    assert.equal(require('@fastify/send'), 5);
+    assert.equal(fs.existsSync(path.join(moved, 'api/node_modules/@fastify/send/test')), false);
     assert.equal(require('override'), 1, 'private version must not inherit another version leftover peers');
     assert.equal(fs.lstatSync(path.join(moved, 'api/node_modules/@cat-cafe/shared')).isSymbolicLink(), false);
     assert.throws(

@@ -17,9 +17,15 @@ export function materialize(from, to, workspace, ancestors = new Set()) {
   if (ancestors.has(real)) throw new Error(`Cyclic packaging link: ${from}`);
   const next = new Set(ancestors).add(real);
   fs.mkdirSync(to, { recursive: true });
+  const manifest = path.join(real, 'package.json');
+  const omitSendTests =
+    fs.existsSync(manifest) && JSON.parse(fs.readFileSync(manifest, 'utf8')).name === '@fastify/send';
   for (const name of fs.readdirSync(real)) {
     // Hoisted layout contains no virtual store; its .bin symlinks are not runtime inputs.
     if (name === '.bin' || name === '.pnpm') continue;
+    // Published test fixtures include snowman filenames that crash Windows BSD tar.
+    // This package's production entry/exports do not reference its test directory.
+    if (omitSendTests && name === 'test') continue;
     materialize(path.join(real, name), path.join(to, name), workspace, next);
   }
 }

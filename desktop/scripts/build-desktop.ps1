@@ -309,6 +309,16 @@ $archiveTargets = @(
     @{ Name = "node";              Src = Join-Path $bundledDir "node" }
 )
 
+# Prefer Git GNU tar for large build trees; installed Windows still uses System32 tar.
+$archiveTar = (Get-Command tar.exe).Source
+$archiveTarPrefix = @()
+$gitTar = Join-Path $env:ProgramFiles "Git/usr/bin/tar.exe"
+if (Test-Path -LiteralPath $gitTar) {
+    $archiveTar = $gitTar
+    $archiveTarPrefix = @('--force-local')
+}
+Write-Host "  Archive tool: $archiveTar"
+
 foreach ($t in $archiveTargets) {
     if (-not (Test-Path $t.Src)) {
         Write-Warn "$($t.Src) not found — skipping $($t.Name).tar.gz"
@@ -318,7 +328,11 @@ foreach ($t in $archiveTargets) {
     $oldErrorPreference = $ErrorActionPreference
     try {
         $ErrorActionPreference = "Continue"
-        $tarOutput = & tar -czf $archivePath -C $t.Src . 2>&1
+        $previousArchivePath = $env:PATH
+        try {
+            $env:PATH = "$(Split-Path -Parent $archiveTar);$env:PATH"
+            $tarOutput = & $archiveTar @archiveTarPrefix -czf $archivePath -C $t.Src . 2>&1
+        } finally { $env:PATH = $previousArchivePath }
         $tarExit = $LASTEXITCODE
     } finally { $ErrorActionPreference = $oldErrorPreference }
     $tarOutput | ForEach-Object { Write-Host $_ }

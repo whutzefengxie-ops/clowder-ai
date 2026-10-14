@@ -65,10 +65,7 @@ die()   { err "$*"; exit 1; }
 bold "Step 1/6 — Build web application"
 if [[ $SKIP_WEB -eq 0 ]]; then
   cd "$PROJECT_ROOT"
-  if ! pnpm install --frozen-lockfile; then
-    warn "frozen-lockfile failed, retrying with pnpm install"
-    pnpm install
-  fi
+  pnpm install --frozen-lockfile || die "Frozen dependency installation failed"
   pnpm run build
   ok "Web application built"
 else
@@ -224,7 +221,7 @@ fi
 cd "$DESKTOP_DIR"
   if [[ ! -d node_modules ]]; then
     echo "  Installing desktop dependencies ..."
-    npm install --include=dev || die "npm install failed in desktop/"
+    npm ci --include=dev || die "npm ci failed in desktop/"
   fi
 
 # electron-builder writes into desktop/dist/. Force a clean output dir.
