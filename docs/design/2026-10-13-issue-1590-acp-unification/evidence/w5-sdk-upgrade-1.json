@@ -121,9 +121,7 @@
       "isError": true,
       "terminalReason": "aborted_tools",
       "stopReason": "tool_use",
-      "userMessageUuids": [
-        "735a4f72-a123-4acf-be16-6e7c1c0b59c5"
-      ]
+      "userMessageUuids": ["735a4f72-a123-4acf-be16-6e7c1c0b59c5"]
     },
     {
       "observedAt": 1791950100177,
@@ -131,9 +129,7 @@
       "isError": false,
       "terminalReason": "completed",
       "stopReason": "end_turn",
-      "userMessageUuids": [
-        "526cecd7-fcbb-4171-a79e-4f0693441935"
-      ]
+      "userMessageUuids": ["526cecd7-fcbb-4171-a79e-4f0693441935"]
     }
   ],
   "rawRefs": [

@@ -10,10 +10,7 @@
   "hooksDisabled": true,
   "userInstructionsExcluded": true,
   "budgetUsd": 2,
-  "toolSurface": [
-    "Read",
-    "Agent(w1-reader tools=Read)"
-  ],
+  "toolSurface": ["Read", "Agent(w1-reader tools=Read)"],
   "uses": [
     {
       "id": "toolu_4vBaF7WVIhRcBjH2rhdb10",

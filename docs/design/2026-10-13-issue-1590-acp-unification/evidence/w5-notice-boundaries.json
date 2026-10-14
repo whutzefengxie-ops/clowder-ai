@@ -4,10 +4,7 @@
   "completeW5Gate": "held",
   "privateSdkSeam": "Query.request({subtype:interrupt,cancel_queued:true})",
   "nativeCapability": "interrupt_cancel_queued_v1",
-  "sdkVersions": [
-    "0.3.232",
-    "0.3.285"
-  ],
+  "sdkVersions": ["0.3.232", "0.3.285"],
   "nativeVersion": "2.1.296",
   "upgradeBinding": {
     "baseBridgePin": "d0aafb1ca26427285ffaeac8d8a4452fff28e9c3",
@@ -22,22 +19,22 @@
     {
       "sample": "boundaries-2",
       "file": "w5-boundaries-2.json",
-      "sha256": "e3ba569a0a3bd185a1790961a995252f7b1683929bc08bd786277d7d62f789c4"
+      "sha256": "e6ae39a66692bc1663f33d7a0bb4dca7152210744ed9c3ff5baa63c307a30be4"
     },
     {
       "sample": "boundaries-5",
       "file": "w5-boundaries-5.json",
-      "sha256": "767b481d2af123b6caf3aee313c8af4ec7a1f678bd415ba744e06c79808b6e63"
+      "sha256": "6c160689740f1786758661df0a23078d1ce15acf1266f46124e22f0249fd2f5f"
     },
     {
       "sample": "sdk-upgrade-1",
       "file": "w5-sdk-upgrade-1.json",
-      "sha256": "d7577f53a269aa653e57983e2d368a548da048938fbbf37330a33f4b07dd983f"
+      "sha256": "2000a1f7e3cb6ded0acddcec6733e7b0495f3c3a1a4ae6694fbd0adec3318ad8"
     },
     {
       "sample": "sdk-upgrade-2",
       "file": "w5-sdk-upgrade-2.json",
-      "sha256": "17114a3ce6d44f09b4109c2eef4236f7d113ccd09f1677a927ff7182defde323"
+      "sha256": "7664e2e3fbdf846ba5a4fa9bd3500d05415f8257074a30366a856b82a1d5114d"
     },
     {
       "sample": "ingress-1",

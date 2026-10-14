@@ -152,24 +152,24 @@ for (const Client of [AcpClient, AcpHttpStreamClient])
       await assert.rejects(client.promptStream('A', 'cannot reopen cancelled connection').next(), /binding retired/);
       assert.equal(prompts.size, 2);
       if (Client === AcpClient) {
-      const iterator = client.promptStream('C', 'early return');
-      const first = iterator.next();
-      await wait(() => prompts.has('C'));
-      send({
-        jsonrpc: '2.0',
-        method: 'session/update',
-        params: {
-          sessionId: 'C',
-          update: { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'partial' } },
-        },
-      });
-      await first;
-      await iterator.return();
-      send(permission(12, 'C'));
-      await wait(() => replies.some((reply) => reply.id === 12));
-      assert.equal(replies.find((reply) => reply.id === 12).result.outcome.outcome, 'cancelled');
-      await assert.rejects(client.promptStream('C', 'early return cannot reopen').next(), /binding retired/);
-      assert.deepEqual(handlers, [1, 6, 7]);
+        const iterator = client.promptStream('C', 'early return');
+        const first = iterator.next();
+        await wait(() => prompts.has('C'));
+        send({
+          jsonrpc: '2.0',
+          method: 'session/update',
+          params: {
+            sessionId: 'C',
+            update: { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'partial' } },
+          },
+        });
+        await first;
+        await iterator.return();
+        send(permission(12, 'C'));
+        await wait(() => replies.some((reply) => reply.id === 12));
+        assert.equal(replies.find((reply) => reply.id === 12).result.outcome.outcome, 'cancelled');
+        await assert.rejects(client.promptStream('C', 'early return cannot reopen').next(), /binding retired/);
+        assert.deepEqual(handlers, [1, 6, 7]);
         send(permission(10, 'B'));
         await wait(() => replies.some((reply) => reply.id === 10));
         assert.equal(replies.find((reply) => reply.id === 10).result.outcome.outcome, 'cancelled');

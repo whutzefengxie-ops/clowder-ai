@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { stripTypeScriptTypes } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
-import { pathToFileURL, fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const args = process.argv.slice(2);
 const option = (name) => {
@@ -37,18 +37,38 @@ for (const fixture of [
     lastTurnInputTokens: undefined,
     thinkingBuffer: '',
   };
-  const start = transformClaudeEvent({
-    type: 'assistant',
-    parent_tool_use_id: fixture.parent,
-    message: { id: `message-${fixture.id}`, content: [{ type: 'tool_use', id: fixture.id, name: 'Read', input: { file_path: 'synthetic.txt' } }] },
-  }, 'codex', state);
+  const start = transformClaudeEvent(
+    {
+      type: 'assistant',
+      parent_tool_use_id: fixture.parent,
+      message: {
+        id: `message-${fixture.id}`,
+        content: [{ type: 'tool_use', id: fixture.id, name: 'Read', input: { file_path: 'synthetic.txt' } }],
+      },
+    },
+    'codex',
+    state,
+  );
   const starts = Array.isArray(start) ? start : start ? [start] : [];
   assert.ok(starts.some((event) => event.type === 'tool_use' && event.toolUseId === fixture.id));
-  const result = transformClaudeEvent({
-    type: 'user',
-    parent_tool_use_id: fixture.parent,
-    message: { content: [{ type: 'tool_result', tool_use_id: fixture.id, is_error: fixture.failed, content: fixture.failed ? 'synthetic failure' : 'synthetic success' }] },
-  }, 'codex', state);
+  const result = transformClaudeEvent(
+    {
+      type: 'user',
+      parent_tool_use_id: fixture.parent,
+      message: {
+        content: [
+          {
+            type: 'tool_result',
+            tool_use_id: fixture.id,
+            is_error: fixture.failed,
+            content: fixture.failed ? 'synthetic failure' : 'synthetic success',
+          },
+        ],
+      },
+    },
+    'codex',
+    state,
+  );
   const results = Array.isArray(result) ? result : result ? [result] : [];
   samples.push({
     name: fixture.name,
@@ -70,7 +90,9 @@ const report = {
   nodeVersion: process.version,
   typeStripper: 'node:module.stripTypeScriptTypes',
   samples,
-  result: samples.every((sample) => !sample.toolResultEmitted) ? 'tool_result_gap_observed' : 'reinspect_parser_behavior',
+  result: samples.every((sample) => !sample.toolResultEmitted)
+    ? 'tool_result_gap_observed'
+    : 'reinspect_parser_behavior',
 };
 const serialized = `${JSON.stringify(report, null, 2)}\n`;
 if (output) await writeFile(resolve(output), serialized, 'utf8');
