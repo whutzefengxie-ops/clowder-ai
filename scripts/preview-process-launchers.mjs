@@ -205,6 +205,7 @@ export async function captureLaunchdIdentity(pid, launchdLabel, readIdentity = r
   for (let attempt = 0; attempt < 20; attempt += 1) {
     if (proof.readJobPid() !== pid) return null;
     const identity = readIdentity(pid);
+    proof.onObservation?.({ pid, expectedCommand: proof.expectedCommand, identity });
     // launchctl can publish a PID before xpcproxy execs the owned lease runner.
     // Recording that transient argv makes the existing exact identity fence kill a healthy startup.
     if (identity) {
@@ -228,7 +229,7 @@ async function waitForLaunchdPid(config, timeoutMs = 2_000) {
   return null;
 }
 
-export async function launchWithLaunchd(config) {
+export async function launchWithLaunchd(config, { onObservation } = {}) {
   mkdirSync(config.stateDir, { recursive: true, mode: 0o700 });
   removeLaunchdJob(config);
   const expectedCommand = writeLaunchdPlist(config).join(' ');
@@ -248,6 +249,7 @@ export async function launchWithLaunchd(config) {
   }
   const identity = await captureLaunchdIdentity(pid, config.launchdLabel, readProcessIdentity, {
     expectedCommand,
+    onObservation,
     readJobPid: () => readLaunchdJob(config)?.pid,
   });
   if (!identity) {

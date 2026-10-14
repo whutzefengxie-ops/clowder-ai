@@ -2,6 +2,8 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { launchWithLaunchd, removeLaunchdJob } from './preview-process-launchers.mjs';
 
 if (process.platform !== 'darwin') process.exit(0);
 const root = mkdtempSync(join(tmpdir(), 'preview-identity-witness-'));
@@ -34,4 +36,34 @@ try {
 } finally {
   spawnSync('launchctl', ['bootout', target], { stdio: 'ignore' });
   rmSync(root, { recursive: true, force: true });
+}
+
+const owned = mkdtempSync(join(tmpdir(), 'preview-lease-witness-'));
+const ownProgram = join(owned, 'witness.mjs');
+writeFileSync(ownProgram, 'setInterval(()=>{},1000);');
+const config = {
+  stateDir: owned,
+  cwd: owned,
+  launchdLabel: `com.catcafe.lease-witness.${process.pid}`,
+  plistPath: join(owned, 'lease.plist'),
+  logPath: join(owned, 'lease.log'),
+  command: [
+    process.execPath,
+    fileURLToPath(new URL('./preview-process-lease-runner.mjs', import.meta.url)),
+    '--expires-at',
+    new Date(Date.now() + 5000).toISOString(),
+    '--completion-path',
+    join(owned, 'completed.json'),
+    '--',
+    process.execPath,
+    ownProgram,
+  ],
+};
+try {
+  await launchWithLaunchd(config, {
+    onObservation: (observation) => console.log(JSON.stringify({ leaseWitness: observation })),
+  });
+} finally {
+  removeLaunchdJob(config);
+  rmSync(owned, { recursive: true, force: true });
 }
