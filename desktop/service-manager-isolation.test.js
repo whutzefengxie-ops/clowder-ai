@@ -81,7 +81,7 @@ for (const contamination of [
         process.execPath,
         [
           '-e',
-          `require('node:fs').writeFileSync(${JSON.stringify(resultPath)}, JSON.stringify(Object.fromEntries(${JSON.stringify(['WORLD_DB', 'TASK_OUTCOME_DB', 'GLOBAL_KNOWLEDGE_DB', 'MEMORY_STORE', 'OPENAI_API_KEY', 'CODEX_HOME', 'REDIS_URL'])}.map(k=>[k,process.env[k]]))))`,
+          `require('node:fs').writeFileSync(${JSON.stringify(resultPath)}, JSON.stringify(Object.fromEntries(${JSON.stringify(['WORLD_DB', 'TASK_OUTCOME_DB', 'GLOBAL_KNOWLEDGE_DB', 'MEMORY_STORE', 'OPENAI_API_KEY', 'CODEX_HOME', 'REDIS_URL', 'CAT_CAFE_RUNTIME_ROOT', 'CAT_CAFE_WORKSPACE_ROOT', 'ALLOWED_WORKSPACE_DIRS'])}.map(k=>[k,process.env[k]]))))`,
         ],
         { envOverrides: manager._buildApiEnv(base) },
       );
@@ -90,6 +90,9 @@ for (const contamination of [
       assert.deepEqual(captured, {
         CODEX_HOME: path.join(base, 'home', '.codex'),
         REDIS_URL: 'redis://localhost:6367',
+        CAT_CAFE_RUNTIME_ROOT: base,
+        CAT_CAFE_WORKSPACE_ROOT: path.join(base, 'project'),
+        ALLOWED_WORKSPACE_DIRS: path.join(base, 'project'),
       });
     } finally {
       for (const [key, value] of Object.entries(previous)) {

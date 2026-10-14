@@ -6,6 +6,7 @@ const path = require('node:path');
 const { resolveProjectRootFromDir } = require('./project-root');
 const { installationIdentity, isInstallationShutdownRequest } = require('./installation-lifecycle');
 const ServiceManager = require('./service-manager');
+const { createStartupReporter } = require('./startup-state');
 const {
   resolveDesktopRuntime,
   initializeDesktopInstance,
@@ -56,6 +57,8 @@ const QUIT_FOR_UPDATE_ARG = '--quit-owned-installation';
 // electron-builder productName and handles legacy data directory migration.
 const userDataRoot = ServiceManager.USER_DATA_DIR;
 const dbg = createDesktopLogger(userDataRoot);
+const startupLogDir = path.join(userDataRoot, 'data', 'logs');
+const reportStartup = createStartupReporter(startupLogDir);
 
 dbg(`Electron starting. ELECTRON_RUN_AS_NODE=${process.env.ELECTRON_RUN_AS_NODE}`);
 dbg(`process.type=${process.type}, versions.electron=${process.versions.electron}`);
@@ -304,17 +307,28 @@ app.on('ready', async () => {
 
   try {
     dbg('startAll() called');
+    reportStartup('starting');
     await services.startAll();
     await refreshRendererLinkOrigins();
     dbg('startAll() done — creating main window');
     createMainWindow();
+    reportStartup('ready');
   } catch (err) {
     dbg(`startAll() FAILED: ${err.message}`);
-    dialog.showErrorBox(
-      'Clowder AI - Startup Error',
-      `Failed to start services:\n${err.message}\n\nCheck logs in ${path.join(USER_DATA_DIR, 'data', 'logs')}`,
-    );
-    app.quit();
+    reportStartup('failed', safeErrorMessage(err));
+    sendSplashStatus('Startup failed: 请查看启动错误与日志');
+    await services.stopAll();
+    const result = await dialog.showMessageBox({
+      type: 'error',
+      title: 'Clowder AI - Startup Error',
+      message: '服务启动失败',
+      detail: `${safeErrorMessage(err)}\n\n日志目录：${startupLogDir}`,
+      buttons: ['打开日志目录', '退出'],
+      defaultId: 0,
+      cancelId: 1,
+    });
+    if (result.response === 0) await shell.openPath(startupLogDir);
+    await quitApp();
   }
 });
 

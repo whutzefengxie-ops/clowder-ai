@@ -69,6 +69,7 @@
       "renderer-link-policy.js",
       "service-manager.js",
       "api-startup-probe.mjs",
+      "startup-state.js",
       "runtime-config.js",
       "runtime-web-server.js",
       "update-checker.js",

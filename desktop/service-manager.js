@@ -662,6 +662,8 @@ class ServiceManager {
             CLAUDE_CONFIG_DIR: path.join(instanceRoot, 'home', '.claude'),
             DSH_HOME: path.join(instanceRoot, 'home', '.dsh'),
             CAT_CAFE_RUNTIME_ROOT: this.root,
+            CAT_CAFE_WORKSPACE_ROOT: path.join(instanceRoot, 'project'),
+            ALLOWED_WORKSPACE_DIRS: path.join(instanceRoot, 'project'),
             REDIS_PORT: String(this.redisPort),
             API_SERVER_HOST: '127.0.0.1',
             NODE_ENV: 'production',
