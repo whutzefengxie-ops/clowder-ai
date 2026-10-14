@@ -20,6 +20,7 @@ import {
   protocolForClient,
 } from '@cat-cafe/shared';
 import { readAccountSnapshot, readAccountStoreSnapshot } from './account-store-snapshot.js';
+import { claudeTokenEnvironment } from './claude-token-account.js';
 import { codexManagedStatus } from './codex-account-identity.js';
 import {
   assertProviderCredentialDestination,
@@ -38,6 +39,7 @@ export interface RuntimeProviderProfile {
   readonly accountOwnerRoot?: string;
   displayName?: string;
   codex?: CodexManagedAccount;
+  claude?: AccountConfig['claude'];
   authType: 'oauth' | 'api_key';
   kind?: ProviderProfileKind;
   /** Fresh-install CLI-owned identity; its active provider is selected by the CLI config. */
@@ -316,6 +318,7 @@ export function accountToRuntimeProfile(
           },
         }
       : {}),
+    ...(account.claude ? { claude: account.claude, envVars: claudeTokenEnvironment(credential) } : {}),
     ...(builtinClient ? { client: builtinClient } : {}),
     ...(builtinClient === 'openai' && accountOwnerRoot ? { accountOwnerRoot: resolve(accountOwnerRoot) } : {}),
     ...(account.clientId !== undefined ? { persistedClientId: account.clientId } : {}),
@@ -326,7 +329,7 @@ export function accountToRuntimeProfile(
     ...(account.modelAliases && Object.keys(account.modelAliases).length > 0
       ? { modelAliases: { ...account.modelAliases } }
       : {}),
-    ...(!account.codex && account.envVars && Object.keys(account.envVars).length > 0
+    ...(!account.codex && !account.claude && account.envVars && Object.keys(account.envVars).length > 0
       ? { envVars: { ...account.envVars } }
       : {}),
   };
@@ -339,6 +342,8 @@ export function validateRuntimeProviderBinding(
   profile: RuntimeProviderProfile,
   _defaultModel?: string | null,
 ): string | null {
+  if (profile.claude && clientId !== 'anthropic')
+    return `Claude token accounts require the native anthropic client, not "${clientId}"`;
   if (profile.codex && codexManagedStatus(profile.codex) !== 'ready') return 'Codex 账号尚未完成登录或身份已改变';
   const protocol = protocolForClient(clientId);
   const concreteProtocol = clientId === 'opencode' ? null : protocol;
