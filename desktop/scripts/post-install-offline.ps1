@@ -86,11 +86,11 @@ function Invoke-AgentHookSync {
 $ScriptDir = Split-Path -Parent $PSCommandPath
 $ProjectRoot = if ($AppDir) { $AppDir } else { Split-Path -Parent $ScriptDir }
 # Prepend bundled Node to PATH so scripts (e.g. agent hook sync) can find it.
-# NOTE: Installer maps bundled\node\* → {app}\node\ (see cat-cafe.iss).
+# NOTE: Installer maps bundled\node\* -> {app}\node\ (see cat-cafe.iss).
 $BundledNodeDir = Join-Path $ProjectRoot "node"
 if (Test-Path (Join-Path $BundledNodeDir "node.exe")) {
     $env:PATH = "$BundledNodeDir;$env:PATH"
-    Write-Ok "Bundled Node.js found — prepended to PATH"
+    Write-Ok "Bundled Node.js found - prepended to PATH"
 }
 
 if ($AgentHooksOnly) {

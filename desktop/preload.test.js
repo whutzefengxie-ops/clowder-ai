@@ -7,7 +7,7 @@ const vm = require('node:vm');
 const { EventEmitter } = require('node:events');
 const { describe, test } = require('node:test');
 
-function loadBridge({ readyResult = null } = {}) {
+function loadBridge({ readyResult = null, argv = [] } = {}) {
   const exposed = {};
   const sent = [];
   const invoked = [];
@@ -30,6 +30,7 @@ function loadBridge({ readyResult = null } = {}) {
   };
   const source = readFileSync(path.join(__dirname, 'preload.js'), 'utf8');
   vm.runInNewContext(source, {
+    process: { argv },
     require(id) {
       assert.equal(id, 'electron');
       return { contextBridge, ipcRenderer };
@@ -39,6 +40,11 @@ function loadBridge({ readyResult = null } = {}) {
 }
 
 describe('desktop preload update bridge', () => {
+  test('exposes only the startup API origin from the actual Electron process argv', () => {
+    const { bridge } = loadBridge({ argv: ['app.exe', '--cat-cafe-api-origin=http://localhost:3158'] });
+    assert.equal(bridge.apiOrigin, 'http://localhost:3158');
+    assert.equal(loadBridge().bridge.apiOrigin, undefined);
+  });
   test('returns the pending prompt from the trusted readiness invoke', async () => {
     const pending = { kind: 'up-to-date', version: '0.12.0' };
     const { bridge, invoked, source } = loadBridge({ readyResult: pending });
