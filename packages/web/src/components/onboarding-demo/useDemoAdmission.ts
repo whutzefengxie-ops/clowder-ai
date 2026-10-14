@@ -29,14 +29,15 @@ export function useDemoAdmission(enabled: boolean, onOpen: () => void, autoEligi
         if (controller.signal.aborted || requestedRevision !== revision.current) return;
         setReceipt(value);
         completed.current = value.status === 'completed';
-        setError('');
+        if (completed.current) pending.current = null;
+        if (!pending.current) setError('');
         if (autoEligible && value.status === 'not_started' && !autoOpened.current) {
           autoOpened.current = true;
           onOpen();
         }
       })
       .catch((cause: unknown) => {
-        if (!controller.signal.aborted && requestedRevision === revision.current)
+        if (!controller.signal.aborted && requestedRevision === revision.current && !pending.current)
           setError(cause instanceof Error ? cause.message : '引导记录读取失败');
       });
     return () => controller.abort();
@@ -60,7 +61,7 @@ export function useDemoAdmission(enabled: boolean, onOpen: () => void, autoEligi
         if (completed.current || pending.current === intent) pending.current = null;
       }
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : '引导记录保存失败');
+      if (!completed.current) setError(cause instanceof Error ? cause.message : '引导记录保存失败');
     } finally {
       writing.current = false;
     }

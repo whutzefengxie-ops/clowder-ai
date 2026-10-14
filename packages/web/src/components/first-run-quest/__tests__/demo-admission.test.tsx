@@ -15,6 +15,10 @@ function ExistingTeam() {
   useDemoAdmission(true, open, false);
   return null;
 }
+function EligibilityProbe({ eligible }: { eligible: boolean }) {
+  admission = useDemoAdmission(true, open, eligible);
+  return <p>{admission.error}</p>;
+}
 beforeEach(() => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
   host = document.createElement('div');
@@ -88,6 +92,23 @@ it('retains completion intent after a failed save and subsequent close', async (
   );
   await act(async () => admission.dismiss());
   expect(vi.mocked(apiFetch).mock.lastCall?.[1]?.body).toBe(JSON.stringify({ status: 'completed' }));
+});
+it('a roster-triggered read cannot hide an unconfirmed completion save error', async () => {
+  const dismissed = () =>
+    new Response(JSON.stringify({ userId: 'owner', version: 'collaboration-v1', status: 'dismissed' }));
+  vi.mocked(apiFetch).mockResolvedValueOnce(dismissed());
+  await act(async () => root.render(<EligibilityProbe eligible={false} />));
+  vi.mocked(apiFetch).mockResolvedValueOnce(new Response('{}', { status: 503 }));
+  await act(async () => admission.complete());
+  vi.mocked(apiFetch).mockResolvedValueOnce(dismissed());
+  await act(async () => root.render(<EligibilityProbe eligible />));
+  expect(host.textContent).toContain('未保存');
+  vi.mocked(apiFetch).mockResolvedValueOnce(
+    new Response(JSON.stringify({ userId: 'owner', version: 'collaboration-v1', status: 'completed' })),
+  );
+  await act(async () => admission.retry());
+  expect(vi.mocked(apiFetch).mock.lastCall?.[1]?.body).toBe(JSON.stringify({ status: 'completed' }));
+  expect(host.textContent).toBe('');
 });
 it('serializes close and completion so an earlier acknowledgement cannot erase completion', async () => {
   vi.mocked(apiFetch).mockResolvedValueOnce(
