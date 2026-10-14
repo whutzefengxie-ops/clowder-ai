@@ -46,7 +46,8 @@ if ($InspectOnly) {
   exit 0
 }
 $exe = Join-Path $installRoot 'desktop-dist\Clowder AI.exe'
-$marker = Join-Path $installRoot 'desktop-dist\desktop-instance.json'
+$marker = Join-Path $installRoot 'desktop-instance.json'
+if (-not (Test-Path -LiteralPath $marker)) { $marker = Join-Path $installRoot 'desktop-dist\desktop-instance.json' }
 $supported = Join-Path $installRoot 'desktop-dist\resources\app\installation-lifecycle.js'
 # An isolated upgrade without a persistent marker cannot use the default lock.
 if ((Test-Path -LiteralPath $exe) -and (Test-Path -LiteralPath $supported) -and (-not $InstanceRoot -or (Test-Path -LiteralPath $marker))) {

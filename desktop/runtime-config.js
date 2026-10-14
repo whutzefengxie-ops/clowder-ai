@@ -4,7 +4,11 @@ const fs = require('node:fs');
 /** Opt-in isolated desktop instance; ordinary launches retain all historical defaults. */
 function resolveDesktopRuntime(env = process.env, executable = process.execPath) {
   // Persisted installer identity survives upgrades launched without the original shell.
-  const marker = path.join(path.dirname(executable), 'desktop-instance.json');
+  const directory = path.dirname(executable);
+  const legacy = path.join(directory, 'desktop-instance.json');
+  const persistent = path.join(path.dirname(directory), 'desktop-instance.json');
+  const marker =
+    path.basename(directory).toLowerCase() === 'desktop-dist' && fs.existsSync(persistent) ? persistent : legacy;
   if (env.CAT_CAFE_DESKTOP_INSTANCE_ROOT === undefined && fs.existsSync(marker)) {
     const saved = JSON.parse(fs.readFileSync(marker, 'utf8'));
     if (typeof saved.CAT_CAFE_DESKTOP_INSTANCE_ROOT !== 'string' || !saved.CAT_CAFE_DESKTOP_INSTANCE_ROOT)

@@ -120,6 +120,7 @@ Source: "..\..\packages\api\src\plugins\*";        DestDir: "{app}\plugins"; \
 ; Desktop scripts (post-install config generation)
 Source: "..\scripts\post-install-offline.ps1";   DestDir: "{app}\scripts"
 Source: "..\scripts\configure-desktop-instance.ps1"; DestDir: "{app}\scripts"
+Source: "..\scripts\configure-desktop-instance.ps1"; Flags: dontcopy
 Source: "..\scripts\stop-installed-desktop.ps1"; DestDir: "{app}\scripts"
 Source: "..\scripts\generate-desktop-config.ps1"; DestDir: "{app}\scripts"
 Source: "..\scripts\sync-agent-hooks-offline.mjs"; DestDir: "{app}\scripts"
@@ -269,10 +270,24 @@ function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
   ExitCode: Integer;
   Cmd, AppDir: String;
+  Started: Boolean;
 begin
   Result := '';
   NeedsRestart := False;
   AppDir := ExpandConstant('{app}');
+  // Save/validate identity before InstallDelete replaces desktop-dist.
+  ExtractTemporaryFile('configure-desktop-instance.ps1');
+  Cmd := '-NoProfile -ExecutionPolicy Bypass -File "' + ExpandConstant('{tmp}') +
+         '\configure-desktop-instance.ps1" -AppDir "' + AppDir +
+         '" -InstanceRoot "' + ExpandConstant('{param:DesktopInstanceRoot|}') +
+         '" -FrontendPort "' + ExpandConstant('{param:FrontendPort|}') +
+         '" -ApiPort "' + ExpandConstant('{param:ApiPort|}') +
+         '" -RedisPort "' + ExpandConstant('{param:RedisPort|}') + '"';
+  Started := Exec('powershell.exe', Cmd, '', SW_HIDE, ewWaitUntilTerminated, ExitCode);
+  if (not Started) or (ExitCode <> 0) then begin
+    Result := 'Unable to preserve the target installation identity. See setup log.';
+    exit;
+  end;
   ExtractTemporaryFile('stop-installed-desktop.ps1');
   // Upgrade and uninstall share identity-bound coordinated shutdown and cleanup.
   Cmd := '-NoProfile -ExecutionPolicy Bypass -File "' + ExpandConstant('{tmp}') +
