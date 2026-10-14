@@ -1375,6 +1375,7 @@ export interface ChatState {
   /** Explicit deep-link/navigation action; reveals the canonical Team workspace. */
   openTeamSubject: (subject: TeamWorkspaceSubject | null) => void;
   openEvolutionProgram: (programId: string) => void;
+  openEvolutionWorkspace: () => void;
   openPublishedArtifact: (
     threadId: string,
     artifact: ThreadArtifactDTO,
@@ -1477,8 +1478,20 @@ export interface ChatState {
   setShowVoteModal: (show: boolean) => void;
 
   // ── #699: Reply-to (quote) state (threadId scoped for split-pane safety) ──
-  replyToMessage: { id: string; content: string; senderCatId: string | null; threadId: string } | null;
-  setReplyTo: (msg: { id: string; content: string; senderCatId: string | null; threadId: string }) => void;
+  replyToMessage: {
+    id: string;
+    content: string;
+    senderCatId: string | null;
+    threadId: string;
+    runtimeAnswerContext?: import('./chat-types').RuntimeConversationAnswerContext;
+  } | null;
+  setReplyTo: (msg: {
+    id: string;
+    content: string;
+    senderCatId: string | null;
+    threadId: string;
+    runtimeAnswerContext?: import('./chat-types').RuntimeConversationAnswerContext;
+  }) => void;
   clearReplyTo: () => void;
 }
 
@@ -2234,6 +2247,21 @@ export const useChatStore = create<ChatState>((set, get) => ({
     });
     return true;
   },
+  openEvolutionWorkspace: () =>
+    set((state) => {
+      const revision = state.workspaceOpenRevision + 1;
+      const patch = { workspaceMode: 'dev' as const, rightPanelMode: 'workspace' as const, rightPanelOpen: true };
+      return {
+        ...patch,
+        workspaceOpenRevision: revision,
+        workspaceOpenRequest: {
+          revision,
+          threadId: state.currentThreadId,
+          target: { kind: 'evolution-home' as const },
+        },
+        ...mirrorActiveFlat(state, patch),
+      };
+    }),
   openEvolutionProgram: (programId) =>
     set((state) => {
       if (!/^evolution-program:[0-9a-f]{32}$/.test(programId)) return {};

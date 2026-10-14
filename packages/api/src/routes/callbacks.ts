@@ -40,6 +40,7 @@ import {
   resolveGitHubNotificationPerspective,
   resolveWorkflowSopSkill,
   reviewSubjectRefSchema,
+  runtimeConversationResponseSchema,
   VersionBoundContextAttachmentsSchema,
 } from '@cat-cafe/shared';
 import type { FastifyBaseLogger, FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
@@ -62,6 +63,7 @@ import {
   ActionSuccessorStandingError,
   buildActionSuccessorFence,
 } from '../domains/ball-custody/ActionSuccessorAdmissionService.js';
+import { resolveActionSuccessorHumanReassignmentEvidence } from '../domains/ball-custody/ActionSuccessorHumanReassignmentEvidence.js';
 import {
   ActionTerminalPredicateError,
   getActionTerminalCapabilityForPredicateKind,
@@ -80,6 +82,7 @@ import { createTypedWaitRegistration } from '../domains/ball-custody/TypedWaitRe
 import { transitionWaitState } from '../domains/ball-custody/wait-state-machine.js';
 import {
   type InvocationQueue,
+  isExactUnmergedQueueSource,
   isOrdinaryQueueTargetEligible,
 } from '../domains/cats/services/agents/invocation/InvocationQueue.js';
 import type { InvocationRegistry } from '../domains/cats/services/agents/invocation/InvocationRegistry.js';
@@ -248,7 +251,6 @@ import { type CallbackMemoryCueDeps, registerCallbackMemoryCueRoutes } from './c
 import { registerCallbackMemoryRoutes } from './callback-memory-routes.js';
 import { projectCallbackMessageBody, projectQueuedCallbackMessageBody } from './callback-message-body.js';
 import { getMultiMentionOrchestrator, registerMultiMentionRoutes } from './callback-multi-mention-routes.js';
-import { registerCallbackNativeTestGrantRoute } from './callback-native-test-grant.js';
 import { registerNativeTurnAdmissionRoute } from './callback-native-turn-admission.js';
 import {
   appendDispatchNegativeAuthorizationBlockedAudit,
@@ -963,6 +965,7 @@ export interface CallbackRoutesOptions {
   /** Host-selected single project for the Live companion; never a model selector. */
   companionProjectPath?: string;
   companionRuntimeInteractionStore?: import('../domains/runtime-interaction/ports/RuntimeInteractionStore.js').RuntimeInteractionPendingReadSource;
+  runtimeInteractionService?: import('../domains/runtime-interaction/RuntimeInteractionService.js').RuntimeInteractionService;
   withLiveCarrierOperation?: <T>(
     query: { invocationId: string; catId: string; threadId: string },
     operation: () => Promise<T>,
@@ -1419,7 +1422,26 @@ const richBlockSchema = z.discriminatedUnion('kind', [
 ]);
 const createRichBlockSchema = z.object({
   block: richBlockSchema,
+  awaitResponseV1: z
+    .object({
+      mode: z.literal('once'),
+      allowTextResponse: z.boolean().optional().default(true),
+      deadlineAt: z.number().int().positive().optional(),
+      defaultResponse: runtimeConversationResponseSchema.optional(),
+    })
+    .strict()
+    .optional(),
 });
+
+function conversationDecisionInteractionId(invocationId: string, blockId: string): string {
+  const digest = createHash('sha256')
+    .update('cat-cafe:runtime-interaction:conversation:v1\0')
+    .update(invocationId)
+    .update('\0')
+    .update(blockId)
+    .digest('hex');
+  return `conversation:${digest}`;
+}
 
 function canUnregisterTrackingTask(
   task: { readonly userId?: string; readonly threadId: string },
@@ -1553,7 +1575,12 @@ export const callbacksRoutes: FastifyPluginAsync<CallbackRoutesOptions> = async 
     ...(opts.admitDotReturn ? { allowDotSourceBoundReturn: true } : {}),
   });
   if (opts.companionProjectPath) {
-    registerCompanionWorkReadRoutes(app, opts.companionProjectPath, opts.companionRuntimeInteractionStore);
+    registerCompanionWorkReadRoutes(
+      app,
+      opts.companionProjectPath,
+      opts.companionRuntimeInteractionStore,
+      messageStore,
+    );
   }
   if (taskStore && opts.deploymentObservationProvider && opts.deploymentWaitLifecycleHolder) {
     registerCallbackDeploymentWaitRoutes(app, {
@@ -1568,11 +1595,6 @@ export const callbacksRoutes: FastifyPluginAsync<CallbackRoutesOptions> = async 
     });
   }
   registerNativeTurnAdmissionRoute(app);
-  registerCallbackNativeTestGrantRoute(app, {
-    ...(taskStore ? { taskStore } : {}),
-    ...(threadStore ? { threadStore } : {}),
-    getGrantConfig: (catId) => catRegistry.tryGet(catId as string)?.config.agyProfile?.nativeCodingGrant,
-  });
   if (opts.meetingArtifactReaderHolder) {
     registerCallbackMeetingArtifactRoutes(app, {
       readerHolder: opts.meetingArtifactReaderHolder,
@@ -3355,6 +3377,16 @@ export const callbacksRoutes: FastifyPluginAsync<CallbackRoutesOptions> = async 
               tenantScope: actor.userId,
             })
           : undefined;
+        const admissionNow = Date.now();
+        const humanReassignmentEvidence = action.replace
+          ? await resolveActionSuccessorHumanReassignmentEvidence({
+              messageStore,
+              groundingEvidenceRef: action.groundingEvidenceRef,
+              userId: actor.userId,
+              childThreadId: effectiveThreadId,
+              now: admissionNow,
+            })
+          : undefined;
         const admissionInput = {
           tenantScope: actor.userId,
           actorCatId: actor.catId,
@@ -3363,9 +3395,10 @@ export const callbacksRoutes: FastifyPluginAsync<CallbackRoutesOptions> = async 
           holderCatIds: actionHolderCatIds,
           dispatchId,
           evidenceRef: `callback:${invocationId}:${clientMessageId}`,
-          now: Date.now(),
+          now: admissionNow,
           ...(incomingActionLeaseRef ? { incomingActionLeaseRef } : {}),
           ...(interruptedGenerationEvidence ? { interruptedGenerationEvidence } : {}),
+          ...(humanReassignmentEvidence ? { humanReassignmentEvidence } : {}),
           action,
         };
         const admission = await opts.actionSuccessorAdmissionService.admit(
@@ -4739,14 +4772,24 @@ export const callbacksRoutes: FastifyPluginAsync<CallbackRoutesOptions> = async 
     // history read must not expose or acknowledge another thread's queued receipt custody.
     const canExposeQueuedBodies = principal.kind === 'invocation' && effectiveThreadId === principal.threadId;
     const queuedFullEntries =
-      isFullMode && isContiguousRead && canExposeQueuedBodies && opts.invocationQueue
-        ? opts.invocationQueue.getQueuedBodyMessagesForCat(
-            effectiveThreadId,
-            principalUserId,
-            principalCatId,
-            expectedParentInvocationId,
-            principal.invocationId,
-          )
+      isFullMode && (isContiguousRead || messageId !== undefined) && canExposeQueuedBodies && opts.invocationQueue
+        ? opts.invocationQueue
+            .getQueuedBodyMessagesForCat(
+              effectiveThreadId,
+              principalUserId,
+              principalCatId,
+              expectedParentInvocationId,
+              principal.invocationId,
+            )
+            .filter(
+              (entry) =>
+                isContiguousRead ||
+                // A targeted thread window returns one stored message body, not a
+                // coalesced Queue payload. Only bind exposure when those identities
+                // are the same; merged carriers remain eligible through the exact
+                // get-message drill, which projects their complete combined body.
+                (messageId !== undefined && isExactUnmergedQueueSource(entry, messageId)),
+            )
         : [];
     const originalQueuedEligibility = new Map(
       queuedFullEntries.map((entry) => {
@@ -5230,6 +5273,7 @@ export const callbacksRoutes: FastifyPluginAsync<CallbackRoutesOptions> = async 
           opts.holdBallDeps!.a2aDispatchDispositionService,
           request.callbackAuth,
           messageIds,
+          messageId && fullPublishedIds.has(messageId) ? messageId : undefined,
         );
         return a2aDispatchDisposition ? { ...body, a2aDispatchDisposition } : body;
       } catch (err) {
@@ -5240,22 +5284,39 @@ export const callbacksRoutes: FastifyPluginAsync<CallbackRoutesOptions> = async 
         return body;
       }
     };
+    // A published history body alone is not proof that the invocation consumed
+    // the current Queue carrier: a coalesced carrier has a larger body than any
+    // one stored message. Reuse the same singleton predicate that admitted the
+    // route-local Queue exposure so Live cannot mint broader authority.
+    const exactFullMessageId =
+      messageId &&
+      fullPublishedIds.has(messageId) &&
+      fullyReturnedQueuedEntries.some((entry) => isExactUnmergedQueueSource(entry, messageId))
+        ? messageId
+        : undefined;
+    const liveReadEvidenceKind = isContiguousRead
+      ? ('full_contiguous_thread_context' as const)
+      : exactFullMessageId
+        ? ('exact_full_message' as const)
+        : undefined;
     const commitLiveReadWitness = async (): Promise<void> => {
       if (
         !isFullMode ||
-        !isContiguousRead ||
+        !liveReadEvidenceKind ||
         principal.kind !== 'invocation' ||
         principal.threadId !== effectiveThreadId ||
         !opts.turnExecutionStore
       )
         return;
-      const messageIds = [
-        ...fullPublishedIds,
-        ...fullyReturnedQueuedEntries
-          .filter((entry) => returnedQueuedEntryIds.has(entry.entryId))
-          .flatMap((entry) => [entry.messageId, ...(entry.mergedMessageIds ?? [])])
-          .filter((id): id is string => typeof id === 'string'),
-      ];
+      const messageIds = exactFullMessageId
+        ? [exactFullMessageId]
+        : [
+            ...fullPublishedIds,
+            ...fullyReturnedQueuedEntries
+              .filter((entry) => returnedQueuedEntryIds.has(entry.entryId))
+              .flatMap((entry) => [entry.messageId, ...(entry.mergedMessageIds ?? [])])
+              .filter((id): id is string => typeof id === 'string'),
+          ];
       await recordLiveFullReadEvidence(
         messageStore,
         opts.turnExecutionStore,
@@ -5266,6 +5327,7 @@ export const callbacksRoutes: FastifyPluginAsync<CallbackRoutesOptions> = async 
           invocationId: principal.invocationId,
           messageIds,
           seenAt: Date.now(),
+          evidenceKind: liveReadEvidenceKind,
         },
         opts.ballCustodyEventLog,
       );
@@ -6030,6 +6092,7 @@ export const callbacksRoutes: FastifyPluginAsync<CallbackRoutesOptions> = async 
         result.a2aDispatchDisposition = await opts.holdBallDeps.a2aDispatchDispositionService.describe(
           request.callbackAuth,
           [message.id],
+          message.id,
         );
       } catch (err) {
         app.log.warn(
@@ -7261,7 +7324,7 @@ export const callbacksRoutes: FastifyPluginAsync<CallbackRoutesOptions> = async 
     const record = requireCallbackAuth(request, reply);
     if (!record) return;
 
-    const { block } = parsed.data;
+    const { block, awaitResponseV1 } = parsed.data;
     const { invocationId } = record;
     // #573: parent (outer) id used for broadcast identity to align with stream/queue path.
     const effectiveInvId = record.parentInvocationId ?? invocationId;
@@ -7280,6 +7343,60 @@ export const callbacksRoutes: FastifyPluginAsync<CallbackRoutesOptions> = async 
 
     if (!(await registry.isLatest(invocationId))) {
       return { status: 'stale_ignored' };
+    }
+
+    if (awaitResponseV1) {
+      if (record.toolExecutionPolicy) {
+        reply.status(403);
+        return { error: 'awaitResponseV1 is available only in an ordinary conversation invocation' };
+      }
+      if (block.kind !== 'interactive') {
+        reply.status(400);
+        return { error: 'awaitResponseV1 requires one interactive block' };
+      }
+      if (!opts.runtimeInteractionService) {
+        reply.status(503);
+        return { error: 'Conversation decision runtime unavailable' };
+      }
+      try {
+        const interaction = await opts.runtimeInteractionService.createConversationDecision({
+          version: 1,
+          interactionId: conversationDecisionInteractionId(record.invocationId, block.id),
+          kind: 'conversation_decision',
+          owner: {
+            userId: record.userId,
+            threadId: record.threadId,
+            catId: record.catId,
+            invocationId: record.invocationId,
+          },
+          createdAt: Date.now(),
+          title: block.title?.trim() || '需要你决定',
+          ...(block.description ? { description: block.description } : {}),
+          presentation: block,
+          allowTextResponse: awaitResponseV1.allowTextResponse,
+          ...(awaitResponseV1.deadlineAt ? { deadlineAt: awaitResponseV1.deadlineAt } : {}),
+          ...(awaitResponseV1.defaultResponse ? { defaultResponse: awaitResponseV1.defaultResponse } : {}),
+        });
+        return {
+          status: 'ok',
+          interactionId: interaction.request.interactionId,
+          revision: interaction.revision,
+          cardRef: interaction.cardRef,
+          routing_warnings: [],
+          message: '一次性决定卡已发布；当前调用不会等待用户回答。',
+        };
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          reply.status(400);
+          return { error: 'Invalid conversation decision', details: error.issues };
+        }
+        const { RuntimeInteractionError } = await import('../domains/runtime-interaction/RuntimeInteractionError.js');
+        if (error instanceof RuntimeInteractionError) {
+          reply.status(error.code === 'unavailable' ? 503 : 409);
+          return { error: error.message, ...(error.reasonCode ? { reasonCode: error.reasonCode } : {}) };
+        }
+        throw error;
+      }
     }
 
     // F34-b: Resolve voice blocks (audio with text, no url) before buffering

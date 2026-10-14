@@ -58,6 +58,8 @@ import { MessageDispositionSelector } from './MessageDispositionSelector';
 import { classifyFreshnessCarrierSupport } from './message-disposition-presentation';
 import { PathCompletionMenu } from './PathCompletionMenu';
 import { projectScreeningComposerConflict } from './project-screening-composer-group';
+import { conversationDecisionCopy } from './rich/conversation-decision.shell-copy';
+import { submitConversationAnswer } from './rich/runtime-conversation-model';
 import { useShellCopy } from './shell/shell-copy';
 import { pushThreadRouteWithHistory } from './ThreadSidebar/thread-navigation';
 import {
@@ -75,6 +77,7 @@ import { useComposerKeyboardFocus } from './use-composer-keyboard-focus';
 import { useDurableComposerDraft } from './useDurableComposerDraft';
 import { useTextareaAutosize } from './useTextareaAutosize';
 import { WhisperCatSelector } from './WhisperCatSelector';
+import { useWorkspaceChatWorkScope } from './workbench/WorkspaceChatWorkScope';
 
 /** Module-level draft storage — survives component unmount/remount across thread switches */
 export {
@@ -265,6 +268,7 @@ export function ChatInput({
   );
   const hasActiveInvocation = canonicalExecutions.length > 0 || hasUnverifiedLegacyExecution;
   const shellV2 = presentation === 'v2';
+  const workScope = useWorkspaceChatWorkScope();
   const stopState: 'available' | 'pending' | 'unavailable' | 'hidden' =
     canonicalExecutions.length === 0 ? (hasUnverifiedLegacyExecution ? 'unavailable' : 'hidden') : projectedCancelState;
   const activeCatIds = useMemo(() => {
@@ -365,6 +369,14 @@ export function ChatInput({
   const [lobbyMode, setLobbyMode] = useState<'player' | 'god-view' | 'detective' | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   useComposerKeyboardFocus(shellV2, textareaRef);
+  useEffect(() => {
+    const handler = (event: Event) => {
+      if ((event as CustomEvent<{ threadId: string }>).detail?.threadId === effectiveThreadId)
+        textareaRef.current?.focus();
+    };
+    window.addEventListener('cat-cafe:conversation-answer-bound', handler);
+    return () => window.removeEventListener('cat-cafe:conversation-answer-bound', handler);
+  }, [effectiveThreadId]);
   const menuRef = useRef<HTMLDivElement>(null);
   const addButtonRef = useRef<HTMLButtonElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -446,9 +458,55 @@ export function ChatInput({
   // F080-P2: path completion
   const pathCompletion = usePathCompletion(input);
 
+  const answerCopy = useShellCopy(conversationDecisionCopy);
+  const boundAnswerSubmitting = useRef(false);
   const doSend = useCallback(
     (deliveryMode?: DeliveryMode) => {
       if (sendTemporarilyDisabled) return;
+      const answer = replyToMessage?.runtimeAnswerContext;
+      if (answer) {
+        if (disabled || boundAnswerSubmitting.current || !input.trim()) return;
+        if (
+          answer.cardRef.threadId !== effectiveThreadId ||
+          answer.cardRef.messageId !== replyToMessage.id ||
+          images.length ||
+          contextAttachments.length ||
+          whisperMode
+        ) {
+          useToastStore
+            .getState()
+            .addToast({ type: 'error', title: answerCopy.changed, message: answerCopy.changed, duration: 6000 });
+          return;
+        }
+        const capturedInput = input;
+        const settleAdmission = beginComposerDraftAdmission({
+          text: capturedInput,
+          images: [],
+          contextAttachments: [],
+          replyTo: replyToMessage,
+        });
+        boundAnswerSubmitting.current = true;
+        void submitConversationAnswer(answer, { kind: 'text', text: capturedInput.trim() })
+          .then(
+            () => {
+              settleAdmission(true);
+              setInput((current) => (current === capturedInput ? '' : current));
+              if (useChatStore.getState().replyToMessage?.runtimeAnswerContext?.operationId === answer.operationId)
+                clearReplyTo();
+            },
+            () => {
+              settleAdmission(false);
+              useToastStore
+                .getState()
+                .addToast({ type: 'error', title: answerCopy.changed, message: answerCopy.changed, duration: 6000 });
+            },
+          )
+          .finally(() => {
+            boundAnswerSubmitting.current = false;
+          });
+        return;
+      }
+
       if (whisperMode && whisperTargets.size === 0) return;
       const conflict = projectScreeningComposerConflict(composerAttachments(effectiveThreadId, contextAttachments));
       if (conflict) {
@@ -459,6 +517,11 @@ export function ChatInput({
       }
       const trimmed = input.trim();
       if ((trimmed || contextAttachments.length > 0) && !disabled) {
+        const visibleWork =
+          shellV2 && contextAttachments.length === 0 && images.length === 0 && effectiveThreadId
+            ? workScope?.read(effectiveThreadId)
+            : null;
+        const sendContexts = visibleWork ? [visibleWork] : contextAttachments;
         const draftSnapshot = {
           text: input,
           images: [...images],
@@ -482,7 +545,7 @@ export function ChatInput({
         let admission: ReturnType<ChatInputProps['onSend']>;
         try {
           admission =
-            contextAttachments.length > 0
+            sendContexts.length > 0
               ? onSend(
                   trimmed,
                   images.length > 0 ? images : undefined,
@@ -490,7 +553,7 @@ export function ChatInput({
                   deliveryMode,
                   replyToMessage?.id,
                   declaredDisposition,
-                  contextAttachments,
+                  sendContexts,
                 )
               : onSend(
                   trimmed,
@@ -527,10 +590,13 @@ export function ChatInput({
     },
     [
       input,
+      answerCopy,
       disabled,
       onSend,
       images,
       contextAttachments,
+      workScope,
+      shellV2,
       sendTemporarilyDisabled,
       whisperMode,
       whisperTargets,

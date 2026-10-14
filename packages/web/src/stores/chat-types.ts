@@ -17,6 +17,14 @@ import type {
   ThreadArtifactDTO,
   TurnExecutionMessageProjection,
 } from '@cat-cafe/shared';
+export interface RuntimeConversationAnswerContext {
+  interactionId: string;
+  expectedRevision: number;
+  operationId: string;
+  ownerUserId: string;
+  cardRef: import('@cat-cafe/shared').RuntimeInteractionCardRef;
+}
+
 import type { WorkspaceMode } from '@/lib/workspace-modes';
 import type { EvidenceSourceType } from '@/types/evidence';
 
@@ -327,6 +335,13 @@ export interface ChatMessage {
     /** F306 durable projection input shared by live, hydration, callback and replay. */
     semanticEvent?: ProviderSemanticEvent;
     rich?: { v: 1; blocks: RichBlock[] };
+    /** Server-owned binding: arbitrary interactive/card metadata never grants admission. */
+    runtimeInteractionCard?: {
+      version: 1;
+      interactionId: string;
+      blockId: string;
+      requestKind: 'approval' | 'question' | 'elicitation' | 'conversation_decision';
+    };
     /** F310 source-owner projection; the card rehydrates canonical state before acting. */
     custodyOfferV1?: CustodyOfferV1;
     contentModificationRequestV1?: import('@cat-cafe/shared').ContentModificationSourceMessageV1;
@@ -877,6 +892,11 @@ export interface ComposerDraftInsert {
   removeContextAttachmentIds?: string[];
   /** Server ACK owns the complete editor text; do not append it to a stale local snapshot. */
   authoritative?: boolean;
+  /** Unsent text requests must wait for the target owner's durable draft read. */
+  waitForDraft?: boolean;
+  /** Keep the existing draft's selection and focus when appending unsent text. */
+  preserveSelection?: boolean;
+  draftReadFailure?: { title: string; message: string };
   /** Newly transferred source range in authoritative text; ChatInput focuses and selects it after hydration. */
   selectionRange?: { start: number; end: number };
   /** Durable owner+thread draft revision acknowledged by the server. */
@@ -992,6 +1012,7 @@ export interface WorkspaceOpenRequest {
       }
     | { kind: 'mode'; mode: Exclude<WorkspaceMode, 'dev' | 'team'> }
     | { kind: 'evolution-program'; programId: string }
+    | { kind: 'evolution-home' }
     | { kind: 'artifact'; artifact: ThreadArtifactDTO; navigationOrigin?: WorkspaceFileNavigationOrigin }
     | {
         kind: 'file';
