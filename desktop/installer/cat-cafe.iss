@@ -24,9 +24,12 @@
 #define MyAppURL       "https://github.com/zts212653/clowder-ai"
 #define MyAppExeName   "Clowder AI.exe"
 #define MyAppUserModelID "ai.clowderai.desktop"
+#ifndef MyAppId
+  #define MyAppId "{{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}"
+#endif
 
 [Setup]
-AppId={{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}
+AppId={#MyAppId}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 ; Show just "Clowder AI" in Add/Remove Programs, not "Clowder AI 版本 X.Y.Z".
@@ -132,9 +135,12 @@ Source: "..\assets\*";                           DestDir: "{app}\desktop\assets"
 Source: "..\..\bundled\redis\*";                 DestDir: "{app}\.cat-cafe\redis\windows"; \
   Flags: recursesubdirs createallsubdirs
 
+[Tasks]
+Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
+
 [Icons]
 Name: "{group}\{#MyAppName}";        Filename: "{app}\desktop-dist\{#MyAppExeName}"; AppUserModelID: "{#MyAppUserModelID}"
-Name: "{autodesktop}\{#MyAppName}";  Filename: "{app}\desktop-dist\{#MyAppExeName}"; AppUserModelID: "{#MyAppUserModelID}"
+Name: "{autodesktop}\{#MyAppName}";  Filename: "{app}\desktop-dist\{#MyAppExeName}"; AppUserModelID: "{#MyAppUserModelID}"; Tasks: desktopicon
 Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
 
 [Run]
@@ -184,14 +190,14 @@ Filename: "reg.exe"; \
 ; CLI tool provisioning removed — bundled Node has no global npm, so
 ; `npm install -g` fails on clean machines. Users install CLIs separately.
 Filename: "powershell.exe"; \
-  Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\scripts\post-install-offline.ps1"" -AppDir ""{app}"""; \
+  Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\scripts\post-install-offline.ps1"" -AppDir ""{app}"" -UserProfileRoot ""{param:UserProfileRoot|}"""; \
   StatusMsg: "Configuring Clowder AI..."; \
   Flags: runhidden waituntilterminated
 ; User-level Agent CLI hook sync writes to ~/.claude and ~/.codex, so it must
 ; run as the invoking user rather than the elevated installer account.
 ; If Windows cannot recover the original credentials, Hub health check repairs it later.
 Filename: "powershell.exe"; \
-  Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\scripts\post-install-offline.ps1"" -AppDir ""{app}"" -AgentHooksOnly"; \
+  Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\scripts\post-install-offline.ps1"" -AppDir ""{app}"" -AgentHooksOnly -UserProfileRoot ""{param:UserProfileRoot|}"""; \
   StatusMsg: "Configuring Agent CLI hooks..."; \
   Flags: runhidden waituntilterminated runasoriginaluser
 
@@ -208,7 +214,7 @@ Filename: "{app}\desktop-dist\{#MyAppExeName}"; \
 ; runasoriginaluser is critical — without it, the app + Redis + API all run
 ; as elevated admin, which breaks user-data paths and is a security concern.
 Filename: "{app}\desktop-dist\{#MyAppExeName}"; \
-  Flags: nowait runasoriginaluser; Check: WizardSilent
+  Flags: nowait runasoriginaluser; Check: ShouldAutoLaunch
 
 ; ── F273: Clean previous version's tar-extracted dirs before upgrade ───
 ; These are NOT tracked by Inno's file registry (created by tar.exe in [Run]).
@@ -245,6 +251,11 @@ Type: filesandordirs; Name: "{app}\scripts\node_modules"
 ; PrepareToInstall kills ONLY processes whose executable path is under {app} —
 ; no risk of killing the user's own node/redis instances running elsewhere.
 [Code]
+function ShouldAutoLaunch(): Boolean;
+begin
+  Result := WizardSilent and (ExpandConstant('{param:NoAutoStart|0}') <> '1');
+end;
+
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
   ExitCode: Integer;

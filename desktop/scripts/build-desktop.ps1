@@ -397,6 +397,7 @@ if (-not $SkipInstaller) {
 
     $iscc = "iscc.exe"
     $candidates = @(
+        (Join-Path (Join-Path $env:ProgramFiles "Inno Setup 7") "ISCC.exe"),
         (Join-Path (Join-Path $env:ProgramFiles "Inno Setup 6") "ISCC.exe"),
         (Join-Path (Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6") "ISCC.exe"),
         (Join-Path (Join-Path (Join-Path $env:LOCALAPPDATA "Programs") "Inno Setup 6") "ISCC.exe")

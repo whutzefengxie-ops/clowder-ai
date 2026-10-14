@@ -2,8 +2,14 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 const UPDATE_ACTIONS = new Set(['download', 'install', 'later', 'skip', 'open-release', 'dismiss']);
+const apiOrigin = process.argv
+  .find((arg) => arg.startsWith('--cat-cafe-api-origin='))
+  ?.split('=')
+  .slice(1)
+  .join('=');
 
 contextBridge.exposeInMainWorld('desktopBridge', {
+  apiOrigin,
   onStatus: (callback) => {
     const listener = (_event, message) => callback(message);
     ipcRenderer.on('splash-status', listener);

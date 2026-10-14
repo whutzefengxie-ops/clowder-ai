@@ -8,6 +8,7 @@ const http = require('node:http');
 const fs = require('node:fs');
 const os = require('node:os');
 const crypto = require('node:crypto');
+const { resolveDesktopRuntime } = require('./runtime-config');
 
 const POLL_INTERVAL_MS = 500;
 const MAX_WAIT_MS = 120_000;
@@ -25,6 +26,8 @@ const ARCH_SEG = process.arch === 'arm64' ? 'arm64' : 'x64';
 // Reads brand name from electron-builder config — single source of truth
 // shared with main.js (which imports USER_DATA_DIR from this module).
 function resolveUserDataDir() {
+  const { instanceRoot } = resolveDesktopRuntime();
+  if (instanceRoot) return instanceRoot;
   let brandName;
   try {
     brandName = require('./package.json').build?.productName || 'Clowder AI';
@@ -91,10 +94,11 @@ function resolveNode(projectRoot) {
 }
 
 class ServiceManager {
-  constructor(projectRoot, { frontendPort, apiPort, onStatus }) {
+  constructor(projectRoot, { frontendPort, apiPort, redisPort = 6399, onStatus }) {
     this.root = projectRoot;
     this.frontendPort = frontendPort;
     this.apiPort = apiPort;
+    this.redisPort = redisPort;
     this.onStatus = onStatus || (() => {});
     this.procs = {};
     this.memoryMode = false;
@@ -103,6 +107,11 @@ class ServiceManager {
   async startAll() {
     log(`=== ServiceManager.startAll() ===`);
     log(`projectRoot: ${this.root}`);
+    if (resolveDesktopRuntime().instanceRoot) {
+      for (const port of [this.frontendPort, this.apiPort, this.redisPort]) {
+        if (await this._isPortOpen(port)) throw new Error(`Isolated desktop port ${port} is already occupied`);
+      }
+    }
 
     // ---- Pre-flight checks ----
     const nodeExe = resolveNode(this.root);
@@ -136,6 +145,8 @@ class ServiceManager {
     // ---- Redis ----
     this.onStatus('Starting Redis...');
     await this._startRedis(userDataDir);
+    if (resolveDesktopRuntime().instanceRoot && this.memoryMode)
+      throw new Error('Isolated desktop requires its own persistent Redis');
     log(`Redis phase complete. memoryMode=${this.memoryMode}`);
 
     // ---- API ----
@@ -147,7 +158,7 @@ class ServiceManager {
     } catch (err) {
       log(`API first-attempt failed: ${err.message}`);
       // If API failed and we haven't tried memory mode yet, retry with MEMORY_STORE=1
-      if (!this.memoryMode) {
+      if (!this.memoryMode && !resolveDesktopRuntime().instanceRoot) {
         this.onStatus('API failed — retrying with memory store...');
         log('Retrying API with MEMORY_STORE=1');
         this.memoryMode = true;
@@ -419,6 +430,15 @@ class ServiceManager {
   _buildApiEnv(userDataDir) {
     const salt = this._getOrCreateTelemetrySalt(userDataDir);
     return {
+      ...(resolveDesktopRuntime().instanceRoot
+        ? {
+            CAT_CAFE_CONFIG_ROOT: path.join(userDataDir, 'project'),
+            CAT_CAFE_GLOBAL_CONFIG_ROOT: path.join(userDataDir, 'global'),
+            CAT_CAFE_DATA_DIR: path.join(userDataDir, 'data'),
+            CAT_CAFE_SKIP_HOMEDIR_MIGRATION: '1',
+            CAT_CAFE_SESSION_COOKIE_NAME: `cat_cafe_desktop_${crypto.createHash('sha256').update(userDataDir).digest('hex').slice(0, 12)}`,
+          }
+        : {}),
       TELEMETRY_HMAC_SALT: salt,
       EVIDENCE_DB: path.join(userDataDir, 'evidence.sqlite'),
       TRANSCRIPT_DATA_DIR: path.join(userDataDir, 'data', 'transcripts'),
@@ -440,13 +460,15 @@ class ServiceManager {
     const portableRedis = path.join(redisDir, `redis-server${EXE_SUFFIX}`);
 
     // Already running — verify it is actually Redis
-    if (await this._isPortOpen(6399)) {
-      const isRedis = await this._verifyRedisPing(6399);
+    if (await this._isPortOpen(this.redisPort)) {
+      if (resolveDesktopRuntime().instanceRoot)
+        throw new Error(`Isolated Redis port ${this.redisPort} is already occupied`);
+      const isRedis = await this._verifyRedisPing(this.redisPort);
       if (isRedis) {
-        this.onStatus('Redis already running on 6399');
+        this.onStatus(`Redis already running on ${this.redisPort}`);
         return;
       }
-      log('Port 6399 occupied by non-Redis — using memory store');
+      log(`Port ${this.redisPort} occupied by non-Redis — using memory store`);
       this.memoryMode = true;
       return;
     }
@@ -468,8 +490,9 @@ class ServiceManager {
     // (e.g. packaged Windows installs where the default 10000 exceeds the
     // process file descriptor limit).  512 is far above local desktop needs.
     const redisArgs = [
+      ...(resolveDesktopRuntime().instanceRoot ? ['--bind', '127.0.0.1'] : []),
       '--port',
-      '6399',
+      String(this.redisPort),
       '--dir',
       redisDataDir,
       '--save',
@@ -493,7 +516,7 @@ class ServiceManager {
     }
 
     this._startProcess('redis', redisCmd, redisArgs, { cwd: redisCwd });
-    const redisReady = await this._waitForPortWithFallback(6399, 'Redis', 'redis');
+    const redisReady = await this._waitForPortWithFallback(this.redisPort, 'Redis', 'redis');
     if (!redisReady) {
       log('Redis failed to start — using memory store');
       this.memoryMode = true;
@@ -532,6 +555,16 @@ class ServiceManager {
   }
 
   _startNextJs() {
+    if (resolveDesktopRuntime().instanceRoot) {
+      const node = resolveNode(this.root);
+      this._startProcess('web', node, [
+        path.join(__dirname, 'runtime-web-server.js'),
+        path.join(this.root, 'packages', 'web'),
+        String(this.frontendPort),
+        String(this.apiPort),
+      ]);
+      return;
+    }
     const webDir = path.join(this.root, 'packages', 'web');
     const nodeExe = resolveNode(this.root) || 'node';
 
@@ -587,6 +620,7 @@ class ServiceManager {
       API_SERVER_PORT: String(this.apiPort),
       FRONTEND_PORT: String(this.frontendPort),
       NEXT_PUBLIC_API_URL: `http://localhost:${this.apiPort}`,
+      ...(resolveDesktopRuntime().instanceRoot ? { FRONTEND_URL: `http://localhost:${this.frontendPort}` } : {}),
       PROMPT_DEBUG: '1',
     };
 
@@ -625,7 +659,7 @@ class ServiceManager {
       env.MEMORY_STORE = '1';
       delete env.REDIS_URL;
     } else {
-      env.REDIS_URL = 'redis://localhost:6399';
+      env.REDIS_URL = `redis://localhost:${this.redisPort}`;
     }
 
     // Apply API-specific env overrides (writable paths, telemetry salt, etc.)

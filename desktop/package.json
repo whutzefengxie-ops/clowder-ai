@@ -67,6 +67,8 @@
       "project-root.js",
       "renderer-link-policy.js",
       "service-manager.js",
+      "runtime-config.js",
+      "runtime-web-server.js",
       "update-checker.js",
       "update-downloader.js",
       "update-installer.js",

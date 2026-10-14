@@ -9,10 +9,14 @@
 
 param(
     [Parameter(Mandatory)] [string]$AppDir,
-    [switch]$AgentHooksOnly
+    [switch]$AgentHooksOnly,
+    [string]$UserProfileRoot
 )
 
 $ErrorActionPreference = "Stop"
+if ($UserProfileRoot -and -not [System.IO.Path]::IsPathRooted($UserProfileRoot)) {
+    throw "UserProfileRoot must be an absolute path"
+}
 
 function Write-Step  { param([string]$msg) Write-Host "`n==> $msg" -ForegroundColor Cyan }
 function Write-Ok    { param([string]$msg) Write-Host "  [OK] $msg" -ForegroundColor Green }
@@ -34,6 +38,7 @@ function Resolve-Command { param([string]$Name)
 }
 
 function Resolve-AgentHookTargetRoot {
+    if ($UserProfileRoot) { return [System.IO.Path]::GetFullPath($UserProfileRoot) }
     if ($env:USERPROFILE) {
         return $env:USERPROFILE
     }
@@ -124,11 +129,12 @@ Write-Step "Step 2/3 - Mount skills"
 
 $skillsSource = Join-Path $ProjectRoot "cat-cafe-skills"
 if (Test-Path $skillsSource) {
+    $skillProfileRoot = Resolve-AgentHookTargetRoot
     $targets = @(
-        @{ Dir = "$env:USERPROFILE\.claude"; Link = "skills" },
-        @{ Dir = "$env:USERPROFILE\.codex"; Link = "skills" },
-        @{ Dir = "$env:USERPROFILE\.gemini"; Link = "skills" },
-        @{ Dir = "$env:USERPROFILE\.kimi"; Link = "skills" }
+        @{ Dir = "$skillProfileRoot\.claude"; Link = "skills" },
+        @{ Dir = "$skillProfileRoot\.codex"; Link = "skills" },
+        @{ Dir = "$skillProfileRoot\.gemini"; Link = "skills" },
+        @{ Dir = "$skillProfileRoot\.kimi"; Link = "skills" }
     )
     foreach ($t in $targets) {
         $linkPath = Join-Path $t.Dir $t.Link

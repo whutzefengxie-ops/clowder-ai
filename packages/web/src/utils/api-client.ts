@@ -32,6 +32,29 @@ function alignLoopbackApiHostname(envUrl: string, location: Location | null): st
 /** @internal Exported for testing — prefer using `API_URL` constant. */
 export function resolveApiUrl(): string {
   const location = getBrowserLocation();
+  const desktopOrigin = (globalThis as { desktopBridge?: { apiOrigin?: unknown } }).desktopBridge?.apiOrigin;
+  if (typeof desktopOrigin === 'string' && isLoopbackLocation(location)) {
+    try {
+      const url = new URL(desktopOrigin);
+      if (
+        url.protocol === 'http:' &&
+        ['localhost', '127.0.0.1'].includes(url.hostname) &&
+        url.pathname === '/' &&
+        !url.username &&
+        !url.password &&
+        !url.search &&
+        !url.hash
+      )
+        return alignLoopbackApiHostname(url.origin, location);
+    } catch {
+      /* Fall back to the ordinary browser configuration. */
+    }
+  }
+  // Server-side modules read the actual runtime port, independent of the packaged browser bundle.
+  if (typeof window === 'undefined') {
+    const port = Number(process.env.API_SERVER_PORT);
+    if (Number.isInteger(port) && port > 0 && port <= 65535) return `http://localhost:${port}`;
+  }
 
   // Cloudflare Tunnel: API 走 api.clowder-ai.com，Access cookie 在 .clowder-ai.com 上共享
   if (location?.hostname === 'cafe.clowder-ai.com') {

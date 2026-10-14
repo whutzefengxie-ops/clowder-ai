@@ -54,7 +54,7 @@ afterEach(() => {
 
 it('replays an old short-v1 ACP pending receipt with its original key and unchanged payload', async () => {
   const partner = recommendNativePartners([runtime], [], [], 'journey-original')[0];
-  const { creationRequestKey: _unused, ...legacy } = partner;
+  const legacy = { ...partner, creationRequestKey: undefined };
   const original = { ...legacy, id: 'acp-583e2d40' };
   const payload = buildCatPayload(original.form);
   const expectedKey = 'onboarding:journey-original:cat:acp-583e2d40';
@@ -121,7 +121,7 @@ it.each([
     acp: { ...runtime.acp, startupArgs: ['--profile', profile] },
   }));
   const partners = recommendNativePartners(peers, [], [], 'old-collision').map((p) => {
-    const { creationRequestKey: _unused, ...legacy } = p;
+    const legacy = { ...p, creationRequestKey: undefined };
     return { ...legacy, id: 'acp-583e2d40', form: { ...p.form, catId: 'dsh' } };
   });
   const key = `cat-cafe:${mode === 'members' ? 'native-team-setup' : 'native-onboarding'}:v2:owner-a`;

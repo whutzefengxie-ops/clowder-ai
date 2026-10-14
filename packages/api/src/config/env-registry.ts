@@ -779,6 +779,15 @@ export const ENV_VARS: EnvDefinition[] = [
     exampleRecommended: true,
   },
   {
+    name: 'CAT_CAFE_DESKTOP_INSTANCE_ROOT',
+    defaultValue: '(未设置 → 保留桌面应用默认目录和端口)',
+    description:
+      '桌面隔离实例的绝对目录；必须同时指定独立 FRONTEND_PORT、API_SERVER_PORT、REDIS_PORT，禁止使用生产保留端口',
+    category: 'storage',
+    sensitive: false,
+    runtimeEditable: false,
+  },
+  {
     name: 'CAT_CAFE_RUNTIME_ROOT',
     defaultValue: '(未设置 → process.cwd())',
     description:

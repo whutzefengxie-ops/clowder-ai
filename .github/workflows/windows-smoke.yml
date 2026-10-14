@@ -42,6 +42,8 @@ jobs:
           scripts/preview-detached-identity.test.mjs
           scripts/preview-lease-command.test.mjs
           packages/web/test/sanitize-widget-types.test.mjs
+      - name: Desktop isolation and installer profile contracts
+        run: node --test desktop/runtime-config.test.js desktop/runtime-web-server.test.js desktop/service-manager-isolation.test.js desktop/service-manager.test.js desktop/post-install-profile.test.js
       - name: Build the actual web application
         run: pnpm --filter @cat-cafe/web build
       - name: Widget sanitization behavior

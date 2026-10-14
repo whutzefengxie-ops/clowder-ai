@@ -39,6 +39,22 @@ describe('resolveApiUrl', () => {
     return mod.resolveApiUrl;
   }
 
+  it('uses the desktop runtime API instead of a production build-time localhost default', async () => {
+    process.env.NEXT_PUBLIC_API_URL = 'http://localhost:3004';
+    stubLocation({ hostname: 'localhost', port: '5158' });
+    vi.stubGlobal('desktopBridge', { apiOrigin: 'http://localhost:3158' });
+    expect((await loadResolveApiUrl())()).toBe('http://localhost:3158');
+  });
+  it.each([
+    'https://outside.invalid',
+    'http://localhost:3158/api',
+    'http://user:pass@localhost:3158',
+  ])('rejects an unsafe desktop API origin %s', async (apiOrigin) => {
+    stubLocation({ hostname: 'localhost', port: '5158' });
+    vi.stubGlobal('desktopBridge', { apiOrigin });
+    expect((await loadResolveApiUrl())()).toBe('http://localhost:5159');
+  });
+
   // ── Cloudflare Tunnel ──
 
   it('returns Cloudflare API when hostname is cafe.clowder-ai.com', async () => {

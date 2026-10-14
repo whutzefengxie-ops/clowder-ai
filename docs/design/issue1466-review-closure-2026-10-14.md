@@ -81,6 +81,19 @@ stop fixture 统一调用生产公开的 readProcessIdentity，保持 UTC/C loca
 
 ## 验证与部署
 
+### Windows 安装版验收增量
+
+用户 2026-10-14 补充要求验证真实 Setup.exe：安装、首次空角色引导、推荐创建、正式回复和重启后的历史。现有 Electron 固定生产端口，直接执行会复用生产 Redis，不能作为隔离验收。
+
+- 显式 `CAT_CAFE_DESKTOP_INSTANCE_ROOT` 启用独立实例，并要求三个合法、不同且非生产的端口。普通桌面启动的端口和目录保持原默认值。
+- ServiceManager 仍是进程 owner；隔离启动拒绝已占用端口，要求独立持久 Redis，不静默降级内存。配置、global owner、消息、Electron userData 和 cookie 分开，禁止导入宿主历史。
+- 安装版浏览器经只读 preload 取得实际本机 API 地址；隔离 Web gateway 接管 API、Socket.IO 和 uploads，避免正式 Next 构建内的旧端口 rewrite 触及生产。SSR 使用实际 API_SERVER_PORT。
+- 安装器允许独立 AppId、显式 UserProfileRoot、禁自动启动和禁桌面快捷方式的命令行参数，便于真实安装而不覆盖已有注册项、CLI hooks 或快捷方式。没有这些参数的普通安装默认行为保持不变。
+- 依赖沿官方 `pnpm deploy --prod --config.node-linker=hoisted` → Electron → tar → Inno Setup 管线生成，编译源码与 build stamp 对齐；不将 win-unpacked 或 CI installed-layout 测试称为已验安装包。
+- 验收分别记录安装退出码/日志/关键文件、零角色首屏、自动 Mock A2A 与逐步预览、一键推荐创建后的 ID/descriptor、真实客户端回复、完整 OS 进程退出再启动后的角色/消息读回。CLI 状态探测和模型真实产出分开。
+
+Architecture cell: desktop-bootstrap（现有 ServiceManager owner）。Map delta: none。隔离是显式配置的既有服务组合，没有第二份角色 authority 或平行记忆存储。
+
 作者检查：受影响角色 CRUD / catalog / readiness / 创建重放回归；引导与成员前端回归；API/Web 类型与正式构建；Windows 包装器回归；原生 macOS lifecycle CI。
 浏览器核验：列表长 ID 截断、完整值复制、键盘详情、编辑跳转、推荐创建与错误恢复；保留演示旅程。
 部署使用新的独立 Next 构建和 deploy 目录，先记录角色、线程、消息与 catalog 摘要，再只切换隔离 Web 5152 / API 3152。

@@ -6,6 +6,7 @@ const path = require('node:path');
 const fs = require('node:fs');
 const { resolveProjectRootFromDir } = require('./project-root');
 const ServiceManager = require('./service-manager');
+const { resolveDesktopRuntime, rewriteDesktopLoopbackUrl } = require('./runtime-config');
 const {
   createRendererLinkOrigins,
   createVersionedRendererUrl,
@@ -30,8 +31,13 @@ if (process.platform === 'win32') {
 }
 
 const PROJECT_ROOT = resolveProjectRootFromDir(__dirname);
-const FRONTEND_PORT = 3003;
-const API_PORT = 3004;
+const desktopRuntime = resolveDesktopRuntime();
+const FRONTEND_PORT = desktopRuntime.frontendPort;
+const API_PORT = desktopRuntime.apiPort;
+if (desktopRuntime.instanceRoot) {
+  fs.mkdirSync(path.join(desktopRuntime.instanceRoot, 'electron'), { recursive: true });
+  app.setPath('userData', path.join(desktopRuntime.instanceRoot, 'electron'));
+}
 const APP_URL = `http://localhost:${FRONTEND_PORT}`;
 const APP_ORIGIN = new URL(APP_URL).origin;
 const API_ORIGIN = new URL(`http://localhost:${API_PORT}`).origin;
@@ -105,6 +111,7 @@ function createSplashWindow() {
     transparent: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
+      additionalArguments: [`--cat-cafe-api-origin=${API_ORIGIN}`],
       contextIsolation: true,
       nodeIntegration: false,
     },
@@ -124,6 +131,7 @@ function createMainWindow() {
     show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
+      additionalArguments: [`--cat-cafe-api-origin=${API_ORIGIN}`],
       contextIsolation: true,
       nodeIntegration: false,
     },
@@ -247,6 +255,19 @@ app.on('ready', async () => {
   }
 
   createSplashWindow();
+  if (desktopRuntime.instanceRoot) {
+    session.defaultSession.webRequest.onBeforeRequest(
+      {
+        urls: [
+          'http://localhost:3003/*',
+          'http://localhost:3004/*',
+          'http://127.0.0.1:3003/*',
+          'http://127.0.0.1:3004/*',
+        ],
+      },
+      (details, callback) => callback({ redirectURL: rewriteDesktopLoopbackUrl(details.url, desktopRuntime) }),
+    );
+  }
   const showAbout = () => showAboutDialog({ app, dialog, onManualUpdate: checkForUpdatesManually });
   tray = createDesktopTray({
     Menu,
@@ -262,6 +283,7 @@ app.on('ready', async () => {
   services = new ServiceManager(PROJECT_ROOT, {
     frontendPort: FRONTEND_PORT,
     apiPort: API_PORT,
+    redisPort: desktopRuntime.redisPort,
     onStatus: sendSplashStatus,
   });
   // F273: Initialize updater — check pending upgrade result BEFORE services
@@ -285,7 +307,11 @@ app.on('ready', async () => {
       if (activeServices) await activeServices.stopAll();
     },
     startServices: async () => {
-      services = new ServiceManager(PROJECT_ROOT, { frontendPort: FRONTEND_PORT, apiPort: API_PORT });
+      services = new ServiceManager(PROJECT_ROOT, {
+        frontendPort: FRONTEND_PORT,
+        apiPort: API_PORT,
+        redisPort: desktopRuntime.redisPort,
+      });
       await services.startAll();
       await refreshRendererLinkOrigins();
     },
