@@ -6,7 +6,12 @@ const path = require('node:path');
 const fs = require('node:fs');
 const { resolveProjectRootFromDir } = require('./project-root');
 const ServiceManager = require('./service-manager');
-const { resolveDesktopRuntime, rewriteDesktopLoopbackUrl, readPackagedApiPort } = require('./runtime-config');
+const {
+  resolveDesktopRuntime,
+  rewriteDesktopLoopbackUrl,
+  readPackagedApiPort,
+  desktopRedirectPorts,
+} = require('./runtime-config');
 const {
   createRendererLinkOrigins,
   createVersionedRendererUrl,
@@ -259,7 +264,7 @@ app.on('ready', async () => {
   if (desktopRuntime.instanceRoot) {
     session.defaultSession.webRequest.onBeforeRequest(
       {
-        urls: [...new Set([3003, 3004, desktopRuntime.packagedApiPort])].flatMap((port) => [
+        urls: desktopRedirectPorts(desktopRuntime).flatMap((port) => [
           `http://localhost:${port}/*`,
           `http://127.0.0.1:${port}/*`,
         ]),

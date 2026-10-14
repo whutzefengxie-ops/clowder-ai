@@ -49,6 +49,16 @@ test('isolated renderer redirects packaged loopback defaults without touching ot
   assert.equal(rewriteDesktopLoopbackUrl('http://outside.invalid:3004/api/cats', config), undefined);
   assert.equal(rewriteDesktopLoopbackUrl('http://localhost:3004/api/cats', { instanceRoot: null }), undefined);
 });
+test('never redirects its own page or API when the packaged API uses that same port', () => {
+  const config = { instanceRoot: '/owned', frontendPort: 3152, apiPort: 3158, packagedApiPort: 3152 };
+  assert.deepEqual(
+    {
+      page: rewriteDesktopLoopbackUrl('http://localhost:3152/?shell=v2', config),
+      api: rewriteDesktopLoopbackUrl('http://localhost:3158/api/cats', { ...config, packagedApiPort: 3158 }),
+    },
+    { page: undefined, api: undefined },
+  );
+});
 test('requires an explicit absolute instance root and three safe distinct ports', () => {
   const env = {
     CAT_CAFE_DESKTOP_INSTANCE_ROOT: path.join(os.tmpdir(), 'isolated-desktop'),

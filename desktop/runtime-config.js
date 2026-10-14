@@ -28,9 +28,14 @@ function rewriteDesktopLoopbackUrl(raw, config) {
   const url = new URL(raw);
   if (url.protocol !== 'http:' || !['localhost', '127.0.0.1'].includes(url.hostname)) return undefined;
   const port = Number(url.port);
-  if (port !== 3003 && port !== 3004 && port !== config.packagedApiPort) return undefined;
+  if (!desktopRedirectPorts(config).includes(port)) return undefined;
   url.port = String(port === 3003 ? config.frontendPort : config.apiPort);
   return url.href;
+}
+function desktopRedirectPorts(config) {
+  return [...new Set([3003, 3004, config.packagedApiPort])].filter(
+    (port) => port !== undefined && port !== config.frontendPort && port !== config.apiPort,
+  );
 }
 function readPackagedApiPort(root) {
   const { rewrites } = JSON.parse(fs.readFileSync(path.join(root, 'packages/web/.next/routes-manifest.json'), 'utf8'));
@@ -40,4 +45,4 @@ function readPackagedApiPort(root) {
     throw new Error('Packaged API rewrite must be a loopback origin for an isolated desktop');
   return Number(url.port);
 }
-module.exports = { resolveDesktopRuntime, rewriteDesktopLoopbackUrl, readPackagedApiPort };
+module.exports = { resolveDesktopRuntime, rewriteDesktopLoopbackUrl, readPackagedApiPort, desktopRedirectPorts };
