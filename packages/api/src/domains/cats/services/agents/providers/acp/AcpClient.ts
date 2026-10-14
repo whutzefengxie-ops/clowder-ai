@@ -24,6 +24,7 @@ import { resolveWindowsSpawnPlan } from '../../../../../../utils/cli-spawn-win.j
 import { buildUnixSupervisedSpawnPlan } from '../../../../../../utils/cli-supervised-process.js';
 import { AcpSessionCancelledError } from './acp-cancellation-error.js';
 import { AcpCwdIdentityTracker } from './acp-cwd-identity.js';
+import { buildAcpInitializeParams } from './acp-initialize.js';
 import type {
   AcpAgentRequest,
   AcpContentBlock,
@@ -307,7 +308,7 @@ export class AcpClient {
       }),
       'ACP initialize: process spawned, sending initialize request',
     );
-    const resp = await this.sendRequest(ACP_METHODS.initialize, { protocolVersion: 1 });
+    const resp = await this.sendRequest(ACP_METHODS.initialize, buildAcpInitializeParams());
     this.initResult = resp.result as unknown as AcpInitializeResult;
     log.info(
       {

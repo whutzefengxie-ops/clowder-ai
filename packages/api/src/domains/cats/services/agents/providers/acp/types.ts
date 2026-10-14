@@ -73,6 +73,11 @@ export const ACP_METHODS = {
 
 export interface AcpInitializeParams {
   protocolVersion: number;
+  clientInfo?: { name: string; title?: string; version: string };
+  clientCapabilities?: {
+    fs?: { readTextFile?: boolean; writeTextFile?: boolean };
+    terminal?: boolean;
+  };
 }
 
 export interface AcpInitializeResult {

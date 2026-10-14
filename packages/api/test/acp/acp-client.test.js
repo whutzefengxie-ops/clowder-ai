@@ -86,11 +86,13 @@ describe('AcpClient', () => {
 
   it('initialize sends protocolVersion and parses response', async () => {
     const { child, clientStdin, agentStdout } = createMockChild();
+    let initializeParams;
 
     clientStdin.on('data', (chunk) => {
       for (const line of chunk.toString().trim().split('\n')) {
         const msg = JSON.parse(line);
         if (msg.method === 'initialize') {
+          initializeParams = msg.params;
           agentRespond(agentStdout, msg.id, INIT_RESULT);
         }
       }
@@ -106,6 +108,13 @@ describe('AcpClient', () => {
     const result = await client.initialize();
     assert.equal(result.protocolVersion, 1);
     assert.equal(result.agentInfo.name, 'test');
+    assert.equal(initializeParams.protocolVersion, 1);
+    assert.deepEqual(initializeParams.clientInfo, { name: 'clowder-ai', title: 'Clowder AI', version: '1' });
+    assert.deepEqual(initializeParams.clientCapabilities, {
+      fs: { readTextFile: false, writeTextFile: false },
+      terminal: false,
+    });
+    assert.equal(Object.hasOwn(initializeParams.clientCapabilities, 'elicitation'), false);
     assert.ok(client.isAlive);
   });
 

@@ -39,6 +39,7 @@ import {
 } from './AcpClient.js';
 import { AcpSessionCancelledError } from './acp-cancellation-error.js';
 import { AcpCwdIdentityTracker } from './acp-cwd-identity.js';
+import { buildAcpInitializeParams } from './acp-initialize.js';
 import type {
   AcpAgentRequest,
   AcpInitializeResult,
@@ -188,7 +189,7 @@ export class AcpHttpStreamClient {
     log.info({ port: this.port, pid: this.child.pid }, 'ACP HTTP: port discovered');
 
     // Phase 3: send initialize via HTTP
-    const resp = await this.httpRequest(ACP_METHODS.initialize, { protocolVersion: 1 });
+    const resp = await this.httpRequest(ACP_METHODS.initialize, buildAcpInitializeParams());
     this.initResult = resp.result as unknown as AcpInitializeResult;
     log.info(
       {
