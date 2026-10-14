@@ -1,6 +1,6 @@
 # #1590 两条可证伪原型
 
-这些脚本只在当前 worktree 的 `.cat-cafe/tmp/acp-prototypes/` 准备固定上游副本，不接生产。`*.test.template.ts` 复制到上游测试目录后执行；其相对 import 按生成位置解析。
+这些脚本只在当前 worktree 的 `.cat-cafe/tmp/acp-prototypes/` 准备固定上游副本，不接生产。`*.test.template.ts` 复制到上游测试目录后执行；其相对 import 按生成位置解析。当前两条原型已分别独立Go，fixed pins/逐条件证据及失效条件见 `docs/design/2026-10-13-issue-1590-acp-unification/prototype-gates.md`；完整G0–G5和迁移仍未通过。下文held为历史样本的当时限制。
 
 Codex 研究副本固定到 `51f78d67e46c3a96ee8d8bf4e43fc917ab21c73e`。从 worktree 根执行 `node scripts/acp-spikes/prepare-codex-prototype.mjs <研究副本绝对路径>`；在生成的 codex 目录执行 `npm ci --ignore-scripts`、`node build.mjs`、`node node_modules/vitest/vitest.mjs run src/__tests__/clowder-fence.test.ts`。另在 worktree 根用 API 的 tsx loader 执行 `codex-native-fence.test.ts`。
 
@@ -22,6 +22,8 @@ Claude 研究副本固定到 v0.70.0 / `d0aafb1ca26427285ffaeac8d8a4452fff28e9c3
 
 `--fault-ingress` 准备独立 `claude-ingress-fault`，使用已有 baseline 的 node_modules。测试钩子须 `CLOWDER_SPIKE_HOLD_SDK_NEXT=1`，将真实 SDK 输入泵的 next 延迟2秒，记录 native spawn/exit，不默认用于普通原型。
 
-`run-claude-notice-boundaries.mts` / `claude-boundary-harness.mts` 是可审查的有界运行器；运行前须明确认证/出站授权并设置 `CLOWDER_SPIKE_AUTHORIZED=1`。当前用户已授权，不能将该授权移植给其他用户。`CLOWDER_SPIKE_SDK_VARIANT=upgrade/ingress` 选择样本，`CLOWDER_SPIKE_RUN_ID` 可指定新的小写数字/字母/下划线/连字符样本名。运行前原子认领目录、保存源文件/参数/SHA，已有目录（含未完成/失败样本）拒绝覆盖。用 API 的 tsx loader 从 worktree 根执行；native2.1.296须在私有 pinned-cli 路径且匹配冻结SHA。
+`run-claude-notice-boundaries.mts` / `claude-boundary-harness.mts` 是可审查的有界运行器；运行前须明确认证/出站授权并设置 `CLOWDER_SPIKE_AUTHORIZED=1`。当前用户已授权，不能将该授权移植给其他用户。`CLOWDER_SPIKE_SDK_VARIANT=upgrade/ingress` 选择样本，`CLOWDER_SPIKE_RUN_ID` 指定新样本名。运行前原子认领目录、保存源文件/参数/SHA，已有目录（含未完成/失败样本）拒绝覆盖。用API的tsx loader执行；`CLOWDER_SPIKE_NATIVE_VERSION`只支持冻结2.1.296（默认）或2.1.299，私有pinned-cli内二进制必须匹配 `claude-native-binding.mts` 的SHA，不沿PATH静默升级。
 
-`readonly-fixture-mcp.mjs` 只读取指定目录内的 synthetic sentinel，固定 scenario、8秒/12次上限，没有任意路径/命令入口。认证副本/实际 env/原始日志留私有 `.cat-cafe/tmp/`，不加入 Git；预算2美元/8 SDK turns，禁 hooks/用户指令。elicitation 回答是固定合成布尔值，不是产品真人 UI。两条完整原型仍 held，回执见 `docs/design/2026-10-13-issue-1590-acp-unification/execution-evidence.md`。
+`run-codex-fence-repeat.mts` 在同一固定no-title binding做2次A→B，每次真实有效A+operation重放，B活动时由native拒绝stale A。限4个ACP prompt/180秒，fixture8秒/12次，无USD硬限；生成的native RPC计数不是provider模型轮次。需要同一明确授权和新的 `CLOWDER_SPIKE_RUN_ID`，默认 `fence-repeat-1`；原子认领目录并在模型访问前保存执行源，禁止覆盖已有样本。
+
+`readonly-fixture-mcp.mjs` 只读取指定目录内的 synthetic sentinel，固定 scenario、8秒/12次上限，没有任意路径/命令入口。认证副本/实际 env/原始日志留私有 `.cat-cafe/tmp/`，不加入 Git；Claude预算2美元/8 SDK turns，禁 hooks/用户指令。elicitation 回答是固定合成布尔值，不是产品真人 UI。原型Go只证明fixed pins的技术路线，生产阶段仍按执行回执逐项验收。

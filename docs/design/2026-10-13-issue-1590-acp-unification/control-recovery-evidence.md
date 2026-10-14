@@ -7,6 +7,8 @@ created: 2026-10-14
 
 # W4.P：控制回执的恢复与对账
 
+最新判定：恢复、活动寿命分离及追加A→B重复已在[原型门禁回执](prototype-gates.md)分别核对，W4.P Go。本报告保留各轮样本与当时的held边界；生产W4/G3与迁移仍未通过。
+
 原本的桥内 Map 会在 owner 重启后再次调用 native；五个新反例均先 RED。现在隔离原型在 native 调用前以 operation/binding/session 为键持久认领 intent，写明 caller target、输入 hash 和稳定 native clientUserMessageId；原生接受后先持久写回执，再返回 ACP。相同 operation 的不同 target/content 拒绝，跨 binding 拒绝，缺记录/损坏记录/无法核实结果都不能重新注入。
 
 receipt 查询先复用经校验的持久原生回执；丢 native 回执时，调用实际 CodexAcpClient 的 native thread/read 历史，要求同 native session、原 target turn、唯一 clientId、完整文本输入 hash 全部匹配。只有准确原生证明能收敛为 injected；不存在、读取失败、歧义等保持 outcome_unknown，不能以未查到推断未执行。injected 仍不等于模型已采用或任务完成。

@@ -7,7 +7,7 @@ created: 2026-10-13
 
 # 两条 P0 原型与桥维护决策
 
-状态：隔离原型已运行，核心 fence/next 取得有界 L2；完整通过条件仍未全部满足，见 [执行回执](execution-evidence.md)。通过原型只允许进入对应增强实现，不等于 G3 或迁移通过。
+状态：固定隔离binding的W4.P/W5.P已分别独立Go，逐条件证据、版本与失效条件见[原型门禁回执](prototype-gates.md)。通过原型只允许推进后续实现，不等于G0–G5或迁移通过。
 
 2026-10-14 追加：[Codex 丢回执/冷恢复](control-recovery-evidence.md)与[Claude elicitation/多 Notice/queued 取消/SDK 升级](notice-boundary-evidence.md)已有实际回执。普通 interrupt 不能撤销 queued Notice 的真实 No-Go 已通过本地私有 seam 补丁修复；社区接受与生产维护合同仍未知，不因本地通过改写上游状态。
 

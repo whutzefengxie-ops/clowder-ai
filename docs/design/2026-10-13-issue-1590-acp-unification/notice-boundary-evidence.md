@@ -7,7 +7,7 @@ created: 2026-10-14
 
 # W5.P：真人等待、多条 Notice 与取消
 
-本轮补齐了真实 elicitation、多条 Notice、已排队取消及一次 SDK 升级演练。**局部语义已通过，完整 W5.P/G3 与迁移仍 held**：这不是生产真人交互 UI、完整 binding/维护预算或 continuity 验收。脱敏机器清单及 raw hash 见 [manifest](evidence/w5-notice-boundaries.json)。
+本轮补齐了真实 elicitation、多条 Notice、已排队取消及一次 SDK 升级演练。随后追加[native2.1.299升级](evidence/w5-native-upgrade.json)，[W5.P已独立Go](prototype-gates.md)。G3与迁移仍held：这不是生产真人交互UI、完整binding/维护预算或continuity验收。原始轮次机器清单及当时的held保留在[manifest](evidence/w5-notice-boundaries.json)，阶段判定以最新门禁回执为准。
 
 ## 发现与修复
 

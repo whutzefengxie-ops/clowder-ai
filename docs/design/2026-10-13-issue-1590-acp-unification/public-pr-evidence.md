@@ -7,6 +7,8 @@ created: 2026-10-14
 
 # 首批公开 PR 的复验边界
 
+本报告冻结首批rebase/复验范围。2026-10-14后续提交补齐原型恢复/边界/升级证据，W4.P/W5.P分别独立Go，见[当前门禁回执](prototype-gates.md)；首批的历史held不代表当前阶段状态。HEAD `38e9f7d5d` 的16项非跳过远端CI检查全部成功，新提交另验，不能继承旧HEAD的CI结论。
+
 首批交付关联 #1590，保持 draft，不关闭 issue，不开启迁移。范围是 print/官方 SDK 的 Claude 工具结果修复、W2.S 权限安全下限、统一方案与隔离原型；完整 Gate 仍按 [执行回执](execution-evidence.md) 独立验收。
 
 公开基线为 upstream/main `449134fed1b08e5cf2a05a72817b84f163baf180`。将本工作线的六个提交重放到该基线，排除原起点的无关账号编辑修复；本地旧线保留在 `backup/acp-1590-before-public-rebase-20261014`。此前真实模型捕获的版本/hash 不变，是历史原型证据，不能写成在新 HEAD 重跑的真实模型验收。

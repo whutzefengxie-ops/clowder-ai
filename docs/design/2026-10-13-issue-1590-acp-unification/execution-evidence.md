@@ -12,7 +12,7 @@ tips_exempt: {reason: "修复既有工具结果与权限语义，当前阶段没
 
 后续控制恢复缺口已取得真实回执并经独立复审，见 [W4.P 恢复证据](control-recovery-evidence.md)；该局部结论不自动放行完整原型。
 
-Claude 的真实 elicitation、多 Notice、queued/SDK-ingress 取消和一次 SDK 升级也已补证，见 [W5.P 边界回执](notice-boundary-evidence.md)。下方“Go/No-Go 的当前结论”保留首轮样本的限制；最新阶段状态以本表和两份追加回执为准。草稿 [PR #1596](https://github.com/zts212653/clowder-ai/pull/1596) 持续更新。
+Claude 的真实 elicitation、多 Notice、queued/SDK-ingress 取消和 SDK/native 各一次升级已补证。2026-10-14 两条原型分别经独立审查为 **W4.P Go、W5.P Go**，完整条件索引、统计与exact审查目标见 [原型门禁回执](prototype-gates.md)。首轮样本的限制保留为历史；最新阶段状态以本表和门禁回执为准。草稿 [PR #1596](https://github.com/zts212653/clowder-ai/pull/1596) 持续更新。
 
 工作区：`G:/AIwork/clowder-ai/worktrees/feat-acp-unified-client-plan-1590`；分支 `feat/acp-unified-client-plan-1590`。生产配置、服务和历史未用于本分支验收，迁移未开启。
 
@@ -23,8 +23,8 @@ Claude 的真实 elicitation、多 Notice、queued/SDK-ingress 取消和一次 S
 | W0 | 9 份冻结 Git blob hash、北向接口清单、6 个 carrier 声明、CLI/桥/SDK 版本与原生二进制 hash | 源码基线足以实施 W1 | 每个实际 binding 的 B/R/E、账号/profile、运行预算与升级演练尚未完整冻结，完整 G0 未通过 |
 | W1 | 原生 `user/tool_result` 漏接修复、原生 ID/parent/invocation 配对、raw payload、失败状态、真实 CLI/官方 SDK、持久历史/UI 刷新 | 两个 P2 已修，代码与新增 SDK 证据通过 | 完整平台调用/socket/UI 链未验收，完整 G1 未通过 |
 | W2.S | STDIO/HTTP 共用 fail-closed 权限边界、factory 显式默认取消、prompt admission/generation、取消隔离 | P1/P2 全部修复，安全下限通过 | 不是 W3.P 平台 principal/policy/审批/审计，也不证明原生工具已静止 |
-| W4.P | native fence/目标反例、持久对账、owner退出反例、consumer与owner寿命分离后真实活动A跨HTTP响应断开 | 21项反例及真实生命周期机制；标题预算遗漏已纠正 | 寿命分离在test owner成立，生产consumer/owner/principal/persistence接线尚缺，完整原型 held |
-| W5.P | 非打断 next/UUID/result、真人等待、多 Notice、queued/SDK-ingress 取消、SDK0.3.285 升级及 now 对照 | 110项原型/129项 API，真实样本与三处审查问题闭环 | 私有 SDK seam 维护合同、完整升级矩阵/预算及生产交互接线仍未验收；完整原型 held |
+| W4.P | native fence/目标反例、持久对账、owner退出反例、稳定owner中的A跨HTTP响应断开；3个可审A→B边界 | **Go**；21项反例及真实边界/恢复，标题预算纠正 | W2/W3/W4尚需生产consumer/owner/principal/persistence接线；不批准G3/迁移 |
+| W5.P | next/UUID/result、真人等待、多 Notice、queued/SDK-ingress取消、SDK0.3.285/native2.1.299升级及now对照 | **Go**；最新升级129项相关桥回归/9项helper，真实关键语义与审查问题闭环 | W3/W5/G3尚需交互UI、私有seam维护合同/完整矩阵/预算；不批准迁移 |
 
 审查者：独立个体 `/root/acp_plan_review`，作者之外的本地同行。同家族审查，不称为跨家族审查；回执只覆盖各自阶段，未批准 G0、完整 G1、G3 或整体迁移。
 
@@ -63,7 +63,7 @@ Claude 固定 v0.70.0 / `d0aafb1c` / SDK 0.3.232，实际 native CLI 2.1.296。#
 
 真实 now 对照发现悬挂：工具转后台继续运行，随后 task_notification、自主 result、idle 均出现，ACP 主请求仍 90 秒超时。原文明确“未中断”，不能因文本含 interrupt 就写成工具取消。确定性回归复现 owned autonomous idle 债吞掉 steer 结清；第一次最小归属补丁又被“旧主任务迟到工具块污染新主任务”反例证伪。最终精确链为 native command UUID → model message ID → tool ID → task notification run ID → autonomous origin.runId，仅本主任务已确认拥有的 followup 不额外记该 idle 债。历史/foreign 债、原 subagent drain gate、autonomous usage/错误所有权保留；缺原生关联证据时不猜 owner。29 项受影响 steering/next 检查通过，并重跑真实 now/next；最终 now 19.236 秒正常结清，失败样本均保留。
 
-目前只能判定核心 ACP 表达/桥承接有实际可行证据。两条完整原型依然 held/unknown；按既定 Go/No-Go 规则不进入全面增强或整体迁移。剩余反例逐条补证后各自重新独立审查，不能因为 W1/W2.S 或某条 L2 通过就批准后续 Gate。
+首轮仅能判定核心表达/桥承接的有界可行性；当时两条原型held。追加丢回执恢复、活动owner寿命分离、A→B重复、elicitation/多Notice/queued取消及SDK/native升级后，原型已各自Go，可继续后续实现。G0–G5仍需自身独立证据，不能把原型Go改写为整体迁移批准。
 
 原型准备脚本和检查位于 `scripts/acp-spikes/`；上游副本在 worktree 的 `.cat-cafe/tmp/acp-prototypes/`，没有嵌入 Git 仓库；研究 clone 在 workspace 根目录。未修改上游源仓，也未公开发社区消息。
 
