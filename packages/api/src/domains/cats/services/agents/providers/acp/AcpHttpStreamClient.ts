@@ -37,6 +37,7 @@ import {
   AcpTimeoutError,
   buildAcpSpawnLogFields,
 } from './AcpClient.js';
+import { AcpSessionCancelledError } from './acp-cancellation-error.js';
 import { AcpCwdIdentityTracker } from './acp-cwd-identity.js';
 import type {
   AcpAgentRequest,
@@ -406,12 +407,7 @@ export class AcpHttpStreamClient {
       // prompt. The pool uses this only for single-flight retirement.
       this.unquiescedSessionIds.add(sessionId);
       log.info({ sessionId, eventCount }, 'HTTP cancel settled local prompt stream');
-      promptError = new AcpStreamIdleError(
-        sessionId,
-        Date.now() - (lastEventAt || Date.now()),
-        eventCount,
-        idleStallMs,
-      );
+      promptError = new AcpSessionCancelledError(sessionId);
       done = true;
       if (idleTimer) clearTimeout(idleTimer);
       if (budgetTimer) clearTimeout(budgetTimer);

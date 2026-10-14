@@ -22,6 +22,7 @@ import { resolveCliCommandOrBare } from '../../../../../../utils/cli-resolve.js'
 import { buildChildEnv } from '../../../../../../utils/cli-spawn.js';
 import { resolveWindowsSpawnPlan } from '../../../../../../utils/cli-spawn-win.js';
 import { buildUnixSupervisedSpawnPlan } from '../../../../../../utils/cli-supervised-process.js';
+import { AcpSessionCancelledError } from './acp-cancellation-error.js';
 import { AcpCwdIdentityTracker } from './acp-cwd-identity.js';
 import type {
   AcpAgentRequest,
@@ -676,12 +677,7 @@ export class AcpClient {
       // termination. The pool uses this only for single-flight retirement.
       this.unquiescedSessionIds.add(sessionId);
       log.info({ sessionId, eventCount }, 'Session cancel settled local prompt stream');
-      promptError = new AcpStreamIdleError(
-        sessionId,
-        Date.now() - (lastEventAt || Date.now()),
-        eventCount,
-        idleStallMs,
-      );
+      promptError = new AcpSessionCancelledError(sessionId);
       done = true;
       if (idleTimer) clearTimeout(idleTimer);
       if (budgetTimer) clearTimeout(budgetTimer);
@@ -965,12 +961,12 @@ export class AcpClient {
       } else if (method && !hasId) {
         if (method === ACP_METHODS.requestPermission) {
           // Gemini CLI sends request_permission as notification (no id) when not in yolo mode.
-          // Best-effort auto-approve with synthetic id (Gemini may ignore it).
+          // Route through the same fail-closed policy using a synthetic id.
           // Also notify stream listeners so idle watchdog suppresses stall during permission wait.
           const permParams = msg.params as Record<string, unknown>;
           log.info(
             { method, sessionId: permParams.sessionId },
-            'ACP: permission notification (no id) — auto-approve + suppress stall',
+            'ACP: permission notification (no id) — dispatch policy + suppress stall',
           );
           this.handleAgentRequest({ ...msg, id: `synth-perm-${Date.now()}` } as unknown as AcpAgentRequest);
           // Inject synthetic event into stream so promptStream sets pendingTool=true

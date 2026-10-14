@@ -1057,9 +1057,10 @@ describe('AcpClient', () => {
 
     const elapsed = Date.now() - startMs;
 
-    // Should throw AcpStreamIdleError (from cancel callback)
+    // Explicit cancellation is distinct from watchdog expiry.
     assert.ok(thrownError, 'Should throw after cancel');
-    assert.equal(thrownError.code, 'STREAM_IDLE_STALL', `Expected STREAM_IDLE_STALL, got ${thrownError.code}`);
+    assert.equal(thrownError.code, 'SESSION_CANCELLED');
+    assert.equal(thrownError.nativeAcknowledged, false);
     assert.equal(
       client.isSafeForSingleFlightReuse,
       false,
@@ -1169,8 +1170,10 @@ describe('AcpClient', () => {
         const result = await iter.next();
         if (result.done) break;
       }
-    } catch (_err) {
-      // Expected — cancel throws AcpStreamIdleError
+    } catch (err) {
+      assert.equal(err.name, 'AcpSessionCancelledError');
+      assert.equal(err.nativeAcknowledged, false, 'local cleanup cannot claim native quiescence');
+      assert.doesNotMatch(err.message, /idle/i, 'explicit cancellation is not an idle timeout');
     }
 
     // After cancel: no stale entries should remain

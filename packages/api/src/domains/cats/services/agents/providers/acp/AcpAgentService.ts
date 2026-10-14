@@ -36,6 +36,7 @@ import {
   AcpTimeoutError,
 } from './AcpClient.js';
 import { type AcpLease, type AcpProcessPool, DEFAULT_ACP_IDLE_TTL_MS, type PoolKey } from './AcpProcessPool.js';
+import { AcpSessionCancelledError } from './acp-cancellation-error.js';
 import {
   bindSessionCredentialFile,
   type PreparedCredentialEnv,
@@ -837,7 +838,12 @@ export class AcpAgentService implements AgentService {
           yield { type: 'done', catId: this.catId, metadata, timestamp: Date.now() };
           return; // Exit — retry path handled completion
         } catch (retryErr) {
-          if (sessionId && (retryErr instanceof AcpTimeoutError || retryErr instanceof AcpStreamIdleError)) {
+          if (
+            sessionId &&
+            (retryErr instanceof AcpTimeoutError ||
+              retryErr instanceof AcpStreamIdleError ||
+              retryErr instanceof AcpSessionCancelledError)
+          ) {
             sealActivePromptSession(sessionId);
           }
           const retryErrMsg = retryErr instanceof Error ? retryErr.message : String(retryErr);
@@ -845,8 +851,11 @@ export class AcpAgentService implements AgentService {
           yield {
             type: 'error',
             catId: this.catId,
-            error: `resume_empty_retry_failed: ${retryErrMsg}`,
-            errorCode: 'prompt_failure',
+            error:
+              retryErr instanceof AcpSessionCancelledError
+                ? toUserFacingError(this.providerName, 'cancelled', retryErrMsg)
+                : `resume_empty_retry_failed: ${retryErrMsg}`,
+            errorCode: retryErr instanceof AcpSessionCancelledError ? 'cancelled' : 'prompt_failure',
             metadata,
             timestamp: Date.now(),
           };
@@ -863,7 +872,10 @@ export class AcpAgentService implements AgentService {
 
       yield { type: 'done', catId: this.catId, metadata, timestamp: Date.now() };
     } catch (err) {
-      if (sessionId && (err instanceof AcpTimeoutError || err instanceof AcpStreamIdleError)) {
+      if (
+        sessionId &&
+        (err instanceof AcpTimeoutError || err instanceof AcpStreamIdleError || err instanceof AcpSessionCancelledError)
+      ) {
         sealActivePromptSession(sessionId);
       }
       const waitedMs = promptStreamStartedAt ? Date.now() - promptStreamStartedAt : 0;
@@ -963,6 +975,7 @@ function classifyError(
   capacitySignal: AcpCapacitySignal | null | undefined,
   clientRecentSignal?: AcpCapacitySignal | null,
 ): { errorCode: string; errorMsg: string } {
+  if (err instanceof AcpSessionCancelledError) return { errorCode: 'cancelled', errorMsg: err.message };
   if (err instanceof AcpProtocolError) {
     // JSON-RPC data.error carries the real cause (e.g. Kimi wraps exceptions
     // as -32603 "Internal error" with the detail in data). Surface it.
@@ -1020,6 +1033,8 @@ function toUserFacingError(providerName: string, errorCode: string, errorMsg: st
   const label = providerName === 'acp' ? 'ACP agent' : providerName;
   const base = `${errorCode}: ${errorMsg}`;
   switch (errorCode) {
+    case 'cancelled':
+      return `${base}\n已请求取消，执行端的最终状态待确认。`;
     case 'agent_busy':
       return `${base}\n⚠️ ${label} 正在处理内部轮次（如后台任务完成通知），自动重试后仍被占用。非 Clowder AI 系统故障，稍后重试即可。`;
     case 'model_capacity':

@@ -1022,9 +1022,11 @@ describe('AcpHttpStreamClient', () => {
 
     const elapsed = Date.now() - startMs;
 
-    // Should throw AcpStreamIdleError (from cancel callback)
+    // Local cancellation must not claim an idle timeout or native quiescence.
     assert.ok(thrownError, 'HTTP cancel should throw');
-    assert.equal(thrownError.code, 'STREAM_IDLE_STALL', `Expected STREAM_IDLE_STALL, got ${thrownError.code}`);
+    assert.equal(thrownError.code, 'SESSION_CANCELLED');
+    assert.equal(thrownError.nativeAcknowledged, false);
+    assert.doesNotMatch(thrownError.message, /idle/i);
     assert.equal(
       client.isSafeForSingleFlightReuse,
       false,
