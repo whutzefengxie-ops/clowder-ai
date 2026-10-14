@@ -89,8 +89,12 @@ test(
         /replacement boundary/i,
       );
       const outside = path.join(own, 'install-sibling/owned-data');
+      fs.mkdirSync(outside, { recursive: true });
       configure(install, outside);
-      assert.equal(resolveDesktopRuntime({}, path.join(install, 'desktop-dist/Clowder AI.exe')).instanceRoot, outside);
+      const restored = resolveDesktopRuntime({}, path.join(install, 'desktop-dist/Clowder AI.exe')).instanceRoot;
+      // Windows runners may supply TEMP using an 8.3 alias. Compare the actual
+      // directory identity rather than requiring one spelling of the same path.
+      assert.equal(fs.realpathSync.native(restored), fs.realpathSync.native(outside));
     } finally {
       fs.rmSync(own, { recursive: true, force: true });
     }
