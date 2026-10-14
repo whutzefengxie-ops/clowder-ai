@@ -89,7 +89,7 @@ fs/terminal server request 如启用，接既有工具政策、项目根/symlink
 
 拟定 `_clowder/v1/control` 请求：
 
-实施状态：本 worktree 已有本地 fork 原型及真实 native fence 回执；原型采用 `action=snapshot/steer` 的窄 schema。Claude 本地 `_clowder/v1/notice` 测试方法固定 next/promptRequired，并返回输入 UUID。两者在 initialize 声明 `prototype:true`，均未获上游接受，尚未实现下方完整 binding revision、durable operation/对账合同，不能直接作为生产端口。证据见 [执行回执](execution-evidence.md)。
+实施状态：本 worktree 的 fork 原型已有真实 native fence，并在隔离 journal 验证 binding revision、durable claim、丢回执及 warm/cold 对账；尚未接生产 durable owner。Claude 本地 `_clowder/v1/notice` 固定 next/promptRequired，返回输入 UUID，已验证真实 elicitation、多 Notice 和取消；queued cancel 依赖非公开 SDK `Query.request` 与 native `interrupt_cancel_queued_v1`，失配拒绝 next/退役未知 ingress。两者在 initialize 声明 `prototype:true`，均未获上游接受，不能直接作为下方完整生产端口。证据见 [执行回执](execution-evidence.md)及[私有 seam 维护边界](notice-boundary-evidence.md)。
 
 ```json
 {

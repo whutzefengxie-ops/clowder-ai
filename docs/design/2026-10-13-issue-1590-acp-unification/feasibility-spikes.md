@@ -9,6 +9,8 @@ created: 2026-10-13
 
 状态：隔离原型已运行，核心 fence/next 取得有界 L2；完整通过条件仍未全部满足，见 [执行回执](execution-evidence.md)。通过原型只允许进入对应增强实现，不等于 G3 或迁移通过。
 
+2026-10-14 追加：[Codex 丢回执/冷恢复](control-recovery-evidence.md)与[Claude elicitation/多 Notice/queued 取消/SDK 升级](notice-boundary-evidence.md)已有实际回执。普通 interrupt 不能撤销 queued Notice 的真实 No-Go 已通过本地私有 seam 补丁修复；社区接受与生产维护合同仍未知，不因本地通过改写上游状态。
+
 ## W4.P：Codex native fence 能否经 ACP 完整承接（R1）
 
 问题分成两个可证伪步骤，不能先假定 ID 可获得：

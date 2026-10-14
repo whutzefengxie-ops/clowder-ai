@@ -12,6 +12,8 @@ tips_exempt: {reason: "修复既有工具结果与权限语义，当前阶段没
 
 后续控制恢复缺口已取得真实回执并经独立复审，见 [W4.P 恢复证据](control-recovery-evidence.md)；该局部结论不自动放行完整原型。
 
+Claude 的真实 elicitation、多 Notice、queued/SDK-ingress 取消和一次 SDK 升级也已补证，见 [W5.P 边界回执](notice-boundary-evidence.md)。下方“Go/No-Go 的当前结论”保留首轮样本的限制；最新阶段状态以本表和两份追加回执为准。草稿 [PR #1596](https://github.com/zts212653/clowder-ai/pull/1596) 持续更新。
+
 工作区：`G:/AIwork/clowder-ai/worktrees/feat-acp-unified-client-plan-1590`；分支 `feat/acp-unified-client-plan-1590`。生产配置、服务和历史未用于本分支验收，迁移未开启。
 
 ## 阶段与门禁
@@ -21,8 +23,8 @@ tips_exempt: {reason: "修复既有工具结果与权限语义，当前阶段没
 | W0 | 9 份冻结 Git blob hash、北向接口清单、6 个 carrier 声明、CLI/桥/SDK 版本与原生二进制 hash | 源码基线足以实施 W1 | 每个实际 binding 的 B/R/E、账号/profile、运行预算与升级演练尚未完整冻结，完整 G0 未通过 |
 | W1 | 原生 `user/tool_result` 漏接修复、原生 ID/parent/invocation 配对、raw payload、失败状态、真实 CLI/官方 SDK、持久历史/UI 刷新 | 两个 P2 已修，代码与新增 SDK 证据通过 | 完整平台调用/socket/UI 链未验收，完整 G1 未通过 |
 | W2.S | STDIO/HTTP 共用 fail-closed 权限边界、factory 显式默认取消、prompt admission/generation、取消隔离 | P1/P2 全部修复，安全下限通过 | 不是 W3.P 平台 principal/policy/审批/审计，也不证明原生工具已静止 |
-| W4.P | 固定桥、真实 native ID export/caller fence、有效/陈旧/非空未知/取消目标、同进程幂等、原型协商 | 核心有界 L2 经非作者确认 | 丢回执、重连/对账和完整反例统计未齐；完整原型 held/unknown，不放行全面增强 |
-| W5.P | next 的真实工具边界/UUID/result/权限等待、now 对照、后台 followup 结清补丁 | 核心有界 L2；新增回归与补丁独立定向复核 | elicitation、多个真实 notice、已排队 notice 后取消及跨版本矩阵未齐；完整原型 held/unknown |
+| W4.P | native ID/caller fence、目标反例、持久认领、丢 ACP/native 回执、warm/cold 原生历史对账 | 21项反例与真实3/0次 native steer 经非作者复核 | 活动连接中断范围、生产 durable owner 接线及完整运行预算仍未验收；完整原型 held |
+| W5.P | 非打断 next/UUID/result、真人等待、多 Notice、queued/SDK-ingress 取消、SDK0.3.285 升级及 now 对照 | 110项原型/129项 API，真实样本与三处审查问题闭环 | 私有 SDK seam 维护合同、完整升级矩阵/预算及生产交互接线仍未验收；完整原型 held |
 
 审查者：独立个体 `/root/acp_plan_review`，作者之外的本地同行。同家族审查，不称为跨家族审查；回执只覆盖各自阶段，未批准 G0、完整 G1、G3 或整体迁移。
 
@@ -49,7 +51,7 @@ tips_exempt: {reason: "修复既有工具结果与权限语义，当前阶段没
 - 审批决定与写 wire 之间再检查 admission generation；同步 allow 后同 tick cancel 也不能送 selected。迟到 callback、新权限 request、旧 session 的再 prompt 和 closed connection 不再获得权限。
 - 实际 STDIO/随机端口 HTTP NDJSON 夹具验证 A 取消、B 正常、数字 ID 原样保留、畸形 kind 取消、STDIO 原生终态后的迟到请求，以及 consumer early-return。模拟 native/权限 owner，未声称真人审批 UI 验收。
 
-## Go/No-Go 的当前结论
+## 首轮 Go/No-Go 样本与历史限制
 
 Codex 固定 bridge 2.1.1 / `51f78d67`、native CLI 0.161.0，在 STDIO wire 注册 `_clowder/v1/control`，导出真正 native callback ID。最初仅 extMethod 未注册 wire 的调用为 `-32601`；错误包装遗漏 message 的问题也已修正并留档。最终同一 binding 的 3 个受限只读回合、79.038 秒，caller A 原值经真正 `CodexAcpClient.steerTurn` 进入 native `turn/steer.expectedTurnId`：valid A 原生回执匹配、重复 operation 只有一次 native 调用；B active 时 stale A/非空不存在 target 被 native 拒绝，B 保持原 ID；idle/取消 target 被 native 拒绝；unknown ACP session、foreign binding、空 target 分别由桥拒绝。原型协商、bundle/lock/runner hash、caller/native mapping 与 raw refs 已冻结。
 
@@ -69,7 +71,7 @@ Claude 固定 v0.70.0 / `d0aafb1c` / SDK 0.3.232，实际 native CLI 2.1.296。#
 
 前阶段受影响检查：API build、131 项既有/入口回归、42 项源码检查、28 项前端适配器、1 项浏览器，见 [阶段机器回执](evidence/stage-validation.json)。授权续办增加 SDK 历史/浏览器样本，实际各 2 项通过；Codex 可控检查 2 项、固定桥映射 1 项；Claude 完整受影响 steering/next 29 项、生成上游 TypeScript 编译通过，续办日志/SHA 见 [授权执行清单](evidence/authorized-runtime.json)。变更文件 Biome 检查通过，有 intentional literal-template、complexity 等 warning/info；没有使用 unsafe fix。
 
-完整 Web tsc 另有既有 `vitest.config.ts` 的重复 Vitest reporter 类型身份冲突，前端源码检查排除该配置后通过，未称整个 `pnpm lint` 通过。更宽的 print/SDK 检查曾有 6 项失败：5 项 Windows 下 MCP 参数为文件路径而测试按内联 JSON 读取，1 项 SDK `/tmp/images` 与 Windows resolved path 预期不一致。相关启动实现本次未改，失败记录保留；未单独证明这些用例的原版本执行结果，因此不能用“全量回归通过”覆盖它们。
+历史 Web tsc 的 Vitest 类型身份冲突已在对齐 main/安装冻结依赖后消失，正式 Web tsc 通过，见公开 PR 回执。更宽的 print/SDK 检查曾有6项失败：5项 Windows MCP 参数为文件路径而测试按内联 JSON 读取，1项 SDK 图像路径未按平台 resolve。现在按实际 inline/file 合同读取及规范化路径，保留原功能断言、未改启动实现，71项通过；失败日志保留，不能扩写成全仓回归通过。
 
 无用户设置的 SDK 曾返回 `Not logged in`；启用用户设置的尝试曾因缺少明确认证/出站范围授权被自动审批拒绝。用户随后明确答复“授权上述限定测试范围”，本轮据此完成隔离 SDK/native 检查；没有改写原认证或生产配置。账号/profile 测试绑定不等于正式成员绑定，完整 G0 的 B/R/E、成本/升级预算矩阵仍未验收。
 

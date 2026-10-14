@@ -12,4 +12,12 @@ Claude 研究副本固定到 v0.70.0 / `d0aafb1ca26427285ffaeac8d8a4452fff28e9c3
 
 `--patch-followup` 是本地 narrow patch：原生命令 UUID → model message ID → tool ID → followup run ID 确认所有权，避免 owned autonomous idle 吞掉 steering 主请求的结清；外来任务的债务与 usage 仍分离。原无补丁的两类确定性 RED 已观察，修正版受影响 steering/next 检查 29 项通过，并重跑真实 now/next。生成目录用 `node node_modules/vitest/vitest.mjs run src/tests/acp-agent.test.ts src/tests/clowder-next-boundary.test.ts -t 'turn steering|W5.P'` 验证。
 
-`readonly-fixture-mcp.mjs` 只读取环境指定目录内的 synthetic sentinel，允许固定 scenario 与最多 8 秒延迟、12 次调用，没有任意路径/命令入口。真实运行器及认证副本留在私有 `.cat-cafe/tmp/`，不加入 Git。当前用户已授权限定认证测试；它不授权发送仓库源码或公开消息。两条完整原型仍 held，回执见 `docs/design/2026-10-13-issue-1590-acp-unification/execution-evidence.md`。
+`--patch-cancel-queued` 补原子 native interrupt+queued 撤销、single-flight 入场 barrier、未知 SDK ingress 退役和已知 usage 保留。它依赖 **非公开 SDK `Query.request`**，仅 SDK0.3.232/0.3.285 + native2.1.296 已实测；next 还须 native `interrupt_cancel_queued_v1`。initialize 的 prototype 路由声明不代表 binding 已支持 next；缺 seam/cap 时入场拒绝。非法回执退役 query，不能用公开 interrupt 冒充。该补丁未获社区接受，版本/维护/生产限制见 `notice-boundary-evidence.md`。原型受影响 cancel/interrupt/usage/steering/next110项通过。
+
+`prepare-claude-sdk-upgrade.mjs` 只在私有目录复制实际 SDK0.3.285 artifact、对齐其支持的 Zod4 peer/内容类型，未改全局安装或工作区依赖；旧 npm lock 保留为历史 pin。编译后执行同一原型检查；这一升级已取得真实回执，不是完整升级矩阵。
+
+`--fault-ingress` 准备独立 `claude-ingress-fault`，使用已有 baseline 的 node_modules。测试钩子须 `CLOWDER_SPIKE_HOLD_SDK_NEXT=1`，将真实 SDK 输入泵的 next 延迟2秒，记录 native spawn/exit，不默认用于普通原型。
+
+`run-claude-notice-boundaries.mts` / `claude-boundary-harness.mts` 是可审查的有界运行器；运行前须明确认证/出站授权并设置 `CLOWDER_SPIKE_AUTHORIZED=1`。当前用户已授权，不能将该授权移植给其他用户。`CLOWDER_SPIKE_SDK_VARIANT=upgrade/ingress` 选择样本，`CLOWDER_SPIKE_RUN_ID` 可指定新的小写数字/字母/下划线/连字符样本名。运行前原子认领目录、保存源文件/参数/SHA，已有目录（含未完成/失败样本）拒绝覆盖。用 API 的 tsx loader 从 worktree 根执行；native2.1.296须在私有 pinned-cli 路径且匹配冻结SHA。
+
+`readonly-fixture-mcp.mjs` 只读取指定目录内的 synthetic sentinel，固定 scenario、8秒/12次上限，没有任意路径/命令入口。认证副本/实际 env/原始日志留私有 `.cat-cafe/tmp/`，不加入 Git；预算2美元/8 SDK turns，禁 hooks/用户指令。elicitation 回答是固定合成布尔值，不是产品真人 UI。两条完整原型仍 held，回执见 `docs/design/2026-10-13-issue-1590-acp-unification/execution-evidence.md`。

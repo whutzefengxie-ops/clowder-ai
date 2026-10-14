@@ -9,6 +9,7 @@ function fixture(pendingHuman = 0) {
   seam.sessions = {
     session: {
       queryClosed: false,
+      clowderCancelQueued: true,
       turnQueue: [{ settled: false }],
       pendingUserInputCount: pendingHuman,
       input: {
@@ -20,7 +21,7 @@ function fixture(pendingHuman = 0) {
   };
   seam.publishGoalFromPrompt = async () => {};
   const interrupt = vi.fn();
-  (seam.sessions.session as Record<string, unknown>).query = { interrupt };
+  (seam.sessions.session as Record<string, unknown>).query = { interrupt, request: vi.fn() };
   return { agent, messages, interrupt };
 }
 it('W5.P next delivery reaches the SDK input with a unique native message UUID', async () => {
@@ -57,5 +58,43 @@ it('W5.P idle requires host-owned prompt and does not start a detached native tu
       _meta: { steering: { delivery: 'next', idleBehavior: 'promptRequired' } },
     }),
   ).toEqual({ outcome: 'promptRequired', reason: 'noRunningTurn' });
+  expect(messages).toHaveLength(0);
+});
+it('W5.P next rejects a native binding without atomic queued cancellation', async () => {
+  const { agent, messages } = fixture();
+  (
+    agent as unknown as { sessions: Record<string, { clowderCancelQueued: boolean }> }
+  ).sessions.session.clowderCancelQueued = false;
+  await expect(
+    agent.steer({
+      sessionId: 'session',
+      prompt: [{ type: 'text', text: 'synthetic' }],
+      _meta: { steering: { delivery: 'next', idleBehavior: 'promptRequired' } },
+    }),
+  ).rejects.toThrow('next_requires_native_queued_cancel');
+  expect(messages).toHaveLength(0);
+});
+it('W5.P next rejects an SDK upgrade that removed its pinned native request seam', async () => {
+  const { agent, messages, interrupt } = fixture();
+  (agent as unknown as { sessions: Record<string, { query: unknown }> }).sessions.session.query = { interrupt };
+  await expect(
+    agent.steer({
+      sessionId: 'session',
+      prompt: [{ type: 'text', text: 'synthetic' }],
+      _meta: { steering: { delivery: 'next', idleBehavior: 'promptRequired' } },
+    }),
+  ).rejects.toThrow('next_requires_native_queued_cancel');
+  expect(messages).toHaveLength(0);
+});
+it('W5.P native cancel closes next admission before awaiting its receipt', async () => {
+  const { agent, messages } = fixture();
+  (agent as unknown as { sessions: Record<string, { cancelled: boolean }> }).sessions.session.cancelled = true;
+  await expect(
+    agent.steer({
+      sessionId: 'session',
+      prompt: [{ type: 'text', text: 'late next' }],
+      _meta: { steering: { delivery: 'next', idleBehavior: 'promptRequired' } },
+    }),
+  ).rejects.toThrow('notice_cancelled');
   expect(messages).toHaveLength(0);
 });

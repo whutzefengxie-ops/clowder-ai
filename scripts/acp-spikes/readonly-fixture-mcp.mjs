@@ -10,7 +10,7 @@ const tools = [
     inputSchema: {
       type: 'object',
       properties: {
-        scenario: { type: 'string', enum: ['A', 'B', 'cancel', 'notice', 'human'] },
+        scenario: { type: 'string', enum: ['A', 'B', 'cancel', 'notice', 'human', 'elicitation'] },
         delayMs: { type: 'integer', minimum: 0, maximum: 8000 },
       },
       required: ['scenario', 'delayMs'],
@@ -24,8 +24,42 @@ const trace = async (phase, fields) => {
     await appendFile(process.env.FIXTURE_TRACE, JSON.stringify({ t: Date.now(), phase, ...fields }) + '\n');
 };
 let count = 0;
+const elicitations = new Map();
+async function elicit() {
+  const id = `fixture-elicit-${count}`;
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      elicitations.delete(id);
+      reject(new Error('elicitation_timeout'));
+    }, 20000);
+    elicitations.set(id, (result) => {
+      clearTimeout(timer);
+      elicitations.delete(id);
+      resolve(result);
+    });
+    send({
+      jsonrpc: '2.0',
+      id,
+      method: 'elicitation/create',
+      params: {
+        mode: 'form',
+        message: 'Confirm reading the synthetic fixture sentinel.',
+        requestedSchema: {
+          type: 'object',
+          properties: { confirm: { type: 'boolean' } },
+          required: ['confirm'],
+          additionalProperties: false,
+        },
+      },
+    });
+  });
+}
 async function handle(message) {
   if (message.id === undefined) return;
+  if (!message.method && elicitations.has(message.id)) {
+    elicitations.get(message.id)(message.result);
+    return;
+  }
   if (message.method === 'initialize')
     return send({
       jsonrpc: '2.0',
@@ -48,7 +82,7 @@ async function handle(message) {
   if (
     message.params?.name !== 'read_fixture' ||
     !args ||
-    !['A', 'B', 'cancel', 'notice', 'human'].includes(args.scenario) ||
+    !['A', 'B', 'cancel', 'notice', 'human', 'elicitation'].includes(args.scenario) ||
     !Number.isInteger(args.delayMs) ||
     args.delayMs < 0 ||
     args.delayMs > 8000 ||
@@ -61,6 +95,17 @@ async function handle(message) {
       result: { isError: true, content: [{ type: 'text', text: 'Outside the bounded synthetic fixture policy' }] },
     });
   await trace('started', { id: message.id, scenario: args.scenario, delayMs: args.delayMs });
+  if (args.scenario === 'elicitation') {
+    await trace('elicitation_requested', { id: message.id });
+    const answer = await elicit();
+    await trace('elicitation_answered', { id: message.id, action: answer?.action });
+    if (answer?.action !== 'accept' || answer.content?.confirm !== true)
+      return send({
+        jsonrpc: '2.0',
+        id: message.id,
+        result: { isError: true, content: [{ type: 'text', text: 'Synthetic confirmation was not accepted' }] },
+      });
+  }
   await new Promise((resolve) => setTimeout(resolve, args.delayMs));
   const sentinel = await readFile(join(process.env.FIXTURE_DIR, 'sentinel.txt'), 'utf8');
   await trace('completed', { id: message.id, scenario: args.scenario });

@@ -1,9 +1,14 @@
 import { execFileSync } from 'node:child_process';
-import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { cp, mkdir, readFile, realpath, symlink, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
+import { patchClaudeQueuedCancel } from './claude-cancel-patch.mjs';
+import { patchClaudeIngressFault } from './claude-ingress-fault-patch.mjs';
 
 const source = resolve(process.argv[2] ?? '../../.research-20261012-client-comparison/claude-agent-acp');
-const target = resolve('.cat-cafe/tmp/acp-prototypes/claude');
+const target = resolve(
+  '.cat-cafe/tmp/acp-prototypes',
+  process.argv.includes('--fault-ingress') ? 'claude-ingress-fault' : 'claude',
+);
 const pin = 'd0aafb1ca26427285ffaeac8d8a4452fff28e9c3';
 if (execFileSync('git', ['-C', source, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim() !== pin)
   throw new Error('Claude upstream pin mismatch');
@@ -20,12 +25,12 @@ const testAnchor = '  it("rejects when the session is unknown", async () => {';
 if (!tests.includes(testAnchor)) throw new Error('Claude steering regression anchor missing');
 tests = tests.replace(
   testAnchor,
-  `${await readFile('scripts/acp-spikes/claude-followup-regression.snippet.txt', 'utf8')}\n${testAnchor}`,
+  `${await readFile('scripts/acp-spikes/claude-followup-regression.snippet.txt', 'utf8')}\n${await readFile('scripts/acp-spikes/claude-cancel-regression.snippet.txt', 'utf8')}\n${testAnchor}`,
 );
 await writeFile(steeringTest, tests);
 if (process.argv.includes('--patch-next')) {
   const file = join(target, 'src/acp-agent.ts');
-  let text = await readFile(file, 'utf8');
+  let text = (await readFile(file, 'utf8')).replaceAll('\r\n', '\n');
   text = text.replace(
     '    idleBehavior?: "promptRequired";',
     '    idleBehavior?: "promptRequired";\n    delivery?: "next";',
@@ -59,7 +64,7 @@ ${anchor}`,
 }
 if (process.argv.includes('--patch-followup')) {
   const file = join(target, 'src/acp-agent.ts');
-  let text = await readFile(file, 'utf8');
+  let text = (await readFile(file, 'utf8')).replaceAll('\r\n', '\n');
   const field = '  promptUuid: string;';
   text = text.replace(
     field,
@@ -117,6 +122,24 @@ ${ownershipAnchor}`,
   );
   await writeFile(file, text);
 }
+if (process.argv.includes('--patch-cancel-queued')) {
+  if (!process.argv.includes('--patch-next')) throw new Error('Queued cancel requires the narrow next patch');
+  await cp('scripts/acp-spikes/claude-native-cancel.ts', join(target, 'src/ClowderNativeCancel.ts'));
+  const file = join(target, 'src/acp-agent.ts');
+  await writeFile(file, patchClaudeQueuedCancel(await readFile(file, 'utf8')));
+}
+if (process.argv.includes('--fault-ingress')) {
+  if (!process.argv.includes('--patch-cancel-queued')) throw new Error('Ingress fault requires queued-cancel patch');
+  const file = join(target, 'src/acp-agent.ts');
+  await writeFile(file, patchClaudeIngressFault(await readFile(file, 'utf8')));
+  const dependencies = resolve('.cat-cafe/tmp/acp-prototypes/claude/node_modules');
+  try {
+    await symlink(dependencies, join(target, 'node_modules'), 'junction');
+  } catch (error) {
+    if (error.code !== 'EEXIST' || (await realpath(join(target, 'node_modules'))) !== (await realpath(dependencies)))
+      throw error;
+  }
+}
 console.log(
   JSON.stringify({
     source,
@@ -127,6 +150,7 @@ console.log(
       : 'unpatched baseline',
     nativeVerification: 'pending',
     ownedFollowupPatch: process.argv.includes('--patch-followup'),
+    queuedCancelPatch: process.argv.includes('--patch-cancel-queued'),
     productionEnabled: false,
   }),
 );
