@@ -6,7 +6,7 @@ const path = require('node:path');
 const fs = require('node:fs');
 const { resolveProjectRootFromDir } = require('./project-root');
 const ServiceManager = require('./service-manager');
-const { resolveDesktopRuntime, rewriteDesktopLoopbackUrl } = require('./runtime-config');
+const { resolveDesktopRuntime, rewriteDesktopLoopbackUrl, readPackagedApiPort } = require('./runtime-config');
 const {
   createRendererLinkOrigins,
   createVersionedRendererUrl,
@@ -32,6 +32,7 @@ if (process.platform === 'win32') {
 
 const PROJECT_ROOT = resolveProjectRootFromDir(__dirname);
 const desktopRuntime = resolveDesktopRuntime();
+if (desktopRuntime.instanceRoot) desktopRuntime.packagedApiPort = readPackagedApiPort(PROJECT_ROOT);
 const FRONTEND_PORT = desktopRuntime.frontendPort;
 const API_PORT = desktopRuntime.apiPort;
 if (desktopRuntime.instanceRoot) {
@@ -258,12 +259,10 @@ app.on('ready', async () => {
   if (desktopRuntime.instanceRoot) {
     session.defaultSession.webRequest.onBeforeRequest(
       {
-        urls: [
-          'http://localhost:3003/*',
-          'http://localhost:3004/*',
-          'http://127.0.0.1:3003/*',
-          'http://127.0.0.1:3004/*',
-        ],
+        urls: [...new Set([3003, 3004, desktopRuntime.packagedApiPort])].flatMap((port) => [
+          `http://localhost:${port}/*`,
+          `http://127.0.0.1:${port}/*`,
+        ]),
       },
       (details, callback) => callback({ redirectURL: rewriteDesktopLoopbackUrl(details.url, desktopRuntime) }),
     );

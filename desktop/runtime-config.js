@@ -1,4 +1,5 @@
 const path = require('node:path');
+const fs = require('node:fs');
 
 /** Opt-in isolated desktop instance; ordinary launches retain all historical defaults. */
 function resolveDesktopRuntime(env = process.env) {
@@ -27,8 +28,16 @@ function rewriteDesktopLoopbackUrl(raw, config) {
   const url = new URL(raw);
   if (url.protocol !== 'http:' || !['localhost', '127.0.0.1'].includes(url.hostname)) return undefined;
   const port = Number(url.port);
-  if (port !== 3003 && port !== 3004) return undefined;
+  if (port !== 3003 && port !== 3004 && port !== config.packagedApiPort) return undefined;
   url.port = String(port === 3003 ? config.frontendPort : config.apiPort);
   return url.href;
 }
-module.exports = { resolveDesktopRuntime, rewriteDesktopLoopbackUrl };
+function readPackagedApiPort(root) {
+  const { rewrites } = JSON.parse(fs.readFileSync(path.join(root, 'packages/web/.next/routes-manifest.json'), 'utf8'));
+  const rules = Array.isArray(rewrites) ? rewrites : Object.values(rewrites).flat();
+  const url = new URL(rules.find((rule) => rule.source === '/api/:path*')?.destination);
+  if (url.protocol !== 'http:' || !['localhost', '127.0.0.1'].includes(url.hostname) || !url.port)
+    throw new Error('Packaged API rewrite must be a loopback origin for an isolated desktop');
+  return Number(url.port);
+}
+module.exports = { resolveDesktopRuntime, rewriteDesktopLoopbackUrl, readPackagedApiPort };

@@ -194,6 +194,13 @@ class ServiceManager {
   _ensureUserDataDir(baseDir) {
     const dirs = [
       baseDir,
+      ...(resolveDesktopRuntime().instanceRoot
+        ? [
+            path.join(baseDir, 'home', 'AppData', 'Local'),
+            path.join(baseDir, 'home', 'AppData', 'Roaming'),
+            path.join(baseDir, 'temp'),
+          ]
+        : []),
       path.join(baseDir, 'data', 'transcripts'),
       path.join(baseDir, 'data', 'logs', 'api'),
       path.join(baseDir, 'data', 'connector-media'),
@@ -615,8 +622,45 @@ class ServiceManager {
   }
 
   _startProcess(name, cmd, args, opts = {}) {
+    const { instanceRoot } = resolveDesktopRuntime();
+    const inherited = instanceRoot
+      ? Object.fromEntries(
+          Object.entries(process.env).filter(([key]) =>
+            [
+              'PATH',
+              'PATHEXT',
+              'SYSTEMROOT',
+              'WINDIR',
+              'COMSPEC',
+              'PROGRAMFILES',
+              'PROGRAMFILES(X86)',
+              'PROGRAMDATA',
+              'PROCESSOR_ARCHITECTURE',
+              'NUMBER_OF_PROCESSORS',
+            ].includes(key.toUpperCase()),
+          ),
+        )
+      : process.env;
     const env = {
-      ...process.env,
+      ...inherited,
+      ...(instanceRoot
+        ? {
+            CAT_CAFE_DESKTOP_INSTANCE_ROOT: instanceRoot,
+            HOME: path.join(instanceRoot, 'home'),
+            USERPROFILE: path.join(instanceRoot, 'home'),
+            APPDATA: path.join(instanceRoot, 'home', 'AppData', 'Roaming'),
+            LOCALAPPDATA: path.join(instanceRoot, 'home', 'AppData', 'Local'),
+            TEMP: path.join(instanceRoot, 'temp'),
+            TMP: path.join(instanceRoot, 'temp'),
+            CODEX_HOME: path.join(instanceRoot, 'home', '.codex'),
+            CLAUDE_CONFIG_DIR: path.join(instanceRoot, 'home', '.claude'),
+            DSH_HOME: path.join(instanceRoot, 'home', '.dsh'),
+            CAT_CAFE_RUNTIME_ROOT: this.root,
+            REDIS_PORT: String(this.redisPort),
+            API_SERVER_HOST: '127.0.0.1',
+            NODE_ENV: 'production',
+          }
+        : {}),
       API_SERVER_PORT: String(this.apiPort),
       FRONTEND_PORT: String(this.frontendPort),
       NEXT_PUBLIC_API_URL: `http://localhost:${this.apiPort}`,

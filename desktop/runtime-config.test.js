@@ -1,6 +1,7 @@
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
-const { resolveDesktopRuntime, rewriteDesktopLoopbackUrl } = require('./runtime-config');
+const { resolveDesktopRuntime, rewriteDesktopLoopbackUrl, readPackagedApiPort } = require('./runtime-config');
+const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 
@@ -11,6 +12,29 @@ test('keeps normal desktop defaults and ignores unrelated shell port overrides',
     redisPort: 6399,
     instanceRoot: null,
   });
+});
+test('recognizes the packaged API port without treating arbitrary loopback services as the API', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'desktop-rewrites-'));
+  const manifest = path.join(root, 'packages/web/.next/routes-manifest.json');
+  fs.mkdirSync(path.dirname(manifest), { recursive: true });
+  try {
+    fs.writeFileSync(
+      manifest,
+      JSON.stringify({
+        rewrites: { afterFiles: [{ source: '/api/:path*', destination: 'http://localhost:3152/api/:path*' }] },
+      }),
+    );
+    const config = {
+      instanceRoot: root,
+      frontendPort: 5158,
+      apiPort: 3158,
+      packagedApiPort: readPackagedApiPort(root),
+    };
+    assert.equal(rewriteDesktopLoopbackUrl('http://localhost:3152/api/cats', config), 'http://localhost:3158/api/cats');
+    assert.equal(rewriteDesktopLoopbackUrl('http://localhost:7123/index.html', config), undefined);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
 });
 test('isolated renderer redirects packaged loopback defaults without touching other origins', () => {
   const config = { instanceRoot: '/owned', frontendPort: 5158, apiPort: 3158 };

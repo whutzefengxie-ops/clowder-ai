@@ -87,6 +87,7 @@ stop fixture 统一调用生产公开的 readProcessIdentity，保持 UTC/C loca
 
 - 显式 `CAT_CAFE_DESKTOP_INSTANCE_ROOT` 启用独立实例，并要求三个合法、不同且非生产的端口。普通桌面启动的端口和目录保持原默认值。
 - ServiceManager 仍是进程 owner；隔离启动拒绝已占用端口，要求独立持久 Redis，不静默降级内存。配置、global owner、消息、Electron userData 和 cookie 分开，禁止导入宿主历史。
+- 隔离子进程只继承操作系统启动必需变量，重新构造私有 HOME/CLI 配置目录和服务参数；外部 WORLD_DB、TASK_OUTCOME_DB、GLOBAL_KNOWLEDGE_DB、认证变量与 MEMORY_STORE 不继承。污染哨兵通过真实自有 Node 子进程验证，不访问对应数据库。
 - 安装版浏览器经只读 preload 取得实际本机 API 地址；隔离 Web gateway 接管 API、Socket.IO 和 uploads，避免正式 Next 构建内的旧端口 rewrite 触及生产。SSR 使用实际 API_SERVER_PORT。
 - 安装器允许独立 AppId、显式 UserProfileRoot、禁自动启动和禁桌面快捷方式的命令行参数，便于真实安装而不覆盖已有注册项、CLI hooks 或快捷方式。没有这些参数的普通安装默认行为保持不变。
 - 依赖沿官方 `pnpm deploy --prod --config.node-linker=hoisted` → Electron → tar → Inno Setup 管线生成，编译源码与 build stamp 对齐；不将 win-unpacked 或 CI installed-layout 测试称为已验安装包。

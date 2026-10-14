@@ -38,3 +38,52 @@ test('isolated desktop Redis probing, spawn and API env all use the same owned p
     fs.rmSync(base, { recursive: true, force: true });
   }
 });
+
+for (const contamination of [
+  {
+    WORLD_DB: '/sentinel/world.sqlite',
+    TASK_OUTCOME_DB: '/sentinel/tasks.sqlite',
+    GLOBAL_KNOWLEDGE_DB: '/sentinel/knowledge.sqlite',
+    CODEX_HOME: '/sentinel/codex',
+    OPENAI_API_KEY: 'fake-sentinel',
+  },
+  { MEMORY_STORE: '1' },
+])
+  test(`isolated child rejects inherited ${Object.keys(contamination).join(', ')}`, async () => {
+    const base = fs.mkdtempSync(path.join(os.tmpdir(), 'desktop-env-'));
+    const input = {
+      ...contamination,
+      CAT_CAFE_DESKTOP_INSTANCE_ROOT: base,
+      FRONTEND_PORT: '5158',
+      API_SERVER_PORT: '3158',
+      REDIS_PORT: '6367',
+    };
+    const previous = Object.fromEntries(Object.keys(input).map((key) => [key, process.env[key]]));
+    const ServiceManager = require('./service-manager');
+    try {
+      Object.assign(process.env, input);
+      const manager = new ServiceManager(base, { frontendPort: 5158, apiPort: 3158, redisPort: 6367 });
+      const resultPath = path.join(base, 'capture.json');
+      manager._startProcess(
+        'probe',
+        process.execPath,
+        [
+          '-e',
+          `require('node:fs').writeFileSync(${JSON.stringify(resultPath)}, JSON.stringify(Object.fromEntries(${JSON.stringify(['WORLD_DB', 'TASK_OUTCOME_DB', 'GLOBAL_KNOWLEDGE_DB', 'MEMORY_STORE', 'OPENAI_API_KEY', 'CODEX_HOME', 'REDIS_URL'])}.map(k=>[k,process.env[k]]))))`,
+        ],
+        { envOverrides: manager._buildApiEnv(base) },
+      );
+      await new Promise((resolve) => manager.procs.probe.once('exit', resolve));
+      const captured = JSON.parse(fs.readFileSync(resultPath, 'utf8'));
+      assert.deepEqual(captured, {
+        CODEX_HOME: path.join(base, 'home', '.codex'),
+        REDIS_URL: 'redis://localhost:6367',
+      });
+    } finally {
+      for (const [key, value] of Object.entries(previous)) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+      fs.rmSync(base, { recursive: true, force: true });
+    }
+  });
