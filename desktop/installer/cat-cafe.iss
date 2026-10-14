@@ -72,7 +72,11 @@ Name: "{app}\node"
 ; This replaces per-file Inno Setup extraction of 30K+ node_modules files,
 ; Runtime extraction still creates files; actual install timings must be measured.
 Source: "..\scripts\extract-runtime-archive.cjs"; DestDir: "{app}\scripts"
-Source: "..\..\bundled\archives\*.tar.gz.json"; DestDir: "{app}\bundled\archives"
+Source: "..\..\bundled\archives\deploy-dependencies.tar.gz.json"; DestDir: "{app}\bundled\archives"
+Source: "..\..\bundled\archives\deploy-api.tar.gz.json"; DestDir: "{app}\bundled\archives"
+Source: "..\..\bundled\archives\deploy-web.tar.gz.json"; DestDir: "{app}\bundled\archives"
+Source: "..\..\bundled\archives\deploy-mcp-server.tar.gz.json"; DestDir: "{app}\bundled\archives"
+Source: "..\..\bundled\archives\electron.tar.gz.json"; DestDir: "{app}\bundled\archives"
 Source: "..\..\bundled\archives\node.tar.gz"; DestDir: "{app}\bundled\archives"; AfterInstall: ExtractRuntimeArchive('node.tar.gz')
 Source: "..\..\bundled\archives\deploy-dependencies.tar.gz"; DestDir: "{app}\bundled\archives"; AfterInstall: ExtractRuntimeArchive('deploy-dependencies.tar.gz')
 Source: "..\..\bundled\archives\deploy-api.tar.gz"; DestDir: "{app}\bundled\archives"; AfterInstall: ExtractRuntimeArchive('deploy-api.tar.gz')

@@ -16,7 +16,7 @@ async function extractRuntimeArchive(
   installRoot,
   archiveName,
   tarImplementation,
-  { onProgress = () => {}, intervalMs = 1000 } = {},
+  { onProgress = () => {}, intervalMs = 1000, allowLegacy = false, runId = randomUUID() } = {},
 ) {
   const root = path.resolve(installRoot);
   const name = archiveName.replace(/\.tar\.gz$/, '');
@@ -27,11 +27,11 @@ async function extractRuntimeArchive(
   let suppliedEntry = false;
   const started = Date.now();
   const cpu = process.cpuUsage();
-  const runId = randomUUID();
   const file = path.join(root, 'bundled/archives', archiveName);
   const bytes = fs.statSync(file).size;
   const manifestFile = file + '.json';
   const manifest = fs.existsSync(manifestFile) ? JSON.parse(fs.readFileSync(manifestFile, 'utf8')) : null;
+  if (!manifest && !allowLegacy) throw new Error('Missing runtime archive manifest');
   if (
     manifest &&
     (manifest.archive !== archiveName ||
@@ -102,18 +102,30 @@ if (require.main === module) {
   const logs = path.join(root, '.installer-logs');
   fs.mkdirSync(logs, { recursive: true });
   const log = path.join(logs, 'extract-runtime.log');
+  const runId = randomUUID();
+  let lastEvent;
   extractRuntimeArchive(root, name, undefined, {
+    runId,
     onProgress: (event) => {
+      lastEvent = event;
       fs.appendFileSync(log, JSON.stringify(event) + '\n');
       process.stdout.write(
         `EXTRACT|${event.status}|${event.archive}|${event.percent}|${event.entries}|${event.totalEntries ?? 0}|${event.elapsedMs}\n`,
       );
     },
   }).catch((error) => {
-    fs.appendFileSync(
-      log,
-      JSON.stringify({ archive: name, status: 'error', at: new Date().toISOString(), message: error.message }) + '\n',
-    );
+    if (lastEvent?.status !== 'failed')
+      fs.appendFileSync(
+        log,
+        JSON.stringify({
+          runId,
+          archive: name,
+          status: 'failed',
+          phase: 'preflight',
+          at: new Date().toISOString(),
+          message: error.message,
+        }) + '\n',
+      );
     console.error(error.message);
     process.exitCode = 1;
   });

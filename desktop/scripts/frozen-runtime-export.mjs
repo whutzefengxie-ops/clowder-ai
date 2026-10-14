@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { stageBuiltWeb } from './stage-built-web.mjs';
 
 const inside = (root, target) => target === root || target.startsWith(root + path.sep);
 const hash = (file) => createHash('sha256').update(fs.readFileSync(file)).digest('hex');
@@ -30,7 +31,13 @@ export function materialize(from, to, workspace, ancestors = new Set()) {
   }
 }
 
-export function exportFrozenRuntime(workspace, out, packages, lockFile, { sharedDependencies = false } = {}) {
+export function exportFrozenRuntime(
+  workspace,
+  out,
+  packages,
+  lockFile,
+  { sharedDependencies = false, builtWebSource } = {},
+) {
   workspace = fs.realpathSync(workspace);
   const lockHash = hash(lockFile);
   if (hash(path.join(workspace, 'pnpm-lock.yaml')) !== lockHash) throw new Error('Frozen workspace lock changed');
@@ -58,6 +65,7 @@ export function exportFrozenRuntime(workspace, out, packages, lockFile, { shared
       if (fs.existsSync(ownModules)) materialize(ownModules, modules, workspace);
     } else exportModules(path.join(workspace, 'node_modules'), ownModules, modules, workspace);
     fs.writeFileSync(path.join(destination, '.runtime-lock.json'), JSON.stringify({ lockHash, node: process.version }));
+    if (name === 'web' && builtWebSource) stageBuiltWeb(builtWebSource, destination);
   }
   return { lockHash, packages, sharedDependencies };
 }

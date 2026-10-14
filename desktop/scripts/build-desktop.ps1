@@ -79,9 +79,7 @@ if (-not $SkipBundleDeps) {
         Move-Item -LiteralPath $deployRoot -Destination (Join-Path $bundledDir "deploy-before-$stamp")
     }
     Move-Item -LiteralPath $nextDeploy -Destination $deployRoot
-    $webNextSrc = Join-Path $ProjectRoot "packages/web/.next"
-    if (-not (Test-Path -LiteralPath $webNextSrc)) { throw "Web build missing" }
-    Copy-Item -LiteralPath $webNextSrc -Destination (Join-Path $deployRoot "web/.next") -Recurse
+    # frozen-runtime-deploy stages .next and generated public/vendor from the same build.
     Write-Ok "Frozen runtime artifacts ready"
 } elseif (-not (Test-Path -LiteralPath $deployRoot)) {
     throw "bundled/deploy missing. Run without -SkipBundleDeps first."

@@ -51,6 +51,7 @@ if (result.status !== 0) throw new Error(`Frozen production install failed (${re
 await rebuildFrozenDependencies(workspace);
 const receipt = exportFrozenRuntime(workspace, out, packages, path.join(source, 'pnpm-lock.yaml'), {
   sharedDependencies: os.platform() === 'win32',
+  builtWebSource: packages.includes('web') ? path.join(source, 'packages/web') : undefined,
 });
 fs.writeFileSync(path.join(out, 'frozen-install.json'), JSON.stringify({ ...receipt, workspace }, null, 2));
 console.log(JSON.stringify({ out, ...receipt }));

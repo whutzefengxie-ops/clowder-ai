@@ -29,6 +29,8 @@ test('real archive producer supplies integrity and extraction validates it, incl
       /integrity mismatch/,
     );
     assert.equal(events.at(-1).status, 'failed');
+    fs.renameSync(file + '.json', file + '.saved-manifest');
+    await assert.rejects(extractRuntimeArchive(root, path.basename(file), tar), /manifest/i);
     await assert.rejects(createRuntimeArchive(input, file), /must be new/);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });

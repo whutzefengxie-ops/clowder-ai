@@ -21,7 +21,10 @@ test('keeps Unicode runtime files and fails on missing/unknown payloads', async 
     fs.mkdirSync(path.join(root, 'bundled/archives'), { recursive: true });
     await tar.c({ file: path.join(root, 'bundled/archives/electron.tar.gz'), gzip: true, cwd: input }, ['.']);
     const events = [];
-    await extractRuntimeArchive(root, 'electron.tar.gz', tar, { onProgress: (event) => events.push(event) });
+    await extractRuntimeArchive(root, 'electron.tar.gz', tar, {
+      allowLegacy: true,
+      onProgress: (event) => events.push(event),
+    });
     assert.equal(events[0]?.status, 'start');
     assert.equal(events.at(-1)?.status, 'complete');
     assert.ok(events.at(-1).entries >= 3);
@@ -54,7 +57,10 @@ test('an existing entry cannot make a newly incomplete upgrade archive succeed',
     fs.writeFileSync(entry, 'existing installation');
     fs.mkdirSync(path.join(root, 'bundled/archives'), { recursive: true });
     await tar.c({ file: path.join(root, 'bundled/archives/electron.tar.gz'), gzip: true, cwd: input }, ['.']);
-    await assert.rejects(extractRuntimeArchive(root, 'electron.tar.gz', tar), /Incomplete runtime archive/);
+    await assert.rejects(
+      extractRuntimeArchive(root, 'electron.tar.gz', tar, { allowLegacy: true }),
+      /Incomplete runtime archive/,
+    );
     assert.equal(fs.readFileSync(entry, 'utf8'), 'existing installation');
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
