@@ -409,6 +409,7 @@ export class AcpAgentService implements AgentService {
       const provenance = client.capabilityProvenance?.();
       const declared = isAcpRecord(provenance?.declared) ? provenance.declared : undefined;
       usageTracker.bind(session.sessionId, declared?.promptUsage === true);
+      delete metadata.usage; // A replacement binding cannot inherit the prior session's current projection.
       metadata.diagnostics = {
         ...metadata.diagnostics,
         acpCapabilities: provenance,
@@ -688,7 +689,8 @@ export class AcpAgentService implements AgentService {
         timeoutMs: this.idleTtlMs + ACP_PROMPT_TIMEOUT_MARGIN_MS,
         onResult: (result) => {
           const meter = usageTracker.accept(result);
-          if (meter.usage) metadata.usage = { ...metadata.usage, ...meter.usage };
+          if (meter.usage) metadata.usage = meter.usage;
+          else delete metadata.usage;
           metadata.diagnostics = {
             ...metadata.diagnostics,
             acpPromptResult: result,

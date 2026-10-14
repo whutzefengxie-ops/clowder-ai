@@ -58,6 +58,7 @@ export class AcpPromptUsageTracker {
     const meter = isAcpRecord(ns) && isAcpRecord(ns.usage) ? ns.usage : undefined;
     if (!this.negotiated || !raw || meter?.scope !== 'prompt' || (meter.kind !== 'snapshot' && meter.kind !== 'delta'))
       return { scope: 'unknown', kind: 'unknown' };
+    if (meter.kind === 'snapshot') this.totals = {};
     if (meter.kind === 'delta') {
       if (typeof meter.id !== 'string' || !meter.id) return { scope: 'unknown', kind: 'delta_without_id' };
       if (this.deltas.has(meter.id)) return { usage: { ...this.totals }, scope: 'prompt', kind: 'duplicate_delta' };
