@@ -26,7 +26,7 @@ test('second-instance shutdown accepts only the same installation and user-data 
         getPath: () => userData,
       },
       PROJECT_ROOT: root,
-      QUIT_FOR_UPDATE_ARG: '--quit-for-update',
+      QUIT_FOR_UPDATE_ARG: '--quit-owned-installation',
       dbg: () => {},
       quitApp: () => {
         quits++;
@@ -36,12 +36,13 @@ test('second-instance shutdown accepts only the same installation and user-data 
         require('./installation-lifecycle').isInstallationShutdownRequest(...args),
     };
     vm.runInNewContext(source.slice(start, end), context);
-    const args = ['exe', '--quit-for-update'];
+    const args = ['exe', '--quit-owned-installation'];
     handler(null, args, '', { installRoot: path.join(base, 'other'), userDataRoot: userData });
     handler(null, args, '', { installRoot: root, userDataRoot: path.join(base, 'other-data') });
     handler(null, args, '', undefined);
+    handler(null, ['exe', '--quit-for-update'], '', { installRoot: root, userDataRoot: userData });
     assert.equal(quits, 0, 'foreign or missing identity cannot shut down this app');
-    handler(null, args, '', { installRoot: root, userDataRoot: userData });
+    handler(null, ['exe', '--quit-owned-installation'], '', { installRoot: root, userDataRoot: userData });
     assert.equal(quits, 1);
   } finally {
     fs.rmSync(base, { recursive: true, force: true });
@@ -74,6 +75,14 @@ test(
         JSON.parse(execFileSync('powershell.exe', [...args, '-InspectOnly'], { encoding: 'utf8' }).trim()),
         children[0].pid,
       );
+      const alias = path.join(base, 'alias');
+      fs.symlinkSync(root, alias, 'junction');
+      assert.equal(
+        JSON.parse(
+          execFileSync('powershell.exe', [...args.slice(0, -1), alias, '-InspectOnly'], { encoding: 'utf8' }).trim(),
+        ),
+        children[0].pid,
+      );
       execFileSync('powershell.exe', [...args, '-WaitSeconds', '0'], { timeout: 10000 });
       await new Promise((resolve) => {
         if (children[0].exitCode !== null) resolve();
@@ -99,6 +108,13 @@ test('installer and uninstaller use the same installation-scoped shutdown script
   assert.match(installer, /PrepareToInstall[\s\S]*stop-installed-desktop\.ps1/);
   const script = fs.readFileSync(path.join(__dirname, 'scripts/stop-installed-desktop.ps1'), 'utf8');
   assert.match(script, /StartsWith\(\$installPrefix, \[System\.StringComparison\]::OrdinalIgnoreCase\)/);
-  assert.match(script, /--quit-for-update/);
+  assert.match(script, /--quit-owned-installation/);
+  assert.doesNotMatch(script, /ArgumentList '--quit-for-update'/);
+  const outgoing = script.match(/ArgumentList '([^']+)'/)[1];
+  assert.equal(
+    ['exe', outgoing].includes('--quit-for-update'),
+    false,
+    'old receiver cannot interpret the new request as legacy quit',
+  );
   assert.doesNotMatch(script, /Stop-Process -Name/);
 });

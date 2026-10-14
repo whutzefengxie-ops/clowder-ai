@@ -117,3 +117,4 @@ Redis 6366、HOME、角色 catalog、历史与 SQLite 路径延用原隔离实�
 - 桌面测试首次 require 前设置 HOME/USERPROFILE/LOCALAPPDATA/APPDATA 私有根，恢复环境；日志根副作用也在夹具内。
 - d4d50 的 Windows 路径身份与 Public 静态构建检查已通过对应远端 CI；最新代码还需整组 CI。
 - 真实 Windows BSD tar 在 @fastify/send 发布的 snowman 测试目录上崩溃/解包失败。冻结出口仅排除该包测试目录，保留生产入口/lib/types；GNU 生成的归档已用系统 tar 解包并验证 SQLite。真实 Setup 安装和完整 UI/模型旅程继续取证，不以归档或 fixture 检查替代。
+独立复核补充：升级 helper 改用旧版本不会匹配的 --quit-owned-installation，且只向支持新身份模块的版本请求协调退出；旧版本走限定安装目录的清理。Windows 通过文件句柄 canonicalize AppDir 和进程 executable，覆盖 junction/短路径。同安装＋同实例新请求、另一安装/实例及旧接收者控制、真实目录/别名/兄弟进程回归通过。

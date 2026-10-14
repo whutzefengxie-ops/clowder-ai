@@ -50,7 +50,7 @@ const createBaseRendererLinkOrigins = () =>
     previewGatewayPort: Number.NaN,
   });
 let rendererLinkOrigins = createBaseRendererLinkOrigins();
-const QUIT_FOR_UPDATE_ARG = '--quit-for-update';
+const QUIT_FOR_UPDATE_ARG = '--quit-owned-installation';
 // Main process log in the user data directory alongside API + desktop logs.
 // Single source of truth: service-manager.js resolveUserDataDir() reads
 // electron-builder productName and handles legacy data directory migration.
