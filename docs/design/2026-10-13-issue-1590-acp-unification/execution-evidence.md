@@ -24,6 +24,7 @@ Claude 的真实 elicitation、多 Notice、queued/SDK-ingress 取消和 SDK/nat
 | W1 | 原生 `user/tool_result` 漏接修复、原生 ID/parent/invocation 配对、raw payload、失败状态、真实 CLI/官方 SDK、持久历史/UI 刷新 | 两个 P2 已修，代码与新增 SDK 证据通过 | 完整平台调用/socket/UI 链未验收，完整 G1 未通过 |
 | W2.S | STDIO/HTTP 共用 fail-closed 权限边界、factory 显式默认取消、prompt admission/generation、取消隔离 | P1/P2 全部修复，安全下限通过 | 不是 W3.P 平台 principal/policy/审批/审计，也不证明原生工具已静止 |
 | W2 首个切片 | STDIO/HTTP共用typed initialize、真实clientInfo/fs/terminal声明；2项wire RED→61项回归、API build及两实际桥握手兼容通过 | `160a02218` 独立窄复核通过，无P1/P2，见[公共初始化](client-initialize-evidence.md) | 不等于完整dispatcher/能力协商/身份/config接线；未验真实HTTP桥/模型/产品审批，G2仍未通过 |
+| W2 图片输入切片 / #1598 | 两transport及collect发送标准image blocks；fresh/busy/resume-empty保持字节；能力缺失/不可读明确拒绝；27专项、280受影响回归、API build及真实Claude/Codex读图通过 | `feeabe1f7` 独立窄复核通过，无P1/P2，见[图片输入](image-input-evidence.md) | 内存MessageStore+测试JSON冷读/受限session wrapper，不等于产品持久化/UI/factory；未实测CodeAgentCLI/MiniMax具体binding，完整G2/G4未通过 |
 | W4.P | native fence/目标反例、持久对账、owner退出反例、稳定owner中的A跨HTTP响应断开；3个可审A→B边界 | **Go**；21项反例及真实边界/恢复，标题预算纠正 | W2/W3/W4尚需生产consumer/owner/principal/persistence接线；不批准G3/迁移 |
 | W5.P | next/UUID/result、真人等待、多 Notice、queued/SDK-ingress取消、SDK0.3.285/native2.1.299升级及now对照 | **Go**；最新升级129项相关桥回归/9项helper，真实关键语义与审查问题闭环 | W3/W5/G3尚需交互UI、私有seam维护合同/完整矩阵/预算；不批准迁移 |
 
