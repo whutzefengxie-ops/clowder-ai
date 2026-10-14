@@ -119,7 +119,7 @@ export function useNativeOnboarding(
               creationRequestKey: receiptMismatch
                 ? partner.creationRequestKey
                 : saved?.idScheme
-                  ? legacyCreationKey(previous, partner, saved.partners, currentCats)
+                  ? legacyCreationKey(previous, saved.partners)
                   : (previous.creationRequestKey ?? partner.creationRequestKey),
               legacySharedRequestKey: saved?.idScheme ? legacySharedKey(previous, saved.partners) : undefined,
               existingId: confirmed && savedMember ? savedMember.id : undefined,

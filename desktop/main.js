@@ -4,6 +4,7 @@
 const { app, BrowserWindow, Menu, Tray, dialog, ipcMain, net, session, shell, Notification } = require('electron');
 const path = require('node:path');
 const { resolveProjectRootFromDir } = require('./project-root');
+const { installationIdentity, isInstallationShutdownRequest } = require('./installation-lifecycle');
 const ServiceManager = require('./service-manager');
 const {
   resolveDesktopRuntime,
@@ -209,8 +210,9 @@ function sendSplashStatus(msg) {
   if (splashWindow && !splashWindow.isDestroyed()) splashWindow.webContents.send('splash-status', msg);
 }
 
-app.on('second-instance', (_event, commandLine) => {
+app.on('second-instance', (_event, commandLine, _workingDirectory, identity) => {
   if (commandLine.includes(QUIT_FOR_UPDATE_ARG)) {
+    if (!isInstallationShutdownRequest(identity, PROJECT_ROOT, app.getPath('userData'))) return;
     dbg('Installer requested coordinated shutdown');
     void quitApp();
     return;
@@ -233,7 +235,7 @@ app.on('ready', async () => {
   // This runs AFTER the install-location guard so that launching from a DMG
   // always shows the warning dialog, even if another instance is already
   // running from /Applications.
-  const gotTheLock = app.requestSingleInstanceLock();
+  const gotTheLock = app.requestSingleInstanceLock(installationIdentity(PROJECT_ROOT, app.getPath('userData')));
   if (!gotTheLock) {
     app.quit();
     return;

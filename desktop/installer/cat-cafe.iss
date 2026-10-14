@@ -118,6 +118,8 @@ Source: "..\..\packages\api\src\plugins\*";        DestDir: "{app}\plugins"; \
 ; (Node.js runtime is shipped as node.tar.gz in bulk archives above)
 ; Desktop scripts (post-install config generation)
 Source: "..\scripts\post-install-offline.ps1";   DestDir: "{app}\scripts"
+Source: "..\scripts\configure-desktop-instance.ps1"; DestDir: "{app}\scripts"
+Source: "..\scripts\stop-installed-desktop.ps1"; DestDir: "{app}\scripts"
 Source: "..\scripts\generate-desktop-config.ps1"; DestDir: "{app}\scripts"
 Source: "..\scripts\sync-agent-hooks-offline.mjs"; DestDir: "{app}\scripts"
 ; User-level Agent CLI hook truth source used by F180 health/sync.
@@ -187,6 +189,10 @@ Filename: "reg.exe"; \
   StatusMsg: "Enabling long path support..."; \
   Flags: runhidden waituntilterminated
 ; Post-install: .env, skills, agent hooks.
+Filename: "powershell.exe"; \
+  Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\scripts\configure-desktop-instance.ps1"" -AppDir ""{app}"" -InstanceRoot ""{param:DesktopInstanceRoot|}"" -FrontendPort ""{param:FrontendPort|}"" -ApiPort ""{param:ApiPort|}"" -RedisPort ""{param:RedisPort|}"""; \
+  StatusMsg: "Configuring desktop instance..."; \
+  Flags: runhidden waituntilterminated
 ; CLI tool provisioning removed — bundled Node has no global npm, so
 ; `npm install -g` fails on clean machines. Users install CLIs separately.
 Filename: "powershell.exe"; \
@@ -230,9 +236,8 @@ Type: filesandordirs; Name: "{app}\node"
 
 [UninstallRun]
 Filename: "powershell.exe"; \
-  Parameters: "-ExecutionPolicy Bypass -Command ""Stop-Process -Name 'Clowder AI' -Force -ErrorAction SilentlyContinue"""; \
-  Flags: runhidden
-
+  Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\scripts\stop-installed-desktop.ps1"" -AppDir ""{app}"""; \
+  Flags: runhidden waituntilterminated runasoriginaluser
 [UninstallDelete]
 ; Directories created by tar.exe extraction are not tracked by Inno Setup's
 ; built-in file registry — must be explicitly listed for clean removal.
@@ -263,34 +268,13 @@ var
 begin
   Result := '';
   NeedsRestart := False;
-  // Escape {app} path for PowerShell single-quoted strings and ensure
-  // trailing backslash for directory boundary (prevents killing processes
-  // in sibling dirs like "ClowderAI-Beta" when app is "ClowderAI").
   AppDir := ExpandConstant('{app}');
-  if Copy(AppDir, Length(AppDir), 1) <> '\' then
-    AppDir := AppDir + '\';
-  StringChange(AppDir, '''', '''''');
-  // Phase 1: ask the non-elevated app to enter quitApp() → stopAll().
-  // WM_CLOSE is not sufficient because the tray close handler hides the window.
+  ExtractTemporaryFile('stop-installed-desktop.ps1');
+  // Upgrade and uninstall share identity-bound coordinated shutdown and cleanup.
+  Cmd := '-NoProfile -ExecutionPolicy Bypass -File "' + ExpandConstant('{tmp}') +
+         '\stop-installed-desktop.ps1" -AppDir "' + AppDir +
+         '" -InstanceRoot "' + ExpandConstant('{param:DesktopInstanceRoot|}') + '"';
   ExecAsOriginalUser(
-    ExpandConstant('{app}\desktop-dist\{#MyAppExeName}'),
-    '--quit-for-update', '', SW_HIDE, ewNoWait, ExitCode);
-  // Wait only while install-directory processes remain, up to 15 seconds.
-  Cmd := '$deadline=(Get-Date).AddSeconds(15); while ((Get-Date) -lt $deadline) { ' +
-         '$running=@(Get-Process -ErrorAction SilentlyContinue | Where-Object { ' +
-         '$_.Path -and $_.Path.StartsWith(''' + AppDir + ''') }); ' +
-         'if ($running.Count -eq 0) { exit 0 }; Start-Sleep -Milliseconds 250 }; exit 1';
-  Exec('powershell.exe',
-       '-NoProfile -ExecutionPolicy Bypass -Command "' + Cmd + '"',
-       '', SW_HIDE, ewWaitUntilTerminated, ExitCode);
-  // Phase 2: force-clean only after coordinated shutdown exceeded its bound.
-  if ExitCode <> 0 then
-  begin
-    Cmd := 'Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith(''' +
-           AppDir +
-           ''') } | Stop-Process -Force -ErrorAction SilentlyContinue';
-    Exec('powershell.exe',
-         '-NoProfile -ExecutionPolicy Bypass -Command "' + Cmd + '"',
-         '', SW_HIDE, ewWaitUntilTerminated, ExitCode);
-  end;
+    'powershell.exe', Cmd, '', SW_HIDE, ewWaitUntilTerminated, ExitCode);
+  if ExitCode <> 0 then Result := 'Unable to stop the target installation safely.';
 end;

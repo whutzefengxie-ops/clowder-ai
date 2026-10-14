@@ -1,13 +1,24 @@
 const assert = require('node:assert/strict');
-const { test } = require('node:test');
+const { test, after } = require('node:test');
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 
+// Module initialization creates its log directory before any instance constructor.
+const moduleRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'desktop-module-'));
+const keys = ['HOME', 'USERPROFILE', 'LOCALAPPDATA', 'APPDATA', 'CAT_CAFE_DESKTOP_INSTANCE_ROOT'];
+const original = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
+for (const key of keys.slice(0, 4)) process.env[key] = moduleRoot;
+delete process.env.CAT_CAFE_DESKTOP_INSTANCE_ROOT;
+const ServiceManager = require('./service-manager');
+for (const [key, value] of Object.entries(original)) {
+  if (value === undefined) delete process.env[key];
+  else process.env[key] = value;
+}
+after(() => fs.rmSync(moduleRoot, { recursive: true, force: true }));
+
 test('isolated desktop Redis probing, spawn and API env all use the same owned port', async () => {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), 'desktop-isolation-'));
-  process.env.LOCALAPPDATA = base;
-  const ServiceManager = require('./service-manager');
   const manager = new ServiceManager(base, { frontendPort: 5158, apiPort: 3158, redisPort: 6367 });
   const probes = [],
     starts = [];
@@ -34,6 +45,8 @@ test('isolated desktop Redis probing, spawn and API env all use the same owned p
     ]);
     await new Promise((resolve) => manager.procs.probe.once('exit', resolve));
     assert.equal(JSON.parse(fs.readFileSync(resultPath, 'utf8')).redis, 'redis://localhost:6367');
+    assert.ok(ServiceManager.USER_DATA_DIR.startsWith(moduleRoot + path.sep));
+    assert.ok(fs.existsSync(path.join(ServiceManager.USER_DATA_DIR, 'data/logs/desktop.log')));
   } finally {
     fs.rmSync(base, { recursive: true, force: true });
   }
@@ -59,7 +72,6 @@ for (const contamination of [
       REDIS_PORT: '6367',
     };
     const previous = Object.fromEntries(Object.keys(input).map((key) => [key, process.env[key]]));
-    const ServiceManager = require('./service-manager');
     try {
       Object.assign(process.env, input);
       const manager = new ServiceManager(base, { frontendPort: 5158, apiPort: 3158, redisPort: 6367 });

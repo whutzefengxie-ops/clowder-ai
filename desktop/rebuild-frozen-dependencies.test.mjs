@@ -62,3 +62,28 @@ test('runs each dependency lifecycle once and invokes default binding.gyp instal
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('canonicalizes an owned workspace alias and still rejects an external dependency', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'native-alias-'));
+  const actual = path.join(root, 'actual');
+  const alias = path.join(root, 'alias');
+  try {
+    const owned = path.join(actual, 'node_modules', 'owned');
+    fs.mkdirSync(owned, { recursive: true });
+    fs.mkdirSync(path.join(actual, 'packages'));
+    fs.writeFileSync(path.join(owned, 'package.json'), JSON.stringify({ name: 'owned', version: '1' }));
+    fs.symlinkSync(actual, alias, process.platform === 'win32' ? 'junction' : 'dir');
+    await rebuildFrozenDependencies(alias);
+    const outside = path.join(root, 'outside');
+    fs.mkdirSync(outside);
+    fs.writeFileSync(path.join(outside, 'package.json'), JSON.stringify({ name: 'outside', version: '1' }));
+    fs.symlinkSync(
+      outside,
+      path.join(actual, 'node_modules', 'outside'),
+      process.platform === 'win32' ? 'junction' : 'dir',
+    );
+    await assert.rejects(() => rebuildFrozenDependencies(alias), /External dependency/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});

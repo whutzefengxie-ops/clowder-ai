@@ -1428,10 +1428,12 @@ describe('main process update-schedule lifecycle', () => {
     assert.match(mainSource, /QUIT_FOR_UPDATE_ARG\s*=\s*'--quit-for-update'/);
     assert.match(secondInstanceBody, /commandLine\.includes\(QUIT_FOR_UPDATE_ARG\)/);
     assert.match(secondInstanceBody, /quitApp\(\)/);
-    assert.match(installerSource, /ExecAsOriginalUser[\s\S]*--quit-for-update[\s\S]*ewNoWait/);
+    const stopSource = readFileSync(path.join(__dirname, 'scripts/stop-installed-desktop.ps1'), 'utf8');
+    assert.match(installerSource, /ExecAsOriginalUser[\s\S]*ewWaitUntilTerminated/);
+    assert.match(stopSource, /Start-Process[\s\S]*--quit-for-update/);
     assert.doesNotMatch(installerSource, /CloseMainWindow/);
     assert.ok(
-      installerSource.indexOf('--quit-for-update') < installerSource.indexOf('Stop-Process -Force'),
+      stopSource.indexOf('--quit-for-update') < stopSource.indexOf('Stop-Process -Force'),
       'coordinated app quit must precede the bounded force-cleanup fallback',
     );
   });

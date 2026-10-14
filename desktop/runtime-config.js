@@ -2,7 +2,15 @@ const path = require('node:path');
 const fs = require('node:fs');
 
 /** Opt-in isolated desktop instance; ordinary launches retain all historical defaults. */
-function resolveDesktopRuntime(env = process.env) {
+function resolveDesktopRuntime(env = process.env, executable = process.execPath) {
+  // Persisted installer identity survives upgrades launched without the original shell.
+  const marker = path.join(path.dirname(executable), 'desktop-instance.json');
+  if (env.CAT_CAFE_DESKTOP_INSTANCE_ROOT === undefined && fs.existsSync(marker)) {
+    const saved = JSON.parse(fs.readFileSync(marker, 'utf8'));
+    if (typeof saved.CAT_CAFE_DESKTOP_INSTANCE_ROOT !== 'string' || !saved.CAT_CAFE_DESKTOP_INSTANCE_ROOT)
+      throw new Error('Installed desktop instance marker must identify its root');
+    env = { ...env, ...saved };
+  }
   const instanceRoot = env.CAT_CAFE_DESKTOP_INSTANCE_ROOT;
   if (instanceRoot === undefined) return { frontendPort: 3003, apiPort: 3004, redisPort: 6399, instanceRoot: null };
   if (!instanceRoot || !path.isAbsolute(instanceRoot)) throw new Error('Desktop instance root must be absolute');

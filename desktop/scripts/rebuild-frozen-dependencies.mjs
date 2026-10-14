@@ -14,6 +14,7 @@ export function resolveNpmCli(executable = process.execPath) {
 }
 
 export async function rebuildFrozenDependencies(workspace, env = process.env) {
+  workspace = fs.realpathSync(workspace);
   const runScript = createRequire(resolveNpmCli())('@npmcli/run-script');
   const visited = new Set();
   const rebuildModules = async (modules) => {

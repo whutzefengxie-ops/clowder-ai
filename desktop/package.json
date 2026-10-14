@@ -62,6 +62,7 @@
       "desktop-update-menu.js",
       "desktop-update-runtime.js",
       "main.js",
+      "installation-lifecycle.js",
       "mac-install-location.js",
       "preload.js",
       "project-root.js",

@@ -23,7 +23,7 @@
     "test:lint-rules": "node eslint-plugins/no-hardcoded-colors.test.js && node eslint-plugins/no-raw-console-borders.test.js",
     "test:production-cache-policy": "node --test test/production-cache-policy.test.cjs",
     "test:browser:f290-entry": "node scripts/run-with-node-env-test.mjs node --test --test-name-pattern='owner activity opens' test/browser/f290-work-policy-ui.test.mjs",
-    "test:first-run-onboarding": "pnpm exec vitest run src/components/first-run-quest/__tests__ src/components/__tests__/member- src/components/__tests__/hub-member- src/components/onboarding/__tests__ src/components/ThreadSidebar/__tests__/sidebar-row-density.test.tsx src/components/ThreadSidebar/__tests__/virtual-thread-list.test.tsx src/utils/__tests__/member-save-trace.test.ts"
+    "test:first-run-onboarding": "pnpm exec vitest run src/components/__tests__/native-onboarding-legacy-roster-ownership.test.tsx src/components/__tests__/review-acp-legacy-lost-response.test.tsx src/components/first-run-quest/__tests__ src/components/__tests__/member- src/components/__tests__/hub-member- src/components/onboarding/__tests__ src/components/ThreadSidebar/__tests__/sidebar-row-density.test.tsx src/components/ThreadSidebar/__tests__/virtual-thread-list.test.tsx src/utils/__tests__/member-save-trace.test.ts"
   },
   "dependencies": {
     "@cat-cafe/shared": "workspace:*",

@@ -108,3 +108,12 @@ Redis 6366、HOME、角色 catalog、历史与 SQLite 路径延用原隔离实�
 - 新冻结出口改用普通 pnpm 9 install --prod --frozen-lockfile --config.node-linker=hoisted。hoisted deploy 会关闭锁读取，不能通过 frozen 参数补救。源码只复制 Git 跟踪清单及显式编译 dist；不复制本地 data/.env/uploads 等运行私有文件。导出按完整包单位处理私有覆盖，保留嵌套 peer，不递归叠加旧包残留。
 - hoisted rebuild 未执行原生依赖 hook，新增按锁定 registry 包执行 install hooks；workspace prepare 仍属于源码构建阶段。新导出 API 用 Node 24 ABI137 执行 SQLite SELECT1 已成功，OTel2.6.1、ClaudeSDK0.3.285 与源锁一致。正式安装器、首次首屏、创建、模型回复与完整进程重启验收尚在进行，不能用上述包级检查替代。
 - 当前本轮引导回归 16 文件 86 项，桌面受影响回归 82 项通过；Web TypeScript noEmit 通过。最终 HEAD CI、实际 Setup.exe 全旅程和源码隔离环境重启将在实证完成后补齐。
+
+## 最新安装与兼容反馈（2026-10-14）
+
+- zts 6162292490：旧共享请求键的归属不能由 roster 同名/同 descriptor 推导。现在保留原 key/body，只有成功的原请求重放才拆分其他 descriptor；新增 members/goal × 正反探测顺序，服务端实际分配 dsh-3、另一个 journey 占用 dsh-2 的 4 条回归。原 8 条恢复继续通过。
+- 同条 macOS 路径 P1：原生 hook 遍历前 canonicalize workspace；自有目录 alias 与真实外部依赖拒绝同时覆盖。Windows junction 实测通过，macOS 交由原生 CI 验证。
+- mind 6161659038：second-instance 协调退出核验安装目录和 Electron userData 身份；安装/升级/卸载共用按安装目录界限过滤的停机脚本，撤掉全局进程名停机。显式隔离根/3 端口写入安装 sidecar，环境为空时仍恢复隔离身份；缺失/损坏身份不回落生产端口。普通安装保留默认值。
+- 桌面测试首次 require 前设置 HOME/USERPROFILE/LOCALAPPDATA/APPDATA 私有根，恢复环境；日志根副作用也在夹具内。
+- d4d50 的 Windows 路径身份与 Public 静态构建检查已通过对应远端 CI；最新代码还需整组 CI。
+- 真实 Windows BSD tar 在 @fastify/send 发布的 snowman 测试目录上崩溃/解包失败。冻结出口仅排除该包测试目录，保留生产入口/lib/types；GNU 生成的归档已用系统 tar 解包并验证 SQLite。真实 Setup 安装和完整 UI/模型旅程继续取证，不以归档或 fixture 检查替代。

@@ -13,6 +13,29 @@ test('keeps normal desktop defaults and ignores unrelated shell port overrides',
     instanceRoot: null,
   });
 });
+
+test('installed instance survives an environment-free upgrade and rejects corrupt identity', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'installed-runtime-'));
+  const executable = path.join(root, 'Clowder AI.exe');
+  const marker = path.join(root, 'desktop-instance.json');
+  const saved = {
+    CAT_CAFE_DESKTOP_INSTANCE_ROOT: root,
+    FRONTEND_PORT: '5158',
+    API_SERVER_PORT: '3158',
+    REDIS_PORT: '6367',
+  };
+  try {
+    fs.writeFileSync(marker, JSON.stringify(saved));
+    assert.equal(resolveDesktopRuntime({}, executable).instanceRoot, fs.realpathSync(root));
+    assert.equal(resolveDesktopRuntime({}, executable).redisPort, 6367);
+    fs.writeFileSync(marker, '{}');
+    assert.throws(() => resolveDesktopRuntime({}, executable), /identify its root/);
+    fs.writeFileSync(marker, JSON.stringify({ ...saved, REDIS_PORT: '6399' }));
+    assert.throws(() => resolveDesktopRuntime({}, executable), /isolated.*port/i);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
 test('recognizes the packaged API port without treating arbitrary loopback services as the API', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'desktop-rewrites-'));
   const manifest = path.join(root, 'packages/web/.next/routes-manifest.json');
