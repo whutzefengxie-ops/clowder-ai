@@ -17,7 +17,7 @@ import type { CatId } from '@cat-cafe/shared';
 import { createModuleLogger } from '../../../../../../infrastructure/logger.js';
 import type { AgentMessage, MessageMetadata } from '../../../types.js';
 import { type AcpToolSnapshot, transformAcpToolEvent } from './acp-tool-events.js';
-import { acpContextUsage } from './acp-usage.js';
+import { acpContextUsage } from './protocol/acp-usage.js';
 import type { AcpSessionUpdate } from './types.js';
 
 const log = createModuleLogger('acp-event-xform');

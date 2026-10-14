@@ -1,4 +1,4 @@
-import type { AcpPromptResult, AcpSessionUpdate, AcpStopReason } from './types.js';
+import type { AcpPromptResult, AcpSessionUpdate, AcpStopReason } from '../types.js';
 
 const STOP_REASONS: readonly string[] = ['end_turn', 'max_tokens', 'max_turn_requests', 'refusal', 'cancelled'];
 export interface AcpPromptStreamOptions {

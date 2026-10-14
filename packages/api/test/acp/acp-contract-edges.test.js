@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { classifyAcpPacket } from '../../dist/domains/cats/services/agents/providers/acp/acp-request-dispatcher.js';
-import { AcpPromptUsageTracker } from '../../dist/domains/cats/services/agents/providers/acp/acp-usage.js';
+import { classifyAcpPacket } from '../../dist/domains/cats/services/agents/providers/acp/protocol/acp-request-dispatcher.js';
+import { AcpPromptUsageTracker } from '../../dist/domains/cats/services/agents/providers/acp/protocol/acp-usage.js';
 import { imageFixture } from '../helpers/acp-image-fixture.js';
 
 const NS = 'clowder.ai/acp.v1';

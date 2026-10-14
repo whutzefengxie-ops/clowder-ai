@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
+import type { AcpMcpServer, AcpNewSessionResult, AcpResponse } from '../types.js';
 import { ACP_CONTRACT_META, AcpCapabilityError, type AcpCapabilitySnapshot, isAcpRecord } from './acp-capabilities.js';
-import type { AcpMcpServer, AcpNewSessionResult, AcpResponse } from './types.js';
 
 export interface AcpTrustedInstructions {
   revision: string;

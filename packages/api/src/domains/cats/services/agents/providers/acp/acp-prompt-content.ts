@@ -1,4 +1,4 @@
-import { AcpCapabilityError } from './acp-capabilities.js';
+import { AcpCapabilityError } from './protocol/acp-capabilities.js';
 import type { AcpContentBlock, AcpPromptCapabilities } from './types.js';
 
 export type AcpPromptInput = string | readonly AcpContentBlock[];

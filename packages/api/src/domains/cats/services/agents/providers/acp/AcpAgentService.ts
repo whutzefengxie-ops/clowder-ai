@@ -38,7 +38,6 @@ import {
 } from './AcpClient.js';
 import { type AcpLease, type AcpProcessPool, DEFAULT_ACP_IDLE_TTL_MS, type PoolKey } from './AcpProcessPool.js';
 import { AcpSessionCancelledError } from './acp-cancellation-error.js';
-import { AcpCapabilityError, isAcpRecord } from './acp-capabilities.js';
 import {
   bindSessionCredentialFile,
   type PreparedCredentialEnv,
@@ -50,10 +49,15 @@ import { createAcpSessionState, flushAcpThinking, transformAcpEvent } from './ac
 import { readAcpImageBlocks, withAcpImages } from './acp-image-input.js';
 import { resolveAcpMcpServers, resolveDisabledServerIds, resolveUserProjectMcpServers } from './acp-mcp-resolver.js';
 import { AcpImageInputError, type AcpPromptInput } from './acp-prompt-content.js';
-import { AcpPromptStoppedError, type AcpPromptStreamOptions, observeAcpPromptTerminal } from './acp-prompt-result.js';
-import type { AcpModelReceipt, AcpSessionOptions } from './acp-session-contract.js';
 import { callbackEnvDiagnostic, materializeSessionMcpServers } from './acp-session-env.js';
-import { AcpPromptUsageTracker } from './acp-usage.js';
+import { AcpCapabilityError, isAcpRecord } from './protocol/acp-capabilities.js';
+import {
+  AcpPromptStoppedError,
+  type AcpPromptStreamOptions,
+  observeAcpPromptTerminal,
+} from './protocol/acp-prompt-result.js';
+import type { AcpModelReceipt, AcpSessionOptions } from './protocol/acp-session-contract.js';
+import { AcpPromptUsageTracker } from './protocol/acp-usage.js';
 import type {
   AcpMcpServer,
   AcpNewSessionResult,

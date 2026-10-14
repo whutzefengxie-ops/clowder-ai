@@ -1,6 +1,6 @@
-import type { MessageMetadata, TokenUsage } from '../../../types.js';
+import type { MessageMetadata, TokenUsage } from '../../../../types.js';
+import type { AcpPromptResult } from '../types.js';
 import { ACP_CONTRACT_META, isAcpRecord } from './acp-capabilities.js';
-import type { AcpPromptResult } from './types.js';
 
 const valid = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value) && value >= 0;
 /** Standard usage_update is a context/session snapshot, never per-prompt spend. */

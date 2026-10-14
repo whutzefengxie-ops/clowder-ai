@@ -27,7 +27,7 @@ const sources = [
   native,
   'scripts/acp-spikes/run-public-contract.mts',
   'packages/api/src/domains/cats/services/agents/providers/acp/AcpClient.ts',
-  'packages/api/src/domains/cats/services/agents/providers/acp/acp-session-contract.ts',
+  'packages/api/src/domains/cats/services/agents/providers/acp/protocol/acp-session-contract.ts',
 ];
 await writeFile(
   join(dir, 'before.json'),

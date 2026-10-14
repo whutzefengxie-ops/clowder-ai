@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { AcpInitializeResult, AcpMcpServer } from './types.js';
+import type { AcpInitializeResult, AcpMcpServer } from '../types.js';
 
 export const ACP_CONTRACT_META = 'clowder.ai/acp.v1';
 export class AcpCapabilityError extends Error {

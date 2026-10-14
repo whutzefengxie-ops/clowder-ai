@@ -38,19 +38,19 @@ import {
   buildAcpSpawnLogFields,
 } from './AcpClient.js';
 import { AcpSessionCancelledError } from './acp-cancellation-error.js';
-import { AcpCapabilitySnapshot } from './acp-capabilities.js';
 import { AcpCwdIdentityTracker } from './acp-cwd-identity.js';
 import { buildAcpInitializeParams } from './acp-initialize.js';
 import { type AcpPromptInput, toAcpPromptContent } from './acp-prompt-content.js';
-import { type AcpPromptStreamOptions, readAcpPromptResult } from './acp-prompt-result.js';
-import { classifyAcpPacket, prepareAcpAgentReply } from './acp-request-dispatcher.js';
+import { AcpCapabilitySnapshot } from './protocol/acp-capabilities.js';
+import { type AcpPromptStreamOptions, readAcpPromptResult } from './protocol/acp-prompt-result.js';
+import { classifyAcpPacket, prepareAcpAgentReply } from './protocol/acp-request-dispatcher.js';
 import {
   type AcpSessionOptions,
   applyAcpModel,
   closeAcpSession,
   openAcpSession,
   readAcpExecutionBinding,
-} from './acp-session-contract.js';
+} from './protocol/acp-session-contract.js';
 import type {
   AcpAgentRequest,
   AcpInitializeResult,

@@ -1,7 +1,7 @@
+import type { AcpPermissionDispatcher, AcpPermissionHandler } from '../acp-permission-dispatcher.js';
+import type { AcpAgentRequest, AcpNotification, AcpRequestId, AcpResponse } from '../types.js';
+import { ACP_METHODS } from '../types.js';
 import { isAcpRecord } from './acp-capabilities.js';
-import type { AcpPermissionDispatcher, AcpPermissionHandler } from './acp-permission-dispatcher.js';
-import type { AcpAgentRequest, AcpNotification, AcpRequestId, AcpResponse } from './types.js';
-import { ACP_METHODS } from './types.js';
 
 export type AcpPacket =
   | { kind: 'response'; response: AcpResponse }
