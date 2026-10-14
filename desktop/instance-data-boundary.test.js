@@ -96,3 +96,23 @@ test(
     }
   },
 );
+
+test(
+  'an unresolved junction is never treated as an ordinary missing data directory',
+  { skip: process.platform !== 'win32' },
+  () => {
+    const own = fs.mkdtempSync(path.join(os.tmpdir(), 'dangling-boundary-'));
+    try {
+      const install = path.join(own, 'install');
+      fs.mkdirSync(install);
+      const alias = path.join(own, 'alias');
+      fs.symlinkSync(path.join(install, 'packages'), alias, 'junction');
+      const root = path.join(alias, 'future');
+      assert.throws(() => resolveDesktopRuntime(identity(root), path.join(install, 'desktop-dist/Clowder AI.exe')));
+      assert.throws(() => configure(install, root));
+      assert.equal(fs.existsSync(path.join(install, 'desktop-instance.json')), false);
+    } finally {
+      fs.rmSync(own, { recursive: true, force: true });
+    }
+  },
+);

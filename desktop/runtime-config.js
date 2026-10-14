@@ -4,11 +4,17 @@ const fs = require('node:fs');
 function canonicalWithMissingSuffix(value) {
   const suffix = [];
   let existing = path.resolve(value);
-  while (!fs.existsSync(existing)) {
-    const parent = path.dirname(existing);
-    if (parent === existing) throw new Error('Cannot resolve desktop data boundary');
-    suffix.unshift(path.basename(existing));
-    existing = parent;
+  while (true) {
+    try {
+      fs.lstatSync(existing);
+      break;
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+      const parent = path.dirname(existing);
+      if (parent === existing) throw new Error('Cannot resolve desktop data boundary');
+      suffix.unshift(path.basename(existing));
+      existing = parent;
+    }
   }
   return path.join(fs.realpathSync.native(existing), ...suffix);
 }
