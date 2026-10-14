@@ -15,19 +15,22 @@ async function extractRuntimeArchive(installRoot, archiveName, tarImplementation
   if (!targets[name] || archiveName !== `${name}.tar.gz`) throw new Error('Unknown runtime archive');
   const tar = tarImplementation ?? createRequire(path.join(root, 'node/node_modules/npm/bin/npm-cli.js'))('tar');
   const cwd = path.join(root, targets[name][0]);
+  const expectedEntry = path.join(cwd, targets[name][1]);
+  let suppliedEntry = false;
   fs.mkdirSync(cwd, { recursive: true });
   await tar.x({
     file: path.join(root, 'bundled/archives', archiveName),
     cwd,
     strict: true,
-    filter: (entry) => {
+    filter: (entry, metadata) => {
       const target = path.resolve(cwd, entry);
       if (target !== cwd && !target.startsWith(cwd + path.sep))
         throw new Error('Archive entry escapes runtime directory');
+      if (target === expectedEntry && metadata.type === 'File') suppliedEntry = true;
       return true;
     },
   });
-  if (!fs.existsSync(path.join(cwd, targets[name][1]))) throw new Error(`Incomplete runtime archive: ${name}`);
+  if (!suppliedEntry || !fs.statSync(expectedEntry).isFile()) throw new Error(`Incomplete runtime archive: ${name}`);
 }
 
 module.exports = { extractRuntimeArchive };

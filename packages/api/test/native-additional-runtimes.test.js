@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { discoverAdditionalRuntimes } from '../src/routes/native-additional-runtimes.js';
+import { discoverAdditionalRuntimes } from '../dist/routes/native-additional-runtimes.js';
 
 test('detects Kimi/OpenCode/Pi without disclosing authentication, and distinguishes Pi RPC from ACP', () => {
   const root = mkdtempSync(join(tmpdir(), 'additional-runtime-'));

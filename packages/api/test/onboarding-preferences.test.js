@@ -4,8 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import Fastify from 'fastify';
-import { readUserPreferences, updateUserPreferences } from '../src/config/user-preferences-store.js';
-import { configOnboardingRoutes } from '../src/routes/config-onboarding.js';
+import { readUserPreferences, updateUserPreferences } from '../dist/config/user-preferences-store.js';
+import { configOnboardingRoutes } from '../dist/routes/config-onboarding.js';
 
 test('persists guide receipts by authenticated operator and version across app reopen', async () => {
   const root = mkdtempSync(join(tmpdir(), 'onboarding-preferences-'));

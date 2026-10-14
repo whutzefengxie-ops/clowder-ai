@@ -38,3 +38,21 @@ test('installer extracts bundled Node first and stops on any extraction error', 
   assert.match(script, /ExitCode <> 0[\s\S]*RaiseException/);
   assert.match(script, /extract-runtime-archive\.cjs/);
 });
+
+test('an existing entry cannot make a newly incomplete upgrade archive succeed', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'runtime-upgrade-'));
+  try {
+    const input = path.join(root, 'input');
+    fs.mkdirSync(input);
+    fs.writeFileSync(path.join(input, 'NOTICE.txt'), 'new payload');
+    fs.mkdirSync(path.join(root, 'desktop-dist'));
+    const entry = path.join(root, 'desktop-dist/Clowder AI.exe');
+    fs.writeFileSync(entry, 'existing installation');
+    fs.mkdirSync(path.join(root, 'bundled/archives'), { recursive: true });
+    await tar.c({ file: path.join(root, 'bundled/archives/electron.tar.gz'), gzip: true, cwd: input }, ['.']);
+    await assert.rejects(extractRuntimeArchive(root, 'electron.tar.gz', tar), /Incomplete runtime archive/);
+    assert.equal(fs.readFileSync(entry, 'utf8'), 'existing installation');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
