@@ -8,7 +8,7 @@ interface Receipt {
   status: 'not_started' | 'dismissed' | 'completed';
 }
 /** Playback remains local; admission/completion belongs to authenticated server preferences. */
-export function useDemoAdmission(enabled: boolean, onOpen: () => void) {
+export function useDemoAdmission(enabled: boolean, onOpen: () => void, autoEligible = true) {
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [error, setError] = useState('');
   const pending = useRef<'dismissed' | 'completed' | null>(null);
@@ -22,7 +22,7 @@ export function useDemoAdmission(enabled: boolean, onOpen: () => void) {
         const value = (await response.json()) as Receipt;
         if (controller.signal.aborted) return;
         setReceipt(value);
-        if (value.status === 'not_started' && !autoOpened.current) {
+        if (autoEligible && value.status === 'not_started' && !autoOpened.current) {
           autoOpened.current = true;
           onOpen();
         }
@@ -31,7 +31,7 @@ export function useDemoAdmission(enabled: boolean, onOpen: () => void) {
         if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : '引导记录读取失败');
       });
     return () => controller.abort();
-  }, [enabled, onOpen]);
+  }, [enabled, onOpen, autoEligible]);
   const save = useCallback(async (status: 'dismissed' | 'completed') => {
     pending.current = status;
     try {

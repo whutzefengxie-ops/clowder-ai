@@ -22,10 +22,11 @@ vi.mock('../settings/members/RecommendedTeamSetup', () => ({
   ),
 }));
 let root: Root, host: HTMLDivElement;
+const back = vi.fn();
 const render = (cats: CatData[] = []) =>
   act(async () =>
     root.render(
-      <MemberCreationPage cats={cats} onBack={() => {}} onSaved={async () => {}} onTeamCreated={async () => {}} />,
+      <MemberCreationPage cats={cats} onBack={back} onSaved={async () => {}} onTeamCreated={async () => {}} />,
     ),
   );
 beforeEach(() => {
@@ -64,8 +65,29 @@ it('preserves the ordinary single-member editor for an existing team', async () 
 
 it('keeps the manual choice in the URL so a settings round trip does not restart setup', async () => {
   state.query = 's=members&view=setup&shell=v2';
+  state.hasFetched = true;
   await render();
   act(() => host.querySelector('button')?.click());
   expect(host.textContent).toContain('单个伙伴配置');
   expect(state.replace).toHaveBeenCalledWith('/settings?s=members&view=add&shell=v2&manual=1', { scroll: false });
+});
+
+it('routes an existing team to its status list instead of automatic creation', async () => {
+  state.query = 's=members&view=setup&shell=classic';
+  state.hasFetched = true;
+  await render([{ id: 'existing' } as CatData]);
+  expect(host.textContent).not.toContain('默认团队推荐');
+  expect(back).toHaveBeenCalledOnce();
+});
+
+it('waits for the initial roster, then preserves the zero-start journey as roles appear', async () => {
+  state.query = 's=members&view=setup';
+  await render();
+  expect(host.textContent).not.toContain('默认团队推荐');
+  state.hasFetched = true;
+  await render();
+  expect(host.textContent).toContain('默认团队推荐');
+  await render([{ id: 'partially-created' } as CatData]);
+  expect(host.textContent).toContain('默认团队推荐');
+  expect(back).not.toHaveBeenCalled();
 });

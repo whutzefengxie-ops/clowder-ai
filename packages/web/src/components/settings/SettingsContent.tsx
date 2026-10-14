@@ -64,6 +64,7 @@ export function SettingsContent({ section, initialEditCatId }: SettingsContentPr
     params.set('s', 'members');
     params.delete('returnTo');
     params.delete('manual');
+    params.delete('resume');
     if (cat) {
       params.set('cat', cat.id);
       params.delete('view');
@@ -82,6 +83,7 @@ export function SettingsContent({ section, initialEditCatId }: SettingsContentPr
     params.delete('view');
     params.delete('returnTo');
     params.delete('manual');
+    params.delete('resume');
     router.push(`/settings?${params.toString()}`, { scroll: false });
   };
 

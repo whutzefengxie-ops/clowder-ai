@@ -151,7 +151,10 @@ function DemoPlayer({ storageScope, onClose, onCompleted }: Omit<Props, 'open'>)
               )}
               <Link
                 href={DEMO_SETTINGS_URL}
-                onClick={() => beginOnboardingNavigation('team-setup')}
+                onClick={() => {
+                  beginOnboardingNavigation('team-setup');
+                  onClose();
+                }}
                 className={
                   playback.finished && delivered
                     ? 'rounded-full bg-cafe-accent px-4 py-2.5 text-sm font-semibold text-[var(--cafe-surface)]'

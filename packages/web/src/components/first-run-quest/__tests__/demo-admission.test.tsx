@@ -11,6 +11,10 @@ function Probe() {
   admission = useDemoAdmission(true, open);
   return <p>{admission.error}</p>;
 }
+function ExistingTeam() {
+  useDemoAdmission(true, open, false);
+  return null;
+}
 beforeEach(() => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
   host = document.createElement('div');
@@ -22,6 +26,13 @@ afterEach(() => {
   host.remove();
   vi.resetAllMocks();
   vi.unstubAllGlobals();
+});
+it('keeps personal admission readable but does not automatically offer setup to an existing team', async () => {
+  vi.mocked(apiFetch).mockResolvedValue(
+    new Response(JSON.stringify({ userId: 'owner', version: 'collaboration-v1', status: 'not_started' })),
+  );
+  await act(async () => root.render(<ExistingTeam />));
+  expect(open).not.toHaveBeenCalled();
 });
 it.each([
   'not_started',

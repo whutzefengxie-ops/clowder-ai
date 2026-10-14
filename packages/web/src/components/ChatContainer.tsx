@@ -190,7 +190,7 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
   // AC-6: research=multi hint from Signal study "多猫研究" button
   const isResearchMode = searchParams?.get('research') === 'multi';
   const { clearTasks } = useTaskStore();
-  const { cats } = useCatData();
+  const { cats, hasFetched: registryKnown, isLoading: registryRefreshing } = useCatData();
   const isV2 = useShellPresentation() === 'v2';
   const coCreator = useCoCreatorConfig();
   const workspaceWorktreeId = useChatStore((s) => s.workspaceWorktreeId);
@@ -506,7 +506,11 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
   const handleStartFirstRunQuest = useCallback(() => {
     setShowQuestWizard(true);
   }, []);
-  const demoAdmission = useDemoAdmission(threadId === 'default', handleStartFirstRunQuest);
+  const demoAdmission = useDemoAdmission(
+    threadId === 'default',
+    handleStartFirstRunQuest,
+    registryKnown && !registryRefreshing && cats.length === 0,
+  );
   const currentBootcampState = storeThreads.find((thread) => thread.id === threadId)?.bootcampState;
   const currentBootcampPhase = currentBootcampState?.phase;
   const showFirstProjectMistakeTip = useFirstProjectMistakeTipGate({
