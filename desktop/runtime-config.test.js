@@ -26,7 +26,9 @@ test('installed instance survives an environment-free upgrade and rejects corrup
   };
   try {
     fs.writeFileSync(marker, JSON.stringify(saved));
-    assert.equal(resolveDesktopRuntime({}, executable).instanceRoot, fs.realpathSync(root));
+    const restored = fs.statSync(resolveDesktopRuntime({}, executable).instanceRoot, { bigint: true });
+    const expected = fs.statSync(root, { bigint: true });
+    assert.deepEqual([restored.dev, restored.ino], [expected.dev, expected.ino]);
     assert.equal(resolveDesktopRuntime({}, executable).redisPort, 6367);
     fs.writeFileSync(marker, '{}');
     assert.throws(() => resolveDesktopRuntime({}, executable), /identify its root/);
