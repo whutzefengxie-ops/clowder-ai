@@ -21,15 +21,15 @@ export function toStoredToolEvent(
     ...(msg.toolName ? { toolName: msg.toolName } : {}),
     ...(msg.toolTracing ? { tracing: msg.toolTracing } : {}),
   };
-  if (msg.type === 'tool_use') {
-    let detail: string | undefined;
-    if (msg.toolInput) {
-      try {
-        detail = truncateDetail(JSON.stringify(msg.toolInput), 200);
-      } catch {
-        detail = '[unserializable]';
-      }
+  let inputDetail: string | undefined;
+  if (msg.toolInput !== undefined) {
+    try {
+      inputDetail = truncateDetail(JSON.stringify(msg.toolInput), 200);
+    } catch {
+      inputDetail = '[unserializable]';
     }
+  }
+  if (msg.type === 'tool_use') {
     const toolName = msg.toolName ?? 'unknown';
     return {
       ...identity,
@@ -37,7 +37,7 @@ export function toStoredToolEvent(
       type: 'tool_use',
       label: `${msg.catId} → ${toolName}`,
       toolName,
-      ...(detail ? { detail } : {}),
+      ...(inputDetail !== undefined ? { detail: inputDetail } : {}),
       timestamp: msg.timestamp,
       startTimeMs: msg.timestamp,
     };
@@ -49,6 +49,7 @@ export function toStoredToolEvent(
     type: 'tool_result',
     label: `${msg.catId} ← result`,
     detail: raw.length ? truncateDetail(raw, 1500) : '(no output)',
+    ...(inputDetail !== undefined ? { inputDetail } : {}),
     timestamp: msg.timestamp,
     endTimeMs: msg.timestamp,
     ...(msg.toolResultStatus ? { status: msg.toolResultStatus } : {}),

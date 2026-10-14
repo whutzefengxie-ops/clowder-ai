@@ -25,7 +25,7 @@ describe('transformAcpEvent', () => {
     const result = transformAcpEvent(update, catId, metadata);
     assert.equal(result.type, 'agent_loop');
     assert.equal(result.metadata.usage.contextUsedTokens, 85_000);
-    assert.equal(result.metadata.usage.lastTurnInputTokens, 85_000);
+    assert.equal(result.metadata.usage.lastTurnInputTokens, undefined);
     assert.equal(result.metadata.usage.contextWindowSize, 100_000);
   });
 

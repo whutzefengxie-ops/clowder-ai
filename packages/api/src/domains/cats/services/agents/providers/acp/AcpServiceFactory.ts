@@ -29,6 +29,8 @@ import { tryPrepareAcpProcessEnv } from './acp-spawn-env.js';
 export type AcpPoolRegistry = Map<string, AcpProcessPool>;
 
 export interface CreateAcpServiceForConfigInput {
+  /** Internal required contracts for an isolated/migration candidate; legacy routing is unchanged. */
+  executionRequirements?: import('./AcpAgentService.js').AcpExecutionRequirements;
   projectRoot: string;
   profileId: string;
   config: CatConfig;
@@ -232,6 +234,7 @@ async function ensureAcpPool(
     acpConfig,
     () => {
       const clientCfg = {
+        launchBindingFingerprint: spawnSignature,
         permissionHandler: denyUnwiredAcpPermission,
         command: bootstrap.command,
         args: bootstrap.args,
@@ -314,6 +317,7 @@ export async function createAcpServiceForConfig(
     providerName: config.clientId === 'acp' ? 'acp' : config.clientId,
     modelName: spawn.sessionModel ?? config.defaultModel ?? 'acp',
     sessionModel: spawn.sessionModel,
+    executionRequirements: input.executionRequirements,
     contextBinding: {
       model: effectiveModel,
       ...((config.clientId === 'opencode' || config.clientId === 'kimi') && spawn.contextPolicy?.windowTokens

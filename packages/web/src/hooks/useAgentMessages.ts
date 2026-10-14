@@ -3255,6 +3255,7 @@ export function handleBackgroundAgentMessage(
       isCurrentFreshParentSeed(bgActiveRef, msg.timestamp, msg.seq);
     const toolResultEventData: ToolEvent = {
       ...liveToolEventFacts(msg),
+      ...(msg.toolInput !== undefined ? { inputDetail: safeJsonDetail(msg.toolInput) } : {}),
       id: msg.toolEventId ?? `bg-tool-result-${msg.timestamp}-${options.nextBgSeq()}`,
       ...(msg.toolExecutionRef ? { executionRef: msg.toolExecutionRef } : {}),
       type: 'tool_result',
@@ -5302,6 +5303,7 @@ export function useAgentMessages() {
         // F183 Phase B1.6 — tool_result wire-up via reducer (same pattern as tool_use).
         const toolResultEventData: ToolEvent = {
           ...liveToolEventFacts(msg),
+          ...(msg.toolInput !== undefined ? { inputDetail: safeJsonDetail(msg.toolInput) } : {}),
           id: msg.toolEventId ?? `toolr-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
           ...(msg.toolExecutionRef ? { executionRef: msg.toolExecutionRef } : {}),
           type: 'tool_result',

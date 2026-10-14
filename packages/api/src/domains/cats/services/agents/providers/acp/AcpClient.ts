@@ -23,9 +23,19 @@ import { buildChildEnv } from '../../../../../../utils/cli-spawn.js';
 import { resolveWindowsSpawnPlan } from '../../../../../../utils/cli-spawn-win.js';
 import { buildUnixSupervisedSpawnPlan } from '../../../../../../utils/cli-supervised-process.js';
 import { AcpSessionCancelledError } from './acp-cancellation-error.js';
+import { AcpCapabilitySnapshot } from './acp-capabilities.js';
 import { AcpCwdIdentityTracker } from './acp-cwd-identity.js';
 import { buildAcpInitializeParams } from './acp-initialize.js';
 import { type AcpPromptInput, toAcpPromptContent } from './acp-prompt-content.js';
+import { type AcpPromptStreamOptions, readAcpPromptResult } from './acp-prompt-result.js';
+import { classifyAcpPacket, prepareAcpAgentReply } from './acp-request-dispatcher.js';
+import {
+  type AcpSessionOptions,
+  applyAcpModel,
+  closeAcpSession,
+  openAcpSession,
+  readAcpExecutionBinding,
+} from './acp-session-contract.js';
 import type {
   AcpAgentRequest,
   AcpContentBlock,
@@ -35,6 +45,7 @@ import type {
   AcpNotification,
   AcpPromptCapabilities,
   AcpPromptResult,
+  AcpRequestId,
   AcpResponse,
   AcpSessionUpdate,
   AcpStopReason,
@@ -73,6 +84,8 @@ export function resolveAcpPromptRequestCeilingMs(activityBudgetMs: number): numb
 export type { AcpPermissionHandler } from './acp-permission-dispatcher.js';
 
 export interface AcpClientConfig {
+  /** Registry's resolved launch generation; never use this as native executable proof. */
+  launchBindingFingerprint?: string;
   /** CLI command (e.g. 'gemini') */
   command: string;
   /** Startup args (e.g. ['--acp']) */
@@ -173,9 +186,11 @@ export class AcpClient {
   private child: ChildProcess | null = null;
   private readonly permissions: AcpPermissionDispatcher;
   private rl: ReadlineInterface | null = null;
-  private readonly pending = new Map<string, PendingAcpRequest>();
+  private readonly pending = new Map<AcpRequestId, PendingAcpRequest>();
   private readonly notificationListeners: Array<(n: AcpNotification) => void> = [];
   private initResult: AcpInitializeResult | null = null;
+  private capabilitySnapshot?: AcpCapabilitySnapshot;
+  private readonly connectionId = randomUUID();
   private negotiatedPromptCapabilities?: Readonly<AcpPromptCapabilities>;
   private closed = false;
   private exited = false;
@@ -198,6 +213,7 @@ export class AcpClient {
    * could be reused while the old request is unresolved.
    */
   private readonly sessionPromptPendingIds = new Map<string, string>();
+  private readonly closedSessionIds = new Set<string>();
   /** Client-level capacity signal — always captured regardless of listeners.
    *  Fallback for delayed stderr arriving after invoke listener is removed. */
   private _recentCapacitySignal: AcpCapacitySignal | null = null;
@@ -312,7 +328,13 @@ export class AcpClient {
       'ACP initialize: process spawned, sending initialize request',
     );
     const resp = await this.sendRequest(ACP_METHODS.initialize, buildAcpInitializeParams());
-    this.initResult = resp.result as unknown as AcpInitializeResult;
+    try {
+      this.capabilitySnapshot = new AcpCapabilitySnapshot(resp.result as unknown as AcpInitializeResult);
+      this.initResult = this.capabilitySnapshot.read();
+    } catch (error) {
+      await this.close();
+      throw error;
+    }
     this.negotiatedPromptCapabilities = Object.freeze({ ...this.initResult.agentCapabilities?.promptCapabilities });
     log.info(
       {
@@ -323,106 +345,75 @@ export class AcpClient {
       },
       'ACP initialize: agent ready',
     );
-    return this.initResult;
+    return this.capabilitySnapshot.read();
   }
 
-  async newSession(cwd?: string, mcpServers: AcpMcpServer[] = []): Promise<AcpNewSessionResult> {
-    // F161: Filter MCP servers by client's announced mcpCapabilities.
-    // Per ACP spec: stdio is mandatory (always passes), http/sse are optional.
-    const compatible = this.filterMcpByCapabilities(mcpServers);
-    if (compatible.length !== mcpServers.length) {
-      log.info(
-        {
-          total: mcpServers.length,
-          compatible: compatible.length,
-          dropped: mcpServers.length - compatible.length,
-          droppedNames: mcpServers.filter((s) => !compatible.includes(s)).map((s) => s.name),
-          capabilities: this.initResult?.agentCapabilities?.mcpCapabilities ?? 'unknown',
-        },
-        'ACP: filtered incompatible MCP servers by client mcpCapabilities',
-      );
-    }
-
-    const effectiveCwd = cwd ?? this.config.cwd;
-    // F161 diagnostic: log the full session/new payload shape for timeout debugging
-    log.info(
-      {
-        cwd: effectiveCwd,
-        mcpServerCount: compatible.length,
-        mcpServers: compatible.map((s) => ({
-          name: s.name,
-          transport: 'type' in s ? s.type : 'stdio',
-          // For stdio: log command + args (no env values — security)
-          ...('command' in s ? { command: s.command, argCount: s.args.length } : {}),
-          // For http/sse: log url presence
-          ...('url' in s ? { hasUrl: !!s.url } : {}),
-          envKeyCount: 'env' in s && Array.isArray(s.env) ? s.env.length : 0,
-          envKeys: 'env' in s && Array.isArray(s.env) ? (s.env as Array<{ name: string }>).map((e) => e.name) : [],
-        })),
-        agentInfo: this.initResult?.agentInfo,
-        pid: this.child?.pid,
-      },
-      'ACP session/new: sending request',
-    );
-
-    const t0 = Date.now();
-    const resp = await this.sendRequest(ACP_METHODS.sessionNew, {
-      cwd: effectiveCwd,
-      mcpServers: compatible,
-    });
-    log.info({ durationMs: Date.now() - t0, hasResult: !!resp.result }, 'ACP session/new: response received');
-    return resp.result as unknown as AcpNewSessionResult;
+  private negotiated(): AcpCapabilitySnapshot {
+    if (!this.capabilitySnapshot) throw new Error('ACP client has not initialized');
+    return this.capabilitySnapshot;
   }
-
-  async loadSession(sessionId: string, cwd?: string, mcpServers: AcpMcpServer[] = []): Promise<AcpNewSessionResult> {
-    const compatible = this.filterMcpByCapabilities(mcpServers);
-    if (compatible.length !== mcpServers.length) {
-      log.info(
-        {
-          total: mcpServers.length,
-          compatible: compatible.length,
-          dropped: mcpServers.length - compatible.length,
-          droppedNames: mcpServers.filter((s) => !compatible.includes(s)).map((s) => s.name),
-          capabilities: this.initResult?.agentCapabilities?.mcpCapabilities ?? 'unknown',
-        },
-        'ACP loadSession: filtered incompatible MCP servers by client mcpCapabilities',
-      );
-    }
-
-    const effectiveCwd = cwd ?? this.config.cwd;
-    log.info(
-      { sessionId, cwd: effectiveCwd, mcpServerCount: compatible.length, pid: this.child?.pid },
-      'ACP session/load: sending request',
+  capabilityProvenance() {
+    return this.negotiated().publicProvenance(this.connectionId, this.config.launchBindingFingerprint);
+  }
+  async newSession(
+    cwd?: string,
+    mcpServers: AcpMcpServer[] = [],
+    options?: AcpSessionOptions,
+  ): Promise<AcpNewSessionResult> {
+    return openAcpSession(
+      (method, params) => this.sendRequest(method, params),
+      this.negotiated(),
+      cwd ?? this.config.cwd,
+      mcpServers,
+      options,
     );
-    const t0 = Date.now();
-    const resp = await this.sendRequest(ACP_METHODS.sessionLoad, {
+  }
+  async loadSession(
+    sessionId: string,
+    cwd?: string,
+    mcpServers: AcpMcpServer[] = [],
+    options?: AcpSessionOptions,
+  ): Promise<AcpNewSessionResult> {
+    return openAcpSession(
+      (method, params) => this.sendRequest(method, params),
+      this.negotiated(),
+      cwd ?? this.config.cwd,
+      mcpServers,
+      options,
       sessionId,
-      cwd: effectiveCwd,
-      mcpServers: compatible,
-    });
-    log.info(
-      { sessionId, durationMs: Date.now() - t0, hasResult: !!resp.result },
-      'ACP session/load: response received',
     );
-    return resp.result as unknown as AcpNewSessionResult;
+  }
+  async closeSession(sessionId: string): Promise<void> {
+    if (this.sessionPromptPendingIds.has(sessionId))
+      throw new Error('ACP session is active; close requires a settled prompt');
+    await closeAcpSession((method, params) => this.sendRequest(method, params), this.negotiated(), sessionId);
+    this.closedSessionIds.add(sessionId);
+    this.permissions.cancelSession(sessionId);
+  }
+  async readExecutionBinding(sessionId: string): Promise<Record<string, unknown>> {
+    return readAcpExecutionBinding((method, params) => this.sendRequest(method, params), this.negotiated(), sessionId);
+  }
+  async applyModelConfig(sessionId: string, model: string, session: AcpNewSessionResult) {
+    return applyAcpModel((method, params) => this.sendRequest(method, params), sessionId, model, session);
   }
 
-  async setSessionConfigOption(sessionId: string, configId: string, value: string): Promise<void> {
+  async setSessionConfigOption(sessionId: string, configId: string, value: string): Promise<Record<string, unknown>> {
     const trimmedConfigId = configId.trim();
     const trimmedValue = value.trim();
-    if (!trimmedConfigId || !trimmedValue) return;
+    if (!trimmedConfigId || !trimmedValue) throw new Error('ACP config id and value must not be empty');
 
     log.info(
       { sessionId, configId: trimmedConfigId, value: trimmedValue, pid: this.child?.pid },
       'ACP session/set_config_option: sending request',
     );
     const t0 = Date.now();
-    await this.sendRequest(ACP_METHODS.sessionSetConfigOption, {
+    const response = await this.sendRequest(ACP_METHODS.sessionSetConfigOption, {
       sessionId,
       configId: trimmedConfigId,
       value: trimmedValue,
     });
     log.info({ sessionId, durationMs: Date.now() - t0 }, 'ACP session/set_config_option: response received');
+    return response.result ?? {};
   }
 
   /**
@@ -434,8 +425,9 @@ export class AcpClient {
     sessionId: string,
     input: AcpPromptInput,
     options?: { timeoutMs?: number },
-  ): Promise<{ events: AcpSessionUpdate[]; stopReason: AcpStopReason }> {
+  ): Promise<{ events: AcpSessionUpdate[]; stopReason: AcpStopReason; result: AcpPromptResult }> {
     const prompt = toAcpPromptContent(input, this.promptCapabilities);
+    if (this.closedSessionIds.has(sessionId)) throw new Error('ACP session was closed; acquire a new session');
     this.permissions.admitSession(sessionId);
     const events: AcpSessionUpdate[] = [];
     const timeoutMs = options?.timeoutMs ?? 120_000;
@@ -458,8 +450,8 @@ export class AcpClient {
     try {
       const promptPromise = this.sendRequest(ACP_METHODS.sessionPrompt, { sessionId, prompt }, timeoutMs, requestId);
       const resp = await promptPromise;
-      const result = resp.result as unknown as AcpPromptResult;
-      return { events, stopReason: result.stopReason };
+      const result = readAcpPromptResult(resp.result);
+      return { events, stopReason: result.stopReason, result };
     } catch (error) {
       this.cancelSession(sessionId);
       this.unquiescedSessionIds.add(sessionId);
@@ -479,7 +471,7 @@ export class AcpClient {
   async *promptStream(
     sessionId: string,
     input: AcpPromptInput,
-    options?: { timeoutMs?: number; idleWarningMs?: number; idleStallMs?: number },
+    options?: AcpPromptStreamOptions,
   ): AsyncGenerator<AcpSessionUpdate, AcpStopReason> {
     const prompt = toAcpPromptContent(input, this.promptCapabilities);
     // KD-12: Activity-based turn budget — resets on each event.
@@ -495,6 +487,7 @@ export class AcpClient {
     // tools, so pendingTool never activates. 90s covers most MCP calls (10-30s).
     const idleStallMs = options?.idleStallMs ?? 90_000;
     const requestCeilingMs = resolveAcpPromptRequestCeilingMs(timeoutMs);
+    if (this.closedSessionIds.has(sessionId)) throw new Error('ACP session was closed; acquire a new session');
     this.permissions.admitSession(sessionId);
     const queue: AcpSessionUpdate[] = [];
     let waitResolve: (() => void) | null = null;
@@ -713,9 +706,10 @@ export class AcpClient {
     let nativePromptSettled = false;
     this.sendRequest(ACP_METHODS.sessionPrompt, { sessionId, prompt }, requestCeilingMs, promptRequestId)
       .then((resp) => {
+        const result = readAcpPromptResult(resp.result);
         nativePromptSettled = true;
-        const result = resp.result as unknown as AcpPromptResult;
         stopReason = result.stopReason;
+        options?.onResult?.(result);
       })
       .catch((err: Error) => {
         if (err instanceof AcpProtocolError) nativePromptSettled = true;
@@ -909,20 +903,6 @@ export class AcpClient {
    *
    * If initResult is unavailable, all servers pass through (permissive fallback).
    */
-  private filterMcpByCapabilities(servers: AcpMcpServer[]): AcpMcpServer[] {
-    const caps = this.initResult?.agentCapabilities?.mcpCapabilities;
-    if (!caps) return servers; // no capability info → pass all (backward compat)
-
-    return servers.filter((s) => {
-      if ('type' in s) {
-        if (s.type === 'http') return caps.http === true;
-        if (s.type === 'sse') return caps.sse === true;
-        return false; // unknown type
-      }
-      // Stdio server (has command, no type field) — mandatory per ACP spec, always pass
-      return true;
-    });
-  }
 
   // ── Internal ─────────────────────────────────────────────────
 
@@ -944,12 +924,21 @@ export class AcpClient {
 
       // #712: id can be 0 (Kimi CLI uses numeric ids starting at 0).
       // `0` is falsy in JS, so use explicit null check instead of truthiness.
-      const id = msg.id as string | number | undefined;
+      const packet = classifyAcpPacket(msg);
+      if (packet.kind === 'invalid') {
+        if ((typeof msg.id === 'string' || typeof msg.id === 'number') && this.pending.has(msg.id)) {
+          this.pending.get(msg.id)?.reject(new Error('Invalid ACP response envelope'));
+          this.pending.delete(msg.id);
+        }
+        log.warn('Invalid ACP envelope ignored');
+        return;
+      }
+      const id = msg.id as AcpRequestId | undefined;
       const hasId = id !== undefined && id !== null;
-      const idStr = hasId ? String(id) : undefined;
+      const idStr = hasId ? id : undefined;
       const method = msg.method as string | undefined;
 
-      if (hasId && idStr && this.pending.has(idStr) && !method) {
+      if (hasId && idStr !== undefined && this.pending.has(idStr) && !method) {
         // Response to one of our requests
         const { resolve } = this.pending.get(idStr)!;
         this.pending.delete(idStr);
@@ -994,7 +983,7 @@ export class AcpClient {
     params: Record<string, unknown>,
     timeoutMs = 60_000,
     /** Pre-generated request ID — used by promptStream to enable cancel-time settlement. */
-    preGeneratedId?: string,
+    preGeneratedId?: AcpRequestId,
   ): Promise<AcpResponse> {
     const child = this.child;
     const stdin = child?.stdin;
@@ -1003,6 +992,7 @@ export class AcpClient {
     }
 
     const id = preGeneratedId ?? randomUUID();
+    if (this.pending.has(id)) return Promise.reject(new Error('ACP request ID already active'));
     const msg = { jsonrpc: '2.0', method, id, params };
     const payload = JSON.stringify(msg);
     log.info(
@@ -1066,25 +1056,11 @@ export class AcpClient {
   }
 
   private handleAgentRequest(req: AcpAgentRequest): void {
-    if (req.method === ACP_METHODS.requestPermission) {
-      const child = this.child;
-      const outcome = this.permissions.dispatch(req, this.config.permissionHandler);
-      if (outcome)
-        void outcome.then((delivery) => {
-          const result = delivery.resolveOutcome();
-          if (!this.closed && !this.exited && child === this.child && child?.stdin?.writable)
-            child.stdin.write(JSON.stringify({ jsonrpc: '2.0', id: req.id, result }) + '\n');
-        });
-    } else {
-      // Unknown agent request — respond with method not found
-      log.warn('Unhandled agent request: %s', req.method);
-      const response = {
-        jsonrpc: '2.0' as const,
-        id: req.id,
-        error: { code: -32601, message: `Client does not handle ${req.method}` },
-      };
-      this.child?.stdin?.write(JSON.stringify(response) + '\n');
-    }
+    const child = this.child;
+    void prepareAcpAgentReply(req, this.permissions, this.config.permissionHandler).then((reply) => {
+      if (reply && !this.closed && !this.exited && child === this.child && child?.stdin?.writable)
+        child.stdin.write(JSON.stringify(reply()) + '\n');
+    });
   }
 
   private rejectAllPending(error: Error): void {

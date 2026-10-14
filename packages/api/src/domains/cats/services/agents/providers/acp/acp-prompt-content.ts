@@ -1,3 +1,4 @@
+import { AcpCapabilityError } from './acp-capabilities.js';
 import type { AcpContentBlock, AcpPromptCapabilities } from './types.js';
 
 export type AcpPromptInput = string | readonly AcpContentBlock[];
@@ -26,5 +27,9 @@ export function requireAcpImageCapability(capabilities?: AcpPromptCapabilities):
 export function toAcpPromptContent(input: AcpPromptInput, capabilities?: AcpPromptCapabilities): AcpContentBlock[] {
   if (typeof input === 'string') return [{ type: 'text', text: input }];
   if (input.some((block) => block.type === 'image')) requireAcpImageCapability(capabilities);
-  return input.map((block) => ({ ...block }));
+  if (input.some((block) => block.type === 'audio') && capabilities?.audio !== true)
+    throw new AcpCapabilityError('audio_input_unsupported', 'ACP agent 未声明 audio 输入能力，内容未发送。');
+  if (input.some((block) => block.type === 'resource') && capabilities?.embeddedContext !== true)
+    throw new AcpCapabilityError('embedded_context_unsupported', 'ACP agent 未声明 embeddedContext，内容未发送。');
+  return structuredClone([...input]);
 }
