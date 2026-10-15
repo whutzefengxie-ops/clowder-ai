@@ -57,6 +57,9 @@ jobs:
           desktop/extract-runtime-archive.test.cjs
           desktop/runtime-archive-progress.test.mjs
           desktop/built-web-assets.test.mjs
+          desktop/api-bundle.test.mjs
+          desktop/api-startup-probe.test.mjs
+          desktop/dsh-test-connection.test.mjs
           desktop/rebuild-frozen-dependencies.test.mjs
       - name: Build the actual web application
         run: pnpm --filter @cat-cafe/web build

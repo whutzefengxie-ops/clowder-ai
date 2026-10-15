@@ -401,7 +401,10 @@ class ServiceManager {
   }
 
   async _startApi(nodeExe, userDataDir) {
-    const apiEntry = path.join(this.root, 'packages', 'api', 'dist', 'index.js');
+    const desktopEntry = path.join(this.root, 'packages', 'api', 'dist', 'index.desktop.js');
+    const apiEntry = fs.existsSync(desktopEntry)
+      ? desktopEntry
+      : path.join(this.root, 'packages', 'api', 'dist', 'index.js');
     // Copy cat-template.json from install root to the writable project dir,
     // and point the API at that copy via CAT_TEMPLATE_PATH. Otherwise the
     // API's cat-config-loader derives projectRoot=dirname(templatePath) from

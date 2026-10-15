@@ -5,6 +5,7 @@ const path = require('node:path');
 const { createRequire } = require('node:module');
 const { test } = require('node:test');
 const { extractRuntimeArchive } = require('./scripts/extract-runtime-archive.cjs');
+const { createHash } = require('node:crypto');
 const npmCli = path.join(
   path.dirname(process.execPath),
   process.platform === 'win32' ? 'node_modules/npm/bin/npm-cli.js' : '../lib/node_modules/npm/bin/npm-cli.js',
@@ -66,3 +67,53 @@ test('an existing entry cannot make a newly incomplete upgrade archive succeed',
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
+
+test(
+  'native Windows extraction verifies before writing and preserves Unicode with real progress',
+  { skip: process.platform !== 'win32' },
+  async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'native-extraction-'));
+    try {
+      const input = path.join(root, 'input');
+      const destination = path.join(root, 'desktop-dist');
+      fs.mkdirSync(input, { recursive: true });
+      fs.mkdirSync(destination);
+      fs.writeFileSync(path.join(input, 'Clowder AI.exe'), 'new entry');
+      fs.writeFileSync(path.join(destination, 'Clowder AI.exe'), 'old entry');
+      fs.mkdirSync(path.join(root, 'bundled/archives'), { recursive: true });
+      const file = path.join(root, 'bundled/archives/electron.tar.gz');
+      await tar.c({ file, gzip: true, cwd: input }, ['.']);
+      let entries = 0;
+      await tar.t({ file, onReadEntry: () => entries++ });
+      const manifest = { archive: 'electron.tar.gz', entries, bytes: fs.statSync(file).size, sha256: '0'.repeat(64) };
+      fs.writeFileSync(file + '.json', JSON.stringify(manifest));
+      await assert.rejects(
+        extractRuntimeArchive(root, manifest.archive, tar, { engine: 'native' }),
+        /integrity mismatch/,
+      );
+      assert.equal(fs.readFileSync(path.join(destination, 'Clowder AI.exe'), 'utf8'), 'old entry');
+      manifest.sha256 = createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+      fs.writeFileSync(file + '.json', JSON.stringify(manifest));
+      const events = [];
+      await extractRuntimeArchive(root, manifest.archive, tar, { engine: 'native', onProgress: (e) => events.push(e) });
+      assert.equal(events.at(-1).engine, 'native');
+      assert.equal(events.at(-1).entries, entries);
+      fs.mkdirSync(path.join(input, '中文目录'), { recursive: true });
+      fs.writeFileSync(path.join(input, '中文目录/snow ☃.txt'), 'unicode witness');
+      await tar.c({ file, gzip: true, cwd: input }, ['.']);
+      entries = 0;
+      await tar.t({ file, onReadEntry: () => entries++ });
+      Object.assign(manifest, {
+        entries,
+        bytes: fs.statSync(file).size,
+        sha256: createHash('sha256').update(fs.readFileSync(file)).digest('hex'),
+      });
+      fs.writeFileSync(file + '.json', JSON.stringify(manifest));
+      await extractRuntimeArchive(root, manifest.archive, tar, { engine: 'native', onProgress: (e) => events.push(e) });
+      assert.equal(events.at(-1).engine, 'node-unicode');
+      assert.equal(fs.readFileSync(path.join(destination, '中文目录/snow ☃.txt'), 'utf8'), 'unicode witness');
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  },
+);

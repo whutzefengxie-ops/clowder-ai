@@ -19,6 +19,9 @@ for (const sharedDependencies of [false, true])
       file('pnpm-lock.yaml', 'locked fixture');
       file('packages/api/package.json', '{"name":"api"}');
       file('packages/api/dist/index.cjs', 'module.exports = require("nested")');
+      file('packages/api/test/dev-fixture.js', 'development-only');
+      file('packages/api/dist/types.d.ts', 'export type Internal = string');
+      file('packages/api/src/plugins/runtime/native.swift', 'runtime-asset');
       file('packages/shared/package.json', '{"name":"@cat-cafe/shared","main":"index.cjs"}');
       file('packages/shared/index.cjs', 'module.exports = 7');
       file('node_modules/@fastify/send/package.json', '{"name":"@fastify/send","main":"index.cjs"}');
@@ -54,6 +57,9 @@ for (const sharedDependencies of [false, true])
       if (sharedDependencies) fs.renameSync(path.join(moved, 'dependencies'), path.join(moved, 'node_modules'));
       const require = createRequire(path.join(moved, 'api/package.json'));
       assert.equal(require('./dist/index.cjs'), 2);
+      assert.equal(fs.existsSync(path.join(moved, 'api/test')), !sharedDependencies);
+      assert.equal(fs.existsSync(path.join(moved, 'api/dist/types.d.ts')), !sharedDependencies);
+      assert.equal(fs.readFileSync(path.join(moved, 'api/src/plugins/runtime/native.swift'), 'utf8'), 'runtime-asset');
       assert.equal(require('@cat-cafe/shared'), 7);
       assert.equal(require('@fastify/send'), 5);
       const modules = path.join(moved, sharedDependencies ? 'node_modules' : 'api/node_modules');

@@ -4,6 +4,7 @@ const { createRequire } = require('node:module');
 const { createHash, randomUUID } = require('node:crypto');
 const { pipeline } = require('node:stream/promises');
 const os = require('node:os');
+const { extractWithSystemTar } = require('./native-runtime-extractor.cjs');
 
 const targets = {
   'deploy-api': ['packages/api', 'dist/index.js'],
@@ -17,7 +18,7 @@ async function extractRuntimeArchive(
   installRoot,
   archiveName,
   tarImplementation,
-  { onProgress = () => {}, intervalMs = 1000, allowLegacy = false, runId = randomUUID() } = {},
+  { onProgress = () => {}, intervalMs = 1000, allowLegacy = false, runId = randomUUID(), engine = 'node' } = {},
 ) {
   const root = path.resolve(installRoot);
   const name = archiveName.replace(/\.tar\.gz$/, '');
@@ -46,19 +47,36 @@ async function extractRuntimeArchive(
   const checksum = createHash('sha256');
   input.on('data', (chunk) => checksum.update(chunk));
   let entries = 0;
+  let verifiedEntries = 0;
+  let unicodeEntry = false;
+  const preflight = engine === 'native';
+  let phase = engine === 'native' ? 'verify' : 'extract';
   let lastEntryAt = started;
   const report = (status, extra = {}) =>
     onProgress({
       runId,
       archive: archiveName,
       status,
+      engine,
+      phase,
       at: new Date().toISOString(),
       elapsedMs: Date.now() - started,
       entries,
       totalEntries: manifest?.entries ?? null,
       bytesRead: input.bytesRead,
       archiveBytes: bytes,
-      percent: status === 'complete' ? 100 : Math.min(99, Math.floor((input.bytesRead / Math.max(1, bytes)) * 100)),
+      progressBasis: preflight ? 'entries' : 'compressed_bytes',
+      percent:
+        status === 'complete'
+          ? 100
+          : Math.min(
+              99,
+              Math.floor(
+                preflight
+                  ? (entries / Math.max(1, verifiedEntries)) * 100
+                  : (input.bytesRead / Math.max(1, bytes)) * 100,
+              ),
+            ),
       idleMs: Date.now() - lastEntryAt,
       cpu: process.cpuUsage(cpu),
       rssBytes: process.memoryUsage().rss,
@@ -69,25 +87,71 @@ async function extractRuntimeArchive(
   report('start');
   const timer = setInterval(() => report('progress'), intervalMs);
   try {
-    await pipeline(
-      input,
-      tar.x({
-        cwd,
-        strict: true,
-        filter: (entry, metadata) => {
-          const target = path.resolve(cwd, entry);
-          if (target !== cwd && !target.startsWith(cwd + path.sep))
-            throw new Error('Archive entry escapes runtime directory');
-          if (target === expectedEntry && metadata.type === 'File') suppliedEntry = true;
+    if (engine === 'native') {
+      await pipeline(
+        input,
+        tar.t({
+          strict: true,
+          onReadEntry: (entry) => {
+            const target = path.resolve(cwd, entry.path);
+            if ((target !== cwd && !target.startsWith(cwd + path.sep)) || /[\r\n]/.test(entry.path))
+              throw new Error('Archive entry escapes runtime directory');
+            if (!['File', 'Directory'].includes(entry.type)) throw new Error('Unsupported runtime archive entry');
+            if (/[^\x00-\x7f]/.test(entry.path)) unicodeEntry = true;
+            if (target === expectedEntry && entry.type === 'File') suppliedEntry = true;
+            verifiedEntries++;
+          },
+        }),
+      );
+      if (!suppliedEntry) throw new Error(`Incomplete runtime archive: ${name}`);
+      if (manifest && (verifiedEntries !== manifest.entries || checksum.digest('hex') !== manifest.sha256))
+        throw new Error('Runtime archive integrity mismatch');
+      phase = 'extract';
+      if (unicodeEntry) {
+        engine = 'node-unicode';
+        report('progress', { reason: 'system_tar_unicode_filename_limitation' });
+        await pipeline(
+          fs.createReadStream(file),
+          tar.x({
+            cwd,
+            strict: true,
+            filter: () => {
+              entries++;
+              lastEntryAt = Date.now();
+              return true;
+            },
+          }),
+        );
+      } else {
+        await extractWithSystemTar(file, cwd, () => {
           entries++;
           lastEntryAt = Date.now();
-          return true;
-        },
-      }),
-    );
-    if (!suppliedEntry || !fs.statSync(expectedEntry).isFile()) throw new Error(`Incomplete runtime archive: ${name}`);
-    if (manifest && (entries !== manifest.entries || checksum.digest('hex') !== manifest.sha256))
-      throw new Error('Runtime archive integrity mismatch');
+        });
+      }
+      if (entries !== verifiedEntries || !fs.statSync(expectedEntry).isFile())
+        throw new Error('Incomplete native extraction');
+    } else {
+      await pipeline(
+        input,
+        tar.x({
+          cwd,
+          strict: true,
+          filter: (entry, metadata) => {
+            const target = path.resolve(cwd, entry);
+            if (target !== cwd && !target.startsWith(cwd + path.sep))
+              throw new Error('Archive entry escapes runtime directory');
+            if (target === expectedEntry && metadata.type === 'File') suppliedEntry = true;
+            entries++;
+            lastEntryAt = Date.now();
+            return true;
+          },
+        }),
+      );
+      if (!suppliedEntry || !fs.statSync(expectedEntry).isFile())
+        throw new Error(`Incomplete runtime archive: ${name}`);
+      if (manifest && (entries !== manifest.entries || checksum.digest('hex') !== manifest.sha256))
+        throw new Error('Runtime archive integrity mismatch');
+    }
     report('complete');
   } catch (error) {
     report('failed', { message: error.message, code: error.code });
@@ -112,6 +176,7 @@ if (require.main === module) {
   const runId = randomUUID();
   let lastEvent;
   extractRuntimeArchive(root, name, undefined, {
+    engine: process.platform === 'win32' ? 'native' : 'node',
     runId,
     onProgress: (event) => {
       lastEvent = event;

@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { bundleDesktopApi } from './bundle-desktop-api.mjs';
 import { exportFrozenRuntime } from './frozen-runtime-export.mjs';
 import { rebuildFrozenDependencies } from './rebuild-frozen-dependencies.mjs';
 
@@ -53,5 +54,7 @@ const receipt = exportFrozenRuntime(workspace, out, packages, path.join(source, 
   sharedDependencies: os.platform() === 'win32',
   builtWebSource: packages.includes('web') ? path.join(source, 'packages/web') : undefined,
 });
+if (os.platform() === 'win32' && packages.includes('api'))
+  receipt.desktopApi = await bundleDesktopApi(path.join(out, 'api'));
 fs.writeFileSync(path.join(out, 'frozen-install.json'), JSON.stringify({ ...receipt, workspace }, null, 2));
 console.log(JSON.stringify({ out, ...receipt }));

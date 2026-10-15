@@ -7,7 +7,8 @@ const inside = (root, target) => target === root || target.startsWith(root + pat
 const hash = (file) => createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 
 /** Materialize only links inside the frozen workspace; reject external/cyclic inputs. */
-export function materialize(from, to, workspace, ancestors = new Set()) {
+export function materialize(from, to, workspace, ancestors = new Set(), include = () => true) {
+  if (!include(from)) return;
   const real = !ancestors.size || fs.lstatSync(from).isSymbolicLink() ? fs.realpathSync(from) : path.resolve(from);
   if (!inside(workspace, real)) throw new Error(`External packaging link: ${from}`);
   const stat = fs.statSync(real);
@@ -27,7 +28,7 @@ export function materialize(from, to, workspace, ancestors = new Set()) {
     // Published test fixtures include snowman filenames that crash Windows BSD tar.
     // This package's production entry/exports do not reference its test directory.
     if (omitSendTests && name === 'test') continue;
-    materialize(path.join(real, name), path.join(to, name), workspace, next);
+    materialize(path.join(real, name), path.join(to, name), workspace, next, include);
   }
 }
 
@@ -54,7 +55,18 @@ export function exportFrozenRuntime(
     fs.mkdirSync(destination);
     for (const entry of fs.readdirSync(source)) {
       if (['node_modules', '.next', '.cache'].includes(entry)) continue;
-      materialize(path.join(source, entry), path.join(destination, entry), workspace);
+      if (sharedDependencies && (entry === 'test' || (name === 'web' && entry === 'src'))) continue;
+      materialize(
+        path.join(source, entry),
+        path.join(destination, entry),
+        workspace,
+        new Set(),
+        (file) =>
+          !sharedDependencies ||
+          name !== 'api' ||
+          !file.startsWith(path.join(source, 'dist') + path.sep) ||
+          !/\.d\.[cm]?ts(?:\.map)?$/.test(file),
+      );
     }
     // The entire frozen production graph is retained, including nested peer versions.
     // Workspace links in the hoisted tree become ordinary files within this output.

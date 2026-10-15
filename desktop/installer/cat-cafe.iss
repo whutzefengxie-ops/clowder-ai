@@ -72,6 +72,7 @@ Name: "{app}\node"
 ; This replaces per-file Inno Setup extraction of 30K+ node_modules files,
 ; Runtime extraction still creates files; actual install timings must be measured.
 Source: "..\scripts\extract-runtime-archive.cjs"; DestDir: "{app}\scripts"
+Source: "..\scripts\native-runtime-extractor.cjs"; DestDir: "{app}\scripts"
 Source: "..\..\bundled\archives\deploy-dependencies.tar.gz.json"; DestDir: "{app}\bundled\archives"
 Source: "..\..\bundled\archives\deploy-api.tar.gz.json"; DestDir: "{app}\bundled\archives"
 Source: "..\..\bundled\archives\deploy-web.tar.gz.json"; DestDir: "{app}\bundled\archives"
