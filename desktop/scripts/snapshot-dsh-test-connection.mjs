@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import runtimeConfig from '../runtime-config.js';
+
 const { canonicalWithMissingSuffix } = runtimeConfig;
 const within = (parent, target) => {
   const relative = path.relative(parent, target);
