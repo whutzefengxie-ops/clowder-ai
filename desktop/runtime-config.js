@@ -121,6 +121,7 @@ function createDesktopLogger(userDataRoot) {
   };
 }
 module.exports = {
+  canonicalWithMissingSuffix,
   resolveDesktopRuntime,
   rewriteDesktopLoopbackUrl,
   readPackagedApiPort,

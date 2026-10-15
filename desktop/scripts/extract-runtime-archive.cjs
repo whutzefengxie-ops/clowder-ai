@@ -49,6 +49,7 @@ async function extractRuntimeArchive(
   let entries = 0;
   let verifiedEntries = 0;
   let unicodeEntry = false;
+  let admissionError;
   const preflight = engine === 'native';
   let phase = engine === 'native' ? 'verify' : 'extract';
   let lastEntryAt = started;
@@ -95,14 +96,16 @@ async function extractRuntimeArchive(
           onReadEntry: (entry) => {
             const target = path.resolve(cwd, entry.path);
             if ((target !== cwd && !target.startsWith(cwd + path.sep)) || /[\r\n]/.test(entry.path))
-              throw new Error('Archive entry escapes runtime directory');
-            if (!['File', 'Directory'].includes(entry.type)) throw new Error('Unsupported runtime archive entry');
-            if (/[^\x00-\x7f]/.test(entry.path)) unicodeEntry = true;
+              admissionError ??= new Error('Archive entry escapes runtime directory');
+            if (!['File', 'Directory'].includes(entry.type))
+              admissionError ??= new Error('Unsupported runtime archive entry');
+            if ([...entry.path].some((char) => char.charCodeAt(0) > 127)) unicodeEntry = true;
             if (target === expectedEntry && entry.type === 'File') suppliedEntry = true;
             verifiedEntries++;
           },
         }),
       );
+      if (admissionError) throw admissionError;
       if (!suppliedEntry) throw new Error(`Incomplete runtime archive: ${name}`);
       if (manifest && (verifiedEntries !== manifest.entries || checksum.digest('hex') !== manifest.sha256))
         throw new Error('Runtime archive integrity mismatch');

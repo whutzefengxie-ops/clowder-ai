@@ -4,6 +4,37 @@ import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 
+for (const alias of ['home', 'config'])
+  test(`snapshot refuses canonical ${alias} escape without changing the source`, async () => {
+    const { snapshotDshTestConnection } = await import('./scripts/snapshot-dsh-test-connection.mjs');
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-alias-'));
+    try {
+      const source = path.join(root, 'source'),
+        target = path.join(root, 'target'),
+        cache = path.join(root, 'cache');
+      fs.mkdirSync(path.join(source, '.dsh/profiles/acp'), { recursive: true });
+      fs.mkdirSync(path.join(cache, '_npx'), { recursive: true });
+      fs.writeFileSync(path.join(source, '.dsh/profiles/acp/package.json'), '{}');
+      if (alias === 'home') fs.symlinkSync(source, target, process.platform === 'win32' ? 'junction' : 'dir');
+      else {
+        fs.mkdirSync(target);
+        fs.symlinkSync(
+          path.join(source, '.dsh'),
+          path.join(target, '.dsh'),
+          process.platform === 'win32' ? 'junction' : 'dir',
+        );
+      }
+      assert.throws(
+        () => snapshotDshTestConnection({ sourceHome: source, targetHome: target, npmCache: cache }),
+        /separate|boundary/i,
+      );
+      assert.equal(fs.existsSync(path.join(source, 'AppData')), false);
+      assert.equal(fs.readFileSync(path.join(source, '.dsh/profiles/acp/package.json'), 'utf8'), '{}');
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
 test('isolated DSH snapshot retains ACP connection and live installed cache without copying history or replacing config', async () => {
   const { snapshotDshTestConnection } = await import('./scripts/snapshot-dsh-test-connection.mjs');
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-connection-'));

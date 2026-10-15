@@ -1,17 +1,31 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import runtimeConfig from '../runtime-config.js';
+const { canonicalWithMissingSuffix } = runtimeConfig;
+const within = (parent, target) => {
+  const relative = path.relative(parent, target);
+  return !relative || (!path.isAbsolute(relative) && relative !== '..' && !relative.startsWith(`..${path.sep}`));
+};
 
 /** Explicit local acceptance setup, never called by production discovery or the installer. */
 export function snapshotDshTestConnection({ sourceHome, targetHome, npmCache }) {
-  if (path.resolve(sourceHome) === path.resolve(targetHome)) throw new Error('DSH test home must be separate');
+  const source = canonicalWithMissingSuffix(sourceHome),
+    target = canonicalWithMissingSuffix(targetHome);
+  if (within(source, target) || within(target, source)) throw new Error('DSH test home must be separate');
+  const verifyTarget = (file) => {
+    if (!within(target, canonicalWithMissingSuffix(file))) throw new Error('DSH snapshot target boundary escaped');
+  };
   const copied = [];
-  for (const relative of [
+  const files = [
     'profiles/acp/package.json',
     'profiles/acp/cordis.yml',
     'profiles/acp/cordis.patch.yml',
     'profiles/acp/pnpm-workspace.yaml',
     'llm-deepseek/files-v3.json',
-  ]) {
+  ];
+  for (const relative of files) verifyTarget(path.join(targetHome, '.dsh', relative));
+  verifyTarget(path.join(targetHome, 'AppData/Local/npm-cache'));
+  for (const relative of files) {
     const from = path.join(sourceHome, '.dsh', relative),
       to = path.join(targetHome, '.dsh', relative);
     if (!fs.existsSync(from)) continue;

@@ -6,11 +6,53 @@ const { createRequire } = require('node:module');
 const { test } = require('node:test');
 const { extractRuntimeArchive } = require('./scripts/extract-runtime-archive.cjs');
 const { createHash } = require('node:crypto');
+const { spawnSync } = require('node:child_process');
 const npmCli = path.join(
   path.dirname(process.execPath),
   process.platform === 'win32' ? 'node_modules/npm/bin/npm-cli.js' : '../lib/node_modules/npm/bin/npm-cli.js',
 );
 const tar = createRequire(npmCli)('tar');
+
+test(
+  'native dangerous archive rejection reports its real failure through the child process',
+  { skip: process.platform !== 'win32' },
+  async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dangerous-native-'));
+    try {
+      fs.mkdirSync(path.join(root, 'input'));
+      fs.writeFileSync(path.join(root, 'input/Clowder AI.exe'), 'never write');
+      fs.mkdirSync(path.join(root, 'bundled/archives'), { recursive: true });
+      const file = path.join(root, 'bundled/archives/electron.tar.gz');
+      await tar.c({ file, cwd: path.join(root, 'input'), prefix: '..', gzip: true }, ['Clowder AI.exe']);
+      let entries = 0;
+      await tar.t({ file, onReadEntry: () => entries++ });
+      fs.writeFileSync(
+        file + '.json',
+        JSON.stringify({
+          archive: 'electron.tar.gz',
+          entries,
+          bytes: fs.statSync(file).size,
+          sha256: createHash('sha256').update(fs.readFileSync(file)).digest('hex'),
+        }),
+      );
+      const code = `const {createRequire}=require('node:module'); const tar=createRequire(${JSON.stringify(npmCli)})('tar'); require(${JSON.stringify(require.resolve('./scripts/extract-runtime-archive.cjs'))}).extractRuntimeArchive(${JSON.stringify(root)},'electron.tar.gz',tar,{engine:'native',onProgress:e=>console.log(JSON.stringify(e))}).catch(e=>{console.error(e.message);process.exitCode=1;});`;
+      const child = spawnSync(process.execPath, ['-e', code], { encoding: 'utf8', windowsHide: true });
+      const events = child.stdout
+        .trim()
+        .split(/\r?\n/)
+        .filter(Boolean)
+        .map((line) => JSON.parse(line));
+      assert.equal(child.status, 1);
+      assert.equal(events.at(-1).status, 'failed');
+      assert.equal(events.at(-1).runId, events[0].runId);
+      assert.match(events.at(-1).message, /escapes runtime directory/);
+      assert.doesNotMatch(child.stderr, /dest.destroy/);
+      assert.equal(fs.existsSync(path.join(root, 'Clowder AI.exe')), false);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  },
+);
 
 test('keeps Unicode runtime files and fails on missing/unknown payloads', async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'runtime-extraction-'));
