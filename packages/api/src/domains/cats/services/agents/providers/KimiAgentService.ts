@@ -5,6 +5,7 @@ import { dirname } from 'node:path';
 import {
   type CatId,
   type CliEffortPreset,
+  catRegistry,
   createCatId,
   getCliEffortOptionsForProvider,
   resolveCliEffortOverride,
@@ -152,9 +153,11 @@ export class KimiAgentService implements AgentService {
   async *invoke(prompt: string, options?: AgentServiceOptions): AsyncIterable<AgentMessage> {
     const requestedModel = options?.callbackEnv?.CAT_CAFE_KIMI_MODEL_OVERRIDE ?? this.model;
     // Empty native selection means omit --model and let the CLI resolve its own config.
-    const effectiveModel = requestedModel
-      ? resolveKimiModelAlias(requestedModel, options?.callbackEnv)
-      : requestedModel;
+    const followsNativeConfig = catRegistry.tryGet(this.catId)?.config.configurationSource === 'native_tool';
+    const effectiveModel =
+      requestedModel && !followsNativeConfig
+        ? resolveKimiModelAlias(requestedModel, options?.callbackEnv)
+        : requestedModel;
     const effortLevel = resolveKimiEffortLevel(this.catId as string, effectiveModel, options?.reasoningEffortOverride);
     const metadata: MessageMetadata = { provider: 'kimi', model: effectiveModel };
     const imagePaths = extractImagePaths(options?.contentBlocks, options?.uploadDir);

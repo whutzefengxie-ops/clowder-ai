@@ -22,7 +22,7 @@ for (const clientId of ['kimi', 'opencode']) {
     ensureFakeCliOnPath(clientId);
     const root = mkdtempSync(join(tmpdir(), 'native-additional-launch-'));
     const config = join(root, 'kimi.toml');
-    writeFileSync(config, 'default_model="native-user-selected-model"\n');
+    writeFileSync(config, 'default_model="native-user-selected-model"\n[models.selected-fast]\nprovider="native"\n');
     const id = `native-${clientId}-launch`;
     catRegistry.register(id, {
       ...catRegistry.tryGet('opus').config,
@@ -33,7 +33,7 @@ for (const clientId of ['kimi', 'opencode']) {
       cli: { command: clientId, outputFormat: 'stream-json' },
     });
     const Service = clientId === 'kimi' ? KimiAgentService : OpenCodeAgentService;
-    for (const model of ['', 'fixture/explicit']) {
+    for (const model of ['', 'selected-fast', 'fixture/explicit']) {
       const proc = createMockProcess();
       const spawnFn = createMockSpawnFn(proc);
       const service = new Service({
