@@ -182,6 +182,9 @@ test('native collaboration stops before prompt when the adopted model is unavail
     wire.writes.some((message) => message.method === 'turn/start'),
     false,
   );
-  assert.ok(wire.writes.some((message) => message.method === 'thread/start'), 'exercise the adopted-model boundary');
+  assert.ok(
+    wire.writes.some((message) => message.method === 'thread/start'),
+    'exercise the adopted-model boundary',
+  );
   assert.ok(messages.some((message) => message.type === 'error'));
 });

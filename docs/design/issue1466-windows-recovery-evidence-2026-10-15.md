@@ -109,4 +109,14 @@ Log closed.
 - 锁文件自动合并保留了本 PR 的 Web Playwright 声明，却移除了 main 从其他包删去的同版本快照；仅恢复原精确三项快照后 frozen install 通过，没有放宽 SDK 版本。
 - 治理检查原生 Windows 复现了动态 import 误用磁盘路径和 admission source 使用反斜杠的两个坐标问题；分别改为 file URL 和仓库 canonical 斜杠。原生 RED→GREEN，不跳过基线/attestation/cutover 验证；本地检查的保护目标须使用 PR 实际上游 SHA，旧 fork origin/main 不是该目标。
 
-当前作者检查：API/shared 编译、Web 类型检查通过；原生 API 相关 136/136、新手引导正式入口 43文件/197项、MCP 实现 4/4 通过。前端兼容四文件 30项包含在引导相关组中，不重复相加。完整治理、精确合流 SHA 的独立 review、CI 和重建实装仍需补齐。
+当前作者检查：API/shared 编译、Web 类型检查通过；原生 API 相关 136/136。合流后的完整 MCP 治理在实际上游 base 7fca 下通过，216 工具、各项 delta 为零，未重写 baseline、attestation 或 cutover。MCP 实现 4/4、evidence 5/5 通过。
+
+## 合流增量与新载体来源
+
+独立复核在 cce 发现旧草稿比较基线遗漏：只规范化 form.carrier，没有同步 baseline，导致只改昵称时把 carrier 误判为本地修改。550 同步迁移两侧后，“旧 App Server 基线、本地改昵称、服务端换 CLI”的回归由 RED 转 GREEN；8 项独立回归、11 项补充探针覆盖显式选择、原生默认、managed、三种 ACP 及 canonical 优先级。独立旧创建请求完整对象对照 16/16 一致。dda 只将退役字段删除改为无未用绑定的等价写法；不更改角色、会话或源配置。
+
+dda0b590123bc81156bacf74e19f6bf73d245fcc 的正式 Web 构建通过，BUILD_ID 为 lhFK2ELSXJ6JU7YB5dm0v；正式引导 CI 入口 43文件/198项通过。API 正式构建来自 cce4d51179a108a68e47d1de58d3bbf83ee720a9，cce→dda 的 API/shared/MCP/collective 源码和锁文件没有变化；新生产依赖已按合流锁重新 frozen install，未复用旧 SDK 依赖归档。API bundle 3241 个内部模块、17671748 字节，保持外部依赖、worker 与真实模块 URL。归档和 Electron 壳来自 dda，不将之后的测试/文档提交冒称运行源码重编。
+
+dda 云端 distributable-5 的原始日志另暴露 4 条旧 Codex 模式夹具前提失效。main 已将 carrier 选择收敛到服务构造注入；直接构造服务的夹具没有显式 carrierMode，错误进入 exec_json，而不是所模拟的 App Server。只给 registry 添加 canonical carrier 的第一次复验仍失败，保留此记录；同步明确构造选项后 5/5 通过。负例同时断言实际 thread/start 已到达、turn/start 未发出，避免任意前置错误造成假绿。产品路由/超时/认证规则未改。
+
+最新完整安装、重启、实际请求与云端 CI 的回执继续在 [PR 原位对账评论](https://github.com/zts212653/clowder-ai/pull/1519#issuecomment-6182906767) 更新；各候选分别记录，不把上文 a73/463 的实物结果挪到新 main 名下。完整 fallback 基线相对 main 的历史 PR 累积量与本轮窄修分开判断；本次草稿修复在同一读取边界统一两侧坐标，没有新增配置/认证静默回退，测试夹具修复也不新增生产 fallback。
