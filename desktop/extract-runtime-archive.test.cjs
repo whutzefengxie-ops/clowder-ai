@@ -85,7 +85,7 @@ test('installer extracts bundled Node first and stops on any extraction error', 
     script.indexOf("AfterInstall: ExtractRuntimeArchive('node.tar.gz')") <
       script.indexOf("AfterInstall: ExtractRuntimeArchive('deploy-api.tar.gz')"),
   );
-  assert.match(script, /ExitCode <> 0[\s\S]*RaiseException/);
+  assert.match(script, /ExitCode <> 0[\s\S]*FailRuntimeExtraction/);
   assert.match(script, /extract-runtime-archive\.cjs/);
 });
 
