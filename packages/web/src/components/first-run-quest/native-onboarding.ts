@@ -1,7 +1,7 @@
 import type { CatData } from '@/hooks/useCatData';
 import { autoSlug, type HubCatEditorFormState, initialState } from '../hub-cat-editor.model';
-import { templateForm } from '../settings/members/member-editor-state';
 import { matchesRuntime, type RuntimeChoice, runtimeDefaults } from '../settings/members/member-runtime-draft';
+import { nativePartnerIdentity } from './native-partner-identity';
 import { stableOnboardingMemberId } from './onboarding-journey';
 import type { TemplateCard } from './TemplateStep';
 
@@ -41,6 +41,8 @@ export function recommendNativePartners(
   const reservedIds = new Set(cats.map((cat) => cat.id.toLowerCase()));
   const reservedAliases = new Set(cats.flatMap((cat) => cat.mentionPatterns.map((alias) => alias.toLowerCase())));
   return runtimes.flatMap((runtime) => {
+    // Keep existing/manual OpenCode members, but do not recommend new ones during the compatibility pause.
+    if (runtime.clientId === 'opencode') return [];
     const descriptor = JSON.stringify([
       runtime.clientId,
       runtime.acp?.command,
@@ -52,16 +54,7 @@ export function recommendNativePartners(
     const discoveryIdentity = runtime.acp ? descriptor : runtime.id;
     if (seen.has(discoveryIdentity)) return [];
     seen.add(discoveryIdentity);
-    const preferred =
-      runtime.clientId === 'anthropic' ? 'ragdoll' : runtime.clientId === 'openai' ? 'maine-coon' : 'dragon-li';
-    const template = templates.find((item) => item.id === preferred) ?? templates[0];
-    const form = template ? templateForm(template, cats, initialState()) : initialState();
-    if (runtime.clientId === 'acp') {
-      form.name = `${runtime.label} 伙伴`;
-      form.displayName = form.name;
-      form.nickname = runtime.label;
-      form.roleDescription = '一起分析问题、完成任务';
-    }
+    const form = nativePartnerIdentity(runtime, templates, cats);
     if (!form.name) form.name = form.displayName = `${runtime.label} 伙伴`;
     const alias = `@${runtime.label.replace(/\s+/g, '-').toLowerCase()}`;
     let uniqueAlias = alias;

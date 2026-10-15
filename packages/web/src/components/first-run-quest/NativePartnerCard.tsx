@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { KimiLoginHelp } from '../settings/members/KimiLoginHelp';
 import { MemberRuntimeFields } from '../settings/members/MemberRuntimeFields';
 import { usesDefaultNativeIdentity } from '../settings/members/native-login-state';
 import { NativeInstallHelp } from './NativeInstallHelp';
 import type { NativePartner } from './native-onboarding';
+import { nativeModelLabel, usesDetectedRuntimeConfiguration } from './native-partner-config';
 
 const chinese = (zh: string) => zh;
 export function NativePartnerCard({
@@ -25,6 +25,12 @@ export function NativePartnerCard({
   const { runtime, form } = partner;
   const available = runtime.installed && (runtime.clientId !== 'acp' || Boolean(runtime.acp));
   const defaultIdentity = usesDefaultNativeIdentity(form);
+  const detectedConfiguration = usesDetectedRuntimeConfiguration(form, runtime);
+  const model = nativeModelLabel(
+    runtime,
+    form.defaultModel || (detectedConfiguration ? runtime.configuredModel : undefined),
+  );
+  const effort = form.cliEffort || (detectedConfiguration ? runtime.configuredEffort : undefined);
   return (
     <article
       className={`rounded-xl border p-4 ${partner.selected ? 'border-cafe-accent bg-cafe-surface' : 'border-[var(--console-border-soft)] bg-cafe-surface-canvas'}`}
@@ -58,7 +64,7 @@ export function NativePartnerCard({
             {created
               ? '已添加'
               : available
-                ? '已发现'
+                ? '已安装'
                 : runtime.discoveryStatus === 'acp_profile_missing'
                   ? '待配置 ACP'
                   : runtime.discoveryStatus === 'adapter_missing'
@@ -81,9 +87,12 @@ export function NativePartnerCard({
       {form.roleDescription && (
         <p className={`${compact ? '' : 'ml-8'} mt-3 text-sm text-cafe-secondary`}>{form.roleDescription}</p>
       )}
+      {form.personality && (
+        <p className={`${compact ? '' : 'ml-8'} mt-2 text-sm text-cafe-muted`}>性格：{form.personality}</p>
+      )}
       <p className={`${compact ? '' : 'ml-8'} mt-3 text-sm text-cafe-muted`}>
         {available
-          ? `${form.defaultModel || '模型跟随工具'} · ${form.cliEffort || '强度跟随工具'}`
+          ? `模型：${model || '由工具决定（未读取）'}${form.defaultModel ? ' · 角色自选' : runtime.modelSource === 'tool_recent' && detectedConfiguration ? ' · 跟随最近选择' : ' · 跟随工具'}${effort ? ` · 强度：${effort}` : ''}`
           : runtime.discoveryStatus === 'adapter_missing'
             ? '已发现 Pi。需要 ACP 适配器后才能通过此入口接入。'
             : runtime.label === 'DSH'
@@ -127,11 +136,6 @@ export function NativePartnerCard({
       )}
       {available && defaultIdentity && runtime.readiness?.status === 'configured' && (
         <p className="mt-3 text-sm text-cafe-secondary">已检测登录 · 实际连接待验证</p>
-      )}
-      {available && defaultIdentity && runtime.clientId === 'kimi' && runtime.readiness?.status === 'unknown' && (
-        <div className="mt-3">
-          <KimiLoginHelp readiness={runtime.readiness} />
-        </div>
       )}
       {available && !defaultIdentity && (
         <p className="mt-3 text-sm text-cafe-secondary">此连接的登录状态尚未检查 · 实际连接待验证</p>

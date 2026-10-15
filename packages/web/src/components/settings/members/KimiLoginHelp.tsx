@@ -11,12 +11,12 @@ export function KimiLoginHelp({
 }) {
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
   return (
-    <div role="status" className="rounded-lg bg-conn-amber-bg p-3 text-sm text-conn-amber-text">
-      <p className="font-medium">{t('Kimi 登录状态尚未验证', 'Kimi sign-in has not been verified')}</p>
+    <div className="py-3 text-sm text-cafe-secondary">
+      <p className="font-medium">{t('Kimi 登录帮助', 'Kimi sign-in help')}</p>
       <p className="mt-1">
         {t(
-          '暂无法只读校验 Kimi 登录。安装或配置存在不代表能够回复；可先发消息验证，若认证失败，请在本安装实例重新登录。',
-          'Kimi sign-in cannot currently be checked without a request. Installation or configuration does not verify replies. Try a message; if authentication fails, sign in again for this installation.',
+          '如需重新登录，可使用下面的命令，登录到此安装实例。',
+          'If you need to sign in again, use the command below for this installation.',
         )}
       </p>
       {readiness.loginCommand && (

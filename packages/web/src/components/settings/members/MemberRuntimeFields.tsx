@@ -186,9 +186,6 @@ export function MemberRuntimeFields({
           {t('已检测登录 · 实际连接待验证', 'Sign-in detected · Connection not yet verified')}
         </p>
       )}
-      {defaultIdentity && form.clientId === 'kimi' && selected?.readiness?.status === 'unknown' && (
-        <KimiLoginHelp readiness={selected.readiness} t={t} />
-      )}
       <div className="grid gap-4 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
         <MemberChoicePicker
           label={t('模型', 'Model')}
@@ -283,6 +280,9 @@ export function MemberRuntimeFields({
       {!nativeSetup && (
         <details className="text-sm text-cafe-secondary">
           <summary className="min-h-10 cursor-pointer py-2">{t('配置详情', 'Configuration details')}</summary>
+          {defaultIdentity && form.clientId === 'kimi' && selected?.readiness && (
+            <KimiLoginHelp readiness={selected.readiness} t={t} />
+          )}
           <p className="mb-3">
             {t(
               '只调整这位伙伴的偏好。安装状态和模型目录不代表调用已验证。',

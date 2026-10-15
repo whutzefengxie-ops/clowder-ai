@@ -13,6 +13,8 @@ export interface RuntimeChoice {
   discoveryStatus?: 'configured' | 'acp_profile_missing' | 'adapter_missing' | 'not_installed';
   models: string[];
   configuredModel?: string;
+  modelSource?: 'tool_config' | 'tool_recent';
+  defaultsStatus?: 'configured_only' | 'unconfigured' | 'session_only';
   configuredEffort?: string;
   acp?: { command: string; startupArgs: string[]; transport?: 'stdio' | 'httpstream' };
 }

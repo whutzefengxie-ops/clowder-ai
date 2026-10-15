@@ -39,7 +39,7 @@ afterEach(async () => {
 it.each([
   '',
   'other-account',
-])('settings show the Kimi login command only for its default identity (%s)', async (accountRef) => {
+])('settings do not warn about unknown Kimi login; recovery stays in configuration details (%s)', async (accountRef) => {
   await act(async () =>
     root.render(
       <MemberRuntimeFields
@@ -52,8 +52,9 @@ it.each([
       />,
     ),
   );
-  expect(host.textContent?.includes('Kimi 登录状态尚未验证')).toBe(accountRef === '');
+  expect(host.textContent).not.toContain('Kimi 登录状态尚未验证');
   expect(host.textContent?.includes(readiness.loginCommand)).toBe(accountRef === '');
+  if (!accountRef) expect(host.querySelector('details')?.open).toBe(false);
   expect(host.textContent).not.toContain('已检测登录');
 });
 it('copies the exact installation-bound command without launching anything', async () => {
