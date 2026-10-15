@@ -13,6 +13,7 @@ export function stageBuiltWeb(source, destination) {
     fs.cpSync(from, to, {
       recursive: true,
       filter: (entry) => {
+        if (path.resolve(entry) === path.resolve(source, '.next/cache/webpack')) return false;
         if (fs.lstatSync(entry).isSymbolicLink()) throw new Error('Linked Web build asset');
         return true;
       },

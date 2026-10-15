@@ -2275,13 +2275,27 @@ describe('F167 Phase P: wakeWhen cancel/replace/delivery tests', () => {
     assert.equal(response.statusCode, 200);
     const { taskId } = JSON.parse(response.body);
 
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    // Observe the last retirement effect, rather than guessing how long a real
+    // command plus its durable carrier will take on a loaded CI runner.
+    const completedBy = Date.now() + 5000;
+    while (!deps._unregisteredIds.includes(taskId) && Date.now() < completedBy) {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
 
     const tombstone = deps._insertedTasks.find((task) => task.id === taskId);
+    const job = resolveManagedCommandJob(deps.dynamicTaskStore.getById(taskId));
+    assert.equal(
+      deps._unregisteredIds.includes(taskId),
+      true,
+      `retirement did not complete: ${JSON.stringify({
+        enabled: tombstone?.enabled,
+        lifecycle: tombstone?.params?.holdLifecycle,
+        gate: job ? readDurableGateRecord(job) : null,
+      })}`,
+    );
     assert.equal(deps._removedIds.includes(taskId), false, 'completion receipt must remain queryable by taskId');
     assert.equal(tombstone.enabled, false, 'successfully completed carrier retires scheduler execution');
     assert.equal(tombstone.params.holdLifecycle.status, 'fired');
     assert.equal(tombstone.params.holdLifecycle.managedCommand.state, 'consumed');
-    assert.equal(deps._unregisteredIds.includes(taskId), true);
   });
 });

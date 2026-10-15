@@ -17,6 +17,8 @@ test('deployment includes generated public CSS, WASM and serviceworker from the 
     file('snapshot/packages/web/package.json', '{}');
     fs.mkdirSync(path.join(own, 'snapshot/node_modules'));
     file('built/.next/BUILD_ID', 'same-build');
+    file('built/.next/cache/webpack/client-production/0.pack', 'compiler-only cache');
+    file('built/.next/cache/fetch-cache/runtime-entry', 'runtime cache witness');
     for (const name of [
       'theme-tokens',
       'cat-persona-tokens',
@@ -43,6 +45,11 @@ test('deployment includes generated public CSS, WASM and serviceworker from the 
     assert.equal(fs.readFileSync(path.join(out, 'web/public/sw.js'), 'utf8'), 'serviceworker witness');
     assert.equal(fs.readFileSync(path.join(out, 'web/public/vendor/esbuild/esbuild.wasm'), 'utf8'), 'WASM witness');
     assert.equal(fs.readFileSync(path.join(out, 'web/.next/BUILD_ID'), 'utf8'), 'same-build');
+    assert.equal(fs.existsSync(path.join(out, 'web/.next/cache/webpack')), false);
+    assert.equal(
+      fs.readFileSync(path.join(out, 'web/.next/cache/fetch-cache/runtime-entry'), 'utf8'),
+      'runtime cache witness',
+    );
     fs.renameSync(path.join(own, 'built/public/vendor/app/theme-tokens.css'), path.join(own, 'css-witness'));
     assert.throws(
       () =>
