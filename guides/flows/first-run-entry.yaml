@@ -1,4 +1,5 @@
 # First-run quest entry reminder. It is intentionally non-blocking.
+tips_exempt: "2026-10-15: This flow is already the automatic non-blocking first-message reminder after partner creation; a second capability tip would duplicate the same instruction."
 schemaVersion: 1
 id: first-run-entry
 name: 首次协作入口

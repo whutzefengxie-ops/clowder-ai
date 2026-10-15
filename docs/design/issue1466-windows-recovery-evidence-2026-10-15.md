@@ -120,3 +120,11 @@ dda0b590123bc81156bacf74e19f6bf73d245fcc 的正式 Web 构建通过，BUILD_ID �
 dda 云端 distributable-5 的原始日志另暴露 4 条旧 Codex 模式夹具前提失效。main 已将 carrier 选择收敛到服务构造注入；直接构造服务的夹具没有显式 carrierMode，错误进入 exec_json，而不是所模拟的 App Server。只给 registry 添加 canonical carrier 的第一次复验仍失败，保留此记录；同步明确构造选项后 5/5 通过。负例同时断言实际 thread/start 已到达、turn/start 未发出，避免任意前置错误造成假绿。产品路由/超时/认证规则未改。
 
 最新完整安装、重启、实际请求与云端 CI 的回执继续在 [PR 原位对账评论](https://github.com/zts212653/clowder-ai/pull/1519#issuecomment-6182906767) 更新；各候选分别记录，不把上文 a73/463 的实物结果挪到新 main 名下。完整 fallback 基线相对 main 的历史 PR 累积量与本轮窄修分开判断；本次草稿修复在同一读取边界统一两侧坐标，没有新增配置/认证静默回退，测试夹具修复也不新增生产 fallback。
+
+作者已实际安装 dda 的 RuntimeMain：覆盖升级 122224ms、退出 0，四文件指纹不变；完整进程启动 106936ms 达到 ready，API http-listening 为 70100ms。模块图 58182ms，read 48884ms、resolve 5387ms；不是清除系统缓存后的受控冷启基准。三角色、四会话十消息、默认猫及配置指纹逐条一致，十项 CSS 与新构建匹配，隔离预览网关 available、实际端口 54376。
+
+新安装版分别实际调用 Codex、Claude Code、DSH，均回复 42，耗时 10105/18155/18135ms；DSH 回复同时在实际 Electron 历史中打开验证。原凭据未再复制到其他实例。强制刷新返回 Codex、Claude、DSH、Kimi、OpenCode、Pi 六项已发现；后三者不据此视为已完成真调用。实际 GUI 已观察一击进入后自动协作、A2A 和右侧从设计稿变为可操作成果，主题正常；已有角色进入普通成员列表，不重新推荐一键配置。
+
+最后自检使用真实 PR base 修正 fork origin/main 的坐标，保留初次错误基线的失败日志。首次配置提醒与 registry 补 tips_exempt：它本身已是自动非阻塞提醒，不额外弹重复 Tips。实际加载器比较源码与已安装版的十个引导对象完全一致；目录校验 10/10、加载器 16/16 通过。元数据不改变运行流程，无需把已有实装冒称重新编译。能力提示覆盖在正确 base 下零错误，九条既有来源警告保留。旧 skill 中架构归属脚本在当前仓库不存在，记录 warning，不伪造其通过。
+
+427e5aff0 的云端最终为 19 SUCCESS / 1 SKIPPED，包括原失败 distributable-5 中上述五条模式用例。实际 checkout 日志为 eb0cb0b，合流 parents 为 427 与 main 7fca。独立复核后相对 cce 的 fallback 净增长 1，是旧草稿读取的 `!cat || cat.carrier` 守卫；它保留空基线和 canonical 权威，不增加静默认证或数据来源。之后提交仅补本段实测记录和上段治理元数据，新的 CI 状态在 PR 对账回执中分别记录。
