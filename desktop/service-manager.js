@@ -11,6 +11,8 @@ const os = require('node:os');
 const crypto = require('node:crypto');
 const { resolveDesktopRuntime } = require('./runtime-config');
 const { initializeDesktopTemplate } = require('./desktop-template');
+const { createStartupTimeline } = require('./startup-timing');
+const { prepareStartupServices, stopOwnedStartupProcess } = require('./startup-services');
 
 const POLL_INTERVAL_MS = 500;
 const MAX_WAIT_MS = 120_000;
@@ -104,9 +106,16 @@ class ServiceManager {
     this.onStatus = onStatus || (() => {});
     this.procs = {};
     this.memoryMode = false;
+    this.timeline = createStartupTimeline({ component: 'services', emit: log });
+    this.startupAbort = null;
   }
 
   async startAll() {
+    this.startupAbort = new AbortController();
+    return this.timeline.runPhase('all-services', () => this._startAll());
+  }
+
+  async _startAll() {
     log(`=== ServiceManager.startAll() ===`);
     log(`projectRoot: ${this.root}`);
     if (resolveDesktopRuntime().instanceRoot) {
@@ -140,33 +149,55 @@ class ServiceManager {
     const userDataDir = this._getUserDataDir();
     this._ensureUserDataDir(userDataDir);
     log(`User data dir: ${userDataDir}`);
+    this.timeline.mark('preflight-complete');
+    this.startupAbort.signal.throwIfAborted();
 
     // NOTE: workspace junction repair must happen at install time (admin).
     // Runtime repair in Program Files fails with EPERM for non-admin users.
 
     // ---- Redis ----
     this.onStatus('Starting Redis...');
-    await this._startRedis(userDataDir);
+    await this.timeline.runPhase('redis-ready', () => this._startRedis(userDataDir));
     if (resolveDesktopRuntime().instanceRoot && this.memoryMode)
       throw new Error('Isolated desktop requires its own persistent Redis');
     log(`Redis phase complete. memoryMode=${this.memoryMode}`);
 
-    // ---- API ----
-    this.onStatus('Starting API server...');
-    let apiReady = false;
+    this.startupAbort.signal.throwIfAborted();
+    this.onStatus('Starting API and Web...');
+    await prepareStartupServices({
+      controller: this.startupAbort,
+      api: (signal) =>
+        this.timeline.runPhase('api-port-ready', () => this._startApiWithFallback(nodeExe, userDataDir, signal)),
+      web: (signal) =>
+        this.timeline.runPhase('web-http-ready', async () => {
+          this._startNextJs();
+          log(`Web process spawned, waiting for HTTP on port ${this.frontendPort}`);
+          await this._waitForHttpReady(this.frontendPort, 'Web', signal);
+        }),
+    });
+    this.startupAbort.signal.throwIfAborted();
+    this.onStatus('Ready!');
+  }
+
+  async _startApiWithFallback(nodeExe, userDataDir, signal) {
     try {
-      await this._startApi(nodeExe, userDataDir);
-      apiReady = true;
+      await this._startApi(nodeExe, userDataDir, signal);
     } catch (err) {
+      signal.throwIfAborted();
       log(`API first-attempt failed: ${err.message}`);
       // If API failed and we haven't tried memory mode yet, retry with MEMORY_STORE=1
       if (!this.memoryMode && !resolveDesktopRuntime().instanceRoot) {
+        const failedProcess = this.procs.api;
+        await this.timeline.runPhase('api-failed-process-stopped', () =>
+          stopOwnedStartupProcess(failedProcess, () => this._killProcessTree('api', failedProcess, 5000)),
+        );
+        signal.throwIfAborted();
+        if (this.procs.api === failedProcess) delete this.procs.api;
         this.onStatus('API failed — retrying with memory store...');
         log('Retrying API with MEMORY_STORE=1');
         this.memoryMode = true;
         try {
-          await this._startApi(nodeExe, userDataDir);
-          apiReady = true;
+          await this._startApi(nodeExe, userDataDir, signal);
         } catch (err2) {
           log(`API retry also failed: ${err2.message}`);
           throw new Error(`API server failed to start:\n${err2.message}`);
@@ -175,18 +206,6 @@ class ServiceManager {
         throw err;
       }
     }
-
-    if (!apiReady) {
-      throw new Error('API server did not start');
-    }
-
-    // ---- Web ----
-    this.onStatus('Starting Web frontend...');
-    this._startNextJs();
-    log(`Web process spawned, waiting for HTTP on port ${this.frontendPort}`);
-    await this._waitForHttpReady(this.frontendPort, 'Web');
-
-    this.onStatus('Ready!');
   }
 
   _getUserDataDir() {
@@ -400,7 +419,7 @@ class ServiceManager {
     return salt;
   }
 
-  async _startApi(nodeExe, userDataDir) {
+  async _startApi(nodeExe, userDataDir, signal = this.startupAbort?.signal) {
     const desktopEntry = path.join(this.root, 'packages', 'api', 'dist', 'index.desktop.js');
     const apiEntry = fs.existsSync(desktopEntry)
       ? desktopEntry
@@ -433,7 +452,8 @@ class ServiceManager {
       { envOverrides, cwd: userProjectDir },
     );
     log(`API process spawned, waiting for port ${this.apiPort}`);
-    await this._waitForPort(this.apiPort, 'API');
+    this.timeline.mark('api-process-spawned');
+    await this._waitForPort(this.apiPort, 'API', signal);
   }
 
   _buildApiEnv(userDataDir) {
@@ -565,66 +585,24 @@ class ServiceManager {
   }
 
   _startNextJs() {
-    if (resolveDesktopRuntime().instanceRoot) {
-      const node = resolveNode(this.root);
-      this._startProcess('web', node, [
-        path.join(__dirname, 'runtime-web-server.js'),
-        path.join(this.root, 'packages', 'web'),
-        String(this.frontendPort),
-        String(this.apiPort),
-      ]);
-      return;
-    }
     const webDir = path.join(this.root, 'packages', 'web');
     const nodeExe = resolveNode(this.root) || 'node';
-
-    let nextJs = null;
-    // Primary: deployed layout (pnpm deploy --node-linker=hoisted) places next
-    // directly under packages/web/node_modules/next.
-    const deployed = path.join(webDir, 'node_modules', 'next', 'dist', 'bin', 'next');
-    if (fs.existsSync(deployed)) nextJs = deployed;
-    // Dev fallback: pnpm store layout in root.
-    if (!nextJs) {
-      const pnpmDir = path.join(this.root, 'node_modules', '.pnpm');
-      if (fs.existsSync(pnpmDir)) {
-        try {
-          const dirs = fs.readdirSync(pnpmDir).filter((d) => d.startsWith('next@'));
-          for (const d of dirs) {
-            const candidate = path.join(pnpmDir, d, 'node_modules', 'next', 'dist', 'bin', 'next');
-            if (fs.existsSync(candidate)) {
-              nextJs = candidate;
-              break;
-            }
-          }
-        } catch {}
-      }
-    }
-    if (!nextJs) {
-      const hoisted = path.join(this.root, 'node_modules', 'next', 'dist', 'bin', 'next');
-      if (fs.existsSync(hoisted)) nextJs = hoisted;
-    }
-
-    let cmd, args;
-    if (nextJs) {
-      cmd = nodeExe;
-      args = [nextJs, 'start', '--port', String(this.frontendPort)];
-    } else if (IS_WIN) {
-      cmd = 'cmd.exe';
-      const localNext = path.join(webDir, 'node_modules', '.bin', 'next.cmd');
-      args = ['/c', fs.existsSync(localNext) ? localNext : 'next.cmd', 'start', '--port', String(this.frontendPort)];
-    } else {
-      // macOS/Linux fallback: spawn node against any next binary on PATH.
-      // In practice 'deployed' above is always found after pnpm deploy, so
-      // this branch only triggers during broken installs.
-      cmd = nodeExe;
-      args = ['-e', 'console.error("next entry not found — reinstall required"); process.exit(1)'];
-    }
-
-    log(`Starting Next.js: ${cmd} ${args.join(' ')}`);
-    this._startProcess('web', cmd, args, { cwd: webDir });
+    this._startProcess(
+      'web',
+      nodeExe,
+      [
+        path.join(__dirname, 'runtime-web-server.js'),
+        webDir,
+        String(this.frontendPort),
+        String(this.apiPort),
+        resolveDesktopRuntime().instanceRoot ? '127.0.0.1' : '0.0.0.0',
+      ],
+      { cwd: webDir },
+    );
   }
 
   _startProcess(name, cmd, args, opts = {}) {
+    this.startupAbort?.signal.throwIfAborted();
     const { instanceRoot } = resolveDesktopRuntime();
     const inherited = instanceRoot
       ? Object.fromEntries(
@@ -806,10 +784,13 @@ class ServiceManager {
     });
   }
 
-  async _waitForPort(port, label) {
+  async _waitForPort(port, label, signal = this.startupAbort?.signal) {
     const deadline = Date.now() + MAX_WAIT_MS;
     while (Date.now() < deadline) {
-      if (await this._isPortOpen(port)) {
+      signal?.throwIfAborted();
+      const open = await this._isPortOpen(port);
+      signal?.throwIfAborted();
+      if (open) {
         this.onStatus(`${label} ready on port ${port}`);
         return;
       }
@@ -829,10 +810,16 @@ class ServiceManager {
     throw new Error(`${label} did not start within ${MAX_WAIT_MS / 1000}s (port ${port})`);
   }
 
-  async _waitForHttpReady(port, label) {
+  async _waitForHttpReady(port, label, signal = this.startupAbort?.signal) {
     const deadline = Date.now() + MAX_WAIT_MS;
+    let attempts = 0;
     while (Date.now() < deadline) {
-      if (await this._isHttpReady(port)) {
+      signal?.throwIfAborted();
+      attempts++;
+      const ready = await this._isHttpReady(port);
+      signal?.throwIfAborted();
+      if (ready) {
+        this.timeline.mark('web-probe-ready', { attempts });
         this.onStatus(`${label} ready on port ${port}`);
         return;
       }
@@ -852,7 +839,10 @@ class ServiceManager {
     const deadline = Date.now() + MAX_WAIT_MS;
     const earlyCheckDeadline = Date.now() + REDIS_FALLBACK_PORT_CHECK_MS;
     while (Date.now() < deadline) {
-      if (await this._isPortOpen(port)) {
+      this.startupAbort?.signal.throwIfAborted();
+      const open = await this._isPortOpen(port);
+      this.startupAbort?.signal.throwIfAborted();
+      if (open) {
         this.onStatus(`${label} ready on port ${port}`);
         return true;
       }
@@ -870,6 +860,7 @@ class ServiceManager {
   }
 
   async stopAll() {
+    this.startupAbort?.abort(new Error('Desktop startup cancelled'));
     const KILL_TIMEOUT_MS = 5000;
     const killPromises = [];
 

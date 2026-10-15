@@ -5,13 +5,17 @@ import { isMainThread, threadId } from 'node:worker_threads';
 
 const started = performance.now();
 const moduleGroups = new Map();
+const uniqueModuleUrls = new Set();
 function moduleGroup(url) {
+  if (String(url).startsWith('node:')) return 'builtin';
   const dependency = String(url).split('/node_modules/');
   if (dependency.length < 2) return 'application';
   const name = dependency.at(-1).match(/^(@[\w.-]+\/[\w.-]+|[\w.-]+)(?:\/|$)/)?.[1];
   return name?.slice(0, 100) ?? 'dependency';
 }
 let moduleLoads = 0,
+  fileModuleLoads = 0,
+  builtinModuleLoads = 0,
   moduleReadMs = 0,
   moduleResolveMs = 0,
   lastReport = started;
@@ -32,6 +36,9 @@ const hook = isMainThread
         } finally {
           const elapsed = performance.now() - began;
           moduleLoads++;
+          uniqueModuleUrls.add(url);
+          if (String(url).startsWith('file:')) fileModuleLoads++;
+          if (String(url).startsWith('node:')) builtinModuleLoads++;
           moduleReadMs += elapsed;
           const name = moduleGroup(url);
           const group = moduleGroups.get(name) ?? { name, loads: 0, readMs: 0 };
@@ -55,6 +62,10 @@ function milestone(phase) {
       pid: process.pid,
       threadId,
       moduleLoads,
+      loadHookCalls: moduleLoads,
+      uniqueModuleUrls: uniqueModuleUrls.size,
+      fileModuleLoads,
+      builtinModuleLoads,
       moduleReadMs: Math.round(moduleReadMs),
       moduleResolveMs: Math.round(moduleResolveMs),
       moduleGroups: [...moduleGroups.values()]

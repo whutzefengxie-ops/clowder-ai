@@ -14,7 +14,6 @@ const ts = tools('typescript');
 const bundledDependencies = new Set([
   'yaml',
   'smol-toml',
-  'puppeteer-core',
   'fast-xml-parser',
   '@opentelemetry/core',
   '@opentelemetry/configuration',

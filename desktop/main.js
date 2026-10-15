@@ -7,6 +7,9 @@ const { resolveProjectRootFromDir } = require('./project-root');
 const { installationIdentity, isInstallationShutdownRequest } = require('./installation-lifecycle');
 const ServiceManager = require('./service-manager');
 const { createStartupReporter, showStartupFailure } = require('./startup-state');
+const { createStartupTimeline } = require('./startup-timing');
+const { showVisibleRenderer } = require('./visible-renderer');
+const { installRendererNavigation } = require('./renderer-navigation');
 const {
   resolveDesktopRuntime,
   initializeDesktopInstance,
@@ -16,12 +19,9 @@ const {
 const {
   createRendererLinkOrigins,
   createVersionedRendererUrl,
-  isAllowedRendererLink,
-  isAllowedRendererDownload,
   resolveRendererLinkOrigins,
 } = require('./renderer-link-policy');
-const { isExpectedOrigin } = require('./update-prompt-controller');
-const { safeErrorMessage, safeHost } = require('./update-network-diagnostics');
+const { safeErrorMessage } = require('./update-network-diagnostics');
 const { DESKTOP_APP_ID } = require('./app-identity');
 const { createDesktopUpdateRuntime } = require('./desktop-update-runtime');
 const { ensureValidMacInstallLocation } = require('./mac-install-location');
@@ -59,6 +59,8 @@ const userDataRoot = ServiceManager.USER_DATA_DIR;
 const dbg = createDesktopLogger(userDataRoot);
 const startupLogDir = path.join(userDataRoot, 'data', 'logs');
 const reportStartup = createStartupReporter(startupLogDir);
+const startupTimeline = createStartupTimeline({ component: 'desktop', emit: dbg });
+startupTimeline.mark('main-initialized');
 
 dbg(`Electron starting. ELECTRON_RUN_AS_NODE=${process.env.ELECTRON_RUN_AS_NODE}`);
 dbg(`process.type=${process.type}, versions.electron=${process.versions.electron}`);
@@ -70,6 +72,7 @@ let services = null;
 let updater = null;
 let updatePrompt = null;
 let isQuitting = false;
+const startupController = new AbortController();
 let quitPromise = null;
 const checkForUpdatesManually = createManualUpdateHandler({
   getUpdatePrompt: () => updatePrompt,
@@ -113,7 +116,7 @@ function createSplashWindow() {
   splashWindow.center();
 }
 
-function createMainWindow() {
+async function createMainWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
@@ -131,45 +134,18 @@ function createMainWindow() {
   });
 
   mainWindow.setMenu(null);
-  const guardAppNavigation = (event) => {
-    if (event.isMainFrame === false) return;
-    if (isExpectedOrigin(event.url, APP_ORIGIN)) return;
-    event.preventDefault();
-    dbg(`Blocked renderer navigation outside app origin: ${safeHost(event.url)}`);
-  };
-  mainWindow.webContents.on('will-navigate', (event) => {
-    if (event.isMainFrame !== false && isAllowedRendererDownload(event.url, API_ORIGIN)) {
-      event.preventDefault();
-      mainWindow.webContents.downloadURL(event.url);
-      dbg(`Started trusted renderer download: ${safeHost(event.url)}`);
-      return;
-    }
-    guardAppNavigation(event);
-  });
-  mainWindow.webContents.on('will-redirect', guardAppNavigation);
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    try {
-      const parsed = new URL(url);
-      if (!isAllowedRendererLink(parsed.href, rendererLinkOrigins)) {
-        dbg(`Blocked non-HTTPS renderer link: ${parsed.protocol}`);
-        return { action: 'deny' };
-      }
-      void shell.openExternal(url).catch((error) => dbg(`Could not open renderer link: ${safeErrorMessage(error)}`));
-    } catch {
-      dbg('Blocked malformed renderer link');
-    }
-    return { action: 'deny' };
+  installRendererNavigation({
+    window: mainWindow,
+    appOrigin: APP_ORIGIN,
+    apiOrigin: API_ORIGIN,
+    getLinkOrigins: () => rendererLinkOrigins,
+    shell,
+    dbg,
   });
   mainWindow.webContents.on('did-navigate', () => updatePrompt?.markRendererUnavailable());
   mainWindow.webContents.on('render-process-gone', () => updatePrompt?.markRendererUnavailable());
-  mainWindow.loadURL(createVersionedRendererUrl(APP_URL, app.getVersion()));
-
-  mainWindow.once('ready-to-show', () => {
-    if (splashWindow && !splashWindow.isDestroyed()) {
-      splashWindow.close();
-    }
-    mainWindow.show();
-  });
+  mainWindow.webContents.once('dom-ready', () => startupTimeline.mark('renderer-dom-ready'));
+  mainWindow.webContents.once('did-finish-load', () => startupTimeline.mark('renderer-did-finish-load'));
 
   mainWindow.on('close', (e) => {
     // Hide to tray on manual close — but let the window close when the
@@ -185,11 +161,23 @@ function createMainWindow() {
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
+  return startupTimeline.runPhase('renderer-visible', () =>
+    showVisibleRenderer({
+      window: mainWindow,
+      url: createVersionedRendererUrl(APP_URL, app.getVersion()),
+      signal: startupController.signal,
+      onVisible: () => {
+        if (splashWindow && !splashWindow.isDestroyed()) splashWindow.close();
+        mainWindow.show();
+      },
+    }),
+  );
 }
 
 async function quitApp() {
   if (!quitPromise) {
     isQuitting = true;
+    startupController.abort(new Error('Desktop startup cancelled'));
     updater?.stopSchedule();
     updatePrompt?.dispose();
     updatePrompt = null;
@@ -228,6 +216,7 @@ app.on('second-instance', (_event, commandLine, _workingDirectory, identity) => 
 });
 
 app.on('ready', async () => {
+  startupTimeline.mark('electron-ready');
   dbg('app ready event fired');
 
   if (!ensureValidMacInstallLocation({ app, dialog })) {
@@ -303,17 +292,21 @@ app.on('ready', async () => {
     arch: process.arch,
   }));
   const upgradeResult = await updater.checkPendingUpgrade();
-  if (upgradeResult === 'quitting') return; // P1-2: installer launched — skip startAll
+  if (upgradeResult === 'quitting' || isQuitting) return; // Installer/quit must not start services later.
 
   try {
     dbg('startAll() called');
     reportStartup('starting');
     await services.startAll();
-    await refreshRendererLinkOrigins();
+    startupTimeline.mark('services-ready');
+    await startupTimeline.runPhase('preview-origin', () => refreshRendererLinkOrigins());
+    startupController.signal.throwIfAborted();
     dbg('startAll() done — creating main window');
-    createMainWindow();
+    await createMainWindow();
+    startupController.signal.throwIfAborted();
     reportStartup('ready');
   } catch (err) {
+    if (isQuitting) return;
     dbg(`startAll() FAILED: ${err.message}`);
     reportStartup('failed', safeErrorMessage(err));
     sendSplashStatus('Startup failed: 请查看启动错误与日志');
@@ -330,6 +323,7 @@ app.on('window-all-closed', () => {
 app.on('before-quit', (e) => {
   // Signal close handlers to stop hiding windows to tray.
   isQuitting = true;
+  startupController.abort(new Error('Desktop startup cancelled'));
   updater?.stopSchedule();
   updatePrompt?.dispose();
   updatePrompt = null;

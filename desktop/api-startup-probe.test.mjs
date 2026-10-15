@@ -17,7 +17,7 @@ test('startup evidence attributes module loads and thread identity without leaki
     fs.writeFileSync(path.join(root, 'node_modules/startup-witness/index.js'), 'export default 2;');
     fs.writeFileSync(
       path.join(root, 'main.mjs'),
-      "import {value} from './dep.mjs'; import witness from 'startup-witness'; globalThis.__clowderStartupMilestone('http-listening');",
+      "import {value} from './dep.mjs'; import witness from 'startup-witness'; import {createRequire} from 'node:module'; const require=createRequire(import.meta.url); for(let i=0;i<10;i++)require('node:path'); globalThis.__clowderStartupMilestone('http-listening');",
     );
     const output = execFileSync(
       process.execPath,
@@ -32,6 +32,13 @@ test('startup evidence attributes module loads and thread identity without leaki
     const ready = events.find((event) => event.phase === 'http-listening');
     assert.ok(ready.moduleLoads >= 2);
     assert.equal(ready.threadId, 0);
+    assert.equal(ready.loadHookCalls, ready.moduleLoads);
+    assert.ok(ready.builtinModuleLoads >= 10);
+    assert.ok(ready.fileModuleLoads >= 2);
+    assert.ok(
+      ready.uniqueModuleUrls < ready.loadHookCalls,
+      'Repeated builtins are hook calls, not distinct disk files',
+    );
     assert.ok(ready.moduleReadMs >= 0);
     assert.equal(ready.moduleGroups.find((group) => group.name === 'startup-witness').loads, 1);
     assert.ok(ready.moduleGroups.every((group) => group.readMs >= 0));
