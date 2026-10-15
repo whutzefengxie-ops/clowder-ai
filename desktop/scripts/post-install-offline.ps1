@@ -50,36 +50,97 @@ function Resolve-AgentHookTargetRoot {
     return $null
 }
 
-function Invoke-AgentHookSync {
-    $syncScript = Join-Path $ProjectRoot "scripts\sync-agent-hooks-offline.mjs"
-    if (-not (Test-Path $syncScript)) {
-        Write-Warn "Agent CLI hook sync skipped -- helper not found"
-        return
+function Write-AgentHookPhase {
+    param([string]$Phase, [string]$State, [double]$DurationMs, [double]$CpuMs)
+    $record = [ordered]@{
+        version = 1; component = 'powershell'; pid = $PID
+        phase = $Phase; state = $State
+        durationMs = [Math]::Round($DurationMs, 2); processCpuMs = [Math]::Round($CpuMs, 2)
     }
-
-    $nodeCmd = Resolve-Command "node"
-    if (-not $nodeCmd) {
-        Write-Warn "Agent CLI hook sync skipped -- node not found"
-        return
+    $line = '[agent-hook-install] ' + ($record | ConvertTo-Json -Compress)
+    Write-Host $line
+    $profileRoot = $null
+    try { $profileRoot = Resolve-AgentHookTargetRoot } catch { }
+    $logDirs = @((Join-Path $ProjectRoot '.installer-logs'))
+    if ($profileRoot) { $logDirs += Join-Path $profileRoot '.cat-cafe\installer-logs' }
+    foreach ($logDir in $logDirs) {
+        try {
+            [System.IO.Directory]::CreateDirectory($logDir) | Out-Null
+            [System.IO.File]::AppendAllText((Join-Path $logDir 'agent-hooks.log'), $line + "`n", [System.Text.UTF8Encoding]::new($false))
+            break
+        } catch { } # Diagnostics cannot prevent user-level hook repair.
     }
+}
 
-    $targetRoot = Resolve-AgentHookTargetRoot
-    if (-not $targetRoot) {
-        Write-Warn "Agent CLI hook sync skipped -- user profile not found"
-        return
-    }
-
+function Invoke-AgentHookPhase {
+    param([string]$Phase, [scriptblock]$Action)
+    $timer = [System.Diagnostics.Stopwatch]::StartNew()
+    $cpu = [System.Diagnostics.Process]::GetCurrentProcess().TotalProcessorTime.TotalMilliseconds
+    Write-AgentHookPhase $Phase 'started' 0 0
     try {
-        & $nodeCmd $syncScript --project-root $ProjectRoot --target-root $targetRoot 2>&1 | ForEach-Object {
-            Write-Host "    $_"
-        }
-        if ($LASTEXITCODE -eq 0) {
-            Write-Ok "Agent CLI hooks synced"
-        } else {
-            Write-Warn "Agent CLI hook sync failed -- Hub health check can repair it later"
-        }
+        $result = & $Action
+        Write-AgentHookPhase $Phase 'completed' $timer.Elapsed.TotalMilliseconds ([System.Diagnostics.Process]::GetCurrentProcess().TotalProcessorTime.TotalMilliseconds - $cpu)
+        return $result
     } catch {
-        Write-Warn "Agent CLI hook sync failed -- Hub health check can repair it later: $_"
+        Write-AgentHookPhase $Phase 'failed' $timer.Elapsed.TotalMilliseconds ([System.Diagnostics.Process]::GetCurrentProcess().TotalProcessorTime.TotalMilliseconds - $cpu)
+        throw
+    }
+}
+
+function Write-SafeNodeHookPhase {
+    param([object]$Line)
+    $text = [string]$Line
+    $prefix = '[agent-hook-install] '
+    if (-not $text.StartsWith($prefix, [System.StringComparison]::Ordinal)) { return }
+    try {
+        $event = $text.Substring($prefix.Length) | ConvertFrom-Json
+        $phases = @('module-import', 'hook-sync', 'sync-result', 'hook-files-write', 'claude-settings-merge',
+            'capability-owner-check', 'capability-sync', 'health-check', 'hook-files-health',
+            'claude-settings-health', 'skills-health', 'mcp-health', 'codex-output-validate')
+        if ($event.version -ne 1 -or $event.component -cne 'node' -or
+            $phases -cnotcontains $event.phase -or @('started', 'completed', 'failed') -cnotcontains $event.state) { return }
+        $safe = [ordered]@{ version = 1; component = 'node'; pid = [int]$event.pid; phase = $event.phase; state = $event.state }
+        if ($safe.pid -le 0) { return }
+        foreach ($field in @('elapsedMs', 'durationMs', 'userCpuMs', 'systemCpuMs')) {
+            $value = $event.$field
+            if ($null -eq $value -or $value -is [string] -or $value -is [bool]) { return }
+            $number = [double]$value
+            if ([double]::IsNaN($number) -or [double]::IsInfinity($number) -or $number -lt 0) { return }
+            $safe[$field] = $number
+        }
+        if ($event.phase -ceq 'sync-result') {
+            if (@('configured', 'missing', 'stale', 'unsupported', 'error') -cnotcontains $event.healthStatus) { return }
+            $safe.healthStatus = $event.healthStatus
+        }
+        Write-Host ($prefix + ($safe | ConvertTo-Json -Compress))
+    } catch { } # Reject malformed child output without exposing it.
+}
+
+function Invoke-AgentHookSync {
+    try {
+        $syncScript = Invoke-AgentHookPhase 'resolve-helper' {
+            $helper = Join-Path $ProjectRoot 'scripts\sync-agent-hooks-offline.mjs'
+            if (-not (Test-Path $helper)) { throw 'helper unavailable' }
+            return $helper
+        }
+        $nodeCmd = Invoke-AgentHookPhase 'resolve-node' {
+            $command = Resolve-Command 'node'
+            if (-not $command) { throw 'node unavailable' }
+            return $command
+        }
+        $targetRoot = Invoke-AgentHookPhase 'resolve-profile' {
+            $profileRoot = Resolve-AgentHookTargetRoot
+            if (-not $profileRoot) { throw 'profile unavailable' }
+            return $profileRoot
+        }
+        Invoke-AgentHookPhase 'node-sync' {
+            # Rebuild only known diagnostic records; arbitrary output is never forwarded.
+            & $nodeCmd $syncScript --project-root $ProjectRoot --target-root $targetRoot 2>&1 | ForEach-Object { Write-SafeNodeHookPhase $_ }
+            if ($LASTEXITCODE -ne 0) { throw 'hook helper failed' }
+        }
+        Write-Ok 'Agent CLI hooks synced'
+    } catch {
+        Write-Warn 'Agent CLI hook sync failed -- inspect installation phases; Hub health check can repair it later'
     }
 }
 
