@@ -151,7 +151,24 @@ function geminiEvents(sessionId, text) {
 
 function createNativeFixtureService(spawnFn) {
   const workspace = join(testGlobalConfigRoot, 'native-workspace');
-  mkdirSync(workspace, { recursive: true });
+  mkdirSync(join(workspace, '.cat-cafe'), { recursive: true });
+  // Callback wiring needs an explicit project policy. Do not inherit whichever
+  // capabilities a previous public-test shard left in the executable repository.
+  writeFileSync(
+    join(workspace, '.cat-cafe/capabilities.json'),
+    JSON.stringify({
+      version: 2,
+      capabilities: [
+        {
+          id: 'cat-cafe-collab',
+          type: 'mcp',
+          source: 'cat-cafe',
+          enabled: true,
+          mcpServer: { command: 'node', args: [] },
+        },
+      ],
+    }),
+  );
   const service = new AgyNativeAgentService({
     catId: 'gemini',
     l0CompilerFn: fakeL0Compiler,
