@@ -10,6 +10,15 @@ function packageNames(modules) {
 
 /** Hoist identical workspace identities, never merely matching names or versions. */
 export function workspaceRuntimeModules(workspace, packages) {
+  // pnpm-workspace.yaml registers packages/*; a nested node_modules target
+  // is a private dependency, even when its path starts with packages/.
+  const packageRoot = path.join(workspace, 'packages');
+  const roots = new Set(
+    fs
+      .readdirSync(packageRoot, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() || entry.isSymbolicLink())
+      .map((entry) => fs.realpathSync(path.join(packageRoot, entry.name))),
+  );
   const candidates = new Map();
   const visited = new Set();
   const pending = [
@@ -19,7 +28,7 @@ export function workspaceRuntimeModules(workspace, packages) {
   const add = (name, from) => {
     if (!fs.lstatSync(from).isSymbolicLink()) return;
     const real = fs.realpathSync(from);
-    if (!real.startsWith(path.join(workspace, 'packages') + path.sep)) return;
+    if (!roots.has(real)) return;
     const manifest = path.join(real, 'package.json');
     if (!fs.existsSync(manifest) || JSON.parse(fs.readFileSync(manifest, 'utf8')).name !== name) return;
     const values = candidates.get(name) ?? new Set();
