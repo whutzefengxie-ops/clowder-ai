@@ -11,6 +11,7 @@ import Fastify from 'fastify';
 import { catsRoutes } from '../dist/routes/cats.js';
 import { discoverAdditionalRuntimes } from '../dist/routes/native-additional-runtimes.js';
 import { isolateAccountAuthEnvironment } from './helpers/account-auth-environment.js';
+import { selectFakeCodexHome } from './helpers/fake-codex-home.js';
 
 const apiRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const webRoot = resolve(apiRoot, '../web/src');
@@ -18,15 +19,22 @@ const webRoot = resolve(apiRoot, '../web/src');
 test('default selected recommendations create through the real API, including Kimi/OpenCode and partial retry', async () => {
   const root = await mkdtemp(join(tmpdir(), 'native-onboarding-api-'));
   const saved = new Map(
-    ['CAT_TEMPLATE_PATH', 'CAT_CAFE_GLOBAL_CONFIG_ROOT', 'KIMI_CONFIG_FILE', 'OPENCODE_CONFIG'].map((key) => [
-      key,
-      process.env[key],
-    ]),
+    [
+      'CAT_TEMPLATE_PATH',
+      'CAT_CAFE_GLOBAL_CONFIG_ROOT',
+      'KIMI_CONFIG_FILE',
+      'OPENCODE_CONFIG',
+      'CODEX_HOME',
+      'CODEX_SQLITE_HOME',
+    ].map((key) => [key, process.env[key]]),
   );
   const restoreAuth = isolateAccountAuthEnvironment();
   const cwd = process.cwd();
   const app = Fastify();
   try {
+    // Creating an enabled Codex member validates the native login independently of discovery.
+    // Own this fixture too: never depend on the developer's credentials or CI's empty HOME.
+    selectFakeCodexHome(root);
     // Bundle the production recommendation/payload functions: no copied request fixture or mocked POST success.
     const frontend = join(root, 'frontend.mjs');
     await build({
