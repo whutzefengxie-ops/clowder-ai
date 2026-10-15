@@ -161,6 +161,8 @@ export interface AcpAgentServiceConfig {
   executionRequirements?: AcpExecutionRequirements;
   /** #1208: model/window already applied to this process-pool generation. */
   contextBinding?: import('../../../types.js').AgentContextBinding;
+  /** Host adapter can set a native window (e.g. Kimi's process-scoped model env). */
+  nativeWindowControl?: boolean;
   /** When false, disables ALL MCP servers (base + per-project) for this member. */
   mcpSupport?: boolean;
   /**
@@ -196,6 +198,7 @@ export class AcpAgentService implements AgentService {
   private readonly sessionModel?: string;
   private readonly executionRequirements: AcpExecutionRequirements;
   private readonly appliedContextBinding?: import('../../../types.js').AgentContextBinding;
+  private readonly configuredWindowControl: boolean;
   private readonly mcpSupportEnabled: boolean;
   /**
    * #1186: Resolved ACP idle TTL — authoritative threshold for all no-event termination.
@@ -220,28 +223,31 @@ export class AcpAgentService implements AgentService {
     this.sessionModel = config.sessionModel?.trim() || undefined;
     this.executionRequirements = config.executionRequirements ?? {};
     this.appliedContextBinding = config.contextBinding;
+    this.configuredWindowControl = config.nativeWindowControl === true;
     this.mcpSupportEnabled = config.mcpSupport !== false;
     this.idleTtlMs = config.idleTtlMs ?? DEFAULT_ACP_IDLE_TTL_MS;
     this.agentBusyRetryDelaysMs = config.agentBusyRetryDelaysMs ?? DEFAULT_AGENT_BUSY_RETRY_DELAYS_MS;
   }
 
   contextCapability(): import('../../../types.js').AgentContextCapability {
-    const nativeWindowControl = false; // Spawn intent is not native configuration adoption.
+    const nativeWindowControl = this.configuredWindowControl === true;
     return {
       provider: this.providerName,
       carrier: 'acp',
       reportsRuntimeWindow: this.observedUsageUpdate,
-      authoritativeUsage: false, // A standard bridge event alone does not prove native usage authority.
+      // Standard usage_update.used/size is current-context evidence, not prompt spend.
+      // Native executable/account verification remains a separate provenance dimension.
+      authoritativeUsage: this.observedUsageUpdate,
       usageTelemetry: this.observedUsageUpdate ? 'available' : 'conditional',
       nativeWindowControl,
       nativeCompressionControl: false,
       observesCompression: false,
       reason: this.observedUsageUpdate
-        ? `Active ACP agent emitted usage_update telemetry; native authority remains unverified${
-            nativeWindowControl ? ' and applies the member window at process spawn' : ''
+        ? `Active ACP agent emitted standard current-context usage_update telemetry${
+            nativeWindowControl ? '; the host configures the Kimi window through its process environment' : ''
           }`
         : `ACP lifecycle support is conditional until the active agent emits usage_update.used${
-            nativeWindowControl ? '; the member window is applied at process spawn' : ''
+            nativeWindowControl ? '; the host configures the Kimi window through its process environment' : ''
           }`,
     };
   }

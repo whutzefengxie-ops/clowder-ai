@@ -318,6 +318,10 @@ export async function createAcpServiceForConfig(
     modelName: spawn.sessionModel ?? config.defaultModel ?? 'acp',
     sessionModel: spawn.sessionModel,
     executionRequirements: input.executionRequirements,
+    nativeWindowControl:
+      config.clientId === 'kimi' &&
+      spawn.contextPolicy?.windowTokens != null &&
+      spawn.env?.KIMI_MODEL_MAX_CONTEXT_SIZE === String(spawn.contextPolicy.windowTokens),
     contextBinding: {
       model: effectiveModel,
       ...((config.clientId === 'opencode' || config.clientId === 'kimi') && spawn.contextPolicy?.windowTokens
