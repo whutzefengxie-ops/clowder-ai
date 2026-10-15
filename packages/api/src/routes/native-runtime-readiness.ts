@@ -1,12 +1,14 @@
 import { execFile } from 'node:child_process';
 import { buildChildEnv } from '../utils/cli-spawn.js';
 import { resolveWindowsSpawnPlan } from '../utils/cli-spawn-win.js';
+import { nativeKimiLoginCommand } from './native-kimi-login.js';
 import { catalogRpc } from './runtime-catalog-rpc.js';
 
 export type NativeReadiness = {
   status: 'login_required' | 'configured' | 'unknown' | 'not_installed';
   checkedAt: number;
   loginCommand?: string;
+  loginShell?: 'powershell' | 'sh';
 };
 type Target = { id: string; installed: boolean; command?: string };
 type RecordValue = Record<string, unknown>;
@@ -69,6 +71,15 @@ const cache = new Map<string, { at: number; value: NativeReadiness }>();
 const pending = new Map<string, Promise<NativeReadiness>>();
 export async function nativeRuntimeReadiness(target: Target, cwd: string, refresh = false): Promise<NativeReadiness> {
   if (!target.installed) return { status: 'not_installed', checkedAt: Date.now() };
+  // Kimi 2.2 exposes login, provider config and doctor, but no read-only auth status.
+  // Local config/credential existence cannot establish that a copied grant remains valid.
+  if (target.id === 'kimi' && target.command)
+    return {
+      status: 'unknown',
+      checkedAt: Date.now(),
+      loginCommand: nativeKimiLoginCommand(target.command),
+      loginShell: process.platform === 'win32' ? 'powershell' : 'sh',
+    };
   if (!target.command || !['codex', 'claude'].includes(target.id)) return { status: 'unknown', checkedAt: Date.now() };
   const key = JSON.stringify([
     target.id,

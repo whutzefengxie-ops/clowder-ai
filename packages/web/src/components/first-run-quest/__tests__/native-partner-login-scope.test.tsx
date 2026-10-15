@@ -20,19 +20,35 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 function mount(
-  status: 'configured' | 'login_required',
+  status: 'configured' | 'login_required' | 'unknown',
   change: Partial<HubCatEditorFormState> = {},
-  clientId: 'anthropic' | 'openai' | 'opencode' = 'anthropic',
+  clientId: 'anthropic' | 'openai' | 'opencode' | 'kimi' = 'anthropic',
 ) {
   const partner = recommendNativePartners(
     [
       {
-        id: clientId === 'openai' ? 'codex' : clientId === 'opencode' ? 'opencode' : 'claude',
-        label: clientId === 'openai' ? 'Codex' : clientId === 'opencode' ? 'OpenCode' : 'Claude Code',
+        id: clientId === 'openai' ? 'codex' : clientId === 'anthropic' ? 'claude' : clientId,
+        label:
+          clientId === 'openai'
+            ? 'Codex'
+            : clientId === 'opencode'
+              ? 'OpenCode'
+              : clientId === 'kimi'
+                ? 'Kimi'
+                : 'Claude Code',
         clientId,
         installed: true,
         models: [],
-        readiness: { status, checkedAt: 1, loginCommand: clientId === 'openai' ? 'codex login' : 'claude auth login' },
+        readiness: {
+          status,
+          checkedAt: 1,
+          loginCommand:
+            clientId === 'kimi'
+              ? 'fixture-instance-kimi login'
+              : clientId === 'openai'
+                ? 'codex login'
+                : 'claude auth login',
+        },
       },
     ],
     [],
@@ -51,8 +67,21 @@ it('does not promise Codex creation before the native login admission check can 
   expect(text).toContain('新增伙伴前需要先登录');
   expect(text).not.toContain('可先创建伙伴');
 });
-it('shows the existing OpenCode workspace requirement before the first message', () => {
-  expect(mount('configured', {}, 'opencode')).toContain('请先为对话选择项目目录');
+it('explains that OpenCode can use the default workspace without requiring a selected project', () => {
+  expect(mount('configured', {}, 'opencode')).toContain('未选择项目时使用默认工作区');
+});
+it('shows unverified Kimi login and this installation guidance before the first message', () => {
+  const text = mount('unknown', {}, 'kimi');
+  expect(text).toContain('Kimi 登录状态尚未验证');
+  expect(text).toContain('本安装实例');
+  expect(text).toContain('fixture-instance-kimi login');
+  expect(text).not.toContain('已检测登录');
+});
+it('does not apply the instance-default Kimi login command to another connection', () => {
+  const text = mount('unknown', { accountRef: 'private-kimi' }, 'kimi');
+  expect(text).not.toContain('fixture-instance-kimi login');
+  expect(text).not.toContain('Kimi 登录状态尚未验证');
+  expect(text).toContain('此连接的登录状态尚未检查');
 });
 it.each([
   ['explicit account', { accountRef: 'company-account' }],

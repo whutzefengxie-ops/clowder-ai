@@ -5,6 +5,7 @@ import { apiFetch } from '@/utils/api-client';
 import type { ProfileItem } from '../../hub-accounts.types';
 import { builtinAccountIdForClient, filterAccounts, type HubCatEditorFormState } from '../../hub-cat-editor.model';
 import { SelectField } from '../../hub-cat-editor-fields';
+import { KimiLoginHelp } from './KimiLoginHelp';
 import { MemberChoicePicker } from './MemberChoicePicker';
 import { MANUAL_RUNTIME_CHOICES } from './manual-runtime-choices';
 import {
@@ -184,6 +185,9 @@ export function MemberRuntimeFields({
         <p className="text-sm text-cafe-secondary">
           {t('已检测登录 · 实际连接待验证', 'Sign-in detected · Connection not yet verified')}
         </p>
+      )}
+      {defaultIdentity && form.clientId === 'kimi' && selected?.readiness?.status === 'unknown' && (
+        <KimiLoginHelp readiness={selected.readiness} t={t} />
       )}
       <div className="grid gap-4 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
         <MemberChoicePicker

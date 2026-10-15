@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { KimiLoginHelp } from '../settings/members/KimiLoginHelp';
 import { MemberRuntimeFields } from '../settings/members/MemberRuntimeFields';
 import { usesDefaultNativeIdentity } from '../settings/members/native-login-state';
 import { NativeInstallHelp } from './NativeInstallHelp';
@@ -127,11 +128,16 @@ export function NativePartnerCard({
       {available && defaultIdentity && runtime.readiness?.status === 'configured' && (
         <p className="mt-3 text-sm text-cafe-secondary">已检测登录 · 实际连接待验证</p>
       )}
+      {available && defaultIdentity && runtime.clientId === 'kimi' && runtime.readiness?.status === 'unknown' && (
+        <div className="mt-3">
+          <KimiLoginHelp readiness={runtime.readiness} />
+        </div>
+      )}
       {available && !defaultIdentity && (
         <p className="mt-3 text-sm text-cafe-secondary">此连接的登录状态尚未检查 · 实际连接待验证</p>
       )}
       {available && runtime.clientId === 'opencode' && (
-        <p className="mt-2 text-sm text-cafe-secondary">使用 OpenCode 时，请先为对话选择项目目录。</p>
+        <p className="mt-2 text-sm text-cafe-secondary">未选择项目时使用默认工作区；你也可以为对话选择项目目录。</p>
       )}
       {expanded && (
         <fieldset

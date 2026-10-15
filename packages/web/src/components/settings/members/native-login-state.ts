@@ -2,6 +2,7 @@ export interface NativeLoginState {
   status: 'login_required' | 'configured' | 'unknown' | 'not_installed';
   checkedAt: number;
   loginCommand?: string;
+  loginShell?: 'powershell' | 'sh';
 }
 
 interface NativeIdentity {
@@ -18,7 +19,7 @@ export function usesDefaultNativeIdentity(config: NativeIdentity): boolean {
     typeof config.commandArgs === 'string' ? config.commandArgs.trim().length > 0 : Boolean(config.commandArgs?.length);
   return (
     config.configurationSource === 'native_tool' &&
-    ['openai', 'anthropic'].includes(config.clientId) &&
+    ['openai', 'anthropic', 'kimi'].includes(config.clientId) &&
     !config.accountRef?.trim() &&
     !config.acp &&
     !customCommand &&

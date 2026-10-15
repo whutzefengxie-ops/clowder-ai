@@ -166,6 +166,7 @@ import {
   supportsProviderContinuityPreflight,
 } from './context-continuity.js';
 import { buildContextManagementHint, queueContextHint, takeContextHintPrefix } from './context-management-hint.js';
+import { canUseDefaultThreadWorkspace, resolveDefaultThreadWorkspace } from './default-thread-workspace.js';
 import {
   applyActiveSessionCapacityPin,
   applyContextBindingToInvocationSnapshot,
@@ -2802,6 +2803,19 @@ export async function* invokeSingleCat(deps: InvocationDeps, params: InvocationP
             workingDirectory = bootcampWorkspace.projectPath;
           } else {
             bootcampWorkspaceError = new Error(bootcampWorkspace.error);
+          }
+        } else if (provider === 'opencode' && canUseDefaultThreadWorkspace(thread, threadId, userId)) {
+          const defaultWorkspace = await resolveDefaultThreadWorkspace();
+          if (defaultWorkspace.ok) {
+            workingDirectory = defaultWorkspace.path;
+            yield {
+              type: 'system_info' as const,
+              catId,
+              content: `本次使用默认工作区：${workingDirectory}`,
+              timestamp: Date.now(),
+            };
+          } else {
+            workspaceResolutionFailureMessage = defaultWorkspace.error;
           }
         } else if (requiresThreadWorkspace) {
           workspaceResolutionFailureMessage = `${workspaceRequiredBy} requires a thread projectPath for ${threadId}. Bind the thread to a project workspace before spawning ${workspaceRequiredBy}.`;
