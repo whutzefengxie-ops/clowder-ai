@@ -29,6 +29,7 @@ export async function readAcpImageBlocks(
   content: readonly MessageContent[] | undefined,
   capabilities?: AcpPromptCapabilities,
   signal?: AbortSignal,
+  uploadDir?: string,
 ): Promise<readonly AcpContentBlock[]> {
   const images = content?.filter((block) => block.type === 'image') ?? [];
   if (images.length === 0) return [];
@@ -36,7 +37,7 @@ export async function readAcpImageBlocks(
   if (images.length > MAX_IMAGES) throw tooLarge();
   let root: string;
   try {
-    root = await realpath(getDefaultUploadDir(process.env.UPLOAD_DIR));
+    root = await realpath(getDefaultUploadDir(uploadDir ?? process.env.UPLOAD_DIR));
   } catch {
     throw new AcpImageInputError('image_input_unavailable', '图片附件无法读取，请重新上传。');
   }
