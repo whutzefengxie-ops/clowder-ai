@@ -17,7 +17,10 @@ test('detached startup records the actual child identity on Windows and Unix', a
     program = join(root, 'owned.cjs');
   writeFileSync(
     program,
-    `require('node:fs').writeFileSync(${JSON.stringify(pidPath)},String(process.pid));setTimeout(()=>{},25000);`,
+    // Identity capture can spend 20 * 5s in Windows CIM queries before ownsProcess
+    // performs one more query. Keep the fixture alive throughout that budget;
+    // the finally block owns cleanup, with a separate safety cap for test crashes.
+    `require('node:fs').writeFileSync(${JSON.stringify(pidPath)},String(process.pid));setTimeout(()=>{},150000);`,
   );
   let record;
   try {
