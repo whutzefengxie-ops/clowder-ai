@@ -43,12 +43,13 @@ const member: CatData = {
   personality: '',
   displayName: '伙伴',
   clientId: 'openai',
+  carrier: 'app_server',
   accountRef: 'codex-company',
   configurationSource: 'managed_account',
   defaultModel: 'gpt-5.4',
   color: { primary: '#123456', secondary: '#abcdef' },
   mentionPatterns: ['@partner'],
-  cli: { command: 'codex', carrier: 'app_server', serviceTier: 'fast' },
+  cli: { command: 'codex', serviceTier: 'fast' },
 };
 let rejectApproval = false;
 let rejectConfigRead = false;

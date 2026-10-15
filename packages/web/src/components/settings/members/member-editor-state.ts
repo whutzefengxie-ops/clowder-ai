@@ -7,7 +7,7 @@ import {
   initialState,
   type StrategyFormState,
 } from '../../hub-cat-editor.model';
-
+import { normalizeMemberDraftForm } from './member-carrier-compat';
 import type { RuntimeDrafts } from './member-runtime-draft';
 
 export interface MemberDraft {
@@ -49,7 +49,9 @@ export function readMemberDraft(key: string): MemberDraft | null {
     if (!data || typeof data !== 'object' || !('version' in data) || data.version !== 1 || !('form' in data))
       return null;
     const draft = data as MemberDraft;
-    return typeof draft.form?.name === 'string' && typeof draft.form?.clientId === 'string' ? draft : null;
+    return typeof draft.form?.name === 'string' && typeof draft.form?.clientId === 'string'
+      ? { ...draft, form: normalizeMemberDraftForm(draft.form) }
+      : null;
   } catch {
     return null;
   }
@@ -97,7 +99,7 @@ export function templateForm(
     teamStrengths: template.teamStrengths ?? '',
     mentionPatterns: alias,
     clientId: recommended,
-    codexCarrier: recommended === 'openai' ? 'app_server' : '',
+    carrier: recommended === 'openai' ? 'app_server' : recommended === 'acp' ? 'acp' : 'cli',
     defaultModel: '',
     cliEffort: '',
     accountRef: '',

@@ -7,6 +7,7 @@ import { test } from 'node:test';
 import Fastify from 'fastify';
 import { _resetCachedConfig } from '../dist/config/cat-config-loader.js';
 import { configEventBus } from '../dist/config/config-event-bus.js';
+import { memberCreationReceipt } from '../dist/config/member-create-receipt.js';
 import { catsRoutes } from '../dist/routes/cats.js';
 import { isolateAccountAuthEnvironment } from './helpers/account-auth-environment.js';
 import { selectFakeCodexHome } from './helpers/fake-codex-home.js';
@@ -50,6 +51,7 @@ test('short names are allocated atomically and only a persisted operator/request
     clientId: 'openai',
     configurationSource: 'native_tool',
     defaultModel: '',
+    cli: { carrier: 'app_server' },
   };
   const request = (owner, key, body = payload) => ({
     method: 'POST',
@@ -69,6 +71,8 @@ test('short names are allocated atomically and only a persisted operator/request
     assert.equal(one.statusCode, 201, one.body);
     assert.equal(two.statusCode, 200, two.body);
     assert.equal(one.json().cat.id, two.json().cat.id);
+    assert.equal(one.json().cat.carrier, 'app_server');
+    assert.equal(one.json().cat.cli.carrier, undefined, 'legacy request fields are not new catalog writes');
     const other = await app.inject(request('owner-b', 'codex'));
     assert.equal(other.statusCode, 201, other.body);
     assert.equal(other.json().cat.id, 'short-codex-2');
@@ -92,6 +96,16 @@ test('short names are allocated atomically and only a persisted operator/request
     assert.equal(retry.json().idempotent, true);
     const catalog = JSON.parse(readFileSync(join(root, '.cat-cafe/cat-catalog.json'), 'utf8'));
     const variants = catalog.breeds.flatMap((b) => b.variants).filter((v) => v.creationReceipt);
+    const originalReceipt = memberCreationReceipt(
+      'owner-a',
+      'journey-one',
+      'onboarding:journey-one:cat:codex',
+      payload,
+    );
+    assert.deepEqual(
+      variants.find((v) => v.creationReceipt.requestHash === originalReceipt.requestHash).creationReceipt,
+      originalReceipt,
+    );
     assert.equal(variants.length, 2);
     assert.equal(new Set(variants.map((v) => v.creationReceipt.requestHash)).size, 2);
     assert.equal(JSON.stringify(retry.json()).includes('requestHash'), false);

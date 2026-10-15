@@ -125,7 +125,7 @@ export function useMemberEditor(
       !ready ||
       draft.section !== 'advanced' ||
       draft.form.clientId !== 'openai' ||
-      draft.form.acpEnabled ||
+      draft.form.carrier === 'acp' ||
       cat?.identityProtection ||
       draft.codexBaseline
     )
@@ -150,7 +150,7 @@ export function useMemberEditor(
     ready,
     draft.section,
     draft.form.clientId,
-    draft.form.acpEnabled,
+    draft.form.carrier,
     draft.codexBaseline,
     cat?.identityProtection,
     codexReload,

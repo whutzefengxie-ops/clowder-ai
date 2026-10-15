@@ -109,7 +109,7 @@ it('preserves finalized input through the actual ACP service and RedisMessageSto
   const written = await store.append({
     threadId: 'fixture-thread',
     userId: 'fixture',
-    catId: 'dsh',
+    from: { kind: 'agent', catId: 'dsh' },
     content: '',
     mentions: [],
     timestamp: 1,

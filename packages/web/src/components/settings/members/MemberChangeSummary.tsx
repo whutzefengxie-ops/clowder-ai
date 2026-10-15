@@ -32,10 +32,9 @@ const labels: Record<keyof HubCatEditorFormState, [string, string]> = {
   cliConfigArgs: ['额外启动参数', 'Extra arguments'],
   commandArgs: ['启动参数', 'Launch arguments'],
   codexSpeed: ['Codex 速度', 'Codex speed'],
-  codexCarrier: ['Codex 接入方式', 'Codex transport'],
+  carrier: ['接入方式', 'Carrier'],
   provider: ['供应商', 'Provider'],
   mcpSupport: ['MCP 工具', 'MCP tools'],
-  acpEnabled: ['ACP 接入', 'ACP connection'],
   acpTransport: ['ACP 传输', 'ACP transport'],
   acpCommand: ['ACP 程序', 'ACP command'],
   acpStartupArgs: ['ACP 启动参数', 'ACP arguments'],
@@ -55,7 +54,7 @@ const labels: Record<keyof HubCatEditorFormState, [string, string]> = {
 function display(key: keyof HubCatEditorFormState, value: unknown, t: MemberText): string {
   if (key === 'clientId')
     return ({ openai: 'Codex', anthropic: 'Claude Code' } as Record<string, string>)[String(value)] ?? String(value);
-  if (key === 'codexCarrier' && value === 'app_server') return 'App Server';
+  if (key === 'carrier' && value === 'app_server') return 'App Server';
   if (key === 'configurationSource')
     return value === 'native_tool' ? t('工具配置', 'Tool settings') : t('已有连接配置', 'Existing connection');
   if (typeof value === 'boolean') return value ? t('开启', 'On') : t('关闭', 'Off');

@@ -1,5 +1,6 @@
 import { serializeCommandArgs } from '../../hub-cat-editor.acp';
 import { type HubCatEditorFormState, initialState, splitCommandArgs } from '../../hub-cat-editor.model';
+import { resolveDraftCarrier } from './member-carrier-compat';
 import type { MemberDraft } from './member-editor-state';
 import type { NativeLoginState } from './native-login-state';
 
@@ -24,11 +25,10 @@ const runtimeFields = [
   'cliEffort',
   'cliConfigArgs',
   'commandArgs',
-  'codexCarrier',
+  'carrier',
   'codexSpeed',
   'provider',
   'mcpSupport',
-  'acpEnabled',
   'acpCommand',
   'acpStartupArgs',
   'acpTransport',
@@ -41,7 +41,9 @@ export type RuntimeDrafts = Record<string, RuntimeFields>;
 function runtimeKey(form: RuntimeFields): string {
   return JSON.stringify([
     form.clientId,
-    form.acpEnabled ? [form.acpCommand, splitCommandArgs(form.acpStartupArgs), form.acpTransport] : null,
+    resolveDraftCarrier(form) === 'acp'
+      ? [form.acpCommand, splitCommandArgs(form.acpStartupArgs), form.acpTransport]
+      : null,
   ]);
 }
 
@@ -53,11 +55,11 @@ export function matchesRuntime(form: RuntimeFields, choice: RuntimeChoice): bool
 export function rememberedRuntimes(drafts: RuntimeDrafts = {}): RuntimeChoice[] {
   return Object.entries(drafts).map(([key, form]) => ({
     id: `draft:${key}`,
-    label: form.acpEnabled ? form.acpCommand : form.clientId,
+    label: resolveDraftCarrier(form) === 'acp' ? form.acpCommand : form.clientId,
     clientId: form.clientId,
     installed: false,
     models: [],
-    ...(form.acpEnabled
+    ...(resolveDraftCarrier(form) === 'acp'
       ? {
           acp: {
             command: form.acpCommand,
@@ -82,8 +84,7 @@ export function runtimeDefaults(next: RuntimeChoice): RuntimeFields {
     commandArgs: '',
     codexSpeed: '',
     provider: '',
-    codexCarrier: next.clientId === 'openai' ? 'app_server' : '',
-    acpEnabled: !!next.acp,
+    carrier: next.acp ? 'acp' : next.clientId === 'openai' ? 'app_server' : 'cli',
     acpCommand: next.acp?.command ?? '',
     acpStartupArgs: next.acp ? serializeCommandArgs(next.acp.startupArgs) : '',
     acpTransport: next.acp?.transport ?? 'stdio',
@@ -93,7 +94,10 @@ export function runtimeDefaults(next: RuntimeChoice): RuntimeFields {
 }
 
 function pickRuntime(form: RuntimeFields): RuntimeFields {
-  return Object.fromEntries(runtimeFields.map((key) => [key, form[key]])) as RuntimeFields;
+  return {
+    ...Object.fromEntries(runtimeFields.map((key) => [key, form[key]])),
+    carrier: resolveDraftCarrier(form),
+  } as RuntimeFields;
 }
 
 /** Switching changes only the draft. Returning to a tool restores its exact binding and overrides. */

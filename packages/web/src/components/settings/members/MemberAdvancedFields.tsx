@@ -1,6 +1,6 @@
 'use client';
 import type { ReactNode } from 'react';
-import type { HubCatEditorFormState } from '../../hub-cat-editor.model';
+import { carrierOptionsForClient, type HubCatEditorFormState } from '../../hub-cat-editor.model';
 import { SelectField, TextField } from '../../hub-cat-editor-fields';
 import type { MemberField } from './MemberAdditionalFields';
 import type { MemberText } from './MemberRuntimeFields';
@@ -27,34 +27,11 @@ export function MemberAdvancedFields({
       </p>
       <SelectField
         label={t('接入方式', 'Adapter')}
-        value={form.acpEnabled ? 'acp' : form.clientId === 'openai' ? form.codexCarrier || 'app_server' : 'native'}
-        options={
-          form.clientId === 'openai'
-            ? [
-                { value: 'app_server', label: 'Codex App Server' },
-                { value: 'exec_json', label: 'Codex exec' },
-                { value: 'acp', label: 'ACP' },
-              ]
-            : [
-                {
-                  value: 'native',
-                  label:
-                    form.clientId === 'anthropic'
-                      ? t('Claude 原生接入（沿用服务设置）', 'Claude native (existing carrier)')
-                      : t('原生接入', 'Native adapter'),
-                  disabled: form.clientId === 'acp',
-                },
-                { value: 'acp', label: 'ACP' },
-              ]
-        }
-        onChange={(value) =>
-          patch({
-            acpEnabled: value === 'acp',
-            ...(value === 'app_server' || value === 'exec_json' ? { codexCarrier: value } : {}),
-          })
-        }
+        value={form.carrier}
+        options={carrierOptionsForClient(form.clientId)}
+        onChange={(value) => patch({ carrier: value as HubCatEditorFormState['carrier'] })}
       />
-      {form.acpEnabled && (
+      {form.carrier === 'acp' && (
         <>
           <TextField
             label={t('启动程序', 'Program')}
@@ -87,7 +64,7 @@ export function MemberAdvancedFields({
           ])}
         </>
       )}
-      {!form.acpEnabled && (
+      {form.carrier !== 'acp' && (
         <label className="block text-sm">
           {t('额外 CLI 参数（每行一项）', 'Extra CLI arguments (one per line)')}
           <textarea

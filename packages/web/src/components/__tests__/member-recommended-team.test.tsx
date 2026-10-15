@@ -159,6 +159,7 @@ it('reads the real roster before recommending and does not overwrite an existing
   existing = [
     {
       id: 'owned-claude',
+      carrier: 'cli',
       displayName: '我的架构师',
       clientId: 'anthropic',
       configurationSource: 'native_tool',

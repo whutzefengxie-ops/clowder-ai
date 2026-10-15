@@ -78,7 +78,9 @@ Log closed.
 
 这不是 a73 空目录首装数据，也不是自动回滚保证。之前 4d 空目录首装为 94508ms；两个候选、冷首装与覆盖恢复分开记录。当前没有受控多次缓存/磁盘负载基准，不将单次数据推成所有机器都同样快。
 
-实物还发现隔离遗漏：a73 API 的预览网关沿用默认 4100，因已占用报 EADDRINUSE；没有成功接管旧服务。仅隔离桌面 API 环境改为 `PREVIEW_GATEWAY_PORT=0` 让系统分配独立端口，普通安装不设置此覆盖；renderer 已从本实例 `/api/preview/status` 获取实际端口并限制允许来源。真实子进程断言先 RED 后 GREEN，连同 renderer policy 14/14 PASS、无跳过。包含这一修改的最后壳包需再执行完整 Setup/启动并核对预览网关，a73 的恢复数据不代替该实物验证。
+实物还发现隔离遗漏：a73 API 的预览网关沿用默认 4100，因已占用报 EADDRINUSE；没有成功接管旧服务。仅隔离桌面 API 环境改为 `PREVIEW_GATEWAY_PORT=0` 让系统分配独立端口，普通安装不设置此覆盖；renderer 已从本实例 `/api/preview/status` 获取实际端口并限制允许来源。真实子进程断言先 RED 后 GREEN，连同 renderer policy 14/14 PASS、无跳过。
+
+463b582a3 壳包实际覆盖安装 133220ms、退出 0，完整重启 93231ms 达到 ready；预览网关 available，实际端口 54625。三角色、十消息、默认路由及四文件指纹保留；十个 CSS 为 200且 hash 一致。解锁后重新观察实际 Electron 的自动播放、typing、A2A、右侧逐步成果与主题颜色。这是合流下述新 main **之前**的载体，不能当作新消息生命周期的实装证据。
 
 构建来源：Web 与 Electron/安装脚本源为 a73；Web BUILD_ID 为 `_a8gFRzq57qFR9BYEuIaE`。API 原编译 dist 来自 `63bcb3e733fef452b46e79ed9ee2ef63cd6aabef`，相关 API 源码连续未改；API 内部 bundle 使用 a73 工具重新生成。依赖锁不变，未声称 a73 全量重编所有 API。外部角色、默认路由、资料和认证不进入程序归档。
 
@@ -95,3 +97,16 @@ Log closed.
 当前没有需驳回的具体技术建议，两条 P2 均有明确复现。mind/zts 并未要求自动回滚、默认复制凭据、改变认证 owner 或扩入 #1590/#1591，不能将未提出的要求列成“未采纳”。
 
 保留独立验收项：macOS DMG、Kimi/OpenCode/Pi 真调用、0/1/N 与登录中断后的完整恢复旅程、F155/F229/F320/DSH 原合同及原 11 秒慢保存现场根因。Windows 实装、绿 CI、限定 review 或一个有用回复均不能替代这些项，也不自动关闭 #1466。
+
+## main 7fca378fa 合流
+
+上游合入 #1398 消息生命周期后产生十六个冲突文件。保留 main 的 MessageFrom、显式消息目标与 canonical carrier authority，将本 PR 的引导、保存诊断、native 配置与默认设置读取边界迁到新调用链：
+
+- `configurationSource` 仍表示配置归属，不替代 `carrier`。native Codex 默认 App Server 在统一 resolver 的兼容输入边界处理，显式 canonical 值优先；生产 assembly 与 API 读模型只消费统一 carrier。
+- 成员编辑的旧草稿只读转换 `codexCarrier/acpEnabled`，新写入使用 canonical 字段；运行工具切换仍保留各自草稿与用户选择。切离 ACP 后保留休眠启动配置，以 carrier 决定是否使用，不再因配置块存在就隐式路由。
+- 未 ACK 的旧一键创建保留原 key 和旧 wire body，服务端只读接收旧 cli.carrier 用于 receipt 与转换，落盘使用 canonical carrier。不得用新 payloadHash 猜测归属，也不迁移角色 ID。
+- ACP 最终工具参数的前端补齐迁入 main 拆分出的 active/background handler 与共用 tool event 构造器。历史链测试改用 main 正式的 MessageFrom 前提，仍真实经过 ACP service 和持久化 write/read。
+- 锁文件自动合并保留了本 PR 的 Web Playwright 声明，却移除了 main 从其他包删去的同版本快照；仅恢复原精确三项快照后 frozen install 通过，没有放宽 SDK 版本。
+- 治理检查原生 Windows 复现了动态 import 误用磁盘路径和 admission source 使用反斜杠的两个坐标问题；分别改为 file URL 和仓库 canonical 斜杠。原生 RED→GREEN，不跳过基线/attestation/cutover 验证；本地检查的保护目标须使用 PR 实际上游 SHA，旧 fork origin/main 不是该目标。
+
+当前作者检查：API/shared 编译、Web 类型检查通过；原生 API 相关 136/136、新手引导正式入口 43文件/197项、MCP 实现 4/4 通过。前端兼容四文件 30项包含在引导相关组中，不重复相加。完整治理、精确合流 SHA 的独立 review、CI 和重建实装仍需补齐。

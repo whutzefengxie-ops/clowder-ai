@@ -3,11 +3,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { type CatData, useCatData } from '@/hooks/useCatData';
 import { apiFetch } from '@/utils/api-client';
 import { initialState } from '../hub-cat-editor.model';
-import { buildCatPayload } from '../hub-cat-editor.payload';
 import type { RuntimeChoice } from '../settings/members/member-runtime-draft';
 import { matchesRuntime } from '../settings/members/member-runtime-draft';
 import { syncDraftToStorage } from '../thread-drafts';
 import { legacyCreationKey, legacySharedKey } from './legacy-creation-key';
+import { buildNativeCreationPayload } from './native-creation-payload';
 import { type NativePartner, newNativeRequestKey, recommendNativePartners, SMALL_GOALS } from './native-onboarding';
 import { buildNativeTeamGoal, orderGoalPartners } from './native-team-goal';
 import type { TemplateCard } from './TemplateStep';
@@ -128,7 +128,8 @@ export function useNativeOnboarding(
                 ? { recoverable: { id: savedMember.id, form: initialState(savedMember) } }
                 : {}),
               selected: partner.selected && (!previous.runtime?.installed || previous.selected),
-              form: confirmed && savedMember ? initialState(savedMember) : { ...partner.form, ...previous.form },
+              // Old pending forms retain their old wire shape for exact idempotent replay.
+              form: confirmed && savedMember ? initialState(savedMember) : previous.form,
             };
           },
         );
@@ -224,7 +225,7 @@ export function useNativeOnboarding(
                 ...headers,
                 'Idempotency-Key': `onboarding:${current.journeyId}:cat:${partner.creationRequestKey ?? id}`,
               },
-              body: JSON.stringify(buildCatPayload(partner.form)),
+              body: JSON.stringify(buildNativeCreationPayload(partner.form)),
             });
         progress = {
           ...progress,

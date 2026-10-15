@@ -129,8 +129,9 @@ export function memberStatus(
 }
 export function memberTransport(cat: CatData): string {
   if (cat.identityProtection?.kind === 'builtin-cloud') return '云端';
-  if (cat.acp || cat.clientId === 'acp') return 'ACP';
-  if (cat.codexCarrier?.effective === 'app_server') return 'App Server';
+  if (cat.carrier === 'acp') return 'ACP';
+  if (cat.carrier === 'app_server') return 'App Server';
+  if (cat.carrier === 'sdk') return 'SDK';
   return 'CLI';
 }
 export function memberClientName(cat: CatData): string {

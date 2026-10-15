@@ -61,6 +61,7 @@ describe('native onboarding recommendations', () => {
     const existing = [
       {
         id: 'codex',
+        carrier: 'cli' as const,
         displayName: 'Existing Codex',
         clientId: 'openai',
         defaultModel: 'old-model',

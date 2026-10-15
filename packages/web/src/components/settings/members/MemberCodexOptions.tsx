@@ -29,7 +29,7 @@ export function MemberCodexOptions({
   retry: () => void;
   t: MemberText;
 }) {
-  if (form.clientId !== 'openai' || form.acpEnabled) return null;
+  if (form.clientId !== 'openai' || form.carrier === 'acp') return null;
   return (
     <div className="mt-6 space-y-5">
       {(authType === 'oauth' || form.codexSpeed) && (

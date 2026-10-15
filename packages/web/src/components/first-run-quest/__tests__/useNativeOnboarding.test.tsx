@@ -97,6 +97,7 @@ it('does not reuse a removed existing member from a stale local draft', async ()
   catalog.cats = [
     {
       id: 'removed-codex',
+      carrier: 'app_server',
       displayName: 'Old partner',
       clientId: 'openai',
       configurationSource: 'native_tool',
@@ -261,6 +262,7 @@ it('preserves deselection of an existing partner across detection refreshes', as
   catalog.cats = [
     {
       id: 'existing-codex',
+      carrier: 'app_server',
       displayName: '现有伙伴',
       clientId: 'openai',
       configurationSource: 'native_tool',

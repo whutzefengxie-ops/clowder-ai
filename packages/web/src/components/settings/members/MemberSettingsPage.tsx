@@ -46,15 +46,16 @@ export function MemberSettingsPage({
   const { draft, accounts, ready, saving, dirtyCount } = editor;
   const { form, baseline, section } = draft;
   const identity = accounts.find((account) => account.id === form.accountRef);
-  const tool = form.acpEnabled
-    ? /dsh|deepseek/i.test(form.acpCommand + form.acpStartupArgs)
-      ? 'DSH'
-      : 'ACP'
-    : form.clientId === 'openai'
-      ? 'Codex'
-      : form.clientId === 'anthropic'
-        ? 'Claude Code'
-        : form.clientId;
+  const tool =
+    form.carrier === 'acp'
+      ? /dsh|deepseek/i.test(form.acpCommand + form.acpStartupArgs)
+        ? 'DSH'
+        : 'ACP'
+      : form.clientId === 'openai'
+        ? 'Codex'
+        : form.clientId === 'anthropic'
+          ? 'Claude Code'
+          : form.clientId;
   const accountLabel =
     identity?.displayName || identity?.name || form.accountRef || t('使用工具当前配置', 'Current tool configuration');
   const query = new URLSearchParams(searchParams.toString());

@@ -1,5 +1,6 @@
 'use client';
 
+import type { CapabilityTipContext, LifecycleActiveRun } from '@cat-cafe/shared';
 import { useRouter } from 'next/navigation';
 import type { ReactNode, Ref } from 'react';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
@@ -8,13 +9,14 @@ import { useChatHistory } from '@/hooks/useChatHistory';
 import { useCoCreatorConfig } from '@/hooks/useCoCreatorConfig';
 import { useConnectionStatus } from '@/hooks/useConnectionStatus';
 import { useSendMessage } from '@/hooks/useSendMessage';
-import { useThreadLiveness, useThreadMessages } from '@/hooks/useThreadScopedSelectors';
+import { useThreadLiveness } from '@/hooks/useThreadScopedSelectors';
 import { useChatStore } from '@/stores/chatStore';
 import { computeCliDiagnosticsDedup } from '@/utils/cli-diagnostics-dedup';
 import { computeScrollRecomputeSignal } from '@/utils/scrollRecomputeSignal';
 import { ChatInput } from '../ChatInput';
 import { ChatMessageRow } from '../ChatMessageRow';
 import { ConnectionStatusBar } from '../ConnectionStatusBar';
+import { getStreamingTipContexts, selectLifecycleTipMessageId } from '../capability-tip-placement';
 import { buildChatTimelineProjectionKey } from '../chat-timeline-projection-key';
 import { useCompanionConversation } from '../concierge/useCompanionConversation';
 import { HubCoCreatorEditor } from '../HubCoCreatorEditor';
@@ -23,17 +25,13 @@ import { MessageSelectionToolbar } from '../MessageSelectionToolbar';
 import { messageMountPolicy } from '../message-mount-policy';
 import { isMessageSelectableForBundle, MAX_SELECTED_MESSAGES } from '../message-selection';
 import { ImportedSessionNotice } from '../new-conversation/ImportedSessionNotice';
-import { collectExactLiveInvocationIds, collectSettlingInvocationIds } from '../queue-receipt-projection';
 import { ReplyRecallRuntimeProvider } from '../reply-layers/ReplyRecallRuntimeProvider';
-import { projectReplyHandoffs } from '../reply-layers/reply-handoff';
-import { canRenderReplyLayers } from '../reply-layers/reply-presentation';
 import type { CardConfirmationEntry } from '../rich/CardBlock';
 import { useShellPresentation } from '../shell/shell-presentation';
 import { ThreadComposerContext } from '../ThreadComposerContext';
 import { TransferTargetPicker } from '../TransferTargetPicker';
 import { VoteActiveBar } from '../VoteActiveBar';
 import { ThreadChatHistoryNavigation } from './ThreadChatHistoryNavigation';
-import { ThreadChatPendingMembers } from './ThreadChatPendingMembers';
 import { useThreadChatRuntime } from './ThreadChatRuntimeProvider';
 import { ThreadExecutionLayer } from './ThreadExecutionLayer';
 import { type RegisterChatReadingPort, useThreadChatReadingPort } from './useThreadChatReadingPort';
@@ -113,13 +111,14 @@ export function ThreadChatSurface({
   // The composer is told it is hosted with the one execution row only in the new shell (see ChatInput `presentation`).
   const composerPresentation = useShellPresentation();
   const [pianoReady, setPianoReady] = useState(false);
-  const messages = useThreadMessages(threadId);
   const liveness = useThreadLiveness(threadId);
-  const { hasActive: hasActiveInvocation, activeInvocations, catInvocations } = liveness;
+  const { hasActive: hasActiveInvocation, catStatuses, catInvocations, intentMode } = liveness;
   const { socketConnected } = useThreadChatRuntime([threadId]);
   const history = useChatHistory(threadId);
   const {
+    messages,
     handleScroll,
+    handleReadingIntent,
     jumpToLatest,
     jumpToMessage,
     beginUserScroll,
@@ -141,13 +140,17 @@ export function ThreadChatSurface({
   const { historyHostRef, composerOnly } = useThreadChatHistoryPresentation(presentation);
   const compact = density === 'compact';
 
-  const settlingInvocationIds = useMemo(
-    () => collectSettlingInvocationIds(activeInvocations, catInvocations),
-    [activeInvocations, catInvocations],
+  const lifecycleActiveRuns = useMemo<readonly LifecycleActiveRun[]>(
+    () => Object.values(catInvocations).flatMap((invocation) => (invocation.activeRun ? [invocation.activeRun] : [])),
+    [catInvocations],
   );
-  const activeInvocationIds = useMemo(
-    () => collectExactLiveInvocationIds(activeInvocations, catInvocations),
-    [activeInvocations, catInvocations],
+  const capabilityTipContexts = useMemo<readonly CapabilityTipContext[]>(
+    () => getStreamingTipContexts(intentMode),
+    [intentMode],
+  );
+  const lifecycleTipMessageId = useMemo(
+    () => selectLifecycleTipMessageId(messages, catStatuses, catInvocations),
+    [messages, catStatuses, catInvocations],
   );
   const cliDedupMap = useMemo(() => computeCliDiagnosticsDedup(messages), [messages]);
   const timelineProjectionKey = useMemo(() => buildChatTimelineProjectionKey(messages, threadId), [messages, threadId]);
@@ -156,18 +159,6 @@ export function ThreadChatSurface({
     () => messages,
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [timelineProjectionKey],
-  );
-  const replyHandoffTimeline = useMemo(
-    () =>
-      projectReplyHandoffs(timelineProjectionMessages, (message) =>
-        canRenderReplyLayers(message, {
-          shellPresentation: composerPresentation,
-          compact,
-          getCatById,
-          currentThreadId: threadId,
-        }),
-      ),
-    [compact, composerPresentation, getCatById, threadId, timelineProjectionMessages],
   );
   const selection = useThreadChatSelection(messages);
   const handleEditCat = useCallback(
@@ -220,14 +211,15 @@ export function ThreadChatSurface({
         <main
           ref={scrollContainerRef}
           onScroll={handleScroll}
+          onClickCapture={handleReadingIntent}
           className={
             composerPresentation === 'v2'
               ? compact
-                ? 'h-full overflow-y-auto pl-3 pr-[42px] py-3'
-                : 'h-full overflow-y-auto p-4 pr-10'
+                ? 'h-full overflow-y-auto [overflow-anchor:none] pl-3 pr-[42px] py-3'
+                : 'h-full overflow-y-auto [overflow-anchor:none] p-4 pr-10'
               : compact
-                ? 'h-full overflow-y-auto px-3 py-3'
-                : 'h-full overflow-y-auto p-4'
+                ? 'h-full overflow-y-auto [overflow-anchor:none] px-3 py-3'
+                : 'h-full overflow-y-auto [overflow-anchor:none] p-4'
           }
           tabIndex={composerPresentation === 'v2' ? -1 : undefined}
           data-message-piano-ready={(composerPresentation === 'v2' && pianoReady) || undefined}
@@ -273,9 +265,7 @@ export function ThreadChatSurface({
                         compact={compact}
                         threadId={threadId}
                         timelineMessages={timelineProjectionMessages}
-                        replyHandoffTimeline={replyHandoffTimeline}
-                        settlingInvocationIds={message.extra?.queueReceipt ? settlingInvocationIds : undefined}
-                        activeInvocationIds={message.extra?.queueReceipt ? activeInvocationIds : undefined}
+                        activeRuns={message.lifecycle?.dispatchRefs?.length ? lifecycleActiveRuns : undefined}
                         getCatById={getCatById}
                         onEditCat={handleEditCat}
                         onEditCoCreator={handleEditCoCreator}
@@ -291,10 +281,11 @@ export function ThreadChatSurface({
                         backgroundMountDelayMs={mountPolicy.backgroundMountDelayMs}
                         sendContext={interactiveSendContext}
                         confirmations={messageConfirmations?.get(message.id)}
+                        showCapabilityTip={message.id === lifecycleTipMessageId}
+                        capabilityTipContexts={capabilityTipContexts}
                       />
                     );
                   })}
-              <ThreadChatPendingMembers threadId={threadId} messages={messages} liveness={liveness} />
             </ReplyRecallRuntimeProvider>
             <div ref={messagesEndRef} />
           </div>
@@ -343,25 +334,18 @@ export function ThreadChatSurface({
                 composerPresentation === 'v2' ? <ThreadComposerContext threadId={threadId} /> : undefined
               }
               threadId={threadId}
-              onSend={async (
-                content,
-                images,
-                whisper,
-                deliveryMode,
-                replyToId,
-                messageDisposition,
-                contextAttachments,
-              ) => {
+              onSend={async (content, images, whisper, replyToId, contextAttachments, explicitTargetCats) => {
                 const sent = await handleSend(
                   content,
                   images,
                   undefined,
                   whisper,
-                  deliveryMode,
                   replyToId,
-                  messageDisposition,
                   contextAttachments,
-                  { consumeComposerDraft: true },
+                  explicitTargetCats,
+                  {
+                    consumeComposerDraft: true,
+                  },
                 );
                 if (sent) onRealMessageSent?.();
                 return sent;

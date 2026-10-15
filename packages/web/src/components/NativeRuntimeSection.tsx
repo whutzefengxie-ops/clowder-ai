@@ -51,7 +51,7 @@ export function NativeRuntimeSection({
   }, []);
   const nativeTool = form.configurationSource === 'native_tool';
   const selected = runtimes.find((runtime) =>
-    form.acpEnabled
+    form.carrier === 'acp'
       ? runtime.acp &&
         runtime.command === form.acpCommand &&
         JSON.stringify(runtime.startupArgs) === JSON.stringify(splitCommandArgs(form.acpStartupArgs))
@@ -66,7 +66,7 @@ export function NativeRuntimeSection({
     options.unshift({
       value: 'current',
       disabled: false,
-      label: `${form.acpEnabled ? '当前 ACP 工具' : form.clientId === 'openai' ? 'Codex' : form.clientId === 'anthropic' ? 'Claude Code' : '当前 ACP 工具'} · 保留当前配置`,
+      label: `${form.carrier === 'acp' ? '当前 ACP 工具' : form.clientId === 'openai' ? 'Codex' : form.clientId === 'anthropic' ? 'Claude Code' : '当前工具'} · 保留当前配置`,
     });
   const choose = (id: string) => {
     const runtime = runtimes.find((item) => item.id === id);
@@ -77,8 +77,7 @@ export function NativeRuntimeSection({
       defaultModel: '',
       cliEffort: '',
       cliConfigArgs: [],
-      codexCarrier: runtime.clientId === 'openai' ? 'app_server' : '',
-      acpEnabled: runtime.clientId === 'acp',
+      carrier: runtime.acp ? 'acp' : runtime.clientId === 'openai' ? 'app_server' : 'cli',
       ...(runtime.acp
         ? {
             acpCommand: runtime.acp.command,
@@ -107,9 +106,9 @@ export function NativeRuntimeSection({
                     defaultModel: '',
                     cliEffort: '',
                     cliConfigArgs: [],
-                    codexCarrier: form.clientId === 'openai' ? 'app_server' : '',
-                    ...(!['anthropic', 'openai', 'acp'].includes(form.clientId)
-                      ? { clientId: 'anthropic', acpEnabled: false }
+                    carrier: form.clientId === 'openai' ? 'app_server' : form.carrier,
+                    ...(!['anthropic', 'openai', 'acp', 'kimi', 'opencode'].includes(form.clientId)
+                      ? { clientId: 'anthropic', carrier: 'cli' }
                       : {}),
                   }
                 : {}),

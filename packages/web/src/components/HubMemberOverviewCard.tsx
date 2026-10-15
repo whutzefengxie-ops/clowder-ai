@@ -203,18 +203,9 @@ function MemberMeta({ cat, configCat }: { cat: CatData; configCat?: CatConfig })
     <>
       <span>
         {getMetaSummary(cat, configCat)}
-        {cat.adapterMode && cat.configurationSource !== 'native_tool' && (
-          <SettingsBadge
-            tone={cat.adapterMode === 'acp' || cat.codexCarrier?.effective === 'app_server' ? 'emerald' : 'slate'}
-            size="xxs"
-            className="ml-1.5 inline-block"
-          >
-            {/* F254 D2: ACP wins over the Codex carrier (assembly checks getAcpConfig first) */}
-            {cat.adapterMode === 'acp'
-              ? 'ACP'
-              : cat.codexCarrier?.effective === 'app_server'
-                ? 'APP SERVER'
-                : cat.adapterMode.toUpperCase()}
+        {cat.carrier && cat.configurationSource !== 'native_tool' && (
+          <SettingsBadge tone={cat.carrier === 'cli' ? 'slate' : 'emerald'} size="xxs" className="ml-1.5 inline-block">
+            {cat.carrier.replace('_', ' ').toUpperCase()}
           </SettingsBadge>
         )}
         {cat.identityProtection ? (

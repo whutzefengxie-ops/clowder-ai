@@ -85,6 +85,7 @@ describe('native tool role editing', () => {
       ...cat,
       id: 'dsh',
       clientId: 'acp',
+      carrier: 'acp' as const,
       defaultModel: '',
       configurationSource: 'native_tool' as const,
       accountRef: undefined,
@@ -98,6 +99,7 @@ describe('native tool role editing', () => {
   it('keeps an existing ACP descriptor visible until the native tool is explicitly selected', async () => {
     const original = {
       ...cat,
+      carrier: 'acp' as const,
       acp: { command: 'node', startupArgs: ['C:/tool with space/bin.js', '--profile', 'acp'] },
     };
     const form = { ...initialState(original), configurationSource: 'native_tool' as const };
@@ -111,13 +113,15 @@ describe('native tool role editing', () => {
     });
     const select = container.querySelector<HTMLSelectElement>('[aria-label="本机工具"]')!;
     expect(select.selectedOptions[0]?.textContent).toContain('ACP');
-    expect(form.acpEnabled).toBe(true);
+    expect(form.carrier).toBe('acp');
     await act(async () => {
       select.value = 'codex';
       select.dispatchEvent(new Event('change', { bubbles: true }));
     });
-    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ clientId: 'openai', acpEnabled: false }));
-    expect(buildCatPatchPayload({ ...form, ...onChange.mock.calls.at(-1)![0] }, original).acp).toBe(null);
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ clientId: 'openai', carrier: 'app_server' }));
+    const patch = buildCatPatchPayload({ ...form, ...onChange.mock.calls.at(-1)![0] }, original);
+    expect(patch.carrier).toBe('app_server');
+    expect(patch).not.toHaveProperty('acp');
   });
 
   it('shows installed tools and independent role overrides without account choices', async () => {

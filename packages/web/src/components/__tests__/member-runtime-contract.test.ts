@@ -8,6 +8,7 @@ const member = {
   name: '伙伴',
   displayName: '伙伴',
   clientId: 'openai',
+  carrier: 'app_server',
   configurationSource: 'native_tool',
   accountRef: 'company-codex',
   defaultModel: '',
@@ -16,7 +17,7 @@ const member = {
   mentionPatterns: ['@partner'],
   roleDescription: '共同解决问题',
   personality: '细心',
-  cli: { command: 'codex', outputFormat: 'json', effort: 'high', carrier: 'app_server' },
+  cli: { command: 'codex', outputFormat: 'json', effort: 'high' },
   voiceConfig: { voice: 'voice-1', langCode: 'zh', speed: 1 },
   contextWindow: 128000,
   sessionChain: true,
@@ -40,6 +41,7 @@ describe('member preferences and execution identity are independent', () => {
     const acp = {
       ...member,
       clientId: 'acp',
+      carrier: 'acp',
       cli: undefined,
       acp: {
         command: 'node',
@@ -57,6 +59,7 @@ describe('member preferences and execution identity are independent', () => {
     const acp = {
       ...member,
       clientId: 'acp',
+      carrier: 'acp',
       cli: undefined,
       acp: {
         command: 'node',

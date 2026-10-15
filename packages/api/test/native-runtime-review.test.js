@@ -3,17 +3,21 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { resolveCodexCarrierTruth } from '../dist/config/codex-cli.js';
+import { resolveCatCarrier } from '../dist/config/cat-config-loader.js';
 import { createAcpServiceForConfig } from '../dist/domains/cats/services/agents/providers/acp/AcpServiceFactory.js';
 
 test('Codex assembly and read model share native defaults while preserving legacy and explicit carriers', () => {
-  assert.deepEqual(resolveCodexCarrierTruth(undefined, {}, 'native_tool'), {
-    effective: 'app_server',
-    source: 'default',
-  });
-  assert.equal(resolveCodexCarrierTruth('exec_json', {}, 'native_tool').effective, 'exec_json');
-  assert.equal(resolveCodexCarrierTruth(undefined, {}).effective, 'exec_json');
-  assert.equal(resolveCodexCarrierTruth(undefined, { CAT_CAFE_CODEX_CARRIER: 'app_server' }).effective, 'app_server');
+  assert.equal(resolveCatCarrier({ clientId: 'openai', configurationSource: 'native_tool' }, ''), 'app_server');
+  assert.equal(
+    resolveCatCarrier({ clientId: 'openai', configurationSource: 'native_tool', cli: { carrier: 'exec_json' } }, ''),
+    'cli',
+  );
+  assert.equal(resolveCatCarrier({ clientId: 'openai' }, ''), 'cli');
+  assert.equal(resolveCatCarrier({ clientId: 'openai' }, 'app_server'), 'app_server');
+  assert.equal(
+    resolveCatCarrier({ clientId: 'openai', configurationSource: 'native_tool', carrier: 'cli' }, ''),
+    'cli',
+  );
 });
 
 test('native ACP applies explicit account env and rotates the process pool on account changes', async () => {
