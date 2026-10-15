@@ -66,7 +66,10 @@ it.each([false, true])('never borrows native models for an explicit connection (
   }
 });
 
-it('keeps model names while dependent efforts load but never leaks a catalog across connections', async () => {
+it.each([
+  'acp:dsh',
+  'pi',
+])('keeps %s model names while dependent efforts load without leaking across connections', async (runtimeId) => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   const pending: Array<(response: Response) => void> = [];
   vi.mocked(apiFetch).mockImplementation(() => new Promise((resolve) => pending.push(resolve)));
@@ -74,7 +77,7 @@ it('keeps model names while dependent efforts load but never leaks a catalog acr
   document.body.append(host);
   const root = createRoot(host);
   function Catalog({ model = '', account = '' }: { model?: string; account?: string }) {
-    const result = useRuntimeCatalog('acp:dsh', 'dsh', account, model, 0);
+    const result = useRuntimeCatalog(runtimeId, 'fixture', account, model, 0);
     return <output>{JSON.stringify(result)}</output>;
   }
   const snapshot = () => JSON.parse(host.textContent || '{}');

@@ -16,7 +16,7 @@ import { selectFakeCodexHome } from './helpers/fake-codex-home.js';
 const apiRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const webRoot = resolve(apiRoot, '../web/src');
 
-test('default selected recommendations create through the real API, including Kimi/OpenCode and partial retry', async () => {
+test('default selected recommendations create through the real API, including Kimi/Pi and partial retry', async () => {
   const root = await mkdtemp(join(tmpdir(), 'native-onboarding-api-'));
   const saved = new Map(
     [
@@ -24,6 +24,7 @@ test('default selected recommendations create through the real API, including Ki
       'CAT_CAFE_GLOBAL_CONFIG_ROOT',
       'KIMI_CONFIG_FILE',
       'OPENCODE_CONFIG',
+      'PI_CODING_AGENT_DIR',
       'CODEX_HOME',
       'CODEX_SQLITE_HOME',
     ].map((key) => [key, process.env[key]]),
@@ -59,8 +60,11 @@ export { buildNativeCreationPayload } from './components/first-run-quest/native-
     process.env.CAT_CAFE_GLOBAL_CONFIG_ROOT = root;
     process.env.KIMI_CONFIG_FILE = join(root, 'kimi.toml');
     process.env.OPENCODE_CONFIG = join(root, 'opencode.json');
+    process.env.PI_CODING_AGENT_DIR = join(root, '.pi/agent');
     await writeFile(process.env.KIMI_CONFIG_FILE, 'default_model = "fixture-kimi"\n');
     await writeFile(process.env.OPENCODE_CONFIG, JSON.stringify({ model: 'fixture/model' }));
+    const piBridgeEntry = join(root, 'fixture-pi-bridge.js');
+    await writeFile(piBridgeEntry, '// test-owned bridge descriptor; no CLI execution');
     process.chdir(root);
     const runtimes = [
       { id: 'codex', label: 'Codex', clientId: 'openai', installed: true, models: [] },
@@ -73,9 +77,9 @@ export { buildNativeCreationPayload } from './components/first-run-quest/native-
         models: [],
         acp: { command: 'node', startupArgs: ['fixture-dsh.js', '--profile', 'acp'] },
       },
-      ...discoverAdditionalRuntimes(root, (command) =>
-        command === 'pi' || command === 'pi-acp' ? null : process.execPath,
-      ),
+      ...discoverAdditionalRuntimes(root, (command) => (command === 'pi-acp' ? null : process.execPath), {
+        piBridgeEntry,
+      }),
     ];
     await app.register(catsRoutes, { nativeRuntimeDiscovery: async () => ({ runtimes }) });
     const headers = { 'x-cat-cafe-user': 'default-user', 'x-cat-cafe-onboarding-journey': randomUUID() };
@@ -85,7 +89,7 @@ export { buildNativeCreationPayload } from './components/first-run-quest/native-
     const selected = partners.filter((partner) => partner.selected);
     assert.deepEqual(
       selected.map((p) => p.runtime.clientId),
-      ['openai', 'anthropic', 'acp', 'kimi', 'opencode'],
+      ['openai', 'anthropic', 'acp', 'kimi', 'acp'],
     );
     const requests = selected.map((partner) => ({
       method: 'POST',
@@ -178,7 +182,7 @@ export { buildNativeCreationPayload } from './components/first-run-quest/native-
     assert.equal(after.breeds.length, expectedBreedCount);
     const readback = await app.inject({ url: '/api/cats', headers });
     assert.equal(readback.statusCode, 200, readback.body);
-    for (const clientId of ['kimi', 'opencode']) {
+    for (const clientId of ['kimi', 'acp']) {
       const cat = readback.json().cats.find((entry) => entry.id === createdIds.get(clientId));
       assert.equal(cat.configurationSource, 'native_tool');
       assert.equal(cat.defaultModel, '');

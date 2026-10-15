@@ -1673,6 +1673,15 @@ export const ENV_VARS: EnvDefinition[] = [
     hubVisible: false,
     runtimeEditable: false,
   },
+  {
+    name: 'PI_CODING_AGENT_DIR',
+    defaultValue: '~/.pi/agent',
+    description: 'Pi 本机配置与认证目录；仅用于读取模型配置并由 Pi 原生客户端管理认证',
+    category: 'cli',
+    sensitive: false,
+    hubVisible: false,
+    runtimeEditable: false,
+  },
 
   // --- gemini ---
   {

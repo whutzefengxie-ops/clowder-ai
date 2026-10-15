@@ -23,7 +23,7 @@ export function useRuntimeCatalog(
   const lastRefresh = useRef(refresh);
   const [result, setResult] = useState<{ key: string; context: string; data: MemberCatalog } | null>(null),
     [loading, setLoading] = useState(false);
-  const requestedModel = runtimeId === 'dsh' || runtimeId?.startsWith('acp:') ? model : '';
+  const requestedModel = runtimeId === 'dsh' || runtimeId === 'pi' || runtimeId?.startsWith('acp:') ? model : '';
   const key = JSON.stringify([runtimeId, catId, accountRef, requestedModel, customStartup]);
   const context = JSON.stringify([runtimeId, catId, accountRef, customStartup]);
   useEffect(() => {
