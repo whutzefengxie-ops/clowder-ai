@@ -18,6 +18,7 @@ vi.mock('@/utils/api-client', () => ({
 }));
 
 const { CatOverviewTab } = await import('../config-viewer-tabs');
+const { apiFetch } = await import('@/utils/api-client');
 
 function minimalCat(id: string, sessionChain?: boolean): import('@/hooks/useCatData').CatData {
   return {
@@ -61,6 +62,30 @@ afterEach(() => {
 });
 
 describe('CatOverviewTab drag & drop (F166)', () => {
+  it('refreshes the resolved default after the first members are registered without changing the preference', async () => {
+    const mock = vi.mocked(apiFetch);
+    const original = mock.getMockImplementation();
+    let registered = false;
+    const requests: string[] = [];
+    mock.mockImplementation(async (url, init) => {
+      requests.push(`${init?.method ?? 'GET'} ${url}`);
+      return new Response(
+        JSON.stringify(String(url) === '/api/config/default-cat' ? { catId: registered ? 'A' : 'legacy-default' } : {}),
+      );
+    });
+    try {
+      const config = { coCreator: null, cats: {} } as unknown as import('../config-viewer-types').ConfigData;
+      await act(async () => root.render(React.createElement(CatOverviewTab, { config, cats: [] })));
+      registered = true;
+      await act(async () => root.render(React.createElement(CatOverviewTab, { config, cats: [minimalCat('A')] })));
+      expect((container.querySelector('[data-testid="default-cat-select"]') as HTMLSelectElement).value).toBe('A');
+      expect(requests.filter((request) => request === 'GET /api/config/default-cat')).toHaveLength(2);
+      expect(requests.some((request) => request.startsWith('PUT '))).toBe(false);
+    } finally {
+      if (original) mock.mockImplementation(original);
+    }
+  });
+
   it('keeps the selected account visible when model preferences inherit from the tool', async () => {
     const cats = [
       {

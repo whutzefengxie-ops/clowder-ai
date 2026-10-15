@@ -123,9 +123,11 @@ export function CatOverviewTab({
       .catch(() => setDefaultCatFetchError(true));
   }, []);
 
+  // The resolver can change after first registration; read it again without writing a new preference.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: registry changes affect the server's resolved default.
   useEffect(() => {
     fetchDefaultCat();
-  }, [fetchDefaultCat]);
+  }, [fetchDefaultCat, cats]);
 
   const handleDefaultCatSelect = useCallback(
     async (catId: string) => {

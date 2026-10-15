@@ -48,6 +48,8 @@ test('isolated DSH snapshot retains ACP connection and live installed cache with
     };
     write('.dsh/profiles/acp/package.json', '{"dsh":{"profile":{"bundles":["@deepseek-ai/dsh-acp-app"]}}}');
     write('.dsh/profiles/acp/cordis.yml', 'test-only connection');
+    write('.dsh/.credentials.yaml', 'fixture-provider: fixture-only-value');
+    write('.dsh/llm-deepseek/files-v3.json', '{"records":["private-file-history"]}');
     write('.dsh/sessions/user-history', 'never copy');
     fs.mkdirSync(path.join(source, 'AppData/Local/npm-cache/_npx'), { recursive: true });
     snapshotDshTestConnection({
@@ -55,7 +57,19 @@ test('isolated DSH snapshot retains ACP connection and live installed cache with
       targetHome: target,
       npmCache: path.join(source, 'AppData/Local/npm-cache'),
     });
+    assert.equal(fs.existsSync(path.join(target, '.dsh/.credentials.yaml')), false);
+    snapshotDshTestConnection({
+      sourceHome: source,
+      targetHome: target,
+      npmCache: path.join(source, 'AppData/Local/npm-cache'),
+      includeCredentials: true,
+    });
     assert.equal(fs.readFileSync(path.join(target, '.dsh/profiles/acp/cordis.yml'), 'utf8'), 'test-only connection');
+    assert.equal(
+      fs.readFileSync(path.join(target, '.dsh/.credentials.yaml'), 'utf8'),
+      'fixture-provider: fixture-only-value',
+    );
+    assert.equal(fs.existsSync(path.join(target, '.dsh/llm-deepseek/files-v3.json')), false);
     assert.equal(fs.existsSync(path.join(target, '.dsh/sessions')), false);
     write(
       'AppData/Local/npm-cache/_npx/new-install/node_modules/@deepseek-ai/dsh/package.json',
@@ -68,12 +82,15 @@ test('isolated DSH snapshot retains ACP connection and live installed cache with
       true,
     );
     fs.writeFileSync(path.join(target, '.dsh/profiles/acp/cordis.yml'), 'user-edited');
+    fs.writeFileSync(path.join(target, '.dsh/.credentials.yaml'), 'user-edited-credential');
     snapshotDshTestConnection({
       sourceHome: source,
       targetHome: target,
       npmCache: path.join(source, 'AppData/Local/npm-cache'),
+      includeCredentials: true,
     });
     assert.equal(fs.readFileSync(path.join(target, '.dsh/profiles/acp/cordis.yml'), 'utf8'), 'user-edited');
+    assert.equal(fs.readFileSync(path.join(target, '.dsh/.credentials.yaml'), 'utf8'), 'user-edited-credential');
     assert.equal(fs.readFileSync(path.join(source, '.dsh/profiles/acp/cordis.yml'), 'utf8'), 'test-only connection');
   } finally {
     fs.rmSync(root, { recursive: true, force: true });

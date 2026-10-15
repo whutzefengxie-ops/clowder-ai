@@ -9,7 +9,7 @@ const within = (parent, target) => {
 };
 
 /** Explicit local acceptance setup, never called by production discovery or the installer. */
-export function snapshotDshTestConnection({ sourceHome, targetHome, npmCache }) {
+export function snapshotDshTestConnection({ sourceHome, targetHome, npmCache, includeCredentials = false }) {
   const source = canonicalWithMissingSuffix(sourceHome),
     target = canonicalWithMissingSuffix(targetHome);
   if (within(source, target) || within(target, source)) throw new Error('DSH test home must be separate');
@@ -22,7 +22,8 @@ export function snapshotDshTestConnection({ sourceHome, targetHome, npmCache }) 
     'profiles/acp/cordis.yml',
     'profiles/acp/cordis.patch.yml',
     'profiles/acp/pnpm-workspace.yaml',
-    'llm-deepseek/files-v3.json',
+    // Credentials require separate explicit approval for the intended test home.
+    ...(includeCredentials ? ['.credentials.yaml'] : []),
   ];
   for (const relative of files) verifyTarget(path.join(targetHome, '.dsh', relative));
   verifyTarget(path.join(targetHome, 'AppData/Local/npm-cache'));
