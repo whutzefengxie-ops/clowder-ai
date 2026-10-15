@@ -54,6 +54,7 @@ jobs:
           desktop/service-manager.test.js
           desktop/post-install-profile.test.js
           desktop/frozen-runtime-export.test.mjs
+          desktop/workspace-runtime-modules.test.mjs
           desktop/extract-runtime-archive.test.cjs
           desktop/runtime-archive-progress.test.mjs
           desktop/built-web-assets.test.mjs
