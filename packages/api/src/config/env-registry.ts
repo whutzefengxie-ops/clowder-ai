@@ -1712,6 +1712,15 @@ export const ENV_VARS: EnvDefinition[] = [
     hubVisible: false,
   },
   {
+    name: 'KIMI_CODE_HOME',
+    defaultValue: '~/.kimi-code',
+    description: '原生 Kimi 2.x 配置、登录与会话目录；旧 kimi-cli 继续使用 KIMI_SHARE_DIR。',
+    category: 'kimi',
+    sensitive: false,
+    hubVisible: false,
+    runtimeEditable: false,
+  },
+  {
     name: 'KIMI_SHARE_DIR',
     defaultValue: '~/.kimi',
     description: '官方 kimi-cli 共享目录（session / mcp / logs）',
