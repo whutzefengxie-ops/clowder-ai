@@ -35,6 +35,7 @@ test('isolated desktop Redis probing, spawn and API env all use the same owned p
   };
   try {
     await manager._startRedis(base);
+    assert.equal(Object.hasOwn(manager._buildApiEnv(base), 'PREVIEW_GATEWAY_PORT'), false);
     assert.deepEqual(probes, [6367, 6367]);
     assert.equal(starts[0][2][1], '6367');
     // Observe the env received by a real, test-owned Node child; no API/Redis starts.
@@ -81,7 +82,7 @@ for (const contamination of [
         process.execPath,
         [
           '-e',
-          `require('node:fs').writeFileSync(${JSON.stringify(resultPath)}, JSON.stringify(Object.fromEntries(${JSON.stringify(['WORLD_DB', 'TASK_OUTCOME_DB', 'GLOBAL_KNOWLEDGE_DB', 'MEMORY_STORE', 'OPENAI_API_KEY', 'CODEX_HOME', 'REDIS_URL', 'CAT_CAFE_RUNTIME_ROOT', 'CAT_CAFE_WORKSPACE_ROOT', 'ALLOWED_WORKSPACE_DIRS'])}.map(k=>[k,process.env[k]]))))`,
+          `require('node:fs').writeFileSync(${JSON.stringify(resultPath)}, JSON.stringify(Object.fromEntries(${JSON.stringify(['WORLD_DB', 'TASK_OUTCOME_DB', 'GLOBAL_KNOWLEDGE_DB', 'MEMORY_STORE', 'OPENAI_API_KEY', 'CODEX_HOME', 'REDIS_URL', 'CAT_CAFE_RUNTIME_ROOT', 'CAT_CAFE_WORKSPACE_ROOT', 'ALLOWED_WORKSPACE_DIRS', 'PREVIEW_GATEWAY_PORT'])}.map(k=>[k,process.env[k]]))))`,
         ],
         { envOverrides: manager._buildApiEnv(base) },
       );
@@ -93,6 +94,7 @@ for (const contamination of [
         CAT_CAFE_RUNTIME_ROOT: base,
         CAT_CAFE_WORKSPACE_ROOT: path.join(base, 'project'),
         ALLOWED_WORKSPACE_DIRS: path.join(base, 'project'),
+        PREVIEW_GATEWAY_PORT: '0',
       });
     } finally {
       for (const [key, value] of Object.entries(previous)) {

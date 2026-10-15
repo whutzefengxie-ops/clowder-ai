@@ -444,6 +444,7 @@ class ServiceManager {
             CAT_CAFE_CONFIG_ROOT: path.join(userDataDir, 'project'),
             CAT_CAFE_GLOBAL_CONFIG_ROOT: path.join(userDataDir, 'global'),
             CAT_CAFE_DATA_DIR: path.join(userDataDir, 'data'),
+            PREVIEW_GATEWAY_PORT: '0',
             CAT_CAFE_SKIP_HOMEDIR_MIGRATION: '1',
             CAT_CAFE_SESSION_COOKIE_NAME: `cat_cafe_desktop_${crypto.createHash('sha256').update(userDataDir).digest('hex').slice(0, 12)}`,
           }
