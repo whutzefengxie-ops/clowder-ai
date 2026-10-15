@@ -151,7 +151,10 @@ export class KimiAgentService implements AgentService {
 
   async *invoke(prompt: string, options?: AgentServiceOptions): AsyncIterable<AgentMessage> {
     const requestedModel = options?.callbackEnv?.CAT_CAFE_KIMI_MODEL_OVERRIDE ?? this.model;
-    const effectiveModel = resolveKimiModelAlias(requestedModel, options?.callbackEnv);
+    // Empty native selection means omit --model and let the CLI resolve its own config.
+    const effectiveModel = requestedModel
+      ? resolveKimiModelAlias(requestedModel, options?.callbackEnv)
+      : requestedModel;
     const effortLevel = resolveKimiEffortLevel(this.catId as string, effectiveModel, options?.reasoningEffortOverride);
     const metadata: MessageMetadata = { provider: 'kimi', model: effectiveModel };
     const imagePaths = extractImagePaths(options?.contentBlocks, options?.uploadDir);

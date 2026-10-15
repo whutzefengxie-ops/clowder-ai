@@ -20,6 +20,7 @@ import {
   type CliConfig,
   type ClientId,
   catClientSupportsCarrier,
+  catClientSupportsNativeTool,
   catRegistry,
   type FreshnessCarrierCapability,
   getCliEffortOptionsForProvider,
@@ -638,8 +639,8 @@ async function validateAccountBindingOrThrow(
   options?: { legacyCompat?: boolean; nativeTool?: boolean },
 ): Promise<void> {
   if (options?.nativeTool) {
-    if (!['anthropic', 'openai', 'acp'].includes(client))
-      throw new Error('本机工具模式仅支持 Codex、Claude Code 和 ACP 工具');
+    if (!catClientSupportsNativeTool(client))
+      throw new Error('此客户端暂不支持本机工具模式，请使用指定服务账号或受支持的 ACP 适配器');
     if (providerName === 'openai-chatgpt-pro') throw new Error('云端成员不能使用本机工具模式');
     if (!accountRef?.trim()) return;
   }

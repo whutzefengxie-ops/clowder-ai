@@ -253,6 +253,13 @@ procedure ExtractionOutput(const S: String; const Error, FirstLine: Boolean);
 var
   Fields: TArrayOfString;
 begin
+  // Script Exec disables the form. Restore window movement, keeping cancel guarded.
+  if RuntimeExtractionBusy and not RuntimeExtractionWindowRestored then begin
+    // TWindowDisabler changes the HWND directly; toggle the VCL property as well.
+    WizardForm.Enabled := False;
+    WizardForm.Enabled := True;
+    RuntimeExtractionWindowRestored := True;
+  end;
   Log(S);
   if Error then exit;
   Fields := StringSplit(S, ['|'], stAll);
@@ -270,7 +277,7 @@ procedure ExtractRuntimeArchive(ArchiveName: String);
 var
   ProgramPath, Arguments, AppDir: String;
   ExitCode: Integer;
-  Started: Boolean;
+  Started, CancelWasEnabled: Boolean;
 begin
   if not RuntimeExtractionSucceeded then exit;
   AppDir := ExpandConstant('{app}');
@@ -283,10 +290,19 @@ begin
     Arguments := '"' + AppDir + '\scripts\extract-runtime-archive.cjs" "' + AppDir + '" "' + ArchiveName + '"';
   end;
   Log('Runtime extraction starting: ' + ArchiveName);
-  if ArchiveName = 'node.tar.gz' then
-    Started := Exec(ProgramPath, Arguments, AppDir, SW_HIDE, ewWaitUntilTerminated, ExitCode)
-  else
-    Started := ExecAndLogOutput(ProgramPath, Arguments, AppDir, SW_SHOWNORMAL, ewWaitUntilTerminated, ExitCode, @ExtractionOutput);
+  RuntimeExtractionBusy := True;
+  RuntimeExtractionWindowRestored := False;
+  CancelWasEnabled := WizardForm.CancelButton.Enabled;
+  WizardForm.CancelButton.Enabled := False;
+  try
+    if ArchiveName = 'node.tar.gz' then
+      Started := Exec(ProgramPath, Arguments, AppDir, SW_HIDE, ewWaitUntilTerminated, ExitCode)
+    else
+      Started := ExecAndLogOutput(ProgramPath, Arguments, AppDir, SW_SHOWNORMAL, ewWaitUntilTerminated, ExitCode, @ExtractionOutput);
+  finally
+    RuntimeExtractionBusy := False;
+    WizardForm.CancelButton.Enabled := CancelWasEnabled;
+  end;
   Log('Runtime extraction ' + ArchiveName + ': exit=' + IntToStr(ExitCode));
   if (not Started) or (ExitCode <> 0) then
     FailRuntimeExtraction('Runtime extraction failed: ' + ArchiveName + '. See setup log and ' + AppDir + '\.installer-logs\extract-runtime.log');

@@ -1,5 +1,7 @@
 var
   RuntimeFailure: String;
+  RuntimeExtractionBusy: Boolean;
+  RuntimeExtractionWindowRestored: Boolean;
 
 function RuntimeExtractionSucceeded(): Boolean;
 begin
@@ -8,6 +10,11 @@ end;
 
 procedure CancelButtonClick(CurPageID: Integer; var Cancel, Confirm: Boolean);
 begin
+  if RuntimeExtractionBusy then begin
+    Cancel := False;
+    Confirm := False;
+    exit;
+  end;
   if not RuntimeExtractionSucceeded then begin
     Cancel := True;
     Confirm := False;

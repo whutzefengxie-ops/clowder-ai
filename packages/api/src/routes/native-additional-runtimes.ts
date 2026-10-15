@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse } from 'smol-toml';
 import { resolveCliCommand } from '../utils/cli-resolve.js';
@@ -17,7 +17,12 @@ const text = (value: unknown) => (typeof value === 'string' ? value : undefined)
 /** Reads only model identifiers; credentials and full configs never leave this boundary. */
 export function discoverAdditionalRuntimes(home: string, commandFor: typeof resolveCliCommand = resolveCliCommand) {
   const kimi = metadata(
-    process.env.KIMI_CONFIG_FILE || join(process.env.KIMI_SHARE_DIR || join(home, '.kimi'), 'config.toml'),
+    process.env.KIMI_CONFIG_FILE ||
+      join(
+        process.env.KIMI_SHARE_DIR ||
+          join(home, existsSync(join(home, '.kimi-code/config.toml')) ? '.kimi-code' : '.kimi'),
+        'config.toml',
+      ),
     true,
   );
   const opencode = metadata(

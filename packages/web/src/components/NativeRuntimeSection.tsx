@@ -1,5 +1,5 @@
 'use client';
-import { getCliEffortOptionsForProvider } from '@cat-cafe/shared';
+import { catClientSupportsNativeTool, getCliEffortOptionsForProvider } from '@cat-cafe/shared';
 import { type ReactNode, useEffect, useState } from 'react';
 import { apiFetch } from '@/utils/api-client';
 import { serializeCommandArgs } from './hub-cat-editor.acp';
@@ -107,9 +107,7 @@ export function NativeRuntimeSection({
                     cliEffort: '',
                     cliConfigArgs: [],
                     carrier: form.clientId === 'openai' ? 'app_server' : form.carrier,
-                    ...(!['anthropic', 'openai', 'acp', 'kimi', 'opencode'].includes(form.clientId)
-                      ? { clientId: 'anthropic', carrier: 'cli' }
-                      : {}),
+                    ...(!catClientSupportsNativeTool(form.clientId) ? { clientId: 'anthropic', carrier: 'cli' } : {}),
                   }
                 : {}),
             })

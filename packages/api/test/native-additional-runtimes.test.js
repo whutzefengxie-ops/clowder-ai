@@ -35,6 +35,10 @@ test('detects Kimi/OpenCode/Pi without disclosing authentication, and distinguis
     assert.equal(found[2].discoveryStatus, 'adapter_missing');
     assert.equal(found[2].acp, undefined);
     assert.doesNotMatch(JSON.stringify(found), /sensitive-sentinel|api_key/);
+    // Current kimi-code migrates to ~/.kimi-code; the old ~/.kimi may still exist.
+    mkdirSync(join(root, '.kimi-code'));
+    writeFileSync(join(root, '.kimi-code/config.toml'), 'default_model="native-current-model"\n');
+    assert.equal(discoverAdditionalRuntimes(root, command)[0].configuredModel, 'native-current-model');
     const bridged = discoverAdditionalRuntimes(root, (name) => join(root, `${name}.cmd`));
     assert.deepEqual(bridged[2].acp, { command: join(root, 'pi-acp.cmd'), startupArgs: [], transport: 'stdio' });
   } finally {

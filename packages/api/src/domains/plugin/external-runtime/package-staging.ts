@@ -200,7 +200,9 @@ export async function stageVerifiedPackageArchive(
     await verifyArchiveDigest(sealedArchivePath, input.packageDigest);
     phase = 'list';
     const archiveEnvironment = { PATH: process.env.PATH ?? '/usr/bin:/bin', LC_ALL: 'C' };
-    const [list, verboseList] = await Promise.all([
+    // A rejected list must not release the shared cwd while its sibling still
+    // runs. Settle both processes before propagating the original tar failure.
+    const listings = await Promise.allSettled([
       // GNU tar interprets the colon in Windows drive paths as host:file.
       // Resolve the sealed archive within this Host-owned staging directory.
       execFileAsync(input.tarBin, ['-tzf', PACKAGE_ARCHIVE_FILENAME], {
@@ -214,6 +216,10 @@ export async function stageVerifiedPackageArchive(
         maxBuffer: 8 * 1024 * 1024,
       }),
     ]);
+    const [list, verboseList] = listings.map((result) => {
+      if (result.status === 'rejected') throw result.reason;
+      return result.value;
+    });
     const members = archiveMembers(list.stdout);
     validateArchiveMemberTypes(verboseList.stdout, members.length);
     phase = 'extract';
