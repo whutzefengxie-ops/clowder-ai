@@ -1,11 +1,29 @@
 import { getCatCarrierOptions } from '@cat-cafe/shared';
+import type { CatData } from '@/hooks/useCatData';
 import type { HubCatEditorFormState } from '../../hub-cat-editor.model';
 
-type LegacyCarrierFields = Pick<HubCatEditorFormState, 'clientId' | 'configurationSource'> & {
+type LegacyCarrierFields = {
+  clientId: string;
+  configurationSource?: HubCatEditorFormState['configurationSource'];
   carrier?: HubCatEditorFormState['carrier'];
   acpEnabled?: boolean;
   codexCarrier?: '' | 'exec_json' | 'app_server';
 };
+
+/** Both sides of a draft diff must use the same carrier coordinate system. */
+export function normalizeMemberDraftBaseline(cat: CatData | null): CatData | null {
+  if (!cat || cat.carrier) return cat;
+  const legacyCli = cat.cli as (CatData['cli'] & { carrier?: LegacyCarrierFields['codexCarrier'] }) | undefined;
+  return {
+    ...cat,
+    carrier: resolveDraftCarrier({
+      clientId: cat.clientId,
+      configurationSource: cat.configurationSource,
+      acpEnabled: Boolean(cat.acp),
+      codexCarrier: legacyCli?.carrier,
+    }),
+  };
+}
 
 /** Read-only compatibility for drafts saved before main introduced canonical carrier. */
 export function resolveDraftCarrier(form: LegacyCarrierFields): HubCatEditorFormState['carrier'] {

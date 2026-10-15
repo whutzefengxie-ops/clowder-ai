@@ -15,6 +15,7 @@ const original = {
   name: '伙伴',
   displayName: '伙伴',
   clientId: 'openai',
+  carrier: 'cli',
   configurationSource: 'native_tool',
   color: { primary: '#123456', secondary: '#abcdef' },
   mentionPatterns: ['@draft'],
@@ -30,6 +31,7 @@ describe('member drafts survive navigation and concurrent edits', () => {
     const acpCat = {
       ...original,
       clientId: 'acp',
+      carrier: 'acp',
       acp: {
         command: 'C:/tools/node.exe',
         startupArgs: ['C:/tools/dsh cli.js', '--profile', 'acp'],
@@ -92,5 +94,26 @@ describe('member drafts survive navigation and concurrent edits', () => {
     const next = rebaseMemberDraft(draft, latest);
     expect(next.form).toMatchObject({ cliEffort: 'low', name: '新名字', accountRef: 'personal' });
     expect(next.baseline?.configurationRevision).toBe('after');
+  });
+  it('does not treat migration of an old carrier as a local edit during rebase', () => {
+    const baseline = { ...original, cli: { ...original.cli, carrier: 'app_server' } };
+    const form = { ...initialState(original), nickname: 'local nickname', codexCarrier: 'app_server' };
+    Reflect.deleteProperty(baseline, 'carrier');
+    Reflect.deleteProperty(form, 'carrier');
+    sessionStorage.setItem(
+      'legacy-carrier-rebase',
+      JSON.stringify({
+        version: 1,
+        baseline,
+        form,
+        section: 'runtime',
+        templateId: null,
+      }),
+    );
+    const draft = readMemberDraft('legacy-carrier-rebase')!;
+    const latest = { ...original, carrier: 'cli' as const, configurationRevision: 'after' };
+    const rebased = rebaseMemberDraft(draft, latest);
+    expect(rebased.form).toMatchObject({ nickname: 'local nickname', carrier: 'cli' });
+    expect(buildMemberPatchPayload(rebased.form, latest)).toEqual({ nickname: 'local nickname' });
   });
 });

@@ -7,7 +7,7 @@ import {
   initialState,
   type StrategyFormState,
 } from '../../hub-cat-editor.model';
-import { normalizeMemberDraftForm } from './member-carrier-compat';
+import { normalizeMemberDraftBaseline, normalizeMemberDraftForm } from './member-carrier-compat';
 import type { RuntimeDrafts } from './member-runtime-draft';
 
 export interface MemberDraft {
@@ -50,7 +50,7 @@ export function readMemberDraft(key: string): MemberDraft | null {
       return null;
     const draft = data as MemberDraft;
     return typeof draft.form?.name === 'string' && typeof draft.form?.clientId === 'string'
-      ? { ...draft, form: normalizeMemberDraftForm(draft.form) }
+      ? { ...draft, baseline: normalizeMemberDraftBaseline(draft.baseline), form: normalizeMemberDraftForm(draft.form) }
       : null;
   } catch {
     return null;

@@ -13,7 +13,8 @@ describe('pre-canonical member drafts', () => {
       [{ acpEnabled: true }, 'acp'],
     ] as const) {
       const form = { ...initialState(), clientId: 'openai' as const, defaultModel: 'my-model', ...extra };
-      const { carrier: _carrier, ...saved } = form;
+      const saved = { ...form };
+      Reflect.deleteProperty(saved, 'carrier');
       const normalized = normalizeMemberDraftForm(saved as typeof form);
       expect(normalized.carrier).toBe(carrier);
       expect(normalized.defaultModel).toBe('my-model');
@@ -31,7 +32,8 @@ describe('pre-canonical member drafts', () => {
       catId: 'codex',
       mentionPatterns: '@codex',
     };
-    const { carrier: _carrier, ...saved } = canonical;
+    const saved = { ...canonical };
+    Reflect.deleteProperty(saved, 'carrier');
     const payload = buildNativeCreationPayload({ ...saved, codexCarrier: 'app_server' } as unknown as typeof canonical);
     expect(payload).not.toHaveProperty('carrier');
     expect(payload.cli).toEqual({ carrier: 'app_server' });
@@ -39,7 +41,8 @@ describe('pre-canonical member drafts', () => {
     expect(buildNativeCreationPayload(canonical).carrier).toBe('app_server');
   });
   it('keeps old ACP launch args and native effort in its original creation request', () => {
-    const { carrier: _carrier, ...form } = initialState();
+    const form = initialState();
+    Reflect.deleteProperty(form, 'carrier');
     const saved = {
       ...form,
       clientId: 'acp' as const,
