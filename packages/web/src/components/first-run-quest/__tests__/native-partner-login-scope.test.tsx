@@ -19,16 +19,20 @@ afterEach(() => {
   host.remove();
   vi.unstubAllGlobals();
 });
-function mount(status: 'configured' | 'login_required', change: Partial<HubCatEditorFormState> = {}) {
+function mount(
+  status: 'configured' | 'login_required',
+  change: Partial<HubCatEditorFormState> = {},
+  clientId: 'anthropic' | 'openai' = 'anthropic',
+) {
   const partner = recommendNativePartners(
     [
       {
-        id: 'claude',
-        label: 'Claude Code',
-        clientId: 'anthropic',
+        id: clientId === 'openai' ? 'codex' : 'claude',
+        label: clientId === 'openai' ? 'Codex' : 'Claude Code',
+        clientId,
         installed: true,
         models: [],
-        readiness: { status, checkedAt: 1, loginCommand: 'claude auth login' },
+        readiness: { status, checkedAt: 1, loginCommand: clientId === 'openai' ? 'codex login' : 'claude auth login' },
       },
     ],
     [],
@@ -41,6 +45,11 @@ function mount(status: 'configured' | 'login_required', change: Partial<HubCatEd
 }
 it.each(['configured', 'login_required'] as const)('retains %s evidence for the ordinary default partner', (status) => {
   expect(mount(status)).toContain(status === 'configured' ? '已检测登录' : '尚未登录');
+});
+it('does not promise Codex creation before the native login admission check can pass', () => {
+  const text = mount('login_required', {}, 'openai');
+  expect(text).toContain('新增伙伴前需要先登录');
+  expect(text).not.toContain('可先创建伙伴');
 });
 it.each([
   ['explicit account', { accountRef: 'company-account' }],

@@ -116,7 +116,10 @@ export function NativePartnerCard({
         <div role="status" className="mt-3 rounded-lg bg-conn-amber-bg p-3 text-sm text-conn-amber-text">
           <p className="font-medium">{runtime.label} 尚未登录</p>
           <p className="mt-1">
-            可先创建伙伴，创建后还需登录才能回复。在此运行环境执行 <code>{runtime.readiness.loginCommand}</code>
+            {runtime.clientId === 'openai'
+              ? 'Codex 登录校验未通过；新增伙伴前需要先登录。'
+              : '可先创建伙伴，创建后还需登录才能回复。'}
+            在此运行环境执行 <code>{runtime.readiness.loginCommand}</code>
             ，然后重新检测。
           </p>
         </div>
