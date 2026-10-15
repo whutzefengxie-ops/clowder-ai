@@ -52,3 +52,42 @@ test(
     }
   },
 );
+
+test('post-install verification accepts shared workspace dependencies', { skip: process.platform !== 'win32' }, () => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'installer-shared-'));
+  try {
+    for (const file of [
+      '.env',
+      'packages/api/dist/index.js',
+      'node_modules/@cat-cafe/shared/dist/index.js',
+      'node_modules/.runtime-lock.json',
+      'node_modules/next/dist/bin/next',
+    ]) {
+      const target = path.join(base, file);
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.writeFileSync(target, file === '.env' ? 'REDIS_URL=redis://127.0.0.1:6330\n' : '{}');
+    }
+    fs.mkdirSync(path.join(base, 'packages/web/.next'), { recursive: true });
+    fs.mkdirSync(path.join(base, 'node_modules/zod'), { recursive: true });
+    const run = spawnSync(
+      'powershell.exe',
+      [
+        '-NoProfile',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-File',
+        path.join(__dirname, 'scripts/post-install-offline.ps1'),
+        '-AppDir',
+        base,
+        '-UserProfileRoot',
+        path.join(base, 'home'),
+      ],
+      { encoding: 'utf8', windowsHide: true },
+    );
+    assert.equal(run.status, 0, run.stderr);
+    assert.match(run.stdout, /Clowder AI configured!/);
+    assert.doesNotMatch(run.stdout, /packages\/api\/node_modules\/@cat-cafe\/shared\/dist\/index.js - missing/);
+  } finally {
+    fs.rmSync(base, { recursive: true, force: true });
+  }
+});

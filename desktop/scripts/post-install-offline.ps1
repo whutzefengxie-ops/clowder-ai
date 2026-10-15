@@ -170,7 +170,7 @@ Write-Step "Step 3/3 - Verify"
 
 $artifacts = @(
     "packages/api/dist/index.js",
-    "packages/api/node_modules/@cat-cafe/shared/dist/index.js",
+    $(if (Test-Path (Join-Path $AppDir 'node_modules/@cat-cafe/shared/dist/index.js')) { 'node_modules/@cat-cafe/shared/dist/index.js' } else { 'packages/api/node_modules/@cat-cafe/shared/dist/index.js' }),
     "packages/web/.next",
     $(if (Test-Path (Join-Path $AppDir 'node_modules/.runtime-lock.json')) { 'node_modules/next/dist/bin/next' } else { 'packages/web/node_modules/next/dist/bin/next' }),
     $(if (Test-Path (Join-Path $AppDir 'node_modules/.runtime-lock.json')) { 'node_modules/zod' } else { 'packages/api/node_modules/zod' })
