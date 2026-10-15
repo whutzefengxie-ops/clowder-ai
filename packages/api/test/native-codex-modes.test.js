@@ -102,6 +102,7 @@ for (const model of ['', 'role-override']) {
         ...catRegistry.tryGet('codex').config,
         id,
         clientId: 'openai',
+        carrier: 'app_server',
         configurationSource: 'native_tool',
         defaultModel: model,
         cli: { command: 'codex', outputFormat: 'json' },
@@ -109,6 +110,7 @@ for (const model of ['', 'role-override']) {
       const wire = new InteractionWire();
       const service = new CodexAgentService({
         catId: id,
+        carrierMode: 'app_server',
         cliCommand: process.execPath,
         l0CompilerFn: async () => 'fixture L0',
       });
@@ -149,6 +151,7 @@ test('native collaboration stops before prompt when the adopted model is unavail
     ...catRegistry.tryGet('codex').config,
     id,
     clientId: 'openai',
+    carrier: 'app_server',
     configurationSource: 'native_tool',
     defaultModel: '',
     cli: { command: 'codex', outputFormat: 'json' },
@@ -162,6 +165,7 @@ test('native collaboration stops before prompt when the adopted model is unavail
   };
   const service = new CodexAgentService({
     catId: id,
+    carrierMode: 'app_server',
     cliCommand: process.execPath,
     l0CompilerFn: async () => 'fixture L0',
   });
@@ -178,5 +182,6 @@ test('native collaboration stops before prompt when the adopted model is unavail
     wire.writes.some((message) => message.method === 'turn/start'),
     false,
   );
+  assert.ok(wire.writes.some((message) => message.method === 'thread/start'), 'exercise the adopted-model boundary');
   assert.ok(messages.some((message) => message.type === 'error'));
 });
