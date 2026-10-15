@@ -62,6 +62,30 @@ afterEach(() => {
 });
 
 describe('CatOverviewTab drag & drop (F166)', () => {
+  it('ignores an older default response that arrives after the first registered roster', async () => {
+    const mock = vi.mocked(apiFetch);
+    const original = mock.getMockImplementation();
+    let completeFirst: ((response: Response) => void) | undefined;
+    let calls = 0;
+    mock.mockImplementation(async (url) => {
+      if (String(url) !== '/api/config/default-cat') return new Response('{}');
+      if (++calls === 1)
+        return new Promise<Response>((resolve) => {
+          completeFirst = resolve;
+        });
+      return new Response(JSON.stringify({ catId: 'A' }));
+    });
+    try {
+      const config = { coCreator: null, cats: {} } as unknown as import('../config-viewer-types').ConfigData;
+      await act(async () => root.render(React.createElement(CatOverviewTab, { config, cats: [] })));
+      await act(async () => root.render(React.createElement(CatOverviewTab, { config, cats: [minimalCat('A')] })));
+      await act(async () => completeFirst?.(new Response(JSON.stringify({ catId: 'legacy-default' }))));
+      expect((container.querySelector('[data-testid="default-cat-select"]') as HTMLSelectElement).value).toBe('A');
+    } finally {
+      if (original) mock.mockImplementation(original);
+    }
+  });
+
   it('refreshes the resolved default after the first members are registered without changing the preference', async () => {
     const mock = vi.mocked(apiFetch);
     const original = mock.getMockImplementation();

@@ -60,6 +60,7 @@ export function CatOverviewTab({
   const [defaultCatLoading, setDefaultCatLoading] = useState(false);
   const [defaultCatFetchError, setDefaultCatFetchError] = useState(false);
   const [defaultCatSaveError, setDefaultCatSaveError] = useState<string | null>(null);
+  const defaultCatFetchSequence = useRef(0);
 
   // F166: Local optimistic cat order; null = follow props. Re-sorted against incoming cats.
   const [localOrder, setLocalOrder] = useState<string[] | null>(null);
@@ -116,22 +117,31 @@ export function CatOverviewTab({
   );
 
   const fetchDefaultCat = useCallback(() => {
+    const sequence = ++defaultCatFetchSequence.current;
     setDefaultCatFetchError(false);
     apiFetch('/api/config/default-cat')
       .then((r) => r.json())
-      .then((data: { catId: string }) => setDefaultCatId(data.catId))
-      .catch(() => setDefaultCatFetchError(true));
+      .then((data: { catId: string }) => {
+        if (sequence === defaultCatFetchSequence.current) setDefaultCatId(data.catId);
+      })
+      .catch(() => {
+        if (sequence === defaultCatFetchSequence.current) setDefaultCatFetchError(true);
+      });
   }, []);
 
   // The resolver can change after first registration; read it again without writing a new preference.
   // biome-ignore lint/correctness/useExhaustiveDependencies: registry changes affect the server's resolved default.
   useEffect(() => {
     fetchDefaultCat();
+    return () => {
+      defaultCatFetchSequence.current += 1;
+    };
   }, [fetchDefaultCat, cats]);
 
   const handleDefaultCatSelect = useCallback(
     async (catId: string) => {
       if (catId === defaultCatId) return;
+      defaultCatFetchSequence.current += 1;
       setDefaultCatLoading(true);
       setDefaultCatSaveError(null);
       try {
