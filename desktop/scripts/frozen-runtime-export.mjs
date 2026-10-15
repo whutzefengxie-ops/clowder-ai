@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { stageBuiltWeb } from './stage-built-web.mjs';
+import { workspaceRuntimeModules } from './workspace-runtime-modules.mjs';
 
 const inside = (root, target) => target === root || target.startsWith(root + path.sep);
 const hash = (file) => createHash('sha256').update(fs.readFileSync(file)).digest('hex');
@@ -44,9 +45,15 @@ export function exportFrozenRuntime(
   if (hash(path.join(workspace, 'pnpm-lock.yaml')) !== lockHash) throw new Error('Frozen workspace lock changed');
   if (fs.existsSync(out)) throw new Error(`Output must be new: ${out}`);
   fs.mkdirSync(out, { recursive: true });
+  const workspaceModules = sharedDependencies ? workspaceRuntimeModules(workspace, packages) : null;
   if (sharedDependencies) {
     const shared = path.join(out, 'dependencies');
-    materialize(path.join(workspace, 'node_modules'), shared, workspace);
+    materialize(path.join(workspace, 'node_modules'), shared, workspace, new Set(), workspaceModules.include);
+    for (const [name, source] of workspaceModules.hoisted) {
+      const target = path.join(shared, name);
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      materialize(source, target, workspace, new Set(), workspaceModules.include);
+    }
     fs.writeFileSync(path.join(shared, '.runtime-lock.json'), JSON.stringify({ lockHash, node: process.version }));
   }
   for (const name of packages) {
@@ -74,12 +81,17 @@ export function exportFrozenRuntime(
     const modules = path.join(destination, 'node_modules');
     if (sharedDependencies) {
       fs.mkdirSync(modules);
-      if (fs.existsSync(ownModules)) materialize(ownModules, modules, workspace);
+      if (fs.existsSync(ownModules)) materialize(ownModules, modules, workspace, new Set(), workspaceModules.include);
     } else exportModules(path.join(workspace, 'node_modules'), ownModules, modules, workspace);
     fs.writeFileSync(path.join(destination, '.runtime-lock.json'), JSON.stringify({ lockHash, node: process.version }));
     if (name === 'web' && builtWebSource) stageBuiltWeb(builtWebSource, destination);
   }
-  return { lockHash, packages, sharedDependencies };
+  return {
+    lockHash,
+    packages,
+    sharedDependencies,
+    ...(workspaceModules ? { sharedWorkspacePackages: [...workspaceModules.hoisted.keys()].sort() } : {}),
+  };
 }
 
 /** A package override replaces the entire module, never overlays old private peers. */

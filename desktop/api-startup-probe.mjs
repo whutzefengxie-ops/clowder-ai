@@ -4,6 +4,13 @@ import { registerHooks } from 'node:module';
 import { isMainThread, threadId } from 'node:worker_threads';
 
 const started = performance.now();
+const moduleGroups = new Map();
+function moduleGroup(url) {
+  const dependency = String(url).split('/node_modules/');
+  if (dependency.length < 2) return 'application';
+  const name = dependency.at(-1).match(/^(@[\w.-]+\/[\w.-]+|[\w.-]+)(?:\/|$)/)?.[1];
+  return name?.slice(0, 100) ?? 'dependency';
+}
 let moduleLoads = 0,
   moduleReadMs = 0,
   moduleResolveMs = 0,
@@ -23,8 +30,14 @@ const hook = isMainThread
         try {
           return next(url, context);
         } finally {
+          const elapsed = performance.now() - began;
           moduleLoads++;
-          moduleReadMs += performance.now() - began;
+          moduleReadMs += elapsed;
+          const name = moduleGroup(url);
+          const group = moduleGroups.get(name) ?? { name, loads: 0, readMs: 0 };
+          group.loads++;
+          group.readMs += elapsed;
+          moduleGroups.set(name, group);
           if (performance.now() - lastReport > 5000) {
             lastReport = performance.now();
             milestone('module-loading');
@@ -44,6 +57,10 @@ function milestone(phase) {
       moduleLoads,
       moduleReadMs: Math.round(moduleReadMs),
       moduleResolveMs: Math.round(moduleResolveMs),
+      moduleGroups: [...moduleGroups.values()]
+        .sort((a, b) => b.readMs - a.readMs)
+        .slice(0, 12)
+        .map((group) => ({ ...group, readMs: Math.round(group.readMs) })),
       elapsedMs: Math.round(performance.now() - started),
       processUptimeMs: Math.round(process.uptime() * 1000),
       rssMb: Math.round(process.memoryUsage().rss / 1048576),

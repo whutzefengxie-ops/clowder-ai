@@ -52,8 +52,10 @@ async function extractRuntimeArchive(
   let admissionError;
   const preflight = engine === 'native';
   let phase = engine === 'native' ? 'verify' : 'extract';
+  let extractionStarted = preflight ? null : started;
   let lastEntryAt = started;
-  const report = (status, extra = {}) =>
+  const report = (status, extra = {}) => {
+    const now = Date.now();
     onProgress({
       runId,
       archive: archiveName,
@@ -61,7 +63,9 @@ async function extractRuntimeArchive(
       engine,
       phase,
       at: new Date().toISOString(),
-      elapsedMs: Date.now() - started,
+      elapsedMs: now - started,
+      verifyMs: preflight ? (extractionStarted ?? now) - started : 0,
+      extractMs: extractionStarted === null ? 0 : now - extractionStarted,
       entries,
       totalEntries: manifest?.entries ?? null,
       bytesRead: input.bytesRead,
@@ -78,12 +82,13 @@ async function extractRuntimeArchive(
                   : (input.bytesRead / Math.max(1, bytes)) * 100,
               ),
             ),
-      idleMs: Date.now() - lastEntryAt,
+      idleMs: now - lastEntryAt,
       cpu: process.cpuUsage(cpu),
       rssBytes: process.memoryUsage().rss,
       priority: os.getPriority(0),
       ...extra,
     });
+  };
   fs.mkdirSync(cwd, { recursive: true });
   report('start');
   const timer = setInterval(() => report('progress'), intervalMs);
@@ -110,6 +115,7 @@ async function extractRuntimeArchive(
       if (manifest && (verifiedEntries !== manifest.entries || checksum.digest('hex') !== manifest.sha256))
         throw new Error('Runtime archive integrity mismatch');
       phase = 'extract';
+      extractionStarted = Date.now();
       if (unicodeEntry) {
         engine = 'node-unicode';
         report('progress', { reason: 'system_tar_unicode_filename_limitation' });

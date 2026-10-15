@@ -23,7 +23,7 @@ for (const sharedDependencies of [false, true])
       file('packages/api/dist/types.d.ts', 'export type Internal = string');
       file('packages/api/src/plugins/runtime/native.swift', 'runtime-asset');
       file('packages/shared/package.json', '{"name":"@cat-cafe/shared","main":"index.cjs"}');
-      file('packages/shared/index.cjs', 'module.exports = 7');
+      file('packages/shared/index.cjs', 'module.exports = {value: 7}');
       file('node_modules/@fastify/send/package.json', '{"name":"@fastify/send","main":"index.cjs"}');
       file('node_modules/@fastify/send/index.cjs', 'module.exports = 5');
       file('node_modules/@fastify/send/test/fixtures/snow \u2603/index.txt', 'fixture only');
@@ -48,10 +48,17 @@ for (const sharedDependencies of [false, true])
         path.join(workspace, 'node_modules/@cat-cafe/shared'),
         'junction',
       );
+      fs.mkdirSync(path.join(workspace, 'packages/api/node_modules/@cat-cafe'), { recursive: true });
+      fs.symlinkSync(
+        path.join(workspace, 'packages/shared'),
+        path.join(workspace, 'packages/api/node_modules/@cat-cafe/shared'),
+        'junction',
+      );
       const out = path.join(base, 'output');
       exportFrozenRuntime(workspace, out, ['api'], path.join(workspace, 'pnpm-lock.yaml'), { sharedDependencies });
       assert.equal(fs.existsSync(path.join(out, 'api/node_modules/nested')), !sharedDependencies);
       assert.equal(fs.existsSync(path.join(out, 'dependencies/nested')), sharedDependencies);
+      assert.equal(fs.existsSync(path.join(out, 'api/node_modules/@cat-cafe/shared')), !sharedDependencies);
       const moved = path.join(base, 'moved');
       fs.renameSync(out, moved);
       if (sharedDependencies) fs.renameSync(path.join(moved, 'dependencies'), path.join(moved, 'node_modules'));
@@ -60,7 +67,11 @@ for (const sharedDependencies of [false, true])
       assert.equal(fs.existsSync(path.join(moved, 'api/test')), !sharedDependencies);
       assert.equal(fs.existsSync(path.join(moved, 'api/dist/types.d.ts')), !sharedDependencies);
       assert.equal(fs.readFileSync(path.join(moved, 'api/src/plugins/runtime/native.swift'), 'utf8'), 'runtime-asset');
-      assert.equal(require('@cat-cafe/shared'), 7);
+      assert.equal(require('@cat-cafe/shared').value, 7);
+      if (sharedDependencies) {
+        const rootRequire = createRequire(path.join(moved, 'package.json'));
+        assert.equal(require('@cat-cafe/shared'), rootRequire('@cat-cafe/shared'));
+      }
       assert.equal(require('@fastify/send'), 5);
       const modules = path.join(moved, sharedDependencies ? 'node_modules' : 'api/node_modules');
       assert.equal(fs.existsSync(path.join(modules, '@fastify/send/test')), false);

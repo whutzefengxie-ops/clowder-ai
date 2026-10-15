@@ -140,6 +140,9 @@ test(
       await extractRuntimeArchive(root, manifest.archive, tar, { engine: 'native', onProgress: (e) => events.push(e) });
       assert.equal(events.at(-1).engine, 'native');
       assert.equal(events.at(-1).entries, entries);
+      assert.ok(events.at(-1).verifyMs >= 0);
+      assert.ok(events.at(-1).extractMs >= 0);
+      assert.ok(events.at(-1).verifyMs + events.at(-1).extractMs <= events.at(-1).elapsedMs);
       fs.mkdirSync(path.join(input, '中文目录'), { recursive: true });
       fs.writeFileSync(path.join(input, '中文目录/snow ☃.txt'), 'unicode witness');
       await tar.c({ file, gzip: true, cwd: input }, ['.']);

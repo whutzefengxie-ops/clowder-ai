@@ -9,9 +9,15 @@ test('startup evidence attributes module loads and thread identity without leaki
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'startup-graph-'));
   try {
     fs.writeFileSync(path.join(root, 'dep.mjs'), 'export const value = 1;');
+    fs.mkdirSync(path.join(root, 'node_modules', 'startup-witness'), { recursive: true });
+    fs.writeFileSync(
+      path.join(root, 'node_modules/startup-witness/package.json'),
+      '{"type":"module","main":"index.js"}',
+    );
+    fs.writeFileSync(path.join(root, 'node_modules/startup-witness/index.js'), 'export default 2;');
     fs.writeFileSync(
       path.join(root, 'main.mjs'),
-      "import {value} from './dep.mjs'; globalThis.__clowderStartupMilestone('http-listening');",
+      "import {value} from './dep.mjs'; import witness from 'startup-witness'; globalThis.__clowderStartupMilestone('http-listening');",
     );
     const output = execFileSync(
       process.execPath,
@@ -27,6 +33,9 @@ test('startup evidence attributes module loads and thread identity without leaki
     assert.ok(ready.moduleLoads >= 2);
     assert.equal(ready.threadId, 0);
     assert.ok(ready.moduleReadMs >= 0);
+    assert.equal(ready.moduleGroups.find((group) => group.name === 'startup-witness').loads, 1);
+    assert.ok(ready.moduleGroups.every((group) => group.readMs >= 0));
+    assert.ok(ready.moduleGroups.length <= 12);
     assert.equal(output.includes(root), false);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });

@@ -64,3 +64,17 @@ Map delta: Windows 公共依赖从三份包内复制改为同一安装根一份�
 DSH已在用户当前Fresh实例复现：实际接口3166重新探测仍not_installed，但原用户HOME的npx缓存和ACP profile可正常只读发现。测试连接快照只有Codex/Claude，隔离HOME/LOCALAPPDATA后没有准备DSH。修复独立验收连接准备，引用只读CLI安装并复制必要的ACP连接配置，不复制会话/存储或改源文件。另覆盖“初次不存在→安装/profile补齐→同一进程重新检测出现”，清楚区分安装、ACP配置与实际调用，不能把启动`npx @deepseek-ai/dsh web`当作ACP认证可用证明。
 
 在当前分支、同一PR实施；生产和用户当前Fresh实例不用于故障注入。新自有实例依次验证真实首装、冷启阶段、引导、三工具真实回复、覆盖升级和故障恢复，记录配置/历史/marker前后值。最终提供另一份未使用的干净测试实例供用户从安装开始验收。
+
+## 第三轮：首装全链路与 workspace 身份去重
+
+来源：用户要求不能用覆盖升级代替首装；继续当前 worktree/PR，实际走完干净安装、首次启动、自动引导、一键创建和真实调用，并另留未使用的环境。
+
+新目录基线已执行：安装前 app/instance 均不存在，独立5174/3174/6330；Setup 88870ms退出0，第一次启动96157ms ready，无重试。角色为0，仅有系统default线程。API监听60905ms，其中模块读取46094ms；没有清除操作系统文件缓存，故不称受控重启后的冷盘基准。引导在真实Electron自动播放，typing/A2A及右侧成果完成，随后进入推荐创建页；无凭据的隔离HOME明确显示尚未登录。后续认证准备、创建及真实请求分别登记，不能把创建记录当回复成功。
+
+已确认冻结图中API/MCP/collective等的共享workspace链接指向同一个源目录，物化时却重复复制；已有单测补真实重复链接后RED。将这些相同canonical目录的workspace包放到一份公共node_modules，保留各包不同身份的私有版本和peer；只按版本号或名字相同不合并。非Windows旧布局不变。不对整个第三方依赖进行未经验证的裁剪或打包，不合并可能产生第二个registry实例的模块。
+
+工作单元：覆盖相同身份单例、同名同版本但不同身份、私有peer和搬移后的实际加载；重新物化冻结图、生成API bundle及安装包，记录条目变化；随后在另一个全新目录重复实际Setup及首次启动，运行完整产品路径。启动日志新增脱敏包分组耗时；解压日志分开校验/写入用时；只读系统资源采样用于定位相关活动，不足以断言安全软件的因果占比。格式化运行`pnpm biome format --write`指定文件，定向Node测试及Windows安装数据边界检查后再提交。
+
+数据边界：既有Fresh/Runtime2/生产不重装、不清库、不修改HOME。新CleanCold/CleanUser的认证资料须按目标单独获授权，只补缺失的必要连接文件，不带历史；未获授权时保持登录待处理。最终给用户的实例不预先创建角色或运行引导；作者验收实例与交付实例分别有独立AppId、目录及三端口。
+
+Architecture cell: Windows offline installer / frozen runtime exporter。Map delta: workspace包按canonical源身份共享，私有依赖owner与所有用户持久化owner不变。Why: 减少重复文件与重复模块实例，实际首装和真调用验证才作验收。
