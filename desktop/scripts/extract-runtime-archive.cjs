@@ -100,7 +100,11 @@ async function extractRuntimeArchive(
 
 module.exports = { extractRuntimeArchive };
 if (require.main === module) {
-  try { os.setPriority(0, os.constants.priority.PRIORITY_BELOW_NORMAL); } catch (error) { console.error(`Archive priority: ${error.code}`); }
+  try {
+    os.setPriority(0, os.constants.priority.PRIORITY_BELOW_NORMAL);
+  } catch (error) {
+    console.error(`Archive priority: ${error.code}`);
+  }
   const [root, name] = process.argv.slice(2);
   const logs = path.join(root, '.installer-logs');
   fs.mkdirSync(logs, { recursive: true });

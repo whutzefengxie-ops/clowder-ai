@@ -77,12 +77,13 @@ Source: "..\..\bundled\archives\deploy-api.tar.gz.json"; DestDir: "{app}\bundled
 Source: "..\..\bundled\archives\deploy-web.tar.gz.json"; DestDir: "{app}\bundled\archives"
 Source: "..\..\bundled\archives\deploy-mcp-server.tar.gz.json"; DestDir: "{app}\bundled\archives"
 Source: "..\..\bundled\archives\electron.tar.gz.json"; DestDir: "{app}\bundled\archives"
-Source: "..\..\bundled\archives\node.tar.gz"; DestDir: "{app}\bundled\archives"; AfterInstall: ExtractRuntimeArchive('node.tar.gz')
-Source: "..\..\bundled\archives\deploy-dependencies.tar.gz"; DestDir: "{app}\bundled\archives"; AfterInstall: ExtractRuntimeArchive('deploy-dependencies.tar.gz')
-Source: "..\..\bundled\archives\deploy-api.tar.gz"; DestDir: "{app}\bundled\archives"; AfterInstall: ExtractRuntimeArchive('deploy-api.tar.gz')
-Source: "..\..\bundled\archives\deploy-web.tar.gz"; DestDir: "{app}\bundled\archives"; AfterInstall: ExtractRuntimeArchive('deploy-web.tar.gz')
-Source: "..\..\bundled\archives\deploy-mcp-server.tar.gz"; DestDir: "{app}\bundled\archives"; AfterInstall: ExtractRuntimeArchive('deploy-mcp-server.tar.gz')
-Source: "..\..\bundled\archives\electron.tar.gz"; DestDir: "{app}\bundled\archives"; AfterInstall: ExtractRuntimeArchive('electron.tar.gz')
+; Already compressed: copying these verbatim avoids a second compression/decode layer.
+Source: "..\..\bundled\archives\node.tar.gz"; DestDir: "{app}\bundled\archives"; Flags: nocompression; AfterInstall: ExtractRuntimeArchive('node.tar.gz')
+Source: "..\..\bundled\archives\deploy-dependencies.tar.gz"; DestDir: "{app}\bundled\archives"; Flags: nocompression; AfterInstall: ExtractRuntimeArchive('deploy-dependencies.tar.gz')
+Source: "..\..\bundled\archives\deploy-api.tar.gz"; DestDir: "{app}\bundled\archives"; Flags: nocompression; AfterInstall: ExtractRuntimeArchive('deploy-api.tar.gz')
+Source: "..\..\bundled\archives\deploy-web.tar.gz"; DestDir: "{app}\bundled\archives"; Flags: nocompression; AfterInstall: ExtractRuntimeArchive('deploy-web.tar.gz')
+Source: "..\..\bundled\archives\deploy-mcp-server.tar.gz"; DestDir: "{app}\bundled\archives"; Flags: nocompression; AfterInstall: ExtractRuntimeArchive('deploy-mcp-server.tar.gz')
+Source: "..\..\bundled\archives\electron.tar.gz"; DestDir: "{app}\bundled\archives"; Flags: nocompression; AfterInstall: ExtractRuntimeArchive('electron.tar.gz')
 ; ── Individual files (small — per-file overhead negligible) ───────────
 ; cat-template.json — the authoritative source for cat model defaults.
 ; cat-config-loader.js resolves it relative to its own location 4 dirs up
