@@ -120,7 +120,10 @@ export function CatOverviewTab({
     const sequence = ++defaultCatFetchSequence.current;
     setDefaultCatFetchError(false);
     apiFetch('/api/config/default-cat')
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error('Default responder read failed');
+        return r.json();
+      })
       .then((data: { catId: string }) => {
         if (sequence === defaultCatFetchSequence.current) setDefaultCatId(data.catId);
       })
@@ -152,6 +155,9 @@ export function CatOverviewTab({
         });
         if (res.ok) {
           const data = (await res.json()) as { warning?: string };
+          // A read started during PUT must not overwrite its acknowledged choice.
+          defaultCatFetchSequence.current += 1;
+          setDefaultCatFetchError(false);
           setDefaultCatId(catId);
           if (data.warning) setDefaultCatSaveError(data.warning);
         } else {

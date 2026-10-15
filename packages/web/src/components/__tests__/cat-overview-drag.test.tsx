@@ -62,6 +62,46 @@ afterEach(() => {
 });
 
 describe('CatOverviewTab drag & drop (F166)', () => {
+  for (const staleFailure of [false, true])
+    it(`keeps confirmed preference after an interleaved GET (failure=${staleFailure})`, async () => {
+      const mock = vi.mocked(apiFetch);
+      const original = mock.getMockImplementation();
+      let finishPut: ((response: Response) => void) | undefined;
+      let finishRead: ((response: Response) => void) | undefined;
+      let reads = 0;
+      mock.mockImplementation(async (url, init) => {
+        if (String(url) !== '/api/config/default-cat') return new Response('{}');
+        if (init?.method === 'PUT')
+          return new Promise<Response>((resolve) => {
+            finishPut = resolve;
+          });
+        if (++reads === 1) return new Response(JSON.stringify({ catId: 'A' }));
+        return new Promise<Response>((resolve) => {
+          finishRead = resolve;
+        });
+      });
+      try {
+        const config = { coCreator: null, cats: {} } as unknown as import('../config-viewer-types').ConfigData;
+        const cats = [minimalCat('A'), minimalCat('B')];
+        await act(async () => root.render(React.createElement(CatOverviewTab, { config, cats })));
+        const select = container.querySelector('[data-testid="default-cat-select"]') as HTMLSelectElement;
+        await act(async () => {
+          select.value = 'B';
+          select.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+        await act(async () => root.render(React.createElement(CatOverviewTab, { config, cats: [...cats] })));
+        await act(async () => finishPut?.(new Response('{}')));
+        expect(select.value).toBe('B');
+        await act(async () =>
+          finishRead?.(new Response(staleFailure ? 'invalid-json' : JSON.stringify({ catId: 'A' }))),
+        );
+        expect(select.value).toBe('B');
+        expect(container.textContent).not.toContain('加载失败，当前默认猫未知');
+      } finally {
+        if (original) mock.mockImplementation(original);
+      }
+    });
+
   it('ignores an older default response that arrives after the first registered roster', async () => {
     const mock = vi.mocked(apiFetch);
     const original = mock.getMockImplementation();

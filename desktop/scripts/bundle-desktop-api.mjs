@@ -33,7 +33,7 @@ function preserveModuleUrl(code, file, dist) {
 
 /** Keep the original dist tree for workers, dynamic paths and unbundled tooling. */
 export async function bundleDesktopApi(apiRoot) {
-  const dist = path.resolve(apiRoot, 'dist');
+  const dist = fs.realpathSync(path.resolve(apiRoot, 'dist'));
   const entry = path.join(dist, 'index.js');
   const output = path.join(dist, 'index.desktop.js');
   const result = await build({
