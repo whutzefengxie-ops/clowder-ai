@@ -24,6 +24,7 @@ import { formatCliExitError } from '../../../../../utils/cli-format.js';
 import { formatCliNotFoundError, resolveCliCommand } from '../../../../../utils/cli-resolve.js';
 import { isCliError, isCliTimeout, isLivenessWarning, spawnCli } from '../../../../../utils/cli-spawn.js';
 import type { SpawnFn } from '../../../../../utils/cli-types.js';
+import { excerptSanitizedStderr } from '../../../../../utils/sanitize-cli-stderr.js';
 import { CliRawArchive } from '../../session/CliRawArchive.js';
 import type {
   AgentMessage,
@@ -46,6 +47,7 @@ import {
   probeOpenCodeAutoApproveSupport,
   userControlsOpenCodeAutoApprove,
 } from './opencode-auto-approval.js';
+import { readOpenCodeError } from './opencode-error.js';
 import { transformOpenCodeEvent } from './opencode-event-transform.js';
 import {
   buildOpenCodeNoToolFinalizerConfig,
@@ -164,14 +166,7 @@ function getOpenCodeStepFinishReason(event: unknown): string | undefined {
 }
 
 function isPermanentOpenCodeProviderFailure(event: unknown, reasonCode: string | undefined): boolean {
-  if (typeof event !== 'object' || event === null) return false;
-  const rawError = (event as Record<string, unknown>).error;
-  if (typeof rawError !== 'object' || rawError === null) return false;
-  const data = (rawError as Record<string, unknown>).data;
-  const statusCode =
-    typeof data === 'object' && data !== null && typeof (data as Record<string, unknown>).statusCode === 'number'
-      ? ((data as Record<string, unknown>).statusCode as number)
-      : undefined;
+  const { statusCode, type } = readOpenCodeError(event);
 
   // These outcomes cannot recover by retrying the same configured invocation.
   // Deliberately exclude 408/429/5xx: those are transient and OpenCode may
@@ -180,6 +175,7 @@ function isPermanentOpenCodeProviderFailure(event: unknown, reasonCode: string |
     reasonCode === 'model_not_found' ||
     reasonCode === 'auth_failed' ||
     reasonCode === 'invalid_config' ||
+    type === 'provider.auth' ||
     statusCode === 401 ||
     statusCode === 402 ||
     statusCode === 403 ||
@@ -537,22 +533,22 @@ export class OpenCodeAgentService implements L0InjectableAgentService {
           // even when CLI never exits non-zero (some providers emit error events then exit 0).
           let yieldMetadata: MessageMetadata = metadata;
           if (result.type === 'error') {
-            const rawError = (event as Record<string, unknown>).error as
-              | { name?: string; data?: { message?: string; statusCode?: number } }
-              | undefined;
+            const rawError = readOpenCodeError(event);
             log.warn(
               {
                 catId: this.catId,
                 invocationId: options?.invocationId,
-                errorName: rawError?.name,
-                errorMessage: rawError?.data?.message,
-                statusCode: rawError?.data?.statusCode,
+                errorName: rawError.type && excerptSanitizedStderr(rawError.type, { edge: 'head', maxLength: 100 }),
+                errorMessage:
+                  rawError.message && excerptSanitizedStderr(rawError.message, { edge: 'head', maxLength: 500 }),
+                statusCode: rawError.statusCode,
               },
               'OpenCode CLI returned error event',
             );
             const diagnosticText = [
-              rawError?.data?.message ?? rawError?.name,
-              rawError?.data?.statusCode ? `HTTP ${rawError.data.statusCode}` : undefined,
+              rawError.message,
+              rawError.statusCode ? `HTTP ${rawError.statusCode}` : undefined,
+              rawError.type === 'provider.auth' ? 'Authentication failed' : undefined,
             ]
               .filter((value): value is string => Boolean(value))
               .join('\n');
@@ -878,6 +874,7 @@ export class OpenCodeAgentService implements L0InjectableAgentService {
           { catId: this.catId, invocationId: params.options?.invocationId, error: result.error },
           'OpenCode no-tool finalizer returned an error event',
         );
+        if (isPermanentOpenCodeProviderFailure(event, undefined)) break;
         continue;
       }
       if (result.type === 'text') {
