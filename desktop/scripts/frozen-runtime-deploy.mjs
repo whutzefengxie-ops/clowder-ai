@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { bundleDesktopApi } from './bundle-desktop-api.mjs';
+import { bundleRuntimePackages } from './bundle-runtime-packages.mjs';
 import { exportFrozenRuntime } from './frozen-runtime-export.mjs';
 import { rebuildFrozenDependencies } from './rebuild-frozen-dependencies.mjs';
 
@@ -61,6 +62,7 @@ const receipt = exportFrozenRuntime(workspace, out, packages, path.join(source, 
       : undefined,
 });
 if (os.platform() === 'win32' && packages.includes('api')) {
+  receipt.runtimePackages = await bundleRuntimePackages(out);
   receipt.desktopApi = await bundleDesktopApi(path.join(out, 'api'));
   if (!receipt.desktopApi.agentHooks) throw new Error('Frozen API requires its dedicated installer hooks bundle');
 }

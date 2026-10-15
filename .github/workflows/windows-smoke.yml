@@ -65,6 +65,7 @@ jobs:
           desktop/built-web-assets.test.mjs
           desktop/api-bundle.test.mjs
           desktop/api-dependency-bundle.test.mjs
+          desktop/runtime-package-bundle.test.mjs
           desktop/runtime-dependency-selection.test.mjs
           desktop/api-startup-probe.test.mjs
           desktop/api-puppeteer-lazy-boundary.test.mjs
