@@ -166,46 +166,46 @@ Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
 Filename: "cmd.exe"; \
   Parameters: "/c mklink /J ""{app}\scripts\node_modules"" ""{app}\packages\api\node_modules"""; \
   StatusMsg: "Linking script dependencies..."; \
-  Flags: runhidden waituntilterminated
+  Flags: runhidden waituntilterminated; Check: RuntimeExtractionSucceeded
 ; Clean up archives after extraction (saves ~100 MB disk space)
 Filename: "cmd.exe"; \
   Parameters: "/c rmdir /s /q ""{app}\bundled\archives"""; \
   StatusMsg: "Cleaning up temporary files..."; \
-  Flags: runhidden waituntilterminated
+  Flags: runhidden waituntilterminated; Check: RuntimeExtractionSucceeded
 ; ── Post-install configuration ────────────────────────────────────────
 ; Enable Windows long paths — pnpm creates paths > 260 chars
 Filename: "reg.exe"; \
   Parameters: "add ""HKLM\SYSTEM\CurrentControlSet\Control\FileSystem"" /v LongPathsEnabled /t REG_DWORD /d 1 /f"; \
   StatusMsg: "Enabling long path support..."; \
-  Flags: runhidden waituntilterminated
+  Flags: runhidden waituntilterminated; Check: RuntimeExtractionSucceeded
 ; Post-install: .env, skills, agent hooks.
 Filename: "powershell.exe"; \
   Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\scripts\configure-desktop-instance.ps1"" -AppDir ""{app}"" -InstanceRoot ""{param:DesktopInstanceRoot|}"" -FrontendPort ""{param:FrontendPort|}"" -ApiPort ""{param:ApiPort|}"" -RedisPort ""{param:RedisPort|}"""; \
   StatusMsg: "Configuring desktop instance..."; \
-  Flags: runhidden waituntilterminated
+  Flags: runhidden waituntilterminated; Check: RuntimeExtractionSucceeded
 ; CLI tool provisioning removed — bundled Node has no global npm, so
 ; `npm install -g` fails on clean machines. Users install CLIs separately.
 Filename: "powershell.exe"; \
   Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\scripts\post-install-offline.ps1"" -AppDir ""{app}"" -UserProfileRoot ""{param:UserProfileRoot|}"""; \
   StatusMsg: "Configuring Clowder AI..."; \
-  Flags: runhidden waituntilterminated
+  Flags: runhidden waituntilterminated; Check: RuntimeExtractionSucceeded
 ; User-level Agent CLI hook sync writes to ~/.claude and ~/.codex, so it must
 ; run as the invoking user rather than the elevated installer account.
 ; If Windows cannot recover the original credentials, Hub health check repairs it later.
 Filename: "powershell.exe"; \
   Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\scripts\post-install-offline.ps1"" -AppDir ""{app}"" -AgentHooksOnly -UserProfileRoot ""{param:UserProfileRoot|}"""; \
   StatusMsg: "Configuring Agent CLI hooks..."; \
-  Flags: runhidden waituntilterminated runasoriginaluser
+  Flags: runhidden waituntilterminated runasoriginaluser; Check: RuntimeExtractionSucceeded
 
 ; Generate desktop-config.json with release metadata (clowder-ai#1107 intake)
 Filename: "powershell.exe"; \
   Parameters: "-ExecutionPolicy Bypass -Command ""& '{app}\scripts\generate-desktop-config.ps1' -AppDir '{app}' -Version '{#MyAppVersion}' -InstallType 'installer'"""; \
   StatusMsg: "Generating desktop configuration..."; \
-  Flags: runhidden waituntilterminated
+  Flags: runhidden waituntilterminated; Check: RuntimeExtractionSucceeded
 
 ; Offer to launch after interactive install
 Filename: "{app}\desktop-dist\{#MyAppExeName}"; \
-  Description: "Launch {#MyAppName}"; Flags: postinstall nowait skipifsilent
+  Description: "Launch {#MyAppName}"; Flags: postinstall nowait skipifsilent; Check: RuntimeExtractionSucceeded
 ; F273: Auto-restart after silent upgrade (in-app updater uses /SILENT).
 ; runasoriginaluser is critical — without it, the app + Redis + API all run
 ; as elevated admin, which breaks user-data paths and is a security concern.
@@ -248,6 +248,7 @@ Type: filesandordirs; Name: "{app}\scripts\node_modules"
 ; PrepareToInstall kills ONLY processes whose executable path is under {app} —
 ; no risk of killing the user's own node/redis instances running elsewhere.
 [Code]
+#include "runtime-failure.iss"
 procedure ExtractionOutput(const S: String; const Error, FirstLine: Boolean);
 var
   Fields: TArrayOfString;
@@ -262,7 +263,7 @@ end;
 
 function ShouldAutoLaunch(): Boolean;
 begin
-  Result := WizardSilent and (ExpandConstant('{param:NoAutoStart|0}') <> '1');
+  Result := RuntimeExtractionSucceeded and WizardSilent and (ExpandConstant('{param:NoAutoStart|0}') <> '1');
 end;
 
 procedure ExtractRuntimeArchive(ArchiveName: String);
@@ -271,6 +272,7 @@ var
   ExitCode: Integer;
   Started: Boolean;
 begin
+  if not RuntimeExtractionSucceeded then exit;
   AppDir := ExpandConstant('{app}');
   WizardForm.StatusLabel.Caption := 'Extracting ' + ArchiveName + '...';
   if ArchiveName = 'node.tar.gz' then begin
@@ -287,9 +289,9 @@ begin
     Started := ExecAndLogOutput(ProgramPath, Arguments, AppDir, SW_SHOWNORMAL, ewWaitUntilTerminated, ExitCode, @ExtractionOutput);
   Log('Runtime extraction ' + ArchiveName + ': exit=' + IntToStr(ExitCode));
   if (not Started) or (ExitCode <> 0) then
-    RaiseException('Runtime extraction failed: ' + ArchiveName + '. See setup log and ' + AppDir + '\.installer-logs\extract-runtime.log');
+    FailRuntimeExtraction('Runtime extraction failed: ' + ArchiveName + '. See setup log and ' + AppDir + '\.installer-logs\extract-runtime.log');
   if (ArchiveName = 'node.tar.gz') and (not FileExists(AppDir + '\node\node.exe')) then
-    RaiseException('Bundled Node.js is incomplete. Installation cannot continue.');
+    FailRuntimeExtraction('Bundled Node.js is incomplete. Installation cannot continue.');
 end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;

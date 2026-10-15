@@ -86,3 +86,15 @@ test('Windows shell excludes runtime resources and every distribution carries th
   assert.match(iss, /ExecAndLogOutput[\s\S]*@ExtractionOutput/);
   assert.match(iss, /deploy-dependencies.tar.gz/);
 });
+
+test('installer failure prevents later setup actions and cannot report success', () => {
+  const iss = fs.readFileSync(new URL('./installer/cat-cafe.iss', import.meta.url), 'utf8');
+  const run = iss.match(/^\[Run\]([\s\S]*?)^\[/m)[1];
+  for (const entry of run.split(/(?=^Filename:)/m).slice(1))
+    assert.match(entry, /Check: (RuntimeExtractionSucceeded|ShouldAutoLaunch)/);
+  const failure = fs.readFileSync(new URL('./installer/runtime-failure.iss', import.meta.url), 'utf8');
+  assert.match(iss, /#include "runtime-failure.iss"/);
+  assert.match(failure, /function GetCustomSetupExitCode[\s\S]*RuntimeFailure[\s\S]*Result := 20/);
+  assert.match(failure, /procedure CancelButtonClick[\s\S]*Confirm := False/);
+  assert.match(failure, /RuntimeFailure :=[\s\S]*WizardForm.Close/);
+});
