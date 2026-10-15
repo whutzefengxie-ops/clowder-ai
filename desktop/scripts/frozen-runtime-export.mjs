@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { selectRuntimeDependencies } from './runtime-dependency-selection.mjs';
 import { stageBuiltWeb } from './stage-built-web.mjs';
 import { workspaceRuntimeModules } from './workspace-runtime-modules.mjs';
 
@@ -38,7 +39,7 @@ export function exportFrozenRuntime(
   out,
   packages,
   lockFile,
-  { sharedDependencies = false, builtWebSource } = {},
+  { sharedDependencies = false, builtWebSource, pruneWebBuildDependencies = false, expectedWebBuildCommit } = {},
 ) {
   workspace = fs.realpathSync(workspace);
   const lockHash = hash(lockFile);
@@ -46,9 +47,24 @@ export function exportFrozenRuntime(
   if (fs.existsSync(out)) throw new Error(`Output must be new: ${out}`);
   fs.mkdirSync(out, { recursive: true });
   const workspaceModules = sharedDependencies ? workspaceRuntimeModules(workspace, packages) : null;
+  const webSelection = pruneWebBuildDependencies
+    ? selectRuntimeDependencies(
+        workspace,
+        builtWebSource ?? path.join(workspace, 'packages/web'),
+        expectedWebBuildCommit,
+      )
+    : null;
+  if (webSelection && (!sharedDependencies || !packages.includes('web')))
+    throw new Error('Web dependency selection requires a shared Windows Web deployment');
   if (sharedDependencies) {
     const shared = path.join(out, 'dependencies');
-    materialize(path.join(workspace, 'node_modules'), shared, workspace, new Set(), workspaceModules.include);
+    materialize(
+      path.join(workspace, 'node_modules'),
+      shared,
+      workspace,
+      new Set(),
+      (file) => workspaceModules.include(file) && (!webSelection || webSelection.include(file)),
+    );
     for (const [name, source] of workspaceModules.hoisted) {
       const target = path.join(shared, name);
       fs.mkdirSync(path.dirname(target), { recursive: true });
@@ -75,7 +91,8 @@ export function exportFrozenRuntime(
           !/\.d\.[cm]?ts(?:\.map)?$/.test(file),
       );
     }
-    // The entire frozen production graph is retained, including nested peer versions.
+    // Retained packages keep their complete private peers and contents. Optional
+    // Web selection affects root build-only packages, never these private trees.
     // Workspace links in the hoisted tree become ordinary files within this output.
     const ownModules = path.join(source, 'node_modules');
     const modules = path.join(destination, 'node_modules');
@@ -90,6 +107,7 @@ export function exportFrozenRuntime(
     lockHash,
     packages,
     sharedDependencies,
+    ...(webSelection ? { webRuntimeSelection: webSelection.receipt } : {}),
     ...(workspaceModules ? { sharedWorkspacePackages: [...workspaceModules.hoisted.keys()].sort() } : {}),
   };
 }

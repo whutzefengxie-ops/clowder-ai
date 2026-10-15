@@ -1,5 +1,5 @@
 import fs from 'node:fs';
-import { createRequire } from 'node:module';
+import { createRequire, isBuiltin } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -7,6 +7,57 @@ const tools = createRequire(import.meta.url);
 // Use the compiler already pinned by the API's tsx build dependency.
 const { build } = createRequire(tools.resolve('tsx/package.json'))('esbuild');
 const ts = tools('typescript');
+
+// Keep native addons, workspace/class identities, telemetry globals and packages
+// with dynamic assets in the frozen dependency tree. Only audited JS modules
+// enter this bundle; this is not permission to prune the runtime dependency graph.
+const bundledDependencies = new Set([
+  'yaml',
+  'smol-toml',
+  'puppeteer-core',
+  'fast-xml-parser',
+  '@opentelemetry/core',
+  '@opentelemetry/configuration',
+  '@opentelemetry/resources',
+  '@opentelemetry/sdk-logs',
+  '@opentelemetry/sdk-metrics',
+  '@opentelemetry/sdk-node',
+  '@opentelemetry/sdk-trace-base',
+  '@opentelemetry/sdk-trace-node',
+  '@opentelemetry/context-async-hooks',
+  '@opentelemetry/exporter-logs-otlp-http',
+  '@opentelemetry/exporter-logs-otlp-grpc',
+  '@opentelemetry/exporter-logs-otlp-proto',
+  '@opentelemetry/exporter-metrics-otlp-http',
+  '@opentelemetry/exporter-metrics-otlp-grpc',
+  '@opentelemetry/exporter-metrics-otlp-proto',
+  '@opentelemetry/exporter-prometheus',
+  '@opentelemetry/exporter-trace-otlp-http',
+  '@opentelemetry/exporter-trace-otlp-grpc',
+  '@opentelemetry/exporter-trace-otlp-proto',
+  '@opentelemetry/exporter-zipkin',
+  '@opentelemetry/otlp-exporter-base',
+  '@opentelemetry/otlp-grpc-exporter-base',
+  '@opentelemetry/otlp-transformer',
+  '@opentelemetry/propagator-b3',
+  '@opentelemetry/propagator-jaeger',
+  '@opentelemetry/semantic-conventions',
+]);
+const packageName = (name) => name.match(/^(@[^/]+\/[^/]+|[^/]+)/)?.[1];
+
+async function verifyExternalIdentity(builder, args, entry, dist) {
+  const resolve = (importer, resolveDir) =>
+    builder.resolve(args.path, {
+      importer,
+      resolveDir,
+      kind: args.kind,
+      pluginData: { externalIdentityProbe: true },
+    });
+  const [original, emitted] = await Promise.all([resolve(args.importer, args.resolveDir), resolve(entry, dist)]);
+  const identity = (result) => (result.errors.length ? null : fs.realpathSync(result.path));
+  if (identity(original) !== identity(emitted))
+    throw new Error(`Desktop bundle would change external dependency identity: ${args.path}`);
+}
 
 function preserveModuleUrl(code, file, dist) {
   if (!code.includes('import.meta')) return code;
@@ -36,14 +87,18 @@ export async function bundleDesktopApi(apiRoot) {
   const dist = fs.realpathSync(path.resolve(apiRoot, 'dist'));
   const entry = path.join(dist, 'index.js');
   const output = path.join(dist, 'index.desktop.js');
+  const includedDependencies = new Set();
   const result = await build({
     entryPoints: [entry],
     outfile: output,
     bundle: true,
-    packages: 'external',
+    nodePaths: [path.resolve(apiRoot, '../dependencies')],
     platform: 'node',
     target: 'node24',
     format: 'esm',
+    banner: {
+      js: "import { createRequire as __desktopCreateRequire } from 'node:module'; const require = __desktopCreateRequire(import.meta.url);",
+    },
     sourcemap: 'linked',
     metafile: true,
     logLevel: 'silent',
@@ -51,9 +106,27 @@ export async function bundleDesktopApi(apiRoot) {
       {
         name: 'original-module-urls',
         setup(builder) {
-          builder.onLoad({ filter: /\.js$/ }, (args) => {
-            if (!args.path.startsWith(dist + path.sep)) return;
-            return { contents: preserveModuleUrl(fs.readFileSync(args.path, 'utf8'), args.path, dist), loader: 'js' };
+          builder.onResolve({ filter: /^[^./\\]/ }, async (args) => {
+            if (args.pluginData?.externalIdentityProbe) return;
+            if (path.isAbsolute(args.path)) return;
+            const name = packageName(args.path);
+            if (bundledDependencies.has(name)) {
+              includedDependencies.add(name);
+              return;
+            }
+            if (args.importer && !args.importer.startsWith(dist + path.sep) && !isBuiltin(args.path)) {
+              await verifyExternalIdentity(builder, args, entry, dist);
+            }
+            return { path: args.path, external: true };
+          });
+          builder.onLoad({ filter: /\.[cm]?js$/ }, (args) => {
+            const code = fs.readFileSync(args.path, 'utf8');
+            if (args.path.startsWith(dist + path.sep))
+              return { contents: preserveModuleUrl(code, args.path, dist), loader: 'js' };
+            // Fail closed when a dependency upgrade adds location-dependent behavior.
+            if (/\b(?:__dirname|__filename)\b|import\.meta|require\.resolve\s*\(/.test(code))
+              throw new Error(`Desktop dependency needs an external asset boundary: ${args.path}`);
+            return { contents: code, loader: 'js' };
           });
         },
       },
@@ -65,7 +138,8 @@ export async function bundleDesktopApi(apiRoot) {
     modules: Object.keys(result.metafile.inputs).length,
     bytes: fs.statSync(output).size,
     originalModuleUrlsPreserved: true,
-    dependenciesBundled: false,
+    dependenciesBundled: includedDependencies.size > 0,
+    bundledPackages: [...includedDependencies].sort(),
   };
   fs.writeFileSync(path.join(dist, 'desktop-bundle.json'), JSON.stringify(receipt));
   return receipt;

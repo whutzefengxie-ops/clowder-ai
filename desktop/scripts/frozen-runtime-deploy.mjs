@@ -53,6 +53,12 @@ await rebuildFrozenDependencies(workspace);
 const receipt = exportFrozenRuntime(workspace, out, packages, path.join(source, 'pnpm-lock.yaml'), {
   sharedDependencies: os.platform() === 'win32',
   builtWebSource: packages.includes('web') ? path.join(source, 'packages/web') : undefined,
+  pruneWebBuildDependencies: os.platform() === 'win32' && packages.includes('web'),
+  expectedWebBuildCommit:
+    os.platform() === 'win32' && packages.includes('web')
+      ? (process.env.CAT_CAFE_BUILD_COMMIT ??
+        execFileSync('git', ['rev-parse', 'HEAD'], { cwd: source }).toString().trim())
+      : undefined,
 });
 if (os.platform() === 'win32' && packages.includes('api'))
   receipt.desktopApi = await bundleDesktopApi(path.join(out, 'api'));
