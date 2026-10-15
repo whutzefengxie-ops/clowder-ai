@@ -37,10 +37,8 @@ export function resolveDraftCarrier(form: LegacyCarrierFields): HubCatEditorForm
 }
 
 export function normalizeMemberDraftForm(form: HubCatEditorFormState): HubCatEditorFormState {
-  const {
-    acpEnabled: _acpEnabled,
-    codexCarrier: _codexCarrier,
-    ...canonical
-  } = form as HubCatEditorFormState & LegacyCarrierFields;
+  const canonical = { ...form };
+  Reflect.deleteProperty(canonical, 'acpEnabled');
+  Reflect.deleteProperty(canonical, 'codexCarrier');
   return { ...canonical, carrier: resolveDraftCarrier(form) };
 }
