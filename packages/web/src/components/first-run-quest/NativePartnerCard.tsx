@@ -130,6 +130,9 @@ export function NativePartnerCard({
       {available && !defaultIdentity && (
         <p className="mt-3 text-sm text-cafe-secondary">此连接的登录状态尚未检查 · 实际连接待验证</p>
       )}
+      {available && runtime.clientId === 'opencode' && (
+        <p className="mt-2 text-sm text-cafe-secondary">使用 OpenCode 时，请先为对话选择项目目录。</p>
+      )}
       {expanded && (
         <fieldset
           disabled={disabled || created}

@@ -34,6 +34,8 @@ function humanizeClientId(clientId: string) {
 function clientRuntimeLabel(cat: CatData, configCat?: CatConfig) {
   if (cat.configurationSource === 'native_tool' && cat.acp)
     return /dsh|deepseek/i.test(JSON.stringify(cat.acp)) ? 'DSH' : 'ACP 工具';
+  if (cat.configurationSource === 'native_tool' && cat.clientId === 'kimi') return 'Kimi';
+  if (cat.configurationSource === 'native_tool' && cat.clientId === 'opencode') return 'OpenCode';
   if (cat.configurationSource === 'native_tool')
     return cat.clientId === 'openai'
       ? 'Codex'

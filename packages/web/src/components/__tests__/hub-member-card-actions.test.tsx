@@ -61,4 +61,16 @@ describe('Hub member actions and effective transport', () => {
     expect(host.textContent).toContain('ACP');
     expect(host.textContent).not.toContain('APP SERVER');
   });
+
+  it.each(['kimi', 'opencode'] as const)('identifies native %s by its actual tool', (clientId) => {
+    act(() =>
+      root.render(
+        <HubMemberOverviewCard
+          cat={{ ...cat, clientId, configurationSource: 'native_tool', carrier: 'cli', defaultModel: '' }}
+        />,
+      ),
+    );
+    expect(host.textContent).toContain(clientId === 'kimi' ? 'Kimi · 跟随工具模型' : 'OpenCode · 跟随工具模型');
+    expect(host.textContent).not.toContain('ACP 工具');
+  });
 });

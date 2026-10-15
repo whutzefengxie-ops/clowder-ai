@@ -22,13 +22,13 @@ afterEach(() => {
 function mount(
   status: 'configured' | 'login_required',
   change: Partial<HubCatEditorFormState> = {},
-  clientId: 'anthropic' | 'openai' = 'anthropic',
+  clientId: 'anthropic' | 'openai' | 'opencode' = 'anthropic',
 ) {
   const partner = recommendNativePartners(
     [
       {
-        id: clientId === 'openai' ? 'codex' : 'claude',
-        label: clientId === 'openai' ? 'Codex' : 'Claude Code',
+        id: clientId === 'openai' ? 'codex' : clientId === 'opencode' ? 'opencode' : 'claude',
+        label: clientId === 'openai' ? 'Codex' : clientId === 'opencode' ? 'OpenCode' : 'Claude Code',
         clientId,
         installed: true,
         models: [],
@@ -50,6 +50,9 @@ it('does not promise Codex creation before the native login admission check can 
   const text = mount('login_required', {}, 'openai');
   expect(text).toContain('新增伙伴前需要先登录');
   expect(text).not.toContain('可先创建伙伴');
+});
+it('shows the existing OpenCode workspace requirement before the first message', () => {
+  expect(mount('configured', {}, 'opencode')).toContain('请先为对话选择项目目录');
 });
 it.each([
   ['explicit account', { accountRef: 'company-account' }],
