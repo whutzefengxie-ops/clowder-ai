@@ -1,6 +1,6 @@
 import { homedir } from 'node:os';
 
-const KEYS = ['HOME', 'USERPROFILE', 'KIMI_SHARE_DIR', 'KIMI_CONFIG_FILE'] as const;
+const KEYS = ['HOME', 'USERPROFILE', 'KIMI_CODE_HOME', 'KIMI_SHARE_DIR', 'KIMI_CONFIG_FILE'] as const;
 const powershell = (value: string) => `'${value.replaceAll("'", "''")}'`;
 const shell = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
 
@@ -13,6 +13,7 @@ export function nativeKimiLoginCommand(
   const values = {
     HOME: env.HOME ?? homedir(),
     USERPROFILE: env.USERPROFILE ?? homedir(),
+    KIMI_CODE_HOME: env.KIMI_CODE_HOME,
     KIMI_SHARE_DIR: env.KIMI_SHARE_DIR,
     KIMI_CONFIG_FILE: env.KIMI_CONFIG_FILE,
   };

@@ -81,11 +81,11 @@ function preserveModuleUrl(code, file, dist) {
   return code;
 }
 
-/** Keep the original dist tree for workers, dynamic paths and unbundled tooling. */
-export async function bundleDesktopApi(apiRoot) {
+async function bundleEntrypoint(apiRoot, relativeEntry, relativeOutput, dependencies) {
   const dist = fs.realpathSync(path.resolve(apiRoot, 'dist'));
-  const entry = path.join(dist, 'index.js');
-  const output = path.join(dist, 'index.desktop.js');
+  const entry = path.join(dist, relativeEntry);
+  const output = path.join(dist, relativeOutput);
+  const outputDirectory = path.dirname(output);
   const includedDependencies = new Set();
   const result = await build({
     entryPoints: [entry],
@@ -109,19 +109,19 @@ export async function bundleDesktopApi(apiRoot) {
             if (args.pluginData?.externalIdentityProbe) return;
             if (path.isAbsolute(args.path)) return;
             const name = packageName(args.path);
-            if (bundledDependencies.has(name)) {
+            if (dependencies.has(name)) {
               includedDependencies.add(name);
               return;
             }
             if (args.importer && !args.importer.startsWith(dist + path.sep) && !isBuiltin(args.path)) {
-              await verifyExternalIdentity(builder, args, entry, dist);
+              await verifyExternalIdentity(builder, args, output, outputDirectory);
             }
             return { path: args.path, external: true };
           });
           builder.onLoad({ filter: /\.[cm]?js$/ }, (args) => {
             const code = fs.readFileSync(args.path, 'utf8');
             if (args.path.startsWith(dist + path.sep))
-              return { contents: preserveModuleUrl(code, args.path, dist), loader: 'js' };
+              return { contents: preserveModuleUrl(code, args.path, outputDirectory), loader: 'js' };
             // Fail closed when a dependency upgrade adds location-dependent behavior.
             if (/\b(?:__dirname|__filename)\b|import\.meta|require\.resolve\s*\(/.test(code))
               throw new Error(`Desktop dependency needs an external asset boundary: ${args.path}`);
@@ -131,16 +131,33 @@ export async function bundleDesktopApi(apiRoot) {
       },
     ],
   });
-  const receipt = {
-    entry: 'dist/index.desktop.js',
-    original: 'dist/index.js',
+  return {
+    entry: `dist/${relativeOutput.replaceAll('\\', '/')}`,
+    original: `dist/${relativeEntry.replaceAll('\\', '/')}`,
     modules: Object.keys(result.metafile.inputs).length,
     bytes: fs.statSync(output).size,
     originalModuleUrlsPreserved: true,
     dependenciesBundled: includedDependencies.size > 0,
     bundledPackages: [...includedDependencies].sort(),
   };
-  fs.writeFileSync(path.join(dist, 'desktop-bundle.json'), JSON.stringify(receipt));
+}
+
+/** This independent installer process never shares its registry with the API. */
+export function bundleDesktopAgentHooks(apiRoot) {
+  return bundleEntrypoint(
+    apiRoot,
+    'agent-hooks/index.js',
+    'agent-hooks/index.desktop.js',
+    new Set(['@cat-cafe/shared', 'smol-toml', 'yaml']),
+  );
+}
+
+/** Keep the original dist tree for workers, dynamic paths and unbundled tooling. */
+export async function bundleDesktopApi(apiRoot) {
+  const receipt = await bundleEntrypoint(apiRoot, 'index.js', 'index.desktop.js', bundledDependencies);
+  if (fs.existsSync(path.join(apiRoot, 'dist/agent-hooks/index.js')))
+    receipt.agentHooks = await bundleDesktopAgentHooks(apiRoot);
+  fs.writeFileSync(path.join(apiRoot, 'dist/desktop-bundle.json'), JSON.stringify(receipt));
   return receipt;
 }
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1]))

@@ -32,7 +32,11 @@ async function main() {
   const args = parseArgs(process.argv.slice(2));
   const projectRoot = resolve(args.projectRoot ?? process.env.CAT_CAFE_PROJECT_ROOT ?? defaultProjectRoot());
   const targetRoot = resolve(args.targetRoot ?? process.env.CAT_CAFE_TARGET_ROOT ?? homedir());
-  const agentHooksModule = resolve(projectRoot, 'packages', 'api', 'dist', 'agent-hooks', 'index.js');
+  const agentHooksDirectory = resolve(projectRoot, 'packages', 'api', 'dist', 'agent-hooks');
+  const bundledAgentHooksModule = resolve(agentHooksDirectory, 'index.desktop.js');
+  const agentHooksModule = existsSync(bundledAgentHooksModule)
+    ? bundledAgentHooksModule
+    : resolve(agentHooksDirectory, 'index.js');
   const started = performance.now();
   const initialCpu = process.cpuUsage();
   const logFiles = [

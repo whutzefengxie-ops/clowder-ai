@@ -60,7 +60,9 @@ const receipt = exportFrozenRuntime(workspace, out, packages, path.join(source, 
         execFileSync('git', ['rev-parse', 'HEAD'], { cwd: source }).toString().trim())
       : undefined,
 });
-if (os.platform() === 'win32' && packages.includes('api'))
+if (os.platform() === 'win32' && packages.includes('api')) {
   receipt.desktopApi = await bundleDesktopApi(path.join(out, 'api'));
+  if (!receipt.desktopApi.agentHooks) throw new Error('Frozen API requires its dedicated installer hooks bundle');
+}
 fs.writeFileSync(path.join(out, 'frozen-install.json'), JSON.stringify({ ...receipt, workspace }, null, 2));
 console.log(JSON.stringify({ out, ...receipt }));

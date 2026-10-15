@@ -30,6 +30,7 @@ import {
 } from '../../../../../config/capabilities/mcp-launch-paths.js';
 import { isRetiredGithubMcpConfigEntry } from '../../../../../config/capabilities/retired-github-mcp.js';
 import { createModuleLogger } from '../../../../../infrastructure/logger.js';
+import type { KimiRuntimePaths } from '../../../../../utils/kimi-cli-runtime.js';
 
 const log = createModuleLogger('kimi-config');
 
@@ -71,11 +72,21 @@ export interface KimiModelConfigInfo {
   maxContextSize?: number;
 }
 
-export function resolveKimiShareDir(callbackEnv?: Record<string, string>): string {
-  return callbackEnv?.KIMI_SHARE_DIR || process.env.KIMI_SHARE_DIR || resolve(homedir(), '.kimi');
+export function resolveKimiShareDir(callbackEnv?: Record<string, string>, paths?: KimiRuntimePaths): string {
+  if (paths) return paths.shareDir;
+  return (
+    callbackEnv?.KIMI_CODE_HOME ||
+    process.env.KIMI_CODE_HOME ||
+    callbackEnv?.KIMI_SHARE_DIR ||
+    process.env.KIMI_SHARE_DIR ||
+    resolve(homedir(), '.kimi')
+  );
 }
 
-export function resolveKimiConfigPath(callbackEnv?: Record<string, string>): string {
+export function resolveKimiConfigPath(callbackEnv?: Record<string, string>, paths?: KimiRuntimePaths): string {
+  if (paths) return paths.configPath;
+  const codeHome = callbackEnv?.KIMI_CODE_HOME || process.env.KIMI_CODE_HOME;
+  if (codeHome) return resolve(codeHome, 'config.toml');
   const explicit = callbackEnv?.KIMI_CONFIG_FILE || process.env.KIMI_CONFIG_FILE;
   if (explicit) return resolve(explicit);
   return join(resolveKimiShareDir(callbackEnv), 'config.toml');
@@ -90,10 +101,14 @@ export function normalizeKimiWorkDirPath(candidate: string): string {
   }
 }
 
-export function readKimiModelConfigInfo(modelAlias: string, callbackEnv?: Record<string, string>): KimiModelConfigInfo {
+export function readKimiModelConfigInfo(
+  modelAlias: string,
+  callbackEnv?: Record<string, string>,
+  paths?: KimiRuntimePaths,
+): KimiModelConfigInfo {
   const fallbackCapabilities: string[] =
     modelAlias === DEFAULT_KIMI_MODEL_ALIAS ? ['thinking', 'image_in', 'video_in'] : [];
-  const configPath = resolveKimiConfigPath(callbackEnv);
+  const configPath = resolveKimiConfigPath(callbackEnv, paths);
   if (!existsSync(configPath)) {
     return {
       defaultThinking: fallbackCapabilities.includes('thinking'),
@@ -146,11 +161,15 @@ export function readKimiModelConfigInfo(modelAlias: string, callbackEnv?: Record
   }
 }
 
-export function resolveKimiModelAlias(model: string, callbackEnv?: Record<string, string>): string {
+export function resolveKimiModelAlias(
+  model: string,
+  callbackEnv?: Record<string, string>,
+  paths?: KimiRuntimePaths,
+): string {
   if (callbackEnv?.CAT_CAFE_KIMI_API_KEY) return model;
   if (model.includes('/')) return model;
 
-  const configPath = resolveKimiConfigPath(callbackEnv);
+  const configPath = resolveKimiConfigPath(callbackEnv, paths);
   if (existsSync(configPath)) {
     try {
       const raw = readFileSync(configPath, 'utf-8');
@@ -164,8 +183,12 @@ export function resolveKimiModelAlias(model: string, callbackEnv?: Record<string
   return DEFAULT_KIMI_MODEL_ALIAS;
 }
 
-export function readKimiSessionId(workingDirectory: string, callbackEnv?: Record<string, string>): string | undefined {
-  const shareDir = resolveKimiShareDir(callbackEnv);
+export function readKimiSessionId(
+  workingDirectory: string,
+  callbackEnv?: Record<string, string>,
+  paths?: KimiRuntimePaths,
+): string | undefined {
+  const shareDir = resolveKimiShareDir(callbackEnv, paths);
   const statePath = join(shareDir, 'kimi.json');
   if (!existsSync(statePath)) return undefined;
   try {
@@ -231,8 +254,9 @@ async function findKimiSessionContextFile(shareDir: string, sessionId: string): 
 export async function readKimiContextUsedTokens(
   sessionId: string,
   callbackEnv?: Record<string, string>,
+  paths?: KimiRuntimePaths,
 ): Promise<number | undefined> {
-  const contextFile = await findKimiSessionContextFile(resolveKimiShareDir(callbackEnv), sessionId);
+  const contextFile = await findKimiSessionContextFile(resolveKimiShareDir(callbackEnv, paths), sessionId);
   if (!contextFile) return undefined;
   const tail = await readTailUtf8(contextFile, KIMI_CONTEXT_TAIL_BYTES);
   if (!tail) return undefined;
@@ -268,6 +292,7 @@ export async function writeMcpConfigFile(
   workingDirectory: string,
   mcpServerPath: string,
   callbackEnv?: Record<string, string>,
+  paths?: KimiRuntimePaths,
 ): Promise<string | null> {
   if (!callbackEnv || !mcpServerPath) return null;
 
@@ -412,7 +437,7 @@ export async function writeMcpConfigFile(
   );
 
   const nextConfig = { mcpServers };
-  const shareDir = resolveKimiShareDir(callbackEnv);
+  const shareDir = resolveKimiShareDir(callbackEnv, paths);
   mkdirSync(shareDir, { recursive: true });
   const dir = mkdtempSync(join(shareDir, 'tmp-mcp-'));
   const path = join(dir, 'mcp.json');

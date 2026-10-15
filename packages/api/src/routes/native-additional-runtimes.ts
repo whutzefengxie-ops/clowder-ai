@@ -1,7 +1,8 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse } from 'smol-toml';
 import { resolveCliCommand } from '../utils/cli-resolve.js';
+import { resolveKimiCliRuntime, resolveKimiRuntimePaths } from '../utils/kimi-cli-runtime.js';
 
 function metadata(file: string, toml = false): Record<string, unknown> {
   try {
@@ -16,15 +17,8 @@ const text = (value: unknown) => (typeof value === 'string' ? value : undefined)
 
 /** Reads only model identifiers; credentials and full configs never leave this boundary. */
 export function discoverAdditionalRuntimes(home: string, commandFor: typeof resolveCliCommand = resolveCliCommand) {
-  const kimi = metadata(
-    process.env.KIMI_CONFIG_FILE ||
-      join(
-        process.env.KIMI_SHARE_DIR ||
-          join(home, existsSync(join(home, '.kimi-code/config.toml')) ? '.kimi-code' : '.kimi'),
-        'config.toml',
-      ),
-    true,
-  );
+  const kimiRuntime = resolveKimiCliRuntime(commandFor);
+  const kimi = metadata(resolveKimiRuntimePaths(kimiRuntime, process.env, home).configPath, true);
   const opencode = metadata(
     process.env.OPENCODE_CONFIG ||
       join(process.env.XDG_CONFIG_HOME || join(home, '.config'), 'opencode', 'opencode.json'),
@@ -35,7 +29,7 @@ export function discoverAdditionalRuntimes(home: string, commandFor: typeof reso
       ['opencode', 'OpenCode', opencode, text(opencode.model)],
     ] as const
   ).map(([id, label, config, configuredModel]) => {
-    const command = commandFor(id);
+    const command = id === 'kimi' ? kimiRuntime?.command : commandFor(id);
     const models = new Set(configuredModel ? [configuredModel] : []);
     if (id === 'kimi' && config.models && typeof config.models === 'object')
       for (const model of Object.keys(config.models)) models.add(model);

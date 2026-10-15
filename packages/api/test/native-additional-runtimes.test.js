@@ -7,7 +7,7 @@ import { discoverAdditionalRuntimes } from '../dist/routes/native-additional-run
 
 test('detects Kimi/OpenCode/Pi without disclosing authentication, and distinguishes Pi RPC from ACP', () => {
   const root = mkdtempSync(join(tmpdir(), 'additional-runtime-'));
-  const keys = ['KIMI_SHARE_DIR', 'KIMI_CONFIG_FILE', 'OPENCODE_CONFIG', 'XDG_CONFIG_HOME'];
+  const keys = ['KIMI_CODE_HOME', 'KIMI_SHARE_DIR', 'KIMI_CONFIG_FILE', 'OPENCODE_CONFIG', 'XDG_CONFIG_HOME'];
   const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
   for (const key of keys) delete process.env[key];
   try {
@@ -38,7 +38,8 @@ test('detects Kimi/OpenCode/Pi without disclosing authentication, and distinguis
     // Current kimi-code migrates to ~/.kimi-code; the old ~/.kimi may still exist.
     mkdirSync(join(root, '.kimi-code'));
     writeFileSync(join(root, '.kimi-code/config.toml'), 'default_model="native-current-model"\n');
-    assert.equal(discoverAdditionalRuntimes(root, command)[0].configuredModel, 'native-current-model');
+    const modernOnly = (name) => (name === 'kimi-cli' ? null : command(name));
+    assert.equal(discoverAdditionalRuntimes(root, modernOnly)[0].configuredModel, 'native-current-model');
     const bridged = discoverAdditionalRuntimes(root, (name) => join(root, `${name}.cmd`));
     assert.deepEqual(bridged[2].acp, { command: join(root, 'pi-acp.cmd'), startupArgs: [], transport: 'stdio' });
   } finally {

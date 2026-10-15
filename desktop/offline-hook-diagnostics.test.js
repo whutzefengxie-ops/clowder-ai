@@ -51,6 +51,23 @@ test('offline helper persists sanitized import and sync phase CPU and duration',
     result.stdout.trim(),
   );
 });
+test('offline installer prefers its built hook entry and never hides a broken bundle', (t) => {
+  const root = setup(t, 'throw new Error("development entry must remain unused");');
+  const bundled = path.join(root, 'packages/api/dist/agent-hooks/index.desktop.js');
+  fs.writeFileSync(bundled, 'export async function syncAgentHooks(){return {status:"configured"};}');
+  const result = run(root);
+  assert.equal(result.status, 0, result.stderr);
+  assert.ok(records(result.stdout).some((event) => event.healthStatus === 'configured'));
+  fs.writeFileSync(bundled, 'throw new Error("bundled-entry-secret");');
+  fs.writeFileSync(
+    path.join(path.dirname(bundled), 'index.js'),
+    'export async function syncAgentHooks(){return {status:"configured"};}',
+  );
+  const failed = run(root);
+  assert.equal(failed.status, 1);
+  assert.ok(records(failed.stdout).some((event) => event.phase === 'module-import' && event.state === 'failed'));
+  assert.doesNotMatch(failed.stdout + failed.stderr, /bundled-entry-secret/);
+});
 test('offline helper logs failed import/sync without raw paths, credentials or thrown messages', (t) => {
   const root = setup(t, 'export async function syncAgentHooks() { throw new Error("secret-api-key /private/HOME"); }');
   const result = run(root);
