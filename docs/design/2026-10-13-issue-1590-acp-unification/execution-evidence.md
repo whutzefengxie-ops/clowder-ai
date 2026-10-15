@@ -6,7 +6,7 @@ created: 2026-10-13
 tips_exempt: {reason: "修复既有工具结果与权限语义，当前阶段没有新增用户操作入口"}
 ---
 
-# W0/W1、W2.S 与原型执行回执
+# W0/W1、W2 与原型执行回执
 
 2026-10-14 首批公开提交已对齐新 main 并重新复验，正式 Web tsc 本轮通过；历史捕获与当前检查的区别见 [公开 PR 回执](public-pr-evidence.md)。
 
@@ -25,6 +25,8 @@ Claude 的真实 elicitation、多 Notice、queued/SDK-ingress 取消和 SDK/nat
 | W2.S | STDIO/HTTP 共用 fail-closed 权限边界、factory 显式默认取消、prompt admission/generation、取消隔离 | P1/P2 全部修复，安全下限通过 | 不是 W3.P 平台 principal/policy/审批/审计，也不证明原生工具已静止 |
 | W2 首个切片 | STDIO/HTTP共用typed initialize、真实clientInfo/fs/terminal声明；2项wire RED→61项回归、API build及两实际桥握手兼容通过 | `160a02218` 独立窄复核通过，无P1/P2，见[公共初始化](client-initialize-evidence.md) | 不等于完整dispatcher/能力协商/身份/config接线；未验真实HTTP桥/模型/产品审批，G2仍未通过 |
 | W2 图片输入切片 / #1598 | 两transport及collect发送标准image blocks；fresh/busy/resume-empty保持字节；能力缺失/不可读明确拒绝；27专项、280受影响回归、API build及真实Claude/Codex读图通过 | `feeabe1f7` 独立窄复核通过，无P1/P2，见[图片输入](image-input-evidence.md) | 内存MessageStore+测试JSON冷读/受限session wrapper，不等于产品持久化/UI/factory；未实测CodeAgentCLI/MiniMax具体binding，完整G2/G4未通过 |
+| W2 公共 consumer | 共用 dispatcher/capability/session/prompt/usage 叶模块、typed 指令与执行回执、模型采用 readback、工具完整内容/父scope/最终输入、pool 指纹；API 450+1、Web 131；后续 context 修复另有 API143/组件84及14项消费链检查 | `eab5082c9` 原代码窄审后，zts 新发现 context authority 退化，已在 `652ff67fe` 修复并另行复审；当前回执见[公共合同](w2-public-contract-evidence.md) | 两真实桥只验证支持判定/拒绝和当前模型 readback；新 namespace 未协商，正向原生增强及完整 G2 未通过 |
+| #1598 产品图片链补证 | 冻结 `eab5082c9` 源码/编译/桥/native 等 84 个 hash；真实 UI 发图与回答、温刷新、API/Redis 保存重启、真实存储冷读与 UI 冷重放；1 prompt/0 tool/2 messages | 证据及独立验收见[产品链回执](product-image-ui-evidence.md) | 安全 guard 限制为合成图片、覆盖 model/system/tools 等选项，不证明生产审批/L0/模型选择；CodeAgentCLI/MiniMax 用户要求跳过、未实测 |
 | W4.P | native fence/目标反例、持久对账、owner退出反例、稳定owner中的A跨HTTP响应断开；3个可审A→B边界 | **Go**；21项反例及真实边界/恢复，标题预算纠正 | W2/W3/W4尚需生产consumer/owner/principal/persistence接线；不批准G3/迁移 |
 | W5.P | next/UUID/result、真人等待、多 Notice、queued/SDK-ingress取消、SDK0.3.285/native2.1.299升级及now对照 | **Go**；最新升级129项相关桥回归/9项helper，真实关键语义与审查问题闭环 | W3/W5/G3尚需交互UI、私有seam维护合同/完整矩阵/预算；不批准迁移 |
 

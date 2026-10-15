@@ -11,7 +11,7 @@ community_issue: 1590
 
 状态：方案草案；统一路线已获本地用户支持，协议扩展与默认迁移尚未通过设计审查和运行验收。
 
-实施与独立审查进展见 [执行回执](execution-evidence.md)：W1 已取得真实 CLI/官方 SDK、持久历史及组件 UI 刷新证据，W2.S 安全下限已落盘；[W4.P/W5.P 已各自独立 Go](prototype-gates.md)，可推进后续实现。完整G0–G5与整体迁移仍未放行。
+实施与独立审查进展见 [执行回执](execution-evidence.md)：W1 已取得真实 CLI/官方 SDK、持久历史及组件 UI 刷新证据，W2.S 安全下限已落盘；[W4.P/W5.P 已各自独立 Go](prototype-gates.md)。[W2 公共 consumer](w2-public-contract-evidence.md)已实现；[#1598 图片产品链](product-image-ui-evidence.md)已在冻结产物上完成真实模型、持久历史、温刷新及 API/Redis 保存重启后的冷重放。完整 G0–G5 与整体迁移仍未放行；CodeAgentCLI/MiniMax 按用户意见暂时跳过，未记通过。
 
 ## 目标与原始需求
 

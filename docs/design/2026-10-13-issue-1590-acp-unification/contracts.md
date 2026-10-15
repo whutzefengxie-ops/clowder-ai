@@ -7,7 +7,7 @@ created: 2026-10-13
 
 # 标准与扩展合同
 
-本节 `_clowder/v1/*`、`clowder.ai/acp.v1` 均为**拟实现合同**，不是已存在的 ACP 标准或桥能力。实施冻结 schema、生成类型并以独立 bridge/client 双端测试验证。
+本节 `_clowder/v1/*`、`clowder.ai/acp.v1` 均为本方案的**私有扩展合同**，不是已存在的 ACP 标准或普遍桥能力。W2 已实现部分 consumer 协商/校验；W4.P/W5.P 仅有固定原型。生产桥的正向采用仍需后续双端实现与验收，不能从宿主类型推断上游支持。
 
 ## 扩展上游状态（2026-10-13）
 
@@ -53,6 +53,8 @@ LL-055 的低成本 readiness 保持 spawn-free，使用静态解析与既有事
 
 ## 3. 高优先级指令、MCP、skills、hooks
 
+W2 当前仅实现 consumer 的协商与回执验证：`agentCapabilities._meta["clowder.ai/acp.v1"]` 必须声明 `contractVersion:1`。`instructions` 声明支持的 `roles` 和 `nativeSources`，`instructionsApplied` 回执含 sessionId/revision/nativeSource 及按序 role/sha256；空必需输入在 acquire 前拒绝。`methods["_clowder/v1/execution/read"]:true` 才能读取 typed binary/account/policy fingerprints，结果只记 `bridge_reported`。以上是本方案拟定的 fork 合同，未获社区接受；当前固定 Claude/Codex 桥均未协商，W4/W5 负责正向原生实现，缺通道成员不迁。
+
 受信任 L0 compiler 输出单独传递，不拼进 user prompt 冒充优先级。新桥在 session/new/load/resume 的 `_meta["clowder.ai/acp.v1"]` 接受 `instructions: {revision, entries:[{role, content}]}`；只接受协商支持的角色。
 
 Claude 桥映射至原生 systemPrompt；Codex 映射至原生 developerInstructions/customInstructions。供应商角色优先级不同，返回实际 applied role/hash 与 native 来源；没有通道阻断强身份成员迁移。用户正文/工具输出不能自行成为 trusted instruction。
@@ -67,7 +69,7 @@ JS HookCallback 留在桥进程内注册，使用同一 native 生命周期。�
 
 复用 #1519 的 rawInput/rawOutput/content/原生 ID/状态映射，后续扩展 delta。统一键为 `(binding, native session, invocation/turn execution scope, toolCallId)`；同 ID 跨 session 或子执行不能串配。
 
-partial patch：缺字段保留旧值；显式 null/empty 按冻结 schema 清除；terminal 重复更新幂等。工具 name/input 的最终快照可晚到，不能以最早空 input 为最终真相。success、failed、denied、cancelled、unknown 独立表达。
+partial patch 按字段冻结，不能以同一 null 算法代替 schema：省略字段保留旧值；实验性 `name:null` 按固定 SDK 明确注释保留原名。`rawInput/rawOutput:null` 保留此次原生 null 事实并替换旧值，opaque input 投影为 `{rawInput:null}`；`content:null` 保留 null 并清除旧 collection，`content:[]` 替换为空 collection，均不自动清除独立 rawOutput。后四项是本 consumer 的逐字段合同，SDK 短注释不充分定义统一 null 语义；不是声称社区已接受某个泛化算法。terminal 重复更新幂等。工具 name/input 的最终快照可晚到，不能以最早空 input 为最终真相。success、failed、denied、cancelled、unknown 独立表达。
 
 raw output 与展示摘要分别保留；content 的 text/image/resource/diff/terminal 引用按类型消费。超长内容保留引用、完整性摘要、截断原因与上限，UI 不显示内部指令或 secret。子调用记录 native child ID、parent tool/turn、execution principal/作用域；不能把所有 child event 扔给主猫同一个工具 ID。
 
@@ -119,6 +121,8 @@ Claude notice 保留当前 SDK `queued_internal_turn` 的安全边界投递、me
 分开计量：当前 context used/size、单请求 tokens、invocation 累计 tokens、session 累计 cost；来源、scope、单位/货币、exact/estimated/unknown、observedAt 与 native turn/epoch 必须明确。snapshot 不重复累加，delta 才累加；非 USD 不硬填 costUsd。
 
 标准 usage_update 及 prompt result usage/_meta 逐字段映射；原生缺数值保持 unknown。缺上下文窗口或可信 used 不启用自动压缩阈值。Codex app-server 现状不可信的 usage 不能因换 ACP 变成 authoritative，也不能为了“保持”已有声明制造值。
+
+固定 SDK 的实验性 prompt usage 注释同时出现 turn/session 描述，当前默认保留完整 raw、scope=unknown。仅上述 v1 namespace 明确声明 `usage:{scope:"prompt"}` 后，才消费 result 同 namespace 的 `usage:{scope:"prompt",kind:"snapshot"|"delta",id?}`；delta必需稳定id，snapshot完整替换自己的已报字段，换session清当前投影，历次回执各自保留。该计量扩展也未获上游接受。标准 context used/size 只作context快照，session累计cost保留货币与scope，不作为本invocation的costUsd；观察到桥数据仍不自动升级native authority。
 
 优先采用双方已冻结支持的标准 compaction 更新；旧桥用协商扩展传同语义 observation。给压缩 ID、阶段、cause、前后 epoch/native session、可展示摘要引用；复用 context continuity owner 的换代判定与 pre-prompt seam，不靠“输出了压缩文本”判完成。
 

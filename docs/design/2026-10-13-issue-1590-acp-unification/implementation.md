@@ -45,6 +45,8 @@ W1 优先级最高且可独立提交/审查；两条统一原型 No-Go 不撤销
 
 出口：V01–V10、V13 的适用 L1/L2；缺 L0 必需通道的成员不迁。
 
+2026-10-15 实施状态：公共 consumer 及工具/遥测链已落盘并完成独立代码审查，适用检查为 API 450 + MCP bootstrap 1、Web 131，见 [W2 回执](w2-public-contract-evidence.md)。隔离真实桥支持判定与 [图片产品 UI 冷重放](product-image-ui-evidence.md)分开记录。当前两固定桥未协商新的可信指令/execution namespace；强要求成员在执行前拒绝，正向原生采用归 W4/W5，不能将 consumer 完成写为完整 G2 或迁移通过。
+
 **W2.S 安全下限（R3）先行**：同时移除 STDIO `AcpClient` 与 `AcpHttpStreamClient` 无 handler/异常路径的默认 allow，返回有据的 reject/cancelled，绝不伪造 optionId；minimal spike host 也显式装 deny-by-default handler。此项在任何真实原型启动前完成并有失败分支测试；不等 W3，不等于完整审批接线已完成。
 
 ## W3：政策、真人交互、取消与恢复
