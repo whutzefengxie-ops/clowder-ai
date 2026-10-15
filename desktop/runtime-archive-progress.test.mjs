@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
-import { createRequire } from 'node:module';
 import { test } from 'node:test';
 import { createRuntimeArchive } from './scripts/create-runtime-archive.mjs';
 import { resolveNpmCli } from './scripts/rebuild-frozen-dependencies.mjs';
+
 const { extractRuntimeArchive } = createRequire(import.meta.url)('./scripts/extract-runtime-archive.cjs');
 const tar = createRequire(resolveNpmCli())('tar');
 
