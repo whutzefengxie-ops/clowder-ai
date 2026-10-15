@@ -1270,6 +1270,8 @@ describe('main process update-schedule lifecycle', () => {
     const mainSource = readFileSync(path.join(__dirname, 'main.js'), 'utf8');
     const runtimeSource = readFileSync(path.join(__dirname, 'desktop-update-runtime.js'), 'utf8');
     const source = `${mainSource}\n${runtimeSource}`;
+    const navigationSource = readFileSync(path.join(__dirname, 'renderer-navigation.js'), 'utf8');
+    const visibleSource = readFileSync(path.join(__dirname, 'visible-renderer.js'), 'utf8');
     const controllerSource = readFileSync(path.join(__dirname, 'update-prompt-controller.js'), 'utf8');
     const preloadSource = readFileSync(path.join(__dirname, 'preload.js'), 'utf8');
 
@@ -1277,18 +1279,28 @@ describe('main process update-schedule lifecycle', () => {
     assert.match(source, /new UpdatePromptController/);
     assert.match(source, /showUpdatePrompt:\s*\(prompt, options\)\s*=>\s*updatePrompt\.show\(prompt, options\)/);
     assert.match(source, /netSession:\s*session\.defaultSession/);
-    assert.match(source, /setWindowOpenHandler/);
-    assert.match(source, /isAllowedRendererLink/);
+    assert.match(mainSource, /const \{ installRendererNavigation \} = require\('\.\/renderer-navigation'\)/);
+    assert.match(
+      mainSource,
+      /installRendererNavigation\(\{\s*window: mainWindow,\s*appOrigin: APP_ORIGIN,\s*apiOrigin: API_ORIGIN,\s*getLinkOrigins: \(\) => rendererLinkOrigins,\s*shell,\s*dbg,\s*\}\)/,
+      'the actual main window must use the current app, API and runtime preview-origin policy',
+    );
+    assert.match(navigationSource, /setWindowOpenHandler/);
+    assert.match(navigationSource, /isAllowedRendererLink/);
     assert.match(
       source,
-      /mainWindow\.loadURL\(createVersionedRendererUrl\(APP_URL,\s*app\.getVersion\(\)\)\)/,
+      /showVisibleRenderer\(\{\s*window: mainWindow,\s*url: createVersionedRendererUrl\(APP_URL,\s*app\.getVersion\(\)\),/,
       "desktop startup must bypass another package version's service-worker document cache",
     );
+    assert.match(mainSource, /const \{ showVisibleRenderer \} = require\('\.\/visible-renderer'\)/);
+    assert.match(visibleSource, /window\.loadURL\(url\)/);
     assert.match(source, /rendererLinkOrigins\s*=\s*createBaseRendererLinkOrigins\(\)/);
     assert.match(source, /resolveRendererLinkOrigins/);
     assert.match(source, /net\.fetch\(`\$\{API_ORIGIN\}\/api\/preview\/status`/);
     assert.equal(
-      mainSource.match(/await refreshRendererLinkOrigins\(\)/g)?.length,
+      mainSource.match(
+        /(?:await refreshRendererLinkOrigins\(\)|await startupTimeline\.runPhase\('preview-origin', \(\) => refreshRendererLinkOrigins\(\)\))/g,
+      )?.length,
       2,
       'both initial startup and installer-recovery restart must refresh the runtime preview origin',
     );
@@ -1302,22 +1314,22 @@ describe('main process update-schedule lifecycle', () => {
       /stopServices:[\s\S]*?services = null;[\s\S]*?rendererLinkOrigins = createBaseRendererLinkOrigins\(\);/,
       'stopping services must revoke the no-longer-owned preview origin',
     );
-    assert.match(source, /isAllowedRendererLink\(parsed\.href,\s*rendererLinkOrigins\)/);
+    assert.match(navigationSource, /isAllowedRendererLink\(parsed\.href,\s*getLinkOrigins\(\)\)/);
     assert.doesNotMatch(
-      source,
+      [source, navigationSource].join('\n'),
       /process\.env\.PREVIEW_GATEWAY_PORT/,
       'popup admission must use the API runtime port rather than configured intent',
     );
     assert.match(
-      source,
-      /const guardAppNavigation = \(event\) => \{\s*if \(event\.isMainFrame === false\) return;\s*if \(isExpectedOrigin\(event\.url, APP_ORIGIN\)\) return;/,
+      navigationSource,
+      /const guardAppNavigation = \(event\) => \{\s*if \(event\.isMainFrame === false \|\| isExpectedOrigin\(event\.url, appOrigin\)\) return;/,
       'subframe redirects must remain under the iframe/gateway policy',
     );
-    assert.match(source, /webContents\.on\('will-navigate',\s*\(event\)\s*=>/);
-    assert.match(source, /webContents\.on\('will-redirect',\s*guardAppNavigation\)/);
+    assert.match(navigationSource, /webContents\.on\('will-navigate',\s*\(event\)\s*=>/);
+    assert.match(navigationSource, /webContents\.on\('will-redirect',\s*guardAppNavigation\)/);
     assert.match(
-      source,
-      /webContents\.on\('will-navigate',[\s\S]*?isAllowedRendererDownload\(event\.url,\s*API_ORIGIN\)[\s\S]*?webContents\.downloadURL\(event\.url\)/,
+      navigationSource,
+      /webContents\.on\('will-navigate',[\s\S]*?event\.isMainFrame !== false && isAllowedRendererDownload\(event\.url,\s*apiOrigin\)[\s\S]*?webContents\.downloadURL\(event\.url\)/,
       'trusted API /uploads navigation must become a download without admitting API top-level navigation',
     );
     assert.match(source, /trustedOrigin:\s*APP_ORIGIN/);
