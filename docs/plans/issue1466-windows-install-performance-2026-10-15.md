@@ -15,6 +15,8 @@ created: 2026-10-15
 - Windows Electron 只提供壳；API/Web/MCP/文档等由同一安装根提供，避免 resources 再复制一次。
 - 每个归档有条目数、字节数、校验和清单。解压开始、周期心跳、成功、失败立即落盘；安装界面消费同一个进度事件，不凭时间伪造完成。
 - 不延长 API120秒期限、不修改 Defender 配置，不把热启动/单测通过冒充冷启动改善。
+- 生成归档限制并发为4，打包/解压CLI降低自己的CPU调度优先级，进度日志记录实际priority；不宣称CPU优先级等同磁盘I/O限速，也不凭安装后低占用证明所有应用卡顿已修复。
+- 用户补充反馈：测试包的PowerShell启动器显窗与继承stdout需要隐藏/重定向；产品child已使用windowsHide。主题CSS404来自遗漏Web构建生成的public/vendor，冻结snapshot本身不含生成物；必须从同一Web构建携带public/.next，缺少核心CSS即拒绝打包。
 - 原实例 marker、数据根、角色 ID、历史消息、CLI 认证和引导回执不迁移。新增公共 node_modules 也属于替换边界，删除前拒绝其中的资料根（含目录别名）。
 
 ## 实施与验证

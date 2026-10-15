@@ -3,6 +3,7 @@ const path = require('node:path');
 const { createRequire } = require('node:module');
 const { createHash, randomUUID } = require('node:crypto');
 const { pipeline } = require('node:stream/promises');
+const os = require('node:os');
 
 const targets = {
   'deploy-api': ['packages/api', 'dist/index.js'],
@@ -61,6 +62,7 @@ async function extractRuntimeArchive(
       idleMs: Date.now() - lastEntryAt,
       cpu: process.cpuUsage(cpu),
       rssBytes: process.memoryUsage().rss,
+      priority: os.getPriority(0),
       ...extra,
     });
   fs.mkdirSync(cwd, { recursive: true });
@@ -98,6 +100,7 @@ async function extractRuntimeArchive(
 
 module.exports = { extractRuntimeArchive };
 if (require.main === module) {
+  try { os.setPriority(0, os.constants.priority.PRIORITY_BELOW_NORMAL); } catch (error) { console.error(`Archive priority: ${error.code}`); }
   const [root, name] = process.argv.slice(2);
   const logs = path.join(root, '.installer-logs');
   fs.mkdirSync(logs, { recursive: true });

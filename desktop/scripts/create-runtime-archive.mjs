@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
+import os from 'node:os';
 import { pathToFileURL } from 'node:url';
 import { resolveNpmCli } from './rebuild-frozen-dependencies.mjs';
 
@@ -24,5 +25,7 @@ export async function createRuntimeArchive(source, file) {
   fs.writeFileSync(file + '.json', JSON.stringify(manifest));
   return manifest;
 }
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href)
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  try { os.setPriority(0, os.constants.priority.PRIORITY_BELOW_NORMAL); } catch (error) { console.error(`Archive priority: ${error.code}`); }
   console.log(JSON.stringify(await createRuntimeArchive(process.argv[2], process.argv[3])));
+}
