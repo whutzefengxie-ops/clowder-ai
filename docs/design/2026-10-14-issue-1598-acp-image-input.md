@@ -8,6 +8,8 @@ tips_exempt: {reason: "修复既有图片附件发送链，没有新增产品操
 
 # Issue #1598：独立图片输入修复
 
+> 本页保留首次拆分时的版本与证据边界。2026-10-15 的 uploadDir P2 修复、当前分支真实产品验证和取消终态缺口见 [更新报告](2026-10-15-issue-1599-validation.md)。
+
 按 [PR #1596 的范围反馈](https://github.com/zts212653/clowder-ai/pull/1596#issuecomment-6167558453)，从统一方案中提取 [Issue #1598](https://github.com/zts212653/clowder-ai/issues/1598) 的既有图片漏接修复。基线为 upstream/main `3c9ea01082de97679b13238da56573df0a0eb9ab`；图片代码提交为 `00dc761c60ad5133175b17e18d3d27280b427394`。
 
 ## 修复范围

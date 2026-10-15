@@ -8,6 +8,11 @@ import { AcpAgentService } from '../../dist/domains/cats/services/agents/provide
 import { getDefaultUploadDir } from '../../dist/utils/upload-paths.js';
 import { imageFixture, SYNTHETIC_PNG } from '../helpers/acp-image-fixture.js';
 
+const ENVIRONMENT_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGNgYPgPAAEDAQAIicLsAAAAAElFTkSuQmCC',
+  'base64',
+);
+
 function service(client, root) {
   return new AcpAgentService({
     catId: 'codex',
@@ -55,7 +60,7 @@ for (const transport of ['stdio', 'httpstream']) {
         await writeFile(join(override, filename), selectedBytes);
       }
       if (scenario === 'same-name' || scenario === 'invalid-override') {
-        await writeFile(join(envRoot, filename), Buffer.from('different environment image bytes'));
+        await writeFile(join(envRoot, filename), ENVIRONMENT_PNG);
       }
       if (scenario === 'invalid-override') uploadDir = join(root, 'missing-root');
       if (scenario === 'escape-override') {
