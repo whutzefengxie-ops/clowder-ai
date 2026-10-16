@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -7,13 +7,34 @@ import { nativeAuthenticationStatus, nativeRuntimeReadiness } from '../src/route
 
 test('login probe honors the shell required by a Windows fallback spawn plan', async () => {
   const root = mkdtempSync(join(tmpdir(), 'native-login-shell-'));
-  const command = join(root, 'fake-claude.sh');
-  writeFileSync(command, '#!/bin/sh\nprintf \'{"loggedIn":true}\\n\'\n');
+  const command = join(root, process.platform === 'win32' ? 'fake-claude.cmd' : 'fake-claude.sh');
+  const marker = join(root, 'called.json');
+  const script = join(root, 'status.cjs');
+  writeFileSync(
+    script,
+    `require('node:fs').writeFileSync(${JSON.stringify(marker)},JSON.stringify(process.argv.slice(2)));console.log('{"loggedIn":true}');`,
+  );
+  writeFileSync(
+    command,
+    process.platform === 'win32'
+      ? `@echo off\r\n"${process.execPath}" "${script}" %*\r\n`
+      : `#!/bin/sh\n"${process.execPath}" "${script}" "$@"\n`,
+  );
   chmodSync(command, 0o755);
+  const keys = ['CLAUDE_CONFIG_DIR', 'ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN'];
+  const original = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
   try {
+    process.env.CLAUDE_CONFIG_DIR = root;
+    delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.ANTHROPIC_AUTH_TOKEN;
     const result = await nativeRuntimeReadiness({ id: 'claude', installed: true, command }, root);
     assert.equal(result.status, 'configured');
+    assert.deepEqual(JSON.parse(readFileSync(marker, 'utf8')), ['auth', 'status', '--json']);
   } finally {
+    for (const [key, value] of Object.entries(original)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
     rmSync(root, { recursive: true, force: true });
   }
 });

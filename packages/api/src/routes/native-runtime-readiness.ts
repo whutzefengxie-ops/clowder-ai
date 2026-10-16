@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process';
 import { buildChildEnv } from '../utils/cli-spawn.js';
 import { resolveWindowsSpawnPlan } from '../utils/cli-spawn-win.js';
+import { hasNativeClaudeApiConfig } from './native-claude-api-config.js';
 import { nativeKimiLoginCommand } from './native-kimi-login.js';
 import { catalogRpc } from './runtime-catalog-rpc.js';
 
@@ -81,6 +82,7 @@ export async function nativeRuntimeReadiness(target: Target, cwd: string, refres
       loginShell: process.platform === 'win32' ? 'powershell' : 'sh',
     };
   if (!target.command || !['codex', 'claude'].includes(target.id)) return { status: 'unknown', checkedAt: Date.now() };
+  if (target.id === 'claude' && hasNativeClaudeApiConfig()) return { status: 'configured', checkedAt: Date.now() };
   const key = JSON.stringify([
     target.id,
     target.command,
