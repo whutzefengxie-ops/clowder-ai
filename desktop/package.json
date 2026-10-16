@@ -159,7 +159,11 @@
         "to": "plugins"
       }
     ],
-    "asar": false,
+    "asar": true,
+    "asarUnpack": [
+      "**/*.node",
+      "**/node_modules/@anthropic-ai/claude-agent-sdk-*/claude-agent-sdk.*.node"
+    ],
     "afterPack": "./afterPack.js"
   }
 }
