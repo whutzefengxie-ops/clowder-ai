@@ -13,7 +13,13 @@ const templatesByClient: Record<string, string> = {
 
 /** Tool identities are independent of the model/provider chosen in that tool. */
 export function nativePartnerIdentity(runtime: RuntimeChoice, templates: TemplateCard[], cats: CatData[]) {
-  const template = templates.find((item) => item.id === templatesByClient[runtime.clientId]);
+  const templateId =
+    runtime.id === 'pi'
+      ? 'golden-chinchilla'
+      : runtime.id === 'dsh'
+        ? 'turkish-van'
+        : templatesByClient[runtime.clientId];
+  const template = templates.find((item) => item.id === templateId);
   const form = template
     ? templateForm(template, cats, initialState())
     : {
@@ -34,10 +40,18 @@ export function nativePartnerIdentity(runtime: RuntimeChoice, templates: Templat
   if (runtime.id === 'pi' || runtime.label === 'Pi') {
     form.name = form.displayName = 'Pi 伙伴';
     form.nickname = '派派';
-    form.avatar = '/avatars/default.png';
+    form.avatar = template?.avatar || '/avatars/family/opencode.png';
     form.roleDescription = '轻量编码伙伴，负责拆解小任务、实现和验证';
     form.personality = '敏捷克制，先给最小可用实现，再补验证细节';
     form.teamStrengths = '任务拆解、编码实现、测试验证';
+  }
+  if (runtime.id === 'dsh') {
+    form.name = form.displayName = 'DSH 伙伴';
+    form.nickname = '深深';
+    form.avatar = template?.avatar || '/avatars/family/kimi.png';
+    form.roleDescription = '共创与推理伙伴，负责分析问题、编码实现和交叉验证';
+    form.personality = '细心务实，先理清问题，再用可验证的结果交付';
+    form.teamStrengths = '问题分析、编码、交叉验证';
   }
   return form;
 }

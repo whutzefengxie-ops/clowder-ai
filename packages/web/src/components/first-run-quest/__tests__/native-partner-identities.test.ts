@@ -40,7 +40,7 @@ describe('native partner identities reflect tools rather than an unrelated model
     expect(partners.every(({ form }) => !form.roleDescription.includes('GLM'))).toBe(true);
     expect(partners.every(({ form }) => form.avatar !== '/avatars/family/glm52.png')).toBe(true);
   });
-  it('uses a neutral identity for a generic ACP tool', () => {
+  it('reuses a complete cat identity for DSH without borrowing an unrelated model claim', () => {
     const partner = recommendNativePartners(
       [
         {
@@ -56,8 +56,11 @@ describe('native partner identities reflect tools rather than an unrelated model
       [],
       'dsh-identity',
     )[0];
-    expect(partner.form.avatar).toBe('/avatars/default.png');
+    expect(partner.form.avatar).toBe('/avatars/family/kimi.png');
     expect(partner.form.displayName).toBe('DSH 伙伴');
+    expect(partner.form.nickname).toBe('深深');
+    expect(partner.form.personality.length).toBeGreaterThan(5);
+    expect(partner.form.teamStrengths.length).toBeGreaterThan(5);
     expect(partner.form.roleDescription).not.toContain('GLM');
   });
   it('recommends Pi instead of OpenCode for a new partner', () => {
@@ -73,6 +76,7 @@ describe('native partner identities reflect tools rather than an unrelated model
     expect(partners.map(({ runtime }) => runtime.label)).toEqual(['Kimi', 'Pi']);
     const form = partners[1].form;
     expect(form.nickname).toBe('派派');
+    expect(form.avatar).toBe('/avatars/family/opencode.png');
     expect(form.avatar).not.toBe(partners[0].form.avatar);
     expect(form.personality).not.toBe(partners[0].form.personality);
     expect(form.roleDescription).not.toMatch(/GLM|OpenCode/);

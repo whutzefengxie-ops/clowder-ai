@@ -204,6 +204,7 @@ export function useNativeOnboarding(
     setError('');
     setErrorStage(null);
     let progress = current;
+    let pendingPartner: NativePartner | undefined;
     const headers = { 'Content-Type': 'application/json', 'X-Cat-Cafe-Onboarding-Journey': current.journeyId };
     try {
       for (const selection of selected) {
@@ -211,6 +212,7 @@ export function useNativeOnboarding(
         const id = partner.id;
         if (progress.created[id]) continue;
         setBusy(`正在添加 ${partner.form.displayName}…`);
+        pendingPartner = partner;
         const result = partner.existingId
           ? {
               cat: {
@@ -227,6 +229,7 @@ export function useNativeOnboarding(
               },
               body: JSON.stringify(buildNativeCreationPayload(partner.form)),
             });
+        pendingPartner = undefined;
         progress = {
           ...progress,
           partners: progress.partners.map((p) => {
@@ -277,7 +280,12 @@ export function useNativeOnboarding(
       refresh();
       onCreated(progress.threadId, lead.name);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : '保存失败，请重试；已添加的伙伴会保留。');
+      const message = cause instanceof Error ? cause.message : '保存失败，请重试；已添加的伙伴会保留。';
+      setError(
+        pendingPartner
+          ? `添加 ${pendingPartner.form.displayName}（${pendingPartner.runtime.label}）失败：${message}`
+          : message,
+      );
       setErrorStage('save');
     } finally {
       inFlight.current = false;

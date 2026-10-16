@@ -104,3 +104,64 @@ for (const contamination of [
       fs.rmSync(base, { recursive: true, force: true });
     }
   });
+
+test('explicit client homes reach the real API child while persistence and ordinary children remain isolated', async () => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'desktop-client-reuse-'));
+  const realClient = path.join(base, 'local-client');
+  fs.mkdirSync(realClient);
+  fs.writeFileSync(
+    path.join(base, 'client-homes.json'),
+    JSON.stringify({ claude: realClient, codex: realClient, dsh: realClient, kimi: realClient, pi: realClient }),
+  );
+  const input = {
+    CAT_CAFE_DESKTOP_INSTANCE_ROOT: base,
+    FRONTEND_PORT: '5158',
+    API_SERVER_PORT: '3158',
+    REDIS_PORT: '6367',
+  };
+  const previous = Object.fromEntries(Object.keys(input).map((key) => [key, process.env[key]]));
+  try {
+    Object.assign(process.env, input);
+    const manager = new ServiceManager(base, { frontendPort: 5158, apiPort: 3158, redisPort: 6367 });
+    for (const name of ['api', 'probe']) {
+      const result = path.join(base, `${name}.json`);
+      const keys = [
+        'HOME',
+        'CODEX_HOME',
+        'CLAUDE_CONFIG_DIR',
+        'DSH_HOME',
+        'KIMI_CODE_HOME',
+        'PI_CODING_AGENT_DIR',
+        'REDIS_URL',
+        'CAT_CAFE_DATA_DIR',
+      ];
+      manager._startProcess(
+        name,
+        process.execPath,
+        [
+          '-e',
+          `require('node:fs').writeFileSync(${JSON.stringify(result)},JSON.stringify(Object.fromEntries(${JSON.stringify(keys)}.map(k=>[k,process.env[k]]))))`,
+        ],
+        { envOverrides: manager._buildApiEnv(base) },
+      );
+      await new Promise((resolve) => manager.procs[name].once('exit', resolve));
+      const env = JSON.parse(fs.readFileSync(result, 'utf8'));
+      assert.equal(env.HOME, path.join(base, 'home'));
+      assert.equal(env.REDIS_URL, 'redis://localhost:6367');
+      assert.equal(env.CAT_CAFE_DATA_DIR, path.join(base, 'data'));
+      assert.equal(
+        env.CODEX_HOME,
+        name === 'api' ? fs.realpathSync.native(realClient) : path.join(base, 'home', '.codex'),
+      );
+      if (name === 'api')
+        for (const key of keys.slice(1, 6)) assert.equal(env[key], fs.realpathSync.native(realClient));
+      else assert.equal(env.KIMI_CODE_HOME, undefined);
+    }
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    fs.rmSync(base, { recursive: true, force: true });
+  }
+});

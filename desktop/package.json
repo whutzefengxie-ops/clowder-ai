@@ -69,6 +69,7 @@
       "renderer-link-policy.js",
       "renderer-navigation.js",
       "service-manager.js",
+      "client-homes.js",
       "subprocess-entry.js",
       "desktop-template.js",
       "api-startup-probe.mjs",

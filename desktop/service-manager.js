@@ -14,6 +14,7 @@ const { initializeDesktopTemplate } = require('./desktop-template');
 const { createStartupTimeline } = require('./startup-timing');
 const { prepareStartupServices, stopOwnedStartupProcess } = require('./startup-services');
 const { resolveExternalNodeEntry } = require('./subprocess-entry');
+const { readClientHomes } = require('./client-homes');
 
 const POLL_INTERVAL_MS = 500;
 const MAX_WAIT_MS = 120_000;
@@ -694,6 +695,7 @@ class ServiceManager {
     if (opts.envOverrides) {
       Object.assign(env, opts.envOverrides);
     }
+    if (name === 'api') Object.assign(env, readClientHomes(instanceRoot));
 
     log(`[${name}] spawn: ${cmd} ${args.join(' ')}`);
     log(`[${name}] cwd: ${opts.cwd || this.root}`);
