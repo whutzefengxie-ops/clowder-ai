@@ -69,6 +69,7 @@
       "renderer-link-policy.js",
       "renderer-navigation.js",
       "service-manager.js",
+      "subprocess-entry.js",
       "desktop-template.js",
       "api-startup-probe.mjs",
       "startup-state.js",
@@ -162,7 +163,11 @@
     "asar": true,
     "asarUnpack": [
       "**/*.node",
-      "**/node_modules/@anthropic-ai/claude-agent-sdk-*/claude-agent-sdk.*.node"
+      "**/node_modules/@anthropic-ai/claude-agent-sdk-*/claude-agent-sdk.*.node",
+      "**/api-startup-probe.mjs",
+      "**/runtime-web-server.js",
+      "**/runtime-web-config.js",
+      "**/startup-timing.js"
     ],
     "afterPack": "./afterPack.js"
   }

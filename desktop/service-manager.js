@@ -13,6 +13,7 @@ const { resolveDesktopRuntime } = require('./runtime-config');
 const { initializeDesktopTemplate } = require('./desktop-template');
 const { createStartupTimeline } = require('./startup-timing');
 const { prepareStartupServices, stopOwnedStartupProcess } = require('./startup-services');
+const { resolveExternalNodeEntry } = require('./subprocess-entry');
 
 const POLL_INTERVAL_MS = 500;
 const MAX_WAIT_MS = 120_000;
@@ -448,7 +449,7 @@ class ServiceManager {
     this._startProcess(
       'api',
       nodeExe,
-      ['--import', pathToFileURL(path.join(__dirname, 'api-startup-probe.mjs')).href, apiEntry],
+      ['--import', pathToFileURL(resolveExternalNodeEntry('api-startup-probe.mjs')).href, apiEntry],
       { envOverrides, cwd: userProjectDir },
     );
     log(`API process spawned, waiting for port ${this.apiPort}`);
@@ -591,7 +592,7 @@ class ServiceManager {
       'web',
       nodeExe,
       [
-        path.join(__dirname, 'runtime-web-server.js'),
+        resolveExternalNodeEntry('runtime-web-server.js'),
         webDir,
         String(this.frontendPort),
         String(this.apiPort),
