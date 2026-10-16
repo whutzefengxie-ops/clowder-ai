@@ -109,6 +109,30 @@ git merge-base --is-ancestor upstream/main HEAD
 
 交付默认目录 `clean-user` 尚未创建，保留为用户真正的零角色、零会话起点。安装器的独立 AppId、目录、数据根、端口与 `UsePreviousAppDir=no` 等设置阻止沿用作者验收目录；不改原生产实例。
 
+## 追加要求：安装版首次默认新版
+
+用户确认主要是旧导航/主界面后，进一步明确要求安装包默认新版。`3ceb86931f5d9e651a5a609671386716a39ec6a0` 只修改 Electron 主窗口参数、preload 及对应回归；API/Web runtime 仍来自 `197867241...`，源码差异为空。
+
+- 主窗口传入自己的 app origin；preload 在应用脚本前，仅为同 origin 的顶层页面初始化缺失/无效的 `cat-cafe:shell-presentation` 为 `v2`。
+- 有效的 `classic` / `v2` 选择原样保留；用户随后选经典版，再次启动不会被切回新版。普通 Web 默认值、角色、消息、权限与全局配置不变。
+- splash、子框架、其他 origin、不带可信 app-origin 参数的窗口均不写此偏好；存储拒绝访问不阻断原 IPC bridge。
+- 切换入口实测为「设置与管理 → 主题 → 界面版本」，即时生效，不需要保存。
+- 新增用例先观察到未初始化和无效旧值两条 RED；修复后定向 60 项、既有更新管理 51 项通过，0 skip。定向 Biome 与 diff whitespace 检查通过。
+
+新包 `ClowderAI-Setup-1.14.0-pr1519-3ceb86931-Isolated.exe`：699181951 bytes，SHA-256 `96FEB4C27506B60654C0C4C9A248C3A1A790FE172D73F03ACBFDE74B0E0FD295`。新 ASAR 的 preload 与受测源码逐字一致，内部版本仍为 1.14.0。验证通道沿用已有 AppId，避免每个 SHA 新增一条软件安装记录；源码 SHA 继续由文件名与 receipt 区分。
+
+复用已停用的作者 `clean-version-b`，真实同目录升级 exit 0，66791 ms；目录与 catalog 保留，未复制认证，未新增桌面快捷方式。实际 Electron 启动日志记录 `renderer-visible=39351 ms`，开启正常 Chromium 日志后捕获到：
+
+```text
+[desktop-shell] initialized preference=v2
+```
+
+这是**真实升级与界面偏好首次初始化验证**，不是新程序目录首装，也不替代此前对应候选的首装证据。原生窗口外观仍不冒充已做截图验收。
+
+交付目标 `clean-user/app` 与 `clean-user/instance` 均未创建，端口 5344/3344/6344 空闲，留给用户亲自从安装、零角色、自动演示到创建及使用验证；该环境未预置认证文件。作者已在无执行中任务时，对 `clean-version-b` 和旧的 `clean-install` 分别执行 Redis SAVE、复制并校验快照，再通过各自安装身份请求协调退出。两套进程与端口均释放；旧环境四条消息在停机前仍可回读，原实例全部文件保留。
+
+本机项目级 `G:\AIwork\clowder-ai\AGENTS.md` 已增加测试环境/产物生命周期约束：先查重、同用途复用、首装边界、测试安装不创建桌面入口、交付/回退保留规则、按实例身份停止、数据保护与收尾台账。自动管理治理区块未动。8 个失效测试快捷方式可恢复归档，另外 6 个有效旧入口保留；未知归属的 5220 Node 服务未动。
+
 ## 剩余验收
 
 1. 用户已确认本轮主要是经典/新版导航与主界面的差异，该项按浏览器偏好处理；其他已知问题继续绑定具体页面与预期验收。
