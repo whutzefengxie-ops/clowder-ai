@@ -21,7 +21,9 @@ test(
       await fs.mkdir(path.join(frozen, 'dependencies'));
       await fs.writeFile(path.join(frozen, 'api/package.json'), '{"type":"module"}');
       const code =
-        'import {createServer} from "node:http"; createServer((q,r)=>r.end("ok")).listen(Number(process.env.API_SERVER_PORT),"127.0.0.1",()=>globalThis.__clowderStartupMilestone("http-listening"));';
+        'import "../scripts/startup-helper.mjs"; import {createServer} from "node:http"; createServer((q,r)=>r.end("ok")).listen(Number(process.env.API_SERVER_PORT),"127.0.0.1",()=>globalThis.__clowderStartupMilestone("http-listening"));';
+      await fs.mkdir(path.join(frozen, 'api/scripts'));
+      await fs.writeFile(path.join(frozen, 'api/scripts/startup-helper.mjs'), 'export const value = 1;');
       await fs.writeFile(entry, code);
       const receipt = await profileDesktopStartup(sourceRoot, frozen, { profileRoot: path.join(root, 'trace') });
       const manifest = JSON.parse(await fs.readFile(receipt.manifest, 'utf8'));
@@ -30,6 +32,7 @@ test(
         { relative: 'packages/api/dist/index.desktop.js', bytes: Buffer.byteLength(code) },
       ]);
       assert.equal(JSON.stringify(manifest).includes(root), false);
+      assert.equal(manifest.excludedFiles, 1);
       assert.equal(
         await fetch(`http://127.0.0.1:${receipt.apiPort}`, { signal: AbortSignal.timeout(500) }).then(
           () => true,

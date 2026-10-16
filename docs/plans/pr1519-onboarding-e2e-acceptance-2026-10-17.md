@@ -41,6 +41,7 @@ tips_exempt: 验收用例和已有能力的缺陷修复，不新增用户入口
 | I05 | 存量实例升级、连续退出/重启 | 配置字段与历史回读，无新重复角色；只退出本安装身份 | 194→f1实际升级81.818s，10文件哈希不变；5角色、12会话、39原消息ID回读，再五真调用通过 |
 | I06 | 无效参数、端口冲突、启动超时、子进程非零退出 | 阶段/归属可诊断；不借用其他环境服务，不误报 ready | Fresh安装实物：占用223ms失败、子进程42在1806ms失败、挂起在121341ms失败；未调大120秒，原生弹窗像素未验 |
 | I07 | 解压中窗口操作与中断 | 窗口可响应；退出有界，失败可恢复 | 拖动**未验证**；用户允许先日志，不能称已通过 |
+| I08 | 新包确实消费自己的预读清单 | 当前启动记录status=ready、文件/字节数与随包清单相等、零错误，不能仅API启动就通过 | 68ebc8285真正首装得到invalid，已判RED；生产者/消费者统一规则后37项通过，修正新EXE仍待GREEN |
 | G01 | 首次打开，未完成引导 | 自动弹出并开始，无中间三选弹窗和额外开始按钮 | 实际 Electron 通过 |
 | G02 | 自动 mock A2A 与右侧 HTML | 六阶段渐进；真实角色零创建；成果添加任务可交互 | 实际 Electron 通过，有截图 |
 | G03 | classic/v2 各入口、重播/暂停/跳过、已完成再进 | 保留用户 shell 偏好；仅首次自动；既有手动入口可达 | 两shell真实生产页面的手动/演示/创建导航2/2；暂停重播等组件回归，不能把HTTP注入写为原生窗口证据 |
@@ -126,6 +127,17 @@ tips_exempt: 验收用例和已有能力的缺陷修复，不新增用户入口
 本轮先观察 RED，再得到22项启动/边界/构建采样/子进程清理回归通过，并接入 Windows Smoke。构建采样真实冻结树也成功。这些是源码/构建证据；**包含预读的新EXE尚未重新完成首装和完整真实调用，因此不能把上表手工对照写成新交付包验收通过**。需要随后两轮新目录完整Setup、首启、引导、一键创建、真调用/A2A与旧历史回读，失败继续 No-Go。
 
 Architecture cell: 既有 desktop bootstrap / frozen build。Map delta: none。预读是可丢弃的程序字节提示，既有 Node loader、角色 catalog、会话和认证 owner 不变。
+
+实际首装新增RED：68ebc8285包SHA `D80A6DB71A9DA8E91FACA606BC93BA26A425B5AD987E25A3D404F7A3C5A45AC2` 在从未存在的程序/数据目录安装53.294s、退出0；API正常ready，但 `[api-startup-read-ahead]` 明确为invalid。完整启动图包含15个 `packages/api/scripts` 或 `src/plugins` 的源码辅助模块，生产者没有应用运行时只接受dist/依赖目录的策略，导致整张清单被拒绝。**这一包不通过性能修复验收，不交付，也没有用API健康冒充通过。** 原case已SAVE并精确协调退出，所有数据/失败日志保留。
+
+修正为构建筛选和运行时共用 `isStartupProgramPath`，保留严格目录边界；这15个小文件仍由正常Node加载，不扩大到源码/配置目录。冻结树重新生成1439文件/37,605,450字节的提示（原始图仍1454，省略83,543字节）。构建样例加入真实出现的scripts模块，观察RED→GREEN，打包相关37项再次通过。新增 `native-read-ahead-observe.test.mjs` 读取实际安装身份、当前PID的ready及该次启动日志，旧包得到 `invalid !== ready` 的真实RED；新版必须用同一观察器转GREEN，不能修改已安装旧包绕过。
+
+复验命令（只读观察，不提前读取/暖启动程序文件）：
+
+```powershell
+$env:CAT_CAFE_STARTUP_READ_AHEAD_LAUNCH='G:\作者证据目录\精确首启记录.json'
+node --test packages/web/test/browser/native-read-ahead-observe.test.mjs
+```
 
 本轮实验收尾：已按固定清单移除五个性能对照及六个采样原型的11个自有程序目录；先确认无活跃进程，归档根配置并记录/解除junction，才递归删除程序。4523个受保护实例文件的前后SHA全部相同，所有instance/HOME/Redis/SQLite/历史与实验日志保留，磁盘实际可用空间增加9,902,477,312字节。未调用通用卸载器、未改生产或已保留交付目录，也未重试之前被拒绝的开始菜单清理。`program-retirement/manifest.json`、`protected-before.json`、`receipt.json`可核验边界。
 

@@ -6,16 +6,23 @@ const maxBytes = 64 * 1024 * 1024;
 const inside = (root, file) => file.startsWith(root + path.sep);
 const programPath = /^(?:node_modules\/|packages\/[a-z][a-z0-9-]*\/(?:dist|node_modules)\/).+\.(?:[cm]?js|json)$/;
 
+export function isStartupProgramPath(relative) {
+  return (
+    typeof relative === 'string' &&
+    programPath.test(relative) &&
+    relative.length <= 1024 &&
+    !/[:<>|?*\0\\]/.test(relative) &&
+    !relative.split('/').some((part) => !part || part === '.' || part === '..')
+  );
+}
+
 function validManifest(value) {
   if (value?.version !== 1 || !/^[a-f0-9]{64}$/.test(value.entrySha256)) return false;
   if (!Array.isArray(value.files) || value.files.length > 2048) return false;
   let bytes = 0;
   const seen = new Set();
   return value.files.every((file) => {
-    if (typeof file?.relative !== 'string' || !programPath.test(file.relative)) return false;
-    if (file.relative.length > 1024 || /[:<>|?*\0]/.test(file.relative)) return false;
-    if (file.relative.includes('\\') || file.relative.split('/').some((part) => !part || part === '.' || part === '..'))
-      return false;
+    if (!isStartupProgramPath(file?.relative)) return false;
     if (!Number.isSafeInteger(file.bytes) || file.bytes < 0 || seen.has(file.relative)) return false;
     seen.add(file.relative);
     bytes += file.bytes;
@@ -73,7 +80,7 @@ export async function readAheadApi(apiEntry, { io = fs, budgetMs = 1500 } = {}) 
         try {
           const canonical = await io.realpath(candidate);
           if (!inside(canonicalRoot, canonical)) throw new Error('External program hint');
-          if (!programPath.test(path.relative(canonicalRoot, canonical).split(path.sep).join('/')))
+          if (!isStartupProgramPath(path.relative(canonicalRoot, canonical).split(path.sep).join('/')))
             throw new Error('Program hint redirected into data');
           // The entry was already read for identity, so do not read it twice.
           if (canonical === canonicalEntry) continue;

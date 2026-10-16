@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isStartupProgramPath } from '../api-startup-read-ahead.mjs';
 import { withFrozenDependencyResolution } from './frozen-dependency-resolution.mjs';
 
 async function freePort() {
@@ -22,6 +23,7 @@ function collectManifest(frozenRoot, profileRoot) {
   const urls = JSON.parse(fs.readFileSync(path.join(profileRoot, 'files.json'), 'utf8'));
   const temporaryApi = path.join(profileRoot, 'app/packages/api');
   const files = new Map();
+  let excludedFiles = 0;
   for (const url of urls) {
     const file = fs.realpathSync(fileURLToPath(url));
     let relative;
@@ -37,12 +39,20 @@ function collectManifest(frozenRoot, profileRoot) {
       relative = path.join(layout === 'dependencies' ? 'node_modules' : `packages/${layout}`, ...parts);
     }
     if (!/\.(?:[cm]?js|json)$/.test(relative)) throw new Error('Non-program input in startup trace');
-    files.set(relative.split(path.sep).join('/'), fs.statSync(file).size);
+    relative = relative.split(path.sep).join('/');
+    // A complete trace may include shipped source helpers. Hints intentionally
+    // cover only dist and dependency programs; share the runtime's exact policy.
+    if (!isStartupProgramPath(relative)) {
+      excludedFiles++;
+      continue;
+    }
+    files.set(relative, fs.statSync(file).size);
   }
   if (!files.size || files.size > 2048 || [...files.values()].reduce((sum, size) => sum + size, 0) > 64 * 1024 * 1024)
     throw new Error('Startup trace exceeds its read budget');
   return {
     version: 1,
+    excludedFiles,
     entrySha256: createHash('sha256')
       .update(fs.readFileSync(path.join(frozenRoot, 'api/dist/index.desktop.js')))
       .digest('hex'),
