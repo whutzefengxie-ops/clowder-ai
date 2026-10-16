@@ -54,10 +54,21 @@ $ProjectRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $PSCom
 Write-Step "Step 1/8 - Build web application"
 if (-not $SkipWebBuild) {
     Push-Location $ProjectRoot
+    $buildRevision = (git rev-parse HEAD).Trim()
+    if ($LASTEXITCODE -ne 0 -or $buildRevision -notmatch '^[a-f0-9]{40}$') { throw "Build requires a source revision" }
+    $buildInputs = @('packages', 'scripts', 'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'tsconfig.base.json')
+    if (git status --porcelain --untracked-files=all -- @buildInputs) { throw "Commit runtime source changes before building a release" }
     pnpm install --frozen-lockfile
     if ($LASTEXITCODE -ne 0) { throw "Frozen dependency installation failed" }
     pnpm run build
     if ($LASTEXITCODE -ne 0) { Write-Err "Build failed"; exit 1 }
+    if ((git rev-parse HEAD).Trim() -ne $buildRevision -or
+        (git status --porcelain --untracked-files=all -- @buildInputs)) { throw "Source changed during the build" }
+    $webRevision = (Get-Content -LiteralPath (Join-Path $ProjectRoot 'packages/web/.next/.build-commit') -Raw).Trim()
+    if ($webRevision -ne $buildRevision) { throw "Web build identity does not match this source revision" }
+    # The API's generic tsc build does not stamp itself. Only record its identity
+    # after this complete, unchanged-source API/Web build has succeeded.
+    [IO.File]::WriteAllText((Join-Path $ProjectRoot 'packages/api/dist/.build-commit'), "$buildRevision`n", [Text.UTF8Encoding]::new($false))
     Pop-Location
     Write-Ok "Web application built"
 } else {
