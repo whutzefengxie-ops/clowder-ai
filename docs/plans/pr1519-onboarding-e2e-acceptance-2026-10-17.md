@@ -143,3 +143,15 @@ verify 模式检查原角色信息、原消息 ID 与标记，然后再对五种
 - 本机无法代表 macOS、离线首次下载安装器依赖、所有外部供应商限流与账号策略。相关模拟错误有对应恢复用例，但真实 macOS 和未运行的原生场景必须独立标为未验收。
 
 只有目标二进制的干净首装、首次启动、上述真实旅程、五工具可用和数据保留全部符合预期，且阻塞清零，才能宣布本次交付达到预期。该文档和作者自检不代替维护者 review 或合并批准。
+
+## 第二轮：真实协作因果证明与首启加载边界
+
+- 未选择 SDK carrier 时，旧版仍静态加载 Claude SDK。以同一旧源码禁止 SDK 导入，实际 RED 命中 `SDK eagerly loaded before an SDK invocation`；修复为调用时按需导入，保留同类身份、query 注入、取消与错误语义。SDK 回归 25/25；新增 Windows smoke 原样命令 34/34。最终 EXE 的冷启动收益尚未测得，不据此宣称性能问题已解决。
+- 安装版的一条初始 Codex 任务已真实产生 Codex→Pi→Codex，但 Pi 同时使用 MCP 回传与行首 @，形成两个独立回接。不能按 sender/target 粗暴去重合法任务。补充 post_message 描述，明确提交回执不等于伙伴回答、同一交接只走一种投递方式；未改权限或路由。需在新构建重验模型行为。
+- A2A 用例必须以持久 lifecycle 的 invocationId / producerInvocationId / inputMessageIds 与完成时间证明因果关系，提前说“收到结果”不能算通过。五个正反例通过。实际用例仍严格要求本次一来一回没有额外回接，禁止放宽为只检查文本出现。
+- 测试失败/超时时只按本次会话的投影 capability 取消精确执行；409 后刷新，连续三个空快照才退出。五个清理反例通过，不按通用进程名或伙伴名结束进程，不删除任何会话。
+- MCP callback 与 A2A staging 回归 97/97；治理 baseline 按真实 PR base `814f63bddbed2e3aa835b0bb5da612b89c266e67` 更新并重新 check 通过。216 个工具，零增删、零权限/schema/selector/profile 变更，仅说明文字增加。整个模块 digest 同步更新不代表 74 个 handler 行为变化。
+- `ca01f28c8` 的远端检查已终态：19 SUCCESS，1 预期 SKIPPED，MERGEABLE。此记录仅适用于该旧 SHA，不迁给后续提交；不代表正式 approval。
+- 本机安装版 SDK 三次原样中文任务也是 0/3；切换 carrier 不能解决 Claude 问题，未改角色 carrier 或静默换模型。Claude 仍阻塞整体交付。
+
+证据位于本轮隔离证据目录的 `sdk-lazy-baseline-red.log`、`sdk-lazy-regression.log`、`windows-native-ci-contracts.log`、`a2a-staging-regression.log`、`mcp-governance-final.log`、`real-a2a/live-journey.json`。新的单测纳入 Windows CI；真实五工具/A2A 保留明确 opt-in 的独立入口，不让普通 CI 意外消耗本机账号。

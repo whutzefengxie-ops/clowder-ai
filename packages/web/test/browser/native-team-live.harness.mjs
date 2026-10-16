@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { chromium } from 'playwright';
+import { settleOwnedThread } from './native-team-cleanup.mjs';
 
 // Opt-in only: these tests invoke paid, locally authenticated clients. They never
 // reset data or copy credentials. HTTP/model traffic must not be mocked here.
@@ -19,13 +20,13 @@ export async function openLiveJourney() {
   await fs.mkdir(directory, { recursive: true });
   const record = { modelRequestsMocked: false, web: web.origin, api: api.origin, steps: [], calls: [], pageErrors: [] };
   const save = () => fs.writeFile(path.join(directory, 'live-journey.json'), JSON.stringify(record, null, 2));
-  const request = async (url, options = {}) => {
+  const request = async (url, options = {}, acceptedStatuses = []) => {
     const response = await fetch(new URL(url, api), {
       ...options,
       headers: { 'X-Cat-Cafe-User': 'default-user', 'Content-Type': 'application/json', ...options.headers },
       signal: AbortSignal.timeout(15000),
     });
-    assert.ok(response.ok, `${url}: HTTP ${response.status}`);
+    assert.ok(response.ok || acceptedStatuses.includes(response.status), `${url}: HTTP ${response.status}`);
     return response.json();
   };
   const browser = await chromium.launch({ headless: true });
@@ -48,9 +49,15 @@ export async function openLiveJourney() {
     log,
     screenshot: (name) => page.screenshot({ path: path.join(directory, `${name}.png`), fullPage: true }),
     close: async () => {
-      await save();
-      await context.close();
-      await browser.close();
+      try {
+        await save();
+      } finally {
+        try {
+          await context.close();
+        } finally {
+          await browser.close();
+        }
+      }
     },
   };
 }
@@ -112,8 +119,12 @@ export async function callRealPartner(journey, cat) {
     await journey.screenshot(`failure-${cat.id}-${marker.slice(-8)}`);
   } finally {
     result.durationMs = Date.now() - started;
-    await save();
-    console.log(`${cat.id}: ${result.passed ? 'PASS' : result.error}`);
+    try {
+      if (result.threadId) result.cleanup = await settleOwnedThread(request, result.threadId);
+    } finally {
+      await save();
+      console.log(`${cat.id}: ${result.passed ? 'PASS' : result.error}`);
+    }
   }
   return result;
 }
