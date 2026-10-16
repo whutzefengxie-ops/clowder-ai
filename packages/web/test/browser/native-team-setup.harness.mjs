@@ -11,7 +11,7 @@ assert.ok(base && evidence, 'Pass the explicitly owned isolated URL and evidence
 const origin = new URL(base);
 assert.ok(['localhost', '127.0.0.1'].includes(origin.hostname) && !['3003', '3004'].includes(origin.port));
 export const labels = ['Codex', 'Claude Code', 'DSH', 'Kimi', 'Pi'];
-const ids = ['codex', 'claude', 'dsh', 'kimi', 'pi'];
+export const ids = ['codex', 'claude', 'dsh', 'kimi', 'pi'];
 export const runtimes = labels.map((label, index) => ({
   id: ids[index],
   label,
@@ -29,8 +29,24 @@ before(async () => {
 });
 after(async () => browser?.close());
 
+async function respondFault(route, failure, commit) {
+  if (failure.committed) commit();
+  if (failure.disconnect) return route.abort('connectionreset');
+  if (failure.hang) return new Promise(() => {});
+  return route.fulfill({ status: failure.status, json: { error: 'fixture account unavailable' } });
+}
+
 export async function setup(options = {}) {
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+  // Keep registration real but omit fetch interception in the HTTP-fault lane.
+  // Playwright's serviceWorkers:block makes Workbox registration return undefined.
+  // The separate installed live journey uses the unmodified production worker.
+  await context.route('**/sw.js', (route) =>
+    route.fulfill({
+      contentType: 'application/javascript',
+      body: 'self.addEventListener("install",()=>self.skipWaiting());',
+    }),
+  );
   const page = await context.newPage();
   const writes = [],
     errors = [];
@@ -38,7 +54,11 @@ export async function setup(options = {}) {
   let failure = options.failCreate;
   let discovered = options.runtimes ?? runtimes;
   const created = [];
-  page.on('pageerror', (error) => errors.push(error.message));
+  const receipts = new Map();
+  page.on('pageerror', (error) => {
+    errors.push(error.message);
+    console.error(error.stack);
+  });
   await context.route('**/api/cats/native-runtimes*', (route) =>
     route.fulfill({
       status: discoveryFails ? 503 : 200,
@@ -46,17 +66,27 @@ export async function setup(options = {}) {
     }),
   );
   await context.route('**/api/cats', async (route) => {
-    if (route.request().method() !== 'POST') return route.fulfill({ json: { cats: options.existing ?? [] } });
+    if (route.request().method() !== 'POST') return route.fulfill({ json: { cats: options.existing ?? created } });
     const payload = route.request().postDataJSON();
     const key = route.request().headers()['idempotency-key'];
     writes.push({ payload, key });
+    if (receipts.has(key)) return route.fulfill({ status: 201, json: { cat: receipts.get(key) } });
     if (failure && writes.length === failure.at) {
-      const status = failure.status;
+      const fault = failure;
       failure = undefined;
-      return route.fulfill({ status, json: { error: 'fixture account unavailable' } });
+      return respondFault(route, fault, () => {
+        const cat = {
+          ...payload,
+          id: payload.id ?? `fixture-${created.length}`,
+          mentionPatterns: payload.mentionPatterns ?? [],
+        };
+        created.push(cat);
+        receipts.set(key, cat);
+      });
     }
     const cat = { ...payload, id: `fixture-${created.length}`, mentionPatterns: payload.mentionPatterns ?? [] };
     created.push(cat);
+    receipts.set(key, cat);
     return route.fulfill({ status: 201, json: { cat } });
   });
   await page.goto(new URL('/settings?s=members&view=setup&shell=v2&lang=zh', origin).href);

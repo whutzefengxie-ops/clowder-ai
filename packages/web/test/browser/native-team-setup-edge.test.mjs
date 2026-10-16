@@ -31,6 +31,7 @@ test('unavailable ACP adapters cannot be selected; other tools can still be crea
   );
   const state = await setup({ runtimes: tools });
   try {
+    await state.page.getByText('其他工具与安装帮助', { exact: true }).click();
     assert.ok(await state.page.getByRole('checkbox', { name: '加入 Pi 伙伴', exact: true }).isDisabled());
     await create(state.page).click();
     await state.panel.waitFor({ state: 'hidden' });

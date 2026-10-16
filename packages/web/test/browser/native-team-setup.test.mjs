@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { test } from 'node:test';
-import { create, evidence, runtimes, select, setup } from './native-team-setup.harness.mjs';
+import { create, evidence, ids, runtimes, select, setup } from './native-team-setup.harness.mjs';
 
 for (let mask = 0; mask < 32; mask++) {
   test(
@@ -40,7 +40,7 @@ for (let mask = 0; mask < 32; mask++) {
   );
 }
 
-for (const status of [400, 401, 403, 409, 429, 500, 503]) {
+for (const status of [400, 403, 409, 429, 500, 503]) {
   test(
     `HTTP ${status}: partial creation names the failed partner; retry keeps receipts and skips completed partners`,
     { timeout: 30000 },
@@ -66,6 +66,25 @@ for (const status of [400, 401, 403, 409, 429, 500, 503]) {
     },
   );
 }
+
+test(
+  'HTTP 401 refreshes the real session and automatically replays the same creation receipt once',
+  { timeout: 30000 },
+  async () => {
+    const state = await setup({ failCreate: { at: 2, status: 401 } });
+    try {
+      await create(state.page).click();
+      await state.panel.waitFor({ state: 'hidden' });
+      assert.equal(state.created.length, 5);
+      assert.equal(state.writes.length, 6);
+      assert.equal(state.writes[2].key, state.writes[1].key);
+      assert.deepEqual(state.writes[2].payload, state.writes[1].payload);
+      assert.deepEqual(state.errors, []);
+    } finally {
+      await state.context.close();
+    }
+  },
+);
 
 test(
   'discovery failure is distinct from no clients; refresh recovers and later detects a newly started DSH',
@@ -104,6 +123,7 @@ test('manual creation remains available from the automatic configuration path', 
   try {
     await state.page.getByRole('button', { name: '手动创建单个伙伴', exact: true }).click();
     await state.panel.waitFor({ state: 'hidden' });
+    await state.page.waitForURL((url) => url.searchParams.get('manual') === '1');
     assert.equal(new URL(state.page.url()).searchParams.get('manual'), '1');
     assert.equal(state.writes.length, 0);
     assert.deepEqual(state.errors, []);
