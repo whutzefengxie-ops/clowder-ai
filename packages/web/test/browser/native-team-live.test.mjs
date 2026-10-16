@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import { test } from 'node:test';
 import { callRealPartner, openLiveJourney, roleIdentity, verifyRetainedHistory } from './native-team-live.harness.mjs';
 import { completeFirstRun } from './native-team-live-fresh.mjs';
+import { assertLivePageHealthy } from './native-team-observers.mjs';
 
 test(
   'installed application: zero-role onboarding or retained-history verification, then real client tasks',
@@ -39,8 +40,7 @@ test(
       );
       assert.equal(await page.getByTestId('recommended-team-setup').count(), 0);
       await log('existing-roster-does-not-recommend-initial-setup');
-      assert.deepEqual(record.pageErrors, []);
-      assert.deepEqual(record.dialogs, [], 'Unexpected browser dialogs must not be silently dismissed as success');
+      assertLivePageHealthy(record);
       assert.ok(
         record.calls.length === 5 && record.calls.every((call) => call.passed),
         'All five clients must execute the unique real task, not merely return a greeting',
@@ -48,6 +48,7 @@ test(
       await log('all-live-acceptance-checks-passed');
     } catch (error) {
       record.failure = String(error.message).slice(0, 800);
+      await journey.screenshot('journey-failure').catch(() => {});
       throw error;
     } finally {
       await journey.close();

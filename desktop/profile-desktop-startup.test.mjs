@@ -100,3 +100,48 @@ test('a failed frozen API exposes its root cause and the retained log location',
     await fs.rm(root, { recursive: true, force: true });
   }
 });
+
+test('an open API port cannot substitute for its completed startup trace', { timeout: 15000 }, async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'desktop-profile-delayed-trace-'));
+  const frozen = path.join(root, 'frozen');
+  const trace = path.join(root, 'trace');
+  const entry = path.join(frozen, 'api/dist/index.desktop.js');
+  try {
+    await fs.mkdir(path.dirname(entry), { recursive: true });
+    await fs.mkdir(path.join(frozen, 'dependencies'));
+    await fs.writeFile(path.join(frozen, 'api/package.json'), '{"type":"module"}');
+    await fs.writeFile(
+      entry,
+      'import {createServer} from "node:http"; createServer((q,r)=>r.end("ok")).listen(Number(process.env.API_SERVER_PORT),"127.0.0.1",()=>setTimeout(()=>globalThis.__clowderStartupMilestone("http-listening"),1200));',
+    );
+    const receipt = await profileDesktopStartup(sourceRoot, frozen, { profileRoot: trace });
+    assert.ok((await fs.stat(receipt.manifest)).size > 0);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('a listening API without a completion milestone still times out and exits', { timeout: 15000 }, async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'desktop-profile-no-trace-'));
+  const frozen = path.join(root, 'frozen');
+  const trace = path.join(root, 'trace');
+  const entry = path.join(frozen, 'api/dist/index.desktop.js');
+  try {
+    await fs.mkdir(path.dirname(entry), { recursive: true });
+    await fs.mkdir(path.join(frozen, 'dependencies'));
+    await fs.writeFile(path.join(frozen, 'api/package.json'), '{"type":"module"}');
+    await fs.writeFile(
+      entry,
+      'import fs from "node:fs"; import {createServer} from "node:http"; fs.writeFileSync("fixture-pid",String(process.pid)); createServer((q,r)=>r.end("ok")).listen(Number(process.env.API_SERVER_PORT),"127.0.0.1");',
+    );
+    await assert.rejects(
+      profileDesktopStartup(sourceRoot, frozen, { profileRoot: trace, timeoutMs: 3000 }),
+      /profile failed/,
+    );
+    const pid = Number(await fs.readFile(path.join(trace, 'instance/project/fixture-pid'), 'utf8'));
+    assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' });
+    await assert.rejects(fs.stat(path.join(frozen, 'api/dist/.startup-read-ahead.json')), { code: 'ENOENT' });
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});

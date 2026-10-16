@@ -1,5 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
+const { setTimeout: delay } = require('node:timers/promises');
 const { pathToFileURL } = require('node:url');
 
 const options = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
@@ -58,7 +59,16 @@ const timeout = setTimeout(() => abort.abort(), options.timeoutMs);
   try {
     manager._ensureUserDataDir(instance);
     await manager._startApi(process.execPath, instance, abort.signal);
-    if (!fs.existsSync(path.join(options.profileRoot, 'files.json'))) throw new Error('No complete API startup trace');
+    // The normal startup seam proves an open port, not that the provider's
+    // post-listen milestone and trace write have run. Consume the explicit
+    // completion evidence under the same bounded deadline before stopping it.
+    while (!fs.existsSync(path.join(options.profileRoot, 'files.json'))) {
+      abort.signal.throwIfAborted();
+      const api = manager.procs.api;
+      if (!api || api.exitCode !== null || api.signalCode !== null)
+        throw new Error('Profile API exited before its completed startup trace');
+      await delay(25, undefined, { signal: abort.signal });
+    }
   } finally {
     clearTimeout(timeout);
     await manager.stopAll();

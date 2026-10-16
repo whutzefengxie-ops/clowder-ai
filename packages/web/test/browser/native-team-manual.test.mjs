@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import { callRealPartner, openLiveJourney, roleIdentity } from './native-team-live.harness.mjs';
+import { assertLivePageHealthy } from './native-team-observers.mjs';
 
 test(
   'installed app: manual creation, nickname save, actual model/effort choices and reversible runtime drafts',
@@ -117,8 +118,7 @@ test(
       assert.equal(manual.clientId, 'openai');
       assert.equal(manual.defaultModel, '', 'Uncommitted model/runtime drafts must not alter the saved role');
       assert.ok((await callRealPartner(journey, manual)).passed);
-      assert.deepEqual(record.pageErrors, []);
-      assert.deepEqual(record.dialogs, []);
+      assertLivePageHealthy(record);
       await log('manual-role-real-task-and-original-roles-retained');
     } catch (error) {
       record.failure = error.message;

@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import { allA2AInvocationsDone, findA2AProof } from './native-team-a2a-proof.mjs';
 import { settleOwnedThread } from './native-team-cleanup.mjs';
 import { openLiveJourney, roleIdentity } from './native-team-live.harness.mjs';
+import { assertLivePageHealthy } from './native-team-observers.mjs';
 
 test(
   'real A2A: one initial target delegates to a configured peer and integrates its actual reply',
@@ -93,8 +94,7 @@ test(
       );
       assert.equal(record.extraPeerInvocations, 0, 'This task must be computed by the peer exactly once');
       assert.equal(trajectories.length, 3, 'One delegation/return must produce exactly three real invocations');
-      assert.deepEqual(record.pageErrors, []);
-      assert.deepEqual(record.dialogs, []);
+      assertLivePageHealthy(record);
       record.cleanup = await settleOwnedThread(request, thread.id, { cancel: false });
       await log('real-delegation-peer-answer-and-integration-passed');
     } catch (error) {

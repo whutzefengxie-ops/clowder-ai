@@ -1,7 +1,31 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { observePageFaults } from './native-team-observers.mjs';
+import { assertLivePageHealthy, observePageFaults } from './native-team-observers.mjs';
 import { create, runtimes, select, setup } from './native-team-setup.harness.mjs';
+
+test('console errors and failed HTTP requests cannot disappear from live acceptance', { timeout: 30000 }, async () => {
+  const state = await setup();
+  try {
+    const record = { pageErrors: [], dialogs: [] };
+    observePageFaults(state.page, record);
+    await state.page.route('**/observer-fault-fixture', (route) =>
+      route.fulfill({ status: 503, body: 'expected fixture' }),
+    );
+    await state.page.route('**/observer-reset-fixture', (route) => route.abort('connectionreset'));
+    await state.page.evaluate(async () => {
+      console.error('expected-observer-console-error');
+      await fetch('/observer-fault-fixture');
+      await fetch('/observer-reset-fixture').catch(() => {});
+    });
+    await state.page.waitForTimeout(100);
+    assert.ok(record.consoleErrors?.some((message) => message.includes('expected-observer-console-error')));
+    assert.ok(record.networkErrors?.some((error) => error.status === 503 && error.path === '/observer-fault-fixture'));
+    assert.ok(record.networkErrors?.some((error) => error.path === '/observer-reset-fixture' && error.failure));
+    assert.throws(() => assertLivePageHealthy(record), /Unexpected renderer faults/);
+  } finally {
+    await state.context.close();
+  }
+});
 
 test(
   'unexpected blocking dialogs and JavaScript faults are observed instead of silently accepted',

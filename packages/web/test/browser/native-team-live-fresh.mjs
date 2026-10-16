@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { exerciseDemoPreview } from './native-demo-preview.mjs';
 export async function completeFirstRun(journey) {
   const { page, request, web, log } = journey;
   assert.equal((await request('/api/cats')).cats.length, 0);
@@ -45,16 +46,14 @@ export async function completeFirstRun(journey) {
   assert.equal(stages.size, 6);
   assert.ok(sawThinking && sawTyping, 'The real player must show thinking and progressive reply phases');
   assert.equal(creates.length, 0, 'Mock collaboration must never create real roles');
-  const preview = page.frameLocator('iframe[title="今天待办 · 演示成果"]');
-  await preview.getByRole('textbox', { name: '新任务', exact: true }).fill('端到端验收任务');
-  await preview.getByRole('button', { name: '添加', exact: true }).click();
-  await preview.getByText('端到端验收任务', { exact: true }).waitFor();
+  const previewObserver = await exerciseDemoPreview(journey, '端到端验收任务');
   await journey.screenshot('progressive-demo-completed');
   await log('automatic-mock-a2a-and-interactive-preview', {
     stages: [...stages],
     stageTimeline,
     sawThinking,
     sawTyping,
+    previewObserver,
   });
   await demo.getByRole('link', { name: '创建我的猫猫 →', exact: true }).click();
   const setup = page.getByTestId('recommended-team-setup');

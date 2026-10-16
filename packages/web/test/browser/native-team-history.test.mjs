@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import { test } from 'node:test';
 import { openLiveJourney, roleIdentity } from './native-team-live.harness.mjs';
+import { assertLivePageHealthy } from './native-team-observers.mjs';
 
 // This is persistence acceptance, not task acceptance. Failed or irrelevant
 // replies must survive restart too; preserving them never turns a failed task green.
@@ -44,8 +45,7 @@ test('installed application retains every recorded outcome after restart', { tim
       messages: expected.threads.reduce((count, thread) => count + thread.messages.length, 0),
       taskVerdictsReclassified: false,
     });
-    assert.deepEqual(journey.record.pageErrors, []);
-    assert.deepEqual(journey.record.dialogs, []);
+    assertLivePageHealthy(journey.record);
   } finally {
     await journey.close();
   }
