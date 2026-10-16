@@ -81,7 +81,8 @@ export async function profileDesktopStartup(sourceRoot, frozenRoot, { profileRoo
   const env = {};
   for (const key of ['PATH', 'Path', 'SystemRoot', 'WINDIR', 'COMSPEC', 'PATHEXT', 'TEMP', 'TMP'])
     if (process.env[key]) env[key] = process.env[key];
-  const log = fs.openSync(path.join(profileRoot, 'build.log'), 'wx');
+  const logPath = path.join(profileRoot, 'build.log');
+  const log = fs.openSync(logPath, 'wx');
   try {
     await withFrozenDependencyResolution(
       frozenRoot,
@@ -97,9 +98,13 @@ export async function profileDesktopStartup(sourceRoot, frozenRoot, { profileRoo
             },
           );
           child.once('error', reject);
-          child.once('exit', (code) =>
-            code === 0 ? resolve() : reject(new Error(`Frozen startup profile failed (${code}); inspect build.log`)),
-          );
+          child.once('exit', (code, signal) => {
+            if (code === 0) return resolve();
+            // This isolated build child has no client credentials. Keep the
+            // bounded failure in CI output as well as its retained source log.
+            const detail = fs.readFileSync(logPath, 'utf8').slice(-8000);
+            reject(new Error(`Frozen startup profile failed (${code}, ${signal}); log=${logPath}\n${detail}`));
+          });
         }),
     );
   } finally {

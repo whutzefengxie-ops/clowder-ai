@@ -79,3 +79,24 @@ test(
     }
   },
 );
+
+test('a failed frozen API exposes its root cause and the retained log location', { timeout: 15000 }, async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'desktop-profile-exit-'));
+  const frozen = path.join(root, 'frozen');
+  const trace = path.join(root, 'trace');
+  const entry = path.join(frozen, 'api/dist/index.desktop.js');
+  try {
+    await fs.mkdir(path.dirname(entry), { recursive: true });
+    await fs.mkdir(path.join(frozen, 'dependencies'));
+    await fs.writeFile(path.join(frozen, 'api/package.json'), '{"type":"module"}');
+    await fs.writeFile(entry, 'console.error("PR1519_PROFILE_ROOT_CAUSE"); process.exit(42);');
+    await assert.rejects(profileDesktopStartup(sourceRoot, frozen, { profileRoot: trace }), (error) => {
+      assert.ok(error.message.includes(path.join(trace, 'build.log')), 'Missing retained diagnostic path');
+      assert.ok(error.message.includes('PR1519_PROFILE_ROOT_CAUSE'), 'Missing actual child failure');
+      return true;
+    });
+  } finally {
+    // Only a synthetic exiting module was started; no persistent databases exist.
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
