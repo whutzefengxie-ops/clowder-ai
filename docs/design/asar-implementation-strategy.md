@@ -1,4 +1,16 @@
-# 🎯 正确的 ASAR 优化方案
+---
+feature_ids: [F155, F229, F320]
+topics: [performance, desktop, packaging]
+doc_kind: design
+created: 2026-10-15
+---
+
+# ASAR 候选方案调研（历史记录）
+
+> 2026-10-16 状态更正：本文记录候选思路，不是已验证的实施指令或性能收益。
+> 方案 B 的实验预打包脚本未接入构建，现已删除，其新增的直接依赖也已移除。
+> 桌面构建仍由 electron-builder 管理自身的 ASAR 工具；API/Web/MCP 的独立 Node 进程及资源目录未迁移到 ASAR。
+> 安装和启动性能继续在 #1606 中以实际测量推进。
 
 ## 问题分析
 
@@ -67,55 +79,14 @@
 
 **问题**：这需要修改代码路径解析逻辑
 
-### 方案 B：保持架构，使用预打包的 ASAR（当前最可行）
+### 方案 B：预打包独立 ASAR（本轮放弃）
 
-**原理**：在构建阶段预先将 API/Web/MCP 打包成 ASAR，然后作为单个文件复制
+该候选尝试将 API/Web/MCP 的部署目录预先打包为单一归档。
+此前实验记录为运行超过180秒，且从未集成进构建；没有取得安装或冷启动改善的实物证据。
+独立 Node 进程的入口、资源路径和必要二进制也不能仅靠归档文件替换。
 
-**实施步骤**：
-
-#### 1. 创建预打包脚本
-```javascript
-// desktop/scripts/pre-bundle-packages.mjs
-import asar from 'asar';
-import path from 'path';
-
-// 将 API/Web/MCP 打包成独立的 ASAR
-await asar.createPackage(
-  'bundled/deploy',
-  'desktop/resources-prebuilt/packages.asar',
-  {}
-);
-```
-
-#### 2. 修改构建配置
-```json
-{
-  "extraResources": [
-    {
-      "from": "./resources-prebuilt/packages.asar",
-      "to": "packages.asar"  // ✅ 单个文件！
-    },
-    // 其他小文件保持
-  ]
-}
-```
-
-#### 3. 修改代码以从 ASAR 读取
-```javascript
-// service-manager.js
-const packagesAsar = path.join(this.root, 'packages.asar');
-const apiEntry = path.join(packagesAsar, 'api', 'dist', 'index.js');
-// Node.js 可以直接从 ASAR 中 require
-```
-
-**优点**：
-- 不改变目录结构
-- 减少文件数：14,162 → 1 个
-- 安装时间大幅减少
-
-**缺点**：
-- 需要修改路径解析
-- 需要额外的预打包步骤
+本轮删除实验脚本及其直接依赖，不保留可照抄的安装或构建步骤。
+这一决定只针对当前未集成候选，不代表所有 ASAR 使用方式均不可行。
 
 ### 方案 C：使用压缩归档 + 安装时解压（你们当前在用）
 
@@ -155,13 +126,8 @@ await tar.c({
 
 **预期提升**：主进程启动加快 2-3 秒
 
-### 阶段 2：探索方案 B（预打包 packages）
-1. 测试从 ASAR 启动 Node.js 子进程
-2. 如果成功，实施完整方案 B
-
-**预期提升**：
-- 安装时间：117s → 10-15s
-- 启动时间：112s → 20-30s
+### 阶段 2：方案 B 已停止
+不再调用已删除的预打包脚本，也不将原先预测的秒数当作验收结果。
 
 ### 阶段 3：如果方案 B 不可行，优化方案 C
 - 使用 zstd 压缩
