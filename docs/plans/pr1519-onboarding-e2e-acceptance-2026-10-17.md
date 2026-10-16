@@ -311,3 +311,11 @@ Claude诊断沿同一CLI、模型和连接进行了对照：原始格式的请�
 异常观察器已另补RED→GREEN：除了JS异常和原生浏览器dialog，还记录console error、HTTP≥400及网络断开（URL只记path）。真实旅程必须四组均为空；缺少观察器也不能通过。HTTP故障注入另为明确的合成边界，不拿预期503作模型可用证据。候选实页的原54例全通过，新增的console/网络诊断反例也已通过。
 
 `a3302b5b3`的installed-layout CI失败只打印“inspect build.log”，没有上传根因日志；本地同lock的API-only完整导出成功，不能把无法复现写成修好。现已补有界错误日志及失败日志上传，并真实复现另一个构建竞态：正常ServiceManager仅确认端口打开，runner立刻检查完成trace，可能在API写出http-listening快照前失败。延迟里程碑fixture保留RED，runner现等待明确文件且仍受原90s构建期限约束；监听但永不完成、异常退出、挂起、日志根因及正常trace共5例GREEN。未调大120s产品冷启门限，也不宣称已证明旧CI的唯一根因；新HEAD仍需终态。
+
+## 更严格的重启复验再次失败，不能以五次done结案
+
+D保存Redis并确认原整棵进程树退出后，同数据目录重启，5角色和原10个消息ID回读通过，再发五种新任务全部完成且自然done。但新增观察器将整轮正确判为FAIL：3条头像404（claude-code、dsh、pi）、7条console error，以及82条`net::ERR_ABORTED`。原记录完整保留，后两者需区分测试快速整页跳转带来的正常取消和真实错误，**未直接忽略或改成通过**。
+
+头像404已追到`CatAvatar`：API中五个avatar均为有效的明确配置，但成员registry hydration前组件猜测`/avatars/${catId}.png`，新建id没有同名静态文件；这一行与当前main相同，新伙伴id触发了它。修复仅将未就绪的暂态图片指向已有default.png，registry到达后仍使用成员原头像，不修改任何catalog/历史/自定义图片。Pi延迟到达的RED已复现，修复后与身份签名、状态圆点和ring回归共27例GREEN，并加入Web首启CI。端到端进一步要求目标回复里的实际图片加载完成、naturalWidth>0；仅有avatar字符串不再作为图片可用证据。
+
+此头像修复尚未进入上面e9候选EXE；新Web构建、安装版复验及剩余console/取消诊断仍开放。不能将源码27例或旧e9两次首装当成包含该修复的新包通过。

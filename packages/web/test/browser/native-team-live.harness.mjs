@@ -125,6 +125,14 @@ export async function callRealPartner(journey, cat) {
     result.historyMessageIds = messages.map((message) => message.id);
     await page.reload();
     await waitForRenderedReply(page, result.replyMessageId, marker);
+    await page.waitForFunction(
+      ({ messageId, avatar }) =>
+        [...document.querySelectorAll(`[data-message-id="${messageId}"] img`)].some(
+          (image) => image.getAttribute('src') === avatar && image.complete && image.naturalWidth > 0,
+        ),
+      { messageId: result.replyMessageId, avatar: cat.avatar },
+    );
+    result.avatarLoaded = true;
     await journey.screenshot(`reply-${cat.id}-${marker.slice(-8)}`);
     result.passed = true;
   } catch (error) {

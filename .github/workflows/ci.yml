@@ -67,6 +67,13 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @cat-cafe/web run test:first-run-onboarding
+      - name: Member avatar hydration, identity and callback status
+        run: >-
+          pnpm --filter @cat-cafe/web exec vitest run
+          src/components/__tests__/CatAvatar-hydration-race.test.tsx
+          src/components/__tests__/CatAvatar-callback-auth-dot.test.tsx
+          src/components/__tests__/CatAvatar-ring.test.tsx
+          src/components/__tests__/cat-nameplate-avatar.test.tsx
       - name: Browser evidence rejects user echoes and accepts normal identity signatures
         run: |
           pnpm --filter @cat-cafe/web exec playwright install --with-deps chromium
