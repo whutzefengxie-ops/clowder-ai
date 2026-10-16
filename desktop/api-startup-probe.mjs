@@ -85,4 +85,13 @@ function milestone(phase) {
 globalThis.__clowderStartupMilestone = milestone;
 milestone('node-bootstrap');
 process.once('exit', (code) => milestone(`exit:${code}`));
-if (isMainThread) console.info('[api-startup-read-ahead]', JSON.stringify(await readAheadApi(process.argv[1])));
+if (isMainThread) {
+  milestone('program-read-ahead-start');
+  const heartbeat = setInterval(() => milestone('program-read-ahead-progress'), 5000);
+  try {
+    console.info('[api-startup-read-ahead]', JSON.stringify(await readAheadApi(process.argv[1])));
+  } finally {
+    clearInterval(heartbeat);
+    milestone('program-read-ahead-complete');
+  }
+}

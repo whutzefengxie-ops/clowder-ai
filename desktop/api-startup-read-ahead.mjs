@@ -32,9 +32,9 @@ function validManifest(value) {
 
 // Hints read immutable JS/JSON bytes only. No imports, writes, resolver changes or
 // authentication reads. Missing/stale hints preserve the ordinary loader path.
-export async function readAheadApi(apiEntry, { io = fs, budgetMs = 1500 } = {}) {
+export async function readAheadApi(apiEntry, { io = fs, budgetMs = 15000 } = {}) {
   const began = performance.now();
-  const result = { status: 'skipped', files: 0, bytes: 0, errors: 0 };
+  const result = { status: 'skipped', files: 0, bytes: 0, errors: 0, budgetMs };
   if (!apiEntry || path.basename(apiEntry) !== 'index.desktop.js') return result;
   const entry = path.resolve(apiEntry);
   const root = path.resolve(entry, '../../../..');

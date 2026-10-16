@@ -145,6 +145,10 @@ node --test packages/web/test/browser/native-read-ahead-observe.test.mjs
 
 B的真实窗口已自动完成六阶段演示、交互预览与五角色一键创建。首轮完整任务脚本保留为失败：Codex真实目标assistant及lifecycle均已完成，但刷新后的全局exact文本定位等不到“标记+正常身份签名”的整段；实际截图清楚显示标记。修正测试为**先按服务端replyMessageId定位，再检查该消息内的标记**，保留真实cat/lifecycle/自然done判据；不匹配用户echo、其他assistant或隐藏消息。三个真实浏览器正反例RED→GREEN，并接入Web引导CI；没有修改产品文案/签名来迎合脚本。修正后的实物UI回读、五任务和A2A仍需另记结果，不覆盖首轮失败。
 
+后续只读实物回查 `native-read-ahead-b-ui-recheck` 已确认原五个目标assistant的真实标记、消息ID及invocation自然done，全部刷新可见；首轮脚本FAIL不被改写。随后同一个5667adf06安装实物上的Codex→Pi→Codex真实协作通过，单一初始目标、实际委派/peer产出/回传因果、恰好3调用自然done、cleanup=[]，总66.365s。测试源码为0b7f2dde0，API/Web仍为无产品差异的f1；不能把这个预热B实例的功能证据搬成冷启动证据。
+
+下一轮预算调整依据：原1500ms来自暖态约200ms的实验，实物已否定其适用于冷态；独立冷态只读实际9386ms，比同次readFile累计17048ms体现了两路并发收益。现把**可选程序预读**上限调整为15000ms并记录budgetMs；每5秒输出独立的program-read-ahead进度阶段。**API整体120000ms故障截止没有延长**。新增默认读者面对1800ms I/O的真实RED→GREEN，23项启动/预算/隔离/构建检查通过。仅更改预算不构成性能修复证据；仍需新EXE在两套从未启动/未做提前读文件的目录中首装、首启和完整旅程，验证实际全量消费及用户可见耗时，失败继续No-Go。
+
 本轮实验收尾：已按固定清单移除五个性能对照及六个采样原型的11个自有程序目录；先确认无活跃进程，归档根配置并记录/解除junction，才递归删除程序。4523个受保护实例文件的前后SHA全部相同，所有instance/HOME/Redis/SQLite/历史与实验日志保留，磁盘实际可用空间增加9,902,477,312字节。未调用通用卸载器、未改生产或已保留交付目录，也未重试之前被拒绝的开始菜单清理。`program-retirement/manifest.json`、`protected-before.json`、`receipt.json`可核验边界。
 
 ## E2E实际找出的首装MCP缺口与修复

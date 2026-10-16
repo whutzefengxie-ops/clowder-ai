@@ -46,7 +46,8 @@ test(
       manifest.files.reduce((sum, item) => sum + item.bytes, 0),
     );
     assert.equal(actual.errors, 0);
-    assert.ok(actual.elapsedMs <= 1500);
+    assert.ok(Number.isSafeInteger(actual.budgetMs) && actual.budgetMs > 0 && actual.budgetMs <= 15000);
+    assert.ok(actual.elapsedMs <= actual.budgetMs);
     await fs.writeFile(
       `${file}.read-ahead-observed.json`,
       JSON.stringify({ ...launch, actual, expectedFiles: manifest.files.length }, null, 2),
