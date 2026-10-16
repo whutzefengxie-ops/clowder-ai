@@ -6,8 +6,8 @@ const { test } = require('node:test');
 const { resolveExternalNodeEntry } = require('./subprocess-entry');
 
 test('keeps external Node entry paths loadable from development and packaged Electron', () => {
-  const sourceDir = path.join('C:', 'build', 'desktop');
-  const resourcesDir = path.join('C:', 'install', 'resources');
+  const sourceDir = path.resolve('build', 'desktop');
+  const resourcesDir = path.resolve('install', 'resources');
 
   assert.equal(
     resolveExternalNodeEntry('runtime-web-server.js', sourceDir),

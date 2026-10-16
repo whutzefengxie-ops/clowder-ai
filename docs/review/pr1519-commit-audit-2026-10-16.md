@@ -237,58 +237,10 @@ rm artifacts/install-perf-*.log
 3. **实际改动小**：仅修改 desktop/package.json（启用 ASAR）
 4. **问题已上报**：创建了 issue #1606 到上游
 
-### ⚠️ 需要改进
+## 后续状态（2026-10-16）
 
-1. **pre-bundle-packages.mjs** 应该删除（实验性，不可行）
-2. **@electron/asar 依赖** 可以移除（已无用）
-3. **本地清理** artifacts/ci-* 和构建产物
+本文前面的清理建议已由提交 `0977dac` 完成：实验脚本 `desktop/scripts/pre-bundle-packages.mjs` 已删除，`@electron/asar` 依赖也已移除。不要重复执行历史方案中的删除命令或清理其他实例产物。
 
-### 📊 提交统计
+本次验收基线为 PR HEAD `eaa47bf`、base `466d454`。该 HEAD 的 CI 有两项根因失败：Biome 格式检查拒绝 `desktop/subprocess-entry.js` 的条件表达式换行；Public contract surfaces 在 Linux 上因测试夹具使用 `path.join('C:', ...)`，把相对路径误当成 Windows 盘符路径。`Test (Public)` 是 contract 失败的下游门禁，不是第三个独立测试根因。当前提交状态与重新运行后的 CI 结果应以 PR Checks 页面为准。
 
-- 原功能相关提交：~20+ 个（onboarding, Pi, Kimi 等）
-- 性能优化提交：5 个（今天新增）
-- 清理提交：1 个（a71072023）
-
----
-
-## 最终建议
-
-### 方案 A：最小清理（推荐）
-仅删除明确不应该存在的文件：
-```bash
-git rm desktop/scripts/pre-bundle-packages.mjs
-cd desktop && pnpm remove @electron/asar && cd ..
-git add desktop/package.json desktop/package-lock.json
-git commit -m "cleanup: remove experimental ASAR pre-bundle script and unused dependency
-
-- Remove pre-bundle-packages.mjs (experimental, >180s runtime, not integrated)
-- Remove @electron/asar dependency (no longer needed)
-- Keep analysis documents for reference"
-git push
-```
-
-### 方案 B：完整清理
-在方案 A 基础上，清理本地和 artifacts：
-```bash
-# 方案 A 的操作
-# +
-rm -rf desktop/dist desktop-dist dist bundled artifacts/ci-*
-# 审查并删除不必要的 artifacts/*.log
-```
-
-### 方案 C：保持现状
-如果认为 pre-bundle 脚本有参考价值：
-- 在文档中明确标注"实验性，不推荐"
-- 或移到 `artifacts/experiments/`
-
----
-
-## 结论
-
-**整体评价**：✅ 基本合理，已自行清理了主要问题
-
-**必要操作**：删除 `pre-bundle-packages.mjs`（1 个文件）
-
-**可选操作**：清理依赖和本地构建产物
-
-**PR 可合并性**：清理后即可
+`upstream/main` 已包含在该基线历史中。完整 Inno Setup 首装、当前 HEAD 的首次启动和既有数据保留仍需按本方案独立验收；CI 通过或 ASAR 内容检查不能替代真实安装器验证，也不能单独作为 PR 可合并结论。
