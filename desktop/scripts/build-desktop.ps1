@@ -359,7 +359,7 @@ foreach ($t in $archiveTargets) {
     } finally { $ErrorActionPreference = $oldErrorPreference }
     $tarOutput | ForEach-Object { Write-Host $_ }
     if ($tarExit -ne 0) { throw "tar failed for $($t.Name), exit=$tarExit, source=$($t.Src)" }
-    & tar -tzf $archivePath > $null
+    & (Join-Path $env:SystemRoot 'System32/tar.exe') -tzf $archivePath > $null
     if ($LASTEXITCODE -ne 0) {
         Write-Err "tar failed for $($t.Name)"
         exit 1

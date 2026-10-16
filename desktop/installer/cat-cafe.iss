@@ -108,9 +108,10 @@ Source: "..\..\docs\*";                          DestDir: "{app}\docs"; \
 ; Runtime scripts — blacklist approach: include all scripts, exclude platform-
 ; irrelevant and dev artifacts. New files are automatically included without
 ; needing to update this manifest (prevents the "missing file" class of bugs).
-; Excludes: *.sh (bash — Linux/Mac only), *.test.* (test files), __pycache__
+; scripts/node_modules can be a development junction into the entire workspace.
+; Runtime dependencies are supplied by the frozen archive and install-time link.
 Source: "..\..\scripts\*";                         DestDir: "{app}\scripts"; \
-  Excludes: "*.sh,*.test.*,__pycache__"; \
+  Excludes: "*.sh,*.test.*,__pycache__,node_modules"; \
   Flags: recursesubdirs createallsubdirs
 ; Runtime assets — prompt templates, manifest, system prompt, brand dictionary.
 Source: "..\..\assets\*";                          DestDir: "{app}\assets"; \
