@@ -39,6 +39,15 @@ function Resolve-Command { param([string]$Name)
 
 function Resolve-AgentHookTargetRoot {
     if ($UserProfileRoot) { return [System.IO.Path]::GetFullPath($UserProfileRoot) }
+    $instanceMarker = Join-Path $AppDir 'desktop-instance.json'
+    if (Test-Path -LiteralPath $instanceMarker) {
+        $instance = Get-Content -LiteralPath $instanceMarker -Raw | ConvertFrom-Json
+        $root = $instance.CAT_CAFE_DESKTOP_INSTANCE_ROOT
+        if (-not ($root -is [string]) -or -not $root -or -not [System.IO.Path]::IsPathRooted($root)) {
+            throw 'Invalid desktop instance identity; refusing hooks in the original client profile'
+        }
+        return Join-Path ([System.IO.Path]::GetFullPath($root)) 'home'
+    }
     if ($env:USERPROFILE) {
         return $env:USERPROFILE
     }

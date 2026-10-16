@@ -6,6 +6,47 @@ const { spawnSync } = require('node:child_process');
 const { test } = require('node:test');
 
 test(
+  'an isolated installer without explicit UserProfileRoot keeps hook writes out of the real client home',
+  { skip: process.platform !== 'win32' },
+  () => {
+    const base = fs.mkdtempSync(path.join(os.tmpdir(), 'installer-isolated-hooks-'));
+    const instance = path.join(base, 'instance');
+    const result = path.join(base, 'target.json');
+    fs.mkdirSync(path.join(base, 'scripts'), { recursive: true });
+    fs.mkdirSync(path.join(instance, 'home'), { recursive: true });
+    fs.writeFileSync(
+      path.join(base, 'desktop-instance.json'),
+      JSON.stringify({ CAT_CAFE_DESKTOP_INSTANCE_ROOT: instance }),
+    );
+    fs.writeFileSync(
+      path.join(base, 'scripts/sync-agent-hooks-offline.mjs'),
+      `import fs from 'node:fs'; fs.writeFileSync(${JSON.stringify(result)}, JSON.stringify(process.argv.slice(2)));`,
+    );
+    try {
+      const run = spawnSync(
+        'powershell.exe',
+        [
+          '-NoProfile',
+          '-ExecutionPolicy',
+          'Bypass',
+          '-File',
+          path.join(__dirname, 'scripts/post-install-offline.ps1'),
+          '-AppDir',
+          base,
+          '-AgentHooksOnly',
+        ],
+        { encoding: 'utf8', windowsHide: true },
+      );
+      assert.equal(run.status, 0, run.stderr);
+      const args = JSON.parse(fs.readFileSync(result, 'utf8'));
+      assert.equal(fs.realpathSync.native(args[3]), fs.realpathSync.native(path.join(instance, 'home')));
+    } finally {
+      fs.rmSync(base, { recursive: true, force: true });
+    }
+  },
+);
+
+test(
   'installer hook sync targets an explicit owned profile, including original-user execution',
   { skip: process.platform !== 'win32' },
   () => {
