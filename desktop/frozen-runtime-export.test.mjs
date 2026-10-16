@@ -6,6 +6,33 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { exportFrozenRuntime, materialize } from './scripts/frozen-runtime-export.mjs';
 
+test('rejects stale or unstamped API artifacts before exporting a revision-bound release', () => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'frozen-revision-'));
+  const revision = 'a'.repeat(40);
+  const stamp = path.join(workspace, 'packages/api/dist/.build-commit');
+  const out = path.join(workspace, 'export');
+  const lock = path.join(workspace, 'pnpm-lock.yaml');
+  fs.mkdirSync(path.dirname(stamp), { recursive: true });
+  fs.mkdirSync(path.join(workspace, 'node_modules'));
+  fs.writeFileSync(lock, 'fixture lock');
+  fs.writeFileSync(path.join(workspace, 'packages/api/package.json'), '{"name":"api"}');
+  const exportRelease = (expected = revision) =>
+    exportFrozenRuntime(workspace, out, ['api'], lock, { expectedWebBuildCommit: expected });
+  try {
+    for (const input of [null, '', 'b'.repeat(40), 'not-a-commit']) {
+      if (input !== null) fs.writeFileSync(stamp, input);
+      assert.throws(exportRelease, /API build identity does not match/, `API stamp: ${input}`);
+      assert.equal(fs.existsSync(out), false, 'a rejected release must not leave an export');
+    }
+    fs.writeFileSync(stamp, revision);
+    assert.throws(() => exportRelease('invalid'), /API build identity does not match/);
+    exportRelease();
+    assert.equal(fs.readFileSync(path.join(out, 'api/dist/.build-commit'), 'utf8'), revision);
+  } finally {
+    fs.rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
 for (const sharedDependencies of [false, true])
   test(`exports portable frozen nested/peer/workspace packages (shared=${sharedDependencies})`, () => {
     const base = fs.mkdtempSync(path.join(os.tmpdir(), 'frozen-export-'));

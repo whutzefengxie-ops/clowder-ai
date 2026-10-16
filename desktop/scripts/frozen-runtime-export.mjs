@@ -45,6 +45,15 @@ export function exportFrozenRuntime(
   const lockHash = hash(lockFile);
   if (hash(path.join(workspace, 'pnpm-lock.yaml')) !== lockHash) throw new Error('Frozen workspace lock changed');
   if (fs.existsSync(out)) throw new Error(`Output must be new: ${out}`);
+  if (expectedWebBuildCommit !== undefined && packages.includes('api')) {
+    const stamp = path.join(workspace, 'packages/api/dist/.build-commit');
+    if (
+      !/^[a-f0-9]{40}$/.test(expectedWebBuildCommit) ||
+      !fs.existsSync(stamp) ||
+      fs.readFileSync(stamp, 'utf8').trim() !== expectedWebBuildCommit
+    )
+      throw new Error('API build identity does not match the release revision; rebuild API and Web together');
+  }
   fs.mkdirSync(out, { recursive: true });
   const workspaceModules = sharedDependencies ? workspaceRuntimeModules(workspace, packages) : null;
   const webSelection = pruneWebBuildDependencies
