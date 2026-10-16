@@ -308,7 +308,7 @@ D的原连续旅程仍保留为FAIL：演示六阶段和页面实际可见，但
 
 Claude诊断沿同一CLI、模型和连接进行了对照：原始格式的请求包含正确用户任务，随后追加system环境消息，反复出现问候/等待指令；简短直接请求也失败。仅在诊断转发中将该system文本移到顶层system、保持用户正文/模型/连接不变，3/3返回任务标记，5.2–6.4s；后续恢复原格式仍出现失败，也有偶然成功。官方[会话中system消息文档](https://platform.claude.com/docs/en/build-with-claude/mid-conversation-system-messages)确认该格式有明确协议支持要求。此对照支持现有客户端与连接的消息格式兼容性问题，**不证明服务端内部实现细节**。关闭实验beta和模型能力声明两种启动对照均未可靠消除原格式问题，未采纳为修复。诊断转发没有进入产品、安装包或默认配置，未改用户配置、未静默换模型或carrier。因此该项继续阻塞完整验收，不能用D的一次成功宣布已修好。
 
-异常观察器已另补RED→GREEN：除了JS异常和原生浏览器dialog，还记录console error、HTTP≥400及网络断开（URL只记path）。真实旅程必须四组均为空；缺少观察器也不能通过。HTTP故障注入另为明确的合成边界，不拿预期503作模型可用证据。候选实页的原54例全通过，新增的console/网络诊断反例也已通过。
+异常观察器已另补RED→GREEN：除了JS异常和原生浏览器dialog，还记录console error、HTTP≥400及网络断开（URL只记path）。真实旅程要求JS/dialog/console及非正常导航生命周期的网络错误为空；缺少观察器也不能通过，全部原始取消仍保留。HTTP故障注入另为明确的合成边界，不拿预期503作模型可用证据。候选实页的原54例全通过，新增的console/网络诊断反例也已通过。
 
 `a3302b5b3`的installed-layout CI失败只打印“inspect build.log”，没有上传根因日志；本地同lock的API-only完整导出成功，不能把无法复现写成修好。现已补有界错误日志及失败日志上传，并真实复现另一个构建竞态：正常ServiceManager仅确认端口打开，runner立刻检查完成trace，可能在API写出http-listening快照前失败。延迟里程碑fixture保留RED，runner现等待明确文件且仍受原90s构建期限约束；监听但永不完成、异常退出、挂起、日志根因及正常trace共5例GREEN。未调大120s产品冷启门限，也不宣称已证明旧CI的唯一根因；新HEAD仍需终态。
 
@@ -319,3 +319,9 @@ D保存Redis并确认原整棵进程树退出后，同数据目录重启，5角�
 头像404已追到`CatAvatar`：API中五个avatar均为有效的明确配置，但成员registry hydration前组件猜测`/avatars/${catId}.png`，新建id没有同名静态文件；这一行与当前main相同，新伙伴id触发了它。修复仅将未就绪的暂态图片指向已有default.png，registry到达后仍使用成员原头像，不修改任何catalog/历史/自定义图片。Pi延迟到达的RED已复现，修复后与身份签名、状态圆点和ring回归共27例GREEN，并加入Web首启CI。端到端进一步要求目标回复里的实际图片加载完成、naturalWidth>0；仅有avatar字符串不再作为图片可用证据。
 
 此头像修复尚未进入上面e9候选EXE；新Web构建、安装版复验及剩余console/取消诊断仍开放。不能将源码27例或旧e9两次首装当成包含该修复的新包通过。
+
+## 文档离开和取消的后续修复（待新包实物）
+
+视图偏好hook与当前main相同，仅React effect清理会abort；整页导航不会运行React unmount，因而离开中的请求可能输出“Failed to load conversation view preference”。pagehide取消及BFCache返回再读的两个反例RED后，现已显式结束离开文档的读取、失效旧generation，并在pageshow.persisted时回读服务端。真实网络失败仍显示load错误；生命周期及真实header共8例GREEN，未吞掉所有fetch错误。
+
+测试观察器用Chromium的frame/loader身份记录请求归属和文档更替，不再凭字符串忽略ERR_ABORTED。仅canceled=true、net::ERR_ABORTED且确实属于已退休document的请求分类为正常导航取消；原始networkErrors全部保留。当前document取消、缺loader身份、connection reset、HTTP503仍失败。纯反例和真实Chromium pending fetch→整页切换的2例GREEN，已接入CI。这是测试语义修正，不能将旧记录缺少loader证据的82条取消回填为通过。

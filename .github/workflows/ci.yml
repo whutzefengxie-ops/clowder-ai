@@ -74,10 +74,13 @@ jobs:
           src/components/__tests__/CatAvatar-callback-auth-dot.test.tsx
           src/components/__tests__/CatAvatar-ring.test.tsx
           src/components/__tests__/cat-nameplate-avatar.test.tsx
+          src/hooks/__tests__/useConversationViewPreference-lifecycle.test.tsx
+          src/components/shell/__tests__/conversation-view-header.test.tsx
       - name: Browser evidence rejects user echoes and accepts normal identity signatures
         run: |
           pnpm --filter @cat-cafe/web exec playwright install --with-deps chromium
           node --test packages/web/test/browser/native-team-rendered-reply.test.mjs
+          node --test packages/web/test/browser/native-team-observers.test.mjs
 
   public-test-prepare:
     name: Public test plan

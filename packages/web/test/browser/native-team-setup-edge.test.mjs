@@ -7,7 +7,7 @@ test('console errors and failed HTTP requests cannot disappear from live accepta
   const state = await setup();
   try {
     const record = { pageErrors: [], dialogs: [] };
-    observePageFaults(state.page, record);
+    await observePageFaults(state.page, record);
     await state.page.route('**/observer-fault-fixture', (route) =>
       route.fulfill({ status: 503, body: 'expected fixture' }),
     );
@@ -34,7 +34,7 @@ test(
     const state = await setup();
     try {
       const record = { pageErrors: [], dialogs: [] };
-      observePageFaults(state.page, record);
+      await observePageFaults(state.page, record);
       await state.page.evaluate(() => window.alert('expected-diagnostic-dialog'));
       assert.deepEqual(record.dialogs, [{ type: 'alert', message: 'expected-diagnostic-dialog' }]);
       await state.page.evaluate(() => {
