@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+
 /**
  * Pre-bundle packages into a single ASAR archive for faster installation and startup.
  *
@@ -10,10 +11,10 @@
  * - Cold start: 112s → 20-30s (reads from virtual filesystem instead of disk I/O)
  */
 
-import { createPackage } from '@electron/asar';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createPackage } from '@electron/asar';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, '../..');

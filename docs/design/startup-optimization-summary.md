@@ -1,4 +1,16 @@
+---
+feature_ids: [F155, F229, F320]
+topics: [performance, startup, implementation]
+doc_kind: implementation-plan
+created: 2026-10-15
+---
+
 # 启动性能优化实施总结
+
+> 2026-10-16 状态更正：下文是上一轮探索记录，不能作为优化已集成或收益已实测的结论。
+> `lazy-telemetry.ts`、`lazy-validation.ts` 两份原型没有调用方，却被 TypeScript 和环境变量门禁扫描，造成 CI 失败；本轮已从运行源码撤出。
+> 实际启动继续使用 `infrastructure/telemetry/init.ts` 统一入口和原有配置校验，不新增遥测开关或跳过校验。
+> 后续性能实现与测量按 #1606 跟进；下文秒数均需对应首装/首启实测验证。
 
 ## 已完成的工作
 
