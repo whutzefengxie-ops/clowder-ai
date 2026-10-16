@@ -25,22 +25,37 @@ export async function completeFirstRun(journey) {
   await demo.waitFor();
   await demo.getByRole('button', { name: '暂停', exact: true }).waitFor();
   const stages = new Set();
+  const stageTimeline = [];
+  let sawThinking = false;
+  let sawTyping = false;
+  const playbackStarted = Date.now();
   const deadline = Date.now() + 70000;
   while (Date.now() < deadline) {
     const text = await demo.locator('aside').innerText();
+    sawThinking ||= (await demo.locator('[data-demo-phase="thinking"]').count()) > 0;
+    sawTyping ||= (await demo.locator('[data-demo-phase="typing"]').count()) > 0;
     for (const stage of ['等待设计', '设计草图', '方案整合', '初版实现', '审查与修正', '已完善'])
-      if (text.includes(stage)) stages.add(stage);
+      if (text.includes(stage) && !stages.has(stage)) {
+        stages.add(stage);
+        stageTimeline.push({ stage, elapsedMs: Date.now() - playbackStarted });
+      }
     if (await demo.getByRole('link', { name: '创建我的猫猫 →', exact: true }).count()) break;
     await page.waitForTimeout(400);
   }
   assert.equal(stages.size, 6);
+  assert.ok(sawThinking && sawTyping, 'The real player must show thinking and progressive reply phases');
   assert.equal(creates.length, 0, 'Mock collaboration must never create real roles');
   const preview = page.frameLocator('iframe[title="今天待办 · 演示成果"]');
   await preview.getByRole('textbox', { name: '新任务', exact: true }).fill('端到端验收任务');
   await preview.getByRole('button', { name: '添加', exact: true }).click();
   await preview.getByText('端到端验收任务', { exact: true }).waitFor();
   await journey.screenshot('progressive-demo-completed');
-  await log('automatic-mock-a2a-and-interactive-preview', { stages: [...stages] });
+  await log('automatic-mock-a2a-and-interactive-preview', {
+    stages: [...stages],
+    stageTimeline,
+    sawThinking,
+    sawTyping,
+  });
   await demo.getByRole('link', { name: '创建我的猫猫 →', exact: true }).click();
   const setup = page.getByTestId('recommended-team-setup');
   await setup.waitFor();

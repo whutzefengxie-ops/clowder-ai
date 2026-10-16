@@ -31,7 +31,12 @@ test(
           cats.find((cat) => cat.id === id),
         );
       await page.goto(new URL('/settings?s=members&view=setup&shell=v2&lang=zh', web).href);
-      await page.waitForURL((url) => url.searchParams.get('view') !== 'setup');
+      await page.waitForURL(
+        (url) =>
+          url.pathname === '/settings' &&
+          url.searchParams.get('s') === 'members' &&
+          url.searchParams.get('view') !== 'setup',
+      );
       assert.equal(await page.getByTestId('recommended-team-setup').count(), 0);
       await log('existing-roster-does-not-recommend-initial-setup');
       assert.deepEqual(record.pageErrors, []);

@@ -128,3 +128,30 @@ test('double click does not create a second batch', { timeout: 30000 }, async ()
     await state.context.close();
   }
 });
+
+test(
+  'a remaining Codex login failure names Codex after Claude is deselected; other selected tools can continue',
+  { timeout: 30000 },
+  async () => {
+    const state = await setup({
+      failCreate: { at: 1, status: 400, message: '本机默认号未登录或读不到，请先在官方工具里登录' },
+    });
+    try {
+      await select(state, 29);
+      await create(state.page).click();
+      const alert = state.panel.getByRole('alert');
+      await alert.waitFor();
+      assert.match(await alert.innerText(), /Codex.*本机默认号未登录或读不到/s);
+      assert.equal(state.writes[0].payload.clientId, 'openai');
+      await state.page.getByRole('checkbox', { name: '加入 Codex 伙伴', exact: true }).uncheck();
+      await create(state.page).click();
+      await state.panel.waitFor({ state: 'hidden' });
+      assert.equal(state.created.length, 3);
+      assert.equal(state.writes.filter(({ payload }) => payload.clientId === 'anthropic').length, 0);
+      assert.equal(state.writes.filter(({ payload }) => payload.clientId === 'openai').length, 1);
+      assert.deepEqual(state.errors, []);
+    } finally {
+      await state.context.close();
+    }
+  },
+);

@@ -8,6 +8,7 @@ import { test } from 'node:test';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
 import Fastify from 'fastify';
+import { bootstrapCatCatalog } from '../dist/config/cat-catalog-store.js';
 import { catsRoutes } from '../dist/routes/cats.js';
 import { discoverAdditionalRuntimes } from '../dist/routes/native-additional-runtimes.js';
 import { isolateAccountAuthEnvironment } from './helpers/account-auth-environment.js';
@@ -66,6 +67,9 @@ export { buildNativeCreationPayload } from './components/first-run-quest/native-
     const piBridgeEntry = join(root, 'fixture-pi-bridge.js');
     await writeFile(piBridgeEntry, '// test-owned bridge descriptor; no CLI execution');
     process.chdir(root);
+    // The real host performs these legacy/owner migrations before accepting a
+    // create request. Establish that precondition before checking byte stability.
+    bootstrapCatCatalog(root, join(root, 'cat-template.json'));
     const runtimes = [
       { id: 'codex', label: 'Codex', clientId: 'openai', installed: true, models: [] },
       { id: 'claude', label: 'Claude Code', clientId: 'anthropic', installed: true, models: [] },
@@ -140,6 +144,17 @@ export { buildNativeCreationPayload } from './components/first-run-quest/native-
     });
     assert.equal(cloud.statusCode, 400);
     assert.match(cloud.json().error, /云端成员不能使用本机工具模式/);
+    const loggedInHome = process.env.CODEX_HOME;
+    const unchanged = await readFile(join(root, '.cat-cafe/cat-catalog.json'), 'utf8');
+    try {
+      process.env.CODEX_HOME = join(root, 'missing-native-login');
+      const unavailable = await app.inject(requests[0]);
+      assert.equal(unavailable.statusCode, 400, unavailable.body);
+      assert.match(unavailable.json().error, /本机默认号未登录或读不到/);
+      assert.equal(await readFile(join(root, '.cat-cafe/cat-catalog.json'), 'utf8'), unchanged);
+    } finally {
+      process.env.CODEX_HOME = loggedInHome;
+    }
     // First three are already committed when a user continues after the old fourth-request failure.
     for (const request of requests.slice(0, 3)) {
       const response = await app.inject(request);

@@ -93,12 +93,14 @@ test(
     const state = await setup({ discoveryFails: true });
     try {
       assert.match(await state.panel.innerText(), /暂时无法检测工具/);
+      await state.page.screenshot({ path: path.join(evidence, 'discovery-unavailable.png'), fullPage: true });
       state.recoverDiscovery();
       state.discover(runtimes.map((r) => ({ ...r, installed: false })));
       await state.page.getByRole('button', { name: '重新检测', exact: true }).click();
       await state.page.getByText('还没有找到可加入的工具', { exact: true }).waitFor();
       assert.equal(await create(state.page).count(), 0);
       assert.ok(await state.page.getByRole('button', { name: '手动创建单个伙伴', exact: true }).isEnabled());
+      await state.page.screenshot({ path: path.join(evidence, 'no-client-manual-fallback.png'), fullPage: true });
       state.discover(runtimes);
       await state.page.getByRole('button', { name: '重新检测', exact: true }).click();
       await state.page.getByText('推荐伙伴 · 5 位', { exact: true }).waitFor();

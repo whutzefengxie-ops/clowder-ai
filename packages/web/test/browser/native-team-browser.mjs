@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
+import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { chromium } from 'playwright';
+import { waitForNativeReady } from './native-team-startup-ready.mjs';
 
 // Optional author-only Electron debugging endpoint. Ordinary fault-injection
 // tests still use their own browser. Never enable this in delivered defaults.
@@ -19,6 +21,12 @@ export async function openJourneyBrowser(web) {
   const debuggerUrl = new URL(endpoint);
   assert.ok(['localhost', '127.0.0.1'].includes(debuggerUrl.hostname));
   assert.ok(debuggerUrl.port && !['3003', '3004', '6399'].includes(debuggerUrl.port));
+  const instance = process.env.CAT_CAFE_ONBOARDING_E2E_INSTANCE;
+  assert.ok(instance && path.isAbsolute(instance), 'Supply the owned native instance directory');
+  await waitForNativeReady(
+    path.join(instance, 'data/logs/startup-state.json'),
+    Number(process.env.CAT_CAFE_ONBOARDING_E2E_PID),
+  );
   const deadline = Date.now() + 15000;
   let ready = false;
   while (Date.now() < deadline) {

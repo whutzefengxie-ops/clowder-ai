@@ -33,11 +33,20 @@ async function respondFault(route, failure, commit) {
   if (failure.committed) commit();
   if (failure.disconnect) return route.abort('connectionreset');
   if (failure.hang) return new Promise(() => {});
-  return route.fulfill({ status: failure.status, json: { error: 'fixture account unavailable' } });
+  return route.fulfill({ status: failure.status, json: { error: failure.message ?? 'fixture account unavailable' } });
 }
 
 export async function setup(options = {}) {
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+  const shell = options.shell ?? 'v2';
+  assert.ok(['classic', 'v2'].includes(shell));
+  await context.addInitScript(
+    ({ shell, origin }) => {
+      if (location.origin === origin && !localStorage.getItem('cat-cafe:shell-presentation'))
+        localStorage.setItem('cat-cafe:shell-presentation', shell);
+    },
+    { shell, origin: origin.origin },
+  );
   // Keep registration real but omit fetch interception in the HTTP-fault lane.
   // Playwright's serviceWorkers:block makes Workbox registration return undefined.
   // The separate installed live journey uses the unmodified production worker.
@@ -89,7 +98,7 @@ export async function setup(options = {}) {
     receipts.set(key, cat);
     return route.fulfill({ status: 201, json: { cat } });
   });
-  await page.goto(new URL('/settings?s=members&view=setup&shell=v2&lang=zh', origin).href);
+  await page.goto(new URL(`/settings?s=members&view=setup&shell=${shell}&lang=zh`, origin).href);
   const panel = page.getByTestId('recommended-team-setup');
   await panel.waitFor();
   await page.getByRole('button', { name: '重新检测', exact: true }).waitFor();
