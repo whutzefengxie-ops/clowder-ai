@@ -4844,6 +4844,19 @@ async function main(): Promise<void> {
 
   let loadRepositoryPluginInfo: (() => Promise<readonly import('@cat-cafe/shared').PluginInfo[]>) | undefined;
 
+  // Seed only an absent registry before plugin activation can persist schedules
+  // into it. Native invoke-time MCP resolution must work without visiting Settings.
+  const { initializeFirstRunCapabilities, readImplicitStartupCapabilities } = await import(
+    './config/capabilities/first-run-capabilities.js'
+  );
+  const capabilityInitialization = await initializeFirstRunCapabilities(
+    resolveActiveProjectRoot(),
+    runtimeEntrypointRoot,
+  );
+  if (capabilityInitialization.status === 'unreadable') {
+    app.log.warn('[api] Existing capabilities are unreadable; preserved without enabling default tools');
+  }
+
   // F202: Plugin framework — discovery + config + resource activation
   {
     const { join } = await import('node:path');
@@ -4970,8 +4983,8 @@ async function main(): Promise<void> {
       // Uses marker file to prevent re-enable after explicit disable (P2-1 fix)
       const root = resolveActiveProjectRoot();
       const githubManifest = pluginRegistry.getManifest('github');
-      if (githubManifest) {
-        const existingCaps = await readCapabilitiesConfig(root);
+      const existingCaps = await readImplicitStartupCapabilities(root);
+      if (githubManifest && existingCaps) {
         const {
           shouldRunGitHubScheduleMigration,
           markGitHubScheduleMigrationDone,

@@ -50,6 +50,7 @@ jobs:
           node --import tsx --test --test-concurrency=1
           test/native-runtime-readiness.test.ts
           test/native-claude-api-readiness.test.ts
+          test/native-mcp-first-run.test.ts
           test/f318-claude-sdk-lazy-load.test.ts
           test/f318-claude-sdk.test.ts
           test/f318-claude-sdk-custody.test.ts
