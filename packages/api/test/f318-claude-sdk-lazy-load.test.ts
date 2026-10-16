@@ -10,6 +10,9 @@ import { loadClaudeSdkQuery } from '../src/domains/cats/services/agents/provider
 test('importing and constructing the SDK carrier does not load the unused SDK runtime', () => {
   const root = mkdtempSync(join(tmpdir(), 'sdk-lazy-import-'));
   const entry = new URL('../src/domains/cats/services/agents/providers/ClaudeSdkAgentService.ts', import.meta.url).href;
+  const catalog = new URL('../src/routes/runtime-catalog-probe.ts', import.meta.url).href;
+  const history = new URL('../src/domains/cats/services/session/import/LocalSessionInspection.ts', import.meta.url)
+    .href;
   const script = `
     import { registerHooks } from 'node:module';
     const hooks = registerHooks({load(url, context, next) {
@@ -18,6 +21,8 @@ test('importing and constructing the SDK carrier does not load the unused SDK ru
     }});
     try {
       const {ClaudeSdkAgentService} = await import(${JSON.stringify(entry)});
+      await import(${JSON.stringify(catalog)});
+      await import(${JSON.stringify(history)});
       const service = new ClaudeSdkAgentService({model:'fixture',mcpServerPath:''});
       if (service.contextCapability().carrier !== 'agent_sdk') throw new Error('Carrier identity changed');
       let closed = 0;

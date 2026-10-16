@@ -4,7 +4,6 @@ import { opendir, readFile, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
-import { getSessionInfo } from '@anthropic-ai/claude-agent-sdk';
 import type { LocalSessionMetadata } from '../../types.js';
 
 const execFileAsync = promisify(execFile);
@@ -54,6 +53,7 @@ export async function hasClaudeRegisteredSessionWriter(root: string, sessionId: 
 }
 
 export async function inspectClaudeLocalSession(sessionId: string): Promise<LocalSessionMetadata> {
+  const { getSessionInfo } = await import('@anthropic-ai/claude-agent-sdk');
   const info = await getSessionInfo(sessionId);
   if (!info?.cwd || !info.cwd.startsWith('/'))
     throw new Error('The original Claude Code session metadata is unavailable');

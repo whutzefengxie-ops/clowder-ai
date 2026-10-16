@@ -1,4 +1,4 @@
-import { query, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
+import type { SDKUserMessage, query as sdkQuery } from '@anthropic-ai/claude-agent-sdk';
 import { buildChildEnv } from '../utils/cli-spawn.js';
 import { resolveWindowsSpawnPlan } from '../utils/cli-spawn-win.js';
 import { catalogRpc } from './runtime-catalog-rpc.js';
@@ -90,8 +90,10 @@ async function probeClaude(target: CatalogTarget): Promise<RuntimeModelCatalog> 
       else controller.signal.addEventListener('abort', () => resolve(), { once: true });
     });
   }
-  let session: ReturnType<typeof query> | undefined;
+  let session: ReturnType<typeof sdkQuery> | undefined;
   try {
+    const { query } = await import('@anthropic-ai/claude-agent-sdk');
+    if (controller.signal.aborted) throw new Error('Model discovery cancelled before SDK query startup');
     session = query({
       prompt: noPrompts(),
       options: {
