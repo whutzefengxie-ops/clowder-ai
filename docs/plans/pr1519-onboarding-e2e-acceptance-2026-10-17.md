@@ -139,6 +139,12 @@ $env:CAT_CAFE_STARTUP_READ_AHEAD_LAUNCH='G:\作者证据目录\精确首启记�
 node --test packages/web/test/browser/native-read-ahead-observe.test.mjs
 ```
 
+5667adf06首装A的第二个真实RED：Setup49.193s/退出0，API最终ready31.657s，但冷态预读1501ms只完成66/1439文件，status=budget；I08未通过，不能靠API健康关闭性能问题。源测试没有覆盖这一冷态成本。安装后外层作者脚本还因读取未初始化LASTEXITCODE产生过假失败，已独立记录；实际Setup退出0，随后未重装/清库，仍在这个原始实例首次启动。失败实例已SAVE并精确退出，数据全部保留。
+
+另在全新B目录首装48.248s/退出0后，**在正常App第一次启动前**仅用随包Node做只读程序I/O诊断：1439文件/37,605,450字节实际9386ms；readFile累计17,047.85ms，realpath425.24ms、stat121.60ms；入口19.4MB单次读取994.82ms。没有执行API/Web/模型，没有角色或历史导入。B随后已经预热，**其首启和250ms提示消费成功均不能当冷态性能通过**。暖态独立对照当前读者240ms，原实验读者186ms；这解释了为何原先按约200ms设计的1500ms预算不足，但没有证明具体OS组件或原120秒事件的唯一原因。
+
+B的真实窗口已自动完成六阶段演示、交互预览与五角色一键创建。首轮完整任务脚本保留为失败：Codex真实目标assistant及lifecycle均已完成，但刷新后的全局exact文本定位等不到“标记+正常身份签名”的整段；实际截图清楚显示标记。修正测试为**先按服务端replyMessageId定位，再检查该消息内的标记**，保留真实cat/lifecycle/自然done判据；不匹配用户echo、其他assistant或隐藏消息。三个真实浏览器正反例RED→GREEN，并接入Web引导CI；没有修改产品文案/签名来迎合脚本。修正后的实物UI回读、五任务和A2A仍需另记结果，不覆盖首轮失败。
+
 本轮实验收尾：已按固定清单移除五个性能对照及六个采样原型的11个自有程序目录；先确认无活跃进程，归档根配置并记录/解除junction，才递归删除程序。4523个受保护实例文件的前后SHA全部相同，所有instance/HOME/Redis/SQLite/历史与实验日志保留，磁盘实际可用空间增加9,902,477,312字节。未调用通用卸载器、未改生产或已保留交付目录，也未重试之前被拒绝的开始菜单清理。`program-retirement/manifest.json`、`protected-before.json`、`receipt.json`可核验边界。
 
 ## E2E实际找出的首装MCP缺口与修复

@@ -67,6 +67,10 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @cat-cafe/web run test:first-run-onboarding
+      - name: Browser evidence rejects user echoes and accepts normal identity signatures
+        run: |
+          pnpm --filter @cat-cafe/web exec playwright install --with-deps chromium
+          node --test packages/web/test/browser/native-team-rendered-reply.test.mjs
 
   public-test-prepare:
     name: Public test plan

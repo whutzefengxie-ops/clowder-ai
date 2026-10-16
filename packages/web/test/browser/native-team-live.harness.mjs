@@ -6,6 +6,7 @@ import { realTaskOutcome } from './native-team-a2a-proof.mjs';
 import { openJourneyBrowser } from './native-team-browser.mjs';
 import { settleOwnedThread } from './native-team-cleanup.mjs';
 import { observePageFaults } from './native-team-observers.mjs';
+import { waitForRenderedReply } from './native-team-rendered-reply.mjs';
 
 // Opt-in only: these tests invoke paid, locally authenticated clients. They never
 // reset data or copy credentials. HTTP/model traffic must not be mocked here.
@@ -123,7 +124,7 @@ export async function callRealPartner(journey, cat) {
     assert.ok(result.replyMessageId, `${cat.id} did not return the unique task marker within 180s`);
     result.historyMessageIds = messages.map((message) => message.id);
     await page.reload();
-    await page.getByText(marker, { exact: true }).first().waitFor();
+    await waitForRenderedReply(page, result.replyMessageId, marker);
     await journey.screenshot(`reply-${cat.id}-${marker.slice(-8)}`);
     result.passed = true;
   } catch (error) {
@@ -173,7 +174,7 @@ export async function verifyRetainedHistory(journey, previous) {
     const reply = messages.find((message) => message.id === call.replyMessageId);
     assert.ok(JSON.stringify(reply.content).includes(call.marker));
     await journey.page.goto(new URL(`/thread/${call.threadId}?shell=v2&lang=zh`, journey.web).href);
-    await journey.page.getByText(call.marker, { exact: true }).first().waitFor();
+    await waitForRenderedReply(journey.page, call.replyMessageId, call.marker);
   }
   await journey.log('retained-roles-and-message-ids-verified', {
     roles: previous.roles.length,
