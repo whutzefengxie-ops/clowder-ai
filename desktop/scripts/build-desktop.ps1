@@ -307,6 +307,11 @@ if (-not $SkipElectronBuild) {
 # Shipping tar.gz archives and extracting post-install with Windows' built-in
 # tar.exe reduces Inno Setup [Files] count from ~30K to ~100.
 Write-Step "Step 6/8 - Archive for fast installer extraction"
+$releaseRevision = (git -C $ProjectRoot rev-parse HEAD).Trim()
+foreach ($stamp in @('api/dist/.build-commit', 'web/.next/.build-commit')) {
+    $artifactRevision = (Get-Content -LiteralPath (Join-Path $deployRoot $stamp) -Raw).Trim()
+    if ($artifactRevision -ne $releaseRevision) { throw "Stale release artifact: $stamp. Rebuild API and Web together." }
+}
 $archiveDir = Join-Path $bundledDir "archives"
 if (Test-Path $archiveDir) { Remove-Item $archiveDir -Recurse -Force }
 New-Item -ItemType Directory -Path $archiveDir -Force | Out-Null

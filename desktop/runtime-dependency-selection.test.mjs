@@ -72,6 +72,7 @@ test('production selection omits Web build-only packages, retaining server graph
     );
     write('packages/web/.next/BUILD_ID', 'built');
     write('packages/web/.next/.build-commit', 'a'.repeat(40));
+    write('packages/api/dist/.build-commit', 'a'.repeat(40));
     write(
       'packages/web/.next/next-server.js.nft.json',
       JSON.stringify({ version: 1, files: ['../../../node_modules/next/index.cjs'] }),
@@ -122,6 +123,7 @@ test('production selection omits Web build-only packages, retaining server graph
     assert.equal(fs.existsSync(path.join(output, 'node_modules/traced-private')), false);
     assert.equal(requireApi('@cat-cafe/shared'), createRequire(path.join(output, 'package.json'))('@cat-cafe/shared'));
     assert.ok(receipt.webRuntimeSelection.excludedRootPackages.includes('client-only-widget'));
+    write('packages/web/.next/.build-commit', 'b'.repeat(40));
     assert.throws(
       () =>
         exportFrozenRuntime(
@@ -129,10 +131,11 @@ test('production selection omits Web build-only packages, retaining server graph
           path.join(root, 'stale'),
           ['api', 'web'],
           path.join(workspace, 'pnpm-lock.yaml'),
-          { ...options, expectedWebBuildCommit: 'b'.repeat(40) },
+          options,
         ),
       /Web build identity/,
     );
+    write('packages/web/.next/.build-commit', 'a'.repeat(40));
     fs.unlinkSync(path.join(workspace, 'packages/web/.next/next-server.js.nft.json'));
     assert.throws(
       () =>
