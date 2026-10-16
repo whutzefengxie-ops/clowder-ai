@@ -60,3 +60,8 @@ test('cleanup requires three consecutive empty snapshots, retaining late schedul
   await settleOwnedThread(request, 'owned', options);
   assert.equal(writes.length, 1);
 });
+test('successful journeys wait for natural completion without canceling legitimate returns', async () => {
+  const { request, writes } = fixture([[live('owned')], [live('owned')], [], [], []]);
+  assert.deepEqual(await settleOwnedThread(request, 'owned', { ...options, cancel: false }), []);
+  assert.deepEqual(writes, []);
+});

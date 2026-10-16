@@ -17,7 +17,7 @@ async function cancelProjection(request, threadId, target) {
 
 // Test-owned thread only. A 409 means the execution ended/replaced: refresh the
 // projection instead of guessing a PID or canceling another thread's work.
-export async function settleOwnedThread(request, threadId, { timeoutMs = 30000, pause = delay } = {}) {
+export async function settleOwnedThread(request, threadId, { timeoutMs = 30000, pause = delay, cancel = true } = {}) {
   const canceled = [];
   const deadline = Date.now() + timeoutMs;
   let emptySnapshots = 0;
@@ -29,7 +29,7 @@ export async function settleOwnedThread(request, threadId, { timeoutMs = 30000, 
     } else {
       emptySnapshots = 0;
       for (const execution of owned) {
-        if (execution.cancelability?.state !== 'cancelable') continue;
+        if (!cancel || execution.cancelability?.state !== 'cancelable') continue;
         const target = execution.cancelability.target;
         await cancelProjection(request, threadId, target);
         canceled.push({ kind: target.kind, executionId: target.executionId, taskId: target.taskId });

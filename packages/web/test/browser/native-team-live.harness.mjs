@@ -2,8 +2,10 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { chromium } from 'playwright';
+import { realTaskOutcome } from './native-team-a2a-proof.mjs';
+import { openJourneyBrowser } from './native-team-browser.mjs';
 import { settleOwnedThread } from './native-team-cleanup.mjs';
+import { observePageFaults } from './native-team-observers.mjs';
 
 // Opt-in only: these tests invoke paid, locally authenticated clients. They never
 // reset data or copy credentials. HTTP/model traffic must not be mocked here.
@@ -18,7 +20,15 @@ export async function openLiveJourney() {
   const directory = process.env.CAT_CAFE_ONBOARDING_E2E_EVIDENCE;
   assert.ok(directory && path.isAbsolute(directory));
   await fs.mkdir(directory, { recursive: true });
-  const record = { modelRequestsMocked: false, web: web.origin, api: api.origin, steps: [], calls: [], pageErrors: [] };
+  const record = {
+    modelRequestsMocked: false,
+    web: web.origin,
+    api: api.origin,
+    steps: [],
+    calls: [],
+    pageErrors: [],
+    dialogs: [],
+  };
   const save = () => fs.writeFile(path.join(directory, 'live-journey.json'), JSON.stringify(record, null, 2));
   const request = async (url, options = {}, acceptedStatuses = []) => {
     const response = await fetch(new URL(url, api), {
@@ -29,11 +39,11 @@ export async function openLiveJourney() {
     assert.ok(response.ok || acceptedStatuses.includes(response.status), `${url}: HTTP ${response.status}`);
     return response.json();
   };
-  const browser = await chromium.launch({ headless: true });
-  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
-  const page = await context.newPage();
+  const { browser, context, page, nativeRenderer } = await openJourneyBrowser(web);
+  record.nativeRenderer = nativeRenderer;
+  record.initialRendererUrl = page.url();
   page.setDefaultTimeout(20000);
-  page.on('pageerror', (error) => record.pageErrors.push(error.message));
+  observePageFaults(page, record);
   const log = async (name, details = {}) => {
     record.steps.push({ name, at: new Date().toISOString(), ...details });
     await save();
@@ -43,6 +53,7 @@ export async function openLiveJourney() {
     web,
     api,
     page,
+    nativeRenderer,
     record,
     request,
     save,
@@ -53,7 +64,7 @@ export async function openLiveJourney() {
         await save();
       } finally {
         try {
-          await context.close();
+          if (!nativeRenderer) await context.close();
         } finally {
           await browser.close();
         }
@@ -79,6 +90,7 @@ export async function callRealPartner(journey, cat) {
   const result = { catId: cat.id, marker, passed: false };
   record.calls.push(result);
   const started = Date.now();
+  let cleanupError;
   try {
     const thread = await request('/api/threads', {
       method: 'POST',
@@ -98,12 +110,12 @@ export async function callRealPartner(journey, cat) {
     let messages = [];
     while (Date.now() < deadline) {
       messages = (await request(`/api/messages?threadId=${thread.id}&limit=50`)).messages;
-      const reply = messages.find(
-        (message) =>
-          message.catId === cat.id && message.type === 'assistant' && JSON.stringify(message.content).includes(marker),
-      );
-      if (reply) {
-        result.replyMessageId = reply.id;
+      const outcome = realTaskOutcome(messages, cat.id, marker);
+      if (outcome) {
+        result.terminalOutcome = outcome;
+        assert.equal(outcome.status, 'passed', `${cat.id}: ${outcome.reason}`);
+        result.replyMessageId = outcome.messageId;
+        result.invocationId = messages.find((message) => message.id === outcome.messageId).lifecycle.invocationId;
         break;
       }
       await page.waitForTimeout(750);
@@ -112,20 +124,38 @@ export async function callRealPartner(journey, cat) {
     result.historyMessageIds = messages.map((message) => message.id);
     await page.reload();
     await page.getByText(marker, { exact: true }).first().waitFor();
-    result.passed = true;
     await journey.screenshot(`reply-${cat.id}-${marker.slice(-8)}`);
+    result.passed = true;
   } catch (error) {
+    result.passed = false;
     result.error = String(error.message).slice(0, 400);
     await journey.screenshot(`failure-${cat.id}-${marker.slice(-8)}`);
   } finally {
-    result.durationMs = Date.now() - started;
     try {
-      if (result.threadId) result.cleanup = await settleOwnedThread(request, result.threadId);
-    } finally {
-      await save();
-      console.log(`${cat.id}: ${result.passed ? 'PASS' : result.error}`);
+      if (result.threadId)
+        result.cleanup = await settleOwnedThread(request, result.threadId, { cancel: !result.passed });
+    } catch (error) {
+      result.passed = false;
+      result.cleanupError = error.message;
+      cleanupError = error;
     }
   }
+  if (result.passed) {
+    try {
+      const invocations = (await request(`/api/threads/${result.threadId}/invocations?limit=20`)).invocations;
+      result.invocationStatus = invocations.find(
+        (invocation) => invocation.invocationId === result.invocationId,
+      )?.status;
+      assert.equal(result.invocationStatus, 'done', 'The real invocation must finish naturally after its reply');
+    } catch (error) {
+      result.passed = false;
+      result.error = error.message;
+    }
+  }
+  result.durationMs = Date.now() - started;
+  await save();
+  console.log(`${cat.id}: ${result.passed ? 'PASS' : result.error || result.cleanupError}`);
+  if (cleanupError) throw cleanupError;
   return result;
 }
 

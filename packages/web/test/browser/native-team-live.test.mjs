@@ -35,6 +35,7 @@ test(
       assert.equal(await page.getByTestId('recommended-team-setup').count(), 0);
       await log('existing-roster-does-not-recommend-initial-setup');
       assert.deepEqual(record.pageErrors, []);
+      assert.deepEqual(record.dialogs, [], 'Unexpected browser dialogs must not be silently dismissed as success');
       assert.ok(
         record.calls.length === 5 && record.calls.every((call) => call.passed),
         'All five clients must execute the unique real task, not merely return a greeting',

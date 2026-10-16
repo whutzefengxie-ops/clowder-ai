@@ -1,6 +1,31 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { observePageFaults } from './native-team-observers.mjs';
 import { create, runtimes, select, setup } from './native-team-setup.harness.mjs';
+
+test(
+  'unexpected blocking dialogs and JavaScript faults are observed instead of silently accepted',
+  { timeout: 30000 },
+  async () => {
+    const state = await setup();
+    try {
+      const record = { pageErrors: [], dialogs: [] };
+      observePageFaults(state.page, record);
+      await state.page.evaluate(() => window.alert('expected-diagnostic-dialog'));
+      assert.deepEqual(record.dialogs, [{ type: 'alert', message: 'expected-diagnostic-dialog' }]);
+      await state.page.evaluate(() => {
+        setTimeout(() => {
+          throw new Error('expected-diagnostic-page-error');
+        }, 0);
+      });
+      await state.page.waitForTimeout(100);
+      assert.deepEqual(record.pageErrors, ['expected-diagnostic-page-error']);
+      assert.equal(state.writes.length, 0);
+    } finally {
+      await state.context.close();
+    }
+  },
+);
 
 test(
   'regression: deselecting a logged-out Claude never submits or blocks that partner',

@@ -4,11 +4,23 @@ export async function completeFirstRun(journey) {
   assert.equal((await request('/api/cats')).cats.length, 0);
   assert.equal((await request('/api/messages?threadId=default&limit=50')).messages.length, 0);
   const creates = [];
+  const capabilitySettingsReads = [];
   page.on('request', (req) => {
     if (req.method() === 'POST' && new URL(req.url()).pathname === '/api/cats') creates.push(req.postDataJSON());
+    if (req.method() === 'GET' && new URL(req.url()).pathname === '/api/capabilities')
+      capabilitySettingsReads.push(req.url());
   });
   await log('zero-roles-and-messages-confirmed');
-  await page.goto(new URL('/?lang=zh', web).href);
+  if (journey.nativeRenderer) {
+    await page.waitForFunction(() => document.documentElement.dataset.shell === 'v2');
+    assert.equal(
+      await page.evaluate(() => localStorage.getItem('cat-cafe:shell-presentation')),
+      'v2',
+      'A fresh installation must open the new shell itself',
+    );
+  } else {
+    await page.goto(new URL('/?shell=v2&lang=zh', web).href);
+  }
   const demo = page.getByRole('dialog').filter({ has: page.getByTestId('demo-transcript') });
   await demo.waitFor();
   await demo.getByRole('button', { name: '暂停', exact: true }).waitFor();
@@ -44,6 +56,7 @@ export async function completeFirstRun(journey) {
   const cats = (await request('/api/cats')).cats;
   assert.equal(cats.length, 5);
   assert.equal(creates.length, 5);
+  assert.deepEqual(capabilitySettingsReads, [], 'Opening capability settings must not heal a broken first-run test');
   for (const cat of cats) assert.ok(cat.avatar && cat.avatar !== '/avatars/default.png');
   await log('one-click-created-five-real-roles');
   return cats;

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { findA2AProof } from './native-team-a2a-proof.mjs';
+import { allA2AInvocationsDone, findA2AProof, realTaskOutcome } from './native-team-a2a-proof.mjs';
 
 const options = { leadId: 'codex', peerId: 'pi', peerMarker: 'PEER', finalMarker: 'FINAL' };
 function fixture() {
@@ -21,7 +21,7 @@ function fixture() {
       content: 'PEER',
       lifecycle: { invocationId: 'b', inputMessageIds: ['handoff'], status: 'completed', completedAt: 10 },
     },
-    { id: 'return', catId: 'pi', lifecycle: { producerInvocationId: 'b' } },
+    { id: 'return', catId: 'pi', content: 'PEER', timestamp: 9, lifecycle: { producerInvocationId: 'b' } },
     {
       id: 'final',
       type: 'assistant',
@@ -40,6 +40,7 @@ test('accepts a persisted delegation/return chain despite an earlier premature m
     peerInvocationId: 'b',
     finalMessageId: 'final',
     finalInvocationId: 'c',
+    returnInvocationId: 'c',
   });
 });
 test('model claims and response array order cannot stand in for a peer return', () => {
@@ -52,15 +53,25 @@ test('an unrelated peer invocation cannot prove delegation by the initial lead',
   messages[2].lifecycle.producerInvocationId = 'foreign';
   assert.equal(findA2AProof(messages, options), undefined);
 });
+test('a real immutable callback result can be consumed while its producer finishes the turn', () => {
+  const messages = fixture();
+  messages[5].lifecycle.startedAt = 9;
+  assert.equal(findA2AProof(messages, options)?.finalInvocationId, 'c');
+});
+test('a callback that does not contain the peer result cannot prove integration', () => {
+  const messages = fixture();
+  messages[4].content = 'still thinking';
+  assert.equal(findA2AProof(messages, options), undefined);
+});
 test('a final reply unrelated to the peer input cannot prove integration', () => {
   const messages = fixture();
   messages[5].lifecycle.inputMessageIds = ['u'];
   assert.equal(findA2AProof(messages, options), undefined);
 });
-test('an incomplete peer or integration started before peer completion cannot pass', () => {
+test('an incomplete peer or integration started before its result was published cannot pass', () => {
   for (const mutate of [
     (messages) => {
-      messages[3].lifecycle.status = 'streaming';
+      messages[3].lifecycle.status = 'processing';
     },
     (messages) => {
       messages[5].lifecycle.startedAt = 8;
@@ -70,4 +81,149 @@ test('an incomplete peer or integration started before peer completion cannot pa
     mutate(messages);
     assert.equal(findA2AProof(messages, options), undefined);
   }
+});
+
+test('a streamed task marker cannot pass before the actual client completes', () => {
+  const reply = {
+    id: 'r',
+    catId: 'pi',
+    type: 'assistant',
+    content: 'TOKEN',
+    lifecycle: { invocationId: 'a', status: 'processing' },
+  };
+  assert.equal(realTaskOutcome([reply], 'pi', 'TOKEN'), undefined);
+  reply.lifecycle.status = 'completed';
+  assert.deepEqual(realTaskOutcome([reply], 'pi', 'TOKEN'), { status: 'passed', messageId: 'r' });
+});
+test('a completed greeting is an explicit failure, never proof of a successful task', () => {
+  const reply = {
+    id: 'r',
+    catId: 'claude-code',
+    type: 'assistant',
+    content: '收到。有什么帮助？',
+    lifecycle: { invocationId: 'a', status: 'completed' },
+  };
+  assert.deepEqual(realTaskOutcome([reply], 'claude-code', 'TOKEN'), {
+    status: 'failed',
+    messageId: 'r',
+    reason: 'completed_without_task_result',
+  });
+});
+test('canceled and failed terminal replies cannot pass even if they contain a partial marker', () => {
+  for (const status of ['failed', 'canceled', 'interrupted']) {
+    const reply = {
+      id: 'r',
+      catId: 'pi',
+      type: 'assistant',
+      content: 'TOKEN',
+      lifecycle: { invocationId: 'a', status },
+    };
+    assert.equal(realTaskOutcome([reply], 'pi', 'TOKEN')?.status, 'failed');
+  }
+});
+test('another cat, user echo or unverified callback cannot satisfy a real task', () => {
+  const messages = [
+    { id: 'u', type: 'user', content: 'TOKEN' },
+    {
+      id: 'p',
+      catId: 'codex',
+      type: 'assistant',
+      content: 'TOKEN',
+      lifecycle: { invocationId: 'b', status: 'completed' },
+    },
+    {
+      id: 'c',
+      catId: 'pi',
+      type: 'assistant',
+      content: 'TOKEN',
+      lifecycle: { producerInvocationId: 'a', status: 'completed' },
+    },
+  ];
+  assert.equal(realTaskOutcome(messages, 'pi', 'TOKEN'), undefined);
+});
+
+function fixtureWithObservation() {
+  const messages = fixture();
+  messages[5].content = '回传已收到，成果已交付';
+  messages[1].lifecycle.completedAt = 12;
+  messages[1].toolEvents = [
+    {
+      type: 'tool_use',
+      toolUseId: 'read1',
+      toolName: 'mcp:cat-cafe-collab/cat_cafe_get_thread_context',
+      timestamp: 10,
+    },
+    {
+      type: 'tool_result',
+      toolUseId: 'read1',
+      status: 'ok',
+      timestamp: 11,
+      detail:
+        'mcp:cat-cafe-collab/cat_cafe_get_thread_context (completed)\n' +
+        JSON.stringify({
+          messages: [{ id: 'return', from: { kind: 'agent', catId: 'pi' }, content: 'PEER' }],
+        }),
+    },
+  ];
+  return messages;
+}
+
+test('a native MCP context read proves a real peer result consumed within the initial lead turn', () => {
+  const proof = findA2AProof(fixtureWithObservation(), options);
+  assert.ok(proof);
+  assert.equal(proof.finalInvocationId, 'a');
+  assert.equal(proof.observationToolUseId, 'read1');
+  assert.equal(proof.observedMessageId, 'return');
+  assert.equal(proof.returnInvocationId, 'c');
+});
+
+test('observing the peer result is insufficient while the actual return invocation is absent or processing', () => {
+  for (const mutate of [
+    (messages) => {
+      messages.pop();
+    },
+    (messages) => {
+      messages[5].lifecycle.status = 'processing';
+    },
+    (messages) => {
+      messages[5].lifecycle.status = 'canceled';
+    },
+  ]) {
+    const messages = fixtureWithObservation();
+    mutate(messages);
+    assert.equal(findA2AProof(messages, options), undefined);
+  }
+});
+
+test('a failed, unrelated, future or forged tool observation cannot prove consumption', () => {
+  for (const mutate of [
+    (messages) => {
+      messages[1].toolEvents[1].status = 'error';
+    },
+    (messages) => {
+      messages[1].toolEvents[0].toolName = 'mcp:external/cat_cafe_get_thread_context';
+    },
+    (messages) => {
+      messages[1].toolEvents[1].toolUseId = 'foreign';
+    },
+    (messages) => {
+      messages[1].toolEvents[1].timestamp = 13;
+    },
+    (messages) => {
+      messages[4].lifecycle.producerInvocationId = 'foreign';
+    },
+    (messages) => {
+      messages[1].toolEvents[1].detail = 'received PEER';
+    },
+  ]) {
+    const messages = fixtureWithObservation();
+    mutate(messages);
+    assert.equal(findA2AProof(messages, options), undefined);
+  }
+});
+test('an admitted but still running, canceled or failed return prevents a successful journey', () => {
+  for (const status of ['running', 'canceled', 'failed'])
+    assert.equal(allA2AInvocationsDone([{ status: 'done' }, { status: 'done' }, { status }]), false);
+  assert.equal(allA2AInvocationsDone([{ status: 'done' }, { status: 'done' }]), false);
+  assert.equal(allA2AInvocationsDone([{ status: 'done' }, { status: 'done' }, { status: 'done' }]), true);
 });
