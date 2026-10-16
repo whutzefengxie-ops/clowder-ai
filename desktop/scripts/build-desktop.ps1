@@ -396,7 +396,7 @@ if (-not $SkipInstaller) {
     if ($LASTEXITCODE -ne 0) { Write-Err "Inno Setup compilation failed"; exit 1 }
     Write-Ok "Installer built"
 
-    $outputExe = Get-ChildItem -Path $distDir -Filter "ClowderAI-Setup-*.exe" | Select-Object -First 1
+    $outputExe = Get-Item -LiteralPath (Join-Path $distDir "ClowderAI-Setup-$catCafeVersion.exe") -ErrorAction Stop
     Write-Host ""
     Write-Host "  ========================================" -ForegroundColor Green
     Write-Host "  Installer ready!" -ForegroundColor Green
