@@ -2,6 +2,7 @@
 // Fields deliberately exclude paths, environment, configuration and credentials.
 import { registerHooks } from 'node:module';
 import { isMainThread, threadId } from 'node:worker_threads';
+import { readAheadApi } from './api-startup-read-ahead.mjs';
 
 const started = performance.now();
 const moduleGroups = new Map();
@@ -84,3 +85,4 @@ function milestone(phase) {
 globalThis.__clowderStartupMilestone = milestone;
 milestone('node-bootstrap');
 process.once('exit', (code) => milestone(`exit:${code}`));
+if (isMainThread) console.info('[api-startup-read-ahead]', JSON.stringify(await readAheadApi(process.argv[1])));

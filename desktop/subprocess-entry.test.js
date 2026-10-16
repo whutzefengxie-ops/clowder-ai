@@ -25,6 +25,7 @@ test('unpacks scripts executed by the standalone Node runtime', () => {
 
   for (const entry of [
     'api-startup-probe.mjs',
+    'api-startup-read-ahead.mjs',
     'runtime-web-server.js',
     'runtime-web-config.js',
     'startup-timing.js',

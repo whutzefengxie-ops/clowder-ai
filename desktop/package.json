@@ -73,6 +73,7 @@
       "subprocess-entry.js",
       "desktop-template.js",
       "api-startup-probe.mjs",
+      "api-startup-read-ahead.mjs",
       "startup-state.js",
       "startup-timing.js",
       "startup-services.js",
@@ -166,6 +167,7 @@
       "**/*.node",
       "**/node_modules/@anthropic-ai/claude-agent-sdk-*/claude-agent-sdk.*.node",
       "**/api-startup-probe.mjs",
+      "**/api-startup-read-ahead.mjs",
       "**/runtime-web-server.js",
       "**/runtime-web-config.js",
       "**/startup-timing.js"

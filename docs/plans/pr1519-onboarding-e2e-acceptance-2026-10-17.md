@@ -92,11 +92,42 @@ tips_exempt: 验收用例和已有能力的缺陷修复，不新增用户入口
 | clean-e2e | 56.213s | 38.372s | 39.585s | 第一轮未单独汇总 |
 | clean-e2e-repeat | 52.292s | 30.523s | 31.910s | 33.278s / 34.245s |
 | clean-final-f1fa89f86 | 57.638s | 38.144s | 见main/desktop阶段日志 | 40.321s / 41.463s |
-| Fresh载体 fresh-author-f1fa89f86 | 51.066s | 33.638s | 34.529s | 35.188s / 36.844s |
+| Fresh载体 fresh-author-f1fa89f86 | 51.066s | 33.638s | 34.529s | 35.841s / 36.844s |
 
 证据：`two-fresh-install-stage-metrics.json`、两套 `*-install-receipt.json`、`*-desktop-stdout.log` 及实例main日志。均为全新程序和数据目录；缓存未受控，不称冷盘benchmark。没有受控复现原100/120秒，不能因此关闭性能问题。moduleReadMs为hook累计开销，不等于独占磁盘IO，也没有证实Defender是根因。
 
 第一轮测试要求URL含shell=v2，但Electron本来通过preload写localStorage，实际DOM/偏好已经v2。此为测试前提错误：失败保留，修断言后再做第二次全新首装，未清角色重试。截图 `native-fresh-observed-after-assertion.png` 显示实际壳的新UI与完整演示背景。
+
+### 程序文件预读的对照与产品化状态
+
+首屏口径更正：此前 Fresh 的 35.188s 是 `renderer-visible` 阶段的 start；实际可见应取 state=complete，为 **35.841s**。保留原日志，不把 load 开始当可见。以下全部采用 complete。
+
+同一 f1 Fresh EXE、相同 5362/3362/6362 端口和全新程序/数据目录，顺序运行，每轮结束停止自有进程。没有复制认证、角色或历史，没有启用 CDP。OS/物理缓存未受控，不称冷盘 benchmark。
+
+| 对照 | Setup | 首屏可见 | API 到监听 | load hook 累计读取 | 预读 |
+|---|---:|---:|---:|---:|---|
+| control-a，原样 | 48.959s | 34.263s | 32.097s | 20.836s | 无 |
+| prime-b，两路只读 | 50.028s | 20.449s | 18.288s | 0.189s | 1454 文件 / 37.69MB / 207ms |
+| prime-c，第二轮两路只读 | 50.562s | 22.021s | 19.411s | 0.186s | 1454 文件 / 37.69MB / 208ms |
+| control-d，同 import/TLA 与 207ms 等待、读零文件 | 49.524s | 31.193s | 29.072s | 18.337s | 零文件 |
+| prime-e，再额外读四个原生库 | 49.406s | 21.014s | 18.621s | 0.202s | 1458 文件 / 59.46MB / 222ms |
+
+两组主要对照首屏均值 32.728s→21.235s，约改善35.1%；所有主要轮次仍加载相同1454个文件，CPU接近。零文件对照排除了单纯导入辅助模块/TLA等待的解释；增加22MB原生库没有额外收益，因此产品不扩大到这些文件。此证据支持低并发提前读不可变程序文件，不证明原120秒失败的唯一OS原因，更不能归咎Defender。
+
+证据目录 `startup-read-ahead-20261017`：五组 `*-install.json`、`*-launch.json`、`*-metrics.json`、main/desktop/stdout 原始日志。临时 probe 均已恢复原 SHA；原始失败和所有实例数据保留。
+
+产品实现仍使用既有 ServiceManager 和普通 Node loader：
+
+1. 冻结构建后，仅在构建机的私有 HOME/空项目启动 API，memory store 与 invocation registry 均显式为 memory；不启动 Redis、Web 或客户端。认证环境不继承；Prometheus 使用临时端口。到 http-listening 时采 JS/JSON 图，90秒有界，finally 停止自有进程。
+2. API 使用实际安装深度，保留 canonical 依赖/私有 peer；只把安装相对程序路径、大小和入口SHA写入 `.startup-read-ahead.json`。本机路径、HOME、配置、数据和认证不进入清单。实际冻结树采样得到1454文件、37,688,993字节，与安装版路径/大小集合完全一致；外部输入为零。
+3. API preload 以两路读者执行，不求值模块、不写文件、不改变 resolver。总计最多2048文件/64MB，1500ms到期立即回到正常loader，不继续派发读取。旧安装无清单、损坏、过期、缺文件均有回退；path escape/junction/data重定向拒绝。
+4. 新 helper 同时加入 Electron files 与 asarUnpack，防止再次出现外部 Node 找不到辅助模块。原120秒启动失败上限不调大。
+
+本轮先观察 RED，再得到22项启动/边界/构建采样/子进程清理回归通过，并接入 Windows Smoke。构建采样真实冻结树也成功。这些是源码/构建证据；**包含预读的新EXE尚未重新完成首装和完整真实调用，因此不能把上表手工对照写成新交付包验收通过**。需要随后两轮新目录完整Setup、首启、引导、一键创建、真调用/A2A与旧历史回读，失败继续 No-Go。
+
+Architecture cell: 既有 desktop bootstrap / frozen build。Map delta: none。预读是可丢弃的程序字节提示，既有 Node loader、角色 catalog、会话和认证 owner 不变。
+
+本轮实验收尾：已按固定清单移除五个性能对照及六个采样原型的11个自有程序目录；先确认无活跃进程，归档根配置并记录/解除junction，才递归删除程序。4523个受保护实例文件的前后SHA全部相同，所有instance/HOME/Redis/SQLite/历史与实验日志保留，磁盘实际可用空间增加9,902,477,312字节。未调用通用卸载器、未改生产或已保留交付目录，也未重试之前被拒绝的开始菜单清理。`program-retirement/manifest.json`、`protected-before.json`、`receipt.json`可核验边界。
 
 ## E2E实际找出的首装MCP缺口与修复
 
