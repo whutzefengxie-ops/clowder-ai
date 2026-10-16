@@ -127,7 +127,7 @@ async function createMainWindow() {
     show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
-      additionalArguments: [`--cat-cafe-api-origin=${API_ORIGIN}`],
+      additionalArguments: [`--cat-cafe-api-origin=${API_ORIGIN}`, `--cat-cafe-app-origin=${APP_ORIGIN}`],
       contextIsolation: true,
       nodeIntegration: false,
     },

@@ -7,6 +7,29 @@ const apiOrigin = process.argv
   ?.split('=')
   .slice(1)
   .join('=');
+const appOrigin = process.argv
+  .find((arg) => arg.startsWith('--cat-cafe-app-origin='))
+  ?.split('=')
+  .slice(1)
+  .join('=');
+
+// Preload runs before the web application: seed only a missing/invalid desktop
+// preference, so first launch paints v2 without overriding a later classic choice.
+// The splash page and other origins/subframes must not receive this preference.
+if (appOrigin && typeof window !== 'undefined' && window.top === window && window.location.origin === appOrigin) {
+  try {
+    const key = 'cat-cafe:shell-presentation';
+    const preference = window.localStorage.getItem(key);
+    if (preference !== 'classic' && preference !== 'v2') {
+      window.localStorage.setItem(key, 'v2');
+      console.info('[desktop-shell] initialized preference=v2');
+    } else {
+      console.info(`[desktop-shell] retained preference=${preference}`);
+    }
+  } catch {
+    console.warn('[desktop-shell] preference storage unavailable');
+  }
+}
 
 contextBridge.exposeInMainWorld('desktopBridge', {
   apiOrigin,
