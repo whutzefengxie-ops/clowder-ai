@@ -9,7 +9,16 @@ test('only a proven retired document cancellation is exempt; raw evidence remain
     dialogs: [],
     consoleErrors: [],
     documentTransitions: [{ frameId: 'frame', previous: 'old', current: 'new' }],
-    networkErrors: [{ failure: 'net::ERR_ABORTED', canceled: true, document: 'old', path: '/slow' }],
+    networkErrors: [
+      {
+        frameId: 'frame',
+        activeDocumentAtFailure: 'new',
+        failure: 'net::ERR_ABORTED',
+        canceled: true,
+        document: 'old',
+        path: '/slow',
+      },
+    ],
   };
   assertLivePageHealthy(record);
   assert.equal(record.expectedDocumentCancellations.length, 1);
@@ -51,4 +60,26 @@ test('Chromium reports a canceled old document with its exact loader identity', 
   } finally {
     await browser.close();
   }
+});
+
+test('a cached document returning does not exempt its new current-page aborts', () => {
+  const record = {
+    pageErrors: [],
+    dialogs: [],
+    consoleErrors: [],
+    documentTransitions: [
+      { frameId: 'frame', previous: 'old', current: 'other' },
+      { frameId: 'frame', previous: 'other', current: 'old' },
+    ],
+    networkErrors: [
+      {
+        frameId: 'frame',
+        document: 'old',
+        activeDocumentAtFailure: 'old',
+        failure: 'net::ERR_ABORTED',
+        canceled: true,
+      },
+    ],
+  };
+  assert.throws(() => assertLivePageHealthy(record), /Unexpected renderer faults/);
 });

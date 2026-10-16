@@ -19,19 +19,25 @@ export async function observePageFaults(page, record) {
   const session = await page.context().newCDPSession(page);
   const requests = new Map();
   const documents = new Map();
+  const pendingNavigation = new Map();
   const visit = (tree) => {
     documents.set(tree.frame.id, tree.frame.loaderId);
     for (const child of tree.childFrames ?? []) visit(child);
   };
   await session.send('Page.enable');
   visit((await session.send('Page.getFrameTree')).frameTree);
+  session.on('Page.frameStartedNavigating', ({ frameId, loaderId }) => {
+    if (loaderId && loaderId !== documents.get(frameId)) pendingNavigation.set(frameId, loaderId);
+  });
   session.on('Page.frameNavigated', ({ frame }) => {
     record.documentTransitions.push({ frameId: frame.id, previous: documents.get(frame.id), current: frame.loaderId });
     documents.set(frame.id, frame.loaderId);
+    pendingNavigation.delete(frame.id);
   });
   session.on('Page.frameDetached', ({ frameId }) => {
     record.documentTransitions.push({ frameId, previous: documents.get(frameId), current: null });
     documents.delete(frameId);
+    pendingNavigation.delete(frameId);
   });
   session.on('Network.requestWillBeSent', (event) => {
     requests.set(event.requestId, {
@@ -43,8 +49,11 @@ export async function observePageFaults(page, record) {
   });
   session.on('Network.loadingFinished', ({ requestId }) => requests.delete(requestId));
   session.on('Network.loadingFailed', (event) => {
+    const request = requests.get(event.requestId);
     record.networkErrors.push({
-      ...requests.get(event.requestId),
+      ...request,
+      activeDocumentAtFailure: request?.frameId ? (documents.get(request.frameId) ?? null) : undefined,
+      navigationTarget: pendingNavigation.get(request?.frameId),
       failure: event.errorText,
       canceled: event.canceled === true,
     });
@@ -63,14 +72,24 @@ export async function observePageFaults(page, record) {
 }
 
 export function assertLivePageHealthy(record) {
-  const retired = new Set(record.documentTransitions?.map((transition) => transition.previous).filter(Boolean));
   record.expectedDocumentCancellations = [];
   record.unexpectedNetworkErrors = [];
   for (const error of record.networkErrors ?? []) {
     // Keep every raw failure. Only the browser's exact canceled request from a
     // retired document is expected; HTTP/current/unidentified failures still fail.
+    const retirement = record.documentTransitions?.find(
+      (transition) =>
+        transition.frameId === error.frameId &&
+        transition.previous === error.document &&
+        (transition.current === error.activeDocumentAtFailure || transition.current === error.navigationTarget),
+    );
     const navigation =
-      error.canceled && error.failure === 'net::ERR_ABORTED' && error.document && retired.has(error.document);
+      error.canceled &&
+      error.failure === 'net::ERR_ABORTED' &&
+      error.frameId &&
+      error.document &&
+      retirement &&
+      (error.activeDocumentAtFailure !== error.document || error.navigationTarget !== undefined);
     (navigation ? record.expectedDocumentCancellations : record.unexpectedNetworkErrors).push(error);
   }
   for (const field of ['pageErrors', 'dialogs', 'consoleErrors', 'networkErrors', 'documentTransitions']) {
