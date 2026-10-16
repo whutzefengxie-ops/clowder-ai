@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import { createRequire, isBuiltin } from 'node:module';
 import path from 'node:path';
+import { withFrozenDependencyResolution } from './frozen-dependency-resolution.mjs';
 import { fileHash, inside, runtimePackageExports, runtimePackageRoots } from './runtime-package-bundle-graph.mjs';
 import { runtimePackageInput } from './runtime-package-bundle-inputs.mjs';
 
@@ -55,7 +56,8 @@ export async function planRuntimePackage(root, packageRoot) {
             if (result.errors.length || result.external || !result.path)
               throw new Error(`Unresolved frozen external dependency: ${specifier}`);
             const canonical = fs.realpathSync(result.path);
-            if (!inside(root, canonical)) throw new Error('External dependency is outside the frozen output');
+            if (!inside(root, canonical))
+              throw new Error(`External dependency is outside the frozen output: ${specifier} -> ${canonical}`);
             return canonical;
           };
           builder.onResolve({ filter: /^[^./\\]/ }, async (args) => {
@@ -136,8 +138,12 @@ function emitPackage(root, { packageRoot, manifest, entries, snapshots, result, 
 
 /** Bundle real roots independently. Never reparent peers or mutate a source/cache inode. */
 export async function bundleRuntimePackages(directory) {
-  const root = fs.realpathSync(directory),
-    plans = [];
+  const root = fs.realpathSync(directory);
+  return withFrozenDependencyResolution(root, () => bundlePackages(root));
+}
+
+async function bundlePackages(root) {
+  const plans = [];
   for (const packageRoot of runtimePackageRoots(root)) plans.push(await planRuntimePackage(root, packageRoot));
   // Validate the entire graph before changing any public entry.
   for (const plan of plans)

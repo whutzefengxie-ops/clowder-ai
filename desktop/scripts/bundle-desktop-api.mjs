@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import { createRequire, isBuiltin } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { withFrozenDependencyResolution } from './frozen-dependency-resolution.mjs';
 
 const tools = createRequire(import.meta.url);
 // Use the compiler already pinned by the API's tsx build dependency.
@@ -154,6 +155,10 @@ export function bundleDesktopAgentHooks(apiRoot) {
 
 /** Keep the original dist tree for workers, dynamic paths and unbundled tooling. */
 export async function bundleDesktopApi(apiRoot) {
+  return withFrozenDependencyResolution(path.dirname(fs.realpathSync(apiRoot)), () => bundleApi(apiRoot));
+}
+
+async function bundleApi(apiRoot) {
   const receipt = await bundleEntrypoint(apiRoot, 'index.js', 'index.desktop.js', bundledDependencies);
   if (fs.existsSync(path.join(apiRoot, 'dist/agent-hooks/index.js')))
     receipt.agentHooks = await bundleDesktopAgentHooks(apiRoot);

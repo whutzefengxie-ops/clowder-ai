@@ -6,6 +6,24 @@ import { bundleDesktopApi } from './scripts/bundle-desktop-api.mjs';
 import { bundleRuntimePackages } from './scripts/bundle-runtime-packages.mjs';
 import { runRuntimeWitness, runtimePackageFixture } from './test-helpers/runtime-package-bundle-fixture.mjs';
 
+test('a frozen export nested below a repository resolves its own dependencies before ancestor packages', async (t) => {
+  const { base, root, peer, write, shared } = runtimePackageFixture(t);
+  peer('dependencies/ancestor-shadow', 'frozen');
+  const foreign = path.join(base, 'node_modules/ancestor-shadow');
+  fs.mkdirSync(foreign, { recursive: true });
+  fs.writeFileSync(path.join(foreign, 'package.json'), '{"type":"module","exports":"./index.js"}');
+  fs.writeFileSync(path.join(foreign, 'index.js'), "export const token='foreign-source';");
+  write(`${shared}/dist/location.js`, "export {token as asset} from 'ancestor-shadow';");
+  await bundleRuntimePackages(root);
+  assert.equal(fs.existsSync(path.join(root, 'node_modules')), false, 'build-only alias must not enter archives');
+  const result = runRuntimeWitness(
+    root,
+    "import {asset} from '@cat-cafe/shared'; console.log(JSON.stringify({asset}));",
+  );
+  assert.equal(result.asset, 'frozen');
+  assert.equal(fs.readFileSync(path.join(foreign, 'index.js'), 'utf8'), "export const token='foreign-source';");
+});
+
 test('canonical public entries share classes, singleton and JSON after a relocatable package-local split', async (t) => {
   const { base, root, shared } = runtimePackageFixture(t);
   const original = fs.readFileSync(path.join(root, shared, 'dist/index.js'), 'utf8');
