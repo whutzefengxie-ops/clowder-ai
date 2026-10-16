@@ -1,6 +1,6 @@
 {
   "name": "cat-cafe-desktop",
-  "version": "0.10.1",
+  "version": "1.14.0",
   "description": "Clowder AI Desktop - Multi-Agent Collaboration Platform",
   "main": "main.js",
   "scripts": {

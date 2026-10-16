@@ -18,7 +18,7 @@
 ; MyAppVersion can be overridden by iscc /DMyAppVersion=X.Y.Z (CI release pipeline).
 ; Default kept for local manual builds.
 #ifndef MyAppVersion
-  #define MyAppVersion "0.10.1"
+  #define MyAppVersion "1.14.0"
 #endif
 #define MyAppPublisher "Clowder AI"
 #define MyAppURL       "https://github.com/zts212653/clowder-ai"
