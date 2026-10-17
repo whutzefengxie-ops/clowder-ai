@@ -315,7 +315,7 @@ end;
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
   ExitCode: Integer;
-  Cmd, AppDir: String;
+  Cmd, AppDir, InstanceRoot: String;
   Started: Boolean;
 begin
   Result := '';
@@ -324,11 +324,16 @@ begin
   // Save/validate identity before InstallDelete replaces desktop-dist.
   ExtractTemporaryFile('configure-desktop-instance.ps1');
   Cmd := '-NoProfile -ExecutionPolicy Bypass -File "' + ExpandConstant('{tmp}') +
-         '\configure-desktop-instance.ps1" -AppDir "' + AppDir +
-         '" -InstanceRoot "' + ExpandConstant('{param:DesktopInstanceRoot|}') +
-         '" -FrontendPort "' + ExpandConstant('{param:FrontendPort|}') +
-         '" -ApiPort "' + ExpandConstant('{param:ApiPort|}') +
-         '" -RedisPort "' + ExpandConstant('{param:RedisPort|}') + '"';
+         '\configure-desktop-instance.ps1" -AppDir "' + AppDir + '"';
+  // Do not pass empty named arguments. Windows PowerShell's command-line
+  // parser can bind a following switch as the value of an empty argument;
+  // that makes a clean install fail before the helper reaches its no-op path.
+  InstanceRoot := ExpandConstant('{param:DesktopInstanceRoot|}');
+  if InstanceRoot <> '' then
+    Cmd := Cmd + ' -InstanceRoot "' + InstanceRoot +
+      '" -FrontendPort "' + ExpandConstant('{param:FrontendPort|}') +
+      '" -ApiPort "' + ExpandConstant('{param:ApiPort|}') +
+      '" -RedisPort "' + ExpandConstant('{param:RedisPort|}') + '"';
   // PowerShell's Add-Type identity helper must not run through the output
   // capture pipe. On Windows this changes the child token/runtime policy and
   // can fail before the script starts with a misleading permission error.
