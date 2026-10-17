@@ -26,6 +26,8 @@ interface SetupDraft {
   lead: string;
   created: Record<string, CreatedPartner>;
   threadId?: string;
+  /** Only a new, verified empty roster may prepare the personal entry reminder. */
+  initialRosterEmpty?: boolean;
 }
 async function readJson<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await apiFetch(path, init);
@@ -137,6 +139,7 @@ export function useNativeOnboarding(
           version: 2,
           ...(!saved || saved.idScheme ? { idScheme: 'short-v1' as const } : {}),
           journeyId,
+          initialRosterEmpty: saved?.initialRosterEmpty ?? (!saved && roster.cats.length === 0),
           partners,
           goal: saved?.goal ?? SMALL_GOALS[0].content,
           lead:
@@ -207,6 +210,13 @@ export function useNativeOnboarding(
     let pendingPartner: NativePartner | undefined;
     const headers = { 'Content-Type': 'application/json', 'X-Cat-Cafe-Onboarding-Journey': current.journeyId };
     try {
+      if (mode === 'members' && current.initialRosterEmpty) {
+        await readJson('/api/config/onboarding/entry', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'pending' }),
+        });
+      }
       for (const selection of selected) {
         const partner = progress.partners.find((p) => p.id === selection.id) ?? selection;
         const id = partner.id;

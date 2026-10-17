@@ -52,6 +52,7 @@ it.each(cases)('recovers legacy pending: $mode, reverse=$reverse, committed=$com
       });
     }
     if (path === '/api/threads' && init?.method === 'POST') return response({ id: 'review-goal' });
+    if (path === '/api/config/onboarding/entry') return response({ status: 'pending' });
     if (init?.method) throw Error('Unexpected fixture write');
     if (path === '/api/session') return response({ userId: 'review-owner' });
     if (path === '/api/cat-templates') return response({ templates: [] });

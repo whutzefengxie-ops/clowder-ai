@@ -63,6 +63,16 @@ export async function setup(options = {}) {
   let failure = options.failCreate;
   let discovered = options.runtimes ?? runtimes;
   const created = [];
+  const entryWrites = [];
+  let entryStatus = options.entryStatus ?? 'not_started';
+  await context.route('**/api/config/onboarding/entry', async (route) => {
+    if (route.request().method() === 'PUT') {
+      const intent = route.request().postDataJSON().status;
+      entryWrites.push(intent);
+      if (entryStatus !== 'completed' && !(entryStatus === 'dismissed' && intent === 'pending')) entryStatus = intent;
+    }
+    await route.fulfill({ json: { userId: 'fixture-user', version: 'first-run-entry-v1', status: entryStatus } });
+  });
   const receipts = new Map();
   page.on('pageerror', (error) => {
     errors.push(error.message);
@@ -110,6 +120,7 @@ export async function setup(options = {}) {
     writes,
     errors,
     created,
+    entryWrites,
     recoverDiscovery: () => {
       discoveryFails = false;
     },

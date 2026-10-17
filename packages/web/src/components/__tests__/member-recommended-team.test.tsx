@@ -29,6 +29,7 @@ beforeEach(() => {
   root = createRoot(host);
   vi.mocked(apiFetch).mockImplementation(async (path, init) => {
     if (path === '/api/session') return json({ userId: 'first-team-owner' });
+    if (path === '/api/config/onboarding/entry') return json({ status: 'pending' });
     if (path === '/api/cat-templates')
       return json({
         templates: [
@@ -144,6 +145,11 @@ it('allows one selected partner and ignores the unselected partners', async () =
   const posts = vi.mocked(apiFetch).mock.calls.filter(([, init]) => init?.method === 'POST');
   expect(posts).toHaveLength(1);
   expect(JSON.parse(String(posts[0][1]?.body)).clientId).toBe('anthropic');
+  expect(
+    vi
+      .mocked(apiFetch)
+      .mock.calls.some(([path, init]) => path === '/api/config/onboarding/entry' && init?.method === 'PUT'),
+  ).toBe(true);
   expect(created).toHaveBeenCalledOnce();
 });
 
@@ -177,5 +183,6 @@ it('reads the real roster before recommending and does not overwrite an existing
   const posts = vi.mocked(apiFetch).mock.calls.filter(([, init]) => init?.method === 'POST');
   expect(posts).toHaveLength(2);
   expect(posts.some(([, init]) => String(init?.body).includes('owned-claude'))).toBe(false);
+  expect(vi.mocked(apiFetch).mock.calls.some(([path]) => path === '/api/config/onboarding/entry')).toBe(false);
   expect(created).toHaveBeenCalledOnce();
 });

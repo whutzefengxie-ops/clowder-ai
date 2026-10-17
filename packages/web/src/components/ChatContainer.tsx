@@ -37,6 +37,7 @@ import { ChatContainerHeader } from './ChatContainerHeader';
 import { hydrateEvolutionFromCurrentUrl } from './capability-evolution/evolution-navigation';
 import { useConciergeConfirmations } from './concierge/useConciergeConfirmations';
 import { BootcampGuideOverlay } from './first-run-quest/BootcampGuideOverlay';
+import { FirstRunEntryReminder } from './first-run-quest/FirstRunEntryReminder';
 import { restoreJourneyState } from './first-run-quest/onboarding-journey';
 import { QuestBanner } from './first-run-quest/QuestBanner';
 import { syncLocalBootcampState } from './first-run-quest/syncLocalBootcampState';
@@ -1453,6 +1454,10 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
             </button>
           </p>
         )}
+        <FirstRunEntryReminder
+          enabled={threadId === 'default' && registryKnown && !registryRefreshing && cats.length > 0 && !showQuestWizard}
+          threadId={threadId}
+        />
         <BootcampListModal open={showBootcampList} onClose={handleBootcampModalClose} currentThreadId={threadId} />
         {showVoteModal && <VoteConfigModal onSubmit={handleVoteSubmit} onCancel={() => setShowVoteModal(false)} />}
         {/* Bootcamp guide overlay: intro phase tips + lifecycle tips (phase-7.5 uses guide engine) */}

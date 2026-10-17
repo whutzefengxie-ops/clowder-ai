@@ -30,6 +30,7 @@ function Harness({ mode = 'members' }: { mode?: 'members' | 'goal' }) {
 function installDiscovery(peer: typeof runtime, cats: CatData[], post: (init: RequestInit) => Response) {
   vi.mocked(apiFetch).mockImplementation(async (path, init) => {
     if (path === '/api/session') return response({ userId: 'owner-a' });
+    if (path === '/api/config/onboarding/entry') return response({ status: 'pending' });
     if (String(path).split('?')[0] === '/api/cats/native-runtimes') return response({ runtimes: [peer] });
     if (path === '/api/cat-templates') return response({ templates: [] });
     if (path === '/api/cats') return init?.method === 'POST' ? post(init) : response({ cats });

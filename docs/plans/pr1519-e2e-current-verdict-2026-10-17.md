@@ -15,7 +15,7 @@ tips_exempt: 既有用户旅程的验收证据与未完成边界
 - Desktop / API / Web 都实际编译自 `0927b6d0a9475b71b6147b4bd212f1e04dfc05fd`；版本 `1.14.0-pr1519-0927b6d0a`。
 - EXE SHA-256：`969CD34C7E4E41D65DF52987BE89A253267B6FBA0DF49D7B6660E2C948230AE3`，699,576,141 bytes。
 - 共享冻结依赖来自 `f1fa89f86`；生产依赖、lock、相关 API/MCP 源码差异为空。新 Web trace 的每个包名/版本都有实际保留 owner，包括私有树里的 semver 7.7.4，不以顶层同名包替代。API 和 Web 编译戳没有改写旧产物冒充重建。
-- 后继提交只修改测试及报告，与上述运行时代码差异为空；后续观察器改动同样属于测试通道，不重写已经记录的失败。`9ed183722` CI 终态19成功、1预期跳过，仍为 REVIEW_REQUIRED，不能代替后继 HEAD 的检查。
+- 后继至`5e85fceb7`只修改测试及报告，与上述运行时代码差异为空；该HEAD CI终态19成功、1预期跳过，仍为REVIEW_REQUIRED。**当前新增F155接线含运行源码改动，尚未打入新包；不得将下表0927实物结果迁为这批新源码验收。** 不重写已有失败或构建戳。
 - 作者目录的程序与 instance 首装前均不存在。复用已授权的 client-homes 路径，不复制角色/历史，不更换客户端连接或模型。生产服务不参与。
 
 ## 当前新包实测
@@ -69,6 +69,10 @@ tips_exempt: 既有用户旅程的验收证据与未完成边界
 前两次脚本失败分别是：用了旧身份header访问必须session鉴权的记录接口；播放中错误匹配了播放结束后的CTA文案。原记录保留，修为真实浏览器cookie及实际动态CTA，没有放宽产品鉴权或把脚本错误称产品故障。独立重跑15个前端状态/非阻塞/pin检查、11个服务端记录及损坏偏好保护检查均通过；前端测试保留既有React act环境警告，不称日志全无警告。完整记录位于`e2e-20261017/lifecycle-0927-retained-demo-{state,browser-session,correct-premises,ready}/`。
 
 **F155仍有新路径接线缺口。** `ChatContainer.tsx`的自动`first-run-entry`要求旧bootcamp journey及本地ready状态；新版演示链接到成员配置，`useNativeOnboarding`的members模式创建后直接返回名单，不写该旧状态。不能以flow已注册、overlay单测通过或本次回访成功声称新版创建后已经自动触发提醒。方案应在既有guide/preference owner内接入新版创建完成事件、避免重放时再触发，并处理旧用户；不另造第二套完成状态。默认不pin与现有members/accounts默认pin的选择仍沿原方案的“待确认”边界，不能私自重置旧pin。此处是源码接线核对，尚未伪造成新产品E2E通过。
+
+上述接线现已按[增量计划](pr1519-first-run-entry-wiring-2026-10-17.md)实现：零角色新草稿在创建前幂等登记first-run-entry-v1，主界面已有角色时消费pending；完成/关闭回执仍在原偏好owner，F155继续负责展示与ACK，classic/v2共同定位设置入口，不要求pin存在。已有名单、旧草稿和0选择不重新登记。新增API曾以404正确RED；新源码12个API检查、231个首启/成员测试、10条flow校验通过，API及Web单独TypeScript编译通过。第一次完整首启测试的9项失败是严格fixture缺新接口响应，已保留失败输出并补齐明确接口后重跑全231项；没有删除旧key/body/单选/登录等断言。完整API package build在现有collective-client的Windows `rm -rf dist`处失败，不能将单独tsc写为该完整命令通过。新接线的生产浏览器/安装版和首次手动创建适用路径仍待补验，当前不是Go。
+
+用户另发现作者原生测试历史污染：复用原Codex HOME也复用了原生会话状态，原“完全隔离”描述须收窄。经明确授权，27条通过作者验收记录或原始调用journal及原生session/cwd证明的会话已可恢复归档，原生日志哈希均不变、0删除；活跃列表已无本批Identity验收条目，原先可见的非目标会话及当前工作会话保留。[根因、回执及后续测试边界](../bug-report/pr1519-native-client-test-history-isolation.md)单列。付费单聊/A2A现在检查实例实际client-homes及canonical根；已知共享HOME没有明确获授权归档计划时，在创建测试会话前拒绝。3项含junction的检查通过；计划声明不替代后续真实归档回读，也不声称已完整验证所有sqlite_home覆盖层。
 
 ## 当前阻塞与保留边界
 

@@ -52,8 +52,8 @@ export interface BubbleDefaultPreferences {
 }
 
 export interface UserPreferences {
-  /** #1466: durable personal demo receipts. Keys include operator and guide version. */
-  onboardingGuides?: Record<string, { status: 'dismissed' | 'completed'; updatedAt: number }>;
+  /** #1466: durable personal guide receipts. Keys include operator and guide version. */
+  onboardingGuides?: Record<string, { status: 'pending' | 'dismissed' | 'completed'; updatedAt: number }>;
   /** F322: owner-private ignored work/request coordinates. No TTL or canonical lifecycle effect. */
   ignoredItems?: IgnoredItemPreferences;
   /** F321: background curation preference and its durable first-enable boundary. */

@@ -38,6 +38,7 @@ beforeEach(() => {
   root = createRoot(container);
   vi.mocked(apiFetch).mockImplementation(async (path, init) => {
     if (path === '/api/session') return response({ userId: 'owner-a' });
+    if (path === '/api/config/onboarding/entry') return response({ status: 'pending' });
     if (String(path).split('?')[0] === '/api/cats/native-runtimes') return response({ runtimes });
     if (path === '/api/cat-templates') return response({ templates: [] });
     if (path === '/api/cats') {
@@ -61,6 +62,11 @@ it('creates the detected team with one confirmation without creating a conversat
   await act(async () => setup.start());
   const writes = vi.mocked(apiFetch).mock.calls.filter(([, init]) => init?.method === 'POST');
   expect(writes.map(([path]) => path)).toEqual(['/api/cats', '/api/cats', '/api/cats']);
+  const calls = vi.mocked(apiFetch).mock.calls;
+  const reminder = calls.findIndex(([path, init]) => path === '/api/config/onboarding/entry' && init?.method === 'PUT');
+  expect(reminder).toBeGreaterThanOrEqual(0);
+  expect(reminder).toBeLessThan(calls.findIndex(([path, init]) => path === '/api/cats' && init?.method === 'POST'));
+  expect(JSON.parse(String(calls[reminder][1]?.body))).toEqual({ status: 'pending' });
   expect(onCreated).toHaveBeenCalledOnce();
 });
 
