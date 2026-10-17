@@ -37,6 +37,12 @@ export function nativePartnerIdentity(runtime: RuntimeChoice, templates: Templat
     form.personality = '沉稳务实，先确认目标，再逐步实现并回报结果';
     form.teamStrengths = '编码实现、工具协作、结果验证';
   }
+  // Kimi discovery may come back without a usable template asset (for
+  // example, an older packaged template catalog). Keep the detected partner
+  // visually identifiable instead of falling back to the generic placeholder.
+  if (runtime.clientId === 'kimi' && (!template || !form.avatar?.trim())) {
+    form.avatar = '/avatars/family/kimi.png';
+  }
   if (runtime.id === 'pi' || runtime.label === 'Pi') {
     form.name = form.displayName = 'Pi 伙伴';
     form.nickname = '派派';

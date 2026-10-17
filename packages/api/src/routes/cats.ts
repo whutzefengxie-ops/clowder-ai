@@ -299,6 +299,22 @@ const updateCatSchema = z.object({
 type UpdateCatRequestBody = z.infer<typeof updateCatSchema>;
 type CreateCatRequestBody = z.infer<typeof createCatSchema>;
 
+function resolveNativeAvatar(
+  clientId: ClientId,
+  avatar: string | undefined | null,
+  acp?: { command: string; startupArgs: string[] } | null,
+): string {
+  const value = avatar?.trim();
+  if (value) return value;
+  if (clientId === 'kimi') return '/avatars/family/kimi.png';
+  const acpText = acp ? [acp.command, ...acp.startupArgs].join(' ') : '';
+  const isPiAcp = clientId === 'acp' && /(?:^|[\\/])pi(?:[-_.]|$)/i.test(acpText);
+  if (isPiAcp) {
+    return '/avatars/family/opencode.png';
+  }
+  return '/avatars/default.png';
+}
+
 const BUILTIN_CLOUD_IDENTITY_PROTECTED_ERROR =
   '内置云端成员 @gpt-pro 的身份受保护，不能改所属家族、Client、模型或传输方式。主句柄 @gpt-pro 固定；可以修改名称、头像、昵称和角色资料，并增加其他别名。需要本地 Codex，请新建另一位成员。';
 
@@ -735,6 +751,10 @@ async function toCatResponse(
         name: cat.name,
         displayName: cat.displayName,
         nickname: cat.nickname,
+        // Preserve the identity asset selected by onboarding/manual editing.
+        // Omitting this field makes every refreshed native member fall back to
+        // the gray default avatar even though the catalog contains the asset.
+        avatar: resolveNativeAvatar(cat.clientId, cat.avatar, acpConfig),
         color: cat.color,
         mentionPatterns: cat.mentionPatterns,
         breedId: cat.breedId,
@@ -781,7 +801,6 @@ async function toCatResponse(
               }
             : capabilityInfo;
         })(),
-        avatar: cat.avatar,
         roleDescription: cat.roleDescription,
         personality: cat.personality,
         teamStrengths: cat.teamStrengths,
@@ -1095,7 +1114,7 @@ export const catsRoutes: FastifyPluginAsync<CatsRoutesOptions> = async (app, opt
         'cli' in body ? body.cli?.serviceTier : undefined,
         'cli' in body && body.cli !== undefined && Object.hasOwn(body.cli, 'serviceTier'),
       );
-      const resolvedAvatar = body.avatar ?? '/avatars/default.png';
+      const resolvedAvatar = resolveNativeAvatar(body.clientId, body.avatar, 'acp' in body ? body.acp : undefined);
       if (body.clientId === 'antigravity') {
         await createRuntimeCatSerialized({
           catId: body.catId,

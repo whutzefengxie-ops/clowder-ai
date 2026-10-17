@@ -37,8 +37,17 @@ describe('native partner identities reflect tools rather than an unrelated model
     const onlyGlm = templateConfig.roleTemplates.filter(({ id }) => id === 'dragon-li');
     const partners = tools.map((runtime) => ({ form: nativePartnerIdentity(runtime, onlyGlm, []) }));
     expect(partners.map(({ form }) => form.displayName)).toEqual(['Kimi 伙伴', 'OpenCode 伙伴']);
+    expect(partners[0].form.avatar).toBe('/avatars/family/kimi.png');
     expect(partners.every(({ form }) => !form.roleDescription.includes('GLM'))).toBe(true);
     expect(partners.every(({ form }) => form.avatar !== '/avatars/family/glm52.png')).toBe(true);
+  });
+
+  it('keeps Kimi identifiable when a template is present but has no avatar asset', () => {
+    const kimi = templateConfig.roleTemplates.find(({ id }) => id === 'turkish-van');
+    expect(kimi).toBeTruthy();
+    if (!kimi) throw new Error('Kimi template fixture is missing');
+    const form = nativePartnerIdentity(tools[0], [{ ...kimi, avatar: '' }], []);
+    expect(form.avatar).toBe('/avatars/family/kimi.png');
   });
   it('reuses a complete cat identity for DSH without borrowing an unrelated model claim', () => {
     const partner = recommendNativePartners(
@@ -101,5 +110,28 @@ describe('native partner identities reflect tools rather than an unrelated model
     expect(recommendNativePartners(tools.slice(0, 1), templateConfig.roleTemplates, [cat], 'existing')[0].form).toEqual(
       initialState(cat),
     );
+  });
+
+  it('repairs only missing native identity assets when an older member has no avatar', () => {
+    const legacy = {
+      id: 'kimi',
+      displayName: 'Kimi 伙伴',
+      name: 'Kimi 伙伴',
+      nickname: '',
+      avatar: '',
+      clientId: 'kimi',
+      configurationSource: 'native_tool',
+      carrier: 'cli',
+      defaultModel: '',
+      mentionPatterns: ['@kimi'],
+      color: { primary: '#123456', secondary: '#abcdef' },
+      roleDescription: '保留的职责',
+      personality: '保留的性格',
+      teamStrengths: '保留的能力',
+    } as CatData;
+    const partner = recommendNativePartners([tools[0]], templateConfig.roleTemplates, [legacy], 'legacy-avatar')[0];
+    expect(partner.form.avatar).toBe('/avatars/family/kimi.png');
+    expect(partner.form.nickname).toBeTruthy();
+    expect(partner.form.roleDescription).toBe('保留的职责');
   });
 });

@@ -338,6 +338,7 @@ describe('cats routes runtime CRUD', { concurrency: false }, () => {
     const createdBody = JSON.parse(createRes.body);
     assert.equal(createdBody.cat.id, 'runtime-spark');
     assert.equal(createdBody.cat.clientId, 'openai');
+    assert.equal(createdBody.cat.avatar, '/avatars/spark.png', 'create response must preserve the identity avatar');
 
     // Simulate a member created by an older version. New routes must preserve
     // this rollback byte during unrelated writes while refusing to edit it.
@@ -389,6 +390,7 @@ describe('cats routes runtime CRUD', { concurrency: false }, () => {
     assert.ok(runtimeCat, 'runtime-spark should appear in /api/cats');
     assert.equal(runtimeCat.displayName, '运行时火花猫');
     assert.equal(runtimeCat.nickname, '火花');
+    assert.equal(runtimeCat.avatar, '/avatars/spark.png', 'list response must preserve the identity avatar');
     assert.deepEqual(runtimeCat.mentionPatterns, ['@runtime-spark', '@运行时火花']);
     assert.equal(runtimeCat.teamStrengths, '精确点改 + 快速修复');
     assert.equal(runtimeCat.caution, null);

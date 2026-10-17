@@ -22,6 +22,7 @@ export function MemberSettingsHost({
   onRetryConfig,
   onRetryRegistry,
   onOpen,
+  onDetect,
   onClose,
   onSaved,
   onTeamCreated,
@@ -42,6 +43,7 @@ export function MemberSettingsHost({
   onRetryConfig: () => void;
   onRetryRegistry: () => void;
   onOpen: (cat: CatData | null) => void;
+  onDetect?: () => void;
   onClose: () => void;
   onSaved: (cat: CatData, trace?: MemberSaveTrace) => Promise<void>;
   onTeamCreated: () => Promise<void>;
@@ -54,6 +56,10 @@ export function MemberSettingsHost({
   const open = (cat: CatData | null) => {
     returnToList.remember();
     onOpen(cat);
+  };
+  const detect = () => {
+    returnToList.remember();
+    onDetect?.();
   };
   const close = () => {
     onClose();
@@ -78,6 +84,7 @@ export function MemberSettingsHost({
             onRetryConfig={onRetryConfig}
             cats={cats}
             onAdd={() => open(null)}
+            onDetect={detect}
             onEdit={open}
             onEditCoCreator={onEditCoCreator}
             onToggle={onToggle}

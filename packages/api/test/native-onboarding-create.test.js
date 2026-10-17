@@ -203,6 +203,16 @@ export { buildNativeCreationPayload } from './components/first-run-quest/native-
       assert.equal(cat.defaultModel, '');
       assert.equal(cat.nickname, 'custom native nickname');
     }
+    assert.equal(
+      readback.json().cats.find((entry) => entry.id === createdIds.get('kimi')).avatar,
+      '/avatars/family/kimi.png',
+      'Kimi keeps its family avatar after the API readback',
+    );
+    assert.equal(
+      readback.json().cats.find((entry) => entry.id === createdIds.get('acp')).avatar,
+      '/avatars/family/opencode.png',
+      'Pi keeps its dedicated fallback avatar after the API readback',
+    );
     // Replaying an unchanged committed request must not add a duplicate.
     for (const request of requests.slice(0, 3)) assert.equal((await app.inject(request)).statusCode, 200);
     assert.equal(

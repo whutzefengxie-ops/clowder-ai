@@ -166,7 +166,13 @@ export class AcpAgentService implements AgentService {
   /** Pre-resolved servers (legacy/test path). Used only when mcpWhitelist is null. */
   private readonly mcpServers: AcpMcpServer[];
   private readonly providerName: string;
-  private readonly modelName: string;
+  /**
+   * ACP native tools may omit a configured model from the member record.  The
+   * first session then reports its actual model through configOptions; keep
+   * that value mutable so messages and request-generation evidence carry the
+   * real identity instead of the transport placeholder "acp".
+   */
+  private modelName: string;
   private readonly sessionModel?: string;
   private readonly appliedContextBinding?: import('../../../types.js').AgentContextBinding;
   private readonly mcpSupportEnabled: boolean;
@@ -278,6 +284,12 @@ export class AcpAgentService implements AgentService {
 
   async *invoke(prompt: string, options?: AgentServiceOptions): AsyncIterable<AgentMessage> {
     const metadata: MessageMetadata = { provider: this.providerName, model: this.modelName };
+    const adoptObservedNativeModel = (model: string | undefined) => {
+      const value = model?.trim();
+      if (!value || this.sessionModel) return;
+      this.modelName = value;
+      metadata.model = value;
+    };
     // Diagnostic context: threadId + invocationId for correlating thread-specific failures
     const threadId = options?.auditContext?.threadId;
     const invocationId = options?.auditContext?.invocationId;
@@ -533,7 +545,10 @@ export class AcpAgentService implements AgentService {
       }
 
       // Configuration rejection is not a load failure: preserve the resumed history.
-      if (resumedSession) await configureNative(resumedSession);
+      if (resumedSession) {
+        await configureNative(resumedSession);
+        adoptObservedNativeModel(nativeDefaults.model);
+      }
 
       if (resumeDisposition !== 'resumed') {
         const freshCreds = prepareSessionCredentialFile(options?.callbackEnv);
@@ -546,6 +561,7 @@ export class AcpAgentService implements AgentService {
         );
         const session = await client.newSession(cwd, sessionMcpServers);
         await configureNative(session, true);
+        adoptObservedNativeModel(nativeDefaults.model);
         sessionId = session.sessionId;
         this.pool.rememberSession?.(this.poolKey, sessionId, lease);
         if (freshCreds) bindSessionCredentialFile(sessionId, freshCreds.path);
@@ -760,6 +776,7 @@ export class AcpAgentService implements AgentService {
           const retryConfig = buildSessionConfig(retryCreds);
           const freshSession = await client.newSession(cwd, retryConfig.mcpServers);
           await configureNative(freshSession, true);
+          adoptObservedNativeModel(nativeDefaults.model);
           const freshSessionId = freshSession.sessionId;
           this.pool.rememberSession?.(this.poolKey, freshSessionId, lease);
           // Replacement retry is a NEW ACP session, so it must get a fresh

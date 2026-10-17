@@ -73,13 +73,24 @@ export function recommendNativePartners(
       catId = `${baseId.slice(0, 40 - suffix.length).replace(/-+$/, '')}${suffix}`;
     }
     reservedIds.add(catId.toLowerCase());
+    const existingForm = existing ? initialState(existing) : undefined;
+    const persistedForm = existingForm
+      ? {
+          ...existingForm,
+          // Older native creations could be persisted before the role asset
+          // was included in the response. Fill only missing identity fields;
+          // never overwrite a user's custom name, nickname, or role text.
+          avatar: existingForm.avatar.trim() || form.avatar,
+          nickname: existingForm.nickname.trim() || form.nickname,
+        }
+      : undefined;
     return [
       {
         id: key,
         creationRequestKey: runtime.acp ? newNativeRequestKey() : key,
         runtime,
-        form: existing
-          ? initialState(existing)
+        form: persistedForm
+          ? persistedForm
           : { ...form, ...runtimeDefaults(runtime), catId, mentionPatterns: uniqueAlias },
         selected: runtime.installed && (runtime.clientId !== 'acp' || Boolean(runtime.acp)),
         ...(existing ? { existingId: existing.id } : {}),

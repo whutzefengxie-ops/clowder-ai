@@ -78,6 +78,18 @@ export function SettingsContent({ section, initialEditCatId }: SettingsContentPr
     }
     router.push(`/settings?${params.toString()}`, { scroll: false });
   };
+  const openMemberSetup = () => {
+    setEditingCat(null);
+    setEditorOpen(true);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('s', 'members');
+    params.set('view', 'setup');
+    params.delete('cat');
+    params.delete('returnTo');
+    params.delete('manual');
+    params.delete('resume');
+    router.push(`/settings?${params.toString()}`, { scroll: false });
+  };
   const closeMember = () => {
     setEditorOpen(false);
     setEditingCat(null);
@@ -221,6 +233,7 @@ export function SettingsContent({ section, initialEditCatId }: SettingsContentPr
             onRetryConfig={() => void fetchData()}
             onRetryRegistry={() => void refresh()}
             onOpen={openMember}
+            onDetect={openMemberSetup}
             onClose={closeMember}
             onTeamCreated={fetchData}
             onSaved={async (saved, trace) => {
