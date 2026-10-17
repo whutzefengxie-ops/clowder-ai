@@ -20,6 +20,7 @@ function createShutdownController({
   dbg,
 }) {
   let quitPromise = null;
+  let quitCompleted = false;
 
   function beginShutdown() {
     setQuitting(true);
@@ -32,12 +33,13 @@ function createShutdownController({
 
   async function stopServices() {
     const activeServices = getServices();
-    setServices(null);
     if (!activeServices) return;
     try {
       await activeServices.stopAll();
     } catch (error) {
       dbg(`Service shutdown failed: ${safeErrorMessage(error)}`);
+    } finally {
+      if (getServices() === activeServices) setServices(null);
     }
   }
 
@@ -53,6 +55,7 @@ function createShutdownController({
       quitPromise = (async () => {
         await stopServices();
         destroyTray();
+        quitCompleted = true;
         app.quit();
       })();
     }
@@ -62,7 +65,8 @@ function createShutdownController({
   function handleBeforeQuit(event) {
     beginShutdown();
     // No owned services means nothing to drain; let Electron exit normally.
-    if (!getServices()) return quitPromise;
+    // Once the coordinated quit has finished, app.quit() is the terminal event.
+    if (quitCompleted || (!getServices() && !quitPromise)) return quitPromise;
     // Block the quit, drain services, then re-issue quitApp's terminal app.quit().
     event.preventDefault();
     quitPromise =
@@ -70,6 +74,7 @@ function createShutdownController({
       (async () => {
         await stopServices();
         destroyTray();
+        quitCompleted = true;
         app.quit();
       })();
     return quitPromise;

@@ -177,6 +177,7 @@ async function fixture(shell, scenario) {
     '/api/approval-hub/pending': { items: [], count: 0 },
     '/api/artifacts': { view: 'works', artifacts: [], total: 0, complete: true, workLineage: 'resolved' },
     '/api/projects/cwd': { path: '/author-entry-fixture' },
+    '/api/executions/active': { scope: 'all', executions: [], unavailableProjectPaths: [] },
   };
   let draft = null,
     draftRevision = 0;
