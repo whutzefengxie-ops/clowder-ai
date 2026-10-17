@@ -161,6 +161,28 @@ export function readKimiModelConfigInfo(
   }
 }
 
+/**
+ * Observe the model selected by the local CLI's own config.toml.
+ *
+ * This is identity evidence only: a native_tool member without an explicit
+ * model deliberately lets the CLI own the request, so the observed value must
+ * never be injected as `--model`. Returns undefined when the config cannot be
+ * read, which keeps callers conservative instead of guessing a model.
+ */
+export function readKimiConfiguredModel(
+  callbackEnv?: Record<string, string>,
+  paths?: KimiRuntimePaths,
+): string | undefined {
+  const configPath = resolveKimiConfigPath(callbackEnv, paths);
+  try {
+    const raw = readFileSync(configPath, 'utf-8');
+    const value = raw.match(/^\s*default_model\s*=\s*["']([^"']+)["']/m)?.[1]?.trim();
+    return value || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function resolveKimiModelAlias(
   model: string,
   callbackEnv?: Record<string, string>,

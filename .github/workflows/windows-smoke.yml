@@ -91,6 +91,26 @@ jobs:
           packages/api/test/lazy-heavy-imports.test.js
           desktop/dsh-test-connection.test.mjs
           desktop/rebuild-frozen-dependencies.test.mjs
+      - name: Install Inno Setup
+        # P2-5: the native installer tests compile desktop/installer/cat-cafe.iss
+        # with the real Inno compiler, which windows-latest does not ship. This
+        # installs the same Chocolatey package the release build uses (Inno Setup
+        # 7 when available) and exports its path for the test harness.
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+          $iscc = @(
+            'C:\Program Files\Inno Setup 7\ISCC.exe',
+            'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+          ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+          if (-not $iscc) { throw 'Native Inno compiler was not found after installation' }
+          "ISCC_EXE=$iscc" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          & $iscc /? | Select-Object -First 1
+      - name: Native installer preparation and menu behavior
+        run: >-
+          node --test
+          desktop/installer-preparation-log.test.js
+          desktop/installer-no-icons.test.js
       - name: Build the actual web application
         run: pnpm --filter @cat-cafe/web build
       - name: Widget sanitization behavior

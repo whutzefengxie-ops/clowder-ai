@@ -50,6 +50,13 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Require first-run test scripts before running them
+        run: >-
+          node scripts/check-required-package-scripts.mjs
+          --package packages/web
+          --script test:first-run-entry:api
+          --script test:first-run-entry:production
+          --script test:onboarding:production-contracts
       - run: pnpm --filter @cat-cafe/shared build
       - run: pnpm --filter @cat-cafe/api build
       - name: Personal first-run lifecycle with production API handlers
@@ -88,6 +95,11 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Require first-run onboarding test script before running it
+        run: >-
+          node scripts/check-required-package-scripts.mjs
+          --package packages/web
+          --script test:first-run-onboarding
       - run: pnpm --filter @cat-cafe/web run test:first-run-onboarding
       - name: Member avatar hydration, identity and callback status
         run: >-

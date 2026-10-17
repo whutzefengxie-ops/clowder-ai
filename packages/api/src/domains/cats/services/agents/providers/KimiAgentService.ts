@@ -35,6 +35,7 @@ import { collectImageAccessDirectories } from './image-cli-bridge.js';
 import { extractImagePaths } from './image-paths.js';
 import {
   buildApiKeyEnv,
+  readKimiConfiguredModel,
   readKimiContextUsedTokens,
   readKimiModelConfigInfo,
   readKimiSessionId,
@@ -166,8 +167,17 @@ export class KimiAgentService implements AgentService {
       requestedModel && !followsNativeConfig
         ? resolveKimiModelAlias(requestedModel, toolEnv, runtimePaths)
         : requestedModel;
-    const effortLevel = resolveKimiEffortLevel(this.catId as string, effectiveModel, options?.reasoningEffortOverride);
-    const metadata: MessageMetadata = { provider: 'kimi', model: effectiveModel };
+    // P2-2: a native_tool member without an explicit model follows the local CLI
+    // config. Observe the model that config selects so metadata, capability /
+    // context-window reads and API-key env carry the real identity. The observed
+    // value is evidence only — it is never injected as `--model`, because the
+    // CLI owns the request identity for this member. Unreadable config stays
+    // conservative: no model claim instead of a guessed alias.
+    const observedModel =
+      followsNativeConfig && !effectiveModel ? readKimiConfiguredModel(toolEnv, runtimePaths) : undefined;
+    const identityModel = effectiveModel || observedModel || '';
+    const effortLevel = resolveKimiEffortLevel(this.catId as string, identityModel, options?.reasoningEffortOverride);
+    const metadata: MessageMetadata = { provider: 'kimi', model: identityModel };
     const imagePaths = extractImagePaths(options?.contentBlocks, options?.uploadDir);
     const imageAccessDirs = collectImageAccessDirectories(imagePaths);
     // Native mode (new kimi-code): identity + pack travel the `--agent-file`
@@ -176,7 +186,7 @@ export class KimiAgentService implements AgentService {
     const effectivePrompt = buildKimiPrompt(prompt, isLegacy ? options?.systemPrompt : undefined, imagePaths);
     const workingDirectory = options?.workingDirectory ?? process.cwd();
     const kimiShareDir = resolveKimiShareDir(toolEnv, runtimePaths);
-    const apiKeyEnv = buildApiKeyEnv(effectiveModel, options?.callbackEnv);
+    const apiKeyEnv = buildApiKeyEnv(identityModel, options?.callbackEnv);
     const kimiCommand = runtime?.command;
     if (!kimiCommand) {
       yield {
@@ -196,7 +206,7 @@ export class KimiAgentService implements AgentService {
     const tempMcpConfig = this.mcpServerPath
       ? await writeMcpConfigFile(workingDirectory, this.mcpServerPath, options?.callbackEnv, runtimePaths)
       : null;
-    const modelConfig = readKimiModelConfigInfo(effectiveModel, toolEnv, runtimePaths);
+    const modelConfig = readKimiModelConfigInfo(identityModel, toolEnv, runtimePaths);
     const supportsThinking =
       modelConfig.capabilities.includes('thinking') ||
       apiKeyEnv?.KIMI_MODEL_CAPABILITIES?.includes('thinking') === true;
@@ -394,7 +404,7 @@ export class KimiAgentService implements AgentService {
         runtime: Object.freeze({
           provider: 'kimi',
           carrier: 'stream_json',
-          ...(effectiveModel ? { model: effectiveModel } : {}),
+          ...(identityModel ? { model: identityModel } : {}),
           protocol: 'stream-json',
           ...(effortLevel ? { reasoningEffort: effortLevel } : {}),
         }),
@@ -700,9 +710,9 @@ export class KimiAgentService implements AgentService {
 
       // clowder-ai#1197: Kimi CLI never reports costUsd. Estimate an
       // API-equivalent cost from the pricing table (same pattern as Codex).
-      // Keyed by effectiveModel (= metadata.model, what the client actually
-      // reports); unknown aliases return null and stay unpriced — token
-      // telemetry still shows, no guessing.
+      // Keyed by identityModel (= metadata.model, what the client actually
+      // reports or the native config selects); unknown aliases return null and
+      // stay unpriced — token telemetry still shows, no guessing.
       //
       // Review gates (Terra, cat-cafe#3479):
       //   1. Estimate only from the immutable raw cost basis captured above,
@@ -725,7 +735,7 @@ export class KimiAgentService implements AgentService {
         metadata.usage &&
         metadata.usage.costUsd == null
       ) {
-        const estimatedCost = estimateCostFromTokens(effectiveModel, rawInput, rawOutput);
+        const estimatedCost = estimateCostFromTokens(identityModel, rawInput, rawOutput);
         if (estimatedCost != null) {
           metadata.usage.costUsd = estimatedCost;
           metadata.usage.costEstimated = true;

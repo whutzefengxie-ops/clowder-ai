@@ -315,12 +315,25 @@ end;
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
   ExitCode: Integer;
-  Cmd, AppDir, InstanceRoot: String;
+  Cmd, AppDir, InstanceRoot, FrontendPort, ApiPort, RedisPort: String;
   Started: Boolean;
 begin
   Result := '';
   NeedsRestart := False;
   AppDir := ExpandConstant('{app}');
+  InstanceRoot := ExpandConstant('{param:DesktopInstanceRoot|}');
+  FrontendPort := ExpandConstant('{param:FrontendPort|}');
+  ApiPort := ExpandConstant('{param:ApiPort|}');
+  RedisPort := ExpandConstant('{param:RedisPort|}');
+  // Isolated ports are meaningless without an explicit instance root: blindly
+  // ignoring them would install over the default instance. Fail closed before
+  // touching the target, matching configure-desktop-instance.ps1's last check.
+  if (InstanceRoot = '') and
+     ((FrontendPort <> '') or (ApiPort <> '') or (RedisPort <> '')) then begin
+    Log('Identity helper rejected: isolated port parameters require DesktopInstanceRoot');
+    Result := 'Isolated ports require an explicit DesktopInstanceRoot.';
+    exit;
+  end;
   // Save/validate identity before InstallDelete replaces desktop-dist.
   ExtractTemporaryFile('configure-desktop-instance.ps1');
   Cmd := '-NoProfile -ExecutionPolicy Bypass -File "' + ExpandConstant('{tmp}') +
@@ -328,17 +341,21 @@ begin
   // Do not pass empty named arguments. Windows PowerShell's command-line
   // parser can bind a following switch as the value of an empty argument;
   // that makes a clean install fail before the helper reaches its no-op path.
-  InstanceRoot := ExpandConstant('{param:DesktopInstanceRoot|}');
-  if InstanceRoot <> '' then
-    Cmd := Cmd + ' -InstanceRoot "' + InstanceRoot +
-      '" -FrontendPort "' + ExpandConstant('{param:FrontendPort|}') +
-      '" -ApiPort "' + ExpandConstant('{param:ApiPort|}') +
-      '" -RedisPort "' + ExpandConstant('{param:RedisPort|}') + '"';
+  // InstanceRoot is not a master switch: each isolated parameter is optional
+  // on its own, so only forward the ones that actually carry a value.
+  if InstanceRoot <> '' then begin
+    Cmd := Cmd + ' -InstanceRoot "' + InstanceRoot + '"';
+    if FrontendPort <> '' then Cmd := Cmd + ' -FrontendPort "' + FrontendPort + '"';
+    if ApiPort <> '' then Cmd := Cmd + ' -ApiPort "' + ApiPort + '"';
+    if RedisPort <> '' then Cmd := Cmd + ' -RedisPort "' + RedisPort + '"';
+  end;
   Log('Identity helper command: ' + Cmd);
-  // PowerShell's Add-Type identity helper must not run through the output
-  // capture pipe. On Windows this changes the child token/runtime policy and
-  // can fail before the script starts with a misleading permission error.
-  Started := Exec('powershell.exe', Cmd, '', SW_HIDE, ewWaitUntilTerminated, ExitCode);
+  // Preserve the original diagnostics contract: the identity helper's output,
+  // including stderr, must reach Setup's log so a refused install records the
+  // real cause instead of only a generic message.
+  Started := ExecAndLogOutput(
+    'powershell.exe', Cmd, '', SW_HIDE, ewWaitUntilTerminated, ExitCode,
+    @ExtractionOutput);
   Log('Identity helper started=' + IntToStr(Ord(Started)) + ', exit=' + IntToStr(ExitCode));
   if (not Started) or (ExitCode <> 0) then begin
     Result := 'Unable to preserve the target installation identity. See setup log.';
@@ -347,8 +364,8 @@ begin
   ExtractTemporaryFile('stop-installed-desktop.ps1');
   // Upgrade and uninstall share identity-bound coordinated shutdown and cleanup.
   Cmd := '-NoProfile -ExecutionPolicy Bypass -File "' + ExpandConstant('{tmp}') +
-         '\stop-installed-desktop.ps1" -AppDir "' + AppDir +
-         '" -InstanceRoot "' + ExpandConstant('{param:DesktopInstanceRoot|}') + '"';
+         '\stop-installed-desktop.ps1" -AppDir "' + AppDir + '"';
+  if InstanceRoot <> '' then Cmd := Cmd + ' -InstanceRoot "' + InstanceRoot + '"';
   ExecAsOriginalUser(
     'powershell.exe', Cmd, '', SW_HIDE, ewWaitUntilTerminated, ExitCode);
   if ExitCode <> 0 then Result := 'Unable to stop the target installation safely.';

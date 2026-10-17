@@ -22,6 +22,7 @@ const {
 } = require('./renderer-link-policy');
 const { safeErrorMessage } = require('./update-network-diagnostics');
 const { createStartupFailureHandler } = require('./startup-failure-handler');
+const { createShutdownController } = require('./shutdown-controller');
 const { DESKTOP_APP_ID } = require('./app-identity');
 const { createDesktopUpdateRuntime } = require('./desktop-update-runtime');
 const { ensureValidMacInstallLocation } = require('./mac-install-location');
@@ -72,7 +73,6 @@ let updatePrompt = null;
 let isQuitting = false;
 let startupPhase = 'booting';
 const startupController = new AbortController();
-let quitPromise = null;
 const checkForUpdatesManually = createManualUpdateHandler({
   getUpdatePrompt: () => updatePrompt,
   getUpdater: () => updater,
@@ -173,29 +173,21 @@ async function createMainWindow() {
   );
 }
 
-async function quitApp() {
-  if (!quitPromise) {
-    isQuitting = true;
-    startupPhase = 'quitting';
-    startupController.abort(new Error('Desktop startup cancelled'));
-    updater?.stopSchedule();
-    updatePrompt?.dispose();
-    updatePrompt = null;
-    quitPromise = (async () => {
-      if (services) {
-        const activeServices = services;
-        services = null;
-        await activeServices.stopAll();
-      }
-      if (tray) {
-        tray.destroy();
-        tray = null;
-      }
-      app.quit();
-    })();
-  }
-  return quitPromise;
-}
+const shutdown = createShutdownController({
+  app,
+  startupController,
+  getServices: () => services,
+  setServices: (value) => (services = value),
+  getTray: () => tray,
+  setTray: (value) => (tray = value),
+  getUpdater: () => updater,
+  getUpdatePrompt: () => updatePrompt,
+  setUpdatePrompt: (value) => (updatePrompt = value),
+  setQuitting: (value) => (isQuitting = value),
+  setPhase: (phase) => (startupPhase = phase),
+  dbg,
+});
+const quitApp = shutdown.quitApp;
 
 function sendSplashStatus(msg) {
   if (splashWindow && !splashWindow.isDestroyed()) splashWindow.webContents.send('splash-status', msg);
@@ -204,9 +196,16 @@ function sendSplashStatus(msg) {
 const handleStartupFailure = createStartupFailureHandler({
   isQuitting: () => isQuitting,
   setPhase: (phase) => (startupPhase = phase),
-  dbg, reportStartup, sendSplashStatus,
-  stopServices: async () => { const activeServices = services; services = null; if (activeServices) await activeServices.stopAll(); },
-  showFailure: (message) => showStartupFailure({ dialog, shell, message, logDir: startupLogDir }), quitApp,
+  dbg,
+  reportStartup,
+  sendSplashStatus,
+  stopServices: async () => {
+    const activeServices = services;
+    services = null;
+    if (activeServices) await activeServices.stopAll();
+  },
+  showFailure: (message) => showStartupFailure({ dialog, shell, message, logDir: startupLogDir }),
+  quitApp,
 });
 
 const windowRecovery = createWindowRecoveryController({
@@ -325,26 +324,4 @@ app.on('window-all-closed', () => {
   // keep running in tray on Windows
   if (process.platform !== 'win32') quitApp();
 });
-app.on('before-quit', (e) => {
-  // Signal close handlers to stop hiding windows to tray.
-  isQuitting = true;
-  startupPhase = 'quitting';
-  startupController.abort(new Error('Desktop startup cancelled'));
-  updater?.stopSchedule();
-  updatePrompt?.dispose();
-  updatePrompt = null;
-  // Electron does NOT await async event handlers. Without blocking here,
-  // the app exits before stopAll() finishes → orphaned node/redis processes.
-  // Prevent default, run cleanup, then quit when done.
-  if (services) {
-    e.preventDefault();
-    services.stopAll().finally(() => {
-      services = null; // prevent re-entry
-      if (tray) {
-        tray.destroy();
-        tray = null;
-      }
-      app.quit();
-    });
-  }
-});
+app.on('before-quit', (event) => shutdown.handleBeforeQuit(event));

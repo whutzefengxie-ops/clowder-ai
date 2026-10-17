@@ -32,7 +32,13 @@ function fixture() {
       type: 'assistant',
       catId: 'codex',
       content: 'FINAL',
-      lifecycle: { invocationId: 'c', inputMessageIds: ['return'], status: 'completed', startedAt: 11 },
+      lifecycle: {
+        invocationId: 'c',
+        inputMessageIds: ['return'],
+        status: 'completed',
+        startedAt: 11,
+        completedAt: 12,
+      },
     },
   ];
 }
@@ -257,8 +263,11 @@ function trajectoryFixture(extra) {
 
 function proofForValidation() {
   return {
+    userMessageId: 'u',
     initialInvocationId: 'a',
+    peerMessageId: 'peer',
     peerInvocationId: 'b',
+    finalMessageId: 'final',
     finalInvocationId: 'c',
     returnInvocationId: 'c',
   };
@@ -343,4 +352,190 @@ test('rejects a completed invocation from an unrelated role or input chain', () 
   );
   assert.equal(result.ok, false);
   assert.deepEqual(result.rejectedInvocations, [{ invocationId: 'd', catId: 'kimi', reason: 'unrelated_role' }]);
+});
+
+function validateExtra(messages, extra = { invocationId: 'd', catId: 'pi', status: 'done', startedAt: 15 }) {
+  return validateA2AInvocations(messages, trajectoryFixture(extra), { ...options, proof: proofForValidation() });
+}
+
+function pushAck(messages, overrides = {}) {
+  messages.push({
+    id: 'ack',
+    type: 'assistant',
+    catId: 'pi',
+    content: '已收到并确认交付',
+    lifecycle: { invocationId: 'd', inputMessageIds: ['final'], status: 'completed', startedAt: 15, ...overrides },
+  });
+}
+
+test('RED: an extra invocation mixing the final result with the original user request is rejected', () => {
+  const messages = fixture();
+  messages.push({
+    id: 'mixed-inputs',
+    type: 'assistant',
+    catId: 'pi',
+    content: '收到，我再算一遍',
+    lifecycle: {
+      invocationId: 'd',
+      inputMessageIds: ['final', 'u'],
+      status: 'completed',
+      startedAt: 15,
+    },
+  });
+  const result = validateExtra(messages);
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.rejectedInvocations, [{ invocationId: 'd', catId: 'pi', reason: 'user_request_input' }]);
+});
+
+test('RED: an extra invocation consuming a peer progress message is rejected even though the peer invoked', () => {
+  const messages = fixture();
+  messages.push({
+    id: 'peer-progress',
+    type: 'assistant',
+    catId: 'pi',
+    content: 'PEER 计算中…',
+    lifecycle: { invocationId: 'b', status: 'processing', startedAt: 9 },
+  });
+  messages.push({
+    id: 'progress-ack',
+    type: 'assistant',
+    catId: 'pi',
+    content: '已收到伙伴进展',
+    lifecycle: { invocationId: 'd', inputMessageIds: ['peer-progress'], status: 'completed', startedAt: 15 },
+  });
+  const result = validateExtra(messages);
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.rejectedInvocations, [{ invocationId: 'd', catId: 'pi', reason: 'unverified_result' }]);
+});
+
+test('RED: an extra invocation consuming a streamed task-marker segment is rejected', () => {
+  const messages = fixture();
+  messages.push({
+    id: 'peer-partial',
+    type: 'assistant',
+    catId: 'pi',
+    content: 'PEER',
+    timestamp: 9,
+    lifecycle: { producerInvocationId: 'b', status: 'processing' },
+  });
+  messages.push({
+    id: 'partial-ack',
+    type: 'assistant',
+    catId: 'pi',
+    content: '已收到结果',
+    lifecycle: { invocationId: 'd', inputMessageIds: ['peer-partial'], status: 'completed', startedAt: 15 },
+  });
+  const result = validateExtra(messages);
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.rejectedInvocations, [{ invocationId: 'd', catId: 'pi', reason: 'unverified_result' }]);
+});
+
+test('RED: an extra invocation that produces a new handoff is rejected', () => {
+  const messages = fixture();
+  pushAck(messages);
+  messages.push({
+    id: 'follow-up-handoff',
+    catId: 'pi',
+    content: '继续交给 kimi',
+    lifecycle: { producerInvocationId: 'd' },
+  });
+  const result = validateExtra(messages);
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.rejectedInvocations, [{ invocationId: 'd', catId: 'pi', reason: 'new_dispatch' }]);
+});
+
+test('RED: a confirmation of a result without completedAt cannot claim the result was published', () => {
+  const messages = fixture();
+  delete messages[5].lifecycle.completedAt;
+  pushAck(messages);
+  const result = validateExtra(messages);
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.rejectedInvocations, [{ invocationId: 'd', catId: 'pi', reason: 'unproven_publication' }]);
+});
+
+test('RED: a confirmation that started before the consumed result completed is rejected', () => {
+  const messages = fixture();
+  messages[5].lifecycle.completedAt = 16;
+  pushAck(messages);
+  const result = validateExtra(messages);
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.rejectedInvocations, [{ invocationId: 'd', catId: 'pi', reason: 'early_confirmation' }]);
+});
+
+test('RED: an extra invocation without persisted input or timing evidence is rejected', () => {
+  const messages = fixture();
+  messages.push({
+    id: 'no-input-ack',
+    type: 'assistant',
+    catId: 'pi',
+    content: '收到',
+    lifecycle: { invocationId: 'd', status: 'completed', startedAt: 15 },
+  });
+  assert.deepEqual(validateExtra(messages).rejectedInvocations, [
+    { invocationId: 'd', catId: 'pi', reason: 'missing_result_input' },
+  ]);
+  const late = fixture();
+  pushAck(late);
+  assert.deepEqual(validateExtra(late, { invocationId: 'd', catId: 'pi', status: 'done' }).rejectedInvocations, [
+    { invocationId: 'd', catId: 'pi', reason: 'unproven_timing' },
+  ]);
+});
+
+test('accepts a short confirmation after the consumed result has a real completedAt', () => {
+  const messages = fixture();
+  messages[5].lifecycle.completedAt = 12;
+  pushAck(messages);
+  assert.deepEqual(validateExtra(messages), {
+    ok: true,
+    acceptedConfirmations: ['d'],
+    rejectedInvocations: [],
+    coreInvocationIds: ['a', 'b', 'c'],
+  });
+});
+
+test('accepts a confirmation that consumes the proof-verified peer result rather than the final reply', () => {
+  const messages = fixture();
+  messages.push({
+    id: 'peer-ack',
+    type: 'assistant',
+    catId: 'pi',
+    content: '伙伴已确认收到',
+    lifecycle: { invocationId: 'd', inputMessageIds: ['peer'], status: 'completed', startedAt: 15 },
+  });
+  assert.deepEqual(validateExtra(messages), {
+    ok: true,
+    acceptedConfirmations: ['d'],
+    rejectedInvocations: [],
+    coreInvocationIds: ['a', 'b', 'c'],
+  });
+});
+
+test('accepts a confirmation consuming a verified final result produced by the initial invocation', () => {
+  const messages = fixture();
+  messages[1].lifecycle.completedAt = 12;
+  messages.push({
+    id: 'observed-ack',
+    type: 'assistant',
+    catId: 'pi',
+    content: '已收到最终答复',
+    lifecycle: { invocationId: 'd', inputMessageIds: ['lead'], status: 'completed', startedAt: 15 },
+  });
+  const proof = {
+    ...proofForValidation(),
+    finalMessageId: 'lead',
+    finalInvocationId: 'a',
+  };
+  assert.deepEqual(
+    validateA2AInvocations(
+      messages,
+      trajectoryFixture({ invocationId: 'd', catId: 'pi', status: 'done', startedAt: 15 }),
+      { ...options, proof },
+    ),
+    {
+      ok: true,
+      acceptedConfirmations: ['d'],
+      rejectedInvocations: [],
+      coreInvocationIds: ['a', 'b', 'c'],
+    },
+  );
 });

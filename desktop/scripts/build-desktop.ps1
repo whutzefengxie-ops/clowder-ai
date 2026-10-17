@@ -29,6 +29,10 @@
 .PARAMETER SkipPortableZip
   Skip portable zip assembly.
 
+.PARAMETER NoManifest
+  Skip writing dist/build-manifest.json. Manifest generation is enabled by
+  default and is non-fatal: a failure only warns and never fails the build.
+
 .EXAMPLE
   .\desktop\scripts\build-desktop.ps1
 #>
@@ -38,7 +42,8 @@ param(
     [switch]$SkipBundleDeps,
     [switch]$SkipElectronBuild,
     [switch]$SkipInstaller,
-    [switch]$SkipPortableZip
+    [switch]$SkipPortableZip,
+    [switch]$NoManifest
 )
 
 $ErrorActionPreference = "Stop"
@@ -51,7 +56,7 @@ function Write-Err   { param([string]$msg) Write-Host "  [ERR] $msg" -Foreground
 $ProjectRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $PSCommandPath))
 
 # Step 1: Build web app
-Write-Step "Step 1/8 - Build web application"
+Write-Step "Step 1/9 - Build web application"
 if (-not $SkipWebBuild) {
     Push-Location $ProjectRoot
     $buildRevision = (git rev-parse HEAD).Trim()
@@ -77,7 +82,7 @@ if (-not $SkipWebBuild) {
 
 # Step 2: ordinary frozen install, then materialize portable runtime trees.
 # pnpm 9 hoisted deploy disables lockfile reads; do not use it for releases.
-Write-Step "Step 2/8 - Frozen runtime packages"
+Write-Step "Step 2/9 - Frozen runtime packages"
 $bundledDir = Join-Path $ProjectRoot "bundled"
 $deployRoot = Join-Path $bundledDir "deploy"
 if (-not $SkipBundleDeps) {
@@ -97,7 +102,7 @@ if (-not $SkipBundleDeps) {
 } else { Write-Ok "Skipped (-SkipBundleDeps)" }
 
 # Step 3: Bundle Redis portable + Node.js runtime
-Write-Step "Step 3/8 - Bundle Redis portable + Node.js"
+Write-Step "Step 3/9 - Bundle Redis portable + Node.js"
 
 # Node.js portable — without this, clean Windows installs with no system Node
 # cannot spawn the API/Web processes. CRITICAL: the bundled Node major version
@@ -222,7 +227,7 @@ if (Test-Path $redisBin) {
 }
 
 # Step 4: Write CLI install guidance (CLIs are installed by users separately)
-Write-Step "Step 4/8 - Write CLI install guidance"
+Write-Step "Step 4/9 - Write CLI install guidance"
 
 $cliToolsDir = Join-Path $bundledDir "cli-tools"
 if (-not (Test-Path $cliToolsDir)) {
@@ -247,7 +252,7 @@ Write-Ok "agy-install-instructions.txt written"
 Write-Ok "CLI tool provisioning removed — users install CLIs separately"
 
 # Step 5: Build Electron app
-Write-Step "Step 5/8 - Build Electron shell"
+Write-Step "Step 5/9 - Build Electron shell"
 $desktopDir = Join-Path $ProjectRoot "desktop"
 $desktopDist = Join-Path $ProjectRoot "desktop-dist"
 
@@ -306,7 +311,7 @@ if (-not $SkipElectronBuild) {
 # NTFS metadata creation + Windows Defender real-time scan → 10+ min install.
 # Shipping tar.gz archives and extracting post-install with Windows' built-in
 # tar.exe reduces Inno Setup [Files] count from ~30K to ~100.
-Write-Step "Step 6/8 - Archive for fast installer extraction"
+Write-Step "Step 6/9 - Archive for fast installer extraction"
 $releaseRevision = (git -C $ProjectRoot rev-parse HEAD).Trim()
 foreach ($stamp in @('api/dist/.build-commit', 'web/.next/.build-commit')) {
     $artifactRevision = (Get-Content -LiteralPath (Join-Path $deployRoot $stamp) -Raw).Trim()
@@ -370,7 +375,7 @@ foreach ($t in $archiveTargets) {
 Write-Ok "Archives ready under bundled/archives/"
 
 # Step 7: Compile Inno Setup installer
-Write-Step "Step 7/8 - Compile installer"
+Write-Step "Step 7/9 - Compile installer"
 if (-not $SkipInstaller) {
     $issFile = Join-Path (Join-Path (Join-Path $ProjectRoot "desktop") "installer") "cat-cafe.iss"
     $distDir = Join-Path $ProjectRoot "dist"
@@ -424,7 +429,7 @@ if (-not $SkipInstaller) {
 }
 
 # Step 8: Assemble portable zip (no-install distribution)
-Write-Step "Step 8/8 - Portable zip"
+Write-Step "Step 8/9 - Portable zip"
 if (-not $SkipPortableZip) {
     $distDir = Join-Path $ProjectRoot "dist"
     if (-not (Test-Path $distDir)) { New-Item -ItemType Directory -Path $distDir | Out-Null }
@@ -582,4 +587,154 @@ if (-not $SkipPortableZip) {
     Write-Host "  ========================================" -ForegroundColor Green
 } else {
     Write-Ok "Portable zip skipped"
+}
+
+# Step 9: Build identity manifest (P2-6). This is release evidence, not a build
+# input, so any failure here only warns — a missing hash must never fail a
+# build that already produced working artifacts. The manifest records: source
+# SHA, generation time, Setup/portable ZIP path+sha256, every tar.gz archive
+# with its serialized manifest, API/Web .build-commit identities, and the
+# working-tree state of every input that the installer packages (including
+# desktop/ source and untracked files that are bundled along, e.g. docs/).
+if (-not $NoManifest) {
+    Write-Step "Step 9/9 - Build manifest"
+    try {
+        $manifestDistDir = Join-Path $ProjectRoot "dist"
+        if (-not (Test-Path -LiteralPath $manifestDistDir)) {
+            New-Item -ItemType Directory -Path $manifestDistDir -Force | Out-Null
+        }
+
+        function Get-ProjectRelativePath {
+            param([string]$Path)
+            $full = [IO.Path]::GetFullPath($Path)
+            if ($full.StartsWith($ProjectRoot, [StringComparison]::OrdinalIgnoreCase)) {
+                $relative = $full.Substring($ProjectRoot.Length) -replace '^[\\/]+', ''
+                return ($relative -replace '\\', '/')
+            }
+            return ($full -replace '\\', '/')
+        }
+        function Get-FileSha256 {
+            param([string]$Path)
+            if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $null }
+            try {
+                return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+            } catch {
+                Write-Warn "Cannot hash $Path : $_"
+                return $null
+            }
+        }
+        function Get-ArtifactRecord {
+            param([string]$Path)
+            if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $null }
+            return [ordered]@{
+                path      = Get-ProjectRelativePath $Path
+                sizeBytes = (Get-Item -LiteralPath $Path).Length
+                sha256    = Get-FileSha256 $Path
+            }
+        }
+
+        $manifestVersion = if ($env:CATCAFE_VERSION) {
+            $env:CATCAFE_VERSION
+        } else {
+            (Get-Content (Join-Path (Join-Path $ProjectRoot 'desktop') 'package.json') -Raw | ConvertFrom-Json).version
+        }
+
+        # Artifact identities stamped by the paired API/Web build.
+        $buildIdentity = [ordered]@{}
+        foreach ($stamp in @(
+            @{ Key = 'api'; RelativePath = 'packages/api/dist/.build-commit' },
+            @{ Key = 'web'; RelativePath = 'packages/web/.next/.build-commit' }
+        )) {
+            $stampPath = Join-Path $ProjectRoot $stamp.RelativePath
+            if (Test-Path -LiteralPath $stampPath) {
+                $stampValue = Get-Content -LiteralPath $stampPath -Raw
+                if ($null -eq $stampValue) { $stampValue = '' } else { $stampValue = $stampValue.Trim() }
+                $buildIdentity[$stamp.Key] = [ordered]@{
+                    path  = $stamp.RelativePath
+                    value = $stampValue
+                }
+            } else {
+                $buildIdentity[$stamp.Key] = $null
+            }
+        }
+
+        # Setup/portable outputs are optional: -SkipInstaller/-SkipPortableZip are valid.
+        $setupExe = Get-ChildItem -LiteralPath $manifestDistDir -Filter 'ClowderAI-Setup-*.exe' -File -ErrorAction SilentlyContinue |
+            Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
+        $portableZip = Get-ChildItem -LiteralPath $manifestDistDir -Filter 'ClowderAI-*.zip' -File -ErrorAction SilentlyContinue |
+            Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
+        $setupRecord = if ($setupExe) { Get-ArtifactRecord $setupExe.FullName } else { $null }
+        $portableRecord = if ($portableZip) { Get-ArtifactRecord $portableZip.FullName } else { $null }
+
+        # Each bulk archive and its serialized extraction manifest (sidecar).
+        $archives = @()
+        $archiveDirManifest = Join-Path (Join-Path $ProjectRoot 'bundled') 'archives'
+        if (Test-Path -LiteralPath $archiveDirManifest) {
+            foreach ($archive in (Get-ChildItem -LiteralPath $archiveDirManifest -Filter '*.tar.gz' -File | Sort-Object Name)) {
+                $archives += [ordered]@{
+                    name     = $archive.Name
+                    archive  = Get-ArtifactRecord $archive.FullName
+                    manifest = Get-ArtifactRecord ($archive.FullName + '.json')
+                }
+            }
+        }
+
+        # Clean/hygiene check over everything the installer copies, recorded
+        # rather than enforced: a dirty tree never aborts an otherwise valid build.
+        $packagedRoots = @(
+            'docs', 'cat-cafe-skills', 'scripts', 'assets', 'guides',
+            'packages/api/src/plugins', '.claude/hooks/user-level',
+            '.claude/hooks/f24-compaction.mjs', 'cat-template.json',
+            'pnpm-workspace.yaml', 'package.json', 'LICENSE',
+            'bundled/archives', 'bundled/node', 'bundled/redis', 'bundled/cli-tools',
+            'desktop/scripts', 'desktop/assets'
+        )
+        $packagedStatus = @(git -C $ProjectRoot status --porcelain --untracked-files=all -- @packagedRoots 2>$null)
+        if ($LASTEXITCODE -ne 0) { Write-Warn "Could not read packaged-input git status; manifest records an empty list" }
+        $desktopStatus = @(git -C $ProjectRoot status --porcelain --untracked-files=normal -- desktop 2>$null)
+        if ($LASTEXITCODE -ne 0) { Write-Warn "Could not read desktop/ git status; manifest records an empty list" }
+
+        $trackedPackagedChanges = @($packagedStatus | Where-Object { $_ -and $_ -notmatch '^\?\?' })
+        $untrackedPackagedFiles = @($packagedStatus | ForEach-Object {
+            if ($_ -match '^\?\?\s+(.+)$') { $Matches[1].Trim() }
+        } | Where-Object { $_ })
+        $desktopSourceChanges = @($desktopStatus | Where-Object { $_ })
+
+        $manifest = [ordered]@{
+            schemaVersion = 1
+            sourceSha     = (git -C $ProjectRoot rev-parse HEAD).Trim()
+            sourceBranch  = (git -C $ProjectRoot rev-parse --abbrev-ref HEAD).Trim()
+            generatedAt   = [DateTime]::UtcNow.ToString('o')
+            version       = $manifestVersion
+            installer     = $setupRecord
+            portableZip   = $portableRecord
+            archives      = $archives
+            buildIdentity = $buildIdentity
+            workingTree   = [ordered]@{
+                packagedInputsClean      = ($packagedStatus.Count -eq 0)
+                packagedTrackedChanges   = $trackedPackagedChanges
+                packagedUntrackedFiles   = $untrackedPackagedFiles
+                desktopSourceClean       = ($desktopStatus.Count -eq 0)
+                desktopSourceChanges     = $desktopSourceChanges
+            }
+        }
+        $manifestPath = Join-Path $manifestDistDir 'build-manifest.json'
+        # BOM-free JSON via .NET so CI parsers and other tools see plain UTF-8.
+        [IO.File]::WriteAllText(
+            $manifestPath,
+            ($manifest | ConvertTo-Json -Depth 8),
+            [Text.UTF8Encoding]::new($false)
+        )
+        Write-Ok "Build manifest -> dist/build-manifest.json"
+        if ($desktopSourceChanges.Count -gt 0) {
+            Write-Warn "desktop/ source has uncommitted changes; recorded in dist/build-manifest.json (build continues)"
+        }
+        if ($trackedPackagedChanges.Count -gt 0) {
+            Write-Warn "Packaged inputs have uncommitted changes; recorded in dist/build-manifest.json"
+        }
+    } catch {
+        Write-Warn "Build manifest generation failed (non-fatal): $_"
+    }
+} else {
+    Write-Ok "Build manifest skipped (-NoManifest)"
 }

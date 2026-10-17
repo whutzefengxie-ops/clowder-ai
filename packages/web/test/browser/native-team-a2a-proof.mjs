@@ -23,36 +23,78 @@ export function allA2AInvocationsDone(invocations) {
 }
 
 const terminalStatuses = new Set(['completed', 'done']);
-const finiteTime = (...values) => values.find((value) => Number.isFinite(value));
 
-function classifyExtraInvocation(
-  invocation,
-  messages,
-  byId,
-  { leadId, peerId, peerMarker, finalMarker, handoffIds, resultIds },
-) {
+/**
+ * The only messages that may explain an extra invocation's input are the immutable
+ * terminal results the persisted proof itself verified. Streaming progress, partial
+ * segments and every other product of the core invocations are explicitly excluded:
+ * an input is a closed set of proof-verified results, never an any-match.
+ */
+function proofVerifiedResults(proof, byId, { leadId, peerId, peerMarker, finalMarker }) {
+  const verified = new Map();
+  for (const [id, catId, marker] of [
+    [proof.peerMessageId, peerId, peerMarker],
+    [proof.finalMessageId, leadId, finalMarker],
+  ]) {
+    const message = id === undefined ? undefined : byId.get(id);
+    if (
+      !message ||
+      message.type !== 'assistant' ||
+      message.catId !== catId ||
+      message.lifecycle?.status !== 'completed' ||
+      !String(message.content ?? '').includes(marker)
+    )
+      continue;
+    verified.set(message.id, message);
+  }
+  return verified;
+}
+
+function inputRejectionReason(id, { byId, handoffIds, verifiedResults, coreInvocationIds, userMessageId }) {
+  if (handoffIds.has(id)) return 'duplicate_handoff';
+  if (id === userMessageId) return 'user_request_input';
+  if (verifiedResults.has(id)) return undefined;
+  const message = byId.get(id);
+  const coreProduced =
+    message &&
+    (coreInvocationIds.has(message.lifecycle?.invocationId) ||
+      coreInvocationIds.has(message.lifecycle?.producerInvocationId));
+  return coreProduced ? 'unverified_result' : 'unexplained_input';
+}
+
+function classifyExtraInvocation(invocation, messages, byId, deps) {
+  const { leadId, peerId, peerMarker, finalMarker } = deps;
   const invocationMessages = messages.filter(
     (message) => message.type === 'assistant' && message.lifecycle?.invocationId === invocation.invocationId,
   );
-  const inputIds = invocationMessages.flatMap((message) => message.lifecycle?.inputMessageIds ?? []);
+  const inputIds = [...new Set(invocationMessages.flatMap((message) => message.lifecycle?.inputMessageIds ?? []))];
   if (![leadId, peerId].includes(invocation.catId)) return 'unrelated_role';
   if (!terminalStatuses.has(invocation.status)) return 'not_done';
-  if (inputIds.some((id) => handoffIds.has(id))) return 'duplicate_handoff';
+  if (inputIds.some((id) => deps.handoffIds.has(id))) return 'duplicate_handoff';
+  // A message this invocation produced was admitted as another invocation's input:
+  // the extra turn handed off / dispatched downstream instead of only acknowledging.
+  if (messages.some((message) => message.lifecycle?.producerInvocationId === invocation.invocationId))
+    return 'new_dispatch';
   if (
     invocationMessages.some(
       (message) => String(message.content).includes(peerMarker) || String(message.content).includes(finalMarker),
     )
   )
     return 'new_task_result';
-  const consumedResult = inputIds
-    .map((id) => byId.get(id))
-    .find((message) => {
-      if (!message || !resultIds.has(message.id)) return false;
-      const producedAt = finiteTime(message.lifecycle?.completedAt, message.lifecycle?.startedAt, message.timestamp);
-      const startedAt = finiteTime(invocation.startedAt, invocationMessages[0]?.lifecycle?.startedAt);
-      return Number.isFinite(producedAt) && Number.isFinite(startedAt) && startedAt >= producedAt;
-    });
-  return consumedResult ? undefined : 'unrelated_input';
+  if (inputIds.length === 0) return 'missing_result_input';
+  for (const id of inputIds) {
+    const reason = inputRejectionReason(id, { ...deps, byId });
+    if (reason) return reason;
+  }
+  // Publication time is the result's own terminal completedAt. startedAt/timestamp are
+  // not publication evidence, so a result without completedAt can never be confirmed.
+  if (!Number.isFinite(invocation.startedAt)) return 'unproven_timing';
+  for (const id of inputIds) {
+    const consumed = deps.verifiedResults.get(id);
+    if (!Number.isFinite(consumed.lifecycle?.completedAt)) return 'unproven_publication';
+    if (invocation.startedAt < consumed.lifecycle.completedAt) return 'early_confirmation';
+  }
+  return undefined;
 }
 
 /**
@@ -63,17 +105,40 @@ function classifyExtraInvocation(
  * extra invocation to its persisted input message and its causal timestamp.
  */
 export function validateA2AInvocations(messages, invocations, { leadId, peerId, peerMarker, finalMarker, proof }) {
+  if (!proof) {
+    return {
+      ok: false,
+      acceptedConfirmations: [],
+      rejectedInvocations: invocations.map((invocation) => ({
+        invocationId: invocation.invocationId,
+        catId: invocation.catId,
+        reason: 'missing_proof',
+      })),
+      coreInvocationIds: [],
+    };
+  }
   const byId = new Map(messages.map((message) => [message.id, message]));
-  const coreInvocationIds = [...new Set([proof.initialInvocationId, proof.peerInvocationId, proof.finalInvocationId])];
+  // returnInvocationId is proof-verified too: on the MCP-observation path the initial
+  // turn both delegates and integrates, so the return callback is a separate core turn.
+  const coreInvocationIds = [
+    ...new Set(
+      [proof.initialInvocationId, proof.peerInvocationId, proof.finalInvocationId, proof.returnInvocationId].filter(
+        Boolean,
+      ),
+    ),
+  ];
   const core = new Set(coreInvocationIds);
+  const verifiedResults = proofVerifiedResults(proof, byId, { leadId, peerId, peerMarker, finalMarker });
+  // A verified terminal result is never a handoff, even when the initial invocation
+  // produced it (the MCP-observation path integrates the peer reply in its own turn).
   const handoffIds = new Set(
     messages
-      .filter((message) => message.catId === leadId && producedBy(message, proof.initialInvocationId))
-      .map((message) => message.id),
-  );
-  const resultIds = new Set(
-    messages
-      .filter((message) => producedBy(message, proof.peerInvocationId) || producedBy(message, proof.finalInvocationId))
+      .filter(
+        (message) =>
+          message.catId === leadId &&
+          producedBy(message, proof.initialInvocationId) &&
+          !verifiedResults.has(message.id),
+      )
       .map((message) => message.id),
   );
   const acceptedConfirmations = [];
@@ -86,7 +151,9 @@ export function validateA2AInvocations(messages, invocations, { leadId, peerId, 
       peerMarker,
       finalMarker,
       handoffIds,
-      resultIds,
+      verifiedResults,
+      coreInvocationIds: core,
+      userMessageId: proof.userMessageId,
     });
     if (reason) rejectedInvocations.push({ invocationId: invocation.invocationId, catId: invocation.catId, reason });
     else acceptedConfirmations.push(invocation.invocationId);
