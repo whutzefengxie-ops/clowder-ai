@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
-import { mkdir } from 'node:fs/promises';
+import { appendFile, mkdir, writeFile } from 'node:fs/promises';
 import { after, before } from 'node:test';
 import { chromium } from 'playwright';
+import { installSetupHttpBoundary, installSetupSocketBoundary } from './fixtures/native-team-setup-boundary.mjs';
 
 // Browser contract lane: real production page and hooks, injected HTTP boundary
 // faults. This lane is NOT evidence that a model authenticated or replied.
@@ -23,11 +24,15 @@ export const runtimes = labels.map((label, index) => ({
   readiness: { status: 'configured' },
 }));
 let browser;
+const unmodeled = [];
 before(async () => {
   await mkdir(evidence, { recursive: true });
   browser = await chromium.launch({ headless: true });
 });
-after(async () => browser?.close());
+after(async () => {
+  await browser?.close();
+  assert.deepEqual(unmodeled, [], 'HTTP-fault tests must model dependencies instead of reaching a live API');
+});
 
 async function respondFault(route, failure, commit) {
   if (failure.committed) commit();
@@ -37,7 +42,12 @@ async function respondFault(route, failure, commit) {
 }
 
 export async function setup(options = {}) {
+  const trace = (phase) =>
+    appendFile(`${evidence}/setup-bootstrap.jsonl`, `${JSON.stringify({ phase, at: Date.now() })}\n`);
+  await trace('context-opening');
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+  await trace('context-open');
+  await installSetupHttpBoundary(context, evidence, unmodeled);
   const shell = options.shell ?? 'v2';
   assert.ok(['classic', 'v2'].includes(shell));
   await context.addInitScript(
@@ -47,6 +57,7 @@ export async function setup(options = {}) {
     },
     { shell, origin: origin.origin },
   );
+  await trace('init-script-ready');
   // Keep registration real but omit fetch interception in the HTTP-fault lane.
   // Playwright's serviceWorkers:block makes Workbox registration return undefined.
   // The separate installed live journey uses the unmodified production worker.
@@ -56,9 +67,22 @@ export async function setup(options = {}) {
       body: 'self.addEventListener("install",()=>self.skipWaiting());',
     }),
   );
+  await trace('worker-fixture-ready');
   const page = await context.newPage();
+  await trace('page-open');
+  await installSetupSocketBoundary(page);
   const writes = [],
-    errors = [];
+    errors = [],
+    requests = [];
+  page.on('request', (request) => requests.push({ method: request.method(), path: new URL(request.url()).pathname }));
+  // apiFetch gates all business requests on session bootstrap. This HTTP-fault
+  // lane supplies its own identity, independently of a developer's live API.
+  await context.route('**/api/session', (route) =>
+    route.fulfill({ json: { userId: 'fixture-user', csrfToken: 'fixture-only' } }),
+  );
+  // Exercise the supported empty-catalog fallback without borrowing a live
+  // backend's templates. Installed avatar/catalog acceptance has its own lane.
+  await context.route('**/api/cat-templates', (route) => route.fulfill({ json: { templates: [] } }));
   let discoveryFails = options.discoveryFails ?? false;
   let failure = options.failCreate;
   let discovered = options.runtimes ?? runtimes;
@@ -87,6 +111,7 @@ export async function setup(options = {}) {
   await context.route('**/api/cats', async (route) => {
     if (route.request().method() !== 'POST') return route.fulfill({ json: { cats: options.existing ?? created } });
     const payload = route.request().postDataJSON();
+    await trace(`create-post:${payload.clientId}`);
     const key = route.request().headers()['idempotency-key'];
     writes.push({ payload, key });
     if (receipts.has(key)) return route.fulfill({ status: 201, json: { cat: receipts.get(key) } });
@@ -108,11 +133,26 @@ export async function setup(options = {}) {
     receipts.set(key, cat);
     return route.fulfill({ status: 201, json: { cat } });
   });
-  await page.goto(new URL(`/settings?s=members&view=setup&shell=${shell}&lang=zh`, origin).href);
   const panel = page.getByTestId('recommended-team-setup');
-  await panel.waitFor();
-  await page.getByRole('button', { name: '重新检测', exact: true }).waitFor();
-  await page.getByText('正在检测本机工具并匹配角色…', { exact: true }).waitFor({ state: 'hidden' });
+  try {
+    await trace('navigating');
+    await page.goto(new URL(`/settings?s=members&view=setup&shell=${shell}&lang=zh`, origin).href, {
+      waitUntil: 'domcontentloaded',
+      timeout: 10000,
+    });
+    await trace('dom-content-loaded');
+    await panel.waitFor({ timeout: 8000 });
+    await trace('panel-visible');
+    await page.getByRole('button', { name: '重新检测', exact: true }).waitFor({ timeout: 8000 });
+    await page.getByText('正在检测本机工具并匹配角色…', { exact: true }).waitFor({ state: 'hidden', timeout: 8000 });
+  } catch (error) {
+    const failure = `${evidence}/setup-bootstrap-${Date.now()}`;
+    await writeFile(`${failure}.json`, JSON.stringify({ errors, requests, failure: error.message }, null, 2));
+    await page.screenshot({ path: `${failure}.png`, fullPage: true, timeout: 3000 }).catch(() => {});
+    await context.close();
+    throw error;
+  }
+  await trace('setup-ready');
   return {
     context,
     page,
@@ -132,9 +172,17 @@ export async function setup(options = {}) {
 
 export async function select(state, mask) {
   for (let i = 0; i < labels.length; i++) {
+    await appendFile(
+      `${evidence}/setup-bootstrap.jsonl`,
+      `${JSON.stringify({ phase: `select:${labels[i]}`, at: Date.now() })}\n`,
+    );
     await state.page
       .getByRole('checkbox', { name: `加入 ${labels[i]} 伙伴`, exact: true })
-      .setChecked(Boolean(mask & (1 << i)));
+      .setChecked(Boolean(mask & (1 << i)), { timeout: 8000 });
   }
+  await appendFile(
+    `${evidence}/setup-bootstrap.jsonl`,
+    `${JSON.stringify({ phase: 'selection-ready', at: Date.now() })}\n`,
+  );
 }
 export const create = (page) => page.getByRole('button', { name: /^(一键创建|继续创建) \d 位伙伴$/ });

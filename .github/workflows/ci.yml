@@ -61,12 +61,18 @@ jobs:
         run: |
           pnpm --filter @cat-cafe/web exec playwright install --with-deps chromium
           pnpm --filter @cat-cafe/web test:first-run-entry:production
+      - name: Production member creation and recovery HTTP contracts
+        env:
+          CAT_CAFE_ONBOARDING_E2E_EVIDENCE: ${{ github.workspace }}/.tmp/native-team-setup-ci
+        run: pnpm --filter @cat-cafe/web test:onboarding:production-contracts
       - name: Preserve first-run browser evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: first-run-entry-${{ github.sha }}-${{ runner.os }}
-          path: .tmp/first-run-entry-ci
+          path: |
+            .tmp/first-run-entry-ci
+            .tmp/native-team-setup-ci
           if-no-files-found: ignore
           retention-days: 7
 

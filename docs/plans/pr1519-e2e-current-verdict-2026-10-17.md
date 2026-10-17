@@ -12,6 +12,44 @@ tips_exempt: 既有用户旅程的验收证据与未完成边界
 
 ## 最新实物结论与下一步
 
+**当前核验快照：源码 `4cc2345eb031c7601e3f05509809b183a8b6139f`，完整安装旅程仍为 No-Go。** 下列快照优先于后面的旧候选过程记录；历史失败、旧包通过及源码测试各保留原适用范围。
+
+| 目标 | 当前证据 | 尚未完成 |
+|---|---|---|
+| main、冲突、CI | 维护者 main 仍为 `b59cd583f`，已是当前 HEAD 祖先；远端 HEAD 与本地一致。CI 19 项成功、1 项预期跳过，MERGEABLE | REVIEW_REQUIRED；不能把作者证据当作正式批准 |
+| 演示、五工具配置、短 ID、头像及存量兼容 | 旧 fac 安装版已实测零角色进入、自动六阶段演示、thinking/typing、渐进成果、实际五次创建及非占位头像。更早 0927 有真实调用/A2A和重启历史证据 | 新运行源码须在新 EXE 中复验；不得把旧包结果改写为当前包通过 |
+| 个人首次提醒 | 137/4cc 已修复误用共享线程 start/complete/cancel 的归属问题；真实个人偏好路由/文件集成 8 项通过，既有 Overlay 26 项通过，当前 production classic/v2 × 完成/退出 4 项通过 | 安装版原失败须在当前新包复验；production 测试的登录、其他 HTTP 与 Socket.IO 明确为夹具，不是 Redis/真实模型验收 |
+| 安装及首次启动速度 | 旧 0927 三次首装 48.489–54.322s、首次 ready 23.002–27.085s；后继 20f/fac 首装 55.138–59.310s、ready 31.515–35.712s，未增加 API 120s 总超时 | 原 100/120s 冷启事件的唯一根因仍未证明；当前新包安装失败，不能继承这些性能结论 |
+| 最新 EXE | `1.14.0-pr1519-4cc2345eb` 已完整打包，711,532,965 bytes；SHA256 `7D16494AA980FBA4361CD6C148359B39C604E9B2E3E5AA5F1F1AC73EA2693314` | **当前首要阻塞：首装 exit1，无 Inno 日志/程序目录。已定位本机文件继承 Low 完整性 → 安装器实际进程 RID4096 → 创建正常 TEMP 目录错误5。安全标签处理尚待用户确认；未自行提高标签、修改访问权限或伪造首装通过** |
+| Claude 原 API 连接 | 用户已决定按外部 LLM API 兼容边界保留，停止继续协议调整及单独反复调用；临时参数已恢复 | 原默认失败保留，不伪造通过，也不再作为本 PR 代码阻塞 |
+| 清理与数据保护 | 27 条已严格核验的 Codex 作者会话可恢复归档，27 份日志哈希重新一致；本轮无新增模型调用。未发现该任务作者实例进程，桌面 PR1519 EXE/快捷方式为零；新增四条作者菜单链接此前可恢复归档 | 旧 37 菜单项仍未清理。此次拟删除未安装的 137 Electron 副本/压缩包也被自动审批拒绝（`blocked by policy`），命令未执行；不得写成已清理或换工具绕过 |
+| 用户交付环境 | `clean-delivery-f1fa89f86` 仍只有客户端路径绑定，未安装程序、未创建 HOME/data/角色/历史；本轮两次失败安装均为作者目录 | 修复当前安装器并完成作者验收后，才提供最终 EXE 与这套未消费的零角色环境 |
+
+**当前待办顺序：** 定位安装器日志生成之前的初始化失败 → 新包真正首装/首次启动 → 自动演示及首次提醒完成/退出/刷新 → 任意选择和手动创建、已存在角色旁路、部分失败/重试 → Codex/DSH/Kimi/Pi 真实调用及真实 A2A → 配置、角色和历史重启回读 → 完整 Setup 失败恢复/同版修复及适用边界 → 作者会话归档、进程/过渡文件收尾 → 评论与正式 review。Claude 外部 API 限制不再重复消耗调用；其他四工具的验收不能写成五工具全通过。原生窗口拖动、macOS 完整安装、连续录屏以及 F229/F320 原合同仍按各自缺口保留，不由 CI 自动关闭。
+
+当前 CI 证据：[4cc Build job](https://github.com/zts212653/clowder-ai/actions/runs/39000763389/job/117302995225)。zts/mind 的 issue 评论再次核对仍为 61 条，最后源 id `6185928831`；[逐条回应表](pr1519-review-comment-ledger-2026-10-17.md)是作者处置，不等于全部已被维护者验收。最新安装失败与源码修正需要同步到公开进度说明，不能沿用旧包状态。
+
+### 当前首装初始化失败的定位
+
+- 相同失败包的文件长度、offset table CRC、Setup ID、加密头 CRC、内嵌 4,654,080 bytes Setup 解压与 CRC 均一致；只在内存读取，没有执行抽出的 Setup 或更改二进制。
+- 受控调试得到 Inno 的原始 Delphi 异常：无法创建 `%TEMP%/is-*.tmp`，错误5（拒绝访问）。全部调试进程均自然 exit1，没有安装程序、创建角色/历史或遗留子进程。
+- 当前父 shell 为高完整性且是管理员；实际安装器 token 仍显示 `elevated=1`、`restricted=false`，但 integrity RID 为 `4096`（Low）。EXE、构建父目录和交付目录的 `icacls` 均回读到继承的 Low/NW 标签。因此“是管理员”不足以诊断该失败。
+- 同一个 Inno 编译器的原生 NOICONS 检查在正常 TEMP 输出位置通过；只生成回执、不创建程序/卸载项/快捷方式的最小包在当前构建目录内则两种 privilege（lowest/admin）都 exit1。普通父 shell 在 TEMP/作者诊断目录中按继承及 Inno 同型保护 DACL 创建空目录的四个对照均成功，之后只删除这四个已确认空的探针目录。
+- 这与 [Microsoft MIC 说明](https://learn.microsoft.com/en-us/windows/win32/secauthz/mandatory-integrity-control)中的进程完整性取用户与可执行文件较低值、Low 不能向 Medium 写入一致；该主机直接失败机制已定位。标签由谁、何时设置尚未查明，不将其写为本 PR 业务代码缺陷、损坏包或安全软件拦截。
+- 原来的约6.7秒失败、结构化启动失败及最小包失败原样保留。当前仅请求提高本轮 EXE 和两个指定无角色验收目录的完整性，先保存 ACL；未获确认前不处理，绝不修改整个父目录或原有客户端。最新包仍未验收。
+
+私有证据位于当前构建的 `inno-offset-integrity.json`、`inno-embedded-integrity.json`、`author-fresh/debug-bootstrap-integrity-result.json`、`minimal-bootstrap/results.json` 与 `temp-directory-api-probe/result.json`；原生客户端认证、配置和历史不进入公开附件。
+
+### 本轮仅测试、CI与验收记录的增量
+
+新增可直接复跑的 `test:onboarding:production-contracts` 入口：当前4cc生产UI的HTTP故障矩阵最终 **53/53通过，73.328s，0失败/取消/跳过**，没有未声明API请求。Next已SIGTERM退出，端口释放，未发现headless测试进程残留；模型调用0、没有原生会话。原来前置超时、网络边界缺口及依赖声明不全导致的整轮失败分别保留，不改判绿色。边界、命令与CI入口见[验收矩阵](pr1519-onboarding-e2e-acceptance-2026-10-17.md#可重复执行的当前-production-http-异常矩阵)。这不关闭上面的native首装阻塞。
+
+本轮另外运行浏览器入口/资源协调检查，实际11通过、1失败、10项按平台跳过。唯一失败为Windows下原`run-with-node-env-test`测试的`spawn pnpm ENOENT`；该wrapper和测试与main `b59cd583f`均无源码差异。新入口直接使用Node执行，实际已经过原浏览器lease并正常释放；未为辅助检查改全局pnpm、伪造shim或改写旧断言。此失败单列，不称补充检查全绿。
+
+本地针对新增/修改的4个JS/JSON文件Biome检查通过，无新增警告；变更不修改产品运行代码。后继仅测试/CI/文档提交的远端CI必须按其新HEAD独立核验，不继承上面的4cc绿灯。公开进度评论已原位更新并远端正文精确回读：[当前进度](https://github.com/zts212653/clowder-ai/pull/1519#issuecomment-6221974509)。
+
+**以下“最新源码增量”和 fac 段落为先前过程记录，已被上述快照更新，不代表 4cc 当前判定。**
+
 **最新源码增量，仍待新产物补验：** fac实物的个人提醒409/400已沿原个人偏好owner修正接线，保留共享offer守卫；7项真实API路由/偏好文件集成、245项首启成员、33项原线程引导及Web类型检查通过。新增production页面检查使用真实提醒/引导路由，不再用总是成功的HTTP回执夹具，并已接入Build lane。当前生产新构建、安装版及本轮真实调用/A2A仍需执行，不能把下面fac原失败重标为通过。完整修复合同见[接线方案](pr1519-first-run-entry-wiring-2026-10-17.md)。
 
 - **源码与CI**：最新main仍为`b59cd583f`且已合入。`fac9726b8`的CI已终态19成功/1预期跳过，PR仍为MERGEABLE/BLOCKED/REVIEW_REQUIRED。后继提交需重新核对，作者自验不等于正式review。
