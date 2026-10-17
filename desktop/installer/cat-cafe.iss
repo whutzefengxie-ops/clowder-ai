@@ -329,7 +329,8 @@ begin
          '" -FrontendPort "' + ExpandConstant('{param:FrontendPort|}') +
          '" -ApiPort "' + ExpandConstant('{param:ApiPort|}') +
          '" -RedisPort "' + ExpandConstant('{param:RedisPort|}') + '"';
-  Started := Exec('powershell.exe', Cmd, '', SW_HIDE, ewWaitUntilTerminated, ExitCode);
+  Started := ExecAndLogOutput('powershell.exe', Cmd, '', SW_HIDE, ewWaitUntilTerminated, ExitCode, @ExtractionOutput);
+  Log('Identity helper started=' + IntToStr(Ord(Started)) + ', exit=' + IntToStr(ExitCode));
   if (not Started) or (ExitCode <> 0) then begin
     Result := 'Unable to preserve the target installation identity. See setup log.';
     exit;

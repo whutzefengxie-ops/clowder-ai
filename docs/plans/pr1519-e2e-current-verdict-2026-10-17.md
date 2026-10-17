@@ -12,6 +12,14 @@ tips_exempt: 既有用户旅程的验收证据与未完成边界
 
 ## 最新实物结论与下一步
 
+**2026-10-17 14:38（Asia/Shanghai）授权处理后的回读，优先于下方过程记录。** 用户已明确允许保存 ACL 后，将本轮指定 EXE、`author-fresh` 和原交付目录三个对象设为 Medium。三个对象已执行并回读成功；EXE SHA256、所有者/组/DACL 和三个父目录的安全描述符均未改变。未扩大到父目录或其他对象，未修改客户端认证、配置或历史。
+
+- 原 exit1/TEMP 错误5已消失：同一完整 EXE 成功创建受保护 TEMP 并生成 Inno 日志，随后在准备阶段 exit7，尚未解压有效程序。新失败不能写成首装成功。
+- 直接运行同一身份脚本（64位/32位 Windows PowerShell）均通过。真实 Inno 准备阶段的诊断对照则复现：子进程为 Medium、非 impersonation，`Add-Type` 返回 Win32 **1314**（缺少所需权限）。新的断点在动态编译原生互操作类型的阶段；尚未用更高标签完成安装对照，不断言 High 必然修复，也不提高标签或启用额外权限。
+- 修正安装器原有诊断缺口：身份辅助脚本由原来的无输出 `Exec` 改为同权限的 `ExecAndLogOutput`，同时记录启动结果和退出码。没有改变管理员模式、身份路径守卫或失败停止规则。原生 Inno 直接消费生产 Pascal gate 的反例先 RED（原日志缺失实际错误），修正后 GREEN；连同 NOICONS 和身份升级检查共 **5/5通过，0跳过**。辅助结果是夹具，不冒充完整安装成功。
+- 私有回执：当前构建的 `integrity-approved-before.json`、`integrity-approved-after.json`、`author-fresh/install-after-medium-result.json`、`author-fresh/setup-after-medium.log`、`author-fresh/preparation-token-probe/setup.log` 和 `preparation-log-{red,green}.log`。保留早先失败，不重写或删除。作者目录仅有诊断与预检生成的身份 marker，没有已安装应用、角色或历史；交付目录仍未安装且未消费引导。
+- 仅该 EXE 提高为 High 的后续对照已另行请求确认，两个目录继续 Medium；这是超出已批准 Medium 的安全元数据操作，未提前执行。完整首装、首次启动、真实调用/A2A、重启与历史回读仍未通过。此前 `5cad928d5` 的远端检查已终态 **19成功/1预期跳过**；本轮后继提交不继承其 CI 绿灯。
+
 **当前核验快照：源码 `4cc2345eb031c7601e3f05509809b183a8b6139f`，完整安装旅程仍为 No-Go。** 下列快照优先于后面的旧候选过程记录；历史失败、旧包通过及源码测试各保留原适用范围。
 
 | 目标 | 当前证据 | 尚未完成 |
