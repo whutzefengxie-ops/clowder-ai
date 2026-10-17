@@ -87,6 +87,10 @@ export function roleIdentity(cat) {
   };
 }
 
+async function leaveRetiredThread(page, threadId) {
+  if (page.url().includes(`/thread/${threadId}`)) await page.goto('about:blank');
+}
+
 export async function callRealPartner(journey, cat) {
   if (cat.clientId === 'openai')
     journey.record.nativeHistoryPolicy = await requireCodexTestHistoryPolicy(
@@ -148,6 +152,11 @@ export async function callRealPartner(journey, cat) {
     await journey.screenshot(`failure-${cat.id}-${marker.slice(-8)}`);
   } finally {
     try {
+      // Leave the retired thread before deleting it. The conversation-view
+      // hook is intentionally strict about a missing owned thread; keeping
+      // the document mounted while cleanup runs turns that expected deletion
+      // into a false renderer 404.
+      if (result.threadId) await leaveRetiredThread(page, result.threadId);
       if (result.threadId)
         result.cleanup = await settleOwnedThread(request, result.threadId, { cancel: !result.passed });
     } catch (error) {
