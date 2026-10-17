@@ -1,6 +1,7 @@
 'use client';
 
 import React, { Component, useEffect, useRef, useState } from 'react';
+import { FIRST_RUN_ENTRY_GUIDE_ID } from '@/components/first-run-quest/firstRunEntryReceipt';
 import { useGuideEngine } from '@/hooks/useGuideEngine';
 import { useGuideStore } from '@/stores/guideStore';
 import { apiFetch } from '@/utils/api-client';
@@ -94,7 +95,7 @@ function GuideOverlayInner() {
   }, [isComplete, isAutoConfirmFinish, exitGuide]);
 
   const handleExit = async () => {
-    if (session?.threadId) {
+    if (session?.threadId && session.flow.id !== FIRST_RUN_ENTRY_GUIDE_ID) {
       try {
         const response = await apiFetch('/api/guide-actions/cancel', {
           method: 'POST',
@@ -244,7 +245,7 @@ function GuideOverlayInner() {
   }, [session, currentStep, nonBlocking]);
 
   const dismissWithReconciliation = () => {
-    if (session?.threadId && session.flow.id) {
+    if (session?.threadId && session.flow.id && session.flow.id !== FIRST_RUN_ENTRY_GUIDE_ID) {
       apiFetch('/api/guide-actions/cancel', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

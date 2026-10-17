@@ -5,7 +5,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { FirstRunEntryReminder } from '@/components/first-run-quest/FirstRunEntryReminder';
-import { useGuideEngine } from '@/hooks/useGuideEngine';
+import { GuideOverlay } from '@/components/GuideOverlay';
 import { useChatStore } from '@/stores/chatStore';
 import { useGuideStore } from '@/stores/guideStore';
 import { apiFetch } from '@/utils/api-client';
@@ -19,8 +19,15 @@ let releaseWrite: (() => void) | undefined;
 let writing: Promise<void> | undefined;
 const actions: { url: string; status: number }[] = [];
 function Probe() {
-  useGuideEngine();
-  return <FirstRunEntryReminder enabled threadId="default" />;
+  return (
+    <>
+      <button type="button" data-guide-id="hub.trigger">
+        Settings
+      </button>
+      <GuideOverlay />
+      <FirstRunEntryReminder enabled threadId="default" />
+    </>
+  );
 }
 const resetStore = () =>
   useGuideStore.setState({
@@ -47,6 +54,8 @@ const waitForAcknowledgement = async () =>
 
 beforeEach(async () => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
+  vi.stubGlobal('requestAnimationFrame', () => 1);
+  vi.stubGlobal('cancelAnimationFrame', () => {});
   vi.spyOn(console, 'warn').mockImplementation(() => {});
   vi.spyOn(console, 'error').mockImplementation(() => {});
   directory = mkdtempSync(path.join(tmpdir(), 'pr1519-personal-entry-'));
@@ -139,15 +148,22 @@ it('exposes actual preference corruption without overwriting it, then retries co
   expect(host.textContent).toContain('可以继续对话');
   expect(useGuideStore.getState().completedGuides.has('default::first-run-entry')).toBe(false);
   writeFileSync(api.preferencesPath, before);
-  await act(async () => host.querySelector<HTMLButtonElement>('button')?.click());
+  await act(async () =>
+    [...host.querySelectorAll<HTMLButtonElement>('button')]
+      .find((button) => button.textContent === '重试入口提醒')
+      ?.click(),
+  );
   await waitForAcknowledgement();
   expect((await receipt()).status).toBe('completed');
 });
 
-it('leaves a different users active shared guide intact when dismissing the personal reminder', async () => {
+it.each([
+  'active',
+  'failed',
+])('leaves a different users active shared guide intact when dismissing the personal reminder (%s)', async (phase) => {
   const foreign = {
     v: 1 as const,
-    guideId: 'add-member',
+    guideId: 'first-run-entry',
     status: 'active' as const,
     userId: 'another-owner',
     offeredAt: 1,
@@ -155,8 +171,29 @@ it('leaves a different users active shared guide intact when dismissing the pers
   await api.guideBridge.set('default', foreign);
   const before = await api.guideBridge.get('default');
   await start();
-  await act(async () => useGuideStore.getState().exitGuide());
-  await act(async () => vi.waitFor(async () => expect((await receipt()).status).toBe('dismissed')));
+  if (phase === 'failed') {
+    const preferences = readFileSync(api.preferencesPath);
+    writeFileSync(api.preferencesPath, '{broken');
+    await complete();
+    await act(async () => vi.waitFor(() => expect(useGuideStore.getState().completionFailed).toBe(true)));
+    writeFileSync(api.preferencesPath, preferences);
+    await act(async () =>
+      [...host.querySelectorAll<HTMLButtonElement>('button')]
+        .find((button) => button.textContent === '知道了')
+        ?.click(),
+    );
+    expect((await receipt()).status).toBe('pending');
+    await act(async () =>
+      [...host.querySelectorAll<HTMLButtonElement>('button')]
+        .find((button) => button.textContent === '重试入口提醒')
+        ?.click(),
+    );
+  } else {
+    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="退出引导"]')?.click());
+  }
+  await act(async () =>
+    vi.waitFor(async () => expect((await receipt()).status).toBe(phase === 'failed' ? 'completed' : 'dismissed')),
+  );
   expect(await api.guideBridge.get('default')).toEqual(before);
   expect(actions.filter((action) => action.url.startsWith('/api/guide-actions/'))).toEqual([]);
 });

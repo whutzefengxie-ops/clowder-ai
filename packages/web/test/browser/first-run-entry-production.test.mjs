@@ -12,7 +12,7 @@ import { openFirstRunEntryApi } from '../fixtures/first-run-entry-api.mjs';
 import { cats, createChatProofApi } from './fixtures/f322-chat-real-page-data.mjs';
 
 // Actual production UI and entry/guide route handlers with atomic preference files.
-// Other HTTP reads and authenticated session identity remain explicit fixtures;
+// Other HTTP reads, the Socket.IO wire and authenticated session identity remain explicit fixtures;
 // in-memory guide threads are NOT installed/Redis/authentication acceptance.
 const webRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const repo = path.resolve(webRoot, '../..');
@@ -138,6 +138,21 @@ async function fixture(shell, scenario) {
   page.on('console', (message) => {
     if (message.type() === 'error') state.consoleErrors.push(message.text());
   });
+  // Match the existing F322 wire fixture. Never connect this page to an unrelated
+  // port, and keep console errors strict rather than filtering connection errors.
+  await page.routeWebSocket('**/socket.io/**', (socket) => {
+    const sid = `entry-${shell}-${scenario}`;
+    socket.send(`0${JSON.stringify({ sid, upgrades: [], pingInterval: 300000, pingTimeout: 200000 })}`);
+    socket.onMessage((packet) => {
+      const text = String(packet);
+      if (text.startsWith('40')) socket.send(`40${JSON.stringify({ sid })}`);
+      if (!text.startsWith('42')) return;
+      const bracket = text.indexOf('['),
+        ack = text.slice(2, bracket);
+      const [event, room] = JSON.parse(text.slice(bracket));
+      if (event === 'join_room' && ack) socket.send(`43${ack}${JSON.stringify([{ ok: true, room }])}`);
+    });
+  });
   const common = createChatProofApi(Date.now(), false, true);
   const bodies = {
     '/api/debug/callback-auth': {
@@ -165,12 +180,20 @@ async function fixture(shell, scenario) {
   };
   let draft = null,
     draftRevision = 0;
+  const homeLeases = new Map();
   await context.route('**/api/**', async (route) => {
     const req = route.request(),
       url = new URL(req.url()),
       method = req.method();
     const reply = (json, status = 200) => route.fulfill({ status, json });
     switch (url.pathname) {
+      case '/api/concierge/home/clients': {
+        assert.equal(method, 'POST');
+        const { clientId } = req.postDataJSON();
+        const clientToken = '00000000-0000-4000-8000-000000000001';
+        homeLeases.set(clientId, clientToken);
+        return reply({ clientToken, expiresAt: Date.now() + 60000 });
+      }
       case '/api/config/onboarding/entry':
         if (method === 'PUT') {
           state.writes.push(`entry:${req.postDataJSON().status}`);
@@ -198,6 +221,12 @@ async function fixture(shell, scenario) {
           draft = { ...body, revision: ++draftRevision, ownerUserId: 'owner-proof', threadId: 'default' };
         }
         return reply({ draft, revision: draftRevision });
+    }
+    if (url.pathname.startsWith('/api/concierge/home/clients/')) {
+      assert.equal(method, 'DELETE');
+      const clientId = url.pathname.split('/').at(-1);
+      assert.equal(req.postDataJSON().clientToken, homeLeases.get(clientId));
+      return reply({ released: homeLeases.delete(clientId) });
     }
     if (url.pathname.startsWith('/api/guide-actions/')) {
       state.writes.push(url.pathname);
@@ -242,10 +271,6 @@ for (const shell of ['classic', 'v2'])
           );
           await saved;
           assert.equal(state.status, 'completed');
-          assert.equal(
-            state.writes.some((value) => value.startsWith('/api/guide-actions/')),
-            false,
-          );
           await page.getByRole('button', { name: '知道了', exact: true }).click();
         } else {
           await panel.getByRole('button', { name: '退出引导' }).click();
@@ -264,6 +289,10 @@ for (const shell of ['classic', 'v2'])
         assert.equal(await panel.count(), 0);
         assert.equal(state.status, action === 'complete' ? 'completed' : 'dismissed');
         assert.equal(state.writes.filter((value) => value.startsWith('entry:')).length, 1);
+        assert.equal(
+          state.writes.some((value) => value.startsWith('/api/guide-actions/')),
+          false,
+        );
         assert.equal(await page.evaluate(() => localStorage.getItem('cat-cafe:pinned-settings-sections')), '[]');
         assert.equal(await page.evaluate(() => localStorage.getItem('cat-cafe:shell-presentation')), shell);
         assert.deepEqual(state.errors, []);
