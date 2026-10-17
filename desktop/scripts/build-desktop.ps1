@@ -33,6 +33,10 @@
   Skip writing dist/build-manifest.json. Manifest generation is enabled by
   default and is non-fatal: a failure only warns and never fails the build.
 
+.PARAMETER AllowDirtyInputs
+  Allow a diagnostic build from a dirty checkout. The generated manifest keeps
+  the dirty-input evidence, but this mode must not be used for a release EXE.
+
 .EXAMPLE
   .\desktop\scripts\build-desktop.ps1
 #>
@@ -43,7 +47,8 @@ param(
     [switch]$SkipElectronBuild,
     [switch]$SkipInstaller,
     [switch]$SkipPortableZip,
-    [switch]$NoManifest
+    [switch]$NoManifest,
+    [switch]$AllowDirtyInputs
 )
 
 $ErrorActionPreference = "Stop"
@@ -54,6 +59,25 @@ function Write-Warn  { param([string]$msg) Write-Host "  [!!] $msg" -ForegroundC
 function Write-Err   { param([string]$msg) Write-Host "  [ERR] $msg" -ForegroundColor Red }
 
 $ProjectRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $PSCommandPath))
+
+# A release package must be reproducible from the exact source revision. The
+# installer copies these roots directly or packs them into the runtime archives;
+# allowing local edits here makes sourceSha/Setup SHA evidence non-reproducible.
+$releaseInputRoots = @(
+    'docs', 'cat-cafe-skills', 'scripts', 'assets', 'guides',
+    'packages', '.claude/hooks/user-level', '.claude/hooks/f24-compaction.mjs',
+    'cat-template.json', 'pnpm-workspace.yaml', 'package.json', 'LICENSE',
+    'bundled/archives', 'bundled/node', 'bundled/redis', 'bundled/cli-tools',
+    'desktop'
+)
+$releaseInputStatus = @(git -C $ProjectRoot status --porcelain --untracked-files=all -- $releaseInputRoots 2>$null)
+if ($LASTEXITCODE -ne 0) { throw 'Could not inspect release input status' }
+if ($releaseInputStatus.Count -gt 0 -and -not $AllowDirtyInputs) {
+    throw "Release packaging requires a clean checkout. Use -AllowDirtyInputs only for diagnostics.`n$($releaseInputStatus -join "`n")"
+}
+if ($releaseInputStatus.Count -gt 0) {
+    Write-Warn 'Diagnostic build: release inputs are dirty; build-manifest.json will record them and the EXE is not releaseable.'
+}
 
 # Step 1: Build web app
 Write-Step "Step 1/9 - Build web application"
@@ -708,8 +732,9 @@ if (-not $NoManifest) {
             }
         }
 
-        # Clean/hygiene check over everything the installer copies, recorded
-        # rather than enforced: a dirty tree never aborts an otherwise valid build.
+        # Clean/hygiene check over everything the installer copies. The
+        # preflight above rejects dirty release inputs; this duplicate census is
+        # retained in the manifest so diagnostic builds remain auditable.
         $packagedRoots = @(
             'docs', 'cat-cafe-skills', 'scripts', 'assets', 'guides',
             'packages/api/src/plugins', '.claude/hooks/user-level',
