@@ -18,7 +18,10 @@ tips_exempt: 既有用户旅程的验收证据与未完成边界
 - 直接运行同一身份脚本（64位/32位 Windows PowerShell）均通过。真实 Inno 准备阶段的诊断对照则复现：子进程为 Medium、非 impersonation，`Add-Type` 返回 Win32 **1314**（缺少所需权限）。新的断点在动态编译原生互操作类型的阶段；尚未用更高标签完成安装对照，不断言 High 必然修复，也不提高标签或启用额外权限。
 - 修正安装器原有诊断缺口：身份辅助脚本由原来的无输出 `Exec` 改为同权限的 `ExecAndLogOutput`，同时记录启动结果和退出码。没有改变管理员模式、身份路径守卫或失败停止规则。原生 Inno 直接消费生产 Pascal gate 的反例先 RED（原日志缺失实际错误），修正后 GREEN；连同 NOICONS 和身份升级检查共 **5/5通过，0跳过**。辅助结果是夹具，不冒充完整安装成功。
 - 私有回执：当前构建的 `integrity-approved-before.json`、`integrity-approved-after.json`、`author-fresh/install-after-medium-result.json`、`author-fresh/setup-after-medium.log`、`author-fresh/preparation-token-probe/setup.log` 和 `preparation-log-{red,green}.log`。保留早先失败，不重写或删除。作者目录仅有诊断与预检生成的身份 marker，没有已安装应用、角色或历史；交付目录仍未安装且未消费引导。
-- 仅该 EXE 提高为 High 的后续对照已另行请求确认，两个目录继续 Medium；这是超出已批准 Medium 的安全元数据操作，未提前执行。完整首装、首次启动、真实调用/A2A、重启与历史回读仍未通过。此前 `5cad928d5` 的远端检查已终态 **19成功/1预期跳过**；本轮后继提交不继承其 CI 绿灯。
+- 用户随后明确批准仅该 EXE 提高为 High；调整前 ACL 已另存，EXE High 回读成功，字节哈希、owner/group/DACL 与两个 Medium 目录及其父目录描述符均未改变。同一完整 EXE 干净首装现已 **exit 0，66.584s**；5 个归档均完成（主依赖 22.950s），`/NOICONS` 生效，没有自动启动。该安装修正只作用于本机验收对象，不能把 High 标签写进产品源码或交付包默认权限。
+- 该安装版首次启动的 `startup-state` ready 为 **36.977s**。从零角色/零消息进入、自动六阶段 thinking/typing 演示、右侧渐进预览、一键创建 Codex/Claude Code/DSH/Kimi/Pi 五个角色、首次提醒单次完成回执及刷新保留均通过；无页面错误/弹窗。随后 Codex、DSH、Kimi、Pi 四次真实调用均自然完成，头像与历史回复回读通过；Claude 按用户决定保留上游 LLM API 兼容限制，不调用、不改判通过。
+- 原生观察器第一次将删除测试线程后的视图偏好 404 报为页面故障。证据显示是验收顺序竞态：页面仍停在即将删除的测试线程，钩子对已删除线程发 GET；产品路由本身按设计返回 404。现已在 `4545d6e02` 让验收脚本先导航离开再清理线程；旧 `live-journey.json` 保留为原始失败证据，四次调用结果仍为通过，不能把该次严格门禁失败重写为产品失败。
+- 作者实例随后通过同安装身份正常 IPC 退出：Redis SAVE 成功、32 个作者进程与所有验收端口归零、未强杀、角色 5 个仍保留、没有删除文件或数据。下一步需在新 HEAD 的 CI 完成后，按“新验收脚本 + 当前完整包”复跑必要的安装版页面门禁；已有安装包由旧产品源码 cut `4cc2345eb` 构建，不包含 `4545d6e02` 的测试脚本修正。
 
 **当前核验快照：源码 `4cc2345eb031c7601e3f05509809b183a8b6139f`，完整安装旅程仍为 No-Go。** 下列快照优先于后面的旧候选过程记录；历史失败、旧包通过及源码测试各保留原适用范围。
 
