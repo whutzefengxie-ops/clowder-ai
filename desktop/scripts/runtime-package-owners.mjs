@@ -12,6 +12,18 @@ export function rootModuleNames(modules) {
   });
 }
 
+/**
+ * Sharp publishes one optional native package per OS/architecture. Next's
+ * trace can mention packages that were present in the lock graph but are not
+ * installed for the current build platform. They cannot be runtime owners on
+ * this platform and must not make an otherwise valid frozen export fail.
+ */
+function isNonTargetSharpOptional(name) {
+  if (!name.startsWith('@img/sharp-')) return false;
+  const target = process.platform === 'win32' ? 'win32' : process.platform;
+  return !name.includes(`-${target}-`) && !name.endsWith(`-${target}`);
+}
+
 /** Ambiguous matches retain every original owner; no package identity is merged. */
 export function tracedOwners(workspace, records) {
   const modules = path.join(workspace, 'node_modules');
@@ -38,7 +50,11 @@ export function tracedOwners(workspace, records) {
       pending.push(...rootModuleNames(nested).map((name) => path.join(nested, name)));
     }
   }
-  for (const [signature, owners] of matches)
-    if (!owners.size) throw new Error(`No frozen owner for traced package: ${JSON.parse(signature)[0]}`);
+  for (const [signature, owners] of matches) {
+    if (owners.size) continue;
+    const name = JSON.parse(signature)[0];
+    if (isNonTargetSharpOptional(name)) continue;
+    throw new Error(`No frozen owner for traced package: ${name}`);
+  }
   return [...new Set([...matches.values()].flatMap((owners) => [...owners]))];
 }
