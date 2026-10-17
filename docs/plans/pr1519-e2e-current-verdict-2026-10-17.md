@@ -1,5 +1,5 @@
 ---
-feature_ids: [F155, F229, F320]
+feature_ids: [F155, F229, F273, F320]
 topics: [onboarding, desktop, testing, native-client]
 doc_kind: validation-report
 created: 2026-10-17
@@ -10,9 +10,19 @@ tips_exempt: 既有用户旅程的验收证据与未完成边界
 
 **当前为 No-Go。** 本文件优先于历史报告中的旧候选状态；不把局部通过、CI 通过或一次成功回复当作整体完成。
 
+## 最新安装实证与退出兼容修复
+
+- `20f1a0a01`已推送，CI终态19成功/1预期跳过，仍为REVIEW_REQUIRED。完整monorepo构建、242项首启/成员检查及4条严格生产页面旅程通过；生产页面HTTP夹具仍不替代原生安装版。
+- 20f的新EXE为711,519,157 bytes，SHA256 `773885743924BFD86EFDACD65EE107E6FB2F3D87B434B746A9D09F234428E07C`。真正新程序/新数据目录首装59.310s、exit0，安装器自动启动后的首次ready35.712s；API回读角色0、默认消息0。只复制目录绑定文件，不复制凭据；用户交付目录绑定哈希未变。该轮没有提前接入CDP，不能声称已经观察完整原生引导旅程；后续须在另一个新目录首装，使用已有`NoAutoStart=1`参数后受控启动并接入观察。
+- 实物同时发现退出兼容缺口：原PowerShell只探测`resources/app/installation-lifecycle.js`，20f实际模块位于ASAR内部，两种物理路径均不存在。原生程序已有退出协议，已在该实例SAVE后直接请求同安装身份IPC，全部自有进程及5368/3368/6368监听退出；不是通过强制结束验证协议。
+- 后继修复兼容源码目录、ASAR解包资源及旧版ASAR中的已知模块；只读最多2MiB的Pickle目录，校验长度、条目类型及正文边界，损坏/超大/缺失解包文件/无实例身份仍不冒充已支持。不增加ASAR运行库依赖；新壳也显式暴露该已有模块以便物理探测。Windows回归14项通过，asar-unpacked及asar-packed各自RED保留；实际新壳、安装与真实旧版退出仍需独立验证。
+- 该增量仅涉及桌面打包/退出脚本、测试及本报告。后继打包可以在严格证明API/Web/MCP及锁文件输入与20f完全相同后，复用20f冻结归档；保留20f真实编译戳和来源，不伪装为后继提交重新编译。桌面壳及安装器必须重新生成并记录新的源码与哈希。新包尚未作为验收完成交付。
+
+以下为过程证据与历史失败；最新状态以上节及实际后继回执为准。
+
 **2026-10-17用户决定：Claude原连接按外部LLM API兼容问题保留，不再继续追查或调整默认协议，也不再单独作为本PR代码修复的阻塞。** 旧29/30及4/5失败记录保持原判，不把需求处置冒充模型重新通过。当前实际余项是F155实页/首次手动创建接线、最新源码的新EXE完整旅程、平台边界及最新CI/正式review。
 
-**当前远端CI已终态，但没有全部通过。** `6fa1689c1`共15项成功、2项跳过、3项失败；失败包括下面两个具体分片及受其影响的`Test (Public)`汇总。PR为`MERGEABLE / BLOCKED / REVIEW_REQUIRED`，main仍为`b59cd583f`且已合入，不存在当前已知文件冲突。以下问题与用户已接受的Claude外部API限制分开处理：
+**历史CI失败（6fa）。** `6fa1689c1`当时共15项成功、2项跳过、3项失败；失败包括下面两个具体分片及受其影响的`Test (Public)`汇总。后继437及20f均19成功/1跳过，这不抹去以下失败或证明SQLite耗时唯一根因已经消除。main `b59cd583f`已合入；以下问题与用户已接受的Claude外部API限制分开处理：
 
 - `Public test (distributable-2)`在`guide-registry-loader.test.js:35`失败：本轮F155 flow实际target为`hub.trigger`，既有契约测试期望`chat.input / rail.members / rail.accounts`三步。该分片扫描199文件，172.353s退出失败。已回读原issue关于非阻塞提醒及pin选择的意见；当前main的classic/v2共有设置锚点为`hub.trigger`，不存在后两个rail标签。本地契约修订后16项通过，但真实页面与后继远端CI尚未通过，不能只凭更换断言关闭。
 - `Public test (distributable-5)`的`memory/index-builder-liveness-contract.test.js:154`失败：SQLite writer等待116.848ms，超过100ms约束。诊断显示主要耗时在SQL run（116.792ms），没有重叠GC；WAL计数变化提供排查线索，但不是唯一根因证明。该运行实现与main一致，尚未定位并修复；不通过放宽阈值或降低持久化保证制造通过。

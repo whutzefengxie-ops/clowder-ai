@@ -170,7 +170,8 @@
       "**/api-startup-read-ahead.mjs",
       "**/runtime-web-server.js",
       "**/runtime-web-config.js",
-      "**/startup-timing.js"
+      "**/startup-timing.js",
+      "**/installation-lifecycle.js"
     ],
     "afterPack": "./afterPack.js"
   }
