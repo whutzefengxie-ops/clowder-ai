@@ -85,7 +85,20 @@ after(async () => {
   await mkdir(evidence, { recursive: true });
   await writeFile(
     path.join(evidence, 'receipt.json'),
-    JSON.stringify({ revision, httpFixture: true, modelCalls: 0, receipts }, null, 2),
+    JSON.stringify(
+      {
+        revision,
+        httpFixture: true,
+        modelCalls: 0,
+        frontend: baseUrl,
+        serverPid: server?.pid,
+        serverExitCode: server?.exitCode,
+        serverSignal: server?.signalCode,
+        receipts,
+      },
+      null,
+      2,
+    ),
   );
   await writeFile(path.join(evidence, 'server.log'), output.join(''));
 });
@@ -228,6 +241,8 @@ for (const shell of ['classic', 'v2'])
         );
         await page.locator('textarea:visible').first().waitFor();
         assert.equal(await panel.count(), 0);
+        assert.equal(state.status, action === 'complete' ? 'completed' : 'dismissed');
+        assert.equal(state.writes.filter((value) => value.startsWith('entry:')).length, 1);
         assert.equal(await page.evaluate(() => localStorage.getItem('cat-cafe:pinned-settings-sections')), '[]');
         assert.equal(await page.evaluate(() => localStorage.getItem('cat-cafe:shell-presentation')), shell);
         assert.deepEqual(state.errors, []);

@@ -15,10 +15,11 @@ export function MemberCreationPage({
   const params = useSearchParams();
   const router = useRouter();
   const { hasFetched, isLoading, refresh } = useCatData();
-  const initialRosterEmpty = useRef<boolean | null>(hasFetched ? props.cats.length === 0 : null);
+  const initialRosterEmpty = useRef<boolean | null>(hasFetched && !isLoading ? props.cats.length === 0 : null);
   useEffect(() => {
-    if (initialRosterEmpty.current === null && hasFetched) initialRosterEmpty.current = props.cats.length === 0;
-  }, [hasFetched, props.cats.length]);
+    if (initialRosterEmpty.current === null && hasFetched && !isLoading)
+      initialRosterEmpty.current = props.cats.length === 0;
+  }, [hasFetched, isLoading, props.cats.length]);
   const decided = useRef(false);
   const [mode, setMode] = useState<'team' | 'manual' | 'pending' | 'existing'>(
     params.get('manual') === '1' || params.get('view') !== 'setup'

@@ -110,6 +110,9 @@ it('waits for the F155 completion acknowledgement before saving personal complet
   if (!id) throw Error('Expected an active guide session');
   await act(async () => useGuideStore.getState().markCompletionPersisted(id));
   expect(JSON.parse(String(writes()[0][1]?.body))).toEqual({ status: 'completed' });
+  await act(async () => useGuideStore.setState({ startFailure: null }));
+  await act(async () => useGuideStore.getState().exitGuide());
+  expect(writes()).toHaveLength(1);
 });
 it('exposes a failed write without a blocking dialog and retries the same dismissal', async () => {
   let fail = true;

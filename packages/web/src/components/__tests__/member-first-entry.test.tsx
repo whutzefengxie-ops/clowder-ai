@@ -39,6 +39,7 @@ beforeEach(() => {
   writes.length = 0;
   receiptFails = false;
   registry.hasFetched = true;
+  registry.isLoading = false;
   saved.mockResolvedValue(undefined);
   vi.mocked(apiFetch).mockImplementation(async (url, init) => {
     if (init?.method) writes.push(`${init.method} ${url}`);
@@ -96,6 +97,15 @@ it('retains the manual form on receipt failure and retries without creating a pa
 it.each([false, true])('does not infer a first user from an unknown or existing roster (known=%s)', async (known) => {
   registry.hasFetched = known;
   await render(known ? [{ id: 'existing' } as CatData] : []);
+  await namePartner();
+  await clickSave();
+  expect(writes).toEqual(['POST /api/cats']);
+  expect(saved).toHaveBeenCalledOnce();
+});
+
+it('does not infer an empty initial roster while a previously fetched list is refreshing', async () => {
+  registry.isLoading = true;
+  await render();
   await namePartner();
   await clickSave();
   expect(writes).toEqual(['POST /api/cats']);

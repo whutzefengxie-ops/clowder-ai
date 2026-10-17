@@ -62,8 +62,10 @@ export function FirstRunEntryReminder({ enabled, threadId }: { enabled: boolean;
     return useGuideStore.subscribe((state, previous) => {
       const own = state.session?.flow.id === GUIDE_ID && state.session.threadId === threadId;
       const previousOwn = previous.session?.flow.id === GUIDE_ID && previous.session.threadId === threadId;
-      const completed = own && state.session?.phase === 'complete' && state.completionPersisted;
-      const dismissed = previousOwn && !state.session && state.completedGuides.has(`${threadId}::${GUIDE_ID}`);
+      const acknowledged = previousOwn && previous.session?.phase === 'complete' && previous.completionPersisted;
+      const completed = own && state.session?.phase === 'complete' && state.completionPersisted && !acknowledged;
+      const dismissed =
+        previousOwn && !state.session && !acknowledged && state.completedGuides.has(`${threadId}::${GUIDE_ID}`);
       if (!completed && !dismissed) return;
       revision.current += 1;
       if (pending.current !== 'completed') pending.current = completed ? 'completed' : 'dismissed';
