@@ -329,7 +329,10 @@ begin
          '" -FrontendPort "' + ExpandConstant('{param:FrontendPort|}') +
          '" -ApiPort "' + ExpandConstant('{param:ApiPort|}') +
          '" -RedisPort "' + ExpandConstant('{param:RedisPort|}') + '"';
-  Started := ExecAndLogOutput('powershell.exe', Cmd, '', SW_HIDE, ewWaitUntilTerminated, ExitCode, @ExtractionOutput);
+  // PowerShell's Add-Type identity helper must not run through the output
+  // capture pipe. On Windows this changes the child token/runtime policy and
+  // can fail before the script starts with a misleading permission error.
+  Started := Exec('powershell.exe', Cmd, '', SW_HIDE, ewWaitUntilTerminated, ExitCode);
   Log('Identity helper started=' + IntToStr(Ord(Started)) + ', exit=' + IntToStr(ExitCode));
   if (not Started) or (ExitCode <> 0) then begin
     Result := 'Unable to preserve the target installation identity. See setup log.';
