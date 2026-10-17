@@ -13,15 +13,22 @@ export function rootModuleNames(modules) {
 }
 
 /**
- * Sharp publishes optional native packages for every supported OS/architecture.
- * Next's trace can mention packages that are present in the lock graph but are
- * not installed in the current build. A missing optional package cannot be a
- * runtime owner and must not make an otherwise valid frozen export fail. Any
- * package that is actually installed still gets retained through the normal
- * owner matching path above.
+ * Sharp publishes optional native packages for every supported OS/architecture,
+ * and its WASM variants pull @emnapi/* helpers that are also optional per
+ * platform. Next's trace can mention packages that are present in the lock
+ * graph but are not installed in the current build. A missing optional package
+ * cannot be a runtime owner and must not make an otherwise valid frozen export
+ * fail. Any package that is actually installed still gets retained through the
+ * normal owner matching path above.
  */
-function isMissingSharpOptional(name) {
-  return name.startsWith('@img/sharp-') || name.startsWith('@img/sharp-libvips-');
+function isMissingOptionalTraceInput(name) {
+  return (
+    name.startsWith('@img/sharp-') ||
+    name.startsWith('@img/sharp-libvips-') ||
+    name === '@emnapi/runtime' ||
+    name === '@emnapi/core' ||
+    name === '@emnapi/wasi-threads'
+  );
 }
 
 /** Ambiguous matches retain every original owner; no package identity is merged. */
@@ -53,7 +60,7 @@ export function tracedOwners(workspace, records) {
   for (const [signature, owners] of matches) {
     if (owners.size) continue;
     const name = JSON.parse(signature)[0];
-    if (isMissingSharpOptional(name)) continue;
+    if (isMissingOptionalTraceInput(name)) continue;
     throw new Error(`No frozen owner for traced package: ${name}`);
   }
   return [...new Set([...matches.values()].flatMap((owners) => [...owners]))];

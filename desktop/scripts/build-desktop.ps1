@@ -258,10 +258,39 @@ $desktopDist = Join-Path $ProjectRoot "desktop-dist"
 
 if (-not $SkipElectronBuild) {
     Push-Location $desktopDir
-    if (-not (Test-Path (Join-Path $desktopDir "node_modules"))) {
-        Write-Host "  Installing desktop dependencies..."
-    npm ci --include=dev
+    # node_modules may already exist but disagree with package-lock.json (for
+    # example an Electron manually installed for diagnosis). electron-builder
+    # packages whatever is installed, so a version drift would ship a shell that
+    # does not match the lockfile and may need an unexpected download. Repair the
+    # installed tree from the lock before packaging.
+    $lockElectron = $null
+    $lockPath = Join-Path $desktopDir "package-lock.json"
+    if (Test-Path -LiteralPath $lockPath) {
+        # package-lock v3 stores the project entry under the empty-string key,
+        # which Windows PowerShell 5.1's ConvertFrom-Json cannot materialize.
+        # Node is a build prerequisite, so ask it for the locked version.
+        $lockElectron = (& node -e "const lock=require(process.argv[1]);process.stdout.write(((lock.packages||{})['']||{}).devDependencies?.electron||'')" $lockPath 2>$null)
+        if ($LASTEXITCODE -ne 0) { $lockElectron = $null }
+        if ($lockElectron) { $lockElectron = "$lockElectron".Trim() }
+    }
+    $installedElectronPath = Join-Path $desktopDir "node_modules/electron/package.json"
+    $installedElectron = if (Test-Path -LiteralPath $installedElectronPath) {
+        (Get-Content -LiteralPath $installedElectronPath -Raw | ConvertFrom-Json).version
+    } else { $null }
+    if (-not (Test-Path (Join-Path $desktopDir "node_modules")) -or
+        ($lockElectron -and $installedElectron -ne $lockElectron)) {
+        if ($installedElectron -and $lockElectron -and $installedElectron -ne $lockElectron) {
+            Write-Warn "desktop Electron $installedElectron does not match package-lock $lockElectron; reinstalling from lock"
+        } else {
+            Write-Host "  Installing desktop dependencies..."
+        }
+        npm ci --include=dev
         if ($LASTEXITCODE -ne 0) { Write-Err "npm install failed in desktop/"; exit 1 }
+        $installedElectron = (Get-Content -LiteralPath $installedElectronPath -Raw | ConvertFrom-Json).version
+        if ($lockElectron -and $installedElectron -ne $lockElectron) {
+            Write-Err "desktop Electron $installedElectron still does not match package-lock $lockElectron"
+            exit 1
+        }
     }
     npx electron-builder --win --dir --config windows-builder.cjs
     if ($LASTEXITCODE -ne 0) { Write-Err "electron-builder failed"; exit 1 }
