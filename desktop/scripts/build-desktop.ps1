@@ -59,6 +59,25 @@ function Write-Warn  { param([string]$msg) Write-Host "  [!!] $msg" -ForegroundC
 function Write-Err   { param([string]$msg) Write-Host "  [ERR] $msg" -ForegroundColor Red }
 
 $ProjectRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $PSCommandPath))
+$integrityTool = Join-Path (Join-Path $ProjectRoot 'desktop') 'scripts\installer-integrity.mjs'
+$script:SetupIntegrityLevel = $null
+$script:BuildRootIntegrity = $null
+
+# A restrictive mandatory integrity label on this build root is inherited by
+# every produced file. A Low-labelled Setup runs at Low integrity and cannot
+# create `%TEMP%\is-*.tmp` (error 5); an explicitly Medium-labelled Setup caps
+# the process at Medium and the PrepareToInstall identity helper fails with
+# Win32 1314. The release step below raises such labels to High, but warn early
+# so the workspace cause is visible instead of looking like a code bug.
+if (Test-Path -LiteralPath $integrityTool) {
+    $rootIntegrityJson = (& node $integrityTool $ProjectRoot --check --json 2>$null | Out-String).Trim()
+    if ($rootIntegrityJson) {
+        try { $script:BuildRootIntegrity = ($rootIntegrityJson | ConvertFrom-Json).level } catch {}
+    }
+    if ($LASTEXITCODE -ne 0 -and $rootIntegrityJson) {
+        Write-Warn "Build root carries a restrictive integrity label; produced installers inherit it and will be raised to High before release (fix the workspace label for clean provenance)."
+    }
+}
 
 # A release package must be reproducible from the exact source revision. The
 # installer copies these roots directly or packs them into the runtime archives;
@@ -471,6 +490,25 @@ if (-not $SkipInstaller) {
     Write-Ok "Installer built"
 
     $outputExe = Get-Item -LiteralPath (Join-Path $distDir "ClowderAI-Setup-$catCafeVersion.exe") -ErrorAction Stop
+    # The installer must be launchable from the delivered folder. A Low label
+    # inherited from the build root makes Setup run at Low integrity (TEMP
+    # creation fails with error 5); an explicit Medium label caps the elevated
+    # process so the identity helper's Add-Type fails with Win32 1314. Raise a
+    # restrictive label to High and fail the release build if it stays
+    # unlaunchable.
+    $integrityResult = (& node $integrityTool $outputExe.FullName --json 2>&1 | Out-String).Trim()
+    if ($LASTEXITCODE -ne 0) {
+        Write-Err "Setup integrity normalization failed: $integrityResult"
+        Write-Err "Delivered EXE would be capped below the elevated token (error 5 at %TEMP%\is-*.tmp, or Win32 1314 in the identity helper)."
+        exit 1
+    }
+    $integrity = $integrityResult | ConvertFrom-Json
+    $script:SetupIntegrityLevel = $integrity.after
+    if ($integrity.changed) {
+        Write-Warn "Raised Setup integrity from $($integrity.before) to $($integrity.after) (restrictive label inherited from the build root)"
+    } else {
+        Write-Ok "Setup integrity: $($integrity.after)"
+    }
     Write-Host ""
     Write-Host "  ========================================" -ForegroundColor Green
     Write-Host "  Installer ready!" -ForegroundColor Green
@@ -717,6 +755,22 @@ if (-not $NoManifest) {
         $portableZip = Get-ChildItem -LiteralPath $manifestDistDir -Filter 'ClowderAI-*.zip' -File -ErrorAction SilentlyContinue |
             Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
         $setupRecord = if ($setupExe) { Get-ArtifactRecord $setupExe.FullName } else { $null }
+        if ($setupRecord) {
+            # Re-check (and normalize when needed) so the manifest never records
+            # an unlaunchable Low-integrity installer as a release artifact.
+            $setupIntegrityJson = (& node $integrityTool $setupExe.FullName --json 2>&1 | Out-String).Trim()
+            if ($LASTEXITCODE -eq 0 -and $setupIntegrityJson) {
+                $setupIntegrity = $setupIntegrityJson | ConvertFrom-Json
+                $setupRecord.integrity = $setupIntegrity.after
+                $script:SetupIntegrityLevel = $setupIntegrity.after
+                if ($setupIntegrity.changed) {
+                    Write-Warn "Raised existing Setup integrity from $($setupIntegrity.before) to $($setupIntegrity.after)"
+                }
+            } else {
+                $setupRecord.integrity = 'unknown'
+                Write-Warn "Could not verify Setup integrity: $setupIntegrityJson"
+            }
+        }
         $portableRecord = if ($portableZip) { Get-ArtifactRecord $portableZip.FullName } else { $null }
 
         # Each bulk archive and its serialized extraction manifest (sidecar).
@@ -770,6 +824,8 @@ if (-not $NoManifest) {
                 packagedUntrackedFiles   = $untrackedPackagedFiles
                 desktopSourceClean       = ($desktopStatus.Count -eq 0)
                 desktopSourceChanges     = $desktopSourceChanges
+                buildRootIntegrity       = $script:BuildRootIntegrity
+                installerIntegrity       = $script:SetupIntegrityLevel
             }
         }
         $manifestPath = Join-Path $manifestDistDir 'build-manifest.json'
