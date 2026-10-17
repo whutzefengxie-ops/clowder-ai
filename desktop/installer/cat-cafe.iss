@@ -39,6 +39,7 @@ AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 DefaultDirName={autopf}\ClowderAI
 DefaultGroupName={#MyAppName}
+AllowNoIcons=yes
 OutputDir=..\..\dist
 OutputBaseFilename=ClowderAI-Setup-{#MyAppVersion}
 Compression=lzma2/ultra64
