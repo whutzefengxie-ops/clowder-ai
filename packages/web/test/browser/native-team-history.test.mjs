@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import { test } from 'node:test';
 import { openLiveJourney, roleIdentity } from './native-team-live.harness.mjs';
 import { assertLivePageHealthy } from './native-team-observers.mjs';
+import { waitForRenderedHistory } from './native-team-rendered-reply.mjs';
 
 // This is persistence acceptance, not task acceptance. Failed or irrelevant
 // replies must survive restart too; preserving them never turns a failed task green.
@@ -12,6 +13,7 @@ test('installed application retains every recorded outcome after restart', { tim
   const expected = JSON.parse(await fs.readFile(source, 'utf8'));
   assert.equal(expected.instance, process.env.CAT_CAFE_ONBOARDING_E2E_INSTANCE);
   const journey = await openLiveJourney();
+  journey.record.renderedHistory = [];
   try {
     const cats = (await journey.request('/api/cats')).cats;
     assert.deepEqual(cats.map(roleIdentity), expected.roles);
@@ -34,8 +36,7 @@ test('installed application retains every recorded outcome after restart', { tim
       }
       await journey.page.goto(new URL(`/thread/${thread.id}?shell=v2&lang=zh`, journey.web).href);
       for (const message of thread.messages.filter((row) => row.type === 'assistant')) {
-        const body = journey.page.locator(`[data-message-id="${message.id}"]`).getByTestId('message-bubble');
-        await body.getByText(message.content, { exact: false }).first().waitFor({ state: 'visible' });
+        journey.record.renderedHistory.push(await waitForRenderedHistory(journey.page, message));
       }
       await journey.screenshot(`retained-${thread.id}`);
     }
@@ -46,6 +47,10 @@ test('installed application retains every recorded outcome after restart', { tim
       taskVerdictsReclassified: false,
     });
     assertLivePageHealthy(journey.record);
+  } catch (error) {
+    journey.record.failure = error.message;
+    await journey.screenshot('history-failure').catch(() => {});
+    throw error;
   } finally {
     await journey.close();
   }

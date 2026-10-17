@@ -28,12 +28,17 @@ tips_exempt: 既有客户端执行异常的取证与恢复边界，不新增配�
 | 安装版现有成员 PATCH 写入临时 CLI 参数 | 同一角色3次新随机任务通过，原连接/模型/工具字段不变 | 产品原有参数入口确实能传递该组合 |
 | 安装版 Claude 首选 → Codex 执行 → Claude 整合 | 52.282s；单一初始 POST、恰好3次真实调用自然 done、因果链通过、cleanup=[] | 不止是短句单聊；能消费真实伙伴结果并完成回传 |
 | 恢复与退出 | 作者角色参数已恢复；Redis SAVE、自有进程树及四端口全部释放 | 临时诊断没有作为默认配置遗留 |
+| 当前包完整Setup失败→同版修复后，再走默认产品路径 | 其余4工具通过；Claude再次只问候，整轮4/5 FAIL | 准备输入与原生CLI用户输入完全相同、任务标记存在；原生最终正文无结果且自然done，cleanup=[]，没有被测试提前取消 |
 
 目前可复核的定位是：**该 CLI / 原 API 连接组合对会话内 system 消息存在兼容异常。** 官方支持模型上的正常协议不能因此被称为错误；没有网关内部证据，不能断言网关具体丢弃了哪个字段或是哪一层转换的缺陷。独立 CLI 的复现也说明不能仅归因于本 PR 的消息发送实现。
 
 安装版在临时显式兼容参数下的真实回传与审核结果（不是默认配置成功的替代证据）：
 
 ![Claude 接收 Codex 真实结果后审核并交付](../plans/assets/pr1519-e2e-20261017/installed-claude-native-compatibility-a2a.png)
+
+恢复默认参数后的真实产品失败仍存在，不能用上图成功替代：
+
+![当前安装版默认Claude收到正确任务却只问候](../plans/assets/pr1519-e2e-20261017/installed-claude-default-task-failure.png)
 
 [官方协议说明](https://platform.claude.com/docs/en/build-with-claude/mid-conversation-system-messages)说明会话内 system 消息的模型范围及位置约束。上述负向 capability 开关来自本机所装 CLI 的实际实现与取证，未在本轮找到官方稳定配置文档；它有版本依赖，不能悄悄变成全部 Claude 连接的默认策略。
 
@@ -56,6 +61,7 @@ tips_exempt: 既有客户端执行异常的取证与恢复边界，不新增配�
 - 安装版随机任务和 A2A 分别复用 `native-team-live.harness.mjs`、`native-team-a2a.test.mjs`；只在明确作者实例中执行，创建的测试历史保留。
 - 私有证据根为本轮 `startup-read-ahead-20261017/`；直连 A/B/A 在 `claude-wire-direct-settings-evidence.json`，最小组合对照在 `claude-wire-native-capability-minimal-evidence.json`。
 - 安装版 `claude-installed-compatibility.log`、`lifecycle-0927-claude-compatibility/{live-journey.json,restoration.json}`、独立 A2A 的 `live-journey.json` 和最终停止回执分别保存。不公开认证、上游私有地址或完整私有请求。
+- 完整修复后默认失败见 `lifecycle-0927-full-setup-repair-live-correct-receipt/live-journey.json`、原生journal对账 `lifecycle-after-repair-claude-failure-evidence.json`；保留原assistant messageId、CLI sessionId、原生done与零清理动作，不重新标绿。
 - 当前 EXE 为 `0927b6d0a` 实际编译产物，SHA-256 `969CD34C7E4E41D65DF52987BE89A253267B6FBA0DF49D7B6660E2C948230AE3`；本轮没有把后继测试/报告提交戳写入旧产物。
 
 这份诊断没有把默认失败改判成功，也没有把外部连接的兼容性边界扩张为对所有供应商的保证。[当前验收判定](../plans/pr1519-e2e-current-verdict-2026-10-17.md)继续保持 No-Go。
