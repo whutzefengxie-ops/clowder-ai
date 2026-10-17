@@ -101,14 +101,22 @@ it('does not record completion on navigation or an engine error and can re-offer
   await render();
   expect(useGuideStore.getState().pendingStart?.guideId).toBe('first-run-entry');
 });
-it('waits for the F155 completion acknowledgement before saving personal completion', async () => {
+it('acknowledges F155 completion only after the personal owner confirms its single write', async () => {
+  let release!: (response: Response) => void;
+  vi.mocked(apiFetch).mockImplementation(async (_path, init) =>
+    init?.method === 'PUT'
+      ? new Promise<Response>((resolve) => {
+          release = resolve;
+        })
+      : json('pending'),
+  );
   await render();
   await start();
   await act(async () => useGuideStore.getState().advanceStep());
-  expect(writes()).toHaveLength(0);
-  const id = useGuideStore.getState().session?.sessionId;
-  if (!id) throw Error('Expected an active guide session');
-  await act(async () => useGuideStore.getState().markCompletionPersisted(id));
+  expect(writes()).toHaveLength(1);
+  expect(useGuideStore.getState().completionPersisted).toBe(false);
+  await act(async () => release(json('completed')));
+  expect(useGuideStore.getState().completionPersisted).toBe(true);
   expect(JSON.parse(String(writes()[0][1]?.body))).toEqual({ status: 'completed' });
   await act(async () => useGuideStore.setState({ startFailure: null }));
   await act(async () => useGuideStore.getState().exitGuide());
@@ -152,4 +160,18 @@ it('ignores a late receipt after eligibility is withdrawn', async () => {
   await act(async () => resolve(json('pending')));
   expect(useGuideStore.getState().pendingStart).toBeNull();
   expect(writes()).toHaveLength(0);
+});
+
+it.each([
+  'pending',
+  'dismissed',
+  'not_started',
+])('does not acknowledge a completed intent from an incorrect 200 status: %s', async (status) => {
+  vi.mocked(apiFetch).mockImplementation(async (_path, init) => json(init?.method === 'PUT' ? status : 'pending'));
+  await render();
+  await start();
+  await act(async () => useGuideStore.getState().advanceStep());
+  expect(useGuideStore.getState().completionPersisted).toBe(false);
+  expect(useGuideStore.getState().completionFailed).toBe(true);
+  expect(host.textContent).toContain('可以继续对话');
 });

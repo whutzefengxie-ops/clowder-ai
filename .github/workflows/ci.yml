@@ -52,7 +52,13 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @cat-cafe/shared build
       - run: pnpm --filter @cat-cafe/api build
+      - name: Personal first-run lifecycle with production API handlers
+        run: pnpm --filter @cat-cafe/web test:first-run-entry:api
       - run: pnpm --filter @cat-cafe/web build
+      - name: Production first-run pages with real receipt and guide routes
+        run: |
+          pnpm --filter @cat-cafe/web exec playwright install --with-deps chromium
+          pnpm --filter @cat-cafe/web test:first-run-entry:production
 
   web-first-run-onboarding:
     name: Test (Web First-run Onboarding)

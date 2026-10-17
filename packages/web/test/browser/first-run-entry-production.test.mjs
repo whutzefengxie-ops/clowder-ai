@@ -8,17 +8,19 @@ import { after, before, test } from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
-import YAML from 'yaml';
+import { openFirstRunEntryApi } from '../fixtures/first-run-entry-api.mjs';
 import { cats, createChatProofApi } from './fixtures/f322-chat-real-page-data.mjs';
 
-// Actual production UI; HTTP boundary fixtures are NOT installed/API persistence evidence.
+// Actual production UI and entry/guide route handlers with atomic preference files.
+// Other HTTP reads and authenticated session identity remain explicit fixtures;
+// in-memory guide threads are NOT installed/Redis/authentication acceptance.
 const webRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const repo = path.resolve(webRoot, '../..');
 const revision = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repo, encoding: 'utf8' }).trim();
 const evidence = process.env.CAT_CAFE_ENTRY_EVIDENCE_DIR ?? path.join(repo, '.tmp', `first-entry-${Date.now()}`);
 const output = [],
   receipts = [];
-let server, browser, baseUrl, flow;
+let server, browser, baseUrl;
 
 async function freePort() {
   const listener = createServer().listen(0, '127.0.0.1');
@@ -35,7 +37,6 @@ before(async () => {
     revision,
     'rebuild production UI from current HEAD first',
   );
-  flow = YAML.parse(await readFile(path.join(repo, 'guides/flows/first-run-entry.yaml'), 'utf8'));
   await mkdir(evidence, { recursive: true });
   const port = await freePort();
   baseUrl = `http://127.0.0.1:${port}`;
@@ -89,6 +90,7 @@ after(async () => {
       {
         revision,
         httpFixture: true,
+        entryAndGuideRoutes: 'production handlers with real atomic preference files; test session identity',
         modelCalls: 0,
         frontend: baseUrl,
         serverPid: server?.pid,
@@ -104,6 +106,16 @@ after(async () => {
 });
 
 async function fixture(shell, scenario) {
+  const entryApi = await openFirstRunEntryApi(path.join(evidence, `${shell}-${scenario}-api`), 'owner-proof');
+  assert.equal(
+    (
+      await entryApi.request('/api/config/onboarding/entry', {
+        method: 'PUT',
+        body: JSON.stringify({ status: 'pending' }),
+      })
+    ).statusCode,
+    200,
+  );
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
   await context.addInitScript((selected) => {
     localStorage.setItem('cat-cafe:shell-presentation', selected);
@@ -161,17 +173,22 @@ async function fixture(shell, scenario) {
     switch (url.pathname) {
       case '/api/config/onboarding/entry':
         if (method === 'PUT') {
-          state.status = req.postDataJSON().status;
-          state.writes.push(`entry:${state.status}`);
+          state.writes.push(`entry:${req.postDataJSON().status}`);
         }
-        return reply({ userId: 'owner-proof', version: 'first-run-entry-v1', status: state.status });
+        {
+          const response = await entryApi.request(url.pathname, { method, body: req.postData() });
+          state.status = response.json().status;
+          return reply(response.json(), response.statusCode);
+        }
       case '/api/config/onboarding':
         return reply({ userId: 'owner-proof', version: 'collaboration-v1', status: 'completed' });
       case '/api/cats':
         assert.equal(method, 'GET');
         return reply({ cats: [cats[0]] });
-      case '/api/guide-flows/first-run-entry':
-        return reply(flow);
+      case '/api/guide-flows/first-run-entry': {
+        const response = await entryApi.request(url.pathname);
+        return reply(response.json(), response.statusCode);
+      }
       case '/api/routing/preview':
         return reply({ targetCats: [cats[0].id], reason: { kind: 'recent_replier' } });
       case '/api/threads/default/composer-draft':
@@ -184,7 +201,8 @@ async function fixture(shell, scenario) {
     }
     if (url.pathname.startsWith('/api/guide-actions/')) {
       state.writes.push(url.pathname);
-      return reply({ ok: true });
+      const response = await entryApi.request(url.pathname, { method, body: req.postData() });
+      return reply(response.json(), response.statusCode);
     }
     if (Object.hasOwn(bodies, url.pathname)) return reply(bodies[url.pathname]);
     const response = common.respond(req, url);
@@ -192,13 +210,13 @@ async function fixture(shell, scenario) {
     state.unexpected.push(`${method} ${url.pathname}`);
     return reply({ error: 'Unexpected first-entry fixture request' }, 500);
   });
-  return { page, context, state, common };
+  return { page, context, state, common, entryApi };
 }
 
 for (const shell of ['classic', 'v2'])
   for (const action of ['complete', 'dismiss']) {
     test(`${shell}: unpinned settings remain usable; ${action} persists across reload`, async () => {
-      const { page, context, state, common } = await fixture(shell, action);
+      const { page, context, state, common, entryApi } = await fixture(shell, action);
       try {
         await page.goto(`${baseUrl}/?shell=${shell}&lang=zh`, { waitUntil: 'domcontentloaded' });
         const panel = page.getByRole('dialog', { name: '引导面板' });
@@ -224,7 +242,10 @@ for (const shell of ['classic', 'v2'])
           );
           await saved;
           assert.equal(state.status, 'completed');
-          assert.ok(state.writes.includes('/api/guide-actions/complete'));
+          assert.equal(
+            state.writes.some((value) => value.startsWith('/api/guide-actions/')),
+            false,
+          );
           await page.getByRole('button', { name: '知道了', exact: true }).click();
         } else {
           await panel.getByRole('button', { name: '退出引导' }).click();
@@ -255,6 +276,7 @@ for (const shell of ['classic', 'v2'])
         state.failure = error.message;
         throw error;
       } finally {
+        await entryApi.app.close();
         await context.close();
       }
     });

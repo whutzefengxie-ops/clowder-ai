@@ -175,7 +175,7 @@ export const useGuideStore = create<GuideState>((set, get) => ({
       if (state.session.sessionId !== sessionId || state.session.phase !== 'complete') {
         return state;
       }
-      return { completionPersisted: true };
+      return { completionPersisted: true, completionFailed: false };
     }),
 
   markCompletionFailed: (sessionId) =>
