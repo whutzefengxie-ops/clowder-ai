@@ -5,6 +5,7 @@ import { allA2AInvocationsDone, findA2AProof } from './native-team-a2a-proof.mjs
 import { settleOwnedThread } from './native-team-cleanup.mjs';
 import { openLiveJourney, roleIdentity } from './native-team-live.harness.mjs';
 import { assertLivePageHealthy } from './native-team-observers.mjs';
+import { readNativeToolObservations } from './native-team-transcript-observation.mjs';
 
 test(
   'real A2A: one initial target delegates to a configured peer and integrates its actual reply',
@@ -55,7 +56,19 @@ test(
         trajectories = [];
       while (Date.now() < deadline) {
         messages = (await request(`/api/messages?threadId=${thread.id}&limit=100`)).messages;
-        proof = findA2AProof(messages, { leadId: lead.id, peerId: peer.id, peerMarker, finalMarker });
+        const observations = await readNativeToolObservations(
+          process.env.CAT_CAFE_ONBOARDING_E2E_INSTANCE,
+          thread.id,
+          messages,
+        );
+        record.toolObservationSources = observations.sources;
+        proof = findA2AProof(messages, {
+          leadId: lead.id,
+          peerId: peer.id,
+          peerMarker,
+          finalMarker,
+          nativeToolEvents: observations.events,
+        });
         if (proof) {
           trajectories = (await request(`/api/threads/${thread.id}/invocations?limit=30`)).invocations;
           if (allA2AInvocationsDone(trajectories)) break;

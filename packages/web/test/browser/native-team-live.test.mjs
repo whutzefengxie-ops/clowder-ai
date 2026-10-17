@@ -38,6 +38,7 @@ test(
           url.searchParams.get('s') === 'members' &&
           url.searchParams.get('view') !== 'setup',
       );
+      await page.getByTestId('member-list-page').waitFor({ state: 'visible' });
       assert.equal(await page.getByTestId('recommended-team-setup').count(), 0);
       await log('existing-roster-does-not-recommend-initial-setup');
       assertLivePageHealthy(record);

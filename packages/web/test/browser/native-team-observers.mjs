@@ -52,7 +52,12 @@ export async function observePageFaults(page, record) {
       frameId: event.frameId,
       startedAt: event.wallTime * 1000,
       prefetch: isPrefetch(event.request.headers),
+      rsc: Object.entries(event.request.headers).some(([name, value]) => name.toLowerCase() === 'rsc' && value === '1'),
     });
+  });
+  session.on('Network.responseReceived', ({ requestId, response }) => {
+    const request = requests.get(requestId);
+    if (request) Object.assign(request, { responseStatus: response.status, mimeType: response.mimeType });
   });
   session.on('Network.loadingFinished', ({ requestId }) => requests.delete(requestId));
   session.on('Network.loadingFailed', (event) => {

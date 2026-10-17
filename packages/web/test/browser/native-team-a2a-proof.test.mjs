@@ -177,6 +177,19 @@ test('a native MCP context read proves a real peer result consumed within the in
   assert.equal(proof.returnInvocationId, 'c');
 });
 
+test('truncated display JSON is insufficient; a complete native observation can prove the same causal read', () => {
+  const messages = fixtureWithObservation();
+  const full = messages[1].toolEvents;
+  messages[1].toolEvents = full.map((event) =>
+    event.type === 'tool_result' ? { ...event, detail: `${event.detail.slice(0, 50)}…` } : event,
+  );
+  assert.equal(findA2AProof(messages, options), undefined);
+  const proof = findA2AProof(messages, { ...options, nativeToolEvents: new Map([['a', full]]) });
+  assert.equal(proof?.observationToolUseId, 'read1');
+  assert.equal(proof?.observedMessageId, 'return');
+  assert.equal(findA2AProof(messages, { ...options, nativeToolEvents: new Map([['foreign', full]]) }), undefined);
+});
+
 test('observing the peer result is insufficient while the actual return invocation is absent or processing', () => {
   for (const mutate of [
     (messages) => {

@@ -38,7 +38,7 @@ function consumedPeerReply(response, peer, marker, byId) {
 
 // Persisted lifecycle/causal facts are authoritative. Stream messages receive an
 // ID before generation ends; array order and a model saying "received" are not proof.
-export function findA2AProof(messages, { leadId, peerId, peerMarker, finalMarker }) {
+export function findA2AProof(messages, { leadId, peerId, peerMarker, finalMarker, nativeToolEvents }) {
   const user = messages.find((message) => message.type === 'user');
   if (!user) return undefined;
   const lead = messages.find(
@@ -68,7 +68,13 @@ export function findA2AProof(messages, { leadId, peerId, peerMarker, finalMarker
         return false;
       if (message.lifecycle?.status !== 'completed' || !Number.isFinite(message.lifecycle.startedAt)) return false;
       if (consumedPeerReply(message, peer, peerMarker, byId)) return true;
-      observation = findPeerObservation(message, peer, peerMarker, byId);
+      observation = findPeerObservation(
+        message,
+        peer,
+        peerMarker,
+        byId,
+        nativeToolEvents?.get(message.lifecycle.invocationId),
+      );
       return Boolean(observation);
     });
     if (integration)

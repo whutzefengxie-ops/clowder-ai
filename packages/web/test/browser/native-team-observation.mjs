@@ -15,8 +15,8 @@ function contextSnapshot(detail) {
 
 // A lead can read the peer's real reply using MCP before its initial turn ends.
 // Pair native tool events and verify the actual snapshot, not model narration.
-export function findPeerObservation(response, peer, marker, byId) {
-  const events = response.toolEvents ?? [];
+export function findPeerObservation(response, peer, marker, byId, nativeEvents) {
+  const events = nativeEvents ?? response.toolEvents ?? [];
   const uses = new Map(
     events
       .filter((event) => event.type === 'tool_use' && CONTEXT_TOOLS.has(event.toolName) && event.toolUseId)
