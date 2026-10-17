@@ -13,15 +13,15 @@ export function rootModuleNames(modules) {
 }
 
 /**
- * Sharp publishes one optional native package per OS/architecture. Next's
- * trace can mention packages that were present in the lock graph but are not
- * installed for the current build platform. They cannot be runtime owners on
- * this platform and must not make an otherwise valid frozen export fail.
+ * Sharp publishes optional native packages for every supported OS/architecture.
+ * Next's trace can mention packages that are present in the lock graph but are
+ * not installed in the current build. A missing optional package cannot be a
+ * runtime owner and must not make an otherwise valid frozen export fail. Any
+ * package that is actually installed still gets retained through the normal
+ * owner matching path above.
  */
-function isNonTargetSharpOptional(name) {
-  if (!name.startsWith('@img/sharp-')) return false;
-  const target = process.platform === 'win32' ? 'win32' : process.platform;
-  return !name.includes(`-${target}-`) && !name.endsWith(`-${target}`);
+function isMissingSharpOptional(name) {
+  return name.startsWith('@img/sharp-') || name.startsWith('@img/sharp-libvips-');
 }
 
 /** Ambiguous matches retain every original owner; no package identity is merged. */
@@ -53,7 +53,7 @@ export function tracedOwners(workspace, records) {
   for (const [signature, owners] of matches) {
     if (owners.size) continue;
     const name = JSON.parse(signature)[0];
-    if (isNonTargetSharpOptional(name)) continue;
+    if (isMissingSharpOptional(name)) continue;
     throw new Error(`No frozen owner for traced package: ${name}`);
   }
   return [...new Set([...matches.values()].flatMap((owners) => [...owners]))];
