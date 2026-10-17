@@ -25,7 +25,7 @@ const { safeErrorMessage } = require('./update-network-diagnostics');
 const { DESKTOP_APP_ID } = require('./app-identity');
 const { createDesktopUpdateRuntime } = require('./desktop-update-runtime');
 const { ensureValidMacInstallLocation } = require('./mac-install-location');
-const { resolveWindowRecoveryAction } = require('./window-recovery');
+const { createWindowRecoveryController } = require('./window-recovery');
 const {
   createDesktopTray,
   createManualUpdateHandler,
@@ -54,7 +54,6 @@ const createBaseRendererLinkOrigins = () =>
 let rendererLinkOrigins = createBaseRendererLinkOrigins();
 const QUIT_FOR_UPDATE_ARG = '--quit-owned-installation';
 // Main process log in the user data directory alongside API + desktop logs.
-// Single source of truth: service-manager.js resolveUserDataDir() reads
 // electron-builder productName and handles legacy data directory migration.
 const userDataRoot = ServiceManager.USER_DATA_DIR;
 const dbg = createDesktopLogger(userDataRoot);
@@ -74,7 +73,6 @@ let updater = null;
 let updatePrompt = null;
 let isQuitting = false;
 let startupPhase = 'booting';
-let mainWindowCreation = null;
 const startupController = new AbortController();
 let quitPromise = null;
 const checkForUpdatesManually = createManualUpdateHandler({
@@ -205,43 +203,19 @@ function sendSplashStatus(msg) {
   if (splashWindow && !splashWindow.isDestroyed()) splashWindow.webContents.send('splash-status', msg);
 }
 
-function focusWindow(window) {
-  if (!window || window.isDestroyed()) return false;
-  if (window.isMinimized()) window.restore();
-  window.show();
-  window.focus();
-  return true;
-}
-
-async function recreateMainWindowIfReady() {
-  if (isQuitting || startupPhase !== 'ready' || !services) return;
-  if (focusWindow(mainWindow)) return;
-  if (!mainWindowCreation) {
-    mainWindowCreation = createMainWindow().finally(() => {
-      mainWindowCreation = null;
-    });
-  }
-  await mainWindowCreation;
-}
-
-app.on('second-instance', (_event, commandLine, _workingDirectory, identity) => {
-  if (commandLine.includes(QUIT_FOR_UPDATE_ARG)) {
-    if (!isInstallationShutdownRequest(identity, PROJECT_ROOT, app.getPath('userData'))) return;
-    dbg('Installer requested coordinated shutdown');
-    void quitApp();
-    return;
-  }
-  const action = resolveWindowRecoveryAction({
-    phase: startupPhase,
-    hasMainWindow: Boolean(mainWindow && !mainWindow.isDestroyed()),
-    hasSplashWindow: Boolean(splashWindow && !splashWindow.isDestroyed()),
-    isQuitting,
-  });
-  dbg(`Second instance recovery action: ${action}`);
-  if (action === 'focus-main') focusWindow(mainWindow);
-  else if (action === 'show-splash') focusWindow(splashWindow);
-  else if (action === 'recreate-main') void recreateMainWindowIfReady();
+const windowRecovery = createWindowRecoveryController({
+  getState: () => ({ phase: startupPhase, mainWindow, splashWindow, services, isQuitting }),
+  createMainWindow,
+  quitArg: QUIT_FOR_UPDATE_ARG,
+  isShutdownRequest: isInstallationShutdownRequest,
+  projectRoot: PROJECT_ROOT,
+  getUserDataRoot: () => app.getPath('userData'),
+  quitApp: () => quitApp(),
+  dbg,
 });
+app.on('second-instance', (_event, commandLine, _workingDirectory, identity) =>
+  windowRecovery.handleSecondInstance(commandLine, identity),
+);
 
 app.on('ready', async () => {
   startupTimeline.mark('electron-ready');
@@ -331,9 +305,7 @@ app.on('ready', async () => {
     await startupTimeline.runPhase('preview-origin', () => refreshRendererLinkOrigins());
     startupController.signal.throwIfAborted();
     dbg('startAll() done — creating main window');
-    mainWindowCreation = createMainWindow();
-    await mainWindowCreation;
-    mainWindowCreation = null;
+    await createMainWindow();
     startupController.signal.throwIfAborted();
     startupPhase = 'ready';
     reportStartup('ready');

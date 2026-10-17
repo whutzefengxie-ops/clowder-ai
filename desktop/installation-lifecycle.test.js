@@ -5,7 +5,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const { test } = require('node:test');
 const { spawn, execFileSync } = require('node:child_process');
-const { resolveWindowRecoveryAction } = require('./window-recovery');
+const { createWindowRecoveryController } = require('./window-recovery');
 
 test('second-instance shutdown accepts only the same installation and user-data identity', () => {
   const source = fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8');
@@ -32,16 +32,18 @@ test('second-instance shutdown accepts only the same installation and user-data 
       quitApp: () => {
         quits++;
       },
-      mainWindow: null,
-      splashWindow: null,
-      services: null,
-      startupPhase: 'ready',
-      isQuitting: false,
-      focusWindow: () => false,
-      recreateMainWindowIfReady: () => {},
-      isInstallationShutdownRequest: (...args) =>
-        require('./installation-lifecycle').isInstallationShutdownRequest(...args),
-      resolveWindowRecoveryAction,
+      windowRecovery: createWindowRecoveryController({
+        getState: () => ({ phase: 'ready', mainWindow: null, splashWindow: null, services: null, isQuitting: false }),
+        createMainWindow: async () => {},
+        quitArg: '--quit-owned-installation',
+        isShutdownRequest: (...args) => require('./installation-lifecycle').isInstallationShutdownRequest(...args),
+        projectRoot: root,
+        getUserDataRoot: () => userData,
+        quitApp: () => {
+          quits++;
+        },
+        dbg: () => {},
+      }),
     };
     vm.runInNewContext(source.slice(start, end), context);
     const args = ['exe', '--quit-owned-installation'];
