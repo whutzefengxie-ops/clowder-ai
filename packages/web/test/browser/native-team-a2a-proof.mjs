@@ -22,6 +22,83 @@ export function allA2AInvocationsDone(invocations) {
   return invocations.length >= 3 && invocations.every((invocation) => invocation.status === 'done');
 }
 
+const terminalStatuses = new Set(['completed', 'done']);
+const finiteTime = (...values) => values.find((value) => Number.isFinite(value));
+
+function classifyExtraInvocation(
+  invocation,
+  messages,
+  byId,
+  { leadId, peerId, peerMarker, finalMarker, handoffIds, resultIds },
+) {
+  const invocationMessages = messages.filter(
+    (message) => message.type === 'assistant' && message.lifecycle?.invocationId === invocation.invocationId,
+  );
+  const inputIds = invocationMessages.flatMap((message) => message.lifecycle?.inputMessageIds ?? []);
+  if (![leadId, peerId].includes(invocation.catId)) return 'unrelated_role';
+  if (!terminalStatuses.has(invocation.status)) return 'not_done';
+  if (inputIds.some((id) => handoffIds.has(id))) return 'duplicate_handoff';
+  if (
+    invocationMessages.some(
+      (message) => String(message.content).includes(peerMarker) || String(message.content).includes(finalMarker),
+    )
+  )
+    return 'new_task_result';
+  const consumedResult = inputIds
+    .map((id) => byId.get(id))
+    .find((message) => {
+      if (!message || !resultIds.has(message.id)) return false;
+      const producedAt = finiteTime(message.lifecycle?.completedAt, message.lifecycle?.startedAt, message.timestamp);
+      const startedAt = finiteTime(invocation.startedAt, invocationMessages[0]?.lifecycle?.startedAt);
+      return Number.isFinite(producedAt) && Number.isFinite(startedAt) && startedAt >= producedAt;
+    });
+  return consumedResult ? undefined : 'unrelated_input';
+}
+
+/**
+ * Classify invocations beyond the persisted lead → peer → lead proof.
+ *
+ * A count-only assertion cannot distinguish a harmless acknowledgement from a
+ * second peer computation or an unrelated client. This validator binds every
+ * extra invocation to its persisted input message and its causal timestamp.
+ */
+export function validateA2AInvocations(messages, invocations, { leadId, peerId, peerMarker, finalMarker, proof }) {
+  const byId = new Map(messages.map((message) => [message.id, message]));
+  const coreInvocationIds = [...new Set([proof.initialInvocationId, proof.peerInvocationId, proof.finalInvocationId])];
+  const core = new Set(coreInvocationIds);
+  const handoffIds = new Set(
+    messages
+      .filter((message) => message.catId === leadId && producedBy(message, proof.initialInvocationId))
+      .map((message) => message.id),
+  );
+  const resultIds = new Set(
+    messages
+      .filter((message) => producedBy(message, proof.peerInvocationId) || producedBy(message, proof.finalInvocationId))
+      .map((message) => message.id),
+  );
+  const acceptedConfirmations = [];
+  const rejectedInvocations = [];
+  for (const invocation of invocations) {
+    if (core.has(invocation.invocationId)) continue;
+    const reason = classifyExtraInvocation(invocation, messages, byId, {
+      leadId,
+      peerId,
+      peerMarker,
+      finalMarker,
+      handoffIds,
+      resultIds,
+    });
+    if (reason) rejectedInvocations.push({ invocationId: invocation.invocationId, catId: invocation.catId, reason });
+    else acceptedConfirmations.push(invocation.invocationId);
+  }
+  return {
+    ok: rejectedInvocations.length === 0,
+    acceptedConfirmations,
+    rejectedInvocations,
+    coreInvocationIds,
+  };
+}
+
 const producedBy = (message, invocationId) =>
   message?.lifecycle?.invocationId === invocationId || message?.lifecycle?.producerInvocationId === invocationId;
 

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import { requireCodexTestHistoryPolicy } from './native-codex-history-policy.mjs';
-import { allA2AInvocationsDone, findA2AProof } from './native-team-a2a-proof.mjs';
+import { allA2AInvocationsDone, findA2AProof, validateA2AInvocations } from './native-team-a2a-proof.mjs';
 import { settleOwnedThread } from './native-team-cleanup.mjs';
 import { openLiveJourney, roleIdentity } from './native-team-live.harness.mjs';
 import { assertLivePageHealthy } from './native-team-observers.mjs';
@@ -100,22 +100,24 @@ test(
         proof.finalInvocationId,
       ])
         assert.ok(trajectories.some((i) => i.invocationId === id));
+      const invocationValidation = validateA2AInvocations(messages, trajectories, {
+        leadId: lead.id,
+        peerId: peer.id,
+        peerMarker,
+        finalMarker,
+        proof,
+      });
+      record.invocationValidation = invocationValidation;
       record.extraLeadInvocations = trajectories.filter((i) => i.catId === lead.id).length - 2;
       record.extraPeerInvocations = trajectories.filter((i) => i.catId === peer.id).length - 1;
       await page.reload();
       await page.getByText(peerMarker, { exact: false }).last().waitFor();
       await page.getByText(finalMarker, { exact: false }).last().waitFor();
       await journey.screenshot('real-a2a-complete');
-      assert.equal(
-        record.extraLeadInvocations,
-        0,
-        'This single-return task must not dispatch an extra return from duplicate delivery carriers',
+      assert.ok(
+        invocationValidation.ok,
+        `Every extra invocation must be causally classified: ${JSON.stringify(invocationValidation.rejectedInvocations)}`,
       );
-      // A real client may send a short acknowledgement after returning its
-      // result. That is still a valid A2A lifecycle as long as the causal
-      // proof contains one peer computation and the lead is not re-entered
-      // by a duplicate carrier. Do not turn model wording into a protocol
-      // failure by requiring exactly three invocations.
       assert.ok(
         trajectories.filter((invocation) => invocation.catId === peer.id).length >= 1,
         'A2A must include at least one real peer invocation',

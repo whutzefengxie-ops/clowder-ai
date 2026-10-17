@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { allA2AInvocationsDone, findA2AProof, realTaskOutcome } from './native-team-a2a-proof.mjs';
+import {
+  allA2AInvocationsDone,
+  findA2AProof,
+  realTaskOutcome,
+  validateA2AInvocations,
+} from './native-team-a2a-proof.mjs';
 
 const options = { leadId: 'codex', peerId: 'pi', peerMarker: 'PEER', finalMarker: 'FINAL' };
 function fixture() {
@@ -239,4 +244,103 @@ test('an admitted but still running, canceled or failed return prevents a succes
     assert.equal(allA2AInvocationsDone([{ status: 'done' }, { status: 'done' }, { status }]), false);
   assert.equal(allA2AInvocationsDone([{ status: 'done' }, { status: 'done' }]), false);
   assert.equal(allA2AInvocationsDone([{ status: 'done' }, { status: 'done' }, { status: 'done' }]), true);
+});
+
+function trajectoryFixture(extra) {
+  return [
+    { invocationId: 'a', catId: 'codex', status: 'done', startedAt: 1, completedAt: 4 },
+    { invocationId: 'b', catId: 'pi', status: 'done', startedAt: 5, completedAt: 10 },
+    { invocationId: 'c', catId: 'codex', status: 'done', startedAt: 11, completedAt: 14 },
+    extra,
+  ];
+}
+
+function proofForValidation() {
+  return {
+    initialInvocationId: 'a',
+    peerInvocationId: 'b',
+    finalInvocationId: 'c',
+    returnInvocationId: 'c',
+  };
+}
+
+test('accepts a post-result acknowledgement when it consumes the persisted result', () => {
+  const messages = fixture();
+  messages.push({
+    id: 'ack',
+    type: 'assistant',
+    catId: 'pi',
+    content: '已收到并确认交付',
+    lifecycle: { invocationId: 'd', inputMessageIds: ['final'], status: 'completed', startedAt: 15 },
+  });
+  assert.deepEqual(
+    validateA2AInvocations(
+      messages,
+      trajectoryFixture({ invocationId: 'd', catId: 'pi', status: 'done', startedAt: 15 }),
+      {
+        ...options,
+        proof: proofForValidation(),
+      },
+    ),
+    {
+      ok: true,
+      acceptedConfirmations: ['d'],
+      rejectedInvocations: [],
+      coreInvocationIds: ['a', 'b', 'c'],
+    },
+  );
+});
+
+test('rejects a duplicate peer computation that consumes the original handoff', () => {
+  const messages = fixture();
+  messages.push({
+    id: 'duplicate',
+    type: 'assistant',
+    catId: 'pi',
+    content: 'PEER=9',
+    lifecycle: { invocationId: 'd', inputMessageIds: ['handoff'], status: 'completed', startedAt: 15 },
+  });
+  const result = validateA2AInvocations(
+    messages,
+    trajectoryFixture({ invocationId: 'd', catId: 'pi', status: 'done', startedAt: 15 }),
+    { ...options, proof: proofForValidation() },
+  );
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.rejectedInvocations, [{ invocationId: 'd', catId: 'pi', reason: 'duplicate_handoff' }]);
+});
+
+test('rejects an extra invocation that emits another task result marker', () => {
+  const messages = fixture();
+  messages.push({
+    id: 'duplicate-result',
+    type: 'assistant',
+    catId: 'pi',
+    content: '已确认 A2A_FINAL=9',
+    lifecycle: { invocationId: 'd', inputMessageIds: ['final'], status: 'completed', startedAt: 15 },
+  });
+  const result = validateA2AInvocations(
+    messages,
+    trajectoryFixture({ invocationId: 'd', catId: 'pi', status: 'done', startedAt: 15 }),
+    { ...options, proof: proofForValidation() },
+  );
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.rejectedInvocations, [{ invocationId: 'd', catId: 'pi', reason: 'new_task_result' }]);
+});
+
+test('rejects a completed invocation from an unrelated role or input chain', () => {
+  const messages = fixture();
+  messages.push({
+    id: 'unrelated',
+    type: 'assistant',
+    catId: 'kimi',
+    content: '我来帮忙',
+    lifecycle: { invocationId: 'd', inputMessageIds: ['u'], status: 'completed', startedAt: 15 },
+  });
+  const result = validateA2AInvocations(
+    messages,
+    trajectoryFixture({ invocationId: 'd', catId: 'kimi', status: 'done', startedAt: 15 }),
+    { ...options, proof: proofForValidation() },
+  );
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.rejectedInvocations, [{ invocationId: 'd', catId: 'kimi', reason: 'unrelated_role' }]);
 });
