@@ -334,6 +334,7 @@ begin
       '" -FrontendPort "' + ExpandConstant('{param:FrontendPort|}') +
       '" -ApiPort "' + ExpandConstant('{param:ApiPort|}') +
       '" -RedisPort "' + ExpandConstant('{param:RedisPort|}') + '"';
+  Log('Identity helper command: ' + Cmd);
   // PowerShell's Add-Type identity helper must not run through the output
   // capture pipe. On Windows this changes the child token/runtime policy and
   // can fail before the script starts with a misleading permission error.
