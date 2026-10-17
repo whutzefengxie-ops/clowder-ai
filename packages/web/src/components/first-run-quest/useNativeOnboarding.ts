@@ -10,6 +10,7 @@ import { legacyCreationKey, legacySharedKey } from './legacy-creation-key';
 import { buildNativeCreationPayload } from './native-creation-payload';
 import { type NativePartner, newNativeRequestKey, recommendNativePartners, SMALL_GOALS } from './native-onboarding';
 import { buildNativeTeamGoal, orderGoalPartners } from './native-team-goal';
+import { prepareFirstRunEntry } from './prepareFirstRunEntry';
 import type { TemplateCard } from './TemplateStep';
 
 interface CreatedPartner {
@@ -211,11 +212,7 @@ export function useNativeOnboarding(
     const headers = { 'Content-Type': 'application/json', 'X-Cat-Cafe-Onboarding-Journey': current.journeyId };
     try {
       if (mode === 'members' && current.initialRosterEmpty) {
-        await readJson('/api/config/onboarding/entry', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status: 'pending' }),
-        });
+        await prepareFirstRunEntry();
       }
       for (const selection of selected) {
         const partner = progress.partners.find((p) => p.id === selection.id) ?? selection;

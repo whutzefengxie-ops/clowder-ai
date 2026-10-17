@@ -14,6 +14,7 @@ import { resolveSessionUserId } from '../utils/request-identity.js';
 
 const phase = z.enum([
   'save',
+  'onboarding.entry',
   'member.write',
   'strategy.write',
   'codex.write',

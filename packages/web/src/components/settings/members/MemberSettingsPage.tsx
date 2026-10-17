@@ -25,12 +25,14 @@ export function MemberSettingsPage({
   onSaved,
   onBack,
   onDelete,
+  onBeforeCreate,
 }: {
   cat: CatData | null;
   cats: CatData[];
   onSaved: (cat: CatData, trace?: MemberSaveTrace) => Promise<void>;
   onBack: () => void;
   onDelete?: () => Promise<void>;
+  onBeforeCreate?: () => Promise<void>;
 }) {
   const router = useRouter();
   const [runtimeValid, setRuntimeValid] = useState(true);
@@ -42,7 +44,7 @@ export function MemberSettingsPage({
     router.replace(`/settings?${params.toString()}`, { scroll: false });
   };
   const t = (zh: string, en: string) => (english ? en : zh);
-  const editor = useMemberEditor(cat, cats, onSaved);
+  const editor = useMemberEditor(cat, cats, onSaved, onBeforeCreate);
   const { draft, accounts, ready, saving, dirtyCount } = editor;
   const { form, baseline, section } = draft;
   const identity = accounts.find((account) => account.id === form.accountRef);

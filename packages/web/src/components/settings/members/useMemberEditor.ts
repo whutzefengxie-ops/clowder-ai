@@ -38,6 +38,7 @@ export function useMemberEditor(
   cat: CatData | null,
   cats: CatData[],
   onSaved: (cat: CatData, trace?: MemberSaveTrace) => Promise<void>,
+  onBeforeCreate?: () => Promise<void>,
 ) {
   const [draft, setDraft] = useState<MemberDraft>({
     version: 1,
@@ -252,6 +253,7 @@ export function useMemberEditor(
         : buildCatPayload(form, null, context);
       const memberChanged = !baseline || Object.keys(payload).length > 0;
       if (baseline?.configurationRevision) Object.assign(payload, { expectedRevision: baseline.configurationRevision });
+      if (!baseline && onBeforeCreate) await trace.phase('onboarding.entry', onBeforeCreate);
       const result = memberChanged
         ? await trace.phase('member.write', () =>
             apiFetch(baseline ? `/api/cats/${baseline.id}` : '/api/cats', {

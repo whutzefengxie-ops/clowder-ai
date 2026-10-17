@@ -21,6 +21,7 @@ async function saveReceipt(intent: TerminalStatus): Promise<TerminalStatus> {
 /** Personal persistence stays in preferences; presentation and interaction stay in F155. */
 export function FirstRunEntryReminder({ enabled, threadId }: { enabled: boolean; threadId: string }) {
   const flowId = useGuideStore((s) => s.session?.flow.id ?? null);
+  const startFailure = useGuideStore((s) => s.startFailure);
   const [attempt, setAttempt] = useState(0);
   const [error, setError] = useState('');
   const started = useRef(false);
@@ -98,10 +99,12 @@ export function FirstRunEntryReminder({ enabled, threadId }: { enabled: boolean;
       });
     return () => controller.abort();
   }, [enabled, flowId, threadId, attempt]);
-  if (!enabled || !error) return null;
+  const failure =
+    error || (startFailure?.guideId === GUIDE_ID && startFailure.threadId === threadId ? startFailure.message : '');
+  if (!enabled || !failure || (flowId && flowId !== GUIDE_ID)) return null;
   return (
     <output className="block text-sm text-cafe-secondary">
-      {error}{' '}
+      {failure}{' '}
       <button
         type="button"
         onClick={() => {

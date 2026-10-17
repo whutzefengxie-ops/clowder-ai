@@ -1,6 +1,7 @@
 /** Fixed diagnostic vocabulary only: never pass configuration values, URLs, names or error messages. */
 export type SavePhase =
   | 'save'
+  | 'onboarding.entry'
   | 'member.write'
   | 'strategy.write'
   | 'codex.write'

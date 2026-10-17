@@ -50,18 +50,29 @@ export function useGuideEngine() {
       if (!isActiveThread() || hasActiveSession()) return;
       if (startInFlightRef.current === startKey) return;
       startInFlightRef.current = startKey;
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10_000);
+      const ownsStart = () => startInFlightRef.current === startKey && isActiveThread();
+      const reportFailure = () => {
+        if (ownsStart() && !useGuideStore.getState().session)
+          useGuideStore.setState({
+            startFailure: { guideId, threadId, message: '入口提醒暂时无法加载，可以直接开始对话；稍后可重试。' },
+          });
+      };
       try {
-        const res = await apiFetch(`/api/guide-flows/${encodeURIComponent(guideId)}`);
+        const res = await apiFetch(`/api/guide-flows/${encodeURIComponent(guideId)}`, { signal: controller.signal });
         if (!res.ok) {
           console.error(`[Guide] Flow fetch failed (${res.status}), awaiting next guide_start event`);
+          reportFailure();
           return;
         }
         const flow = (await res.json()) as OrchestrationFlow;
         if (!flow?.steps?.length) {
           console.warn(`[Guide] Empty flow: ${guideId}`);
+          reportFailure();
           return;
         }
-        if (!isActiveThread() || hasActiveSession()) return;
+        if (!ownsStart() || controller.signal.aborted || hasActiveSession()) return;
         // Ensure server-side guide session exists — client-triggered guides
         // (e.g. bootcamp) skip /api/guide-actions/start, so register here.
         apiFetch('/api/guide-actions/start', {
@@ -72,7 +83,9 @@ export function useGuideEngine() {
         startGuide(flow, threadId);
       } catch (err) {
         console.error(`[Guide] Failed to fetch flow "${guideId}":`, err);
+        reportFailure();
       } finally {
+        clearTimeout(timeout);
         if (startInFlightRef.current === startKey) {
           startInFlightRef.current = null;
         }

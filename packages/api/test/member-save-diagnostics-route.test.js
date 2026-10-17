@@ -101,6 +101,14 @@ test('browser timing requires session auth and rejects arbitrary content, oversi
     const event = records.find((r) => r.event === 'member_save' && r.source === 'browser');
     assert.equal(event.traceId, payload.traceId);
     assert.equal(event.trustedTiming, false);
+    const entry = await app.inject({
+      method: 'POST',
+      url: '/api/diagnostics/member-save',
+      headers,
+      payload: { ...payload, events: [{ ...payload.events[0], phase: 'onboarding.entry' }] },
+    });
+    assert.equal(entry.statusCode, 204);
+    assert.ok(records.some((r) => r.event === 'member_save' && r.phase === 'onboarding.entry'));
     assert.ok(!JSON.stringify(records.filter((r) => r.event === 'member_save')).includes('secret'));
   } finally {
     await app.close();
