@@ -59,6 +59,29 @@ test('second-instance shutdown accepts only the same installation and user-data 
   }
 });
 
+test('second-instance renderer recreation reports failures instead of creating an unhandled rejection', async () => {
+  const failure = new Error('controlled renderer load failure');
+  let reported;
+  const controller = createWindowRecoveryController({
+    getState: () => ({ phase: 'ready', mainWindow: null, splashWindow: null, services: {}, isQuitting: false }),
+    createMainWindow: async () => {
+      throw failure;
+    },
+    quitArg: '--quit-owned-installation',
+    isShutdownRequest: () => false,
+    projectRoot: '/tmp/install',
+    getUserDataRoot: () => '/tmp/user-data',
+    quitApp: () => {},
+    dbg: () => {},
+    onRecoveryError: (error) => {
+      reported = error;
+    },
+  });
+  controller.handleSecondInstance(['clowder-ai.exe'], undefined);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(reported, failure);
+});
+
 test(
   'Windows cleanup stops a test-owned install process and preserves its sibling control',
   { skip: process.platform !== 'win32' },

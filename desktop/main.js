@@ -1,6 +1,5 @@
 // Clowder AI Desktop — Electron main process
 // Launches backend services (Redis, API, Web) then shows the web UI.
-
 const { app, BrowserWindow, Menu, Tray, dialog, ipcMain, net, session, shell, Notification } = require('electron');
 const path = require('node:path');
 const { resolveProjectRootFromDir } = require('./project-root');
@@ -22,6 +21,7 @@ const {
   resolveRendererLinkOrigins,
 } = require('./renderer-link-policy');
 const { safeErrorMessage } = require('./update-network-diagnostics');
+const { createStartupFailureHandler } = require('./startup-failure-handler');
 const { DESKTOP_APP_ID } = require('./app-identity');
 const { createDesktopUpdateRuntime } = require('./desktop-update-runtime');
 const { ensureValidMacInstallLocation } = require('./mac-install-location');
@@ -32,11 +32,9 @@ const {
   installMacApplicationMenu,
   showAboutDialog,
 } = require('./desktop-update-menu');
-
 if (process.platform === 'win32') {
   app.setAppUserModelId(DESKTOP_APP_ID);
 }
-
 const PROJECT_ROOT = resolveProjectRootFromDir(__dirname);
 const desktopRuntime = resolveDesktopRuntime();
 const FRONTEND_PORT = desktopRuntime.frontendPort;
@@ -203,6 +201,14 @@ function sendSplashStatus(msg) {
   if (splashWindow && !splashWindow.isDestroyed()) splashWindow.webContents.send('splash-status', msg);
 }
 
+const handleStartupFailure = createStartupFailureHandler({
+  isQuitting: () => isQuitting,
+  setPhase: (phase) => (startupPhase = phase),
+  dbg, reportStartup, sendSplashStatus,
+  stopServices: async () => { const activeServices = services; services = null; if (activeServices) await activeServices.stopAll(); },
+  showFailure: (message) => showStartupFailure({ dialog, shell, message, logDir: startupLogDir }), quitApp,
+});
+
 const windowRecovery = createWindowRecoveryController({
   getState: () => ({ phase: startupPhase, mainWindow, splashWindow, services, isQuitting }),
   createMainWindow,
@@ -212,6 +218,7 @@ const windowRecovery = createWindowRecoveryController({
   getUserDataRoot: () => app.getPath('userData'),
   quitApp: () => quitApp(),
   dbg,
+  onRecoveryError: (error) => void handleStartupFailure(error),
 });
 app.on('second-instance', (_event, commandLine, _workingDirectory, identity) =>
   windowRecovery.handleSecondInstance(commandLine, identity),
@@ -310,14 +317,7 @@ app.on('ready', async () => {
     startupPhase = 'ready';
     reportStartup('ready');
   } catch (err) {
-    if (isQuitting) return;
-    startupPhase = 'failed';
-    dbg(`startAll() FAILED: ${err.message}`);
-    reportStartup('failed', safeErrorMessage(err));
-    sendSplashStatus('Startup failed: 请查看启动错误与日志');
-    await services.stopAll();
-    await showStartupFailure({ dialog, shell, message: safeErrorMessage(err), logDir: startupLogDir });
-    await quitApp();
+    await handleStartupFailure(err);
   }
 });
 

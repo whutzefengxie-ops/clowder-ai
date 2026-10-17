@@ -1432,14 +1432,16 @@ describe('main process update-schedule lifecycle', () => {
 
   test('installer-requested quit reaches the same service shutdown lifecycle', () => {
     const mainSource = readFileSync(path.join(__dirname, 'main.js'), 'utf8');
+    const recoverySource = readFileSync(path.join(__dirname, 'window-recovery.js'), 'utf8');
     const installerSource = readFileSync(path.join(__dirname, 'installer', 'cat-cafe.iss'), 'utf8');
     const secondInstanceStart = mainSource.indexOf("app.on('second-instance'");
     const secondInstanceEnd = mainSource.indexOf("\napp.on('ready'", secondInstanceStart);
     const secondInstanceBody = mainSource.slice(secondInstanceStart, secondInstanceEnd);
 
     assert.match(mainSource, /QUIT_FOR_UPDATE_ARG\s*=\s*'--quit-owned-installation'/);
-    assert.match(secondInstanceBody, /commandLine\.includes\(QUIT_FOR_UPDATE_ARG\)/);
-    assert.match(secondInstanceBody, /quitApp\(\)/);
+    assert.match(secondInstanceBody, /windowRecovery\.handleSecondInstance\(commandLine, identity\)/);
+    assert.match(recoverySource, /commandLine\.includes\(quitArg\)/);
+    assert.match(recoverySource, /void quitApp\(\)/);
     const stopSource = readFileSync(path.join(__dirname, 'scripts/stop-installed-desktop.ps1'), 'utf8');
     assert.match(installerSource, /ExecAsOriginalUser[\s\S]*ewWaitUntilTerminated/);
     assert.match(stopSource, /Start-Process[\s\S]*--quit-owned-installation/);

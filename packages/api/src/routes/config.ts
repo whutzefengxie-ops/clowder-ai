@@ -50,6 +50,7 @@ import { getDefaultUploadDir } from '../utils/upload-paths.js';
 import { configCatOrderRoutes } from './config-cat-order.js';
 import { configConversationViewRoutes } from './config-conversation-view.js';
 import { configIgnoredItemRoutes } from './config-ignored-items.js';
+import { configLiveProjectRoutes } from './config-live-projects.js';
 import { configMessageDispositionRoutes } from './config-message-disposition.js';
 import { configOnboardingRoutes } from './config-onboarding.js';
 import { configThreadAttentionRoutes } from './config-thread-attention.js';
@@ -198,6 +199,7 @@ export async function configRoutes(app: FastifyInstance, opts: ConfigRoutesOptio
   const envFilePath = opts.envFilePath ?? resolve(projectRoot, '.env');
 
   await app.register(configCatOrderRoutes, { projectRoot });
+  await app.register(configLiveProjectRoutes, { projectRoot });
   await app.register(configConversationViewRoutes, { projectRoot, threadStore: opts.threadStore });
   await app.register(configIgnoredItemRoutes, { projectRoot });
   await app.register(configMessageDispositionRoutes, { projectRoot });

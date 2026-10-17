@@ -19,6 +19,7 @@ function createWindowRecoveryController({
   getUserDataRoot,
   quitApp,
   dbg,
+  onRecoveryError,
 }) {
   let mainWindowCreation = null;
   const focusWindow = (window) => {
@@ -36,7 +37,11 @@ function createWindowRecoveryController({
       mainWindowCreation = createMainWindow().finally(() => {
         mainWindowCreation = null;
       });
-    await mainWindowCreation;
+    try {
+      await mainWindowCreation;
+    } catch (error) {
+      onRecoveryError?.(error);
+    }
   };
   const handleSecondInstance = (commandLine, identity) => {
     if (commandLine.includes(quitArg)) {
