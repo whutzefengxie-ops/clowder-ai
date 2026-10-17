@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import { test } from 'node:test';
 import { callRealPartner, openLiveJourney, roleIdentity, verifyRetainedHistory } from './native-team-live.harness.mjs';
 import { completeFirstRun } from './native-team-live-fresh.mjs';
-import { assertLivePageHealthy } from './native-team-observers.mjs';
+import { assertLivePageHealthy, verifyVisibleRoute } from './native-team-observers.mjs';
 
 test(
   'installed application: zero-role onboarding or retained-history verification, then real client tasks',
@@ -38,7 +38,7 @@ test(
           url.searchParams.get('s') === 'members' &&
           url.searchParams.get('view') !== 'setup',
       );
-      await page.getByTestId('member-list-page').waitFor({ state: 'visible' });
+      await verifyVisibleRoute(page, record, 'member-list-page');
       assert.equal(await page.getByTestId('recommended-team-setup').count(), 0);
       await log('existing-roster-does-not-recommend-initial-setup');
       assertLivePageHealthy(record);

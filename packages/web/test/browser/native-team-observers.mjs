@@ -1,10 +1,16 @@
 import assert from 'node:assert/strict';
-import { callerCancellation, isPrefetch, observeCallerCancellations } from './native-request-cancellations.mjs';
+import {
+  callerCancellation,
+  isPrefetch,
+  observeCallerCancellations,
+  verifiedRscCancellation,
+} from './native-request-cancellations.mjs';
 
 export async function observePageFaults(page, record) {
   record.consoleErrors ??= [];
   record.networkErrors ??= [];
   record.documentTransitions ??= [];
+  record.verifiedRoutes ??= [];
   const requestPath = (request) => new URL(request.url()).pathname;
   page.on('console', (message) => {
     if (message.type() === 'error') record.consoleErrors.push(message.text().slice(0, 400));
@@ -57,7 +63,12 @@ export async function observePageFaults(page, record) {
   });
   session.on('Network.responseReceived', ({ requestId, response }) => {
     const request = requests.get(requestId);
-    if (request) Object.assign(request, { responseStatus: response.status, mimeType: response.mimeType });
+    if (request)
+      Object.assign(request, {
+        responseStatus: response.status,
+        mimeType: response.mimeType,
+        fromServiceWorker: response.fromServiceWorker === true,
+      });
   });
   session.on('Network.loadingFinished', ({ requestId }) => requests.delete(requestId));
   session.on('Network.loadingFailed', (event) => {
@@ -103,6 +114,7 @@ export function assertLivePageHealthy(record) {
   record.expectedDocumentCancellations = [];
   record.unexpectedNetworkErrors = [];
   record.expectedCallerCancellations = [];
+  record.expectedRscCancellations = [];
   for (const error of record.networkErrors ?? []) {
     // Keep every raw failure. Only the browser's exact canceled request from a
     // retired document is expected; HTTP/current/unidentified failures still fail.
@@ -133,6 +145,7 @@ export function assertLivePageHealthy(record) {
     const caller = callerCancellation(error, record);
     if (navigation || preObserverNavigation) record.expectedDocumentCancellations.push(error);
     else if (caller) record.expectedCallerCancellations.push({ error, evidence: caller });
+    else if (verifiedRscCancellation(error, record)) record.expectedRscCancellations.push(error);
     else record.unexpectedNetworkErrors.push(error);
   }
   for (const field of ['pageErrors', 'dialogs', 'consoleErrors', 'networkErrors', 'documentTransitions']) {
@@ -140,4 +153,24 @@ export function assertLivePageHealthy(record) {
   }
   for (const field of ['pageErrors', 'dialogs', 'consoleErrors', 'unexpectedNetworkErrors'])
     assert.deepEqual(record[field], [], `Unexpected renderer faults: ${field}`);
+}
+
+export async function verifyVisibleRoute(page, record, testId) {
+  await page.getByTestId(testId).waitFor({ state: 'visible' });
+  const session = await page.context().newCDPSession(page);
+  try {
+    const {
+      frameTree: { frame },
+    } = await session.send('Page.getFrameTree');
+    record.verifiedRoutes ??= [];
+    record.verifiedRoutes.push({
+      path: new URL(page.url()).pathname,
+      frameId: frame.id,
+      document: frame.loaderId,
+      testId,
+      verifiedAt: Date.now(),
+    });
+  } finally {
+    await session.detach();
+  }
 }

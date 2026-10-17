@@ -100,3 +100,26 @@ export function callerCancellation(error, record) {
   );
   return callers.length === 1 ? { kind: 'caller-abort-signal', request, caller: callers[0] } : null;
 }
+
+export function verifiedRscCancellation(error, record) {
+  if (
+    !error.canceled ||
+    error.failure !== 'net::ERR_ABORTED' ||
+    error.method !== 'GET' ||
+    !error.rsc ||
+    error.responseStatus !== 200 ||
+    error.mimeType !== 'text/x-component' ||
+    error.fromServiceWorker !== true
+  )
+    return false;
+  return (
+    record.verifiedRoutes?.some(
+      (route) =>
+        route.path === error.path &&
+        route.document === error.document &&
+        route.frameId === error.frameId &&
+        Number.isFinite(route.verifiedAt) &&
+        route.verifiedAt >= error.failedAt,
+    ) === true
+  );
+}

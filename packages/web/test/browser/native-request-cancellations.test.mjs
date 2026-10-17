@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { chromium } from 'playwright';
-import { callerCancellation, isPrefetch } from './native-request-cancellations.mjs';
+import { callerCancellation, isPrefetch, verifiedRscCancellation } from './native-request-cancellations.mjs';
 import { assertLivePageHealthy, observePageFaults } from './native-team-observers.mjs';
 
 test('cancellation proof is specific to the request; resets, HTTP faults and ambiguity still fail', () => {
@@ -94,4 +94,35 @@ test('the observer must not swallow an unhandled real fetch rejection', async ()
     assert.equal(record.callerCancellations.length, 0);
     assert.throws(() => assertLivePageHealthy(record), /Unexpected renderer faults/);
   });
+});
+
+test('only fulfilled worker RSC cancellations with later visible route proof are expected', () => {
+  const error = {
+    path: '/settings',
+    document: 'doc',
+    frameId: 'frame',
+    failedAt: 20,
+    method: 'GET',
+    canceled: true,
+    failure: 'net::ERR_ABORTED',
+    rsc: true,
+    responseStatus: 200,
+    mimeType: 'text/x-component',
+    fromServiceWorker: true,
+  };
+  const route = { path: '/settings', document: 'doc', frameId: 'frame', verifiedAt: 21 };
+  assert.ok(verifiedRscCancellation(error, { verifiedRoutes: [route] }));
+  for (const change of [
+    { responseStatus: 503 },
+    { mimeType: 'text/html' },
+    { rsc: false },
+    { fromServiceWorker: false },
+    { failure: 'net::ERR_CONNECTION_RESET' },
+    { canceled: false },
+    { method: 'POST' },
+  ])
+    assert.equal(verifiedRscCancellation({ ...error, ...change }, { verifiedRoutes: [route] }), false);
+  for (const change of [{ verifiedAt: 19 }, { document: 'other' }, { frameId: 'other' }, { path: '/elsewhere' }])
+    assert.equal(verifiedRscCancellation(error, { verifiedRoutes: [{ ...route, ...change }] }), false);
+  assert.equal(verifiedRscCancellation(error, {}), false);
 });

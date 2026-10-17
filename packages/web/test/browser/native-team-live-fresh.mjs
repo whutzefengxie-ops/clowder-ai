@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { exerciseDemoPreview } from './native-demo-preview.mjs';
+import { verifyVisibleRoute } from './native-team-observers.mjs';
 export async function completeFirstRun(journey) {
   const { page, request, web, log } = journey;
   assert.equal((await request('/api/cats')).cats.length, 0);
@@ -58,6 +59,7 @@ export async function completeFirstRun(journey) {
   await demo.getByRole('link', { name: '创建我的猫猫 →', exact: true }).click();
   const setup = page.getByTestId('recommended-team-setup');
   await setup.waitFor();
+  await verifyVisibleRoute(page, journey.record, 'recommended-team-setup');
   for (const label of ['Codex', 'Claude Code', 'DSH', 'Kimi', 'Pi']) {
     const checkbox = page.getByRole('checkbox', { name: `加入 ${label} 伙伴`, exact: true });
     assert.ok(await checkbox.isEnabled());
