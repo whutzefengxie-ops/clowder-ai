@@ -16,6 +16,8 @@ tips_exempt: 汇总既有需求及验收责任，不新增产品入口
 
 本轮起点为 `ca01f28c8c0a2a8a332f38c4f59b02ffe25d41be`。2026-10-17 重新 fetch 的 upstream/main 为 `814f63bddbed2e3aa835b0bb5da612b89c266e67`，已经在分支历史中。运行候选为 `f1fa89f86562eab15439787eadf3656acaff0733`，其CI终态19成功/1跳过、PR MERGEABLE；这不构成approval。新增用例/报告提交后须单独核对新HEAD。工作继续留在 `worktrees/feat-onboarding-first-run`。
 
+后续当前候选已经实际重编到 `0927b6d0a`，三次新目录首装与最新判定以[当前验收报告](pr1519-e2e-current-verdict-2026-10-17.md)为准；本计划下表保留实施过程，不把旧候选的成功/待验状态迁成新包结论。[61条逐项review回应](pr1519-review-comment-ledger-2026-10-17.md)已补齐，用户最近选择的原Claude连接继续诊断，未全局替换协议或改模型。
+
 已下载当前 102 条 PR 会话评论、24 条 issue 评论；PR 正式 reviews 和 inline comments 均为 0。非作者的 63 条会话意见需按原评论及后继回执对账，不能因为没有 formal review 就当成没有审查意见。最新 reviewer 是 zts212653 的 [6185928831](https://github.com/zts212653/clowder-ai/pull/1519#issuecomment-6185928831)，mindfn 的当前适用边界见 [6182085363](https://github.com/zts212653/clowder-ai/pull/1519#issuecomment-6182085363)。
 
 ## 用户意见逐组核对
