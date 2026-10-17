@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { requireCodexTestHistoryPolicy } from './native-codex-history-policy.mjs';
 import { realTaskOutcome } from './native-team-a2a-proof.mjs';
 import { openJourneyBrowser } from './native-team-browser.mjs';
 import { settleOwnedThread } from './native-team-cleanup.mjs';
@@ -87,6 +88,11 @@ export function roleIdentity(cat) {
 }
 
 export async function callRealPartner(journey, cat) {
+  if (cat.clientId === 'openai')
+    journey.record.nativeHistoryPolicy = await requireCodexTestHistoryPolicy(
+      process.env.CAT_CAFE_ONBOARDING_E2E_INSTANCE,
+      process.env.CAT_CAFE_ONBOARDING_CODEX_HISTORY_POLICY,
+    );
   const { request, page, web, record, save } = journey;
   const marker = `LIVE_${cat.id.replaceAll('-', '_')}_${randomUUID().slice(0, 8)}`;
   const result = { catId: cat.id, marker, passed: false };

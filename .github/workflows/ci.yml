@@ -82,6 +82,7 @@ jobs:
           node --test packages/web/test/browser/native-team-rendered-reply.test.mjs
           node --test packages/web/test/browser/native-team-observers.test.mjs
           node --test packages/web/test/browser/native-request-cancellations.test.mjs
+          node --test packages/web/test/browser/native-codex-history-policy.test.mjs
           node --test packages/web/test/browser/native-team-a2a-proof.test.mjs packages/web/test/browser/native-team-transcript-observation.test.mjs
 
   public-test-prepare:

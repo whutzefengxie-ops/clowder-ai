@@ -43,6 +43,7 @@ jobs:
           scripts/preview-lease-command.test.mjs
           packages/web/test/sanitize-widget-types.test.mjs
           packages/web/test/browser/native-team-a2a-proof.test.mjs packages/web/test/native-team-cleanup.test.mjs
+          packages/web/test/browser/native-codex-history-policy.test.mjs
           packages/web/test/browser/native-team-startup-ready.test.mjs
       - name: Native authentication and lazy SDK contracts (no live accounts)
         shell: bash

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
+import { requireCodexTestHistoryPolicy } from './native-codex-history-policy.mjs';
 import { allA2AInvocationsDone, findA2AProof } from './native-team-a2a-proof.mjs';
 import { settleOwnedThread } from './native-team-cleanup.mjs';
 import { openLiveJourney, roleIdentity } from './native-team-live.harness.mjs';
@@ -22,6 +23,11 @@ test(
         peer = cats.find((cat) => cat.id === (process.env.CAT_CAFE_ONBOARDING_A2A_PEER ?? 'pi'));
       assert.ok(lead && peer, 'Use the explicitly owned test roster; never create or reset roles here');
       assert.notEqual(lead.id, peer.id, 'A2A requires two different real partners');
+      if ([lead, peer].some((cat) => cat.clientId === 'openai'))
+        record.nativeHistoryPolicy = await requireCodexTestHistoryPolicy(
+          process.env.CAT_CAFE_ONBOARDING_E2E_INSTANCE,
+          process.env.CAT_CAFE_ONBOARDING_CODEX_HISTORY_POLICY,
+        );
       record.roles = [lead, peer].map(roleIdentity);
       const token = randomUUID().slice(0, 8);
       const left = 3 + Math.floor(Math.random() * 10),
