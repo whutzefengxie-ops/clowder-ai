@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
-import { useCatData } from '@/hooks/useCatData';
+import { refreshCatsNow, useCatData } from '@/hooks/useCatData';
 import { apiFetch } from '@/utils/api-client';
 import type { MemberSaveTrace } from '@/utils/member-save-trace';
 import { accountsCopy } from '../accounts/accounts.shell-copy';
@@ -15,6 +15,7 @@ import { HubCoCreatorEditor } from '../HubCoCreatorEditor';
 import { HubConnectorConfigTab } from '../HubConnectorConfigTab';
 import { HubEnvFilesTab } from '../HubEnvFilesTab';
 import { HubOverviewToolbar } from '../HubMemberOverviewCard';
+import { memberSaveCopy } from '../members/member-save.shell-copy';
 import { PushSettingsPanel } from '../PushSettingsPanel';
 import { useShellCopy } from '../shell/shell-copy';
 import { useShellPresentation } from '../shell/shell-presentation';
@@ -48,6 +49,7 @@ export function SettingsContent({ section, initialEditCatId }: SettingsContentPr
   const router = useRouter();
   const searchParams = useSearchParams();
   const accountsText = useShellCopy(accountsCopy);
+  const saveText = useShellCopy(memberSaveCopy);
   const sectionText = useSettingsDetailText();
   const { cats, refresh, isLoading: catsLoading, hasFetched: catsKnown } = useCatData();
   const isV2 = useShellPresentation() === 'v2';
@@ -123,9 +125,16 @@ export function SettingsContent({ section, initialEditCatId }: SettingsContentPr
 
   const handleEditorSaved = useCallback(
     async (trace?: MemberSaveTrace) => {
-      await Promise.all([fetchData(trace?.headers()), refresh(trace?.headers())]);
+      const [, { cats: updatedCats, fromApi }] = await Promise.all([
+        fetchData(trace?.headers()),
+        refreshCatsNow(trace?.headers()),
+      ]);
+      if (editingCat && (!fromApi || !updatedCats.some((cat) => cat.id === editingCat.id))) {
+        throw new Error(saveText.readbackFailed);
+      }
+      setEditingCat((previous) => (previous ? (updatedCats.find((cat) => cat.id === previous.id) ?? previous) : null));
     },
-    [fetchData, refresh],
+    [fetchData, editingCat, saveText.readbackFailed],
   );
 
   const handleToggleAvailability = useCallback(

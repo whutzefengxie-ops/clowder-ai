@@ -152,8 +152,7 @@ function geminiEvents(sessionId, text) {
 function createNativeFixtureService(spawnFn) {
   const workspace = join(testGlobalConfigRoot, 'native-workspace');
   mkdirSync(join(workspace, '.cat-cafe'), { recursive: true });
-  // Callback wiring needs an explicit project policy. Do not inherit whichever
-  // capabilities a previous public-test shard left in the executable repository.
+  // This test requires collab; an ambient skills-only config correctly enables no MCPs.
   writeFileSync(
     join(workspace, '.cat-cafe/capabilities.json'),
     JSON.stringify({
@@ -188,9 +187,13 @@ function createNativeFixtureService(spawnFn) {
       workingDirectory: workspace,
       spawnCliOverride: (launch) => {
         // Observe the credential at the real launch fence, before finally retires it.
-        const config = JSON.parse(readFileSync(join(launch.env.HOME, '.gemini/config/mcp_config.json'), 'utf8'));
+        const geminiDirArg = launch.args.find((arg) => arg.startsWith('--gemini_dir='));
+        assert.ok(geminiDirArg, 'Native launch must identify its per-run configuration');
+        const geminiDir = geminiDirArg.slice('--gemini_dir='.length);
+        const config = JSON.parse(readFileSync(join(geminiDir, 'config/mcp_config.json'), 'utf8'));
         const credentialPath = config.mcpServers?.['cat-cafe-collab']?.env?.CAT_CAFE_CREDENTIAL_FILE;
-        if (credentialPath) spawnFn._nativeCredential = JSON.parse(readFileSync(credentialPath, 'utf8'));
+        assert.ok(credentialPath, 'Native collab MCP must receive its per-run credential file');
+        spawnFn._nativeCredential = JSON.parse(readFileSync(credentialPath, 'utf8'));
         return spawnCli(launch, { spawnFn });
       },
     });
@@ -407,7 +410,9 @@ describe('AgentRouter + Services wiring', () => {
       }),
     );
 
-    await collect(router.route('user-1', '@gemini hello'));
+    const events = await collect(router.route('user-1', '@gemini hello'));
+    const error = events.find((event) => event.type === 'error');
+    assert.equal(error, undefined, error?.error);
 
     assert.equal(geminiSpawn._calls.length, 1);
     const call = geminiSpawn._calls[0];
@@ -419,6 +424,7 @@ describe('AgentRouter + Services wiring', () => {
     assert.ok(spawnOpts.env.CAT_CAFE_INVOCATION_ID);
     assert.equal(spawnOpts.env.CAT_CAFE_CALLBACK_TOKEN, undefined);
     assert.ok(geminiSpawn._nativeCredential?.callbackToken);
+    assert.equal(geminiSpawn._nativeCredential.invocationId, spawnOpts.env.CAT_CAFE_INVOCATION_ID);
   });
 
   // --- InvocationRegistry 接线验证 ---

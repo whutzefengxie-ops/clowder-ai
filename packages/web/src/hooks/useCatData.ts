@@ -202,7 +202,7 @@ function normalizeCats(rawCats: unknown[]): CatData[] {
   });
 }
 
-async function refreshCatsNow(headers?: HeadersInit): Promise<FetchResult> {
+export async function refreshCatsNow(headers?: HeadersInit): Promise<FetchResult> {
   const prev = _cached;
   _cached = null;
   _fetchPromise = fetchCats(headers);

@@ -8,6 +8,8 @@ import { useAgentHookHealth } from '@/hooks/useAgentHookHealth';
 import { formatCatName, useCatData } from '@/hooks/useCatData';
 import { useCoCreatorConfig } from '@/hooks/useCoCreatorConfig';
 import { useConnectionStatus } from '@/hooks/useConnectionStatus';
+import { useConversationViewPreference } from '@/hooks/useConversationViewPreference';
+import { useConversationViewReadingCheckpoint } from '@/hooks/useConversationViewReadingCheckpoint';
 import { godAction, submitAction } from '@/hooks/useGameApi';
 import { reconnectGame } from '@/hooks/useGameReconnect';
 import { useGovernanceStatus } from '@/hooks/useGovernanceStatus';
@@ -24,6 +26,7 @@ import { useActiveExecutionStore } from '@/stores/activeExecutionStore';
 import { type ChatMessage, type Thread, useChatStore } from '@/stores/chatStore';
 import { useGameStore } from '@/stores/gameStore';
 import { useGuideStore } from '@/stores/guideStore';
+import { withQueuedInputPreviews } from '@/stores/queued-input-preview';
 import { useSidebarProjectionStore } from '@/stores/sidebarProjectionStore';
 import { useSidebarStore } from '@/stores/sidebarStore';
 import { useTaskStore } from '@/stores/taskStore';
@@ -36,6 +39,9 @@ import { BootstrapOrchestrator } from './BootstrapOrchestrator';
 import { ChatContainerHeader } from './ChatContainerHeader';
 import { hydrateEvolutionFromCurrentUrl } from './capability-evolution/evolution-navigation';
 import { useConciergeConfirmations } from './concierge/useConciergeConfirmations';
+import { ArtworkLightboxHost } from './content-review/ArtworkLightboxHost';
+import { ArtworkLightboxProvider, useArtworkLightboxScope } from './content-review/ArtworkLightboxScope';
+import { scopedQueue } from './execution-row/thread-queue';
 import { BootcampGuideOverlay } from './first-run-quest/BootcampGuideOverlay';
 import { FirstRunEntryReminder } from './first-run-quest/FirstRunEntryReminder';
 import { restoreJourneyState } from './first-run-quest/onboarding-journey';
@@ -70,6 +76,7 @@ import { useF307ExperienceWorkbenchStore } from './workbench/experience-workbenc
 import { useArtifactWorkHostPresentation } from './workbench/useArtifactWorkHostPresentation';
 import { WorkspaceChatRevealProvider } from './workbench/WorkspaceChatReveal';
 import { WorkspaceChatWorkScopeProvider } from './workbench/WorkspaceChatWorkScope';
+import type { MainAreaAttentionPresentation } from './workbench/workspace-work-host-projection';
 import { ContextualWorkspaceChrome } from './workspace/ContextualWorkspaceChrome';
 import { FloatingTranscriptContainer } from './workspace/FloatingTranscriptContainer';
 import { ResizeHandle } from './workspace/ResizeHandle';
@@ -80,6 +87,8 @@ import { StatusPresentation } from './workspace-status/StatusPresentation';
 interface ChatContainerProps {
   threadId: string;
 }
+
+const EMPTY_CONVERSATION_QUEUE = [] as const;
 
 function hasConciergeConfirmationActions(messages: readonly ChatMessage[]): boolean {
   return messages.some((message) =>
@@ -93,7 +102,20 @@ function hasConciergeConfirmationActions(messages: readonly ChatMessage[]): bool
   );
 }
 
+function coversChatHistory(presentation: MainAreaAttentionPresentation): boolean {
+  if (presentation.kind === 'overlay') return true;
+  return presentation.mode === 'full-window';
+}
+
 export function ChatContainer({ threadId }: ChatContainerProps) {
+  return (
+    <ArtworkLightboxProvider key={threadId} threadId={threadId}>
+      <ChatContainerContent threadId={threadId} />
+    </ArtworkLightboxProvider>
+  );
+}
+
+function ChatContainerContent({ threadId }: ChatContainerProps) {
   const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
   if (searchParams?.get('export') === 'true') {
     return <ThreadChatExport threadId={threadId} messageIds={searchParams.getAll('messageId')} />;
@@ -102,6 +124,7 @@ export function ChatContainer({ threadId }: ChatContainerProps) {
 }
 
 function InteractiveChatContainer({ threadId }: ChatContainerProps) {
+  const artworkLightbox = useArtworkLightboxScope();
   const bottomChromeRef = useRef<HTMLDivElement | null>(null);
   const bottomChromeObserverRef = useRef<ResizeObserver | null>(null);
   const bottomChromeObserverRafRef = useRef<number | null>(null);
@@ -193,6 +216,18 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
   const { clearTasks } = useTaskStore();
   const { cats, hasFetched: registryKnown, isLoading: registryRefreshing } = useCatData();
   const isV2 = useShellPresentation() === 'v2';
+  const conversationViewQueue = useChatStore((state) => scopedQueue(state, threadId)) ?? EMPTY_CONVERSATION_QUEUE;
+  const conversationViewMessages = useMemo(
+    () => withQueuedInputPreviews(allMessages, conversationViewQueue, threadId),
+    [allMessages, conversationViewQueue, threadId],
+  );
+  const conversationViewController = useConversationViewPreference(threadId, isV2);
+  const conversationViewReading = useConversationViewReadingCheckpoint({
+    threadId,
+    controller: conversationViewController,
+    messages: conversationViewMessages,
+    queue: conversationViewQueue,
+  });
   const coCreator = useCoCreatorConfig();
   const workspaceWorktreeId = useChatStore((s) => s.workspaceWorktreeId);
   useTeleport(); // F227: drive the Hub to a teleport target message (thread:teleport)
@@ -280,6 +315,7 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
       : null,
   );
   const [mediaComposerSurfaceId, setMediaComposerSurfaceId] = useState<string | null>(null);
+  const workModeRequest = useChatStore((state) => state.workspaceOpenRequest);
   const registeredWorkId = useRef<string | null>(null);
   const onRegisteredWorkChange = useCallback((id: string | null) => {
     if (registeredWorkId.current === id) return;
@@ -292,6 +328,7 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
     fullWindowActive: artifactFullWindowActive,
     narrowWorkComposerActive,
     workspaceWideActive,
+    workModeActive,
     chatBasis: artifactWorkChatBasis,
     invalidateHost: invalidateArtifactWorkHost,
     resizeChatBasis: resizeArtifactWorkChatBasis,
@@ -304,6 +341,7 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
     isDesktop,
     statusPanelOpen,
     rightPanelMode,
+    workModeRequested: workModeRequest?.threadId === threadId && workModeRequest.presentation === 'work-mode',
   });
   const workComposerOnlyActive = artifactFullWindowActive || narrowWorkComposerActive;
   const activeChatBasis =
@@ -382,7 +420,7 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
     rightPanelMode === 'workspace' &&
     mainAreaAttentionSurfaceId !== null &&
     (attentionPresentation.kind !== 'chat-workspace' || attentionPresentation.threadId === threadId);
-  const mainAreaOverlayActive = mainAreaAttentionActive && attentionPresentation.kind === 'overlay';
+  const mainAreaOverlayActive = mainAreaAttentionActive && coversChatHistory(attentionPresentation);
   const revealWorkspaceChat = useCallback(() => {
     if (!isV2 || useChatStore.getState().currentThreadId !== threadId) return;
     // Full-window Artifact work leaves room for the original composer; the other overlay hosts cover it.
@@ -404,7 +442,13 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
     narrowWorkComposerActive,
     closeStatusPanel,
   ]);
-  const messageSearchAvailable = isV2 && viewMode === 'single' && !artifactFullWindowActive && !mainAreaOverlayActive;
+  const messageSearchAvailable =
+    isV2 &&
+    viewMode === 'single' &&
+    !artworkLightbox?.work &&
+    !workComposerOnlyActive &&
+    !mainAreaOverlayActive &&
+    (isDesktop || !statusPanelOpen);
   const messageSearch = useMessageSearchHost({
     threadId,
     pushThreadRoute: navigateToThread,
@@ -531,14 +575,23 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
   const registerSettingsReadingPort = useSettingsReadingPort(originTitle);
   const registerShellReadingPort = useCallback<RegisterChatReadingPort>(
     (port) => {
+      conversationViewReading.setReadingPort(port);
       const releaseSearch = messageSearchAvailable ? messageSearch.registerReadingPort(port) : () => {};
       const releaseSettings = isV2 && viewMode === 'single' ? registerSettingsReadingPort(port) : () => {};
       return () => {
+        conversationViewReading.setReadingPort(null);
         releaseSettings();
         releaseSearch();
       };
     },
-    [isV2, viewMode, registerSettingsReadingPort, messageSearchAvailable, messageSearch.registerReadingPort],
+    [
+      conversationViewReading.setReadingPort,
+      isV2,
+      viewMode,
+      registerSettingsReadingPort,
+      messageSearchAvailable,
+      messageSearch.registerReadingPort,
+    ],
   );
 
   // The virtual default conversation uses the startup repository; a real route
@@ -957,30 +1010,22 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
     <WorkspaceChatWorkScopeProvider
       threadId={threadId}
       onRegisteredWorkChange={onRegisteredWorkChange}
-      getActiveSurfaceId={() => useF307ExperienceWorkbenchStore.getState().layout.activeSurfaceId}
+      getActiveSurfaceId={() =>
+        artworkLightbox?.work?.surface?.id ?? useF307ExperienceWorkbenchStore.getState().layout.activeSurfaceId
+      }
       isHostVisible={() => {
         const chat = useChatStore.getState();
         return (
           isV2 &&
           chat.currentThreadId === threadId &&
           (!chat.presentationLock || chat.presentationLock.ownerThreadId === threadId) &&
-          chat.rightPanelOpen &&
-          chat.rightPanelMode === 'workspace' &&
+          (!!artworkLightbox?.work || (chat.rightPanelOpen && chat.rightPanelMode === 'workspace')) &&
           document.visibilityState === 'visible'
         );
       }}
     >
       <div ref={containerRef} className="relative flex h-screen h-dvh">
-        <MessageSearchOverlay
-          threadId={threadId}
-          host={messageSearch}
-          available={messageSearchAvailable}
-          resolveSpeaker={(speaker) => {
-            if (speaker === 'user') return coCreator.name;
-            const cat = cats.find((candidate) => candidate.id === speaker);
-            return cat ? formatCatName(cat) : speaker;
-          }}
-        />
+        <ArtworkLightboxHost />
         {connectionStatus.updateRequired && <RuntimeUpdateRequiredDialog onReload={() => window.location.reload()} />}
         {/* Mobile-only sidebar overlay — desktop sidebar is in AppShell */}
         {sidebarOpen && !isDesktop && (
@@ -998,7 +1043,7 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
 
         <div
           className={`flex min-w-0 flex-col ${mainAreaOverlayActive ? 'invisible pointer-events-none' : ''} ${
-            workComposerOnlyActive ? 'absolute inset-0 z-50 pointer-events-none' : ''
+            workComposerOnlyActive ? 'absolute inset-0 z-50 pointer-events-none' : 'relative'
           }`}
           aria-hidden={mainAreaOverlayActive || undefined}
           data-testid="thread-chat-host"
@@ -1018,6 +1063,16 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
               : { flex: '1 1 0%' }
           }
         >
+          <MessageSearchOverlay
+            threadId={threadId}
+            host={messageSearch}
+            available={messageSearchAvailable}
+            resolveSpeaker={(speaker) => {
+              if (speaker === 'user') return coCreator.name;
+              const cat = cats.find((candidate) => candidate.id === speaker);
+              return cat ? formatCatName(cat) : speaker;
+            }}
+          />
           {!workComposerOnlyActive && !showNewConversationLanding && (
             <ChatContainerHeader
               sidebarOpen={sidebarOpen}
@@ -1039,6 +1094,9 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
                   setRightPanelOpen(true);
                 }
               }}
+              conversationViewController={conversationViewController}
+              conversationViewMessages={conversationViewMessages}
+              conversationViewQueue={conversationViewQueue}
             />
           )}
 
@@ -1069,6 +1127,8 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
                 presentation={workComposerOnlyActive ? 'composer-only' : 'conversation'}
                 onReadingPort={isV2 ? registerShellReadingPort : undefined}
                 messageConfirmations={messageConfirmations}
+                conversationViewController={conversationViewController}
+                conversationViewQueue={conversationViewQueue}
                 acceptUnscopedInteractiveSend
                 onRealMessageSent={() => handleRealOnboardingMessage(threadId)}
                 footerRef={attachBottomChromeRef}
@@ -1376,12 +1436,26 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
                   ? 'artifact-full-window'
                   : workspaceWideActive
                     ? 'wide-workspace'
-                    : mainAreaOverlayActive
-                      ? 'main-area-attention'
-                      : 'right-rail'
+                    : workModeActive
+                      ? 'artwork-work-mode'
+                      : mainAreaOverlayActive
+                        ? 'main-area-attention'
+                        : 'right-rail'
             }
             data-attention-surface={mainAreaAttentionActive ? mainAreaAttentionSurfaceId : undefined}
           >
+            {workModeActive ? (
+              <div className="flex shrink-0 items-center border-b border-cafe-subtle px-3 py-2">
+                <button
+                  type="button"
+                  onClick={closeStatusPanel}
+                  className="text-xs text-cafe-secondary"
+                  data-testid="artwork-work-mode-return"
+                >
+                  ‹ 聊天
+                </button>
+              </div>
+            ) : null}
             <ContextualWorkspaceChrome
               mode={rightPanelMode}
               onFold={closeStatusPanel}
@@ -1455,7 +1529,9 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
           </p>
         )}
         <FirstRunEntryReminder
-          enabled={threadId === 'default' && registryKnown && !registryRefreshing && cats.length > 0 && !showQuestWizard}
+          enabled={
+            threadId === 'default' && registryKnown && !registryRefreshing && cats.length > 0 && !showQuestWizard
+          }
           threadId={threadId}
         />
         <BootcampListModal open={showBootcampList} onClose={handleBootcampModalClose} currentThreadId={threadId} />

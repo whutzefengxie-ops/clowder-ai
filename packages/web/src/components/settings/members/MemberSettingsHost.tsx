@@ -1,5 +1,4 @@
 'use client';
-import { RoutingContextLedger } from '@/components/routing-context/RoutingContextLedger';
 import type { CatData } from '@/hooks/useCatData';
 import type { MemberSaveTrace } from '@/utils/member-save-trace';
 import { CatOverviewTab, type ConfigData } from '../../config-viewer-tabs';
@@ -105,12 +104,6 @@ export function MemberSettingsHost({
               <div className="flex justify-end">
                 <OpenTeamWorkspaceButton />
               </div>
-              <details className="rounded-xl border border-[var(--console-border-soft)] p-4">
-                <summary className="cursor-pointer text-sm text-cafe-secondary">查看路由记录</summary>
-                <div className="mt-4">
-                  <RoutingContextLedger />
-                </div>
-              </details>
             </div>
           </div>
         )}

@@ -10,6 +10,18 @@ tips_exempt: 既有用户旅程的验收证据与未完成边界
 
 **当前为 No-Go。** 本文件优先于历史报告中的旧候选状态；不把局部通过、CI 通过或一次成功回复当作整体完成。
 
+## 最新 main 合并与本机复验
+
+本轮在 `e7ad07671` 上合并实际维护者仓库的 main `b59cd583f1a49cccd4161daea52641d9aab09f67`（#1609），先保留合并前分支，再处理18个内容冲突。保留 main 的 Artwork lightbox、单猫会话投影、消息处理选项及成员保存/操作反馈，同时保留本PR的演示、一键创建、本机工具配置、设置页路由、保存诊断header和文档离开时取消读取。classic中过时的路由列表跟随 main 移除。没有整文件回退旧主界面，也没有改写历史提交。
+
+- 合并后首启/成员46文件231项通过；会话视图/编辑器6文件129项通过；成员保存及操作反馈6文件35项通过。第一轮129项中有1项仍预期Codex旧CLI默认，改为本PR已确定的`app_server`默认后完整重跑通过。变更清单新增字段`configurationSource`也接入main的穷举标签映射；Web TypeScript通过。
+- 完整`pnpm --filter @cat-cafe/api build`本轮通过，包含collective-client构建。上一轮Unix `rm`失败已改为Node只清理本包生成的dist目录；单独tsc不再代替本次完整命令。
+- frozen-lockfile安装通过。MCP基线从合并后的真实registry重生成，再针对上述准确main SHA检查通过：218工具、0新增/删除、0 schema/profile/action差异。默认fork `origin/main`陈旧时的校验失败原样保留，没有修改bootstrap证明或伪造远端ref。能力提示针对准确main的实际改动集检查通过，仍有9条既有引用警告；10条guide校验通过。
+- 后端跨平台选择集实际为25/26通过、0跳过。唯一失败为AGY Native接线在Windows无法取得Unix进程出生身份；额外wakeWhen单项也因同一身份前提拒绝supervisor lease（400）。已核实`cli-process-ownership.ts`在win32明确返回null，上述身份消费者与main一致，不是仅凭失败名称推定上游问题。不能将这两项写为通过，亦未绕过生产身份校验。包含整份wakeWhen文件的首轮已中止并保留原失败日志；WSL入口缺磁盘的脚本前提失败与随后Git Bash实测分开记录。
+- 本轮未新增真实模型调用或用户原生会话，没有启动额外安装实例。作者测试会话的27条可恢复归档重新回读，日志哈希27/27一致；当前可见列表无本批Identity标题。原角色、认证与持久历史不参与重置。
+
+证据在项目外`e2e-20261017/main-b59-merge/`，以`api-build.log`、`web-merge-contracts-correct-carrier.log`、`member-feedback-contracts.log`、`web-typecheck.log`、`api-portable-contracts.log`、`wakewhen-win32-specific.log`及`mcp-governance-check.log`为准。最新源码仍未重新制作EXE或完成F155生产浏览器/手动首配验收；不得把旧0927安装包的实物结果迁移到这次main合并。
+
 ## 验证对象
 
 - Desktop / API / Web 都实际编译自 `0927b6d0a9475b71b6147b4bd212f1e04dfc05fd`；版本 `1.14.0-pr1519-0927b6d0a`。

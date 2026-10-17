@@ -31,7 +31,8 @@ export function useHubCatEditorData({ cat, draft, existingCats, open, presentati
   const [loadingStrategy, setLoadingStrategy] = useState(false);
   const [loadingCodexSettings, setLoadingCodexSettings] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [profilesError, setProfilesError] = useState<string | null>(null);
   const [strategyError, setStrategyError] = useState<string | null>(null);
   const [codexSettingsError, setCodexSettingsError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -83,7 +84,7 @@ export function useHubCatEditorData({ cat, draft, existingCats, open, presentati
     if (!open) return;
     setForm(initialForm());
     setFieldErrors({});
-    setError(null);
+    setSaveError(null);
     setStrategyError(null);
     setCodexSettingsError(null);
     setStrategyBaselineHasOverride(false);
@@ -108,6 +109,7 @@ export function useHubCatEditorData({ cat, draft, existingCats, open, presentati
     if (!open) return;
     let cancelled = false;
     setLoadingProfiles(true);
+    setProfilesError(null);
     apiFetch('/api/accounts')
       .then(async (res) => {
         if (!res.ok) throw new Error(`账号配置加载失败 (${res.status})`);
@@ -130,7 +132,7 @@ export function useHubCatEditorData({ cat, draft, existingCats, open, presentati
         }));
       })
       .catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : '账号配置加载失败');
+        if (!cancelled) setProfilesError(err instanceof Error ? err.message : '账号配置加载失败');
       })
       .finally(() => {
         if (!cancelled) setLoadingProfiles(false);
@@ -176,6 +178,7 @@ export function useHubCatEditorData({ cat, draft, existingCats, open, presentati
     };
   }, [open, cat]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the member refresh above resets this baseline, so the same refresh must reread it.
   useEffect(() => {
     if (!open || !showCodexSettings) {
       setCodexSettings(null);
@@ -210,7 +213,7 @@ export function useHubCatEditorData({ cat, draft, existingCats, open, presentati
     return () => {
       cancelled = true;
     };
-  }, [open, showCodexSettings]);
+  }, [open, showCodexSettings, cat]);
 
   useEffect(() => {
     if (form.clientId === 'antigravity') {
@@ -274,7 +277,8 @@ export function useHubCatEditorData({ cat, draft, existingCats, open, presentati
     loadingStrategy,
     loadingCodexSettings,
     uploadingAvatar,
-    error,
+    saveError,
+    profilesError,
     strategyError,
     codexSettingsError,
     saving,
@@ -305,9 +309,10 @@ export function useHubCatEditorData({ cat, draft, existingCats, open, presentati
     saveBlockedByProfileBinding,
     setForm,
     setFieldErrors,
-    setError,
+    setSaveError,
     setStrategyError,
     setCodexSettingsError,
+    setStrategyBaseline,
     setStrategyBaselineHasOverride,
     setCodexSettingsBaseline,
     setSelectedTemplateId,
