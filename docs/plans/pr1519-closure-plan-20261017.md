@@ -7,7 +7,7 @@ created: 2026-10-17
 
 # PR #1519 收口实施与验收计划
 
-来源：PR #1519 当前 HEAD `0152f4632f6733afd2387a217b1793397d125a42`、当前 PR 复盘评论、zts/mind 最新限定复核，以及 issue #1466 已接受的引导合同。
+来源：PR #1519 当前 HEAD `340aaaa271f8905133185f1a552e558f07b18679`、当前 PR 复盘评论、zts/mind 最新限定复核，以及 issue #1466 已接受的引导合同。
 
 ## 目标
 
@@ -15,11 +15,11 @@ created: 2026-10-17
 
 ## 当前状态锚点
 
-- PR HEAD：`0152f4632f6733afd2387a217b1793397d125a42`。
+- PR HEAD：`340aaaa271f8905133185f1a552e558f07b18679`。
 - 当前 CI：19 SUCCESS / 1 SKIPPED；正式 approving review 仍缺失；PR 仍 BLOCKED。
 - A2A：`native-team-a2a.test.mjs` 放宽次数约束后，重复 handoff 和无关角色 invocation 会被误判为通过；这是当前明确 P1。
 - Windows：原生异常曾在旧包/旧诊断环境观测到 `0x80000003`，但必须绑定当前包 SHA、Electron/Chromium 版本、Windows 完整 build/UBR、PID/父子关系和原始 dump 后才能决定是否升级 Electron。`--no-sandbox`、提权和清空数据不作为默认修复。
-- 单实例：当前源码只在 `mainWindow` 存在时处理 second-instance 聚焦；启动中、窗口销毁、失败和安装器停机需要单独覆盖。
+- 单实例：当前源码此前只在 `mainWindow` 存在时处理 second-instance 聚焦；启动中、窗口销毁、失败和安装器停机需要单独覆盖。现已在 `window-recovery.js` 中收敛，且 main.js 保持 350 行硬门禁以内。
 
 本轮已落地的收敛改动（仍需随当前 HEAD 做完整构建验收）：
 
