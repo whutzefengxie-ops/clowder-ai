@@ -81,6 +81,7 @@ jobs:
           pnpm --filter @cat-cafe/web exec playwright install --with-deps chromium
           node --test packages/web/test/browser/native-team-rendered-reply.test.mjs
           node --test packages/web/test/browser/native-team-observers.test.mjs
+          node --test packages/web/test/browser/native-request-cancellations.test.mjs
 
   public-test-prepare:
     name: Public test plan

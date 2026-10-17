@@ -83,3 +83,67 @@ test('a cached document returning does not exempt its new current-page aborts', 
   };
   assert.throws(() => assertLivePageHealthy(record), /Unexpected renderer faults/);
 });
+
+test('a request predating Network.enable is still diagnosed during the first observed document retirement', async () => {
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const page = await browser.newPage();
+    await page.route('**/*', (route) => route.fulfill({ contentType: 'text/html', body: '<main>old</main>' }));
+    await page.goto('http://early.invalid/old');
+    let seen;
+    const started = new Promise((resolve) => {
+      seen = resolve;
+    });
+    await page.route('**/slow', () => {
+      seen();
+      return new Promise(() => {});
+    });
+    await page.evaluate(() => {
+      void fetch('/slow').catch(() => {});
+    });
+    await started;
+    const record = { pageErrors: [], dialogs: [] };
+    const stop = await observePageFaults(page, record);
+    await page.goto('http://early.invalid/new');
+    for (let i = 0; i < 100 && !record.networkErrors.length; i++) await page.waitForTimeout(20);
+    assert.ok(
+      record.networkErrors.some((error) => !error.document),
+      'Reproduce missing request start on late attachment',
+    );
+    assertLivePageHealthy(record);
+    await stop();
+  } finally {
+    await browser.close();
+  }
+});
+
+test('a pre-observer request canceled without document navigation remains a failure', async () => {
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const page = await browser.newPage();
+    await page.route('**/*', (route) => route.fulfill({ contentType: 'text/html', body: '<main>current</main>' }));
+    await page.goto('http://early.invalid/');
+    let seen;
+    const started = new Promise((resolve) => {
+      seen = resolve;
+    });
+    await page.route('**/slow', () => {
+      seen();
+      return new Promise(() => {});
+    });
+    await page.evaluate(() => {
+      window.oldController = new AbortController();
+      void fetch('/slow', { signal: window.oldController.signal }).catch(() => {});
+    });
+    await started;
+    const record = { pageErrors: [], dialogs: [] };
+    const stop = await observePageFaults(page, record);
+    await page.evaluate(() => window.oldController.abort());
+    for (let i = 0; i < 100 && !record.networkErrors.length; i++) await page.waitForTimeout(20);
+    assert.equal(record.callerCancellations.length, 0);
+    assert.throws(() => assertLivePageHealthy(record), /Unexpected renderer faults/);
+    await stop();
+  } finally {
+    await browser.close();
+  }
+});

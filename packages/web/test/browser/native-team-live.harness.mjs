@@ -44,7 +44,7 @@ export async function openLiveJourney() {
   record.nativeRenderer = nativeRenderer;
   record.initialRendererUrl = page.url();
   page.setDefaultTimeout(20000);
-  await observePageFaults(page, record);
+  const stopObserver = await observePageFaults(page, record);
   const log = async (name, details = {}) => {
     record.steps.push({ name, at: new Date().toISOString(), ...details });
     await save();
@@ -65,6 +65,7 @@ export async function openLiveJourney() {
         await save();
       } finally {
         try {
+          await stopObserver();
           if (!nativeRenderer) await context.close();
         } finally {
           await browser.close();
