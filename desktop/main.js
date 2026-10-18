@@ -28,7 +28,7 @@ const { createWindowRecoveryController } = require('./window-recovery');
 const { decideWindowClose } = require('./window-close-policy');
 const { createLifecycleLogger } = require('./lifecycle-diagnostics');
 const {
-  createDesktopTray,
+  createDesktopTrayResult,
   createManualUpdateHandler,
   installMacApplicationMenu,
   showAboutDialog,
@@ -256,7 +256,7 @@ app.on('ready', async () => {
   lifecycle('desktop-instance-initialized', { isolated: Boolean(desktopRuntime.instanceRoot) });
   const showAbout = () => showAboutDialog({ app, dialog, onManualUpdate: checkForUpdatesManually });
   lifecycle('tray-create-requested');
-  const trayResult = createDesktopTray({
+  const trayResult = createDesktopTrayResult({
     Menu,
     Tray,
     iconPath: path.join(__dirname, 'assets', 'icon.ico'),

@@ -23,8 +23,15 @@ test('Windows without a tray keeps the window visible so the process has an entr
   });
 });
 
-test('non-Windows platforms retain native close behavior', () => {
+test('macOS keeps the previous tray-hide behavior', () => {
   assert.deepEqual(decideWindowClose({ platform: 'darwin', isQuitting: false, trayAvailable: true }), {
+    action: 'hide',
+    reason: 'manual-close',
+  });
+});
+
+test('non-Windows platforms without a tray retain native close behavior', () => {
+  assert.deepEqual(decideWindowClose({ platform: 'darwin', isQuitting: false, trayAvailable: false }), {
     action: 'allow',
     reason: 'non-windows',
   });

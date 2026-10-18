@@ -49,7 +49,7 @@ function serializeTrayError(error) {
   };
 }
 
-function createDesktopTray({ Menu, Tray, iconPath, getMainWindow, onManualUpdate, onQuit, showAbout }) {
+function createDesktopTrayResult({ Menu, Tray, iconPath, getMainWindow, onManualUpdate, onQuit, showAbout }) {
   let tray = null;
   try {
     tray = new Tray(iconPath);
@@ -72,6 +72,12 @@ function createDesktopTray({ Menu, Tray, iconPath, getMainWindow, onManualUpdate
     } catch {}
     return { status: 'failed', tray: null, error: serializeTrayError(error) };
   }
+}
+
+// Keep the original Tray|null contract for existing callers. The main process
+// opts into the structured result so failures cannot be silently downgraded.
+function createDesktopTray(options) {
+  return createDesktopTrayResult(options).tray;
 }
 
 function installMacApplicationMenu({ app, Menu, onManualUpdate, showAbout }) {
@@ -105,6 +111,7 @@ function installMacApplicationMenu({ app, Menu, onManualUpdate, showAbout }) {
 
 module.exports = {
   createDesktopTray,
+  createDesktopTrayResult,
   createManualUpdateHandler,
   installMacApplicationMenu,
   showAboutDialog,

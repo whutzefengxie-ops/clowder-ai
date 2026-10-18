@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const { describe, test } = require('node:test');
 
-const { createDesktopTray, createManualUpdateHandler } = require('./desktop-update-menu');
+const { createDesktopTray, createDesktopTrayResult, createManualUpdateHandler } = require('./desktop-update-menu');
 
 describe('desktop manual update entry point', () => {
   test('re-presents an existing prompt instead of queuing another check behind it', () => {
@@ -33,7 +33,7 @@ function createMenu() {
 
 test('tray creation returns a diagnosable success result', () => {
   const handlers = [];
-  const result = createDesktopTray({
+  const result = createDesktopTrayResult({
     Menu: createMenu(),
     Tray: class {
       setToolTip() {}
@@ -58,7 +58,7 @@ test('tray creation returns a diagnosable success result', () => {
 });
 
 test('tray creation returns the native error instead of silently degrading', () => {
-  const result = createDesktopTray({
+  const result = createDesktopTrayResult({
     Menu: createMenu(),
     Tray: class {
       constructor() {
@@ -76,4 +76,23 @@ test('tray creation returns the native error instead of silently degrading', () 
   assert.equal(result.tray, null);
   assert.equal(result.error.message, 'icon unavailable');
   assert.equal(result.error.name, 'Error');
+});
+
+test('legacy tray callers still receive a Tray instance', () => {
+  const tray = createDesktopTray({
+    Menu: createMenu(),
+    Tray: class {
+      setToolTip() {}
+      setContextMenu() {}
+      on() {}
+    },
+    iconPath: 'icon.ico',
+    getMainWindow: () => null,
+    onManualUpdate: () => {},
+    onQuit: () => {},
+    showAbout: () => {},
+  });
+
+  assert.ok(tray);
+  assert.equal(typeof tray.setToolTip, 'function');
 });
