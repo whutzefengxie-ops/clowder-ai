@@ -20,15 +20,9 @@ if(mode==='claude'){
  if(JSON.stringify(process.argv.slice(3))!==JSON.stringify(['auth','status','--json']))process.exit(91);
  note({mode,args:process.argv.slice(3)});console.log(JSON.stringify({loggedIn:true,email:'fixture@example.invalid',access_token:'fake-sensitive-sentinel'}));
 }else{
- if(JSON.stringify(process.argv.slice(3))!==JSON.stringify(['app-server']))process.exit(92);
- require('node:readline').createInterface({input:process.stdin}).on('line',line=>{
-  const request=JSON.parse(line);note({mode,method:request.method,params:request.params});
-  if(request.method==='initialized')return;
-  if(!['initialize','account/read'].includes(request.method))process.exit(93);
-  if(request.method==='account/read'&&request.params.refreshToken!==false)process.exit(94);
-  const result=request.method==='initialize'?{}:{account:{type:'chatgpt',email:'fixture@example.invalid',access_token:'fake-sensitive-sentinel'}};
-  console.log(JSON.stringify({jsonrpc:'2.0',id:request.id,result}));
- });
+ if(JSON.stringify(process.argv.slice(3))!==JSON.stringify(['login','status']))process.exit(92);
+ note({mode,args:process.argv.slice(3)});
+ console.error('Logged in using ChatGPT');
 }`,
   );
   const targets = ['codex', 'claude'].map((id) => {
@@ -52,7 +46,7 @@ if(mode==='claude'){
   const spawn = childProcess.spawn,
     execFile = childProcess.execFile;
   const plans = targets.map((t) => {
-    const args = t.id === 'codex' ? ['app-server'] : ['auth', 'status', '--json'];
+    const args = t.id === 'codex' ? ['login', 'status'] : ['auth', 'status', '--json'];
     return process.platform === 'win32' ? resolveWindowsSpawnPlan(t.command, args) : { command: t.command, args };
   });
   const permits = (command, args) =>
@@ -92,10 +86,9 @@ if(mode==='claude'){
         .map((line) => JSON.parse(line));
       assert.equal(rows.filter((r) => r.mode === 'claude').length, 1);
       assert.deepEqual(
-        rows.filter((r) => r.mode === 'codex').map((r) => r.method),
-        ['initialize', 'initialized', 'account/read'],
+        rows.filter((r) => r.mode === 'codex').map((r) => r.args),
+        [['login', 'status']],
       );
-      assert.equal(rows.find((r) => r.method === 'account/read').params.refreshToken, false);
     },
     restore() {
       mock.restoreAll();

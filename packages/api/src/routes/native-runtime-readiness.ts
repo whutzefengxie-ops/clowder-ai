@@ -3,7 +3,7 @@ import { buildChildEnv } from '../utils/cli-spawn.js';
 import { resolveWindowsSpawnPlan } from '../utils/cli-spawn-win.js';
 import { hasNativeClaudeApiConfig } from './native-claude-api-config.js';
 import { nativeKimiLoginCommand } from './native-kimi-login.js';
-import { catalogRpc } from './runtime-catalog-rpc.js';
+import { probeCodexLogin } from './runtime-codex-discovery.js';
 
 export type NativeReadiness = {
   status: 'login_required' | 'configured' | 'unknown' | 'not_installed';
@@ -58,16 +58,6 @@ async function claudeLogin(command: string, cwd: string): Promise<unknown> {
     );
   });
 }
-async function codexLogin(command: string, cwd: string): Promise<unknown> {
-  const rpc = catalogRpc(command, ['app-server'], cwd, 6_000);
-  try {
-    await rpc.request('initialize', { clientInfo: { name: 'clowder-login-check', version: '1.0.0' } });
-    rpc.notify('initialized');
-    return await rpc.request('account/read', { refreshToken: false });
-  } finally {
-    await rpc.close();
-  }
-}
 const cache = new Map<string, { at: number; value: NativeReadiness }>();
 const pending = new Map<string, Promise<NativeReadiness>>();
 export async function nativeRuntimeReadiness(target: Target, cwd: string, refresh = false): Promise<NativeReadiness> {
@@ -97,7 +87,7 @@ export async function nativeRuntimeReadiness(target: Target, cwd: string, refres
   const running = pending.get(key);
   if (running) return running;
   if (pending.size >= 3) return { status: 'unknown', checkedAt: Date.now() };
-  const probe = target.id === 'claude' ? claudeLogin : codexLogin;
+  const probe = target.id === 'claude' ? claudeLogin : probeCodexLogin;
   const promise = probe(target.command, cwd)
     .catch(() => null)
     .then((observed) => {

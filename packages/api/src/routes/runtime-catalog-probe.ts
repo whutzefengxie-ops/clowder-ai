@@ -2,15 +2,14 @@ import type { SDKUserMessage, query as sdkQuery } from '@anthropic-ai/claude-age
 import { buildChildEnv } from '../utils/cli-spawn.js';
 import { resolveWindowsSpawnPlan } from '../utils/cli-spawn-win.js';
 import { catalogRpc } from './runtime-catalog-rpc.js';
+import { probeCodexCatalog } from './runtime-codex-discovery.js';
 import {
   acpChoices,
   acpOption,
   parseAcpCatalog,
   parseClaudeModels,
-  parseCodexModels,
   type RuntimeModelCatalog,
   record,
-  text,
 } from './runtime-model-catalog.js';
 
 export interface CatalogTarget {
@@ -22,30 +21,9 @@ export interface CatalogTarget {
 }
 export async function probeRuntimeCatalog(target: CatalogTarget): Promise<RuntimeModelCatalog> {
   if (target.kind === 'claude') return probeClaude(target);
-  const rpc = catalogRpc(
-    target.command,
-    target.kind === 'codex' ? [...target.args, 'app-server'] : target.args,
-    target.cwd,
-  );
+  if (target.kind === 'codex') return probeCodexCatalog(target.command, target.args, target.cwd);
+  const rpc = catalogRpc(target.command, target.args, target.cwd);
   try {
-    if (target.kind === 'codex') {
-      await rpc.request('initialize', { clientInfo: { name: 'clowder-model-picker', version: '1.0.0' } });
-      rpc.notify('initialized');
-      const config = record(record(await rpc.request('config/read', { includeLayers: false, cwd: target.cwd })).config);
-      const models: RuntimeModelCatalog['models'] = [];
-      let cursor: string | undefined;
-      do {
-        const page = await rpc.request('model/list', { ...(cursor ? { cursor } : {}), limit: 100 });
-        models.push(...parseCodexModels(page));
-        cursor = text(record(page).nextCursor);
-      } while (cursor && models.length < 1000);
-      return {
-        status: models.length ? 'live' : 'unavailable',
-        models,
-        defaultModel: text(config.model),
-        defaultEffort: text(config.model_reasoning_effort),
-      };
-    }
     await rpc.request('initialize', {
       protocolVersion: 1,
       clientCapabilities: {},
