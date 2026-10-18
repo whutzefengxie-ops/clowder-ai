@@ -2,7 +2,10 @@ import './helpers/setup-cat-registry.js';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { catRegistry } from '@cat-cafe/shared';
-import { CodexAgentService } from '../dist/domains/cats/services/agents/providers/CodexAgentService.js';
+import {
+  CodexAgentService,
+  resolveCodexSchemaModelFamily,
+} from '../dist/domains/cats/services/agents/providers/CodexAgentService.js';
 
 class AsyncInbox {
   #values = [];
@@ -187,4 +190,10 @@ test('native collaboration stops before prompt when the adopted model is unavail
     'exercise the adopted-model boundary',
   );
   assert.ok(messages.some((message) => message.type === 'error'));
+});
+
+test('native Codex projects inherited empty model to a valid schema capability family', () => {
+  assert.equal(resolveCodexSchemaModelFamily(''), 'unknown');
+  assert.equal(resolveCodexSchemaModelFamily('  '), 'unknown');
+  assert.equal(resolveCodexSchemaModelFamily('gpt-5.6-sol'), 'gpt-5.6-sol');
 });

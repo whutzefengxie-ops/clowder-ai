@@ -594,6 +594,15 @@ export function buildCodexReasoningArgs(effortLevel: string): string[] {
 }
 
 /**
+ * Capability metadata needs a non-empty model family even when a native Codex
+ * member intentionally inherits the local CLI model (represented as empty).
+ * This projection never changes launch arguments or persisted member config.
+ */
+export function resolveCodexSchemaModelFamily(model: string | null | undefined): string {
+  return model?.trim() || 'unknown';
+}
+
+/**
  * `--config` keys whose values are part of a system-owned runtime contract.
  * Free-form cliConfigArgs may override ordinary Codex preferences, but they
  * cannot replace identity/speed controls or the model/window that an
@@ -2373,7 +2382,7 @@ export class CodexAgentService implements AgentService {
         command: codexCommand,
         provider: 'openai',
         carrier: useAppServer ? 'app_server' : 'exec_json',
-        modelFamily: cliModel ?? 'provider-default',
+        modelFamily: resolveCodexSchemaModelFamily(cliModel),
         profileClass: schemaDeliveryProfile,
         profileId: schemaDeliveryProfileId,
         config: createMcpSchemaDeliveryLaunchConfig({
