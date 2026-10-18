@@ -59,7 +59,6 @@ const startupLogDir = path.join(userDataRoot, 'data', 'logs');
 const reportStartup = createStartupReporter(startupLogDir);
 const startupTimeline = createStartupTimeline({ component: 'desktop', emit: dbg });
 startupTimeline.mark('main-initialized');
-
 dbg(`Electron starting. ELECTRON_RUN_AS_NODE=${process.env.ELECTRON_RUN_AS_NODE}`);
 dbg(`process.type=${process.type}, versions.electron=${process.versions.electron}`);
 
@@ -77,7 +76,6 @@ const checkForUpdatesManually = createManualUpdateHandler({
   getUpdatePrompt: () => updatePrompt,
   getUpdater: () => updater,
 });
-
 async function refreshRendererLinkOrigins() {
   try {
     rendererLinkOrigins = await resolveRendererLinkOrigins({
@@ -96,7 +94,6 @@ async function refreshRendererLinkOrigins() {
     dbg(`Could not resolve preview gateway origin: ${safeErrorMessage(error)}`);
   }
 }
-
 function createSplashWindow() {
   splashWindow = new BrowserWindow({
     width: 420,
@@ -114,7 +111,6 @@ function createSplashWindow() {
   splashWindow.loadFile(path.join(__dirname, 'splash.html'));
   splashWindow.center();
 }
-
 async function createMainWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
@@ -247,15 +243,19 @@ app.on('ready', async () => {
     await requestQuit('single-instance-lock');
     return;
   }
+  lifecycle('single-instance-lock-acquired', { userDataRoot: app.getPath('userData') });
   if (process.argv.includes(QUIT_FOR_UPDATE_ARG)) {
     await requestQuit('installer');
     return;
   }
 
   createSplashWindow();
+  lifecycle('splash-created');
   startupPhase = 'starting';
   initializeDesktopInstance(session, desktopRuntime, PROJECT_ROOT);
+  lifecycle('desktop-instance-initialized', { isolated: Boolean(desktopRuntime.instanceRoot) });
   const showAbout = () => showAboutDialog({ app, dialog, onManualUpdate: checkForUpdatesManually });
+  lifecycle('tray-create-requested');
   const trayResult = createDesktopTray({
     Menu,
     Tray,
