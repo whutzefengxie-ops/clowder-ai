@@ -175,7 +175,6 @@ import {
   type CodexApprovalSurface,
   isReservedCodexAppApprovalConfigKey,
 } from './codex-app-approval-routing.js';
-import { classifyCodexExecToolSurface } from './codex-app-server-boundary.js';
 import {
   bindCodexAppServerControlOptions,
   resolveCodexAppServerControlOptions,
@@ -2570,18 +2569,11 @@ export class CodexAgentService implements AgentService {
                   })),
                 );
                 return Object.freeze({
-                  ...prepareProviderRequest(
-                    input.kind === 'text' ? input.text : input.kind === 'context' ? LIVE_CONTEXT_TRIGGER : '',
-                    'app_server',
-                  ),
+                  ...prepareProviderRequest(input.kind === 'text' ? input.text : LIVE_CONTEXT_TRIGGER, 'app_server'),
                   message: Object.freeze({
-                    body: input.kind === 'text' ? input.text : input.kind === 'context' ? LIVE_CONTEXT_TRIGGER : '',
+                    body: input.kind === 'text' ? input.text : LIVE_CONTEXT_TRIGGER,
                     injectionDecision:
-                      input.kind === 'text'
-                        ? 'app_server_live_typed_input'
-                        : input.kind === 'notice'
-                          ? 'app_server_live_freshness_input'
-                          : 'app_server_live_context_input',
+                      input.kind === 'text' ? 'app_server_live_typed_input' : 'app_server_live_context_input',
                     sourceRefs: input.kind === 'text' ? sourceRefs : Object.freeze([]),
                   }),
                   nativeInstructions:
@@ -2590,8 +2582,7 @@ export class CodexAgentService implements AgentService {
                           {
                             body: input.text,
                             sourceRefs,
-                            injectionDecision:
-                              input.kind === 'notice' ? 'app_server_live_freshness_context' : 'app_server_live_context',
+                            injectionDecision: 'app_server_live_context',
                           },
                         ])
                       : Object.freeze([]),
@@ -2640,7 +2631,6 @@ export class CodexAgentService implements AgentService {
                   '[F306] unsupported Codex app-server notification skipped',
                 );
               },
-              ...(options?.activeInvocationFreshness ? { freshnessController: options.activeInvocationFreshness } : {}),
               ...(auditContext
                 ? {
                     onLifecycle: (lifecycle: CodexAppServerLifecycleSnapshot) => {
@@ -2792,22 +2782,6 @@ export class CodexAgentService implements AgentService {
           providerRecovery ??= { attempts: [] };
           providerRecovery.attempts.push(reconnectNotice.message);
           if (reconnectNotice.attempt !== undefined) providerRecovery.lastAttempt = reconnectNotice.attempt;
-        }
-
-        if (!useAppServer && options?.activeInvocationFreshness) {
-          const toolSurface = classifyCodexExecToolSurface(event);
-          if (toolSurface) {
-            try {
-              const notice = await options.activeInvocationFreshness.prepare({
-                threadId: auditContext?.threadId ?? 'unknown',
-                turnId: options.invocationId ?? 'codex-exec-json',
-                toolSurface,
-              });
-              if (notice) await options.activeInvocationFreshness.markMissed(notice, 'unsupported_carrier');
-            } catch (err) {
-              log.warn({ err, invocationId: options.invocationId }, '[F254-D2] exec freshness telemetry failed');
-            }
-          }
         }
 
         if (auditContext && !useAppServer) {
@@ -3010,13 +2984,6 @@ export class CodexAgentService implements AgentService {
             metadata.usage = usage;
           }
           if (raw.type === 'turn.completed') {
-            if (!useAppServer && options?.activeInvocationFreshness) {
-              try {
-                await options.activeInvocationFreshness.markTurnCompleted(options.invocationId ?? 'codex-exec-json');
-              } catch (err) {
-                log.warn({ err, invocationId: options.invocationId }, '[F254-D2] exec terminal freshness audit failed');
-              }
-            }
             semanticCompletionController.abort();
             const u = raw.usage as Record<string, unknown> | undefined;
             if (u) {
