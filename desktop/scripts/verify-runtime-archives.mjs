@@ -29,7 +29,7 @@ for (const item of required) {
     const manifestPath = `${archivePath}.json`;
     try {
       const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
-      if (!manifest || manifest.archive !== item.name || manifest.sizeBytes !== archive.size) {
+      if (!manifest || manifest.archive !== item.name || manifest.bytes !== archive.size) {
         failures.push(`${item.name}: sidecar does not match archive`);
       }
       record.manifest = manifestPath;

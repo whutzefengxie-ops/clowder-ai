@@ -16,7 +16,7 @@ function makeRoot({ empty = false, missingSidecar = false } = {}) {
     const archive = path.join(dir, name);
     fs.writeFileSync(archive, empty ? '' : 'archive');
     if (name !== 'node.tar.gz' && !missingSidecar) {
-      fs.writeFileSync(`${archive}.json`, JSON.stringify({ archive: name, sizeBytes: 7 }));
+      fs.writeFileSync(`${archive}.json`, JSON.stringify({ archive: name, bytes: 7 }));
     }
   }
   return root;
