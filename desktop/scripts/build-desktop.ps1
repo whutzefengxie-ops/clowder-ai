@@ -406,8 +406,14 @@ $archiveTargets = @(
 # tar implementation as installation and include integrity/progress manifests.
 $archiveTar = (Get-Command tar.exe).Source
 $archiveTarPrefix = @()
+$systemTar = Join-Path $env:WINDIR 'System32/tar.exe'
 $gitTar = Join-Path $env:ProgramFiles "Git/usr/bin/tar.exe"
-if (Test-Path -LiteralPath $gitTar) {
+if (Test-Path -LiteralPath $systemTar) {
+    # Git's bundled tar can terminate with 0xC0000142 while archiving the
+    # portable Node tree on Windows. Prefer the inbox bsdtar for deterministic
+    # packaging; fall back to Git tar on older Windows images.
+    $archiveTar = $systemTar
+} elseif (Test-Path -LiteralPath $gitTar) {
     $archiveTar = $gitTar
     $archiveTarPrefix = @('--force-local')
 }
