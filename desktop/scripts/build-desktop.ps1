@@ -97,6 +97,12 @@ if ($releaseInputStatus.Count -gt 0 -and -not $AllowDirtyInputs) {
 if ($releaseInputStatus.Count -gt 0) {
     Write-Warn 'Diagnostic build: release inputs are dirty; build-manifest.json will record them and the EXE is not releaseable.'
 }
+function Assert-WebBuildIdentity {
+    param([string]$WebRoot)
+    $expectedRevision = (git -C $ProjectRoot rev-parse HEAD).Trim()
+    & node (Join-Path $ProjectRoot 'desktop/scripts/verify-web-build.cjs') $WebRoot $expectedRevision
+    if ($LASTEXITCODE -ne 0) { throw "Web runtime admission failed: $WebRoot. Rebuild; do not rewrite build stamps." }
+}
 
 # Step 1: Build web app
 Write-Step "Step 1/9 - Build web application"
@@ -120,6 +126,7 @@ if (-not $SkipWebBuild) {
     Pop-Location
     Write-Ok "Web application built"
 } else {
+    Assert-WebBuildIdentity (Join-Path $ProjectRoot 'packages/web')
     Write-Ok "Skipped (existing artifacts)"
 }
 
@@ -143,6 +150,7 @@ if (-not $SkipBundleDeps) {
 } elseif (-not (Test-Path -LiteralPath $deployRoot)) {
     throw "bundled/deploy missing. Run without -SkipBundleDeps first."
 } else { Write-Ok "Skipped (-SkipBundleDeps)" }
+Assert-WebBuildIdentity (Join-Path $deployRoot 'web')
 
 # Step 3: Bundle Redis portable + Node.js runtime
 Write-Step "Step 3/9 - Bundle Redis portable + Node.js"

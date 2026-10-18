@@ -4,6 +4,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { test } = require('node:test');
 const { loadDesktopWebConfig } = require('./runtime-web-config');
+const { verifyWebBuild } = require('./scripts/verify-web-build.cjs');
 
 function fixture() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'desktop-web-config-'));
@@ -64,6 +65,18 @@ test('verified production snapshot retains build env, routes and runtime env pre
     delete process.env.RUNTIME_WEB_ENV_TEST;
     loadDesktopWebConfig(f.root, f.requireWeb);
     assert.equal(process.env.RUNTIME_WEB_ENV_TEST, 'file-value');
+  } finally {
+    f.close();
+  }
+});
+
+test('packaging admission rejects restamped bundles and unchanged stale builds', () => {
+  const f = fixture();
+  try {
+    assert.equal(verifyWebBuild(f.root, 'a'.repeat(40), f.requireWeb).revision, 'a'.repeat(40));
+    assert.throws(() => verifyWebBuild(f.root, 'b'.repeat(40), f.requireWeb), /rebuild instead of restamping/);
+    fs.writeFileSync(path.join(f.root, '.next/.build-commit'), 'b'.repeat(40));
+    assert.throws(() => verifyWebBuild(f.root, 'b'.repeat(40), f.requireWeb), /does not match its build identity/);
   } finally {
     f.close();
   }
