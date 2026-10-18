@@ -39,6 +39,34 @@ test('login probe honors the shell required by a Windows fallback spawn plan', a
   }
 });
 
+test('Claude login status accepts JSON when the CLI writes a warning to stderr', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'native-claude-warning-'));
+  const command = join(root, process.platform === 'win32' ? 'fake-claude.cmd' : 'fake-claude.sh');
+  const script = join(root, 'status.cjs');
+  writeFileSync(
+    script,
+    `console.error('WARNING: PATH alias unavailable - private-sentinel');console.log(JSON.stringify({loggedIn:true}));`,
+  );
+  writeFileSync(
+    command,
+    process.platform === 'win32'
+      ? `@echo off\r\n"${process.execPath}" "${script}" %*\r\n`
+      : `#!/bin/sh\n"${process.execPath}" "${script}" "$@"\n`,
+  );
+  chmodSync(command, 0o755);
+  const previous = process.env.CLAUDE_CONFIG_DIR;
+  process.env.CLAUDE_CONFIG_DIR = root;
+  try {
+    const result = await nativeRuntimeReadiness({ id: 'claude', installed: true, command }, root, true);
+    assert.equal(result.status, 'configured');
+    assert.doesNotMatch(JSON.stringify(result), /private-sentinel/);
+  } finally {
+    if (previous === undefined) delete process.env.CLAUDE_CONFIG_DIR;
+    else process.env.CLAUDE_CONFIG_DIR = previous;
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('installed is not authenticated; supported CLIs report missing login before a model turn', () => {
   assert.equal(nativeAuthenticationStatus('claude', { loggedIn: false }), 'login_required');
   assert.equal(nativeAuthenticationStatus('codex', { account: null, requiresOpenaiAuth: true }), 'login_required');

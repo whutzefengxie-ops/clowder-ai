@@ -82,6 +82,11 @@ test('Codex model discovery preserves native history and exposes only catalog me
 
 for (const scenario of [
   { output: 'Logged in using an API key - private-sentinel', code: 0, expected: 'configured' },
+  {
+    output: 'WARNING: unable to create PATH alias - private-sentinel\\nLogged in using ChatGPT',
+    code: 0,
+    expected: 'configured',
+  },
   { output: 'Not logged in', code: 1, expected: 'login_required' },
   { output: 'Logged in using ChatGPT', code: 1, expected: 'unknown' },
   { output: 'network failure private-sentinel', code: 2, expected: 'unknown' },

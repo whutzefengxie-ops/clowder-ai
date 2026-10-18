@@ -117,6 +117,8 @@ packages/api/dist/.build-commit == 同一 SHA
 - 共享 workspace 包按 canonical source 去重，私有/peer 版本保留；
 - `tar -tzf` 可以完整列出每个归档，抽取器能验证 entry count、size 和 sha256。
 
+构建脚本还会运行 `desktop/scripts/verify-runtime-archives.mjs`。它对安装器会消费的六个归档逐一检查：文件存在、字节数大于零；除 Node 归档外必须存在 sidecar，且 sidecar 中的归档名和字节数必须与实际文件一致。任一检查失败会在 Inno 编译前退出，禁止把半成品交付给用户。对应回归测试为 `desktop/verify-runtime-archives.test.mjs`。
+
 ### 阶段 D：Electron/ASAR 闭包
 
 Electron 壳必须使用 `desktop/package-lock.json` 锁定的版本。`electron-builder --dir` 完成后，`afterPack` 必须读取真实 `app.asar` 并检查主进程本地 `require` 闭包；缺少 `startup-failure-handler.js`、`shutdown-controller.js`、`runtime-web-config.js` 等文件时立即失败。

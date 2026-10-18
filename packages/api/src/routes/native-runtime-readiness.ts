@@ -16,6 +16,30 @@ type RecordValue = Record<string, unknown>;
 const record = (value: unknown): RecordValue =>
   value !== null && typeof value === 'object' && !Array.isArray(value) ? (value as RecordValue) : {};
 
+function parseClaudeLoginOutput(
+  stdout: string,
+  stderr: string,
+  error: { code?: string | number | null } | null,
+): unknown {
+  const candidates = [
+    stdout.trim(),
+    ...`${stdout}\n${stderr}`
+      .split(/\r?\n/)
+      .reverse()
+      .map((line) => line.trim()),
+  ].filter(Boolean);
+  for (const candidate of candidates) {
+    try {
+      const value: unknown = JSON.parse(candidate);
+      const ordinaryMissingLogin = record(value).loggedIn === false && error?.code === 1;
+      return error && !ordinaryMissingLogin ? null : value;
+    } catch {
+      // CLI warnings may precede the JSON status; try the next line.
+    }
+  }
+  return null;
+}
+
 /** Login evidence only. It cannot prove quota, reachability, or a successful model invocation. */
 export function nativeAuthenticationStatus(kind: string, value: unknown): NativeReadiness['status'] {
   const observed = record(value);
@@ -45,16 +69,7 @@ async function claudeLogin(command: string, cwd: string): Promise<unknown> {
         timeout: 6_000,
         maxBuffer: 256_000,
       },
-      (error, stdout) => {
-        // An unconfigured CLI exits nonzero with loggedIn:false. Never expose stdout/stderr or account identity.
-        try {
-          const value: unknown = JSON.parse(stdout);
-          const ordinaryMissingLogin = record(value).loggedIn === false && error?.code === 1;
-          resolve(error && !ordinaryMissingLogin ? null : value);
-        } catch {
-          resolve(null);
-        }
-      },
+      (error, stdout, stderr) => resolve(parseClaudeLoginOutput(stdout, stderr, error)),
     );
   });
 }

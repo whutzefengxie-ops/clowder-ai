@@ -458,6 +458,8 @@ foreach ($t in $archiveTargets) {
     $sizeMB = [math]::Round((Get-Item $archivePath).Length / 1MB, 2)
     Write-Ok "$($t.Name).tar.gz ($sizeMB MB)"
 }
+& node (Join-Path $ProjectRoot 'desktop/scripts/verify-runtime-archives.mjs') $ProjectRoot
+if ($LASTEXITCODE -ne 0) { throw 'Runtime archive gate failed; no installer may be compiled.' }
 Write-Ok "Archives ready under bundled/archives/"
 
 # Step 7: Compile Inno Setup installer

@@ -34,8 +34,11 @@ async function inspectCodex(command: string, args: string[], cwd: string, timeou
 export async function probeCodexLogin(command: string, cwd: string): Promise<unknown> {
   const result = await inspectCodex(command, ['login', 'status'], cwd, 6_000);
   const output = `${result.output}\n${result.errorOutput}`.trim();
-  if (!result.failed && /^Logged in using ChatGPT(?:\s|$)/.test(output)) return { account: { type: 'chatgpt' } };
-  if (!result.failed && /^Logged in using an API key(?:\s|$)/.test(output)) return { account: { type: 'apiKey' } };
+  const lines = output.split(/\r?\n/).map((line) => line.trim());
+  if (!result.failed && lines.some((line) => /^Logged in using ChatGPT(?:\s|$)/.test(line)))
+    return { account: { type: 'chatgpt' } };
+  if (!result.failed && lines.some((line) => /^Logged in using an API key(?:\s|$)/.test(line)))
+    return { account: { type: 'apiKey' } };
   if (result.code === 1 && output === 'Not logged in') {
     const requiresOpenaiAuth = nativeProviderRequiresOpenaiAuth(cwd);
     return requiresOpenaiAuth === undefined ? null : { account: null, requiresOpenaiAuth };
