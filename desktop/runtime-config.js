@@ -16,6 +16,17 @@ function canonicalWithMissingSuffix(value) {
       existing = parent;
     }
   }
+  // Windows junctions can be reported by lstat/readlink while
+  // realpathSync.native fails with ENOENT (notably for the install-time
+  // scripts\node_modules junction). Resolve the link target explicitly so
+  // the installation/data boundary check remains fail-closed before the
+  // Electron logger and services are initialized.
+  const stat = fs.lstatSync(existing);
+  if (stat.isSymbolicLink()) {
+    const target = fs.readlinkSync(existing);
+    const resolvedTarget = path.isAbsolute(target) ? target : path.resolve(path.dirname(existing), target);
+    return path.join(canonicalWithMissingSuffix(resolvedTarget), ...suffix);
+  }
   return path.join(fs.realpathSync.native(existing), ...suffix);
 }
 
