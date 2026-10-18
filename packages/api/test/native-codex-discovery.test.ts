@@ -103,3 +103,23 @@ test('unsupported native catalog command remains unavailable without an App Serv
   });
   assert.equal(readFileSync(f.state, 'utf8'), 'original native history');
 });
+
+for (const profile of [false, true]) {
+  test(`a native third-party provider without OpenAI auth does not require ChatGPT login (profile=${profile})`, async (t) => {
+    const f = fixture(t);
+    const previous = process.env.CODEX_HOME;
+    process.env.CODEX_HOME = f.root;
+    t.after(() => {
+      if (previous === undefined) delete process.env.CODEX_HOME;
+      else process.env.CODEX_HOME = previous;
+    });
+    writeFileSync(
+      join(f.root, 'config.toml'),
+      `${profile ? 'profile="fixture"\n[profiles.fixture]\n' : ''}model_provider="fixture"\n[model_providers.fixture]\nname="Fixture"\nwire_api="responses"\nrequires_openai_auth=false\n`,
+    );
+    writeFileSync(f.program, "console.error('Not logged in');process.exit(1);");
+    const result = await nativeRuntimeReadiness({ id: 'codex', installed: true, command: f.command }, f.root, true);
+    assert.equal(result.status, 'configured');
+    assert.equal(readFileSync(f.state, 'utf8'), 'original native history');
+  });
+}

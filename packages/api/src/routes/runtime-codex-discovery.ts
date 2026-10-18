@@ -1,4 +1,7 @@
 import { execFile } from 'node:child_process';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+import { readCodexLaunchProjection } from '../config/codex-launch-config.js';
 import { buildChildEnv } from '../utils/cli-spawn.js';
 import { resolveWindowsSpawnPlan } from '../utils/cli-spawn-win.js';
 import { parseCodexModels, type RuntimeModelCatalog, record, rows } from './runtime-model-catalog.js';
@@ -33,8 +36,24 @@ export async function probeCodexLogin(command: string, cwd: string): Promise<unk
   const output = `${result.output}\n${result.errorOutput}`.trim();
   if (!result.failed && /^Logged in using ChatGPT(?:\s|$)/.test(output)) return { account: { type: 'chatgpt' } };
   if (!result.failed && /^Logged in using an API key(?:\s|$)/.test(output)) return { account: { type: 'apiKey' } };
-  if (result.code === 1 && output === 'Not logged in') return { account: null, requiresOpenaiAuth: true };
+  if (result.code === 1 && output === 'Not logged in') {
+    const requiresOpenaiAuth = nativeProviderRequiresOpenaiAuth(cwd);
+    return requiresOpenaiAuth === undefined ? null : { account: null, requiresOpenaiAuth };
+  }
   return null;
+}
+
+/** A third-party native provider can use its own token without a ChatGPT/OpenAI login. */
+function nativeProviderRequiresOpenaiAuth(cwd: string): boolean | undefined {
+  const home = process.env.CODEX_HOME || join(homedir(), '.codex');
+  const { config, requirements } = readCodexLaunchProjection(home, cwd);
+  const id = String(requirements.model_provider ?? config.model_provider ?? 'openai');
+  const managed = record(record(requirements.model_providers)[id]).requires_openai_auth;
+  if (typeof managed === 'boolean') return managed;
+  // User definitions cannot replace the native built-in provider's authentication policy.
+  if (id === 'openai' || id === 'openai_https') return true;
+  const declared = record(record(config.model_providers)[id]).requires_openai_auth;
+  return typeof declared === 'boolean' ? declared : undefined;
 }
 
 /** The CLI owns catalog refresh/cache/provider selection; no agent session or prompt is created. */
