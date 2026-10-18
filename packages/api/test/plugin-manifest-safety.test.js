@@ -22,6 +22,8 @@ import { BUILTIN_PLUGIN_IDS, parsePluginManifest, validateEnvSafety } from '../d
 import { registerPluginRoutes } from '../dist/routes/plugin-routes.js';
 import { _clearActiveRootCacheForTest } from '../dist/utils/active-project-root.js';
 
+const providerDirectory = (provider) => (provider === 'kimi' ? '.kimi-code' : `.${provider}`);
+
 const require = createRequire(import.meta.url);
 const fsModule = require('node:fs');
 
@@ -1164,7 +1166,7 @@ describe('PluginResourceActivator skill safety', () => {
           { name: 'claude', path: '.claude/skills', enabled: true },
           { name: 'codex', path: '.codex/skills', enabled: false },
           { name: 'gemini', path: '.gemini/skills', enabled: false },
-          { name: 'kimi', path: '.kimi/skills', enabled: false },
+          { name: 'kimi', path: '.kimi-code/skills', enabled: false },
           { name: 'acp', path: '.acp/skills', enabled: true },
         ],
       }),
@@ -1720,7 +1722,7 @@ describe('PluginResourceActivator conflict & rollback (review P1-2, P2-1)', () =
 
     // Create user-owned directories at ALL standard provider paths → all conflict
     for (const provider of ['claude', 'codex', 'gemini', 'kimi']) {
-      const userDir = join(projectRoot, `.${provider}`, 'skills', 'my-skill');
+      const userDir = join(projectRoot, providerDirectory(provider), 'skills', 'my-skill');
       mkdirSync(userDir, { recursive: true });
       writeFileSync(join(userDir, 'user-file.md'), 'user content');
     }
@@ -1755,7 +1757,7 @@ describe('PluginResourceActivator conflict & rollback (review P1-2, P2-1)', () =
     assert.deepEqual(persisted.capabilities, [], 'failed all-conflict activation should roll back capability config');
     for (const provider of ['claude', 'codex', 'gemini', 'kimi']) {
       assert.equal(
-        existsSync(join(projectRoot, `.${provider}`, 'skills', 'my-skill', 'user-file.md')),
+        existsSync(join(projectRoot, providerDirectory(provider), 'skills', 'my-skill', 'user-file.md')),
         true,
         `activation must not replace user-owned ${provider} conflict`,
       );
@@ -1787,7 +1789,7 @@ describe('PluginResourceActivator conflict & rollback (review P1-2, P2-1)', () =
             { name: 'claude', path: '.claude/skills', enabled: true },
             { name: 'codex', path: '.codex/skills', enabled: true },
             { name: 'gemini', path: '.gemini/skills', enabled: false },
-            { name: 'kimi', path: '.kimi/skills', enabled: false },
+            { name: 'kimi', path: '.kimi-code/skills', enabled: false },
           ],
         },
         null,
@@ -1841,7 +1843,7 @@ describe('PluginResourceActivator conflict & rollback (review P1-2, P2-1)', () =
     mkdirSync(join(projectRoot, '.cat-cafe'), { recursive: true });
     // Create provider dirs as read-only (r-x) so mkdir for skills/ subdir throws EACCES
     for (const provider of ['claude', 'codex', 'gemini', 'kimi']) {
-      const providerDir = join(projectRoot, `.${provider}`);
+      const providerDir = join(projectRoot, providerDirectory(provider));
       mkdirSync(providerDir, { recursive: true });
       chmodSync(providerDir, 0o555);
     }
@@ -1869,7 +1871,7 @@ describe('PluginResourceActivator conflict & rollback (review P1-2, P2-1)', () =
     assert.deepEqual(persisted.capabilities, [], 'config must be rolled back on mount throw');
     // Cleanup: restore permissions before temp dir cleanup
     for (const provider of ['claude', 'codex', 'gemini', 'kimi']) {
-      chmodSync(join(projectRoot, `.${provider}`), 0o755);
+      chmodSync(join(projectRoot, providerDirectory(provider)), 0o755);
     }
   });
 
@@ -1897,7 +1899,7 @@ describe('PluginResourceActivator conflict & rollback (review P1-2, P2-1)', () =
           { name: 'claude', path: '.claude/skills', enabled: false },
           { name: 'codex', path: '.codex/skills', enabled: false },
           { name: 'gemini', path: '.gemini/skills', enabled: false },
-          { name: 'kimi', path: '.kimi/skills', enabled: false },
+          { name: 'kimi', path: '.kimi-code/skills', enabled: false },
           { name: 'acp', path: '.acp/skills', enabled: true },
         ],
       }),
@@ -1939,7 +1941,7 @@ describe('PluginResourceActivator conflict & rollback (review P1-2, P2-1)', () =
 
     // Standard providers were disabled — no symlinks should exist there either
     for (const provider of ['claude', 'codex', 'gemini', 'kimi']) {
-      const linkPath = join(projectRoot, `.${provider}`, 'skills', 'rollback-skill');
+      const linkPath = join(projectRoot, providerDirectory(provider), 'skills', 'rollback-skill');
       assert.equal(existsSync(linkPath), false, `disabled ${provider} should have no symlink`);
     }
   });
