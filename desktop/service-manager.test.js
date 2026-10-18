@@ -157,3 +157,24 @@ test('probes bundled plugin mirror and rebuilds it when the first read fails', a
     rmSync(userDataRoot, { recursive: true, force: true });
   }
 });
+
+test('waits for all startup-critical mirror files before spawning services', async () => {
+  const installRoot = await mkdtemp(path.join(tmpdir(), 'service-manager-install-'));
+  const userDataRoot = await mkdtemp(path.join(tmpdir(), 'service-manager-user-'));
+  try {
+    for (const name of ['.claude', 'assets', 'guides', 'packages', 'scripts']) {
+      seedMirrorSource(installRoot, name);
+    }
+    seedMirrorSource(installRoot, 'docs', path.join('harness-feedback', 'eval-domains', 'eval-design-gate.yaml'));
+    seedMirrorSource(installRoot, 'cat-cafe-skills', path.join('refs', 'shared-rules.md'));
+    seedMirrorSource(installRoot, 'cat-cafe-skills', path.join('custody-recognition', 'SKILL.md'));
+    seedMirrorSource(installRoot, 'plugins', path.join('github', 'plugin.yaml'));
+
+    const manager = new ServiceManager(installRoot, { frontendPort: 3003, apiPort: 3004 });
+    manager._ensureUserDataDir(userDataRoot);
+    await manager._waitForProjectMirrors(userDataRoot, 1_000);
+  } finally {
+    rmSync(installRoot, { recursive: true, force: true });
+    rmSync(userDataRoot, { recursive: true, force: true });
+  }
+});

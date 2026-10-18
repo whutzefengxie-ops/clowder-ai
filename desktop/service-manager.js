@@ -157,6 +157,12 @@ class ServiceManager {
     // NOTE: workspace junction repair must happen at install time (admin).
     // Runtime repair in Program Files fails with EPERM for non-admin users.
 
+    // Windows can report a freshly-created NTFS junction as present while the
+    // first traversal still returns ENOENT. Do not spawn API/Web in that
+    // window: the API reads bundled docs and skills during bootstrap and would
+    // otherwise bind its port, then exit later with an opaque startup failure.
+    await this._waitForProjectMirrors(userDataDir);
+
     // ---- Redis ----
     this.onStatus('Starting Redis...');
     await this.timeline.runPhase('redis-ready', () => this._startRedis(userDataDir));
@@ -403,6 +409,35 @@ class ServiceManager {
         log(`Warning: scripts/node_modules link: ${err.message}`);
       }
     }
+  }
+
+  async _waitForProjectMirrors(baseDir, timeoutMs = 5_000) {
+    const projectDir = path.join(baseDir, 'project');
+    const probes = [
+      ['docs', path.join('harness-feedback', 'eval-domains', 'eval-design-gate.yaml')],
+      ['cat-cafe-skills', path.join('refs', 'shared-rules.md')],
+      ['cat-cafe-skills', path.join('custody-recognition', 'SKILL.md')],
+      ['plugins', path.join('github', 'plugin.yaml')],
+    ];
+    const deadline = Date.now() + timeoutMs;
+    let lastFailures = [];
+    while (Date.now() <= deadline) {
+      lastFailures = [];
+      for (const [mirror, relativeProbe] of probes) {
+        const probePath = path.join(projectDir, mirror, relativeProbe);
+        try {
+          fs.readFileSync(probePath, 'utf8');
+        } catch (error) {
+          lastFailures.push(`${probePath}: ${error.message}`);
+        }
+      }
+      if (lastFailures.length === 0) {
+        log(`Project mirror readiness verified (${probes.length} probes)`);
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    throw new Error(`Project mirror readiness failed before API start:\n${lastFailures.join('\n')}`);
   }
 
   _getOrCreateTelemetrySalt(userDataDir) {
