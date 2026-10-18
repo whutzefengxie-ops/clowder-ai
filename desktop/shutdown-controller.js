@@ -46,7 +46,21 @@ function createShutdownController({
   function destroyTray() {
     const activeTray = getTray();
     setTray(null);
-    activeTray?.destroy();
+    if (!activeTray) {
+      dbg('[lifecycle] tray-destroy-skipped {"reason":"not-created"}');
+      return;
+    }
+    dbg(
+      `[lifecycle] tray-destroy-requested ${JSON.stringify({
+        trayDestroyed: Boolean(activeTray.isDestroyed?.()),
+      })}`,
+    );
+    try {
+      activeTray.destroy();
+      dbg('[lifecycle] tray-destroyed');
+    } catch (error) {
+      dbg(`[lifecycle] tray-destroy-failed ${JSON.stringify({ message: safeErrorMessage(error) })}`);
+    }
   }
 
   function quitApp() {

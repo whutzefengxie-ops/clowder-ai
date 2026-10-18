@@ -27,6 +27,7 @@ const { ensureValidMacInstallLocation } = require('./mac-install-location');
 const { createWindowRecoveryController } = require('./window-recovery');
 const { decideWindowClose } = require('./window-close-policy');
 const { createLifecycleLogger } = require('./lifecycle-diagnostics');
+const appLifecycle = require('./app-lifecycle');
 const {
   createDesktopTrayResult,
   createManualUpdateHandler,
@@ -61,6 +62,7 @@ const startupTimeline = createStartupTimeline({ component: 'desktop', emit: dbg 
 startupTimeline.mark('main-initialized');
 dbg(`Electron starting. ELECTRON_RUN_AS_NODE=${process.env.ELECTRON_RUN_AS_NODE}`);
 dbg(`process.type=${process.type}, versions.electron=${process.versions.electron}`);
+appLifecycle.logRuntimeIdentity({ dbg, app, projectRoot: PROJECT_ROOT });
 
 let mainWindow = null;
 let splashWindow = null;
@@ -138,7 +140,11 @@ async function createMainWindow() {
     dbg,
   });
   mainWindow.webContents.on('did-navigate', () => updatePrompt?.markRendererUnavailable());
-  mainWindow.webContents.on('render-process-gone', () => updatePrompt?.markRendererUnavailable());
+  appLifecycle.installRendererProcessDiagnostics({
+    webContents: mainWindow.webContents,
+    lifecycle,
+    onUnavailable: () => updatePrompt?.markRendererUnavailable(),
+  });
   mainWindow.webContents.once('dom-ready', () => startupTimeline.mark('renderer-dom-ready'));
   mainWindow.webContents.once('did-finish-load', () => startupTimeline.mark('renderer-did-finish-load'));
 
@@ -197,6 +203,9 @@ function requestQuit(source = 'unknown') {
 }
 
 const quitApp = () => requestQuit('startup-failure');
+
+const getLifecycleState = () => ({ isQuitting, quitSource, trayAvailable: Boolean(tray), startupPhase });
+appLifecycle.installAppLifecycleDiagnostics({ app, lifecycle, requestQuit, shutdown, getState: getLifecycleState });
 
 function sendSplashStatus(msg) {
   if (splashWindow && !splashWindow.isDestroyed()) splashWindow.webContents.send('splash-status', msg);
@@ -267,7 +276,7 @@ app.on('ready', async () => {
   });
   if (trayResult.status === 'created') {
     tray = trayResult.tray;
-    lifecycle('tray-created', { iconPath: path.join(__dirname, 'assets', 'icon.ico') });
+    appLifecycle.logTrayCreated({ lifecycle, tray, app, iconPath: path.join(__dirname, 'assets', 'icon.ico') });
   } else {
     lifecycle('tray-create-failed', trayResult.error);
     void dialog
@@ -338,13 +347,4 @@ app.on('ready', async () => {
   } catch (err) {
     await handleStartupFailure(err);
   }
-});
-
-app.on('window-all-closed', () => {
-  lifecycle('window-all-closed', { platform: process.platform, isQuitting, quitSource });
-  if (process.platform !== 'win32') requestQuit('window-all-closed');
-});
-app.on('before-quit', (event) => {
-  lifecycle('before-quit', { source: quitSource, isQuitting });
-  shutdown.handleBeforeQuit(event);
 });

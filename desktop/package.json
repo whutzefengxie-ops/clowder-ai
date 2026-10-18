@@ -62,6 +62,7 @@
       "app-identity.js",
       "desktop-update-menu.js",
       "lifecycle-diagnostics.js",
+      "app-lifecycle.js",
       "desktop-update-runtime.js",
       "main.js",
       "window-close-policy.js",
