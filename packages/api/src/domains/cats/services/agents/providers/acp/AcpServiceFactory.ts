@@ -149,7 +149,7 @@ async function prepareAcpSpawnContext(
     // kimi-code's ACP server creates sessions through the same KimiCLI.create()
     // path as the CLI. KIMI_MODEL_MAX_CONTEXT_SIZE is its supported model-window
     // override, so keep the member policy process-scoped instead of mutating the
-    // user's shared ~/.kimi/config.toml.
+    // user's shared ~/.kimi-code/config.toml.
     acpSpawnEnv = {
       ...(acpSpawnEnv ?? {}),
       KIMI_MODEL_MAX_CONTEXT_SIZE: String(contextPolicy.windowTokens),

@@ -30,16 +30,6 @@ function readText(path: string, deps: ClientAuthDeps): string {
   return (deps.readFile ?? ((file) => readFileSync(file, 'utf8')))(path);
 }
 
-function hasKimiNativeAuth(home: string, env: NodeJS.ProcessEnv, deps: ClientAuthDeps): boolean {
-  const shareDir = env.KIMI_SHARE_DIR?.trim() || join(home, '.kimi');
-  try {
-    const parsed = record(JSON.parse(readText(join(shareDir, 'credentials', 'kimi-code.json'), deps)));
-    return nonEmpty(parsed?.access_token) && nonEmpty(parsed?.refresh_token);
-  } catch {
-    return false;
-  }
-}
-
 function hasOpenCodeNativeAuth(home: string, env: NodeJS.ProcessEnv, deps: ClientAuthDeps): boolean {
   const xdg = env.XDG_DATA_HOME?.trim();
   const dataDir =
@@ -123,12 +113,9 @@ export function detectClientAuth(client: string, envKey: string, deps: ClientAut
   const codexHome = env.CODEX_HOME?.trim() || join(home, '.codex');
   const path = getCredentialPath(client, home, env, codexHome);
   if (!path) {
-    const authenticated =
-      client === 'kimi'
-        ? hasKimiNativeAuth(home, env, deps)
-        : client === 'opencode'
-          ? hasOpenCodeNativeAuth(home, env, deps)
-          : false;
+    // Kimi Code exposes no read-only login status. Retired ~/.kimi token files
+    // are not evidence of a current Kimi Code login; leave it unverified here.
+    const authenticated = client === 'opencode' ? hasOpenCodeNativeAuth(home, env, deps) : false;
     return {
       hasApiKey: false,
       authenticated,

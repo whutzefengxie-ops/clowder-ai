@@ -11,9 +11,9 @@ test('detects Kimi and bridged Pi without disclosing authentication or probing O
   const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
   for (const key of keys) delete process.env[key];
   try {
-    mkdirSync(join(root, '.kimi'), { recursive: true });
+    mkdirSync(join(root, '.kimi-code'), { recursive: true });
     writeFileSync(
-      join(root, '.kimi/config.toml'),
+      join(root, '.kimi-code/config.toml'),
       'default_model="kimi-code/k3"\n[models."kimi-code/k3"]\nprovider="native"\n[providers.native]\napi_key="sensitive-sentinel"\n',
     );
     const bridge = join(root, 'pi-acp-bridge.js');
@@ -33,7 +33,6 @@ test('detects Kimi and bridged Pi without disclosing authentication or probing O
     assert.equal(found[1].acp.command, process.execPath);
     assert.doesNotMatch(JSON.stringify(found), /sensitive-sentinel|api_key/);
     // Current kimi-code migrates to ~/.kimi-code; the old ~/.kimi may still exist.
-    mkdirSync(join(root, '.kimi-code'));
     writeFileSync(join(root, '.kimi-code/config.toml'), 'default_model="native-current-model"\n');
     const modernOnly = (name) => (name === 'kimi-cli' ? null : command(name));
     assert.equal(discoverAdditionalRuntimes(root, modernOnly)[0].configuredModel, 'native-current-model');

@@ -11,7 +11,7 @@ export function NativeInstallHelp({ runtime }: { runtime: RuntimeChoice }) {
           : runtime.label === 'Pi'
             ? 'https://github.com/regadas/pi-acp'
             : runtime.clientId === 'kimi'
-              ? 'https://github.com/MoonshotAI/kimi-cli'
+              ? 'https://moonshotai.github.io/kimi-code/zh/guides/getting-started'
               : runtime.clientId === 'opencode'
                 ? 'https://opencode.ai/docs/'
                 : null;

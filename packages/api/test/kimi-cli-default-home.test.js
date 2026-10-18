@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import { KimiAgentService } from '../dist/domains/cats/services/agents/providers/KimiAgentService.js';
 import { discoverAdditionalRuntimes } from '../dist/routes/native-additional-runtimes.js';
 import { invalidateCliCommand } from '../dist/utils/cli-resolve.js';
-import { resolveKimiCliRuntime, resolveKimiRuntimePaths } from '../dist/utils/kimi-cli-runtime.js';
+import { resolveKimiRuntimePaths } from '../dist/utils/kimi-cli-runtime.js';
 import {
   buildFakeL0Compiler,
   collect,
@@ -77,48 +77,39 @@ test('modern CLI without a config never borrows stale legacy metadata', (t) => {
   assert.deepEqual(found.models, []);
 });
 
-test('discovery agrees with dispatch legacy precedence even if a modern directory exists', (t) => {
+test('discovery and dispatch ignore an obsolete shim when Kimi Code is installed', (t) => {
   const { root, bin } = fixture(t, { legacy: true });
   const found = discoverAdditionalRuntimes(root)[0];
-  assert.equal(found.command, join(bin, 'kimi-cli'));
-  assert.equal(found.configuredModel, 'legacy-alias');
+  assert.equal(found.command, join(bin, 'kimi'));
+  assert.equal(found.configuredModel, 'modern-alias');
 });
 
-test('selected flavor owns env semantics instead of borrowing the other CLI configuration', (t) => {
+test('native paths ignore retired share/config environment variables', (t) => {
   const { root } = fixture(t);
-  const modern = { command: 'owned-kimi', flavor: 'native' };
-  const legacy = { command: 'owned-kimi-cli', flavor: 'legacy' };
-  const oldConfig = join(root, 'custom-legacy.toml');
   const modernHome = join(root, 'custom-modern');
-  const env = { KIMI_CODE_HOME: modernHome, KIMI_SHARE_DIR: join(root, 'old-share'), KIMI_CONFIG_FILE: oldConfig };
-  assert.deepEqual(resolveKimiRuntimePaths(modern, env), {
-    shareDir: modernHome,
-    configPath: join(modernHome, 'config.toml'),
-  });
-  assert.deepEqual(resolveKimiRuntimePaths(legacy, env), {
-    shareDir: env.KIMI_SHARE_DIR,
-    configPath: oldConfig,
-  });
-  assert.equal(
-    resolveKimiRuntimePaths(modern, { KIMI_SHARE_DIR: env.KIMI_SHARE_DIR }).shareDir,
-    join(root, '.kimi-code'),
-  );
+  const env = {
+    KIMI_CODE_HOME: modernHome,
+    KIMI_SHARE_DIR: join(root, 'old-share'),
+    KIMI_CONFIG_FILE: join(root, 'old.toml'),
+  };
+  assert.deepEqual(resolveKimiRuntimePaths(env), { shareDir: modernHome, configPath: join(modernHome, 'config.toml') });
+  assert.equal(resolveKimiRuntimePaths({ KIMI_SHARE_DIR: env.KIMI_SHARE_DIR }).shareDir, join(root, '.kimi-code'));
 });
 
 test('account-specific OS home affects the native default without inventing an authentication override', (t) => {
   const { root } = fixture(t);
   const accountHome = join(root, 'account-home');
   const env = { HOME: accountHome, USERPROFILE: accountHome };
-  const paths = resolveKimiRuntimePaths(resolveKimiCliRuntime(), env);
+  const paths = resolveKimiRuntimePaths(env);
   assert.equal(paths.shareDir, join(accountHome, '.kimi-code'));
   assert.equal(paths.configPath, join(accountHome, '.kimi-code', 'config.toml'));
   assert.deepEqual(env, { HOME: accountHome, USERPROFILE: accountHome });
 });
 
 for (const legacy of [false, true]) {
-  test(`${legacy ? 'legacy' : 'modern'} invocation host readers use the selected CLI default home`, async (t) => {
+  test(`native invocation keeps its own home with obsolete shim ${legacy ? 'present' : 'absent'}`, async (t) => {
     const { root, bin } = fixture(t, { legacy });
-    const directory = join(root, legacy ? '.kimi' : '.kimi-code');
+    const directory = join(root, '.kimi-code');
     const sessionId = 'owned-session';
     // Exercise only the existing context format at the chosen root. There is
     // no assumption that modern sessions use this format.
@@ -138,13 +129,10 @@ for (const legacy of [false, true]) {
     await emitEvents(proc, [{ role: 'assistant', session_id: sessionId, content: '42' }]);
     const messages = await pending;
     const [command, args, options] = spawnFn.mock.calls[0].arguments;
-    assert.equal(command, join(bin, legacy ? 'kimi-cli' : 'kimi'));
-    assert.equal(args[args.indexOf('--model') + 1], legacy ? 'legacy-alias' : 'modern-alias');
+    assert.equal(command, join(bin, 'kimi'));
+    assert.equal(args[args.indexOf('--model') + 1], 'modern-alias');
     assert.equal(options.env?.KIMI_CODE_HOME, undefined, 'host defaults must not mutate child authentication');
-    assert.equal(
-      messages.find((item) => item.type === 'done')?.metadata?.usage?.contextWindowSize,
-      legacy ? 12345 : 45678,
-    );
+    assert.equal(messages.find((item) => item.type === 'done')?.metadata?.usage?.contextWindowSize, 45678);
   });
 }
 

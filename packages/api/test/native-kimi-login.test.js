@@ -12,7 +12,7 @@ test('copied Kimi login uses the API instance environment and restores the termi
     const output = join(root, 'observed.json');
     const restored = join(root, 'restored.json');
     const recorder = join(root, 'record.mjs');
-    const keys = ['HOME', 'USERPROFILE', 'KIMI_SHARE_DIR', 'KIMI_CONFIG_FILE'];
+    const keys = ['HOME', 'USERPROFILE', 'KIMI_CODE_HOME'];
     writeFileSync(
       recorder,
       `import fs from 'node:fs';fs.writeFileSync(${JSON.stringify(output)},JSON.stringify({args:process.argv.slice(2),env:Object.fromEntries(${JSON.stringify(keys)}.map(key=>[key,process.env[key]??null]))}));`,
@@ -29,7 +29,7 @@ test('copied Kimi login uses the API instance environment and restores the termi
     const instance = {
       HOME: join(root, 'instance & home'),
       USERPROFILE: join(root, 'instance & home'),
-      KIMI_CONFIG_FILE: join(root, "config 'quoted.toml"),
+      KIMI_CODE_HOME: join(root, "native 'quoted home"),
     };
     mkdirSync(instance.HOME);
     const recipe = nativeKimiLoginCommand(command, instance);
@@ -51,7 +51,7 @@ test('copied Kimi login uses the API instance environment and restores the termi
     );
     const observed = JSON.parse(readFileSync(output, 'utf8'));
     assert.deepEqual(observed.args, ['login']);
-    assert.deepEqual(observed.env, { ...instance, KIMI_SHARE_DIR: null });
+    assert.deepEqual(observed.env, instance);
     if (win) assert.deepEqual(JSON.parse(readFileSync(restored, 'utf8').replace(/^\uFEFF/, '')), terminal);
   } finally {
     rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });

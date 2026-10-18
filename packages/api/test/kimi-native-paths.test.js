@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
-import { homedir, tmpdir } from 'node:os';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import { KimiAgentService } from '../dist/domains/cats/services/agents/providers/KimiAgentService.js';
@@ -67,12 +67,14 @@ test('host paths and model metadata use the modern home before legacy overrides'
   assert.equal(readKimiModelConfigInfo('fixture-v2', env).maxContextSize, 424242);
 });
 
-test('legacy share/config and default locations retain their existing contract', (t) => {
-  const { legacy } = fixture(t);
-  assert.equal(resolveKimiShareDir({ KIMI_SHARE_DIR: legacy }), legacy);
-  assert.equal(resolveKimiConfigPath({ KIMI_CONFIG_FILE: join(legacy, 'other.toml') }), join(legacy, 'other.toml'));
-  assert.equal(resolveKimiShareDir(), join(homedir(), '.kimi'));
-  assert.equal(resolveKimiConfigPath(), join(homedir(), '.kimi', 'config.toml'));
+test('retired share/config variables do not redirect Kimi Code paths', (t) => {
+  const { legacy, osHome } = fixture(t);
+  assert.equal(resolveKimiShareDir({ KIMI_SHARE_DIR: legacy }), join(osHome, '.kimi-code'));
+  assert.equal(
+    resolveKimiConfigPath({ KIMI_CONFIG_FILE: join(legacy, 'other.toml') }),
+    join(osHome, '.kimi-code', 'config.toml'),
+  );
+  assert.equal(resolveKimiShareDir(), join(osHome, '.kimi-code'));
 });
 
 test('process modern home is used unless the current invocation explicitly selects another modern home', (t) => {

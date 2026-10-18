@@ -58,6 +58,7 @@ packages/web/public/vendor/
 .gemini/
 .antigravitycli/
 .kimi/
+.kimi-code/
 .kiro/
 .trae/
 .dare/

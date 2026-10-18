@@ -136,24 +136,24 @@ test('OpenCode native auth follows xdg data roots on every host platform', async
   assert.equal(wrong.find((client) => client.client === 'opencode')?.authenticated, false);
 });
 
-test('Kimi native auth requires both access and refresh tokens', async () => {
+test('retired Kimi credentials are not evidence of a Kimi Code login', async () => {
   const authPath = join(homeDir, '.kimi', 'credentials', 'kimi-code.json');
   const clients = await detect({
     [authPath]: { access_token: 'fixture-access', refresh_token: 'fixture-refresh' },
   });
-  assert.equal(clients.find((client) => client.client === 'kimi')?.authenticated, true);
+  assert.equal(clients.find((client) => client.client === 'kimi')?.authenticated, false);
   assert.equal(JSON.stringify(clients).includes('fixture-access'), false);
 });
 
-test('Kimi native auth honors an explicit KIMI_SHARE_DIR', async () => {
+test('retired KIMI_SHARE_DIR does not supply Kimi Code login evidence', async () => {
   const shareDir = join(homeDir, 'custom-kimi');
   const authPath = join(shareDir, 'credentials', 'kimi-code.json');
   const clients = await detect(
     { [authPath]: { access_token: 'fixture-access', refresh_token: 'fixture-refresh' } },
     { KIMI_SHARE_DIR: shareDir },
   );
-  assert.equal(clients.find((client) => client.client === 'kimi')?.authenticated, true);
-  assert.equal(clients.find((client) => client.client === 'kimi')?.authType, 'native');
+  assert.equal(clients.find((client) => client.client === 'kimi')?.authenticated, false);
+  assert.equal(clients.find((client) => client.client === 'kimi')?.authType, 'none');
 });
 
 test('OpenCode native auth honors XDG_DATA_HOME and does not expose credentials', async () => {

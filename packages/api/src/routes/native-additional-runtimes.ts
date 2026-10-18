@@ -22,7 +22,7 @@ export function discoverAdditionalRuntimes(
   options: { piBridgeEntry?: string } = {},
 ) {
   const kimiRuntime = resolveKimiCliRuntime(commandFor);
-  const kimi = metadata(resolveKimiRuntimePaths(kimiRuntime, process.env, home).configPath, true);
+  const kimi = metadata(resolveKimiRuntimePaths(process.env, home).configPath, true);
   const native = ([['kimi', 'Kimi', kimi, text(kimi.default_model)]] as const).map(
     ([id, label, config, configuredModel]) => {
       const command = id === 'kimi' ? kimiRuntime?.command : commandFor(id);

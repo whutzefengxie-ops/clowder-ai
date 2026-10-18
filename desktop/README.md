@@ -227,7 +227,7 @@ pnpm desktop:installer
    npm install -g @anthropic-ai/claude-code        # Claude
    npm install -g @openai/codex                     # Codex
    irm https://antigravity.google/cli/install.cmd | iex  # Antigravity CLI / Gemini 默认
-   pip install --user --upgrade kimi-cli            # Kimi（Python）
+   npm install -g @moonshot-ai/kimi-code             # Kimi Code
    ```
    > 安装包内已 bundle 便携 Node.js，安装过程中会自动使用。手动补装时需确保系统 PATH 中有 Node.js 或 Python。
 
