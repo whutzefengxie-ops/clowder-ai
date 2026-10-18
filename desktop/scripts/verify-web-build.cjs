@@ -13,7 +13,9 @@ function verifyWebBuild(web, expectedRevision, requireWeb) {
 
 if (require.main === module) {
   try {
-    console.log(JSON.stringify(verifyWebBuild(process.argv[2], process.argv[3])));
+    const requireBase = process.argv[4] ? path.resolve(process.argv[4]) : undefined;
+    const requireWeb = requireBase ? require('node:module').createRequire(requireBase) : undefined;
+    console.log(JSON.stringify(verifyWebBuild(process.argv[2], process.argv[3], requireWeb)));
   } catch (error) {
     console.error(error.message);
     process.exitCode = 1;

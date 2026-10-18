@@ -100,7 +100,12 @@ if ($releaseInputStatus.Count -gt 0) {
 function Assert-WebBuildIdentity {
     param([string]$WebRoot)
     $expectedRevision = (git -C $ProjectRoot rev-parse HEAD).Trim()
-    & node (Join-Path $ProjectRoot 'desktop/scripts/verify-web-build.cjs') $WebRoot $expectedRevision
+    # Frozen Web keeps dependencies under the shared deploy tree; resolve the
+    # validator's Next implementation from the already-built source workspace.
+    # The artifact itself is still validated for its serialized config, BUILD_ID
+    # and exact revision, and the final staged app is exercised at runtime.
+    $resolver = Join-Path $ProjectRoot 'packages/web/package.json'
+    & node (Join-Path $ProjectRoot 'desktop/scripts/verify-web-build.cjs') $WebRoot $expectedRevision $resolver
     if ($LASTEXITCODE -ne 0) { throw "Web runtime admission failed: $WebRoot. Rebuild; do not rewrite build stamps." }
 }
 
