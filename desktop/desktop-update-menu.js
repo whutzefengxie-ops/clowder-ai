@@ -41,26 +41,37 @@ function showAboutDialog({ app, dialog, onManualUpdate }) {
     });
 }
 
+function serializeTrayError(error) {
+  return {
+    name: error?.name || 'Error',
+    message: error?.message || String(error),
+    stack: error?.stack,
+  };
+}
+
 function createDesktopTray({ Menu, Tray, iconPath, getMainWindow, onManualUpdate, onQuit, showAbout }) {
-  let tray;
+  let tray = null;
   try {
     tray = new Tray(iconPath);
-  } catch {
-    return null;
+    tray.setToolTip('Clowder AI');
+    tray.setContextMenu(
+      Menu.buildFromTemplate([
+        { label: 'Show Clowder AI', click: () => presentWindow(getMainWindow()) },
+        { type: 'separator' },
+        { label: 'About', click: showAbout },
+        { label: 'Check for Updates', click: onManualUpdate },
+        { type: 'separator' },
+        { label: 'Quit', click: onQuit },
+      ]),
+    );
+    tray.on('double-click', () => presentWindow(getMainWindow()));
+    return { status: 'created', tray, error: null };
+  } catch (error) {
+    try {
+      tray?.destroy?.();
+    } catch {}
+    return { status: 'failed', tray: null, error: serializeTrayError(error) };
   }
-  tray.setToolTip('Clowder AI');
-  tray.setContextMenu(
-    Menu.buildFromTemplate([
-      { label: 'Show Clowder AI', click: () => presentWindow(getMainWindow()) },
-      { type: 'separator' },
-      { label: 'About', click: showAbout },
-      { label: 'Check for Updates', click: onManualUpdate },
-      { type: 'separator' },
-      { label: 'Quit', click: onQuit },
-    ]),
-  );
-  tray.on('double-click', () => presentWindow(getMainWindow()));
-  return tray;
 }
 
 function installMacApplicationMenu({ app, Menu, onManualUpdate, showAbout }) {

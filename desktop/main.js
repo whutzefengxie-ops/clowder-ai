@@ -1,5 +1,3 @@
-// Clowder AI Desktop — Electron main process
-// Launches backend services (Redis, API, Web) then shows the web UI.
 const { app, BrowserWindow, Menu, Tray, dialog, ipcMain, net, session, shell, Notification } = require('electron');
 const path = require('node:path');
 const { resolveProjectRootFromDir } = require('./project-root');
@@ -27,6 +25,8 @@ const { DESKTOP_APP_ID } = require('./app-identity');
 const { createDesktopUpdateRuntime } = require('./desktop-update-runtime');
 const { ensureValidMacInstallLocation } = require('./mac-install-location');
 const { createWindowRecoveryController } = require('./window-recovery');
+const { decideWindowClose } = require('./window-close-policy');
+const { createLifecycleLogger } = require('./lifecycle-diagnostics');
 const {
   createDesktopTray,
   createManualUpdateHandler,
@@ -52,10 +52,9 @@ const createBaseRendererLinkOrigins = () =>
   });
 let rendererLinkOrigins = createBaseRendererLinkOrigins();
 const QUIT_FOR_UPDATE_ARG = '--quit-owned-installation';
-// Main process log in the user data directory alongside API + desktop logs.
-// electron-builder productName and handles legacy data directory migration.
 const userDataRoot = ServiceManager.USER_DATA_DIR;
 const dbg = createDesktopLogger(userDataRoot);
+const lifecycle = createLifecycleLogger(dbg);
 const startupLogDir = path.join(userDataRoot, 'data', 'logs');
 const reportStartup = createStartupReporter(startupLogDir);
 const startupTimeline = createStartupTimeline({ component: 'desktop', emit: dbg });
@@ -71,6 +70,7 @@ let services = null;
 let updater = null;
 let updatePrompt = null;
 let isQuitting = false;
+let quitSource = null;
 let startupPhase = 'booting';
 const startupController = new AbortController();
 const checkForUpdatesManually = createManualUpdateHandler({
@@ -147,13 +147,20 @@ async function createMainWindow() {
   mainWindow.webContents.once('did-finish-load', () => startupTimeline.mark('renderer-did-finish-load'));
 
   mainWindow.on('close', (e) => {
-    // Hide to tray on manual close — but let the window close when the
-    // app is quitting (Cmd+Q / OS quit / tray "Quit"). Without the
-    // isQuitting guard, the close handler blocks app.quit() because
-    // tray still exists → zombie Electron shell with dead services.
-    if (tray && !isQuitting) {
+    const decision = decideWindowClose({
+      platform: process.platform,
+      isQuitting,
+      trayAvailable: Boolean(tray),
+    });
+    lifecycle('window-close-requested', { ...decision, trayAvailable: Boolean(tray), isQuitting });
+    if (decision.action !== 'allow') {
       e.preventDefault();
-      mainWindow.hide();
+      if (decision.action === 'hide') {
+        mainWindow.hide();
+        lifecycle('window-close-hidden', { reason: decision.reason });
+      } else {
+        lifecycle('window-close-kept-visible', { reason: decision.reason });
+      }
     }
   });
 
@@ -187,7 +194,13 @@ const shutdown = createShutdownController({
   setPhase: (phase) => (startupPhase = phase),
   dbg,
 });
-const quitApp = shutdown.quitApp;
+function requestQuit(source = 'unknown') {
+  quitSource = source;
+  lifecycle('quit-requested', { source });
+  return shutdown.quitApp();
+}
+
+const quitApp = () => requestQuit('startup-failure');
 
 function sendSplashStatus(msg) {
   if (splashWindow && !splashWindow.isDestroyed()) splashWindow.webContents.send('splash-status', msg);
@@ -215,14 +228,13 @@ const windowRecovery = createWindowRecoveryController({
   isShutdownRequest: isInstallationShutdownRequest,
   projectRoot: PROJECT_ROOT,
   getUserDataRoot: () => app.getPath('userData'),
-  quitApp: () => quitApp(),
+  quitApp: () => requestQuit('window-recovery'),
   dbg,
   onRecoveryError: (error) => void handleStartupFailure(error),
 });
 app.on('second-instance', (_event, commandLine, _workingDirectory, identity) =>
   windowRecovery.handleSecondInstance(commandLine, identity),
 );
-
 app.on('ready', async () => {
   startupTimeline.mark('electron-ready');
   dbg('app ready event fired');
@@ -230,18 +242,13 @@ app.on('ready', async () => {
   if (!ensureValidMacInstallLocation({ app, dialog })) {
     return;
   }
-
-  // Single instance lock — prevent multiple Clowder AI processes.
-  // This runs AFTER the install-location guard so that launching from a DMG
-  // always shows the warning dialog, even if another instance is already
-  // running from /Applications.
   const gotTheLock = app.requestSingleInstanceLock(installationIdentity(PROJECT_ROOT, app.getPath('userData')));
   if (!gotTheLock) {
-    app.quit();
+    await requestQuit('single-instance-lock');
     return;
   }
   if (process.argv.includes(QUIT_FOR_UPDATE_ARG)) {
-    await quitApp();
+    await requestQuit('installer');
     return;
   }
 
@@ -249,15 +256,30 @@ app.on('ready', async () => {
   startupPhase = 'starting';
   initializeDesktopInstance(session, desktopRuntime, PROJECT_ROOT);
   const showAbout = () => showAboutDialog({ app, dialog, onManualUpdate: checkForUpdatesManually });
-  tray = createDesktopTray({
+  const trayResult = createDesktopTray({
     Menu,
     Tray,
     iconPath: path.join(__dirname, 'assets', 'icon.ico'),
     getMainWindow: () => mainWindow,
     onManualUpdate: checkForUpdatesManually,
-    onQuit: () => quitApp(),
+    onQuit: () => requestQuit('tray'),
     showAbout,
   });
+  if (trayResult.status === 'created') {
+    tray = trayResult.tray;
+    lifecycle('tray-created', { iconPath: path.join(__dirname, 'assets', 'icon.ico') });
+  } else {
+    lifecycle('tray-create-failed', trayResult.error);
+    void dialog
+      .showMessageBox({
+        type: 'warning',
+        buttons: ['OK'],
+        title: 'Clowder AI',
+        message: '系统托盘不可用',
+        detail: '关闭窗口时将保持窗口打开。请查看桌面日志以诊断托盘创建失败原因。',
+      })
+      .catch((error) => lifecycle('tray-failure-notice-failed', { message: safeErrorMessage(error) }));
+  }
   installMacApplicationMenu({ app, Menu, onManualUpdate: checkForUpdatesManually, showAbout });
 
   services = new ServiceManager(PROJECT_ROOT, {
@@ -266,8 +288,6 @@ app.on('ready', async () => {
     redisPort: desktopRuntime.redisPort,
     onStatus: sendSplashStatus,
   });
-  // F273: Initialize updater — check pending upgrade result BEFORE services
-  // (spec §3.2: "main.js 早期、服务启动前检测")
   ({ updater, updatePrompt } = createDesktopUpdateRuntime({
     app,
     net,
@@ -279,7 +299,7 @@ app.on('ready', async () => {
     getMainWindow: () => mainWindow,
     getTray: () => tray,
     trustedOrigin: APP_ORIGIN,
-    quitApp,
+    quitApp: () => requestQuit('update'),
     stopServices: async () => {
       const activeServices = services;
       services = null;
@@ -321,7 +341,10 @@ app.on('ready', async () => {
 });
 
 app.on('window-all-closed', () => {
-  // keep running in tray on Windows
-  if (process.platform !== 'win32') quitApp();
+  lifecycle('window-all-closed', { platform: process.platform, isQuitting, quitSource });
+  if (process.platform !== 'win32') requestQuit('window-all-closed');
 });
-app.on('before-quit', (event) => shutdown.handleBeforeQuit(event));
+app.on('before-quit', (event) => {
+  lifecycle('before-quit', { source: quitSource, isQuitting });
+  shutdown.handleBeforeQuit(event);
+});

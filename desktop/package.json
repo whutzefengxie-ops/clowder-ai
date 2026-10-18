@@ -61,8 +61,10 @@
     "files": [
       "app-identity.js",
       "desktop-update-menu.js",
+      "lifecycle-diagnostics.js",
       "desktop-update-runtime.js",
       "main.js",
+      "window-close-policy.js",
       "window-recovery.js",
       "installation-lifecycle.js",
       "mac-install-location.js",
