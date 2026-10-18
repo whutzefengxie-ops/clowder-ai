@@ -1,12 +1,17 @@
 import fs from 'node:fs';
 import { createRequire, isBuiltin } from 'node:module';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { withFrozenDependencyResolution } from './frozen-dependency-resolution.mjs';
 import { fileHash, inside, runtimePackageExports, runtimePackageRoots } from './runtime-package-bundle-graph.mjs';
 import { runtimePackageInput } from './runtime-package-bundle-inputs.mjs';
 
 const tools = createRequire(import.meta.url);
-const { build } = createRequire(tools.resolve('tsx/package.json'))('esbuild');
+const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+// tsx/esbuild are owned by the API workspace. Resolve them from that explicit
+// package boundary instead of relying on a hoisted root node_modules layout.
+const apiTools = createRequire(path.join(projectRoot, 'packages/api/package.json'));
+const { build } = createRequire(apiTools.resolve('tsx/package.json'))('esbuild');
 const relative = (root, file) => path.relative(root, file).replaceAll('\\', '/');
 
 async function validateRequiredModule(resolve, specifier, canonical, packageRoot, snapshots) {

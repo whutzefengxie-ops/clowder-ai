@@ -5,9 +5,12 @@ import { fileURLToPath } from 'node:url';
 import { withFrozenDependencyResolution } from './frozen-dependency-resolution.mjs';
 
 const tools = createRequire(import.meta.url);
-// Use the compiler already pinned by the API's tsx build dependency.
-const { build } = createRequire(tools.resolve('tsx/package.json'))('esbuild');
-const ts = tools('typescript');
+const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+// Use the compiler already pinned by the API's tsx build dependency. Resolve
+// from that package boundary so strict pnpm linking is reproducible.
+const apiTools = createRequire(path.join(projectRoot, 'packages/api/package.json'));
+const { build } = createRequire(apiTools.resolve('tsx/package.json'))('esbuild');
+const ts = apiTools('typescript');
 
 // Keep native addons, workspace/class identities, telemetry globals and packages
 // with dynamic assets in the frozen dependency tree. Only audited JS modules
