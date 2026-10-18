@@ -40,7 +40,23 @@ function Resolve-BoundaryPath([string]$path) {
     $suffix = @([IO.Path]::GetFileName($existing)) + $suffix
     $existing = $parent
   }
-  $canonical = [DesktopBoundaryPath]::Resolve($existing)
+  try {
+    $canonical = [DesktopBoundaryPath]::Resolve($existing)
+  } catch {
+    # A junction created by the installer (scripts\node_modules) may reject a
+    # direct directory handle on some Windows builds. Resolve its target with
+    # the filesystem provider before applying the boundary comparison. This
+    # keeps the check fail-closed for aliases while allowing a normal install
+    # to write client-homes.json.
+    $item = Get-Item -LiteralPath $existing -Force -ErrorAction Stop
+    $isReparsePoint = (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)
+    $target = @($item.Target) | Select-Object -First 1
+    if (-not $isReparsePoint -or -not $target) { throw }
+    if (-not [IO.Path]::IsPathRooted([string]$target)) {
+      $target = Join-Path ([IO.Path]::GetDirectoryName($existing)) ([string]$target)
+    }
+    $canonical = Resolve-BoundaryPath ([IO.Path]::GetFullPath([string]$target))
+  }
   foreach ($part in $suffix) { $canonical = Join-Path $canonical $part }
   return $canonical.TrimEnd('\')
 }
