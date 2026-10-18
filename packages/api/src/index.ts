@@ -6277,7 +6277,7 @@ async function main(): Promise<void> {
   });
   const { registerPersonalChromePluginRoutes } = await import('./routes/personal-chrome-plugin-routes.js');
   const personalChromeInstallModule = (await import(
-    pathToFileURL(join(findMonorepoRoot(process.cwd()), 'packages/api/scripts/f247-personal-chrome-install.mjs')).href
+    pathToFileURL(join(runtimeEntrypointRoot, 'packages/api/scripts/f247-personal-chrome-install.mjs')).href
   )) as unknown as {
     createPersonalChromePluginPort(options: {
       projectRoot: string;
