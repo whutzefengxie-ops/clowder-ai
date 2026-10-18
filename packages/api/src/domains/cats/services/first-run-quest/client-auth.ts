@@ -91,6 +91,18 @@ function getCredentialPath(client: string, home: string, env: NodeJS.ProcessEnv,
   return null;
 }
 
+function hasClaudeSettingsApiAuth(home: string, env: NodeJS.ProcessEnv, deps: ClientAuthDeps): boolean {
+  try {
+    const settings = record(
+      JSON.parse(readText(join(env.CLAUDE_CONFIG_DIR?.trim() || join(home, '.claude'), 'settings.json'), deps)),
+    );
+    const configured = record(settings?.env);
+    return ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN'].some((key) => nonEmpty(configured?.[key]));
+  } catch {
+    return false;
+  }
+}
+
 function hasJsonAuth(client: string, parsed: Record<string, unknown> | null): boolean {
   const tokens = record(client === 'claude' ? parsed?.claudeAiOauth : client === 'codex' ? parsed?.tokens : parsed);
   if (client === 'claude') return nonEmpty(tokens?.accessToken) && nonEmpty(tokens?.refreshToken);
@@ -109,6 +121,14 @@ export function detectClientAuth(client: string, envKey: string, deps: ClientAut
     } satisfies ClientAuthResult;
   }
   const home = deps.homeDir ?? homedir();
+  if (client === 'claude' && hasClaudeSettingsApiAuth(home, env, deps)) {
+    return {
+      hasApiKey: false,
+      authenticated: true,
+      authType: 'native',
+      accountRef: 'claude',
+    } satisfies ClientAuthResult;
+  }
   // These must match the CLI's runtime home, not the quota panel's optional account override.
   const codexHome = env.CODEX_HOME?.trim() || join(home, '.codex');
   const path = getCredentialPath(client, home, env, codexHome);
