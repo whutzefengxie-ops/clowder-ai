@@ -91,6 +91,36 @@ if ($InstanceRoot) {
     }
   } else { $body = $requested | ConvertTo-Json -Compress }
 } elseif ($FrontendPort -or $ApiPort -or $RedisPort) { throw 'InstanceRoot is required with isolated ports' }
+
+function Write-DefaultClientHomes([string]$root) {
+  if (-not $root) { return }
+  $target = Join-Path $root 'client-homes.json'
+  if (Test-Path -LiteralPath $target) { return }
+  $profile = if ($env:USERPROFILE) { $env:USERPROFILE } else { [Environment]::GetFolderPath('UserProfile') }
+  $candidates = [ordered]@{
+    claude = Join-Path $profile '.claude'
+    codex = Join-Path $profile '.codex'
+    dsh = Join-Path $profile '.dsh'
+    kimi = if ($env:KIMI_CODE_HOME) { $env:KIMI_CODE_HOME } else { Join-Path $profile '.kimi-code' }
+    pi = if ($env:PI_CODING_AGENT_DIR) { $env:PI_CODING_AGENT_DIR } else { Join-Path $profile '.pi' }
+    npmCache = if ($env:npm_config_cache) { $env:npm_config_cache } else { Join-Path $env:LOCALAPPDATA 'npm-cache' }
+  }
+  $homes = [ordered]@{}
+  foreach ($entry in $candidates.GetEnumerator()) {
+    if ($entry.Value -and (Test-Path -LiteralPath $entry.Value -PathType Container)) {
+      $homes[$entry.Key] = [IO.Path]::GetFullPath($entry.Value)
+    }
+  }
+  if ($homes.Count -eq 0) { return }
+  [IO.Directory]::CreateDirectory($root) | Out-Null
+  $temporary = "$target.$PID.tmp"
+  try {
+    [IO.File]::WriteAllText($temporary, ($homes | ConvertTo-Json -Compress), [Text.UTF8Encoding]::new($false))
+    Move-Item -LiteralPath $temporary -Destination $target
+  } finally { if (Test-Path -LiteralPath $temporary) { Remove-Item -LiteralPath $temporary } }
+}
+
+Write-DefaultClientHomes $InstanceRoot
 if (-not $body -or (Test-Path -LiteralPath $marker)) { exit 0 }
 # Keep this install-owned record outside the payload replacement boundary.
 # A failed extraction can be retried without losing the original instance.

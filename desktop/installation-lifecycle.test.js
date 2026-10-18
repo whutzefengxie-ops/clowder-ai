@@ -151,3 +151,12 @@ test('installer and uninstaller use the same installation-scoped shutdown script
   );
   assert.doesNotMatch(script, /Stop-Process -Name/);
 });
+
+test('isolated install records host client homes without copying credentials', () => {
+  const script = fs.readFileSync(path.join(__dirname, 'scripts/configure-desktop-instance.ps1'), 'utf8');
+  assert.match(script, /client-homes\.json/);
+  for (const key of ['claude', 'codex', 'dsh', 'kimi', 'pi']) assert.match(script, new RegExp(`\\b${key}\\s*=`));
+  assert.match(script, /Test-Path -LiteralPath \$target/);
+  assert.match(script, /Move-Item -LiteralPath \$temporary -Destination \$target/);
+  assert.doesNotMatch(script, /Copy-Item[^\r\n]+\.credentials|auth\.json/);
+});
