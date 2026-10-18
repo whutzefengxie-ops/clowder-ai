@@ -467,6 +467,9 @@ importers:
       onnxruntime-web:
         specifier: 1.24.3
         version: 1.24.3
+      zod:
+        specifier: ^3.22.0
+        version: 3.25.76
       '@xterm/addon-fit':
         specifier: ^0.11.0
         version: 0.11.0
