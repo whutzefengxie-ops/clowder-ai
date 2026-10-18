@@ -88,6 +88,7 @@ test('Windows shell excludes runtime resources and every distribution carries th
   assert.match(iss, /ExecAndLogOutput[\s\S]*@ExtractionOutput/);
   assert.match(iss, /deploy-dependencies.tar.gz/);
   assert.match(iss, /Excludes: [^\n]*\.cat-cafe-shared-refs/);
+  assert.match(iss, /Excludes:\s*"\.cat-cafe-shared-refs\*"/);
   assert.match(iss, /cat-cafe-skills\\refs\\\*[^\n]*\.cat-cafe-shared-refs/);
   assert.match(iss, /\[InstallDelete\][\s\S]*cat-cafe-skills\\\.cat-cafe-shared-refs/);
   assert.equal(skillsResources.length, 2);

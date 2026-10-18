@@ -105,7 +105,7 @@ Source: "..\..\package.json";                    DestDir: "{app}"
 ; fails with MoveFile error 183 on upgrade).  The explicit entry below keeps
 ; the runtime alias directory and its relative skill references intact.
 Source: "..\..\cat-cafe-skills\*";               DestDir: "{app}\cat-cafe-skills"; \
-  Excludes: ".cat-cafe-shared-refs"; \
+  Excludes: ".cat-cafe-shared-refs*"; \
   Flags: recursesubdirs createallsubdirs
 Source: "..\..\cat-cafe-skills\refs\*";         DestDir: "{app}\cat-cafe-skills\.cat-cafe-shared-refs"; \
   Flags: recursesubdirs createallsubdirs
