@@ -128,7 +128,15 @@
       },
       {
         "from": "../cat-cafe-skills",
-        "to": "cat-cafe-skills"
+        "to": "cat-cafe-skills",
+        "filter": [
+          "**/*",
+          "!**/.cat-cafe-shared-refs"
+        ]
+      },
+      {
+        "from": "../cat-cafe-skills/refs",
+        "to": "cat-cafe-skills/.cat-cafe-shared-refs"
       },
       {
         "from": "../.claude/hooks/user-level",

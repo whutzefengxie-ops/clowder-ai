@@ -100,7 +100,14 @@ Source: "..\..\pnpm-workspace.yaml";             DestDir: "{app}"
 Source: "..\..\package.json";                    DestDir: "{app}"
 ; Skills manifest — loaded by API routes/capabilities.ts when listing available
 ; skills. Missing → skills panel shows empty; cats lose skill context.
+; Git checks out this symlink as a four-byte "refs" file on Windows.  Do not
+; let Inno replace an existing installed alias directory with that file (it
+; fails with MoveFile error 183 on upgrade).  The explicit entry below keeps
+; the runtime alias directory and its relative skill references intact.
 Source: "..\..\cat-cafe-skills\*";               DestDir: "{app}\cat-cafe-skills"; \
+  Excludes: ".cat-cafe-shared-refs"; \
+  Flags: recursesubdirs createallsubdirs
+Source: "..\..\cat-cafe-skills\refs\*";         DestDir: "{app}\cat-cafe-skills\.cat-cafe-shared-refs"; \
   Flags: recursesubdirs createallsubdirs
 ; Documentation directories used by git-doc-reader and feat-index-doc-import
 ; routes (features, threads, architecture). Missing → /api/docs/* returns 404.
@@ -226,6 +233,9 @@ Type: filesandordirs; Name: "{app}\node_modules"
 Type: filesandordirs; Name: "{app}\packages"
 Type: filesandordirs; Name: "{app}\desktop-dist"
 Type: filesandordirs; Name: "{app}\node"
+; Replace the Windows materialized shared-ref alias deterministically.  This
+; is package-owned content under {app}; it is not user HOME or history data.
+Type: filesandordirs; Name: "{app}\cat-cafe-skills\.cat-cafe-shared-refs"
 
 [UninstallRun]
 Filename: "powershell.exe"; \

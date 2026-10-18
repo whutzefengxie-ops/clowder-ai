@@ -571,6 +571,18 @@ if (-not $SkipPortableZip) {
 
     # Skills
     Copy-ToStaging (Join-Path $ProjectRoot "cat-cafe-skills") "cat-cafe-skills"
+    # Windows checkouts materialize the Git symlink
+    # cat-cafe-skills/.cat-cafe-shared-refs as a four-byte "refs" file.  The
+    # portable layout must contain a real alias directory so relative skill
+    # references survive extraction and upgrades on Windows.
+    $stagedSkills = Join-Path $staging "cat-cafe-skills"
+    $stagedSharedRefs = Join-Path $stagedSkills ".cat-cafe-shared-refs"
+    $stagedMarker = $stagedSharedRefs
+    if (Test-Path -LiteralPath $stagedMarker -PathType Leaf) { Remove-Item -LiteralPath $stagedMarker -Force }
+    $stagedRefs = Join-Path $stagedSkills "refs"
+    if (Test-Path -LiteralPath $stagedRefs) {
+        Copy-Item -Path $stagedRefs -Destination $stagedSharedRefs -Recurse -Force
+    }
 
     # Docs
     Copy-ToStaging (Join-Path $ProjectRoot "docs") "docs"

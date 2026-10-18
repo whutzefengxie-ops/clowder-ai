@@ -83,8 +83,16 @@ test('Windows shell excludes runtime resources and every distribution carries th
   assert.match(script, /--config windows-builder.cjs/);
   assert.match(script, /"dependencies"\) "node_modules"/);
   const iss = fs.readFileSync(new URL('./installer/cat-cafe.iss', import.meta.url), 'utf8');
+  const packageJson = JSON.parse(fs.readFileSync(new URL('./package.json', import.meta.url), 'utf8'));
+  const skillsResources = packageJson.build.extraResources.filter((entry) => entry.to.startsWith('cat-cafe-skills'));
   assert.match(iss, /ExecAndLogOutput[\s\S]*@ExtractionOutput/);
   assert.match(iss, /deploy-dependencies.tar.gz/);
+  assert.match(iss, /Excludes: [^\n]*\.cat-cafe-shared-refs/);
+  assert.match(iss, /cat-cafe-skills\\refs\\\*[^\n]*\.cat-cafe-shared-refs/);
+  assert.match(iss, /\[InstallDelete\][\s\S]*cat-cafe-skills\\\.cat-cafe-shared-refs/);
+  assert.equal(skillsResources.length, 2);
+  assert.match(JSON.stringify(skillsResources), /!\*\*\/.cat-cafe-shared-refs/);
+  assert.match(JSON.stringify(skillsResources), /cat-cafe-skills\\?\/.cat-cafe-shared-refs/);
 });
 
 test('installer failure prevents later setup actions and cannot report success', () => {
