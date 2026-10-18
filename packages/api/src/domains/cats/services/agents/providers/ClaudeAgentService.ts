@@ -686,7 +686,7 @@ export class ClaudeAgentService implements AgentService {
         command: claudeCommand,
         provider: 'anthropic',
         carrier: 'print_sdk',
-        modelFamily: effectiveModel ?? 'provider-default',
+        modelFamily: effectiveModel || 'provider-default',
         profileClass: schemaDeliveryProfile,
         profileId: schemaDeliveryProfile,
         config: createMcpSchemaDeliveryLaunchConfig({
