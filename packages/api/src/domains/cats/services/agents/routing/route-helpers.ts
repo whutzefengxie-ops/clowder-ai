@@ -39,8 +39,7 @@ import type { MemoryCueOpportunitySeed } from '../../../../memory/cue/MemoryCueI
 import type { NudgeProcessResult } from '../../../../memory/EntityNudgeService.js';
 import type { CloudDispatchProvenance } from '../../cloud-bridge/types.js';
 import { buildMessageMap, formatMessage } from '../../context/ContextAssembler.js';
-import { BRIEFING_TIMEZONE } from '../../duty-briefing/constants.js';
-import { formatPromptTime } from '../../format-time.js';
+import { CO_CREATOR_TIME_ZONE, formatPromptTime } from '../../format-time.js';
 import type { DegradationResult } from '../../orchestration/DegradationPolicy.js';
 import { mapToPresentation } from '../../session/context/context-presentation.js';
 import {
@@ -366,7 +365,11 @@ export interface RouteOptions {
         callerTraceContext?: import('../../../../../infrastructure/telemetry/genai-semconv.js').CallerTraceContext;
       }) => Promise<StoredMessage>)
     | undefined;
-  /** Canonical failed-final path: terminalize the response and wake the exact A2A caller once. */
+  /**
+   * Canonical failed-final transaction. Always persists the terminal response;
+   * durable receipts select eligible callers and suppress failure-report bounces.
+   * Calling this hook does not itself imply a caller wake was admitted.
+   */
   commitFailedA2AReport?:
     | ((input: {
         responseMessageId: string;
@@ -377,7 +380,7 @@ export interface RouteOptions {
         ownerAuthProvenance: OwnerAuthProvenance;
         threadId: string;
         reporterCatId: CatId;
-        predecessorCatId: CatId;
+        predecessorCatId?: CatId;
         parentInvocationId?: string;
         callerTraceContext?: import('../../../../../infrastructure/telemetry/genai-semconv.js').CallerTraceContext;
       }) => Promise<StoredMessage>)
@@ -401,6 +404,8 @@ export interface RouteOptions {
   /** F108: Unique invocation ID for WorklistRegistry isolation in concurrent execution.
    *  When provided, worklist is keyed by this ID instead of threadId. */
   parentInvocationId?: string | undefined;
+  /** A recovery proof cannot acknowledge an older wake that still awaits this target. */
+  resolvePendingWakeMessageIds?: (catId: string, messageIds: readonly string[]) => Promise<readonly string[]>;
   /** Exact, non-trigger message bodies exposed by incremental context to this invocation. */
   onPromptMessagesExposed?:
     | ((input: {
@@ -1366,6 +1371,8 @@ export async function fetchAfterCursor(
 
 /** Options for caller-specified budget overrides */
 export interface IncrementalContextOptions {
+  /** Pending wakes cap recovery only; they remain visible in the actual projection. */
+  resolvePendingWakeMessageIds?: (messageIds: readonly string[]) => Promise<readonly string[]>;
   /**
    * Invocation-owned history ceiling for the token-trim pass.
    * The routing layer should calculate this as:
@@ -1446,7 +1453,7 @@ function projectVisibleMessages(messages: readonly StoredMessage[]) {
   );
 }
 
-type SameRouteBoundaryCap = { active: false } | { active: true; boundary: CanonicalVisibilityCursor | undefined };
+type IncrementalBoundaryCap = { active: false } | { active: true; boundary: CanonicalVisibilityCursor | undefined };
 
 interface SameRouteIsolationContext {
   readonly laterUserTurnBoundary?: CanonicalVisibilityCursor;
@@ -1503,17 +1510,14 @@ function incrementalDeferralReason(
   return undefined;
 }
 
-function resolveSameRouteBoundaryCap(
+function resolveIncrementalBoundaryCap(
   unseen: StoredMessage[],
   cursor: string | undefined,
   catId: CatId,
   playMode: boolean,
   options: IncrementalContextOptions | undefined,
   isolation: SameRouteIsolationContext,
-): SameRouteBoundaryCap {
-  if (!playMode || (!options?.sameRouteOutputMessageIds?.size && !options?.sameUserWaveTriggerMessageId)) {
-    return { active: false };
-  }
+): IncrementalBoundaryCap {
   const firstWithheldIndex = unseen.findIndex(
     (message) => incrementalDeferralReason(message, catId, playMode, options, isolation) !== undefined,
   );
@@ -1523,7 +1527,7 @@ function resolveSameRouteBoundaryCap(
     firstWithheldIndex === 0 ? cursor : cursorFor(unseen[firstWithheldIndex - 1] as StoredMessage);
   return {
     active: true,
-    boundary: canonicalDeferredBoundary(precedingCursor, 'same-route-withheld-predecessor'),
+    boundary: canonicalDeferredBoundary(precedingCursor, 'incremental-withheld-predecessor'),
   };
 }
 
@@ -1610,9 +1614,9 @@ function isVisibleTargetTrigger(trigger: StoredMessage | null, threadId: string,
   );
 }
 
-function clampToSameRouteBoundaryCap(
+function clampToIncrementalBoundaryCap(
   candidate: CanonicalVisibilityCursor | undefined,
-  cap: SameRouteBoundaryCap,
+  cap: IncrementalBoundaryCap,
 ): CanonicalVisibilityCursor | undefined {
   if (!cap.active) return candidate;
   if (!candidate || !cap.boundary) return undefined;
@@ -1770,9 +1774,17 @@ async function assembleIncrementalContextInternal(
       }
     }
   }
-  const loadedUnseen = await fetchAfterCursor(deps.messageStore, threadId, cursor, userId);
-  const deliveryRecovery = recoverableDeliveryBoundary(loadedUnseen, { userId, threadId, catId });
-  let unseen = loadedUnseen;
+  const fetchedUnseen = await fetchAfterCursor(deps.messageStore, threadId, cursor, userId);
+  // Public speech stays in the unread projection. Queue coverage is committed
+  // for the exact fully projected IDs before the provider sees this prompt.
+  const loadedUnseen = fetchedUnseen;
+  const pendingWakes = new Set(
+    await options?.resolvePendingWakeMessageIds?.(fetchedUnseen.map((message) => message.id)),
+  );
+  const firstPending = fetchedUnseen.findIndex((message) => pendingWakes.has(message.id));
+  const recoveryPrefix = firstPending < 0 ? fetchedUnseen : fetchedUnseen.slice(0, firstPending);
+  const deliveryRecovery = recoverableDeliveryBoundary(recoveryPrefix, { userId, threadId, catId });
+  let unreadCandidates = fetchedUnseen;
   if (deliveryRecovery.cursor && (!cursor || compareCursors(deliveryRecovery.cursor, cursor) > 0)) {
     try {
       await deps.deliveryCursorStore.ackCursor(userId, catId, threadId, deliveryRecovery.cursor);
@@ -1780,13 +1792,14 @@ async function assembleIncrementalContextInternal(
       // when another reader has already advanced the durable slot further.
       cursor = deliveryRecovery.cursor;
       const recoveredCursor = cursor;
-      unseen = loadedUnseen.filter(
+      unreadCandidates = fetchedUnseen.filter(
         (message) => message.visibilitySeq === undefined || compareCursors(cursorFor(message), recoveredCursor) > 0,
       );
     } catch (err) {
       log.warn({ err, catId, threadId }, 'Delivery boundary recovery failed; retaining unread context');
     }
   }
+  const unseen = unreadCandidates;
 
   // Debug mode: cats see all whispers (full transparency). Play mode: cats only see their own whispers.
   const playMode = thinkingMode !== 'debug';
@@ -1805,8 +1818,8 @@ async function assembleIncrementalContextInternal(
       sameRouteOutputMessageIds: options?.sameRouteOutputMessageIds,
     }),
   };
-  const sameRouteBoundaryCap = resolveSameRouteBoundaryCap(
-    unseen,
+  const incrementalBoundaryCap = resolveIncrementalBoundaryCap(
+    unreadCandidates,
     cursor,
     catId,
     playMode,
@@ -2028,7 +2041,7 @@ async function assembleIncrementalContextInternal(
       rankedSources,
       storedLedgerArtifacts,
       viewer,
-      sameRouteBoundaryCap,
+      incrementalBoundaryCap,
       contextMode ?? 'cold',
       deltaSize,
     );
@@ -2050,9 +2063,9 @@ async function assembleIncrementalContextInternal(
           contextText: options?.contextProjection
             ? `${formatContextProjection(options.contextProjection, deltaSize)}\n${navigationHeader}`
             : navigationHeader,
-          boundaryId: clampToSameRouteBoundaryCap(
+          boundaryId: clampToIncrementalBoundaryCap(
             canonicalDeferredBoundary(cursor, 'warm-empty-cursor'),
-            sameRouteBoundaryCap,
+            incrementalBoundaryCap,
           ),
           projectedMessageIds: [],
           exposedMessageIds: [],
@@ -2102,7 +2115,7 @@ async function assembleIncrementalContextInternal(
         formatPromptTime(epochMs, {
           nowMs: options.nowMs,
           includeAge: 'stale',
-          staleComparisonTimeZone: BRIEFING_TIMEZONE,
+          staleComparisonTimeZone: CO_CREATOR_TIME_ZONE,
         })
     : undefined;
   const lines = capped.map((m) => {
@@ -2126,9 +2139,9 @@ async function assembleIncrementalContextInternal(
     const zeroBudgetDegradation = `⚠️ 增量上下文预算耗尽: 系统提示已占满 prompt 预算，${capped.length} 条未读消息全部丢弃`;
     // #1200/#3444: only canonical evidence may enter the deferred ACK slot.
     const zeroLastMsg = capped[capped.length - 1];
-    const zeroBoundaryId = clampToSameRouteBoundaryCap(
+    const zeroBoundaryId = clampToIncrementalBoundaryCap(
       canonicalDeferredBoundary(zeroLastMsg ? cursorFor(zeroLastMsg) : undefined, 'warm-zero-budget-tail'),
-      sameRouteBoundaryCap,
+      incrementalBoundaryCap,
     );
     return {
       ...projectionOutput,
@@ -2182,9 +2195,9 @@ async function assembleIncrementalContextInternal(
           contextText: options?.contextProjection
             ? `${formatContextProjection(options.contextProjection, deltaSize)}\n${navigationHeader}`
             : navigationHeader,
-          boundaryId: clampToSameRouteBoundaryCap(
+          boundaryId: clampToIncrementalBoundaryCap(
             canonicalDeferredBoundary(cursor, 'warm-trimmed-empty-cursor'),
-            sameRouteBoundaryCap,
+            incrementalBoundaryCap,
           ),
           projectedMessageIds: [],
           exposedMessageIds: [],
@@ -2213,9 +2226,9 @@ async function assembleIncrementalContextInternal(
   // #1200/#3444: cursorFor remains graded for general consumers; this producer
   // admits only the canonical branch into deferred delivery state.
   const lastCappedMsg = finalCapped[finalCapped.length - 1];
-  const boundaryId = clampToSameRouteBoundaryCap(
+  const boundaryId = clampToIncrementalBoundaryCap(
     canonicalDeferredBoundary(lastCappedMsg ? cursorFor(lastCappedMsg) : undefined, 'warm-visible-tail'),
-    sameRouteBoundaryCap,
+    incrementalBoundaryCap,
   );
   return {
     ...projectionOutput,
@@ -2257,7 +2270,7 @@ async function assembleSmartWindowContext(
   rankedSources: import('./source-ranking.js').RankedSource[],
   preReadStoredArtifacts: import('./artifact-tracking.js').RecentArtifact[],
   viewer: { type: 'cat'; catId: CatId } | { type: 'user' },
-  sameRouteBoundaryCap: SameRouteBoundaryCap,
+  incrementalBoundaryCap: IncrementalBoundaryCap,
   contextMode: 'cold' | 'hot',
   deltaSize: 'small' | 'large',
 ): Promise<IncrementalContextResult> {
@@ -2455,7 +2468,7 @@ async function assembleSmartWindowContext(
         formatPromptTime(epochMs, {
           nowMs: options.nowMs,
           includeAge: 'stale',
-          staleComparisonTimeZone: BRIEFING_TIMEZONE,
+          staleComparisonTimeZone: CO_CREATOR_TIME_ZONE,
         })
     : undefined;
   const burstLines = scrubbedBurst.map((m) => {
@@ -2475,9 +2488,9 @@ async function assembleSmartWindowContext(
   // #1200/#3444: cursorFor remains graded for general consumers; this producer
   // admits only the canonical branch into deferred delivery state.
   const lastRelevantMsg = relevant[relevant.length - 1];
-  const boundaryId = clampToSameRouteBoundaryCap(
+  const boundaryId = clampToIncrementalBoundaryCap(
     canonicalDeferredBoundary(lastRelevantMsg ? cursorFor(lastRelevantMsg) : undefined, 'cold-visible-tail'),
-    sameRouteBoundaryCap,
+    incrementalBoundaryCap,
   );
   const directiveSource = selectDirectiveSources(rankedSources)[0];
   const navigationPresentations = [

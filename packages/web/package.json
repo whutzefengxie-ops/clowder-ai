@@ -56,8 +56,6 @@
     "mermaid": "^11.15.0",
     "next": "^14.1.0",
     "next-themes": "^0.4.6",
-    "onnxruntime-web": "1.24.3",
-    "phaser": "^3.90.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-markdown": "^10.1.0",
@@ -70,7 +68,8 @@
     "socket.io-client": "^4.7.0",
     "unified": "^11.0.5",
     "zod": "^3.22.0",
-    "zustand": "^4.5.0"
+    "zustand": "^4.5.0",
+    "@cat-cafe/ui": "workspace:*"
   },
   "devDependencies": {
     "@types/mdast": "4.0.4",

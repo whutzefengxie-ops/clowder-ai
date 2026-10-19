@@ -37,6 +37,8 @@ export interface CreateAcpServiceForConfigInput {
   acpConfig: AcpVariantConfig;
   poolRegistry: AcpPoolRegistry;
   log: Pick<FastifyBaseLogger, 'info' | 'warn'>;
+  /** Tests supply an owned throwaway root; production uses the platform default. */
+  bootstrapRoot?: string;
   /** Carry a safe registration failure to the router while leaving this service absent. */
   onUnavailable?: (reason: AgentRegistrationFailure) => void;
 }
@@ -91,6 +93,7 @@ function resolveAcpBootstrap(
   profileId: string,
   acpConfig: AcpVariantConfig,
   effectiveModel: string,
+  bootstrapRoot?: string,
 ): AcpBootstrapContext {
   const model = effectiveModel.trim() || undefined;
   const args = resolveAcpBootstrapArgs(projectRoot, acpConfig.startupArgs, {
@@ -101,7 +104,7 @@ function resolveAcpBootstrap(
     projectRoot,
     command: resolveAcpBootstrapCommand(projectRoot, acpConfig.command),
     args,
-    cwd: resolveAcpBootstrapCwd(projectRoot, profileId),
+    cwd: resolveAcpBootstrapCwd(projectRoot, profileId, bootstrapRoot),
     model,
     poolKey: { projectPath: projectRoot, providerProfile: profileId },
   };
@@ -235,7 +238,9 @@ async function ensureAcpPool(
       const clientCfg = {
         command: bootstrap.command,
         args: bootstrap.args,
-        cwd: bootstrap.cwd,
+        // Cold starts must recreate a lost cwd and revalidate its permissions.
+        // Existing live processes keep their cwd and drain under pool policy.
+        cwd: resolveAcpBootstrapCwd(bootstrap.projectRoot, profileId, input.bootstrapRoot),
         ...(spawn.env ? { env: spawn.env } : {}),
       };
       return acpConfig.transport === 'httpstream' ? new AcpHttpStreamClient(clientCfg) : new AcpClient(clientCfg);
@@ -266,7 +271,7 @@ export async function createAcpServiceForConfig(
     );
   }
 
-  const bootstrap = resolveAcpBootstrap(projectRoot, profileId, acpConfig, effectiveModel);
+  const bootstrap = resolveAcpBootstrap(projectRoot, profileId, acpConfig, effectiveModel, input.bootstrapRoot);
   let accountContext: AcpAccountContext;
   try {
     accountContext = resolveAcpAccount(bootstrap.projectRoot, config);
