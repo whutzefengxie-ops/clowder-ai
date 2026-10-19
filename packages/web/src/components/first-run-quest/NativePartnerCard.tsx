@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { MemberRuntimeFields } from '../settings/members/MemberRuntimeFields';
 import { usesDefaultNativeIdentity } from '../settings/members/native-login-state';
 import { NativeInstallHelp } from './NativeInstallHelp';
-import type { NativePartner } from './native-onboarding';
+import { type NativePartner, nativeRuntimeSelectable } from './native-onboarding';
 import { nativeModelLabel, usesDetectedRuntimeConfiguration } from './native-partner-config';
 
 const chinese = (zh: string) => zh;
@@ -23,7 +23,7 @@ export function NativePartnerCard({
 }) {
   const [expanded, setExpanded] = useState(false);
   const { runtime, form } = partner;
-  const available = runtime.installed && (runtime.clientId !== 'acp' || Boolean(runtime.acp));
+  const available = nativeRuntimeSelectable(runtime);
   const defaultIdentity = usesDefaultNativeIdentity(form);
   const detectedConfiguration = usesDetectedRuntimeConfiguration(form, runtime);
   const model = nativeModelLabel(
@@ -65,11 +65,13 @@ export function NativePartnerCard({
               ? '已添加'
               : available
                 ? '已安装'
-                : runtime.discoveryStatus === 'acp_profile_missing'
-                  ? '待配置 ACP'
-                  : runtime.discoveryStatus === 'adapter_missing'
-                    ? '已安装 · 待接入适配器'
-                    : '未检测到'}
+                : runtime.readiness?.status === 'login_required'
+                  ? '已安装 · 登录校验未通过'
+                  : runtime.discoveryStatus === 'acp_profile_missing'
+                    ? '待配置 ACP'
+                    : runtime.discoveryStatus === 'adapter_missing'
+                      ? '已安装 · 待接入适配器'
+                      : '未检测到'}
           </p>
         </div>
         {available && (
@@ -122,7 +124,7 @@ export function NativePartnerCard({
           </button>
         </div>
       )}
-      {available && defaultIdentity && runtime.readiness?.status === 'login_required' && (
+      {defaultIdentity && runtime.readiness?.status === 'login_required' && (
         <div role="status" className="mt-3 rounded-lg bg-conn-amber-bg p-3 text-sm text-conn-amber-text">
           <p className="font-medium">{runtime.label} 尚未登录</p>
           <p className="mt-1">

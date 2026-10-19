@@ -22,6 +22,21 @@ export interface NativePartner {
 export const newNativeRequestKey = () =>
   `acp-${Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join('')}`;
 
+/**
+ * A runtime can be installed while its default connection is unusable. Keep
+ * those entries visible for repair, but never preselect or submit them. Kimi,
+ * Pi and ACP runtimes intentionally report unknown readiness because their
+ * clients do not expose a safe read-only login check; their installed state is
+ * still the strongest non-invasive signal available.
+ */
+export function nativeRuntimeSelectable(runtime: RuntimeChoice): boolean {
+  if (!runtime.installed || (runtime.clientId === 'acp' && !runtime.acp)) return false;
+  if (['openai', 'anthropic'].includes(runtime.clientId) && runtime.readiness) {
+    return runtime.readiness.status === 'configured';
+  }
+  return runtime.readiness?.status !== 'login_required';
+}
+
 /** Registry-generated ACP ids change after creation; the launch descriptor does not. */
 function partnerKey(runtime: RuntimeChoice): string {
   if (!runtime.acp) return runtime.id;
@@ -92,7 +107,7 @@ export function recommendNativePartners(
         form: persistedForm
           ? persistedForm
           : { ...form, ...runtimeDefaults(runtime), catId, mentionPatterns: uniqueAlias },
-        selected: runtime.installed && (runtime.clientId !== 'acp' || Boolean(runtime.acp)),
+        selected: nativeRuntimeSelectable(runtime),
         ...(existing ? { existingId: existing.id } : {}),
       },
     ];

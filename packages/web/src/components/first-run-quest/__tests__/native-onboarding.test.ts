@@ -123,6 +123,27 @@ describe('native onboarding recommendations', () => {
     );
     expect(partners.every((p) => !p.selected)).toBe(true);
   });
+  it('keeps installed but unauthenticated native clients visible without preselecting them', () => {
+    const partners = recommendNativePartners(
+      [
+        {
+          ...runtimes[0],
+          readiness: { status: 'login_required' as const, checkedAt: 1, loginCommand: 'claude auth login' },
+        },
+        {
+          ...runtimes[1],
+          readiness: { status: 'configured' as const, checkedAt: 1 },
+        },
+      ],
+      templates,
+      [],
+      'journey-123456',
+    );
+    expect(partners.map((p) => [p.runtime.label, p.selected])).toEqual([
+      ['Claude Code', false],
+      ['Codex', true],
+    ]);
+  });
   it('deduplicates DSH descriptors and preserves stable retry identities', () => {
     const partners = recommendNativePartners(
       [...runtimes, { ...runtimes[2], id: 'acp:existing' }],

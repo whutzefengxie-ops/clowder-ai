@@ -8,7 +8,13 @@ import { matchesRuntime } from '../settings/members/member-runtime-draft';
 import { syncDraftToStorage } from '../thread-drafts';
 import { legacyCreationKey, legacySharedKey } from './legacy-creation-key';
 import { buildNativeCreationPayload } from './native-creation-payload';
-import { type NativePartner, newNativeRequestKey, recommendNativePartners, SMALL_GOALS } from './native-onboarding';
+import {
+  type NativePartner,
+  nativeRuntimeSelectable,
+  newNativeRequestKey,
+  recommendNativePartners,
+  SMALL_GOALS,
+} from './native-onboarding';
 import { buildNativeTeamGoal, orderGoalPartners } from './native-team-goal';
 import { prepareFirstRunEntry } from './prepareFirstRunEntry';
 import type { TemplateCard } from './TemplateStep';
@@ -193,9 +199,7 @@ export function useNativeOnboarding(
     )
       return;
     const selected = orderGoalPartners(
-      current.partners.filter(
-        (p) => p.selected && p.runtime.installed && (p.runtime.clientId !== 'acp' || p.runtime.acp),
-      ),
+      current.partners.filter((p) => p.selected && nativeRuntimeSelectable(p.runtime)),
       current.lead,
     );
     if (!selected.length) return;

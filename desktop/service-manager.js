@@ -731,7 +731,22 @@ class ServiceManager {
       Object.assign(env, opts.envOverrides);
     }
     if (name === 'api') {
-      Object.assign(env, instanceRoot ? readClientHomes(instanceRoot) : resolveDefaultClientHomes());
+      // Client HOME variables are capability bindings, not ordinary inherited
+      // process state. Clear a stale shell/test binding before applying the
+      // current launch policy; otherwise a previous isolated run can make a
+      // normal install probe the wrong credential directory and report the
+      // host's working Codex/Claude as logged out.
+      for (const key of [
+        'CLAUDE_CONFIG_DIR',
+        'CODEX_HOME',
+        'DSH_HOME',
+        'KIMI_CODE_HOME',
+        'PI_CODING_AGENT_DIR',
+        'npm_config_cache',
+      ]) {
+        delete env[key];
+      }
+      Object.assign(env, instanceRoot ? readClientHomes(instanceRoot) : resolveDefaultClientHomes(env));
     }
 
     log(`[${name}] spawn: ${cmd} ${args.join(' ')}`);
