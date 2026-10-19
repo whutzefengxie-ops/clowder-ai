@@ -2172,22 +2172,22 @@ export class QueueProcessor {
             : undefined
           : { phase: 'settled' as const };
       if (!phase) continue;
-      const transition = await this.advanceLifecycleDispatchWithRetry(
-        id,
-        {
-          ...lifecycleInputIdentityForStoredMessage(source),
-          targetId: input.targetId,
-          statusMessageId: input.responseMessageId,
-          ...phase,
-          inputRead: readAt === undefined ? { status: 'pending' } : { status: 'read', at: readAt },
-        },
-        {
+      const readPatch: LifecycleInputDispatchPatch = {
+        ...lifecycleInputIdentityForStoredMessage(source),
+        targetId: input.targetId,
+        statusMessageId: input.responseMessageId,
+        ...phase,
+        inputRead: readAt === undefined ? { status: 'pending' } : { status: 'read', at: readAt },
+      };
+      let transition = await this.deps.messageStore.advanceLifecycleInputDispatch(id, readPatch);
+      if (transition.kind === 'conflict' && transition.reason === 'contended') {
+        transition = await this.advanceLifecycleDispatchWithRetry(id, readPatch, {
           threadId: input.threadId,
           catId: input.targetId,
           invocationId: input.invocationId,
           purpose: 'input_read_receipt',
-        },
-      );
+        });
+      }
       if (transition.kind === 'applied') this.emitLifecycleMessageUpdated(input.userId, transition.message);
       if (
         readAt !== undefined &&
@@ -3165,24 +3165,24 @@ export class QueueProcessor {
       );
       if (!source || source.threadId !== input.threadId || source.userId !== input.userId || !ref)
         throw new Error('Append acceptance lost its original source binding');
-      const accepted = await this.advanceLifecycleDispatchWithRetry(
-        messageId,
-        {
-          ...lifecycleInputIdentityForStoredMessage(source),
-          targetId: input.targetId,
-          statusMessageId: input.responseMessageId,
-          ...(ref.phase === 'settled'
-            ? { phase: 'settled' as const }
-            : { phase: 'dispatched' as const, dispatchedAt: ref.dispatchedAt ?? source.timestamp }),
-          appendAcceptance: 'accepted',
-        },
-        {
+      const acceptancePatch: LifecycleInputDispatchPatch = {
+        ...lifecycleInputIdentityForStoredMessage(source),
+        targetId: input.targetId,
+        statusMessageId: input.responseMessageId,
+        ...(ref.phase === 'settled'
+          ? { phase: 'settled' as const }
+          : { phase: 'dispatched' as const, dispatchedAt: ref.dispatchedAt ?? source.timestamp }),
+        appendAcceptance: 'accepted',
+      };
+      let accepted = await this.deps.messageStore.advanceLifecycleInputDispatch(messageId, acceptancePatch);
+      if (accepted.kind === 'conflict' && accepted.reason === 'contended') {
+        accepted = await this.advanceLifecycleDispatchWithRetry(messageId, acceptancePatch, {
           threadId: input.threadId,
           catId: input.targetId,
           invocationId: input.invocationId,
           purpose: 'append_acceptance',
-        },
-      );
+        });
+      }
       if (accepted.kind !== 'applied' && accepted.kind !== 'replayed')
         throw new Error('Append acceptance did not persist');
       this.emitLifecycleMessageUpdated(input.userId, accepted.message);
@@ -5275,12 +5275,18 @@ export class QueueProcessor {
                   statusMessageId: observed.message.id,
                   dispatchedAt: input.startedAt,
                 };
-                const transition = await this.advanceLifecycleDispatchWithRetry(inputMessage.id, dispatchPatch, {
-                  threadId: input.threadId,
-                  catId: input.catId,
-                  invocationId: input.invocationId,
-                  purpose: 'response_admission',
-                });
+                let transition = await messageStore.advanceLifecycleInputDispatch(
+                  inputMessage.id,
+                  dispatchPatch,
+                );
+                if (transition.kind === 'conflict' && transition.reason === 'contended') {
+                  transition = await this.advanceLifecycleDispatchWithRetry(inputMessage.id, dispatchPatch, {
+                    threadId: input.threadId,
+                    catId: input.catId,
+                    invocationId: input.invocationId,
+                    purpose: 'response_admission',
+                  });
+                }
                 if (transition.kind !== 'applied' && transition.kind !== 'replayed') {
                   this.deps.log.error(
                     {
