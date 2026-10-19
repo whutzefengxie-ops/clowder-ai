@@ -2496,10 +2496,7 @@ export class QueueProcessor {
   ): Promise<AdvanceLifecycleInputDispatchResult> {
     let result = await this.deps.messageStore.advanceLifecycleInputDispatch(messageId, patch);
     for (let attempt = 1; attempt <= 3 && result.kind === 'conflict' && result.reason === 'contended'; attempt++) {
-      this.deps.log.warn(
-        { ...context, messageId, attempt },
-        '[QueueProcessor] lifecycle dispatch contended; retrying',
-      );
+      this.deps.log.warn({ ...context, messageId, attempt }, '[QueueProcessor] lifecycle dispatch contended; retrying');
       await new Promise((resolve) => setTimeout(resolve, 5 * attempt + Math.floor(Math.random() * 5)));
       result = await this.deps.messageStore.advanceLifecycleInputDispatch(messageId, patch);
     }

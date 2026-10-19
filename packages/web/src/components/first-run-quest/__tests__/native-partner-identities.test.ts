@@ -95,14 +95,7 @@ describe('native partner identities reflect tools rather than an unrelated model
     expect(form.defaultModel).toBe('');
   });
   it('keeps the cat identity on an upgraded project whose template predates it', () => {
-    const oldTemplateIds = new Set([
-      'ragdoll',
-      'maine-coon',
-      'siamese',
-      'dragon-li',
-      'bengal',
-      'golden-chinchilla',
-    ]);
+    const oldTemplateIds = new Set(['ragdoll', 'maine-coon', 'siamese', 'dragon-li', 'bengal', 'golden-chinchilla']);
     const oldTemplates = templateConfig.roleTemplates.filter(({ id }) => oldTemplateIds.has(id));
     const runtimes: RuntimeChoice[] = [
       { id: 'kimi', label: 'Kimi', clientId: 'kimi', installed: true, models: [] },

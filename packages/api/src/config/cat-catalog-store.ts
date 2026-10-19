@@ -807,8 +807,7 @@ function repairLegacyIdentityRecord(record: Record<string, unknown>, identity: N
   changed =
     replaceExactLegacyString(record, 'personality', identity.legacy.personality, identity.personality) || changed;
   changed =
-    replaceExactLegacyString(record, 'teamStrengths', identity.legacy.teamStrengths, identity.teamStrengths) ||
-    changed;
+    replaceExactLegacyString(record, 'teamStrengths', identity.legacy.teamStrengths, identity.teamStrengths) || changed;
   return changed;
 }
 
@@ -817,14 +816,11 @@ function repairLegacyIdentityRecord(record: Record<string, unknown>, identity: N
  * Only exact legacy defaults are replaced, so a user's own edits are kept.
  * Idempotent: after the first successful pass every field no longer matches.
  */
-export function repairLegacyNativeToolIdentities(catalog: {
-  breeds?: Array<Record<string, unknown>>;
-}): boolean {
+export function repairLegacyNativeToolIdentities(catalog: { breeds?: Array<Record<string, unknown>> }): boolean {
   let changed = false;
   for (const breed of catalog.breeds ?? []) {
     const variants = Array.isArray(breed.variants) ? (breed.variants as Array<Record<string, unknown>>) : [];
-    const defaultVariant =
-      variants.find((variant) => variant.id === breed.defaultVariantId) ?? variants[0];
+    const defaultVariant = variants.find((variant) => variant.id === breed.defaultVariantId) ?? variants[0];
     const identity = nativeToolIdentityFor({
       clientId: defaultVariant ? stringField(defaultVariant, 'clientId') : undefined,
       catId:
