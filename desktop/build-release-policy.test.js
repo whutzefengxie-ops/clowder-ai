@@ -10,7 +10,8 @@ const source = fs.readFileSync(path.join(__dirname, 'scripts/build-desktop.ps1')
 const windows = process.platform === 'win32';
 const quote = (value) => `'${value.replaceAll("'", "''")}'`;
 function fixture(t) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'desktop-release-policy-'));
+  // GitHub Windows TEMP uses an 8.3 alias; Get-Item returns its expanded path.
+  const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'desktop-release-policy-')));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   for (const directory of ['desktop/scripts', 'desktop/node_modules/electron', 'dist'])
     fs.mkdirSync(path.join(root, directory), { recursive: true });
