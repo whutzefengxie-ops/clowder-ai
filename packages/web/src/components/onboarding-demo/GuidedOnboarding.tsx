@@ -3,10 +3,9 @@
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { DemoTeam } from './DemoTeam';
 import { DemoTranscript } from './DemoTranscript';
 import { DemoWorkProduct } from './DemoWorkProduct';
-import { DEMO_EVENTS, DEMO_SETTINGS_URL, type DemoCat } from './demo-story';
+import { DEMO_EVENTS, DEMO_SETTINGS_URL } from './demo-story';
 import { beginOnboardingNavigation, finishOnboardingNavigation } from './onboarding-performance';
 import { useDemoPlayback } from './useDemoPlayback';
 
@@ -55,8 +54,6 @@ function DemoPlayer({ storageScope, onClose, onCompleted }: Omit<Props, 'open'>)
   }, [started, playback.finished]);
   const events = DEMO_EVENTS.slice(0, playback.index + 1);
   const current = DEMO_EVENTS[playback.index];
-  const active =
-    current && current.speaker !== 'user' && current.speaker !== 'system' ? (current.speaker as DemoCat) : undefined;
   const completedEvents = playback.phase === 'complete' || playback.finished ? events : events.slice(0, -1);
   const stage = [...completedEvents].reverse().find((event) => event.artifact)?.artifact;
   const replay = () => {
@@ -109,7 +106,6 @@ function DemoPlayer({ storageScope, onClose, onCompleted }: Omit<Props, 'open'>)
             ×
           </button>
         </header>
-        <DemoTeam active={active} />
         <div className="flex min-h-10 items-center justify-between gap-2 border-y border-[var(--console-border-soft)] px-4 py-2 text-xs sm:px-6">
           <span role="status">
             {playback.finished

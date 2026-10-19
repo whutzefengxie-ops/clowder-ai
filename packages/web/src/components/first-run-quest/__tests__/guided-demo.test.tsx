@@ -1,7 +1,7 @@
 import { act, StrictMode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { DEMO_EVENTS } from '../../onboarding-demo/demo-story';
+import { DEMO_EVENTS, DEMO_TEAM } from '../../onboarding-demo/demo-story';
 import { GuidedOnboarding } from '../../onboarding-demo/GuidedOnboarding';
 
 let root: Root, host: HTMLDivElement;
@@ -116,7 +116,12 @@ it('keeps the same browser beside the conversation from design through delivery'
 
 it('automates all handoffs without clients or API calls and opens a working deliverable', async () => {
   await mount();
+  const transcript = document.querySelector('[data-testid="demo-transcript"]');
+  for (const avatar of document.querySelectorAll('[role="dialog"] img')) {
+    expect(transcript?.contains(avatar)).toBe(true);
+  }
   for (let i = 0; i < 16; i++) await tick();
+  for (const cat of Object.values(DEMO_TEAM)) expect(transcript?.textContent).toContain(cat.name);
   expect(document.body.textContent).toContain('审查通过');
   expect(document.body.textContent).toContain('已修正');
   expect(document.querySelectorAll('[data-demo-handoff]').length).toBeGreaterThanOrEqual(6);
