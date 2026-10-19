@@ -142,7 +142,12 @@ export function MemberRuntimeFields({
     disabled: item.discoveryStatus === 'acp_profile_invalid',
     label: `${item.label} · ${item.id.startsWith('draft:') ? t('已保留的配置', 'Retained configuration') : (nativeAcpProfileLabel(item.discoveryStatus, t) ?? (item.installed ? t('已安装', 'Installed') : t('未找到', 'Not found')))}`,
   }));
-  if (!selected) choices.unshift({ value: 'current', label: `${tool} · ${t('当前配置', 'Current configuration')}` });
+  if (!selected)
+    choices.unshift({
+      value: 'current',
+      disabled: false,
+      label: `${tool} · ${t('当前配置', 'Current configuration')}`,
+    });
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between gap-3">
