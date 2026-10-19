@@ -1,12 +1,25 @@
 import assert from 'node:assert/strict';
+import childProcess from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { discoverDshRuntime } from '../src/routes/native-dsh-discovery.js';
 import { dshLauncherProfileState, dshProfileState } from '../src/routes/native-dsh-profile.js';
 
-test('fresh catalog can discover an existing DSH npx installation and ACP profile without creating a member', () => {
+test('fresh catalog can discover an existing DSH npx installation and ACP profile without creating a member', (t) => {
+  // The cached-package fixture owns its Node lookup; host PATH aliases are not
+  // evidence about DSH discovery or the profile initialization boundary.
+  t.mock.method(childProcess, 'execSync', (command: string) => {
+    assert.match(command, /^(where node\.exe|which node)$/);
+    return process.execPath;
+  });
+  syncBuiltinESMExports();
+  t.after(() => {
+    t.mock.restoreAll();
+    syncBuiltinESMExports();
+  });
   const root = mkdtempSync(join(tmpdir(), 'dsh-discovery-'));
   const dshHome = join(root, '.dsh');
   const cache = join(root, 'npm-cache');

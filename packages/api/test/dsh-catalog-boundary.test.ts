@@ -42,6 +42,13 @@ test('DSH discovery, creation and both model catalog paths never initialize an a
   Object.assign(process.env, environment);
   for (const command of ['dsh', 'claude', 'codex']) invalidateCliCommand(command);
   let spawns = 0;
+  // Keep PATH restricted to the fixture. Supplying Node lookup avoids requiring
+  // a host `which` executable while retaining the real cached-entry discovery.
+  mock.method(childProcess, 'execSync', (command: string) => {
+    if (command === 'where node.exe' || command === 'which node') return process.execPath;
+    spawns++;
+    throw Error('Unexpected synchronous process launch');
+  });
   mock.method(childProcess, 'spawn', () => {
     spawns++;
     throw Error('Unexpected process launch');
