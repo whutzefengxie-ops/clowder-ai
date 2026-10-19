@@ -17,12 +17,23 @@ function cache(client: SessionConfigurationClient) {
   }
   return result;
 }
+function isUnknownModelPreference(value: string): boolean {
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return Array.isArray(parsed) && parsed.length === 2 && parsed.every((part) => part === 'unknown');
+  } catch {
+    return value.trim().toLowerCase() === 'unknown';
+  }
+}
 function currentPreferences(session: Session): Preferences {
   const result: Preferences = {};
   if (!Array.isArray(session.configOptions)) return result;
   for (const option of session.configOptions) {
     if (!option || typeof option !== 'object' || typeof option.currentValue !== 'string') continue;
-    if (option.category === 'model' || option.id === 'model') result.model = option.currentValue;
+    if (option.category === 'model' || option.id === 'model') {
+      if (isUnknownModelPreference(option.currentValue)) continue;
+      result.model = option.currentValue;
+    }
     if (option.category === 'thought_level' || option.id === 'reasoning_effort') result.effort = option.currentValue;
   }
   return result;

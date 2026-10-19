@@ -16,7 +16,10 @@ if (extension !== -1) {
     },
   });
 }
-let model = { provider: 'fixture', id: 'native', name: 'Native fixture' };
+const unknownModel = existsSync(path.join(root, 'unknown-model'));
+let model = unknownModel
+  ? { provider: 'unknown', id: 'unknown', name: 'unknown' }
+  : { provider: 'fixture', id: 'native', name: 'Native fixture' };
 let thinkingLevel = 'medium',
   buffer = '',
   timer;
@@ -34,7 +37,9 @@ process.stdin.on('data', (chunk) => {
         break;
       case 'get_available_models':
         response(command, {
-          models: [model, { provider: 'fixture', id: 'other', name: 'Other', secret: 'catalog-sensitive-sentinel' }],
+          models: unknownModel
+            ? []
+            : [model, { provider: 'fixture', id: 'other', name: 'Other', secret: 'catalog-sensitive-sentinel' }],
         });
         break;
       case 'get_available_thinking_levels':

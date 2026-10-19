@@ -34,6 +34,22 @@ for (const [kind, category] of [
     assert.equal(adopted.configOptions[0].currentValue, '');
   });
 
+test('does not persist Pi unknown/unknown as a native model default', async () => {
+  const client = {};
+  await captureNativeDefaults(
+    client,
+    {
+      sessionId: 'pi-unknown',
+      configOptions: [{ id: 'model', category: 'model', currentValue: '["unknown","unknown"]' }],
+    },
+    '/pi-project',
+  );
+  const defaults = await defaultsForNativeResume(client, '/pi-project', {}, async () => {
+    throw new Error('unexpected probe');
+  });
+  assert.deepEqual(defaults, {});
+});
+
 test('resetting native ACP preferences restores defaults in the original conversation, also after restart', async () => {
   const id = 'native-reset-test';
   const base = {

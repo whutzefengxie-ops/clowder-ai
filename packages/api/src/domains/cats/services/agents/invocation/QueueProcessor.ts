@@ -5209,8 +5209,21 @@ export class QueueProcessor {
                 lifecycleResponseInterrupted = true;
               };
               await this.admitQueueEntriesForProvider(deliveryTimeByMessageId);
+              // Queue admission changes queued sources to delivered and assigns their
+              // durable timeline clock. Re-read the canonical rows before deriving
+              // dispatch identity: the initial snapshot may still carry the queued
+              // fallback order key, which Redis correctly rejects as stale.
+              const dispatchInputMessages = (
+                await Promise.all(
+                  lifecycleInputMessages.map((message) => messageStore.getById(message.id)),
+                )
+              ).filter((message): message is StoredMessage => Boolean(message));
+              if (dispatchInputMessages.length !== lifecycleInputMessages.length) {
+                await interruptLifecycleResponse('input_dispatch_source_missing');
+                throw new Error(`Lifecycle input dispatch source missing: ${input.invocationId}`);
+              }
               const lifecycleInputSnapshots: StoredMessage[] = [];
-              for (const inputMessage of lifecycleInputMessages) {
+              for (const inputMessage of dispatchInputMessages) {
                 const transition = await messageStore.advanceLifecycleInputDispatch(inputMessage.id, {
                   ...lifecycleInputIdentityForStoredMessage(inputMessage),
                   targetId: input.catId,

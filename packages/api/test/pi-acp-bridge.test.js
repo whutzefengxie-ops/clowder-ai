@@ -7,8 +7,9 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { PiAcpBridge } from '../dist/domains/cats/services/agents/providers/pi/pi-acp-bridge.js';
 
 const fakePi = fileURLToPath(new URL('./helpers/pi-rpc-fixture.mjs', import.meta.url));
-async function fixture(run, { shim = false } = {}) {
+async function fixture(run, { shim = false, unknownModel = false } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'pi acp bridge-'));
+  if (unknownModel) writeFileSync(join(root, 'unknown-model'), 'yes');
   const outputs = [];
   let command = process.execPath,
     args = [fakePi, root];
@@ -63,6 +64,26 @@ test('Pi adapter advertises only implemented capabilities and discovers opaque n
     assert.equal(selected.result.configOptions[0].currentValue, '["fixture","other"]');
     assert.ok((await request('x', 'session/load', { sessionId: created.result.sessionId })).error);
   }));
+
+test('Pi unknown native state follows the CLI default without exposing an invalid model option', () =>
+  fixture(
+    async ({ root, request }) => {
+      const created = await request('s', 'session/new', { cwd: root, mcpServers: [] });
+      assert.equal(created.error, undefined);
+      assert.equal(
+        created.result.configOptions.some((option) => option.id === 'model'),
+        false,
+      );
+      const sessionId = created.result.sessionId;
+      const prompted = await request('p', 'session/prompt', {
+        sessionId,
+        prompt: [{ type: 'text', text: 'hello' }],
+      });
+      assert.equal(prompted.error, undefined);
+      assert.equal(prompted.result.stopReason, 'end_turn');
+    },
+    { unknownModel: true },
+  ));
 
 test('Pi prompt waits beyond admission and agent_end until agent_settled, without duplicated text', () =>
   fixture(async ({ root, outputs, bridge, request }) => {

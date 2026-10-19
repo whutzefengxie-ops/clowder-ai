@@ -6,9 +6,17 @@ import { PiAcpEvents } from './pi-acp-events.js';
 import { type PiRecord, PiRpcProcess, PiRpcRequestRejectedError, record } from './pi-rpc-process.js';
 
 type Option = { value: string; name: string };
+function isUnknownModelPart(value: string): boolean {
+  return value.trim().toLowerCase() === 'unknown';
+}
 function modelOption(value: unknown): Option | undefined {
   const model = record(value);
-  return typeof model.provider === 'string' && typeof model.id === 'string'
+  return typeof model.provider === 'string' &&
+    typeof model.id === 'string' &&
+    model.provider.trim() !== '' &&
+    model.id.trim() !== '' &&
+    !isUnknownModelPart(model.provider) &&
+    !isUnknownModelPart(model.id)
     ? {
         value: JSON.stringify([model.provider, model.id]),
         name: typeof model.name === 'string' ? model.name : `${model.provider}/${model.id}`,
@@ -94,8 +102,13 @@ export class PiAcpSession {
       this.rpc.request('get_available_models'),
       this.rpc.request('get_available_thinking_levels'),
     ]);
-    this.models = (Array.isArray(catalog.models) ? catalog.models : []).flatMap((value) => modelOption(value) ?? []);
-    this.currentModel = modelOption(state.model)?.value;
+    const models = (Array.isArray(catalog.models) ? catalog.models : []).flatMap((value) => modelOption(value) ?? []);
+    this.models = [...new Map(models.map((model) => [model.value, model])).values()];
+    const currentModel = modelOption(state.model)?.value;
+    // Pi reports unknown/unknown before a provider is selected. Do not expose
+    // that sentinel as an ACP option: it cannot be selected or matched.
+    this.currentModel =
+      currentModel && this.models.some((model) => model.value === currentModel) ? currentModel : undefined;
     this.thinking = (Array.isArray(thinking.levels) ? thinking.levels : []).filter(
       (value): value is string => typeof value === 'string',
     );

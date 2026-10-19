@@ -55,6 +55,17 @@ it('shows thinking then a partial response, and delays preview until the respons
   expect(document.querySelector('[data-preview-stage="design"]')).not.toBeNull();
 });
 
+it('does not flash the next cat response while advancing between demo events', async () => {
+  localStorage.setItem('cat-cafe:scripted-onboarding:v1:demo-user', JSON.stringify({ version: 1, index: 2 }));
+  await mount();
+  expect(document.querySelector('[data-demo-phase="thinking"]')?.textContent).toContain('正在思考');
+  await act(async () => vi.advanceTimersByTimeAsync(DEMO_EVENTS[2].duration));
+  const active = document.querySelector('[data-demo-phase="thinking"]');
+  expect(active).not.toBeNull();
+  expect(active?.textContent).toContain('正在思考');
+  expect(active?.textContent).not.toContain(DEMO_EVENTS[3].text);
+});
+
 const acknowledge = async (source: Window | null | undefined, stage = 'final') => {
   await act(async () =>
     window.dispatchEvent(

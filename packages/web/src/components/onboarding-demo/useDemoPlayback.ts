@@ -87,13 +87,24 @@ export function useDemoPlayback(scope: string) {
   }, [ready, state.index, state.paused]);
   const event = DEMO_EVENTS[state.index];
   const isCat = event && event.speaker !== 'user' && event.speaker !== 'system';
+  // A state.index change renders once before the effect resets elapsedMs. Treat
+  // that boundary as the new event's zero point so the previous event's final
+  // elapsed value cannot briefly expose the full next response.
+  const effectiveElapsedMs = lastIndex.current === state.index ? elapsedMs : 0;
   const thinkingMs = 900;
   const typingMs = event ? Math.min(2400, Math.max(1000, event.text.length * 28)) : 0;
   const phase: 'complete' | 'thinking' | 'typing' =
-    !isCat || elapsedMs >= thinkingMs + typingMs ? 'complete' : elapsedMs < thinkingMs ? 'thinking' : 'typing';
+    !isCat || effectiveElapsedMs >= thinkingMs + typingMs
+      ? 'complete'
+      : effectiveElapsedMs < thinkingMs
+        ? 'thinking'
+        : 'typing';
   const characters =
     event && isCat
-      ? Math.min(event.text.length, Math.floor((Math.max(0, elapsedMs - thinkingMs) / typingMs) * event.text.length))
+      ? Math.min(
+          event.text.length,
+          Math.floor((Math.max(0, effectiveElapsedMs - thinkingMs) / typingMs) * event.text.length),
+        )
       : (event?.text.length ?? 0);
   return {
     ...state,
