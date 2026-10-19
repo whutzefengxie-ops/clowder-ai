@@ -214,7 +214,7 @@ Filename: "powershell.exe"; \
 
 ; Offer to launch after interactive install
 Filename: "{app}\desktop-dist\{#MyAppExeName}"; \
-  Description: "Launch {#MyAppName}"; Flags: postinstall nowait skipifsilent; Check: RuntimeExtractionSucceeded
+  Description: "Launch {#MyAppName}"; Flags: postinstall nowait skipifsilent runasoriginaluser; Check: RuntimeExtractionSucceeded
 ; F273: Auto-restart after silent upgrade (in-app updater uses /SILENT).
 ; runasoriginaluser is critical — without it, the app + Redis + API all run
 ; as elevated admin, which breaks user-data paths and is a security concern.

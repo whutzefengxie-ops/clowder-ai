@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { test } = require('node:test');
-const { readClientHomes } = require('./client-homes');
+const { readClientHomes, resolveDefaultClientHomes } = require('./client-homes');
 
 test('client reuse is opt-in and never inherits the host platform data environment', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'client-homes-'));
@@ -48,6 +48,33 @@ test('invalid client reuse paths and unrelated environment overrides fail closed
     }
     fs.writeFileSync(path.join(root, 'client-homes.json'), '{');
     assert.throws(() => readClientHomes(root), { message: 'Invalid desktop client-homes configuration' });
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('ordinary desktop launches resolve the current user client homes without copying credentials', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'client-homes-default-'));
+  try {
+    const home = path.join(root, 'user');
+    const claude = path.join(home, '.claude');
+    const codex = path.join(home, '.codex');
+    fs.mkdirSync(claude, { recursive: true });
+    fs.mkdirSync(codex, { recursive: true });
+    const resolved = resolveDefaultClientHomes(
+      {
+        USERPROFILE: home,
+        CLAUDE_CONFIG_DIR: '',
+        CODEX_HOME: '',
+        KIMI_CODE_HOME: '',
+        PI_CODING_AGENT_DIR: '',
+        npm_config_cache: '',
+      },
+      home,
+    );
+    assert.equal(resolved.CLAUDE_CONFIG_DIR, fs.realpathSync.native(claude));
+    assert.equal(resolved.CODEX_HOME, fs.realpathSync.native(codex));
+    assert.equal(Object.hasOwn(resolved, 'HOME'), false);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

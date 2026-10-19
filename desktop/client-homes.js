@@ -1,5 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
+const os = require('node:os');
 
 const clientKeys = {
   claude: 'CLAUDE_CONFIG_DIR',
@@ -34,4 +35,39 @@ function readClientHomes(instanceRoot) {
     throw new Error('Invalid desktop client-homes configuration');
   }
 }
-module.exports = { readClientHomes };
+
+/** Resolve host-owned client directories for an ordinary (non-isolated) launch.
+ * This only returns directory bindings; credentials and sessions stay in place.
+ */
+function envOrPath(env, key, fallback) {
+  return env[key]?.trim() || fallback;
+}
+
+function resolveExistingDirectory(directory) {
+  if (!directory || !path.isAbsolute(directory)) return null;
+  try {
+    return fs.statSync(directory).isDirectory() ? fs.realpathSync.native(directory) : null;
+  } catch {
+    return null;
+  }
+}
+
+function resolveDefaultClientHomes(env = process.env, homeDir = os.homedir()) {
+  const profile = envOrPath(env, 'USERPROFILE', homeDir);
+  const candidates = {
+    claude: envOrPath(env, 'CLAUDE_CONFIG_DIR', path.join(profile, '.claude')),
+    codex: envOrPath(env, 'CODEX_HOME', path.join(profile, '.codex')),
+    dsh: envOrPath(env, 'DSH_HOME', path.join(profile, '.dsh')),
+    kimi: envOrPath(env, 'KIMI_CODE_HOME', path.join(profile, '.kimi-code')),
+    pi: envOrPath(env, 'PI_CODING_AGENT_DIR', path.join(profile, '.pi')),
+    npmCache: envOrPath(env, 'npm_config_cache', path.join(env.LOCALAPPDATA || '', 'npm-cache')),
+  };
+  const resolved = {};
+  for (const [key, directory] of Object.entries(candidates)) {
+    const canonical = resolveExistingDirectory(directory);
+    if (canonical) resolved[key] = canonical;
+  }
+  return Object.fromEntries(Object.entries(resolved).map(([key, directory]) => [clientKeys[key], directory]));
+}
+
+module.exports = { readClientHomes, resolveDefaultClientHomes };

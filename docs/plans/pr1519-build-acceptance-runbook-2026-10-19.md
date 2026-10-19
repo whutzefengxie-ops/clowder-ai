@@ -23,12 +23,14 @@ created: 2026-10-19
 3. 交付副本只能通过脚本复制并写入最终路径，不能普通复制覆盖既有交付目录。最终 EXE、manifest、日志和验收记录放在任务专属 `artifacts/` 目录，不散落桌面。
 4. 首装测试使用新的程序目录和新的实例 HOME，实例端口独立；安装参数中的 `/DIR` 必须完整引用，测试无快捷方式时使用 `/TASKS="!desktopicon"`。首装不能用覆盖升级冒充。
 5. 安装日志必须包含所有归档 `EXTRACT|complete`、退出码 0、安装完成和关闭记录。出现 `is-*.tmp` 拒绝访问、MoveFile 183、帮助参数弹窗或提权失败均为 No-Go。
+6. 生产安装器的默认目录必须保持 `{autopf}\ClowderAI`（Windows 通常为 `C:\Program Files\ClowderAI`）。自动化调用 `/DIR` 时必须把含空格的完整路径作为一个带引号的参数；未加引号会被 Inno 截断为 `C:\Program`，不能把该调用错误当作产品默认目录。安装后启动必须使用 `runasoriginaluser`，避免管理员安装上下文污染首次运行的用户 HOME。
 
 ## 首次启动与客户端检测
 
 1. 首次启动必须读取 `startup-state.json` 为 `phase=ready`，记录启动耗时；`desktop.log` 必须包含 project mirror readiness、Redis、API、Web 和 all-services 完成记录。
 2. 通过 API `/api/health`、`/api/ready`、Web 入口和 `/api/cats` 回读；干净实例的角色和历史为空。不得把认证或角色历史复制到测试 HOME。
 3. 若要复用宿主机已登录客户端，只写入实例 `client-homes.json` 的明确映射，不复制令牌；映射目录只读验证。检测结果必须与实际配置一致：Claude 同时识别 CLI 凭据和 `settings.json.env.ANTHROPIC_API_KEY`/`ANTHROPIC_AUTH_TOKEN`，且任何返回值不得泄露凭据；Codex 等客户端必须以同样的实例 HOME 规则检测。
+   普通非隔离安装也必须由 API 显式绑定当前用户实际存在的 Claude/Codex/DSH/Kimi/Pi 目录；这只是环境变量映射，不复制凭据、会话或历史。没有目录的客户端不应凭空标记为已登录。
 4. 一键检测和手动添加是两个独立入口。取消一个客户端后不能阻塞其他已勾选客户端；创建后用 GET 回读角色和首条消息，失败原因必须可见。
 
 ## 托盘与退出生命周期

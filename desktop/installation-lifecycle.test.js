@@ -152,6 +152,21 @@ test('installer and uninstaller use the same installation-scoped shutdown script
   assert.doesNotMatch(script, /Stop-Process -Name/);
 });
 
+test('post-install launch runs as the original user after an elevated installation', () => {
+  const installer = fs.readFileSync(path.join(__dirname, 'installer/cat-cafe.iss'), 'utf8');
+  const launch = installer.match(
+    /; Offer to launch after interactive install[\s\S]*?Description: "Launch \{#MyAppName\}";[^\r\n]+/,
+  );
+  assert.ok(launch, 'production installer must keep a post-install launch entry');
+  assert.match(launch[0], /Flags: postinstall nowait skipifsilent runasoriginaluser/);
+});
+
+test('installer uses the Windows Program Files default and does not bake a truncated path', () => {
+  const installer = fs.readFileSync(path.join(__dirname, 'installer/cat-cafe.iss'), 'utf8');
+  assert.match(installer, /DefaultDirName=\{autopf\}\\ClowderAI/);
+  assert.doesNotMatch(installer, /DefaultDirName=.*C:\\Program(?:\\|$)/i);
+});
+
 test('isolated install records host client homes without copying credentials', () => {
   const script = fs.readFileSync(path.join(__dirname, 'scripts/configure-desktop-instance.ps1'), 'utf8');
   assert.match(script, /client-homes\.json/);

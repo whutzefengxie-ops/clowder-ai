@@ -53,6 +53,39 @@ test('isolated desktop Redis probing, spawn and API env all use the same owned p
   }
 });
 
+test('ordinary API child explicitly reuses existing host client homes', async () => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'desktop-host-clients-'));
+  const hostHome = path.join(base, 'host');
+  const claude = path.join(hostHome, '.claude');
+  const codex = path.join(hostHome, '.codex');
+  fs.mkdirSync(claude, { recursive: true });
+  fs.mkdirSync(codex, { recursive: true });
+  const previous = process.env.USERPROFILE;
+  process.env.USERPROFILE = hostHome;
+  try {
+    const manager = new ServiceManager(base, { frontendPort: 5158, apiPort: 3158, redisPort: 6367 });
+    const resultPath = path.join(base, 'host-client-env.json');
+    manager._startProcess(
+      'api',
+      process.execPath,
+      [
+        '-e',
+        `require('node:fs').writeFileSync(${JSON.stringify(resultPath)},JSON.stringify(Object.fromEntries(['CLAUDE_CONFIG_DIR','CODEX_HOME'].map(k=>[k,process.env[k]]))))`,
+      ],
+      { envOverrides: manager._buildApiEnv(base) },
+    );
+    await new Promise((resolve) => manager.procs.api.once('exit', resolve));
+    assert.deepEqual(JSON.parse(fs.readFileSync(resultPath, 'utf8')), {
+      CLAUDE_CONFIG_DIR: fs.realpathSync.native(claude),
+      CODEX_HOME: fs.realpathSync.native(codex),
+    });
+  } finally {
+    if (previous === undefined) delete process.env.USERPROFILE;
+    else process.env.USERPROFILE = previous;
+    fs.rmSync(base, { recursive: true, force: true });
+  }
+});
+
 for (const contamination of [
   {
     WORLD_DB: '/sentinel/world.sqlite',
