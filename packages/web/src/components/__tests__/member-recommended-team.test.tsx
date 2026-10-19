@@ -90,12 +90,29 @@ afterEach(() => {
 const mount = () =>
   act(async () => root.render(<RecommendedTeamSetup onCreated={created} onManual={manual} onBack={back} />));
 
-it('shows missing CLI login before creating a teammate and distinguishes creation from readiness', async () => {
+it('blocks the default logged-out partner while keeping connection adjustment and other partners available', async () => {
   loginRequired = true;
   await mount();
   expect(host.textContent).toContain('Claude Code 尚未登录');
   expect(host.textContent).toContain('claude auth login');
-  expect(host.textContent).toContain('创建后还需登录');
+  expect(host.textContent).toContain('新增伙伴前需要先登录，或调整为其他连接');
+  expect(host.textContent).not.toContain('创建后还需登录');
+  const claude = host.querySelector<HTMLInputElement>('input[aria-label="加入 Claude Code 伙伴"]');
+  expect(claude).not.toBeNull();
+  expect(claude?.checked).toBe(false);
+  expect(claude?.disabled).toBe(true);
+  const adjust = [...(claude?.closest('article')?.querySelectorAll('button') ?? [])].find(
+    (item) => item.textContent === '调整',
+  );
+  expect(adjust).toBeDefined();
+  expect(adjust?.disabled).toBe(false);
+  expect(host.querySelectorAll('input:checked')).toHaveLength(2);
+  await act(async () => button('一键创建').click());
+  const writes = vi
+    .mocked(apiFetch)
+    .mock.calls.filter(([path, init]) => path === '/api/cats' && init?.method === 'POST');
+  expect(writes).toHaveLength(2);
+  expect(writes.map(([, init]) => JSON.parse(String(init?.body)).clientId)).toEqual(['openai', 'acp']);
 });
 
 it('detects and preselects a complete team, and creates it in one click with inherited defaults', async () => {
