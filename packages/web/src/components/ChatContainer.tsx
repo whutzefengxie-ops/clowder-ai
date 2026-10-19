@@ -222,7 +222,7 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
     () => withQueuedInputPreviews(allMessages, conversationViewQueue, threadId),
     [allMessages, conversationViewQueue, threadId],
   );
-  const conversationViewController = useConversationViewPreference(threadId, isV2);
+  const conversationViewController = useConversationViewPreference(threadId, isV2 && threadId !== 'default');
   const conversationViewReading = useConversationViewReadingCheckpoint({
     threadId,
     controller: conversationViewController,
