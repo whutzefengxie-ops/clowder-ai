@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { test } from 'node:test';
+import { isDeepStrictEqual } from 'node:util';
 import { create, evidence, ids, runtimes, select, setup } from './native-team-setup.harness.mjs';
 
 for (let mask = 0; mask < 32; mask++) {
@@ -23,13 +24,18 @@ for (let mask = 0; mask < 32; mask++) {
           await state.panel.waitFor({ state: 'hidden' });
           assert.equal(state.writes.length, count);
           const expected = ids.filter((_, i) => mask & (1 << i));
-          const submitted = state.writes.map(({ payload }) =>
-            payload.clientId === 'acp'
-              ? payload.nickname === '派派'
-                ? 'pi'
-                : 'dsh'
-              : { openai: 'codex', anthropic: 'claude', kimi: 'kimi' }[payload.clientId],
-          );
+          const submitted = state.writes.map(({ payload }) => {
+            // User-facing identities can change; the submitted launch config
+            // must still match the selected discovered tool exactly.
+            const runtime = runtimes.find(
+              (runtime) =>
+                runtime.clientId === payload.clientId &&
+                (runtime.clientId !== 'acp' ||
+                  isDeepStrictEqual({ transport: 'stdio', ...runtime.acp }, { transport: 'stdio', ...payload.acp })),
+            );
+            assert.ok(runtime, 'creation must preserve a discovered runtime launch config');
+            return runtime.id;
+          });
           assert.deepEqual(submitted, expected);
         }
         assert.deepEqual(state.errors, []);
