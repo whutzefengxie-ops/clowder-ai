@@ -1,12 +1,19 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 
 const script = path.join(import.meta.dirname, 'scripts', 'verify-runtime-archives.mjs');
-const names = ['node.tar.gz', 'deploy-dependencies.tar.gz', 'deploy-api.tar.gz', 'deploy-web.tar.gz', 'deploy-mcp-server.tar.gz', 'electron.tar.gz'];
+const names = [
+  'node.tar.gz',
+  'deploy-dependencies.tar.gz',
+  'deploy-api.tar.gz',
+  'deploy-web.tar.gz',
+  'deploy-mcp-server.tar.gz',
+  'electron.tar.gz',
+];
 
 function makeRoot({ empty = false, missingSidecar = false } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'runtime-archives-'));

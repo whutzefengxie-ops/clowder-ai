@@ -60,8 +60,12 @@ test('ordinary API child explicitly reuses existing host client homes', async ()
   const codex = path.join(hostHome, '.codex');
   fs.mkdirSync(claude, { recursive: true });
   fs.mkdirSync(codex, { recursive: true });
-  const previous = process.env.USERPROFILE;
+  const previous = Object.fromEntries(
+    ['USERPROFILE', 'CLAUDE_CONFIG_DIR', 'CODEX_HOME'].map((key) => [key, process.env[key]]),
+  );
   process.env.USERPROFILE = hostHome;
+  delete process.env.CLAUDE_CONFIG_DIR;
+  delete process.env.CODEX_HOME;
   try {
     const manager = new ServiceManager(base, { frontendPort: 5158, apiPort: 3158, redisPort: 6367 });
     const resultPath = path.join(base, 'host-client-env.json');
@@ -80,26 +84,29 @@ test('ordinary API child explicitly reuses existing host client homes', async ()
       CODEX_HOME: fs.realpathSync.native(codex),
     });
   } finally {
-    if (previous === undefined) delete process.env.USERPROFILE;
-    else process.env.USERPROFILE = previous;
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
     fs.rmSync(base, { recursive: true, force: true });
   }
 });
 
-test('ordinary API child clears stale isolated client homes before resolving host homes', async () => {
+test('ordinary API child preserves explicit client homes instead of guessing they are stale', async () => {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), 'desktop-host-client-reset-'));
   const hostHome = path.join(base, 'host');
-  const staleHome = path.join(base, 'stale-isolated');
+  const customHome = path.join(base, 'custom-clients');
   fs.mkdirSync(path.join(hostHome, '.claude'), { recursive: true });
   fs.mkdirSync(path.join(hostHome, '.codex'), { recursive: true });
-  fs.mkdirSync(path.join(staleHome, '.claude'), { recursive: true });
-  fs.mkdirSync(path.join(staleHome, '.codex'), { recursive: true });
-  const previous = Object.fromEntries(
-    ['USERPROFILE', 'CLAUDE_CONFIG_DIR', 'CODEX_HOME'].map((key) => [key, process.env[key]]),
+  const bindings = Object.fromEntries(
+    ['CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'DSH_HOME', 'KIMI_CODE_HOME', 'PI_CODING_AGENT_DIR', 'npm_config_cache'].map(
+      (key) => [key, path.join(customHome, key)],
+    ),
   );
+  for (const directory of Object.values(bindings)) fs.mkdirSync(directory, { recursive: true });
+  const previous = Object.fromEntries(['USERPROFILE', ...Object.keys(bindings)].map((key) => [key, process.env[key]]));
   process.env.USERPROFILE = hostHome;
-  process.env.CLAUDE_CONFIG_DIR = path.join(staleHome, '.claude');
-  process.env.CODEX_HOME = path.join(staleHome, '.codex');
+  Object.assign(process.env, bindings);
   try {
     const manager = new ServiceManager(base, { frontendPort: 5158, apiPort: 3158, redisPort: 6367 });
     const resultPath = path.join(base, 'host-client-env-reset.json');
@@ -108,15 +115,15 @@ test('ordinary API child clears stale isolated client homes before resolving hos
       process.execPath,
       [
         '-e',
-        `require('node:fs').writeFileSync(${JSON.stringify(resultPath)},JSON.stringify(Object.fromEntries(['CLAUDE_CONFIG_DIR','CODEX_HOME'].map(k=>[k,process.env[k]]))))`,
+        `require('node:fs').writeFileSync(${JSON.stringify(resultPath)},JSON.stringify(Object.fromEntries(${JSON.stringify(Object.keys(bindings))}.map(k=>[k,process.env[k]]))))`,
       ],
       { envOverrides: manager._buildApiEnv(base) },
     );
     await new Promise((resolve) => manager.procs.api.once('exit', resolve));
-    assert.deepEqual(JSON.parse(fs.readFileSync(resultPath, 'utf8')), {
-      CLAUDE_CONFIG_DIR: fs.realpathSync.native(path.join(hostHome, '.claude')),
-      CODEX_HOME: fs.realpathSync.native(path.join(hostHome, '.codex')),
-    });
+    assert.deepEqual(
+      JSON.parse(fs.readFileSync(resultPath, 'utf8')),
+      Object.fromEntries(Object.entries(bindings).map(([key, directory]) => [key, fs.realpathSync.native(directory)])),
+    );
   } finally {
     for (const [key, value] of Object.entries(previous)) {
       if (value === undefined) delete process.env[key];
@@ -177,6 +184,49 @@ for (const contamination of [
       fs.rmSync(base, { recursive: true, force: true });
     }
   });
+
+test('isolated API does not inherit host client bindings without a client-homes mapping', async () => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'desktop-client-deny-'));
+  const clientKeys = [
+    'CLAUDE_CONFIG_DIR',
+    'CODEX_HOME',
+    'DSH_HOME',
+    'KIMI_CODE_HOME',
+    'PI_CODING_AGENT_DIR',
+    'npm_config_cache',
+  ];
+  const input = {
+    CAT_CAFE_DESKTOP_INSTANCE_ROOT: base,
+    FRONTEND_PORT: '5158',
+    API_SERVER_PORT: '3158',
+    REDIS_PORT: '6367',
+    ...Object.fromEntries(clientKeys.map((key) => [key, path.join(base, 'host-owned')])),
+  };
+  fs.mkdirSync(path.join(base, 'host-owned'));
+  const previous = Object.fromEntries(Object.keys(input).map((key) => [key, process.env[key]]));
+  try {
+    Object.assign(process.env, input);
+    const manager = new ServiceManager(base, { frontendPort: 5158, apiPort: 3158, redisPort: 6367 });
+    const result = path.join(base, 'capture.json');
+    manager._startProcess(
+      'api',
+      process.execPath,
+      [
+        '-e',
+        `require('node:fs').writeFileSync(${JSON.stringify(result)},JSON.stringify(Object.fromEntries(${JSON.stringify([...clientKeys, 'HOME'])}.map(k=>[k,process.env[k]]))))`,
+      ],
+      { envOverrides: manager._buildApiEnv(base) },
+    );
+    await new Promise((resolve) => manager.procs.api.once('exit', resolve));
+    assert.deepEqual(JSON.parse(fs.readFileSync(result, 'utf8')), { HOME: path.join(base, 'home') });
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    fs.rmSync(base, { recursive: true, force: true });
+  }
+});
 
 test('explicit client homes reach the real API child while persistence and ordinary children remain isolated', async () => {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), 'desktop-client-reuse-'));

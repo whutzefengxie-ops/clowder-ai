@@ -5214,9 +5214,7 @@ export class QueueProcessor {
               // dispatch identity: the initial snapshot may still carry the queued
               // fallback order key, which Redis correctly rejects as stale.
               const dispatchInputMessages = (
-                await Promise.all(
-                  lifecycleInputMessages.map((message) => messageStore.getById(message.id)),
-                )
+                await Promise.all(lifecycleInputMessages.map((message) => messageStore.getById(message.id)))
               ).filter((message): message is StoredMessage => Boolean(message));
               if (dispatchInputMessages.length !== lifecycleInputMessages.length) {
                 await interruptLifecycleResponse('input_dispatch_source_missing');

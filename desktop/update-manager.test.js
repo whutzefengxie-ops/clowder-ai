@@ -1395,7 +1395,8 @@ describe('main process update-schedule lifecycle', () => {
       /desktop-update:register|document-capability/,
       'renderer documents must not be able to request or replace readiness authority',
     );
-    assert.match(source, /webContents\.on\('render-process-gone'[\s\S]*markRendererUnavailable/);
+    // Actual main-window wiring and renderer crash invalidation are exercised
+    // by main-renderer-lifecycle.test.js, including the extracted helper.
   });
 
   test('uses one runtime-safe Windows AppUserModelID in the process and installed shortcuts', () => {

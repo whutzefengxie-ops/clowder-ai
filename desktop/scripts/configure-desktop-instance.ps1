@@ -114,11 +114,11 @@ function Write-DefaultClientHomes([string]$root) {
   if (Test-Path -LiteralPath $target) { return }
   $profile = if ($env:USERPROFILE) { $env:USERPROFILE } else { [Environment]::GetFolderPath('UserProfile') }
   $candidates = [ordered]@{
-    claude = Join-Path $profile '.claude'
-    codex = Join-Path $profile '.codex'
-    dsh = Join-Path $profile '.dsh'
+    claude = if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $profile '.claude' }
+    codex = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $profile '.codex' }
+    dsh = if ($env:DSH_HOME) { $env:DSH_HOME } else { Join-Path $profile '.dsh' }
     kimi = if ($env:KIMI_CODE_HOME) { $env:KIMI_CODE_HOME } else { Join-Path $profile '.kimi-code' }
-    pi = if ($env:PI_CODING_AGENT_DIR) { $env:PI_CODING_AGENT_DIR } else { Join-Path $profile '.pi' }
+    pi = if ($env:PI_CODING_AGENT_DIR) { $env:PI_CODING_AGENT_DIR } else { Join-Path $profile '.pi/agent' }
     npmCache = if ($env:npm_config_cache) { $env:npm_config_cache } else { Join-Path $env:LOCALAPPDATA 'npm-cache' }
   }
   $homes = [ordered]@{}

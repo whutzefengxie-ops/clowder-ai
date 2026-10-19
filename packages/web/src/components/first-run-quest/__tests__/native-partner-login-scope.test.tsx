@@ -26,6 +26,7 @@ function mount(
   change: Partial<HubCatEditorFormState> = {},
   clientId: 'anthropic' | 'openai' | 'opencode' | 'kimi' | 'acp' = 'anthropic',
   runtimeChange: Partial<RuntimeChoice> = {},
+  created = true,
 ) {
   const runtime: RuntimeChoice = {
     id: clientId === 'openai' ? 'codex' : clientId === 'anthropic' ? 'claude' : clientId,
@@ -58,7 +59,9 @@ function mount(
     selected: true,
     form: { ...initialState(), ...runtimeDefaults(runtime), ...change },
   };
-  act(() => root.render(<NativePartnerCard partner={partner} created patch={vi.fn()} onValidityChange={vi.fn()} />));
+  act(() =>
+    root.render(<NativePartnerCard partner={partner} created={created} patch={vi.fn()} onValidityChange={vi.fn()} />),
+  );
   return host.textContent ?? '';
 }
 it.each(['configured', 'login_required'] as const)('retains %s evidence for the ordinary default partner', (status) => {
@@ -113,7 +116,18 @@ it.each([
     expect(text).not.toContain('已检测登录');
     expect(text).not.toContain('尚未登录');
     expect(text).toContain('此连接的登录状态尚未检查');
+    expect(host.querySelector<HTMLInputElement>('input[type="checkbox"]')?.disabled).toBe(false);
   }
+});
+
+it('keeps adjustment available when the installed default connection needs login', () => {
+  mount('login_required', {}, 'openai', {}, false);
+  expect(host.querySelector<HTMLInputElement>('input[type="checkbox"]')?.disabled).toBe(true);
+  const adjust = Array.from(host.querySelectorAll('button')).find((button) => button.textContent === '调整');
+  expect(adjust).toBeDefined();
+  expect(adjust?.disabled).toBe(false);
+  act(() => adjust?.click());
+  expect(host.querySelector('fieldset')).not.toBeNull();
 });
 
 it.each(['Pi', 'DSH'])('shows %s inherited model without claiming login evidence', (label) => {

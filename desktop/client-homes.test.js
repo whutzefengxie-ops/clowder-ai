@@ -79,3 +79,23 @@ test('ordinary desktop launches resolve the current user client homes without co
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('default Pi binding reads settings and authentication from the agent directory', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'client-homes-pi-'));
+  try {
+    const agent = path.join(root, '.pi', 'agent');
+    fs.mkdirSync(agent, { recursive: true });
+    const settings = { defaultProvider: 'fixture', defaultModel: 'fixture-model' };
+    fs.writeFileSync(path.join(agent, 'settings.json'), JSON.stringify(settings));
+    fs.writeFileSync(path.join(agent, 'auth.json'), '{"fixture":{"type":"api_key","key":"test-only"}}');
+    const resolved = resolveDefaultClientHomes({ USERPROFILE: root }, root);
+    assert.equal(resolved.PI_CODING_AGENT_DIR, fs.realpathSync.native(agent));
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(resolved.PI_CODING_AGENT_DIR, 'settings.json'))), settings);
+    assert.equal(
+      JSON.parse(fs.readFileSync(path.join(resolved.PI_CODING_AGENT_DIR, 'auth.json'))).fixture.key,
+      'test-only',
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});

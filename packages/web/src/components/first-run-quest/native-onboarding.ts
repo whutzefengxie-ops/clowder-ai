@@ -1,6 +1,7 @@
 import type { CatData } from '@/hooks/useCatData';
 import { autoSlug, type HubCatEditorFormState, initialState } from '../hub-cat-editor.model';
 import { matchesRuntime, type RuntimeChoice, runtimeDefaults } from '../settings/members/member-runtime-draft';
+import { usesDetectedRuntimeConfiguration } from './native-partner-config';
 import { nativePartnerIdentity } from './native-partner-identity';
 import { stableOnboardingMemberId } from './onboarding-journey';
 import type { TemplateCard } from './TemplateStep';
@@ -24,13 +25,16 @@ export const newNativeRequestKey = () =>
 
 /**
  * A runtime can be installed while its default connection is unusable. Keep
- * those entries visible for repair, but never preselect or submit them. Kimi,
+ * those default connections visible for repair, but never preselect or submit
+ * them. A different account or launch configuration has no matching login
+ * evidence and must be admitted by the server using its own identity. Kimi,
  * Pi and ACP runtimes intentionally report unknown readiness because their
  * clients do not expose a safe read-only login check; their installed state is
  * still the strongest non-invasive signal available.
  */
-export function nativeRuntimeSelectable(runtime: RuntimeChoice): boolean {
+export function nativeRuntimeSelectable(runtime: RuntimeChoice, form?: HubCatEditorFormState): boolean {
   if (!runtime.installed || (runtime.clientId === 'acp' && !runtime.acp)) return false;
+  if (form && !usesDetectedRuntimeConfiguration(form, runtime)) return true;
   if (['openai', 'anthropic'].includes(runtime.clientId) && runtime.readiness) {
     return runtime.readiness.status === 'configured';
   }
@@ -107,7 +111,7 @@ export function recommendNativePartners(
         form: persistedForm
           ? persistedForm
           : { ...form, ...runtimeDefaults(runtime), catId, mentionPatterns: uniqueAlias },
-        selected: nativeRuntimeSelectable(runtime),
+        selected: nativeRuntimeSelectable(runtime, persistedForm),
         ...(existing ? { existingId: existing.id } : {}),
       },
     ];

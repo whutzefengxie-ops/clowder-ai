@@ -21,7 +21,7 @@
   Skip frozen runtime export (use existing bundled/deploy/).
 
 .PARAMETER SkipElectronBuild
-  Skip electron-builder (use existing desktop-dist/). Use desktop/package-lock.json
+  Diagnostic-only: skip electron-builder and use unverified existing desktop-dist/.
 
 .PARAMETER SkipInstaller
   Skip Inno Setup compilation.
@@ -30,8 +30,8 @@
   Skip portable zip assembly.
 
 .PARAMETER NoManifest
-  Skip writing dist/build-manifest.json. Manifest generation is enabled by
-  default and is non-fatal: a failure only warns and never fails the build.
+  Skip writing dist/build-manifest.json for an explicitly diagnostic build.
+  Release builds require a complete manifest and fail if it cannot be written.
 
 .PARAMETER AllowDirtyInputs
   Allow a diagnostic build from a dirty checkout. The generated manifest keeps
@@ -62,6 +62,14 @@ $ProjectRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $PSCom
 $integrityTool = Join-Path (Join-Path $ProjectRoot 'desktop') 'scripts\installer-integrity.mjs'
 $script:SetupIntegrityLevel = $null
 $script:BuildRootIntegrity = $null
+$generatedSetupPath = $null
+$generatedPortablePath = $null
+if (-not $AllowDirtyInputs -and $SkipElectronBuild) {
+    throw '-SkipElectronBuild has no verified shell source receipt. Rebuild Electron for a release; use -AllowDirtyInputs only for diagnostics.'
+}
+if (-not $AllowDirtyInputs -and $NoManifest) {
+    throw '-NoManifest is diagnostic-only. A release requires its build manifest.'
+}
 
 # A restrictive mandatory integrity label on this build root is inherited by
 # every produced file. A Low-labelled Setup runs at Low integrity and cannot
@@ -353,23 +361,14 @@ if (-not $SkipElectronBuild) {
         if ($lockElectron) { $lockElectron = "$lockElectron".Trim() }
     }
     $installedElectronPath = Join-Path $desktopDir "node_modules/electron/package.json"
-    $installedElectron = if (Test-Path -LiteralPath $installedElectronPath) {
-        (Get-Content -LiteralPath $installedElectronPath -Raw | ConvertFrom-Json).version
-    } else { $null }
-    if (-not (Test-Path (Join-Path $desktopDir "node_modules")) -or
-        ($lockElectron -and $installedElectron -ne $lockElectron)) {
-        if ($installedElectron -and $lockElectron -and $installedElectron -ne $lockElectron) {
-            Write-Warn "desktop Electron $installedElectron does not match package-lock $lockElectron; reinstalling from lock"
-        } else {
-            Write-Host "  Installing desktop dependencies..."
-        }
-        npm ci --include=dev
-        if ($LASTEXITCODE -ne 0) { Write-Err "npm install failed in desktop/"; exit 1 }
-        $installedElectron = (Get-Content -LiteralPath $installedElectronPath -Raw | ConvertFrom-Json).version
-        if ($lockElectron -and $installedElectron -ne $lockElectron) {
-            Write-Err "desktop Electron $installedElectron still does not match package-lock $lockElectron"
-            exit 1
-        }
+    # Matching Electron alone does not verify electron-builder, asar or their peers.
+    # Install the complete locked tree on every build.
+    npm ci --include=dev
+    if ($LASTEXITCODE -ne 0) { Write-Err "npm ci failed in desktop/"; exit 1 }
+    $installedElectron = (Get-Content -LiteralPath $installedElectronPath -Raw | ConvertFrom-Json).version
+    if ($lockElectron -and $installedElectron -ne $lockElectron) {
+        Write-Err "desktop Electron $installedElectron still does not match package-lock $lockElectron"
+        exit 1
     }
     npx electron-builder --win --dir --config windows-builder.cjs
     if ($LASTEXITCODE -ne 0) { Write-Err "electron-builder failed"; exit 1 }
@@ -557,6 +556,7 @@ if (-not $SkipInstaller) {
     }
     $integrity = $integrityResult | ConvertFrom-Json
     $script:SetupIntegrityLevel = $integrity.after
+    $generatedSetupPath = $outputExe.FullName
     if ($integrity.changed) {
         Write-Warn "Raised Setup integrity from $($integrity.before) to $($integrity.after) (restrictive label inherited from the build root)"
     } else {
@@ -735,6 +735,7 @@ if (-not $SkipPortableZip) {
     Remove-Item $staging -Recurse -Force
 
     $zipFile = Get-Item $zipPath
+    $generatedPortablePath = $zipFile.FullName
     Write-Host ""
     Write-Host "  ========================================" -ForegroundColor Green
     Write-Host "  Portable zip ready!" -ForegroundColor Green
@@ -745,9 +746,9 @@ if (-not $SkipPortableZip) {
     Write-Ok "Portable zip skipped"
 }
 
-# Step 9: Build identity manifest (P2-6). This is release evidence, not a build
-# input, so any failure here only warns — a missing hash must never fail a
-# build that already produced working artifacts. The manifest records: source
+# Step 9: Build identity manifest (P2-6). Release evidence must succeed before
+# any output can be delivered. Only files produced by this invocation belong
+# to its source revision. The manifest records: source
 # SHA, generation time, Setup/portable ZIP path+sha256, every tar.gz archive
 # with its serialized manifest, API/Web .build-commit identities, and the
 # working-tree state of every input that the installer packages (including
@@ -771,17 +772,11 @@ if (-not $NoManifest) {
         }
         function Get-FileSha256 {
             param([string]$Path)
-            if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $null }
-            try {
-                return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
-            } catch {
-                Write-Warn "Cannot hash $Path : $_"
-                return $null
-            }
+            return (Get-FileHash -LiteralPath $Path -Algorithm SHA256 -ErrorAction Stop).Hash.ToLowerInvariant()
         }
         function Get-ArtifactRecord {
             param([string]$Path)
-            if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $null }
+            if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { throw "Manifest input is missing: $Path" }
             return [ordered]@{
                 path      = Get-ProjectRelativePath $Path
                 sizeBytes = (Get-Item -LiteralPath $Path).Length
@@ -814,11 +809,9 @@ if (-not $NoManifest) {
             }
         }
 
-        # Setup/portable outputs are optional: -SkipInstaller/-SkipPortableZip are valid.
-        $setupExe = Get-ChildItem -LiteralPath $manifestDistDir -Filter 'ClowderAI-Setup-*.exe' -File -ErrorAction SilentlyContinue |
-            Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
-        $portableZip = Get-ChildItem -LiteralPath $manifestDistDir -Filter 'ClowderAI-*.zip' -File -ErrorAction SilentlyContinue |
-            Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
+        # A skipped output must remain null even when dist contains an older release.
+        $setupExe = if ($generatedSetupPath) { Get-Item -LiteralPath $generatedSetupPath -ErrorAction Stop } else { $null }
+        $portableZip = if ($generatedPortablePath) { Get-Item -LiteralPath $generatedPortablePath -ErrorAction Stop } else { $null }
         $setupRecord = if ($setupExe) { Get-ArtifactRecord $setupExe.FullName } else { $null }
         if ($setupRecord) {
             # Re-check (and normalize when needed) so the manifest never records
@@ -832,8 +825,7 @@ if (-not $NoManifest) {
                     Write-Warn "Raised existing Setup integrity from $($setupIntegrity.before) to $($setupIntegrity.after)"
                 }
             } else {
-                $setupRecord.integrity = 'unknown'
-                Write-Warn "Could not verify Setup integrity: $setupIntegrityJson"
+                throw "Could not verify Setup integrity: $setupIntegrityJson"
             }
         }
         $portableRecord = if ($portableZip) { Get-ArtifactRecord $portableZip.FullName } else { $null }
@@ -846,7 +838,7 @@ if (-not $NoManifest) {
                 $archives += [ordered]@{
                     name     = $archive.Name
                     archive  = Get-ArtifactRecord $archive.FullName
-                    manifest = Get-ArtifactRecord ($archive.FullName + '.json')
+                    manifest = if ($archive.Name -eq 'node.tar.gz') { $null } else { Get-ArtifactRecord ($archive.FullName + '.json') }
                 }
             }
         }
@@ -863,9 +855,9 @@ if (-not $NoManifest) {
             'desktop/scripts', 'desktop/assets'
         )
         $packagedStatus = @(git -C $ProjectRoot status --porcelain --untracked-files=all -- @packagedRoots 2>$null)
-        if ($LASTEXITCODE -ne 0) { Write-Warn "Could not read packaged-input git status; manifest records an empty list" }
+        if ($LASTEXITCODE -ne 0) { throw "Could not read packaged-input git status" }
         $desktopStatus = @(git -C $ProjectRoot status --porcelain --untracked-files=normal -- desktop 2>$null)
-        if ($LASTEXITCODE -ne 0) { Write-Warn "Could not read desktop/ git status; manifest records an empty list" }
+        if ($LASTEXITCODE -ne 0) { throw "Could not read desktop/ git status" }
 
         $trackedPackagedChanges = @($packagedStatus | Where-Object { $_ -and $_ -notmatch '^\?\?' })
         $untrackedPackagedFiles = @($packagedStatus | ForEach-Object {
@@ -879,6 +871,8 @@ if (-not $NoManifest) {
             sourceBranch  = (git -C $ProjectRoot rev-parse --abbrev-ref HEAD).Trim()
             generatedAt   = [DateTime]::UtcNow.ToString('o')
             version       = $manifestVersion
+            diagnosticOnly = [bool]$AllowDirtyInputs
+            skippedElectronBuild = [bool]$SkipElectronBuild
             installer     = $setupRecord
             portableZip   = $portableRecord
             archives      = $archives
@@ -908,7 +902,8 @@ if (-not $NoManifest) {
             Write-Warn "Packaged inputs have uncommitted changes; recorded in dist/build-manifest.json"
         }
     } catch {
-        Write-Warn "Build manifest generation failed (non-fatal): $_"
+        if (-not $AllowDirtyInputs) { throw "Release build manifest generation failed: $_" }
+        Write-Warn "Diagnostic build manifest generation failed; output is not releaseable: $_"
     }
 } else {
     Write-Ok "Build manifest skipped (-NoManifest)"

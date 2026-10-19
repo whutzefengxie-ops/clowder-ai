@@ -122,6 +122,7 @@ export function useNativeOnboarding(
               currentCats.some(
                 (cat) => cat.id === acknowledged.id && !matchesRuntime(initialState(cat), partner.runtime),
               );
+            const restoredForm = confirmed && savedMember ? initialState(savedMember) : previous.form;
             return {
               ...partner,
               // A lost-response retry must retain the exact key of the original persisted request.
@@ -136,9 +137,11 @@ export function useNativeOnboarding(
               ...(!confirmed && savedMember && !saved?.idScheme
                 ? { recoverable: { id: savedMember.id, form: initialState(savedMember) } }
                 : {}),
-              selected: partner.selected && (!previous.runtime?.installed || previous.selected),
+              selected:
+                nativeRuntimeSelectable(partner.runtime, restoredForm) &&
+                (!previous.runtime?.installed || previous.selected),
               // Old pending forms retain their old wire shape for exact idempotent replay.
-              form: confirmed && savedMember ? initialState(savedMember) : previous.form,
+              form: restoredForm,
             };
           },
         );
@@ -199,7 +202,7 @@ export function useNativeOnboarding(
     )
       return;
     const selected = orderGoalPartners(
-      current.partners.filter((p) => p.selected && nativeRuntimeSelectable(p.runtime)),
+      current.partners.filter((p) => p.selected && nativeRuntimeSelectable(p.runtime, p.form)),
       current.lead,
     );
     if (!selected.length) return;

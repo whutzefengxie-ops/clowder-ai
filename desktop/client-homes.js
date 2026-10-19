@@ -59,7 +59,7 @@ function resolveDefaultClientHomes(env = process.env, homeDir = os.homedir()) {
     codex: envOrPath(env, 'CODEX_HOME', path.join(profile, '.codex')),
     dsh: envOrPath(env, 'DSH_HOME', path.join(profile, '.dsh')),
     kimi: envOrPath(env, 'KIMI_CODE_HOME', path.join(profile, '.kimi-code')),
-    pi: envOrPath(env, 'PI_CODING_AGENT_DIR', path.join(profile, '.pi')),
+    pi: envOrPath(env, 'PI_CODING_AGENT_DIR', path.join(profile, '.pi', 'agent')),
     npmCache: envOrPath(env, 'npm_config_cache', path.join(env.LOCALAPPDATA || '', 'npm-cache')),
   };
   const resolved = {};

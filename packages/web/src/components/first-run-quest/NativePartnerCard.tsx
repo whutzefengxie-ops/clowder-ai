@@ -23,9 +23,9 @@ export function NativePartnerCard({
 }) {
   const [expanded, setExpanded] = useState(false);
   const { runtime, form } = partner;
-  const available = nativeRuntimeSelectable(runtime);
-  const defaultIdentity = usesDefaultNativeIdentity(form);
+  const available = nativeRuntimeSelectable(runtime, form);
   const detectedConfiguration = usesDetectedRuntimeConfiguration(form, runtime);
+  const defaultIdentity = usesDefaultNativeIdentity(form) && detectedConfiguration;
   const model = nativeModelLabel(
     runtime,
     form.defaultModel || (detectedConfiguration ? runtime.configuredModel : undefined),
@@ -74,7 +74,7 @@ export function NativePartnerCard({
                       : '未检测到'}
           </p>
         </div>
-        {available && (
+        {runtime.installed && (
           <button
             type="button"
             disabled={created || disabled}
@@ -130,7 +130,7 @@ export function NativePartnerCard({
           <p className="mt-1">
             {runtime.clientId === 'openai'
               ? 'Codex 登录校验未通过；新增伙伴前需要先登录。'
-              : '可先创建伙伴，创建后还需登录才能回复。'}
+              : '新增伙伴前需要先登录，或调整为其他连接。'}
             在此运行环境执行 <code>{runtime.readiness.loginCommand}</code>
             ，然后重新检测。
           </p>

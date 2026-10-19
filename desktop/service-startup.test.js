@@ -29,6 +29,16 @@ function manager() {
     fs.mkdirSync(path.join(root, entry), { recursive: true });
   fs.writeFileSync(path.join(root, 'packages/api/dist/index.js'), '');
   fs.writeFileSync(path.join(root, 'node/node.exe'), '');
+  for (const entry of [
+    'docs/harness-feedback/eval-domains/eval-design-gate.yaml',
+    'cat-cafe-skills/refs/shared-rules.md',
+    'cat-cafe-skills/custody-recognition/SKILL.md',
+    'plugins/github/plugin.yaml',
+  ]) {
+    const file = path.join(root, 'project', entry);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, 'startup fixture');
+  }
   const value = new ServiceManager(root, { frontendPort: 5200, apiPort: 3200, redisPort: 6300 });
   value._getUserDataDir = () => root;
   value._ensureUserDataDir = () => {};
@@ -36,6 +46,18 @@ function manager() {
   value._isPortOpen = async () => false;
   return value;
 }
+
+test('missing project mirrors reject startup before any service is spawned', async () => {
+  const value = manager();
+  fs.unlinkSync(path.join(value.root, 'project/plugins/github/plugin.yaml'));
+  value._waitForProjectMirrors = (root) => ServiceManager.prototype._waitForProjectMirrors.call(value, root, 0);
+  const starts = [];
+  value._startRedis = async () => starts.push('redis');
+  value._startApi = async () => starts.push('api');
+  value._startNextJs = () => starts.push('web');
+  await assert.rejects(value.startAll(), /Project mirror readiness failed[\s\S]*plugin.yaml/);
+  assert.deepEqual(starts, []);
+});
 
 for (const first of ['api', 'web'])
   test(`prepares API and Web together, waiting for both (${first} first)`, async () => {

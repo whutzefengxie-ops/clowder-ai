@@ -66,12 +66,15 @@ jobs:
           desktop/runtime-web-server.test.js
           desktop/runtime-web-config.test.js
           desktop/service-startup.test.js
+          desktop/main-renderer-lifecycle.test.js
           desktop/startup-timing.test.js
           desktop/visible-renderer.test.js
           desktop/renderer-navigation.test.js
           desktop/installation-lifecycle.test.js
           desktop/service-manager-isolation.test.js
           desktop/client-homes.test.js
+          desktop/configure-client-homes.test.js
+          desktop/build-release-policy.test.js
           desktop/service-manager.test.js
           desktop/post-install-profile.test.js
           desktop/frozen-runtime-export.test.mjs
