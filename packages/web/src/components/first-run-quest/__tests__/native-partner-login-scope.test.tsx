@@ -130,6 +130,18 @@ it('keeps adjustment available when the installed default connection needs login
   expect(host.querySelector('fieldset')).not.toBeNull();
 });
 
+it.each([
+  'login_required',
+  'unknown',
+] as const)('keeps installation and model metadata separate from %s default login readiness', (status) => {
+  const text = mount(status, {}, 'openai', { configuredModel: 'fixture/codex' }, false);
+  expect(host.querySelector<HTMLInputElement>('input[type="checkbox"]')?.disabled).toBe(true);
+  expect(text).toContain('已安装');
+  expect(text).toContain('fixture/codex');
+  expect(text).not.toContain('安装与检测帮助');
+  expect(text).not.toContain('未检测到');
+});
+
 it.each(['Pi', 'DSH'])('shows %s inherited model without claiming login evidence', (label) => {
   const text = mount('unknown', {}, 'acp', {
     id: label.toLowerCase(),

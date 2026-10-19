@@ -95,7 +95,7 @@ it('blocks the default logged-out partner while keeping connection adjustment an
   await mount();
   expect(host.textContent).toContain('Claude Code 尚未登录');
   expect(host.textContent).toContain('claude auth login');
-  expect(host.textContent).toContain('新增伙伴前需要先登录，或调整为其他连接');
+  expect(host.textContent).toContain('新增伙伴前需要先登录；其他连接请通过手动入口创建。');
   expect(host.textContent).not.toContain('创建后还需登录');
   const claude = host.querySelector<HTMLInputElement>('input[aria-label="加入 Claude Code 伙伴"]');
   expect(claude).not.toBeNull();

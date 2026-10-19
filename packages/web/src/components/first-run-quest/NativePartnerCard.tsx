@@ -23,7 +23,8 @@ export function NativePartnerCard({
 }) {
   const [expanded, setExpanded] = useState(false);
   const { runtime, form } = partner;
-  const available = nativeRuntimeSelectable(runtime, form);
+  const available = runtime.installed && (runtime.clientId !== 'acp' || Boolean(runtime.acp));
+  const selectable = nativeRuntimeSelectable(runtime, form);
   const detectedConfiguration = usesDetectedRuntimeConfiguration(form, runtime);
   const defaultIdentity = usesDefaultNativeIdentity(form) && detectedConfiguration;
   const model = nativeModelLabel(
@@ -40,7 +41,7 @@ export function NativePartnerCard({
           type="checkbox"
           aria-label={`加入 ${runtime.label} 伙伴`}
           checked={partner.selected}
-          disabled={!available || disabled}
+          disabled={!selectable || disabled}
           onChange={(e) => patch({ selected: e.target.checked })}
           className="h-5 w-5 shrink-0 accent-[var(--color-cafe-accent)]"
         />
@@ -63,10 +64,10 @@ export function NativePartnerCard({
             {runtime.label} ·{' '}
             {created
               ? '已添加'
-              : available
-                ? '已安装'
-                : runtime.readiness?.status === 'login_required'
-                  ? '已安装 · 登录校验未通过'
+              : available && defaultIdentity && runtime.readiness?.status === 'login_required'
+                ? '已安装 · 登录校验未通过'
+                : available
+                  ? '已安装'
                   : runtime.discoveryStatus === 'acp_profile_missing'
                     ? '待配置 ACP'
                     : runtime.discoveryStatus === 'adapter_missing'
@@ -130,7 +131,7 @@ export function NativePartnerCard({
           <p className="mt-1">
             {runtime.clientId === 'openai'
               ? 'Codex 登录校验未通过；新增伙伴前需要先登录。'
-              : '新增伙伴前需要先登录，或调整为其他连接。'}
+              : '新增伙伴前需要先登录；其他连接请通过手动入口创建。'}
             在此运行环境执行 <code>{runtime.readiness.loginCommand}</code>
             ，然后重新检测。
           </p>
