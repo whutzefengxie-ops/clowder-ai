@@ -5275,10 +5275,7 @@ export class QueueProcessor {
                   statusMessageId: observed.message.id,
                   dispatchedAt: input.startedAt,
                 };
-                let transition = await messageStore.advanceLifecycleInputDispatch(
-                  inputMessage.id,
-                  dispatchPatch,
-                );
+                let transition = await messageStore.advanceLifecycleInputDispatch(inputMessage.id, dispatchPatch);
                 if (transition.kind === 'conflict' && transition.reason === 'contended') {
                   transition = await this.advanceLifecycleDispatchWithRetry(inputMessage.id, dispatchPatch, {
                     threadId: input.threadId,
