@@ -108,6 +108,28 @@ function Assert-WebBuildIdentity {
     & node (Join-Path $ProjectRoot 'desktop/scripts/verify-web-build.cjs') $WebRoot $expectedRevision $resolver
     if ($LASTEXITCODE -ne 0) { throw "Web runtime admission failed: $WebRoot. Rebuild; do not rewrite build stamps." }
 }
+function Assert-ApiDesktopBundle {
+    param([string]$ApiRoot)
+    $required = @(
+        (Join-Path $ApiRoot 'dist/index.desktop.js'),
+        (Join-Path $ApiRoot 'dist/agent-hooks/index.desktop.js'),
+        (Join-Path $ApiRoot 'dist/.startup-read-ahead.json'),
+        (Join-Path $ApiRoot 'dist/desktop-bundle.json')
+    )
+    foreach ($file in $required) {
+        if (-not (Test-Path -LiteralPath $file -PathType Leaf)) {
+            throw "Desktop API bundle incomplete: missing $file. Run frozen-runtime-deploy without -SkipBundleDeps."
+        }
+        if ((Get-Item -LiteralPath $file).Length -le 0) {
+            throw "Desktop API bundle incomplete: empty $file."
+        }
+    }
+    $receipt = Get-Content -LiteralPath (Join-Path $ApiRoot 'dist/desktop-bundle.json') -Raw | ConvertFrom-Json
+    if ($receipt.entry -ne 'dist/index.desktop.js' -or $receipt.agentHooks.entry -ne 'dist/agent-hooks/index.desktop.js') {
+        throw "Desktop API bundle receipt does not name both optimized entries."
+    }
+    Write-Ok "Desktop API bundle complete (optimized entry + startup manifest + installer hooks)"
+}
 
 # Step 1: Build web app
 Write-Step "Step 1/9 - Build web application"
@@ -156,6 +178,7 @@ if (-not $SkipBundleDeps) {
     throw "bundled/deploy missing. Run without -SkipBundleDeps first."
 } else { Write-Ok "Skipped (-SkipBundleDeps)" }
 Assert-WebBuildIdentity (Join-Path $deployRoot 'web')
+Assert-ApiDesktopBundle (Join-Path $deployRoot 'api')
 
 # Step 3: Bundle Redis portable + Node.js runtime
 Write-Step "Step 3/9 - Bundle Redis portable + Node.js"
@@ -441,6 +464,15 @@ foreach ($t in $archiveTargets) {
     if ($t.Name -ne 'node') {
         node (Join-Path $ProjectRoot 'desktop/scripts/create-runtime-archive.mjs') $t.Src $archivePath
         if ($LASTEXITCODE -ne 0) { throw "Runtime archive failed: $($t.Name)" }
+        if ($t.Name -eq 'deploy-api') {
+            $entries = @(& (Join-Path $env:SystemRoot 'System32/tar.exe') -tzf $archivePath)
+            foreach ($requiredEntry in @('./packages/api/dist/index.desktop.js', './packages/api/dist/agent-hooks/index.desktop.js', './packages/api/dist/.startup-read-ahead.json')) {
+                if (-not ($entries -contains $requiredEntry) -and -not ($entries -contains $requiredEntry.TrimStart('./'))) {
+                    throw "deploy-api archive missing required entry: $requiredEntry"
+                }
+            }
+            Write-Ok "deploy-api archive contains optimized desktop entry and startup manifest"
+        }
         continue
     }
     $oldErrorPreference = $ErrorActionPreference

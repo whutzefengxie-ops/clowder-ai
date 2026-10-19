@@ -114,6 +114,22 @@ test('stops the first owned API before fallback replaces its handle', async () =
   }
 });
 
+test('does not downgrade a slow API to memory while Redis is still reachable', async () => {
+  const value = manager();
+  const controller = new AbortController();
+  value.startupAbort = controller;
+  value._startApi = async () => {
+    throw new Error('controlled readiness timeout');
+  };
+  value._isPortOpen = async (port) => port === value.redisPort;
+
+  await assert.rejects(
+    value._startApiWithFallback(process.execPath, value.root, controller.signal),
+    /controlled readiness timeout/,
+  );
+  assert.equal(value.memoryMode, false);
+});
+
 test('a quit during preparation cancels late spawning and never reports ready', async () => {
   const value = manager(),
     entered = deferred(),

@@ -194,7 +194,11 @@ class ServiceManager {
       signal.throwIfAborted();
       log(`API first-attempt failed: ${err.message}`);
       // If API failed and we haven't tried memory mode yet, retry with MEMORY_STORE=1
-      if (!this.memoryMode && !resolveDesktopRuntime().instanceRoot) {
+      // only when the Redis process is actually unavailable. A slow/cold API
+      // entry must not be converted into a misleading degraded-mode failure
+      // while the durable Redis backend is still healthy.
+      const redisAvailable = await this._isPortOpen(this.redisPort);
+      if (!this.memoryMode && !resolveDesktopRuntime().instanceRoot && !redisAvailable) {
         const failedProcess = this.procs.api;
         await this.timeline.runPhase('api-failed-process-stopped', () =>
           stopOwnedStartupProcess(failedProcess, () => this._killProcessTree('api', failedProcess, 5000)),
@@ -721,6 +725,9 @@ class ServiceManager {
 
     if (this.memoryMode) {
       env.MEMORY_STORE = '1';
+      // InvocationRegistry deliberately fails closed without Redis unless
+      // the degraded mode is explicit. Keep the fallback self-consistent.
+      env.CAT_CAFE_INVOCATION_REGISTRY = 'memory';
       delete env.REDIS_URL;
     } else {
       env.REDIS_URL = `redis://localhost:${this.redisPort}`;
