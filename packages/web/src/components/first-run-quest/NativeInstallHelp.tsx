@@ -20,8 +20,8 @@ export function NativeInstallHelp({ runtime }: { runtime: RuntimeChoice }) {
       <summary className="min-h-8 cursor-pointer text-cafe-accent">安装与检测帮助</summary>
       <div className="mt-2 space-y-2 leading-relaxed">
         <p>
-          {runtime.discoveryStatus === 'acp_profile_missing'
-            ? '已找到 DSH 程序，还需要配置 ACP profile，才能加入团队。'
+          {runtime.discoveryStatus === 'acp_profile_invalid'
+            ? 'DSH 已安装，但现有 ACP profile 无法读取或未启用 ACP bundle。请修复该配置；不会自动覆盖。'
             : runtime.discoveryStatus === 'adapter_missing'
               ? 'Pi 原生 RPC 与 ACP 是不同协议。安装 pi-acp 适配器后重新检测，或使用原手动接入入口配置已有适配器。'
               : `在运行猫咖服务的这台电脑上安装 ${runtime.label}，打开工具完成首次配置。`}

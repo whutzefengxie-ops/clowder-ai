@@ -52,6 +52,7 @@ export function createOwnedRuntimeCat(
   projectRoot: string,
   input: RuntimeCatInput,
   receipt?: Receipt,
+  validateNew?: () => void,
 ): { id: string; replayed: boolean } {
   const catalog = readRuntimeCatCatalog(projectRoot);
   const members = catalog.breeds.flatMap((b) => b.variants.map((v) => ({ id: v.catId ?? b.catId, variant: v })));
@@ -61,6 +62,7 @@ export function createOwnedRuntimeCat(
       throw new MemberCreateConflict('This creation request already belongs to a different configuration');
     return { id: String(owned.id), replayed: true };
   }
+  validateNew?.();
   const registry = Object.values(catRegistry.getAllConfigs());
   const ids = new Set(
     [

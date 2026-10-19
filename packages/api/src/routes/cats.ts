@@ -1,3 +1,4 @@
+import { dshLauncherProfileState, InvalidDshProfile } from './native-dsh-profile.js';
 import { discoverNativeRuntimesWithReadiness } from './native-runtimes.js';
 import { registerRuntimeCatalogRoute } from './runtime-catalog-route.js';
 /**
@@ -1082,7 +1083,15 @@ export const catsRoutes: FastifyPluginAsync<CatsRoutesOptions> = async (app, opt
     try {
       const createRuntimeCatSerialized = async (input: Parameters<typeof createRuntimeCat>[1]) => {
         const result = await withRuntimeCatMutationLock(projectRoot, () =>
-          createOwnedRuntimeCat(projectRoot, input, receipt),
+          createOwnedRuntimeCat(projectRoot, input, receipt, () => {
+            if (
+              body.configurationSource === 'native_tool' &&
+              'acp' in body &&
+              body.acp &&
+              dshLauncherProfileState(body.acp.command, body.acp.startupArgs, projectRoot) === 'acp_profile_invalid'
+            )
+              throw new InvalidDshProfile('DSH 的现有 ACP profile 无效，请先在客户端修复配置。');
+          }),
         );
         body.catId = result.id;
         replayed = result.replayed;
@@ -1249,6 +1258,8 @@ export const catsRoutes: FastifyPluginAsync<CatsRoutesOptions> = async (app, opt
       const message = err instanceof Error ? err.message : String(err);
       if (err instanceof MemberCreateConflict)
         return reply.code(409).send({ code: 'member_creation_conflict', error: message });
+      if (err instanceof InvalidDshProfile)
+        return reply.code(400).send({ code: 'acp_profile_invalid', error: message });
       reply.status(400);
       return { error: message };
     }

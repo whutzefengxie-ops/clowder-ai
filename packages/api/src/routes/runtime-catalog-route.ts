@@ -8,6 +8,7 @@ import { resolveByAccountRef } from '../config/account-resolver.js';
 import { getAcpConfig } from '../config/cat-config-loader.js';
 import { resolveActiveProjectRoot } from '../utils/active-project-root.js';
 import { resolveHeaderUserId } from '../utils/request-identity.js';
+import { dshLauncherProfileState } from './native-dsh-profile.js';
 import { discoverNativeRuntimes } from './native-runtimes.js';
 import { type CatalogTarget, probeRuntimeCatalog } from './runtime-catalog-probe.js';
 import type { RuntimeModelCatalog } from './runtime-model-catalog.js';
@@ -96,13 +97,26 @@ export function registerRuntimeCatalogRoute(app: FastifyInstance) {
       (member?.cli?.command && !['codex', 'claude'].includes(member.cli.command) && !runtime.id.startsWith('acp:'))
     )
       return { ...fallback, message: 'custom_startup' };
-    if (!runtime.installed || !runtime.command) return { ...fallback, status: 'unavailable', message: 'not_installed' };
+    if (!runtime.installed) return { ...fallback, status: 'unavailable', message: 'not_installed' };
     const acp = runtime.id.startsWith('acp:')
       ? getAcpConfig(runtime.id.slice(4), root)
       : 'acp' in runtime
         ? runtime.acp
         : undefined;
     if (acp?.transport === 'httpstream') return { ...fallback, message: 'unsupported_transport' };
+    const dshState =
+      runtime.id === 'dsh' && 'discoveryStatus' in runtime
+        ? runtime.discoveryStatus
+        : acp
+          ? dshLauncherProfileState(acp.command, acp.startupArgs, root)
+          : undefined;
+    if (dshState && dshState !== 'configured')
+      return {
+        ...fallback,
+        status: dshState === 'acp_profile_invalid' ? 'unavailable' : 'configured',
+        message: dshState,
+      };
+    if (!runtime.command) return { ...fallback, status: 'unavailable', message: 'not_installed' };
     const target: CatalogTarget = {
       kind: runtime.id === 'codex' ? 'codex' : runtime.id === 'claude' ? 'claude' : 'acp',
       command: runtime.command,

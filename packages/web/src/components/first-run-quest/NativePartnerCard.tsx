@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { MemberRuntimeFields } from '../settings/members/MemberRuntimeFields';
+import { nativeAcpProfileLabel, nativeAcpProfileMessage } from '../settings/members/native-acp-profile-status';
 import { usesDefaultNativeIdentity } from '../settings/members/native-login-state';
 import { NativeInstallHelp } from './NativeInstallHelp';
 import { type NativePartner, nativeRuntimeSelectable } from './native-onboarding';
@@ -32,6 +33,8 @@ export function NativePartnerCard({
     form.defaultModel || (detectedConfiguration ? runtime.configuredModel : undefined),
   );
   const effort = form.cliEffort || (detectedConfiguration ? runtime.configuredEffort : undefined);
+  const profileLabel = nativeAcpProfileLabel(runtime.discoveryStatus, chinese);
+  const profileMessage = nativeAcpProfileMessage(runtime.discoveryStatus, chinese);
   return (
     <article
       className={`rounded-xl border p-4 ${partner.selected ? 'border-cafe-accent bg-cafe-surface' : 'border-[var(--console-border-soft)] bg-cafe-surface-canvas'}`}
@@ -64,12 +67,12 @@ export function NativePartnerCard({
             {runtime.label} ·{' '}
             {created
               ? '已添加'
-              : available && defaultIdentity && runtime.readiness?.status === 'login_required'
-                ? '已安装 · 登录校验未通过'
-                : available
-                  ? '已安装'
-                  : runtime.discoveryStatus === 'acp_profile_missing'
-                    ? '待配置 ACP'
+              : profileLabel
+                ? profileLabel
+                : available && defaultIdentity && runtime.readiness?.status === 'login_required'
+                  ? '已安装 · 登录校验未通过'
+                  : available
+                    ? '已安装'
                     : runtime.discoveryStatus === 'adapter_missing'
                       ? '已安装 · 待接入适配器'
                       : '未检测到'}
@@ -94,13 +97,14 @@ export function NativePartnerCard({
         <p className={`${compact ? '' : 'ml-8'} mt-2 text-sm text-cafe-muted`}>性格：{form.personality}</p>
       )}
       <p className={`${compact ? '' : 'ml-8'} mt-3 text-sm text-cafe-muted`}>
-        {available
-          ? `模型：${model || '由工具决定（未读取）'}${form.defaultModel ? ' · 角色自选' : runtime.modelSource === 'tool_recent' && detectedConfiguration ? ' · 跟随最近选择' : ' · 跟随工具'}${effort ? ` · 强度：${effort}` : ''}`
-          : runtime.discoveryStatus === 'adapter_missing'
-            ? '已发现 Pi。需要 ACP 适配器后才能通过此入口接入。'
-            : runtime.label === 'DSH'
-              ? '需要已安装的 DSH 和 ACP profile。配置完成后重新检测。'
-              : `安装并登录 ${runtime.label} 后，重新检测即可加入。`}
+        {profileMessage ||
+          (available
+            ? `模型：${model || '由工具决定（未读取）'}${form.defaultModel ? ' · 角色自选' : runtime.modelSource === 'tool_recent' && detectedConfiguration ? ' · 跟随最近选择' : ' · 跟随工具'}${effort ? ` · 强度：${effort}` : ''}`
+            : runtime.discoveryStatus === 'adapter_missing'
+              ? '已发现 Pi。需要 ACP 适配器后才能通过此入口接入。'
+              : runtime.label === 'DSH'
+                ? '安装 DSH 后重新检测；首次连接时由 DSH 准备 ACP。'
+                : `安装并登录 ${runtime.label} 后，重新检测即可加入。`)}
       </p>
       {!available && <NativeInstallHelp runtime={runtime} />}
       {partner.missingExisting && !created && (

@@ -3,22 +3,12 @@ import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { resolveCliCommand } from '../utils/cli-resolve.js';
 import { findSystemNode } from '../utils/cli-spawn-win.js';
+import { dshProfileState } from './native-dsh-profile.js';
 
 interface DiscoveryOptions {
   dshHome?: string;
   npmCaches?: string[];
   resolveCommand?: (command: string) => string | null;
-}
-
-function hasAcpProfile(home: string): boolean {
-  try {
-    const profile = JSON.parse(readFileSync(join(home, 'profiles/acp/package.json'), 'utf8'));
-    return (
-      Array.isArray(profile.dsh?.profile?.bundles) && profile.dsh.profile.bundles.includes('@deepseek-ai/dsh-acp-app')
-    );
-  } catch {
-    return false;
-  }
 }
 
 /** Read installed package metadata only; never execute npx or install a profile during discovery. */
@@ -59,18 +49,19 @@ export function discoverDshRuntime(options: DiscoveryOptions = {}) {
   ];
   const entry = command ? undefined : cachedEntry(caches);
   const executable = command ?? (entry ? (findSystemNode() ?? undefined) : undefined);
-  const available = Boolean(executable && hasAcpProfile(dshHome));
+  const profileState = dshProfileState(dshHome);
+  const available = Boolean(executable && profileState !== 'acp_profile_invalid');
   const startupArgs = [...(entry ? [entry] : []), '--profile', 'acp'];
   return {
     id: 'dsh',
     label: 'DSH',
     clientId: 'acp' as const,
-    installed: available,
+    installed: Boolean(executable),
     command: executable,
     ...(available && executable ? { acp: { command: executable, startupArgs, transport: 'stdio' as const } } : {}),
     models: [] as string[],
     defaultsStatus: 'session_only',
     transport: 'acp',
-    discoveryStatus: available ? 'configured' : executable ? 'acp_profile_missing' : 'not_installed',
+    discoveryStatus: executable ? profileState : 'not_installed',
   };
 }

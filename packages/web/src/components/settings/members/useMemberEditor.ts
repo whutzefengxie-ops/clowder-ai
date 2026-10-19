@@ -228,7 +228,6 @@ export function useMemberEditor(
       setError(err instanceof Error ? err.message : '重新读取失败');
     }
   };
-
   const save = async () => {
     const snapshot = stateRef.current;
     const { baseline, strategy } = snapshot;
@@ -237,6 +236,10 @@ export function useMemberEditor(
       : { ...snapshot.form, roleDescription: snapshot.form.roleDescription.trim() || '团队伙伴' };
     if (!form.name.trim()) {
       setError('请填写名字。');
+      return;
+    }
+    if (form.clientId === 'acp' && form.carrier !== 'acp') {
+      setError('请选择 ACP 接入方式，并填写有效的启动程序与参数。');
       return;
     }
     if (saving) return;

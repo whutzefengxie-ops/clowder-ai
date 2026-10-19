@@ -7,6 +7,7 @@ import { getAcpConfig } from '../config/cat-config-loader.js';
 import { resolveCliCommand } from '../utils/cli-resolve.js';
 import { discoverAdditionalRuntimes } from './native-additional-runtimes.js';
 import { discoverDshRuntime } from './native-dsh-discovery.js';
+import { dshLauncherProfileState } from './native-dsh-profile.js';
 import { nativeRuntimeReadiness } from './native-runtime-readiness.js';
 
 function text(value: unknown): string | undefined {
@@ -65,13 +66,17 @@ export function discoverNativeRuntimes(projectRoot: string) {
     const command = isAbsolute(config.command) ? config.command : resolveCliCommand(config.command);
     const entry = config.startupArgs.find((arg) => /(?:\.m?js|\.cjs)$/.test(arg));
     const installed = Boolean(command && existsSync(command) && (!entry || existsSync(resolve(projectRoot, entry))));
-    const selectable = safeNativeStartup(config.command, config.startupArgs);
+    const profileState = dshLauncherProfileState(config.command, config.startupArgs, projectRoot);
+    const selectable = safeNativeStartup(config.command, config.startupArgs) && profileState !== 'acp_profile_invalid';
     return [
       {
         id: `acp:${cat.id}`,
         label: /dsh|deepseek/i.test([config.command, ...config.startupArgs].join(' ')) ? 'DSH' : cat.displayName,
         clientId: 'acp',
         installed,
+        ...(profileState && profileState !== 'custom_startup'
+          ? { discoveryStatus: installed ? profileState : 'not_installed' }
+          : {}),
         ...(selectable
           ? {
               command: config.command,

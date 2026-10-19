@@ -15,6 +15,7 @@ import {
   rememberedRuntimes,
   runtimeDefaults,
 } from './member-runtime-draft';
+import { nativeAcpProfileLabel, nativeAcpProfileMessage } from './native-acp-profile-status';
 import { usesDefaultNativeIdentity } from './native-login-state';
 import { useRuntimeCatalog } from './useRuntimeCatalog';
 export type MemberText = (zh: string, en: string) => string;
@@ -71,7 +72,9 @@ export function MemberRuntimeFields({
     ...rememberedRuntimes(runtimeDrafts).filter(
       (old) => !runtimes.some((item) => matchesRuntime(runtimeDefaults(old), item)),
     ),
-    ...MANUAL_RUNTIME_CHOICES.filter((item) => !runtimes.some((runtime) => runtime.clientId === item.clientId)),
+    ...MANUAL_RUNTIME_CHOICES.filter(
+      (item) => item.clientId === 'acp' || !runtimes.some((runtime) => runtime.clientId === item.clientId),
+    ),
   ];
   const selected = tools.find((item) => matchesRuntime(form, item));
   const tool =
@@ -114,7 +117,11 @@ export function MemberRuntimeFields({
     efforts !== undefined &&
     !!form.cliEffort &&
     !efforts.some((item) => item.value === form.cliEffort);
-  useEffect(() => onValidityChange?.(!invalidEffort), [invalidEffort, onValidityChange]);
+  const invalidRuntime = selected?.discoveryStatus === 'acp_profile_invalid';
+  useEffect(
+    () => onValidityChange?.(!invalidEffort && !invalidRuntime),
+    [invalidEffort, invalidRuntime, onValidityChange],
+  );
   const follow = t(native ? `跟随 ${tool} 设置` : '跟随连接设置', `Follow ${native ? tool : 'connection'} settings`);
   const accountOptions = [
     { value: '', label: t(`使用 ${tool} 当前配置`, `Use current ${tool} configuration`), disabled: false },
@@ -132,7 +139,8 @@ export function MemberRuntimeFields({
     });
   const choices = tools.map((item) => ({
     value: item.id,
-    label: `${item.label} · ${item.id.startsWith('draft:') ? t('已保留的配置', 'Retained configuration') : item.installed ? t('已安装', 'Installed') : t('未找到', 'Not found')}`,
+    disabled: item.discoveryStatus === 'acp_profile_invalid',
+    label: `${item.label} · ${item.id.startsWith('draft:') ? t('已保留的配置', 'Retained configuration') : (nativeAcpProfileLabel(item.discoveryStatus, t) ?? (item.installed ? t('已安装', 'Installed') : t('未找到', 'Not found')))}`,
   }));
   if (!selected) choices.unshift({ value: 'current', label: `${tool} · ${t('当前配置', 'Current configuration')}` });
   return (
@@ -155,7 +163,7 @@ export function MemberRuntimeFields({
           options={choices}
           onChange={(value) => {
             const next = tools.find((item) => item.id === value);
-            if (!next || next.id === selected?.id) return;
+            if (!next || next.id === selected?.id || next.discoveryStatus === 'acp_profile_invalid') return;
             if (onToolChange) onToolChange(next);
             else patch(runtimeDefaults(next));
           }}
@@ -228,22 +236,23 @@ export function MemberRuntimeFields({
           </p>
         ) : (
           <p>
-            {catalog?.message === 'account_unavailable'
-              ? t(
-                  '此连接暂不可读取。已保留当前选择，请在“管理连接”中检查。',
-                  'This connection is unavailable. Your selection is preserved; check Manage connections.',
-                )
-              : catalog?.message === 'account_catalog'
-                ? t('使用此连接保存的模型清单。', 'Using the model list saved with this connection.')
-                : catalog?.message === 'custom_startup'
-                  ? t(
-                      '此成员使用自定义启动配置，请按工具支持的模型选择或手动指定。',
-                      'This teammate uses a custom launch configuration; select or specify a supported model.',
-                    )
-                  : t(
-                      '模型目录暂不可读取。可以继续跟随工具，或保留已有模型；稍后刷新重试。',
-                      'Model catalog unavailable. Keep inherited or saved settings, or retry with Refresh.',
-                    )}
+            {nativeAcpProfileMessage(catalog?.message, t) ||
+              (catalog?.message === 'account_unavailable'
+                ? t(
+                    '此连接暂不可读取。已保留当前选择，请在“管理连接”中检查。',
+                    'This connection is unavailable. Your selection is preserved; check Manage connections.',
+                  )
+                : catalog?.message === 'account_catalog'
+                  ? t('使用此连接保存的模型清单。', 'Using the model list saved with this connection.')
+                  : catalog?.message === 'custom_startup'
+                    ? t(
+                        '此成员使用自定义启动配置，请按工具支持的模型选择或手动指定。',
+                        'This teammate uses a custom launch configuration; select or specify a supported model.',
+                      )
+                    : t(
+                        '模型目录暂不可读取。可以继续跟随工具，或保留已有模型；稍后刷新重试。',
+                        'Model catalog unavailable. Keep inherited or saved settings, or retry with Refresh.',
+                      ))}
           </p>
         )}
         {!catalogLoading && efforts?.length === 0 && !form.cliEffort && (
