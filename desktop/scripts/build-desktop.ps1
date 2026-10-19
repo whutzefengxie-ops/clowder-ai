@@ -466,7 +466,7 @@ foreach ($t in $archiveTargets) {
         if ($LASTEXITCODE -ne 0) { throw "Runtime archive failed: $($t.Name)" }
         if ($t.Name -eq 'deploy-api') {
             $entries = @(& (Join-Path $env:SystemRoot 'System32/tar.exe') -tzf $archivePath)
-            foreach ($requiredEntry in @('./packages/api/dist/index.desktop.js', './packages/api/dist/agent-hooks/index.desktop.js', './packages/api/dist/.startup-read-ahead.json')) {
+            foreach ($requiredEntry in @('./dist/index.desktop.js', './dist/agent-hooks/index.desktop.js', './dist/.startup-read-ahead.json')) {
                 if (-not ($entries -contains $requiredEntry) -and -not ($entries -contains $requiredEntry.TrimStart('./'))) {
                     throw "deploy-api archive missing required entry: $requiredEntry"
                 }
