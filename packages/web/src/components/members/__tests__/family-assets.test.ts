@@ -27,6 +27,7 @@ const approvedIds = [
   'gemini',
   'gemini25',
   'kimi',
+  'dsh',
   'glm52',
   'antigravity',
   'antig-opus',
@@ -35,7 +36,7 @@ const approvedIds = [
 describe('approved family assets remain portable release inputs', () => {
   it('contains the accepted used avatars and excludes unused/test additions', () => {
     expect(catalog.map((a) => a.id)).toEqual(approvedIds);
-    expect(new Set(catalog.map((a) => a.src)).size).toBe(25);
+    expect(new Set(catalog.map((a) => a.src)).size).toBe(26);
     expect(catalog.some((a) => a.src.startsWith('/uploads/'))).toBe(false);
   });
   it('ships every chooser and role-template asset through the existing export roots', () => {

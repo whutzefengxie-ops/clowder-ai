@@ -484,6 +484,14 @@ class ServiceManager {
     if (fs.existsSync(templateDst)) {
       envOverrides.CAT_TEMPLATE_PATH = templateDst;
     }
+    // Keep the project copy as the writable overlay, but let the API merge in
+    // role templates shipped by this installer. Without this, an upgraded
+    // project keeps the template it copied on first install and new tools
+    // (for example Kimi) cannot resolve their cat identity.
+    const shippedTemplate = path.join(this.root, 'cat-template.json');
+    if (fs.existsSync(shippedTemplate)) {
+      envOverrides.CAT_TEMPLATE_BASE_PATH = shippedTemplate;
+    }
     // cwd must be a writable dir containing pnpm-workspace.yaml so that the
     // API's findMonorepoRoot() anchors on it, not on Program Files.
     this._startProcess(

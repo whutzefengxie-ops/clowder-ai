@@ -33,11 +33,13 @@ describe('native partner identities reflect tools rather than an unrelated model
       expect(form.cliEffort).toBe('');
     }
   });
-  it('never falls back to a different family when its specific template is absent', () => {
+  it('falls back to the shipped cat identity when a specific template is absent', () => {
     const onlyGlm = templateConfig.roleTemplates.filter(({ id }) => id === 'dragon-li');
     const partners = tools.map((runtime) => ({ form: nativePartnerIdentity(runtime, onlyGlm, []) }));
-    expect(partners.map(({ form }) => form.displayName)).toEqual(['Kimi 伙伴', 'OpenCode 伙伴']);
+    expect(partners.map(({ form }) => form.displayName)).toEqual(['梵花猫', 'OpenCode 伙伴']);
     expect(partners[0].form.avatar).toBe('/avatars/family/kimi.png');
+    expect(partners[0].form.nickname).toBe('墨墨');
+    expect(partners[0].form.roleDescription).not.toMatch(/一起分析问题|GLM/);
     expect(partners.every(({ form }) => !form.roleDescription.includes('GLM'))).toBe(true);
     expect(partners.every(({ form }) => form.avatar !== '/avatars/family/glm52.png')).toBe(true);
   });
@@ -65,9 +67,9 @@ describe('native partner identities reflect tools rather than an unrelated model
       [],
       'dsh-identity',
     )[0];
-    expect(partner.form.avatar).toBe('/avatars/family/kimi.png');
-    expect(partner.form.displayName).toBe('DSH 伙伴');
-    expect(partner.form.nickname).toBe('深深');
+    expect(partner.form.avatar).toBe('/avatars/family/dsh.png');
+    expect(partner.form.displayName).toBe('小鲸鱼');
+    expect(partner.form.nickname).toBe('鲸鲸');
     expect(partner.form.personality.length).toBeGreaterThan(5);
     expect(partner.form.teamStrengths.length).toBeGreaterThan(5);
     expect(partner.form.roleDescription).not.toContain('GLM');
@@ -84,12 +86,50 @@ describe('native partner identities reflect tools rather than an unrelated model
     const partners = recommendNativePartners([...tools, pi], templateConfig.roleTemplates, [], 'pi-replacement');
     expect(partners.map(({ runtime }) => runtime.label)).toEqual(['Kimi', 'Pi']);
     const form = partners[1].form;
-    expect(form.nickname).toBe('派派');
+    expect(form.displayName).toBe('金渐层');
+    expect(form.nickname).toBe('金哥');
     expect(form.avatar).toBe('/avatars/family/opencode.png');
     expect(form.avatar).not.toBe(partners[0].form.avatar);
     expect(form.personality).not.toBe(partners[0].form.personality);
     expect(form.roleDescription).not.toMatch(/GLM|OpenCode/);
     expect(form.defaultModel).toBe('');
+  });
+  it('keeps the cat identity on an upgraded project whose template predates it', () => {
+    const oldTemplateIds = new Set([
+      'ragdoll',
+      'maine-coon',
+      'siamese',
+      'dragon-li',
+      'bengal',
+      'golden-chinchilla',
+    ]);
+    const oldTemplates = templateConfig.roleTemplates.filter(({ id }) => oldTemplateIds.has(id));
+    const runtimes: RuntimeChoice[] = [
+      { id: 'kimi', label: 'Kimi', clientId: 'kimi', installed: true, models: [] },
+      {
+        id: 'dsh',
+        label: 'DSH',
+        clientId: 'acp',
+        installed: true,
+        models: [],
+        acp: { command: 'dsh', startupArgs: [] },
+      },
+      {
+        id: 'pi',
+        label: 'Pi',
+        clientId: 'acp',
+        installed: true,
+        models: [],
+        acp: { command: 'node', startupArgs: ['pi-acp-bridge.js'] },
+      },
+    ];
+    const partners = recommendNativePartners(runtimes, oldTemplates, [], 'upgraded-project');
+    expect(partners.map(({ form }) => form.displayName)).toEqual(['梵花猫', '小鲸鱼', '金渐层']);
+    expect(partners.map(({ form }) => form.avatar)).toEqual([
+      '/avatars/family/kimi.png',
+      '/avatars/family/dsh.png',
+      '/avatars/family/opencode.png',
+    ]);
   });
   it('preserves the complete existing identity, including custom names and model overrides', () => {
     const cat = {

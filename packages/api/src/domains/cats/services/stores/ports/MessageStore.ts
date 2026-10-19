@@ -1042,7 +1042,13 @@ export type AdvanceLifecycleInputDispatchResult =
   | { kind: 'applied' | 'replayed'; message: StoredMessage }
   | {
       kind: 'conflict';
-      reason: 'not_input' | 'identity_mismatch' | 'invalid_transition' | 'status_message_mismatch' | 'duplicate_target';
+      reason:
+        | 'not_input'
+        | 'identity_mismatch'
+        | 'invalid_transition'
+        | 'status_message_mismatch'
+        | 'duplicate_target'
+        | 'contended';
       message: StoredMessage;
     }
   | { kind: 'not_found' };

@@ -1117,6 +1117,14 @@ export const ENV_VARS: EnvDefinition[] = [
     runtimeEditable: false,
   },
   {
+    name: 'CAT_TEMPLATE_BASE_PATH',
+    defaultValue: '(未设置)',
+    description: '安装包内置的只读猫猫模板路径；设置后与项目模板按 id 合并，项目模板优先',
+    category: 'cli',
+    sensitive: false,
+    runtimeEditable: false,
+  },
+  {
     name: 'DEFAULT_CAT_ID',
     defaultValue: '(cat-config 第一个 breed)',
     description: '默认猫猫 ID（覆盖 cat-config 里的顺序）',

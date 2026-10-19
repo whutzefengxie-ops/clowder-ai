@@ -99,7 +99,7 @@ it('bounds ACP request keys independently of descriptor size and persists them b
   });
   await act(async () => root.render(<Harness />));
   await act(async () => setup.start());
-  expect(setup.error).toContain('DSH 伙伴');
+  expect(setup.error).toContain('小鲸鱼');
   expect(setup.error).toContain('DSH');
   expect(setup.error).toContain('response lost');
   act(() => root.unmount());

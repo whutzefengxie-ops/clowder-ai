@@ -8,6 +8,7 @@ import { matchesRuntime } from '../settings/members/member-runtime-draft';
 import { syncDraftToStorage } from '../thread-drafts';
 import { legacyCreationKey, legacySharedKey } from './legacy-creation-key';
 import { buildNativeCreationPayload } from './native-creation-payload';
+import { withLegacyNativeIdentityRepair } from './native-identity-repair';
 import {
   type NativePartner,
   nativeRuntimeSelectable,
@@ -123,6 +124,13 @@ export function useNativeOnboarding(
                 (cat) => cat.id === acknowledged.id && !matchesRuntime(initialState(cat), partner.runtime),
               );
             const restoredForm = confirmed && savedMember ? initialState(savedMember) : previous.form;
+            // A confirmed member has no pending POST, so repairing a legacy
+            // default here is safe. An unconfirmed form may be the exact body
+            // of a lost-response retry: changing it would break idempotent
+            // replay, so leave that wire shape untouched.
+            const form = confirmed
+              ? withLegacyNativeIdentityRepair(restoredForm, partner.form, partner.runtime)
+              : restoredForm;
             return {
               ...partner,
               // A lost-response retry must retain the exact key of the original persisted request.
@@ -141,7 +149,7 @@ export function useNativeOnboarding(
                 nativeRuntimeSelectable(partner.runtime, restoredForm) &&
                 (!previous.runtime?.installed || previous.selected),
               // Old pending forms retain their old wire shape for exact idempotent replay.
-              form: restoredForm,
+              form,
             };
           },
         );

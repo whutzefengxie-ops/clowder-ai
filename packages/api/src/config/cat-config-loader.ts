@@ -343,13 +343,45 @@ const catCafeConfigVersionSchema = z.object({
 });
 
 /** clowder-ai#340: Read cat-template.json directly — cat-config.json is no longer a runtime source. */
-function readTemplate(templatePath: string): string {
+function readRawTemplate(templatePath: string): string {
   try {
     return readFileSync(templatePath, 'utf-8');
   } catch (err) {
     const code = (err as NodeJS.ErrnoException).code;
     throw new Error(`Failed to read cat-template.json at ${templatePath}: ${code ?? 'unknown error'}`);
   }
+}
+
+/**
+ * Read the project's template as an overlay on the shipped template.
+ *
+ * The desktop installer must not overwrite a project's `cat-template.json`
+ * (users may edit it), so an upgraded install would otherwise keep serving the
+ * template it copied on day one. `CAT_TEMPLATE_BASE_PATH` points at the
+ * read-only template shipped inside the install root; merging it first lets new
+ * role templates (and other id-keyed template data) reach existing projects
+ * while the project copy still wins for any id it defines.
+ */
+function readTemplate(templatePath: string): string {
+  const raw = readRawTemplate(templatePath);
+  const basePath = process.env.CAT_TEMPLATE_BASE_PATH?.trim();
+  if (!basePath) return raw;
+  const resolvedBase = resolve(basePath);
+  if (resolvedBase === resolve(templatePath)) return raw;
+  try {
+    const base = JSON.parse(readRawTemplate(resolvedBase)) as Record<string, unknown>;
+    const overlay = JSON.parse(raw) as Record<string, unknown>;
+    return JSON.stringify(deepMergeConfig(base, overlay));
+  } catch {
+    // A missing or malformed shipped template must not take the project down;
+    // the project copy remains the authoritative fallback.
+    return raw;
+  }
+}
+
+/** Read the merged (shipped base + project overlay) template. */
+export function readResolvedTemplateSource(templatePath: string): string {
+  return readTemplate(templatePath);
 }
 
 /**

@@ -60,6 +60,7 @@ import {
   getRoster,
   loadCatConfig,
   loadResolvedCatConfig,
+  readResolvedTemplateSource,
   resolveCatCarrier,
   toAllCatConfigs,
 } from '../config/cat-config-loader.js';
@@ -919,7 +920,7 @@ export const catsRoutes: FastifyPluginAsync<CatsRoutesOptions> = async (app, opt
     try {
       const projectRoot = resolveProjectRoot();
       const templatePath = resolveProjectTemplatePath(projectRoot);
-      const raw = JSON.parse(await import('node:fs').then((fs) => fs.promises.readFile(templatePath, 'utf-8'))) as {
+      const raw = JSON.parse(readResolvedTemplateSource(templatePath)) as {
         roleTemplates?: {
           id: string;
           name: string;

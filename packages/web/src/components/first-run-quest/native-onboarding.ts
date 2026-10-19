@@ -1,6 +1,7 @@
 import type { CatData } from '@/hooks/useCatData';
 import { autoSlug, type HubCatEditorFormState, initialState } from '../hub-cat-editor.model';
 import { matchesRuntime, type RuntimeChoice, runtimeDefaults } from '../settings/members/member-runtime-draft';
+import { withLegacyNativeIdentityRepair } from './native-identity-repair';
 import { usesDetectedRuntimeConfiguration } from './native-partner-config';
 import { nativePartnerIdentity } from './native-partner-identity';
 import { stableOnboardingMemberId } from './onboarding-journey';
@@ -93,16 +94,7 @@ export function recommendNativePartners(
     }
     reservedIds.add(catId.toLowerCase());
     const existingForm = existing ? initialState(existing) : undefined;
-    const persistedForm = existingForm
-      ? {
-          ...existingForm,
-          // Older native creations could be persisted before the role asset
-          // was included in the response. Fill only missing identity fields;
-          // never overwrite a user's custom name, nickname, or role text.
-          avatar: existingForm.avatar.trim() || form.avatar,
-          nickname: existingForm.nickname.trim() || form.nickname,
-        }
-      : undefined;
+    const persistedForm = existingForm ? withLegacyNativeIdentityRepair(existingForm, form, runtime) : undefined;
     return [
       {
         id: key,
