@@ -8,7 +8,7 @@ import { matchesRuntime } from '../settings/members/member-runtime-draft';
 import { syncDraftToStorage } from '../thread-drafts';
 import { legacyCreationKey, legacySharedKey } from './legacy-creation-key';
 import { buildNativeCreationPayload } from './native-creation-payload';
-import { withLegacyNativeIdentityRepair } from './native-identity-repair';
+import { repairLegacyNativeIdentityFields } from './native-identity-repair';
 import {
   type NativePartner,
   nativeRuntimeSelectable,
@@ -124,21 +124,29 @@ export function useNativeOnboarding(
                 (cat) => cat.id === acknowledged.id && !matchesRuntime(initialState(cat), partner.runtime),
               );
             const restoredForm = confirmed && savedMember ? initialState(savedMember) : previous.form;
-            // A confirmed member has no pending POST, so repairing a legacy
-            // default here is safe. An unconfirmed form may be the exact body
-            // of a lost-response retry: changing it would break idempotent
-            // replay, so leave that wire shape untouched.
-            const form = confirmed
-              ? withLegacyNativeIdentityRepair(restoredForm, partner.form, partner.runtime)
-              : restoredForm;
+            // Repair a pre-identity default even when the draft is not confirmed:
+            // a draft whose member is no longer in the roster (for example, a
+            // clean install or a reset catalog) is a fresh recommendation and
+            // must show the cat identity. An unconfirmed form whose member still
+            // exists may be the exact body of a lost-response retry, so leave
+            // that wire shape untouched.
+            const identityRepair =
+              confirmed || !savedMember
+                ? repairLegacyNativeIdentityFields(restoredForm, partner.form, partner.runtime)
+                : {};
+            const identityChanged = Object.keys(identityRepair).length > 0;
+            const form = identityChanged ? { ...restoredForm, ...identityRepair } : restoredForm;
             return {
               ...partner,
-              // A lost-response retry must retain the exact key of the original persisted request.
+              // A repaired form is a new request: its old key may belong to a
+              // different payload. A true lost-response retry keeps its key.
               creationRequestKey: receiptMismatch
                 ? partner.creationRequestKey
-                : saved?.idScheme
-                  ? legacyCreationKey(previous, saved.partners)
-                  : (previous.creationRequestKey ?? partner.creationRequestKey),
+                : identityChanged && !savedMember
+                  ? newNativeRequestKey()
+                  : saved?.idScheme
+                    ? legacyCreationKey(previous, saved.partners)
+                    : (previous.creationRequestKey ?? partner.creationRequestKey),
               legacySharedRequestKey: saved?.idScheme ? legacySharedKey(previous, saved.partners) : undefined,
               existingId: confirmed && savedMember ? savedMember.id : undefined,
               missingExisting: Boolean(previous.existingId && !savedMember),
@@ -146,9 +154,7 @@ export function useNativeOnboarding(
                 ? { recoverable: { id: savedMember.id, form: initialState(savedMember) } }
                 : {}),
               selected:
-                nativeRuntimeSelectable(partner.runtime, restoredForm) &&
-                (!previous.runtime?.installed || previous.selected),
-              // Old pending forms retain their old wire shape for exact idempotent replay.
+                nativeRuntimeSelectable(partner.runtime, form) && (!previous.runtime?.installed || previous.selected),
               form,
             };
           },

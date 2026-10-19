@@ -135,6 +135,49 @@ it('does not reuse a removed existing member from a stale local draft', async ()
   expect(onCreated).toHaveBeenCalledOnce();
 });
 
+it('repairs a legacy detection draft when the member is no longer in the roster', async () => {
+  const original = vi.mocked(apiFetch).getMockImplementation()!;
+  vi.mocked(apiFetch).mockImplementation(async (path, init) =>
+    String(path).split('?')[0] === '/api/cats/native-runtimes'
+      ? response({ runtimes: [runtimes[2]] })
+      : original(path, init),
+  );
+  await act(async () => root.render(<Harness mode="members" />));
+  const fresh = setup.draft!.partners[0];
+  const legacyForm = {
+    ...fresh.form,
+    name: 'DSH 伙伴',
+    displayName: 'DSH 伙伴',
+    nickname: '深深',
+    avatar: '/avatars/family/kimi.png',
+    roleDescription: '共创与推理伙伴，负责分析问题、编码实现和交叉验证',
+    personality: '细心务实，先理清问题，再用可验证的结果交付',
+    teamStrengths: '问题分析、编码、交叉验证',
+  };
+  localStorage.setItem(
+    'cat-cafe:native-team-setup:v2:owner-a',
+    JSON.stringify({
+      version: 2,
+      idScheme: 'short-v1',
+      journeyId: 'legacy-journey',
+      initialRosterEmpty: true,
+      partners: [{ ...fresh, creationRequestKey: 'acp-old-request', form: legacyForm }],
+      goal: '',
+      lead: fresh.id,
+      created: {},
+    }),
+  );
+  catalog.cats = [];
+  act(() => root.unmount());
+  root = createRoot(container);
+  await act(async () => root.render(<Harness mode="members" />));
+  const partner = setup.draft!.partners[0];
+  expect(partner.form.displayName).toBe('小鲸鱼');
+  expect(partner.form.nickname).toBe('鲸鲸');
+  expect(partner.form.avatar).toBe('/avatars/family/dsh.png');
+  expect(partner.creationRequestKey).not.toBe('acp-old-request');
+});
+
 it('retains a legacy draft ID and custom identity when rediscovery recomputes recommendations', async () => {
   await act(async () => root.render(<Harness mode="members" />));
   const saved = JSON.parse(localStorage.getItem('cat-cafe:native-team-setup:v2:owner-a')!);
