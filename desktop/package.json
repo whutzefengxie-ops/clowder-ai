@@ -74,6 +74,7 @@
       "renderer-link-policy.js",
       "renderer-navigation.js",
       "service-manager.js",
+      "memory-fallback-consent.js",
       "client-homes.js",
       "subprocess-entry.js",
       "desktop-template.js",

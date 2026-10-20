@@ -32,7 +32,9 @@ function createStartupFailureHandler({
           logUnfinished('stop services', stopError);
         }
         try {
-          await showFailure(message);
+          const outcome = (await showFailure(message, error)) ?? 'quit';
+          // A relaunch already replaced this process; quitting here would race it.
+          if (outcome === 'relaunch') return;
         } catch (showError) {
           logUnfinished('show the failure dialog', showError);
         }

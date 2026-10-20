@@ -5,6 +5,7 @@ const path = require('node:path');
 const os = require('node:os');
 const { createStartupReporter, showStartupFailure } = require('./startup-state');
 const { createStartupFailureHandler } = require('./startup-failure-handler');
+const { consentPath, consumeMemoryFallbackConsent } = require('./memory-fallback-consent');
 
 test('a supervisor can read terminal failure before any UI action, without stale process identity', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'startup-state-'));
@@ -142,4 +143,83 @@ test('the asynchronous startup prompt opens the actual logs directory only when 
   });
   assert.match(supplied.detail, /API exited.*\n\n.*private\/logs/);
   assert.deepEqual(opened, ['private/logs']);
+});
+
+test('the startup prompt offers one-launch memory storage only for a recoverable Redis failure', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'startup-memory-offer-'));
+  const events = [];
+  let supplied;
+  const app = {
+    relaunch: () => events.push('relaunch'),
+    exit: (code) => events.push(`exit:${code}`),
+  };
+  try {
+    const outcome = await showStartupFailure({
+      app,
+      dialog: {
+        showMessageBox: async (options) => {
+          supplied = options;
+          return { response: 1 };
+        },
+      },
+      shell: { openPath: async () => {} },
+      message: 'Redis 不可用',
+      userDataRoot: root,
+      error: Object.assign(new Error('Redis 不可用'), {
+        code: 'REDIS_UNAVAILABLE',
+        recovery: { allowMemoryOnce: true },
+      }),
+    });
+    assert.equal(supplied.buttons.length, 3);
+    assert.match(supplied.buttons[1], /仅本次使用内存存储/);
+    assert.deepEqual(events, ['relaunch', 'exit:0']);
+    assert.equal(outcome, 'relaunch');
+    assert.equal(fs.existsSync(consentPath(root)), true, 'the chosen degraded launch is recorded for the relaunch');
+    assert.equal(consumeMemoryFallbackConsent(root), true);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('an unrecoverable startup failure keeps the plain dialog and never consents to memory', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'startup-memory-denied-'));
+  let supplied;
+  const events = [];
+  try {
+    const outcome = await showStartupFailure({
+      app: { relaunch: () => events.push('relaunch'), exit: () => events.push('exit') },
+      dialog: {
+        showMessageBox: async (options) => {
+          supplied = options;
+          return { response: 1 };
+        },
+      },
+      shell: { openPath: async () => {} },
+      message: 'API exited',
+      userDataRoot: root,
+      error: new Error('API exited'),
+    });
+    assert.equal(supplied.buttons.length, 2);
+    assert.equal(fs.existsSync(consentPath(root)), false);
+    assert.equal(outcome, 'quit');
+    assert.deepEqual(events, []);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('a relaunching failure dialog does not also quit the app', async () => {
+  const events = [];
+  const handler = createStartupFailureHandler({
+    isQuitting: () => false,
+    setPhase: () => {},
+    dbg: () => {},
+    reportStartup: () => {},
+    sendSplashStatus: () => {},
+    stopServices: async () => events.push('stop'),
+    showFailure: async () => 'relaunch',
+    quitApp: async () => events.push('quit'),
+  });
+  await handler(new Error('Redis 不可用'));
+  assert.deepEqual(events, ['stop'], 'the relaunched process owns the next attempt');
 });

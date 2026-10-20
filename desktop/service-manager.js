@@ -15,10 +15,31 @@ const { createStartupTimeline } = require('./startup-timing');
 const { prepareStartupServices, stopOwnedStartupProcess } = require('./startup-services');
 const { resolveExternalNodeEntry } = require('./subprocess-entry');
 const { readClientHomes, resolveDefaultClientHomes } = require('./client-homes');
+const { consumeMemoryFallbackConsent } = require('./memory-fallback-consent');
 
 const POLL_INTERVAL_MS = 500;
 const MAX_WAIT_MS = 120_000;
 const REDIS_FALLBACK_PORT_CHECK_MS = 5_000;
+
+// Ordinary installs must fail closed when Redis is unavailable: running the API
+// on an in-memory store silently makes history and queued work non-durable.
+// Only an explicit user decision (see memory-fallback-consent.js) may degrade.
+const REDIS_UNAVAILABLE_MESSAGES = Object.freeze({
+  port_in_use_non_redis: 'Redis 端口已被其他程序占用，无法确认它是 Redis。请关闭占用该端口的程序后重新打开应用。',
+  binary_missing: '未找到可用的 Redis（应用自带与系统 redis-server 均不可用）。请重新安装应用或恢复 Redis 后重试。',
+  binary_unusable: '应用自带的 Redis 无法运行。请重新安装应用或修复 Redis 后重试。',
+  start_failed: 'Redis 启动失败或未在预期时间内就绪。请查看日志后重试。',
+});
+class RedisUnavailableError extends Error {
+  constructor(reason, port) {
+    super(`${REDIS_UNAVAILABLE_MESSAGES[reason]}（端口 ${port}）应用不会自动改用内存存储。`);
+    this.name = 'RedisUnavailableError';
+    this.code = 'REDIS_UNAVAILABLE';
+    this.reason = reason;
+    this.port = port;
+    this.recovery = { allowMemoryOnce: true };
+  }
+}
 
 const IS_WIN = process.platform === 'win32';
 const IS_MAC = process.platform === 'darwin';
@@ -100,7 +121,7 @@ function resolveNode(projectRoot) {
 }
 
 class ServiceManager {
-  constructor(projectRoot, { frontendPort, apiPort, redisPort = 6399, onStatus }) {
+  constructor(projectRoot, { frontendPort, apiPort, redisPort = 6399, onStatus, allowMemoryFallback = false }) {
     this.root = projectRoot;
     this.frontendPort = frontendPort;
     this.apiPort = apiPort;
@@ -108,11 +129,14 @@ class ServiceManager {
     this.onStatus = onStatus || (() => {});
     this.procs = {};
     this.memoryMode = false;
+    // Explicit consent only: constructor option or startAll({ allowMemoryFallback }).
+    this.allowMemoryFallback = allowMemoryFallback === true;
     this.timeline = createStartupTimeline({ component: 'services', emit: log });
     this.startupAbort = null;
   }
 
-  async startAll() {
+  async startAll({ allowMemoryFallback = false } = {}) {
+    if (allowMemoryFallback) this.allowMemoryFallback = true;
     this.startupAbort = new AbortController();
     return this.timeline.runPhase('all-services', () => this._startAll());
   }
@@ -151,6 +175,7 @@ class ServiceManager {
     const userDataDir = this._getUserDataDir();
     this._ensureUserDataDir(userDataDir);
     log(`User data dir: ${userDataDir}`);
+    this._consumeMemoryConsent(userDataDir);
     this.timeline.mark('preflight-complete');
     this.startupAbort.signal.throwIfAborted();
 
@@ -198,7 +223,7 @@ class ServiceManager {
       // entry must not be converted into a misleading degraded-mode failure
       // while the durable Redis backend is still healthy.
       const redisAvailable = await this._isPortOpen(this.redisPort);
-      if (!this.memoryMode && !resolveDesktopRuntime().instanceRoot && !redisAvailable) {
+      if (!this.memoryMode && this._memoryFallbackAllowed() && !redisAvailable) {
         const failedProcess = this.procs.api;
         await this.timeline.runPhase('api-failed-process-stopped', () =>
           stopOwnedStartupProcess(failedProcess, () => this._killProcessTree('api', failedProcess, 5000)),
@@ -207,7 +232,7 @@ class ServiceManager {
         if (this.procs.api === failedProcess) delete this.procs.api;
         this.onStatus('API failed — retrying with memory store...');
         log('Retrying API with MEMORY_STORE=1');
-        this.memoryMode = true;
+        this._useMemoryStore('api_failed');
         try {
           await this._startApi(nodeExe, userDataDir, signal);
         } catch (err2) {
@@ -547,18 +572,24 @@ class ServiceManager {
         this.onStatus(`Redis already running on ${this.redisPort}`);
         return;
       }
-      log(`Port ${this.redisPort} occupied by non-Redis — using memory store`);
-      this.memoryMode = true;
-      return;
+      log(`Port ${this.redisPort} occupied by non-Redis`);
+      if (this._memoryFallbackAllowed()) {
+        this._useMemoryStore('port_in_use_non_redis');
+        return;
+      }
+      throw new RedisUnavailableError('port_in_use_non_redis', this.redisPort);
     }
 
     const hasPortable = fs.existsSync(portableRedis);
     const hasSystem = await this._commandExists('redis-server');
 
     if (!hasPortable && !hasSystem) {
-      log('Redis not found — using memory store');
-      this.memoryMode = true;
-      return;
+      log('Redis not found');
+      if (this._memoryFallbackAllowed()) {
+        this._useMemoryStore('binary_missing');
+        return;
+      }
+      throw new RedisUnavailableError('binary_missing', this.redisPort);
     }
 
     // Persist data to writable user directory so sessions survive app restart.
@@ -588,24 +619,51 @@ class ServiceManager {
       redisCwd = redisDir;
       const canRun = this._testRedisBinary(portableRedis, redisDir);
       if (!canRun) {
-        log('Redis binary test failed — using memory store');
-        this.memoryMode = true;
-        return;
+        log('Redis binary test failed');
+        if (this._memoryFallbackAllowed()) {
+          this._useMemoryStore('binary_unusable');
+          return;
+        }
+        throw new RedisUnavailableError('binary_unusable', this.redisPort);
       }
     }
 
     this._startProcess('redis', redisCmd, redisArgs, { cwd: redisCwd });
     const redisReady = await this._waitForPortWithFallback(this.redisPort, 'Redis', 'redis');
     if (!redisReady) {
-      log('Redis failed to start — using memory store');
-      this.memoryMode = true;
+      log('Redis failed to start');
       if (this.procs.redis && !this.procs.redis.killed) {
         try {
           this.procs.redis.kill();
         } catch {}
       }
       delete this.procs.redis;
+      if (this._memoryFallbackAllowed()) {
+        this._useMemoryStore('start_failed');
+        return;
+      }
+      throw new RedisUnavailableError('start_failed', this.redisPort);
     }
+  }
+
+  /** Memory store is reachable only through an explicit decision, never through a failure branch. */
+  _memoryFallbackAllowed() {
+    return this.allowMemoryFallback && !resolveDesktopRuntime().instanceRoot;
+  }
+
+  /** A consent file written by the startup-failure dialog authorizes exactly one launch. */
+  _consumeMemoryConsent(userDataDir) {
+    if (this.allowMemoryFallback || resolveDesktopRuntime().instanceRoot) return false;
+    if (!consumeMemoryFallbackConsent(userDataDir)) return false;
+    this.allowMemoryFallback = true;
+    log('Consumed one-launch memory-store consent');
+    return true;
+  }
+
+  _useMemoryStore(reason) {
+    this.memoryMode = true;
+    log(`Memory store enabled by explicit consent (${reason}); data will not survive restart`);
+    this.onStatus('Redis 不可用，已按你的选择使用临时内存存储（重启后数据不会保留）');
   }
 
   _testRedisBinary(exe, cwd) {

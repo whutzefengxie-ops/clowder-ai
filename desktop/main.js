@@ -222,7 +222,7 @@ const handleStartupFailure = createStartupFailureHandler({
     services = null;
     if (activeServices) await activeServices.stopAll();
   },
-  showFailure: (message) => showStartupFailure({ dialog, shell, message, logDir: startupLogDir }),
+  showFailure: (message, error) => showStartupFailure({ app, dialog, shell, message, error, userDataRoot }),
   quitApp,
 });
 

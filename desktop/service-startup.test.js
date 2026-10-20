@@ -113,6 +113,8 @@ test('stops the first owned API before fallback replaces its handle', async () =
     children = [];
   const controller = new AbortController();
   value.startupAbort = controller;
+  // The memory retry is an explicit degraded choice, not an automatic fallback.
+  value.allowMemoryFallback = true;
   value._startApi = async () => {
     if (children.length) {
       assert.notEqual(

@@ -1418,6 +1418,7 @@ describe('main process update-schedule lifecycle', () => {
       'desktop-update-menu.js',
       'desktop-update-runtime.js',
       'mac-install-location.js',
+      'memory-fallback-consent.js',
       'shutdown-controller.js',
       'startup-failure-handler.js',
       'update-install-flow.js',
