@@ -4,10 +4,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { setTimeout as pause } from 'node:timers/promises';
+import Database from 'better-sqlite3';
 import { IndexBuilder } from '../../dist/domains/memory/IndexBuilder.js';
+import { ProjectionCheckpointBackpressureError } from '../../dist/domains/memory/projection-checkpoints.js';
 import { SqliteEvidenceStore } from '../../dist/domains/memory/SqliteEvidenceStore.js';
 import { RunLedger } from '../../dist/infrastructure/scheduler/RunLedger.js';
-import { createIndexWriterDiagnostics } from '../helpers/index-writer-diagnostics.js';
 
 async function fixture(t) {
   const root = mkdtempSync(join(tmpdir(), 'index-contract-'));
@@ -60,7 +61,7 @@ test(
   'online history indexing yields between message batches while same-DB ledger writes proceed',
   { timeout: 30_000 },
   async (t) => {
-    const { docs, store } = await fixture(t);
+    const { root, docs, store } = await fixture(t);
     const messages = Array.from({ length: 2000 }, (_, i) => ({
       id: `m-${i}`,
       threadId: 'fixture',
@@ -76,9 +77,7 @@ test(
       // Match runtime MessageStore.getByThread: latest N, oldest first.
       (_threadId, limit = 2000) => messages.slice(-limit),
     );
-    const writerDiagnostics = createIndexWriterDiagnostics(store.getDb());
-    t.after(() => writerDiagnostics.close());
-    const ledger = new RunLedger(writerDiagnostics.database);
+    const ledger = new RunLedger(store.getDb());
     const gaps = [];
     const writes = [];
     const passageCounts = new Set();
@@ -101,33 +100,49 @@ test(
       gaps.push(recordGap(performance.now()));
       const count = countPassages.get().n;
       if (count > 0 && count < messages.length) passageCounts.add(count);
-      writerDiagnostics.beforeWrite(count);
       const started = performance.now();
-      try {
-        ledger.record({
-          task_id: 'index-fixture',
-          subject_key: 'live',
-          outcome: 'delivered',
-          signal_summary: null,
-          duration_ms: 0,
-          started_at: Date.now(),
-          assigned_cat_id: null,
-        });
-      } finally {
-        const elapsedMs = performance.now() - started;
-        writes.push(elapsedMs);
-        writerDiagnostics.afterWrite({ startedAt: started, elapsedMs });
-      }
-    }, 5);
-    try {
-      await builder.rebuild({
-        force: true,
-        onProgress: (phase) => {
-          phases.push({ phase, atMs: performance.now() - startedAt });
-          writerDiagnostics.phase(phase);
-        },
+      ledger.record({
+        task_id: 'index-fixture',
+        subject_key: 'live',
+        outcome: 'delivered',
+        signal_summary: null,
+        duration_ms: 0,
+        started_at: Date.now(),
+        assigned_cat_id: null,
       });
+      writes.push(performance.now() - started);
+    }, 5);
+    const reader = new Database(join(root, 'evidence.sqlite'), { readonly: true });
+    let pinNextBatch = true;
+    let checkpointRetries = 0;
+    try {
+      // Like runtime catch-up, retry transient maintenance backpressure. The
+      // timer's concurrent reads/writes do not guarantee a fully drained WAL.
+      // Pin one real snapshot so recovery is exercised on every run, not only
+      // when the timer happens to overlap a PASSIVE checkpoint in CI.
+      for (;;) {
+        try {
+          await builder.rebuild({
+            force: true,
+            onProgress: (phase) => {
+              phases.push({ phase, atMs: performance.now() - startedAt });
+              if (phase === 'thread-passages' && pinNextBatch) {
+                pinNextBatch = false;
+                reader.exec('BEGIN');
+                reader.prepare('SELECT count(*) FROM evidence_passages').get();
+              }
+            },
+          });
+          break;
+        } catch (error) {
+          if (!(error instanceof ProjectionCheckpointBackpressureError) || checkpointRetries >= 3) throw error;
+          checkpointRetries++;
+          if (reader.inTransaction) reader.exec('ROLLBACK');
+          await pause(5);
+        }
+      }
     } finally {
+      reader.close();
       // A final synchronous stretch can finish before the next timer fires.
       recordGap(performance.now());
       clearInterval(timer);
@@ -137,14 +152,14 @@ test(
           messages: 2000,
           turns: gaps.length,
           passageCheckpoints: passageCounts.size,
+          checkpointRetries,
           slowestGap,
           maxWriterMs: Math.max(...writes),
           phases,
-          writerDiagnostics: writerDiagnostics.summary(),
         }),
       );
-      writerDiagnostics.close();
     }
+    assert.ok(checkpointRetries > 0, 'recover after the temporary reader releases its snapshot');
     assert.equal(countPassages.get().n, 2000);
     const summary = (await store.getByAnchor('thread-fixture')).summary;
     assert.ok(summary.startsWith('[user] message 1900 '), 'summary uses the latest 100 messages');

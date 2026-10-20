@@ -11,12 +11,9 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const { build } = createRequire(path.join(root, 'package.json'))('esbuild');
 const entries = {
   ImageExportBrowserSession: 'services/image-export-browser-session.ts',
-  runContainedMaterializer: 'domains/plugin/content-materializer-runtime/browser-runner.ts',
   openCurrentBrowserPage: 'domains/concierge/action/jev/OwnerCurrentPageBrowser.ts',
   createOwnerCdpConnector: 'domains/concierge/action/jev/OwnerCdpConnector.ts',
   maybeStartOwnerLocalNoteLab: 'domains/concierge/live/host/owner-local-note-lab.ts',
-  DefaultFeishuQrBindClient: 'infrastructure/connectors/FeishuQrBindClient.ts',
-  OfficialPluginAuthService: 'domains/plugin/official-plugin-auth.ts',
   SignalEmailService: 'domains/signals/services/email-service.ts',
   createRetryableLoader: 'utils/retryable-loader.ts',
 };
@@ -111,7 +108,6 @@ await assert.rejects(retry(),/sync failed/);
 assert.equal(await retry(),'retried');
 assert.equal(retryAttempts,2);
 assert.equal(await api.maybeStartOwnerLocalNoteLab({enabled:false}),null);
-new api.OfficialPluginAuthService({packages:{}});
 const digest={subject:'fixture',html:'fixture',text:'fixture'};
 const config=enabled=>({notifications:{email:{enabled,smtp:{host:'unused',port:1,secure:false},from:'fixture',to:'fixture'}}});
 assert.equal((await new api.SignalEmailService({config:config(false)}).sendDailyDigest(digest)).status,'skipped');
@@ -140,14 +136,6 @@ const lab=await api.maybeStartOwnerLocalNoteLab({enabled:true,projectRoot:proces
 assert.equal(lab.url,selected.url);
 await lab.close();
 assert.equal(state.serverCloses,1);
-const nativePlatform=process.platform;
-try{
- Object.defineProperty(process,'platform',{value:'linux'});
- const result=await api.runContainedMaterializer({module:Buffer.from('fixture'),requestJson:'{}',signal});
- assert.equal(result.json,'{}');
- assert.equal(result.metrics.disposed,true);
-}finally{Object.defineProperty(process,'platform',{value:nativePlatform});}
-assert.equal(state.launches,3);
 const mail=new api.SignalEmailService({config:config(true)});
 assert.equal((await mail.sendDailyDigest(digest)).status,'error');
 assert.equal((await mail.sendDailyDigest(digest)).status,'sent');
@@ -158,19 +146,6 @@ let injected=0;
 const injectedMail=new api.SignalEmailService({config:config(true),createTransporter(){injected++;return {async sendMail(){return {messageId:'injected'};}};}});
 assert.equal((await injectedMail.sendDailyDigest(digest)).messageId,'injected');
 assert.equal(injected,1);
-const qr=new api.DefaultFeishuQrBindClient(async()=>({ok:true,json:async()=>({supported_auth_methods:['client_secret'],verification_uri_complete:'https://accounts.feishu.cn/fixture',device_code:'fixture'})}));
-assert.equal((await qr.create()).qrUrl,'data:fixture');
-assert.equal((await qr.create()).qrUrl,'data:fixture');
-assert.equal(state.qr,2);
-const official=new api.OfficialPluginAuthService({
- packages:{async resolveInstalledPackage(){return {rootDir:process.env.LAZY_LAB_ROOT,async verifyIntegrity(){},async release(){}};}},
- async run(){return {stdout:JSON.stringify({device_code:'fixture-only',verification_url:'https://accounts.feishu.cn/fixture'}),stderr:''};},
-});
-const ownerAuth={kind:'lark-cli-device',runnerPath:'scripts/f317-page-action/browser-binary.mjs',domains:['note']};
-const started=await official.start({entry:{ownerAuth},instance:{pluginInstanceId:'fixture',packageDigest:'fixture'}});
-assert.equal(started.qrDataUrl,'data:fixture');
-await official.shutdown();
-assert.equal(state.qr,3);
-assert.deepEqual(state.loads,{browser:1,mail:1,qr:1});
+assert.deepEqual(state.loads,{browser:1,mail:1});
 console.log('lazy consumers passed');
 `;

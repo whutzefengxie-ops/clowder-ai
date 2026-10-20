@@ -172,7 +172,7 @@ export function SettingsShellV2({
       </aside>
 
       <div
-        className={`min-w-0 flex-1 ${fixedLayout ? 'overflow-hidden' : 'overflow-y-auto'}`}
+        className={`min-h-0 min-w-0 flex-1 ${fixedLayout ? 'overflow-hidden' : 'overflow-y-auto'}`}
         data-trajectory-origin-scroll
       >
         <div
@@ -180,13 +180,13 @@ export function SettingsShellV2({
         >
           {active && (
             <SettingsSecondLevel
+              fixedLayout={fixedLayout}
               entry={active}
               selection={selection}
               onSelect={onSelect}
               onOpenTeam={openTeam}
               isPinned={isPinned}
               onTogglePin={togglePin}
-              fixedLayout={fixedLayout}
             >
               {selection === 'theme' ? (
                 <ThemeSettingsPanel />

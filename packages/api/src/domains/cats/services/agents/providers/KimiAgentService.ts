@@ -30,7 +30,7 @@ import type {
 import type { RawArchiveSink } from '../providers/codex-audit-hooks.js';
 import { sanitizeRawEvent } from '../providers/codex-audit-hooks.js';
 import { collectImageAccessDirectories } from './image-cli-bridge.js';
-import { extractImagePaths } from './image-paths.js';
+import { extractTrustedImagePaths } from './image-paths.js';
 import {
   buildApiKeyEnv,
   readKimiConfiguredModel,
@@ -166,7 +166,11 @@ export class KimiAgentService implements AgentService {
     const identityModel = effectiveModel || observedModel || '';
     const effortLevel = resolveKimiEffortLevel(this.catId as string, identityModel, options?.reasoningEffortOverride);
     const metadata: MessageMetadata = { provider: 'kimi', model: identityModel };
-    const imagePaths = extractImagePaths(options?.contentBlocks, options?.uploadDir);
+    const imagePaths = await extractTrustedImagePaths(
+      options?.contentBlocks,
+      options?.uploadDir,
+      options?.resolveTrustedImagePath,
+    );
     const imageAccessDirs = collectImageAccessDirectories(imagePaths);
     // Identity and pack travel through --agent-file; the user prompt stays unwrapped.
     const effectivePrompt = buildKimiPrompt(prompt, imagePaths);

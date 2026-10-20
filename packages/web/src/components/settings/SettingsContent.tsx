@@ -12,7 +12,6 @@ import type { ConfigData } from '../config-viewer-tabs';
 import { DesktopUpdateSettingsPanel } from '../DesktopUpdateSettingsPanel';
 import { HubAccountsTab } from '../HubAccountsTab';
 import { HubCoCreatorEditor } from '../HubCoCreatorEditor';
-import { HubConnectorConfigTab } from '../HubConnectorConfigTab';
 import { HubEnvFilesTab } from '../HubEnvFilesTab';
 import { HubOverviewToolbar } from '../HubMemberOverviewCard';
 import { memberSaveCopy } from '../members/member-save.shell-copy';
@@ -59,7 +58,6 @@ export function SettingsContent({ section, initialEditCatId }: SettingsContentPr
   const [editingCat, setEditingCat] = useState<(typeof cats)[number] | null>(null);
   const [togglingCatId, setTogglingCatId] = useState<string | null>(null);
   const [coCreatorEditorOpen, setCoCreatorEditorOpen] = useState(false);
-  const [imRefreshKey, setImRefreshKey] = useState(0);
   const confirm = useConfirm();
   const openMember = (cat: (typeof cats)[number] | null) => {
     setEditingCat(cat);
@@ -216,6 +214,18 @@ export function SettingsContent({ section, initialEditCatId }: SettingsContentPr
 
   const meta = SETTINGS_SECTIONS.find((item) => item.id === section) ?? SETTINGS_SECTIONS[0];
 
+  const pageHeader = {
+    title: section === 'accounts' ? accountsText.title : (sectionText(section)?.title ?? meta.label),
+    subtitle:
+      section === 'accounts'
+        ? isV2
+          ? undefined
+          : accountsText.subtitle
+        : isV2
+          ? (sectionText(section)?.description ?? meta.description)
+          : meta.description,
+  };
+
   const content = (() => {
     switch (meta.id) {
       case 'members':
@@ -310,7 +320,7 @@ export function SettingsContent({ section, initialEditCatId }: SettingsContentPr
       case 'mcp':
         return <McpManageContent />;
       case 'plugins':
-        return <PluginsContent />;
+        return <PluginsContent pageHeader={pageHeader} />;
       case 'concierge':
         return <ConciergeSettingsContent />;
       default:

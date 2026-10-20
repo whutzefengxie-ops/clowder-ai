@@ -49,6 +49,36 @@ export function reportApiConnectionFailure(error: unknown): boolean {
   return true;
 }
 
+export interface ApiFetchOptions {
+  /** Longer bounded wait for mutations that prepare plugin packages. GET deadlines stay unchanged. */
+  mutationTimeoutMs?: number;
+  /**
+   * A mutation happened while this exact GET may already be active. Attach the
+   * caller to one bounded trailing generation instead of the possibly stale one.
+   */
+  afterCurrentGet?: boolean;
+  /**
+   * Carry a representation validator on this physical GET generation without
+   * partitioning the exact-resource coordination key.
+   */
+  ifNoneMatch?: string | null;
+}
+
+interface GetGeneration {
+  id: number;
+  promise: Promise<Response>;
+  resolve(response: Response): void;
+  reject(error: unknown): void;
+  path: string;
+  init: RequestInit | undefined;
+  ifNoneMatch: string | null | undefined;
+}
+
+interface GetCoordinationState {
+  active: GetGeneration;
+  trailing: GetGeneration | null;
+}
+
 const coordinatedGets = new Map<string, GetCoordinationState>();
 let nextGetGeneration = 0;
 
@@ -144,7 +174,7 @@ function ensureBodyForMutation(init?: RequestInit): RequestInit | undefined {
   if (init.body != null) return init;
   return {
     ...init,
-    headers: { 'content-type': 'application/json', ...(init.headers as Record<string, string>) },
+    headers: { 'content-type': 'application/json', ...Object.fromEntries(new Headers(init.headers)) },
     body: '{}',
   };
 }
@@ -189,16 +219,26 @@ function withoutCallerSignal(init?: RequestInit): RequestInit | undefined {
   return physicalInit;
 }
 
-async function performApiFetch(path: string, init?: RequestInit, notifyFailure = true): Promise<Response> {
+async function performApiFetch(
+  path: string,
+  init?: RequestInit,
+  timeoutMs = API_REQUEST_TIMEOUT_MS,
+  notifyFailure = true,
+): Promise<Response> {
   try {
-    return await performSessionRequest(path, init, notifyFailure);
+    return await performSessionRequest(path, init, timeoutMs, notifyFailure);
   } catch (error) {
     if (notifyFailure && !init?.signal?.aborted) reportApiConnectionFailure(error);
     throw error;
   }
 }
 
-async function performSessionRequest(path: string, init?: RequestInit, notifyFailure = true): Promise<Response> {
+async function performSessionRequest(
+  path: string,
+  init?: RequestInit,
+  timeoutMs = API_REQUEST_TIMEOUT_MS,
+  notifyFailure = true,
+): Promise<Response> {
   const initialSessionGate = ensureSession();
   await traceSaveTransport(init, 'session.wait', () => waitForPromiseWithSignal(initialSessionGate, init?.signal));
   const normalized = withSessionCsrf(ensureBodyForMutation(init));
@@ -212,7 +252,7 @@ async function performSessionRequest(path: string, init?: RequestInit, notifyFai
           ...normalized,
           credentials: 'include',
         },
-        API_REQUEST_TIMEOUT_MS,
+        timeoutMs,
       ),
     1,
   );
@@ -233,7 +273,7 @@ async function performSessionRequest(path: string, init?: RequestInit, notifyFai
           ...refreshed,
           credentials: 'include',
         },
-        API_REQUEST_TIMEOUT_MS,
+        timeoutMs,
       ),
     2,
   );
@@ -324,7 +364,7 @@ async function coordinatedGet(
  *
  * @param path - API path starting with '/' (e.g. '/api/messages')
  * @param init - Standard RequestInit options
- * @param options - GET generation coordination options
+ * @param options - GET generation coordination or a bounded mutation timeout
  */
 export async function apiFetch(path: string, init?: RequestInit, options?: ApiFetchOptions): Promise<Response> {
   init = tagSaveRequest(init);
@@ -334,10 +374,10 @@ export async function apiFetch(path: string, init?: RequestInit, options?: ApiFe
   if (requestMethod(init) === 'GET') {
     return coordinatedGet(path, init, options?.afterCurrentGet === true, options?.ifNoneMatch);
   }
-  return performApiFetch(path, init);
+  return performApiFetch(path, init, options?.mutationTimeoutMs);
 }
 
 /** Best-effort timing delivery recovers stale sessions without showing diagnostic-only failures to the user. */
 export function sendMemberSaveDiagnostics(init: RequestInit): Promise<Response> {
-  return performApiFetch('/api/diagnostics/member-save', init, false);
+  return performApiFetch('/api/diagnostics/member-save', init, API_REQUEST_TIMEOUT_MS, false);
 }
