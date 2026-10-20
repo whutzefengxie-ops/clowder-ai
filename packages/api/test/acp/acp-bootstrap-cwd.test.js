@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {
   chmodSync,
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
@@ -110,6 +111,37 @@ describe('acp bootstrap cwd', () => {
     assert.equal(first, second, 'bootstrap path should stay deterministic across cold starts');
     assert.ok(existsSync(second), 'bootstrap dir should be recreated on demand');
   });
+
+  it(
+    'falls back to the machine-local root when temp ancestors allow replacement',
+    { skip: process.platform === 'win32' ? false : 'Windows ACL boundary is only enforced on win32' },
+    () => {
+      const primaryRoot = join(testFixture, 'unsafe-temp-root');
+      const fallbackRoot = join(testFixture, 'programdata-root');
+      mkdirSync(primaryRoot, { recursive: true });
+      mkdirSync(fallbackRoot, { recursive: true });
+      const windowsEnsure = (root, cwd) => {
+        if (resolve(root) === resolve(primaryRoot)) {
+          throw new Error(
+            'ACP bootstrap parent permits unsafe directory replacement: C:\\Temp allows S-1-5-21-x Modify',
+          );
+        }
+        mkdirSync(cwd, { recursive: true });
+      };
+
+      const dir = resolveAcpBootstrapCwd(
+        resolve('/tmp/cat-cafe-project'),
+        'dsh',
+        primaryRoot,
+        windowsEnsure,
+        fallbackRoot,
+      );
+      createdDirs.add(dir);
+
+      assert.ok(isPathWithinRoot(fallbackRoot, dir, { relative, isAbsolute }));
+      assert.ok(existsSync(dir), 'fallback bootstrap dir should be created eagerly');
+    },
+  );
 
   it(
     'enforces owner-only POSIX permissions on the bootstrap cwd',

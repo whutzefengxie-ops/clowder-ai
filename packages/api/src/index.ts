@@ -2014,16 +2014,26 @@ async function main(): Promise<void> {
               return;
             }
             activeAcpProfileIds.add(id);
-            const acpService = await createAcpServiceForConfig({
-              projectRoot,
-              profileId: id,
-              config,
-              effectiveModel: getCatModel(id),
-              acpConfig,
-              poolRegistry: acpPoolRegistry,
-              log: app.log,
-              onUnavailable: (reason) => agentRegistry.markUnavailable(id, reason),
-            });
+            let acpService: Awaited<ReturnType<typeof createAcpServiceForConfig>>;
+            try {
+              acpService = await createAcpServiceForConfig({
+                projectRoot,
+                profileId: id,
+                config,
+                effectiveModel: getCatModel(id),
+                acpConfig,
+                poolRegistry: acpPoolRegistry,
+                log: app.log,
+                onUnavailable: (reason) => agentRegistry.markUnavailable(id, reason),
+              });
+            } catch (error) {
+              // A single member's bootstrap/privacy failure must not keep the API
+              // from listening; degrade that member and keep every other cat.
+              const reason = error instanceof Error ? error.message : String(error);
+              app.log.warn(`[api] Cat "${id}" ACP startup failed; marking it unavailable: ${reason}`);
+              agentRegistry.markUnavailable(id, { code: 'ACP_BOOTSTRAP_UNAVAILABLE', message: reason });
+              return;
+            }
             if (!acpService) return;
             service = acpService;
           } else
