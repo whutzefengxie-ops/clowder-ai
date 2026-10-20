@@ -30,8 +30,10 @@ test('importing and constructing the SDK carrier does not load the unused SDK ru
         async *[Symbol.asyncIterator]() {
           const first = await prompt[Symbol.asyncIterator]().next();
           yield {type:'system',subtype:'init',session_id:'fixture'};
+          yield {type:'system',subtype:'session_state_changed',state:'running',session_id:'fixture'};
           yield {type:'assistant',message:{id:'fixture',role:'assistant',content:[{type:'text',text:'injected-query-used'}]}};
           yield {type:'result',subtype:'success',session_id:'fixture',is_error:false,user_message_uuids:[first.value.uuid],queued_turn_count:0};
+          yield {type:'system',subtype:'session_state_changed',state:'idle',session_id:'fixture'};
         },close(){closed++;}
       })});
       const events=[];
