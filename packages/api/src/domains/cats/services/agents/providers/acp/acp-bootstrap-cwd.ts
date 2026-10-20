@@ -107,6 +107,9 @@ export function resolveAcpBootstrapCwd(
   bootstrapRoot: string = resolveAcpBootstrapRoot(),
   windowsEnsure: WindowsBootstrapEnsurer = ensureWindowsAcpBootstrapDirectories,
   windowsFallbackRoot: string | undefined = resolveWindowsAcpBootstrapFallbackRoot(),
+  // Only the production default root may relocate. Callers that inject a root
+  // (tests, isolated fixtures) keep the fail-closed contract they assert.
+  allowWindowsFallback = bootstrapRoot === resolveAcpBootstrapRoot(),
 ): string {
   const normalizedProjectRoot = resolve(projectRoot);
   const projectSlug = sanitizeSegment(basename(normalizedProjectRoot), 'project');
@@ -125,7 +128,7 @@ export function resolveAcpBootstrapCwd(
       const fallbackDir = windowsFallbackRoot ? join(windowsFallbackRoot, leaf) : undefined;
       // Only an unsafe ancestor chain justifies relocating the root. A reparse
       // point at the cwd itself must still fail closed.
-      if (!fallbackDir || !/permits unsafe directory replacement/.test(message)) throw error;
+      if (!allowWindowsFallback || !fallbackDir || !/permits unsafe directory replacement/.test(message)) throw error;
       if (resolve(fallbackDir) === resolve(dir)) throw error;
       // A sibling principal (sandbox group or another local user) holds Modify
       // or Delete on the temp-profile ancestors, so it could replace the private

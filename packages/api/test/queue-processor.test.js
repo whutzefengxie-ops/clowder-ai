@@ -1267,8 +1267,10 @@ describe('QueueProcessor over the source-row pending Queue', () => {
     const originalGetById = harness.messageStore.getById.bind(harness.messageStore);
     // Redis returns a fresh object for each read. Keep the initial queued snapshot
     // separate from the delivered row that admission writes before dispatch.
-    harness.messageStore.getById = mock.fn(async (messageId) => {
-      const message = await originalGetById(messageId);
+    // Stay synchronous: the reserved-id guard reads getById() without awaiting, and
+    // a promise (always truthy) would be mistaken for an existing message.
+    harness.messageStore.getById = mock.fn((messageId) => {
+      const message = originalGetById(messageId);
       return message ? structuredClone(message) : null;
     });
     const originalMarkDelivered = harness.messageStore.markDelivered.bind(harness.messageStore);

@@ -135,6 +135,7 @@ describe('acp bootstrap cwd', () => {
         primaryRoot,
         windowsEnsure,
         fallbackRoot,
+        true,
       );
       createdDirs.add(dir);
 

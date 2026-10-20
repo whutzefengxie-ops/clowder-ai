@@ -39,6 +39,8 @@ const ALLOWLIST = new Map([
   ],
   ['PROGRAMFILES', 'Windows OS variable (ImageExporter.ts Chrome detection)'],
   ['PATHEXT', 'Windows OS variable (capability-orchestrator.ts executable extension lookup)'],
+  ['ProgramData', 'Windows OS-provided machine data root used for the ACP bootstrap fallback; not an app setting'],
+  ['ALLUSERSPROFILE', 'Windows OS-provided alias of ProgramData used when ProgramData is unset'],
   ['NODE_ENV', 'Node.js standard'],
   ['GH_HOST', 'Inherited GitHub CLI host used to partition credential quota; not an app setting'],
   ['GH_CONFIG_DIR', 'GitHub CLI-owned configuration location used to identify its auth store'],
