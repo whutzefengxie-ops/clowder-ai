@@ -56,6 +56,40 @@ describe('BindingDryRun (AC-C4)', () => {
     assert.equal(report.safe, true);
   });
 
+  it('does not descend into nested git repositories or linked worktrees', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'dry-nested-git-'));
+    writeFileSync(join(dir, 'root.md'), '# Root\n\nSafe.');
+
+    const nestedRepo = join(dir, 'nested-repo');
+    mkdirSync(nestedRepo);
+    mkdirSync(join(nestedRepo, '.git'));
+    writeFileSync(join(nestedRepo, 'secret.md'), '# Secret\n\ntoken: ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij\n');
+
+    const linkedWorktree = join(dir, 'linked-worktree');
+    mkdirSync(linkedWorktree);
+    writeFileSync(join(linkedWorktree, '.git'), 'gitdir: ../.git/worktrees/linked-worktree');
+    writeFileSync(join(linkedWorktree, 'secret.md'), '# Secret\n\ntoken: ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij\n');
+
+    const report = BindingDryRun.run(dir);
+    assert.equal(report.markdownFiles, 1);
+    assert.equal(report.safe, true);
+  });
+
+  it('normalizes Windows paths before applying exclude patterns', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'dry-win-excl-'));
+    mkdirSync(join(dir, 'worktrees'));
+    mkdirSync(join(dir, 'worktrees', 'copy'));
+    writeFileSync(
+      join(dir, 'worktrees', 'copy', 'secret.md'),
+      '# Secret\n\ntoken: ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij\n',
+    );
+    writeFileSync(join(dir, 'public.md'), '# Public\n\nSafe.');
+
+    const report = BindingDryRun.run(dir, { exclude: ['worktrees/**'] });
+    assert.equal(report.markdownFiles, 1);
+    assert.equal(report.safe, true);
+  });
+
   it('auto-excludes .obsidian and .claude dirs', () => {
     const dir = mkdtempSync(join(tmpdir(), 'dry-auto-'));
     mkdirSync(join(dir, '.obsidian'));
