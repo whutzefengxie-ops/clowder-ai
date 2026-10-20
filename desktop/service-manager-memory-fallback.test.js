@@ -168,7 +168,11 @@ test('isolated desktop never degrades, even with consent', async () => {
     const manager = managerFor(root, { allowMemoryFallback: true });
     await assert.rejects(
       manager._startRedis(path.join(root, 'userdata')),
-      (error) => error.code === 'REDIS_UNAVAILABLE' && error.reason === 'binary_missing',
+      (error) =>
+        error.code === 'REDIS_UNAVAILABLE' &&
+        error.reason === 'binary_missing' &&
+        error.recovery.allowMemoryOnce === false,
+      'an isolated instance must not advertise the memory option it can never honor',
     );
     assert.equal(manager.memoryMode, false);
   } finally {
@@ -178,6 +182,58 @@ test('isolated desktop never degrades, even with consent', async () => {
       else process.env[key] = value;
     }
   }
+});
+
+test('isolated desktop discards a stale consent instead of honoring it', () => {
+  const root = tempRoot('isolated-stale');
+  const userDataDir = path.join(root, 'userdata');
+  fs.mkdirSync(userDataDir, { recursive: true });
+  requestMemoryFallbackOnce(userDataDir);
+  const isolatedEnv = { FRONTEND_PORT: '3920', API_SERVER_PORT: '3921', REDIS_PORT: '3922' };
+  const saved = Object.fromEntries(Object.keys(isolatedEnv).map((key) => [key, process.env[key]]));
+  process.env.CAT_CAFE_DESKTOP_INSTANCE_ROOT = root;
+  Object.assign(process.env, isolatedEnv);
+  try {
+    const manager = managerFor(root);
+    assert.equal(manager._consumeMemoryConsent(userDataDir), false);
+    assert.equal(manager.allowMemoryFallback, false);
+    assert.equal(fs.existsSync(consentPath(userDataDir)), false, 'the stale consent must not survive');
+  } finally {
+    delete process.env.CAT_CAFE_DESKTOP_INSTANCE_ROOT;
+    for (const [key, value] of Object.entries(saved)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});
+
+test('a consent file that cannot be deleted never authorizes a launch', () => {
+  const root = tempRoot('undeletable');
+  const userDataDir = path.join(root, 'userdata');
+  fs.mkdirSync(userDataDir, { recursive: true });
+  requestMemoryFallbackOnce(userDataDir);
+  const realRmSync = fs.rmSync;
+  fs.rmSync = (target, options) => {
+    if (String(target).includes('startup-memory-fallback.once')) {
+      const error = new Error('EACCES: permission denied, unlink consent');
+      error.code = 'EACCES';
+      throw error;
+    }
+    return realRmSync(target, options);
+  };
+  try {
+    for (const attempt of ['first', 'second']) {
+      const manager = managerFor(root);
+      assert.equal(manager._consumeMemoryConsent(userDataDir), false, `${attempt} launch must stay fail-closed`);
+      assert.equal(manager.allowMemoryFallback, false);
+    }
+  } finally {
+    fs.rmSync = realRmSync;
+  }
+  const later = managerFor(root);
+  assert.equal(later._consumeMemoryConsent(userDataDir), false, 'a neutralized leftover is not a consent');
+  assert.equal(later.allowMemoryFallback, false);
+  assert.equal(fs.existsSync(consentPath(userDataDir)), false);
 });
 
 test('API startup failure does not downgrade without consent', async () => {

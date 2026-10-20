@@ -208,6 +208,37 @@ test('an unrecoverable startup failure keeps the plain dialog and never consents
   }
 });
 
+test('a Redis failure that cannot degrade (isolated) is not offered the memory choice', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'startup-memory-isolated-'));
+  let supplied;
+  const events = [];
+  try {
+    const outcome = await showStartupFailure({
+      app: { relaunch: () => events.push('relaunch'), exit: () => events.push('exit') },
+      dialog: {
+        showMessageBox: async (options) => {
+          supplied = options;
+          return { response: 1 };
+        },
+      },
+      shell: { openPath: async () => {} },
+      message: 'Redis 不可用',
+      userDataRoot: root,
+      error: Object.assign(new Error('Redis 不可用'), {
+        code: 'REDIS_UNAVAILABLE',
+        recovery: { allowMemoryOnce: false },
+      }),
+    });
+    assert.equal(supplied.buttons.length, 2, 'the isolated instance can never honor the memory choice');
+    assert.doesNotMatch(supplied.detail, /临时内存存储/);
+    assert.equal(fs.existsSync(consentPath(root)), false);
+    assert.equal(outcome, 'quit');
+    assert.deepEqual(events, []);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('a relaunching failure dialog does not also quit the app', async () => {
   const events = [];
   const handler = createStartupFailureHandler({

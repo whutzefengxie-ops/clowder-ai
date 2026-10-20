@@ -23,17 +23,37 @@ function requestMemoryFallbackOnce(userDataRoot) {
   );
 }
 
-/** Returns true only when a valid one-launch consent existed; always removes it. */
+/** Best effort: an unreadable consent must stay invalid even if it survives. */
+function neutralizeConsent(file) {
+  try {
+    fs.truncateSync(file, 0);
+  } catch {}
+}
+
+/**
+ * Returns true only when a valid one-launch consent existed AND was consumed.
+ * Single use is the whole contract: when the file cannot be removed, this
+ * launch must not be authorized, otherwise every later Redis failure would
+ * silently inherit the same consent instead of asking again.
+ */
 function consumeMemoryFallbackConsent(userDataRoot) {
+  const file = consentPath(userDataRoot);
   let raw;
   try {
-    raw = fs.readFileSync(consentPath(userDataRoot), 'utf8');
+    raw = fs.readFileSync(file, 'utf8');
   } catch {
     return false;
   }
   try {
-    fs.rmSync(consentPath(userDataRoot), { force: true });
-  } catch {}
+    fs.rmSync(file, { force: true });
+  } catch {
+    neutralizeConsent(file);
+    return false;
+  }
+  if (fs.existsSync(file)) {
+    neutralizeConsent(file);
+    return false;
+  }
   try {
     return JSON.parse(raw)?.scope === 'single-launch';
   } catch {
@@ -41,4 +61,17 @@ function consumeMemoryFallbackConsent(userDataRoot) {
   }
 }
 
-module.exports = { requestMemoryFallbackOnce, consumeMemoryFallbackConsent, consentPath, CONSENT_FILE };
+/** Drop a consent that must never take effect (for example an isolated instance). */
+function discardMemoryFallbackConsent(userDataRoot) {
+  try {
+    fs.rmSync(consentPath(userDataRoot), { force: true });
+  } catch {}
+}
+
+module.exports = {
+  requestMemoryFallbackOnce,
+  consumeMemoryFallbackConsent,
+  discardMemoryFallbackConsent,
+  consentPath,
+  CONSENT_FILE,
+};

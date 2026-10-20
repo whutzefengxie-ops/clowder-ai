@@ -15,7 +15,11 @@ const { createStartupTimeline } = require('./startup-timing');
 const { prepareStartupServices, stopOwnedStartupProcess } = require('./startup-services');
 const { resolveExternalNodeEntry } = require('./subprocess-entry');
 const { readClientHomes, resolveDefaultClientHomes } = require('./client-homes');
-const { consumeMemoryFallbackConsent } = require('./memory-fallback-consent');
+const {
+  consumeMemoryFallbackConsent,
+  discardMemoryFallbackConsent,
+  consentPath,
+} = require('./memory-fallback-consent');
 
 const POLL_INTERVAL_MS = 500;
 const MAX_WAIT_MS = 120_000;
@@ -31,13 +35,13 @@ const REDIS_UNAVAILABLE_MESSAGES = Object.freeze({
   start_failed: 'Redis 启动失败或未在预期时间内就绪。请查看日志后重试。',
 });
 class RedisUnavailableError extends Error {
-  constructor(reason, port) {
+  constructor(reason, port, { allowMemoryOnce = true } = {}) {
     super(`${REDIS_UNAVAILABLE_MESSAGES[reason]}（端口 ${port}）应用不会自动改用内存存储。`);
     this.name = 'RedisUnavailableError';
     this.code = 'REDIS_UNAVAILABLE';
     this.reason = reason;
     this.port = port;
-    this.recovery = { allowMemoryOnce: true };
+    this.recovery = { allowMemoryOnce };
   }
 }
 
@@ -562,11 +566,14 @@ class ServiceManager {
     const platformSeg = IS_WIN ? 'windows' : `darwin-${ARCH_SEG}`;
     const redisDir = path.join(this.root, '.cat-cafe', 'redis', platformSeg);
     const portableRedis = path.join(redisDir, `redis-server${EXE_SUFFIX}`);
+    // An isolated instance can never degrade, so its failures must not advertise
+    // the one-launch memory choice the dialog would otherwise offer.
+    const isolated = Boolean(resolveDesktopRuntime().instanceRoot);
+    const fail = (reason) => new RedisUnavailableError(reason, this.redisPort, { allowMemoryOnce: !isolated });
 
     // Already running — verify it is actually Redis
     if (await this._isPortOpen(this.redisPort)) {
-      if (resolveDesktopRuntime().instanceRoot)
-        throw new Error(`Isolated Redis port ${this.redisPort} is already occupied`);
+      if (isolated) throw new Error(`Isolated Redis port ${this.redisPort} is already occupied`);
       const isRedis = await this._verifyRedisPing(this.redisPort);
       if (isRedis) {
         this.onStatus(`Redis already running on ${this.redisPort}`);
@@ -577,7 +584,7 @@ class ServiceManager {
         this._useMemoryStore('port_in_use_non_redis');
         return;
       }
-      throw new RedisUnavailableError('port_in_use_non_redis', this.redisPort);
+      throw fail('port_in_use_non_redis');
     }
 
     const hasPortable = fs.existsSync(portableRedis);
@@ -589,7 +596,7 @@ class ServiceManager {
         this._useMemoryStore('binary_missing');
         return;
       }
-      throw new RedisUnavailableError('binary_missing', this.redisPort);
+      throw fail('binary_missing');
     }
 
     // Persist data to writable user directory so sessions survive app restart.
@@ -624,7 +631,7 @@ class ServiceManager {
           this._useMemoryStore('binary_unusable');
           return;
         }
-        throw new RedisUnavailableError('binary_unusable', this.redisPort);
+        throw fail('binary_unusable');
       }
     }
 
@@ -642,7 +649,7 @@ class ServiceManager {
         this._useMemoryStore('start_failed');
         return;
       }
-      throw new RedisUnavailableError('start_failed', this.redisPort);
+      throw fail('start_failed');
     }
   }
 
@@ -653,8 +660,21 @@ class ServiceManager {
 
   /** A consent file written by the startup-failure dialog authorizes exactly one launch. */
   _consumeMemoryConsent(userDataDir) {
-    if (this.allowMemoryFallback || resolveDesktopRuntime().instanceRoot) return false;
-    if (!consumeMemoryFallbackConsent(userDataDir)) return false;
+    const file = consentPath(userDataDir);
+    const hadConsent = fs.existsSync(file);
+    if (resolveDesktopRuntime().instanceRoot) {
+      // The dialog must not offer degradation here; drop any stale consent so a
+      // later ordinary launch cannot inherit it.
+      if (!hadConsent) return false;
+      discardMemoryFallbackConsent(userDataDir);
+      log('Discarded memory-store consent: an isolated desktop never degrades');
+      return false;
+    }
+    if (!hadConsent) return false;
+    if (!consumeMemoryFallbackConsent(userDataDir)) {
+      log('Memory-store consent could not be consumed; refusing degraded start');
+      return false;
+    }
     this.allowMemoryFallback = true;
     log('Consumed one-launch memory-store consent');
     return true;
