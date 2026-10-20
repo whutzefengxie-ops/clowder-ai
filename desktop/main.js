@@ -1,4 +1,16 @@
-const { app, BrowserWindow, Menu, Tray, dialog, ipcMain, net, session, shell, Notification } = require('electron');
+const {
+  app,
+  BrowserWindow,
+  Menu,
+  Tray,
+  dialog,
+  ipcMain,
+  net,
+  session,
+  shell,
+  Notification,
+  nativeImage,
+} = require('electron');
 const path = require('node:path');
 const { resolveProjectRootFromDir } = require('./project-root');
 const { installationIdentity, isInstallationShutdownRequest } = require('./installation-lifecycle');
@@ -38,6 +50,7 @@ if (process.platform === 'win32') {
   app.setAppUserModelId(DESKTOP_APP_ID);
 }
 const PROJECT_ROOT = resolveProjectRootFromDir(__dirname);
+const trayIconPath = path.join(__dirname, 'assets', process.platform === 'win32' ? 'icon.ico' : 'icon.png');
 const desktopRuntime = resolveDesktopRuntime();
 const FRONTEND_PORT = desktopRuntime.frontendPort;
 const API_PORT = desktopRuntime.apiPort;
@@ -268,7 +281,8 @@ app.on('ready', async () => {
   const trayResult = createDesktopTrayResult({
     Menu,
     Tray,
-    iconPath: path.join(__dirname, 'assets', 'icon.ico'),
+    nativeImage,
+    iconPath: trayIconPath,
     getMainWindow: () => mainWindow,
     onManualUpdate: checkForUpdatesManually,
     onQuit: () => requestQuit('tray'),
@@ -276,7 +290,7 @@ app.on('ready', async () => {
   });
   if (trayResult.status === 'created') {
     tray = trayResult.tray;
-    appLifecycle.logTrayCreated({ lifecycle, tray, app, iconPath: path.join(__dirname, 'assets', 'icon.ico') });
+    appLifecycle.logTrayCreated({ lifecycle, tray, app, iconPath: trayIconPath });
   } else {
     lifecycle('tray-create-failed', trayResult.error);
     void dialog

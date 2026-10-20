@@ -96,3 +96,40 @@ test('legacy tray callers still receive a Tray instance', () => {
   assert.ok(tray);
   assert.equal(typeof tray.setToolTip, 'function');
 });
+
+test('macOS tray decodes PNG into a menu-bar-sized native image', () => {
+  const image = {};
+  const seen = {};
+  const result = createDesktopTrayResult({
+    Menu: createMenu(),
+    Tray: class {
+      constructor(icon) {
+        seen.icon = icon;
+      }
+      setToolTip() {}
+      setContextMenu() {}
+      on() {}
+    },
+    nativeImage: {
+      createFromPath(filename) {
+        seen.filename = filename;
+        return {
+          resize(size) {
+            seen.size = size;
+            return image;
+          },
+        };
+      },
+    },
+    platform: 'darwin',
+    iconPath: '/assets/icon.png',
+    getMainWindow: () => null,
+    onManualUpdate() {},
+    onQuit() {},
+    showAbout() {},
+  });
+  assert.equal(result.status, 'created');
+  assert.equal(seen.filename, '/assets/icon.png');
+  assert.deepEqual(seen.size, { width: 18, height: 18 });
+  assert.equal(seen.icon, image);
+});

@@ -49,10 +49,24 @@ function serializeTrayError(error) {
   };
 }
 
-function createDesktopTrayResult({ Menu, Tray, iconPath, getMainWindow, onManualUpdate, onQuit, showAbout }) {
+function createDesktopTrayResult({
+  Menu,
+  Tray,
+  nativeImage,
+  platform = process.platform,
+  iconPath,
+  getMainWindow,
+  onManualUpdate,
+  onQuit,
+  showAbout,
+}) {
   let tray = null;
   try {
-    tray = new Tray(iconPath);
+    const image =
+      platform === 'darwin' && nativeImage
+        ? nativeImage.createFromPath(iconPath).resize({ width: 18, height: 18 })
+        : iconPath;
+    tray = new Tray(image);
     tray.setToolTip('Clowder AI');
     tray.setContextMenu(
       Menu.buildFromTemplate([
