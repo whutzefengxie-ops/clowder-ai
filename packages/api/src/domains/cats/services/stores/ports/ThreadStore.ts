@@ -345,6 +345,11 @@ export interface PendingContinuationEntry {
   createdAt: number;
 }
 
+/** Initial mutable preferences included in the first durable thread write. */
+export interface ThreadCreateOptions {
+  pinned?: boolean;
+}
+
 /**
  * F128: Audit metadata written to a thread when it is created from an approved proposal.
  */
@@ -722,6 +727,7 @@ export interface IThreadStore {
     parentThreadId?: string,
     proposalAudit?: ThreadProposalAudit,
     branchAudit?: ThreadBranchAudit,
+    options?: ThreadCreateOptions,
   ): Thread | Promise<Thread>;
   get(threadId: string, options?: StoreReadOptions): Thread | null | Promise<Thread | null>;
   list(userId: string, options?: StoreReadOptions): Thread[] | Promise<Thread[]>;
@@ -998,6 +1004,7 @@ export class ThreadStore implements IThreadStore {
     parentThreadId?: string,
     proposalAudit?: ThreadProposalAudit,
     branchAudit?: ThreadBranchAudit,
+    options?: ThreadCreateOptions,
   ): Thread {
     this.evictIfNeeded();
 
@@ -1010,6 +1017,7 @@ export class ThreadStore implements IThreadStore {
       participants: [],
       lastActiveAt: Date.now(),
       createdAt: Date.now(),
+      ...(options?.pinned ? { pinned: true, pinnedAt: Date.now() } : {}),
       ...(parentThreadId ? { parentThreadId } : {}),
       ...(proposalAudit
         ? {
