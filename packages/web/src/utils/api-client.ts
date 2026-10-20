@@ -7,9 +7,6 @@
  */
 
 import { useToastStore } from '../stores/toastStore';
-import type { ApiFetchOptions, GetCoordinationState, GetGeneration } from './api-client-types';
-
-export type { ApiFetchOptions } from './api-client-types';
 
 import { markApiGetGeneration } from './api-get-generation';
 import { resolveApiUrl } from './api-origin';

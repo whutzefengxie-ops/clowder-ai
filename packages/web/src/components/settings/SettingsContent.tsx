@@ -7,7 +7,6 @@ import { refreshCatsNow, useCatData } from '@/hooks/useCatData';
 import { apiFetch } from '@/utils/api-client';
 import type { MemberSaveTrace } from '@/utils/member-save-trace';
 import { accountsCopy } from '../accounts/accounts.shell-copy';
-import { ConnectorPluginInstallButton } from '../ConnectorPluginInstallButton';
 import type { ConfigData } from '../config-viewer-tabs';
 import { DesktopUpdateSettingsPanel } from '../DesktopUpdateSettingsPanel';
 import { HubAccountsTab } from '../HubAccountsTab';
@@ -275,8 +274,6 @@ export function SettingsContent({ section, initialEditCatId }: SettingsContentPr
             />
           </div>
         );
-      case 'im':
-        return <HubConnectorConfigTab refreshKey={imRefreshKey} />;
       case 'voice':
         return (
           <div className="space-y-6">
@@ -344,7 +341,6 @@ export function SettingsContent({ section, initialEditCatId }: SettingsContentPr
           }
         >
           {section === 'members' && config && <HubOverviewToolbar onAddMember={() => openMember(null)} />}
-          {section === 'im' && <ConnectorPluginInstallButton onInstalled={() => setImRefreshKey((k) => k + 1)} />}
         </SettingsPageHeader>
       )}
       {content}
