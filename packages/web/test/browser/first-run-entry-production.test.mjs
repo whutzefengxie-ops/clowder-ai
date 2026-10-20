@@ -11,7 +11,7 @@ import { chromium } from 'playwright';
 import { openFirstRunEntryApi } from '../fixtures/first-run-entry-api.mjs';
 import { cats, createChatProofApi } from './fixtures/f322-chat-real-page-data.mjs';
 
-// Actual production UI and entry/guide route handlers with atomic preference files.
+// Actual production UI and entry/guide/draft handlers with atomic preference files.
 // Other HTTP reads, the Socket.IO wire and authenticated session identity remain explicit fixtures;
 // in-memory guide threads are NOT installed/Redis/authentication acceptance.
 const webRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -179,8 +179,6 @@ async function fixture(shell, scenario) {
     '/api/projects/cwd': { path: '/author-entry-fixture' },
     '/api/executions/active': { scope: 'all', executions: [], unavailableProjectPaths: [] },
   };
-  let draft = null,
-    draftRevision = 0;
   const homeLeases = new Map();
   await context.route('**/api/**', async (route) => {
     const req = route.request(),
@@ -215,13 +213,11 @@ async function fixture(shell, scenario) {
       }
       case '/api/routing/preview':
         return reply({ targetCats: [cats[0].id], reason: { kind: 'recent_replier' } });
-      case '/api/threads/default/composer-draft':
-        if (method === 'PUT') {
-          const body = req.postDataJSON();
-          assert.equal(body.expectedRevision, draftRevision);
-          draft = { ...body, revision: ++draftRevision, ownerUserId: 'owner-proof', threadId: 'default' };
-        }
-        return reply({ draft, revision: draftRevision });
+      case '/api/threads/default/composer-draft': {
+        // Autosave can race a reload; preserve the real HTTP 409 revision fence.
+        const response = await entryApi.request(url.pathname, { method, body: req.postData() });
+        return reply(response.json(), response.statusCode);
+      }
     }
     if (url.pathname.startsWith('/api/concierge/home/clients/')) {
       assert.equal(method, 'DELETE');

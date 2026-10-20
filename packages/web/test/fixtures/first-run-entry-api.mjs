@@ -1,18 +1,20 @@
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { URL as NodeURL } from 'node:url';
+import { MessageStore } from '../../../api/dist/domains/cats/services/stores/ports/MessageStore.js';
 import { ThreadStore } from '../../../api/dist/domains/cats/services/stores/ports/ThreadStore.js';
 import {
   createGuideStoreBridge,
   InMemoryGuideSessionStore,
 } from '../../../api/dist/domains/guides/GuideSessionRepository.js';
+import { composerDraftRecallRoutes } from '../../../api/dist/routes/composer-draft-recall.js';
 import { configOnboardingRoutes } from '../../../api/dist/routes/config-onboarding.js';
 import { guideActionRoutes } from '../../../api/dist/routes/guide-action-routes.js';
 
 const requireApi = createRequire(new NodeURL('../../../api/package.json', import.meta.url));
 const Fastify = requireApi('fastify');
 
-// Real route handlers, guide state machine and atomic preference files. Only the
+// Real route handlers, guide state machine, draft revision fences and preference files. Only the
 // authenticated session is supplied by this fixture; no production auth bypass.
 export async function openFirstRunEntryApi(projectRoot, userId) {
   const app = Fastify();
@@ -27,6 +29,10 @@ export async function openFirstRunEntryApi(projectRoot, userId) {
   await app.register(guideActionRoutes, {
     threadStore,
     guideSessionStore,
+    socketManager: { emitToUser() {}, broadcastToRoom() {} },
+  });
+  await app.register(composerDraftRecallRoutes, {
+    messageStore: new MessageStore(),
     socketManager: { emitToUser() {}, broadcastToRoom() {} },
   });
   await app.ready();
