@@ -1,4 +1,5 @@
 // Desktop tray and application-menu wiring for updater entry points.
+const path = require('node:path');
 
 function presentWindow(window) {
   if (!window || window.isDestroyed?.()) return;
@@ -47,6 +48,11 @@ function serializeTrayError(error) {
     message: error?.message || String(error),
     stack: error?.stack,
   };
+}
+
+function createNativeDesktopTrayResult({ electron, platform = process.platform, ...options }) {
+  const iconPath = path.join(__dirname, 'assets', platform === 'win32' ? 'icon.ico' : 'icon.png');
+  return { ...createDesktopTrayResult({ ...electron, ...options, platform, iconPath }), iconPath };
 }
 
 function createDesktopTrayResult({
@@ -126,6 +132,7 @@ function installMacApplicationMenu({ app, Menu, onManualUpdate, showAbout }) {
 module.exports = {
   createDesktopTray,
   createDesktopTrayResult,
+  createNativeDesktopTrayResult,
   createManualUpdateHandler,
   installMacApplicationMenu,
   showAboutDialog,

@@ -1,16 +1,4 @@
-const {
-  app,
-  BrowserWindow,
-  Menu,
-  Tray,
-  dialog,
-  ipcMain,
-  net,
-  session,
-  shell,
-  Notification,
-  nativeImage,
-} = require('electron');
+const { app, BrowserWindow, Menu, dialog, ipcMain, net, session, shell, Notification } = require('electron');
 const path = require('node:path');
 const { resolveProjectRootFromDir } = require('./project-root');
 const { installationIdentity, isInstallationShutdownRequest } = require('./installation-lifecycle');
@@ -41,7 +29,7 @@ const { decideWindowClose } = require('./window-close-policy');
 const { createLifecycleLogger } = require('./lifecycle-diagnostics');
 const appLifecycle = require('./app-lifecycle');
 const {
-  createDesktopTrayResult,
+  createNativeDesktopTrayResult,
   createManualUpdateHandler,
   installMacApplicationMenu,
   showAboutDialog,
@@ -50,7 +38,6 @@ if (process.platform === 'win32') {
   app.setAppUserModelId(DESKTOP_APP_ID);
 }
 const PROJECT_ROOT = resolveProjectRootFromDir(__dirname);
-const trayIconPath = path.join(__dirname, 'assets', process.platform === 'win32' ? 'icon.ico' : 'icon.png');
 const desktopRuntime = resolveDesktopRuntime();
 const FRONTEND_PORT = desktopRuntime.frontendPort;
 const API_PORT = desktopRuntime.apiPort;
@@ -278,11 +265,8 @@ app.on('ready', async () => {
   lifecycle('desktop-instance-initialized', { isolated: Boolean(desktopRuntime.instanceRoot) });
   const showAbout = () => showAboutDialog({ app, dialog, onManualUpdate: checkForUpdatesManually });
   lifecycle('tray-create-requested');
-  const trayResult = createDesktopTrayResult({
-    Menu,
-    Tray,
-    nativeImage,
-    iconPath: trayIconPath,
+  const trayResult = createNativeDesktopTrayResult({
+    electron: require('electron'),
     getMainWindow: () => mainWindow,
     onManualUpdate: checkForUpdatesManually,
     onQuit: () => requestQuit('tray'),
@@ -290,7 +274,7 @@ app.on('ready', async () => {
   });
   if (trayResult.status === 'created') {
     tray = trayResult.tray;
-    appLifecycle.logTrayCreated({ lifecycle, tray, app, iconPath: trayIconPath });
+    appLifecycle.logTrayCreated({ lifecycle, tray, app, iconPath: trayResult.iconPath });
   } else {
     lifecycle('tray-create-failed', trayResult.error);
     void dialog

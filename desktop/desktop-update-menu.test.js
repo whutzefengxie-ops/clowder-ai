@@ -1,7 +1,13 @@
 const assert = require('node:assert/strict');
+const path = require('node:path');
 const { describe, test } = require('node:test');
 
-const { createDesktopTray, createDesktopTrayResult, createManualUpdateHandler } = require('./desktop-update-menu');
+const {
+  createDesktopTray,
+  createDesktopTrayResult,
+  createManualUpdateHandler,
+  createNativeDesktopTrayResult,
+} = require('./desktop-update-menu');
 
 describe('desktop manual update entry point', () => {
   test('re-presents an existing prompt instead of queuing another check behind it', () => {
@@ -132,4 +138,41 @@ test('macOS tray decodes PNG into a menu-bar-sized native image', () => {
   assert.equal(seen.filename, '/assets/icon.png');
   assert.deepEqual(seen.size, { width: 18, height: 18 });
   assert.equal(seen.icon, image);
+});
+
+test('native tray wiring selects packaged platform assets and preserves Windows passthrough', () => {
+  for (const platform of ['darwin', 'win32']) {
+    const decoded = {};
+    let received;
+    let decodedPath;
+    const result = createNativeDesktopTrayResult({
+      platform,
+      electron: {
+        Menu: createMenu(),
+        Tray: class {
+          constructor(image) {
+            received = image;
+          }
+          setToolTip() {}
+          setContextMenu() {}
+          on() {}
+        },
+        nativeImage: {
+          createFromPath(filename) {
+            decodedPath = filename;
+            return { resize: () => decoded };
+          },
+        },
+      },
+      getMainWindow: () => null,
+      onManualUpdate() {},
+      onQuit() {},
+      showAbout() {},
+    });
+    const expected = path.join(__dirname, 'assets', platform === 'win32' ? 'icon.ico' : 'icon.png');
+    assert.equal(result.status, 'created');
+    assert.equal(result.iconPath, expected);
+    assert.equal(received, platform === 'darwin' ? decoded : expected);
+    assert.equal(decodedPath, platform === 'darwin' ? expected : undefined);
+  }
 });
