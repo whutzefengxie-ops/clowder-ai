@@ -844,7 +844,7 @@ if (-not $NoManifest) {
         # retained in the manifest so diagnostic builds remain auditable.
         $packagedRoots = @(
             'docs', 'cat-cafe-skills', 'scripts', 'assets', 'guides',
-            'packages/api/src/plugins', '.claude/hooks/user-level',
+            '.claude/hooks/user-level',
             '.claude/hooks/f24-compaction.mjs', 'cat-template.json',
             'pnpm-workspace.yaml', 'package.json', 'LICENSE',
             'bundled/archives', 'bundled/node', 'bundled/redis', 'bundled/cli-tools',
