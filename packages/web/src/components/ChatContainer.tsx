@@ -54,7 +54,6 @@ import { PawIcon } from './icons/PawIcon';
 import { MessageSearchOverlay } from './message-search/MessageSearchOverlay';
 import { useMessageSearchHost } from './message-search/useMessageSearchHost';
 import { NewConversationPage } from './new-conversation/NewConversationPage';
-import { DemoEntryActions } from './onboarding-demo/DemoEntryActions';
 import { DEMO_SETTINGS_URL } from './onboarding-demo/demo-story';
 import { GuidedOnboarding } from './onboarding-demo/GuidedOnboarding';
 import { useDemoAdmission } from './onboarding-demo/useDemoAdmission';
@@ -1153,9 +1152,7 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
                     <PawIcon className="w-12 h-12 text-cafe-muted mx-auto mb-4" />
                     <p className="text-lg text-cafe-secondary mb-1">欢迎来到 Clowder AI!</p>
                     <p className="text-sm text-cafe-muted" suppressHydrationWarning>
-                      {cats.length > 0
-                        ? '选择一位伙伴，开始你的下一个目标'
-                        : '项目自带角色模板仅供选择，不会自动加入成员列表'}
+                      {cats.length > 0 ? '选择一位伙伴，开始你的下一个目标' : '先看看猫猫如何协作，再创建自己的伙伴'}
                     </p>
                     {showSetupCard && govStatus && (
                       <div className="mt-6 text-left">
@@ -1217,10 +1214,20 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
                         );
                       }
                       return (
-                        <DemoEntryActions
-                          empty={registryKnown && cats.length === 0}
-                          onShowCollaboration={handleStartFirstRunQuest}
-                        />
+                        <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+                          <button
+                            type="button"
+                            onClick={handleStartFirstRunQuest}
+                            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-cafe-accent/20 bg-accent-50 text-cafe-accent hover:bg-accent-100 transition-colors text-sm font-medium"
+                            data-testid="empty-state-bootcamp"
+                          >
+                            <BootcampIcon className="w-4 h-4" />
+                            看看团队如何协作
+                          </button>
+                          <Link href={DEMO_SETTINGS_URL} className="px-4 py-2 text-sm text-cafe-accent">
+                            创建我的猫猫
+                          </Link>
+                        </div>
                       );
                     })()}
                   </div>

@@ -93,7 +93,7 @@ function DemoPlayer({ storageScope, onClose, onCompleted }: Omit<Props, 'open'>)
               看猫猫一起把事情做好
             </h2>
             <p className="mt-1 text-xs leading-5 text-cafe-secondary">
-              演示角色来自项目预置数据，不会加入你的成员列表。你可以直接检测本机工具，选择并添加自己的伙伴。
+              看看同一个页面如何被设计、实现和完善，再创建自己的团队。
             </p>
           </div>
           <button
@@ -157,7 +157,7 @@ function DemoPlayer({ storageScope, onClose, onCompleted }: Omit<Props, 'open'>)
                     : 'rounded-full border border-[var(--console-border-soft)] px-4 py-2.5 text-sm text-cafe-accent'
                 }
               >
-                一键检测本机工具 →
+                {playback.finished && delivered ? '创建我的猫猫 →' : '直接创建我的猫猫 →'}
               </Link>
             </div>
           </div>

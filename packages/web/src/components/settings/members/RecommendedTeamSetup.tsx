@@ -55,7 +55,7 @@ export function RecommendedTeamSetup({
         </button>
         <h1 className="text-2xl font-semibold">创建你的猫猫团队</h1>
         <p className="mt-3 text-sm leading-6 text-cafe-secondary">
-          检测这台电脑上的工具，选择要加入的伙伴。角色来自项目自带模板，确认添加后才会出现在成员列表中。
+          根据这台电脑上的工具，为你准备了默认伙伴。保留推荐，一键加入；以后随时可以调整。
         </p>
       </header>
       <section className="rounded-2xl border border-[var(--console-border-soft)] bg-[var(--console-card-bg)] p-5 sm:p-6">

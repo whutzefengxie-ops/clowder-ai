@@ -174,7 +174,7 @@ export interface NewConversationPageProps {
 
 export function NewConversationPage(props: NewConversationPageProps) {
   const copy = useShellCopy(newConversationCopy);
-  const { cats, hasFetched } = useCatData();
+  const { cats } = useCatData();
   const [discussionNotice, setDiscussionNotice] = useState<string | null>(null);
   const floating = useArtifactLightbox('default');
   const floatingScope = useArtworkLightboxScope();
@@ -334,9 +334,7 @@ export function NewConversationPage(props: NewConversationPageProps) {
           localSaveFailed={admission.localSaveFailed}
           onRetry={admission.retryLoad}
         />
-        {props.onShowCollaboration && (
-          <DemoEntryActions empty={hasFetched && cats.length === 0} onShowCollaboration={props.onShowCollaboration} />
-        )}
+        {props.onShowCollaboration && <DemoEntryActions onShowCollaboration={props.onShowCollaboration} />}
         {floating.error && <p role="alert">{floating.error}</p>}
         <div className="mt-8">
           <RecentWorks onOpen={openWork} onOpenAll={() => setWorkspaceMode('artifacts')} onDiscuss={discussWork} />
