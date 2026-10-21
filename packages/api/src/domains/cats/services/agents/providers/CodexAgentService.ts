@@ -1523,6 +1523,18 @@ export class CodexAgentService implements AgentService {
         finalEnv[key] = value;
       }
     }
+
+    // Mark all NO_PROXY case variants from process.env for deletion, except the canonical one we just set.
+    // This prevents normalizeEnv from re-inheriting stale variants when it calls buildChildEnv again.
+    const canonicalNoProxyKey = Object.keys(result.env).find((k) => k.toUpperCase() === 'NO_PROXY');
+    if (options.inheritParentEnv !== false) {
+      for (const key of Object.keys(process.env)) {
+        if (key.toUpperCase() === 'NO_PROXY' && key !== canonicalNoProxyKey && !Object.hasOwn(finalEnv, key)) {
+          finalEnv[key] = null;
+        }
+      }
+    }
+
     return finalEnv;
   }
 
