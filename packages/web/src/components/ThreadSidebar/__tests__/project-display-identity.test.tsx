@@ -137,5 +137,4 @@ describe('Windows project display preserves project identity (#1585)', () => {
     });
     expect(onSwitch).toHaveBeenCalledWith(PATH_B);
   });
-
 });
