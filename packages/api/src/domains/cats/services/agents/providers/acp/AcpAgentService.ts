@@ -1038,6 +1038,17 @@ function classifyError(
         : null;
     const fullMsg = dataDetail ? `${err.message} — ${dataDetail}` : err.message;
 
+    // Check for credential-related errors before other classifications
+    if (
+      /credential.*(required|missing|invalid|expired)/i.test(fullMsg) ||
+      /auth.*fail/i.test(fullMsg) ||
+      /api[_\s]?key.*(missing|required|invalid)/i.test(fullMsg) ||
+      /token.*(expired|invalid)/i.test(fullMsg) ||
+      /unauthorized|unauthenticated/i.test(fullMsg)
+    ) {
+      return { errorCode: 'credential_required', errorMsg: fullMsg };
+    }
+
     if (isAgentBusyError(err)) {
       // turn.agent_busy after busy-retry exhaustion — agent-internal turn still active
       return { errorCode: 'agent_busy', errorMsg: fullMsg };
@@ -1086,6 +1097,8 @@ function toUserFacingError(providerName: string, errorCode: string, errorMsg: st
   const label = providerName === 'acp' ? 'ACP agent' : providerName;
   const base = `${errorCode}: ${errorMsg}`;
   switch (errorCode) {
+    case 'credential_required':
+      return `${base}\n⚠️ 凭据缺失或无效。请在 Hub > 账号设置中添加 API key，或在原生工具中配置凭据。`;
     case 'agent_busy':
       return `${base}\n⚠️ ${label} 正在处理内部轮次（如后台任务完成通知），自动重试后仍被占用。非 Clowder AI 系统故障，稍后重试即可。`;
     case 'model_capacity':
