@@ -96,6 +96,7 @@ export function useDurableComposerDraft({
     unrestoredImageCount,
   } = useDurableComposerDraftImageState({
     threadId,
+    ownerIdRef,
     setImages,
     setIsPreparingImages,
     saveCurrentDraftRef: saveCurrentDraftForImagesRef,
@@ -375,9 +376,19 @@ export function useDurableComposerDraft({
 
     return persistDraftSnapshot(ownerContext.snapshot, false, ownerContext.ownerId, ownerContext.threadId);
   }, [captureCurrentDraft, persistDraftSnapshot, threadId]);
+
+  // P1 R9: Image save must capture owner at assignment, not at call time
   saveCurrentDraftForImagesRef.current = threadId
-    ? () => enqueueComposerDraftSave(threadId, persistCurrentDraft)
+    ? () => {
+        const ownerId = ownerIdRef.current;
+        const capturedThreadId = threadId;
+        const snapshot = captureCurrentDraft();
+        return enqueueComposerDraftSave(threadId, () =>
+          persistDraftSnapshot(snapshot, false, ownerId, capturedThreadId),
+        );
+      }
     : async () => false;
+
   const { persistSettledDraft } = useComposerDraftAutosave({
     threadId,
     hydratedRef,
