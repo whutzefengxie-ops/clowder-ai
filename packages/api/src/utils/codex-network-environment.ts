@@ -189,11 +189,7 @@ export function deriveCodexNetworkEnvironmentSync(
  * Checks if environment has proxy configuration.
  */
 function hasProxyEnv(env: NodeJS.ProcessEnv): boolean {
-  return !!(
-    env.HTTP_PROXY || env.http_proxy ||
-    env.HTTPS_PROXY || env.https_proxy ||
-    env.ALL_PROXY || env.all_proxy
-  );
+  return !!(env.HTTP_PROXY || env.http_proxy || env.HTTPS_PROXY || env.https_proxy || env.ALL_PROXY || env.all_proxy);
 }
 
 /**
@@ -275,7 +271,10 @@ function parseWindowsProxyOverride(override: string): {
   const supported: string[] = [];
   const unsupported: string[] = [];
 
-  const entries = override.split(';').map((s) => s.trim()).filter((s) => s.length > 0);
+  const entries = override
+    .split(';')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
 
   for (const entry of entries) {
     if (entry === '<local>' || entry.includes('*') || entry.includes('-') || entry.includes('/')) {
@@ -309,11 +308,10 @@ export async function readWindowsSystemProxy(
 
     const readValue = async (valueName: string): Promise<string | undefined> => {
       try {
-        const { stdout } = await execFileAsync(
-          'reg',
-          ['query', keyPath, '/v', valueName],
-          { signal: controller.signal, timeout: timeoutMs },
-        );
+        const { stdout } = await execFileAsync('reg', ['query', keyPath, '/v', valueName], {
+          signal: controller.signal,
+          timeout: timeoutMs,
+        });
         return extractRegValue(stdout, valueName);
       } catch {
         return undefined;
@@ -328,8 +326,12 @@ export async function readWindowsSystemProxy(
     ]);
 
     // If all reads failed, return null (read failed)
-    if (proxyEnable === undefined && proxyServer === undefined &&
-        proxyOverride === undefined && autoConfigURL === undefined) {
+    if (
+      proxyEnable === undefined &&
+      proxyServer === undefined &&
+      proxyOverride === undefined &&
+      autoConfigURL === undefined
+    ) {
       return null;
     }
 

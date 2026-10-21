@@ -18,26 +18,19 @@ import { CODEX_DESKTOP_ISOLATION_ARGS, CODEX_RESTRICTED_APPS_ARGS } from './code
 
 export { codexConfigObjectFromArgs } from './codex-config-overrides.js';
 
-import { buildCodexModelCatalogArgs, isCodexCustomCatalogModel } from './codex-model-catalog.js';
-import { extractUserEnvTemplates, hasSupportedEnvTemplate, resolveEnvMap } from './env-map.js';
 import {
   deriveCodexNetworkEnvironmentSync,
   readWindowsSystemProxy,
   type WindowsSystemProxyConfig,
 } from '../../../../../utils/codex-network-environment.js';
+import { buildCodexModelCatalogArgs, isCodexCustomCatalogModel } from './codex-model-catalog.js';
+import { extractUserEnvTemplates, hasSupportedEnvTemplate, resolveEnvMap } from './env-map.js';
 
 /**
  * Checks if environment has proxy configuration.
  */
 function hasProxyEnv(env: Record<string, string | null>): boolean {
-  return !!(
-    env.HTTP_PROXY ||
-    env.http_proxy ||
-    env.HTTPS_PROXY ||
-    env.https_proxy ||
-    env.ALL_PROXY ||
-    env.all_proxy
-  );
+  return !!(env.HTTP_PROXY || env.http_proxy || env.HTTPS_PROXY || env.https_proxy || env.ALL_PROXY || env.all_proxy);
 }
 
 /**
@@ -1490,9 +1483,9 @@ export class CodexAgentService implements AgentService {
   private async applyCodexNetworkEnvironment(
     overrides: Record<string, string | null>,
     options: { inheritParentEnv?: boolean; workingDirectory?: string } = {},
-  ): Promise<NodeJS.ProcessEnv> {
+  ): Promise<Record<string, string | null>> {
     // Build complete environment with null deletions (matches buildChildEnv logic)
-    const baseEnv: NodeJS.ProcessEnv = {};
+    const baseEnv: Record<string, string | null> = {};
 
     if (options.inheritParentEnv !== false) {
       for (const [key, value] of Object.entries(process.env)) {
@@ -1512,7 +1505,7 @@ export class CodexAgentService implements AgentService {
     }
 
     // Read Windows system proxy if needed (async with timeout)
-    let systemProxy: WindowsSystemProxyConfig | null | undefined = undefined;
+    let systemProxy: WindowsSystemProxyConfig | null | undefined;
     if (process.platform === 'win32') {
       try {
         systemProxy = await readWindowsSystemProxy({ timeoutMs: 1000 });
@@ -1521,7 +1514,15 @@ export class CodexAgentService implements AgentService {
       }
     }
 
-    const result = deriveCodexNetworkEnvironmentSync(baseEnv, systemProxy);
+    // Convert Record<string, string | null> to NodeJS.ProcessEnv for deriveCodexNetworkEnvironmentSync
+    // Filter out null values as they represent deletions in our convention
+    const processEnv: NodeJS.ProcessEnv = {};
+    for (const [key, value] of Object.entries(baseEnv)) {
+      if (value !== null) {
+        processEnv[key] = value;
+      }
+    }
+    const result = deriveCodexNetworkEnvironmentSync(processEnv, systemProxy);
 
     // Log diagnostic information for troubleshooting
     if (result.diagnostic.unsupportedScenarios.length > 0) {
@@ -1535,7 +1536,14 @@ export class CodexAgentService implements AgentService {
       );
     }
 
-    return result.env;
+    // Convert NodeJS.ProcessEnv to Record<string, string | null> by filtering undefined
+    const finalEnv: Record<string, string | null> = {};
+    for (const [key, value] of Object.entries(result.env)) {
+      if (value !== undefined) {
+        finalEnv[key] = value;
+      }
+    }
+    return finalEnv;
   }
 
   private async prepareCapabilityLaunch(
@@ -2494,23 +2502,19 @@ export class CodexAgentService implements AgentService {
       let pooledSessionInUse = false;
       let forceDirectAppServer = false;
       const createDirectSession = (sessionOptions: AgentCarrierSessionOptions): Promise<AgentCarrierSession> =>
-        createDirectAgentCarrierSession(
-          sessionOptions,
-          {
-            finalEnvironment: derivedEnv,
-            ...(auditContext?.executionId
-              ? {
-                  executionOwner: {
-                    executionId: auditContext.executionId,
-                    invocationId: auditContext.invocationId,
-                    threadId: auditContext.threadId,
-                    userId: auditContext.userId,
-                    catId: auditContext.catId,
-                  },
-                }
-              : {}),
-          },
-        );
+        createDirectAgentCarrierSession(sessionOptions, {
+          ...(auditContext?.executionId
+            ? {
+                executionOwner: {
+                  executionId: auditContext.executionId,
+                  invocationId: auditContext.invocationId,
+                  threadId: auditContext.threadId,
+                  userId: auditContext.userId,
+                  catId: auditContext.catId,
+                },
+              }
+            : {}),
+        });
       const createPooledSession = async (sessionOptions: AgentCarrierSessionOptions): Promise<AgentCarrierSession> => {
         if (forceDirectAppServer) {
           return createDirectSession(sessionOptions);
