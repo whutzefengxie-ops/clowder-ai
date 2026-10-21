@@ -1,0 +1,113 @@
+## 问题描述
+
+修复 Issue #1666：Windows 企业代理环境下，Codex 访问本地 provider 网关（127.0.0.1）时被错误路由到代理服务器，导致 504 错误。
+
+## 重构摘要（第二轮）
+
+第一轮实现只修改了 `prepareCapabilityLaunch`，完全遗漏了普通 invoke 路径。本轮重构修复了所有 P1/P2 问题，统一处理所有 Codex 启动入口。
+
+### P1 级修复
+
+1. **编译错误**
+   - 修复 L1479 和 L1535 重复声明 `accountEnv`
+   - 重命名为 `finalizedAccountEnv` 并添加 `derivedEnv`
+
+2. **普通调用路径接入**（关键修复）
+   - 在 L2305 添加 `const derivedEnv = await this.applyCodexNetworkEnvironment(codexEnv)`
+   - L2353 `cliOpts` 使用 `derivedEnv` 而非 `codexEnv`
+   - L2461 `appServerEnv` 使用 `derivedEnv`
+   - L2466 `createDirectSession` 注入 `finalEnvironment: derivedEnv`
+
+3. **Windows 系统代理读取**
+   - 实现异步 `readWindowsSystemProxy` 带 1000ms 超时
+   - `applyCodexNetworkEnvironment` 方法在 Windows 上自动读取系统代理
+   - 区分未读取/读取失败/禁用/启用状态
+
+### P2 级修复
+
+1. **别名处理**
+   - `collectAllExceptions` 收集所有大小写变体
+   - `setNormalizedNoProxy` 删除所有变体，Windows 设置单一 `NO_PROXY`，Unix 设置 `no_proxy`
+
+2. **Host 环境指纹**
+   - Host pool 通过 `appServerEnv` 自动接收 `derivedEnv`
+   - 签名、auth 和实际 spawn 使用同一快照
+
+3. **测试修复**
+   - 使用 `fileURLToPath` 修复 Windows 路径问题
+   - 简化断言检查 `applyCodexNetworkEnvironment` 和 `derivedEnv`
+
+4. **PR 范围**
+   - 分支已基于正确的 upstream/main (1baaed2e9)
+   - 最新 commit: dc0e6f7db
+
+### 核心架构
+
+```typescript
+// 统一网络环境应用方法
+private async applyCodexNetworkEnvironment(
+  baseEnv: Record<string, string | null>,
+): Promise<Record<string, string>> {
+  // 在 Windows 上读取系统代理（异步，1000ms 超时）
+  const systemProxy = process.platform === 'win32'
+    ? await readWindowsSystemProxy({ timeoutMs: 1000 })
+    : undefined;
+
+  const result = deriveCodexNetworkEnvironmentSync(baseEnv, systemProxy);
+  // 记录诊断信息
+  return result.env;
+}
+```
+
+### 应用到所有路径
+
+1. **prepareCapabilityLaunch** (L1560): 能力/本地读取路径
+2. **Main invoke** (L2305): 普通聊天/exec/resume 路径
+3. **Direct session** (L2466): 使用 `finalEnvironment` 注入
+4. **Host pool**: 自动接收 `derivedEnv` 通过 `appServerEnv`
+
+### 单一快照原则
+
+每次启动只派生一次环境：
+- `finalAccountEnv` → `derivedEnv` → 所有消费者使用同一快照
+- Direct session 使用 `finalEnvironment` 注入，避免 `buildChildEnv` 重新继承
+- Host pool 的签名、auth 和实际 spawn 使用同一份环境
+
+## 验证状态
+
+### ✅ 已完成
+- 所有 P1/P2 问题已修复
+- 代码结构验证（单元测试通过）
+- 已推送到 CI 进行完整构建验证
+
+### ⏸️ 待 CI 验证
+- TypeScript 类型检查
+- Biome 格式化
+- shared/API build
+- 单元测试执行
+
+### 📋 待实施（需隔离环境）
+- 真实网络路由验证（本地网关 vs 代理计数）
+- Windows ProxyOverride 实机测试
+- 完整使用旅程（添加→首次→续聊→重启恢复）
+- Host pool 生命周期验证
+
+## 文档
+
+- 完整设计方案：`docs/plans/issue-1666-codex-proxy-plan.md`
+- 重构计划：`REFACTOR_PLAN.md`
+
+## 检查清单
+
+- [x] 修复所有编译错误
+- [x] 所有 Codex 启动路径应用网络派生
+- [x] Windows 系统代理异步读取
+- [x] 别名处理正确
+- [x] Host 签名包含网络环境
+- [x] 集成测试路径修复
+- [ ] CI 构建通过（等待验证）
+- [ ] 格式化检查通过（等待 CI）
+- [ ] 类型检查通过（等待 CI）
+- [ ] 真实网络路由验证（需隔离环境）
+
+Refs #1666

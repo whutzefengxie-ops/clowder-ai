@@ -45,6 +45,7 @@ export interface CodexNetworkEnvironment {
  * Windows system proxy configuration (read-only).
  */
 export interface WindowsSystemProxyConfig {
+  readonly enabled: boolean;
   readonly proxyServer?: string;
   readonly proxyOverride?: string;
   readonly hasPac: boolean;
@@ -94,7 +95,7 @@ export function deriveCodexNetworkEnvironmentSync(
   }
 
   // No env exceptions - check Windows system proxy if applicable
-  if (process.platform === 'win32' && diagnostic.hasProxy) {
+  if (process.platform === 'win32') {
     if (systemProxy === undefined) {
       // Not read - cannot safely determine if system exceptions exist
       return {
@@ -114,6 +115,18 @@ export function deriveCodexNetworkEnvironmentSync(
           ...diagnostic,
           exceptionSource: 'read_failed',
           unsupportedScenarios: ['windows_system_proxy_read_failed'],
+        },
+      };
+    }
+
+    if (!systemProxy.enabled) {
+      // System proxy is disabled - safe to add loopback only
+      setNormalizedNoProxy(env, [...LOOPBACK_ADDRESSES]);
+      return {
+        env,
+        diagnostic: {
+          ...diagnostic,
+          loopbackAdded: true,
         },
       };
     }
@@ -188,11 +201,13 @@ function hasProxyEnv(env: NodeJS.ProcessEnv): boolean {
  * Returns deduplicated list preserving original casing.
  */
 function collectAllExceptions(env: NodeJS.ProcessEnv): string[] {
-  const keys = ['NO_PROXY', 'no_proxy', 'No_Proxy'];
   const all: string[] = [];
   const seen = new Set<string>();
 
-  for (const key of keys) {
+  // Scan all environment keys for NO_PROXY variants (case-insensitive)
+  for (const key of Object.keys(env)) {
+    if (key.toUpperCase() !== 'NO_PROXY') continue;
+
     const value = env[key];
     if (!value || value.trim() === '') continue;
 
@@ -234,10 +249,12 @@ function mergeExceptions(existing: readonly string[], toAdd: readonly string[]):
 function setNormalizedNoProxy(env: NodeJS.ProcessEnv, exceptions: readonly string[]): void {
   const value = exceptions.join(',');
 
-  // Remove all variants
-  delete env.NO_PROXY;
-  delete env.no_proxy;
-  delete env.No_Proxy;
+  // Remove all case variants (scan all keys)
+  for (const key of Object.keys(env)) {
+    if (key.toUpperCase() === 'NO_PROXY') {
+      delete env[key];
+    }
+  }
 
   if (process.platform === 'win32') {
     // Windows: use uppercase only
@@ -303,15 +320,26 @@ export async function readWindowsSystemProxy(
       }
     };
 
-    const [proxyServer, proxyOverride, autoConfigURL] = await Promise.all([
+    const [proxyEnable, proxyServer, proxyOverride, autoConfigURL] = await Promise.all([
+      readValue('ProxyEnable'),
       readValue('ProxyServer'),
       readValue('ProxyOverride'),
       readValue('AutoConfigURL'),
     ]);
 
+    // If all reads failed, return null (read failed)
+    if (proxyEnable === undefined && proxyServer === undefined &&
+        proxyOverride === undefined && autoConfigURL === undefined) {
+      return null;
+    }
+
+    // ProxyEnable: REG_DWORD 0 or 1
+    const enabled = proxyEnable === '0x1' || proxyEnable === '1';
+
     return {
-      proxyServer,
-      proxyOverride,
+      enabled,
+      proxyServer: enabled ? proxyServer : undefined,
+      proxyOverride: enabled ? proxyOverride : undefined,
       hasPac: !!autoConfigURL,
     };
   } catch {

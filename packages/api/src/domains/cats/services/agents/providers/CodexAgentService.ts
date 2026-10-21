@@ -1481,13 +1481,39 @@ export class CodexAgentService implements AgentService {
    * Applies Codex network environment derivation to preserve loopback direct connection
    * while maintaining existing proxy configuration and internal network exceptions.
    * Issue #1666: Windows enterprise proxy may route 127.0.0.1 through proxy.
+   *
+   * This method produces a complete, spawn-ready environment by:
+   * 1. Inheriting from parent environment (unless native with inheritParentEnv=false)
+   * 2. Applying overrides and deleting null-marked keys
+   * 3. Deriving network environment (adding loopback to NO_PROXY)
    */
   private async applyCodexNetworkEnvironment(
-    baseEnv: Record<string, string | null>,
-  ): Promise<Record<string, string>> {
+    overrides: Record<string, string | null>,
+    options: { inheritParentEnv?: boolean; workingDirectory?: string } = {},
+  ): Promise<NodeJS.ProcessEnv> {
+    // Build complete environment with null deletions (matches buildChildEnv logic)
+    const baseEnv: NodeJS.ProcessEnv = {};
+
+    if (options.inheritParentEnv !== false) {
+      for (const [key, value] of Object.entries(process.env)) {
+        if (value !== undefined) {
+          baseEnv[key] = value;
+        }
+      }
+    }
+
+    // Apply overrides and handle null deletions
+    for (const [key, value] of Object.entries(overrides)) {
+      if (value === null) {
+        delete baseEnv[key];
+      } else {
+        baseEnv[key] = value;
+      }
+    }
+
     // Read Windows system proxy if needed (async with timeout)
     let systemProxy: WindowsSystemProxyConfig | null | undefined = undefined;
-    if (process.platform === 'win32' && hasProxyEnv(baseEnv)) {
+    if (process.platform === 'win32') {
       try {
         systemProxy = await readWindowsSystemProxy({ timeoutMs: 1000 });
       } catch {
@@ -1509,7 +1535,7 @@ export class CodexAgentService implements AgentService {
       );
     }
 
-    return result.env as Record<string, string>;
+    return result.env;
   }
 
   private async prepareCapabilityLaunch(
@@ -1598,7 +1624,10 @@ export class CodexAgentService implements AgentService {
     );
 
     // Apply network environment derivation for enterprise proxy compatibility (Issue #1666)
-    const derivedEnv = await this.applyCodexNetworkEnvironment(finalizedAccountEnv);
+    const derivedEnv = await this.applyCodexNetworkEnvironment(finalizedAccountEnv, {
+      inheritParentEnv: false, // Already finalized, do not re-inherit
+      workingDirectory: cwd,
+    });
 
     return {
       command: this.cliCommand,
@@ -2304,7 +2333,10 @@ export class CodexAgentService implements AgentService {
 
       // Apply network environment derivation for enterprise proxy compatibility (Issue #1666)
       // This must happen after all account/MCP/argv overlays are composed
-      const derivedEnv = await this.applyCodexNetworkEnvironment(codexEnv);
+      const derivedEnv = await this.applyCodexNetworkEnvironment(codexEnv, {
+        inheritParentEnv: !native,
+        workingDirectory: options?.workingDirectory ?? process.cwd(),
+      });
 
       const semanticCompletionController = new AbortController();
 
