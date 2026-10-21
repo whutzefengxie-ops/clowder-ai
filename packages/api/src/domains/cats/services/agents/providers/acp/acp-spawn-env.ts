@@ -25,9 +25,10 @@ export function prepareAcpProcessEnv(options: PrepareAcpProcessEnvOptions): Reco
 
   if (account?.authType === 'api_key') {
     if (!account.apiKey) {
+      const clientHint = options.clientId === 'acp' ? 'this ACP connection' : options.clientId;
       throw new Error(
-        `account "${account.id}" is configured as api_key but has no API key set — ` +
-          'add the key in Hub > account settings',
+        `Credential required: account "${account.id}" (${clientHint}) is configured as api_key but has no API key set. ` +
+          'Add the key in Hub > account settings, or configure credentials in the native tool.',
       );
     }
     const userEnvTemplates = account.envVars ? extractUserEnvTemplates(account.envVars) : undefined;
@@ -35,15 +36,22 @@ export function prepareAcpProcessEnv(options: PrepareAcpProcessEnvOptions): Reco
     // It never selects a BUILTIN_ENV_MAPS[provider] template — env comes only from the account's
     // envVars templates. Ignore any provider on generic ACP (stale / pack-catalog / direct-API).
     const envMapProvider = options.clientId === 'acp' ? undefined : (options.provider ?? undefined);
-    Object.assign(
-      resolved,
-      resolveEnvMap(
-        options.clientId,
-        envMapProvider,
-        { apiKey: account.apiKey, baseUrl: account.baseUrl, baseModel: options.baseModel },
-        userEnvTemplates,
-      ),
+
+    // For generic ACP, we must have explicit envVars templates since there's no built-in mapping
+    if (options.clientId === 'acp' && !userEnvTemplates) {
+      throw new Error(
+        `Credential mapping required: account "${account.id}" has an API key but no envVars template. ` +
+          'Generic ACP connections require explicit environment variable mapping (e.g., DEEPSEEK_API_KEY: "${api_key}").',
+      );
+    }
+
+    const envMap = resolveEnvMap(
+      options.clientId,
+      envMapProvider,
+      { apiKey: account.apiKey, baseUrl: account.baseUrl, baseModel: options.baseModel },
+      userEnvTemplates,
     );
+    Object.assign(resolved, envMap);
   }
 
   const validEnvKey = /^[A-Z_][A-Za-z0-9_]*$/;

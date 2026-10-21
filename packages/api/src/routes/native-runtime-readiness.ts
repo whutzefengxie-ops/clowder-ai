@@ -6,10 +6,12 @@ import { nativeKimiLoginCommand } from './native-kimi-login.js';
 import { probeCodexLogin } from './runtime-codex-discovery.js';
 
 export type NativeReadiness = {
-  status: 'login_required' | 'configured' | 'unknown' | 'not_installed';
+  status: 'login_required' | 'configured' | 'unknown' | 'not_installed' | 'credential_required';
   checkedAt: number;
   loginCommand?: string;
   loginShell?: 'powershell' | 'sh';
+  /** When status='credential_required', hints at what is missing (e.g., 'api_key', 'oauth') */
+  credentialHint?: string;
 };
 type Target = { id: string; installed: boolean; command?: string };
 type RecordValue = Record<string, unknown>;
