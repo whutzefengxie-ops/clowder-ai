@@ -284,20 +284,20 @@ export function ThreadSignalPills({
       data-testid={`${testIdPrefix}-pills`}
     >
       {hasPendingDecision && (
-        <span data-signal-badge className="inline-flex h-5 flex-none items-center">
+        <span data-signal-badge className="inline-flex h-5 flex-none items-center gap-1">
+          <span
+            aria-hidden="true"
+            className="h-1.5 w-1.5 flex-none rounded-full"
+            style={{ background: 'var(--semantic-warning)' }}
+          />
           <span
             role="img"
-            aria-label={copy.waitingForYou}
-            className="inline-flex h-5 flex-none items-center gap-1 rounded px-1.5 text-label font-medium"
-            style={{ background: 'var(--semantic-warning-surface)', color: sidebarStatusTextColor('warning') }}
+            aria-label={copy.needsDecision}
+            className="text-label font-medium"
+            style={{ color: sidebarStatusTextColor('warning') }}
             data-testid="thread-row-pending-decision"
           >
-            <span
-              aria-hidden="true"
-              className="h-1.5 w-1.5 flex-none rounded-full"
-              style={{ background: 'var(--semantic-warning)' }}
-            />
-            {copy.waitingForYou}
+            {copy.needsDecision}
           </span>
         </span>
       )}

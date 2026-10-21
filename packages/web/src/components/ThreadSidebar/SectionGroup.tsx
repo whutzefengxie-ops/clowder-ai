@@ -160,6 +160,7 @@ export function SectionGroup({
             intent="content"
             side="right"
             onlyWhenTruncated
+            multiline
           >
             <button
               type="button"
