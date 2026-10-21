@@ -159,7 +159,7 @@ export function SectionGroup({
             detail={projectPath && projectPath !== 'default' ? projectPath : undefined}
             intent="content"
             side="right"
-            onlyWhenTruncated
+            onlyWhenTruncated={!projectPath || projectPath === 'default'}
             multiline
           >
             <button
@@ -167,6 +167,7 @@ export function SectionGroup({
               onClick={onToggle}
               className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
               aria-label={label}
+              data-project-path={projectPath || undefined}
             >
               <SectionChevron isCollapsed={isCollapsed} />
               {iconPath && <SectionIcon iconPath={iconPath} iconColor={iconColor} />}
