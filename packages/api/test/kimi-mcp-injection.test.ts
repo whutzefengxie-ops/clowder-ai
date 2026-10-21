@@ -1,10 +1,11 @@
 import './helpers/setup-cat-registry.js';
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import fs, { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { type TestContext, test } from 'node:test';
+import { mock, type TestContext, test } from 'node:test';
 import { KimiAgentService } from '../src/domains/cats/services/agents/providers/KimiAgentService.js';
 import { prepareKimiMcpConfig } from '../src/domains/cats/services/agents/providers/kimi-mcp-config.js';
 
@@ -72,7 +73,7 @@ async function fixture(t: TestContext) {
       workingDirectory: workspace,
       callbackEnv: { CAT_CAFE_CAT_ID: 'kimi', KIMI_CODE_HOME: join(root, 'native') },
     });
-  return { root, file, invoke, lease };
+  return { root, file, invoke, lease, workspace };
 }
 
 test('Kimi receives effective MCP config during invocation and restores native project bytes', async (t) => {
@@ -139,4 +140,61 @@ test('native-only MCP entries are blocked in the temporary surface without editi
   });
   assert.ok(!messages.some((m) => m.type === 'error'), JSON.stringify(messages));
   assert.equal(await readFile(native, 'utf8'), original);
+});
+
+test('Kimi refuses a project target that is the native HOME MCP configuration', async (t) => {
+  const { file, workspace } = await fixture(t);
+  const original = '{"mcpServers":{},"native-home":true}\n';
+  await writeFile(file, original);
+  await assert.rejects(
+    prepareKimiMcpConfig({
+      workingDirectory: workspace,
+      callbackEnv: { CAT_CAFE_CAT_ID: 'kimi', KIMI_CODE_HOME: join(workspace, '.kimi-code') },
+    }),
+    /native HOME/i,
+  );
+  assert.equal(await readFile(file, 'utf8'), original);
+});
+
+test('Kimi refuses a native HOME alias before its MCP directory exists', async (t) => {
+  const { file, workspace } = await fixture(t);
+  await rm(join(workspace, '.kimi-code'), { recursive: true });
+  const alias = `${workspace}-alias`;
+  await fs.symlink(workspace, alias, process.platform === 'win32' ? 'junction' : 'dir');
+  await assert.rejects(
+    prepareKimiMcpConfig({
+      workingDirectory: alias,
+      callbackEnv: { CAT_CAFE_CAT_ID: 'kimi', KIMI_CODE_HOME: join(workspace, '.kimi-code') },
+    }),
+    /native HOME/i,
+  );
+  assert.equal(existsSync(file), false);
+});
+
+test('an external atomic save during cleanup is preserved rather than replaced by the pre-invocation file', async (t) => {
+  const { file, lease } = await fixture(t);
+  await writeFile(file, '{"original":true}');
+  const active = await lease();
+  const external = '{"external-save-during-cleanup":true}';
+  const actualRead = fs.readFile;
+  let injected = false;
+  const readMock = mock.method(fs, 'readFile', async (...args: Parameters<typeof fs.readFile>) => {
+    const value = await actualRead(...args);
+    if (!injected && String(args[0]).startsWith(join(file, '..')) && String(args[0]).endsWith('.json')) {
+      injected = true;
+      const staged = join(file, '..', 'external-save.json');
+      await writeFile(staged, external);
+      await fs.rename(staged, file);
+    }
+    return value;
+  });
+  syncBuiltinESMExports();
+  try {
+    await active.dispose().catch(() => {});
+  } finally {
+    readMock.mock.restore();
+    syncBuiltinESMExports();
+  }
+  assert.ok(injected);
+  assert.equal(await readFile(file, 'utf8'), external);
 });

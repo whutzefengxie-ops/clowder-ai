@@ -34,7 +34,7 @@ export async function resolveInvokeCapabilityRoot(binaryRoot: string): Promise<s
 
 /** A declared persistent source is authority, including absence; do not enable default tools on read failure. */
 export function assertMappedCapabilitySource(resolved: boolean, binaryRoot: string, configRoot: string): void {
-  if (!resolved && !isSameCapabilityRoot(binaryRoot, configRoot)) {
+  if (!resolved && (resolveDeclaredCapabilityRoot() !== undefined || !isSameCapabilityRoot(binaryRoot, configRoot))) {
     throw new Error('Persistent capabilities source is missing or unreadable');
   }
 }

@@ -113,3 +113,26 @@ test('empty and unreadable explicit registries do not fall back to enabled runti
   await assert.rejects(resolveProviderMcpConfigResolution(input), /missing or unreadable/);
   assert.equal(await readFile(f.file, 'utf8'), '{broken');
 });
+
+test('an explicit same-root registry remains authoritative when missing or corrupt', async (t) => {
+  const f = await fixture(t);
+  process.env.CAT_CAFE_CONFIG_ROOT = f.binary;
+  const file = join(f.binary, '.cat-cafe/capabilities.json');
+  const invoke = () =>
+    resolveProviderMcpConfigResolution({
+      callbackEnv: { CAT_CAFE_CAT_ID: 'opus' },
+      workingDirectory: f.workspace,
+      mcpServerPath: join(f.dist, 'index.js'),
+    });
+  await assert.rejects(invoke(), /missing or unreadable/);
+  await mkdir(join(f.binary, '.cat-cafe'));
+  await writeFile(file, '{broken');
+  await assert.rejects(invoke(), /missing or unreadable/);
+  assert.equal(await readFile(file, 'utf8'), '{broken');
+});
+
+test('ACP rejects a missing explicitly selected registry even when binary and config roots coincide', async (t) => {
+  const f = await fixture(t);
+  process.env.CAT_CAFE_CONFIG_ROOT = f.binary;
+  await assert.rejects(resolveAcpMcpServers(f.binary, [], undefined, { mcpSupport: true }), /missing or unreadable/);
+});

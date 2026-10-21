@@ -1,15 +1,23 @@
 import { randomUUID } from 'node:crypto';
-import { lstat, mkdir, open, readFile, rename, unlink, writeFile } from 'node:fs/promises';
-import { dirname, join, resolve } from 'node:path';
+import { link, lstat, mkdir, open, readFile, rename, unlink, writeFile } from 'node:fs/promises';
+import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveBinaryRoot } from '../../../../../config/capabilities/capability-orchestrator.js';
+import { isSameCapabilityRoot } from '../../../../../config/capabilities/invoke-capability-root.js';
 import { MCP_CALLBACK_ENV_KEYS } from '../../../../../config/capabilities/mcp-constants.js';
 import { resolveKimiRuntimePaths } from '../../../../../utils/kimi-cli-runtime.js';
+import { pathsEqual } from '../../../../../utils/project-path.js';
 import { resolveProviderMcpConfig } from './provider-mcp-config.js';
 
 export interface KimiMcpLease {
   env: Record<string, string>;
   dispose(): Promise<void>;
+}
+
+/** link is exclusive: an editor's new target must never be replaced during restoration. */
+async function restoreWithoutOverwrite(source: string, target: string): Promise<void> {
+  await link(source, target);
+  await unlink(source);
 }
 
 /** Kimi Code has no invoke-time MCP flag: lend it a native project config.
@@ -41,7 +49,17 @@ export async function prepareKimiMcpConfig(input: {
   }
   // Project entries shadow native HOME entries. Explicitly block native-only
   // servers so the managed invocation cannot bypass the capability registry.
-  const nativeFile = join(resolveKimiRuntimePaths(input.callbackEnv).shareDir, 'mcp.json');
+  const nativeDirectory = resolveKimiRuntimePaths(input.callbackEnv).shareDir;
+  const directory = join(input.workingDirectory, '.kimi-code');
+  // Compare existing parents too: first use may not have created either leaf yet.
+  if (
+    isSameCapabilityRoot(directory, nativeDirectory) ||
+    (pathsEqual(basename(directory), basename(nativeDirectory)) &&
+      isSameCapabilityRoot(dirname(directory), dirname(nativeDirectory)))
+  ) {
+    throw new Error('Refusing to replace the native HOME Kimi MCP configuration');
+  }
+  const nativeFile = join(nativeDirectory, 'mcp.json');
   const nativeRaw = await readFile(nativeFile, 'utf8').catch((error: NodeJS.ErrnoException) => {
     if (error.code !== 'ENOENT') throw error;
     return null;
@@ -52,7 +70,6 @@ export async function prepareKimiMcpConfig(input: {
       if (!(name in servers)) servers[name] = { enabled: false };
     }
   }
-  const directory = join(input.workingDirectory, '.kimi-code');
   await mkdir(directory, { recursive: true });
   if ((await lstat(directory)).isSymbolicLink()) throw new Error('Refusing a linked Kimi MCP directory');
   const file = join(directory, 'mcp.json');
@@ -83,13 +100,9 @@ export async function prepareKimiMcpConfig(input: {
   } catch (error) {
     await handle.close().catch(() => {});
     if (original && !installed) {
-      const occupied = await lstat(file).catch((failure: NodeJS.ErrnoException) => {
-        if (failure.code !== 'ENOENT') throw failure;
-        return null;
+      await restoreWithoutOverwrite(backup, file).catch((failure: unknown) => {
+        throw new Error(`Kimi MCP installation conflicted; original preserved at ${backup}`, { cause: failure });
       });
-      if (occupied)
-        throw new Error(`Kimi MCP installation conflicted; original preserved at ${backup}`, { cause: error });
-      await rename(backup, file);
     }
     await unlink(lock);
     throw error;
@@ -101,11 +114,20 @@ export async function prepareKimiMcpConfig(input: {
     env: { KIMI_CODE_TRUST_WORKSPACE: '1' },
     async dispose() {
       if (disposed) return;
-      if ((await readFile(file, 'utf8')) !== rendered) {
+      // Capture the current inode before inspecting it. An atomic save after this
+      // rename creates a new target which exclusive restoration cannot overwrite.
+      const parked = join(directory, `.clowder-mcp-current-${randomUUID()}.json`);
+      await rename(file, parked);
+      if ((await readFile(parked, 'utf8')) !== rendered) {
+        await restoreWithoutOverwrite(parked, file).catch((failure: unknown) => {
+          throw new Error(`Kimi MCP recovery required; current preserved at ${parked}, original at ${backup}`, {
+            cause: failure,
+          });
+        });
         throw new Error(`Kimi MCP configuration changed during invocation; original preserved at ${backup}`);
       }
-      await unlink(file);
-      if (original) await rename(backup, file);
+      if (original) await restoreWithoutOverwrite(backup, file);
+      await unlink(parked);
       await unlink(lock);
       disposed = true;
     },

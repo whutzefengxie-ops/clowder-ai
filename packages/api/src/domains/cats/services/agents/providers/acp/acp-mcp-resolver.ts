@@ -22,6 +22,10 @@ import {
   SENSITIVE_KEY_PATTERNS,
 } from '../../../../../../config/capabilities/capability-orchestrator.js';
 import {
+  assertMappedCapabilitySource,
+  resolveDeclaredCapabilityRoot,
+} from '../../../../../../config/capabilities/invoke-capability-root.js';
+import {
   isRetiredGithubMcpCapability,
   isRetiredGithubMcpConfigEntry,
 } from '../../../../../../config/capabilities/retired-github-mcp.js';
@@ -264,8 +268,10 @@ export async function resolveAcpMcpServers(
   const disabled = opts?.disabledServerIds;
   // Use pre-loaded config from factory when available (proper API path);
   // fall back to direct read only for backward compat / tests.
+  const configSourceRoot = opts?.configSourceRoot ?? resolveDeclaredCapabilityRoot() ?? projectRoot;
   const capConfig =
-    opts?.capabilitiesConfig !== undefined ? opts.capabilitiesConfig : readCapabilitiesConfigSync(projectRoot);
+    opts?.capabilitiesConfig !== undefined ? opts.capabilitiesConfig : readCapabilitiesConfigSync(configSourceRoot);
+  assertMappedCapabilitySource(capConfig !== null, resolveBinaryRoot(projectRoot), configSourceRoot);
   const retiredCapabilityIds = new Set(
     capConfig?.capabilities.filter(isRetiredGithubMcpCapability).map((capability) => capability.id) ?? [],
   );
@@ -322,7 +328,7 @@ export async function resolveAcpMcpServers(
   // Phase 2: resolve externals from capabilities.json (#712)
   // Use configSourceRoot for relative path resolution — external MCPs from a
   // project-local capabilities.json must resolve relative to that project, not the runtime root.
-  const externalRoot = opts?.configSourceRoot ?? projectRoot;
+  const externalRoot = configSourceRoot;
   const missing: string[] = [];
   if (externalNames.length > 0) {
     if (capConfig) {
