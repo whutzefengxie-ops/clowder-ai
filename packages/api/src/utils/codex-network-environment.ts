@@ -433,31 +433,33 @@ export async function readWindowsSystemProxy(
 
     if (wpadState === null || wpadState.autoDetect === null) {
       // Cannot determine WPAD state (timeout, permission denied, API failure, invalid format)
+      // Return null to trigger read_failed diagnostic
       return null;
     }
 
-    if (wpadState.autoDetect === true) {
-      // WPAD auto-detect is enabled, cannot convert to static NO_PROXY
-      return null;
-    }
-
-    // wpadState.autoDetect === false: WPAD disabled
     // Check explicit PAC URL from both current connection and registry root key
     const connectionPacUrl = wpadState.autoConfigUrl; // From WinHTTP current connection
     const registryPacUrl = autoConfigURL; // From registry root key
 
-    const hasPac = !!(connectionPacUrl || registryPacUrl);
+    // Known not convertible: WPAD enabled OR explicit PAC URL configured
+    const hasPac = wpadState.autoDetect === true || !!(connectionPacUrl || registryPacUrl);
 
     if (hasPac) {
-      // Explicit PAC URL configured (either in connection or registry), cannot convert to static proxy
-      return null;
+      // Return config with hasPac=true to trigger windows_pac_wpad_not_convertible diagnostic
+      return {
+        enabled,
+        proxyServer: enabled ? proxyServer : undefined,
+        proxyOverride: enabled ? proxyOverride : undefined,
+        hasPac: true,
+      };
     }
 
+    // wpadState.autoDetect === false AND no PAC URL: both WPAD and PAC disabled
     return {
       enabled,
       proxyServer: enabled ? proxyServer : undefined,
       proxyOverride: enabled ? proxyOverride : undefined,
-      hasPac: false, // Both WPAD and explicit PAC are disabled
+      hasPac: false,
     };
   } catch {
     // Any failure: timeout, access denied, key not found, etc.
