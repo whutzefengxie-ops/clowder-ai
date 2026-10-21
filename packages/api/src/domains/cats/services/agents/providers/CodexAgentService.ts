@@ -20,6 +20,7 @@ export { codexConfigObjectFromArgs } from './codex-config-overrides.js';
 
 import { buildCodexModelCatalogArgs, isCodexCustomCatalogModel } from './codex-model-catalog.js';
 import { extractUserEnvTemplates, hasSupportedEnvTemplate, resolveEnvMap } from './env-map.js';
+import { deriveCodexNetworkEnvironmentSync } from '../../../../../utils/codex-network-environment.js';
 /**
  * Codex Agent Service
  * 使用 Codex CLI 子进程调用缅因猫 (Codex)
@@ -1529,20 +1530,37 @@ export class CodexAgentService implements AgentService {
       env.HOME = dirname(executionHome);
       if (process.platform === 'win32') env.USERPROFILE = env.HOME;
     }
+
+    // Finalize account environment (includes CODEX_HOME, auth, etc.)
+    const accountEnv = withoutSessionScopedHostEnv(
+      finalizeCodexAccountEnvironment(descriptor, {
+        env,
+        selectedApiEnv,
+        memberConfigArgs,
+        args,
+        cwd,
+        ...(executionHome ? { executionHome } : {}),
+      }),
+    );
+
+    // Apply network environment derivation for enterprise proxy compatibility (Issue #1666)
+    // This adds loopback addresses to NO_PROXY while preserving existing proxy configuration
+    const networkResult = deriveCodexNetworkEnvironmentSync(accountEnv);
+
+    // Log diagnostic information for troubleshooting
+    if (networkResult.diagnostic.unsupportedScenarios.length > 0) {
+      this.logger?.warn('codex_network_environment_partial_support', {
+        catId: this.catId,
+        scenarios: networkResult.diagnostic.unsupportedScenarios,
+        source: networkResult.diagnostic.exceptionSource,
+      });
+    }
+
     return {
       command: this.cliCommand,
       args,
       cwd,
-      env: withoutSessionScopedHostEnv(
-        finalizeCodexAccountEnvironment(descriptor, {
-          env,
-          selectedApiEnv,
-          memberConfigArgs,
-          args,
-          cwd,
-          ...(executionHome ? { executionHome } : {}),
-        }),
-      ),
+      env: networkResult.env,
     };
   }
 
