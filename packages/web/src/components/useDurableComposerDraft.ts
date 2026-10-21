@@ -398,6 +398,7 @@ export function useDurableComposerDraft({
     return registerDurableComposerDraftAdmissionFlusher({
       threadId,
       hydrationSettledRef,
+      ownerIdRef,
       pendingAdmissionDraftRef,
       canonicalDraftRef,
       pendingRecoveryRef,
@@ -413,7 +414,7 @@ export function useDurableComposerDraft({
 
   const beginAdmission = useCallback(
     (snapshot: ComposerAdmissionSnapshot) => {
-      const generation = hydrationGenerationRef.current;
+      const ownerId = ownerIdRef.current; // P1-2 R8: Use stable owner ID, not hydration generation
       const durableSnapshot = { ...snapshot, imageUrls: [...imageUrlsRef.current] };
       const admittedDraft = durableDraftForAdmission(
         durableSnapshot,
@@ -430,15 +431,15 @@ export function useDurableComposerDraft({
         snapshot: admittedDraft,
         files: [...durableSnapshot.images],
         confirmsRecoveredDraft: recoveredDraftAwaitingConfirmationRef.current,
-        generation,
+        generation: ownerId, // P1-2 R8: Store ownerId, not hydration generation
         threadId: threadId ?? null,
       };
       recoveredDraftAwaitingConfirmationRef.current = false;
       pendingAdmissionDraftRef.current = pendingAdmission;
       admissionsPendingRef.current += 1;
       return (accepted: boolean | undefined) => {
-        // P1-3: Check generation and thread owner first
-        if (generation !== hydrationGenerationRef.current || pendingAdmission.threadId !== threadId) {
+        // P1-2 R8: Check stable owner ID, not hydration generation
+        if (ownerId !== ownerIdRef.current || pendingAdmission.threadId !== threadId) {
           return;
         }
 
@@ -474,7 +475,7 @@ export function useDurableComposerDraft({
           }
         } else {
           clearFallbackRef.current = durableSnapshot;
-          persistSettledDraft(generation);
+          persistSettledDraft(hydrationGenerationRef.current); // P1-2 R8: Use current hydration generation
         }
         setAdmissionEpoch((current) => current + 1);
       };

@@ -18,6 +18,7 @@ export interface PendingComposerAdmissionDraft {
 interface RegisterAdmissionFlusherOptions {
   threadId: string;
   hydrationSettledRef: ValueRef<Promise<void>>;
+  ownerIdRef: ValueRef<number>;
   pendingAdmissionDraftRef: ValueRef<PendingComposerAdmissionDraft | null>;
   canonicalDraftRef: ValueRef<DurableDraftSnapshot | null>;
   pendingRecoveryRef: ValueRef<{
@@ -29,7 +30,12 @@ interface RegisterAdmissionFlusherOptions {
   recoveredDraftAwaitingConfirmationRef: ValueRef<boolean>;
   revisionRef: ValueRef<number>;
   captureCurrentDraft: () => DurableDraftSnapshot;
-  persistDraftSnapshot: (snapshot: DurableDraftSnapshot, allowPendingAdmission?: boolean) => Promise<boolean>;
+  persistDraftSnapshot: (
+    snapshot: DurableDraftSnapshot,
+    allowPendingAdmission?: boolean,
+    boundOwnerId?: number,
+    boundThreadId?: string | null,
+  ) => Promise<boolean>;
   enqueueSave: (threadId: string, save: () => Promise<boolean>) => Promise<boolean>;
 }
 
@@ -61,7 +67,10 @@ async function persist(
   snapshot: DurableDraftSnapshot,
   admission: boolean,
 ): Promise<boolean> {
-  return state.enqueueSave(state.threadId, () => state.persistDraftSnapshot(snapshot, admission));
+  // P1-1 R8: Capture owner identity before enqueue
+  const ownerId = state.ownerIdRef.current;
+  const threadId = state.threadId;
+  return state.enqueueSave(state.threadId, () => state.persistDraftSnapshot(snapshot, admission, ownerId, threadId));
 }
 
 async function flushOrdinary(state: RegisterAdmissionFlusherOptions) {
