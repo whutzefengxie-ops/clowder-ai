@@ -2,7 +2,7 @@ import type { ContextAttachment } from '@cat-cafe/shared';
 import { act, useRef, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { prepareComposerDraftAdmission } from '@/components/composer-draft-flush-registry';
+import { flushComposerDraft, prepareComposerDraftAdmission } from '@/components/composer-draft-flush-registry';
 import { threadContextAttachmentDrafts, threadImageDrafts } from '@/components/thread-drafts';
 import { useDurableComposerDraft } from '@/components/useDurableComposerDraft';
 import { useChatStore } from '@/stores/chatStore';
@@ -19,6 +19,7 @@ let write: (body: { text?: string; expectedRevision: number }, method: string) =
 let typeText: (text: string) => void;
 let addFiles: (files: File[]) => void;
 let updateAttachments: (attachments: ContextAttachment[]) => void;
+let discardUnrestored: () => Promise<void>;
 let beginAndClear: () => void;
 let finish: (accepted: boolean | undefined) => void;
 let resolvePendingWrite: (() => void) | null;
@@ -47,6 +48,7 @@ function Harness({ threadId = THREAD }: { threadId?: string }) {
   typeText = setInput;
   addFiles = setImages;
   updateAttachments = setAttachments;
+  discardUnrestored = durable.discardUnrestoredImages;
   beginAndClear = () => {
     finish = durable.beginAdmission({ text: input, images, contextAttachments: attachments, replyTo: replyToMessage });
     durable.markOptimisticallyCleared();
@@ -60,6 +62,7 @@ function Harness({ threadId = THREAD }: { threadId?: string }) {
       <textarea ref={textareaRef} value={input} readOnly />
       <span data-files>{images.length}</span>
       <span data-context>{JSON.stringify(attachments)}</span>
+      <span data-unrestored>{durable.unrestoredImageCount}</span>
     </>
   );
 }
@@ -208,7 +211,7 @@ it('does not mistake completion of its own in-flight autosave for foreign recove
   resolvePendingWrite?.();
   await settle(); // The real send caller also has async mirror/intent work before preparation.
   const result = await admissionResult();
-  act(() => finish(!(result instanceof Error)));
+  act(() => finish(result instanceof Error ? false : true));
   expect(result).not.toBeInstanceOf(Error);
   expect(writes.findLast((body) => body.text)?.text).toBe('please revise current PR');
 });
@@ -461,4 +464,222 @@ it('restores the confirmed attempted edit when its confirming retry meets anothe
   expect(await admissionResult()).toBeInstanceOf(Error);
   act(() => finish(false));
   expect(container.querySelector('textarea')?.value).toContain('edited confirmed draft to send');
+});
+
+it.each([
+  'pagehide',
+  'ordinary flush',
+])('keeps an old-thread queued %s save from adopting the new thread generation and revision', async (boundary) => {
+  const owners = new Map([
+    [THREAD, { text: 'old saved draft', revision: 5 }],
+    ['new-thread', { text: 'new-thread saved draft', revision: 20 }],
+  ]);
+  const requestLog: { threadId: string; expectedRevision: number; text: string }[] = [];
+  let delayed = false;
+  vi.mocked(apiFetch).mockImplementation(async (url, init) => {
+    const threadId = String(url).match(/\/threads\/([^/]+)\/composer-draft/)?.[1];
+    if (!threadId || !owners.has(threadId)) throw new Error(`Unexpected fixture URL: ${url}`);
+    const current = owners.get(threadId)!;
+    if (!init?.method) return response({ draft: { text: current.text }, revision: current.revision });
+    const body = JSON.parse(String(init.body));
+    requestLog.push({ threadId, expectedRevision: body.expectedRevision, text: body.text ?? '' });
+    if (threadId === THREAD && body.text === 'old-thread in-flight edit' && !delayed) {
+      delayed = true;
+      return new Promise<Response>((resolve) => {
+        resolvePendingWrite = () => {
+          current.text = body.text;
+          current.revision += 1;
+          resolve(response({ draft: { text: current.text }, revision: current.revision }));
+          resolvePendingWrite = null;
+        };
+      });
+    }
+    if (body.expectedRevision !== current.revision) {
+      return response({ code: 'DRAFT_REVISION_MISMATCH' }, 409);
+    }
+    current.text = init.method === 'DELETE' ? '' : (body.text ?? '');
+    current.revision += 1;
+    return response({ draft: { text: current.text }, revision: current.revision });
+  });
+  await render();
+  act(() => typeText('old-thread in-flight edit'));
+  await act(async () => vi.advanceTimersByTimeAsync(400));
+  expect(resolvePendingWrite).not.toBeNull();
+  act(() => typeText('old-thread queued pagehide edit'));
+  let queuedFlush: Promise<unknown> | undefined;
+  if (boundary === 'pagehide') act(() => window.dispatchEvent(new Event('pagehide')));
+  else
+    act(() => {
+      queuedFlush = flushComposerDraft(THREAD).catch((error) => error);
+    });
+  await act(async () => {
+    useChatStore.setState({ currentThreadId: 'new-thread' });
+    root.render(<Harness threadId="new-thread" />);
+  });
+  await settle();
+  resolvePendingWrite?.();
+  await settle();
+  if (queuedFlush)
+    await act(async () => {
+      await queuedFlush;
+    });
+  act(() => typeText('new-thread current edit'));
+  await act(async () => vi.advanceTimersByTimeAsync(450));
+  await settle();
+  expect.soft(container.querySelector('textarea')?.value).toBe('new-thread current edit');
+  expect
+    .soft(requestLog.filter((request) => request.threadId === 'new-thread').at(-1)?.text, JSON.stringify(requestLog))
+    .toBe('new-thread current edit');
+  expect
+    .soft(
+      requestLog.filter((request) => request.threadId === 'new-thread').at(-1)?.expectedRevision,
+      JSON.stringify(requestLog),
+    )
+    .toBe(20);
+  expect
+    .soft(requestLog.filter((request) => request.threadId === THREAD).map((request) => request.expectedRevision))
+    .not.toContain(20);
+  expect.soft(owners.get('new-thread')?.text).toBe('new-thread current edit');
+});
+
+it('advances CAS within one owner when a second autosave is queued behind its own slow first save', async () => {
+  await render();
+  let firstWrite = true;
+  write = (body, method) => {
+    if (body.expectedRevision !== revision) {
+      return response({ code: 'DRAFT_REVISION_MISMATCH' }, 409);
+    }
+    if (firstWrite) {
+      firstWrite = false;
+      return new Promise<Response>((resolve) => {
+        resolvePendingWrite = () => {
+          owner = { text: body.text ?? '' };
+          revision += 1;
+          resolve(response({ draft: owner, revision }));
+          resolvePendingWrite = null;
+        };
+      });
+    }
+    owner = method === 'DELETE' ? null : { text: body.text ?? '' };
+    revision += 1;
+    return response({ draft: owner, revision });
+  };
+  act(() => typeText('please inspect current PR'));
+  await act(async () => vi.advanceTimersByTimeAsync(400));
+  expect(resolvePendingWrite).not.toBeNull();
+  act(() => typeText('please revise current PR'));
+  await act(async () => vi.advanceTimersByTimeAsync(400));
+  resolvePendingWrite?.();
+  await settle();
+  expect
+    .soft(
+      writes.map((body) => body.expectedRevision),
+      JSON.stringify(writes),
+    )
+    .toEqual([5, 6]);
+  expect.soft(owner?.text).toBe('please revise current PR');
+  act(() => beginAndClear());
+  const result = await admissionResult();
+  act(() => finish(result instanceof Error ? false : true));
+  expect(result).not.toBeInstanceOf(Error);
+});
+
+it('restores a rejected send and releases autosave after a same-thread pending insert changes hydration generation', async () => {
+  await render();
+  act(() => typeText('attempted message awaiting transport'));
+  await act(async () => vi.advanceTimersByTimeAsync(450));
+  act(() => beginAndClear());
+  expect(await admissionResult()).not.toBeInstanceOf(Error);
+  act(() =>
+    useChatStore.setState({
+      pendingChatInsert: {
+        threadId: THREAD,
+        text: 'new content inserted while transport waits',
+      },
+    }),
+  );
+  await settle();
+  expect(container.querySelector('textarea')?.value).toContain('new content inserted while transport waits');
+  act(() => finish(false));
+  expect.soft(container.querySelector('textarea')?.value).toContain('attempted message awaiting transport');
+  act(() => typeText('next edit after rejected transport'));
+  await act(async () => vi.advanceTimersByTimeAsync(450));
+  expect.soft(owner?.text).toBe('next edit after rejected transport');
+});
+
+it('keeps queued image-discard persistence and its failure rollback inside the original owner', async () => {
+  const missingUrl = '/review-missing.png';
+  const owners = new Map<string, { text: string; revision: number; contentBlocks?: unknown[] }>([
+    [THREAD, { text: 'old saved draft', revision: 5, contentBlocks: [{ type: 'image', url: missingUrl }] }],
+    ['new-thread', { text: 'new-thread saved draft', revision: 20 }],
+  ]);
+  const requestLog: { threadId: string; expectedRevision: number; text: string }[] = [];
+  let delayed = false;
+  vi.mocked(apiFetch).mockImplementation(async (url, init) => {
+    if (String(url) === missingUrl) return response({ error: 'image unavailable' }, 500);
+    const threadId = String(url).match(/\/threads\/([^/]+)\/composer-draft/)?.[1];
+    if (!threadId || !owners.has(threadId)) throw new Error(`Unexpected fixture URL: ${url}`);
+    const current = owners.get(threadId)!;
+    if (!init?.method)
+      return response({
+        draft: { text: current.text, contentBlocks: current.contentBlocks },
+        revision: current.revision,
+      });
+    const body = JSON.parse(String(init.body));
+    requestLog.push({ threadId, expectedRevision: body.expectedRevision, text: body.text ?? '' });
+    if (threadId === THREAD && body.text === 'old-thread in-flight edit' && !delayed) {
+      delayed = true;
+      return new Promise<Response>((resolve) => {
+        resolvePendingWrite = () => {
+          current.text = body.text;
+          current.contentBlocks = body.contentBlocks;
+          current.revision += 1;
+          resolve(
+            response({
+              draft: { text: current.text, contentBlocks: current.contentBlocks },
+              revision: current.revision,
+            }),
+          );
+          resolvePendingWrite = null;
+        };
+      });
+    }
+    if (body.expectedRevision !== current.revision) return response({ code: 'DRAFT_REVISION_MISMATCH' }, 409);
+    current.text = init.method === 'DELETE' ? '' : (body.text ?? '');
+    current.contentBlocks = body.contentBlocks;
+    current.revision += 1;
+    return response({
+      draft: { text: current.text, contentBlocks: current.contentBlocks },
+      revision: current.revision,
+    });
+  });
+  await render();
+  expect(container.querySelector('[data-unrestored]')?.textContent).toBe('1');
+  act(() => typeText('old-thread in-flight edit'));
+  await act(async () => vi.advanceTimersByTimeAsync(400));
+  expect(resolvePendingWrite).not.toBeNull();
+  let discarded: Promise<void>;
+  act(() => {
+    discarded = discardUnrestored();
+  });
+  await act(async () => {
+    useChatStore.setState({ currentThreadId: 'new-thread' });
+    root.render(<Harness threadId="new-thread" />);
+  });
+  await settle();
+  act(() => typeText('new-thread current edit'));
+  resolvePendingWrite?.();
+  await act(async () => {
+    await discarded;
+  });
+  await settle();
+  await act(async () => vi.advanceTimersByTimeAsync(450));
+  expect
+    .soft(
+      requestLog.filter((request) => request.threadId === THREAD).map((request) => request.expectedRevision),
+      JSON.stringify(requestLog),
+    )
+    .not.toContain(20);
+  expect.soft(owners.get('new-thread')?.text).toBe('new-thread current edit');
+  expect.soft(container.querySelector('[data-unrestored]')?.textContent).toBe('0');
 });
