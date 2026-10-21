@@ -7,13 +7,6 @@
  * This module provides pure functions to derive Codex launch environment with loopback
  * addresses added to NO_PROXY, while preserving existing proxy configuration and internal
  * network exceptions.
- *
- * Design principles:
- * - Pure derivation from parent environment + overrides (no global process.env mutation)
- * - Preserve existing HTTP_PROXY/HTTPS_PROXY/ALL_PROXY and user-configured NO_PROXY
- * - Only add loopback addresses (localhost, 127.0.0.1, ::1) to exceptions
- * - Windows: respect ProxyOverride when env NO_PROXY is empty (hyper-util behavior)
- * - Safe degradation: preserve original environment if system exceptions cannot be read
  */
 
 /**
@@ -27,39 +20,33 @@ const LOOPBACK_ADDRESSES = ['localhost', '127.0.0.1', '::1'] as const;
 export type ProxyExceptionSource = 'env' | 'system_static' | 'system_pac' | 'none' | 'read_failed';
 
 /**
+ * Diagnostic information for network environment derivation.
+ */
+export interface CodexNetworkDiagnostic {
+  /** Whether any proxy environment variables are present */
+  readonly hasProxy: boolean;
+  /** Source of proxy exceptions used */
+  readonly exceptionSource: ProxyExceptionSource;
+  /** Whether loopback addresses were added */
+  readonly loopbackAdded: boolean;
+  /** Scenarios not covered by this implementation (empty if fully handled) */
+  readonly unsupportedScenarios: readonly string[];
+}
+
+/**
  * Derived network environment for Codex launch.
  */
 export interface CodexNetworkEnvironment {
-  /**
-   * Final environment variables to pass to Codex process.
-   * Contains merged NO_PROXY with loopback addresses added.
-   */
   readonly env: NodeJS.ProcessEnv;
-
-  /**
-   * Diagnostic information (no credentials, safe for logging).
-   */
-  readonly diagnostic: {
-    /** Whether any proxy environment variables are present */
-    readonly hasProxy: boolean;
-    /** Source of proxy exceptions used */
-    readonly exceptionSource: ProxyExceptionSource;
-    /** Whether loopback addresses were added */
-    readonly loopbackAdded: boolean;
-    /** Scenarios not covered by this implementation (empty if fully handled) */
-    readonly unsupportedScenarios: readonly string[];
-  };
+  readonly diagnostic: CodexNetworkDiagnostic;
 }
 
 /**
  * Windows system proxy configuration (read-only).
  */
 export interface WindowsSystemProxyConfig {
-  /** Static proxy server (from ProxyServer registry key) */
   readonly proxyServer?: string;
-  /** Static proxy exceptions (from ProxyOverride registry key) */
   readonly proxyOverride?: string;
-  /** Whether PAC/WPAD is configured */
   readonly hasPac: boolean;
 }
 
@@ -67,7 +54,6 @@ export interface WindowsSystemProxyConfig {
  * Options for reading Windows system proxy configuration.
  */
 export interface ReadWindowsProxyOptions {
-  /** Timeout in milliseconds (default: 1000) */
   readonly timeoutMs?: number;
 }
 
@@ -75,90 +61,73 @@ export interface ReadWindowsProxyOptions {
  * Derives Codex network environment from base environment.
  *
  * @param baseEnv - Base environment (already merged with account overrides and null deletions)
- * @param options - Optional system proxy reader (Windows only)
+ * @param systemProxy - Pre-read Windows system proxy config (undefined = not read, null = read failed)
  * @returns Derived environment with loopback addresses in NO_PROXY
- */
-export function deriveCodexNetworkEnvironment(
-  baseEnv: NodeJS.ProcessEnv,
-  options?: {
-    readonly readWindowsProxy?: (opts?: ReadWindowsProxyOptions) => Promise<WindowsSystemProxyConfig | null>;
-  },
-): CodexNetworkEnvironment {
-  const env = { ...baseEnv };
-  const diagnostic: CodexNetworkEnvironment['diagnostic'] = {
-    hasProxy: hasProxyEnv(env),
-    exceptionSource: 'none',
-    loopbackAdded: false,
-    unsupportedScenarios: [],
-  };
-
-  // Collect existing exceptions from environment (case-insensitive on Windows)
-  const existingExceptions = collectExistingExceptions(env);
-
-  if (existingExceptions.length > 0) {
-    // User has explicit env exceptions - preserve and append
-    diagnostic.exceptionSource = 'env';
-    const merged = mergeExceptions(existingExceptions, LOOPBACK_ADDRESSES);
-    setNormalizedNoProxy(env, merged);
-    diagnostic.loopbackAdded = merged.length > existingExceptions.length;
-    return { env, diagnostic };
-  }
-
-  // No env exceptions - check if we need to preserve Windows system exceptions
-  // This matches hyper-util 0.1.20 behavior: only loads ProxyOverride when env is empty
-  if (process.platform === 'win32' && options?.readWindowsProxy && diagnostic.hasProxy) {
-    // Async not allowed here - must be called by consumer before this function
-    // For now, mark as unsupported and preserve original environment
-    diagnostic.exceptionSource = 'none';
-    diagnostic.unsupportedScenarios = ['windows_system_exceptions_require_async_read'];
-    return { env, diagnostic };
-  }
-
-  // Safe to add loopback-only exceptions
-  setNormalizedNoProxy(env, [...LOOPBACK_ADDRESSES]);
-  diagnostic.loopbackAdded = true;
-  return { env, diagnostic };
-}
-
-/**
- * Synchronous version that accepts pre-read system proxy config.
  */
 export function deriveCodexNetworkEnvironmentSync(
   baseEnv: NodeJS.ProcessEnv,
   systemProxy?: WindowsSystemProxyConfig | null,
 ): CodexNetworkEnvironment {
   const env = { ...baseEnv };
-  const diagnostic: CodexNetworkEnvironment['diagnostic'] = {
+  const diagnostic: CodexNetworkDiagnostic = {
     hasProxy: hasProxyEnv(env),
     exceptionSource: 'none',
     loopbackAdded: false,
     unsupportedScenarios: [],
   };
 
-  const existingExceptions = collectExistingExceptions(env);
+  // Collect existing exceptions from all case variants
+  const existingExceptions = collectAllExceptions(env);
 
   if (existingExceptions.length > 0) {
-    diagnostic.exceptionSource = 'env';
+    // User has explicit env exceptions - preserve and append
     const merged = mergeExceptions(existingExceptions, LOOPBACK_ADDRESSES);
     setNormalizedNoProxy(env, merged);
-    diagnostic.loopbackAdded = merged.length > existingExceptions.length;
-    return { env, diagnostic };
+    return {
+      env,
+      diagnostic: {
+        ...diagnostic,
+        exceptionSource: 'env',
+        loopbackAdded: merged.length > existingExceptions.length,
+      },
+    };
   }
 
-  // Check Windows system exceptions
-  if (process.platform === 'win32' && diagnostic.hasProxy && systemProxy !== undefined) {
+  // No env exceptions - check Windows system proxy if applicable
+  if (process.platform === 'win32' && diagnostic.hasProxy) {
+    if (systemProxy === undefined) {
+      // Not read - cannot safely determine if system exceptions exist
+      return {
+        env,
+        diagnostic: {
+          ...diagnostic,
+          unsupportedScenarios: ['windows_system_proxy_not_read'],
+        },
+      };
+    }
+
     if (systemProxy === null) {
       // Read failed - preserve original environment
-      diagnostic.exceptionSource = 'read_failed';
-      diagnostic.unsupportedScenarios = ['windows_system_proxy_read_failed'];
-      return { env, diagnostic };
+      return {
+        env,
+        diagnostic: {
+          ...diagnostic,
+          exceptionSource: 'read_failed',
+          unsupportedScenarios: ['windows_system_proxy_read_failed'],
+        },
+      };
     }
 
     if (systemProxy.hasPac) {
       // PAC/WPAD present - cannot safely convert to static list
-      diagnostic.exceptionSource = 'system_pac';
-      diagnostic.unsupportedScenarios = ['windows_pac_wpad_not_convertible'];
-      return { env, diagnostic };
+      return {
+        env,
+        diagnostic: {
+          ...diagnostic,
+          exceptionSource: 'system_pac',
+          unsupportedScenarios: ['windows_pac_wpad_not_convertible'],
+        },
+      };
     }
 
     if (systemProxy.proxyOverride) {
@@ -166,55 +135,79 @@ export function deriveCodexNetworkEnvironmentSync(
       const systemExceptions = parseWindowsProxyOverride(systemProxy.proxyOverride);
       if (systemExceptions.unsupported.length > 0) {
         // Contains patterns we cannot safely convert
-        diagnostic.exceptionSource = 'system_static';
-        diagnostic.unsupportedScenarios = systemExceptions.unsupported.map(
-          (pattern) => `windows_proxy_override_pattern_not_supported:${pattern}`,
-        );
-        return { env, diagnostic };
+        return {
+          env,
+          diagnostic: {
+            ...diagnostic,
+            exceptionSource: 'system_static',
+            unsupportedScenarios: systemExceptions.unsupported.map(
+              (pattern) => `windows_proxy_override_pattern_not_supported:${pattern}`,
+            ),
+          },
+        };
       }
 
       // Safe to merge
-      diagnostic.exceptionSource = 'system_static';
       const merged = mergeExceptions(systemExceptions.supported, LOOPBACK_ADDRESSES);
       setNormalizedNoProxy(env, merged);
-      diagnostic.loopbackAdded = merged.length > systemExceptions.supported.length;
-      return { env, diagnostic };
+      return {
+        env,
+        diagnostic: {
+          ...diagnostic,
+          exceptionSource: 'system_static',
+          loopbackAdded: merged.length > systemExceptions.supported.length,
+        },
+      };
     }
   }
 
-  // No exceptions present - safe to add loopback only
+  // Safe to add loopback-only exceptions
   setNormalizedNoProxy(env, [...LOOPBACK_ADDRESSES]);
-  diagnostic.loopbackAdded = true;
-  return { env, diagnostic };
+  return {
+    env,
+    diagnostic: {
+      ...diagnostic,
+      loopbackAdded: true,
+    },
+  };
 }
 
 /**
  * Checks if environment has proxy configuration.
  */
 function hasProxyEnv(env: NodeJS.ProcessEnv): boolean {
-  const upper = (key: string) => env[key];
-  const lower = (key: string) => env[key.toLowerCase()];
   return !!(
-    upper('HTTP_PROXY') ||
-    lower('http_proxy') ||
-    upper('HTTPS_PROXY') ||
-    lower('https_proxy') ||
-    upper('ALL_PROXY') ||
-    lower('all_proxy')
+    env.HTTP_PROXY || env.http_proxy ||
+    env.HTTPS_PROXY || env.https_proxy ||
+    env.ALL_PROXY || env.all_proxy
   );
 }
 
 /**
- * Collects existing NO_PROXY entries from environment (handles case variations).
+ * Collects existing NO_PROXY entries from all case variants.
+ * Returns deduplicated list preserving original casing.
  */
-function collectExistingExceptions(env: NodeJS.ProcessEnv): string[] {
-  const noProxy = env.NO_PROXY ?? env.no_proxy;
-  if (!noProxy || noProxy.trim() === '') return [];
+function collectAllExceptions(env: NodeJS.ProcessEnv): string[] {
+  const keys = ['NO_PROXY', 'no_proxy', 'No_Proxy'];
+  const all: string[] = [];
+  const seen = new Set<string>();
 
-  return noProxy
-    .split(',')
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0);
+  for (const key of keys) {
+    const value = env[key];
+    if (!value || value.trim() === '') continue;
+
+    for (const entry of value.split(',')) {
+      const trimmed = entry.trim();
+      if (trimmed.length === 0) continue;
+      const lower = trimmed.toLowerCase();
+      if (!seen.has(lower)) {
+        seen.add(lower);
+        all.push(trimmed);
+      }
+    }
+  }
+
+  return all;
 }
 
 /**
@@ -236,31 +229,27 @@ function mergeExceptions(existing: readonly string[], toAdd: readonly string[]):
 
 /**
  * Sets NO_PROXY in environment with platform-appropriate casing.
+ * Removes all case variants and sets single canonical key.
  */
 function setNormalizedNoProxy(env: NodeJS.ProcessEnv, exceptions: readonly string[]): void {
   const value = exceptions.join(',');
 
+  // Remove all variants
+  delete env.NO_PROXY;
+  delete env.no_proxy;
+  delete env.No_Proxy;
+
   if (process.platform === 'win32') {
-    // Windows: use uppercase, remove lowercase variant
+    // Windows: use uppercase only
     env.NO_PROXY = value;
-    delete env.no_proxy;
   } else {
-    // Unix: preserve existing casing or use lowercase
-    if (env.NO_PROXY !== undefined) {
-      env.NO_PROXY = value;
-    } else {
-      env.no_proxy = value;
-    }
+    // Unix: use lowercase (most common convention)
+    env.no_proxy = value;
   }
 }
 
 /**
  * Parses Windows ProxyOverride registry value.
- * Format: semicolon-separated list, may contain wildcards, <local>, IP ranges.
- *
- * Returns:
- * - supported: entries that can be safely converted to NO_PROXY format
- * - unsupported: entries that require special handling (wildcards, <local>, etc.)
  */
 function parseWindowsProxyOverride(override: string): {
   supported: string[];
@@ -272,34 +261,18 @@ function parseWindowsProxyOverride(override: string): {
   const entries = override.split(';').map((s) => s.trim()).filter((s) => s.length > 0);
 
   for (const entry of entries) {
-    // <local> means "bypass proxy for local addresses"
-    if (entry === '<local>') {
+    if (entry === '<local>' || entry.includes('*') || entry.includes('-') || entry.includes('/')) {
       unsupported.push(entry);
-      continue;
+    } else {
+      supported.push(entry);
     }
-
-    // Wildcards like *.example.com
-    if (entry.includes('*')) {
-      unsupported.push(entry);
-      continue;
-    }
-
-    // IP ranges or CIDR notation
-    if (entry.includes('-') || entry.includes('/')) {
-      unsupported.push(entry);
-      continue;
-    }
-
-    // Plain hostname or IP - safe to use
-    supported.push(entry);
   }
 
   return { supported, unsupported };
 }
 
 /**
- * Reads Windows system proxy configuration from registry.
- * Windows-only, returns null on non-Windows or read failure.
+ * Reads Windows system proxy configuration from registry (async).
  */
 export async function readWindowsSystemProxy(
   options?: ReadWindowsProxyOptions,
@@ -315,35 +288,32 @@ export async function readWindowsSystemProxy(
     const { promisify } = await import('node:util');
     const execFileAsync = promisify(execFile);
 
-    // Read Internet Settings registry key
     const keyPath = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings';
 
-    const { stdout } = await execFileAsync(
-      'reg',
-      ['query', keyPath, '/v', 'ProxyServer'],
-      { signal: controller.signal, timeout: timeoutMs },
-    );
+    const readValue = async (valueName: string): Promise<string | undefined> => {
+      try {
+        const { stdout } = await execFileAsync(
+          'reg',
+          ['query', keyPath, '/v', valueName],
+          { signal: controller.signal, timeout: timeoutMs },
+        );
+        return extractRegValue(stdout, valueName);
+      } catch {
+        return undefined;
+      }
+    };
 
-    const proxyServer = extractRegValue(stdout, 'ProxyServer');
+    const [proxyServer, proxyOverride, autoConfigURL] = await Promise.all([
+      readValue('ProxyServer'),
+      readValue('ProxyOverride'),
+      readValue('AutoConfigURL'),
+    ]);
 
-    const { stdout: overrideStdout } = await execFileAsync(
-      'reg',
-      ['query', keyPath, '/v', 'ProxyOverride'],
-      { signal: controller.signal, timeout: timeoutMs },
-    );
-
-    const proxyOverride = extractRegValue(overrideStdout, 'ProxyOverride');
-
-    // Check for PAC/WPAD
-    const { stdout: pacStdout } = await execFileAsync(
-      'reg',
-      ['query', keyPath, '/v', 'AutoConfigURL'],
-      { signal: controller.signal, timeout: timeoutMs },
-    ).catch(() => ({ stdout: '' }));
-
-    const hasPac = !!extractRegValue(pacStdout, 'AutoConfigURL');
-
-    return { proxyServer, proxyOverride, hasPac };
+    return {
+      proxyServer,
+      proxyOverride,
+      hasPac: !!autoConfigURL,
+    };
   } catch {
     return null;
   } finally {
@@ -351,15 +321,11 @@ export async function readWindowsSystemProxy(
   }
 }
 
-/**
- * Extracts registry value from reg.exe output.
- */
 function extractRegValue(stdout: string, valueName: string): string | undefined {
   const lines = stdout.split('\n');
   for (const line of lines) {
     const trimmed = line.trim();
     if (trimmed.startsWith(valueName)) {
-      // Format: "ValueName    REG_SZ    Value"
       const parts = trimmed.split(/\s+/);
       const valueIndex = parts.indexOf('REG_SZ') + 1;
       if (valueIndex > 0 && valueIndex < parts.length) {

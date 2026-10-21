@@ -20,7 +20,26 @@ export { codexConfigObjectFromArgs } from './codex-config-overrides.js';
 
 import { buildCodexModelCatalogArgs, isCodexCustomCatalogModel } from './codex-model-catalog.js';
 import { extractUserEnvTemplates, hasSupportedEnvTemplate, resolveEnvMap } from './env-map.js';
-import { deriveCodexNetworkEnvironmentSync } from '../../../../../utils/codex-network-environment.js';
+import {
+  deriveCodexNetworkEnvironmentSync,
+  readWindowsSystemProxy,
+  type WindowsSystemProxyConfig,
+} from '../../../../../utils/codex-network-environment.js';
+
+/**
+ * Checks if environment has proxy configuration.
+ */
+function hasProxyEnv(env: Record<string, string | null>): boolean {
+  return !!(
+    env.HTTP_PROXY ||
+    env.http_proxy ||
+    env.HTTPS_PROXY ||
+    env.https_proxy ||
+    env.ALL_PROXY ||
+    env.all_proxy
+  );
+}
+
 /**
  * Codex Agent Service
  * 使用 Codex CLI 子进程调用缅因猫 (Codex)
@@ -1379,7 +1398,7 @@ export class CodexAgentService implements AgentService {
     input: LocalSessionReadInput,
     read: (client: CodexAppServerNativeRpcClient) => Promise<T>,
   ): Promise<T> {
-    const launch = this.prepareCapabilityLaunch(input.cwd, input.account, input.cliConfigArgs, true);
+    const launch = await this.prepareCapabilityLaunch(input.cwd, input.account, input.cliConfigArgs, true);
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(new Error('Session check timed out')), input.timeoutMs);
     const options = { ...launch, invocationId: input.invocationId, signal: controller.signal };
@@ -1412,7 +1431,7 @@ export class CodexAgentService implements AgentService {
     if (this.carrierMode !== 'app_server' || !this.appServerHostPool) {
       throw new Error('codex_native_capability_source_unsupported');
     }
-    const launchConfiguration = this.prepareCapabilityLaunch(input.cwd, input.account, input.cliConfigArgs);
+    const launchConfiguration = await this.prepareCapabilityLaunch(input.cwd, input.account, input.cliConfigArgs);
     // The native CLI creates an implicit home, but refuses a missing explicit one.
     if (launchConfiguration.env?.CODEX_AUTH_MODE === 'api_key' && launchConfiguration.env.CODEX_HOME) {
       const { mkdir } = await import('node:fs/promises');
@@ -1458,12 +1477,47 @@ export class CodexAgentService implements AgentService {
     }
   }
 
-  private prepareCapabilityLaunch(
+  /**
+   * Applies Codex network environment derivation to preserve loopback direct connection
+   * while maintaining existing proxy configuration and internal network exceptions.
+   * Issue #1666: Windows enterprise proxy may route 127.0.0.1 through proxy.
+   */
+  private async applyCodexNetworkEnvironment(
+    baseEnv: Record<string, string | null>,
+  ): Promise<Record<string, string>> {
+    // Read Windows system proxy if needed (async with timeout)
+    let systemProxy: WindowsSystemProxyConfig | null | undefined = undefined;
+    if (process.platform === 'win32' && hasProxyEnv(baseEnv)) {
+      try {
+        systemProxy = await readWindowsSystemProxy({ timeoutMs: 1000 });
+      } catch {
+        systemProxy = null;
+      }
+    }
+
+    const result = deriveCodexNetworkEnvironmentSync(baseEnv, systemProxy);
+
+    // Log diagnostic information for troubleshooting
+    if (result.diagnostic.unsupportedScenarios.length > 0) {
+      log.warn(
+        {
+          catId: this.catId,
+          scenarios: result.diagnostic.unsupportedScenarios,
+          source: result.diagnostic.exceptionSource,
+        },
+        '[codex-network] Partial support for network environment derivation',
+      );
+    }
+
+    return result.env as Record<string, string>;
+  }
+
+  private async prepareCapabilityLaunch(
     cwd: string,
     account?: RuntimeProviderProfile,
     cliConfigArgs: readonly string[] = [],
     localInspection = false,
-  ): Pick<AgentCarrierSessionOptions, 'command' | 'args' | 'cwd' | 'env'> {
+  ): Promise<Pick<AgentCarrierSessionOptions, 'command' | 'args' | 'cwd' | 'env'>> {
     if (!localInspection && (this.carrierMode !== 'app_server' || !this.appServerHostPool))
       throw new Error('codex_native_capability_source_unsupported');
     const nativeTool = usesNativeToolConfiguration(catRegistry.tryGet(this.catId)?.config);
@@ -1532,7 +1586,7 @@ export class CodexAgentService implements AgentService {
     }
 
     // Finalize account environment (includes CODEX_HOME, auth, etc.)
-    const accountEnv = withoutSessionScopedHostEnv(
+    const finalizedAccountEnv = withoutSessionScopedHostEnv(
       finalizeCodexAccountEnvironment(descriptor, {
         env,
         selectedApiEnv,
@@ -1544,23 +1598,13 @@ export class CodexAgentService implements AgentService {
     );
 
     // Apply network environment derivation for enterprise proxy compatibility (Issue #1666)
-    // This adds loopback addresses to NO_PROXY while preserving existing proxy configuration
-    const networkResult = deriveCodexNetworkEnvironmentSync(accountEnv);
-
-    // Log diagnostic information for troubleshooting
-    if (networkResult.diagnostic.unsupportedScenarios.length > 0) {
-      this.logger?.warn('codex_network_environment_partial_support', {
-        catId: this.catId,
-        scenarios: networkResult.diagnostic.unsupportedScenarios,
-        source: networkResult.diagnostic.exceptionSource,
-      });
-    }
+    const derivedEnv = await this.applyCodexNetworkEnvironment(finalizedAccountEnv);
 
     return {
       command: this.cliCommand,
       args,
       cwd,
-      env: networkResult.env,
+      env: derivedEnv,
     };
   }
 
@@ -2258,6 +2302,10 @@ export class CodexAgentService implements AgentService {
         mkdirSync(finalAccountEnv.CODEX_HOME, { recursive: true, mode: 0o700 });
       }
 
+      // Apply network environment derivation for enterprise proxy compatibility (Issue #1666)
+      // This must happen after all account/MCP/argv overlays are composed
+      const derivedEnv = await this.applyCodexNetworkEnvironment(codexEnv);
+
       const semanticCompletionController = new AbortController();
 
       const codexCommand = verifiedNativeShellCommand ?? resolveCliCommand(this.cliCommand);
@@ -2306,7 +2354,7 @@ export class CodexAgentService implements AgentService {
         // F296 B4a: stdinInput is injected at the spawn site so a preflight-mode
         // invocation can never reach a CLI spawn with empty or premature bytes.
         ...(options?.workingDirectory ? { cwd: options.workingDirectory } : {}),
-        env: codexEnv,
+        env: derivedEnv,
         ...(native ? { inheritParentEnv: false } : {}),
         ...(options?.signal ? { signal: options.signal } : {}),
         ...(options?.invocationId ? { invocationId: options.invocationId } : {}),
@@ -2410,13 +2458,14 @@ export class CodexAgentService implements AgentService {
           ]),
         });
       };
-      const appServerEnv = usePooledAppServer ? withoutSessionScopedHostEnv(codexEnv) : codexEnv;
+      const appServerEnv = usePooledAppServer ? withoutSessionScopedHostEnv(derivedEnv) : derivedEnv;
       let pooledSessionInUse = false;
       let forceDirectAppServer = false;
       const createDirectSession = (sessionOptions: AgentCarrierSessionOptions): Promise<AgentCarrierSession> =>
         createDirectAgentCarrierSession(
-          { ...sessionOptions, env: codexEnv },
+          sessionOptions,
           {
+            finalEnvironment: derivedEnv,
             ...(auditContext?.executionId
               ? {
                   executionOwner: {
