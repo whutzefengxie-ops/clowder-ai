@@ -23,7 +23,8 @@ let beginAndClear: () => void;
 let finish: (accepted: boolean | undefined) => void;
 let resolvePendingWrite: (() => void) | null;
 const preparing = () => {};
-const response = (body: unknown, status = 200) => ({ ok: status >= 200 && status < 300, status, json: async () => body }) as Response;
+const response = (body: unknown, status = 200) =>
+  ({ ok: status >= 200 && status < 300, status, json: async () => body }) as Response;
 
 function Harness({ threadId = THREAD }: { threadId?: string }) {
   const [input, setInput] = useState('');
@@ -32,9 +33,16 @@ function Harness({ threadId = THREAD }: { threadId?: string }) {
   const replyToMessage = useChatStore((state) => state.replyToMessage);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const durable = useDurableComposerDraft({
-    threadId, input, setInput, images, setImages,
-    contextAttachments: attachments, setContextAttachments: setAttachments,
-    replyToMessage, textareaRef, setIsPreparingImages: preparing,
+    threadId,
+    input,
+    setInput,
+    images,
+    setImages,
+    contextAttachments: attachments,
+    setContextAttachments: setAttachments,
+    replyToMessage,
+    textareaRef,
+    setIsPreparingImages: preparing,
   });
   typeText = setInput;
   addFiles = setImages;
@@ -47,10 +55,18 @@ function Harness({ threadId = THREAD }: { threadId?: string }) {
     setAttachments([]);
     useChatStore.getState().clearReplyTo();
   };
-  return <><textarea ref={textareaRef} value={input} readOnly /><span data-files>{images.length}</span><span data-context>{JSON.stringify(attachments)}</span></>;
+  return (
+    <>
+      <textarea ref={textareaRef} value={input} readOnly />
+      <span data-files>{images.length}</span>
+      <span data-context>{JSON.stringify(attachments)}</span>
+    </>
+  );
 }
 async function settle() {
-  await act(async () => { for (let i = 0; i < 20; i += 1) await Promise.resolve(); });
+  await act(async () => {
+    for (let i = 0; i < 20; i += 1) await Promise.resolve();
+  });
 }
 async function render() {
   await act(async () => root.render(<Harness />));
@@ -60,8 +76,11 @@ async function render() {
 async function admissionResult() {
   let result: unknown;
   await act(async () => {
-    try { result = await prepareComposerDraftAdmission(THREAD); }
-    catch (error) { result = error; }
+    try {
+      result = await prepareComposerDraftAdmission(THREAD);
+    } catch (error) {
+      result = error;
+    }
   });
   return result;
 }
@@ -189,14 +208,16 @@ it('does not mistake completion of its own in-flight autosave for foreign recove
   resolvePendingWrite?.();
   await settle(); // The real send caller also has async mirror/intent work before preparation.
   const result = await admissionResult();
-  act(() => finish(result instanceof Error ? false : true));
+  act(() => finish(!(result instanceof Error)));
   expect(result).not.toBeInstanceOf(Error);
   expect(writes.findLast((body) => body.text)?.text).toBe('please revise current PR');
 });
 
 it('still requires confirmation and displays both drafts when hydration arrives after the click', async () => {
   let releaseRead: (value: Response) => void;
-  const read = new Promise<Response>((resolve) => { releaseRead = resolve; });
+  const read = new Promise<Response>((resolve) => {
+    releaseRead = resolve;
+  });
   vi.mocked(apiFetch).mockImplementation(async (_url, init) => {
     if (!init?.method) return read;
     const body = JSON.parse(String(init.body));
@@ -248,21 +269,24 @@ it('requires confirmation before a retry can overwrite an unseen draft fetched a
 
 it('preserves typing done while the merged recovery snapshot is being saved', async () => {
   let releaseRead: (value: Response) => void;
-  const read = new Promise<Response>((resolve) => { releaseRead = resolve; });
+  const read = new Promise<Response>((resolve) => {
+    releaseRead = resolve;
+  });
   vi.mocked(apiFetch).mockImplementation(async (_url, init) => {
     if (!init?.method) return read;
     const body = JSON.parse(String(init.body));
     writes.push(body);
     return await write(body, init.method);
   });
-  write = (body) => new Promise<Response>((resolve) => {
-    resolvePendingWrite = () => {
-      owner = { text: body.text ?? '' };
-      revision += 1;
-      resolve(response({ draft: owner, revision }));
-      resolvePendingWrite = null;
-    };
-  });
+  write = (body) =>
+    new Promise<Response>((resolve) => {
+      resolvePendingWrite = () => {
+        owner = { text: body.text ?? '' };
+        revision += 1;
+        resolve(response({ draft: owner, revision }));
+        resolvePendingWrite = null;
+      };
+    });
   await act(async () => root.render(<Harness />));
   act(() => typeText('local attempted message'));
   let preparingAdmission: Promise<unknown>;
@@ -353,21 +377,24 @@ it('keeps autosaving the new thread after the old-thread admission finishes', as
 
 it('preserves context and reply selected while the merged recovery snapshot is being saved', async () => {
   let releaseRead: (value: Response) => void;
-  const read = new Promise<Response>((resolve) => { releaseRead = resolve; });
+  const read = new Promise<Response>((resolve) => {
+    releaseRead = resolve;
+  });
   vi.mocked(apiFetch).mockImplementation(async (_url, init) => {
     if (!init?.method) return read;
     const body = JSON.parse(String(init.body));
     writes.push(body);
     return await write(body, init.method);
   });
-  write = (body) => new Promise<Response>((resolve) => {
-    resolvePendingWrite = () => {
-      owner = { text: body.text ?? '' };
-      revision += 1;
-      resolve(response({ draft: owner, revision }));
-      resolvePendingWrite = null;
-    };
-  });
+  write = (body) =>
+    new Promise<Response>((resolve) => {
+      resolvePendingWrite = () => {
+        owner = { text: body.text ?? '' };
+        revision += 1;
+        resolve(response({ draft: owner, revision }));
+        resolvePendingWrite = null;
+      };
+    });
   await act(async () => root.render(<Harness />));
   act(() => typeText('local attempted message'));
   let preparingAdmission: Promise<unknown>;
@@ -380,12 +407,19 @@ it('preserves context and reply selected while the merged recovery snapshot is b
   await settle();
   expect(resolvePendingWrite).not.toBeNull();
   const newContext: ContextAttachment = {
-    v: 1, kind: 'thread', id: 'new-context', threadId: 'source-thread', title: 'New user selection',
+    v: 1,
+    kind: 'thread',
+    id: 'new-context',
+    threadId: 'source-thread',
+    title: 'New user selection',
   };
   act(() => {
     updateAttachments([newContext]);
     useChatStore.getState().setReplyTo({
-      id: 'new-reply', content: 'New reply target', senderCatId: null, threadId: THREAD,
+      id: 'new-reply',
+      content: 'New reply target',
+      senderCatId: null,
+      threadId: THREAD,
     });
   });
   let result: unknown;

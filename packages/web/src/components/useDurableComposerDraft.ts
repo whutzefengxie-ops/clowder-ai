@@ -133,6 +133,8 @@ export function useDurableComposerDraft({
     pendingRecoveryRef.current = null;
     admissionsPendingRef.current = 0; // Reset pending count for new owner
     pendingAdmissionDraftRef.current = null;
+    revisionRef.current = 0; // Reset revision for new owner
+    lastSavedSignatureRef.current = ''; // Reset signature for new owner
     resetImageRecovery();
     recoveredDraftAwaitingConfirmationRef.current = false;
     const hydration = waitForComposerDraftSaves(threadId)
@@ -202,7 +204,20 @@ export function useDurableComposerDraft({
   }, [restoreFallbackImages, setContextAttachments, setInput, setReplyTo]);
 
   const reconcileConflict = useCallback(
-    (draft: Awaited<ReturnType<typeof loadOwnerComposerDraft>>, shouldClear: boolean) => {
+    (
+      draft: Awaited<ReturnType<typeof loadOwnerComposerDraft>>,
+      shouldClear: boolean,
+      saveGeneration?: number,
+      saveThreadId?: string | null,
+    ) => {
+      // P1-1 R5: Verify owner if this conflict is from a queued save
+      if (saveGeneration !== undefined && saveThreadId !== undefined) {
+        if (saveGeneration !== hydrationGenerationRef.current || saveThreadId !== threadId) {
+          // Stale conflict from old owner - don't pollute current owner's state
+          return;
+        }
+      }
+
       revisionRef.current = draft.revision;
       const currentImages = imageUrlsFromDraft(draft.draft);
       const currentContextAttachments = contextAttachmentsFromDraft(draft.draft);
@@ -269,11 +284,28 @@ export function useDurableComposerDraft({
   );
 
   const persistDraftSnapshot = useCallback(
-    async (snapshot: DurableDraftSnapshot, allowPendingAdmission = false) => {
-      const capturedGeneration = hydrationGenerationRef.current;
-      const capturedThreadId = threadId;
+    async (
+      snapshot: DurableDraftSnapshot,
+      allowPendingAdmission = false,
+      boundGeneration?: number,
+      boundThreadId?: string | null,
+      boundRevision?: number,
+    ) => {
+      // Use bound owner if provided (from queue task), otherwise capture current
+      const capturedGeneration = boundGeneration ?? hydrationGenerationRef.current;
+      const capturedThreadId = boundThreadId ?? threadId;
+      const capturedRevision = boundRevision ?? revisionRef.current;
 
       if (!capturedThreadId || (admissionsPendingRef.current > 0 && !allowPendingAdmission)) return false;
+
+      // P1-1 R5: Validate owner at execution time for queued tasks
+      if (boundGeneration !== undefined) {
+        // This is a queued task - verify owner hasn't changed
+        if (capturedGeneration !== hydrationGenerationRef.current || capturedThreadId !== threadId) {
+          // Owner changed - don't execute stale task
+          return false;
+        }
+      }
 
       const signature = composerDraftSignature(
         snapshot.text,
@@ -303,15 +335,17 @@ export function useDurableComposerDraft({
         snapshot.preservedBlocks.length === 0 &&
         !snapshot.replyTo;
 
-      const result = await writeOwnerComposerDraft(capturedThreadId, revisionRef.current, snapshot);
+      const result = await writeOwnerComposerDraft(capturedThreadId, capturedRevision, snapshot);
 
-      // P1-4: Check if owner changed during async save
-      if (capturedGeneration !== hydrationGenerationRef.current || capturedThreadId !== threadId) {
-        return false; // Discard stale save result
+      // P1-4: Check if owner changed during async save (for direct calls, not queued)
+      if (boundGeneration === undefined) {
+        if (capturedGeneration !== hydrationGenerationRef.current || capturedThreadId !== threadId) {
+          return false; // Discard stale save result
+        }
       }
 
       if (result.kind === 'conflict') {
-        reconcileConflict(result, shouldClear);
+        reconcileConflict(result, shouldClear, capturedGeneration, capturedThreadId);
         return false;
       }
       if (result.kind === 'failed') {
@@ -331,10 +365,17 @@ export function useDurableComposerDraft({
     [reconcileConflict, restoreAdmissionFallback, threadId],
   );
 
-  const persistCurrentDraft = useCallback(
-    () => persistDraftSnapshot(captureCurrentDraft()),
-    [captureCurrentDraft, persistDraftSnapshot],
-  );
+  const persistCurrentDraft = useCallback(() => {
+    // Capture owner, snapshot, and revision at call time, not when queue executes
+    const capturedGeneration = hydrationGenerationRef.current;
+    const capturedThreadId = threadId;
+    const capturedRevision = revisionRef.current;
+    const snapshot = captureCurrentDraft();
+
+    if (!capturedThreadId) return Promise.resolve(false);
+
+    return persistDraftSnapshot(snapshot, false, capturedGeneration, capturedThreadId, capturedRevision);
+  }, [captureCurrentDraft, persistDraftSnapshot, threadId]);
   saveCurrentDraftForImagesRef.current = threadId
     ? () => enqueueComposerDraftSave(threadId, persistCurrentDraft)
     : async () => false;
@@ -385,12 +426,12 @@ export function useDurableComposerDraft({
         pendingRecoveryRef.current = null;
       }
 
-      const pendingAdmission = {
+      const pendingAdmission: PendingComposerAdmissionDraft = {
         snapshot: admittedDraft,
         files: [...durableSnapshot.images],
         confirmsRecoveredDraft: recoveredDraftAwaitingConfirmationRef.current,
         generation,
-        threadId,
+        threadId: threadId ?? null,
       };
       recoveredDraftAwaitingConfirmationRef.current = false;
       pendingAdmissionDraftRef.current = pendingAdmission;
