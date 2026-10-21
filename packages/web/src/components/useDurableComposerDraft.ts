@@ -147,13 +147,6 @@ export function useDurableComposerDraft({
           draft?.replyTo,
         );
         lastSavedSignatureRef.current = recoveredSignature;
-        const localSignature = composerDraftSignature(
-          inputRef.current,
-          imageUrlsRef.current,
-          contextAttachmentsRef.current,
-          preservedBlocksRef.current,
-          replyToIdRef.current,
-        );
         setInput((localText) => mergeHydratedDraft(serverText, localText));
         setContextAttachments((local) => mergeContextAttachments(serverContextAttachments, local));
         if (draft?.replyTo) {
@@ -190,7 +183,7 @@ export function useDurableComposerDraft({
     return () => {
       if (hydrationGenerationRef.current === generation) hydrationGenerationRef.current += 1;
     };
-  }, [resetImageRecovery, restoreDraftImages, setContextAttachments, setInput, setReplyTo, threadId]);
+  }, [imageUrlsRef, resetImageRecovery, restoreDraftImages, setContextAttachments, setInput, setReplyTo, threadId]);
 
   const restoreAdmissionFallback = useCallback(() => {
     const fallback = clearFallbackRef.current;
