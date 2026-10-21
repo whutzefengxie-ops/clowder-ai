@@ -176,6 +176,15 @@ describe('VirtualAttentionList nearest visibility', () => {
       return decisions.has(threadId) ? 76 : 52;
     };
 
+    // Mock getBoundingClientRect to return real heights matching getRowHeight
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      const key = this.dataset.rowKey;
+      if (!key) return rect(0, 0);
+      const threadId = key.split(':')[1];
+      const height = decisions.has(threadId) ? 76 : 52;
+      return rect(0, height);
+    });
+
     function DynamicHarness() {
       const scrollContainerRef = useRef<HTMLDivElement>(null);
       const [groupDecisions, setGroupDecisions] = React.useState<{ status: 'ready'; threadIds: Set<string> }>({
@@ -210,7 +219,7 @@ describe('VirtualAttentionList nearest visibility', () => {
     // Initial: all 52px, total = 52 * 100 = 5200px
     expect(list.style.height).toBe('5200px');
 
-    // Scroll to make row 50 visible and measure it
+    // Scroll to make row 50 visible and measure it (enters cache with 52px)
     act(() => handleRef.current?.scrollToIndex(50));
     expect(host.querySelector('[data-row-key="thread:thread-50"]')).not.toBeNull();
 
@@ -227,20 +236,22 @@ describe('VirtualAttentionList nearest visibility', () => {
     });
 
     // Total should update immediately: 52*99 + 76 = 5224px
-    // Even though row 50 is offscreen, cache was cleared
+    // Cache invalidation ensures offscreen row uses new height, not stale 52px
     expect(list.style.height).toBe('5224px');
 
-    // Scroll back to row 50, should see correct height already reflected
-    act(() => handleRef.current?.scrollToIndex(50));
-    const row50 = host.querySelector('[data-row-key="thread:thread-50"]');
-    expect(row50).not.toBeNull();
+    // Scroll thread-50 offscreen again before removing decision
+    act(() => {
+      scroller.scrollTop = 0;
+      scroller.dispatchEvent(new Event('scroll'));
+    });
+    expect(host.querySelector('[data-row-key="thread:thread-50"]')).toBeNull();
 
-    // Remove decision
+    // Remove decision (thread-50 still offscreen)
     act(() => {
       (globalThis as any).__updateDecisions(new Set());
     });
 
-    // Total should return to 5200px immediately
+    // Total should return to 5200px immediately (cache invalidated again)
     expect(list.style.height).toBe('5200px');
 
     delete (globalThis as any).__updateDecisions;
