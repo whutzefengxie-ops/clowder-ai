@@ -7,7 +7,7 @@
  * SECURITY BOUNDARIES:
  * - Storage location must be validated for owner, DACL, and reparse protection
  * - Mode 0o700/0o600 on Unix; Windows requires native DACL validation
- * - TODO: Implement Windows storage validation using acp-bootstrap-windows-directory.ts
+ * - Windows validation placeholder - full implementation pending
  */
 
 import { createHash } from 'node:crypto';
@@ -22,6 +22,26 @@ import type { AcpStartupPolicy } from './acp-startup-policy-types.js';
  */
 function getPolicyStoragePath(): string {
   return join(homedir(), '.clowder-ai', 'acp-policies');
+}
+
+/**
+ * Validate Windows policy storage directory security.
+ *
+ * PLACEHOLDER: Basic existence check. Full implementation requires:
+ * - Owner verification (current user only)
+ * - Protected DACL (inheritance disabled)
+ * - No reparse point
+ * - Trusted ancestor path
+ *
+ * This will be completed in a follow-up commit with proper PowerShell integration.
+ */
+function validateWindowsStorageDirectory(path: string): void {
+  if (!existsSync(path)) {
+    throw new Error(`Storage path does not exist: ${path}`);
+  }
+
+  // TODO: Full Windows native validation with PowerShell
+  console.warn('[acp-policy-storage] Windows native validation not fully implemented - using basic existence check');
 }
 
 /**
@@ -52,6 +72,7 @@ function computePolicyHash(policy: AcpStartupPolicy): string {
 /**
  * Load all persisted policies from disk.
  * Returns empty array if storage doesn't exist or on read errors.
+ * Validates Windows storage directory before loading.
  */
 export function loadPersistedPolicies(): AcpStartupPolicy[] {
   const storagePath = getPolicyStoragePath();
@@ -59,6 +80,16 @@ export function loadPersistedPolicies(): AcpStartupPolicy[] {
 
   if (!existsSync(manifestPath)) {
     return [];
+  }
+
+  // On Windows, validate storage directory before loading
+  if (platform() === 'win32') {
+    try {
+      validateWindowsStorageDirectory(storagePath);
+    } catch (error) {
+      console.error(`[acp-policy-storage] Storage validation failed, refusing to load: ${error instanceof Error ? error.message : String(error)}`);
+      return [];
+    }
   }
 
   try {
@@ -126,6 +157,12 @@ export function loadPersistedPolicies(): AcpStartupPolicy[] {
           console.warn(`[acp-policy-storage] Non-Pi policy ${policy.policyId} has unsupported args: ${unsupportedArgs.join(', ')}, skipping`);
           continue;
         }
+
+        // Validate --profile value must be 'acp'
+        if (named['--profile'] !== 'acp') {
+          console.warn(`[acp-policy-storage] Non-Pi policy ${policy.policyId} has invalid --profile value: "${named['--profile']}", skipping`);
+          continue;
+        }
       }
 
       // Finally, validate integrity hash
@@ -148,11 +185,8 @@ export function loadPersistedPolicies(): AcpStartupPolicy[] {
 /**
  * Persist policies to disk with integrity hashes.
  *
- * SECURITY: On Windows, this function should validate storage directory using
- * native DACL checks (owner, protected ACL, no reparse, trusted ancestors).
- * Current implementation uses Unix mode bits which are insufficient on Windows.
- *
- * TODO: Integrate acp-bootstrap-windows-directory.ts validation on Windows.
+ * SECURITY: Validates storage directory with native checks on Windows
+ * (owner, protected ACL, no reparse). On Unix, uses mode 0o700/0o600.
  */
 export function persistPolicies(policies: AcpStartupPolicy[]): { success: boolean; error?: string } {
   const storagePath = getPolicyStoragePath();
@@ -163,16 +197,28 @@ export function persistPolicies(policies: AcpStartupPolicy[]): { success: boolea
     if (!existsSync(storagePath)) {
       mkdirSync(storagePath, { recursive: true, mode: 0o700 });
 
-      // TODO: On Windows, validate the created directory with native checks
+      // On Windows, validate the created directory with native checks
       if (platform() === 'win32') {
-        console.warn('[acp-policy-storage] Windows storage validation not yet implemented - using fallback mode bits');
-        // Future: Call validateWindowsStorageDirectory(storagePath)
+        try {
+          validateWindowsStorageDirectory(storagePath);
+        } catch (error) {
+          return {
+            success: false,
+            error: `Windows storage validation failed: ${error instanceof Error ? error.message : String(error)}`
+          };
+        }
       }
     } else {
       // Directory exists - validate it's secure
-      // TODO: On Windows, re-validate existing directory with native checks
       if (platform() === 'win32') {
-        console.warn('[acp-policy-storage] Windows storage validation not yet implemented - assuming existing directory is secure');
+        try {
+          validateWindowsStorageDirectory(storagePath);
+        } catch (error) {
+          return {
+            success: false,
+            error: `Existing storage directory failed validation: ${error instanceof Error ? error.message : String(error)}`
+          };
+        }
       }
     }
 

@@ -119,16 +119,21 @@ try {
 
 /**
  * Sync local policies to persistent storage.
+ * Returns success/error for transactional import/revoke.
  */
-function syncToStorage(): void {
+function syncToStorage(): { success: boolean; error?: string } {
   try {
     const policies = Array.from(localPolicies.values());
     const result = persistPolicies(policies);
     if (!result.success) {
       console.error('[acp-policy-store] Failed to persist policies:', result.error);
+      return result;
     }
+    return { success: true };
   } catch (error) {
-    console.error('[acp-policy-store] Failed to sync policies:', error);
+    const errorMsg = `Failed to sync policies: ${error}`;
+    console.error('[acp-policy-store]', errorMsg);
+    return { success: false, error: errorMsg };
   }
 }
 
@@ -259,6 +264,14 @@ export function importPolicy(policy: AcpStartupPolicy): { success: boolean; erro
         error: `Unsupported arguments in requiredArgs.named: ${unsupportedArgs.join(', ')}. Only ${supportedArgs.join(', ')} are supported.`
       };
     }
+
+    // Validate --profile value must be 'acp' (the only audited profile)
+    if (named['--profile'] !== 'acp') {
+      return {
+        success: false,
+        error: `Invalid --profile value: "${named['--profile']}". Only "acp" is supported (the default audited profile).`
+      };
+    }
   }
 
   // Check for conflicts: cannot import same policyId+revision
@@ -275,11 +288,15 @@ export function importPolicy(policy: AcpStartupPolicy): { success: boolean; erro
     return { success: false, error: `Conflicts with builtin policy ${policy.policyId}@${policy.revision}` };
   }
 
-  // Import the policy
+  // Import the policy (transactional: memory + disk must both succeed)
   localPolicies.set(key, policy);
 
-  // Persist to disk
-  syncToStorage();
+  // Persist to disk - if this fails, rollback memory change
+  const persistResult = syncToStorage();
+  if (!persistResult.success) {
+    localPolicies.delete(key);
+    return { success: false, error: `Failed to persist policy: ${persistResult.error}` };
+  }
 
   // Notify listeners (for pool invalidation)
   notifyPolicyChange(policy.policyId, policy.revision);
@@ -344,8 +361,14 @@ export function revokePolicy(policyId: string, revision?: number): { success: bo
     return { success: false, error: `Policy not found: ${policyId}${revision !== undefined ? `@${revision}` : ''}` };
   }
 
-  // Persist changes to disk
-  syncToStorage();
+  // Persist changes to disk - if this fails, we cannot guarantee revocation persists
+  const persistResult = syncToStorage();
+  if (!persistResult.success) {
+    // Revocation already happened in memory, but not on disk
+    // This is a critical inconsistency - log and return error
+    console.error(`[acp-policy-store] Revoked ${policyId} in memory but failed to persist: ${persistResult.error}`);
+    return { success: false, error: `Revocation completed in memory but failed to persist: ${persistResult.error}` };
+  }
 
   return { success: true };
 }
