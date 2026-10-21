@@ -117,7 +117,7 @@ describe('ACP startup policy import and revocation (W2)', () => {
       provenance: { reviewer: 'test', auditDate: '2024-01-01', evidenceRef: 'test' },
       launchShape: {
         entryPattern: 'node-absolute',
-        requiredArgs: { named: { '--mode': 'test' } }
+        requiredArgs: { named: { '--profile': 'acp' } }
       },
       artifacts: [{ path: 'entry', sha256: 'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789' }],
       assurance: 'test',
@@ -147,7 +147,7 @@ describe('ACP startup policy import and revocation (W2)', () => {
       provenance: { reviewer: 'test', auditDate: '2024-01-01', evidenceRef: 'test' },
       launchShape: {
         entryPattern: 'node-absolute',
-        requiredArgs: { named: { '--mode': 'test' } }
+        requiredArgs: { named: { '--profile': 'acp' } }
       },
       artifacts: [{ path: 'entry', sha256: 'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789' }],
       assurance: 'test',
@@ -184,7 +184,7 @@ describe('ACP startup policy import and revocation (W2)', () => {
       provenance: { reviewer: 'test', auditDate: '2024-01-01', evidenceRef: 'test' },
       launchShape: {
         entryPattern: 'node-absolute',
-        requiredArgs: { named: { '--mode': 'test' } }
+        requiredArgs: { named: { '--profile': 'acp' } }
       },
       artifacts: [{ path: 'entry', sha256: 'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789' }],
       assurance: 'test',

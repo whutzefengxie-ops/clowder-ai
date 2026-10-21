@@ -244,8 +244,20 @@ export function importPolicy(policy: AcpStartupPolicy): { success: boolean; erro
   // Validate launch shape - ALL non-Pi policies must have complete argument constraints
   // This prevents privilege escalation via extra arguments like --patch
   if (policy.policyId !== 'builtin-pi-bridge') {
-    if (!policy.launchShape.requiredArgs?.named || Object.keys(policy.launchShape.requiredArgs.named).length === 0) {
+    const named = policy.launchShape.requiredArgs?.named;
+    if (!named || Object.keys(named).length === 0) {
       return { success: false, error: 'Non-Pi policies must specify complete requiredArgs.named to prevent extra arguments' };
+    }
+
+    // Validate that only supported argument patterns are specified
+    // Currently only '--profile' is supported by the matcher
+    const supportedArgs = ['--profile'];
+    const unsupportedArgs = Object.keys(named).filter(arg => !supportedArgs.includes(arg));
+    if (unsupportedArgs.length > 0) {
+      return {
+        success: false,
+        error: `Unsupported arguments in requiredArgs.named: ${unsupportedArgs.join(', ')}. Only ${supportedArgs.join(', ')} are supported.`
+      };
     }
   }
 
