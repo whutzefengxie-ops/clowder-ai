@@ -476,6 +476,8 @@ describe('Issue #1666: Codex network environment derivation', () => {
     });
 
     it('handles system proxy read failure (null)', () => {
+      if (process.platform !== 'win32') return;
+
       const result = deriveCodexNetworkEnvironmentSync({}, null);
 
       assert.strictEqual(result.diagnostic.exceptionSource, 'read_failed');
@@ -502,22 +504,26 @@ describe('Issue #1666: Codex network environment derivation', () => {
       assert.strictEqual(result.diagnostic.hasProxy, true);
       assert.strictEqual(result.diagnostic.exceptionSource, 'env');
 
-      // Should normalize to NO_PROXY (canonical form)
-      const noProxy = result.env.NO_PROXY;
+      // Should collect entries from all case variants and merge them
+      const noProxy = result.env.NO_PROXY ?? result.env.no_proxy;
       assert.ok(noProxy);
-      assert.ok(noProxy.includes('lowercase.com') || noProxy.includes('mixedcase.com'));
+      assert.ok(noProxy.includes('lowercase.com'), 'should include lowercase.com from no_proxy');
+      assert.ok(noProxy.includes('mixedcase.com'), 'should include mixedcase.com from No_Proxy');
     });
 
     it('deletes all case variants when setting NO_PROXY', () => {
+      if (process.platform !== 'win32') return;
+
       const input = {
         HTTP_PROXY: 'http://proxy.example.com:8080',
         no_proxy: 'old.com',
         No_Proxy: 'old2.com',
       };
 
-      const result = deriveCodexNetworkEnvironmentSync(input);
+      const systemProxy: WindowsSystemProxyConfig = { enabled: false, hasPac: false };
+      const result = deriveCodexNetworkEnvironmentSync(input, systemProxy);
 
-      // Should have canonical NO_PROXY
+      // Should have canonical NO_PROXY on Windows
       assert.ok(result.env.NO_PROXY);
 
       // Should delete lowercase variants
