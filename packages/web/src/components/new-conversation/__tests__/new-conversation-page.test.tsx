@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   closeRightPanel: vi.fn(),
   queueWorkDiscussion: vi.fn(),
   currentThreadId: 'default',
+  emptyRoster: false,
   fakeArtifact: {
     type: 'image',
     name: 'work',
@@ -48,7 +49,10 @@ vi.mock('@/stores/chatStore', () => ({
 }));
 
 vi.mock('@/hooks/useCatData', () => ({
-  useCatData: () => ({ cats: [{ id: 'codex-sol', displayName: 'Sol', mentionPatterns: ['@codex-sol'] }] }),
+  useCatData: () => ({
+    hasFetched: true,
+    cats: mocks.emptyRoster ? [] : [{ id: 'codex-sol', displayName: 'Sol', mentionPatterns: ['@codex-sol'] }],
+  }),
 }));
 
 vi.mock('../queue-work-discussion', () => ({ queueWorkDiscussion: mocks.queueWorkDiscussion }));
@@ -228,11 +232,46 @@ describe('F322 new conversation page', () => {
     );
     const watch = container.querySelector<HTMLButtonElement>('[data-testid="empty-state-bootcamp"]');
     expect(watch?.textContent).toBe(language === 'zh' ? '看看团队如何协作' : 'See the team collaborate');
-    expect(container.querySelector('a')?.getAttribute('href')).toBe('/settings?s=members&view=setup');
+    expect(container.querySelector('a')?.getAttribute('href')).toBe('/settings?s=members');
     act(() => watch?.click());
     expect(show).toHaveBeenCalledOnce();
     expect(admission.send).not.toHaveBeenCalled();
     expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('offers detection and manual enrollment for an empty roster without sending or creating on render', () => {
+    mocks.emptyRoster = true;
+    const navigate = vi.fn();
+    try {
+      act(() =>
+        root.render(
+          <NewConversationPage
+            sidebarOpen
+            statusPanelOpen={false}
+            hasWorkspaceActivity={false}
+            onToggleSidebar={vi.fn()}
+            onToggleStatusPanel={vi.fn()}
+            onNavigate={navigate}
+            onShowCollaboration={vi.fn()}
+          />,
+        ),
+      );
+      expect(container.textContent).toContain('还没有成员');
+      const links = [...container.querySelectorAll('a')].map((link) => ({
+        href: link.getAttribute('href'),
+        label: link.textContent,
+      }));
+      expect(links).toEqual(
+        expect.arrayContaining([
+          { href: '/settings?s=members&view=setup', label: '一键检测本机工具' },
+          { href: '/settings?s=members&view=add&manual=1', label: '手动添加成员' },
+        ]),
+      );
+      expect(mocks.admission.send).not.toHaveBeenCalled();
+      expect(navigate).not.toHaveBeenCalled();
+    } finally {
+      mocks.emptyRoster = false;
+    }
   });
 
   it('reveals the original conversation after restoring its saved workspace, without sending', () => {

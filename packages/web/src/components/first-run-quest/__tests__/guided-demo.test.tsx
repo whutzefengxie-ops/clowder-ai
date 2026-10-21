@@ -131,7 +131,7 @@ it('automates all handoffs without clients or API calls and opens a working deli
   expect(document.body.textContent).not.toContain('成果已就绪');
   await acknowledge(frame?.contentWindow);
   expect(document.querySelector('a')?.getAttribute('href')).toBe('/settings?s=members&view=setup');
-  expect(document.querySelector('a')?.textContent).toContain('创建我的猫猫');
+  expect(document.querySelector('a')?.textContent).toContain('一键检测本机工具');
 });
 
 it('ignores unrelated frames, offers retry on timeout, and accepts the current frame only', async () => {
@@ -147,7 +147,7 @@ it('ignores unrelated frames, offers retry on timeout, and accepts the current f
   await acknowledge(oldFrame);
   expect(document.body.textContent).not.toContain('成果已就绪');
   await acknowledge(document.querySelector('iframe')?.contentWindow);
-  expect(document.querySelector('a')?.textContent).toContain('创建我的猫猫');
+  expect(document.querySelector('a')?.textContent).toContain('一键检测本机工具');
   expect(fetch).not.toHaveBeenCalled();
 });
 

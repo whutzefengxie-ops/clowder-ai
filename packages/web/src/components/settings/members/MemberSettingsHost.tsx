@@ -94,6 +94,34 @@ export function MemberSettingsHost({
           <div hidden={editorOpen} className="space-y-8">
             {configError ? (
               <p role="alert">{configError}</p>
+            ) : config && !registryKnown ? (
+              <p role="status">
+                {registryLoading ? '正在读取成员名单…' : '成员名单读取失败'}
+                {!registryLoading && (
+                  <button type="button" onClick={onRetryRegistry} className="ml-3 text-cafe-accent">
+                    重试
+                  </button>
+                )}
+              </p>
+            ) : config && cats.length === 0 ? (
+              <section className="rounded-xl border border-[var(--console-border-soft)] bg-[var(--console-card-bg)] p-6">
+                <h2 className="text-lg font-semibold">还没有成员</h2>
+                <p className="mt-2 text-sm text-cafe-secondary">
+                  检测本机工具，选择要加入的伙伴；项目自带角色模板仅在确认添加后成为成员。
+                </p>
+                <div className="mt-4 flex flex-wrap gap-4">
+                  <button
+                    type="button"
+                    className="text-sm font-semibold text-cafe-accent"
+                    onClick={onDetect ? detect : () => open(null)}
+                  >
+                    一键检测本机工具
+                  </button>
+                  <button type="button" className="text-sm text-cafe-secondary" onClick={() => open(null)}>
+                    手动添加成员
+                  </button>
+                </div>
+              </section>
             ) : config ? (
               <CatOverviewTab
                 config={config}

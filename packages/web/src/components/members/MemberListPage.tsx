@@ -70,10 +70,12 @@ export function MemberListPage({
           )}
         </div>
       </header>
-      <div className="member-defaults">
-        <MemberDefaultCat cats={cats} list={list} />
-        <MemberPreferencesSummary routing={routing} cats={cats} />
-      </div>
+      {cats.length > 0 && (
+        <div className="member-defaults">
+          <MemberDefaultCat cats={cats} list={list} />
+          <MemberPreferencesSummary routing={routing} cats={cats} />
+        </div>
+      )}
       <div className="member-filters">
         <div role="group" aria-label={t('成员筛选')}>
           {[

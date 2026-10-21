@@ -32,6 +32,7 @@ import {
 } from '@cat-cafe/shared';
 import { z } from 'zod';
 import { createModuleLogger } from '../infrastructure/logger.js';
+import { isUserSelectedCatalog } from './cat-catalog-initialization.js';
 import { bootstrapCatCatalog, type CatCatalogReadOptions, readCatCatalogRaw } from './cat-catalog-store.js';
 import { resolveProjectTemplatePath } from './project-template-path.js';
 import {
@@ -523,6 +524,11 @@ function removeUnavailableTemplateVariants(
 
       const catId = variant.catId ?? breed.catId;
       if (!catId) return true;
+      // New installations must not gain unselected variants through read-side merging.
+      if (isUserSelectedCatalog(catalogJson)) {
+        removedCatIds.add(catId);
+        return false;
+      }
       const input = {
         breedId: breed.id,
         variantId: variant.id,
