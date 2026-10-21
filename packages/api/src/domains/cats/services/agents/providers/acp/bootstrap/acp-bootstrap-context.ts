@@ -33,14 +33,18 @@ export function resolveAcpBootstrap(
   };
 }
 
-/** Classify using the final child environment, then freeze the chosen root for this pool. */
+/** Classify the startup policy, then freeze the chosen root for this pool. */
 export function verifyAcpBootstrap(
   base: AcpBootstrapContext,
   profileId: string,
   bootstrapRoot?: string,
   env?: Record<string, string>,
 ): VerifiedAcpBootstrapContext {
-  const isolation = auditedWindowsAcpStartup(base.command, base.args, buildChildEnv(env));
+  const isolation = auditedWindowsAcpStartup(
+    base.command,
+    base.args,
+    buildChildEnv(env, { workingDirectory: base.projectRoot }),
+  );
   const options = { allowVolumeRootDelete: isolation !== undefined };
   const cwd = resolveAcpBootstrapCwd(
     base.projectRoot,
@@ -51,7 +55,11 @@ export function verifyAcpBootstrap(
     undefined,
     options,
   );
-  const verifyCwd = (command = base.command, args = base.args, childEnv = buildChildEnv(env)) => {
+  const verifyCwd = (
+    command = base.command,
+    args = base.args,
+    childEnv = buildChildEnv(env, { workingDirectory: cwd }),
+  ) => {
     if (isolation && auditedWindowsAcpStartup(command, args, childEnv) !== isolation) {
       throw new Error('Windows ACP bootstrap startup policy changed; refusing cold start');
     }
