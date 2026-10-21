@@ -357,7 +357,16 @@ function extractRegValue(stdout: string, valueName: string): string | undefined 
     const trimmed = line.trim();
     if (trimmed.startsWith(valueName)) {
       const parts = trimmed.split(/\s+/);
-      const valueIndex = parts.indexOf('REG_SZ') + 1;
+      // Registry values can be REG_SZ, REG_DWORD, REG_EXPAND_SZ, etc.
+      const regTypes = ['REG_SZ', 'REG_DWORD', 'REG_EXPAND_SZ', 'REG_MULTI_SZ', 'REG_BINARY'];
+      let valueIndex = -1;
+      for (const regType of regTypes) {
+        const idx = parts.indexOf(regType);
+        if (idx >= 0) {
+          valueIndex = idx + 1;
+          break;
+        }
+      }
       if (valueIndex > 0 && valueIndex < parts.length) {
         return parts.slice(valueIndex).join(' ').trim();
       }

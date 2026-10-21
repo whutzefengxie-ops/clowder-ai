@@ -1483,7 +1483,7 @@ export class CodexAgentService implements AgentService {
   private async applyCodexNetworkEnvironment(
     overrides: Record<string, string | null>,
     options: { inheritParentEnv?: boolean; workingDirectory?: string } = {},
-  ): Promise<Record<string, string | null>> {
+  ): Promise<Record<string, string>> {
     // Use canonical buildChildEnv to ensure proper variable stripping (runtime lifecycle, secrets, etc.)
     // and correct cwd/PWD/INIT_CWD handling. This replaces hand-written process.env copying.
     const baseEnv = buildChildEnv(overrides, {
@@ -1516,22 +1516,13 @@ export class CodexAgentService implements AgentService {
       );
     }
 
-    // Convert NodeJS.ProcessEnv to Record<string, string | null> by filtering undefined
-    const finalEnv: Record<string, string | null> = {};
+    // Return complete environment as Record<string, string> (no null, no undefined).
+    // This will be passed as finalEnvironment to bypass normalizeEnv's second buildChildEnv call,
+    // preventing deleted keys from re-inheriting from process.env.
+    const finalEnv: Record<string, string> = {};
     for (const [key, value] of Object.entries(result.env)) {
       if (value !== undefined) {
         finalEnv[key] = value;
-      }
-    }
-
-    // Mark all NO_PROXY case variants from process.env for deletion, except the canonical one we just set.
-    // This prevents normalizeEnv from re-inheriting stale variants when it calls buildChildEnv again.
-    const canonicalNoProxyKey = Object.keys(result.env).find((k) => k.toUpperCase() === 'NO_PROXY');
-    if (options.inheritParentEnv !== false) {
-      for (const key of Object.keys(process.env)) {
-        if (key.toUpperCase() === 'NO_PROXY' && key !== canonicalNoProxyKey && !Object.hasOwn(finalEnv, key)) {
-          finalEnv[key] = null;
-        }
       }
     }
 
@@ -2495,6 +2486,7 @@ export class CodexAgentService implements AgentService {
       let forceDirectAppServer = false;
       const createDirectSession = (sessionOptions: AgentCarrierSessionOptions): Promise<AgentCarrierSession> =>
         createDirectAgentCarrierSession(sessionOptions, {
+          finalEnvironment: derivedEnv,
           ...(auditContext?.executionId
             ? {
                 executionOwner: {
