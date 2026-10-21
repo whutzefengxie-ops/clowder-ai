@@ -1,5 +1,6 @@
 import { type ReactNode, type RefObject, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { AttentionListRow } from './attention-clusters';
+import type { GroupDecisionRead } from './use-group-decisions';
 
 interface MeasuredRow {
   row: AttentionListRow;
@@ -67,10 +68,19 @@ export function useMeasuredSidebarRows(
   containerRef: RefObject<HTMLDivElement>,
   enabled: boolean,
   range: { start: number; end: number },
+  groupDecisions: GroupDecisionRead,
 ) {
   const [measured, setMeasured] = useState<ReadonlyMap<string, MeasuredRow>>(new Map());
   const measuredWidth = useRef<number | null>(null);
+  const decisionsGeneration = useRef(0);
   const rowByKey = useMemo(() => new Map(rows.map((row) => [row.key, row])), [rows]);
+
+  // Invalidate cache when decisions change
+  useEffect(() => {
+    decisionsGeneration.current += 1;
+    setMeasured(new Map());
+  }, [groupDecisions.status, groupDecisions.threadIds]);
+
   useEffect(() => {
     const list = listRef.current,
       container = containerRef.current;

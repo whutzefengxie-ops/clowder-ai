@@ -2012,6 +2012,7 @@ export function ThreadSidebar({ onClose, className, routeThreadId, activeDestina
                           getRowHeight={isV2 ? attentionRowHeight : undefined}
                           scrollContainerRef={scrollContainerRef}
                           renderItem={renderAttentionRow}
+                          groupDecisions={groupDecisions}
                         />
                       ) : (
                         <VirtualThreadList

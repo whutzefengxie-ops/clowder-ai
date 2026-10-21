@@ -44,6 +44,8 @@ const rows: AttentionListRow[] = threads.map((thread) => ({
   thread,
 }));
 
+const MOCK_GROUP_DECISIONS = { status: 'ready' as const, threadIds: new Set<string>() };
+
 function Harness({
   handleRef,
   getRowHeight,
@@ -61,6 +63,7 @@ function Harness({
         getRowHeight={getRowHeight}
         scrollContainerRef={scrollContainerRef}
         renderItem={(row) => <div data-row-key={row.key}>{row.key}</div>}
+        groupDecisions={MOCK_GROUP_DECISIONS}
       />
     </div>
   );
