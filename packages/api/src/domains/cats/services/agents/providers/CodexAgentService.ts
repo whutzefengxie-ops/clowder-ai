@@ -1484,25 +1484,12 @@ export class CodexAgentService implements AgentService {
     overrides: Record<string, string | null>,
     options: { inheritParentEnv?: boolean; workingDirectory?: string } = {},
   ): Promise<Record<string, string | null>> {
-    // Build complete environment with null deletions (matches buildChildEnv logic)
-    const baseEnv: Record<string, string | null> = {};
-
-    if (options.inheritParentEnv !== false) {
-      for (const [key, value] of Object.entries(process.env)) {
-        if (value !== undefined) {
-          baseEnv[key] = value;
-        }
-      }
-    }
-
-    // Apply overrides and handle null deletions
-    for (const [key, value] of Object.entries(overrides)) {
-      if (value === null) {
-        delete baseEnv[key];
-      } else {
-        baseEnv[key] = value;
-      }
-    }
+    // Use canonical buildChildEnv to ensure proper variable stripping (runtime lifecycle, secrets, etc.)
+    // and correct cwd/PWD/INIT_CWD handling. This replaces hand-written process.env copying.
+    const baseEnv = buildChildEnv(overrides, {
+      inheritParentEnv: options.inheritParentEnv,
+      workingDirectory: options.workingDirectory,
+    });
 
     // Read Windows system proxy if needed (async with timeout)
     let systemProxy: WindowsSystemProxyConfig | null | undefined;
@@ -1514,15 +1501,8 @@ export class CodexAgentService implements AgentService {
       }
     }
 
-    // Convert Record<string, string | null> to NodeJS.ProcessEnv for deriveCodexNetworkEnvironmentSync
-    // Filter out null values as they represent deletions in our convention
-    const processEnv: NodeJS.ProcessEnv = {};
-    for (const [key, value] of Object.entries(baseEnv)) {
-      if (value !== null) {
-        processEnv[key] = value;
-      }
-    }
-    const result = deriveCodexNetworkEnvironmentSync(processEnv, systemProxy);
+    // deriveCodexNetworkEnvironmentSync expects NodeJS.ProcessEnv and returns one
+    const result = deriveCodexNetworkEnvironmentSync(baseEnv, systemProxy);
 
     // Log diagnostic information for troubleshooting
     if (result.diagnostic.unsupportedScenarios.length > 0) {
