@@ -310,12 +310,13 @@ function parseWindowsProxyOverride(override: string): {
 /**
  * Reads Windows WPAD state using WinHTTP API via PowerShell.
  *
- * Returns:
- * - true: WPAD auto-detect is enabled
- * - false: WPAD auto-detect is disabled
- * - null: Cannot determine (timeout, permission denied, API failure)
+ * Returns an object with:
+ * - autoDetect: true (enabled) | false (disabled) | null (unknown)
+ * - autoConfigUrl: string | null (explicit PAC URL from current connection)
  */
-async function readWindowsWpadState(options?: ReadWindowsProxyOptions): Promise<boolean | null> {
+async function readWindowsWpadState(
+  options?: ReadWindowsProxyOptions
+): Promise<{ autoDetect: boolean | null; autoConfigUrl: string | null } | null> {
   if (process.platform !== 'win32') return null;
 
   const timeoutMs = options?.timeoutMs ?? 1000;
@@ -325,12 +326,24 @@ async function readWindowsWpadState(options?: ReadWindowsProxyOptions): Promise<
   try {
     const { execFile } = await import('node:child_process');
     const { promisify } = await import('node:util');
-    const { join, dirname } = await import('node:path');
+    const { join } = await import('node:path');
     const { fileURLToPath } = await import('node:url');
+    const { dirname } = await import('node:path');
+    const { existsSync } = await import('node:fs');
     const execFileAsync = promisify(execFile);
 
-    // Find script path relative to this module
-    const scriptPath = join(dirname(fileURLToPath(import.meta.url)), '../scripts/read-windows-wpad-state.ps1');
+    // Script is at packages/api/scripts/read-windows-wpad-state.ps1
+    // This module is at packages/api/src/utils or packages/api/dist/utils
+    const currentDir = dirname(fileURLToPath(import.meta.url));
+
+    // Try source layout first (src/utils -> ../../scripts)
+    let scriptPath = join(currentDir, '../../scripts/read-windows-wpad-state.ps1');
+
+    // If not found, try dist layout (dist/utils -> ../../scripts)
+    // Both resolve to packages/api/scripts from their respective locations
+    if (!existsSync(scriptPath)) {
+      scriptPath = join(currentDir, '../../../scripts/read-windows-wpad-state.ps1');
+    }
 
     const { stdout } = await execFileAsync(
       'powershell.exe',
@@ -348,9 +361,20 @@ async function readWindowsWpadState(options?: ReadWindowsProxyOptions): Promise<
       return null;
     }
 
-    return result.autoDetect === true;
+    // Strict boolean check: only true/false are valid, everything else is unknown
+    const autoDetect =
+      result.autoDetect === true ? true :
+      result.autoDetect === false ? false :
+      null;
+
+    // Extract autoConfigUrl from current connection (not registry root key)
+    const autoConfigUrl = typeof result.autoConfigUrl === 'string' && result.autoConfigUrl
+      ? result.autoConfigUrl
+      : null;
+
+    return { autoDetect, autoConfigUrl };
   } catch {
-    // Timeout, permission denied, JSON parse error, etc.
+    // Timeout, permission denied, JSON parse error, script not found, etc.
     return null;
   } finally {
     clearTimeout(timer);
@@ -403,24 +427,29 @@ export async function readWindowsSystemProxy(
     const wpadState = await readWindowsWpadState(options);
 
     // Three-state handling for WPAD:
-    // - true: WPAD enabled, cannot convert to static proxy -> return null (preserve environment)
-    // - false: WPAD disabled, can proceed with static proxy or no-proxy
-    // - null: Cannot determine -> return null (preserve environment, unknown state)
-    if (wpadState === true) {
+    // - autoDetect=true: WPAD enabled, cannot convert to static proxy
+    // - autoDetect=false: WPAD disabled, check explicit PAC
+    // - autoDetect=null or wpadState=null: Cannot determine, preserve environment
+
+    if (wpadState === null || wpadState.autoDetect === null) {
+      // Cannot determine WPAD state (timeout, permission denied, API failure, invalid format)
+      return null;
+    }
+
+    if (wpadState.autoDetect === true) {
       // WPAD auto-detect is enabled, cannot convert to static NO_PROXY
       return null;
     }
 
-    if (wpadState === null) {
-      // Cannot determine WPAD state (timeout, permission denied, API failure)
-      return null;
-    }
+    // wpadState.autoDetect === false: WPAD disabled
+    // Check explicit PAC URL from both current connection and registry root key
+    const connectionPacUrl = wpadState.autoConfigUrl; // From WinHTTP current connection
+    const registryPacUrl = autoConfigURL; // From registry root key
 
-    // wpadState === false: WPAD disabled, check explicit PAC URL
-    const hasPac = !!autoConfigURL;
+    const hasPac = !!(connectionPacUrl || registryPacUrl);
 
     if (hasPac) {
-      // Explicit PAC URL configured, cannot convert to static proxy
+      // Explicit PAC URL configured (either in connection or registry), cannot convert to static proxy
       return null;
     }
 
