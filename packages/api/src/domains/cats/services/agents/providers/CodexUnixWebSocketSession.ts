@@ -65,14 +65,23 @@ export async function prepareCodexHostLaunch(options: AgentCarrierSessionOptions
     cwd: options.cwd ?? null,
     env: Object.entries(signatureEnv).sort(([left], [right]) => left.localeCompare(right)),
   };
+  // Filter out null values to get a clean environment for auth and spawn.
+  // env is already complete from applyCodexNetworkEnvironment; nulls are deletion markers
+  // for session-scoped keys that should not be inherited by the host.
+  const cleanEnv: Record<string, string> = Object.fromEntries(
+    Object.entries(env).filter((entry): entry is [string, string] => entry[1] !== null),
+  );
+
   return {
     signature: createHash('sha256').update(JSON.stringify(signaturePayload)).digest('hex'),
-    authIdentity: await readCodexHostAuthIdentity(buildChildEnv(env, { workingDirectory: options.cwd }), options.cwd),
+    // cleanEnv is already a complete environment from applyCodexNetworkEnvironment.
+    // Do not call buildChildEnv again to avoid restoring deleted keys.
+    authIdentity: await readCodexHostAuthIdentity(cleanEnv, options.cwd),
     launch: {
       command: options.command,
       args,
       ...(options.cwd ? { cwd: options.cwd } : {}),
-      env,
+      env: cleanEnv,
     },
   };
 }
@@ -232,9 +241,11 @@ export async function spawnCodexAppServerHost(launch: CodexAppServerHostLaunch):
     maxChars: HOST_STDERR_TAIL_CHARS,
     onLine: (line) => codexHostServedModels.ingestStderrLine(line),
   });
-  const childCwd = launch.cwd ?? process.cwd();
+  // launch.env is already a complete environment from applyCodexNetworkEnvironment.
+  // Do not call normalizeEnv (which calls buildChildEnv) again to avoid restoring deleted keys.
+  // Type assertion: cleanEnv is Record<string, string>, compatible with ProcessEnv.
   const supervised = buildUnixSupervisedSpawnPlan(launch.command, launch.args, {
-    env: normalizeEnv(launch.env, childCwd),
+    env: launch.env as NodeJS.ProcessEnv,
     killGraceMs: Math.max(250, CLOSE_GRACE_MS - 500),
     socketDirectory: launch.socketDirectory,
   });

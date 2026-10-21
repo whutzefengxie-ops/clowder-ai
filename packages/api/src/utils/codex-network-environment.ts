@@ -306,37 +306,52 @@ export async function readWindowsSystemProxy(
 
     const keyPath = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings';
 
-    const readValue = async (valueName: string): Promise<string | undefined> => {
+    type ReadResult = { ok: true; value: string | undefined } | { ok: false };
+
+    const readValue = async (valueName: string): Promise<ReadResult> => {
       try {
         const { stdout } = await execFileAsync('reg', ['query', keyPath, '/v', valueName], {
           signal: controller.signal,
           timeout: timeoutMs,
         });
-        return extractRegValue(stdout, valueName);
-      } catch {
-        return undefined;
+        return { ok: true, value: extractRegValue(stdout, valueName) };
+      } catch (error: unknown) {
+        // Exit code 1 typically means "value not found" (optional key missing).
+        // Other errors (timeout, permission, etc.) are read failures.
+        const isNotFound = error && typeof error === 'object' && 'code' in error && error.code === 1;
+        if (isNotFound) {
+          return { ok: true, value: undefined };
+        }
+        return { ok: false };
       }
     };
 
-    const [proxyEnable, proxyServer, proxyOverride, autoConfigURL] = await Promise.all([
+    const [proxyEnableResult, proxyServerResult, proxyOverrideResult, autoConfigURLResult] = await Promise.all([
       readValue('ProxyEnable'),
       readValue('ProxyServer'),
       readValue('ProxyOverride'),
       readValue('AutoConfigURL'),
     ]);
 
-    // If all reads failed, return null (read failed)
-    if (
-      proxyEnable === undefined &&
-      proxyServer === undefined &&
-      proxyOverride === undefined &&
-      autoConfigURL === undefined
-    ) {
+    // If all reads failed (not just missing), return null (read failed)
+    if (!proxyEnableResult.ok && !proxyServerResult.ok && !proxyOverrideResult.ok && !autoConfigURLResult.ok) {
       return null;
     }
 
+    // If any required read failed (ProxyEnable, ProxyServer, or ProxyOverride when enabled),
+    // return null to preserve the original environment.
+    const proxyEnable = proxyEnableResult.ok ? proxyEnableResult.value : undefined;
+    const proxyServer = proxyServerResult.ok ? proxyServerResult.value : undefined;
+    const proxyOverride = proxyOverrideResult.ok ? proxyOverrideResult.value : undefined;
+    const autoConfigURL = autoConfigURLResult.ok ? autoConfigURLResult.value : undefined;
+
     // ProxyEnable: REG_DWORD 0 or 1
     const enabled = proxyEnable === '0x1' || proxyEnable === '1';
+
+    // If proxy is enabled but we failed to read ProxyServer or ProxyOverride, treat as read failure
+    if (enabled && (!proxyServerResult.ok || !proxyOverrideResult.ok)) {
+      return null;
+    }
 
     return {
       enabled,

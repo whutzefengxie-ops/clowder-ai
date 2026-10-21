@@ -1395,7 +1395,10 @@ export class CodexAgentService implements AgentService {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(new Error('Session check timed out')), input.timeoutMs);
     const options = { ...launch, invocationId: input.invocationId, signal: controller.signal };
-    const acquisition = createDirectAgentCarrierSession(options);
+    // launch.env is Record<string, string> from applyCodexNetworkEnvironment, compatible with ProcessEnv
+    const acquisition = createDirectAgentCarrierSession(options, {
+      finalEnvironment: launch.env as NodeJS.ProcessEnv,
+    });
     void acquisition
       .then(async (wire) => {
         if (controller.signal.aborted) await wire.close().catch(async () => wire.terminate?.());
@@ -2378,7 +2381,9 @@ export class CodexAgentService implements AgentService {
         // invocation can never reach a CLI spawn with empty or premature bytes.
         ...(options?.workingDirectory ? { cwd: options.workingDirectory } : {}),
         env: derivedEnv,
-        ...(native ? { inheritParentEnv: false } : {}),
+        // derivedEnv is already a complete environment from applyCodexNetworkEnvironment.
+        // Do not inherit parent env again to avoid restoring deleted keys.
+        inheritParentEnv: false,
         ...(options?.signal ? { signal: options.signal } : {}),
         ...(options?.invocationId ? { invocationId: options.invocationId } : {}),
         ...(options?.cliSessionId ? { cliSessionId: options.cliSessionId } : {}),
