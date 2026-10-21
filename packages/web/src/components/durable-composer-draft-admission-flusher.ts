@@ -11,6 +11,10 @@ export interface PendingComposerAdmissionDraft {
   files: File[];
   confirmsRecoveredDraft: boolean;
   capturedDisplayedSignature: string;
+  capturedLastSavedSignature: string;
+  capturedInFlightSaveSignature: string;
+  capturedEditorSignature: string;
+  generation: number;
 }
 
 interface RegisterAdmissionFlusherOptions {
@@ -73,18 +77,25 @@ async function flushAdmission(state: RegisterAdmissionFlusherOptions) {
     return flushResult(state, pending.snapshot, false, false, true);
   }
 
-  // Only reconcile if canonical is truly a new recovery not yet displayed
+  // Only reconcile if canonical is truly new recovery not from our own saves
   const canonical = state.canonicalDraftRef.current;
+  const canonicalSignature = canonical
+    ? composerDraftSignature(
+        canonical.text,
+        canonical.imageUrls,
+        canonical.contextAttachments,
+        canonical.preservedBlocks,
+        canonical.replyTo,
+      )
+    : '';
+
   const shouldReconcile =
     !pending.confirmsRecoveredDraft &&
     canonical &&
-    composerDraftSignature(
-      canonical.text,
-      canonical.imageUrls,
-      canonical.contextAttachments,
-      canonical.preservedBlocks,
-      canonical.replyTo,
-    ) !== pending.capturedDisplayedSignature;
+    canonicalSignature !== pending.capturedDisplayedSignature &&
+    canonicalSignature !== pending.capturedLastSavedSignature &&
+    canonicalSignature !== pending.capturedInFlightSaveSignature &&
+    canonicalSignature !== pending.capturedEditorSignature;
 
   const reconciliation = shouldReconcile
     ? reconcileComposerAdmission(pending.snapshot, canonical)
