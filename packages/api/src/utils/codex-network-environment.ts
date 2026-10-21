@@ -345,15 +345,19 @@ export async function readWindowsSystemProxy(
     const proxyServer = extractRegValue(stdout, 'ProxyServer');
     const proxyOverride = extractRegValue(stdout, 'ProxyOverride');
     const autoConfigURL = extractRegValue(stdout, 'AutoConfigURL');
+    const autoDetect = extractRegValue(stdout, 'AutoDetect');
 
     // ProxyEnable: REG_DWORD 0 or 1
     const enabled = proxyEnable === '0x1' || proxyEnable === '1';
+
+    // AutoDetect: REG_DWORD 0 or 1 (corresponds to WinHTTP fAutoDetect / WPAD)
+    const wpadEnabled = autoDetect === '0x1' || autoDetect === '1';
 
     return {
       enabled,
       proxyServer: enabled ? proxyServer : undefined,
       proxyOverride: enabled ? proxyOverride : undefined,
-      hasPac: !!autoConfigURL,
+      hasPac: !!autoConfigURL || wpadEnabled,
     };
   } catch {
     // Any failure: timeout, access denied, key not found, etc.
