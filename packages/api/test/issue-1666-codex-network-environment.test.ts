@@ -102,8 +102,8 @@ describe('Issue #1666: Codex network environment derivation', () => {
       assert.ok(noProxy);
 
       // Should not duplicate localhost
-      const parts = noProxy.split(',').map(s => s.trim());
-      const localhostCount = parts.filter(p => p.toLowerCase() === 'localhost').length;
+      const parts = noProxy.split(',').map((s) => s.trim());
+      const localhostCount = parts.filter((p) => p.toLowerCase() === 'localhost').length;
       assert.strictEqual(localhostCount, 1, 'localhost should appear only once');
 
       // Should still add other loopback addresses
@@ -121,8 +121,8 @@ describe('Issue #1666: Codex network environment derivation', () => {
       assert.ok(noProxy);
 
       // Should preserve original casing but not duplicate
-      const parts = noProxy.split(',').map(s => s.trim());
-      const localhostVariants = parts.filter(p => p.toLowerCase() === 'localhost');
+      const parts = noProxy.split(',').map((s) => s.trim());
+      const localhostVariants = parts.filter((p) => p.toLowerCase() === 'localhost');
       assert.ok(localhostVariants.length >= 1, 'should have at least one localhost variant');
       assert.ok(localhostVariants.length <= 2, 'should not add more localhost variants');
     });
@@ -160,16 +160,13 @@ describe('Issue #1666: Codex network environment derivation', () => {
         hasPac: false,
       };
 
-      const result = deriveCodexNetworkEnvironmentSync(
-        { HTTP_PROXY: 'http://proxy.company.com:8080' },
-        systemProxy,
-      );
+      const result = deriveCodexNetworkEnvironmentSync({ HTTP_PROXY: 'http://proxy.company.com:8080' }, systemProxy);
 
       assert.strictEqual(result.diagnostic.exceptionSource, 'system_static');
 
       // Should mark wildcard as unsupported
       assert.ok(
-        result.diagnostic.unsupportedScenarios.some(s => s.includes('*.local')),
+        result.diagnostic.unsupportedScenarios.some((s) => s.includes('*.local')),
         'wildcard pattern should be marked unsupported',
       );
     });
@@ -183,14 +180,11 @@ describe('Issue #1666: Codex network environment derivation', () => {
         hasPac: false,
       };
 
-      const result = deriveCodexNetworkEnvironmentSync(
-        { HTTP_PROXY: 'http://proxy.company.com:8080' },
-        systemProxy,
-      );
+      const result = deriveCodexNetworkEnvironmentSync({ HTTP_PROXY: 'http://proxy.company.com:8080' }, systemProxy);
 
       assert.strictEqual(result.diagnostic.exceptionSource, 'system_static');
       assert.ok(
-        result.diagnostic.unsupportedScenarios.some(s => s.includes('<local>')),
+        result.diagnostic.unsupportedScenarios.some((s) => s.includes('<local>')),
         '<local> should be marked unsupported',
       );
     });
@@ -204,9 +198,7 @@ describe('Issue #1666: Codex network environment derivation', () => {
       );
 
       assert.strictEqual(result.diagnostic.exceptionSource, 'read_failed');
-      assert.deepStrictEqual(result.diagnostic.unsupportedScenarios, [
-        'windows_system_proxy_read_failed',
-      ]);
+      assert.deepStrictEqual(result.diagnostic.unsupportedScenarios, ['windows_system_proxy_read_failed']);
 
       // Should preserve original environment
       assert.strictEqual(result.env.NO_PROXY, undefined);
@@ -222,15 +214,10 @@ describe('Issue #1666: Codex network environment derivation', () => {
         hasPac: true,
       };
 
-      const result = deriveCodexNetworkEnvironmentSync(
-        { HTTP_PROXY: 'http://proxy.company.com:8080' },
-        systemProxy,
-      );
+      const result = deriveCodexNetworkEnvironmentSync({ HTTP_PROXY: 'http://proxy.company.com:8080' }, systemProxy);
 
       assert.strictEqual(result.diagnostic.exceptionSource, 'system_pac');
-      assert.deepStrictEqual(result.diagnostic.unsupportedScenarios, [
-        'windows_pac_wpad_not_convertible',
-      ]);
+      assert.deepStrictEqual(result.diagnostic.unsupportedScenarios, ['windows_pac_wpad_not_convertible']);
 
       // Should preserve original environment
       assert.strictEqual(result.env.NO_PROXY, undefined);
@@ -245,10 +232,7 @@ describe('Issue #1666: Codex network environment derivation', () => {
         hasPac: false,
       };
 
-      const result = deriveCodexNetworkEnvironmentSync(
-        { HTTP_PROXY: 'http://proxy.company.com:8080' },
-        systemProxy,
-      );
+      const result = deriveCodexNetworkEnvironmentSync({ HTTP_PROXY: 'http://proxy.company.com:8080' }, systemProxy);
 
       assert.strictEqual(result.diagnostic.exceptionSource, 'system_static');
       assert.strictEqual(result.diagnostic.loopbackAdded, true);
@@ -396,8 +380,93 @@ describe('Issue #1666: Codex network environment derivation', () => {
       const noProxy = result.env.NO_PROXY ?? result.env.no_proxy;
       assert.ok(noProxy);
 
-      const parts = noProxy.split(',').map(s => s.trim());
+      const parts = noProxy.split(',').map((s) => s.trim());
       assert.strictEqual(parts.length, 3, 'should not add duplicates');
+    });
+  });
+
+  describe('Windows system proxy enabled state', () => {
+    it('uses system proxy when enabled=true', () => {
+      if (process.platform !== 'win32') return;
+
+      const systemProxy: WindowsSystemProxyConfig = {
+        enabled: true,
+        proxyServer: 'proxy.company.com:8080',
+        proxyOverride: '10.0.0.1',
+        hasPac: false,
+      };
+
+      const result = deriveCodexNetworkEnvironmentSync({}, systemProxy);
+
+      assert.strictEqual(result.diagnostic.exceptionSource, 'system_static');
+      assert.strictEqual(result.diagnostic.loopbackAdded, true);
+    });
+
+    it('does not use system proxy when enabled=false', () => {
+      if (process.platform !== 'win32') return;
+
+      const systemProxy: WindowsSystemProxyConfig = {
+        enabled: false,
+        proxyServer: 'proxy.company.com:8080',
+        proxyOverride: '10.0.0.1',
+        hasPac: false,
+      };
+
+      const result = deriveCodexNetworkEnvironmentSync({}, systemProxy);
+
+      // Should not use system proxy when disabled
+      assert.strictEqual(result.diagnostic.exceptionSource, 'none');
+      assert.strictEqual(result.diagnostic.loopbackAdded, true);
+    });
+
+    it('handles system proxy read failure (null)', () => {
+      const result = deriveCodexNetworkEnvironmentSync({}, null);
+
+      assert.strictEqual(result.diagnostic.exceptionSource, 'read_failed');
+      assert.deepStrictEqual(result.diagnostic.unsupportedScenarios, ['windows_system_proxy_read_failed']);
+    });
+
+    it('handles system proxy read returning undefined', () => {
+      const result = deriveCodexNetworkEnvironmentSync({}, undefined);
+
+      // undefined means system proxy reading not attempted (non-Windows or not needed)
+      assert.strictEqual(result.diagnostic.exceptionSource, 'none');
+    });
+  });
+
+  describe('Case-insensitive proxy variable handling', () => {
+    it('scans all case variants of NO_PROXY', () => {
+      const result = deriveCodexNetworkEnvironmentSync({
+        HTTP_PROXY: 'http://proxy.example.com:8080',
+        no_proxy: 'lowercase.com',
+        No_Proxy: 'mixedcase.com',
+      });
+
+      // Should detect proxy from any case variant
+      assert.strictEqual(result.diagnostic.hasProxy, true);
+      assert.strictEqual(result.diagnostic.exceptionSource, 'env');
+
+      // Should normalize to NO_PROXY (canonical form)
+      const noProxy = result.env.NO_PROXY;
+      assert.ok(noProxy);
+      assert.ok(noProxy.includes('lowercase.com') || noProxy.includes('mixedcase.com'));
+    });
+
+    it('deletes all case variants when setting NO_PROXY', () => {
+      const input = {
+        HTTP_PROXY: 'http://proxy.example.com:8080',
+        no_proxy: 'old.com',
+        No_Proxy: 'old2.com',
+      };
+
+      const result = deriveCodexNetworkEnvironmentSync(input);
+
+      // Should have canonical NO_PROXY
+      assert.ok(result.env.NO_PROXY);
+
+      // Should delete lowercase variants
+      assert.strictEqual(result.env.no_proxy, undefined);
+      assert.strictEqual(result.env.No_Proxy, undefined);
     });
   });
 });
