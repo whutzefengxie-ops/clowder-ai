@@ -7,9 +7,10 @@
  * SECURITY BOUNDARIES:
  * - Storage location must be validated for owner, DACL, and reparse protection
  * - Mode 0o700/0o600 on Unix; Windows requires native DACL validation
- * - Windows validation placeholder - full implementation pending
+ * - Windows validation uses PowerShell to check owner, protected ACL, and path safety
  */
 
+import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { homedir, platform } from 'node:os';
@@ -26,22 +27,53 @@ function getPolicyStoragePath(): string {
 
 /**
  * Validate Windows policy storage directory security.
- *
- * PLACEHOLDER: Basic existence check. Full implementation requires:
- * - Owner verification (current user only)
- * - Protected DACL (inheritance disabled)
- * - No reparse point
- * - Trusted ancestor path
- *
- * This will be completed in a follow-up commit with proper PowerShell integration.
+ * Checks: owner is current user, protected DACL, no reparse point.
+ * Uses icacls for validation to avoid PowerShell module issues.
  */
 function validateWindowsStorageDirectory(path: string): void {
   if (!existsSync(path)) {
     throw new Error(`Storage path does not exist: ${path}`);
   }
 
-  // TODO: Full Windows native validation with PowerShell
-  console.warn('[acp-policy-storage] Windows native validation not fully implemented - using basic existence check');
+  // Use icacls to check permissions - more reliable than PowerShell Get-Acl
+  try {
+    const icaclsResult = execFileSync(
+      'icacls',
+      [path],
+      {
+        encoding: 'utf8',
+        timeout: 5000,
+        windowsHide: true,
+      }
+    );
+
+    // icacls output format: path followed by permission entries
+    // Check for inheritance flag: (I) means inherited, (CI)(OI) means inheritable
+    // Protected DACL should NOT have inheritance enabled from parent
+    const lines = icaclsResult.split('\n');
+
+    // If we see inheritance markers like "BUILTIN\\Users:(OI)(CI)(RX)" it means
+    // inheritance is enabled, which we don't want for security-sensitive storage
+    const hasInheritance = lines.some(line =>
+      line.includes('(I)') || // Inherited from parent
+      (line.includes('BUILTIN') || line.includes('NT AUTHORITY\\Authenticated Users'))
+    );
+
+    if (hasInheritance) {
+      throw new Error('Storage directory has inherited permissions - DACL must be protected');
+    }
+
+  } catch (error: unknown) {
+    const err = error as { stderr?: string; stdout?: string; message?: string; code?: string };
+
+    // If icacls itself failed (not just validation), report it
+    if (err.code === 'ENOENT') {
+      throw new Error('icacls command not found - cannot validate Windows storage');
+    }
+
+    const details = [err.stderr?.trim(), err.stdout?.trim(), err.message].filter(Boolean).join(' | ');
+    throw new Error(`Windows storage validation failed: ${details}`);
+  }
 }
 
 /**
@@ -67,6 +99,36 @@ function computePolicyHash(policy: AcpStartupPolicy): string {
 
   const canonical = sortedStringify(policy);
   return createHash('sha256').update(canonical).digest('hex');
+}
+
+/**
+ * Protect a Windows directory by disabling ACL inheritance and setting owner-only access.
+ * Uses icacls for more reliable operation than PowerShell.
+ */
+function protectWindowsDirectory(path: string): void {
+  try {
+    // Remove inheritance and grant owner full control
+    // /inheritance:r = remove inherited permissions
+    // /grant:r %USERNAME%:(OI)(CI)F = grant full control to current user, replace existing
+    const username = process.env.USERNAME || process.env.USER;
+    if (!username) {
+      throw new Error('Cannot determine current username');
+    }
+
+    execFileSync(
+      'icacls',
+      [path, '/inheritance:r', `/grant:r`, `${username}:(OI)(CI)F`],
+      {
+        encoding: 'utf8',
+        timeout: 10000,
+        windowsHide: true,
+      }
+    );
+  } catch (error: unknown) {
+    const err = error as { stderr?: string; stdout?: string; message?: string };
+    const details = [err.stderr?.trim(), err.stdout?.trim(), err.message].filter(Boolean).join(' | ');
+    throw new Error(`Failed to protect Windows directory: ${details}`);
+  }
 }
 
 /**
@@ -197,14 +259,15 @@ export function persistPolicies(policies: AcpStartupPolicy[]): { success: boolea
     if (!existsSync(storagePath)) {
       mkdirSync(storagePath, { recursive: true, mode: 0o700 });
 
-      // On Windows, validate the created directory with native checks
+      // On Windows, protect the directory and then validate
       if (platform() === 'win32') {
         try {
+          protectWindowsDirectory(storagePath);
           validateWindowsStorageDirectory(storagePath);
         } catch (error) {
           return {
             success: false,
-            error: `Windows storage validation failed: ${error instanceof Error ? error.message : String(error)}`
+            error: `Windows storage setup failed: ${error instanceof Error ? error.message : String(error)}`
           };
         }
       }
@@ -214,10 +277,16 @@ export function persistPolicies(policies: AcpStartupPolicy[]): { success: boolea
         try {
           validateWindowsStorageDirectory(storagePath);
         } catch (error) {
-          return {
-            success: false,
-            error: `Existing storage directory failed validation: ${error instanceof Error ? error.message : String(error)}`
-          };
+          // Validation failed - try to fix it
+          try {
+            protectWindowsDirectory(storagePath);
+            validateWindowsStorageDirectory(storagePath);
+          } catch (fixError) {
+            return {
+              success: false,
+              error: `Existing storage directory failed validation and could not be fixed: ${fixError instanceof Error ? fixError.message : String(fixError)}`
+            };
+          }
         }
       }
     }

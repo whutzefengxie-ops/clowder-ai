@@ -289,7 +289,9 @@ export function importPolicy(policy: AcpStartupPolicy): { success: boolean; erro
   }
 
   // Import the policy (transactional: memory + disk must both succeed)
-  localPolicies.set(key, policy);
+  // Deep clone to prevent caller from modifying the stored policy
+  const immutablePolicy = JSON.parse(JSON.stringify(policy)) as AcpStartupPolicy;
+  localPolicies.set(key, immutablePolicy);
 
   // Persist to disk - if this fails, rollback memory change
   const persistResult = syncToStorage();
@@ -329,45 +331,50 @@ export function revokePolicy(policyId: string, revision?: number): { success: bo
     return { success: false, error: `Cannot revoke builtin policy: ${policyId}` };
   }
 
-  let revokedCount = 0;
+  // Build list of policies to revoke (don't modify memory yet)
+  const toRevoke: Array<{ key: string; policy: AcpStartupPolicy }> = [];
 
   if (revision !== undefined) {
     // Revoke specific revision
     const key = makePolicyKey(policyId, revision);
-    if (localPolicies.delete(key)) {
-      revokedCount++;
-      notifyPolicyChange(policyId, revision);
+    const policy = localPolicies.get(key);
+    if (policy) {
+      toRevoke.push({ key, policy });
     }
   } else {
     // Revoke all revisions of this policy
-    const toRevoke: string[] = [];
     for (const [key, policy] of localPolicies.entries()) {
       if (policy.policyId === policyId) {
-        toRevoke.push(key);
-      }
-    }
-
-    for (const key of toRevoke) {
-      const policy = localPolicies.get(key);
-      if (policy) {
-        localPolicies.delete(key);
-        notifyPolicyChange(policy.policyId, policy.revision);
-        revokedCount++;
+        toRevoke.push({ key, policy });
       }
     }
   }
 
-  if (revokedCount === 0) {
+  if (toRevoke.length === 0) {
     return { success: false, error: `Policy not found: ${policyId}${revision !== undefined ? `@${revision}` : ''}` };
   }
 
-  // Persist changes to disk - if this fails, we cannot guarantee revocation persists
+  // Persist changes to disk FIRST (before modifying memory)
+  // Temporarily remove from map to get the correct state to persist
+  const removed: Array<{ key: string; policy: AcpStartupPolicy }> = [];
+  for (const { key, policy } of toRevoke) {
+    localPolicies.delete(key);
+    removed.push({ key, policy });
+  }
+
   const persistResult = syncToStorage();
+
   if (!persistResult.success) {
-    // Revocation already happened in memory, but not on disk
-    // This is a critical inconsistency - log and return error
-    console.error(`[acp-policy-store] Revoked ${policyId} in memory but failed to persist: ${persistResult.error}`);
-    return { success: false, error: `Revocation completed in memory but failed to persist: ${persistResult.error}` };
+    // Rollback: restore all removed policies
+    for (const { key, policy } of removed) {
+      localPolicies.set(key, policy);
+    }
+    return { success: false, error: `Failed to persist revocation: ${persistResult.error}` };
+  }
+
+  // Persist succeeded - now notify listeners (memory already updated)
+  for (const { policy } of toRevoke) {
+    notifyPolicyChange(policy.policyId, policy.revision);
   }
 
   return { success: true };
