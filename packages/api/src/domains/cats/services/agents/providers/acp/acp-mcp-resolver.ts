@@ -16,6 +16,7 @@ import {
   CAT_CAFE_SPLIT_ENTRYPOINTS,
   expandManagedMcpNamesForUserMerge,
   isMcpEnabledForCat,
+  resolveBinaryRoot,
   resolveCatCafeNodeCommand,
   resolvePencilCommand,
   SENSITIVE_KEY_PATTERNS,
@@ -87,7 +88,7 @@ export function resolveBuiltinCatCafeServer(projectRoot: string, name: string): 
   return {
     name,
     command: resolveCatCafeNodeCommand(),
-    args: [resolve(projectRoot, MCP_SERVER_DIST, entry)],
+    args: [resolve(resolveBinaryRoot(projectRoot), MCP_SERVER_DIST, entry)],
     env: [],
   };
 }
@@ -283,8 +284,7 @@ export async function resolveAcpMcpServers(
           .filter((c) => c.type === 'mcp' && !disabled?.has(c.id) && !retiredCapabilityIds.has(c.id))
           .map((c) => c.id)
       : [];
-    const hasCatCafe = allEnabledIds.some((id) => id === 'cat-cafe' || CAT_CAFE_SPLIT_ENTRYPOINTS.has(id));
-    effectiveWhitelist = hasCatCafe ? allEnabledIds : ['cat-cafe', ...allEnabledIds];
+    effectiveWhitelist = capConfig ? allEnabledIds : ['cat-cafe'];
     log.info(
       { catId: opts?.catId, effectiveWhitelist, source: capConfig ? 'capabilities.json' : 'fallback' },
       '#712: empty whitelist + mcpSupport=true → all enabled project MCPs',
