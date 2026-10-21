@@ -157,6 +157,15 @@ export function useDurableComposerDraft({
           preservedBlocksRef.current,
           draft?.replyTo,
         );
+        // P1 R10: Capture current signature BEFORE projection, not after
+        // Reading inputRef.current after setInput may see the projected value
+        const currentSignature = composerDraftSignature(
+          inputRef.current,
+          imageUrlsRef.current,
+          contextAttachmentsRef.current,
+          preservedBlocksRef.current,
+          replyToIdRef.current,
+        );
         lastSavedSignatureRef.current = recoveredSignature;
         setInput((localText) => mergeHydratedDraft(serverText, localText));
         setContextAttachments((local) => mergeContextAttachments(serverContextAttachments, local));
@@ -173,14 +182,7 @@ export function useDurableComposerDraft({
         await restoreDraftImages(imageUrls, threadId, false);
         if (hydrationGenerationRef.current !== generation) return;
         hydratedRef.current = true;
-        // Mark as pending recovery if server has unsent draft that differs from current state
-        const currentSignature = composerDraftSignature(
-          inputRef.current,
-          imageUrlsRef.current,
-          contextAttachmentsRef.current,
-          preservedBlocksRef.current,
-          replyToIdRef.current,
-        );
+        // Mark as pending recovery if server has unsent draft that differs from pre-projection state
         const hasServerContent =
           serverText.trim() || imageUrls.length > 0 || serverContextAttachments.length > 0 || draft?.replyTo;
         if (hasServerContent && recoveredSignature !== currentSignature && canonicalDraftRef.current) {
