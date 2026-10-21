@@ -198,7 +198,7 @@ export function ensureWindowsAcpBootstrapDirectories(
     if (output.trim() !== 'acp-private-directory-v1') throw new Error('Missing Windows ACL verification receipt');
   } catch (cause) {
     const detail =
-      cause instanceof Error && 'stderr' in cause ? String(cause.stderr).trim() : 'verification unavailable';
+      cause instanceof Error && 'stderr' in cause ? String(cause.stderr ?? '').trim() : 'verification unavailable';
     throw windowsAcpBootstrapError(detail);
   }
 }
