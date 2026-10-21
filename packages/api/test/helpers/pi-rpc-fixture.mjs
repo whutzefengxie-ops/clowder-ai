@@ -101,6 +101,15 @@ process.stdin.on('data', (chunk) => {
           send({ type: 'agent_settled', aborted: false });
           break;
         }
+        if (command.message === 'empty-string') {
+          send({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: '' } });
+          send({
+            type: 'message_end',
+            message: { role: 'assistant', content: [{ type: 'text', text: '' }], stopReason: 'stop' },
+          });
+          send({ type: 'agent_settled', aborted: false });
+          break;
+        }
         send({ type: 'message_update', assistantMessageEvent: { type: 'thinking_delta', delta: 'Thinking' } });
         send({ type: 'tool_execution_start', toolCallId: 'tool-1', toolName: 'read', args: { path: 'fixture' } });
         send({

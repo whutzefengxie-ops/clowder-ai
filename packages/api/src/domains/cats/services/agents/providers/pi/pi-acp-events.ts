@@ -38,7 +38,7 @@ export class PiAcpEvents {
   }
 
   private delta(delta: PiRecord): void {
-    if (typeof delta.delta !== 'string') return;
+    if (typeof delta.delta !== 'string' || delta.delta === '') return;
     if (delta.type === 'text_delta') {
       this.streamedText = true;
       this.chunk('agent_message_chunk', delta.delta);
@@ -61,11 +61,11 @@ export class PiAcpEvents {
     let hasContent = false;
     for (const block of Array.isArray(message.content) ? message.content : []) {
       const content = record(block);
-      if (content.type === 'text' && typeof content.text === 'string' && !this.streamedText) {
+      if (content.type === 'text' && typeof content.text === 'string' && content.text !== '' && !this.streamedText) {
         this.chunk('agent_message_chunk', content.text);
         hasContent = true;
       }
-      if (content.type === 'thinking' && typeof content.thinking === 'string' && !this.streamedThinking) {
+      if (content.type === 'thinking' && typeof content.thinking === 'string' && content.thinking !== '' && !this.streamedThinking) {
         this.chunk('agent_thought_chunk', content.thinking);
         hasContent = true;
       }

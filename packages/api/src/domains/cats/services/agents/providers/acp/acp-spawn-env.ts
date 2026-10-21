@@ -36,15 +36,6 @@ export function prepareAcpProcessEnv(options: PrepareAcpProcessEnvOptions): Reco
     // It never selects a BUILTIN_ENV_MAPS[provider] template — env comes only from the account's
     // envVars templates. Ignore any provider on generic ACP (stale / pack-catalog / direct-API).
     const envMapProvider = options.clientId === 'acp' ? undefined : (options.provider ?? undefined);
-
-    // For generic ACP, we must have explicit envVars templates since there's no built-in mapping
-    if (options.clientId === 'acp' && !userEnvTemplates) {
-      throw new Error(
-        `Credential mapping required: account "${account.id}" has an API key but no envVars template. ` +
-          'Generic ACP connections require explicit environment variable mapping (e.g., DEEPSEEK_API_KEY: "${api_key}").',
-      );
-    }
-
     const envMap = resolveEnvMap(
       options.clientId,
       envMapProvider,

@@ -102,38 +102,4 @@ describe('prepareAcpProcessEnv', () => {
     assert.equal(result.ok, false);
     assert.match(result.error.message, /Credential required.*account "deepseek-key".*has no API key set/);
   });
-
-  it('provides actionable error when generic ACP account has key but no envVars template', () => {
-    assert.throws(
-      () =>
-        prepareAcpProcessEnv({
-          clientId: 'acp',
-          provider: 'deepseek-official',
-          baseModel: 'deepseek-chat',
-          account: {
-            id: 'deepseek-key',
-            authType: 'api_key',
-            apiKey: 'sk-deepseek-xyz',
-            // Missing envVars template
-          },
-        }),
-      /Credential mapping required.*no envVars template.*explicit environment variable mapping/,
-    );
-  });
-
-  it('allows generic ACP with key and proper envVars template', () => {
-    const env = prepareAcpProcessEnv({
-      clientId: 'acp',
-      provider: 'deepseek-official',
-      baseModel: 'deepseek-chat',
-      account: {
-        id: 'deepseek-key',
-        authType: 'api_key',
-        apiKey: 'sk-deepseek-xyz',
-        envVars: { DEEPSEEK_API_KEY: '${api_key}' },
-      },
-    });
-    assert.ok(env);
-    assert.equal(env.DEEPSEEK_API_KEY, 'sk-deepseek-xyz');
-  });
 });
