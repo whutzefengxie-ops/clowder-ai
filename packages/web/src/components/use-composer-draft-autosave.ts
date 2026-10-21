@@ -9,13 +9,20 @@ interface DraftAutosaveOptions {
   threadId?: string;
   hydratedRef: MutableRefObject<boolean>;
   hydrationGenerationRef: MutableRefObject<number>;
+  revisionRef: MutableRefObject<number>;
   admissionsPendingRef: MutableRefObject<number>;
   admissionEpoch: number;
   input: string;
   images: File[];
   contextAttachments: ContextAttachment[];
   captureCurrentDraft: () => DurableDraftSnapshot;
-  persistDraftSnapshot: (snapshot: DurableDraftSnapshot) => Promise<boolean>;
+  persistDraftSnapshot: (
+    snapshot: DurableDraftSnapshot,
+    allowPendingAdmission?: boolean,
+    boundGeneration?: number,
+    boundThreadId?: string | null,
+    boundRevision?: number,
+  ) => Promise<boolean>;
   persistCurrentDraft: () => Promise<boolean>;
 }
 
@@ -25,6 +32,7 @@ export function useComposerDraftAutosave(options: DraftAutosaveOptions) {
     threadId,
     hydratedRef,
     hydrationGenerationRef,
+    revisionRef,
     admissionsPendingRef,
     admissionEpoch,
     input,
@@ -32,21 +40,34 @@ export function useComposerDraftAutosave(options: DraftAutosaveOptions) {
     contextAttachments,
     captureCurrentDraft,
     persistDraftSnapshot,
-    persistCurrentDraft,
   } = options;
   useEffect(() => {
     if (!threadId) return;
     const flush = () => {
       if (!hydratedRef.current || admissionsPendingRef.current > 0) return;
+      // P1 R6: Capture complete owner context immediately, before enqueue
+      const generation = hydrationGenerationRef.current;
+      const capturedThreadId = threadId;
+      const capturedRevision = revisionRef.current;
       const snapshot = captureCurrentDraft();
-      void enqueueComposerDraftSave(threadId, () => persistDraftSnapshot(snapshot));
+      void enqueueComposerDraftSave(threadId, () =>
+        persistDraftSnapshot(snapshot, false, generation, capturedThreadId, capturedRevision),
+      );
     };
     window.addEventListener('pagehide', flush);
     return () => {
       window.removeEventListener('pagehide', flush);
       flush();
     };
-  }, [admissionsPendingRef, captureCurrentDraft, hydratedRef, persistDraftSnapshot, threadId]);
+  }, [
+    admissionsPendingRef,
+    captureCurrentDraft,
+    hydratedRef,
+    hydrationGenerationRef,
+    persistDraftSnapshot,
+    revisionRef,
+    threadId,
+  ]);
 
   useEffect(() => {
     if (!threadId || !hydratedRef.current || admissionsPendingRef.current > 0) return;
@@ -55,26 +76,42 @@ export function useComposerDraftAutosave(options: DraftAutosaveOptions) {
     void contextAttachments;
     void input;
     const timer = window.setTimeout(() => {
-      void enqueueComposerDraftSave(threadId, persistCurrentDraft);
+      // P1 R6: Capture complete owner context in timeout, before enqueue
+      const generation = hydrationGenerationRef.current;
+      const capturedThreadId = threadId;
+      const capturedRevision = revisionRef.current;
+      const snapshot = captureCurrentDraft();
+      void enqueueComposerDraftSave(threadId, () =>
+        persistDraftSnapshot(snapshot, false, generation, capturedThreadId, capturedRevision),
+      );
     }, 400);
     return () => window.clearTimeout(timer);
   }, [
     admissionEpoch,
     admissionsPendingRef,
+    captureCurrentDraft,
     contextAttachments,
     hydratedRef,
+    hydrationGenerationRef,
     images,
     input,
-    persistCurrentDraft,
+    persistDraftSnapshot,
+    revisionRef,
     threadId,
   ]);
 
   const persistSettledDraft = useCallback(
     (generation: number) => {
       if (!threadId || admissionsPendingRef.current > 0 || hydrationGenerationRef.current !== generation) return;
-      void enqueueComposerDraftSave(threadId, persistCurrentDraft);
+      // P1 R6: Capture owner context before enqueue
+      const capturedThreadId = threadId;
+      const capturedRevision = revisionRef.current;
+      const snapshot = captureCurrentDraft();
+      void enqueueComposerDraftSave(threadId, () =>
+        persistDraftSnapshot(snapshot, false, generation, capturedThreadId, capturedRevision),
+      );
     },
-    [admissionsPendingRef, hydrationGenerationRef, persistCurrentDraft, threadId],
+    [admissionsPendingRef, captureCurrentDraft, hydrationGenerationRef, persistDraftSnapshot, revisionRef, threadId],
   );
   return { persistSettledDraft };
 }

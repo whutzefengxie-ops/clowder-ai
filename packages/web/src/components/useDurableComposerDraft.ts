@@ -337,11 +337,9 @@ export function useDurableComposerDraft({
 
       const result = await writeOwnerComposerDraft(capturedThreadId, capturedRevision, snapshot);
 
-      // P1-4: Check if owner changed during async save (for direct calls, not queued)
-      if (boundGeneration === undefined) {
-        if (capturedGeneration !== hydrationGenerationRef.current || capturedThreadId !== threadId) {
-          return false; // Discard stale save result
-        }
+      // P1 R6: Always validate owner after async write, for both queued and direct calls
+      if (capturedGeneration !== hydrationGenerationRef.current || capturedThreadId !== threadId) {
+        return false; // Owner changed - discard stale save result
       }
 
       if (result.kind === 'conflict') {
@@ -366,15 +364,24 @@ export function useDurableComposerDraft({
   );
 
   const persistCurrentDraft = useCallback(() => {
-    // Capture owner, snapshot, and revision at call time, not when queue executes
-    const capturedGeneration = hydrationGenerationRef.current;
-    const capturedThreadId = threadId;
-    const capturedRevision = revisionRef.current;
-    const snapshot = captureCurrentDraft();
+    // P1 R6: Capture complete owner context BEFORE enqueue, not in closure
+    const ownerContext = {
+      generation: hydrationGenerationRef.current,
+      threadId: threadId,
+      revision: revisionRef.current,
+      snapshot: captureCurrentDraft(),
+    };
 
-    if (!capturedThreadId) return Promise.resolve(false);
+    if (!ownerContext.threadId) return Promise.resolve(false);
 
-    return persistDraftSnapshot(snapshot, false, capturedGeneration, capturedThreadId, capturedRevision);
+    // Return a function that uses the captured context, not current refs
+    return persistDraftSnapshot(
+      ownerContext.snapshot,
+      false,
+      ownerContext.generation,
+      ownerContext.threadId,
+      ownerContext.revision,
+    );
   }, [captureCurrentDraft, persistDraftSnapshot, threadId]);
   saveCurrentDraftForImagesRef.current = threadId
     ? () => enqueueComposerDraftSave(threadId, persistCurrentDraft)
@@ -383,6 +390,7 @@ export function useDurableComposerDraft({
     threadId,
     hydratedRef,
     hydrationGenerationRef,
+    revisionRef,
     admissionsPendingRef,
     admissionEpoch,
     input,
