@@ -173,14 +173,25 @@ function makePolicyKey(policyId: string, revision: number): string {
 }
 
 /**
+ * Deep clone a policy to prevent caller modification of internal state.
+ */
+function clonePolicy(policy: AcpStartupPolicy): AcpStartupPolicy {
+  return JSON.parse(JSON.stringify(policy)) as AcpStartupPolicy;
+}
+
+/**
  * Get all active policies (builtin + local).
+ * Returns deep clones to prevent caller modification of internal state.
  */
 export function getActivePolicies(): ReadonlyArray<AcpStartupPolicy> {
-  return [...BUILTIN_POLICIES, ...Array.from(localPolicies.values())];
+  const builtinClones = BUILTIN_POLICIES.map(clonePolicy);
+  const localClones = Array.from(localPolicies.values()).map(clonePolicy);
+  return [...builtinClones, ...localClones];
 }
 
 /**
  * Get a specific policy by ID and optional revision.
+ * Returns a deep clone to prevent caller modification of internal state.
  */
 export function getPolicy(policyId: string, revision?: number): AcpStartupPolicy | undefined {
   const policies = getActivePolicies();

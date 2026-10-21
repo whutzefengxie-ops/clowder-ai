@@ -7,15 +7,16 @@
  * SECURITY BOUNDARIES:
  * - Storage location must be validated for owner, DACL, and reparse protection
  * - Mode 0o700/0o600 on Unix; Windows requires native DACL validation
- * - Windows validation uses PowerShell to check owner, protected ACL, and path safety
+ * - Windows validation uses native .NET APIs via PowerShell to check owner, protected ACL, SID-based rights
+ * - Existing directories with invalid ACLs are REJECTED, not auto-repaired
  */
 
-import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { homedir, platform } from 'node:os';
 import { join } from 'node:path';
 import type { AcpStartupPolicy } from './acp-startup-policy-types.js';
+import { ensureWindowsAcpBootstrapDirectories } from '../acp-bootstrap-windows-directory.js';
 
 /**
  * Storage location for local policies.
@@ -26,53 +27,35 @@ function getPolicyStoragePath(): string {
 }
 
 /**
- * Validate Windows policy storage directory security.
- * Checks: owner is current user, protected DACL, no reparse point.
- * Uses icacls for validation to avoid PowerShell module issues.
+ * Validate Windows policy storage directory security using native .NET validation.
+ *
+ * Uses the existing ensureWindowsAcpBootstrapDirectories which performs:
+ * - Owner check (must be current user)
+ * - Protected DACL (no inheritance)
+ * - SID-based rights validation (no untrusted principals with elevated rights)
+ * - Reparse point detection
+ * - Ancestor safety checks
+ *
+ * This function ONLY validates existing directories. It does NOT create or modify ACLs.
+ * If validation fails, the directory must be rejected.
  */
-function validateWindowsStorageDirectory(path: string): void {
+function validateWindowsStorageDirectory(path: string): { success: boolean; error?: string } {
   if (!existsSync(path)) {
-    throw new Error(`Storage path does not exist: ${path}`);
+    return { success: false, error: `Storage path does not exist: ${path}` };
   }
 
-  // Use icacls to check permissions - more reliable than PowerShell Get-Acl
   try {
-    const icaclsResult = execFileSync(
-      'icacls',
-      [path],
-      {
-        encoding: 'utf8',
-        timeout: 5000,
-        windowsHide: true,
-      }
-    );
-
-    // icacls output format: path followed by permission entries
-    // Check for inheritance flag: (I) means inherited, (CI)(OI) means inheritable
-    // Protected DACL should NOT have inheritance enabled from parent
-    const lines = icaclsResult.split('\n');
-
-    // If we see inheritance markers like "BUILTIN\\Users:(OI)(CI)(RX)" it means
-    // inheritance is enabled, which we don't want for security-sensitive storage
-    const hasInheritance = lines.some(line =>
-      line.includes('(I)') || // Inherited from parent
-      (line.includes('BUILTIN') || line.includes('NT AUTHORITY\\Authenticated Users'))
-    );
-
-    if (hasInheritance) {
-      throw new Error('Storage directory has inherited permissions - DACL must be protected');
-    }
-
+    // Use the existing native validation.
+    // We pass the same path for both root and cwd since we're validating a single directory.
+    // allowVolumeRootDelete is false - policy storage has no special volume root exception.
+    ensureWindowsAcpBootstrapDirectories(path, path, { allowVolumeRootDelete: false });
+    return { success: true };
   } catch (error: unknown) {
-    const err = error as { stderr?: string; stdout?: string; message?: string; code?: string };
-
-    // If icacls itself failed (not just validation), report it
-    if (err.code === 'ENOENT') {
-      throw new Error('icacls command not found - cannot validate Windows storage');
-    }
-
-    const details = [err.stderr?.trim(), err.stdout?.trim(), err.message].filter(Boolean).join(' | ');
-    throw new Error(`Windows storage validation failed: ${details}`);
+    const err = error as { message?: string; code?: string };
+    return {
+      success: false,
+      error: `Windows storage validation failed: ${err.message || String(error)}`
+    };
   }
 }
 
@@ -102,39 +85,9 @@ function computePolicyHash(policy: AcpStartupPolicy): string {
 }
 
 /**
- * Protect a Windows directory by disabling ACL inheritance and setting owner-only access.
- * Uses icacls for more reliable operation than PowerShell.
- */
-function protectWindowsDirectory(path: string): void {
-  try {
-    // Remove inheritance and grant owner full control
-    // /inheritance:r = remove inherited permissions
-    // /grant:r %USERNAME%:(OI)(CI)F = grant full control to current user, replace existing
-    const username = process.env.USERNAME || process.env.USER;
-    if (!username) {
-      throw new Error('Cannot determine current username');
-    }
-
-    execFileSync(
-      'icacls',
-      [path, '/inheritance:r', `/grant:r`, `${username}:(OI)(CI)F`],
-      {
-        encoding: 'utf8',
-        timeout: 10000,
-        windowsHide: true,
-      }
-    );
-  } catch (error: unknown) {
-    const err = error as { stderr?: string; stdout?: string; message?: string };
-    const details = [err.stderr?.trim(), err.stdout?.trim(), err.message].filter(Boolean).join(' | ');
-    throw new Error(`Failed to protect Windows directory: ${details}`);
-  }
-}
-
-/**
  * Load all persisted policies from disk.
  * Returns empty array if storage doesn't exist or on read errors.
- * Validates Windows storage directory before loading.
+ * Validates Windows storage directory before loading - REJECTS invalid directories, does not auto-repair.
  */
 export function loadPersistedPolicies(): AcpStartupPolicy[] {
   const storagePath = getPolicyStoragePath();
@@ -145,11 +98,11 @@ export function loadPersistedPolicies(): AcpStartupPolicy[] {
   }
 
   // On Windows, validate storage directory before loading
+  // SECURITY: Invalid directories are REJECTED, not auto-repaired
   if (platform() === 'win32') {
-    try {
-      validateWindowsStorageDirectory(storagePath);
-    } catch (error) {
-      console.error(`[acp-policy-storage] Storage validation failed, refusing to load: ${error instanceof Error ? error.message : String(error)}`);
+    const validationResult = validateWindowsStorageDirectory(storagePath);
+    if (!validationResult.success) {
+      console.error(`[acp-policy-storage] Storage validation failed, refusing to load: ${validationResult.error}`);
       return [];
     }
   }
@@ -247,46 +200,42 @@ export function loadPersistedPolicies(): AcpStartupPolicy[] {
 /**
  * Persist policies to disk with integrity hashes.
  *
- * SECURITY: Validates storage directory with native checks on Windows
- * (owner, protected ACL, no reparse). On Unix, uses mode 0o700/0o600.
+ * SECURITY:
+ * - On Windows, validates storage directory with native .NET checks (owner, protected DACL, SID-based rights, no reparse)
+ * - Existing directories with invalid ACLs are REJECTED, not auto-repaired
+ * - New directories are created with proper security via ensureWindowsAcpBootstrapDirectories
+ * - On Unix, uses mode 0o700/0o600
  */
 export function persistPolicies(policies: AcpStartupPolicy[]): { success: boolean; error?: string } {
   const storagePath = getPolicyStoragePath();
   const manifestPath = join(storagePath, 'policies.json');
 
   try {
-    // Ensure storage directory exists
+    // Ensure storage directory exists with proper security
     if (!existsSync(storagePath)) {
-      mkdirSync(storagePath, { recursive: true, mode: 0o700 });
-
-      // On Windows, protect the directory and then validate
       if (platform() === 'win32') {
+        // On Windows, use native creation with protected DACL
         try {
-          protectWindowsDirectory(storagePath);
-          validateWindowsStorageDirectory(storagePath);
+          ensureWindowsAcpBootstrapDirectories(storagePath, storagePath, { allowVolumeRootDelete: false });
         } catch (error) {
           return {
             success: false,
-            error: `Windows storage setup failed: ${error instanceof Error ? error.message : String(error)}`
+            error: `Failed to create Windows storage directory: ${error instanceof Error ? error.message : String(error)}`
           };
         }
+      } else {
+        // On Unix, create with mode 0o700
+        mkdirSync(storagePath, { recursive: true, mode: 0o700 });
       }
     } else {
-      // Directory exists - validate it's secure
+      // Directory exists - validate it's secure (REJECT if invalid, do NOT auto-repair)
       if (platform() === 'win32') {
-        try {
-          validateWindowsStorageDirectory(storagePath);
-        } catch (error) {
-          // Validation failed - try to fix it
-          try {
-            protectWindowsDirectory(storagePath);
-            validateWindowsStorageDirectory(storagePath);
-          } catch (fixError) {
-            return {
-              success: false,
-              error: `Existing storage directory failed validation and could not be fixed: ${fixError instanceof Error ? fixError.message : String(fixError)}`
-            };
-          }
+        const validationResult = validateWindowsStorageDirectory(storagePath);
+        if (!validationResult.success) {
+          return {
+            success: false,
+            error: `Existing storage directory failed validation (refusing to auto-repair): ${validationResult.error}`
+          };
         }
       }
     }
