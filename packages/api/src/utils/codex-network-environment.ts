@@ -345,19 +345,23 @@ export async function readWindowsSystemProxy(
     const proxyServer = extractRegValue(stdout, 'ProxyServer');
     const proxyOverride = extractRegValue(stdout, 'ProxyOverride');
     const autoConfigURL = extractRegValue(stdout, 'AutoConfigURL');
-    const autoDetect = extractRegValue(stdout, 'AutoDetect');
 
     // ProxyEnable: REG_DWORD 0 or 1
     const enabled = proxyEnable === '0x1' || proxyEnable === '1';
 
-    // AutoDetect: REG_DWORD 0 or 1 (corresponds to WinHTTP fAutoDetect / WPAD)
-    const wpadEnabled = autoDetect === '0x1' || autoDetect === '1';
+    // WPAD (Web Proxy Auto-Discovery) limitation:
+    // The root key AutoDetect DWORD does not reliably indicate active WPAD state.
+    // WinHttpGetIEProxyConfigForCurrentUser reads from Connections\DefaultConnectionSettings
+    // blob with PROXY_TYPE_AUTO_DETECT(0x08) flag for the current active connection.
+    // Without native WinHTTP call, we cannot reliably determine WPAD state.
+    // Only autoConfigURL (explicit PAC URL) is detectable from registry.
+    // Future: Consider calling WinHttpGetIEProxyConfigForCurrentUser via native addon.
 
     return {
       enabled,
       proxyServer: enabled ? proxyServer : undefined,
       proxyOverride: enabled ? proxyOverride : undefined,
-      hasPac: !!autoConfigURL || wpadEnabled,
+      hasPac: !!autoConfigURL, // Only explicit PAC URL; WPAD detection not implemented
     };
   } catch {
     // Any failure: timeout, access denied, key not found, etc.

@@ -1,8 +1,13 @@
 /**
- * Issue #1666: tmux environment isolation security regression tests
+ * Issue #1666: Environment isolation security unit tests
  *
- * Guards against re-inheriting ambient credentials when using finalEnvironment.
- * These tests cover the complete invoke→factory→writer→script chain.
+ * Tests buildChildEnv behavior for inheritParentEnv contract.
+ * These are unit tests, not end-to-end integration tests.
+ *
+ * TODO: Add integration tests that call:
+ * - CodexAgentService.invoke → tmux factory → writeAgentCommandFile → script generation
+ * - exec_json path → writeAgentCommandFile → script generation
+ * Verify that deleting :2573 inheritParentEnv causes RED (credentials restored).
  */
 
 import { strict as assert } from 'node:assert';
@@ -10,9 +15,9 @@ import { test } from 'node:test';
 import { resolve } from 'node:path';
 import { buildChildEnv } from '../src/utils/cli-spawn.js';
 
-test('Issue #1666: tmux environment isolation', async (t) => {
-  await t.test('writeAgentCommandFile respects inheritParentEnv=false (finalEnvironment)', async () => {
-    // Simulate finalEnvironment: ambient credentials deleted, inheritParentEnv=false
+test('Issue #1666: buildChildEnv inheritParentEnv contract', async (t) => {
+  await t.test('buildChildEnv with inheritParentEnv=false does not re-inherit deleted credentials', async () => {
+    // Unit test: buildChildEnv respects inheritParentEnv=false
     const ambientCredential = 'ambient-account-fixture';
     const originalEnv = process.env.CODEX_API_KEY;
     const testCwd = resolve('/test/cwd');
@@ -28,14 +33,13 @@ test('Issue #1666: tmux environment isolation', async (t) => {
       // finalEnv should not have the deleted credential
       assert.equal(finalEnv.CODEX_API_KEY, undefined, 'finalEnv should not restore deleted credential');
 
-      // tmux writer receives this finalEnv with inheritParentEnv=false
+      // Second call to buildChildEnv (simulates tmux writer behavior)
       const writerOptions = {
         env: finalEnv,
         cwd: testCwd,
         inheritParentEnv: false,
       };
 
-      // Writer calls buildChildEnv again - must respect inheritParentEnv=false
       const scriptEnv = buildChildEnv(writerOptions.env, {
         workingDirectory: writerOptions.cwd,
         bindExecutionOwner: false,
@@ -45,7 +49,7 @@ test('Issue #1666: tmux environment isolation', async (t) => {
       assert.equal(
         scriptEnv.CODEX_API_KEY,
         undefined,
-        'tmux script must not re-inherit deleted ambient credential'
+        'Second buildChildEnv call must not re-inherit deleted ambient credential'
       );
       assert.equal(scriptEnv.USER_VAR, 'value', 'User variables should be preserved');
     } finally {
@@ -54,8 +58,9 @@ test('Issue #1666: tmux environment isolation', async (t) => {
     }
   });
 
-  await t.test('writeAgentCommandFile with normal overrides (inheritParentEnv=true default)', async () => {
+  await t.test('buildChildEnv with inheritParentEnv=true (default) inherits and strips forbidden vars', async () => {
     const originalHome = process.env.HOME;
+    const originalPath = process.env.PATH ?? process.env.Path;
     const testHome = '/original/home';
     const testCwd = resolve('/test/cwd');
 
@@ -79,6 +84,10 @@ test('Issue #1666: tmux environment isolation', async (t) => {
         undefined,
         'Forbidden variables must be stripped'
       );
+      // Check PATH (normalized to uppercase on Windows)
+      const pathKey = Object.keys(scriptEnv).find((k) => k.toUpperCase() === 'PATH');
+      assert.ok(pathKey, 'PATH should be inherited');
+      assert.equal(scriptEnv[pathKey!], originalPath, 'PATH value should match original');
     } finally {
       if (originalHome !== undefined) process.env.HOME = originalHome;
       else delete process.env.HOME;
@@ -86,9 +95,9 @@ test('Issue #1666: tmux environment isolation', async (t) => {
     }
   });
 
-  await t.test('writeAgentCommandFile corrects stale PWD/INIT_CWD', async () => {
+  await t.test('buildChildEnv corrects stale PWD/INIT_CWD', async () => {
     const stalePwd = '/old/directory';
-    const actualCwd = resolve('/test/cwd'); // Use resolve for cross-platform path
+    const actualCwd = resolve('/test/cwd');
 
     const overrides = {
       USER_VAR: 'value',
@@ -108,6 +117,7 @@ test('Issue #1666: tmux environment isolation', async (t) => {
 
   await t.test('empty overrides preserve defaults with inheritParentEnv=true', async () => {
     const originalHome = process.env.HOME;
+    const originalPath = process.env.PATH ?? process.env.Path;
     const testHome = '/test/home';
     const testCwd = resolve('/test/cwd');
 
@@ -124,7 +134,10 @@ test('Issue #1666: tmux environment isolation', async (t) => {
       });
 
       assert.equal(scriptEnv.HOME, testHome, 'Empty overrides should still inherit HOME');
-      assert.ok(scriptEnv.PATH, 'Empty overrides should still inherit PATH');
+      // Check PATH (normalized to uppercase on Windows)
+      const pathKey = Object.keys(scriptEnv).find((k) => k.toUpperCase() === 'PATH');
+      assert.ok(pathKey, 'Empty overrides should still inherit PATH');
+      assert.equal(scriptEnv[pathKey!], originalPath, 'PATH value should match original');
     } finally {
       if (originalHome !== undefined) process.env.HOME = originalHome;
       else delete process.env.HOME;
