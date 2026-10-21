@@ -318,29 +318,54 @@ export function persistPolicies(policies: AcpStartupPolicy[]): { success: boolea
     const tempPath = `${manifestPath}.tmp`;
     const backupPath = `${manifestPath}.bak`;
 
-    // Check if tmp path already exists and is a symlink - REJECT before writing
-    if (existsSync(tempPath)) {
-      const tmpValidation = validateFileNotSymlink(tempPath);
-      if (!tmpValidation.success) {
+    // Check if tmp path is a symlink (including dangling symlinks)
+    // Use lstatSync() which does NOT follow symlinks, unlike existsSync()
+    try {
+      const tmpStats = lstatSync(tempPath);
+      if (tmpStats.isSymbolicLink()) {
         return {
           success: false,
-          error: `Refusing to write through existing tmp file: ${tmpValidation.error}`
+          error: 'Refusing to write through tmp symlink (existing target)'
         };
       }
-      // Existing tmp file is not a symlink, but we should remove it to ensure clean state
-      try {
-        unlinkSync(tempPath);
-      } catch (error) {
+      // Tmp file exists and is not a symlink - remove it for clean state
+      unlinkSync(tempPath);
+    } catch (error: unknown) {
+      const err = error as { code?: string };
+      // ENOENT = file doesn't exist, which is OK for creation
+      // Any other error should be reported
+      if (err.code !== 'ENOENT') {
         return {
           success: false,
-          error: `Failed to remove existing tmp file: ${error}`
+          error: `Failed to check tmp file: ${error}`
         };
       }
+      // File doesn't exist - OK to create
     }
 
-    // Atomic write: write to temp file, then rename
-    // Use mode 0o600 to ensure only owner can read/write
-    writeFileSync(tempPath, JSON.stringify(manifest, null, 2), { encoding: 'utf8', mode: 0o600 });
+    // Use exclusive creation (wx flag) to prevent following symlinks
+    // wx = open for writing, fail if file exists (atomic, doesn't follow symlinks)
+    // This prevents: 1) following dangling symlinks to create files outside storage
+    //                2) race conditions between check and write
+    try {
+      writeFileSync(tempPath, JSON.stringify(manifest, null, 2), {
+        encoding: 'utf8',
+        mode: 0o600,
+        flag: 'wx' // Exclusive creation - fail if file exists, don't follow symlinks
+      });
+    } catch (error: unknown) {
+      const err = error as { code?: string; message?: string };
+      if (err.code === 'EEXIST') {
+        return {
+          success: false,
+          error: 'Tmp file appeared between check and write (possible race or symlink)'
+        };
+      }
+      return {
+        success: false,
+        error: `Failed to write tmp file: ${err.message || String(error)}`
+      };
+    }
 
     // Backup existing manifest if present
     if (existsSync(manifestPath)) {
