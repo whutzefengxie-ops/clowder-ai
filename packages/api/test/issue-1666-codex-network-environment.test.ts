@@ -18,7 +18,11 @@ import {
 describe('Issue #1666: Codex network environment derivation', () => {
   describe('No proxy configuration', () => {
     it('adds loopback addresses when no proxy is configured', () => {
-      const result = deriveCodexNetworkEnvironmentSync({});
+      // On Windows, must provide systemProxy to enable safe loopback injection
+      const systemProxy: WindowsSystemProxyConfig | undefined =
+        process.platform === 'win32' ? { enabled: false, hasPac: false } : undefined;
+
+      const result = deriveCodexNetworkEnvironmentSync({}, systemProxy);
 
       assert.strictEqual(result.diagnostic.hasProxy, false);
       assert.strictEqual(result.diagnostic.loopbackAdded, true);
@@ -36,10 +40,17 @@ describe('Issue #1666: Codex network environment derivation', () => {
 
   describe('Proxy with no exceptions', () => {
     it('adds loopback addresses when proxy exists but NO_PROXY is empty', () => {
-      const result = deriveCodexNetworkEnvironmentSync({
-        HTTP_PROXY: 'http://proxy.example.com:8080',
-        NO_PROXY: '',
-      });
+      // On Windows, must provide systemProxy to enable safe loopback injection
+      const systemProxy: WindowsSystemProxyConfig | undefined =
+        process.platform === 'win32' ? { enabled: false, hasPac: false } : undefined;
+
+      const result = deriveCodexNetworkEnvironmentSync(
+        {
+          HTTP_PROXY: 'http://proxy.example.com:8080',
+          NO_PROXY: '',
+        },
+        systemProxy,
+      );
 
       assert.strictEqual(result.diagnostic.hasProxy, true);
       assert.strictEqual(result.diagnostic.loopbackAdded, true);
@@ -52,10 +63,17 @@ describe('Issue #1666: Codex network environment derivation', () => {
     });
 
     it('adds loopback addresses when proxy exists but NO_PROXY is whitespace', () => {
-      const result = deriveCodexNetworkEnvironmentSync({
-        HTTPS_PROXY: 'http://proxy.example.com:8080',
-        NO_PROXY: '   ',
-      });
+      // On Windows, must provide systemProxy to enable safe loopback injection
+      const systemProxy: WindowsSystemProxyConfig | undefined =
+        process.platform === 'win32' ? { enabled: false, hasPac: false } : undefined;
+
+      const result = deriveCodexNetworkEnvironmentSync(
+        {
+          HTTPS_PROXY: 'http://proxy.example.com:8080',
+          NO_PROXY: '   ',
+        },
+        systemProxy,
+      );
 
       assert.strictEqual(result.diagnostic.hasProxy, true);
       assert.strictEqual(result.diagnostic.loopbackAdded, true);
@@ -130,12 +148,16 @@ describe('Issue #1666: Codex network environment derivation', () => {
 
   describe('Handle null deletions', () => {
     it('respects environment where NO_PROXY was explicitly deleted', () => {
+      // On Windows, must provide systemProxy to enable safe loopback injection
+      const systemProxy: WindowsSystemProxyConfig | undefined =
+        process.platform === 'win32' ? { enabled: false, hasPac: false } : undefined;
+
       const base = {
         HTTP_PROXY: 'http://proxy.example.com:8080',
         // NO_PROXY intentionally missing (was deleted via null override)
       };
 
-      const result = deriveCodexNetworkEnvironmentSync(base);
+      const result = deriveCodexNetworkEnvironmentSync(base, systemProxy);
 
       assert.strictEqual(result.diagnostic.hasProxy, true);
       assert.strictEqual(result.diagnostic.loopbackAdded, true);
@@ -155,6 +177,7 @@ describe('Issue #1666: Codex network environment derivation', () => {
       }
 
       const systemProxy: WindowsSystemProxyConfig = {
+        enabled: true,
         proxyServer: 'proxy.company.com:8080',
         proxyOverride: '*.local;10.0.0.1;internal.company.com',
         hasPac: false,
@@ -175,6 +198,7 @@ describe('Issue #1666: Codex network environment derivation', () => {
       if (process.platform !== 'win32') return;
 
       const systemProxy: WindowsSystemProxyConfig = {
+        enabled: true,
         proxyServer: 'proxy.company.com:8080',
         proxyOverride: '<local>;10.0.0.1',
         hasPac: false,
@@ -209,6 +233,7 @@ describe('Issue #1666: Codex network environment derivation', () => {
       if (process.platform !== 'win32') return;
 
       const systemProxy: WindowsSystemProxyConfig = {
+        enabled: true,
         proxyServer: 'proxy.company.com:8080',
         proxyOverride: '10.0.0.1',
         hasPac: true,
@@ -227,6 +252,7 @@ describe('Issue #1666: Codex network environment derivation', () => {
       if (process.platform !== 'win32') return;
 
       const systemProxy: WindowsSystemProxyConfig = {
+        enabled: true,
         proxyServer: 'proxy.company.com:8080',
         proxyOverride: '10.0.0.1;192.168.1.1',
         hasPac: false,
@@ -256,9 +282,14 @@ describe('Issue #1666: Codex network environment derivation', () => {
     it('uses uppercase NO_PROXY on Windows', () => {
       if (process.platform !== 'win32') return;
 
-      const result = deriveCodexNetworkEnvironmentSync({
-        HTTP_PROXY: 'http://proxy.example.com:8080',
-      });
+      const systemProxy: WindowsSystemProxyConfig = { enabled: false, hasPac: false };
+
+      const result = deriveCodexNetworkEnvironmentSync(
+        {
+          HTTP_PROXY: 'http://proxy.example.com:8080',
+        },
+        systemProxy,
+      );
 
       assert.ok(result.env.NO_PROXY, 'should set NO_PROXY on Windows');
       assert.strictEqual(result.env.no_proxy, undefined, 'should not set lowercase no_proxy on Windows');
@@ -285,7 +316,11 @@ describe('Issue #1666: Codex network environment derivation', () => {
 
   describe('Edge cases', () => {
     it('handles empty environment', () => {
-      const result = deriveCodexNetworkEnvironmentSync({});
+      // On Windows, must provide systemProxy to enable safe loopback injection
+      const systemProxy: WindowsSystemProxyConfig | undefined =
+        process.platform === 'win32' ? { enabled: false, hasPac: false } : undefined;
+
+      const result = deriveCodexNetworkEnvironmentSync({}, systemProxy);
 
       assert.strictEqual(result.diagnostic.hasProxy, false);
       assert.strictEqual(result.diagnostic.loopbackAdded, true);
@@ -296,29 +331,50 @@ describe('Issue #1666: Codex network environment derivation', () => {
     });
 
     it('handles ALL_PROXY', () => {
-      const result = deriveCodexNetworkEnvironmentSync({
-        ALL_PROXY: 'http://proxy.example.com:8080',
-      });
+      // On Windows, must provide systemProxy to enable safe loopback injection
+      const systemProxy: WindowsSystemProxyConfig | undefined =
+        process.platform === 'win32' ? { enabled: false, hasPac: false } : undefined;
+
+      const result = deriveCodexNetworkEnvironmentSync(
+        {
+          ALL_PROXY: 'http://proxy.example.com:8080',
+        },
+        systemProxy,
+      );
 
       assert.strictEqual(result.diagnostic.hasProxy, true);
       assert.strictEqual(result.diagnostic.loopbackAdded, true);
     });
 
     it('handles lowercase proxy variables', () => {
-      const result = deriveCodexNetworkEnvironmentSync({
-        http_proxy: 'http://proxy.example.com:8080',
-        https_proxy: 'http://proxy.example.com:8080',
-      });
+      // On Windows, must provide systemProxy to enable safe loopback injection
+      const systemProxy: WindowsSystemProxyConfig | undefined =
+        process.platform === 'win32' ? { enabled: false, hasPac: false } : undefined;
+
+      const result = deriveCodexNetworkEnvironmentSync(
+        {
+          http_proxy: 'http://proxy.example.com:8080',
+          https_proxy: 'http://proxy.example.com:8080',
+        },
+        systemProxy,
+      );
 
       assert.strictEqual(result.diagnostic.hasProxy, true);
       assert.strictEqual(result.diagnostic.loopbackAdded, true);
     });
 
     it('handles NO_PROXY with only commas', () => {
-      const result = deriveCodexNetworkEnvironmentSync({
-        HTTP_PROXY: 'http://proxy.example.com:8080',
-        NO_PROXY: ',,,',
-      });
+      // On Windows, must provide systemProxy to enable safe loopback injection
+      const systemProxy: WindowsSystemProxyConfig | undefined =
+        process.platform === 'win32' ? { enabled: false, hasPac: false } : undefined;
+
+      const result = deriveCodexNetworkEnvironmentSync(
+        {
+          HTTP_PROXY: 'http://proxy.example.com:8080',
+          NO_PROXY: ',,,',
+        },
+        systemProxy,
+      );
 
       assert.strictEqual(result.diagnostic.hasProxy, true);
       assert.strictEqual(result.diagnostic.loopbackAdded, true);
