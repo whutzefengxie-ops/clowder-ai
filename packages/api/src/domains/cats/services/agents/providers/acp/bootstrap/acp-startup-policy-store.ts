@@ -97,16 +97,51 @@ const BUILTIN_POLICIES: AcpStartupPolicy[] = [
 /**
  * Local policies imported by the instance owner.
  *
- * These are stored separately from builtin policies and can be revoked.
- * Currently stubbed - W2 will implement the controlled import mechanism.
+ * Stored in memory (Map by policyId-revision key).
+ * Future: persist to validated storage with integrity checks.
  */
-const localPolicies: AcpStartupPolicy[] = [];
+const localPolicies = new Map<string, AcpStartupPolicy>();
+
+/**
+ * Policy change listeners (for pool invalidation on revocation/updates).
+ */
+type PolicyChangeListener = (policyId: string, revision: number) => void;
+const policyChangeListeners = new Set<PolicyChangeListener>();
+
+/**
+ * Register a listener for policy changes.
+ * Returns an unsubscribe function.
+ */
+export function onPolicyChange(listener: PolicyChangeListener): () => void {
+  policyChangeListeners.add(listener);
+  return () => policyChangeListeners.delete(listener);
+}
+
+/**
+ * Notify all listeners of a policy change (for pool invalidation).
+ */
+function notifyPolicyChange(policyId: string, revision: number): void {
+  for (const listener of policyChangeListeners) {
+    try {
+      listener(policyId, revision);
+    } catch (error) {
+      console.error('[acp-policy-store] Listener error:', error);
+    }
+  }
+}
+
+/**
+ * Generate a unique key for policy storage.
+ */
+function makePolicyKey(policyId: string, revision: number): string {
+  return `${policyId}@${revision}`;
+}
 
 /**
  * Get all active policies (builtin + local).
  */
 export function getActivePolicies(): ReadonlyArray<AcpStartupPolicy> {
-  return [...BUILTIN_POLICIES, ...localPolicies];
+  return [...BUILTIN_POLICIES, ...Array.from(localPolicies.values())];
 }
 
 /**
@@ -132,34 +167,122 @@ export function isPolicyActive(policyId: string, revision: number): boolean {
 }
 
 /**
- * W2 TODO: Implement controlled policy import.
+ * Import a policy into the local policy store.
  *
- * This function will:
- * 1. Validate the policy structure
- * 2. Check for conflicts with existing policies
- * 3. Verify storage location integrity
- * 4. Persist the policy securely
+ * This is a controlled import - policies must be explicitly added by authorized users.
+ * The policy is validated before being added.
  *
- * Policies must NOT be auto-trusted based on:
- * - Project files
- * - Agent output
- * - Package self-declarations
- * - Provenance strings alone
+ * Security boundaries:
+ * - Policies are NOT auto-trusted based on file scans or package declarations
+ * - Provenance must be explicitly provided (but not auto-verified in this impl)
+ * - Conflicts with existing policies are detected
+ * - Storage is in-memory for this implementation (no persistence yet)
+ *
+ * @param policy The policy to import
+ * @returns Success status and error message if failed
  */
-export function importPolicy(_policy: AcpStartupPolicy): { success: boolean; error?: string } {
-  // Stubbed for W1 - will implement in W2
-  return { success: false, error: 'Policy import not yet implemented (W2)' };
+export function importPolicy(policy: AcpStartupPolicy): { success: boolean; error?: string } {
+  // Validate schema version
+  if (policy.schemaVersion !== 1) {
+    return { success: false, error: `Unsupported schema version: ${policy.schemaVersion}` };
+  }
+
+  // Validate required fields
+  if (!policy.policyId || !policy.label) {
+    return { success: false, error: 'Policy must have policyId and label' };
+  }
+
+  if (policy.revision < 1) {
+    return { success: false, error: 'Policy revision must be >= 1' };
+  }
+
+  if (!policy.provenance || !policy.provenance.reviewer || !policy.provenance.evidenceRef) {
+    return { success: false, error: 'Policy must have complete provenance (reviewer, evidenceRef)' };
+  }
+
+  if (!policy.artifacts || policy.artifacts.length === 0) {
+    return { success: false, error: 'Policy must have at least one artifact' };
+  }
+
+  // Check for conflicts: cannot import same policyId+revision
+  const key = makePolicyKey(policy.policyId, policy.revision);
+  if (localPolicies.has(key)) {
+    return { success: false, error: `Policy ${policy.policyId}@${policy.revision} already exists` };
+  }
+
+  // Check for conflicts with builtin policies
+  const builtinConflict = BUILTIN_POLICIES.find(
+    (p) => p.policyId === policy.policyId && p.revision === policy.revision
+  );
+  if (builtinConflict) {
+    return { success: false, error: `Conflicts with builtin policy ${policy.policyId}@${policy.revision}` };
+  }
+
+  // Import the policy
+  localPolicies.set(key, policy);
+
+  // Notify listeners (for pool invalidation)
+  notifyPolicyChange(policy.policyId, policy.revision);
+
+  return { success: true };
 }
 
 /**
- * W2 TODO: Implement policy revocation.
+ * Revoke a policy from the local policy store.
  *
- * Revoking a policy must:
- * 1. Remove it from the active set
- * 2. Trigger pool invalidation for affected signatures
- * 3. Fail new spawn attempts using the revoked policy
+ * Revoking a policy:
+ * 1. Removes it from the active set
+ * 2. Triggers pool invalidation notifications
+ * 3. Causes new spawn attempts using this policy to fail
+ *
+ * @param policyId The policy ID to revoke
+ * @param revision Optional specific revision to revoke (if omitted, revokes all revisions)
+ * @returns Success status and error message if failed
  */
-export function revokePolicy(_policyId: string, _revision?: number): { success: boolean; error?: string } {
-  // Stubbed for W1 - will implement in W2
-  return { success: false, error: 'Policy revocation not yet implemented (W2)' };
+export function revokePolicy(policyId: string, revision?: number): { success: boolean; error?: string } {
+  if (!policyId) {
+    return { success: false, error: 'policyId is required' };
+  }
+
+  // Cannot revoke builtin policies
+  const isBuiltin = BUILTIN_POLICIES.some(
+    (p) => p.policyId === policyId && (revision === undefined || p.revision === revision)
+  );
+  if (isBuiltin) {
+    return { success: false, error: `Cannot revoke builtin policy: ${policyId}` };
+  }
+
+  let revokedCount = 0;
+
+  if (revision !== undefined) {
+    // Revoke specific revision
+    const key = makePolicyKey(policyId, revision);
+    if (localPolicies.delete(key)) {
+      revokedCount++;
+      notifyPolicyChange(policyId, revision);
+    }
+  } else {
+    // Revoke all revisions of this policy
+    const toRevoke: string[] = [];
+    for (const [key, policy] of localPolicies.entries()) {
+      if (policy.policyId === policyId) {
+        toRevoke.push(key);
+      }
+    }
+
+    for (const key of toRevoke) {
+      const policy = localPolicies.get(key);
+      if (policy) {
+        localPolicies.delete(key);
+        notifyPolicyChange(policy.policyId, policy.revision);
+        revokedCount++;
+      }
+    }
+  }
+
+  if (revokedCount === 0) {
+    return { success: false, error: `Policy not found: ${policyId}${revision !== undefined ? `@${revision}` : ''}` };
+  }
+
+  return { success: true };
 }

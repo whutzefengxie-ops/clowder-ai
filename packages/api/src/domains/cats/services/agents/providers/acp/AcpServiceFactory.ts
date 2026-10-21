@@ -179,6 +179,24 @@ async function ensureAcpPool(
   spawn: AcpSpawnContext,
 ): Promise<AcpProcessPool> {
   const { profileId, acpConfig, poolRegistry } = input;
+
+  // Check if the policy used for this bootstrap is still active
+  // If the policy was revoked, we must not use or create a pool
+  if (bootstrap.policyId && bootstrap.policyRevision !== undefined) {
+    const { isPolicyActive } = await import('./bootstrap/acp-startup-policy-store.js');
+    if (!isPolicyActive(bootstrap.policyId, bootstrap.policyRevision)) {
+      // Policy was revoked - retire existing pool if any
+      const existingPool = poolRegistry.get(profileId);
+      if (existingPool) {
+        existingPool.retireWhenIdle();
+        poolRegistry.delete(profileId);
+      }
+      throw new Error(
+        `Startup policy ${bootstrap.policyId}@${bootstrap.policyRevision} is no longer active (revoked or removed)`
+      );
+    }
+  }
+
   const spawnSignature = createAcpPoolSpawnSignature({
     command: bootstrap.command,
     args: bootstrap.args,

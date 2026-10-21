@@ -52,6 +52,7 @@ function getEnvVariable(env: NodeJS.ProcessEnv, name: string): string | undefine
 
 /**
  * Match a startup command against the built-in Pi bridge policy.
+ * Now checks active policies instead of bypassing the store.
  */
 function matchPiBridgePolicy(
   plan: { command: string; args: string[]; shell?: true | string },
@@ -67,15 +68,32 @@ function matchPiBridgePolicy(
     return { matched: false, reason: 'LAUNCH_UNRESOLVED' };
   }
 
-  // Check Pi bridge signature
+  // Check Pi bridge signature: must be exact match
   if (
-    realpathSync(entry) === realpathSync(PI_BRIDGE) &&
     rest.length === 2 &&
     rest[0] === '--pi-command' &&
     rest[1] &&
     isAbsolute(rest[1])
   ) {
-    return { matched: true, policyId: 'builtin-pi-bridge', revision: 1, label: 'Built-in Pi ACP Bridge' };
+    try {
+      // Verify it's actually the Pi bridge by realpath comparison
+      if (realpathSync(entry) === realpathSync(PI_BRIDGE)) {
+        // Check if Pi policy is active in the store
+        const piPolicy = getActivePolicies().find((p) => p.policyId === 'builtin-pi-bridge');
+        if (piPolicy) {
+          return {
+            matched: true,
+            policyId: piPolicy.policyId,
+            revision: piPolicy.revision,
+            label: piPolicy.label
+          };
+        }
+        // Policy exists but not active
+        return { matched: false, reason: 'BUILD_NOT_AUDITED' };
+      }
+    } catch {
+      return { matched: false, reason: 'LAUNCH_UNRESOLVED' };
+    }
   }
 
   return { matched: false, reason: 'BUILD_NOT_AUDITED' };
@@ -99,12 +117,16 @@ function matchDshPolicy(
     return { matched: false, reason: 'LAUNCH_UNRESOLVED' };
   }
 
-  // Check required arguments
+  // Check required arguments - must match exactly, no extra parameters
   if (policy.launchShape.requiredArgs?.named) {
     const namedArgs = policy.launchShape.requiredArgs.named;
     if (namedArgs['--profile']) {
-      const profileIndex = rest.indexOf('--profile');
-      if (profileIndex === -1 || rest[profileIndex + 1] !== namedArgs['--profile']) {
+      // Require exact match: rest must be ['--profile', 'acp'] with no additional args
+      if (
+        rest.length !== 2 ||
+        rest[0] !== '--profile' ||
+        rest[1] !== namedArgs['--profile']
+      ) {
         return { matched: false, reason: 'BUILD_NOT_AUDITED' };
       }
     }
@@ -257,12 +279,12 @@ export function matchStartupPolicy(
     return { matched: false, reason: 'LAUNCH_UNRESOLVED' };
   }
 
-  // Check forbidden environment variables
-  if (getEnvVariable(env, 'NODE_OPTIONS') || getEnvVariable(env, 'NODE_PATH')) {
-    return { matched: false, reason: 'STARTUP_ENV_UNSAFE' };
-  }
-
   try {
+    // Check forbidden environment variables (environment ambiguity is caught here)
+    if (getEnvVariable(env, 'NODE_OPTIONS') || getEnvVariable(env, 'NODE_PATH')) {
+      return { matched: false, reason: 'STARTUP_ENV_UNSAFE' };
+    }
+
     // Resolve the spawn plan
     const plan = resolveWindowsSpawnPlan(resolveCliCommandOrBare(command), args);
 
@@ -283,7 +305,11 @@ export function matchStartupPolicy(
 
     // No policy matched
     return { matched: false, reason: 'BUILD_NOT_AUDITED' };
-  } catch {
+  } catch (error) {
+    // Environment ambiguity or other errors should return structured rejection
+    if (error instanceof Error && error.message.includes('Ambiguous environment variable')) {
+      return { matched: false, reason: 'STARTUP_ENV_UNSAFE' };
+    }
     return { matched: false, reason: 'LAUNCH_UNRESOLVED' };
   }
 }
