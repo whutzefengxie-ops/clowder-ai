@@ -185,14 +185,17 @@ describe('VirtualAttentionList nearest visibility', () => {
       return rect(0, height);
     });
 
+    // Test control ref with explicit type
+    const updateDecisionsRef = { current: null as ((newDecisions: Set<string>) => void) | null };
+
     function DynamicHarness() {
       const scrollContainerRef = useRef<HTMLDivElement>(null);
       const [groupDecisions, setGroupDecisions] = React.useState<{ status: 'ready'; threadIds: Set<string> }>({
         status: 'ready',
         threadIds: decisions,
       });
-      // Expose setter for test control
-      (globalThis as any).__updateDecisions = (newDecisions: Set<string>) => {
+      // Expose setter for test control via typed ref
+      updateDecisionsRef.current = (newDecisions: Set<string>) => {
         decisions = newDecisions;
         setGroupDecisions({ status: 'ready', threadIds: newDecisions });
       };
@@ -232,7 +235,7 @@ describe('VirtualAttentionList nearest visibility', () => {
 
     // Add decision for thread-50 (should invalidate cache)
     act(() => {
-      (globalThis as any).__updateDecisions(new Set(['thread-50']));
+      updateDecisionsRef.current?.(new Set(['thread-50']));
     });
 
     // Total should update immediately: 52*99 + 76 = 5224px
@@ -248,12 +251,10 @@ describe('VirtualAttentionList nearest visibility', () => {
 
     // Remove decision (thread-50 still offscreen)
     act(() => {
-      (globalThis as any).__updateDecisions(new Set());
+      updateDecisionsRef.current?.(new Set());
     });
 
     // Total should return to 5200px immediately (cache invalidated again)
     expect(list.style.height).toBe('5200px');
-
-    delete (globalThis as any).__updateDecisions;
   });
 });
