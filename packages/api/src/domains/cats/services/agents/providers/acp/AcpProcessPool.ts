@@ -113,6 +113,8 @@ function resolveSupportsMultiplexing(variantConfig: unknown): boolean {
 
 export class AcpProcessPool {
   readonly spawnSignature?: string;
+  readonly policyId?: string;
+  readonly policyRevision?: number;
   private readonly config: AcpPoolConfig;
   private readonly supportsMultiplexing: boolean;
   private readonly entries = new Map<string, PoolEntry[]>();
@@ -140,8 +142,12 @@ export class AcpProcessPool {
     variantConfig: unknown,
     clientFactory: AcpClientFactory,
     spawnSignature?: string,
+    policyId?: string,
+    policyRevision?: number,
   ) {
     this.spawnSignature = spawnSignature;
+    this.policyId = policyId;
+    this.policyRevision = policyRevision;
     this.config = {
       maxLiveProcesses: config.maxLiveProcesses,
       idleTtlMs: config.idleTtlMs ?? DEFAULT_ACP_IDLE_TTL_MS,
@@ -158,6 +164,19 @@ export class AcpProcessPool {
   async acquire(poolKey: PoolKey, options: AcpAcquireOptions = {}): Promise<AcpLease> {
     if (this.closed) throw new Error('Pool is closed');
     if (this.retiring) throw new Error('Pool is retired');
+
+    // Check if the policy used by this pool is still active
+    // This prevents hot reuse of pools when the policy has been revoked
+    if (this.policyId && this.policyRevision !== undefined) {
+      const { isPolicyActive } = await import('./bootstrap/acp-startup-policy-store.js');
+      if (!isPolicyActive(this.policyId, this.policyRevision)) {
+        // Policy was revoked - retire this pool immediately
+        this.retireWhenIdle();
+        throw new Error(
+          `Pool policy ${this.policyId}@${this.policyRevision} is no longer active (revoked or removed)`
+        );
+      }
+    }
 
     const key = serializeKey(poolKey);
     const entries = this.entries.get(key) ?? [];

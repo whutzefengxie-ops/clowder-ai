@@ -242,6 +242,8 @@ async function ensureAcpPool(
       return acpConfig.transport === 'httpstream' ? new AcpHttpStreamClient(clientCfg) : new AcpClient(clientCfg);
     },
     spawnSignature,
+    bootstrap.policyId,
+    bootstrap.policyRevision,
   );
   poolRegistry.set(profileId, pool);
   return pool;

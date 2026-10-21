@@ -294,8 +294,9 @@ export function matchStartupPolicy(
       return piResult;
     }
 
-    // Try DSH policies
-    const policies = getActivePolicies().filter((p) => p.policyId.startsWith('dsh-'));
+    // Try all non-Pi policies (not just those starting with 'dsh-')
+    // This ensures imported policies with any policyId are considered
+    const policies = getActivePolicies().filter((p) => p.policyId !== 'builtin-pi-bridge');
     for (const policy of policies) {
       const result = matchDshPolicy(policy, plan, env);
       if (result.matched) {

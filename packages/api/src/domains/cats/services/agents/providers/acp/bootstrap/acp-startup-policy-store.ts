@@ -192,8 +192,8 @@ export function importPolicy(policy: AcpStartupPolicy): { success: boolean; erro
     return { success: false, error: 'Policy must have policyId and label' };
   }
 
-  if (policy.revision < 1) {
-    return { success: false, error: 'Policy revision must be >= 1' };
+  if (!policy.revision || policy.revision < 1) {
+    return { success: false, error: 'Policy must have revision >= 1' };
   }
 
   if (!policy.provenance || !policy.provenance.reviewer || !policy.provenance.evidenceRef) {
@@ -202,6 +202,23 @@ export function importPolicy(policy: AcpStartupPolicy): { success: boolean; erro
 
   if (!policy.artifacts || policy.artifacts.length === 0) {
     return { success: false, error: 'Policy must have at least one artifact' };
+  }
+
+  // Validate artifacts have proper hashes (not placeholder values)
+  for (const artifact of policy.artifacts) {
+    if (!artifact.sha256 || artifact.sha256.length < 32 || !/^[a-f0-9]+$/i.test(artifact.sha256)) {
+      return { success: false, error: `Invalid SHA-256 hash for artifact ${artifact.path}: ${artifact.sha256}` };
+    }
+  }
+
+  // Validate launch shape - must have argument constraints for DSH policies
+  if (policy.policyId.startsWith('dsh-')) {
+    if (!policy.launchShape.requiredArgs?.named) {
+      return { success: false, error: 'DSH policies must specify requiredArgs.named (e.g., --profile)' };
+    }
+    if (!policy.launchShape.requiredArgs.named['--profile']) {
+      return { success: false, error: 'DSH policies must specify --profile requirement' };
+    }
   }
 
   // Check for conflicts: cannot import same policyId+revision

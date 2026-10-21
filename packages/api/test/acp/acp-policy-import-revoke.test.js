@@ -17,7 +17,7 @@ describe('ACP startup policy import and revocation (W2)', () => {
       label: 'Test',
       provenance: { reviewer: 'test', auditDate: '2024-01-01', evidenceRef: 'test' },
       launchShape: { entryPattern: 'node-absolute' },
-      artifacts: [{ path: 'entry', sha256: 'abc' }],
+      artifacts: [{ path: 'entry', sha256: 'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789' }],
       assurance: 'test',
     });
     assert.equal(result1.success, false);
@@ -31,7 +31,7 @@ describe('ACP startup policy import and revocation (W2)', () => {
       label: 'Test',
       provenance: { reviewer: '', auditDate: '2024-01-01', evidenceRef: '' },
       launchShape: { entryPattern: 'node-absolute' },
-      artifacts: [{ path: 'entry', sha256: 'abc' }],
+      artifacts: [{ path: 'entry', sha256: 'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789' }],
       assurance: 'test',
     });
     assert.equal(result2.success, false);
@@ -50,6 +50,20 @@ describe('ACP startup policy import and revocation (W2)', () => {
     });
     assert.equal(result3.success, false);
     assert.match(result3.error, /artifact/i);
+
+    // Invalid SHA-256 hash
+    const result4 = importPolicy({
+      schemaVersion: 1,
+      policyId: 'test',
+      revision: 1,
+      label: 'Test',
+      provenance: { reviewer: 'test', auditDate: '2024-01-01', evidenceRef: 'test' },
+      launchShape: { entryPattern: 'node-absolute' },
+      artifacts: [{ path: 'entry', sha256: 'abc' }],
+      assurance: 'test',
+    });
+    assert.equal(result4.success, false);
+    assert.match(result4.error, /SHA-256/i);
   });
 
   test('importPolicy accepts valid policy and makes it active', async () => {
@@ -72,7 +86,7 @@ describe('ACP startup policy import and revocation (W2)', () => {
         requiredArgs: { named: { '--profile': 'acp' } },
       },
       artifacts: [
-        { path: 'entry', sha256: 'test-hash-123' },
+        { path: 'entry', sha256: '1a03dee18683483ff6a1b27b2a1e650230da6bcca9a0f55f7d81b3308c3f307f' },
       ],
       assurance: 'Test policy for W2 verification',
     };
@@ -102,7 +116,7 @@ describe('ACP startup policy import and revocation (W2)', () => {
       label: 'Test',
       provenance: { reviewer: 'test', auditDate: '2024-01-01', evidenceRef: 'test' },
       launchShape: { entryPattern: 'node-absolute' },
-      artifacts: [{ path: 'entry', sha256: 'abc' }],
+      artifacts: [{ path: 'entry', sha256: 'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789' }],
       assurance: 'test',
     };
 
@@ -129,7 +143,7 @@ describe('ACP startup policy import and revocation (W2)', () => {
       label: 'Test',
       provenance: { reviewer: 'test', auditDate: '2024-01-01', evidenceRef: 'test' },
       launchShape: { entryPattern: 'node-absolute' },
-      artifacts: [{ path: 'entry', sha256: 'abc' }],
+      artifacts: [{ path: 'entry', sha256: 'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789' }],
       assurance: 'test',
     };
 
@@ -163,7 +177,7 @@ describe('ACP startup policy import and revocation (W2)', () => {
       label: 'Test v1',
       provenance: { reviewer: 'test', auditDate: '2024-01-01', evidenceRef: 'test' },
       launchShape: { entryPattern: 'node-absolute' },
-      artifacts: [{ path: 'entry', sha256: 'abc1' }],
+      artifacts: [{ path: 'entry', sha256: 'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789' }],
       assurance: 'test',
     };
 
@@ -171,7 +185,7 @@ describe('ACP startup policy import and revocation (W2)', () => {
       ...policy1,
       revision: 2,
       label: 'Test v2',
-      artifacts: [{ path: 'entry', sha256: 'abc2' }],
+      artifacts: [{ path: 'entry', sha256: '1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef' }],
     };
 
     importPolicy(policy1);
