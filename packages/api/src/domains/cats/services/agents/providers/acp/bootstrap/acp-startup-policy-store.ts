@@ -6,6 +6,7 @@
  */
 
 import type { AcpStartupPolicy } from './acp-startup-policy-types.js';
+import { loadPersistedPolicies, persistPolicies } from './acp-startup-policy-storage.js';
 
 /**
  * Built-in policies included with this version of Clowder AI.
@@ -97,10 +98,39 @@ const BUILTIN_POLICIES: AcpStartupPolicy[] = [
 /**
  * Local policies imported by the instance owner.
  *
- * Stored in memory (Map by policyId-revision key).
- * Future: persist to validated storage with integrity checks.
+ * Loaded from persistent storage on initialization.
+ * Changes are persisted to disk on import/revoke.
  */
 const localPolicies = new Map<string, AcpStartupPolicy>();
+
+// Load persisted policies on module initialization
+try {
+  const persisted = loadPersistedPolicies();
+  for (const policy of persisted) {
+    const key = makePolicyKey(policy.policyId, policy.revision);
+    localPolicies.set(key, policy);
+  }
+  if (persisted.length > 0) {
+    console.info(`[acp-policy-store] Loaded ${persisted.length} persisted policies`);
+  }
+} catch (error) {
+  console.error('[acp-policy-store] Failed to load persisted policies:', error);
+}
+
+/**
+ * Sync local policies to persistent storage.
+ */
+function syncToStorage(): void {
+  try {
+    const policies = Array.from(localPolicies.values());
+    const result = persistPolicies(policies);
+    if (!result.success) {
+      console.error('[acp-policy-store] Failed to persist policies:', result.error);
+    }
+  } catch (error) {
+    console.error('[acp-policy-store] Failed to sync policies:', error);
+  }
+}
 
 /**
  * Policy change listeners (for pool invalidation on revocation/updates).
@@ -204,20 +234,18 @@ export function importPolicy(policy: AcpStartupPolicy): { success: boolean; erro
     return { success: false, error: 'Policy must have at least one artifact' };
   }
 
-  // Validate artifacts have proper hashes (not placeholder values)
+  // Validate artifacts have proper hashes (SHA-256 = 64 hex chars)
   for (const artifact of policy.artifacts) {
-    if (!artifact.sha256 || artifact.sha256.length < 32 || !/^[a-f0-9]+$/i.test(artifact.sha256)) {
-      return { success: false, error: `Invalid SHA-256 hash for artifact ${artifact.path}: ${artifact.sha256}` };
+    if (!artifact.sha256 || artifact.sha256.length !== 64 || !/^[a-f0-9]{64}$/i.test(artifact.sha256)) {
+      return { success: false, error: `Invalid SHA-256 hash for artifact ${artifact.path}: must be 64 hex characters` };
     }
   }
 
-  // Validate launch shape - must have argument constraints for DSH policies
-  if (policy.policyId.startsWith('dsh-')) {
-    if (!policy.launchShape.requiredArgs?.named) {
-      return { success: false, error: 'DSH policies must specify requiredArgs.named (e.g., --profile)' };
-    }
-    if (!policy.launchShape.requiredArgs.named['--profile']) {
-      return { success: false, error: 'DSH policies must specify --profile requirement' };
+  // Validate launch shape - ALL non-Pi policies must have complete argument constraints
+  // This prevents privilege escalation via extra arguments like --patch
+  if (policy.policyId !== 'builtin-pi-bridge') {
+    if (!policy.launchShape.requiredArgs?.named || Object.keys(policy.launchShape.requiredArgs.named).length === 0) {
+      return { success: false, error: 'Non-Pi policies must specify complete requiredArgs.named to prevent extra arguments' };
     }
   }
 
@@ -237,6 +265,9 @@ export function importPolicy(policy: AcpStartupPolicy): { success: boolean; erro
 
   // Import the policy
   localPolicies.set(key, policy);
+
+  // Persist to disk
+  syncToStorage();
 
   // Notify listeners (for pool invalidation)
   notifyPolicyChange(policy.policyId, policy.revision);
@@ -300,6 +331,9 @@ export function revokePolicy(policyId: string, revision?: number): { success: bo
   if (revokedCount === 0) {
     return { success: false, error: `Policy not found: ${policyId}${revision !== undefined ? `@${revision}` : ''}` };
   }
+
+  // Persist changes to disk
+  syncToStorage();
 
   return { success: true };
 }

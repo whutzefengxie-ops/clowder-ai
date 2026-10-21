@@ -165,11 +165,18 @@ export class AcpProcessPool {
     if (this.closed) throw new Error('Pool is closed');
     if (this.retiring) throw new Error('Pool is retired');
 
-    // Check if the policy used by this pool is still active
+    // Check if the policy used by this pool is still active (must be synchronous check before any await)
     // This prevents hot reuse of pools when the policy has been revoked
     if (this.policyId && this.policyRevision !== undefined) {
-      const { isPolicyActive } = await import('./bootstrap/acp-startup-policy-store.js');
-      if (!isPolicyActive(this.policyId, this.policyRevision)) {
+      // Dynamic import returns a promise, but isPolicyActive is synchronous
+      // We must check policy state before entering any async work to avoid close/reopen race
+      const storeModule = await import('./bootstrap/acp-startup-policy-store.js');
+      const isActive = storeModule.isPolicyActive(this.policyId, this.policyRevision);
+
+      // Re-check closed state after the await - pool might have closed during import
+      if (this.closed) throw new Error('Pool is closed');
+
+      if (!isActive) {
         // Policy was revoked - retire this pool immediately
         this.retireWhenIdle();
         throw new Error(
