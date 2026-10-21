@@ -1,5 +1,6 @@
 import type { ContextAttachment } from '@cat-cafe/shared';
-import { act, useRef, useState } from 'react';
+import { act, useCallback, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { flushComposerDraft, prepareComposerDraftAdmission } from '@/components/composer-draft-flush-registry';
@@ -23,6 +24,7 @@ let discardUnrestored: () => Promise<void>;
 let beginAndClear: () => void;
 let finish: (accepted: boolean | undefined) => void;
 let resolvePendingWrite: (() => void) | null;
+let commitProjectionImmediately = false;
 const preparing = () => {};
 const response = (body: unknown, status = 200) =>
   ({ ok: status >= 200 && status < 300, status, json: async () => body }) as Response;
@@ -33,10 +35,14 @@ function Harness({ threadId = THREAD }: { threadId?: string }) {
   const [attachments, setAttachments] = useState<ContextAttachment[]>([]);
   const replyToMessage = useChatStore((state) => state.replyToMessage);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const projectInput = useCallback<typeof setInput>((value) => {
+    if (commitProjectionImmediately) flushSync(() => setInput(value));
+    else setInput(value);
+  }, []);
   const durable = useDurableComposerDraft({
     threadId,
     input,
-    setInput,
+    setInput: projectInput,
     images,
     setImages,
     contextAttachments: attachments,
@@ -88,6 +94,7 @@ async function admissionResult() {
   return result;
 }
 beforeEach(() => {
+  commitProjectionImmediately = false;
   vi.useFakeTimers();
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   sessionStorage.clear();
@@ -239,6 +246,37 @@ it('still requires confirmation and displays both drafts when hydration arrives 
   });
   expect(result).toBeInstanceOf(Error);
   expect((result as Error).name).toBe('ComposerDraftConfirmationRequiredError');
+  act(() => finish(false));
+  expect(container.querySelector('textarea')?.value).toBe('remote unsent message\n\nlocal attempted message');
+});
+
+it('requires confirmation when hydration projection commits before its asynchronous image restoration settles', async () => {
+  // Real React may commit the projected editor value before the hydration continuation.
+  // Force that ordering instead of relying on act() to batch the entire recovery.
+  commitProjectionImmediately = true;
+  let releaseRead!: (value: Response) => void;
+  const read = new Promise<Response>((resolve) => {
+    releaseRead = resolve;
+  });
+  vi.mocked(apiFetch).mockImplementation(async (_url, init) => {
+    if (!init?.method) return read;
+    const body = JSON.parse(String(init.body));
+    writes.push(body);
+    return await write(body, init.method);
+  });
+  await act(async () => root.render(<Harness />));
+  act(() => typeText('local attempted message'));
+  let result: unknown;
+  await act(async () => {
+    beginAndClear();
+    const preparingAdmission = prepareComposerDraftAdmission(THREAD).catch((error) => error);
+    owner = { text: 'remote unsent message' };
+    releaseRead(response({ draft: owner, revision }));
+    result = await preparingAdmission;
+  });
+  expect(result).toBeInstanceOf(Error);
+  expect((result as Error).name).toBe('ComposerDraftConfirmationRequiredError');
+  expect(writes.at(-1)?.text).toBe('remote unsent message\n\nlocal attempted message');
   act(() => finish(false));
   expect(container.querySelector('textarea')?.value).toBe('remote unsent message\n\nlocal attempted message');
 });
