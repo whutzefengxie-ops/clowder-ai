@@ -70,7 +70,8 @@ DSH 默认启动链只读取精确 cwd/HOME 的 `.env`，模块由安装位置/p
 | 最终受影响回归 | **177 项：176 通过、0 失败、1 跳过**；跳过项仅 POSIX mode 位，Windows 使用原生 ACL 验证 |
 | 真实 Pi/DSH initialize | 两者各启动两次成功，关闭后重开；真实 DSH、真实内置桥，无模型调用 |
 | 完整 API TypeScript 编译 | 通过 |
-| Biome 检查、git diff --check | 无错误；保留既有大文件和复杂度警告 |
+| 标准 `pnpm --dir packages/api build` | 通过；共享包、API、资源拷贝、F299 recorder 12 implementers 均完成 |
+| Biome 检查、git diff --check | 无错误；启动链校验函数有新增复杂度警告，另有既有大文件/规则警告 |
 | capability-tips checker | 通过，10 条既有 stale anchor 警告 |
 
 回归覆盖：root/cwd 广泛 Allow、错误 owner、继承、junction、普通文件、不可用验证器、普通祖先各危险权限、原始 GenericAll/回调 ACE、SUBST、卷根正向、通用 ACP 反向、配置变更、实际 spawn 接线、池签名与冷启动、账号/注册诊断、STDIO/HTTP 和进程池生命周期。
@@ -81,9 +82,13 @@ DSH 默认启动链只读取精确 cwd/HOME 的 `.env`，模块由安装位置/p
 
 运行测试：`node --import ./packages/api/test/helpers/setup-cat-registry.js --test --test-concurrency=2 --test-timeout=90000 <上述 bootstrap/client/httpstream/pool/factory/registration 测试文件>`。真实启动用例位于 `packages/api/test/acp/acp-bootstrap-audited-runtime.test.js`，只在显式提供原生 fixtures 时运行。全量仓库测试未执行。
 
+fallback checker 的语法计数触发自检：startup policy 的布尔拒绝条件及 native 身份校验被计为 fallback，并非吞掉异常后换方案。真实位置候选只有既有 temp、ProgramData 加新增数据卷一层；同一验证器统一检查，私有目录/校验不可用失败不降级。坐标修正是区分“可重命名的普通祖先”和“经原生证明的真实卷根”；移除新增候选会重新落回同一不可信系统盘链，不能解决原问题。
+
+安全论证针对 bootstrap 边界，沿用既有进程执行契约对安装的 Node/CLI/依赖和用户选择的真实项目的信任；不声称修复操作系统或任意第三方 CLI 的全部风险。
+
 ## 独立审查与原机验收
 
-独立审查由非作者 `security_review_1653` 完成，最终结果另附同目录审查记录；作者测试不替代该结论。这是独立 GPT 实例，不声称跨模型家族审查或 GitHub 正式批准。
+独立审查由非作者 `security_review_1653` 完成，结论为 **supported，无 P1/P2 阻断项，独立安全测试 46/46 通过**，覆盖代码提交 `4a0b6833b748951f0378793d6cf77aeed24a469c`。完整记录见 [独立安全审查](./issue1653-independent-security-review.md)。作者测试不替代该结论。这是独立 GPT 实例，不声称跨模型家族审查或 GitHub 正式批准。其后仅补文档与收尾记录，生产代码和测试内容无变化。
 
 原企业机器仍须逐项验收：
 
@@ -95,3 +100,11 @@ DSH 默认启动链只读取精确 cwd/HOME 的 `.env`，模块由安装位置/p
 6. 原机 C/D 根和用户目录 ACL 前后只读比对。当前 C 根是 TrustedInstaller，不能把它当作原机安装账户 owner 的同一复现。
 
 这些项目尚未验证，因此不据此关闭 Issue、不声称原企业机已经恢复。工作分支保留供进一步验收；主分支、其他 ACP 工位和生产运行态未修改。
+
+## 收尾回执
+
+- 四个真实测试子进程均通过客户端 close 退出，按记录 PID 只读回查均不存在；未启动应用/Redis 服务。
+- 临时 SUBST 映射已解除，G 卷上的本任务 UUID 测试根均已回收；卷根 SDDL 比对通过。
+- 新建的 C 盘 UUID fixture 共 46 个文件已逐个 SHA-256 核验归档，原 UUID 目录已移除。归档为本 worktree `.tmp/issue1653-native-fixtures.zip`，SHA-256 `47d3618fdd5aca57a53146c9f86809f87620f81219c2ad225ccf84e24a9b82e5`；清单和实例台账在 `.tmp/issue1653-native-manifest.json`、`.tmp/issue1653-instance-ledger.json`。
+- 归档前已确认无 reparse、数据库、原生会话或认证文件。DSH 临时技能 assets 与官方包哈希一致，空 spill 和 registry 模板均为本任务新生成物。
+- 没有安装 EXE、创建快捷方式、修改原生 HOME 或操作生产历史。工位及日志保留，供用户继续原机验收。
