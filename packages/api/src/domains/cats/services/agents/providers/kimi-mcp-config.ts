@@ -4,10 +4,9 @@ import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveBinaryRoot } from '../../../../../config/capabilities/capability-orchestrator.js';
 import { isSameCapabilityRoot } from '../../../../../config/capabilities/invoke-capability-root.js';
-import { MCP_CALLBACK_ENV_KEYS } from '../../../../../config/capabilities/mcp-constants.js';
 import { resolveKimiRuntimePaths } from '../../../../../utils/kimi-cli-runtime.js';
 import { pathsEqual } from '../../../../../utils/project-path.js';
-import { resolveProviderMcpConfig } from './provider-mcp-config.js';
+import { resolveKimiMcpSurface } from './kimi-mcp-surface.js';
 
 export interface KimiMcpLease {
   env: Record<string, string>;
@@ -33,20 +32,6 @@ export async function prepareKimiMcpConfig(input: {
   if (!input.callbackEnv?.CAT_CAFE_CAT_ID || input.mcpServerPath === '') return noop;
   if (!input.workingDirectory) throw new Error('Kimi MCP injection requires an explicit working directory');
   const binaryRoot = resolveBinaryRoot(resolve(dirname(fileURLToPath(import.meta.url)), '../../../../../../../..'));
-  const servers = await resolveProviderMcpConfig({
-    ...input,
-    callbackEnv: input.callbackEnv,
-    mcpServerPath: input.mcpServerPath ?? join(binaryRoot, 'packages/mcp-server/dist/index.js'),
-    provider: 'kimi',
-  });
-  // MCP children inherit this invocation's environment. Never persist callback credentials.
-  for (const entry of Object.values(servers)) {
-    if (entry.env && typeof entry.env === 'object') {
-      const env = { ...(entry.env as Record<string, string>) };
-      for (const key of MCP_CALLBACK_ENV_KEYS) delete env[key];
-      entry.env = env;
-    }
-  }
   // Project entries shadow native HOME entries. Explicitly block native-only
   // servers so the managed invocation cannot bypass the capability registry.
   const nativeDirectory = resolveKimiRuntimePaths(input.callbackEnv).shareDir;
@@ -59,17 +44,12 @@ export async function prepareKimiMcpConfig(input: {
   ) {
     throw new Error('Refusing to replace the native HOME Kimi MCP configuration');
   }
-  const nativeFile = join(nativeDirectory, 'mcp.json');
-  const nativeRaw = await readFile(nativeFile, 'utf8').catch((error: NodeJS.ErrnoException) => {
-    if (error.code !== 'ENOENT') throw error;
-    return null;
+  const servers = await resolveKimiMcpSurface({
+    workingDirectory: input.workingDirectory,
+    callbackEnv: input.callbackEnv,
+    mcpServerPath: input.mcpServerPath ?? join(binaryRoot, 'packages/mcp-server/dist/index.js'),
+    nativeDirectory,
   });
-  if (nativeRaw) {
-    const native = JSON.parse(nativeRaw) as { mcpServers?: Record<string, unknown> };
-    for (const name of Object.keys(native.mcpServers ?? {})) {
-      if (!(name in servers)) servers[name] = { enabled: false };
-    }
-  }
   await mkdir(directory, { recursive: true });
   if ((await lstat(directory)).isSymbolicLink()) throw new Error('Refusing a linked Kimi MCP directory');
   const file = join(directory, 'mcp.json');

@@ -135,7 +135,8 @@ test('native-only MCP entries are blocked in the temporary surface without editi
   await writeFile(native, original);
   const messages = await invoke(async () => {
     const config = JSON.parse(await readFile(file, 'utf8'));
-    assert.deepEqual(config.mcpServers['native-only'], { enabled: false });
+    assert.equal(config.mcpServers['native-only'].enabled, false);
+    assert.equal(config.mcpServers['native-only'].command, 'never-run');
     assert.ok(config.mcpServers['cat-cafe-collab']);
   });
   assert.ok(!messages.some((m) => m.type === 'error'), JSON.stringify(messages));
