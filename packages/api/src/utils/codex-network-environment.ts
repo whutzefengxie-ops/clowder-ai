@@ -246,16 +246,19 @@ function mergeExceptions(existing: readonly string[], toAdd: readonly string[]):
  * Removes all case variants and sets single canonical key.
  *
  * Windows: Always use uppercase NO_PROXY
- * Unix: Preserve existing casing if present, otherwise use lowercase no_proxy
+ * Unix: Prefer existing standard key (NO_PROXY or no_proxy), otherwise use lowercase no_proxy
+ *       Mixed-case variants (e.g. No_Proxy) are normalized to standard keys for matcher compatibility
  */
 function setNormalizedNoProxy(env: NodeJS.ProcessEnv, exceptions: readonly string[]): void {
   const value = exceptions.join(',');
 
-  // Detect existing casing on Unix
+  // Detect existing standard casing on Unix
   let existingKey: string | undefined;
   if (process.platform !== 'win32') {
+    // Only preserve standard keys that actual matchers recognize (NO_PROXY, no_proxy)
+    // Mixed-case variants (No_Proxy, etc.) are not recognized by hyper-util and similar libraries
     for (const key of Object.keys(env)) {
-      if (key.toUpperCase() === 'NO_PROXY') {
+      if (key === 'NO_PROXY' || key === 'no_proxy') {
         existingKey = key;
         break;
       }
@@ -273,7 +276,7 @@ function setNormalizedNoProxy(env: NodeJS.ProcessEnv, exceptions: readonly strin
     // Windows: use uppercase only
     env.NO_PROXY = value;
   } else {
-    // Unix: preserve existing casing, default to lowercase
+    // Unix: preserve existing standard key (NO_PROXY or no_proxy), default to lowercase
     env[existingKey || 'no_proxy'] = value;
   }
 }
