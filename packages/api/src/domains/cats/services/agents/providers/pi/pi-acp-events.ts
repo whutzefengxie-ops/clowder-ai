@@ -49,22 +49,29 @@ export class PiAcpEvents {
   }
 
   private final(message: PiRecord): void {
-    this.completedAssistant = true;
     if (message.stopReason === 'error' || message.stopReason === 'aborted') {
       const detail =
         typeof message.errorMessage === 'string'
           ? sanitizeCliStderr(message.errorMessage).slice(0, 1_000)
           : 'Provider request failed';
       this.failure = new Error(`Pi: ${detail}`);
+      this.completedAssistant = true;
       return;
     }
+    let hasContent = false;
     for (const block of Array.isArray(message.content) ? message.content : []) {
       const content = record(block);
-      if (content.type === 'text' && typeof content.text === 'string' && !this.streamedText)
+      if (content.type === 'text' && typeof content.text === 'string' && !this.streamedText) {
         this.chunk('agent_message_chunk', content.text);
-      if (content.type === 'thinking' && typeof content.thinking === 'string' && !this.streamedThinking)
+        hasContent = true;
+      }
+      if (content.type === 'thinking' && typeof content.thinking === 'string' && !this.streamedThinking) {
         this.chunk('agent_thought_chunk', content.thinking);
+        hasContent = true;
+      }
     }
+    // Only mark as completed if we streamed content earlier or found content in the final message
+    this.completedAssistant = this.streamedText || this.streamedThinking || hasContent;
   }
 
   private chunk(sessionUpdate: string, text: string): void {
