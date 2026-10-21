@@ -72,6 +72,7 @@ export function useDurableComposerDraft({
   const admissionsPendingRef = useRef(0);
   const pendingAdmissionDraftRef = useRef<PendingComposerAdmissionDraft | null>(null);
   const canonicalDraftRef = useRef<DurableDraftSnapshot | null>(null);
+  const displayedRecoverySignatureRef = useRef<string>('');
   const recoveredDraftAwaitingConfirmationRef = useRef(false);
   const clearFallbackRef = useRef<(ComposerAdmissionSnapshot & { imageUrls: string[] }) | null>(null);
   const pendingSelectionRef = useRef<PendingComposerSelection | null>(null);
@@ -107,6 +108,7 @@ export function useDurableComposerDraft({
     revisionRef,
     hydratedRef,
     lastSavedSignatureRef,
+    displayedRecoverySignatureRef,
     preservedBlocksRef,
     contextAttachmentsRef,
     pendingSelectionRef,
@@ -125,6 +127,7 @@ export function useDurableComposerDraft({
     const generation = ++hydrationGenerationRef.current;
     hydratedRef.current = false;
     canonicalDraftRef.current = null;
+    displayedRecoverySignatureRef.current = '';
     resetImageRecovery();
     recoveredDraftAwaitingConfirmationRef.current = false;
     const hydration = waitForComposerDraftSaves(threadId)
@@ -137,13 +140,14 @@ export function useDurableComposerDraft({
         preservedBlocksRef.current = preservedBlocksFromDraft(draft);
         canonicalDraftRef.current = durableDraftSnapshotFromOwner(draft);
         revisionRef.current = revision;
-        lastSavedSignatureRef.current = composerDraftSignature(
+        const recoveredSignature = composerDraftSignature(
           serverText,
           imageUrls,
           serverContextAttachments,
           preservedBlocksRef.current,
           draft?.replyTo,
         );
+        lastSavedSignatureRef.current = recoveredSignature;
         setInput((localText) => mergeHydratedDraft(serverText, localText));
         setContextAttachments((local) => mergeContextAttachments(serverContextAttachments, local));
         if (draft?.replyTo) {
@@ -159,6 +163,7 @@ export function useDurableComposerDraft({
         await restoreDraftImages(imageUrls, threadId, false);
         if (hydrationGenerationRef.current !== generation) return;
         hydratedRef.current = true;
+        displayedRecoverySignatureRef.current = recoveredSignature;
       })
       .catch(() => {
         // The local session mirror remains available; autosave stays fenced.
@@ -186,13 +191,14 @@ export function useDurableComposerDraft({
       const currentContextAttachments = contextAttachmentsFromDraft(draft.draft);
       preservedBlocksRef.current = preservedBlocksFromDraft(draft.draft);
       canonicalDraftRef.current = durableDraftSnapshotFromOwner(draft.draft);
-      lastSavedSignatureRef.current = composerDraftSignature(
+      const conflictSignature = composerDraftSignature(
         draft.draft?.text ?? '',
         currentImages,
         currentContextAttachments,
         preservedBlocksRef.current,
         draft.draft?.replyTo,
       );
+      lastSavedSignatureRef.current = conflictSignature;
       if (!shouldClear) return;
       setInput((localText) => mergeHydratedDraft(draft.draft?.text ?? '', localText));
       setContextAttachments((local) => mergeContextAttachments(currentContextAttachments, local));
@@ -207,6 +213,7 @@ export function useDurableComposerDraft({
           threadId: threadId ?? '',
         });
       }
+      displayedRecoverySignatureRef.current = conflictSignature;
       clearFallbackRef.current = null;
     },
     [restoreDraftImages, setContextAttachments, setInput, setReplyTo, threadId],
@@ -256,6 +263,7 @@ export function useDurableComposerDraft({
       revisionRef.current = result.revision;
       lastSavedSignatureRef.current = signature;
       canonicalDraftRef.current = snapshot;
+      displayedRecoverySignatureRef.current = signature;
       clearFallbackRef.current = null;
       return true;
     },
@@ -290,6 +298,7 @@ export function useDurableComposerDraft({
       hydrationSettledRef,
       pendingAdmissionDraftRef,
       canonicalDraftRef,
+      displayedRecoverySignatureRef,
       admissionImagesReady,
       recoveredDraftAwaitingConfirmationRef,
       revisionRef,

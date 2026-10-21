@@ -1,6 +1,6 @@
 import { reconcileComposerAdmission } from './composer-draft-admission';
 import { registerComposerDraftFlusher } from './composer-draft-flush-registry';
-import type { DurableDraftSnapshot } from './durable-composer-draft-helpers';
+import { composerDraftSignature, type DurableDraftSnapshot } from './durable-composer-draft-helpers';
 
 interface ValueRef<T> {
   current: T;
@@ -17,6 +17,7 @@ interface RegisterAdmissionFlusherOptions {
   hydrationSettledRef: ValueRef<Promise<void>>;
   pendingAdmissionDraftRef: ValueRef<PendingComposerAdmissionDraft | null>;
   canonicalDraftRef: ValueRef<DurableDraftSnapshot | null>;
+  displayedRecoverySignatureRef: ValueRef<string>;
   admissionImagesReady: (pendingFiles: readonly File[], requiredUrls: readonly string[]) => boolean;
   recoveredDraftAwaitingConfirmationRef: ValueRef<boolean>;
   revisionRef: ValueRef<number>;
@@ -72,10 +73,23 @@ async function flushAdmission(state: RegisterAdmissionFlusherOptions) {
     return flushResult(state, pending.snapshot, false, false, true);
   }
 
-  const reconciliation =
-    !pending.confirmsRecoveredDraft && state.canonicalDraftRef.current
-      ? reconcileComposerAdmission(pending.snapshot, state.canonicalDraftRef.current)
-      : { snapshot: pending.snapshot, requiresConfirmation: false };
+  // Only reconcile if canonical is truly a new recovery, not just the user's own autosaved edit
+  const canonical = state.canonicalDraftRef.current;
+  const shouldReconcile =
+    !pending.confirmsRecoveredDraft &&
+    canonical &&
+    composerDraftSignature(
+      canonical.text,
+      canonical.imageUrls,
+      canonical.contextAttachments,
+      canonical.preservedBlocks,
+      canonical.replyTo,
+    ) !== state.displayedRecoverySignatureRef.current;
+
+  const reconciliation = shouldReconcile
+    ? reconcileComposerAdmission(pending.snapshot, canonical)
+    : { snapshot: pending.snapshot, requiresConfirmation: false };
+
   const persisted = await persist(state, reconciliation.snapshot, true);
   if ((reconciliation.requiresConfirmation && persisted) || (pending.confirmsRecoveredDraft && !persisted)) {
     state.recoveredDraftAwaitingConfirmationRef.current = true;
