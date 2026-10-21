@@ -72,7 +72,6 @@ export function useDurableComposerDraft({
   const admissionsPendingRef = useRef(0);
   const pendingAdmissionDraftRef = useRef<PendingComposerAdmissionDraft | null>(null);
   const canonicalDraftRef = useRef<DurableDraftSnapshot | null>(null);
-  const displayedRecoverySignatureRef = useRef<string>('');
   const recoveredDraftAwaitingConfirmationRef = useRef(false);
   const clearFallbackRef = useRef<(ComposerAdmissionSnapshot & { imageUrls: string[] }) | null>(null);
   const pendingSelectionRef = useRef<PendingComposerSelection | null>(null);
@@ -108,7 +107,6 @@ export function useDurableComposerDraft({
     revisionRef,
     hydratedRef,
     lastSavedSignatureRef,
-    displayedRecoverySignatureRef,
     preservedBlocksRef,
     contextAttachmentsRef,
     pendingSelectionRef,
@@ -127,7 +125,6 @@ export function useDurableComposerDraft({
     const generation = ++hydrationGenerationRef.current;
     hydratedRef.current = false;
     canonicalDraftRef.current = null;
-    displayedRecoverySignatureRef.current = '';
     resetImageRecovery();
     recoveredDraftAwaitingConfirmationRef.current = false;
     const hydration = waitForComposerDraftSaves(threadId)
@@ -163,7 +160,6 @@ export function useDurableComposerDraft({
         await restoreDraftImages(imageUrls, threadId, false);
         if (hydrationGenerationRef.current !== generation) return;
         hydratedRef.current = true;
-        displayedRecoverySignatureRef.current = recoveredSignature;
       })
       .catch(() => {
         // The local session mirror remains available; autosave stays fenced.
@@ -213,7 +209,6 @@ export function useDurableComposerDraft({
           threadId: threadId ?? '',
         });
       }
-      displayedRecoverySignatureRef.current = conflictSignature;
       clearFallbackRef.current = null;
     },
     [restoreDraftImages, setContextAttachments, setInput, setReplyTo, threadId],
@@ -263,7 +258,6 @@ export function useDurableComposerDraft({
       revisionRef.current = result.revision;
       lastSavedSignatureRef.current = signature;
       canonicalDraftRef.current = snapshot;
-      displayedRecoverySignatureRef.current = signature;
       clearFallbackRef.current = null;
       return true;
     },
@@ -298,7 +292,6 @@ export function useDurableComposerDraft({
       hydrationSettledRef,
       pendingAdmissionDraftRef,
       canonicalDraftRef,
-      displayedRecoverySignatureRef,
       admissionImagesReady,
       recoveredDraftAwaitingConfirmationRef,
       revisionRef,
@@ -318,10 +311,24 @@ export function useDurableComposerDraft({
         durableSnapshot.imageUrls,
         preservedBlocksRef.current,
       );
+
+      // Capture the displayed recovery boundary at click time
+      const capturedCanonical = canonicalDraftRef.current;
+      const capturedDisplayedSignature = capturedCanonical
+        ? composerDraftSignature(
+            capturedCanonical.text,
+            capturedCanonical.imageUrls,
+            capturedCanonical.contextAttachments,
+            capturedCanonical.preservedBlocks,
+            capturedCanonical.replyTo,
+          )
+        : '';
+
       const pendingAdmission = {
         snapshot: admittedDraft,
         files: [...durableSnapshot.images],
         confirmsRecoveredDraft: recoveredDraftAwaitingConfirmationRef.current,
+        capturedDisplayedSignature,
       };
       recoveredDraftAwaitingConfirmationRef.current = false;
       pendingAdmissionDraftRef.current = pendingAdmission;

@@ -10,6 +10,7 @@ export interface PendingComposerAdmissionDraft {
   snapshot: DurableDraftSnapshot;
   files: File[];
   confirmsRecoveredDraft: boolean;
+  capturedDisplayedSignature: string;
 }
 
 interface RegisterAdmissionFlusherOptions {
@@ -17,7 +18,6 @@ interface RegisterAdmissionFlusherOptions {
   hydrationSettledRef: ValueRef<Promise<void>>;
   pendingAdmissionDraftRef: ValueRef<PendingComposerAdmissionDraft | null>;
   canonicalDraftRef: ValueRef<DurableDraftSnapshot | null>;
-  displayedRecoverySignatureRef: ValueRef<string>;
   admissionImagesReady: (pendingFiles: readonly File[], requiredUrls: readonly string[]) => boolean;
   recoveredDraftAwaitingConfirmationRef: ValueRef<boolean>;
   revisionRef: ValueRef<number>;
@@ -66,14 +66,14 @@ async function flushAdmission(state: RegisterAdmissionFlusherOptions) {
   await state.hydrationSettledRef.current;
   const pending = state.pendingAdmissionDraftRef.current;
   if (!pending) return flushResult(state, null, false);
-  const requiredImageUrls = [
-    ...new Set([...pending.snapshot.imageUrls, ...(state.canonicalDraftRef.current?.imageUrls ?? [])]),
-  ];
+
+  // Use attempted snapshot's images only, not canonical's stale images
+  const requiredImageUrls = [...new Set(pending.snapshot.imageUrls)];
   if (!state.admissionImagesReady(pending.files, requiredImageUrls)) {
     return flushResult(state, pending.snapshot, false, false, true);
   }
 
-  // Only reconcile if canonical is truly a new recovery, not just the user's own autosaved edit
+  // Only reconcile if canonical is truly a new recovery not yet displayed
   const canonical = state.canonicalDraftRef.current;
   const shouldReconcile =
     !pending.confirmsRecoveredDraft &&
@@ -84,7 +84,7 @@ async function flushAdmission(state: RegisterAdmissionFlusherOptions) {
       canonical.contextAttachments,
       canonical.preservedBlocks,
       canonical.replyTo,
-    ) !== state.displayedRecoverySignatureRef.current;
+    ) !== pending.capturedDisplayedSignature;
 
   const reconciliation = shouldReconcile
     ? reconcileComposerAdmission(pending.snapshot, canonical)
