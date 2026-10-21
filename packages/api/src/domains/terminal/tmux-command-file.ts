@@ -41,7 +41,7 @@ export function paneUtility(name: 'env' | 'rm' | 'tee' | 'cat' | 'sh'): string {
 
 export async function writeAgentCommandFile(
   directory: string,
-  options: Pick<CliSpawnOptions, 'env' | 'cwd' | 'bindExecutionOwner'>,
+  options: Pick<CliSpawnOptions, 'env' | 'cwd' | 'bindExecutionOwner' | 'inheritParentEnv'>,
   command: string,
 ): Promise<readonly string[]> {
   if (options.bindExecutionOwner === true) {
@@ -52,12 +52,13 @@ export async function writeAgentCommandFile(
   const shell = bash ?? zsh;
   if (!shell) throw new Error('tmux agent transport requires bash or zsh with pipefail support');
 
-  // If env contains null tombstones, process with buildChildEnv
-  // If env is already final (no null values), use directly to avoid re-inheriting from process.env
-  const hasNullTombstones = options.env && Object.values(options.env).some((v) => v === null);
-  const planned: NodeJS.ProcessEnv = hasNullTombstones
-    ? buildChildEnv(options.env, { workingDirectory: options.cwd, bindExecutionOwner: false })
-    : (options.env as NodeJS.ProcessEnv ?? {});
+  // Always use canonical buildChildEnv for security (strips sensitive vars) and defaults (HOME/PATH/cwd fixup)
+  // inheritParentEnv=false signals finalEnvironment: env is pre-composed, don't re-inherit from process.env
+  const planned = buildChildEnv(options.env, {
+    workingDirectory: options.cwd,
+    bindExecutionOwner: false,
+    inheritParentEnv: options.inheritParentEnv,
+  });
 
   const exports: string[] = [];
   for (const [key, value] of Object.entries(planned)) {

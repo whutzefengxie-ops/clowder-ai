@@ -1538,7 +1538,7 @@ export class CodexAgentService implements AgentService {
     account?: RuntimeProviderProfile,
     cliConfigArgs: readonly string[] = [],
     localInspection = false,
-  ): Promise<Pick<AgentCarrierSessionOptions, 'command' | 'args' | 'cwd' | 'env'>> {
+  ): Promise<Pick<AgentCarrierSessionOptions, 'command' | 'args' | 'cwd' | 'env' | 'inheritParentEnv'>> {
     if (!localInspection && (this.carrierMode !== 'app_server' || !this.appServerHostPool))
       throw new Error('codex_native_capability_source_unsupported');
     const nativeTool = usesNativeToolConfiguration(catRegistry.tryGet(this.catId)?.config);
@@ -1629,6 +1629,7 @@ export class CodexAgentService implements AgentService {
       args,
       cwd,
       env: derivedEnv,
+      inheritParentEnv: false, // derivedEnv is finalEnvironment; do not re-inherit from process.env
     };
   }
 
