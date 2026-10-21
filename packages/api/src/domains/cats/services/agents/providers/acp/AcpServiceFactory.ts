@@ -184,6 +184,8 @@ async function ensureAcpPool(
     args: bootstrap.args,
     cwd: bootstrap.cwd,
     bootstrapIsolation: bootstrap.isolation,
+    policyId: bootstrap.policyId,
+    policyRevision: bootstrap.policyRevision,
     env: spawn.env ?? null,
     openCodeRuntimeConfig: spawn.openCodeRuntimeConfig,
     contextPolicy: spawn.contextPolicy,

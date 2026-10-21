@@ -66,4 +66,48 @@ describe('ACP pool spawn signature', () => {
     });
     assert.notEqual(first, second);
   });
+
+  test('changes when the startup policy changes (W3: policy revocation)', async () => {
+    const { createAcpPoolSpawnSignature } = await import(
+      '../../dist/domains/cats/services/agents/providers/acp/acp-pool-signature.js'
+    );
+    const base = {
+      command: 'dsh',
+      args: ['--profile', 'acp'],
+      cwd: '/bootstrap',
+      maxLiveProcesses: 3,
+      idleTtlMs: 30_000,
+      transport: 'stdio',
+    };
+
+    // Different policy IDs produce different signatures
+    const policy1 = createAcpPoolSpawnSignature({
+      ...base,
+      policyId: 'dsh-0.2.0-rc.2',
+      policyRevision: 1,
+    });
+    const policy2 = createAcpPoolSpawnSignature({
+      ...base,
+      policyId: 'dsh-0.3.0',
+      policyRevision: 1,
+    });
+    assert.notEqual(policy1, policy2, 'Different policy IDs should produce different signatures');
+
+    // Different revisions of the same policy produce different signatures
+    const rev1 = createAcpPoolSpawnSignature({
+      ...base,
+      policyId: 'dsh-0.2.0-rc.2',
+      policyRevision: 1,
+    });
+    const rev2 = createAcpPoolSpawnSignature({
+      ...base,
+      policyId: 'dsh-0.2.0-rc.2',
+      policyRevision: 2,
+    });
+    assert.notEqual(rev1, rev2, 'Different policy revisions should produce different signatures');
+
+    // No policy info should differ from having policy info
+    const noPolicy = createAcpPoolSpawnSignature(base);
+    assert.notEqual(noPolicy, policy1, 'Absence of policy info should produce different signature');
+  });
 });

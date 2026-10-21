@@ -3,7 +3,7 @@ import type { AcpVariantConfig } from '../../../../../../../config/cat-config-lo
 import { buildChildEnv } from '../../../../../../../utils/cli-spawn.js';
 import type { PoolKey } from '../AcpProcessPool.js';
 import { resolveAcpBootstrapArgs, resolveAcpBootstrapCommand, resolveAcpBootstrapCwd } from '../acp-bootstrap-cwd.js';
-import { auditedWindowsAcpStartup } from './acp-bootstrap-startup-policy.js';
+import { matchStartupPolicy } from './acp-startup-policy-matcher.js';
 
 export interface AcpBootstrapContext {
   projectRoot: string;
@@ -15,6 +15,10 @@ export interface AcpBootstrapContext {
 export interface VerifiedAcpBootstrapContext extends AcpBootstrapContext {
   cwd: string;
   isolation?: string;
+  /** Policy ID that matched (W3: for pool signature) */
+  policyId?: string;
+  /** Policy revision that matched (W3: for pool signature) */
+  policyRevision?: number;
   verifyCwd: (command?: string, args?: string[], env?: NodeJS.ProcessEnv) => string;
 }
 export function resolveAcpBootstrap(
@@ -40,12 +44,13 @@ export function verifyAcpBootstrap(
   bootstrapRoot?: string,
   env?: Record<string, string>,
 ): VerifiedAcpBootstrapContext {
-  const isolation = auditedWindowsAcpStartup(
-    base.command,
-    base.args,
-    buildChildEnv(env, { workingDirectory: base.projectRoot }),
-  );
-  const options = { allowVolumeRootDelete: isolation !== undefined };
+  const childEnv = buildChildEnv(env, { workingDirectory: base.projectRoot });
+  const policyMatch = matchStartupPolicy(base.command, base.args, childEnv);
+
+  // Legacy isolation mapping
+  const isolation = policyMatch.matched ? policyMatch.label : undefined;
+  const options = { allowVolumeRootDelete: policyMatch.matched };
+
   const cwd = resolveAcpBootstrapCwd(
     base.projectRoot,
     profileId,
@@ -58,12 +63,27 @@ export function verifyAcpBootstrap(
   const verifyCwd = (
     command = base.command,
     args = base.args,
-    childEnv = buildChildEnv(env, { workingDirectory: cwd }),
+    verifyEnv = buildChildEnv(env, { workingDirectory: cwd }),
   ) => {
-    if (isolation && auditedWindowsAcpStartup(command, args, childEnv) !== isolation) {
-      throw new Error('Windows ACP bootstrap startup policy changed; refusing cold start');
+    const recheckMatch = matchStartupPolicy(command, args, verifyEnv);
+    if (policyMatch.matched) {
+      if (
+        !recheckMatch.matched ||
+        recheckMatch.policyId !== policyMatch.policyId ||
+        recheckMatch.revision !== policyMatch.revision
+      ) {
+        throw new Error('Windows ACP bootstrap startup policy changed; refusing cold start');
+      }
     }
     return resolveAcpBootstrapCwd(base.projectRoot, profileId, dirname(cwd), undefined, undefined, false, options);
   };
-  return { ...base, cwd, isolation, verifyCwd };
+
+  return {
+    ...base,
+    cwd,
+    isolation,
+    policyId: policyMatch.matched ? policyMatch.policyId : undefined,
+    policyRevision: policyMatch.matched ? policyMatch.revision : undefined,
+    verifyCwd,
+  };
 }

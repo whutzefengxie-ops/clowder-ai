@@ -3,6 +3,10 @@ export interface AcpPoolSpawnSignatureInput {
   args: string[];
   cwd: string;
   bootstrapIsolation?: string;
+  /** Policy identifier for startup policy matching (W3: enables pool invalidation on policy revocation) */
+  policyId?: string;
+  /** Policy revision number (W3: enables pool invalidation on policy updates) */
+  policyRevision?: number;
   env?: Record<string, string> | null;
   openCodeRuntimeConfig?: unknown;
   contextPolicy?: unknown;
@@ -18,6 +22,8 @@ export function createAcpPoolSpawnSignature(input: AcpPoolSpawnSignatureInput): 
     args: input.args,
     cwd: input.cwd,
     bootstrapIsolation: input.bootstrapIsolation ?? null,
+    policyId: input.policyId ?? null,
+    policyRevision: input.policyRevision ?? null,
     env: input.env ?? null,
     openCodeRuntimeConfig: input.openCodeRuntimeConfig ?? null,
     contextPolicy: input.contextPolicy ?? null,
