@@ -1,132 +1,118 @@
-/**
- * Issue #1666: Reader to derive diagnostic integration tests
- *
- * Tests real readWindowsSystemProxy -> deriveCodexNetworkEnvironmentSync chain.
- * Verifies diagnostic source classification: known not convertible vs read failed.
- *
- * Based on Codex R23/R24 nine-fixture verification requirement.
- */
-
-import { strict as assert } from 'node:assert';
+import assert from 'node:assert/strict';
+import childProcess from 'node:child_process';
+import { syncBuiltinESMExports } from 'node:module';
 import { test } from 'node:test';
-import { mkdtemp, writeFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { promisify } from 'node:util';
+import { deriveCodexNetworkEnvironmentSync, readWindowsSystemProxy } from '../src/utils/codex-network-environment.js';
 
-test('Issue #1666: Reader to derive diagnostic classification', async (t) => {
-  if (process.platform !== 'win32') {
-    t.skip('Windows-only test');
-    return;
-  }
+interface Scenario {
+  name: string;
+  output: string;
+  source: 'none' | 'system_pac' | 'read_failed';
+  unsupported: string[];
+  loopback: boolean;
+  failResolver?: boolean;
+}
 
-  const { readWindowsSystemProxy, deriveCodexNetworkEnvironmentSync } = await import('../src/utils/codex-network-environment.ts');
+const unknown = ['windows_system_proxy_read_failed'];
+const pac = ['windows_pac_wpad_not_convertible'];
+const scenarios: Scenario[] = [
+  {
+    name: 'known disabled',
+    output: '{"autoDetect":false,"autoConfigUrl":null}',
+    source: 'none',
+    unsupported: [],
+    loopback: true,
+  },
+  {
+    name: 'WPAD enabled',
+    output: '{"autoDetect":true,"autoConfigUrl":null}',
+    source: 'system_pac',
+    unsupported: pac,
+    loopback: false,
+  },
+  {
+    name: 'connection PAC',
+    output: '{"autoDetect":false,"autoConfigUrl":"http://pac.fixture.invalid/config.pac"}',
+    source: 'system_pac',
+    unsupported: pac,
+    loopback: false,
+  },
+  {
+    name: 'unknown flag',
+    output: '{"autoDetect":null,"autoConfigUrl":null}',
+    source: 'read_failed',
+    unsupported: unknown,
+    loopback: false,
+  },
+  { name: 'missing flag', output: '{}', source: 'read_failed', unsupported: unknown, loopback: false },
+  {
+    name: 'string boolean',
+    output: '{"autoDetect":"false"}',
+    source: 'read_failed',
+    unsupported: unknown,
+    loopback: false,
+  },
+  {
+    name: 'API failure',
+    output: '{"autoDetect":null,"error":"fixture API error"}',
+    source: 'read_failed',
+    unsupported: unknown,
+    loopback: false,
+  },
+  { name: 'invalid JSON', output: 'invalid JSON', source: 'read_failed', unsupported: unknown, loopback: false },
+  {
+    name: 'resolver timeout',
+    output: '',
+    failResolver: true,
+    source: 'read_failed',
+    unsupported: unknown,
+    loopback: false,
+  },
+];
 
-  await t.test('WPAD enabled (autoDetect=true) -> system_pac / windows_pac_wpad_not_convertible', async () => {
-    // Create temporary PowerShell script that returns WPAD=true
-    const tempDir = await mkdtemp(join(tmpdir(), 'wpad-test-'));
-    const scriptPath = join(tempDir, 'read-windows-wpad-state.ps1');
-
-    await writeFile(scriptPath, `
-      $result = @{
-        autoDetect = $true
-        autoConfigUrl = $null
+test('Windows reader to derive diagnostic source', { skip: process.platform !== 'win32' }, async (t) => {
+  for (const scenario of scenarios) {
+    await t.test(scenario.name, async () => {
+      const original = childProcess.execFile;
+      const commands: string[] = [];
+      const stub = Object.assign(
+        (): never => {
+          throw new Error('The reader must use the promisified fixture');
+        },
+        {
+          [promisify.custom]: async (command: string) => {
+            commands.push(command);
+            if (command === 'reg') {
+              return { stdout: 'HKCU\\Fixture\r\n ProxyEnable REG_DWORD 0x0\r\n', stderr: '' };
+            }
+            assert.equal(command, 'powershell.exe', 'unexpected command must never execute');
+            if (scenario.failResolver) throw new Error('fixture timeout');
+            return { stdout: scenario.output, stderr: '' };
+          },
+        },
+      );
+      childProcess.execFile = stub as typeof childProcess.execFile;
+      syncBuiltinESMExports();
+      try {
+        const systemProxy = await readWindowsSystemProxy({ timeoutMs: 1000 });
+        assert.deepEqual(commands, ['reg', 'powershell.exe'], 'the real reader must query both sources');
+        const base = { HTTPS_PROXY: 'http://proxy.fixture.invalid:3128', TEST_VAR: 'kept' };
+        const result = deriveCodexNetworkEnvironmentSync(base, systemProxy);
+        assert.equal(result.diagnostic.exceptionSource, scenario.source);
+        assert.deepEqual(result.diagnostic.unsupportedScenarios, scenario.unsupported);
+        assert.equal(result.diagnostic.loopbackAdded, scenario.loopback);
+        assert.equal(result.env.HTTPS_PROXY, base.HTTPS_PROXY);
+        assert.equal(result.env.TEST_VAR, base.TEST_VAR);
+        if (scenario.loopback) {
+          assert.deepEqual(new Set(result.env.NO_PROXY?.split(',')), new Set(['localhost', '127.0.0.1', '::1']));
+        } else {
+          assert.deepEqual(result.env, base, 'unknown and unsupported policies must preserve the environment');
+        }
+      } finally {
+        childProcess.execFile = original;
+        syncBuiltinESMExports();
       }
-      $result | ConvertTo-Json -Compress
-    `, 'utf-8');
-
-    try {
-      // Note: This test verifies the diagnostic logic but cannot fully mock PowerShell execution
-      // The real PowerShell script path is packages/api/scripts/read-windows-wpad-state.ps1
-      // This demonstrates the expected behavior for WPAD=true scenarios
-
-      // Manually construct the expected systemProxy result for WPAD=true
-      const systemProxyWithWpad = {
-        enabled: false,
-        hasPac: true, // WPAD enabled means hasPac=true
-      };
-
-      const result = deriveCodexNetworkEnvironmentSync(
-        { TEST_VAR: 'value' },
-        systemProxyWithWpad
-      );
-
-      assert.equal(result.diagnostic.exceptionSource, 'system_pac', 'WPAD enabled should be system_pac');
-      assert.ok(
-        result.diagnostic.unsupportedScenarios.includes('windows_pac_wpad_not_convertible'),
-        'WPAD enabled should be windows_pac_wpad_not_convertible'
-      );
-      assert.equal(result.diagnostic.loopbackAdded, false, 'Should not add loopback when WPAD enabled');
-    } finally {
-      await rm(tempDir, { recursive: true, force: true });
-    }
-  });
-
-  await t.test('Connection PAC URL -> system_pac / windows_pac_wpad_not_convertible', async () => {
-    // Simulate connection PAC URL present
-    const systemProxyWithPac = {
-      enabled: false,
-      hasPac: true, // Connection PAC URL means hasPac=true
-    };
-
-    const result = deriveCodexNetworkEnvironmentSync(
-      { TEST_VAR: 'value' },
-      systemProxyWithPac
-    );
-
-    assert.equal(result.diagnostic.exceptionSource, 'system_pac', 'Connection PAC should be system_pac');
-    assert.ok(
-      result.diagnostic.unsupportedScenarios.includes('windows_pac_wpad_not_convertible'),
-      'Connection PAC should be windows_pac_wpad_not_convertible'
-    );
-  });
-
-  await t.test('Read failure (null) -> read_failed', async () => {
-    // Simulate read failure
-    const result = deriveCodexNetworkEnvironmentSync(
-      { TEST_VAR: 'value' },
-      null // null means read failed
-    );
-
-    assert.equal(result.diagnostic.exceptionSource, 'read_failed', 'Read failure should be read_failed');
-    assert.ok(
-      result.diagnostic.unsupportedScenarios.includes('windows_system_proxy_read_failed'),
-      'Read failure should be windows_system_proxy_read_failed'
-    );
-  });
-
-  await t.test('WPAD disabled + no PAC (hasPac=false) -> adds loopback', async () => {
-    // Simulate both WPAD and PAC disabled
-    const systemProxyClean = {
-      enabled: false,
-      hasPac: false, // Both WPAD and PAC disabled
-    };
-
-    const result = deriveCodexNetworkEnvironmentSync(
-      { TEST_VAR: 'value' },
-      systemProxyClean
-    );
-
-    assert.equal(result.diagnostic.loopbackAdded, true, 'Should add loopback when both disabled');
-    assert.ok(result.env.NO_PROXY?.includes('localhost'), 'Should include localhost in NO_PROXY');
-  });
-
-  await t.test('Manual proxy enabled + WPAD disabled -> uses system exceptions', async () => {
-    // Simulate manual proxy with exceptions
-    const systemProxyWithExceptions = {
-      enabled: true,
-      proxyServer: '192.168.1.1:8080',
-      proxyOverride: 'localhost;127.0.0.1;<local>',
-      hasPac: false,
-    };
-
-    const result = deriveCodexNetworkEnvironmentSync(
-      { TEST_VAR: 'value' },
-      systemProxyWithExceptions
-    );
-
-    assert.equal(result.diagnostic.exceptionSource, 'system_static', 'Should use system_static');
-    assert.equal(result.diagnostic.loopbackAdded, false, 'Should not add loopback when using system exceptions');
-    // Note: NO_PROXY parsing and setting requires proxy environment variables to be present
-    // This test verifies the diagnostic classification, not the full environment derivation
-  });
+    });
+  }
 });
