@@ -7,6 +7,7 @@ export function isUserSelectedCatalog(catalog: unknown): boolean {
     catalog !== null &&
     typeof catalog === 'object' &&
     'memberInitialization' in catalog &&
-    catalog.memberInitialization === USER_SELECTED_INITIALIZATION
+    typeof catalog.memberInitialization === 'string' &&
+    catalog.memberInitialization.startsWith('user_selected_')
   );
 }

@@ -6,7 +6,12 @@ import { test } from 'node:test';
 import Fastify from 'fastify';
 import { bootstrapCatCatalog, readCatCatalogRaw, writeCatCatalog } from '../dist/config/cat-catalog-store.js';
 import { loadResolvedCatConfig, toAllCatConfigs } from '../dist/config/cat-config-loader.js';
-import { createRuntimeCat, deleteRuntimeCat, updateRuntimeCat } from '../dist/config/runtime-cat-catalog.js';
+import {
+  createRuntimeCat,
+  deleteRuntimeCat,
+  readRuntimeAccountMembers,
+  updateRuntimeCat,
+} from '../dist/config/runtime-cat-catalog.js';
 import { configOnboardingRoutes } from '../dist/routes/config-onboarding.js';
 
 const template = JSON.parse(readFileSync(resolve(import.meta.dirname, '../../../cat-template.json'), 'utf8'));
@@ -132,4 +137,58 @@ test('ordinary member create, edit and delete retain the explicit enrollment pol
   bootstrapCatCatalog(root, path);
   assert.deepEqual(toAllCatConfigs(loadResolvedCatConfig(path)), {});
   assert.equal(JSON.parse(readCatCatalogRaw(root)).memberInitialization, 'user_selected_v1');
+});
+
+test('standard config parsing and account-binding reads retain the enrollment policy through writeback', (context) => {
+  const { root, path } = fixture(context);
+  bootstrapCatCatalog(root, path);
+  const parsed = readRuntimeAccountMembers(root);
+  assert.equal(parsed.memberInitialization, 'user_selected_v1');
+  assert.equal(loadResolvedCatConfig(path).memberInitialization, 'user_selected_v1');
+  writeCatCatalog(root, parsed);
+  bootstrapCatCatalog(root, path);
+  assert.equal(JSON.parse(readCatCatalogRaw(root)).memberInitialization, 'user_selected_v1');
+  assert.deepEqual(toAllCatConfigs(loadResolvedCatConfig(path)), {});
+});
+
+test('a newer user-selected enrollment policy never falls back to legacy template enrollment', (context) => {
+  const { root, path } = fixture(context);
+  bootstrapCatCatalog(root, path);
+  const raw = JSON.parse(readCatCatalogRaw(root));
+  raw.memberInitialization = 'user_selected_v99';
+  writeCatCatalog(root, raw);
+  bootstrapCatCatalog(root, path);
+  assert.deepEqual(JSON.parse(readCatCatalogRaw(root)).breeds, []);
+  assert.deepEqual(toAllCatConfigs(loadResolvedCatConfig(path)), {});
+  assert.equal(readRuntimeAccountMembers(root).memberInitialization, 'user_selected_v99');
+});
+
+test('a damaged catalog disables automatic onboarding without blocking personal guide receipts', async (context) => {
+  const { root, path } = fixture(context);
+  const catalogPath = bootstrapCatCatalog(root, path);
+  const validCatalog = readFileSync(catalogPath, 'utf8');
+  const invalidCatalog = '{invalid catalog';
+  writeFileSync(catalogPath, invalidCatalog);
+  const app = Fastify();
+  app.addHook('onRequest', async (request) => {
+    request.sessionUserId = 'fixture-owner';
+  });
+  await app.register(configOnboardingRoutes, { projectRoot: root });
+  try {
+    const initial = await app.inject('/api/config/onboarding');
+    assert.equal(initial.statusCode, 200);
+    assert.equal(initial.json().autoEligible, false);
+    const saved = await app.inject({
+      method: 'PUT',
+      url: '/api/config/onboarding',
+      payload: { status: 'dismissed' },
+    });
+    assert.equal(saved.statusCode, 200);
+    assert.equal(saved.json().status, 'dismissed');
+    assert.equal(readFileSync(catalogPath, 'utf8'), invalidCatalog, 'guide receipts never repair catalog data');
+    writeFileSync(catalogPath, validCatalog);
+    assert.equal((await app.inject('/api/config/onboarding')).json().status, 'dismissed');
+  } finally {
+    await app.close();
+  }
 });

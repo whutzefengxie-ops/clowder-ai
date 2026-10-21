@@ -12,16 +12,21 @@ const entryInput = z.object({ status: z.enum(['pending', 'dismissed', 'completed
 /** Personal receipts share the existing atomic preference owner, not the transient F155 session. */
 export const configOnboardingRoutes: FastifyPluginAsync<{ projectRoot: string }> = async (app, { projectRoot }) => {
   const autoEligible = () => {
-    const raw = readCatCatalogRaw(projectRoot, { persistMigrations: false });
-    const catalog: unknown = raw ? JSON.parse(raw) : null;
-    return (
-      isUserSelectedCatalog(catalog) &&
-      catalog !== null &&
-      typeof catalog === 'object' &&
-      'breeds' in catalog &&
-      Array.isArray(catalog.breeds) &&
-      catalog.breeds.length === 0
-    );
+    try {
+      const raw = readCatCatalogRaw(projectRoot, { persistMigrations: false });
+      const catalog: unknown = raw ? JSON.parse(raw) : null;
+      return (
+        isUserSelectedCatalog(catalog) &&
+        catalog !== null &&
+        typeof catalog === 'object' &&
+        'breeds' in catalog &&
+        Array.isArray(catalog.breeds) &&
+        catalog.breeds.length === 0
+      );
+    } catch {
+      app.log.warn('Onboarding catalog unavailable; automatic guide disabled');
+      return false;
+    }
   };
   const snapshot = (userId: string, version: string, preferences: UserPreferences) => ({
     userId,
