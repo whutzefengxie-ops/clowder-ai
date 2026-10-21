@@ -1,5 +1,5 @@
 ---
-feature_ids: []
+feature_ids: [F320]
 topics: [codex, native-tool, onboarding, issue-1654]
 doc_kind: bug-report
 created: 2026-10-21
@@ -48,6 +48,9 @@ POSIX 0700 断言只在能表达该权限的系统执行；生产认证边界未
 进入未修改的 `check-f290-product-copy.test.mjs`，因 Windows `\\` 与预期 `/` 路径不同失败；
 在未修改的 main 同 SHA 上运行该测试，复现同一失败。
 `check:architecture-ownership` 在当前仓库不存在，记录工具缺口，不伪造通过。
+`pnpm check:artifacts` 的容量检查 2/2、MCP surface governance（198 tools、无 surface delta）通过；
+随后被 F310 缺少 ROADMAP 索引阻挡，未修改 main 上同样失败。本次账号解析归属沿用
+[F320](../features/F320-multi-oauth-account-switching.md)，不声称完成其整体多账号愿景。
 
 ## 真实完整旅程
 
@@ -63,19 +66,34 @@ POSIX 0700 断言只在能表达该权限的系统执行；生产认证边界未
 4. 同一对话续聊回复最初校验词 `CEDAR1654`。
 5. 隔离应用账号目录加入无关默认 OAuth 账号，重启最终构建的 API，重新加载页面。
    历史完整保留，再次真实续聊回复 `CEDAR1654`。
+6. 保存独立 Redis，停止 Redis/API/Web，核对进程全退出、三个端口全部释放。
+   复用同一套目录冷启动整套服务，从磁盘恢复历史；页面再次续聊回复 `CEDAR1654`。
 
 持久化读回：同一应用 session `839af920-a7f9-4961-b7ad-191db43515d8`，
-同一原生 session `01a15db9-b446-7201-8a2b-935e2bf49597`；原有 4 个消息 ID 保留，消息数变成 6。
+同一原生 session `01a15db9-b446-7201-8a2b-935e2bf49597`；API 重启时 4→6 条消息，
+整套冷启动前的 6 个消息 ID 全部保留、续聊后共 8 条，均未另开 session。
 使用本机 CLI **0.161.0**，未据此声称覆盖 Issue 报告中的 0.163.0。
 本次未验证外部原生历史导入，也未改动该功能。
 
 ## 证据与边界
 
 本地证据目录：`G:\AIwork\clowder-ai\artifacts\issue1654-native-config-20261021`。
-`instances.json` 记录进程与数据归属；`continuity-proof.json` 记录会话和原始文件只读哈希核对。
-`01-detected.png` 到 `07-restart-resume.png` 记录 UI；各测试、构建和模型调用日志保存在同目录。
+`instances.json` 记录进程与数据归属；`continuity-proof.json` / `cold-restart-proof.json` 记录会话、
+磁盘恢复和原始文件只读哈希核对。`01-detected.png` 到 `08-cold-restart-resume.png` 记录 UI；
+各测试、构建和模型调用日志保存在同目录。
 该目录含私有测试认证副本，不纳入 Git 或公开报告。
 
 原始 `C:\Users\Administrator\.codex\config.toml` 与 `auth.json` 哈希均未改变。
 订阅模式真实旅程通过；custom provider 的成功回复仍受本机上游 502 阻挡，不能据此关闭其真实环境验收。
 没有部署、合并或关闭上游 Issue。分支与数据保留供审阅，作者临时服务在取证后受控停止。
+
+## 独立审查与收尾
+
+非作者 `review_issue1654` 审查提交 `84ba84b643288fbc059bbc632a2d0beed3d77483`，
+回读上游问题和评论，独立执行 8/8 回归，返回本地 `approve`，无 P1/P2。
+它只批准该提交的代码，不代表 custom provider 真实验收、部署批准或 Issue 关闭。
+审查后的增量仅补本文证据，源代码与已审提交逐字节一致。
+
+最终核对：作者进程残留 0，`3112/5112/6388` 无监听；生产 `3003/3004/6399`
+仍为原 PID。保存了独立 Redis；没有删除配置、认证、会话、SQLite 或数据库。
+worktree 由本任务作者具名保留供审阅，2026-10-28 复查；数据与用户环境持续保护。
