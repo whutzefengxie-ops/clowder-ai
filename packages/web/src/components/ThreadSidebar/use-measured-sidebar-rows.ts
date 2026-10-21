@@ -79,7 +79,7 @@ export function useMeasuredSidebarRows(
   useEffect(() => {
     decisionsGeneration.current += 1;
     setMeasured(new Map());
-  }, [groupDecisions.status, groupDecisions.threadIds]);
+  }, [groupDecisions]);
 
   useEffect(() => {
     const list = listRef.current,
@@ -114,6 +114,6 @@ export function useMeasuredSidebarRows(
     for (const slot of list.querySelectorAll('[data-virtual-row-key]'))
       if (slot.firstElementChild) observer?.observe(slot.firstElementChild);
     return () => observer?.disconnect();
-  }, [rowByKey, listRef, containerRef, enabled, range.start, range.end]);
+  }, [rowByKey, listRef, containerRef, enabled, range]);
   return measured;
 }

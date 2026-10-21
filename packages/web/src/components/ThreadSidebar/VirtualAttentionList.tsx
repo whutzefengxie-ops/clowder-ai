@@ -10,8 +10,8 @@ import {
   useState,
 } from 'react';
 import type { AttentionListRow } from './attention-clusters';
-import { useMeasuredSidebarRows } from './use-measured-sidebar-rows';
 import type { GroupDecisionRead } from './use-group-decisions';
+import { useMeasuredSidebarRows } from './use-measured-sidebar-rows';
 import type { VirtualThreadListHandle } from './VirtualThreadList';
 
 const ROW_HEIGHT_PX = 80;
