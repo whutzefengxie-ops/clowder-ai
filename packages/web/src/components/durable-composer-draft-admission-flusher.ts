@@ -10,11 +10,8 @@ export interface PendingComposerAdmissionDraft {
   snapshot: DurableDraftSnapshot;
   files: File[];
   confirmsRecoveredDraft: boolean;
-  capturedDisplayedSignature: string;
-  capturedLastSavedSignature: string;
-  capturedInFlightSaveSignature: string;
-  capturedEditorSignature: string;
   generation: number;
+  threadId: string | null;
 }
 
 interface RegisterAdmissionFlusherOptions {
@@ -22,6 +19,7 @@ interface RegisterAdmissionFlusherOptions {
   hydrationSettledRef: ValueRef<Promise<void>>;
   pendingAdmissionDraftRef: ValueRef<PendingComposerAdmissionDraft | null>;
   canonicalDraftRef: ValueRef<DurableDraftSnapshot | null>;
+  pendingRecoveryRef: ValueRef<{ snapshot: DurableDraftSnapshot; revision: number; source: 'hydration' | 'conflict' } | null>;
   admissionImagesReady: (pendingFiles: readonly File[], requiredUrls: readonly string[]) => boolean;
   recoveredDraftAwaitingConfirmationRef: ValueRef<boolean>;
   revisionRef: ValueRef<number>;
@@ -77,34 +75,24 @@ async function flushAdmission(state: RegisterAdmissionFlusherOptions) {
     return flushResult(state, pending.snapshot, false, false, true);
   }
 
-  // Only reconcile if canonical is truly new recovery not from our own saves
-  const canonical = state.canonicalDraftRef.current;
-  const canonicalSignature = canonical
-    ? composerDraftSignature(
-        canonical.text,
-        canonical.imageUrls,
-        canonical.contextAttachments,
-        canonical.preservedBlocks,
-        canonical.replyTo,
-      )
-    : '';
-
-  const shouldReconcile =
-    !pending.confirmsRecoveredDraft &&
-    canonical &&
-    canonicalSignature !== pending.capturedDisplayedSignature &&
-    canonicalSignature !== pending.capturedLastSavedSignature &&
-    canonicalSignature !== pending.capturedInFlightSaveSignature &&
-    canonicalSignature !== pending.capturedEditorSignature;
+  // P1-1: Check pendingRecoveryRef for unseen recovery, not signature comparison
+  const pendingRecovery = state.pendingRecoveryRef.current;
+  const shouldReconcile = !pending.confirmsRecoveredDraft && pendingRecovery !== null;
 
   const reconciliation = shouldReconcile
-    ? reconcileComposerAdmission(pending.snapshot, canonical)
+    ? reconcileComposerAdmission(pending.snapshot, pendingRecovery.snapshot)
     : { snapshot: pending.snapshot, requiresConfirmation: false };
 
   const persisted = await persist(state, reconciliation.snapshot, true);
-  if ((reconciliation.requiresConfirmation && persisted) || (pending.confirmsRecoveredDraft && !persisted)) {
+
+  if (reconciliation.requiresConfirmation && persisted) {
+    state.recoveredDraftAwaitingConfirmationRef.current = true;
+    // Consume pending recovery after reconciliation
+    state.pendingRecoveryRef.current = null;
+  } else if (pending.confirmsRecoveredDraft && !persisted) {
     state.recoveredDraftAwaitingConfirmationRef.current = true;
   }
+
   return flushResult(state, reconciliation.snapshot, persisted, reconciliation.requiresConfirmation);
 }
 

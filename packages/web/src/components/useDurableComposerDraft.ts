@@ -72,8 +72,7 @@ export function useDurableComposerDraft({
   const admissionsPendingRef = useRef(0);
   const pendingAdmissionDraftRef = useRef<PendingComposerAdmissionDraft | null>(null);
   const canonicalDraftRef = useRef<DurableDraftSnapshot | null>(null);
-  const displayedRecoverySignatureRef = useRef<string>('');
-  const inFlightSaveSignatureRef = useRef<string>('');
+  const pendingRecoveryRef = useRef<{ snapshot: DurableDraftSnapshot; revision: number; source: 'hydration' | 'conflict' } | null>(null);
   const recoveredDraftAwaitingConfirmationRef = useRef(false);
   const clearFallbackRef = useRef<(ComposerAdmissionSnapshot & { imageUrls: string[] }) | null>(null);
   const pendingSelectionRef = useRef<PendingComposerSelection | null>(null);
@@ -109,7 +108,6 @@ export function useDurableComposerDraft({
     revisionRef,
     hydratedRef,
     lastSavedSignatureRef,
-    displayedRecoverySignatureRef,
     preservedBlocksRef,
     contextAttachmentsRef,
     pendingSelectionRef,
@@ -128,7 +126,7 @@ export function useDurableComposerDraft({
     const generation = ++hydrationGenerationRef.current;
     hydratedRef.current = false;
     canonicalDraftRef.current = null;
-    displayedRecoverySignatureRef.current = '';
+    pendingRecoveryRef.current = null;
     resetImageRecovery();
     recoveredDraftAwaitingConfirmationRef.current = false;
     const hydration = waitForComposerDraftSaves(threadId)
@@ -149,6 +147,13 @@ export function useDurableComposerDraft({
           draft?.replyTo,
         );
         lastSavedSignatureRef.current = recoveredSignature;
+        const localSignature = composerDraftSignature(
+          inputRef.current,
+          imageUrlsRef.current,
+          contextAttachmentsRef.current,
+          preservedBlocksRef.current,
+          replyToIdRef.current,
+        );
         setInput((localText) => mergeHydratedDraft(serverText, localText));
         setContextAttachments((local) => mergeContextAttachments(serverContextAttachments, local));
         if (draft?.replyTo) {
@@ -164,7 +169,18 @@ export function useDurableComposerDraft({
         await restoreDraftImages(imageUrls, threadId, false);
         if (hydrationGenerationRef.current !== generation) return;
         hydratedRef.current = true;
-        displayedRecoverySignatureRef.current = recoveredSignature;
+        // Mark as pending recovery if server has unsent draft that differs from current state
+        const currentSignature = composerDraftSignature(
+          inputRef.current,
+          imageUrlsRef.current,
+          contextAttachmentsRef.current,
+          preservedBlocksRef.current,
+          replyToIdRef.current,
+        );
+        const hasServerContent = serverText.trim() || imageUrls.length > 0 || serverContextAttachments.length > 0 || draft?.replyTo;
+        if (hasServerContent && recoveredSignature !== currentSignature && canonicalDraftRef.current) {
+          pendingRecoveryRef.current = { snapshot: canonicalDraftRef.current, revision, source: 'hydration' };
+        }
       })
       .catch(() => {
         // The local session mirror remains available; autosave stays fenced.
@@ -200,7 +216,13 @@ export function useDurableComposerDraft({
         draft.draft?.replyTo,
       );
       lastSavedSignatureRef.current = conflictSignature;
-      if (!shouldClear) return;
+      if (!shouldClear) {
+        // Mark as pending recovery - not yet displayed
+        if (canonicalDraftRef.current) {
+          pendingRecoveryRef.current = { snapshot: canonicalDraftRef.current, revision: draft.revision, source: 'conflict' };
+        }
+        return;
+      }
       setInput((localText) => mergeHydratedDraft(draft.draft?.text ?? '', localText));
       setContextAttachments((local) => mergeContextAttachments(currentContextAttachments, local));
       void restoreDraftImages(currentImages, threadId ?? '', false);
@@ -214,7 +236,10 @@ export function useDurableComposerDraft({
           threadId: threadId ?? '',
         });
       }
-      displayedRecoverySignatureRef.current = conflictSignature;
+      // Displayed, so mark as pending recovery
+      if (canonicalDraftRef.current) {
+        pendingRecoveryRef.current = { snapshot: canonicalDraftRef.current, revision: draft.revision, source: 'conflict' };
+      }
       clearFallbackRef.current = null;
     },
     [restoreDraftImages, setContextAttachments, setInput, setReplyTo, threadId],
@@ -253,25 +278,19 @@ export function useDurableComposerDraft({
         snapshot.preservedBlocks.length === 0 &&
         !snapshot.replyTo;
 
-      // Mark in-flight save before awaiting response
-      inFlightSaveSignatureRef.current = signature;
-
       const result = await writeOwnerComposerDraft(threadId, revisionRef.current, snapshot);
       if (result.kind === 'conflict') {
-        inFlightSaveSignatureRef.current = '';
         reconcileConflict(result, shouldClear);
         return false;
       }
       if (result.kind === 'failed') {
-        inFlightSaveSignatureRef.current = '';
         if (shouldClear) restoreAdmissionFallback();
         return false;
       }
       revisionRef.current = result.revision;
       lastSavedSignatureRef.current = signature;
       canonicalDraftRef.current = snapshot;
-      displayedRecoverySignatureRef.current = signature;
-      inFlightSaveSignatureRef.current = '';
+      pendingRecoveryRef.current = null; // User's own save, not external recovery
       clearFallbackRef.current = null;
       return true;
     },
@@ -306,6 +325,7 @@ export function useDurableComposerDraft({
       hydrationSettledRef,
       pendingAdmissionDraftRef,
       canonicalDraftRef,
+      pendingRecoveryRef,
       admissionImagesReady,
       recoveredDraftAwaitingConfirmationRef,
       revisionRef,
@@ -326,44 +346,38 @@ export function useDurableComposerDraft({
         preservedBlocksRef.current,
       );
 
-      // Capture all relevant signatures at click time
-      const capturedDisplayedRecoverySignature = displayedRecoverySignatureRef.current;
-      const capturedLastSavedSignature = lastSavedSignatureRef.current;
-      const capturedInFlightSaveSignature = inFlightSaveSignatureRef.current;
-      const capturedCurrentEditorSignature = composerDraftSignature(
-        inputRef.current,
-        imageUrlsRef.current,
-        contextAttachmentsRef.current,
-        preservedBlocksRef.current,
-        replyToIdRef.current,
-      );
+      // Clear pending recovery from hydration (user already saw it), but keep conflict recovery
+      if (hydratedRef.current && pendingRecoveryRef.current?.source === 'hydration') {
+        pendingRecoveryRef.current = null;
+      }
 
       const pendingAdmission = {
         snapshot: admittedDraft,
         files: [...durableSnapshot.images],
         confirmsRecoveredDraft: recoveredDraftAwaitingConfirmationRef.current,
-        capturedDisplayedSignature: capturedDisplayedRecoverySignature,
-        capturedLastSavedSignature,
-        capturedInFlightSaveSignature,
-        capturedEditorSignature: capturedCurrentEditorSignature,
         generation,
+        threadId,
       };
       recoveredDraftAwaitingConfirmationRef.current = false;
       pendingAdmissionDraftRef.current = pendingAdmission;
       admissionsPendingRef.current += 1;
       return (accepted: boolean | undefined) => {
+        // P1-3: Check generation and thread owner first
+        if (generation !== hydrationGenerationRef.current || pendingAdmission.threadId !== threadId) {
+          return;
+        }
+
         admissionsPendingRef.current = Math.max(0, admissionsPendingRef.current - 1);
         if (pendingAdmissionDraftRef.current === pendingAdmission) pendingAdmissionDraftRef.current = null;
         if (accepted === false) {
           // Only use canonical if it's from this pending admission and reconciliation occurred
           if (
-            generation === hydrationGenerationRef.current &&
             recoveredDraftAwaitingConfirmationRef.current &&
             canonicalDraftRef.current
           ) {
-            // Display merged snapshot bound to this admission
+            // P1-2: Display merged snapshot but preserve new input during save
             const merged = canonicalDraftRef.current;
-            setInput(() => merged.text);
+            setInput((curr) => mergeHydratedDraft(curr, merged.text));
             setContextAttachments(() => merged.contextAttachments);
             void restoreDraftImages(merged.imageUrls, threadId ?? '', false);
             if (merged.replyTo) {

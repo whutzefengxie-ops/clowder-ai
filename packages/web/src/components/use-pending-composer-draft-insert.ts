@@ -22,7 +22,6 @@ interface PendingComposerDraftRefs {
   revisionRef: MutableRefObject<number>;
   hydratedRef: MutableRefObject<boolean>;
   lastSavedSignatureRef: MutableRefObject<string>;
-  displayedRecoverySignatureRef: MutableRefObject<string>;
   preservedBlocksRef: MutableRefObject<MessageContent[]>;
   contextAttachmentsRef: MutableRefObject<ContextAttachment[]>;
   pendingSelectionRef: MutableRefObject<PendingComposerSelection | null>;
@@ -55,9 +54,6 @@ function applyPendingServerRevision(insert: ComposerDraftInsert, refs: PendingCo
     insert.replyToId,
   );
   refs.lastSavedSignatureRef.current = signature;
-  if (insert.authoritative) {
-    refs.displayedRecoverySignatureRef.current = signature;
-  }
 }
 
 function projectPendingText(insert: ComposerDraftInsert, previous: string): string {
@@ -133,7 +129,6 @@ export function usePendingComposerDraftInsert({
   revisionRef,
   hydratedRef,
   lastSavedSignatureRef,
-  displayedRecoverySignatureRef,
   preservedBlocksRef,
   contextAttachmentsRef,
   pendingSelectionRef,
@@ -153,7 +148,6 @@ export function usePendingComposerDraftInsert({
         revisionRef,
         hydratedRef,
         lastSavedSignatureRef,
-        displayedRecoverySignatureRef,
         preservedBlocksRef,
         contextAttachmentsRef,
         pendingSelectionRef,
@@ -213,7 +207,6 @@ export function usePendingComposerDraftInsert({
     hydrationSettledRef,
     imageUrlsRef,
     lastSavedSignatureRef,
-    displayedRecoverySignatureRef,
     pendingChatInsert,
     pendingSelectionRef,
     preservedBlocksRef,
