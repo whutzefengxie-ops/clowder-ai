@@ -12,11 +12,42 @@
  */
 
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { homedir, platform } from 'node:os';
 import { join } from 'node:path';
 import type { AcpStartupPolicy } from './acp-startup-policy-types.js';
 import { ensureWindowsAcpBootstrapDirectories } from '../acp-bootstrap-windows-directory.js';
+
+/**
+ * Validate that a file is not a symlink/reparse point.
+ * This is a basic check - full validation would require native APIs for owner/DACL.
+ * However, if the parent directory is properly protected (owner-only with protected DACL),
+ * files created within inherit these protections via (OI)(CI) flags.
+ */
+function validateFileNotSymlink(filePath: string): { success: boolean; error?: string } {
+  if (!existsSync(filePath)) {
+    return { success: false, error: `File does not exist: ${filePath}` };
+  }
+
+  try {
+    const stats = lstatSync(filePath);
+
+    // Check if it's a symlink
+    if (stats.isSymbolicLink()) {
+      return { success: false, error: `File is a symbolic link: ${filePath}` };
+    }
+
+    // On Windows, check for reparse points (symlinks, junctions, mount points)
+    // Note: lstat().isSymbolicLink() catches symlinks, but there are other reparse point types
+    // For comprehensive reparse detection, native APIs would be needed
+    // The directory validation already checks for reparse at directory level
+
+    return { success: true };
+  } catch (error: unknown) {
+    const err = error as { message?: string };
+    return { success: false, error: `Failed to validate file: ${err.message || String(error)}` };
+  }
+}
 
 /**
  * Storage location for local policies.
@@ -88,6 +119,7 @@ function computePolicyHash(policy: AcpStartupPolicy): string {
  * Load all persisted policies from disk.
  * Returns empty array if storage doesn't exist or on read errors.
  * Validates Windows storage directory before loading - REJECTS invalid directories, does not auto-repair.
+ * Also validates that manifest file is not a symlink/reparse point.
  */
 export function loadPersistedPolicies(): AcpStartupPolicy[] {
   const storagePath = getPolicyStoragePath();
@@ -105,6 +137,13 @@ export function loadPersistedPolicies(): AcpStartupPolicy[] {
       console.error(`[acp-policy-storage] Storage validation failed, refusing to load: ${validationResult.error}`);
       return [];
     }
+  }
+
+  // Validate that manifest file is not a symlink/reparse point
+  const fileValidation = validateFileNotSymlink(manifestPath);
+  if (!fileValidation.success) {
+    console.error(`[acp-policy-storage] Manifest file validation failed, refusing to load: ${fileValidation.error}`);
+    return [];
   }
 
   try {
@@ -204,10 +243,11 @@ export function loadPersistedPolicies(): AcpStartupPolicy[] {
  * - On Windows, validates storage directory with native .NET checks (owner, protected DACL, SID-based rights, no reparse)
  * - Existing directories with invalid ACLs are REJECTED, not auto-repaired
  * - New directories are created with proper security via ensureWindowsAcpBootstrapDirectories
+ * - Parent directories (.clowder-ai) are created first to satisfy helper's immediate-parent requirement
  * - On Unix, uses mode 0o700/0o600
  */
 export function persistPolicies(policies: AcpStartupPolicy[]): { success: boolean; error?: string } {
-  const storagePath = getPolicyStoragePath();
+  const storagePath = getPolicyStoragePath(); // HOME/.clowder-ai/acp-policies
   const manifestPath = join(storagePath, 'policies.json');
 
   try {
@@ -215,7 +255,26 @@ export function persistPolicies(policies: AcpStartupPolicy[]): { success: boolea
     if (!existsSync(storagePath)) {
       if (platform() === 'win32') {
         // On Windows, use native creation with protected DACL
+        // ensureWindowsAcpBootstrapDirectories requires immediate parent to exist
+        // So we need to create .clowder-ai first, then acp-policies
+        const parentDir = join(homedir(), '.clowder-ai');
+
         try {
+          // Create parent directory if it doesn't exist
+          if (!existsSync(parentDir)) {
+            ensureWindowsAcpBootstrapDirectories(parentDir, parentDir, { allowVolumeRootDelete: false });
+          } else {
+            // Validate existing parent
+            const parentValidation = validateWindowsStorageDirectory(parentDir);
+            if (!parentValidation.success) {
+              return {
+                success: false,
+                error: `Parent directory failed validation: ${parentValidation.error}`
+              };
+            }
+          }
+
+          // Now create acp-policies subdirectory (parent exists)
           ensureWindowsAcpBootstrapDirectories(storagePath, storagePath, { allowVolumeRootDelete: false });
         } catch (error) {
           return {
@@ -224,7 +283,7 @@ export function persistPolicies(policies: AcpStartupPolicy[]): { success: boolea
           };
         }
       } else {
-        // On Unix, create with mode 0o700
+        // On Unix, create with mode 0o700 (recursive handles parent)
         mkdirSync(storagePath, { recursive: true, mode: 0o700 });
       }
     } else {
