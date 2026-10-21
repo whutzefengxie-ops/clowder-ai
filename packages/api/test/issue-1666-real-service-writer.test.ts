@@ -1,136 +1,61 @@
-/**
- * Issue #1666: Real service-to-writer integration test
- *
- * Tests the complete chain using real CodexAgentService.invoke and writeAgentCommandFile.
- * Verifies that sessionOptions.inheritParentEnv=false prevents credential re-inheritance.
- *
- * Based on Codex R20 executable reproduction.
- */
-
 import './helpers/setup-cat-registry.js';
-import { strict as assert } from 'node:assert';
-import { test } from 'node:test';
-import { mkdtemp, mkdir, writeFile, readFile, rm, chmod } from 'node:fs/promises';
+import assert from 'node:assert/strict';
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { delimiter, join } from 'node:path';
+import { test } from 'node:test';
+import { resolveCodexAccountLaunch } from '../src/config/codex-account-launch.js';
+import { CodexAgentService } from '../src/domains/cats/services/agents/providers/CodexAgentService.js';
+import { writeAgentCommandFile } from '../src/domains/terminal/tmux-command-file.js';
+import { fakeL0Compiler } from './helpers/fake-l0-compiler.js';
+import { F320AccountWire } from './helpers/f320-account-wire.js';
+import { installAmbientCodexAccount } from './helpers/f320-auth-environment.js';
 
-test('Issue #1666: Real service-to-writer integration', async (t) => {
-  await t.test('Real CodexAgentService + writeAgentCommandFile preserves inheritParentEnv contract', async () => {
-    const ambientCredential = 'ambient-test-credential-12345';
-    const explicitCredential = 'explicit-account-credential-67890';
-    const originalEnv = process.env.TEST_CODEX_CREDENTIAL;
-    const testRoot = await mkdtemp(join(tmpdir(), 'issue1666-real-service-'));
-
-    try {
-      // Set ambient credential in process.env
-      process.env.TEST_CODEX_CREDENTIAL = ambientCredential;
-
-      // Create fixture bin directory with discoverable but non-executable stubs
-      const binDir = join(testRoot, 'bin');
-      await mkdir(binDir, { recursive: true });
-
-      // Create stub executables (discovered by tool discovery, never actually run)
-      await writeFile(join(binDir, 'bash'), '#!/bin/sh\necho "stub bash"\n', 'utf-8');
-      await writeFile(join(binDir, 'env'), '#!/bin/sh\necho "stub env"\n', 'utf-8');
-      await writeFile(join(binDir, 'rm'), '#!/bin/sh\necho "stub rm"\n', 'utf-8');
-
-      if (process.platform !== 'win32') {
-        await chmod(join(binDir, 'bash'), 0o755);
-        await chmod(join(binDir, 'env'), 0o755);
-        await chmod(join(binDir, 'rm'), 0o755);
-      }
-
-      // Import after setting env
-      const { CodexAgentService } = await import('../src/domains/cats/services/agents/providers/CodexAgentService.ts');
-      const { CodexAppServerHostPool } = await import('../src/domains/cats/services/agents/providers/CodexAppServerHostPool.ts');
-
-      let capturedScript: string | null = null;
-
-      // Create mock host pool
-      const pool = new CodexAppServerHostPool(
-        { idleTtlMs: 0, maxWarmHosts: 0 },
-        {
-          createSocketDirectory: () => join(testRoot, 'socket'),
-          removeSocketDirectory: async () => {},
-          spawnHost: async (launch) => {
-            // Capture the actual env that would be sent to tmux writer
-            // In real flow: CodexAgentService -> sessionOptions -> tmux factory -> writeAgentCommandFile
-
-            // Extract script path if tmux launch is attempted
-            if (launch.command?.includes('tmux') || launch.args?.some((a: string) => a.includes('tmux'))) {
-              // Find script file in args
-              const scriptArg = launch.args?.find((a: string) => a.endsWith('.sh') || a.includes('launch'));
-              if (scriptArg && typeof scriptArg === 'string') {
-                try {
-                  capturedScript = await readFile(scriptArg, 'utf-8');
-                } catch {
-                  // Script might not exist yet, that's OK
-                }
-              }
-            }
-
-            throw new Error('TEST_STOP_AFTER_CAPTURE');
-          },
-          connectHost: async () => {
-            throw new Error('connectHost should not be reached');
-          },
-        }
-      );
-
-      const service = new CodexAgentService({
-        carrierMode: 'app_server',
-        appServerHostPool: pool,
-        cliCommand: join(binDir, 'bash'), // Use fixture bash
-        l0CompilerFn: async () => ({ kind: 'deny', reason: 'test-fixture' }),
-        rawArchive: { append: async () => {} },
-      });
-
-      // Attempt real invoke with explicit account
-      try {
-        const iter = service.invoke('test prompt', {
-          workingDirectory: testRoot,
-          invocationId: 'test-invoke-1',
-          account: {
-            id: 'test-account',
-            authType: 'api_key',
-            client: 'openai',
-            apiKey: explicitCredential,
-          },
-        });
-
-        await iter.next();
-      } catch (err: any) {
-        if (!err.message.includes('TEST_STOP')) {
-          // Some other error, may be expected (tmux not available, etc.)
-          // The key test is whether the script would have correct env if it were generated
-          console.log('Expected test stop error or tmux unavailable:', err.message);
-        }
-      }
-
-      // Verification: Check that service passed inheritParentEnv=false
-      // This is indirect: we verify the final behavior rather than internal state
-
-      // If script was captured, verify it doesn't contain ambient credential
-      if (capturedScript) {
-        assert.ok(
-          !capturedScript.includes(ambientCredential),
-          `Real service-generated script must not contain ambient credential "${ambientCredential}"`
-        );
-
-        assert.ok(
-          capturedScript.includes(explicitCredential),
-          'Real service-generated script should contain explicit account credential'
-        );
-      } else {
-        // On Windows or without tmux, we cannot generate the actual script
-        // But we verified the code path exists and would call writeAgentCommandFile with correct options
-        console.log('Script not captured (Windows or tmux unavailable), but code path verified');
-      }
-
-    } finally {
-      if (originalEnv !== undefined) process.env.TEST_CODEX_CREDENTIAL = originalEnv;
-      else delete process.env.TEST_CODEX_CREDENTIAL;
-      await rm(testRoot, { recursive: true, force: true }).catch(() => {});
-    }
+test('Codex invoke passes its finalized environment to the real tmux writer', async (t) => {
+  installAmbientCodexAccount(t);
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'issue1666-service-writer-')));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const invalidKeys = Object.entries(process.env).filter(([key]) => !/^[A-Za-z_][A-Za-z0-9_]*$/.test(key));
+  for (const [key] of invalidKeys) delete process.env[key];
+  t.after(() => { for (const [key, value] of invalidKeys) process.env[key] = value; });
+  const bin = join(root, 'bin');
+  await mkdir(bin);
+  for (const name of ['bash', 'env', 'rm']) {
+    await writeFile(join(bin, name), 'fixture tool: discovered but never executed', { mode: 0o755 });
+  }
+  const originalPath = process.env.PATH;
+  process.env.PATH = bin + delimiter + (originalPath ?? '');
+  t.after(() => { if (originalPath === undefined) delete process.env.PATH; else process.env.PATH = originalPath; });
+  const account = { id: 'writer-api-fixture', authType: 'api_key' as const, apiKey: 'writer-selected-key', envVars: { HOME: root } };
+  const launch = resolveCodexAccountLaunch(account, { cwd: root, env: { HOME: root } });
+  const service = new CodexAgentService({
+    carrierMode: 'app_server',
+    cliCommand: process.execPath,
+    l0CompilerFn: fakeL0Compiler,
+    rawArchive: { append: async () => {} },
   });
+  let scriptCount = 0;
+  for await (const event of service.invoke('fixture', {
+    workingDirectory: root,
+    invocationId: 'writer-invocation',
+    codexAccountLaunch: launch,
+    accountEnv: account.envVars,
+    callbackEnv: { CODEX_AUTH_MODE: 'api_key', OPENAI_API_KEY: account.apiKey },
+    agentCarrierSessionFactory: async (options) => {
+      const directory = await mkdtemp(join(root, 'command-'));
+      const argv = await writeAgentCommandFile(directory, {
+        cwd: options.cwd,
+        env: options.env,
+        inheritParentEnv: options.inheritParentEnv,
+      }, ':');
+      const script = await readFile(argv.at(-1)!, 'utf8');
+      scriptCount++;
+      assert.equal(script.includes('export CODEX_API_KEY='), false, 'actual writer must not restore ambient CODEX_API_KEY');
+      assert.equal(script.includes("export OPENAI_API_KEY='writer-selected-key'"), true, 'actual script must carry the selected fixture account');
+      return new F320AccountWire({});
+    },
+  })) {
+    assert.notEqual(event.type, 'error', event.error);
+  }
+  assert.equal(scriptCount, 1, 'the real service invocation must reach the writer and produce one script');
 });
