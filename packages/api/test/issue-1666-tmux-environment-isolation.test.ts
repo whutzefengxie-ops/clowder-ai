@@ -11,8 +11,8 @@
  */
 
 import { strict as assert } from 'node:assert';
-import { test } from 'node:test';
 import { resolve } from 'node:path';
+import { test } from 'node:test';
 import { buildChildEnv } from '../src/utils/cli-spawn.js';
 
 test('Issue #1666: buildChildEnv inheritParentEnv contract', async (t) => {
@@ -27,7 +27,7 @@ test('Issue #1666: buildChildEnv inheritParentEnv contract', async (t) => {
 
       const finalEnv = buildChildEnv(
         { CODEX_API_KEY: null, USER_VAR: 'value' },
-        { inheritParentEnv: false, workingDirectory: testCwd }
+        { inheritParentEnv: false, workingDirectory: testCwd },
       );
 
       // finalEnv should not have the deleted credential
@@ -49,7 +49,7 @@ test('Issue #1666: buildChildEnv inheritParentEnv contract', async (t) => {
       assert.equal(
         scriptEnv.CODEX_API_KEY,
         undefined,
-        'Second buildChildEnv call must not re-inherit deleted ambient credential'
+        'Second buildChildEnv call must not re-inherit deleted ambient credential',
       );
       assert.equal(scriptEnv.USER_VAR, 'value', 'User variables should be preserved');
     } finally {
@@ -79,15 +79,11 @@ test('Issue #1666: buildChildEnv inheritParentEnv contract', async (t) => {
 
       assert.equal(scriptEnv.HOME, testHome, 'Normal overrides should inherit HOME');
       assert.equal(scriptEnv.USER_VAR, 'value', 'User variables should be present');
-      assert.equal(
-        scriptEnv.CAT_CAFE_HOOK_TOKEN,
-        undefined,
-        'Forbidden variables must be stripped'
-      );
+      assert.equal(scriptEnv.CAT_CAFE_HOOK_TOKEN, undefined, 'Forbidden variables must be stripped');
       // Check PATH (normalized to uppercase on Windows)
       const pathKey = Object.keys(scriptEnv).find((k) => k.toUpperCase() === 'PATH');
       assert.ok(pathKey, 'PATH should be inherited');
-      assert.equal(scriptEnv[pathKey!], originalPath, 'PATH value should match original');
+      assert.equal(scriptEnv[pathKey], originalPath, 'PATH value should match original');
     } finally {
       if (originalHome !== undefined) process.env.HOME = originalHome;
       else delete process.env.HOME;
@@ -137,7 +133,7 @@ test('Issue #1666: buildChildEnv inheritParentEnv contract', async (t) => {
       // Check PATH (normalized to uppercase on Windows)
       const pathKey = Object.keys(scriptEnv).find((k) => k.toUpperCase() === 'PATH');
       assert.ok(pathKey, 'Empty overrides should still inherit PATH');
-      assert.equal(scriptEnv[pathKey!], originalPath, 'PATH value should match original');
+      assert.equal(scriptEnv[pathKey], originalPath, 'PATH value should match original');
     } finally {
       if (originalHome !== undefined) process.env.HOME = originalHome;
       else delete process.env.HOME;

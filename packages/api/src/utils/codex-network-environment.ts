@@ -315,7 +315,7 @@ function parseWindowsProxyOverride(override: string): {
  * - autoConfigUrl: string | null (explicit PAC URL from current connection)
  */
 async function readWindowsWpadState(
-  options?: ReadWindowsProxyOptions
+  options?: ReadWindowsProxyOptions,
 ): Promise<{ autoDetect: boolean | null; autoConfigUrl: string | null } | null> {
   if (process.platform !== 'win32') return null;
 
@@ -351,7 +351,7 @@ async function readWindowsWpadState(
       {
         signal: controller.signal,
         timeout: timeoutMs,
-      }
+      },
     );
 
     const result = JSON.parse(stdout.trim());
@@ -362,15 +362,11 @@ async function readWindowsWpadState(
     }
 
     // Strict boolean check: only true/false are valid, everything else is unknown
-    const autoDetect =
-      result.autoDetect === true ? true :
-      result.autoDetect === false ? false :
-      null;
+    const autoDetect = result.autoDetect === true ? true : result.autoDetect === false ? false : null;
 
     // Extract autoConfigUrl from current connection (not registry root key)
-    const autoConfigUrl = typeof result.autoConfigUrl === 'string' && result.autoConfigUrl
-      ? result.autoConfigUrl
-      : null;
+    const autoConfigUrl =
+      typeof result.autoConfigUrl === 'string' && result.autoConfigUrl ? result.autoConfigUrl : null;
 
     return { autoDetect, autoConfigUrl };
   } catch {
@@ -444,22 +440,13 @@ export async function readWindowsSystemProxy(
     // Known not convertible: WPAD enabled OR explicit PAC URL configured
     const hasPac = wpadState.autoDetect === true || !!(connectionPacUrl || registryPacUrl);
 
-    if (hasPac) {
-      // Return config with hasPac=true to trigger windows_pac_wpad_not_convertible diagnostic
-      return {
-        enabled,
-        proxyServer: enabled ? proxyServer : undefined,
-        proxyOverride: enabled ? proxyOverride : undefined,
-        hasPac: true,
-      };
-    }
-
-    // wpadState.autoDetect === false AND no PAC URL: both WPAD and PAC disabled
+    // Return config with hasPac=true to trigger windows_pac_wpad_not_convertible diagnostic
+    // or hasPac=false when both WPAD and PAC are disabled
     return {
       enabled,
       proxyServer: enabled ? proxyServer : undefined,
       proxyOverride: enabled ? proxyOverride : undefined,
-      hasPac: false,
+      hasPac,
     };
   } catch {
     // Any failure: timeout, access denied, key not found, etc.

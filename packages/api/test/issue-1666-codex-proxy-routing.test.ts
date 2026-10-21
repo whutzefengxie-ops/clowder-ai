@@ -6,8 +6,8 @@
  */
 
 import assert from 'node:assert';
-import { fileURLToPath } from 'node:url';
 import { describe, it } from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 describe('Issue #1666: Codex proxy routing integration', () => {
   describe('Entry point coverage', () => {
@@ -43,10 +43,7 @@ describe('Issue #1666: Codex proxy routing integration', () => {
         'invoke path should call applyCodexNetworkEnvironment',
       );
 
-      assert.ok(
-        content.includes('env: derivedEnv'),
-        'cliOpts should use derivedEnv',
-      );
+      assert.ok(content.includes('env: derivedEnv'), 'cliOpts should use derivedEnv');
     });
 
     it('DirectAgentCarrierSession receives final environment', async () => {
@@ -71,15 +68,9 @@ describe('Issue #1666: Codex proxy routing integration', () => {
 
       const content = await fs.readFile(pluginPath, 'utf-8');
 
-      assert.ok(
-        content.includes('MINIMAL_PATH'),
-        'Plugin native should use MINIMAL_PATH',
-      );
+      assert.ok(content.includes('MINIMAL_PATH'), 'Plugin native should use MINIMAL_PATH');
 
-      assert.ok(
-        !content.includes('applyCodexNetworkEnvironment'),
-        'Plugin native should NOT apply network derivation',
-      );
+      assert.ok(!content.includes('applyCodexNetworkEnvironment'), 'Plugin native should NOT apply network derivation');
     });
   });
 
