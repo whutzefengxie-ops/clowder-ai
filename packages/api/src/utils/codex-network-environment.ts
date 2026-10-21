@@ -308,6 +308,56 @@ function parseWindowsProxyOverride(override: string): {
 }
 
 /**
+ * Reads Windows WPAD state using WinHTTP API via PowerShell.
+ *
+ * Returns:
+ * - true: WPAD auto-detect is enabled
+ * - false: WPAD auto-detect is disabled
+ * - null: Cannot determine (timeout, permission denied, API failure)
+ */
+async function readWindowsWpadState(options?: ReadWindowsProxyOptions): Promise<boolean | null> {
+  if (process.platform !== 'win32') return null;
+
+  const timeoutMs = options?.timeoutMs ?? 1000;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const { execFile } = await import('node:child_process');
+    const { promisify } = await import('node:util');
+    const { join, dirname } = await import('node:path');
+    const { fileURLToPath } = await import('node:url');
+    const execFileAsync = promisify(execFile);
+
+    // Find script path relative to this module
+    const scriptPath = join(dirname(fileURLToPath(import.meta.url)), '../scripts/read-windows-wpad-state.ps1');
+
+    const { stdout } = await execFileAsync(
+      'powershell.exe',
+      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', scriptPath],
+      {
+        signal: controller.signal,
+        timeout: timeoutMs,
+      }
+    );
+
+    const result = JSON.parse(stdout.trim());
+
+    if (result.error) {
+      // WinHTTP API call failed
+      return null;
+    }
+
+    return result.autoDetect === true;
+  } catch {
+    // Timeout, permission denied, JSON parse error, etc.
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
  * Reads Windows system proxy configuration from registry (async).
  *
  * Reads the entire Internet Settings key at once. Only returns a valid config
@@ -349,19 +399,36 @@ export async function readWindowsSystemProxy(
     // ProxyEnable: REG_DWORD 0 or 1
     const enabled = proxyEnable === '0x1' || proxyEnable === '1';
 
-    // WPAD (Web Proxy Auto-Discovery) limitation:
-    // The root key AutoDetect DWORD does not reliably indicate active WPAD state.
-    // WinHttpGetIEProxyConfigForCurrentUser reads from Connections\DefaultConnectionSettings
-    // blob with PROXY_TYPE_AUTO_DETECT(0x08) flag for the current active connection.
-    // Without native WinHTTP call, we cannot reliably determine WPAD state.
-    // Only autoConfigURL (explicit PAC URL) is detectable from registry.
-    // Future: Consider calling WinHttpGetIEProxyConfigForCurrentUser via native addon.
+    // Read WPAD state using WinHTTP API (current active connection)
+    const wpadState = await readWindowsWpadState(options);
+
+    // Three-state handling for WPAD:
+    // - true: WPAD enabled, cannot convert to static proxy -> return null (preserve environment)
+    // - false: WPAD disabled, can proceed with static proxy or no-proxy
+    // - null: Cannot determine -> return null (preserve environment, unknown state)
+    if (wpadState === true) {
+      // WPAD auto-detect is enabled, cannot convert to static NO_PROXY
+      return null;
+    }
+
+    if (wpadState === null) {
+      // Cannot determine WPAD state (timeout, permission denied, API failure)
+      return null;
+    }
+
+    // wpadState === false: WPAD disabled, check explicit PAC URL
+    const hasPac = !!autoConfigURL;
+
+    if (hasPac) {
+      // Explicit PAC URL configured, cannot convert to static proxy
+      return null;
+    }
 
     return {
       enabled,
       proxyServer: enabled ? proxyServer : undefined,
       proxyOverride: enabled ? proxyOverride : undefined,
-      hasPac: !!autoConfigURL, // Only explicit PAC URL; WPAD detection not implemented
+      hasPac: false, // Both WPAD and explicit PAC are disabled
     };
   } catch {
     // Any failure: timeout, access denied, key not found, etc.
