@@ -266,9 +266,11 @@ it('requires confirmation when hydration projection commits before its asynchron
   });
   await act(async () => root.render(<Harness />));
   act(() => typeText('local attempted message'));
+  act(() => beginAndClear());
+  await settle();
+  expect(container.querySelector('textarea')?.value).toBe('');
   let result: unknown;
   await act(async () => {
-    beginAndClear();
     const preparingAdmission = prepareComposerDraftAdmission(THREAD).catch((error) => error);
     owner = { text: 'remote unsent message' };
     releaseRead(response({ draft: owner, revision }));
