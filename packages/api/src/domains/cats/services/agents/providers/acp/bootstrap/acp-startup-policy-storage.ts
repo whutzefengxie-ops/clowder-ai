@@ -6,7 +6,7 @@
  */
 
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { AcpStartupPolicy } from './acp-startup-policy-types.js';
@@ -102,15 +102,15 @@ export function persistPolicies(policies: AcpStartupPolicy[]): { success: boolea
       if (existsSync(backupPath)) {
         // Remove old backup
         try {
-          require('fs').unlinkSync(backupPath);
+          unlinkSync(backupPath);
         } catch {
           // Ignore
         }
       }
-      require('fs').renameSync(manifestPath, backupPath);
+      renameSync(manifestPath, backupPath);
     }
 
-    require('fs').renameSync(tempPath, manifestPath);
+    renameSync(tempPath, manifestPath);
 
     return { success: true };
   } catch (error) {
