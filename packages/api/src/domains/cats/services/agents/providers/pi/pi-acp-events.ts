@@ -65,7 +65,12 @@ export class PiAcpEvents {
         this.chunk('agent_message_chunk', content.text);
         hasContent = true;
       }
-      if (content.type === 'thinking' && typeof content.thinking === 'string' && content.thinking !== '' && !this.streamedThinking) {
+      if (
+        content.type === 'thinking' &&
+        typeof content.thinking === 'string' &&
+        content.thinking !== '' &&
+        !this.streamedThinking
+      ) {
         this.chunk('agent_thought_chunk', content.thinking);
         hasContent = true;
       }
