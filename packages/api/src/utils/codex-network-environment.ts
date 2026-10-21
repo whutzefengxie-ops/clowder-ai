@@ -289,6 +289,14 @@ function parseWindowsProxyOverride(override: string): {
 
 /**
  * Reads Windows system proxy configuration from registry (async).
+ *
+ * Reads the entire Internet Settings key at once. Only returns a valid config
+ * if the entire read succeeds. Any failure (timeout, permission denied, etc.)
+ * returns null to preserve the original environment.
+ *
+ * Exit code 1 from reg query means "command failed" - could be access denied,
+ * key not found, or other errors. We cannot distinguish "value missing" from
+ * "permission denied" reliably, so any failure returns null.
  */
 export async function readWindowsSystemProxy(
   options?: ReadWindowsProxyOptions,
@@ -306,52 +314,20 @@ export async function readWindowsSystemProxy(
 
     const keyPath = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings';
 
-    type ReadResult = { ok: true; value: string | undefined } | { ok: false };
+    // Read entire key at once. If this fails (access denied, timeout, etc.), return null.
+    const { stdout } = await execFileAsync('reg', ['query', keyPath], {
+      signal: controller.signal,
+      timeout: timeoutMs,
+    });
 
-    const readValue = async (valueName: string): Promise<ReadResult> => {
-      try {
-        const { stdout } = await execFileAsync('reg', ['query', keyPath, '/v', valueName], {
-          signal: controller.signal,
-          timeout: timeoutMs,
-        });
-        return { ok: true, value: extractRegValue(stdout, valueName) };
-      } catch (error: unknown) {
-        // Exit code 1 typically means "value not found" (optional key missing).
-        // Other errors (timeout, permission, etc.) are read failures.
-        const isNotFound = error && typeof error === 'object' && 'code' in error && error.code === 1;
-        if (isNotFound) {
-          return { ok: true, value: undefined };
-        }
-        return { ok: false };
-      }
-    };
-
-    const [proxyEnableResult, proxyServerResult, proxyOverrideResult, autoConfigURLResult] = await Promise.all([
-      readValue('ProxyEnable'),
-      readValue('ProxyServer'),
-      readValue('ProxyOverride'),
-      readValue('AutoConfigURL'),
-    ]);
-
-    // If all reads failed (not just missing), return null (read failed)
-    if (!proxyEnableResult.ok && !proxyServerResult.ok && !proxyOverrideResult.ok && !autoConfigURLResult.ok) {
-      return null;
-    }
-
-    // If any required read failed (ProxyEnable, ProxyServer, or ProxyOverride when enabled),
-    // return null to preserve the original environment.
-    const proxyEnable = proxyEnableResult.ok ? proxyEnableResult.value : undefined;
-    const proxyServer = proxyServerResult.ok ? proxyServerResult.value : undefined;
-    const proxyOverride = proxyOverrideResult.ok ? proxyOverrideResult.value : undefined;
-    const autoConfigURL = autoConfigURLResult.ok ? autoConfigURLResult.value : undefined;
+    // Parse all values from the complete output
+    const proxyEnable = extractRegValue(stdout, 'ProxyEnable');
+    const proxyServer = extractRegValue(stdout, 'ProxyServer');
+    const proxyOverride = extractRegValue(stdout, 'ProxyOverride');
+    const autoConfigURL = extractRegValue(stdout, 'AutoConfigURL');
 
     // ProxyEnable: REG_DWORD 0 or 1
     const enabled = proxyEnable === '0x1' || proxyEnable === '1';
-
-    // If proxy is enabled but we failed to read ProxyServer or ProxyOverride, treat as read failure
-    if (enabled && (!proxyServerResult.ok || !proxyOverrideResult.ok)) {
-      return null;
-    }
 
     return {
       enabled,
@@ -360,6 +336,8 @@ export async function readWindowsSystemProxy(
       hasPac: !!autoConfigURL,
     };
   } catch {
+    // Any failure: timeout, access denied, key not found, etc.
+    // Cannot safely determine system proxy state - return null to preserve environment.
     return null;
   } finally {
     clearTimeout(timer);
