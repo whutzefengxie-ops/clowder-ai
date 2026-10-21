@@ -2570,6 +2570,7 @@ export class CodexAgentService implements AgentService {
               args: appServerArgs,
               ...(options?.workingDirectory ? { cwd: options.workingDirectory } : {}),
               env: appServerEnv,
+              inheritParentEnv: false, // appServerEnv is finalEnvironment; do not re-inherit ambient credentials
               ...(options?.signal ? { signal: options.signal } : {}),
               invocationId: options?.invocationId ?? `codex-app-server-${Date.now()}`,
               ...(options?.sessionId ? { sessionId: options.sessionId } : {}),
