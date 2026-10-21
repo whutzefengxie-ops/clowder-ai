@@ -19,17 +19,17 @@ import { AcpAgentService } from './AcpAgentService.js';
 import { AcpClient } from './AcpClient.js';
 import { AcpHttpStreamClient } from './AcpHttpStreamClient.js';
 import { AcpProcessPool, DEFAULT_ACP_IDLE_TTL_MS } from './AcpProcessPool.js';
-import {
-  type AcpBootstrapContext,
-  resolveAcpBootstrap,
-  type VerifiedAcpBootstrapContext,
-  verifyAcpBootstrap,
-} from './acp-bootstrap-context.js';
 // resolveAcpMcpServers + resolveDisabledServerIds moved to AcpAgentService.invoke()
 // for invoke-time resolution (#712 P1-1).
 import { createAcpPoolSpawnSignature } from './acp-pool-signature.js';
 import { skipAcpProfile } from './acp-registration-failure.js';
 import { tryPrepareAcpProcessEnv } from './acp-spawn-env.js';
+import {
+  type AcpBootstrapContext,
+  resolveAcpBootstrap,
+  type VerifiedAcpBootstrapContext,
+  verifyAcpBootstrap,
+} from './bootstrap/acp-bootstrap-context.js';
 
 export type AcpPoolRegistry = Map<string, AcpProcessPool>;
 

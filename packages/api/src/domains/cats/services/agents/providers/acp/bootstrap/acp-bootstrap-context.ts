@@ -1,8 +1,8 @@
 import { dirname } from 'node:path';
-import type { AcpVariantConfig } from '../../../../../../config/cat-config-loader.js';
-import { buildChildEnv } from '../../../../../../utils/cli-spawn.js';
-import type { PoolKey } from './AcpProcessPool.js';
-import { resolveAcpBootstrapArgs, resolveAcpBootstrapCommand, resolveAcpBootstrapCwd } from './acp-bootstrap-cwd.js';
+import type { AcpVariantConfig } from '../../../../../../../config/cat-config-loader.js';
+import { buildChildEnv } from '../../../../../../../utils/cli-spawn.js';
+import type { PoolKey } from '../AcpProcessPool.js';
+import { resolveAcpBootstrapArgs, resolveAcpBootstrapCommand, resolveAcpBootstrapCwd } from '../acp-bootstrap-cwd.js';
 import { auditedWindowsAcpStartup } from './acp-bootstrap-startup-policy.js';
 
 export interface AcpBootstrapContext {

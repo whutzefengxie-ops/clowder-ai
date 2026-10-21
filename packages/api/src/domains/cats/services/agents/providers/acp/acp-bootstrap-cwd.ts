@@ -7,7 +7,7 @@ import {
   ensureWindowsAcpBootstrapRoot,
   type WindowsAcpRootOptions,
   type WindowsBootstrapEnsurer,
-} from './acp-bootstrap-windows-roots.js';
+} from './bootstrap/acp-bootstrap-windows-roots.js';
 
 const SAFE_SEGMENT_RE = /[^a-zA-Z0-9._-]+/g;
 const OWNER_ONLY_MODE = 0o700;

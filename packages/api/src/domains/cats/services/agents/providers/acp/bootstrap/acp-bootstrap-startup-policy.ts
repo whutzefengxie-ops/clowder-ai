@@ -4,10 +4,10 @@ import { createRequire } from 'node:module';
 import { homedir } from 'node:os';
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { resolveCliCommandOrBare } from '../../../../../../utils/cli-resolve.js';
-import { resolveWindowsSpawnPlan } from '../../../../../../utils/cli-spawn-win.js';
+import { resolveCliCommandOrBare } from '../../../../../../../utils/cli-resolve.js';
+import { resolveWindowsSpawnPlan } from '../../../../../../../utils/cli-spawn-win.js';
 
-const PI_BRIDGE = fileURLToPath(new URL('../pi/pi-acp-bridge.js', import.meta.url));
+const PI_BRIDGE = fileURLToPath(new URL('../../pi/pi-acp-bridge.js', import.meta.url));
 const DSH_HASHES = {
   entry: '1a03dee18683483ff6a1b27b2a1e650230da6bcca9a0f55f7d81b3308c3f307f',
   '@deepseek-ai/dsh-app-boot': '234db45e1b3f8c683b5bc1f551948b2a2ec52a6468c7b6937725a23f1c0e0d96',

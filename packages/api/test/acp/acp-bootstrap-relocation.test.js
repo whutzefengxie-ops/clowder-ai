@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import { resolveAcpBootstrapCwd } from '../../dist/domains/cats/services/agents/providers/acp/acp-bootstrap-cwd.js';
-import { WindowsAcpBootstrapError } from '../../dist/domains/cats/services/agents/providers/acp/acp-bootstrap-windows-error.js';
+import { WindowsAcpBootstrapError } from '../../dist/domains/cats/services/agents/providers/acp/bootstrap/acp-bootstrap-windows-error.js';
 
 function fixture(run) {
   const parent = mkdtempSync(join(tmpdir(), 'acp-relocation-1653-'));

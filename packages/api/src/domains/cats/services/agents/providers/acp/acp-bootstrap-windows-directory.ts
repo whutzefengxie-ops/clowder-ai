@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { isAbsolute, join } from 'node:path';
-import { windowsAcpBootstrapError } from './acp-bootstrap-windows-error.js';
-import { WINDOWS_VOLUME_IDENTITY_SCRIPT } from './acp-bootstrap-windows-volume.js';
+import { windowsAcpBootstrapError } from './bootstrap/acp-bootstrap-windows-error.js';
+import { WINDOWS_VOLUME_IDENTITY_SCRIPT } from './bootstrap/acp-bootstrap-windows-volume.js';
 
 // Windows PowerShell 5.1 uses .NET Framework's atomic ACL creation overload.
 // https://learn.microsoft.com/dotnet/api/system.io.directory.createdirectory?view=netframework-4.8.1

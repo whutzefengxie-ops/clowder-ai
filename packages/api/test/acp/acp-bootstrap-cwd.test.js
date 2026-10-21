@@ -13,7 +13,7 @@ import {
 import { tmpdir } from 'node:os';
 import { basename, dirname, isAbsolute, join, relative, resolve, win32 } from 'node:path';
 import { after, afterEach, before, describe, it } from 'node:test';
-import { WindowsAcpBootstrapError } from '../../dist/domains/cats/services/agents/providers/acp/acp-bootstrap-windows-error.js';
+import { WindowsAcpBootstrapError } from '../../dist/domains/cats/services/agents/providers/acp/bootstrap/acp-bootstrap-windows-error.js';
 
 const {
   isPathWithinRoot,

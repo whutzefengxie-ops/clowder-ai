@@ -4,8 +4,8 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { test } from 'node:test';
-import { verifyAcpBootstrap } from '../../dist/domains/cats/services/agents/providers/acp/acp-bootstrap-context.js';
-import { auditedWindowsAcpStartup } from '../../dist/domains/cats/services/agents/providers/acp/acp-bootstrap-startup-policy.js';
+import { verifyAcpBootstrap } from '../../dist/domains/cats/services/agents/providers/acp/bootstrap/acp-bootstrap-context.js';
+import { auditedWindowsAcpStartup } from '../../dist/domains/cats/services/agents/providers/acp/bootstrap/acp-bootstrap-startup-policy.js';
 
 const windows = { skip: process.platform !== 'win32' };
 const bridge = resolve('packages/api/dist/domains/cats/services/agents/providers/pi/pi-acp-bridge.js');

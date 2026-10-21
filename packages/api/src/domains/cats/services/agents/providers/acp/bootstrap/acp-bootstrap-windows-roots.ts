@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { dirname, join, win32 } from 'node:path';
-import type { WindowsAcpBootstrapOptions } from './acp-bootstrap-windows-directory.js';
+import type { WindowsAcpBootstrapOptions } from '../acp-bootstrap-windows-directory.js';
 import { isWindowsAcpAncestorFailure } from './acp-bootstrap-windows-error.js';
 
 export interface WindowsAcpRootOptions extends WindowsAcpBootstrapOptions {

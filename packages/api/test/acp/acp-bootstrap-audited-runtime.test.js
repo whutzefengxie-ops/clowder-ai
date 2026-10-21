@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join, parse, resolve } from 'node:path';
 import { test } from 'node:test';
 import { AcpClient } from '../../dist/domains/cats/services/agents/providers/acp/AcpClient.js';
-import { verifyAcpBootstrap } from '../../dist/domains/cats/services/agents/providers/acp/acp-bootstrap-context.js';
+import { verifyAcpBootstrap } from '../../dist/domains/cats/services/agents/providers/acp/bootstrap/acp-bootstrap-context.js';
 
 for (const provider of ['pi', 'dsh']) {
   test(
