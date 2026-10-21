@@ -72,7 +72,11 @@ export function useDurableComposerDraft({
   const admissionsPendingRef = useRef(0);
   const pendingAdmissionDraftRef = useRef<PendingComposerAdmissionDraft | null>(null);
   const canonicalDraftRef = useRef<DurableDraftSnapshot | null>(null);
-  const pendingRecoveryRef = useRef<{ snapshot: DurableDraftSnapshot; revision: number; source: 'hydration' | 'conflict' } | null>(null);
+  const pendingRecoveryRef = useRef<{
+    snapshot: DurableDraftSnapshot;
+    revision: number;
+    source: 'hydration' | 'conflict';
+  } | null>(null);
   const recoveredDraftAwaitingConfirmationRef = useRef(false);
   const clearFallbackRef = useRef<(ComposerAdmissionSnapshot & { imageUrls: string[] }) | null>(null);
   const pendingSelectionRef = useRef<PendingComposerSelection | null>(null);
@@ -127,6 +131,8 @@ export function useDurableComposerDraft({
     hydratedRef.current = false;
     canonicalDraftRef.current = null;
     pendingRecoveryRef.current = null;
+    admissionsPendingRef.current = 0; // Reset pending count for new owner
+    pendingAdmissionDraftRef.current = null;
     resetImageRecovery();
     recoveredDraftAwaitingConfirmationRef.current = false;
     const hydration = waitForComposerDraftSaves(threadId)
@@ -170,7 +176,8 @@ export function useDurableComposerDraft({
           preservedBlocksRef.current,
           replyToIdRef.current,
         );
-        const hasServerContent = serverText.trim() || imageUrls.length > 0 || serverContextAttachments.length > 0 || draft?.replyTo;
+        const hasServerContent =
+          serverText.trim() || imageUrls.length > 0 || serverContextAttachments.length > 0 || draft?.replyTo;
         if (hasServerContent && recoveredSignature !== currentSignature && canonicalDraftRef.current) {
           pendingRecoveryRef.current = { snapshot: canonicalDraftRef.current, revision, source: 'hydration' };
         }
@@ -212,7 +219,11 @@ export function useDurableComposerDraft({
       if (!shouldClear) {
         // Mark as pending recovery - not yet displayed
         if (canonicalDraftRef.current) {
-          pendingRecoveryRef.current = { snapshot: canonicalDraftRef.current, revision: draft.revision, source: 'conflict' };
+          pendingRecoveryRef.current = {
+            snapshot: canonicalDraftRef.current,
+            revision: draft.revision,
+            source: 'conflict',
+          };
         }
         return;
       }
@@ -231,7 +242,11 @@ export function useDurableComposerDraft({
       }
       // Displayed, so mark as pending recovery
       if (canonicalDraftRef.current) {
-        pendingRecoveryRef.current = { snapshot: canonicalDraftRef.current, revision: draft.revision, source: 'conflict' };
+        pendingRecoveryRef.current = {
+          snapshot: canonicalDraftRef.current,
+          revision: draft.revision,
+          source: 'conflict',
+        };
       }
       clearFallbackRef.current = null;
     },
@@ -255,7 +270,11 @@ export function useDurableComposerDraft({
 
   const persistDraftSnapshot = useCallback(
     async (snapshot: DurableDraftSnapshot, allowPendingAdmission = false) => {
-      if (!threadId || (admissionsPendingRef.current > 0 && !allowPendingAdmission)) return false;
+      const capturedGeneration = hydrationGenerationRef.current;
+      const capturedThreadId = threadId;
+
+      if (!capturedThreadId || (admissionsPendingRef.current > 0 && !allowPendingAdmission)) return false;
+
       const signature = composerDraftSignature(
         snapshot.text,
         snapshot.imageUrls,
@@ -264,6 +283,19 @@ export function useDurableComposerDraft({
         snapshot.replyTo,
       );
       if (signature === lastSavedSignatureRef.current) return true;
+
+      // P1-1: Block autosave if there's unseen recovery, unless it's from hydration and user has seen it
+      if (!allowPendingAdmission && pendingRecoveryRef.current) {
+        // Allow autosave if recovery is from hydration and user has been editing (hydratedRef=true)
+        if (pendingRecoveryRef.current.source === 'hydration' && hydratedRef.current) {
+          // User saw hydration and is now editing - clear the old recovery and allow save
+          pendingRecoveryRef.current = null;
+        } else {
+          // Conflict recovery or hydration not yet seen - block save
+          return false;
+        }
+      }
+
       const shouldClear =
         !snapshot.text.trim() &&
         snapshot.imageUrls.length === 0 &&
@@ -271,7 +303,13 @@ export function useDurableComposerDraft({
         snapshot.preservedBlocks.length === 0 &&
         !snapshot.replyTo;
 
-      const result = await writeOwnerComposerDraft(threadId, revisionRef.current, snapshot);
+      const result = await writeOwnerComposerDraft(capturedThreadId, revisionRef.current, snapshot);
+
+      // P1-4: Check if owner changed during async save
+      if (capturedGeneration !== hydrationGenerationRef.current || capturedThreadId !== threadId) {
+        return false; // Discard stale save result
+      }
+
       if (result.kind === 'conflict') {
         reconcileConflict(result, shouldClear);
         return false;
@@ -283,7 +321,10 @@ export function useDurableComposerDraft({
       revisionRef.current = result.revision;
       lastSavedSignatureRef.current = signature;
       canonicalDraftRef.current = snapshot;
-      pendingRecoveryRef.current = null; // User's own save, not external recovery
+      // Only clear pendingRecovery if this was an admission save that consumed it
+      if (allowPendingAdmission) {
+        pendingRecoveryRef.current = null;
+      }
       clearFallbackRef.current = null;
       return true;
     },
@@ -363,17 +404,15 @@ export function useDurableComposerDraft({
         admissionsPendingRef.current = Math.max(0, admissionsPendingRef.current - 1);
         if (pendingAdmissionDraftRef.current === pendingAdmission) pendingAdmissionDraftRef.current = null;
         if (accepted === false) {
-          // Only use canonical if it's from this pending admission and reconciliation occurred
-          if (
-            recoveredDraftAwaitingConfirmationRef.current &&
-            canonicalDraftRef.current
-          ) {
-            // P1-2: Display merged snapshot but preserve new input during save
-            const merged = canonicalDraftRef.current;
+          // P1-4: Use reconciliation result bound to this admission, not global canonical
+          if (pendingAdmission.reconciliationResult) {
+            // Display merged snapshot bound to this specific admission
+            const merged = pendingAdmission.reconciliationResult.merged;
             setInput((curr) => mergeHydratedDraft(curr, merged.text));
-            setContextAttachments(() => merged.contextAttachments);
+            setContextAttachments((curr) => mergeContextAttachments(curr, merged.contextAttachments));
             void restoreDraftImages(merged.imageUrls, threadId ?? '', false);
-            if (merged.replyTo) {
+            // Preserve current reply if user set one during save, otherwise use merged
+            if (!useChatStore.getState().replyToMessage && merged.replyTo) {
               const store = useChatStore.getState();
               const parent = store.messages.find((message) => message.id === merged.replyTo);
               setReplyTo({
@@ -382,8 +421,6 @@ export function useDurableComposerDraft({
                 senderCatId: parent?.catId ?? null,
                 threadId: threadId ?? '',
               });
-            } else if (useChatStore.getState().replyToMessage) {
-              useChatStore.getState().clearReplyTo();
             }
           } else {
             // Restore attempted snapshot and preserve new input
@@ -401,7 +438,16 @@ export function useDurableComposerDraft({
         setAdmissionEpoch((current) => current + 1);
       };
     },
-    [imageUrlsRef, persistSettledDraft, restoreDraftImages, restoreFallbackImages, setContextAttachments, setInput, setReplyTo, threadId],
+    [
+      imageUrlsRef,
+      persistSettledDraft,
+      restoreDraftImages,
+      restoreFallbackImages,
+      setContextAttachments,
+      setInput,
+      setReplyTo,
+      threadId,
+    ],
   );
 
   const markOptimisticallyCleared = useCallback(() => {

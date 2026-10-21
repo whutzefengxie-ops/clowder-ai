@@ -1,6 +1,6 @@
 import { reconcileComposerAdmission } from './composer-draft-admission';
 import { registerComposerDraftFlusher } from './composer-draft-flush-registry';
-import { composerDraftSignature, type DurableDraftSnapshot } from './durable-composer-draft-helpers';
+import type { DurableDraftSnapshot } from './durable-composer-draft-helpers';
 
 interface ValueRef<T> {
   current: T;
@@ -10,6 +10,7 @@ export interface PendingComposerAdmissionDraft {
   snapshot: DurableDraftSnapshot;
   files: File[];
   confirmsRecoveredDraft: boolean;
+  reconciliationResult?: { merged: DurableDraftSnapshot; recoveryRevision: number } | null;
   generation: number;
   threadId: string | null;
 }
@@ -19,7 +20,11 @@ interface RegisterAdmissionFlusherOptions {
   hydrationSettledRef: ValueRef<Promise<void>>;
   pendingAdmissionDraftRef: ValueRef<PendingComposerAdmissionDraft | null>;
   canonicalDraftRef: ValueRef<DurableDraftSnapshot | null>;
-  pendingRecoveryRef: ValueRef<{ snapshot: DurableDraftSnapshot; revision: number; source: 'hydration' | 'conflict' } | null>;
+  pendingRecoveryRef: ValueRef<{
+    snapshot: DurableDraftSnapshot;
+    revision: number;
+    source: 'hydration' | 'conflict';
+  } | null>;
   admissionImagesReady: (pendingFiles: readonly File[], requiredUrls: readonly string[]) => boolean;
   recoveredDraftAwaitingConfirmationRef: ValueRef<boolean>;
   revisionRef: ValueRef<number>;
@@ -87,6 +92,13 @@ async function flushAdmission(state: RegisterAdmissionFlusherOptions) {
 
   if (reconciliation.requiresConfirmation && persisted) {
     state.recoveredDraftAwaitingConfirmationRef.current = true;
+    // P1-4: Save reconciliation result to pending admission for cleanup
+    if (state.pendingAdmissionDraftRef.current === pending && pendingRecovery) {
+      pending.reconciliationResult = {
+        merged: reconciliation.snapshot,
+        recoveryRevision: pendingRecovery.revision,
+      };
+    }
     // Consume pending recovery after reconciliation
     state.pendingRecoveryRef.current = null;
   } else if (pending.confirmsRecoveredDraft && !persisted) {
