@@ -51,7 +51,14 @@ export async function writeAgentCommandFile(
   const zsh = bash ? undefined : findExecutable('zsh');
   const shell = bash ?? zsh;
   if (!shell) throw new Error('tmux agent transport requires bash or zsh with pipefail support');
-  const planned = buildChildEnv(options.env, { workingDirectory: options.cwd, bindExecutionOwner: false });
+
+  // If env contains null tombstones, process with buildChildEnv
+  // If env is already final (no null values), use directly to avoid re-inheriting from process.env
+  const hasNullTombstones = options.env && Object.values(options.env).some((v) => v === null);
+  const planned: NodeJS.ProcessEnv = hasNullTombstones
+    ? buildChildEnv(options.env, { workingDirectory: options.cwd, bindExecutionOwner: false })
+    : (options.env as NodeJS.ProcessEnv ?? {});
+
   const exports: string[] = [];
   for (const [key, value] of Object.entries(planned)) {
     if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) throw new Error(`Invalid tmux environment key: ${key}`);
