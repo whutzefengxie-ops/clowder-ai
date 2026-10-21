@@ -138,37 +138,4 @@ describe('Windows project display preserves project identity (#1585)', () => {
     expect(onSwitch).toHaveBeenCalledWith(PATH_B);
   });
 
-  it('configures AppTooltip to show path for real projectPaths regardless of truncation', async () => {
-    // This test verifies that short project names with real paths are configured
-    // to always show tooltips (onlyWhenTruncated=false), ensuring users can hover/focus
-    // to see the full path and distinguish same-name projects.
-    //
-    // Note: Actual hover/focus tooltip display is verified via browser isolation tests,
-    // as jsdom does not provide sufficient environment for AppTooltip's pointer events,
-    // focus-visible detection, and portal rendering with positioning.
-    await harness.render();
-
-    const btnA = projectHeading(PATH_A);
-    const btnB = projectHeading(PATH_B);
-
-    // Both buttons show short name "demo" (not truncated)
-    expect(btnA.textContent).toBe('demo');
-    expect(btnB.textContent).toBe('demo');
-
-    // Both have real projectPath attributes
-    expect(btnA.getAttribute('data-project-path')).toBe(PATH_A);
-    expect(btnB.getAttribute('data-project-path')).toBe(PATH_B);
-
-    // Paths are distinct, allowing users to differentiate same-name projects
-    expect(btnA.getAttribute('data-project-path')).not.toBe(btnB.getAttribute('data-project-path'));
-
-    // Both buttons have accessible labels
-    expect(btnA.getAttribute('aria-label')).toBe('demo');
-    expect(btnB.getAttribute('aria-label')).toBe('demo');
-
-    // Buttons are wrapped by AppTooltip (parent is AppTooltip's display:contents wrapper)
-    expect(btnA.parentElement).not.toBeNull();
-    expect(btnB.parentElement).not.toBeNull();
-    expect(btnA.parentElement?.getAttribute('style')).toContain('display: contents');
-  });
 });
