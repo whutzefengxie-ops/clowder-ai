@@ -72,12 +72,10 @@ export function useMeasuredSidebarRows(
 ) {
   const [measured, setMeasured] = useState<ReadonlyMap<string, MeasuredRow>>(new Map());
   const measuredWidth = useRef<number | null>(null);
-  const decisionsGeneration = useRef(0);
   const rowByKey = useMemo(() => new Map(rows.map((row) => [row.key, row])), [rows]);
 
   // Invalidate cache when decisions change
   useEffect(() => {
-    decisionsGeneration.current += 1;
     setMeasured(new Map());
   }, [groupDecisions]);
 
