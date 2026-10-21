@@ -337,11 +337,32 @@ export function useDurableComposerDraft({
         admissionsPendingRef.current = Math.max(0, admissionsPendingRef.current - 1);
         if (pendingAdmissionDraftRef.current === pendingAdmission) pendingAdmissionDraftRef.current = null;
         if (accepted === false) {
-          setInput((current) => mergeHydratedDraft(current, durableSnapshot.text));
-          restoreFallbackImages(durableSnapshot.images, durableSnapshot.imageUrls);
-          setContextAttachments((current) => mergeContextAttachments(current, durableSnapshot.contextAttachments));
-          if (durableSnapshot.replyTo && !useChatStore.getState().replyToMessage) {
-            setReplyTo(durableSnapshot.replyTo);
+          // Display the merged snapshot if reconciliation occurred
+          const current = canonicalDraftRef.current;
+          if (current) {
+            setInput(() => current.text);
+            setContextAttachments(() => current.contextAttachments);
+            void restoreDraftImages(current.imageUrls, threadId ?? '', false);
+            if (current.replyTo) {
+              const store = useChatStore.getState();
+              const parent = store.messages.find((message) => message.id === current.replyTo);
+              setReplyTo({
+                id: current.replyTo,
+                content: parent?.content ?? '(原消息未加载)',
+                senderCatId: parent?.catId ?? null,
+                threadId: threadId ?? '',
+              });
+            } else if (useChatStore.getState().replyToMessage) {
+              useChatStore.getState().clearReplyTo();
+            }
+          } else {
+            // Fallback to attempted snapshot if no canonical
+            setInput((curr) => mergeHydratedDraft(curr, durableSnapshot.text));
+            restoreFallbackImages(durableSnapshot.images, durableSnapshot.imageUrls);
+            setContextAttachments((curr) => mergeContextAttachments(curr, durableSnapshot.contextAttachments));
+            if (durableSnapshot.replyTo && !useChatStore.getState().replyToMessage) {
+              setReplyTo(durableSnapshot.replyTo);
+            }
           }
         } else {
           clearFallbackRef.current = durableSnapshot;
@@ -350,7 +371,7 @@ export function useDurableComposerDraft({
         setAdmissionEpoch((current) => current + 1);
       };
     },
-    [imageUrlsRef, persistSettledDraft, restoreFallbackImages, setContextAttachments, setInput, setReplyTo],
+    [imageUrlsRef, persistSettledDraft, restoreDraftImages, restoreFallbackImages, setContextAttachments, setInput, setReplyTo, threadId],
   );
 
   const markOptimisticallyCleared = useCallback(() => {
