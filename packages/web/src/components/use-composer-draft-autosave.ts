@@ -9,7 +9,7 @@ interface DraftAutosaveOptions {
   threadId?: string;
   hydratedRef: MutableRefObject<boolean>;
   hydrationGenerationRef: MutableRefObject<number>;
-  revisionRef: MutableRefObject<number>;
+  ownerIdRef: MutableRefObject<number>;
   admissionsPendingRef: MutableRefObject<number>;
   admissionEpoch: number;
   input: string;
@@ -19,9 +19,8 @@ interface DraftAutosaveOptions {
   persistDraftSnapshot: (
     snapshot: DurableDraftSnapshot,
     allowPendingAdmission?: boolean,
-    boundGeneration?: number,
+    boundOwnerId?: number,
     boundThreadId?: string | null,
-    boundRevision?: number,
   ) => Promise<boolean>;
   persistCurrentDraft: () => Promise<boolean>;
 }
@@ -32,7 +31,7 @@ export function useComposerDraftAutosave(options: DraftAutosaveOptions) {
     threadId,
     hydratedRef,
     hydrationGenerationRef,
-    revisionRef,
+    ownerIdRef,
     admissionsPendingRef,
     admissionEpoch,
     input,
@@ -45,29 +44,18 @@ export function useComposerDraftAutosave(options: DraftAutosaveOptions) {
     if (!threadId) return;
     const flush = () => {
       if (!hydratedRef.current || admissionsPendingRef.current > 0) return;
-      // P1 R6: Capture complete owner context immediately, before enqueue
-      const generation = hydrationGenerationRef.current;
+      // P1 R7: Capture owner identity (not revision), let revision advance in queue
+      const ownerId = ownerIdRef.current;
       const capturedThreadId = threadId;
-      const capturedRevision = revisionRef.current;
       const snapshot = captureCurrentDraft();
-      void enqueueComposerDraftSave(threadId, () =>
-        persistDraftSnapshot(snapshot, false, generation, capturedThreadId, capturedRevision),
-      );
+      void enqueueComposerDraftSave(threadId, () => persistDraftSnapshot(snapshot, false, ownerId, capturedThreadId));
     };
     window.addEventListener('pagehide', flush);
     return () => {
       window.removeEventListener('pagehide', flush);
       flush();
     };
-  }, [
-    admissionsPendingRef,
-    captureCurrentDraft,
-    hydratedRef,
-    hydrationGenerationRef,
-    persistDraftSnapshot,
-    revisionRef,
-    threadId,
-  ]);
+  }, [admissionsPendingRef, captureCurrentDraft, hydratedRef, ownerIdRef, persistDraftSnapshot, threadId]);
 
   useEffect(() => {
     if (!threadId || !hydratedRef.current || admissionsPendingRef.current > 0) return;
@@ -76,14 +64,11 @@ export function useComposerDraftAutosave(options: DraftAutosaveOptions) {
     void contextAttachments;
     void input;
     const timer = window.setTimeout(() => {
-      // P1 R6: Capture complete owner context in timeout, before enqueue
-      const generation = hydrationGenerationRef.current;
+      // P1 R7: Capture owner identity, let revision advance in queue
+      const ownerId = ownerIdRef.current;
       const capturedThreadId = threadId;
-      const capturedRevision = revisionRef.current;
       const snapshot = captureCurrentDraft();
-      void enqueueComposerDraftSave(threadId, () =>
-        persistDraftSnapshot(snapshot, false, generation, capturedThreadId, capturedRevision),
-      );
+      void enqueueComposerDraftSave(threadId, () => persistDraftSnapshot(snapshot, false, ownerId, capturedThreadId));
     }, 400);
     return () => window.clearTimeout(timer);
   }, [
@@ -92,26 +77,23 @@ export function useComposerDraftAutosave(options: DraftAutosaveOptions) {
     captureCurrentDraft,
     contextAttachments,
     hydratedRef,
-    hydrationGenerationRef,
     images,
     input,
+    ownerIdRef,
     persistDraftSnapshot,
-    revisionRef,
     threadId,
   ]);
 
   const persistSettledDraft = useCallback(
     (generation: number) => {
       if (!threadId || admissionsPendingRef.current > 0 || hydrationGenerationRef.current !== generation) return;
-      // P1 R6: Capture owner context before enqueue
+      // P1 R7: Capture owner identity, let revision advance
+      const ownerId = ownerIdRef.current;
       const capturedThreadId = threadId;
-      const capturedRevision = revisionRef.current;
       const snapshot = captureCurrentDraft();
-      void enqueueComposerDraftSave(threadId, () =>
-        persistDraftSnapshot(snapshot, false, generation, capturedThreadId, capturedRevision),
-      );
+      void enqueueComposerDraftSave(threadId, () => persistDraftSnapshot(snapshot, false, ownerId, capturedThreadId));
     },
-    [admissionsPendingRef, captureCurrentDraft, hydrationGenerationRef, persistDraftSnapshot, revisionRef, threadId],
+    [admissionsPendingRef, captureCurrentDraft, hydrationGenerationRef, ownerIdRef, persistDraftSnapshot, threadId],
   );
   return { persistSettledDraft };
 }
