@@ -253,6 +253,11 @@ export class AcpProcessPool {
       const pending = this.pendingSpawns.get(key);
       if (pending) {
         const entry = await pending;
+
+        // Re-check pool state after await - pool might have closed during spawn
+        if (this.closed) throw new Error('Pool is closed');
+        if (this.retiring) throw new Error('Pool is retired');
+
         entry.leaseCount++;
         entry.lastUsedAt = Date.now();
         this._metrics.activeLeaseCount++;
@@ -275,6 +280,14 @@ export class AcpProcessPool {
     if (this.supportsMultiplexing) this.pendingSpawns.set(key, spawnPromise);
 
     const entry = await spawnPromise;
+
+    // Re-check pool state after spawn completes - pool might have closed during spawn
+    if (this.closed || this.retiring) {
+      // Pool closed during spawn - retire the just-spawned entry immediately
+      this.retireEntry(entry, poolKey, this.closed ? 'pool closed during spawn' : 'pool retiring during spawn');
+      throw new Error(this.closed ? 'Pool is closed' : 'Pool is retired');
+    }
+
     return this.createLease(entry, poolKey, canResumeRequestedSession);
   }
 
