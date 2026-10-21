@@ -1485,7 +1485,7 @@ export class CodexAgentService implements AgentService {
    */
   private async applyCodexNetworkEnvironment(
     overrides: Record<string, string | null>,
-    options: { inheritParentEnv?: boolean; workingDirectory?: string } = {},
+    options: { inheritParentEnv?: boolean; workingDirectory?: string; skipSystemProxy?: boolean } = {},
   ): Promise<Record<string, string>> {
     // Use canonical buildChildEnv to ensure proper variable stripping (runtime lifecycle, secrets, etc.)
     // and correct cwd/PWD/INIT_CWD handling. This replaces hand-written process.env copying.
@@ -1495,8 +1495,9 @@ export class CodexAgentService implements AgentService {
     });
 
     // Read Windows system proxy if needed (async with timeout)
+    // Skip for plugin isolation (skipSystemProxy=true) to maintain minimal environment boundary
     let systemProxy: WindowsSystemProxyConfig | null | undefined;
-    if (process.platform === 'win32') {
+    if (process.platform === 'win32' && !options.skipSystemProxy) {
       try {
         systemProxy = await readWindowsSystemProxy({ timeoutMs: 1000 });
       } catch {
@@ -2327,9 +2328,11 @@ export class CodexAgentService implements AgentService {
 
       // Apply network environment derivation for enterprise proxy compatibility (Issue #1666)
       // This must happen after all account/MCP/argv overlays are composed
+      // For plugins (native=true), skip system proxy reading to maintain minimal environment boundary
       const derivedEnv = await this.applyCodexNetworkEnvironment(codexEnv, {
         inheritParentEnv: !native,
         workingDirectory: options?.workingDirectory ?? process.cwd(),
+        skipSystemProxy: !!native,
       });
 
       const semanticCompletionController = new AbortController();

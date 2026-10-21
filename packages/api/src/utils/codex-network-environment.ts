@@ -119,18 +119,7 @@ export function deriveCodexNetworkEnvironmentSync(
       };
     }
 
-    if (!systemProxy.enabled) {
-      // System proxy is disabled - safe to add loopback only
-      setNormalizedNoProxy(env, [...LOOPBACK_ADDRESSES]);
-      return {
-        env,
-        diagnostic: {
-          ...diagnostic,
-          loopbackAdded: true,
-        },
-      };
-    }
-
+    // Check PAC/WPAD first - independent of manual proxy enabled state
     if (systemProxy.hasPac) {
       // PAC/WPAD present - cannot safely convert to static list
       return {
@@ -142,6 +131,20 @@ export function deriveCodexNetworkEnvironmentSync(
         },
       };
     }
+
+    if (!systemProxy.enabled) {
+      // Manual proxy is disabled and no PAC - safe to add loopback only
+      setNormalizedNoProxy(env, [...LOOPBACK_ADDRESSES]);
+      return {
+        env,
+        diagnostic: {
+          ...diagnostic,
+          loopbackAdded: true,
+        },
+      };
+    }
+
+    // Manual proxy is enabled - check ProxyOverride
 
     if (systemProxy.proxyOverride) {
       // Parse ProxyOverride and merge with loopback
