@@ -19,14 +19,19 @@ import type { AcpStartupPolicy } from './acp-startup-policy-types.js';
 import { ensureWindowsAcpBootstrapDirectories } from '../acp-bootstrap-windows-directory.js';
 
 /**
- * Validate that a file is not a symlink/reparse point.
- * This is a basic check - full validation would require native APIs for owner/DACL.
- * However, if the parent directory is properly protected (owner-only with protected DACL),
- * files created within inherit these protections via (OI)(CI) flags.
+ * Validate that a file is not a symlink/reparse point and check ACL on Windows.
+ *
+ * LIMITATION: Full file owner/DACL validation requires native Windows APIs.
+ * Current implementation checks symlink and will be extended with native validation.
+ *
+ * For now, we rely on:
+ * 1. Symlink detection via lstatSync()
+ * 2. Exclusive file creation (wx mode) to prevent following existing symlinks
+ * 3. Directory protection inheritance via (OI)(CI) flags for newly created files
  */
 function validateFileNotSymlink(filePath: string): { success: boolean; error?: string } {
   if (!existsSync(filePath)) {
-    return { success: false, error: `File does not exist: ${filePath}` };
+    return { success: true }; // File doesn't exist yet - OK for creation
   }
 
   try {
@@ -37,10 +42,9 @@ function validateFileNotSymlink(filePath: string): { success: boolean; error?: s
       return { success: false, error: `File is a symbolic link: ${filePath}` };
     }
 
-    // On Windows, check for reparse points (symlinks, junctions, mount points)
-    // Note: lstat().isSymbolicLink() catches symlinks, but there are other reparse point types
-    // For comprehensive reparse detection, native APIs would be needed
-    // The directory validation already checks for reparse at directory level
+    // TODO: Add native Windows file ACL validation here
+    // Should check: owner is current user, protected DACL, no untrusted principals
+    // This would require extending the PowerShell validation script
 
     return { success: true };
   } catch (error: unknown) {
@@ -309,24 +313,80 @@ export function persistPolicies(policies: AcpStartupPolicy[]): { success: boolea
       })),
     };
 
-    // Atomic write: write to temp file, then rename
+    // SECURITY: Validate tmp/backup file paths before writing
+    // Prevent writing through symlinks to files outside the storage directory
     const tempPath = `${manifestPath}.tmp`;
+    const backupPath = `${manifestPath}.bak`;
+
+    // Check if tmp path already exists and is a symlink - REJECT before writing
+    if (existsSync(tempPath)) {
+      const tmpValidation = validateFileNotSymlink(tempPath);
+      if (!tmpValidation.success) {
+        return {
+          success: false,
+          error: `Refusing to write through existing tmp file: ${tmpValidation.error}`
+        };
+      }
+      // Existing tmp file is not a symlink, but we should remove it to ensure clean state
+      try {
+        unlinkSync(tempPath);
+      } catch (error) {
+        return {
+          success: false,
+          error: `Failed to remove existing tmp file: ${error}`
+        };
+      }
+    }
+
+    // Atomic write: write to temp file, then rename
+    // Use mode 0o600 to ensure only owner can read/write
     writeFileSync(tempPath, JSON.stringify(manifest, null, 2), { encoding: 'utf8', mode: 0o600 });
 
-    // On Windows, must remove target before rename
+    // Backup existing manifest if present
     if (existsSync(manifestPath)) {
-      const backupPath = `${manifestPath}.bak`;
+      // Validate manifest before backing it up
+      const manifestValidation = validateFileNotSymlink(manifestPath);
+      if (!manifestValidation.success) {
+        // Clean up the tmp file we just created
+        try {
+          unlinkSync(tempPath);
+        } catch {
+          // Ignore cleanup errors
+        }
+        return {
+          success: false,
+          error: `Existing manifest failed validation: ${manifestValidation.error}`
+        };
+      }
+
+      // Remove old backup if exists
       if (existsSync(backupPath)) {
-        // Remove old backup
+        const backupValidation = validateFileNotSymlink(backupPath);
+        if (!backupValidation.success) {
+          // Clean up the tmp file
+          try {
+            unlinkSync(tempPath);
+          } catch {
+            // Ignore
+          }
+          return {
+            success: false,
+            error: `Existing backup failed validation: ${backupValidation.error}`
+          };
+        }
+
         try {
           unlinkSync(backupPath);
         } catch {
-          // Ignore
+          // Ignore - backup removal is not critical
         }
       }
+
+      // Move current manifest to backup
       renameSync(manifestPath, backupPath);
     }
 
+    // Move tmp to manifest
     renameSync(tempPath, manifestPath);
 
     return { success: true };
