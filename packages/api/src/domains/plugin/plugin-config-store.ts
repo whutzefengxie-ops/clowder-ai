@@ -14,6 +14,16 @@ function resolvePluginConfigPath(projectRoot: string, pluginId: string): string 
   return resolve(resolvePluginConfigDir(projectRoot), `${pluginId}.json`);
 }
 
+/** Exact-text CAS input; unlike readPluginConfig this never normalizes or suppresses malformed data. */
+export function readPluginConfigText(projectRoot: string, pluginId: string): string | undefined {
+  try {
+    return readFileSync(resolvePluginConfigPath(projectRoot, pluginId), 'utf8');
+  } catch (error) {
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return undefined;
+    throw error;
+  }
+}
+
 function writeFileAtomic(filePath: string, content: string): void {
   const tempPath = `${filePath}.tmp-${process.pid}-${Date.now()}`;
   writeFileSync(tempPath, content, { encoding: 'utf-8', mode: 0o600 });

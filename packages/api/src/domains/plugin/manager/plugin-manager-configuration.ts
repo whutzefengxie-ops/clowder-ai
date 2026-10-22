@@ -13,6 +13,7 @@ import {
   writePluginOperationState,
 } from '../plugin-config-store.js';
 import { type AcpBootstrapConfigRecovery, prepareAcpBootstrapConfigRecovery } from './acp-bootstrap-config-recovery.js';
+import type { acpBootstrapDirectoryIdentity } from './acp-bootstrap-directory-identity.js';
 import { chromeSetupPolicy } from './chrome-setup/personal-chrome-setup-policy.js';
 import { effectivePluginConfigurationValue } from './plugin-configuration-values.js';
 import {
@@ -36,6 +37,7 @@ export interface HostPluginConfigurationServiceOptions {
   readonly lifecycle?: Pick<ExternalPluginLifecycleService, 'runWithRuntimeSuspended'>;
   readonly packages?: VerifiedPluginPackageLocator;
   readonly inspectBootstrapRoot?: typeof inspectAcpBootstrapDirectory;
+  readonly bootstrapDirectoryIdentity?: typeof acpBootstrapDirectoryIdentity;
 }
 
 export class HostPluginConfigurationService implements PluginManagerConfigurationPort {
@@ -104,18 +106,16 @@ export class HostPluginConfigurationService implements PluginManagerConfiguratio
     state: OperationState,
     fence?: PluginOperationCommitFence,
   ): Promise<void> {
-    if (fence) {
-      await this.options.inventory.transaction((transaction) => {
-        assertOperationCommit(fence, transaction, pluginId);
-        writePluginOperationState(this.options.projectRoot, pluginId, operationKey, state);
-      });
-      return;
-    }
-    writePluginOperationState(this.options.projectRoot, pluginId, operationKey, state);
+    await this.options.inventory.transaction((transaction) => {
+      if (fence) assertOperationCommit(fence, transaction, pluginId);
+      writePluginOperationState(this.options.projectRoot, pluginId, operationKey, state);
+    });
   }
 
   async clearOperationState(pluginId: string, operationKey: string): Promise<void> {
-    writePluginOperationState(this.options.projectRoot, pluginId, operationKey, undefined);
+    await this.options.inventory.transaction(() => {
+      writePluginOperationState(this.options.projectRoot, pluginId, operationKey, undefined);
+    });
   }
 
   async configureOperationTargets(
@@ -125,30 +125,19 @@ export class HostPluginConfigurationService implements PluginManagerConfiguratio
     values: Readonly<Record<string, string>>,
     fence?: PluginOperationCommitFence,
   ): Promise<readonly string[]> {
-    if (fence) {
-      return this.options.inventory.transaction((transaction) => {
-        assertOperationCommit(fence, transaction, pluginId);
-        const instance = transaction.instances.getCurrent(pluginId);
-        const record = instance && transaction.packages.get(instance.packageDigest);
-        if (!instance || instance.pluginInstanceId !== pluginInstanceId || !record)
-          throw new PluginManagerServiceError('ACTION_NOT_ALLOWED', 'Plugin instance changed');
-        return this.writeOperationTargets(pluginId, operationKey, values, record);
-      });
-    }
-    const snapshot = await this.options.inventory.snapshot();
-    const instance = snapshot.instances.find(
-      (candidate) =>
-        candidate.pluginId === pluginId &&
-        candidate.pluginInstanceId === pluginInstanceId &&
-        candidate.lifecycleState === 'installed',
-    );
-    const packageRecord = instance
-      ? snapshot.packages.find((candidate) => candidate.packageDigest === instance.packageDigest)
-      : undefined;
-    if (!instance || !packageRecord) {
-      throw new PluginManagerServiceError('ACTION_NOT_ALLOWED', 'Plugin is not the current installed instance');
-    }
-    return this.writeOperationTargets(pluginId, operationKey, values, packageRecord);
+    return this.options.inventory.transaction((transaction) => {
+      if (fence) assertOperationCommit(fence, transaction, pluginId);
+      const instance = transaction.instances.getCurrent(pluginId);
+      const record = instance && transaction.packages.get(instance.packageDigest);
+      if (
+        !instance ||
+        instance.pluginInstanceId !== pluginInstanceId ||
+        instance.lifecycleState !== 'installed' ||
+        !record
+      )
+        throw new PluginManagerServiceError('ACTION_NOT_ALLOWED', 'Plugin instance changed');
+      return this.writeOperationTargets(pluginId, operationKey, values, record);
+    });
   }
 
   private writeOperationTargets(

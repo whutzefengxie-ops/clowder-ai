@@ -75,15 +75,38 @@ test(
   },
 );
 
-test('legacy directory opt-in alone and a non-Windows Host never waive audit', async () => {
+test('explicit required wins over the legacy preset; a non-Windows Host never waives audit', async () => {
   const f = await rootRecoveryFixture();
-  delete process.env.CAT_CAFE_ACP_BOOTSTRAP_CONFIG_AUDIT_MODE;
+  process.env.CAT_CAFE_ACP_BOOTSTRAP_CONFIG_AUDIT_MODE = 'required';
   process.env.CAT_CAFE_TRUSTED_HOST_COMPATIBILITY = '1';
   await assert.rejects(f.save());
   if (process.platform !== 'win32') {
     process.env.CAT_CAFE_ACP_BOOTSTRAP_CONFIG_AUDIT_MODE = 'warn-bootstrap-root';
     await assert.rejects(f.save());
   }
+});
+
+test('two different path spellings for the same native directory cannot use recovery', windows, async () => {
+  const f = await rootRecoveryFixture({ identity: () => 'same-native-directory' });
+  await assert.rejects(f.save(), /audit|directory/i);
+  assert.equal(JSON.parse(f.read().clients)[0].bootstrapRoot, profile.bootstrapRoot);
+});
+
+test('a raw config rewrite with unchanged parsed values invalidates previous admission', windows, async () => {
+  const { readFileSync, writeFileSync } = await import('node:fs');
+  const { join } = await import('node:path');
+  const f = await rootRecoveryFixture({
+    lifecycleFactory: (_inventory, instance) => ({
+      async runWithRuntimeSuspended(input) {
+        await input.preflight();
+        const path = join(f.projectRoot, '.cat-cafe', 'plugin-config', 'test.acp-library.json');
+        writeFileSync(path, readFileSync(path, 'utf8') + '\n');
+        return input.operation(instance);
+      },
+    }),
+  });
+  await assert.rejects(f.save(), /audit|changed/i);
+  assert.equal(JSON.parse(f.read().clients)[0].bootstrapRoot, profile.bootstrapRoot);
 });
 
 test('preflight admission cannot survive concurrent config or grant changes', windows, async () => {

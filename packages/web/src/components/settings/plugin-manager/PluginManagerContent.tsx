@@ -101,6 +101,7 @@ export function PluginManagerContent({
   catalogMessage,
   loading = false,
   error,
+  warning,
   busyPluginId = null,
   selectedPluginId,
   linkedPluginId = null,
@@ -127,6 +128,7 @@ export function PluginManagerContent({
   catalogMessage?: string;
   loading?: boolean;
   error?: string | null;
+  warning?: string | null;
   busyPluginId?: string | null;
   selectedPluginId?: string | null;
   linkedPluginId?: string | null;
@@ -228,6 +230,11 @@ export function PluginManagerContent({
       )}
 
       <PluginManagerError message={error} />
+      {warning && (
+        <p role="status" className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          {warning}
+        </p>
+      )}
 
       <div className="grid min-h-0 flex-1 gap-3.5 overflow-hidden lg:grid-cols-[minmax(17rem,0.82fr)_minmax(0,1.5fr)]">
         <div

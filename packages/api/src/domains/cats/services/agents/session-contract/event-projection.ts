@@ -64,6 +64,9 @@ export function projectSessionEvent(
     case 'status':
       message = { type: 'status', content: event.detail ?? event.phase };
       break;
+    case 'diagnostic':
+      message = { type: event.kind, content: event.content };
+      break;
     case 'error':
       message = { type: 'error', error: event.message, errorCode: event.code, errorDisposition: event.disposition };
       break;

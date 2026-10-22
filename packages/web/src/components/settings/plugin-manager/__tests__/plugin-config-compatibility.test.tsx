@@ -51,6 +51,7 @@ it('preserves saved status, shows the audit warning after refresh, and clears it
       onBusy: (id) => events.push(`busy:${id}`),
       onSaved: (id) => events.push(`saved:${id}`),
       onError: (message) => events.push(`notice:${message}`),
+      onWarning: (message) => events.push(`warning:${message}`),
     });
     return null;
   }
@@ -69,7 +70,7 @@ it('preserves saved status, shows the audit warning after refresh, and clears it
       'saved:null',
       'saved:official.acp-clients',
       'refresh',
-      'notice:配置已保存，但插件审计写入失败',
+      'warning:配置已保存，但插件审计写入失败',
       'busy:null',
     ]);
     events.length = 0;
@@ -80,6 +81,7 @@ it('preserves saved status, shows the audit warning after refresh, and clears it
     expect(events).toContain('saved:official.acp-clients');
     expect(events).not.toContain('notice:配置已保存，但插件审计写入失败');
     expect(events).toContain('notice:null');
+    expect(events).toContain('warning:null');
   } finally {
     act(() => root.unmount());
   }

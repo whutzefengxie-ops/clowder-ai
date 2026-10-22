@@ -16,11 +16,12 @@ export function isExplicitAcpBootstrapRoot(value: string): boolean {
 export function inspectAcpBootstrapDirectory(
   root?: string,
 ): { ok: true; root: string; trustMode: 'strict' | 'trusted-host' } | { ok: false; error: string } {
-  const compatibility = process.platform === 'win32' && isTrustedHostCompatibilityEnabled();
+  let compatibility = false;
   if (root !== undefined && !isExplicitAcpBootstrapRoot(root)) {
     return { ok: false, error: '引导目录必须是本机绝对路径。' };
   }
   try {
+    compatibility = process.platform === 'win32' && isTrustedHostCompatibilityEnabled();
     const cwd = resolveAcpBootstrapCwd(
       process.cwd(),
       'directory-check',

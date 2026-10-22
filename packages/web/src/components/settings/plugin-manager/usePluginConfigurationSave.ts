@@ -9,12 +9,14 @@ export function usePluginConfigurationSave({
   refresh,
   onBusy,
   onError,
+  onWarning,
   onSaved,
 }: {
   snapshot: PluginManagerListResponse | null;
   refresh(): Promise<void>;
   onBusy(id: string | null): void;
   onError(message: string | null): void;
+  onWarning(message: string | null): void;
   onSaved(id: string | null): void;
 }) {
   return useCallback(
@@ -40,8 +42,8 @@ export function usePluginConfigurationSave({
         onSaved(pluginId);
         await refresh();
         if (receipt && typeof receipt === 'object' && 'warning' in receipt && typeof receipt.warning === 'string') {
-          onError(receipt.warning);
-        }
+          onWarning(receipt.warning);
+        } else onWarning(null);
       } catch {
         await refresh();
         onError('未能确认配置保存结果，请刷新后检查。');
@@ -49,6 +51,6 @@ export function usePluginConfigurationSave({
         onBusy(null);
       }
     },
-    [snapshot, refresh, onBusy, onError, onSaved],
+    [snapshot, refresh, onBusy, onError, onWarning, onSaved],
   );
 }

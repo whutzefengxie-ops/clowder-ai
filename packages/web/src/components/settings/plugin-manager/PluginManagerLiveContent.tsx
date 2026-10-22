@@ -32,6 +32,7 @@ export function PluginManagerLiveContent({
   const [detailState, setDetailState] = useState<DetailLoadState>({ state: 'idle' });
   const [busyPluginId, setBusyPluginId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
   const [selectedPluginId, setSelectedPluginId] = useState<string | null>(null);
   const [linkedPluginId, setLinkedPluginId] = useState<string | null>(null);
   const [configurationSavedPluginId, setConfigurationSavedPluginId] = useState<string | null>(null);
@@ -143,6 +144,7 @@ export function PluginManagerLiveContent({
     refresh,
     onBusy: setBusyPluginId,
     onError: setError,
+    onWarning: setWarning,
     onSaved: setConfigurationSavedPluginId,
   });
 
@@ -264,6 +266,7 @@ export function PluginManagerLiveContent({
       catalogMessage={snapshot?.catalog.message}
       loading={snapshot === null && error === null}
       error={error}
+      warning={warning}
       busyPluginId={busyPluginId}
       selectedPluginId={selectedPluginId}
       linkedPluginId={linkedPluginId}

@@ -10,22 +10,27 @@ import { readDeclaration } from '../declared/declared-agent-session-providers.js
 import { resolvePackageFile } from '../declared/declared-resource-paths.js';
 import type { VerifiedPluginPackageLocator } from '../external-runtime/types.js';
 import type { PluginInventoryStore, PluginInventoryTransaction } from '../host-inventory/ports.js';
-import { readPluginConfig } from '../plugin-config-store.js';
+import { readPluginConfig, readPluginConfigText } from '../plugin-config-store.js';
+import { acpBootstrapDirectoryIdentity } from './acp-bootstrap-directory-identity.js';
 import { PluginManagerServiceError } from './plugin-manager-service.js';
 
 function refused(): never {
   throw new PluginManagerServiceError(
     'AUDIT_UNAVAILABLE',
-    'Plugin audit log is unavailable; only a verified ACP bootstrap root change can use recovery',
+    'Plugin audit log is unavailable; only a verified ACP bootstrap root change can use recovery. Configuration was not saved; any private directories already created by inspection are retained.',
   );
 }
 
-function changedBootstrapRoots(previous: string, nextValue: unknown, packageRoot: string): Set<string> {
+function changedBootstrapRoots(
+  previous: string,
+  nextValue: unknown,
+  packageRoot: string,
+): Map<string, string | undefined> {
   const oldProfiles = parseAgentClientProfiles(previous, { packageRoot });
   const newProfiles = parseAgentClientProfiles(nextValue, { packageRoot });
   if (!oldProfiles.ok || !newProfiles.ok || oldProfiles.profiles.length !== newProfiles.profiles.length)
     return refused();
-  const roots = new Set<string>();
+  const roots = new Map<string, string | undefined>();
   for (let i = 0; i < oldProfiles.profiles.length; i++) {
     const previous = oldProfiles.profiles[i];
     const next = newProfiles.profiles[i];
@@ -35,7 +40,7 @@ function changedBootstrapRoots(previous: string, nextValue: unknown, packageRoot
     if (!isDeepStrictEqual({ ...previous, acp: oldAcp }, { ...next, acp: newAcp })) return refused();
     if (oldRoot !== newRoot) {
       if (!newRoot) return refused();
-      roots.add(newRoot);
+      roots.set(newRoot, oldRoot);
     }
   }
   if (!roots.size) return refused();
@@ -54,6 +59,7 @@ export async function prepareAcpBootstrapConfigRecovery(input: {
   inventory: PluginInventoryStore;
   packages?: VerifiedPluginPackageLocator;
   inspectBootstrapRoot?: typeof inspectAcpBootstrapDirectory;
+  bootstrapDirectoryIdentity?: typeof acpBootstrapDirectoryIdentity;
   pluginId: string;
   pluginInstanceId: string;
   request: PluginManagerConfigureRequest;
@@ -78,7 +84,13 @@ export async function prepareAcpBootstrapConfigRecovery(input: {
       !record.manifest.features.some((feature) => feature.capabilities.includes('plugin.config.read'))
     )
       return refused();
-    return { instance, record, grant, stored: readPluginConfig(input.projectRoot, input.pluginId) };
+    return {
+      instance,
+      record,
+      grant,
+      stored: readPluginConfig(input.projectRoot, input.pluginId),
+      text: readPluginConfigText(input.projectRoot, input.pluginId),
+    };
   });
   const located = await input.packages.resolveInstalledPackage(captured.record.packageDigest);
   try {
@@ -101,15 +113,31 @@ export async function prepareAcpBootstrapConfigRecovery(input: {
       input.request.updates[0].value,
       located.rootDir,
     );
+    const identities = new Map<string, string>();
+    const identity = input.bootstrapDirectoryIdentity ?? acpBootstrapDirectoryIdentity;
+    const readIdentity = (root: string) => {
+      try {
+        return identity(root);
+      } catch {
+        return refused();
+      }
+    };
     const admission: AcpBootstrapConfigRecovery = {
       async verify() {
         if (!allowsAcpBootstrapConfigAuditWarning()) return refused();
         await located.verifyIntegrity();
-        for (const root of roots) {
+        for (const [root, oldRoot] of roots) {
           const check = (input.inspectBootstrapRoot ?? inspectAcpBootstrapDirectory)(root);
           if (!check.ok)
-            throw new PluginManagerServiceError('INVALID_CONFIGURATION', `引导目录检查失败：${check.error}`);
+            throw new PluginManagerServiceError(
+              'INVALID_CONFIGURATION',
+              `引导目录检查失败：${check.error}\n检查可能已创建专用目录；本次配置未保存。`,
+            );
           if (check.trustMode !== 'trusted-host') return refused();
+          const current = readIdentity(root);
+          if (!current || (oldRoot && readIdentity(oldRoot) === current)) return refused();
+          if (identities.has(root) && identities.get(root) !== current) return refused();
+          identities.set(root, current);
         }
       },
       assertCurrent(tx) {
@@ -124,9 +152,11 @@ export async function prepareAcpBootstrapConfigRecovery(input: {
           instance.activationState !== captured.instance.activationState ||
           !isDeepStrictEqual(tx.packages.get(instance.packageDigest), captured.record) ||
           !isDeepStrictEqual(tx.grants.get(instance.pluginInstanceId), captured.grant) ||
+          readPluginConfigText(input.projectRoot, input.pluginId) !== captured.text ||
           !isDeepStrictEqual(readPluginConfig(input.projectRoot, input.pluginId), captured.stored)
         )
           return refused();
+        for (const [root, expected] of identities) if (readIdentity(root) !== expected) return refused();
       },
       release: () => located.release(),
     };

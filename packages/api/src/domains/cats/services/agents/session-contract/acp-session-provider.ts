@@ -149,6 +149,11 @@ export class AcpSessionProvider implements Contract.AgentSessionProvider {
           errorCode: message.errorCode,
           outcome: session.active?.controller.signal.aborted ? 'cancelled' : message.errorCode ? 'failed' : 'completed',
         };
+      case 'system_info':
+      case 'provider_signal':
+      case 'liveness_signal':
+      case 'agent_loop':
+        return { ...base, type: 'diagnostic', kind: message.type, content: message.content };
       default:
         return { ...base, type: 'status', phase: message.type };
     }

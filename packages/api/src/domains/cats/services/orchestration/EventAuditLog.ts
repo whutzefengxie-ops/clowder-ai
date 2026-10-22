@@ -43,7 +43,7 @@ export class EventAuditLog {
   private initialized = false;
 
   constructor(options?: { auditDir?: string }) {
-    this.auditDir = options?.auditDir ?? process.env.AUDIT_LOG_DIR ?? DEFAULT_AUDIT_DIR;
+    this.auditDir = resolve(options?.auditDir ?? process.env.AUDIT_LOG_DIR ?? DEFAULT_AUDIT_DIR);
   }
 
   /**
@@ -145,6 +145,11 @@ export class EventAuditLog {
   getLogPath(): string {
     const filename = this.getFilename(Date.now());
     return resolve(this.auditDir, filename);
+  }
+
+  /** The actual directory captured by this writer, without creating files or directories. */
+  getDirectory(): string {
+    return this.auditDir;
   }
 
   /**
