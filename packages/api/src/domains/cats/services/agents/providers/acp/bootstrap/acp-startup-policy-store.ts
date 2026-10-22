@@ -121,8 +121,45 @@ try {
  * Sync local policies to persistent storage.
  * Returns success/error for transactional import/revoke.
  */
+/**
+ * Sync local policies to persistent storage.
+ * Returns success/error for transactional import/revoke.
+ *
+ * IMPORTANT: Implements optimistic concurrency control by verifying disk state
+ * hasn't changed since last reload. If another process modified policies between
+ * reload and commit, this will fail to prevent overwriting external changes.
+ */
 function syncToStorage(): { success: boolean; error?: string } {
   try {
+    // Read current disk state before committing
+    const diskPolicies = loadPersistedPolicies();
+    const diskKeys = new Set(diskPolicies.map(p => makePolicyKey(p.policyId, p.revision)));
+
+    // Compare with our memory snapshot (from last reload)
+    // If disk has different policies, another process made changes
+    const memoryKeys = new Set(localPolicies.keys());
+
+    // Check for additions on disk (another process imported)
+    for (const diskKey of diskKeys) {
+      if (!memoryKeys.has(diskKey)) {
+        return {
+          success: false,
+          error: `Concurrent modification detected: policy ${diskKey} was added on disk since last reload. Rejecting commit to prevent overwrite.`
+        };
+      }
+    }
+
+    // Check for removals on disk (another process revoked)
+    for (const memoryKey of memoryKeys) {
+      if (!diskKeys.has(memoryKey)) {
+        return {
+          success: false,
+          error: `Concurrent modification detected: policy ${memoryKey} was removed from disk since last reload. Rejecting commit to prevent resurrection.`
+        };
+      }
+    }
+
+    // Disk state matches memory state - safe to commit
     const policies = Array.from(localPolicies.values());
     const result = persistPolicies(policies);
     if (!result.success) {
@@ -183,7 +220,21 @@ function clonePolicy(policy: AcpStartupPolicy): AcpStartupPolicy {
  * Get all active policies (builtin + local).
  * Returns deep clones to prevent caller modification of internal state.
  */
+/**
+ * Get all active policies (builtin + local).
+ * Returns deep clones to prevent caller modification of internal state.
+ *
+ * IMPORTANT: Reloads from storage to ensure fresh state, even if another process
+ * modified policies. This ensures warm pool acquire sees external revocations.
+ */
 export function getActivePolicies(): ReadonlyArray<AcpStartupPolicy> {
+  // Reload to see external changes (revocations by other processes)
+  const reloadResult = reloadFromStorage();
+  if (!reloadResult.success) {
+    console.error('[acp-policy-store] Failed to reload policies in getActivePolicies:', reloadResult.error);
+    // Fall through to return current state (better than crashing)
+  }
+
   const builtinClones = BUILTIN_POLICIES.map(clonePolicy);
   const localClones = Array.from(localPolicies.values()).map(clonePolicy);
   return [...builtinClones, ...localClones];
