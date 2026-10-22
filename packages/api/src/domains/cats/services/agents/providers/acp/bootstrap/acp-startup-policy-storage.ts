@@ -499,24 +499,60 @@ export function loadPersistedPolicies(): AcpStartupPolicy[] {
 
 /**
  * Acquire an exclusive lock for policy storage operations.
- * Uses a lock file with exclusive open to serialize writers across processes.
+ * Uses a lock file with PID to enable stale lock detection.
+ *
+ * IMPORTANT: Caller must ensure storage directory exists before calling.
  *
  * Returns lock file descriptor on success, or error.
- * Caller must call releaseLock() with the fd when done.
+ * Caller must call releasePolicyLock() with the fd when done.
  */
 export function acquirePolicyLock(storagePath: string): { success: true; fd: number } | { success: false; error: string } {
   const lockPath = join(storagePath, 'policies.lock');
 
   try {
-    // Open with exclusive flag (O_CREAT | O_EXCL) - fails if file exists
-    // This provides atomic test-and-set for the lock
+    // Try to create lock file exclusively with current PID
     const fd = openSync(lockPath, 'wx');
+    writeFileSync(fd, String(process.pid));
     return { success: true, fd };
   } catch (error: unknown) {
     const err = error as { code?: string; message?: string };
     if (err.code === 'EEXIST') {
-      // Lock file exists - another process holds the lock
-      return { success: false, error: 'Storage lock held by another process' };
+      // Lock file exists - check if it's stale
+      try {
+        const content = readFileSync(lockPath, 'utf8');
+        const ownerPid = parseInt(content.trim(), 10);
+
+        if (isNaN(ownerPid)) {
+          // Invalid PID - can't determine if stale
+          return { success: false, error: 'Storage lock exists with invalid PID' };
+        }
+
+        // Check if owning process still exists
+        try {
+          // process.kill(pid, 0) throws if process doesn't exist
+          process.kill(ownerPid, 0);
+          // Process exists - lock is valid
+          return { success: false, error: `Storage lock held by process ${ownerPid}` };
+        } catch (killErr: unknown) {
+          const ke = killErr as { code?: string };
+          if (ke.code === 'ESRCH') {
+            // Process doesn't exist - stale lock, remove it
+            try {
+              unlinkSync(lockPath);
+              // Retry acquisition
+              const fd = openSync(lockPath, 'wx');
+              writeFileSync(fd, String(process.pid));
+              return { success: true, fd };
+            } catch (retryErr) {
+              return { success: false, error: `Failed to acquire lock after removing stale lock: ${retryErr}` };
+            }
+          }
+          // Other error (EPERM = no permission to signal) - assume process exists
+          return { success: false, error: `Storage lock held by process ${ownerPid}` };
+        }
+      } catch (readErr) {
+        return { success: false, error: `Failed to read lock file: ${readErr}` };
+      }
     }
     return { success: false, error: `Failed to acquire lock: ${err.message || String(error)}` };
   }

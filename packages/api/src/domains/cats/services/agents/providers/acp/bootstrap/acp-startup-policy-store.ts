@@ -6,8 +6,9 @@
  */
 
 import type { AcpStartupPolicy } from './acp-startup-policy-types.js';
-import { loadPersistedPolicies, persistPolicies, acquirePolicyLock, releasePolicyLock } from './acp-startup-policy-storage.js';
-import { homedir } from 'node:os';
+import { loadPersistedPolicies, persistPolicies, acquirePolicyLock, releasePolicyLock, getPolicyStoragePath } from './acp-startup-policy-storage.js';
+import { existsSync, mkdirSync } from 'node:fs';
+import { homedir, platform } from 'node:os';
 import { join } from 'node:path';
 
 /**
@@ -140,10 +141,31 @@ try {
  * our baseline check and commit.
  */
 function syncToStorage(): { success: boolean; error?: string } {
-  const storagePath = join(homedir(), '.clowder-ai', 'acp-policies');
+  const storagePath = getPolicyStoragePath();
   let lockFd: number | undefined;
 
   try {
+    // Ensure storage directory exists before attempting to acquire lock
+    // This delegates to persistPolicies which handles platform-specific security
+    if (!existsSync(storagePath)) {
+      // Let persistPolicies handle directory creation with proper security
+      // We need the directory to exist for lock file, but creation must be secure
+      if (platform() === 'win32') {
+        // Windows: Let persistPolicies handle secure creation
+        // For now, just try to persist - it will create the directory securely
+        // If that fails, return the error
+      } else {
+        // Unix: Create with secure mode
+        const parentDir = join(homedir(), '.clowder-ai');
+        if (!existsSync(parentDir)) {
+          mkdirSync(parentDir, { mode: 0o700 });
+        }
+        if (!existsSync(storagePath)) {
+          mkdirSync(storagePath, { mode: 0o700 });
+        }
+      }
+    }
+
     // Acquire exclusive lock for the entire transaction
     const lockResult = acquirePolicyLock(storagePath);
     if (!lockResult.success) {
