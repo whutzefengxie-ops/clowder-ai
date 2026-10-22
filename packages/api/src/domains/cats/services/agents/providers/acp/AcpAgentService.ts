@@ -1050,14 +1050,9 @@ function classifyError(
       /store\s+\w+_API_KEY\s+through/i.test(fullMsg) ||
       /credential.*(required|missing|invalid|expired)/i.test(fullMsg) ||
       /api[_\s]?key.*(missing|required|invalid)/i.test(fullMsg) ||
-      /token.*(expired|invalid)/i.test(fullMsg)
+      /token.*(expired|invalid)/i.test(fullMsg) ||
+      /auth\s+fail|authentication\s+failed|unauthenticated/i.test(fullMsg)
     ) {
-      return { errorCode: 'credential_required', errorMsg: fullMsg };
-    }
-
-    // General auth failures - only if not already classified as MCP or specific credential pattern
-    // Be conservative: 401/403 alone could be network, MCP, or provider issues
-    if (/^(auth.*fail|unauthenticated)$/i.test(fullMsg)) {
       return { errorCode: 'credential_required', errorMsg: fullMsg };
     }
 
