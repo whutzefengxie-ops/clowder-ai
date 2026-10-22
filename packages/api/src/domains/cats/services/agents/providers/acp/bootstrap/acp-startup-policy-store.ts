@@ -135,13 +135,13 @@ function syncToStorage(): { success: boolean; error?: string } {
     const diskPolicies = loadPersistedPolicies();
     const diskKeys = new Set(diskPolicies.map(p => makePolicyKey(p.policyId, p.revision)));
 
-    // Compare with our memory snapshot (from last reload)
-    // If disk has different policies, another process made changes
-    const memoryKeys = new Set(localPolicies.keys());
+    // Compare disk against baseline (from last reload), NOT against current memory
+    // Current memory includes this operation's changes, which are intentional
+    // We only want to detect external changes by other processes
 
-    // Check for additions on disk (another process imported)
+    // Check for additions on disk (another process imported since our reload)
     for (const diskKey of diskKeys) {
-      if (!memoryKeys.has(diskKey)) {
+      if (!baselineSnapshot.has(diskKey)) {
         return {
           success: false,
           error: `Concurrent modification detected: policy ${diskKey} was added on disk since last reload. Rejecting commit to prevent overwrite.`
@@ -149,23 +149,27 @@ function syncToStorage(): { success: boolean; error?: string } {
       }
     }
 
-    // Check for removals on disk (another process revoked)
-    for (const memoryKey of memoryKeys) {
-      if (!diskKeys.has(memoryKey)) {
+    // Check for removals on disk (another process revoked since our reload)
+    for (const baselineKey of baselineSnapshot) {
+      if (!diskKeys.has(baselineKey)) {
         return {
           success: false,
-          error: `Concurrent modification detected: policy ${memoryKey} was removed from disk since last reload. Rejecting commit to prevent resurrection.`
+          error: `Concurrent modification detected: policy ${baselineKey} was removed from disk since last reload. Rejecting commit to prevent resurrection.`
         };
       }
     }
 
-    // Disk state matches memory state - safe to commit
+    // Disk state matches baseline - safe to commit our changes
     const policies = Array.from(localPolicies.values());
     const result = persistPolicies(policies);
     if (!result.success) {
       console.error('[acp-policy-store] Failed to persist policies:', result.error);
       return result;
     }
+
+    // Update baseline to reflect committed state
+    baselineSnapshot = new Set(localPolicies.keys());
+
     return { success: true };
   } catch (error) {
     const errorMsg = `Failed to sync policies: ${error}`;
@@ -264,8 +268,16 @@ export function isPolicyActive(policyId: string, revision: number): boolean {
 }
 
 /**
+ * Baseline snapshot captured at last reload.
+ * Used for optimistic concurrency control - we compare current disk state
+ * against this baseline to detect external changes since reload.
+ */
+let baselineSnapshot: Set<string> = new Set();
+
+/**
  * Reload local policies from persistent storage.
  * This ensures we have the latest state from disk, even if another process modified it.
+ * Also captures a baseline snapshot for optimistic concurrency control.
  */
 function reloadFromStorage(): { success: boolean; error?: string } {
   try {
@@ -279,6 +291,9 @@ function reloadFromStorage(): { success: boolean; error?: string } {
       const key = makePolicyKey(policy.policyId, policy.revision);
       localPolicies.set(key, policy);
     }
+
+    // Capture baseline snapshot for concurrency control
+    baselineSnapshot = new Set(localPolicies.keys());
 
     return { success: true };
   } catch (error) {
