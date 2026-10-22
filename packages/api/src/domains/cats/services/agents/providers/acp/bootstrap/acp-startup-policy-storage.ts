@@ -56,11 +56,12 @@ try {
   $security.AddAccessRule($rule)
 
   # Write content with secure ACL
-  # Use FileStream to set security during creation
+  # Use FileStream with correct constructor signature for FileSecurity
+  # Signature: (String, FileMode, FileSystemRights, FileShare, Int32, FileOptions, FileSecurity)
   $mode = [System.IO.FileMode]::CreateNew
-  $access = [System.IO.FileAccess]::Write
   $share = [System.IO.FileShare]::None
-  $fs = [System.IO.FileStream]::new($filePath, $mode, $security, $access, $share, 4096)
+  $options = [System.IO.FileOptions]::None
+  $fs = [System.IO.FileStream]::new($filePath, $mode, $full, $share, 4096, $options, $security)
   try {
     $bytes = [System.Text.Encoding]::UTF8.GetBytes($content)
     $fs.Write($bytes, 0, $bytes.Length)
