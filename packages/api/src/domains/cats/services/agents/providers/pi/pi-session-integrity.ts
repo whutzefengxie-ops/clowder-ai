@@ -1,5 +1,4 @@
-import { createReadStream, lstatSync } from 'node:fs';
-import { createInterface } from 'node:readline';
+import { createReadStream, lstatSync, type ReadStream } from 'node:fs';
 import type { PiSessionSlot } from './pi-session-store.js';
 
 function parseEntry(line: string): Record<string, unknown> {
@@ -10,16 +9,30 @@ function parseEntry(line: string): Record<string, unknown> {
   return value;
 }
 
+async function* nativeLines(input: ReadStream): AsyncGenerator<string> {
+  // Pi splits only on LF. readline also accepts bare CR, hiding corruption from the real loader.
+  let pending = '';
+  for await (const chunk of input) {
+    pending += chunk;
+    let end = pending.indexOf('\n');
+    while (end >= 0) {
+      yield pending.slice(0, end);
+      pending = pending.slice(end + 1);
+      end = pending.indexOf('\n');
+    }
+  }
+  if (pending) yield pending;
+}
+
 /** Run under the native writer lease, before Pi can skip malformed lines or migrate the file. */
 export async function assertPiHistoryIntegrity(slot: PiSessionSlot): Promise<void> {
   if (!slot.file) return;
   const input = createReadStream(slot.file, { encoding: 'utf8' });
-  const lines = createInterface({ input, crlfDelay: Number.POSITIVE_INFINITY });
   try {
     const stat = lstatSync(slot.file);
     if (!stat.isFile() || stat.isSymbolicLink()) throw new Error('Not a regular native history');
     let first = true;
-    for await (const line of lines) {
+    for await (const line of nativeLines(input)) {
       if (!line.trim()) continue;
       const value = parseEntry(line);
       if (first && (value.type !== 'session' || value.version !== 3 || value.id !== slot.id || value.cwd !== slot.cwd))
@@ -30,7 +43,6 @@ export async function assertPiHistoryIntegrity(slot: PiSessionSlot): Promise<voi
   } catch {
     throw new Error('Pi 原生会话历史损坏或格式不支持；原文件已保留，不会自动新建会话。');
   } finally {
-    lines.close();
     input.destroy();
   }
 }

@@ -36,6 +36,8 @@ tips_exempt: 既有 Pi 连续性与错误处理修复，没有新增入口或独
 
 独立审阅 `6e1623c3` 后又复现两项 P2：合法 header 后的损坏 JSONL 会被 Pi 1.3 静默跳过；逐行脱敏会漏掉跨行 PEM 正文。两项新增用例均先观察到 RED。现由实际 writer 持锁后逐行校验 JSON 语法、记录基本形状和原生 header，再导入 Pi；坏文件不改写、不替换，验证失败释放锁。诊断先识别完整 PEM 块，覆盖跨 chunk、超长行和缺失 END，正文不进入可见截尾。
 
+复审 `386b6927` 发现预检 `readline` 与 Pi 的分行语义不同：裸 CR 会被前者分行，后者只认 LF。该反例先 RED，随后改为严格 LF 增量扫描，保留合法 CRLF 支持；损坏文件不改写、原生 loader 不启动。对本次 Pi 目录的 header、RPC、ACP 和诊断分帧位置同步扫描，其他位置均按 LF，未遗留同类 `readline` 解析。
+
 | 验证 | 当前结果 |
 | --- | --- |
 | `pnpm --filter @cat-cafe/api build` | 通过，当前源码重新编译，F299 census 检查通过 |

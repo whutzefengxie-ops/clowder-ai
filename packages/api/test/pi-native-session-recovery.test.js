@@ -166,7 +166,8 @@ test('Pi refuses a damaged history body before the native loader can skip or rep
     );
     const original = readFileSync(file, 'utf8');
     const nativePid = readFileSync(join(root, 'started'), 'utf8');
-    for (const tail of ['{"type":"message","id":"partial",', '\nnot-json\n', '\nnull\n']) {
+    const record = JSON.stringify({ type: 'message', message: { role: 'user', content: 'LF boundary' } });
+    for (const tail of ['{"type":"message","id":"partial",', '\nnot-json\n', '\nnull\n', `\n${record}\r${record}\n`]) {
       const damaged = original + tail;
       writeFileSync(file, damaged);
       const reply = await make().request('session/load', { sessionId: id, cwd: root, mcpServers: [] });
@@ -175,10 +176,12 @@ test('Pi refuses a damaged history body before the native loader can skip or rep
       assert.equal(readFileSync(file, 'utf8'), damaged, 'neither repair nor replacement is allowed');
       assert.equal(readFileSync(join(root, 'started'), 'utf8'), nativePid, 'native loader must not run');
     }
-    writeFileSync(file, original);
+    const crlf = original.replaceAll('\n', '\r\n');
+    writeFileSync(file, crlf);
     assert.equal(
       (await make().request('session/load', { sessionId: id, cwd: root, mcpServers: [] })).result.sessionId,
       id,
       'failed validation releases the native writer lease',
     );
+    assert.equal(readFileSync(file, 'utf8'), crlf, 'normal CRLF records remain loadable without rewriting');
   }));
