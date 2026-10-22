@@ -21,6 +21,7 @@ import { resolveCliCommandOrBare } from '../../../../../../utils/cli-resolve.js'
 import { buildChildEnv } from '../../../../../../utils/cli-spawn.js';
 import { resolveWindowsSpawnPlan } from '../../../../../../utils/cli-spawn-win.js';
 import { buildUnixSupervisedSpawnPlan } from '../../../../../../utils/cli-supervised-process.js';
+import { PI_BRIDGE_NAME, PI_SESSION_BINDING_ERROR } from '../pi/pi-bridge-contract.js';
 import { AcpCwdIdentityTracker } from './acp-cwd-identity.js';
 import { type AcpPromptInput, toAcpPromptContent } from './acp-prompt-content.js';
 import { AcpSessionBindingError, ActiveSessionCache } from './active-session-cache.js';
@@ -471,6 +472,14 @@ export class AcpClient {
       cwd: effectiveCwd,
       mcpServers: compatible,
       ...(meta ? { _meta: meta } : {}),
+    }).catch((error: unknown) => {
+      if (
+        this.initResult?.agentInfo?.name === PI_BRIDGE_NAME &&
+        error instanceof AcpProtocolError &&
+        error.code === PI_SESSION_BINDING_ERROR
+      )
+        throw new AcpSessionBindingError(error.message);
+      throw error;
     });
     log.info(
       { sessionId, durationMs: Date.now() - t0, hasResult: !!resp.result },
