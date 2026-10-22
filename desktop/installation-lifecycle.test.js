@@ -82,24 +82,45 @@ test('second-instance renderer recreation reports failures instead of creating a
   assert.equal(reported, failure);
 });
 
-function mockedInstallInspection({ candidateName, candidatePath, unreadable = false, inspectOnly = true }) {
+function mockedInstallInspection({
+  candidateName,
+  candidatePath,
+  unreadable = false,
+  inspectOnly = true,
+  delayedExit = false,
+  waitAcknowledgesExit = true,
+}) {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), 'install-enumeration-'));
   const appDir = path.join(base, 'install');
   fs.mkdirSync(appDir);
   fs.writeFileSync(path.join(appDir, 'probe.exe'), 'Only filename inventory is used; this fixture is never executed.');
   const marker = path.join(base, 'unexpected-stop');
+  const waitMarker = path.join(base, 'owned-process-waited');
   const quote = (value) => `'${value.replace(/'/g, "''")}'`;
   const wrapper = path.join(base, 'inspect.ps1');
   fs.writeFileSync(
     wrapper,
     [
       `$global:fixtureProcess = [pscustomobject]@{ Id = 2147483000; ProcessName = ${quote(candidateName)} }`,
+      '$global:fixtureVisible = $true',
       unreadable
         ? "$global:fixtureProcess | Add-Member ScriptProperty Path { throw 'Controlled protected process path' }"
-        : `$global:fixtureProcess | Add-Member NoteProperty Path ${quote(candidatePath ?? path.join(base, 'missing.exe'))}`,
-      'function Get-Process { [CmdletBinding()] param([int]$Id) $global:fixtureProcess }',
-      `function Stop-Process { [CmdletBinding()] param([Parameter(ValueFromPipeline)]$InputObject, [switch]$Force) process { [IO.File]::WriteAllText(${quote(marker)}, 'called'); throw 'No process may be stopped by this fixture' } }`,
+        : `$global:fixtureProcess | Add-Member NoteProperty Path ${quote(delayedExit ? path.join(appDir, 'probe.exe') : (candidatePath ?? path.join(base, 'missing.exe')))}`,
+      'function Get-Process { [CmdletBinding()] param([int]$Id) if ($global:fixtureVisible) { $global:fixtureProcess } }',
+      'function Stop-Process { [CmdletBinding()] param([Parameter(ValueFromPipeline)]$InputObject, [switch]$Force) process {',
+      `  [IO.File]::WriteAllText(${quote(marker)}, 'called')`,
+      delayedExit
+        ? "  if (-not [object]::ReferenceEquals(@($InputObject)[0], $global:fixtureProcess)) { throw 'Wrong stop object' }"
+        : "  throw 'No process may be stopped by this fixture'",
+      '} }',
+      'function Wait-Process { [CmdletBinding()] param([Parameter(ValueFromPipeline)]$InputObject, [int]$Timeout) process {',
+      "  if (@($InputObject).Count -ne 1 -or -not [object]::ReferenceEquals(@($InputObject)[0], $global:fixtureProcess)) { throw 'Wrong wait object' }",
+      `  if ($Timeout -ne 5 -or -not (Test-Path -LiteralPath ${quote(marker)})) { throw 'Wait must follow stop and be bounded' }`,
+      `  [IO.File]::WriteAllText(${quote(waitMarker)}, 'called')`,
+      ...(waitAcknowledgesExit ? ['$global:fixtureVisible = $false'] : []),
+      '} }',
       `& ${quote(path.join(__dirname, 'scripts/stop-installed-desktop.ps1'))} -AppDir ${quote(appDir)} -WaitSeconds 0 ${inspectOnly ? '-InspectOnly' : ''}`,
+      'exit $LASTEXITCODE',
     ].join('\r\n'),
   );
   try {
@@ -116,7 +137,7 @@ function mockedInstallInspection({ candidateName, candidatePath, unreadable = fa
       status = error.status;
       stderr = error.stderr?.toString() ?? '';
     }
-    return { status, stderr, stopped: fs.existsSync(marker) };
+    return { status, stderr, stopped: fs.existsSync(marker), waited: fs.existsSync(waitMarker) };
   } finally {
     fs.rmSync(base, { recursive: true, force: true });
   }
@@ -155,6 +176,33 @@ test(
 );
 
 test(
+  'Windows cleanup waits for the captured owned process to exit after stop',
+  { skip: process.platform !== 'win32' },
+  () => {
+    const result = mockedInstallInspection({ candidateName: 'probe', inspectOnly: false, delayedExit: true });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stopped, true);
+    assert.equal(result.waited, true);
+  },
+);
+
+test(
+  'Windows cleanup still fails if the captured process remains after the bounded wait',
+  { skip: process.platform !== 'win32' },
+  () => {
+    const result = mockedInstallInspection({
+      candidateName: 'probe',
+      inspectOnly: false,
+      delayedExit: true,
+      waitAcknowledgesExit: false,
+    });
+    assert.equal(result.status, 1, 'a stop request and expired wait are not proof of exit');
+    assert.equal(result.stopped, true);
+    assert.equal(result.waited, true);
+  },
+);
+
+test(
   'Windows cleanup stops a test-owned install process and preserves its sibling control',
   { skip: process.platform !== 'win32' },
   async () => {
@@ -177,18 +225,23 @@ test(
       const script = path.join(__dirname, 'scripts/stop-installed-desktop.ps1');
       const args = ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', script, '-AppDir', root];
       assert.equal(
-        JSON.parse(execFileSync('powershell.exe', [...args, '-InspectOnly'], { encoding: 'utf8' }).trim()),
+        JSON.parse(
+          execFileSync('powershell.exe', [...args, '-InspectOnly'], { encoding: 'utf8', windowsHide: true }).trim(),
+        ),
         children[0].pid,
       );
       const alias = path.join(base, 'alias');
       fs.symlinkSync(root, alias, 'junction');
       assert.equal(
         JSON.parse(
-          execFileSync('powershell.exe', [...args.slice(0, -1), alias, '-InspectOnly'], { encoding: 'utf8' }).trim(),
+          execFileSync('powershell.exe', [...args.slice(0, -1), alias, '-InspectOnly'], {
+            encoding: 'utf8',
+            windowsHide: true,
+          }).trim(),
         ),
         children[0].pid,
       );
-      execFileSync('powershell.exe', [...args, '-WaitSeconds', '0'], { timeout: 10000 });
+      execFileSync('powershell.exe', [...args, '-WaitSeconds', '0'], { timeout: 10000, windowsHide: true });
       await new Promise((resolve) => {
         if (children[0].exitCode !== null) resolve();
         else children[0].once('exit', resolve);

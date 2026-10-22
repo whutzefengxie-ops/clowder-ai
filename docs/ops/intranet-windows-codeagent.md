@@ -28,6 +28,8 @@ CodeAgent 如果安装在自定义位置，优先把安装目录加入用户 PAT
 
 内网发行版使用固定 AppId。Inno Setup 默认复用同应用登记的上次安装目录，不能把改版本号或另选目录理解成完整隔离，见 [AppId](https://jrsoftware.org/ishelp/topic_setup_appid.htm) 与 [UsePreviousAppDir](https://jrsoftware.org/ishelp/topic_setup_usepreviousappdir.htm)。两个程序目录仍可能使用同一个默认数据根与端口，开始菜单或卸载登记也可能只指向其中一个。
 
+根据当前单实例启动逻辑，旧进程仍持有同一用户数据根的锁时，运行新目录的 EXE 可能只激活旧窗口，新进程随后退出；看到窗口打开不能证明新版本已运行。因此第 1、3、5 步的真实路径、完整退出和构建 SHA 核对不可省略。
+
 升级前后按以下顺序核对：
 
 1. 从当前快捷方式“目标”或任务管理器确认实际 `desktop-dist\Clowder AI.exe` 路径，其上一级就是程序目录；不要只看安装包文件名或相同的 `1.14.0`。

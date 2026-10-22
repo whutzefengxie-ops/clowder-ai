@@ -127,5 +127,10 @@ while ((Get-Date) -lt $deadline) {
   Start-Sleep -Milliseconds 250
 }
 # Bounded cleanup is restricted to executables within this exact installation.
-Get-OwnedInstallProcesses | Stop-Process -Force -ErrorAction SilentlyContinue
+$ownedProcesses = @(Get-OwnedInstallProcesses)
+if ($ownedProcesses.Count -gt 0) {
+  $ownedProcesses | Stop-Process -Force -ErrorAction SilentlyContinue
+  # Stop-Process requests termination; wait on the same captured objects before re-enumerating.
+  Wait-Process -InputObject $ownedProcesses -Timeout 5 -ErrorAction SilentlyContinue
+}
 if (@(Get-OwnedInstallProcesses).Count -ne 0) { exit 1 }
