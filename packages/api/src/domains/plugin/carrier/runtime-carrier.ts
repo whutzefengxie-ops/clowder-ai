@@ -121,6 +121,7 @@ export class PluginRuntimeCarrierRouter implements PluginRuntimeLifecyclePort {
         this.resources && {
           ...this.resources,
           nativeActionEnvironment: (contributionId) => this.nativeActions.environment(pluginInstanceId, contributionId),
+          nativeActionEnvironmentReferences: (id) => this.nativeActions.environmentReferences(pluginInstanceId, id),
         },
       );
       await this.#runtimeContributions.activate(
@@ -184,6 +185,7 @@ export class PluginRuntimeCarrierRouter implements PluginRuntimeLifecyclePort {
       this.resources && {
         ...this.resources,
         nativeActionEnvironment: (contributionId) => this.nativeActions.environment(pluginInstanceId, contributionId),
+        nativeActionEnvironmentReferences: (id) => this.nativeActions.environmentReferences(pluginInstanceId, id),
       },
     );
     this.#nativeMcpLaunches.activate(admission, generation, launches);

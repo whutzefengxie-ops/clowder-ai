@@ -296,6 +296,7 @@ app.on('ready', async () => {
     apiPort: API_PORT,
     redisPort: desktopRuntime.redisPort,
     onStatus: sendSplashStatus,
+    pluginNetworkFetch: net.fetch.bind(net),
   });
   ({ updater, updatePrompt } = createDesktopUpdateRuntime({
     app,
@@ -320,6 +321,7 @@ app.on('ready', async () => {
         frontendPort: FRONTEND_PORT,
         apiPort: API_PORT,
         redisPort: desktopRuntime.redisPort,
+        pluginNetworkFetch: net.fetch.bind(net),
       });
       await services.startAll();
       await refreshRendererLinkOrigins();
