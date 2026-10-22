@@ -17,7 +17,7 @@ import {
 import { serializeInventoryPackage } from './stored-manifest.js';
 import type { PluginGrantRecord, PluginInstanceRecord, PluginInventorySnapshot, PluginPackageRecord } from './types.js';
 import { PluginInventoryError } from './types.js';
-import { requireInventoryWriterLease } from './writer-lease.js';
+import { canonicalInventoryPath, requireInventoryWriterLease } from './writer-lease.js';
 
 interface TransactionState {
   readonly packages: Map<string, PluginPackageRecord>;
@@ -111,10 +111,11 @@ class TransactionQueue {
 const fileTransactionQueues = new Map<string, TransactionQueue>();
 
 function fileQueue(path: string): TransactionQueue {
-  let queue = fileTransactionQueues.get(path);
+  const key = canonicalInventoryPath(path);
+  let queue = fileTransactionQueues.get(key);
   if (!queue) {
     queue = new TransactionQueue();
-    fileTransactionQueues.set(path, queue);
+    fileTransactionQueues.set(key, queue);
   }
   return queue;
 }
@@ -214,8 +215,8 @@ export class FilePluginInventoryStore implements PluginInventoryStore {
     work: (transaction: PluginInventoryTransaction) => Promise<T> | T,
     options?: { onCommitFailure?(): void },
   ): Promise<T> {
-    requireInventoryWriterLease(this.path);
     return this.queue.run(async () => {
+      const releaseWriter = requireInventoryWriterLease(this.path);
       try {
         const candidate = transactionFor(await this.load(), this.contract);
         const result = await work(candidate.transaction);
@@ -244,6 +245,8 @@ export class FilePluginInventoryStore implements PluginInventoryStore {
       } catch (error) {
         options?.onCommitFailure?.();
         throw error;
+      } finally {
+        releaseWriter();
       }
     });
   }

@@ -179,20 +179,23 @@ test('[39] a metadata model or usage change becomes a session-scoped context eve
   assert.deepEqual(changed.usage, usage);
 });
 
-test('[39] message types without a contract equivalent become status events', async () => {
+test('[39] diagnostic events preserve their kind and content alongside output', async () => {
   const { provider } = providerFor([
     agentMessage('system_info', { content: 'thinking' }),
-    agentMessage('provider_signal', {}),
+    agentMessage('provider_signal', { content: 'capacity retry' }),
     agentMessage('text', { content: 'reply' }),
     agentMessage('done'),
   ]);
 
   const events = await runTurn(provider);
-  const statuses = events.filter((event) => event.type === 'status');
+  const diagnostics = events.filter((event) => event.type === 'diagnostic');
 
   assert.deepEqual(
-    statuses.map((event) => event.phase),
-    ['system_info', 'provider_signal'],
+    diagnostics.map((event) => [event.kind, event.content]),
+    [
+      ['system_info', 'thinking'],
+      ['provider_signal', 'capacity retry'],
+    ],
   );
   assert.equal(events.filter((event) => event.type === 'output').length, 1);
 });
