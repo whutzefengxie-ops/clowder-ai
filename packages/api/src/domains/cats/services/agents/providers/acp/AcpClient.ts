@@ -271,6 +271,7 @@ export class AcpClient {
       cwd: this.config.cwd,
       stdio: ['pipe', 'pipe', 'pipe'],
       env: childEnv,
+      windowsHide: true,
     };
     if (IS_WINDOWS && !this.config.spawnFn) {
       const spawnPlan = resolveWindowsSpawnPlan(command, args);

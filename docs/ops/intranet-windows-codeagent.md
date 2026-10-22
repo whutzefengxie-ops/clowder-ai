@@ -78,4 +78,6 @@ CAT_CAFE_ACP_BOOTSTRAP_CONFIG_AUDIT_MODE=warn-bootstrap-root
 
 ## 验证边界
 
+后台的 Host、ACP 和 MCP 进程不应为日常使用打开命令窗口。本轮源码补齐了 ACP 进程隐藏窗口设置，并修正作者回归测试与开发监督器的窗口创建；只改变窗口显示，不改变 ACP 权限、命令参数或通信。旧安装包尚未包含这项修复，不能用源码测试替代新包验收。
+
 安装、界面创建、持久化和合成 ACP/MCP 测试分别记录。`synthetic-client.cjs` 只是作者验收产物，不会进入安装包，也不是企业 CodeAgent。只有真实 CodeAgent 完成 ACP 初始化、MCP 工具调用、角色传球与重启续接后，才能声明企业客户端的完整实机验收通过。
