@@ -306,3 +306,30 @@ test('Pi local bridge failures remain prompt failures through the real ACP host 
     assert.equal(error.errorCode, 'prompt_failure');
     assert.doesNotMatch(error.error, /容量不足/);
   }));
+
+test('Pi empty assistant response without error or aborted should fail rather than succeed silently', () =>
+  fixture(async ({ root, request }) => {
+    const sessionId = (await request('s', 'session/new', { cwd: root, mcpServers: [] })).result.sessionId;
+    const result = await request('p', 'session/prompt', { sessionId, prompt: [{ type: 'text', text: 'empty' }] });
+    assert.ok(result.error, 'Empty assistant response must be treated as a protocol error');
+    assert.match(
+      result.error.message,
+      /settled without.*completed|no.*output|empty.*response/i,
+      'Error message should indicate empty or incomplete response',
+    );
+  }));
+
+test('Pi empty string content should fail rather than succeed silently', () =>
+  fixture(async ({ root, request }) => {
+    const sessionId = (await request('s', 'session/new', { cwd: root, mcpServers: [] })).result.sessionId;
+    const result = await request('p', 'session/prompt', {
+      sessionId,
+      prompt: [{ type: 'text', text: 'empty-string' }],
+    });
+    assert.ok(result.error, 'Empty string content must be treated as a protocol error');
+    assert.match(
+      result.error.message,
+      /settled without.*completed/i,
+      'Error message should indicate no completed response',
+    );
+  }));

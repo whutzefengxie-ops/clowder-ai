@@ -1,0 +1,38 @@
+{
+  "kind": "source-leaf-characterization",
+  "scope": "actual TypeScript leaf modules; only type stripping and local import URL rewrite; no spawn, network, HOME or real credential reads",
+  "node": "v24.16.0",
+  "baseSha": "1baaed2e9fadca8b550ae7041ef5a663994ab2d4",
+  "sources": [
+    {
+      "path": "packages/api/src/domains/cats/services/agents/providers/env-map.ts",
+      "sha256": "2acdd1462f2428bc093337ce74789fcfb70fed8e570f16c68ac81a7a054b93ff"
+    },
+    {
+      "path": "packages/api/src/domains/cats/services/agents/providers/acp/acp-spawn-env.ts",
+      "sha256": "c466799a60ea0a8abe85c95c406b66a4ff0ef0c29babcaeb3dd02f86caf14f82"
+    }
+  ],
+  "checks": [
+    {
+      "name": "null account generates no application credential override",
+      "result": "pass"
+    },
+    {
+      "name": "generic ACP provider name alone generates no credential mapping",
+      "result": "pass"
+    },
+    {
+      "name": "explicit generic ACP account template maps DeepSeek key",
+      "result": "pass"
+    },
+    {
+      "name": "missing explicit account key produces a failure",
+      "result": "pass"
+    },
+    {
+      "name": "reserved application environment template is rejected",
+      "result": "pass"
+    }
+  ]
+}

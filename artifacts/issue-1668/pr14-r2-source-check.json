@@ -1,0 +1,191 @@
+{
+  "kind": "pr14-exact-commit-source-counterexamples",
+  "requiredBase": "1baaed2e9fadca8b550ae7041ef5a663994ab2d4",
+  "actualBase": "1baaed2e9fadca8b550ae7041ef5a663994ab2d4",
+  "head": "06d4bcd25338b4ea523b5875790727d25f03e105",
+  "scope": "Actual Git blobs, Node TypeScript transform, import URL rewrite and extraction of actual record helper. Synthetic leaf inputs only; no real credentials, native model process or provider requests. Format checks consume committed LF bytes from the six implementation files relative to actual fork base.",
+  "observations": [
+    {
+      "sha": "1baaed2e9fadca8b550ae7041ef5a663994ab2d4",
+      "name": "null-account",
+      "accepted": true,
+      "env": null
+    },
+    {
+      "sha": "1baaed2e9fadca8b550ae7041ef5a663994ab2d4",
+      "name": "literal-provider-key",
+      "accepted": true,
+      "env": {
+        "DEEPSEEK_API_KEY": "synthetic-literal"
+      }
+    },
+    {
+      "sha": "1baaed2e9fadca8b550ae7041ef5a663994ab2d4",
+      "name": "no-template-native-or-parent-env",
+      "accepted": true,
+      "env": null
+    },
+    {
+      "sha": "1baaed2e9fadca8b550ae7041ef5a663994ab2d4",
+      "name": "explicit-key-template",
+      "accepted": true,
+      "env": {
+        "DEEPSEEK_API_KEY": "synthetic-only"
+      }
+    },
+    {
+      "sha": "1baaed2e9fadca8b550ae7041ef5a663994ab2d4",
+      "name": "empty-content-array",
+      "completedAssistant": true,
+      "failure": null,
+      "visibleCharacterCount": 0
+    },
+    {
+      "sha": "1baaed2e9fadca8b550ae7041ef5a663994ab2d4",
+      "name": "empty-text-block",
+      "completedAssistant": true,
+      "failure": null,
+      "visibleCharacterCount": 0
+    },
+    {
+      "sha": "1baaed2e9fadca8b550ae7041ef5a663994ab2d4",
+      "name": "empty-thinking-block",
+      "completedAssistant": true,
+      "failure": null,
+      "visibleCharacterCount": 0
+    },
+    {
+      "sha": "1baaed2e9fadca8b550ae7041ef5a663994ab2d4",
+      "name": "empty-stream-delta",
+      "completedAssistant": true,
+      "failure": null,
+      "visibleCharacterCount": 0
+    },
+    {
+      "sha": "1baaed2e9fadca8b550ae7041ef5a663994ab2d4",
+      "name": "ordinary-text",
+      "completedAssistant": true,
+      "failure": null,
+      "visibleCharacterCount": 14
+    },
+    {
+      "sha": "06d4bcd25338b4ea523b5875790727d25f03e105",
+      "name": "null-account",
+      "accepted": true,
+      "env": null
+    },
+    {
+      "sha": "06d4bcd25338b4ea523b5875790727d25f03e105",
+      "name": "literal-provider-key",
+      "accepted": true,
+      "env": {
+        "DEEPSEEK_API_KEY": "synthetic-literal"
+      }
+    },
+    {
+      "sha": "06d4bcd25338b4ea523b5875790727d25f03e105",
+      "name": "no-template-native-or-parent-env",
+      "accepted": true,
+      "env": null
+    },
+    {
+      "sha": "06d4bcd25338b4ea523b5875790727d25f03e105",
+      "name": "explicit-key-template",
+      "accepted": true,
+      "env": {
+        "DEEPSEEK_API_KEY": "synthetic-only"
+      }
+    },
+    {
+      "sha": "06d4bcd25338b4ea523b5875790727d25f03e105",
+      "name": "empty-content-array",
+      "completedAssistant": false,
+      "failure": null,
+      "visibleCharacterCount": 0
+    },
+    {
+      "sha": "06d4bcd25338b4ea523b5875790727d25f03e105",
+      "name": "empty-text-block",
+      "completedAssistant": false,
+      "failure": null,
+      "visibleCharacterCount": 0
+    },
+    {
+      "sha": "06d4bcd25338b4ea523b5875790727d25f03e105",
+      "name": "empty-thinking-block",
+      "completedAssistant": false,
+      "failure": null,
+      "visibleCharacterCount": 0
+    },
+    {
+      "sha": "06d4bcd25338b4ea523b5875790727d25f03e105",
+      "name": "empty-stream-delta",
+      "completedAssistant": false,
+      "failure": null,
+      "visibleCharacterCount": 0
+    },
+    {
+      "sha": "06d4bcd25338b4ea523b5875790727d25f03e105",
+      "name": "ordinary-text",
+      "completedAssistant": true,
+      "failure": null,
+      "visibleCharacterCount": 14
+    }
+  ],
+  "formatting": [
+    {
+      "path": "packages/api/src/domains/cats/services/agents/providers/acp/acp-spawn-env.ts",
+      "formatterExitCode": 0,
+      "committedBytesMatchFormatter": true,
+      "error": null
+    },
+    {
+      "path": "packages/api/src/domains/cats/services/agents/providers/pi/pi-acp-events.ts",
+      "formatterExitCode": 0,
+      "committedBytesMatchFormatter": false,
+      "error": null
+    },
+    {
+      "path": "packages/api/src/routes/native-runtime-readiness.ts",
+      "formatterExitCode": 0,
+      "committedBytesMatchFormatter": true,
+      "error": null
+    },
+    {
+      "path": "packages/api/test/acp/acp-spawn-env.test.js",
+      "formatterExitCode": 0,
+      "committedBytesMatchFormatter": true,
+      "error": null
+    },
+    {
+      "path": "packages/api/test/helpers/pi-rpc-fixture.mjs",
+      "formatterExitCode": 0,
+      "committedBytesMatchFormatter": true,
+      "error": null
+    },
+    {
+      "path": "packages/api/test/pi-acp-bridge.test.js",
+      "formatterExitCode": 0,
+      "committedBytesMatchFormatter": false,
+      "error": null
+    }
+  ],
+  "sources": {
+    "1baaed2e9fadca8b550ae7041ef5a663994ab2d4:packages/api/src/domains/cats/services/agents/providers/env-map.ts": "87663a907ccc6147580feacd7e58fda40f543276fbef07ffb17bed84f46c82ee",
+    "1baaed2e9fadca8b550ae7041ef5a663994ab2d4:packages/api/src/domains/cats/services/agents/providers/acp/acp-spawn-env.ts": "ed1bd73224477f1cabcb229e009e8588f1d7776ed96fce10c057524b117085dd",
+    "1baaed2e9fadca8b550ae7041ef5a663994ab2d4:packages/api/src/utils/cli-error-patterns.ts": "f159685d493d00315f9d93c9a83bd92a8c36fc7a3b72ff546711231d7e94b9f3",
+    "1baaed2e9fadca8b550ae7041ef5a663994ab2d4:packages/api/src/utils/sanitize-cli-stderr.ts": "b02909be4040a9b4dd8aeab44fca1d3216aa24447da8ec59a8c835c9d472c925",
+    "1baaed2e9fadca8b550ae7041ef5a663994ab2d4:packages/api/src/domains/cats/services/agents/providers/pi/pi-rpc-process.ts": "d34e84f9e60bef3baa58b9d98a16d3063b9f69ca7c8d3bea80a1cf675135c995",
+    "1baaed2e9fadca8b550ae7041ef5a663994ab2d4:packages/api/src/domains/cats/services/agents/providers/pi/pi-acp-events.ts": "d61456a7fe06b3741ccf248d40ed8551b887f339b86f66466e37e3e9de5ed9fe",
+    "06d4bcd25338b4ea523b5875790727d25f03e105:packages/api/src/domains/cats/services/agents/providers/env-map.ts": "87663a907ccc6147580feacd7e58fda40f543276fbef07ffb17bed84f46c82ee",
+    "06d4bcd25338b4ea523b5875790727d25f03e105:packages/api/src/domains/cats/services/agents/providers/acp/acp-spawn-env.ts": "9de07f43e973fee33b87f7aef45b0fb4ba1c36ad408c2eb3337b935fa89302b7",
+    "06d4bcd25338b4ea523b5875790727d25f03e105:packages/api/src/utils/cli-error-patterns.ts": "f159685d493d00315f9d93c9a83bd92a8c36fc7a3b72ff546711231d7e94b9f3",
+    "06d4bcd25338b4ea523b5875790727d25f03e105:packages/api/src/utils/sanitize-cli-stderr.ts": "b02909be4040a9b4dd8aeab44fca1d3216aa24447da8ec59a8c835c9d472c925",
+    "06d4bcd25338b4ea523b5875790727d25f03e105:packages/api/src/domains/cats/services/agents/providers/pi/pi-rpc-process.ts": "d34e84f9e60bef3baa58b9d98a16d3063b9f69ca7c8d3bea80a1cf675135c995",
+    "06d4bcd25338b4ea523b5875790727d25f03e105:packages/api/src/domains/cats/services/agents/providers/pi/pi-acp-events.ts": "dafac1a929da47a1a12ce8706a95c4f7897e931ab1f4e4b12fb4b69289cb3262",
+    "06d4bcd25338b4ea523b5875790727d25f03e105:packages/api/src/routes/native-runtime-readiness.ts": "00c9e5a40f868f020ebc5504e2631a28ce08d75d679129ea7bb28d57f0d9f759",
+    "06d4bcd25338b4ea523b5875790727d25f03e105:packages/api/test/acp/acp-spawn-env.test.js": "ea86e02ca075d258d65c4cef715c5dd27728761eed66dc684410544d6e800d50",
+    "06d4bcd25338b4ea523b5875790727d25f03e105:packages/api/test/helpers/pi-rpc-fixture.mjs": "01cadb77f433d264bc3e3afeb0c8c7e0da17f2b6bda672f72cf490225f857733",
+    "06d4bcd25338b4ea523b5875790727d25f03e105:packages/api/test/pi-acp-bridge.test.js": "0b0aaca58cad388318511dabc5fe826d4a23fa1c3ad8cb6c83b69f6a01cfb820"
+  }
+}

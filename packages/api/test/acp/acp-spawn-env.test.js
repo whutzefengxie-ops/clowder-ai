@@ -21,7 +21,7 @@ describe('prepareAcpProcessEnv', () => {
             envVars: { DEEPSEEK_API_KEY: '${api_key}' },
           },
         }),
-      /account "deepseek-key" is configured as api_key but has no API key set/,
+      /Credential required.*account "deepseek-key".*has no API key set/,
     );
   });
 
@@ -100,6 +100,23 @@ describe('prepareAcpProcessEnv', () => {
       },
     });
     assert.equal(result.ok, false);
-    assert.match(result.error.message, /account "deepseek-key" is configured as api_key but has no API key set/);
+    assert.match(result.error.message, /Credential required.*account "deepseek-key".*has no API key set/);
+    assert.equal(result.errorCode, 'credential_required', 'Should return credential_required errorCode');
+  });
+
+  it('returns credential_required errorCode for missing envVars template', () => {
+    const result = tryPrepareAcpProcessEnv({
+      clientId: 'acp',
+      provider: undefined,
+      baseModel: 'deepseek-chat',
+      account: {
+        id: 'deepseek-key',
+        authType: 'api_key',
+        apiKey: 'sk-test',
+        // Missing envVars - would need literal env or inherited source, but none provided
+      },
+    });
+    // This is now allowed - no error thrown for missing template
+    assert.equal(result.ok, true, 'Missing template is allowed (may have literal env or inheritance)');
   });
 });

@@ -1,0 +1,48 @@
+{
+  "kind": "plan-review-source-characterization",
+  "node": "v24.16.0",
+  "scope": "Node TypeScript transform of actual leaf modules with local import URL rewrite; actual record helper extracted; no native spawn, credential reads, API call or UI acceptance",
+  "planSha256": "e02a2e8f2c51438d9055ff8a90a51d87a13be6b53f7acaf6136cacde65dd0aab",
+  "sources": {
+    "packages/api/src/domains/cats/services/agents/providers/env-map.ts": "2acdd1462f2428bc093337ce74789fcfb70fed8e570f16c68ac81a7a054b93ff",
+    "packages/api/src/domains/cats/services/agents/providers/acp/acp-spawn-env.ts": "c466799a60ea0a8abe85c95c406b66a4ff0ef0c29babcaeb3dd02f86caf14f82",
+    "packages/api/src/utils/cli-error-patterns.ts": "eca45a80aa15229b9dff3531b63df6ae6e674ab4c7e886dca039fe54d663ce5b",
+    "packages/api/src/utils/sanitize-cli-stderr.ts": "f7e5eb4c1d28b37ea2c71e822f498090dd7e2eb639b5b57a6fb357d28de3fb80",
+    "packages/api/src/domains/cats/services/agents/providers/pi/pi-rpc-process.ts": "a6c57046b6807187f1fd0b85e93f25f8b72502bcd667c33831763c41bd01936c",
+    "packages/api/src/domains/cats/services/agents/providers/pi/pi-acp-events.ts": "da4493ba57ea42f3e92aaca10351860a2186cff093377173e14479bceb90f3b1"
+  },
+  "checks": [
+    {
+      "name": "null account generates no override",
+      "result": "pass"
+    },
+    {
+      "name": "generic ACP provider does not guess an environment mapping",
+      "result": "pass"
+    },
+    {
+      "name": "explicit account template maps the key",
+      "result": "pass"
+    },
+    {
+      "name": "explicit missing key fails",
+      "result": "pass"
+    },
+    {
+      "name": "reserved application environment cannot be templated",
+      "result": "pass"
+    },
+    {
+      "name": "Pi provider error already propagates in the event translator",
+      "result": "pass"
+    },
+    {
+      "name": "Pi completed empty assistant is a reproducible candidate gap",
+      "result": "pass"
+    },
+    {
+      "name": "Pi ordinary final text still emits one update",
+      "result": "pass"
+    }
+  ]
+}
