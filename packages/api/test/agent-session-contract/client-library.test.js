@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { AcpSessionProvider } from '../../src/domains/cats/services/agents/session-contract/acp-session-provider.ts';
-import { projectSessionEvent } from '../../src/domains/cats/services/agents/session-contract/event-projection.ts';
-import { SessionImplementationRegistry } from '../../src/domains/cats/services/agents/session-contract/implementation-registry.ts';
-import * as library from '../../src/domains/cats/services/agents/session-contract/plugin-agent-provider.ts';
-import { RegisteredSessionAgentService } from '../../src/domains/cats/services/agents/session-contract/registered-session-agent-service.ts';
+import { AcpSessionProvider } from '../../dist/domains/cats/services/agents/session-contract/acp-session-provider.js';
+import { projectSessionEvent } from '../../dist/domains/cats/services/agents/session-contract/event-projection.js';
+import { SessionImplementationRegistry } from '../../dist/domains/cats/services/agents/session-contract/implementation-registry.js';
+import * as library from '../../dist/domains/cats/services/agents/session-contract/plugin-agent-provider.js';
+import { RegisteredSessionAgentService } from '../../dist/domains/cats/services/agents/session-contract/registered-session-agent-service.js';
 
 test('a data-only client library references one configuration field', () => {
   assert.deepEqual(library.parseAgentProviderDeclaration({ configurationKey: 'clients' }, { packageRoot: '/pkg' }), {

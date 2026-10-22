@@ -3,10 +3,10 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { loadCatConfig, toAllCatConfigs } from '../../src/config/cat-config-loader.ts';
-import { updateRuntimeCat } from '../../src/config/runtime-cat-catalog.ts';
-import { resolveMemberSessionRef } from '../../src/domains/cats/services/agents/session-contract/plugin-agent-provider.ts';
-import { selectSessionAgentService } from '../../src/domains/cats/services/agents/session-contract/registered-session-agent-service.ts';
+import { loadCatConfig, toAllCatConfigs } from '../../dist/config/cat-config-loader.js';
+import { updateRuntimeCat } from '../../dist/config/runtime-cat-catalog.js';
+import { resolveMemberSessionRef } from '../../dist/domains/cats/services/agents/session-contract/plugin-agent-provider.js';
+import { selectSessionAgentService } from '../../dist/domains/cats/services/agents/session-contract/registered-session-agent-service.js';
 
 for (const carrier of ['acp', 'cli'])
   test(`manual ${carrier} choice survives disk reload and overrides both old bindings`, async (t) => {

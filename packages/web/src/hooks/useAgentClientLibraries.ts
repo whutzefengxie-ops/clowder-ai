@@ -9,11 +9,12 @@ export interface AgentClientLibrary {
   error?: string;
   presets?: { id: string; name: string; command: string; startupArgs: string[] }[];
 }
-export function useAgentClientLibraries(revision?: string) {
+export function useAgentClientLibraries(revision?: string, enabled = true) {
   const [libraries, setLibraries] = useState<AgentClientLibrary[]>([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   useEffect(() => {
+    if (!enabled) return;
     let current = true;
     setLoading(true);
     Promise.resolve()
@@ -36,6 +37,6 @@ export function useAgentClientLibraries(revision?: string) {
     return () => {
       current = false;
     };
-  }, [revision]);
-  return { libraries, loading, error };
+  }, [revision, enabled]);
+  return { libraries: enabled ? libraries : [], loading: enabled && loading, error: enabled ? error : '' };
 }

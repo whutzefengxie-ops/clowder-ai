@@ -9,15 +9,9 @@ import { builtinAccountIdForClient, filterAccounts, type HubCatEditorFormState }
 import { SelectField } from '../../hub-cat-editor-fields';
 import { KimiLoginHelp } from './KimiLoginHelp';
 import { MemberChoicePicker } from './MemberChoicePicker';
-import { MANUAL_RUNTIME_CHOICES } from './manual-runtime-choices';
-import {
-  matchesRuntime,
-  type RuntimeChoice,
-  type RuntimeDrafts,
-  rememberedRuntimes,
-  runtimeDefaults,
-} from './member-runtime-draft';
-import { nativeAcpProfileLabel, nativeAcpProfileMessage } from './native-acp-profile-status';
+import { matchesRuntime, type RuntimeChoice, type RuntimeDrafts, runtimeDefaults } from './member-runtime-draft';
+import { memberRuntimeOptions, memberRuntimeTools } from './member-runtime-tools';
+import { nativeAcpProfileMessage } from './native-acp-profile-status';
 import { usesDefaultNativeIdentity } from './native-login-state';
 import { useRuntimeCatalog } from './useRuntimeCatalog';
 export type MemberText = (zh: string, en: string) => string;
@@ -49,17 +43,7 @@ export function MemberRuntimeFields({
     [error, setError] = useState(false),
     [loading, setLoading] = useState(true),
     [refresh, setRefresh] = useState(0);
-  const { libraries: clientLibraries, error: clientLibraryError } = useAgentClientLibraries(String(refresh));
-  const pluginTools: RuntimeChoice[] = clientLibraries.flatMap((library) =>
-    library.clients.map((client) => ({
-      id: client.ref,
-      label: client.name,
-      clientId: 'acp',
-      installed: client.available,
-      models: [],
-      acp: { agentProvider: client.ref, command: 'plugin-agent', startupArgs: [] },
-    })),
-  );
+  const { libraries: clientLibraries, error: libraryError } = useAgentClientLibraries(String(refresh), !nativeSetup);
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
@@ -80,16 +64,7 @@ export function MemberRuntimeFields({
       });
     return () => controller.abort();
   }, [refresh]);
-  const tools = [
-    ...runtimes,
-    ...pluginTools,
-    ...rememberedRuntimes(runtimeDrafts).filter(
-      (old) => ![...runtimes, ...pluginTools].some((item) => matchesRuntime(runtimeDefaults(old), item)),
-    ),
-    ...MANUAL_RUNTIME_CHOICES.filter(
-      (item) => item.clientId === 'acp' || !runtimes.some((runtime) => runtime.clientId === item.clientId),
-    ),
-  ];
+  const tools = memberRuntimeTools(runtimes, clientLibraries, runtimeDrafts);
   const selected = tools.find((item) => matchesRuntime(form, item));
   const agy = usesAgyNative(form) || usesAgyAcp(form);
   const tool =
@@ -165,11 +140,7 @@ export function MemberRuntimeFields({
       label: `${form.accountRef} · ${t('暂不可读取', 'Unavailable')}`,
       disabled: false,
     });
-  const choices = tools.map((item) => ({
-    value: item.id,
-    disabled: item.discoveryStatus === 'acp_profile_invalid' || (item.id.startsWith('plugin:') && !item.installed),
-    label: `${item.label} · ${item.id.startsWith('plugin:') ? t(item.installed ? '插件已启用' : '插件未启用', item.installed ? 'Plugin enabled' : 'Plugin disabled') : item.id.startsWith('draft:') ? t('已保留的配置', 'Retained configuration') : (nativeAcpProfileLabel(item.discoveryStatus, t) ?? (item.installed ? t('已安装', 'Installed') : t('未找到', 'Not found')))}`,
-  }));
+  const choices = memberRuntimeOptions(tools, t);
   if (!selected)
     choices.unshift({
       value: 'current',
@@ -218,9 +189,9 @@ export function MemberRuntimeFields({
           )}
         </p>
       )}
-      {clientLibraryError && (
+      {libraryError && (
         <p role="alert" className="text-sm text-cafe-secondary">
-          {clientLibraryError}
+          {libraryError}
         </p>
       )}
       {needsLogin && (

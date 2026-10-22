@@ -4,17 +4,17 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import Fastify from 'fastify';
-import { SessionImplementationRegistry } from '../../src/domains/cats/services/agents/session-contract/implementation-registry.ts';
-import { RegisteredSessionAgentService } from '../../src/domains/cats/services/agents/session-contract/registered-session-agent-service.ts';
-import { declaredAgentSessionProviders } from '../../src/domains/plugin/declared/declared-agent-session-providers.ts';
-import { DeclaredRuntimeContributions } from '../../src/domains/plugin/declared/declared-runtime-contributions.ts';
-import { FilesystemVerifiedPluginPackageLocator } from '../../src/domains/plugin/external-runtime/filesystem-package-locator.ts';
+import { SessionImplementationRegistry } from '../../dist/domains/cats/services/agents/session-contract/implementation-registry.js';
+import { RegisteredSessionAgentService } from '../../dist/domains/cats/services/agents/session-contract/registered-session-agent-service.js';
+import { declaredAgentSessionProviders } from '../../dist/domains/plugin/declared/declared-agent-session-providers.js';
+import { DeclaredRuntimeContributions } from '../../dist/domains/plugin/declared/declared-runtime-contributions.js';
+import { FilesystemVerifiedPluginPackageLocator } from '../../dist/domains/plugin/external-runtime/filesystem-package-locator.js';
 import {
   HostInventoryControlPlane,
   LocalPluginPackageAdmission,
   MemoryPluginInventoryStore,
-} from '../../src/domains/plugin/index.ts';
-import { registerAgentClientLibraryRoutes } from '../../src/routes/agent-client-library-routes.ts';
+} from '../../dist/domains/plugin/index.js';
+import { registerAgentClientLibraryRoutes } from '../../dist/routes/agent-client-library-routes.js';
 import { collect, FakeSessionProvider, options } from './fake-session-provider.js';
 
 async function harness(t, grants = ['plugin.config.read']) {
