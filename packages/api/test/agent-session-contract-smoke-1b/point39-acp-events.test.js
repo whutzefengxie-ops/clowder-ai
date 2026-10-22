@@ -1,11 +1,11 @@
-// #1647 slice 1b — agreement v1.3 §39 (part 2): AgentMessage → contract events.
+// AgentMessage → contract events, including message-local usage and diagnostics.
 //
-// The adapter is the only place that knows how ACP-shaped AgentMessages look, so
-// this table is the whole translation surface. Anything it cannot express is a
-// `status` event, never a bespoke passthrough field.
+// The adapter keeps each diagnostic's type and payload. Usage belongs to its
+// emitted message, while model changes remain session-scoped context.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { AcpSessionProvider } from '../../dist/domains/cats/services/agents/session-contract/acp-session-provider.js';
+import { projectSessionEvent } from '../../dist/domains/cats/services/agents/session-contract/event-projection.js';
 import { agentMessage, collect, createFakeAgentService, turnInput } from './fakes.js';
 
 const CAT_ID = 'cat-1';
@@ -161,38 +161,77 @@ test('[39] a stream that ends without done gets exactly one completed done', asy
   assert.equal(events.at(-1).type, 'done');
 });
 
-test('[39] a metadata model or usage change becomes a session-scoped context event', async () => {
+test('model changes update session context while usage stays on its original message', async () => {
   const usage = { inputTokens: 5, outputTokens: 2, totalTokens: 7 };
   const { provider } = providerFor([
     agentMessage('text', { content: 'a' }, { model: 'model-a' }),
     agentMessage('text', { content: 'b' }, { model: 'model-b', usage }),
-    agentMessage('done'),
+    agentMessage('text', { content: 'c' }, { model: 'model-b' }),
+    agentMessage('done', {}, { model: 'model-b' }),
   ]);
 
   const events = await runTurn(provider);
   const contexts = events.filter((event) => event.type === 'context');
 
-  assert.ok(contexts.length >= 1, 'a changed model/usage must be observable');
-  const changed = contexts.find((event) => event.model === 'model-b');
-  assert.ok(changed, 'the new model must be reported');
-  assert.equal(changed.scope, 'session');
-  assert.deepEqual(changed.usage, usage);
+  assert.deepEqual(
+    contexts.map((event) => event.model),
+    ['model-a', 'model-b'],
+  );
+  assert.ok(contexts.every((event) => event.scope === 'session' && event.usage === undefined));
+  const outputs = events.filter((event) => event.type === 'output');
+  assert.deepEqual(
+    outputs.map((event) => event.messageUsage),
+    [undefined, usage, undefined],
+  );
+  assert.equal(events.at(-1).messageUsage, undefined, 'usage must not leak into the terminal');
+
+  const context = { catId: CAT_ID, metadata: { provider: 'fixture', model: 'initial' } };
+  const projected = events.flatMap((event) => projectSessionEvent(event, context));
+  assert.deepEqual(
+    projected.map((message) => message.metadata.usage),
+    [undefined, usage, undefined, undefined],
+  );
+  assert.deepEqual(
+    projected.map((message) => message.metadata.model),
+    ['model-a', 'model-b', 'model-b', 'model-b'],
+  );
 });
 
-test('[39] message types without a contract equivalent become status events', async () => {
+test('system and provider diagnostics retain their exact types and payloads', async () => {
+  const diagnosticTypes = ['system_info', 'provider_signal', 'liveness_signal', 'agent_loop'];
+  const payloads = diagnosticTypes.map((type) => JSON.stringify({ type, detail: 'fixture telemetry' }));
   const { provider } = providerFor([
-    agentMessage('system_info', { content: 'thinking' }),
-    agentMessage('provider_signal', {}),
+    ...diagnosticTypes.map((type, index) => agentMessage(type, { content: payloads[index] })),
+    agentMessage('status', { content: 'working' }),
     agentMessage('text', { content: 'reply' }),
     agentMessage('done'),
   ]);
 
   const events = await runTurn(provider);
-  const statuses = events.filter((event) => event.type === 'status');
-
+  const diagnostics = events.filter((event) => diagnosticTypes.includes(event.type));
   assert.deepEqual(
-    statuses.map((event) => event.phase),
-    ['system_info', 'provider_signal'],
+    diagnostics.map((event) => event.type),
+    diagnosticTypes,
+  );
+  assert.deepEqual(
+    diagnostics.map((event) => event.content),
+    payloads,
+  );
+  assert.ok(diagnostics.every((event) => event.scope === 'turn'));
+  assert.deepEqual(
+    events.filter((event) => event.type === 'status').map((event) => event.detail),
+    ['working'],
   );
   assert.equal(events.filter((event) => event.type === 'output').length, 1);
+
+  const context = { catId: CAT_ID, metadata: { provider: 'fixture', model: 'fixture' } };
+  const projected = diagnostics.flatMap((event) => projectSessionEvent(event, context));
+  assert.deepEqual(
+    projected.map((message) => message.type),
+    diagnosticTypes,
+  );
+  assert.deepEqual(
+    projected.map((message) => message.content),
+    payloads,
+  );
 });

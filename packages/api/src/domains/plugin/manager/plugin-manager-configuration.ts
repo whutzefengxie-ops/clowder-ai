@@ -21,13 +21,17 @@ import {
   configError,
   configureTransaction,
   manifestConfiguration,
+  manifestConfigurationReady,
   manifestOperation,
   requireConfigurationTarget,
-  requiredFieldsReady,
   validateUpdates,
   validateValue,
 } from './plugin-configuration-write.js';
-import { configFieldProjection, operationFieldProjection } from './plugin-manager-field-projection.js';
+import {
+  configFieldProjection,
+  operationFieldProjection,
+  projectConfigurationVariants,
+} from './plugin-manager-field-projection.js';
 import { type PluginManagerConfigurationPort, PluginManagerServiceError } from './plugin-manager-service.js';
 
 export interface HostPluginConfigurationServiceOptions {
@@ -60,6 +64,7 @@ export class HostPluginConfigurationService implements PluginManagerConfiguratio
     if (packageRecord.manifest === null) return [];
     const stored = readPluginConfig(this.options.projectRoot, pluginId);
     const fields = manifestConfiguration(packageRecord);
+    const configurationVariants = projectConfigurationVariants(packageRecord.manifest);
     const hostSetup = chromeSetupPolicy(packageRecord);
     return [
       ...(hostSetup ? [operationFieldProjection(hostSetup, undefined, [], {})] : []),
@@ -71,7 +76,7 @@ export class HostPluginConfigurationService implements PluginManagerConfiguratio
               fields,
               stored,
             )
-          : configFieldProjection(field, fields, stored),
+          : configFieldProjection(field, fields, stored, configurationVariants),
       ),
     ];
   }
@@ -169,9 +174,8 @@ export class HostPluginConfigurationService implements PluginManagerConfiguratio
         ['enabling', 'disabling'].includes(current.instance.activationState)
       )
         return;
-      const fields = manifestConfiguration(current.packageRecord);
       const stored = readPluginConfig(this.options.projectRoot, pluginId);
-      const configReadiness = requiredFieldsReady(fields, stored) ? 'ready' : 'incomplete';
+      const configReadiness = manifestConfigurationReady(current.packageRecord, stored) ? 'ready' : 'incomplete';
       if (configReadiness === current.instance.configReadiness) return;
       transaction.instances.put({
         ...current.instance,

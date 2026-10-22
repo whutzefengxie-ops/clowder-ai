@@ -1,4 +1,9 @@
 import { isPluginConfigurationFieldRequired, type PluginManagerConfigureRequest } from '@cat-cafe/shared';
+import {
+  declaresConfigurationVariants,
+  effectiveConfiguration,
+  effectiveConfigurationIsValid,
+} from '../configuration-variant-consumption.js';
 import type { PluginInventoryTransaction } from '../host-inventory/ports.js';
 import type { PluginInstanceRecord, PluginPackageRecord } from '../host-inventory/types.js';
 import { readPluginConfig, writePluginConfig } from '../plugin-config-store.js';
@@ -91,6 +96,19 @@ export function requiredFieldsReady(
       return true;
     return effectivePluginConfigurationValue(field, stored[field.key]) !== undefined;
   });
+}
+
+/** Variant readiness uses the contract's effective branch; older manifests retain their requiredness walk. */
+export function manifestConfigurationReady(
+  record: PluginPackageRecord,
+  stored: Readonly<Record<string, string>>,
+): boolean {
+  const manifest = record.manifest;
+  if (manifest && declaresConfigurationVariants(manifest)) {
+    const { resolution, effectiveValues } = effectiveConfiguration(manifest, stored);
+    return resolution.status === 'selected' && effectiveConfigurationIsValid(manifest, effectiveValues);
+  }
+  return requiredFieldsReady(manifestConfiguration(record), stored);
 }
 
 export function requireConfigurationTarget(
@@ -186,7 +204,7 @@ export function configureTransaction(input: {
   );
   input.transaction.instances.put({
     ...current.instance,
-    configReadiness: requiredFieldsReady(fields, next) ? 'ready' : 'incomplete',
+    configReadiness: manifestConfigurationReady(current.packageRecord, next) ? 'ready' : 'incomplete',
     lifecycleRevision: current.instance.lifecycleRevision + 1,
     updatedAt: input.now,
   });
