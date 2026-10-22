@@ -6,6 +6,7 @@ import { parse } from 'smol-toml';
 import { getAcpConfig } from '../config/cat-config-loader.js';
 import { resolveCliCommand } from '../utils/cli-resolve.js';
 import { discoverAdditionalRuntimes } from './native-additional-runtimes.js';
+import { discoverCodeAgentRuntimes } from './native-codeagent-discovery.js';
 import { discoverDshRuntime } from './native-dsh-discovery.js';
 import { dshLauncherProfileState } from './native-dsh-profile.js';
 import { nativeRuntimeReadiness } from './native-runtime-readiness.js';
@@ -94,7 +95,7 @@ export function discoverNativeRuntimes(projectRoot: string) {
     ? []
     : [discoverDshRuntime()];
   return {
-    runtimes: [...builtins, ...acp, ...dsh, ...discoverAdditionalRuntimes(home)],
+    runtimes: [...discoverCodeAgentRuntimes(), ...builtins, ...acp, ...dsh, ...discoverAdditionalRuntimes(home)],
     authenticationStatus: 'not_checked',
   };
 }

@@ -35,7 +35,7 @@ test('isolated desktop Redis probing, spawn and API env all use the same owned p
   };
   try {
     await manager._startRedis(base);
-    assert.equal(Object.hasOwn(manager._buildApiEnv(base), 'PREVIEW_GATEWAY_PORT'), false);
+    assert.equal(manager._buildApiEnv(base).PREVIEW_GATEWAY_PORT, '0');
     assert.deepEqual(probes, [6367, 6367]);
     assert.equal(starts[0][2][1], '6367');
     // Observe the env received by a real, test-owned Node child; no API/Redis starts.

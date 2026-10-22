@@ -14,7 +14,7 @@
 ;   5. Runs user-level Agent CLI hook sync under the invoking user profile
 ;   6. Creates desktop shortcut to the Electron app
 
-#define MyAppName      "Clowder AI"
+#define MyAppName      "Clowder AI Intranet"
 ; MyAppVersion can be overridden by iscc /DMyAppVersion=X.Y.Z (CI release pipeline).
 ; Default kept for local manual builds.
 #ifndef MyAppVersion
@@ -23,9 +23,9 @@
 #define MyAppPublisher "Clowder AI"
 #define MyAppURL       "https://github.com/zts212653/clowder-ai"
 #define MyAppExeName   "Clowder AI.exe"
-#define MyAppUserModelID "ai.clowderai.desktop"
+#define MyAppUserModelID "ai.clowderai.intranet"
 #ifndef MyAppId
-  #define MyAppId "{{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}"
+  #define MyAppId "{{CAEEDC72-2026-4AC0-9D9C-0FCB0ADEA611}"
 #endif
 
 [Setup]
@@ -37,11 +37,11 @@ AppVersion={#MyAppVersion}
 AppVerName={#MyAppName}
 AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
-DefaultDirName={autopf}\ClowderAI
+DefaultDirName={autopf}\ClowderAI-Intranet
 DefaultGroupName={#MyAppName}
 AllowNoIcons=yes
 OutputDir=..\..\dist
-OutputBaseFilename=ClowderAI-Setup-{#MyAppVersion}
+OutputBaseFilename=ClowderAI-Intranet-Setup-{#MyAppVersion}
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern

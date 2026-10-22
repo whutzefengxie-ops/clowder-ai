@@ -111,7 +111,11 @@ export function useNativeOnboarding(
         const currentCats = roster.cats;
         const partners = recommendNativePartners(discovered.runtimes, templates.templates, currentCats, journeyId).map(
           (partner) => {
-            const previous = saved?.partners.find((p) => p.form && matchesRuntime(p.form, partner.runtime));
+            const previous =
+              saved?.partners.find((p) => p.id === partner.id) ??
+              saved?.partners.find(
+                (p) => p.form && !partner.runtime.roleTemplateId && matchesRuntime(p.form, partner.runtime),
+              );
             if (!previous?.form) return partner;
             const savedMember = currentCats.find(
               (cat) => cat.id === previous.form.catId && matchesRuntime(initialState(cat), partner.runtime),

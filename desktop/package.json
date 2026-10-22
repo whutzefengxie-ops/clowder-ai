@@ -22,10 +22,11 @@
     }
   },
   "build": {
-    "appId": "ai.clowderai.desktop",
-    "productName": "Clowder AI",
+    "appId": "ai.clowderai.intranet",
+    "productName": "Clowder AI Intranet",
     "artifactName": "ClowderAI-${version}-${arch}.${ext}",
     "win": {
+      "executableName": "Clowder AI",
       "target": "dir",
       "icon": "assets/icon.ico"
     },
@@ -60,6 +61,7 @@
     },
     "files": [
       "app-identity.js",
+      "intranet-profile.js",
       "desktop-update-menu.js",
       "lifecycle-diagnostics.js",
       "app-lifecycle.js",

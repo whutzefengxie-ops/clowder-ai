@@ -1,5 +1,6 @@
 const { app, BrowserWindow, Menu, dialog, ipcMain, net, session, shell, Notification } = require('electron');
 const path = require('node:path');
+const { prepareIntranetAppData } = require('./intranet-profile');
 const { resolveProjectRootFromDir } = require('./project-root');
 const { installationIdentity, isInstallationShutdownRequest } = require('./installation-lifecycle');
 const ServiceManager = require('./service-manager');
@@ -54,6 +55,7 @@ const createBaseRendererLinkOrigins = () =>
 let rendererLinkOrigins = createBaseRendererLinkOrigins();
 const QUIT_FOR_UPDATE_ARG = '--quit-owned-installation';
 const userDataRoot = ServiceManager.USER_DATA_DIR;
+prepareIntranetAppData(app, userDataRoot, desktopRuntime.instanceRoot);
 const dbg = createDesktopLogger(userDataRoot);
 const lifecycle = createLifecycleLogger(dbg);
 const startupLogDir = path.join(userDataRoot, 'data', 'logs');

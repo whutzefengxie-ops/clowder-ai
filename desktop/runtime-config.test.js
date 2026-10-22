@@ -5,11 +5,11 @@ const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 
-test('keeps normal desktop defaults and ignores unrelated shell port overrides', () => {
+test('keeps dedicated intranet desktop defaults and ignores unrelated shell port overrides', () => {
   assert.deepEqual(resolveDesktopRuntime({ FRONTEND_PORT: '5158' }), {
-    frontendPort: 3003,
-    apiPort: 3004,
-    redisPort: 6399,
+    frontendPort: 5331,
+    apiPort: 5332,
+    redisPort: 6389,
     instanceRoot: null,
   });
 });

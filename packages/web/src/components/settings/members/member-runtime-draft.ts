@@ -9,6 +9,9 @@ export interface RuntimeChoice {
   label: string;
   clientId: HubCatEditorFormState['clientId'];
   installed: boolean;
+  /** A Host-owned role recommendation, independent of the client carrying it. */
+  roleTemplateId?: string;
+  priority?: number;
   readiness?: NativeLoginState;
   discoveryStatus?: 'configured' | 'acp_profile_missing' | 'acp_profile_invalid' | 'adapter_missing' | 'not_installed';
   models: string[];

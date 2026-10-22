@@ -60,54 +60,74 @@ export function recommendNativePartners(
   const seen = new Set<string>();
   const reservedIds = new Set(cats.map((cat) => cat.id.toLowerCase()));
   const reservedAliases = new Set(cats.flatMap((cat) => cat.mentionPatterns.map((alias) => alias.toLowerCase())));
-  return runtimes.flatMap((runtime) => {
-    // Keep existing/manual OpenCode members, but do not recommend new ones during the compatibility pause.
-    if (runtime.clientId === 'opencode') return [];
-    const descriptor = JSON.stringify([
-      runtime.clientId,
-      runtime.acp?.command,
-      runtime.acp?.startupArgs,
-      runtime.acp?.transport ?? 'stdio',
-    ]);
-    // Full descriptor equality prevents short-hash collisions in the local partner index.
-    const key = runtime.acp ? `acp:${encodeURIComponent(descriptor)}` : runtime.id;
-    const discoveryIdentity = runtime.acp ? descriptor : runtime.id;
-    if (seen.has(discoveryIdentity)) return [];
-    seen.add(discoveryIdentity);
-    const form = nativePartnerIdentity(runtime, templates, cats);
-    if (!form.name) form.name = form.displayName = `${runtime.label} 伙伴`;
-    const alias = `@${runtime.label.replace(/\s+/g, '-').toLowerCase()}`;
-    let uniqueAlias = alias;
-    for (let n = 2; reservedAliases.has(uniqueAlias); n++) uniqueAlias = `${alias}-${n}`;
-    reservedAliases.add(uniqueAlias);
-    const legacyId = stableOnboardingMemberId(journeyId, 'partner', partnerKey(runtime));
-    const existing = cats.find(
-      (cat) =>
-        (cat.id === legacyId || cat.configurationSource === 'native_tool') &&
-        matchesRuntime(initialState(cat), runtime),
-    );
-    const baseId = autoSlug(runtime.label);
-    let catId = baseId;
-    for (let n = 2; reservedIds.has(catId.toLowerCase()); n++) {
-      const suffix = `-${n}`;
-      catId = `${baseId.slice(0, 40 - suffix.length).replace(/-+$/, '')}${suffix}`;
-    }
-    reservedIds.add(catId.toLowerCase());
-    const existingForm = existing ? initialState(existing) : undefined;
-    const persistedForm = existingForm ? withLegacyNativeIdentityRepair(existingForm, form, runtime) : undefined;
-    return [
-      {
-        id: key,
-        creationRequestKey: runtime.acp ? newNativeRequestKey() : key,
-        runtime,
-        form: persistedForm
-          ? persistedForm
-          : { ...form, ...runtimeDefaults(runtime), catId, mentionPatterns: uniqueAlias },
-        selected: nativeRuntimeSelectable(runtime, persistedForm),
-        ...(existing ? { existingId: existing.id } : {}),
-      },
-    ];
-  });
+  const prioritizedRoles = new Set(
+    runtimes
+      .filter((runtime) => runtime.installed && runtime.priority && runtime.roleTemplateId)
+      .map((runtime) => runtime.roleTemplateId),
+  );
+  return [...runtimes]
+    .sort((left, right) => (right.priority ?? 0) - (left.priority ?? 0))
+    .flatMap((runtime) => {
+      // Keep existing/manual OpenCode members, but do not recommend new ones during the compatibility pause.
+      if (runtime.clientId === 'opencode') return [];
+      const descriptor = JSON.stringify([
+        runtime.clientId,
+        runtime.acp?.command,
+        runtime.acp?.startupArgs,
+        runtime.acp?.transport ?? 'stdio',
+      ]);
+      // Full descriptor equality prevents short-hash collisions in the local partner index.
+      const roleKey = runtime.roleTemplateId ? `:${runtime.roleTemplateId}` : '';
+      const key = (runtime.acp ? `acp:${encodeURIComponent(descriptor)}` : runtime.id) + roleKey;
+      const discoveryIdentity = (runtime.acp ? descriptor : runtime.id) + roleKey;
+      if (seen.has(discoveryIdentity)) return [];
+      seen.add(discoveryIdentity);
+      const form = nativePartnerIdentity(runtime, templates, cats);
+      if (!form.name) form.name = form.displayName = `${runtime.label} 伙伴`;
+      const alias = runtime.roleTemplateId
+        ? `@${form.nickname || form.name}`
+        : `@${runtime.label.replace(/\s+/g, '-').toLowerCase()}`;
+      let uniqueAlias = alias;
+      for (let n = 2; reservedAliases.has(uniqueAlias); n++) uniqueAlias = `${alias}-${n}`;
+      reservedAliases.add(uniqueAlias);
+      const legacyId = stableOnboardingMemberId(journeyId, 'partner', partnerKey(runtime));
+      const existing = cats.find(
+        (cat) =>
+          (cat.id === legacyId || cat.configurationSource === 'native_tool') &&
+          matchesRuntime(initialState(cat), runtime) &&
+          (!runtime.roleTemplateId || cat.nickname === form.nickname),
+      );
+      const baseId = runtime.roleTemplateId ? `codeagent-${runtime.roleTemplateId}` : autoSlug(runtime.label);
+      let catId = baseId;
+      for (let n = 2; reservedIds.has(catId.toLowerCase()); n++) {
+        const suffix = `-${n}`;
+        catId = `${baseId.slice(0, 40 - suffix.length).replace(/-+$/, '')}${suffix}`;
+      }
+      reservedIds.add(catId.toLowerCase());
+      const existingForm = existing ? initialState(existing) : undefined;
+      const persistedForm = existingForm ? withLegacyNativeIdentityRepair(existingForm, form, runtime) : undefined;
+      return [
+        {
+          id: key,
+          creationRequestKey: runtime.acp ? newNativeRequestKey() : key,
+          runtime,
+          form: persistedForm
+            ? persistedForm
+            : { ...form, ...runtimeDefaults(runtime), catId, mentionPatterns: uniqueAlias },
+          selected:
+            nativeRuntimeSelectable(runtime, persistedForm) &&
+            (Boolean(existing) ||
+              Boolean(runtime.priority) ||
+              !prioritizedRoles.has(
+                ({ anthropic: 'ragdoll', openai: 'maine-coon', kimi: 'turkish-van' } as Record<string, string>)[
+                  runtime.clientId
+                ],
+              )) &&
+            (!runtime.roleTemplateId || Boolean(existing) || !cats.some((cat) => cat.nickname === form.nickname)),
+          ...(existing ? { existingId: existing.id } : {}),
+        },
+      ];
+    });
 }
 
 export const SMALL_GOALS = [
