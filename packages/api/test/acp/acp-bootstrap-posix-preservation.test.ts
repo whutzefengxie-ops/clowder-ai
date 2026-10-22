@@ -23,10 +23,11 @@ function fixture(run: (root: string, setMode: (path: string, mode: number) => vo
       Object.defineProperty(process, 'getuid', { value: () => 1000, configurable: true });
       mock.method(fs, 'lstatSync', (path: fs.PathLike) => {
         const stat = original.lstat(path);
-        if (typeof path === 'string' && (path === root || path.startsWith(`${root}\\`))) {
+        if (typeof path === 'string') {
+          const inFixture = path === root || path.startsWith(`${root}\\`);
           Object.defineProperties(stat, {
-            uid: { value: 1000 },
-            mode: { value: (stat.mode & ~0o7777) | (modes.get(path) ?? 0o700) },
+            uid: { value: inFixture ? 1000 : 0 },
+            mode: { value: (stat.mode & ~0o7777) | (modes.get(path) ?? (inFixture ? 0o700 : 0o755)) },
           });
         }
         return stat;
@@ -89,5 +90,24 @@ test('inspection creates a new private leaf under an existing parent and can reu
     assert.equal(inspectAcpBootstrapDirectory(root).ok, true);
     assert.equal(inspectAcpBootstrapDirectory(root).ok, true);
     assert.equal(fs.lstatSync(root).mode & 0o7777, 0o700);
+  });
+});
+
+test('a private root under a non-sticky shared parent is rejected without changing permissions', () => {
+  fixture((parent, setMode) => {
+    const root = join(parent, 'private-under-shared-parent');
+    fs.mkdirSync(root, { mode: 0o700 });
+    setMode(parent, 0o777);
+    assert.equal(inspectAcpBootstrapDirectory(root).ok, false);
+    assert.equal(fs.lstatSync(parent).mode & 0o7777, 0o777);
+    assert.equal(fs.lstatSync(root).mode & 0o7777, 0o700);
+  });
+});
+
+test('a trusted sticky shared parent protects the current-user private root', () => {
+  fixture((parent, setMode) => {
+    setMode(parent, 0o1777);
+    assert.equal(inspectAcpBootstrapDirectory(join(parent, 'private-under-sticky-parent')).ok, true);
+    assert.equal(fs.lstatSync(parent).mode & 0o7777, 0o1777);
   });
 });

@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { chmodSync, existsSync, lstatSync, mkdirSync, realpathSync } from 'node:fs';
 import { tmpdir, userInfo } from 'node:os';
-import { basename, isAbsolute, join, type PlatformPath, posix, relative, resolve, win32 } from 'node:path';
+import { basename, dirname, isAbsolute, join, type PlatformPath, posix, relative, resolve, win32 } from 'node:path';
 import { ensureWindowsAcpBootstrapDirectories } from './acp-bootstrap-windows-directory.js';
 import {
   ensureWindowsAcpBootstrapRoot,
@@ -118,6 +118,25 @@ function ensurePrivatePosixDirectory(path: string): void {
   }
 }
 
+function assertTrustedPosixAncestors(path: string, visited = new Set<string>()): void {
+  if (visited.has(path)) return;
+  visited.add(path);
+  const stat = lstatSync(path);
+  if (typeof process.getuid !== 'function' || (stat.uid !== 0 && stat.uid !== process.getuid())) {
+    throw new Error(`ACP bootstrap ancestor has an untrusted owner: ${path}`);
+  }
+  if (stat.isSymbolicLink()) {
+    // Both the link's logical parent chain and its canonical target must be
+    // trusted. This permits system-owned /tmp links on macOS, not alias bypasses.
+    assertTrustedPosixAncestors(realpathSync(path), visited);
+  } else if (!stat.isDirectory() || ((stat.mode & 0o022) !== 0 && (stat.mode & 0o1000) === 0)) {
+    // Sticky /tmp protects entries owned by this user or root from replacement.
+    throw new Error(`ACP bootstrap ancestor allows unsafe directory replacement: ${path}`);
+  }
+  const parent = dirname(path);
+  if (parent !== path) assertTrustedPosixAncestors(parent, visited);
+}
+
 /**
  * Gemini ACP initialize is sensitive to project-level .gemini/settings.json when
  * launched directly from repo cwd. Bootstrap from an isolated tmp dir, then pass
@@ -151,6 +170,7 @@ export function resolveAcpBootstrapCwd(
   } else if (options.preserveExistingPermissions) {
     // User-selected roots and diagnostics must never chmod an existing path.
     // Only the final component is created; its parent must already exist.
+    assertTrustedPosixAncestors(dirname(root));
     ensurePrivatePosixDirectory(root);
     ensurePrivatePosixDirectory(dir);
   } else {
