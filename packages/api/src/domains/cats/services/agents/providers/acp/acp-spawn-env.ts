@@ -17,7 +17,7 @@ export interface PrepareAcpProcessEnvOptions {
 
 export type TryPrepareAcpProcessEnvResult =
   | { ok: true; env: Record<string, string> | undefined }
-  | { ok: false; error: Error };
+  | { ok: false; error: Error; errorCode?: 'credential_required' | 'invalid_config' };
 
 export function prepareAcpProcessEnv(options: PrepareAcpProcessEnvOptions): Record<string, string> | undefined {
   const account = options.account ?? null;
@@ -61,6 +61,14 @@ export function tryPrepareAcpProcessEnv(options: PrepareAcpProcessEnvOptions): T
   try {
     return { ok: true, env: prepareAcpProcessEnv(options) };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err : new Error(String(err)) };
+    const error = err instanceof Error ? err : new Error(String(err));
+    // Detect credential-related errors
+    const isCredentialError =
+      /Credential required|Credential mapping required|no API key set|store.*API_KEY through/i.test(error.message);
+    return {
+      ok: false,
+      error,
+      errorCode: isCredentialError ? 'credential_required' : 'invalid_config',
+    };
   }
 }

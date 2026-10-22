@@ -111,9 +111,10 @@ async function prepareAcpSpawnContext(
     account: accountContext.account,
   });
   if (!acpEnvResult.ok) {
+    const reason = acpEnvResult.errorCode === 'credential_required' ? 'credential_required' : 'invalid-spawn-env';
     return skipAcpProfile(
       input,
-      'invalid-spawn-env',
+      reason,
       { err: acpEnvResult.error, catId, profileId, accountRef: accountContext.accountRef },
       'ACP registry sync skipped member due to invalid spawn env',
     );
