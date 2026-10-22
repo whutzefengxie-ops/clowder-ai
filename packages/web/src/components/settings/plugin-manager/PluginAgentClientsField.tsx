@@ -88,7 +88,7 @@ export function PluginAgentClientsField({
         配置本机已安装的 ACP 入口，保存并启用插件后，在成员接入设置中选择。CLI 需提供 ACP 模式或已安装的 ACP 桥。
       </p>
       {profiles.map((profile, index) => (
-        <fieldset key={index} className="space-y-2 rounded-xl bg-[var(--console-card-bg)] p-3">
+        <fieldset key={profile.id} className="space-y-2 rounded-xl bg-[var(--console-card-bg)] p-3">
           <div className="grid gap-2 sm:grid-cols-2">
             <label className="text-xs text-cafe-secondary">
               名称
@@ -100,14 +100,8 @@ export function PluginAgentClientsField({
               />
             </label>
             <label className="text-xs text-cafe-secondary">
-              固定 ID（绑定后保留）
-              <input
-                className={inputClass}
-                aria-label={`客户端 ${index + 1} ID`}
-                pattern="[a-z0-9][a-z0-9._-]*"
-                value={profile.id}
-                onChange={(event) => update(index, { id: event.target.value })}
-              />
+              固定 ID（自动生成，改名不变）
+              <input className={inputClass} aria-label={`客户端 ${index + 1} ID`} readOnly value={profile.id} />
             </label>
           </div>
           <label className="block text-xs text-cafe-secondary">
@@ -158,7 +152,7 @@ export function PluginAgentClientsField({
             className="rounded-lg bg-[var(--console-field-bg)] px-3 py-2 text-xs font-semibold text-cafe"
             onClick={() => {
               const kind = preset.id;
-              let id = kind === 'custom' ? 'agent' : kind;
+              let id = kind === 'custom' ? `client-${crypto.randomUUID()}` : kind;
               let suffix = 2;
               while (profiles.some((profile) => profile.id === id)) id = `${kind}-${suffix++}`;
               onChange(JSON.stringify([...profiles, { ...preset, id }]));
