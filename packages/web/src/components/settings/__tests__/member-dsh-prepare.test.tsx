@@ -2,7 +2,7 @@ import { act, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, expect, it, vi } from 'vitest';
 import { apiFetch } from '@/utils/api-client';
-import { initialState } from '../../hub-cat-editor.model';
+import { type HubCatEditorFormState, initialState } from '../../hub-cat-editor.model';
 import { buildCatPayload } from '../../hub-cat-editor.payload';
 import { MemberRuntimeFields } from '../members/MemberRuntimeFields';
 
@@ -50,7 +50,7 @@ async function prepare() {
     return new Response(JSON.stringify(data));
   });
   function Editor() {
-    const [form, setForm] = useState({
+    const [form, setForm] = useState<HubCatEditorFormState>({
       ...initialState(),
       catId: 'new-dsh',
       name: 'New DSH',
