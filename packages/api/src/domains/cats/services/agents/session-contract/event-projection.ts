@@ -36,6 +36,7 @@ export function projectSessionEvent(
         type: 'tool_use',
         toolName: event.name,
         toolUseId: event.callId,
+        ...(event.rawPayload ? { toolRawPayload: event.rawPayload } : {}),
         toolInput:
           event.input !== null && typeof event.input === 'object' && !Array.isArray(event.input)
             ? (event.input as Record<string, unknown>)
@@ -48,6 +49,15 @@ export function projectSessionEvent(
         toolName: event.name,
         toolUseId: event.callId,
         toolResultStatus: event.status,
+        ...(event.input !== undefined
+          ? {
+              toolInput:
+                event.input !== null && typeof event.input === 'object' && !Array.isArray(event.input)
+                  ? (event.input as Record<string, unknown>)
+                  : { value: event.input },
+            }
+          : {}),
+        ...(event.rawPayload ? { toolRawPayload: event.rawPayload } : {}),
         content: typeof event.output === 'string' ? event.output : JSON.stringify(event.output),
       };
       break;

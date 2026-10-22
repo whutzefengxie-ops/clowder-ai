@@ -34,6 +34,7 @@ import {
 } from './members/editor-presentation';
 import { MemberChangedField, MemberChangeMark, useMemberChanged } from './members/MemberChangeMark';
 import { MemberOperationFeedback } from './members/MemberOperationFeedback';
+import { PluginAgentClientPicker } from './PluginAgentClientPicker';
 
 type FormPatch = Partial<HubCatEditorFormState>;
 
@@ -379,6 +380,7 @@ const PROTECTED_IDENTITY_FIELD_LABELS: Record<BuiltinCloudIdentityProtectedField
   commandArgs: '启动参数',
   cliConfigArgs: 'CLI 配置',
   acp: 'ACP 传输',
+  agentProvider: '插件客户端绑定',
   mentionPatterns: '主句柄 @gpt-pro',
 };
 
@@ -555,6 +557,7 @@ export function AccountSection({
             const nextCarrier = carrierOptionsForClient(nextClient)[0]?.value ?? 'cli';
             onChange({
               clientId: nextClient,
+              acpAgentProvider: null,
               provider: '',
               cliEffort: '',
               carrier: nextCarrier,
@@ -583,12 +586,13 @@ export function AccountSection({
             ]}
             onChange={(value) => {
               if (value === 'agy-native') {
-                onChange({ carrier: 'cli', agyNativeEnabled: true });
+                onChange({ carrier: 'cli', agyNativeEnabled: true, acpAgentProvider: null });
                 return;
               }
               const carrier = value as HubCatEditorFormState['carrier'];
               onChange({
                 carrier,
+                acpAgentProvider: null,
                 agyNativeEnabled: false,
                 ...(carrier === 'acp' && !form.acpCommand.trim()
                   ? { acpCommand: defaultAcpCommandForClient(form.clientId) }
@@ -739,38 +743,43 @@ export function AccountSection({
             ) : null}
             {form.carrier === 'acp' ? (
               <>
-                <TextField
-                  label="ACP Command"
-                  value={form.acpCommand}
-                  onChange={(value) => onChange({ acpCommand: value })}
-                  required
-                  placeholder={defaultAcpCommandForClient(form.clientId) || 'agent-cli'}
-                />
-                <TextField
-                  label="ACP Startup Args"
-                  value={form.acpStartupArgs}
-                  onChange={(value) => onChange({ acpStartupArgs: value })}
-                  required
-                  placeholder={defaultAcpStartupArgsForClient(form.clientId) || '--acp'}
-                />
-                <p className="-mt-1 text-micro leading-4 text-cafe-muted">
-                  空格分隔，如 <code className="text-cafe-secondary">acp --pure</code> 或{' '}
-                  <code className="text-cafe-secondary">--acp --mode agent</code>。带空格的值用引号包裹。
-                </p>
-                <TextField
-                  label="ACP Max Processes"
-                  value={form.acpMaxLiveProcesses}
-                  onChange={(value) => onChange({ acpMaxLiveProcesses: value })}
-                  inputMode="numeric"
-                  placeholder="3"
-                />
-                <TextField
-                  label="ACP Idle TTL (min)"
-                  value={form.acpIdleTtlMinutes}
-                  onChange={(value) => onChange({ acpIdleTtlMinutes: value })}
-                  inputMode="numeric"
-                  placeholder="30"
-                />
+                <PluginAgentClientPicker form={form} onChange={onChange} />
+                {!form.acpAgentProvider && (
+                  <>
+                    <TextField
+                      label="ACP Command"
+                      value={form.acpCommand}
+                      onChange={(value) => onChange({ acpCommand: value })}
+                      required
+                      placeholder={defaultAcpCommandForClient(form.clientId) || 'agent-cli'}
+                    />
+                    <TextField
+                      label="ACP Startup Args"
+                      value={form.acpStartupArgs}
+                      onChange={(value) => onChange({ acpStartupArgs: value })}
+                      required
+                      placeholder={defaultAcpStartupArgsForClient(form.clientId) || '--acp'}
+                    />
+                    <p className="-mt-1 text-micro leading-4 text-cafe-muted">
+                      空格分隔，如 <code className="text-cafe-secondary">acp --pure</code> 或{' '}
+                      <code className="text-cafe-secondary">--acp --mode agent</code>。带空格的值用引号包裹。
+                    </p>
+                    <TextField
+                      label="ACP Max Processes"
+                      value={form.acpMaxLiveProcesses}
+                      onChange={(value) => onChange({ acpMaxLiveProcesses: value })}
+                      inputMode="numeric"
+                      placeholder="3"
+                    />
+                    <TextField
+                      label="ACP Idle TTL (min)"
+                      value={form.acpIdleTtlMinutes}
+                      onChange={(value) => onChange({ acpIdleTtlMinutes: value })}
+                      inputMode="numeric"
+                      placeholder="30"
+                    />
+                  </>
+                )}
               </>
             ) : null}
           </>

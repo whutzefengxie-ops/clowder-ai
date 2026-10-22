@@ -92,7 +92,7 @@ test('[39] tool_use becomes tool_call keyed by the native tool id', async () => 
   assert.equal(calls[1].name, 'ping');
 });
 
-test('[39] tool_result becomes tool_result with status ok', async () => {
+test('[39] tool_result without a native status remains unknown', async () => {
   const { provider } = providerFor([
     agentMessage('tool_result', { toolName: 'read_file', content: 'file body', toolUseId: 'call-1' }),
     agentMessage('done'),
@@ -103,7 +103,7 @@ test('[39] tool_result becomes tool_result with status ok', async () => {
 
   assert.equal(result.callId, 'call-1');
   assert.equal(result.name, 'read_file');
-  assert.equal(result.status, 'ok');
+  assert.equal(result.status, 'unknown');
   assert.equal(result.output, 'file body');
 });
 

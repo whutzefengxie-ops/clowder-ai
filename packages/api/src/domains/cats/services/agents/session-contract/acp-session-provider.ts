@@ -121,6 +121,7 @@ export class AcpSessionProvider implements Contract.AgentSessionProvider {
           name: message.toolName ?? '',
           callId: message.toolUseId,
           input: message.toolInput,
+          rawPayload: message.toolRawPayload,
         };
       case 'tool_result':
         return {
@@ -128,8 +129,10 @@ export class AcpSessionProvider implements Contract.AgentSessionProvider {
           type: 'tool_result',
           name: message.toolName ?? '',
           callId: message.toolUseId,
-          status: 'ok',
+          status: message.toolResultStatus ?? 'unknown',
           output: message.content,
+          input: message.toolInput,
+          rawPayload: message.toolRawPayload,
         };
       case 'error':
         return {

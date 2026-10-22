@@ -31,7 +31,15 @@ export function MemberAdvancedFields({
         options={carrierOptionsForClient(form.clientId)}
         onChange={(value) => patch({ carrier: value as HubCatEditorFormState['carrier'] })}
       />
-      {form.carrier === 'acp' && (
+      {form.acpAgentProvider && (
+        <p className="text-sm text-cafe-secondary">
+          {t(
+            '启动配置由插件管理。请在插件集成中修改对应 client。',
+            'The plugin owns launch settings. Edit this client in Plugin integrations.',
+          )}
+        </p>
+      )}
+      {form.carrier === 'acp' && !form.acpAgentProvider && (
         <>
           <TextField
             label={t('启动程序', 'Program')}

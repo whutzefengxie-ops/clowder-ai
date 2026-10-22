@@ -138,8 +138,16 @@ export type TurnEvent = { scope: 'turn'; sessionId: HostSessionId; turn: TurnRef
         channel?: 'final' | 'commentary' | 'unknown';
       };
     }
-  | { type: 'tool_call'; callId?: string; name: string; input?: unknown }
-  | { type: 'tool_result'; callId?: string; name: string; status: 'ok' | 'error' | 'unknown'; output?: unknown }
+  | { type: 'tool_call'; callId?: string; name: string; input?: unknown; rawPayload?: Record<string, unknown> }
+  | {
+      type: 'tool_result';
+      callId?: string;
+      name: string;
+      status: 'ok' | 'error' | 'unknown';
+      output?: unknown;
+      input?: unknown;
+      rawPayload?: Record<string, unknown>;
+    }
   | { type: 'status'; phase: string; detail?: string }
   | { type: 'input_read'; deliveryId: string }
   | { type: 'error'; code: string; message: string; disposition: 'transient' | 'terminal' }

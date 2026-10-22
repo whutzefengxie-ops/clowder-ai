@@ -1,6 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { useAgentClientLibraries } from '@/hooks/useAgentClientLibraries';
 import { apiFetch } from '@/utils/api-client';
 import type { ProfileItem } from '../../hub-accounts.types';
 import { builtinAccountIdForClient, filterAccounts, type HubCatEditorFormState } from '../../hub-cat-editor.model';
@@ -47,6 +48,17 @@ export function MemberRuntimeFields({
     [error, setError] = useState(false),
     [loading, setLoading] = useState(true),
     [refresh, setRefresh] = useState(0);
+  const { libraries: clientLibraries, error: clientLibraryError } = useAgentClientLibraries(String(refresh));
+  const pluginTools: RuntimeChoice[] = clientLibraries.flatMap((library) =>
+    library.clients.map((client) => ({
+      id: client.ref,
+      label: client.name,
+      clientId: 'acp',
+      installed: client.available,
+      models: [],
+      acp: { agentProvider: client.ref, command: 'plugin-agent', startupArgs: [] },
+    })),
+  );
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
@@ -69,8 +81,9 @@ export function MemberRuntimeFields({
   }, [refresh]);
   const tools = [
     ...runtimes,
+    ...pluginTools,
     ...rememberedRuntimes(runtimeDrafts).filter(
-      (old) => !runtimes.some((item) => matchesRuntime(runtimeDefaults(old), item)),
+      (old) => ![...runtimes, ...pluginTools].some((item) => matchesRuntime(runtimeDefaults(old), item)),
     ),
     ...MANUAL_RUNTIME_CHOICES.filter(
       (item) => item.clientId === 'acp' || !runtimes.some((runtime) => runtime.clientId === item.clientId),
@@ -92,7 +105,12 @@ export function MemberRuntimeFields({
   const defaultIdentity = usesDefaultNativeIdentity(form);
   const needsLogin = defaultIdentity && selected?.readiness?.status === 'login_required';
   const { catalog, loading: catalogLoading } = useRuntimeCatalog(
-    needsLogin || selected?.id.startsWith('draft:') || selected?.id.startsWith('manual:') ? undefined : selected?.id,
+    needsLogin ||
+      selected?.id.startsWith('draft:') ||
+      selected?.id.startsWith('manual:') ||
+      selected?.id.startsWith('plugin:')
+      ? undefined
+      : selected?.id,
     editing ? form.catId : undefined,
     form.accountRef,
     form.defaultModel,
@@ -139,8 +157,8 @@ export function MemberRuntimeFields({
     });
   const choices = tools.map((item) => ({
     value: item.id,
-    disabled: item.discoveryStatus === 'acp_profile_invalid',
-    label: `${item.label} · ${item.id.startsWith('draft:') ? t('已保留的配置', 'Retained configuration') : (nativeAcpProfileLabel(item.discoveryStatus, t) ?? (item.installed ? t('已安装', 'Installed') : t('未找到', 'Not found')))}`,
+    disabled: item.discoveryStatus === 'acp_profile_invalid' || (item.id.startsWith('plugin:') && !item.installed),
+    label: `${item.label} · ${item.id.startsWith('plugin:') ? t(item.installed ? '插件已启用' : '插件未启用', item.installed ? 'Plugin enabled' : 'Plugin disabled') : item.id.startsWith('draft:') ? t('已保留的配置', 'Retained configuration') : (nativeAcpProfileLabel(item.discoveryStatus, t) ?? (item.installed ? t('已安装', 'Installed') : t('未找到', 'Not found')))}`,
   }));
   if (!selected)
     choices.unshift({
@@ -180,6 +198,19 @@ export function MemberRuntimeFields({
             '工具列表读取失败，现有配置已保留。请刷新重试。',
             'Could not read tools. Your configuration is preserved. Retry with Refresh.',
           )}
+        </p>
+      )}
+      {form.acpAgentProvider && (
+        <p className="text-sm text-cafe-secondary">
+          {t(
+            '启动配置来自插件，认证与默认模型由 client 管理；实际连接待验证。',
+            'Launch settings come from the plugin. The client owns authentication and model defaults; connection is not yet verified.',
+          )}
+        </p>
+      )}
+      {clientLibraryError && (
+        <p role="alert" className="text-sm text-cafe-secondary">
+          {clientLibraryError}
         </p>
       )}
       {needsLogin && (
@@ -223,7 +254,14 @@ export function MemberRuntimeFields({
         />
       </div>
       <div className="space-y-1 text-sm text-cafe-secondary" role="status">
-        {needsLogin ? (
+        {form.acpAgentProvider ? (
+          <p>
+            {t(
+              '默认使用客户端当前模型；也可手动填写该客户端支持的模型 ID。',
+              'Uses the client model by default. You can also enter a model ID supported by that client.',
+            )}
+          </p>
+        ) : needsLogin ? (
           <p>
             {t(
               '登录后可读取模型目录；当前可以保留跟随工具设置。',

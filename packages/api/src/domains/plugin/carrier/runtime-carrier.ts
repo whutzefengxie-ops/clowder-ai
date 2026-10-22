@@ -170,8 +170,10 @@ export class PluginRuntimeCarrierRouter implements PluginRuntimeLifecyclePort {
   }
 
   async configRefresh(pluginInstanceId: string): Promise<void> {
-    const carrier = this.#selectAdmission(await this.#admission(pluginInstanceId));
+    const admission = await this.#admission(pluginInstanceId);
+    const carrier = this.#selectAdmission(admission);
     await carrier.configRefresh?.(pluginInstanceId);
+    await this.#runtimeContributions.refreshAgentSessionProviders(admission);
   }
 
   async stopAll(reason = 'host_shutdown'): Promise<void> {

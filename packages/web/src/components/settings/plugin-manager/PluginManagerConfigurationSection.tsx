@@ -2,9 +2,11 @@
 
 import { isPluginConfigurationFieldRequired } from '@cat-cafe/shared';
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
+import { useAgentClientLibraries } from '@/hooks/useAgentClientLibraries';
 import { type PlatformFieldStatus, StepBadge } from '../../HubConfigIcons';
 import { ConfigFieldRenderer } from '../primitives/ConfigFieldRenderer';
 import { SettingsText } from '../primitives/SettingsText';
+import { agentClientConfigurationError, PluginAgentClientsField } from './PluginAgentClientsField';
 import { PluginManagerConfigurationActions } from './PluginManagerConfigurationActions';
 import { PluginManagerOperationField } from './PluginManagerOperationField';
 import { PluginManagerSetupStep } from './PluginManagerSetupStep';
@@ -115,6 +117,10 @@ export function PluginManagerConfigurationSection({
   beforeConfiguration?: ReactNode;
 }) {
   const installed = plugin.artifact === 'installed';
+  const { libraries: clientLibraries } = useAgentClientLibraries(
+    JSON.stringify([plugin.id, plugin.intent, plugin.live, plugin.configFields]),
+  );
+  const clientLibrary = clientLibraries.find((library) => library.pluginId === plugin.id);
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [showSaved, setShowSaved] = useState(false);
@@ -169,6 +175,10 @@ export function PluginManagerConfigurationSection({
     const errors = Object.fromEntries(
       configurableFields.flatMap((field) => {
         const value = effectiveFieldValue(field, fieldValues);
+        if (clientLibrary?.configurationKey === field.key) {
+          const error = agentClientConfigurationError(value);
+          if (error) return [[field.key, error]];
+        }
         if (fieldIsRequired(field, fields, fieldValues) && value.trim().length === 0) {
           const label = presentation === 'v2' ? pluginFieldLabel(plugin.id, field) : field.label;
           return [[field.key, `请填写 ${label}`]];
@@ -184,7 +194,7 @@ export function PluginManagerConfigurationSection({
     input?.focus();
     input?.scrollIntoView?.({ block: 'center' });
     return false;
-  }, [configurableFields, fieldValues, fields, plugin.id, presentation]);
+  }, [configurableFields, fieldValues, fields, plugin.id, presentation, clientLibrary?.configurationKey]);
 
   useEffect(() => {
     if (validationRequest <= handledValidationRequest.current) return;
@@ -241,6 +251,13 @@ export function PluginManagerConfigurationSection({
                         field={field}
                         pendingConfigValues={fieldValues}
                         onStatusChange={handleOperationChange}
+                      />
+                    ) : clientLibrary?.configurationKey === field.key ? (
+                      <PluginAgentClientsField
+                        key={field.key}
+                        presets={clientLibrary.presets}
+                        value={effectiveFieldValue(field, fieldValues)}
+                        onChange={(value) => changeField(field.key, value)}
                       />
                     ) : listFormat ? (
                       <PluginManagerStringList

@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createAcpServiceForConfig } from '../../dist/domains/cats/services/agents/providers/acp/AcpServiceFactory.js';
 import { transformAcpEvent } from '../../dist/domains/cats/services/agents/providers/acp/acp-event-transformer.js';
 import { AgentSessionBridgeService } from '../../dist/domains/cats/services/agents/session-contract/AgentSessionBridgeService.js';
@@ -119,7 +119,7 @@ test('adapter supplies done on EOF; errors/outcomes/metadata/status map as agree
   );
   assert.equal(messages[1].textMode, 'replace');
   assert.equal(messages[1].metadata.model, 'm');
-  assert.equal(messages[3].toolResultStatus, 'ok');
+  assert.equal(messages[3].toolResultStatus, 'error');
   assert.equal(messages[4].content, 'provider_signal');
   assert.equal(messages[5].errorCode, 'provider_error');
   assert.equal(messages.at(-1).errorCode, undefined);
@@ -261,7 +261,7 @@ test(
       registration.unregister();
     } finally {
       await Promise.all([...pools.values()].map((pool) => pool.closeAll()));
-      await rm(root, { recursive: true, force: true });
+      await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
     }
   },
 );
@@ -355,7 +355,7 @@ test(
           command: 'node',
           startupArgs: [
             '--import',
-            preload,
+            pathToFileURL(preload).href,
             fileURLToPath(new URL('../fixtures/agent-session-reference/fake-acp-agent.mjs', import.meta.url)),
             '--http',
             'https://fixture.invalid/agent',
