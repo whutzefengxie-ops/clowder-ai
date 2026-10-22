@@ -132,13 +132,24 @@ export const ENV_VARS: EnvDefinition[] = [
     name: 'CAT_CAFE_TRUSTED_HOST_COMPATIBILITY',
     defaultValue: '0',
     description:
-      '显式可信主机兼容模式：跳过 Windows ACP 祖先信任校验；插件配置审计失败时告警后允许保存。目录自身私有权限及鉴权仍保留，接受祖先替换风险。仅启动前设为 1 并重启 API 生效',
+      '旧 Windows ACP 目录兼容别名：仅在新目录策略未设置时，exact 1 跳过祖先信任检查；不再放宽审计。请迁移至 CAT_CAFE_WINDOWS_ACP_BOOTSTRAP_MODE，重启 API 生效',
     category: 'server',
     settingsGroup: 'security',
     sensitive: false,
     runtimeEditable: false,
     restartRequired: true,
     booleanSemantics: { defaultOn: false, trueWhen: 'exactOne' },
+  },
+  {
+    name: 'CAT_CAFE_WINDOWS_ACP_BOOTSTRAP_MODE',
+    defaultValue: 'strict',
+    description:
+      'Windows ACP 目录策略：strict 或 trusted-host。后者仅跳过祖先 owner/DACL，保留自身私有权限、NTFS 和路径身份检查；接受祖先替换风险，不放宽审计。重启 API 生效',
+    category: 'server',
+    settingsGroup: 'security',
+    sensitive: false,
+    runtimeEditable: false,
+    restartRequired: true,
   },
 ];
 

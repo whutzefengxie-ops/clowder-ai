@@ -75,18 +75,19 @@ for (const mode of [undefined, 'true']) {
     assert.deepEqual(h.mutations, []);
   });
 }
-test('explicit compatibility saves once with a visible audit warning', async (t) => {
+test('legacy compatibility never implicitly waives configuration audit', async (t) => {
   const h = await harness(t, { mode: '1' });
   const response = await h.save();
-  assert.equal(response.statusCode, 200, response.body);
-  assert.equal(h.mutations.length, 1);
+  assert.equal(response.statusCode, 503, response.body);
+  assert.equal(h.mutations.length, 0);
   assert.equal(h.audits(), 1);
-  assert.match(response.json().warning, /配置已保存.*审计/);
+  assert.equal(response.json().warning, undefined);
   assert.doesNotMatch(response.body, /private-value|raw audit payload/);
 });
 test('compatibility never converts a configuration failure into saved success', async (t) => {
   const h = await harness(t, {
     mode: '1',
+    auditFailures: 0,
     configureError: new PluginManagerServiceError('INVALID_CONFIGURATION', 'invalid client'),
   });
   const response = await h.save();
@@ -110,11 +111,11 @@ test('compatibility retains owner, origin and local-address admission', async (t
 });
 test('audit recovery clears warnings on the next explicit save', async (t) => {
   const h = await harness(t, { mode: '1', auditFailures: 1 });
-  assert.equal((await h.save()).statusCode, 200);
+  assert.equal((await h.save()).statusCode, 503);
   const recovered = await h.save();
   assert.equal(recovered.statusCode, 200);
   assert.equal(recovered.json().warning, undefined);
-  assert.equal(h.mutations.length, 2);
+  assert.equal(h.mutations.length, 1);
 });
 test('compatibility does not waive audit admission for plugin activation', async (t) => {
   const h = await harness(t, { mode: '1' });
