@@ -192,7 +192,7 @@ test('bad package integrity and stale lifecycle revision cannot reach persistenc
 });
 
 test(
-  'inventory commit failure after the config write reports partial persistence and can be retried',
+  'inventory failure compensates the config and the same C request retries while audit remains unavailable',
   windows,
   async () => {
     const { join, win32 } = await import('node:path');
@@ -225,12 +225,12 @@ test(
     });
     await assert.rejects(
       service.configureBootstrapRoot('test.acp-library', f.instance.pluginInstanceId, f.request()),
-      /Configuration saved, but/,
+      /previous text restored/,
     );
-    assert.equal(JSON.parse(f.read().clients)[0].bootstrapRoot, 'D:/NewACP');
+    assert.equal(JSON.parse(f.read().clients)[0].bootstrapRoot, profile.bootstrapRoot);
     assert.equal((await inventory.snapshot()).instances[0].lifecycleRevision, f.instance.lifecycleRevision);
     broken = false;
-    await service.configure('test.acp-library', f.instance.pluginInstanceId, f.request());
+    await service.configureBootstrapRoot('test.acp-library', f.instance.pluginInstanceId, f.request());
     assert.equal((await inventory.snapshot()).instances[0].lifecycleRevision, f.instance.lifecycleRevision + 1);
   },
 );
