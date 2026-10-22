@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { acpBootstrapDirectoryIdentity } from '../../src/domains/plugin/manager/acp-bootstrap-directory-identity.js';
+import { acpBootstrapDirectoryIdentity } from '../../src/domains/plugin/manager/acp-bootstrap/acp-bootstrap-directory-identity.js';
 
 test('native identities recognize aliases without treating different directories or a missing path as equal', () => {
   const root = mkdtempSync(join(tmpdir(), 'acp-identity-'));

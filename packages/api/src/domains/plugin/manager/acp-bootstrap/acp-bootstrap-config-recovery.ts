@@ -1,19 +1,19 @@
 import { win32 } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import type { PluginManagerConfigureRequest } from '@cat-cafe/shared';
-import { allowsAcpBootstrapConfigAuditWarning } from '../../../config/acp-bootstrap-config-audit-policy.js';
-import { inspectAcpBootstrapDirectory } from '../../cats/services/agents/providers/acp/bootstrap/acp-bootstrap-inspect.js';
+import { allowsAcpBootstrapConfigAuditWarning } from '../../../../config/acp-bootstrap-config-audit-policy.js';
+import { inspectAcpBootstrapDirectory } from '../../../cats/services/agents/providers/acp/bootstrap/acp-bootstrap-inspect.js';
 import {
   parseAgentClientProfiles,
   parseAgentProviderDeclaration,
-} from '../../cats/services/agents/session-contract/plugin-agent-provider.js';
-import { readDeclaration } from '../declared/declared-agent-session-providers.js';
-import { resolvePackageFile } from '../declared/declared-resource-paths.js';
-import type { VerifiedPluginPackageLocator } from '../external-runtime/types.js';
-import type { PluginInventoryStore, PluginInventoryTransaction } from '../host-inventory/ports.js';
-import { readPluginConfig, readPluginConfigText } from '../plugin-config-store.js';
+} from '../../../cats/services/agents/session-contract/plugin-agent-provider.js';
+import { readDeclaration } from '../../declared/declared-agent-session-providers.js';
+import { resolvePackageFile } from '../../declared/declared-resource-paths.js';
+import type { VerifiedPluginPackageLocator } from '../../external-runtime/types.js';
+import type { PluginInventoryStore, PluginInventoryTransaction } from '../../host-inventory/ports.js';
+import { readPluginConfig, readPluginConfigText } from '../../plugin-config-store.js';
+import { PluginManagerServiceError } from '../plugin-manager-service.js';
 import { acpBootstrapDirectoryIdentity } from './acp-bootstrap-directory-identity.js';
-import { PluginManagerServiceError } from './plugin-manager-service.js';
 
 function refused(): never {
   throw new PluginManagerServiceError(
