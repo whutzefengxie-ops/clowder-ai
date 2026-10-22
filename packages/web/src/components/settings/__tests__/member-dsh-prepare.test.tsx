@@ -16,14 +16,14 @@ afterEach(async () => {
 });
 const args = ['/fixture/dsh/lib/bin.js', '--profile', 'acp'];
 const generated = [...args, '--patch', '/fixture/host/custom.yml'];
-async function prepare() {
+async function prepare(runtimeId = 'acp:existing-dsh') {
   vi.mocked(apiFetch).mockImplementation(async (path) => {
     const data =
       path === '/api/cats/native-runtimes'
         ? {
             runtimes: [
               {
-                id: 'acp:existing-dsh',
+                id: runtimeId,
                 label: 'DSH',
                 clientId: 'acp',
                 installed: true,
@@ -107,8 +107,8 @@ it('clears stale model and effort overrides in the saved member payload', async 
   expect(payload.cli?.effort).toBeUndefined();
   expect(payload.acp.startupArgs).toEqual(generated);
 });
-it('invalidates the receipt after manually changing the generated launch', async () => {
-  await prepare();
+it.each(['acp:existing-dsh', 'dsh'])('invalidates the receipt after manually changing %s launch', async (runtimeId) => {
+  await prepare(runtimeId);
   await click('Edit launch');
   expect(host.textContent).not.toContain('已加入草稿，请保存成员后使用');
   expect(host.textContent).not.toContain('发送一次请求验证此配置');

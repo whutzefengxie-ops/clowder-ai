@@ -40,10 +40,12 @@ const errors: Record<string, [string, string]> = {
 };
 export function DshProviderSetup({
   runtimeId,
+  configurationKey,
   onPrepared,
   t,
 }: {
   runtimeId: string;
+  configurationKey?: string;
   onPrepared: (command: string, args: string[]) => void;
   t: (zh: string, en: string) => string;
 }) {
@@ -58,7 +60,7 @@ export function DshProviderSetup({
     [tested, setTested] = useState(false);
   const generation = useRef(0);
   useEffect(() => {
-    // Invalidate late responses when the member switches to another runtime.
+    // Invalidate late responses when the runtime or its launch configuration changes.
     if (!runtimeId) return;
     setInspection(undefined);
     setReceipt('');
@@ -68,7 +70,7 @@ export function DshProviderSetup({
     return () => {
       generation.current += 1;
     };
-  }, [runtimeId]);
+  }, [runtimeId, configurationKey]);
   async function request(action: string, body: Record<string, unknown>) {
     const response = await apiFetch(`/api/cats/dsh-setup/${action}`, {
       method: 'POST',

@@ -53,7 +53,7 @@ it('preserves the draft and offers retry when composition changed', async () => 
   expect(host.textContent).toContain('配置已变化');
   expect(prepared).not.toHaveBeenCalled();
 });
-it('does not apply a late preparation result after switching the runtime', async () => {
+it.each(['runtime', 'launch'])('does not apply a late preparation result after changing %s', async (change) => {
   const prepared = vi.fn();
   let resolvePreparation: ((value: Response) => void) | undefined;
   vi.stubGlobal(
@@ -76,7 +76,16 @@ it('does not apply a late preparation result after switching the runtime', async
   await act(async () => root.render(<DshProviderSetup runtimeId="dsh" onPrepared={prepared} t={(zh) => zh} />));
   await act(async () => host.querySelector<HTMLButtonElement>('button')?.click());
   await act(async () => [...host.querySelectorAll('button')].find((b) => b.textContent === '使用此配置')?.click());
-  await act(async () => root.render(<DshProviderSetup runtimeId="acp:another" onPrepared={prepared} t={(zh) => zh} />));
+  await act(async () =>
+    root.render(
+      <DshProviderSetup
+        runtimeId={change === 'runtime' ? 'acp:another' : 'dsh'}
+        configurationKey={change === 'launch' ? 'edited-launch' : undefined}
+        onPrepared={prepared}
+        t={(zh) => zh}
+      />,
+    ),
+  );
   await act(async () =>
     resolvePreparation?.(new Response(JSON.stringify({ id: 'old', command: 'old-dsh', startupArgs: [] }))),
   );
