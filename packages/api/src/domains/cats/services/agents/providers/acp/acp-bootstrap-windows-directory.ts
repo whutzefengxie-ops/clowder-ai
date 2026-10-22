@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { isAbsolute, join } from 'node:path';
+import { isTrustedHostCompatibilityEnabled } from '../../../../../../config/trusted-host-compatibility.js';
 import { windowsAcpBootstrapError } from './bootstrap/acp-bootstrap-windows-error.js';
 import { WINDOWS_VOLUME_IDENTITY_SCRIPT } from './bootstrap/acp-bootstrap-windows-volume.js';
 
@@ -92,6 +93,13 @@ try {
     $parent = [System.IO.Directory]::GetParent($path)
     while ($null -ne $parent) {
       Assert-Directory $parent.FullName
+      if ($null -eq $parent.Parent -and -not [AcpVolumeIdentity]::IsRoot($parent.FullName)) {
+        Fail 'PARENT_VOLUME' 'ACP bootstrap parent is not a verified local NTFS volume root' $parent.FullName
+      }
+      if ($request.trustedHostCompatibility) {
+        $parent = $parent.Parent
+        continue
+      }
       $parentAcl = [System.IO.Directory]::GetAccessControl($parent.FullName)
       Assert-SupportedAcl $parentAcl $parent.FullName
       if ($parentOwners -notcontains $parentAcl.GetOwner($sidType).Value) {
@@ -99,9 +107,6 @@ try {
       }
       $mask = 0xD0040
       if ($null -eq $parent.Parent) {
-        if (-not [AcpVolumeIdentity]::IsRoot($parent.FullName)) {
-          Fail 'PARENT_VOLUME' 'ACP bootstrap parent is not a verified local NTFS volume root' $parent.FullName
-        }
         # A true volume root cannot be renamed; its private child cannot be deleted
         # without child DELETE or parent DELETE_CHILD. All other checks stay intact.
         if ($request.allowVolumeRootDelete) { $mask = 0xC0040 }
@@ -191,7 +196,12 @@ export function ensureWindowsAcpBootstrapDirectories(
         // incompatible PowerShell 7 modules. Let WinPS build its own paths.
         // https://learn.microsoft.com/powershell/module/microsoft.powershell.core/about/about_psmodulepath
         env: Object.fromEntries(Object.entries(process.env).filter(([name]) => name.toUpperCase() !== 'PSMODULEPATH')),
-        input: JSON.stringify({ root, cwd, allowVolumeRootDelete: options.allowVolumeRootDelete === true }),
+        input: JSON.stringify({
+          root,
+          cwd,
+          allowVolumeRootDelete: options.allowVolumeRootDelete === true,
+          trustedHostCompatibility: isTrustedHostCompatibilityEnabled(),
+        }),
         encoding: 'utf8',
         timeout: 20_000,
         maxBuffer: 256 * 1024,

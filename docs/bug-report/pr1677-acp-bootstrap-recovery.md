@@ -44,7 +44,7 @@ node --import tsx scripts/check-acp-bootstrap.ts --root 'D:\ClowderBootstrap\my-
 修复实际条件后再次发消息即可恢复；没有后台自动重发。清空字段并保存可恢复自动模式。
 
 若所有卷的祖先均不合格，需要管理员提供祖先链可信的专用本地 NTFS 位置（必要时专用数据卷），或换用合格 Host。
-不能靠新建普通文件夹、改 exe 路径、接管系统盘或关闭校验绕过。具体说明见：
+默认严格模式不能靠新建普通文件夹、改 exe 路径或接管系统盘解决。后续用户明确授权的[可信主机兼容模式](../ops/acp-trusted-host-compatibility.md)允许跳过祖先信任校验，并清楚呈现风险与审计告警；其余目录自身与鉴权限制保留。具体说明见：
 
 - [Host 启动、安装及配置](../ops/acp-client-plugin-user-guide.md)
 - [新客户端入口发现与分阶段能力验证](../ops/acp-client-onboarding-and-verification.md)
@@ -72,6 +72,21 @@ MCP 实测为 stdio；HTTP 只有参数映射测试。最后两条 POSIX 修复�
 扩大 ACP 检查为 639 项：632 PASS、4 FAIL、3 SKIP。三项（AGY permission alias、两个 host-media-ledger fsync EPERM）
 已在原始基线分别复现；另一个 Windows 取消夹具清理 EBUSY，串行重跑 2/2 PASS。
 这不是全仓全绿结论；须消费本次新 HEAD 的远端 CI。
+
+## 内网续办：显式可信主机兼容模式
+
+用户报告自选目录检查通过，但保存显示 `Plugin audit log is unavailable`；CodeAgent 另有 `prompt_failure: EPERM`。
+保存路径在调用配置服务前先追加审计；追加失败返回 503，因此不能把目录检查通过当作配置已经生效。审计实现只是追加文件，不执行 bootstrap 祖先校验；不能把两种错误统称为同一个安全检查问题。
+
+用户随后明确选择兼容模式：仅 Host 启动环境中的 `CAT_CAFE_TRUSTED_HOST_COMPATIBILITY=1` 开启。
+Windows 跳过祖先 owner / DACL 信任，仍保留自身私有 DACL、真实 NTFS、非 reparse 与 spawn 复验；插件配置审计失败时告警后继续保存，页面显示告警，实际配置失败不会被转换为成功。
+登录、owner、本机/Origin 与受限角色策略不变，其他插件生命周期和工具审计仍按原规则。
+这更新此前对应范围的安全取舍，默认严格模式保持。风险和具体操作见[兼容模式指南](../ops/acp-trusted-host-compatibility.md)。
+
+本机已验证：目录祖先宽泛授权的默认拒绝→开启后创建私有目录→不修改祖先 ACL→坏自身 ACL/junction/SUBST 仍拒绝→关闭后重新拒绝。
+生产 HTTP handlers 配合真实配置文件及合成 ACP 原生子进程完成检查、审计失败告警保存、重新读取、initialize、session/new、prompt 和严格模式恢复。零模型调用，未连接原企业机或真实 CodeAgent。
+配置 API 回归 34 PASS，Web 相关 24 PASS，注册表核心 29 PASS；既有 233 项元数据序列化内容和顺序保持不变。
+扩大运行注册表测试有 4 个 Windows 限制：两项断言绝对路径以 `/` 开头，两项依赖缺失的 `sh`；相关代码未改，不能将此描述为全文件本机通过。
 
 ## 验收边界
 

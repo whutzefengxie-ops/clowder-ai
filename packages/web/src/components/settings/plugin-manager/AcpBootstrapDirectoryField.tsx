@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { apiFetch } from '@/utils/api-client';
 
-type Check = { ok: true; root: string } | { ok: false; error: string };
+type Check = { ok: true; root: string; trustMode?: 'strict' | 'trusted-host' } | { ok: false; error: string };
 export function AcpBootstrapDirectoryField({
   value,
   label,
@@ -59,7 +59,8 @@ export function AcpBootstrapDirectoryField({
         />
       </label>
       <p>
-        目录及每级父目录都必须通过安全检查。检查会创建专用私有目录，未启动客户端；不会修改已有目录权限。它与项目工作目录不同。
+        按 Host
+        当前信任策略检查目录与父链。检查会创建专用私有目录，未启动客户端；不会修改已有目录权限。它与项目工作目录不同。
       </p>
       <button
         type="button"
@@ -72,7 +73,10 @@ export function AcpBootstrapDirectoryField({
       {check &&
         (check.ok ? (
           <div role="status" className="space-y-2 break-all">
-            <p>严格检查通过：{check.root}</p>
+            <p>
+              {check.trustMode === 'trusted-host' ? '兼容模式检查通过（已跳过祖先信任校验）' : '严格检查通过'}：
+              {check.root}
+            </p>
             <p>此结果只证明目录合格；保存配置后，再发送消息验证客户端。</p>
             {value !== check.root && (
               <button type="button" className="font-semibold text-cafe" onClick={() => onChange(check.root)}>

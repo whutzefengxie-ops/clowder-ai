@@ -81,3 +81,21 @@ it('keeps a failed check visible and permits retry without replacing the saved c
   });
   expect(container.querySelector('[role="status"]')?.textContent).toContain('严格检查通过');
 });
+
+it('never describes a compatibility check as fully trusted ancestry', async () => {
+  vi.mocked(apiFetch).mockResolvedValue(
+    new Response(
+      JSON.stringify({
+        ok: true,
+        root: 'D:/PrivateACP',
+        trustMode: 'trusted-host',
+      }),
+    ),
+  );
+  await act(async () => {
+    button('检查引导目录').click();
+  });
+  expect(container.querySelector('[role="status"]')?.textContent).toContain('兼容模式检查通过');
+  expect(container.querySelector('[role="status"]')?.textContent).toContain('已跳过祖先信任校验');
+  expect(container.textContent).not.toContain('严格检查通过');
+});
