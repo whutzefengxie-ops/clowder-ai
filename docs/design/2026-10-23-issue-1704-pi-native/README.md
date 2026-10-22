@@ -4,7 +4,7 @@ related_features: [F241, F289]
 topics: [pi, acp, sessions, recovery, diagnostics, issue-1704]
 doc_kind: index
 created: 2026-10-23
-status: implementation_verified_pending_review
+status: implementation_verified_peer_reviewed
 ---
 
 # Issue #1704：内置 Pi 修复方案索引

@@ -4,7 +4,7 @@ related_features: [F241, F289]
 topics: [pi, acp, sessions, recovery, diagnostics, issue-1704]
 doc_kind: verification
 created: 2026-10-23
-status: implementation_verified_pending_review
+status: implementation_verified_peer_reviewed
 tips_exempt: 既有 Pi 连续性与错误处理修复，没有新增入口或独立使用步骤。
 ---
 
@@ -60,6 +60,8 @@ fallback 检测对新模块的 `||` 输入校验与 `try/catch` 触发警告。�
 补充边界：Windows 实测桥被强制结束后其测试子进程也退出，因此“无桥状态但写者存活”用独立的生产 runner 持锁验证，不把它写成现场实测遗孤进程。该用例确证没有 Bridge Map 也不能抢占存活的真实写者。
 
 ## 本次声明的限度
+
+2026-10-23 本地独立复审回执：`Review-Subject-Ref=issue1704/native-pi-recovery`，`localReviewVerdict=approved`，`reviewedHeadSha=9237455728a51da8bbe60f52e67462cebcdf52c5`，accepted source 为 `cec3708a8a2ab539ebd8f2e427135054ae37a9d2` 的 `recommended-design.md`。审阅者独立重跑四组 18 项全过，未确认剩余 P1/P2；本回执与索引状态是后续仅文档提交，不改变已审源码。此结论不代替维护者合入决定或企业现场验收。
 
 冷恢复和首轮事件转换/错误传递已在上述层级验证。企业机那次首轮空响应究竟由网关、模型、启动 shim 还是其他因素触发，仍没有同版本完整事件链；本 PR 不宣称该现场诱因已被确定，不自动关闭 #1704。
 
