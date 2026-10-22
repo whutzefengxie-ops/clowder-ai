@@ -11,6 +11,7 @@ import { PluginArchiveInstallButton } from './PluginArchiveInstallButton';
 import { PluginDirectoryInstallButton } from './PluginDirectoryInstallButton';
 import { PluginManagerDetailCard } from './PluginManagerDetailCard';
 import { PluginListRow, PluginListSection } from './PluginManagerList';
+import { PluginManagerNotices } from './PluginManagerNotices';
 import { PluginMarketplaceSettings } from './PluginMarketplaceSettings';
 import { installedPluginGroups, type PluginManagerPresentation } from './plugin-manager-attention';
 import type { PluginManagerDesignFixture } from './plugin-manager-fixtures';
@@ -46,15 +47,6 @@ function blockedEnableReason(plugin: PluginManagerDesignFixture) {
   return plugin.auth === 'connected'
     ? '还在等待 dot 读原文并回帖；两处都完成后才能开启。'
     : '请先完成订阅和两处往返验证，再启用 dot。';
-}
-
-function PluginManagerError({ message }: { message: string | null | undefined }) {
-  if (!message) return null;
-  return (
-    <div role="alert" className="rounded-xl bg-conn-red-bg px-3 py-2.5 text-sm text-conn-red-text">
-      {message}
-    </div>
-  );
 }
 
 function matchesSearch(plugin: PluginManagerDesignFixture, query: string): boolean {
@@ -220,21 +212,12 @@ export function PluginManagerContent({
         />
       )}
 
-      {catalogStatus !== 'fresh' && (
-        <div className="flex items-start gap-2 rounded-xl bg-conn-amber-bg px-3 py-2.5">
-          <HubIcon name="alert-triangle" className="mt-0.5 h-4 w-4 shrink-0 text-conn-amber-text" />
-          <SettingsText as="p" variant="sm" tone="amber">
-            {catalogMessage ?? '目录暂时不可用；已安装插件仍可管理，未安装列表会在连接恢复后刷新。'}
-          </SettingsText>
-        </div>
-      )}
-
-      <PluginManagerError message={error} />
-      {warning && (
-        <p role="status" className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
-          {warning}
-        </p>
-      )}
+      <PluginManagerNotices
+        catalogStatus={catalogStatus}
+        catalogMessage={catalogMessage}
+        error={error}
+        warning={warning}
+      />
 
       <div className="grid min-h-0 flex-1 gap-3.5 overflow-hidden lg:grid-cols-[minmax(17rem,0.82fr)_minmax(0,1.5fr)]">
         <div

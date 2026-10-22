@@ -1,3 +1,4 @@
+import { win32 } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import type { PluginManagerConfigureRequest } from '@cat-cafe/shared';
 import { allowsAcpBootstrapConfigAuditWarning } from '../../../config/acp-bootstrap-config-audit-policy.js';
@@ -21,16 +22,12 @@ function refused(): never {
   );
 }
 
-function changedBootstrapRoots(
-  previous: string,
-  nextValue: unknown,
-  packageRoot: string,
-): Map<string, string | undefined> {
+function changedBootstrapRoots(previous: string, nextValue: unknown, packageRoot: string): Map<string, Set<string>> {
   const oldProfiles = parseAgentClientProfiles(previous, { packageRoot });
   const newProfiles = parseAgentClientProfiles(nextValue, { packageRoot });
   if (!oldProfiles.ok || !newProfiles.ok || oldProfiles.profiles.length !== newProfiles.profiles.length)
     return refused();
-  const roots = new Map<string, string | undefined>();
+  const roots = new Map<string, Set<string>>();
   for (let i = 0; i < oldProfiles.profiles.length; i++) {
     const previous = oldProfiles.profiles[i];
     const next = newProfiles.profiles[i];
@@ -40,7 +37,21 @@ function changedBootstrapRoots(
     if (!isDeepStrictEqual({ ...previous, acp: oldAcp }, { ...next, acp: newAcp })) return refused();
     if (oldRoot !== newRoot) {
       if (!newRoot) return refused();
-      roots.set(newRoot, oldRoot);
+      if (
+        oldRoot &&
+        win32
+          .resolve(oldRoot)
+          .replace(/[\\/]+$/, '')
+          .toLowerCase() ===
+          win32
+            .resolve(newRoot)
+            .replace(/[\\/]+$/, '')
+            .toLowerCase()
+      )
+        return refused();
+      const previousRoots = roots.get(newRoot) ?? new Set<string>();
+      if (oldRoot) previousRoots.add(oldRoot);
+      roots.set(newRoot, previousRoots);
     }
   }
   if (!roots.size) return refused();
@@ -126,7 +137,7 @@ export async function prepareAcpBootstrapConfigRecovery(input: {
       async verify() {
         if (!allowsAcpBootstrapConfigAuditWarning()) return refused();
         await located.verifyIntegrity();
-        for (const [root, oldRoot] of roots) {
+        for (const [root, oldRoots] of roots) {
           const check = (input.inspectBootstrapRoot ?? inspectAcpBootstrapDirectory)(root);
           if (!check.ok)
             throw new PluginManagerServiceError(
@@ -135,7 +146,7 @@ export async function prepareAcpBootstrapConfigRecovery(input: {
             );
           if (check.trustMode !== 'trusted-host') return refused();
           const current = readIdentity(root);
-          if (!current || (oldRoot && readIdentity(oldRoot) === current)) return refused();
+          if (!current || [...oldRoots].some((oldRoot) => readIdentity(oldRoot) === current)) return refused();
           if (identities.has(root) && identities.get(root) !== current) return refused();
           identities.set(root, current);
         }

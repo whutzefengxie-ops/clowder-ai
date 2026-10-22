@@ -44,7 +44,7 @@ Why：复用已有插件配置、准入、运行生命周期和 SessionImplement
 
 ## MCP 与角色协作续办（2026-10-22）
 
-用户补充验收范围：三个实际客户端必须调用 Clowder MCP 并参与角色协作，补齐 pi，仍不向远端提交。
+验收范围：dsh、Claude、Pi 的实际客户端调用 Clowder MCP 并参与角色协作，补齐 Pi 的 MCP 透传。
 
 - Host 自动提供协作 MCP、当前会话回调凭证与角色身份；用户配置只有启动命令和参数，不填写 token。
 - pi 使用独立 `@clowder-ai/pi-acp` 桥，固定上游 pi-acp 版本及源哈希构建，透传 ACP MCP 到本机 Pi 1.3+ 原生注册 API。
@@ -55,12 +55,13 @@ Why：复用已有插件配置、准入、运行生命周期和 SessionImplement
 
 ## 源码提交范围（2026-10-22）
 
-用户后续授权将 Host 与插件分别提交至对应仓库并创建 PR，取代前述仅本地保留的提交限制。
+Host 与插件分别提交对应仓库，通过独立 PR 交付。
 Host PR 依赖 #1665；插件 PR 依赖本次 Host 扩展。这里只提交源码，不发布 npm 或部署生产。
 公开操作指南采用可替换路径与完整源码启动命令；原本机手册、认证、历史及原始验收数据在仓外保留。
 
 ## 可信主机兼容模式（2026-10-22）
 
-用户在内网验证确认：引导检查通过，但配置保存被 `AUDIT_UNAVAILABLE` 拒绝；CodeAgent 仍有未定位的 EPERM。
-用户明确选择新增显式模式，跳过 Windows 祖先信任校验，插件配置审计失败告警后继续保存；保留目录自身私有权限、鉴权和本机管理限制。
-该选择更新此前对应范围的「不降低安全性」要求，默认严格模式不变。实现与验收边界见[计划](../design/2026-10-22-trusted-host-compatibility.md)及[操作说明](../ops/acp-trusted-host-compatibility.md)。不将本机合成 ACP 验证声明为真实 CodeAgent 或原企业机验收。
+严格路径、Windows 祖先兼容 B、受限配置审计恢复 C 分别有独立契约；默认 strict/required。内网部署通过 Host .env 一次保存，重启与升级持续沿用；D 的一次性准备独立交付，API 不自动回写部署文件。
+审计失败只允许 Windows trusted-host 下已有 ACP client 的显式 bootstrapRoot 变化；完整原生检查后，在写事务内复读原文本、包 digest、grant 并消费版本围栏。新增 client、改名称/顺序/命令/argv/MCP 或其他插件配置均不豁免，安装/启用和工具调用保持原准入。
+旧 exact 1 对未设置的新键映射受限组合，新键逐项优先，strict 会屏蔽 C；非法新值启动失败，warning 与 error 分开。保留目录自身私有权限、原生身份和直接本机管理；不改系统盘或已有 ACL，不改存量 ID/绑定/历史。持久 inventory 单活跃 API 写者，配置写者共享事务。
+契约与操作见[设计](../design/2026-10-22-trusted-host-compatibility.md)和[指南](../ops/acp-trusted-host-compatibility.md)。报告者已有 CodeAgent 正常使用反馈，但精确构建/访问拓扑和逐项 MCP/协作/续接证据未齐；本机合成验证与真实 dsh/Claude/Pi 结果须分开记录。

@@ -49,6 +49,7 @@ for (const [label, transform] of [
   ['clear root', (p) => [{ ...p, bootstrapRoot: undefined }]],
   ['relative root', (p) => [{ ...p, bootstrapRoot: './root' }]],
   ['no change', () => [profile]],
+  ['equivalent Windows spelling', () => [{ ...profile, bootstrapRoot: 'd:\\OLDACP\\' }]],
 ])
   test(`audit exception refuses ${label} changes without writing`, windows, async () => {
     const f = await rootRecoveryFixture();
