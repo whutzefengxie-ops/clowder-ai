@@ -47,7 +47,10 @@ export function verifyAcpBootstrap(
     buildChildEnv(env, { workingDirectory: base.projectRoot }),
   );
   // An owner-selected root is always strict, even for an audited launch chain.
-  const options = { allowVolumeRootDelete: !strictRoot && isolation !== undefined };
+  const options = {
+    allowVolumeRootDelete: !strictRoot && isolation !== undefined,
+    preserveExistingPermissions: strictRoot,
+  };
   const cwd = resolveAcpBootstrapCwd(
     base.projectRoot,
     profileId,

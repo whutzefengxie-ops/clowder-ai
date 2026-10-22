@@ -59,6 +59,10 @@ jobs:
           --script test:onboarding:production-contracts
       - run: pnpm --filter @cat-cafe/shared build
       - run: pnpm --filter @cat-cafe/api build
+      - name: ACP directory checks preserve existing Unix permissions
+        run: >-
+          node --import tsx --test
+          packages/api/test/acp/acp-bootstrap-posix-preservation.test.ts
       - name: Native PR and Issue tracking source fence (original candidate bytes)
         shell: bash
         run: |

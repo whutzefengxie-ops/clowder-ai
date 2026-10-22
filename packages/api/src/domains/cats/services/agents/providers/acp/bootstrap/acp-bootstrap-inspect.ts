@@ -24,6 +24,7 @@ export function inspectAcpBootstrapDirectory(root?: string): { ok: true; root: s
       undefined,
       undefined,
       root === undefined,
+      { preserveExistingPermissions: true },
     );
     return { ok: true, root: dirname(cwd) };
   } catch (error) {

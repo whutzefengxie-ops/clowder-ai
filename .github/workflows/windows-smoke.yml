@@ -192,6 +192,7 @@ jobs:
           packages/api/test/acp/acp-bootstrap-generic-selection.test.ts
           packages/api/test/acp/acp-bootstrap-explicit-root.test.ts
           packages/api/test/acp/acp-bootstrap-strict-native.test.ts
+          packages/api/test/acp/acp-bootstrap-posix-preservation.test.ts
           packages/api/test/acp/acp-bootstrap-check-route.test.ts
           packages/api/test/agent-session-contract/acp-factory-recovery.test.ts
           packages/api/test/account-credential-identity.test.js
