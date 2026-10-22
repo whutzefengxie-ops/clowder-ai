@@ -191,46 +191,74 @@ test('bad package integrity and stale lifecycle revision cannot reach persistenc
   }
 });
 
-test(
-  'inventory failure compensates the config and the same C request retries while audit remains unavailable',
-  windows,
-  async () => {
-    const { join, win32 } = await import('node:path');
-    const { rename } = await import('node:fs/promises');
-    const f = await rootRecoveryFixture();
-    const path = join(f.projectRoot, 'inventory.json');
-    const snapshot = await f.inventory.snapshot();
-    const initial = new FilePluginInventoryStore(path);
-    await initial.transaction((tx) => {
-      for (const pkg of snapshot.packages) tx.packages.put(pkg);
-      for (const instance of snapshot.instances) tx.instances.put(instance);
-      for (const grant of snapshot.grants) tx.grants.put(grant);
-    });
-    let broken = true;
-    const inventory = new FilePluginInventoryStore(path, {
-      fileOps: {
-        rename: async (...args) => {
-          if (broken && JSON.parse(f.read().clients)[0].bootstrapRoot === 'D:/NewACP')
-            throw new Error('simulated inventory EPERM');
-          return rename(...args);
+for (const resumeFailure of [false, true])
+  test(
+    `inventory failure compensates config; resumeFailure=${resumeFailure}; same C request can retry`,
+    windows,
+    async () => {
+      const { join, win32 } = await import('node:path');
+      const { rename } = await import('node:fs/promises');
+      const f = await rootRecoveryFixture();
+      const path = join(f.projectRoot, 'inventory.json');
+      const snapshot = await f.inventory.snapshot();
+      const initial = new FilePluginInventoryStore(path);
+      await initial.transaction((tx) => {
+        for (const pkg of snapshot.packages) tx.packages.put(pkg);
+        for (const instance of snapshot.instances) tx.instances.put(instance);
+        for (const grant of snapshot.grants) tx.grants.put(grant);
+        if (resumeFailure)
+          tx.instances.put({
+            ...f.instance,
+            activationState: 'enabled',
+            runtimeState: 'crashed',
+            configReadiness: 'ready',
+          });
+      });
+      let broken = true;
+      const inventory = new FilePluginInventoryStore(path, {
+        fileOps: {
+          rename: async (...args) => {
+            if (broken && JSON.parse(f.read().clients)[0].bootstrapRoot === 'D:/NewACP')
+              throw new Error('simulated inventory EPERM');
+            return rename(...args);
+          },
         },
-      },
-    });
-    const service = new HostPluginConfigurationService({
-      projectRoot: f.projectRoot,
-      inventory,
-      packages: f.packages,
-      inspectBootstrapRoot: (root) => ({ ok: true, root, trustMode: 'trusted-host' }),
-      bootstrapDirectoryIdentity: (root) => win32.resolve(root).toLowerCase(),
-    });
-    await assert.rejects(
-      service.configureBootstrapRoot('test.acp-library', f.instance.pluginInstanceId, f.request()),
-      /previous text restored/,
-    );
-    assert.equal(JSON.parse(f.read().clients)[0].bootstrapRoot, profile.bootstrapRoot);
-    assert.equal((await inventory.snapshot()).instances[0].lifecycleRevision, f.instance.lifecycleRevision);
-    broken = false;
-    await service.configureBootstrapRoot('test.acp-library', f.instance.pluginInstanceId, f.request());
-    assert.equal((await inventory.snapshot()).instances[0].lifecycleRevision, f.instance.lifecycleRevision + 1);
-  },
-);
+      });
+      const service = new HostPluginConfigurationService({
+        projectRoot: f.projectRoot,
+        inventory,
+        packages: f.packages,
+        inspectBootstrapRoot: (root) => ({ ok: true, root, trustMode: 'trusted-host' }),
+        bootstrapDirectoryIdentity: (root) => win32.resolve(root).toLowerCase(),
+        ...(resumeFailure
+          ? {
+              lifecycle: new ExternalPluginLifecycleService({
+                store: inventory,
+                supervisor: {
+                  stop: async () => {},
+                  start: async () => {
+                    if (broken) throw new Error('runtime startup failure');
+                  },
+                },
+              }),
+            }
+          : {}),
+      });
+      await assert.rejects(
+        service.configureBootstrapRoot('test.acp-library', f.instance.pluginInstanceId, f.request()),
+        resumeFailure
+          ? /Previous configuration restored, but the plugin runtime could not be restored/
+          : /previous text restored/,
+      );
+      assert.equal(JSON.parse(f.read().clients)[0].bootstrapRoot, profile.bootstrapRoot);
+      const afterFailure = (await inventory.snapshot()).instances[0];
+      if (resumeFailure) assert.equal(afterFailure.runtimeState, 'stopped');
+      else assert.equal(afterFailure.lifecycleRevision, f.instance.lifecycleRevision);
+      broken = false;
+      await service.configureBootstrapRoot('test.acp-library', f.instance.pluginInstanceId, {
+        ...f.request(),
+        expectedRevision: afterFailure.lifecycleRevision,
+      });
+      assert.equal((await inventory.snapshot()).instances[0].lifecycleRevision, afterFailure.lifecycleRevision + 1);
+    },
+  );

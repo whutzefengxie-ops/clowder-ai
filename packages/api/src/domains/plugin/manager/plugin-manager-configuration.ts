@@ -277,6 +277,11 @@ export class HostPluginConfigurationService implements PluginManagerConfiguratio
         },
       });
     } catch (error) {
+      if (compensated && error instanceof PluginLifecycleError && error.code === 'CONFIGURATION_RESUME_FAILED')
+        throw new PluginManagerServiceError(
+          'RUNTIME_START_FAILED',
+          'Previous configuration restored, but the plugin runtime could not be restored; refresh plugin state and retry after fixing runtime startup',
+        );
       if (compensated)
         throw new PluginManagerServiceError(
           'CONFIGURATION_UNAVAILABLE',
