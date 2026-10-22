@@ -21,9 +21,7 @@ function refused(): never {
 }
 
 function changedBootstrapRoots(previous: string, nextValue: unknown, packageRoot: string): Set<string> {
-  const oldProfiles = parseAgentClientProfiles(previous, {
-    packageRoot: located.rootDir,
-  });
+  const oldProfiles = parseAgentClientProfiles(previous, { packageRoot });
   const newProfiles = parseAgentClientProfiles(nextValue, { packageRoot });
   if (!oldProfiles.ok || !newProfiles.ok || oldProfiles.profiles.length !== newProfiles.profiles.length)
     return refused();
