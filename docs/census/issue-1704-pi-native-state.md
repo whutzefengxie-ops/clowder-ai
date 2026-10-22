@@ -36,6 +36,8 @@ scope 由 Host 的项目、稳定成员 ID、profileId、显式 accountRef/原�
 
 仅支持本桥创建的 `clowder-pi-v1-<uuid>`、Pi 3 版原生文件格式，以及 Pi 1.3 兼容 RPC。真实写者使用可解析的已安装 Node CLI 和 Node 24+；不安装/下载 Pi，也不执行任意 shell fallback。Windows SQLite 使用命名空间路径支持长目录。
 
+恢复的 JSONL 在实际 writer 取得锁后、导入 Pi CLI 前逐行检查语法、记录基本形状及 header 身份，避免原生 loader 静默跳过损坏行后误报恢复成功。校验不改写文件，也不承担迁移或内容重建；拒绝后保留原文件并释放锁。
+
 旧 `--no-session` UUID 不存在可恢复原生历史；保留应用记录，用户显式新会话。回退旧二进制不删除新增状态；旧版不能恢复新格式时如实失败，不承诺无缝回退。备份/后续数据根迁移必须同时携带原生 JSONL 和绑定摘要；在无活跃写者时处理辅助锁文件，禁止清库。
 
 ## 证据归属

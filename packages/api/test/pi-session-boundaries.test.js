@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { generateKeyPairSync } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -75,4 +76,30 @@ test('Pi diagnostics sanitize complete split chunks and discard oversized raw li
   assert.doesNotMatch(diag.context(), /sk-|xxx/);
   assert.match(diag.context(), /safe failure/);
   assert.ok(diag.context().length <= 1002);
+});
+
+test('Pi diagnostics suppress multiline PEM across chunks, oversized lines and incomplete blocks', () => {
+  const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 1024 });
+  const pem = privateKey.export({ type: 'pkcs8', format: 'pem' });
+  const body = pem
+    .split('\n')
+    .slice(1, -2)
+    .join('')
+    .match(/.{1,16}/g);
+  for (const oversized of [false, true]) {
+    for (const complete of [false, true]) {
+      const diag = new PiRpcDiagnostics();
+      const content = `before\n${oversized ? 'x'.repeat(20000) : ''}-----BEGIN PRIVATE KEY-----\n${body.join('\n')}\n${complete ? '-----END PRIVATE KEY-----\nafter\n' : ''}`;
+      for (let i = 0; i < content.length; i += 7) diag.write(Buffer.from(content.slice(i, i + 7)));
+      diag.end();
+      assert.equal(
+        body.some((line) => diag.context().includes(line)),
+        false,
+        'no raw private-key line survives',
+      );
+      assert.match(diag.context(), /PEM_REDACTED/);
+      if (complete) assert.match(diag.context(), /after/);
+      assert.ok(diag.context().length <= 1002);
+    }
+  }
 });

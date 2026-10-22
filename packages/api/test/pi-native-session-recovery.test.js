@@ -152,3 +152,33 @@ test('Pi refuses legacy, missing, corrupt and wrong-scope history without creati
     assert.ok(reply.error);
     assert.equal(readFileSync(file, 'utf8'), 'invalid native history fixture');
   }));
+
+test('Pi refuses a damaged history body before the native loader can skip or repair it', () =>
+  fixture(async ({ root, make }) => {
+    const first = make();
+    const id = (await first.request('session/new', { cwd: root, mcpServers: [] })).result.sessionId;
+    await prompt(first, id, 'remember CEDAR1704');
+    await first.bridge.close();
+    const dir = join(root, 'native-sessions/pi/v1', scope, id);
+    const file = join(
+      dir,
+      readdirSync(dir).find((name) => name.endsWith('.jsonl')),
+    );
+    const original = readFileSync(file, 'utf8');
+    const nativePid = readFileSync(join(root, 'started'), 'utf8');
+    for (const tail of ['{"type":"message","id":"partial",', '\nnot-json\n', '\nnull\n']) {
+      const damaged = original + tail;
+      writeFileSync(file, damaged);
+      const reply = await make().request('session/load', { sessionId: id, cwd: root, mcpServers: [] });
+      assert.ok(reply.error, 'damaged history must fail explicitly');
+      assert.equal(reply.error.code, -32004);
+      assert.equal(readFileSync(file, 'utf8'), damaged, 'neither repair nor replacement is allowed');
+      assert.equal(readFileSync(join(root, 'started'), 'utf8'), nativePid, 'native loader must not run');
+    }
+    writeFileSync(file, original);
+    assert.equal(
+      (await make().request('session/load', { sessionId: id, cwd: root, mcpServers: [] })).result.sessionId,
+      id,
+      'failed validation releases the native writer lease',
+    );
+  }));

@@ -34,14 +34,16 @@ tips_exempt: 既有 Pi 连续性与错误处理修复，没有新增入口或独
 
 原基线观察到 6 项新回归 RED：无 load、MCP/写者/历史保护缺口、空 delta 阻断 final、部分流丢失 final 后缀。随后单独观察到 Host 重启更换 credential-file 和原生 ID 意外变化的 RED；修复后同一组检查通过。
 
+独立审阅 `6e1623c3` 后又复现两项 P2：合法 header 后的损坏 JSONL 会被 Pi 1.3 静默跳过；逐行脱敏会漏掉跨行 PEM 正文。两项新增用例均先观察到 RED。现由实际 writer 持锁后逐行校验 JSON 语法、记录基本形状和原生 header，再导入 Pi；坏文件不改写、不替换，验证失败释放锁。诊断先识别完整 PEM 块，覆盖跨 chunk、超长行和缺失 END，正文不进入可见截尾。
+
 | 验证 | 当前结果 |
 | --- | --- |
 | `pnpm --filter @cat-cafe/api build` | 通过，当前源码重新编译，F299 census 检查通过 |
 | `pnpm --filter @cat-cafe/api lint` | 通过 |
-| Pi bridge/RPC/empty/native recovery/Host/storage boundaries + ACP cache/resume/discovery/pool/signature/registry/bootstrap + 原生路由/错误持久化 | 103 项：102 通过、0 失败、1 跳过；跳过为需要额外 DSH 审计安装路径的用例，与 Pi 无关 |
+| Pi bridge/RPC/empty/native recovery/Host/storage boundaries + ACP cache/resume/discovery/pool/signature/registry/bootstrap + 原生路由/错误持久化 | 105 项：104 通过、0 失败、1 跳过；跳过为需要额外 DSH 审计安装路径的用例，与 Pi 无关 |
 | 真实 Pi + 受控 OpenAI-compatible 接口 | 新建、热续聊、重建桥后同 ID 冷恢复及 provider 原历史通过；真实 Host 空完成/失败 load 分类通过 |
 | 真实 MCP + 受控 provider | 新会话及冷恢复后工具真实执行并落 receipt；冷恢复使用新的 credential-file 和 invocation，原 ID 保持 |
-| 真实自定义 LLM | 三次真实调用：首轮、热续聊、重建桥后的冷恢复均记住 `CEDAR1704` |
+| 真实自定义 LLM | `6e1623c3` 三次真实调用：首轮、热续聊、重建桥后的冷恢复均记住 `CEDAR1704`；审查修复未重复付费调用，新增前置校验已用真实 Pi + 受控接口重跑冷恢复/MCP |
 | `pnpm check` | 未全绿：停在未修改的 F290 Windows 路径分隔符断言；没有将其标为通过 |
 | 公开测试发现与能力提示 | 四个新增 `.test.js` 均进入实际 public test selection；`pnpm check:capability-tips` 通过，保留既有 10 条提示警告 |
 
@@ -50,6 +52,8 @@ tips_exempt: 既有 Pi 连续性与错误处理修复，没有新增入口或独
 W0、原生 fixture、真实 LLM 账本和编译模块 SHA-256 保留在本工位 `.cat-cafe/issue1704/`；所有真实调用均使用独立原生目录。私有模型配置、native JSONL 和原始日志不提交 Git。原 Pi models/auth/settings 哈希未变；各实验桥进程退出、临时回环接口关闭，持久数据保留。
 
 F290 失败已从 `upstream/main` 原样提取两份检查脚本再次复现，准确差异为 `packages\\collective-client\\src\\ProductShell.tsx` 与斜杠路径；检测脚本未改。ownership README 使用原生成器在 LF 规范化的临时镜像生成，避开 Windows checkout 的 CRLF 解析限制，没有改生成器源码。
+
+fallback 检测对新模块的 `||` 输入校验与 `try/catch` 触发警告。已检查这些位置：恢复权威收敛为原生文件，未增加 transcript 镜像或替代会话路径；身份、cwd、MCP、格式、文件类型与活跃写者保护均需保留；catch 仅向外传递脱敏失败，不吞错后切换历史。此次增加的是边界拒绝，不是多级恢复猜测。
 
 补充边界：Windows 实测桥被强制结束后其测试子进程也退出，因此“无桥状态但写者存活”用独立的生产 runner 持锁验证，不把它写成现场实测遗孤进程。该用例确证没有 Bridge Map 也不能抢占存活的真实写者。
 

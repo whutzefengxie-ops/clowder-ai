@@ -2,6 +2,7 @@ import { closeSync, lstatSync, openSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join, toNamespacedPath } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { assertPiHistoryIntegrity } from './pi-session-integrity.js';
 import type { PiSessionSlot } from './pi-session-store.js';
 
 interface WriterLease {
@@ -35,6 +36,7 @@ try {
   }
   // Keep a strong reference throughout the real Pi lifetime (including after the bridge dies).
   process.once('exit', () => database.close());
+  await assertPiHistoryIntegrity(slot);
   process.argv = [process.execPath, entry, ...args];
   await import(pathToFileURL(entry).href);
 } catch (error) {
