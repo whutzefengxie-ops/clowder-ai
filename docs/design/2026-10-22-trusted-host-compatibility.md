@@ -35,6 +35,6 @@ Host .env 或服务管理器的持久环境可一次保存策略，重启 API �
 
 D 的一次性准备、模板、探针和源码部署接线单独交付，普通启动只读，不夹带安装器或 F289 数据迁移。新 Agent 推荐单 Agent 静态插件，现有官方动态目录保持兼容；第三方动态 grant 和命令执行沙箱不在此契约内。
 
-验收覆盖正常审计、root-only 正反例、原生身份、原始文本/digest/grant 并发、健康 refresh/stop/crashed、失败重试、本机门禁、warning 与错误、多个 API 的排他准入；合成 ACP 与真实客户端证据分别标识。操作见[指南](../ops/acp-trusted-host-compatibility.md)。
+验收覆盖正常审计、root-only 正反例、原生身份、原始文本/digest/grant 并发、健康 refresh/stop/crashed、失败重试、本机门禁、warning 与错误、跨进程重叠事务排他及崩溃后释放；合成 ACP 与真实客户端证据分别标识。操作见[指南](../ops/acp-trusted-host-compatibility.md)。
 
 Architecture cell：Host ACP 启动、插件保存准入、inventory 写者。Map delta：策略分域；配置/审计复用现有存储。Why：持久内网接入可用，同时限定每项权限取舍及恢复行为。
