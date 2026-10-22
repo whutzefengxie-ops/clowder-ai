@@ -3,6 +3,7 @@ feature_ids: [F241]
 topics: [acp, dsh, custom-provider, troubleshooting]
 doc_kind: user-guide
 created: 2026-10-22
+tips_exempt: "DSH 成员配置入口直接提供复用步骤与主动验证费用提示，无需额外弹出提示。"
 ---
 
 # DSH ACP 使用自定义 LLM
@@ -15,6 +16,36 @@ created: 2026-10-22
 该版本的 ACP bundle 默认选择 `deepseek-official / deepseek-v4-flash`；
 Desktop、Web 和 ACP 各自的 profile 配置不会自动相互复制；home 层配置则由这些 profile 共享。
 同一 `DSH_HOME` 的凭据引用可被这些 profile 使用，但有凭据并不等于 ACP 已配置并选中对应路由。
+
+## 在成员设置中一次配置
+
+已在 DSH 配置自定义 `llm-pi-ai` 接口时，可在“设置 → 成员 → 模型与工具”使用
+**DSH 自定义 LLM**，无需配置官方供应商或改绑 Host 账号：
+
+1. 成员使用原生工具配置、无单独账号绑定；展开 DSH 自定义 LLM。
+2. 选择实际保存接口的 profile（例如 `desktop`、`web` 或 `acp`），点击“读取 DSH 配置”。
+   页面展示 ACP 当前路由和模型，以及来源显式声明的路由/模型；读取不会调用 LLM。
+3. 选择目标路由和模型，点击“使用此配置”，再通过成员页面的“保存”应用草稿。
+   原来的官方模型覆盖会清除，成员跟随专用 patch 的选择。
+4. 可主动点击“发送一次请求验证此配置”。这会产生一次模型 prompt，可能收费并保留
+   DSH 测试会话；它不启用 MCP，拒绝向 Host 申请的工具权限。成功只证明收到模型文本，
+   保存后的实际聊天、续聊和角色协作仍需各自验证。
+
+Clowder 在 Host 持久配置根的 `.cat-cafe/dsh-acp/` 保存专用配置快照，并在原有
+`--patch` 之后加载。它完整保留所选 provider 的模型元数据和兼容项，以及当前 ACP 的
+其他配置和 provider 条目。新路径让已有连接池识别变更，正在运行的回合可正常排空；
+旧会话和原生配置不被清空。回退可恢复成员原来的启动参数和模型选择，旧 patch 保留。
+源 profile 后续改动不会自动覆盖此快照，需要重新读取、选择和保存。
+
+配置读取在私有临时副本中运行 DSH 的 `--dump-config`，防止诊断重写原生 `cordis.yml`。
+Desktop 在部分 CLI 版本中保留给 Electron，因此来源只读解析 profile/home patch 显式保存
+的 provider 声明；home 层仍按完整 config 替换。若 ACP profile 尚不存在，读取不会在原生
+HOME 初始化它；首次实际连接由 DSH 正常初始化。认证仍从原有 HOME 或继承环境解析，
+不迁移凭据文件，不为自定义网关补官方 key，也不会自行猜测或提高模型上下文上限。
+
+复杂补丁、表达式、仅来自 bundle 的隐式模型、自定义启动 wrapper、非绝对 `DSH_HOME`
+或内联密钥不自动迁移，按下文手动配置。仅安装了 Host、尚未在 DSH 配置接口和凭据时，
+先完成 DSH 原生配置，再读取复用。此入口只接受直接本机的已登录 owner 操作。
 
 ## 1. 确定实际的启动入口和配置根
 
