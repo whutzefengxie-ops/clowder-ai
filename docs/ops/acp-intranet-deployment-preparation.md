@@ -25,7 +25,11 @@ node scripts/prepare-intranet-deployment.mjs --host-root "D:\ClowderAI"
 
 写入目标为 `<host-root>/.env`；同目录临时文件 flush 后原子替换，替换前复读原文，遇到并发编辑拒绝。Windows 保留原 `.env` 的 DACL，其他平台保留原文件 mode。不执行 `icacls`、`takeown`、盘根提权或系统 ACL 修改。准备时请停止其他配置编辑；工具锁只协调本工具的并发调用，不能锁住任意外部编辑器。
 
+现有文件必须可无损解码为 UTF-8（可带 BOM）；非法字节会拒绝并保留原文件，需负责人确认编码后另行转换。本切片让 Windows 主启动器及 API 子入口均明确按 UTF-8 读取 `.env`，覆盖中文用户目录与路径，避免 PowerShell 5 按系统 ANSI 解码到另一审计位置。启动器仍只读。
+
 准备状态与锁位于 `<host-root>/.cat-cafe/deployment-preparation.json` 和 `deployment-preparation.lock`，不存凭证。成功后重复执行不改 `.env`、不重复探针。失败留下已创建目录及追加过的事件以供诊断；不要删除日志或业务配置来恢复。崩溃残留锁可显式追加 `--recover-stale-lock` 重试，只保留并改名确认 PID 已退出的锁；活进程或身份不明时拒绝。
+
+锁仅在临时文件完整 flush 后排他发布；写入中断的 pending 文件不被当成锁。记录 PID 与系统出生身份，已复用 PID 的旧锁可显式恢复；不会结束任何进程。
 
 ## 审计位置与一次探针
 

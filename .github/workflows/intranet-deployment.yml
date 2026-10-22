@@ -4,6 +4,7 @@ on:
     paths:
       - 'scripts/prepare-intranet-deployment*'
       - 'scripts/lib/*intranet*'
+      - 'scripts/start-windows.ps1'
       - '.env.intranet.example'
       - '.github/workflows/intranet-deployment.yml'
   workflow_dispatch:
@@ -18,4 +19,4 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: node --test scripts/prepare-intranet-deployment.test.mjs
+      - run: node --test scripts/prepare-intranet-deployment.test.mjs scripts/lib/intranet-preparation-lock.test.mjs

@@ -1,17 +1,9 @@
 import { createHash, randomUUID } from 'node:crypto';
-import {
-  closeSync,
-  existsSync,
-  mkdirSync,
-  openSync,
-  readFileSync,
-  renameSync,
-  unlinkSync,
-  writeFileSync,
-} from 'node:fs';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { isAbsolute, join, resolve } from 'node:path';
 import { assertPlainPath, atomicWrite, defaultPreparationAdapters, readOptional } from './intranet-preparation-io.mjs';
+import { acquirePreparationLock, recoverPreparationLock } from './intranet-preparation-lock.mjs';
 
 const BOOTSTRAP = 'CAT_CAFE_WINDOWS_ACP_BOOTSTRAP_MODE';
 const AUDIT = 'CAT_CAFE_ACP_BOOTSTRAP_CONFIG_AUDIT_MODE';
@@ -64,22 +56,6 @@ function loadRecord(path) {
   return record;
 }
 
-function recoverLock(path) {
-  const captured = readOptional(path);
-  if (captured === undefined) return;
-  const owner = JSON.parse(captured);
-  if (!Number.isSafeInteger(owner.pid) || owner.pid <= 0)
-    throw new Error('Unknown preparation lock; preserve it for diagnosis');
-  try {
-    process.kill(owner.pid, 0);
-    throw new Error('Preparation lock belongs to a live process');
-  } catch (error) {
-    if (error.code !== 'ESRCH') throw error;
-  }
-  if (readOptional(path) !== captured) throw new Error('Preparation lock changed; retry without modifying it');
-  renameSync(path, `${path}.retained-${randomUUID()}`);
-}
-
 /** Explicit deployment-owner operation. Normal launchers and API never call this writer. */
 export async function prepareIntranetDeployment(options) {
   if (!options.hostRoot || !isAbsolute(options.hostRoot))
@@ -95,14 +71,12 @@ export async function prepareIntranetDeployment(options) {
   assertPlainPath(stateRoot);
   mkdirSync(stateRoot, { recursive: true, mode: 0o700 });
   const lockPath = join(stateRoot, 'deployment-preparation.lock');
-  if (options.recoverStaleLock) recoverLock(lockPath);
-  const lock = openSync(lockPath, 'wx', 0o600);
-  writeFileSync(lock, JSON.stringify({ pid: process.pid, purpose: 'explicit intranet preparation' }));
+  if (options.recoverStaleLock) recoverPreparationLock(lockPath, readOptional);
+  const release = acquirePreparationLock(lockPath);
   try {
     return await prepareLocked({ ...options, hostRoot, stateRoot });
   } finally {
-    closeSync(lock);
-    unlinkSync(lockPath);
+    release();
   }
 }
 

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -149,3 +150,39 @@ test('crash recovery retains a verified stale lock, never removes a live owner o
   await prepareIntranetDeployment({ ...f.options, recoverStaleLock: true });
   assert.equal(f.calls.length, 1);
 });
+
+test('invalid UTF-8 configuration is rejected byte-for-byte without a probe', async () => {
+  const f = fixture();
+  const previous = Buffer.from([0x41, 0x3d, 0xff, 0x0a]);
+  writeFileSync(join(f.root, '.env'), previous);
+  await assert.rejects(prepareIntranetDeployment(f.options), /encod|UTF|valid/i);
+  assert.deepEqual(readFileSync(join(f.root, '.env')), previous);
+  assert.equal(f.calls.length, 0);
+});
+
+test(
+  'production Windows PowerShell dotenv loaders preserve a prepared Unicode directory after restart',
+  { skip: process.platform !== 'win32' },
+  async () => {
+    const f = fixture('# 保留配置\r\n');
+    const result = await prepareIntranetDeployment({
+      ...f.options,
+      deploymentEnv: { CAT_CAFE_DATA_DIR: join(f.root, '中文 用户') },
+    });
+    const source = readFileSync(new URL('./start-windows.ps1', import.meta.url), 'utf8');
+    const loader = source.slice(
+      source.indexOf('# -- Load .env'),
+      source.indexOf('function Preserve-ServiceFlagForApiLifecycle'),
+    );
+    const ps = `$ProgressPreference='SilentlyContinue'; [Console]::InputEncoding=[Text.Encoding]::UTF8; [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false); $ProjectRoot=[Console]::In.ReadToEnd(); function Write-Ok($v){}; function Write-Warn($v){}; ${loader}\n$env:AUDIT_LOG_DIR`;
+    for (let i = 0; i < 2; i++) {
+      const directory = execFileSync(
+        'C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe',
+        ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(ps, 'utf16le').toString('base64')],
+        { input: f.root, encoding: 'utf8', windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] },
+      ).trim();
+      assert.equal(directory.replaceAll('\\', '/'), result.auditDirectory.replaceAll('\\', '/'));
+    }
+    assert.match(source, /Get-Content \$envFile -Encoding UTF8/g);
+  },
+);

@@ -28,7 +28,7 @@ export function assertPlainPath(path) {
 export function readOptional(path) {
   assertPlainPath(path);
   try {
-    return readFileSync(path, 'utf8');
+    return new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(readFileSync(path));
   } catch (error) {
     if (error.code === 'ENOENT') return undefined;
     throw error;
