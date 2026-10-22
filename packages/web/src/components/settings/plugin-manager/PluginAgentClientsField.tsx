@@ -152,7 +152,12 @@ export function PluginAgentClientsField({
             className="rounded-lg bg-[var(--console-field-bg)] px-3 py-2 text-xs font-semibold text-cafe"
             onClick={() => {
               const kind = preset.id;
-              let id = kind === 'custom' ? `client-${crypto.randomUUID()}` : kind;
+              // getRandomValues also works on an intranet HTTP page; randomUUID
+              // is limited to secure contexts. This ID is persisted, never recomputed on rename.
+              let id =
+                kind === 'custom'
+                  ? `client-${Array.from(crypto.getRandomValues(new Uint32Array(3)), (part) => part.toString(36)).join('-')}`
+                  : kind;
               let suffix = 2;
               while (profiles.some((profile) => profile.id === id)) id = `${kind}-${suffix++}`;
               onChange(JSON.stringify([...profiles, { ...preset, id }]));
