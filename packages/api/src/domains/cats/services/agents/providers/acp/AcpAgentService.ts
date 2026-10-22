@@ -1038,14 +1038,26 @@ function classifyError(
         : null;
     const fullMsg = dataDetail ? `${err.message} — ${dataDetail}` : err.message;
 
-    // Check for credential-related errors before other classifications
+    // Check MCP errors first to avoid misclassifying tool auth as model credential issues
+    if (/\bmcp\b/i.test(fullMsg)) {
+      return { errorCode: 'mcp_pollution', errorMsg: fullMsg };
+    }
+
+    // Check for model credential-related errors (specific patterns from known providers)
+    // DSH pattern: "no API key for provider route" or similar structured messages
     if (
+      /no\s+API\s+key\s+for\s+provider/i.test(fullMsg) ||
+      /store\s+\w+_API_KEY\s+through/i.test(fullMsg) ||
       /credential.*(required|missing|invalid|expired)/i.test(fullMsg) ||
-      /auth.*fail/i.test(fullMsg) ||
       /api[_\s]?key.*(missing|required|invalid)/i.test(fullMsg) ||
-      /token.*(expired|invalid)/i.test(fullMsg) ||
-      /unauthorized|unauthenticated/i.test(fullMsg)
+      /token.*(expired|invalid)/i.test(fullMsg)
     ) {
+      return { errorCode: 'credential_required', errorMsg: fullMsg };
+    }
+
+    // General auth failures - only if not already classified as MCP or specific credential pattern
+    // Be conservative: 401/403 alone could be network, MCP, or provider issues
+    if (/^(auth.*fail|unauthenticated)$/i.test(fullMsg)) {
       return { errorCode: 'credential_required', errorMsg: fullMsg };
     }
 
@@ -1055,9 +1067,6 @@ function classifyError(
     }
     if (err.code === -32000 || fullMsg.includes('capacity')) {
       return { errorCode: 'model_capacity', errorMsg: fullMsg };
-    }
-    if (/\bmcp\b/i.test(fullMsg)) {
-      return { errorCode: 'mcp_pollution', errorMsg: fullMsg };
     }
     return { errorCode: 'prompt_failure', errorMsg: fullMsg };
   }

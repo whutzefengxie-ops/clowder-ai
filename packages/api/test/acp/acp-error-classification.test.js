@@ -11,8 +11,53 @@ import { describe, it } from 'node:test';
 // that match the patterns observed in real DSH/Pi credential failures.
 
 describe('ACP credential error classification', () => {
-  it('identifies missing API key errors', async () => {
-    // RED test: Will fail until error classification is implemented
+  it('identifies original DSH missing API key error', async () => {
+    // R3-1: Original DSH error pattern from Issue #1668
+    const { AcpAgentService } = await import(
+      '../../dist/domains/cats/services/agents/providers/acp/AcpAgentService.js'
+    );
+    const { AcpProtocolError } = await import('../../dist/domains/cats/services/agents/providers/acp/AcpClient.js');
+
+    const service = new AcpAgentService({
+      catId: 'test-cat',
+      pool: {
+        async acquire() {
+          return {
+            client: {
+              promptCapabilities: {},
+              onCapacity() {},
+              offCapacity() {},
+              clearRecentCapacitySignal() {},
+              async newSession() {
+                throw new AcpProtocolError(-32603, 'Internal error: turn failed', {
+                  error:
+                    'llm-deepseek: no API key for provider route "deepseek-official"; store DEEPSEEK_API_KEY through the credentials service (the web Models page writes it), or export DEEPSEEK_API_KEY in the launching environment',
+                });
+              },
+              async *promptStream() {},
+            },
+            release() {},
+          };
+        },
+      },
+      poolKey: {},
+      projectRoot: '.',
+      mcpSupport: false,
+      providerName: 'DSH',
+    });
+
+    const messages = [];
+    for await (const message of service.invoke('test task', { workingDirectory: '.' })) {
+      messages.push(message);
+    }
+
+    const error = messages.find((m) => m.type === 'error');
+    assert.ok(error, 'Should emit an error message');
+    assert.equal(error.errorCode, 'credential_required', 'Should classify original DSH error as credential_required');
+    assert.match(error.error, /no API key for provider/i, 'Error message should contain original pattern');
+  });
+
+  it('identifies generic missing API key errors', async () => {
     const { AcpAgentService } = await import(
       '../../dist/domains/cats/services/agents/providers/acp/AcpAgentService.js'
     );
@@ -42,7 +87,7 @@ describe('ACP credential error classification', () => {
       poolKey: {},
       projectRoot: '.',
       mcpSupport: false,
-      providerName: 'DSH',
+      providerName: 'Test',
     });
 
     const messages = [];
@@ -51,9 +96,8 @@ describe('ACP credential error classification', () => {
     }
 
     const error = messages.find((m) => m.type === 'error');
-    assert.ok(error, 'Should emit an error message');
-    assert.equal(error.errorCode, 'credential_required', 'Should classify as credential_required');
-    assert.match(error.error, /credential/i, 'Error message should mention credentials');
+    assert.ok(error);
+    assert.equal(error.errorCode, 'credential_required');
   });
 
   it('identifies authentication failures', async () => {
@@ -73,7 +117,7 @@ describe('ACP credential error classification', () => {
               offCapacity() {},
               clearRecentCapacitySignal() {},
               async newSession() {
-                throw new AcpProtocolError(-32603, 'Unauthorized', { error: 'Authentication failed' });
+                throw new AcpProtocolError(-32603, 'auth fail');
               },
               async *promptStream() {},
             },
@@ -95,6 +139,52 @@ describe('ACP credential error classification', () => {
     const error = messages.find((m) => m.type === 'error');
     assert.ok(error);
     assert.equal(error.errorCode, 'credential_required');
+  });
+
+  it('classifies MCP auth errors as mcp_pollution, not credential_required', async () => {
+    // R3-2: MCP authentication should not pollute model credential status
+    const { AcpAgentService } = await import(
+      '../../dist/domains/cats/services/agents/providers/acp/AcpAgentService.js'
+    );
+    const { AcpProtocolError } = await import('../../dist/domains/cats/services/agents/providers/acp/AcpClient.js');
+
+    const service = new AcpAgentService({
+      catId: 'test-cat',
+      pool: {
+        async acquire() {
+          return {
+            client: {
+              promptCapabilities: {},
+              onCapacity() {},
+              offCapacity() {},
+              clearRecentCapacitySignal() {},
+              async newSession() {
+                throw new AcpProtocolError(-32603, 'MCP server fixture returned Unauthorized');
+              },
+              async *promptStream() {},
+            },
+            release() {},
+          };
+        },
+      },
+      poolKey: {},
+      projectRoot: '.',
+      mcpSupport: false,
+      providerName: 'Test',
+    });
+
+    const messages = [];
+    for await (const message of service.invoke('test task', { workingDirectory: '.' })) {
+      messages.push(message);
+    }
+
+    const error = messages.find((m) => m.type === 'error');
+    assert.ok(error);
+    assert.equal(
+      error.errorCode,
+      'mcp_pollution',
+      'MCP auth errors should be classified as mcp_pollution, not credential_required',
+    );
   });
 
   it('does not misclassify capacity errors as credential errors', async () => {
