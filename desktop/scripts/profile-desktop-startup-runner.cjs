@@ -52,6 +52,7 @@ manager._startProcess = (name, command, args, settings) => {
   });
 };
 const abort = new AbortController();
+manager.startupAbort = abort;
 process.on('SIGTERM', () => abort.abort());
 const timeout = setTimeout(() => abort.abort(), options.timeoutMs);
 (async () => {
