@@ -13,7 +13,7 @@ created: 2026-10-22
 
 本文对应 DSH 源码 `687f282e8625c6b8d11ff58211a90524be2e4317`（包版本 `0.2.1-rc.2`）。
 该版本的 ACP bundle 默认选择 `deepseek-official / deepseek-v4-flash`；
-Desktop、Web 和 ACP 各自的 provider 配置不会自动相互复制。
+Desktop、Web 和 ACP 各自的 profile 配置不会自动相互复制；home 层配置则由这些 profile 共享。
 同一 `DSH_HOME` 的凭据引用可被这些 profile 使用，但有凭据并不等于 ACP 已配置并选中对应路由。
 
 ## 1. 确定实际的启动入口和配置根
@@ -22,7 +22,13 @@ Desktop、Web 和 ACP 各自的 provider 配置不会自动相互复制。
 Windows 可用 `Get-Command dsh -All` 检查入口。若它是包装脚本，还要确认脚本最终使用的 `DSH_HOME`：
 某些本地启动器会重设该变量，仅在外部终端设置它不能证明配置隔离已经生效。
 
-找到该配置根下的 `profiles/acp/cordis.patch.yml`，对照 Desktop/Web 中实际可用的自定义 provider。
+配置按以下顺序加载，后层可覆盖前层：
+
+`bundle → profiles/acp/cordis.patch.yml → $DSH_HOME/cordis.patch.yml → 按参数顺序应用的 --patch 文件`。
+
+找到实际启动参数中的全部 `--patch`，连同共享 home patch 一起检查，再对照 ACP profile 与 Desktop/Web 中可用的 provider。
+同一插件后层的完整 `config` 会替换前层配置；因此 profile 已选中目标模型，仍可能被 home 或 overlay 改回旧路由。
+共享 home patch 还会影响其他 profile：修正实际生效的覆盖层时，只改必要条目，保留其他 profile 需要的配置，不删除整个共享 patch。
 编辑前备份目标 patch；保留已有路由、插件配置、认证和历史。
 若使用另一套实验 `DSH_HOME`，通过原生配置方式提供该路由所需凭据，避免复制整份日常认证文件。
 
@@ -52,6 +58,7 @@ Windows 可用 `Get-Command dsh -All` 检查入口。若它是包装脚本，还
 将这两部分合并进现有 patch 中对应 `id` 的配置；不要直接覆盖整个文件或追加重复 `id`。
 保留该插件原有的其他配置及 `providers` 条目。
 从可用 profile 迁入路由时，完整保留它的模型元数据、`compat` 等选项，而不只复制显示名称。
+同时检查后续 home/overlay 层是否再次配置 `acp` 或 `llm-pi-ai`，防止选择或 provider 字典被覆盖。
 
 `apiKeyEnv` 是凭据引用名，不是密钥正文。它必须能在**实际 ACP 进程使用的配置根或启动环境**中解析。
 例如同一 `DSH_HOME` 已有该引用时，无需另配官方 key；另一配置根中没有它时，仍须通过 DSH 原生方式配置。
@@ -69,7 +76,11 @@ Windows 可用 `Get-Command dsh -All` 检查入口。若它是包装脚本，还
 
 ## 4. 验证实际路由
 
-先通过 ACP 客户端完成 `initialize → session/new → session/prompt`，再从 Clowder 发起同样的最小请求。
+先用实际入口及相同的 `--profile`、`--patch` 参数执行 `--dump-config`，核对最终 `acp` 选择和 `llm-pi-ai` 路由声明；
+此步骤只组合配置，不调用模型。不要将可能包含私有配置或 `!!js` 表达式的完整输出直接发布或作为脚本执行。
+例如 profile 选 `custom-gateway/your-model`、home patch 选官方模型时，最终选择应以 home 层为准；
+两个 overlay 都改 `acp` 时，按参数顺序最后应用的 overlay 生效。
+再通过 ACP 客户端完成 `initialize → session/new → session/prompt`，并从 Clowder 发起同样的最小请求。
 检查以下证据：
 
 1. 新会话的模型选项及当前值指向目标 provider/model。DSH 可能用 JSON 数组字符串表示模型值，
@@ -85,7 +96,8 @@ Windows 可用 `Get-Command dsh -All` 检查入口。若它是包装脚本，还
 
 | 观察 | 下一步 |
 | --- | --- |
-| ACP 仍广告或选择官方 provider | 修正实际 ACP profile 的路由声明和默认选择，核对启动器是否使用了另一配置根 |
+| ACP 仍广告或选择官方 provider | 核对真实配置根，以及 bundle、profile、共享 home 和全部 `--patch` 的加载顺序；修正实际生效的覆盖层 |
+| profile 中声明的目标路由在最终配置中消失 | 检查 home/overlay 是否用完整 `llm-pi-ai.config` 替换了 profile 的 provider 字典，合并所需条目并保留共享配置 |
 | ACP 选择自定义 provider，但缺对应引用 | 在该原生配置根或进程环境中提供目标引用，不用官方 key 替代 |
 | 原生 ACP 成功，Clowder 选择不同模型 | 检查角色模型覆盖、client 启动参数和当前会话回执，再定位 Host 的具体偏差 |
 | 路由正确，出现协议或接口错误 | 核对 DSH provider 的 `api`、`baseURL`、模型和兼容选项；必要时向 DSH 上游报告 |
@@ -93,8 +105,9 @@ Windows 可用 `Get-Command dsh -All` 检查入口。若它是包装脚本，还
 Windows 若在启动子进程前报 bootstrap 目录 ACL 不安全，按现有指南配置独立的安全目录；
 它属于进程启动隔离检查，不能作为自定义 LLM 鉴权失败的证据。
 
-配置回退只恢复本次修改前的 ACP patch 和角色模型选择；不清空凭据或历史。
+配置回退只恢复本次实际修改的 profile/home/overlay patch 及角色模型选择；不清空凭据或历史。
 若在原生 ACP 与 Clowder 中均成功，配置修复即可闭合该调用问题，无需新增通用凭据状态或派发机制。
 
 上游依据：[DSH ACP 默认配置](https://github.com/deepseek-ai/deepseek-harness/blob/687f282e8625c6b8d11ff58211a90524be2e4317/packages/bundle/acp-app/cordis.patch.yml)、
-[自定义 provider 配置说明](https://github.com/deepseek-ai/deepseek-harness/blob/687f282e8625c6b8d11ff58211a90524be2e4317/packages/llm/llm-pi-ai/README.md)。
+[自定义 provider 配置说明](https://github.com/deepseek-ai/deepseek-harness/blob/687f282e8625c6b8d11ff58211a90524be2e4317/packages/llm/llm-pi-ai/README.md)、
+[配置层加载顺序](https://github.com/deepseek-ai/deepseek-harness/blob/687f282e8625c6b8d11ff58211a90524be2e4317/packages/boot/app-boot/src/profile-context.ts#L74-L80)。
