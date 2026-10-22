@@ -78,10 +78,10 @@ MCP 实测为 stdio；HTTP 只有参数映射测试。最后两条 POSIX 修复�
 用户报告自选目录检查通过，但保存显示 `Plugin audit log is unavailable`；CodeAgent 另有 `prompt_failure: EPERM`。
 保存路径在调用配置服务前先追加审计；追加失败返回 503，因此不能把目录检查通过当作配置已经生效。审计实现只是追加文件，不执行 bootstrap 祖先校验；不能把两种错误统称为同一个安全检查问题。
 
-用户随后明确选择兼容模式：仅 Host 启动环境中的 `CAT_CAFE_TRUSTED_HOST_COMPATIBILITY=1` 开启。
-Windows 跳过祖先 owner / DACL 信任，仍保留自身私有 DACL、真实 NTFS、非 reparse 与 spawn 复验；插件配置审计失败时告警后继续保存，页面显示告警，实际配置失败不会被转换为成功。
+当前契约已将目录信任 B 和审计准入 C 拆成两个 Host 持久配置键，详见[兼容模式指南](../ops/acp-trusted-host-compatibility.md)。旧 `CAT_CAFE_TRUSTED_HOST_COMPATIBILITY=1` 仅在对应新键未设置时映射受限组合，并在启动时告警。
+Windows 的 B 跳过祖先 owner / DACL 信任，保留自身私有 DACL、真实 NTFS、非 reparse 与 spawn 复验。C 仅对已安装且授权的已有 ACP client 的真实引导目录变化开放；命令、参数、名称、ID、MCP、其他字段、新增 client 或混合更新均不获例外。成功保存的审计缺失以独立 warning 展示。
 登录、owner、本机/Origin 与受限角色策略不变，其他插件生命周期和工具审计仍按原规则。
-这更新此前对应范围的安全取舍，默认严格模式保持。风险和具体操作见[兼容模式指南](../ops/acp-trusted-host-compatibility.md)。
+默认严格模式保持。API 不写部署配置；一次准备与模板归独立 D 交付，普通启动不补键、不迁移日志。以下早期验收数字对应当时版本，不能替代最新 HEAD 的回归和 CI。
 
 本机已验证：目录祖先宽泛授权的默认拒绝→开启后创建私有目录→不修改祖先 ACL→坏自身 ACL/junction/SUBST 仍拒绝→关闭后重新拒绝。
 生产 HTTP handlers 配合真实配置文件及合成 ACP 原生子进程完成检查、审计失败告警保存、重新读取、initialize、session/new、prompt 和严格模式恢复。零模型调用，未连接原企业机或真实 CodeAgent。

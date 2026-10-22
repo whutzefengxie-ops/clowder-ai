@@ -52,14 +52,16 @@ CAT_CAFE_ACP_BOOTSTRAP_CONFIG_AUDIT_MODE=warn-bootstrap-root
 
 `Plugin audit log is unavailable` 是实际审计追加失败，不能据此判断引导目录失败。默认位置仍是 API cwd 下 data/audit-logs。诊断报告 writer 实际绑定的位置；显式 AUDIT_LOG_DIR 不会被静默改道。
 
-部署者应提供 Host 账户可追加的专用日志目录；修改 AUDIT_LOG_DIR 须保存到部署配置并重启 API，仅刷新 Web 不生效，Hub 不能热改。公共 Host 的部署准备属于独立 D 交付。本分支的独立内网 Windows 包已预置持久默认值，普通用户不必编辑环境变量；详见[内网包指南](./intranet-windows-codeagent.md)。
+部署者应提供 Host 账户可追加的专用日志目录；修改 AUDIT_LOG_DIR 须保存到部署配置并重启 API，仅刷新 Web 不生效，Hub 不能热改。公共 Host 的自动部署准备属于独立 D 交付，不能把尚未交付的命令当成默认行为。本分支的独立内网 Windows 包已预置持久默认值，普通用户不必编辑环境变量；见[内网包指南](./intranet-windows-codeagent.md)。
 
 - 正常审计成功：保存正常完成，无降级 warning。
 - 审计失败且已有 client 仅改变 root：C 还会验证包/grant、原生目录身份、事务内旧文本和版本；成功才显示“已保存，但本次审计未写入”。
 - 审计失败且不满足例外：未保存。安装、启用、新 client 和修改命令必须先恢复正常审计。
 - 已写入但 runtime 刷新/恢复失败：显示部分失败，不能当成完成；刷新回读配置和插件状态后处理。
+- C 的配置已写入但 inventory 落盘失败：在同一队列释放前，确认文本仍是本次写入值并补偿恢复旧原文；恢复库存后可在审计仍故障时重试同一 C 请求。不能覆盖并发编辑。若补偿自身失败，则明确报告部分保存，须恢复库存与正常审计后刷新、普通保存；配置与库存是两个文件，不能声称跨文件原子提交。
 - 日志位置恢复后再次保存会重试审计；成功清除当前 warning。既有已丢失审计不自动补写或伪造成成功。
 
+同一 inventory 的写事务使用原生 SQLite 文件锁排他，覆盖配置副作用、库存提交及失败补偿；忙锁时等待当前事务结束再明确重试。辅助 `*.writer-lock.sqlite` 不存业务数据，不删除或迁移。它不提供多 API 的 runtime 协同，部署仍应只运行一套 Host API。只停止已确认归属的重复实例，不按进程名批量结束，不删除用户存储。
 
 ## CodeAgent 和回退
 

@@ -197,6 +197,11 @@ jobs:
           packages/api/test/acp/acp-bootstrap-strict-native.test.ts
           packages/api/test/acp/acp-bootstrap-posix-preservation.test.ts
           packages/api/test/acp/acp-bootstrap-check-route.test.ts
+          packages/api/test/acp/acp-host-policy-matrix.test.ts
+          packages/api/test/acp/acp-directory-identity.test.ts
+          packages/api/test/acp-bootstrap-config-recovery.test.js
+          packages/api/test/plugin-inventory-writer-lease.test.js
+          packages/api/test/audit-log-retry.test.js
           packages/api/test/agent-session-contract/acp-factory-recovery.test.ts
           packages/api/test/account-credential-identity.test.js
           packages/api/test/account-store-adjudication.test.js

@@ -23,7 +23,7 @@ Windows 企业存储可能无法满足严格祖先信任，且审计追加失败
 
 服务器原生复跑目录校验；本机文件系统的目录身份识别大小写/分隔符/长短名别名，不能仅按字符串声称位置改变。检查可能创建 root 和 directory-check 目录；保存失败仍保留，不自动删除、不改旧 ACL。
 
-写入同一个 inventory.transaction 内复读原配置文本、包 digest、grant 和实例，和捕获状态比较，再消费 revision 围栏。复读至写入无 await；操作目标/状态等写者共享事务队列。不能把进程内队列称为跨进程锁。
+写入同一个 inventory.transaction 内复读原配置文本、包 digest、grant 和实例，和捕获状态比较，再消费 revision 围栏。复读至写入无 await；操作目标/状态等写者共享 canonical 队列。文件库存另由辅助 SQLite 原生锁覆盖读取最新状态、配置副作用、JSON 提交和同步补偿，最后释放；进程崩溃由 OS 释放，不查询 PID、不缓存长期连接。仅对可靠支持 SQLite 原生锁的本地存储提供事务排他，部署仍只运行一套 API，不宣称多个活 API 的 runtime 协同。辅助文件不存业务数据、不删除；只读快照使用原子 JSON。不能把进程内队列称为跨进程锁。
 
 配置已保存的 warning 与实际错误分别返回和展示；写入未知、已写入但 refresh/恢复失败不得伪装成功。下一次明确保存重新尝试审计，不永久缓存旧失败，不伪造自动补记。
 
@@ -33,8 +33,8 @@ Windows 企业存储可能无法满足严格祖先信任，且审计追加失败
 
 Host .env 或服务管理器的持久环境可一次保存策略，重启 API 生效；不要求每次 PowerShell export。AUDIT_LOG_DIR 构造时绑定且不可从 Hub 热改；现有显式路径不静默迁移，API 默认仍为其 cwd/data/audit-logs。
 
-D 的一次性准备、模板、探针和部署接线单独交付，不混入公共 A/B/C 送审。本分支另有独立内网安装包，默认配置由桌面发行版只读注入，见[使用指南](../ops/intranet-windows-codeagent.md)；不做 F289 数据迁移。新 Agent 推荐单 Agent 静态插件，现有官方动态目录保持兼容；第三方动态 grant 和命令执行沙箱不在此契约内。
+D 的一次性准备、模板、探针和源码部署接线单独交付，普通启动只读，不夹带安装器或 F289 数据迁移。本分支另行提供独立内网 Windows 发行版，默认配置由桌面只读注入，已有配置长期保留，见[内网包指南](../ops/intranet-windows-codeagent.md)。新 Agent 推荐单 Agent 静态插件，现有官方动态目录保持兼容；第三方动态 grant 和命令执行沙箱不在此契约内。
 
-验收覆盖正常审计、root-only 正反例、原生身份、原始文本/digest/grant 并发、健康 refresh/stop/crashed、失败重试、本机门禁、warning 与错误；合成 ACP 与真实客户端证据分别标识。操作见[指南](../ops/acp-trusted-host-compatibility.md)。
+验收覆盖正常审计、root-only 正反例、原生身份、原始文本/digest/grant 并发、健康 refresh/stop/crashed、失败重试、本机门禁、warning 与错误、跨进程重叠事务排他及崩溃后释放；合成 ACP 与真实客户端证据分别标识。操作见[指南](../ops/acp-trusted-host-compatibility.md)。
 
-Architecture cell：Host ACP 启动、插件保存准入与事务复读。Map delta：策略分域；配置/审计复用现有存储。Why：持久内网接入可用，同时限定每项权限取舍及恢复行为。
+Architecture cell：Host ACP 启动、插件保存准入、inventory 写者。Map delta：策略分域；配置/审计复用现有存储。Why：持久内网接入可用，同时限定每项权限取舍及恢复行为。

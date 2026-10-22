@@ -8,12 +8,17 @@ import type { OperationState } from '../operations/operation-state-machine.js';
 import { assertOperationCommit, type PluginOperationCommitFence } from '../operations/plugin-operation-fence.js';
 import {
   readPluginConfig,
+  readPluginConfigText,
   readPluginOperationState,
+  restorePluginConfigText,
   writePluginConfig,
   writePluginOperationState,
 } from '../plugin-config-store.js';
-import { type AcpBootstrapConfigRecovery, prepareAcpBootstrapConfigRecovery } from './acp-bootstrap-config-recovery.js';
-import type { acpBootstrapDirectoryIdentity } from './acp-bootstrap-directory-identity.js';
+import {
+  type AcpBootstrapConfigRecovery,
+  prepareAcpBootstrapConfigRecovery,
+} from './acp-bootstrap/acp-bootstrap-config-recovery.js';
+import type { acpBootstrapDirectoryIdentity } from './acp-bootstrap/acp-bootstrap-directory-identity.js';
 import { chromeSetupPolicy } from './chrome-setup/personal-chrome-setup-policy.js';
 import { effectivePluginConfigurationValue } from './plugin-configuration-values.js';
 import {
@@ -210,27 +215,47 @@ export class HostPluginConfigurationService implements PluginManagerConfiguratio
     bootstrapRootRecovery = false,
   ): Promise<void> {
     let recovery: AcpBootstrapConfigRecovery | undefined;
+    let persisted = false;
+    let compensated = false;
     const prepareRecovery = async () => {
       if (bootstrapRootRecovery)
         recovery = await prepareAcpBootstrapConfigRecovery({ ...this.options, pluginId, pluginInstanceId, request });
     };
     const persist = async (expectedRevision: number, liveRefresh = false) => {
       await recovery?.verify();
-      await this.options.inventory.transaction((transaction) => {
-        configureTransaction({
-          transaction,
-          projectRoot: this.options.projectRoot,
-          pluginId,
-          pluginInstanceId,
-          request: { ...request, expectedRevision },
-          allowEmpty,
-          liveRefresh,
-          now: this.now(),
-          ...(recovery ? { beforeWrite: (tx) => recovery?.assertCurrent(tx) } : {}),
-        });
-      });
+      let previous: string | undefined;
+      let written: string | undefined;
+      await this.options.inventory.transaction(
+        (transaction) => {
+          previous = readPluginConfigText(this.options.projectRoot, pluginId);
+          configureTransaction({
+            transaction,
+            projectRoot: this.options.projectRoot,
+            pluginId,
+            pluginInstanceId,
+            request: { ...request, expectedRevision },
+            allowEmpty,
+            liveRefresh,
+            now: this.now(),
+            afterConfigWrite: () => {
+              persisted = true;
+              written = readPluginConfigText(this.options.projectRoot, pluginId);
+            },
+            ...(recovery ? { beforeWrite: (tx) => recovery?.assertCurrent(tx) } : {}),
+          });
+        },
+        bootstrapRootRecovery
+          ? {
+              onCommitFailure: () => {
+                if (written === undefined) return;
+                restorePluginConfigText(this.options.projectRoot, pluginId, written, previous);
+                persisted = false;
+                compensated = true;
+              },
+            }
+          : undefined,
+      );
     };
-    let persisted = false;
     try {
       if (!this.options.lifecycle) {
         await prepareRecovery();
@@ -259,6 +284,21 @@ export class HostPluginConfigurationService implements PluginManagerConfiguratio
         },
       });
     } catch (error) {
+      if (compensated && error instanceof PluginLifecycleError && error.code === 'CONFIGURATION_RESUME_FAILED')
+        throw new PluginManagerServiceError(
+          'RUNTIME_START_FAILED',
+          'Previous configuration restored, but the plugin runtime could not be restored; refresh plugin state and retry after fixing runtime startup',
+        );
+      if (compensated)
+        throw new PluginManagerServiceError(
+          'CONFIGURATION_UNAVAILABLE',
+          'Configuration was not saved; previous text restored after inventory commit failure. Restore inventory storage and retry.',
+        );
+      if (persisted)
+        throw new PluginManagerServiceError(
+          'RUNTIME_START_FAILED',
+          'Configuration saved, but the plugin inventory or runtime update did not complete; restore inventory and audit storage, refresh the saved configuration and plugin state, then retry',
+        );
       if (!(error instanceof PluginLifecycleError)) throw error;
       if (error.code === 'STALE_REVISION' || error.code === 'STALE_INSTANCE') {
         throw new PluginManagerServiceError('STALE_REVISION', error.message);

@@ -98,7 +98,6 @@ export function requiredFieldsReady(
   });
 }
 
-/** Variant readiness uses the contract's effective branch; older manifests retain their requiredness walk. */
 export function manifestConfigurationReady(
   record: PluginPackageRecord,
   stored: Readonly<Record<string, string>>,
@@ -181,6 +180,7 @@ export function configureTransaction(input: {
   readonly allowEmpty?: boolean;
   readonly liveRefresh?: boolean;
   readonly beforeWrite?: (transaction: PluginInventoryTransaction) => void;
+  readonly afterConfigWrite?: () => void;
 }): void {
   const current = requireConfigurationTarget(input.transaction, input.pluginId, input.pluginInstanceId);
   assertConfigurationFence(current.instance, input.request.expectedRevision);
@@ -202,6 +202,7 @@ export function configureTransaction(input: {
     input.pluginId,
     input.request.updates.map((update) => ({ name: update.key, value: update.value })),
   );
+  input.afterConfigWrite?.();
   input.transaction.instances.put({
     ...current.instance,
     configReadiness: manifestConfigurationReady(current.packageRecord, next) ? 'ready' : 'incomplete',

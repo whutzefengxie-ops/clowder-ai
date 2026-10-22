@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { afterEach, beforeEach, test } from 'node:test';
 import { ExternalPluginLifecycleService } from '../dist/domains/plugin/external-plugin-lifecycle.js';
+import { FilePluginInventoryStore } from '../dist/domains/plugin/host-inventory/stores.js';
+import { HostPluginConfigurationService } from '../dist/domains/plugin/manager/plugin-manager-configuration.js';
 import { writePluginConfig } from '../dist/domains/plugin/plugin-config-store.js';
 import { profile, rootRecoveryFixture } from './helpers/acp-root-recovery-fixture.js';
 
@@ -49,6 +51,7 @@ for (const [label, transform] of [
   ['clear root', (p) => [{ ...p, bootstrapRoot: undefined }]],
   ['relative root', (p) => [{ ...p, bootstrapRoot: './root' }]],
   ['no change', () => [profile]],
+  ['equivalent Windows spelling', () => [{ ...profile, bootstrapRoot: 'd:\\OLDACP\\' }]],
 ])
   test(`audit exception refuses ${label} changes without writing`, windows, async () => {
     const f = await rootRecoveryFixture();
@@ -187,3 +190,75 @@ test('bad package integrity and stale lifecycle revision cannot reach persistenc
     assert.equal(JSON.parse(f.read().clients)[0].bootstrapRoot, profile.bootstrapRoot);
   }
 });
+
+for (const resumeFailure of [false, true])
+  test(
+    `inventory failure compensates config; resumeFailure=${resumeFailure}; same C request can retry`,
+    windows,
+    async () => {
+      const { join, win32 } = await import('node:path');
+      const { rename } = await import('node:fs/promises');
+      const f = await rootRecoveryFixture();
+      const path = join(f.projectRoot, 'inventory.json');
+      const snapshot = await f.inventory.snapshot();
+      const initial = new FilePluginInventoryStore(path);
+      await initial.transaction((tx) => {
+        for (const pkg of snapshot.packages) tx.packages.put(pkg);
+        for (const instance of snapshot.instances) tx.instances.put(instance);
+        for (const grant of snapshot.grants) tx.grants.put(grant);
+        if (resumeFailure)
+          tx.instances.put({
+            ...f.instance,
+            activationState: 'enabled',
+            runtimeState: 'crashed',
+            configReadiness: 'ready',
+          });
+      });
+      let broken = true;
+      const inventory = new FilePluginInventoryStore(path, {
+        fileOps: {
+          rename: async (...args) => {
+            if (broken && JSON.parse(f.read().clients)[0].bootstrapRoot === 'D:/NewACP')
+              throw new Error('simulated inventory EPERM');
+            return rename(...args);
+          },
+        },
+      });
+      const service = new HostPluginConfigurationService({
+        projectRoot: f.projectRoot,
+        inventory,
+        packages: f.packages,
+        inspectBootstrapRoot: (root) => ({ ok: true, root, trustMode: 'trusted-host' }),
+        bootstrapDirectoryIdentity: (root) => win32.resolve(root).toLowerCase(),
+        ...(resumeFailure
+          ? {
+              lifecycle: new ExternalPluginLifecycleService({
+                store: inventory,
+                supervisor: {
+                  stop: async () => {},
+                  start: async () => {
+                    if (broken) throw new Error('runtime startup failure');
+                  },
+                },
+              }),
+            }
+          : {}),
+      });
+      await assert.rejects(
+        service.configureBootstrapRoot('test.acp-library', f.instance.pluginInstanceId, f.request()),
+        resumeFailure
+          ? /Previous configuration restored, but the plugin runtime could not be restored/
+          : /previous text restored/,
+      );
+      assert.equal(JSON.parse(f.read().clients)[0].bootstrapRoot, profile.bootstrapRoot);
+      const afterFailure = (await inventory.snapshot()).instances[0];
+      if (resumeFailure) assert.equal(afterFailure.runtimeState, 'stopped');
+      else assert.equal(afterFailure.lifecycleRevision, f.instance.lifecycleRevision);
+      broken = false;
+      await service.configureBootstrapRoot('test.acp-library', f.instance.pluginInstanceId, {
+        ...f.request(),
+        expectedRevision: afterFailure.lifecycleRevision,
+      });
+      assert.equal((await inventory.snapshot()).instances[0].lifecycleRevision, afterFailure.lifecycleRevision + 1);
+    },
+  );
