@@ -32,14 +32,49 @@ public static class InstallPathIdentity {
 '@
 $installRoot = [InstallPathIdentity]::Resolve($AppDir).TrimEnd('\')
 $installPrefix = $installRoot + '\'
-function Get-OwnedInstallProcesses {
-  @(Get-Process -ErrorAction SilentlyContinue | Where-Object {
-    $processPath = $_.Path
-    if ($processPath) {
-      $processPath = [InstallPathIdentity]::Resolve($processPath)
-      $processPath.StartsWith($installPrefix, [System.StringComparison]::OrdinalIgnoreCase)
+# Names narrow enumeration only; canonical executable paths remain the stop authority.
+# Do not traverse reparse members into another installation or user-owned tree.
+function Get-InstallExecutableNames {
+  $names = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+  $directories = [Collections.Generic.Queue[string]]::new()
+  $directories.Enqueue($installRoot)
+  while ($directories.Count -gt 0) {
+    foreach ($entry in @(Get-ChildItem -LiteralPath $directories.Dequeue() -Force -ErrorAction Stop)) {
+      if ($entry.PSIsContainer) {
+        if (-not ($entry.Attributes -band [IO.FileAttributes]::ReparsePoint)) { $directories.Enqueue($entry.FullName) }
+      }
+      elseif ($entry.Extension -ieq '.exe') { $null = $names.Add($entry.BaseName) }
     }
-  })
+  }
+  return ,$names
+}
+$candidateNames = Get-InstallExecutableNames
+function Get-OwnedInstallProcesses {
+  foreach ($candidate in @(Get-Process -ErrorAction Stop)) {
+    # Querying paths of unrelated protected Windows processes can fail even for an administrator.
+    # An unreadable live candidate is still an error, never evidence of a stopped installation.
+    try {
+      $processName = $candidate.ProcessName
+      if (-not $processName) { throw 'Process name unavailable' }
+    } catch {
+      if (Get-Process -Id $candidate.Id -ErrorAction SilentlyContinue) {
+        throw "Cannot verify process identity for installation shutdown (PID $($candidate.Id))"
+      }
+      continue
+    }
+    if (-not $candidateNames.Contains($processName)) { continue }
+    try {
+      $processPath = $candidate.Path
+      if (-not $processPath) { throw 'Executable path unavailable' }
+      $processPath = [InstallPathIdentity]::Resolve($processPath)
+    } catch {
+      if (Get-Process -Id $candidate.Id -ErrorAction SilentlyContinue) {
+        throw "Cannot verify candidate executable for installation shutdown (PID $($candidate.Id))"
+      }
+      continue
+    }
+    if ($processPath.StartsWith($installPrefix, [System.StringComparison]::OrdinalIgnoreCase)) { $candidate }
+  }
 }
 if ($InspectOnly) {
   @(Get-OwnedInstallProcesses | ForEach-Object { $_.Id }) | ConvertTo-Json -Compress

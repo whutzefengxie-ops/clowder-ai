@@ -1,5 +1,6 @@
 import { basename } from 'node:path';
 import { isBuiltinPiBridgeArgs } from '../domains/cats/services/agents/providers/pi/pi-bridge-launch.js';
+import { resolveDshSetupLaunch } from './dsh-setup-launch.js';
 import { dshLauncherProfileState } from './native-dsh-profile.js';
 
 export type NativeHarnessId = 'codeagent' | 'claudecode' | 'codex' | 'dsh' | 'pi' | 'kimi';
@@ -23,5 +24,13 @@ export function nativeBindingHarness(
   if (name === 'node' && isBuiltinPiBridgeArgs([...args])) return 'pi';
   const dsh = dshLauncherProfileState(command, args, cwd);
   if (dsh && dsh !== 'custom_startup') return 'dsh';
+  if (dsh === 'custom_startup') {
+    try {
+      resolveDshSetupLaunch(command, [...args], cwd);
+      return 'dsh'; // Classification only; profile readiness and probe policy stay unchanged.
+    } catch {
+      // Unknown wrappers or unsafe overlays remain unclassified.
+    }
+  }
   return undefined;
 }

@@ -4,13 +4,17 @@ import { useEffect, useState } from 'react';
 import { useAgentClientLibraries } from '@/hooks/useAgentClientLibraries';
 import { apiFetch } from '@/utils/api-client';
 import type { ProfileItem } from '../../hub-accounts.types';
-import { serializeCommandArgs } from '../../hub-cat-editor.acp';
 import { usesAgyAcp, usesAgyNative } from '../../hub-cat-editor.agy';
-import { builtinAccountIdForClient, filterAccounts, type HubCatEditorFormState } from '../../hub-cat-editor.model';
+import {
+  builtinAccountIdForClient,
+  filterAccounts,
+  type HubCatEditorFormState,
+  splitCommandArgs,
+} from '../../hub-cat-editor.model';
 import { SelectField } from '../../hub-cat-editor-fields';
-import { DshProviderSetup } from './DshProviderSetup';
 import { MemberChoicePicker } from './MemberChoicePicker';
 import { MemberConfigurationDetails } from './MemberConfigurationDetails';
+import { MemberDshProviderSetup } from './MemberDshProviderSetup';
 import { MemberToolSelector } from './MemberToolSelector';
 import type { MemberRuntimeContext } from './member-runtime-context';
 import { matchesRuntime, type RuntimeChoice, type RuntimeDrafts, runtimeDefaults } from './member-runtime-draft';
@@ -99,6 +103,7 @@ export function MemberRuntimeFields({
     form.defaultModel,
     refresh,
     form.cliConfigArgs.length > 0,
+    JSON.stringify([form.acpCommand, splitCommandArgs(form.acpStartupArgs), form.acpTransport, form.acpAgentProvider]),
   );
   const defaultModel = catalog?.defaultModel ?? (!form.accountRef ? selected?.configuredModel : undefined);
   const defaultModelLabel =
@@ -212,18 +217,7 @@ export function MemberRuntimeFields({
           {t('已检测登录 · 实际连接待验证', 'Sign-in detected · Connection not yet verified')}
         </p>
       )}
-      {native &&
-        !form.accountRef &&
-        form.clientId === 'acp' &&
-        /dsh|deepseek/i.test(form.acpCommand + form.acpStartupArgs) && (
-          <DshProviderSetup
-            runtimeId={selected?.id ?? (editing ? `acp:${form.catId}` : 'dsh')}
-            t={t}
-            onPrepared={(command, args) =>
-              patch({ acpCommand: command, acpStartupArgs: serializeCommandArgs(args), defaultModel: '' })
-            }
-          />
-        )}
+      <MemberDshProviderSetup form={form} selected={selected} patch={patch} t={t} />
       <div className="grid gap-4 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
         <MemberChoicePicker
           label={t('模型', 'Model')}

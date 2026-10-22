@@ -82,6 +82,78 @@ test('second-instance renderer recreation reports failures instead of creating a
   assert.equal(reported, failure);
 });
 
+function mockedInstallInspection({ candidateName, candidatePath, unreadable = false, inspectOnly = true }) {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'install-enumeration-'));
+  const appDir = path.join(base, 'install');
+  fs.mkdirSync(appDir);
+  fs.writeFileSync(path.join(appDir, 'probe.exe'), 'Only filename inventory is used; this fixture is never executed.');
+  const marker = path.join(base, 'unexpected-stop');
+  const quote = (value) => `'${value.replace(/'/g, "''")}'`;
+  const wrapper = path.join(base, 'inspect.ps1');
+  fs.writeFileSync(
+    wrapper,
+    [
+      `$global:fixtureProcess = [pscustomobject]@{ Id = 2147483000; ProcessName = ${quote(candidateName)} }`,
+      unreadable
+        ? "$global:fixtureProcess | Add-Member ScriptProperty Path { throw 'Controlled protected process path' }"
+        : `$global:fixtureProcess | Add-Member NoteProperty Path ${quote(candidatePath ?? path.join(base, 'missing.exe'))}`,
+      'function Get-Process { [CmdletBinding()] param([int]$Id) $global:fixtureProcess }',
+      `function Stop-Process { [CmdletBinding()] param([Parameter(ValueFromPipeline)]$InputObject, [switch]$Force) process { [IO.File]::WriteAllText(${quote(marker)}, 'called'); throw 'No process may be stopped by this fixture' } }`,
+      `& ${quote(path.join(__dirname, 'scripts/stop-installed-desktop.ps1'))} -AppDir ${quote(appDir)} -WaitSeconds 0 ${inspectOnly ? '-InspectOnly' : ''}`,
+    ].join('\r\n'),
+  );
+  try {
+    let status = 0,
+      stderr = '';
+    try {
+      execFileSync('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', wrapper], {
+        encoding: 'utf8',
+        windowsHide: true,
+        stdio: 'pipe',
+        timeout: 15000,
+      });
+    } catch (error) {
+      status = error.status;
+      stderr = error.stderr?.toString() ?? '';
+    }
+    return { status, stderr, stopped: fs.existsSync(marker) };
+  } finally {
+    fs.rmSync(base, { recursive: true, force: true });
+  }
+}
+
+test(
+  'Windows inspection ignores unrelated process paths that cannot be canonicalized',
+  { skip: process.platform !== 'win32' },
+  () => {
+    const result = mockedInstallInspection({ candidateName: 'unrelated-protected-process' });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stopped, false);
+  },
+);
+
+test(
+  'Windows inspection never accesses unrelated protected process Path getters',
+  { skip: process.platform !== 'win32' },
+  () => {
+    const result = mockedInstallInspection({ candidateName: 'unrelated-protected-process', unreadable: true });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stopped, false);
+  },
+);
+
+test(
+  'Windows cleanup reports unresolved live candidates without stopping them or claiming success',
+  { skip: process.platform !== 'win32' },
+  () => {
+    for (const unreadable of [false, true]) {
+      const result = mockedInstallInspection({ candidateName: 'probe', unreadable, inspectOnly: false });
+      assert.equal(result.status, 1, 'an unresolved candidate is not proof that the installation stopped');
+      assert.equal(result.stopped, false);
+    }
+  },
+);
+
 test(
   'Windows cleanup stops a test-owned install process and preserves its sibling control',
   { skip: process.platform !== 'win32' },
