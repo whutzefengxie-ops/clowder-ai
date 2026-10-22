@@ -20,6 +20,127 @@ import type { AcpStartupPolicy } from './acp-startup-policy-types.js';
 import { ensureWindowsAcpBootstrapDirectories } from '../acp-bootstrap-windows-directory.js';
 
 /**
+ * PowerShell script to create a file with secure Windows ACL.
+ * Sets owner to current user and protected DACL (no inheritance).
+ * Content is passed via stdin and written atomically.
+ */
+const CREATE_SECURE_FILE_SCRIPT = `
+$ErrorActionPreference = 'Stop'
+$ProgressPreference = 'SilentlyContinue'
+try {
+  [Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false)
+  $request = [Console]::In.ReadToEnd() | ConvertFrom-Json
+  $filePath = $request.filePath
+  $content = $request.content
+
+  # Check if file already exists
+  if ([System.IO.File]::Exists($filePath)) {
+    throw "File already exists: $filePath"
+  }
+
+  $sidType = [System.Security.Principal.SecurityIdentifier]
+  $user = [System.Security.Principal.WindowsIdentity]::GetCurrent().User
+  $allow = [System.Security.AccessControl.AccessControlType]::Allow
+  $full = [System.Security.AccessControl.FileSystemRights]::FullControl
+
+  # Create file security descriptor with owner and protected DACL
+  $security = [System.Security.AccessControl.FileSecurity]::new()
+  $security.SetOwner($user)
+  $security.SetAccessRuleProtection($true, $false)
+
+  # Grant full control to current user only
+  $rule = [System.Security.AccessControl.FileSystemAccessRule]::new(
+    $user, $full,
+    [System.Security.AccessControl.InheritanceFlags]::None,
+    [System.Security.AccessControl.PropagationFlags]::None, $allow)
+  $security.AddAccessRule($rule)
+
+  # Write content with secure ACL
+  # Use FileStream to set security during creation
+  $mode = [System.IO.FileMode]::CreateNew
+  $access = [System.IO.FileAccess]::Write
+  $share = [System.IO.FileShare]::None
+  $fs = [System.IO.FileStream]::new($filePath, $mode, $security, $access, $share, 4096)
+  try {
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($content)
+    $fs.Write($bytes, 0, $bytes.Length)
+    $fs.Flush()
+  } finally {
+    $fs.Close()
+  }
+
+  [Console]::Out.Write('secure-file-created')
+} catch {
+  [Console]::Error.WriteLine($_.Exception.Message)
+  exit 1
+}
+`;
+
+/**
+ * Create a file with secure Windows ACL (owner + protected DACL).
+ * On Windows, uses PowerShell + .NET to set security during creation.
+ * On Unix, uses fs with mode 0o600.
+ */
+function createSecureFile(filePath: string, content: string): { success: boolean; error?: string } {
+  if (platform() === 'win32') {
+    try {
+      const powershell = join(
+        process.env.SystemRoot ?? 'C:\\Windows',
+        'System32',
+        'WindowsPowerShell',
+        'v1.0',
+        'powershell.exe',
+      );
+
+      const output = execFileSync(
+        powershell,
+        [
+          '-NoLogo',
+          '-NoProfile',
+          '-NonInteractive',
+          '-EncodedCommand',
+          Buffer.from(CREATE_SECURE_FILE_SCRIPT, 'utf16le').toString('base64'),
+        ],
+        {
+          env: Object.fromEntries(Object.entries(process.env).filter(([name]) => name.toUpperCase() !== 'PSMODULEPATH')),
+          input: JSON.stringify({ filePath, content }),
+          encoding: 'utf8',
+          timeout: 10_000,
+          maxBuffer: 256 * 1024,
+          windowsHide: true,
+          stdio: ['pipe', 'pipe', 'pipe'],
+        },
+      );
+
+      if (output.trim() !== 'secure-file-created') {
+        return { success: false, error: 'Secure file creation did not return expected receipt' };
+      }
+
+      return { success: true };
+    } catch (error: unknown) {
+      const err = error as { stderr?: string; message?: string; code?: string };
+      if (err.code === 'EEXIST') {
+        return { success: false, error: 'File already exists' };
+      }
+      const errorMsg = err.stderr?.trim() || err.message || String(error);
+      return { success: false, error: `Failed to create secure file: ${errorMsg}` };
+    }
+  } else {
+    // Unix: use standard fs with mode 0o600
+    try {
+      writeFileSync(filePath, content, { encoding: 'utf8', mode: 0o600, flag: 'wx' });
+      return { success: true };
+    } catch (error: unknown) {
+      const err = error as { code?: string; message?: string };
+      if (err.code === 'EEXIST') {
+        return { success: false, error: 'File already exists' };
+      }
+      return { success: false, error: `Failed to create file: ${err.message || String(error)}` };
+    }
+  }
+}
+
+/**
  * PowerShell script to validate a file's security on Windows.
  * Checks: owner, protected DACL, no untrusted principals, no reparse point.
  * Similar to directory validation but uses File.GetAccessControl.
@@ -478,27 +599,31 @@ export function persistPolicies(policies: AcpStartupPolicy[]): { success: boolea
       // File doesn't exist - OK to create
     }
 
-    // Use exclusive creation (wx flag) to prevent following symlinks
-    // wx = open for writing, fail if file exists (atomic, doesn't follow symlinks)
-    // This prevents: 1) following dangling symlinks to create files outside storage
-    //                2) race conditions between check and write
-    try {
-      writeFileSync(tempPath, JSON.stringify(manifest, null, 2), {
-        encoding: 'utf8',
-        mode: 0o600,
-        flag: 'wx' // Exclusive creation - fail if file exists, don't follow symlinks
-      });
-    } catch (error: unknown) {
-      const err = error as { code?: string; message?: string };
-      if (err.code === 'EEXIST') {
-        return {
-          success: false,
-          error: 'Tmp file appeared between check and write (possible race or symlink)'
-        };
+    // Use secure file creation to set proper owner/DACL on Windows
+    // On Windows: PowerShell + .NET sets owner to current user + protected DACL
+    // On Unix: standard fs with mode 0o600 + exclusive flag
+    const manifestContent = JSON.stringify(manifest, null, 2);
+    const createResult = createSecureFile(tempPath, manifestContent);
+    if (!createResult.success) {
+      return {
+        success: false,
+        error: `Failed to create tmp file: ${createResult.error}`
+      };
+    }
+
+    // Validate the newly created tmp file before proceeding
+    // This ensures the file meets security requirements (owner, protected DACL, no reparse)
+    const tmpValidation = validateFileNotSymlink(tempPath);
+    if (!tmpValidation.success) {
+      // Clean up the tmp file we just created
+      try {
+        unlinkSync(tempPath);
+      } catch {
+        // Ignore cleanup errors
       }
       return {
         success: false,
-        error: `Failed to write tmp file: ${err.message || String(error)}`
+        error: `Created tmp file failed validation: ${tmpValidation.error}`
       };
     }
 
