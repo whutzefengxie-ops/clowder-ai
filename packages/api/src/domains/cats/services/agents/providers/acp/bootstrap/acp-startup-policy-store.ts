@@ -213,6 +213,31 @@ export function isPolicyActive(policyId: string, revision: number): boolean {
 }
 
 /**
+ * Reload local policies from persistent storage.
+ * This ensures we have the latest state from disk, even if another process modified it.
+ */
+function reloadFromStorage(): { success: boolean; error?: string } {
+  try {
+    const persisted = loadPersistedPolicies();
+
+    // Clear current local policies
+    localPolicies.clear();
+
+    // Reload from disk
+    for (const policy of persisted) {
+      const key = makePolicyKey(policy.policyId, policy.revision);
+      localPolicies.set(key, policy);
+    }
+
+    return { success: true };
+  } catch (error) {
+    const errorMsg = `Failed to reload policies from storage: ${error}`;
+    console.error('[acp-policy-store]', errorMsg);
+    return { success: false, error: errorMsg };
+  }
+}
+
+/**
  * Import a policy into the local policy store.
  *
  * This is a controlled import - policies must be explicitly added by authorized users.
@@ -228,6 +253,12 @@ export function isPolicyActive(policyId: string, revision: number): boolean {
  * @returns Success status and error message if failed
  */
 export function importPolicy(policy: AcpStartupPolicy): { success: boolean; error?: string } {
+  // Reload from storage to get latest state (in case another process modified it)
+  const reloadResult = reloadFromStorage();
+  if (!reloadResult.success) {
+    return { success: false, error: `Failed to reload policies before import: ${reloadResult.error}` };
+  }
+
   // Validate schema version
   if (policy.schemaVersion !== 1) {
     return { success: false, error: `Unsupported schema version: ${policy.schemaVersion}` };
@@ -330,6 +361,12 @@ export function importPolicy(policy: AcpStartupPolicy): { success: boolean; erro
  * @returns Success status and error message if failed
  */
 export function revokePolicy(policyId: string, revision?: number): { success: boolean; error?: string } {
+  // Reload from storage to get latest state (in case another process modified it)
+  const reloadResult = reloadFromStorage();
+  if (!reloadResult.success) {
+    return { success: false, error: `Failed to reload policies before revoke: ${reloadResult.error}` };
+  }
+
   if (!policyId) {
     return { success: false, error: 'policyId is required' };
   }

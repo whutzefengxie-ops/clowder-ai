@@ -672,8 +672,34 @@ export function persistPolicies(policies: AcpStartupPolicy[]): { success: boolea
       renameSync(manifestPath, backupPath);
     }
 
-    // Move tmp to manifest
-    renameSync(tempPath, manifestPath);
+    // Move tmp to manifest (final commit)
+    // If this fails, restore backup to maintain consistency
+    try {
+      renameSync(tempPath, manifestPath);
+    } catch (error) {
+      // Final commit failed - restore backup if it exists
+      if (existsSync(backupPath)) {
+        try {
+          renameSync(backupPath, manifestPath);
+        } catch (restoreError) {
+          // Restore failed - both tmp and backup exist, manifest missing
+          // This is a critical state - log but don't hide original error
+          console.error('[acp-policy-storage] Failed to restore backup after commit failure:', restoreError);
+        }
+      }
+      // Clean up tmp file if it still exists
+      try {
+        if (existsSync(tempPath)) {
+          unlinkSync(tempPath);
+        }
+      } catch {
+        // Ignore cleanup errors
+      }
+      return {
+        success: false,
+        error: `Failed to commit manifest: ${error instanceof Error ? error.message : String(error)}`
+      };
+    }
 
     return { success: true };
   } catch (error) {
