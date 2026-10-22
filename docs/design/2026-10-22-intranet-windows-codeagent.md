@@ -9,6 +9,8 @@ created: 2026-10-22
 
 目标：交付独立 EXE 安装包；CodeAgent 直接内置 Host，一键发现并优先承载宪宪、砚砚、墨墨，不依赖 #104 插件安装或 Claude Code 存在。
 
+用户操作与一次配置入口见[内网包指南](../ops/intranet-windows-codeagent.md)。
+
 源码：feat/intranet-windows-codeagent；承接 #1677 B/C 已提交实现及隔离后续修复 9729158b4。旧插件方案和当前运行环境保留，内网包不自动更新到公共发行版。
 
 ## 产品契约

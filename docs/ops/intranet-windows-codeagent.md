@@ -1,0 +1,61 @@
+---
+feature_ids: [F241]
+topics: [windows, intranet, codeagent, installation]
+doc_kind: guide
+created: 2026-10-22
+---
+
+# Clowder AI Intranet 使用说明
+
+这是独立内网发行版。安装名称、安装目录、用户数据目录与普通版分开；不迁移或覆盖普通版的角色、配置、认证和历史。CodeAgent 的接入逻辑直接内置 Host，无需安装 ACP 插件。
+
+本说明用于这个独立内网包；公共 Host 的严格默认值不因此改变。公共策略的完整边界见 [Windows ACP 持久配置](./acp-trusted-host-compatibility.md)，本包操作以本说明及实际策略诊断为准。
+
+## 安装与首次使用
+
+1. 使用企业批准的方式安装并登录 CodeAgent。Host 包含 Node、Redis、Web 和桌面外壳，不包含企业 CodeAgent 程序本体或登录凭据。
+2. 在 PowerShell 运行 `Get-Command codeagent -All | Select-Object Source`。应能看到实际的 `.exe` 或 `.cmd` 路径；`codeagent --acp` 是该客户端的 ACP 启动方式，通过 stdin/stdout 交换 NDJSON。手工启动后等待输入属于正常状态，检查结束可按 Ctrl+C 退出。
+3. 安装交付的 `ClowderAI-Intranet-Setup-1.14.0.exe`，启动 **Clowder AI Intranet**。默认端口为 Web 5331、API 5332、Redis 6389。端口占用时先确认归属，不结束其他产品的进程。
+4. 在首次创建伙伴或设置→成员→推荐配置入口重新检测。找到 CodeAgent 后，会优先推荐宪宪、砚砚、墨墨三套独立身份；点击“一键创建 3 位伙伴”。同一个 CodeAgent 程序承载三个角色，不代表三个不同的底层模型。
+5. 若已安装其他客户端，可按需要勾选。已有角色不会自动改绑、覆盖，已有同名身份也不会自动重复创建。客户端缺失时显示“未检测到”，不能据此推断登录或 ACP 协议已经验证。
+6. 在会话中分别 `@宪宪`、`@砚砚`、`@墨墨` 发起任务；从一个角色向另一个角色传球，再检查实际伙伴回复，以验证协作链路。
+
+CodeAgent 如果安装在自定义位置，优先把安装目录加入用户 PATH 并重启本应用后重新检测。也可在成员编辑器手动新增/编辑通用 ACP，填写第一步找到的可执行绝对路径和 `--acp` 参数，选择对应角色模板；已经检测到的伙伴可点击“调整”修改启动配置。安装 CLI 后，已运行的桌面程序可能仍持有旧 PATH；退出并重新启动后再检测。
+
+## 兼容配置只需设置一次
+
+本发行版每次启动默认带入以下设置，普通用户无需创建文件、编辑 `.env` 或逐个客户端设置：
+
+```text
+CAT_CAFE_INTRANET_EDITION=1
+CAT_CAFE_TRUSTED_HOST_COMPATIBILITY=1
+CAT_CAFE_WINDOWS_ACP_BOOTSTRAP_MODE=trusted-host
+CAT_CAFE_ACP_BOOTSTRAP_CONFIG_AUDIT_MODE=warn-bootstrap-root
+```
+
+它们只影响 Host 的 Windows ACP 兼容策略。仍保留目录自身私有权限、本地 NTFS、链接拒绝、鉴权与直接本机管理边界；不会修改系统盘 ACL。审计失败例外只覆盖已存在 ACP client 的引导目录变更，不能用来修改命令、参数或 MCP 授权。
+
+默认用户数据根为 `%LOCALAPPDATA%\Clowder AI Intranet`，审计目录为其中的 `data\audit-logs`。重启使用同一数据根，替换程序不覆盖用户文件。作者隔离验收可能使用安装参数指定的独立数据根；不要把验收数据根当作普通版路径。
+
+运维人员需要显式覆盖时，在该数据根手工创建 `intranet-host.json`，例如：
+
+```json
+{
+  "CAT_CAFE_WINDOWS_ACP_BOOTSTRAP_MODE": "trusted-host",
+  "CAT_CAFE_ACP_BOOTSTRAP_CONFIG_AUDIT_MODE": "warn-bootstrap-root"
+}
+```
+
+保存文件后完整退出桌面应用并重新启动。此文件优先于启动进程环境，其次是本发行版默认值。API 及普通启动流程只读取它，不自动改写；更新不覆盖。显式 `strict`、`required` 与自定义 `AUDIT_LOG_DIR` 均保留。不要在该文件放客户端认证或密钥。
+
+## 引导目录与权限
+
+引导目录是 Host 启动 ACP 进程时使用的专用目录，业务项目目录仍单独传给 ACP session。先用现有入口自动检查；需要手工指定时，选择当前用户可管理的本地 NTFS 目录，使用专门的子目录，保留服务端原生检查结果。不要对 `C:\`、`D:\` 或已有业务目录执行批量 ACL 修改。
+
+内置 CodeAgent 默认自动选择，不要求用户先找目录。若另行使用原 ACP 客户端插件的高级设置：在 Host 本机打开“设置→插件→ACP 客户端目录”，引导目录先留空，点击“检查引导目录”，直接使用返回的完整路径；点击“使用此目录”后保存并重新进入页面回读。不要按示例用户名猜路径，也不要把检查返回的目录当作项目目录。这个高级入口属于可选插件，不是本包内置 CodeAgent 的安装前置步骤。
+
+兼容模式仍可能拒绝目录自身权限或文件系统不合格的路径；它不能绕过 Windows 或 CodeAgent 本身返回的 EPERM。客户端 bypass 与 Host 兼容策略相互独立，本包不会暗中开启客户端 bypass。企业已验证的客户端参数可通过成员的 ACP 配置显式保存。
+
+## 验证边界
+
+安装、界面创建、持久化和合成 ACP/MCP 测试分别记录。`synthetic-client.cjs` 只是作者验收产物，不会进入安装包，也不是企业 CodeAgent。只有真实 CodeAgent 完成 ACP 初始化、MCP 工具调用、角色传球与重启续接后，才能声明企业客户端的完整实机验收通过。

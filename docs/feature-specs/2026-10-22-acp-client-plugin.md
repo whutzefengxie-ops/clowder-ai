@@ -62,5 +62,6 @@ Host PR 依赖 #1665；插件 PR 依赖本次 Host 扩展。这里只提交源�
 ## 可信主机兼容模式（2026-10-22）
 
 用户在内网验证确认：引导检查通过，但配置保存被 `AUDIT_UNAVAILABLE` 拒绝；CodeAgent 仍有未定位的 EPERM。
-用户明确选择新增显式模式，跳过 Windows 祖先信任校验，插件配置审计失败告警后继续保存；保留目录自身私有权限、鉴权和本机管理限制。
-该选择更新此前对应范围的「不降低安全性」要求，默认严格模式不变。实现与验收边界见[计划](../design/2026-10-22-trusted-host-compatibility.md)及[操作说明](../ops/acp-trusted-host-compatibility.md)。不将本机合成 ACP 验证声明为真实 CodeAgent 或原企业机验收。
+后续将该历史共享模式拆成两项 Host 部署策略：Windows 祖先信任默认 strict；配置审计默认 required。只有 Windows、trusted-host、warn-bootstrap-root 同时生效且正常审计实际失败，才允许符合完整校验的已有 client 引导目录变更。新增 client 或混改命令、参数、bypass、MCP 不获得例外；鉴权、本机管理和目录自身私有权限保留。
+旧变量仅 exact 1 对未设置的新键分别提供受限回退，显式 strict 会屏蔽审计例外。策略可一次持久配置并在正常重启后沿用；API 不自写部署文件。实现与验收边界见[计划](../design/2026-10-22-trusted-host-compatibility.md)及[操作说明](../ops/acp-trusted-host-compatibility.md)。不将本机合成 ACP 验证声明为真实 CodeAgent 或原企业机验收。
+独立内网 Windows 发行版属于 D：内置 CodeAgent 发现与既有角色身份推荐，无需插件，预置持久默认值；不把该发行版默认值混入公共 Host。见[内网包指南](../ops/intranet-windows-codeagent.md)。

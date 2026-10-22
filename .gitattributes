@@ -2,3 +2,4 @@
 # These source bytes define the tracked immutable stylesheet fingerprints.
 packages/web/src/app/*.css text eol=lf
 packages/ui/src/styles.css text eol=lf
+desktop/package.json text eol=lf
