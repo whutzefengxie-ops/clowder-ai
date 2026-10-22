@@ -57,7 +57,7 @@ const timeout = setTimeout(() => abort.abort(), options.timeoutMs);
 (async () => {
   try {
     manager._ensureUserDataDir(instance);
-    await manager._waitForProjectMirrors(instance);
+    await manager._waitForProjectMirrors(instance, 5_000, process.execPath);
     await manager._startApi(process.execPath, instance, abort.signal);
     // The normal startup seam proves an open port, not that the provider's
     // post-listen milestone and trace write have run. Consume the explicit

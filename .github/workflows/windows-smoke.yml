@@ -70,6 +70,9 @@ jobs:
           desktop/runtime-web-server.test.js
           desktop/runtime-web-config.test.js
           desktop/service-startup.test.js
+          desktop/project-mirror-startup-recovery.test.js
+          desktop/project-mirror-recovery.test.js
+          desktop/project-mirror-consumer.test.js
           desktop/main-renderer-lifecycle.test.js
           desktop/startup-timing.test.js
           desktop/visible-renderer.test.js
