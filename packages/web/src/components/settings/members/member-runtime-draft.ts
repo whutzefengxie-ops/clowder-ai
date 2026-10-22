@@ -7,6 +7,10 @@ import type { NativeLoginState } from './native-login-state';
 export interface RuntimeChoice {
   id: string;
   label: string;
+  kind?: 'tool' | 'binding';
+  harnessId?: string;
+  sourceCatId?: string;
+  roleTemplates?: { id: string; priority?: number }[];
   clientId: HubCatEditorFormState['clientId'];
   installed: boolean;
   /** A Host-owned role recommendation, independent of the client carrying it. */
@@ -49,7 +53,7 @@ const runtimeFields = [
   'agyTrustedWorkspaces',
 ] as const;
 type RuntimeFields = Pick<HubCatEditorFormState, (typeof runtimeFields)[number]>;
-export type RuntimeDrafts = Record<string, RuntimeFields>;
+export type RuntimeDrafts = Record<string, RuntimeFields & { harnessId?: string }>;
 
 function runtimeKey(form: RuntimeFields): string {
   return JSON.stringify([
@@ -69,6 +73,8 @@ export function rememberedRuntimes(drafts: RuntimeDrafts = {}): RuntimeChoice[] 
   return Object.entries(drafts).map(([key, form]) => ({
     id: `draft:${key}`,
     label: resolveDraftCarrier(form) === 'acp' ? form.acpCommand : form.clientId,
+    kind: 'binding',
+    harnessId: form.harnessId,
     clientId: form.clientId,
     installed: false,
     models: [],
@@ -116,13 +122,23 @@ function pickRuntime(form: RuntimeFields): RuntimeFields {
 }
 
 /** Switching changes only the draft. Returning to a tool restores its exact binding and overrides. */
-export function switchMemberRuntime(draft: MemberDraft, next: RuntimeChoice): MemberDraft {
+export function switchMemberRuntime(draft: MemberDraft, next: RuntimeChoice, current?: RuntimeChoice): MemberDraft {
+  const nativeHarness = !draft.form.acpAgentProvider && current?.harnessId;
+  if (next.kind === 'tool' && next.harnessId && next.harnessId === nativeHarness) return draft;
   const defaults = runtimeDefaults(next);
   const nextKey = runtimeKey({ ...draft.form, ...defaults });
   const currentKey = runtimeKey(draft.form);
   if (nextKey === currentKey) return draft;
-  const runtimeDrafts = { ...draft.runtimeDrafts, [currentKey]: pickRuntime(draft.form) };
-  const restored = runtimeDrafts[nextKey];
+  const runtimeDrafts = { ...draft.runtimeDrafts };
+  // Object insertion order records the most recently visited exact binding for each harness.
+  delete runtimeDrafts[currentKey];
+  runtimeDrafts[currentKey] = { ...pickRuntime(draft.form), ...(nativeHarness ? { harnessId: nativeHarness } : {}) };
+  const restored =
+    (next.kind === 'tool' && next.harnessId
+      ? Object.values(runtimeDrafts)
+          .reverse()
+          .find((fields) => !fields.acpAgentProvider && fields.harnessId === next.harnessId)
+      : undefined) ?? runtimeDrafts[nextKey];
   // Fill every key, including optional undefined values omitted by JSON draft storage.
   const fields = restored ? pickRuntime(restored) : defaults;
   return { ...draft, runtimeDrafts, form: { ...draft.form, ...fields } };

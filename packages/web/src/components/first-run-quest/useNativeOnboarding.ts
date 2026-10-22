@@ -7,6 +7,7 @@ import type { RuntimeChoice } from '../settings/members/member-runtime-draft';
 import { matchesRuntime } from '../settings/members/member-runtime-draft';
 import { syncDraftToStorage } from '../thread-drafts';
 import { legacyCreationKey, legacySharedKey } from './legacy-creation-key';
+import { retainedCodeagentDraft } from './native-codeagent-draft-recovery';
 import { buildNativeCreationPayload } from './native-creation-payload';
 import { repairLegacyNativeIdentityFields } from './native-identity-repair';
 import {
@@ -16,6 +17,7 @@ import {
   recommendNativePartners,
   SMALL_GOALS,
 } from './native-onboarding';
+import { restoredNativeLead } from './native-runtime-recommendations';
 import { buildNativeTeamGoal, orderGoalPartners } from './native-team-goal';
 import { prepareFirstRunEntry } from './prepareFirstRunEntry';
 import type { TemplateCard } from './TemplateStep';
@@ -111,8 +113,10 @@ export function useNativeOnboarding(
         const currentCats = roster.cats;
         const partners = recommendNativePartners(discovered.runtimes, templates.templates, currentCats, journeyId).map(
           (partner) => {
+            const retained = retainedCodeagentDraft(partner, saved?.partners);
             const previous =
               saved?.partners.find((p) => p.id === partner.id) ??
+              retained?.previous ??
               saved?.partners.find(
                 (p) => p.form && !partner.runtime.roleTemplateId && matchesRuntime(p.form, partner.runtime),
               );
@@ -142,6 +146,9 @@ export function useNativeOnboarding(
             const form = identityChanged ? { ...restoredForm, ...identityRepair } : restoredForm;
             return {
               ...partner,
+              ...(retained || previous.retainedCodeagentRole
+                ? { id: previous.id, retainedCodeagentRole: retained?.roleKey ?? previous.retainedCodeagentRole }
+                : {}),
               // A repaired form is a new request: its old key may belong to a
               // different payload. A true lost-response retry keeps its key.
               creationRequestKey: receiptMismatch
@@ -170,13 +177,7 @@ export function useNativeOnboarding(
           initialRosterEmpty: saved?.initialRosterEmpty ?? (!saved && roster.cats.length === 0),
           partners,
           goal: saved?.goal ?? SMALL_GOALS[0].content,
-          lead:
-            partners.find((p) => {
-              const previousLead = saved?.partners.find((old) => old.id === saved.lead);
-              return previousLead?.form && matchesRuntime(previousLead.form, p.runtime);
-            })?.id ??
-            partners.find((p) => p.selected)?.id ??
-            '',
+          lead: restoredNativeLead(partners, saved?.partners, saved?.lead),
           created: Object.fromEntries(
             partners.flatMap((partner) => {
               const previous = saved?.partners.find((p) => p.form && matchesRuntime(p.form, partner.runtime));

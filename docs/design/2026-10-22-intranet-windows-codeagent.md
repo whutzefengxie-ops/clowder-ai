@@ -21,7 +21,7 @@ created: 2026-10-22
 - 默认设置来自本发行版代码，每次启动相同；用户数据根的 intranet-host.json 可持久覆盖明确策略。读取不写配置，更新程序不替换用户数据文件；显式 strict/required 与 AUDIT_LOG_DIR 均尊重。
 - 原生检测只解析 PATH/常见目录，不启动 client、不调用模型。仅找到真实 CodeAgent 时，返回三套角色建议；未找到则显示不可用，不能冒充登录或协议已验证。
 - 三个角色共用 CodeAgent 的可执行入口，各自拥有独立身份、成员 ID、会话和职责；不把它们说成三个不同模型。角色模板独立于 transport；没有 Claude Code 仍能创建宪宪。
-- 首次建议优先 CodeAgent；原生 Claude/Codex/Kimi 仍可选择。已有角色与定制人设不自动改绑，也不自动生成同名重复角色。草稿恢复必须按身份区分，不能用同一 ACP descriptor 把三个角色合成一个。
+- 首次建议优先 CodeAgent；内网工具目录收敛为 CodeAgent、Claude Code、Codex、DSH、Pi。推荐身份与工具分开；已有角色、插件及定制接入不自动改绑或覆盖，草稿恢复必须按身份区分，不能用同一 ACP descriptor 把三个角色合成一个。
 - CodeAgent 启动为 codeagent --acp。bypass 仍属客户端独立配置，不由 Host 兼容模式暗中开启；先保留实机已经验证的参数。
 - 安装包包含 Host、Node、Redis、Web、Electron；企业 CodeAgent 本体和原生认证属于企业分发边界，需验收真实安装来源后记录。安装 Host 不应伪造 CodeAgent 已安装；当前作者机未检测到真实 CodeAgent。
 
@@ -34,3 +34,5 @@ created: 2026-10-22
 5. 作者测试不新增桌面快捷方式或开机启动；临时实例维护任务台账，停止仅限已核验归属。原生认证/会话与日志不进入 Git/安装包；合成 ACP 不能冒充企业 CodeAgent 实机验收。
 
 Architecture cell：桌面发行版与原生角色发现。Map delta：增加内网默认策略及带身份的 CodeAgent 建议，不新增插件授权层。Why：让首次可用路径直接由 Host 和安装包承担。
+
+工具目录、精确绑定与聊天名称的一致性调整见[本轮实施契约](./2026-10-23-intranet-runtime-identity.md)。

@@ -4,6 +4,7 @@ import { matchesRuntime, type RuntimeChoice, runtimeDefaults } from '../settings
 import { withLegacyNativeIdentityRepair } from './native-identity-repair';
 import { usesDetectedRuntimeConfiguration } from './native-partner-config';
 import { nativePartnerIdentity } from './native-partner-identity';
+import { nativeRuntimeRecommendations, preferredNativeBinding } from './native-runtime-recommendations';
 import { stableOnboardingMemberId } from './onboarding-journey';
 import type { TemplateCard } from './TemplateStep';
 
@@ -16,6 +17,8 @@ export interface NativePartner {
   creationRequestKey?: string;
   /** Upgrade-only marker: several old descriptors shared this pending request key. */
   legacySharedRequestKey?: string;
+  /** A missing-CLI catalog upgrade retained this pending CodeAgent role, independently of its launch descriptor. */
+  retainedCodeagentRole?: string;
   existingId?: string;
   missingExisting?: boolean;
   recoverable?: { id: string; form: HubCatEditorFormState };
@@ -57,17 +60,29 @@ export function recommendNativePartners(
   cats: CatData[],
   journeyId: string,
 ): NativePartner[] {
+  const recommendations = nativeRuntimeRecommendations(runtimes);
   const seen = new Set<string>();
   const reservedIds = new Set(cats.map((cat) => cat.id.toLowerCase()));
   const reservedAliases = new Set(cats.flatMap((cat) => cat.mentionPatterns.map((alias) => alias.toLowerCase())));
   const prioritizedRoles = new Set(
-    runtimes
+    recommendations
       .filter((runtime) => runtime.installed && runtime.priority && runtime.roleTemplateId)
       .map((runtime) => runtime.roleTemplateId),
   );
-  return [...runtimes]
+  return recommendations
     .sort((left, right) => (right.priority ?? 0) - (left.priority ?? 0))
-    .flatMap((runtime) => {
+    .flatMap((candidate) => {
+      const form = nativePartnerIdentity(candidate, templates, cats);
+      const existingBinding = preferredNativeBinding(candidate, runtimes, cats, form);
+      const runtime = existingBinding
+        ? {
+            ...candidate,
+            acp: existingBinding.acp,
+            installed: existingBinding.installed,
+            discoveryStatus: existingBinding.discoveryStatus,
+            models: existingBinding.models,
+          }
+        : candidate;
       // Keep existing/manual OpenCode members, but do not recommend new ones during the compatibility pause.
       if (runtime.clientId === 'opencode') return [];
       const descriptor = JSON.stringify([
@@ -82,7 +97,6 @@ export function recommendNativePartners(
       const discoveryIdentity = (runtime.acp ? descriptor : runtime.id) + roleKey;
       if (seen.has(discoveryIdentity)) return [];
       seen.add(discoveryIdentity);
-      const form = nativePartnerIdentity(runtime, templates, cats);
       if (!form.name) form.name = form.displayName = `${runtime.label} 伙伴`;
       const alias = runtime.roleTemplateId
         ? `@${form.nickname || form.name}`
@@ -95,9 +109,11 @@ export function recommendNativePartners(
         (cat) =>
           (cat.id === legacyId || cat.configurationSource === 'native_tool') &&
           matchesRuntime(initialState(cat), runtime) &&
-          (!runtime.roleTemplateId || cat.nickname === form.nickname),
+          (!runtime.roleTemplateId || cat.id === existingBinding?.sourceCatId || cat.nickname === form.nickname),
       );
-      const baseId = runtime.roleTemplateId ? `codeagent-${runtime.roleTemplateId}` : autoSlug(runtime.label);
+      const codeagentRole =
+        runtime.roleTemplateId && (runtime.harnessId === 'codeagent' || runtime.id.startsWith('codeagent:'));
+      const baseId = codeagentRole ? `codeagent-${runtime.roleTemplateId}` : autoSlug(runtime.label);
       let catId = baseId;
       for (let n = 2; reservedIds.has(catId.toLowerCase()); n++) {
         const suffix = `-${n}`;
