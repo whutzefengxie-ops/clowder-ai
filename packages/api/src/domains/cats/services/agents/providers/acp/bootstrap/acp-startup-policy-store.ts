@@ -6,7 +6,9 @@
  */
 
 import type { AcpStartupPolicy } from './acp-startup-policy-types.js';
-import { loadPersistedPolicies, persistPolicies } from './acp-startup-policy-storage.js';
+import { loadPersistedPolicies, persistPolicies, acquirePolicyLock, releasePolicyLock } from './acp-startup-policy-storage.js';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 
 /**
  * Built-in policies included with this version of Clowder AI.
@@ -129,32 +131,49 @@ try {
  * hasn't changed since last reload. If another process modified policies between
  * reload and commit, this will fail to prevent overwriting external changes.
  */
+/**
+ * Sync local policies to persistent storage.
+ * Returns success/error for transactional import/revoke.
+ *
+ * IMPORTANT: Uses exclusive file lock to serialize the entire read-check-write cycle.
+ * This prevents race conditions where another process modifies policies between
+ * our baseline check and commit.
+ */
 function syncToStorage(): { success: boolean; error?: string } {
+  const storagePath = join(homedir(), '.clowder-ai', 'acp-policies');
+  let lockFd: number | undefined;
+
   try {
-    // Read current disk state before committing
+    // Acquire exclusive lock for the entire transaction
+    const lockResult = acquirePolicyLock(storagePath);
+    if (!lockResult.success) {
+      return { success: false, error: lockResult.error };
+    }
+    lockFd = lockResult.fd;
+
+    // Now holding lock - read current disk state
     const diskPolicies = loadPersistedPolicies();
     const diskKeys = new Set(diskPolicies.map(p => makePolicyKey(p.policyId, p.revision)));
 
-    // Compare disk against baseline (from last reload), NOT against current memory
-    // Current memory includes this operation's changes, which are intentional
-    // We only want to detect external changes by other processes
+    // Compare disk against baseline (from last reload)
+    // This detects if another process modified policies between reload and lock acquisition
 
-    // Check for additions on disk (another process imported since our reload)
+    // Check for additions on disk (another process imported before we got the lock)
     for (const diskKey of diskKeys) {
       if (!baselineSnapshot.has(diskKey)) {
         return {
           success: false,
-          error: `Concurrent modification detected: policy ${diskKey} was added on disk since last reload. Rejecting commit to prevent overwrite.`
+          error: `Concurrent modification detected: policy ${diskKey} was added on disk since last reload.`
         };
       }
     }
 
-    // Check for removals on disk (another process revoked since our reload)
+    // Check for removals on disk (another process revoked before we got the lock)
     for (const baselineKey of baselineSnapshot) {
       if (!diskKeys.has(baselineKey)) {
         return {
           success: false,
-          error: `Concurrent modification detected: policy ${baselineKey} was removed from disk since last reload. Rejecting commit to prevent resurrection.`
+          error: `Concurrent modification detected: policy ${baselineKey} was removed from disk since last reload.`
         };
       }
     }
@@ -175,6 +194,11 @@ function syncToStorage(): { success: boolean; error?: string } {
     const errorMsg = `Failed to sync policies: ${error}`;
     console.error('[acp-policy-store]', errorMsg);
     return { success: false, error: errorMsg };
+  } finally {
+    // Always release lock
+    if (lockFd !== undefined) {
+      releasePolicyLock(lockFd, storagePath);
+    }
   }
 }
 

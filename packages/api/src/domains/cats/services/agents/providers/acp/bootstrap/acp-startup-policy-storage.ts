@@ -13,7 +13,7 @@
 
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, lstatSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, openSync, closeSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { homedir, platform } from 'node:os';
 import { join } from 'node:path';
 import type { AcpStartupPolicy } from './acp-startup-policy-types.js';
@@ -494,6 +494,44 @@ export function loadPersistedPolicies(): AcpStartupPolicy[] {
   } catch (error) {
     console.error('[acp-policy-storage] Failed to load policies:', error);
     return [];
+  }
+}
+
+/**
+ * Acquire an exclusive lock for policy storage operations.
+ * Uses a lock file with exclusive open to serialize writers across processes.
+ *
+ * Returns lock file descriptor on success, or error.
+ * Caller must call releaseLock() with the fd when done.
+ */
+export function acquirePolicyLock(storagePath: string): { success: true; fd: number } | { success: false; error: string } {
+  const lockPath = join(storagePath, 'policies.lock');
+
+  try {
+    // Open with exclusive flag (O_CREAT | O_EXCL) - fails if file exists
+    // This provides atomic test-and-set for the lock
+    const fd = openSync(lockPath, 'wx');
+    return { success: true, fd };
+  } catch (error: unknown) {
+    const err = error as { code?: string; message?: string };
+    if (err.code === 'EEXIST') {
+      // Lock file exists - another process holds the lock
+      return { success: false, error: 'Storage lock held by another process' };
+    }
+    return { success: false, error: `Failed to acquire lock: ${err.message || String(error)}` };
+  }
+}
+
+/**
+ * Release the exclusive lock.
+ */
+export function releasePolicyLock(fd: number, storagePath: string): void {
+  const lockPath = join(storagePath, 'policies.lock');
+  try {
+    closeSync(fd);
+    unlinkSync(lockPath);
+  } catch (error) {
+    console.error('[acp-policy-storage] Failed to release lock:', error);
   }
 }
 
