@@ -14,8 +14,11 @@ import {
   writePluginConfig,
   writePluginOperationState,
 } from '../plugin-config-store.js';
-import { type AcpBootstrapConfigRecovery, prepareAcpBootstrapConfigRecovery } from './acp-bootstrap-config-recovery.js';
-import type { acpBootstrapDirectoryIdentity } from './acp-bootstrap-directory-identity.js';
+import {
+  type AcpBootstrapConfigRecovery,
+  prepareAcpBootstrapConfigRecovery,
+} from './acp-bootstrap/acp-bootstrap-config-recovery.js';
+import type { acpBootstrapDirectoryIdentity } from './acp-bootstrap/acp-bootstrap-directory-identity.js';
 import { chromeSetupPolicy } from './chrome-setup/personal-chrome-setup-policy.js';
 import { effectivePluginConfigurationValue } from './plugin-configuration-values.js';
 import {
