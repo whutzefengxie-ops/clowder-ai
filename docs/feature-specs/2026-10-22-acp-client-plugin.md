@@ -1,16 +1,14 @@
 ---
 feature_ids: [F241]
 topics: [acp, plugins, members]
-doc_kind: implementation-plan
+doc_kind: feature-spec
 created: 2026-10-22
 tips_exempt: "本地候选插件尚未发布，配置和绑定入口说明随插件 README 展示；发布目录接入时再提供可导航的能力提示。"
 ---
 
 # ACP client 插件配置与角色绑定
 
-来源：用户在本聊天授权本地实现、适配 dsh / Claude / pi 并端到端验证；不提交或推送远端。
-Host 基线为上游 PR #1665 的 `5cb50be949eb737e4d60573a81e649f664a368c3`。
-插件仓基线为 `c84ddd7`，分别使用独立 feature worktree。
+本功能在 [#1665](https://github.com/zts212653/clowder-ai/pull/1665) 的 Host-owned 会话契约基础上，提供 ACP client 配置复用、角色绑定及恢复。配套插件见 [clowder-ai-plugins#104](https://github.com/zts212653/clowder-ai-plugins/pull/104)；本规格描述产品契约，实际交付状态和验证版本以对应 PR 为准。
 
 Before：每只成员重复填写命令参数，插件实现绑定还需修改环境变量并重启。
 After：插件管理页配置命名 client；成员编辑器选择已启用 client，保存即可对话。
@@ -39,8 +37,7 @@ API 使用 `pnpm --filter @cat-cafe/api build`，Web 使用 `pnpm --filter @cat-
 
 Architecture cell：现有 F241 Host-owned ACP extension；Map delta：none。
 Why：复用已有插件配置、准入、运行生命周期和 SessionImplementationRegistry；不新增持久存储或进程所有者。
-不会修改生产 runtime 或其配置，不使用 3003/3004/6399；测试状态永久保留并记录确切归属。
-原生客户端隔离认证与历史：先确认实际状态根；不向日志输出凭据，不修改既有会话。
+验收环境隔离应用数据、Redis 和原生客户端状态，记录源码、插件包及测试会话的确切归属；不向日志输出凭据，不修改既有配置或历史。
 
 ## MCP 与角色协作续办（2026-10-22）
 

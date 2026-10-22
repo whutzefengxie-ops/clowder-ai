@@ -1,8 +1,8 @@
-// #1647 slice 1b — agreement v1.3 §39 (part 2): AgentMessage → contract events.
+// ACP AgentMessages project into session contract events.
 //
 // The adapter is the only place that knows how ACP-shaped AgentMessages look, so
-// this table is the whole translation surface. Anything it cannot express is a
-// `status` event, never a bespoke passthrough field.
+// this table verifies the translation surface, including system and telemetry
+// events whose types must survive until Host invocation policy handles them.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { AcpSessionProvider } from '../../dist/domains/cats/services/agents/session-contract/acp-session-provider.js';
@@ -92,7 +92,7 @@ test('[39] tool_use becomes tool_call keyed by the native tool id', async () => 
   assert.equal(calls[1].name, 'ping');
 });
 
-test('[39] tool_result without a native status remains unknown', async () => {
+test('[39] tool_result without native status remains unknown', async () => {
   const { provider } = providerFor([
     agentMessage('tool_result', { toolName: 'read_file', content: 'file body', toolUseId: 'call-1' }),
     agentMessage('done'),
@@ -161,7 +161,7 @@ test('[39] a stream that ends without done gets exactly one completed done', asy
   assert.equal(events.at(-1).type, 'done');
 });
 
-test('[39] a metadata model or usage change becomes a session-scoped context event', async () => {
+test('model changes update session context; usage belongs to each message', async () => {
   const usage = { inputTokens: 5, outputTokens: 2, totalTokens: 7 };
   const { provider } = providerFor([
     agentMessage('text', { content: 'a' }, { model: 'model-a' }),
@@ -176,26 +176,26 @@ test('[39] a metadata model or usage change becomes a session-scoped context eve
   const changed = contexts.find((event) => event.model === 'model-b');
   assert.ok(changed, 'the new model must be reported');
   assert.equal(changed.scope, 'session');
-  assert.deepEqual(changed.usage, usage);
+  assert.equal(changed.usage, undefined);
+  assert.deepEqual(events.find((event) => event.text === 'b').messageUsage, usage);
+  assert.equal(events.at(-1).messageUsage, undefined);
 });
 
-test('[39] diagnostic events preserve their kind and content alongside output', async () => {
-  const { provider } = providerFor([
-    agentMessage('system_info', { content: 'thinking' }),
-    agentMessage('provider_signal', { content: 'capacity retry' }),
-    agentMessage('text', { content: 'reply' }),
-    agentMessage('done'),
-  ]);
+test('system and telemetry events retain their types and content', async () => {
+  const originals = ['system_info', 'provider_signal', 'liveness_signal', 'agent_loop'].map((type) =>
+    agentMessage(type, { content: `${type} body` }),
+  );
+  const { provider } = providerFor([...originals, agentMessage('text', { content: 'reply' }), agentMessage('done')]);
 
   const events = await runTurn(provider);
-  const diagnostics = events.filter((event) => event.type === 'diagnostic');
-
-  assert.deepEqual(
-    diagnostics.map((event) => [event.kind, event.content]),
-    [
-      ['system_info', 'thinking'],
-      ['provider_signal', 'capacity retry'],
-    ],
+  for (const original of originals) {
+    const event = events.find((event) => event.type === original.type);
+    assert.ok(event);
+    assert.equal(event.content, original.content);
+  }
+  assert.equal(
+    events.some((event) => event.type === 'status'),
+    false,
   );
   assert.equal(events.filter((event) => event.type === 'output').length, 1);
 });

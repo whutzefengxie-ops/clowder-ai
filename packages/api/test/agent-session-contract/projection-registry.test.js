@@ -11,7 +11,7 @@ import {
 import { collect, fixture, options, session, turn } from './fake-session-provider.js';
 
 const dir = new URL('../../src/domains/cats/services/agents/session-contract/', import.meta.url);
-test('v1.1/13: projected sequence, shallow metadata snapshots and both textMode layers', async () => {
+test('projected sequence, shallow metadata snapshots and both textMode layers', async () => {
   const { bridge, provider } = fixture({ metadata: { provider: 'test-provider', model: 'initial' } });
   const usage = { inputTokens: 42 };
   const nativeMessage = {
@@ -78,7 +78,10 @@ test('projection: append, primitive tools, status fallback and silent session fa
   const project = (event) => projectSessionEvent(event, ctx);
   assert.equal(project(turn('output', { text: 'suffix', textMode: 'append' }))[0].textMode, 'append');
   for (const input of [undefined, null, 'string', 1, ['array']])
-    assert.deepEqual(project(turn('tool_call', { name: 'tool', input }))[0].toolInput, { value: input });
+    assert.deepEqual(
+      project(turn('tool_call', { name: 'tool', input }))[0].toolInput,
+      input === undefined ? undefined : { value: input },
+    );
   assert.equal(project(turn('tool_result', { name: 'tool', output: 'raw', status: 'error' }))[0].content, 'raw');
   assert.equal(project(turn('status', { phase: 'fallback' }))[0].content, 'fallback');
   assert.equal(project(turn('status', { phase: 'fallback', detail: '' }))[0].content, '');
@@ -116,7 +119,7 @@ test('registry: exact keys, duplicate rejection, factory context and idempotent 
   }
 });
 
-test('v1.1/3: Support has exactly the two agreed literals', async () => {
+test('Support has exactly the two agreed literals', async () => {
   const source = ts.createSourceFile(
     'types.ts',
     await readFile(new URL('types.ts', dir), 'utf8'),
