@@ -63,7 +63,14 @@ export class EventAuditLog {
     const filepath = join(this.auditDir, filename);
     const line = `${JSON.stringify(event)}\n`;
 
-    await appendFile(filepath, line, 'utf-8');
+    try {
+      await appendFile(filepath, line, 'utf-8');
+    } catch (error) {
+      // A removed/repaired directory must not leave this process stuck on its
+      // previous initialization. No retry here: append outcomes may be uncertain.
+      this.initialized = false;
+      throw error;
+    }
 
     return event;
   }

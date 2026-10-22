@@ -151,6 +151,17 @@ export const ENV_VARS: EnvDefinition[] = [
     runtimeEditable: false,
     restartRequired: true,
   },
+  {
+    name: 'CAT_CAFE_ACP_BOOTSTRAP_CONFIG_AUDIT_MODE',
+    defaultValue: 'required',
+    description:
+      'ACP 引导目录保存审计：required 或 warn-bootstrap-root。后者仅在 Windows trusted-host 目录策略下，允许本机所有者保存已校验且只修改引导目录的现有客户端配置；其他变更仍要求审计。重启 API 生效',
+    category: 'server',
+    settingsGroup: 'security',
+    sensitive: false,
+    runtimeEditable: false,
+    restartRequired: true,
+  },
 ];
 
 /** Mask credentials in a URL while preserving host/port/db for debugging. */

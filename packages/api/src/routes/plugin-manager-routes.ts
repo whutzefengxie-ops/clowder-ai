@@ -41,7 +41,7 @@ type PluginManagerRouteService = Pick<
 >;
 
 export interface PluginManagerRouteOptions {
-  readonly manager: PluginManagerRouteService;
+  readonly manager: PluginManagerRouteService & Partial<Pick<PluginManagerService, 'configureBootstrapRoot'>>;
   readonly contributions?: Pick<PluginRuntimeCarrierRouter, 'listPluginTools' | 'callPluginTool'>;
   readonly bindings?: Pick<PluginManagerBindings, 'list' | 'disconnect'>;
   readonly asset?: PluginManagerPackageAssetPort;

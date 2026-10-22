@@ -1,5 +1,7 @@
 import type { PluginManagerConfigureRequest } from '@cat-cafe/shared';
 import type { FastifyInstance } from 'fastify';
+import { allowsAcpBootstrapConfigAuditWarning } from '../config/acp-bootstrap-config-audit-policy.js';
+import { requireCapabilityWriteOwner } from '../config/capabilities/capability-write-guards.js';
 import type { EventAuditLog } from '../domains/cats/services/orchestration/EventAuditLog.js';
 import { pluginAccessError, requirePluginWriteAccess } from './plugin-access-guards.js';
 import {
@@ -33,8 +35,31 @@ export function registerPluginManagerConfigurationRoute(
           expectedRevision: mutation.expectedRevision,
           keys: mutation.updates.map((update) => update.key),
         });
-      } catch {
-        return reply.status(503).send({ error: 'Plugin audit log is unavailable', code: 'AUDIT_UNAVAILABLE' });
+      } catch (error) {
+        request.log.warn(
+          { pluginId: parsedId.data, code: 'AUDIT_UNAVAILABLE', err: error },
+          'Plugin configuration audit append failed; check AUDIT_LOG_DIR',
+        );
+        // Callback roles retain normal audited access, never the human recovery exception.
+        const human = !request.callbackPrincipal && requirePluginWriteAccess(request);
+        if (
+          !human ||
+          'error' in human ||
+          requireCapabilityWriteOwner(human.operator, { requireConfiguredOwner: true }) ||
+          !allowsAcpBootstrapConfigAuditWarning() ||
+          !options.manager.configureBootstrapRoot
+        )
+          return reply.status(503).send({ error: 'Plugin audit log is unavailable', code: 'AUDIT_UNAVAILABLE' });
+        try {
+          const result = await options.manager.configureBootstrapRoot(parsedId.data, mutation);
+          return {
+            ...result,
+            warning:
+              '引导目录配置已保存，但插件审计写入失败。此例外仅允许引导目录变更；请修复 AUDIT_LOG_DIR 后再次保存。',
+          };
+        } catch (recoveryError) {
+          return sendManagerError(reply, recoveryError);
+        }
       }
       try {
         const result = await options.manager.configure(parsedId.data, mutation);
