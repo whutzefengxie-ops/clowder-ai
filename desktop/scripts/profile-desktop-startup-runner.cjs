@@ -20,7 +20,6 @@ for (const name of ['web', 'mcp-server']) {
 fs.symlinkSync(path.join(options.frozenRoot, 'dependencies'), path.join(app, 'node_modules'), 'junction');
 for (const name of ['assets', 'docs', 'guides', 'cat-cafe-skills'])
   fs.symlinkSync(path.join(options.sourceRoot, name), path.join(app, name), 'junction');
-fs.symlinkSync(path.join(options.sourceRoot, 'packages/api/src/plugins'), path.join(app, 'plugins'), 'junction');
 for (const name of fs.readdirSync(path.join(options.sourceRoot, 'scripts'))) {
   if (name === 'node_modules') continue;
   const from = path.join(options.sourceRoot, 'scripts', name);
@@ -58,6 +57,7 @@ const timeout = setTimeout(() => abort.abort(), options.timeoutMs);
 (async () => {
   try {
     manager._ensureUserDataDir(instance);
+    await manager._waitForProjectMirrors(instance, 5_000, process.execPath);
     await manager._startApi(process.execPath, instance, abort.signal);
     // The normal startup seam proves an open port, not that the provider's
     // post-listen milestone and trace write have run. Consume the explicit
