@@ -1,0 +1,189 @@
+{
+  "kind": "pr14-exact-commit-source-counterexamples",
+  "requiredBase": "1baaed2e9fadca8b550ae7041ef5a663994ab2d4",
+  "actualBase": "44fb36e65b3a9ea4ebb9a9a875e0605c06f80289",
+  "head": "117b0e76381ec04752c25257bb0f1a2c1537e767",
+  "scope": "Actual Git blobs, Node TypeScript transform, import URL rewrite and extraction of actual record helper. Synthetic leaf inputs only; no real credentials, native model process or provider requests. Format checks consume committed LF bytes from the six implementation files relative to actual fork base.",
+  "observations": [
+    {
+      "sha": "1baaed2e9fadca8b550ae7041ef5a663994ab2d4",
+      "name": "null-account",
+      "accepted": true,
+      "env": null
+    },
+    {
+      "sha": "1baaed2e9fadca8b550ae7041ef5a663994ab2d4",
+      "name": "literal-provider-key",
+      "accepted": true,
+      "env": {
+        "DEEPSEEK_API_KEY": "synthetic-literal"
+      }
+    },
+    {
+      "sha": "1baaed2e9fadca8b550ae7041ef5a663994ab2d4",
+      "name": "no-template-native-or-parent-env",
+      "accepted": true,
+      "env": null
+    },
+    {
+      "sha": "1baaed2e9fadca8b550ae7041ef5a663994ab2d4",
+      "name": "explicit-key-template",
+      "accepted": true,
+      "env": {
+        "DEEPSEEK_API_KEY": "synthetic-only"
+      }
+    },
+    {
+      "sha": "1baaed2e9fadca8b550ae7041ef5a663994ab2d4",
+      "name": "empty-content-array",
+      "completedAssistant": true,
+      "failure": null,
+      "visibleCharacterCount": 0
+    },
+    {
+      "sha": "1baaed2e9fadca8b550ae7041ef5a663994ab2d4",
+      "name": "empty-text-block",
+      "completedAssistant": true,
+      "failure": null,
+      "visibleCharacterCount": 0
+    },
+    {
+      "sha": "1baaed2e9fadca8b550ae7041ef5a663994ab2d4",
+      "name": "empty-thinking-block",
+      "completedAssistant": true,
+      "failure": null,
+      "visibleCharacterCount": 0
+    },
+    {
+      "sha": "1baaed2e9fadca8b550ae7041ef5a663994ab2d4",
+      "name": "empty-stream-delta",
+      "completedAssistant": true,
+      "failure": null,
+      "visibleCharacterCount": 0
+    },
+    {
+      "sha": "1baaed2e9fadca8b550ae7041ef5a663994ab2d4",
+      "name": "ordinary-text",
+      "completedAssistant": true,
+      "failure": null,
+      "visibleCharacterCount": 14
+    },
+    {
+      "sha": "117b0e76381ec04752c25257bb0f1a2c1537e767",
+      "name": "null-account",
+      "accepted": true,
+      "env": null
+    },
+    {
+      "sha": "117b0e76381ec04752c25257bb0f1a2c1537e767",
+      "name": "literal-provider-key",
+      "accepted": false,
+      "error": "Credential mapping required: account \"synthetic-review\" has an API key but no envVars template. Generic ACP connections require explicit environment variable mapping (e.g., DEEPSEEK_API_KEY: \"${api_key}\")."
+    },
+    {
+      "sha": "117b0e76381ec04752c25257bb0f1a2c1537e767",
+      "name": "no-template-native-or-parent-env",
+      "accepted": false,
+      "error": "Credential mapping required: account \"synthetic-review\" has an API key but no envVars template. Generic ACP connections require explicit environment variable mapping (e.g., DEEPSEEK_API_KEY: \"${api_key}\")."
+    },
+    {
+      "sha": "117b0e76381ec04752c25257bb0f1a2c1537e767",
+      "name": "explicit-key-template",
+      "accepted": true,
+      "env": {
+        "DEEPSEEK_API_KEY": "synthetic-only"
+      }
+    },
+    {
+      "sha": "117b0e76381ec04752c25257bb0f1a2c1537e767",
+      "name": "empty-content-array",
+      "completedAssistant": false,
+      "failure": null,
+      "visibleCharacterCount": 0
+    },
+    {
+      "sha": "117b0e76381ec04752c25257bb0f1a2c1537e767",
+      "name": "empty-text-block",
+      "completedAssistant": true,
+      "failure": null,
+      "visibleCharacterCount": 0
+    },
+    {
+      "sha": "117b0e76381ec04752c25257bb0f1a2c1537e767",
+      "name": "empty-thinking-block",
+      "completedAssistant": true,
+      "failure": null,
+      "visibleCharacterCount": 0
+    },
+    {
+      "sha": "117b0e76381ec04752c25257bb0f1a2c1537e767",
+      "name": "empty-stream-delta",
+      "completedAssistant": true,
+      "failure": null,
+      "visibleCharacterCount": 0
+    },
+    {
+      "sha": "117b0e76381ec04752c25257bb0f1a2c1537e767",
+      "name": "ordinary-text",
+      "completedAssistant": true,
+      "failure": null,
+      "visibleCharacterCount": 14
+    }
+  ],
+  "formatting": [
+    {
+      "path": "packages/api/src/domains/cats/services/agents/providers/acp/acp-spawn-env.ts",
+      "formatterExitCode": 0,
+      "committedBytesMatchFormatter": true,
+      "error": null
+    },
+    {
+      "path": "packages/api/src/domains/cats/services/agents/providers/pi/pi-acp-events.ts",
+      "formatterExitCode": 0,
+      "committedBytesMatchFormatter": true,
+      "error": null
+    },
+    {
+      "path": "packages/api/src/routes/native-runtime-readiness.ts",
+      "formatterExitCode": 0,
+      "committedBytesMatchFormatter": true,
+      "error": null
+    },
+    {
+      "path": "packages/api/test/acp/acp-spawn-env.test.js",
+      "formatterExitCode": 0,
+      "committedBytesMatchFormatter": true,
+      "error": null
+    },
+    {
+      "path": "packages/api/test/helpers/pi-rpc-fixture.mjs",
+      "formatterExitCode": 0,
+      "committedBytesMatchFormatter": true,
+      "error": null
+    },
+    {
+      "path": "packages/api/test/pi-acp-bridge.test.js",
+      "formatterExitCode": 0,
+      "committedBytesMatchFormatter": true,
+      "error": null
+    }
+  ],
+  "sources": {
+    "1baaed2e9fadca8b550ae7041ef5a663994ab2d4:packages/api/src/domains/cats/services/agents/providers/env-map.ts": "87663a907ccc6147580feacd7e58fda40f543276fbef07ffb17bed84f46c82ee",
+    "1baaed2e9fadca8b550ae7041ef5a663994ab2d4:packages/api/src/domains/cats/services/agents/providers/acp/acp-spawn-env.ts": "ed1bd73224477f1cabcb229e009e8588f1d7776ed96fce10c057524b117085dd",
+    "1baaed2e9fadca8b550ae7041ef5a663994ab2d4:packages/api/src/utils/cli-error-patterns.ts": "f159685d493d00315f9d93c9a83bd92a8c36fc7a3b72ff546711231d7e94b9f3",
+    "1baaed2e9fadca8b550ae7041ef5a663994ab2d4:packages/api/src/utils/sanitize-cli-stderr.ts": "b02909be4040a9b4dd8aeab44fca1d3216aa24447da8ec59a8c835c9d472c925",
+    "1baaed2e9fadca8b550ae7041ef5a663994ab2d4:packages/api/src/domains/cats/services/agents/providers/pi/pi-rpc-process.ts": "d34e84f9e60bef3baa58b9d98a16d3063b9f69ca7c8d3bea80a1cf675135c995",
+    "1baaed2e9fadca8b550ae7041ef5a663994ab2d4:packages/api/src/domains/cats/services/agents/providers/pi/pi-acp-events.ts": "d61456a7fe06b3741ccf248d40ed8551b887f339b86f66466e37e3e9de5ed9fe",
+    "117b0e76381ec04752c25257bb0f1a2c1537e767:packages/api/src/domains/cats/services/agents/providers/env-map.ts": "87663a907ccc6147580feacd7e58fda40f543276fbef07ffb17bed84f46c82ee",
+    "117b0e76381ec04752c25257bb0f1a2c1537e767:packages/api/src/domains/cats/services/agents/providers/acp/acp-spawn-env.ts": "6453f88fc3f7afee75b3db84853964ceb0f7e51b9d38110dc32feafd36392c59",
+    "117b0e76381ec04752c25257bb0f1a2c1537e767:packages/api/src/utils/cli-error-patterns.ts": "f159685d493d00315f9d93c9a83bd92a8c36fc7a3b72ff546711231d7e94b9f3",
+    "117b0e76381ec04752c25257bb0f1a2c1537e767:packages/api/src/utils/sanitize-cli-stderr.ts": "b02909be4040a9b4dd8aeab44fca1d3216aa24447da8ec59a8c835c9d472c925",
+    "117b0e76381ec04752c25257bb0f1a2c1537e767:packages/api/src/domains/cats/services/agents/providers/pi/pi-rpc-process.ts": "d34e84f9e60bef3baa58b9d98a16d3063b9f69ca7c8d3bea80a1cf675135c995",
+    "117b0e76381ec04752c25257bb0f1a2c1537e767:packages/api/src/domains/cats/services/agents/providers/pi/pi-acp-events.ts": "47ea7929632900545c97bb17100f0d857cdecedebaae7ed5b689fd06e2d3750b",
+    "117b0e76381ec04752c25257bb0f1a2c1537e767:packages/api/src/routes/native-runtime-readiness.ts": "00c9e5a40f868f020ebc5504e2631a28ce08d75d679129ea7bb28d57f0d9f759",
+    "117b0e76381ec04752c25257bb0f1a2c1537e767:packages/api/test/acp/acp-spawn-env.test.js": "c30cd0178aaac3270a973e5da8f532f5a8229d5d5b308ade0bc44c64e2624e0d",
+    "117b0e76381ec04752c25257bb0f1a2c1537e767:packages/api/test/helpers/pi-rpc-fixture.mjs": "47d4bd02f4915269bace48572930017624bbaae71875a9ec11ee54ba3331b557",
+    "117b0e76381ec04752c25257bb0f1a2c1537e767:packages/api/test/pi-acp-bridge.test.js": "06fbf1cc26188ec232228e7699e6da2a524511780ac6e3dbb08638e12df923cb"
+  }
+}

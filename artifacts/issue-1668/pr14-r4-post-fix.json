@@ -1,0 +1,31 @@
+{
+  "head": "fb203cd70a44648a49c7f6d88b8f82c1c998ced4",
+  "scope": "Synthetic errors through the built ACP service, under isolated test HOME; no native process, provider request or production state",
+  "observations": [
+    {
+      "name": "reported-dsh-missing-key",
+      "errorCode": "credential_required",
+      "message": "credential_required: ACP error -32603: Internal error: turn failed: llm-deepseek: no API key for provider route \"deepseek-official\"; store DEEPSEEK_API_KEY through the credentials service (the web Models page writes it), or export DEEPSEEK_API_KEY in the launching environment\n⚠️ 凭据缺失或无效。请在 Hub > 账号设置中添加 API key，或在原生工具中配置凭据。"
+    },
+    {
+      "name": "mcp-auth-is-not-model-auth",
+      "errorCode": "mcp_pollution",
+      "message": "mcp_pollution: ACP error -32603: MCP server fixture returned Unauthorized\n⚠️ ACP agent 工具调用异常（MCP 服务端错误）。"
+    },
+    {
+      "name": "pagination-token-is-not-model-auth",
+      "errorCode": "prompt_failure",
+      "message": "prompt_failure: ACP error -32603: Pagination token invalid; request a new page cursor"
+    },
+    {
+      "name": "capacity-with-token-detail",
+      "errorCode": "model_capacity",
+      "message": "model_capacity: ACP error -32000: Resource exhausted: capacity exceeded; retry token invalid\n⚠️ ACP agent 服务端容量不足（服务器繁忙），非 Clowder AI 系统故障。"
+    },
+    {
+      "name": "synthetic-secret-redaction",
+      "errorCode": "credential_required",
+      "syntheticSecretPresent": false
+    }
+  ]
+}

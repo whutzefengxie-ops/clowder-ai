@@ -1,0 +1,16 @@
+{
+  "head": "7895abfad12c2a9e8ad334b7bf6ad703895e78ec",
+  "scope": "Synthetic errors through the built ACP service, under isolated test HOME; no native process, provider request or production state",
+  "observations": [
+    {
+      "name": "reported-dsh-missing-key",
+      "errorCode": "prompt_failure",
+      "message": "prompt_failure: ACP error -32603: Internal error: turn failed: llm-deepseek: no API key for provider route \"deepseek-official\"; store DEEPSEEK_API_KEY through the credentials service (the web Models page writes it), or export DEEPSEEK_API_KEY in the launching environment"
+    },
+    {
+      "name": "mcp-auth-is-not-model-auth",
+      "errorCode": "credential_required",
+      "message": "credential_required: ACP error -32603: MCP server fixture returned Unauthorized\n⚠️ 凭据缺失或无效。请在 Hub > 账号设置中添加 API key，或在原生工具中配置凭据。"
+    }
+  ]
+}

@@ -30,6 +30,7 @@ import {
 import { getCatEffort } from '../../../../../../config/cat-config-loader.js';
 import { getCatModel } from '../../../../../../config/cat-models.js';
 import { createModuleLogger } from '../../../../../../infrastructure/logger.js';
+import { sanitizeCliStderr } from '../../../../../../utils/sanitize-cli-stderr.js';
 import { createPromptDigest } from '../../../context/prompt-digest.js';
 import type {
   AgentMessage,
@@ -946,7 +947,9 @@ export class AcpAgentService implements AgentService {
       if (pendingThinking) yield pendingThinking;
 
       const { errorCode, errorMsg } = classifyError(err, capacitySignal, client.recentCapacitySignal);
-      log.error({ ...ctx, errorCode, err: errorMsg, sessionId, eventCount, waitedMs }, 'ACP prompt failure');
+      // R4-2: Sanitize error message before logging to prevent credential leakage
+      const sanitizedForLog = sanitizeCliStderr(errorMsg);
+      log.error({ ...ctx, errorCode, err: sanitizedForLog, sessionId, eventCount, waitedMs }, 'ACP prompt failure');
       yield {
         type: 'error',
         catId: this.catId,
@@ -1038,31 +1041,42 @@ function classifyError(
         : null;
     const fullMsg = dataDetail ? `${err.message} — ${dataDetail}` : err.message;
 
-    // Check MCP errors first to avoid misclassifying tool auth as model credential issues
+    // Priority order: structured error codes → specific patterns → generic fallback
+    // R4-3: Check error code first (capacity -32000, busy -32001) before text patterns
+
+    // 1. Check busy by error code (highest priority for -32001)
+    if (isAgentBusyError(err)) {
+      return { errorCode: 'agent_busy', errorMsg: fullMsg };
+    }
+
+    // 2. Check capacity by error code -32000 (takes precedence over text patterns)
+    if (err.code === -32000) {
+      return { errorCode: 'model_capacity', errorMsg: fullMsg };
+    }
+
+    // 3. Check MCP errors to avoid misclassifying tool auth as model credential issues
     if (/\bmcp\b/i.test(fullMsg)) {
       return { errorCode: 'mcp_pollution', errorMsg: fullMsg };
     }
 
-    // Check for model credential-related errors (specific patterns from known providers)
-    // DSH pattern: "no API key for provider route" or similar structured messages
+    // 4. Check for model credential-related errors (narrowed patterns from known providers)
+    // DSH structured: "no API key for provider route", "store <PROVIDER>_API_KEY through"
+    // Avoid generic "token" which can match pagination tokens or capacity retry tokens
     if (
       /no\s+API\s+key\s+for\s+provider/i.test(fullMsg) ||
       /store\s+\w+_API_KEY\s+through/i.test(fullMsg) ||
       /credential.*(required|missing|invalid|expired)/i.test(fullMsg) ||
       /api[_\s]?key.*(missing|required|invalid)/i.test(fullMsg) ||
-      /token.*(expired|invalid)/i.test(fullMsg) ||
-      /auth\s+fail|authentication\s+failed|unauthenticated/i.test(fullMsg)
+      /auth(?:entication)?\s+(?:fail|invalid|error)|unauthenticated/i.test(fullMsg)
     ) {
       return { errorCode: 'credential_required', errorMsg: fullMsg };
     }
 
-    if (isAgentBusyError(err)) {
-      // turn.agent_busy after busy-retry exhaustion — agent-internal turn still active
-      return { errorCode: 'agent_busy', errorMsg: fullMsg };
-    }
-    if (err.code === -32000 || fullMsg.includes('capacity')) {
+    // 5. Capacity text pattern (after credential check, for non--32000 capacity errors)
+    if (/capacity.*(?:exhaust|exceed|limit)/i.test(fullMsg)) {
       return { errorCode: 'model_capacity', errorMsg: fullMsg };
     }
+
     return { errorCode: 'prompt_failure', errorMsg: fullMsg };
   }
   if (err instanceof AcpTimeoutError) {
@@ -1096,10 +1110,13 @@ function classifyError(
 
 /** Map internal error codes to user-friendly messages that clarify the failure source.
  *  Format: `{errorCode}: {errorMsg}\n{user-facing explanation}`
- *  The errorCode prefix is preserved for machine grep-ability (tests + invoke-helpers). */
+ *  The errorCode prefix is preserved for machine grep-ability (tests + invoke-helpers).
+ *  R4-2: Sanitizes errorMsg before returning to prevent credential leakage. */
 function toUserFacingError(providerName: string, errorCode: string, errorMsg: string): string {
   const label = providerName === 'acp' ? 'ACP agent' : providerName;
-  const base = `${errorCode}: ${errorMsg}`;
+  // R4-2: Sanitize error message at the unified outbound boundary
+  const sanitized = sanitizeCliStderr(errorMsg);
+  const base = `${errorCode}: ${sanitized}`;
   switch (errorCode) {
     case 'credential_required':
       return `${base}\n⚠️ 凭据缺失或无效。请在 Hub > 账号设置中添加 API key，或在原生工具中配置凭据。`;
@@ -1112,7 +1129,7 @@ function toUserFacingError(providerName: string, errorCode: string, errorMsg: st
     case 'turn_budget_exceeded': {
       // #1186: Derive actual timeout from error message instead of hardcoding 15m.
       // AcpTimeoutError format: "...did not respond within ${ms}ms"
-      const budgetMatch = errorMsg.match(/within (\d+)ms/);
+      const budgetMatch = sanitized.match(/within (\d+)ms/);
       const budgetMinutes = budgetMatch ? Math.round(Number(budgetMatch[1]) / 60_000) : '?';
       return `${base}\n⚠️ 本轮对话时间预算用完（${budgetMinutes}分钟），agent 可能在执行复杂工具链。非故障，可重试。`;
     }
@@ -1121,7 +1138,7 @@ function toUserFacingError(providerName: string, errorCode: string, errorMsg: st
     case 'init_failure':
       return `${base}\n⚠️ ACP agent 启动失败（本地进程异常）。`;
     case 'prompt_failure':
-      if (/Premature close|ECONNRESET|socket hang up/i.test(errorMsg)) {
+      if (/Premature close|ECONNRESET|socket hang up/i.test(sanitized)) {
         return `${base}\n⚠️ ${label} 与服务端连接中断（Premature close），非 Clowder AI 系统故障。`;
       }
       return base;
