@@ -13,23 +13,26 @@ afterEach(async () => {
 
 it('reads only on request and prepares a complete route for the existing member save flow', async () => {
   const prepared = vi.fn();
-  const fetch = vi.fn(async (path: string, _init?: RequestInit) => ({
-    ok: true,
-    json: async () =>
-      path.endsWith('inspect')
-        ? {
-            profiles: ['acp', 'desktop'],
-            sourceProfile: 'acp',
-            revision: 'a'.repeat(64),
-            active: { provider: 'deepseek-official', model: 'official', providers: [] },
-            source: { providers: [{ id: 'custom', models: [{ id: 'custom-model', label: 'Custom model' }] }] },
-          }
-        : {
-            id: 'receipt',
-            command: 'node',
-            startupArgs: ['dsh.js', '--profile', 'acp', '--patch', '/host/custom.yml'],
-          },
-  }));
+  const fetch = vi.fn(async (path: string, init?: RequestInit) => {
+    if (path.includes('/dsh-setup/')) expect(init?.method).toBe('POST');
+    return {
+      ok: true,
+      json: async () =>
+        path.endsWith('inspect')
+          ? {
+              profiles: ['acp', 'desktop'],
+              sourceProfile: 'acp',
+              revision: 'a'.repeat(64),
+              active: { provider: 'deepseek-official', model: 'official', providers: [] },
+              source: { providers: [{ id: 'custom', models: [{ id: 'custom-model', label: 'Custom model' }] }] },
+            }
+          : {
+              id: 'receipt',
+              command: 'node',
+              startupArgs: ['dsh.js', '--profile', 'acp', '--patch', '/host/custom.yml'],
+            },
+    };
+  });
   vi.stubGlobal('fetch', fetch);
   await act(async () => root.render(<DshProviderSetup runtimeId="dsh" onPrepared={prepared} t={(zh) => zh} />));
   expect(fetch).not.toHaveBeenCalled();
