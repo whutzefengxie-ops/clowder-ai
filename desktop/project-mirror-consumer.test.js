@@ -65,3 +65,21 @@ test('a missing consumer executable returns its spawn error without hanging', as
     { code: 'ENOENT' },
   );
 });
+
+test('the real consumer returns structured missing-file errors for source and mirror', async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mirror-consumer-missing-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const entries = ['source', 'mirror'].map((kind) => ({
+    kind,
+    path: path.join(root, kind, 'missing.yaml'),
+  }));
+  const failures = await readProjectMirrorsInConsumer({ nodeExe: process.execPath, entries, timeoutMs: 5000 });
+  assert.equal(failures.length, entries.length);
+  for (const [index, failure] of failures.entries()) {
+    assert.equal(failure.kind, entries[index].kind);
+    assert.equal(failure.path, entries[index].path);
+    assert.equal(failure.code, 'ENOENT');
+    assert.equal(typeof failure.errno, 'number');
+    assert.equal(failure.syscall, 'open');
+  }
+});
