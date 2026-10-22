@@ -292,3 +292,5 @@ CodeAgent 示例：`command: "codeagent"`，`startupArgs: ["--acp"]`；bypass �
 - 验证并发首调不重复创建客户端、失败后可重试、正常服务可复用；重启后再次核对原生 session ID 和 MCP 凭证。
 - 保留危险祖先、已有私有目录被破坏、junction/SUBST 和不支持 ACL 的拒绝证据；不要改系统盘 ACL 来让测试变绿。
 - 所有候选均拒绝时记录为「无安全存储位置」，请管理员提供合格位置；这与 ACP 协议不兼容是两类结论。
+
+上述“危险祖先拒绝”指默认 strict。已认可祖先替换风险的内网部署可一次持久设置[分离的 B/C 策略](./acp-trusted-host-compatibility.md)，无需每次启动 export；trusted-host 接受祖先风险，但自身私有权限和链接拒绝仍须验证。审计例外只限已有 client 的真实引导目录变化，不覆盖新 client 的首次添加或命令变更。

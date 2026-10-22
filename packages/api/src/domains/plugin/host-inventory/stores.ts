@@ -17,6 +17,7 @@ import {
 import { serializeInventoryPackage } from './stored-manifest.js';
 import type { PluginGrantRecord, PluginInstanceRecord, PluginInventorySnapshot, PluginPackageRecord } from './types.js';
 import { PluginInventoryError } from './types.js';
+import { requireInventoryWriterLease } from './writer-lease.js';
 
 interface TransactionState {
   readonly packages: Map<string, PluginPackageRecord>;
@@ -202,6 +203,7 @@ export class FilePluginInventoryStore implements PluginInventoryStore {
   }
 
   async transaction<T>(work: (transaction: PluginInventoryTransaction) => Promise<T> | T): Promise<T> {
+    requireInventoryWriterLease(this.path);
     return this.queue.run(async () => {
       const candidate = transactionFor(await this.load(), this.contract);
       const result = await work(candidate.transaction);

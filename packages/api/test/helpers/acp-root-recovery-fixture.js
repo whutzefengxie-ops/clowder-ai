@@ -1,6 +1,6 @@
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, win32 } from 'node:path';
 import { FilesystemVerifiedPluginPackageLocator } from '../../dist/domains/plugin/external-runtime/filesystem-package-locator.js';
 import {
   HostInventoryControlPlane,
@@ -18,7 +18,7 @@ export const profile = {
   bootstrapRoot: 'D:/OldACP',
   mcpWhitelist: ['cat-cafe'],
 };
-export async function rootRecoveryFixture({ grant = true, declaration, inspect, lifecycleFactory } = {}) {
+export async function rootRecoveryFixture({ grant = true, declaration, inspect, identity, lifecycleFactory } = {}) {
   const projectRoot = await mkdtemp(join(tmpdir(), 'acp-root-recovery-'));
   const source = join(projectRoot, 'source');
   const { mkdir } = await import('node:fs/promises');
@@ -55,6 +55,7 @@ export async function rootRecoveryFixture({ grant = true, declaration, inspect, 
     inventory,
     packages,
     inspectBootstrapRoot: inspect ?? ((root) => ({ ok: true, root, trustMode: 'trusted-host' })),
+    bootstrapDirectoryIdentity: identity ?? ((root) => win32.resolve(root).toLowerCase()),
     ...(lifecycleFactory ? { lifecycle: lifecycleFactory(inventory, instance) } : {}),
   });
   const request = (profiles = [{ ...profile, bootstrapRoot: 'D:/NewACP' }]) => ({

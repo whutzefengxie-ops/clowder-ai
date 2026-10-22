@@ -163,6 +163,7 @@ export function configureTransaction(input: {
   readonly allowEmpty?: boolean;
   readonly liveRefresh?: boolean;
   readonly beforeWrite?: (transaction: PluginInventoryTransaction) => void;
+  readonly afterConfigWrite?: () => void;
 }): void {
   const current = requireConfigurationTarget(input.transaction, input.pluginId, input.pluginInstanceId);
   assertConfigurationFence(current.instance, input.request.expectedRevision);
@@ -184,6 +185,7 @@ export function configureTransaction(input: {
     input.pluginId,
     input.request.updates.map((update) => ({ name: update.key, value: update.value })),
   );
+  input.afterConfigWrite?.();
   input.transaction.instances.put({
     ...current.instance,
     configReadiness: requiredFieldsReady(fields, next) ? 'ready' : 'incomplete',

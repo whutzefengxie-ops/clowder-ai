@@ -132,7 +132,7 @@ export const ENV_VARS: EnvDefinition[] = [
     name: 'CAT_CAFE_TRUSTED_HOST_COMPATIBILITY',
     defaultValue: '0',
     description:
-      '旧 Windows ACP 目录兼容别名：仅在新目录策略未设置时，exact 1 跳过祖先信任检查；不再放宽审计。请迁移至 CAT_CAFE_WINDOWS_ACP_BOOTSTRAP_MODE，重启 API 生效',
+      '弃用的内网预置别名：仅 exact 1 且对应新键未设置时映射 trusted-host / warn-bootstrap-root；审计例外仅 Windows 已有 ACP client 的引导目录变更。新键逐项优先，重启 API 生效',
     category: 'server',
     settingsGroup: 'security',
     sensitive: false,
@@ -142,6 +142,7 @@ export const ENV_VARS: EnvDefinition[] = [
   },
   {
     name: 'CAT_CAFE_WINDOWS_ACP_BOOTSTRAP_MODE',
+    allowedValues: ['strict', 'trusted-host'],
     defaultValue: 'strict',
     description:
       'Windows ACP 目录策略：strict 或 trusted-host。后者仅跳过祖先 owner/DACL，保留自身私有权限、NTFS 和路径身份检查；接受祖先替换风险，不放宽审计。重启 API 生效',
@@ -153,6 +154,7 @@ export const ENV_VARS: EnvDefinition[] = [
   },
   {
     name: 'CAT_CAFE_ACP_BOOTSTRAP_CONFIG_AUDIT_MODE',
+    allowedValues: ['required', 'warn-bootstrap-root'],
     defaultValue: 'required',
     description:
       'ACP 引导目录保存审计：required 或 warn-bootstrap-root。后者仅在 Windows trusted-host 目录策略下，允许本机所有者保存已校验且只修改引导目录的现有客户端配置；其他变更仍要求审计。重启 API 生效',

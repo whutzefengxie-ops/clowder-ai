@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { afterEach, beforeEach, test } from 'node:test';
 import { ExternalPluginLifecycleService } from '../dist/domains/plugin/external-plugin-lifecycle.js';
+import { FilePluginInventoryStore } from '../dist/domains/plugin/host-inventory/stores.js';
+import { HostPluginConfigurationService } from '../dist/domains/plugin/manager/plugin-manager-configuration.js';
 import { writePluginConfig } from '../dist/domains/plugin/plugin-config-store.js';
 import { profile, rootRecoveryFixture } from './helpers/acp-root-recovery-fixture.js';
 
@@ -49,6 +51,7 @@ for (const [label, transform] of [
   ['clear root', (p) => [{ ...p, bootstrapRoot: undefined }]],
   ['relative root', (p) => [{ ...p, bootstrapRoot: './root' }]],
   ['no change', () => [profile]],
+  ['equivalent Windows spelling', () => [{ ...profile, bootstrapRoot: 'd:\\OLDACP\\' }]],
 ])
   test(`audit exception refuses ${label} changes without writing`, windows, async () => {
     const f = await rootRecoveryFixture();
@@ -75,15 +78,38 @@ test(
   },
 );
 
-test('legacy directory opt-in alone and a non-Windows Host never waive audit', async () => {
+test('explicit required wins over the legacy preset; a non-Windows Host never waives audit', async () => {
   const f = await rootRecoveryFixture();
-  delete process.env.CAT_CAFE_ACP_BOOTSTRAP_CONFIG_AUDIT_MODE;
+  process.env.CAT_CAFE_ACP_BOOTSTRAP_CONFIG_AUDIT_MODE = 'required';
   process.env.CAT_CAFE_TRUSTED_HOST_COMPATIBILITY = '1';
   await assert.rejects(f.save());
   if (process.platform !== 'win32') {
     process.env.CAT_CAFE_ACP_BOOTSTRAP_CONFIG_AUDIT_MODE = 'warn-bootstrap-root';
     await assert.rejects(f.save());
   }
+});
+
+test('two different path spellings for the same native directory cannot use recovery', windows, async () => {
+  const f = await rootRecoveryFixture({ identity: () => 'same-native-directory' });
+  await assert.rejects(f.save(), /audit|directory/i);
+  assert.equal(JSON.parse(f.read().clients)[0].bootstrapRoot, profile.bootstrapRoot);
+});
+
+test('a raw config rewrite with unchanged parsed values invalidates previous admission', windows, async () => {
+  const { readFileSync, writeFileSync } = await import('node:fs');
+  const { join } = await import('node:path');
+  const f = await rootRecoveryFixture({
+    lifecycleFactory: (_inventory, instance) => ({
+      async runWithRuntimeSuspended(input) {
+        await input.preflight();
+        const path = join(f.projectRoot, '.cat-cafe', 'plugin-config', 'test.acp-library.json');
+        writeFileSync(path, readFileSync(path, 'utf8') + '\n');
+        return input.operation(instance);
+      },
+    }),
+  });
+  await assert.rejects(f.save(), /audit|changed/i);
+  assert.equal(JSON.parse(f.read().clients)[0].bootstrapRoot, profile.bootstrapRoot);
 });
 
 test('preflight admission cannot survive concurrent config or grant changes', windows, async () => {
@@ -164,3 +190,47 @@ test('bad package integrity and stale lifecycle revision cannot reach persistenc
     assert.equal(JSON.parse(f.read().clients)[0].bootstrapRoot, profile.bootstrapRoot);
   }
 });
+
+test(
+  'inventory commit failure after the config write reports partial persistence and can be retried',
+  windows,
+  async () => {
+    const { join, win32 } = await import('node:path');
+    const { rename } = await import('node:fs/promises');
+    const f = await rootRecoveryFixture();
+    const path = join(f.projectRoot, 'inventory.json');
+    const snapshot = await f.inventory.snapshot();
+    const initial = new FilePluginInventoryStore(path);
+    await initial.transaction((tx) => {
+      for (const pkg of snapshot.packages) tx.packages.put(pkg);
+      for (const instance of snapshot.instances) tx.instances.put(instance);
+      for (const grant of snapshot.grants) tx.grants.put(grant);
+    });
+    let broken = true;
+    const inventory = new FilePluginInventoryStore(path, {
+      fileOps: {
+        rename: async (...args) => {
+          if (broken && JSON.parse(f.read().clients)[0].bootstrapRoot === 'D:/NewACP')
+            throw new Error('simulated inventory EPERM');
+          return rename(...args);
+        },
+      },
+    });
+    const service = new HostPluginConfigurationService({
+      projectRoot: f.projectRoot,
+      inventory,
+      packages: f.packages,
+      inspectBootstrapRoot: (root) => ({ ok: true, root, trustMode: 'trusted-host' }),
+      bootstrapDirectoryIdentity: (root) => win32.resolve(root).toLowerCase(),
+    });
+    await assert.rejects(
+      service.configureBootstrapRoot('test.acp-library', f.instance.pluginInstanceId, f.request()),
+      /Configuration saved, but/,
+    );
+    assert.equal(JSON.parse(f.read().clients)[0].bootstrapRoot, 'D:/NewACP');
+    assert.equal((await inventory.snapshot()).instances[0].lifecycleRevision, f.instance.lifecycleRevision);
+    broken = false;
+    await service.configure('test.acp-library', f.instance.pluginInstanceId, f.request());
+    assert.equal((await inventory.snapshot()).instances[0].lifecycleRevision, f.instance.lifecycleRevision + 1);
+  },
+);
