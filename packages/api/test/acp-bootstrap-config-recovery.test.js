@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { afterEach, beforeEach, test } from 'node:test';
 import { ExternalPluginLifecycleService } from '../dist/domains/plugin/external-plugin-lifecycle.js';
+import { FilePluginInventoryStore } from '../dist/domains/plugin/host-inventory/stores.js';
+import { HostPluginConfigurationService } from '../dist/domains/plugin/manager/plugin-manager-configuration.js';
 import { writePluginConfig } from '../dist/domains/plugin/plugin-config-store.js';
 import { profile, rootRecoveryFixture } from './helpers/acp-root-recovery-fixture.js';
 
@@ -188,3 +190,47 @@ test('bad package integrity and stale lifecycle revision cannot reach persistenc
     assert.equal(JSON.parse(f.read().clients)[0].bootstrapRoot, profile.bootstrapRoot);
   }
 });
+
+test(
+  'inventory commit failure after the config write reports partial persistence and can be retried',
+  windows,
+  async () => {
+    const { join, win32 } = await import('node:path');
+    const { rename } = await import('node:fs/promises');
+    const f = await rootRecoveryFixture();
+    const path = join(f.projectRoot, 'inventory.json');
+    const snapshot = await f.inventory.snapshot();
+    const initial = new FilePluginInventoryStore(path);
+    await initial.transaction((tx) => {
+      for (const pkg of snapshot.packages) tx.packages.put(pkg);
+      for (const instance of snapshot.instances) tx.instances.put(instance);
+      for (const grant of snapshot.grants) tx.grants.put(grant);
+    });
+    let broken = true;
+    const inventory = new FilePluginInventoryStore(path, {
+      fileOps: {
+        rename: async (...args) => {
+          if (broken && JSON.parse(f.read().clients)[0].bootstrapRoot === 'D:/NewACP')
+            throw new Error('simulated inventory EPERM');
+          return rename(...args);
+        },
+      },
+    });
+    const service = new HostPluginConfigurationService({
+      projectRoot: f.projectRoot,
+      inventory,
+      packages: f.packages,
+      inspectBootstrapRoot: (root) => ({ ok: true, root, trustMode: 'trusted-host' }),
+      bootstrapDirectoryIdentity: (root) => win32.resolve(root).toLowerCase(),
+    });
+    await assert.rejects(
+      service.configureBootstrapRoot('test.acp-library', f.instance.pluginInstanceId, f.request()),
+      /Configuration saved, but/,
+    );
+    assert.equal(JSON.parse(f.read().clients)[0].bootstrapRoot, 'D:/NewACP');
+    assert.equal((await inventory.snapshot()).instances[0].lifecycleRevision, f.instance.lifecycleRevision);
+    broken = false;
+    await service.configure('test.acp-library', f.instance.pluginInstanceId, f.request());
+    assert.equal((await inventory.snapshot()).instances[0].lifecycleRevision, f.instance.lifecycleRevision + 1);
+  },
+);

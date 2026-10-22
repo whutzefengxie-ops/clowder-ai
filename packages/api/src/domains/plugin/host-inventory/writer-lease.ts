@@ -1,18 +1,24 @@
 import { createHash, randomUUID } from 'node:crypto';
 import {
+  closeSync,
   existsSync,
+  fsyncSync,
   lstatSync,
   mkdirSync,
+  openSync,
   readdirSync,
   readFileSync,
+  renameSync,
   statSync,
   unlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
+import { processBirthIdentity } from '../../../utils/process-birth-identity.js';
 import { PluginInventoryError } from './types.js';
 
 const owned = new Map<string, { path: string; contents: string }>();
+let birth: string | undefined;
 
 function live(pid: number): boolean {
   try {
@@ -39,11 +45,24 @@ export function requireInventoryWriterLease(inventoryPath: string): void {
   mkdirSync(directory, { recursive: true, mode: 0o700 });
   if (lstatSync(directory).isSymbolicLink()) throw new Error('Plugin inventory writer directory must not be linked');
   const path = join(directory, `${process.pid}-${randomUUID()}.json`);
-  const contents = JSON.stringify({ schemaVersion: 1, pid: process.pid });
-  writeFileSync(path, contents, { flag: 'wx', mode: 0o600 });
+  const contents = JSON.stringify({
+    schemaVersion: 2,
+    pid: process.pid,
+    birth: (birth ??= processBirthIdentity(process.pid)),
+  });
+  const temporary = `${path}.pending`;
+  const fd = openSync(temporary, 'wx', 0o600);
+  try {
+    writeFileSync(fd, contents);
+    fsyncSync(fd);
+  } finally {
+    closeSync(fd);
+  }
+  renameSync(temporary, path);
   let accepted = false;
   try {
     for (const entry of readdirSync(directory)) {
+      if (!entry.endsWith('.json')) continue;
       const otherPath = join(directory, entry);
       if (otherPath === path) continue;
       try {
@@ -54,11 +73,14 @@ export function requireInventoryWriterLease(inventoryPath: string): void {
           !other ||
           typeof other !== 'object' ||
           !('pid' in other) ||
+          !('birth' in other) ||
+          typeof other.birth !== 'string' ||
+          !other.birth ||
           !Number.isSafeInteger(other.pid) ||
           Number(other.pid) <= 0
         )
           throw new Error('Invalid writer lease');
-        if (live(Number(other.pid)))
+        if (live(Number(other.pid)) && processBirthIdentity(Number(other.pid)) === other.birth)
           throw new PluginInventoryError(
             'INVENTORY_INVARIANT',
             'Plugin inventory already has a live API writer; use one Host API per inventory before retrying',

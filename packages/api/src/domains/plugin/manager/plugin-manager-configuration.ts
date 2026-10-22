@@ -206,6 +206,7 @@ export class HostPluginConfigurationService implements PluginManagerConfiguratio
     bootstrapRootRecovery = false,
   ): Promise<void> {
     let recovery: AcpBootstrapConfigRecovery | undefined;
+    let persisted = false;
     const prepareRecovery = async () => {
       if (bootstrapRootRecovery)
         recovery = await prepareAcpBootstrapConfigRecovery({ ...this.options, pluginId, pluginInstanceId, request });
@@ -222,11 +223,13 @@ export class HostPluginConfigurationService implements PluginManagerConfiguratio
           allowEmpty,
           liveRefresh,
           now: this.now(),
+          afterConfigWrite: () => {
+            persisted = true;
+          },
           ...(recovery ? { beforeWrite: (tx) => recovery?.assertCurrent(tx) } : {}),
         });
       });
     };
-    let persisted = false;
     try {
       if (!this.options.lifecycle) {
         await prepareRecovery();
@@ -255,6 +258,11 @@ export class HostPluginConfigurationService implements PluginManagerConfiguratio
         },
       });
     } catch (error) {
+      if (persisted)
+        throw new PluginManagerServiceError(
+          'RUNTIME_START_FAILED',
+          'Configuration saved, but the plugin inventory or runtime update did not complete; restore storage, refresh the saved configuration and plugin state, then retry',
+        );
       if (!(error instanceof PluginLifecycleError)) throw error;
       if (error.code === 'STALE_REVISION' || error.code === 'STALE_INSTANCE') {
         throw new PluginManagerServiceError('STALE_REVISION', error.message);
