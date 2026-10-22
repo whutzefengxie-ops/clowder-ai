@@ -386,7 +386,6 @@ class ServiceManager {
     // the junction resolves it — so retry once if the probe fails.
     const criticalProbes = [
       { mirror: 'cat-cafe-skills', probe: path.join('refs', 'shared-rules.md') },
-      { mirror: 'plugins', probe: path.join('github', 'plugin.yaml') },
     ];
     for (const { mirror, probe } of criticalProbes) {
       const probePath = path.join(projectDir, mirror, probe);
@@ -445,7 +444,6 @@ class ServiceManager {
       ['docs', path.join('harness-feedback', 'eval-domains', 'eval-design-gate.yaml')],
       ['cat-cafe-skills', path.join('refs', 'shared-rules.md')],
       ['cat-cafe-skills', path.join('custody-recognition', 'SKILL.md')],
-      ['plugins', path.join('github', 'plugin.yaml')],
     ];
     const deadline = Date.now() + timeoutMs;
     let lastFailures = [];

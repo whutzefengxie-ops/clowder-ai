@@ -110,7 +110,7 @@ test('mirrors bundled plugins into the writable API project root', async () => {
   }
 });
 
-test('probes bundled plugin mirror and rebuilds it when the first read fails', async () => {
+test('probes the shipped shared-rules mirror and rebuilds it when the first read fails', async () => {
   const installRoot = await mkdtemp(path.join(tmpdir(), 'service-manager-install-'));
   const userDataRoot = await mkdtemp(path.join(tmpdir(), 'service-manager-user-'));
   try {
@@ -120,8 +120,8 @@ test('probes bundled plugin mirror and rebuilds it when the first read fails', a
     seedMirrorSource(installRoot, 'cat-cafe-skills', path.join('refs', 'shared-rules.md'));
     seedMirrorSource(installRoot, 'plugins', path.join('github', 'plugin.yaml'));
 
-    const pluginProbePath = path.join(userDataRoot, 'project', 'plugins', 'github', 'plugin.yaml');
-    const pluginMirrorPath = path.join(userDataRoot, 'project', 'plugins');
+    const pluginProbePath = path.join(userDataRoot, 'project', 'cat-cafe-skills', 'refs', 'shared-rules.md');
+    const pluginMirrorPath = path.join(userDataRoot, 'project', 'cat-cafe-skills');
     const originalReadFileSync = fs.readFileSync;
     const originalSymlinkSync = fs.symlinkSync;
     let pluginProbeReads = 0;
@@ -173,6 +173,25 @@ test('waits for all startup-critical mirror files before spawning services', asy
     const manager = new ServiceManager(installRoot, { frontendPort: 3003, apiPort: 3004 });
     manager._ensureUserDataDir(userDataRoot);
     await manager._waitForProjectMirrors(userDataRoot, 1_000);
+  } finally {
+    rmSync(installRoot, { recursive: true, force: true });
+    rmSync(userDataRoot, { recursive: true, force: true });
+  }
+});
+
+test('separated-plugin installation starts without the retired loose GitHub plugin directory', async () => {
+  const installRoot = await mkdtemp(path.join(tmpdir(), 'service-manager-separated-plugins-'));
+  const userDataRoot = await mkdtemp(path.join(tmpdir(), 'service-manager-separated-data-'));
+  try {
+    seedMirrorSource(installRoot, 'docs', path.join('harness-feedback', 'eval-domains', 'eval-design-gate.yaml'));
+    seedMirrorSource(installRoot, 'cat-cafe-skills', path.join('refs', 'shared-rules.md'));
+    seedMirrorSource(installRoot, 'cat-cafe-skills', path.join('custody-recognition', 'SKILL.md'));
+    const manager = new ServiceManager(installRoot, { frontendPort: 5331, apiPort: 5332, redisPort: 6389 });
+    manager._ensureUserDataDir(userDataRoot);
+    assert.equal(existsSync(path.join(installRoot, 'plugins')), false);
+    await manager._waitForProjectMirrors(userDataRoot, 100);
+    fs.unlinkSync(path.join(installRoot, 'docs', 'harness-feedback', 'eval-domains', 'eval-design-gate.yaml'));
+    await assert.rejects(manager._waitForProjectMirrors(userDataRoot, 100), /eval-design-gate.yaml/);
   } finally {
     rmSync(installRoot, { recursive: true, force: true });
     rmSync(userDataRoot, { recursive: true, force: true });
