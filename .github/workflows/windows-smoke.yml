@@ -35,6 +35,11 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @cat-cafe/shared build
       - run: pnpm --filter @cat-cafe/api build
+      - name: Plugin native auth link diagnostic
+        run: >-
+          pnpm --filter @cat-cafe/api exec node ./scripts/with-test-home.mjs
+          node --import tsx --test --test-timeout=60000 --test-name-pattern="auth link"
+          test/f320-plugin-account.test.ts
       - name: Workspace root cold-store, HTTP and persistence regressions
         run: node packages/api/scripts/test-workspace-roots.mjs
       - name: Windows web build and duplicate Trusted Types regression
@@ -230,6 +235,8 @@ jobs:
           node --test packages/api/test/cli-spawn-win.test.js
           node --test packages/api/test/process-liveness-probe.test.js
           node --test packages/api/test/pick-directory.test.js
+      - name: Browser env wrapper regression
+        run: node --test --test-name-pattern='applies --env' packages/web/test/run-with-node-env-test.test.cjs
       - name: Windows stale-process entrypoint guard
         run: node --test scripts/cleanup-stale-dev-processes.test.mjs
       # #1542: the compaction launch plan must hold on Windows (realpath

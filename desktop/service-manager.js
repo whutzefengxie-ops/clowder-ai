@@ -13,6 +13,7 @@ const { resolveDesktopRuntime } = require('./runtime-config');
 const { initializeDesktopTemplate } = require('./desktop-template');
 const { prepareProjectMirrors } = require('./project-mirrors');
 const { waitForProjectMirrors } = require('./project-mirror-readiness');
+const { createPluginNetworkBridge } = require('./plugin-network-bridge');
 const { createStartupTimeline } = require('./startup-timing');
 const { prepareStartupServices, stopOwnedStartupProcess } = require('./startup-services');
 const { resolveExternalNodeEntry } = require('./subprocess-entry');
@@ -127,7 +128,10 @@ function resolveNode(projectRoot) {
 }
 
 class ServiceManager {
-  constructor(projectRoot, { frontendPort, apiPort, redisPort = 6399, onStatus, allowMemoryFallback = false }) {
+  constructor(
+    projectRoot,
+    { frontendPort, apiPort, redisPort = 6399, onStatus, allowMemoryFallback = false, pluginNetworkFetch },
+  ) {
     this.root = projectRoot;
     this.frontendPort = frontendPort;
     this.apiPort = apiPort;
@@ -139,12 +143,20 @@ class ServiceManager {
     this.allowMemoryFallback = allowMemoryFallback === true;
     this.timeline = createStartupTimeline({ component: 'services', emit: log });
     this.startupAbort = null;
+    this.pluginNetworkFetch = pluginNetworkFetch;
+    this.pluginNetworkBridge = null;
+    this.pluginNetworkBinding = null;
   }
 
   async startAll({ allowMemoryFallback = false } = {}) {
     if (allowMemoryFallback) this.allowMemoryFallback = true;
     this.startupAbort = new AbortController();
-    return this.timeline.runPhase('all-services', () => this._startAll());
+    try {
+      return await this.timeline.runPhase('all-services', () => this._startAll());
+    } catch (error) {
+      await this._stopPluginNetworkBridge();
+      throw error;
+    }
   }
 
   async _startAll() {
@@ -202,6 +214,7 @@ class ServiceManager {
     log(`Redis phase complete. memoryMode=${this.memoryMode}`);
 
     this.startupAbort.signal.throwIfAborted();
+    await this._startPluginNetworkBridge();
     this.onStatus('Starting API and Web...');
     await prepareStartupServices({
       controller: this.startupAbort,
@@ -422,7 +435,29 @@ class ServiceManager {
       TTS_CACHE_DIR: path.join(userDataDir, 'data', 'tts-cache'),
       AUDIT_LOG_DIR: path.join(userDataDir, 'data', 'audit-logs'),
       CLI_RAW_ARCHIVE_DIR: path.join(userDataDir, 'data', 'cli-raw-archive'),
+      ...(this.pluginNetworkBinding
+        ? {
+            CAT_CAFE_PLUGIN_NETWORK_BRIDGE_URL: this.pluginNetworkBinding.endpoint,
+            CAT_CAFE_PLUGIN_NETWORK_BRIDGE_TOKEN: this.pluginNetworkBinding.token,
+          }
+        : {}),
     };
+  }
+
+  async _startPluginNetworkBridge() {
+    if (!this.pluginNetworkFetch || this.pluginNetworkBridge) return;
+    const bridge = createPluginNetworkBridge({ netFetch: this.pluginNetworkFetch });
+    const binding = await bridge.start();
+    this.pluginNetworkBridge = bridge;
+    this.pluginNetworkBinding = binding;
+    log('Desktop plugin network bridge ready on loopback');
+  }
+
+  async _stopPluginNetworkBridge() {
+    const bridge = this.pluginNetworkBridge;
+    this.pluginNetworkBridge = null;
+    this.pluginNetworkBinding = null;
+    if (bridge) await bridge.close();
   }
 
   async _startRedis(userDataDir) {
@@ -892,6 +927,7 @@ class ServiceManager {
 
     await Promise.allSettled(killPromises);
     this.procs = {};
+    await this._stopPluginNetworkBridge();
   }
 
   async _killProcessTree(name, proc, timeoutMs) {
