@@ -40,8 +40,7 @@ if (process.platform === 'win32') {
 }
 const PROJECT_ROOT = resolveProjectRootFromDir(__dirname);
 const desktopRuntime = resolveDesktopRuntime();
-const FRONTEND_PORT = desktopRuntime.frontendPort;
-const API_PORT = desktopRuntime.apiPort;
+const { frontendPort: FRONTEND_PORT, apiPort: API_PORT } = desktopRuntime;
 prepareDesktopInstance(app, desktopRuntime);
 const APP_URL = `http://localhost:${FRONTEND_PORT}`;
 const APP_ORIGIN = new URL(APP_URL).origin;
@@ -65,7 +64,6 @@ startupTimeline.mark('main-initialized');
 dbg(`Electron starting. ELECTRON_RUN_AS_NODE=${process.env.ELECTRON_RUN_AS_NODE}`);
 dbg(`process.type=${process.type}, versions.electron=${process.versions.electron}`);
 appLifecycle.logRuntimeIdentity({ dbg, app, projectRoot: PROJECT_ROOT });
-
 let mainWindow = null;
 let splashWindow = null;
 let tray = null;
