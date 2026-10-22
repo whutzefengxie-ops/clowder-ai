@@ -1,11 +1,14 @@
 'use client';
 
+import { AcpBootstrapDirectoryField } from './AcpBootstrapDirectoryField';
+
 interface Profile {
   id: string;
   name: string;
   command: string;
   startupArgs: string[];
   mcpWhitelist?: string[];
+  bootstrapRoot?: string;
 }
 const inputClass = 'w-full rounded-lg bg-[var(--console-field-bg)] px-3 py-2 text-sm text-cafe';
 function decode(value: string): Profile[] | null {
@@ -36,6 +39,13 @@ export function agentClientConfigurationError(value: string): string | undefined
     if (ids.has(profile.id)) return `客户端 ID 重复：${profile.id}`;
     ids.add(profile.id);
     if (!profile.name.trim() || !profile.command.trim()) return '请填写每个客户端的名称和启动命令。';
+    if (
+      profile.bootstrapRoot !== undefined &&
+      (typeof profile.bootstrapRoot !== 'string' ||
+        !/^(?:[a-z]:[\\/]|\/)/i.test(profile.bootstrapRoot) ||
+        /[\u0000\r\n]/.test(profile.bootstrapRoot))
+    )
+      return '引导目录须为运行 Host 的电脑上的绝对路径，或清空后自动选择。';
   }
   return undefined;
 }
@@ -121,6 +131,12 @@ export function PluginAgentClientsField({
               }
             />
           </label>
+          <AcpBootstrapDirectoryField
+            key={profile.id}
+            label={`客户端 ${index + 1} 引导目录`}
+            value={profile.bootstrapRoot ?? ''}
+            onChange={(value) => update(index, { bootstrapRoot: value || undefined })}
+          />
           <button
             type="button"
             className="text-xs text-cafe-secondary"

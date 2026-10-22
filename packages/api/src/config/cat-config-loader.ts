@@ -1173,6 +1173,8 @@ export interface AcpVariantConfig {
   agentProvider?: string;
   command: string;
   startupArgs: string[];
+  /** Optional owner-selected absolute root; full directory checks, no automatic relocation. */
+  bootstrapRoot?: string;
   /** F161 Phase C: ACP wire transport. 'stdio' = NDJSON over stdin/stdout (default). 'httpstream' = spawn process that listens on HTTP port. */
   transport?: 'stdio' | 'httpstream';
   /** Required for httpstream until ACP publishes a stable HTTP transport spec. */

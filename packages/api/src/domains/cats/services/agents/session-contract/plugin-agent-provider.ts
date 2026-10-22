@@ -1,6 +1,7 @@
 /** Internal / unstable: data only. The Host owns transport construction. */
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 import { z } from 'zod';
+import { isExplicitAcpBootstrapRoot } from '../providers/acp/bootstrap/acp-bootstrap-inspect.js';
 import type { SessionImplementationRef } from './implementation-registry.js';
 export const AGENT_PROVIDER_DECLARATION_FILE = 'agent-provider.json';
 const safeText = z
@@ -10,6 +11,7 @@ const safeText = z
 const acpSchema = z.strictObject({
   command: safeText.min(1),
   startupArgs: z.array(safeText).max(128),
+  bootstrapRoot: safeText.min(1).refine(isExplicitAcpBootstrapRoot, '引导目录必须是本机绝对路径').optional(),
   mcpWhitelist: z.array(z.string()).optional(),
 });
 export interface AgentProviderDeclaration {

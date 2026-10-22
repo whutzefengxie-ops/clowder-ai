@@ -279,3 +279,16 @@ MCP 读 / MCP 写 / 对方真实执行：PASS / FAIL / 未测
 本轮已有 dsh、Claude、pi 的 Windows stdio 实证，范围见对应 PR 的验证说明。
 原始日志保留在作者本机，未随源码发布。
 它们通过不代表任意新客户端自动通过；新客户端的能力记录才是最终依据。
+
+## 9. Windows 新客户端的目录与恢复验收
+
+先按[文档一的目录操作](acp-client-plugin-user-guide.md#windows怎样找到安全引导目录)执行「检查引导目录」，再验证 ACP。
+自定义客户端 JSON 可以包含可选 `bootstrapRoot` 绝对路径；省略表示自动寻找，不能附带 `allowVolumeRootDelete`、trusted SID 或跳过校验字段。
+CodeAgent 示例：`command: "codeagent"`，`startupArgs: ["--acp"]`；bypass 参数仍使用客户端实际支持的 argv，不影响 Host 的目录安全校验。
+普通 stdin/stdout NDJSON 也不保证版本、认证、恢复和 MCP 全部兼容，继续执行本文各项检查。
+
+- 记录实际通过的 root、运行 API 的账户、客户端启动 cwd 和会话项目 cwd；不要把目录检查成功写成 ACP 握手成功。
+- 在独立测试项目制造可恢复失败（例如专用父目录尚未创建），确认消息显示失败且客户端未启动；补齐合格条件后，同一配置再次发送应成功。
+- 验证并发首调不重复创建客户端、失败后可重试、正常服务可复用；重启后再次核对原生 session ID 和 MCP 凭证。
+- 保留危险祖先、已有私有目录被破坏、junction/SUBST 和不支持 ACL 的拒绝证据；不要改系统盘 ACL 来让测试变绿。
+- 所有候选均拒绝时记录为「无安全存储位置」，请管理员提供合格位置；这与 ACP 协议不兼容是两类结论。

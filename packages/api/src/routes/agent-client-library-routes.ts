@@ -1,5 +1,9 @@
 import { isDeepStrictEqual } from 'node:util';
 import type { FastifyInstance } from 'fastify';
+import {
+  inspectAcpBootstrapDirectory,
+  isExplicitAcpBootstrapRoot,
+} from '../domains/cats/services/agents/providers/acp/bootstrap/acp-bootstrap-inspect.js';
 import type { SessionImplementationRegistry } from '../domains/cats/services/agents/session-contract/implementation-registry.js';
 import {
   AGENT_PROVIDER_DECLARATION_FILE,
@@ -22,6 +26,18 @@ export function registerAgentClientLibraryRoutes(
     registry: SessionImplementationRegistry;
   },
 ): void {
+  app.post('/api/agent-providers/bootstrap-check', async (request, reply) => {
+    const access = requirePluginOwnerLocalAccess(request, 'write');
+    if ('error' in access) return pluginAccessError(reply, access);
+    const body = request.body;
+    if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).some((key) => key !== 'root'))
+      return reply.code(400).send({ error: 'Invalid directory check' });
+    const root = (body as { root?: unknown }).root;
+    if (root !== undefined && (typeof root !== 'string' || !isExplicitAcpBootstrapRoot(root))) {
+      return reply.code(400).send({ error: '引导目录必须是本机绝对路径。' });
+    }
+    return inspectAcpBootstrapDirectory(root);
+  });
   app.get('/api/agent-providers', async (request, reply) => {
     const access = requirePluginOwnerLocalAccess(request, 'read');
     if ('error' in access) return pluginAccessError(reply, access);
