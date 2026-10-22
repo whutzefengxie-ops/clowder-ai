@@ -4,12 +4,12 @@ related_features: [F241, F289]
 topics: [pi, acp, sessions, recovery, diagnostics, issue-1704]
 doc_kind: index
 created: 2026-10-23
-status: proposed
+status: implementation_verified_pending_review
 ---
 
 # Issue #1704：内置 Pi 修复方案索引
 
-本轮交付设计和实施计划，等待用户审阅；没有修改业务代码、启动验收服务或切换现用桥。
+用户已批准推荐方案并授权实施和提交 PR。实现及分层验证见 [实施报告](implementation-report.md)；下文保留已接受的方案索引，企业机现场验收仍单独记录。
 
 ## 推荐结论
 
@@ -26,6 +26,7 @@ status: proposed
 | [推荐设计](recommended-design.md) | 为什么继续修内置桥；ID、存储、恢复、MCP、并发、兼容与回退契约 |
 | [实施计划](implementation-plan.md) | 工作单元、实际改动位置、RED/GREEN、依赖及交付门槛 |
 | [证据与验收](evidence-and-acceptance.md) | 已证实什么；哪些 PR 可复用；测试矩阵及企业机待补证据 |
+| [实施报告](implementation-report.md) | W0 决定、实际实现、来源复用、RED/GREEN 和真实 Pi/LLM/MCP 结果 |
 
 ## 工位与来源
 
@@ -38,20 +39,20 @@ status: proposed
 | 原始问题 | [Host #1704](https://github.com/zts212653/clowder-ai/issues/1704) |
 | 企业机补充 | [实际内置桥及两代 PID 的评论](https://github.com/zts212653/clowder-ai/issues/1704#issuecomment-6345264766) |
 | 既有复现工位 | `G:\AIwork\clowder-ai\worktrees\analysis-issue-1704-pi`，保留原始证据，不在本轮清理 |
-| 本工位隔离 | `.env` 指向 Redis 6398；本轮未启动 Redis/API/Pi 或发起模型调用 |
+| 本工位隔离 | `.env` 指向 Redis 6398；未启动 Redis/API；Pi/LLM/MCP 验证使用独立状态和任务自有接口 |
 
-本地 main checkout 未切换或重置；方案从已更新的 `upstream/main` 提交创建。上述两个 main 基线之间的变化没有涉及 Pi 桥及其冷恢复实现，旧复现结论仍适用于本设计的源码分析；本轮没有重新运行真实模型。
+本地 main checkout 未切换或重置；方案从已更新的 `upstream/main` 提交创建。上述两个 main 基线之间的变化没有涉及 Pi 桥及其冷恢复实现；本轮修复后的真实调用与旧基线复现分别记录在实施报告中。
 
-## 审阅时需要判断的取舍
+## 已接受的取舍
 
 1. 推荐采用内置桥原生持久化路线；独立插件桥 #104 作为对照和可借鉴实现，不作为本修复的安装前置条件。
 2. 对新会话提供可验证的冷恢复；对旧 `--no-session` 历史如实说明恢复限制，保留用户显式开始新会话的选择。
 3. 按两个工作流交付：原生冷恢复，以及首轮空响应的转换修复/诊断与企业现场复验。两项分别记录完成状态。
 
-跨进程写者互斥、Pi 版本能力和 Host 不透明 ID 消费路径由实施前技术验证解决，详见 W0；它们尚未被本轮文档工作验证通过。
+跨进程写者互斥、Pi 版本能力和 Host 不透明 ID 消费路径已完成 W0 验证；实际决定与证据见实施报告。
 
 ## 交付边界
 
-本方案不承担 DSH #1668，不修改通用 ACP 的失败回退策略，不改变成员现有模型、凭据归属或 UI 布局。没有新建 GitHub PR、发布评论或宣称上游已经接受此路线。
+本方案不承担 DSH #1668，不改变成员现有模型、凭据归属或 UI 布局。通用 ACP 的失败回退策略不放宽，仅识别内置 Pi 的精确绑定错误；PR 与独立复核以实际回执为准。
 
 实施后必须达到：新会话首轮、热续聊、池回收后冷恢复、Host 重启后冷恢复、当前 MCP 调用，以及空响应/真实错误分类均有对应证据。正式合入、打包和企业机最终路径验收属于后续实施交付，不由这份计划替代。

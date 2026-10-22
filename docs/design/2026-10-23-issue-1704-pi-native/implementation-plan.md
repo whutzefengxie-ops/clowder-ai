@@ -9,7 +9,7 @@ status: proposed
 
 # 实施计划：冷恢复与首轮空响应同步闭环
 
-本计划尚未执行。用户本轮要求先给方案、不改代码；以下工作单元在方案审阅后进入实施。目标、兼容和状态契约见[推荐设计](recommended-design.md)，全部验收项见[证据与验收](evidence-and-acceptance.md)。
+本计划于方案阶段编写，用户随后批准按推荐路线实施并提交 PR。以下保留已接受的工作单元；实际执行状态与分层证据见[实施报告](implementation-report.md)，不能把计划要求当成已完成验证。目标、兼容和状态契约见[推荐设计](recommended-design.md)，全部验收项见[证据与验收](evidence-and-acceptance.md)。
 
 ## 顺序与交付组织
 
