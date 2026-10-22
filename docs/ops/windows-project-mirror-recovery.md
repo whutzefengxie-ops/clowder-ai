@@ -87,15 +87,24 @@ Get-Content -LiteralPath (Join-Path $projectRoot 'packages\web\.next\.build-comm
 开发者进一步从实际 `app.asar` 读取 `service-manager.js`、`project-mirrors.js`、`project-mirror-readiness.js`、`project-mirror-consumer.js` 四个文件，比较内容哈希并记录是否统一换行；新增诊断版本还应包含 `project-mirror-diagnostics.js` 和 `startup-error-diagnostics.js`。使用本仓库 `desktop` 的 `@electron/asar` 依赖读取，不在内网临时下载工具。例如在已安装开发依赖的源码目录执行：
 
 ```powershell
-$env:CLOWDER_INSPECT_ASAR = Join-Path $resources 'app.asar'
-try {
-  node -e 'const a=require("./desktop/node_modules/@electron/asar"); const c=require("node:crypto"); for(const n of ["service-manager.js","project-mirrors.js","project-mirror-readiness.js","project-mirror-consumer.js","project-mirror-diagnostics.js","startup-error-diagnostics.js"]){try{const b=a.extractFile(process.env.CLOWDER_INSPECT_ASAR,n);console.log(n,c.createHash("sha256").update(b).digest("hex"));}catch{console.log(n,"MISSING");}}'
-} finally {
-  Remove-Item Env:CLOWDER_INSPECT_ASAR
+@'
+const a = require('./desktop/node_modules/@electron/asar');
+const c = require('node:crypto');
+for (const n of ['service-manager.js', 'project-mirrors.js', 'project-mirror-readiness.js',
+  'project-mirror-consumer.js', 'project-mirror-diagnostics.js', 'startup-error-diagnostics.js']) {
+  try {
+    const b = a.extractFile(process.argv[2], n);
+    console.log(n, c.createHash('sha256').update(b).digest('hex'));
+  } catch {
+    console.log(n, 'MISSING_OR_UNREADABLE');
+  }
 }
+'@ | node - (Join-Path $resources 'app.asar')
 ```
 
-这一步只读安装包与组件，不启动服务、不执行资源中的脚本、不修改安装目录或 ACL。缺少桌面模块可以说明版本不含对应实现；仅有恢复日志、PID 或安装器的同名版本号不足以证明具体源码提交。
+这里通过标准输入传递脚本，兼容 Windows PowerShell 5.1 的参数引号规则，不需要修改执行策略。`MISSING_OR_UNREADABLE` 表示未读到模块，还需区分确实不存在与 ASAR 无法读取；不能直接当成旧版本的证据。
+
+这一步只读安装包与组件，不启动服务、不执行资源中的脚本、不修改安装目录或 ACL。确认缺少桌面模块可以说明版本不含对应实现；仅有恢复日志、PID 或安装器的同名版本号不足以证明具体源码提交。
 
 ## 验证口径
 
