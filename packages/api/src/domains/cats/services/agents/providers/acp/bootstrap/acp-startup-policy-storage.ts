@@ -11,12 +11,135 @@
  * - Existing directories with invalid ACLs are REJECTED, not auto-repaired
  */
 
+import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, lstatSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { homedir, platform } from 'node:os';
 import { join } from 'node:path';
 import type { AcpStartupPolicy } from './acp-startup-policy-types.js';
 import { ensureWindowsAcpBootstrapDirectories } from '../acp-bootstrap-windows-directory.js';
+
+/**
+ * PowerShell script to validate a file's security on Windows.
+ * Checks: owner, protected DACL, no untrusted principals, no reparse point.
+ * Similar to directory validation but uses File.GetAccessControl.
+ */
+const VALIDATE_FILE_SCRIPT = `
+$ErrorActionPreference = 'Stop'
+$ProgressPreference = 'SilentlyContinue'
+try {
+  [Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false)
+  $request = [Console]::In.ReadToEnd() | ConvertFrom-Json
+  $filePath = $request.filePath
+
+  $sidType = [System.Security.Principal.SecurityIdentifier]
+  $user = [System.Security.Principal.WindowsIdentity]::GetCurrent().User
+  $trusted = @($user.Value, 'S-1-5-18', 'S-1-5-32-544')
+  $allow = [System.Security.AccessControl.AccessControlType]::Allow
+  $full = [System.Security.AccessControl.FileSystemRights]::FullControl
+
+  # Check if file exists and is not a reparse point
+  if (-not [System.IO.File]::Exists($filePath)) {
+    throw "File does not exist: $filePath"
+  }
+
+  $attributes = [System.IO.File]::GetAttributes($filePath)
+  if (($attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+    throw 'File must not be a symlink or reparse point'
+  }
+  if (($attributes -band [System.IO.FileAttributes]::Directory) -ne 0) {
+    throw 'Path must be a file, not a directory'
+  }
+
+  # Get file ACL and validate
+  $acl = [System.IO.File]::GetAccessControl($filePath)
+
+  # Check owner
+  if ($acl.GetOwner($sidType).Value -ne $user.Value) {
+    throw "File has untrusted owner: $($acl.GetOwner($sidType).Value)"
+  }
+
+  # Check protected DACL
+  if (-not $acl.AreAccessRulesProtected) {
+    throw 'File must have a protected private DACL (no inheritance)'
+  }
+
+  # Validate access rules
+  $userFullControl = $false
+  foreach ($rule in $acl.GetAccessRules($true, $true, $sidType)) {
+    if ($rule.AccessControlType -eq $allow) {
+      if ($trusted -notcontains $rule.IdentityReference.Value) {
+        throw "File has unsafe Allow ACL for: $($rule.IdentityReference.Value)"
+      }
+      if ($rule.IdentityReference.Value -eq $user.Value -and
+          ($rule.FileSystemRights -band $full) -eq $full) {
+        $userFullControl = $true
+      }
+    } else {
+      throw 'File has unsupported Deny ACL'
+    }
+  }
+
+  if (-not $userFullControl) {
+    throw 'File lacks owner FullControl'
+  }
+
+  [Console]::Out.Write('file-validation-ok')
+} catch {
+  [Console]::Error.WriteLine($_.Exception.Message)
+  exit 1
+}
+`;
+
+/**
+ * Validate file security on Windows using native .NET APIs.
+ * Checks owner, protected DACL, no untrusted principals, no reparse.
+ */
+function validateWindowsFileSecurity(filePath: string): { success: boolean; error?: string } {
+  if (!existsSync(filePath)) {
+    return { success: false, error: `File does not exist: ${filePath}` };
+  }
+
+  try {
+    const powershell = join(
+      process.env.SystemRoot ?? 'C:\\Windows',
+      'System32',
+      'WindowsPowerShell',
+      'v1.0',
+      'powershell.exe',
+    );
+
+    const output = execFileSync(
+      powershell,
+      [
+        '-NoLogo',
+        '-NoProfile',
+        '-NonInteractive',
+        '-EncodedCommand',
+        Buffer.from(VALIDATE_FILE_SCRIPT, 'utf16le').toString('base64'),
+      ],
+      {
+        env: Object.fromEntries(Object.entries(process.env).filter(([name]) => name.toUpperCase() !== 'PSMODULEPATH')),
+        input: JSON.stringify({ filePath }),
+        encoding: 'utf8',
+        timeout: 10_000,
+        maxBuffer: 256 * 1024,
+        windowsHide: true,
+        stdio: ['pipe', 'pipe', 'pipe'],
+      },
+    );
+
+    if (output.trim() !== 'file-validation-ok') {
+      return { success: false, error: 'File validation did not return expected receipt' };
+    }
+
+    return { success: true };
+  } catch (error: unknown) {
+    const err = error as { stderr?: string; message?: string };
+    const errorMsg = err.stderr?.trim() || err.message || String(error);
+    return { success: false, error: `Windows file validation failed: ${errorMsg}` };
+  }
+}
 
 /**
  * Validate that a file is not a symlink/reparse point and check ACL on Windows.
@@ -29,6 +152,17 @@ import { ensureWindowsAcpBootstrapDirectories } from '../acp-bootstrap-windows-d
  * 2. Exclusive file creation (wx mode) to prevent following existing symlinks
  * 3. Directory protection inheritance via (OI)(CI) flags for newly created files
  */
+/**
+ * Validate file security (symlink check + Windows native ACL validation).
+ *
+ * On Windows, performs native validation:
+ * - File must be owned by current user
+ * - File must have protected DACL (no inheritance)
+ * - Only trusted principals (owner, SYSTEM, Administrators) can have access
+ * - File must not be a reparse point
+ *
+ * On Unix, checks symlink only (relies on directory mode for inheritance).
+ */
 function validateFileNotSymlink(filePath: string): { success: boolean; error?: string } {
   if (!existsSync(filePath)) {
     return { success: true }; // File doesn't exist yet - OK for creation
@@ -37,14 +171,15 @@ function validateFileNotSymlink(filePath: string): { success: boolean; error?: s
   try {
     const stats = lstatSync(filePath);
 
-    // Check if it's a symlink
+    // Check if it's a symlink (all platforms)
     if (stats.isSymbolicLink()) {
       return { success: false, error: `File is a symbolic link: ${filePath}` };
     }
 
-    // TODO: Add native Windows file ACL validation here
-    // Should check: owner is current user, protected DACL, no untrusted principals
-    // This would require extending the PowerShell validation script
+    // On Windows, perform native ACL validation
+    if (platform() === 'win32') {
+      return validateWindowsFileSecurity(filePath);
+    }
 
     return { success: true };
   } catch (error: unknown) {
