@@ -1,0 +1,22 @@
+name: Intranet Deployment Preparation
+on:
+  pull_request:
+    paths:
+      - 'scripts/prepare-intranet-deployment*'
+      - 'scripts/lib/*intranet*'
+      - 'scripts/start-windows.ps1'
+      - '.env.intranet.example'
+      - '.github/workflows/intranet-deployment.yml'
+  workflow_dispatch:
+jobs:
+  preparation:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test scripts/prepare-intranet-deployment.test.mjs scripts/lib/intranet-preparation-lock.test.mjs

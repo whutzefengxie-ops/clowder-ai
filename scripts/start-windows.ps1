@@ -87,7 +87,7 @@ if ($env:CAT_CAFE_STRICT_PROFILE_DEFAULTS -eq "1" -and $Profile_) {
 # -- Load .env -----------------------------------------------
 $envFile = Join-Path $ProjectRoot ".env"
 if (Test-Path $envFile) {
-    Get-Content $envFile | ForEach-Object {
+    Get-Content $envFile -Encoding UTF8 | ForEach-Object {
         $line = $_.Trim()
         if ($line -and -not $line.StartsWith("#")) {
             $parts = $line -split "=", 2
@@ -526,7 +526,7 @@ try {
         # Load .env into job process (Start-Job inherits parent env,
         # but re-load to be safe if process env was not fully propagated)
         if (Test-Path $envFile) {
-            Get-Content $envFile | ForEach-Object {
+            Get-Content $envFile -Encoding UTF8 | ForEach-Object {
                 $line = $_.Trim()
                 if ($line -and -not $line.StartsWith("#")) {
                     $parts = $line -split "=", 2
