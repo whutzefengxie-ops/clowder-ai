@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { join, resolve } from 'node:path';
 import { test } from 'node:test';
 import { AcpSessionProvider } from '../../dist/domains/cats/services/agents/session-contract/acp-session-provider.js';
 import { projectSessionEvent } from '../../dist/domains/cats/services/agents/session-contract/event-projection.js';
@@ -14,20 +15,27 @@ test('a data-only client library references one configuration field', () => {
 });
 
 test('owner configured client profiles retain argv boundaries and reject duplicates and package executables', () => {
+  const root = resolve('client-library-fixture');
+  const packageRoot = join(root, 'plugin');
   const raw = JSON.stringify([
-    { id: 'dsh', name: 'DeepSeek Harness', command: 'C:/Program Files/DSH/dsh.exe', startupArgs: ['--profile', 'acp'] },
+    {
+      id: 'dsh',
+      name: 'DeepSeek Harness',
+      command: join(root, 'Program Files', 'DSH', 'dsh.exe'),
+      startupArgs: ['--profile', 'acp'],
+    },
   ]);
-  const parsed = library.parseAgentClientProfiles(raw, { packageRoot: 'G:/plugin' });
+  const parsed = library.parseAgentClientProfiles(raw, { packageRoot });
   assert.equal(parsed.ok, true);
   assert.deepEqual(parsed.profiles[0].acp.startupArgs, ['--profile', 'acp']);
   for (const invalid of [
     raw.replace('dsh.exe', 'dsh.exe\u0000'),
     JSON.stringify([JSON.parse(raw)[0], JSON.parse(raw)[0]]),
-    JSON.stringify([{ id: 'evil', name: 'x', command: 'G:/plugin/evil.exe', startupArgs: [] }]),
+    JSON.stringify([{ id: 'evil', name: 'x', command: join(packageRoot, 'evil.exe'), startupArgs: [] }]),
     JSON.stringify([{ id: 'x', name: 'x', command: 'node', startupArgs: [], env: { TOKEN: 'not-allowed' } }]),
     '[]'.repeat(40000),
   ])
-    assert.equal(library.parseAgentClientProfiles(invalid, { packageRoot: 'G:/plugin' }).ok, false);
+    assert.equal(library.parseAgentClientProfiles(invalid, { packageRoot }).ok, false);
 });
 
 test('persistent plugin reference is strict and never becomes an executable fallback', () => {
