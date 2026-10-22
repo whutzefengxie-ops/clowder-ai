@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { test } from 'node:test';
 import { ensureWindowsAcpBootstrapDirectories } from '../../src/domains/cats/services/agents/providers/acp/acp-bootstrap-windows-directory.ts';
 
@@ -14,8 +14,20 @@ test(
     const missing = join(tmpdir(), `不存在-${randomUUID()}`);
     assert.throws(
       () => ensureWindowsAcpBootstrapDirectories(join(missing, 'private'), join(missing, 'private', 'cwd')),
-      (error: unknown) =>
-        error instanceof Error && error.message.includes('directory does not exist') && error.message.includes(missing),
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.match(error.message, /directory does not exist/);
+        assert.ok('path' in error && typeof error.path === 'string');
+        assert.equal(basename(error.path), basename(missing));
+        // WinPS may expand a runner's short-name/case spelling in DirectoryInfo.
+        // Compare the real existing parent and the exact missing Unicode leaf.
+        assert.equal(
+          realpathSync.native(dirname(error.path)).toLowerCase(),
+          realpathSync.native(dirname(missing)).toLowerCase(),
+        );
+        assert.ok(error.message.includes(error.path), 'the readable error must include the full reported path');
+        return true;
+      },
     );
     assert.equal(existsSync(missing), false);
   },
