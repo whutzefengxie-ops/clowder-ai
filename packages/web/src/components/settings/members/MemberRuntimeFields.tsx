@@ -4,13 +4,12 @@ import { useEffect, useState } from 'react';
 import { useAgentClientLibraries } from '@/hooks/useAgentClientLibraries';
 import { apiFetch } from '@/utils/api-client';
 import type { ProfileItem } from '../../hub-accounts.types';
-import { serializeCommandArgs } from '../../hub-cat-editor.acp';
 import { usesAgyAcp, usesAgyNative } from '../../hub-cat-editor.agy';
 import { builtinAccountIdForClient, filterAccounts, type HubCatEditorFormState } from '../../hub-cat-editor.model';
 import { SelectField } from '../../hub-cat-editor-fields';
-import { DshProviderSetup } from './DshProviderSetup';
 import { MemberChoicePicker } from './MemberChoicePicker';
 import { MemberConfigurationDetails } from './MemberConfigurationDetails';
+import { MemberDshProviderSetup } from './MemberDshProviderSetup';
 import { matchesRuntime, type RuntimeChoice, type RuntimeDrafts, runtimeDefaults } from './member-runtime-draft';
 import { memberRuntimeOptions, memberRuntimeTools } from './member-runtime-tools';
 import { nativeAcpProfileMessage } from './native-acp-profile-status';
@@ -217,12 +216,11 @@ export function MemberRuntimeFields({
         !form.accountRef &&
         form.clientId === 'acp' &&
         /dsh|deepseek/i.test(form.acpCommand + form.acpStartupArgs) && (
-          <DshProviderSetup
+          <MemberDshProviderSetup
+            form={form}
             runtimeId={selected?.id ?? (editing ? `acp:${form.catId}` : 'dsh')}
             t={t}
-            onPrepared={(command, args) =>
-              patch({ acpCommand: command, acpStartupArgs: serializeCommandArgs(args), defaultModel: '' })
-            }
+            patch={patch}
           />
         )}
       <div className="grid gap-4 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
