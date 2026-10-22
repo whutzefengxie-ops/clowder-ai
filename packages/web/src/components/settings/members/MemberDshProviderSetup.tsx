@@ -20,6 +20,7 @@ function bindingKey(form: HubCatEditorFormState): string {
     form.cliConfigArgs,
     form.commandArgs,
     form.defaultModel,
+    form.cliEffort,
   ]);
 }
 
@@ -69,10 +70,16 @@ export function MemberDshProviderSetup({
     <DshProviderSetup
       key={session.key}
       runtimeId={session.runtimeId}
+      configurationKey={session.key}
       t={t}
       onPrepared={(command, args) => {
         if (!live.current.active || live.current.binding !== binding) return;
-        const change = { acpCommand: command, acpStartupArgs: serializeCommandArgs(args), defaultModel: '' };
+        const change = {
+          acpCommand: command,
+          acpStartupArgs: serializeCommandArgs(args),
+          defaultModel: '',
+          cliEffort: '',
+        };
         setPrepared({ binding: bindingKey({ ...form, ...change }), key: session.key, runtimeId: session.runtimeId });
         patch(change);
       }}

@@ -73,6 +73,7 @@ async function mount(initial: Partial<HubCatEditorFormState> = {}) {
       ...runtimeDefaults(runtime),
       catId: 'same-member',
       defaultModel: 'official',
+      cliEffort: 'max',
       ...initial,
     });
     current = form;
@@ -106,6 +107,7 @@ it('keeps its own prepared descriptor and receipt while clearing the explicitly 
   await click('读取 DSH 配置');
   await click('使用此配置');
   expect(current.defaultModel).toBe('');
+  expect(current.cliEffort).toBe('');
   expect(current.acpStartupArgs).toContain('/host/company.yml');
   expect(hasReceipt()).toBe(true);
   await act(async () => change((old) => ({ ...old, name: 'New display name' })));
@@ -128,6 +130,7 @@ it.each([
   { acpAgentProvider: 'plugin:approved:dsh' },
   { accountRef: 'another-account' },
   { defaultModel: 'another-model' },
+  { cliEffort: 'another-effort' },
 ])('invalidates the receipt after an external form edit: %j', async (edit) => {
   await mount();
   await click('读取 DSH 配置');
@@ -144,6 +147,7 @@ it.each([
   { acpAgentProvider: 'plugin:approved:dsh' },
   { accountRef: 'another-account' },
   { defaultModel: 'another-model' },
+  { cliEffort: 'another-effort' },
   { clientId: 'openai' as const, carrier: 'app_server' as const, acpCommand: '', acpStartupArgs: '' },
 ])('does not apply a late prepare over a newer form context: %j', async (edit) => {
   deferPrepare = true;
