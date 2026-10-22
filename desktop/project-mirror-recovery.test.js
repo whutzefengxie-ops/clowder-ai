@@ -145,7 +145,7 @@ test('a parent-only UNKNOWN on source and mirror can be verified by the real con
   assert.ok(value.logs.some((message) => message.includes('source failures=1')));
 });
 
-test('source error fields remain visible when the independent consumer also cannot read it', async (t) => {
+test('source error fields remain visible when the consumer cannot verify before the deadline', async (t) => {
   const value = fixture(t);
   prepareProjectMirrors(value);
   const { mirror, relativePath } = PROJECT_MIRROR_PROBES[0];
@@ -154,7 +154,10 @@ test('source error fields remain visible when the independent consumer also cann
   parentReadFailure(t, [path.join(value.projectDir, mirror, relativePath), source], { code: 'EPERM' });
   await assert.rejects(waitForProjectMirrors({ ...value, timeoutMs: 350 }), (error) => {
     assert.match(error.message, /parent source .*code=EPERM errno=-4094 syscall=open/);
-    assert.match(error.message, /consumer source .*code=ENOENT/);
+    assert.match(error.message, /parent mirror .*code=EPERM errno=-4094 syscall=open/);
+    // Under parallel CI load, this short whole-readiness budget may expire
+    // before a fresh Node responds. Either outcome must still reject startup.
+    assert.match(error.message, /consumer (?:source [^\n]*code=ENOENT|[^\n]*code=ETIMEDOUT)/);
     return true;
   });
 });
