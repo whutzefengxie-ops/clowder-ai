@@ -34,6 +34,7 @@ cat-cafe-skills/custody-recognition/SKILL.md
 
 ```text
 Project mirror parent read failed
+Project mirror consumer diagnostic
 Project mirror readiness verified
 Project mirror readiness failed before API start
 failed to prepare mirror
@@ -41,6 +42,21 @@ Preserving existing non-link mirror
 ```
 
 成功日志会标明读取验证路径：父进程、重试后的父进程，或实际 Node consumer。失败日志区分 `source` 和 `mirror`，并保留路径、`code`、`errno`、`syscall`，用于判断安装源文件问题还是项目镜像入口问题。`UNKNOWN` 本身不能确认 Windows 原始错误码或缓存机制。
+
+每次 consumer 都记录 `started` 和 `settled` JSON 事件。用 `attempt` 配对，查看 `pid`、实际 `executable`、`budgetMs`、`elapsedMs`、`entryCount`、退出码/信号、输出字节数、`status` 和逐文件失败项。`started` 表示已尝试启动，非空 PID 说明进程已创建；只有 `settled` 且 `status: ready` 才证明本次六项读取全部完成。`read_failed` 是已完成读取但有文件失败；`timed_out`、`aborted`、`spawn_failed`、`exited`、`invalid_output` 分别表示超时、取消、启动失败、异常退出、返回协议无效。退出码为零本身不代表文件可读。
+
+弹窗和 `startup-state.json.message` 保留短摘要。完整结构化失败记录另外写入 `main.log` 的 `Desktop startup diagnostic` 行和 `startup-state.json.diagnostics`，包含最终父进程读取结果及所有 consumer 完成结果，不再丢失末轮诊断。不记录文件内容、环境变量、原始 stdout/stderr 或任意异常堆栈；只记录输出字节数和已知资源路径的错误字段。异常规模超过防护上限时，会明确记录 `omitted`/`omittedFailures`/`truncatedFields`，而不是无提示截断。
+
+在弹窗打开的日志目录执行（不要自行假定其他安装实例的目录）：
+
+```powershell
+Get-Content -LiteralPath .\desktop.log -Tail 500 |
+  Select-String 'Project mirror|failed to prepare mirror|Preserving existing'
+Get-Content -LiteralPath .\main.log -Tail 150 |
+  Select-String 'Desktop startup FAILED|Desktop startup diagnostic|identity'
+$state = Get-Content -LiteralPath .\startup-state.json -Raw | ConvertFrom-Json
+$state.diagnostics | ConvertTo-Json -Depth 12
+```
 
 | 日志结果 | 含义及处理 |
 |---|---|
@@ -51,6 +67,35 @@ Preserving existing non-link mirror
 | Preserving existing non-link mirror | 已有真实目录或不能安全确认类型的入口已保留，不自动覆盖。 |
 
 反馈时附上发生时间、`projectRoot`、`User data dir`，以及对应 source/mirror 错误和恢复结果。用户名和企业路径可以脱敏，但保留路径层级及错误类型。
+
+## 核对安装包和实际运行组件
+
+`1.14.0` 是产品版本，相同版本号可以对应多个测试构建。安装器文件名、API/Web 的提交标记、桌面 `app.asar` 分别核对，不能用 API 提交号推定桌面源码。先从 `main.log` 的 `[identity]` 行确认实际 `execPath`、`resourcesPath`、`projectRoot`，避免读取另一个安装实例。下面的路径由这次运行的实际值填写；Windows 的 `projectRoot` 通常是安装根，不能直接当成 `resourcesPath`：
+
+```powershell
+$setup = 'D:\交付包\实际安装器.exe'
+$resources = 'C:\实际安装目录\desktop-dist\resources'
+$projectRoot = 'C:\实际安装目录'
+Get-FileHash -LiteralPath $setup -Algorithm SHA256
+Get-FileHash -LiteralPath (Join-Path $resources 'app.asar') -Algorithm SHA256
+Get-Content -LiteralPath (Join-Path $projectRoot 'packages\api\dist\.build-commit')
+Get-Content -LiteralPath (Join-Path $projectRoot 'packages\web\.next\.build-commit')
+```
+
+将安装器 SHA256 与交付的 `build-manifest.json` 对照，同时记录安装目录的两个标记和 ASAR 哈希。manifest 描述构建时的输入与产物，不能证明后来安装目录未被其他安装/部署覆盖。API/Web 标记不同或与交付源提交不同，应先查清组件来源；不要覆盖已有配置或历史来排除问题。
+
+开发者进一步从实际 `app.asar` 读取 `service-manager.js`、`project-mirrors.js`、`project-mirror-readiness.js`、`project-mirror-consumer.js` 四个文件，比较内容哈希并记录是否统一换行；新增诊断版本还应包含 `project-mirror-diagnostics.js` 和 `startup-error-diagnostics.js`。使用本仓库 `desktop` 的 `@electron/asar` 依赖读取，不在内网临时下载工具。例如在已安装开发依赖的源码目录执行：
+
+```powershell
+$env:CLOWDER_INSPECT_ASAR = Join-Path $resources 'app.asar'
+try {
+  node -e 'const a=require("./desktop/node_modules/@electron/asar"); const c=require("node:crypto"); for(const n of ["service-manager.js","project-mirrors.js","project-mirror-readiness.js","project-mirror-consumer.js","project-mirror-diagnostics.js","startup-error-diagnostics.js"]){try{const b=a.extractFile(process.env.CLOWDER_INSPECT_ASAR,n);console.log(n,c.createHash("sha256").update(b).digest("hex"));}catch{console.log(n,"MISSING");}}'
+} finally {
+  Remove-Item Env:CLOWDER_INSPECT_ASAR
+}
+```
+
+这一步只读安装包与组件，不启动服务、不执行资源中的脚本、不修改安装目录或 ACL。缺少桌面模块可以说明版本不含对应实现；仅有恢复日志、PID 或安装器的同名版本号不足以证明具体源码提交。
 
 ## 验证口径
 

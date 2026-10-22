@@ -32,27 +32,42 @@ function assertExited(receipt) {
 
 test('consumer deadline waits for its owned Node to close before rejecting', async (t) => {
   const receipt = fixture(t);
+  const diagnostics = [];
   await assert.rejects(
-    readProjectMirrorsInConsumer({ nodeExe: process.execPath, entries: [], timeoutMs: 1000 }),
+    readProjectMirrorsInConsumer({
+      nodeExe: process.execPath,
+      entries: [],
+      timeoutMs: 1000,
+      onDiagnostic: (event) => diagnostics.push(event),
+    }),
     /timed out/,
   );
   assertExited(receipt);
+  assert.equal(diagnostics.length, 2);
+  assert.equal(diagnostics[1].status, 'timed_out');
+  assert.equal(diagnostics[1].signal, 'SIGKILL');
+  assert.equal(diagnostics[1].pid, diagnostics[0].pid);
 });
 
 test('consumer cancellation waits for its owned Node to close before rejecting', async (t) => {
   const receipt = fixture(t);
   const controller = new AbortController();
+  const diagnostics = [];
   const reading = readProjectMirrorsInConsumer({
     nodeExe: process.execPath,
     entries: [],
     signal: controller.signal,
     timeoutMs: 3000,
+    onDiagnostic: (event) => diagnostics.push(event),
   });
   const rejected = assert.rejects(reading, /controlled consumer cancellation/);
   for (let i = 0; i < 200 && !fs.existsSync(receipt); i += 1) await delay(10);
   controller.abort(new Error('controlled consumer cancellation'));
   await rejected;
   assertExited(receipt);
+  assert.equal(diagnostics.length, 2);
+  assert.equal(diagnostics[1].status, 'aborted');
+  assert.equal(diagnostics[1].pid, diagnostics[0].pid);
 });
 
 test('a missing consumer executable returns its spawn error without hanging', async () => {
