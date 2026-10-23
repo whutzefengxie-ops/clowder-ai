@@ -17,6 +17,19 @@ public static class InstallPathIdentity {
   static extern SafeFileHandle CreateFile(string path, uint access, uint share, IntPtr security, uint creation, uint flags, IntPtr template);
   [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true)]
   static extern uint GetFinalPathNameByHandle(SafeFileHandle handle, StringBuilder result, uint size, uint flags);
+  [DllImport("kernel32.dll", SetLastError=true)]
+  static extern SafeProcessHandle OpenProcess(uint access, bool inherit, int processId);
+  [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true)]
+  static extern bool QueryFullProcessImageName(SafeProcessHandle process, uint flags, StringBuilder result, ref uint size);
+  public static string ProcessImage(int processId) {
+    using (var process = OpenProcess(0x1000, false, processId)) {
+      if (process.IsInvalid) throw new System.ComponentModel.Win32Exception();
+      var text = new StringBuilder(32768);
+      uint size = (uint)text.Capacity;
+      if (!QueryFullProcessImageName(process, 0, text, ref size)) throw new System.ComponentModel.Win32Exception();
+      return text.ToString();
+    }
+  }
   public static string Resolve(string path) {
     using (var handle = CreateFile(path, 0, 7, IntPtr.Zero, 3, 0x02000000, IntPtr.Zero)) {
       if (handle.IsInvalid) throw new System.ComponentModel.Win32Exception();
@@ -64,7 +77,8 @@ function Get-OwnedInstallProcesses {
     }
     if (-not $candidateNames.Contains($processName)) { continue }
     try {
-      $processPath = $candidate.Path
+      # Module enumeration can fail for an unrelated elevated process under the original user token.
+      $processPath = [InstallPathIdentity]::ProcessImage($candidate.Id)
       if (-not $processPath) { throw 'Executable path unavailable' }
       $processPath = [InstallPathIdentity]::Resolve($processPath)
     } catch {

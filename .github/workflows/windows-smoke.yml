@@ -91,6 +91,7 @@ jobs:
           desktop/visible-renderer.test.js
           desktop/renderer-navigation.test.js
           desktop/installation-lifecycle.test.js
+          desktop/installation-process-image.test.js
           desktop/service-manager-isolation.test.js
           desktop/client-homes.test.js
           desktop/configure-client-homes.test.js

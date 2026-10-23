@@ -4,7 +4,7 @@ const os = require('node:os');
 const path = require('node:path');
 const vm = require('node:vm');
 const { test } = require('node:test');
-const { spawn, execFileSync } = require('node:child_process');
+const { spawn, spawnSync, execFileSync } = require('node:child_process');
 const { createWindowRecoveryController } = require('./window-recovery');
 
 test('second-instance shutdown accepts only the same installation and user-data identity', () => {
@@ -96,6 +96,11 @@ function mockedInstallInspection({
   fs.writeFileSync(path.join(appDir, 'probe.exe'), 'Only filename inventory is used; this fixture is never executed.');
   const marker = path.join(base, 'unexpected-stop');
   const waitMarker = path.join(base, 'owned-process-waited');
+  const production = fs.readFileSync(path.join(__dirname, 'scripts/stop-installed-desktop.ps1'), 'utf8');
+  const imageCall = '[InstallPathIdentity]::ProcessImage($candidate.Id)';
+  assert.equal(production.split(imageCall).length, 2, 'replace only the native image lookup for fictitious PIDs');
+  const fixtureScript = path.join(base, 'stop-with-fixture-image.ps1');
+  fs.writeFileSync(fixtureScript, production.replace(imageCall, '$candidate.Path'));
   const quote = (value) => `'${value.replace(/'/g, "''")}'`;
   const wrapper = path.join(base, 'inspect.ps1');
   fs.writeFileSync(
@@ -119,7 +124,7 @@ function mockedInstallInspection({
       `  [IO.File]::WriteAllText(${quote(waitMarker)}, 'called')`,
       ...(waitAcknowledgesExit ? ['$global:fixtureVisible = $false'] : []),
       '} }',
-      `& ${quote(path.join(__dirname, 'scripts/stop-installed-desktop.ps1'))} -AppDir ${quote(appDir)} -WaitSeconds 0 ${inspectOnly ? '-InspectOnly' : ''}`,
+      `& ${quote(fixtureScript)} -AppDir ${quote(appDir)} -WaitSeconds 0 ${inspectOnly ? '-InspectOnly' : ''}`,
       'exit $LASTEXITCODE',
     ].join('\r\n'),
   );
@@ -241,7 +246,41 @@ test(
         ),
         children[0].pid,
       );
-      execFileSync('powershell.exe', [...args, '-WaitSeconds', '0'], { timeout: 10000, windowsHide: true });
+      try {
+        execFileSync('powershell.exe', [...args, '-WaitSeconds', '0'], { timeout: 10000, windowsHide: true });
+      } catch (error) {
+        const source = fs.readFileSync(script, 'utf8');
+        const quote = (value) => `'${value.replace(/'/g, "''")}'`;
+        const diagnostic = path.join(base, 'failed-stop-state.ps1');
+        fs.writeFileSync(
+          diagnostic,
+          [
+            "$ErrorActionPreference='Stop';[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)",
+            source.slice(source.indexOf('Add-Type -TypeDefinition'), source.indexOf('$installRoot =')),
+            `$prefix=[InstallPathIdentity]::Resolve(${quote(root)}).TrimEnd([char]92)+[char]92`,
+            `@(foreach($probeId in @(${children.map((child) => child.pid).join(',')})){`,
+            '$p=Get-Process -Id $probeId -ErrorAction SilentlyContinue;$exited=$null;$image=$null;$failure=$null;$owned=$false',
+            'if($p){try{$exited=$p.HasExited}catch{};try{$image=[InstallPathIdentity]::ProcessImage($probeId)}catch{$failure=$_.Exception.Message}}',
+            'if($image){try{$owned=[InstallPathIdentity]::Resolve($image).StartsWith($prefix,[StringComparison]::OrdinalIgnoreCase)}catch{}}',
+            '[pscustomobject]@{pid=$probeId;listed=[bool]$p;HasExited=$exited;image=$image;owned=$owned;readError=$failure}',
+            '})|ConvertTo-Json -Depth 4 -Compress',
+          ].join('\r\n'),
+        );
+        const state = spawnSync('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', diagnostic], {
+          encoding: 'utf8',
+          windowsHide: true,
+          timeout: 10000,
+        });
+        console.error('Owned stop failure state:', {
+          status: error.status,
+          stderr: error.stderr?.toString(),
+          probePids: children.map((child) => child.pid),
+          stateStatus: state.status,
+          state: state.stdout,
+          stateError: state.stderr || state.error?.message,
+        });
+        throw error;
+      }
       await new Promise((resolve) => {
         if (children[0].exitCode !== null) resolve();
         else children[0].once('exit', resolve);
