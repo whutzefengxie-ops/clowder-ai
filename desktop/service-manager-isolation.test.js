@@ -159,6 +159,7 @@ for (const contamination of [
     OPENAI_API_KEY: 'fake-sentinel',
   },
   { MEMORY_STORE: '1' },
+  { CAT_CAFE_WORKSPACE_ROOT: '/sentinel/parent-owner-workspace' },
 ])
   test(`isolated child rejects inherited ${Object.keys(contamination).join(', ')}`, async () => {
     const base = fs.mkdtempSync(path.join(os.tmpdir(), 'desktop-env-'));

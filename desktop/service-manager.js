@@ -424,6 +424,7 @@ class ServiceManager {
       ...(resolveDesktopRuntime().instanceRoot
         ? {
             CAT_CAFE_CONFIG_ROOT: path.join(userDataDir, 'project'),
+            CAT_CAFE_WORKSPACE_ROOT: path.join(userDataDir, 'project'),
             CAT_CAFE_GLOBAL_CONFIG_ROOT: path.join(userDataDir, 'global'),
             CAT_CAFE_DATA_DIR: path.join(userDataDir, 'data'),
             PREVIEW_GATEWAY_PORT: '0',

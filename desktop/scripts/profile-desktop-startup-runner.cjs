@@ -12,14 +12,15 @@ fs.mkdirSync(path.join(app, 'packages'), { recursive: true });
 for (const name of ['scripts', '.claude']) fs.mkdirSync(path.join(app, name));
 fs.writeFileSync(path.join(project, 'pnpm-workspace.yaml'), 'packages: []\n');
 fs.cpSync(path.join(options.frozenRoot, 'api'), path.join(app, 'packages/api'), { recursive: true });
-// Only the API needs a physical installed-depth copy for import.meta.url assets.
+// API code needs installed depth for import.meta.url assets. Critical resource
+// roots below must also model the installed tree, without external junctions.
 for (const name of ['web', 'mcp-server']) {
   const from = path.join(options.frozenRoot, name);
   if (fs.existsSync(from)) fs.symlinkSync(from, path.join(app, 'packages', name), 'junction');
 }
 fs.symlinkSync(path.join(options.frozenRoot, 'dependencies'), path.join(app, 'node_modules'), 'junction');
 for (const name of ['assets', 'docs', 'guides', 'cat-cafe-skills'])
-  fs.symlinkSync(path.join(options.sourceRoot, name), path.join(app, name), 'junction');
+  fs.cpSync(path.join(options.sourceRoot, name), path.join(app, name), { recursive: true, dereference: true });
 for (const name of fs.readdirSync(path.join(options.sourceRoot, 'scripts'))) {
   if (name === 'node_modules') continue;
   const from = path.join(options.sourceRoot, 'scripts', name);
