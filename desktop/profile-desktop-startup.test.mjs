@@ -26,6 +26,12 @@ test(
       await fs.writeFile(path.join(frozen, 'api/scripts/startup-helper.mjs'), 'export const value = 1;');
       await fs.writeFile(entry, code);
       const receipt = await profileDesktopStartup(sourceRoot, frozen, { profileRoot: path.join(root, 'trace') });
+      for (const name of ['assets', 'docs', 'guides', 'cat-cafe-skills']) {
+        assert.equal((await fs.lstat(path.join(root, 'trace/app', name))).isSymbolicLink(), false);
+        if (process.platform === 'win32') {
+          assert.equal((await fs.lstat(path.join(root, 'trace/instance/project', name))).isSymbolicLink(), false);
+        }
+      }
       const manifest = JSON.parse(await fs.readFile(receipt.manifest, 'utf8'));
       assert.equal(manifest.entrySha256, createHash('sha256').update(code).digest('hex'));
       assert.deepEqual(manifest.files, [

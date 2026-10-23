@@ -318,13 +318,12 @@ test('installer and uninstaller use the same installation-scoped shutdown script
   assert.doesNotMatch(script, /Stop-Process -Name/);
 });
 
-test('post-install launch runs as the original user after an elevated installation', () => {
+test('intranet installation preserves manual shortcuts without application Run entries', () => {
   const installer = fs.readFileSync(path.join(__dirname, 'installer/cat-cafe.iss'), 'utf8');
-  const launch = installer.match(
-    /; Offer to launch after interactive install[\s\S]*?Description: "Launch \{#MyAppName\}";[^\r\n]+/,
-  );
-  assert.ok(launch, 'production installer must keep a post-install launch entry');
-  assert.match(launch[0], /Flags: postinstall nowait skipifsilent runasoriginaluser/);
+  const run = installer.match(/^\[Run\]\r?\n([\s\S]*?)(?=^\[[^\]]+\])/m)[1];
+  assert.doesNotMatch(run, /desktop-dist|postinstall|ShouldAutoLaunch/);
+  assert.match(installer, /Name: "\{autodesktop\}\\\{#MyAppName\}";[^\r\n]+desktop-dist/);
+  assert.match(installer, /Name: "desktopicon";[^\r\n]+CreateDesktopIcon/);
 });
 
 test('installer uses the Windows Program Files default and does not bake a truncated path', () => {

@@ -3,7 +3,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 
 const MARKER = '.clowder-bundled-resource.json';
-const MIRRORS = new Set(['docs', 'cat-cafe-skills']);
+const MIRRORS = new Set(['docs', 'cat-cafe-skills', 'assets', 'guides']);
 const hash = (value) => crypto.createHash('sha256').update(value).digest('hex');
 const canonical = (value) => {
   const result = path.resolve(value);
@@ -26,23 +26,32 @@ function statIdentity(filename) {
   };
 }
 
-function inventory(root, { deadline = Infinity, copyTo, excludeMarker = false } = {}) {
+function inventory(root, { deadline = Infinity, copyTo, excludeMarker = false, ownedPaths } = {}) {
   const records = [];
   let bytes = 0;
+  let count = 0;
+  let hasOwnerEntries = false;
   function visit(relative) {
     check(deadline);
     const filename = path.join(root, relative);
     const stat = fs.lstatSync(filename);
     if (stat.isSymbolicLink()) throw new Error(`Managed resource source contains a reparse entry: ${filename}`);
+    const owned = !ownedPaths || !relative || ownedPaths.has(relative);
+    if (!owned) hasOwnerEntries = true;
+    count += 1;
+    if (count > 20000) throw new Error('Managed resource inventory exceeds its bounded entry count');
     if (stat.isDirectory()) {
       if (copyTo && relative) fs.mkdirSync(path.join(copyTo, relative));
-      if (relative) records.push({ path: relative, kind: 'directory' });
+      if (relative && owned) records.push({ path: relative, kind: 'directory' });
       for (const name of fs.readdirSync(filename).sort()) {
         if (!relative && excludeMarker && name === MARKER) continue;
         if (name === MARKER) throw new Error(`Reserved resource marker in source: ${filename}`);
         visit(path.join(relative, name));
       }
     } else if (stat.isFile()) {
+      // User-added evaluation output is counted and link-checked, never read,
+      // copied or treated as bundled content.
+      if (!owned) return;
       bytes += stat.size;
       if (stat.size > 64 * 1024 * 1024 || bytes > 256 * 1024 * 1024)
         throw new Error('Managed resource inventory exceeds its bounded size');
@@ -51,10 +60,9 @@ function inventory(root, { deadline = Infinity, copyTo, excludeMarker = false } 
       if (copyTo) fs.writeFileSync(path.join(copyTo, relative), content, { flag: 'wx', mode: stat.mode & 0o777 });
       records.push({ path: relative, kind: 'file', sha256: hash(content) });
     } else throw new Error(`Unsupported managed resource entry: ${filename}`);
-    if (records.length > 20000) throw new Error('Managed resource inventory exceeds its bounded entry count');
   }
   visit('');
-  return { digest: hash(JSON.stringify(records)), records, bytes };
+  return { digest: hash(JSON.stringify(records)), records, bytes, hasOwnerEntries };
 }
 
 function markerAt(destination) {
@@ -98,10 +106,15 @@ function entryState(destination, source, mirror, deadline = Infinity) {
   const marker = markerAt(destination);
   if (!marker || marker.value.mirror !== mirror)
     throw new Error(`Preserving existing real resource directory without ownership: ${destination}`);
-  if (inventory(destination, { deadline, excludeMarker: true }).digest !== marker.value.digest) {
+  const actual = inventory(destination, {
+    deadline,
+    excludeMarker: true,
+    ownedPaths: new Set(marker.value.records.map((record) => record.path)),
+  });
+  if (actual.digest !== marker.value.digest) {
     throw new Error(`Managed resource conflict: owner modified files; preserving ${destination}`);
   }
-  return { identity, marker };
+  return { identity, marker, hasOwnerEntries: actual.hasOwnerEntries };
 }
 
 function verifyEntry(destination, source, mirror, expected, deadline) {

@@ -31,6 +31,9 @@ function fixture(t) {
     logs,
     nodeExe: process.execPath,
     timeoutMs: 1500,
+    // These tests exercise the retained read-failure recovery path separately
+    // from Windows' proactive preparation, covered by the physical-root suite.
+    platform: 'linux',
     log: (s) => logs.push(s),
   };
 }

@@ -81,6 +81,8 @@ jobs:
           desktop/project-mirror-startup-recovery.test.js
           desktop/project-mirror-recovery.test.js
           desktop/project-mirror-materialization.test.js
+          desktop/project-mirror-physical-resources.test.js
+          desktop/project-resource-redirection-guard.test.js
           desktop/project-mirror-consumer.test.js
           desktop/project-mirror-observability.test.js
           desktop/project-mirror-diagnostic-history.test.js
@@ -113,6 +115,7 @@ jobs:
           desktop/api-startup-cold-budget.test.mjs
           desktop/shutdown-controller.test.js
           desktop/profile-desktop-startup.test.mjs
+          desktop/profile-resource-copy.test.cjs
           desktop/profile-mirror-cancellation.test.js
           desktop/api-puppeteer-lazy-boundary.test.mjs
           packages/api/test/lazy-heavy-imports.test.js
@@ -138,6 +141,7 @@ jobs:
         run: >-
           node --test
           desktop/installer-preparation-log.test.js
+          desktop/installer-manual-start.test.js
           desktop/installer-no-icons.test.js
       - name: Build the actual web application
         run: pnpm --filter @cat-cafe/web build

@@ -91,6 +91,25 @@ async function refreshMaterializedMirrors(options) {
   await runMaterialization({ ...options, mirrors });
 }
 
+async function preparePhysicalMirrors(options) {
+  const mirrors = [...MIRRORS].filter((mirror) => {
+    const source = path.join(options.installRoot, mirror);
+    const destination = path.join(options.projectDir, mirror);
+    try {
+      const bundled = fs.lstatSync(source);
+      if (bundled.isSymbolicLink()) throw new Error(`Managed resource source contains a reparse entry: ${source}`);
+      if (!bundled.isDirectory()) return false;
+      const entry = fs.lstatSync(destination);
+      // Unknown real directories remain owner data, including absent probes.
+      return entry.isSymbolicLink();
+    } catch (error) {
+      if (error.code === 'ENOENT') return false;
+      throw error;
+    }
+  });
+  if (mirrors.length) await runMaterialization({ ...options, mirrors, allowLink: true });
+}
+
 async function materializeFailedMirrors(options, failures) {
   const mirrors = [...new Set(failures.filter((entry) => entry.kind === 'mirror').map((entry) => entry.mirror))];
   if (!mirrors.length || mirrors.some((mirror) => !MIRRORS.has(mirror))) return false;
@@ -106,4 +125,4 @@ async function materializeFailedMirrors(options, failures) {
   return true;
 }
 
-module.exports = { runMaterialization, refreshMaterializedMirrors, materializeFailedMirrors };
+module.exports = { runMaterialization, refreshMaterializedMirrors, preparePhysicalMirrors, materializeFailedMirrors };

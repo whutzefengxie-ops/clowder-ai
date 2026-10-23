@@ -411,6 +411,12 @@ class ServiceManager {
   _buildApiEnv(userDataDir) {
     const salt = this._getOrCreateTelemetrySalt(userDataDir);
     return {
+      // Resolve bundled ACP/MCP binaries from the installation while keeping
+      // writable project resources and agent work outside its program files.
+      CAT_CAFE_RUNTIME_ROOT: this.root,
+      CAT_CAFE_WORKSPACE_ROOT: resolveDesktopRuntime().instanceRoot
+        ? path.join(userDataDir, 'project')
+        : process.env.CAT_CAFE_WORKSPACE_ROOT?.trim() || path.join(userDataDir, 'project'),
       CAT_CAFE_SESSION_COOKIE_NAME: `cat_cafe_intranet_${crypto.createHash('sha256').update(userDataDir).digest('hex').slice(0, 12)}`,
       TELEMETRY_HMAC_SALT: salt,
       EVIDENCE_DB: path.join(userDataDir, 'evidence.sqlite'),

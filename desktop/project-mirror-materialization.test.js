@@ -191,10 +191,10 @@ fs.renameSync = function(from, to) {
   return result;
 };`,
   );
-  await assert.rejects(waitForProjectMirrors(value), /modified|conflict/);
+  await assert.rejects(waitForProjectMirrors(value), /modified|changed|conflict/);
   const backup = fs.readdirSync(value.projectDir).find((name) => name.endsWith('.previous'));
   assert.equal(fs.readFileSync(path.join(value.projectDir, backup, 'owner-added.txt'), 'utf8'), 'do not remove');
-  await assert.rejects(waitForProjectMirrors(value), /modified|conflict/);
+  await assert.rejects(waitForProjectMirrors(value), /modified|changed|conflict/);
   assert.equal(fs.readFileSync(path.join(value.projectDir, backup, 'owner-added.txt'), 'utf8'), 'do not remove');
 });
 

@@ -62,6 +62,13 @@ function Get-InstallExecutableNames {
   return ,$names
 }
 $candidateNames = Get-InstallExecutableNames
+function Test-CandidateStillRunning([int]$ProcessId) {
+  $current = Get-Process -Id $ProcessId -ErrorAction SilentlyContinue
+  if (-not $current) { return $false }
+  # Enumeration can retain an exited process; presence alone is not liveness.
+  try { return (-not $current.HasExited) }
+  catch { return $true } # An unknown live candidate must still refuse shutdown.
+}
 function Get-OwnedInstallProcesses {
   foreach ($candidate in @(Get-Process -ErrorAction Stop)) {
     # Querying paths of unrelated protected Windows processes can fail even for an administrator.
@@ -70,7 +77,7 @@ function Get-OwnedInstallProcesses {
       $processName = $candidate.ProcessName
       if (-not $processName) { throw 'Process name unavailable' }
     } catch {
-      if (Get-Process -Id $candidate.Id -ErrorAction SilentlyContinue) {
+      if (Test-CandidateStillRunning $candidate.Id) {
         throw "Cannot verify process identity for installation shutdown (PID $($candidate.Id))"
       }
       continue
@@ -82,7 +89,7 @@ function Get-OwnedInstallProcesses {
       if (-not $processPath) { throw 'Executable path unavailable' }
       $processPath = [InstallPathIdentity]::Resolve($processPath)
     } catch {
-      if (Get-Process -Id $candidate.Id -ErrorAction SilentlyContinue) {
+      if (Test-CandidateStillRunning $candidate.Id) {
         throw "Cannot verify candidate executable for installation shutdown (PID $($candidate.Id))"
       }
       continue

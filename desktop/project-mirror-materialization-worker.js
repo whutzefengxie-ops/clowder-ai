@@ -26,12 +26,57 @@ function exists(filename) {
   }
 }
 
+function removeOwnedStaticTree(root, journal, deadline) {
+  verifyEntry(root, journal.source, journal.mirror, journal.before, deadline);
+  const holding = path.join(root, `.clowder-cleanup-${crypto.randomUUID()}`);
+  fs.mkdirSync(holding);
+  for (const record of journal.before.marker.value.records.filter((entry) => entry.kind === 'file')) {
+    check(deadline);
+    const filename = path.join(root, record.path);
+    const stat = fs.lstatSync(filename);
+    if (!stat.isFile() || stat.isSymbolicLink() || hash(fs.readFileSync(filename)) !== record.sha256)
+      throw new Error(`Preserving changed retired resource: ${filename}`);
+    const held = path.join(holding, path.basename(record.path));
+    fs.renameSync(filename, held);
+    // Verify the entry actually moved before deleting it. A concurrently
+    // replaced owner file is restored, or retained alongside a new owner file.
+    const moved = fs.lstatSync(held);
+    if (!moved.isFile() || moved.isSymbolicLink() || hash(fs.readFileSync(held)) !== record.sha256) {
+      if (!exists(filename)) fs.renameSync(held, filename);
+      throw new Error(`Preserving changed retired resource in ${root}`);
+    }
+    fs.unlinkSync(held);
+  }
+  fs.rmdirSync(holding);
+  const directories = journal.before.marker.value.records
+    .filter((entry) => entry.kind === 'directory')
+    .sort((left, right) => right.path.length - left.path.length);
+  // rmdir refuses nonempty directories; unknown additions are never visited.
+  for (const { path: relative } of directories) fs.rmdirSync(path.join(root, relative));
+  const names = fs.readdirSync(root);
+  if (names.length !== 1 || names[0] !== MARKER) throw new Error(`Preserving owner additions in ${root}`);
+  const marker = markerAt(root);
+  if (marker?.text !== journal.before.marker.text) throw new Error(`Preserving changed retired marker in ${root}`);
+  fs.unlinkSync(path.join(root, MARKER));
+  fs.rmdirSync(root);
+}
+
 function removeBackup(filename, journal, deadline) {
   verifyEntry(filename, journal.source, journal.mirror, journal.before, deadline);
   if (fs.lstatSync(filename).isSymbolicLink()) {
     if (process.platform === 'win32') fs.rmdirSync(filename);
     else fs.unlinkSync(filename);
-  } else removeGeneratedTree(filename);
+  } else {
+    // Cleanup must never leave a partially deleted tree in a recovery slot.
+    // A retired static copy is outside the journal; failure preserves it.
+    const retired = `${filename}.retired-${crypto.randomUUID()}`;
+    fs.renameSync(filename, retired);
+    try {
+      removeOwnedStaticTree(retired, journal, deadline);
+    } catch {
+      return retired;
+    }
+  }
 }
 
 function readJournal(projectDir) {
@@ -94,7 +139,8 @@ function verifyPartialStage(journal, deadline) {
 
 function recoverInterrupted(projectDir, deadline) {
   const journal = readJournal(projectDir);
-  if (!journal) return;
+  if (!journal) return [];
+  const retained = [];
   const { destination, stage, backup, journalPath } = journal;
   if (exists(backup)) {
     if (!exists(destination)) fs.renameSync(backup, destination);
@@ -109,7 +155,8 @@ function recoverInterrupted(projectDir, deadline) {
           `Interrupted resource recovery has a conflicting destination; preserving all files: ${destination}`,
         );
       }
-      removeBackup(backup, journal, deadline);
+      const retired = removeBackup(backup, journal, deadline);
+      if (retired) retained.push(retired);
     }
   }
   if (exists(stage)) {
@@ -117,6 +164,7 @@ function recoverInterrupted(projectDir, deadline) {
     removeGeneratedTree(stage);
   }
   fs.unlinkSync(journalPath);
+  return retained;
 }
 
 function materializeOne({ installRoot, projectDir, mirror, deadline, allowLink }) {
@@ -126,6 +174,7 @@ function materializeOne({ installRoot, projectDir, mirror, deadline, allowLink }
   if (before.identity.link && !allowLink) return { mirror, status: 'link' };
   const sourceInventory = inventory(source, { deadline });
   if (before.marker?.value.digest === sourceInventory.digest) return { mirror, status: 'current' };
+  if (before.hasOwnerEntries) return { mirror, status: 'refresh deferred', reason: 'owner additions retained' };
   const id = crypto.randomUUID();
   const journalPath = path.join(projectDir, JOURNAL);
   const stage = path.join(projectDir, `.clowder-resource-${id}.stage`);
@@ -162,7 +211,7 @@ function materializeOne({ installRoot, projectDir, mirror, deadline, allowLink }
       fs.renameSync(backup, destination);
       throw error;
     }
-    removeBackup(backup, journal, deadline);
+    const retainedBackup = removeBackup(backup, journal, deadline);
     fs.unlinkSync(journalPath);
     return {
       mirror,
@@ -170,11 +219,13 @@ function materializeOne({ installRoot, projectDir, mirror, deadline, allowLink }
       files: copied.records.filter((entry) => entry.kind === 'file').length,
       bytes: copied.bytes,
       digest: copied.digest,
+      ...(retainedBackup ? { retainedBackup } : {}),
     };
   } catch (error) {
     // Recover only our recorded stage/link; unknown or concurrently changed owner data stays intact.
     try {
-      recoverInterrupted(projectDir, deadline);
+      const retained = recoverInterrupted(projectDir, deadline);
+      if (retained.length) error.message += `; retained static backups: ${retained.join(', ')}`;
     } catch (recoveryError) {
       error.message += `; recovery retained for retry: ${recoveryError.message}`;
     }
@@ -193,8 +244,11 @@ function runRequest(request) {
   )
     throw new Error('Invalid managed resource recovery request');
   const deadline = Date.now() + Math.min(60000, Math.max(1, budgetMs));
-  recoverInterrupted(projectDir, deadline);
-  return mirrors.map((mirror) => materializeOne({ installRoot, projectDir, mirror, deadline, allowLink }));
+  const retained = recoverInterrupted(projectDir, deadline);
+  return [
+    ...retained.map((retainedBackup) => ({ status: 'retained retired backup', retainedBackup })),
+    ...mirrors.map((mirror) => materializeOne({ installRoot, projectDir, mirror, deadline, allowLink })),
+  ];
 }
 
 if (require.main === module) {

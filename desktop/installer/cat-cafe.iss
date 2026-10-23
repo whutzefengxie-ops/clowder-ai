@@ -207,14 +207,8 @@ Filename: "powershell.exe"; \
   StatusMsg: "Generating desktop configuration..."; \
   Flags: runhidden waituntilterminated; Check: RuntimeExtractionSucceeded
 
-; Offer to launch after interactive install
-Filename: "{app}\desktop-dist\{#MyAppExeName}"; \
-  Description: "Launch {#MyAppName}"; Flags: postinstall nowait skipifsilent runasoriginaluser; Check: RuntimeExtractionSucceeded
-; F273: Auto-restart after silent upgrade (in-app updater uses /SILENT).
-; runasoriginaluser is critical — without it, the app + Redis + API all run
-; as elevated admin, which breaks user-data paths and is a security concern.
-Filename: "{app}\desktop-dist\{#MyAppExeName}"; \
-  Flags: nowait runasoriginaluser; Check: ShouldAutoLaunch
+; The intranet installer never launches the application, interactively or silently.
+; Start it manually from the installed desktop shortcut after Setup has exited.
 
 ; ── F273: Clean previous version's tar-extracted dirs before upgrade ───
 ; These are NOT tracked by Inno's file registry (created by tar.exe in [Run]).
@@ -273,11 +267,6 @@ begin
   if (GetArrayLength(Fields) <> 7) or (Fields[0] <> 'EXTRACT') then exit;
   WizardForm.StatusLabel.Caption := 'Extracting ' + Fields[2] + ' - ' + Fields[3] + '%';
   WizardForm.FilenameLabel.Caption := Fields[4] + ' / ' + Fields[5] + ' entries - ' + IntToStr(StrToIntDef(Fields[6], 0) div 1000) + 's (' + Fields[1] + ')';
-end;
-
-function ShouldAutoLaunch(): Boolean;
-begin
-  Result := RuntimeExtractionSucceeded and WizardSilent and (ExpandConstant('{param:NoAutoStart|0}') <> '1');
 end;
 
 procedure ExtractRuntimeArchive(ArchiveName: String);
