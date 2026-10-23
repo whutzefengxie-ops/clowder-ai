@@ -3,7 +3,7 @@ feature_ids: []
 topics: [codex, windows, proxy, native-tool, issue-1666]
 doc_kind: plan
 created: 2026-10-22
-status: reviewed_for_implementation
+status: implemented_with_acceptance_gaps
 ---
 
 # Issue #1666：Codex 企业代理环境兼容修复方案
@@ -12,7 +12,9 @@ status: reviewed_for_implementation
 
 本文已由 Codex 完成方案审查；用户在本 thread 明确授权：方案通过后交 Claude 实施并提交 PR，
 再由 Codex 独立审核验收。实施须包含本次审查补充的安全降级与验证约束，见第 9 节。
-当前仍只有方案文档，没有代码修复或实机验收结果；未授权合并、部署或修改运行配置。
+PR #1670 已实施；2026-10-23 用户授权修复 CI、恢复隔离环境、执行真实调用与重启恢复验收，
+并更新 PR 正文，明确要求暂不合并。最新证据及未覆盖场景见
+[本轮验收记录](issue-1666-codex-proxy-validation-2026-10-23.md)。
 
 - 问题：[zts212653/clowder-ai#1666](https://github.com/zts212653/clowder-ai/issues/1666)。
 - 相关前置：[Issue #1654](https://github.com/zts212653/clowder-ai/issues/1654)、[已合并 PR #1659](https://github.com/zts212653/clowder-ai/pull/1659)。
@@ -20,7 +22,8 @@ status: reviewed_for_implementation
 - 工位：`G:\AIwork\clowder-ai\worktrees\feat-issue-1666-codex-proxy`。
 - 基线：已拉取的 `upstream/main`，`1baaed2e9fadca8b550ae7041ef5a663994ab2d4`，包含 #1659。
 - 负责人：Codex；工位保留供审核，2026-10-29 复查，届时不自动删除。
-- 本轮没有安装依赖、启动服务、创建测试账号/会话，也没有改动 main 或 runtime 的工作区文件。
+- 已使用独立 HOME、Redis 和端口完成四轮真实 OAuth 调用；临时服务已停止，数据保留。
+  main 与生产 runtime 未作开发或部署改动；企业本地 custom provider 场景仍未验收通过。
 
 ## 2. 目标与根因判断
 
