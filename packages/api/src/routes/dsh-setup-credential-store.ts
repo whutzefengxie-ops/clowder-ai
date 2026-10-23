@@ -34,16 +34,19 @@ export function assertDefaultDshCredentialStore(
   if (!home.trim() || !isAbsolute(home)) throw Error('dsh_setup_custom_startup');
   const document = parseDocument(source, { uniqueKeys: true });
   if (document.errors.length || !isSeq(document.contents)) throw Error('dsh_config_invalid');
-  const resolvers = document.contents.items.filter(
-    (row) =>
-      isMap(row) &&
-      (row.get('id') === 'credentials' ||
-        row.get('id') === 'credentials-local' ||
-        (typeof row.get('name') === 'string' && /credentials?/i.test(String(row.get('name'))))),
-  );
+  const resolvers = document.contents.items.filter((row) => {
+    if (!isMap(row)) return false;
+    const id: unknown = row.get('id');
+    const name: unknown = row.get('name');
+    return (
+      id === 'credentials' || id === 'credentials-local' || (typeof name === 'string' && /credentials?/i.test(name))
+    );
+  });
   if (resolvers.length > 1 || (requireResolver && resolvers.length !== 1)) throw Error('dsh_setup_custom_startup');
   for (const row of resolvers) {
-    if (!isMap(row) || row.get('id') !== 'credentials') throw Error('dsh_setup_custom_startup');
+    if (!isMap(row)) throw Error('dsh_setup_custom_startup');
+    const id: unknown = row.get('id');
+    if (id !== 'credentials') throw Error('dsh_setup_custom_startup');
     visit(row, (_key, node) => {
       if (isAlias(node)) throw Error('dsh_setup_custom_startup');
       if (
