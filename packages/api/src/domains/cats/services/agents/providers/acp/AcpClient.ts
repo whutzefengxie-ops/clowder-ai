@@ -22,10 +22,10 @@ import { buildChildEnv } from '../../../../../../utils/cli-spawn.js';
 import { resolveWindowsSpawnPlan } from '../../../../../../utils/cli-spawn-win.js';
 import { buildUnixSupervisedSpawnPlan } from '../../../../../../utils/cli-supervised-process.js';
 import { PI_BRIDGE_NAME, PI_SESSION_BINDING_ERROR } from '../pi/pi-bridge-contract.js';
-import { shutdownAcpChild } from './acp-child-shutdown.js';
 import { AcpCwdIdentityTracker } from './acp-cwd-identity.js';
 import { type AcpPromptInput, toAcpPromptContent } from './acp-prompt-content.js';
 import { AcpSessionBindingError, ActiveSessionCache } from './active-session-cache.js';
+import { shutdownAcpChild } from './lifecycle/acp-child-shutdown.js';
 import type {
   AcpAgentRequest,
   AcpContentBlock,

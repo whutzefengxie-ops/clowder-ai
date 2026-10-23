@@ -9,7 +9,7 @@
  */
 
 import { createModuleLogger } from '../../../../../../infrastructure/logger.js';
-import { AcpRetirementBarrier } from './acp-retirement-barrier.js';
+import { AcpRetirementBarrier } from './lifecycle/acp-retirement-barrier.js';
 
 const log = createModuleLogger('acp-pool');
 

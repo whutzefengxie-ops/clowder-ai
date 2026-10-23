@@ -37,10 +37,10 @@ import {
   AcpTimeoutError,
   buildAcpSpawnLogFields,
 } from './AcpClient.js';
-import { shutdownAcpChild } from './acp-child-shutdown.js';
 import { AcpCwdIdentityTracker } from './acp-cwd-identity.js';
 import { type AcpPromptInput, toAcpPromptContent } from './acp-prompt-content.js';
 import { AcpSessionBindingError, ActiveSessionCache } from './active-session-cache.js';
+import { shutdownAcpChild } from './lifecycle/acp-child-shutdown.js';
 import type {
   AcpAgentRequest,
   AcpInitializeResult,

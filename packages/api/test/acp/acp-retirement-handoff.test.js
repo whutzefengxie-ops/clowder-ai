@@ -4,7 +4,7 @@ import { PassThrough } from 'node:stream';
 import { test } from 'node:test';
 import { AcpClient } from '../../dist/domains/cats/services/agents/providers/acp/AcpClient.js';
 import { AcpProcessPool } from '../../dist/domains/cats/services/agents/providers/acp/AcpProcessPool.js';
-import { shutdownAcpChild } from '../../dist/domains/cats/services/agents/providers/acp/acp-child-shutdown.js';
+import { shutdownAcpChild } from '../../dist/domains/cats/services/agents/providers/acp/lifecycle/acp-child-shutdown.js';
 
 const gate = () => {
   let resolve;
