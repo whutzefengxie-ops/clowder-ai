@@ -1,6 +1,6 @@
 import { resolveCliCommand } from '../utils/cli-resolve.js';
 
-const INTRANET_ROLES = ['ragdoll', 'maine-coon', 'turkish-van'] as const;
+const INTRANET_ROLES = ['maine-coon'] as const;
 
 /** Built into the Host: PATH/file discovery only, no plugin, credentials, prompt or agent process. */
 export function discoverCodeAgentRuntimes(

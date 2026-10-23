@@ -74,6 +74,10 @@ function prepareMirrorEntry({ source, destination, rebuild, log }) {
 function prepareProjectMirrors({ installRoot, projectDir, log = () => {}, rebuildMirrors = [] }) {
   const rebuild = new Set(rebuildMirrors);
   fs.mkdirSync(projectDir, { recursive: true });
+  if (fs.existsSync(path.join(projectDir, '.clowder-resource-transaction.json'))) {
+    log('Deferring mirror preparation until the interrupted managed resource transaction is recovered');
+    return;
+  }
   for (const mirror of PROJECT_MIRRORS) {
     const source = path.join(installRoot, mirror);
     const destination = path.join(projectDir, mirror);

@@ -30,11 +30,13 @@ export function MemberDshProviderSetup({
   selected,
   patch,
   t,
+  autoInspect = Boolean(selected?.dshSetupRequired),
 }: {
   form: HubCatEditorFormState;
   selected?: RuntimeChoice;
   patch: (value: Partial<HubCatEditorFormState>) => void;
   t: MemberText;
+  autoInspect?: boolean;
 }) {
   const binding = bindingKey(form);
   const live = useRef({ binding, active: true });
@@ -72,6 +74,7 @@ export function MemberDshProviderSetup({
       runtimeId={session.runtimeId}
       configurationKey={session.key}
       t={t}
+      autoInspect={autoInspect}
       onPrepared={(command, args) => {
         if (!live.current.active || live.current.binding !== binding) return;
         const change = {

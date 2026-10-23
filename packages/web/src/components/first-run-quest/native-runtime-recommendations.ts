@@ -3,14 +3,50 @@ import { autoSlug, type HubCatEditorFormState } from '../hub-cat-editor.model';
 import { matchesRuntime, type RuntimeChoice } from '../settings/members/member-runtime-draft';
 import type { NativePartner } from './native-onboarding';
 
+function expandRoleRecommendations(runtime: RuntimeChoice): RuntimeChoice[] {
+  return runtime.roleTemplates?.length
+    ? runtime.roleTemplates.map((role) => ({ ...runtime, roleTemplateId: role.id, priority: role.priority }))
+    : [runtime];
+}
+
+function intranetRecommendations(runtime: RuntimeChoice): RuntimeChoice[] {
+  // Availability in the editor is independent of the supported default team.
+  if ([runtime.harnessId, runtime.id].some((id) => id === 'codex' || id === 'pi')) return [];
+  if (runtime.harnessId === 'codeagent' || /^codeagent(?::|$)/.test(runtime.id)) {
+    if (runtime.roleTemplateId && runtime.roleTemplateId !== 'maine-coon') return [];
+    return [{ ...runtime, roleTemplateId: 'maine-coon', priority: 100 }];
+  }
+  return expandRoleRecommendations(runtime);
+}
+
 /** Roles decorate a recommendation, never the ordinary tool catalog. */
-export function nativeRuntimeRecommendations(runtimes: RuntimeChoice[]): RuntimeChoice[] {
+export function nativeRuntimeRecommendations(
+  runtimes: RuntimeChoice[],
+  edition: 'intranet' | 'public' = 'public',
+): RuntimeChoice[] {
   return runtimes.flatMap((runtime) => {
     if (runtime.kind === 'binding') return [];
-    return runtime.roleTemplates?.length
-      ? runtime.roleTemplates.map((role) => ({ ...runtime, roleTemplateId: role.id, priority: role.priority }))
-      : [runtime];
+    return edition === 'intranet' ? intranetRecommendations(runtime) : expandRoleRecommendations(runtime);
   });
+}
+
+/** Suppress new duplicate identities without changing, merging or removing persisted members. */
+export function uniqueIntranetPartners(partners: NativePartner[], cats: CatData[]): NativePartner[] {
+  const identity = (name: string) => name.trim().normalize('NFKC').toLowerCase();
+  const seen = new Set<string>();
+  return partners.filter((partner) => {
+    const key = identity(partner.form.nickname || partner.form.displayName || partner.form.name);
+    if (!key || seen.has(key)) return false;
+    if (!partner.existingId && cats.some((cat) => identity(cat.nickname || cat.displayName) === key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+/** A narrowed catalog must not erase pending configuration or its original idempotency key. */
+export function parkedNativePartners(previous: NativePartner[] = [], current: NativePartner[]): NativePartner[] {
+  // Old releases could assign one request key to several roles; a shared key is not identity.
+  return previous.filter((old) => !current.some((partner) => partner.id === old.id));
 }
 
 export function preferredNativeBinding(

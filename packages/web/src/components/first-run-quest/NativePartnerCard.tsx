@@ -22,8 +22,9 @@ export function NativePartnerCard({
   patch: (change: Partial<NativePartner>) => void;
   onValidityChange: (valid: boolean) => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(Boolean(partner.runtime.dshSetupRequired));
   const { runtime, form } = partner;
+  const locked = created && !(runtime.dshSetupRequired && partner.existingId);
   const available = runtime.installed && (runtime.clientId !== 'acp' || Boolean(runtime.acp));
   const selectable = nativeRuntimeSelectable(runtime, form);
   const detectedConfiguration = usesDetectedRuntimeConfiguration(form, runtime);
@@ -65,7 +66,7 @@ export function NativePartnerCard({
           </h3>
           <p className="mt-1 text-sm text-cafe-secondary">
             {runtime.label} ·{' '}
-            {created
+            {locked
               ? '已添加'
               : profileLabel
                 ? profileLabel
@@ -81,7 +82,7 @@ export function NativePartnerCard({
         {runtime.installed && (
           <button
             type="button"
-            disabled={created || disabled}
+            disabled={locked || disabled}
             onClick={() => setExpanded(!expanded)}
             aria-expanded={expanded}
             className="min-h-10 shrink-0 text-sm text-cafe-accent"
@@ -109,6 +110,11 @@ export function NativePartnerCard({
       {!available && <NativeInstallHelp runtime={runtime} />}
       {partner.missingExisting && !created && (
         <p className="mt-3 text-sm text-cafe-secondary">原伙伴已不在当前名单中。确认创建后，会按保留的配置重新添加。</p>
+      )}
+      {runtime.dshSetupRequired && detectedConfiguration && !locked && (
+        <p role="status" className="mt-3 text-sm text-cafe-secondary">
+          DSH 需要确认可用的供应商路由；会优先读取现有 Desktop/Web 配置，确认一次后随成员长期保存。
+        </p>
       )}
       {partner.recoverable && !created && (
         <div className="mt-3 text-sm text-cafe-secondary">
@@ -152,7 +158,7 @@ export function NativePartnerCard({
       )}
       {expanded && (
         <fieldset
-          disabled={disabled || created}
+          disabled={disabled || locked}
           className="mt-4 space-y-4 border-t border-[var(--console-border-soft)] pt-4"
         >
           <div className="grid gap-3 sm:grid-cols-2">
@@ -177,7 +183,15 @@ export function NativePartnerCard({
             nativeSetup
             form={form}
             accounts={[]}
-            patch={(change) => patch({ form: { ...form, ...change } })}
+            patch={(change) => {
+              const next = { ...form, ...change };
+              patch({
+                form: next,
+                ...(runtime.dshSetupRequired && change.acpStartupArgs && nativeRuntimeSelectable(runtime, next)
+                  ? { selected: true, dshSetupPrepared: true }
+                  : {}),
+              });
+            }}
             t={chinese}
             accountHref="/settings?s=members"
             editing={false}

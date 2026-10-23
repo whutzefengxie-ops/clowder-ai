@@ -7,7 +7,7 @@ import { useNativeOnboarding } from '../useNativeOnboarding';
 vi.mock('@/utils/api-client', () => ({ apiFetch: vi.fn() }));
 vi.mock('@/hooks/useCatData', () => ({ useCatData: () => ({ refresh: vi.fn() }) }));
 
-it('restores legacy three-role drafts and independent request receipts after discovery becomes one harness', async () => {
+it('narrows legacy intranet drafts to Yanyan while parking other identities and retry receipts without writes', async () => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
   localStorage.clear();
   const templates = ['ragdoll', 'maine-coon', 'turkish-van'].map((id, index) => ({
@@ -28,7 +28,7 @@ it('restores legacy three-role drafts and independent request receipts after dis
     installed: true,
     models: [],
     acp: { command: 'codeagent', startupArgs: ['--acp'], transport: 'stdio' },
-    roleTemplates: templates.map((template) => ({ id: template.id, priority: 100 })),
+    roleTemplates: [{ id: 'maine-coon', priority: 100 }],
   };
   let upgraded = false;
   let state: ReturnType<typeof useNativeOnboarding> | undefined;
@@ -42,7 +42,7 @@ it('restores legacy three-role drafts and independent request receipts after dis
         JSON.stringify(
           String(path).startsWith('/api/cats/native-runtimes')
             ? {
-                edition: 'intranet',
+                edition: upgraded ? 'intranet' : 'public',
                 runtimes: upgraded
                   ? [canonical]
                   : templates.map((template) => ({
@@ -86,28 +86,33 @@ it('restores legacy three-role drafts and independent request receipts after dis
     const before = structuredClone(state?.draft?.partners);
     upgraded = true;
     await act(async () => state?.reload());
-    expect(state?.draft?.lead).toBe(third.id);
+    expect(state?.draft?.partners).toHaveLength(1);
+    expect(state?.draft?.partners[0].form.nickname).toBe('砚砚');
+    expect(state?.draft?.lead).toBe(state?.draft?.partners[0].id);
     expect(
-      state?.draft?.partners.map((partner) => ({
-        id: partner.id,
-        form: partner.form,
-        key: partner.creationRequestKey,
-        selected: partner.selected,
-      })),
+      [...(state?.draft?.partners ?? []), ...(state?.draft?.parkedPartners ?? [])]
+        .map((partner) => ({
+          id: partner.id,
+          form: partner.form,
+          key: partner.creationRequestKey,
+          selected: partner.selected,
+        }))
+        .sort((left, right) => left.id.localeCompare(right.id)),
     ).toEqual(
-      before?.map((partner) => ({
-        id: partner.id,
-        form: partner.form,
-        key: partner.creationRequestKey,
-        selected: partner.selected,
-      })),
+      before
+        ?.map((partner) => ({
+          id: partner.id,
+          form: partner.form,
+          key: partner.creationRequestKey,
+          selected: partner.selected,
+        }))
+        .sort((left, right) => left.id.localeCompare(right.id)),
     );
-    expect(state?.draft?.partners.map((partner) => partner.runtime.label)).toEqual([
-      'CodeAgent',
-      'CodeAgent',
-      'CodeAgent',
-    ]);
-    expect(new Set(state?.draft?.partners.map((partner) => partner.creationRequestKey)).size).toBe(3);
+    expect(state?.draft?.partners[0].runtime.label).toBe('CodeAgent');
+    expect(state?.draft?.parkedPartners).toHaveLength(2);
+    const parked = structuredClone(state?.draft?.parkedPartners);
+    await act(async () => state?.reload());
+    expect(state?.draft?.parkedPartners).toEqual(parked);
     expect(vi.mocked(apiFetch).mock.calls.some(([, init]) => ['POST', 'PATCH'].includes(init?.method ?? ''))).toBe(
       false,
     );

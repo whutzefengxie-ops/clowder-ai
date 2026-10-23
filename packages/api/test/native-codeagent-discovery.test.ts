@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { discoverCodeAgentRuntimes } from '../src/routes/native-codeagent-discovery.js';
 
-test('intranet CodeAgent discovery provides one tool with three separate role recommendations', () => {
+test('intranet CodeAgent discovery provides one tool and only the Yanyan role recommendation', () => {
   const probed: string[] = [];
   const runtimes = discoverCodeAgentRuntimes((name) => {
     probed.push(name);
@@ -14,11 +14,7 @@ test('intranet CodeAgent discovery provides one tool with three separate role re
   assert.equal(runtimes[0]?.label, 'CodeAgent');
   assert.equal(runtimes[0]?.harnessId, 'codeagent');
   assert.equal(runtimes[0]?.kind, 'tool');
-  assert.deepEqual(runtimes[0]?.roleTemplates, [
-    { id: 'ragdoll', priority: 100 },
-    { id: 'maine-coon', priority: 100 },
-    { id: 'turkish-van', priority: 100 },
-  ]);
+  assert.deepEqual(runtimes[0]?.roleTemplates, [{ id: 'maine-coon', priority: 100 }]);
   for (const runtime of runtimes) {
     assert.equal(runtime.installed, true);
     assert.equal(runtime.clientId, 'acp');

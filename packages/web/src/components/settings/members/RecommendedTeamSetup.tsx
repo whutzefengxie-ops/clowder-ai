@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { NativePartnerCard } from '../../first-run-quest/NativePartnerCard';
+import { needsExistingDshRepair } from '../../first-run-quest/native-partner-persistence';
 import { useNativeOnboarding } from '../../first-run-quest/useNativeOnboarding';
 import { finishOnboardingNavigation } from '../../onboarding-demo/onboarding-performance';
 
@@ -25,7 +26,8 @@ export function RecommendedTeamSetup({
     draft?.partners.filter((p) => p.runtime.installed && (p.runtime.clientId !== 'acp' || p.runtime.acp)) ?? [];
   const unavailable = draft?.partners.filter((p) => !available.includes(p)) ?? [];
   const selected = available.filter((p) => p.selected);
-  const pending = selected.filter((p) => !p.existingId && !draft?.created[p.id]);
+  const pending = selected.filter((p) => needsExistingDshRepair(p) || (!p.existingId && !draft?.created[p.id]));
+  const repairing = pending.some(needsExistingDshRepair);
   const invalidSelection = selected.some(
     (p) => invalid[p.id] || !p.form.displayName.trim() || Boolean(p.recoverable && !p.existingId),
   );
@@ -34,7 +36,7 @@ export function RecommendedTeamSetup({
       key={partner.id}
       partner={partner}
       compact
-      created={Boolean(partner.existingId || draft?.created[partner.id])}
+      created={!needsExistingDshRepair(partner) && Boolean(partner.existingId || draft?.created[partner.id])}
       disabled={Boolean(busy)}
       patch={(change) => setup.patchPartner(partner.id, change)}
       onValidityChange={(valid) =>
@@ -117,7 +119,9 @@ export function RecommendedTeamSetup({
           <p role="status">
             {busy ||
               (pending.length
-                ? `已为你选好 ${pending.length} 位新伙伴`
+                ? repairing
+                  ? `已准备 ${pending.length} 位伙伴配置，保存后生效`
+                  : `已为你选好 ${pending.length} 位新伙伴`
                 : selected.length
                   ? '所选伙伴已加入团队'
                   : '可以选择一位、多位，或暂不创建')}
@@ -143,9 +147,13 @@ export function RecommendedTeamSetup({
               className="min-h-11 rounded-full bg-cafe-accent px-6 text-sm font-semibold text-[var(--cafe-surface)] disabled:opacity-50"
             >
               {busy
-                ? '正在创建…'
+                ? repairing
+                  ? '正在保存…'
+                  : '正在创建…'
                 : pending.length
-                  ? `${errorStage === 'save' ? '继续创建' : '一键创建'} ${pending.length} 位伙伴`
+                  ? repairing
+                    ? `保存 ${pending.length} 位伙伴配置`
+                    : `${errorStage === 'save' ? '继续创建' : '一键创建'} ${pending.length} 位伙伴`
                   : '查看我的团队'}
             </button>
           )}

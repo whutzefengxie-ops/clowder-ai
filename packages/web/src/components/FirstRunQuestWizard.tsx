@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { NativeGoalStep } from './first-run-quest/NativeGoalStep';
 import { NativePartnerCard } from './first-run-quest/NativePartnerCard';
+import { needsExistingDshRepair } from './first-run-quest/native-partner-persistence';
 import { useNativeOnboarding } from './first-run-quest/useNativeOnboarding';
 
 interface FirstRunQuestWizardProps {
@@ -141,7 +142,7 @@ export function FirstRunQuestWizard({ open, onClose, onCreated }: FirstRunQuestW
                   key={partner.id}
                   partner={partner}
                   disabled={Boolean(busy)}
-                  created={Boolean(draft.created[partner.id] || partner.existingId)}
+                  created={!needsExistingDshRepair(partner) && Boolean(draft.created[partner.id] || partner.existingId)}
                   patch={(change) => setup.patchPartner(partner.id, change)}
                   onValidityChange={(valid) =>
                     setInvalid((current) =>

@@ -4,7 +4,11 @@ import { matchesRuntime, type RuntimeChoice, runtimeDefaults } from '../settings
 import { withLegacyNativeIdentityRepair } from './native-identity-repair';
 import { usesDetectedRuntimeConfiguration } from './native-partner-config';
 import { nativePartnerIdentity } from './native-partner-identity';
-import { nativeRuntimeRecommendations, preferredNativeBinding } from './native-runtime-recommendations';
+import {
+  nativeRuntimeRecommendations,
+  preferredNativeBinding,
+  uniqueIntranetPartners,
+} from './native-runtime-recommendations';
 import { stableOnboardingMemberId } from './onboarding-journey';
 import type { TemplateCard } from './TemplateStep';
 
@@ -20,6 +24,9 @@ export interface NativePartner {
   /** A missing-CLI catalog upgrade retained this pending CodeAgent role, independently of its launch descriptor. */
   retainedCodeagentRole?: string;
   existingId?: string;
+  /** Explicit route confirmation by the preparation flow; never inferred from launch arguments. */
+  dshSetupPrepared?: boolean;
+  dshSetupBaseline?: CatData;
   missingExisting?: boolean;
   recoverable?: { id: string; form: HubCatEditorFormState };
 }
@@ -39,6 +46,7 @@ export const newNativeRequestKey = () =>
 export function nativeRuntimeSelectable(runtime: RuntimeChoice, form?: HubCatEditorFormState): boolean {
   if (!runtime.installed || (runtime.clientId === 'acp' && !runtime.acp)) return false;
   if (form && !usesDetectedRuntimeConfiguration(form, runtime)) return true;
+  if (runtime.dshSetupRequired) return false;
   if (['openai', 'anthropic'].includes(runtime.clientId) && runtime.readiness) {
     return runtime.readiness.status === 'configured';
   }
@@ -59,8 +67,9 @@ export function recommendNativePartners(
   templates: TemplateCard[],
   cats: CatData[],
   journeyId: string,
+  edition: 'intranet' | 'public' = 'public',
 ): NativePartner[] {
-  const recommendations = nativeRuntimeRecommendations(runtimes);
+  const recommendations = nativeRuntimeRecommendations(runtimes, edition);
   const seen = new Set<string>();
   const reservedIds = new Set(cats.map((cat) => cat.id.toLowerCase()));
   const reservedAliases = new Set(cats.flatMap((cat) => cat.mentionPatterns.map((alias) => alias.toLowerCase())));
@@ -69,7 +78,7 @@ export function recommendNativePartners(
       .filter((runtime) => runtime.installed && runtime.priority && runtime.roleTemplateId)
       .map((runtime) => runtime.roleTemplateId),
   );
-  return recommendations
+  const partners = recommendations
     .sort((left, right) => (right.priority ?? 0) - (left.priority ?? 0))
     .flatMap((candidate) => {
       const form = nativePartnerIdentity(candidate, templates, cats);
@@ -80,6 +89,7 @@ export function recommendNativePartners(
             acp: existingBinding.acp,
             installed: existingBinding.installed,
             discoveryStatus: existingBinding.discoveryStatus,
+            dshSetupRequired: existingBinding.dshSetupRequired,
             models: existingBinding.models,
           }
         : candidate;
@@ -141,9 +151,11 @@ export function recommendNativePartners(
               )) &&
             (!runtime.roleTemplateId || Boolean(existing) || !cats.some((cat) => cat.nickname === form.nickname)),
           ...(existing ? { existingId: existing.id } : {}),
+          ...(existing && runtime.dshSetupRequired ? { dshSetupBaseline: structuredClone(existing) } : {}),
         },
       ];
     });
+  return edition === 'intranet' ? uniqueIntranetPartners(partners, cats) : partners;
 }
 
 export const SMALL_GOALS = [

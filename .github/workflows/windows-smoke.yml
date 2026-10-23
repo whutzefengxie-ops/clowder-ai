@@ -80,6 +80,7 @@ jobs:
           desktop/service-startup.test.js
           desktop/project-mirror-startup-recovery.test.js
           desktop/project-mirror-recovery.test.js
+          desktop/project-mirror-materialization.test.js
           desktop/project-mirror-consumer.test.js
           desktop/project-mirror-observability.test.js
           desktop/project-mirror-diagnostic-history.test.js

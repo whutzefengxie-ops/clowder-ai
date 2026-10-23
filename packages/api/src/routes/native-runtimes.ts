@@ -5,6 +5,7 @@ import { catRegistry } from '@cat-cafe/shared';
 import { parse } from 'smol-toml';
 import { getAcpConfig } from '../config/cat-config-loader.js';
 import { resolveCliCommand } from '../utils/cli-resolve.js';
+import { hasPersistedDshSetup } from './dsh-persisted-setup.js';
 import { discoverAdditionalRuntimes } from './native-additional-runtimes.js';
 import { discoverCodeAgentRuntimes } from './native-codeagent-discovery.js';
 import { discoverDshRuntime } from './native-dsh-discovery.js';
@@ -78,6 +79,7 @@ export function discoverNativeRuntimes(projectRoot: string, options: DiscoveryOp
     const entry = config.startupArgs.find((arg) => /(?:\.m?js|\.cjs)$/.test(arg));
     const installed = Boolean(command && existsSync(command) && (!entry || existsSync(resolve(projectRoot, entry))));
     const profileState = dshLauncherProfileState(config.command, config.startupArgs, projectRoot);
+    const harnessId = nativeBindingHarness(config.command, config.startupArgs, projectRoot);
     const selectable = safeNativeStartup(config.command, config.startupArgs) && profileState !== 'acp_profile_invalid';
     return [
       {
@@ -85,7 +87,10 @@ export function discoverNativeRuntimes(projectRoot: string, options: DiscoveryOp
         label: cat.displayName,
         kind: 'binding' as const,
         sourceCatId: cat.id,
-        harnessId: nativeBindingHarness(config.command, config.startupArgs, projectRoot),
+        harnessId,
+        ...(intranet && harnessId === 'dsh'
+          ? { dshSetupRequired: !hasPersistedDshSetup(config.startupArgs, projectRoot) }
+          : {}),
         clientId: 'acp',
         installed,
         ...(profileState && profileState !== 'custom_startup'
@@ -108,6 +113,7 @@ export function discoverNativeRuntimes(projectRoot: string, options: DiscoveryOp
     discoverDshRuntime({
       resolveCommand: commandFor,
       dshHome: process.env.DSH_HOME || join(home, '.dsh'),
+      requireSetup: intranet,
       ...(options.home ? { npmCaches: [] } : {}),
     }),
     'dsh',

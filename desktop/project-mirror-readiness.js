@@ -4,6 +4,7 @@ const { setTimeout: delay } = require('node:timers/promises');
 const { PROJECT_MIRROR_PROBES, prepareProjectMirrors } = require('./project-mirrors');
 const { readProjectMirrorsInConsumer } = require('./project-mirror-consumer');
 const { safeFilesystemFields, safeProbeFailure, attachMirrorDiagnostics } = require('./project-mirror-diagnostics');
+const { refreshMaterializedMirrors, materializeFailedMirrors } = require('./project-mirror-materialization');
 
 function readEntries(entries) {
   return entries.flatMap((entry) => {
@@ -64,6 +65,8 @@ async function waitWithDiagnostics(
   state,
 ) {
   signal?.throwIfAborted();
+  const recoveryOptions = { installRoot, projectDir, nodeExe, signal, log };
+  await refreshMaterializedMirrors(recoveryOptions);
   const deadline = Date.now() + timeoutMs;
   const entries = (kind, root) =>
     probes.map(({ mirror, relativePath }) => ({
@@ -124,6 +127,32 @@ async function waitWithDiagnostics(
           `Project mirror readiness verified (${probes.length} probes; bundled Node consumer). Parent read remained unavailable; no ACL, configuration or history was changed.`,
         );
         return { verification: 'consumer' };
+      }
+      // Only an actual completed consumer read can authorize materialization.
+      // Source failures, launch failures and timeouts never authorize a copy.
+      if (!consumerError && consumerFailures.length && consumerFailures.every((failure) => failure.kind === 'mirror')) {
+        if (await materializeFailedMirrors(recoveryOptions, consumerFailures)) {
+          const verified = await probeConsumer({
+            nodeExe,
+            entries: [...sourceEntries, ...mirrorEntries],
+            signal,
+            remaining: 5000,
+            attempt: attempt + 1,
+            log,
+            onDiagnostic: state.observe,
+          });
+          if (!verified.error && !verified.failures.length) {
+            log('Project mirror readiness verified (complete materialized resources; bundled Node consumer)');
+            return { verification: 'consumer', recovery: 'materialized' };
+          }
+          throw readinessError({
+            sourceFailures: readEntries(sourceEntries),
+            failures: readEntries(mirrorEntries),
+            consumerFailures: verified.failures,
+            consumerError: verified.error,
+            nodeExe,
+          });
+        }
       }
     }
     attempt += 1;

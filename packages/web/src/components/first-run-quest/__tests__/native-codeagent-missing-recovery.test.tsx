@@ -10,7 +10,7 @@ import { useNativeOnboarding } from '../useNativeOnboarding';
 vi.mock('@/utils/api-client', () => ({ apiFetch: vi.fn() }));
 vi.mock('@/hooks/useCatData', () => ({ useCatData: () => ({ refresh: vi.fn() }) }));
 
-it('retains three pending CodeAgent roles through missing-CLI catalog migration and reinstall without executing drafts', async () => {
+it('retains pending CodeAgent Yanyan and parks other roles through missing-CLI migration and reinstall without execution', async () => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
   localStorage.clear();
   const roles = ['ragdoll', 'maine-coon', 'turkish-van'];
@@ -61,7 +61,7 @@ it('retains three pending CodeAgent roles through missing-CLI catalog migration 
         JSON.stringify(
           String(path).startsWith('/api/cats/native-runtimes')
             ? {
-                edition: 'intranet',
+                edition: discovery === 'legacy' ? 'public' : 'intranet',
                 runtimes: discoveredRuntimes(),
               }
             : path === '/api/session'
@@ -99,20 +99,26 @@ it('retains three pending CodeAgent roles through missing-CLI catalog migration 
     await act(async () => setup?.patch({ lead: initial[2].id }));
     const before = structuredClone(setup?.draft?.partners);
     const preserved = () =>
-      setup?.draft?.partners.map((partner) => ({
+      [...(setup?.draft?.partners ?? []), ...(setup?.draft?.parkedPartners ?? [])]
+        .map((partner) => ({
+          id: partner.id,
+          form: partner.form,
+          key: partner.creationRequestKey,
+        }))
+        .sort((left, right) => left.id.localeCompare(right.id));
+    const expected = before
+      ?.map((partner) => ({
         id: partner.id,
         form: partner.form,
         key: partner.creationRequestKey,
-      }));
-    const expected = before?.map((partner) => ({
-      id: partner.id,
-      form: partner.form,
-      key: partner.creationRequestKey,
-    }));
+      }))
+      .sort((left, right) => left.id.localeCompare(right.id));
     discovery = 'missing';
     await act(async () => setup?.reload());
     expect(preserved()).toEqual(expected);
-    expect(setup?.draft?.lead).toBe(initial[2].id);
+    expect(setup?.draft?.partners).toHaveLength(1);
+    expect(setup?.draft?.parkedPartners).toHaveLength(2);
+    expect(setup?.draft?.lead).toBe('');
     expect(
       setup?.draft?.partners.every(
         (partner) => !partner.runtime.installed && !partner.runtime.acp && !partner.selected,
@@ -125,9 +131,13 @@ it('retains three pending CodeAgent roles through missing-CLI catalog migration 
     await act(async () => setup?.reload());
     await act(async () => setup?.reload());
     expect(preserved()).toEqual(expected);
-    expect(setup?.draft?.lead).toBe(initial[2].id);
+    expect(setup?.draft?.lead).toBe(setup?.draft?.partners[0].id);
     expect(setup?.draft?.partners.every((partner) => partner.runtime.installed)).toBe(true);
-    expect(new Set(setup?.draft?.partners.map((partner) => partner.creationRequestKey)).size).toBe(3);
+    expect(
+      new Set(
+        [...(setup?.draft?.partners ?? []), ...(setup?.draft?.parkedPartners ?? [])].map((p) => p.creationRequestKey),
+      ).size,
+    ).toBe(3);
   } finally {
     await act(async () => root.unmount());
     host.remove();

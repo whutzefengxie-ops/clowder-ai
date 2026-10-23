@@ -91,6 +91,12 @@ export function inspectDshConfig(source: string): DshSetupInfo {
     model: text(acp.model),
   };
 }
+/** Credential references only. Neither secret values nor endpoints leave the server. */
+export function dshProviderCredentialReferences(source: string): Record<string, string | undefined> {
+  return Object.fromEntries(
+    Object.entries(object(configs(source).llm.providers)).map(([id, route]) => [id, text(object(route).apiKeyEnv)]),
+  );
+}
 /** Desktop is reserved to Electron in some CLI versions. Reuse only explicitly
  * stored declarations, with the home layer replacing the full plugin config. */
 export function composeDshProviderSource(profilePatch: string, homePatch: string): string {

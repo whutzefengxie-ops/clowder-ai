@@ -17,6 +17,8 @@ export interface RuntimeChoice {
   roleTemplateId?: string;
   priority?: number;
   readiness?: NativeLoginState;
+  /** An installed DSH default still needs an explicit usable route confirmation. */
+  dshSetupRequired?: boolean;
   discoveryStatus?: 'configured' | 'acp_profile_missing' | 'acp_profile_invalid' | 'adapter_missing' | 'not_installed';
   models: string[];
   configuredModel?: string;

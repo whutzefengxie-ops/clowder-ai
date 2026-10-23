@@ -28,6 +28,14 @@ cat-cafe-skills/custody-recognition/SKILL.md
 
 取消启动时同时停止本次的探针子进程；不会继续启动 API。代码不改变 ACP 的信任、审计、权限模式或客户端命令参数，内网包可继续保留其 CodeAgent 接入。
 
+### 持续无法穿越 junction 的自动恢复
+
+当真正的 Node consumer 已完成读取、安装源全部正常、只有 `docs` / `cat-cafe-skills` 镜像失败时，桌面会把对应的**完整资源目录**实体化到原来的项目路径。不是只复制三个探针，也不跳过启动检查；API、治理规则及 ACP 客户端仍从原来的 `project/docs` 和 `project/cat-cafe-skills` 读取，随后必须再次通过同一 Node 的六项就绪检查。此过程无需用户设置环境变量、提权、修改 ACL 或重建角色。
+
+复制由隐藏的独立 Node worker 执行，另有最多 60 秒的有界预算，支持取消启动。它先核对入口确实是本次安装源的链接，拒绝源树中的 reparse entry，在旁边创建受管理 staging，完成全量源/副本摘要校验后再交换入口。复制或发布失败会恢复原入口；取消留下的已记录事务由下一次启动先恢复，避免反复积累 staging。空间不足或文件访问失败保留原错误及可重试状态，不通过覆盖用户数据解决。
+
+实体目录含 `.clowder-bundled-resource.json` 全量清单。重启和升级时，只有现存文件完整匹配上次清单，才会自动刷新为新安装源的资源；用户修改或新增文件、未知真实目录、变更后的备份/staging 均保留并报告明确冲突，不静默覆盖。请勿手工编辑资源清单来绕过保护。配置、身份、认证、Redis、SQLite 和历史不属于这份资源清单，也不参与复制和替换。
+
 ## 如何看日志
 
 启动失败弹窗的“打开日志目录”指向当前实例实际目录。查看其中 `desktop.log`，搜索：
@@ -35,6 +43,7 @@ cat-cafe-skills/custody-recognition/SKILL.md
 ```text
 Project mirror parent read failed
 Project mirror consumer diagnostic
+Project mirror materialization
 Project mirror readiness verified
 Project mirror readiness failed before API start
 failed to prepare mirror
