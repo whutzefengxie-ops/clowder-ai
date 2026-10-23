@@ -92,7 +92,8 @@ beforeEach(() => {
       if (failPatch-- > 0) return response({ error: 'temporary_write_failure' }, 503);
       if (patch.expectedRevision !== persisted.configurationRevision)
         return response({ error: 'member_config_conflict' }, 409);
-      const { expectedRevision: _expected, ...changes } = patch;
+      const changes = { ...patch };
+      delete changes.expectedRevision;
       persisted = {
         ...persisted,
         ...changes,
