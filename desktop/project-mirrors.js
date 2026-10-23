@@ -1,5 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
+const { PHYSICAL_RESOURCES, materializeResource } = require('./project-resource-materialization');
 
 const PROJECT_MIRRORS = Object.freeze([
   '.claude',
@@ -70,17 +71,51 @@ function prepareMirrorEntry({ source, destination, rebuild, log }) {
   log(`Mirror link created: ${destination} -> ${source}`);
 }
 
-/** Prepare known bundled-resource links; existing real directories remain owner data. */
-function prepareProjectMirrors({ installRoot, projectDir, log = () => {}, rebuildMirrors = [] }) {
+function preparePhysicalResource(options, rebuild) {
+  const { destination } = options;
+  // A second read/copy cannot repair a transient reader failure in an already
+  // physical directory. Leave it for the actual consumer probe.
+  if (rebuild.size) {
+    try {
+      if (!fs.lstatSync(destination).isSymbolicLink()) return;
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
+  }
+  try {
+    materializeResource({ ...options, removeLink: removeMirrorLink });
+  } catch (error) {
+    options.log(
+      `Bundled resource preparation failed: ${options.source} -> ${destination}: ${describeFilesystemError(error)}`,
+    );
+    throw error;
+  }
+}
+
+/** Prepare physical Windows resources and optional links; preserve owner data. */
+function prepareProjectMirrors({
+  installRoot,
+  projectDir,
+  log = () => {},
+  rebuildMirrors = [],
+  platform = process.platform,
+}) {
   const rebuild = new Set(rebuildMirrors);
   fs.mkdirSync(projectDir, { recursive: true });
   for (const mirror of PROJECT_MIRRORS) {
+    if (rebuild.size && !rebuild.has(mirror)) continue;
     const source = path.join(installRoot, mirror);
     const destination = path.join(projectDir, mirror);
     try {
       if (!fs.statSync(source).isDirectory()) throw new Error('Bundled mirror source is not a directory');
     } catch (error) {
       log(`Skipping mirror source ${source}: ${describeFilesystemError(error)}`);
+      continue;
+    }
+    if (platform === 'win32' && PHYSICAL_RESOURCES.has(mirror)) {
+      // Failure is fatal: a readable probe must not hide an incomplete copy or
+      // overwrite a modified resource. Readiness still performs its full reads.
+      preparePhysicalResource({ source, destination, installRoot, mirror, log }, rebuild);
       continue;
     }
     try {

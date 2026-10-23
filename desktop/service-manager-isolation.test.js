@@ -42,10 +42,11 @@ test('isolated desktop Redis probing, spawn and API env all use the same owned p
     const resultPath = path.join(base, 'env.json');
     spawnProcess('probe', process.execPath, [
       '-e',
-      `require('node:fs').writeFileSync(${JSON.stringify(resultPath)}, JSON.stringify({redis:process.env.REDIS_URL}))`,
+      `require('node:fs').writeFileSync(${JSON.stringify(resultPath)}, JSON.stringify({redis:process.env.REDIS_URL,runtimeRoot:process.env.CAT_CAFE_RUNTIME_ROOT}))`,
     ]);
     await new Promise((resolve) => manager.procs.probe.once('exit', resolve));
     assert.equal(JSON.parse(fs.readFileSync(resultPath, 'utf8')).redis, 'redis://localhost:6367');
+    assert.equal(JSON.parse(fs.readFileSync(resultPath, 'utf8')).runtimeRoot, base);
     assert.ok(ServiceManager.USER_DATA_DIR.startsWith(moduleRoot + path.sep));
     assert.ok(fs.existsSync(path.join(ServiceManager.USER_DATA_DIR, 'data/logs/desktop.log')));
   } finally {

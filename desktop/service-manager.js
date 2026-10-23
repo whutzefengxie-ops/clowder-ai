@@ -652,6 +652,9 @@ class ServiceManager {
       : process.env;
     const env = {
       ...inherited,
+      // MCP executables belong to the installation, never the writable
+      // project's optional packages junction (including ordinary installs).
+      CAT_CAFE_RUNTIME_ROOT: this.root,
       ...(instanceRoot
         ? {
             CAT_CAFE_DESKTOP_INSTANCE_ROOT: instanceRoot,
@@ -664,7 +667,6 @@ class ServiceManager {
             CODEX_HOME: path.join(instanceRoot, 'home', '.codex'),
             CLAUDE_CONFIG_DIR: path.join(instanceRoot, 'home', '.claude'),
             DSH_HOME: path.join(instanceRoot, 'home', '.dsh'),
-            CAT_CAFE_RUNTIME_ROOT: this.root,
             CAT_CAFE_WORKSPACE_ROOT: path.join(instanceRoot, 'project'),
             ALLOWED_WORKSPACE_DIRS: path.join(instanceRoot, 'project'),
             REDIS_PORT: String(this.redisPort),
