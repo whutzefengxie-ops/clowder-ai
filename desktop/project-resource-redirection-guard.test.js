@@ -43,11 +43,19 @@ test(
     }
     assert.equal(JSON.parse(fs.readFileSync(receipt)).phase, 'restricted-junctions-created');
     const guarded = run('guarded-node.ps1', ['-NodeExe', process.execPath, '-Worker', worker]);
-    assert.equal(guarded.status, 0, `${guarded.stdout}\n${guarded.stderr}`);
+    const errorFile = path.join(root, 'worker-error.txt');
+    assert.equal(
+      guarded.status,
+      0,
+      `${guarded.stdout}\n${guarded.stderr}\n${fs.existsSync(errorFile) ? fs.readFileSync(errorFile, 'utf8') : ''}`,
+    );
     const result = JSON.parse(fs.readFileSync(receipt));
     assert.equal(result.phase, 'guarded-readiness-passed');
     assert.deepEqual(result.after, []);
     assert.equal(result.historyPreserved, true);
+    if (fs.existsSync(path.join(__dirname, '../packages/api/dist/index.js'))) {
+      assert.equal(result.apiConsumers.status, 'passed');
+    }
     assert.match(guarded.stdout, /flags=1/);
   },
 );

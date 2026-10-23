@@ -11,18 +11,23 @@ const { readProjectMirrorsInConsumer } = require(path.join(moduleRoot, 'project-
 const installRoot = path.join(root, 'installed bundle');
 const projectDir = path.join(root, 'user project');
 const receipt = path.join(root, 'receipt.json');
+const repoRoot = path.resolve(__dirname, '../..');
 
 async function main() {
   if (process.argv[2] === 'create') {
     for (const { mirror, relativePath } of PROJECT_MIRROR_PROBES) {
       const file = path.join(installRoot, mirror, relativePath);
       fs.mkdirSync(path.dirname(file), { recursive: true });
-      fs.writeFileSync(file, `fixture ${relativePath}`);
+      fs.copyFileSync(path.join(repoRoot, mirror, relativePath), file);
     }
     for (const relative of ['docs/extra.md', 'assets/prompt-templates/template.md', 'guides/catalog.yaml']) {
       fs.mkdirSync(path.dirname(path.join(installRoot, relative)), { recursive: true });
       fs.writeFileSync(path.join(installRoot, relative), relative);
     }
+    fs.copyFileSync(
+      path.join(repoRoot, 'assets/prompt-templates/a2a-ball-check.md'),
+      path.join(installRoot, 'assets/prompt-templates/a2a-ball-check.md'),
+    );
     fs.mkdirSync(projectDir);
     for (const mirror of ['docs', 'cat-cafe-skills', 'assets', 'guides']) {
       fs.symlinkSync(path.join(installRoot, mirror), path.join(projectDir, mirror), 'junction');
@@ -65,6 +70,7 @@ async function main() {
     { cwd: projectDir, windowsHide: true, encoding: 'utf8' },
   );
   assert.equal(downstream.status, 0, downstream.stderr);
+  const apiConsumers = await require('./physical-api-consumers.cjs')({ repoRoot, projectDir, root });
   prepareProjectMirrors({ installRoot, projectDir }); // Persistent reuse, no environment opt-in.
   assert.equal(fs.readFileSync(protectedFile, 'utf8'), 'protected history and configuration');
   fs.writeFileSync(
@@ -78,6 +84,7 @@ async function main() {
         after,
         ready,
         downstreamExit: downstream.status,
+        apiConsumers,
         historyPreserved: true,
         systemPolicyChanged: false,
         aclChanged: false,

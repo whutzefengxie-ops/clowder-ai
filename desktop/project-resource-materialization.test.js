@@ -128,6 +128,27 @@ test('a crash between renames is recovered without touching owner configuration'
   assert.equal(fs.readFileSync(path.join(destination, 'another-consumer.md'), 'utf8'), 'docs/another-consumer.md');
 });
 
+test('partially failed old-backup cleanup cannot poison publication or the next startup', (t) => {
+  const value = fixture(t);
+  const source = path.join(value.installRoot, 'docs/another-consumer.md');
+  prepareProjectMirrors(value);
+  fs.writeFileSync(source, 'version2');
+  prepareProjectMirrors(value);
+  fs.writeFileSync(source, 'version3');
+  const remove = fs.rmSync;
+  const mocked = t.mock.method(fs, 'rmSync', (directory, ...args) => {
+    if (String(directory).includes('.clowder-resource-docs.previous')) {
+      fs.unlinkSync(path.join(directory, 'another-consumer.md'));
+      throw Object.assign(new Error('controlled interrupted cleanup'), { code: 'EPERM' });
+    }
+    return remove(directory, ...args);
+  });
+  assert.doesNotThrow(() => prepareProjectMirrors(value));
+  mocked.mock.restore();
+  prepareProjectMirrors(value);
+  assert.equal(fs.readFileSync(path.join(value.projectDir, 'docs/another-consumer.md'), 'utf8'), 'version3');
+});
+
 test('an interrupted copy keeps old links usable and retries without discarding its partial output', (t) => {
   const value = fixture(t);
   const write = fs.writeFileSync;

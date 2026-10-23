@@ -23,6 +23,20 @@ function retainInterruptedStage(stage, mirror, log) {
   log(`Retained interrupted bundled resource staging: ${retained}`);
 }
 
+function retirePrevious(previous, mirror, log) {
+  if (!lstat(previous)) return;
+  assertUnchanged(previous, mirror);
+  // Never partially delete a directory occupying a recovery slot. A crash or
+  // sharing violation during cleanup must not poison the next publication.
+  const retired = `${previous}.retired-${crypto.randomUUID()}`;
+  fs.renameSync(previous, retired);
+  try {
+    fs.rmSync(retired, { recursive: true });
+  } catch (error) {
+    log(`Retained retired bundled resource backup ${retired}: code=${error.code ?? 'UNKNOWN'}`);
+  }
+}
+
 // Called synchronously before services start, under Desktop's single-instance lock.
 // Reserved siblings never contain configuration/history. Existing real roots
 // without our marker remain owner data and cannot be adopted automatically.
@@ -56,11 +70,7 @@ function materializeResource({ source, destination, installRoot, mirror, removeL
   }
   retainInterruptedStage(stage, mirror, log);
   stageTree({ source, stage, mirror, boundary: fs.realpathSync(installRoot), entries });
-  if (lstat(previous)) {
-    assertUnchanged(previous, mirror);
-    // Only an unchanged, fully read, app-owned static backup may be discarded.
-    fs.rmSync(previous, { recursive: true });
-  }
+  retirePrevious(previous, mirror, log);
   if (existing?.isSymbolicLink()) {
     removeLink(destination); // Never traverse, chmod or remove its target.
   } else if (existing) {

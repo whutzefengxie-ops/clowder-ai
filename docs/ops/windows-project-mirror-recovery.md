@@ -48,6 +48,7 @@ Bundled resource verified
 Bundled resource preparation failed
 Restored interrupted bundled resource publication
 Retained interrupted bundled resource staging
+Retained retired bundled resource backup
 Preserving extended resource directory
 ```
 
@@ -77,6 +78,7 @@ $state.diagnostics | ConvertTo-Json -Depth 12
 | Preserving existing non-link mirror | 已有真实目录或不能安全确认类型的入口已保留，不自动覆盖。 |
 | Bundled resource materialized / verified | 已完成普通目录全量准备或校验，条目数和耗时在同一行。 |
 | Restored interrupted / Retained interrupted | 已自动恢复旧副本或留存不完整暂存，下次启动重试，无需删除用户数据。 |
+| Retained retired bundled resource backup | 旧静态备份清理失败，已退出发布槽位并留存，不影响当前副本或下次重试。 |
 | bundled refresh deferred | 目录有用户新增内容，当前副本保留；需要人工合并该目录的资源升级。 |
 
 反馈时附上发生时间、`projectRoot`、`User data dir`，以及对应 source/mirror 错误和恢复结果。用户名和企业路径可以脱敏，但保留路径层级及错误类型。
