@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { NativePartnerCard } from '../../first-run-quest/NativePartnerCard';
-import { nativeRuntimeSelectable } from '../../first-run-quest/native-onboarding';
+import { nativePartnerSelectable } from '../../first-run-quest/native-onboarding';
 import { needsExistingDshRepair } from '../../first-run-quest/native-partner-persistence';
 import { useNativeOnboarding } from '../../first-run-quest/useNativeOnboarding';
 import { finishOnboardingNavigation } from '../../onboarding-demo/onboarding-performance';
@@ -22,7 +22,7 @@ export function RecommendedTeamSetup({
   useEffect(() => {
     if (!loading) finishOnboardingNavigation('team-setup', 'ready');
   }, [loading]);
-  const available = draft?.partners.filter((p) => nativeRuntimeSelectable(p.runtime, p.form)) ?? [];
+  const available = draft?.partners.filter(nativePartnerSelectable) ?? [];
   const unavailable = draft?.partners.filter((p) => !available.includes(p)) ?? [];
   const selected = available.filter((p) => p.selected);
   const pending = selected.filter((p) => needsExistingDshRepair(p) || (!p.existingId && !draft?.created[p.id]));

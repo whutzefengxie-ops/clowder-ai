@@ -11,6 +11,7 @@ import { retainedCodeagentDraft } from './native-codeagent-draft-recovery';
 import { repairLegacyNativeIdentityFields } from './native-identity-repair';
 import {
   type NativePartner,
+  nativePartnerSelectable,
   nativeRuntimeSelectable,
   newNativeRequestKey,
   recommendNativePartners,
@@ -249,7 +250,7 @@ export function useNativeOnboarding(
     )
       return;
     const selected = orderGoalPartners(
-      current.partners.filter((p) => p.selected && nativeRuntimeSelectable(p.runtime, p.form)),
+      current.partners.filter((p) => p.selected && nativePartnerSelectable(p)),
       current.lead,
     );
     if (!selected.length) return;

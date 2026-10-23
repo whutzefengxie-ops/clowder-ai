@@ -1,5 +1,5 @@
 import { serializeCommandArgs } from '../hub-cat-editor.acp';
-import type { NativePartner } from './native-onboarding';
+import { type NativePartner, requiresDshDraftConfirmation } from './native-onboarding';
 import { usesDetectedRuntimeConfiguration } from './native-partner-config';
 
 /** Browsing is read-only. The user's create/save action confirms the detected route once. */
@@ -8,6 +8,8 @@ export async function prepareNativePartner(
   headers: Record<string, string>,
   readJson: <T>(path: string, init?: RequestInit) => Promise<T>,
 ): Promise<NativePartner> {
+  if (requiresDshDraftConfirmation(partner))
+    throw Error('已保留此前的 DSH 模型或思考强度设置，请在成员配置中确认连接后再创建。');
   if (
     !partner.runtime.dshSetupRequired ||
     partner.dshSetupPrepared ||
@@ -20,7 +22,13 @@ export async function prepareNativePartner(
   const prepared = await readJson<{ command: string; startupArgs: string[] }>('/api/cats/dsh-setup/prepare', {
     method: 'POST',
     headers,
-    body: JSON.stringify({ runtimeId: partner.runtime.id, sourceProfile, revision, provider, model }),
+    body: JSON.stringify({
+      runtimeId: partner.runtime.dshSetupRuntimeId ?? partner.runtime.id,
+      sourceProfile,
+      revision,
+      provider,
+      model,
+    }),
   }).catch((cause: unknown) => {
     if (cause instanceof Error && cause.message === 'dsh_setup_changed')
       throw Error('DSH 配置已变化，请重新检测后创建；原配置已保留。');

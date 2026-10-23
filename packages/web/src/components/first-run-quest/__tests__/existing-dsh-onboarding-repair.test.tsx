@@ -13,11 +13,12 @@ const args = ['--profile', 'acp', '--patch', '/host/.cat-cafe/dsh-acp/4240a628-b
 const response = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
 let persisted: CatData, host: HTMLDivElement, root: Root;
 let failPatch = 0,
-  losePatchResponse = false;
+  losePatchResponse = false,
+  customBinding = false;
 const onCreated = vi.fn();
 
 function runtimes() {
-  const required = !persisted.acp?.startupArgs.includes('--patch');
+  const required = !persisted.acp?.startupArgs.includes(args[args.length - 1]);
   const base = {
     harnessId: 'dsh',
     label: 'DSH',
@@ -45,6 +46,7 @@ function runtimes() {
       id: `acp:${persisted.id}`,
       kind: 'binding',
       sourceCatId: persisted.id,
+      dshSetup: { ...base.dshSetup, revision: customBinding ? 'binding-revision' : 'source-revision' },
       dshSetupRequired: required,
       acp: persisted.acp,
     },
@@ -55,6 +57,7 @@ beforeEach(() => {
   localStorage.clear();
   failPatch = 0;
   losePatchResponse = false;
+  customBinding = false;
   onCreated.mockReset();
   refresh.mockReset();
   persisted = {
@@ -99,7 +102,16 @@ beforeEach(() => {
           ],
         },
       });
-    if (path === '/api/cats/dsh-setup/prepare') return response({ id: 'prepared', command: 'dsh', startupArgs: args });
+    if (path === '/api/cats/dsh-setup/prepare') {
+      const selection = JSON.parse(String(init?.body));
+      if (customBinding && (selection.runtimeId !== `acp:${persisted.id}` || selection.revision !== 'binding-revision'))
+        return response({ error: 'dsh_setup_changed' }, 409);
+      return response({
+        id: 'prepared',
+        command: persisted.acp?.command,
+        startupArgs: customBinding ? [...(persisted.acp?.startupArgs ?? []), '--patch', args[args.length - 1]] : args,
+      });
+    }
     if (path === '/api/cats/existing-whale' && init?.method === 'PATCH') {
       const patch = JSON.parse(String(init.body));
       if (failPatch-- > 0) return response({ error: 'temporary_write_failure' }, 503);
@@ -150,6 +162,37 @@ const writes = () =>
     .mock.calls.filter(
       ([, init]) => ['POST', 'PATCH'].includes(init?.method ?? '') && !String(init?.body).includes('source-revision'),
     );
+
+it('prepares the exact existing binding when its DSH entry and extra patch differ from the tool default', async () => {
+  customBinding = true;
+  const oldAcp = persisted.acp;
+  if (!oldAcp) throw Error('Fixture ACP missing');
+  const customArgs = ['C:/Tools/dsh/lib/bin.js', '--profile', 'acp', '--patch', 'C:/DSH/company-existing.yml'];
+  persisted.acp = {
+    ...oldAcp,
+    command: 'C:/Tools/dsh/node.exe',
+    startupArgs: customArgs,
+  };
+  const original = structuredClone(persisted);
+  await mount();
+  await click(/保存.*配置|查看我的团队|一键创建/);
+  expect(onCreated).toHaveBeenCalledOnce();
+  const prepared = vi.mocked(apiFetch).mock.calls.find(([path]) => path === '/api/cats/dsh-setup/prepare');
+  expect(JSON.parse(String(prepared?.[1]?.body))).toEqual({
+    runtimeId: `acp:${original.id}`,
+    sourceProfile: 'desktop',
+    revision: 'binding-revision',
+    provider: 'company',
+    model: 'private-model',
+  });
+  expect(persisted.acp?.command).toBe(original.acp?.command);
+  expect(persisted.acp?.startupArgs).toEqual([...customArgs, '--patch', args[args.length - 1]]);
+  expect(persisted.acp?.mcpWhitelist).toEqual(original.acp?.mcpWhitelist);
+  expect(persisted.acp?.pool).toEqual(original.acp?.pool);
+  for (const field of ['id', 'name', 'displayName', 'nickname', 'mentionPatterns', 'color'] as const)
+    expect(persisted[field]).toEqual(original[field]);
+  expect(writes().some(([path]) => path === '/api/cats')).toBe(false);
+});
 
 it('confirms the Desktop route and repairs the original member via revision-protected PATCH, then reopens without preparation', async () => {
   const original = structuredClone(persisted);

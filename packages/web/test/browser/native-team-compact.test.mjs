@@ -28,6 +28,17 @@ for (const provider of ['deepseek-official', 'private-gateway']) {
       const state = await setup({
         runtimes: tools,
         edition: 'intranet',
+        templates: [
+          {
+            id: 'ragdoll',
+            name: '布偶猫',
+            nickname: '宪宪',
+            avatar: '/avatars/family/opus55.png',
+            color: { primary: '#a85820', secondary: '#fff4e8' },
+            roleDescription: '主架构师和核心开发者，擅长深度思考和系统设计',
+            personality: '温柔且有主见，完成后说明结果',
+          },
+        ],
         prepareDsh: (body) => {
           assert.deepEqual(body, {
             runtimeId: 'dsh',
@@ -46,6 +57,7 @@ for (const provider of ['deepseek-official', 'private-gateway']) {
           assert.equal(await checkbox.isChecked(), true);
           assert.equal(await checkbox.isEnabled(), true);
         }
+        assert.equal(await state.panel.getByRole('heading', { name: '布偶猫 · 宪宪', exact: true }).isVisible(), true);
         assert.equal(await state.panel.getByRole('button', { name: /^(调整|收起)$/ }).count(), 0);
         assert.equal(await state.panel.locator('fieldset,input:not([type=checkbox]),select,textarea').count(), 0);
         assert.equal(state.preparations.length, 0, 'Discovery must not write a member patch');

@@ -80,9 +80,11 @@ export async function setup(options = {}) {
   await context.route('**/api/session', (route) =>
     route.fulfill({ json: { userId: 'fixture-user', csrfToken: 'fixture-only' } }),
   );
-  // Exercise the supported empty-catalog fallback without borrowing a live
-  // backend's templates. Installed avatar/catalog acceptance has its own lane.
-  await context.route('**/api/cat-templates', (route) => route.fulfill({ json: { templates: [] } }));
+  // Default to the empty-catalog fallback; explicit template fixtures may also
+  // exercise named cards without borrowing a live backend's identities.
+  await context.route('**/api/cat-templates', (route) =>
+    route.fulfill({ json: { templates: options.templates ?? [] } }),
+  );
   let discoveryFails = options.discoveryFails ?? false;
   let failure = options.failCreate;
   let discovered = options.runtimes ?? runtimes;

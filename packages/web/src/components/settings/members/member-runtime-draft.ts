@@ -19,6 +19,8 @@ export interface RuntimeChoice {
   readiness?: NativeLoginState;
   /** An installed DSH default still needs an explicit usable route confirmation. */
   dshSetupRequired?: boolean;
+  /** The discovery binding whose launch produced dshSetup; recommendation identity stays the tool. */
+  dshSetupRuntimeId?: string;
   /** Read-only route evidence; member-only preparation happens after the user confirms creation. */
   dshSetup?:
     | { status: 'configured'; sourceProfile: string; revision: string; provider: string; model: string }

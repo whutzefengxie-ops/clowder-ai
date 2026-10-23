@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { NativeGoalStep } from './first-run-quest/NativeGoalStep';
 import { NativePartnerCard } from './first-run-quest/NativePartnerCard';
-import { nativeRuntimeSelectable } from './first-run-quest/native-onboarding';
+import { nativePartnerSelectable } from './first-run-quest/native-onboarding';
 import { needsExistingDshRepair } from './first-run-quest/native-partner-persistence';
 import { useNativeOnboarding } from './first-run-quest/useNativeOnboarding';
 
@@ -29,9 +29,9 @@ export function FirstRunQuestWizard({ open, onClose, onCreated }: FirstRunQuestW
   }, [open]);
   if (!open) return null;
   const { draft, loading, busy, error, errorStage } = setup;
-  const selected = draft?.partners.filter((p) => p.selected) ?? [];
+  const selected = draft?.partners.filter((p) => p.selected && nativePartnerSelectable(p)) ?? [];
   const invalidSelection = selected.some((p) => !p.form.displayName.trim());
-  const available = draft?.partners.filter((p) => nativeRuntimeSelectable(p.runtime, p.form)) ?? [];
+  const available = draft?.partners.filter(nativePartnerSelectable) ?? [];
 
   return createPortal(
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-[var(--console-overlay-medium)] px-3 py-4 backdrop-blur-sm">

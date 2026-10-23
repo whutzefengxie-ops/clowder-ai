@@ -1,7 +1,7 @@
 import { nativeAcpProfileLabel, nativeAcpProfileMessage } from '../settings/members/native-acp-profile-status';
 import { usesDefaultNativeIdentity } from '../settings/members/native-login-state';
 import { NativeInstallHelp } from './NativeInstallHelp';
-import { type NativePartner, nativeRuntimeSelectable } from './native-onboarding';
+import { type NativePartner, nativePartnerSelectable, requiresDshDraftConfirmation } from './native-onboarding';
 import { nativeModelLabel, usesDetectedRuntimeConfiguration } from './native-partner-config';
 
 const chinese = (zh: string) => zh;
@@ -21,7 +21,8 @@ export function NativePartnerCard({
   const { runtime, form } = partner;
   const locked = created && !(runtime.dshSetupRequired && partner.existingId);
   const available = runtime.installed && (runtime.clientId !== 'acp' || Boolean(runtime.acp));
-  const selectable = nativeRuntimeSelectable(runtime, form);
+  const selectable = nativePartnerSelectable(partner);
+  const manualDsh = requiresDshDraftConfirmation(partner);
   const detectedConfiguration = usesDetectedRuntimeConfiguration(form, runtime);
   const defaultIdentity = usesDefaultNativeIdentity(form) && detectedConfiguration;
   const model = nativeModelLabel(
@@ -30,21 +31,25 @@ export function NativePartnerCard({
   );
   const effort = form.cliEffort || (detectedConfiguration ? runtime.configuredEffort : undefined);
   const dshRoute = runtime.dshSetup;
-  const profileLabel =
-    dshRoute?.status === 'configured' ? '已检测可用配置' : nativeAcpProfileLabel(runtime.discoveryStatus, chinese);
-  const profileMessage =
-    dshRoute?.status === 'configured'
+  const profileLabel = manualDsh
+    ? '已保留自定义设置 · 待确认连接'
+    : dshRoute?.status === 'configured'
+      ? '已检测可用配置'
+      : nativeAcpProfileLabel(runtime.discoveryStatus, chinese);
+  const profileMessage = manualDsh
+    ? `模型：${form.defaultModel || '跟随工具'}${form.cliEffort ? ` · 强度：${form.cliEffort}` : ''}`
+    : dshRoute?.status === 'configured'
       ? `连接：${dshRoute.provider} / ${dshRoute.model} · 复用 ${dshRoute.sourceProfile} 配置`
       : nativeAcpProfileMessage(runtime.discoveryStatus, chinese);
   return (
     <article
-      className={`rounded-xl border p-4 ${partner.selected ? 'border-cafe-accent bg-cafe-surface' : 'border-[var(--console-border-soft)] bg-cafe-surface-canvas'}`}
+      className={`rounded-xl border p-4 ${partner.selected && selectable ? 'border-cafe-accent bg-cafe-surface' : 'border-[var(--console-border-soft)] bg-cafe-surface-canvas'}`}
     >
       <div className={`flex items-center ${compact ? 'gap-2' : 'gap-3'}`}>
         <input
           type="checkbox"
           aria-label={`加入 ${runtime.label} 伙伴`}
-          checked={partner.selected}
+          checked={partner.selected && selectable}
           disabled={!selectable || disabled}
           onChange={(e) => patch({ selected: e.target.checked })}
           className="h-5 w-5 shrink-0 accent-[var(--color-cafe-accent)]"
@@ -100,9 +105,11 @@ export function NativePartnerCard({
       {partner.missingExisting && !created && (
         <p className="mt-3 text-sm text-cafe-secondary">原伙伴已不在当前名单中。确认创建后，会按保留的配置重新添加。</p>
       )}
-      {runtime.dshSetupRequired && dshRoute?.status !== 'configured' && !locked && (
+      {runtime.dshSetupRequired && (manualDsh || dshRoute?.status !== 'configured') && !locked && (
         <p role="status" className="mt-3 text-sm text-cafe-secondary">
-          未找到可复用的 DSH 连接。请在成员配置中完成接入后重新检测。
+          {manualDsh
+            ? '此前的模型或思考强度已保留，请在“设置 → 成员与运行时”确认连接。'
+            : '未找到可复用的 DSH 连接。请在成员配置中完成接入后重新检测。'}
         </p>
       )}
       {partner.recoverable && !created && (
@@ -141,9 +148,11 @@ export function NativePartnerCard({
       )}
       {available && !defaultIdentity && (
         <p className="mt-3 text-sm text-cafe-secondary">
-          {dshRoute?.status === 'configured' && detectedConfiguration
-            ? '已检测到供应商与凭据配置 · 实际连接待验证'
-            : '此连接的登录状态尚未检查 · 实际连接待验证'}
+          {manualDsh
+            ? '连接需要再次确认 · 原有设置已保留'
+            : dshRoute?.status === 'configured' && detectedConfiguration
+              ? '已检测到供应商与凭据配置 · 实际连接待验证'
+              : '此连接的登录状态尚未检查 · 实际连接待验证'}
         </p>
       )}
       {available && runtime.clientId === 'opencode' && (

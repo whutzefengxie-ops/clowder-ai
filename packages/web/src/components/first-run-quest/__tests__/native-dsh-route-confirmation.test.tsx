@@ -194,3 +194,41 @@ it('preselects a previously blocked draft after its route becomes usable and ret
   await mount();
   expect(host.querySelector<HTMLInputElement>('input[type=checkbox]')?.checked).toBe(false);
 });
+
+it.each([
+  { defaultModel: 'my-explicit-model', cliEffort: '' },
+  { defaultModel: '', cliEffort: 'high' },
+])('preserves an uncreated legacy DSH draft with explicit overrides $defaultModel/$cliEffort for manual confirmation', async (overrides) => {
+  await mount();
+  const key = 'cat-cafe:native-team-setup:v2:compact-recommendation';
+  const draft = JSON.parse(localStorage.getItem(key)!);
+  draft.partners[0].form = { ...draft.partners[0].form, ...overrides };
+  const originalKey = draft.partners[0].creationRequestKey;
+  const originalId = draft.partners[0].form.catId;
+  localStorage.setItem(key, JSON.stringify(draft));
+  await act(async () => root.unmount());
+  root = createRoot(host);
+  claudeReadiness = 'configured';
+  vi.mocked(apiFetch).mockClear();
+  await mount();
+  const checkbox = host.querySelector<HTMLInputElement>('input[aria-label="加入 DSH 伙伴"]')!;
+  expect(checkbox.checked).toBe(false);
+  expect(checkbox.disabled).toBe(true);
+  expect(checkbox.closest('details')).not.toBeNull();
+  expect(host.textContent).toContain('已保留自定义设置');
+  expect(host.textContent).toContain(overrides.defaultModel || overrides.cliEffort);
+  const restored = JSON.parse(localStorage.getItem(key)!).partners.find(
+    (partner: { form: { catId: string } }) => partner.form.catId === originalId,
+  );
+  expect(restored.creationRequestKey).toBe(originalKey);
+  expect(restored.form).toMatchObject({ ...overrides, catId: originalId });
+  expect(vi.mocked(apiFetch).mock.calls.some(([, init]) => init?.method)).toBe(false);
+  expect(host.querySelector('fieldset, select')).toBeNull();
+  await act(async () => create().click());
+  const posts = vi
+    .mocked(apiFetch)
+    .mock.calls.filter(([path, init]) => path === '/api/cats' && init?.method === 'POST');
+  expect(posts).toHaveLength(1);
+  expect(JSON.parse(String(posts[0][1]?.body)).clientId).toBe('anthropic');
+  expect(vi.mocked(apiFetch).mock.calls.some(([path]) => path.endsWith('/prepare'))).toBe(false);
+});

@@ -53,6 +53,20 @@ export function nativeRuntimeSelectable(runtime: RuntimeChoice, form?: HubCatEdi
   return runtime.readiness?.status !== 'login_required';
 }
 
+/** A prior uncreated custom choice is not consent to replace it with the detected default route. */
+export function requiresDshDraftConfirmation(partner: NativePartner): boolean {
+  return Boolean(
+    !partner.existingId &&
+      !partner.dshSetupPrepared &&
+      partner.runtime.dshSetupRequired &&
+      usesDetectedRuntimeConfiguration(partner.form, partner.runtime) &&
+      (partner.form.defaultModel.trim() || partner.form.cliEffort.trim()),
+  );
+}
+
+export const nativePartnerSelectable = (partner: NativePartner) =>
+  !requiresDshDraftConfirmation(partner) && nativeRuntimeSelectable(partner.runtime, partner.form);
+
 /** Registry-generated ACP ids change after creation; the launch descriptor does not. */
 function partnerKey(runtime: RuntimeChoice): string {
   if (!runtime.acp) return runtime.id;
@@ -91,6 +105,7 @@ export function recommendNativePartners(
             discoveryStatus: existingBinding.discoveryStatus,
             dshSetupRequired: existingBinding.dshSetupRequired,
             dshSetup: existingBinding.dshSetup,
+            dshSetupRuntimeId: existingBinding.dshSetupRuntimeId ?? existingBinding.id,
             models: existingBinding.models,
           }
         : candidate;
