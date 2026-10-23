@@ -36,6 +36,12 @@ it('reads only on request and prepares a complete route for the existing member 
   vi.stubGlobal('fetch', fetch);
   await act(async () => root.render(<DshProviderSetup runtimeId="dsh" onPrepared={prepared} t={(zh) => zh} />));
   expect(fetch).not.toHaveBeenCalled();
+  const setupHint = [...host.querySelectorAll('p')].find((element) =>
+    element.textContent?.includes('手动接入或调整 DSH 连接'),
+  );
+  expect(setupHint).toBeDefined();
+  expect(setupHint?.closest('details')).toBeNull();
+  expect(host.querySelector('details')?.open).toBe(false);
   await act(async () => host.querySelector<HTMLButtonElement>('button')!.click());
   expect(host.textContent).toContain('deepseek-official');
   await act(async () => [...host.querySelectorAll('button')].find((b) => b.textContent === '使用此配置')!.click());

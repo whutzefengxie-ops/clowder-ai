@@ -275,6 +275,7 @@ export class AcpClient {
     };
     if (IS_WINDOWS && !this.config.spawnFn) {
       const spawnPlan = resolveWindowsSpawnPlan(command, args);
+      Object.assign(childEnv, spawnPlan.env);
       log.debug(
         {
           original: command,

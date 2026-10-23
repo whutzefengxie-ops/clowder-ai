@@ -62,6 +62,8 @@ jobs:
           test/native-tool-catalog.test.ts
           test/native-codeagent-discovery.test.ts
           test/native-dsh-patch-classification.test.ts
+          test/dsh-recommendation.test.ts
+          test/dsh-setup-copy-policy.test.js
           test/dsh-catalog-boundary.test.ts
           test/native-claude-api-readiness.test.ts
           test/native-mcp-first-run.test.ts
@@ -69,6 +71,13 @@ jobs:
           test/f318-claude-sdk.test.ts
           test/f318-claude-sdk-custody.test.ts
           test/f318-claude-sdk-launch.test.ts
+      - name: Install locked Electron runtime for the official DSH Desktop launcher fixture
+        run: npm ci --prefix desktop --no-audit --no-fund
+      - name: Official DSH Desktop diagnostics, model catalog and ACP cold spawn
+        run: >-
+          pnpm --filter @cat-cafe/api exec node ./scripts/with-test-home.mjs
+          node --import tsx --test --test-timeout=90000
+          test/dsh-desktop-launcher.test.ts
       - name: Desktop isolation and installer profile contracts
         run: >-
           node --test

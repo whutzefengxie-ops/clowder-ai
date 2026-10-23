@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { resolveInvokeCapabilityRoot } from '../config/capabilities/invoke-capability-root.js';
 import { AcpClient } from '../domains/cats/services/agents/providers/acp/AcpClient.js';
 import { buildDshPatch, canonicalDshConfig, composeDshProviderSource, inspectDshConfig } from './dsh-setup-config.js';
+import { assertDefaultDshCredentialStore } from './dsh-setup-credential-store.js';
 import { type DshSetupLaunch, dshSetupBootstrap, dumpDshConfig } from './dsh-setup-launch.js';
 import { inspectDshRouteReadiness } from './dsh-setup-readiness.js';
 
@@ -53,14 +54,16 @@ export async function readDshSetup(launch: DshSetupLaunch, sourceProfile: string
     throw Error('dsh_setup_profile_required');
   const active = await dumpDshConfig(launch);
   const home = process.env.DSH_HOME ?? join(homedir(), '.dsh');
-  const sourceFor = (profile: string) =>
-    profile === activeProfile
-      ? active
-      : composeDshProviderSource(
-          patchFile(join(home, 'profiles', profile, 'cordis.patch.yml')),
-          patchFile(join(home, 'cordis.patch.yml')),
-        );
   const cwd = dshSetupBootstrap(launch).cwd;
+  assertDefaultDshCredentialStore(active, home, cwd, true);
+  const sourceFor = (profile: string) => {
+    if (profile === activeProfile) return active;
+    const profilePatch = patchFile(join(home, 'profiles', profile, 'cordis.patch.yml'));
+    const homePatch = patchFile(join(home, 'cordis.patch.yml'));
+    assertDefaultDshCredentialStore(profilePatch, home, cwd);
+    assertDefaultDshCredentialStore(homePatch, home, cwd);
+    return composeDshProviderSource(profilePatch, homePatch);
+  };
   const viewFor = (profile: string) => inspectDshRouteReadiness(sourceFor(profile), home, cwd);
   if (sourceProfile === 'auto') {
     const ordered = [...new Set([activeProfile, 'desktop', 'web', ...profiles])].filter((p) => profiles.includes(p));
@@ -71,14 +74,26 @@ export async function readDshSetup(launch: DshSetupLaunch, sourceProfile: string
       available ?? ordered.find((p) => p !== activeProfile && viewFor(p).providers.length) ?? activeProfile;
   }
   const source = sourceFor(sourceProfile);
+  const sourceView = viewFor(sourceProfile);
+  const activeView = inspectDshConfig(active);
+  const usable = sourceView.providers.filter((route) => route.credentialStatus === 'configured' && route.models.length);
+  const selected =
+    usable.find((route) => route.id === sourceView.provider) ??
+    usable.find((route) => route.id === activeView.provider) ??
+    usable[0];
+  const model =
+    selected?.models.find((item) => item.id === sourceView.model)?.id ??
+    selected?.models.find((item) => item.id === activeView.model)?.id ??
+    selected?.models[0]?.id;
   return {
     active,
     source,
     view: {
       profiles,
       sourceProfile,
-      active: inspectDshConfig(active),
-      source: viewFor(sourceProfile),
+      active: activeView,
+      source: sourceView,
+      suggestedSelection: selected && model ? { provider: selected.id, model } : undefined,
       revision: digest(
         JSON.stringify([launch, process.env.DSH_HOME, canonicalDshConfig(active), canonicalDshConfig(source)]),
       ),

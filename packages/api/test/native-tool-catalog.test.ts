@@ -177,3 +177,41 @@ test('ordinary native tool model metadata does not merge independent member or a
     f.restore();
   }
 });
+
+test('Claude discovery inherits its effective native model and effort from the same launch settings', () => {
+  const f = fixture();
+  const keys = ['ANTHROPIC_MODEL', 'CLAUDE_CODE_EFFORT_LEVEL'];
+  const saved = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
+  try {
+    process.env.ANTHROPIC_MODEL = 'shell-model';
+    process.env.CLAUDE_CODE_EFFORT_LEVEL = 'medium';
+    mkdirSync(join(f.home, '.claude'));
+    mkdirSync(join(f.root, '.claude'));
+    writeFileSync(
+      join(f.home, '.claude/settings.json'),
+      JSON.stringify({ model: 'user-model', env: { ANTHROPIC_MODEL: 'user-gateway-model' } }),
+    );
+    writeFileSync(
+      join(f.root, '.claude/settings.local.json'),
+      JSON.stringify({
+        model: 'local-model',
+        effortLevel: 'low',
+        env: { ANTHROPIC_MODEL: 'local-gateway-model', CLAUDE_CODE_EFFORT_LEVEL: 'high' },
+      }),
+    );
+    const runtime = discoverNativeRuntimes(f.root, { home: f.home, commandFor: f.commandFor }).runtimes.find(
+      (item) => item.id === 'claude',
+    );
+    assert.ok(runtime && 'configuredModel' in runtime && 'configuredEffort' in runtime);
+    assert.equal(runtime.configuredModel, 'local-gateway-model');
+    assert.equal(runtime.configuredEffort, 'high');
+    assert.deepEqual(runtime.models, ['local-gateway-model']);
+    assert.doesNotMatch(JSON.stringify(runtime), /ANTHROPIC_MODEL|CLAUDE_CODE_EFFORT_LEVEL/);
+  } finally {
+    for (const [key, value] of Object.entries(saved)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    f.restore();
+  }
+});

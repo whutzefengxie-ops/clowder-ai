@@ -6,7 +6,9 @@ import { parse } from 'smol-toml';
 import { getAcpConfig } from '../config/cat-config-loader.js';
 import { resolveCliCommand } from '../utils/cli-resolve.js';
 import { hasPersistedDshSetup } from './dsh-persisted-setup.js';
+import { inspectDshRecommendation } from './dsh-recommendation.js';
 import { discoverAdditionalRuntimes } from './native-additional-runtimes.js';
+import { nativeClaudeConfiguration } from './native-claude-api-config.js';
 import { discoverCodeAgentRuntimes } from './native-codeagent-discovery.js';
 import { discoverDshRuntime } from './native-dsh-discovery.js';
 import { dshLauncherProfileState } from './native-dsh-profile.js';
@@ -44,7 +46,7 @@ export function discoverNativeRuntimes(projectRoot: string, options: DiscoveryOp
   const commandFor = options.commandFor ?? resolveCliCommand;
   const intranet = options.intranet ?? process.env.CAT_CAFE_INTRANET_EDITION === '1';
   const codex = metadata(join(process.env.CODEX_HOME || join(home, '.codex'), 'config.toml'), true);
-  const claude = metadata(join(process.env.CLAUDE_CONFIG_DIR || join(home, '.claude'), 'settings.json'));
+  const claude = nativeClaudeConfiguration(projectRoot, home);
   const builtins = (
     [
       ['codex', 'Codex', 'openai'],
@@ -53,7 +55,7 @@ export function discoverNativeRuntimes(projectRoot: string, options: DiscoveryOp
   ).map(([id, label, clientId]) => {
     const command = commandFor(id);
     const configuredModel = text(id === 'codex' ? codex.model : claude.model);
-    const configuredEffort = text(id === 'codex' ? codex.model_reasoning_effort : claude.effortLevel);
+    const configuredEffort = text(id === 'codex' ? codex.model_reasoning_effort : claude.effort);
     const models = new Set<string>();
     if (configuredModel) models.add(configuredModel);
     return nativeTool(
@@ -137,6 +139,12 @@ export async function discoverNativeRuntimesWithReadiness(root: string, refresh 
     found.runtimes.map(async (runtime) => ({
       ...runtime,
       readiness: await nativeRuntimeReadiness(runtime, root, refresh),
+      ...(found.edition === 'intranet' &&
+      runtime.harnessId === 'dsh' &&
+      'dshSetupRequired' in runtime &&
+      runtime.dshSetupRequired
+        ? { dshSetup: await inspectDshRecommendation(runtime, root, refresh) }
+        : {}),
     })),
   );
   return { edition: found.edition, runtimes, authenticationStatus: 'local_checked' };
