@@ -261,9 +261,11 @@ test(
 
 test('installer and uninstaller use the same installation-scoped shutdown script', () => {
   const installer = fs.readFileSync(path.join(__dirname, 'installer/cat-cafe.iss'), 'utf8');
+  const identityGate = fs.readFileSync(path.join(__dirname, 'installer/installation-identity.iss'), 'utf8');
   assert.doesNotMatch(installer, /Stop-Process -Name/);
   assert.match(installer, /\[UninstallRun\][\s\S]*stop-installed-desktop\.ps1/);
-  assert.match(installer, /PrepareToInstall[\s\S]*stop-installed-desktop\.ps1/);
+  assert.match(installer, /#include "installation-identity\.iss"/);
+  assert.match(identityGate, /PrepareToInstall[\s\S]*stop-installed-desktop\.ps1/);
   const script = fs.readFileSync(path.join(__dirname, 'scripts/stop-installed-desktop.ps1'), 'utf8');
   assert.match(script, /StartsWith\(\$installPrefix, \[System\.StringComparison\]::OrdinalIgnoreCase\)/);
   assert.match(script, /--quit-owned-installation/);
