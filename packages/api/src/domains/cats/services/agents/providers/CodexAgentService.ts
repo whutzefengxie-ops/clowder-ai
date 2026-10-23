@@ -1,4 +1,5 @@
 import type { RuntimeProviderProfile } from '../../../../../config/account-resolver.js';
+import { usesNativeToolConfiguration } from '../../../../../config/cat-account-binding.js';
 import { finalizeCodexAccountEnvironment } from '../../../../../config/codex-account-environment.js';
 import { resolveCodexAccountLaunch, resolveCodexApiExecutionHome } from '../../../../../config/codex-account-launch.js';
 import { codexCliConfig } from '../../../../../config/codex-launch-config.js';
@@ -17,8 +18,21 @@ import { CODEX_DESKTOP_ISOLATION_ARGS, CODEX_RESTRICTED_APPS_ARGS } from './code
 
 export { codexConfigObjectFromArgs } from './codex-config-overrides.js';
 
+import {
+  deriveCodexNetworkEnvironmentSync,
+  readWindowsSystemProxy,
+  type WindowsSystemProxyConfig,
+} from '../../../../../utils/codex-network-environment.js';
 import { buildCodexModelCatalogArgs, isCodexCustomCatalogModel } from './codex-model-catalog.js';
 import { extractUserEnvTemplates, hasSupportedEnvTemplate, resolveEnvMap } from './env-map.js';
+
+/**
+ * Checks if environment has proxy configuration.
+ */
+function hasProxyEnv(env: Record<string, string | null>): boolean {
+  return !!(env.HTTP_PROXY || env.http_proxy || env.HTTPS_PROXY || env.https_proxy || env.ALL_PROXY || env.all_proxy);
+}
+
 /**
  * Codex Agent Service
  * 使用 Codex CLI 子进程调用缅因猫 (Codex)
@@ -1377,11 +1391,14 @@ export class CodexAgentService implements AgentService {
     input: LocalSessionReadInput,
     read: (client: CodexAppServerNativeRpcClient) => Promise<T>,
   ): Promise<T> {
-    const launch = this.prepareCapabilityLaunch(input.cwd, input.account, input.cliConfigArgs, true);
+    const launch = await this.prepareCapabilityLaunch(input.cwd, input.account, input.cliConfigArgs, true);
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(new Error('Session check timed out')), input.timeoutMs);
     const options = { ...launch, invocationId: input.invocationId, signal: controller.signal };
-    const acquisition = createDirectAgentCarrierSession(options);
+    // launch.env is Record<string, string> from applyCodexNetworkEnvironment, compatible with ProcessEnv
+    const acquisition = createDirectAgentCarrierSession(options, {
+      finalEnvironment: launch.env as NodeJS.ProcessEnv,
+    });
     void acquisition
       .then(async (wire) => {
         if (controller.signal.aborted) await wire.close().catch(async () => wire.terminate?.());
@@ -1410,7 +1427,7 @@ export class CodexAgentService implements AgentService {
     if (this.carrierMode !== 'app_server' || !this.appServerHostPool) {
       throw new Error('codex_native_capability_source_unsupported');
     }
-    const launchConfiguration = this.prepareCapabilityLaunch(input.cwd, input.account, input.cliConfigArgs);
+    const launchConfiguration = await this.prepareCapabilityLaunch(input.cwd, input.account, input.cliConfigArgs);
     // The native CLI creates an implicit home, but refuses a missing explicit one.
     if (launchConfiguration.env?.CODEX_AUTH_MODE === 'api_key' && launchConfiguration.env.CODEX_HOME) {
       const { mkdir } = await import('node:fs/promises');
@@ -1456,16 +1473,83 @@ export class CodexAgentService implements AgentService {
     }
   }
 
-  private prepareCapabilityLaunch(
+  /**
+   * Applies Codex network environment derivation to preserve loopback direct connection
+   * while maintaining existing proxy configuration and internal network exceptions.
+   * Issue #1666: Windows enterprise proxy may route 127.0.0.1 through proxy.
+   *
+   * This method produces a complete, spawn-ready environment by:
+   * 1. Inheriting from parent environment (unless native with inheritParentEnv=false)
+   * 2. Applying overrides and deleting null-marked keys
+   * 3. Deriving network environment (adding loopback to NO_PROXY)
+   */
+  private async applyCodexNetworkEnvironment(
+    overrides: Record<string, string | null>,
+    options: { inheritParentEnv?: boolean; workingDirectory?: string; skipSystemProxy?: boolean } = {},
+  ): Promise<Record<string, string>> {
+    // Use canonical buildChildEnv to ensure proper variable stripping (runtime lifecycle, secrets, etc.)
+    // and correct cwd/PWD/INIT_CWD handling. This replaces hand-written process.env copying.
+    const baseEnv = buildChildEnv(overrides, {
+      inheritParentEnv: options.inheritParentEnv,
+      workingDirectory: options.workingDirectory,
+    });
+
+    // Read Windows system proxy if needed (async with timeout)
+    // Skip for plugin isolation (skipSystemProxy=true) to maintain minimal environment boundary
+    let systemProxy: WindowsSystemProxyConfig | null | undefined;
+    if (process.platform === 'win32' && !options.skipSystemProxy) {
+      try {
+        systemProxy = await readWindowsSystemProxy({ timeoutMs: 1000 });
+      } catch {
+        systemProxy = null;
+      }
+    }
+
+    // deriveCodexNetworkEnvironmentSync expects NodeJS.ProcessEnv and returns one
+    const result = deriveCodexNetworkEnvironmentSync(baseEnv, systemProxy);
+
+    // Log diagnostic information for troubleshooting
+    if (result.diagnostic.unsupportedScenarios.length > 0) {
+      log.warn(
+        {
+          catId: this.catId,
+          scenarios: result.diagnostic.unsupportedScenarios,
+          source: result.diagnostic.exceptionSource,
+        },
+        '[codex-network] Partial support for network environment derivation',
+      );
+    }
+
+    // Return complete environment as Record<string, string> (no null, no undefined).
+    // This will be passed as finalEnvironment to bypass normalizeEnv's second buildChildEnv call,
+    // preventing deleted keys from re-inheriting from process.env.
+    const finalEnv: Record<string, string> = {};
+    for (const [key, value] of Object.entries(result.env)) {
+      if (value !== undefined) {
+        finalEnv[key] = value;
+      }
+    }
+
+    return finalEnv;
+  }
+
+  private async prepareCapabilityLaunch(
     cwd: string,
     account?: RuntimeProviderProfile,
     cliConfigArgs: readonly string[] = [],
     localInspection = false,
-  ): Pick<AgentCarrierSessionOptions, 'command' | 'args' | 'cwd' | 'env'> {
+  ): Promise<Pick<AgentCarrierSessionOptions, 'command' | 'args' | 'cwd' | 'env' | 'inheritParentEnv'>> {
     if (!localInspection && (this.carrierMode !== 'app_server' || !this.appServerHostPool))
       throw new Error('codex_native_capability_source_unsupported');
-    const selected = account ?? { id: 'codex', authType: 'oauth' as const, client: 'openai' as const };
-    if (selected.authType === 'api_key' && !selected.apiKey)
+    const nativeTool = usesNativeToolConfiguration(catRegistry.tryGet(this.catId)?.config);
+    const selected = (nativeTool ? undefined : account) ?? {
+      id: 'codex',
+      authType: 'oauth' as const,
+      client: 'openai' as const,
+      ...(nativeTool ? { syntheticNative: true } : {}),
+    };
+    const explicitApiAccount = selected.authType === 'api_key' && !selected.syntheticNative;
+    if (explicitApiAccount && !selected.apiKey)
       throw new Error('codex_native_capability_source_credentials_unavailable');
     const accountEnv = Object.fromEntries(
       Object.entries(selected.envVars ?? {}).filter(
@@ -1473,18 +1557,17 @@ export class CodexAgentService implements AgentService {
           /^[A-Z_][A-Za-z0-9_]*$/.test(key) && !key.startsWith('CAT_CAFE_') && !hasSupportedEnvTemplate(value),
       ),
     );
-    const mapped =
-      selected.authType === 'api_key'
-        ? resolveEnvMap(
-            'openai',
-            undefined,
-            { apiKey: selected.apiKey, baseUrl: selected.baseUrl, baseModel: this.model },
-            extractUserEnvTemplates(selected.envVars ?? {}),
-          )
-        : {};
+    const mapped = explicitApiAccount
+      ? resolveEnvMap(
+          'openai',
+          undefined,
+          { apiKey: selected.apiKey, baseUrl: selected.baseUrl, baseModel: this.model },
+          extractUserEnvTemplates(selected.envVars ?? {}),
+        )
+      : {};
     const customBaseUrl =
       (mapped.OPENAI_BASE_URL ?? mapped.OPENAI_API_BASE ?? accountEnv.OPENAI_BASE_URL ?? accountEnv.OPENAI_API_BASE) ||
-      (selected.authType === 'api_key' ? CODEX_API_DEFAULT_BASE_URL : undefined);
+      (explicitApiAccount ? CODEX_API_DEFAULT_BASE_URL : undefined);
     const selectedApiEnv = { ...mapped, ...accountEnv };
     const env = Object.fromEntries(
       Object.entries(buildChildEnv(selectedApiEnv, { workingDirectory: cwd })).filter(
@@ -1496,9 +1579,9 @@ export class CodexAgentService implements AgentService {
       assertCodexSharedStateRoots(descriptor.accountOwnerRoot, { launch: descriptor });
     if (descriptor.managed) assertCodexManagedPlatformSupport(descriptor.credentialHome, this.cliCommand);
     const args = ['app-server', '--stdio'];
-    if (selected.authType === 'api_key') {
+    if (descriptor.authMode === 'api_key') {
       if (customBaseUrl) args.push(...buildCodexCustomProviderArgs(customBaseUrl, 'api_key'));
-    } else args.push('--config', 'model_provider="openai"');
+    } else if (descriptor.authMode === 'oauth') args.push('--config', 'model_provider="openai"');
     const memberConfigArgs = stripReservedCodexSystemConfigs(
       cliConfigArgs.flatMap((arg) => arg.trim().split(/\s+/)),
       this.catId as string,
@@ -1515,27 +1598,38 @@ export class CodexAgentService implements AgentService {
       delete selectedApiEnv.OPENAI_API_BASE;
     }
     const executionHome =
-      selected.authType === 'api_key' && customBaseUrl
+      descriptor.authMode === 'api_key' && customBaseUrl
         ? resolveCodexApiExecutionHome(descriptor, customBaseUrl, cwd, env)
         : undefined;
     if (executionHome) {
       env.HOME = dirname(executionHome);
       if (process.platform === 'win32') env.USERPROFILE = env.HOME;
     }
+
+    // Finalize account environment (includes CODEX_HOME, auth, etc.)
+    const finalizedAccountEnv = withoutSessionScopedHostEnv(
+      finalizeCodexAccountEnvironment(descriptor, {
+        env,
+        selectedApiEnv,
+        memberConfigArgs,
+        args,
+        cwd,
+        ...(executionHome ? { executionHome } : {}),
+      }),
+    );
+
+    // Apply network environment derivation for enterprise proxy compatibility (Issue #1666)
+    const derivedEnv = await this.applyCodexNetworkEnvironment(finalizedAccountEnv, {
+      inheritParentEnv: false, // Already finalized, do not re-inherit
+      workingDirectory: cwd,
+    });
+
     return {
       command: this.cliCommand,
       args,
       cwd,
-      env: withoutSessionScopedHostEnv(
-        finalizeCodexAccountEnvironment(descriptor, {
-          env,
-          selectedApiEnv,
-          memberConfigArgs,
-          args,
-          cwd,
-          ...(executionHome ? { executionHome } : {}),
-        }),
-      ),
+      env: derivedEnv,
+      inheritParentEnv: false, // derivedEnv is finalEnvironment; do not re-inherit from process.env
     };
   }
 
@@ -1693,6 +1787,7 @@ export class CodexAgentService implements AgentService {
     /** exec_json can only carry frozen bytes; undefined means "preflight, app_server only". */
     const execStdinInput = effectivePromptSource.kind === 'frozen' ? effectivePromptSource.prompt : undefined;
     const nativeTool = catRegistry.tryGet(this.catId)?.config.configurationSource === 'native_tool';
+    const nativeAuthentication = usesNativeToolConfiguration(catRegistry.tryGet(this.catId)?.config);
     const effectiveModel =
       options?.callbackEnv?.CAT_CAFE_OPENAI_MODEL_OVERRIDE ?? (nativeTool ? getCatModel(this.catId) : this.model);
     const imagePaths = native
@@ -1818,8 +1913,7 @@ export class CodexAgentService implements AgentService {
     const catalogRequested = carrierMode === 'exec_json' && isCodexCustomCatalogModel(effectiveModel);
     const catalogApplied = modelCatalogArgs.length > 0;
     const authMode =
-      options?.codexAccountLaunch?.authMode ??
-      (nativeTool && !options?.callbackEnv?.CODEX_AUTH_MODE ? 'auto' : getCodexAuthMode(options?.callbackEnv));
+      options?.codexAccountLaunch?.authMode ?? (nativeAuthentication ? 'auto' : getCodexAuthMode(options?.callbackEnv));
     const requestedServiceTier = resolveCodexSpeed({
       clientId: 'openai',
       authType: authMode === 'oauth' || authMode === 'api_key' ? authMode : undefined,
@@ -1874,11 +1968,11 @@ export class CodexAgentService implements AgentService {
       servedModelObservation === 'on';
     const oauthTransport = getCodexOAuthTransport();
     const builtinOpenaiProviderArgs: string[] =
-      !nativeTool && !customBaseUrl && authMode === 'oauth' && oauthTransport === 'builtin'
+      !nativeAuthentication && !customBaseUrl && authMode === 'oauth' && oauthTransport === 'builtin'
         ? ['--config', 'model_provider="openai"']
         : [];
     const openaiHttpsProviderArgs: string[] =
-      !nativeTool && !customBaseUrl && authMode === 'oauth' && oauthTransport === 'https'
+      !nativeAuthentication && !customBaseUrl && authMode === 'oauth' && oauthTransport === 'https'
         ? [
             '--config',
             'model_provider="openai_https"',
@@ -2162,7 +2256,7 @@ export class CodexAgentService implements AgentService {
       const homeIsolated = !!native || (authMode === 'api_key' && !!customBaseUrl);
       const codexEnv = native
         ? { ...native.env }
-        : withVerdictGhGuardEnv(nativeTool ? rawEnv : applyAuthMode(rawEnv, authMode));
+        : withVerdictGhGuardEnv(nativeAuthentication ? rawEnv : applyAuthMode(rawEnv, authMode));
 
       // Diagnostic logging: critical env state for debugging CLI startup failures
       log.info(
@@ -2233,6 +2327,15 @@ export class CodexAgentService implements AgentService {
         mkdirSync(finalAccountEnv.CODEX_HOME, { recursive: true, mode: 0o700 });
       }
 
+      // Apply network environment derivation for enterprise proxy compatibility (Issue #1666)
+      // This must happen after all account/MCP/argv overlays are composed
+      // For plugins (native=true), skip system proxy reading to maintain minimal environment boundary
+      const derivedEnv = await this.applyCodexNetworkEnvironment(codexEnv, {
+        inheritParentEnv: !native,
+        workingDirectory: options?.workingDirectory ?? process.cwd(),
+        skipSystemProxy: !!native,
+      });
+
       const semanticCompletionController = new AbortController();
 
       const codexCommand = verifiedNativeShellCommand ?? resolveCliCommand(this.cliCommand);
@@ -2281,8 +2384,10 @@ export class CodexAgentService implements AgentService {
         // F296 B4a: stdinInput is injected at the spawn site so a preflight-mode
         // invocation can never reach a CLI spawn with empty or premature bytes.
         ...(options?.workingDirectory ? { cwd: options.workingDirectory } : {}),
-        env: codexEnv,
-        ...(native ? { inheritParentEnv: false } : {}),
+        env: derivedEnv,
+        // derivedEnv is already a complete environment from applyCodexNetworkEnvironment.
+        // Do not inherit parent env again to avoid restoring deleted keys.
+        inheritParentEnv: false,
         ...(options?.signal ? { signal: options.signal } : {}),
         ...(options?.invocationId ? { invocationId: options.invocationId } : {}),
         ...(options?.cliSessionId ? { cliSessionId: options.cliSessionId } : {}),
@@ -2385,26 +2490,24 @@ export class CodexAgentService implements AgentService {
           ]),
         });
       };
-      const appServerEnv = usePooledAppServer ? withoutSessionScopedHostEnv(codexEnv) : codexEnv;
+      const appServerEnv = usePooledAppServer ? withoutSessionScopedHostEnv(derivedEnv) : derivedEnv;
       let pooledSessionInUse = false;
       let forceDirectAppServer = false;
       const createDirectSession = (sessionOptions: AgentCarrierSessionOptions): Promise<AgentCarrierSession> =>
-        createDirectAgentCarrierSession(
-          { ...sessionOptions, env: codexEnv },
-          {
-            ...(auditContext?.executionId
-              ? {
-                  executionOwner: {
-                    executionId: auditContext.executionId,
-                    invocationId: auditContext.invocationId,
-                    threadId: auditContext.threadId,
-                    userId: auditContext.userId,
-                    catId: auditContext.catId,
-                  },
-                }
-              : {}),
-          },
-        );
+        createDirectAgentCarrierSession(sessionOptions, {
+          finalEnvironment: derivedEnv,
+          ...(auditContext?.executionId
+            ? {
+                executionOwner: {
+                  executionId: auditContext.executionId,
+                  invocationId: auditContext.invocationId,
+                  threadId: auditContext.threadId,
+                  userId: auditContext.userId,
+                  catId: auditContext.catId,
+                },
+              }
+            : {}),
+        });
       const createPooledSession = async (sessionOptions: AgentCarrierSessionOptions): Promise<AgentCarrierSession> => {
         if (forceDirectAppServer) {
           return createDirectSession(sessionOptions);
@@ -2467,6 +2570,7 @@ export class CodexAgentService implements AgentService {
               args: appServerArgs,
               ...(options?.workingDirectory ? { cwd: options.workingDirectory } : {}),
               env: appServerEnv,
+              inheritParentEnv: false, // appServerEnv is finalEnvironment; do not re-inherit ambient credentials
               ...(options?.signal ? { signal: options.signal } : {}),
               invocationId: options?.invocationId ?? `codex-app-server-${Date.now()}`,
               ...(options?.sessionId ? { sessionId: options.sessionId } : {}),
