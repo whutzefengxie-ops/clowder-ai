@@ -4,34 +4,9 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import { fileURLToPath } from 'node:url';
 import { readAheadApi } from './api-startup-read-ahead.mjs';
 import { profileDesktopStartup } from './scripts/profile-desktop-startup.mjs';
-
-async function minimalProfileSource(root) {
-  const mini = path.join(root, 'source');
-  for (const dir of ['scripts', 'assets', 'guides']) await fs.mkdir(path.join(mini, dir), { recursive: true });
-  // Run the real Desktop code; only static test inputs are reduced.
-  await fs.symlink(
-    path.join(sourceRoot, 'desktop'),
-    path.join(mini, 'desktop'),
-    process.platform === 'win32' ? 'junction' : 'dir',
-  );
-  for (const relative of [
-    'cat-template.json',
-    'pnpm-workspace.yaml',
-    'package.json',
-    'docs/harness-feedback/eval-domains/eval-design-gate.yaml',
-    'cat-cafe-skills/refs/shared-rules.md',
-    'cat-cafe-skills/custody-recognition/SKILL.md',
-    'assets/prompt-templates/a2a-ball-check.md',
-    'guides/registry.yaml',
-  ]) {
-    await fs.mkdir(path.dirname(path.join(mini, relative)), { recursive: true });
-    await fs.copyFile(path.join(sourceRoot, relative), path.join(mini, relative));
-  }
-  return mini;
-}
+import { createProfileSource } from './test-helpers/profile-source-fixture.mjs';
 
 async function reportProfileFailure(t, root, trace) {
   let file;
@@ -50,7 +25,6 @@ async function reportProfileFailure(t, root, trace) {
   t.diagnostic(`Retaining unexpected profile failure: ${root}\n${detail}`);
 }
 
-const sourceRoot = fileURLToPath(new URL('..', import.meta.url));
 test(
   'build trace uses an isolated API, produces portable program hints and releases its port',
   { timeout: 30000 },
@@ -67,6 +41,7 @@ test(
       await fs.mkdir(path.join(frozen, 'api/scripts'));
       await fs.writeFile(path.join(frozen, 'api/scripts/startup-helper.mjs'), 'export const value = 1;');
       await fs.writeFile(entry, code);
+      const sourceRoot = await createProfileSource(root);
       const receipt = await profileDesktopStartup(sourceRoot, frozen, { profileRoot: path.join(root, 'trace') });
       for (const name of ['assets', 'docs', 'guides', 'cat-cafe-skills']) {
         assert.equal((await fs.lstat(path.join(root, 'trace/app', name))).isSymbolicLink(), false);
@@ -108,7 +83,7 @@ test(
     const entry = path.join(frozen, 'api/dist/index.desktop.js');
     let failed = false;
     try {
-      const mini = await minimalProfileSource(root);
+      const mini = await createProfileSource(root);
       await fs.mkdir(path.dirname(entry), { recursive: true });
       await fs.mkdir(path.join(frozen, 'dependencies'));
       await fs.writeFile(path.join(frozen, 'api/package.json'), '{"type":"module"}');
@@ -144,11 +119,14 @@ test('a failed frozen API exposes its root cause and the retained log location',
     await fs.mkdir(path.join(frozen, 'dependencies'));
     await fs.writeFile(path.join(frozen, 'api/package.json'), '{"type":"module"}');
     await fs.writeFile(entry, 'console.error("PR1519_PROFILE_ROOT_CAUSE"); process.exit(42);');
-    await assert.rejects(profileDesktopStartup(sourceRoot, frozen, { profileRoot: trace }), (error) => {
-      assert.ok(error.message.includes(path.join(trace, 'build.log')), 'Missing retained diagnostic path');
-      assert.ok(error.message.includes('PR1519_PROFILE_ROOT_CAUSE'), 'Missing actual child failure');
-      return true;
-    });
+    await assert.rejects(
+      profileDesktopStartup(await createProfileSource(root), frozen, { profileRoot: trace }),
+      (error) => {
+        assert.ok(error.message.includes(path.join(trace, 'build.log')), 'Missing retained diagnostic path');
+        assert.ok(error.message.includes('PR1519_PROFILE_ROOT_CAUSE'), 'Missing actual child failure');
+        return true;
+      },
+    );
   } finally {
     // Only a synthetic exiting module was started; no persistent databases exist.
     await fs.rm(root, { recursive: true, force: true });
@@ -168,7 +146,7 @@ test('an open API port cannot substitute for its completed startup trace', { tim
       entry,
       'import {createServer} from "node:http"; createServer((q,r)=>r.end("ok")).listen(Number(process.env.API_SERVER_PORT),"127.0.0.1",()=>setTimeout(()=>globalThis.__clowderStartupMilestone("http-listening"),1200));',
     );
-    const receipt = await profileDesktopStartup(sourceRoot, frozen, { profileRoot: trace });
+    const receipt = await profileDesktopStartup(await createProfileSource(root), frozen, { profileRoot: trace });
     assert.ok((await fs.stat(receipt.manifest)).size > 0);
   } finally {
     await fs.rm(root, { recursive: true, force: true });
@@ -182,13 +160,13 @@ test('a listening API without a completion milestone still times out and exits',
   const entry = path.join(frozen, 'api/dist/index.desktop.js');
   let failed = false;
   try {
-    const mini = await minimalProfileSource(root);
+    const mini = await createProfileSource(root);
     await fs.mkdir(path.dirname(entry), { recursive: true });
     await fs.mkdir(path.join(frozen, 'dependencies'));
     await fs.writeFile(path.join(frozen, 'api/package.json'), '{"type":"module"}');
     await fs.writeFile(
       entry,
-      'import fs from "node:fs"; import {createServer} from "node:http"; fs.writeFileSync("fixture-pid",String(process.pid)); createServer((q,r)=>r.end("ok")).listen(Number(process.env.API_SERVER_PORT),"127.0.0.1");',
+      'import fs from "node:fs"; import {createServer} from "node:http"; createServer((q,r)=>r.end("ok")).listen(Number(process.env.API_SERVER_PORT),"127.0.0.1",()=>fs.writeFileSync("fixture-pid",String(process.pid)));',
     );
     await assert.rejects(
       profileDesktopStartup(mini, frozen, { profileRoot: trace, timeoutMs: 3000 }),

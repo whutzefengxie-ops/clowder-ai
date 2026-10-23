@@ -11,6 +11,7 @@ export class PiRpcDiagnostics {
   private marker = '';
   private pem = false;
   private pemEnding = false;
+  constructor(private readonly maxLength = 1000) {}
   write(chunk: Buffer): void {
     this.accept(this.decoder.write(chunk));
   }
@@ -21,7 +22,7 @@ export class PiRpcDiagnostics {
     const begin = scan.lastIndexOf('-----BEGIN ');
     const end = scan.lastIndexOf('-----END ');
     if (begin >= 0) {
-      if (!this.pem) this.tail = `${this.tail}[PEM_REDACTED]\n`.slice(-1000);
+      if (!this.pem) this.tail = `${this.tail}[PEM_REDACTED]\n`.slice(-this.maxLength);
       this.pem = true;
       this.pemEnding = end > begin;
     } else if (this.pem && end >= 0) this.pemEnding = true;
@@ -54,10 +55,18 @@ export class PiRpcDiagnostics {
     this.pending = '';
   }
   private commit(): void {
-    this.tail = (this.tail + sanitizeCliStderr(this.pending)).slice(-1000);
+    this.tail = (this.tail + sanitizeCliStderr(this.pending)).slice(-this.maxLength);
     this.pending = '';
   }
   context(): string {
     return this.tail.trim() ? `: ${this.tail.trim()}` : '';
   }
+}
+
+/** Apply the same incomplete-PEM and oversize protection to every visible Pi error channel. */
+export function piErrorExcerpt(input: string, maxLength = 1000): string {
+  const diagnostics = new PiRpcDiagnostics(maxLength);
+  diagnostics.write(Buffer.from(input, 'utf8'));
+  diagnostics.end();
+  return diagnostics.context().slice(2) || 'Pi returned an empty or oversized error';
 }

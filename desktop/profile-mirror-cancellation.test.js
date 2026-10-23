@@ -6,7 +6,6 @@ const os = require('node:os');
 const path = require('node:path');
 const { test } = require('node:test');
 
-const sourceRoot = path.resolve(__dirname, '..');
 const runner = path.join(__dirname, 'scripts/profile-desktop-startup-runner.cjs');
 
 // Test-only fault and phase markers; all production startup code remains real.
@@ -109,6 +108,8 @@ for (const window of ['backoff', 'consumer']) {
         let closed;
         let output = '';
         try {
+          const { createProfileSource } = await import('./test-helpers/profile-source-fixture.mjs');
+          const sourceRoot = await createProfileSource(root);
           fs.mkdirSync(profileRoot);
           fs.mkdirSync(path.dirname(entry), { recursive: true });
           fs.mkdirSync(path.join(frozenRoot, 'dependencies'));

@@ -2,9 +2,9 @@ import { isAbsolute } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 import { pathToFileURL } from 'node:url';
 import { resolveCatCafeDataRoot } from '../../../../../../utils/cli-process-ownership.js';
-import { sanitizeCliStderr } from '../../../../../../utils/sanitize-cli-stderr.js';
 import { PiAcpSession } from './pi-acp-session.js';
 import { encodePiAcpRecord, PI_BRIDGE_NAME, PI_SESSION_BINDING_ERROR } from './pi-bridge-contract.js';
+import { piErrorExcerpt } from './pi-rpc-diagnostics.js';
 import { type PiRecord, record } from './pi-rpc-process.js';
 import { type PiSessionSlot, type PiSessionStorage, PiSessionStore, piDigest } from './pi-session-store.js';
 
@@ -86,8 +86,7 @@ export class PiAcpBridge {
           id: request.id,
           error: {
             code: request.method === 'session/load' ? PI_SESSION_BINDING_ERROR : -32603,
-            message:
-              error instanceof Error ? sanitizeCliStderr(error.message).slice(0, 1500) : 'Pi bridge request failed',
+            message: error instanceof Error ? piErrorExcerpt(error.message, 1500) : 'Pi bridge request failed',
           },
         });
     }
