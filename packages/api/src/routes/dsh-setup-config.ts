@@ -1,4 +1,5 @@
 import { isAlias, isMap, isSeq, parseDocument, stringify, visit, type YAMLMap } from 'yaml';
+import { assertDshCopyPolicy } from './dsh-setup-copy-policy.js';
 
 export interface DshSetupInfo {
   providers: { id: string; models: { id: string; label: string }[] }[];
@@ -51,31 +52,6 @@ function configs(source: string) {
 export function canonicalDshConfig(source: string): string {
   return JSON.stringify(configs(source));
 }
-function assertReferencesOnly(value: unknown): void {
-  if (Array.isArray(value)) {
-    value.forEach(assertReferencesOnly);
-    return;
-  }
-  if (!value || typeof value !== 'object') return;
-  for (const [key, child] of Object.entries(value)) {
-    if (
-      /(?:api[_-]?key|authorization|password|secret|cookie|^(?:access[_-]?|refresh[_-]?)?token$)/i.test(key) &&
-      key !== 'apiKeyEnv'
-    )
-      throw Error('dsh_inline_credential');
-    if (key === 'baseURL' && typeof child === 'string') {
-      const url = new URL(child);
-      if (
-        !['https:', 'http:'].includes(url.protocol) ||
-        url.username ||
-        url.password ||
-        [...url.searchParams.keys()].some((name) => /key|token|secret|password/i.test(name))
-      )
-        throw Error('dsh_inline_credential');
-    }
-    assertReferencesOnly(child);
-  }
-}
 export function inspectDshConfig(source: string): DshSetupInfo {
   const { llm, acp } = configs(source);
   return {
@@ -109,10 +85,11 @@ export function buildDshPatch(active: string, source: string, provider: string, 
   )
     throw Error('dsh_selection_invalid');
   const providers = { ...object(current.llm.providers), [provider]: object(from.llm.providers)[provider] };
-  const patch = [
-    { id: 'llm-pi-ai', config: { ...current.llm, providers } },
-    { id: 'acp', config: { ...current.acp, provider, model } },
-  ];
-  assertReferencesOnly(patch);
-  return stringify(patch);
+  const llmConfig = { ...current.llm, providers };
+  const acpConfig = { ...current.acp, provider, model };
+  assertDshCopyPolicy(llmConfig, acpConfig);
+  return stringify([
+    { id: 'llm-pi-ai', config: llmConfig },
+    { id: 'acp', config: acpConfig },
+  ]);
 }

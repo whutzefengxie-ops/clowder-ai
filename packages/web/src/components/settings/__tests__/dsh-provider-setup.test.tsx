@@ -45,15 +45,18 @@ it('reads only on request and prepares a complete route for the existing member 
   expect(setupCalls).toHaveLength(2);
   expect(JSON.parse(setupCalls[1]![1]!.body as string)).toMatchObject({ provider: 'custom', model: 'custom-model' });
 });
-it('preserves the draft and offers retry when composition changed', async () => {
+it.each([
+  ['dsh_setup_changed', '配置已变化'],
+  ['dsh_config_manual', '无法安全自动复制'],
+])('preserves the draft and explains %s', async (error, message) => {
   const prepared = vi.fn();
   vi.stubGlobal(
     'fetch',
-    vi.fn(async () => ({ ok: false, json: async () => ({ error: 'dsh_setup_changed', profiles: ['desktop'] }) })),
+    vi.fn(async () => ({ ok: false, json: async () => ({ error, profiles: ['desktop'] }) })),
   );
   await act(async () => root.render(<DshProviderSetup runtimeId="dsh" onPrepared={prepared} t={(zh) => zh} />));
   await act(async () => host.querySelector<HTMLButtonElement>('button')!.click());
-  expect(host.textContent).toContain('配置已变化');
+  expect(host.textContent).toContain(message);
   expect(prepared).not.toHaveBeenCalled();
 });
 it.each(['runtime', 'launch'])('does not apply a late preparation result after changing %s', async (change) => {

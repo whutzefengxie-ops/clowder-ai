@@ -5,7 +5,7 @@ import { buildDshPatch, composeDshProviderSource, inspectDshConfig } from '../di
 
 const active = stringify([
   { id: 'llm-pi-ai', config: { providers: { retained: { models: [{ id: 'old' }] } } } },
-  { id: 'acp', config: { provider: 'deepseek-official', model: 'official', promptTimeout: 123 } },
+  { id: 'acp', config: { provider: 'deepseek-official', model: 'official', sessionListPageSize: 123 } },
   { id: 'unrelated', config: { value: 'preserve elsewhere' } },
 ]);
 const provider = {
@@ -43,7 +43,7 @@ test('overlay copies the complete custom route, preserves active config, and sel
       },
     },
   });
-  assert.deepEqual(patch[1], { id: 'acp', config: { provider: 'custom', model: 'model/a', promptTimeout: 123 } });
+  assert.deepEqual(patch[1], { id: 'acp', config: { provider: 'custom', model: 'model/a', sessionListPageSize: 123 } });
   assert.equal(parse(active)[1].config.provider, 'deepseek-official');
 });
 test('refuses unknown route/model and ambiguous plugin IDs instead of falling back to official', () => {
@@ -54,7 +54,7 @@ test('refuses unknown route/model and ambiguous plugin IDs instead of falling ba
 });
 test('never copies inline keys or evaluates custom YAML expressions', () => {
   const secret = source.replace('apiKeyEnv: CUSTOM_KEY', 'apiKey: private-value');
-  assert.throws(() => buildDshPatch(active, secret, 'custom', 'model/a'), /credential/);
+  assert.throws(() => buildDshPatch(active, secret, 'custom', 'model/a'), /dsh_config_manual/);
   assert.throws(
     () => buildDshPatch(active, source.replace('CUSTOM_KEY', '!!js dangerous()'), 'custom', 'model/a'),
     /expression/,

@@ -22,6 +22,11 @@ Desktop、Web 和 ACP 各自的 profile 配置不会自动相互复制；home �
 已在 DSH 配置自定义 `llm-pi-ai` 接口时，可在“设置 → 成员 → 模型与工具”使用
 **DSH 自定义 LLM**，无需配置官方供应商或改绑 Host 账号：
 
+**首次接入必须确认 ACP 的实际路由，并保存所需的切换。** 安装、发现工具或导入成员不会
+自动把 Desktop/Web 的接口应用到 ACP；没有完成选择与保存时，ACP 仍可能使用官方默认。
+即使进程环境没有 `DEEPSEEK_API_KEY`，也不能据此断言官方认证不可用或自动切换供应商，
+因为 DSH 还可能从原生 credentials service 等来源解析认证。
+
 1. 成员使用原生工具配置、无单独账号绑定；展开 DSH 自定义 LLM。
 2. 选择实际保存接口的 profile（例如 `desktop`、`web` 或 `acp`），点击“读取 DSH 配置”。
    页面展示 ACP 当前路由和模型，以及来源显式声明的路由/模型；读取不会调用 LLM。
@@ -43,8 +48,24 @@ Desktop 在部分 CLI 版本中保留给 Electron，因此来源只读解析 pro
 HOME 初始化它；首次实际连接由 DSH 正常初始化。认证仍从原有 HOME 或继承环境解析，
 不迁移凭据文件，不为自定义网关补官方 key，也不会自行猜测或提高模型上下文上限。
 
+自动复制只支持明确的字段及类型，验证通过后完整保留，不静默丢弃不支持的字段：
+
+- provider：`apiKeyEnv`（POSIX 环境变量名形式的原生凭据引用）、`displayName`、`api`、
+  不含 userinfo/query/fragment 的 HTTP(S) `baseURL`、`models`、`modelOverrides`、`compat`，
+  `defaultContextWindow/defaultMaxTokens/defaultInput`、`reasoning/thinkingBudgets`、
+  `cacheRetention/transport`、各 timeout/图像预算字段及 `retryPolicy`。
+- model 与 override：`id`（仅 models）、`name`、`contextWindow/maxTokens`、`input`、
+  `reasoningEfforts`、`compat`。兼容项限已识别的布尔开关、协议枚举与数值；
+  自由字典 `chatTemplateKwargs/chatTemplateArgs` 不自动复制。
+- ACP：`provider/model/sessionListPageSize`；LLM 插件配置只复制 `providers`。
+  每个保留的 active provider 同样经过检查，不能因本次未选中而绕过。
+
+非空自定义 `headers`、内联 key、未知字段、错误字段类型、带查询参数或片段的 endpoint
+均拒绝整个自动准备操作，原生配置保持原样，按手动路径接入；空 `headers: {}` 可以保留。
+检查发生在长期 patch 写入之前，错误只返回固定代码，不回传字段值。
+
 复杂补丁、表达式、仅来自 bundle 的隐式模型、自定义启动 wrapper、非绝对 `DSH_HOME`
-或内联密钥不自动迁移，按下文手动配置。仅安装了 Host、尚未在 DSH 配置接口和凭据时，
+也不自动迁移。仅安装了 Host、尚未在 DSH 配置接口和凭据时，
 先完成 DSH 原生配置，再读取复用。此入口只接受直接本机的已登录 owner 操作。
 
 ## 1. 确定实际的启动入口和配置根

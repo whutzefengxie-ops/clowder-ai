@@ -16,6 +16,10 @@ interface Inspection {
   source: ConfigInfo;
 }
 const errors: Record<string, [string, string]> = {
+  dsh_config_manual: [
+    '配置包含自定义 header、未支持字段或内联认证，无法安全自动复制。请保留原配置，按指南在 DSH 手动配置 ACP。',
+    'Custom headers, unsupported fields or inline authentication cannot be copied safely. Preserve the configuration and set up ACP manually using the DSH guide.',
+  ],
   dsh_setup_changed: ['配置已变化，请重新读取后确认。', 'Configuration changed. Read it again before confirming.'],
   dsh_setup_profile_required: [
     '请选择已有的完整 DSH profile；先在 DSH 完成配置，再读取。',
