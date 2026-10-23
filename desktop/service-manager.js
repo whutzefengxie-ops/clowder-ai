@@ -416,6 +416,11 @@ class ServiceManager {
   _buildApiEnv(userDataDir) {
     const salt = this._getOrCreateTelemetrySalt(userDataDir);
     return {
+      // Binary lookup and runtime-path redirection are one API contract.
+      // Keep writable project data outside the installation and respect an
+      // ordinary deployment's existing explicit workspace selection.
+      CAT_CAFE_RUNTIME_ROOT: this.root,
+      CAT_CAFE_WORKSPACE_ROOT: process.env.CAT_CAFE_WORKSPACE_ROOT?.trim() || path.join(userDataDir, 'project'),
       ...(resolveDesktopRuntime().instanceRoot
         ? {
             CAT_CAFE_CONFIG_ROOT: path.join(userDataDir, 'project'),
@@ -652,9 +657,6 @@ class ServiceManager {
       : process.env;
     const env = {
       ...inherited,
-      // MCP executables belong to the installation, never the writable
-      // project's optional packages junction (including ordinary installs).
-      CAT_CAFE_RUNTIME_ROOT: this.root,
       ...(instanceRoot
         ? {
             CAT_CAFE_DESKTOP_INSTANCE_ROOT: instanceRoot,

@@ -89,7 +89,9 @@ module.exports = async function verifyApiConsumers({ repoRoot, projectDir, root 
   const { loadA2aBallCheck } = await load('domains/cats/services/context/prompt-template-loader.js');
   assert.ok(loadA2aBallCheck().length > 100);
   const { resolveL0CompilerScriptPath } = await load('domains/cats/services/agents/providers/l0-compiler.js');
-  assert.equal(resolveL0CompilerScriptPath(projectDir), path.join(repoRoot, 'scripts/compile-system-prompt-l0.mjs'));
+  const compiler = resolveL0CompilerScriptPath(projectDir);
+  assert.equal(fs.realpathSync(compiler), fs.realpathSync(path.join(repoRoot, 'scripts/compile-system-prompt-l0.mjs')));
+  assert.ok(fs.readFileSync(compiler).length > 100);
   const { resolveBuiltinCatCafeServer } = await load('domains/cats/services/agents/providers/acp/acp-mcp-resolver.js');
   const mcp = resolveBuiltinCatCafeServer(projectDir, 'cat-cafe-collab');
   assert.equal(mcp.args[0], path.join(repoRoot, 'packages/mcp-server/dist/collab.js'));
