@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { NativePartnerCard } from '../../first-run-quest/NativePartnerCard';
+import { nativeRuntimeSelectable } from '../../first-run-quest/native-onboarding';
 import { needsExistingDshRepair } from '../../first-run-quest/native-partner-persistence';
 import { useNativeOnboarding } from '../../first-run-quest/useNativeOnboarding';
 import { finishOnboardingNavigation } from '../../onboarding-demo/onboarding-performance';
@@ -16,21 +17,17 @@ export function RecommendedTeamSetup({
   onBack: () => void;
 }) {
   const setup = useNativeOnboarding(true, onCreated, 'members');
-  const [invalid, setInvalid] = useState<Record<string, boolean>>({});
   const { draft, loading, busy, error, errorStage } = setup;
   useEffect(() => finishOnboardingNavigation('team-setup', 'mounted'), []);
   useEffect(() => {
     if (!loading) finishOnboardingNavigation('team-setup', 'ready');
   }, [loading]);
-  const available =
-    draft?.partners.filter((p) => p.runtime.installed && (p.runtime.clientId !== 'acp' || p.runtime.acp)) ?? [];
+  const available = draft?.partners.filter((p) => nativeRuntimeSelectable(p.runtime, p.form)) ?? [];
   const unavailable = draft?.partners.filter((p) => !available.includes(p)) ?? [];
   const selected = available.filter((p) => p.selected);
   const pending = selected.filter((p) => needsExistingDshRepair(p) || (!p.existingId && !draft?.created[p.id]));
   const repairing = pending.some(needsExistingDshRepair);
-  const invalidSelection = selected.some(
-    (p) => invalid[p.id] || !p.form.displayName.trim() || Boolean(p.recoverable && !p.existingId),
-  );
+  const invalidSelection = selected.some((p) => !p.form.displayName.trim() || Boolean(p.recoverable && !p.existingId));
   const card = (partner: NonNullable<typeof draft>['partners'][number]) => (
     <NativePartnerCard
       key={partner.id}
@@ -39,9 +36,6 @@ export function RecommendedTeamSetup({
       created={!needsExistingDshRepair(partner) && Boolean(partner.existingId || draft?.created[partner.id])}
       disabled={Boolean(busy)}
       patch={(change) => setup.patchPartner(partner.id, change)}
-      onValidityChange={(valid) =>
-        setInvalid((values) => (values[partner.id] === !valid ? values : { ...values, [partner.id]: !valid }))
-      }
     />
   );
   return (

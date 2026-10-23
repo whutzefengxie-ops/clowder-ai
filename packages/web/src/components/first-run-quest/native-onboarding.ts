@@ -24,7 +24,7 @@ export interface NativePartner {
   /** A missing-CLI catalog upgrade retained this pending CodeAgent role, independently of its launch descriptor. */
   retainedCodeagentRole?: string;
   existingId?: string;
-  /** Explicit route confirmation by the preparation flow; never inferred from launch arguments. */
+  /** User-confirmed creation prepared this route; never inferred from launch arguments. */
   dshSetupPrepared?: boolean;
   dshSetupBaseline?: CatData;
   missingExisting?: boolean;
@@ -46,7 +46,7 @@ export const newNativeRequestKey = () =>
 export function nativeRuntimeSelectable(runtime: RuntimeChoice, form?: HubCatEditorFormState): boolean {
   if (!runtime.installed || (runtime.clientId === 'acp' && !runtime.acp)) return false;
   if (form && !usesDetectedRuntimeConfiguration(form, runtime)) return true;
-  if (runtime.dshSetupRequired) return false;
+  if (runtime.dshSetupRequired) return runtime.dshSetup?.status === 'configured';
   if (['openai', 'anthropic'].includes(runtime.clientId) && runtime.readiness) {
     return runtime.readiness.status === 'configured';
   }
@@ -90,6 +90,7 @@ export function recommendNativePartners(
             installed: existingBinding.installed,
             discoveryStatus: existingBinding.discoveryStatus,
             dshSetupRequired: existingBinding.dshSetupRequired,
+            dshSetup: existingBinding.dshSetup,
             models: existingBinding.models,
           }
         : candidate;

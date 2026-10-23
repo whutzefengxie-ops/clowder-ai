@@ -19,6 +19,10 @@ export interface RuntimeChoice {
   readiness?: NativeLoginState;
   /** An installed DSH default still needs an explicit usable route confirmation. */
   dshSetupRequired?: boolean;
+  /** Read-only route evidence; member-only preparation happens after the user confirms creation. */
+  dshSetup?:
+    | { status: 'configured'; sourceProfile: string; revision: string; provider: string; model: string }
+    | { status: 'unavailable'; error: string };
   discoveryStatus?: 'configured' | 'acp_profile_missing' | 'acp_profile_invalid' | 'adapter_missing' | 'not_installed';
   models: string[];
   configuredModel?: string;

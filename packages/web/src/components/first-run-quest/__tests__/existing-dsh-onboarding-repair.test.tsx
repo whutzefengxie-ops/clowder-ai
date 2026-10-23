@@ -18,7 +18,20 @@ const onCreated = vi.fn();
 
 function runtimes() {
   const required = !persisted.acp?.startupArgs.includes('--patch');
-  const base = { harnessId: 'dsh', label: 'DSH', clientId: 'acp', installed: true, models: [] };
+  const base = {
+    harnessId: 'dsh',
+    label: 'DSH',
+    clientId: 'acp',
+    installed: true,
+    models: [],
+    dshSetup: {
+      status: 'configured',
+      sourceProfile: 'desktop',
+      revision: 'source-revision',
+      provider: 'company',
+      model: 'private-model',
+    },
+  };
   return [
     {
       ...base,
@@ -141,8 +154,7 @@ const writes = () =>
 it('confirms the Desktop route and repairs the original member via revision-protected PATCH, then reopens without preparation', async () => {
   const original = structuredClone(persisted);
   await mount();
-  expect(host.textContent).toContain('已读取配置来源：desktop');
-  await click('使用此配置');
+  expect(host.textContent).toContain('复用 desktop 配置');
   await click(/保存.*配置|查看我的团队|一键创建/);
   const patches = writes().filter(([path, init]) => path === '/api/cats/existing-whale' && init?.method === 'PATCH');
   expect(patches).toHaveLength(1);
@@ -162,7 +174,7 @@ it('confirms the Desktop route and repairs the original member via revision-prot
   vi.mocked(apiFetch).mockClear();
   root = createRoot(host);
   await mount();
-  expect(host.textContent).not.toContain('需要确认可用的供应商路由');
+  expect(host.querySelector('fieldset')).toBeNull();
   expect(vi.mocked(apiFetch).mock.calls.some(([path]) => path.endsWith('/inspect') || path.endsWith('/prepare'))).toBe(
     false,
   );
@@ -171,7 +183,6 @@ it('confirms the Desktop route and repairs the original member via revision-prot
 it('keeps the original ID and prepared draft after a write failure and retries without creating a member', async () => {
   failPatch = 1;
   await mount();
-  await click('使用此配置');
   await click(/保存.*配置|查看我的团队|一键创建/);
   expect(host.textContent).toContain('temporary_write_failure');
   expect(persisted.acp?.startupArgs).toEqual(['--profile', 'acp']);
@@ -183,7 +194,6 @@ it('keeps the original ID and prepared draft after a write failure and retries w
 
 it('does not overwrite a concurrent revision and keeps the pending repair visible', async () => {
   await mount();
-  await click('使用此配置');
   persisted = { ...persisted, configurationRevision: 'c'.repeat(64), nickname: 'Owner concurrent name' };
   await click(/保存.*配置|查看我的团队|一键创建/);
   expect(host.textContent).toMatch(/conflict|已.*变更|重新检测/);
@@ -191,14 +201,13 @@ it('does not overwrite a concurrent revision and keeps the pending repair visibl
   expect(persisted.acp?.startupArgs).toEqual(['--profile', 'acp']);
   expect(onCreated).not.toHaveBeenCalled();
   await click('重新检测');
-  expect(host.textContent).toContain('需要确认可用的供应商路由');
-  expect(host.textContent).not.toContain('保存 1 位伙伴配置');
+  expect(host.textContent).toContain('复用 desktop 配置');
+  expect(host.textContent).toContain('保存 1 位伙伴配置');
 });
 
 it('recovers a committed PATCH whose response was lost by reading back the original member', async () => {
   losePatchResponse = true;
   await mount();
-  await click('使用此配置');
   await click(/保存.*配置|查看我的团队|一键创建/);
   expect(host.textContent).toContain('response_lost');
   await click(/继续创建|保存.*配置|查看我的团队/);
@@ -211,8 +220,7 @@ it('recovers a committed PATCH whose response was lost by reading back the origi
 
 it('allows the existing member repair through the real goal wizard without creating another member', async () => {
   await act(async () => root.render(<FirstRunQuestWizard open onClose={vi.fn()} onCreated={onCreated} />));
-  expect(document.body.textContent).toContain('已读取配置来源：desktop');
-  await click('使用此配置');
+  expect(document.body.textContent).toContain('复用 desktop 配置');
   await click(/下一步.*1.*伙伴/);
   await click('保存伙伴，前往对话');
   expect(persisted.acp?.startupArgs).toEqual(args);

@@ -24,6 +24,7 @@ import {
 } from './native-partner-persistence';
 import { parkedNativePartners, restoredNativeLead, uniqueIntranetPartners } from './native-runtime-recommendations';
 import { buildNativeTeamGoal, orderGoalPartners } from './native-team-goal';
+import { prepareNativePartner } from './prepare-native-partner';
 import { prepareFirstRunEntry } from './prepareFirstRunEntry';
 import type { TemplateCard } from './TemplateStep';
 
@@ -188,7 +189,10 @@ export function useNativeOnboarding(
               ? { recoverable: { id: savedMember.id, form: initialState(savedMember) } }
               : {}),
             selected:
-              nativeRuntimeSelectable(partner.runtime, form) && (!previous.runtime?.installed || previous.selected),
+              nativeRuntimeSelectable(partner.runtime, form) &&
+              (!previous.runtime?.installed ||
+                !nativeRuntimeSelectable(previous.runtime, previous.form) ||
+                previous.selected),
             form,
           };
         });
@@ -265,11 +269,14 @@ export function useNativeOnboarding(
         await prepareFirstRunEntry();
       }
       for (const selection of selected) {
-        const partner = progress.partners.find((p) => p.id === selection.id) ?? selection;
+        let partner = progress.partners.find((p) => p.id === selection.id) ?? selection;
         const id = partner.id;
         if (progress.created[id] && !needsExistingDshRepair(partner)) continue;
         setBusy(`正在添加 ${partner.form.displayName}…`);
         pendingPartner = partner;
+        partner = await prepareNativePartner(partner, headers, readJson);
+        progress = { ...progress, partners: progress.partners.map((p) => (p.id === id ? partner : p)) };
+        persist(progress);
         const result = await saveNativePartner(partner, current.journeyId, headers, readJson);
         pendingPartner = undefined;
         progress = {
