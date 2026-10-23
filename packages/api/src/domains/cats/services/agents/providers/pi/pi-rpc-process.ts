@@ -2,8 +2,7 @@ import { type ChildProcessWithoutNullStreams, execFile, spawn } from 'node:child
 import { randomUUID } from 'node:crypto';
 import { StringDecoder } from 'node:string_decoder';
 import { resolveWindowsSpawnPlan } from '../../../../../../utils/cli-spawn-win.js';
-import { sanitizeCliStderr } from '../../../../../../utils/sanitize-cli-stderr.js';
-import { PiRpcDiagnostics } from './pi-rpc-diagnostics.js';
+import { PiRpcDiagnostics, piErrorExcerpt } from './pi-rpc-diagnostics.js';
 
 export type PiRecord = Record<string, unknown>;
 export const record = (value: unknown): PiRecord =>
@@ -101,7 +100,7 @@ export class PiRpcProcess {
       else if (event.success === false)
         pending.reject(
           new PiRpcRequestRejectedError(
-            `Pi rejected the RPC request: ${typeof event.error === 'string' ? sanitizeCliStderr(event.error).slice(0, 1000) : 'check its model and login configuration'}`,
+            `Pi rejected the RPC request: ${typeof event.error === 'string' ? piErrorExcerpt(event.error) : 'check its model and login configuration'}`,
           ),
         );
       else pending.reject(new Error('Pi returned an invalid RPC response'));

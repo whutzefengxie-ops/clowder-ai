@@ -2,6 +2,7 @@ import { closeSync, lstatSync, openSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join, toNamespacedPath } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { piErrorExcerpt } from './pi-rpc-diagnostics.js';
 import { assertPiHistoryIntegrity } from './pi-session-integrity.js';
 import type { PiSessionSlot } from './pi-session-store.js';
 
@@ -45,6 +46,6 @@ try {
     error instanceof Error && /^(?:Pi |Persistent Pi requires)/.test(error.message)
       ? error.message
       : 'Pi persistent writer could not start; check Node 24, storage permissions and the installed Pi CLI';
-  process.stderr.write(`${message}\n`);
+  process.stderr.write(`${piErrorExcerpt(message)}\n`);
   process.exitCode = 1;
 }

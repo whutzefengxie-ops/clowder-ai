@@ -1,4 +1,4 @@
-import { sanitizeCliStderr } from '../../../../../../utils/sanitize-cli-stderr.js';
+import { piErrorExcerpt } from './pi-rpc-diagnostics.js';
 import { type PiRecord, record } from './pi-rpc-process.js';
 
 /** Translates progress only. Neither prompt admission nor agent_end is a terminal success fence. */
@@ -59,9 +59,7 @@ export class PiAcpEvents {
     this.assistantEnds++;
     if (message.stopReason === 'error' || message.stopReason === 'aborted') {
       const detail =
-        typeof message.errorMessage === 'string'
-          ? sanitizeCliStderr(message.errorMessage).slice(0, 1_000)
-          : 'Provider request failed';
+        typeof message.errorMessage === 'string' ? piErrorExcerpt(message.errorMessage) : 'Provider request failed';
       this.failure = new Error(`Pi: ${detail}`);
       return;
     }
