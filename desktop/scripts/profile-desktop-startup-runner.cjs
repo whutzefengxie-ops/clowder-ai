@@ -2,6 +2,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { setTimeout: delay } = require('node:timers/promises');
 const { pathToFileURL } = require('node:url');
+const { copyProfileResources } = require('./profile-resources.cjs');
 
 const options = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
 const instance = path.join(options.profileRoot, 'instance');
@@ -19,8 +20,7 @@ for (const name of ['web', 'mcp-server']) {
   if (fs.existsSync(from)) fs.symlinkSync(from, path.join(app, 'packages', name), 'junction');
 }
 fs.symlinkSync(path.join(options.frozenRoot, 'dependencies'), path.join(app, 'node_modules'), 'junction');
-for (const name of ['assets', 'docs', 'guides', 'cat-cafe-skills'])
-  fs.cpSync(path.join(options.sourceRoot, name), path.join(app, name), { recursive: true, dereference: true });
+copyProfileResources(options.sourceRoot, app);
 for (const name of fs.readdirSync(path.join(options.sourceRoot, 'scripts'))) {
   if (name === 'node_modules') continue;
   const from = path.join(options.sourceRoot, 'scripts', name);

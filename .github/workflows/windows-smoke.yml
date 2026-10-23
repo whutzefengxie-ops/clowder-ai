@@ -110,6 +110,7 @@ jobs:
           desktop/api-startup-cold-budget.test.mjs
           desktop/shutdown-controller.test.js
           desktop/profile-desktop-startup.test.mjs
+          desktop/profile-resources.test.cjs
           desktop/profile-mirror-cancellation.test.js
           desktop/api-puppeteer-lazy-boundary.test.mjs
           packages/api/test/lazy-heavy-imports.test.js
