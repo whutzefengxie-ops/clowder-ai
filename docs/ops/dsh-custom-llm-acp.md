@@ -66,7 +66,7 @@ npm shim，不能把 ASAR 内的 `cli.js` 交给系统 Node。未知自定义 wr
 检测确认。已由 Host 生成并持久保存、路由和凭据仍有效的专用 patch 会继续复用，不要求每次配置。
 
 Clowder 在 Host 持久配置根的 `.cat-cafe/dsh-acp/` 保存专用配置快照，并在原有
-`--patch` 之后加载。它完整保留所选 provider 的模型元数据和兼容项，以及当前 ACP 的
+`--patch` 之后加载。在明确支持并通过类型校验的范围内，它完整保留所选 provider 的模型元数据和兼容项，以及当前 ACP 的
 其他配置和 provider 条目。新路径让已有连接池识别变更，正在运行的回合可正常排空；
 旧会话和原生配置不被清空。回退可恢复成员原来的启动参数和模型选择，旧 patch 保留。
 源 profile 后续改动不会自动覆盖此快照，需要重新读取、选择和保存。
@@ -77,8 +77,26 @@ Desktop 在部分 CLI 版本中保留给 Electron，因此来源只读解析 pro
 HOME 初始化它；首次实际连接由 DSH 正常初始化。认证仍从原有 HOME 或继承环境解析，
 不迁移凭据文件，不为自定义网关补官方 key，也不会自行猜测或提高模型上下文上限。
 
-复杂补丁、表达式、仅来自 bundle 的隐式模型、自定义启动 wrapper、非绝对 `DSH_HOME`
-或内联密钥不自动迁移，按下文手动配置。仅安装了 Host、尚未在 DSH 配置接口和凭据时，
+自动复制只支持明确的字段及类型，验证通过后完整保留，不静默丢弃不支持的字段：
+
+- `llm-pi-ai` provider：`apiKeyEnv` 凭据引用、`displayName/api/baseURL`、模型及 override、
+  已识别的 `compat`、上下文/输出上限、输入类型、思考预算、缓存、transport、timeout/图像预算与重试设置。
+  HTTP(S) endpoint 不含 userinfo、query 或 fragment。
+- 模型及 override：`id`（仅 models）、`name`、`contextWindow/maxTokens/input/reasoningEfforts/compat`。
+  兼容项只允许已识别的布尔开关、协议枚举与数值，自由模板字典不自动复制。
+- ACP：`provider/model/sessionListPageSize`；`llm-pi-ai` 插件只复制 `providers`。
+  全部保留的 active providers 同样受检，不能因本次未选中而绕过。
+- 官方 `llm-deepseek` 使用独立类型约束：凭据引用、无认证参数的 endpoint、思考模式/强度、
+  模型元数据、上下文/输出上限、图像与文件预算/时限、重试设置。当前与来源合并后的全部字段都要通过校验。
+
+非空自定义 `headers`、内联 key、未知字段、错误类型、带 query/fragment 的 endpoint
+会拒绝整个自动准备，保留原文件并转手动路径；空 `headers: {}` 可以保留。
+检查发生在长期 patch 写入之前，错误只返回固定代码，不回传私有字段和值。
+自动检测还须确认同一默认原生 local credentials resolver；改过凭据位置、替换/禁用 resolver
+或无法验证的文档保持手动接入，不读取未知凭据文件或猜用另一份认证。
+
+复杂补丁、表达式、既无显式模型也无已保存选择的隐式模型、未知启动 wrapper、非绝对 `DSH_HOME`
+也不自动迁移，按下文手动配置。仅安装了 Host、尚未在 DSH 配置接口和凭据时，
 先完成 DSH 原生配置，再读取复用。此入口只接受直接本机的已登录 owner 操作。
 
 ## 1. 确定实际的启动入口和配置根

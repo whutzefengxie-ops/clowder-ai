@@ -62,6 +62,18 @@ it('preserves the draft and offers retry when composition changed', async () => 
   expect(host.textContent).toContain('配置已变化');
   expect(prepared).not.toHaveBeenCalled();
 });
+it('explains unsupported automatic copies without replacing the member draft', async () => {
+  const prepared = vi.fn();
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => new Response(JSON.stringify({ error: 'dsh_config_manual' }), { status: 400 })),
+  );
+  await act(async () => root.render(<DshProviderSetup runtimeId="dsh" onPrepared={prepared} t={(zh) => zh} />));
+  await act(async () => host.querySelector<HTMLButtonElement>('button')!.click());
+  expect(host.querySelector('[role=alert]')?.textContent).toContain('无法安全自动复制');
+  expect(host.querySelector('[role=alert]')?.textContent).toContain('保留原配置');
+  expect(prepared).not.toHaveBeenCalled();
+});
 it.each(['runtime', 'launch'])('does not apply a late preparation result after changing %s', async (change) => {
   const prepared = vi.fn();
   let resolvePreparation: ((value: Response) => void) | undefined;
