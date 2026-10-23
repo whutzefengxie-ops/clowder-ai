@@ -94,7 +94,7 @@ function Get-OwnedInstallProcesses {
       }
       continue
     }
-    if ($processPath.StartsWith($installPrefix, [System.StringComparison]::OrdinalIgnoreCase)) { $candidate }
+    if ($processPath.StartsWith($installPrefix, [System.StringComparison]::OrdinalIgnoreCase) -and (Test-CandidateStillRunning $candidate.Id)) { $candidate }
   }
 }
 if ($InspectOnly) {

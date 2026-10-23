@@ -6,6 +6,7 @@ const vm = require('node:vm');
 const { test } = require('node:test');
 const { spawn, spawnSync, execFileSync } = require('node:child_process');
 const { createWindowRecoveryController } = require('./window-recovery');
+const { mockedInstallInspection } = require('./installation-lifecycle-fixture');
 
 test('second-instance shutdown accepts only the same installation and user-data identity', () => {
   const source = fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8');
@@ -82,72 +83,6 @@ test('second-instance renderer recreation reports failures instead of creating a
   assert.equal(reported, failure);
 });
 
-function mockedInstallInspection({
-  candidateName,
-  candidatePath,
-  unreadable = false,
-  inspectOnly = true,
-  delayedExit = false,
-  waitAcknowledgesExit = true,
-}) {
-  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'install-enumeration-'));
-  const appDir = path.join(base, 'install');
-  fs.mkdirSync(appDir);
-  fs.writeFileSync(path.join(appDir, 'probe.exe'), 'Only filename inventory is used; this fixture is never executed.');
-  const marker = path.join(base, 'unexpected-stop');
-  const waitMarker = path.join(base, 'owned-process-waited');
-  const production = fs.readFileSync(path.join(__dirname, 'scripts/stop-installed-desktop.ps1'), 'utf8');
-  const imageCall = '[InstallPathIdentity]::ProcessImage($candidate.Id)';
-  assert.equal(production.split(imageCall).length, 2, 'replace only the native image lookup for fictitious PIDs');
-  const fixtureScript = path.join(base, 'stop-with-fixture-image.ps1');
-  fs.writeFileSync(fixtureScript, production.replace(imageCall, '$candidate.Path'));
-  const quote = (value) => `'${value.replace(/'/g, "''")}'`;
-  const wrapper = path.join(base, 'inspect.ps1');
-  fs.writeFileSync(
-    wrapper,
-    [
-      `$global:fixtureProcess = [pscustomobject]@{ Id = 2147483000; ProcessName = ${quote(candidateName)} }`,
-      '$global:fixtureVisible = $true',
-      unreadable
-        ? "$global:fixtureProcess | Add-Member ScriptProperty Path { throw 'Controlled protected process path' }"
-        : `$global:fixtureProcess | Add-Member NoteProperty Path ${quote(delayedExit ? path.join(appDir, 'probe.exe') : (candidatePath ?? path.join(base, 'missing.exe')))}`,
-      'function Get-Process { [CmdletBinding()] param([int]$Id) if ($global:fixtureVisible) { $global:fixtureProcess } }',
-      'function Stop-Process { [CmdletBinding()] param([Parameter(ValueFromPipeline)]$InputObject, [switch]$Force) process {',
-      `  [IO.File]::WriteAllText(${quote(marker)}, 'called')`,
-      delayedExit
-        ? "  if (-not [object]::ReferenceEquals(@($InputObject)[0], $global:fixtureProcess)) { throw 'Wrong stop object' }"
-        : "  throw 'No process may be stopped by this fixture'",
-      '} }',
-      'function Wait-Process { [CmdletBinding()] param([Parameter(ValueFromPipeline)]$InputObject, [int]$Timeout) process {',
-      "  if (@($InputObject).Count -ne 1 -or -not [object]::ReferenceEquals(@($InputObject)[0], $global:fixtureProcess)) { throw 'Wrong wait object' }",
-      `  if ($Timeout -ne 5 -or -not (Test-Path -LiteralPath ${quote(marker)})) { throw 'Wait must follow stop and be bounded' }`,
-      `  [IO.File]::WriteAllText(${quote(waitMarker)}, 'called')`,
-      ...(waitAcknowledgesExit ? ['$global:fixtureVisible = $false'] : []),
-      '} }',
-      `& ${quote(fixtureScript)} -AppDir ${quote(appDir)} -WaitSeconds 0 ${inspectOnly ? '-InspectOnly' : ''}`,
-      'exit $LASTEXITCODE',
-    ].join('\r\n'),
-  );
-  try {
-    let status = 0,
-      stderr = '';
-    try {
-      execFileSync('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', wrapper], {
-        encoding: 'utf8',
-        windowsHide: true,
-        stdio: 'pipe',
-        timeout: 15000,
-      });
-    } catch (error) {
-      status = error.status;
-      stderr = error.stderr?.toString() ?? '';
-    }
-    return { status, stderr, stopped: fs.existsSync(marker), waited: fs.existsSync(waitMarker) };
-  } finally {
-    fs.rmSync(base, { recursive: true, force: true });
-  }
-}
-
 test(
   'Windows inspection ignores unrelated process paths that cannot be canonicalized',
   { skip: process.platform !== 'win32' },
@@ -175,6 +110,23 @@ test(
     for (const unreadable of [false, true]) {
       const result = mockedInstallInspection({ candidateName: 'probe', unreadable, inspectOnly: false });
       assert.equal(result.status, 1, 'an unresolved candidate is not proof that the installation stopped');
+      assert.equal(result.stopped, false);
+    }
+  },
+);
+
+test(
+  'successful owned image resolution excludes verified exited candidates and retains live or unknown candidates',
+  { skip: process.platform !== 'win32' },
+  () => {
+    for (const [exitState, expected] of [
+      ['exited', ''],
+      ['live', '2147483000'],
+      ['unknown', '2147483000'],
+    ]) {
+      const result = mockedInstallInspection({ candidateName: 'probe', delayedExit: true, exitState });
+      assert.equal(result.status, 0, result.stderr);
+      assert.equal(result.stdout.trim(), expected, exitState);
       assert.equal(result.stopped, false);
     }
   },
