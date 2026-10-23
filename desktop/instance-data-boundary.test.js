@@ -152,7 +152,8 @@ test(
       const body = JSON.stringify(identity(data));
       fs.writeFileSync(legacy, body);
       fs.writeFileSync(path.join(data, 'history.json'), 'protected history');
-      configure(install, data, ['-ValidateOnly']);
+      // InitializeUninstall validates the saved marker without re-requesting its root.
+      configure(install, undefined, ['-ValidateOnly']);
       assert.equal(fs.readFileSync(legacy, 'utf8'), body);
       assert.deepEqual(fs.readdirSync(data), ['history.json']);
       assert.equal(fs.readFileSync(path.join(data, 'history.json'), 'utf8'), 'protected history');
