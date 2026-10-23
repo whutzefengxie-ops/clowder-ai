@@ -129,142 +129,150 @@ export function DshProviderSetup({
   const routes = inspection?.source.providers ?? [];
   const models = routes.find((p) => p.id === provider)?.models ?? [];
   return (
-    <details className="rounded-xl border border-[var(--console-border-soft)] p-4 text-sm">
-      <summary className="cursor-pointer font-medium">{t('DSH 自定义 LLM', 'DSH custom LLM')}</summary>
-      <p className="my-3 text-cafe-secondary">
+    <>
+      <p className="text-sm text-cafe-secondary">
         {t(
-          '复用 DSH 已配置的接口，只为此成员生成专用配置。原生配置、认证和历史保留；无需配置官方供应商。',
-          'Reuse a configured DSH provider for this teammate. Native configuration, credentials and history are preserved. No official provider is required.',
+          '首次使用自定义接口时，请在下方选择路由并保存成员。检测到 DSH 不代表 ACP 已切换到该接口。',
+          'Before first use, choose your custom provider below and save the teammate. Detecting DSH does not switch its ACP provider.',
         )}
       </p>
-      <a
-        className="inline-flex min-h-10 items-center text-cafe-accent"
-        href="https://github.com/zts212653/clowder-ai/blob/main/docs/ops/dsh-custom-llm-acp.md"
-        target="_blank"
-        rel="noreferrer"
-      >
-        {t('查看 DSH 配置指南', 'DSH configuration guide')}
-      </a>
-      <fieldset disabled={busy} className="min-w-0">
-        <SelectField
-          label={t('读取配置来源', 'Read configuration from')}
-          value={sourceProfile}
-          options={profiles.map((value) => ({ value, label: value }))}
-          onChange={(value) => {
-            setSourceProfile(value);
-            setInspection(undefined);
-            setReceipt('');
-            setError('');
-            setTested(false);
-          }}
-        />
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => void run('inspect')}
-          className="my-2 min-h-10 text-cafe-accent disabled:opacity-50"
+      <details className="rounded-xl border border-[var(--console-border-soft)] p-4 text-sm">
+        <summary className="cursor-pointer font-medium">{t('DSH 自定义 LLM', 'DSH custom LLM')}</summary>
+        <p className="my-3 text-cafe-secondary">
+          {t(
+            '复用 DSH 已配置的接口，只为此成员生成专用配置。原生配置、认证和历史保留；无需配置官方供应商。',
+            'Reuse a configured DSH provider for this teammate. Native configuration, credentials and history are preserved. No official provider is required.',
+          )}
+        </p>
+        <a
+          className="inline-flex min-h-10 items-center text-cafe-accent"
+          href="https://github.com/zts212653/clowder-ai/blob/main/docs/ops/dsh-custom-llm-acp.md"
+          target="_blank"
+          rel="noreferrer"
         >
-          {busy ? t('处理中…', 'Working…') : t('读取 DSH 配置', 'Read DSH configuration')}
-        </button>
-        {inspection && (
-          <div className="space-y-3">
-            <p>
-              {t('当前 ACP 选择', 'Current ACP selection')}：{inspection.active.provider ?? '—'} /{' '}
-              {inspection.active.model ?? '—'}
-            </p>
-            {routes.length ? (
-              <>
-                <SelectField
-                  label={t('供应商路由', 'Provider route')}
-                  value={provider}
-                  options={routes.map((p) => ({ value: p.id, label: p.id }))}
-                  onChange={(value) => {
-                    setProvider(value);
-                    setModel(routes.find((p) => p.id === value)?.models[0]?.id ?? '');
-                    setReceipt('');
-                    setTested(false);
-                  }}
-                />
-                <SelectField
-                  label={t('DSH 模型', 'DSH model')}
-                  value={model}
-                  options={models.map((m) => ({ value: m.id, label: m.label }))}
-                  onChange={(value) => {
-                    setModel(value);
-                    setReceipt('');
-                    setTested(false);
-                  }}
-                />
-                {!models.length && (
-                  <p className="text-cafe-secondary">
-                    {t(
-                      '此路由没有显式模型清单，请先在 DSH 配置模型。',
-                      'Configure an explicit model list in DSH first.',
-                    )}
-                  </p>
-                )}
-                <button
-                  type="button"
-                  disabled={busy || !model}
-                  onClick={() => void run('prepare')}
-                  className="min-h-10 text-cafe-accent disabled:opacity-50"
-                >
-                  {t('使用此配置', 'Use this configuration')}
-                </button>
-              </>
-            ) : (
-              <p className="text-cafe-secondary">
+          {t('查看 DSH 配置指南', 'DSH configuration guide')}
+        </a>
+        <fieldset disabled={busy} className="min-w-0">
+          <SelectField
+            label={t('读取配置来源', 'Read configuration from')}
+            value={sourceProfile}
+            options={profiles.map((value) => ({ value, label: value }))}
+            onChange={(value) => {
+              setSourceProfile(value);
+              setInspection(undefined);
+              setReceipt('');
+              setError('');
+              setTested(false);
+            }}
+          />
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void run('inspect')}
+            className="my-2 min-h-10 text-cafe-accent disabled:opacity-50"
+          >
+            {busy ? t('处理中…', 'Working…') : t('读取 DSH 配置', 'Read DSH configuration')}
+          </button>
+          {inspection && (
+            <div className="space-y-3">
+              <p>
+                {t('当前 ACP 选择', 'Current ACP selection')}：{inspection.active.provider ?? '—'} /{' '}
+                {inspection.active.model ?? '—'}
+              </p>
+              {routes.length ? (
+                <>
+                  <SelectField
+                    label={t('供应商路由', 'Provider route')}
+                    value={provider}
+                    options={routes.map((p) => ({ value: p.id, label: p.id }))}
+                    onChange={(value) => {
+                      setProvider(value);
+                      setModel(routes.find((p) => p.id === value)?.models[0]?.id ?? '');
+                      setReceipt('');
+                      setTested(false);
+                    }}
+                  />
+                  <SelectField
+                    label={t('DSH 模型', 'DSH model')}
+                    value={model}
+                    options={models.map((m) => ({ value: m.id, label: m.label }))}
+                    onChange={(value) => {
+                      setModel(value);
+                      setReceipt('');
+                      setTested(false);
+                    }}
+                  />
+                  {!models.length && (
+                    <p className="text-cafe-secondary">
+                      {t(
+                        '此路由没有显式模型清单，请先在 DSH 配置模型。',
+                        'Configure an explicit model list in DSH first.',
+                      )}
+                    </p>
+                  )}
+                  <button
+                    type="button"
+                    disabled={busy || !model}
+                    onClick={() => void run('prepare')}
+                    className="min-h-10 text-cafe-accent disabled:opacity-50"
+                  >
+                    {t('使用此配置', 'Use this configuration')}
+                  </button>
+                </>
+              ) : (
+                <p className="text-cafe-secondary">
+                  {t(
+                    '此来源没有可复用的自定义接口。请选择 Desktop/Web 使用的 profile；如尚未配置，请先在 DSH 添加接口和凭据。',
+                    'No reusable custom providers here. Choose your Desktop/Web profile, or configure a provider and credential in DSH first.',
+                  )}
+                </p>
+              )}
+            </div>
+          )}
+          {receipt && (
+            <div role="status" className="mt-3 space-y-2 text-cafe-secondary">
+              <p>
                 {t(
-                  '此来源没有可复用的自定义接口。请选择 Desktop/Web 使用的 profile；如尚未配置，请先在 DSH 添加接口和凭据。',
-                  'No reusable custom providers here. Choose your Desktop/Web profile, or configure a provider and credential in DSH first.',
+                  '已加入草稿，请保存成员后使用。此配置只保留凭据引用，仍由原有 DSH 解析认证。',
+                  'Added to the draft. Save the teammate to apply. Credentials remain resolved by DSH.',
                 )}
               </p>
-            )}
-          </div>
-        )}
-        {receipt && (
-          <div role="status" className="mt-3 space-y-2 text-cafe-secondary">
-            <p>
-              {t(
-                '已加入草稿，请保存成员后使用。此配置只保留凭据引用，仍由原有 DSH 解析认证。',
-                'Added to the draft. Save the teammate to apply. Credentials remain resolved by DSH.',
-              )}
-            </p>
-            <p>
-              {t(
-                '可选验证会向模型发送一次请求，可能产生费用，并保留 DSH 测试会话。',
-                'Optional verification sends one model request, may incur a charge, and retains a DSH test session.',
-              )}
-            </p>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void run('test')}
-              className="min-h-10 text-cafe-accent disabled:opacity-50"
-            >
-              {t('发送一次请求验证此配置', 'Send one request to test this configuration')}
-            </button>
-          </div>
-        )}
-        {tested && (
-          <p role="status" className="mt-2 text-cafe-secondary">
-            {t(
-              '已收到模型文本回复。成员保存后的首轮和续聊仍请在聊天中确认。',
-              'Model text received. Confirm first turn and continuation in chat after saving.',
-            )}
-          </p>
-        )}
-        {error && (
-          <p role="alert" className="mt-3 text-conn-red-text">
-            {errors[error]
-              ? t(...errors[error])
-              : t(
-                  '无法完成 DSH 配置或验证。请检查实际启动入口、profile、凭据引用与 ACP 引导目录权限，再重新读取。原配置已保留。',
-                  'DSH setup or verification failed. Check the launcher, profile, credential reference and ACP bootstrap permissions, then retry. Existing configuration is preserved.',
+              <p>
+                {t(
+                  '可选验证会向模型发送一次请求，可能产生费用，并保留 DSH 测试会话。',
+                  'Optional verification sends one model request, may incur a charge, and retains a DSH test session.',
                 )}
-          </p>
-        )}
-      </fieldset>
-    </details>
+              </p>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void run('test')}
+                className="min-h-10 text-cafe-accent disabled:opacity-50"
+              >
+                {t('发送一次请求验证此配置', 'Send one request to test this configuration')}
+              </button>
+            </div>
+          )}
+          {tested && (
+            <p role="status" className="mt-2 text-cafe-secondary">
+              {t(
+                '已收到模型文本回复。成员保存后的首轮和续聊仍请在聊天中确认。',
+                'Model text received. Confirm first turn and continuation in chat after saving.',
+              )}
+            </p>
+          )}
+          {error && (
+            <p role="alert" className="mt-3 text-conn-red-text">
+              {errors[error]
+                ? t(...errors[error])
+                : t(
+                    '无法完成 DSH 配置或验证。请检查实际启动入口、profile、凭据引用与 ACP 引导目录权限，再重新读取。原配置已保留。',
+                    'DSH setup or verification failed. Check the launcher, profile, credential reference and ACP bootstrap permissions, then retry. Existing configuration is preserved.',
+                  )}
+            </p>
+          )}
+        </fieldset>
+      </details>
+    </>
   );
 }
