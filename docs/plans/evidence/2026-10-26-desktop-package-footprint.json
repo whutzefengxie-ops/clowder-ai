@@ -31,146 +31,41 @@
       "regularFiles": 50884,
       "rawBytes": 806798126,
       "largestPackagesOrRoots": [
-        [
-          "@anthropic-ai/claude-agent-sdk-win32-x64",
-          243751648
-        ],
-        [
-          "@next/swc-win32-x64-msvc",
-          135864842
-        ],
-        [
-          "next",
-          86662079
-        ],
-        [
-          "date-fns",
-          22601076
-        ],
-        [
-          "js-tiktoken",
-          22432828
-        ],
-        [
-          "@img/sharp-win32-x64",
-          19890145
-        ],
-        [
-          "@cat-cafe/shared",
-          17408921
-        ],
-        [
-          "node-pty",
-          16103042
-        ],
-        [
-          "chromium-bidi",
-          13240203
-        ],
-        [
-          "better-sqlite3",
-          12154354
-        ],
-        [
-          "@opentelemetry/semantic-conventions",
-          11463785
-        ],
-        [
-          "@cat-cafe/mcp-server",
-          11425879
-        ],
-        [
-          "@anthropic-ai/sdk",
-          9503985
-        ],
-        [
-          "puppeteer-core",
-          8533623
-        ],
-        [
-          "@opentelemetry/otlp-transformer",
-          6784565
-        ],
-        [
-          "rollup",
-          6452533
-        ],
-        [
-          "webpack",
-          6006711
-        ],
-        [
-          "@vscode/ripgrep-win32-x64",
-          5431448
-        ],
-        [
-          "@anthropic-ai/claude-agent-sdk",
-          5384396
-        ],
-        [
-          "luxon",
-          4592735
-        ],
-        [
-          "react-dom",
-          4513549
-        ],
-        [
-          "@modelcontextprotocol/sdk",
-          4322438
-        ],
-        [
-          "katex",
-          4037040
-        ],
-        [
-          "devtools-protocol",
-          3705759
-        ],
-        [
-          "zod",
-          3594196
-        ],
-        [
-          "protobufjs",
-          2948443
-        ],
-        [
-          "es-abstract",
-          2786378
-        ],
-        [
-          "@babel/types",
-          2750097
-        ],
-        [
-          "fastify",
-          2561624
-        ],
-        [
-          "@grpc/grpc-js",
-          2503452
-        ],
-        [
-          "caniuse-lite",
-          2336576
-        ],
-        [
-          "terser",
-          2333446
-        ],
-        [
-          "@types/node",
-          2282558
-        ],
-        [
-          "@babel/parser",
-          1995445
-        ],
-        [
-          "@clowder-ai/plugin-sdk",
-          1971576
-        ]
+        ["@anthropic-ai/claude-agent-sdk-win32-x64", 243751648],
+        ["@next/swc-win32-x64-msvc", 135864842],
+        ["next", 86662079],
+        ["date-fns", 22601076],
+        ["js-tiktoken", 22432828],
+        ["@img/sharp-win32-x64", 19890145],
+        ["@cat-cafe/shared", 17408921],
+        ["node-pty", 16103042],
+        ["chromium-bidi", 13240203],
+        ["better-sqlite3", 12154354],
+        ["@opentelemetry/semantic-conventions", 11463785],
+        ["@cat-cafe/mcp-server", 11425879],
+        ["@anthropic-ai/sdk", 9503985],
+        ["puppeteer-core", 8533623],
+        ["@opentelemetry/otlp-transformer", 6784565],
+        ["rollup", 6452533],
+        ["webpack", 6006711],
+        ["@vscode/ripgrep-win32-x64", 5431448],
+        ["@anthropic-ai/claude-agent-sdk", 5384396],
+        ["luxon", 4592735],
+        ["react-dom", 4513549],
+        ["@modelcontextprotocol/sdk", 4322438],
+        ["katex", 4037040],
+        ["devtools-protocol", 3705759],
+        ["zod", 3594196],
+        ["protobufjs", 2948443],
+        ["es-abstract", 2786378],
+        ["@babel/types", 2750097],
+        ["fastify", 2561624],
+        ["@grpc/grpc-js", 2503452],
+        ["caniuse-lite", 2336576],
+        ["terser", 2333446],
+        ["@types/node", 2282558],
+        ["@babel/parser", 1995445],
+        ["@clowder-ai/plugin-sdk", 1971576]
       ]
     },
     {
@@ -180,58 +75,19 @@
       "regularFiles": 11292,
       "rawBytes": 129358899,
       "largestPackagesOrRoots": [
-        [
-          "dist",
-          101710443
-        ],
-        [
-          "src",
-          25761666
-        ],
-        [
-          "vendor",
-          1438191
-        ],
-        [
-          "scripts",
-          312417
-        ],
-        [
-          "node_modules",
-          97799
-        ],
-        [
-          "config",
-          20297
-        ],
-        [
-          "package.json",
-          11862
-        ],
-        [
-          "runtime",
-          5240
-        ],
-        [
-          "fixtures",
-          577
-        ],
-        [
-          "tsconfig.json",
-          194
-        ],
-        [
-          ".gitignore",
-          116
-        ],
-        [
-          ".runtime-lock.json",
-          97
-        ],
-        [
-          "uploads",
-          0
-        ]
+        ["dist", 101710443],
+        ["src", 25761666],
+        ["vendor", 1438191],
+        ["scripts", 312417],
+        ["node_modules", 97799],
+        ["config", 20297],
+        ["package.json", 11862],
+        ["runtime", 5240],
+        ["fixtures", 577],
+        ["tsconfig.json", 194],
+        [".gitignore", 116],
+        [".runtime-lock.json", 97],
+        ["uploads", 0]
       ]
     },
     {
@@ -241,74 +97,23 @@
       "regularFiles": 986,
       "rawBytes": 249930224,
       "largestPackagesOrRoots": [
-        [
-          "public",
-          211727560
-        ],
-        [
-          ".next",
-          33260839
-        ],
-        [
-          "node_modules",
-          4113394
-        ],
-        [
-          "color-audit-report.json",
-          740028
-        ],
-        [
-          "scripts",
-          29640
-        ],
-        [
-          "eslint-plugins",
-          20780
-        ],
-        [
-          "tailwind.config.js",
-          14949
-        ],
-        [
-          "package.json",
-          9054
-        ],
-        [
-          "next.config.js",
-          6940
-        ],
-        [
-          "worker",
-          3455
-        ],
-        [
-          ".eslintrc.json",
-          1238
-        ],
-        [
-          "vitest.config.ts",
-          998
-        ],
-        [
-          "tsconfig.json",
-          597
-        ],
-        [
-          "vitest.entry-api.config.ts",
-          333
-        ],
-        [
-          "next-env.d.ts",
-          233
-        ],
-        [
-          ".runtime-lock.json",
-          97
-        ],
-        [
-          "postcss.config.js",
-          89
-        ]
+        ["public", 211727560],
+        [".next", 33260839],
+        ["node_modules", 4113394],
+        ["color-audit-report.json", 740028],
+        ["scripts", 29640],
+        ["eslint-plugins", 20780],
+        ["tailwind.config.js", 14949],
+        ["package.json", 9054],
+        ["next.config.js", 6940],
+        ["worker", 3455],
+        [".eslintrc.json", 1238],
+        ["vitest.config.ts", 998],
+        ["tsconfig.json", 597],
+        ["vitest.entry-api.config.ts", 333],
+        ["next-env.d.ts", 233],
+        [".runtime-lock.json", 97],
+        ["postcss.config.js", 89]
       ]
     },
     {
@@ -318,38 +123,14 @@
       "regularFiles": 1452,
       "rawBytes": 10388570,
       "largestPackagesOrRoots": [
-        [
-          "node_modules",
-          4162554
-        ],
-        [
-          "dist",
-          3952239
-        ],
-        [
-          "src",
-          1154567
-        ],
-        [
-          "governance",
-          1114029
-        ],
-        [
-          "scripts",
-          3735
-        ],
-        [
-          "package.json",
-          1155
-        ],
-        [
-          "tsconfig.json",
-          194
-        ],
-        [
-          ".runtime-lock.json",
-          97
-        ]
+        ["node_modules", 4162554],
+        ["dist", 3952239],
+        ["src", 1154567],
+        ["governance", 1114029],
+        ["scripts", 3735],
+        ["package.json", 1155],
+        ["tsconfig.json", 194],
+        [".runtime-lock.json", 97]
       ]
     },
     {
@@ -359,78 +140,24 @@
       "regularFiles": 78,
       "rawBytes": 302832396,
       "largestPackagesOrRoots": [
-        [
-          "Clowder AI.exe",
-          201481728
-        ],
-        [
-          "locales",
-          43597720
-        ],
-        [
-          "LICENSES.chromium.html",
-          12278238
-        ],
-        [
-          "icudtl.dat",
-          10466624
-        ],
-        [
-          "libGLESv2.dll",
-          8019968
-        ],
-        [
-          "resources.pak",
-          5926839
-        ],
-        [
-          "vk_swiftshader.dll",
-          5577728
-        ],
-        [
-          "d3dcompiler_47.dll",
-          4916728
-        ],
-        [
-          "resources",
-          4765136
-        ],
-        [
-          "ffmpeg.dll",
-          3001344
-        ],
-        [
-          "vulkan-1.dll",
-          903680
-        ],
-        [
-          "v8_context_snapshot.bin",
-          702157
-        ],
-        [
-          "libEGL.dll",
-          493056
-        ],
-        [
-          "snapshot_blob.bin",
-          331874
-        ],
-        [
-          "chrome_200_percent.pak",
-          220631
-        ],
-        [
-          "chrome_100_percent.pak",
-          147743
-        ],
-        [
-          "LICENSE.electron.txt",
-          1096
-        ],
-        [
-          "vk_swiftshader_icd.json",
-          106
-        ]
+        ["Clowder AI.exe", 201481728],
+        ["locales", 43597720],
+        ["LICENSES.chromium.html", 12278238],
+        ["icudtl.dat", 10466624],
+        ["libGLESv2.dll", 8019968],
+        ["resources.pak", 5926839],
+        ["vk_swiftshader.dll", 5577728],
+        ["d3dcompiler_47.dll", 4916728],
+        ["resources", 4765136],
+        ["ffmpeg.dll", 3001344],
+        ["vulkan-1.dll", 903680],
+        ["v8_context_snapshot.bin", 702157],
+        ["libEGL.dll", 493056],
+        ["snapshot_blob.bin", 331874],
+        ["chrome_200_percent.pak", 220631],
+        ["chrome_100_percent.pak", 147743],
+        ["LICENSE.electron.txt", 1096],
+        ["vk_swiftshader_icd.json", 106]
       ]
     },
     {
@@ -440,66 +167,21 @@
       "regularFiles": 1942,
       "rawBytes": 104965234,
       "largestPackagesOrRoots": [
-        [
-          "node.exe",
-          92279112
-        ],
-        [
-          "node_modules",
-          12414018
-        ],
-        [
-          "LICENSE",
-          159872
-        ],
-        [
-          "CHANGELOG.md",
-          56187
-        ],
-        [
-          "README.md",
-          43075
-        ],
-        [
-          "install_tools.bat",
-          3094
-        ],
-        [
-          "npm",
-          2073
-        ],
-        [
-          "npx",
-          2073
-        ],
-        [
-          "npm.ps1",
-          1700
-        ],
-        [
-          "npx.ps1",
-          1700
-        ],
-        [
-          "nodevars.bat",
-          702
-        ],
-        [
-          "npm.cmd",
-          538
-        ],
-        [
-          "npx.cmd",
-          538
-        ],
-        [
-          "corepack",
-          334
-        ],
-        [
-          "corepack.cmd",
-          218
-        ]
+        ["node.exe", 92279112],
+        ["node_modules", 12414018],
+        ["LICENSE", 159872],
+        ["CHANGELOG.md", 56187],
+        ["README.md", 43075],
+        ["install_tools.bat", 3094],
+        ["npm", 2073],
+        ["npx", 2073],
+        ["npm.ps1", 1700],
+        ["npx.ps1", 1700],
+        ["nodevars.bat", 702],
+        ["npm.cmd", 538],
+        ["npx.cmd", 538],
+        ["corepack", 334],
+        ["corepack.cmd", 218]
       ]
     }
   ],
