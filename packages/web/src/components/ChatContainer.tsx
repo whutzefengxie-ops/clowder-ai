@@ -117,7 +117,13 @@ export function ChatContainer({ threadId }: ChatContainerProps) {
 function ChatContainerContent({ threadId }: ChatContainerProps) {
   const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
   if (searchParams?.get('export') === 'true') {
-    return <ThreadChatExport threadId={threadId} messageIds={searchParams.getAll('messageId')} />;
+    return (
+      <ThreadChatExport
+        threadId={threadId}
+        messageIds={searchParams.getAll('messageId')}
+        selectionItems={window.__catCafeImageExportItems}
+      />
+    );
   }
   return <InteractiveChatContainer threadId={threadId} />;
 }
@@ -1042,16 +1048,6 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
               : { flex: '1 1 0%' }
           }
         >
-          <MessageSearchOverlay
-            threadId={threadId}
-            host={messageSearch}
-            available={messageSearchAvailable}
-            resolveSpeaker={(speaker) => {
-              if (speaker === 'user') return coCreator.name;
-              const cat = cats.find((candidate) => candidate.id === speaker);
-              return cat ? formatCatName(cat) : speaker;
-            }}
-          />
           {!workComposerOnlyActive && !showNewConversationLanding && (
             <ChatContainerHeader
               sidebarOpen={sidebarOpen}
@@ -1078,6 +1074,19 @@ function InteractiveChatContainer({ threadId }: ChatContainerProps) {
               conversationViewQueue={conversationViewQueue}
             />
           )}
+
+          {/* Reading controls occupy their own row so the existing history owner
+              measures a viewport whose beginning is actually readable. */}
+          <MessageSearchOverlay
+            threadId={threadId}
+            host={messageSearch}
+            available={messageSearchAvailable}
+            resolveSpeaker={(speaker) => {
+              if (speaker === 'user') return coCreator.name;
+              const cat = cats.find((candidate) => candidate.id === speaker);
+              return cat ? formatCatName(cat) : speaker;
+            }}
+          />
 
           {showNewConversationLanding ? (
             <NewConversationPage

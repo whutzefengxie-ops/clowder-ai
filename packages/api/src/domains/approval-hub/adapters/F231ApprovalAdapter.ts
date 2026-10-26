@@ -1,3 +1,4 @@
+import { type ApprovalDecisionRead, projectApprovalDecisionRead } from '../ports/IApprovalAdapter.js';
 /**
  * F246 v2: F231 (Profile Update Proposal) → ApprovalItem adapter.
  *
@@ -12,6 +13,7 @@ import type { ApprovalItem, ProfileUpdateProposal, SettledApprovalItem } from '@
 import type { IProfileUpdateProposalStore } from '../../cats/services/stores/ports/ProfileUpdateProposalStore.js';
 import { ALL_PENDING_APPROVALS_LIMIT, type IApprovalAdapter, type ListSettledOpts } from '../ports/IApprovalAdapter.js';
 import { compactApprovalProjections, projectApprovalNavigation } from '../projectApprovalNavigation.js';
+import { projectSettledDecisionFacts } from '../settled-decision-facts.js';
 
 const F231_STALE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const DEFAULT_SETTLED_LIMIT = 50;
@@ -28,6 +30,12 @@ export class F231ApprovalAdapter implements IApprovalAdapter {
   }
 
   /** F246 Phase H: approved/rejected proposals for the history tab. */
+  async readDecision(userId: string, proposalId: string): Promise<ApprovalDecisionRead> {
+    const p = await this.store.get(proposalId);
+    if (!p || p.createdBy !== userId) return { state: 'closed' };
+    return projectApprovalDecisionRead(p.status, () => toSettledItem(p), p.rejectionReason);
+  }
+
   async listSettled(userId: string, opts?: ListSettledOpts): Promise<SettledApprovalItem[]> {
     const limit = opts?.limit ?? DEFAULT_SETTLED_LIMIT;
     const proposals = await this.store.listSettledByUser(userId, limit);
@@ -70,6 +78,7 @@ function toSettledItem(p: ProfileUpdateProposal): SettledApprovalItem | null {
     legacyMessageId: p.cardMessageId,
   });
   if (!navigation) return null;
+  const decision = projectSettledDecisionFacts(p);
   return {
     proposalId: p.proposalId,
     sourceFeatureId: 'F231' as const,
@@ -78,14 +87,15 @@ function toSettledItem(p: ProfileUpdateProposal): SettledApprovalItem | null {
     status: p.status,
     summary: `${p.targetLayer === 'corpus' ? 'Corpus' : 'Profile'} update: ${p.rationale.slice(0, 80)}`,
     detail: {
+      ...decision.detail,
       rationale: p.rationale,
       targetLayer: p.targetLayer,
       targetPath: p.targetPath,
       signalKind: p.signalProvenance.kind,
     },
     navigation,
-    decidedAt: p.approvedAt ?? p.rejectedAt ?? 0,
-    decidedBy: p.approvedBy ?? p.rejectedBy ?? '',
+    decidedAt: decision.decidedAt,
+    decidedBy: decision.decidedBy,
     createdAt: p.createdAt,
   };
 }

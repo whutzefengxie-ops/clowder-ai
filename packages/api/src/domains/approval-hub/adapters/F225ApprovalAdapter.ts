@@ -1,3 +1,4 @@
+import { type ApprovalDecisionRead, projectApprovalDecisionRead } from '../ports/IApprovalAdapter.js';
 /**
  * F246: F225 (Session Handoff Proposal) → ApprovalItem adapter.
  *
@@ -5,9 +6,9 @@
  * ApprovalItem DTOs. inlineApprovable = false (F225 needs session context —
  * Hub shows a "jump to thread" action, not inline approve). Stale threshold: 24h.
  *
- * Phase G (F246): adds listSettled() — surfaces approved/rejected proposals in
+ * Settled history surfaces approved/rejected/expired proposals in
  * the approval history tab using listSettledByUser() added to the store.
- * decidedAt = updatedAt (set at approve/reject time); decidedBy = userId (always operator).
+ * decidedAt = updatedAt at the actual transition; expiry has no human decider.
  */
 
 import type { ApprovalItem, SessionHandoffProposal, SettledApprovalItem } from '@cat-cafe/shared';
@@ -26,6 +27,14 @@ export class F225ApprovalAdapter implements IApprovalAdapter {
     const result = this.store.listPendingByUser(userId, ALL_PENDING_APPROVALS_LIMIT);
     if (Array.isArray(result)) return compactApprovalProjections(result.map((p) => toItem(p)));
     return result.then((proposals) => compactApprovalProjections(proposals.map((p) => toItem(p))));
+  }
+
+  async readDecision(userId: string, proposalId: string): Promise<ApprovalDecisionRead> {
+    const p = await this.store.get(proposalId);
+    if (!p || p.userId !== userId) return { state: 'closed' };
+    const feedback = p.latestHumanDisposition;
+    const reason = feedback?.reasonCode === 'other' ? feedback.detail : feedback?.reasonCode;
+    return projectApprovalDecisionRead(p.status, () => toSettledItem(p), reason);
   }
 
   async listSettled(userId: string, opts?: ListSettledOpts): Promise<SettledApprovalItem[]> {
@@ -70,14 +79,13 @@ function toSettledItem(p: SessionHandoffProposal): SettledApprovalItem | null {
     legacyMessageId: p.cardMessageId,
   });
   if (!navigation) return null;
-  // F225 has no dedicated decidedBy field — the decision-maker is always the operator (userId).
-  // updatedAt is set to Date.now() at approve/reject time, so it serves as decidedAt.
+  // Only approve/reject are operator decisions. System expiry retains its time without a human actor.
   return {
     proposalId: p.proposalId,
     sourceFeatureId: 'F225' as const,
     requesterCatId: p.sourceCatId,
     ownerUserId: p.userId,
-    status: p.status as 'approved' | 'rejected',
+    status: p.status as 'approved' | 'rejected' | 'expired',
     summary: `Session handoff: ${p.sourceCatId} → ${p.note.done.slice(0, 60)}`,
     detail: {
       done: p.note.done,
@@ -89,7 +97,7 @@ function toSettledItem(p: SessionHandoffProposal): SettledApprovalItem | null {
     },
     navigation,
     decidedAt: p.updatedAt,
-    decidedBy: p.userId,
+    decidedBy: p.status === 'expired' ? '' : p.userId,
     createdAt: p.createdAt,
   };
 }

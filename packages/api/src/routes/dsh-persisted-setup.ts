@@ -1,9 +1,9 @@
 import { lstatSync, readFileSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import { resolveDeclaredCapabilityRoot } from '../config/capabilities/invoke-capability-root.js';
 import { pathsEqual } from '../utils/project-path.js';
 import { inspectDshRouteReadiness } from './dsh-setup-readiness.js';
+import { resolveDshHome } from './native-dsh-home.js';
 
 /** A classification hint only, never launcher authority. A random --patch is
  * not a saved setup: require this Host's exact UUID directory and a complete,
@@ -25,7 +25,7 @@ export function hasPersistedDshSetup(args: readonly string[], cwd: string): bool
       if (entry.isSymbolicLink() || (path === patch ? !entry.isFile() || entry.size > 4_000_000 : !entry.isDirectory()))
         return false;
     }
-    const home = process.env.DSH_HOME ?? join(homedir(), '.dsh');
+    const home = resolveDshHome();
     // bootstrap cwd is not the project: never infer a key from project/.env.
     const view = inspectDshRouteReadiness(readFileSync(patch, 'utf8'), home, home);
     return view.providers.some(

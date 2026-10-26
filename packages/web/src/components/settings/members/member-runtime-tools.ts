@@ -22,6 +22,7 @@ const harnessLabels: Record<string, string> = {
   pi: 'Pi',
 };
 export function memberRuntimeLabel(runtime: RuntimeChoice): string {
+  if (runtime.agyCarrier === 'acp') return 'AGY 官方 ACP';
   return runtime.kind === 'binding' && runtime.sourceCatId
     ? (harnessLabels[runtime.harnessId ?? ''] ?? 'ACP')
     : runtime.label;
@@ -38,6 +39,7 @@ function runtimeOptionStatus(item: RuntimeChoice, t: MemberText): string {
   if (item.id.startsWith('plugin:'))
     return t(item.installed ? '插件已启用' : '插件未启用', item.installed ? 'Plugin enabled' : 'Plugin disabled');
   if (item.id.startsWith('draft:')) return t('已保留的配置', 'Retained configuration');
+  if (item.id.startsWith('manual:')) return t('手动配置', 'Manual configuration');
   return (
     nativeAcpProfileLabel(item.discoveryStatus, t) ??
     (item.installed ? t('已安装', 'Installed') : t('未找到', 'Not found'))

@@ -84,18 +84,19 @@ function ChatProposalRead({
       ...parent,
       writesLocked: parent.writesLocked || !verified || checking,
       authorizeWrite: (kind, options) => verified && !checking && parent.authorizeWrite(kind, options),
+      reportRequest: (event) => {
+        parent.reportRequest(event);
+        if (event.phase === 'end') reread((value) => value + 1);
+      },
     }),
     [parent, verified, checking],
   );
   return (
-    <div className="min-w-0 rounded-xl border border-[var(--shell-hairline)] p-3">
+    <div className="min-w-0">
       {proposal ? (
-        <>
-          <h3 className="mb-2 break-words text-sm font-semibold">{proposal.title}</h3>
-          <ApprovalHostContext.Provider value={host}>
-            <ProposalCardProducer proposal={proposal} />
-          </ApprovalHostContext.Provider>
-        </>
+        <ApprovalHostContext.Provider value={host}>
+          <ProposalCardProducer proposal={proposal} showTitle />
+        </ApprovalHostContext.Provider>
       ) : null}
       {!verified ? (
         <div className="flex items-center gap-2 text-xs">

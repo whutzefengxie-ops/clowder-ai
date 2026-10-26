@@ -24,6 +24,7 @@ describe('quick member configuration', () => {
     expect(html).toContain('正在读取工具');
     expect(html).toContain('disabled');
     expect(html).not.toContain('Gemini');
+    expect(html).not.toContain('Antigravity');
   });
   it('shows meaningful threshold controls and hides compression counts for handoff', () => {
     const html = renderToStaticMarkup(

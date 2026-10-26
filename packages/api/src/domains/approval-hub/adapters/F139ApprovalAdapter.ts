@@ -1,7 +1,9 @@
 import type { ApprovalItem, ScheduleMutationProposal, SettledApprovalItem } from '@cat-cafe/shared';
 import type { ScheduleMutationProposalStore } from '../../../infrastructure/scheduler/ScheduleMutationProposalStore.js';
 import type { IApprovalAdapter, ListSettledOpts } from '../ports/IApprovalAdapter.js';
+import { type ApprovalDecisionRead, projectApprovalDecisionRead } from '../ports/IApprovalAdapter.js';
 import { compactApprovalProjections, projectApprovalNavigation } from '../projectApprovalNavigation.js';
+import { projectSettledDecisionFacts } from '../settled-decision-facts.js';
 
 const DEFAULT_SETTLED_LIMIT = 50;
 
@@ -12,6 +14,12 @@ export class F139ApprovalAdapter implements IApprovalAdapter {
 
   listPending(userId: string): ApprovalItem[] {
     return compactApprovalProjections(this.store.listPending(userId).map(toItem));
+  }
+
+  async readDecision(userId: string, proposalId: string): Promise<ApprovalDecisionRead> {
+    const p = await this.store.getById(proposalId);
+    if (!p || p.ownerUserId !== userId) return { state: 'closed' };
+    return projectApprovalDecisionRead(p.status, () => toSettledItem(p), p.rejectionReason);
   }
 
   listSettled(userId: string, opts?: ListSettledOpts): SettledApprovalItem[] {
@@ -45,6 +53,7 @@ function toSettledItem(proposal: ScheduleMutationProposal): SettledApprovalItem 
   }
   const navigation = projectApprovalNavigation(proposal, {});
   if (!navigation) return null;
+  const decision = projectSettledDecisionFacts(proposal);
   return {
     proposalId: proposal.proposalId,
     sourceFeatureId: 'F139',
@@ -52,10 +61,10 @@ function toSettledItem(proposal: ScheduleMutationProposal): SettledApprovalItem 
     ownerUserId: proposal.ownerUserId,
     status: proposal.status,
     summary: summary(proposal),
-    detail: detail(proposal),
+    detail: { ...detail(proposal), ...decision.detail },
     navigation,
-    decidedAt: proposal.approvedAt ?? proposal.rejectedAt ?? 0,
-    decidedBy: proposal.approvedBy ?? proposal.rejectedBy ?? '',
+    decidedAt: decision.decidedAt,
+    decidedBy: decision.decidedBy,
     createdAt: proposal.createdAt,
   };
 }

@@ -1,5 +1,6 @@
 import { reportAcpHostPolicy, resolveAcpHostPolicy } from './config/acp-host-policy.js';
 import { AgentServiceUnavailableError } from './domains/cats/services/agents/registry/AgentServiceUnavailableError.js';
+import { hasRecentWorkPublication } from './domains/cats/services/agents/routing/recent-global-work-reader.js';
 import { createRefreshingAcpSessionProvider } from './domains/cats/services/agents/session-contract/acp-session-provider.js';
 import {
   SessionImplementationRegistry,
@@ -11,6 +12,7 @@ import {
   selectSessionAgentService,
 } from './domains/cats/services/agents/session-contract/registered-session-agent-service.js';
 import { readSessionContractSettings } from './domains/cats/services/agents/session-contract/session-contract-settings.js';
+import { ContextSourceOpportunityStore } from './domains/memory/cue/ContextSourceOpportunityStore.js';
 import {
   createHostMediaPathResolver,
   hostMediaPathRootsFromEnv,
@@ -80,6 +82,8 @@ import {
 } from './config/runtime-deployment-inclusion.js';
 import { initRuntimeOverrides } from './config/session-strategy-overrides.js';
 import { assertStorageReady } from './config/storage-guard.js';
+import { ApprovalDecisionReceiptOutbox } from './domains/approval-hub/ApprovalDecisionReceiptOutbox.js';
+import { ApprovalDecisionReceiptService } from './domains/approval-hub/ApprovalDecisionReceiptService.js';
 import { ApprovalIngress } from './domains/approval-hub/ApprovalIngress.js';
 import { RedisApprovalLifecycleEpochAuthority } from './domains/approval-hub/ApprovalLifecycleEpochAuthority.js';
 import {
@@ -98,6 +102,7 @@ import { F266ApprovalAdapter } from './domains/approval-hub/adapters/F266Approva
 import { F276ApprovalAdapter } from './domains/approval-hub/adapters/F276ApprovalAdapter.js';
 import { F306ApprovalAdapter } from './domains/approval-hub/adapters/F306ApprovalAdapter.js';
 import { F321ApprovalAdapter } from './domains/approval-hub/adapters/F321ApprovalAdapter.js';
+import { installApprovalDecisionReceiptHooks } from './domains/approval-hub/approval-decision-receipt-hooks.js';
 import { createDispatchProposalStore } from './domains/approval-hub/stores/factories/DispatchProposalStoreFactory.js';
 import { createEntityProposalStore } from './domains/approval-hub/stores/factories/EntityProposalStoreFactory.js';
 import { createActionSuccessorRecoveryCycle } from './domains/ball-custody/ActionSuccessorRecoveryCycle.js';
@@ -107,8 +112,8 @@ import { EventWaitDispositionService } from './domains/ball-custody/EventWaitDis
 import { createSqliteHoldQuotaStore, type IHoldQuotaStore } from './domains/ball-custody/hold-quota-store.js';
 import { RedisHoldQuotaStore } from './domains/ball-custody/hold-quota-store-redis.js';
 import type { ManagedCommandWakeRecoverySweep } from './domains/ball-custody/ManagedCommandWakeRecoverySweep.js';
+import { createManagedCommandWakeAdmission } from './domains/ball-custody/managed-command-wake-admission.js';
 import { createManagedCommandWakeCarrierAdapter } from './domains/ball-custody/managed-command-wake-carrier-adapter.js';
-import type { ManagedCommandWakeRecoveryDeps } from './domains/ball-custody/managed-command-wake-lifecycle.js';
 import { createManagedWakeAdmittedNotifier } from './domains/ball-custody/managed-wake-admitted-notifier.js';
 import { RedisWaitTerminationStore } from './domains/ball-custody/RedisWaitTerminationStore.js';
 import { WaitTerminationService } from './domains/ball-custody/WaitTerminationService.js';
@@ -396,6 +401,10 @@ import {
   PawFeelCaptureIntentSidecar,
   PawFeelCaptureService,
 } from './infrastructure/harness-eval/paw-feel-disposition/hot-intake.js';
+import {
+  loadOrCreatePawFeelInboxAuditCursorSigner,
+  PawFeelInboxAuditScanService,
+} from './infrastructure/harness-eval/paw-feel-disposition/inbox-audit-scan.js';
 import { createMemoryCuePawFeelGitTruth } from './infrastructure/harness-eval/paw-feel-disposition/providers/memory-cue-git-truth.js';
 import {
   MEMORY_CUE_PAW_FEEL_PROVIDER_ROUTE,
@@ -499,6 +508,7 @@ import {
   mkdirRoute,
   packsRoutes,
   pawFeelDispositionRoutes,
+  pawFeelInboxAuditScanRoutes,
   pawFeelLegacyCensusRoutes,
   perspectiveRoutes,
   projectSetupRoute,
@@ -559,6 +569,7 @@ import { knowledgeFeedRoutes } from './routes/knowledge-feed.js';
 import { createLiveTaskAuthority } from './routes/live-task-authority.js';
 import { marketplaceRoutes } from './routes/marketplace.js';
 import { mediaRoutes } from './routes/media-routes.js';
+import { registerMemberMcpRoutes, resolveMemberToolFamiliesForCat } from './routes/member-mcp.js';
 import { registerPersonMemoryDecisionRoutes } from './routes/person-memory-decision-routes.js';
 import { personMemoryOwnerReadRoutes } from './routes/person-memory-owner-read.js';
 import { previewRoutes } from './routes/preview.js';
@@ -636,12 +647,15 @@ async function main(): Promise<void> {
   startupMilestone('telemetry-ready');
 
   const { registerMemberSaveDiagnostics } = await import('./routes/member-save-diagnostics.js');
+  const { registerConnectionDiagnostics } = await import('./routes/connection-diagnostics.js');
   const { saveSpan } = await import('./utils/member-save-diagnostics.js');
 
   const app = Fastify({ logger: customLogger as unknown as import('fastify').FastifyBaseLogger });
   reportAcpHostPolicy(app.log, acpHostPolicy);
   const messageReadDiagnostics = registerMessageReadDiagnostics(app);
   const privateUserId = (process.env.CAT_CAFE_USER_ID ?? 'default-user').trim();
+  let approvalDecisionReceipts: ApprovalDecisionReceiptService;
+  installApprovalDecisionReceiptHooks(app, () => approvalDecisionReceipts);
   let runtimeDeploymentRevision: string | null = null;
   let runtimeDeploymentContext: RuntimeDeploymentProcessContext | undefined;
   const deploymentWaitLifecycleHolder: {
@@ -666,6 +680,8 @@ async function main(): Promise<void> {
     origin: resolveFrontendCorsOrigins(process.env, app.log),
     credentials: true,
     exposedHeaders: ['x-clowder-save-id'],
+    // Diagnostic correlation adds a fixed header to GETs; reuse their preflight during polling.
+    maxAge: 600,
   });
 
   // F156 D-2: Anti-clickjacking headers (X-Frame-Options + CSP frame-ancestors)
@@ -676,6 +692,7 @@ async function main(): Promise<void> {
   await app.register(sessionAuthPlugin);
   await app.register(sessionRoute, { ownerUserId: privateUserId });
   registerMemberSaveDiagnostics(app, runtimeDeploymentRevision ?? undefined);
+  registerConnectionDiagnostics(app);
 
   // WebSocket support (F089 terminal)
   await app.register(fastifyWebsocket);
@@ -1013,7 +1030,7 @@ async function main(): Promise<void> {
     readDiagnostics: messageReadDiagnostics,
     onAppend: (msg) => {
       appendListener?.(msg);
-      if (userMentionEvent(msg))
+      if (userMentionEvent(msg) || hasRecentWorkPublication(msg))
         socketManager?.emitToUser(msg.userId, 'entrusted_work_projection_invalidated', { ownerUserId: msg.userId });
       custodyOpportunityObservation?.notifySourceChanged(msg);
     },
@@ -1607,6 +1624,7 @@ async function main(): Promise<void> {
     try {
       const result = await memoryServices.indexBuilder.rebuild({
         deferThreadIndexing: true,
+        deferDocumentEmbedding: true,
         onProgress: (phase, percent) => {
           app.log.info(
             { phase, percent, elapsedMs: Date.now() - startMs },
@@ -1628,6 +1646,7 @@ async function main(): Promise<void> {
       memoryServices.embeddingLifecycle.catchUpAfterReady(),
     );
   }
+  app.addHook('onClose', async () => memoryServices.embeddingLifecycle.deactivate());
 
   // F-4: Global knowledge rebuild (Skills + MEMORY.md → global_knowledge.sqlite)
   if (memoryServices.globalIndexBuilder) {
@@ -1699,7 +1718,7 @@ async function main(): Promise<void> {
   const priorTimelineListener = messageStore.onTimelineChanged;
   messageStore.onTimelineChanged = (message) => {
     priorTimelineListener?.(message);
-    if (userMentionEvent(message) || message.mentionsUser)
+    if (userMentionEvent(message) || message.mentionsUser || hasRecentWorkPublication(message))
       socketManager?.emitToUser(message.userId, 'entrusted_work_projection_invalidated', {
         ownerUserId: message.userId,
       });
@@ -2586,6 +2605,27 @@ async function main(): Promise<void> {
     logger: app.log,
   });
   const memoryCueRuntime = createMemoryCueRuntime({
+    ...(memoryServices.catalog && memoryServices.collectionStores && memoryServices.knowledgeResolver
+      ? {
+          contextProjectDiscovery: {
+            threads: threadStore,
+            catalog: memoryServices.catalog,
+            stores: memoryServices.collectionStores,
+            resolver: memoryServices.knowledgeResolver,
+            homeProjectPath: resolveActiveProjectRoot(),
+            homeDocsRoot: docsRoot,
+          },
+        }
+      : {}),
+    contextSourceOpportunityStore: new ContextSourceOpportunityStore(memoryServices.store.getDb()),
+    contextSourceAuthorization: {
+      threads: threadStore,
+      tasks: taskStore,
+      onOmission: (sourceMessageId, reason) =>
+        app.log.info({ sourceMessageId, reason }, '[F321] context source admission omitted'),
+      ...(actionSuccessorLeaseStore ? { leases: actionSuccessorLeaseStore } : {}),
+      ...(taskApprovedDelegateProvider ? { delegates: taskApprovedDelegateProvider } : {}),
+    },
     threadOverviewSource,
     episodeStore: memoryCueEpisodeStore,
     handles: memoryCueHandles,
@@ -2633,7 +2673,10 @@ async function main(): Promise<void> {
     postCompactContext: ({ cliSessionId }) => inProcessCompactionSurface.postCompactContextFor(cliSessionId),
   });
   let trustedImagePathResolver: (hmrId: string) => Promise<string | undefined> = async () => undefined;
+  const { createOwnedWaitStatusReader } = await import('./domains/ball-custody/OwnedWaitStatus.js');
+  const ownedWaitStatusReader = createOwnedWaitStatusReader({ taskStore, dynamicTaskStore });
   router = new AgentRouter({
+    ownedWaitStatusReader,
     resolveTrustedImagePath: async (hmrId) => trustedImagePathResolver(hmrId),
 
     agentRegistry,
@@ -2689,6 +2732,7 @@ async function main(): Promise<void> {
       personMemoryStore,
       messageStore,
     ),
+    contextSourceAdmission: memoryCueRuntime.contextSourceAdmission,
     memoryCuePromptService: memoryCueRuntime.promptService,
     profileCueOpportunitySource: memoryCueRuntime.profileOpportunitySource,
     eventCueOpportunitySource: memoryCueRuntime.eventOpportunitySource,
@@ -3312,7 +3356,14 @@ async function main(): Promise<void> {
   {
     const { UnavailableTipEventSink, RedisTipEventSink } = await import('./routes/tip-telemetry.js');
     const tipSink = redis ? new RedisTipEventSink(redis) : new UnavailableTipEventSink();
-    await app.register(tipTelemetryRoutes, { sink: tipSink });
+    const { CapabilityTipsUsageAdapter } = await import(
+      './infrastructure/harness-eval/capability-tips/capability-tips-usage-adapter.js'
+    );
+    const tipUsage = redis ? new CapabilityTipsUsageAdapter(redis) : undefined;
+    await app.register(tipTelemetryRoutes, {
+      sink: tipSink,
+      ...(tipUsage ? { readUsage: (selector) => tipUsage.resolve(selector) } : {}),
+    });
   }
   // F200 Phase B: Recall metrics API
   await app.register(recallMetricsRoutes, {
@@ -3430,6 +3481,7 @@ async function main(): Promise<void> {
   const pawFeelLegacyCensusCursorSigner = redis
     ? await loadOrCreateLegacyPawFeelBlockerCensusCursorSigner(redis)
     : undefined;
+  const pawFeelInboxAuditCursorSigner = redis ? await loadOrCreatePawFeelInboxAuditCursorSigner(redis) : undefined;
   const pawFeelFixResolver = actionSuccessorLeaseStore
     ? new PawFeelFixEvidenceResolver({ leaseStore: actionSuccessorLeaseStore, taskStore })
     : undefined;
@@ -3528,6 +3580,14 @@ async function main(): Promise<void> {
         ...(pawFeelDispositionReadModel ? { bundleMembershipResolver: pawFeelDispositionReadModel } : {}),
       })
     : undefined;
+  const pawFeelInboxAuditScanService =
+    pawFeelDispositionEventLog && pawFeelDispositionReadModel && pawFeelInboxAuditCursorSigner
+      ? new PawFeelInboxAuditScanService({
+          eventLog: pawFeelDispositionEventLog,
+          readModel: pawFeelDispositionReadModel,
+          signer: pawFeelInboxAuditCursorSigner,
+        })
+      : undefined;
   const pawFeelBlockerReconciler = pawFeelDispositionService
     ? new PawFeelBlockerReconciler({ service: pawFeelDispositionService })
     : undefined;
@@ -4166,6 +4226,11 @@ async function main(): Promise<void> {
     callbackRegistry: registry,
     agentKeyRegistry,
   });
+  await app.register(pawFeelInboxAuditScanRoutes, {
+    ...(pawFeelInboxAuditScanService ? { auditScanService: pawFeelInboxAuditScanService } : {}),
+    callbackRegistry: registry,
+    agentKeyRegistry,
+  });
   await app.register(pawFeelLegacyCensusRoutes, {
     ...(pawFeelLegacyCensusService ? { censusService: pawFeelLegacyCensusService } : {}),
     callbackRegistry: registry,
@@ -4540,6 +4605,8 @@ async function main(): Promise<void> {
   }
 
   const callbackOpts = {
+    ...(routingContextRuntime ? { routingSelection: routingContextRuntime.selectionService } : {}),
+    proposalProjectRoot: resolveActiveProjectRoot(),
     companionCollectiveAccountability: readCollectiveAttention,
     resolveTrustedImagePath: async (hmrId: string) => {
       try {
@@ -4600,6 +4667,7 @@ async function main(): Promise<void> {
     socketManager,
     callbackAuthNotifier,
     taskStore,
+    ownedWaitStatusReader,
     backlogStore,
     threadStore,
     conciergeConfigStore: conciergeConfigStoreShared,
@@ -4710,6 +4778,14 @@ async function main(): Promise<void> {
     },
   } as Parameters<typeof callbacksRoutes>[1];
   await app.register(callbacksRoutes, callbackOpts);
+  // F306 Phase B: member MCP gateway — loopback Streamable HTTP MCP for ACP
+  // members (iCode), authenticated per invocation against the live registry.
+  registerMemberMcpRoutes(app, {
+    registry,
+    resolveMemberToolFamilies: ({ catId }) => resolveMemberToolFamiliesForCat(resolveActiveProjectRoot(), catId),
+    apiBaseUrl: `http://127.0.0.1:${PORT}`,
+    log: app.log,
+  });
   await app.register(callbackRuntimeInteractionRoutes, {
     registry,
     callbackAuthNotifier,
@@ -4964,6 +5040,9 @@ async function main(): Promise<void> {
     capabilityProjectRoot: pluginCapabilityRoot,
     editorParentOrigin: new URL(resolveFrontendBaseUrl(process.env, app.log)).origin,
     desktopExecutor: {
+      prepare: async () => {
+        await companionDesktopComponent.prepare();
+      },
       open: async (launch) =>
         new ElectronDesktopWindowExecutor({
           executable: await companionDesktopComponent.executable(),
@@ -5623,17 +5702,32 @@ async function main(): Promise<void> {
     F306: bindLegacyApprovalProducer(new F306ApprovalAdapter(runtimeInteractionRuntime.store)),
     F321: bindLegacyApprovalProducer(new F321ApprovalAdapter(eventMemoryCorrectionProposalStore)),
     F260: bindLegacyApprovalProducer(
-      new F260ApprovalAdapter(entityProposalStore, (proposal) => {
-        if (!memoryServices.evidenceStore.inspectEntityConflict) {
-          throw new Error('F260: evidenceStore.inspectEntityConflict not available — Hub projection blocked');
-        }
-        return memoryServices.evidenceStore.inspectEntityConflict(
-          buildEntityRecord(proposal, proposal.ownerUserId),
-          proposal.ownerUserId,
-        );
-      }),
+      new F260ApprovalAdapter(
+        entityProposalStore,
+        (proposal) => {
+          if (!memoryServices.evidenceStore.inspectEntityConflict) {
+            throw new Error('F260: evidenceStore.inspectEntityConflict not available — Hub projection blocked');
+          }
+          return memoryServices.evidenceStore.inspectEntityConflict(
+            buildEntityRecord(proposal, proposal.ownerUserId),
+            proposal.ownerUserId,
+          );
+        },
+        (proposal) =>
+          memoryServices.evidenceStore.getEntityProposalEffectProof?.(
+            proposal.entityId,
+            proposal.proposalId,
+            proposal.ownerUserId,
+          ) ?? null,
+      ),
     ),
     F266: bindV1ApprovalProducer(f266ApprovalAdapter),
+  });
+  approvalDecisionReceipts = new ApprovalDecisionReceiptService({
+    registry: approvalProducerRegistry,
+    messageStore,
+    outbox: new ApprovalDecisionReceiptOutbox(schedulerDb),
+    logger: app.log,
   });
   const { createArtifactReviewIntegration } = await import('./domains/growing/artifact-review-composition.js');
   const { createProgramContentMediaPort } = await import(
@@ -5754,6 +5848,8 @@ async function main(): Promise<void> {
     }),
   );
   const livingWorks = new LivingWorkService({
+    changed: (ownerUserId) =>
+      socketManager?.emitToUser(ownerUserId, 'entrusted_work_projection_invalidated', { ownerUserId }),
     responses: workResponses,
     owner: collaborativeContent.owner,
     versions: artifactReview.store.works,
@@ -7466,28 +7562,11 @@ async function main(): Promise<void> {
     log: { warn: (context, message) => app.log.warn(context, message) },
   });
 
-  const admitManagedWake: ManagedCommandWakeRecoveryDeps['admitWake'] = async (input) => {
-    // INV-I1: Message and Queue row in one transaction. The lease was already verified against
-    // this exact envelope, so nothing admitted here can belong to a generation that has moved on.
-    const admitted = await invocationQueue.send(messageStore, input.message, {
-      threadId: input.threadId,
-      userId: input.userId,
-      sourceId: input.message.idempotencyKey,
-      kind: 'conversation_input',
-      ownerAuthProvenance: 'unknown',
-      idempotencyKey: input.message.idempotencyKey,
-      content: input.content,
-      from: input.message.from,
-      targetCats: [input.catId],
-      intent: 'execute',
-      priority: input.priority,
-      sourceCategory: input.sourceCategory,
-      ...(input.actionSuccessorFence ? { actionSuccessorFence: input.actionSuccessorFence } : {}),
-    });
-    if (admitted.outcome === 'full') return {};
-    await notifyManagedWakeAdmitted(input.threadId, input.userId);
-    return { messageId: admitted.message.id };
-  };
+  const admitManagedWake = createManagedCommandWakeAdmission({
+    queue: invocationQueue,
+    messageStore,
+    notifyAdmitted: notifyManagedWakeAdmitted,
+  });
   // Physical embodiment is independent of IM packages and their subscriptions.
   const embodimentOutbound: NonNullable<typeof callbackOpts.outboundHook> = {
     async deliver(threadId, content, catId, _rich, _meta, _origin, triggerMessageId) {

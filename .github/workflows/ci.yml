@@ -70,6 +70,7 @@ jobs:
           pnpm --filter @cat-cafe/api exec node ./scripts/with-test-home.mjs
           node --import tsx --test --test-concurrency=1
           test/native-tool-catalog.test.ts
+          test/project-template-path.test.ts
           test/native-codeagent-discovery.test.ts
           test/native-dsh-patch-classification.test.ts
           test/dsh-recommendation.test.ts

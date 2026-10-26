@@ -65,6 +65,7 @@ jobs:
           test/native-runtime-readiness.test.ts
           test/native-dsh-discovery.test.ts
           test/native-tool-catalog.test.ts
+          test/project-template-path.test.ts
           test/native-codeagent-discovery.test.ts
           test/native-dsh-patch-classification.test.ts
           test/dsh-recommendation.test.ts

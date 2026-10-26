@@ -21,9 +21,10 @@ import type {
   QueueAuthorIntent,
   QueueAuthorIntentFallbackReason,
   QueueTargetAttemptTerminalReason,
+  RoutingAdmissionProvenanceV1,
   WaitContinuationCarrierV1,
 } from '@cat-cafe/shared';
-import { isMessageFrom } from '@cat-cafe/shared';
+import { isMessageFrom, routingAdmissionProvenanceV1Schema } from '@cat-cafe/shared';
 import { createModuleLogger } from '../../../../../infrastructure/logger.js';
 import type { CallerTraceContext } from '../../../../../infrastructure/telemetry/genai-semconv.js';
 import {
@@ -65,6 +66,14 @@ import { assertQueueLedgerExecutionScope } from './queue-ledger/QueueLedgerValid
 import { isOwnerRecoverableRoutingTarget } from './queue-routing-recovery-policy.js';
 
 export type QueueEntry = QueueLedgerEntry;
+
+/** Sent or uncertain input still belongs to its original run, even while its row is queued. */
+export function hasInFlightLifecycleAppend(entry: Pick<QueueEntry, 'delivery'>): boolean {
+  return (
+    Object.keys(entry.delivery.appendPendingByTarget ?? {}).length > 0 ||
+    Object.values(entry.delivery.appendRecoveryByTarget ?? {}).some((failure) => failure.acceptance === 'unknown')
+  );
+}
 
 type QueueAttemptSettlementOutcome = 'handled' | 'failed' | 'interrupted' | 'cancelled';
 
@@ -527,7 +536,8 @@ export class InvocationQueue {
           (ref) =>
             !row.delivery.appendPendingByTarget?.[ref.targetId] ||
             ref.appendAcceptance === 'accepted' ||
-            ref.inputRead?.status === 'read',
+            (!row.delivery.appendPendingByTarget?.[ref.targetId]?.requiresCompletion &&
+              ref.inputRead?.status === 'read'),
         )
         .map((ref) => ref.targetId) ?? [],
     );
@@ -1297,6 +1307,7 @@ export class InvocationQueue {
     messageId: string,
     targetId: string,
     responseMessageId: string,
+    completed = false,
   ): Promise<boolean> {
     const entryId = queueEntryId(messageId);
     const entry = await this.ledgerStore.get(threadId, entryId);
@@ -1306,6 +1317,7 @@ export class InvocationQueue {
         entry.delivery.appendPendingByTarget?.[targetId]?.responseMessageId !== responseMessageId)
     )
       return false;
+    if (entry.delivery.appendPendingByTarget?.[targetId]?.requiresCompletion && !completed) return false;
     const result = await this.ledgerStore.reconcileTargets(threadId, entryId, [], [targetId], {});
     if (result.outcome !== 'updated' && result.outcome !== 'replayed') return false;
     this.removeCachedEntry(threadId, entryId);
@@ -1316,8 +1328,15 @@ export class InvocationQueue {
   /** Claim one queued row before an external withdrawal side effect. */
   async claimQueuedEntryForWithdrawal(threadId: string, userId: string, entryId: string): Promise<QueueEntry | null> {
     const entry = this.findEntry(threadId, userId, entryId);
-    if (!entry || entry.status !== 'queued') return null;
-    return this.claimLedgerEntry(entry);
+    if (!entry || entry.status !== 'queued' || hasInFlightLifecycleAppend(entry)) return null;
+    const claimed = await this.claimLedgerEntry(entry);
+    // The cache can predate a concurrent Append. Inspect the canonical claim
+    // before any History cancellation or ledger withdrawal side effect.
+    if (claimed && hasInFlightLifecycleAppend(claimed)) {
+      await this.restoreClaimedEntries(threadId, [claimed.id]);
+      return null;
+    }
+    return claimed;
   }
 
   /** Freeze the source entry for one message before its withdrawal side effect. */
@@ -1333,7 +1352,8 @@ export class InvocationQueue {
     if (matches.length === 0 || matches.some((entry) => queueEntryOwnerId(entry) !== userId)) {
       return { outcome: 'not_found' };
     }
-    if (matches.some((entry) => entry.status !== 'queued')) return { outcome: 'processing' };
+    if (matches.some((entry) => entry.status !== 'queued' || hasInFlightLifecycleAppend(entry)))
+      return { outcome: 'processing' };
     const claimId = randomUUID();
     const claimed = await this.ledgerStore.claimPrefix(
       threadId,
@@ -1344,7 +1364,15 @@ export class InvocationQueue {
     if (claimed.outcome !== 'claimed') {
       return { outcome: claimed.outcome === 'not_found' ? 'not_found' : 'processing' };
     }
-    return { outcome: 'claimed', entries: this.cacheLedgerClaim(claimed.entries, claimId) };
+    const entries = this.cacheLedgerClaim(claimed.entries, claimId);
+    if (entries.some(hasInFlightLifecycleAppend)) {
+      await this.restoreClaimedEntries(
+        threadId,
+        entries.map((entry) => entry.id),
+      );
+      return { outcome: 'processing' };
+    }
+    return { outcome: 'claimed', entries };
   }
 
   /** Withdraw every source entry frozen by claimMessageEntriesForWithdrawal. */
@@ -1392,6 +1420,24 @@ export class InvocationQueue {
     }
     this.cacheLedgerEntries([committed.entry]);
     return true;
+  }
+
+  /** B is optional provenance. A worker that already claimed this row never waits for it. */
+  async recordRoutingAdmissionObservation(
+    threadId: string,
+    userId: string,
+    entryId: string,
+    observation: RoutingAdmissionProvenanceV1,
+  ): Promise<boolean> {
+    const parsed = routingAdmissionProvenanceV1Schema.parse(observation);
+    const result = await this.mutateQueuedLedgerEntry(threadId, userId, entryId, (entry) => {
+      if (entry.delivery.routingAdmission) return false;
+      entry.delivery.routingAdmission = structuredClone(parsed);
+      return true;
+    });
+    // The metadata CAS may briefly win a worker's claim. Restore its ordinary drain notification.
+    if (result) await this.notifyAdmission(threadId, [result.entry]);
+    return result?.changed ?? false;
   }
 
   /**

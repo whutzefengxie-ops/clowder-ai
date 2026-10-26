@@ -1,7 +1,14 @@
 import type { ApprovalItem, EventMemoryCorrectionProposal, SettledApprovalItem } from '@cat-cafe/shared';
 import type { EventMemoryCorrectionProposalStore } from '../../memory/event/EventMemoryCorrectionProposalStore.js';
-import { ALL_PENDING_APPROVALS_LIMIT, type IApprovalAdapter, type ListSettledOpts } from '../ports/IApprovalAdapter.js';
+import {
+  ALL_PENDING_APPROVALS_LIMIT,
+  type ApprovalDecisionRead,
+  type IApprovalAdapter,
+  type ListSettledOpts,
+  projectApprovalDecisionRead,
+} from '../ports/IApprovalAdapter.js';
 import { compactApprovalProjections, projectApprovalNavigation } from '../projectApprovalNavigation.js';
+import { projectSettledDecisionFacts } from '../settled-decision-facts.js';
 
 const STALE_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -13,6 +20,12 @@ export class F321ApprovalAdapter implements IApprovalAdapter {
   async listPending(ownerUserId: string): Promise<ApprovalItem[]> {
     const proposals = await this.store.listActionable(ownerUserId, ALL_PENDING_APPROVALS_LIMIT);
     return compactApprovalProjections(proposals.map(toItem));
+  }
+
+  async readDecision(userId: string, proposalId: string): Promise<ApprovalDecisionRead> {
+    const p = await this.store.get(proposalId);
+    if (!p || p.ownerUserId !== userId) return { state: 'closed' };
+    return projectApprovalDecisionRead(p.status, () => toSettledItem(p), p.rejectionReason);
   }
 
   async listSettled(ownerUserId: string, opts?: ListSettledOpts): Promise<SettledApprovalItem[]> {
@@ -44,6 +57,7 @@ function toSettledItem(proposal: EventMemoryCorrectionProposal): SettledApproval
   if (proposal.status !== 'approved' && proposal.status !== 'rejected') return null;
   const navigation = projectApprovalNavigation(proposal, { legacyThreadId: proposal.sourceThreadId });
   if (!navigation) return null;
+  const decision = projectSettledDecisionFacts(proposal);
   return {
     proposalId: proposal.proposalId,
     sourceFeatureId: 'F321',
@@ -51,10 +65,10 @@ function toSettledItem(proposal: EventMemoryCorrectionProposal): SettledApproval
     ownerUserId: proposal.ownerUserId,
     status: proposal.status,
     summary: `Event correction: ${proposal.eventId}`,
-    detail: detailOf(proposal),
+    detail: { ...detailOf(proposal), ...decision.detail },
     navigation,
-    decidedAt: proposal.approvedAt ?? proposal.rejectedAt ?? 0,
-    decidedBy: proposal.approvedBy ?? proposal.rejectedBy ?? '',
+    decidedAt: decision.decidedAt,
+    decidedBy: decision.decidedBy,
     createdAt: proposal.createdAt,
   };
 }

@@ -491,8 +491,7 @@ describe('SystemPromptBuilder', () => {
     assert.ok(opencodeId.includes('出口一问'), 'OpenCode workflow should include exit check (出口一问)');
     assert.ok(opencodeId.includes('OMOC Sisyphus'), 'OpenCode workflow should keep golden-chinchilla governance');
     for (const prompt of [opusId, codexId, opencodeId, buildStaticIdentity('gemini25')]) {
-      assert.match(prompt, /常规 reviewer（缅因猫、kimi 或 gemini-argon；Argon 只审不写）/);
-      assert.doesNotMatch(prompt, /常规 reviewer（[^）]*Sonnet/);
+      assert.match(prompt, /常规 reviewer（缅因猫、Sonnet、kimi 或 gemini-argon；Argon 只审不写）/);
     }
   });
 
@@ -1250,6 +1249,20 @@ describe('SystemPromptBuilder', () => {
     });
     assert.ok(ctx.includes('[路由提醒]'), 'Should include routing feedback banner');
     assert.ok(ctx.includes('@opus'), 'Should mention the target cat');
+  });
+
+  test('void hold feedback is a factual wait reconciliation rather than a self-mention routing instruction', async () => {
+    const { buildInvocationContext } = await import('../dist/domains/cats/services/context/SystemPromptBuilder.js');
+    const ctx = buildInvocationContext({
+      catId: 'codex',
+      mode: 'independent',
+      teammates: ['opus'],
+      mcpAvailable: true,
+      mentionRoutingFeedback: { sourceTimestamp: Date.now(), items: [{ targetCatId: 'codex', reason: 'void_hold' }] },
+    });
+    assert.match(ctx, /等待对账/);
+    assert.doesNotMatch(ctx, /上次你提到了.*@codex/);
+    assert.doesNotMatch(ctx, /请.*hold_ball/);
   });
 
   test('buildInvocationContext does not contain static identity or MCP tools', async () => {

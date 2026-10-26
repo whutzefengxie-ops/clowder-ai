@@ -35,10 +35,13 @@ function resolveUrl(url: string, isV2: boolean): string {
 export function ContentBlocks({
   blocks,
   publication,
+  messageSource,
   fallbackText,
 }: {
   blocks: MessageContent[];
   publication?: PublishedMessageCoordinate;
+  /** Read-only origin of an opinion, including a queued input; never a publication grant. */
+  messageSource?: Pick<PublishedMessageCoordinate, 'threadId' | 'messageId'>;
   /** Callback posts store their spoken body separately from attachment-only blocks. */
   fallbackText?: string;
 }) {
@@ -48,11 +51,11 @@ export function ContentBlocks({
   return (
     <>
       {fallbackText?.trim() && !blocks.some((block) => block.type === 'text') ? (
-        <MarkdownContent content={fallbackText} />
+        <MarkdownContent referenceThreadId={publication?.threadId} content={fallbackText} />
       ) : null}
       {blocks.map((block, i) => {
         if (block.type === 'text') {
-          return <MarkdownContent key={i} content={block.text} />;
+          return <MarkdownContent key={i} referenceThreadId={publication?.threadId} content={block.text} />;
         }
         if (block.type === 'image') {
           const source = published.source(block.url, { kind: 'content-block', index: i });
@@ -136,7 +139,9 @@ export function ContentBlocks({
                 : [],
             ) satisfies MediaContextAttachment[];
             for (const member of group) renderedGalleryAttachments.add(member.id);
-            return <GalleryAttachmentGroup key={attachment.id} attachments={group} />;
+            return (
+              <GalleryAttachmentGroup key={attachment.id} attachments={group} message={messageSource ?? publication} />
+            );
           }
           const quoteNumber =
             block.attachment.kind === 'quote' && block.attachment.source.kind === 'workspace_file'

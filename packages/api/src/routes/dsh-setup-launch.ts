@@ -12,6 +12,7 @@ import { buildChildEnv } from '../utils/cli-spawn.js';
 import { resolveWindowsSpawnPlan } from '../utils/cli-spawn-win.js';
 import { resolveDshDesktopLauncher } from '../utils/dsh-desktop-launcher.js';
 import { createDshDumpSnapshot } from './dsh-setup-snapshot.js';
+import { resolveDshHome } from './native-dsh-home.js';
 import { dshProfileState } from './native-dsh-profile.js';
 import { closeCatalogProcess } from './runtime-catalog-process.js';
 
@@ -24,8 +25,7 @@ export interface DshSetupLaunch {
 
 /** Unknown wrappers can change HOME or run arbitrary commands: keep them manual. */
 export function resolveDshSetupLaunch(command: string, args: string[], cwd: string): DshSetupLaunch {
-  if (process.env.DSH_HOME !== undefined && (!process.env.DSH_HOME.trim() || !isAbsolute(process.env.DSH_HOME)))
-    throw Error('dsh_setup_custom_startup');
+  resolveDshHome();
   const desktop = resolveDshDesktopLauncher(command, args);
   const plan = desktop
     ? { command, args }

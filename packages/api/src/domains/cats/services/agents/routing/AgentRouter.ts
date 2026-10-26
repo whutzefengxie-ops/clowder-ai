@@ -488,6 +488,7 @@ export interface AgentRouterOptions {
   draftStore?: IDraftStore;
   /** F065: Task store for bootstrap task snapshot injection */
   taskStore?: ITaskStore;
+  ownedWaitStatusReader?: import('../../../../ball-custody/OwnedWaitStatus.js').OwnedWaitStatusReader;
   /** RFC A79: canonical exact-run situation projection for agent context. */
   threadExecutionSituationSource?: import('../invocation/thread-execution-situation.js').ThreadExecutionSituationSource;
   /** F073 P4: Workflow SOP store for stage hint injection */
@@ -552,6 +553,7 @@ export interface AgentRouterOptions {
   personMemoryProposalStatusContextResolver?: import('../../../../memory/people/PersonMemoryProposalStatusContextResolver.js').PersonMemoryProposalStatusContextResolver;
   /** F287: invocation-bound Cue Plane adapter. */
   memoryCuePromptService?: import('../../../../memory/cue/MemoryCueInvocationPromptService.js').MemoryCueInvocationPromptResolver;
+  contextSourceAdmission?: import('../../../../memory/cue/ContextSourceAdmission.js').ContextSourceAdmission;
   profileCueOpportunitySource?: import('../../../../memory/cue/sources/ProfileMemoryCueSource.js').ProfileMemoryCueSource;
   threadOverviewOpportunitySource?: import('../../../../memory/cue/sources/ThreadOverviewMemoryCueSource.js').ThreadOverviewMemoryCueSource;
   eventCueOpportunitySource?: import('../../../../memory/cue/sources/EventMemoryCueSource.js').EventMemoryCueSource;
@@ -590,6 +592,9 @@ export class AgentRouter {
   private draftStore: IDraftStore | undefined;
   private taskProgressStore: TaskProgressStore | undefined;
   private taskStore: ITaskStore | undefined;
+  private ownedWaitStatusReader:
+    | import('../../../../ball-custody/OwnedWaitStatus.js').OwnedWaitStatusReader
+    | undefined;
   private threadExecutionSituationSource?: import('../invocation/thread-execution-situation.js').ThreadExecutionSituationSource;
   private workflowSopStore: IWorkflowSopStore | undefined;
   private executionDigestStore:
@@ -643,6 +648,7 @@ export class AgentRouter {
   private personMemoryProposalStatusContextResolver?: import('../../../../memory/people/PersonMemoryProposalStatusContextResolver.js').PersonMemoryProposalStatusContextResolver;
   /** F287 */
   private memoryCuePromptService?: import('../../../../memory/cue/MemoryCueInvocationPromptService.js').MemoryCueInvocationPromptResolver;
+  private contextSourceAdmission?: import('../../../../memory/cue/ContextSourceAdmission.js').ContextSourceAdmission;
   private profileCueOpportunitySource?: import('../../../../memory/cue/sources/ProfileMemoryCueSource.js').ProfileMemoryCueSource;
   private threadOverviewOpportunitySource?: import('../../../../memory/cue/sources/ThreadOverviewMemoryCueSource.js').ThreadOverviewMemoryCueSource;
   private eventCueOpportunitySource?: import('../../../../memory/cue/sources/EventMemoryCueSource.js').EventMemoryCueSource;
@@ -694,6 +700,7 @@ export class AgentRouter {
     this.draftStore = options.draftStore;
     this.taskProgressStore = options.taskProgressStore;
     this.taskStore = options.taskStore;
+    this.ownedWaitStatusReader = options.ownedWaitStatusReader;
     this.threadExecutionSituationSource = options.threadExecutionSituationSource;
     this.workflowSopStore = options.workflowSopStore;
     this.executionDigestStore = options.executionDigestStore;
@@ -727,6 +734,7 @@ export class AgentRouter {
     this.injectionTraceStore = options.injectionTraceStore;
     this.personMemoryProposalStatusContextResolver = options.personMemoryProposalStatusContextResolver;
     this.memoryCuePromptService = options.memoryCuePromptService;
+    this.contextSourceAdmission = options.contextSourceAdmission;
     this.profileCueOpportunitySource = options.profileCueOpportunitySource;
     this.eventCueOpportunitySource = options.eventCueOpportunitySource;
     this.threadOverviewOpportunitySource = options.threadOverviewOpportunitySource;
@@ -1368,6 +1376,7 @@ export class AgentRouter {
         ...(this.freshnessStateStore ? { freshnessStateStore: this.freshnessStateStore } : {}),
         ...(this.runtimeInteractionPort ? { runtimeInteractionPort: this.runtimeInteractionPort } : {}),
         ...(this.memoryCuePromptService ? { memoryCuePromptService: this.memoryCuePromptService } : {}),
+        ...(this.contextSourceAdmission ? { contextSourceAdmission: this.contextSourceAdmission } : {}),
         ...(this.profileCueOpportunitySource ? { profileCueOpportunitySource: this.profileCueOpportunitySource } : {}),
         ...(this.threadOverviewOpportunitySource
           ? { threadOverviewOpportunitySource: this.threadOverviewOpportunitySource }
@@ -1379,6 +1388,7 @@ export class AgentRouter {
       ...(this.dotReplyTarget ? { dotReplyTarget: this.dotReplyTarget } : {}),
       deliveryCursorStore: this.deliveryCursorStore,
       ...(this.taskStore ? { taskStore: this.taskStore } : {}),
+      ...(this.ownedWaitStatusReader ? { ownedWaitStatusReader: this.ownedWaitStatusReader } : {}),
       ...(this.threadExecutionSituationSource
         ? { threadExecutionSituationSource: this.threadExecutionSituationSource }
         : {}),

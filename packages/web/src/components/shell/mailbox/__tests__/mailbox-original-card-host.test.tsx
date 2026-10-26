@@ -91,8 +91,8 @@ async function render(item: UnifiedAttentionItemV1, current = true, readOwner = 
   return sessions;
 }
 const primary = (kind: 'F225' | 'F231') =>
-  [...container.querySelectorAll('button')].find((b) =>
-    b.textContent?.includes(kind === 'F225' ? '批准并接力' : '批准并写入'),
+  [...container.querySelectorAll('button')].find(
+    (b) => !b.hasAttribute('aria-expanded') && b.textContent?.includes(kind === 'F225' ? '批准并接力' : '批准并写入'),
   );
 it.each([
   'F225',
@@ -162,7 +162,7 @@ it.each([
   );
   await render(source(kind));
   expect(primary(kind)).toBeUndefined();
-  expect(container.textContent).toContain('已批准');
+  expect(container.textContent).toContain(kind === 'F225' ? '已同意 · 接力已发起' : '已同意 · 已写入档案');
 });
 
 it.each([

@@ -11,6 +11,7 @@ import { discoverAdditionalRuntimes } from './native-additional-runtimes.js';
 import { nativeClaudeConfiguration } from './native-claude-api-config.js';
 import { discoverCodeAgentRuntimes } from './native-codeagent-discovery.js';
 import { discoverDshRuntime } from './native-dsh-discovery.js';
+import { resolveDshHome } from './native-dsh-home.js';
 import { dshLauncherProfileState } from './native-dsh-profile.js';
 import { discoverPiRuntime } from './native-pi-discovery.js';
 import { nativeRuntimeReadiness } from './native-runtime-readiness.js';
@@ -41,7 +42,8 @@ export function safeNativeStartup(command: string, startupArgs: readonly string[
   );
 }
 /** Discovery is read-only. No auth files, full agent launches, prompts or login probes. */
-export function discoverNativeRuntimes(projectRoot: string, options: DiscoveryOptions = {}) {
+export function discoverNativeRuntimes(projectRoot: string, input: DiscoveryOptions | typeof resolveCliCommand = {}) {
+  const options = typeof input === 'function' ? { commandFor: input } : input;
   const home = options.home ?? homedir();
   const commandFor = options.commandFor ?? resolveCliCommand;
   const intranet = options.intranet ?? process.env.CAT_CAFE_INTRANET_EDITION === '1';
@@ -81,19 +83,21 @@ export function discoverNativeRuntimes(projectRoot: string, options: DiscoveryOp
     const entry = config.startupArgs.find((arg) => /(?:\.m?js|\.cjs)$/.test(arg));
     const installed = Boolean(command && existsSync(command) && (!entry || existsSync(resolve(projectRoot, entry))));
     const profileState = dshLauncherProfileState(config.command, config.startupArgs, projectRoot);
-    const harnessId = nativeBindingHarness(config.command, config.startupArgs, projectRoot);
+    const agy = cat.clientId === 'google' && cat.agyProfile?.carrier === 'acp';
+    const harnessId = agy ? 'agy' : nativeBindingHarness(config.command, config.startupArgs, projectRoot);
     const selectable = safeNativeStartup(config.command, config.startupArgs) && profileState !== 'acp_profile_invalid';
     return [
       {
         id: `acp:${cat.id}`,
-        label: cat.displayName,
+        label: agy ? 'AGY 官方 ACP' : cat.displayName,
         kind: 'binding' as const,
         sourceCatId: cat.id,
         harnessId,
         ...(intranet && harnessId === 'dsh'
           ? { dshSetupRequired: !hasPersistedDshSetup(config.startupArgs, projectRoot) }
           : {}),
-        clientId: 'acp',
+        clientId: agy ? 'google' : 'acp',
+        ...(agy ? { agyCarrier: 'acp' as const } : {}),
         installed,
         ...(profileState && profileState !== 'custom_startup'
           ? { discoveryStatus: installed ? profileState : 'not_installed' }
@@ -114,7 +118,7 @@ export function discoverNativeRuntimes(projectRoot: string, options: DiscoveryOp
   const dsh = nativeTool(
     discoverDshRuntime({
       resolveCommand: commandFor,
-      dshHome: process.env.DSH_HOME || join(home, '.dsh'),
+      dshHome: resolveDshHome(process.env.DSH_HOME ?? join(home, '.dsh')),
       requireSetup: intranet,
       ...(options.home ? { npmCaches: [] } : {}),
     }),
@@ -125,9 +129,39 @@ export function discoverNativeRuntimes(projectRoot: string, options: DiscoveryOp
     : discoverAdditionalRuntimes(home, commandFor).map((runtime) =>
         nativeTool(runtime, runtime.id === 'pi' ? 'pi' : 'kimi'),
       );
+  const agyModels = Object.values(catRegistry.getAllConfigs())
+    .filter((cat) => cat.clientId === 'google' && cat.agyProfile?.enabled)
+    .flatMap((cat) => (cat.agyProfile?.model ? [cat.agyProfile.model] : []));
+  const agy = intranet
+    ? []
+    : (
+        [
+          ['agy-native', 'AGY Native', 'agy', 'native'],
+          ...(!acp.some((runtime) => 'agyCarrier' in runtime)
+            ? [['agy-acp', 'AGY 官方 ACP', 'agy_acp_server.par', 'acp'] as const]
+            : []),
+        ] as const
+      ).map(([id, label, executable, agyCarrier]) => {
+        const command = commandFor(executable);
+        return {
+          id,
+          label,
+          kind: 'tool' as const,
+          harnessId: 'agy',
+          clientId: 'google',
+          agyCarrier,
+          command: command ?? undefined,
+          installed: Boolean(command),
+          models: [...new Set(agyModels)],
+          defaultsStatus: 'configured_only',
+          ...(agyCarrier === 'acp'
+            ? { acp: { command: executable, startupArgs: [], transport: 'stdio' as const } }
+            : {}),
+        };
+      });
   return {
     edition: intranet ? ('intranet' as const) : ('public' as const),
-    runtimes: [...discoverCodeAgentRuntimes(commandFor, intranet), ...builtins, ...acp, dsh, ...additional],
+    runtimes: [...discoverCodeAgentRuntimes(commandFor, intranet), ...builtins, ...acp, dsh, ...agy, ...additional],
     authenticationStatus: 'not_checked',
   };
 }

@@ -2,7 +2,7 @@ import { type Dispatch, type SetStateAction, useCallback } from 'react';
 import type { HubCatEditorFormState } from '../../hub-cat-editor.model';
 import type { MemberDraft } from './member-editor-state';
 import { type MemberRuntimeContext, memberRuntimeContextScope } from './member-runtime-context';
-import { type RuntimeChoice, switchMemberRuntime } from './member-runtime-draft';
+import { patchMemberRuntime, type RuntimeChoice, switchMemberRuntime } from './member-runtime-draft';
 
 export function useMemberRuntimeEditing(
   setDraft: Dispatch<SetStateAction<MemberDraft>>,
@@ -11,7 +11,7 @@ export function useMemberRuntimeEditing(
   const patch = useCallback(
     (change: Partial<HubCatEditorFormState>) => {
       setNotice(null);
-      setDraft((previous) => ({ ...previous, form: { ...previous.form, ...change } }));
+      setDraft((previous) => patchMemberRuntime(previous, change));
     },
     [setDraft, setNotice],
   );

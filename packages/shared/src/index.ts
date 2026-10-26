@@ -18,6 +18,7 @@ export * from './capability-tips.js';
 // Human-facing runtime member identity shared by API notifications and Web surfaces.
 export * from './cat-display-name.js';
 export * from './cat-mention-identity.js';
+export * from './chat-references.js';
 export * from './chatgpt-cloud-presentation.js';
 // Export shared CLI effort helpers
 export * from './cli-effort.js';
@@ -55,6 +56,7 @@ export * from './dot-mcp.js';
 export * from './eval-metric-ref.js';
 // First-party WebSocket Stop intent contract (API + Web single source).
 export * from './explicit-stop-intent.js';
+export * from './feature-demos.js';
 export * from './ignored-item-preference.js';
 export * from './markdown-link-safety.js';
 // Export shared text helpers
@@ -83,6 +85,7 @@ export * from './recall-outcome.js';
 // NOT re-exported here — uses Node.js fs, same pattern as Redis utils.
 // Export registry (CatRegistry, catIdSchema, assertKnownCatId)
 export * from './registry/index.js';
+export * from './runtime-interaction-result.js';
 export * from './runtime-question-retirement.js';
 // Export all schemas
 export * from './schemas/index.js';
@@ -90,6 +93,7 @@ export * from './schemas/index.js';
 export * from './source-code-extensions.js';
 export * from './text-utils.js';
 export * from './thread-works.js';
+export * from './types/approval-decision-receipt.js';
 export * from './types/artifact-review.js';
 export * from './types/artifact-review-drawing.js';
 // F255 runtime schemas are exported directly while their source remains grouped
@@ -124,6 +128,7 @@ export * from './types/collective-work-matter.js';
 export * from './types/collective-work-policy.js';
 export { collectiveWorkResultMediaTypeForFileName } from './types/collective-work-return.js';
 export * from './types/collective-work-wake.js';
+export * from './types/connection-diagnostics.js';
 export * from './types/content-modification.js';
 export * from './types/content-modification-carrier.js';
 export * from './types/content-modification-control.js';

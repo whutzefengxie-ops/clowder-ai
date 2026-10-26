@@ -805,6 +805,7 @@ async function ensureDuplicateCallbackWake(input: {
 }
 
 export interface CallbackRoutesOptions {
+  proposalProjectRoot?: string;
   resolveTrustedImagePath?: (hmrId: string) => Promise<string | undefined>;
   liveTaskAuthority?: import('./live-task-authority.js').LiveTaskAuthority;
   /** F293: applied scarcity policy; defaults to the active project dossier. */
@@ -869,6 +870,7 @@ export interface CallbackRoutesOptions {
     threadId: string,
   ) => Promise<{ memberCardCount: number }> | { memberCardCount: number };
   taskStore?: ITaskStore;
+  ownedWaitStatusReader?: import('../domains/ball-custody/OwnedWaitStatus.js').OwnedWaitStatusReader;
   backlogStore?: IBacklogStore;
   /** For thinking mode filtering in thread-context + thread-cats discovery */
   threadStore?: IThreadStore;
@@ -912,6 +914,10 @@ export interface CallbackRoutesOptions {
   agentRegistry?: { getAllEntries(): Map<string, unknown> };
   /** Read-only F293 annotation; Queue preserves all accepted target rows. */
   routingDispatchPreflight?: import('../domains/routing-context/RoutingDispatchPreflightPort.js').RoutingDispatchPreflightPort;
+  routingSelection?: Pick<
+    import('../domains/routing-context/selection/RoutingSelectionService.js').RoutingSelectionService,
+    'read'
+  >;
   /** For post_message @mention → invocation triggering */
   router?: AgentRouter;
   invocationRecordStore?: IInvocationRecordStore;
@@ -936,6 +942,8 @@ export interface CallbackRoutesOptions {
   indexBuilder?: { markThreadDirty(threadId: string): void; flushDirtyThreads?(): number | Promise<number> };
   /** F102: DI memory services — SQLite-backed evidence store */
   evidenceStore: IEvidenceStore;
+  /** Optional shared publisher; caller authentication remains in callback routes. */
+  messageSearchService?: import('../domains/memory/MessageSearchService.js').MessageSearchService;
   markerQueue: IMarkerQueue;
   reflectionService: IReflectionService;
   /** F254 Phase B: Raw Redis client for freshness notice event log + state store */
@@ -2170,7 +2178,7 @@ export const callbacksRoutes: FastifyPluginAsync<CallbackRoutesOptions> = async 
         threadId: effectiveThreadId,
         messageId: storedMsg.id,
         routed: routingOutcome.routed,
-        ...(deliveryDecision.routingPreflight ? { routing_preflight: deliveryDecision.routingPreflight } : {}),
+        ...(deliveryDecision.routingAdmission ? { routing_admission: deliveryDecision.routingAdmission } : {}),
         ...(validatedReplyTo ? { replyTo: validatedReplyTo } : {}),
         ...(clientMessageId ? { clientMessageId } : {}),
         ...(routing_warnings.length > 0 ? { routing_warnings } : {}),
@@ -3834,7 +3842,7 @@ export const callbacksRoutes: FastifyPluginAsync<CallbackRoutesOptions> = async 
       threadId: effectiveThreadId,
       messageId: storedMsg.id,
       routed: routingOutcome.routed,
-      ...(deliveryDecision.routingPreflight ? { routing_preflight: deliveryDecision.routingPreflight } : {}),
+      ...(deliveryDecision.routingAdmission ? { routing_admission: deliveryDecision.routingAdmission } : {}),
       ...(validatedReplyTo ? { replyTo: validatedReplyTo } : {}),
       ...(clientMessageId ? { clientMessageId } : {}),
       ...(routing_warnings.length > 0 ? { routing_warnings } : {}),
@@ -5798,6 +5806,7 @@ export const callbacksRoutes: FastifyPluginAsync<CallbackRoutesOptions> = async 
   if (taskStore) {
     registerCallbackTaskRoutes(app, {
       taskStore,
+      ...(opts.ownedWaitStatusReader ? { ownedWaitStatusReader: opts.ownedWaitStatusReader } : {}),
       messageStore: opts.messageStore,
       socketManager,
       ...(threadStore ? { threadStore } : {}),
@@ -5833,12 +5842,14 @@ export const callbacksRoutes: FastifyPluginAsync<CallbackRoutesOptions> = async 
     registerCallbackThreadCatsRoutes(app, {
       threadStore: opts.threadStore,
       agentRegistry: opts.agentRegistry,
+      ...(opts.routingSelection ? { routingSelection: opts.routingSelection } : {}),
     });
   }
 
   // F128: Cat-side thread proposal callback
   if (opts.proposalStore && opts.threadStore) {
     registerCallbackProposeThreadRoutes(app, {
+      projectRoot: opts.proposalProjectRoot,
       registry,
       proposalStore: opts.proposalStore,
       threadStore: opts.threadStore,
@@ -5957,6 +5968,7 @@ export const callbacksRoutes: FastifyPluginAsync<CallbackRoutesOptions> = async 
 
   await registerCallbackMemoryRoutes(app, {
     evidenceStore: opts.evidenceStore,
+    messageSearchService: opts.messageSearchService,
     messageStore: opts.messageStore,
     ...(opts.threadStore ? { threadStore: opts.threadStore } : {}),
     markerQueue: opts.markerQueue,

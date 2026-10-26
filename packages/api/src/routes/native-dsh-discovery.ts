@@ -41,7 +41,6 @@ function cachedEntry(caches: string[]): string | undefined {
 
 export function discoverDshRuntime(options: DiscoveryOptions = {}) {
   const home = homedir();
-  const dshHome = options.dshHome ?? process.env.DSH_HOME ?? join(home, '.dsh');
   const command = (options.resolveCommand ?? resolveCliCommand)('dsh');
   const caches = options.npmCaches ?? [
     ...(process.env.npm_config_cache ? [process.env.npm_config_cache] : []),
@@ -50,7 +49,7 @@ export function discoverDshRuntime(options: DiscoveryOptions = {}) {
   ];
   const entry = command ? undefined : cachedEntry(caches);
   const executable = command ?? (entry ? (findSystemNode() ?? undefined) : undefined);
-  const profileState = dshProfileState(dshHome);
+  const profileState = dshProfileState(options.dshHome);
   const available = Boolean(executable && profileState !== 'acp_profile_invalid');
   const startupArgs = [...(entry ? [entry] : []), '--profile', 'acp'];
   return {

@@ -76,7 +76,7 @@ it('retains public manual clients and keeps unknown custom bindings available se
     acp: { command: 'private-wrapper', startupArgs: ['--acp'] },
   } as RuntimeChoice;
   const result = memberRuntimeTools([...tools, unknown], [], undefined, 'public');
-  expect(memberRuntimeOptions(result, t).some((item) => item.label.startsWith('Gemini'))).toBe(true);
+  expect(memberRuntimeOptions(result, t).some((item) => item.label.startsWith('AGY Native'))).toBe(true);
   expect(memberRuntimeOptions(result, t, 'bindings').find((item) => item.value === unknown.id)?.label).not.toContain(
     '布偶猫',
   );
@@ -228,4 +228,43 @@ it('keeps context only within the same member, executable, transport and plugin 
   expect(memberRuntimeContextScope({ ...node, acpStartupArgs: 'pi.mjs --profile acp' })).not.toBe(
     memberRuntimeContextScope(node),
   );
+});
+
+it('keeps AGY Native and official ACP histories separate within the same harness', () => {
+  const native: RuntimeChoice = {
+    id: 'agy',
+    label: 'AGY Native',
+    kind: 'tool',
+    harnessId: 'agy',
+    clientId: 'google',
+    agyCarrier: 'native',
+    installed: true,
+    models: [],
+  };
+  const acp: RuntimeChoice = {
+    ...native,
+    id: 'agy-acp',
+    label: 'AGY official ACP',
+    agyCarrier: 'acp',
+    acp: { command: 'agy', startupArgs: ['--acp'], transport: 'stdio' },
+  };
+  const original: MemberDraft = {
+    version: 1,
+    baseline: null,
+    templateId: null,
+    section: 'runtime',
+    form: {
+      ...initialState(),
+      ...runtimeDefaults(native),
+      defaultModel: 'native-model',
+      agyProfileId: 'native-profile',
+    },
+  };
+  const switched = switchMemberRuntime(original, acp, native);
+  expect(switched.form.carrier).toBe('acp');
+  expect(switched.form.agyAcpEnabled).toBe(true);
+  const edited = { ...switched, form: { ...switched.form, defaultModel: 'acp-model', agyProfileId: 'acp-profile' } };
+  const restoredNative = switchMemberRuntime(edited, native, acp);
+  expect(restoredNative.form).toEqual(original.form);
+  expect(switchMemberRuntime(restoredNative, acp, native).form).toEqual(edited.form);
 });

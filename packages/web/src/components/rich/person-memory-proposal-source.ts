@@ -16,8 +16,25 @@ const snapshotSchema = z.object({
   remainingDraftIds: z.array(z.string()).optional(),
   publicationState: z.literal('anchored'),
   approvalCardMessageId: z.string(),
+  replacedByProposalId: z.string().min(1).optional(),
+  hasRetainedWrites: z.boolean().optional(),
+  materialized: z
+    .object({
+      claims: z.number().int().nonnegative(),
+      relationships: z.number().int().nonnegative(),
+      events: z.number().int().nonnegative(),
+    })
+    .optional(),
+  undoApplied: z.boolean().optional(),
   decisionReceipt: receiptSchema.optional(),
-  undoReceipt: z.object({ requestId: z.string(), verdict: z.literal('undone') }).optional(),
+  undoReceipt: z
+    .object({
+      requestId: z.string(),
+      verdict: z.literal('undone'),
+      candidateId: z.string().optional(),
+      candidateState: z.enum(['pending_approval', 'partially_materialized', 'withdrawn']).optional(),
+    })
+    .optional(),
 });
 export type PersonMemorySnapshot = z.infer<typeof snapshotSchema>;
 export type PersonMemoryCoordinate = { threadId: string; messageId: string };
@@ -99,6 +116,7 @@ export async function readPersonMemorySource(
   ref: PersonMemoryCoordinate,
   original?: RichCardBlock,
   expected?: ApprovalHubItem,
+  expectedOwnerUserId?: string,
 ): Promise<{ snapshot: PersonMemorySnapshot; item: ApprovalHubItem | null } | null> {
   try {
     const session = await apiFetch('/api/session', {}, { afterCurrentGet: true });
@@ -107,6 +125,7 @@ export async function readPersonMemorySource(
       !record(owner) ||
       typeof owner.userId !== 'string' ||
       !owner.userId ||
+      (expectedOwnerUserId !== undefined && expectedOwnerUserId !== owner.userId) ||
       (expected && expected.ownerUserId !== owner.userId)
     )
       return null;

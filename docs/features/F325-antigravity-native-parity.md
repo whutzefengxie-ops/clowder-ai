@@ -1,6 +1,6 @@
 ---
 feature_ids: [F325]
-tips_exempt: "Renewed 2026-10-17 after merged native finish and live identity verification: This records repair toward normal member capability parity and still-incomplete acceptance, not a newly usable public entry. The former Task-only tool/file restrictions are not the product goal; add user-facing discovery when the complete working path is delivered and verified."
+tips_exempt: "Renewed 2026-10-24 for restoring the existing Native host tool environment and unattended Git behavior, alongside the member tool discovery repair; no new setting or user action is introduced. Overall parity and natural-use limits remain recorded separately."
 related_features: [F053, F061, F143, F149, F161, F174, F178, F194, F201, F203, F210, F211, F241, F254, F261, F286, F296, F299, F306, F318, F320, F323, F324]
 topics: [antigravity, acp, native-carrier, parity, migration, managed-job]
 doc_kind: spec
@@ -14,6 +14,8 @@ description_updated_at: 2026-09-29T06:01:16Z
 # F325: Antigravity Native Parity｜Siamese的新猫爬架与旧接入收归
 
 > **Status**: in-progress | **Owner**: 小星星·Maine Coon (@codex-astra, gpt-6-astra) | **Priority**: P1
+
+**2026-10-23 部署等待核对：`deploymentWait=unavailable`**：沿墨墨 source `private-source-id`，Sol 独立核实 #6041 已合入 `7761176c829af36d89a7ea3975cb4e8c744f3199`，正式 runtime 仍运行 `f16399d26482ece3341137c11f64c6189f3f726c`。原 Task `private-source-id` 的 canonical owner read 为 revision 17、`done` / `satisfied`、owner=`codex61-sol`；运行版本的 `registrationTaskError` 明确对终态 Task 返回 409 `Terminal Task cannot register a deployment wait`。据此未提交终态登记请求，本修复没有新建的自动部署回调；不复活 Task1529、不建镜像 Task、不重启 runtime。加载后核验仍待沿本线程续办：先确认冻结 merge 的实际包含关系与 API/Web ready，再按 source1329 的原分工安排便宜模型自然连续 A/B/C 验收，核对同进程、逐条完成回执、Queue 退休和正文；是否实际触发 recovered 支路须如实记录。Task1529 的已完成快照与整体 F325/Task2347 的未验边界保持原状。
 
 **2026-10-20 验收安排更新（覆盖下文这三项的专门验收安排）**：You 在本线程 source1157（`[thread-id]#private-source-id`）说明这几天正常使用没有遇到问题，要求认证中断恢复、上下文快满时自动接续、持久后台任务随日常使用验收，不消耗Siamese或其他猫的额外 token 专门验收。三项沿平时真实任务自然观察，复用已有证据；不为凑验收安排额外模型调用、长任务/故障探针、周期核验或反复审计旧材料。日常出现具体故障再针对该现场定位、修复与必要验证。未触发的场景如实保留证据边界，不以“近期没出问题”冒称全部通过，也不继续以缺少专门验收为由要求重复演示。原 Task2347 与 Astra 的交付责任保留，本次不关闭 Feature。
 
@@ -117,9 +119,33 @@ ACP 原生 L0 缺口已证；You 已选择保留个人 OAuth 与原生 L0，继�
 
 ### Phase B: 原生身份、安全与对话平权
 
+#### 工作单元：宿主工具环境同步 {#native-host-environment}
+
+- 来源：You `private-source-id`；Sol6.1 实现、Argon 独立 review。
+
 #### Open issue：Native 命令长时间静默 {#native-command-stall}
 
 - 状态：open，底层工具未返回的直接原因未知；Native 漏传 livenessProbe、观察器丢弃 warning 的呈现缺口已修复并加载。
+
+#### 工作单元：Native CLI 同进程续轮（Claude SDK 档）{#native-same-process-followup}
+
+- **来源 / 分工**：You source1329（`private-source-id`）。Sol6.1（@codex61-sol）写代码，Argon（@gemini-argon）独立审查，印印（@agy-opus55）指挥并在合入后最终验收。官方 ACP 的插话下一轮再做，本单不碰。
+- **目标**：AGY 猫正在运行时，同一 thread 里发给它的新消息不必再等这次运行结束、下次被叫起来才看到，而是写进同一个 AGY 进程，在当前这一轮结束后的下一轮处理。能力声明对齐 Claude SDK：`deliverySemantics: 'queued_internal_turn'`、`activeInvocationGuidance: 'supported'`。
+  - 上游支持：agy 1.4.5 `--input-format stream-json` 下，stdin 每进来一条消息就跑一轮、各出一个 `result`，关掉 stdin 后进程正常退出。运行中写入的消息会作为下一轮的 `user_input` step 被读到。
+  - 宿主有三处限制：`AgyNativeAgentService.ts` 的 `archiveNativeStream` 收到第一个 `result` 就关 stdin（L51）；`agy-native-turn.ts` 遇到第二个 result 就报错（L44），result 之后出现的 init/step 也会被拒（L79、L96）；能力写死成 `unsupported`（`AgyNativeAgentService.ts` L98-104）。
+  - 参照实现：`ClaudeSdkAgentService` 通过 `options.activeRunDispatch.register({ invocationId, capabilities, initialInputRead, handle, dispatch })` 接收运行中的消息（L182-215）。
+- **要做的**：
+  1. 调用里有 `activeRunDispatch` 时向它注册。能力写 `append: true`、`steer: false`、`inputReadReceipt: true`。stream-json 没有打断当前这一轮的接口，所以带 `force` 的请求要拒绝，不能假装支持。
+  2. `dispatch` 把消息编码成下一条 stream-json user 消息写进 stdin。只有看到对应的 `user_input` step DONE，才发"已读"回执（`onInputRead`）；写进 stdin 不算已读。
+  3. stdin 何时关：收到 result 时，如果还有已接受、但还没跑的消息，就不关；没有了才关 stdin，同时停止接收新消息。取消、报错、进程退出时立刻停止接收。
+  4. 一个进程多轮：观察器按轮切分。校验 init 只出现一次、`conversation_id` 不变；result 之后只允许接下一轮的 `user_input`。最后一轮结束才发 `done`。用量按轮计算，因为 result 里的用量是整个会话累计的。
+  5. `requestNativeCompaction`（`/compact`）和没有 `activeRunDispatch` 的调用，继续保持一问一答，行为不变。
+- **必须守住**（AC-B3）：
+  - 一条消息只有在它那一轮出了 SUCCESS result 后才算处理完。如果进程在那一轮出 result 前就结束、被取消或报错，这条消息要留在排队里，下一次调用照常处理，不能丢，也不能重复执行。
+  - A 的 result 已经出来、stdin 正在关的时候才到的消息，返回 `active_run_closed`，走现有排队，不能写进正在关闭的 stdin。
+  - 不读 `queuedMessages`，也不往 Profile 设置里加字段：实验已经证明它没用，宿主的设置白名单保持不变。认证、Profile、权限、MCP 凭据都不动；也不恢复已退役的"MCP 返回时顺带通知"（#1616）。
+- **验证**：先红后绿。用假 agy 进程（`spawnCliOverride` 或现有 `scripts/probes/f325-agy-native-*` 夹具）覆盖这几种情况：两轮都正常；A 运行中来了 B，随后 A 被取消；B 恰好在 A 的 result 之后到；第 2 轮报错；一问一答和 `/compact` 不回归。真实模型只由印印在合入加载后，用便宜模型走一次自然插话旅程，不另跑付费矩阵。
+- **不在范围内**：Codex 档的 `exact_active_turn`（目前没有上游接口）、官方 ACP 的插话、F325 close。
 
 复用 ACP service/pool、L0 compiler、F174/F178 principal、F286 MCP surface、F254 freshness、
 F296 context、F299 trajectory 与 F183/F306 semantic events。补真实 native instruction、

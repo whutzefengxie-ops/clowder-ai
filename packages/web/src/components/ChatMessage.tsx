@@ -76,11 +76,14 @@ import { BriefingCard } from './rich/BriefingCard';
 import type { CardConfirmationEntry } from './rich/CardBlock';
 import { CustodyOfferCard } from './rich/CustodyOfferCard';
 import { RichBlocks } from './rich/RichBlocks';
+import { projectRuntimeInteractionHeading } from './rich/runtime-interaction-heading';
+import { runtimeInteractionHeadingCopy } from './rich/runtime-interaction-heading.shell-copy';
 import { RoutingPreflightActions } from './routing-context/RoutingPreflightActions';
 import { SenderAvatar } from './SenderAvatar';
 import { SubexecutionActivity } from './SubexecutionActivity';
 import { SummaryCard } from './SummaryCard';
 import { SystemNoticeBar } from './SystemNoticeBar';
+import { useShellCopy } from './shell/shell-copy';
 import { useShellPresentation } from './shell/shell-presentation';
 import { NativeFailureDiagnostics, TerminalDiagnosticsPanel } from './TerminalDiagnosticsPanel';
 import { ThinkingContent } from './ThinkingContent';
@@ -199,7 +202,6 @@ function ChatMessageContent({
   onEditCoCreator,
   hideDiagnosticsPanel,
   dedupCount,
-  forwardingDisabled = false,
   showCapabilityTip = false,
   capabilityTipContexts,
   sendContext,
@@ -208,6 +210,9 @@ function ChatMessageContent({
   // The Café 1.6 cat reply (nameplate, no outer bubble) is a presentation of the same message, switched by the one shell
   // switch. Read it with the other hooks, before any early return.
   const shellPresentation = useShellPresentation();
+  const headingCopy = useShellCopy(runtimeInteractionHeadingCopy);
+  const displayedContent =
+    shellPresentation === 'v2' ? projectRuntimeInteractionHeading(message, headingCopy) : message.content;
   const replyRecall = useReplyRecallProjection(message.id);
   const coCreator = useCoCreatorConfig();
   const currentThreadId = useChatStore((s) => s.currentThreadId);
@@ -219,6 +224,7 @@ function ChatMessageContent({
     canRenderReplyLayers(message, replyLayersPresentation),
   );
 
+  const messageSource = renderThreadId ? { threadId: renderThreadId, messageId: message.id } : undefined;
   const publication =
     renderThreadId && !message.isStreaming && !message.queuedEntryId
       ? {
@@ -547,6 +553,8 @@ function ChatMessageContent({
         threadId={currentThreadId}
         timelineMessages={threadMessages}
         footer={dispatchLine}
+        getCatById={getCatById}
+        replyPreview={!isSchedulerReply ? resolvedReplyPreview : undefined}
       />
     );
   }
@@ -725,7 +733,7 @@ function ChatMessageContent({
             }}
           />
         ) : hasBlocks ? (
-          <ContentBlocks blocks={message.contentBlocks!} publication={publication} />
+          <ContentBlocks blocks={message.contentBlocks!} publication={publication} messageSource={messageSource} />
         ) : (
           <CollapsibleMarkdown content={message.content} disclosureKey={bodyDisclosureKey} />
         )}
@@ -815,6 +823,10 @@ function ChatMessageContent({
   /* ── Cat (assistant) header ── */
   const catHeader =
     compact ||
+    // Persisted replies can outlive their catalog entry. Their stable catId still owns the
+    // author row and its action slot; dropping the whole row makes MessageActions fall back
+    // over the first line of content exactly when the catalog cannot resolve the author.
+    message.catId ||
     catStyle ||
     companionIdentity ||
     message.extra?.turnExecution ||
@@ -921,7 +933,6 @@ function ChatMessageContent({
             {shellPresentation === 'classic' && (
               <InvocationTrajectoryAnchor message={message} threadId={renderThreadId} />
             )}
-            {shellPresentation === 'classic' && <MessageActionSlot />}
           </MessageAuthorDetails>
         </div>
         {companionIdentity && companionAuthorName && (
@@ -990,11 +1001,12 @@ function ChatMessageContent({
     <ContentBlocks
       blocks={message.contentBlocks!}
       publication={publication}
-      fallbackText={mergedSpeechContent ?? message.content}
+      messageSource={messageSource}
+      fallbackText={mergedSpeechContent ?? displayedContent}
     />
   ) : hasTextContent ? (
     <CollapsibleMarkdown
-      content={mergedSpeechContent ?? message.content}
+      content={mergedSpeechContent ?? displayedContent}
       className={REPLY_BODY_CLASS}
       disclosureKey={bodyDisclosureKey}
     />
@@ -1006,11 +1018,12 @@ function ChatMessageContent({
     <ContentBlocks
       blocks={message.contentBlocks!}
       publication={publication}
-      fallbackText={mergedSpeechContent ?? message.content}
+      messageSource={messageSource}
+      fallbackText={mergedSpeechContent ?? displayedContent}
     />
   ) : !isStreamOrigin && hasTextContent ? (
     <CollapsibleMarkdown
-      content={mergedSpeechContent ?? message.content}
+      content={mergedSpeechContent ?? displayedContent}
       className={catStyle?.font}
       disclosureKey={bodyDisclosureKey}
     />
@@ -1162,7 +1175,6 @@ function ChatMessageContent({
           sourceMessageIds={message.projectionSourceMessageIds ?? [message.id]}
           messageSource={message.source}
           htmlWidgetDisclosureKeys={richHtmlDisclosureKeys}
-          forwardingEnabled={!message.isStreaming && !forwardingDisabled}
           sendContext={sendContext}
           confirmations={confirmations}
         />

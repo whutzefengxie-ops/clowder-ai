@@ -5,6 +5,7 @@ import type {
   LifecycleAppendFailure,
   MessageFrom,
   QueueAuthorIntent,
+  RoutingAdmissionProvenanceV1,
   WaitContinuationCarrierV1,
 } from '@cat-cafe/shared';
 import type { CallerTraceContext } from '../../../../../../infrastructure/telemetry/genai-semconv.js';
@@ -56,11 +57,15 @@ export interface QueueLedgerExecution {
 }
 
 export interface QueueLedgerDelivery {
+  /** Optional B observation, never execution/recovery authority. No quota/account payload is retained. */
+  routingAdmission?: RoutingAdmissionProvenanceV1;
   /** Original Queue owns each Append until provider acceptance or durable recovery. */
   appendPendingByTarget?: Record<
     string,
     Pick<LifecycleAppendFailure, 'targetId' | 'invocationId' | 'responseMessageId' | 'at'> & {
       dispatchStarted: boolean;
+      /** Keep this target after read/transport acceptance until its own successful internal turn. */
+      requiresCompletion?: boolean;
     }
   >;
   /** Definite refusals await a new run; uncertain inputs remain held while their original handoff is checked. */

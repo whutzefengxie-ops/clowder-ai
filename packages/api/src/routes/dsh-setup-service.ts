@@ -1,6 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { lstatSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { resolveInvokeCapabilityRoot } from '../config/capabilities/invoke-capability-root.js';
 import { AcpClient } from '../domains/cats/services/agents/providers/acp/AcpClient.js';
@@ -8,9 +7,11 @@ import { buildDshPatch, canonicalDshConfig, composeDshProviderSource, inspectDsh
 import { assertDefaultDshCredentialStore } from './dsh-setup-credential-store.js';
 import { type DshSetupLaunch, dshSetupBootstrap, dumpDshConfig } from './dsh-setup-launch.js';
 import { inspectDshRouteReadiness } from './dsh-setup-readiness.js';
+import { resolveDshHome } from './native-dsh-home.js';
 
-export function dshSourceProfiles(home = process.env.DSH_HOME ?? join(homedir(), '.dsh')): string[] {
+export function dshSourceProfiles(configuredHome?: string): string[] {
   try {
+    const home = resolveDshHome(configuredHome);
     return readdirSync(join(home, 'profiles'), { withFileTypes: true })
       .flatMap((entry) => {
         if (!entry.isDirectory() || !/^[\w-]+$/.test(entry.name)) return [];
@@ -53,7 +54,7 @@ export async function readDshSetup(launch: DshSetupLaunch, sourceProfile: string
   if ((sourceProfile !== 'auto' && !profiles.includes(sourceProfile)) || !profiles.includes(activeProfile))
     throw Error('dsh_setup_profile_required');
   const active = await dumpDshConfig(launch);
-  const home = process.env.DSH_HOME ?? join(homedir(), '.dsh');
+  const home = resolveDshHome();
   const cwd = dshSetupBootstrap(launch).cwd;
   assertDefaultDshCredentialStore(active, home, cwd, true);
   const sourceFor = (profile: string) => {
@@ -94,9 +95,7 @@ export async function readDshSetup(launch: DshSetupLaunch, sourceProfile: string
       active: activeView,
       source: sourceView,
       suggestedSelection: selected && model ? { provider: selected.id, model } : undefined,
-      revision: digest(
-        JSON.stringify([launch, process.env.DSH_HOME, canonicalDshConfig(active), canonicalDshConfig(source)]),
-      ),
+      revision: digest(JSON.stringify([launch, home, canonicalDshConfig(active), canonicalDshConfig(source)])),
     },
   };
 }

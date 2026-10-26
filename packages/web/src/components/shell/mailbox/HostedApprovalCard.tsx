@@ -12,6 +12,7 @@ import { ApprovalItemCard } from '@/components/ApprovalItemCard';
 import { useApprovalHubStore } from '@/stores/approvalHubStore';
 import { useShellCopy } from '../shell-copy';
 import { useShellLanguage } from '../shell-language';
+import { ApprovalDecisionReceipt } from './ApprovalDecisionReceipt';
 import { ApprovalResultLink } from './ApprovalResultLink';
 import { type HostedApprovalMatch, matchHostedApproval } from './approval-match';
 import { describeReconcile } from './approval-reconcile';
@@ -161,7 +162,12 @@ function Hosted({
   const key = sessionKey(ownerUserId, { sourceFeatureId: approval.sourceFeatureId, proposalId: approval.proposalId });
 
   useEffect(() => {
-    sessions.open({ ownerUserId, decisionRef: item.decisionRef, approval });
+    sessions.open({
+      ownerUserId,
+      decisionRef: item.decisionRef,
+      approval,
+      ...(item.originalApprovalCard?.block.kind === 'card' ? { originalBlock: item.originalApprovalCard.block } : {}),
+    });
   }, [sessions, ownerUserId, item.decisionRef, approval]);
   useSyncExternalStore(sessions.subscribe, sessions.getVersion, sessions.getVersion);
   const session = sessions.get(key);
@@ -170,7 +176,7 @@ function Hosted({
   const match = matchHostedApproval({ read: approval, readOwnerUserId: ownerUserId, storeItems, now: Date.now() });
   const state = session?.model.state ?? { kind: 'idle' as const };
   const language = useShellLanguage();
-  const reconcile = describeReconcile(state, { language, ownerUserId });
+  const reconcile = describeReconcile(state, { language, ownerUserId, sourceFeatureId: approval.sourceFeatureId });
 
   const lastMatched = useRef<ApprovalHubItem | null>(null);
   if (match.kind === 'matched') lastMatched.current = match.item;
@@ -214,6 +220,25 @@ function Hosted({
     [originalPlaceAction, writesLocked, authorizeWrite, reportEditing, reportRequest, t],
   );
 
+  if (state.kind === 'decided') {
+    return (
+      <div data-testid="mailbox-hosted-approval" data-state={state.kind} data-session-key={key}>
+        <ApprovalDecisionReceipt
+          session={session ?? { approval, ownerUserId }}
+          terminal={state.terminal}
+          line={reconcile.line ?? ''}
+        >
+          <SessionStatus
+            line={null}
+            notice={session?.notice ?? null}
+            canReread={reconcile.canReread}
+            onReread={() => sessions.reread(key)}
+          />
+          {originalPlaceAction}
+        </ApprovalDecisionReceipt>
+      </div>
+    );
+  }
   return (
     <div
       className="flex flex-col gap-2"

@@ -1,4 +1,5 @@
 import { serializeCommandArgs } from '../../hub-cat-editor.acp';
+import { usesAgyAcp, usesAgyNative } from '../../hub-cat-editor.agy';
 import { type HubCatEditorFormState, initialState, splitCommandArgs } from '../../hub-cat-editor.model';
 import { resolveDraftCarrier } from './member-carrier-compat';
 import type { MemberDraft } from './member-editor-state';
@@ -16,6 +17,7 @@ export interface RuntimeChoice {
   /** A Host-owned role recommendation, independent of the client carrying it. */
   roleTemplateId?: string;
   priority?: number;
+  agyCarrier?: 'native' | 'acp';
   readiness?: NativeLoginState;
   /** An installed DSH default still needs an explicit usable route confirmation. */
   dshSetupRequired?: boolean;
@@ -73,6 +75,7 @@ function runtimeKey(form: RuntimeFields): string {
 }
 
 export function matchesRuntime(form: RuntimeFields, choice: RuntimeChoice): boolean {
+  if (choice.agyCarrier && !(choice.agyCarrier === 'native' ? usesAgyNative(form) : usesAgyAcp(form))) return false;
   return runtimeKey(form) === runtimeKey(runtimeDefaults(choice));
 }
 
@@ -80,12 +83,23 @@ export function matchesRuntime(form: RuntimeFields, choice: RuntimeChoice): bool
 export function rememberedRuntimes(drafts: RuntimeDrafts = {}): RuntimeChoice[] {
   return Object.entries(drafts).map(([key, form]) => ({
     id: `draft:${key}`,
-    label: resolveDraftCarrier(form) === 'acp' ? form.acpCommand : form.clientId,
+    label: usesAgyNative(form)
+      ? 'AGY Native'
+      : usesAgyAcp(form)
+        ? 'AGY 官方 ACP'
+        : resolveDraftCarrier(form) === 'acp'
+          ? form.acpCommand
+          : form.clientId,
     kind: 'binding',
     harnessId: form.harnessId,
     clientId: form.clientId,
     installed: false,
     models: [],
+    ...(usesAgyNative(form)
+      ? { agyCarrier: 'native' as const }
+      : usesAgyAcp(form)
+        ? { agyCarrier: 'acp' as const }
+        : {}),
     ...(resolveDraftCarrier(form) === 'acp'
       ? {
           acp: {
@@ -119,6 +133,8 @@ export function runtimeDefaults(next: RuntimeChoice): RuntimeFields {
     acpTransport: next.acp?.transport ?? 'stdio',
     acpMaxLiveProcesses: '',
     acpIdleTtlMinutes: '',
+    agyNativeEnabled: next.agyCarrier === 'native',
+    agyAcpEnabled: next.agyCarrier === 'acp',
   };
 }
 
@@ -129,14 +145,42 @@ function pickRuntime(form: RuntimeFields): RuntimeFields {
   } as RuntimeFields;
 }
 
+/** Advanced adapter changes share the tool picker's existing draft history. */
+export function patchMemberRuntime(draft: MemberDraft, change: Partial<HubCatEditorFormState>): MemberDraft {
+  const form = { ...draft.form, ...change };
+  if (resolveDraftCarrier(form) === resolveDraftCarrier(draft.form)) return { ...draft, form };
+  const runtimeDrafts = { ...draft.runtimeDrafts, [runtimeKey(draft.form)]: pickRuntime(draft.form) };
+  // The adapter picker supplies startup defaults. Prefer the exact binding
+  // already carried by this draft when returning to its previous protocol.
+  const restored =
+    runtimeDrafts[runtimeKey({ ...draft.form, carrier: form.carrier })] ?? runtimeDrafts[runtimeKey(form)];
+  return {
+    ...draft,
+    runtimeDrafts,
+    form: {
+      ...form,
+      ...(restored ? pickRuntime(restored) : {}),
+      carrier: form.carrier,
+      agyNativeEnabled: form.agyNativeEnabled,
+      agyAcpEnabled: form.agyAcpEnabled,
+    },
+  };
+}
+
 /** Switching changes only the draft. Returning to a tool restores its exact binding and overrides. */
 export function switchMemberRuntime(draft: MemberDraft, next: RuntimeChoice, current?: RuntimeChoice): MemberDraft {
   const nativeHarness = !draft.form.acpAgentProvider && current?.harnessId;
-  if (next.kind === 'tool' && next.harnessId && next.harnessId === nativeHarness) return draft;
+  if (!next.agyCarrier && next.kind === 'tool' && next.harnessId && next.harnessId === nativeHarness) return draft;
   const defaults = runtimeDefaults(next);
   const nextKey = runtimeKey({ ...draft.form, ...defaults });
   const currentKey = runtimeKey(draft.form);
-  if (nextKey === currentKey) return draft;
+  if (nextKey === currentKey) {
+    if (matchesRuntime(draft.form, next)) return draft;
+    return {
+      ...draft,
+      form: { ...draft.form, agyNativeEnabled: defaults.agyNativeEnabled, agyAcpEnabled: defaults.agyAcpEnabled },
+    };
+  }
   const runtimeDrafts = { ...draft.runtimeDrafts };
   // Object insertion order records the most recently visited exact binding for each harness.
   delete runtimeDrafts[currentKey];
@@ -145,7 +189,12 @@ export function switchMemberRuntime(draft: MemberDraft, next: RuntimeChoice, cur
     (next.kind === 'tool' && next.harnessId
       ? Object.values(runtimeDrafts)
           .reverse()
-          .find((fields) => !fields.acpAgentProvider && fields.harnessId === next.harnessId)
+          .find(
+            (fields) =>
+              !fields.acpAgentProvider &&
+              fields.harnessId === next.harnessId &&
+              (!next.agyCarrier || (next.agyCarrier === 'native' ? usesAgyNative(fields) : usesAgyAcp(fields))),
+          )
       : undefined) ?? runtimeDrafts[nextKey];
   // Fill every key, including optional undefined values omitted by JSON draft storage.
   const fields = restored ? pickRuntime(restored) : defaults;

@@ -119,6 +119,8 @@ export const COORDINATION_TERMINAL_SCAN_PAGE_SIZE = 100;
 export interface ThreadMessageReadOptions {
   /** Select artifact hash fields, omitting named top-level payloads; contentBlocks and extra are not trimmed. */
   artifactProjection?: boolean;
+  /** Internal recipient history: omit top-level bodies and contentBlocks; retain sender/visibility inputs and full extra. */
+  recipientProjection?: boolean;
   /** Include queued cat-authored speech that is already published to the timeline. */
   includeQueuedCatMessages?: boolean;
   /** Include durable queued owner work (user or Host connector ingress) in the browser timeline only. */
@@ -1018,7 +1020,7 @@ export type CommitLifecycleResponseTerminalResult =
 
 export type LifecycleInputDispatchPatch = {
   inputRead?: LifecycleInputReadReceipt;
-  appendAcceptance?: 'pending' | 'accepted';
+  appendAcceptance?: LifecycleDispatchRef['appendAcceptance'];
   orderKey: string;
   producerInvocationId?: string;
   targetId: string;
@@ -1213,7 +1215,7 @@ export function advanceLifecycleInputDispatchMetadata(
 ): LifecycleInputDispatchMetadataResult {
   if (patch.inputRead !== undefined && !isLifecycleInputReadReceipt(patch.inputRead))
     return { kind: 'conflict', reason: 'invalid_transition' };
-  if (patch.appendAcceptance !== undefined && !['pending', 'accepted'].includes(patch.appendAcceptance))
+  if (patch.appendAcceptance !== undefined && !['pending', 'written', 'accepted'].includes(patch.appendAcceptance))
     return { kind: 'conflict', reason: 'invalid_transition' };
   const identity = {
     kind: 'input' as const,
@@ -1221,7 +1223,11 @@ export function advanceLifecycleInputDispatchMetadata(
     ...(patch.producerInvocationId ? { producerInvocationId: patch.producerInvocationId } : {}),
   };
   if (!current) {
-    if (patch.phase !== 'dispatched' || patch.inputRead?.status === 'read')
+    if (
+      patch.phase !== 'dispatched' ||
+      patch.inputRead?.status === 'read' ||
+      (patch.appendAcceptance !== undefined && patch.appendAcceptance !== 'pending')
+    )
       return { kind: 'conflict', reason: 'invalid_transition' };
     return {
       kind: 'applied',
@@ -1251,7 +1257,13 @@ export function advanceLifecycleInputDispatchMetadata(
   if (matching.length > 1) return { kind: 'conflict', reason: 'duplicate_target' };
   const existing = matching[0];
   if (!existing) {
-    if (patch.phase !== 'dispatched' || patch.inputRead?.status === 'read')
+    // Receipts update an admitted exact receiver; a delayed ACK/read must never
+    // recreate a binding that incomplete-turn recovery already removed.
+    if (
+      patch.phase !== 'dispatched' ||
+      patch.inputRead?.status === 'read' ||
+      (patch.appendAcceptance !== undefined && patch.appendAcceptance !== 'pending')
+    )
       return { kind: 'conflict', reason: 'invalid_transition' };
     return {
       kind: 'applied',
@@ -1274,13 +1286,16 @@ export function advanceLifecycleInputDispatchMetadata(
   if (existing.statusMessageId !== patch.statusMessageId) {
     return { kind: 'conflict', reason: 'status_message_mismatch' };
   }
-  if (patch.appendAcceptance === 'accepted' && existing.appendAcceptance === 'pending') {
+  if (
+    (patch.appendAcceptance === 'accepted' && ['pending', 'written'].includes(existing.appendAcceptance ?? '')) ||
+    (patch.appendAcceptance === 'written' && existing.appendAcceptance === 'pending')
+  ) {
     return {
       kind: 'applied',
       lifecycle: {
         ...current,
         dispatchRefs: refs.map((ref) =>
-          ref.targetId === patch.targetId ? { ...ref, appendAcceptance: 'accepted' } : ref,
+          ref.targetId === patch.targetId ? { ...ref, appendAcceptance: patch.appendAcceptance } : ref,
         ),
       },
     };
@@ -2033,6 +2048,12 @@ export interface IMessageStore {
   /** Get a single message by its ID. Returns null if not found. */
   getById(id: string): StoredMessage | null | Promise<StoredMessage | null>;
   /**
+   * Fresh media/visibility projection for exact publication reads. May omit
+   * top-level content, thinking, metadata and toolEvents; never an authority verdict.
+   * Missing rows return null; unavailable/incomplete hydration must reject.
+   */
+  getArtifactById?(id: string): StoredMessage | null | Promise<StoredMessage | null>;
+  /**
    * F278 source-only read path. Redis implementations may batch a narrow field
    * projection; all requested ids must receive an available/unavailable outcome.
    */
@@ -2612,7 +2633,7 @@ export class MessageStore {
       };
     }
 
-    const messageId = generateSortableId(msg.timestamp);
+    const messageId = msg.reservedId ?? generateSortableId(msg.timestamp);
     const entries = [...buildAdmission(messageId)];
     const admitted = ledgerStore.enqueueNow(entries, maxQueuedUserEntries);
     if (admitted.outcome === 'full') return { outcome: 'full' };
@@ -3662,7 +3683,10 @@ export class MessageStore {
       collectiveWorkDelegationV1: _stripCollectiveDelegation,
       ...hostOnly
     } = extra as Record<string, unknown>;
+    const previousRich = JSON.stringify(msg.extra?.rich);
     msg.extra = { ...msg.extra, ...hostOnly };
+    if (hostOnly.rich !== undefined && previousRich !== JSON.stringify(msg.extra.rich))
+      notifyMessageTimelineChange(this, msg);
     return msg;
   }
 
@@ -3702,9 +3726,11 @@ export class MessageStore {
   augmentStreamMetadata(id: string, patch: StreamMetadataAugmentInput): StoredMessage | null {
     const msg = this.messages.find((m) => m.id === id);
     if (!msg) return null;
+    const previousRich = JSON.stringify(msg.extra?.rich);
     const updated = applyStreamMetadataAugment(msg, patch);
     this.userMentionIndex.observe(updated);
-    if (patch.mentionsUser) notifyMessageTimelineChange(this, updated);
+    if (patch.mentionsUser || (patch.extra?.rich && previousRich !== JSON.stringify(updated.extra?.rich)))
+      notifyMessageTimelineChange(this, updated);
     return updated;
   }
 
