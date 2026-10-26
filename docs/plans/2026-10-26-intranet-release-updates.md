@@ -85,7 +85,8 @@ update-settings.json 继续保存自动检查/跳过选择；ETag/跳过版本/�
 公开可读仓库不要求 Token；私有仓库只用读取 Release/附件所需权限，不能复用 CI 的发布写令牌。
 有受支持的现有同站点只读凭据引用时经明确绑定复用；不能扫描其他插件/原生认证来猜 Token。
 用户输入可用当前 Windows 用户的 OS 加密持久化（Electron safeStorage，按锁定 Electron API 选择）。
-Token 不放 manifest、URL 查询参数、日志、renderer payload、命令行或发行包；安全存储不可用时明确诊断。
+Token 不写入 manifest、URL 查询参数、日志、命令行或发行包；首次输入经专用、受校验的 IPC 提交给主进程。
+不向 renderer 回显或广播 Token，也不在 renderer 持久化；安全存储不可用时明确诊断。
 主进程保存配置和加密凭据须原子写、幂等、失败保留旧文件；变更源后重新检查，不继续安装旧目标。
 最小用户入口复用现有更新设置，首次仅缺配置/认证时补充；不另建一套成员/插件管理入口。
 

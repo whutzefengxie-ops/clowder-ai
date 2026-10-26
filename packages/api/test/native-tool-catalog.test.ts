@@ -215,3 +215,42 @@ test('Claude discovery inherits its effective native model and effort from the s
     f.restore();
   }
 });
+
+test('invalid DSH HOME disables only DSH while public and intranet catalogs keep other tools', () => {
+  const f = fixture();
+  try {
+    process.env.DSH_HOME = 'relative-native-home';
+    for (const intranet of [true, false]) {
+      const result = discoverNativeRuntimes(f.root, { home: f.home, commandFor: f.commandFor, intranet });
+      const dsh = result.runtimes.find((runtime) => runtime.id === 'dsh');
+      assert.equal(dsh?.discoveryStatus, 'acp_profile_invalid');
+      assert.equal(dsh?.acp, undefined);
+      for (const id of ['claude', 'codex'])
+        assert.equal(result.runtimes.find((runtime) => runtime.id === id)?.installed, true);
+    }
+  } finally {
+    f.restore();
+  }
+});
+
+test('blank DSH HOME keeps discovery scoped to the selected native home', () => {
+  const f = fixture();
+  try {
+    const profile = join(f.home, '.dsh/profiles/acp');
+    mkdirSync(profile, { recursive: true });
+    writeFileSync(
+      join(profile, 'package.json'),
+      JSON.stringify({ dsh: { profile: { bundles: ['@deepseek-ai/dsh-acp-app'] } } }),
+    );
+    for (const configured of [undefined, '', '   ']) {
+      if (configured === undefined) delete process.env.DSH_HOME;
+      else process.env.DSH_HOME = configured;
+      const result = discoverNativeRuntimes(f.root, { home: f.home, commandFor: f.commandFor, intranet: true });
+      const dsh = result.runtimes.find((runtime) => runtime.id === 'dsh');
+      assert.equal(dsh?.discoveryStatus, 'configured');
+      assert.ok(dsh?.acp);
+    }
+  } finally {
+    f.restore();
+  }
+});

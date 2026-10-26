@@ -11,7 +11,6 @@ import { discoverAdditionalRuntimes } from './native-additional-runtimes.js';
 import { nativeClaudeConfiguration } from './native-claude-api-config.js';
 import { discoverCodeAgentRuntimes } from './native-codeagent-discovery.js';
 import { discoverDshRuntime } from './native-dsh-discovery.js';
-import { resolveDshHome } from './native-dsh-home.js';
 import { dshLauncherProfileState } from './native-dsh-profile.js';
 import { discoverPiRuntime } from './native-pi-discovery.js';
 import { nativeRuntimeReadiness } from './native-runtime-readiness.js';
@@ -118,7 +117,7 @@ export function discoverNativeRuntimes(projectRoot: string, input: DiscoveryOpti
   const dsh = nativeTool(
     discoverDshRuntime({
       resolveCommand: commandFor,
-      dshHome: resolveDshHome(process.env.DSH_HOME ?? join(home, '.dsh')),
+      dshHome: process.env.DSH_HOME?.trim() ? process.env.DSH_HOME : join(home, '.dsh'),
       requireSetup: intranet,
       ...(options.home ? { npmCaches: [] } : {}),
     }),
