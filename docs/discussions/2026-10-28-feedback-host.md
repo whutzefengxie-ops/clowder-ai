@@ -32,9 +32,12 @@ created: 2026-10-28
 - API 与 Web TypeScript 检查通过。
 - owner dispatch、无权限调用、激活代际失效、保留 authority 到期、日志材料边界、Codex/Claude 私有上下文及工具/原生历史抑制测试通过。
 - Web 面板 CSP/opaque origin/异常 HTML 单元验证通过。
-- 配套插件独立 npm 包安装后，通过实际 Host React 组件、HTTP route 和模块调用端口运行 10 项联合浏览器检查；图片复制与下载为实际字节操作，剪贴板在测试内隔离。
+- 配套插件独立 npm 包安装后，通过实际 Host React 组件、HTTP route 和模块调用端口运行 17 项联合浏览器检查；图片复制与下载为实际字节操作，剪贴板在测试内隔离。
 - 联合验证的 Client 与远端服务为替身，未创建真实反馈单或原生会话。完整真实设置页安装、真实 Client 和内网目标仍需上线前验收；不以合成证据代替。
 
 可复现：先在插件仓打包，设置 `FEEDBACK_ARTIFACT`、`FEEDBACK_NPM_CLI`，然后运行 `pnpm --filter @cat-cafe/api test:plugin-feedback:installed`。可选 `FEEDBACK_PLAYWRIGHT_MODULE`、`FEEDBACK_CHROMIUM` 指定已有浏览器运行时；所有临时数据放入 `FEEDBACK_JOURNEY_ARTIFACTS`。
 
 测试服务使用随机空闲端口，台账在对应 artifacts 下，完成后已停止。未改生产 runtime、端口、认证、角色、会话、Redis 或 SQLite。两个 feature worktree 保留用于 PR 评审，合入前不部署。
+
+
+复审修复：诊断 ID 使用真实 CliRawArchive 允许的字符；账号/模型目的地与配置代际绑定到确认，原生未知目的地明确标注。联合验证改用真实 Host 私有存储编码器（Redis 传输为替身），覆盖超过 1 MiB 的截图及元数据、部分上传恢复、已创建待回读链接。初轮 CI 的首装浏览器证明发现新增的空插件目录 GET 未加入其显式 HTTP fixture；已补精确只读响应和回归，未放开未知写入。

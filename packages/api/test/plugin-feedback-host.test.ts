@@ -4,9 +4,15 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import Fastify from 'fastify';
-import { currentPluginOwnerRequestContext } from '../src/domains/plugin/carrier/plugin-owner-request-context.js';
+import { CliRawArchive } from '../src/domains/cats/services/session/CliRawArchive.js';
+import {
+  currentPluginOwnerRequestContext,
+  withPluginOwnerRequest,
+  withPluginOwnerWebhook,
+} from '../src/domains/plugin/carrier/plugin-owner-request-context.js';
 import type { PluginRuntimeAdmission } from '../src/domains/plugin/carrier/runtime-carrier.js';
 import { DeclaredPluginUi } from '../src/domains/plugin/declared/declared-plugin-ui.js';
+import { diagnosticDestination } from '../src/domains/plugin/host-surface/plugin-diagnostic-destination.js';
 import { collectDiagnosticLogs } from '../src/domains/plugin/host-surface/plugin-diagnostic-logs.js';
 import { createPluginDiagnosticsHost } from '../src/domains/plugin/host-surface/plugin-diagnostics.js';
 import { pluginUiRoutes } from '../src/routes/plugin/plugin-ui-routes.js';
@@ -31,6 +37,93 @@ const admission = {
     },
   },
 } as unknown as PluginRuntimeAdmission;
+
+async function asOwner<T>(run: () => Promise<T>): Promise<T> {
+  return withPluginOwnerRequest(
+    {
+      pluginId: 'official.fixture',
+      contributionId: 'open',
+      userId: 'fixture-owner',
+      operation: 'write',
+      signal: new AbortController().signal,
+      requestIdentity: {
+        requestId: 'fixture-request',
+        transportRequestId: 'fixture',
+        method: 'POST',
+        declaredPath: '/ui',
+        path: '/ui',
+        bodyDigest: 'fixture',
+        queryDigest: 'fixture',
+      },
+    },
+    () => withPluginOwnerWebhook('official.fixture', 'open', 'fixture', false, () => {}, run),
+  );
+}
+
+test('diagnostic confirmation names actual compatible endpoint or explicitly unknown native destination', () => {
+  const result = diagnosticDestination('openai', {
+    id: 'proxy',
+    displayName: 'Company account',
+    authType: 'api_key',
+    baseUrl: 'https://compat.example.test/v1',
+  });
+  assert.match(result, /Company account.*https:\/\/compat.example.test/);
+  const overridden = diagnosticDestination(
+    'openai',
+    { id: 'proxy', authType: 'api_key' },
+    { OPENAI_BASE_URL: 'https://user:secret@other.example.test/v1?token=secret' },
+  );
+  assert.match(overridden, /https:\/\/other.example.test/);
+  assert.ok(!overridden.includes('secret'));
+  assert.match(diagnosticDestination('anthropic', null), /目的地未知/);
+});
+
+test('diagnosis uses the real raw-archive ID boundary and rejects changed destination consent', async () => {
+  let revision = 'first';
+  let calls = 0;
+  const port = createPluginDiagnosticsHost(
+    'fixture',
+    {
+      projectRoot: () => '/not-read',
+      clients: () => [
+        {
+          id: 'configured',
+          label: 'configured',
+          provider: 'compatible protocol',
+          model: 'fixture',
+          destination: 'https://compat.example.test',
+          revision,
+          options: {},
+          service: {
+            supportsFeedbackDiagnostics: () => true,
+            async *invoke(_prompt, options) {
+              calls++;
+              assert.ok(options?.invocationId);
+              new CliRawArchive().getPath(options.invocationId);
+              yield { type: 'text', catId: 'fixture', content: 'bounded report', timestamp: Date.now() };
+              yield { type: 'done', catId: 'fixture', timestamp: Date.now() };
+            },
+          },
+        },
+      ],
+    },
+    async () => {},
+  );
+  const input = {
+    clientId: 'configured',
+    clientRevision: 'first',
+    prompt: 'sanitized',
+    instructions: 'recipe',
+    signal: new AbortController().signal,
+  };
+  assert.equal(await asOwner(() => port.analyze(input)), 'bounded report');
+  revision = 'changed';
+  await assert.rejects(
+    asOwner(() => port.analyze(input)),
+    /目的地.*变化/,
+  );
+  assert.equal(calls, 1);
+});
 
 test('installed UI dispatch derives owner facts, rejects anonymous/stale calls and fences retained authority', async () => {
   let retained: ReturnType<typeof currentPluginOwnerRequestContext>;
@@ -90,7 +183,13 @@ test('diagnostics are inaccessible outside an owner HTTP activation', async () =
   await assert.rejects(port.describe(), /用户在插件面板/);
   await assert.rejects(port.collect(), /用户在插件面板/);
   await assert.rejects(
-    port.analyze({ clientId: 'forged', prompt: 'x', instructions: 'x', signal: new AbortController().signal }),
+    port.analyze({
+      clientId: 'forged',
+      clientRevision: 'forged',
+      prompt: 'x',
+      instructions: 'x',
+      signal: new AbortController().signal,
+    }),
     /用户在插件面板/,
   );
 });

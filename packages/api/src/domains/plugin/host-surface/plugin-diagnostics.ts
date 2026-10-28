@@ -11,11 +11,19 @@ export interface DiagnosticClient {
   label: string;
   provider: string;
   model: string;
+  destination: string;
+  revision: string;
 }
 export interface PluginDiagnosticsHost {
   describe(): Promise<{ environment: string; projectRoot: string; clients: DiagnosticClient[] }>;
   collect(): Promise<string>;
-  analyze(input: { clientId: string; prompt: string; instructions: string; signal: AbortSignal }): Promise<string>;
+  analyze(input: {
+    clientId: string;
+    clientRevision: string;
+    prompt: string;
+    instructions: string;
+    signal: AbortSignal;
+  }): Promise<string>;
 }
 export interface DiagnosticServices {
   projectRoot(): string;
@@ -44,7 +52,14 @@ export function createPluginDiagnosticsHost(
       return {
         projectRoot: services.projectRoot(),
         environment: `Clowder AI（版本以设置页面为准）\n${platform()} ${release()} ${arch()}\nNode ${process.versions.node}`,
-        clients: services.clients().map(({ id, label, provider, model }) => ({ id, label, provider, model })),
+        clients: services.clients().map(({ id, label, provider, model, destination, revision }) => ({
+          id,
+          label,
+          provider,
+          model,
+          destination,
+          revision,
+        })),
       };
     },
     async collect() {
@@ -59,6 +74,8 @@ export function createPluginDiagnosticsHost(
     async analyze(input) {
       const context = await owner();
       const client = services.clients().find((c) => c.id === input.clientId);
+      if (!client || client.revision !== input.clientRevision)
+        throw new Error('分析目的地或账号配置已变化，请重新检查范围并确认');
       const policy = { mode: 'read_only' as const, replayDeniedToolNames: [] };
       if (!client?.service.supportsFeedbackDiagnostics?.())
         throw new Error('所选 Agent Client 无法保证只读诊断，可直接提交或手动创建');
@@ -80,7 +97,7 @@ export function createPluginDiagnosticsHost(
           workingDirectory: cwd,
           systemPrompt: input.instructions,
           signal,
-          invocationId: `feedback:${randomUUID()}`,
+          invocationId: `feedback-${randomUUID()}`,
           toolExecutionPolicy: policy,
           diagnosticTextOnly: true,
         };

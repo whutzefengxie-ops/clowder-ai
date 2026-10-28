@@ -1,6 +1,7 @@
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createChatProofApi } from '../../../../test/browser/fixtures/f322-chat-real-page-data.mjs';
 import { PluginUiEntries } from '../PluginUiEntries';
 import { sandboxedPanelHtml } from '../plugin-panel-bridge';
 
@@ -53,5 +54,13 @@ describe('plugin sidebar panel isolation', () => {
         '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'',
       ),
     ).toBe(true);
+  });
+  it('production-page HTTP fixture represents an empty installed UI registry without admitting mutations', () => {
+    const fixture = createChatProofApi(Date.now(), false, true);
+    const url = new URL('http://localhost/api/plugin-ui');
+    const response = fixture.respond({ method: () => 'GET' }, url);
+    expect(response?.status).toBe(200);
+    expect(JSON.parse(response!.body)).toEqual({ entries: [] });
+    expect(fixture.respond({ method: () => 'POST', postDataJSON: () => ({}) }, url)).toBeNull();
   });
 });

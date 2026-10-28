@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { startInstalledFeedbackFixture } from './fixtures/feedback-installed-harness.mts';
+import { startInstalledFeedbackFixture, withPrivatePngMetadata } from './fixtures/feedback-installed-harness.mts';
 
 const fixture = await startInstalledFeedbackFixture();
 const { artifactRoot, playwright, url, targets, issues, ledger } = fixture;
@@ -24,17 +24,21 @@ try {
   );
   await page.goto(url);
   assert.equal(await page.locator('#workspace').innerHTML(), '');
-  const png = Buffer.from(
+  let png = Buffer.from(
     await page.evaluate(() => {
       const canvas = document.createElement('canvas');
-      canvas.width = 16;
-      canvas.height = 10;
-      canvas.getContext('2d')!.fillRect(0, 0, 16, 10);
+      canvas.width = 512;
+      canvas.height = 512;
+      const context = canvas.getContext('2d')!;
+      const pixels = context.createImageData(512, 512);
+      for (let i = 0; i < pixels.data.length; i += 65536) crypto.getRandomValues(pixels.data.subarray(i, i + 65536));
+      context.putImageData(pixels, 0, 0);
       return canvas.toDataURL('image/png').split(',')[1];
     }),
     'base64',
   );
-  fixture.setPng(png);
+  png = withPrivatePngMetadata(png);
+  assert.ok(png.toString('base64').length > 1_048_576, 'large screenshot must exceed the actual CAS value budget');
   await page.getByRole('button', { name: '问题反馈', exact: true }).click();
   const panel = page.frameLocator('iframe[title="问题反馈"]');
   await panel
@@ -59,6 +63,9 @@ try {
   await panel.locator('input[type=file]').setInputFiles({ name: 'test.png', mimeType: 'image/png', buffer: png });
   await panel.getByRole('button', { name: '直接提交', exact: true }).click();
   await panel.getByText('我已检查完整报告和所有图片').waitFor();
+  const previewSource = await panel.locator('.picture img').getAttribute('src');
+  const approvedPng = Buffer.from(previewSource!.split(',')[1], 'base64');
+  assert.ok(!approvedPng.includes(Buffer.from('private-metadata-canary')));
   await panel.getByRole('button', { name: '复制报告正文', exact: true }).click();
   assert.ok(
     !(await page.evaluate(() => (window as unknown as { copied: string }).copied)).includes('user-secret-canary'),
@@ -86,6 +93,7 @@ try {
     'https://gitlab.example.test/team/clowder-ai/-/issues/1',
   );
   assert.equal(fixture.posts(), 1);
+  assert.deepEqual(fixture.uploadedBytes(), approvedPng, 'upload must match the reviewed send copy');
   assert.match(issues.get('1')!.description, /https:\/\/gitlab.example.test\/team\/clowder-ai\/uploads\//);
   await page.screenshot({ path: join(artifactRoot, 'automatic-result.png'), fullPage: true });
   await panel.getByRole('button', { name: '继续反馈', exact: true }).click();
@@ -108,6 +116,43 @@ try {
   await page.screenshot({ path: join(artifactRoot, 'analysis-report.png'), fullPage: true });
   await page.setViewportSize({ width: 420, height: 850 });
   await page.screenshot({ path: join(artifactRoot, 'narrow-report.png'), fullPage: true });
+  await page.setViewportSize({ width: 1200, height: 980 });
+  fixture.failNextRead();
+  await panel.getByRole('checkbox', { name: '我已检查完整报告和所有图片' }).check();
+  await panel.getByRole('button', { name: '确认上传', exact: true }).click();
+  const pendingLink = panel.getByRole('link', { name: /已创建，待核验/ });
+  await pendingLink.waitFor();
+  assert.match((await pendingLink.getAttribute('href')) ?? '', /\/issues\/2$/);
+  assert.equal(fixture.posts(), 2);
+  await page.screenshot({ path: join(artifactRoot, 'created-pending-readback.png'), fullPage: true });
+  await panel.getByRole('button', { name: '核对提交结果', exact: true }).click();
+  await panel.getByRole('link', { name: '打开 Issue', exact: true }).waitFor();
+  assert.equal(fixture.posts(), 2, 'readback retry cannot create again');
+  await panel.getByRole('button', { name: '继续反馈', exact: true }).click();
+  await panel.getByLabel('问题标题').fill('部分附件失败');
+  await panel.getByLabel('问题描述').fill('retain receipts');
+  await panel.locator('input[type=file]').setInputFiles([
+    { name: 'one.png', mimeType: 'image/png', buffer: png },
+    { name: 'two.png', mimeType: 'image/png', buffer: png },
+  ]);
+  await panel.getByRole('button', { name: '直接提交', exact: true }).click();
+  await panel.getByRole('checkbox', { name: '我已检查完整报告和所有图片' }).check();
+  fixture.failSecondUpload();
+  await panel.getByRole('button', { name: '确认上传', exact: true }).click();
+  await panel.getByRole('button', { name: '保留回执，返回编辑', exact: true }).waitFor();
+  assert.equal(fixture.posts(), 2, 'partial attachment failure must not create an Issue');
+  assert.ok(
+    (await fixture.journals()).some(
+      (value) =>
+        value &&
+        typeof value === 'object' &&
+        'uploads' in value &&
+        Array.isArray(value.uploads) &&
+        value.uploads.length === 1,
+    ),
+  );
+  await panel.getByRole('button', { name: '保留回执，返回编辑', exact: true }).click();
+  await panel.getByLabel('问题标题').fill('恢复后可继续编辑');
   await writeFile(
     join(artifactRoot, 'receipt.json'),
     JSON.stringify(
@@ -123,6 +168,13 @@ try {
           'prepared sanitized Agent input',
           'post-analysis sanitization',
           'narrow layout',
+          'hidden PNG metadata excluded from send copy',
+          'reviewed send copy equals uploaded bytes',
+          'known Issue link shown while readback pending',
+          'readback reconciliation never reposts',
+          'partial upload receipt survives',
+          'partial upload edit recovery without creating Issue',
+          'large screenshot through real Host storage encoder',
         ],
         posts: fixture.posts(),
         archiveSha256: ledger.archiveSha256,
@@ -131,7 +183,7 @@ try {
       2,
     ),
   );
-  process.stdout.write('PASS: 10 packed-plugin / Host browser journey checks\n');
+  process.stdout.write('PASS: 17 packed-plugin / Host browser journey checks\n');
 } catch (error) {
   if (currentPage) {
     await currentPage.screenshot({ path: join(artifactRoot, 'failure.png'), fullPage: true });

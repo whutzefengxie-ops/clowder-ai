@@ -13,7 +13,7 @@ export const pluginUiRoutes: FastifyPluginAsync<{ ui: DeclaredPluginUi }> = asyn
   });
   app.post<{ Params: { instanceId: string; commandId: string }; Body: { generation: string; input: unknown } }>(
     '/api/plugin-ui/:instanceId/:commandId',
-    { bodyLimit: 12_000_000 },
+    { bodyLimit: 24_000_000 },
     async (request, reply) => {
       const access = requirePluginOwnerLocalAccess(request, 'write');
       if ('error' in access) return pluginAccessError(reply, access);
@@ -48,7 +48,7 @@ export const pluginUiRoutes: FastifyPluginAsync<{ ui: DeclaredPluginUi }> = asyn
             () => ui.call(instanceId, commandId, request.body.generation, request.body.input),
           ),
         );
-        if (Buffer.byteLength(JSON.stringify(result) ?? '') > 12_000_000)
+        if (Buffer.byteLength(JSON.stringify(result) ?? '') > 24_000_000)
           throw new Error('Plugin UI response exceeds budget');
         return { result };
       } catch (error) {

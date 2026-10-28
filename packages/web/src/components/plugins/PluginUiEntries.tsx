@@ -91,7 +91,7 @@ export function PluginUiEntries() {
       )
         return;
       const requestId = message.requestId as number;
-      if (pending.has(requestId) || pending.size >= 16 || JSON.stringify(data).length > 12_000_000) return;
+      if (pending.has(requestId) || pending.size >= 16 || JSON.stringify(data).length > 24_000_000) return;
       pending.add(requestId);
       const target = frame.current?.contentWindow;
       const token = nonce.current;

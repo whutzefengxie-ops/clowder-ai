@@ -1,3 +1,4 @@
+import { createHash, randomUUID } from 'node:crypto';
 import { catRegistry } from '@cat-cafe/shared';
 import { validateRuntimeProviderBinding } from '../../../config/account-resolver.js';
 import { usesNativeToolConfiguration } from '../../../config/cat-account-binding.js';
@@ -11,6 +12,9 @@ import {
 } from '../../cats/services/agents/providers/env-map.js';
 import type { AgentRegistry } from '../../cats/services/agents/registry/AgentRegistry.js';
 import type { AgentServiceOptions } from '../../cats/services/types.js';
+import { diagnosticDestination } from './plugin-diagnostic-destination.js';
+
+const generations = new WeakMap<object, string>();
 
 export function diagnosticProviders(registry: AgentRegistry, projectRoot: string) {
   return [...registry.getAllEntries()].flatMap(([id, service]) => {
@@ -64,7 +68,24 @@ export function diagnosticProviders(registry: AgentRegistry, projectRoot: string
           ? { codexAccountLaunch: resolveCodexAccountLaunch(account, { cwd: projectRoot }) }
           : {}),
       };
-      return [{ id, label: config.displayName, provider: client, model, service, options }];
+      const destination = diagnosticDestination(client, account, { ...callbackEnv, ...options.accountEnv });
+      const generation = generations.get(service) ?? randomUUID();
+      generations.set(service, generation);
+      const revision = createHash('sha256')
+        .update(JSON.stringify({ id, generation, model, destination, options }))
+        .digest('hex');
+      return [
+        {
+          id,
+          label: config.displayName,
+          provider: `${client} 兼容协议`,
+          destination,
+          revision,
+          model,
+          service,
+          options,
+        },
+      ];
     } catch {
       return [];
     }

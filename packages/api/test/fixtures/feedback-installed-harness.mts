@@ -12,6 +12,7 @@ import { createModuleHostInvocation } from '../../src/domains/plugin/builtin-run
 import type { PluginRuntimeAdmission } from '../../src/domains/plugin/carrier/runtime-carrier.js';
 import { DeclaredPluginUi } from '../../src/domains/plugin/declared/declared-plugin-ui.js';
 import { pluginUiRoutes } from '../../src/routes/plugin/plugin-ui-routes.js';
+import { feedbackStorageFixture } from './feedback-storage.mts';
 
 export async function startInstalledFeedbackFixture() {
   const archive = resolve(process.env.FEEDBACK_ARTIFACT ?? 'missing-feedback-artifact');
@@ -69,7 +70,10 @@ export async function startInstalledFeedbackFixture() {
     alias: { '@/utils/api-client': resolve('test/fixtures/feedback-api.ts') },
   });
 
-  let png = Buffer.alloc(0);
+  let uploadedPng = Buffer.alloc(0);
+  let failRead = false;
+  let failUploadAt = 0;
+  let uploadAttempt = 0;
   const targets = [
     {
       id: 'internal',
@@ -84,8 +88,7 @@ export async function startInstalledFeedbackFixture() {
       attachmentOrigins: [],
     },
   ];
-  const values = new Map<string, { revision: number; value: unknown }>();
-  let revision = 0;
+  const persistence = feedbackStorageFixture();
   let modelPrompt = '';
   let posts = 0;
   const issues = new Map<string, { iid: number; web_url: string; title: string; description: string }>();
@@ -96,11 +99,14 @@ export async function startInstalledFeedbackFixture() {
     const json = (value: unknown) => new Response(JSON.stringify(value));
     if (address.endsWith('/user')) return json({ username: 'fixture-owner' });
     if (address.endsWith('/uploads') && init?.method === 'POST') {
+      uploadAttempt++;
+      if (failUploadAt && uploadAttempt === failUploadAt) throw new Error('synthetic upload outage');
       assert.ok(init.body instanceof FormData);
-      assert.deepEqual(Buffer.from(await (init.body.get('file') as File).arrayBuffer()), png);
+      uploadedPng = Buffer.from(await (init.body.get('file') as File).arrayBuffer());
+      assert.ok(!uploadedPng.includes(Buffer.from('private-metadata-canary')));
       return json({ full_path: '/team/clowder-ai/uploads/fixture/screenshot-1.png' });
     }
-    if (address.includes('/uploads/fixture/')) return new Response(png);
+    if (address.includes('/uploads/fixture/')) return new Response(uploadedPng);
     if (address.endsWith('/issues') && init?.method === 'POST') {
       posts++;
       const data = JSON.parse(String(init.body));
@@ -114,7 +120,13 @@ export async function startInstalledFeedbackFixture() {
       return json(issue);
     }
     const id = address.match(/\/issues\/(\d+)$/)?.[1];
-    if (id) return json(issues.get(id));
+    if (id) {
+      if (failRead) {
+        failRead = false;
+        throw new Error('synthetic read outage');
+      }
+      return json(issues.get(id));
+    }
     return json({ path_with_namespace: 'team/clowder-ai', visibility: 'private', issues_enabled: true });
   };
   const host = {
@@ -123,20 +135,27 @@ export async function startInstalledFeedbackFixture() {
     config: { get: async () => JSON.stringify(targets) },
     secrets: { get: async () => 'synthetic-token' },
     storage: {
-      get: async (key: string) => structuredClone(values.get(key)),
+      ...persistence.storage,
       compareAndSet: async (key: string, expected: number | null, value: unknown) => {
-        if ((values.get(key)?.revision ?? null) !== expected) return { applied: false };
-        const r = ++revision;
-        values.set(key, { revision: r, value: structuredClone(value) });
-        await writeFile(join(artifactRoot, 'retained-journal.json'), JSON.stringify([...values]));
-        return { applied: true, revision: r };
+        const result = await persistence.storage.compareAndSet(key, expected, value);
+        await writeFile(join(artifactRoot, 'retained-journal.json'), JSON.stringify(await persistence.entries()));
+        return result;
       },
     },
     diagnostics: {
       describe: async () => ({
         environment: 'Windows fixture Node 24',
         projectRoot: 'C:\\Users\\Alice\\project',
-        clients: [{ id: 'configured', label: '已配置 Client', provider: 'synthetic', model: 'fixture' }],
+        clients: [
+          {
+            id: 'configured',
+            label: '已配置 Client',
+            provider: 'synthetic',
+            model: 'fixture',
+            destination: '隔离测试，无外部模型',
+            revision: 'fixture-revision',
+          },
+        ],
       }),
       collect: async () => 'api_key=log-secret-canary E_TIMEOUT C:\\Users\\Alice\\project\\a.ts',
       analyze: async (input: { prompt: string }) => {
@@ -195,9 +214,14 @@ export async function startInstalledFeedbackFixture() {
     url,
     targets,
     issues,
-    setPng(value: Buffer) {
-      png = value;
+    uploadedBytes: () => uploadedPng,
+    failNextRead: () => {
+      failRead = true;
     },
+    failSecondUpload: () => {
+      failUploadAt = uploadAttempt + 2;
+    },
+    journals: async () => Object.values(await persistence.entries()).map((v) => v.value),
     posts: () => posts,
     modelPrompt: () => modelPrompt,
     async stop() {
@@ -220,4 +244,20 @@ export async function startInstalledFeedbackFixture() {
       );
     },
   };
+}
+
+export function withPrivatePngMetadata(png: Buffer): Buffer {
+  const text = Buffer.from('Comment\0private-metadata-canary');
+  const name = Buffer.from('tEXt');
+  const bytes = Buffer.concat([name, text]);
+  let crc = 0xffffffff;
+  for (const byte of bytes) {
+    crc ^= byte;
+    for (let i = 0; i < 8; i++) crc = (crc >>> 1) ^ (crc & 1 ? 0xedb88320 : 0);
+  }
+  const length = Buffer.alloc(4);
+  length.writeUInt32BE(text.length);
+  const checksum = Buffer.alloc(4);
+  checksum.writeUInt32BE((crc ^ 0xffffffff) >>> 0);
+  return Buffer.concat([png.subarray(0, 33), length, bytes, checksum, png.subarray(33)]);
 }
