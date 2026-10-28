@@ -15,6 +15,7 @@ import {
 import { composeManagedSettingsDocument } from './claude-compaction-launch-plan.js';
 import { resolveClaudeMcpConfig } from './claude-mcp-config.js';
 import { withClaudeSecretHooks } from './claude-secret-hook-settings.js';
+import { feedbackDiagnosticIdentity } from './feedback-diagnostic-policy.js';
 import { appendLocalImagePathHints, collectImageAccessDirectories } from './image-cli-bridge.js';
 import { extractTrustedImagePaths } from './image-paths.js';
 import { compileL0ViaSubprocess } from './l0-compiler.js';
@@ -90,6 +91,7 @@ export async function prepareClaudeSdkLaunch(input: {
   // Alternate spawn transports cannot silently be ignored by this carrier.
   if (options?.spawnCliOverride) throw new Error('claude_sdk_spawn_override_unsupported');
   const readOnly = options?.toolExecutionPolicy?.mode === 'read_only';
+  if (options?.diagnosticTextOnly && !readOnly) throw new Error('diagnostic_text_requires_read_only');
   const imagePaths = await extractTrustedImagePaths(
     options?.contentBlocks,
     options?.uploadDir,
@@ -98,10 +100,12 @@ export async function prepareClaudeSdkLaunch(input: {
   const prompt = appendLocalImagePathHints(input.prompt, imagePaths);
   const { effectiveModel, useEnvModelOverride } = resolveClaudeModelSelection(options?.callbackEnv, input.model);
   const effort = effortValue(resolveClaudeEffortLevel(catId, effectiveModel, options?.reasoningEffortOverride));
-  const l0 = await input.l0CompilerFn({
-    catId,
-    userId: options?.callbackEnv?.CAT_CAFE_USER_ID ?? options?.auditContext?.userId,
-  });
+  const l0 = options?.diagnosticTextOnly
+    ? feedbackDiagnosticIdentity(catId)
+    : await input.l0CompilerFn({
+        catId,
+        userId: options?.callbackEnv?.CAT_CAFE_USER_ID ?? options?.auditContext?.userId,
+      });
   const nativeInstructions = [
     { body: l0, injectionDecision: 'native_l0_compiled' },
     ...(options?.systemPrompt ? [{ body: options.systemPrompt, injectionDecision: 'route_append_system_prompt' }] : []),
@@ -179,6 +183,7 @@ export async function prepareClaudeSdkLaunch(input: {
       includePartialMessages: true,
       permissionMode: readOnly ? 'plan' : 'bypassPermissions',
       ...(readOnly ? { tools: [] } : { allowDangerouslySkipPermissions: true }),
+      ...(options?.diagnosticTextOnly && readOnly ? { persistSession: false, maxTurns: 1 } : {}),
       strictMcpConfig: true,
       mcpServers: {},
       settingSources,

@@ -1050,6 +1050,8 @@ export interface LocalSessionReadInput {
 }
 
 export interface AgentServiceOptions {
+  /** Owner-confirmed feedback only: ephemeral text inference, with native tools disabled. */
+  diagnosticTextOnly?: boolean;
   /** Host logical SessionRecord identity; sessionId remains the native resume id. */
   hostSessionId?: string;
   /** Binding restored from the canonical SessionRecord, including across API restarts. */
@@ -1330,6 +1332,8 @@ export interface AgentService {
 
   /** True only when this concrete carrier applies the requested policy before model launch. */
   supportsToolExecutionPolicy?(policy: ToolExecutionPolicy): boolean;
+  /** Safe ephemeral feedback text inference, including private-context and native-tool suppression. */
+  supportsFeedbackDiagnostics?(): boolean;
 
   /** F254 D2: effective carrier capability for this concrete service instance. */
   freshnessCarrierCapability?(

@@ -204,6 +204,7 @@ import {
   snapshotFromHostEntry,
 } from './codex-served-model.js';
 import { createDirectAgentCarrierSession } from './DirectAgentCarrierSession.js';
+import { FEEDBACK_CODEX_ARGS, feedbackDiagnosticIdentity } from './feedback-diagnostic-policy.js';
 import { compileL0ViaSubprocess } from './l0-compiler.js';
 import {
   createMcpSchemaDeliveryLaunchConfig,
@@ -1244,6 +1245,10 @@ export class CodexAgentService implements AgentService {
     return policy.mode === 'read_only' && this.carrierMode === 'exec_json';
   }
 
+  supportsFeedbackDiagnostics(): boolean {
+    return true;
+  }
+
   freshnessCarrierCapability(
     options?: Pick<AgentServiceOptions, 'liveCompanion' | 'requiredTools'>,
   ): AgentFreshnessCarrierCapability {
@@ -1671,8 +1676,9 @@ export class CodexAgentService implements AgentService {
     // The preflight seam exists only on app_server. Fail closed instead of
     // quietly falling back to a prompt frozen before the provider verdict.
     const requiredTools = normalizeRequiredTools(options?.requiredTools);
-    const carrierMode =
-      options?.requireExactResume || options?.liveCompanion || requiredTools.length > 0
+    const carrierMode = options?.diagnosticTextOnly
+      ? 'exec_json'
+      : options?.requireExactResume || options?.liveCompanion || requiredTools.length > 0
         ? 'app_server'
         : this.carrierMode;
     if (promptSource.kind === 'preflight' && carrierMode !== 'app_server') {
@@ -1923,11 +1929,13 @@ export class CodexAgentService implements AgentService {
 
     // F203 Phase C: compile per-cat L0 → OpenAI `developer` role args.
     // fail-closed (generator contract, mirrors the CLI-not-found path below).
-    const l0Result = await this.compileDeveloperInstructions(
-      cliModel,
-      native ? undefined : options?.callbackEnv?.CAT_CAFE_USER_ID,
-      native ? 'public' : 'owner',
-    );
+    const l0Result = options?.diagnosticTextOnly
+      ? { value: feedbackDiagnosticIdentity(this.catId) }
+      : await this.compileDeveloperInstructions(
+          cliModel,
+          native ? undefined : options?.callbackEnv?.CAT_CAFE_USER_ID,
+          native ? 'public' : 'owner',
+        );
     if (native) await native.assertCurrent();
     if ('error' in l0Result) {
       yield {
@@ -2009,6 +2017,10 @@ export class CodexAgentService implements AgentService {
     const readOnlyArgs = readOnly
       ? ['--ignore-user-config', '--config', 'mcp_servers={}', '--config', 'apps._default.enabled=false']
       : [];
+    if (options?.diagnosticTextOnly) {
+      if (!readOnly) throw new Error('diagnostic_text_requires_read_only');
+      readOnlyArgs.push(...FEEDBACK_CODEX_ARGS);
+    }
 
     // Dedup: skip system --config/--flag pairs that the user explicitly overrides (#567).
     const dedup = (src: string[]): string[] => {

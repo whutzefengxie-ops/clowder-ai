@@ -8,14 +8,21 @@ import {
   type CollectiveMaterialSourceHolder,
   createCollectiveMaterialSourceProxy,
 } from './collective-material-source.js';
+import {
+  createPluginDiagnosticsHost,
+  type DiagnosticServices,
+  type PluginDiagnosticsHost,
+} from './plugin-diagnostics.js';
 import { createPluginMembersHost, type PluginMembersHost, type PluginMembersServices } from './plugin-members-host.js';
 
 export interface PluginNeutralHost {
+  readonly diagnostics?: PluginDiagnosticsHost;
   readonly collectiveMaterialSource?: CollectiveMaterialSourcePort;
   readonly collectiveArtifactOwner?: CollectiveArtifactOwnerPort;
   readonly members: PluginMembersHost;
 }
 interface Deps {
+  readonly diagnostics?: DiagnosticServices;
   readonly collectiveMaterialSource?: CollectiveMaterialSourceHolder;
   readonly collectiveArtifactOwner?: CollectiveArtifactOwnerHolder;
   readonly activationSignal?: AbortSignal;
@@ -61,6 +68,16 @@ export async function createPluginNeutralHost(deps: Deps): Promise<PluginNeutral
   }
   const collective = pkg.pluginId === 'official.collective-connector' && instance.pluginId === pkg.pluginId;
   return Object.freeze({
+    ...(deps.diagnostics
+      ? {
+          diagnostics: createPluginDiagnosticsHost(
+            deps.pluginInstanceId,
+            deps.diagnostics,
+            current,
+            deps.activationSignal,
+          ),
+        }
+      : {}),
     ...(collective && deps.collectiveMaterialSource
       ? {
           collectiveMaterialSource: createCollectiveMaterialSourceProxy({

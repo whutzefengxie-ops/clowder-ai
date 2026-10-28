@@ -307,6 +307,7 @@ import { TasteMemoryLifecycleStore } from './domains/memory/taste/TasteMemoryLif
 import { TasteMemoryProjectionWriter } from './domains/memory/taste/TasteMemoryProjectionWriter.js';
 import { importTasteTakeawayCandidates } from './domains/memory/taste/TasteTakeawayCandidateImporter.js';
 import { tasteDocumentAnchor } from './domains/memory/taste/taste-memory-identity.js';
+import { diagnosticProviders } from './domains/plugin/host-surface/plugin-diagnostic-provider.js';
 import { publicParticipantAvatar } from './domains/plugin/host-surface/public-participant-avatar.js';
 import { PortDiscoveryService } from './domains/preview/port-discovery.js';
 import { collectRuntimePorts } from './domains/preview/port-validator.js';
@@ -5324,6 +5325,10 @@ async function main(): Promise<void> {
       isCatAvailable,
     },
     threadDeepLinkUrl: createThreadDeepLinkUrl(frontendBaseUrl),
+    diagnostics: {
+      projectRoot: () => resolveActiveProjectRoot(),
+      clients: () => diagnosticProviders(agentRegistry, resolveActiveProjectRoot()),
+    },
     threadProjections: {
       backlogStore,
       cats: {
@@ -5723,6 +5728,8 @@ async function main(): Promise<void> {
   });
   const { pluginWebhookForwardingRoutes } = await import('./routes/plugin/plugin-webhook-forwarding-routes.js');
   await app.register(pluginWebhookForwardingRoutes, { webhooks: pluginRuntime.supervisor });
+  const { pluginUiRoutes } = await import('./routes/plugin/plugin-ui-routes.js');
+  await app.register(pluginUiRoutes, { ui: pluginRuntime.supervisor.ui });
 
   // F246/F313: one registry and one renderer projection. The F266 writer stays
   // fenced until an owner-backed resolver/dispatcher and a v1_active epoch are
