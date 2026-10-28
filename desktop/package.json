@@ -78,6 +78,7 @@
       "renderer-navigation.js",
       "service-manager.js",
       "project-mirrors.js",
+      "project-provider-directory.js",
       "project-mirror-readiness.js",
       "project-mirror-consumer.js",
       "project-mirror-diagnostics.js",

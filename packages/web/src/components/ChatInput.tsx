@@ -41,7 +41,9 @@ import { ChatContextPicker } from './ChatContextPicker';
 import { ChatInputActionButton } from './ChatInputActionButton';
 import { ChatInputAddMenu } from './ChatInputAddMenu';
 import { ChatInputMenus } from './ChatInputMenus';
+import { ChatInputStickers } from './ChatInputStickers';
 import { ComposerRoutingPreview } from './ComposerRoutingPreview';
+import { useCatCardComposer } from './cat-profile-card/CatProfileCardContext';
 import { chatComposerCopy } from './chat-composer.shell-copy';
 import { type ContextPickerMode, detectContextShortcut } from './chat-context-reference';
 import { buildCatOptions, type CatOption, detectMenuTrigger } from './chat-input-options';
@@ -303,6 +305,7 @@ export function ChatInput({
   const [mentionStart, setMentionStart] = useState(-1);
   const [mentionFilter, setMentionFilter] = useState('');
   const [images, setImages] = useState<File[]>(() => (threadId ? (threadImageDrafts.get(threadId) ?? []) : []));
+  const [stickerThread, setStickerThread] = useState<string>();
   const [contextAttachments, setContextAttachments] = useState<ContextAttachment[]>(() =>
     threadId ? (threadContextAttachmentDrafts.get(threadId) ?? []) : [],
   );
@@ -339,6 +342,7 @@ export function ChatInput({
   const ghostRef = useRef<string | null>(null);
   const [showHistorySearch, setShowHistorySearch] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  useCatCardComposer(input, setInput, textareaRef);
   useComposerKeyboardFocus(shellV2, textareaRef);
   useEffect(() => {
     const handler = (event: Event) => {
@@ -505,17 +509,8 @@ export function ChatInput({
       const settleAdmission = beginComposerDraftAdmission(draftSnapshot);
       let admission: ReturnType<ChatInputProps['onSend']>;
       try {
-        admission = messageDisposition.oneShot
-          ? onSend(
-              trimmed,
-              images.length > 0 ? images : undefined,
-              whisper,
-              replyToMessage?.id,
-              sendContexts.length > 0 ? sendContexts : undefined,
-              undefined,
-              messageDisposition.oneShot,
-            )
-          : sendContexts.length > 0
+        admission =
+          sendContexts.length > 0
             ? onSend(trimmed, images.length > 0 ? images : undefined, whisper, replyToMessage?.id, sendContexts)
             : onSend(trimmed, images.length > 0 ? images : undefined, whisper, replyToMessage?.id);
       } catch {
@@ -525,7 +520,6 @@ export function ChatInput({
       void Promise.resolve(admission).then(
         (accepted) => {
           settleAdmission(accepted === false ? false : undefined);
-          if (accepted !== false) messageDisposition.clearOneShot();
         },
         () => settleAdmission(false),
       );
@@ -558,7 +552,6 @@ export function ChatInput({
     markComposerDraftOptimisticallyCleared,
     setInput,
     effectiveThreadId,
-    messageDisposition,
   ]);
 
   const handleSend = useCallback(() => doSend(), [doSend]);
@@ -943,6 +936,7 @@ export function ChatInput({
 
   const composerDraftExtras = (
     <ChatComposerDraftExtras
+      threadId={effectiveThreadId}
       files={images}
       contextAttachments={shownContextAttachments}
       replyToMessage={replyToMessage}
@@ -1058,17 +1052,24 @@ export function ChatInput({
         <ChatInputAddMenu
           presentation={presentation}
           onAttach={() => fileInputRef.current?.click()}
+          onStickers={() => setStickerThread(threadId ?? '__new__')}
           onAddContext={() => openContextPicker('all')}
           onWhisperToggle={handleWhisperToggle}
           onClose={() => setAddMenuOpen(false)}
           messageDisposition={messageDisposition}
-          hasActiveInvocation={hasActiveInvocation && !prospectiveThread && !whisperTargetsAllIdle}
           triggerRef={addButtonRef}
           disabled={disabled}
           sendDisabled={sendTemporarilyDisabled}
           maxImages={images.length >= 5}
           whisperMode={whisperMode}
           preferredCat={shellV2 ? (preferredCatControl ?? undefined) : undefined}
+        />
+      )}
+      {stickerThread === (threadId ?? '__new__') && (
+        <ChatInputStickers
+          key={threadId ?? '__new__'}
+          onClose={() => setStickerThread(undefined)}
+          onSelect={(file) => setImages((current) => [...current, file].slice(0, 5))}
         />
       )}
 

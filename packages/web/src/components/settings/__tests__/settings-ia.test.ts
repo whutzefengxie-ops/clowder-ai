@@ -12,8 +12,9 @@ import {
 import { SETTINGS_SECTIONS } from '../settings-nav-config';
 
 describe('F322 设置与管理 information architecture', () => {
-  it('has exactly the 11 decided first-level items, in the decided order and groups', () => {
+  it('places your profile above the decided settings destinations and groups', () => {
     expect(SETTINGS_IA.map((entry) => entry.label)).toEqual([
+      '你',
       '猫猫团队',
       '调度',
       '能力进化',
@@ -26,7 +27,7 @@ describe('F322 设置与管理 information architecture', () => {
       '功能看板',
       '信号',
     ]);
-    expect(SETTINGS_IA.map((entry) => entry.group)).toEqual([1, 1, 1, 1, 2, 2, 2, 3, 3, 3, 3]);
+    expect(SETTINGS_IA.map((entry) => entry.group)).toEqual([1, 1, 1, 1, 1, 2, 2, 2, 3, 3, 3, 3]);
     expect(new Set(SETTINGS_IA.map((entry) => entry.id)).size).toBe(SETTINGS_IA.length);
   });
 
@@ -98,8 +99,13 @@ describe('F322 pins above the mailbox', () => {
 
   it('the Workspace team panel has its own pin identity and never resolves to the settings members section', () => {
     expect(TEAM_WORKSPACE_PIN_ID).not.toBe(destPinId('team'));
-    expect(resolvePin(TEAM_WORKSPACE_PIN_ID)).toMatchObject({ kind: 'workspace-team', label: '成员能力与路由状态' });
-    expect(resolvePin('dest:team')).toMatchObject({ kind: 'entry', label: '猫猫团队' });
+    expect(resolvePin(TEAM_WORKSPACE_PIN_ID)).toMatchObject({
+      kind: 'workspace-team',
+      label: '成员能力与路由状态',
+      icon: 'paw',
+    });
+    expect(resolvePin('dest:team')).toMatchObject({ kind: 'entry', label: '猫猫团队', icon: 'paw' });
+    expect(resolvePin('members')).toMatchObject({ kind: 'section', label: '成员与运行时', icon: 'paw' });
   });
 
   it('an unknown or retired pin id resolves to nothing instead of crashing the rail', () => {

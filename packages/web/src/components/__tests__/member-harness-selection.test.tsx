@@ -140,19 +140,20 @@ it('shows exactly five products while preserving a role-specific native binding 
   expect(select?.value).toBe('codeagent');
   expect(host.textContent).not.toContain('跟随 缅因猫 设置');
   await choose('codeagent');
-  expect(host.querySelector('[data-testid=member-save-bar]')).toBeNull();
+  expect(host.querySelector('[data-testid=member-save-bar] [role=status]')?.textContent).toContain('没有改动');
   const refresh = [...host.querySelectorAll('button')].find((button) => button.textContent === '刷新');
   await act(async () => refresh?.click());
   expect(host.querySelector('[role=combobox]')?.textContent).toContain('company-model');
-  expect(host.querySelector('[data-testid=member-save-bar]')).toBeNull();
+  expect(host.querySelector('[data-testid=member-save-bar] [role=status]')?.textContent).toContain('没有改动');
   expect(host.querySelector<HTMLOptionElement>('option[value="plugin:approved:client"]')?.disabled).toBe(true);
 });
 it('restores the exact previous binding and identity after a harness round trip', async () => {
   await mount();
   await choose('codex');
   expect(host.querySelector('[data-testid=member-save-bar]')).not.toBeNull();
+  expect(host.querySelector('[data-testid=member-save-bar]')?.textContent).not.toContain('没有改动');
   await choose('codeagent');
-  expect(host.querySelector('[data-testid=member-save-bar]')).toBeNull();
+  expect(host.querySelector('[data-testid=member-save-bar] [role=status]')?.textContent).toContain('没有改动');
   expect(host.querySelector('[role=combobox]')?.textContent).toContain('company-model');
   expect(host.textContent).toContain('砚砚');
   expect(vi.mocked(apiFetch).mock.calls.filter(([, init]) => init?.method === 'PATCH')).toHaveLength(0);
@@ -217,7 +218,7 @@ it('preserves the member after initial discovery failure and admits tool choices
   await mount();
   expect(host.querySelector<HTMLSelectElement>('select[aria-label="使用工具"]')?.disabled).toBe(true);
   expect(host.textContent).not.toContain('Gemini');
-  expect(host.querySelector('[data-testid=member-save-bar]')).toBeNull();
+  expect(host.querySelector('[data-testid=member-save-bar] [role=status]')?.textContent).toContain('没有改动');
   fail = false;
   await click('刷新');
   expect(host.querySelector<HTMLSelectElement>('select[aria-label="使用工具"]')?.options.length).toBe(5);

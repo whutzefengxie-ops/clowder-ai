@@ -153,7 +153,7 @@ it('persists the prepared descriptor through the existing member save and reopen
   await act(async () => root.unmount());
   root = createRoot(host);
   await mount();
-  expect(host.querySelector('[data-testid=member-save-bar]')).toBeNull();
+  expect(host.querySelector('[data-testid=member-save-bar] [role=status]')?.textContent).toContain('没有改动');
   expect(host.textContent).not.toContain('发送一次请求验证此配置');
   await click('读取 DSH 配置');
   expect(host.textContent).toContain('company / private-model');

@@ -79,7 +79,12 @@ async function waitWithDiagnostics(
 ) {
   signal?.throwIfAborted();
   const recoveryOptions = { installRoot, projectDir, nodeExe, signal, log };
+  const preparationDeferred = fs.existsSync(path.join(projectDir, '.clowder-resource-transaction.json'));
   await refreshMaterializedMirrors(recoveryOptions);
+  if (preparationDeferred) {
+    signal?.throwIfAborted();
+    prepareProjectMirrors({ installRoot, projectDir, log });
+  }
   const entries = (kind, root) =>
     probes.map(({ mirror, relativePath }) => ({
       kind,

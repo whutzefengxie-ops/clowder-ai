@@ -1,25 +1,59 @@
 import { PluginSourceLabel } from '../PluginSourceLabel';
+import { PluginStatusDot } from '../PluginStatusDot';
 import { PluginVisual } from '../PluginVisual';
 import { pluginHasUpdate } from '../plugin-manager-attention';
 import type { PluginManagerDesignFixture } from '../plugin-manager-fixtures';
 import { PluginToggle } from './PluginManagerActions';
 import { pluginManagerText } from './plugin-manager.shell-copy';
 
-export function PluginDetailHeader({
-  plugin,
-  locale,
-  busy,
-  onSetEnabled,
-  onBlockedToggle,
-  onInstall,
-}: {
+interface PluginDetailActionProps {
   plugin: PluginManagerDesignFixture;
   locale: string;
   busy: boolean;
   onSetEnabled?: ((enabled: boolean) => void) | undefined;
   onBlockedToggle?: (() => void) | undefined;
   onInstall?: (() => void) | undefined;
-}) {
+}
+
+/** The selected detail remains actionable even when its list row is folded away. */
+export function PluginDetailStateAction({
+  plugin,
+  locale,
+  busy,
+  onSetEnabled,
+  onBlockedToggle,
+  onInstall,
+}: PluginDetailActionProps) {
+  const t = pluginManagerText(locale);
+  if (plugin.artifact === 'installed')
+    return (
+      <span className="flex items-center gap-2 text-compact text-cafe-secondary">
+        <span>{plugin.intent === 'enabled' ? t.enabled : t.disabled}</span>
+        <PluginToggle
+          plugin={plugin}
+          locale={locale}
+          busy={busy}
+          onSetEnabled={onSetEnabled}
+          onBlockedToggle={onBlockedToggle}
+        />
+      </span>
+    );
+  if (!(plugin.actions?.install ?? plugin.artifact === 'absent') || !onInstall) return null;
+  return (
+    <button
+      type="button"
+      data-plugin-detail-action="install"
+      disabled={busy}
+      onClick={onInstall}
+      className="console-button-primary !font-medium disabled:opacity-50"
+    >
+      {busy ? t.working : t.install}
+    </button>
+  );
+}
+
+export function PluginDetailHeader(props: PluginDetailActionProps) {
+  const { plugin, locale } = props;
   const t = pluginManagerText(locale);
   const source =
     plugin.trust === 'unknown'
@@ -41,28 +75,7 @@ export function PluginDetailHeader({
           {plugin.installedVersion ?? plugin.availableVersion} · {source}
         </p>
       </div>
-      {plugin.artifact === 'installed' ? (
-        <span className="flex items-center gap-2 text-compact text-cafe-secondary">
-          <span>{plugin.intent === 'enabled' ? t.enabled : t.disabled}</span>
-          <PluginToggle
-            plugin={plugin}
-            locale={locale}
-            busy={busy}
-            onSetEnabled={onSetEnabled}
-            onBlockedToggle={onBlockedToggle}
-          />
-        </span>
-      ) : (plugin.actions?.install ?? plugin.artifact === 'absent') && onInstall ? (
-        <button
-          type="button"
-          data-plugin-detail-action="install"
-          disabled={busy}
-          onClick={onInstall}
-          className="console-button-primary !font-medium disabled:opacity-50"
-        >
-          {busy ? t.working : t.install}
-        </button>
-      ) : null}
+      <PluginDetailStateAction {...props} />
     </header>
   );
 }
@@ -86,7 +99,10 @@ export function PluginUpdateNotice({
       data-inline-notice
       className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-cafe-border bg-[var(--shell-work)] px-3 py-2.5"
     >
-      <p className="text-sm text-cafe">{t.newVersion(plugin.availableVersion)}</p>
+      <p className="flex items-center gap-2 text-sm text-cafe">
+        <PluginStatusDot tone="update" className="h-2 w-2" />
+        {t.newVersion(plugin.availableVersion)}
+      </p>
       {onInstall && (
         <button
           type="button"

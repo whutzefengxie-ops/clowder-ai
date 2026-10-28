@@ -402,6 +402,7 @@ export interface AgentMessage {
   messageTimestamp?: number;
   /** F52: Cross-thread origin metadata (set for cross-thread callback messages) */
   extra?: {
+    startupRecovery?: import('@cat-cafe/shared').CodexStartupRecovery;
     outputLayout?: import('@cat-cafe/shared').MessageOutputLayoutV1;
     crossPost?: {
       sourceThreadId: string;
@@ -979,7 +980,6 @@ export interface AgentClientActiveRunDispatchRegistration {
 export interface PluginNativeActionTarget {
   readonly instanceId: string;
   readonly contributionId: string;
-  readonly method: string;
 }
 
 export type ToolExecutionPolicy =
@@ -992,7 +992,6 @@ export type ToolExecutionPolicy =
       readonly mode: 'plugin_native';
       readonly pluginInstanceId: string;
       readonly contributionId: string;
-      readonly actionMethods: readonly string[];
     };
 
 /**

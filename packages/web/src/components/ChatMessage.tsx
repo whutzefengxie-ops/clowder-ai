@@ -29,6 +29,7 @@ import {
 import { CapabilityTipStrip } from './CapabilityTipStrip';
 import { CatNameplate } from './CatNameplate';
 import { CloudBindingRecoveryCard } from './CloudBindingRecoveryCard';
+import { CodexStartupRecoveryStatus } from './CodexStartupRecoveryStatus';
 import { CollapsibleMarkdown } from './CollapsibleMarkdown';
 import { ConnectorBubble } from './ConnectorBubble';
 import { ContentBlocks } from './ContentBlocks';
@@ -66,8 +67,8 @@ import { isLastOfOwnRun } from './own-message-run';
 import { PawFeelDispositionDock } from './paw-feel/PawFeelDispositionDock';
 import { ReplyPill } from './ReplyPill';
 import { RoutingWarningNotice } from './RoutingWarningNotice';
-import { NativeReplyText } from './reply-layers/NativeReplyText';
 import { ReplyLayers } from './reply-layers/ReplyLayers';
+import { ReplyOutputBody } from './reply-layers/ReplyOutputBody';
 import { useReplyRecallProjection } from './reply-layers/ReplyRecallContext';
 import { REPLY_BODY_CLASS } from './reply-layers/reply-body';
 import { canRenderReplyLayers, canRenderReplyNameplate } from './reply-layers/reply-presentation';
@@ -545,7 +546,14 @@ function ChatMessageContent({
     }
     if (isConnectorSystemNotice(message)) {
       if (isLinkedCloudBindingRecoveryNotice(message, threadMessages)) return null;
-      return <SystemNoticeBar message={message} footer={dispatchLine} />;
+      return (
+        <SystemNoticeBar
+          message={message}
+          footer={dispatchLine}
+          threadId={renderThreadId}
+          timelineMessages={threadMessages}
+        />
+      );
     }
     return (
       <ConnectorBubble
@@ -797,7 +805,13 @@ function ChatMessageContent({
               )}
               <span className="text-cafe-muted">{formatTime(assistantPresentationTime)}</span>
             </div>
-            <p className="mt-2 text-sm text-cafe-muted">已接下，还没有输出</p>
+            {message.extra?.startupRecovery && message.extra.startupRecovery.stage !== 'ready' ? (
+              <div className="mt-2 text-cafe-muted">
+                <CodexStartupRecoveryStatus message={message} />
+              </div>
+            ) : (
+              <p className="mt-2 text-sm text-cafe-muted">已接下，还没有输出</p>
+            )}
             {showCapabilityTip && capabilityTipContexts ? (
               <CapabilityTipStrip
                 surface="pending_bubble"
@@ -988,11 +1002,7 @@ function ChatMessageContent({
    * block. A streamed reply's text is the stream's own text (the CLI block was fed the same); a callback reply, or the spoken part
    * of a merged one, is its own content. The tool calls, thinking and model line are not here: they are the record (ReplyLayers). */
   const replyBody = !showsNameplate ? null : nativeReplyOutput ? (
-    <div data-testid="native-reply-answer" className="space-y-3">
-      {nativeReplyOutput.answers.map((run) => (
-        <NativeReplyText key={run.id} run={run} className={REPLY_BODY_CLASS} disclosureKey={bodyDisclosureKey} />
-      ))}
-    </div>
+    <ReplyOutputBody output={nativeReplyOutput} className={REPLY_BODY_CLASS} disclosureKey={bodyDisclosureKey} />
   ) : isStreamOrigin ? (
     cliStdoutContent?.trim() ? (
       <CollapsibleMarkdown content={cliStdoutContent} className={REPLY_BODY_CLASS} disclosureKey={bodyDisclosureKey} />
@@ -1096,7 +1106,9 @@ function ChatMessageContent({
         </>
       }
     >
-      {emptyResponseNotice && emptyResponseNotice.tone !== 'processing' ? (
+      <CodexStartupRecoveryStatus message={message} showRecovered={!showsNameplate} />
+      {message.extra?.startupRecovery && message.extra.startupRecovery.stage !== 'ready' ? null : emptyResponseNotice &&
+        emptyResponseNotice.tone !== 'processing' ? (
         <CollapsibleMarkdown
           content={emptyResponseNotice.label}
           className={catStyle?.font}

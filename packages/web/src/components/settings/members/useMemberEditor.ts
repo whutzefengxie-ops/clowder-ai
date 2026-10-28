@@ -1,4 +1,5 @@
 'use client';
+import type { MemberVisualAssets } from '@cat-cafe/shared';
 import { useEffect, useRef, useState } from 'react';
 import type { CatData } from '@/hooks/useCatData';
 import { API_URL, apiFetch } from '@/utils/api-client';
@@ -17,6 +18,7 @@ import {
 } from '../../hub-cat-editor.model';
 import { buildMemberPatchPayload } from '../../hub-cat-editor.payload';
 import type { CatStrategyEntry } from '../../hub-strategy-types';
+import { commitMemberAvatar } from './member-avatar-draft';
 import {
   changedFields,
   type MemberDraft,
@@ -327,6 +329,8 @@ export function useMemberEditor(
     conflicted,
     refreshBaseline,
     patch,
+    avatarCommitted: (value: { avatar?: string; visualAssets: MemberVisualAssets }) =>
+      setDraft((previous) => commitMemberAvatar(previous, value)),
     switchRuntime,
     observeRuntime,
     setSection,

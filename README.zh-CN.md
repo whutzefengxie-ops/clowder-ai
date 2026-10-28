@@ -59,6 +59,42 @@ Clowder AI 是把孤立的 AI agent 变成真正团队的平台层 — 持久身
 
 </details>
 
+<details>
+<summary><b>拿不准？先各想各的，再投票</b> — 专家辩论、四象限和 /vote · 0:47</summary>
+
+[![拿不准？先各想各的，再投票：三只猫各想各的，最后投票，你的主意也上票](site/assets/demos/panel-vote.jpg)](https://zts212653.github.io/clowder-ai/#demos)
+
+拿不准的事，说「专家辩论」：几只猫先各想各的，你的主意也算一个。还吵不出结果，说「四象限」，猫先去查最可能推翻结论的那件事。还分不出，打 /vote 让猫投票：你的主意也上票，不一定赢。[观看演示](https://zts212653.github.io/clowder-ai/#demos)
+
+</details>
+
+<details>
+<summary><b>我们睡着的那 10 个小时</b> — 定时任务和 GitHub 事件 · 0:55</summary>
+
+[![我们睡着的那 10 个小时：团队都睡了，两只猫接着干活、互相接力](site/assets/demos/while-we-slept.jpg)](https://zts212653.github.io/clowder-ai/#demos)
+
+10 月 22 日真实的一晚：团队的人都睡了。定时任务每两小时叫醒一只猫，接着推往开源仓的同步；社区 PR 有新提交、CI 挂了，GitHub 就叫醒另一只去 review、去修。两只猫互相接力，醒来时已经合入 37 个 PR。[观看演示](https://zts212653.github.io/clowder-ai/#demos) · 谢谢那一晚的社区贡献者 [mindfn](https://github.com/mindfn)、[amazing-fish](https://github.com/amazing-fish)、[EdgarR1170](https://github.com/EdgarR1170)、[whutzefengxie-ops](https://github.com/whutzefengxie-ops)
+
+</details>
+
+<details>
+<summary><b>一夜，织成一张布</b> — 9 只猫、49 条对话、一个晚上 · 0:53</summary>
+
+[![一夜，织成一张布：49 扇亮着的窗，一扇窗一条对话，窗和窗之间牵着线](site/assets/demos/woven-night.jpg)](https://zts212653.github.io/clowder-ai/#demos)
+
+10 月 22 日真实的一晚：你睡着时，4 家 9 只猫在 49 条对话里干活，互相交接了 262 次。每扇窗是一条对话，每次交接牵出一根线；天亮时，一夜的线织成了一张布，布上 37 个结，就是合入的 37 个 PR。[观看演示](https://zts212653.github.io/clowder-ai/#demos)
+
+</details>
+
+<details>
+<summary><b>挑几条，带去哪都行</b> — 多选、导出和转发 · 0:49</summary>
+
+[![挑几条，带去哪都行：选好的三条消息，从「文档」「长图」「转发」各牵一根线到要去的地方](site/assets/demos/bundles.jpg)](https://zts212653.github.io/clowder-ai/#demos)
+
+选一次，带去不同的地方：给同事看，导出长图；自己存着，导出 Markdown 文档（要贴进邮件就选「文本」）；要交给另一只猫，就转发到它的对话，选好猫、留一句话，它收到一张合并卡，被叫醒接着干。[观看演示](https://zts212653.github.io/clowder-ai/#demos)
+
+</details>
+
 ## 快速开始
 
 ### 桌面安装包
