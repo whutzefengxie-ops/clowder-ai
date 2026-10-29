@@ -15,6 +15,7 @@ tips_exempt: 部署准备与首次安装接线，无新增日常用户入口；�
 1. 复用 `prepareInitialPluginInstallation` 的同一 journal、首次安装判断、重试、owner 变更围栏和卸载 tombstone。仅增加可选的本地 pinned release 元数据源；不为离线另造状态机，不伪造官方 catalog URL。
 2. 本地 bundle 为只读元数据和实际 tgz：精确 pluginId、packageName、version、SHA-512 SRI、相邻 archive 文件名及初始 enabled 意图。元数据在边界严格校验，文件名不能逃逸 bundle 根。
 3. 使用 Manager composition 中同一个 LocalPluginPackageAdmission（包括完整性、quarantine、配置 reconcile、lifecycle），并传入 expectedDigest/expectedPackage；身份和摘要在 inventory 写入前校验。通过旧 inventory/配置入口启用，不扩大 grants、不启动模型。
+   离线 fence 要求有运行依赖的包随包提供 node_modules；缺失在写 inventory 前拒绝，不等到 materializer 执行 npm ci。prepared journal 恢复也检查已接纳 provenance，不允许不完整或旧 catalog 包从离线启用链补网下载。随包依赖损坏/缺模块仍如实失败，不回落 npm；本规则不禁用用户已有在线插件的正常行为。
 4. 显式 `CAT_CAFE_OFFLINE_PLUGIN_BUNDLE` 绝对路径优先；发行 profile 可声明默认 bundle 相对安装运行根的资源路径。选中离线源后，缺失、损坏或重试失败只进入现有延后/重试诊断，不回落到公共 catalog/network。
 5. 公共 profile 未选择离线源时保持已有官方首次安装行为。现有 inventory/journal/卸载记录胜过默认值，不在普通升级时重装、改绑或覆盖已保存配置。中断后的重试仍用 journal 原 pin；包变化不能静默漂移版本。
 6. 打包准备入口只向显式构建 staging 输出 immutable 归档和 bundle 元数据；从实际 tgz 提取标识并计算摘要，不把企业 binary、端点、凭据或用户连接配置塞入包。输出可以放到部署 API 的 `offline-plugins/` 后一同进入现有安装闭包；不写运行数据根。
@@ -48,5 +49,6 @@ node scripts/prepare-offline-plugin-bundle.mjs "G:/build/runtime/packages/api/of
 - 构建/元数据三项通过：严格 schema、profile 范围、真实归档 hash、重复准备及不同输出保护。
 - 实际 `@clowder-ai/codeagent@0.1.0-beta.2` tgz 的离线安装→默认注册→双 ACP fixture 会话/续聊→非法保存修正→停用/启用→运行时重建回读通过，SHA-256 为 `83c3a06bb2a1d9501a4fea34bd82a4adf562f75bd9143635f5392c16ecbddf9e`。测试 catalog 请求直接抛错，未回落网络。
 - API/shared 类型编译及 env registry/example 检查通过。测试使用作者独立临时项目，原生进程关闭后回收，无生产 Redis/端口/配置修改。
+- 独立审查在 `8bbbc807cf90b1ea8c40ac87f537ffda6dc269f4` 发现 P2：合法 builtin 包若缺 node_modules，默认 materializer 仍会 npm ci。两个生产用例观察到安装尝试（注入拦截、未实际联网）后补离线 admission fence 与 prepared 激活检查；另验证完整随包依赖在重建 runtime 后 healthy，零 catalog/registry 安装尝试。构建 staging 同样拒绝缺失依赖目录。扩展集合 **29/29**（含原 materializer 8 项，正常在线行为保留）通过；新增自身 21 项纳入 CI。
 
 本片不包含安装器新 EXE、内网旧 owner 文件兼容桥、所有发行身份参数化或企业 Release provider。与独立 H5 策略的组合验收另行记录。企业 binary 本机不可用且用户已明确由现场验收；fixture 不证明真实 CodeAgent 模型/MCP/A2A 或安装包首装。PR 提交与独立审查状态见后续记录，不能将本地通过等同公共已合入。

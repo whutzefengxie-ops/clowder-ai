@@ -75,4 +75,13 @@ test('staging hashes actual archives, is idempotent and refuses to overwrite a d
   execFileSync('tar', ['-czf', archive, '-C', root, 'package'], { windowsHide: true });
   await assert.rejects(prepareOfflinePluginBundle(output, [archive]), /Existing offline bundle differs/);
   assert.deepEqual(await readFile(path), original);
+  await writeFile(
+    join(pkg, 'package.json'),
+    JSON.stringify({ name: entry.packageName, version: entry.version, dependencies: { missing: '1.0.0' } }),
+  );
+  execFileSync('tar', ['-czf', archive, '-C', root, 'package'], { windowsHide: true });
+  await assert.rejects(
+    prepareOfflinePluginBundle(join(root, 'incomplete-staging'), [archive]),
+    /shipped runtime dependencies/,
+  );
 });
