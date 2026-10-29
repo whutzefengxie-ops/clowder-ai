@@ -1,0 +1,257 @@
+{
+  "acceptedObjective": "按综合重构方案实施并完成验收闭环",
+  "branch": "feat/role-agent-refactor-20261029-gpt-sol",
+  "baseCommit": "6d8d4915bcd84edfeb42edf76466cf6318cecdbd",
+  "sourceDirectory": "C:\\Users\\Administrator\\Desktop\\猫猫咖啡馆\\技术方案\\综合重构方案-20261029",
+  "documents": [
+    {
+      "name": "source-manifest.json",
+      "sha256": "c1aea2d7e2fb4be04080bb158ddcd61807439265b221c7dec9c63f166444444c"
+    },
+    {
+      "name": "交付校验.md",
+      "sha256": "85f3f7618cad0a24019e89b933f041907c5b7d935290092f7dbf4313e1abbf5f"
+    },
+    {
+      "name": "实施与验收.md",
+      "sha256": "6e2580fcefc06d0c85714d2c7f36e17c2830708fbb2bedcf3fe4780dd4bf6605"
+    },
+    {
+      "name": "客户端适配与CodeAgent扩展.md",
+      "sha256": "46d36ad13cc5ce02217e0266840f1afff348ba3e7de8fbe6bfad71e9b3e02021"
+    },
+    {
+      "name": "评审问题闭环.md",
+      "sha256": "c022bf88fb97e08366676cfa2123869ed57fc1863c360ff44b37705b4d8eaa12"
+    },
+    {
+      "name": "重构技术方案.md",
+      "sha256": "ba844e3a7030827d61deffe1c69424d631eae507f2423bcb414c4fb4f5be22c2"
+    }
+  ],
+  "userSteering": {
+    "codeagent": "用户确认本机没有 CodeAgent，授权简单 mock；区分模拟契约证据与真实企业能力",
+    "macos": "尚无实际连接信息"
+  },
+  "cases": [
+    {
+      "id": "C01",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "C02",
+      "status": "NOT_RUN",
+      "evidence": [
+        "README.md#2026-10-30-阶段记录尚未整体验收：局部证据，不等于该条目完整通过"
+      ]
+    },
+    {
+      "id": "C03",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "C04",
+      "status": "NOT_RUN",
+      "evidence": [
+        "README.md#2026-10-30-阶段记录尚未整体验收：局部证据，不等于该条目完整通过"
+      ]
+    },
+    {
+      "id": "C05",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "C06",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "C07",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "C08",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "C09",
+      "status": "NOT_RUN",
+      "evidence": [
+        "README.md#2026-10-30-阶段记录尚未整体验收：局部证据，不等于该条目完整通过"
+      ]
+    },
+    {
+      "id": "C10",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "C11",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "C12",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "C13",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "C14",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "C15",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "C16",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "C17",
+      "status": "NOT_RUN",
+      "evidence": [
+        "README.md#2026-10-30-阶段记录尚未整体验收：局部证据，不等于该条目完整通过"
+      ]
+    },
+    {
+      "id": "C18",
+      "status": "NOT_RUN",
+      "evidence": [
+        "README.md#2026-10-30-阶段记录尚未整体验收：局部证据，不等于该条目完整通过"
+      ]
+    },
+    {
+      "id": "C19",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "C20",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "C21",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "C22",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "C23",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "C24",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "C25",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "C26",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "E01",
+      "status": "NOT_RUN",
+      "evidence": [
+        "README.md#2026-10-30-阶段记录尚未整体验收：局部证据，不等于该条目完整通过"
+      ]
+    },
+    {
+      "id": "E02",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "E03",
+      "status": "NOT_RUN",
+      "evidence": [
+        "README.md#2026-10-30-阶段记录尚未整体验收：局部证据，不等于该条目完整通过"
+      ]
+    },
+    {
+      "id": "E04",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "Q01",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "Q02",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "Q03",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "Q04",
+      "status": "NOT_RUN",
+      "evidence": []
+    }
+  ],
+  "workPackages": [
+    {
+      "id": "W0",
+      "status": "IN_PROGRESS"
+    },
+    {
+      "id": "W1",
+      "status": "IN_PROGRESS"
+    },
+    {
+      "id": "W2",
+      "status": "IN_PROGRESS"
+    },
+    {
+      "id": "W3",
+      "status": "NOT_STARTED"
+    },
+    {
+      "id": "W4",
+      "status": "NOT_STARTED"
+    },
+    {
+      "id": "W5",
+      "status": "IN_PROGRESS"
+    },
+    {
+      "id": "W6",
+      "status": "IN_PROGRESS"
+    },
+    {
+      "id": "W7",
+      "status": "NOT_STARTED"
+    }
+  ],
+  "lastProgressAt": "2026-10-30T00:25:00+08:00"
+}

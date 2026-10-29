@@ -45,9 +45,10 @@ import {
   collectRosterFamilyLabels,
   formatRosterLabel,
   resolveL0Projections,
+  resolveMemberIdentity,
   resolvePromptTemplateVariables,
 } from '@cat-cafe/shared';
-import { getDossierL0Pronouns, getDossierL0RoutingNote, getDossierL0SelfDescription } from '@cat-cafe/shared/dossier';
+import { getDossierL0Pronouns, loadDossierProfiles } from '@cat-cafe/shared/dossier';
 import {
   CURRENT_CORPUS_PROFILE_URI,
   CURRENT_RELATIONSHIP_PROFILE_URI,
@@ -257,12 +258,13 @@ function buildIdentityBlock(config, runtimeModel, dossierRoot) {
   if (config.nickname) {
     lines.push(`昵称 "${config.nickname}" 的由来见 \`docs/stories/cat-names/\`。`);
   }
-  const selfDescription = getDossierL0SelfDescription(config.catId, dossierRoot);
+  const identity = resolveMemberIdentity(config, loadDossierProfiles(dossierRoot).get(config.catId));
+  const selfDescription = identity.selfDescription;
   if (selfDescription) {
     lines.push(`角色与自我校准：${selfDescription}`);
   } else {
-    lines.push(`角色：${config.roleDescription}`);
-    lines.push(`性格：${config.personality}`);
+    lines.push(`角色：${identity.roleDescription}`);
+    lines.push(`性格：${identity.personality}`);
   }
   // Bug fix: CLI 不传 runtimeModel 导致 L0 缺模型号，猫读 CLAUDE.md 硬编码签名出错。
   // fallback 链：runtimeModel（显式传入）> resolveModel（env override）> defaultModel。
@@ -328,7 +330,7 @@ function buildRosterRow(id, cfg, dossierRoot, familyLabels) {
   // capability dossier. Prefer the explicit compact route note; keep config
   // caution as a compatibility fallback for runtime/custom cats that have not
   // yet acquired a structured dossier profile. Hard restrictions always stay.
-  const routingNote = getDossierL0RoutingNote(id, dossierRoot) ?? cfg.caution;
+  const routingNote = resolveMemberIdentity(cfg, loadDossierProfiles(dossierRoot).get(id)).routingNote;
   const routeContract = [routingNote, restrictions].filter(Boolean).join('；') || '—';
   return `| ${label} | ${cell} | ${routeContract} |`;
 }

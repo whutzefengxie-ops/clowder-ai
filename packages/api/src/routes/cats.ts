@@ -89,7 +89,12 @@ import {
   readRuntimeCatCatalog,
   withRuntimeCatMutationLock,
 } from '../config/runtime-cat-catalog.js';
-import { deleteRuntimeOverride, getRuntimeOverride, setRuntimeOverride } from '../config/session-strategy-overrides.js';
+import {
+  deleteRuntimeOverride,
+  getRuntimeOverride,
+  getRuntimeOverrideRevision,
+  setRuntimeOverride,
+} from '../config/session-strategy-overrides.js';
 import type { InvocationCapacitySnapshot } from '../domains/cats/services/agents/invocation/invocation-capacity-snapshot.js';
 import { resolveActiveProjectRoot } from '../utils/active-project-root.js';
 import { saveSpan } from '../utils/member-save-diagnostics.js';
@@ -1810,13 +1815,14 @@ export const catsRoutes: FastifyPluginAsync<CatsRoutesOptions> = async (app, opt
     }
     const managedIdsBefore = getManagedCatalogIds(projectRoot);
     const overrideBackup = getRuntimeOverride(request.params.id);
+    const overrideRevision = getRuntimeOverrideRevision(request.params.id);
     try {
-      await deleteRuntimeOverride(request.params.id);
+      await deleteRuntimeOverride(request.params.id, overrideRevision);
       try {
         deleteRuntimeCat(projectRoot, request.params.id);
       } catch (err) {
         if (overrideBackup) {
-          await setRuntimeOverride(request.params.id, overrideBackup);
+          await setRuntimeOverride(request.params.id, overrideBackup, 'none');
         }
         throw err;
       }

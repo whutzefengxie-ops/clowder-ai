@@ -12,6 +12,11 @@ code_anchors:
   - packages/api/src/domains/cats/services/cloud-bridge/dot/dot-identity.ts
   - cat-config.json
   - packages/api/src/config/cat-config-loader.ts
+  - packages/api/src/config/member-identity-sources.ts
+  - packages/shared/src/member-profiles.ts
+  - packages/shared/src/member-identity.ts
+  - packages/web/src/components/settings/members/member-save-record.ts
+  - packages/web/src/components/settings/members/member-save-extras.ts
   - packages/api/src/config/account-resolver.ts
   - packages/api/src/config/account-store-snapshot.ts
   - packages/api/src/config/account-routing-capacity.ts
@@ -143,6 +148,10 @@ cited_by:
 ---
 
 # Identity / Session
+
+## Member identity and execution projections
+
+The member catalog remains the identity owner. RoleProfile and ExecutionProfile are read-time views of its existing resolved member; field provenance comes from the same template/catalog read and is carried into the frozen binding. L0, teammate routing and the existing compiled preview share one dossier suppression decision. Explicit complete-config input remains authoritative; template-only legacy members retain a labelled dossier fallback. The official member page reconciles uncertain member writes by the original catId before retry, and saves strategy overrides and global Codex keys independently through their resource revisions. This adds no member database, approval authority or session store. Completing the admission/compiler consumer snapshot and native session compatibility remains a separate implementation step.
 
 Architecture cell: identity-session
 

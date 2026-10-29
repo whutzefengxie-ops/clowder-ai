@@ -8,6 +8,7 @@ import {
   type StrategyFormState,
 } from '../../hub-cat-editor.model';
 import { normalizeMemberDraftBaseline, normalizeMemberDraftForm } from './member-carrier-compat';
+import type { CatPayloadContext } from '../../hub-cat-editor.payload';
 import type { RuntimeDrafts } from './member-runtime-draft';
 
 export interface MemberDraft {
@@ -21,6 +22,13 @@ export interface MemberDraft {
   strategyBaseline?: StrategyFormState | null;
   codexSettings?: CodexRuntimeSettings;
   codexBaseline?: CodexRuntimeSettings;
+  pendingWrite?: {
+    catId: string;
+    create: boolean;
+    form: HubCatEditorFormState;
+    payload: Record<string, unknown>;
+    context: CatPayloadContext;
+  };
 }
 
 export function changedFields(form: HubCatEditorFormState, baseline: CatData | null): number {
@@ -50,7 +58,14 @@ export function readMemberDraft(key: string): MemberDraft | null {
       return null;
     const draft = data as MemberDraft;
     return typeof draft.form?.name === 'string' && typeof draft.form?.clientId === 'string'
-      ? { ...draft, baseline: normalizeMemberDraftBaseline(draft.baseline), form: normalizeMemberDraftForm(draft.form) }
+      ? {
+          ...draft,
+          baseline: normalizeMemberDraftBaseline(draft.baseline),
+          form: normalizeMemberDraftForm(draft.form),
+          ...(draft.pendingWrite
+            ? { pendingWrite: { ...draft.pendingWrite, form: normalizeMemberDraftForm(draft.pendingWrite.form) } }
+            : {}),
+        }
       : null;
   } catch {
     return null;

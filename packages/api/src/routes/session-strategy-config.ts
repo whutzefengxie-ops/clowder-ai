@@ -10,11 +10,14 @@ import { saveSpan } from '../utils/member-save-diagnostics.js';
 import type { SessionStrategyConfig } from '@cat-cafe/shared';
 import { catRegistry } from '@cat-cafe/shared';
 import type { FastifyPluginAsync } from 'fastify';
+import { z } from 'zod';
 import { sessionStrategySchema } from '../config/cat-config-loader.js';
 import { getSessionStrategyWithSource } from '../config/session-strategy.js';
 import {
   deleteRuntimeOverride,
   getAllRuntimeOverrides,
+  getRuntimeOverride,
+  getRuntimeOverrideRevision,
   setRuntimeOverride,
 } from '../config/session-strategy-overrides.js';
 import { resolveSessionExecutionStatus } from '../domains/cats/services/agents/context-lifecycle-capability.js';
@@ -24,6 +27,14 @@ import { resolveHeaderUserId } from '../utils/request-identity.js';
 interface SessionStrategyRouteOptions {
   resolveContextCapability?: (catId: string) => AgentContextCapability;
 }
+
+const strategyMutationSchema = sessionStrategySchema
+  .unwrap()
+  .partial()
+  .extend({
+    expectedRevision: z.string().min(1).optional(),
+  });
+const strategyDeleteSchema = z.object({ expectedRevision: z.string().min(1).optional() });
 
 const UNAVAILABLE_CONTEXT_CAPABILITY: AgentContextCapability = {
   provider: 'unknown',
@@ -76,6 +87,7 @@ export const sessionStrategyConfigRoutes: FastifyPluginAsync<SessionStrategyRout
         effective,
         source,
         revision,
+        overrideRevision: getRuntimeOverrideRevision(catId),
         changedAt,
         executionStatus: executionStatusFor(capability, effective.strategy),
         hasOverride: override != null,
@@ -113,13 +125,15 @@ export const sessionStrategyConfigRoutes: FastifyPluginAsync<SessionStrategyRout
     }
 
     // Validate the override payload with the shared Zod schema
-    const parseResult = sessionStrategySchema.safeParse(request.body);
+    const parseResult = strategyMutationSchema.safeParse(request.body);
     if (!parseResult.success) {
       reply.status(400);
       return { error: 'Invalid strategy config', details: parseResult.error.issues };
     }
 
-    const override = parseResult.data;
+    const { expectedRevision, ...override } = parseResult.data;
+    if (expectedRevision === undefined)
+      return reply.code(428).send({ error: '请重新读取会话策略，携带 expectedRevision 后再保存。' });
     if (!override || Object.keys(override).length === 0) {
       reply.status(400);
       return { error: 'Empty override — use DELETE to remove an override' };
@@ -130,7 +144,14 @@ export const sessionStrategyConfigRoutes: FastifyPluginAsync<SessionStrategyRout
     // Zod .optional() produces `T | undefined` for nested props; our type uses optional-only.
     // Shapes are equivalent at runtime after validation.
     await saveSpan('strategy.persist', () =>
-      setRuntimeOverride(catId, override as unknown as Partial<SessionStrategyConfig>),
+      setRuntimeOverride(
+        catId,
+        {
+          ...getRuntimeOverride(catId),
+          ...override,
+        } as unknown as Partial<SessionStrategyConfig>,
+        expectedRevision,
+      ),
     );
     request.log.info({ operator, catId, override }, 'session strategy override set');
 
@@ -141,6 +162,7 @@ export const sessionStrategyConfigRoutes: FastifyPluginAsync<SessionStrategyRout
       effective,
       source,
       revision,
+      overrideRevision: getRuntimeOverrideRevision(catId),
       changedAt,
       executionStatus: executionStatusFor(capability, effective.strategy),
       override,
@@ -166,7 +188,11 @@ export const sessionStrategyConfigRoutes: FastifyPluginAsync<SessionStrategyRout
       return { error: `Unknown cat ID: "${catId}"` };
     }
 
-    const existed = await deleteRuntimeOverride(catId);
+    const parsed = strategyDeleteSchema.safeParse(request.body ?? {});
+    if (!parsed.success) return reply.code(400).send({ error: 'Invalid strategy revision' });
+    if (parsed.data.expectedRevision === undefined)
+      return reply.code(428).send({ error: '请重新读取会话策略，携带 expectedRevision 后再删除覆盖。' });
+    const existed = await deleteRuntimeOverride(catId, parsed.data.expectedRevision);
     request.log.info({ operator, catId, deleted: existed }, 'session strategy override delete');
     if (!existed) {
       reply.status(404);
@@ -181,6 +207,7 @@ export const sessionStrategyConfigRoutes: FastifyPluginAsync<SessionStrategyRout
       effective,
       source,
       revision,
+      overrideRevision: getRuntimeOverrideRevision(catId),
       changedAt,
       executionStatus: executionStatusFor(capability, effective.strategy),
       deleted: true,

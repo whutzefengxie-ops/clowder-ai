@@ -38,6 +38,7 @@ import {
   buildAcpSpawnLogFields,
 } from './AcpClient.js';
 import { AcpCwdIdentityTracker } from './acp-cwd-identity.js';
+import { resolveAcpPermissionDecision } from './acp-permission-policy.js';
 import { type AcpPromptInput, toAcpPromptContent } from './acp-prompt-content.js';
 import { AcpSessionBindingError, ActiveSessionCache } from './active-session-cache.js';
 import { shutdownAcpChild } from './lifecycle/acp-child-shutdown.js';
@@ -47,7 +48,6 @@ import type {
   AcpMcpServer,
   AcpNewSessionResult,
   AcpNotification,
-  AcpPermissionRequest,
   AcpPromptCapabilities,
   AcpPromptResult,
   AcpResponse,
@@ -812,14 +812,7 @@ export class AcpHttpStreamClient {
         }
         if (responsePromise) await responsePromise;
       } else {
-        // Prefer allow_always (session-wide) over allow_once to avoid repeated permission
-        // prompts for every MCP tool call. Kimi sends optionId "approve_for_session" for this.
-        const params = req.params as unknown as AcpPermissionRequest;
-        const allowOption =
-          params.options?.find((o) => o.kind === 'allow_always') ??
-          params.options?.find((o) => o.kind === 'allow_once') ??
-          params.options?.[0];
-        await respond({ optionId: allowOption?.optionId ?? 'allow_once' });
+        await respond(resolveAcpPermissionDecision(req.params, this.config.defaultPermissionDecision));
       }
       return;
     }

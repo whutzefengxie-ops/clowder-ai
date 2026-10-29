@@ -167,10 +167,16 @@ export async function scene(width = 1440, dark = false, classic = false, protect
     if (p.startsWith('/api/')) {
       if (request.method() !== 'GET')
         state.writes.push({ path: p, method: request.method(), body: request.postDataJSON() });
-      if (options.catsProducer && (p === '/api/cats' || p.startsWith('/api/cats/'))) {
+      const producer =
+        p === '/api/cats' || p.startsWith('/api/cats/')
+          ? options.catsProducer
+          : p === '/api/config' || p.startsWith('/api/config/session-strategy')
+            ? options.settingsProducer
+            : undefined;
+      if (producer) {
         if (request.method() === 'PATCH' && state.rejectSave)
           return json(route, { error: 'Fixture save rejected' }, 403);
-        const response = await options.catsProducer.app.inject({
+        const response = await producer.app.inject({
           method: request.method(),
           url: p,
           headers: { 'x-cat-cafe-user': 'default-user', 'content-type': 'application/json' },

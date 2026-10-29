@@ -17,7 +17,7 @@ const profile = { model: 'gemini-3.8-flash-high' };
 const headers = { 'x-cat-cafe-user': 'default-user' };
 export async function nativeMemberProducer(
   initialProfile,
-  { cliCommand = 'agy', clientId = 'google', accountRef = 'gemini', initialModel } = {},
+  { cliCommand = 'agy', clientId = 'google', accountRef = 'gemini', initialModel, retainRoot = false } = {},
 ) {
   const root = mkdtempSync(join(tmpdir(), 'f322-member-native-'));
   const keys = [
@@ -90,7 +90,7 @@ export async function nativeMemberProducer(
       _resetCachedConfig();
       catRegistry.reset();
       for (const [id, config] of Object.entries(toAllCatConfigs(loadCatConfig()))) catRegistry.register(id, config);
-      rmSync(root, { recursive: true, force: true });
+      if (!retainRoot) rmSync(root, { recursive: true, force: true });
     },
   };
 }

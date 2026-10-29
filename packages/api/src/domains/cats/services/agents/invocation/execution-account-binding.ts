@@ -1,5 +1,11 @@
 import { createHash } from 'node:crypto';
-import type { CatConfig, ExecutionAccountSnapshot } from '@cat-cafe/shared';
+import {
+  type CatConfig,
+  type ExecutionAccountSnapshot,
+  type ExecutionProfile,
+  projectMemberProfiles,
+  type RoleProfile,
+} from '@cat-cafe/shared';
 import {
   type RuntimeProviderProfile,
   resolveBuiltinClientForProvider,
@@ -19,6 +25,8 @@ import type { FrozenExecutionWorkspace } from './execution-workspace.js';
 
 export interface FrozenExecutionBinding {
   readonly catConfig?: CatConfig;
+  readonly roleProfile?: RoleProfile;
+  readonly executionProfile?: ExecutionProfile;
   readonly workspace: FrozenExecutionWorkspace;
   readonly projectRoot: string;
   readonly effectiveAccountRef?: string;
@@ -90,6 +98,7 @@ export function freezeExecutionAccountBinding(input: {
           : undefined;
   return Object.freeze({
     catConfig,
+    ...(catConfig ? deepFreeze(projectMemberProfiles(catConfig)) : {}),
     workspace: input.workspace,
     projectRoot,
     effectiveAccountRef,
