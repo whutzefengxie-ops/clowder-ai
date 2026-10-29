@@ -51,7 +51,7 @@ import { appendLocalImagePathHints, collectImageAccessDirectories } from '../pro
 import { extractTrustedImagePaths } from '../providers/image-paths.js';
 import { findGitBashPath } from './claude-agent-win.js';
 import { composeManagedSettingsDocument } from './claude-compaction-launch-plan.js';
-import { resolveClaudeMcpConfig } from './claude-mcp-config.js';
+import { captureClaudeMcpConfig, resolveClaudeMcpConfig } from './claude-mcp-config.js';
 import { extractClaudeUsage, isResultErrorEvent, transformClaudeEvent } from './claude-ndjson-parser.js';
 import { withClaudeSecretHooks } from './claude-secret-hook-settings.js';
 import { compileL0ViaSubprocess } from './l0-compiler.js';
@@ -396,6 +396,10 @@ export class ClaudeAgentService implements AgentService {
     return true;
   }
 
+  captureInvocationOptions(input: Parameters<NonNullable<AgentService['captureInvocationOptions']>>[0]) {
+    return captureClaudeMcpConfig({ ...input, catId: this.catId, mcpServerPath: this.mcpServerPath });
+  }
+
   supportsToolExecutionPolicy(policy: ToolExecutionPolicy): boolean {
     return policy.mode === 'read_only';
   }
@@ -523,6 +527,7 @@ export class ClaudeAgentService implements AgentService {
     // On Windows, Claude CLI treats inline JSON as a file path — write to temp file.
     if (!readOnly) {
       const mcpResolution = await resolveClaudeMcpConfig({
+        frozenNativeMcpConfig: options?.frozenNativeMcpConfig,
         callbackEnv: options?.callbackEnv,
         workingDirectory: options?.workingDirectory,
         mcpServerPath: this.mcpServerPath,

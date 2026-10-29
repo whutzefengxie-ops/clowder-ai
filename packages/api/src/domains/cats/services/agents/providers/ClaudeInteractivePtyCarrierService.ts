@@ -52,7 +52,7 @@ import {
   resolveClaudeModelSelection,
   resolveDefaultClaudeMcpServerPath,
 } from './ClaudeAgentService.js';
-import { resolveClaudeMcpConfig } from './claude-mcp-config.js';
+import { captureClaudeMcpConfig, resolveClaudeMcpConfig } from './claude-mcp-config.js';
 import {
   extractEntrypointFromHookEntries,
   extractSessionIdFromHookEntries,
@@ -136,6 +136,15 @@ export class ClaudeInteractivePtyCarrierService implements AgentService {
     return policy.mode === 'read_only';
   }
 
+  captureInvocationOptions(input: Parameters<NonNullable<AgentService['captureInvocationOptions']>>[0]) {
+    return captureClaudeMcpConfig({
+      ...input,
+      workingDirectory: input.workingDirectory ?? this.cwd,
+      catId: this.catId,
+      mcpServerPath: this.mcpServerPath,
+    });
+  }
+
   contextCapability(): import('../../types.js').AgentContextCapability {
     return {
       provider: 'anthropic',
@@ -217,6 +226,7 @@ export class ClaudeInteractivePtyCarrierService implements AgentService {
     // --mcp-config + --strict-mcp-config (F230 AC-B3): gated on callbackEnv (no callback = MCP unusable).
     if (!readOnly && options?.callbackEnv && this.mcpServerPath && existsSync(this.mcpServerPath)) {
       const resolution = await resolveClaudeMcpConfig({
+        frozenNativeMcpConfig: options?.frozenNativeMcpConfig,
         callbackEnv: options.callbackEnv,
         workingDirectory: options.workingDirectory ?? this.cwd,
         mcpServerPath: this.mcpServerPath,

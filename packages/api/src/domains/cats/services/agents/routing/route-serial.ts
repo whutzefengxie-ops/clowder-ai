@@ -825,6 +825,7 @@ export async function* routeSerial(
           userId,
           ownerAuthProvenance,
           service: pinnedService,
+          toolExecutionPolicy: options.toolExecutionPolicy,
           ...(catSignal ? { signal: catSignal } : {}),
         });
       } catch (error) {

@@ -1421,6 +1421,7 @@ export async function prepareInvocationExecutionBinding(
     model?: string;
     signal?: AbortSignal;
     ownerAuthProvenance?: InvocationParams['ownerAuthProvenance'];
+    toolExecutionPolicy?: AgentServiceOptions['toolExecutionPolicy'];
   },
 ): Promise<FrozenExecutionBinding> {
   input.signal?.throwIfAborted();
@@ -1468,7 +1469,11 @@ export async function prepareInvocationExecutionBinding(
           const view = await deps.resolveInvocationPluginMcpView?.();
           input.signal?.throwIfAborted();
           return withInvocationPluginMcpView(
-            () => captureOptions({ workingDirectory: workspace.workingDirectory }),
+            () =>
+              captureOptions({
+                workingDirectory: workspace.workingDirectory,
+                toolExecutionPolicy: input.toolExecutionPolicy,
+              }),
             view,
             input.ownerAuthProvenance === 'strict' && exposureProject
               ? { kind: 'member', projectRoot: exposureProject, memberCatId: input.catId }

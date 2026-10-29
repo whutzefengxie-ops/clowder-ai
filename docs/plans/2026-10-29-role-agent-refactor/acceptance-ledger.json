@@ -68,7 +68,8 @@
         "README.md#W2-模型与-effort-消费切片尚未完成-W2：实际消费者局部证据，整条仍未完成",
         "README.md#W2-线程偏好消费切片尚未完成-W2：准入后晚读反例闭环，跨owner读一致性尚未完成",
         "README.md#W2-Codex-全局启动策略切片尚未完成-W2：sandbox/approval/transport/observation实际消费者局部证据",
-        "README.md#W2-ACP-MCP-计划消费切片尚未完成-W2：描述符在实际session/new边界保持准入值；整条未完成"
+        "README.md#W2-ACP-MCP-计划消费切片尚未完成-W2：描述符在实际session/new边界保持准入值；整条未完成",
+        "README.md#W2-Claude-原生-MCP-消费切片尚未完成-W2：四载体与wrapper实际配置消费局部证据；整条未完成"
       ]
     },
     {
@@ -300,5 +301,13 @@
     "subject": "task:01a1881e-1a7b-78d0-9a62-ff99b0ab7a01/checkpoint-codex-policy",
     "findings": [],
     "evidence": "README.md#W2-Codex-全局启动策略切片尚未完成-W2"
+  },
+  "acpMcpCheckpointReview": {
+    "reviewer": "checkpoint_review",
+    "verdict": "approved",
+    "reviewedHead": "8f852771c1e4aeca4dd6a27675c02466254325cb",
+    "subject": "task:01a1881e-1a7b-78d0-9a62-ff99b0ab7a01/checkpoint-acp-mcp",
+    "findings": [],
+    "evidence": "README.md#W2-ACP-MCP-计划消费切片尚未完成-W2"
   }
 }

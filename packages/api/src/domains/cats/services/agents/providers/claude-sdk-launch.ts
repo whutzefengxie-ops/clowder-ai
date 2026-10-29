@@ -116,6 +116,7 @@ export async function prepareClaudeSdkLaunch(input: {
   const mcpResolution =
     !readOnly && options?.callbackEnv && input.mcpServerPath
       ? await resolveClaudeMcpConfig({
+          frozenNativeMcpConfig: options?.frozenNativeMcpConfig,
           callbackEnv: options.callbackEnv,
           workingDirectory: options.workingDirectory,
           mcpServerPath: input.mcpServerPath,

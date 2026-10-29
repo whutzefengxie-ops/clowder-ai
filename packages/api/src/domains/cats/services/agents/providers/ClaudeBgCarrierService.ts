@@ -65,7 +65,7 @@ import {
   resolveDefaultClaudeMcpServerPath,
   SUBSCRIPTION_MODE_DENY_KEYS,
 } from './ClaudeAgentService.js';
-import { resolveClaudeMcpConfig } from './claude-mcp-config.js';
+import { captureClaudeMcpConfig, resolveClaudeMcpConfig } from './claude-mcp-config.js';
 import { JobEventConsumer, type JobState } from './JobEventConsumer.js';
 import { compileL0ViaSubprocess } from './l0-compiler.js';
 import { writeInvocationMcpConfigFile } from './session-credential-file.js';
@@ -251,6 +251,10 @@ export class ClaudeBgCarrierService implements AgentService {
     return true;
   }
 
+  captureInvocationOptions(input: Parameters<NonNullable<AgentService['captureInvocationOptions']>>[0]) {
+    return captureClaudeMcpConfig({ ...input, catId: this.catId, mcpServerPath: this.mcpServerPath });
+  }
+
   supportsToolExecutionPolicy(policy: ToolExecutionPolicy): boolean {
     return policy.mode === 'read_only';
   }
@@ -325,6 +329,7 @@ export class ClaudeBgCarrierService implements AgentService {
     const mcpResolution =
       !readOnly && options?.callbackEnv && this.mcpServerPath
         ? await resolveClaudeMcpConfig({
+            frozenNativeMcpConfig: options?.frozenNativeMcpConfig,
             callbackEnv: options.callbackEnv,
             workingDirectory: options.workingDirectory,
             mcpServerPath: this.mcpServerPath,

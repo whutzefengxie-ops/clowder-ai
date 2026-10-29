@@ -212,3 +212,17 @@ MCP 描述符与每轮 callback 认证分开：仍在既有 session owner 获得
 注册插件的新夹具最初缺 invocationId 而超时，已补真实调用必需字段，并用完成结果与租约门槛的 race 提前报告夹具错误；早期超时日志保留，不计通过。复杂度复核：复用现有 resolver、binding、AsyncLocalStorage 视图与凭据 owner，仅新增一项 Host 捕获端口及描述符载体；没有新存储、队列或 launcher。map delta 为 identity-session 的运行消费锚点和 mcp-surface-governance 的原投影消费说明，owner 不变。
 
 尚待：其他原生客户端的 MCP/项目输入冻结、配置写入通知及各 owner 的读前读后一致性重解析、实现 generation、会话兼容与最终平台/工程任务验收。无真实模型调用或新增常驻服务；当前 ACP MCP 切片等待独立审查。
+
+checkpoint_review 对 `8f852771c1e4aeca4dd6a27675c02466254325cb` 给出 approved，subject 为 `task:01a1881e-1a7b-78d0-9a62-ff99b0ab7a01/checkpoint-acp-mcp`；独立 24 PASS，覆盖 strict/unknown owner、外部项目、blockedCats 暴露策略和捕获后绑定当前凭据，无新 P1/P2。批准仍限该 ACP 描述符切片，其他环境变量引用与原生客户端配置仍须继续。
+
+## W2 Claude 原生 MCP 消费切片（尚未完成 W2）
+
+原 native MCP resolver 分为读取现有配置计划和绑定本轮凭据两个阶段；计划继续使用原服务器格式，记录已经验证的插件服务器来源。正式准入借用同一 Host 捕获端口，Claude print、SDK、后台、PTY 和回退包装器消费该计划。插件普通环境引用在捕获时解析，回调 transport 环境在启动时绑定当前轮；不把本轮 token 放入准入计划。read_only 的准入与启动都跳过 MCP 工具发现，serial/parallel 入口传递既有工具策略，不增加策略 owner。
+
+五条真实消费边界反例先 RED：capabilities、项目 `.mcp.json`、当前插件激活、回退包装器和 SDK 读取准入后新值；修复后 GREEN，另加后台最终 argv、PTY 驱动参数与只读对照，`native-mcp-carriers-final.log` 8 PASS。这里的“真实消费边界”使用实际 Host/carrier/resolver 配合 fake spawn/driver，不代表真实 Claude 模型或 PTY 会话验收。插件场景还验证环境引用保留旧值、callback 使用当前轮值。最初夹具缺模板、SDK 误读保留为空的 sdkOptions.mcpServers 和后台 mock 等待错误事件，均修正后重新取证；早期失败日志保留，未计行为 RED 或通过。
+
+扩大回归 `native-mcp-regression-final.log` 为 209 项=208 PASS+1 FAIL，涵盖既有 Claude/MCP 合并、carrier fallback/health、插件视图、Kimi 原生解析与 SDK。剩余 Kimi shared HTTP 测试使用 URL.pathname 作为 Windows 程序路径，`native-mcp-path-witness.log` 确认该路径及 collab.js 不存在，fileURLToPath 后存在；未改该测试或产品默认值，仍记 FAIL。首轮回归缺公共 registry 预加载已纠正，首轮结果不计有效回归。API tsc 通过，Biome 14 文件无错误；factory 只增加转发端口，不重排原文件格式。新增公开测试受 public resolver 覆盖。
+
+复杂度复核：复用原解析规则、原 native server 格式、原冻结 binding 和 transport 凭据绑定；仅拆出确需复用的计划/绑定两阶段，不增数据库、配置 DSL、通用 launcher 或插件权限层。map delta 仅增加现有 consumer 锚点与消费说明。其他 native MCP、完整环境/策略/项目输入、owner revision 一致性重解析及 implementation generation 仍待继续，C05/C14 整条未完成。本次无真实模型调用、新增常驻环境或持久业务数据改写；本切片等待独立审查。
+
+最终计划显式 structuredClone 后再交给深冻结 binding，避免冻结借来的 Host 视图对象。受影响凭据/取消/L0/ACP/Claude 集合 `native-mcp-freeze-credentials-final.log` 为 38 项=35 PASS+3 FAIL：两条既有 hook 测试硬编码 `/bin/bash` 在 Windows ENOENT；一条凭据文件测试把 POSIX mode 0600 作为 Windows ACL 证明而得到 0666。未修改这些测试或降低权限要求，均不计通过；当前轮凭据轮换和冻结反例通过。这些夹具失败不能替代 Windows ACL 的真实验收。

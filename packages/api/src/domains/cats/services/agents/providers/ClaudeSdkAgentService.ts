@@ -18,6 +18,7 @@ import type {
   ToolExecutionPolicy,
 } from '../../types.js';
 import { resolveDefaultClaudeMcpServerPath } from './ClaudeAgentService.js';
+import { captureClaudeMcpConfig } from './claude-mcp-config.js';
 import { extractClaudeUsage, transformClaudeEvent } from './claude-ndjson-parser.js';
 import { sdkCompactionHooks } from './claude-sdk-compaction-hooks.js';
 import { prepareClaudeSdkLaunch } from './claude-sdk-launch.js';
@@ -107,6 +108,10 @@ export class ClaudeSdkAgentService implements AgentService {
 
   injectsL0Natively(): boolean {
     return true;
+  }
+
+  captureInvocationOptions(input: Parameters<NonNullable<AgentService['captureInvocationOptions']>>[0]) {
+    return captureClaudeMcpConfig({ ...input, catId: this.catId, mcpServerPath: this.mcpServerPath });
   }
 
   supportsToolExecutionPolicy(policy: ToolExecutionPolicy): boolean {

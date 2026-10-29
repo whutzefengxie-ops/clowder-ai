@@ -24,7 +24,10 @@ import {
   resolveMcpCommand,
   resolveMcpWorkingDir,
 } from '../../../../../config/capabilities/mcp-launch-paths.js';
-import { pluginMcpEnvironment } from '../../../../../config/capabilities/plugin-mcp-environment.js';
+import {
+  bindPluginMcpEnvironment,
+  pluginMcpEnvironment,
+} from '../../../../../config/capabilities/plugin-mcp-environment.js';
 import { isRetiredGithubMcpConfigEntry } from '../../../../../config/capabilities/retired-github-mcp.js';
 import { createModuleLogger } from '../../../../../infrastructure/logger.js';
 
@@ -39,7 +42,13 @@ function resolveMcpWorkspaceRoot(workingDirectory?: string): string {
   return process.cwd();
 }
 
-export async function resolveProviderMcpConfigResolution(input: {
+export interface ProviderMcpConfigPlan {
+  readonly servers: Record<string, Record<string, unknown>>;
+  readonly source: 'capabilities.json' | 'fallback';
+  readonly pluginMcpServerNames: readonly string[];
+}
+
+export async function captureProviderMcpConfig(input: {
   callbackEnv: Record<string, string>;
   workingDirectory?: string;
   mcpServerPath: string;
@@ -47,7 +56,7 @@ export async function resolveProviderMcpConfigResolution(input: {
   provider?: string;
   /** Native clients may inherit a Git-root MCP file while executing in a child directory. */
   projectMcpRoot?: string;
-}): Promise<{ servers: Record<string, Record<string, unknown>>; source: 'capabilities.json' | 'fallback' }> {
+}): Promise<ProviderMcpConfigPlan> {
   const distDir = dirname(input.mcpServerPath);
   const binaryProjectRoot = resolve(distDir, '../../..');
   const capabilitiesProjectRoot = await resolveInvokeCapabilityRoot(binaryProjectRoot);
@@ -66,6 +75,7 @@ export async function resolveProviderMcpConfigResolution(input: {
 
   const mcpServers: Record<string, Record<string, unknown>> = {};
   const managedMcpServerNames = new Set<string>();
+  const pluginMcpServerNames: string[] = [];
   let resolved = false;
   try {
     // F249: Project config is the single truth source for MCP resolution.
@@ -111,6 +121,7 @@ export async function resolveProviderMcpConfigResolution(input: {
           };
           const environment = pluginMcpEnvironment(s, input.callbackEnv);
           if (environment && Object.keys(environment).length > 0) entry.env = environment;
+          if (s.source === 'plugin' && environment?.CLOWDER_PLUGIN_ACTION_TOKEN) pluginMcpServerNames.push(s.name);
           if (workingDir) entry.cwd = workingDir;
           mcpServers[s.name] = entry;
         }
@@ -178,20 +189,37 @@ export async function resolveProviderMcpConfigResolution(input: {
     }),
     '#712: MCP invoke-time injection',
   );
+  return structuredClone({
+    servers: mcpServers,
+    source: resolved ? 'capabilities.json' : 'fallback',
+    pluginMcpServerNames,
+  });
+}
+
+export async function resolveProviderMcpConfigResolution(
+  input: Parameters<typeof captureProviderMcpConfig>[0] & { frozenNativeMcpConfig?: ProviderMcpConfigPlan },
+): Promise<{ servers: Record<string, Record<string, unknown>>; source: ProviderMcpConfigPlan['source'] }> {
+  const plan = input.frozenNativeMcpConfig ?? (await captureProviderMcpConfig(input));
+  const callback = {
+    ...input.callbackEnv,
+    ...(input.credentialFile ? { CAT_CAFE_CREDENTIAL_FILE: input.credentialFile } : {}),
+  };
   return {
     servers: materializeNativeMcpHttp(
       Object.fromEntries(
-        Object.entries(mcpServers).map(([name, server]) => [
+        Object.entries(plan.servers).map(([name, server]) => [
           name,
-          bindManagedMcpStdioConfig(server, {
-            ...input.callbackEnv,
-            ...(input.credentialFile ? { CAT_CAFE_CREDENTIAL_FILE: input.credentialFile } : {}),
-          }),
+          bindManagedMcpStdioConfig(
+            plan.pluginMcpServerNames.includes(name)
+              ? { ...server, env: bindPluginMcpEnvironment(server.env as Record<string, string>, callback) }
+              : server,
+            callback,
+          ),
         ]),
       ),
-      { ...input.callbackEnv, ...(input.credentialFile ? { CAT_CAFE_CREDENTIAL_FILE: input.credentialFile } : {}) },
+      callback,
     ),
-    source: resolved ? 'capabilities.json' : 'fallback',
+    source: plan.source,
   };
 }
 
