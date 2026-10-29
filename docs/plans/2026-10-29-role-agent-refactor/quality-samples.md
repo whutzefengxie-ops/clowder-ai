@@ -38,7 +38,7 @@ node packages/api/scripts/with-test-home.mjs node ../../scripts/role-agent-quali
 
 `packages/api/test/role-agent-quality-samples.test.js` 为校准入口。最初三条测试/十二个对照通过，但 checkpoint_review 对 eaa7d268 返回 changes_requested：金额相邻安全值失真、view 显式 false、执行后生成文件未核验、包装器改变 cwd 导致文档命令失效，共四个 P2。作者保留三个真实误放候选，`quality-samples-review-red-three.log` 三条均 RED；修复后 `quality-samples-review-green-final.log` 四条 PASS，包含原三组及三个新反例共十五个判定、真实文档入口和输出位置检查。执行前/后哈希均入报告，运行中改变代码或新增文件拒绝；版本控制的根 .git 元数据排除在代码范围之外。另有 `quality-samples-report-path-red.log` 证实报告放进候选目录会在评分后新增文件，现于命令边界拒绝创建。
 
-`quality-samples-review-biome-final.log` 无错误。作者复跑 reviewer 原三反例为两个 PASS、一个旧诊断见证 FAIL：第三条原先断言最终哈希缺少 debug.log，现在最终哈希已正确包含它，因此旧缺陷见证不再成立；没有修改 reviewer 文件或将复跑误记为全过。最终状态仍等同一 reviewer 复核，不把作者参考实现或量尺自检标为 Q01 通过。所有夹具/报告保留在日志中的独立路径，无真实候选客户端或模型调用。
+`quality-samples-review-biome-final.log` 无错误。作者复跑 reviewer 原三反例为两个 PASS、一个旧诊断见证 FAIL：第三条原先断言最终哈希缺少 debug.log，现在最终哈希已正确包含它，因此旧缺陷见证不再成立；没有修改 reviewer 文件或将复跑误记为全过。随后 checkpoint_review 对 db76cade55c431228657bbba0efaa5d03d71a770 给出 approved，独立 8 PASS，闭环原四 P2 及报告位置问题，含实际文档入口和执行中源码变化检查。批准仅限量尺准备；作者参考实现与自检不计为 Q01 通过。所有夹具/报告保留在日志中的独立路径，无真实候选客户端或模型调用。
 
 ## Q02–Q04 的剩余准备与运行
 

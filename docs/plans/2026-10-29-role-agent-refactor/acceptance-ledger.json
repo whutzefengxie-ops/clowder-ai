@@ -405,18 +405,27 @@
     "findings": [],
     "evidence": "README.md#W2-账号与启动策略读后核验切片尚未完成-W2"
   },
-  "qualitySamplesCheckpointReview": {
+  "acpAccountSelectionCheckpointReview": {
     "reviewer": "checkpoint_review",
     "verdict": "changes_requested",
-    "reviewedHead": "eaa7d268ffbab07b0f2168af259eb344bcad68db",
+    "reviewedHead": "ef688b96161ab1d32e164de3d156cb1ff60b19a5",
+    "subject": "task:01a1881e-1a7b-78d0-9a62-ff99b0ab7a01/checkpoint-acp-account-selection",
+    "findings": ["P2 implicit app default and native/unbound share an undefined explicit ref; native whitespace resolves inconsistently"],
+    "authorFixStatus": "addressed_awaiting_independent_recheck",
+    "evidence": "README.md#W2-ACP-成员改选账号的准入匹配尚未完成-W2"
+  },
+  "qualitySamplesCheckpointReview": {
+    "reviewer": "checkpoint_review",
+    "verdict": "approved",
+    "reviewedHead": "db76cade55c431228657bbba0efaa5d03d71a770",
     "subject": "task:01a1881e-1a7b-78d0-9a62-ff99b0ab7a01/checkpoint-quality-samples",
-    "findings": [
+    "closedFindings": [
       "P2 view explicit false accepted incorrectly",
       "P2 inexact adjacent safe cents accepted incorrectly",
       "P2 execution-time file mutation absent from final scope/hash check",
       "P2 documented wrapper command uses the wrong child cwd"
     ],
-    "authorFixStatus": "addressed_awaiting_independent_recheck",
+    "findings": [],
     "evidence": "quality-samples.md#判断依据及职责"
   },
   "acpAccountSourceCheckpointReview": {

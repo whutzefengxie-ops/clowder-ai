@@ -420,3 +420,9 @@ checkpoint_review 对 `48471628a1357a429ee7665aa8f46a9d686b37dc` 给出 approved
 上一切片只验证原构建账号本体当前性；成员在新调用前改选另一个账号、或取消显式账号改回原生默认时，原账号本身仍未变化。`acp-account-selection-red.log` 的两个真实 factory→Host 反例均未拒绝。现仅在已有 capture port 增加冻结 accountRef，Host 总是提供该属性，包括明确 undefined；factory 将其与构建来源核对。缺属性的直接内部调用仍沿原来源验证，属性存在但 undefined 不回落旧账号。ACP hook 与既有统一输入类型对齐，未增加外部配置字段或存储。
 
 修复后 `acp-account-selection-green.log` 18 PASS，覆盖原五条账号来源、两条新选择、新 factory 实际 env/原生无账号读回及原生命周期；`acp-account-selection-consumers.log` 70 PASS。API tsc 与 5 文件 Biome 无错误。factory 仍仅在隔离进程使用原 trusted-host 测试模式，未验证 strict ACL；客户端为内存协议替身，无真实模型/外部服务。复杂度复核：一个现有冻结投影字段与一次明确选择比较，沿原冲突/有界重解析路径，不新增账号系统或重试器。原始命令、whitelist、父环境/CA、全 owner 一致性和 W2 继续未完成；此选择来源切片等待独立审查。
+
+独立 reviewer 对 `ef688b96161ab1d32e164de3d156cb1ff60b19a5` 返回 P2：原始显式 ref 无法区分隐式应用默认与原生无绑定；两个值都是 undefined 时，旧应用账号 pool 可穿过新 native 选择。另证实 factory 原先用 !config.accountRef 判断空，空白字符串与 Host trim 语义不同，native 会误取应用默认 HOME。这是原 resolver 不一致在本护栏中的未闭环变体，不称为本次新引入回归。
+
+现 capture port 的 accountRef 明确承载实际解析的 runtime account.id，包括隐式默认；present undefined 表示本轮 native/unbound，与旧构建 account.id 比较。factory 复用原 usesNativeToolConfiguration 统一空白语义，不另写 trim 规则。新增两条真实 factory→Host 反例 `acp-native-selection-red.log` 先 RED，修复后 `acp-native-selection-green.log` 20 PASS，保留原七条选择/账号与租约用例，验证隐式默认的原绑定、切换拒绝和新 factory 不再带应用 HOME；消费者 `acp-native-selection-consumers.log` 70 PASS。API tsc、4 文件 Biome 无错误；无真实模型/外部进程，仍不认证 strict ACL。此 P2 修复等待独立复核，不扩大到完整 W2。
+
+量尺准备的另一独立回执：checkpoint_review 对 `db76cade55c431228657bbba0efaa5d03d71a770` 返回 approved，原四 P2 和报告位置问题闭环，独立 8 PASS；subject 保持 checkpoint-quality-samples。该批准仅限量尺，Q01 及真实候选继续 NOT_RUN，详见 quality-samples.md。

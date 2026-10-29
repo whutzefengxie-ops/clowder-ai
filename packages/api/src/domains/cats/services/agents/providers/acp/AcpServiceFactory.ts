@@ -9,7 +9,10 @@ import {
   validateRuntimeProviderBinding,
 } from '../../../../../../config/account-resolver.js';
 import { AccountStoreVerdictError } from '../../../../../../config/account-store-format.js';
-import { resolveBoundAccountRefForCat } from '../../../../../../config/cat-account-binding.js';
+import {
+  resolveBoundAccountRefForCat,
+  usesNativeToolConfiguration,
+} from '../../../../../../config/cat-account-binding.js';
 import type { AcpVariantConfig } from '../../../../../../config/cat-config-loader.js';
 import { resolveContextCapacity } from '../../../../../../config/context-capacity.js';
 import { resolveEffectiveOpenCodeModel } from '../../../../../../config/opencode-model.js';
@@ -101,7 +104,7 @@ function resolveAcpContextPolicy(config: CatConfig, effectiveModel: string): Acp
 }
 
 function resolveAcpAccount(projectRoot: string, config: CatConfig): AcpAccountContext {
-  if (config.configurationSource === 'native_tool' && !config.accountRef) return { account: null };
+  if (usesNativeToolConfiguration(config)) return { account: null };
   const catId = config.id;
   const accountRef = resolveBoundAccountRefForCat(projectRoot, catId, config);
   const builtinClient = resolveBuiltinClientForProvider(config.clientId);
@@ -416,7 +419,7 @@ export async function createAcpServiceForConfig(
   });
   const captureOptions = service.captureInvocationOptions.bind(service);
   service.captureInvocationOptions = async (options) => {
-    if ('accountRef' in options && options.accountRef !== accountSource.accountRef)
+    if ('accountRef' in options && options.accountRef !== accountSource.account?.id)
       throw new ExecutionAdmissionConflict('ACP selected account changed; refresh this member before admission.');
     assertAccountCurrent();
     const captured = await captureOptions(options);

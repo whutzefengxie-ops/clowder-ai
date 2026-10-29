@@ -1525,7 +1525,7 @@ export async function prepareInvocationExecutionBinding(
                       workingDirectory: workspace.workingDirectory,
                       toolExecutionPolicy: input.toolExecutionPolicy,
                       accountEnv: binding.accountEnv,
-                      accountRef: binding.effectiveAccountRef,
+                      accountRef: binding.resolvedAccount?.id,
                       mcpSupport: binding.catConfig?.mcpSupport !== false,
                       liveCompanion: input.liveCompanion,
                     })
