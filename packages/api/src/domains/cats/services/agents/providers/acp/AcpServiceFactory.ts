@@ -416,6 +416,8 @@ export async function createAcpServiceForConfig(
   });
   const captureOptions = service.captureInvocationOptions.bind(service);
   service.captureInvocationOptions = async (options) => {
+    if ('accountRef' in options && options.accountRef !== accountSource.accountRef)
+      throw new ExecutionAdmissionConflict('ACP selected account changed; refresh this member before admission.');
     assertAccountCurrent();
     const captured = await captureOptions(options);
     assertAccountCurrent();

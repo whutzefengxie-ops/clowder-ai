@@ -1251,6 +1251,8 @@ export interface AgentService {
     workingDirectory?: string;
     toolExecutionPolicy?: ToolExecutionPolicy;
     accountEnv?: Record<string, string>;
+    /** Host supplies this property even when undefined, preserving an explicit unbound/native choice. */
+    accountRef?: string;
     mcpSupport?: boolean;
     liveCompanion?: AgentServiceOptions['liveCompanion'];
   }): Promise<

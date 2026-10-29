@@ -259,7 +259,7 @@ export class AcpAgentService implements AgentService {
   }
 
   /** Resolve the same existing MCP sources before admission can wait for a process. */
-  async captureInvocationOptions(input: { workingDirectory?: string; mcpSupport?: boolean }) {
+  async captureInvocationOptions(input: Parameters<NonNullable<AgentService['captureInvocationOptions']>>[0]) {
     const userProjectRoot = input.workingDirectory;
     const mcpSupport = input.mcpSupport ?? this.mcpSupportEnabled;
     let baseMcpServers: AcpMcpServer[];

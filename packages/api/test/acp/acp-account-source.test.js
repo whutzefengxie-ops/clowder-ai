@@ -11,7 +11,7 @@ import { createAcpServiceForConfig } from '../../dist/domains/cats/services/agen
 import { ExecutionAdmissionConflict } from '../../dist/domains/cats/services/agents/registry/AgentServiceUnavailableError.js';
 import { isolateAccountAuthEnvironment } from '../helpers/account-auth-environment.js';
 
-for (const change of ['home', 'env', 'credential', 'quota', 'after-binding']) {
+for (const change of ['home', 'env', 'credential', 'quota', 'after-binding', 'account-selection', 'native-selection']) {
   test(`factory ACP account source handles a ${change} write at admission`, async (t) => {
     t.after(isolateAccountAuthEnvironment());
     const parent = resolve('artifacts/role-agent-refactor/acp-account-source');
@@ -75,6 +75,25 @@ for (const change of ['home', 'env', 'credential', 'quota', 'after-binding']) {
     const launch = pool.clientFactory().config;
     assert.equal(launch.env.HOME, join(root, 'before'));
     const mutate = () => {
+      if (change === 'account-selection' || change === 'native-selection') {
+        if (change === 'account-selection')
+          writeCatalogAccount(root, 'other-owned-acp', { ...account, envVars: { HOME: join(root, 'after') } });
+        const members = catRegistry.getAllConfigs();
+        catRegistry.reset();
+        Object.entries(members).forEach(([id, member]) =>
+          catRegistry.register(
+            id,
+            id === catId
+              ? {
+                  ...member,
+                  accountRef: change === 'account-selection' ? 'other-owned-acp' : undefined,
+                  configurationSource: change === 'native-selection' ? 'native_tool' : 'managed_account',
+                }
+              : member,
+          ),
+        );
+        return;
+      }
       if (change === 'credential') writeCredential('owned-acp', { apiKey: 'fixture-after-only' }, root);
       else
         writeCatalogAccount(root, 'owned-acp', {
@@ -102,7 +121,10 @@ for (const change of ['home', 'env', 'credential', 'quota', 'after-binding']) {
       assert.equal(pool.getMetrics().coldStartCount, 0);
       await view.releaseInvocation();
       await service.disposeHostService();
-      const replacement = await createAcpServiceForConfig(factoryInput);
+      const replacement = await createAcpServiceForConfig({
+        ...factoryInput,
+        config: catRegistry.tryGet(catId).config,
+      });
       assert.ok(replacement);
       t.after(() => replacement.disposeHostService());
       const next = await prepareInvocationExecutionBinding(
@@ -110,8 +132,15 @@ for (const change of ['home', 'env', 'credential', 'quota', 'after-binding']) {
         { catId, service: replacement, threadId: 'thread', userId: 'owner' },
       );
       const nextLaunch = pools.get(catId).clientFactory().config;
+      if (change === 'native-selection') {
+        assert.equal(next.resolvedAccount, null);
+        assert.equal(nextLaunch.env, undefined);
+        return;
+      }
       assert.equal(nextLaunch.env.HOME, next.accountEnv.HOME);
-      assert.equal(nextLaunch.env.FIXTURE_ORDINARY, change === 'env' ? 'after' : 'before');
+      if (change !== 'account-selection')
+        assert.equal(nextLaunch.env.FIXTURE_ORDINARY, change === 'env' ? 'after' : 'before');
+      if (change === 'account-selection') assert.equal(next.effectiveAccountRef, 'other-owned-acp');
       if (change === 'home') assert.equal(nextLaunch.env.HOME, join(root, 'after'));
       if (change === 'credential') assert.equal(nextLaunch.env.FIXTURE_TOKEN, 'fixture-after-only');
       return;

@@ -414,3 +414,9 @@ checkpoint_review 对 `48471628a1357a429ee7665aa8f46a9d686b37dc` 给出 approved
 ## W0/Q01 固定样本准备（未完成质量验收）
 
 按 eval-design 方法对 claim 与判断分工做了复核，具体范围见 [quality-samples.md](quality-samples.md)。新增一个离线脚本，准备三个全新目录的小型工程任务并独立校验实际行为/文件范围，报告记录脚本与候选哈希；公开测试不包含独立答案。作者校准三个任务各四种对照：种子缺陷、健康参考、越界改动及未修完整，三条测试/十二个判定符合预期，重复准备拒绝覆盖；Biome 无错误。没有运行真实模型或候选，Q01 保持 NOT_RUN；Q02–Q04 与性能基线继续准备。此样本量尺切片等待独立审查。
+
+## W2 ACP 成员改选账号的准入匹配（尚未完成 W2）
+
+上一切片只验证原构建账号本体当前性；成员在新调用前改选另一个账号、或取消显式账号改回原生默认时，原账号本身仍未变化。`acp-account-selection-red.log` 的两个真实 factory→Host 反例均未拒绝。现仅在已有 capture port 增加冻结 accountRef，Host 总是提供该属性，包括明确 undefined；factory 将其与构建来源核对。缺属性的直接内部调用仍沿原来源验证，属性存在但 undefined 不回落旧账号。ACP hook 与既有统一输入类型对齐，未增加外部配置字段或存储。
+
+修复后 `acp-account-selection-green.log` 18 PASS，覆盖原五条账号来源、两条新选择、新 factory 实际 env/原生无账号读回及原生命周期；`acp-account-selection-consumers.log` 70 PASS。API tsc 与 5 文件 Biome 无错误。factory 仍仅在隔离进程使用原 trusted-host 测试模式，未验证 strict ACL；客户端为内存协议替身，无真实模型/外部服务。复杂度复核：一个现有冻结投影字段与一次明确选择比较，沿原冲突/有界重解析路径，不新增账号系统或重试器。原始命令、whitelist、父环境/CA、全 owner 一致性和 W2 继续未完成；此选择来源切片等待独立审查。
