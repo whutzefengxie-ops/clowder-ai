@@ -458,3 +458,13 @@ checkpoint_review 对 `4456f3882acaeda8f7ee8fe60aa3e7cf7022c19a` 返回 approved
 `client-mcp-currentness-red.log` 九条真实 Host→client capture 反例均 FAIL，覆盖四客户端项目文件变化/出现及 Kimi HOME 变化；修复后 `client-mcp-currentness-green.log` 9 PASS，并核对下一准入实际描述符、OpenCode command 和 Kimi 新原生入口的拒绝值。`client-mcp-currentness-regression.log` 152 PASS，覆盖原 resolver、各原生/ACP 冻结、workspace、共享授权及格式适配。`client-mcp-currentness-tsc-verified.log` 确认 API 构建 exit 0 后才运行测试；7 文件 Biome 无错误，既有测试风格警告未扩散修改。测试不启动模型或常驻环境，独立夹具数据保留。
 
 复杂度复核：只在既有实际文件读取点记录版本，不新增配置对象缓存、watcher、launcher、存储或跨进程总线；未改变 Kimi 后续原生层只能补拒绝的限制。该证据不覆盖全部客户端原生配置、插件激活代次、父环境/CA、成员整体发布、持久审计或完整 W2/C05/C15；等待独立审查。
+
+checkpoint_review 对 `be51e64613ce84a7b3ffee0e287e1ffcd0eb56f1` 返回 approved，subject 为 checkpoint-client-mcp-currentness，独立 34 PASS，覆盖实际读取字节、缺失/出现/消失、scope 隔离、原错误语义及冻结后消费，无未关闭 finding。批准仅限该 SHA；下一激活切片和完整 W2 不在本回执范围。
+
+## W2 本地插件 MCP 激活准入核验（尚未完成 W2）
+
+NativeMcpLaunches 的既有 memberView 保留原激活对象集合和各入口可用性，提供只供准入检查的 isCurrent。Host 在最后异步读取之后核验该视图；新增、移除、刷新激活及动作代次失效均走已有自有冲突/一次重解析。已失效但未再变化的入口仍按原规则拒绝，不把稳定拒绝变成无限冲突。检查回调不进入 FrozenExecutionBinding、编译输入、持久审计或发送参数。
+
+真实 NativeMcpLaunches/NativePluginActions→Host→ACP 捕获的 `plugin-mcp-currentness-red-valid.log` 6 项=2 对照 PASS+4 FAIL，原先刷新/禁用/启用/动作代次变化均未拒绝；首轮夹具用错 ACP 名称的日志不算有效 RED。修复后 `plugin-mcp-currentness-green.log` 49 PASS，含六条新检查、原插件发现/隔离与已审查文件版本；下一准入实际采用新 args 或移除失效入口。`plugin-mcp-currentness-consumers.log` 52 PASS，覆盖真实 carrier 的原 native launch/Alpha 激活、多个原生消费者与串并行重解析。API tsc exit 0 后才测试；4 文件 Biome 无错误。无真实模型或新增常驻环境，作者新夹具保留，既有测试沿原夹具生命周期结束。
+
+复杂度复核及 map delta：复用插件激活 owner 到 invocation/MCP 消费者的既有边，只新增私有视图校验能力和最终检查；没有代次总线、watcher 或存储。此处覆盖会返回本地激活视图的隔离 Host；persistCapabilities 常规发布路径仍不返回该视图，不能以本次证明全部插件激活或 inventory/package 的外部静默变更。成员整体发布、父环境/CA、全部写入通知和完整 W2/C05/C15 仍未闭环；等待独立审查。

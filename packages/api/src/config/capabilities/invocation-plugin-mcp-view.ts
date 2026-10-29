@@ -21,6 +21,8 @@ export interface InvocationPluginMcpEntry {
 export interface InvocationPluginMcpView {
   readonly entries: readonly InvocationPluginMcpEntry[];
   readonly localCapabilityRoot?: string;
+  /** Admission-only check owned by the activation source, including additions to an empty view. */
+  readonly isCurrent?: () => boolean;
 }
 
 const invocationView = new AsyncLocalStorage<{

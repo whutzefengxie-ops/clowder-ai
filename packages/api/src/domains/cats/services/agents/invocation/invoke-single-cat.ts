@@ -1513,11 +1513,13 @@ export async function prepareInvocationExecutionBinding(
     catConfig?.provider !== 'openai-chatgpt-pro' &&
     catConfig?.mcpSupport !== false &&
     input.toolExecutionPolicy?.mode !== 'read_only';
+  let isPluginMcpCurrent = () => true;
   const mcpSources = await captureInvocationMcpSources(async () =>
     captureOptions || captureOpenCodeMcp || captureSharedMcp
       ? await preflightRace(
           Promise.resolve().then(async () => {
             const view = await deps.resolveInvocationPluginMcpView?.();
+            isPluginMcpCurrent = () => view?.isCurrent?.() !== false;
             input.signal?.throwIfAborted();
             return withInvocationPluginMcpView(
               async () => {
@@ -1598,6 +1600,10 @@ export async function prepareInvocationExecutionBinding(
   if (!mcpSources.isCurrent())
     throw new ExecutionAdmissionConflict(
       'MCP configuration changed during execution admission; retry this invocation.',
+    );
+  if (!isPluginMcpCurrent())
+    throw new ExecutionAdmissionConflict(
+      'Plugin MCP activation changed during execution admission; retry this invocation.',
     );
   const frozenL0Input =
     catConfig && (input.service?.injectsL0Natively?.() || catConfig.clientId === 'opencode')

@@ -272,9 +272,20 @@
       "status": "NOT_STARTED"
     }
   ],
-  "lastProgressAt": "2026-10-29T22:25:00Z",
-  "clientMcpCurrentnessCheckpointReview": {
+  "lastProgressAt": "2026-10-29T22:29:00Z",
+  "pluginMcpCurrentnessCheckpointReview": {
     "verdict": "PENDING",
+    "evidence": "README.md#W2-本地插件-MCP-激活准入核验尚未完成-W2",
+    "tests": { "red": "2 PASS + 4 FAIL", "green": "49 PASS", "consumers": "52 PASS" },
+    "scope": "Existing local activation views only; ordinary publication and full W2 remain incomplete"
+  },
+  "clientMcpCurrentnessCheckpointReview": {
+    "reviewer": "checkpoint_review",
+    "verdict": "approved",
+    "reviewedHead": "be51e64613ce84a7b3ffee0e287e1ffcd0eb56f1",
+    "subject": "task:01a1881e-1a7b-78d0-9a62-ff99b0ab7a01/checkpoint-client-mcp-currentness",
+    "findings": [],
+    "independentTests": "34 PASS",
     "evidence": "README.md#W2-客户端-MCP-文件版本核验尚未完成-W2",
     "tests": { "red": "9 FAIL", "green": "9 PASS", "regression": "152 PASS" },
     "scope": "Client MCP file reads only; complete C05/C15 and W2 remain NOT_RUN/IN_PROGRESS"
