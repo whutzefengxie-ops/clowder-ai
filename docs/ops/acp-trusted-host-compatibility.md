@@ -11,7 +11,20 @@ created: 2026-10-22
 
 ## 配置一次
 
-在运行 Host API 的电脑、启动器实际读取的 Host 根目录 `.env` 中一次加入（不要覆盖原文件）：
+正常内网发行可通过部署预设长期提供兼容值，普通用户无需每次设置环境变量。管理员需要覆盖时，在运行 Host 的电脑上配置一次，并完整重启 API。
+
+桌面入口默认只读 `<实际 userDataDir>/host-policy.json`。在桌面启动日志的 `User data dir` 和 API `ACP_HOST_POLICY.ownerFile` 中找到确切路径，不按安装目录或浏览器电脑猜位置。文件不存在时继承，不自动创建；需要覆盖才由管理员创建，例如：
+
+```json
+{
+  "bootstrapMode": "trusted-host",
+  "auditMode": "warn-bootstrap-root"
+}
+```
+
+逐键优先级为 **owner 文件 > 环境（新键，再旧 exact-one 别名）> 选中发行的 hostPolicy > 公共 strict/required**。文件可以只写一键或 `{}`，其余项继承。策略在启动时形成同一份只读快照；改文件后仅刷新 Web 不生效。非法 JSON、未知键、枚举错误、空文件或读取失败会在监听前报错，API 不回写原文件。
+
+源码/CLI 不猜 owner 文件位置，可在启动器实际读取的 Host 根 `.env` 指定绝对路径 `CAT_CAFE_HOST_POLICY_FILE=...`，也可继续一次加入已有两键（不要覆盖原文件）：
 
 ```dotenv
 CAT_CAFE_WINDOWS_ACP_BOOTSTRAP_MODE=trusted-host
@@ -20,9 +33,9 @@ CAT_CAFE_ACP_BOOTSTRAP_CONFIG_AUDIT_MODE=warn-bootstrap-root
 
 然后按[Host 操作指南](./acp-client-plugin-user-guide.md)正常重启 API。以后仍用原启动方式，无需每次终端 export。源码 Windows 启动器读 Host 根 .env；API job 读取同一文件。Bash 另支持 .env.local，避免在两处放冲突策略。单独命名 .env.intranet.example 不会自动加载。
 
-服务管理器或容器使用其既有持久环境注入；desktop 已提供自己的 AUDIT_LOG_DIR，保留该位置。插件、角色和 Hub 编辑接口不能开启上述 Host 策略。
+服务管理器或容器使用其既有持久环境注入。desktop 已提供自己的 AUDIT_LOG_DIR，本次不迁移该位置。插件、角色和 Hub 编辑接口不能开启上述 Host 策略；旧内网文件仍由既有发行桥读取，不因新增 owner 文件机制而搬迁或改写。
 
-旧 `CAT_CAFE_TRUSTED_HOST_COMPATIBILITY=1` 可以继续持久使用：只有 exact 1、对应新键未设置才映射上述受限组合。显式新值逐项优先。旧版共享开关曾允许任意插件配置在审计失败后保存；本候选已经收窄，不能把旧版说明套到新行为。
+旧 `CAT_CAFE_TRUSTED_HOST_COMPATIBILITY=1` 可以继续持久使用：只有 exact 1、owner 同键和环境新键未设置才映射上述受限组合。旧版共享开关曾允许任意插件配置在审计失败后保存；本候选已经收窄，不能把旧版说明套到新行为。
 
 | 有效目录模式 | 请求审计模式 | Windows 的最终行为 |
 | --- | --- | --- |
@@ -69,4 +82,4 @@ CAT_CAFE_ACP_BOOTSTRAP_CONFIG_AUDIT_MODE=warn-bootstrap-root
 
 检查、保存成功不保证 CodeAgent 自身不会在项目、HOME、认证、会话或 MCP 返回 EPERM。区分 initialize、session/new、prompt 的阶段；本机合成 ACP、原生 dsh/Claude/Pi 和报告者 CodeAgent 证据分别记录，不把一种正常输出扩大为全部 MCP/协作/续接验收。
 
-恢复严格模式时在持久部署配置中明确设 `CAT_CAFE_WINDOWS_ACP_BOOTSTRAP_MODE=strict`、审计设 required，正常重启 API；显式新值会覆盖遗留旧别名。配置、角色和历史保留，严格模式会重新拒绝祖先不合格的目录。
+恢复严格模式时，在已使用的 owner 文件设 `{"bootstrapMode":"strict","auditMode":"required"}` 并重启 API；无 owner 覆盖时也可在持久环境设显式新值。不要只改低优先级来源后误认为已经生效，按启动摘要核对逐键来源。配置、角色和历史保留，严格模式会重新拒绝祖先不合格的目录。

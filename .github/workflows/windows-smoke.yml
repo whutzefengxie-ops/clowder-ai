@@ -96,6 +96,7 @@ jobs:
           desktop/renderer-navigation.test.js
           desktop/installation-lifecycle.test.js
           desktop/service-manager-isolation.test.js
+          desktop/host-policy-env.test.js
           desktop/client-homes.test.js
           desktop/configure-client-homes.test.js
           desktop/build-release-policy.test.js

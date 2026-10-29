@@ -18,6 +18,12 @@ export interface DeploymentProfile {
   repositoryFullName: string;
   promptPolicy?: DeploymentPromptPolicy;
   l0Projections?: L0Projection[];
+  hostPolicy?: DeploymentHostPolicy;
+}
+
+export interface DeploymentHostPolicy {
+  bootstrapMode?: 'strict' | 'trusted-host';
+  auditMode?: 'required' | 'warn-bootstrap-root';
 }
 
 export type L0Projection = 'owner' | 'public' | 'collective-work';
@@ -43,6 +49,24 @@ function record(value: unknown, label: string): Record<string, unknown> {
     throw new Error(`Invalid deployment configuration: ${label} must be an object`);
   }
   return value as Record<string, unknown>;
+}
+
+/** Shared boundary for a deployment preset or an owner's read-only Host policy file. */
+export function parseDeploymentHostPolicy(value: unknown): DeploymentHostPolicy {
+  const input = record(value, 'hostPolicy');
+  const { bootstrapMode, auditMode } = input;
+  if (
+    Object.keys(input).some((key) => key !== 'bootstrapMode' && key !== 'auditMode') ||
+    (bootstrapMode !== undefined && bootstrapMode !== 'strict' && bootstrapMode !== 'trusted-host') ||
+    (auditMode !== undefined && auditMode !== 'required' && auditMode !== 'warn-bootstrap-root')
+  )
+    throw new Error(
+      'Invalid deployment configuration: hostPolicy permits only bootstrapMode (strict|trusted-host) and auditMode (required|warn-bootstrap-root)',
+    );
+  return {
+    ...(bootstrapMode === undefined ? {} : { bootstrapMode }),
+    ...(auditMode === undefined ? {} : { auditMode }),
+  };
 }
 
 function port(value: unknown, label: string): number {
@@ -129,6 +153,7 @@ function selectProfile(input: unknown, requested?: string): { name: string; prof
       brand: brand(selected.brand),
       repositoryFullName: repository(selected.repositoryFullName),
       ...(selected.l0Projections === undefined ? {} : { l0Projections: l0Projections(selected.l0Projections) }),
+      ...(selected.hostPolicy === undefined ? {} : { hostPolicy: parseDeploymentHostPolicy(selected.hostPolicy) }),
     },
   };
 }
