@@ -363,4 +363,16 @@ checkpoint_review 对 `da57a4c999b567da651ccf104203c1d268267c2b` 给出 approved
 
 `client-identity-factory-process-only-final.log` 6 PASS，含原 pin/reset/replacement/release/policy refusal 与新增真实 factory 身份拒绝。该单独进程沿用此前既有 trusted-host 模式，仅验证流程，不认证父目录 strict Windows ACL，不改用户/生产设置、不新增 skip。首轮构建的常量作用域错误已由 TypeScript 抓出并改至真实 factory 入口；最终日志为 `client-identity-tsc-final.log`，没有在构建失败后运行依赖测试。
 
-复杂度复核：产品改动复用既有 snapshot/registry，增加一项类型化来源和两个实现的声明/传递，不新增注册系统、认证库、launcher 或通用客户端 DSL。不据此宣称成员/服务全发布原子性、自动 reparse、其余客户端迁移或会话兼容已完成；无真实模型或新增常驻环境，此 client 来源切片等待独立审查。
+复杂度复核：产品改动复用既有 snapshot/registry，增加一项类型化来源和两个实现的声明/传递，不新增注册系统、认证库、launcher 或通用客户端 DSL。不据此宣称成员/服务全发布原子性、自动 reparse、其余客户端迁移或会话兼容已完成；无真实模型或新增常驻环境。
+
+checkpoint_review 对 `0700400b913e1a6b1b9a96ec4aa13c88a839f987` 给出 approved，subject 为 `task:01a1881e-1a7b-78d0-9a62-ff99b0ab7a01/checkpoint-client-identity`。独立 46 PASS，覆盖更早拒绝、legacy unknown、注册包装器子 generation 和真实 factory 租约；factory 检查仅用进程内既有 trusted-host 模式，不认证 strict ACL。无未关闭 finding，批准只限 Codex/ACP 构建来源切片。
+
+## W2 配置冲突的有界准入重解析切片（尚未完成 W2）
+
+正式串行/并行路由只对 Host 自有 ExecutionAdmissionConflict 在模型调用前重新准入一次。第一次失败先释放原 pin，再从当前 Router 表解析服务、取得新 pin、完整重做原捕获；成功后实际 invoke 消费新服务与新 binding。第二次仍变化则输出 execution_binding_conflict。普通带 409 的错误、取消、释放失败与 provider 执行错误均不重试；模型发送在该 helper 之外。原 prepareInvocationExecutionBinding 仍是单次捕获，两个正式路由是它的生产调用方。
+
+`admission-reparse-red-final.log` 的串并行实际 Host 反例 12 项=4 PASS+8 FAIL；第一次修复后 12 PASS。增加公开冲突码断言后 `admission-reparse-conflict-red.log` 再现 2 FAIL，修复路由错误投影后最终 `admission-reparse-routing-final.log` 274 PASS。覆盖一次变更后消费最新 sandbox、连续变更不启动 CLI、服务替换后只调用新实现、移除后的最新不可用原因、非自有 409 不重试及取消；原生 CLI 是进程内 fake，没有真实模型调用。新增四条 pin 所有权检查证明失败视图各释放一次、成功视图在 scope 收尾释放，取消后不再解析/获取新租约。
+
+`admission-reparse-invocation-final.log` 207 项=203 PASS+原 AGY Native Windows birth-identity 4 FAIL，保持原平台限制，不放宽所有权检查。最终 API tsc 通过，8 个变更源/测试文件 Biome 无错误；构建成功后才运行依赖 dist 的验证。无新增常驻服务、安装、用户认证或历史改动。
+
+复杂度复核：复用原 InvocationServiceScope 和 Router 表，仅增加一个有明确 owner 的冲突类型与一次重解析；不新建队列、重试框架、版本总线或 launcher。此处只处理已检测出的冲突，其他 owner 输入的一致性检测、完整服务构建 provenance、所有写方通知与持久会话兼容仍待继续；不能作为完整 W2/C15 通过证据。此有界重解析切片等待独立审查。

@@ -199,7 +199,7 @@ import { getRichBlockBuffer } from '../invocation/RichBlockBuffer.js';
 import { recordTurnOutputVerdict, requireTurnOutputAllowed } from '../invocation/response-draft-settlement.js';
 import { resolveManagedSessionPolicySnapshot } from '../invocation/session-policy-snapshot.js';
 import { resolveDefaultClaudeMcpServerPath } from '../providers/ClaudeAgentService.js';
-import { AgentServiceUnavailableError } from '../registry/AgentServiceUnavailableError.js';
+import { AgentServiceUnavailableError, ExecutionAdmissionConflict } from '../registry/AgentServiceUnavailableError.js';
 import { detectInlineActionMentionsWithShadow, getMaxA2ADepth, parseA2AMentions } from '../routing/a2a-mentions.js';
 import { registerWorklist, unregisterWorklist } from '../routing/WorklistRegistry.js';
 import { accumulateTextAggregate } from '../text-aggregation.js';
@@ -818,22 +818,36 @@ export async function* routeSerial(
         servicePreparationError = error;
       }
       let executionBinding: Awaited<ReturnType<typeof prepareInvocationExecutionBinding>>;
-      try {
-        executionBinding = await prepareInvocationExecutionBinding(deps.invocationDeps, {
+      const capture = (service?: AgentService) =>
+        prepareInvocationExecutionBinding(deps.invocationDeps, {
           catId,
           threadId,
           userId,
           ownerAuthProvenance,
-          service: pinnedService,
+          service,
           toolExecutionPolicy: options.toolExecutionPolicy,
           ...(options.liveCompanion && index === 0 ? { liveCompanion: options.liveCompanion } : {}),
           ...(catSignal ? { signal: catSignal } : {}),
         });
+      try {
+        if (pinnedService) {
+          const admitted = await invocationServices.admit(
+            pinnedService,
+            () => getService(deps.services, catId, deps.unavailableServices),
+            capture,
+            catSignal,
+          );
+          pinnedService = admitted.service;
+          executionBinding = admitted.executionBinding;
+        } else executionBinding = await capture();
       } catch (error) {
         yield {
           type: 'error',
           catId,
-          errorCode: 'execution_binding_unavailable',
+          errorCode:
+            error instanceof ExecutionAdmissionConflict
+              ? 'execution_binding_conflict'
+              : 'execution_binding_unavailable',
           error: error instanceof Error ? error.message : 'Execution binding is unavailable',
           timestamp: Date.now(),
         };

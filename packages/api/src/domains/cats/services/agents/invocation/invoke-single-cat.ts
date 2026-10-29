@@ -7,6 +7,7 @@ import type {
 import { ContextSourceWorkBudget } from '../../../../memory/cue/ContextSourceWorkBudget.js';
 import { captureInvocationL0Input } from '../providers/l0-input-capture.js';
 import { agentServiceGeneration } from '../registry/AgentRegistry.js';
+import { ExecutionAdmissionConflict } from '../registry/AgentServiceUnavailableError.js';
 import { deepFreeze, type FrozenExecutionBinding, freezeExecutionAccountBinding } from './execution-account-binding.js';
 import { freezeExecutionWorkspace } from './execution-workspace.js';
 import { InvocationServiceScope } from './invocation-service-scope.js';
@@ -1438,9 +1439,9 @@ export async function prepareInvocationExecutionBinding(
   const carrier = input.service?.freshnessCarrierCapability?.();
   const declaredImplementation = input.service?.implementationSnapshot?.();
   if (declaredImplementation?.clientId && declaredImplementation.clientId !== catConfig?.clientId)
-    throw Object.assign(new Error('execution_client_changed: 成员与已准备的 client 不一致，请在配置刷新后重试。'), {
-      statusCode: 409,
-    });
+    throw new ExecutionAdmissionConflict(
+      'execution_client_changed: 成员与已准备的 client 不一致，请在配置刷新后重试。',
+    );
   const implementationSource =
     declaredImplementation ??
     (input.service
@@ -1558,9 +1559,9 @@ export async function prepareInvocationExecutionBinding(
       : { sharedMcpLaunch: { transport: mcpTransport } };
   input.signal?.throwIfAborted();
   if (catRegistry.getRevision() !== memberRegistryRevision)
-    throw Object.assign(new Error('Member configuration changed during execution admission; retry this invocation.'), {
-      statusCode: 409,
-    });
+    throw new ExecutionAdmissionConflict(
+      'Member configuration changed during execution admission; retry this invocation.',
+    );
   const currentAccountBinding = freezeExecutionAccountBinding({
     catId: input.catId,
     catConfig,
@@ -1568,17 +1569,14 @@ export async function prepareInvocationExecutionBinding(
     workspace,
   });
   if (!isDeepStrictEqual(binding, currentAccountBinding))
-    throw Object.assign(
-      new Error('Execution configuration changed during execution admission; retry this invocation.'),
-      {
-        statusCode: 409,
-      },
+    throw new ExecutionAdmissionConflict(
+      'Execution configuration changed during execution admission; retry this invocation.',
     );
   if (
     input.service?.implementationSnapshot &&
     !isDeepStrictEqual(input.service.implementationSnapshot(), implementation)
   )
-    throw Object.assign(new Error('session_host_generation_changed'), { statusCode: 409 });
+    throw new ExecutionAdmissionConflict('session_host_generation_changed');
   const frozenL0Input =
     catConfig && (input.service?.injectsL0Natively?.() || catConfig.clientId === 'opencode')
       ? captureInvocationL0Input({
@@ -1617,7 +1615,8 @@ export async function* invokeSingleCat(deps: InvocationDeps, params: InvocationP
       yield {
         type: 'error',
         catId: params.catId,
-        errorCode: 'execution_binding_unavailable',
+        errorCode:
+          error instanceof ExecutionAdmissionConflict ? 'execution_binding_conflict' : 'execution_binding_unavailable',
         error: error instanceof Error ? error.message : 'Execution binding is unavailable',
         timestamp: Date.now(),
       };

@@ -107,7 +107,7 @@ import { recordTurnOutputVerdict, requireTurnOutputAllowed } from '../invocation
 import { resolveManagedSessionPolicySnapshot } from '../invocation/session-policy-snapshot.js';
 import { mergeStreams } from '../invocation/stream-merge.js';
 import { resolveDefaultClaudeMcpServerPath } from '../providers/ClaudeAgentService.js';
-import { AgentServiceUnavailableError } from '../registry/AgentServiceUnavailableError.js';
+import { AgentServiceUnavailableError, ExecutionAdmissionConflict } from '../registry/AgentServiceUnavailableError.js';
 import { parseA2AMentions } from '../routing/a2a-mentions.js';
 import { accumulateTextAggregate } from '../text-aggregation.js';
 import { commitCompletedRouteResponse, isCollectiveBoundResponse } from './commit-completed-response.js';
@@ -236,17 +236,29 @@ async function* routeParallelPrepared(
     }
   }
   const prepared = await Promise.allSettled(
-    targetCats.map((catId) =>
-      prepareInvocationExecutionBinding(deps.invocationDeps, {
-        catId,
-        threadId,
-        userId,
-        ownerAuthProvenance: options.ownerAuthProvenance,
-        service: pinnedServices.get(catId),
-        toolExecutionPolicy: options.toolExecutionPolicy,
-        signal: signalForCat?.(catId) ?? signal,
-      }),
-    ),
+    targetCats.map(async (catId) => {
+      const catSignal = signalForCat?.(catId) ?? signal;
+      const capture = (service?: AgentService) =>
+        prepareInvocationExecutionBinding(deps.invocationDeps, {
+          catId,
+          threadId,
+          userId,
+          ownerAuthProvenance: options.ownerAuthProvenance,
+          service,
+          toolExecutionPolicy: options.toolExecutionPolicy,
+          signal: catSignal,
+        });
+      const current = pinnedServices.get(catId);
+      if (!current) return capture();
+      const admitted = await invocationServices.admit(
+        current,
+        () => getService(deps.services, catId, deps.unavailableServices),
+        capture,
+        catSignal,
+      );
+      pinnedServices.set(catId, admitted.service);
+      return admitted.executionBinding;
+    }),
   );
   const executionBindings = new Map<CatId, Awaited<ReturnType<typeof prepareInvocationExecutionBinding>>>();
   for (const [index, result] of prepared.entries()) {
@@ -257,7 +269,10 @@ async function* routeParallelPrepared(
       yield {
         type: 'error',
         catId,
-        errorCode: 'execution_binding_unavailable',
+        errorCode:
+          result.reason instanceof ExecutionAdmissionConflict
+            ? 'execution_binding_conflict'
+            : 'execution_binding_unavailable',
         error: result.reason instanceof Error ? result.reason.message : 'Execution binding is unavailable',
         timestamp: Date.now(),
       };

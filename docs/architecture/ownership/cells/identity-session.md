@@ -264,6 +264,8 @@ Official CLI init is verified before stdin delivery; only then does the existing
 
 L0 input capture remains with the existing invocation/compiler owner. Shared Node-only capture and pure rendering are used by the diagnostic CLI and API without bootstrapping a second registry in the invocation child. The admission binding carries private immutable input in memory; the child receives it through its existing stdin pipe and caches by content digest plus compiler version. Native provider and AGY control consumers must receive that input, while standalone live diagnostics label their revision. This does not create another identity store or session authority; complete execution/MCP/policy/implementation freezing is a separate remaining boundary.
 
+The existing invocation scope owns failed admission pins. Serial and parallel routes release a failed pin and resolve one fresh view only for an owned configuration conflict before provider invocation; a second conflict is terminal for this admission. Provider sends and opaque status codes do not enter that retry. This does not establish persistent session compatibility or a new retry owner.
+
 ## Canon Member Avatar Consumer
 
 F326 Phase D resolves the existing member id, then projects its one member-avatar slot from collaborative-content-plane. The direct Human selects it with its own receipt; mixed avatar/profile PATCH is rejected before either write. Linked members keep the canon projection after profile-only saves, clear remains linked, and unreadable bound bytes never fall back to catalog or another image. This consumer does not move roster or member authority.

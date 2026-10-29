@@ -1,6 +1,7 @@
 import type { CatId } from '@cat-cafe/shared';
 import type { AgentMessage, AgentService, AgentServiceOptions, ProviderContinuityPreflight } from '../../types.js';
 import { agentServiceGeneration } from '../registry/AgentRegistry.js';
+import { ExecutionAdmissionConflict } from '../registry/AgentServiceUnavailableError.js';
 import { AgentSessionBridgeService } from './AgentSessionBridgeService.js';
 import type {
   HostSessionImplementation,
@@ -91,7 +92,7 @@ export class RegisteredSessionAgentService implements AgentService {
   private snapshot(binding: PreparedBinding) {
     const failure = this.bindingFailure(binding);
     if (failure || !binding.generation)
-      throw Object.assign(new Error(failure ?? 'session_implementation_unavailable'), { statusCode: 409 });
+      throw new ExecutionAdmissionConflict(failure ?? 'session_implementation_unavailable');
     const implementation = binding.service?.implementationSnapshot?.();
     return Object.freeze({
       key: this.implementationKey,
