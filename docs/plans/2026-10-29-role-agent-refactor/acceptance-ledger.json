@@ -404,6 +404,14 @@
     "findings": [],
     "evidence": "README.md#W2-账号与启动策略读后核验切片尚未完成-W2"
   },
+  "acpAccountSourceCheckpointReview": {
+    "reviewer": "checkpoint_review",
+    "verdict": "approved",
+    "reviewedHead": "48471628a1357a429ee7665aa8f46a9d686b37dc",
+    "subject": "task:01a1881e-1a7b-78d0-9a62-ff99b0ab7a01/checkpoint-acp-account-source",
+    "findings": [],
+    "evidence": "README.md#W2-ACP-构建账号来源核验切片尚未完成-W2"
+  },
   "threadCurrentnessCheckpointReview": {
     "reviewer": "checkpoint_review",
     "verdict": "approved",

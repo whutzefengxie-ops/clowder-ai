@@ -407,4 +407,10 @@ checkpoint_review 对 `b808d0232ebb77cce599ee462fe88876155ad384` 给出 approved
 
 最终 API tsc、3 文件 Biome 无错误。factory 集合使用隔离测试进程的既有 trusted-host 模式，未认证 strict Windows ACL、未改生产配置；真实 factory/pool 消费者配的是内存协议客户端，没有启动外部进程或调用真实模型。池/视图由测试所有者受控释放，私有夹具数据保留在任务 artifacts。
 
-复杂度复核：复用既有 resolver、capture hook、冲突和 pool owner，无新账号库、factory 服务、通知总线或重试系统。该保护针对构建时账号来源；成员选择/ACP 原始命令与 whitelist、父环境/CA 及所有配置 owner 的发布一致性仍须继续，不把它当作完整启动计划冻结或 W2/C05/C15 通过。此切片等待独立审查。
+复杂度复核：复用既有 resolver、capture hook、冲突和 pool owner，无新账号库、factory 服务、通知总线或重试系统。该保护针对构建时账号来源；成员选择/ACP 原始命令与 whitelist、父环境/CA 及所有配置 owner 的发布一致性仍须继续，不把它当作完整启动计划冻结或 W2/C05/C15 通过。
+
+checkpoint_review 对 `48471628a1357a429ee7665aa8f46a9d686b37dc` 给出 approved，subject 为 `task:01a1881e-1a7b-78d0-9a62-ff99b0ab7a01/checkpoint-acp-account-source`。独立 91 PASS，含真实 factory、捕获期间变化、元数据控制、严格凭据和冻结后原绑定；无未关闭 finding。factory 仅用私有进程既有 trusted-host，不认证 strict ACL，批准限此账号来源边界。
+
+## W0/Q01 固定样本准备（未完成质量验收）
+
+按 eval-design 方法对 claim 与判断分工做了复核，具体范围见 [quality-samples.md](quality-samples.md)。新增一个离线脚本，准备三个全新目录的小型工程任务并独立校验实际行为/文件范围，报告记录脚本与候选哈希；公开测试不包含独立答案。作者校准三个任务各四种对照：种子缺陷、健康参考、越界改动及未修完整，三条测试/十二个判定符合预期，重复准备拒绝覆盖；Biome 无错误。没有运行真实模型或候选，Q01 保持 NOT_RUN；Q02–Q04 与性能基线继续准备。此样本量尺切片等待独立审查。
