@@ -145,6 +145,7 @@ export async function startInstalledFeedbackFixture() {
     ownerUserId: 'fixture-owner',
     projectPath: projectRoot,
     threadStore,
+    messageStore: { getByThread: async () => [], getByThreadBefore: async () => [] },
     threadDeepLinkUrl: (id) => `http://localhost/thread/${id}`,
     cats: {
       getAllCatIds: () => ['configured'],

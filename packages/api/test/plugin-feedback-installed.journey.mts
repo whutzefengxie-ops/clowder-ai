@@ -67,6 +67,7 @@ try {
   const approvedPng = Buffer.from(previewSource!.split(',')[1], 'base64');
   assert.ok(!approvedPng.includes(Buffer.from('private-metadata-canary')));
   await panel.getByRole('button', { name: '复制报告正文', exact: true }).click();
+  await page.waitForFunction(() => typeof (window as unknown as { copied?: string }).copied === 'string');
   assert.ok(
     !(await page.evaluate(() => (window as unknown as { copied: string }).copied)).includes('user-secret-canary'),
   );
@@ -99,8 +100,8 @@ try {
   await panel.getByRole('button', { name: '继续反馈', exact: true }).click();
   await panel.getByLabel('问题标题').fill('分析反馈测试');
   await panel.getByLabel('问题描述').fill('api_key=analysis-user-secret');
-  await panel.getByRole('checkbox', { name: '增加最近 15 分钟' }).check();
   await panel.getByRole('button', { name: '分析并上传 · 推荐', exact: true }).click();
+  await panel.getByText('查看将发送的脱敏材料', { exact: true }).click();
   await panel.getByLabel('脱敏分析材料').waitFor();
   const materials = await panel.getByLabel('脱敏分析材料').inputValue();
   assert.ok(
@@ -108,18 +109,30 @@ try {
       !materials.includes('Alice') &&
       !materials.includes('analysis-user-secret'),
   );
-  await panel.getByRole('checkbox', { name: '同意将上述脱敏材料' }).check();
   await panel.getByRole('button', { name: '开始分析', exact: true }).click();
   await panel.getByRole('button', { name: '停止等待，保留草稿', exact: true }).click();
   await panel.getByRole('button', { name: '重新准备材料', exact: true }).click();
-  await panel.getByRole('checkbox', { name: '同意将上述脱敏材料' }).check();
   await panel.getByRole('button', { name: '开始分析', exact: true }).click();
+  const analysisFrame = await (await page.locator('iframe[title="问题反馈"]').elementHandle())!.contentFrame();
+  assert.ok(analysisFrame);
+  await analysisFrame.evaluate(() => {
+    (window as unknown as { analysisNode: Element | null }).analysisNode = document.querySelector('.content');
+  });
+  await page.waitForTimeout(2200);
+  assert.equal(
+    await analysisFrame.evaluate(
+      () => (window as unknown as { analysisNode: Element | null }).analysisNode === document.querySelector('.content'),
+    ),
+    true,
+    'status polling must preserve the same content node',
+  );
   await page.getByRole('button', { name: '关闭插件面板', exact: true }).click();
   await page.getByRole('button', { name: '问题反馈', exact: true }).click();
   await panel.getByText('我已检查完整报告和所有图片').waitFor();
   assert.equal(fixture.modelRuns(), 2, 'only the explicit restart invokes again; reopening does not');
   assert.ok(fixture.modelPrompt().endsWith(materials));
-  assert.ok(!(await panel.locator('textarea').inputValue()).includes('model-secret-canary'));
+  assert.ok(!(await panel.getByLabel('报告正文预览').innerText()).includes('model-secret-canary'));
+  assert.equal(await panel.getByRole('checkbox', { name: '同意将上述脱敏材料' }).count(), 0);
   await page.screenshot({ path: join(artifactRoot, 'analysis-report.png'), fullPage: true });
   await page.setViewportSize({ width: 420, height: 850 });
   await page.screenshot({ path: join(artifactRoot, 'narrow-report.png'), fullPage: true });
@@ -184,6 +197,8 @@ try {
           'partial upload receipt survives',
           'partial upload edit recovery without creating Issue',
           'large screenshot through real Host storage encoder',
+          'polling preserves content DOM without busy flicker',
+          'Markdown report preview without a redundant analysis checkbox',
         ],
         posts: fixture.posts(),
         archiveSha256: ledger.archiveSha256,
@@ -192,7 +207,7 @@ try {
       2,
     ),
   );
-  process.stdout.write('PASS: 19 packed-plugin / Host browser journey checks\n');
+  process.stdout.write('PASS: 21 packed-plugin / Host browser journey checks\n');
 } catch (error) {
   if (currentPage) {
     await currentPage.screenshot({ path: join(artifactRoot, 'failure.png'), fullPage: true });

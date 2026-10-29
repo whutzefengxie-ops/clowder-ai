@@ -44,10 +44,7 @@ export function configuredFeedbackMember(invoke: (input: Record<string, unknown>
                   {
                     kind: 'text',
                     payload: {
-                      text: JSON.stringify({
-                        title: '分析后的标题',
-                        body: '## 初步分析\n事实：E_TIMEOUT\n推测：信息不足\n未验证：尚未复现\napi_key=model-secret-canary',
-                      }),
+                      text: '# 分析后的标题\n\n## 初步分析\n事实：E_TIMEOUT\n推测：信息不足\n未验证：尚未复现\napi_key=model-secret-canary\n\n[伙伴/fixture🐾]',
                     },
                   },
                 ],
@@ -62,7 +59,7 @@ export function configuredFeedbackMember(invoke: (input: Record<string, unknown>
             outcome: 'completed',
             executionId,
           });
-        }, 1500);
+        }, 5000);
         return { messageId, threadId: input.threadId };
       },
     },

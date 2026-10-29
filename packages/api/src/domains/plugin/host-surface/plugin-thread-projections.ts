@@ -22,6 +22,14 @@ export interface PluginThreadMessage {
   readonly timestamp: number;
   readonly content: string;
   readonly sender: { readonly kind: 'owner' | 'cat' | 'system'; readonly catId?: string };
+  /** Durable ordinary response evidence; no native credentials or session metadata. */
+  readonly response?: {
+    readonly executionId: string;
+    readonly inputMessageIds: readonly string[];
+    readonly status: 'processing' | 'completed' | 'failed' | 'canceled' | 'interrupted';
+    readonly startedAt: number;
+    readonly completedAt?: number;
+  };
 }
 
 export interface PluginThreadHistoryCursor {
@@ -169,5 +177,16 @@ export async function projectThreadMessages(
         : message.catId
           ? { kind: 'cat' as const, catId: message.catId }
           : { kind: 'owner' as const },
+      ...(message.lifecycle?.kind === 'response'
+        ? {
+            response: {
+              executionId: message.lifecycle.invocationId,
+              inputMessageIds: [...message.lifecycle.inputMessageIds],
+              status: message.lifecycle.status,
+              startedAt: message.lifecycle.startedAt,
+              ...(message.lifecycle.completedAt === undefined ? {} : { completedAt: message.lifecycle.completedAt }),
+            },
+          }
+        : {}),
     }));
 }
