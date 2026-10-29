@@ -35,7 +35,7 @@ import {
 import type { FrozenExecutionWorkspace } from './execution-workspace.js';
 
 export interface FrozenExecutionBinding {
-  readonly implementation?: Readonly<{ key: string; generation: string }>;
+  readonly implementation?: Readonly<{ key: string; generation: string; clientId?: CatConfig['clientId'] }>;
   readonly sharedMcpLaunch?: Readonly<{ transport: string; context?: SharedInvocationContext }>;
   readonly openCodeMcpConfig?: import('../providers/opencode-config-writer.js').OpenCodeMcpConfigPlan;
   readonly accountEnv?: Record<string, string>;

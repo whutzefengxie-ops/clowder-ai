@@ -92,9 +92,11 @@ export class RegisteredSessionAgentService implements AgentService {
     const failure = this.bindingFailure(binding);
     if (failure || !binding.generation)
       throw Object.assign(new Error(failure ?? 'session_implementation_unavailable'), { statusCode: 409 });
+    const implementation = binding.service?.implementationSnapshot?.();
     return Object.freeze({
       key: this.implementationKey,
-      generation: `${binding.generation}:${binding.service ? agentServiceGeneration(binding.service) : 'provider'}`,
+      generation: `${binding.generation}:${implementation?.generation ?? (binding.service ? agentServiceGeneration(binding.service) : 'provider')}`,
+      ...(implementation?.clientId ? { clientId: implementation.clientId } : {}),
     });
   }
   implementationSnapshot() {

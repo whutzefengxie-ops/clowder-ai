@@ -1436,8 +1436,13 @@ export async function prepareInvocationExecutionBinding(
   const memberRegistryRevision = catRegistry.getRevision();
   const catConfig = catRegistry.tryGet(input.catId as string)?.config;
   const carrier = input.service?.freshnessCarrierCapability?.();
+  const declaredImplementation = input.service?.implementationSnapshot?.();
+  if (declaredImplementation?.clientId && declaredImplementation.clientId !== catConfig?.clientId)
+    throw Object.assign(new Error('execution_client_changed: 成员与已准备的 client 不一致，请在配置刷新后重试。'), {
+      statusCode: 409,
+    });
   const implementationSource =
-    input.service?.implementationSnapshot?.() ??
+    declaredImplementation ??
     (input.service
       ? {
           key: `builtin:${catConfig?.clientId ?? 'unknown'}/${carrier?.carrier ?? 'unknown'}`,

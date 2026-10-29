@@ -7,6 +7,7 @@ import type {
   A2ARoutingProjection,
   CatId,
   CliEffortPreset,
+  ClientId,
   CodexSpeedValue,
   CrossThreadCoordination,
   FreshnessCarrierCapability,
@@ -1244,7 +1245,7 @@ export interface ProviderRequestGenerationCommitV1 {
  */
 export interface AgentService {
   /** Host-owned implementation identity; a pinned registered view rejects a replaced generation. */
-  implementationSnapshot?(): Readonly<{ key: string; generation: string }>;
+  implementationSnapshot?(): Readonly<{ key: string; generation: string; clientId?: ClientId }>;
   /** Read configuration before any provider lease. Returns owned descriptors, never starts a model turn. */
   captureInvocationOptions?(input: {
     workingDirectory?: string;

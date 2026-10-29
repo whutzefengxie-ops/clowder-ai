@@ -7,6 +7,7 @@ import { codexCliConfig } from '../../../../../config/codex-launch-config.js';
 import { codexManagedLaunchArgs } from '../../../../../config/codex-managed-launch.js';
 import { assertCodexManagedPlatformSupport } from '../../../../../config/codex-managed-support.js';
 import { assertCodexSharedStateRoots } from '../../../../../config/codex-shared-state.js';
+import { agentServiceGeneration } from '../registry/AgentRegistry.js';
 import { inspectCodexImportSession, listCodexImportSessions } from './CodexLocalSessionSource.js';
 import { bindCodexAccountConfiguration } from './codex-app-server-account-configuration.js';
 import {
@@ -1054,6 +1055,14 @@ export class CodexAgentService implements AgentService {
     mkdirSync(root, { recursive: true, mode: 0o700 });
     this.apiKeyIsolationHome = mkdtempSync(join(root, `${this.catId}-`));
     return this.apiKeyIsolationHome;
+  }
+
+  implementationSnapshot() {
+    return Object.freeze({
+      key: 'builtin:codex',
+      generation: agentServiceGeneration(this),
+      clientId: 'openai' as const,
+    });
   }
 
   /** F203 Phase C — this service injects L0 via `-c developer_instructions=` (Task 4). */

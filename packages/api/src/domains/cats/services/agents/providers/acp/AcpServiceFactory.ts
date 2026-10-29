@@ -283,6 +283,7 @@ export async function createAcpServiceForConfig(
 ): Promise<(AcpAgentService & { disposeHostService(): Promise<void> }) | null> {
   const { projectRoot, profileId, config, acpConfig } = input;
   const catId = config.id;
+  const clientId = config.clientId;
   const effectiveModel =
     config.clientId === 'opencode'
       ? (resolveEffectiveOpenCodeModel(config.provider, input.effectiveModel)?.model ?? input.effectiveModel)
@@ -383,6 +384,7 @@ export async function createAcpServiceForConfig(
       ...(spawn.antigravity ? { antigravity: spawn.antigravity, agentBusyRetryDelaysMs: [] } : {}),
       catId,
       pool,
+      clientId,
       poolKey: bootstrap.poolKey,
       projectRoot: bootstrap.projectRoot,
       mcpWhitelist: acpConfig.mcpWhitelist ?? [],

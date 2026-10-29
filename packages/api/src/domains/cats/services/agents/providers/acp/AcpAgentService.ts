@@ -19,7 +19,7 @@ import { isInvocationBoundMcpLaunch } from '../session-credential-file.js';
  *   - System prompt: prepended to prompt text (ACP agents have no system prompt flag)
  */
 
-import { type CatId, catRegistry } from '@cat-cafe/shared';
+import { type CatId, type ClientId, catRegistry } from '@cat-cafe/shared';
 import { resolveBinaryRoot } from '../../../../../../config/capabilities/capability-orchestrator.js';
 import {
   assertMappedCapabilitySource,
@@ -37,6 +37,7 @@ import type {
   MessageMetadata,
   PreparedProviderRequestV1,
 } from '../../../types.js';
+import { agentServiceGeneration } from '../../registry/AgentRegistry.js';
 import {
   type AcpCapacitySignal,
   type AcpPermissionHandler,
@@ -154,6 +155,8 @@ export interface AcpAgentServiceConfig {
   mcpWhitelist?: string[];
   /** @deprecated Pre-resolved MCP servers. Prefer mcpWhitelist for per-invocation capture. */
   mcpServers?: AcpMcpServer[];
+  /** Factory-owned construction identity; display labels do not establish the execution client. */
+  clientId?: ClientId;
   /** Provider name for metadata (e.g. 'google', 'opencode'). Defaults to 'acp'. */
   providerName?: string;
   /** Model name for metadata. Defaults to 'acp'. */
@@ -201,6 +204,7 @@ export class AcpAgentService implements AgentService {
   /** Pre-resolved servers (legacy/test path). Used only when mcpWhitelist is null. */
   private readonly mcpServers: AcpMcpServer[];
   private readonly providerName: string;
+  private readonly clientId?: ClientId;
   /**
    * ACP native tools may omit a configured model from the member record.  The
    * first session then reports its actual model through configOptions; keep
@@ -230,6 +234,7 @@ export class AcpAgentService implements AgentService {
   constructor(config: AcpAgentServiceConfig) {
     this.antigravity = config.antigravity;
     this.catId = config.catId;
+    this.clientId = config.clientId;
     this.pool = config.pool;
     this.poolKey = config.poolKey;
     this.projectRoot = config.projectRoot;
@@ -243,6 +248,14 @@ export class AcpAgentService implements AgentService {
     this.mcpSupportEnabled = config.mcpSupport !== false;
     this.idleTtlMs = config.idleTtlMs ?? DEFAULT_ACP_IDLE_TTL_MS;
     this.agentBusyRetryDelaysMs = config.agentBusyRetryDelaysMs ?? DEFAULT_AGENT_BUSY_RETRY_DELAYS_MS;
+  }
+
+  implementationSnapshot() {
+    return Object.freeze({
+      key: 'builtin:acp',
+      generation: agentServiceGeneration(this),
+      ...(this.clientId ? { clientId: this.clientId } : {}),
+    });
   }
 
   /** Resolve the same existing MCP sources before admission can wait for a process. */

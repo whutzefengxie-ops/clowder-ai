@@ -348,3 +348,19 @@ checkpoint_review 对 `cd81df15458fa51a00835ffdf018d42007b0b40d` 给出 approved
 首轮 `router-refresh-inflight-green.log` 250 项=249 PASS+1 FAIL。失败为旧 non-native-L0 断言只匹配 `## 协作\n`；`router-collab-newline-witness.log` 实际消费者见证 LF=false、CRLF=true、章节为 `## 协作`，证明确有完整章节，只是 Windows 模板换行。删除临时诊断，仅该断言规范化 CRLF，其他身份/A2A/决策树断言不变，产品提示词不变。最终 `router-refresh-inflight-green-final.log` 250 PASS，无新增 skip，含实际刷新旅程、完整 Router/提及解析/正式策略依赖、权限接线、串并行策略、元数据和 generation；API tsc 通过，三个相关文件 Biome 无错误，旧夹具逻辑 diff 仅一行。
 
 复杂度复核：原类 6 增 4 删，维护既有表的对象身份；不改变当前 turn 的绑定、不重新发送消息、不新建运行实例。此修复不证明 catalog 与 service 发布的全部中间状态已消除，服务/成员 client 身份匹配与全 owner 一致性重解析仍须继续；无真实模型调用，此 Router 切片等待独立审查。
+
+checkpoint_review 对 `da57a4c999b567da651ccf104203c1d268267c2b` 给出 approved，subject 为 `task:01a1881e-1a7b-78d0-9a62-ff99b0ab7a01/checkpoint-router-refresh`。独立 135 PASS，含留存/浅复制 deps、后续成员替换/不可用/恢复、旧诊断清除与活动调用原绑定；CRLF 断言修改保留原行为检查。无未关闭 finding，仍不证明完整发布一致性或自动 reparse。
+
+## W2 Codex/ACP 构建 client 身份切片（尚未完成 W2）
+
+先覆盖 Codex 原生与现有 ACP 两条纵向链：Codex 由具体实现显式声明原 clientId；ACP factory 在异步准备前捕获构建输入的 clientId，随原内部配置传给服务，不从 providerName/model/command 猜测。implementationSnapshot 增加该可选来源字段；注册包装器保留子实现的来源及 generation，外层仍保留自己的注册 key。正式准入在工作目录、账号和 provider discovery 前核对成员与已准备服务的 clientId，不一致明确 409。没有新增插件声明字段或可执行能力，没有把 CodeAgent/iCode 识别混进命令子串。
+
+这证明的是 Host 的构建来源对应关系，不是远端 CLI 自认证、模型能力或实际模型身份；clientId 仍采用现有 schema，不另建身份命名系统。只覆盖已接线的 Codex/ACP；其他原生客户端和没有本地 Host service 的协议 provider 仍分别保留未知/原边界，不宣称全平台或全部客户端已验收。实际二进制/adapter 专属能力及版本仍须按 W4/W5 的证据验证。
+
+`client-identity-red.log` 四条实际 Codex/ACP/注册包装器反例先 RED：错配未拒绝，显示标签对照没有构建身份投影。修复后错配在 discovery 前拒绝，普通显示标签含 codex/icode/codeagent 也不改变实际声明来源；`client-identity-green.log` 联合 80 PASS，含正式准入、已迁入 MCP、L0、线程/账号/currentness、策略及真实 ACP provider/高级操作。`client-identity-library-regression.log` 50 PASS，覆盖插件激活/禁用/替换、库选择、路由及原生偏好；最终 API tsc 通过，9 文件 Biome 无错误。
+
+真实 production ACP factory 的原租约夹具构建 clientId=acp，但 Host policy 场景仍声明 OpenAI，新的更早身份拒绝使旧 policy 断言没有进入目标阶段。现仅给两个正式 Host 场景声明匹配/故意错配的成员来源；新增 factory→准入负例验证 factory 接线，未删除错配约束。最初把 native_tool/fixture model 设置扩到纯 pool 测试，暴露 Fake client 不提供 model 配置选项，`client-identity-pool-diagnostic.log` 证实原因；随后缩回正式 Host 场景，纯 pool 原夹具和完整断言保留，并补错误诊断。
+
+`client-identity-factory-process-only-final.log` 6 PASS，含原 pin/reset/replacement/release/policy refusal 与新增真实 factory 身份拒绝。该单独进程沿用此前既有 trusted-host 模式，仅验证流程，不认证父目录 strict Windows ACL，不改用户/生产设置、不新增 skip。首轮构建的常量作用域错误已由 TypeScript 抓出并改至真实 factory 入口；最终日志为 `client-identity-tsc-final.log`，没有在构建失败后运行依赖测试。
+
+复杂度复核：产品改动复用既有 snapshot/registry，增加一项类型化来源和两个实现的声明/传递，不新增注册系统、认证库、launcher 或通用客户端 DSL。不据此宣称成员/服务全发布原子性、自动 reparse、其余客户端迁移或会话兼容已完成；无真实模型或新增常驻环境，此 client 来源切片等待独立审查。

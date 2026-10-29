@@ -29,6 +29,7 @@ code_anchors:
   - packages/api/src/domains/cats/services/agents/invocation/shared-mcp-launch.ts
   - packages/api/src/config/codex-cli.ts
   - packages/api/src/domains/cats/services/agents/providers/acp/AcpAgentService.ts
+  - packages/api/src/domains/cats/services/agents/providers/acp/AcpServiceFactory.ts
   - packages/api/src/domains/cats/services/agents/providers/claude-mcp-config.ts
   - packages/api/src/domains/cats/services/agents/providers/kimi-mcp-config.ts
   - packages/api/src/domains/cats/services/agents/providers/opencode-config-writer.ts
@@ -213,6 +214,7 @@ F209's entity registry is adjacent but not canonical for agent identity. Its `en
 - Implementation registration and concrete service generations remain process-local to their existing registry owners. Invocation pins inherit the concrete service token; registered views validate their captured registration and service again before admission completes. The binding carries only the owned key/generation pair. This is neither a persistent client version nor proof of cross-restart session compatibility, and it does not replace the existing launch fence or lease lifecycle.
 - Admission rechecks the same existing account/execution projection after asynchronous provider discovery. Changed consumed account or launch-policy values reject that admission; unrelated account metadata excluded by the existing runtime resolver does not become a new execution input. This adds no account store, credential hash or global revision service, and is not the remaining multi-owner reparse protocol.
 - Router refresh updates its owned service and unavailability tables in place. Retained strategy dependencies therefore resolve later members against the current registry at dequeue, while an invocation already holding a concrete service keeps that reference. Registry publication remains synchronous; no polling, event bus or new execution authority is introduced.
+- Codex native declares its construction client; the ACP factory captures the member clientId before asynchronous preparation and passes that provenance into its concrete service. Registered views preserve the child's declared client and generation. Admission rejects a declared client mismatch before discovery, independently of model, display name or command spelling. This does not authenticate a remote executable or imply unported native-client coverage.
 - For connector binding, use `ConnectorThreadBindingStore` and connector binding keys instead of ad hoc thread maps.
 - For bubble identity, follow ADR-033 and route through `bubble-pipeline` contracts and tests.
 - For runtime session binding, use Session Chain / runtime-session metadata keyed by Clowder AI session id and runtime session id. IDE-direct registration belongs behind the external runtime registration contract and agent-key authorization, not ad hoc JSON maps.
