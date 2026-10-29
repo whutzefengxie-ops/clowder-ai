@@ -1051,6 +1051,8 @@ export interface LocalSessionReadInput {
 }
 
 export interface AgentServiceOptions {
+  /** Frozen requested preferences; actual adopted model/effort remain provider observations. */
+  executionPreferences?: import('./agents/providers/member-execution-preferences.js').MemberExecutionPreferences;
   /** Admission-owned identity/rules; the L0 child never reloads mutable configuration. */
   frozenL0Input?: import('@cat-cafe/shared/l0-input').FrozenL0Input;
   /** Host logical SessionRecord identity; sessionId remains the native resume id. */

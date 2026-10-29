@@ -96,8 +96,13 @@ export async function prepareClaudeSdkLaunch(input: {
     options?.resolveTrustedImagePath,
   );
   const prompt = appendLocalImagePathHints(input.prompt, imagePaths);
-  const { effectiveModel, useEnvModelOverride } = resolveClaudeModelSelection(options?.callbackEnv, input.model);
-  const effort = effortValue(resolveClaudeEffortLevel(catId, effectiveModel, options?.reasoningEffortOverride));
+  const { effectiveModel, useEnvModelOverride } = resolveClaudeModelSelection(
+    options?.callbackEnv,
+    options?.executionPreferences?.model ?? input.model,
+  );
+  const effort = effortValue(
+    resolveClaudeEffortLevel(catId, effectiveModel, options?.reasoningEffortOverride, options?.executionPreferences),
+  );
   const l0 = await input.l0CompilerFn({
     frozenInput: options?.frozenL0Input,
     requireFrozenInput: true,

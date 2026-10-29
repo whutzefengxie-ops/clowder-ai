@@ -58,7 +58,6 @@ import { context, SpanStatusCode, trace } from '@opentelemetry/api';
 import { bindInvocationPluginMcpView } from '../../../../../config/capabilities/invocation-plugin-mcp-view.js';
 import { pluginMcpExposureProject } from '../../../../../config/capabilities/plugin-mcp-exposure.js';
 import { buildCatGitIdentityEnv } from '../../../../../config/cat-git-identity.js';
-import { getCatModel } from '../../../../../config/cat-models.js';
 import { parseOpenCodeModel, resolveEffectiveOpenCodeModel } from '../../../../../config/opencode-model.js';
 import { shouldTakeAction } from '../../../../../config/session-strategy.js';
 import { assertSafeTestConfigRoot } from '../../../../../config/test-config-write-guard.js';
@@ -1445,7 +1444,7 @@ export async function prepareInvocationExecutionBinding(
           catId: input.catId,
           catConfig,
           userId: input.userId,
-          model: input.model,
+          model: binding.executionPreferences?.model,
           profileRepository: deps.profileRepository,
         })
       : undefined;
@@ -1689,22 +1688,16 @@ async function* invokePreparedSingleCat(deps: InvocationDeps, params: Invocation
     // Per-cat git author identity (W1: cats are Agents with identity).
     // GIT_AUTHOR_NAME/GIT_COMMITTER_NAME override the runtime git config's pinned
     // user.name so each cat's commits carry its own name instead of all collapsing
-    // to one. Model comes from getCatModel(catId) — the SAME source as the system-prompt
-    // identity line (env CAT_{CATID}_MODEL > runtime catRegistry), so the author name
+    // to one. Model comes from the admitted choices used for the system-prompt
+    // identity line, so the author name
     // tracks the cat's real model (opus-45 → claude-opus-4-8), not the catId or a stale
     // catalog copy. Email is intentionally NOT set — it inherits git config (the operator's
     // GitHub noreply account) so contribution-graph attribution stays on one account
     // while the name distinguishes the cat. (operator directive 2026-05-28)
     ...buildCatGitIdentityEnv(
       catId as string,
-      catRegistry.tryGet(catId as string)?.config?.breedId,
-      ((): string | undefined => {
-        try {
-          return getCatModel(catId as string);
-        } catch {
-          return undefined;
-        }
-      })(),
+      frozenExecutionBinding.catConfig?.breedId,
+      frozenExecutionBinding.executionPreferences?.model,
     ),
   };
 
@@ -2960,7 +2953,11 @@ async function* invokePreparedSingleCat(deps: InvocationDeps, params: Invocation
 
     // F127 account injection:
     // Members bind to a concrete accountRef (builtin oauth account or generic api_key account).
-    const defaultModel = invocationCapacitySnapshot?.model?.trim() || catConfig?.defaultModel?.trim() || undefined;
+    const defaultModel =
+      (frozenExecutionBinding.executionPreferences
+        ? frozenExecutionBinding.executionPreferences.model
+        : invocationCapacitySnapshot?.model || catConfig?.defaultModel
+      )?.trim() || undefined;
     const projectRoot = frozenExecutionBinding.projectRoot;
     const effectiveAccountRef = frozenExecutionBinding.effectiveAccountRef;
     const resolvedAccount = frozenExecutionBinding.resolvedAccount;
@@ -3886,7 +3883,7 @@ async function* invokePreparedSingleCat(deps: InvocationDeps, params: Invocation
         ? (resolveCodexSpeed({
             clientId: catConfig.clientId,
             authType: resolvedAccount?.authType,
-            model: getCatModel(catId),
+            model: frozenExecutionBinding.executionPreferences?.model ?? catConfig.defaultModel,
             memberDefault: catConfig.cli?.serviceTier,
             threadOverride: threadSpeedOverride,
           }).requested ?? undefined)
@@ -3913,6 +3910,9 @@ async function* invokePreparedSingleCat(deps: InvocationDeps, params: Invocation
     const requiresImportedHistory =
       activeSessionRecordForResume?.externalImport?.cliSessionId === sessionId && Boolean(sessionId);
     const baseOptions: AgentServiceOptions = {
+      ...(frozenExecutionBinding.executionPreferences
+        ? { executionPreferences: frozenExecutionBinding.executionPreferences }
+        : {}),
       ...(frozenExecutionBinding.frozenL0Input ? { frozenL0Input: frozenExecutionBinding.frozenL0Input } : {}),
       ...(params.onRemoteExecutionDispatched
         ? { onRemoteExecutionDispatched: params.onRemoteExecutionDispatched }

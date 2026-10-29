@@ -131,9 +131,13 @@ export function resolveClaudeEffortLevel(
   catId: string,
   effectiveModel: string,
   override: CliEffortPreset | null | undefined,
+  preferences?: AgentServiceOptions['executionPreferences'],
 ): string {
-  const inherited = getCatEffort(catId, undefined, 'anthropic', effectiveModel);
-  if (!inherited && !override && catRegistry.tryGet(catId)?.config.configurationSource === 'native_tool') return '';
+  const inherited = preferences?.effort ?? getCatEffort(catId, undefined, 'anthropic', effectiveModel);
+  const nativeTool = preferences
+    ? preferences.configurationSource === 'native_tool'
+    : catRegistry.tryGet(catId)?.config.configurationSource === 'native_tool';
+  if (!inherited && !override && nativeTool) return '';
   return resolveCliEffortOverride('anthropic', effectiveModel, inherited, override).effective;
 }
 
@@ -456,9 +460,10 @@ export class ClaudeAgentService implements AgentService {
     // ClaudeBgCarrierService reuses the same rules (single source of truth).
     const { effectiveModel, useEnvModelOverride } = resolveClaudeModelSelection(
       options?.callbackEnv,
-      catRegistry.tryGet(this.catId)?.config.configurationSource === 'native_tool'
-        ? getCatModel(this.catId)
-        : this.model,
+      options?.executionPreferences?.model ??
+        (catRegistry.tryGet(this.catId)?.config.configurationSource === 'native_tool'
+          ? getCatModel(this.catId)
+          : this.model),
     );
     const isApiKeyMode = options?.callbackEnv?.[ANTHROPIC_PROFILE_MODE_KEY] === 'api_key';
     // #840 R2 (砚砚 review 2026-06-02): the main prompt must NOT ride argv.
@@ -480,6 +485,7 @@ export class ClaudeAgentService implements AgentService {
       this.catId as string,
       effectiveModel,
       options?.reasoningEffortOverride,
+      options?.executionPreferences,
     );
 
     const args: string[] = [

@@ -82,9 +82,10 @@ export function resolveKimiEffortLevel(
   catId: string,
   effectiveModel: string | null | undefined,
   override: CliEffortPreset | null | undefined,
+  preferences?: AgentServiceOptions['executionPreferences'],
 ): string | null {
   if (!getCliEffortOptionsForProvider('kimi', effectiveModel)) return null;
-  const inherited = getCatEffort(catId, undefined, 'kimi', effectiveModel);
+  const inherited = preferences?.effort ?? getCatEffort(catId, undefined, 'kimi', effectiveModel);
   return resolveCliEffortOverride('kimi', effectiveModel, inherited, override).effective;
 }
 
@@ -152,9 +153,12 @@ export class KimiAgentService implements AgentService {
     const runtime = resolveKimiCliRuntime();
     const toolEnv = { ...options?.callbackEnv, ...options?.accountEnv };
     const runtimePaths = resolveKimiRuntimePaths(toolEnv);
-    const requestedModel = options?.callbackEnv?.CAT_CAFE_KIMI_MODEL_OVERRIDE ?? this.model;
+    const requestedModel =
+      options?.callbackEnv?.CAT_CAFE_KIMI_MODEL_OVERRIDE ?? options?.executionPreferences?.model ?? this.model;
     // Empty native selection means omit --model and let the CLI resolve its own config.
-    const followsNativeConfig = catRegistry.tryGet(this.catId)?.config.configurationSource === 'native_tool';
+    const followsNativeConfig = options?.executionPreferences
+      ? options.executionPreferences.configurationSource === 'native_tool'
+      : catRegistry.tryGet(this.catId)?.config.configurationSource === 'native_tool';
     const effectiveModel =
       requestedModel && !followsNativeConfig
         ? resolveKimiModelAlias(requestedModel, toolEnv, runtimePaths)
@@ -168,7 +172,12 @@ export class KimiAgentService implements AgentService {
     const observedModel =
       followsNativeConfig && !effectiveModel ? readKimiConfiguredModel(toolEnv, runtimePaths) : undefined;
     const identityModel = effectiveModel || observedModel || '';
-    const effortLevel = resolveKimiEffortLevel(this.catId as string, identityModel, options?.reasoningEffortOverride);
+    const effortLevel = resolveKimiEffortLevel(
+      this.catId as string,
+      identityModel,
+      options?.reasoningEffortOverride,
+      options?.executionPreferences,
+    );
     const metadata: MessageMetadata = { provider: 'kimi', model: identityModel };
     const imagePaths = await extractTrustedImagePaths(
       options?.contentBlocks,

@@ -63,7 +63,10 @@
     {
       "id": "C05",
       "status": "NOT_RUN",
-      "evidence": ["README.md#W2-L0-冻结输入切片W2-尚未完成：局部契约证据和明确失败，非整条通过"]
+      "evidence": [
+        "README.md#W2-L0-冻结输入切片W2-尚未完成：局部契约证据和明确失败，非整条通过",
+        "README.md#W2-模型与-effort-消费切片尚未完成-W2：实际消费者局部证据，整条仍未完成"
+      ]
     },
     {
       "id": "C06",
@@ -248,7 +251,7 @@
       "status": "NOT_STARTED"
     }
   ],
-  "lastProgressAt": "2026-10-30T01:59:33.0115769+08:00",
+  "lastProgressAt": "2026-10-30T02:12:46.9230292+08:00",
   "checkpointReview": {
     "reviewer": "checkpoint_review",
     "verdict": "approved",
@@ -263,11 +266,11 @@
   },
   "l0CheckpointReview": {
     "reviewer": "checkpoint_review",
-    "verdict": "changes_requested",
-    "reviewedHead": "847aa4d571f852fb35470038b5bd1608c595114f",
+    "verdict": "approved",
+    "reviewedHead": "ab03ccacb5274ec9b1e6fcd48855f54088c5664f",
     "subject": "task:01a1881e-1a7b-78d0-9a62-ff99b0ab7a01/checkpoint-l0",
-    "fixes": "implemented_pending_rereview",
-    "findings": ["P2 explicit qualification compiler cwd still differs from capture overlay root"],
+    "fixes": "independently_verified",
+    "findings": [],
     "evidence": "README.md#L0-独立审查修复"
   }
 }

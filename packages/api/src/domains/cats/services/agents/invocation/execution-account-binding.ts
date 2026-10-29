@@ -22,9 +22,14 @@ import {
 } from '../../../../../config/codex-account-launch.js';
 import { codexExecutionAccountSnapshot } from '../../../../../config/codex-execution-account.js';
 import { resolveActiveProjectRoot } from '../../../../../utils/active-project-root.js';
+import {
+  captureMemberExecutionPreferences,
+  type MemberExecutionPreferences,
+} from '../providers/member-execution-preferences.js';
 import type { FrozenExecutionWorkspace } from './execution-workspace.js';
 
 export interface FrozenExecutionBinding {
+  readonly executionPreferences?: MemberExecutionPreferences;
   readonly frozenL0Input?: FrozenL0Input;
   readonly memberRegistryRevision?: number;
   readonly catConfig?: CatConfig;
@@ -101,6 +106,9 @@ export function freezeExecutionAccountBinding(input: {
           : undefined;
   return Object.freeze({
     catConfig,
+    ...(catConfig
+      ? { executionPreferences: captureMemberExecutionPreferences(input.catId, catConfig, input.model) }
+      : {}),
     ...(catConfig ? deepFreeze(projectMemberProfiles(catConfig)) : {}),
     workspace: input.workspace,
     projectRoot,

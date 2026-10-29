@@ -10,6 +10,7 @@ import {
   hasSupportedEnvTemplate,
   resolveEnvMap,
 } from '../cats/services/agents/providers/env-map.js';
+import { captureMemberExecutionPreferences } from '../cats/services/agents/providers/member-execution-preferences.js';
 import type { AgentServiceOptions } from '../cats/services/types.js';
 
 /** Same member account/model resolution as ordinary native invocations; no new account layer. */
@@ -22,7 +23,10 @@ export function resolveCurationProvider(projectRoot: string, catId: string) {
   const callbackEnv: Record<string, string> = {
     CAT_CAFE_OPENAI_MODEL_OVERRIDE: model,
   };
-  const options: AgentServiceOptions = { callbackEnv };
+  const options: AgentServiceOptions = {
+    callbackEnv,
+    executionPreferences: captureMemberExecutionPreferences(catId, config, model),
+  };
   if (account) {
     const incompatibility = validateRuntimeProviderBinding('openai', account, model);
     if (incompatibility) throw new Error(incompatibility);

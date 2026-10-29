@@ -195,17 +195,25 @@ export class ClaudeInteractivePtyCarrierService implements AgentService {
     );
 
     // ─── Model + args ──────────────────────────────────────────────────────────
-    const { effectiveModel, useEnvModelOverride } = resolveClaudeModelSelection(options?.callbackEnv, model);
+    const { effectiveModel, useEnvModelOverride } = resolveClaudeModelSelection(
+      options?.callbackEnv,
+      options?.executionPreferences?.model ?? model,
+    );
     const extraArgs: string[] = [];
     // --permission-mode bypassPermissions (F230 AC-B4, F198 Phase D parity)
     extraArgs.push('--permission-mode', readOnly ? 'plan' : 'bypassPermissions');
     if (readOnly) extraArgs.push('--tools', '', '--strict-mcp-config');
     // --model (skip if env-based override)
-    if (!useEnvModelOverride) {
+    if (!useEnvModelOverride && effectiveModel) {
       extraArgs.push('--model', effectiveModel);
     }
-    const effortLevel = resolveClaudeEffortLevel(catId as string, effectiveModel, options?.reasoningEffortOverride);
-    extraArgs.push('--effort', effortLevel);
+    const effortLevel = resolveClaudeEffortLevel(
+      catId as string,
+      effectiveModel,
+      options?.reasoningEffortOverride,
+      options?.executionPreferences,
+    );
+    if (effortLevel) extraArgs.push('--effort', effortLevel);
     // --mcp-config + --strict-mcp-config (F230 AC-B3): gated on callbackEnv (no callback = MCP unusable).
     if (!readOnly && options?.callbackEnv && this.mcpServerPath && existsSync(this.mcpServerPath)) {
       const resolution = await resolveClaudeMcpConfig({

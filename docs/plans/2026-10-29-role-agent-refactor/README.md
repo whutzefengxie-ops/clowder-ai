@@ -146,3 +146,23 @@ checkpoint_review 审查 `2a69d4789ee16b44c2f50a2f768e4abffd888220`，返回两�
 原生/public 载体的 Windows 认证缺口仍须按矩阵处理。上述集合不相加为完整验收率。无新常驻服务、模型调用或用户状态根复用；隔离测试目录保留原始证据。当前等待同一 reviewer 复审，W2 整体仍未完成。
 
 复审 `847aa4d571f852fb35470038b5bd1608c595114f` 独立确认原两反例及调用集合 40 PASS，但发现原 overlay P2 的显式 cwd 变体：查询资格判断已有 compiler cwd=Host 配置根，API 进程 cwd 可与它不同。新增 owner-only `compilerCwd` 捕获参数并由该入口传现有 root，普通入口仍默认原 cwd，public 不读取此参数或 owner 源。reviewer 真实 child 第三反例及实际查询入口的 Host canary 反例先 RED 后 GREEN；`l0-query-overlay-green.log` 共 9 PASS（原三反例、后台四旅程、实际查询两旅程）。未把 task 工作区作为 Host 来源；等待修复后复审。
+
+checkpoint_review 对 `ab03ccacb5274ec9b1e6fcd48855f54088c5664f` 给出 approved，subject 仍为 checkpoint-l0；独立复跑 9 PASS，三个原反例和 public/默认/显式 cwd 边界均闭环，无新 P1/P2。只批准 L0 checkpoint，不代表完整 W2 或平台验收。
+
+## W2 模型与 effort 消费切片（尚未完成 W2）
+
+既有执行 binding 增加只读 executionPreferences，保存配置来源、解析后的请求 model/effort 及原生认证继承选择，不增加持久化模型或新注册中心。Host 在准入时捕获并传给实际 consumer；Claude print/bg/SDK/PTY、Codex、Kimi、ACP、CatAgent 优先消费该快照。后台摘要、查询、任务提取及 watcher 也在自身现有 owner 捕获。Git 作者与 OpenCode 模型/速度解析改用同一准入值。实际采用的 model/effort 仍只能由客户端观察报告，未将请求值复制成采用值。
+
+ACP 的 source/model/effort 读取从租约之后移到之前；正式调用使用更早的 Host 快照，直接内部调用在自身入口捕获。两条真实 consumer 反例先 RED：租约等待期间改模型/effort或切换 configurationSource，都错误采用新值；现在实际 session/set_config_option 使用原值。Codex 最终 argv 验证显式偏好与空偏好两种情况；空 model/effort 不注入新覆盖，PTY 同样省略空参数。新偏好对象无账号密钥、token 或完整 env。
+
+| 本切片验证 | 结果 |
+|---|---|
+| ACP 两反例 + Codex/PTY 最终参数 + 绑定 + 后台 | 11 PASS，`execution-preferences-final-targeted.log` |
+| SDK/原生继承/watcher/query | 26 PASS，`execution-preferences-sdk-regression.log` |
+| 通用 ACP / iCode / CatAgent | 131 PASS，`execution-preferences-acp-catagent.log` |
+| 扩大 native / invocation / 正式命令入口 | 311 项：304 PASS、7 FAIL，`execution-preferences-native-regression.log` |
+| 类型 | API tsc、Web tsc --noEmit 通过；API 构建缓存留在任务 artifacts，不修改产品 tsconfig |
+
+7 个失败为：3 条 Claude bg 持久 owner 夹具在 Windows 无原生进程出生身份、1 条 Codex 缓存根断言硬编码 POSIX 分隔符、3 条 PTY 图像/自定义 HOME 断言硬编码 POSIX 路径。涉及进程身份和路径实现与基线无差异，未降低门禁、改期望为假成功或标为通过；也未改写无关夹具来刷绿。这里没有最终安装包、真实模型或 macOS 证据。
+
+剩余的 thread effort/speed、全局沙箱/审批、MCP/ACP 磁盘配置、项目指令及跨 owner revision/generation 一致性仍按后续 W2 实施；当前部分测试通过不能替代 C05/C15 整条。无新增常驻服务或真实模型调用，当前切片等待独立审查。

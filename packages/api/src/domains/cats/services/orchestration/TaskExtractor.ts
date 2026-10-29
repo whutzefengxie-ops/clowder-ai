@@ -6,6 +6,7 @@
 
 import { type CatId, type CreateTaskInput, catRegistry } from '@cat-cafe/shared';
 import { captureInvocationL0Input } from '../agents/providers/l0-input-capture.js';
+import { captureMemberExecutionPreferences } from '../agents/providers/member-execution-preferences.js';
 import type { StoredMessage } from '../stores/ports/MessageStore.js';
 import type { AgentService } from '../types.js';
 
@@ -201,6 +202,10 @@ export async function extractTasks(
     for await (const msg of catService.invoke(prompt, {
       ...(options.catId
         ? {
+            executionPreferences: captureMemberExecutionPreferences(
+              options.catId,
+              catRegistry.getOrThrow(options.catId).config,
+            ),
             frozenL0Input: captureInvocationL0Input({
               catId: options.catId,
               catConfig: catRegistry.getOrThrow(options.catId).config,

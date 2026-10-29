@@ -418,6 +418,17 @@ export class AcpAgentService implements AgentService {
       return;
     }
 
+    // Direct internal callers admit here; the Host path supplies its earlier frozen choices.
+    const nativeTool = options?.executionPreferences
+      ? options.executionPreferences.configurationSource === 'native_tool'
+      : catRegistry.tryGet(this.catId)?.config.configurationSource === 'native_tool';
+    const preferences = {
+      model: nativeTool ? (options?.executionPreferences?.model ?? getCatModel(this.catId)) || undefined : undefined,
+      effort: nativeTool
+        ? (options?.reasoningEffortOverride ?? options?.executionPreferences?.effort ?? getCatEffort(this.catId)) ||
+          undefined
+        : undefined,
+    };
     let lease: AcpLease | null = null;
     try {
       lease = await this.pool.acquire(this.poolKey, { sessionId: options?.sessionId });
@@ -659,11 +670,6 @@ export class AcpAgentService implements AgentService {
         { type: 'done', catId: this.catId, metadata, timestamp: Date.now() },
       ];
 
-      const nativeTool = catRegistry.tryGet(this.catId)?.config.configurationSource === 'native_tool';
-      const preferences = {
-        model: nativeTool ? getCatModel(this.catId) || undefined : undefined,
-        effort: nativeTool ? (options?.reasoningEffortOverride ?? (getCatEffort(this.catId) || undefined)) : undefined,
-      };
       let nativeDefaults: { model?: string; effort?: string } = {};
       if (nativeTool && resumeSessionId) {
         nativeDefaults = await defaultsForNativeResume(client, cwd, preferences, () => client.newSession(cwd, []));

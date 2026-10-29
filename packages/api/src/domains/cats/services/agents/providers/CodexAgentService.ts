@@ -1708,10 +1708,16 @@ export class CodexAgentService implements AgentService {
           };
     /** exec_json can only carry frozen bytes; undefined means "preflight, app_server only". */
     const execStdinInput = effectivePromptSource.kind === 'frozen' ? effectivePromptSource.prompt : undefined;
-    const nativeTool = catRegistry.tryGet(this.catId)?.config.configurationSource === 'native_tool';
-    const nativeAuthentication = usesNativeToolConfiguration(catRegistry.tryGet(this.catId)?.config);
+    const nativeTool = options?.executionPreferences
+      ? options.executionPreferences.configurationSource === 'native_tool'
+      : catRegistry.tryGet(this.catId)?.config.configurationSource === 'native_tool';
+    const nativeAuthentication =
+      options?.executionPreferences?.nativeAuthentication ??
+      usesNativeToolConfiguration(catRegistry.tryGet(this.catId)?.config);
     const effectiveModel =
-      options?.callbackEnv?.CAT_CAFE_OPENAI_MODEL_OVERRIDE ?? (nativeTool ? getCatModel(this.catId) : this.model);
+      options?.callbackEnv?.CAT_CAFE_OPENAI_MODEL_OVERRIDE ??
+      options?.executionPreferences?.model ??
+      (nativeTool ? getCatModel(this.catId) : this.model);
     const imagePaths = native
       ? []
       : await extractTrustedImagePaths(options?.contentBlocks, options?.uploadDir, options?.resolveTrustedImagePath);
@@ -1719,7 +1725,8 @@ export class CodexAgentService implements AgentService {
 
     const sandboxMode = readOnly || live || native ? 'read-only' : getCodexSandboxMode();
     const approvalPolicy = readOnly || live || native ? 'never' : getCodexApprovalPolicy();
-    const inheritedEffort = getCatEffort(this.catId as string, undefined, 'openai', effectiveModel);
+    const inheritedEffort =
+      options?.executionPreferences?.effort ?? getCatEffort(this.catId as string, undefined, 'openai', effectiveModel);
     const effortLevel =
       nativeTool && !inheritedEffort && !options?.reasoningEffortOverride
         ? ''

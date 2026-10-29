@@ -375,11 +375,15 @@ export class ClaudeBgCarrierService implements AgentService {
       // from production --model handling. Resolves:
       // - callbackEnv MODEL_OVERRIDE_KEY (per-invocation override)
       // - api_key + non-Anthropic model → omit --model (let env drive)
-      const { effectiveModel, useEnvModelOverride } = resolveClaudeModelSelection(options?.callbackEnv, this.model);
+      const { effectiveModel, useEnvModelOverride } = resolveClaudeModelSelection(
+        options?.callbackEnv,
+        options?.executionPreferences?.model ?? this.model,
+      );
       const effortLevel = resolveClaudeEffortLevel(
         this.catId as string,
         effectiveModel,
         options?.reasoningEffortOverride,
+        options?.executionPreferences,
       );
       // #840 R2 (砚砚 review 2026-06-02): bg carrier prompt also rides argv
       // historically — same ENAMETOOLONG risk as the `-p` carrier. Spike

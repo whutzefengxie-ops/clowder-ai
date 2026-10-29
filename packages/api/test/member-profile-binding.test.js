@@ -34,6 +34,12 @@ describe('member identity and execution projections at admission', () => {
     assert.equal('clientId' in binding.roleProfile, false);
     assert.equal('defaultModel' in binding.roleProfile, false);
     assert.equal(binding.executionProfile?.clientId, 'acp');
+    assert.deepEqual(binding.executionPreferences, {
+      configurationSource: 'native_tool',
+      model: '',
+      effort: 'medium',
+      nativeAuthentication: true,
+    });
     assert.equal('personality' in binding.executionProfile, false);
     assert.deepEqual(member, original);
   });
@@ -49,6 +55,7 @@ describe('member identity and execution projections at admission', () => {
     mutable.cli.effort = 'high';
     assert.equal(binding.roleProfile?.roleDescription, '审查当前任务');
     assert.equal(binding.executionProfile?.cli.effort, 'medium');
+    assert.equal(binding.executionPreferences.effort, 'medium');
     assert.ok(Object.isFrozen(binding.roleProfile));
     assert.ok(Object.isFrozen(binding.executionProfile));
   });
