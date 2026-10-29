@@ -125,3 +125,22 @@ Windows 默认 `bash` 指向失效 WSL 磁盘，额外 edition 用例失败来�
 尚待 W2：各 owner 完整 revision/generation 读前读后重解析；ACP/native 启动参数、MCP 暴露、权限/沙箱、model/effort 和非 L0 上下文消费者全面使用 binding；实现 generation 与受控启用。当前 registry 变化会明确要求重试，不能据此声称已经实现规范要求的完整跨 owner 冻结。会话兼容摘要/片段、CodeAgent 专属发现及 Q/平台/发行物验收继续保持未完成。
 
 提交前定向集合复跑 `frozen-final-targeted.log`：157 项=153 PASS+4 既有本地 OpenCode 文件缺失 SKIP，无 FAIL。shared 构建、API tsc、Web tsc --noEmit 通过；目标 25 文件 Biome 无错误、68 条复杂度/已有风格警告；新增两个 `.test.js` 已验证由现有 public resolver 选中。较大集合及 Native Windows 的失败仍独立保留，不以定向集合替代。无新增服务/真实模型调用；本切片等待独立审查。
+
+### L0 独立审查修复
+
+checkpoint_review 审查 `2a69d4789ee16b44c2f50a2f768e4abffd888220`，返回两个 P2，subject 为 `task:01a1881e-1a7b-78d0-9a62-ff99b0ab7a01/checkpoint-l0`。其独立运行的 59 项通过，另外两个实际调用反例先见 RED：摘要后台入口缺少冻结输入，外部项目的冻结捕获改变了 Host 工作流覆盖目录。
+
+现由实际后台 owner 补齐输入：curation provider 携带解析后的成员；摘要/线程馆员将真实 userId 传到 native run；任务提取和查询资格判断在现有入口捕获；离线 watcher 把自身既有专用指令冻结，不引入普通成员身份。public native admission 独立捕获 public 白名单，捕获前不读取 owner catalog/profile/governance。保留真实编译器缺快照拒绝行为，没有恢复 live fallback。共享根解析复用原有 Host 工作区算法，移除 task projectRoot 作为覆盖来源。未增加存储、协议或 launcher。
+
+两个 reviewer 原始反例转绿，并将后台摘要、实际任务提取、外部工作区覆盖和 public 无 owner 读取的四条旅程纳入公开发现的 `background-frozen-l0.test.js`。实际 L0 仍运行独立编译子进程，原生客户端使用替身，未调用模型。旧命令路由夹具只有无效的半个成员对象，更新为同一真实模板成员，不能以 L0 捕获失败后的降级任务冒充模型提取成功。
+
+| 修复后集合 | 实际结果 |
+|---|---|
+| reviewer 原反例 + 后台四旅程 + 任务提取/正式命令路由/查询 + 冻结协议 | 40 PASS，`l0-review-caller-green.log` |
+| L0 编译/等价/准入/Codex 实际编译/Claude bg | 45 PASS，`l0-review-native-regression.log` |
+| curation/source labels/watcher/account | 39 项：38 PASS、1 FAIL；失败为既有 Windows `plugin_native_workspace_not_private`，在 L0 前被拦截，`l0-review-background-ts.log` |
+| public native 原有完整旅程 | 13 项：6 PASS、7 FAIL，同一 Windows 私有目录门禁；新增 public 捕获/真实编译旅程通过。保留 `l0-public-capture-tests.log`，不降低门禁 |
+| 更早扩大后台 TS 回归 | 37 项：26 PASS、11 FAIL；11 项均为旧 MessageStore 夹具缺少必需 MessageFrom，在 L0 前失败；无本次改动，不修改无关夹具。`l0-background-ts-tests.log` 保留 |
+| 类型和格式 | shared/API/Web tsc 通过；21 个目标文件 Biome 无错误，61 warnings、2 infos（随后删除新增测试未用 import）；diff --check 无错误 |
+
+原生/public 载体的 Windows 认证缺口仍须按矩阵处理。上述集合不相加为完整验收率。无新常驻服务、模型调用或用户状态根复用；隔离测试目录保留原始证据。当前等待同一 reviewer 复审，W2 整体仍未完成。

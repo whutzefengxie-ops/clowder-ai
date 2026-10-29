@@ -1,5 +1,5 @@
 import { accessSync, existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import YAML from 'yaml';
 import { z } from 'zod';
 import { collectRosterFamilyLabels, formatRosterLabel } from './cat-display-name.js';
@@ -29,6 +29,16 @@ const sectionFiles = {
 };
 const provenanceTrigger = '- MG provenance override：外部finding修完后等PR truth，不@旧reviewer。';
 const familyBreeds = { 布偶猫: 'ragdoll', 缅因猫: 'maine-coon', 暹罗猫: 'siamese' };
+
+/** Workflow overlays belong to the Host workspace, independently of a task's repository. */
+export function resolveL0OverlayRoot(start = process.cwd()) {
+  let directory = resolve(start);
+  while (directory !== dirname(directory)) {
+    if (existsSync(resolve(directory, 'pnpm-workspace.yaml'))) return directory;
+    directory = dirname(directory);
+  }
+  return resolve(start);
+}
 
 function withoutAnnotations(text: string) {
   return text
@@ -123,20 +133,26 @@ function workflowTriggers(templates: string, projectRoot: string, variables: Rea
 }
 
 /** The admission owner supplies resolved members/models and governance from the same captured revision set. */
-export function captureFrozenL0Input(input: {
-  catId: string;
-  member: CatConfig;
-  model: string;
-  teammates: readonly { catId: string; config: CatConfig; model: string }[];
-  coCreator: Pick<CoCreatorConfig, 'name' | 'mentionPatterns'>;
-  installRoot: string;
-  projectRoot: string;
-  dossierRoot?: string;
-  profileDir?: string;
-  governanceText?: string;
-  projection: 'owner' | 'public';
-}) {
-  const { catId, member: config, projection } = input;
+export function captureFrozenL0Input(
+  input: {
+    catId: string;
+    installRoot: string;
+  } & (
+    | { projection: 'public' }
+    | {
+        member: CatConfig;
+        model: string;
+        teammates: readonly { catId: string; config: CatConfig; model: string }[];
+        coCreator: Pick<CoCreatorConfig, 'name' | 'mentionPatterns'>;
+        overlayRoot: string;
+        dossierRoot?: string;
+        profileDir?: string;
+        governanceText?: string;
+        projection: 'owner';
+      }
+  ),
+) {
+  const { catId, projection } = input;
   const templates = resolve(input.installRoot, 'assets/prompt-templates');
   if (projection === 'public')
     return freezeL0Input({
@@ -150,6 +166,7 @@ export function captureFrozenL0Input(input: {
     });
   if (!input.profileDir || input.governanceText === undefined)
     throw new Error('Owner L0 profile/governance sources are required');
+  const config = input.member;
   const dossierRoot = input.dossierRoot ?? input.installRoot;
   const dossier = loadDossierProfiles(dossierRoot);
   const identity = resolveMemberIdentity(config, dossier.get(catId));
@@ -180,7 +197,7 @@ export function captureFrozenL0Input(input: {
     return `| ${label} | ${model ? `${mention} · ${model}` : mention} | ${route} |`;
   });
   const edition = resolvePromptTemplateVariables();
-  const triggers = workflowTriggers(templates, input.projectRoot, edition);
+  const triggers = workflowTriggers(templates, input.overlayRoot, edition);
   const family = Object.entries(familyBreeds).find(([label]) => config.displayName?.startsWith(label))?.[1];
   const workflow =
     triggers[config.breedId ?? ''] ??

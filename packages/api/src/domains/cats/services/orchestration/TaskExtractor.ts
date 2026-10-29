@@ -5,6 +5,7 @@
  */
 
 import { type CatId, type CreateTaskInput, catRegistry } from '@cat-cafe/shared';
+import { captureInvocationL0Input } from '../agents/providers/l0-input-capture.js';
 import type { StoredMessage } from '../stores/ports/MessageStore.js';
 import type { AgentService } from '../types.js';
 
@@ -21,6 +22,8 @@ export interface ExtractedTask {
 }
 
 export interface ExtractionOptions {
+  /** The route-owned member that backs catService; never taken from model output. */
+  catId?: string;
   threadId: string;
   userId: string;
   signal?: AbortSignal;
@@ -195,7 +198,20 @@ export async function extractTasks(
     const prompt = buildExtractionPrompt(contextText);
     let fullResponse = '';
 
-    for await (const msg of catService.invoke(prompt, {})) {
+    for await (const msg of catService.invoke(prompt, {
+      ...(options.catId
+        ? {
+            frozenL0Input: captureInvocationL0Input({
+              catId: options.catId,
+              catConfig: catRegistry.getOrThrow(options.catId).config,
+              userId: options.userId,
+            }),
+          }
+        : {}),
+      callbackEnv: { CAT_CAFE_USER_ID: options.userId },
+      toolExecutionPolicy: { mode: 'read_only', replayDeniedToolNames: [] },
+      ...(signal ? { signal } : {}),
+    })) {
       if (signal?.aborted) {
         return { tasks: [], degraded: true, reason: 'Aborted during extraction' };
       }

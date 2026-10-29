@@ -81,7 +81,7 @@ test('parent capture preserves the existing owner/public L0 output and actual ch
         .map(([catId, member]) => ({ catId, config: member, model: getCatModel(catId) })),
       coCreator: getCoCreatorConfig(config),
       installRoot: projectRoot,
-      projectRoot,
+      overlayRoot: projectRoot,
       profileDir,
       dossierRoot: projectRoot,
       projection,

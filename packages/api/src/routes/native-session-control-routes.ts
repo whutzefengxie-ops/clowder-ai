@@ -55,7 +55,6 @@ async function handleNativeCompaction(
           catId: target.catId,
           userId: target.userId,
           catConfig: catRegistry.getOrThrow(target.catId).config,
-          projectRoot: target.nativeSessionBinding.workspaceRoot,
         })
       : undefined;
     // Evidence canary, not a transactional guard: observeCompaction commits the

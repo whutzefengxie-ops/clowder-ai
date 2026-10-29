@@ -1659,7 +1659,12 @@ export class CodexAgentService implements AgentService {
       yield* this.invokePrepared(promptSource, options);
       return;
     }
-    const native = await prepareCodexNativeLaunch(options, this.carrierMode, promptSource.kind === 'frozen');
+    const native = await prepareCodexNativeLaunch(
+      options,
+      this.carrierMode,
+      promptSource.kind === 'frozen',
+      this.catId,
+    );
     try {
       for await (const message of this.invokePrepared(promptSource, native.options, native)) {
         await native.assertCurrent();

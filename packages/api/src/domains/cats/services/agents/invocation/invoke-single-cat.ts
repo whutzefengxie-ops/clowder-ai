@@ -1446,7 +1446,6 @@ export async function prepareInvocationExecutionBinding(
           catConfig,
           userId: input.userId,
           model: input.model,
-          projectRoot: workspace.workingProjectRoot ?? binding.projectRoot,
           profileRepository: deps.profileRepository,
         })
       : undefined;

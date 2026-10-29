@@ -7,7 +7,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { catRegistry, resolveL0Projections } from '@cat-cafe/shared';
 import { parseFrozenL0Input, renderFrozenL0Input } from '@cat-cafe/shared/l0-input';
-import { captureFrozenL0Input } from '@cat-cafe/shared/l0-input-capture';
+import { captureFrozenL0Input, resolveL0OverlayRoot } from '@cat-cafe/shared/l0-input-capture';
 import { DEFAULT_PROFILE_USER_ID, profileUserRelativePath } from '@cat-cafe/shared/profile-contract';
 
 export { resolveRelationshipKey, resolveUserCapsule } from '@cat-cafe/shared/l0-input-capture';
@@ -52,12 +52,6 @@ async function captureDiagnosticL0(options) {
   const context = await diagnosticContext();
   const entry = catRegistry.tryGet(catId);
   if (!entry) throw new Error(`compileL0: unknown catId "${catId}". Registered: ${catRegistry.getAllIds().join(', ')}`);
-  // Keep diagnostic overlay resolution rooted in its current workspace.
-  let projectRoot = resolve(process.cwd());
-  const { existsSync } = await import('node:fs');
-  while (projectRoot !== dirname(projectRoot) && !existsSync(resolve(projectRoot, 'pnpm-workspace.yaml')))
-    projectRoot = dirname(projectRoot);
-  if (!existsSync(resolve(projectRoot, 'pnpm-workspace.yaml'))) projectRoot = resolve(process.cwd());
   const all = catRegistry.getAllConfigs();
   const content = {
     catId,
@@ -72,7 +66,7 @@ async function captureDiagnosticL0(options) {
           ),
     coCreator: projection === 'public' ? { name: '', mentionPatterns: [] } : context.getCoCreatorConfig(context.config),
     installRoot: REPO_ROOT,
-    projectRoot,
+    overlayRoot: resolveL0OverlayRoot(),
     dossierRoot,
   };
   if (projection === 'public') return captureFrozenL0Input(content);

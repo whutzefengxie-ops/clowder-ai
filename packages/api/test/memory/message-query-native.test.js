@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import '../helpers/setup-cat-registry.js';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -22,6 +23,17 @@ async function exercise(t, failed = false) {
   const root = mkdtempSync(join(tmpdir(), 'qualification-native-'));
   const release = join(root, 'exit');
   const controller = new AbortController();
+  const keys = ['HOME', 'USERPROFILE', 'CLAUDE_CONFIG_DIR', 'CAT_CAFE_DATA_DIR', 'CAT_CAFE_GLOBAL_CONFIG_ROOT'];
+  const previous = new Map(keys.map((key) => [key, process.env[key]]));
+  keys.forEach((key) => {
+    process.env[key] = root;
+  });
+  t.after(() =>
+    previous.forEach((value, key) => {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }),
+  );
   t.after(() => {
     controller.abort();
     rmSync(root, { recursive: true, force: true });
@@ -29,7 +41,20 @@ async function exercise(t, failed = false) {
   const originalGet = catRegistry.tryGet.bind(catRegistry);
   t.mock.method(catRegistry, 'tryGet', (id) =>
     id === 'haiku55'
-      ? { config: { id, clientId: 'anthropic', defaultModel: model, accountRef: 'claude' } }
+      ? {
+          config: {
+            ...originalGet('opus').config,
+            id,
+            name: 'Qualification member',
+            displayName: 'Qualification member',
+            nickname: undefined,
+            relationshipKey: 'qualification',
+            roleDescription: '只读资格判断',
+            clientId: 'anthropic',
+            defaultModel: model,
+            accountRef: 'claude',
+          },
+        }
       : originalGet(id),
   );
   for (const key of ['ANTHROPIC_API_KEY', 'ANTHROPIC_BASE_URL', 'ANTHROPIC_AUTH_TOKEN']) {
@@ -40,7 +65,10 @@ async function exercise(t, failed = false) {
       else process.env[key] = previous;
     });
   }
-  t.mock.method(ClaudeAgentService.prototype, 'compileL0ToTempFile', async () => {
+  t.mock.method(ClaudeAgentService.prototype, 'compileL0ToTempFile', async (userId, frozenInput) => {
+    assert.equal(userId, 'owner');
+    assert.equal(frozenInput.catId, 'haiku55');
+    assert.equal(Object.isFrozen(frozenInput), true);
     const path = join(mkdtempSync(join(tmpdir(), 'qualification-l0-')), 'system-prompt-l0.md');
     writeFileSync(path, fullL0);
     return path;

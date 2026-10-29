@@ -47,6 +47,7 @@ export function resolveCurationProvider(projectRoot: string, catId: string) {
     options.codexAccountLaunch = resolveCodexAccountLaunch(account, { cwd: projectRoot });
   }
   return {
+    catConfig: config,
     catId,
     model,
     accountIdentity: options.codexAccountLaunch?.accountRevision ?? account?.id ?? 'native_tool',
