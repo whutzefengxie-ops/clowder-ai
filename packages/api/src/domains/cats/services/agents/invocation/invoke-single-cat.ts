@@ -6,7 +6,7 @@ import type {
 } from '../../../../memory/cue/ContextSourceAdmission.js';
 import { ContextSourceWorkBudget } from '../../../../memory/cue/ContextSourceWorkBudget.js';
 import { captureInvocationL0Input } from '../providers/l0-input-capture.js';
-import { type FrozenExecutionBinding, freezeExecutionAccountBinding } from './execution-account-binding.js';
+import { deepFreeze, type FrozenExecutionBinding, freezeExecutionAccountBinding } from './execution-account-binding.js';
 import { freezeExecutionWorkspace } from './execution-workspace.js';
 import { InvocationServiceScope } from './invocation-service-scope.js';
 import {
@@ -157,7 +157,7 @@ import { resolveDefaultClaudeMcpServerPath } from '../providers/ClaudeAgentServi
 import { ClaudeSdkAgentService } from '../providers/ClaudeSdkAgentService.js';
 import { buildClaudeCompactionLaunchPlan } from '../providers/claude-compaction-launch-plan.js';
 import { servedFactsPayload } from '../providers/codex-served-model.js';
-import { extractUserEnvTemplates, hasSupportedEnvTemplate, resolveEnvMap } from '../providers/env-map.js';
+import { extractUserEnvTemplates, resolveEnvMap } from '../providers/env-map.js';
 import { compileL0ViaSubprocess } from '../providers/l0-compiler.js';
 import { OC_INSTRUCTIONS_ONLY_ENV } from '../providers/OpenCodeAgentService.js';
 import {
@@ -1461,6 +1461,12 @@ export async function prepareInvocationExecutionBinding(
     effortReadFailed: effort.status === 'rejected',
     speedReadFailed: speed.status === 'rejected',
   });
+  const binding = freezeExecutionAccountBinding({
+    catId: input.catId,
+    catConfig,
+    model: input.model,
+    workspace,
+  });
   const captureOptions = input.service?.captureInvocationOptions?.bind(input.service);
   const exposureProject = pluginMcpExposureProject(workspace.threadProjectPath, workspace.workingDirectory);
   const providerOptions = captureOptions
@@ -1473,6 +1479,8 @@ export async function prepareInvocationExecutionBinding(
               captureOptions({
                 workingDirectory: workspace.workingDirectory,
                 toolExecutionPolicy: input.toolExecutionPolicy,
+                accountEnv: binding.accountEnv,
+                mcpSupport: binding.catConfig?.mcpSupport,
               }),
             view,
             input.ownerAuthProvenance === 'strict' && exposureProject
@@ -1489,13 +1497,6 @@ export async function prepareInvocationExecutionBinding(
     throw Object.assign(new Error('Member configuration changed during execution admission; retry this invocation.'), {
       statusCode: 409,
     });
-  const binding = freezeExecutionAccountBinding({
-    catId: input.catId,
-    catConfig,
-    model: input.model,
-    workspace,
-    providerOptions,
-  });
   const frozenL0Input =
     catConfig && (input.service?.injectsL0Natively?.() || catConfig.clientId === 'opencode')
       ? captureInvocationL0Input({
@@ -1508,6 +1509,7 @@ export async function prepareInvocationExecutionBinding(
       : undefined;
   return Object.freeze({
     ...binding,
+    ...(providerOptions ? { providerOptions: deepFreeze(providerOptions) } : {}),
     memberRegistryRevision,
     threadPreferences,
     ...(frozenL0Input ? { frozenL0Input } : {}),
@@ -3149,24 +3151,8 @@ async function* invokePreparedSingleCat(deps: InvocationDeps, params: Invocation
     // Note: google protocol branch no longer needs explicit credential injection
     // — fully handled by resolveEnvMap above.
 
-    // F171: User-defined env vars from account config.
-    // Passed separately via accountEnv — NOT injected into callbackEnv.
-    // callbackEnv is for MCP callback routing; accountEnv is applied LAST
-    // in subprocess env so user vars override provider-injected values.
-    // F161: Template entries (${api_key} / ${base_url}) are already resolved by
-    // resolveEnvMap above — filter them out to prevent literal "${...}" leaking.
-    let accountEnv: Record<string, string> | undefined;
-    if (resolvedAccount?.envVars) {
-      const validEnvKey = /^[A-Z_][A-Za-z0-9_]*$/;
-      const filtered: Record<string, string> = {};
-      for (const [k, v] of Object.entries(resolvedAccount.envVars)) {
-        if (!validEnvKey.test(k) || k.startsWith('CAT_CAFE_')) continue;
-        // Skip template entries — already resolved by resolveEnvMap
-        if (hasSupportedEnvTemplate(v)) continue;
-        filtered[k] = v;
-      }
-      if (Object.keys(filtered).length > 0) accountEnv = filtered;
-    }
+    // Account overrides were filtered once by the admission owner, separately from callback authority.
+    const accountEnv = frozenExecutionBinding.accountEnv;
 
     const trimmedDefaultModel = typeof defaultModel === 'string' ? defaultModel.trim() : undefined;
     const modelProviderName = catConfig?.provider?.trim() || undefined;

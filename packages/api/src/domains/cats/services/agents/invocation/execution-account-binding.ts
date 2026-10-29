@@ -26,6 +26,7 @@ import { type CodexLaunchPolicy, captureCodexLaunchPolicy } from '../../../../..
 import { codexExecutionAccountSnapshot } from '../../../../../config/codex-execution-account.js';
 import { resolveActiveProjectRoot } from '../../../../../utils/active-project-root.js';
 import type { AgentServiceOptions } from '../../types.js';
+import { hasSupportedEnvTemplate } from '../providers/env-map.js';
 import {
   captureMemberExecutionPreferences,
   type MemberExecutionPreferences,
@@ -33,6 +34,7 @@ import {
 import type { FrozenExecutionWorkspace } from './execution-workspace.js';
 
 export interface FrozenExecutionBinding {
+  readonly accountEnv?: Record<string, string>;
   readonly providerOptions?: Readonly<Pick<AgentServiceOptions, 'frozenAcpMcpServers' | 'frozenNativeMcpConfig'>>;
   readonly codexLaunchPolicy?: CodexLaunchPolicy;
   readonly threadPreferences?: Readonly<{
@@ -55,7 +57,7 @@ export interface FrozenExecutionBinding {
   readonly executionAccount?: ExecutionAccountSnapshot;
 }
 
-function deepFreeze<T>(value: T): T {
+export function deepFreeze<T>(value: T): T {
   if (value && typeof value === 'object' && !Object.isFrozen(value)) {
     for (const child of Object.values(value)) deepFreeze(child);
     Object.freeze(value);
@@ -98,6 +100,14 @@ export function freezeExecutionAccountBinding(input: {
       `account "${account.id}" is configured as api_key but has no API key set — add the key in Hub > account settings`,
     );
   const resolvedAccount = account ? deepFreeze(structuredClone(account)) : null;
+  // Preserve F171 filtering. The same selected HOME/environment is used by
+  // provider discovery and later invocation; template values remain resolveEnvMap's responsibility.
+  const accountEnv = Object.fromEntries(
+    Object.entries(resolvedAccount?.envVars ?? {}).filter(
+      ([key, value]) =>
+        /^[A-Z_][A-Za-z0-9_]*$/.test(key) && !key.startsWith('CAT_CAFE_') && !hasSupportedEnvTemplate(value),
+    ),
+  );
   const codexAccountLaunch =
     provider === 'openai' && resolvedAccount
       ? resolveCodexAccountLaunch(resolvedAccount, { cwd: input.workspace.workingProjectRoot })
@@ -129,6 +139,7 @@ export function freezeExecutionAccountBinding(input: {
     projectRoot,
     effectiveAccountRef,
     resolvedAccount,
+    ...(Object.keys(accountEnv).length > 0 ? { accountEnv: deepFreeze(accountEnv) } : {}),
     ...(codexAccountLaunch ? { codexAccountLaunch } : {}),
     ...(executionAccount ? { executionAccount } : {}),
   });

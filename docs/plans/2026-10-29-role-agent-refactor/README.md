@@ -226,3 +226,11 @@ checkpoint_review 对 `8f852771c1e4aeca4dd6a27675c02466254325cb` 给出 approved
 复杂度复核：复用原解析规则、原 native server 格式、原冻结 binding 和 transport 凭据绑定；仅拆出确需复用的计划/绑定两阶段，不增数据库、配置 DSL、通用 launcher 或插件权限层。map delta 仅增加现有 consumer 锚点与消费说明。其他 native MCP、完整环境/策略/项目输入、owner revision 一致性重解析及 implementation generation 仍待继续，C05/C14 整条未完成。本次无真实模型调用、新增常驻环境或持久业务数据改写；本切片等待独立审查。
 
 最终计划显式 structuredClone 后再交给深冻结 binding，避免冻结借来的 Host 视图对象。受影响凭据/取消/L0/ACP/Claude 集合 `native-mcp-freeze-credentials-final.log` 为 38 项=35 PASS+3 FAIL：两条既有 hook 测试硬编码 `/bin/bash` 在 Windows ENOENT；一条凭据文件测试把 POSIX mode 0600 作为 Windows ACL 证明而得到 0666。未修改这些测试或降低权限要求，均不计通过；当前轮凭据轮换和冻结反例通过。这些夹具失败不能替代 Windows ACL 的真实验收。
+
+checkpoint_review 对 `e241747ae71c202b7846c3516651014fea6aa299` 给出 approved，subject 为 `task:01a1881e-1a7b-78d0-9a62-ff99b0ab7a01/checkpoint-claude-mcp`；独立 25 PASS，补验真实内置 MCP 的当前轮 HTTP 凭据、材化不修改计划、插件环境不重复展开及 strict/unknown/只读边界，无新 P1/P2。批准限该 Claude MCP 切片。
+
+## W2 配置捕获与账号环境顺序切片（尚未完成 W2）
+
+Kimi 的原生 HOME 依赖所选账号环境，而旧捕获端口早于账号解析。现先调用原账号冻结 owner，再把同一绑定的 accountEnv 和成员 mcpSupport 交给 provider 捕获；仍在既有成员 revision/取消门禁内。F171 原环境过滤逻辑从实际 invoke 前移到冻结 owner，后续 invoke 直接消费同一投影；模板映射与 callback 权限分离、空字符串、非法 key 和 CAT_CAFE_ 过滤均保持原规则。原 deepFreeze 供准入的最后组装复用，不重新解析账号，不新增配置存储或解析框架。
+
+反例先 RED：provider 捕获得不到账号 HOME，捕获期间账号文件变化使后续绑定采用另一份账号配置。修复后同一账号 HOME、普通环境、成员 MCP 开关均保持准入值，实际 invoke 消费一致；过滤不修改原 account projection。`account-environment-consumer-final.log` 1 PASS；扩大 `account-environment-green-regression.log` 231 项=227 PASS+4 原 AGY Native Windows 出生身份 FAIL；API tsc 通过。这里只把既有账号环境连接到捕获端口，Kimi 原生配置计划、全局 ambient env、各 owner revision 一致性与重解析仍待继续；无真实模型调用或新增常驻环境，等待独立审查。

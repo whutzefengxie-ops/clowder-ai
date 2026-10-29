@@ -1245,6 +1245,8 @@ export interface AgentService {
   captureInvocationOptions?(input: {
     workingDirectory?: string;
     toolExecutionPolicy?: ToolExecutionPolicy;
+    accountEnv?: Record<string, string>;
+    mcpSupport?: boolean;
   }): Promise<Pick<AgentServiceOptions, 'frozenAcpMcpServers' | 'frozenNativeMcpConfig'>>;
   /** Pin one prepared carrier generation before Host policy, L0 and capacity admission. Idempotent on a pinned view. */
   forInvocation?(): AgentService;
