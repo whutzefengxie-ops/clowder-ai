@@ -12,9 +12,13 @@ import { AgentSessionBridgeService } from '../../dist/domains/cats/services/agen
 import { AcpSessionProvider } from '../../dist/domains/cats/services/agents/session-contract/acp-session-provider.js';
 import { deferred } from '../agent-session-contract/fake-session-provider.js';
 
-for (const closeFails of [false, true])
+for (const { closeFails, consumerReturn } of [
+  { closeFails: false, consumerReturn: false },
+  { closeFails: true, consumerReturn: false },
+  { closeFails: false, consumerReturn: true },
+])
   test(
-    `the Host waits for owned single-flight retirement; close failure=${closeFails}`,
+    `owned single-flight retirement; close failure=${closeFails}, consumer return=${consumerReturn}`,
     { timeout: 15000 },
     async (t) => {
       const parent = resolve('artifacts/role-agent-refactor/native-cancel-stop');
@@ -70,6 +74,18 @@ for (const closeFails of [false, true])
         owner: 'codex',
         mock: true,
         sourceCommit: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
+        runtimeModules: ['AcpAgentService.js', 'AcpProcessPool.js'].map((name) => ({
+          name,
+          sha256: createHash('sha256')
+            .update(
+              readFileSync(
+                fileURLToPath(
+                  new URL(`../../dist/domains/cats/services/agents/providers/acp/${name}`, import.meta.url),
+                ),
+              ),
+            )
+            .digest('hex'),
+        })),
         executable: process.execPath,
         executableSha256: createHash('sha256').update(readFileSync(process.execPath)).digest('hex'),
         fixture,
@@ -105,7 +121,7 @@ for (const closeFails of [false, true])
         );
         assert.equal(client.isAlive, false);
       });
-      const iterator = bridge
+      const iterator = (consumerReturn ? service : bridge)
         .invoke('#wait', { invocationId: 'owned-stop-invocation', signal: controller.signal, workingDirectory: root })
         [Symbol.asyncIterator]();
       while (true) {
@@ -119,12 +135,15 @@ for (const closeFails of [false, true])
         JSON.stringify({ ...instance, pid: nativePid, status: 'running' }, null, 2),
       );
       let terminalPublished = false;
-      const completion = iterator.next().then((event) => {
+      const completion = (consumerReturn ? iterator.return() : iterator.next()).then((event) => {
         terminalPublished = true;
         return event;
       });
-      controller.abort();
-      await closing.promise;
+      if (!consumerReturn) controller.abort();
+      await Promise.race([
+        closing.promise,
+        completion.then(() => assert.fail('the active native prompt must stop before consumer completion')),
+      ]);
       let repeatedReleaseSettled = false;
       const repeatedRelease = ownedLease.release();
       void repeatedRelease.then(
@@ -142,8 +161,11 @@ for (const closeFails of [false, true])
       assert.equal(repeatedReleaseSettled, false, 'another release caller must share the physical stop fence');
       stop.resolve();
       const terminal = await completion;
-      assert.equal(terminal.value.type, 'done');
-      assert.equal(terminal.value.errorCode, closeFails ? 'session_contract_failed' : 'cancelled');
+      assert.equal(terminal.done, consumerReturn);
+      if (!consumerReturn) {
+        assert.equal(terminal.value.type, 'done');
+        assert.equal(terminal.value.errorCode, closeFails ? 'session_contract_failed' : 'cancelled');
+      }
       if (closeFails) await assert.rejects(repeatedRelease, /owned retirement failure/);
       else await repeatedRelease;
       assert.equal(client.isAlive, closeFails);

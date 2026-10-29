@@ -281,3 +281,5 @@ F326 Phase D resolves the existing member id, then projects its one member-avata
 单飞 ACP 的 lease.release 由既有 retirement barrier 证明实际进程关闭，service finally 必须等待；重复或过代 lease 仍观察该关闭结果。排队退休与移除 pool entry 不等于原生已停止，关闭失败不能由 Bridge 转成成功取消。本切片未改变 multiplexed carrier 的 session sealing 或 Host 路由的有界清理策略。
 
 Host 通过现有 AgentService 的内部 cancellationMode:drain 声明识别 adapter 对取消及清理的所有权，不用 vendor 名推断。invocation 对该流等待清理，parallel merge 不提前合成其终态；声明固定在 Registered invocation view。未声明的 legacy 继续原有有界退出。该声明不是对未知/失败停止或全部平台的认证。
+
+并行 invocation 的局部 AbortController 合入 batch/per-cat 信号；merger 对声明 drain 的 child 拥有退出取消与等待责任，所有受控 child 清理结束后再报告错误。原生 ACP 提前 return 时必须先在仍有活动请求的内层边界取消，再关闭 promptStream，不能把移除本地监听误认成上游停止。关闭失败的 unknown/恢复仍由既有执行 owner 待闭环。

@@ -381,6 +381,7 @@ export class AcpAgentService implements AgentService {
       beforeAttempt?: (attempt: number) => Promise<void>;
       onAttemptStart?: () => void;
       onBackoff?: (attempt: number, delayMs: number) => void;
+      onAbandoned?: () => void;
     },
   ): AsyncGenerator<AcpSessionUpdate> {
     const delays = this.agentBusyRetryDelaysMs;
@@ -390,6 +391,7 @@ export class AcpAgentService implements AgentService {
       hooks?.onAttemptStart?.();
       try {
         const stream = client.promptStream(sessionId, prompt, opts);
+        let yielding = false;
         try {
           while (true) {
             const next = await stream.next();
@@ -401,9 +403,12 @@ export class AcpAgentService implements AgentService {
               break;
             }
             yieldedEvents++;
+            yielding = true;
             yield next.value;
+            yielding = false;
           }
         } finally {
+          if (yielding) hooks?.onAbandoned?.();
           await stream.return(undefined);
         }
         return;
@@ -945,6 +950,9 @@ export class AcpAgentService implements AgentService {
         onBackoff: () => {
           promptPhase = 'busy_backoff';
         },
+        onAbandoned: () => {
+          if (sessionId) cancelActivePromptSession(sessionId);
+        },
       };
       log.info({ ...ctx, sessionId, promptDigest, idleTtlMs: this.idleTtlMs }, 'ACP promptStream starting');
       eventCount = 0;
@@ -1271,6 +1279,7 @@ export class AcpAgentService implements AgentService {
       };
       yield { type: 'done', catId: this.catId, metadata, timestamp: Date.now() };
     } finally {
+      if (sessionId) cancelActivePromptSession(sessionId);
       agyActive = false;
       if (this.antigravity && sessionId) client.setSessionPermissionHandler(sessionId);
       if (this.antigravity && requiresProviderShutdown()) await client.close?.();

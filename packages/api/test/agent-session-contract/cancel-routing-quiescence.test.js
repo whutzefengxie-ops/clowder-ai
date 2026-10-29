@@ -64,6 +64,24 @@ for (const { route, mixed } of [
           owner: 'codex',
           mock: true,
           sourceCommit: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
+          runtimeModules: await Promise.all(
+            [
+              'invocation/invoke-single-cat.js',
+              'invocation/stream-merge.js',
+              'providers/acp/AcpAgentService.js',
+              'routing/route-parallel.js',
+              'routing/route-serial.js',
+            ].map(async (name) => ({
+              name,
+              sha256: createHash('sha256')
+                .update(
+                  await readFile(
+                    fileURLToPath(new URL(`../../dist/domains/cats/services/agents/${name}`, import.meta.url)),
+                  ),
+                )
+                .digest('hex'),
+            })),
+          ),
           program: process.execPath,
           fixture,
           fixtureSha256: createHash('sha256')

@@ -560,3 +560,13 @@ checkpoint_review 对 096223f30379b97db4a3bd4ad4c53eb33696ebf0 返回 approved�
 API tsc exit 0 后，四条实际串/并行、直连/Bridge 为 cancel-routing-quiescence-green.log 4 PASS；加入并行 drain ACP+健康 legacy sibling 的两条对照后，19 个合同文件 cancel-routing-quiescence-contracts.log 203 PASS。明确超出原一秒超时仍保持 native PID 活着但不发该 cat done；健康 sibling 在等待期间能完成，实际停止后该 cat 只发一次 done、已有消息 lifecycle 为 canceled，身份对应原 child。外围 legacy timeout/retry、并发取消隔离、stream merge、双 ID 及 A2A 回归 cancel-routing-quiescence-regression.log 46 PASS；七文件 Biome 无错误，43 条既有警告/两提示未扩散修改。
 
 测试只使用隔离 mock HOME，无端口/网络/真实凭据或模型；实例台账与状态数据保留。复杂度复核仅加一个明确的内部取消所有权声明和两个现有消费点，不把普通 legacy service 全部改成无限等待，不增加泛化取消框架。本片段证明成功受控停止的路由顺序；关闭失败/未知与重启恢复、多路复用以及完整 C12/W3 仍待闭环。独立审查待派发。
+
+checkpoint_review 对 fcfc6b8d874890d5b8b642582889e959da00dd88 返回 changes_requested，独立 1 PASS+2 FAIL：parallel 消费者提前 return 仍未等源 finally；独立 per-cat signal 遮蔽 batch abort，使 drain 源继续工作。两条均接受，未用另一项关闭失败边界替代。
+
+现有 parallel route 为每个 child 保存本次局部 AbortController，将 batch/per-cat/该局部信号合入同一实际执行信号，准入、执行及终态判断共用；merge 在消费者退出时取消自己所拥有的 child 并等待 return。该所有权通过一个内部 controller 端口传入，legacy 仍沿原 close 快捷路径。多个受控清理用 allSettled 完整等待后再上报失败，避免一个失败绕过另一个清理；stream-merge-owned-return.test.js 两条 PASS。无新持久状态或独立恢复器。
+
+作者采用原三条反例并补 pending next 对照，cancel-routing-review-green.log 八条 PASS（五条作者用例及三条私有回放）；原取消/timeout/双ID/A2A 的 cancel-routing-review-regression.log 46 PASS。另用真实 Node mock 发现 direct ACP 提前 return 未取消 active prompt，cancel-native-consumer-return-red.log 1 FAIL。最初只在 invokeTurn finally 取消仍有同样失败，扩大运行 78 PASS+1 FAIL；原因是内层 promptStream 的 finally 已先移除活动请求，外层取消太晚。现在在原 busy-retry wrapper 的被中断 yield 边界先调用既有取消函数，再 return 内层流；自然结束和 busy backoff 不走这个分支，已有 finally 保留兜底。
+
+最终 API tsc exit 0 后，cancel-routing-review-final.log 91 PASS，含实际 mock 取消/失败/直接 return 三条、原适配器、原/新路由所有权和 merger；20 个合同文件 cancel-routing-review-contracts-final.log 208 PASS。新增用例 Biome 无警告，原源码警告未扩散清理。mock 台账进一步记录实际加载的 dist 模块哈希，区分开发期间 HEAD 基线与未提交构建字节，未把 HEAD 字段单独当作运行源码证明。
+
+额外真实失败 witness cancel-routing-failure-red.log 两条 FAIL 明确保留：close 拒绝且 native 仍 alive 时，serial/parallel Bridge route 仍投影 canceled（串行丢失失败码、并行带 session_contract_failed）。对应 wire-evidence.json、实例台账及隔离 HOME 保留，finally 已受控停止作者进程。此项未知/关闭失败恢复、多路复用和完整 C12 仍未完成，不能据本次成功停止与退出修复升级整体验收。待复核修复 SHA。
