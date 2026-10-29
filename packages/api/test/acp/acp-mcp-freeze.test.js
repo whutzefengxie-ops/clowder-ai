@@ -10,7 +10,15 @@ import { AcpSessionProvider } from '../../dist/domains/cats/services/agents/sess
 import { SessionImplementationRegistry } from '../../dist/domains/cats/services/agents/session-contract/implementation-registry.js';
 import { RegisteredSessionAgentService } from '../../dist/domains/cats/services/agents/session-contract/registered-session-agent-service.js';
 
-for (const source of ['capabilities', 'project-mcp', 'registered-plugin', 'plugin-mcp']) {
+for (const source of [
+  'capabilities',
+  'project-mcp',
+  'registered-plugin',
+  'plugin-mcp',
+  'member-off',
+  'member-on',
+  'member-implicit-on',
+]) {
   test(`actual ACP session uses admitted ${source} settings after a lease wait`, async (t) => {
     const artifacts = join(process.cwd(), 'artifacts', 'role-agent-refactor', 'acp-mcp-freeze');
     mkdirSync(artifacts, { recursive: true });
@@ -31,6 +39,7 @@ for (const source of ['capabilities', 'project-mcp', 'registered-plugin', 'plugi
       configurationSource: 'managed_account',
       accountRef: undefined,
       defaultModel: 'fixture-model',
+      mcpSupport: source === 'member-implicit-on' ? undefined : source !== 'member-off',
     });
     const keys = ['CAT_CAFE_CONFIG_ROOT', 'CAT_CAFE_PROJECT_ALLOWED_ROOTS'];
     const old = new Map(keys.map((key) => [key, process.env[key]]));
@@ -67,7 +76,7 @@ for (const source of ['capabilities', 'project-mcp', 'registered-plugin', 'plugi
               : [],
         }),
       );
-      if (source === 'project-mcp')
+      if (source === 'project-mcp' || source === 'member-off')
         writeFileSync(join(project, '.mcp.json'), JSON.stringify({ mcpServers: { 'fixture-server': server } }));
     };
     writeConfig('before');
@@ -100,7 +109,7 @@ for (const source of ['capabilities', 'project-mcp', 'registered-plugin', 'plugi
       catId: id,
       projectRoot: host,
       mcpWhitelist: source !== 'project-mcp' ? [capabilityId] : [],
-      mcpSupport: true,
+      mcpSupport: !['member-on', 'member-implicit-on'].includes(source),
       poolKey: { projectPath: host, providerProfile: id },
       pool: {
         async releaseSession() {},
@@ -145,7 +154,9 @@ for (const source of ['capabilities', 'project-mcp', 'registered-plugin', 'plugi
           }
         : {}),
       threadStore:
-        source === 'project-mcp' ? { get: () => ({ id: 'thread', projectPath: project, createdBy: 'owner' }) } : null,
+        source === 'project-mcp' || source === 'member-off'
+          ? { get: () => ({ id: 'thread', projectPath: project, createdBy: 'owner' }) }
+          : null,
     };
     const binding = await prepareInvocationExecutionBinding(deps, {
       catId: id,
@@ -155,6 +166,13 @@ for (const source of ['capabilities', 'project-mcp', 'registered-plugin', 'plugi
     });
     assert.ok(binding.providerOptions?.frozenAcpMcpServers, 'admission lost the concrete provider capture hook');
     assert.ok(Object.isFrozen(binding.providerOptions.frozenAcpMcpServers));
+    if (source.startsWith('member-')) {
+      const changed = catRegistry.getAllConfigs();
+      catRegistry.reset();
+      Object.entries(changed).forEach(([key, config]) =>
+        catRegistry.register(key, key === id ? { ...config, mcpSupport: source === 'member-off' } : config),
+      );
+    }
     writeConfig('queued-after');
     const pending = Array.fromAsync(
       invocationService.invoke('isolated task', {
@@ -175,7 +193,8 @@ for (const source of ['capabilities', 'project-mcp', 'registered-plugin', 'plugi
       messages.filter((message) => message.type === 'error'),
       [],
     );
-    assert.equal(sentServers.length, 1);
+    assert.equal(sentServers.length, source === 'member-off' ? 0 : 1);
+    if (source === 'member-off') return;
     assert.deepEqual(sentServers[0].args, ['--fixture=before']);
     assert.equal(sentServers[0].env.find(({ name }) => name === 'FIXTURE_SCOPE')?.value, 'before');
   });

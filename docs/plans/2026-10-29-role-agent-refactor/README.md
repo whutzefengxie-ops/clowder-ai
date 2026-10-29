@@ -376,3 +376,11 @@ checkpoint_review 对 `0700400b913e1a6b1b9a96ec4aa13c88a839f987` 给出 approved
 `admission-reparse-invocation-final.log` 207 项=203 PASS+原 AGY Native Windows birth-identity 4 FAIL，保持原平台限制，不放宽所有权检查。最终 API tsc 通过，8 个变更源/测试文件 Biome 无错误；构建成功后才运行依赖 dist 的验证。无新增常驻服务、安装、用户认证或历史改动。
 
 复杂度复核：复用原 InvocationServiceScope 和 Router 表，仅增加一个有明确 owner 的冲突类型与一次重解析；不新建队列、重试框架、版本总线或 launcher。此处只处理已检测出的冲突，其他 owner 输入的一致性检测、完整服务构建 provenance、所有写方通知与持久会话兼容仍待继续；不能作为完整 W2/C15 通过证据。此有界重解析切片等待独立审查。
+
+## W2 ACP 成员 MCP 开关消费修复（尚未完成 W2）
+
+Host 原来传了准入成员的 mcpSupport，但 ACP 捕获函数忽略它，使用构建服务时的旧值。补三条真实 Host→ACP session/new 反例：当前关闭而构建开启、当前开启而构建关闭、当前缺省开启而构建关闭；准入后再次翻转成员并等待租约，验证实际创建会话仍用本轮冻结计划。`acp-member-mcp-red-consumer.log` 7 项=4 PASS+3 FAIL，实际工具数量与有效开关相反。前两轮夹具因误用 registry API 失败，不当作行为 RED；最终日志以真实消费者断言为准。
+
+正式准入把既有“非 false 即开启”解析为 boolean；ACP 优先用该值捕获，直接内部调用未提供该字段时保持构建默认。原解析、项目补充与冻结后消费路径不变，没有增加运行时开关或再次读 registry。`acp-member-mcp-green.log` 78 PASS，含 MCP resolver、直接 resume、模型偏好、client 身份和串并行有界重解析；API tsc 通过，3 文件 Biome 无错误。扩大消费者 `acp-member-mcp-consumers.log` 123 项=122 PASS+1 原 Windows bootstrap 父目录 PARENT_REPLACEMENT 拒绝；单独进程沿用既有 trusted-host 模式重跑原注册文件 `acp-member-mcp-registration-process-only.log` 7 PASS，不认证 strict ACL，不改用户/生产模式。
+
+复杂度复核：产品只增加有效 boolean 的传递/消费，未重构原 factory 或增加配置框架。构建 whitelist/启动参数、全部 owner 一致性及持久会话仍待后续，不把这个开关修复描述为完整发布原子性。没有真实模型或新增常驻服务；此修复等待独立审查。

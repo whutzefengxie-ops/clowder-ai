@@ -1519,7 +1519,7 @@ export async function prepareInvocationExecutionBinding(
                       workingDirectory: workspace.workingDirectory,
                       toolExecutionPolicy: input.toolExecutionPolicy,
                       accountEnv: binding.accountEnv,
-                      mcpSupport: binding.catConfig?.mcpSupport,
+                      mcpSupport: binding.catConfig?.mcpSupport !== false,
                       liveCompanion: input.liveCompanion,
                     })
                   : undefined;

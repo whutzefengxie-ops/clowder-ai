@@ -259,10 +259,11 @@ export class AcpAgentService implements AgentService {
   }
 
   /** Resolve the same existing MCP sources before admission can wait for a process. */
-  async captureInvocationOptions(input: { workingDirectory?: string }) {
+  async captureInvocationOptions(input: { workingDirectory?: string; mcpSupport?: boolean }) {
     const userProjectRoot = input.workingDirectory;
+    const mcpSupport = input.mcpSupport ?? this.mcpSupportEnabled;
     let baseMcpServers: AcpMcpServer[];
-    if (!this.mcpSupportEnabled) {
+    if (!mcpSupport) {
       baseMcpServers = [];
     } else if (this.mcpWhitelist !== null) {
       const binaryRoot = resolveBinaryRoot(this.projectRoot);
@@ -271,7 +272,7 @@ export class AcpAgentService implements AgentService {
       assertMappedCapabilitySource(capConfig !== null, binaryRoot, capabilitiesRoot);
       const disabled = resolveDisabledServerIds(this.projectRoot, this.catId as string, capConfig);
       baseMcpServers = await resolveAcpMcpServers(this.projectRoot, this.mcpWhitelist, undefined, {
-        mcpSupport: this.mcpSupportEnabled,
+        mcpSupport,
         disabledServerIds: disabled,
         catId: this.catId as string,
         capabilitiesConfig: capConfig,
@@ -281,7 +282,7 @@ export class AcpAgentService implements AgentService {
       baseMcpServers = this.mcpServers;
     }
     let invokeServers = baseMcpServers;
-    if (this.mcpSupportEnabled && userProjectRoot && userProjectRoot !== this.projectRoot) {
+    if (mcpSupport && userProjectRoot && userProjectRoot !== this.projectRoot) {
       const baseNames = new Set(baseMcpServers.map((s) => s.name));
       const userServers = resolveUserProjectMcpServers(userProjectRoot, baseNames);
       if (userServers.length > 0) invokeServers = [...baseMcpServers, ...userServers];
