@@ -22,7 +22,7 @@ created: 2026-10-29
 
 - API 类型检查；4 项 UI/owner/生命周期/runtime-info/projectRef 定向测试；3 项 Web 隔离测试通过。
 - 两个普通插件共用同一入口注册机制的测试通过，无反馈插件 ID 条件。
-- 实际 packed 插件与真实 Host 面板/HTTP/模块调用/普通线程/私有存储编码器通过 18 项联合浏览器旅程。模型输出、外部平台和 Redis 传输为替身，不冒充真实 Client 或内网验收。
+- 实际 packed 插件与真实 Host 面板/HTTP/模块调用/普通线程/私有存储编码器通过 19 项联合浏览器旅程。模型输出、外部平台和 Redis 传输为替身，不冒充真实 Client 或内网验收。
 - 真实 Settings 安装全旅程、实际成员调用、平台写入和内网 CLI 仍待目标环境验收。两个 PR 保持 Draft，未部署或合入。
 
 命令：`pnpm --filter @cat-cafe/api test:plugin-feedback`、`pnpm --filter @cat-cafe/web exec vitest run src/components/plugins/__tests__/plugin-ui.test.tsx`。打包旅程设置 `FEEDBACK_ARTIFACT` / `FEEDBACK_NPM_CLI`（可选浏览器模块/执行文件）后运行 `pnpm --filter @cat-cafe/api test:plugin-feedback:installed`。
