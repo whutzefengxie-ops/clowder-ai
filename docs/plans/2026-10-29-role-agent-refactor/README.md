@@ -570,3 +570,9 @@ checkpoint_review 对 fcfc6b8d874890d5b8b642582889e959da00dd88 返回 changes_re
 最终 API tsc exit 0 后，cancel-routing-review-final.log 91 PASS，含实际 mock 取消/失败/直接 return 三条、原适配器、原/新路由所有权和 merger；20 个合同文件 cancel-routing-review-contracts-final.log 208 PASS。新增用例 Biome 无警告，原源码警告未扩散清理。mock 台账进一步记录实际加载的 dist 模块哈希，区分开发期间 HEAD 基线与未提交构建字节，未把 HEAD 字段单独当作运行源码证明。
 
 额外真实失败 witness cancel-routing-failure-red.log 两条 FAIL 明确保留：close 拒绝且 native 仍 alive 时，serial/parallel Bridge route 仍投影 canceled（串行丢失失败码、并行带 session_contract_failed）。对应 wire-evidence.json、实例台账及隔离 HOME 保留，finally 已受控停止作者进程。此项未知/关闭失败恢复、多路复用和完整 C12 仍未完成，不能据本次成功停止与退出修复升级整体验收。待复核修复 SHA。
+
+checkpoint_review 对 0c7bd2f86ce4231513301b519ea0a66802af86ba 返回 approved，原两个 P2 闭环，独立 44 PASS。包含正常 done 后消费者 break 保持 succeeded、批/单成员隔离、pending next 的退出清理及真实 direct ACP return。三个独立 mock PID 均已退出，HOME 保留；批准不包含关闭失败 unknown。
+
+关闭失败的下一条事实核验已加入真实 InMemoryTurnExecutionStore：cancel-routing-failure-records-red.log 两条有效 FAIL。native-route-failure-records/owned native state OPqcZC（serial）和 gUZOwB（parallel）的 wire-evidence.json 显示 nativeAliveAtTerminal=true，response/execution 均 canceled、providerTeardownAt 却已写入，activeChildren=0。两实例均在 finally 受控关闭并保留数据。不能仅修改错误码或 toast；必须贯通停止未确认的实际事实，保持原 child/R 与同一资源准入阻断，待原恢复 owner 精确确认后收敛。
+
+独立 advisory 已确认最小边界（不是实现批准）：原 Turn/Message/queue owner 保持权威；保留原 native owner 的句柄及精确归属，池移除 entry 和 closed 标志不能代替 OS exit；recovery 核对同 parent/child/资源，先证实 gone 或受控停止再持久化/解阻；启动恢复不能直接把未知 running interrupt 后复用原生会话。源码追踪进一步确认 cli-process-ownership 的进程快照在 Windows 返回 null，ACP 只在非 Windows 使用既有 Unix supervisor；跨平台恢复不能套用未经证明的 Unix 完整性。这与 W2 尚未完成的持久引用/绑定来源和 W3 兼容片段相关，下一实施需同时补真实 owner 依据，禁止新建取消数据库或用无界空 Promise 暂存未知状态。当前没有提交这部分未经验证的恢复实现。

@@ -272,7 +272,7 @@
       "status": "NOT_STARTED"
     }
   ],
-  "lastProgressAt": "2026-10-29T23:33:29Z",
+  "lastProgressAt": "2026-10-29T23:36:29Z",
   "cancelBroadcastCheckpointReview": {
     "verdict": "approved",
     "lastReviewedHead": "43376b8bc22d81ef663aa0bcf418ff5e64f6c205",
@@ -338,7 +338,7 @@
     "findings": []
   },
   "routeCancellationCheckpointReview": {
-    "verdict": "PENDING_RE_REVIEW",
+    "verdict": "approved",
     "evidence": "README.md#W3-Host-路由等待-adapter-取消清理尚未完成-W3",
     "tests": {
       "red": "4 FAIL",
@@ -351,13 +351,16 @@
       "ownedMerge": "2 PASS"
     },
     "scope": "Successful owned ACP stop through serial/parallel and mixed legacy sibling; unknown/restart/multiplex/full C12 remain incomplete",
-    "lastReviewedHead": "fcfc6b8d874890d5b8b642582889e959da00dd88",
-    "lastVerdict": "changes_requested",
-    "findings": [
+    "lastReviewedHead": "0c7bd2f86ce4231513301b519ea0a66802af86ba",
+    "lastVerdict": "approved",
+    "findings": [],
+    "remainingWitness": "cancel-routing-failure-records-red.log: 2 FAIL, native alive but child/R canceled and providerTeardownAt written; full C12 incomplete",
+    "reviewedHead": "0c7bd2f86ce4231513301b519ea0a66802af86ba",
+    "closedFindings": [
       "P2 parallel consumer return does not await drain child cleanup",
       "P2 per-cat signal masks batch abort for drain execution"
     ],
-    "remainingWitness": "cancel-routing-failure-red.log: 2 FAIL; close failure still projects canceled while native alive, full C12 incomplete"
+    "independentTests": "44 PASS"
   },
   "catalogPublicationCheckpointReview": {
     "reviewer": "checkpoint_review",
