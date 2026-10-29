@@ -13,6 +13,7 @@ import type { FrozenL0Input } from '@cat-cafe/shared/l0-input';
 import {
   type RuntimeProviderProfile,
   resolveBuiltinClientForProvider,
+  resolveByAccountRef,
   validateRuntimeProviderBinding,
 } from '../../../../../config/account-resolver.js';
 import { AccountStoreVerdictError } from '../../../../../config/account-store-format.js';
@@ -89,8 +90,13 @@ export function freezeExecutionAccountBinding(input: {
   const effectiveAccountRef = resolveBoundAccountRefForCat(projectRoot, input.catId, catConfig);
   let account: RuntimeProviderProfile | null = null;
   try {
-    account = client ? resolveCatRuntimeAccount(projectRoot, input.catId, client, catConfig) : null;
-    if (effectiveAccountRef && client && !account) throw new Error(`bound account "${effectiveAccountRef}" not found`);
+    account = client
+      ? resolveCatRuntimeAccount(projectRoot, input.catId, client, catConfig)
+      : provider === 'acp' && effectiveAccountRef
+        ? resolveByAccountRef(projectRoot, effectiveAccountRef)
+        : null;
+    if (effectiveAccountRef && (client || provider === 'acp') && !account)
+      throw new Error(`bound account "${effectiveAccountRef}" not found`);
     const error =
       provider && account
         ? validateRuntimeProviderBinding(provider, account, input.model ?? catConfig?.defaultModel)

@@ -266,6 +266,8 @@ L0 input capture remains with the existing invocation/compiler owner. Shared Nod
 
 The existing invocation scope owns failed admission pins. Serial and parallel routes release a failed pin and resolve one fresh view only for an owned configuration conflict before provider invocation; a second conflict is terminal for this admission. Provider sends and opaque status codes do not enter that retry. This does not establish persistent session compatibility or a new retry owner.
 
+Generic ACP's explicit account reference is resolved by the existing account owner at admission. The existing ACP factory checks its private construction-time account source around MCP capture; stale pool inputs reject new admission, while an admitted invocation keeps its captured service. No private account body is added to session compatibility or durable audit by this guard.
+
 ## Canon Member Avatar Consumer
 
 F326 Phase D resolves the existing member id, then projects its one member-avatar slot from collaborative-content-plane. The direct Human selects it with its own receipt; mixed avatar/profile PATCH is rejected before either write. Linked members keep the canon projection after profile-only saves, clear remains linked, and unreadable bound bytes never fall back to catalog or another image. This consumer does not move roster or member authority.

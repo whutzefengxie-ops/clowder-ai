@@ -76,7 +76,9 @@
         "README.md#W2-Codex-MCP-输入消费切片尚未完成-W2：冻结输入、真实MCP两轮消费和基线复核；整条未完成",
         "README.md#W2-Host-shared-MCP-上下文消费切片尚未完成-W2：Host注册与callback共享准入上下文；整条未完成",
         "README.md#W2-capabilities-写入通知切片尚未完成-W2：合法capabilities写入委托中央原子writer；通知与实际提交局部证据",
-        "README.md#W2-账号与启动策略读后核验切片尚未完成-W2：正式账号与S3写入导致准入值变更409；自动重解析及其他owner未完成"
+        "README.md#W2-账号与启动策略读后核验切片尚未完成-W2：正式账号与S3写入导致准入值变更409；其他owner未完成",
+        "README.md#W2-ACP-成员-MCP-开关消费修复尚未完成-W2：实际session/new使用当前显式/缺省开关并保持冻结",
+        "README.md#W2-ACP-构建账号来源核验切片尚未完成-W2：通用ACP显式账号解析、旧池来源错配拒绝/新factory消费；完整启动计划未完成"
       ]
     },
     {
@@ -401,6 +403,14 @@
     "subject": "task:01a1881e-1a7b-78d0-9a62-ff99b0ab7a01/checkpoint-account-currentness",
     "findings": [],
     "evidence": "README.md#W2-账号与启动策略读后核验切片尚未完成-W2"
+  },
+  "threadCurrentnessCheckpointReview": {
+    "reviewer": "checkpoint_review",
+    "verdict": "approved",
+    "reviewedHead": "b808d0232ebb77cce599ee462fe88876155ad384",
+    "subject": "task:01a1881e-1a7b-78d0-9a62-ff99b0ab7a01/checkpoint-thread-currentness",
+    "findings": [],
+    "evidence": "README.md#W2-线程工作区与偏好读后核验切片尚未完成-W2"
   },
   "admissionReparseCheckpointReview": {
     "reviewer": "checkpoint_review",

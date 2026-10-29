@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from 'node:util';
 import type { CatConfig } from '@cat-cafe/shared';
 import type { FastifyBaseLogger } from 'fastify';
 import {
@@ -14,6 +15,7 @@ import { resolveContextCapacity } from '../../../../../../config/context-capacit
 import { resolveEffectiveOpenCodeModel } from '../../../../../../config/opencode-model.js';
 import { saveSpan } from '../../../../../../utils/member-save-diagnostics.js';
 import type { AgentRegistrationFailure } from '../../registry/AgentServiceUnavailableError.js';
+import { ExecutionAdmissionConflict } from '../../registry/AgentServiceUnavailableError.js';
 import { prepareDshSecretPatch, verifyDshSecretPatch } from '../dsh-secret-patch.js';
 import { ensureKimiSecretHooks } from '../kimi-secret-hooks.js';
 import { prepareOpenCodeAcpSpawnConfig } from '../opencode-acp-spawn-config.js';
@@ -322,9 +324,10 @@ export async function createAcpServiceForConfig(
   }
 
   const bootstrap = resolveAcpBootstrap(projectRoot, profileId, acpConfig, effectiveModel);
+  const accountConfig = structuredClone(config);
   let accountContext: AcpAccountContext;
   try {
-    accountContext = resolveAcpAccount(bootstrap.projectRoot, config);
+    accountContext = resolveAcpAccount(bootstrap.projectRoot, accountConfig);
   } catch (error) {
     if (!(error instanceof AccountStoreVerdictError)) throw error;
     return skipAcpProfile(
@@ -354,6 +357,11 @@ export async function createAcpServiceForConfig(
       );
     }
   }
+  const accountSource = structuredClone(accountContext);
+  const assertAccountCurrent = () => {
+    if (!isDeepStrictEqual(accountSource, resolveAcpAccount(bootstrap.projectRoot, accountConfig)))
+      throw new ExecutionAdmissionConflict('ACP account source changed; refresh this member before admission.');
+  };
   const spawn = await saveSpan('acp.prepare', () => prepareAcpSpawnContext(effectiveInput, bootstrap, accountContext));
   if (!spawn) return null;
   bootstrap.args = piBridgeStorageArgs(
@@ -379,34 +387,39 @@ export async function createAcpServiceForConfig(
 
   // #712 P1-1: pass whitelist — MCP resolution happens at invoke time in
   // AcpAgentService so capability toggles take effect without registry rebuild.
-  return bindAcpServicePoolLease(
-    new AcpAgentService({
-      ...(spawn.antigravity ? { antigravity: spawn.antigravity, agentBusyRetryDelaysMs: [] } : {}),
-      catId,
-      pool,
-      clientId,
-      poolKey: bootstrap.poolKey,
-      projectRoot: bootstrap.projectRoot,
-      mcpWhitelist: acpConfig.mcpWhitelist ?? [],
-      providerName: config.clientId === 'acp' ? 'acp' : config.clientId,
-      modelName: spawn.sessionModel ?? config.defaultModel ?? 'acp',
-      // iCode: modelProfileId is the session/set_model target (iCode model
-      // configuration id), distinct from defaultModel (display/audit model name).
-      // The factory rejects iCode members without it, so this is always defined.
-      sessionModel: acpConfig.protocolAdapter === 'icode' ? icodeModelProfileId : spawn.sessionModel,
-      protocolAdapter: acpConfig.protocolAdapter,
-      contextBinding: {
-        model: effectiveModel,
-        ...((config.clientId === 'opencode' || config.clientId === 'kimi') && spawn.contextPolicy?.windowTokens
-          ? { windowTokens: spawn.contextPolicy.windowTokens }
-          : {}),
-        source: 'service_spawn',
-      },
-      mcpSupport: config.mcpSupport,
-      // #1186: Thread the member's configured idle TTL to AcpAgentService so
-      // promptStream uses it as the authoritative no-event termination threshold.
-      idleTtlMs: acpConfig.pool?.idleTtlMs ?? DEFAULT_ACP_IDLE_TTL_MS,
-    }),
-    lease,
-  );
+  const service = new AcpAgentService({
+    ...(spawn.antigravity ? { antigravity: spawn.antigravity, agentBusyRetryDelaysMs: [] } : {}),
+    catId,
+    pool,
+    clientId,
+    poolKey: bootstrap.poolKey,
+    projectRoot: bootstrap.projectRoot,
+    mcpWhitelist: acpConfig.mcpWhitelist ?? [],
+    providerName: config.clientId === 'acp' ? 'acp' : config.clientId,
+    modelName: spawn.sessionModel ?? config.defaultModel ?? 'acp',
+    // iCode: modelProfileId is the session/set_model target (iCode model
+    // configuration id), distinct from defaultModel (display/audit model name).
+    // The factory rejects iCode members without it, so this is always defined.
+    sessionModel: acpConfig.protocolAdapter === 'icode' ? icodeModelProfileId : spawn.sessionModel,
+    protocolAdapter: acpConfig.protocolAdapter,
+    contextBinding: {
+      model: effectiveModel,
+      ...((config.clientId === 'opencode' || config.clientId === 'kimi') && spawn.contextPolicy?.windowTokens
+        ? { windowTokens: spawn.contextPolicy.windowTokens }
+        : {}),
+      source: 'service_spawn',
+    },
+    mcpSupport: config.mcpSupport,
+    // #1186: Thread the member's configured idle TTL to AcpAgentService so
+    // promptStream uses it as the authoritative no-event termination threshold.
+    idleTtlMs: acpConfig.pool?.idleTtlMs ?? DEFAULT_ACP_IDLE_TTL_MS,
+  });
+  const captureOptions = service.captureInvocationOptions.bind(service);
+  service.captureInvocationOptions = async (options) => {
+    assertAccountCurrent();
+    const captured = await captureOptions(options);
+    assertAccountCurrent();
+    return captured;
+  };
+  return bindAcpServicePoolLease(service, lease);
 }

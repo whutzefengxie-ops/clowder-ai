@@ -395,4 +395,16 @@ checkpoint_review 对 `93f0754491ac937a6c2c3c50e35de75d996d0191` 给出 approved
 
 `thread-currentness-red.log` 4 项=1 PASS+3 FAIL，真实 ThreadStore 的工作区/effort/speed 合法写入没有被发现；其他成员写入是对照。修复后 `thread-currentness-consumers-passed.log` 40 PASS，另加实际串/并行 Host→Codex fake CLI 四条旅程，验证新工作区 cwd、新 effort argv 且只发送一次。speed 当前性/下一次读回及冻结后消费分别由准入与原 invocation 检查覆盖。最初把“原生 auto auth + gpt-5.3”当作 Fast 适用夹具导致两条预期失败；既有 Fast 契约仅允许适用 OAuth/模型组合，移除不成立的 Fast argv 场景，保留当前性断言与原能力限制，不为测试开启 Fast。
 
-`thread-currentness-routing-final.log` 120 PASS，含完整策略、元数据、真实刷新、调用 preflight 和 L0；最终 API tsc 与 3 文件 Biome 无错误。没有真实模型、常驻服务或数据修改。复杂度复核：原准入函数共用局部读取、增加一个执行投影比较；无新存储、revision bus、watcher 或启动器。该切片不等于线程所有状态/MCP源/启动配置的一致性协议，全部 W2 与会话语义仍未完成；等待独立审查。
+`thread-currentness-routing-final.log` 120 PASS，含完整策略、元数据、真实刷新、调用 preflight 和 L0；最终 API tsc 与 3 文件 Biome 无错误。没有真实模型、常驻服务或数据修改。复杂度复核：原准入函数共用局部读取、增加一个执行投影比较；无新存储、revision bus、watcher 或启动器。该切片不等于线程所有状态/MCP源/启动配置的一致性协议，全部 W2 与会话语义仍未完成。
+
+checkpoint_review 对 `b808d0232ebb77cce599ee462fe88876155ad384` 给出 approved，subject 为 `task:01a1881e-1a7b-78d0-9a62-ff99b0ab7a01/checkpoint-thread-currentness`。独立 45 PASS，含当前性、实际 cwd/effort、读取状态变化、元数据控制、第二轮读取取消和成员 revision fence；无未关闭 finding，不证明线程原子快照或完整 W2。
+
+## W2 ACP 构建账号来源核验切片（尚未完成 W2）
+
+实际 factory 已将账号 HOME/env/凭据固化到 pool 启动配置；单纯在 Host 内前后两次读取当前账号，不能发现两次均为新值、实际旧池仍是旧值的错配。现由原 factory 在构建时复制私有账号来源及其成员选择输入，在 captureInvocationOptions 前后沿原 resolveAcpAccount 核验；变化时发出已有自有准入冲突，等待刷新/重新准备。该核验只处于准入，已冻结 invocation 仍消费原计划和原 pool，不在模型执行阶段重读账号。没有将私有 profile/secret 写入审计或兼容键。
+
+测试同时发现通用 clientId=acp 的显式 accountRef 原来在 Host 冻结层被忽略：该层只解析 builtin client。补齐该明确分支，复用原 resolveByAccountRef 和验证逻辑；未绑定原生来源仍保持原继承，不扩展其他无关 client。`acp-account-source-red.log` 的两个正常对照因 accountEnv 缺失失败，三个旧池错配未拒绝；修复 Host 分支后 `acp-account-source-red-after-host.log` 对照通过，HOME/普通 env/凭据三条仍 RED，独立证明 factory 来源缺口。最终 `acp-account-source-green.log` 23 PASS，含真实 factory→Host 准入、新服务与新启动配置匹配、额度元数据不误判、冻结后实际 ACP 会话保持旧绑定，以及原租约/工厂/环境用例。消费者 `acp-account-source-consumers.log` 70 PASS，含解析、成员投影、账号冻结、MCP、偏好、协议 provider 和正式路由。
+
+最终 API tsc、3 文件 Biome 无错误。factory 集合使用隔离测试进程的既有 trusted-host 模式，未认证 strict Windows ACL、未改生产配置；真实 factory/pool 消费者配的是内存协议客户端，没有启动外部进程或调用真实模型。池/视图由测试所有者受控释放，私有夹具数据保留在任务 artifacts。
+
+复杂度复核：复用既有 resolver、capture hook、冲突和 pool owner，无新账号库、factory 服务、通知总线或重试系统。该保护针对构建时账号来源；成员选择/ACP 原始命令与 whitelist、父环境/CA 及所有配置 owner 的发布一致性仍须继续，不把它当作完整启动计划冻结或 W2/C05/C15 通过。此切片等待独立审查。
