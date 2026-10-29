@@ -502,3 +502,7 @@ checkpoint_review 对 `1ef2f234401e51cdc8cc7697dbc5a8af33948983` 返回 approved
 旧夹具同步了真实语义：主动提供 provider 停止事件、先释放执行 gate 再等待取消终态；EOF 断言改为明确缺失终态失败。第一次全组因旧插件假 release 不发停止事件而等待，确认父子 PID/准确测试文件后仅停止本次 worker 48800（父 48516），日志和其临时文件保留；未停止用户或其他任务进程。原 built-in 取消基线还以 OpenAI 成员配通用 ACP，诊断 `cancel-quiescence-baseline-diagnosis.log` 明确 execution_client_changed；夹具现注册实际 ACP 配置并恢复原内存 registry，没有放宽产品检查。完整重新运行已结束，无新增常驻实例。
 
 复杂度复核及 map delta：复用 session bridge/provider 的既有事件和 iterator 所有权，删除把 abort 当终态的分支，等待既有清理；不增加数据库、后台恢复器或重试系统。更新 identity-session cell 的原依赖边。该片段不把标准取消 ACK 解释为原生已停止证明；AcpAgentService/pool 的 unknown/隔离、release 失败/Host 重启、compatibility/片段与审计仍待整体完成。原 SocketManager 取消广播仍提前发 done，现有路由诊断仍有两个广播；下一步应在 transport/lifecycle owner 区分取消请求与终态。C12 整体继续 NOT_RUN，等待本切片独立审查。
+
+checkpoint_review 对 `cbb5124c2d48f888ebfb02127081c8f27ba9de25` 返回 changes_requested，独立 12 项=9 PASS+3 FAIL，两个 P2：源 finally 经 next 抛错后，对已关闭源 return 的空成功仍会清 active；未启动时并发 return/next 改写 consumed，会永久 busy。前者还以真实 AGY AcpAgentService 包装和未释放租约复现。作者补两条真实分支，`cancel-quiescence-review-red.log` 9 项=7 PASS+2 FAIL。
+
+修复仅记录 return 进入时是否未消费，并记录源 next 是否成功返回；失败 next 后的空 return 不再被当作清理证明。`cancel-quiescence-review-green.log` 9 PASS，`cancel-quiescence-review-contracts.log` 197 PASS，作者回放 reviewer 私有五条（含真实 AGY 包装）`cancel-quiescence-reviewer-replay.log` 5 PASS。最终 API tsc exit 0、两文件 Biome 无错误；等待独立复核，未将作者回放计为独立批准。没有新服务/模型调用。

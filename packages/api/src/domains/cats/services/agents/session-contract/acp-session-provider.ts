@@ -101,11 +101,12 @@ export class AcpSessionProvider implements Contract.AgentSessionProvider {
             return events.next();
           },
           return: async () => {
+            const unstarted = !consumed;
             if (!active.done) controller.abort();
             const result = await events.return(undefined);
             // A never-started generator has no finally. Once consumed, only
             // that finally may clear active after successful source cleanup.
-            if (!consumed) {
+            if (unstarted) {
               active.done = true;
               cleanup();
             }
@@ -226,10 +227,13 @@ export class AcpSessionProvider implements Contract.AgentSessionProvider {
     let seq = 0;
     let iterator: AsyncIterator<AgentMessage> | undefined;
     let terminal: Contract.AgentSessionEvent | undefined;
+    let sourceReadCompleted = false;
     try {
       iterator = source[Symbol.asyncIterator]();
       while (true) {
+        sourceReadCompleted = false;
         const next = await iterator.next();
+        sourceReadCompleted = true;
         if (next.done) break;
         const current = next.value.metadata;
         if (current && !isDeepStrictEqual(metadata, { model: current.model })) {
@@ -259,8 +263,12 @@ export class AcpSessionProvider implements Contract.AgentSessionProvider {
       // A provider may emit done before its finally releases the execution
       // lease. Keep active and withhold terminal until that cleanup completes.
       await iterator?.return?.();
-      active.done = true;
-      cleanup();
+      // A return on a generator already closed by a failed next is a no-op,
+      // not evidence that its failing finally released the execution lease.
+      if (sourceReadCompleted) {
+        active.done = true;
+        cleanup();
+      }
     }
     yield terminal;
   }

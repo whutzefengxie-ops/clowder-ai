@@ -272,11 +272,14 @@
       "status": "NOT_STARTED"
     }
   ],
-  "lastProgressAt": "2026-10-29T23:04:00Z",
+  "lastProgressAt": "2026-10-29T22:54:11Z",
   "cancelQuiescenceCheckpointReview": {
-    "verdict": "PENDING",
+    "verdict": "PENDING_RE_REVIEW",
+    "originalReviewedHead": "cbb5124c2d48f888ebfb02127081c8f27ba9de25",
+    "originalVerdict": "changes_requested",
+    "findings": ["P2 next-path cleanup failure clears active", "P2 unstarted concurrent return/next leaves permanent busy"],
     "evidence": "README.md#W3-取消终态与迭代器清理纵向切片尚未完成-W3",
-    "tests": { "red": "5 FAIL", "contracts": "195 PASS" },
+    "tests": { "red": "5 FAIL", "reviewRed": "7 PASS + 2 FAIL", "contracts": "197 PASS", "authorReplay": "5 PASS" },
     "scope": "Existing bridge/ACP iterator and terminal boundary; native unknown recovery/transport terminal/full C12 remain incomplete"
   },
   "catalogPublicationCheckpointReview": {

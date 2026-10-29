@@ -50,40 +50,69 @@ for (const reply of ['accepted', 'failed', 'throws', 'unsupported']) {
   );
 }
 
-test('cancelled cleanup failure remains a failure and keeps the ACP execution busy', async () => {
-  const stop = deferred();
-  let calls = 0;
+for (const failureAt of ['return', 'next'])
+  test(`cancelled ${failureAt} cleanup failure remains a failure and keeps the ACP execution busy`, async () => {
+    const stop = deferred();
+    let calls = 0;
+    const provider = new AcpSessionProvider({
+      catId: 'codex',
+      service: {
+        async *invoke() {
+          calls++;
+          try {
+            yield { type: 'status', catId: 'codex', content: 'running', timestamp: 1 };
+            await stop.promise;
+            if (failureAt === 'return') yield { type: 'done', catId: 'codex', timestamp: 1 };
+          } finally {
+            throw new Error('owned cleanup failure');
+          }
+        },
+      },
+    });
+    const bridge = new AgentSessionBridgeService({
+      catId: 'codex',
+      provider,
+      resolveHostSession: () => ({ sessionId: 'host' }),
+    });
+    const controller = new AbortController();
+    const stream = bridge.invoke('first', options({ signal: controller.signal }))[Symbol.asyncIterator]();
+    assert.equal((await stream.next()).value.content, 'running');
+    const completion = collect(stream);
+    controller.abort();
+    stop.resolve();
+    const events = await completion;
+    assert.equal(events.at(-1).errorCode, 'session_contract_failed');
+    const blocked = await collect(bridge.invoke('second', options({ invocationId: 'second' })));
+    assert.equal(blocked[0].errorCode, 'busy');
+    assert.equal(calls, 1, 'failed cleanup cannot allow another source execution');
+  });
+
+test('return-before-first-next uses its entry state when a closed next is queued concurrently', async () => {
+  let executions = 0;
   const provider = new AcpSessionProvider({
     catId: 'codex',
     service: {
       async *invoke() {
-        calls++;
-        try {
-          yield { type: 'status', catId: 'codex', content: 'running', timestamp: 1 };
-          await stop.promise;
-          yield { type: 'done', catId: 'codex', timestamp: 1 };
-        } finally {
-          throw new Error('owned cleanup failure');
-        }
+        executions++;
+        yield { type: 'done', catId: 'codex', timestamp: 1 };
       },
     },
   });
-  const bridge = new AgentSessionBridgeService({
-    catId: 'codex',
-    provider,
-    resolveHostSession: () => ({ sessionId: 'host' }),
-  });
-  const controller = new AbortController();
-  const stream = bridge.invoke('first', options({ signal: controller.signal }))[Symbol.asyncIterator]();
-  assert.equal((await stream.next()).value.content, 'running');
-  const completion = collect(stream);
-  controller.abort();
-  stop.resolve();
-  const events = await completion;
-  assert.equal(events.at(-1).errorCode, 'session_contract_failed');
-  const blocked = await collect(bridge.invoke('second', options({ invocationId: 'second' })));
-  assert.equal(blocked[0].errorCode, 'busy');
-  assert.equal(calls, 1, 'failed cleanup cannot allow another source execution');
+  await provider.openSession({ sessionId: 'host' });
+  const input = {
+    invocation: { invocationId: 'first', callbackEnv: {}, mcpServers: [] },
+    prompt: { kind: 'frozen', text: 'task' },
+  };
+  const first = await provider.startTurn('host', input, new AbortController().signal);
+  const iterator = first.events[Symbol.asyncIterator]();
+  assert.deepEqual(
+    (await Promise.all([iterator.return(), iterator.next()])).map((result) => result.done),
+    [true, true],
+  );
+  assert.equal(executions, 0);
+  const next = await provider.startTurn('host', input, new AbortController().signal);
+  if (next.ok) await next.events[Symbol.asyncIterator]().return();
+  assert.equal(next.ok, true, 'no source ran; the wrapper owns cleanup of this unstarted turn');
 });
 
 for (const cancelled of [false, true]) {
