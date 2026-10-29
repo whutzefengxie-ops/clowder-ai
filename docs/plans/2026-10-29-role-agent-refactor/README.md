@@ -468,3 +468,9 @@ NativeMcpLaunches 的既有 memberView 保留原激活对象集合和各入口�
 真实 NativeMcpLaunches/NativePluginActions→Host→ACP 捕获的 `plugin-mcp-currentness-red-valid.log` 6 项=2 对照 PASS+4 FAIL，原先刷新/禁用/启用/动作代次变化均未拒绝；首轮夹具用错 ACP 名称的日志不算有效 RED。修复后 `plugin-mcp-currentness-green.log` 49 PASS，含六条新检查、原插件发现/隔离与已审查文件版本；下一准入实际采用新 args 或移除失效入口。`plugin-mcp-currentness-consumers.log` 52 PASS，覆盖真实 carrier 的原 native launch/Alpha 激活、多个原生消费者与串并行重解析。API tsc exit 0 后才测试；4 文件 Biome 无错误。无真实模型或新增常驻环境，作者新夹具保留，既有测试沿原夹具生命周期结束。
 
 复杂度复核及 map delta：复用插件激活 owner 到 invocation/MCP 消费者的既有边，只新增私有视图校验能力和最终检查；没有代次总线、watcher 或存储。此处覆盖会返回本地激活视图的隔离 Host；persistCapabilities 常规发布路径仍不返回该视图，不能以本次证明全部插件激活或 inventory/package 的外部静默变更。成员整体发布、父环境/CA、全部写入通知和完整 W2/C05/C15 仍未闭环；等待独立审查。
+
+checkpoint_review 对 `d886018ea4f2320f4fca4a553686cde181c93da4` 返回 approved，subject 为 checkpoint-plugin-mcp-currentness。独立 31 PASS，覆盖空视图新增、移除/替换、actions generation、稳定拒绝、并发 Host 隔离及回调不进入 binding；无未关闭 finding。批准仅限本地 memberView，不含常规发布或完整 W2。
+
+## W0 Q02 审查样本准备（尚未执行真实 Q02）
+
+固定两份已知实质缺陷与一份健康对照，保留 before/after，任务明确边界；评估者保存答案/校准测试，只复制单个候选子目录。实际可复现对照及范围说明见 quality-review-samples/README.md；`review-samples-calibration.log` 四条 PASS。manifest 固定九份材料与校准程序 SHA256，新增文件的 LF 属性防止 Windows checkout 改变被评分字节，不调整全仓换行策略。量尺准备不计入真实客户端两轮盲审或质量成功率，无真实模型/服务调用。此样本等待独立审查；Q03/Q04、真实质量基线、性能与平台验收继续未完成。
