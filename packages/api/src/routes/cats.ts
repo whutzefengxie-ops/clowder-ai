@@ -38,7 +38,7 @@ import {
   resolveCodexSpeed,
   supportsActiveInvocationGuidance,
 } from '@cat-cafe/shared';
-import type { FastifyPluginAsync } from 'fastify';
+import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import {
   builtinAccountIdForClient,
@@ -471,6 +471,19 @@ function projectedBuiltinCloudIdentityAfterPatch(input: {
 
 function resolveProjectRoot(): string {
   return resolveActiveProjectRoot();
+}
+
+/**
+ * Transitional CAS opt-in marker (W1 save contract). Only writers that send
+ * `x-clowder-formal-edit: 1` are required to carry a revision; legacy callers
+ * without the header keep the pre-CAS blind-write behavior in this change.
+ */
+const FORMAL_EDIT_HEADER = 'x-clowder-formal-edit';
+
+function isFormalEditRequest(request: FastifyRequest): boolean {
+  const header = request.headers[FORMAL_EDIT_HEADER];
+  const value = Array.isArray(header) ? header[0] : header;
+  return value === '1';
 }
 
 interface CatResponseMetadata {
@@ -993,13 +1006,19 @@ export const catsRoutes: FastifyPluginAsync<CatsRoutesOptions> = async (app, opt
   });
 
   // GET /api/cats - 获取所有猫猫配置
-  app.get('/api/cats', async () => {
+  // ?catId=<id> narrows the read to one member so a create-timeout client can look
+  // up its submitted stable catId (and configurationRevision) before retrying POST.
+  app.get<{ Querystring: { catId?: string } }>('/api/cats', async (request) => {
     const projectRoot = resolveProjectRoot();
     const resolveMetadata = buildCatResponseMetadataResolver(projectRoot);
     const resolveEffectiveAccountRef = buildEffectiveAccountRefResolver();
+    const catIdFilter = typeof request.query.catId === 'string' ? request.query.catId.trim() : '';
+    const members = Object.values(getResolvedCats(projectRoot)).filter(
+      (cat) => catIdFilter === '' || cat.id === catIdFilter,
+    );
     return {
       cats: await Promise.all(
-        Object.values(getResolvedCats(projectRoot)).map((cat) =>
+        members.map((cat) =>
           toCatResponse(
             cat,
             projectRoot,
@@ -1352,6 +1371,15 @@ export const catsRoutes: FastifyPluginAsync<CatsRoutesOptions> = async (app, opt
     }
 
     const body = parsed.data;
+    // S1: informal/legacy writers keep blind-write compatibility; a formal-edit
+    // request must carry the member's configurationRevision baseline.
+    if (isFormalEditRequest(request) && body.expectedRevision === undefined) {
+      reply.status(428);
+      return {
+        code: 'member_revision_required',
+        error: '正式保存需要成员配置版本（expectedRevision）。请刷新成员后再保存。',
+      };
+    }
     if (body.avatar !== undefined && opts.memberAssets?.()?.binding(request.params.id)) {
       const mixed = Object.keys(body).some((key) => key !== 'avatar' && key !== 'expectedRevision');
       return reply.code(409).send({
@@ -1778,7 +1806,9 @@ export const catsRoutes: FastifyPluginAsync<CatsRoutesOptions> = async (app, opt
       const message = err instanceof Error ? err.message : String(err);
       if (err instanceof MemberConfigurationConflict) {
         reply.status(409);
-      } else if (/not found/i.test(message)) {
+        return { code: 'member_configuration_conflict', error: message };
+      }
+      if (/not found/i.test(message)) {
         reply.status(404);
       } else {
         reply.status(400);

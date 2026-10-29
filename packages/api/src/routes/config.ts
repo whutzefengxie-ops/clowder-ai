@@ -13,6 +13,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { collectConfigSnapshot } from '../config/ConfigRegistry.js';
 import { configStore } from '../config/ConfigStore.js';
+import { configSnapshotValue, configWriteRevision, memberEditorWriteRevisions } from '../config/config-write-revision.js';
 import {
   clearRuntimeDefaultCatId,
   getDefaultCatId,
@@ -61,9 +62,54 @@ import { configThreadAttentionRoutes } from './config-thread-attention.js';
 const patchSchema = z.object({
   key: z.string().min(1),
   value: z.union([z.string(), z.number(), z.boolean()]),
+  /** S3: revision of `key`'s current value, from `GET /api/config.writeRevisions[key]`. */
+  expectedRevision: z.string().min(1).optional(),
 });
 
 const PERSISTENT_CLI_OUTPUT_KEY = 'ui.bubble.cliOutput';
+
+/**
+ * Transitional CAS opt-in marker (W1 save contract). Only writers that send
+ * `x-clowder-formal-edit: 1` are required to carry a revision; legacy callers
+ * without the header keep the pre-CAS blind-write behavior in this change.
+ */
+const FORMAL_EDIT_HEADER = 'x-clowder-formal-edit';
+
+function isFormalEditRequest(request: FastifyRequest): boolean {
+  const header = request.headers[FORMAL_EDIT_HEADER];
+  const value = Array.isArray(header) ? header[0] : header;
+  return value === '1';
+}
+
+function configRevision(key: string, snapshot: unknown): string {
+  return configWriteRevision(key, configSnapshotValue(snapshot, configStore.getSnapshotPath(key)));
+}
+
+/**
+ * S3 CAS gate: rejects a formal write that lacks a revision (428) or whose
+ * revision is stale (409). Returns undefined when the write may proceed.
+ */
+function configRevisionRejection(
+  request: FastifyRequest,
+  key: string,
+  expectedRevision: string | undefined,
+  snapshot: ConfigSnapshot,
+): { status: number; body: { code: string; revision?: string; error: string } } | undefined {
+  if (isFormalEditRequest(request) && expectedRevision === undefined) {
+    return {
+      status: 428,
+      body: { code: 'config_revision_required', error: '正式保存需要配置版本（expectedRevision）。请刷新配置后再保存。' },
+    };
+  }
+  const current = configRevision(key, snapshot);
+  if (expectedRevision !== undefined && expectedRevision !== current) {
+    return {
+      status: 409,
+      body: { code: 'config_revision_conflict', revision: current, error: '配置已在其他页面修改。请刷新后核对再保存。' },
+    };
+  }
+  return undefined;
+}
 
 type ConfigPatchValue = string | number | boolean;
 
@@ -136,12 +182,7 @@ interface ConfigRoutesOptions {
 }
 
 function getSnapshotValue(snapshot: ConfigSnapshot, key: string): unknown {
-  const path = configStore.getSnapshotPath(key);
-  if (!path) return undefined;
-  return path.reduce<unknown>((current, segment) => {
-    if (current == null || typeof current !== 'object') return undefined;
-    return (current as Record<string, unknown>)[segment];
-  }, snapshot);
+  return configSnapshotValue(snapshot, configStore.getSnapshotPath(key));
 }
 
 function resolveOperator(raw: unknown): string | null {
@@ -212,9 +253,15 @@ export async function configRoutes(app: FastifyInstance, opts: ConfigRoutesOptio
   await app.register(configOnboardingRoutes, { projectRoot });
   await app.register(configThreadAttentionRoutes, { projectRoot, threadStore: opts.threadStore });
 
-  app.get('/api/config', async () => ({
-    config: collectConfigSnapshot(projectRoot),
-  }));
+  app.get('/api/config', async () => {
+    const snapshot = collectConfigSnapshot(projectRoot);
+    return {
+      config: snapshot,
+      // S3: one revision per global key the formal member editor writes, derived from
+      // this exact snapshot so a read→edit→CAS round trip compares the same value.
+      writeRevisions: memberEditorWriteRevisions(snapshot, (key) => configStore.getSnapshotPath(key)),
+    };
+  });
 
   app.patch('/api/config', async (request, reply) => {
     const parsed = patchSchema.safeParse(request.body);
@@ -229,6 +276,11 @@ export async function configRoutes(app: FastifyInstance, opts: ConfigRoutesOptio
     }
 
     const before = saveSpan('config.snapshot.before', () => collectConfigSnapshot(projectRoot));
+    const rejection = configRevisionRejection(request, parsed.data.key, parsed.data.expectedRevision, before);
+    if (rejection) {
+      reply.status(rejection.status);
+      return rejection.body;
+    }
     const oldValue = getSnapshotValue(before, parsed.data.key);
     try {
       saveSpan('config.persist', () => applyConfigPatch(projectRoot, parsed.data.key, parsed.data.value));
@@ -271,7 +323,7 @@ export async function configRoutes(app: FastifyInstance, opts: ConfigRoutesOptio
       request.log.warn({ err, key: parsed.data.key }, 'config audit append failed');
     }
 
-    return { config: after };
+    return { config: after, revision: configRevision(parsed.data.key, after) };
   });
 
   const handleCoCreatorPatch = async (request: FastifyRequest, reply: FastifyReply) => {
