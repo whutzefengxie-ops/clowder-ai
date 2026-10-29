@@ -584,3 +584,11 @@ checkpoint_review 对 0c7bd2f86ce4231513301b519ea0a66802af86ba 返回 approved�
 API tsc exit 0 后，unknown-restart-green.log 27 PASS，包含新三条及原内存/启动恢复/历史记录检查。Redis 分支使用真实 RedisTurnExecutionStore 和正式 codec 读取合法 hash，验证未知记录不会调用 terminal Lua 或移除 running index；该分支是受控读取边界测试，不是实际 Redis 服务、跨进程或最终发行物验收。四文件 Biome 无错误，两条既有复杂度警告保留，无服务/端口/原生进程或业务数据操作。
 
 复杂度复核：只复用现有 owner 字段、两个存储实现共用一项判断；无新状态库、watcher、恢复器或定时器。缺证明时旧 tracked 执行会继续阻止恢复收尾，这是本切片的明确行为；受控停止/精确 OS owner 证据的后续接线尚未完成。它不能修复已经被旧取消路径误写的 terminal 历史，也不能代替仍开放的 live close 失败两个反例。完整 C12/W3 仍未验收，等待独立审查。
+
+checkpoint_review 对 32911e9fa34e708238d32b01de229617208c9968 返回 approved，独立 29 PASS，含 started/teardown 的 0 时间值、protected IDs、同 parent/member 两个 child 只按精确证明分别收尾以及重复恢复。批准仅限启动保护；无实际 Redis、原生停止证明或完整 C12 认证。
+
+## W3 ACP error 与真实 exit 区分（尚未完成 W3）
+
+acp-close-proof-red.log 为 1 PASS+1 FAIL：真实 AcpClient 配受控 ChildProcess，在初始化后先收到 error、随后 close，原 error handler 已把 exited=true，close 跳过 SIGTERM 并成功返回；从未收到 exit。关闭期间发生 error 的对照正确报告未确认。现在 error 只把 client 标为 closed/不可复用，exited 仍只由真实 exit 设置；确实没有 spawn 到 PID 的启动失败无需信号。两个既有字段的两行修改，不增加 shutdown 框架、重试、字段或状态 owner。
+
+API tsc exit 0 后，acp-close-proof-green.log 13 PASS，含新三条、原 retirement 及真实 mock 取消/失败/direct return；acp-close-proof-regression.log 55 PASS，含原 ACP client、Windows spawn 和 AGY ACP 协议/权限。两文件 Biome 无错误，原九条 warning/五条 info 未扩散清理。受控 ChildProcess 用例不创建 OS 进程；真实 mock 用例沿原逐实例台账关闭、隔离数据保留。此处证明 error 不冒充载体 exit，不证明 Pi native 子树、Windows 跨进程恢复或上层 close failure 的正确持久化；两个 live failure RED 与完整 C12 仍待继续。等待独立审查。

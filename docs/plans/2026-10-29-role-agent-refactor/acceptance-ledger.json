@@ -272,7 +272,7 @@
       "status": "NOT_STARTED"
     }
   ],
-  "lastProgressAt": "2026-10-29T23:44:09Z",
+  "lastProgressAt": "2026-10-29T23:46:57Z",
   "cancelBroadcastCheckpointReview": {
     "verdict": "approved",
     "lastReviewedHead": "43376b8bc22d81ef663aa0bcf418ff5e64f6c205",
@@ -363,13 +363,26 @@
     "independentTests": "44 PASS"
   },
   "unknownRestartCheckpointReview": {
-    "verdict": "PENDING_REVIEW",
+    "verdict": "approved",
     "evidence": "README.md#W3-启动恢复保留未确认停止的执行尚未完成-W3",
     "tests": {
       "red": "2 FAIL",
       "regression": "27 PASS"
     },
-    "scope": "Existing tracked-started/no-teardown record restart guard only; Redis test is controlled read boundary, live close failure/native owner recovery/full C12 incomplete"
+    "scope": "Existing tracked-started/no-teardown record restart guard only; Redis test is controlled read boundary, live close failure/native owner recovery/full C12 incomplete",
+    "reviewedHead": "32911e9fa34e708238d32b01de229617208c9968",
+    "independentTests": "29 PASS",
+    "findings": []
+  },
+  "acpCloseProofCheckpointReview": {
+    "verdict": "PENDING_REVIEW",
+    "evidence": "README.md#W3-ACP-error-与真实-exit-区分尚未完成-W3",
+    "tests": {
+      "red": "1 PASS + 1 FAIL",
+      "targeted": "13 PASS",
+      "regression": "55 PASS"
+    },
+    "scope": "Existing client error/exit boundary only; native-tree stop, cross-process recovery, live close failure/full C12 incomplete"
   },
   "catalogPublicationCheckpointReview": {
     "reviewer": "checkpoint_review",

@@ -349,7 +349,7 @@ export class AcpClient {
 
     this.child.on('error', (err) => {
       log.error('ACP process error: %s', err.message);
-      this.exited = true;
+      this.closed = true;
       this.rejectAllPending(err);
     });
 
@@ -1005,7 +1005,7 @@ export class AcpClient {
 
     this.rl?.close();
     this.rejectAllPending(new Error('ACP client closed'));
-    if (this.child && !this.exited)
+    if (this.child?.pid !== undefined && !this.exited)
       await shutdownAcpChild(this.child, KILL_GRACE_MS, this.initResult?.agentInfo?.name === PI_BRIDGE_NAME);
   }
 
