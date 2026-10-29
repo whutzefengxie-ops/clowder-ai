@@ -176,3 +176,7 @@ ThreadStore 的内存实现返回可变记录，工作区捕获现复制该记�
 新增三反例先 RED：原记录后写污染快照、真实 ThreadStore 准入后修改 effort/speed 导致实际 invoke 收到新值。修复后均 GREEN，且原 F262/F291 的每轮读取、继承及失败诊断四条保持通过。最终集合 `thread-execution-freeze-final.log` 为 182 项=178 PASS+4 FAIL；4 条失败仍是已记录的 AGY Native Windows 出生身份缺口，不计通过。API tsc 通过；新公开测试已确认由 resolver 选中。
 
 本切片解决已准入后的晚读，不宣称 workspace/偏好/账号/MCP 各 owner 之间的读前读后一致性已经完成。下一步继续配置一致性重解析、MCP/ACP/native 启动计划与全局策略冻结。无新增常驻服务或真实模型调用；当前线程切片等待独立审查。
+
+独立审查 `7fe6cdb0f0db1bd1393abd5f6c7db1a372c56e5d` 返回一个 P2：已取消准入仍创建偏好读取 Promise；既有 preflightRace 提前拒绝，未消费的原始 Promise 随后失败，默认 Node 进程退出 1。现于准入入口、workspace await 之后检查取消，避免启动已废弃读取；读取 await 之后也检查取消，不能将取消中的准入报告为 ready。不改全局 race helper，已有在途读取仍由其原处理器消费。
+
+reviewer 独立子进程反例和公开测试的三个时点（准入前、workspace 中、偏好读中）均先 RED 后 GREEN，使用严格 unhandled-rejections 模式；子进程不再崩溃、取消不返回可用 binding。最终 `thread-cancel-green.log` 为 186 项=182 PASS+原 4 条 Windows AGY FAIL，新增取消场景与原线程/诊断场景通过。API tsc 通过，Biome 两文件无错误、20 warnings。证据仍区分真实 Node 子进程与模型调用；本次没有真实模型调用或常驻环境，等待同一 reviewer 复审。

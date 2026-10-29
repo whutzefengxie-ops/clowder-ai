@@ -1,5 +1,6 @@
 import './helpers/setup-cat-registry.js';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { test } from 'node:test';
 import { freezeExecutionWorkspace } from '../dist/domains/cats/services/agents/invocation/execution-workspace.js';
 import {
@@ -9,6 +10,38 @@ import {
 import { ContextEpochOwner } from '../dist/domains/cats/services/session/context/ContextEpochOwner.js';
 import { InMemoryContextEpochStore } from '../dist/domains/cats/services/stores/ports/ContextEpochStore.js';
 import { ThreadStore } from '../dist/domains/cats/services/stores/ports/ThreadStore.js';
+
+for (const timing of ['before-admission', 'during-workspace', 'during-preferences']) {
+  test(`cancel ${timing} neither crashes the Host process nor returns a ready admission`, () => {
+    const moduleUrl = new URL('../dist/domains/cats/services/agents/invocation/invoke-single-cat.js', import.meta.url)
+      .href;
+    const script = `
+      import { prepareInvocationExecutionBinding } from ${JSON.stringify(moduleUrl)};
+      const controller = new AbortController();
+      let reads = 0;
+      let rejected = false;
+      if (${JSON.stringify(timing)} === 'before-admission') controller.abort();
+      await prepareInvocationExecutionBinding({ threadStore: {
+        get: async () => { if (${JSON.stringify(timing)} === 'during-workspace') controller.abort(); return null; },
+        getMemberEffort: async () => { reads++; if (${JSON.stringify(timing)} === 'during-preferences') controller.abort(); throw new Error('fixture preference read failed'); },
+        getMemberSpeed: async () => { reads++; throw new Error('fixture preference read failed'); },
+      } }, { catId: 'codex', threadId: 'thread', userId: 'owner', signal: controller.signal }).catch(error => {
+        if (error.name !== 'AbortError') throw error;
+        rejected = true;
+      });
+      await new Promise(resolve => setTimeout(resolve, 20));
+      if (${JSON.stringify(timing)} !== 'during-preferences' && reads !== 0) throw new Error('cancelled admission still started preference reads');
+      if (!rejected) throw new Error('cancelled admission reported ready');
+      console.log('cancelled-safely');
+    `;
+    const child = spawnSync(process.execPath, ['--unhandled-rejections=strict', '--input-type=module', '-e', script], {
+      encoding: 'utf8',
+      timeout: 15000,
+    });
+    assert.equal(child.status, 0, child.stderr);
+    assert.match(child.stdout, /cancelled-safely/);
+  });
+}
 
 test('workspace capture does not retain a mutable in-memory ThreadStore record', async () => {
   const thread = { id: 'thread', projectPath: 'default', memberEffortOverrides: { codex: 'low' } };

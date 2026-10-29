@@ -1419,6 +1419,7 @@ export async function prepareInvocationExecutionBinding(
     signal?: AbortSignal;
   },
 ): Promise<FrozenExecutionBinding> {
+  input.signal?.throwIfAborted();
   const memberRegistryRevision = catRegistry.getRevision();
   const catConfig = catRegistry.tryGet(input.catId as string)?.config;
   const carrier = input.service?.freshnessCarrierCapability?.();
@@ -1431,6 +1432,7 @@ export async function prepareInvocationExecutionBinding(
     requiresAgyWorkspace:
       Boolean(input.service && usesAgyNativeCarrier(input.service)) || carrier?.carrier === 'agy_acp',
   });
+  input.signal?.throwIfAborted();
   const [effort, speed] = await Promise.allSettled([
     preflightRace(
       Promise.resolve().then(() => deps.threadStore?.getMemberEffort?.(input.threadId, input.catId, input.userId)),
@@ -1447,6 +1449,7 @@ export async function prepareInvocationExecutionBinding(
       input.signal,
     ),
   ] as const);
+  input.signal?.throwIfAborted();
   const threadPreferences = Object.freeze({
     reasoningEffortOverride: effort.status === 'fulfilled' ? effort.value : undefined,
     speedOverride: speed.status === 'fulfilled' ? speed.value : undefined,
