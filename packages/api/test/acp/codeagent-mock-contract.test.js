@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { createHash, randomUUID } from 'node:crypto';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { AcpClient } from '../../dist/domains/cats/services/agents/providers/acp/AcpClient.js';
@@ -8,6 +10,20 @@ import { AcpClient } from '../../dist/domains/cats/services/agents/providers/acp
 const fixture = fileURLToPath(new URL('../fixtures/codeagent-mock.mjs', import.meta.url));
 const artifacts = resolve('artifacts/role-agent-refactor/codeagent-mock');
 mkdirSync(artifacts, { recursive: true });
+const provenance = {
+  sourceCommit: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
+  sourceDirty:
+    execFileSync('git', ['status', '--porcelain', '--untracked-files=no'], { encoding: 'utf8' }).trim().length > 0,
+  executable: process.execPath,
+  executableSha256: createHash('sha256').update(readFileSync(process.execPath)).digest('hex'),
+  nodeVersion: process.version,
+  fixtureSha256: createHash('sha256').update(readFileSync(fixture)).digest('hex'),
+  compiledClientSha256: createHash('sha256')
+    .update(
+      readFileSync(new URL('../../dist/domains/cats/services/agents/providers/acp/AcpClient.js', import.meta.url)),
+    )
+    .digest('hex'),
+};
 
 async function open(t, config = {}, root = mkdtempSync(join(artifacts, 'isolated state '))) {
   const client = new AcpClient({
@@ -18,22 +34,36 @@ async function open(t, config = {}, root = mkdtempSync(join(artifacts, 'isolated
     env: { HOME: root, USERPROFILE: root },
     ...config,
   });
+  const record = {
+    ...provenance,
+    task: 'role-agent-refactor-20261029-gpt-sol',
+    owner: 'codex',
+    mock: true,
+    fixture,
+    version: '0.1.0',
+    stateRoot: root,
+    programDirectory: dirname(process.execPath),
+    ownerPid: process.pid,
+    startedAt: new Date().toISOString(),
+    case: t.name,
+    nativeCredentialsUsed: false,
+    networkUsed: false,
+    ports: [],
+    retention: 'current contract evidence',
+  };
+  const ledgerPath = join(root, `instance-${randomUUID()}.json`);
+  writeFileSync(ledgerPath, JSON.stringify({ ...record, status: 'starting' }, null, 2));
   t.after(async () => {
     await client.close();
     writeFileSync(
-      join(root, 'instance.json'),
+      ledgerPath,
       JSON.stringify(
         {
-          task: 'role-agent-refactor-20261029-gpt-sol',
-          mock: true,
-          fixture,
-          version: '0.1.0',
-          stateRoot: root,
-          ownerPid: process.pid,
+          ...record,
+          pid: client.pid,
           running: client.isAlive,
-          case: t.name,
-          nativeCredentialsUsed: false,
-          networkUsed: false,
+          status: 'closed-data-retained',
+          stoppedAt: new Date().toISOString(),
         },
         null,
         2,
@@ -41,6 +71,7 @@ async function open(t, config = {}, root = mkdtempSync(join(artifacts, 'isolated
     );
   });
   const initialized = await client.initialize();
+  writeFileSync(ledgerPath, JSON.stringify({ ...record, pid: client.pid, status: 'running' }, null, 2));
   assert.equal(initialized.agentInfo.name, 'codeagent-mock');
   return { client, root };
 }

@@ -23,12 +23,21 @@ export function projectMemberIdentitySources(config: CatCafeConfig, breed: CatBr
       'caution',
       'restrictions',
     ].map((field) => {
-      const key = field as keyof CatVariant;
+      // Follow the resolved value chain before assigning authored provenance.
+      // A template variant's own value wins over an edited breed/default too.
+      const key =
+        field === 'name' && variant.name === undefined && variant.displayName !== undefined
+          ? 'displayName'
+          : (field as keyof CatVariant);
       const source =
-        ownVariant?.[key] !== undefined
-          ? 'variant'
-          : field === 'personality' && defaultVariant?.personality !== undefined
-            ? 'default_variant'
+        variant[key] !== undefined
+          ? ownVariant?.[key] !== undefined
+            ? 'variant'
+            : 'template'
+          : field === 'personality'
+            ? defaultVariant?.personality !== undefined
+              ? 'default_variant'
+              : 'template'
             : ownBreed?.[field as keyof CatBreed] !== undefined
               ? 'breed'
               : 'template';

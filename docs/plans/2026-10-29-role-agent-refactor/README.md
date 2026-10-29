@@ -71,3 +71,14 @@ Architecture ownership：涉及现有配置、context、invocation/session、app
 Architecture cell 为 `identity-session`（其 identity-agent / runtime-binding 边界）；map delta 为新增代码锚点及投影/保存消费者说明，owner 不变。`cat-life-settings` 是生活/日记配置，与本任务成员设置无关，未借其名字建立新归属。
 
 下一步顺序：完成 S1 必需版本及正式写入者迁移；完成冻结输入传到实际 L0/ACP/native consumer 与实现 generation；会话兼容、取消/回执/恢复；逐客户端保真与 CodeAgent 专属接线；固定 Q 样本、性能与平台/发行物矩阵；最终独立 review、启用和回退。macOS 与真实企业发行物仍无现场证据，不计通过。全部未覆盖项在总账保持 NOT_RUN。
+
+## 独立审查第一轮
+
+非作者 reviewer 审查 `2ec3bd6d30255b2b76d7fc7d3237c38f14eb8339`，结论 changes_requested，两个 P2，未申请全 Feature 终态通过。reviewer 独立验证原方案 6 文件哈希，定向 API 16/Web 11 项通过，另外实证两个恢复反例 RED；无新增工位/服务。
+
+1. 来源元数据先看 raw catalog 的默认 variant/breed，而没有先看有效值已经被 template variant 占位，导致未编辑成员错误停用 dossier。修复按实际取值链选择来源，覆盖默认性格、breed 描述及旧 name→displayName 例外；新增普通/空性格的双 variant 反例先 RED，再 GREEN，真实继承仍为 default_variant。
+2. pending PATCH 后用户改回旧 baseline，页面以 dirtyCount=0 截断核对；即使直接调 hook，旧 baseline 重基线也吞掉撤回意图。修复将待核对状态单独显示并绕过无改动短路，恢复时用 pending.form 判断提交后的编辑，保留用户撤回值。正式页面/hook 两反例先 RED 后 GREEN；实际浏览器通过响应丢失、读回失败、改回旧值、核对、再保存的真实 API 旅程。
+
+修复后相关 API 集合 499 项=497 PASS+2 Redis SKIP；Web 六文件 47 PASS；浏览器两条旅程 PASS；mock+身份定向14 PASS。7 个新 `.test.js` 已验证进入现有 public resolver；未用未被 CI 发现的测试文件充数。mock 新记录补全子进程 PID、源码/dirty 标记、实际 adapter/fixture/Node 哈希和独立关闭状态；早期失败状态保留为 RED 证据，不补造过去的原生调用记录。
+
+平台矩阵见 [platform-matrix.md](platform-matrix.md)，明确 Windows/macOS、CPU、内外网、已有承诺及未取得现场证据。当前修复等待同一 reviewer 复审，不自称通过。

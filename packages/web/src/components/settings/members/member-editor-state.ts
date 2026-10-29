@@ -40,8 +40,11 @@ export function changedFields(form: HubCatEditorFormState, baseline: CatData | n
 }
 
 /** Preserve only local edits; concurrent changes to untouched fields come from the server. */
-export function rebaseMemberDraft(draft: MemberDraft, latest: CatData): MemberDraft {
-  const before = initialState(draft.baseline);
+export function rebaseMemberDraft(
+  draft: MemberDraft,
+  latest: CatData,
+  before = initialState(draft.baseline),
+): MemberDraft {
   const form = initialState(latest);
   for (const key of Object.keys(draft.form) as (keyof HubCatEditorFormState)[]) {
     if (JSON.stringify(draft.form[key]) !== JSON.stringify(before[key])) {

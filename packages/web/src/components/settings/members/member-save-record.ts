@@ -47,7 +47,7 @@ export async function saveMemberRecord(input: {
             JSON.stringify(value) !== JSON.stringify(pending.form[field as keyof HubCatEditorFormState]),
         )
       ) {
-        commit(rebaseMemberDraft({ ...snapshot, pendingWrite: undefined }, member));
+        commit(rebaseMemberDraft({ ...snapshot, pendingWrite: undefined }, member, pending.form));
         throw new Error('已找回上次保存的成员并保留新草稿，请核对后再次保存。');
       }
       return member;

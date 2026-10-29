@@ -4,8 +4,13 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { CatData } from '@/hooks/useCatData';
 import { apiFetch } from '@/utils/api-client';
 import { useMemberEditor } from '../settings/members/useMemberEditor';
+import { MemberSettingsPage } from '../settings/members/MemberSettingsPage';
 
 vi.mock('@/utils/api-client', () => ({ API_URL: 'http://member-recovery.test', apiFetch: vi.fn() }));
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  useSearchParams: () => new URLSearchParams('s=members&cat=recovery-member&lang=zh'),
+}));
 let editor: ReturnType<typeof useMemberEditor>;
 let root: Root;
 let container: HTMLDivElement;
@@ -53,6 +58,7 @@ beforeEach(() => {
     }
     if (path === '/api/cats')
       return readsFail ? response({ error: 'offline' }, 503) : response({ cats: stored ? [stored] : [] });
+    if (path === '/api/cats/native-runtimes') return response({ runtimes: [] });
     if (path === '/api/accounts') return response({ projectPath: '/isolated', providers: [] });
     if (path === '/api/session') return response({ userId: 'owner' });
     if (path === '/api/cat-templates') return response({ templates: [] });
@@ -129,4 +135,53 @@ it('preserves the draft when the pending catId belongs to a different configurat
   expect(editor.error).toBeTruthy();
   expect(editor.draft.form.roleDescription).toBe('团队伙伴');
   expect(saved).not.toHaveBeenCalled();
+});
+
+it('rebases pending edits against the submitted form so reverting a value is preserved', async () => {
+  await render(existing);
+  readsFail = true;
+  await act(async () => editor.patch({ personality: 'new personality' }));
+  await act(async () => editor.save());
+  await act(async () => editor.patch({ personality: '' }));
+  readsFail = false;
+  await act(async () => editor.save());
+  expect(editor.draft.baseline?.personality).toBe('new personality');
+  expect(editor.draft.form.personality).toBe('');
+  expect(editor.draft.pendingWrite).toBeUndefined();
+  expect(editor.dirtyCount).toBeGreaterThan(0);
+});
+
+it('the official page can reconcile a pending save even after the user reverts all dirty fields', async () => {
+  container = document.createElement('div');
+  document.body.append(container);
+  root = createRoot(container);
+  await act(async () =>
+    root.render(<MemberSettingsPage cat={existing} cats={[existing]} onSaved={saved} onBack={() => {}} />),
+  );
+  const click = async (label: string) => {
+    const button = Array.from(container.querySelectorAll('button')).find((item) => item.textContent === label);
+    expect(button).toBeDefined();
+    await act(async () => button?.click());
+  };
+  const fill = async (value: string) => {
+    const field = container.querySelector<HTMLTextAreaElement>('textarea[aria-label="个性"]');
+    expect(field).not.toBeNull();
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set?.call(field, value);
+      field?.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  };
+  await click('身份与职责');
+  await fill('new personality');
+  readsFail = true;
+  await click('保存');
+  await fill('');
+  expect(container.textContent).toContain('上次保存结果待核对');
+  readsFail = false;
+  await click('核对上次保存');
+  expect(container.querySelector<HTMLTextAreaElement>('textarea[aria-label="个性"]')?.value).toBe('');
+  expect(writes).toBe(1);
+  await click('保存');
+  expect(stored?.personality).toBe('');
+  expect(saved).toHaveBeenCalledOnce();
 });

@@ -115,3 +115,70 @@ test('an explicitly supplied complete config is authoritative rather than treate
   assert.doesNotMatch(l0, /fixture-self-canary/);
   assert.equal(explicit.identitySources.roleDescription, 'breed');
 });
+
+function prepareInheritedVariant(personality) {
+  const { root } = prepare();
+  const path = join(root, 'cat-template.json');
+  const template = JSON.parse(readFileSync(path, 'utf8'));
+  const breed = template.breeds[0];
+  const primary = { ...breed.variants[0], catId: 'primary' };
+  const secondary = {
+    ...primary,
+    id: 'secondary',
+    catId: 'fable-5',
+    displayName: 'Secondary',
+    roleDescription: 'own template role',
+    personality,
+  };
+  breed.variants = [primary, secondary];
+  writeFileSync(path, JSON.stringify(template));
+  mkdirSync(join(root, '.cat-cafe'));
+  writeFileSync(
+    join(root, '.cat-cafe/cat-catalog.json'),
+    JSON.stringify({
+      version: 2,
+      breeds: [
+        {
+          id: breed.id,
+          catId: breed.catId,
+          defaultVariantId: primary.id,
+          name: 'edited breed name',
+          roleDescription: 'edited breed role',
+          variants: [
+            { id: primary.id, catId: 'primary', personality: 'edited default personality' },
+            { id: secondary.id, catId: 'fable-5' },
+          ],
+        },
+      ],
+    }),
+  );
+  const configs = toAllCatConfigs(loadResolvedCatConfig(path));
+  catRegistry.reset();
+  Object.entries(configs).forEach(([id, config]) => catRegistry.register(id, config));
+  return { root, config: configs['fable-5'] };
+}
+
+for (const personality of ['own template personality', '']) {
+  test(`an untouched secondary keeps its actual template winners (${personality || 'empty'})`, async () => {
+    const { root, config } = prepareInheritedVariant(personality);
+    assert.equal(config.personality, personality);
+    assert.equal(config.name, 'Secondary');
+    assert.equal(config.roleDescription, 'own template role');
+    assert.deepEqual(
+      {
+        personality: config.identitySources.personality,
+        name: config.identitySources.name,
+        roleDescription: config.identitySources.roleDescription,
+      },
+      { personality: 'template', name: 'template', roleDescription: 'template' },
+    );
+    assert.match(await compileL0({ catId: 'fable-5', dossierRoot: root, profileDir: root }), /fixture-self-canary/);
+    assert.match(buildTeammateRoster('primary', root), /fixture-roster-canary/);
+  });
+}
+
+test('a secondary without its own personality actually inherits the edited default', () => {
+  const { config } = prepareInheritedVariant(undefined);
+  assert.equal(config.personality, 'edited default personality');
+  assert.equal(config.identitySources.personality, 'default_variant');
+});

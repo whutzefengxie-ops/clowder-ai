@@ -169,14 +169,14 @@ export function useMemberEditor(
     setStorageWarning(!ok);
   }, [draft, dirtyCount, ready]);
   useEffect(() => {
-    if (!dirtyCount) return;
+    if (!dirtyCount && !draft.pendingWrite) return;
     const guard = (event: BeforeUnloadEvent) => {
       event.preventDefault();
       event.returnValue = '';
     };
     window.addEventListener('beforeunload', guard);
     return () => window.removeEventListener('beforeunload', guard);
-  }, [dirtyCount]);
+  }, [dirtyCount, draft.pendingWrite]);
 
   const patch = useCallback((change: Partial<HubCatEditorFormState>) => {
     setNotice(null);
