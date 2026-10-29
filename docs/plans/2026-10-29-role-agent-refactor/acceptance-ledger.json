@@ -253,15 +253,15 @@
       "status": "NOT_STARTED"
     }
   ],
-  "lastProgressAt": "2026-10-30T00:40:15.3781354+08:00",
+  "lastProgressAt": "2026-10-30T00:42:28.0430299+08:00",
   "checkpointReview": {
-    "fixedPendingRecheck": [
+    "reviewer": "checkpoint_review",
+    "verdict": "approved",
+    "target": "74e0caebd503851803d923291ddce0ce3c25f8d4",
+    "evidence": "README.md#独立审查第一轮",
+    "closedFindings": [
       "P2 identity provenance winner mismatch",
       "P2 unknown PATCH reconciliation loses revert intent"
-    ],
-    "reviewer": "checkpoint_review",
-    "verdict": "changes_requested",
-    "target": "2ec3bd6d30255b2b76d7fc7d3237c38f14eb8339",
-    "evidence": "README.md#独立审查第一轮"
+    ]
   }
 }

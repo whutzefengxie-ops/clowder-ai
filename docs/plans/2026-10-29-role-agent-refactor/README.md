@@ -82,3 +82,5 @@ Architecture cell 为 `identity-session`（其 identity-agent / runtime-binding 
 修复后相关 API 集合 499 项=497 PASS+2 Redis SKIP；Web 六文件 47 PASS；浏览器两条旅程 PASS；mock+身份定向14 PASS。7 个新 `.test.js` 已验证进入现有 public resolver；未用未被 CI 发现的测试文件充数。mock 新记录补全子进程 PID、源码/dirty 标记、实际 adapter/fixture/Node 哈希和独立关闭状态；早期失败状态保留为 RED 证据，不补造过去的原生调用记录。
 
 平台矩阵见 [platform-matrix.md](platform-matrix.md)，明确 Windows/macOS、CPU、内外网、已有承诺及未取得现场证据。当前修复等待同一 reviewer 复审，不自称通过。
+
+复审回执：非作者 checkpoint_review 对 `74e0caebd503851803d923291ddce0ce3c25f8d4` 给出 `localReviewVerdict=approved`，同一 reviewSubjectRef；独立 API 19/Web 13 项及原恢复反例通过，核看恢复截图，两个 P2 闭环。未发现新 P1/P2，无新增工位/服务/源码改动。仅批准继续实施，不代表 W0–W7 终态。
