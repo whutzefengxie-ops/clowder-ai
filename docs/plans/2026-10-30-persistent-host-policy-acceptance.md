@@ -37,4 +37,6 @@ created: 2026-10-30
 
 Linux CI 的既有 ACP policy 步骤加入文件/进程/发行投影测试；Windows/macOS smoke 加入桌面策略路径测试。新测试文件均低于 350 行；已有大文件只保留必要接线，未借机重构。
 
-本机证据保存在任务 artifacts 的 `codeagent-plugin-extension-20261030/policy-*`、`persistent-policy-red.log`、`deployment-policy-red.log`、`desktop-policy-red.log`。所有子进程是测试拥有的隐藏 Node，已退出；未启动额外长期服务或连接生产 Redis。独立审查及 PR 状态以实际后续记录为准，本文不自行签署批准。
+本机证据保存在任务 artifacts 的 `codeagent-plugin-extension-20261030/policy-*`、`persistent-policy-red.log`、`deployment-policy-red.log`、`desktop-policy-red.log`。所有子进程是测试拥有的隐藏 Node，已退出；未启动额外长期服务或连接生产 Redis。
+
+非作者对实现 `76fb8a3d97cc73df4d943d2afb2fc8f109c12ad5` 给出 approve，仅覆盖 H5；独立复跑 API 文件/进程/旧矩阵 10/10、桌面/投影 3/3，并枚举 8,748 组优先级/平台组合全部符合合同。后续仅追加本文记录，不改变已审实现。不代签 H6、旧内网桥合包、EXE 或真实企业客户端。
