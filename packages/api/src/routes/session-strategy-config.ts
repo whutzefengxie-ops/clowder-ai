@@ -11,7 +11,9 @@ import type { SessionStrategyConfig } from '@cat-cafe/shared';
 import { catRegistry } from '@cat-cafe/shared';
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
-import { sessionStrategySchema } from '../config/cat-config-loader.js';
+import { loadResolvedCatConfig, sessionStrategySchema, toAllCatConfigs } from '../config/cat-config-loader.js';
+import { resolveProjectTemplatePath } from '../config/project-template-path.js';
+import { withRuntimeCatMutationLock } from '../config/runtime-cat-catalog.js';
 import { getSessionStrategyWithSource } from '../config/session-strategy.js';
 import {
   deleteRuntimeOverride,
@@ -22,6 +24,7 @@ import {
 } from '../config/session-strategy-overrides.js';
 import { resolveSessionExecutionStatus } from '../domains/cats/services/agents/context-lifecycle-capability.js';
 import type { AgentContextCapability } from '../domains/cats/services/types.js';
+import { resolveActiveProjectRoot } from '../utils/active-project-root.js';
 import { resolveHeaderUserId } from '../utils/request-identity.js';
 
 interface SessionStrategyRouteOptions {
@@ -58,6 +61,16 @@ function executionStatusFor(capability: AgentContextCapability, strategy: Sessio
     sessionRotation: true,
     continuityBootstrap: true,
     observesCompression: capability.observesCompression,
+  });
+}
+
+/** Share deletion's existing lock; check persisted membership after any wait, before writing S2. */
+function withMemberStrategyMutation<T>(catId: string, write: () => Promise<T>) {
+  const root = resolveActiveProjectRoot();
+  return withRuntimeCatMutationLock(root, () => {
+    const members = toAllCatConfigs(loadResolvedCatConfig(resolveProjectTemplatePath(root)));
+    if (!members[catId]) throw Object.assign(new Error(`Unknown cat ID: "${catId}"`), { statusCode: 404 });
+    return write();
   });
 }
 
@@ -143,14 +156,16 @@ export const sessionStrategyConfigRoutes: FastifyPluginAsync<SessionStrategyRout
 
     // Zod .optional() produces `T | undefined` for nested props; our type uses optional-only.
     // Shapes are equivalent at runtime after validation.
-    await saveSpan('strategy.persist', () =>
-      setRuntimeOverride(
-        catId,
-        {
-          ...getRuntimeOverride(catId),
-          ...override,
-        } as unknown as Partial<SessionStrategyConfig>,
-        expectedRevision,
+    await withMemberStrategyMutation(catId, () =>
+      saveSpan('strategy.persist', () =>
+        setRuntimeOverride(
+          catId,
+          {
+            ...getRuntimeOverride(catId),
+            ...override,
+          } as unknown as Partial<SessionStrategyConfig>,
+          expectedRevision,
+        ),
       ),
     );
     request.log.info({ operator, catId, override }, 'session strategy override set');
@@ -192,7 +207,9 @@ export const sessionStrategyConfigRoutes: FastifyPluginAsync<SessionStrategyRout
     if (!parsed.success) return reply.code(400).send({ error: 'Invalid strategy revision' });
     if (parsed.data.expectedRevision === undefined)
       return reply.code(428).send({ error: '请重新读取会话策略，携带 expectedRevision 后再删除覆盖。' });
-    const existed = await deleteRuntimeOverride(catId, parsed.data.expectedRevision);
+    const existed = await withMemberStrategyMutation(catId, () =>
+      deleteRuntimeOverride(catId, parsed.data.expectedRevision),
+    );
     request.log.info({ operator, catId, deleted: existed }, 'session strategy override delete');
     if (!existed) {
       reply.status(404);

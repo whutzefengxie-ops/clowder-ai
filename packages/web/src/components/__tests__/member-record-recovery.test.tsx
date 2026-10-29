@@ -3,8 +3,8 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { CatData } from '@/hooks/useCatData';
 import { apiFetch } from '@/utils/api-client';
-import { useMemberEditor } from '../settings/members/useMemberEditor';
 import { MemberSettingsPage } from '../settings/members/MemberSettingsPage';
+import { useMemberEditor } from '../settings/members/useMemberEditor';
 
 vi.mock('@/utils/api-client', () => ({ API_URL: 'http://member-recovery.test', apiFetch: vi.fn() }));
 vi.mock('next/navigation', () => ({
@@ -122,6 +122,33 @@ it('reads back a committed member PATCH without resending it', async () => {
   expect(editor.error).toBeNull();
   expect(editor.draft.baseline?.personality).toBe('new personality');
   expect(writes).toBe(1);
+});
+
+it('recovers a restored legacy draft without a member version by explicitly reading and retaining edits', async () => {
+  const previous = vi.mocked(apiFetch).getMockImplementation()!;
+  vi.mocked(apiFetch).mockImplementation(async (path, init) => {
+    if (init?.method === 'PATCH' && !JSON.parse(String(init.body)).expectedRevision)
+      return response({ error: '缺少成员保存版本，请重新读取成员配置后再操作。' }, 428);
+    return previous(path, init);
+  });
+  await render({ ...existing, configurationRevision: undefined });
+  await act(async () => editor.patch({ personality: 'keep legacy edits' }));
+  await act(async () => editor.save());
+  expect(editor.error).toContain('缺少成员保存版本');
+  act(() => root.unmount());
+  container.remove();
+  await render(existing);
+  await act(async () => editor.save());
+  expect(editor.conflicted).toBe(true);
+  expect(editor.draft.form.personality).toBe('keep legacy edits');
+  stored = existing;
+  await act(async () => editor.refreshBaseline());
+  expect(editor.draft.baseline?.configurationRevision).toBe('before');
+  expect(editor.draft.form.personality).toBe('keep legacy edits');
+  await act(async () => editor.save());
+  expect(editor.error).toBeNull();
+  expect(writes).toBe(1);
+  expect(editor.draft.baseline?.personality).toBe('keep legacy edits');
 });
 
 it('preserves the draft when the pending catId belongs to a different configuration', async () => {

@@ -71,7 +71,7 @@ export async function saveMemberRecord(input: {
     })
       .then((response) => {
         rejected = response.status >= 400 && response.status < 500 && response.status !== 408;
-        if (response.status === 409) input.conflict();
+        if (response.status === 409 || response.status === 428) input.conflict();
         return readMemberResponse<{ cat: CatData }>(response);
       })
       .then((body) => body.cat)

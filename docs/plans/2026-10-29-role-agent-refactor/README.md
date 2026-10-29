@@ -94,3 +94,7 @@ Architecture cell 为 `identity-session`（其 identity-agent / runtime-binding 
 验证：新增 5 项 owner/锁/真实 Fastify 反例先见 RED 后 GREEN；API 9 文件共 145 PASS；Web 4 文件 28 PASS；正式设置浏览器 2 PASS；API/Web 类型检查通过。账号回归中的 ACP 构造案例仅在测试进程显式使用已有 trusted-host 测试模式，避免把 runner Temp 父级 ACL 当作账号语义失败；并未验证或放松产品 Windows ACL。
 
 证据为本工位 `artifacts/role-agent-refactor-20261029-gpt-sol/s1-*.log` 与 `browser-journey-s1.log`。无新增服务或原生客户端调用。C17 仍须与 S2/S3、并发和失败场景一并验收；当前只是 S1 局部闭环，等待独立审查。
+
+独立审查 `d25959f95bc4a26b5fa688dddf16499ff1937ea1` 返回两个 P2。其一是旧持久草稿没有成员版本，428 未显示“重新读取并保留修改”，重开仍恢复旧 baseline；现将 428 和 409 一并进入已有恢复入口，验证重开、保留个性编辑、手动读取新版本、再次保存。其二是删除成员原本没有 S2 override，另一合法的 `none` 版本策略请求可在删除后落盘；现让 S2 PATCH/DELETE 复用同一目录锁，并在锁内重读持久成员存在性，不依赖尚未刷新的 registry。无新增事务或 owner。
+
+两反例均先 RED；修复后 S1/S2 定向 API 22 PASS，保存恢复/actions/Codex Web 21 PASS。更早的 API 145 和浏览器 2 条为前一提交证据，不冒充这次最终源码全量重跑。reviewer 原始反例保存在独立审查证据目录，后续按修复提交复审。

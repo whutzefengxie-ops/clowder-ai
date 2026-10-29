@@ -12,9 +12,11 @@ import { createRuntimeCat, withRuntimeCatMutationLock } from '../dist/config/run
 import {
   _clearRuntimeOverrides,
   getRuntimeOverride,
+  initRuntimeOverrides,
   setRuntimeOverride,
 } from '../dist/config/session-strategy-overrides.js';
 import { catsRoutes } from '../dist/routes/cats.js';
+import { sessionStrategyConfigRoutes } from '../dist/routes/session-strategy-config.js';
 import { isolateAccountAuthEnvironment } from './helpers/account-auth-environment.js';
 
 function memberFixture() {
@@ -175,3 +177,61 @@ test('formal member changes reject stale deletion before its strategy side effec
   assert.equal(getRuntimeOverride('versioned-member'), undefined);
   assert.equal((await read()).length, 0);
 });
+
+test(
+  'a strategy save waiting during member deletion cannot recreate an orphan override',
+  { timeout: 10_000 },
+  async (t) => {
+    const { app, read, headers } = await appFixture(t);
+    await app.register(sessionStrategyConfigRoutes);
+    const member = (await read())[0];
+    let value = null;
+    let release;
+    let entered;
+    let blocked = false;
+    const started = new Promise((resolve) => {
+      entered = resolve;
+    });
+    const gate = new Promise((resolve) => {
+      release = resolve;
+    });
+    t.after(() => release());
+    await initRuntimeOverrides({
+      options: {},
+      scan: async () => ['0', []],
+      get: async () => {
+        if (!blocked) {
+          blocked = true;
+          entered();
+          await gate;
+        }
+        return value;
+      },
+      eval: async (_script, _keys, _key, expected, next) => {
+        if ((value ?? '') !== expected) return 0;
+        value = next || null;
+        return 1;
+      },
+    });
+    const deletion = app.inject({
+      method: 'DELETE',
+      url: '/api/cats/versioned-member',
+      headers,
+      payload: { expectedRevision: member.configurationRevision },
+    });
+    await started;
+    const saving = app.inject({
+      method: 'PATCH',
+      url: '/api/config/session-strategy/versioned-member',
+      headers,
+      payload: { strategy: 'compress', expectedRevision: 'none' },
+    });
+    await new Promise(setImmediate);
+    release();
+    const [deleted, saved] = await Promise.all([deletion, saving]);
+    assert.equal(deleted.statusCode, 200, deleted.payload);
+    assert.equal(saved.statusCode, 404, saved.payload);
+    assert.equal((await read()).length, 0);
+    assert.equal(getRuntimeOverride('versioned-member'), undefined);
+  },
+);
