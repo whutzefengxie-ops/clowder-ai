@@ -5,6 +5,7 @@ import type {
   ContextSourceIngress,
 } from '../../../../memory/cue/ContextSourceAdmission.js';
 import { ContextSourceWorkBudget } from '../../../../memory/cue/ContextSourceWorkBudget.js';
+import { captureInvocationL0Input } from '../providers/l0-input-capture.js';
 import { type FrozenExecutionBinding, freezeExecutionAccountBinding } from './execution-account-binding.js';
 import { freezeExecutionWorkspace } from './execution-workspace.js';
 import { InvocationServiceScope } from './invocation-service-scope.js';
@@ -1411,7 +1412,7 @@ export interface InvocationParams {
  * - Storing the final response in messageStore
  */
 export async function prepareInvocationExecutionBinding(
-  deps: Pick<InvocationDeps, 'threadStore'>,
+  deps: Pick<InvocationDeps, 'threadStore' | 'profileRepository'>,
   input: {
     catId: CatId;
     threadId: string;
@@ -1421,6 +1422,7 @@ export async function prepareInvocationExecutionBinding(
     signal?: AbortSignal;
   },
 ): Promise<FrozenExecutionBinding> {
+  const memberRegistryRevision = catRegistry.getRevision();
   const catConfig = catRegistry.tryGet(input.catId as string)?.config;
   const carrier = input.service?.freshnessCarrierCapability?.();
   const workspace = await freezeExecutionWorkspace({
@@ -1432,7 +1434,23 @@ export async function prepareInvocationExecutionBinding(
     requiresAgyWorkspace:
       Boolean(input.service && usesAgyNativeCarrier(input.service)) || carrier?.carrier === 'agy_acp',
   });
-  return freezeExecutionAccountBinding({ catId: input.catId, catConfig, model: input.model, workspace });
+  if (catRegistry.getRevision() !== memberRegistryRevision)
+    throw Object.assign(new Error('Member configuration changed during execution admission; retry this invocation.'), {
+      statusCode: 409,
+    });
+  const binding = freezeExecutionAccountBinding({ catId: input.catId, catConfig, model: input.model, workspace });
+  const frozenL0Input =
+    catConfig && (input.service?.injectsL0Natively?.() || catConfig.clientId === 'opencode')
+      ? captureInvocationL0Input({
+          catId: input.catId,
+          catConfig,
+          userId: input.userId,
+          model: input.model,
+          projectRoot: workspace.workingProjectRoot ?? binding.projectRoot,
+          profileRepository: deps.profileRepository,
+        })
+      : undefined;
+  return Object.freeze({ ...binding, memberRegistryRevision, ...(frozenL0Input ? { frozenL0Input } : {}) });
 }
 
 export async function* invokeSingleCat(deps: InvocationDeps, params: InvocationParams): AsyncIterable<AgentMessage> {
@@ -3157,7 +3175,12 @@ async function* invokePreparedSingleCat(deps: InvocationDeps, params: Invocation
         // the undefined branch is unreachable post-guard — avoids biome noNonNullAssertion.
         const compilerFn = (hasL0CompilerSeam(service) && service.l0CompilerFn) || compileL0ViaSubprocess;
 
-        const l0Content = await compilerFn({ catId: catId as string, userId });
+        const l0Content = await compilerFn({
+          catId: catId as string,
+          userId,
+          frozenInput: frozenExecutionBinding.frozenL0Input,
+          requireFrozenInput: true,
+        });
         // Write compiled L0 into the runtime config dir (created below or reused).
         const safeCatId = (catId as string).replace(/[^a-zA-Z0-9._-]+/g, '-');
         const safeInvocationId = invocationId.replace(/[^a-zA-Z0-9._-]+/g, '-');
@@ -3891,6 +3914,7 @@ async function* invokePreparedSingleCat(deps: InvocationDeps, params: Invocation
     const requiresImportedHistory =
       activeSessionRecordForResume?.externalImport?.cliSessionId === sessionId && Boolean(sessionId);
     const baseOptions: AgentServiceOptions = {
+      ...(frozenExecutionBinding.frozenL0Input ? { frozenL0Input: frozenExecutionBinding.frozenL0Input } : {}),
       ...(params.onRemoteExecutionDispatched
         ? { onRemoteExecutionDispatched: params.onRemoteExecutionDispatched }
         : {}),

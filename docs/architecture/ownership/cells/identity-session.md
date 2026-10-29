@@ -15,6 +15,9 @@ code_anchors:
   - packages/api/src/config/member-identity-sources.ts
   - packages/shared/src/member-profiles.ts
   - packages/shared/src/member-identity.ts
+  - packages/shared/src/l0-input.ts
+  - packages/shared/src/l0-input-capture.ts
+  - packages/api/src/domains/cats/services/agents/providers/l0-input-capture.ts
   - packages/web/src/components/settings/members/member-save-record.ts
   - packages/web/src/components/settings/members/member-save-extras.ts
   - packages/api/src/config/account-resolver.ts
@@ -235,6 +238,10 @@ The measured first managed combination is macOS + official native Codex 0.159.0 
 Native uses the existing SessionManager/SessionChainStore for durable resume bindings, not an in-memory session authority. A verified preflight L0/cwd/permission mismatch can seal the old session and rebuild from canonical history before starting a new one; partial output and exact imported-resume requests cannot silently fall back. Profile serialization protects per-turn credential/config binding. Skills come from the existing mount resolver. Historical Antigravity session import/lifecycle remain readable; Gemini CLI, IDE bridge and SQLite polling are no longer execution carriers.
 
 Official CLI init is verified before stdin delivery; only then does the existing F296 preflight settle the final generation and F299 record its bytes. A prior unsupported scope adopts a newly observed runtime through one unconsumed cold epoch; it becomes hot only after actual generation consumption and another verified resume. Compaction checkpoints advance the existing epoch owner. The raw cumulative result/error and transport diagnostics remain separate from current-turn completion evidence.
+
+## Frozen L0 Input
+
+L0 input capture remains with the existing invocation/compiler owner. Shared Node-only capture and pure rendering are used by the diagnostic CLI and API without bootstrapping a second registry in the invocation child. The admission binding carries private immutable input in memory; the child receives it through its existing stdin pipe and caches by content digest plus compiler version. Native provider and AGY control consumers must receive that input, while standalone live diagnostics label their revision. This does not create another identity store or session authority; complete execution/MCP/policy/implementation freezing is a separate remaining boundary.
 
 ## Canon Member Avatar Consumer
 

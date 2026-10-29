@@ -98,3 +98,30 @@ Architecture cell 为 `identity-session`（其 identity-agent / runtime-binding 
 独立审查 `d25959f95bc4a26b5fa688dddf16499ff1937ea1` 返回两个 P2。其一是旧持久草稿没有成员版本，428 未显示“重新读取并保留修改”，重开仍恢复旧 baseline；现将 428 和 409 一并进入已有恢复入口，验证重开、保留个性编辑、手动读取新版本、再次保存。其二是删除成员原本没有 S2 override，另一合法的 `none` 版本策略请求可在删除后落盘；现让 S2 PATCH/DELETE 复用同一目录锁，并在锁内重读持久成员存在性，不依赖尚未刷新的 registry。无新增事务或 owner。
 
 两反例均先 RED；修复后 S1/S2 定向 API 22 PASS，保存恢复/actions/Codex Web 21 PASS。更早的 API 145 和浏览器 2 条为前一提交证据，不冒充这次最终源码全量重跑。reviewer 原始反例保存在独立审查证据目录，后续按修复提交复审。
+
+复审回执：checkpoint_review 对 `b5e517d0c3c3ec909a6509ec6c14558f10d4e5a3` 给出 approved，subject 为 `task:01a1881e-1a7b-78d0-9a62-ff99b0ab7a01/checkpoint-s1`；独立原始反例 GREEN、API 22/Web 21 PASS，无新 P1/P2。只批准 S1 checkpoint。
+
+## W2 L0 冻结输入切片（W2 尚未完成）
+
+现有 L0 编译 owner 增加 typed FrozenL0Input：成员/名册、规则模板、治理、工作流和本次嵌入的用户 capsule 捕获为私有只读文本；输入摘要和编译器版本共同进入原缓存。共享 Node-only 模块承接原脚本的捕获逻辑，CLI 和 API 复用同一实现，不复制另一份身份解析器。public 在读取私有正文前使用独立白名单。API 不导入自举 CLI；子进程的 `--frozen-input` 模式只验证/渲染 stdin JSON，不读取当下 registry/profile/rules。选择已有 stdin 管道传输私有输入，未新增 IPC 服务或私有临时输入文件；原生输出工件仍由原 owner 管理。
+
+准入 binding 增加冻结 L0，并用现有 CatRegistry revision 拦截异步工作区解析期间的配置变化。Claude print/bg/SDK、Codex、Kimi、OpenCode、AGY Native/ACP 的实际编译调用传入该输入且要求存在；真实编译器缺快照明确失败，不退回 live。AGY 手动压缩路由在控制准入处捕获同一输入，并保留原生 binding 严格哈希/工作区/账号检查。独立 CLI 继续允许 live 诊断，stderr 标明 configurationRevision/inputDigest，不记录提示词正文。
+
+新增 3 项冻结协议及 2 项准入反例先 RED；旧捕获器与新捕获模块在删除重复实现前已比较 owner/public 实际产物一致。实际 Codex L0 子进程 + 替身 CLI 验证被冻结的 developer instructions，随后缺快照时不启动 CLI。AGY Windows 文件权限反例又实证了根路径/目标路径分隔符不一致，现统一比较；POSIX shell 测试引用 Windows 临时路径时单引号保护，CLI 测试用 fileURLToPath，不修改真实 shell 执行或降低预期。
+
+| 本切片验证集合 | 实际结果 |
+|---|---|
+| L0/准入/Codex真实编译边界/Claude bg/OpenCode/F296 | 73 项：69 PASS + 4 既有本地 OpenCode 文件缺失 SKIP，不计为通过 |
+| Kimi 与 AGY ACP 配置/权限/协议 | 63 PASS；ACP 构造测试的 runner Temp 仅按既有 trusted-host 测试模式隔离，非 ACL 实机验收 |
+| Claude SDK 两文件 | 22 PASS |
+| 压缩控制路由与 AGY 目标 guard | 15 PASS |
+| dossier 显式根脚本回归 | 5 PASS |
+| owner/public/edition 渲染等价 | 10 PASS；跨 edition 安装 hook 的额外 1 项在显式 Git Bash PATH 下通过 |
+| 较大 invocation/routing/member 集合 | 217 项：213 PASS、4 FAIL；四项均进入既有 AGY Native 的 Windows 进程出生身份缺口，不计绿灯 |
+| AGY Native 独立压缩 | 8 FAIL，首次调用因同一进程身份缺口无法启动；日志保留 |
+
+Windows 默认 `bash` 指向失效 WSL 磁盘，额外 edition 用例失败来源已定位；测试进程显式选已安装 Git Bash 后通过，未改系统 PATH 或修复/启动 WSL。原生 ownership 工具在 win32 返回 null，相关源码与基线无差异；F325 原始 Feature 明确 Linux/Windows 未认证，因此保留候选和现场缺口，不把 Host 的 Windows 安装承诺误当该原生载体已认证，也不删除失败或新增 skip。MCP 测试仅规范路径断言分隔符；OpenCode host 编译的捕获条件已对齐实际 consumer，原有三条自愈旅程恢复通过。
+
+尚待 W2：各 owner 完整 revision/generation 读前读后重解析；ACP/native 启动参数、MCP 暴露、权限/沙箱、model/effort 和非 L0 上下文消费者全面使用 binding；实现 generation 与受控启用。当前 registry 变化会明确要求重试，不能据此声称已经实现规范要求的完整跨 owner 冻结。会话兼容摘要/片段、CodeAgent 专属发现及 Q/平台/发行物验收继续保持未完成。
+
+提交前定向集合复跑 `frozen-final-targeted.log`：157 项=153 PASS+4 既有本地 OpenCode 文件缺失 SKIP，无 FAIL。shared 构建、API tsc、Web tsc --noEmit 通过；目标 25 文件 Biome 无错误、68 条复杂度/已有风格警告；新增两个 `.test.js` 已验证由现有 public resolver 选中。较大集合及 Native Windows 的失败仍独立保留，不以定向集合替代。无新增服务/真实模型调用；本切片等待独立审查。

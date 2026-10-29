@@ -43,7 +43,8 @@
       "id": "C02",
       "status": "NOT_RUN",
       "evidence": [
-        "README.md#2026-10-30-阶段记录尚未整体验收：局部证据，不等于该条目完整通过"
+        "README.md#2026-10-30-阶段记录尚未整体验收：局部证据，不等于该条目完整通过",
+        "README.md#W2-L0-冻结输入切片W2-尚未完成：局部契约证据和明确失败，非整条通过"
       ]
     },
     {
@@ -55,13 +56,16 @@
       "id": "C04",
       "status": "NOT_RUN",
       "evidence": [
-        "README.md#2026-10-30-阶段记录尚未整体验收：局部证据，不等于该条目完整通过"
+        "README.md#2026-10-30-阶段记录尚未整体验收：局部证据，不等于该条目完整通过",
+        "README.md#W2-L0-冻结输入切片W2-尚未完成：局部契约证据和明确失败，非整条通过"
       ]
     },
     {
       "id": "C05",
       "status": "NOT_RUN",
-      "evidence": []
+      "evidence": [
+        "README.md#W2-L0-冻结输入切片W2-尚未完成：局部契约证据和明确失败，非整条通过"
+      ]
     },
     {
       "id": "C06",
@@ -108,7 +112,9 @@
     {
       "id": "C14",
       "status": "NOT_RUN",
-      "evidence": []
+      "evidence": [
+        "README.md#W2-L0-冻结输入切片W2-尚未完成：局部契约证据和明确失败，非整条通过"
+      ]
     },
     {
       "id": "C15",
@@ -254,15 +260,17 @@
       "status": "NOT_STARTED"
     }
   ],
-  "lastProgressAt": "2026-10-30T01:01:37.2602584+08:00",
+  "lastProgressAt": "2026-10-30T01:29:46.7640286+08:00",
   "checkpointReview": {
     "reviewer": "checkpoint_review",
     "verdict": "approved",
-    "target": "74e0caebd503851803d923291ddce0ce3c25f8d4",
+    "target": "b5e517d0c3c3ec909a6509ec6c14558f10d4e5a3",
     "evidence": "README.md#独立审查第一轮",
     "closedFindings": [
       "P2 identity provenance winner mismatch",
-      "P2 unknown PATCH reconciliation loses revert intent"
+      "P2 unknown PATCH reconciliation loses revert intent",
+      "P2 legacy versionless draft cannot recover from 428",
+      "P2 queued S2 save recreates an orphan after member deletion"
     ]
   }
 }

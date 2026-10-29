@@ -217,6 +217,8 @@ export class KimiAgentService implements AgentService {
     let rejectedResumeSessionId: string | undefined;
     try {
       const l0 = await this.l0CompilerFn({
+        frozenInput: options?.frozenL0Input,
+        requireFrozenInput: true,
         catId: this.catId as string,
         userId: options?.callbackEnv?.CAT_CAFE_USER_ID,
       });

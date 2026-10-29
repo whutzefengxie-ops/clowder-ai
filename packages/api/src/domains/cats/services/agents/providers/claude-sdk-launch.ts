@@ -99,6 +99,8 @@ export async function prepareClaudeSdkLaunch(input: {
   const { effectiveModel, useEnvModelOverride } = resolveClaudeModelSelection(options?.callbackEnv, input.model);
   const effort = effortValue(resolveClaudeEffortLevel(catId, effectiveModel, options?.reasoningEffortOverride));
   const l0 = await input.l0CompilerFn({
+    frozenInput: options?.frozenL0Input,
+    requireFrozenInput: true,
     catId,
     userId: options?.callbackEnv?.CAT_CAFE_USER_ID ?? options?.auditContext?.userId,
   });

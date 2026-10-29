@@ -9230,7 +9230,7 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
     assert.equal(upstream.command, process.execPath, 'the original split server retains the runtime Node binary');
     assert.equal(upstream.args.length, 1);
     assert.ok(
-      upstream.args[0].endsWith('/packages/mcp-server/dist/collab.js'),
+      upstream.args[0].replaceAll('\\', '/').endsWith('/packages/mcp-server/dist/collab.js'),
       `MCP upstream must point to split entrypoint: ${upstream.args[0]}`,
     );
     for (const env of [launchEnv, upstream.env])

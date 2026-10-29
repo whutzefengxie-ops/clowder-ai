@@ -290,11 +290,20 @@ export class ClaudeBgCarrierService implements AgentService {
    * (mirrors the per-instance mcp-config temp-file pattern, also not cleaned).
    * @returns absolute path to the written L0 file.
    */
-  private async compileL0ToTempFile(userId?: string): Promise<string> {
+  private async compileL0ToTempFile(
+    userId?: string,
+    frozenInput?: AgentServiceOptions['frozenL0Input'],
+  ): Promise<string> {
     const l0Dir = mkdtempSync(join(tmpdir(), 'cat-cafe-l0-'));
     const l0Path = join(l0Dir, 'system-prompt-l0.md');
     try {
-      await this.l0CompilerFn({ catId: this.catId as string, userId, outPath: l0Path });
+      await this.l0CompilerFn({
+        catId: this.catId as string,
+        userId,
+        outPath: l0Path,
+        frozenInput,
+        requireFrozenInput: true,
+      });
     } catch (err) {
       throw new CarrierError(`L0 compile failed for ${this.catId as string}: ${(err as Error).message}`, err);
     }
@@ -312,7 +321,7 @@ export class ClaudeBgCarrierService implements AgentService {
     // Native 2.1.296 retains daemon-start auth, ignoring later dispatch credentials.
     if (options?.claudeTokenAccount) throw new Error('claude_token_carrier_unsupported');
     const readOnly = options?.toolExecutionPolicy?.mode === 'read_only';
-    const l0Path = await this.compileL0ToTempFile(options?.callbackEnv?.CAT_CAFE_USER_ID);
+    const l0Path = await this.compileL0ToTempFile(options?.callbackEnv?.CAT_CAFE_USER_ID, options?.frozenL0Input);
     const mcpResolution =
       !readOnly && options?.callbackEnv && this.mcpServerPath
         ? await resolveClaudeMcpConfig({

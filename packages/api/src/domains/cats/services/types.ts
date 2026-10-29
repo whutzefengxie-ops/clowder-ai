@@ -1051,6 +1051,8 @@ export interface LocalSessionReadInput {
 }
 
 export interface AgentServiceOptions {
+  /** Admission-owned identity/rules; the L0 child never reloads mutable configuration. */
+  frozenL0Input?: import('@cat-cafe/shared/l0-input').FrozenL0Input;
   /** Host logical SessionRecord identity; sessionId remains the native resume id. */
   hostSessionId?: string;
   /** Binding restored from the canonical SessionRecord, including across API restarts. */
@@ -1266,6 +1268,7 @@ export interface AgentService {
 
   /** Request provider-native compaction on an already bound, idle runtime. */
   requestNativeCompaction?(input: {
+    readonly frozenL0Input?: import('@cat-cafe/shared/l0-input').FrozenL0Input;
     readonly nativeSessionBinding?: import('@cat-cafe/shared').NativeSessionBinding;
     readonly userId?: string;
     /** Preserve a proven boundary even if the later control transport fails. */
@@ -1384,6 +1387,8 @@ export interface AgentService {
  * Same as `compileL0ViaSubprocess` but injectable for testing.
  */
 export type L0CompilerFn = (options: {
+  frozenInput?: import('@cat-cafe/shared/l0-input').FrozenL0Input;
+  requireFrozenInput?: boolean;
   catId: string;
   userId?: string;
   projection?: 'owner' | 'public';

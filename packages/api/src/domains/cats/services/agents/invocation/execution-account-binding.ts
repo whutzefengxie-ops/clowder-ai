@@ -6,6 +6,7 @@ import {
   projectMemberProfiles,
   type RoleProfile,
 } from '@cat-cafe/shared';
+import type { FrozenL0Input } from '@cat-cafe/shared/l0-input';
 import {
   type RuntimeProviderProfile,
   resolveBuiltinClientForProvider,
@@ -24,6 +25,8 @@ import { resolveActiveProjectRoot } from '../../../../../utils/active-project-ro
 import type { FrozenExecutionWorkspace } from './execution-workspace.js';
 
 export interface FrozenExecutionBinding {
+  readonly frozenL0Input?: FrozenL0Input;
+  readonly memberRegistryRevision?: number;
   readonly catConfig?: CatConfig;
   readonly roleProfile?: RoleProfile;
   readonly executionProfile?: ExecutionProfile;

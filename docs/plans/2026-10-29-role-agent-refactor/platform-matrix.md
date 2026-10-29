@@ -31,6 +31,8 @@ status: in-progress
 
 本矩阵不替代逐客户端 C14：Claude、Codex、Google/AGY、Kimi、Pi、DSH、OpenCode、CatAgent、A2A、通用 ACP/iCode 保留其原生或 ACP 实际载体。每个已承诺的 `(OS, CPU, 网络, client, carrier, version)` 形成一条结果；名称相似、命令包含某字符串或同为 ACP 都不能合并为同一个通过项。
 
+本轮扩大回归确认 AGY Native 的 Windows 进程出生身份不可用，压缩/普通路由等用例失败。`docs/features/F325-antigravity-native-parity.md` 的现有边界明确 Linux/Windows 未认证；这一路径保持候选/FAIL，不扩大启用，不从 Windows Host 发行承诺推导 Native 已通过。AGY ACP 与 Native 分开；其本机协议/权限回归不能代替官方程序和真实认证验收。
+
 ## 每条正式证据的最小字段
 
 | 字段 | 记录内容 |
