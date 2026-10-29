@@ -61,7 +61,6 @@ test('provider configuration capture and invocation use the same frozen account 
   const service = {
     captureInvocationOptions: async (input) => {
       captured = input;
-      writeAccount('after');
       return {};
     },
     supportsToolExecutionPolicy: () => true,
@@ -92,6 +91,7 @@ test('provider configuration capture and invocation use the same frozen account 
     userId: 'owner',
     service,
   });
+  writeAccount('after');
   const expected = { KIMI_CODE_HOME: join(root, 'before'), CUSTOM_EMPTY: '' };
   assert.deepEqual(captured.accountEnv, expected, 'MCP discovery needs the selected invocation account HOME');
   assert.equal(captured.mcpSupport, false);

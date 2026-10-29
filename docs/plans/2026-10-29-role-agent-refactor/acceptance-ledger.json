@@ -75,7 +75,8 @@
         "README.md#W2-OpenCode-Host-MCP-消费切片尚未完成-W2：原Host-writer计划、路径、激活视图及实际launch局部证据",
         "README.md#W2-Codex-MCP-输入消费切片尚未完成-W2：冻结输入、真实MCP两轮消费和基线复核；整条未完成",
         "README.md#W2-Host-shared-MCP-上下文消费切片尚未完成-W2：Host注册与callback共享准入上下文；整条未完成",
-        "README.md#W2-capabilities-写入通知切片尚未完成-W2：合法capabilities写入委托中央原子writer；通知与实际提交局部证据"
+        "README.md#W2-capabilities-写入通知切片尚未完成-W2：合法capabilities写入委托中央原子writer；通知与实际提交局部证据",
+        "README.md#W2-账号与启动策略读后核验切片尚未完成-W2：正式账号与S3写入导致准入值变更409；自动重解析及其他owner未完成"
       ]
     },
     {
@@ -126,7 +127,10 @@
     {
       "id": "C15",
       "status": "NOT_RUN",
-      "evidence": ["README.md#W2-实现-generation-准入切片尚未完成-W2：正式准入期间注册/服务代次变更409及下一调用新代次；跨owner重解析与会话兼容仍未完成"]
+      "evidence": [
+        "README.md#W2-实现-generation-准入切片尚未完成-W2：正式准入期间注册/服务代次变更409及下一调用新代次；跨owner重解析与会话兼容仍未完成",
+        "README.md#W2-账号与启动策略读后核验切片尚未完成-W2：消费投影变化409与无关元数据控制项；非完整跨owner一致性"
+      ]
     },
     {
       "id": "C16",
@@ -377,5 +381,13 @@
     "findings": [],
     "remainingBoundary": "scripts/sync-skills.sh direct cross-process writer is not yet notified; no capabilities revision/cache switch is certified",
     "evidence": "README.md#W2-capabilities-写入通知切片尚未完成-W2"
+  },
+  "implementationGenerationCheckpointReview": {
+    "reviewer": "checkpoint_review",
+    "verdict": "approved",
+    "reviewedHead": "236dc8756b1ed17a02a54e18e21a7fc122df58a0",
+    "subject": "task:01a1881e-1a7b-78d0-9a62-ff99b0ab7a01/checkpoint-implementation-generation",
+    "findings": [],
+    "evidence": "README.md#W2-实现-generation-准入切片尚未完成-W2"
   }
 }

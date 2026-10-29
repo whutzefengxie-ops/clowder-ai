@@ -1556,6 +1556,19 @@ export async function prepareInvocationExecutionBinding(
     throw Object.assign(new Error('Member configuration changed during execution admission; retry this invocation.'), {
       statusCode: 409,
     });
+  const currentAccountBinding = freezeExecutionAccountBinding({
+    catId: input.catId,
+    catConfig,
+    model: input.model,
+    workspace,
+  });
+  if (!isDeepStrictEqual(binding, currentAccountBinding))
+    throw Object.assign(
+      new Error('Execution configuration changed during execution admission; retry this invocation.'),
+      {
+        statusCode: 409,
+      },
+    );
   if (
     input.service?.implementationSnapshot &&
     !isDeepStrictEqual(input.service.implementationSnapshot(), implementation)

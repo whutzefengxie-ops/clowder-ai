@@ -324,3 +324,15 @@ checkpoint_review 对 `52ad776284536bd8eaa93d847e271d478d51c604` 给出 approved
 `implementation-freeze-invocation-final.log` 289 项=285 PASS+原 AGY Native Windows birth-identity 4 FAIL。首轮 `implementation-freeze-green.log` 65 项=60 PASS+原 strict ACP Windows bootstrap ACL 5 FAIL，错误在 factory 准备目录时即因父目录其他 SID 的 Modify 权限而出现，bootstrap 实现未改。单独进程设置仓库已有 trusted-host 模式后的 `implementation-freeze-pool-process-only.log` 5 PASS，仅证明原 pool pin/reset/replacement/release 路径，不认证 strict ACL，不改变用户/生产设置，也不新增 skip。
 
 复杂度复核：一份弱引用 token 表、原 registry entry 的 token 和原校验函数共用，无新服务/版本总线/launcher/持久模型。此 token 尚未接入原生片段兼容或持久审计，不把绑定投影当作完整接线。所有 owner 的一致性重解析、其他通知、完整 env 和会话语义仍继续未完成；无真实模型或常驻环境，此 generation 切片等待独立审查。
+
+checkpoint_review 对 `236dc8756b1ed17a02a54e18e21a7fc122df58a0` 给出 approved，subject 为 `task:01a1881e-1a7b-78d0-9a62-ff99b0ab7a01/checkpoint-implementation-generation`。独立 56 PASS，含注册/实际服务变化、pin 稳定性及原启动 fence/插件生命周期/释放；无未关闭 finding。只批准该进程内准入切片，不证明持久兼容或跨重启 resume。
+
+## W2 账号与启动策略读后核验切片（尚未完成 W2）
+
+异步 provider/MCP 捕获后，使用原 freezeExecutionAccountBinding 再读取同一账号/执行投影；实际消费值变化时返回可重试 409，防止准入期间合法账号写入或 S3 全局策略修改被遗漏。不另建 revision/hash 框架，也不记录 raw profile/secret 到审计或兼容键。原 runtime resolver 排除的额度元数据仍不成为新的执行输入。已完成 binding 后的正常修改仍不污染活动调用；源码只增原 owner 的读后比较。
+
+新 `account-currentness-red.log` 为 3 项=2 RED+1 初始控制项 PASS，两个 RED 分别经正式 writeCatalogAccount 和 configStore.set 修改账号 HOME/Codex sandbox，原准入均未拒绝。控制项最初 quota 夹具不符合既有 schema；第二次读取真实触发严格校验后，首次 green 为 51 PASS+此夹具 FAIL。现按既有 schema 补 source/items/status，不改产品验证，`account-currentness-green-final.log` 52 PASS，包含合法元数据控制项和所有已迁入的冻结消费者。
+
+旧环境一致性正例将写入时机从 capture 内移到 binding 已完成之后，继续验证 discovery 与真实 invoke 使用相同旧 HOME；准入期间变化由新增负例明确覆盖，并非删除该时窗的断言。`account-currentness-native-final.log` 17 PASS，涵盖实际原生消费者、账号绑定、事件订阅与正式保存诊断；`account-currentness-invocation-final.log` 289 项=285 PASS+原 AGY Native Windows birth-identity 4 FAIL。API tsc、3 文件 Biome 无错误，无真实模型或新增服务。
+
+复杂度复核：复用同一已有解析 owner，新增 13 行内联比较，不增加存储、环境配置项、watcher、启动器或认证路径。当前变化仅明确拒绝不一致准入，尚未自动重新解析；MCP/工作区/全局输入的全 owner 读前读后版本协议、持续变化冲突处理、通知完整性及会话兼容仍未完成。不能以该保护或局部通过替代完整 W2/C15；此账号 currentness 切片等待独立审查。
