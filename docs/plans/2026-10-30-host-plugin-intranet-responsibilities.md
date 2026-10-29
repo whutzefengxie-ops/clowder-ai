@@ -22,7 +22,7 @@ created: 2026-10-30
 
 Host 保有安装完整性、grant、运行生命周期、会话、取消/续接和 A2A 权威。使用通用注册/配置能力，不新增 CodeAgent 专用角色字段或 AgentRouter 分支。插件不能决定 Host 的目录策略、审计例外或管理访问权限。
 
-当前独立 Draft：[固定客户端配置 #16](https://github.com/whutzefengxie-ops/clowder-ai/pull/16)、[持久策略 #17](https://github.com/whutzefengxie-ops/clowder-ai/pull/17)。它们以 fork 中精确基础快照为 base，尚未进入公共 main。H6 位于 `feat/offline-acp-plugin-preload`，叠在 #16 上，审查和 PR 状态另记。
+当前独立 Draft：[固定客户端配置 #16](https://github.com/whutzefengxie-ops/clowder-ai/pull/16)、[持久策略 #17](https://github.com/whutzefengxie-ops/clowder-ai/pull/17)。它们以 fork 中精确基础快照为 base，尚未进入公共 main。[H6 离线预置 #18](https://github.com/whutzefengxie-ops/clowder-ai/pull/18) 位于 `feat/offline-acp-plugin-preload`，叠在 #16 上；独立审查与组合验收状态另记。
 
 ## 二、插件仓：我们提供一份 CodeAgent 包
 

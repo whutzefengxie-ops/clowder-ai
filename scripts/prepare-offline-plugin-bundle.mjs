@@ -25,6 +25,18 @@ export async function prepareOfflinePluginBundle(output, archives) {
       const manifest = metadata('manifest.json');
       const pkg = metadata('package.json');
       if (pkg.version !== manifest.version) throw new Error('Package and manifest version disagree');
+      const dependencies = [pkg.dependencies, pkg.optionalDependencies].flatMap((value) =>
+        value && typeof value === 'object' && !Array.isArray(value) ? Object.keys(value) : [],
+      );
+      if (dependencies.length) {
+        const contents = execFileSync('tar', ['-tf', resolve(archive)], {
+          encoding: 'utf8',
+          windowsHide: true,
+          maxBuffer: 1024 * 1024,
+        });
+        if (!contents.split(/\r?\n/).some((name) => name.startsWith('package/node_modules/')))
+          throw new Error('Offline packages must include shipped runtime dependencies');
+      }
       const hex = createHash('sha512').update(bytes).digest('hex');
       return {
         source: resolve(archive),

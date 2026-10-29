@@ -70,6 +70,7 @@ jobs:
           node --test packages/api/test/plugin-initial-installation.test.js
           packages/api/test/plugin-offline-initial-installation.test.js
           packages/api/test/plugin-offline-admission.test.js
+          packages/api/test/plugin-offline-closure.test.js
           scripts/offline-plugin-bundle.test.mjs
       - name: Managed Codex layout link diagnostic
         run: >-

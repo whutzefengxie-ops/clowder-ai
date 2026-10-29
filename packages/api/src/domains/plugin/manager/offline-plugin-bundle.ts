@@ -46,6 +46,7 @@ export async function prepareOfflineHostInitialPlugins(options: {
           { kind: 'local-archive', path: join(dirname(options.bundlePath), entry.archive) },
           {
             expectedDigest: entry.packageDigest,
+            requireShippedDependencies: true,
             expectedPackage: { pluginId, packageName: entry.packageName, version: entry.version },
           },
         );
@@ -53,9 +54,12 @@ export async function prepareOfflineHostInitialPlugins(options: {
     },
     reconcile: (pluginId, instanceId) => managerRuntime.configuration.reconcile(pluginId, instanceId),
     activate: async (pluginId, instanceId, expectedRevision) => {
-      const instance = (await runtime.inventoryStore.snapshot()).instances.find(
-        (i) => i.pluginInstanceId === instanceId,
-      );
+      const snapshot = await runtime.inventoryStore.snapshot();
+      const instance = snapshot.instances.find((i) => i.pluginInstanceId === instanceId);
+      const provenance = snapshot.packages.find((p) => p.packageDigest === instance?.packageDigest)?.provenance;
+      // Covers a prepared journal from before this fence or from an earlier online source.
+      if (provenance?.kind !== 'local-archive' || provenance.dependencyClosure === 'materialized')
+        throw new Error('Offline activation requires a local archive with shipped runtime dependencies');
       if (instance?.configReadiness === 'ready')
         await managerRuntime.manager.setEnabled(pluginId, { enabled: true, expectedRevision });
     },
