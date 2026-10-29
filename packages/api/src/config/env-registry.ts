@@ -179,6 +179,17 @@ export const ENV_VARS: EnvDefinition[] = [
     restartRequired: true,
   },
   {
+    name: 'CAT_CAFE_HOST_POLICY_FILE',
+    defaultValue: '',
+    description:
+      '只读 Host 策略 JSON 文件的绝对路径；仅 bootstrapMode/auditMode，逐键优先于环境与发行预设。桌面默认实际用户数据根的 host-policy.json；缺失继承，非法内容在监听前失败，重启 API 生效',
+    category: 'server',
+    settingsGroup: 'security',
+    sensitive: false,
+    runtimeEditable: false,
+    restartRequired: true,
+  },
+  {
     name: 'CAT_CAFE_ACP_BOOTSTRAP_CONFIG_AUDIT_MODE',
     allowedValues: ['required', 'warn-bootstrap-root'],
     defaultValue: 'required',

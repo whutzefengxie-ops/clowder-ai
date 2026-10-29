@@ -1,3 +1,5 @@
+import type { DeploymentHostPolicy } from '@cat-cafe/shared';
+
 export const ACP_BOOTSTRAP_MODES = ['strict', 'trusted-host'] as const;
 export const ACP_CONFIG_AUDIT_MODES = ['required', 'warn-bootstrap-root'] as const;
 
@@ -7,7 +9,25 @@ function choice<T extends string>(name: string, value: string | undefined, allow
   throw new Error(`${name} must be ${allowed.join(' or ')}; update the Host deployment configuration and restart API`);
 }
 
-export function resolveAcpHostPolicy(policyEnv: NodeJS.ProcessEnv = process.env, platform = process.platform) {
+function selectPolicyValue<T extends string>(values: {
+  owner?: T;
+  environment?: T;
+  legacy?: T;
+  preset?: T;
+  fallback: T;
+}) {
+  if (values.owner !== undefined) return { value: values.owner, source: 'owner' as const };
+  if (values.environment !== undefined) return { value: values.environment, source: 'environment' as const };
+  if (values.legacy !== undefined) return { value: values.legacy, source: 'legacy-environment' as const };
+  if (values.preset !== undefined) return { value: values.preset, source: 'preset' as const };
+  return { value: values.fallback, source: 'default' as const };
+}
+
+export function resolveAcpHostPolicy(
+  policyEnv: NodeJS.ProcessEnv = process.env,
+  platform = process.platform,
+  layers: { owner?: DeploymentHostPolicy; preset?: DeploymentHostPolicy } = {},
+) {
   const legacy = policyEnv.CAT_CAFE_TRUSTED_HOST_COMPATIBILITY === '1';
   const bootstrap = choice(
     'CAT_CAFE_WINDOWS_ACP_BOOTSTRAP_MODE',
@@ -19,8 +39,23 @@ export function resolveAcpHostPolicy(policyEnv: NodeJS.ProcessEnv = process.env,
     policyEnv.CAT_CAFE_ACP_BOOTSTRAP_CONFIG_AUDIT_MODE,
     ACP_CONFIG_AUDIT_MODES,
   );
-  const bootstrapMode = bootstrap ?? (legacy ? 'trusted-host' : 'strict');
-  const requestedAuditMode = audit ?? (legacy ? 'warn-bootstrap-root' : 'required');
+  const { owner = {}, preset = {} } = layers;
+  const selectedBootstrap = selectPolicyValue({
+    owner: owner.bootstrapMode,
+    environment: bootstrap,
+    legacy: legacy ? 'trusted-host' : undefined,
+    preset: preset.bootstrapMode,
+    fallback: 'strict',
+  });
+  const selectedAudit = selectPolicyValue({
+    owner: owner.auditMode,
+    environment: audit,
+    legacy: legacy ? 'warn-bootstrap-root' : undefined,
+    preset: preset.auditMode,
+    fallback: 'required',
+  });
+  const bootstrapMode = selectedBootstrap.value;
+  const requestedAuditMode = selectedAudit.value;
   const auditWarningAllowed =
     platform === 'win32' && bootstrapMode === 'trusted-host' && requestedAuditMode === 'warn-bootstrap-root';
   return {
@@ -29,8 +64,10 @@ export function resolveAcpHostPolicy(policyEnv: NodeJS.ProcessEnv = process.env,
     effectiveAuditMode: auditWarningAllowed ? 'warn-bootstrap-root' : 'required',
     auditWarningAllowed,
     legacy,
-    legacyBootstrap: legacy && bootstrap === undefined,
-    legacyAudit: legacy && audit === undefined,
+    legacyBootstrap: selectedBootstrap.source === 'legacy-environment',
+    legacyAudit: selectedAudit.source === 'legacy-environment',
+    bootstrapSource: selectedBootstrap.source,
+    auditSource: selectedAudit.source,
     suppressedReason:
       requestedAuditMode !== 'warn-bootstrap-root'
         ? undefined
@@ -40,6 +77,21 @@ export function resolveAcpHostPolicy(policyEnv: NodeJS.ProcessEnv = process.env,
             ? 'non-Windows Host'
             : 'bootstrap mode is strict',
   } as const;
+}
+
+let processPolicy: ReturnType<typeof resolveAcpHostPolicy> | undefined;
+
+/** API startup installs one immutable snapshot; the returned restore is for isolated embedders/tests. */
+export function installAcpHostPolicy(policy: ReturnType<typeof resolveAcpHostPolicy>): () => void {
+  const previous = processPolicy;
+  processPolicy = Object.freeze({ ...policy });
+  return () => {
+    processPolicy = previous;
+  };
+}
+
+export function getAcpHostPolicy(): ReturnType<typeof resolveAcpHostPolicy> {
+  return processPolicy ?? resolveAcpHostPolicy();
 }
 
 /** Called once by API startup, before any plugin recovery or listener. Never writes configuration. */

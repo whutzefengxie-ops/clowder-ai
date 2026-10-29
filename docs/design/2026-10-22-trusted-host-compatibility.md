@@ -14,7 +14,7 @@ Windows 企业存储可能无法满足严格祖先信任，且审计追加失败
 - B：`CAT_CAFE_WINDOWS_ACP_BOOTSTRAP_MODE=strict|trusted-host`，默认 strict。trusted-host 只跳过 Windows 祖先 owner/DACL；保留自身私有权限、真实本地 NTFS、逐级非 reparse/junction、SUBST 拒绝和 spawn 前复验。不修已有 ACL，接受祖先替换路径的风险，不能称完整信任校验。
 - C：`CAT_CAFE_ACP_BOOTSTRAP_CONFIG_AUDIT_MODE=required|warn-bootstrap-root`，默认 required。只有 Windows + trusted-host + warn-bootstrap-root，且正常审计追加已失败，才评估已有 client 的 root-only 恢复。
 - 旧 `CAT_CAFE_TRUSTED_HOST_COMPATIBILITY=1` 仅 exact 1 生效，对未设置的新键分别映射 trusted-host / warn-bootstrap-root；不再让所有平台的任意插件配置绕过审计。新键逐项优先；显式 strict 会屏蔽 C，显式 required 会关闭 C。
-- 两项新键都只在启动期使用；空/非法显式值启动报错，不回退旧值。启动摘要显示请求/有效策略及屏蔽原因，旧变量输出一次弃用提示。旧别名至少保留相关两个正式版本且不少于 90 天，到期复评，不能定时静默关闭。
+- 两项新键都只在启动期使用；空/非法显式值启动报错，不回退旧值。owner 文件同键优先，随后环境新键/旧 exact-one、发行预设、公共默认；strict 仍屏蔽 C。启动摘要显示请求/有效策略、逐键来源、owner 文件路径及屏蔽原因，旧变量输出一次弃用提示。旧别名至少保留相关两个正式版本且不少于 90 天，到期复评，不能定时静默关闭。
 - 插件管理保留直接本机、owner、登录、Origin/CSRF 与受限角色边界。callback Agent 不获得 C；不新增远程管理能力。
 
 ## C 的完整准入
@@ -31,7 +31,9 @@ Windows 企业存储可能无法满足严格祖先信任，且审计追加失败
 
 ## 持久配置与交付
 
-Host .env 或服务管理器的持久环境可一次保存策略，重启 API 生效；不要求每次 PowerShell export。AUDIT_LOG_DIR 构造时绑定且不可从 Hub 热改；现有显式路径不静默迁移，API 默认仍为其 cwd/data/audit-logs。
+部署 profile 可声明可选 hostPolicy，公共未声明时仍 strict/required。桌面默认把实际 userDataDir/host-policy.json 的路径交给 API；部署者显式 CAT_CAFE_HOST_POLICY_FILE 优先，CLI 未指定路径不猜 cwd。文件只含可选 bootstrapMode/auditMode，缺失或空对象继承；空文件、未知键、非法枚举和不可读文件在监听前失败。
+
+API 启动只读一次，所有 bootstrap/审计准入消费者共用同一份冻结快照，不回写 process.env、不创建或改写 owner 文件/.env、不迁旧内网文件或历史。更新后重启 API 生效；不要求每次 PowerShell export。AUDIT_LOG_DIR 构造时绑定且不可从 Hub 热改，本次保持已有绑定位置与默认路径语义。
 
 D 的一次性准备、模板、探针和源码部署接线单独交付，普通启动只读，不夹带安装器或 F289 数据迁移。新 Agent 推荐单 Agent 静态插件，现有官方动态目录保持兼容；第三方动态 grant 和命令执行沙箱不在此契约内。
 
