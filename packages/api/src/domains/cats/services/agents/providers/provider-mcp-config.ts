@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import {
   CAT_CAFE_SPLIT_ENTRYPOINTS,
@@ -13,7 +13,11 @@ import {
   assertMappedCapabilitySource,
   resolveInvokeCapabilityRoot,
 } from '../../../../../config/capabilities/invoke-capability-root.js';
-import { readInvocationMcpConfig } from '../../../../../config/capabilities/invoke-mcp-config.js';
+import {
+  observeInvocationMcpSource,
+  readInvocationMcpConfig,
+  readInvocationMcpFile,
+} from '../../../../../config/capabilities/invoke-mcp-config.js';
 import {
   bindManagedMcpStdioConfig,
   materializeNativeMcpHttp,
@@ -174,7 +178,7 @@ export async function captureProviderMcpConfig(input: {
       for (const userMcpRoot of roots) {
         const userMcpPath = join(userMcpRoot, '.mcp.json');
         if (existsSync(userMcpPath)) {
-          const userMcp = JSON.parse(readFileSync(userMcpPath, 'utf-8')) as {
+          const userMcp = JSON.parse(readInvocationMcpFile(userMcpPath)) as {
             mcpServers?: Record<string, unknown>;
           };
           if (userMcp.mcpServers && typeof userMcp.mcpServers === 'object') {
@@ -189,7 +193,7 @@ export async function captureProviderMcpConfig(input: {
               }
             }
           }
-        }
+        } else observeInvocationMcpSource(userMcpPath, null);
       }
     } catch {
       // best-effort: unreadable user config → capabilities-only

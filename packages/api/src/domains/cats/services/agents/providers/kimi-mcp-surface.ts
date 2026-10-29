@@ -1,5 +1,6 @@
 import { readFile, stat } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
+import { observeInvocationMcpSource } from '../../../../../config/capabilities/invoke-mcp-config.js';
 import {
   captureProviderMcpConfig,
   materializeProviderMcpConfig,
@@ -86,7 +87,9 @@ async function denyUnapprovedNativeServers(
   layers: ReadonlyArray<{ path: string; cwd: string }>,
 ): Promise<void> {
   for (const layer of layers) {
-    for (const [name, entry] of Object.entries(parseServers(await optionalText(layer.path)))) {
+    const raw = await optionalText(layer.path);
+    observeInvocationMcpSource(layer.path, raw ?? null);
+    for (const [name, entry] of Object.entries(parseServers(raw))) {
       if (!Object.hasOwn(servers, name) || servers[name]?.enabled === false) {
         Object.defineProperty(servers, name, {
           value: disabledServer(entry, layer.cwd),

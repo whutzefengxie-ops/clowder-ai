@@ -450,3 +450,11 @@ checkpoint_review 对 `145bb8cd4ac1851d78afca033dc9f63d93abffe8` 返回 approved
 复杂度复核：仅复用原 MCP 文件 owner 记录本轮版本及最终读取核验；没有缓存配置对象、跨调用缓存切换、watcher、存储或通用配置总线。scripts/sync-skills.sh 的跨进程通知缺口继续保留，不能以本次字节核验声称全部合法写方已通知。该核验只覆盖经此正式 reader 读取的文件；原生 HOME/.mcp.json 等专属来源、插件激活代次、父环境/CA、成员整体发布与持久审计仍须分别完成，W2/C05/C15 尚未整体验收。此 MCP 文件切片等待独立审查。
 
 checkpoint_review 对 `4456f3882acaeda8f7ee8fe60aa3e7cf7022c19a` 返回 approved，subject 为 `task:01a1881e-1a7b-78d0-9a62-ff99b0ab7a01/checkpoint-mcp-currentness`。独立 28 PASS，含最后等待窗口、实际路由重解析、缺文件出现/消失、重复读取后恢复旧字节、并发隔离及普通诊断；无未关闭 finding。批准仅限正式 reader 来源版本，不含其他 MCP/激活/父环境或完整 W2。另已复核六份 accepted source 文件哈希均未变，记录 source-integrity-4456f388.json；全部 34 个 C/E/Q 整体验收条目仍保持 NOT_RUN。
+
+## W2 客户端 MCP 文件版本核验（尚未完成 W2）
+
+将既有准入 scope 的版本记录接到 ACP、Claude、Kimi 的项目 .mcp.json、OpenCode 的 opencode.json、Kimi 原生 HOME/项目补拒绝层，以及这几条路径原先直接读取的 capabilities.json。同步读取保留原文件错误，异步 Kimi reader 上报实际解析字节；原 optional/best-effort/strict 规则不变。原先不存在的可选层也记录缺失状态，避免准入等待中创建文件而使用旧计划。最终核验与冲突处理继续复用已审查路径；冻结后 consumer 不重读这些允许计划。
+
+`client-mcp-currentness-red.log` 九条真实 Host→client capture 反例均 FAIL，覆盖四客户端项目文件变化/出现及 Kimi HOME 变化；修复后 `client-mcp-currentness-green.log` 9 PASS，并核对下一准入实际描述符、OpenCode command 和 Kimi 新原生入口的拒绝值。`client-mcp-currentness-regression.log` 152 PASS，覆盖原 resolver、各原生/ACP 冻结、workspace、共享授权及格式适配。`client-mcp-currentness-tsc-verified.log` 确认 API 构建 exit 0 后才运行测试；7 文件 Biome 无错误，既有测试风格警告未扩散修改。测试不启动模型或常驻环境，独立夹具数据保留。
+
+复杂度复核：只在既有实际文件读取点记录版本，不新增配置对象缓存、watcher、launcher、存储或跨进程总线；未改变 Kimi 后续原生层只能补拒绝的限制。该证据不覆盖全部客户端原生配置、插件激活代次、父环境/CA、成员整体发布、持久审计或完整 W2/C05/C15；等待独立审查。

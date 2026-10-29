@@ -7,6 +7,27 @@ import { isSameCapabilityRoot } from './invoke-capability-root.js';
 
 const sourceReads = new AsyncLocalStorage<{ versions: Map<string, string | null>; changed: boolean }>();
 
+/** Async native readers report the actual bytes they parsed, including an absent optional layer. */
+export function observeInvocationMcpSource(path: string, raw: string | null): void {
+  const state = sourceReads.getStore();
+  if (!state) return;
+  const version = raw === null ? null : createHash('sha256').update(raw).digest('hex');
+  const previous = state.versions.get(path);
+  if (previous !== undefined && previous !== version) state.changed = true;
+  else state.versions.set(path, version);
+}
+
+/** Preserve filesystem errors so each client keeps its existing required/optional-file policy. */
+export function readInvocationMcpFile(path: string): string {
+  let raw: string | null = null;
+  try {
+    raw = readFileSync(path, 'utf8');
+    return raw;
+  } finally {
+    observeInvocationMcpSource(path, raw);
+  }
+}
+
 function readSource(path: string) {
   try {
     const raw = readFileSync(path, 'utf8');
@@ -29,13 +50,8 @@ export async function captureInvocationMcpSources<T>(capture: () => T | Promise<
 
 function read(root: string): CapabilitiesConfig | null {
   const path = join(root, '.cat-cafe/capabilities.json');
-  const { raw, version } = readSource(path);
-  const state = sourceReads.getStore();
-  if (state) {
-    const previous = state.versions.get(path);
-    if (previous !== undefined && previous !== version) state.changed = true;
-    else state.versions.set(path, version);
-  }
+  const { raw } = readSource(path);
+  observeInvocationMcpSource(path, raw);
   if (raw === null) return null;
   try {
     const value = JSON.parse(raw);

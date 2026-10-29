@@ -8,7 +8,7 @@
  * - writeOpenCodeInstructionsOnlyConfig: instructions-only config (F203 Phase I)
  */
 
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import {
   expandManagedMcpNamesForUserMerge,
@@ -19,6 +19,10 @@ import {
   isSameCapabilityRoot,
   resolveInvokeCapabilityRoot,
 } from '../../../../../config/capabilities/invoke-capability-root.js';
+import {
+  observeInvocationMcpSource,
+  readInvocationMcpFile,
+} from '../../../../../config/capabilities/invoke-mcp-config.js';
 import { toOpenCodeMcpEntry } from '../../../../../config/capabilities/mcp-config-adapters.js';
 import { isRetiredGithubMcpConfigEntry } from '../../../../../config/capabilities/retired-github-mcp.js';
 import {
@@ -121,7 +125,7 @@ export async function captureOpenCodeMcpConfig(
       let accessScope: 'global' | 'project' = 'global';
       if (workingDirectory && !isSameCapabilityRoot(workingDirectory, capabilitiesProjectRoot)) {
         try {
-          const projectRaw = readFileSync(join(workingDirectory, '.cat-cafe', 'capabilities.json'), 'utf-8');
+          const projectRaw = readInvocationMcpFile(join(workingDirectory, '.cat-cafe', 'capabilities.json'));
           const parsed = JSON.parse(projectRaw);
           if (parsed?.version === 1 || parsed?.version === 2) {
             capConfig = parsed;
@@ -133,7 +137,7 @@ export async function captureOpenCodeMcpConfig(
         }
       }
       if (!capConfig) {
-        const raw = readFileSync(join(capabilitiesProjectRoot, '.cat-cafe', 'capabilities.json'), 'utf-8');
+        const raw = readInvocationMcpFile(join(capabilitiesProjectRoot, '.cat-cafe', 'capabilities.json'));
         const parsed = JSON.parse(raw);
         if (parsed?.version === 1 || parsed?.version === 2) capConfig = parsed;
       }
@@ -166,7 +170,7 @@ export async function captureOpenCodeMcpConfig(
     const userConfigPath = join(workingDirectory, 'opencode.json');
     try {
       if (existsSync(userConfigPath)) {
-        const userConfig = JSON.parse(readFileSync(userConfigPath, 'utf-8')) as { mcp?: Record<string, unknown> };
+        const userConfig = JSON.parse(readInvocationMcpFile(userConfigPath)) as { mcp?: Record<string, unknown> };
         if (userConfig.mcp && typeof userConfig.mcp === 'object') {
           const userMcp = { ...userConfig.mcp };
           for (const [name, entry] of Object.entries(userMcp)) {
@@ -181,7 +185,7 @@ export async function captureOpenCodeMcpConfig(
           if (Object.keys(merged).length > 0) config.mcp = merged;
           else delete config.mcp;
         }
-      }
+      } else observeInvocationMcpSource(userConfigPath, null);
     } catch {
       // best-effort: if user config unreadable, proceed with our config only
     }

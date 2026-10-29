@@ -272,7 +272,13 @@
       "status": "NOT_STARTED"
     }
   ],
-  "lastProgressAt": "2026-10-29T22:16:11.1649947Z",
+  "lastProgressAt": "2026-10-29T22:25:00Z",
+  "clientMcpCurrentnessCheckpointReview": {
+    "verdict": "PENDING",
+    "evidence": "README.md#W2-客户端-MCP-文件版本核验尚未完成-W2",
+    "tests": { "red": "9 FAIL", "green": "9 PASS", "regression": "152 PASS" },
+    "scope": "Client MCP file reads only; complete C05/C15 and W2 remain NOT_RUN/IN_PROGRESS"
+  },
   "checkpointReview": {
     "reviewer": "checkpoint_review",
     "verdict": "approved",
