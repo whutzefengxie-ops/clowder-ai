@@ -299,7 +299,9 @@ checkpoint_review 对 `8f3e191c303e18283604c4d5f960a331b87de3af` 给出 approved
 
 ## W2 capabilities 写入通知切片（尚未完成 W2）
 
-审计 API 内 capabilities.json 的合法写入：HTTP 安装/删除/开关、插件静态资源、初始化/迁移、挂载规则、项目 MCP sync/drift 和 skill sync 均委托原异步 writer；新成员同步继承委托原同步 writer。scripts 内匹配为 health/doctor 读取，governance cleanup 明确保护该文件，没有将诊断或派生 CLI 文件当作真相源写入。
+审计 API 内 capabilities.json 的合法写入：HTTP 安装/删除/开关、插件静态资源、初始化/迁移、挂载规则、项目 MCP sync/drift 和 skill sync 均委托原异步 writer；新成员同步继承委托原同步 writer。governance cleanup 明确保护该文件，没有将诊断或派生 CLI 文件当作真相源写入。
+
+独立审查指出，作者最初 scripts 搜索只筛 mjs/ts/cjs，遗漏 `scripts/sync-skills.sh:292` 的直接写方：它合并 skillsSync 后直接 writeFileSync(capFile)，并不经过中央 API writer。已回读原文确认，该跨进程/离线写入仍未补通知，不能声称“全部合法写方已覆盖”。当前尚未建立依赖 capabilities 事件的 revision/cache 订阅者，不为此新建 IPC 或假装能向另一个进程的 EventEmitter 发通知；后续一致性核验与缓存切换必须覆盖此写方或明确收口其离线边界。health/doctor 读取与此真实写方分别记录。
 
 现在两个原子 writer 仅在 rename 成功后向既有 configEventBus 发 capabilities domain 事件，changedKeys 为规范化项目根，沿用 changeSetId/timestamp；不带正文、env 或密钥。同步/异步共用一个短通知函数，避免两个真实写入点漂移。事件不冒充 env file-scope，避免触发 VAPID 等无关键的重载；不增加新 bus、watcher、revision 数据库或缓存切换。
 
