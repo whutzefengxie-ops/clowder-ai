@@ -336,3 +336,15 @@ checkpoint_review 对 `236dc8756b1ed17a02a54e18e21a7fc122df58a0` 给出 approved
 旧环境一致性正例将写入时机从 capture 内移到 binding 已完成之后，继续验证 discovery 与真实 invoke 使用相同旧 HOME；准入期间变化由新增负例明确覆盖，并非删除该时窗的断言。`account-currentness-native-final.log` 17 PASS，涵盖实际原生消费者、账号绑定、事件订阅与正式保存诊断；`account-currentness-invocation-final.log` 289 项=285 PASS+原 AGY Native Windows birth-identity 4 FAIL。API tsc、3 文件 Biome 无错误，无真实模型或新增服务。
 
 复杂度复核：复用同一已有解析 owner，新增 13 行内联比较，不增加存储、环境配置项、watcher、启动器或认证路径。当前变化仅明确拒绝不一致准入，尚未自动重新解析；MCP/工作区/全局输入的全 owner 读前读后版本协议、持续变化冲突处理、通知完整性及会话兼容仍未完成。不能以该保护或局部通过替代完整 W2/C15；此账号 currentness 切片等待独立审查。
+
+checkpoint_review 对 `cd81df15458fa51a00835ffdf018d42007b0b40d` 给出 approved，subject 为 `task:01a1881e-1a7b-78d0-9a62-ff99b0ab7a01/checkpoint-account-currentness`。独立 73 PASS，含实际来源双读、凭据轮换、删除/损坏/孤立凭据拒绝、元数据控制、原生继承与冻结后变化；无未关闭 finding。自动 reparse、其他 owner 和完整 W2 仍未完成。
+
+## W2 后续成员出队服务刷新切片（尚未完成 W2）
+
+原 AgentRouter.refreshFromRegistry 会替换 services/unavailableServices 对象，已取得策略依赖的串行路由仍持有旧对象。第一个成员运行期间更新实现后，后续尚未准入成员会继续用旧服务，或者拿不到最新不可用原因。现仅原地更新 Router 自有两张表，保留同步发布；已 pin 的 invocation 仍持有原服务引用，后续成员在自己的出队边界读取当前表。没有新缓存 owner、轮询或发布协议。
+
+`router-refresh-inflight-red.log` 两条实际 AgentRouter→保留的 getStrategyDeps→routeSerial 旅程先 RED：暂停第一成员、更新 registry/router，再恢复执行，第二成员仍调用旧服务。修复后，第一成员跨刷新继续旧输出，第二成员使用新服务，或明确展示新的不可用原因；新第一服务没有接管活动调用。
+
+首轮 `router-refresh-inflight-green.log` 250 项=249 PASS+1 FAIL。失败为旧 non-native-L0 断言只匹配 `## 协作\n`；`router-collab-newline-witness.log` 实际消费者见证 LF=false、CRLF=true、章节为 `## 协作`，证明确有完整章节，只是 Windows 模板换行。删除临时诊断，仅该断言规范化 CRLF，其他身份/A2A/决策树断言不变，产品提示词不变。最终 `router-refresh-inflight-green-final.log` 250 PASS，无新增 skip，含实际刷新旅程、完整 Router/提及解析/正式策略依赖、权限接线、串并行策略、元数据和 generation；API tsc 通过，三个相关文件 Biome 无错误，旧夹具逻辑 diff 仅一行。
+
+复杂度复核：原类 6 增 4 删，维护既有表的对象身份；不改变当前 turn 的绑定、不重新发送消息、不新建运行实例。此修复不证明 catalog 与 service 发布的全部中间状态已消除，服务/成员 client 身份匹配与全 owner 一致性重解析仍须继续；无真实模型调用，此 Router 切片等待独立审查。

@@ -129,7 +129,8 @@
       "status": "NOT_RUN",
       "evidence": [
         "README.md#W2-实现-generation-准入切片尚未完成-W2：正式准入期间注册/服务代次变更409及下一调用新代次；跨owner重解析与会话兼容仍未完成",
-        "README.md#W2-账号与启动策略读后核验切片尚未完成-W2：消费投影变化409与无关元数据控制项；非完整跨owner一致性"
+        "README.md#W2-账号与启动策略读后核验切片尚未完成-W2：消费投影变化409与无关元数据控制项；非完整跨owner一致性",
+        "README.md#W2-后续成员出队服务刷新切片尚未完成-W2：真实串行路由保留活动服务、后续成员新服务/最新不可用原因；非全发布协议"
       ]
     },
     {
@@ -389,5 +390,13 @@
     "subject": "task:01a1881e-1a7b-78d0-9a62-ff99b0ab7a01/checkpoint-implementation-generation",
     "findings": [],
     "evidence": "README.md#W2-实现-generation-准入切片尚未完成-W2"
+  },
+  "accountCurrentnessCheckpointReview": {
+    "reviewer": "checkpoint_review",
+    "verdict": "approved",
+    "reviewedHead": "cd81df15458fa51a00835ffdf018d42007b0b40d",
+    "subject": "task:01a1881e-1a7b-78d0-9a62-ff99b0ab7a01/checkpoint-account-currentness",
+    "findings": [],
+    "evidence": "README.md#W2-账号与启动策略读后核验切片尚未完成-W2"
   }
 }
