@@ -44,7 +44,7 @@ Copy-Item -LiteralPath (Join-Path $sampleRoot $sampleId) -Destination $taskDesti
 node packages/api/scripts/with-test-home.mjs node --test --test-reporter=spec ./test/role-agent-review-samples.test.js
 ```
 
-四条校准检查覆盖原始/变更的真实行为、健康对照和材料完整性。作者首次三个行为检查通过，证明 A/B 已知回归可复现、C 满足声明边界；这不是候选审查通过证据。新增 manifest 校准后仍须运行并独立 review。当前仅完成量尺准备，Q02 真实绑定两轮盲审继续 NOT_RUN；Q03/Q04 另行准备和验收。
+四条校准检查覆盖原始/变更的真实行为、健康对照和材料完整性。作者首次三个行为检查通过，证明 A/B 已知回归可复现、C 满足声明边界；这不是候选审查通过证据。加入 manifest 后四条检查通过，独立 review 回执见下。当前仅完成量尺准备，Q02 真实绑定两轮盲审继续 NOT_RUN；Q03/Q04 另行准备和验收。
 
 checkpoint_review 对 `4c91c38852737620d90ac941b0d955d6b8e2c5aa` 给出 approved，无未关闭 P1/P2。独立 9 PASS 覆盖正式入口、临时 index 的 Windows 检出哈希、文档复制边界，以及健康 C 的额外 514 组 ASCII 输入等价检查。该回执只批准样本校准；未执行真实候选盲审，不计为 Q02 通过。
 

@@ -488,3 +488,5 @@ checkpoint_review 对 `4c91c38852737620d90ac941b0d955d6b8e2c5aa` 返回 approved
 自检发现首次实现把 toAllCatConfigs 放在 reset 后，会在重复 catId 投影失败时清空旧 registry；有效 `catalog-publication-projection-red-valid.log` 先复现丢失，现恢复原先先完整校验、再发布的顺序。更早 duplicate 夹具被既有迁移处理而非命中投影错误，不算此 RED。最终 API tsc 与 4 文件 Biome 无错误，旧警告未扩散清理；无模型或常驻服务，新夹具数据保留。
 
 复杂度复核及 map delta：目录 owner→已有 registry→invocation 的原边增加来源证明，WeakMap 只附短期校验，不提供身份数据/编辑接口/持久状态。两个实际发布点共用同一个注册函数，无新身份库、revision 总线、队列或 launcher。全部策略/env/CA、常规插件激活、合法写入通知、持久审计和完整 W2/C05/C15 仍未完成；性能 20 次对照仍需总验收，不把本切片测试耗时当性能结论。等待独立审查。
+
+checkpoint_review 对 `1ef2f234401e51cdc8cc7697dbc5a8af33948983` 返回 approved，subject 为 checkpoint-catalog-publication。独立 42 PASS，确认失败发布保留旧 registry/额外成员、两个来源隔离、legacy 非持久读取不改字节、最后等待期间真实 locked writer 变更被拒绝及原身份/串并行重解析；无未关闭 finding。批准仅限此切片，完整 W2 与性能验收继续未完成。此轮四个切片均已独立批准，全部 34 个 C/E/Q 整体验收状态保持 NOT_RUN。
