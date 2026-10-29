@@ -826,6 +826,7 @@ export async function* routeSerial(
           ownerAuthProvenance,
           service: pinnedService,
           toolExecutionPolicy: options.toolExecutionPolicy,
+          ...(options.liveCompanion && index === 0 ? { liveCompanion: options.liveCompanion } : {}),
           ...(catSignal ? { signal: catSignal } : {}),
         });
       } catch (error) {

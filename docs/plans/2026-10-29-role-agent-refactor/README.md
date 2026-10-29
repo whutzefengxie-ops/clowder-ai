@@ -278,3 +278,7 @@ checkpoint_review 对 `0df53ed32d973f7698b161f9c7b110eaadd7c666` 给出 approved
 扩大回归 `codex-mcp-regression.log` 为 171 项=153 PASS+18 FAIL。为核实来源，将本次四个已修改源码的精确补丁保存在任务 artifacts，暂时反向应用并编译未修改的 HEAD，重跑对应三个旧测试文件；`codex-mcp-platform-baseline.log` 为 127 项=109 PASS+相同 18 FAIL。它们来自 Windows 连接池关闭后的直连、public 原生私有 workspace 检查和 POSIX cache 路径断言。随后原样恢复补丁并重新编译，再完成上述 33 PASS；不把基线失败当通过，也未为测试放开产品隔离检查。
 
 复杂度复核：保留原解析与材化 owner，只把有两个真实调用方的捕获逻辑移到同目录模块；原大类减少代码，新增模块小于 200 行，无 launcher、配置总线、认证库或通用适配 DSL。map delta 只补现有消费边界。完整 env/原生自动发现、一致性重解析、写入通知、实现 generation 和会话兼容仍待继续，W2/C05/C15 仍未整体验收。此 Codex 切片等待独立审查。
+
+独立审查 `656d611ae96d0d7ec39900e6e12a4fe14d4e2f16` 返回 P2：routeSerial 准入漏传 liveCompanion，导致 Live 错误捕获普通 MCP。公开路由反例 `codex-live-admission-red.log` 为 2 RED，首成员报 execution_binding_unavailable。现仅补与实际 invoke 相同的首成员条件，不给后续成员传播 Live 标志。最初夹具修完该点后又触发原 Host shared MCP 读取；为隔离新增捕获回归，最终夹具将首成员设 mcpSupport=false，第二普通成员保持 true，分别证明 Live 能进入真实路由消费者、普通成员仍校验缺失配置。原 shared 读取未由此修改，仍纳入后续 W2 输入清单；两条不同失败不混为同一修复。
+
+`codex-live-admission-green-isolated.log` 38 PASS，含实际 routeSerial 两场景、Codex 冻结/真实 MCP、策略、Live 启动/生命周期/MCP 和存量 live carriers。API tsc、两文件 Biome 通过，无真实模型或新增服务。此 P2 修复等待同一 reviewer 独立复核。
