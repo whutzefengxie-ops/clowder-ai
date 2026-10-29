@@ -421,12 +421,14 @@ class ServiceManager {
       // ordinary deployment's existing explicit workspace selection.
       CAT_CAFE_RUNTIME_ROOT: this.root,
       CAT_CAFE_WORKSPACE_ROOT: process.env.CAT_CAFE_WORKSPACE_ROOT?.trim() || path.join(userDataDir, 'project'),
+      CAT_CAFE_HOST_POLICY_FILE: process.env.CAT_CAFE_HOST_POLICY_FILE ?? path.join(userDataDir, 'host-policy.json'),
       ...(resolveDesktopRuntime().instanceRoot
         ? {
             CAT_CAFE_CONFIG_ROOT: path.join(userDataDir, 'project'),
             CAT_CAFE_WORKSPACE_ROOT: path.join(userDataDir, 'project'),
             CAT_CAFE_GLOBAL_CONFIG_ROOT: path.join(userDataDir, 'global'),
             CAT_CAFE_DATA_DIR: path.join(userDataDir, 'data'),
+            CAT_CAFE_HOST_POLICY_FILE: path.join(userDataDir, 'host-policy.json'),
             PREVIEW_GATEWAY_PORT: '0',
             CAT_CAFE_SKIP_HOMEDIR_MIGRATION: '1',
             CAT_CAFE_SESSION_COOKIE_NAME: `cat_cafe_desktop_${crypto.createHash('sha256').update(userDataDir).digest('hex').slice(0, 12)}`,

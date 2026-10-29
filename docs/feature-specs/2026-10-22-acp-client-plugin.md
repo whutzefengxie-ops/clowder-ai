@@ -58,7 +58,7 @@ Host PR 依赖 #1665；插件 PR 依赖本次 Host 扩展。这里只提交源�
 
 ## 可信主机兼容模式（2026-10-22）
 
-严格路径、Windows 祖先兼容 B、受限配置审计恢复 C 分别有独立契约；默认 strict/required。内网部署通过 Host .env 一次保存，重启与升级持续沿用；D 的一次性准备独立交付，API 不自动回写部署文件。
+严格路径、Windows 祖先兼容 B、受限配置审计恢复 C 分别有独立契约；公共默认 strict/required。内网可用发行 hostPolicy 提供长期默认值，owner 文件或持久环境做显式覆盖；逐键 owner > 环境新键/旧 exact-one > 发行预设 > 公共默认。桌面默认只读实际 userDataDir/host-policy.json，CLI 通过绝对路径指定；API 启动固定同一快照，不自动创建或回写文件/.env。D 的一次性准备与离线预置独立交付。
 审计失败只允许 Windows trusted-host 下已有 ACP client 的显式 bootstrapRoot 变化；完整原生检查后，在写事务内复读原文本、包 digest、grant 并消费版本围栏。新增 client、改名称/顺序/命令/argv/MCP 或其他插件配置均不豁免，安装/启用和工具调用保持原准入。
-旧 exact 1 对未设置的新键映射受限组合，新键逐项优先，strict 会屏蔽 C；非法新值启动失败，warning 与 error 分开。保留目录自身私有权限、原生身份和直接本机管理；不改系统盘或已有 ACL，不改存量 ID/绑定/历史。持久 inventory 写事务由原生锁排他，配置写者共享事务；运行部署仍只支持一套 Host API，不提供多个 API 的 runtime 协同。
+旧 exact 1 对 owner 和环境新键均未覆盖的同键映射受限组合，有效 strict 会屏蔽 C；非法显式值或 owner 文件在监听前失败，warning 与 error 分开。启动摘要报告逐键来源，文件变化重启才生效。保留目录自身私有权限、原生身份和直接本机管理；不改系统盘或已有 ACL，不改存量 ID/绑定/历史。持久 inventory 写事务由原生锁排他，配置写者共享事务；运行部署仍只支持一套 Host API，不提供多个 API 的 runtime 协同。
 契约与操作见[设计](../design/2026-10-22-trusted-host-compatibility.md)和[指南](../ops/acp-trusted-host-compatibility.md)。报告者已有 CodeAgent 正常使用反馈，但精确构建/访问拓扑和逐项 MCP/协作/续接证据未齐；本机合成验证与真实 dsh/Claude/Pi 结果须分开记录。

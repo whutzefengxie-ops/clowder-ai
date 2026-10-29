@@ -51,7 +51,7 @@ jobs:
           redis-cli --version
           launchctl print "gui/$(id -u)"
       - name: Frozen native hooks and private desktop module data root
-        run: node --test desktop/rebuild-frozen-dependencies.test.mjs desktop/installation-lifecycle.test.js desktop/runtime-config.test.js desktop/service-manager-isolation.test.js
+        run: node --test desktop/rebuild-frozen-dependencies.test.mjs desktop/installation-lifecycle.test.js desktop/runtime-config.test.js desktop/service-manager-isolation.test.js desktop/host-policy-env.test.js
       - name: Verify exec identity proof and complete owned cleanup
         # Only test-owned literal arguments are logged by this native witness.
         # The ordinary preview launcher never logs user commands or environments.

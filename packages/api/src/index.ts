@@ -1,4 +1,5 @@
-import { reportAcpHostPolicy, resolveAcpHostPolicy } from './config/acp-host-policy.js';
+import { installAcpHostPolicy, reportAcpHostPolicy } from './config/acp-host-policy.js';
+import { loadAcpHostPolicy } from './config/host-policy-file.js';
 import { AgentServiceUnavailableError } from './domains/cats/services/agents/registry/AgentServiceUnavailableError.js';
 import { hasRecentWorkPublication } from './domains/cats/services/agents/routing/recent-global-work-reader.js';
 import { createRefreshingAcpSessionProvider } from './domains/cats/services/agents/session-contract/acp-session-provider.js';
@@ -639,7 +640,8 @@ function hasRuntimeSessionDrain(service: AgentService): service is AgentService 
 
 async function main(): Promise<void> {
   startupMilestone('module-graph-loaded');
-  const acpHostPolicy = resolveAcpHostPolicy();
+  const acpHostPolicy = loadAcpHostPolicy();
+  installAcpHostPolicy(acpHostPolicy);
   let managedCommandWakeRecovery: ManagedCommandWakeRecoverySweep | undefined;
   const { logger: customLogger, isDebugMode, LOG_DIR_PATH } = await import('./infrastructure/logger.js');
   let sessionHookAuthenticationReady = (): boolean => false;

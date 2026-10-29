@@ -81,6 +81,9 @@ jobs:
           node --import tsx --test
           packages/api/test/acp/acp-bootstrap-posix-preservation.test.ts
           packages/api/test/acp/acp-host-policy-matrix.test.ts
+          packages/api/test/acp/host-policy-file.test.js
+          packages/api/test/acp/host-policy-process.test.js
+          scripts/deployment-host-policy.test.mjs
       - name: Audit diagnostics respect explicit paths
         run: node --test scripts/logs-health-audit.test.mjs
       - name: Plugin native auth link diagnostic
