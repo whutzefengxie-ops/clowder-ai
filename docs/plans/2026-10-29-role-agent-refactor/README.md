@@ -536,3 +536,15 @@ checkpoint_review 对 f000d5dd4565f608d58d35c91d95beb1cccdd5b2 返回 changes_re
 复杂度复核：仅修现有投影和槽位收尾，无新 store、协议、失败重试、状态框架或追加错误正文。完整 C12、原生停止证明及恢复未知状态仍未闭环；另一真实 Node mock 反例已复现异步进程退休未完成即发布终态，独立在下一切片处理。
 
 最终 Web tsc exit 0、四文件 Biome 无错误；早一次 tsc 发现 Boolean 抹去错误码的类型收窄，已改用明确的 failure 值，未用类型断言掩盖可空消息。独立复核仍待回执。
+
+checkpoint_review 对 43376b8bc22d81ef663aa0bcf418ff5e64f6c205 返回 approved，原取消清理及恢复三条 P2 和两个 Web P2 全部关闭；独立 34 PASS，保留真实 f000 API 事件回放与当前消费者对照。reviewer 确认 solo idle 清 badge 的既有合同可接受，并更新 witness 核对明确 error toast、禁止 success；sibling 保留 loading/error 状态，旧 parent/同 parent 新 child 均受保护。批准只限该 SHA 的取消/恢复片段。
+
+## W3 单飞 ACP 物理退休等待（尚未完成 W3）
+
+实际 AcpClient→Node CodeAgent mock→原 pool→AcpAgentService→AcpSessionProvider→Bridge 的反例 cancel-native-stop-red.log 1 FAIL：本地取消使协议流结束，pool 只排队 close，真实 PID 仍活着时 Host 已发 done。现有 AcpLease.release 返回原 retirement barrier，重复/过代 release 也等待该 barrier；实际 service finally await release。没有新关闭器、timer、重试或状态存储。
+
+API tsc exit 0 后运行。cancel-native-stop-regression.log 65 PASS，覆盖 pool、generation handoff、HTTPstream、原 retirement 和 iterator；新真实进程成功与失败对照各一条。追加并发 release 也不能提前返回，cancel-native-stop-final.log 2 PASS；关闭失败保留 session_contract_failed 和 busy，禁止将其改写为 cancelled 或启动第二 native turn。首轮扩大运行 55 PASS+10 既有 Windows Temp ACL PARENT_REPLACEMENT 失败；沿项目已有测试进程内 trusted-host 模式复跑通过，不认证 strict ACL、不修改产品策略。新测试不使用网络/认证/持久业务历史，仅隔离 mock HOME，逐实例记录源码/程序/夹具哈希、PID、目录及关闭状态；数据保留。
+
+三文件 Biome 无错误，九条原有警告不扩散清理。复杂度复核仅复用既有 barrier 与 finally 的所有权；支持 multiplexing 的未知会话、Host 取消超时与路由提前收尾、重启及完整 C12 尚未完成。该物理退休片段待独立审查。
+
+取消/Bridge 全部 18 个合同文件追加验证 cancel-native-stop-contracts.log 为 197 PASS。七份本切片 mock 实例台账均为 closed-data-retained/running:false，按 native-cancel-stop 精确命令行回读无运行 Node；核验快照见 cancel-native-stop-instances.json，没有删除任何 HOME 或历史。

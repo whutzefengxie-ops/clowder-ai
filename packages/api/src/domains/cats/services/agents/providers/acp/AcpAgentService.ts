@@ -1327,7 +1327,7 @@ export class AcpAgentService implements AgentService {
         if (onAbort && options?.signal) {
           options.signal.removeEventListener('abort', onAbort);
         }
-        lease.release();
+        await lease.release();
       }
     }
   }

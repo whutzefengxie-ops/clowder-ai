@@ -274,13 +274,10 @@
   ],
   "lastProgressAt": "2026-10-29T23:16:38Z",
   "cancelBroadcastCheckpointReview": {
-    "verdict": "PENDING_RE_REVIEW",
-    "lastReviewedHead": "f000d5dd4565f608d58d35c91d95beb1cccdd5b2",
-    "lastVerdict": "changes_requested",
-    "findings": [
-      "P2 background sibling loading cleared by a single recovered child",
-      "P2 failed recovery done.errorCode projects success in current/background consumers"
-    ],
+    "verdict": "approved",
+    "lastReviewedHead": "43376b8bc22d81ef663aa0bcf418ff5e64f6c205",
+    "lastVerdict": "approved",
+    "findings": [],
     "evidence": "README.md#W3-取消请求广播与前端消费尚未完成-W3",
     "tests": {
       "red": "1 PASS + 2 FAIL",
@@ -290,24 +287,30 @@
       "web": "19 PASS",
       "webRecoveryRed": "2 PASS + 3 FAIL",
       "webRecovery": "131 PASS",
-      "actualApiWebReplay": "2 PASS + 1 FAIL: idle badge expectation under independent review"
+      "actualApiWebReplay": "Independent witness updated for existing idle teardown: error notification required, no idle badge required"
     },
-    "scope": "Request projection and real existing consumers only; native unknown recovery and complete C12 remain incomplete"
+    "scope": "Request projection and real existing consumers only; native unknown recovery and complete C12 remain incomplete",
+    "closedFindings": [
+      "P2 background sibling loading cleared by a single recovered child",
+      "P2 failed recovery done.errorCode projects success in current/background consumers",
+      "P2 confirmed-gone REST recovery lost its terminal projection"
+    ],
+    "independentTests": "34 PASS"
   },
   "cancelQuiescenceCheckpointReview": {
-    "verdict": "PENDING_RE_REVIEW",
+    "verdict": "approved",
     "originalReviewedHead": "cbb5124c2d48f888ebfb02127081c8f27ba9de25",
     "originalVerdict": "changes_requested",
     "closedFindings": [
       "P2 next-path cleanup failure clears active",
-      "P2 unstarted concurrent return/next leaves permanent busy"
-    ],
-    "lastReviewedHead": "f000d5dd4565f608d58d35c91d95beb1cccdd5b2",
-    "lastVerdict": "changes_requested",
-    "findings": [
+      "P2 unstarted concurrent return/next leaves permanent busy",
       "P2 background sibling loading cleared by a single recovered child",
-      "P2 failed recovery done.errorCode projects success in current/background consumers"
+      "P2 failed recovery done.errorCode projects success in current/background consumers",
+      "P2 confirmed-gone REST recovery lost its terminal projection"
     ],
+    "lastReviewedHead": "43376b8bc22d81ef663aa0bcf418ff5e64f6c205",
+    "lastVerdict": "approved",
+    "findings": [],
     "evidence": "README.md#W3-取消终态与迭代器清理纵向切片尚未完成-W3",
     "tests": {
       "red": "5 FAIL",
@@ -316,9 +319,20 @@
       "authorReplay": "5 PASS",
       "webRecoveryRed": "2 PASS + 3 FAIL",
       "webRecovery": "131 PASS",
-      "actualApiWebReplay": "2 PASS + 1 FAIL: idle badge expectation under independent review"
+      "actualApiWebReplay": "Independent witness updated for existing idle teardown: error notification required, no idle badge required"
     },
-    "scope": "Existing bridge/ACP iterator and terminal boundary; native unknown recovery/transport terminal/full C12 remain incomplete"
+    "scope": "Existing bridge/ACP iterator and terminal boundary; native unknown recovery/transport terminal/full C12 remain incomplete",
+    "independentTests": "34 PASS"
+  },
+  "nativeRetirementCheckpointReview": {
+    "verdict": "PENDING_REVIEW",
+    "evidence": "README.md#W3-单飞-ACP-物理退休等待尚未完成-W3",
+    "tests": {
+      "red": "1 FAIL",
+      "regression": "65 PASS",
+      "finalNativeAndConcurrentRelease": "2 PASS"
+    },
+    "scope": "Owned single-flight retirement only; multiplex unknown/Host route timeout/full C12 remain incomplete"
   },
   "catalogPublicationCheckpointReview": {
     "reviewer": "checkpoint_review",
