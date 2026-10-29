@@ -122,6 +122,7 @@ for (const source of ['capabilities', 'http-bearer', 'plugin-mcp']) {
       },
     });
     const deps = {
+      apiUrl: 'http://127.0.0.1:13004',
       threadStore: { get: () => ({ id: 'thread', projectPath: project, createdBy: 'owner' }) },
       ...(source === 'plugin-mcp'
         ? {

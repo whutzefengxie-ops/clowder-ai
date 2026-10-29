@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import type { SharedInvocationContext } from '@cat-cafe/mcp-server/dist/shared-invocation-context.js';
 import {
   type CatConfig,
   type CliEffortPreset,
@@ -34,6 +35,7 @@ import {
 import type { FrozenExecutionWorkspace } from './execution-workspace.js';
 
 export interface FrozenExecutionBinding {
+  readonly sharedMcpLaunch?: Readonly<{ transport: string; context?: SharedInvocationContext }>;
   readonly openCodeMcpConfig?: import('../providers/opencode-config-writer.js').OpenCodeMcpConfigPlan;
   readonly accountEnv?: Record<string, string>;
   readonly providerOptions?: Readonly<

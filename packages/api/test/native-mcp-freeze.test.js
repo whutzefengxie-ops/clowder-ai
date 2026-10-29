@@ -137,6 +137,7 @@ for (const scenario of [
         ? new FallbackCarrierWrapper(service, id, 'print_sdk', 'print_sdk', new CarrierHealthStore())
         : service;
     const deps = {
+      apiUrl: 'http://127.0.0.1:13004',
       threadStore: { get: () => ({ id: 'thread', projectPath: project, createdBy: 'owner' }) },
       ...(scenario === 'plugin-mcp'
         ? {

@@ -46,6 +46,7 @@ test('admission fences a role registry change while resolving the thread workspa
   t.after(() => release());
   const binding = prepareInvocationExecutionBinding(
     {
+      apiUrl: 'http://127.0.0.1:13004',
       threadStore: {
         get: async () => {
           enter();
@@ -67,7 +68,7 @@ test('admission fences a role registry change while resolving the thread workspa
 test('a native invocation carries immutable L0 bytes that survive later role edits', async (t) => {
   const { all, catId, member } = fixture(t);
   const binding = await prepareInvocationExecutionBinding(
-    { threadStore: null },
+    { apiUrl: 'http://127.0.0.1:13004', threadStore: null },
     { catId, userId: 'isolated-owner', threadId: 'frozen-thread', service },
   );
   assert.ok(binding.frozenL0Input);
@@ -96,7 +97,7 @@ test('admission fences a member change while the concrete provider captures MCP 
   });
   t.after(() => release());
   const pending = prepareInvocationExecutionBinding(
-    { threadStore: null },
+    { apiUrl: 'http://127.0.0.1:13004', threadStore: null },
     {
       catId,
       userId: 'isolated-owner',

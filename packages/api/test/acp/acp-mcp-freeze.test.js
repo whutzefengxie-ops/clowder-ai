@@ -123,6 +123,7 @@ for (const source of ['capabilities', 'project-mcp', 'registered-plugin', 'plugi
       t.after(() => registered.releaseAll('owned_test_complete'));
     }
     const deps = {
+      apiUrl: 'http://127.0.0.1:13004',
       ...(source === 'plugin-mcp'
         ? {
             resolveInvocationPluginMcpView: async () => ({

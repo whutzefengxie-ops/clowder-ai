@@ -1418,7 +1418,7 @@ function resolveInvocationMcpServerPath() {
 }
 
 export async function prepareInvocationExecutionBinding(
-  deps: Pick<InvocationDeps, 'threadStore' | 'profileRepository' | 'resolveInvocationPluginMcpView'>,
+  deps: Pick<InvocationDeps, 'threadStore' | 'profileRepository' | 'resolveInvocationPluginMcpView' | 'apiUrl'>,
   input: {
     catId: CatId;
     threadId: string;
@@ -1485,8 +1485,13 @@ export async function prepareInvocationExecutionBinding(
         }
       : undefined;
   const exposureProject = pluginMcpExposureProject(workspace.threadProjectPath, workspace.workingDirectory);
+  const mcpTransport = process.env.CAT_CAFE_MCP_TRANSPORT ?? 'shared';
+  const captureSharedMcp =
+    catConfig?.provider !== 'openai-chatgpt-pro' &&
+    catConfig?.mcpSupport !== false &&
+    input.toolExecutionPolicy?.mode !== 'read_only';
   const captured =
-    captureOptions || captureOpenCodeMcp
+    captureOptions || captureOpenCodeMcp || captureSharedMcp
       ? await preflightRace(
           Promise.resolve().then(async () => {
             const view = await deps.resolveInvocationPluginMcpView?.();
@@ -1511,9 +1516,19 @@ export async function prepareInvocationExecutionBinding(
                       workspace.workingDirectory,
                     )
                   : undefined;
+                input.signal?.throwIfAborted();
+                const sharedMcpContext = captureSharedMcp
+                  ? await prepareSharedMcpLaunch({
+                      catId: input.catId,
+                      apiUrl: deps.apiUrl,
+                      workingDirectory: workspace.workingDirectory,
+                      transport: mcpTransport,
+                    })
+                  : undefined;
                 return {
                   ...(providerOptions ? { providerOptions } : {}),
                   ...(openCodeMcpConfig ? { openCodeMcpConfig } : {}),
+                  sharedMcpLaunch: { transport: mcpTransport, context: sharedMcpContext },
                 };
               },
               view,
@@ -1525,7 +1540,7 @@ export async function prepareInvocationExecutionBinding(
           'service.captureInvocationOptions:execution-binding',
           input.signal,
         )
-      : undefined;
+      : { sharedMcpLaunch: { transport: mcpTransport } };
   input.signal?.throwIfAborted();
   if (catRegistry.getRevision() !== memberRegistryRevision)
     throw Object.assign(new Error('Member configuration changed during execution admission; retry this invocation.'), {
@@ -1633,18 +1648,9 @@ async function* invokePreparedSingleCat(deps: InvocationDeps, params: Invocation
     ...(deps.workflowSopStore ? { workflowSopStore: deps.workflowSopStore } : {}),
   });
 
-  const mcpTransport = process.env.CAT_CAFE_MCP_TRANSPORT ?? 'shared';
-  const sharedMcpContext =
-    isCloudOnlyInvocation ||
-    frozenExecutionBinding.catConfig?.mcpSupport === false ||
-    effectiveToolExecutionPolicy?.mode === 'read_only'
-      ? undefined
-      : await prepareSharedMcpLaunch({
-          catId,
-          apiUrl,
-          workingDirectory: frozenExecutionBinding.workspace.workingDirectory,
-          transport: mcpTransport,
-        });
+  const sharedMcpLaunch = frozenExecutionBinding.sharedMcpLaunch;
+  if (!sharedMcpLaunch) throw new Error('Shared MCP admission snapshot unavailable');
+  const { transport: mcpTransport, context: sharedMcpContext } = sharedMcpLaunch;
   const { invocationId, callbackToken } = await registry.create(
     userId,
     catId,

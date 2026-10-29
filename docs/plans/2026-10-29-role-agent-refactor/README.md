@@ -282,3 +282,15 @@ checkpoint_review 对 `0df53ed32d973f7698b161f9c7b110eaadd7c666` 给出 approved
 独立审查 `656d611ae96d0d7ec39900e6e12a4fe14d4e2f16` 返回 P2：routeSerial 准入漏传 liveCompanion，导致 Live 错误捕获普通 MCP。公开路由反例 `codex-live-admission-red.log` 为 2 RED，首成员报 execution_binding_unavailable。现仅补与实际 invoke 相同的首成员条件，不给后续成员传播 Live 标志。最初夹具修完该点后又触发原 Host shared MCP 读取；为隔离新增捕获回归，最终夹具将首成员设 mcpSupport=false，第二普通成员保持 true，分别证明 Live 能进入真实路由消费者、普通成员仍校验缺失配置。原 shared 读取未由此修改，仍纳入后续 W2 输入清单；两条不同失败不混为同一修复。
 
 `codex-live-admission-green-isolated.log` 38 PASS，含实际 routeSerial 两场景、Codex 冻结/真实 MCP、策略、Live 启动/生命周期/MCP 和存量 live carriers。API tsc、两文件 Biome 通过，无真实模型或新增服务。此 P2 修复等待同一 reviewer 独立复核。
+
+checkpoint_review 对 `136528bcb27dc52c547f5fe52e766eed08d2ae35` 给出 approved，subject 为 `task:01a1881e-1a7b-78d0-9a62-ff99b0ab7a01/checkpoint-codex-mcp`。Live 准入 P2 闭环，独立 7 PASS，包含首成员/普通后续成员、两轮真实 MCP wrapper/凭据、特殊名称、禁用 HTTP 与 Pencil；无未关闭 finding。只批准 Codex 切片。
+
+## W2 Host shared MCP 上下文消费切片（尚未完成 W2）
+
+将原 prepareSharedMcpLaunch 移到准入的同一成员/插件 scope，捕获 transport 及原 SharedInvocationContext；不新增解析规则或启动器。Host invocation 注册与 callback 凭据材化消费同一深冻结对象，不在准入后读取部署、数据目录、工作目录、允许目录或成员工具范围。原 cloud-only、成员 MCP off、read-only 排除条件保持；原请求认证/撤销校验不变。快照缺失明确拒绝，不回落到磁盘/当前环境。
+
+`shared-mcp-freeze-red.log` 两条真实 Host 消费反例先 RED：准入后修改普通配置时注册了后来的部署/目录/范围；配置变损坏时消费者抛错。修复后两条均通过，实际 registry.create 和 provider callback 使用准入值。`shared-mcp-freeze-green.log` 联合 45 PASS，覆盖全部已迁移 ACP/native MCP、L0、线程偏好、账号环境及 Live 路由；API tsc 通过，相关 8 文件 Biome 无错误。五个原先只测局部准入的夹具补必需 apiUrl，最初 Invalid URL 失败保留在 green-first 日志，不给产品加测试专用 fallback。
+
+扩大 `shared-mcp-freeze-regression.log` 314 项=309 PASS+4 原 AGY Native Windows birth-identity FAIL+1 原 Redis SKIP，覆盖实际串并行路由、元数据、invoke 及共享 MCP 认证/撤销/载体/ACP/工作目录/成员 owner。已存在的 AGY 出生身份检查不放宽，不把 skip 计通过。
+
+复杂度复核：只将一次既有读取提前并保存到已有 binding，准入函数/原 shared owner 继续各司其职；没有 revision bus、会话库或通用 launcher。跨 owner revision/generation 重解析、所有配置写入通知、原生自动发现及完整 env/实现生命周期仍未完成。无模型调用或新增常驻环境；此 Host shared 切片等待独立审查。

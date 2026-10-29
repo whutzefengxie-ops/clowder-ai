@@ -125,7 +125,10 @@ for (const scenario of [
       },
     });
     const binding = await prepareInvocationExecutionBinding(
-      { threadStore: { get: () => ({ id: 'thread', projectPath: workingDirectory, createdBy: 'owner' }) } },
+      {
+        apiUrl: 'http://127.0.0.1:13004',
+        threadStore: { get: () => ({ id: 'thread', projectPath: workingDirectory, createdBy: 'owner' }) },
+      },
       {
         catId: id,
         threadId: 'thread',

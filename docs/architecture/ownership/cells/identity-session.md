@@ -21,6 +21,7 @@ code_anchors:
   - packages/api/src/domains/cats/services/agents/providers/member-execution-preferences.ts
   - packages/api/src/domains/cats/services/agents/invocation/execution-account-binding.ts
   - packages/api/src/domains/cats/services/agents/invocation/execution-workspace.ts
+  - packages/api/src/domains/cats/services/agents/invocation/shared-mcp-launch.ts
   - packages/api/src/config/codex-cli.ts
   - packages/api/src/domains/cats/services/agents/providers/acp/AcpAgentService.ts
   - packages/api/src/domains/cats/services/agents/providers/claude-mcp-config.ts
@@ -203,6 +204,7 @@ F209's entity registry is adjacent but not canonical for agent identity. Its `en
 - For provider accounts, resolve through the existing account store, pass one launch snapshot into the existing execution boundary, and finalize authentication env after all overlays. Control and reconnect reuse the accepted launch options and validate the same initialized connection before business RPC. API/custom probes and calls share a stable account/config/private execution root; Collective remains separately isolated. Collective keeps its isolated instructions, skills, history and SQLite root while projecting only the selected existing file login. Managed account layout is not enabled by P2a; its remaining continuity/configuration checks are in the F320 plan and fixture evidence.
 - For thread-scoped agent runtime config, persist only raw intent and project it through the current roster/provider/model capability after actual-cat routing; keep typed invocation options and provider argv validation as the execution boundary. Existing execution admission captures member model/effort and thread effort/speed before leases; the provider consumes that snapshot while adopted values remain separate observations. Workspace capture copies the ThreadStore record rather than retaining a mutable in-memory store reference.
 - ACP admission consumes the existing MCP resolver through the concrete pinned service and stores owned descriptors in the execution binding. Session ownership still materializes the current turn's callback credentials; descriptor capture does not move credential or tool authority.
+- Host admission also captures the existing shared MCP context and transport in that binding. Invocation creation and callback materialization consume the same immutable deployment, data/workspace roots and admitted families; they do not repeat discovery after admission. This does not replace the MCP request authority or its revocation checks.
 - For connector binding, use `ConnectorThreadBindingStore` and connector binding keys instead of ad hoc thread maps.
 - For bubble identity, follow ADR-033 and route through `bubble-pipeline` contracts and tests.
 - For runtime session binding, use Session Chain / runtime-session metadata keyed by Clowder AI session id and runtime session id. IDE-direct registration belongs behind the external runtime registration contract and agent-key authorization, not ad hoc JSON maps.
