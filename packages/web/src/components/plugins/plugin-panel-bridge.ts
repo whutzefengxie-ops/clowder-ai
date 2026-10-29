@@ -5,6 +5,10 @@ export function sandboxedPanelHtml(value: unknown): string {
   if (
     !value ||
     typeof value !== 'object' ||
+    !('kind' in value) ||
+    value.kind !== 'plugin-panel' ||
+    !('version' in value) ||
+    value.version !== 1 ||
     !('html' in value) ||
     typeof value.html !== 'string' ||
     value.html.length > 2_000_000

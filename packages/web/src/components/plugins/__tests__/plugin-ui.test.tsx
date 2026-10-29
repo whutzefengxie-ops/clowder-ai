@@ -23,7 +23,7 @@ describe('plugin sidebar panel isolation', () => {
           JSON.stringify(
             path === '/api/plugin-ui'
               ? { entries: [{ instanceId: 'fixture', commandId: 'open', generation: 'activation', label: '问题反馈' }] }
-              : { result: { html: '<p>isolated package UI</p>' } },
+              : { result: { kind: 'plugin-panel', version: 1, html: '<p>isolated package UI</p>' } },
           ),
         ),
     );
@@ -50,9 +50,11 @@ describe('plugin sidebar panel isolation', () => {
     expect(() => sandboxedPanelHtml({ html: 'x'.repeat(2_000_001) })).toThrow();
     expect(() => sandboxedPanelHtml({ html: null })).toThrow();
     expect(
-      sandboxedPanelHtml({ html: '<meta http-equiv="Content-Security-Policy" content="default-src *">' }).startsWith(
-        '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'',
-      ),
+      sandboxedPanelHtml({
+        kind: 'plugin-panel',
+        version: 1,
+        html: '<meta http-equiv="Content-Security-Policy" content="default-src *">',
+      }).startsWith('<meta http-equiv="Content-Security-Policy" content="default-src \'none\''),
     ).toBe(true);
   });
   it('production-page HTTP fixture represents an empty installed UI registry without admitting mutations', () => {

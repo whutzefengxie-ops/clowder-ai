@@ -1,8 +1,10 @@
 'use client';
 
+import type { PluginIconSpec } from '@cat-cafe/shared';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { apiFetch } from '@/utils/api-client';
+import { PluginVisual } from '../settings/plugin-manager/PluginVisual';
 import { copyPanelImage, pluginPanelChannel, sandboxedPanelHtml } from './plugin-panel-bridge';
 
 interface Entry {
@@ -10,6 +12,7 @@ interface Entry {
   commandId: string;
   label: string;
   generation: string;
+  icon?: PluginIconSpec;
 }
 async function invoke(entry: Entry, input: unknown, signal?: AbortSignal): Promise<unknown> {
   const response = await apiFetch(
@@ -154,18 +157,7 @@ export function PluginUiEntries() {
           onClick={() => void open(entry)}
           className="flex h-10 w-10 items-center justify-center rounded-lg hover:bg-[var(--console-rail-item)]"
         >
-          <svg
-            viewBox="0 0 24 24"
-            width="20"
-            height="20"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.7"
-            aria-hidden="true"
-          >
-            <path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8v.5Z" />
-            <path d="M12 7v5m0 3h.01" />
-          </svg>
+          <PluginVisual icon={entry.icon ?? 'plug'} name={entry.label} />
         </button>
       ))}
       {active &&

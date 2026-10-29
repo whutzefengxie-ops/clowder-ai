@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import type { PluginIconSpec } from '@cat-cafe/shared';
 import type { UiCommandContribution, UiSlotItemContribution } from '@clowder-ai/plugin-contract';
 import { currentPluginOwnerRequestContext, withPluginOwnerWebhook } from '../carrier/plugin-owner-request-context.js';
 import type { PluginRuntimeAdmission } from '../carrier/runtime-carrier.js';
@@ -9,6 +10,7 @@ export interface PluginUiEntry {
   label: string;
   generation: string;
   order: number;
+  icon?: PluginIconSpec;
 }
 interface Active {
   admission: PluginRuntimeAdmission;
@@ -54,6 +56,17 @@ export class DeclaredPluginUi {
                   label: slot.label,
                   generation: active.generation,
                   order: slot.order ?? 0,
+                  ...(active.admission.packageRecord.manifest.icon
+                    ? {
+                        icon:
+                          typeof active.admission.packageRecord.manifest.icon === 'string'
+                            ? active.admission.packageRecord.manifest.icon
+                            : {
+                                ...active.admission.packageRecord.manifest.icon,
+                                src: `/api/plugin-manager/plugins/${encodeURIComponent(active.admission.packageRecord.pluginId)}/icon`,
+                              },
+                      }
+                    : {}),
                 },
               ]
             : [];

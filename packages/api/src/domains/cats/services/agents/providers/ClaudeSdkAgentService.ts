@@ -113,10 +113,6 @@ export class ClaudeSdkAgentService implements AgentService {
     return policy.mode === 'read_only';
   }
 
-  supportsFeedbackDiagnostics(): boolean {
-    return true;
-  }
-
   freshnessCarrierCapability(): AgentFreshnessCarrierCapability {
     return {
       provider: 'anthropic',

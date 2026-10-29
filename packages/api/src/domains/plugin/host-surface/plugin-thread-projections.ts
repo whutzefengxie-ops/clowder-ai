@@ -7,6 +7,7 @@ import { ExternalPluginRuntimeError } from '../external-runtime/types.js';
 
 export interface PluginThreadSummary {
   readonly id: string;
+  readonly projectRef?: string;
   readonly deepLinkUrl: string;
   readonly title: string | null;
   readonly createdAt: number;
@@ -89,6 +90,7 @@ export async function projectThread(
   ];
   return {
     id: thread.id,
+    projectRef: thread.projectPath,
     deepLinkUrl: threadDeepLinkUrl(thread.id),
     title: thread.title,
     createdAt: thread.createdAt,

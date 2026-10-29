@@ -110,8 +110,11 @@ try {
   );
   await panel.getByRole('checkbox', { name: '同意将上述脱敏材料' }).check();
   await panel.getByRole('button', { name: '开始分析', exact: true }).click();
+  await page.getByRole('button', { name: '关闭插件面板', exact: true }).click();
+  await page.getByRole('button', { name: '问题反馈', exact: true }).click();
   await panel.getByText('我已检查完整报告和所有图片').waitFor();
-  assert.equal(fixture.modelPrompt(), materials);
+  assert.equal(fixture.modelRuns(), 1, 'reopening must not invoke the member again');
+  assert.ok(fixture.modelPrompt().endsWith(materials));
   assert.ok(!(await panel.locator('textarea').inputValue()).includes('model-secret-canary'));
   await page.screenshot({ path: join(artifactRoot, 'analysis-report.png'), fullPage: true });
   await page.setViewportSize({ width: 420, height: 850 });
@@ -167,6 +170,7 @@ try {
           'automatic screenshot upload + remote readback URL',
           'prepared sanitized Agent input',
           'post-analysis sanitization',
+          'ordinary analysis survives panel reopen without another invocation',
           'narrow layout',
           'hidden PNG metadata excluded from send copy',
           'reviewed send copy equals uploaded bytes',
@@ -183,7 +187,7 @@ try {
       2,
     ),
   );
-  process.stdout.write('PASS: 17 packed-plugin / Host browser journey checks\n');
+  process.stdout.write('PASS: 18 packed-plugin / Host browser journey checks\n');
 } catch (error) {
   if (currentPage) {
     await currentPage.screenshot({ path: join(artifactRoot, 'failure.png'), fullPage: true });

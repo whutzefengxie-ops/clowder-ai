@@ -35,7 +35,7 @@ import { catRegistryMentionPatterns } from './infrastructure/connectors/mention-
 // 必须最先 import：Node 24.16 undici setTypeOfService EINVAL 崩溃防护（见文件头注释）
 import './settos-guard.js';
 import { createHash, randomUUID } from 'node:crypto';
-import { homedir, tmpdir } from 'node:os';
+import { arch, homedir, platform, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
@@ -307,7 +307,6 @@ import { TasteMemoryLifecycleStore } from './domains/memory/taste/TasteMemoryLif
 import { TasteMemoryProjectionWriter } from './domains/memory/taste/TasteMemoryProjectionWriter.js';
 import { importTasteTakeawayCandidates } from './domains/memory/taste/TasteTakeawayCandidateImporter.js';
 import { tasteDocumentAnchor } from './domains/memory/taste/taste-memory-identity.js';
-import { diagnosticProviders } from './domains/plugin/host-surface/plugin-diagnostic-provider.js';
 import { publicParticipantAvatar } from './domains/plugin/host-surface/public-participant-avatar.js';
 import { PortDiscoveryService } from './domains/preview/port-discovery.js';
 import { collectRuntimePorts } from './domains/preview/port-validator.js';
@@ -5329,10 +5328,14 @@ async function main(): Promise<void> {
       isCatAvailable,
     },
     threadDeepLinkUrl: createThreadDeepLinkUrl(frontendBaseUrl),
-    diagnostics: {
-      projectRoot: () => resolveActiveProjectRoot(),
-      clients: () => diagnosticProviders(agentRegistry, resolveActiveProjectRoot()),
-    },
+    runtimeInfo: () => ({
+      version: runtimeDeploymentRevision ?? 'unknown',
+      platform: platform(),
+      architecture: arch(),
+      nodeVersion: process.versions.node,
+      projectRoot: resolveActiveProjectRoot(),
+      logDirectory: LOG_DIR_PATH,
+    }),
     threadProjections: {
       backlogStore,
       cats: {

@@ -8,10 +8,13 @@ import { pathToFileURL } from 'node:url';
 import { validateManifest } from '@clowder-ai/plugin-contract';
 import Fastify from 'fastify';
 import { parse } from 'yaml';
+import { ThreadStore } from '../../src/domains/cats/services/stores/ports/ThreadStore.js';
 import { createModuleHostInvocation } from '../../src/domains/plugin/builtin-runtime/carriers/module-host-invocation.js';
 import type { PluginRuntimeAdmission } from '../../src/domains/plugin/carrier/runtime-carrier.js';
 import { DeclaredPluginUi } from '../../src/domains/plugin/declared/declared-plugin-ui.js';
+import { createPluginThreadHost } from '../../src/domains/plugin/host-surface/plugin-thread-host.js';
 import { pluginUiRoutes } from '../../src/routes/plugin/plugin-ui-routes.js';
+import { configuredFeedbackMember } from './feedback-member.mts';
 import { feedbackStorageFixture } from './feedback-storage.mts';
 
 export async function startInstalledFeedbackFixture() {
@@ -89,7 +92,6 @@ export async function startInstalledFeedbackFixture() {
     },
   ];
   const persistence = feedbackStorageFixture();
-  let modelPrompt = '';
   let posts = 0;
   const issues = new Map<string, { iid: number; web_url: string; title: string; description: string }>();
   const originalFetch = globalThis.fetch;
@@ -129,6 +131,30 @@ export async function startInstalledFeedbackFixture() {
     }
     return json({ path_with_namespace: 'team/clowder-ai', visibility: 'private', issues_enabled: true });
   };
+  const projectRoot = join(artifactRoot, 'diagnostic-project');
+  const logDirectory = join(artifactRoot, 'diagnostic-logs');
+  await mkdir(projectRoot, { recursive: true });
+  await mkdir(logDirectory, { recursive: true });
+  await writeFile(
+    join(logDirectory, 'api.log'),
+    JSON.stringify({ time: Date.now(), level: 50, msg: 'api_key=log-secret-canary E_TIMEOUT' }),
+  );
+  const threadStore = new ThreadStore();
+  const threads = createPluginThreadHost({
+    pluginId: manifest.pluginId,
+    ownerUserId: 'fixture-owner',
+    projectPath: projectRoot,
+    threadStore,
+    threadDeepLinkUrl: (id) => `http://localhost/thread/${id}`,
+    cats: {
+      getAllCatIds: () => ['configured'],
+      getRegisteredServices: () => new Map([['configured', {}]]),
+      isCatAvailable: () => true,
+      getCatAliases: () => [],
+      getCatDisplayName: () => '已配置 Client',
+    },
+  });
+  const memberFixture = configuredFeedbackMember((input) => activation.actions['feedback.delivery'](input));
   const host = {
     pluginInstanceId: 'fixture',
     dataPath: join(artifactRoot, 'retained-data'),
@@ -142,27 +168,19 @@ export async function startInstalledFeedbackFixture() {
         return result;
       },
     },
-    diagnostics: {
-      describe: async () => ({
-        environment: 'Windows fixture Node 24',
-        projectRoot: 'C:\\Users\\Alice\\project',
-        clients: [
-          {
-            id: 'configured',
-            label: '已配置 Client',
-            provider: 'synthetic',
-            model: 'fixture',
-            destination: '隔离测试，无外部模型',
-            revision: 'fixture-revision',
-          },
-        ],
+    runtimeInfo: {
+      get: async () => ({
+        version: 'synthetic',
+        platform: 'win32',
+        architecture: 'x64',
+        nodeVersion: process.versions.node,
+        projectRoot,
+        logDirectory,
       }),
-      collect: async () => 'api_key=log-secret-canary E_TIMEOUT C:\\Users\\Alice\\project\\a.ts',
-      analyze: async (input: { prompt: string }) => {
-        modelPrompt = input.prompt;
-        return '## 初步分析\n事实：E_TIMEOUT\n推测：信息不足\n未验证：尚未复现\napi_key=model-secret-canary';
-      },
     },
+    threads,
+    members: memberFixture.members,
+    messaging: memberFixture.messaging,
   };
   const activation = await module.default.create(manifest).start(host);
   const invocation = createModuleHostInvocation({ runtime: { actions: () => activation.actions } });
@@ -178,6 +196,9 @@ export async function startInstalledFeedbackFixture() {
     request.sessionUserId = 'fixture-owner';
   });
   await app.register(pluginUiRoutes, { ui });
+  app.get('/api/plugin-manager/plugins/:pluginId/icon', async (_, reply) =>
+    reply.type('image/svg+xml').send(await readFile(join(packageRoot, 'assets/icon.svg'))),
+  );
   app.get('/', async (_, reply) =>
     reply
       .type('text/html')
@@ -223,7 +244,8 @@ export async function startInstalledFeedbackFixture() {
     },
     journals: async () => Object.values(await persistence.entries()).map((v) => v.value),
     posts: () => posts,
-    modelPrompt: () => modelPrompt,
+    modelPrompt: memberFixture.modelPrompt,
+    modelRuns: memberFixture.modelRuns,
     async stop() {
       ui.deactivate('fixture');
       await activation.stop({ reason: 'test_complete' });

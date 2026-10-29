@@ -1,5 +1,6 @@
 import type { CollectiveMaterialSourcePort } from '@cat-cafe/shared';
 import type { CollectiveArtifactOwnerPort } from '../../collaborative-content/collective-artifact/owner-port.js';
+import { currentPluginOwnerRequestContext } from '../carrier/plugin-owner-request-context.js';
 import { ExternalPluginRuntimeError } from '../external-runtime/types.js';
 import type { PluginInventoryStore } from '../host-inventory/ports.js';
 import type { PluginInstanceRecord, PluginPackageRecord } from '../host-inventory/types.js';
@@ -8,21 +9,24 @@ import {
   type CollectiveMaterialSourceHolder,
   createCollectiveMaterialSourceProxy,
 } from './collective-material-source.js';
-import {
-  createPluginDiagnosticsHost,
-  type DiagnosticServices,
-  type PluginDiagnosticsHost,
-} from './plugin-diagnostics.js';
 import { createPluginMembersHost, type PluginMembersHost, type PluginMembersServices } from './plugin-members-host.js';
 
+export interface PluginRuntimeInfo {
+  readonly version: string;
+  readonly platform: string;
+  readonly architecture: string;
+  readonly nodeVersion: string;
+  readonly projectRoot: string;
+  readonly logDirectory: string;
+}
 export interface PluginNeutralHost {
-  readonly diagnostics?: PluginDiagnosticsHost;
+  readonly runtimeInfo?: { get(): Promise<PluginRuntimeInfo> };
   readonly collectiveMaterialSource?: CollectiveMaterialSourcePort;
   readonly collectiveArtifactOwner?: CollectiveArtifactOwnerPort;
   readonly members: PluginMembersHost;
 }
 interface Deps {
-  readonly diagnostics?: DiagnosticServices;
+  readonly runtimeInfo?: () => PluginRuntimeInfo;
   readonly collectiveMaterialSource?: CollectiveMaterialSourceHolder;
   readonly collectiveArtifactOwner?: CollectiveArtifactOwnerHolder;
   readonly activationSignal?: AbortSignal;
@@ -68,14 +72,18 @@ export async function createPluginNeutralHost(deps: Deps): Promise<PluginNeutral
   }
   const collective = pkg.pluginId === 'official.collective-connector' && instance.pluginId === pkg.pluginId;
   return Object.freeze({
-    ...(deps.diagnostics
+    ...(deps.runtimeInfo
       ? {
-          diagnostics: createPluginDiagnosticsHost(
-            deps.pluginInstanceId,
-            deps.diagnostics,
-            current,
-            deps.activationSignal,
-          ),
+          runtimeInfo: {
+            async get() {
+              await current();
+              const owner = currentPluginOwnerRequestContext(deps.pluginInstanceId);
+              if (!owner?.requestIdentity) throw new Error('Runtime information requires an owner request');
+              await owner.assertCurrent();
+              const { version, platform, architecture, nodeVersion, projectRoot, logDirectory } = deps.runtimeInfo!();
+              return { version, platform, architecture, nodeVersion, projectRoot, logDirectory };
+            },
+          },
         }
       : {}),
     ...(collective && deps.collectiveMaterialSource
