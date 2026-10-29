@@ -1451,39 +1451,45 @@ export async function prepareInvocationExecutionBinding(
         }
       : undefined);
   const implementation = implementationSource ? Object.freeze({ ...implementationSource }) : undefined;
-  const workspace = await freezeExecutionWorkspace({
-    threadStore: deps.threadStore,
-    threadId: input.threadId,
-    userId: input.userId,
-    provider: catConfig?.clientId,
-    ...(input.signal ? { signal: input.signal } : {}),
-    requiresAgyWorkspace:
-      Boolean(input.service && usesAgyNativeCarrier(input.service)) || carrier?.carrier === 'agy_acp',
-  });
-  input.signal?.throwIfAborted();
-  const [effort, speed] = await Promise.allSettled([
-    preflightRace(
-      Promise.resolve().then(() => deps.threadStore?.getMemberEffort?.(input.threadId, input.catId, input.userId)),
-      'threadStore.getMemberEffort:execution-binding',
-      input.signal,
-    ),
-    preflightRace(
-      Promise.resolve().then(() =>
-        catConfig?.clientId === 'openai'
-          ? deps.threadStore?.getMemberSpeed?.(input.threadId, input.catId, input.userId)
-          : undefined,
+  const captureThread = async () => {
+    const workspace = await freezeExecutionWorkspace({
+      threadStore: deps.threadStore,
+      threadId: input.threadId,
+      userId: input.userId,
+      provider: catConfig?.clientId,
+      ...(input.signal ? { signal: input.signal } : {}),
+      requiresAgyWorkspace:
+        Boolean(input.service && usesAgyNativeCarrier(input.service)) || carrier?.carrier === 'agy_acp',
+    });
+    input.signal?.throwIfAborted();
+    const [effort, speed] = await Promise.allSettled([
+      preflightRace(
+        Promise.resolve().then(() => deps.threadStore?.getMemberEffort?.(input.threadId, input.catId, input.userId)),
+        'threadStore.getMemberEffort:execution-binding',
+        input.signal,
       ),
-      'threadStore.getMemberSpeed:execution-binding',
-      input.signal,
-    ),
-  ] as const);
-  input.signal?.throwIfAborted();
-  const threadPreferences = Object.freeze({
-    reasoningEffortOverride: effort.status === 'fulfilled' ? effort.value : undefined,
-    speedOverride: speed.status === 'fulfilled' ? speed.value : undefined,
-    effortReadFailed: effort.status === 'rejected',
-    speedReadFailed: speed.status === 'rejected',
-  });
+      preflightRace(
+        Promise.resolve().then(() =>
+          catConfig?.clientId === 'openai'
+            ? deps.threadStore?.getMemberSpeed?.(input.threadId, input.catId, input.userId)
+            : undefined,
+        ),
+        'threadStore.getMemberSpeed:execution-binding',
+        input.signal,
+      ),
+    ] as const);
+    input.signal?.throwIfAborted();
+    return {
+      workspace,
+      threadPreferences: Object.freeze({
+        reasoningEffortOverride: effort.status === 'fulfilled' ? effort.value : undefined,
+        speedOverride: speed.status === 'fulfilled' ? speed.value : undefined,
+        effortReadFailed: effort.status === 'rejected',
+        speedReadFailed: speed.status === 'rejected',
+      }),
+    };
+  };
+  const { workspace, threadPreferences } = await captureThread();
   const binding = freezeExecutionAccountBinding({
     catId: input.catId,
     catConfig,
@@ -1558,6 +1564,14 @@ export async function prepareInvocationExecutionBinding(
         )
       : { sharedMcpLaunch: { transport: mcpTransport } };
   input.signal?.throwIfAborted();
+  const currentThread = await captureThread();
+  const workspaceChanged = (
+    ['workingDirectory', 'workingProjectRoot', 'threadProjectPath', 'usesDefaultWorkspace'] as const
+  ).some((key) => workspace[key] !== currentThread.workspace[key]);
+  if (workspaceChanged || !isDeepStrictEqual(threadPreferences, currentThread.threadPreferences))
+    throw new ExecutionAdmissionConflict(
+      'Thread execution configuration changed during admission; retry this invocation.',
+    );
   if (catRegistry.getRevision() !== memberRegistryRevision)
     throw new ExecutionAdmissionConflict(
       'Member configuration changed during execution admission; retry this invocation.',

@@ -131,7 +131,9 @@
         "README.md#W2-实现-generation-准入切片尚未完成-W2：正式准入期间注册/服务代次变更409及下一调用新代次；跨owner重解析与会话兼容仍未完成",
         "README.md#W2-账号与启动策略读后核验切片尚未完成-W2：消费投影变化409与无关元数据控制项；非完整跨owner一致性",
         "README.md#W2-后续成员出队服务刷新切片尚未完成-W2：真实串行路由保留活动服务、后续成员新服务/最新不可用原因；非全发布协议",
-        "README.md#W2-CodexACP-构建-client-身份切片尚未完成-W2：两个构建来源、包装器与真实factory消费错配409；其余客户端及全owner协议未完成"
+        "README.md#W2-CodexACP-构建-client-身份切片尚未完成-W2：两个构建来源、包装器与真实factory消费错配409；其余客户端及全owner协议未完成",
+        "README.md#W2-配置冲突的有界准入重解析切片尚未完成-W2：正式串并行一次重解析与模型不重发；持续变化明确冲突",
+        "README.md#W2-线程工作区与偏好读后核验切片尚未完成-W2：真实ThreadStore写入冲突、其他成员对照与路由重解析后实际cwd/effort消费；非全owner协议"
       ]
     },
     {
@@ -399,6 +401,22 @@
     "subject": "task:01a1881e-1a7b-78d0-9a62-ff99b0ab7a01/checkpoint-account-currentness",
     "findings": [],
     "evidence": "README.md#W2-账号与启动策略读后核验切片尚未完成-W2"
+  },
+  "admissionReparseCheckpointReview": {
+    "reviewer": "checkpoint_review",
+    "verdict": "approved",
+    "reviewedHead": "34743bf52d9fd5abaeccbca10b76bfa364100647",
+    "subject": "task:01a1881e-1a7b-78d0-9a62-ff99b0ab7a01/checkpoint-admission-reparse",
+    "findings": [],
+    "evidence": "README.md#W2-配置冲突的有界准入重解析切片尚未完成-W2"
+  },
+  "acpMcpSwitchCheckpointReview": {
+    "reviewer": "checkpoint_review",
+    "verdict": "approved",
+    "reviewedHead": "93f0754491ac937a6c2c3c50e35de75d996d0191",
+    "subject": "task:01a1881e-1a7b-78d0-9a62-ff99b0ab7a01/checkpoint-acp-mcp-switch",
+    "findings": [],
+    "evidence": "README.md#W2-ACP-成员-MCP-开关消费修复尚未完成-W2"
   },
   "clientIdentityCheckpointReview": {
     "reviewer": "checkpoint_review",

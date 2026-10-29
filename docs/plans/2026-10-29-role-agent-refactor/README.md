@@ -375,7 +375,9 @@ checkpoint_review 对 `0700400b913e1a6b1b9a96ec4aa13c88a839f987` 给出 approved
 
 `admission-reparse-invocation-final.log` 207 项=203 PASS+原 AGY Native Windows birth-identity 4 FAIL，保持原平台限制，不放宽所有权检查。最终 API tsc 通过，8 个变更源/测试文件 Biome 无错误；构建成功后才运行依赖 dist 的验证。无新增常驻服务、安装、用户认证或历史改动。
 
-复杂度复核：复用原 InvocationServiceScope 和 Router 表，仅增加一个有明确 owner 的冲突类型与一次重解析；不新建队列、重试框架、版本总线或 launcher。此处只处理已检测出的冲突，其他 owner 输入的一致性检测、完整服务构建 provenance、所有写方通知与持久会话兼容仍待继续；不能作为完整 W2/C15 通过证据。此有界重解析切片等待独立审查。
+复杂度复核：复用原 InvocationServiceScope 和 Router 表，仅增加一个有明确 owner 的冲突类型与一次重解析；不新建队列、重试框架、版本总线或 launcher。此处只处理已检测出的冲突，其他 owner 输入的一致性检测、完整服务构建 provenance、所有写方通知与持久会话兼容仍待继续；不能作为完整 W2/C15 通过证据。
+
+checkpoint_review 对 `34743bf52d9fd5abaeccbca10b76bfa364100647` 给出 approved，subject 为 `task:01a1881e-1a7b-78d0-9a62-ff99b0ab7a01/checkpoint-admission-reparse`。独立 21 PASS，验证释放完成前不解析、释放异常/取消不重试、实际新 service/binding 配对，以及 provider 阶段同类错误不重发；无未关闭 finding。批准仅限该提交，不包括后续切片或完整 W2。
 
 ## W2 ACP 成员 MCP 开关消费修复（尚未完成 W2）
 
@@ -383,4 +385,14 @@ Host 原来传了准入成员的 mcpSupport，但 ACP 捕获函数忽略它，�
 
 正式准入把既有“非 false 即开启”解析为 boolean；ACP 优先用该值捕获，直接内部调用未提供该字段时保持构建默认。原解析、项目补充与冻结后消费路径不变，没有增加运行时开关或再次读 registry。`acp-member-mcp-green.log` 78 PASS，含 MCP resolver、直接 resume、模型偏好、client 身份和串并行有界重解析；API tsc 通过，3 文件 Biome 无错误。扩大消费者 `acp-member-mcp-consumers.log` 123 项=122 PASS+1 原 Windows bootstrap 父目录 PARENT_REPLACEMENT 拒绝；单独进程沿用既有 trusted-host 模式重跑原注册文件 `acp-member-mcp-registration-process-only.log` 7 PASS，不认证 strict ACL，不改用户/生产模式。
 
-复杂度复核：产品只增加有效 boolean 的传递/消费，未重构原 factory 或增加配置框架。构建 whitelist/启动参数、全部 owner 一致性及持久会话仍待后续，不把这个开关修复描述为完整发布原子性。没有真实模型或新增常驻服务；此修复等待独立审查。
+复杂度复核：产品只增加有效 boolean 的传递/消费，未重构原 factory 或增加配置框架。构建 whitelist/启动参数、全部 owner 一致性及持久会话仍待后续，不把这个开关修复描述为完整发布原子性。没有真实模型或新增常驻服务。
+
+checkpoint_review 对 `93f0754491ac937a6c2c3c50e35de75d996d0191` 给出 approved，subject 为 `task:01a1881e-1a7b-78d0-9a62-ff99b0ab7a01/checkpoint-acp-mcp-switch`。独立 37 PASS，含开关/默认、等待后的冻结、内部构建默认与关闭时跳过损坏来源；无未关闭 finding。批准不包含 whitelist/启动输入一致性或完整 W2。
+
+## W2 线程工作区与偏好读后核验切片（尚未完成 W2）
+
+准入复用同一个局部 captureThread 读取路径，在异步 provider/MCP 捕获前后解析工作区与本成员 effort/speed。只比较实际工作区坐标及本轮偏好/读取状态；其他成员偏好、标题等非执行字段不进入此比较。发现变化抛已有自有冲突，正式路由沿已审查的一次重解析路径使用最新输入；成功冻结后仍沿用原绑定。最后的成员 revision 核验保留在新增异步读取之后，防止该等待窗口绕过原检查。
+
+`thread-currentness-red.log` 4 项=1 PASS+3 FAIL，真实 ThreadStore 的工作区/effort/speed 合法写入没有被发现；其他成员写入是对照。修复后 `thread-currentness-consumers-passed.log` 40 PASS，另加实际串/并行 Host→Codex fake CLI 四条旅程，验证新工作区 cwd、新 effort argv 且只发送一次。speed 当前性/下一次读回及冻结后消费分别由准入与原 invocation 检查覆盖。最初把“原生 auto auth + gpt-5.3”当作 Fast 适用夹具导致两条预期失败；既有 Fast 契约仅允许适用 OAuth/模型组合，移除不成立的 Fast argv 场景，保留当前性断言与原能力限制，不为测试开启 Fast。
+
+`thread-currentness-routing-final.log` 120 PASS，含完整策略、元数据、真实刷新、调用 preflight 和 L0；最终 API tsc 与 3 文件 Biome 无错误。没有真实模型、常驻服务或数据修改。复杂度复核：原准入函数共用局部读取、增加一个执行投影比较；无新存储、revision bus、watcher 或启动器。该切片不等于线程所有状态/MCP源/启动配置的一致性协议，全部 W2 与会话语义仍未完成；等待独立审查。
