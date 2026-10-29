@@ -35,7 +35,9 @@ import type { FrozenExecutionWorkspace } from './execution-workspace.js';
 
 export interface FrozenExecutionBinding {
   readonly accountEnv?: Record<string, string>;
-  readonly providerOptions?: Readonly<Pick<AgentServiceOptions, 'frozenAcpMcpServers' | 'frozenNativeMcpConfig'>>;
+  readonly providerOptions?: Readonly<
+    Pick<AgentServiceOptions, 'frozenAcpMcpServers' | 'frozenNativeMcpConfig' | 'frozenKimiMcpConfig'>
+  >;
   readonly codexLaunchPolicy?: CodexLaunchPolicy;
   readonly threadPreferences?: Readonly<{
     reasoningEffortOverride?: CliEffortPreset;

@@ -41,6 +41,8 @@ code_anchors:
   - packages/api/src/config/capabilities/invocation-plugin-mcp-view.ts
   - packages/api/src/config/capabilities/plugin-mcp-environment.ts
   - packages/api/src/domains/cats/services/agents/providers/provider-mcp-config.ts
+  - packages/api/src/domains/cats/services/agents/providers/kimi-mcp-surface.ts
+  - packages/api/src/domains/cats/services/agents/providers/kimi-mcp-config.ts
   - packages/api/src/config/capabilities/plugin-mcp-exposure.ts
 doc_anchors:
   - docs/decisions/044-mcp-resource-lifecycle-and-surface-budget.md
@@ -148,3 +150,9 @@ Claude print, SDK, background and PTY consume the admitted native MCP plan. Ordi
 references resolve during capture; the existing transport binder supplies current-turn credentials
 without re-expanding that environment. Read-only admission continues to skip unused tool discovery.
 This shares the existing native resolver and credential owners, without changing native schema or launch authority.
+
+Kimi consumes that same admitted native server plan through its existing project-file lease.
+Its native HOME and member MCP switch are captured before launch. Because Kimi still discovers
+lower native layers, a later read can only deny newly unapproved names; it cannot add permissions
+or replace the admitted server settings. A changed native project root is rejected before lending
+the project file. The original credential lease and conflict-preserving restoration remain owners.

@@ -46,6 +46,25 @@ export interface ProviderMcpConfigPlan {
   readonly servers: Record<string, Record<string, unknown>>;
   readonly source: 'capabilities.json' | 'fallback';
   readonly pluginMcpServerNames: readonly string[];
+  readonly catCafeMcpServerNames: readonly string[];
+}
+
+function catCafeEnvironment(
+  input: { callbackEnv: Record<string, string>; credentialFile?: string },
+  previous: Record<string, string>,
+) {
+  const env = { ...previous };
+  if (input.credentialFile) {
+    delete env.CAT_CAFE_INVOCATION_ID;
+    delete env.CAT_CAFE_CALLBACK_TOKEN;
+  }
+  for (const key of MCP_CALLBACK_ENV_KEYS) {
+    const value = input.callbackEnv[key];
+    if (value && !(input.credentialFile && (key === 'CAT_CAFE_INVOCATION_ID' || key === 'CAT_CAFE_CALLBACK_TOKEN')))
+      env[key] = value;
+  }
+  if (input.credentialFile) env.CAT_CAFE_CREDENTIAL_FILE = input.credentialFile;
+  return env;
 }
 
 export async function captureProviderMcpConfig(input: {
@@ -62,20 +81,14 @@ export async function captureProviderMcpConfig(input: {
   const capabilitiesProjectRoot = await resolveInvokeCapabilityRoot(binaryProjectRoot);
   const catId = input.callbackEnv.CAT_CAFE_CAT_ID;
 
-  const catCafeEnvEntries: Record<string, string> = {
+  const catCafeEnvEntries = catCafeEnvironment(input, {
     ALLOWED_WORKSPACE_DIRS: resolveMcpWorkspaceRoot(input.workingDirectory),
-  };
-  for (const key of MCP_CALLBACK_ENV_KEYS) {
-    const val = input.callbackEnv?.[key];
-    if (val && !(input.credentialFile && (key === 'CAT_CAFE_INVOCATION_ID' || key === 'CAT_CAFE_CALLBACK_TOKEN')))
-      catCafeEnvEntries[key] = val;
-  }
-
-  if (input.credentialFile) catCafeEnvEntries.CAT_CAFE_CREDENTIAL_FILE = input.credentialFile;
+  });
 
   const mcpServers: Record<string, Record<string, unknown>> = {};
   const managedMcpServerNames = new Set<string>();
   const pluginMcpServerNames: string[] = [];
+  const catCafeMcpServerNames: string[] = [];
   let resolved = false;
   try {
     // F249: Project config is the single truth source for MCP resolution.
@@ -100,6 +113,7 @@ export async function captureProviderMcpConfig(input: {
           const ep = CAT_CAFE_SPLIT_ENTRYPOINTS.get(s.name)!;
           const epPath = join(distDir, ep);
           if (existsSync(epPath)) {
+            catCafeMcpServerNames.push(s.name);
             mcpServers[s.name] = {
               command: resolveCatCafeNodeCommand(),
               args: [epPath],
@@ -136,6 +150,7 @@ export async function captureProviderMcpConfig(input: {
     for (const [name, ep] of CAT_CAFE_SPLIT_ENTRYPOINTS) {
       const epPath = join(distDir, ep);
       if (existsSync(epPath)) {
+        catCafeMcpServerNames.push(name);
         mcpServers[name] = {
           command: resolveCatCafeNodeCommand(),
           args: [epPath],
@@ -193,6 +208,7 @@ export async function captureProviderMcpConfig(input: {
     servers: mcpServers,
     source: resolved ? 'capabilities.json' : 'fallback',
     pluginMcpServerNames,
+    catCafeMcpServerNames,
   });
 }
 
@@ -200,6 +216,13 @@ export async function resolveProviderMcpConfigResolution(
   input: Parameters<typeof captureProviderMcpConfig>[0] & { frozenNativeMcpConfig?: ProviderMcpConfigPlan },
 ): Promise<{ servers: Record<string, Record<string, unknown>>; source: ProviderMcpConfigPlan['source'] }> {
   const plan = input.frozenNativeMcpConfig ?? (await captureProviderMcpConfig(input));
+  return materializeProviderMcpConfig(plan, input);
+}
+
+export function materializeProviderMcpConfig(
+  plan: ProviderMcpConfigPlan,
+  input: { callbackEnv: Record<string, string>; credentialFile?: string },
+) {
   const callback = {
     ...input.callbackEnv,
     ...(input.credentialFile ? { CAT_CAFE_CREDENTIAL_FILE: input.credentialFile } : {}),
@@ -212,7 +235,9 @@ export async function resolveProviderMcpConfigResolution(
           bindManagedMcpStdioConfig(
             plan.pluginMcpServerNames.includes(name)
               ? { ...server, env: bindPluginMcpEnvironment(server.env as Record<string, string>, callback) }
-              : server,
+              : plan.catCafeMcpServerNames.includes(name)
+                ? { ...server, env: catCafeEnvironment(input, server.env as Record<string, string>) }
+                : server,
             callback,
           ),
         ]),

@@ -62,7 +62,7 @@ import {
   lookupKimiL0Fingerprint,
   recordKimiL0Fingerprint,
 } from './kimi-l0-session-fingerprint.js';
-import { type KimiMcpLease, prepareKimiMcpConfig } from './kimi-mcp-config.js';
+import { captureKimiMcpConfig, type KimiMcpLease, prepareKimiMcpConfig } from './kimi-mcp-config.js';
 import { ensureKimiSecretHooks } from './kimi-secret-hooks.js';
 import { compileL0ViaSubprocess } from './l0-compiler.js';
 
@@ -123,6 +123,17 @@ export class KimiAgentService implements AgentService {
     return isKimiNativeL0ChannelAvailable();
   }
 
+  async captureInvocationOptions(input: Parameters<NonNullable<AgentService['captureInvocationOptions']>>[0]) {
+    return {
+      frozenKimiMcpConfig: await captureKimiMcpConfig({
+        callbackEnv: { CAT_CAFE_CAT_ID: this.catId, ...input.accountEnv },
+        workingDirectory: input.workingDirectory,
+        mcpServerPath: this.mcpServerPath,
+        mcpSupport: input.mcpSupport,
+      }),
+    };
+  }
+
   freshnessCarrierCapability(): AgentFreshnessCarrierCapability {
     return {
       provider: 'kimi',
@@ -151,7 +162,11 @@ export class KimiAgentService implements AgentService {
     // account's overrides. Identity and MCP callback authorization stay scoped
     // to callbackEnv; only path/model readers use this merged environment.
     const runtime = resolveKimiCliRuntime();
-    const toolEnv = { ...options?.callbackEnv, ...options?.accountEnv };
+    const toolEnv = {
+      ...options?.callbackEnv,
+      ...options?.accountEnv,
+      ...(options?.frozenKimiMcpConfig ? { KIMI_CODE_HOME: options.frozenKimiMcpConfig.nativeDirectory } : {}),
+    };
     const runtimePaths = resolveKimiRuntimePaths(toolEnv);
     const requestedModel =
       options?.callbackEnv?.CAT_CAFE_KIMI_MODEL_OVERRIDE ?? options?.executionPreferences?.model ?? this.model;
@@ -339,9 +354,10 @@ export class KimiAgentService implements AgentService {
 
     let mcpLease: KimiMcpLease | undefined;
     try {
-      await ensureKimiSecretHooks({ ...(options?.callbackEnv ?? {}), ...(options?.accountEnv ?? {}) });
+      await ensureKimiSecretHooks(toolEnv);
       mcpLease = await prepareKimiMcpConfig({
-        callbackEnv: { ...(options?.callbackEnv ?? {}), ...(options?.accountEnv ?? {}) },
+        callbackEnv: toolEnv,
+        frozenKimiMcpConfig: options?.frozenKimiMcpConfig,
         workingDirectory: options?.workingDirectory,
         mcpServerPath: this.mcpServerPath,
       });

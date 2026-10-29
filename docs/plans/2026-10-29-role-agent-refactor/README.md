@@ -234,3 +234,17 @@ checkpoint_review 对 `e241747ae71c202b7846c3516651014fea6aa299` 给出 approved
 Kimi 的原生 HOME 依赖所选账号环境，而旧捕获端口早于账号解析。现先调用原账号冻结 owner，再把同一绑定的 accountEnv 和成员 mcpSupport 交给 provider 捕获；仍在既有成员 revision/取消门禁内。F171 原环境过滤逻辑从实际 invoke 前移到冻结 owner，后续 invoke 直接消费同一投影；模板映射与 callback 权限分离、空字符串、非法 key 和 CAT_CAFE_ 过滤均保持原规则。原 deepFreeze 供准入的最后组装复用，不重新解析账号，不新增配置存储或解析框架。
 
 反例先 RED：provider 捕获得不到账号 HOME，捕获期间账号文件变化使后续绑定采用另一份账号配置。修复后同一账号 HOME、普通环境、成员 MCP 开关均保持准入值，实际 invoke 消费一致；过滤不修改原 account projection。`account-environment-consumer-final.log` 1 PASS；扩大 `account-environment-green-regression.log` 231 项=227 PASS+4 原 AGY Native Windows 出生身份 FAIL；API tsc 通过。这里只把既有账号环境连接到捕获端口，Kimi 原生配置计划、全局 ambient env、各 owner revision 一致性与重解析仍待继续；无真实模型调用或新增常驻环境，等待独立审查。
+
+checkpoint_review 对 `6c34051ee463c9dfc7b8e1cb7c1aa0bd2579378d` 给出 approved，subject 为 `task:01a1881e-1a7b-78d0-9a62-ff99b0ab7a01/checkpoint-account-environment`；独立 44 PASS，补验 native_tool 不读取应用账号库，以及缺有效凭据的托管账号在 provider discovery 前失败，无新 P1/P2。批准限该账号环境顺序切片。
+
+## W2 Kimi 原生 MCP 消费切片（尚未完成 W2）
+
+Kimi 复用现有 native MCP resolver 和项目配置借用 owner，在准入时捕获允许服务器、成员 MCP 开关、原生 HOME、Git 项目根及拒绝层路径。实际 native 读取、secret hooks、MCP 文件和最终 spawn 都使用同一 HOME。既有显式关闭 Host 注入模式仍不借用项目文件；关闭成员 MCP 则仍覆盖并拒绝所有原生层，不能被随后成员配置变更绕过。未创建第二 HOME、认证库、launcher 或通用版本框架。
+
+Kimi 无法完全关闭原生自动发现，因此启动前仍读取下层配置以补充拒绝项：未知/新增原生工具只能被禁用，不能加入允许集合或替换已准入参数；使用计划副本，不污染冻结对象。Git 根变化时在写入项目文件前明确拒绝。原文件备份、独占锁、改动冲突保留和凭据清理沿用既有 owner。此处的负向收口读取不作为可变配置的允许回退。
+
+五个原反例 `kimi-mcp-red-consumer.log` 先 RED：capabilities/项目参数晚读、MCP off 晚读、原生层变化伴随允许参数晚读、显式关闭注入时 HOME 未钉住。最终新增实际 invoke 与 Git 根变化两场景，`kimi-mcp-consumer-final.log` 7 PASS，验证最终 MCP 文件/进程环境和租约恢复，仍使用 fake spawn 而非模型。首轮对原生层变化的临时拒绝断言未作为最终方案；最终使用既有“未知工具拒绝”规则，既保持冻结允许项，也允许任务继续。
+
+扩大回归发现并修复三个真实凭据回归：原 resolver 对内置 split 入口的环境绑定不能只依赖最后一个安装路径校验器。现由原 isManagedCatCafeSplit/本机 fallback 解析分支记录入口来源，启动时按原规则绑定当前轮凭据；外部同名服务器不因名字获得该权限。Kimi 凭据文件材化仍去除 inline token，并保留 caller-owned 文件。`kimi-mcp-callback-green.log` 25 PASS（实际原生 MCP 握手与凭据恢复、七条 Kimi、八条 Claude）；API tsc 通过，7 文件 Biome 无错误，公开 resolver 选中新测试。
+
+最终 `kimi-mcp-regression-final.log` 189 项=186 PASS+3 FAIL：一条既有 Kimi shared HTTP 测试的 Windows URL.pathname 问题；一条 hook 测试的 POSIX mode 断言；一条旧 hook 测试期待拒绝本地 ReadFile/WriteFile，而基线 F333 native-secret-policy 仅约束识别出的外发 shell 操作。`kimi-secret-policy-witness.log` 和基线 diff 确认策略/该测试均未由本任务修改，不把旧预期改成通过，也不恢复已经移除的策略。复杂度复核与 map delta 均限现有 native/MCP/凭据 owner；无新服务或真实模型调用。其他 native MCP、完整 env/策略、跨 owner 一致性重解析、generation、会话兼容与整体验收仍待继续；本切片等待独立审查。
