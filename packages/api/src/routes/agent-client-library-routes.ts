@@ -7,6 +7,7 @@ import {
 import type { SessionImplementationRegistry } from '../domains/cats/services/agents/session-contract/implementation-registry.js';
 import {
   AGENT_PROVIDER_DECLARATION_FILE,
+  type AgentProviderDeclaration,
   parseAgentProviderDeclaration,
 } from '../domains/cats/services/agents/session-contract/plugin-agent-provider.js';
 import { resolveAgentClientLibrary } from '../domains/plugin/declared/agent-client-library.js';
@@ -46,8 +47,10 @@ export function registerAgentClientLibraryRoutes(
     for (const instance of snapshot.instances.filter((instance) => instance.lifecycleState === 'installed')) {
       const record = snapshot.packages.find((record) => record.packageDigest === instance.packageDigest);
       if (!record?.manifest) continue;
+      const pluginName = record.manifest.name;
       let located: Awaited<ReturnType<VerifiedPluginPackageLocator['resolveInstalledPackage']>> | undefined;
       let configurationKey: string | null = null;
+      let defaultClient: (AgentProviderDeclaration['acp'] & { id: string; name: string }) | undefined;
       try {
         located = await input.packages.resolveInstalledPackage(record.packageDigest);
         if (!isDeepStrictEqual(located.manifest, record.manifest)) throw new Error('ACP 插件包权威不一致');
@@ -64,26 +67,26 @@ export function registerAgentClientLibraryRoutes(
         await located.verifyIntegrity();
         const parsed = parseAgentProviderDeclaration(raw, { packageRoot: located.rootDir });
         if (!parsed.ok) throw new Error(parsed.reason);
-        configurationKey = 'configurationKey' in parsed.declaration ? parsed.declaration.configurationKey : null;
-        const profiles =
-          'configurationKey' in parsed.declaration
-            ? await resolveAgentClientLibrary({
-                declaration: parsed.declaration,
-                admission: {
-                  instance,
-                  packageRecord: { ...record, manifest: record.manifest },
-                },
-                packageRoot: located.rootDir,
-                configuration: input.configuration,
-              })
-            : [parsed.declaration];
+        configurationKey = parsed.declaration.configurationKey ?? null;
+        if ('id' in parsed.declaration)
+          defaultClient = { id: parsed.declaration.id, name: pluginName, ...parsed.declaration.acp };
+        const profiles = await resolveAgentClientLibrary({
+          declaration: parsed.declaration,
+          admission: {
+            instance,
+            packageRecord: { ...record, manifest: record.manifest },
+          },
+          packageRoot: located.rootDir,
+          configuration: input.configuration,
+        });
         libraries.push({
           pluginId: instance.pluginId,
-          presets: 'configurationKey' in parsed.declaration ? (parsed.declaration.presets ?? []) : [],
+          presets: 'presets' in parsed.declaration ? (parsed.declaration.presets ?? []) : [],
+          ...(defaultClient ? { configurationMode: 'single' as const, defaultClient } : {}),
           configurationKey,
           clients: profiles.map((profile) => ({
             id: profile.id,
-            name: profile.name ?? profile.id,
+            name: profile.name ?? (defaultClient ? pluginName : profile.id),
             ref: `plugin:${instance.pluginId}/${profile.id}`,
             available: input.registry.has({ pluginId: instance.pluginId, contributionId: profile.id }),
           })),
@@ -92,6 +95,7 @@ export function registerAgentClientLibraryRoutes(
         libraries.push({
           pluginId: instance.pluginId,
           configurationKey,
+          ...(defaultClient ? { configurationMode: 'single' as const, defaultClient } : {}),
           clients: [],
           error: error instanceof Error ? error.message : 'ACP 插件目录读取失败',
         });

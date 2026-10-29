@@ -148,6 +148,16 @@ function assertLifecycleLog(line, result, level, providerId = 'agent') {
   assert.equal(line.msg, `[session-contract] agent-provider ${result}`);
   return line;
 }
+
+test('a fixed declaration without owner configuration cannot grant auto_allow at activation', async (t) => {
+  const h = await lifecycle(t, { ...declaration, acp: { ...declaration.acp, permissionPolicy: 'auto_allow' } });
+  await assert.rejects(
+    h.runtime.activate(h.admission, () => {}),
+    /owner|显式/i,
+  );
+  assert.equal(h.registry.has(ref), false);
+  assert.equal(h.created.length, 0);
+});
 test('static reference package passes real local admission; activation/disable/restart use existing lifecycle', async (t) => {
   const h = await lifecycle(t);
   await h.runtime.activate(h.admission, () => assert.fail('plugin code invoked'));
