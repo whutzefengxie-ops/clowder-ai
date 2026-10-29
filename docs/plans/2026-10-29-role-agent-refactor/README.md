@@ -448,3 +448,5 @@ checkpoint_review 对 `145bb8cd4ac1851d78afca033dc9f63d93abffe8` 返回 approved
 追加路由夹具时的语法错误和继承默认 effort 导致的 thought_level 失败留在较早 routing 日志；修正测试作用域，并显式声明本场景委托原生默认 effort，没有放宽产品配置校验。最后夹具补齐真实 lease 接口及线程活动接口，消除无关清理失败。最终 API tsc 通过、3 文件 Biome 无错误。
 
 复杂度复核：仅复用原 MCP 文件 owner 记录本轮版本及最终读取核验；没有缓存配置对象、跨调用缓存切换、watcher、存储或通用配置总线。scripts/sync-skills.sh 的跨进程通知缺口继续保留，不能以本次字节核验声称全部合法写方已通知。该核验只覆盖经此正式 reader 读取的文件；原生 HOME/.mcp.json 等专属来源、插件激活代次、父环境/CA、成员整体发布与持久审计仍须分别完成，W2/C05/C15 尚未整体验收。此 MCP 文件切片等待独立审查。
+
+checkpoint_review 对 `4456f3882acaeda8f7ee8fe60aa3e7cf7022c19a` 返回 approved，subject 为 `task:01a1881e-1a7b-78d0-9a62-ff99b0ab7a01/checkpoint-mcp-currentness`。独立 28 PASS，含最后等待窗口、实际路由重解析、缺文件出现/消失、重复读取后恢复旧字节、并发隔离及普通诊断；无未关闭 finding。批准仅限正式 reader 来源版本，不含其他 MCP/激活/父环境或完整 W2。另已复核六份 accepted source 文件哈希均未变，记录 source-integrity-4456f388.json；全部 34 个 C/E/Q 整体验收条目仍保持 NOT_RUN。

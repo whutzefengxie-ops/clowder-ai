@@ -272,7 +272,7 @@
       "status": "NOT_STARTED"
     }
   ],
-  "lastProgressAt": "2026-10-30T03:49:46.1634322+08:00",
+  "lastProgressAt": "2026-10-29T22:16:11.1649947Z",
   "checkpointReview": {
     "reviewer": "checkpoint_review",
     "verdict": "approved",
@@ -404,6 +404,14 @@
     "subject": "task:01a1881e-1a7b-78d0-9a62-ff99b0ab7a01/checkpoint-account-currentness",
     "findings": [],
     "evidence": "README.md#W2-账号与启动策略读后核验切片尚未完成-W2"
+  },
+  "mcpCurrentnessCheckpointReview": {
+    "reviewer": "checkpoint_review",
+    "verdict": "approved",
+    "reviewedHead": "4456f3882acaeda8f7ee8fe60aa3e7cf7022c19a",
+    "subject": "task:01a1881e-1a7b-78d0-9a62-ff99b0ab7a01/checkpoint-mcp-currentness",
+    "findings": [],
+    "evidence": "README.md#W2-正式-MCP-文件版本核验尚未完成-W2"
   },
   "acpCatalogSourceCheckpointReview": {
     "reviewer": "checkpoint_review",
