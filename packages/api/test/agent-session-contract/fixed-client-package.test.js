@@ -45,6 +45,10 @@ test(
         ];
         await writeFile(join(packageRoot, 'manifest.json'), JSON.stringify(manifest));
         await writeFile(
+          join(packageRoot, 'package.json'),
+          JSON.stringify({ name: '@test/agent-session-reference', version: manifest.version }),
+        );
+        await writeFile(
           join(packageRoot, 'agent-provider.json'),
           JSON.stringify({
             id: contributionId,
