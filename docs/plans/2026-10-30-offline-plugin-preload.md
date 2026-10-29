@@ -52,3 +52,13 @@ node scripts/prepare-offline-plugin-bundle.mjs "G:/build/runtime/packages/api/of
 - 独立审查在 `8bbbc807cf90b1ea8c40ac87f537ffda6dc269f4` 发现 P2：合法 builtin 包若缺 node_modules，默认 materializer 仍会 npm ci。两个生产用例观察到安装尝试（注入拦截、未实际联网）后补离线 admission fence 与 prepared 激活检查；另验证完整随包依赖在重建 runtime 后 healthy，零 catalog/registry 安装尝试。构建 staging 同样拒绝缺失依赖目录。扩展集合 **29/29**（含原 materializer 8 项，正常在线行为保留）通过；新增自身 21 项纳入 CI。
 
 本片不包含安装器新 EXE、内网旧 owner 文件兼容桥、所有发行身份参数化或企业 Release provider。与独立 H5 策略的组合验收另行记录。企业 binary 本机不可用且用户已明确由现场验收；fixture 不证明真实 CodeAgent 模型/MCP/A2A 或安装包首装。PR 提交与独立审查状态见后续记录，不能将本地通过等同公共已合入。
+
+## 审查与组合验证回执
+
+H6 非作者复审覆盖 `7ed04c7699e99fe789555d9eb7e7c279c543c26c`：approve，独立复跑 29/29 无 skip，P2 闭合；不覆盖内网 EXE/企业模型。H1–H4 与 H5 已有各自独立签注。本段是验证记录，不新增生产代码。
+
+隔离组合分支 `feat/codeagent-plugin-integration@48006f3928a4bb91b7c5f31a7702242b35d53670` 合入 H1–H4、H5、H6，唯一冲突为 deployment profile 相邻字段，保留 hostPolicy 与 offlinePluginBundle 两者。API/shared/MCP 构建及最终 API 类型编译通过；策略进程/文件、初装/离线/闭包、原 materializer、发行投影、desktop 策略接线 **38/38**。另在实际 tgz 的离线双 ACP fixture 链路前，通过真实 owner 文件加载并冻结 H5 策略（优先于 strict 环境值），全链 **1/1**；结束时 owner 文件字节不变，独立临时状态清理、ACP 子进程关闭。真实 CodeAgent/MCP/整包验收仍待现场。
+
+fallback checker 使用本片 base `d4b054e646a9a5b8cb2b6fab12326f7a9d9739c7`。提示含逻辑 OR 的输入拒绝、安装根显式覆盖/源码定位、以及两次 EEXIST 处理：它们是保持原构建输出的幂等契约，不是失败后换网络源；保留这两次 catch 才能区分相同与不同产物。新 loadReleases 与 catalog 在进入操作时二选一，错误不互相 fallback。capability-tips 检查 exit 0，报告基础已有失效 anchor 警告，未将警告说成已修复。未运行完整远端 CI，不能以本地检查替代其状态。
+
+Draft PR 为 [#18](https://github.com/whutzefengxie-ops/clowder-ai/pull/18)，base 是 #16；H5 单独为 #17。新增源码与文档均在新工作树，原基础/内网工作树、用户配置与历史、原生 HOME、系统/祖先 ACL 未改。当前无为本轮保留的运行服务或新 EXE。
