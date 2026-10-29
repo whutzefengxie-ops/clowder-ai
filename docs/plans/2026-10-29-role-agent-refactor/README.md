@@ -294,3 +294,17 @@ checkpoint_review 对 `136528bcb27dc52c547f5fe52e766eed08d2ae35` 给出 approved
 扩大 `shared-mcp-freeze-regression.log` 314 项=309 PASS+4 原 AGY Native Windows birth-identity FAIL+1 原 Redis SKIP，覆盖实际串并行路由、元数据、invoke 及共享 MCP 认证/撤销/载体/ACP/工作目录/成员 owner。已存在的 AGY 出生身份检查不放宽，不把 skip 计通过。
 
 复杂度复核：只将一次既有读取提前并保存到已有 binding，准入函数/原 shared owner 继续各司其职；没有 revision bus、会话库或通用 launcher。跨 owner revision/generation 重解析、所有配置写入通知、原生自动发现及完整 env/实现生命周期仍未完成。无模型调用或新增常驻环境；此 Host shared 切片等待独立审查。
+
+checkpoint_review 对 `8f3e191c303e18283604c4d5f960a331b87de3af` 给出 approved，subject 为 `task:01a1881e-1a7b-78d0-9a62-ff99b0ab7a01/checkpoint-shared-mcp`。独立 12 PASS，覆盖跳过路径、并发工作目录隔离、真实 registry 防修改、取消及快照实际消费；无未关闭 finding。批准限此 Host shared 切片。
+
+## W2 capabilities 写入通知切片（尚未完成 W2）
+
+审计 API 内 capabilities.json 的合法写入：HTTP 安装/删除/开关、插件静态资源、初始化/迁移、挂载规则、项目 MCP sync/drift 和 skill sync 均委托原异步 writer；新成员同步继承委托原同步 writer。scripts 内匹配为 health/doctor 读取，governance cleanup 明确保护该文件，没有将诊断或派生 CLI 文件当作真相源写入。
+
+现在两个原子 writer 仅在 rename 成功后向既有 configEventBus 发 capabilities domain 事件，changedKeys 为规范化项目根，沿用 changeSetId/timestamp；不带正文、env 或密钥。同步/异步共用一个短通知函数，避免两个真实写入点漂移。事件不冒充 env file-scope，避免触发 VAPID 等无关键的重载；不增加新 bus、watcher、revision 数据库或缓存切换。
+
+`capabilities-notification-red.log` 三个真实写入反例先 RED：普通异步、成员同步继承、实际项目 sync 均无通知。修复后在通知回调中直接读取已提交文件，确认对应状态已落盘；读取、无变化继承和实际写失败没有新通知，事件不泄露夹具 secret。最终 `capabilities-notification-final.log` 109 PASS，覆盖上述三旅程、原 event bus、写锁、正式 MCP HTTP 写入、挂载、项目 drift/sync 及 shared 快照；API tsc、3 文件 Biome 无错误。
+
+扩大首次集合 `capabilities-notification-green.log` 165 项=154 PASS+11 FAIL，均在 capabilities 读路由。将仅本次两个源码文件的补丁保存在 artifacts 并暂时反向应用，编译未改 HEAD 后单独复跑该文件，`capabilities-notification-route-baseline.log` 89 项=78 PASS+相同 11 FAIL；包含 config_missing、挂载健康与读时发现/路径重写的旧预期，未在本任务中逐一诊断或放宽。随后恢复原补丁并重新编译，完成上述 109 PASS。基线源码差异/原日志保留，不把旧失败计通过。
+
+复杂度复核：实现增加的是一个既有事件 source、两个提交点和共用短通知，没有将无关的账号/成员写入合并成事务。其他配置族的写入通知仍须按真实 owner 审计；跨 owner 读前读后核验、重解析、generation 和会话语义继续未完成。无模型或常驻服务调用；当前通知切片等待独立审查。

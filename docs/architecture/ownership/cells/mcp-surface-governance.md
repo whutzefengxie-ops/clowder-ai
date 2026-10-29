@@ -38,6 +38,7 @@ code_anchors:
   - packages/mcp-server/test/server-toolsets-annotations.test.ts
   - packages/api/src/config/capabilities/mcp-constants.ts
   - packages/api/src/config/capabilities/capability-orchestrator.ts
+  - packages/api/src/config/config-event-bus.ts
   - packages/api/src/config/capabilities/invocation-plugin-mcp-view.ts
   - packages/api/src/config/capabilities/plugin-mcp-environment.ts
   - packages/api/src/domains/cats/services/agents/providers/provider-mcp-config.ts
@@ -169,3 +170,9 @@ Codex captures resolved server inputs through the same admission hook. Its nativ
 retains disabled shapes and per-launch credential binding; one-shot environment wrappers are
 created for each launch rather than cached in the admitted plan. Live and public native launches
 retain their own admitted MCP boundary, while read-only invocations skip unused tool discovery.
+
+Committed capability-registry writes notify the existing config event bus from the two atomic
+write owners, covering direct async writes, synchronous member inheritance and delegated project
+sync. The domain event identifies the resolved project root; it contains no configuration or
+credential values and does not trigger unrelated environment-key subscribers. Reads and failed
+writes do not publish commits. This adds no cache, revision service or new configuration authority.

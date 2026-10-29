@@ -74,7 +74,8 @@
         "README.md#W2-Kimi-原生-MCP-消费切片尚未完成-W2：允许计划冻结、原生层仅补拒绝、HOME与凭据实际消费局部证据",
         "README.md#W2-OpenCode-Host-MCP-消费切片尚未完成-W2：原Host-writer计划、路径、激活视图及实际launch局部证据",
         "README.md#W2-Codex-MCP-输入消费切片尚未完成-W2：冻结输入、真实MCP两轮消费和基线复核；整条未完成",
-        "README.md#W2-Host-shared-MCP-上下文消费切片尚未完成-W2：Host注册与callback共享准入上下文；整条未完成"
+        "README.md#W2-Host-shared-MCP-上下文消费切片尚未完成-W2：Host注册与callback共享准入上下文；整条未完成",
+        "README.md#W2-capabilities-写入通知切片尚未完成-W2：合法capabilities写入委托中央原子writer；通知与实际提交局部证据"
       ]
     },
     {
@@ -359,5 +360,13 @@
     "closedFindings": ["P2 serial Live admission omitted the first member's Live port"],
     "findings": [],
     "evidence": "README.md#W2-Codex-MCP-输入消费切片尚未完成-W2"
+  },
+  "sharedMcpCheckpointReview": {
+    "reviewer": "checkpoint_review",
+    "verdict": "approved",
+    "reviewedHead": "8f3e191c303e18283604c4d5f960a331b87de3af",
+    "subject": "task:01a1881e-1a7b-78d0-9a62-ff99b0ab7a01/checkpoint-shared-mcp",
+    "findings": [],
+    "evidence": "README.md#W2-Host-shared-MCP-上下文消费切片尚未完成-W2"
   }
 }
