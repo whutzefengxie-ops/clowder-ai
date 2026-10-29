@@ -65,7 +65,8 @@
       "status": "NOT_RUN",
       "evidence": [
         "README.md#W2-L0-冻结输入切片W2-尚未完成：局部契约证据和明确失败，非整条通过",
-        "README.md#W2-模型与-effort-消费切片尚未完成-W2：实际消费者局部证据，整条仍未完成"
+        "README.md#W2-模型与-effort-消费切片尚未完成-W2：实际消费者局部证据，整条仍未完成",
+        "README.md#W2-线程偏好消费切片尚未完成-W2：准入后晚读反例闭环，跨owner读一致性尚未完成"
       ]
     },
     {
@@ -251,7 +252,7 @@
       "status": "NOT_STARTED"
     }
   ],
-  "lastProgressAt": "2026-10-30T02:12:46.9230292+08:00",
+  "lastProgressAt": "2026-10-30T02:26:25.5648670+08:00",
   "checkpointReview": {
     "reviewer": "checkpoint_review",
     "verdict": "approved",
@@ -272,5 +273,13 @@
     "fixes": "independently_verified",
     "findings": [],
     "evidence": "README.md#L0-独立审查修复"
+  },
+  "preferencesCheckpointReview": {
+    "reviewer": "checkpoint_review",
+    "verdict": "approved",
+    "reviewedHead": "155d932501dbbba29686b24cf0c45b0e52926f2e",
+    "subject": "task:01a1881e-1a7b-78d0-9a62-ff99b0ab7a01/checkpoint-preferences",
+    "findings": [],
+    "evidence": "README.md#W2-模型与-effort-消费切片尚未完成-W2"
   }
 }

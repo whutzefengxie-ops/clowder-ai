@@ -1,6 +1,8 @@
 import { createHash } from 'node:crypto';
 import {
   type CatConfig,
+  type CliEffortPreset,
+  type CodexSpeedValue,
   type ExecutionAccountSnapshot,
   type ExecutionProfile,
   projectMemberProfiles,
@@ -29,6 +31,12 @@ import {
 import type { FrozenExecutionWorkspace } from './execution-workspace.js';
 
 export interface FrozenExecutionBinding {
+  readonly threadPreferences?: Readonly<{
+    reasoningEffortOverride?: CliEffortPreset;
+    speedOverride?: CodexSpeedValue;
+    effortReadFailed: boolean;
+    speedReadFailed: boolean;
+  }>;
   readonly executionPreferences?: MemberExecutionPreferences;
   readonly frozenL0Input?: FrozenL0Input;
   readonly memberRegistryRevision?: number;

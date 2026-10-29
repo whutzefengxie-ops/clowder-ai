@@ -38,8 +38,6 @@ import { rm } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import {
   type CatId,
-  type CliEffortPreset,
-  type CodexSpeedValue,
   type ContextHealth,
   catRegistry,
   type MessageContent,
@@ -1433,6 +1431,28 @@ export async function prepareInvocationExecutionBinding(
     requiresAgyWorkspace:
       Boolean(input.service && usesAgyNativeCarrier(input.service)) || carrier?.carrier === 'agy_acp',
   });
+  const [effort, speed] = await Promise.allSettled([
+    preflightRace(
+      Promise.resolve().then(() => deps.threadStore?.getMemberEffort?.(input.threadId, input.catId, input.userId)),
+      'threadStore.getMemberEffort:execution-binding',
+      input.signal,
+    ),
+    preflightRace(
+      Promise.resolve().then(() =>
+        catConfig?.clientId === 'openai'
+          ? deps.threadStore?.getMemberSpeed?.(input.threadId, input.catId, input.userId)
+          : undefined,
+      ),
+      'threadStore.getMemberSpeed:execution-binding',
+      input.signal,
+    ),
+  ] as const);
+  const threadPreferences = Object.freeze({
+    reasoningEffortOverride: effort.status === 'fulfilled' ? effort.value : undefined,
+    speedOverride: speed.status === 'fulfilled' ? speed.value : undefined,
+    effortReadFailed: effort.status === 'rejected',
+    speedReadFailed: speed.status === 'rejected',
+  });
   if (catRegistry.getRevision() !== memberRegistryRevision)
     throw Object.assign(new Error('Member configuration changed during execution admission; retry this invocation.'), {
       statusCode: 409,
@@ -1448,7 +1468,12 @@ export async function prepareInvocationExecutionBinding(
           profileRepository: deps.profileRepository,
         })
       : undefined;
-  return Object.freeze({ ...binding, memberRegistryRevision, ...(frozenL0Input ? { frozenL0Input } : {}) });
+  return Object.freeze({
+    ...binding,
+    memberRegistryRevision,
+    threadPreferences,
+    ...(frozenL0Input ? { frozenL0Input } : {}),
+  });
 }
 
 export async function* invokeSingleCat(deps: InvocationDeps, params: InvocationParams): AsyncIterable<AgentMessage> {
@@ -3837,46 +3862,30 @@ async function* invokePreparedSingleCat(deps: InvocationDeps, params: Invocation
       }
     }
 
-    let reasoningEffortOverride: CliEffortPreset | undefined;
-    if (deps.threadStore?.getMemberEffort) {
-      try {
-        reasoningEffortOverride = await deps.threadStore.getMemberEffort(threadId, catId, userId);
-      } catch (err) {
-        log.warn(
-          { catId, threadId, userId, err },
-          'Thread effort override read failed — continuing with inherited effort',
-        );
-        yield {
-          type: 'system_info' as const,
-          catId,
-          content: JSON.stringify({
-            type: 'thread_effort_override_read_failed',
-            message: 'Thread effort override could not be loaded; using the member default for this invocation.',
-          }),
-          timestamp: Date.now(),
-        };
-      }
+    const reasoningEffortOverride = frozenExecutionBinding.threadPreferences?.reasoningEffortOverride;
+    if (frozenExecutionBinding.threadPreferences?.effortReadFailed) {
+      yield {
+        type: 'system_info' as const,
+        catId,
+        content: JSON.stringify({
+          type: 'thread_effort_override_read_failed',
+          message: 'Thread effort override could not be loaded; using the member default for this invocation.',
+        }),
+        timestamp: Date.now(),
+      };
     }
 
-    let threadSpeedOverride: CodexSpeedValue | undefined;
-    if (provider === 'openai' && deps.threadStore?.getMemberSpeed) {
-      try {
-        threadSpeedOverride = await deps.threadStore.getMemberSpeed(threadId, catId, userId);
-      } catch (err) {
-        log.warn(
-          { catId, threadId, userId, err },
-          'Thread speed override read failed — continuing with the member default',
-        );
-        yield {
-          type: 'system_info' as const,
-          catId,
-          content: JSON.stringify({
-            type: 'thread_speed_override_read_failed',
-            message: 'Thread speed override could not be loaded; using the member default for this invocation.',
-          }),
-          timestamp: Date.now(),
-        };
-      }
+    const threadSpeedOverride = frozenExecutionBinding.threadPreferences?.speedOverride;
+    if (frozenExecutionBinding.threadPreferences?.speedReadFailed) {
+      yield {
+        type: 'system_info' as const,
+        catId,
+        content: JSON.stringify({
+          type: 'thread_speed_override_read_failed',
+          message: 'Thread speed override could not be loaded; using the member default for this invocation.',
+        }),
+        timestamp: Date.now(),
+      };
     }
     const requestedServiceTier =
       provider === 'openai' && catConfig

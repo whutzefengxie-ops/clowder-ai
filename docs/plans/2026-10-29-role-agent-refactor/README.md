@@ -166,3 +166,13 @@ ACP 的 source/model/effort 读取从租约之后移到之前；正式调用使�
 7 个失败为：3 条 Claude bg 持久 owner 夹具在 Windows 无原生进程出生身份、1 条 Codex 缓存根断言硬编码 POSIX 分隔符、3 条 PTY 图像/自定义 HOME 断言硬编码 POSIX 路径。涉及进程身份和路径实现与基线无差异，未降低门禁、改期望为假成功或标为通过；也未改写无关夹具来刷绿。这里没有最终安装包、真实模型或 macOS 证据。
 
 剩余的 thread effort/speed、全局沙箱/审批、MCP/ACP 磁盘配置、项目指令及跨 owner revision/generation 一致性仍按后续 W2 实施；当前部分测试通过不能替代 C05/C15 整条。无新增常驻服务或真实模型调用，当前切片等待独立审查。
+
+checkpoint_review 对 `155d932501dbbba29686b24cf0c45b0e52926f2e` 给出 approved，subject 为 `task:01a1881e-1a7b-78d0-9a62-ff99b0ab7a01/checkpoint-preferences`；独立 27 PASS，20 个成员的新旧 effort 解析一致，无新 P1/P2。仅批准该提交，不含下一未提交切片。
+
+## W2 线程偏好消费切片（尚未完成 W2）
+
+ThreadStore 的内存实现返回可变记录，工作区捕获现复制该记录，避免等待后观察到另一轮写入。线程 effort/speed 沿用已有 getter，在执行准入时读入同一 binding；实际调用不再等待后重读。读入使用既有 preflightRace 的超时/取消边界，读取失败仍保留原来的继承行为和可见诊断。未新增线程配置存储、getter、版本或通用事务。
+
+新增三反例先 RED：原记录后写污染快照、真实 ThreadStore 准入后修改 effort/speed 导致实际 invoke 收到新值。修复后均 GREEN，且原 F262/F291 的每轮读取、继承及失败诊断四条保持通过。最终集合 `thread-execution-freeze-final.log` 为 182 项=178 PASS+4 FAIL；4 条失败仍是已记录的 AGY Native Windows 出生身份缺口，不计通过。API tsc 通过；新公开测试已确认由 resolver 选中。
+
+本切片解决已准入后的晚读，不宣称 workspace/偏好/账号/MCP 各 owner 之间的读前读后一致性已经完成。下一步继续配置一致性重解析、MCP/ACP/native 启动计划与全局策略冻结。无新增常驻服务或真实模型调用；当前线程切片等待独立审查。
