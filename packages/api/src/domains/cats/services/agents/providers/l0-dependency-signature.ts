@@ -9,7 +9,11 @@ const GOVERNANCE_RULES_RELPATHS = [
   'cat-cafe-skills/refs/shared-rules.local-override.md',
 ] as const;
 
-function findWorkspaceRoot(start: string): string {
+/**
+ * Walk up from `start` until the pnpm workspace root is found.
+ * Exported so the frozen-input owner resolves the same local overlay root.
+ */
+export function findWorkspaceRoot(start: string): string {
   let dir = resolve(start);
   while (dir !== dirname(dir)) {
     if (existsSync(resolve(dir, 'pnpm-workspace.yaml'))) return dir;
@@ -74,6 +78,19 @@ function computeSignature(cwd: string, scriptPath: string): string | null {
   }
   if (!addDependencyFingerprint(resolve(repoRoot, 'docs/team/cat-dossier.md'), 'docs/team/cat-dossier.md', entries))
     return null;
+  // W2/C06: member identity, roster and execution facts are compiler inputs.
+  // Any saved member edit must invalidate cached L0 even when no template,
+  // dossier or governance byte changed.
+  if (!addDependencyFingerprint(resolve(repoRoot, 'cat-template.json'), 'cat-template.json', entries)) return null;
+  if (
+    !addDependencyFingerprint(
+      resolve(workspaceRoot, '.cat-cafe', 'cat-catalog.json'),
+      '.cat-cafe/cat-catalog.json',
+      entries,
+    )
+  ) {
+    return null;
+  }
   for (const relPath of GOVERNANCE_RULES_RELPATHS) {
     if (!addDependencyFingerprint(resolve(repoRoot, relPath), relPath, entries)) return null;
   }

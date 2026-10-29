@@ -9,7 +9,17 @@
  * catRegistry inside the API process. Instead we cross the boundary via a
  * subprocess to the Phase B CLI (KD-10: `writeL0File()` + `--out`).
  *
- * Single source of truth for that boundary — both ClaudeBgCarrierService
+ * W2: real invocations use the FROZEN input mode. The parent resolves the
+ * effective member configuration, roster, identity authority, governance,
+ * capsule and compiler dependency facts once (at invocation admission), writes
+ * them to a private v1 JSON payload and passes `--frozen-input <path>`. The
+ * child then renders exactly that input and never re-bootstraps the registry /
+ * member catalog from disk, so a member edit while an invocation waits cannot
+ * change the already admitted invocation. The legacy disk-reading path stays
+ * available for diagnostics/CLI and tests via `frozenInputMode: 'legacy'`;
+ * there is no automatic fallback from frozen to legacy.
+ *
+ * Single source of truth for the boundary — both ClaudeBgCarrierService
  * (`--system-prompt-file`) and CodexAgentService (`-c developer_instructions`)
  * consume it.
  *
@@ -21,8 +31,9 @@
  */
 
 import { spawn as nodeSpawn } from 'node:child_process';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   CURRENT_CORPUS_PROFILE_URI,
@@ -33,6 +44,13 @@ import { profilePointerEmitted } from '../../../../../infrastructure/telemetry/i
 import { saveSpan } from '../../../../../utils/member-save-diagnostics.js';
 import { FileProfileRepository } from '../../profile/ProfileRepository.js';
 import { L0DependencySignatureTracker } from './l0-dependency-signature.js';
+import {
+  buildL0FrozenInput,
+  computeL0FrozenInputDigest,
+  L0_FROZEN_INPUT_VERSION,
+  type L0FrozenInputBody,
+  type L0FrozenInputV1,
+} from './l0-frozen-input.js';
 import { type L0CacheGeneration, L0ProfileCache, type L0Projection } from './l0-profile-cache.js';
 
 const SCRIPT_BASENAME = 'compile-system-prompt-l0.mjs';
@@ -129,6 +147,19 @@ export function resolveL0CompilerScriptPath(cwd: string = process.cwd()): string
   return undefined;
 }
 
+/** Arguments handed to the frozen-input builder (parent side, at admission). */
+export interface CompileL0FrozenInputArgs {
+  readonly catId: string;
+  readonly projection: L0Projection;
+  readonly userId: string;
+  /** Canonical profile dir for owner projection; omitted for public. */
+  readonly profileDir?: string;
+  readonly dataDir?: string;
+  readonly cwd: string;
+  /** Repo/install root that owns assets, governance and the dossier. */
+  readonly repoRoot: string;
+}
+
 export interface CompileL0Options {
   /** Cat to compile L0 for (must be registered in the runtime cat catalog). */
   catId: string;
@@ -148,6 +179,13 @@ export interface CompileL0Options {
   cwd?: string;
   /** Test seam — replaces the real spawn. */
   spawnFn?: typeof nodeSpawn;
+  /**
+   * Compile input mode. Real invocations MUST stay `frozen` (default); the
+   * legacy disk-reading path exists for diagnostics/CLI and tests only.
+   */
+  frozenInputMode?: 'frozen' | 'legacy';
+  /** Test seam — replaces the parent-side frozen payload assembly. */
+  buildFrozenInput?: (args: CompileL0FrozenInputArgs) => Promise<L0FrozenInputV1>;
 }
 
 type L0ProjectionContext =
@@ -183,20 +221,114 @@ function projectionProfileIsCurrent(context: L0ProjectionContext): boolean {
   );
 }
 
+/** Frozen cache key: owner/cat/projection + captured input digest (W2/C06). */
+function frozenCacheKey(userId: string, catId: string, projection: L0Projection, digest: string): string {
+  return `${l0Cache.key(userId, catId, projection)}\0${digest}`;
+}
+
+function verifyFrozenInputDigest(payload: L0FrozenInputV1): void {
+  const { digest, ...body } = payload;
+  const expected = computeL0FrozenInputDigest(body as L0FrozenInputBody);
+  if (expected !== digest) {
+    throw new Error(`L0 frozen input digest mismatch for ${payload.catId}`);
+  }
+}
+
+function assertFrozenInput(payload: L0FrozenInputV1, catId: string, projection: L0Projection): void {
+  if (payload === null || typeof payload !== 'object') {
+    throw new Error(`L0 frozen input for ${catId} is not an object`);
+  }
+  if (payload.version !== L0_FROZEN_INPUT_VERSION) {
+    throw new Error(
+      `L0 frozen input for ${catId} has unsupported version ${String(payload.version)}; expected ${L0_FROZEN_INPUT_VERSION}`,
+    );
+  }
+  if (payload.catId !== catId) {
+    throw new Error(`L0 frozen input catId mismatch: payload has "${payload.catId}", compile requested "${catId}"`);
+  }
+  if (payload.projection !== projection) {
+    throw new Error(
+      `L0 frozen input projection mismatch: payload has "${payload.projection}", requested "${projection}"`,
+    );
+  }
+  if (projection === 'owner') {
+    if (!Array.isArray(payload.members) || !payload.members.some((member) => member.catId === catId)) {
+      throw new Error(`L0 frozen input is missing resolved member "${catId}"`);
+    }
+    if (payload.identity === null) {
+      throw new Error(`L0 frozen input is missing identity authority for "${catId}"`);
+    }
+  }
+  verifyFrozenInputDigest(payload);
+}
+
 /**
  * Compile per-cat L0 by invoking the Phase B CLI as a subprocess.
  * @returns the compiled L0 string (file content when `outPath` is set, else stdout).
- * @throws when the script is unresolvable, the subprocess fails to spawn,
- *   exits non-zero, or produces empty output (fail-closed).
+ * @throws when the script is unresolvable, the frozen snapshot cannot be built,
+ *   the subprocess fails to spawn, exits non-zero, or produces empty output
+ *   (fail-closed).
  */
+/**
+ * Repo/install root the L0 CLI will use for its assets, governance and dossier
+ * lookups. The script lives at `<repoRoot>/scripts/compile-system-prompt-l0.mjs`
+ * and derives its own REPO_ROOT as `dirname(script)..`. The child resolves its
+ * module URL (following symlinks), so the parent must realpath the script too —
+ * packaged installs mirror scripts/ through a symlinked project dir and a naive
+ * dirname() would pick a different root than the child and change the frozen
+ * bytes.
+ */
+function resolveL0CompilerRepoRoot(scriptPath: string): string {
+  try {
+    return resolve(dirname(realpathSync(scriptPath)), '..');
+  } catch {
+    return resolve(dirname(scriptPath), '..');
+  }
+}
+
 export async function compileL0ViaSubprocess(options: CompileL0Options): Promise<string> {
-  const { catId, outPath } = options;
+  const { catId } = options;
   const userId = options.userId ?? process.env.CAT_CAFE_USER_ID ?? DEFAULT_PROFILE_USER_ID;
   const projection = resolveProjection(options);
-  const key = l0Cache.key(userId, catId, projection);
   const cwd = options.cwd ?? process.cwd();
   const scriptPath = resolveL0CompilerScriptPath(cwd);
-  const dependencySignature = scriptPath ? refreshL0DependencySignature(cwd, scriptPath) : null;
+  const mode = options.frozenInputMode ?? 'frozen';
+
+  if (mode === 'frozen') {
+    if (!scriptPath) {
+      throw new Error(
+        `L0 compiler script not resolvable from cwd=${cwd} (expected scripts/${SCRIPT_BASENAME}); cannot compile L0 for ${catId}`,
+      );
+    }
+    const profileDir =
+      projection === 'owner' ? new FileProfileRepository({ dataDir: options.dataDir }).profileDir(userId) : undefined;
+    const payload = await (options.buildFrozenInput ?? buildL0FrozenInput)({
+      catId,
+      projection,
+      userId,
+      ...(profileDir !== undefined ? { profileDir } : {}),
+      ...(options.dataDir !== undefined ? { dataDir: options.dataDir } : {}),
+      cwd,
+      repoRoot: resolveL0CompilerRepoRoot(scriptPath),
+    });
+    assertFrozenInput(payload, catId, projection);
+    return compileFrozenPayload(options, scriptPath, payload, userId, projection, cwd);
+  }
+
+  return compileLegacy(options, scriptPath, userId, projection);
+}
+
+async function compileFrozenPayload(
+  options: CompileL0Options,
+  scriptPath: string,
+  payload: L0FrozenInputV1,
+  userId: string,
+  projection: L0Projection,
+  cwd: string,
+): Promise<string> {
+  const { catId, outPath } = options;
+  const key = frozenCacheKey(userId, catId, projection, payload.digest);
+  const dependencySignature = refreshL0DependencySignature(cwd, scriptPath);
   const projectionContext = resolveProjectionContext(options, userId, key, projection);
   const { profileSignature } = projectionContext;
 
@@ -208,11 +340,6 @@ export async function compileL0ViaSubprocess(options: CompileL0Options): Promise
     return cached;
   }
 
-  // In-flight dedup — collapse concurrent cold-cache callers onto a single
-  // subprocess. The first caller installs the Promise; subsequent callers
-  // await the same one. Per-call `outPath` is honored: any caller that
-  // passed `outPath` writes the resolved L0 to that path before returning.
-  // Phase G AC-G10 — the profile cache owns the shared in-flight promise.
   const inflight = dependencySignature && profileSignature !== null ? l0Cache.getInflight(key) : undefined;
   if (inflight) {
     const result = await inflight;
@@ -222,8 +349,10 @@ export async function compileL0ViaSubprocess(options: CompileL0Options): Promise
   }
 
   const compileGeneration = l0Cache.generation(key);
-  const compilePromise = doCompileL0(
+  const compilePromise = doCompileL0Frozen(
     { ...options, userId },
+    payload,
+    scriptPath,
     key,
     compileGeneration,
     dependencySignature,
@@ -235,45 +364,13 @@ export async function compileL0ViaSubprocess(options: CompileL0Options): Promise
     recordProfilePointerEmission(result);
     return result;
   } finally {
-    // Always clean up the in-flight entry once settled — subsequent calls
-    // will read from l0Cache (on success) or re-attempt (on failure).
     l0Cache.deleteInflight(key, compilePromise);
   }
 }
 
-/**
- * Internal compile path — separated from `compileL0ViaSubprocess` so the
- * in-flight dedup wrapper can install the Promise without recursing.
- */
-async function doCompileL0(
-  options: CompileL0Options,
-  cacheKey: string,
-  compileGeneration: L0CacheGeneration,
-  dependencySignature: string | null,
-  projectionContext: L0ProjectionContext,
-): Promise<string> {
-  const { catId, outPath, cwd = process.cwd(), spawnFn = nodeSpawn } = options;
-  const { profileSignature } = projectionContext;
-  const scriptPath = resolveL0CompilerScriptPath(cwd);
-  if (!scriptPath) {
-    throw new Error(
-      `L0 compiler script not resolvable from cwd=${cwd} (expected scripts/${SCRIPT_BASENAME}); cannot compile L0 for ${catId}`,
-    );
-  }
-
-  // F231 KD-19: private profile truth is user-scoped persistent data, never cwd/worktree state.
-  // Public and private Work compilation receive neither profile paths nor bytes.
-  const args = [
-    scriptPath,
-    '--cat',
-    catId,
-    ...(projectionContext.projection !== 'owner'
-      ? ['--projection', projectionContext.projection]
-      : ['--profile-dir', projectionContext.profileDir]),
-    ...(outPath ? ['--out', outPath] : []),
-  ];
-
-  const stdout = await new Promise<string>((resolvePromise, rejectPromise) => {
+/** Spawn the L0 CLI and capture stdout; fail-closed on spawn/exit errors. */
+function runL0Subprocess(args: string[], cwd: string, spawnFn: typeof nodeSpawn, catId: string): Promise<string> {
+  return new Promise<string>((resolvePromise, rejectPromise) => {
     const child = spawnFn(process.execPath, args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] });
     let out = '';
     let err = '';
@@ -300,28 +397,164 @@ async function doCompileL0(
       resolvePromise(out);
     });
   });
+}
 
-  let result: string;
+function resolveCompiledResult(outPath: string | undefined, stdout: string, catId: string): string {
   if (outPath) {
-    result = readFileSync(outPath, 'utf8');
+    const result = readFileSync(outPath, 'utf8');
     if (result.trim().length === 0) {
       throw new Error(`L0 compile produced empty file ${outPath} for ${catId}`);
     }
-  } else {
-    result = stdout;
-    if (result.trim().length === 0) {
-      throw new Error(`L0 compile produced empty output (no --out) for ${catId}`);
-    }
+    return result;
   }
+  if (stdout.trim().length === 0) {
+    throw new Error(`L0 compile produced empty output (no --out) for ${catId}`);
+  }
+  return stdout;
+}
 
+function cacheCompiledResult(
+  key: string,
+  result: string,
+  compileGeneration: L0CacheGeneration,
+  dependencySignature: string | null,
+  projectionContext: L0ProjectionContext,
+): void {
+  const { profileSignature } = projectionContext;
   if (
     dependencySignature &&
     profileSignature !== null &&
     dependencySignatures.isCurrent(dependencySignature) &&
     projectionProfileIsCurrent(projectionContext) &&
-    l0Cache.generationIsCurrent(cacheKey, compileGeneration)
+    l0Cache.generationIsCurrent(key, compileGeneration)
   ) {
-    l0Cache.set(cacheKey, result, profileSignature);
+    l0Cache.set(key, result, profileSignature);
   }
+}
+
+/**
+ * Frozen compile path: write the captured payload to an owned temp artifact,
+ * pass `--frozen-input`, and remove the artifact after the child settles.
+ */
+async function doCompileL0Frozen(
+  options: CompileL0Options,
+  payload: L0FrozenInputV1,
+  scriptPath: string,
+  cacheKey: string,
+  compileGeneration: L0CacheGeneration,
+  dependencySignature: string | null,
+  projectionContext: L0ProjectionContext,
+): Promise<string> {
+  const { catId, outPath, cwd = process.cwd(), spawnFn = nodeSpawn } = options;
+  // Owned temp artifact: private dir, removed in finally (same pattern as the
+  // existing --out temp dirs owned by the carrier services).
+  const payloadDir = mkdtempSync(join(tmpdir(), 'cat-cafe-l0-frozen-'));
+  const payloadPath = join(payloadDir, 'l0-frozen-input.json');
+  try {
+    writeFileSync(payloadPath, JSON.stringify(payload), { encoding: 'utf8', mode: 0o600 });
+    const args = [
+      scriptPath,
+      '--cat',
+      catId,
+      '--frozen-input',
+      payloadPath,
+      ...(projectionContext.projection !== 'owner' ? ['--projection', projectionContext.projection] : []),
+      ...(outPath ? ['--out', outPath] : []),
+    ];
+    const stdout = await runL0Subprocess(args, cwd, spawnFn, catId);
+    const result = resolveCompiledResult(outPath, stdout, catId);
+    cacheCompiledResult(cacheKey, result, compileGeneration, dependencySignature, projectionContext);
+    return result;
+  } finally {
+    try {
+      rmSync(payloadDir, { recursive: true, force: true });
+    } catch {
+      // Best-effort cleanup; the private temp dir contains no secrets and is
+      // reclaimed by the OS temp cleanup if removal fails.
+    }
+  }
+}
+
+/** Legacy diagnostics/CLI compile path: the child reloads the registry from disk. */
+async function compileLegacy(
+  options: CompileL0Options,
+  scriptPath: string | undefined,
+  userId: string,
+  projection: L0Projection,
+): Promise<string> {
+  const { catId, outPath } = options;
+  const cwd = options.cwd ?? process.cwd();
+  const key = l0Cache.key(userId, catId, projection);
+  const dependencySignature = scriptPath ? refreshL0DependencySignature(cwd, scriptPath) : null;
+  const projectionContext = resolveProjectionContext(options, userId, key, projection);
+  const { profileSignature } = projectionContext;
+
+  // Cache hit — skip subprocess entirely
+  const cached = dependencySignature && profileSignature !== null ? l0Cache.get(key) : undefined;
+  if (cached) {
+    if (outPath) writeFileSync(outPath, cached, 'utf8');
+    recordProfilePointerEmission(cached);
+    return cached;
+  }
+
+  const inflight = dependencySignature && profileSignature !== null ? l0Cache.getInflight(key) : undefined;
+  if (inflight) {
+    const result = await inflight;
+    if (outPath) writeFileSync(outPath, result, 'utf8');
+    recordProfilePointerEmission(result);
+    return result;
+  }
+
+  const compileGeneration = l0Cache.generation(key);
+  const compilePromise = doCompileL0Legacy(
+    { ...options, userId },
+    key,
+    compileGeneration,
+    dependencySignature,
+    projectionContext,
+  );
+  l0Cache.setInflight(key, compilePromise);
+  try {
+    const result = await compilePromise;
+    recordProfilePointerEmission(result);
+    return result;
+  } finally {
+    // Always clean up the in-flight entry once settled — subsequent calls
+    // will read from l0Cache (on success) or re-attempt (on failure).
+    l0Cache.deleteInflight(key, compilePromise);
+  }
+}
+
+/** Internal legacy compile path — separated so the dedup wrapper can install the promise. */
+async function doCompileL0Legacy(
+  options: CompileL0Options,
+  cacheKey: string,
+  compileGeneration: L0CacheGeneration,
+  dependencySignature: string | null,
+  projectionContext: L0ProjectionContext,
+): Promise<string> {
+  const { catId, outPath, cwd = process.cwd(), spawnFn = nodeSpawn } = options;
+  const scriptPath = resolveL0CompilerScriptPath(cwd);
+  if (!scriptPath) {
+    throw new Error(
+      `L0 compiler script not resolvable from cwd=${cwd} (expected scripts/${SCRIPT_BASENAME}); cannot compile L0 for ${catId}`,
+    );
+  }
+
+  // F231 KD-19: private profile truth is user-scoped persistent data, never cwd/worktree state.
+  // Public and private Work compilation receive neither profile paths nor bytes.
+  const args = [
+    scriptPath,
+    '--cat',
+    catId,
+    ...(projectionContext.projection !== 'owner'
+      ? ['--projection', projectionContext.projection]
+      : ['--profile-dir', projectionContext.profileDir]),
+    ...(outPath ? ['--out', outPath] : []),
+  ];
+
+  const stdout = await runL0Subprocess(args, cwd, spawnFn, catId);
+  const result = resolveCompiledResult(outPath, stdout, catId);
+  cacheCompiledResult(cacheKey, result, compileGeneration, dependencySignature, projectionContext);
   return result;
 }

@@ -36,6 +36,7 @@
  * path as the non-native SystemPromptBuilder path.
  */
 
+import { createHash } from 'node:crypto';
 import { accessSync, existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, resolve } from 'node:path';
@@ -223,10 +224,10 @@ function ensureMergeGateSourceProvenanceTrigger(content) {
   return `${content.trimEnd()}\n${MERGE_GATE_SOURCE_PROVENANCE_TRIGGER}`;
 }
 
-function loadWorkflowTriggers() {
-  const basePath = workflowTriggersBasePath('workflow-triggers.yaml');
-  const localPath = workflowTriggersOverlayPath('workflow-triggers.local.yaml');
-  const effectivePath = existsSync(localPath) ? localPath : basePath;
+function loadWorkflowTriggers(paths) {
+  const basePath = paths?.basePath ?? workflowTriggersBasePath('workflow-triggers.yaml');
+  const localPath = paths ? paths.overlayPath : workflowTriggersOverlayPath('workflow-triggers.local.yaml');
+  const effectivePath = localPath && existsSync(localPath) ? localPath : basePath;
 
   if (!existsSync(effectivePath)) {
     console.warn('[compile-l0] workflow-triggers.yaml not found, using empty map');
@@ -237,7 +238,7 @@ function loadWorkflowTriggers() {
     return parseWorkflowTriggersFile(effectivePath);
   } catch (err) {
     console.warn(`[compile-l0] malformed YAML in ${effectivePath}: ${err}`);
-    if (effectivePath === localPath && existsSync(basePath)) {
+    if (effectivePath === localPath && localPath && existsSync(basePath)) {
       try {
         return parseWorkflowTriggersFile(basePath);
       } catch {
@@ -248,22 +249,45 @@ function loadWorkflowTriggers() {
   }
 }
 
-function buildIdentityBlock(config, runtimeModel, dossierRoot) {
-  const lines = [];
+/** Frozen identity lines from the parent's identity authority decision. */
+function buildResolvedIdentityLines(resolvedIdentity) {
+  if (resolvedIdentity.selfDescription) {
+    return [`角色与自我校准：${resolvedIdentity.selfDescription.text}`];
+  }
+  const lines = [`角色：${resolvedIdentity.roleDescription.value}`, `性格：${resolvedIdentity.personality.value}`];
+  const supplementary = resolvedIdentity.supplementary ?? [];
+  if (supplementary.length > 0) {
+    lines.push('', '补充事实（dossier，独立来源）：');
+    for (const fact of supplementary) lines.push(`- ${fact.text}`);
+  }
+  return lines;
+}
+
+/** Legacy diagnostics path: dossier self-description first, then config fields. */
+function buildLegacyIdentityLines(config, dossierRoot) {
+  const selfDescription = getDossierL0SelfDescription(config.catId, dossierRoot);
+  if (selfDescription) return [`角色与自我校准：${selfDescription}`];
+  return [`角色：${config.roleDescription}`, `性格：${config.personality}`];
+}
+
+export function buildIdentityBlock(config, runtimeModel, dossierRoot, resolvedIdentity) {
   const nameLabel = config.nickname
     ? `${config.displayName}/${config.nickname}（${config.name}）`
     : `${config.displayName}（${config.name}）`;
-  lines.push(`你是 ${nameLabel}。`);
+  const lines = [`你是 ${nameLabel}。`];
   if (config.nickname) {
     lines.push(`昵称 "${config.nickname}" 的由来见 \`docs/stories/cat-names/\`。`);
   }
-  const selfDescription = getDossierL0SelfDescription(config.catId, dossierRoot);
-  if (selfDescription) {
-    lines.push(`角色与自我校准：${selfDescription}`);
-  } else {
-    lines.push(`角色：${config.roleDescription}`);
-    lines.push(`性格：${config.personality}`);
-  }
+  // W2 frozen path: the parent already decided identity authority. An explicit
+  // saved config identity wins and the conflicting dossier self-description is
+  // not injected (it was suppressed and reported in the preview). Members
+  // without an explicit identity keep the legacy dossier self-description
+  // byte-for-byte.
+  lines.push(
+    ...(resolvedIdentity
+      ? buildResolvedIdentityLines(resolvedIdentity)
+      : buildLegacyIdentityLines(config, dossierRoot)),
+  );
   // Bug fix: CLI 不传 runtimeModel 导致 L0 缺模型号，猫读 CLAUDE.md 硬编码签名出错。
   // fallback 链：runtimeModel（显式传入）> resolveModel（env override）> defaultModel。
   const resolvedModel = runtimeModel || resolveModel(config.catId ?? '', config);
@@ -312,11 +336,16 @@ function resolveModel(id, cfg) {
   return cfg.defaultModel ?? '';
 }
 
-function buildRosterRow(id, cfg, dossierRoot, familyLabels) {
+/**
+ * Build one roster row from already-resolved routing facts.
+ * `resolved` carries { model, pronouns, routingNote }; the legacy caller
+ * resolves them from the live registry/dossier, the frozen caller reads them
+ * from the captured payload. Byte-identical for the same inputs.
+ */
+function buildRosterRowFromResolved(id, cfg, resolved, familyLabels) {
   const mention = cfg.mentionPatterns?.[0] ?? `@${id}`;
-  const model = resolveModel(id, cfg);
-  const cell = model ? `${mention} · ${model}` : mention;
-  const pronouns = getDossierL0Pronouns(id, dossierRoot)?.split('/')[0]?.trim();
+  const cell = resolved.model ? `${mention} · ${resolved.model}` : mention;
+  const pronouns = resolved.pronouns ? resolved.pronouns.split('/')[0]?.trim() : undefined;
   // Chinese L0 only needs the Chinese pronoun. The dossier marker limits this
   // scarce surface to evidence-backed repeat failures instead of every profile.
   // Prefer the shorter nickname for marked rows so the reminder is token-negative.
@@ -328,9 +357,33 @@ function buildRosterRow(id, cfg, dossierRoot, familyLabels) {
   // capability dossier. Prefer the explicit compact route note; keep config
   // caution as a compatibility fallback for runtime/custom cats that have not
   // yet acquired a structured dossier profile. Hard restrictions always stay.
-  const routingNote = getDossierL0RoutingNote(id, dossierRoot) ?? cfg.caution;
+  const routingNote = resolved.routingNote;
   const routeContract = [routingNote, restrictions].filter(Boolean).join('；') || '—';
   return `| ${label} | ${cell} | ${routeContract} |`;
+}
+
+export function buildRosterRow(id, cfg, dossierRoot, familyLabels) {
+  return buildRosterRowFromResolved(
+    id,
+    cfg,
+    {
+      model: resolveModel(id, cfg),
+      pronouns: getDossierL0Pronouns(id, dossierRoot),
+      routingNote: getDossierL0RoutingNote(id, dossierRoot) ?? cfg.caution,
+    },
+    familyLabels,
+  );
+}
+
+function buildTeammateRosterRows(entries) {
+  if (entries.length === 0) return '（无其他可用队友）';
+
+  const rows = ['## 队友名册', '| 猫猫 | @mention · 当前模型 | 路由边界 |', '|------|---------|------|'];
+  const familyLabels = collectRosterFamilyLabels(entries.map((entry) => entry.config));
+  for (const entry of entries) {
+    rows.push(buildRosterRowFromResolved(entry.catId, entry.config, entry.resolved, familyLabels));
+  }
+  return rows.join('\n');
 }
 
 function buildTeammateRoster(currentCatId, dossierRoot) {
@@ -340,14 +393,30 @@ function buildTeammateRoster(currentCatId, dossierRoot) {
     currentCatId,
     (id) => !_isCatAvailable || _isCatAvailable(id, _loadedConfig),
   );
-  if (teammates.length === 0) return '（无其他可用队友）';
+  const entries = teammates.map(([id, cfg]) => ({
+    catId: id,
+    config: cfg,
+    resolved: {
+      model: resolveModel(id, cfg),
+      pronouns: getDossierL0Pronouns(id, dossierRoot),
+      routingNote: getDossierL0RoutingNote(id, dossierRoot) ?? cfg.caution,
+    },
+  }));
+  return buildTeammateRosterRows(entries);
+}
 
-  const rows = ['## 队友名册', '| 猫猫 | @mention · 当前模型 | 路由边界 |', '|------|---------|------|'];
-  const familyLabels = collectRosterFamilyLabels(teammates.map(([, cfg]) => cfg));
-  for (const [id, cfg] of teammates) {
-    rows.push(buildRosterRow(id, cfg, dossierRoot, familyLabels));
-  }
-  return rows.join('\n');
+/** Frozen roster: no registry/dossier reads, only the captured payload entries. */
+function buildTeammateRosterFromFrozen(roster) {
+  const entries = (roster ?? []).map((entry) => ({
+    catId: entry.catId,
+    config: entry.config,
+    resolved: {
+      model: entry.runtimeModel,
+      pronouns: entry.pronouns,
+      routingNote: entry.routingNote,
+    },
+  }));
+  return buildTeammateRosterRows(entries);
 }
 
 /**
@@ -371,8 +440,8 @@ const DISPLAY_NAME_TO_BREED = {
   暹罗猫: 'siamese',
 };
 
-function buildWorkflowTriggers(breedId, catId, displayName) {
-  const workflowTriggers = loadWorkflowTriggers();
+function buildWorkflowTriggers(breedId, catId, displayName, triggerPaths) {
+  const workflowTriggers = loadWorkflowTriggers(triggerPaths);
   const direct = workflowTriggers[breedId] ?? workflowTriggers[catId];
   if (direct) return direct;
   const familyBreed = Object.entries(DISPLAY_NAME_TO_BREED).find(([familyName]) =>
@@ -387,11 +456,15 @@ function buildWorkflowTriggers(breedId, catId, displayName) {
 // Phase C Task 1 (A8 gap): 渲染 operator reference 行，对齐 buildStaticIdentity
 // L568-571（co-creator config 动态 name + mentionPatterns），替代 L0 §4
 // 硬编码 @co-creator。删 user message 后这是猫认 operator + 路由 handle 的唯一来源。
-function renderCvoRef() {
-  if (!_coCreatorConfig) return '';
-  const name = _coCreatorConfig.name;
-  const handles = (_coCreatorConfig.mentionPatterns ?? []).map((p) => `\`${p}\``).join(' / ');
+function renderCvoRefFrom(coCreatorConfig) {
+  if (!coCreatorConfig) return '';
+  const name = coCreatorConfig.name;
+  const handles = (coCreatorConfig.mentionPatterns ?? []).map((p) => `\`${p}\``).join(' / ');
   return `${name}（co-creator/operator）。重要决策由${name}拍板。需要关注时行首写 ${handles}。`;
+}
+
+function renderCvoRef() {
+  return renderCvoRefFrom(_coCreatorConfig);
 }
 
 // ─── F231: User profile capsule resolution ────────────────────────────────
@@ -463,6 +536,176 @@ export function resolveUserCapsule(profileDir, relationshipKey) {
   return section;
 }
 
+// -- Frozen input mode (W2 / C06) -------------------------------------------
+// Production invocations must render an already resolved input snapshot. The
+// parent process passes a v1 JSON payload via --frozen-input; this child then
+// validates the payload and renders only it. It MUST NOT bootstrap the
+// registry or reload member configuration from disk in this mode (that is why
+// the payload carries members/roster/runtimeModel/identity/governance/capsule).
+// Missing, unsupported, unresolvable or tampered payloads fail closed with a
+// non-zero exit; there is no fallback to reading the live catalog.
+
+export const L0_FROZEN_INPUT_VERSION = 1;
+
+function canonicalizeFrozenInputValue(value) {
+  if (Array.isArray(value)) return value.map(canonicalizeFrozenInputValue);
+  if (value !== null && typeof value === 'object') {
+    const sorted = {};
+    for (const key of Object.keys(value).sort()) {
+      const child = value[key];
+      if (child !== undefined) sorted[key] = canonicalizeFrozenInputValue(child);
+    }
+    return sorted;
+  }
+  return value;
+}
+
+/** SHA-256 over the canonicalized payload body (everything except `digest`). */
+export function computeFrozenInputDigest(payload) {
+  const { digest: _digest, ...body } = payload;
+  return createHash('sha256')
+    .update(JSON.stringify(canonicalizeFrozenInputValue(body)))
+    .digest('hex');
+}
+
+function assertFrozenProjection(projection) {
+  if (!resolveL0Projections().includes(projection)) {
+    throw new Error(`unsupported frozen input projection "${String(projection)}"`);
+  }
+}
+
+function parseFrozenInputFile(inputPath) {
+  let raw;
+  try {
+    raw = readFileSync(inputPath, 'utf8');
+  } catch (err) {
+    throw new Error(`frozen input unreadable: ${err?.code ?? err?.message ?? 'unknown error'}`);
+  }
+  let payload;
+  try {
+    payload = JSON.parse(raw);
+  } catch (err) {
+    throw new Error(`frozen input is not valid JSON: ${err.message}`);
+  }
+  if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw new Error('frozen input must be a JSON object');
+  }
+  return payload;
+}
+
+function assertFrozenEnvelope(payload) {
+  if (payload.version !== L0_FROZEN_INPUT_VERSION) {
+    throw new Error(`unsupported frozen input version ${String(payload.version)}; expected ${L0_FROZEN_INPUT_VERSION}`);
+  }
+  if (typeof payload.catId !== 'string' || payload.catId.length === 0) {
+    throw new Error('frozen input is missing catId');
+  }
+  assertFrozenProjection(payload.projection);
+  if (typeof payload.digest !== 'string' || payload.digest.length === 0) {
+    throw new Error('frozen input is missing its digest');
+  }
+  if (computeFrozenInputDigest(payload) !== payload.digest) {
+    throw new Error('frozen input digest mismatch (payload was modified after capture)');
+  }
+}
+
+function assertFrozenOwnerPayload(payload) {
+  if (!Array.isArray(payload.members) || !payload.members.some((member) => member?.catId === payload.catId)) {
+    throw new Error(`frozen input is missing resolved member "${payload.catId}"`);
+  }
+  if (payload.identity === null || typeof payload.identity !== 'object') {
+    throw new Error('frozen input is missing identity authority');
+  }
+  if (typeof payload.governanceL0 !== 'string') {
+    throw new Error('frozen input is missing governanceL0 text');
+  }
+  if (typeof payload.capsule !== 'string') {
+    throw new Error('frozen input is missing capsule text');
+  }
+  if (!Array.isArray(payload.roster)) {
+    throw new Error('frozen input is missing the teammate roster');
+  }
+  if (payload.workflowTriggers === null || typeof payload.workflowTriggers?.basePath !== 'string') {
+    throw new Error('frozen input is missing workflow trigger paths');
+  }
+}
+
+/**
+ * Read and structurally validate a frozen input payload.
+ * @param {string} inputPath absolute or cwd-relative path to the v1 JSON payload
+ * @returns {Object} validated payload
+ * @throws {Error} on unreadable/malformed/unsupported/tampered payloads
+ */
+export function loadFrozenInput(inputPath) {
+  if (typeof inputPath !== 'string' || inputPath.length === 0) {
+    throw new Error('frozen input path is required');
+  }
+  const payload = parseFrozenInputFile(inputPath);
+  assertFrozenEnvelope(payload);
+  if (payload.projection === 'owner') assertFrozenOwnerPayload(payload);
+  return payload;
+}
+
+/**
+ * Render L0 from a validated frozen payload without any registry reload.
+ * @param {Object} payload validated v1 payload
+ * @returns {string} compiled L0
+ */
+export function compileFrozenL0(payload) {
+  if (payload.projection === 'public') return compilePublicParticipationL0(payload.catId);
+  const member = payload.members.find((candidate) => candidate?.catId === payload.catId);
+  if (!member || member.config === null || typeof member.config !== 'object') {
+    throw new Error(`frozen input is missing resolved configuration for "${payload.catId}"`);
+  }
+  const config = { ...member.config, catId: payload.catId };
+  const identityBlock = buildIdentityBlock(config, payload.runtimeModel, REPO_ROOT, payload.identity);
+  const rosterBlock = buildTeammateRosterFromFrozen(payload.roster);
+  const workflowTriggers = buildWorkflowTriggers(
+    config.breedId,
+    payload.catId,
+    config.displayName,
+    payload.workflowTriggers,
+  );
+  return renderL0Document({
+    identityBlock,
+    capsuleSection: payload.capsule,
+    rosterBlock,
+    governanceL0: payload.governanceL0,
+    workflowTriggers,
+    cvoRef: renderCvoRefFrom(payload.coCreator),
+  });
+}
+
+/**
+ * Render the L0 document from already-resolved section bodies.
+ * Shared by the legacy compile path and the frozen render path so both produce
+ * the same bytes for the same inputs.
+ */
+function renderL0Document(sections) {
+  // Strip compiler-only annotation lines from the main template (same as
+  // loadL0SectionTemplate does for L-section files). Allows rich source labels
+  // without changing the compiled output sent to the model.
+  const template = readFileSync(TEMPLATE_PATH, 'utf8')
+    .split('\n')
+    .filter((line) => !isCompilerAnnotationLine(line))
+    .join('\n');
+  // Load L1-L7 section templates (static content extracted to individual files)
+  let result = template;
+  for (const [placeholder, filename] of Object.entries(L0_SECTION_TEMPLATES)) {
+    result = result.replace(`{{${placeholder}}}`, loadL0SectionTemplate(filename));
+  }
+  // One pass over source placeholders: inserted labels, capsules and overlays
+  // stay opaque, even when their data happens to contain a placeholder spelling.
+  return renderEditionVariables(result, {
+    IDENTITY_BLOCK: sections.identityBlock,
+    USER_CAPSULE: sections.capsuleSection,
+    TEAMMATE_ROSTER: sections.rosterBlock,
+    GOVERNANCE_L0: sections.governanceL0,
+    WORKFLOW_TRIGGERS: sections.workflowTriggers,
+    CVO_REF: sections.cvoRef,
+  });
+}
+
 /**
  * Compile per-cat L0 string by substituting template variables.
  *
@@ -490,13 +733,6 @@ export async function compileL0(options) {
   // routing, or the co-creator reference so none can become model-visible.
   if (projection === 'public') return compilePublicParticipationL0(catId);
 
-  // Strip compiler-only annotation lines from the main template (same as
-  // loadL0SectionTemplate does for L-section files). Allows rich source labels
-  // without changing the compiled output sent to the model.
-  const template = readFileSync(TEMPLATE_PATH, 'utf8')
-    .split('\n')
-    .filter((line) => !isCompilerAnnotationLine(line))
-    .join('\n');
   const governanceL0 = await _loadCompiledGovernanceL0(REPO_ROOT);
 
   // Runtime callers pass a user-scoped profileDir. Direct compiles use the same
@@ -511,21 +747,13 @@ export async function compileL0(options) {
     capsuleSection = resolveUserCapsule(resolvedProfileDir, relationshipKey);
   }
 
-  // Load L1-L7 section templates (static content extracted to individual files)
-  let result = template;
-  for (const [placeholder, filename] of Object.entries(L0_SECTION_TEMPLATES)) {
-    result = result.replace(`{{${placeholder}}}`, loadL0SectionTemplate(filename));
-  }
-
-  // One pass over source placeholders: inserted labels, capsules and overlays
-  // stay opaque, even when their data happens to contain a placeholder spelling.
-  return renderEditionVariables(result, {
-    IDENTITY_BLOCK: buildIdentityBlock(config, runtimeModel, dossierRoot),
-    USER_CAPSULE: capsuleSection,
-    TEAMMATE_ROSTER: buildTeammateRoster(catId, dossierRoot),
-    GOVERNANCE_L0: governanceL0.content,
-    WORKFLOW_TRIGGERS: buildWorkflowTriggers(config.breedId, catId, config.displayName),
-    CVO_REF: renderCvoRef(),
+  return renderL0Document({
+    identityBlock: buildIdentityBlock(config, runtimeModel, dossierRoot),
+    capsuleSection,
+    rosterBlock: buildTeammateRoster(catId, dossierRoot),
+    governanceL0: governanceL0.content,
+    workflowTriggers: buildWorkflowTriggers(config.breedId, catId, config.displayName),
+    cvoRef: renderCvoRef(),
   });
 }
 
@@ -553,26 +781,74 @@ export async function writeL0File(options, outPath) {
 //     → override profile directory (gpt52 review P1: fixes symlink/packaged layouts)
 //   node scripts/compile-system-prompt-l0.mjs --cat opus-47 --projection public
 //     → allowlisted public identity/collaboration contract; no owner-local overlays
+//   node scripts/compile-system-prompt-l0.mjs --frozen-input /abs/frozen.json [--out p.md]
+//     → production path: render only the captured payload, never reload the catalog
 if (isCliEntrypoint(import.meta.url, process.argv[1])) {
   const args = process.argv.slice(2);
   const catIdx = args.indexOf('--cat');
-  if (catIdx < 0 || !args[catIdx + 1]) {
-    console.error(
-      `Usage: node scripts/compile-system-prompt-l0.mjs --cat <catId> [--out <path>] [--profile-dir <path>] [--projection ${resolveL0Projections().join('|')}]`,
-    );
-    process.exit(2);
-  }
-  const catId = args[catIdx + 1];
+  const frozenIdx = args.indexOf('--frozen-input');
   const profileDirIdx = args.indexOf('--profile-dir');
-  const profileDir = profileDirIdx >= 0 ? args[profileDirIdx + 1] : undefined;
   const projectionIdx = args.indexOf('--projection');
-  const projection = projectionIdx >= 0 ? args[projectionIdx + 1] : undefined;
   const outIdx = args.indexOf('--out');
-  if (outIdx >= 0 && args[outIdx + 1]) {
-    const outPath = args[outIdx + 1];
-    await writeL0File({ catId, profileDir, projection }, outPath);
-    console.error(`Wrote compiled L0 for ${catId} → ${outPath}`);
+  const outPath = outIdx >= 0 ? args[outIdx + 1] : undefined;
+  const requestedProjection = projectionIdx >= 0 ? args[projectionIdx + 1] : undefined;
+  const usage = `Usage: node scripts/compile-system-prompt-l0.mjs --cat <catId> [--out <path>] [--profile-dir <path>] [--projection ${resolveL0Projections().join('|')}]\n       node scripts/compile-system-prompt-l0.mjs --frozen-input <jsonPath> [--cat <catId>] [--out <path>]`;
+
+  if (frozenIdx >= 0) {
+    const inputPath = args[frozenIdx + 1];
+    if (!inputPath) {
+      console.error(usage);
+      process.exit(2);
+    }
+    let payload;
+    try {
+      payload = loadFrozenInput(inputPath);
+    } catch (err) {
+      console.error(`[compile-l0] frozen input rejected: ${err.message}`);
+      process.exit(3);
+    }
+    const requestedCatId = catIdx >= 0 ? args[catIdx + 1] : undefined;
+    if (requestedCatId && requestedCatId !== payload.catId) {
+      console.error(`[compile-l0] --cat "${requestedCatId}" does not match frozen input catId "${payload.catId}"`);
+      process.exit(3);
+    }
+    if (profileDirIdx >= 0) {
+      console.error(
+        '[compile-l0] --profile-dir is not accepted with --frozen-input; the capsule is captured in the payload',
+      );
+      process.exit(3);
+    }
+    if (requestedProjection && requestedProjection !== payload.projection) {
+      console.error(
+        `[compile-l0] --projection "${requestedProjection}" does not match frozen input projection "${payload.projection}"`,
+      );
+      process.exit(3);
+    }
+    let compiled;
+    try {
+      compiled = compileFrozenL0(payload);
+    } catch (err) {
+      console.error(`[compile-l0] frozen compile failed: ${err.message}`);
+      process.exit(4);
+    }
+    if (outPath) {
+      writeFileSync(outPath, compiled, 'utf8');
+      console.error(`Wrote compiled L0 for ${payload.catId} → ${outPath}`);
+    } else {
+      process.stdout.write(compiled);
+    }
+  } else if (catIdx < 0 || !args[catIdx + 1]) {
+    console.error(usage);
+    process.exit(2);
   } else {
-    process.stdout.write(await compileL0({ catId, profileDir, projection }));
+    const catId = args[catIdx + 1];
+    const profileDir = profileDirIdx >= 0 ? args[profileDirIdx + 1] : undefined;
+    const projection = requestedProjection;
+    if (outPath) {
+      await writeL0File({ catId, profileDir, projection }, outPath);
+      console.error(`Wrote compiled L0 for ${catId} → ${outPath}`);
+    } else {
+      process.stdout.write(await compileL0({ catId, profileDir, projection }));
+    }
   }
 }

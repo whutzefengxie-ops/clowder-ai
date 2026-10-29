@@ -24,6 +24,17 @@ import {
 
 const SCRIPT_REL = 'scripts/compile-system-prompt-l0.mjs';
 
+/**
+ * W2: real invocations now use the frozen input mode by default. This file
+ * exercises the retained legacy diagnostics path (fake spawn + fake repo
+ * roots), whose behavior is intentionally unchanged, so every call here opts
+ * into `frozenInputMode: 'legacy'`. Frozen-path coverage lives in
+ * w2-l0-frozen-input.test.ts.
+ */
+function compileLegacy(options) {
+  return compileL0ViaSubprocess({ frozenInputMode: 'legacy', ...options });
+}
+
 /** Mimic the real compile CLI's `writeL0File` when --out is present. */
 function maybeWriteOut(args, writeOut) {
   if (writeOut == null) return;
@@ -103,7 +114,7 @@ test('compileL0ViaSubprocess (no outPath) returns stdout as compiled L0', async 
   clearL0Cache();
   const root = seedRepoRoot();
   const spawnFn = buildFakeSpawn({ stdout: '你是 布偶猫（Claude Opus）...L0 BODY...' });
-  const out = await compileL0ViaSubprocess({ catId: 'opus-47', cwd: root, dataDir: root, spawnFn });
+  const out = await compileLegacy({ catId: 'opus-47', cwd: root, dataDir: root, spawnFn });
   assert.match(out, /布偶猫/);
   const call = spawnFn.calls[0];
   assert.deepEqual(call.args, [
@@ -122,7 +133,7 @@ test('F231: canonical profileDir is user-scoped and independent of compiler cwd'
   const dataDir = mkdtempSync(join(tmpdir(), 'f231-canonical-data-'));
   const spawnFn = buildFakeSpawn({ stdout: 'USER-SCOPED-L0' });
 
-  await compileL0ViaSubprocess({ catId: 'codex', userId: 'alice', cwd: root, dataDir, spawnFn });
+  await compileLegacy({ catId: 'codex', userId: 'alice', cwd: root, dataDir, spawnFn });
 
   const call = spawnFn.calls[0];
   assert.equal(call.args[call.args.indexOf('--profile-dir') + 1], resolve(dataDir, 'profiles', 'alice'));
@@ -136,13 +147,10 @@ test('F231: L0 cache key isolates users with the same catId', async () => {
   const bobSpawn = buildFakeSpawn({ stdout: 'BOB-L0' });
 
   assert.equal(
-    await compileL0ViaSubprocess({ catId: 'codex', userId: 'alice', cwd: root, dataDir, spawnFn: aliceSpawn }),
+    await compileLegacy({ catId: 'codex', userId: 'alice', cwd: root, dataDir, spawnFn: aliceSpawn }),
     'ALICE-L0',
   );
-  assert.equal(
-    await compileL0ViaSubprocess({ catId: 'codex', userId: 'bob', cwd: root, dataDir, spawnFn: bobSpawn }),
-    'BOB-L0',
-  );
+  assert.equal(await compileLegacy({ catId: 'codex', userId: 'bob', cwd: root, dataDir, spawnFn: bobSpawn }), 'BOB-L0');
   assert.equal(aliceSpawn.calls.length, 1);
   assert.equal(bobSpawn.calls.length, 1, 'bob must not receive alice cache entry');
 });
@@ -155,11 +163,11 @@ test('public-safe L0 projection is separately cached and reaches the compiler CL
   const publicSpawn = buildFakeSpawn({ stdout: 'PUBLIC-SAFE-L0' });
 
   assert.equal(
-    await compileL0ViaSubprocess({ catId: 'codex', userId: 'alice', cwd: root, dataDir, spawnFn: ownerSpawn }),
+    await compileLegacy({ catId: 'codex', userId: 'alice', cwd: root, dataDir, spawnFn: ownerSpawn }),
     'OWNER-L0-WITH-PROFILE',
   );
   assert.equal(
-    await compileL0ViaSubprocess({
+    await compileLegacy({
       catId: 'codex',
       userId: 'alice',
       projection: 'public',
@@ -179,7 +187,7 @@ test('public-safe L0 projection is separately cached and reaches the compiler CL
   clearL0Cache('codex', 'alice');
   const publicRetry = buildFakeSpawn({ stdout: 'PUBLIC-SAFE-L0-AFTER-CLEAR' });
   assert.equal(
-    await compileL0ViaSubprocess({
+    await compileLegacy({
       catId: 'codex',
       userId: 'alice',
       projection: 'public',
@@ -197,7 +205,7 @@ test('compileL0ViaSubprocess (outPath) passes --out and returns file content', a
   const root = seedRepoRoot();
   const outPath = join(mkdtempSync(join(tmpdir(), 'l0-out-')), 'system-prompt-l0.md');
   const spawnFn = buildFakeSpawn({ stderr: `Wrote compiled L0 → ${outPath}`, writeOut: 'COMPILED-L0-FILE-CONTENT' });
-  const out = await compileL0ViaSubprocess({ catId: 'codex', cwd: root, dataDir: root, outPath, spawnFn });
+  const out = await compileLegacy({ catId: 'codex', cwd: root, dataDir: root, outPath, spawnFn });
   assert.equal(out, 'COMPILED-L0-FILE-CONTENT');
   const call = spawnFn.calls[0];
   assert.deepEqual(call.args, [
@@ -215,7 +223,7 @@ test('compileL0ViaSubprocess fail-closed: unresolvable script path throws', asyn
   clearL0Cache();
   const empty = mkdtempSync(join(tmpdir(), 'l0-noscript-'));
   await assert.rejects(
-    () => compileL0ViaSubprocess({ catId: 'no-script-cat', cwd: empty, spawnFn: buildFakeSpawn({}) }),
+    () => compileLegacy({ catId: 'no-script-cat', cwd: empty, spawnFn: buildFakeSpawn({}) }),
     // Without install-root fallback: "script not resolvable" error.
     // With install-root (monorepo): script found → fakeSpawn({}) returns empty → "empty output" error.
     /compile-system-prompt-l0|script.*not.*resolve|L0 compiler|empty/i,
@@ -227,7 +235,7 @@ test('compileL0ViaSubprocess fail-closed: non-zero exit throws with stderr', asy
   const root = seedRepoRoot();
   const spawnFn = buildFakeSpawn({ exitCode: 2, stderr: 'unknown catId "ghost"' });
   await assert.rejects(
-    () => compileL0ViaSubprocess({ catId: 'ghost', cwd: root, spawnFn }),
+    () => compileLegacy({ catId: 'ghost', cwd: root, spawnFn }),
     (err) => {
       assert.match(err.message, /ghost|exit|2/);
       return true;
@@ -239,14 +247,14 @@ test('compileL0ViaSubprocess fail-closed: empty stdout (no outPath) throws', asy
   clearL0Cache();
   const root = seedRepoRoot();
   const spawnFn = buildFakeSpawn({ stdout: '   \n' });
-  await assert.rejects(() => compileL0ViaSubprocess({ catId: 'empty-cat', cwd: root, spawnFn }), /empty|no.*output/i);
+  await assert.rejects(() => compileLegacy({ catId: 'empty-cat', cwd: root, spawnFn }), /empty|no.*output/i);
 });
 
 test('compileL0ViaSubprocess fail-closed: spawn error (ENOENT) throws', async () => {
   clearL0Cache();
   const root = seedRepoRoot();
   const spawnFn = buildFakeSpawn({ errorOnSpawn: Object.assign(new Error('spawn node ENOENT'), { code: 'ENOENT' }) });
-  await assert.rejects(() => compileL0ViaSubprocess({ catId: 'enoent-cat', cwd: root, spawnFn }), /ENOENT|spawn/i);
+  await assert.rejects(() => compileLegacy({ catId: 'enoent-cat', cwd: root, spawnFn }), /ENOENT|spawn/i);
 });
 
 // --- L0 cache ---
@@ -257,19 +265,19 @@ test('compileL0ViaSubprocess caches result and clearL0Cache invalidates', async 
   const spawnFn = buildFakeSpawn({ stdout: 'CACHED L0 CONTENT' });
 
   // First call: subprocess runs
-  const out1 = await compileL0ViaSubprocess({ catId: 'cache-test-cat', cwd: root, spawnFn });
+  const out1 = await compileLegacy({ catId: 'cache-test-cat', cwd: root, spawnFn });
   assert.equal(out1, 'CACHED L0 CONTENT');
   assert.equal(spawnFn.calls.length, 1);
 
   // Second call: cache hit, no new subprocess
-  const out2 = await compileL0ViaSubprocess({ catId: 'cache-test-cat', cwd: root, spawnFn });
+  const out2 = await compileLegacy({ catId: 'cache-test-cat', cwd: root, spawnFn });
   assert.equal(out2, 'CACHED L0 CONTENT');
   assert.equal(spawnFn.calls.length, 1, 'cache hit should skip subprocess');
 
   // Clear single cat: next call should spawn again
   clearL0Cache('cache-test-cat');
   const spawnFn2 = buildFakeSpawn({ stdout: 'REFRESHED L0' });
-  const out3 = await compileL0ViaSubprocess({ catId: 'cache-test-cat', cwd: root, spawnFn: spawnFn2 });
+  const out3 = await compileLegacy({ catId: 'cache-test-cat', cwd: root, spawnFn: spawnFn2 });
   assert.equal(out3, 'REFRESHED L0');
   assert.equal(spawnFn2.calls.length, 1);
 });
@@ -280,14 +288,14 @@ test('compileL0ViaSubprocess invalidates cached L0 when prompt-template assets c
   const l5TemplatePath = join(root, 'assets', 'prompt-templates', 'l5-mcp-tools-index.md');
   const spawnFn = buildFakeSpawn({ stdout: 'L0 BEFORE TEMPLATE CHANGE' });
 
-  const out1 = await compileL0ViaSubprocess({ catId: 'template-change-cat', cwd: root, spawnFn });
+  const out1 = await compileLegacy({ catId: 'template-change-cat', cwd: root, spawnFn });
   assert.equal(out1, 'L0 BEFORE TEMPLATE CHANGE');
   assert.equal(spawnFn.calls.length, 1);
 
   writeFileSync(l5TemplatePath, 'UPDATED L5 WITH PROJECTPATH GUARD CONTENT');
 
   const spawnFn2 = buildFakeSpawn({ stdout: 'L0 AFTER TEMPLATE CHANGE' });
-  const out2 = await compileL0ViaSubprocess({ catId: 'template-change-cat', cwd: root, spawnFn: spawnFn2 });
+  const out2 = await compileLegacy({ catId: 'template-change-cat', cwd: root, spawnFn: spawnFn2 });
   assert.equal(out2, 'L0 AFTER TEMPLATE CHANGE');
   assert.equal(spawnFn2.calls.length, 1, 'template changes must force a fresh L0 compiler subprocess');
 });
@@ -300,14 +308,14 @@ test('compileL0ViaSubprocess invalidates all cached cats when the dossier change
   writeFileSync(dossierPath, 'INITIAL DOSSIER');
   for (const catId of ['dossier-cat-a', 'dossier-cat-b']) {
     const initial = buildFakeSpawn({ stdout: `BEFORE ${catId}` });
-    await compileL0ViaSubprocess({ catId, cwd: root, spawnFn: initial });
-    await compileL0ViaSubprocess({ catId, cwd: root, spawnFn: initial });
+    await compileLegacy({ catId, cwd: root, spawnFn: initial });
+    await compileLegacy({ catId, cwd: root, spawnFn: initial });
     assert.equal(initial.calls.length, 1, 'unchanged dossier must keep the cache');
   }
   writeFileSync(dossierPath, 'UPDATED DOSSIER ROUTING');
   for (const catId of ['dossier-cat-a', 'dossier-cat-b']) {
     const updated = buildFakeSpawn({ stdout: `AFTER ${catId}` });
-    const result = await compileL0ViaSubprocess({ catId, cwd: root, spawnFn: updated });
+    const result = await compileLegacy({ catId, cwd: root, spawnFn: updated });
     assert.equal(result, `AFTER ${catId}`);
     assert.equal(updated.calls.length, 1, 'shared dossier change must invalidate every cat');
   }
@@ -323,7 +331,7 @@ test('compileL0ViaSubprocess invalidates cached L0 when governance rules change'
   utimesSync(sharedRulesPath, fixedTime, fixedTime);
   const spawnFn = buildFakeSpawn({ stdout: 'L0 BEFORE GOVERNANCE CHANGE' });
 
-  const out1 = await compileL0ViaSubprocess({ catId: 'governance-change-cat', cwd: root, spawnFn });
+  const out1 = await compileLegacy({ catId: 'governance-change-cat', cwd: root, spawnFn });
   assert.equal(out1, 'L0 BEFORE GOVERNANCE CHANGE');
   assert.equal(spawnFn.calls.length, 1);
 
@@ -332,21 +340,21 @@ test('compileL0ViaSubprocess invalidates cached L0 when governance rules change'
   utimesSync(sharedRulesPath, fixedTime, fixedTime);
 
   const spawnFn2 = buildFakeSpawn({ stdout: 'L0 AFTER SHARED RULES CHANGE' });
-  const out2 = await compileL0ViaSubprocess({ catId: 'governance-change-cat', cwd: root, spawnFn: spawnFn2 });
+  const out2 = await compileLegacy({ catId: 'governance-change-cat', cwd: root, spawnFn: spawnFn2 });
   assert.equal(out2, 'L0 AFTER SHARED RULES CHANGE');
   assert.equal(spawnFn2.calls.length, 1, 'shared-rules changes must force a fresh L0 compiler subprocess');
 
   writeFileSync(localRulesPath, 'LOCAL GOVERNANCE OVERLAY');
 
   const spawnFn3 = buildFakeSpawn({ stdout: 'L0 AFTER LOCAL GOVERNANCE OVERLAY' });
-  const out3 = await compileL0ViaSubprocess({ catId: 'governance-change-cat', cwd: root, spawnFn: spawnFn3 });
+  const out3 = await compileLegacy({ catId: 'governance-change-cat', cwd: root, spawnFn: spawnFn3 });
   assert.equal(out3, 'L0 AFTER LOCAL GOVERNANCE OVERLAY');
   assert.equal(spawnFn3.calls.length, 1, 'shared-rules.local changes must force a fresh L0 compiler subprocess');
 
   writeFileSync(overrideRulesPath, 'LOCAL GOVERNANCE OVERRIDE');
 
   const spawnFn4 = buildFakeSpawn({ stdout: 'L0 AFTER LOCAL GOVERNANCE OVERRIDE' });
-  const out4 = await compileL0ViaSubprocess({ catId: 'governance-change-cat', cwd: root, spawnFn: spawnFn4 });
+  const out4 = await compileLegacy({ catId: 'governance-change-cat', cwd: root, spawnFn: spawnFn4 });
   assert.equal(out4, 'L0 AFTER LOCAL GOVERNANCE OVERRIDE');
   assert.equal(
     spawnFn4.calls.length,
@@ -366,14 +374,14 @@ test('F231: profile content changes invalidate only that user/cat L0 cache entry
 
   const firstSpawn = buildFakeSpawn({ stdout: 'L0-FIRST' });
   assert.equal(
-    await compileL0ViaSubprocess({ catId: 'codex', userId: 'alice', cwd: root, dataDir, spawnFn: firstSpawn }),
+    await compileLegacy({ catId: 'codex', userId: 'alice', cwd: root, dataDir, spawnFn: firstSpawn }),
     'L0-FIRST',
   );
 
   writeFileSync(primerPath, 'SECOND');
   const secondSpawn = buildFakeSpawn({ stdout: 'L0-SECOND' });
   assert.equal(
-    await compileL0ViaSubprocess({ catId: 'codex', userId: 'alice', cwd: root, dataDir, spawnFn: secondSpawn }),
+    await compileLegacy({ catId: 'codex', userId: 'alice', cwd: root, dataDir, spawnFn: secondSpawn }),
     'L0-SECOND',
   );
   assert.equal(secondSpawn.calls.length, 1, 'profile edits must force a fresh compiler subprocess');
@@ -390,7 +398,7 @@ test('F231: legacy cwd/private/profile never shadows the canonical data root', a
   writeFileSync(join(projectDir, 'scripts', 'compile-system-prompt-l0.mjs'), '// fake');
 
   const spawnFn = buildFakeSpawn({ stdout: 'PACKAGED-L0' });
-  await compileL0ViaSubprocess({ catId: 'packaged-cat', userId: 'alice', cwd: projectDir, dataDir, spawnFn });
+  await compileLegacy({ catId: 'packaged-cat', userId: 'alice', cwd: projectDir, dataDir, spawnFn });
   const call = spawnFn.calls[0];
   assert.equal(
     call.args[call.args.indexOf('--profile-dir') + 1],
@@ -404,7 +412,7 @@ test('F231: packaged script lookup and profile storage use independent roots', a
   const root = seedRepoRoot();
   const dataDir = mkdtempSync(join(tmpdir(), 'l0-data-'));
   const spawnFn = buildFakeSpawn({ stdout: 'FALLBACK-L0' });
-  await compileL0ViaSubprocess({ catId: 'fallback-cat', userId: 'alice', cwd: root, dataDir, spawnFn });
+  await compileLegacy({ catId: 'fallback-cat', userId: 'alice', cwd: root, dataDir, spawnFn });
   const call = spawnFn.calls[0];
   assert.equal(
     call.args[call.args.indexOf('--profile-dir') + 1],
@@ -503,9 +511,9 @@ test('AC-G10: concurrent cold-cache compileL0ViaSubprocess calls collapse to sin
   }
   const spawnFn = buildSlowSpawn('DEDUP-L0-OUTPUT');
   const [out1, out2, out3] = await Promise.all([
-    compileL0ViaSubprocess({ catId: 'dedup-cat', cwd: root, spawnFn }),
-    compileL0ViaSubprocess({ catId: 'dedup-cat', cwd: root, spawnFn }),
-    compileL0ViaSubprocess({ catId: 'dedup-cat', cwd: root, spawnFn }),
+    compileLegacy({ catId: 'dedup-cat', cwd: root, spawnFn }),
+    compileLegacy({ catId: 'dedup-cat', cwd: root, spawnFn }),
+    compileLegacy({ catId: 'dedup-cat', cwd: root, spawnFn }),
   ]);
   assert.equal(out1, 'DEDUP-L0-OUTPUT');
   assert.equal(out2, 'DEDUP-L0-OUTPUT');
@@ -519,12 +527,12 @@ test('AC-G10: post-dedup the cache holds result — subsequent calls do not resp
   const spawnFn = buildFakeSpawn({ stdout: 'CACHED-AFTER-DEDUP' });
   // Pair of concurrent calls — installs cache after settle.
   await Promise.all([
-    compileL0ViaSubprocess({ catId: 'post-dedup-cat', cwd: root, spawnFn }),
-    compileL0ViaSubprocess({ catId: 'post-dedup-cat', cwd: root, spawnFn }),
+    compileLegacy({ catId: 'post-dedup-cat', cwd: root, spawnFn }),
+    compileLegacy({ catId: 'post-dedup-cat', cwd: root, spawnFn }),
   ]);
   assert.equal(spawnFn.calls.length, 1);
   // Third call sequentially — must hit cache, not spawn again.
-  const result = await compileL0ViaSubprocess({ catId: 'post-dedup-cat', cwd: root, spawnFn });
+  const result = await compileLegacy({ catId: 'post-dedup-cat', cwd: root, spawnFn });
   assert.equal(result, 'CACHED-AFTER-DEDUP');
   assert.equal(spawnFn.calls.length, 1, 'cache hit after dedup must skip subprocess');
 });
@@ -535,12 +543,12 @@ test('AC-G10: in-flight failure does not poison cache — next call may retry', 
   // First spawn fails with non-zero exit.
   const failingSpawn = buildFakeSpawn({ stderr: 'first call fails', exitCode: 2 });
   await assert.rejects(
-    () => compileL0ViaSubprocess({ catId: 'retry-cat', cwd: root, spawnFn: failingSpawn }),
+    () => compileLegacy({ catId: 'retry-cat', cwd: root, spawnFn: failingSpawn }),
     /retry-cat|exit|2/,
   );
   // Second spawn succeeds — confirms cache was not populated by the failure.
   const goodSpawn = buildFakeSpawn({ stdout: 'RECOVERED-L0' });
-  const out = await compileL0ViaSubprocess({ catId: 'retry-cat', cwd: root, spawnFn: goodSpawn });
+  const out = await compileLegacy({ catId: 'retry-cat', cwd: root, spawnFn: goodSpawn });
   assert.equal(out, 'RECOVERED-L0');
   assert.equal(goodSpawn.calls.length, 1);
 });
@@ -559,7 +567,7 @@ test('AC-G10: clearL0Cache during in-flight compile prevents stale result from r
   };
   controlledSpawn.calls = [];
 
-  const oldCompile = compileL0ViaSubprocess({ catId: 'clear-race-cat', cwd: root, spawnFn: controlledSpawn });
+  const oldCompile = compileLegacy({ catId: 'clear-race-cat', cwd: root, spawnFn: controlledSpawn });
   assert.equal(controlledSpawn.calls.length, 1);
   assert.equal(pending.length, 1);
 
@@ -570,7 +578,7 @@ test('AC-G10: clearL0Cache during in-flight compile prevents stale result from r
   assert.equal(await oldCompile, 'STALE-L0', 'the already-started caller still receives its own compile result');
 
   const freshSpawn = buildFakeSpawn({ stdout: 'FRESH-L0' });
-  const out = await compileL0ViaSubprocess({ catId: 'clear-race-cat', cwd: root, spawnFn: freshSpawn });
+  const out = await compileLegacy({ catId: 'clear-race-cat', cwd: root, spawnFn: freshSpawn });
   assert.equal(out, 'FRESH-L0');
   assert.equal(freshSpawn.calls.length, 1, 'post-clear caller must respawn instead of reading stale cache');
 });
@@ -586,9 +594,9 @@ test('Phase E: clearL0CacheOwner invalidates ALL cats for that owner', async () 
   const spawn1 = buildFakeSpawn({ stdout: 'ALICE-CODEX' });
   const spawn2 = buildFakeSpawn({ stdout: 'ALICE-OPUS' });
   const spawn3 = buildFakeSpawn({ stdout: 'BOB-CODEX' });
-  await compileL0ViaSubprocess({ catId: 'codex', userId: 'alice', cwd: root, dataDir, spawnFn: spawn1 });
-  await compileL0ViaSubprocess({ catId: 'opus', userId: 'alice', cwd: root, dataDir, spawnFn: spawn2 });
-  await compileL0ViaSubprocess({ catId: 'codex', userId: 'bob', cwd: root, dataDir, spawnFn: spawn3 });
+  await compileLegacy({ catId: 'codex', userId: 'alice', cwd: root, dataDir, spawnFn: spawn1 });
+  await compileLegacy({ catId: 'opus', userId: 'alice', cwd: root, dataDir, spawnFn: spawn2 });
+  await compileLegacy({ catId: 'codex', userId: 'bob', cwd: root, dataDir, spawnFn: spawn3 });
   assert.equal(l0CacheSize(), 3, 'three entries cached before clearOwner');
 
   // Owner-wide invalidation
@@ -596,7 +604,7 @@ test('Phase E: clearL0CacheOwner invalidates ALL cats for that owner', async () 
 
   // Bob's entry survives
   const bobRetry = buildFakeSpawn({ stdout: 'BOB-STILL' });
-  const bobResult = await compileL0ViaSubprocess({
+  const bobResult = await compileLegacy({
     catId: 'codex',
     userId: 'bob',
     cwd: root,
@@ -610,11 +618,11 @@ test('Phase E: clearL0CacheOwner invalidates ALL cats for that owner', async () 
   const aliceRetry1 = buildFakeSpawn({ stdout: 'ALICE-CODEX-2' });
   const aliceRetry2 = buildFakeSpawn({ stdout: 'ALICE-OPUS-2' });
   assert.equal(
-    await compileL0ViaSubprocess({ catId: 'codex', userId: 'alice', cwd: root, dataDir, spawnFn: aliceRetry1 }),
+    await compileLegacy({ catId: 'codex', userId: 'alice', cwd: root, dataDir, spawnFn: aliceRetry1 }),
     'ALICE-CODEX-2',
   );
   assert.equal(
-    await compileL0ViaSubprocess({ catId: 'opus', userId: 'alice', cwd: root, dataDir, spawnFn: aliceRetry2 }),
+    await compileLegacy({ catId: 'opus', userId: 'alice', cwd: root, dataDir, spawnFn: aliceRetry2 }),
     'ALICE-OPUS-2',
   );
   assert.equal(aliceRetry1.calls.length, 1, 'alice codex re-spawned after owner clear');
@@ -632,7 +640,7 @@ test('Phase E: corpus content change invalidates L0 cache (corpus in signature)'
 
   const spawn1 = buildFakeSpawn({ stdout: 'L0-CORPUS-V1' });
   assert.equal(
-    await compileL0ViaSubprocess({ catId: 'codex', userId: 'alice', cwd: root, dataDir, spawnFn: spawn1 }),
+    await compileLegacy({ catId: 'codex', userId: 'alice', cwd: root, dataDir, spawnFn: spawn1 }),
     'L0-CORPUS-V1',
   );
 
@@ -641,7 +649,7 @@ test('Phase E: corpus content change invalidates L0 cache (corpus in signature)'
 
   const spawn2 = buildFakeSpawn({ stdout: 'L0-CORPUS-V2' });
   assert.equal(
-    await compileL0ViaSubprocess({ catId: 'codex', userId: 'alice', cwd: root, dataDir, spawnFn: spawn2 }),
+    await compileLegacy({ catId: 'codex', userId: 'alice', cwd: root, dataDir, spawnFn: spawn2 }),
     'L0-CORPUS-V2',
   );
   assert.equal(spawn2.calls.length, 1, 'corpus change must invalidate L0 cache');
@@ -662,7 +670,7 @@ test('P2: recordProfilePointerEmission detects corpus URI for per-layer telemetr
   // Output with both URIs: primer + corpus
   const l0WithBothPointers = `Identity block...\n共享事実: ${CURRENT_CORPUS_PROFILE_URI}\nPrimer: ${CURRENT_RELATIONSHIP_PROFILE_URI}\n`;
   const spawnBoth = buildFakeSpawn({ stdout: l0WithBothPointers });
-  const outBoth = await compileL0ViaSubprocess({ catId: 'opus', cwd: root, dataDir: root, spawnFn: spawnBoth });
+  const outBoth = await compileLegacy({ catId: 'opus', cwd: root, dataDir: root, spawnFn: spawnBoth });
   assert.ok(outBoth.includes(CURRENT_CORPUS_PROFILE_URI), 'corpus URI in output → profile.layer=corpus emission');
   assert.ok(outBoth.includes(CURRENT_RELATIONSHIP_PROFILE_URI), 'primer URI in output → profile.layer=primer emission');
 
@@ -670,7 +678,7 @@ test('P2: recordProfilePointerEmission detects corpus URI for per-layer telemetr
   clearL0Cache();
   const l0CorpusOnly = `Identity block...\n共享事実: ${CURRENT_CORPUS_PROFILE_URI}\n`;
   const spawnCorpus = buildFakeSpawn({ stdout: l0CorpusOnly });
-  const outCorpus = await compileL0ViaSubprocess({ catId: 'opus', cwd: root, dataDir: root, spawnFn: spawnCorpus });
+  const outCorpus = await compileLegacy({ catId: 'opus', cwd: root, dataDir: root, spawnFn: spawnCorpus });
   assert.ok(outCorpus.includes(CURRENT_CORPUS_PROFILE_URI), 'corpus-only output contains corpus URI');
   assert.ok(!outCorpus.includes(CURRENT_RELATIONSHIP_PROFILE_URI), 'corpus-only output has no primer URI');
 });

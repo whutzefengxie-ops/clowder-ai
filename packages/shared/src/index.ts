@@ -166,6 +166,8 @@ export * from './types/living-work.js';
 // F314: one accepted-source contract shared by API persistence and MCP producers.
 export * from './types/local-review.js';
 export * from './types/media-publication-source.js';
+// W1: pure role/execution member profile projections shared by API and Web.
+export * from './types/member-profile.js';
 // F287 bounded opportunity/cue contract (kept explicit for API/MCP consumers).
 export * from './types/memory-cue.js';
 export * from './types/message-output-layout.js';
