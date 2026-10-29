@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 // Fixed before candidate runs. Only the selected seed and TASK.md enter the candidate workspace.
@@ -79,6 +79,8 @@ test('default list excludes archived notes', () => {
       assert.deepEqual(listNotes(notes, { includeArchived: false }), notes.slice(1));
       assert.deepEqual(listNotes(notes, { includeArchived: true }), notes);
       assert.equal(renderNotes(notes), '|b');
+      assert.equal(renderNotes(notes, {}), '|b');
+      assert.equal(renderNotes(notes, { includeArchived: false }), '|b');
       assert.equal(renderNotes(notes, { includeArchived: true }), 'a||b');
       assert.deepEqual(listNotes([], { includeArchived: true }), []);
       assert.deepEqual(notes, before);
@@ -118,7 +120,12 @@ test('receipt keeps currency and minor units', () => {
         ['--1', null],
         ['not money', null],
         ['90071992547409.91', Number.MAX_SAFE_INTEGER],
+        ['90071992547409.90', Number.MAX_SAFE_INTEGER - 1],
+        ['90071992547409.89', Number.MAX_SAFE_INTEGER - 2],
         ['90071992547409.92', null],
+        ['-90071992547409.91', Number.MIN_SAFE_INTEGER],
+        ['-90071992547409.90', Number.MIN_SAFE_INTEGER + 1],
+        ['-90071992547409.92', null],
       ])
         assert.equal(parseMinorUnits(text), cents, text);
       assert.deepEqual(receipt('-2.35'), { currency: 'CNY', minor: -235 });
@@ -135,6 +142,11 @@ if (!sample || !['prepare', 'verify'].includes(mode) || !workspaceArg || (mode =
   );
 }
 const workspace = resolve(workspaceArg);
+const reportPath = mode === 'verify' ? resolve(reportArg) : undefined;
+if (reportPath) {
+  const output = relative(workspace, reportPath);
+  if (!isAbsolute(output) && output.split(sep)[0] !== '..') throw new Error('验收报告必须位于候选工作区之外。');
+}
 const files = {
   ...sample.files,
   'TASK.md': `${sample.task}\n\n验证入口：node --test test/public.test.mjs。最终说明改动、实际验证及限制。\n`,
@@ -161,18 +173,28 @@ if (mode === 'prepare') {
       return entry.isDirectory() ? scan(join(directory, entry.name), relative) : [relative];
     });
   let fileHashes = {};
+  let executionInputHashes = {};
+  const snapshot = () =>
+    Object.fromEntries(scan(workspace).map((path) => [path, digest(readFileSync(join(workspace, path)))]));
+  const assertScope = (hashes) => {
+    const paths = [...new Set([...Object.keys(baseline), ...Object.keys(hashes)])];
+    const changed = paths.filter((path) => hashes[path] !== baseline[path]);
+    assert.ok(
+      changed.every((path) => sample.allowed.includes(path)),
+      `超出允许范围：${changed.filter((path) => !sample.allowed.includes(path)).join(', ')}`,
+    );
+    return changed;
+  };
   const [result] = await Promise.allSettled([
     Promise.resolve().then(async () => {
-      fileHashes = Object.fromEntries(
-        scan(workspace).map((path) => [path, digest(readFileSync(join(workspace, path)))]),
-      );
-      const paths = [...new Set([...Object.keys(baseline), ...Object.keys(fileHashes)])];
-      const changed = paths.filter((path) => fileHashes[path] !== baseline[path]);
-      assert.ok(
-        changed.every((path) => sample.allowed.includes(path)),
-        `超出允许范围：${changed.filter((path) => !sample.allowed.includes(path)).join(', ')}`,
-      );
-      await sample.check(workspace);
+      executionInputHashes = snapshot();
+      fileHashes = executionInputHashes;
+      const changed = assertScope(executionInputHashes);
+      const [checked] = await Promise.allSettled([sample.check(workspace)]);
+      fileHashes = snapshot();
+      assertScope(fileHashes);
+      assert.deepEqual(fileHashes, executionInputHashes, '验收期间候选文件发生变化，不能为未核对字节签发通过。');
+      if (checked.status === 'rejected') throw checked.reason;
       return changed;
     }),
   ]);
@@ -181,13 +203,13 @@ if (mode === 'prepare') {
     workspace,
     scriptSha256: digest(readFileSync(new URL(import.meta.url))),
     fileHashes,
+    executionInputHashes,
     status: result.status === 'fulfilled' ? 'PASS' : 'FAIL',
     ...(result.status === 'fulfilled'
       ? { changed: result.value }
       : { error: result.reason instanceof Error ? result.reason.message : String(result.reason) }),
     claim: '仅该固定样本的行为及文件范围；不证明模型总体能力、审查质量或平台发行验收',
   };
-  const reportPath = resolve(reportArg);
   mkdirSync(dirname(reportPath), { recursive: true });
   writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`, { flag: 'wx' });
   process.stdout.write(`${report.status} ${id} ${reportPath}\n`);

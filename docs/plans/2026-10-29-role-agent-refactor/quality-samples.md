@@ -23,10 +23,10 @@ status: partial-preparation
 ```powershell
 node scripts/role-agent-quality.mjs prepare Q01-A <新任务目录>
 # 候选在该目录完成 TASK.md，保留调用与工具原始记录。
-node packages/api/scripts/with-test-home.mjs node scripts/role-agent-quality.mjs verify Q01-A <任务目录> <目录外的新报告.json>
+node packages/api/scripts/with-test-home.mjs node ../../scripts/role-agent-quality.mjs verify Q01-A <任务目录> <目录外的新报告.json>
 ```
 
-报告使用排他创建，包含脚本哈希、任务 ID、候选文件哈希、范围/行为结果与限制。不能把报告写进被评分目录，否则会成为额外改动。任务验收前由既有隔离环境检查公开测试；独立检查再核对行为与改动范围。任何受保护文件改变、额外文件或删除均按任务约定失败。新 binding 每项两轮均通过；所有失败和重试保留，Q01 总状态仅在真实候选完成全部轮次且独立审查无高严重问题后更新。
+报告使用排他创建，包含脚本哈希、任务 ID、执行前/后候选文件哈希、范围/行为结果与限制。执行前后分别核对范围，执行中出现额外文件或字节变化不能通过。不能把报告写进被评分目录，否则会成为额外改动。with-test-home 将工作目录切换到 packages/api，所以上述脚本参数从该位置解析。任务验收前由既有隔离环境检查公开测试；独立检查再核对行为与改动范围。任何受保护文件改变、额外文件或删除均按任务约定失败。新 binding 每项两轮均通过；所有失败和重试保留，Q01 总状态仅在真实候选完成全部轮次且独立审查无高严重问题后更新。
 
 ## 判断依据及职责
 
@@ -36,7 +36,9 @@ node packages/api/scripts/with-test-home.mjs node scripts/role-agent-quality.mjs
 - 适用范围：这些小型 JavaScript 工程任务的局部符合性；不估计模型总体成功率或跨语言能力。换任务、量尺或输入分布重新校准。两轮只观察明显不稳定，不给统计显著性结论。
 - 0/1/2 盲评沿原方案分维度记录，不折成抵消身份冒充/越权/虚假成功的总分。记录用户干预、耗时、token 和重建次数；未采到的字段保持未知。
 
-`packages/api/test/role-agent-quality-samples.test.js` 为校准入口：每个任务分别检查原始缺陷、健康参考、越界改测试、未修完整四种结果，且确认已有任务目录不会被覆盖。`quality-samples-calibration-final.log` 三条测试通过，合计十二个判定对照符合预期；报告/源文件留在各测试诊断所列 artifacts。`quality-samples-biome-verified.log` 无错误。尚未调用真实候选客户端，不把这些结果标为 Q01 PASS。
+`packages/api/test/role-agent-quality-samples.test.js` 为校准入口。最初三条测试/十二个对照通过，但 checkpoint_review 对 eaa7d268 返回 changes_requested：金额相邻安全值失真、view 显式 false、执行后生成文件未核验、包装器改变 cwd 导致文档命令失效，共四个 P2。作者保留三个真实误放候选，`quality-samples-review-red-three.log` 三条均 RED；修复后 `quality-samples-review-green-final.log` 四条 PASS，包含原三组及三个新反例共十五个判定、真实文档入口和输出位置检查。执行前/后哈希均入报告，运行中改变代码或新增文件拒绝；版本控制的根 .git 元数据排除在代码范围之外。另有 `quality-samples-report-path-red.log` 证实报告放进候选目录会在评分后新增文件，现于命令边界拒绝创建。
+
+`quality-samples-review-biome-final.log` 无错误。作者复跑 reviewer 原三反例为两个 PASS、一个旧诊断见证 FAIL：第三条原先断言最终哈希缺少 debug.log，现在最终哈希已正确包含它，因此旧缺陷见证不再成立；没有修改 reviewer 文件或将复跑误记为全过。最终状态仍等同一 reviewer 复核，不把作者参考实现或量尺自检标为 Q01 通过。所有夹具/报告保留在日志中的独立路径，无真实候选客户端或模型调用。
 
 ## Q02–Q04 的剩余准备与运行
 
@@ -44,4 +46,4 @@ Q02 需要另建两个有可复现实质缺陷的 before/after 变更及一个�
 
 Q02–Q04、真实模型基线和逐平台发行验收继续 NOT_RUN。性能按原方案：本地同条件连续 20 次，中位数同时增加 >10% 且 >100ms 阻断；真实任务耗时/token 中位数增加 >15% 复核。当前样本量尺校准未产生性能基线或新的能力支持声明。
 
-复杂度复核：一个离线 Node 脚本和三条校准测试，共用静态样本；无新运行服务、评分数据库、插件权限、在线指标或通用 benchmark 平台。后续复用已有 invocation/session 证据和正式验收矩阵。
+复杂度复核：一个离线 Node 脚本和四条校准测试，共用静态样本；重复使用的快照/范围检查服务于真实执行前后两个边界。无新运行服务、评分数据库、插件权限、在线指标或通用 benchmark 平台。后续复用已有 invocation/session 证据和正式验收矩阵。

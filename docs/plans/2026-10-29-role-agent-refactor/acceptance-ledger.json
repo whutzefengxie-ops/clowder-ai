@@ -405,6 +405,20 @@
     "findings": [],
     "evidence": "README.md#W2-账号与启动策略读后核验切片尚未完成-W2"
   },
+  "qualitySamplesCheckpointReview": {
+    "reviewer": "checkpoint_review",
+    "verdict": "changes_requested",
+    "reviewedHead": "eaa7d268ffbab07b0f2168af259eb344bcad68db",
+    "subject": "task:01a1881e-1a7b-78d0-9a62-ff99b0ab7a01/checkpoint-quality-samples",
+    "findings": [
+      "P2 view explicit false accepted incorrectly",
+      "P2 inexact adjacent safe cents accepted incorrectly",
+      "P2 execution-time file mutation absent from final scope/hash check",
+      "P2 documented wrapper command uses the wrong child cwd"
+    ],
+    "authorFixStatus": "addressed_awaiting_independent_recheck",
+    "evidence": "quality-samples.md#判断依据及职责"
+  },
   "acpAccountSourceCheckpointReview": {
     "reviewer": "checkpoint_review",
     "verdict": "approved",

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -18,6 +18,20 @@ const controls = {
 }`,
     },
     partial: { 'src/cache.mjs': null },
+    misleading: {
+      'src/cache.mjs': `import { writeFileSync } from 'node:fs';
+export function createCache(now = Date.now) {
+  const entries = new Map();
+  return {
+    put(key, value, ttlMs) { entries.set(key, { value, expiresAt: now() + ttlMs }); },
+    get(key) {
+      const item = entries.get(key);
+      if (item && now() >= item.expiresAt) writeFileSync(new URL('../debug.log', import.meta.url), 'fixture-only');
+      return item && now() < item.expiresAt ? item.value : undefined;
+    },
+  };
+}`,
+    },
   },
   'Q01-B': {
     healthy: {
@@ -26,6 +40,10 @@ const controls = {
 export function renderNotes(notes, options) { return listNotes(notes, options).map(note => note.title).join('|'); }`,
     },
     partial: { 'src/view.mjs': null },
+    misleading: {
+      'src/view.mjs': `import { listNotes } from './store.mjs';
+export function renderNotes(notes, options) { return listNotes(notes, options ? { includeArchived: Boolean(options) } : undefined).map(note => note.title).join('|'); }`,
+    },
   },
   'Q01-C': {
     healthy: {
@@ -38,6 +56,13 @@ export function renderNotes(notes, options) { return listNotes(notes, options).m
     },
     partial: {
       'src/money.mjs': `export function parseMinorUnits(text) { return /^[-+]?[0-9]+(\\.[0-9]{1,2})?$/.test(text.trim()) ? Math.round(Number(text) * 100) : null; }`,
+    },
+    misleading: {
+      'src/money.mjs': `export function parseMinorUnits(text) {
+  if (!/^[-+]?[0-9]+(\\.[0-9]{1,2})?$/.test(text.trim())) return null;
+  const value = Math.round(Number(text) * 100);
+  return Number.isSafeInteger(value) ? value : null;
+}`,
     },
   },
 };
@@ -82,8 +107,52 @@ for (const [id, control] of Object.entries(controls)) {
       writeFileSync(join(workspace, path), partial);
     });
     verify('incomplete', 'FAIL');
+    if (control.misleading) {
+      Object.entries({ ...control.healthy, ...control.misleading }).forEach(([path, content]) => {
+        writeFileSync(join(workspace, path), content);
+      });
+      assert.equal(run(['--test', 'test/public.test.mjs'], workspace).status, 0);
+      const rejected = verify('review-counterexample', 'FAIL');
+      if (id === 'Q01-A') {
+        assert.ok(Object.hasOwn(rejected.fileHashes, 'debug.log'));
+        assert.equal(Object.hasOwn(rejected.executionInputHashes, 'debug.log'), false);
+      }
+    }
     const duplicate = run([script, 'prepare', id, workspace]);
     assert.notEqual(duplicate.status, 0, 'prepare must not overwrite an existing evaluation workspace');
     assert.equal(readFileSync(protectedPath, 'utf8'), publicSource);
   });
 }
+
+test('documented root command resolves through the real isolated-home wrapper', (t) => {
+  const parent = resolve('artifacts/role-agent-refactor/quality-calibration');
+  mkdirSync(parent, { recursive: true });
+  const root = mkdtempSync(join(parent, 'documented-command-')),
+    workspace = join(root, 'candidate');
+  t.diagnostic(`retained documented command proof: ${root}`);
+  const repository = fileURLToPath(new URL('../../../', import.meta.url));
+  const wrapper = fileURLToPath(new URL('../scripts/with-test-home.mjs', import.meta.url));
+  const prepared = spawnSync(process.execPath, [script, 'prepare', 'Q01-A', workspace], {
+    cwd: repository,
+    encoding: 'utf8',
+    timeout: 15000,
+  });
+  assert.equal(prepared.status, 0, prepared.stderr);
+  writeFileSync(join(workspace, 'src/cache.mjs'), controls['Q01-A'].healthy['src/cache.mjs']);
+  const report = join(root, 'report.json');
+  const verified = spawnSync(
+    process.execPath,
+    [wrapper, 'node', '../../scripts/role-agent-quality.mjs', 'verify', 'Q01-A', workspace, report],
+    { cwd: repository, encoding: 'utf8', timeout: 15000 },
+  );
+  assert.equal(verified.status, 0, `${verified.stdout}\n${verified.stderr}`);
+  assert.equal(JSON.parse(readFileSync(report, 'utf8')).status, 'PASS');
+  const insideReport = join(workspace, 'inside-report.json');
+  const inside = spawnSync(process.execPath, [script, 'verify', 'Q01-A', workspace, insideReport], {
+    cwd: repository,
+    encoding: 'utf8',
+    timeout: 15000,
+  });
+  assert.notEqual(inside.status, 0, 'the evaluator must not add an unscored report inside the candidate workspace');
+  assert.equal(existsSync(insideReport), false);
+});
