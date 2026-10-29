@@ -176,3 +176,5 @@ write owners, covering direct async writes, synchronous member inheritance and d
 sync. The domain event identifies the resolved project root; it contains no configuration or
 credential values and does not trigger unrelated environment-key subscribers. Reads and failed
 writes do not publish commits. This adds no cache, revision service or new configuration authority.
+
+During admission, the existing invocation MCP reader records private versions of the formal global/project files it actually reads. The Host validates those versions after its last asynchronous capture and rejects a changed source before sending. Reads still resolve through the original owners; this introduces no cross-invocation configuration cache. Client-native files and plugin activation currentness keep their separate ownership boundaries.

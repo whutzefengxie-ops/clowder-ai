@@ -1,11 +1,44 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { CapabilitiesConfig } from '@cat-cafe/shared';
 import { isSameCapabilityRoot } from './invoke-capability-root.js';
 
-function read(root: string): CapabilitiesConfig | null {
+const sourceReads = new AsyncLocalStorage<{ versions: Map<string, string | null>; changed: boolean }>();
+
+function readSource(path: string) {
   try {
-    const value = JSON.parse(readFileSync(join(root, '.cat-cafe/capabilities.json'), 'utf8'));
+    const raw = readFileSync(path, 'utf8');
+    return { raw, version: createHash('sha256').update(raw).digest('hex') };
+  } catch {
+    return { raw: null, version: null };
+  }
+}
+
+/** Track only versions during this admission. Each read still uses its existing source and parsing policy. */
+export async function captureInvocationMcpSources<T>(capture: () => T | Promise<T>) {
+  const state = { versions: new Map<string, string | null>(), changed: false };
+  const value = await sourceReads.run(state, capture);
+  return {
+    value,
+    isCurrent: () =>
+      !state.changed && [...state.versions].every(([path, version]) => readSource(path).version === version),
+  };
+}
+
+function read(root: string): CapabilitiesConfig | null {
+  const path = join(root, '.cat-cafe/capabilities.json');
+  const { raw, version } = readSource(path);
+  const state = sourceReads.getStore();
+  if (state) {
+    const previous = state.versions.get(path);
+    if (previous !== undefined && previous !== version) state.changed = true;
+    else state.versions.set(path, version);
+  }
+  if (raw === null) return null;
+  try {
+    const value = JSON.parse(raw);
     return (value?.version === 1 || value?.version === 2) &&
       Array.isArray(value.capabilities) &&
       // Match readCapabilitiesConfigState: every consumer reads fields off each entry.

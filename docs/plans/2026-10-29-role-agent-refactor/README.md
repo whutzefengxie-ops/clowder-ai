@@ -436,3 +436,15 @@ checkpoint_review 对 `1f1453ee56de361f2681ae373e0e76d7a561a400` 返回 approved
 `acp-catalog-source-red.log` 五项=2 PASS+3 FAIL，使用真实 getAcpConfig 和独立模板，修改启动参数、移除 ACP、损坏来源均未拒绝。修复后 `acp-catalog-source-green.log` 27 PASS，含上述三条、新 factory 实际 AcpClient 构造 args、新旧绑定对照、账号来源/选择及原租约/工厂；`acp-catalog-source-consumers.log` 62 PASS，含客户端库生命周期/能力、插件选择与 MCP/执行偏好。没有启动原生 CLI/真实模型，构造参数证据不代替进程或发行物验收；全部池由测试释放，夹具数据保留。
 
 最终 API tsc、三个相关文件 Biome 无错误。首次格式检查报 index.ts 的 CRLF；仅规范为 LF，Git 逻辑差异仍为目录 factory 调用点的一行。factory 集合仍使用隔离进程的既有 trusted-host 模式，不认证 strict ACL。复杂度复核：复用原 factory 与来源解析函数，在现有私有输入增加一个读取端口，共用原前后 fence；没有新注册/启动框架、存储、watcher 或 revision bus。成员整体发布、MCP 来源、父环境/CA、其他客户端完整输入及 W2 仍待继续；此目录来源切片等待独立审查。
+
+checkpoint_review 对 `145bb8cd4ac1851d78afca033dc9f63d93abffe8` 返回 approved，subject 为 `task:01a1881e-1a7b-78d0-9a62-ff99b0ab7a01/checkpoint-acp-catalog-source`。独立 24 PASS，含真实 catalog overlay、变更/删除/损坏、捕获期间变化、私有副本及 legacy 无 getter 兼容；无未关闭 finding。批准仍限目录来源，不代表成员整体发布、全部 MCP/父环境或完整 W2。
+
+## W2 正式 MCP 文件版本核验（尚未完成 W2）
+
+原 readInvocationMcpConfig 继续按既有规则每次读取/解析全局和项目 capabilities.json；在本轮捕获 scope 中只记录实际读到的文件版本，重复读取版本不同时记为变化。Host 包住原 provider/共享 MCP 捕获，在后续线程读取及账号/实现核验之后、L0 同步捕获之前验证这些来源仍为原版本；变化抛既有自有冲突并沿一次重解析路径处理。版本集合为私有临时数据，不带配置正文进入审计或子进程，不在实际发送阶段再次查询。
+
+`mcp-currentness-red.log` 四项=1 PASS+3 FAIL：实际 ACP 捕获期间写全局/项目配置，以及最后线程读取窗口写配置，均未发现变化。相同字节重写是对照。修复后 `mcp-currentness-green.log` 66 PASS，含各已迁入 native/ACP 的实际 MCP 消费、冻结后变化、线程/currentness 和原路由重解析；`mcp-currentness-consumers.log` 178 PASS，涵盖原 workspace/共享授权、适配格式、完整策略与调用 preflight。新增串/并行 Host→ACP 内存协议 session 旅程，`mcp-currentness-routing-complete.log` 6 PASS，确认冲突后捕获两次、实际 session/new 一次且新 args 被消费，turn 关闭/lease release 各一次；没有真实模型或原生 CLI。
+
+追加路由夹具时的语法错误和继承默认 effort 导致的 thought_level 失败留在较早 routing 日志；修正测试作用域，并显式声明本场景委托原生默认 effort，没有放宽产品配置校验。最后夹具补齐真实 lease 接口及线程活动接口，消除无关清理失败。最终 API tsc 通过、3 文件 Biome 无错误。
+
+复杂度复核：仅复用原 MCP 文件 owner 记录本轮版本及最终读取核验；没有缓存配置对象、跨调用缓存切换、watcher、存储或通用配置总线。scripts/sync-skills.sh 的跨进程通知缺口继续保留，不能以本次字节核验声称全部合法写方已通知。该核验只覆盖经此正式 reader 读取的文件；原生 HOME/.mcp.json 等专属来源、插件激活代次、父环境/CA、成员整体发布与持久审计仍须分别完成，W2/C05/C15 尚未整体验收。此 MCP 文件切片等待独立审查。

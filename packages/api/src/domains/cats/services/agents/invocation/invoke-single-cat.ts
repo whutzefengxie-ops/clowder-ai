@@ -59,6 +59,7 @@ import {
   bindInvocationPluginMcpView,
   withInvocationPluginMcpView,
 } from '../../../../../config/capabilities/invocation-plugin-mcp-view.js';
+import { captureInvocationMcpSources } from '../../../../../config/capabilities/invoke-mcp-config.js';
 import { pluginMcpExposureProject } from '../../../../../config/capabilities/plugin-mcp-exposure.js';
 import { buildCatGitIdentityEnv } from '../../../../../config/cat-git-identity.js';
 import { parseOpenCodeModel, resolveEffectiveOpenCodeModel } from '../../../../../config/opencode-model.js';
@@ -1512,7 +1513,7 @@ export async function prepareInvocationExecutionBinding(
     catConfig?.provider !== 'openai-chatgpt-pro' &&
     catConfig?.mcpSupport !== false &&
     input.toolExecutionPolicy?.mode !== 'read_only';
-  const captured =
+  const mcpSources = await captureInvocationMcpSources(async () =>
     captureOptions || captureOpenCodeMcp || captureSharedMcp
       ? await preflightRace(
           Promise.resolve().then(async () => {
@@ -1563,7 +1564,9 @@ export async function prepareInvocationExecutionBinding(
           'service.captureInvocationOptions:execution-binding',
           input.signal,
         )
-      : { sharedMcpLaunch: { transport: mcpTransport } };
+      : { sharedMcpLaunch: { transport: mcpTransport } },
+  );
+  const captured = mcpSources.value;
   input.signal?.throwIfAborted();
   const currentThread = await captureThread();
   const workspaceChanged = (
@@ -1592,6 +1595,10 @@ export async function prepareInvocationExecutionBinding(
     !isDeepStrictEqual(input.service.implementationSnapshot(), implementation)
   )
     throw new ExecutionAdmissionConflict('session_host_generation_changed');
+  if (!mcpSources.isCurrent())
+    throw new ExecutionAdmissionConflict(
+      'MCP configuration changed during execution admission; retry this invocation.',
+    );
   const frozenL0Input =
     catConfig && (input.service?.injectsL0Natively?.() || catConfig.clientId === 'opencode')
       ? captureInvocationL0Input({
