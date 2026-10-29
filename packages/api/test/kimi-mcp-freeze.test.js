@@ -25,6 +25,8 @@ for (const scenario of [
   'injection-disabled',
   'actual-invoke',
   'project-root-change',
+  'prototype-native-before',
+  'prototype-native-after',
 ]) {
   test(`Kimi native MCP writer consumes its admitted configuration: ${scenario}`, async (t) => {
     const artifacts = join(process.cwd(), 'artifacts', 'role-agent-refactor', 'kimi-mcp-freeze');
@@ -48,6 +50,16 @@ for (const scenario of [
     writeFileSync(mcpServerPath, '// never executed');
     const nativeFile = join(nativeBefore, 'mcp.json');
     writeFileSync(nativeFile, JSON.stringify({ mcpServers: { homeTool: { command: 'never-executed' } } }));
+    if (scenario === 'prototype-native-before')
+      writeFileSync(
+        nativeFile,
+        JSON.stringify({
+          mcpServers: {
+            homeTool: { command: 'never-executed' },
+            ['__proto__']: { command: 'never-executed' },
+          },
+        }),
+      );
     const keys = ['CAT_CAFE_CONFIG_ROOT', 'CAT_CAFE_PROJECT_ALLOWED_ROOTS', 'KIMI_CODE_HOME'];
     const old = new Map(keys.map((key) => [key, process.env[key]]));
     process.env.CAT_CAFE_CONFIG_ROOT = host;
@@ -60,7 +72,7 @@ for (const scenario of [
       id,
       accountRef: undefined,
       configurationSource: 'native_tool',
-      mcpSupport: scenario !== 'member-off',
+      mcpSupport: scenario !== 'member-off' && !scenario.startsWith('prototype-native-'),
     };
     catRegistry.register(id, member);
     t.after(() => {
@@ -113,6 +125,11 @@ for (const scenario of [
         service,
       },
     );
+    if (scenario === 'prototype-native-before') {
+      const servers = binding.providerOptions.frozenKimiMcpConfig.mcpConfig.servers;
+      assert.ok(Object.hasOwn(servers, '__proto__'), 'capture must preserve native denial names as own properties');
+      assert.equal(servers.__proto__.enabled, false);
+    }
     writeConfig('after');
     if (scenario === 'member-off') {
       catRegistry.reset();
@@ -123,6 +140,16 @@ for (const scenario of [
       writeFileSync(nativeFile, JSON.stringify({ mcpServers: { newHomeTool: { command: 'never-executed' } } }));
     else if (scenario !== 'member-off') process.env.KIMI_CODE_HOME = nativeAfter;
     if (scenario === 'project-root-change') renameSync(join(project, '.git'), join(project, '.git-before'));
+    if (scenario === 'prototype-native-after')
+      writeFileSync(
+        nativeFile,
+        JSON.stringify({
+          mcpServers: {
+            homeTool: { command: 'never-executed' },
+            ['__proto__']: { command: 'never-executed' },
+          },
+        }),
+      );
     const prepare = () =>
       prepareKimiMcpConfig({
         ...binding.providerOptions,
@@ -177,7 +204,11 @@ for (const scenario of [
       const servers = JSON.parse(readFileSync(join(project, '.kimi-code', 'mcp.json'), 'utf8')).mcpServers;
       if (scenario === 'native-file-change')
         assert.equal(servers.newHomeTool.enabled, false, 'new ambient tools must not widen the admitted surface');
-      if (scenario === 'member-off') assert.ok(Object.values(servers).every((server) => server.enabled === false));
+      if (scenario.startsWith('prototype-native-')) {
+        assert.ok(Object.hasOwn(servers, '__proto__'), 'materialization must retain every native denial name');
+        assert.equal(servers.__proto__.enabled, false);
+      }
+      if (!member.mcpSupport) assert.ok(Object.values(servers).every((server) => server.enabled === false));
       else {
         assert.deepEqual(servers['fixture-server'].args, ['--fixture=before']);
         assert.equal(servers['fixture-server'].env.FIXTURE_SCOPE, 'before');

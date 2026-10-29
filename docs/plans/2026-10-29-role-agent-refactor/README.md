@@ -248,3 +248,7 @@ Kimi 无法完全关闭原生自动发现，因此启动前仍读取下层配置
 扩大回归发现并修复三个真实凭据回归：原 resolver 对内置 split 入口的环境绑定不能只依赖最后一个安装路径校验器。现由原 isManagedCatCafeSplit/本机 fallback 解析分支记录入口来源，启动时按原规则绑定当前轮凭据；外部同名服务器不因名字获得该权限。Kimi 凭据文件材化仍去除 inline token，并保留 caller-owned 文件。`kimi-mcp-callback-green.log` 25 PASS（实际原生 MCP 握手与凭据恢复、七条 Kimi、八条 Claude）；API tsc 通过，7 文件 Biome 无错误，公开 resolver 选中新测试。
 
 最终 `kimi-mcp-regression-final.log` 189 项=186 PASS+3 FAIL：一条既有 Kimi shared HTTP 测试的 Windows URL.pathname 问题；一条 hook 测试的 POSIX mode 断言；一条旧 hook 测试期待拒绝本地 ReadFile/WriteFile，而基线 F333 native-secret-policy 仅约束识别出的外发 shell 操作。`kimi-secret-policy-witness.log` 和基线 diff 确认策略/该测试均未由本任务修改，不把旧预期改成通过，也不恢复已经移除的策略。复杂度复核与 map delta 均限现有 native/MCP/凭据 owner；无新服务或真实模型调用。其他 native MCP、完整 env/策略、跨 owner 一致性重解析、generation、会话兼容与整体验收仍待继续；本切片等待独立审查。
+
+独立审查 `a1fae7d67d33c7be0d868bf7b06c7c2af7dba06d` 发现 P2：普通对象的 `__proto__` 赋值丢掉原生 MCP 拒绝项。最初 0.34 loader 会过滤该名称，不能证明真实后果；reviewer 进一步获取方案所引的 Kimi 2.2 提交 `472192c34c1efad89a369870eff0da0b708ce9bb`，直接执行其 `packages/agent-core-v2/src/app/mcpConfig/configLoader.ts`，证明该名称被保留，缺拒绝时 enabled 非 false；同版连接 owner 据 enabled 判定是否启用，P2 因而成立。源文件、loader 映射与独立反例保留在 reviewer artifacts，未将不同版本的结果混为一谈，也未启动模型。
+
+现仅在原拒绝函数以 Object.defineProperty 创建可枚举自有项，恢复原 map 对特殊名称的语义；捕获与启动补拒绝两处共用。两条公开反例分别覆盖准入前已有及准入后新增名称，`kimi-mcp-prototype-red.log` 先 RED；修复后 `kimi-mcp-prototype-green.log` 51 项=50 PASS+原 Windows URL.pathname FAIL，API tsc 通过，未改变 MCP 策略或验证门槛。修复等待同一 reviewer 以原 2.2 实际消费者复审。

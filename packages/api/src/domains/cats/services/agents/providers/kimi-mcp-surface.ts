@@ -88,7 +88,12 @@ async function denyUnapprovedNativeServers(
   for (const layer of layers) {
     for (const [name, entry] of Object.entries(parseServers(await optionalText(layer.path)))) {
       if (!Object.hasOwn(servers, name) || servers[name]?.enabled === false) {
-        servers[name] = disabledServer(entry, layer.cwd);
+        Object.defineProperty(servers, name, {
+          value: disabledServer(entry, layer.cwd),
+          enumerable: true,
+          configurable: true,
+          writable: true,
+        });
       }
     }
   }
