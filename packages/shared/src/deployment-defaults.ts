@@ -18,6 +18,7 @@ export interface DeploymentProfile {
   repositoryFullName: string;
   promptPolicy?: DeploymentPromptPolicy;
   l0Projections?: L0Projection[];
+  offlinePluginBundle?: string;
 }
 
 export type L0Projection = 'owner' | 'public' | 'collective-work';
@@ -129,8 +130,22 @@ function selectProfile(input: unknown, requested?: string): { name: string; prof
       brand: brand(selected.brand),
       repositoryFullName: repository(selected.repositoryFullName),
       ...(selected.l0Projections === undefined ? {} : { l0Projections: l0Projections(selected.l0Projections) }),
+      ...(selected.offlinePluginBundle === undefined
+        ? {}
+        : { offlinePluginBundle: offlinePluginBundle(selected.offlinePluginBundle) }),
     },
   };
+}
+
+function offlinePluginBundle(value: unknown): string {
+  if (
+    typeof value !== 'string' ||
+    value.length > 256 ||
+    !/^[a-zA-Z0-9._-]+(?:\/[a-zA-Z0-9._-]+)*\.json$/.test(value) ||
+    value.split('/').some((p) => p === '.' || p === '..')
+  )
+    throw new Error('Invalid deployment configuration: offlinePluginBundle must be a relative JSON resource path');
+  return value;
 }
 
 function l0Projections(value: unknown): L0Projection[] {

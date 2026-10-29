@@ -167,6 +167,17 @@ export const ENV_VARS: EnvDefinition[] = [
     booleanSemantics: { defaultOn: false, trueWhen: 'exactOne' },
   },
   {
+    name: 'CAT_CAFE_OFFLINE_PLUGIN_BUNDLE',
+    defaultValue: '',
+    description:
+      '只读离线插件 bundle.json 的绝对路径；覆盖发行资源默认值，选中后失败不回落公共首次安装目录。重启 API 生效',
+    category: 'server',
+    settingsGroup: 'runtime',
+    sensitive: false,
+    runtimeEditable: false,
+    restartRequired: true,
+  },
+  {
     name: 'CAT_CAFE_WINDOWS_ACP_BOOTSTRAP_MODE',
     allowedValues: ['strict', 'trusted-host'],
     defaultValue: 'strict',

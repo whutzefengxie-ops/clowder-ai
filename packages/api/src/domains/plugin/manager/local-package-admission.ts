@@ -64,6 +64,8 @@ export interface LocalPluginPackageAdmissionOptions {
 export interface LocalPluginAdmissionFence {
   readonly replacement?: PluginArchiveReplacementConfirmation;
   readonly expectedDigest?: string;
+  /** Offline delivery must not defer dependency resolution to the runtime/npm. */
+  readonly requireShippedDependencies?: boolean;
   /** Repository discovery selects an identity before package preparation runs. */
   readonly expectedPackage?: { readonly pluginId: string; readonly version: string; readonly packageName: string };
   readonly signal?: AbortSignal;
@@ -433,6 +435,11 @@ export class LocalPluginPackageAdmission {
       }
       const signalSchemas = await readSignalSchemas(located.rootDir, located.manifest);
       const packageMetadata = await readPackageMetadata(located.rootDir);
+      if (fence.requireShippedDependencies && packageMetadata.dependencyClosure === 'materialized')
+        throw new LocalPluginPackageAdmissionError(
+          'INVALID_PACKAGE_SCHEMA',
+          'Offline packages must include shipped runtime dependencies',
+        );
       if (
         fence.expectedPackage &&
         (located.manifest.pluginId !== fence.expectedPackage.pluginId ||
