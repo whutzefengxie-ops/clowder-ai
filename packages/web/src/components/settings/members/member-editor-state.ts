@@ -2,7 +2,10 @@ import type { CatData } from '@/hooks/useCatData';
 import type { TemplateCard } from '../../first-run-quest/TemplateStep';
 import {
   autoSlug,
+  type CodexApprovalPolicy,
+  type CodexAuthMode,
   type CodexRuntimeSettings,
+  type CodexSandboxMode,
   type HubCatEditorFormState,
   initialState,
   type StrategyFormState,
@@ -21,6 +24,32 @@ export interface MemberDraft {
   strategyBaseline?: StrategyFormState | null;
   codexSettings?: CodexRuntimeSettings;
   codexBaseline?: CodexRuntimeSettings;
+  /** S3 CAS: the last revision each global Codex key was read or written at. */
+  codexWriteRevisions?: Record<string, string>;
+}
+
+/** S3 global keys owned by the member editor, mapped to their settings field. */
+export const CODEX_CONFIG_KEY_BY_FIELD: Record<keyof CodexRuntimeSettings, string> = {
+  sandboxMode: 'cli.codexSandboxMode',
+  approvalPolicy: 'cli.codexApprovalPolicy',
+  authMode: 'codex.execution.authMode',
+};
+
+export function codexFieldForConfigKey(key: string): keyof CodexRuntimeSettings | null {
+  for (const [field, configKey] of Object.entries(CODEX_CONFIG_KEY_BY_FIELD)) {
+    if (configKey === key) return field as keyof CodexRuntimeSettings;
+  }
+  return null;
+}
+
+export function withCodexField(
+  settings: CodexRuntimeSettings,
+  field: keyof CodexRuntimeSettings,
+  value: string,
+): CodexRuntimeSettings {
+  if (field === 'sandboxMode') return { ...settings, sandboxMode: value as CodexSandboxMode };
+  if (field === 'approvalPolicy') return { ...settings, approvalPolicy: value as CodexApprovalPolicy };
+  return { ...settings, authMode: value as CodexAuthMode };
 }
 
 export function changedFields(form: HubCatEditorFormState, baseline: CatData | null): number {
@@ -41,6 +70,43 @@ export function rebaseMemberDraft(draft: MemberDraft, latest: CatData): MemberDr
     }
   }
   return { ...draft, baseline: latest, form, runtimeDrafts: undefined };
+}
+
+const USER_STRATEGY_FIELDS = ['strategy', 'warnThreshold', 'actionThreshold', 'maxCompressions'] as const;
+
+/** Keep local strategy edits (including conflicting ones) but take the latest read as the saved baseline. */
+export function rebaseStrategyDraft(draft: MemberDraft, latest: StrategyFormState | null): MemberDraft {
+  if (!latest) return draft;
+  if (!draft.strategy) return { ...draft, strategy: latest, strategyBaseline: latest };
+  const before = draft.strategyBaseline;
+  const strategy: StrategyFormState = { ...latest };
+  if (before) {
+    const keep: Partial<Pick<StrategyFormState, (typeof USER_STRATEGY_FIELDS)[number]>> = {};
+    for (const field of USER_STRATEGY_FIELDS) {
+      if (draft.strategy[field] !== before[field]) Object.assign(keep, { [field]: draft.strategy[field] });
+    }
+    Object.assign(strategy, keep);
+  }
+  return { ...draft, strategy, strategyBaseline: latest };
+}
+
+/** Keep local Codex edits; untouched fields and every write revision come from the latest read. */
+export function rebaseCodexDraft(
+  draft: MemberDraft,
+  latest: CodexRuntimeSettings,
+  writeRevisions: Record<string, string> = {},
+): MemberDraft {
+  const revisions = { ...(draft.codexWriteRevisions ?? {}), ...writeRevisions };
+  if (!draft.codexSettings || !draft.codexBaseline) {
+    return { ...draft, codexWriteRevisions: revisions };
+  }
+  let settings: CodexRuntimeSettings = { ...latest };
+  for (const field of Object.keys(CODEX_CONFIG_KEY_BY_FIELD) as (keyof CodexRuntimeSettings)[]) {
+    if (draft.codexSettings[field] !== draft.codexBaseline[field]) {
+      settings = withCodexField(settings, field, draft.codexSettings[field]);
+    }
+  }
+  return { ...draft, codexSettings: settings, codexBaseline: latest, codexWriteRevisions: revisions };
 }
 
 export function readMemberDraft(key: string): MemberDraft | null {

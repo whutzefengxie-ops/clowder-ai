@@ -16,6 +16,7 @@ import { MemberCloudIdentity } from './MemberCloudIdentity';
 import { MemberCodexOptions } from './MemberCodexOptions';
 import { MemberDeleteButton } from './MemberDeleteButton';
 import { MemberRuntimeFields } from './MemberRuntimeFields';
+import type { SaveStepStatus } from './member-save-readback';
 import { useMemberEditor } from './useMemberEditor';
 
 const sections = [
@@ -25,6 +26,18 @@ const sections = [
   ['context', '上下文与会话', 'Context & sessions'],
   ['advanced', '高级接入', 'Advanced connection'],
 ] as const;
+
+const SAVE_STEP_COPY: Record<SaveStepStatus, [string, string]> = {
+  saved: ['已保存', 'Saved'],
+  failed: ['未保存', 'Not saved'],
+  conflict: ['有冲突，需重新读取', 'Conflict — reload to review'],
+  skipped: ['未提交', 'Not submitted'],
+};
+
+function saveStepLabel(status: SaveStepStatus, t: (zh: string, en: string) => string): string {
+  const [zh, en] = SAVE_STEP_COPY[status];
+  return t(zh, en);
+}
 
 export function MemberSettingsPage({
   cat,
@@ -263,6 +276,32 @@ export function MemberSettingsPage({
             >
               {t('重新读取，保留我的修改并核对', 'Reload latest and keep my edits for review')}
             </button>
+          )}
+          {editor.saveLedger && (
+            <div
+              role="status"
+              data-testid="member-save-ledger"
+              className="mt-4 rounded-xl bg-[var(--console-card-bg)] p-4 text-sm"
+            >
+              <ul className="space-y-1">
+                {(
+                  [
+                    ['member', '成员', 'Member'],
+                    ['strategy', '会话策略', 'Session strategy'],
+                    ['codex', 'Codex 全局设置', 'Global Codex settings'],
+                  ] as const
+                ).map(([step, zh, en]) => {
+                  const entry = editor.saveLedger?.[step];
+                  if (!entry) return null;
+                  const label = saveStepLabel(entry.status, t);
+                  return (
+                    <li key={step}>
+                      {t(zh, en)}：{entry.message ? `${label}（${entry.message}）` : label}
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
           )}
           {editor.notice && (
             <p role="status" className="mt-4 text-sm text-cafe-secondary">

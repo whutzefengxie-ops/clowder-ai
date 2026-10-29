@@ -7,9 +7,7 @@ import type { MemberSaveTrace } from '@/utils/member-save-trace';
 import type { TemplateCard } from '../../first-run-quest/TemplateStep';
 import type { AccountsResponse, ProfileItem } from '../../hub-accounts.types';
 import {
-  buildCatPayload,
   buildCodexConfigPatches,
-  buildStrategyPayload,
   type CodexRuntimeSettings,
   type HubCatEditorFormState,
   initialState,
@@ -17,7 +15,6 @@ import {
   toCodexRuntimeSettings,
   toStrategyForm,
 } from '../../hub-cat-editor.model';
-import { buildMemberPatchPayload } from '../../hub-cat-editor.payload';
 import type { CatStrategyEntry } from '../../hub-strategy-types';
 import { commitMemberAvatar } from './member-avatar-draft';
 import {
@@ -25,10 +22,20 @@ import {
   type MemberDraft,
   persistMemberDraft,
   readMemberDraft,
+  rebaseCodexDraft,
   rebaseMemberDraft,
+  rebaseStrategyDraft,
   templateForm,
 } from './member-editor-state';
 import { patchMemberRuntime, type RuntimeChoice, switchMemberRuntime } from './member-runtime-draft';
+import {
+  type MemberSaveLedger,
+  readCodexConfig,
+  readCodexWriteRevisions,
+  readMemberById,
+  readSessionStrategyEntry,
+} from './member-save-readback';
+import { runMemberSave } from './member-save-steps';
 import { useMemberSaveTrace } from './useMemberSaveTrace';
 
 async function readResponse<T>(response: Response): Promise<T> {
@@ -58,6 +65,7 @@ export function useMemberEditor(
   const [notice, setNotice] = useState<string | null>(null);
   const [storageWarning, setStorageWarning] = useState(false);
   const [conflicted, setConflicted] = useState(false);
+  const [saveLedger, setSaveLedger] = useState<MemberSaveLedger | null>(null);
   const [codexError, setCodexError] = useState<string | null>(null);
   const [codexReload, setCodexReload] = useState(0);
   const storageKey = useRef('');
@@ -136,12 +144,17 @@ export function useMemberEditor(
     let cancelled = false;
     setCodexError(null);
     apiFetch('/api/config')
-      .then(readResponse<{ config?: Parameters<typeof toCodexRuntimeSettings>[0] }>)
+      .then(readResponse<{ config?: Parameters<typeof toCodexRuntimeSettings>[0]; writeRevisions?: unknown }>)
       .then((body) => {
         if (cancelled) return;
         if (!body.config) throw new Error('Codex 运行参数缺失，请重新读取。');
         const settings = toCodexRuntimeSettings(body.config);
-        setDraft((previous) => ({ ...previous, codexSettings: settings, codexBaseline: settings }));
+        setDraft((previous) => ({
+          ...previous,
+          codexSettings: settings,
+          codexBaseline: settings,
+          codexWriteRevisions: readCodexWriteRevisions(body.writeRevisions),
+        }));
       })
       .catch((err: unknown) => {
         if (!cancelled) setCodexError(err instanceof Error ? err.message : 'Codex 运行参数读取失败');
@@ -185,10 +198,12 @@ export function useMemberEditor(
 
   const patch = useCallback((change: Partial<HubCatEditorFormState>) => {
     setNotice(null);
+    setSaveLedger(null);
     setDraft((previous) => patchMemberRuntime(previous, change));
   }, []);
   const switchRuntime = (next: RuntimeChoice) => {
     setNotice(null);
+    setSaveLedger(null);
     setDraft((previous) => switchMemberRuntime(previous, next));
   };
   const setSection = (section: string) => setDraft((previous) => ({ ...previous, section }));
@@ -199,30 +214,46 @@ export function useMemberEditor(
       runtimeDrafts: undefined,
       form: template ? templateForm(template, cats, previous.form) : initialState(),
     }));
-  const patchStrategy = (change: Partial<StrategyFormState>) =>
+  const patchStrategy = (change: Partial<StrategyFormState>) => {
+    setSaveLedger(null);
     setDraft((previous) => ({
       ...previous,
       strategy: previous.strategy ? { ...previous.strategy, ...change } : previous.strategy,
     }));
-  const patchCodex = (change: Partial<CodexRuntimeSettings>) =>
+  };
+  const patchCodex = (change: Partial<CodexRuntimeSettings>) => {
+    setSaveLedger(null);
     setDraft((previous) => ({
       ...previous,
       codexSettings: previous.codexSettings ? { ...previous.codexSettings, ...change } : undefined,
     }));
+  };
   const discard = () => {
     persistMemberDraft(storageKey.current, null);
     setDraft({ version: 1, form: initialState(cat), baseline: cat, templateId: null, section: draft.section });
     setError(null);
     setNotice(null);
     setConflicted(false);
+    setSaveLedger(null);
   };
 
   const refreshBaseline = async () => {
+    const snapshot = stateRef.current;
+    const catId = snapshot.baseline?.id;
+    if (!catId) {
+      setError('该成员尚未创建，请直接保存。');
+      return;
+    }
     try {
-      const body = await apiFetch('/api/cats').then(readResponse<{ cats: CatData[] }>);
-      const latest = body.cats.find((item) => item.id === stateRef.current.baseline?.id);
+      const latest = await readMemberById(catId);
       if (!latest) throw new Error('该成员已不存在，草稿仍保留。');
-      setDraft((previous) => rebaseMemberDraft(previous, latest));
+      let next = rebaseMemberDraft(snapshot, latest);
+      const [strategyEntry, config] = await Promise.all([readSessionStrategyEntry(catId), readCodexConfig()]);
+      if (strategyEntry) next = rebaseStrategyDraft(next, toStrategyForm(strategyEntry));
+      if (config) next = rebaseCodexDraft(next, config.settings, config.writeRevisions);
+      setDraft(next);
+      persistMemberDraft(storageKey.current, next);
+      setSaveLedger(null);
       setConflicted(false);
       setError(null);
       setNotice('已读取最新配置并保留你的修改。请核对后再次保存；同一字段以你的修改为准。');
@@ -232,7 +263,7 @@ export function useMemberEditor(
   };
   const save = async () => {
     const snapshot = stateRef.current;
-    const { baseline, strategy } = snapshot;
+    const { baseline } = snapshot;
     const form = baseline
       ? snapshot.form
       : { ...snapshot.form, roleDescription: snapshot.form.roleDescription.trim() || '团队伙伴' };
@@ -249,76 +280,41 @@ export function useMemberEditor(
     setSaving(true);
     setError(null);
     setNotice(null);
-    let persisted: CatData | null = null;
+    setSaveLedger(null);
     try {
       const account = accounts.find((item) => item.id === form.accountRef);
-      const context = { accountAuthType: account?.authType ?? null };
-      const payload = baseline
-        ? buildMemberPatchPayload(form, baseline, context)
-        : buildCatPayload(form, null, context);
-      const memberChanged = !baseline || Object.keys(payload).length > 0;
-      if (baseline?.configurationRevision) Object.assign(payload, { expectedRevision: baseline.configurationRevision });
-      if (!baseline && onBeforeCreate) await trace.phase('onboarding.entry', onBeforeCreate);
-      const result = memberChanged
-        ? await trace.phase('member.write', () =>
-            apiFetch(baseline ? `/api/cats/${baseline.id}` : '/api/cats', {
-              method: baseline ? 'PATCH' : 'POST',
-              headers: { 'Content-Type': 'application/json', ...trace.headers() },
-              body: JSON.stringify(payload),
-            }).then((response) => {
-              if (response.status === 409) setConflicted(true);
-              return readResponse<{ cat: CatData }>(response);
-            }),
-          )
-        : { cat: baseline };
-      persisted = result.cat;
-      // A later strategy failure must not roll back a successful account/member write.
-      let next = { ...snapshot, baseline: persisted, form: initialState(persisted), runtimeDrafts: undefined };
-      setDraft(next);
-      persistMemberDraft(storageKey.current, next);
-      if (strategy && JSON.stringify(strategy) !== JSON.stringify(snapshot.strategyBaseline)) {
-        await trace.phase('strategy.write', () =>
-          apiFetch(`/api/config/session-strategy/${result.cat.id}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json', ...trace.headers() },
-            body: JSON.stringify(buildStrategyPayload(strategy)),
-          }).then(readResponse<unknown>),
-        );
-        next = { ...next, strategyBaseline: snapshot.strategy };
-        setDraft(next);
-        persistMemberDraft(storageKey.current, next);
-      }
-      if (snapshot.codexSettings && snapshot.codexBaseline) {
-        for (const configPatch of buildCodexConfigPatches(snapshot.codexSettings, snapshot.codexBaseline)) {
-          await trace.phase('codex.write', () =>
-            apiFetch('/api/config', {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json', ...trace.headers() },
-              body: JSON.stringify(configPatch),
-            }).then(readResponse<unknown>),
-          );
-          const field =
-            configPatch.key === 'cli.codexSandboxMode'
-              ? 'sandboxMode'
-              : configPatch.key === 'cli.codexApprovalPolicy'
-                ? 'approvalPolicy'
-                : 'authMode';
-          next = { ...next, codexBaseline: { ...next.codexBaseline!, [field]: snapshot.codexSettings[field] } };
+      const result = await runMemberSave({
+        draft: baseline ? snapshot : { ...snapshot, form },
+        accountAuthType: account?.authType ?? null,
+        trace,
+        onBeforeCreate,
+        commit: (next) => {
           setDraft(next);
           persistMemberDraft(storageKey.current, next);
-        }
+        },
+      });
+      setSaveLedger(result.ledger);
+      setConflicted(result.conflicted);
+      if (result.complete) {
+        persistMemberDraft(storageKey.current, null);
+        setNotice('已保存。正在运行的回合不变，后续调用使用新设置。');
+        const saved = result.savedCat ?? baseline;
+        if (saved)
+          await trace
+            .phase('refresh', () => onSaved(saved, trace))
+            .catch(() => setNotice('配置已保存，成员列表刷新失败，请重新打开列表。'));
+        return;
       }
-      persistMemberDraft(storageKey.current, null);
-      setDraft({ ...next, strategyBaseline: next.strategy });
-      setNotice('已保存。正在运行的回合不变，后续调用使用新设置。');
-      await trace
-        .phase('refresh', () => onSaved(result.cat, trace))
-        .catch(() => setNotice('配置已保存，成员列表刷新失败，请重新打开列表。'));
+      trace.fail();
+      setNotice(result.notice);
+      setError(result.error);
+      // Keep a successfully saved member visible to the rest of the app without closing the editor.
+      const savedCat = result.savedCat;
+      if (baseline && savedCat && savedCat.id === baseline.id)
+        await trace.phase('refresh', () => onSaved(savedCat, trace)).catch(() => undefined);
     } catch (err) {
       trace.fail();
-      setError(
-        `${persisted ? '成员已保存，部分附加设置尚未保存：' : ''}${err instanceof Error ? err.message : '保存失败'}`,
-      );
+      setError(err instanceof Error ? err.message : '保存失败');
     } finally {
       trace.finish();
       setSaving(false);
@@ -335,6 +331,7 @@ export function useMemberEditor(
     storageWarning,
     dirtyCount,
     conflicted,
+    saveLedger,
     refreshBaseline,
     patch,
     avatarCommitted: (value: { avatar?: string; visualAssets: MemberVisualAssets }) =>
