@@ -39,6 +39,10 @@ export class RegisteredSessionAgentService implements AgentService {
     const service = this.hostService();
     return service?.injectsL0Natively?.bind(service);
   }
+  get captureInvocationOptions(): AgentService['captureInvocationOptions'] {
+    const service = this.hostService();
+    return service?.captureInvocationOptions?.bind(service);
+  }
   get supportsToolExecutionPolicy(): AgentService['supportsToolExecutionPolicy'] {
     const service = this.hostService();
     return service?.supportsToolExecutionPolicy?.bind(service);
@@ -76,6 +80,7 @@ export class RegisteredSessionAgentService implements AgentService {
     const view: AgentService = {
       forInvocation: () => view,
       injectsL0Natively: service?.injectsL0Natively?.bind(service),
+      captureInvocationOptions: service?.captureInvocationOptions?.bind(service),
       supportsToolExecutionPolicy: service?.supportsToolExecutionPolicy?.bind(service),
       freshnessCarrierCapability: service?.freshnessCarrierCapability?.bind(service),
       contextCapability: service?.contextCapability?.bind(service),

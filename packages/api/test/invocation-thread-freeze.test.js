@@ -11,11 +11,13 @@ import { ContextEpochOwner } from '../dist/domains/cats/services/session/context
 import { InMemoryContextEpochStore } from '../dist/domains/cats/services/stores/ports/ContextEpochStore.js';
 import { ThreadStore } from '../dist/domains/cats/services/stores/ports/ThreadStore.js';
 
-for (const timing of ['before-admission', 'during-workspace', 'during-preferences']) {
+for (const timing of ['before-admission', 'during-workspace', 'during-preferences', 'during-mcp-capture']) {
   test(`cancel ${timing} neither crashes the Host process nor returns a ready admission`, () => {
     const moduleUrl = new URL('../dist/domains/cats/services/agents/invocation/invoke-single-cat.js', import.meta.url)
       .href;
+    const registrySetupUrl = new URL('./helpers/setup-cat-registry.js', import.meta.url).href;
     const script = `
+      import ${JSON.stringify(registrySetupUrl)};
       import { prepareInvocationExecutionBinding } from ${JSON.stringify(moduleUrl)};
       const controller = new AbortController();
       let reads = 0;
@@ -25,12 +27,14 @@ for (const timing of ['before-admission', 'during-workspace', 'during-preference
         get: async () => { if (${JSON.stringify(timing)} === 'during-workspace') controller.abort(); return null; },
         getMemberEffort: async () => { reads++; if (${JSON.stringify(timing)} === 'during-preferences') controller.abort(); throw new Error('fixture preference read failed'); },
         getMemberSpeed: async () => { reads++; throw new Error('fixture preference read failed'); },
-      } }, { catId: 'codex', threadId: 'thread', userId: 'owner', signal: controller.signal }).catch(error => {
+      } }, { catId: 'codex', threadId: 'thread', userId: 'owner', signal: controller.signal,
+        service: ${JSON.stringify(timing)} === 'during-mcp-capture' ? { captureInvocationOptions: async () => { controller.abort(); throw new Error('fixture MCP capture failed'); } } : undefined,
+      }).catch(error => {
         if (error.name !== 'AbortError') throw error;
         rejected = true;
       });
       await new Promise(resolve => setTimeout(resolve, 20));
-      if (${JSON.stringify(timing)} !== 'during-preferences' && reads !== 0) throw new Error('cancelled admission still started preference reads');
+      if (['before-admission', 'during-workspace'].includes(${JSON.stringify(timing)}) && reads !== 0) throw new Error('cancelled admission still started preference reads');
       if (!rejected) throw new Error('cancelled admission reported ready');
       console.log('cancelled-safely');
     `;

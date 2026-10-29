@@ -823,6 +823,7 @@ export async function* routeSerial(
           catId,
           threadId,
           userId,
+          ownerAuthProvenance,
           service: pinnedService,
           ...(catSignal ? { signal: catSignal } : {}),
         });

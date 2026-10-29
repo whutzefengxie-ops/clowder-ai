@@ -67,7 +67,8 @@
         "README.md#W2-L0-冻结输入切片W2-尚未完成：局部契约证据和明确失败，非整条通过",
         "README.md#W2-模型与-effort-消费切片尚未完成-W2：实际消费者局部证据，整条仍未完成",
         "README.md#W2-线程偏好消费切片尚未完成-W2：准入后晚读反例闭环，跨owner读一致性尚未完成",
-        "README.md#W2-Codex-全局启动策略切片尚未完成-W2：sandbox/approval/transport/observation实际消费者局部证据"
+        "README.md#W2-Codex-全局启动策略切片尚未完成-W2：sandbox/approval/transport/observation实际消费者局部证据",
+        "README.md#W2-ACP-MCP-计划消费切片尚未完成-W2：描述符在实际session/new边界保持准入值；整条未完成"
       ]
     },
     {
@@ -253,7 +254,7 @@
       "status": "NOT_STARTED"
     }
   ],
-  "lastProgressAt": "2026-10-30T02:36:13.4264460+08:00",
+  "lastProgressAt": "2026-10-30T02:54:42.2391616+08:00",
   "checkpointReview": {
     "reviewer": "checkpoint_review",
     "verdict": "approved",
@@ -291,5 +292,13 @@
     "fixes": "independently_verified",
     "findings": [],
     "evidence": "README.md#W2-线程偏好消费切片尚未完成-W2"
+  },
+  "codexPolicyCheckpointReview": {
+    "reviewer": "checkpoint_review",
+    "verdict": "approved",
+    "reviewedHead": "fa1a82a14b209cf7c20fe625c73d40c3b6019221",
+    "subject": "task:01a1881e-1a7b-78d0-9a62-ff99b0ab7a01/checkpoint-codex-policy",
+    "findings": [],
+    "evidence": "README.md#W2-Codex-全局启动策略切片尚未完成-W2"
   }
 }

@@ -1051,6 +1051,8 @@ export interface LocalSessionReadInput {
 }
 
 export interface AgentServiceOptions {
+  /** Admission-owned MCP descriptors; callback credentials are materialized for the current turn. */
+  frozenAcpMcpServers?: import('./agents/providers/acp/types.js').AcpMcpServer[];
   codexLaunchPolicy?: import('../../../config/codex-cli.js').CodexLaunchPolicy;
   /** Frozen requested preferences; actual adopted model/effort remain provider observations. */
   executionPreferences?: import('./agents/providers/member-execution-preferences.js').MemberExecutionPreferences;
@@ -1238,6 +1240,10 @@ export interface ProviderRequestGenerationCommitV1 {
  * Interface that all agent services must implement
  */
 export interface AgentService {
+  /** Read configuration before any provider lease. Returns owned descriptors, never starts a model turn. */
+  captureInvocationOptions?(input: { workingDirectory?: string }): Promise<{
+    frozenAcpMcpServers: import('./agents/providers/acp/types.js').AcpMcpServer[];
+  }>;
   /** Pin one prepared carrier generation before Host policy, L0 and capacity admission. Idempotent on a pinned view. */
   forInvocation?(): AgentService;
   /** Release a pinned Host invocation even when policy/preflight exits before a provider iterator starts. Idempotent. */

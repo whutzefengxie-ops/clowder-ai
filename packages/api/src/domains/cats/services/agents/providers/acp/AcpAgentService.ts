@@ -148,11 +148,11 @@ export interface AcpAgentServiceConfig {
   projectRoot: string;
   /**
    * MCP whitelist from ACP variant config. When set, MCP servers are resolved
-   * at invoke time from capabilities.json (not frozen at construction time).
-   * This ensures capability toggles take effect without registry rebuild.
+   * at invocation admission from capabilities.json, before the lease wait.
+   * Capability toggles affect the next invocation without a registry rebuild.
    */
   mcpWhitelist?: string[];
-  /** @deprecated Pre-resolved MCP servers. Prefer mcpWhitelist for invoke-time resolution. */
+  /** @deprecated Pre-resolved MCP servers. Prefer mcpWhitelist for per-invocation capture. */
   mcpServers?: AcpMcpServer[];
   /** Provider name for metadata (e.g. 'google', 'opencode'). Defaults to 'acp'. */
   providerName?: string;
@@ -196,7 +196,7 @@ export class AcpAgentService implements AgentService {
   private readonly pool: AcpProcessPool;
   private readonly poolKey: PoolKey;
   private readonly projectRoot: string;
-  /** Invoke-time whitelist — when non-null, MCP servers are resolved fresh each invoke. */
+  /** Admission whitelist — when non-null, MCP servers are captured fresh for each invocation. */
   private readonly mcpWhitelist: string[] | null;
   /** Pre-resolved servers (legacy/test path). Used only when mcpWhitelist is null. */
   private readonly mcpServers: AcpMcpServer[];
@@ -243,6 +243,37 @@ export class AcpAgentService implements AgentService {
     this.mcpSupportEnabled = config.mcpSupport !== false;
     this.idleTtlMs = config.idleTtlMs ?? DEFAULT_ACP_IDLE_TTL_MS;
     this.agentBusyRetryDelaysMs = config.agentBusyRetryDelaysMs ?? DEFAULT_AGENT_BUSY_RETRY_DELAYS_MS;
+  }
+
+  /** Resolve the same existing MCP sources before admission can wait for a process. */
+  async captureInvocationOptions(input: { workingDirectory?: string }) {
+    const userProjectRoot = input.workingDirectory;
+    let baseMcpServers: AcpMcpServer[];
+    if (!this.mcpSupportEnabled) {
+      baseMcpServers = [];
+    } else if (this.mcpWhitelist !== null) {
+      const binaryRoot = resolveBinaryRoot(this.projectRoot);
+      const capabilitiesRoot = await resolveInvokeCapabilityRoot(binaryRoot);
+      const { config: capConfig, configSourceRoot } = readInvocationMcpConfig(capabilitiesRoot, userProjectRoot);
+      assertMappedCapabilitySource(capConfig !== null, binaryRoot, capabilitiesRoot);
+      const disabled = resolveDisabledServerIds(this.projectRoot, this.catId as string, capConfig);
+      baseMcpServers = await resolveAcpMcpServers(this.projectRoot, this.mcpWhitelist, undefined, {
+        mcpSupport: this.mcpSupportEnabled,
+        disabledServerIds: disabled,
+        catId: this.catId as string,
+        capabilitiesConfig: capConfig,
+        configSourceRoot,
+      });
+    } else {
+      baseMcpServers = this.mcpServers;
+    }
+    let invokeServers = baseMcpServers;
+    if (this.mcpSupportEnabled && userProjectRoot && userProjectRoot !== this.projectRoot) {
+      const baseNames = new Set(baseMcpServers.map((s) => s.name));
+      const userServers = resolveUserProjectMcpServers(userProjectRoot, baseNames);
+      if (userServers.length > 0) invokeServers = [...baseMcpServers, ...userServers];
+    }
+    return { frozenAcpMcpServers: structuredClone(invokeServers) };
   }
 
   /**
@@ -430,16 +461,24 @@ export class AcpAgentService implements AgentService {
         : undefined,
     };
     let lease: AcpLease | null = null;
+    let invokeServers: AcpMcpServer[];
+    let preparingMcp = true;
     try {
+      invokeServers =
+        options?.frozenAcpMcpServers ??
+        (await this.captureInvocationOptions({ workingDirectory: options?.workingDirectory })).frozenAcpMcpServers;
+      options?.signal?.throwIfAborted();
+      preparingMcp = false;
       lease = await this.pool.acquire(this.poolKey, { sessionId: options?.sessionId });
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
-      log.error({ ...ctx, err: errMsg }, 'ACP init failure');
+      const errorCode = options?.signal?.aborted ? 'prompt_failure' : preparingMcp ? 'mcp_pollution' : 'init_failure';
+      log.error({ ...ctx, err: errMsg, errorCode }, 'ACP preparation failure');
       yield {
         type: 'error',
         catId: this.catId,
-        error: `init_failure: ${errMsg}`,
-        errorCode: 'init_failure',
+        error: `${errorCode}: ${errMsg}`,
+        errorCode,
         metadata,
         timestamp: Date.now(),
       };
@@ -563,41 +602,6 @@ export class AcpAgentService implements AgentService {
         options?.uploadDir,
         options?.resolveTrustedImagePath,
       );
-      // #712 P1-1: resolve MCP servers at invoke time from capabilities.json
-      // so capability toggles take effect immediately without registry rebuild.
-      // P1-2: check project-local capabilities.json first, fall back to runtime root.
-      const userProjectRoot = options?.workingDirectory;
-      let baseMcpServers: AcpMcpServer[];
-      if (!this.mcpSupportEnabled) {
-        baseMcpServers = [];
-      } else if (this.mcpWhitelist !== null) {
-        const binaryRoot = resolveBinaryRoot(this.projectRoot);
-        const capabilitiesRoot = await resolveInvokeCapabilityRoot(binaryRoot);
-        const { config: capConfig, configSourceRoot } = readInvocationMcpConfig(capabilitiesRoot, userProjectRoot);
-        if (this.mcpSupportEnabled) assertMappedCapabilitySource(capConfig !== null, binaryRoot, capabilitiesRoot);
-        const disabled = resolveDisabledServerIds(this.projectRoot, this.catId as string, capConfig);
-        baseMcpServers = await resolveAcpMcpServers(this.projectRoot, this.mcpWhitelist, undefined, {
-          mcpSupport: this.mcpSupportEnabled,
-          disabledServerIds: disabled,
-          catId: this.catId as string,
-          capabilitiesConfig: capConfig,
-          configSourceRoot,
-        });
-      } else {
-        baseMcpServers = this.mcpServers;
-      }
-
-      // F145 Phase E: merge user project .mcp.json servers per-invoke
-      // F161 gate: when mcpSupport is disabled, skip ALL MCP
-      let invokeServers = baseMcpServers;
-      if (this.mcpSupportEnabled && userProjectRoot && userProjectRoot !== this.projectRoot) {
-        const baseNames = new Set(baseMcpServers.map((s) => s.name));
-        const userServers = resolveUserProjectMcpServers(userProjectRoot, baseNames);
-        if (userServers.length > 0) {
-          invokeServers = [...baseMcpServers, ...userServers];
-        }
-      }
-
       // Per-invocation: merge callbackEnv into cat-cafe* MCP servers so callback tools
       // (multi_mention, post_message, etc.) get CAT_CAFE_API_URL / token / invocationId.
       // #1099 review P1: the credential refresh file is SESSION-scoped — the nonce path

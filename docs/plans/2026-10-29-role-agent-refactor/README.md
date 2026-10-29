@@ -190,3 +190,25 @@ checkpoint_review 对 `87beb72db4b11ad061314ab9e85b8db053f5a3b9` 给出 approved
 实际最终 argv 反例先 RED：准入为 read-only，后续全局改 workspace-write，旧调用错误采用后者。修复后 native_tool、托管 OAuth 与 read_only 三旅程通过；最后的注册成员夹具为 `codex-policy-final-targeted.log` 3 PASS，验证 sandbox/approval、传输 provider 参数及 RUST_LOG 观测开关。受影响 L0/后台/原生继承/served-model 两载体共 37 PASS，`codex-policy-green.log`；扩大 Codex/config 回归共 123 项=122 PASS+1 已登记的 POSIX 缓存根断言 FAIL，`codex-policy-regression.log`。API tsc 通过；新测试公开 resolver 可发现。
 
 这不是所有全局配置或 ACP/MCP 启动环境已冻结的声明；各 owner 的一致性重解析、MCP/项目指令及实现 generation 仍待继续。无真实模型调用或新增常驻服务，本策略切片等待独立审查。
+
+checkpoint_review 对 `fa1a82a14b209cf7c20fe625c73d40c3b6019221` 给出 approved，subject 为 `task:01a1881e-1a7b-78d0-9a62-ff99b0ab7a01/checkpoint-codex-policy`；独立 23 PASS，包括内部调用首次等待后保留原 sandbox/approval/HTTPS/tracing，权限优先序保留，无新 P1/P2。仍只批准本切片。
+
+## W2 ACP MCP 计划消费切片（尚未完成 W2）
+
+AgentService 增加限定的 Host 配置捕获端口；现有 AcpAgentService 复用原 resolver，在准入时读取 capabilities、用户项目 `.mcp.json` 及验证过的插件 MCP 视图，返回独立描述符。原执行 binding 深冻结该计划，RegisteredSessionAgentService 和池的已钉住视图转发同一具体实现的捕获端口；正式 serial/parallel 入口保留原 ownerAuthProvenance 和成员 exposure scope。直接内部 ACP 调用也在池租约之前捕获，不再等待后重读。
+
+MCP 描述符与每轮 callback 认证分开：仍在既有 session owner 获得所有权之后绑定当前轮凭据和刷新文件。配置解析失败不启动客户端池租约；捕获阶段取消沿用既有 preflightRace 并消费在途 Promise。该端口不启动模型、不改变插件 manifest 或 MCP 语义/权限 owner。
+
+两个实际 consumer 反例先 RED：修改 capabilities 或项目 `.mcp.json`，租约之后的 session/new 收到新参数。修复后四条旅程覆盖这两种来源、正式插件 ACP 实现桥接、插件 MCP 的当前 Host 激活视图；准入后及租约中两次改写不污染原计划，普通 catalog 不能替代本次已验证的插件启动。新捕获过程中的取消以已注册成员、严格拒绝模式的独立 Node 子进程验证；成员 registry 在异步 MCP 捕获期间变化也被现有冲突门禁拦截。
+
+| 本切片验证 | 实际结果 |
+|---|---|
+| 四来源冻结 + 四时点取消 + 线程偏好 + 认证轮换/空响应 | 27 PASS，`acp-mcp-freeze-credential-final.log` |
+| 通用 ACP/iCode/MCP resolver/插件视图/Host 能力/池 pin | 155 项=150 PASS+5 FAIL；5 条在 Windows runner Temp 父级 ACL 处先失败，`acp-mcp-freeze-regression.log` |
+| 上述 5 条纯池归属夹具的独立执行 | 既有显式 trusted-host 测试模式下 5 PASS，`acp-mcp-owned-lease-fixture.log`；未改变产品默认值，不能证明 strict ACL 实机通过 |
+| invocation/L0/异步成员冲突/四来源 | 184 项=180 PASS+4 已记录的 AGY Native Windows FAIL，`acp-mcp-invocation-final.log` |
+| 类型 | API tsc 与 Web tsc --noEmit 通过；新 `.test.js` 公开 resolver 选中 |
+
+注册插件的新夹具最初缺 invocationId 而超时，已补真实调用必需字段，并用完成结果与租约门槛的 race 提前报告夹具错误；早期超时日志保留，不计通过。复杂度复核：复用现有 resolver、binding、AsyncLocalStorage 视图与凭据 owner，仅新增一项 Host 捕获端口及描述符载体；没有新存储、队列或 launcher。map delta 为 identity-session 的运行消费锚点和 mcp-surface-governance 的原投影消费说明，owner 不变。
+
+尚待：其他原生客户端的 MCP/项目输入冻结、配置写入通知及各 owner 的读前读后一致性重解析、实现 generation、会话兼容与最终平台/工程任务验收。无真实模型调用或新增常驻服务；当前 ACP MCP 切片等待独立审查。

@@ -84,3 +84,37 @@ test('a native invocation carries immutable L0 bytes that survive later role edi
   assert.doesNotMatch(body, /later role/);
   assert.equal(Object.isFrozen(binding.frozenL0Input), true);
 });
+
+test('admission fences a member change while the concrete provider captures MCP options', async (t) => {
+  const { all, catId, member } = fixture(t);
+  let enter, release;
+  const entered = new Promise((resolve) => {
+    enter = resolve;
+  });
+  const gate = new Promise((resolve) => {
+    release = resolve;
+  });
+  t.after(() => release());
+  const pending = prepareInvocationExecutionBinding(
+    { threadStore: null },
+    {
+      catId,
+      userId: 'isolated-owner',
+      threadId: 'frozen-thread',
+      service: {
+        ...service,
+        captureInvocationOptions: async () => {
+          enter();
+          await gate;
+          return { frozenAcpMcpServers: [] };
+        },
+      },
+    },
+  );
+  await entered;
+  catRegistry.reset();
+  Object.entries(all).forEach(([id, config]) => catRegistry.register(id, config));
+  catRegistry.register(catId, { ...member, roleDescription: 'changed during MCP capture' });
+  release();
+  await assert.rejects(pending, /configuration changed.*admission/i);
+});

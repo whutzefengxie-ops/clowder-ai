@@ -135,3 +135,9 @@ The persistent configuration owner migrates only proven first-party Codex projec
 HTTP admission, preserving full backups and an explicit stdio profile. Preview/Alpha reads cannot
 publish this migration. Six server names and tool schemas remain unchanged. Nonresident shell/
 `gh`/`curl`/pre-push checks remain; third-party MCP per-call inspection is deliberately retired.
+
+Invocation admission consumes the same verified local activation and member exposure scope before
+ACP pool waits. It captures transport descriptors using the existing resolver; the current-turn
+credential binder remains responsible for callback authority. This introduces no new MCP identity
+or exposure tier, and does not make a deployment's stored plugin launch a fallback for a missing
+activation in an isolated Host view.

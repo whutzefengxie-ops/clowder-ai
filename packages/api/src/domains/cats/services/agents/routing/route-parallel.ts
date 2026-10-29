@@ -241,6 +241,7 @@ async function* routeParallelPrepared(
         catId,
         threadId,
         userId,
+        ownerAuthProvenance: options.ownerAuthProvenance,
         service: pinnedServices.get(catId),
         signal: signalForCat?.(catId) ?? signal,
       }),

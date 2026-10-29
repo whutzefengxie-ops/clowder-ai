@@ -53,7 +53,10 @@ import {
   type SessionRecord,
 } from '@cat-cafe/shared';
 import { context, SpanStatusCode, trace } from '@opentelemetry/api';
-import { bindInvocationPluginMcpView } from '../../../../../config/capabilities/invocation-plugin-mcp-view.js';
+import {
+  bindInvocationPluginMcpView,
+  withInvocationPluginMcpView,
+} from '../../../../../config/capabilities/invocation-plugin-mcp-view.js';
 import { pluginMcpExposureProject } from '../../../../../config/capabilities/plugin-mcp-exposure.js';
 import { buildCatGitIdentityEnv } from '../../../../../config/cat-git-identity.js';
 import { parseOpenCodeModel, resolveEffectiveOpenCodeModel } from '../../../../../config/opencode-model.js';
@@ -1409,7 +1412,7 @@ export interface InvocationParams {
  * - Storing the final response in messageStore
  */
 export async function prepareInvocationExecutionBinding(
-  deps: Pick<InvocationDeps, 'threadStore' | 'profileRepository'>,
+  deps: Pick<InvocationDeps, 'threadStore' | 'profileRepository' | 'resolveInvocationPluginMcpView'>,
   input: {
     catId: CatId;
     threadId: string;
@@ -1417,6 +1420,7 @@ export async function prepareInvocationExecutionBinding(
     service?: AgentService;
     model?: string;
     signal?: AbortSignal;
+    ownerAuthProvenance?: InvocationParams['ownerAuthProvenance'];
   },
 ): Promise<FrozenExecutionBinding> {
   input.signal?.throwIfAborted();
@@ -1456,11 +1460,37 @@ export async function prepareInvocationExecutionBinding(
     effortReadFailed: effort.status === 'rejected',
     speedReadFailed: speed.status === 'rejected',
   });
+  const captureOptions = input.service?.captureInvocationOptions?.bind(input.service);
+  const exposureProject = pluginMcpExposureProject(workspace.threadProjectPath, workspace.workingDirectory);
+  const providerOptions = captureOptions
+    ? await preflightRace(
+        Promise.resolve().then(async () => {
+          const view = await deps.resolveInvocationPluginMcpView?.();
+          input.signal?.throwIfAborted();
+          return withInvocationPluginMcpView(
+            () => captureOptions({ workingDirectory: workspace.workingDirectory }),
+            view,
+            input.ownerAuthProvenance === 'strict' && exposureProject
+              ? { kind: 'member', projectRoot: exposureProject, memberCatId: input.catId }
+              : undefined,
+          );
+        }),
+        'service.captureInvocationOptions:execution-binding',
+        input.signal,
+      )
+    : undefined;
+  input.signal?.throwIfAborted();
   if (catRegistry.getRevision() !== memberRegistryRevision)
     throw Object.assign(new Error('Member configuration changed during execution admission; retry this invocation.'), {
       statusCode: 409,
     });
-  const binding = freezeExecutionAccountBinding({ catId: input.catId, catConfig, model: input.model, workspace });
+  const binding = freezeExecutionAccountBinding({
+    catId: input.catId,
+    catConfig,
+    model: input.model,
+    workspace,
+    providerOptions,
+  });
   const frozenL0Input =
     catConfig && (input.service?.injectsL0Natively?.() || catConfig.clientId === 'opencode')
       ? captureInvocationL0Input({
@@ -3922,6 +3952,7 @@ async function* invokePreparedSingleCat(deps: InvocationDeps, params: Invocation
     const requiresImportedHistory =
       activeSessionRecordForResume?.externalImport?.cliSessionId === sessionId && Boolean(sessionId);
     const baseOptions: AgentServiceOptions = {
+      ...frozenExecutionBinding.providerOptions,
       ...(frozenExecutionBinding.codexLaunchPolicy
         ? { codexLaunchPolicy: frozenExecutionBinding.codexLaunchPolicy }
         : {}),

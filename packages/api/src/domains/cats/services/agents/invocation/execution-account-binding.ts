@@ -25,6 +25,7 @@ import {
 import { type CodexLaunchPolicy, captureCodexLaunchPolicy } from '../../../../../config/codex-cli.js';
 import { codexExecutionAccountSnapshot } from '../../../../../config/codex-execution-account.js';
 import { resolveActiveProjectRoot } from '../../../../../utils/active-project-root.js';
+import type { AgentServiceOptions } from '../../types.js';
 import {
   captureMemberExecutionPreferences,
   type MemberExecutionPreferences,
@@ -32,6 +33,7 @@ import {
 import type { FrozenExecutionWorkspace } from './execution-workspace.js';
 
 export interface FrozenExecutionBinding {
+  readonly providerOptions?: Readonly<Pick<AgentServiceOptions, 'frozenAcpMcpServers'>>;
   readonly codexLaunchPolicy?: CodexLaunchPolicy;
   readonly threadPreferences?: Readonly<{
     reasoningEffortOverride?: CliEffortPreset;
@@ -67,6 +69,7 @@ export function freezeExecutionAccountBinding(input: {
   catConfig?: CatConfig;
   model?: string;
   workspace: FrozenExecutionWorkspace;
+  providerOptions?: FrozenExecutionBinding['providerOptions'];
 }): FrozenExecutionBinding {
   const catConfig = input.catConfig ? deepFreeze(structuredClone(input.catConfig)) : undefined;
   const provider = catConfig?.clientId;
@@ -116,6 +119,7 @@ export function freezeExecutionAccountBinding(input: {
           : undefined;
   return Object.freeze({
     catConfig,
+    ...(input.providerOptions ? { providerOptions: deepFreeze(input.providerOptions) } : {}),
     ...(provider === 'openai' ? { codexLaunchPolicy: captureCodexLaunchPolicy() } : {}),
     ...(catConfig
       ? { executionPreferences: captureMemberExecutionPreferences(input.catId, catConfig, input.model) }

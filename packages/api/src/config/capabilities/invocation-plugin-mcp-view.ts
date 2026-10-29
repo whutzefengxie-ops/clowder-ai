@@ -28,6 +28,15 @@ const invocationView = new AsyncLocalStorage<{
   readonly scope: PluginMcpExposureScope | undefined;
 }>();
 
+/** Admission needs the same verified activation projection before a provider iterator exists. */
+export function withInvocationPluginMcpView<T>(
+  run: () => T,
+  view: InvocationPluginMcpView | undefined,
+  scope?: PluginMcpExposureScope,
+): T {
+  return invocationView.run({ view, scope: scope ? Object.freeze({ ...scope }) : undefined }, run);
+}
+
 export function invocationPluginMcpConfig(config: import('@cat-cafe/shared').CapabilitiesConfig, memberCatId: string) {
   const context = invocationView.getStore();
   return projectLocalPluginMcpCapabilities(config, context?.view, context?.scope, memberCatId).config;
