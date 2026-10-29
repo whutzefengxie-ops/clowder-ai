@@ -58,6 +58,8 @@ export interface CreateAcpServiceForConfigInput {
   /** Effective model resolved once by registry construction (env override included). */
   effectiveModel: string;
   acpConfig: AcpVariantConfig;
+  /** Catalog construction uses its existing accessor; plugin sources retain their registration fence. */
+  resolveCurrentAcpConfig?(): AcpVariantConfig | undefined;
   poolRegistry: AcpPoolRegistry;
   log: Pick<FastifyBaseLogger, 'info' | 'warn'>;
   /** Tests supply an owned throwaway root; production uses the platform default. */
@@ -286,14 +288,16 @@ async function ensureAcpPool(
 export async function createAcpServiceForConfig(
   input: CreateAcpServiceForConfigInput,
 ): Promise<(AcpAgentService & { disposeHostService(): Promise<void> }) | null> {
-  const { projectRoot, profileId, config, acpConfig } = input;
+  const { projectRoot, profileId, resolveCurrentAcpConfig } = input;
+  const config = structuredClone(input.config);
+  const acpConfig = structuredClone(input.acpConfig);
   const catId = config.id;
   const clientId = config.clientId;
   const effectiveModel =
     config.clientId === 'opencode'
       ? (resolveEffectiveOpenCodeModel(config.provider, input.effectiveModel)?.model ?? input.effectiveModel)
       : input.effectiveModel;
-  const effectiveInput = effectiveModel === input.effectiveModel ? input : { ...input, effectiveModel };
+  const effectiveInput = { ...input, config, acpConfig, effectiveModel };
 
   if (acpConfig.transport === 'httpstream' && acpConfig.experimental !== true) {
     return skipAcpProfile(
@@ -327,10 +331,9 @@ export async function createAcpServiceForConfig(
   }
 
   const bootstrap = resolveAcpBootstrap(projectRoot, profileId, acpConfig, effectiveModel);
-  const accountConfig = structuredClone(config);
   let accountContext: AcpAccountContext;
   try {
-    accountContext = resolveAcpAccount(bootstrap.projectRoot, accountConfig);
+    accountContext = resolveAcpAccount(bootstrap.projectRoot, config);
   } catch (error) {
     if (!(error instanceof AccountStoreVerdictError)) throw error;
     return skipAcpProfile(
@@ -361,8 +364,10 @@ export async function createAcpServiceForConfig(
     }
   }
   const accountSource = structuredClone(accountContext);
-  const assertAccountCurrent = () => {
-    if (!isDeepStrictEqual(accountSource, resolveAcpAccount(bootstrap.projectRoot, accountConfig)))
+  const assertConstructionCurrent = () => {
+    if (resolveCurrentAcpConfig && !isDeepStrictEqual(acpConfig, resolveCurrentAcpConfig()))
+      throw new ExecutionAdmissionConflict('ACP launch source changed; refresh this member before admission.');
+    if (!isDeepStrictEqual(accountSource, resolveAcpAccount(bootstrap.projectRoot, config)))
       throw new ExecutionAdmissionConflict('ACP account source changed; refresh this member before admission.');
   };
   const spawn = await saveSpan('acp.prepare', () => prepareAcpSpawnContext(effectiveInput, bootstrap, accountContext));
@@ -421,9 +426,9 @@ export async function createAcpServiceForConfig(
   service.captureInvocationOptions = async (options) => {
     if ('accountRef' in options && options.accountRef !== accountSource.account?.id)
       throw new ExecutionAdmissionConflict('ACP selected account changed; refresh this member before admission.');
-    assertAccountCurrent();
+    assertConstructionCurrent();
     const captured = await captureOptions(options);
-    assertAccountCurrent();
+    assertConstructionCurrent();
     return captured;
   };
   return bindAcpServicePoolLease(service, lease);

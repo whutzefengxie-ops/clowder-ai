@@ -2141,6 +2141,7 @@ async function main(): Promise<void> {
                       config,
                       effectiveModel: getCatModel(id),
                       acpConfig,
+                      resolveCurrentAcpConfig: () => getAcpConfig(id, projectRoot),
                       poolRegistry: acpPoolRegistry,
                       log: app.log,
                       onUnavailable: (reason) => agentRegistry.markUnavailable(id, reason),

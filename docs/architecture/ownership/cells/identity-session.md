@@ -268,6 +268,8 @@ The existing invocation scope owns failed admission pins. Serial and parallel ro
 
 Generic ACP's explicit account reference is resolved by the existing account owner at admission. The existing ACP factory checks its private construction-time account source around MCP capture; stale pool inputs reject new admission, while an admitted invocation keeps its captured service. No private account body is added to session compatibility or durable audit by this guard.
 
+Catalog ACP construction retains owned launch settings and its existing catalog accessor. Invocation capture validates that source before and after MCP capture; admitted plans and the L0 child do not call the accessor. Plugin lifecycle remains with implementation registration rather than a new launch registry.
+
 ## Canon Member Avatar Consumer
 
 F326 Phase D resolves the existing member id, then projects its one member-avatar slot from collaborative-content-plane. The direct Human selects it with its own receipt; mixed avatar/profile PATCH is rejected before either write. Linked members keep the canon projection after profile-only saves, clear remains linked, and unreadable bound bytes never fall back to catalog or another image. This consumer does not move roster or member authority.

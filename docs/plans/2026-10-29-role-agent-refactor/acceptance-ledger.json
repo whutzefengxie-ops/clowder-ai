@@ -407,11 +407,11 @@
   },
   "acpAccountSelectionCheckpointReview": {
     "reviewer": "checkpoint_review",
-    "verdict": "changes_requested",
-    "reviewedHead": "ef688b96161ab1d32e164de3d156cb1ff60b19a5",
+    "verdict": "approved",
+    "reviewedHead": "1f1453ee56de361f2681ae373e0e76d7a561a400",
     "subject": "task:01a1881e-1a7b-78d0-9a62-ff99b0ab7a01/checkpoint-acp-account-selection",
-    "findings": ["P2 implicit app default and native/unbound share an undefined explicit ref; native whitespace resolves inconsistently"],
-    "authorFixStatus": "addressed_awaiting_independent_recheck",
+    "closedFindings": ["P2 implicit app default and native/unbound share an undefined explicit ref; native whitespace resolves inconsistently"],
+    "findings": [],
     "evidence": "README.md#W2-ACP-成员改选账号的准入匹配尚未完成-W2"
   },
   "qualitySamplesCheckpointReview": {

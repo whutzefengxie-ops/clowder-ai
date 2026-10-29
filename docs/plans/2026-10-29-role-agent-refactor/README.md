@@ -426,3 +426,13 @@ checkpoint_review 对 `48471628a1357a429ee7665aa8f46a9d686b37dc` 给出 approved
 现 capture port 的 accountRef 明确承载实际解析的 runtime account.id，包括隐式默认；present undefined 表示本轮 native/unbound，与旧构建 account.id 比较。factory 复用原 usesNativeToolConfiguration 统一空白语义，不另写 trim 规则。新增两条真实 factory→Host 反例 `acp-native-selection-red.log` 先 RED，修复后 `acp-native-selection-green.log` 20 PASS，保留原七条选择/账号与租约用例，验证隐式默认的原绑定、切换拒绝和新 factory 不再带应用 HOME；消费者 `acp-native-selection-consumers.log` 70 PASS。API tsc、4 文件 Biome 无错误；无真实模型/外部进程，仍不认证 strict ACL。此 P2 修复等待独立复核，不扩大到完整 W2。
 
 量尺准备的另一独立回执：checkpoint_review 对 `db76cade55c431228657bbba0efaa5d03d71a770` 返回 approved，原四 P2 和报告位置问题闭环，独立 8 PASS；subject 保持 checkpoint-quality-samples。该批准仅限量尺，Q01 及真实候选继续 NOT_RUN，详见 quality-samples.md。
+
+checkpoint_review 对 `1f1453ee56de361f2681ae373e0e76d7a561a400` 返回 approved，原账号选择 P2 闭环，独立 34 PASS，含两个原 RED、直接调用空值语义、Registered 转发、冻结后旧 turn 与租约。批准限此边界；原始启动配置、父环境和完整 W2 继续待验。
+
+## W2 目录 ACP 启动配置来源核验（尚未完成 W2）
+
+目录 ACP 工厂调用方将原 getAcpConfig accessor 传给既有 factory，factory 在首次异步准备前复制成员与 ACP 配置，并在原 capture hook 前后核验原始 ACP 来源。目录配置参数变更、删除或损坏返回已有自有准入冲突；不会把新绑定配到旧 pool。已冻结绑定和后续 AcpClient 构造保留原输入。这个 accessor 只在准入读取，不进入 L0 子进程、实际模型发送或持久审计。插件声明继续依赖原实现注册/生命周期 fence，直接 legacy 工厂调用未提供该 accessor 的来源不据此取得目录一致性证明。
+
+`acp-catalog-source-red.log` 五项=2 PASS+3 FAIL，使用真实 getAcpConfig 和独立模板，修改启动参数、移除 ACP、损坏来源均未拒绝。修复后 `acp-catalog-source-green.log` 27 PASS，含上述三条、新 factory 实际 AcpClient 构造 args、新旧绑定对照、账号来源/选择及原租约/工厂；`acp-catalog-source-consumers.log` 62 PASS，含客户端库生命周期/能力、插件选择与 MCP/执行偏好。没有启动原生 CLI/真实模型，构造参数证据不代替进程或发行物验收；全部池由测试释放，夹具数据保留。
+
+最终 API tsc、三个相关文件 Biome 无错误。首次格式检查报 index.ts 的 CRLF；仅规范为 LF，Git 逻辑差异仍为目录 factory 调用点的一行。factory 集合仍使用隔离进程的既有 trusted-host 模式，不认证 strict ACL。复杂度复核：复用原 factory 与来源解析函数，在现有私有输入增加一个读取端口，共用原前后 fence；没有新注册/启动框架、存储、watcher 或 revision bus。成员整体发布、MCP 来源、父环境/CA、其他客户端完整输入及 W2 仍待继续；此目录来源切片等待独立审查。
