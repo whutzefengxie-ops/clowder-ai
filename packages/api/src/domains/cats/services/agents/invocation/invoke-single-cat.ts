@@ -1428,6 +1428,7 @@ export async function prepareInvocationExecutionBinding(
     signal?: AbortSignal;
     ownerAuthProvenance?: InvocationParams['ownerAuthProvenance'];
     toolExecutionPolicy?: AgentServiceOptions['toolExecutionPolicy'];
+    liveCompanion?: AgentServiceOptions['liveCompanion'];
   },
 ): Promise<FrozenExecutionBinding> {
   input.signal?.throwIfAborted();
@@ -1498,6 +1499,7 @@ export async function prepareInvocationExecutionBinding(
                       toolExecutionPolicy: input.toolExecutionPolicy,
                       accountEnv: binding.accountEnv,
                       mcpSupport: binding.catConfig?.mcpSupport,
+                      liveCompanion: input.liveCompanion,
                     })
                   : undefined;
                 input.signal?.throwIfAborted();

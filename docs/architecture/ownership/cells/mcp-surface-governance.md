@@ -44,6 +44,7 @@ code_anchors:
   - packages/api/src/domains/cats/services/agents/providers/kimi-mcp-surface.ts
   - packages/api/src/domains/cats/services/agents/providers/kimi-mcp-config.ts
   - packages/api/src/domains/cats/services/agents/providers/opencode-config-writer.ts
+  - packages/api/src/domains/cats/services/agents/providers/codex-mcp-input.ts
   - packages/api/src/config/capabilities/plugin-mcp-exposure.ts
 doc_anchors:
   - docs/decisions/044-mcp-resource-lifecycle-and-surface-budget.md
@@ -163,3 +164,8 @@ writer's native MCP plan and binary entrypoint separately from model/auth/instru
 the writer consumes its owned copy after waits, retaining its existing configuration format,
 user-merge rules, Pencil resolution and credential guard. This does not introduce another
 provider or require native carriers to move their launch ownership into AgentService.
+
+Codex captures resolved server inputs through the same admission hook. Its native TOML renderer
+retains disabled shapes and per-launch credential binding; one-shot environment wrappers are
+created for each launch rather than cached in the admitted plan. Live and public native launches
+retain their own admitted MCP boundary, while read-only invocations skip unused tool discovery.

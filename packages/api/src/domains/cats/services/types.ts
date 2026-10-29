@@ -1055,6 +1055,7 @@ export interface AgentServiceOptions {
   frozenAcpMcpServers?: import('./agents/providers/acp/types.js').AcpMcpServer[];
   frozenNativeMcpConfig?: import('./agents/providers/provider-mcp-config.js').ProviderMcpConfigPlan;
   frozenKimiMcpConfig?: import('./agents/providers/kimi-mcp-surface.js').KimiMcpConfigPlan;
+  frozenCodexMcpInput?: import('./agents/providers/codex-mcp-input.js').CodexMcpInputPlan;
   codexLaunchPolicy?: import('../../../config/codex-cli.js').CodexLaunchPolicy;
   /** Frozen requested preferences; actual adopted model/effort remain provider observations. */
   executionPreferences?: import('./agents/providers/member-execution-preferences.js').MemberExecutionPreferences;
@@ -1248,7 +1249,13 @@ export interface AgentService {
     toolExecutionPolicy?: ToolExecutionPolicy;
     accountEnv?: Record<string, string>;
     mcpSupport?: boolean;
-  }): Promise<Pick<AgentServiceOptions, 'frozenAcpMcpServers' | 'frozenNativeMcpConfig' | 'frozenKimiMcpConfig'>>;
+    liveCompanion?: AgentServiceOptions['liveCompanion'];
+  }): Promise<
+    Pick<
+      AgentServiceOptions,
+      'frozenAcpMcpServers' | 'frozenNativeMcpConfig' | 'frozenKimiMcpConfig' | 'frozenCodexMcpInput'
+    >
+  >;
   /** Pin one prepared carrier generation before Host policy, L0 and capacity admission. Idempotent on a pinned view. */
   forInvocation?(): AgentService;
   /** Release a pinned Host invocation even when policy/preflight exits before a provider iterator starts. Idempotent. */

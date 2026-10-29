@@ -266,3 +266,15 @@ OpenCode 的 MCP 运行配置继续由原 Host writer 生成，不强行搬进 A
 扩大回归 `opencode-mcp-regression-final.log` 为 212 项=208 PASS+原有 4 SKIP（公开 checkout 无本地 OpenCode 配置，未新增 skip）。两处旧夹具已最小修正：default-workspace 成员补合法 relationshipKey，使真实路由/默认工作区旅程继续进入 provider；路径断言规范化分隔符以验证 Windows 路径。未降低角色身份检查或产品路径要求，`opencode-mcp-portable-fixtures.log` 74 PASS；原失败结果保留。Host 调用扩大集合 `opencode-mcp-invocation-final.log` 184 项=180 PASS+原 4 AGY Native Windows 出生身份 FAIL。API tsc 通过，6 文件 Biome 无错误；旧文件只归一化换行，逻辑 diff 仍是上述两处夹具修改。
 
 复杂度复核：无新增全局事务或配置框架，两个实际调用方共用一次 MCP 解析，原 Host 仍拥有 OpenCode 启动配置。map delta 仅增加现有 consumer 锚点与说明。此切片不宣称已冻结所有原生自动发现/外部规则、完整 env/策略/账号读取一致性和 implementation generation，也不等于完整 W2/W4、工程任务质量或最终发行物验收。无新增常驻环境或真实模型调用；当前 OpenCode 切片等待独立审查。
+
+checkpoint_review 对 `0df53ed32d973f7698b161f9c7b110eaadd7c666` 给出 approved，subject 为 `task:01a1881e-1a7b-78d0-9a62-ff99b0ab7a01/checkpoint-opencode-mcp`。独立 77 PASS，涵盖 Host 实际消费、直接 writer、材化不修改计划、激活范围、取消和成员变更；无未关闭 finding。批准限该 OpenCode 切片。
+
+## W2 Codex MCP 输入消费切片（尚未完成 W2）
+
+沿用原 Codex MCP 解析规则，准入捕获 capabilities、成员/插件激活视图、Pencil、命令/参数/工作目录、普通环境与 HTTP Bearer 引用。实际消费者渲染 Codex 原生 TOML，保留禁用形状、内置 split、名称转义、Bearer 变量和 workspace 规则。一次性 env wrapper 仍在每次 launch 创建；冻结 wrapper 文件会在第一轮自清理后失效，因此只冻结输入，当前轮凭据由原 binder 材化。直接内部调用在首次异步准备前捕获；只读、plugin_native 和 live 路径保留各自边界，不引入普通 MCP 捕获。原 Codex 全局策略捕获顺序不变。
+
+`codex-mcp-red.log` 三个反例先 RED，最终实际 exec_json launch 参数保持 capabilities/HTTP Bearer/插件准入值。插件场景额外启动真实 MCP 子进程并调用工具：同一冻结计划连续两轮，各自创建新 wrapper，保持普通环境且读取各自当前凭据；计划本体不变。`codex-mcp-consumer-final.log` 为 33 PASS，包含上述消费者、策略、实时启动/生命周期/MCP、配置覆盖和项目兼容；API tsc 通过，6 文件 Biome 无错误，未调用真实模型。
+
+扩大回归 `codex-mcp-regression.log` 为 171 项=153 PASS+18 FAIL。为核实来源，将本次四个已修改源码的精确补丁保存在任务 artifacts，暂时反向应用并编译未修改的 HEAD，重跑对应三个旧测试文件；`codex-mcp-platform-baseline.log` 为 127 项=109 PASS+相同 18 FAIL。它们来自 Windows 连接池关闭后的直连、public 原生私有 workspace 检查和 POSIX cache 路径断言。随后原样恢复补丁并重新编译，再完成上述 33 PASS；不把基线失败当通过，也未为测试放开产品隔离检查。
+
+复杂度复核：保留原解析与材化 owner，只把有两个真实调用方的捕获逻辑移到同目录模块；原大类减少代码，新增模块小于 200 行，无 launcher、配置总线、认证库或通用适配 DSL。map delta 只补现有消费边界。完整 env/原生自动发现、一致性重解析、写入通知、实现 generation 和会话兼容仍待继续，W2/C05/C15 仍未整体验收。此 Codex 切片等待独立审查。

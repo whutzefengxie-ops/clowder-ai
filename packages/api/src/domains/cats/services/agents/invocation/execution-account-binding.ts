@@ -37,7 +37,10 @@ export interface FrozenExecutionBinding {
   readonly openCodeMcpConfig?: import('../providers/opencode-config-writer.js').OpenCodeMcpConfigPlan;
   readonly accountEnv?: Record<string, string>;
   readonly providerOptions?: Readonly<
-    Pick<AgentServiceOptions, 'frozenAcpMcpServers' | 'frozenNativeMcpConfig' | 'frozenKimiMcpConfig'>
+    Pick<
+      AgentServiceOptions,
+      'frozenAcpMcpServers' | 'frozenNativeMcpConfig' | 'frozenKimiMcpConfig' | 'frozenCodexMcpInput'
+    >
   >;
   readonly codexLaunchPolicy?: CodexLaunchPolicy;
   readonly threadPreferences?: Readonly<{
