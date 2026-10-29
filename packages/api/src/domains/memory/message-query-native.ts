@@ -83,6 +83,7 @@ export const runNativeQueryBatch: QueryBatchRunner = async (batch, context) => {
       catConfig: config,
       userId: context.userId,
       model: config.defaultModel,
+      compilerCwd: root,
     }),
     workingDirectory: root,
     systemPrompt: QUERY_QUALIFICATION_INSTRUCTIONS,

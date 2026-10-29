@@ -144,3 +144,5 @@ checkpoint_review 审查 `2a69d4789ee16b44c2f50a2f768e4abffd888220`，返回两�
 | 类型和格式 | shared/API/Web tsc 通过；21 个目标文件 Biome 无错误，61 warnings、2 infos（随后删除新增测试未用 import）；diff --check 无错误 |
 
 原生/public 载体的 Windows 认证缺口仍须按矩阵处理。上述集合不相加为完整验收率。无新常驻服务、模型调用或用户状态根复用；隔离测试目录保留原始证据。当前等待同一 reviewer 复审，W2 整体仍未完成。
+
+复审 `847aa4d571f852fb35470038b5bd1608c595114f` 独立确认原两反例及调用集合 40 PASS，但发现原 overlay P2 的显式 cwd 变体：查询资格判断已有 compiler cwd=Host 配置根，API 进程 cwd 可与它不同。新增 owner-only `compilerCwd` 捕获参数并由该入口传现有 root，普通入口仍默认原 cwd，public 不读取此参数或 owner 源。reviewer 真实 child 第三反例及实际查询入口的 Host canary 反例先 RED 后 GREEN；`l0-query-overlay-green.log` 共 9 PASS（原三反例、后台四旅程、实际查询两旅程）。未把 task 工作区作为 Host 来源；等待修复后复审。

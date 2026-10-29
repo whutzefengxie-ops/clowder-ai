@@ -19,6 +19,8 @@ export function captureInvocationL0Input(
         catConfig: CatConfig;
         userId: string;
         model?: string;
+        /** Existing compiler owner cwd, independent of the task working directory. */
+        compilerCwd?: string;
         profileRepository?: Pick<FileProfileRepository, 'profileDir'>;
         projection?: 'owner';
       }
@@ -42,7 +44,7 @@ export function captureInvocationL0Input(
       .map(([id, config]) => ({ catId: id, config, model: getCatModel(id) })),
     coCreator: getCoCreatorConfig(catalog),
     installRoot,
-    overlayRoot: resolveL0OverlayRoot(),
+    overlayRoot: resolveL0OverlayRoot(input.compilerCwd),
     projection: 'owner',
     profileDir: (input.profileRepository ?? new FileProfileRepository()).profileDir(input.userId),
     governanceText: loadCompiledGovernanceL0Sync(installRoot).content,

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import '../helpers/setup-cat-registry.js';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -23,11 +23,22 @@ async function exercise(t, failed = false) {
   const root = mkdtempSync(join(tmpdir(), 'qualification-native-'));
   const release = join(root, 'exit');
   const controller = new AbortController();
-  const keys = ['HOME', 'USERPROFILE', 'CLAUDE_CONFIG_DIR', 'CAT_CAFE_DATA_DIR', 'CAT_CAFE_GLOBAL_CONFIG_ROOT'];
+  copyFileSync(process.env.CAT_TEMPLATE_PATH, join(root, 'cat-template.json'));
+  const keys = [
+    'HOME',
+    'USERPROFILE',
+    'CLAUDE_CONFIG_DIR',
+    'CAT_CAFE_DATA_DIR',
+    'CAT_CAFE_GLOBAL_CONFIG_ROOT',
+    'CAT_TEMPLATE_PATH',
+  ];
   const previous = new Map(keys.map((key) => [key, process.env[key]]));
   keys.forEach((key) => {
     process.env[key] = root;
   });
+  process.env.CAT_TEMPLATE_PATH = join(root, 'cat-template.json');
+  mkdirSync(join(root, '.cat-cafe', 'prompt-overlays'), { recursive: true });
+  writeFileSync(join(root, 'pnpm-workspace.yaml'), 'packages: []\n');
   t.after(() =>
     previous.forEach((value, key) => {
       if (value === undefined) delete process.env[key];
@@ -39,6 +50,10 @@ async function exercise(t, failed = false) {
     rmSync(root, { recursive: true, force: true });
   });
   const originalGet = catRegistry.tryGet.bind(catRegistry);
+  writeFileSync(
+    join(root, '.cat-cafe', 'prompt-overlays', 'workflow-triggers.local.yaml'),
+    JSON.stringify({ [originalGet('opus').config.breedId]: 'QUALIFICATION_HOST_WORKFLOW_CANARY' }),
+  );
   t.mock.method(catRegistry, 'tryGet', (id) =>
     id === 'haiku55'
       ? {
@@ -69,6 +84,7 @@ async function exercise(t, failed = false) {
     assert.equal(userId, 'owner');
     assert.equal(frozenInput.catId, 'haiku55');
     assert.equal(Object.isFrozen(frozenInput), true);
+    assert.match(JSON.stringify(frozenInput.variables), /QUALIFICATION_HOST_WORKFLOW_CANARY/);
     const path = join(mkdtempSync(join(tmpdir(), 'qualification-l0-')), 'system-prompt-l0.md');
     writeFileSync(path, fullL0);
     return path;
