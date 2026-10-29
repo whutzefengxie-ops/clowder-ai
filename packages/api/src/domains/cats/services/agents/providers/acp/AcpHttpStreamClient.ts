@@ -36,6 +36,7 @@ import {
   AcpStreamIdleError,
   AcpTimeoutError,
   buildAcpSpawnLogFields,
+  selectAcpPermissionOptionId,
 } from './AcpClient.js';
 import { AcpCwdIdentityTracker } from './acp-cwd-identity.js';
 import { type AcpPromptInput, toAcpPromptContent } from './acp-prompt-content.js';
@@ -812,14 +813,21 @@ export class AcpHttpStreamClient {
         }
         if (responsePromise) await responsePromise;
       } else {
-        // Prefer allow_always (session-wide) over allow_once to avoid repeated permission
-        // prompts for every MCP tool call. Kimi sends optionId "approve_for_session" for this.
+        // C09/O1 fail closed: no handler means no approval channel. Only an
+        // explicit auto-allow opt-in (acp.permissionPolicy: 'auto_allow') may
+        // answer allow; otherwise select an explicit reject option or cancel.
         const params = req.params as unknown as AcpPermissionRequest;
-        const allowOption =
-          params.options?.find((o) => o.kind === 'allow_always') ??
-          params.options?.find((o) => o.kind === 'allow_once') ??
-          params.options?.[0];
-        await respond({ optionId: allowOption?.optionId ?? 'allow_once' });
+        const decision = this.config.defaultPermissionDecision === 'allow' ? 'allow' : 'reject';
+        const optionId = selectAcpPermissionOptionId(params.options, decision);
+        if (optionId) {
+          await respond({ optionId });
+        } else {
+          log.warn(
+            { method: req.method, id: req.id, sessionId: params.sessionId, decision },
+            'ACP HTTP permission: no matching fail-closed option — cancelling',
+          );
+          await respond({ cancelled: true });
+        }
       }
       return;
     }

@@ -307,7 +307,7 @@ describe('AcpHttpStreamClient', () => {
     assert.match(caught.message, /closed before final prompt response/);
   });
 
-  it('responds to id-bearing permission requests on prompt streams', async () => {
+  it('responds to id-bearing permission requests under an explicit auto-allow policy', async () => {
     let resolvePermissionResponse;
     const permissionResponseReceived = new Promise((resolve) => {
       resolvePermissionResponse = resolve;
@@ -373,6 +373,8 @@ describe('AcpHttpStreamClient', () => {
         return child;
       },
       portDiscoveryTimeoutMs: 500,
+      // C09: auto-approve is only reachable after an explicit member opt-in.
+      defaultPermissionDecision: 'allow',
     });
 
     await client.initialize();
@@ -392,6 +394,90 @@ describe('AcpHttpStreamClient', () => {
     assert.equal(capturedPermissionResponse.result?.outcome?.outcome, 'selected');
     assert.equal(capturedPermissionResponse.result?.outcome?.optionId, 'allow_once');
     assert.equal(events.at(-1)?.update?.content?.text, 'approved');
+  });
+
+  it('C09: fails closed on id-bearing permission requests without an explicit policy', async () => {
+    let resolvePermissionResponse;
+    const permissionResponseReceived = new Promise((resolve) => {
+      resolvePermissionResponse = resolve;
+    });
+    let capturedPermissionResponse = null;
+
+    server = await startJsonRpcServer((message, res) => {
+      if (message.method === 'initialize') {
+        return { jsonrpc: '2.0', id: message.id, result: INIT_RESULT };
+      }
+      if (message.method === 'session/new') {
+        return { jsonrpc: '2.0', id: message.id, result: { sessionId: 'http-session' } };
+      }
+      if (message.method === 'session/prompt') {
+        res.writeHead(200, { 'Content-Type': 'application/x-ndjson' });
+        res.write(
+          `${JSON.stringify({
+            jsonrpc: '2.0',
+            id: 'perm-http-reject',
+            method: 'session/request_permission',
+            params: {
+              sessionId: 'http-session',
+              options: [
+                { optionId: 'allow_once', name: 'Allow once', kind: 'allow_once' },
+                { optionId: 'allow_always', name: 'Always allow', kind: 'allow_always' },
+                { optionId: 'reject_once', name: 'Reject', kind: 'reject_once' },
+              ],
+            },
+          })}\n`,
+        );
+        permissionResponseReceived.then(() => {
+          res.write(
+            `${JSON.stringify({
+              jsonrpc: '2.0',
+              method: 'session/update',
+              params: {
+                sessionId: 'http-session',
+                update: { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'denied' } },
+              },
+            })}\n`,
+          );
+          res.end(`${JSON.stringify({ jsonrpc: '2.0', id: message.id, result: { stopReason: 'end_turn' } })}\n`);
+        });
+        return undefined;
+      }
+      if (message.id === 'perm-http-reject' && !message.method) {
+        capturedPermissionResponse = message;
+        res.writeHead(204);
+        res.end();
+        resolvePermissionResponse();
+        return undefined;
+      }
+      return { jsonrpc: '2.0', id: message.id, error: { code: -32601, message: 'not found' } };
+    });
+    const { child, agentStdout } = createMockChild();
+    const port = serverPort(server);
+
+    client = new AcpHttpStreamClient({
+      command: 'fake-http-acp',
+      args: [],
+      cwd: '/tmp',
+      spawnFn: () => {
+        setImmediate(() => agentStdout.write(`Listening on port ${port}\n`));
+        return child;
+      },
+      portDiscoveryTimeoutMs: 500,
+    });
+
+    await client.initialize();
+    const session = await client.newSession();
+    try {
+      for await (const event of client.promptStream(session.sessionId, 'hello', { timeoutMs: 500 })) {
+        void event;
+      }
+    } catch (err) {
+      assert.fail(`Fail-closed permission response must not stall: ${err?.message}`);
+    }
+
+    assert.ok(capturedPermissionResponse, 'client should POST a permission response');
+    assert.equal(capturedPermissionResponse.result?.outcome?.outcome, 'selected');
+    assert.equal(capturedPermissionResponse.result?.outcome?.optionId, 'reject_once');
   });
 
   it('treats 204 agent response acknowledgements as complete', async () => {

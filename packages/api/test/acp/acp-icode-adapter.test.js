@@ -532,7 +532,7 @@ describe('AcpServiceFactory protocolAdapter wiring', () => {
     }
   });
 
-  it('keeps default members unchanged: no fail-closed default, no adapter field', async () => {
+  it('keeps default members fail closed and leaves the adapter field unset', async () => {
     const projectRoot = mkdtempSync(join(tmpdir(), 'acp-default-factory-'));
     const profileId = 'acp-default-factory';
     const poolRegistry = new Map();
@@ -547,7 +547,49 @@ describe('AcpServiceFactory protocolAdapter wiring', () => {
       assert.ok(service);
       assert.equal(service.protocolAdapter, undefined);
       const client = poolRegistry.get(profileId).clientFactory();
-      assert.equal(client.config.defaultPermissionDecision, undefined);
+      // C09: a member without an explicit `permissionPolicy` must fail closed.
+      assert.equal(client.config.defaultPermissionDecision, 'reject');
+    } finally {
+      await Promise.all([...poolRegistry.values()].map((pool) => pool.closeAll?.()));
+      rmSync(projectRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('threads an explicit auto_allow permissionPolicy and fails closed on invalid values', async () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), 'acp-permission-policy-factory-'));
+    const poolRegistry = new Map();
+
+    try {
+      const allowed = await createAcpServiceForConfig(
+        makeBaseInput(projectRoot, 'acp-permission-allow', poolRegistry, {
+          acpConfig: { command: 'mock-acp', startupArgs: ['acp'], permissionPolicy: 'auto_allow' },
+        }),
+      );
+      assert.ok(allowed);
+      assert.equal(poolRegistry.get('acp-permission-allow').clientFactory().config.defaultPermissionDecision, 'allow');
+
+      const invalid = await createAcpServiceForConfig(
+        makeBaseInput(projectRoot, 'acp-permission-invalid', poolRegistry, {
+          acpConfig: { command: 'mock-acp', startupArgs: ['acp'], permissionPolicy: 'allow' },
+        }),
+      );
+      assert.ok(invalid);
+      assert.equal(poolRegistry.get('acp-permission-invalid').clientFactory().config.defaultPermissionDecision, 'reject');
+
+      // iCode keeps its stricter adapter contract even if the member opts in.
+      const icode = await createAcpServiceForConfig(
+        makeBaseInput(projectRoot, 'icode-permission-allow', poolRegistry, {
+          acpConfig: {
+            command: 'mock-acp',
+            startupArgs: ['acp'],
+            protocolAdapter: 'icode',
+            modelProfileId: 'profile-sol',
+            permissionPolicy: 'auto_allow',
+          },
+        }),
+      );
+      assert.ok(icode);
+      assert.equal(poolRegistry.get('icode-permission-allow').clientFactory().config.defaultPermissionDecision, 'reject');
     } finally {
       await Promise.all([...poolRegistry.values()].map((pool) => pool.closeAll?.()));
       rmSync(projectRoot, { recursive: true, force: true });

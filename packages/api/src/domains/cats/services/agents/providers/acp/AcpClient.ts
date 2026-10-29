@@ -82,6 +82,30 @@ export type AcpPermissionHandler = (
  */
 export type AcpSessionRequestHandler = (req: AcpAgentRequest) => Promise<Record<string, unknown>>;
 
+/**
+ * C09/O1 fail-closed permission option selection, shared by the stdio and HTTP
+ * transports. Only an explicit auto-allow decision may select an allow option;
+ * every other decision selects an explicit reject option and returns undefined
+ * when the agent offers none (callers must cancel, never invent an option id).
+ */
+export function selectAcpPermissionOptionId(
+  options: AcpPermissionRequest['options'] | undefined,
+  decision: 'allow' | 'reject',
+): string | undefined {
+  if (!Array.isArray(options)) return undefined;
+  if (decision === 'allow') {
+    return (
+      options.find((option) => option.kind === 'allow_always')?.optionId ??
+      options.find((option) => option.kind === 'allow_once')?.optionId
+    );
+  }
+  return (
+    options.find((option) => option.kind === 'reject_once')?.optionId ??
+    options.find((option) => option.kind === 'reject_always')?.optionId ??
+    options.find((option) => option.optionId === 'reject')?.optionId
+  );
+}
+
 export interface AcpClientConfig {
   /** CLI command (e.g. 'gemini') */
   command: string;
@@ -99,12 +123,15 @@ export interface AcpClientConfig {
   antigravityDiagnostics?: boolean;
   /** Inject spawn function for testing */
   spawnFn?: typeof nodeSpawn;
-  /** Custom permission request handler. Defaults to auto-approve (allow_once). */
+  /** Custom permission request handler. Without one, the default decision applies. */
   permissionHandler?: AcpPermissionHandler;
   /**
-   * Default decision when no permissionHandler is set and the agent asks for
-   * permission. 'reject' (iCode fail-closed policy) selects a reject option
-   * instead of auto-approving flagged native effects. Defaults to 'allow'.
+   * Decision used when no permissionHandler is set and the agent asks for
+   * permission. Defaults to 'reject' (fail closed): select an explicit reject
+   * option, or cancel when the agent offers none — never an allow.
+   * 'allow' is only valid when the Host/user explicitly opted in
+   * (`acp.permissionPolicy: 'auto_allow'`, resolved by
+   * resolveAcpPermissionPolicy); it selects allow_always/allow_once.
    */
   defaultPermissionDecision?: 'allow' | 'reject';
 }
@@ -1136,12 +1163,15 @@ export class AcpClient {
       } else if (method && !hasId) {
         if (method === ACP_METHODS.requestPermission) {
           // Gemini CLI sends request_permission as notification (no id) when not in yolo mode.
-          // Best-effort auto-approve with synthetic id (Gemini may ignore it).
+          // A no-id notification still gets a synthetic-id response (best effort; Gemini may
+          // ignore it), but the response follows the same fail-closed policy: without an
+          // explicit auto-allow opt-in it is reject/cancel, never allow.
           // Also notify stream listeners so idle watchdog suppresses stall during permission wait.
           const permParams = msg.params as Record<string, unknown>;
+          const decision = this.config.defaultPermissionDecision === 'allow' ? 'allow' : 'reject';
           log.info(
-            { method, sessionId: permParams.sessionId },
-            'ACP: permission notification (no id) — auto-approve + suppress stall',
+            { method, sessionId: permParams.sessionId, decision },
+            'ACP: permission notification (no id) — policy decision + suppress stall',
           );
           this.handleAgentRequest({ ...msg, id: `synth-perm-${Date.now()}` } as unknown as AcpAgentRequest);
           // Inject synthetic event into stream so promptStream sets pendingTool=true
@@ -1272,38 +1302,23 @@ export class AcpClient {
           };
           this.child?.stdin?.write(JSON.stringify(errResponse) + '\n');
         }
-      } else if (this.config.defaultPermissionDecision === 'reject') {
-        // iCode fail-closed policy: never auto-approve. Select an explicit
-        // reject option; if the agent offers none, cancel rather than allow.
+      } else {
+        // No handler = no live approval channel. Fail closed unless the member
+        // explicitly opted into automatic authorization (acp.permissionPolicy:
+        // 'auto_allow'). Never select or invent an allow option by default; when
+        // the agent offers no matching option, cancel instead.
         const params = req.params as unknown as AcpPermissionRequest;
-        const rejectOption =
-          params.options?.find((o) => o.kind === 'reject_once') ??
-          params.options?.find((o) => o.kind === 'reject_always') ??
-          params.options?.find((o) => o.optionId === 'reject');
-        if (rejectOption) {
-          respond({ optionId: rejectOption.optionId });
+        const decision = this.config.defaultPermissionDecision === 'allow' ? 'allow' : 'reject';
+        const optionId = selectAcpPermissionOptionId(params.options, decision);
+        if (optionId) {
+          respond({ optionId });
         } else {
           log.warn(
-            { method: req.method, id: req.id, sessionId: params.sessionId },
-            'ACP permission: reject policy but no reject option offered — cancelling',
+            { method: req.method, id: req.id, sessionId: params.sessionId, decision },
+            'ACP permission: no matching fail-closed option — cancelling',
           );
-          const response = {
-            jsonrpc: '2.0' as const,
-            id: req.id,
-            result: { outcome: { outcome: 'cancelled' as const } },
-          };
-          this.child?.stdin?.write(JSON.stringify(response) + '\n');
+          respond({ cancelled: true });
         }
-      } else {
-        // Default: auto-approve (allow_once)
-        const params = req.params as unknown as AcpPermissionRequest;
-        // Prefer allow_always (session-wide) over allow_once to avoid repeated permission
-        // prompts for every MCP tool call. Kimi sends optionId "approve_for_session" for this.
-        const allowOption =
-          params.options?.find((o) => o.kind === 'allow_always') ??
-          params.options?.find((o) => o.kind === 'allow_once') ??
-          params.options?.[0];
-        respond({ optionId: allowOption?.optionId ?? 'allow_once' });
       }
     } else if (req.method === ACP_METHODS.chrysRequestInput) {
       this.handleChrysRequestInput(req);

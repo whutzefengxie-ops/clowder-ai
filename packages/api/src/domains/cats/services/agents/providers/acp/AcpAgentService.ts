@@ -139,6 +139,21 @@ type PromptPhase =
    */
   | 'busy_backoff';
 
+/**
+ * C05/O2: execution inputs resolved from member/global configuration at
+ * admission time, BEFORE the pool lease wait. An edit made while this
+ * invocation queues must not change the values used for its ACP session
+ * configuration; the next invocation resolves fresh values.
+ */
+interface FrozenExecutionConfig {
+  /** `configurationSource === 'native_tool'` at admission. */
+  readonly nativeTool: boolean;
+  /** Requested native model preference at admission (native_tool only). */
+  readonly model?: string;
+  /** Requested native effort preference at admission (native_tool only). */
+  readonly effort?: string;
+}
+
 export interface AcpAgentServiceConfig {
   antigravity?: AgyAcpConfig;
   catId: CatId;
@@ -222,6 +237,23 @@ export class AcpAgentService implements AgentService {
   private readonly agentBusyRetryDelaysMs: number[];
   /** Becomes true only after this concrete ACP service observes usable standard usage telemetry. */
   private observedUsageUpdate = false;
+
+  /**
+   * C05/O2: resolve the member-level native execution configuration at
+   * invocation admission, BEFORE the pool lease wait. The global registry and
+   * cat-config reads happen exactly once here so a member edit while this
+   * invocation queues cannot change the values applied to the admitted session;
+   * the next invocation resolves fresh values.
+   */
+  private freezeExecutionConfig(options?: AgentServiceOptions): FrozenExecutionConfig {
+    const nativeTool = catRegistry.tryGet(this.catId)?.config.configurationSource === 'native_tool';
+    if (!nativeTool) return { nativeTool };
+    return {
+      nativeTool,
+      model: getCatModel(this.catId) || undefined,
+      effort: options?.reasoningEffortOverride ?? (getCatEffort(this.catId) || undefined),
+    };
+  }
 
   async releaseSession(nativeSessionId: string): Promise<void> {
     await this.pool.releaseSession(this.poolKey, nativeSessionId);
@@ -411,6 +443,27 @@ export class AcpAgentService implements AgentService {
         catId: this.catId,
         error: 'prompt_failure: aborted before start',
         errorCode: 'prompt_failure',
+        metadata,
+        timestamp: Date.now(),
+      };
+      yield { type: 'done', catId: this.catId, metadata, timestamp: Date.now() };
+      return;
+    }
+
+    // C05/O2: freeze member configuration at admission, before the lease wait.
+    // A member edit made while this invocation queues must not change the values
+    // applied to this admitted session; the next invocation resolves fresh ones.
+    let frozenExecutionConfig: FrozenExecutionConfig;
+    try {
+      frozenExecutionConfig = this.freezeExecutionConfig(options);
+    } catch (err) {
+      const { errorCode, errorMsg } = classifyError(err, null);
+      log.error({ ...ctx, errorCode, err: errorMsg }, 'ACP pre-lease configuration resolution failed');
+      yield {
+        type: 'error',
+        catId: this.catId,
+        error: toUserFacingError(this.providerName, errorCode, errorMsg),
+        errorCode,
         metadata,
         timestamp: Date.now(),
       };
@@ -659,10 +712,10 @@ export class AcpAgentService implements AgentService {
         { type: 'done', catId: this.catId, metadata, timestamp: Date.now() },
       ];
 
-      const nativeTool = catRegistry.tryGet(this.catId)?.config.configurationSource === 'native_tool';
+      const nativeTool = frozenExecutionConfig.nativeTool;
       const preferences = {
-        model: nativeTool ? getCatModel(this.catId) || undefined : undefined,
-        effort: nativeTool ? (options?.reasoningEffortOverride ?? (getCatEffort(this.catId) || undefined)) : undefined,
+        model: frozenExecutionConfig.model,
+        effort: frozenExecutionConfig.effort,
       };
       let nativeDefaults: { model?: string; effort?: string } = {};
       if (nativeTool && resumeSessionId) {

@@ -9,7 +9,7 @@ import {
 } from '../../../../../../config/account-resolver.js';
 import { AccountStoreVerdictError } from '../../../../../../config/account-store-format.js';
 import { resolveBoundAccountRefForCat } from '../../../../../../config/cat-account-binding.js';
-import type { AcpVariantConfig } from '../../../../../../config/cat-config-loader.js';
+import { type AcpVariantConfig, resolveAcpPermissionPolicy } from '../../../../../../config/cat-config-loader.js';
 import { resolveContextCapacity } from '../../../../../../config/context-capacity.js';
 import { resolveEffectiveOpenCodeModel } from '../../../../../../config/opencode-model.js';
 import { saveSpan } from '../../../../../../utils/member-save-diagnostics.js';
@@ -220,6 +220,10 @@ async function ensureAcpPool(
   spawn: AcpSpawnContext,
 ): Promise<{ pool: AcpProcessPool; lease: AcpServicePoolLease }> {
   const { profileId, acpConfig, poolRegistry } = input;
+  // C09/O1: permission default is derived from the member's explicit policy and
+  // is fail closed. iCode keeps its stricter adapter contract (reject only).
+  const permissionDecision =
+    acpConfig.protocolAdapter === 'icode' ? 'reject' : resolveAcpPermissionPolicy(acpConfig.permissionPolicy);
   const spawnSignature = createAcpPoolSpawnSignature({
     command: bootstrap.command,
     args: bootstrap.args,
@@ -233,6 +237,7 @@ async function ensureAcpPool(
     transport: acpConfig.transport ?? 'stdio',
     supportsMultiplexing: acpConfig.supportsMultiplexing,
     protocolAdapter: acpConfig.protocolAdapter,
+    permissionDecision,
     ...(spawn.antigravity ? { sessionPolicy: { provider: 'antigravity', profile: spawn.antigravity.profile } } : {}),
   });
 
@@ -262,9 +267,9 @@ async function ensureAcpPool(
         cwd: bootstrap.verifyCwd(),
         ...(process.platform === 'win32' ? { verifyBootstrapCwd: bootstrap.verifyCwd } : {}),
         ...(spawn.env ? { env: spawn.env } : {}),
-        // iCode fail-closed policy: flagged native effects must never be
-        // auto-approved by the generic default (allow) path.
-        ...(acpConfig.protocolAdapter === 'icode' ? { defaultPermissionDecision: 'reject' as const } : {}),
+        // C09/O1: fail closed unless this member explicitly opted into automatic
+        // authorization. iCode always rejects flagged native effects.
+        defaultPermissionDecision: permissionDecision,
         ...(spawn.antigravity
           ? { inheritParentEnv: false, permissionHandler: denyAgyAcpPermission, antigravityDiagnostics: true }
           : {}),

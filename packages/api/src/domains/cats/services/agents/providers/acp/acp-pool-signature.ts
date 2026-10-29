@@ -11,6 +11,12 @@ export interface AcpPoolSpawnSignatureInput {
   transport?: 'stdio' | 'httpstream';
   supportsMultiplexing?: boolean;
   protocolAdapter?: string;
+  /**
+   * C09/O1: client permission default. A member policy edit must produce a new
+   * pool generation so an explicit auto_allow revocation cannot keep a warm
+   * client whose closure still allows. Absent => fail closed.
+   */
+  permissionDecision?: 'allow' | 'reject';
   sessionPolicy?: unknown;
 }
 
@@ -28,6 +34,7 @@ export function createAcpPoolSpawnSignature(input: AcpPoolSpawnSignatureInput): 
     transport: input.transport ?? 'stdio',
     supportsMultiplexing: input.supportsMultiplexing === true,
     protocolAdapter: input.protocolAdapter ?? null,
+    permissionDecision: input.permissionDecision ?? 'reject',
     ...(input.sessionPolicy ? { sessionPolicy: input.sessionPolicy } : {}),
   });
 }

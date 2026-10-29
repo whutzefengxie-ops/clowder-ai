@@ -1171,6 +1171,30 @@ export function getCatContextWindowConfig(
 
 // ── F149: ACP config accessor (raw variant field, not in CatConfig type) ──────
 
+/**
+ * C09/O1: Explicit member-level authorization for ACP native permission
+ * requests. Only `auto_allow` may let the client answer an agent permission
+ * request without a permission handler. `deny` (and every missing/unknown
+ * value) fails closed: the client selects an explicit reject option or cancels,
+ * and never manufactures an allow.
+ */
+export type AcpPermissionPolicy = 'auto_allow' | 'deny';
+
+/** Client-level default decision derived from the member policy. */
+export type AcpPermissionDecision = 'allow' | 'reject';
+
+/**
+ * Resolve the raw member-level `acp.permissionPolicy` value into the ACP
+ * client's default permission decision.
+ *
+ * Fail closed: only the exact explicit `'auto_allow'` opts in. Missing,
+ * malformed, legacy, or unknown values (including `'deny'`, `'allow'`, `true`,
+ * `1`) resolve to `'reject'`.
+ */
+export function resolveAcpPermissionPolicy(policy: unknown): AcpPermissionDecision {
+  return policy === 'auto_allow' ? 'allow' : 'reject';
+}
+
 export interface AcpVariantConfig {
   /** Stable plugin reference; the Host resolves launch settings from the active plugin. */
   agentProvider?: string;
@@ -1188,6 +1212,13 @@ export interface AcpVariantConfig {
   protocolAdapter?: 'icode';
   /** iCode: model configuration id sent to session/set_model (distinct from defaultModel). */
   modelProfileId?: string;
+  /**
+   * C09/O1: explicit native permission authorization for this member.
+   * `'auto_allow'` = the Host/user deliberately authorized the client to answer
+   * agent permission requests automatically (allow_always/allow_once).
+   * Missing or invalid => `deny` (fail closed; reject or cancel, never allow).
+   */
+  permissionPolicy?: AcpPermissionPolicy;
   /** Phase C: optional pool config overrides */
   pool?: {
     maxLiveProcesses?: number;
