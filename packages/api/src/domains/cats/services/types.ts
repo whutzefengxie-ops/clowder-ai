@@ -1244,6 +1244,8 @@ export interface ProviderRequestGenerationCommitV1 {
  * Interface that all agent services must implement
  */
 export interface AgentService {
+  /** The adapter handles AbortSignal and owns teardown; Host must drain it before terminalizing. */
+  readonly cancellationMode?: 'drain';
   /** Host-owned implementation identity; a pinned registered view rejects a replaced generation. */
   implementationSnapshot?(): Readonly<{ key: string; generation: string; clientId?: ClientId }>;
   /** Read configuration before any provider lease. Returns owned descriptors, never starts a model turn. */

@@ -194,6 +194,7 @@ export interface AcpAgentServiceConfig {
 export type GeminiAcpAdapterConfig = AcpAgentServiceConfig;
 
 export class AcpAgentService implements AgentService {
+  readonly cancellationMode = 'drain' as const;
   private readonly antigravity?: AgyAcpConfig;
   readonly catId: CatId;
   private readonly pool: AcpProcessPool;

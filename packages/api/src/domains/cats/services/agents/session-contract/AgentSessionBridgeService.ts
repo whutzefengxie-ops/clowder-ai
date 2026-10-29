@@ -52,6 +52,7 @@ function dispatchResult(
 
 /** Internal / unstable. No provider-specific policy or Host invocation machinery crosses this boundary. */
 export class AgentSessionBridgeService implements Service.AgentService {
+  readonly cancellationMode = 'drain' as const;
   private readonly sessions = new Map<string, Promise<Contract.OpenSessionResult>>();
   private readonly active = new Set<string>();
   constructor(private readonly input: BridgeInput) {}

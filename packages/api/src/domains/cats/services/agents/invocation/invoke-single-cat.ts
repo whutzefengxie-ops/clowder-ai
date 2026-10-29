@@ -761,8 +761,12 @@ function abortableNext<T>(iter: AsyncIterator<T>, signal: AbortSignal): Promise<
 
 const SERVICE_ITERATOR_CLOSE_TIMEOUT_MS = 1_000;
 
-async function closeServiceIterator<T>(iter: AsyncIterator<T>): Promise<boolean> {
+async function closeServiceIterator<T>(iter: AsyncIterator<T>, drain = false): Promise<boolean> {
   if (!iter.return) return true;
+  if (drain) {
+    await iter.return();
+    return true;
+  }
   let timeout: ReturnType<typeof setTimeout> | null = null;
   try {
     return await Promise.race([
@@ -2307,11 +2311,12 @@ async function* invokePreparedSingleCat(deps: InvocationDeps, params: Invocation
     if (!iterator) return;
     activeServiceIterator = null;
     try {
-      if (!(await closeServiceIterator(iterator))) {
+      if (!(await closeServiceIterator(iterator, service.cancellationMode === 'drain'))) {
         log.warn({ catId, threadId, invocationId }, 'Timed out closing abandoned provider iterator');
       } else unclosedServiceIterators.delete(iterator);
     } catch (err) {
       log.warn({ catId, threadId, invocationId, err }, 'Failed to close abandoned provider iterator');
+      if (service.cancellationMode === 'drain') throw err;
     }
   };
 
@@ -5787,7 +5792,9 @@ async function* invokePreparedSingleCat(deps: InvocationDeps, params: Invocation
       for (;;) {
         let iterResult: IteratorResult<AgentMessage>;
         try {
-          iterResult = await abortableNext(serviceIter, signal);
+          iterResult = await (service.cancellationMode === 'drain'
+            ? serviceIter.next()
+            : abortableNext(serviceIter, signal));
         } catch (error) {
           if (!sourceRefreshRequired) throw error;
           break;
@@ -6161,6 +6168,7 @@ async function* invokePreparedSingleCat(deps: InvocationDeps, params: Invocation
             msg.errorCode ?? 'provider_error',
           );
         if (msg.type === 'done') {
+          if (service.cancellationMode === 'drain') await closeActiveServiceIterator();
           await terminateCurrentRequestGeneration(
             providerCancelled
               ? 'cancelled'

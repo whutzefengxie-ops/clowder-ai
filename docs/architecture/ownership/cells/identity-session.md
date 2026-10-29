@@ -279,3 +279,5 @@ Catalog ACP construction retains owned launch settings and its existing catalog 
 F326 Phase D resolves the existing member id, then projects its one member-avatar slot from collaborative-content-plane. The direct Human selects it with its own receipt; mixed avatar/profile PATCH is rejected before either write. Linked members keep the canon projection after profile-only saves, clear remains linked, and unreadable bound bytes never fall back to catalog or another image. This consumer does not move roster or member authority.
 
 单飞 ACP 的 lease.release 由既有 retirement barrier 证明实际进程关闭，service finally 必须等待；重复或过代 lease 仍观察该关闭结果。排队退休与移除 pool entry 不等于原生已停止，关闭失败不能由 Bridge 转成成功取消。本切片未改变 multiplexed carrier 的 session sealing 或 Host 路由的有界清理策略。
+
+Host 通过现有 AgentService 的内部 cancellationMode:drain 声明识别 adapter 对取消及清理的所有权，不用 vendor 名推断。invocation 对该流等待清理，parallel merge 不提前合成其终态；声明固定在 Registered invocation view。未声明的 legacy 继续原有有界退出。该声明不是对未知/失败停止或全部平台的认证。

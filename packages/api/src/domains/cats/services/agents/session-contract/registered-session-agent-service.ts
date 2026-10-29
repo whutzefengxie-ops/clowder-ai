@@ -26,6 +26,7 @@ interface PreparedBinding {
   provider?: AgentSessionProvider;
 }
 export class RegisteredSessionAgentService implements AgentService {
+  readonly cancellationMode = 'drain' as const;
   private cached?: { provider: AgentSessionProvider; bridge: AgentSessionBridgeService; lifetime: AbortController };
   constructor(private readonly input: RegisteredInput) {}
   get implementationKey(): string {
@@ -107,6 +108,7 @@ export class RegisteredSessionAgentService implements AgentService {
     const binding = this.preparedBinding();
     const { service } = binding;
     const view: AgentService = {
+      cancellationMode: this.cancellationMode,
       forInvocation: () => view,
       implementationSnapshot: () => this.snapshot(binding),
       injectsL0Natively: service?.injectsL0Natively?.bind(service),

@@ -548,3 +548,15 @@ API tsc exit 0 后运行。cancel-native-stop-regression.log 65 PASS，覆盖 po
 三文件 Biome 无错误，九条原有警告不扩散清理。复杂度复核仅复用既有 barrier 与 finally 的所有权；支持 multiplexing 的未知会话、Host 取消超时与路由提前收尾、重启及完整 C12 尚未完成。该物理退休片段待独立审查。
 
 取消/Bridge 全部 18 个合同文件追加验证 cancel-native-stop-contracts.log 为 197 PASS。七份本切片 mock 实例台账均为 closed-data-retained/running:false，按 native-cancel-stop 精确命令行回读无运行 Node；核验快照见 cancel-native-stop-instances.json，没有删除任何 HOME 或历史。
+
+checkpoint_review 对 096223f30379b97db4a3bd4ad4c53eb33696ebf0 返回 approved，独立 57 PASS，包括重复/过代 release 同一成功或失败屏障、同步计数、不同 key 不相互阻塞。两个独立 mock PID 均已退出，独立台账保留；批准仅限单飞物理退休等待。
+
+## W3 Host 路由等待 adapter 取消清理（尚未完成 W3）
+
+将同一真实 mock 旅程接至实际 routeSerial/routeParallel→SocketManager→MessageStore 后，cancel-routing-quiescence-red.log 四条全部 FAIL：Host 的一秒 abandoned iterator 超时和并行 merge 的 abort 合成 done，仍绕过已修复的下层停止 fence。这个反例证明必须修改上层消费者，不能只用 Bridge 单独测试认定全链路结束。
+
+现有 AgentService 增加私有 cancellationMode:drain，表示 adapter 自己处理 AbortSignal 并拥有清理，不是平台支持认证。ACP、Bridge 和 Registered 的固定 invocation view 声明该模式；invokeSingleCat 对此等待原 iterator，发 provider done 前先完成原清理，清理错误不再静默当成功。并行 route 对这些 child 等待原流，不经 merge 的 abort 合成终态；未迁入的 legacy child 继续使用原快捷退出，公共及单成员 signal 均保留作用。无按客户端名称/命令猜分支，无新关闭器、线程、计时器、存储或状态 DSL。
+
+API tsc exit 0 后，四条实际串/并行、直连/Bridge 为 cancel-routing-quiescence-green.log 4 PASS；加入并行 drain ACP+健康 legacy sibling 的两条对照后，19 个合同文件 cancel-routing-quiescence-contracts.log 203 PASS。明确超出原一秒超时仍保持 native PID 活着但不发该 cat done；健康 sibling 在等待期间能完成，实际停止后该 cat 只发一次 done、已有消息 lifecycle 为 canceled，身份对应原 child。外围 legacy timeout/retry、并发取消隔离、stream merge、双 ID 及 A2A 回归 cancel-routing-quiescence-regression.log 46 PASS；七文件 Biome 无错误，43 条既有警告/两提示未扩散修改。
+
+测试只使用隔离 mock HOME，无端口/网络/真实凭据或模型；实例台账与状态数据保留。复杂度复核仅加一个明确的内部取消所有权声明和两个现有消费点，不把普通 legacy service 全部改成无限等待，不增加泛化取消框架。本片段证明成功受控停止的路由顺序；关闭失败/未知与重启恢复、多路复用以及完整 C12/W3 仍待闭环。独立审查待派发。

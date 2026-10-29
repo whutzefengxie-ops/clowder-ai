@@ -1287,8 +1287,14 @@ async function* routeParallelPrepared(
       log.error({ streamIndex: idx, catId: targetCats[idx], err }, 'Parallel stream error (post-recovery)');
     },
     {
-      ...(signal ? { signal } : {}),
-      ...(signalForCat ? { signalForIndex: (index: number) => signalForCat(requireTargetCat(targetCats, index)) } : {}),
+      // Adapter-owned cancellation must finish the real child iterator. Legacy
+      // streams retain the existing abort shortcut, scoped to each child.
+      signalForIndex: (index: number) => {
+        const catId = requireTargetCat(targetCats, index);
+        if (pinnedServices.get(catId)?.cancellationMode === 'drain') return undefined;
+        const catSignal = signalForCat?.(catId);
+        return signal && catSignal ? AbortSignal.any([signal, catSignal]) : (catSignal ?? signal);
+      },
       valueForAbort: (index: number): AgentMessage => ({
         type: 'done',
         catId: requireTargetCat(targetCats, index),
