@@ -84,3 +84,13 @@ Architecture cell 为 `identity-session`（其 identity-agent / runtime-binding 
 平台矩阵见 [platform-matrix.md](platform-matrix.md)，明确 Windows/macOS、CPU、内外网、已有承诺及未取得现场证据。当前修复等待同一 reviewer 复审，不自称通过。
 
 复审回执：非作者 checkpoint_review 对 `74e0caebd503851803d923291ddce0ce3c25f8d4` 给出 `localReviewVerdict=approved`，同一 reviewSubjectRef；独立 API 19/Web 13 项及原恢复反例通过，核看恢复截图，两个 P2 闭环。未发现新 P1/P2，无新增工位/服务/源码改动。仅批准继续实施，不代表 W0–W7 终态。
+
+## S1 写入前置条件收尾
+
+成员 owner 和正式 PATCH/DELETE 端点拒绝无版本写入（428），旧版本返回 409。启停状态纳入成员 revision；DELETE 在核对成员版本之后才清理策略，复用原有目录锁，等待异步策略持久化期间继续持锁。修复此前 `return Promise` 提前经过 finally 释放锁的问题，未新增锁、事务或存储。
+
+正式 SettingsContent 启停/删除和 MemberCloudIdentity 恢复操作携带成员版本；恢复动作的混合字段检查接受版本元数据。既有 API 测试客户端改为先读取当前成员版本，再提交原字段；保留新的盲写/过期写入反例，不为旧测试开放绕过入口。迁移时发现 `body`/`payload` 双入口覆盖，已修正并重跑；拒绝写入副作用测试先完成 GET 的已有目录迁移，再记录写入前字节快照。
+
+验证：新增 5 项 owner/锁/真实 Fastify 反例先见 RED 后 GREEN；API 9 文件共 145 PASS；Web 4 文件 28 PASS；正式设置浏览器 2 PASS；API/Web 类型检查通过。账号回归中的 ACP 构造案例仅在测试进程显式使用已有 trusted-host 测试模式，避免把 runner Temp 父级 ACL 当作账号语义失败；并未验证或放松产品 Windows ACL。
+
+证据为本工位 `artifacts/role-agent-refactor-20261029-gpt-sol/s1-*.log` 与 `browser-journey-s1.log`。无新增服务或原生客户端调用。C17 仍须与 S2/S3、并发和失败场景一并验收；当前只是 S1 局部闭环，等待独立审查。

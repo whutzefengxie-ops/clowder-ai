@@ -124,7 +124,8 @@
       "id": "C17",
       "status": "NOT_RUN",
       "evidence": [
-        "README.md#2026-10-30-阶段记录尚未整体验收：局部证据，不等于该条目完整通过"
+        "README.md#2026-10-30-阶段记录尚未整体验收：局部证据，不等于该条目完整通过",
+        "README.md#s1-写入前置条件收尾：S1 局部证据，仍非 C17 全量通过"
       ]
     },
     {
@@ -253,7 +254,7 @@
       "status": "NOT_STARTED"
     }
   ],
-  "lastProgressAt": "2026-10-30T00:42:28.0430299+08:00",
+  "lastProgressAt": "2026-10-30T01:01:37.2602584+08:00",
   "checkpointReview": {
     "reviewer": "checkpoint_review",
     "verdict": "approved",

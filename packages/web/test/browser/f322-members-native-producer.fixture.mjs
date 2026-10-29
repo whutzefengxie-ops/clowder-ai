@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { catRegistry } from '@cat-cafe/shared';
 import '../../../api/test/helpers/setup-cat-registry.js';
 import { selectFakeCodexHome } from '../../../api/test/helpers/fake-codex-home.js';
+import { readMemberRequestRevision } from '../../../api/test/helpers/member-request-revision.js';
 
 const requireApi = createRequire(new URL('../../../api/package.json', import.meta.url));
 const Fastify = requireApi('fastify');
@@ -80,7 +81,13 @@ export async function nativeMemberProducer(
     app,
     root,
     persisted: () => JSON.parse(readFileSync(join(root, '.cat-cafe/cat-catalog.json'), 'utf8')).breeds[0].variants[0],
-    patch: (body) => app.inject({ method: 'PATCH', url: '/api/cats/gemini38', headers, payload: body }),
+    patch: async (body) =>
+      app.inject({
+        method: 'PATCH',
+        url: '/api/cats/gemini38',
+        headers,
+        payload: { expectedRevision: await readMemberRequestRevision(app, '/api/cats/gemini38', headers), ...body },
+      }),
     close: async () => {
       await app.close();
       keys.forEach((key, i) => {
