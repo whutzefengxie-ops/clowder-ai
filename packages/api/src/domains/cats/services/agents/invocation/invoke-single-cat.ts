@@ -62,6 +62,7 @@ import {
 import { captureInvocationMcpSources } from '../../../../../config/capabilities/invoke-mcp-config.js';
 import { pluginMcpExposureProject } from '../../../../../config/capabilities/plugin-mcp-exposure.js';
 import { buildCatGitIdentityEnv } from '../../../../../config/cat-git-identity.js';
+import { isPublishedCatalogSnapshotCurrent } from '../../../../../config/cat-registry-reconciliation.js';
 import { parseOpenCodeModel, resolveEffectiveOpenCodeModel } from '../../../../../config/opencode-model.js';
 import { shouldTakeAction } from '../../../../../config/session-strategy.js';
 import { assertSafeTestConfigRoot } from '../../../../../config/test-config-write-guard.js';
@@ -1437,6 +1438,8 @@ export async function prepareInvocationExecutionBinding(
   input.signal?.throwIfAborted();
   const memberRegistryRevision = catRegistry.getRevision();
   const catConfig = catRegistry.tryGet(input.catId as string)?.config;
+  if (!isPublishedCatalogSnapshotCurrent(catConfig))
+    throw new ExecutionAdmissionConflict('Member catalog publication is stale; retry after configuration refresh.');
   const carrier = input.service?.freshnessCarrierCapability?.();
   const declaredImplementation = input.service?.implementationSnapshot?.();
   if (declaredImplementation?.clientId && declaredImplementation.clientId !== catConfig?.clientId)
@@ -1578,7 +1581,7 @@ export async function prepareInvocationExecutionBinding(
     throw new ExecutionAdmissionConflict(
       'Thread execution configuration changed during admission; retry this invocation.',
     );
-  if (catRegistry.getRevision() !== memberRegistryRevision)
+  if (catRegistry.getRevision() !== memberRegistryRevision || !isPublishedCatalogSnapshotCurrent(catConfig))
     throw new ExecutionAdmissionConflict(
       'Member configuration changed during execution admission; retry this invocation.',
     );

@@ -42,7 +42,7 @@ node packages/api/scripts/with-test-home.mjs node ../../scripts/role-agent-quali
 
 ## Q02–Q04 的剩余准备与运行
 
-Q02 已补静态样本，见 [评估者材料与裁决规则](quality-review-samples/README.md)：缓存绕过 owner 检查、并发预留移除已有锁两个回归，及 ASCII 标签去重健康对照。九份候选材料和校准程序由 manifest 固定 SHA256；候选只获取对应子目录，答案、manifest、校准测试留在评估者侧。实际 before/after 行为及健康对照已校准 4 PASS；材料一致性通过不代表候选有审查能力，尚待独立校准与真实两轮盲审。每轮必须识别指定事实并给有效证据，健康对照无虚假阻断。
+Q02 已补静态样本，见 [评估者材料与裁决规则](quality-review-samples/README.md)：缓存绕过 owner 检查、并发预留移除已有锁两个回归，及 ASCII 标签去重健康对照。九份候选材料和校准程序由 manifest 固定 SHA256；候选只获取对应子目录，答案、manifest、校准测试留在评估者侧。实际 before/after 行为及健康对照已校准 4 PASS；checkpoint_review 对 4c91c388 给出 approved，独立 9 PASS，含复制/检出边界与 C 的 514 组 ASCII 等价检查。材料一致性通过不代表候选有审查能力，真实两轮盲审仍未执行。每轮必须识别指定事实并给有效证据，健康对照无虚假阻断。
 
 Q03 须在正式 Host 中运行实现→审查→修复→再审查，并实际压缩或重启；记录两名真实成员、原生片段、角色约束与产物，不能用重开同一个测试函数替代。Q04 失效认证、权限拒绝、工具不可用和发送未知需在目标绑定真实运行；现有 CodeAgent mock 仅有协议/权限/取消断线局部证据，工程判断与未知副作用恢复仍待补验。
 

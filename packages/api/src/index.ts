@@ -65,10 +65,11 @@ import {
   getConfigSessionStrategy,
   getDefaultCatId,
   isCatAvailable,
+  loadResolvedCatConfig,
   toAllCatConfigs,
 } from './config/cat-config-loader.js';
 import { getCatModel } from './config/cat-models.js';
-import { reconcileCatRegistry } from './config/cat-registry-reconciliation.js';
+import { reconcileCatRegistry, registerCatalogSnapshot } from './config/cat-registry-reconciliation.js';
 import { resolveCatRuntimeAccount } from './config/cat-runtime-account.js';
 import { configEventBus } from './config/config-event-bus.js';
 import {
@@ -1833,10 +1834,9 @@ async function main(): Promise<void> {
   // so registry population must precede auto-dream bootstrap as well as AgentRouter construction.
   try {
     const catConfig = bootstrapDefaultCatCatalog();
-    const allConfigs = toAllCatConfigs(catConfig);
-    for (const [id, config] of Object.entries(allConfigs)) {
-      catRegistry.register(id, config);
-    }
+    registerCatalogSnapshot(toAllCatConfigs(catConfig), () =>
+      loadResolvedCatConfig(undefined, { persistMigrations: false }),
+    );
     app.log.info(`[api] CatRegistry initialized: ${catRegistry.getAllIds().join(', ')}`);
   } catch (err) {
     app.log.error(`[api] Failed to load cat catalog — .cat-cafe/cat-catalog.json is required: ${String(err)}`);

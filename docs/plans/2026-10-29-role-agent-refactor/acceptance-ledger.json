@@ -272,9 +272,20 @@
       "status": "NOT_STARTED"
     }
   ],
-  "lastProgressAt": "2026-10-29T22:33:00Z",
-  "reviewSamplesCheckpointReview": {
+  "lastProgressAt": "2026-10-29T22:37:00Z",
+  "catalogPublicationCheckpointReview": {
     "verdict": "PENDING",
+    "evidence": "README.md#W2-已发布成员目录来源核验尚未完成-W2",
+    "tests": { "red": "2 PASS + 4 FAIL", "regression": "176 PASS" },
+    "scope": "Startup/reconciliation catalog publication proof; complete W2 and performance acceptance remain incomplete"
+  },
+  "reviewSamplesCheckpointReview": {
+    "reviewer": "checkpoint_review",
+    "verdict": "approved",
+    "reviewedHead": "4c91c38852737620d90ac941b0d955d6b8e2c5aa",
+    "subject": "task:01a1881e-1a7b-78d0-9a62-ff99b0ab7a01/checkpoint-review-samples",
+    "findings": [],
+    "independentTests": "9 PASS including 514 additional ASCII equivalence inputs",
     "evidence": "quality-review-samples/README.md",
     "calibrationTests": "4 PASS",
     "scope": "Fixed Q02 material preparation; real candidate blind reviews remain NOT_RUN"

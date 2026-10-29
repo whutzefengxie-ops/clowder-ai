@@ -474,3 +474,17 @@ checkpoint_review 对 `d886018ea4f2320f4fca4a553686cde181c93da4` 返回 approved
 ## W0 Q02 审查样本准备（尚未执行真实 Q02）
 
 固定两份已知实质缺陷与一份健康对照，保留 before/after，任务明确边界；评估者保存答案/校准测试，只复制单个候选子目录。实际可复现对照及范围说明见 quality-review-samples/README.md；`review-samples-calibration.log` 四条 PASS。manifest 固定九份材料与校准程序 SHA256，新增文件的 LF 属性防止 Windows checkout 改变被评分字节，不调整全仓换行策略。量尺准备不计入真实客户端两轮盲审或质量成功率，无真实模型/服务调用。此样本等待独立审查；Q03/Q04、真实质量基线、性能与平台验收继续未完成。
+
+提交 4c91c388 后用 core.autocrlf=true checkout-index 将材料/校准程序检出到独立作者 artifacts，`review-samples-windows-checkout.log` 4 PASS，验证真实 Windows 过滤后字节与行为；没有用本机未检出文件冒充跨换行校验。
+
+checkpoint_review 对 `4c91c38852737620d90ac941b0d955d6b8e2c5aa` 返回 approved，subject 为 checkpoint-review-samples，独立 9 PASS；包括正式命令、独立临时 index 的 Windows 换行过滤、实际 Copy-Item 三文件/哈希边界，以及 C 追加 514 组 ASCII 输入等价检查。无未关闭 finding，批准仅限 Q02 量尺，真实候选仍 NOT_RUN。
+
+## W2 已发布成员目录来源核验（尚未完成 W2）
+
+启动注册及原 reconcileCatRegistry 共用 registerCatalogSnapshot，为各已发布目录对象附私有 WeakMap 来源检查。检查从原 owner/原模板解析路径重读非持久迁移投影，与已发布的全部实际成员投影比较；Host 在首次捕获前及最后异步读取后核验。目录已提交、registry 尚未发布时，不再只靠未变化的内存 revision 放行旧角色/队友资料，而是沿既有冲突/一次重解析处理。语义相同的格式变化不冲突；已冻结 binding 继续原值。程序注册的非目录对象沿其既有 owner，不据此宣称也获得目录来源证明。
+
+`catalog-publication-red-valid.log` 6 项=2 对照 PASS+4 FAIL，覆盖调用前、捕获期间、队友配置提交及冻结后下一次调用；均由真实 withRuntimeCatMutationLock/updateRuntimeCat 提交，registry revision 没有更新。首轮夹具缺 displayName 不算行为 RED。修复后加入启动注册与重复 ID 投影失败保留原 registry，`catalog-publication-regression-final.log` 共 176 PASS，含新八条及原目录/订阅、身份/投影、MCP 来源、串并行重解析。第一次扩大运行给本应自行准备 registry 的旧身份测试额外全局 preload，造成重复注册；去掉不适用 preload 后通过，未改该测试或产品校验。
+
+自检发现首次实现把 toAllCatConfigs 放在 reset 后，会在重复 catId 投影失败时清空旧 registry；有效 `catalog-publication-projection-red-valid.log` 先复现丢失，现恢复原先先完整校验、再发布的顺序。更早 duplicate 夹具被既有迁移处理而非命中投影错误，不算此 RED。最终 API tsc 与 4 文件 Biome 无错误，旧警告未扩散清理；无模型或常驻服务，新夹具数据保留。
+
+复杂度复核及 map delta：目录 owner→已有 registry→invocation 的原边增加来源证明，WeakMap 只附短期校验，不提供身份数据/编辑接口/持久状态。两个实际发布点共用同一个注册函数，无新身份库、revision 总线、队列或 launcher。全部策略/env/CA、常规插件激活、合法写入通知、持久审计和完整 W2/C05/C15 仍未完成；性能 20 次对照仍需总验收，不把本切片测试耗时当性能结论。等待独立审查。
