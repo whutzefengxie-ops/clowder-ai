@@ -65,6 +65,12 @@ jobs:
           --script test:onboarding:production-contracts
       - run: pnpm --filter @cat-cafe/shared build
       - run: pnpm --filter @cat-cafe/api build
+      - name: Pinned offline plugin first start and staging
+        run: >-
+          node --test packages/api/test/plugin-initial-installation.test.js
+          packages/api/test/plugin-offline-initial-installation.test.js
+          packages/api/test/plugin-offline-admission.test.js
+          scripts/offline-plugin-bundle.test.mjs
       - name: Managed Codex layout link diagnostic
         run: >-
           pnpm --filter @cat-cafe/api exec node ./scripts/with-test-home.mjs

@@ -5445,14 +5445,25 @@ async function main(): Promise<void> {
     sources: { messageStore },
   });
   const { prepareHostInitialPlugins } = await import('./domains/plugin/manager/initial-plugin-installation.js');
+  const { prepareOfflineHostInitialPlugins, resolveOfflinePluginBundlePath } = await import(
+    './domains/plugin/manager/offline-plugin-bundle.js'
+  );
   let initialPlugins: Awaited<ReturnType<typeof prepareHostInitialPlugins>> | undefined;
   try {
-    initialPlugins = await prepareHostInitialPlugins({
+    const bundlePath = resolveOfflinePluginBundlePath(
+      process.env.CAT_CAFE_OFFLINE_PLUGIN_BUNDLE,
+      deploymentDefaults.offlinePluginBundle,
+      process.env.CAT_CAFE_RUNTIME_ROOT ?? findMonorepoRoot(dirname(fileURLToPath(import.meta.url))),
+    );
+    const common = {
       runtime: pluginRuntime,
       managerRuntime: pluginManagerRuntime,
-      catalog: pluginManagerCatalog,
-      onFailure: (pluginId, error) => app.log.warn({ pluginId, err: error }, '[api] Initial plugin setup pending'),
-    });
+      onFailure: (pluginId: string, error: unknown) =>
+        app.log.warn({ pluginId, err: error }, '[api] Initial plugin setup pending'),
+    };
+    initialPlugins = bundlePath
+      ? await prepareOfflineHostInitialPlugins({ ...common, bundlePath })
+      : await prepareHostInitialPlugins({ ...common, catalog: pluginManagerCatalog });
   } catch (error) {
     // Offline discovery must not prevent the Host from opening. The durable journal retries
     // unfinished entries on restart; completed entries (including user uninstalls) stay completed.

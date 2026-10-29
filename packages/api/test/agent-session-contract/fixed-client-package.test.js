@@ -17,6 +17,7 @@ import {
   createDormantPluginRuntimeComposition,
   createPluginManagerRuntimeComposition,
 } from '../../dist/domains/plugin/index.js';
+import { prepareOfflineHostInitialPlugins } from '../../dist/domains/plugin/manager/offline-plugin-bundle.js';
 import { readPluginConfig } from '../../dist/domains/plugin/plugin-config-store.js';
 import { collect, options } from './fake-session-provider.js';
 
@@ -105,19 +106,58 @@ test(
                 }),
             }),
         });
-        const { manager } = createPluginManagerRuntimeComposition({
+        const managerRuntime = createPluginManagerRuntimeComposition({
           runtime,
           catalogManifests: [],
-          catalogProvider: { snapshot: async () => ({ entries: [], status: 'fresh', checkedAt: Date.now() }) },
+          catalogProvider: {
+            snapshot: async () => {
+              throw new Error('Offline path must not fetch catalog');
+            },
+          },
         });
-        return { runtime, manager, registry, services, pools };
+        return { runtime, manager: managerRuntime.manager, managerRuntime, registry, services, pools };
       };
       host = makeHost();
-      await host.manager.install({ source: { kind: 'local-archive', path: archive } });
-      const current = async () => (await host.manager.get(pluginId)).plugin;
+      const bundlePath = join(root, 'bundle.json');
+      const pkg = JSON.parse(
+        (await promisify(execFile)('tar', ['-xOf', archive, 'package/package.json'], { windowsHide: true })).stdout,
+      );
+      await cp(archive, join(root, 'plugin.tgz'));
+      await writeFile(
+        bundlePath,
+        JSON.stringify({
+          schemaVersion: 1,
+          plugins: [
+            {
+              pluginId,
+              packageName: pkg.name,
+              version: pkg.version,
+              archive: 'plugin.tgz',
+              packageDigest: `sha512-${createHash('sha512')
+                .update(await readFile(archive))
+                .digest('base64')}`,
+              enabled: true,
+            },
+          ],
+        }),
+      );
+      const initial = await prepareOfflineHostInitialPlugins({
+        bundlePath,
+        runtime: host.runtime,
+        managerRuntime: host.managerRuntime,
+        onFailure: (_id, error) => {
+          throw error;
+        },
+      });
+      const current = async () => (await host.manager.getLocal(pluginId)).plugin;
       const installed = await current();
       assert.equal(installed.intent, 'disabled');
       assert.equal(installed.config, 'ready');
+      await initial.activate();
+      assert.ok(
+        host.registry.has(ref),
+        'offline first-start activation registers the default client without invoking a model',
+      );
       const savedConnection = JSON.stringify({
         command: process.execPath,
         startupArgs: [
@@ -127,7 +167,7 @@ test(
         permissionPolicy: 'deny',
       });
       await host.manager.configure(pluginId, {
-        expectedRevision: installed.lifecycleRevision,
+        expectedRevision: (await current()).lifecycleRevision,
         updates: [{ key: 'connection', value: savedConnection }],
       });
       await host.manager.setEnabled(pluginId, { enabled: true, expectedRevision: (await current()).lifecycleRevision });

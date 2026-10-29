@@ -2,6 +2,7 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { PLUGIN_HOST_ENTRIES } from '../host-inventory/plugin-host-layout.js';
 import type { PluginInventoryStore } from '../host-inventory/ports.js';
+import type { OfficialPluginCatalogEntry } from '../official-catalog.js';
 import type { OfficialPluginPackageInstaller } from '../official-package-installer.js';
 import type { DormantPluginRuntimeComposition, PluginManagerRuntimeComposition } from '../runtime-composition.js';
 import { loadMachinePluginCatalog, OFFICIAL_PLUGIN_CATALOG_URL } from './machine-catalog-provider.js';
@@ -14,15 +15,19 @@ export interface InitialPluginSelection {
 export interface InitialPluginInstallationOptions {
   readonly statePath: string;
   readonly inventory: PluginInventoryStore;
-  readonly catalog: OfficialPluginCatalogProvider;
-  readonly installer: Pick<OfficialPluginPackageInstaller, 'install' | 'installFromSnapshot'>;
+  readonly catalog?: OfficialPluginCatalogProvider;
+  readonly loadReleases?: () => Promise<
+    readonly Pick<OfficialPluginCatalogEntry, 'catalogId' | 'pluginId' | 'version' | 'packageDigest'>[]
+  >;
+  readonly installer: Pick<OfficialPluginPackageInstaller, 'install'> &
+    Partial<Pick<OfficialPluginPackageInstaller, 'installFromSnapshot'>>;
   readonly loadSelection: () => Promise<unknown>;
   readonly reconcile?: (pluginId: string, instanceId: string) => Promise<void>;
   readonly activate: (
     pluginId: string,
     instanceId: string,
     expectedRevision: number,
-    catalogSnapshot: OfficialPluginCatalogSnapshot,
+    catalogSnapshot?: OfficialPluginCatalogSnapshot,
   ) => Promise<void>;
   readonly onFailure: (pluginId: string, error: unknown) => void;
 }
@@ -105,10 +110,12 @@ async function begin(options: InitialPluginInstallationOptions): Promise<Initial
     return { journal };
   }
   const selection = parseInitialPluginSelection(await options.loadSelection());
-  const catalog = await options.catalog.snapshot();
-  if (catalog.status !== 'fresh') throw new Error('Initial installation requires a current catalog');
+  const catalog = options.loadReleases ? undefined : await options.catalog?.snapshot();
+  if (!options.loadReleases && catalog?.status !== 'fresh')
+    throw new Error('Initial installation requires a current catalog');
+  const releases = options.loadReleases ? await options.loadReleases() : (catalog?.entries ?? []);
   const plugins = selection.plugins.map((p) => {
-    const e = catalog.entries.find((e) => e.pluginId === p.pluginId);
+    const e = releases.find((e) => e.pluginId === p.pluginId);
     if (!e) throw new Error(`Initial plugin is absent from catalog: ${p.pluginId}`);
     return {
       pluginId: p.pluginId,
@@ -177,9 +184,9 @@ async function installInitialRelease(
   catalogSnapshot?: OfficialPluginCatalogSnapshot,
 ) {
   const release = { version: p.version, packageDigest: p.packageDigest };
-  return catalogSnapshot
-    ? options.installer.installFromSnapshot(catalogSnapshot, p.catalogId, release)
-    : options.installer.install(p.catalogId, release);
+  if (!catalogSnapshot) return options.installer.install(p.catalogId, release);
+  if (!options.installer.installFromSnapshot) throw new Error('Catalog installation requires a snapshot installer');
+  return options.installer.installFromSnapshot(catalogSnapshot, p.catalogId, release);
 }
 async function installPending(options: InitialPluginInstallationOptions, plan: InitialPluginPlan): Promise<void> {
   const { journal, catalogSnapshot } = plan;
@@ -195,10 +202,11 @@ async function installPending(options: InitialPluginInstallationOptions, plan: I
 async function operationCatalogSnapshot(
   options: InitialPluginInstallationOptions,
   plan: InitialPluginPlan,
-): Promise<OfficialPluginCatalogSnapshot> {
+): Promise<OfficialPluginCatalogSnapshot | undefined> {
+  if (options.loadReleases) return undefined;
   if (plan.catalogSnapshot) return plan.catalogSnapshot;
   try {
-    return await options.catalog.snapshot();
+    return await options.catalog?.snapshot();
   } catch {
     return { entries: [], status: 'degraded', checkedAt: null, errorCode: 'CATALOG_FETCH_FAILED' };
   }
@@ -252,6 +260,7 @@ export function prepareHostInitialPlugins(options: {
       (() => loadMachinePluginCatalog(new URL('initial-plugins.json', OFFICIAL_PLUGIN_CATALOG_URL).href)),
     reconcile: (pluginId, instanceId) => managerRuntime.configuration.reconcile(pluginId, instanceId),
     activate: async (pluginId, instanceId, expectedRevision, catalogSnapshot) => {
+      if (!catalogSnapshot) throw new Error('Official initial activation requires a catalog snapshot');
       const instance = (await runtime.inventoryStore.snapshot()).instances.find(
         (i) => i.pluginInstanceId === instanceId,
       );
