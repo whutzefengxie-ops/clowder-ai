@@ -526,3 +526,13 @@ checkpoint_review 对 `91d5c02b9e7c1e9365a4d2236b302ae43a4097b8` 返回 changes_
 `cancel-recovery-regression.log` 161 PASS，含新恢复对照、F295 的多来源/精确进程/替代执行保护、全部 queue API、真实 Socket/ACP 及 cancel-auto-resume；追加 owned done 的 parent/child/errorCode 断言后 `cancel-recovery-owner-final.log` 40 PASS。作者回放 reviewer 原恢复反例 `cancel-recovery-reviewer-replay.log` 1 PASS，未冒充独立批准。之前 queue API 扩查的 86 项中 3 条旧普通请求 done 断言已迁到 status 且明确禁止 done，最终全过；不恢复这些错误的终态断言。API tsc exit 0、四文件 Biome 无错误。
 
 复杂度复核：三个既有 owner 的少量明确投影，保留其原控制流与前置证明；无广播开关、通用状态机、新存储或重试层。force-reset/lock-only 等未知 native 状态未被改成虚假成功，完整 C12 的恢复/阻止新 turn 仍需继续验证。独立复核待重发至修复 SHA。
+
+## W3 恢复终态的现有前端消费（尚未完成 W3）
+
+checkpoint_review 对 f000d5dd4565f608d58d35c91d95beb1cccdd5b2 返回 changes_requested，原三条取消 finding 已关闭，新发现两个 P2：真实恢复失败 done 到后台后误报绿色完成；一个 child 终态清除仍有 sibling 的线程 loading。独立 57 PASS 加两个 Web 失败，实际 Fastify/Record/Turn/Message store 产生的消息保存在 reviewer artifacts。
+
+作者在真实 Zustand 消费者补当前/后台三个分支，cancel-recovery-web-red.log 为 2 PASS+3 FAIL。现有后台清理只在移除精确槽位后剩余为零时清 loading；当前及后台 done 消费保留非 cancelled 的 errorCode 为失败，复用原状态、任务进度与通知，不新增消息正文或错误行。仍保留既有 idle 收尾会清 badges 的行为；单执行失败通过 error toast 呈现，有 sibling 时保留 error badge。cancel-recovery-web-green.log 共 131 PASS，覆盖当前/后台、并发、loading、named message 的原路径。作者回放独立真实 API 事件的三条私有用例，旧执行及 sibling 两条 PASS；solo 用例仍期望清理后保留 error badge，实际 undefined，已将既有清理合同提交 reviewer 判断，未将该回放称为全绿或独立批准。
+
+复杂度复核：仅修现有投影和槽位收尾，无新 store、协议、失败重试、状态框架或追加错误正文。完整 C12、原生停止证明及恢复未知状态仍未闭环；另一真实 Node mock 反例已复现异步进程退休未完成即发布终态，独立在下一切片处理。
+
+最终 Web tsc exit 0、四文件 Biome 无错误；早一次 tsc 发现 Boolean 抹去错误码的类型收窄，已改用明确的 failure 值，未用类型断言掩盖可空消息。独立复核仍待回执。

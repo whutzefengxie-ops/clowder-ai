@@ -97,3 +97,5 @@ F247 owns the cloud Host append, while this cell owns how its result becomes thr
 ## Static Scan Hints
 
 Watch for new or renamed `ConnectorRouter`, `MessageEnvelope`, `Adapter`, `BindingStore`, `OutboundDeliveryHook`, `StreamingOutboundHook`, `CrossThreadCoordination`, `resolveCrossThreadCoordination`, `cancel_invocation`, `clientInstanceId`, `actionId`, `coordinationId`, `effectClass`, `onClosureCatchingUp`, `onClosureBlocked`, `published_with_unseen`, `supplement_declined`, `OutputCommitDecision`, `sendReply`, `sendFormattedReply`, and `sendMedia` implementations.
+
+恢复终态的当前/后台消费者按 done.errorCode 保留失败投影，不写第二份正文；后台只在精确移除后无执行槽位时清 loading。失败不解除 sibling 的运行状态；最后一个槽位结束仍沿既有清 target/badges 收尾，失败通知继续呈现。

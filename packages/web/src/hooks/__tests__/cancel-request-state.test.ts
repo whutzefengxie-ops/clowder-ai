@@ -62,3 +62,61 @@ it('the background-thread consumer also retains the real slot until the actual t
   expect(store.getThreadState('background').hasActiveInvocation).toBe(false);
   expect(store.getThreadState('background').isLoading).toBe(false);
 });
+
+// The payload shape is produced by the real degraded Fastify recovery path.
+const failedTerminal = {
+  type: 'done',
+  catId: 'opus5',
+  invocationId: 'parent',
+  turnInvocationId: 'failed-child',
+  isFinal: true,
+  errorCode: 'control_plane_unavailable',
+  timestamp: 2,
+};
+
+for (const sibling of [false, true])
+  it(`failed recovery remains failed in background; live sibling=${sibling}`, () => {
+    const store = useChatStore.getState();
+    store.addThreadActiveInvocation('background', 'parent', 'opus5', 'execute');
+    store.setThreadCatInvocation('background', 'opus5', { invocationId: 'parent', turnInvocationId: 'failed-child' });
+    if (sibling) {
+      store.addThreadActiveInvocation('background', 'parent-kimi', 'kimi', 'execute');
+      store.setThreadCatInvocation('background', 'kimi', { invocationId: 'parent', turnInvocationId: 'live-child' });
+    }
+    store.updateThreadCatStatus('background', 'opus5', 'streaming');
+    store.setThreadLoading('background', true);
+    const addToast = vi.fn();
+    handleBackgroundAgentMessage(
+      { ...failedTerminal, threadId: 'background' },
+      { store, nextBgSeq: () => 1, addToast },
+    );
+    const after = store.getThreadState('background');
+    expect(after.isLoading).toBe(sibling);
+    expect(after.hasActiveInvocation).toBe(sibling);
+    // The established last-slot teardown clears status badges; the failure toast must survive it.
+    if (sibling) expect(after.catStatuses.opus5).toBe('error');
+    expect(addToast.mock.calls.some(([toast]) => toast.type === 'success')).toBe(false);
+    expect(addToast.mock.calls.some(([toast]) => toast.type === 'error')).toBe(true);
+    if (sibling) expect(after.activeInvocations['parent-kimi']?.catId).toBe('kimi');
+  });
+
+it('the open-thread failed terminal also preserves a sibling and presents failure', () => {
+  const store = useChatStore.getState();
+  store.addActiveInvocation('parent', 'opus5', 'execute');
+  store.addActiveInvocation('parent-kimi', 'kimi', 'execute');
+  store.setCatInvocation('opus5', { invocationId: 'parent', turnInvocationId: 'failed-child' });
+  store.setCatInvocation('kimi', { invocationId: 'parent', turnInvocationId: 'live-child' });
+  store.setLoading(true);
+  handleActiveAgentMessage(
+    { ...failedTerminal, threadId: 'open' },
+    {
+      actions: store,
+      rows: { rows: () => [], addRow: vi.fn(), patchRow: vi.fn(), removeRow: vi.fn() },
+      resolveCatName: (id: string) => id,
+      timeoutDiagnostics: { set: vi.fn(), take: () => null },
+    },
+  );
+  expect(useChatStore.getState().activeInvocations['parent-kimi']?.catId).toBe('kimi');
+  expect(useChatStore.getState().isLoading).toBe(true);
+  expect(useChatStore.getState().catStatuses.opus5).toBe('error');
+});
