@@ -34,6 +34,7 @@ import {
 import type { FrozenExecutionWorkspace } from './execution-workspace.js';
 
 export interface FrozenExecutionBinding {
+  readonly openCodeMcpConfig?: import('../providers/opencode-config-writer.js').OpenCodeMcpConfigPlan;
   readonly accountEnv?: Record<string, string>;
   readonly providerOptions?: Readonly<
     Pick<AgentServiceOptions, 'frozenAcpMcpServers' | 'frozenNativeMcpConfig' | 'frozenKimiMcpConfig'>

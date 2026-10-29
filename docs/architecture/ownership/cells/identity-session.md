@@ -25,6 +25,7 @@ code_anchors:
   - packages/api/src/domains/cats/services/agents/providers/acp/AcpAgentService.ts
   - packages/api/src/domains/cats/services/agents/providers/claude-mcp-config.ts
   - packages/api/src/domains/cats/services/agents/providers/kimi-mcp-config.ts
+  - packages/api/src/domains/cats/services/agents/providers/opencode-config-writer.ts
   - packages/web/src/components/settings/members/member-save-record.ts
   - packages/web/src/components/settings/members/member-save-extras.ts
   - packages/api/src/config/account-resolver.ts

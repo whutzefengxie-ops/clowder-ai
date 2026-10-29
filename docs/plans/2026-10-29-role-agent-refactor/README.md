@@ -254,3 +254,15 @@ Kimi 无法完全关闭原生自动发现，因此启动前仍读取下层配置
 现仅在原拒绝函数以 Object.defineProperty 创建可枚举自有项，恢复原 map 对特殊名称的语义；捕获与启动补拒绝两处共用。两条公开反例分别覆盖准入前已有及准入后新增名称，`kimi-mcp-prototype-red.log` 先 RED；修复后 `kimi-mcp-prototype-green.log` 51 项=50 PASS+原 Windows URL.pathname FAIL，API tsc 通过，未改变 MCP 策略或验证门槛。修复等待同一 reviewer 以原 2.2 实际消费者复审。
 
 checkpoint_review 对 `30ebd15fd8d2fd49069f289536d54650a866949d` 复审确认上述 2.2 effective 拒绝反例 GREEN；另返回 P2：嵌套 cwd 的可选 `.mcp.json` 被无条件纳入 strict 拒绝层，损坏 JSON 阻断准入，原基线与实际 2.2 均会忽略该非原生发现层。现恢复原 `mcpSupport === false` 纳入条件，未新建宽松解析或绕过权限。两条公开反例分别在准入前损坏、准入后变损坏，先 RED，修复后冻结允许项仍保持原值，原生 HOME/根目录拒绝继续生效。`kimi-mcp-nested-green.log` 53 项=52 PASS+原 Windows URL.pathname FAIL，API tsc 通过；等待同一 reviewer 对新提交复审，无真实模型调用。
+
+checkpoint_review 对 `5b7d3297d7819bab827fa85a1b2f88c0f53e64d7` 给出 approved，subject 为 `task:01a1881e-1a7b-78d0-9a62-ff99b0ab7a01/checkpoint-kimi-mcp`；两条 P2 均闭环，独立 14 PASS，涵盖真实 2.2 loader、基线、准入后变化、实际 Kimi 调用和 Claude 共用 materializer。批准限该 Kimi 切片，无未关闭 finding、真实模型调用或遗留测试租约。
+
+## W2 OpenCode Host MCP 消费切片（尚未完成 W2）
+
+OpenCode 的 MCP 运行配置继续由原 Host writer 生成，不强行搬进 AgentService。现从 writer 提取可复用的无落盘 MCP 捕获阶段，保留原 capabilities/Pencil/项目 opencode.json 合并规则和原格式；准入在同一插件激活与成员 exposure scope 下捕获独立计划及 MCP 二进制入口。原 binding 深冻结该计划，后续 writer 只消费其副本，模型、认证、L0/额外指令和 guard 仍由原 owner 材化。直接内部 writer 调用仍在自己的入口捕获；不增 provider 接口、存储、launcher、版本总线或配置 DSL。
+
+三个实际 Host→writer→OpenCode launch 反例先 RED：capabilities/项目 opencode.json 晚读、插件读取普通 catalog 参数。首次夹具虚构 PID 被真实 Host liveness 判断为死进程，产生迟到 mock 输出错误；修正为无 OS PID 的内存 fixture 并断言返回文本，再在未修改的 HEAD 源码上重新执行，`opencode-mcp-red-verified.log` 为 3 FAIL，均在实际参数断言失败、没有异步夹具错误。任务源代码补丁曾临时保存在本任务 artifacts，并原样恢复；首个 CRLF 补丁检查失败未修改源码，相关日志不当作基线证据。新计划的参数和普通环境、MCP 路径均保持准入值，材化不修改原计划；最终四场景均实际消费模拟输出，未调用模型。
+
+扩大回归 `opencode-mcp-regression-final.log` 为 212 项=208 PASS+原有 4 SKIP（公开 checkout 无本地 OpenCode 配置，未新增 skip）。两处旧夹具已最小修正：default-workspace 成员补合法 relationshipKey，使真实路由/默认工作区旅程继续进入 provider；路径断言规范化分隔符以验证 Windows 路径。未降低角色身份检查或产品路径要求，`opencode-mcp-portable-fixtures.log` 74 PASS；原失败结果保留。Host 调用扩大集合 `opencode-mcp-invocation-final.log` 184 项=180 PASS+原 4 AGY Native Windows 出生身份 FAIL。API tsc 通过，6 文件 Biome 无错误；旧文件只归一化换行，逻辑 diff 仍是上述两处夹具修改。
+
+复杂度复核：无新增全局事务或配置框架，两个实际调用方共用一次 MCP 解析，原 Host 仍拥有 OpenCode 启动配置。map delta 仅增加现有 consumer 锚点与说明。此切片不宣称已冻结所有原生自动发现/外部规则、完整 env/策略/账号读取一致性和 implementation generation，也不等于完整 W2/W4、工程任务质量或最终发行物验收。无新增常驻环境或真实模型调用；当前 OpenCode 切片等待独立审查。

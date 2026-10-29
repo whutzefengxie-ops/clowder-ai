@@ -3,6 +3,7 @@
  * to keep the core template generator under the 350-line module budget.
  *
  * Handles:
+ * - captureOpenCodeMcpConfig: reads the existing MCP plan before admission waits
  * - writeOpenCodeRuntimeConfig: full runtime config (with async pencil resolution)
  * - writeOpenCodeInstructionsOnlyConfig: instructions-only config (F203 Phase I)
  */
@@ -25,7 +26,7 @@ import {
   generateOpenCodeRuntimeConfig,
   type OpenCodeRuntimeConfigOptions,
 } from './opencode-config-template.js';
-import { resolveCapabilityMcpNamesSync } from './opencode-mcp-injection.js';
+import { buildOpenCodeMcpSync, resolveCapabilityMcpNamesSync } from './opencode-mcp-injection.js';
 import { withOpenCodeSecretGuard } from './opencode-secret-config.js';
 
 // ─── Config file writers ──────────────────────────────────────────
@@ -80,34 +81,34 @@ export function writeOpenCodeInstructionsOnlyConfig(
   return configPath;
 }
 
-/**
- * Writes a per-invocation opencode config file.
- * OpenCode's `OPENCODE_CONFIG` points to a config file path; `OPENCODE_CONFIG_DIR`
- * is reserved for the `.opencode/`-style config directory structure.
- * Returns the `opencode.json` file path (set it as `OPENCODE_CONFIG`).
- */
-export async function writeOpenCodeRuntimeConfig(
+export interface OpenCodeMcpConfigPlan {
+  readonly mcp: Readonly<Record<string, unknown>>;
+  readonly mcpServerPath?: string;
+}
+
+/** Read native OpenCode MCP settings without writing an invocation config or credentials. */
+export async function captureOpenCodeMcpConfig(
   projectRoot: string,
   catId: string,
-  invocationId: string,
-  options: OpenCodeRuntimeConfigOptions,
+  options: Pick<
+    OpenCodeRuntimeConfigOptions,
+    'mcpServerPath' | 'allowedWorkspaceDirs' | 'catId' | 'capabilitiesProjectRoot'
+  >,
   workingDirectory?: string,
-): Promise<string> {
-  const safeCatId = sanitizePathSegment(catId);
-  const safeInvocationId = sanitizePathSegment(invocationId);
-  const configDir = join(projectRoot, '.cat-cafe', `oc-config-${safeCatId}-${safeInvocationId}`);
-  const configPath = join(configDir, 'opencode.json');
-  const tempPath = `${configPath}.tmp-${process.pid}`;
+): Promise<OpenCodeMcpConfigPlan> {
   const capabilitiesProjectRoot = await resolveInvokeCapabilityRoot(
     options.capabilitiesProjectRoot ??
       (options.mcpServerPath ? resolve(dirname(options.mcpServerPath), '../../..') : projectRoot),
   );
-  const config = generateOpenCodeRuntimeConfig({
-    ...options,
-    catId: options.catId ?? catId,
-    capabilitiesProjectRoot,
-    workingDirectory,
-  });
+  const config: { mcp?: Record<string, unknown> } = {};
+  if (options.mcpServerPath)
+    config.mcp = buildOpenCodeMcpSync(
+      options.mcpServerPath,
+      options.catId ?? catId,
+      capabilitiesProjectRoot,
+      workingDirectory,
+      options.allowedWorkspaceDirs,
+    );
 
   // Resolve pencil at invoke time (async) — only if enabled in capabilities.json
   if (options.mcpServerPath) {
@@ -186,6 +187,31 @@ export async function writeOpenCodeRuntimeConfig(
     }
   }
 
+  return structuredClone({ mcp: config.mcp ?? {}, mcpServerPath: options.mcpServerPath });
+}
+
+/** Write the native runtime config, consuming an admitted MCP plan when the Host provides one. */
+export async function writeOpenCodeRuntimeConfig(
+  projectRoot: string,
+  catId: string,
+  invocationId: string,
+  options: OpenCodeRuntimeConfigOptions,
+  workingDirectory?: string,
+  frozenMcpConfig?: OpenCodeMcpConfigPlan,
+): Promise<string> {
+  const plan = frozenMcpConfig ?? (await captureOpenCodeMcpConfig(projectRoot, catId, options, workingDirectory));
+  const config = generateOpenCodeRuntimeConfig({
+    ...options,
+    catId: options.catId ?? catId,
+    workingDirectory,
+    mcpServerPath: undefined,
+  });
+  if (Object.keys(plan.mcp).length > 0) config.mcp = structuredClone(plan.mcp);
+  const safeCatId = sanitizePathSegment(catId);
+  const safeInvocationId = sanitizePathSegment(invocationId);
+  const configDir = join(projectRoot, '.cat-cafe', `oc-config-${safeCatId}-${safeInvocationId}`);
+  const configPath = join(configDir, 'opencode.json');
+  const tempPath = `${configPath}.tmp-${process.pid}`;
   mkdirSync(configDir, { recursive: true, mode: 0o700 });
   writeFileSync(tempPath, JSON.stringify(withOpenCodeSecretGuard(config), null, 2), {
     encoding: 'utf8',

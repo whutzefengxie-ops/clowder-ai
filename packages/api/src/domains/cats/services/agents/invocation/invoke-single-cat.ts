@@ -168,6 +168,7 @@ import {
   summarizeOpenCodeRuntimeConfigForDebug,
 } from '../providers/opencode-config-template.js';
 import {
+  captureOpenCodeMcpConfig,
   writeOpenCodeInstructionsOnlyConfig,
   writeOpenCodeRuntimeConfig,
 } from '../providers/opencode-config-writer.js';
@@ -1411,6 +1412,11 @@ export interface InvocationParams {
  * - Accumulating text/metadata from yielded messages
  * - Storing the final response in messageStore
  */
+function resolveInvocationMcpServerPath() {
+  const configured = process.env.CAT_CAFE_MCP_SERVER_PATH?.trim();
+  return configured ? resolve(process.cwd(), configured) : resolveDefaultClaudeMcpServerPath();
+}
+
 export async function prepareInvocationExecutionBinding(
   deps: Pick<InvocationDeps, 'threadStore' | 'profileRepository' | 'resolveInvocationPluginMcpView'>,
   input: {
@@ -1468,30 +1474,56 @@ export async function prepareInvocationExecutionBinding(
     workspace,
   });
   const captureOptions = input.service?.captureInvocationOptions?.bind(input.service);
+  const captureOpenCodeMcp =
+    catConfig?.clientId === 'opencode' &&
+    binding.resolvedAccount &&
+    resolveEffectiveOpenCodeModel(catConfig.provider?.trim() || undefined, binding.executionPreferences?.model?.trim())
+      ? {
+          mcpServerPath: resolveInvocationMcpServerPath(),
+          ...(workspace.workingDirectory ? { allowedWorkspaceDirs: resolve(workspace.workingDirectory) } : {}),
+        }
+      : undefined;
   const exposureProject = pluginMcpExposureProject(workspace.threadProjectPath, workspace.workingDirectory);
-  const providerOptions = captureOptions
-    ? await preflightRace(
-        Promise.resolve().then(async () => {
-          const view = await deps.resolveInvocationPluginMcpView?.();
-          input.signal?.throwIfAborted();
-          return withInvocationPluginMcpView(
-            () =>
-              captureOptions({
-                workingDirectory: workspace.workingDirectory,
-                toolExecutionPolicy: input.toolExecutionPolicy,
-                accountEnv: binding.accountEnv,
-                mcpSupport: binding.catConfig?.mcpSupport,
-              }),
-            view,
-            input.ownerAuthProvenance === 'strict' && exposureProject
-              ? { kind: 'member', projectRoot: exposureProject, memberCatId: input.catId }
-              : undefined,
-          );
-        }),
-        'service.captureInvocationOptions:execution-binding',
-        input.signal,
-      )
-    : undefined;
+  const captured =
+    captureOptions || captureOpenCodeMcp
+      ? await preflightRace(
+          Promise.resolve().then(async () => {
+            const view = await deps.resolveInvocationPluginMcpView?.();
+            input.signal?.throwIfAborted();
+            return withInvocationPluginMcpView(
+              async () => {
+                const providerOptions = captureOptions
+                  ? await captureOptions({
+                      workingDirectory: workspace.workingDirectory,
+                      toolExecutionPolicy: input.toolExecutionPolicy,
+                      accountEnv: binding.accountEnv,
+                      mcpSupport: binding.catConfig?.mcpSupport,
+                    })
+                  : undefined;
+                input.signal?.throwIfAborted();
+                const openCodeMcpConfig = captureOpenCodeMcp
+                  ? await captureOpenCodeMcpConfig(
+                      binding.projectRoot,
+                      input.catId,
+                      captureOpenCodeMcp,
+                      workspace.workingDirectory,
+                    )
+                  : undefined;
+                return {
+                  ...(providerOptions ? { providerOptions } : {}),
+                  ...(openCodeMcpConfig ? { openCodeMcpConfig } : {}),
+                };
+              },
+              view,
+              input.ownerAuthProvenance === 'strict' && exposureProject
+                ? { kind: 'member', projectRoot: exposureProject, memberCatId: input.catId }
+                : undefined,
+            );
+          }),
+          'service.captureInvocationOptions:execution-binding',
+          input.signal,
+        )
+      : undefined;
   input.signal?.throwIfAborted();
   if (catRegistry.getRevision() !== memberRegistryRevision)
     throw Object.assign(new Error('Member configuration changed during execution admission; retry this invocation.'), {
@@ -1509,7 +1541,7 @@ export async function prepareInvocationExecutionBinding(
       : undefined;
   return Object.freeze({
     ...binding,
-    ...(providerOptions ? { providerOptions: deepFreeze(providerOptions) } : {}),
+    ...deepFreeze(captured),
     memberRegistryRevision,
     threadPreferences,
     ...(frozenL0Input ? { frozenL0Input } : {}),
@@ -3196,10 +3228,9 @@ async function* invokePreparedSingleCat(deps: InvocationDeps, params: Invocation
     // Clowder AI MCP server access (especially in game threads where project-level
     // opencode.json may not be discoverable).
     const hasExplicitOcProvider = Boolean(modelProviderName);
-    const configuredMcpServerPath = process.env.CAT_CAFE_MCP_SERVER_PATH?.trim();
-    const mcpServerPath = configuredMcpServerPath
-      ? resolve(process.cwd(), configuredMcpServerPath)
-      : resolveDefaultClaudeMcpServerPath();
+    const mcpServerPath = frozenExecutionBinding.openCodeMcpConfig
+      ? frozenExecutionBinding.openCodeMcpConfig.mcpServerPath
+      : resolveInvocationMcpServerPath();
 
     // F203 Phase I: compile L0 for OpenCode BEFORE the runtime config condition.
     // OpenCodeAgentService.injectsL0Natively() = true, so the route layer does
@@ -3319,6 +3350,7 @@ async function* invokePreparedSingleCat(deps: InvocationDeps, params: Invocation
         invocationId,
         runtimeConfigOptions,
         workingDirectory,
+        frozenExecutionBinding.openCodeMcpConfig,
       );
       callbackEnv.OPENCODE_CONFIG = openCodeRuntimeConfigPath;
       if (invocationCapacitySnapshot && effectiveModel && invocationCapacitySnapshot.capacity.windowTokens > 0) {

@@ -43,6 +43,7 @@ code_anchors:
   - packages/api/src/domains/cats/services/agents/providers/provider-mcp-config.ts
   - packages/api/src/domains/cats/services/agents/providers/kimi-mcp-surface.ts
   - packages/api/src/domains/cats/services/agents/providers/kimi-mcp-config.ts
+  - packages/api/src/domains/cats/services/agents/providers/opencode-config-writer.ts
   - packages/api/src/config/capabilities/plugin-mcp-exposure.ts
 doc_anchors:
   - docs/decisions/044-mcp-resource-lifecycle-and-surface-budget.md
@@ -156,3 +157,9 @@ Its native HOME and member MCP switch are captured before launch. Because Kimi s
 lower native layers, a later read can only deny newly unapproved names; it cannot add permissions
 or replace the admitted server settings. A changed native project root is rejected before lending
 the project file. The original credential lease and conflict-preserving restoration remain owners.
+
+OpenCode runtime configuration stays with its existing Host writer. Admission captures that
+writer's native MCP plan and binary entrypoint separately from model/auth/instruction fields;
+the writer consumes its owned copy after waits, retaining its existing configuration format,
+user-merge rules, Pencil resolution and credential guard. This does not introduce another
+provider or require native carriers to move their launch ownership into AgentService.
