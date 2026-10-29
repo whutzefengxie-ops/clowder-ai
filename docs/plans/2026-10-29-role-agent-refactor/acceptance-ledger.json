@@ -272,7 +272,13 @@
       "status": "NOT_STARTED"
     }
   ],
-  "lastProgressAt": "2026-10-29T22:54:11Z",
+  "lastProgressAt": "2026-10-29T22:58:10Z",
+  "cancelBroadcastCheckpointReview": {
+    "verdict": "PENDING",
+    "evidence": "README.md#W3-取消请求广播与前端消费尚未完成-W3",
+    "tests": { "red": "1 PASS + 2 FAIL", "api": "35 PASS", "web": "19 PASS" },
+    "scope": "Request projection and real existing consumers only; native unknown recovery and complete C12 remain incomplete"
+  },
   "cancelQuiescenceCheckpointReview": {
     "verdict": "PENDING_RE_REVIEW",
     "originalReviewedHead": "cbb5124c2d48f888ebfb02127081c8f27ba9de25",

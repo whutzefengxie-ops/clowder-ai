@@ -88,6 +88,10 @@ F247 owns the cloud Host append, while this cell owns how its result becomes thr
 - Do not use free-text intent classification to decide whether a cross-thread relay is terminal; callers select phase explicitly and the server reads persisted provenance.
 - Do not persist a cloud conversation ID, pairing secret, Cookie, or full rendered prompt in a thread receipt.
 
+## 取消请求与执行终态
+
+既有 SocketManager/REST 取消广播仅报告明确目标的非终态 status，不因本地 AbortController 或 mutex 恢复就发 done，也不为缺失目标编造默认成员。实际 done 仍由原 execution/lifecycle 路由收敛；前端当前/后台线程的既有消费者保持执行槽位，直到收到该终态。本边界不成为原生取消确认、未知状态恢复或会话资源释放的新 owner。
+
 ## Static Scan Hints
 
 Watch for new or renamed `ConnectorRouter`, `MessageEnvelope`, `Adapter`, `BindingStore`, `OutboundDeliveryHook`, `StreamingOutboundHook`, `CrossThreadCoordination`, `resolveCrossThreadCoordination`, `cancel_invocation`, `clientInstanceId`, `actionId`, `coordinationId`, `effectClass`, `onClosureCatchingUp`, `onClosureBlocked`, `published_with_unseen`, `supplement_declined`, `OutputCommitDecision`, `sendReply`, `sendFormattedReply`, and `sendMedia` implementations.

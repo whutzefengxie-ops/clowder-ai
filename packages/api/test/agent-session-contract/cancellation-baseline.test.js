@@ -16,9 +16,8 @@ import { buildCancelMessages, SocketManager } from '../../dist/infrastructure/we
 import { ThreadSequencer } from '../../dist/infrastructure/websocket/ThreadSequencer.js';
 import { appendTestLifecycleResponseSource } from '../helpers/message-from-fixtures.js';
 
-// Diagnostic regression: the pre-existing cancel route emits transport cleanup
-// before routing emits its terminal, even without the bridge. QueueProcessor
-// stamps the routing terminal later; this test stops at the socket emit boundary.
+// A socket cancellation is a request. The route owns the one terminal after
+// execution cleanup; the transport cannot publish an earlier synthetic done.
 for (const bridged of [false, true]) {
   test(
     `cancel broadcast provenance with real ACP child: ${bridged ? 'bridge' : 'built-in'}`,
@@ -146,12 +145,16 @@ for (const bridged of [false, true]) {
         }
         assert.equal(stopped, true, JSON.stringify(errors));
         const done = emitted.filter(({ event, message }) => event === 'agent_message' && message.type === 'done');
-        assert.equal(done.length, 2, 'existing transport cleanup and durable routing terminal both broadcast');
-        assert.equal(done[0].message.invocationId, undefined);
-        assert.equal(done[0].message.messageId, undefined);
+        const requests = emitted.filter(
+          ({ message }) => message.type === 'status' && /等待执行状态确认/.test(message.content),
+        );
+        assert.equal(requests.length, 1);
+        assert.notEqual(requests[0].message.isFinal, true);
+        assert.equal(done.length, 1, 'only the execution route broadcasts a terminal');
         assert.equal(store.getById(responseMessageId).lifecycle.status, 'canceled');
         assert.equal(store.getById(responseMessageId).lifecycle.invocationId, 'child-turn');
-        assert.ok(done[0].message.seq < done[1].message.seq);
+        assert.ok(requests[0].message.seq < done[0].message.seq);
+        assert.equal(pools.get('codex').getMetrics().activeLeaseCount, 0);
       } finally {
         await Promise.all([...pools.values()].map((pool) => pool.closeAll()));
         if (previousMode === undefined) delete process.env.CAT_CAFE_WINDOWS_ACP_BOOTSTRAP_MODE;

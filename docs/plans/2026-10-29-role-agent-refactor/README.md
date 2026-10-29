@@ -506,3 +506,15 @@ checkpoint_review 对 `1ef2f234401e51cdc8cc7697dbc5a8af33948983` 返回 approved
 checkpoint_review 对 `cbb5124c2d48f888ebfb02127081c8f27ba9de25` 返回 changes_requested，独立 12 项=9 PASS+3 FAIL，两个 P2：源 finally 经 next 抛错后，对已关闭源 return 的空成功仍会清 active；未启动时并发 return/next 改写 consumed，会永久 busy。前者还以真实 AGY AcpAgentService 包装和未释放租约复现。作者补两条真实分支，`cancel-quiescence-review-red.log` 9 项=7 PASS+2 FAIL。
 
 修复仅记录 return 进入时是否未消费，并记录源 next 是否成功返回；失败 next 后的空 return 不再被当作清理证明。`cancel-quiescence-review-green.log` 9 PASS，`cancel-quiescence-review-contracts.log` 197 PASS，作者回放 reviewer 私有五条（含真实 AGY 包装）`cancel-quiescence-reviewer-replay.log` 5 PASS。最终 API tsc exit 0、两文件 Biome 无错误；等待独立复核，未将作者回放计为独立批准。没有新服务/模型调用。
+
+独立复核 85ce6a218 的首次派发因模型容量失败，未产生源码裁决；批准状态仍为待复核，不将基础设施错误解释为通过或代码拒绝。
+
+## W3 取消请求广播与前端消费（尚未完成 W3）
+
+buildCancelMessages 原先收到本地取消即发无原生停止证据的 done/isFinal，且空目标会编造 opus。`cancel-request-broadcast-red.log` 三项=1 对照 PASS+2 FAIL。现复用原 status 消息向明确目标报告“正在停止，等待执行状态确认”，不发布终态或编造默认成员；实际 done 留给原 execution/lifecycle owner。Socket/REST 原有用户归属、操作来源去重、scope、处理中 reservation 与 auto-resume 防护保持原逻辑，没有新增取消状态源或协议字段。
+
+`cancel-request-broadcast-regression.log` 35 PASS，含纯边界、真实 Socket.IO 请求、队列 cancel-all/单成员隔离及实际工厂→ACP 子进程→原生/Bridge 两条路由。取消请求 status 先到，最终只有一个路由 done，持久生命周期 canceled，activeLeaseCount 为 0。此前诊断基线的“两次 done”断言改为该真实合同；空批次旧测试原来依赖默认目标，已按明确无目标不广播更新，未改产品 identity guard。
+
+`cancel-request-state-web-final.log` 19 PASS，包括新两条真实 Zustand store 的当前/后台 consumer 检查、既有并发取消与停止按钮：请求到来保留执行槽位/loading，真实 done 后才清理。API tsc、Web tsc 均 exit 0，六文件 Biome 无错误。首次 Web 包装器无法直接 spawn Windows pnpm shim，保留 ENOENT 日志；改由本机已安装 Vitest package 的实际 Node 入口执行，无依赖安装。既有组件测试的 React act 警告保留，没有修改组件行为。
+
+复杂度复核及 map delta：transport→现有消息消费者只投影请求，lifecycle 继续是终态 owner；函数更短，不新增 store、重试器、消息类型或状态 DSL，更新 transport cell。前端只补回归，没有增加产品状态。此处仍不证明 native 进程已停止、取消断线/未知执行已恢复、release 失败或重启已安全、最终安装物验收通过，C12/W3 继续未完成。等待与取消清理切片一起独立复核。

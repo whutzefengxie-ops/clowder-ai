@@ -1,0 +1,64 @@
+import { beforeEach, expect, it, vi } from 'vitest';
+import { useChatStore } from '@/stores/chatStore';
+import { handleActiveAgentMessage } from '../agent-messages/active-handler';
+import { handleBackgroundAgentMessage } from '../useAgentMessages';
+
+beforeEach(() => {
+  useChatStore.setState({
+    currentThreadId: 'open',
+    messages: [],
+    threadStates: {},
+    activeInvocations: {},
+    catInvocations: {},
+    catStatuses: {},
+    hasActiveInvocation: false,
+    isLoading: false,
+    intentMode: null,
+  });
+});
+
+const request = { type: 'status', catId: 'codex', content: '正在停止，等待执行状态确认', timestamp: 1 };
+
+it('the open-thread consumer keeps the real execution/loading until the actual terminal', () => {
+  const store = useChatStore.getState();
+  store.addActiveInvocation('inv', 'codex', 'execute');
+  store.setLoading(true);
+  store.setCatStatus('codex', 'streaming');
+  const context = {
+    actions: store,
+    rows: { rows: () => [], addRow: vi.fn(), patchRow: vi.fn(), removeRow: vi.fn() },
+    resolveCatName: (id: string) => id,
+    timeoutDiagnostics: { set: vi.fn(), take: () => null },
+  };
+  handleActiveAgentMessage({ ...request, threadId: 'open' }, context);
+  expect(useChatStore.getState().activeInvocations.inv?.catId).toBe('codex');
+  expect(useChatStore.getState().hasActiveInvocation).toBe(true);
+  expect(useChatStore.getState().isLoading).toBe(true);
+  expect(useChatStore.getState().catStatuses.codex).toBe('streaming');
+  handleActiveAgentMessage(
+    { type: 'done', catId: 'codex', threadId: 'open', invocationId: 'inv', isFinal: true, timestamp: 2 },
+    context,
+  );
+  expect(useChatStore.getState().activeInvocations).toEqual({});
+  expect(useChatStore.getState().hasActiveInvocation).toBe(false);
+  expect(useChatStore.getState().isLoading).toBe(false);
+});
+
+it('the background-thread consumer also retains the real slot until the actual terminal', () => {
+  const store = useChatStore.getState();
+  store.addThreadActiveInvocation('background', 'inv', 'codex', 'execute');
+  store.setThreadLoading('background', true);
+  const context = { store, nextBgSeq: () => 1, addToast: vi.fn() };
+  handleBackgroundAgentMessage({ ...request, threadId: 'background' }, context);
+  const stopping = store.getThreadState('background');
+  expect(stopping.activeInvocations.inv?.catId).toBe('codex');
+  expect(stopping.hasActiveInvocation).toBe(true);
+  expect(stopping.isLoading).toBe(true);
+  handleBackgroundAgentMessage(
+    { type: 'done', catId: 'codex', threadId: 'background', invocationId: 'inv', isFinal: true, timestamp: 2 },
+    context,
+  );
+  expect(store.getThreadState('background').activeInvocations).toEqual({});
+  expect(store.getThreadState('background').hasActiveInvocation).toBe(false);
+  expect(store.getThreadState('background').isLoading).toBe(false);
+});
