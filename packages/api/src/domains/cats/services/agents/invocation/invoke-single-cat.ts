@@ -3922,6 +3922,9 @@ async function* invokePreparedSingleCat(deps: InvocationDeps, params: Invocation
     const requiresImportedHistory =
       activeSessionRecordForResume?.externalImport?.cliSessionId === sessionId && Boolean(sessionId);
     const baseOptions: AgentServiceOptions = {
+      ...(frozenExecutionBinding.codexLaunchPolicy
+        ? { codexLaunchPolicy: frozenExecutionBinding.codexLaunchPolicy }
+        : {}),
       ...(frozenExecutionBinding.executionPreferences
         ? { executionPreferences: frozenExecutionBinding.executionPreferences }
         : {}),

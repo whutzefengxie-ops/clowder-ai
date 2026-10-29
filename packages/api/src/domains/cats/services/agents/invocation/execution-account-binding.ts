@@ -22,6 +22,7 @@ import {
   type CodexAccountLaunchDescriptor,
   resolveCodexAccountLaunch,
 } from '../../../../../config/codex-account-launch.js';
+import { type CodexLaunchPolicy, captureCodexLaunchPolicy } from '../../../../../config/codex-cli.js';
 import { codexExecutionAccountSnapshot } from '../../../../../config/codex-execution-account.js';
 import { resolveActiveProjectRoot } from '../../../../../utils/active-project-root.js';
 import {
@@ -31,6 +32,7 @@ import {
 import type { FrozenExecutionWorkspace } from './execution-workspace.js';
 
 export interface FrozenExecutionBinding {
+  readonly codexLaunchPolicy?: CodexLaunchPolicy;
   readonly threadPreferences?: Readonly<{
     reasoningEffortOverride?: CliEffortPreset;
     speedOverride?: CodexSpeedValue;
@@ -114,6 +116,7 @@ export function freezeExecutionAccountBinding(input: {
           : undefined;
   return Object.freeze({
     catConfig,
+    ...(provider === 'openai' ? { codexLaunchPolicy: captureCodexLaunchPolicy() } : {}),
     ...(catConfig
       ? { executionPreferences: captureMemberExecutionPreferences(input.catId, catConfig, input.model) }
       : {}),

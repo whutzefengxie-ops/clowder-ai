@@ -180,3 +180,13 @@ ThreadStore 的内存实现返回可变记录，工作区捕获现复制该记�
 独立审查 `7fe6cdb0f0db1bd1393abd5f6c7db1a372c56e5d` 返回一个 P2：已取消准入仍创建偏好读取 Promise；既有 preflightRace 提前拒绝，未消费的原始 Promise 随后失败，默认 Node 进程退出 1。现于准入入口、workspace await 之后检查取消，避免启动已废弃读取；读取 await 之后也检查取消，不能将取消中的准入报告为 ready。不改全局 race helper，已有在途读取仍由其原处理器消费。
 
 reviewer 独立子进程反例和公开测试的三个时点（准入前、workspace 中、偏好读中）均先 RED 后 GREEN，使用严格 unhandled-rejections 模式；子进程不再崩溃、取消不返回可用 binding。最终 `thread-cancel-green.log` 为 186 项=182 PASS+原 4 条 Windows AGY FAIL，新增取消场景与原线程/诊断场景通过。API tsc 通过，Biome 两文件无错误、20 warnings。证据仍区分真实 Node 子进程与模型调用；本次没有真实模型调用或常驻环境，等待同一 reviewer 复审。
+
+checkpoint_review 对 `87beb72db4b11ad061314ab9e85b8db053f5a3b9` 给出 approved，subject 仍为 checkpoint-thread-preferences；原崩溃反例、三个取消和三个快照场景通过，另外以已注册成员独立验证 effort/speed 两个 getter 的严格拒绝模式取消边界。该 P2 闭环，无新 P1/P2，批准仍限本切片。
+
+## W2 Codex 全局启动策略切片（尚未完成 W2）
+
+现有 codex-cli 解析 owner 增加一次只读捕获，把实际使用的 sandbox、approval、OAuth transport 和 served-model observation 放入既有 binding/options。Host 准入和后台摘要捕获一次；独立内部调用在 Codex 入口、首次异步准备之前捕获。实际 consumer 只用该值，保持既有枚举解析与默认值。任务 read_only、live 和 public native 的强制限制继续优先，不允许被冻结的宽松全局设置扩大它们的权限；不增加配置项、存储或 launcher。
+
+实际最终 argv 反例先 RED：准入为 read-only，后续全局改 workspace-write，旧调用错误采用后者。修复后 native_tool、托管 OAuth 与 read_only 三旅程通过；最后的注册成员夹具为 `codex-policy-final-targeted.log` 3 PASS，验证 sandbox/approval、传输 provider 参数及 RUST_LOG 观测开关。受影响 L0/后台/原生继承/served-model 两载体共 37 PASS，`codex-policy-green.log`；扩大 Codex/config 回归共 123 项=122 PASS+1 已登记的 POSIX 缓存根断言 FAIL，`codex-policy-regression.log`。API tsc 通过；新测试公开 resolver 可发现。
+
+这不是所有全局配置或 ACP/MCP 启动环境已冻结的声明；各 owner 的一致性重解析、MCP/项目指令及实现 generation 仍待继续。无真实模型调用或新增常驻服务，本策略切片等待独立审查。

@@ -4,6 +4,7 @@ import { usesNativeToolConfiguration } from '../../config/cat-account-binding.js
 import { getCatModel } from '../../config/cat-models.js';
 import { resolveCatRuntimeAccount } from '../../config/cat-runtime-account.js';
 import { resolveCodexAccountLaunch } from '../../config/codex-account-launch.js';
+import { captureCodexLaunchPolicy } from '../../config/codex-cli.js';
 import { CodexAgentService } from '../cats/services/agents/providers/CodexAgentService.js';
 import {
   extractUserEnvTemplates,
@@ -24,6 +25,7 @@ export function resolveCurationProvider(projectRoot: string, catId: string) {
     CAT_CAFE_OPENAI_MODEL_OVERRIDE: model,
   };
   const options: AgentServiceOptions = {
+    codexLaunchPolicy: captureCodexLaunchPolicy(),
     callbackEnv,
     executionPreferences: captureMemberExecutionPreferences(catId, config, model),
   };

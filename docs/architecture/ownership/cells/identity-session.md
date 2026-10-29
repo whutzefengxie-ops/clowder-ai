@@ -21,6 +21,7 @@ code_anchors:
   - packages/api/src/domains/cats/services/agents/providers/member-execution-preferences.ts
   - packages/api/src/domains/cats/services/agents/invocation/execution-account-binding.ts
   - packages/api/src/domains/cats/services/agents/invocation/execution-workspace.ts
+  - packages/api/src/config/codex-cli.ts
   - packages/web/src/components/settings/members/member-save-record.ts
   - packages/web/src/components/settings/members/member-save-extras.ts
   - packages/api/src/config/account-resolver.ts

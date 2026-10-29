@@ -79,13 +79,7 @@ import {
 import { pluginMcpEnvironment } from '../../../../../config/capabilities/plugin-mcp-environment.js';
 import { deriveAutoCompactTokenLimit, getCatEffort } from '../../../../../config/cat-config-loader.js';
 import { getCatModel } from '../../../../../config/cat-models.js';
-import {
-  type CodexCarrierMode,
-  getCodexApprovalPolicy,
-  getCodexOAuthTransport,
-  getCodexSandboxMode,
-  getCodexServedModelObservation,
-} from '../../../../../config/codex-cli.js';
+import { type CodexCarrierMode, captureCodexLaunchPolicy } from '../../../../../config/codex-cli.js';
 import { estimateCostFromTokens } from '../../../../../config/model-pricing.js';
 import { createModuleLogger } from '../../../../../infrastructure/logger.js';
 import { formatCliExitError } from '../../../../../utils/cli-format.js';
@@ -1655,12 +1649,13 @@ export class CodexAgentService implements AgentService {
     promptSource: CodexAppServerPromptSource,
     options?: AgentServiceOptions,
   ): AsyncIterable<AgentMessage> {
-    if (!options || (!options.pluginNativeLaunch && options.toolExecutionPolicy?.mode !== 'plugin_native')) {
-      yield* this.invokePrepared(promptSource, options);
+    const admittedOptions = { ...options, codexLaunchPolicy: options?.codexLaunchPolicy ?? captureCodexLaunchPolicy() };
+    if (!admittedOptions.pluginNativeLaunch && admittedOptions.toolExecutionPolicy?.mode !== 'plugin_native') {
+      yield* this.invokePrepared(promptSource, admittedOptions);
       return;
     }
     const native = await prepareCodexNativeLaunch(
-      options,
+      admittedOptions,
       this.carrierMode,
       promptSource.kind === 'frozen',
       this.catId,
@@ -1680,6 +1675,8 @@ export class CodexAgentService implements AgentService {
     options?: AgentServiceOptions,
     native?: PreparedCodexNativeLaunch,
   ): AsyncIterable<AgentMessage> {
+    const launchPolicy = options?.codexLaunchPolicy;
+    if (!launchPolicy) throw new Error('codex_launch_policy_unavailable');
     // The preflight seam exists only on app_server. Fail closed instead of
     // quietly falling back to a prompt frozen before the provider verdict.
     const requiredTools = normalizeRequiredTools(options?.requiredTools);
@@ -1723,8 +1720,8 @@ export class CodexAgentService implements AgentService {
       : await extractTrustedImagePaths(options?.contentBlocks, options?.uploadDir, options?.resolveTrustedImagePath);
     const imageArgs = imagePaths.flatMap((path) => ['--image', path]);
 
-    const sandboxMode = readOnly || live || native ? 'read-only' : getCodexSandboxMode();
-    const approvalPolicy = readOnly || live || native ? 'never' : getCodexApprovalPolicy();
+    const sandboxMode = readOnly || live || native ? 'read-only' : launchPolicy.sandboxMode;
+    const approvalPolicy = readOnly || live || native ? 'never' : launchPolicy.approvalPolicy;
     const inheritedEffort =
       options?.executionPreferences?.effort ?? getCatEffort(this.catId as string, undefined, 'openai', effectiveModel);
     const effortLevel =
@@ -1900,11 +1897,11 @@ export class CodexAgentService implements AgentService {
     // frames were there all along, just ANSI-coloured — see
     // `codex-served-model.ts` extractTracePayload.) Only the websocket
     // `codex.response.metadata` frame carries the turn-state header.
-    const servedModelObservation = getCodexServedModelObservation();
+    const servedModelObservation = launchPolicy.servedModelObservation;
     const observeServedModel =
       (!customBaseUrl || (authMode === 'api_key' && customBaseUrl === CODEX_API_DEFAULT_BASE_URL)) &&
       servedModelObservation === 'on';
-    const oauthTransport = getCodexOAuthTransport();
+    const oauthTransport = launchPolicy.oauthTransport;
     const builtinOpenaiProviderArgs: string[] =
       !nativeAuthentication && !customBaseUrl && authMode === 'oauth' && oauthTransport === 'builtin'
         ? ['--config', 'model_provider="openai"']

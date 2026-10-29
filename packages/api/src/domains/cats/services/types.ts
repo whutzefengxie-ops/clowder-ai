@@ -1051,6 +1051,7 @@ export interface LocalSessionReadInput {
 }
 
 export interface AgentServiceOptions {
+  codexLaunchPolicy?: import('../../../config/codex-cli.js').CodexLaunchPolicy;
   /** Frozen requested preferences; actual adopted model/effort remain provider observations. */
   executionPreferences?: import('./agents/providers/member-execution-preferences.js').MemberExecutionPreferences;
   /** Admission-owned identity/rules; the L0 child never reloads mutable configuration. */
