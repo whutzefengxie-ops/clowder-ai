@@ -1,6 +1,8 @@
-import type { CatId } from '@cat-cafe/shared';
+import type { CatId, IdentityAdoptionArtifact } from '@cat-cafe/shared';
 import type { AgentMessage, AgentService, AgentServiceOptions, ProviderContinuityPreflight } from '../../types.js';
 import { AgentSessionBridgeService } from './AgentSessionBridgeService.js';
+import type { BridgeOpenProfile, FragmentSwitchEvent } from './AgentSessionBridgeService.js';
+import type { CompatibilityStructure } from './compatibility-key.js';
 import type {
   HostSessionImplementation,
   SessionImplementationRef,
@@ -15,6 +17,19 @@ interface RegisteredInput {
   registry: SessionImplementationRegistry;
   metadata?: { provider: string; model: string };
   log?: { info(...a: unknown[]): void; warn(...a: unknown[]): void };
+  /** W3: frozen open-time model/config for the concrete implementation. */
+  resolveOpenProfile?(options: AgentServiceOptions | undefined): BridgeOpenProfile | undefined;
+  /** W3: structural compatibility facts known only to the Host (client/carrier/account/HOME/...). */
+  resolveCompatibility?(options: AgentServiceOptions | undefined): CompatibilityStructure | undefined;
+  /** W3: persisted in-place identity adoption evidence (C10 gate). */
+  resolveIdentityArtifact?(options: AgentServiceOptions | undefined): IdentityAdoptionArtifact | undefined;
+  /** W3: explicit resume choice; absent falls back to requireExactResume. */
+  resumeOnUnavailable?: 'fail' | 'start_new';
+  onContinuityEvidence?(
+    evidence: import('../../types.js').ProviderContinuityEvidence,
+    ctx: { sessionId: string },
+  ): void | Promise<void>;
+  onFragmentSwitch?(event: FragmentSwitchEvent): void | Promise<void>;
 }
 interface PreparedBinding {
   registration?: symbol;
@@ -160,6 +175,14 @@ export class RegisteredSessionAgentService implements AgentService {
             sessionId: opts?.hostSessionId ?? '',
             resumeNativeSessionId: opts?.sessionId,
           }),
+          ...(this.input.resolveOpenProfile ? { resolveOpenProfile: this.input.resolveOpenProfile } : {}),
+          ...(this.input.resolveCompatibility ? { resolveCompatibility: this.input.resolveCompatibility } : {}),
+          ...(this.input.resolveIdentityArtifact
+            ? { resolveIdentityArtifact: this.input.resolveIdentityArtifact }
+            : {}),
+          ...(this.input.resumeOnUnavailable ? { resumeOnUnavailable: this.input.resumeOnUnavailable } : {}),
+          ...(this.input.onContinuityEvidence ? { onContinuityEvidence: this.input.onContinuityEvidence } : {}),
+          ...(this.input.onFragmentSwitch ? { onFragmentSwitch: this.input.onFragmentSwitch } : {}),
         }),
       };
       this.cached = cached;

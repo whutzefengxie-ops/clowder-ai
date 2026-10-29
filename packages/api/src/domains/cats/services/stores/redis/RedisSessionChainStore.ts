@@ -18,8 +18,11 @@ import type {
   CatHandoffNote,
   CatId,
   ContextHealth,
+  FragmentSwitchRecord,
   HybridProgress,
+  IdentityAdoptionArtifact,
   SessionCapacityPin,
+  SessionCompatibilitySnapshot,
   SessionPolicySnapshot,
   SessionRecord,
   SessionStatus,
@@ -55,6 +58,9 @@ const DEFAULT_TTL_SECONDS = 0; // persistent — set >0 via env to enable expiry
  * ARGV[11] = bare cat+thread chain key (Lua KEYS are keyPrefix-expanded by ioredis)
  * ARGV[12] = reuse existing active flag, ARGV[13] = initial compression count ('' = unknown)
  * KEYS[7] = owner-scoped active pointer
+ * ARGV[14] = scopedInvocation JSON ('' = none)
+ * ARGV[15] = compat snapshot JSON ('' = legacy/unverifiable), ARGV[16] = identityArtifact JSON,
+ * ARGV[17] = fragmentSwitch JSON. Appended at the end so existing positions stay stable.
  *
  * Returns: {'existing', existingId} when cliSessionId is already claimed,
  *          {'created', id, seq} when a new record is created.
@@ -87,6 +93,9 @@ end
 if ARGV[9] ~= '' then redis.call('HSET', KEYS[3], 'workingDirectory', ARGV[9]) end
 if ARGV[10] ~= '' then redis.call('HSET', KEYS[3], 'workspaceFingerprint', ARGV[10]) end
 if ARGV[14] ~= '' then redis.call('HSET', KEYS[3], 'scopedInvocation', ARGV[14]) end
+if ARGV[15] ~= '' then redis.call('HSET', KEYS[3], 'compat', ARGV[15]) end
+if ARGV[16] ~= '' then redis.call('HSET', KEYS[3], 'identityArtifact', ARGV[16]) end
+if ARGV[17] ~= '' then redis.call('HSET', KEYS[3], 'fragmentSwitch', ARGV[17]) end
 ${DEFAULT_TTL_SECONDS > 0 ? `redis.call('EXPIRE', KEYS[3], ${DEFAULT_TTL_SECONDS})` : '-- persistent mode: no EXPIRE'}
 redis.call('ZADD', KEYS[2], seq, ARGV[1])
 ${DEFAULT_TTL_SECONDS > 0 ? `redis.call('EXPIRE', KEYS[2], ${DEFAULT_TTL_SECONDS})` : '-- persistent mode: no EXPIRE'}
@@ -356,6 +365,9 @@ export class RedisSessionChainStore implements ISessionChainStore {
         input.reuseExistingActive ? '1' : '0',
         input.compressionCount == null ? '' : String(input.compressionCount),
         input.scopedInvocation ? JSON.stringify(input.scopedInvocation) : '',
+        input.compat ? JSON.stringify(input.compat) : '',
+        input.identityArtifact ? JSON.stringify(input.identityArtifact) : '',
+        input.fragmentSwitch ? JSON.stringify(input.fragmentSwitch) : '',
       )) as [string, string, string?];
 
       const [status, recordId, seqRaw] = result;
@@ -404,6 +416,9 @@ export class RedisSessionChainStore implements ISessionChainStore {
         ...(input.chainKey ? { chainKey: input.chainKey } : {}),
         ...(input.workingDirectory ? { workingDirectory: input.workingDirectory } : {}),
         ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
+        ...(input.compat ? { compat: input.compat } : {}),
+        ...(input.identityArtifact ? { identityArtifact: input.identityArtifact } : {}),
+        ...(input.fragmentSwitch ? { fragmentSwitch: input.fragmentSwitch } : {}),
       };
     }
 
@@ -790,6 +805,10 @@ export class RedisSessionChainStore implements ISessionChainStore {
     if (patch.externalImport !== undefined) pairs.push('externalImport', JSON.stringify(patch.externalImport));
     if (patch.nativeSessionBinding !== undefined)
       pairs.push('nativeSessionBinding', JSON.stringify(patch.nativeSessionBinding));
+    if (patch.compat !== undefined) pairs.push('compat', JSON.stringify(patch.compat));
+    if (patch.identityArtifact !== undefined)
+      pairs.push('identityArtifact', JSON.stringify(patch.identityArtifact));
+    if (patch.fragmentSwitch !== undefined) pairs.push('fragmentSwitch', JSON.stringify(patch.fragmentSwitch));
     if (patch.messageCount !== undefined) {
       pairs.push('messageCount', String(patch.messageCount));
     }
@@ -963,6 +982,9 @@ export class RedisSessionChainStore implements ISessionChainStore {
     const contextHealth = safeParseJson<ContextHealth>(data.contextHealth);
     const capacityPin = safeParseJson<SessionCapacityPin>(data.capacityPin);
     const lastUsage = safeParseJson<SessionUsageSnapshot>(data.lastUsage);
+    const compat = safeParseJson<SessionCompatibilitySnapshot>(data.compat);
+    const identityArtifact = safeParseJson<IdentityAdoptionArtifact>(data.identityArtifact);
+    const fragmentSwitch = safeParseJson<FragmentSwitchRecord>(data.fragmentSwitch);
     const continuityCapsule =
       data.continuityCapsule !== undefined ? safeParseJson<unknown>(data.continuityCapsule) : undefined;
     const catHandoffNote =
@@ -1024,6 +1046,9 @@ export class RedisSessionChainStore implements ISessionChainStore {
       ...(data.nativeSessionBinding
         ? { nativeSessionBinding: JSON.parse(data.nativeSessionBinding) as SessionRecord['nativeSessionBinding'] }
         : {}),
+      ...(compat ? { compat } : {}),
+      ...(identityArtifact ? { identityArtifact } : {}),
+      ...(fragmentSwitch ? { fragmentSwitch } : {}),
       ...(lastUsage ? { lastUsage } : {}),
       messageCount: parseInt(data.messageCount ?? '0', 10),
       compressionCount,

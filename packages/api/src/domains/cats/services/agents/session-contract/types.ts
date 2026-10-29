@@ -11,6 +11,22 @@ export type HostSessionId = string;
 
 export type HostInvocationId = string;
 
+/** How the adapter delivers Host identity into the native session (§6). */
+export type IdentityChannel = 'native_system' | 'verified_extension' | 'user_prefix';
+
+/** Whether an already-open native fragment can adopt changed identity in place (§6/§7). */
+export type IdentityUpdateMode = 'in_place_verified' | 'in_place_unverified' | 'new_fragment_only';
+
+/** Adapter-declared preconditions for resuming a native session. */
+export interface ResumeCondition {
+  readonly support: Support;
+  /** `caller_choice_required`: resume_unavailable must follow the caller's fail/start_new choice. */
+  readonly onUnavailable: 'caller_choice_required' | 'unknown';
+}
+
+/** How the adapter exposes Host MCP tools to the native session (§6). */
+export type McpExposure = 'direct' | 'deferred' | 'unsupported';
+
 export interface AgentSessionCapabilities {
   input: Support;
   inputReadReceipt: Support;
@@ -20,6 +36,17 @@ export interface AgentSessionCapabilities {
   observesCompaction: boolean;
 
   continuityEvidence: 'pre_send' | 'none';
+
+  /** Absent = not declared: identity is not verifiable for team engineering tasks. */
+  identityChannel?: IdentityChannel;
+  /** Absent = unknown: the bridge must start a new fragment instead of claiming reuse. */
+  identityUpdate?: IdentityUpdateMode;
+  /** Absent = unknown: never infer resume support from a previous attempt. */
+  resumeCondition?: ResumeCondition;
+  /** Absent = unknown: MCP surface is not provably applied. */
+  mcpExposure?: McpExposure;
+  /** Machine-readable limitations of this client/version; absent = not stated. */
+  limitations?: readonly string[];
 }
 
 export interface AgentSessionProvider {
@@ -85,7 +112,7 @@ export type PreSendFacts = Parameters<Service.ProviderContinuityPreflight['settl
 
 export type StartTurnResult =
   | { ok: true; turn: TurnRef; events: AsyncIterable<AgentSessionEvent> }
-  | { ok: false; code: 'busy' | 'session_unavailable' | 'failed'; reason?: string };
+  | { ok: false; code: 'busy' | 'session_unavailable' | 'pre_send_failed' | 'failed'; reason?: string };
 
 export interface SupplementInput {
   text: string;
@@ -102,7 +129,16 @@ export type InputResult =
   | { status: 'turn_ended' }
   | { status: 'unknown' };
 
-export type CancelResult = { ok: true } | { ok: false; code: 'unsupported' | 'turn_ended' | 'failed' };
+/**
+ * Host-observable cancellation phases (§6): a request is not acceptance, and
+ * acceptance is not proof that execution stopped. Providers may omit the phase
+ * when they cannot report one; the Host then treats it as unproven.
+ */
+export type CancelPhase = 'requested' | 'client_accepted' | 'execution_stopped' | 'host_terminal';
+
+export type CancelResult =
+  | { ok: true; phase?: CancelPhase }
+  | { ok: false; code: 'unsupported' | 'turn_ended' | 'failed'; phase?: CancelPhase };
 
 export interface CompactOptions {
   invocationId: HostInvocationId;
@@ -146,6 +182,10 @@ export type TurnEvent = { scope: 'turn'; sessionId: HostSessionId; turn: TurnRef
   | {
       type: 'tool_call';
       callId?: string;
+      /** Scoped execution owner when the native event reports one; absent = unknown, never inferred. */
+      executionId?: string;
+      /** Parent tool call when the native event reports one; absent = unknown, never inferred. */
+      parentCallId?: string;
       name?: string;
       input?: unknown;
       source?: Service.AgentMessage['toolSource'];
@@ -154,6 +194,10 @@ export type TurnEvent = { scope: 'turn'; sessionId: HostSessionId; turn: TurnRef
   | {
       type: 'tool_result';
       callId?: string;
+      /** Scoped execution owner when the native event reports one; absent = unknown, never inferred. */
+      executionId?: string;
+      /** Parent tool call when the native event reports one; absent = unknown, never inferred. */
+      parentCallId?: string;
       name?: string;
       status: 'ok' | 'error' | 'unknown';
       output?: unknown;

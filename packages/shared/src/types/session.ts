@@ -53,6 +53,42 @@ export interface NativeSessionBinding {
   readonly agentName: string;
 }
 
+/**
+ * W3: digest projection of one structural session-compatibility key.
+ * Raw structural values (accounts, HOME, prompts) are not persisted here —
+ * only per-field digests plus the canonical combined digest.
+ */
+export interface SessionCompatibilityFieldDigest {
+  readonly field: string;
+  readonly digest: string;
+}
+
+export interface SessionCompatibilitySnapshot {
+  readonly keyVersion: 1;
+  readonly digest: string;
+  readonly fieldDigests: readonly SessionCompatibilityFieldDigest[];
+}
+
+/**
+ * W3: evidence that a native client actually consumed the current identity /
+ * instructions in place. `instructionDigest` must match the digest the Host is
+ * about to rely on; a stale artifact can never authorise an in-place claim.
+ */
+export interface IdentityAdoptionArtifact {
+  readonly v: 1;
+  readonly instructionDigest: string;
+  /** Adapter/verification-owned opaque evidence reference; never a secret. */
+  readonly evidenceRef: string;
+  readonly adoptedAt: number;
+}
+
+/** W3: why the Host started a new native fragment for an existing Host session. */
+export interface FragmentSwitchRecord {
+  readonly at: number;
+  readonly reason: string;
+  readonly changed: readonly string[];
+}
+
 export interface SessionRecord {
   readonly id: string;
   /** A one-shot scoped execution is traceable history, never a home resume candidate. */
@@ -74,6 +110,15 @@ export interface SessionRecord {
   /** CLI-reported session ID (from session_init event) */
   cliSessionId?: string;
   nativeSessionBinding?: NativeSessionBinding;
+  /**
+   * W3: structural compatibility key most recently proven for the current
+   * native fragment. Absent means legacy/unverifiable — never assume reuse.
+   */
+  compat?: SessionCompatibilitySnapshot;
+  /** W3: verified in-place identity adoption evidence for the current fragment. */
+  identityArtifact?: IdentityAdoptionArtifact;
+  /** W3: latest native-fragment switch for this Host session (reason + changed fields). */
+  fragmentSwitch?: FragmentSwitchRecord;
   /** User-requested adoption of an existing native history; persisted across reloads. */
   externalImport?: {
     cliSessionId: string;

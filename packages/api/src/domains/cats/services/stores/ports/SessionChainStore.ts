@@ -29,7 +29,16 @@ export function upsertCapacityPinRecoveryNote(provenance: string, note: string):
  */
 
 import { randomUUID } from 'node:crypto';
-import type { CatId, HybridProgress, SessionCapacityPin, SessionPolicySnapshot, SessionRecord } from '@cat-cafe/shared';
+import type {
+  CatId,
+  FragmentSwitchRecord,
+  HybridProgress,
+  IdentityAdoptionArtifact,
+  SessionCapacityPin,
+  SessionCompatibilitySnapshot,
+  SessionPolicySnapshot,
+  SessionRecord,
+} from '@cat-cafe/shared';
 import { isHomeSession } from '../../session/session-scope.js';
 import type { StoreReadOptions } from './StoreReadOptions.js';
 import { throwIfStoreReadAborted } from './StoreReadOptions.js';
@@ -39,6 +48,12 @@ export interface CreateSessionInput {
   cliSessionId?: string;
   workingDirectory?: string;
   workspaceFingerprint?: string;
+  /** W3: structural compatibility key proven for the initial native fragment. */
+  compat?: SessionCompatibilitySnapshot;
+  /** W3: verified in-place identity adoption evidence. */
+  identityArtifact?: IdentityAdoptionArtifact;
+  /** W3: native-fragment switch reason, when the record starts as a new fragment. */
+  fragmentSwitch?: FragmentSwitchRecord;
   threadId: string;
   catId: CatId;
   userId: string;
@@ -89,6 +104,9 @@ export type SessionRecordPatch = Partial<
     SessionRecord,
     | 'cliSessionId'
     | 'nativeSessionBinding'
+    | 'compat'
+    | 'identityArtifact'
+    | 'fragmentSwitch'
     | 'externalImport'
     | 'workingDirectory'
     | 'workspaceFingerprint'
@@ -273,6 +291,9 @@ export class SessionChainStore implements ISessionChainStore {
       ...(input.cliSessionId ? { cliSessionId: input.cliSessionId } : {}),
       ...(input.workingDirectory ? { workingDirectory: input.workingDirectory } : {}),
       ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
+      ...(input.compat ? { compat: input.compat } : {}),
+      ...(input.identityArtifact ? { identityArtifact: input.identityArtifact } : {}),
+      ...(input.fragmentSwitch ? { fragmentSwitch: input.fragmentSwitch } : {}),
       threadId: input.threadId,
       catId: input.catId,
       userId: input.userId,
@@ -579,6 +600,9 @@ export class SessionChainStore implements ISessionChainStore {
     if (patch.continuityCapsule !== undefined) record.continuityCapsule = patch.continuityCapsule;
     if (patch.externalImport !== undefined) record.externalImport = patch.externalImport;
     if (patch.nativeSessionBinding !== undefined) record.nativeSessionBinding = patch.nativeSessionBinding;
+    if (patch.compat !== undefined) record.compat = patch.compat;
+    if (patch.identityArtifact !== undefined) record.identityArtifact = patch.identityArtifact;
+    if (patch.fragmentSwitch !== undefined) record.fragmentSwitch = patch.fragmentSwitch;
     if (patch.consecutiveRestoreFailures !== undefined)
       record.consecutiveRestoreFailures = patch.consecutiveRestoreFailures;
     if (patch.latestResumeSessionId !== undefined) record.latestResumeSessionId = patch.latestResumeSessionId;

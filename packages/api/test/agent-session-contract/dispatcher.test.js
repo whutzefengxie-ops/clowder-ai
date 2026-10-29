@@ -104,15 +104,22 @@ for (const bound of [true, false])
       provider.inspectInput = undefined;
       provider.support.inputReadReceipt = 'unsupported';
     });
-    assert.deepEqual(f.dispatcher.handle, {
-      provider: 'other',
-      carrier: 'other',
-      threadId: bound ? 'native' : 'host',
-      turnId: bound ? 'native-turn' : 'inv',
-    });
-    assert.equal(f.dispatcher.capabilities.inputReadReceipt, false);
-    assert.equal(f.dispatcher.inspectInput, undefined);
+    if (bound) {
+      assert.deepEqual(f.dispatcher.handle, {
+        provider: 'other',
+        carrier: 'other',
+        threadId: 'native',
+        turnId: 'native-turn',
+      });
+      assert.equal(f.dispatcher.capabilities.inputReadReceipt, false);
+      assert.equal(f.dispatcher.inspectInput, undefined);
+    } else {
+      // No real native session id or native turn id exists, so no dispatcher
+      // may be registered with fabricated Host ids (C12/C13).
+      assert.equal(f.dispatcher, undefined);
+    }
     await f.finish();
+    assert.equal(f.releases, bound ? 1 : 0);
   });
 
 test('unsupported input never registers; no registration also works on supported input', async () => {

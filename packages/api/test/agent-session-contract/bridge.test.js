@@ -236,7 +236,7 @@ test('allowlisted DTOs, resume once, default fields, credentials are not logged'
     sessionId: 'host',
     instructions: 'instructions',
     cwd: '/project',
-    resume: { nativeSessionId: 'old', onUnavailable: 'start_new' },
+    resume: { nativeSessionId: 'old', onUnavailable: 'fail' },
   });
   const input = provider.calls.start[0].input;
   assert.deepEqual(Object.keys(input).sort(), ['invocation', 'prompt']);
@@ -251,8 +251,13 @@ test('allowlisted DTOs, resume once, default fields, credentials are not logged'
   assert.equal(input.invocation.toolExecutionPolicy, toolExecutionPolicy);
   assert.equal(input.invocation.requiredTools, requiredTools);
   assert.equal(JSON.stringify({ logs, warnings }).includes('secret'), false);
+  // The next invocation drops the systemPrompt: the bridge must not keep using
+  // the first invocation's instructions, so it releases and re-opens a fragment.
   await collect(bridge.invoke('next', options({ sessionId: 'different' })));
-  assert.equal(provider.calls.open.length, 1);
+  assert.equal(provider.calls.open.length, 2);
+  assert.equal(provider.calls.open[1].input.instructions, '');
+  assert.equal(provider.calls.open[1].input.resume, undefined, 'a new fragment must not resume the replaced one');
+  assert.deepEqual(provider.calls.release, [{ id: 'host', reason: 'session_incompatible' }]);
   const defaults = fixture();
   const messages = await collect(defaults.bridge.invoke('x', options()));
   assert.deepEqual(defaults.provider.calls.open[0].input, { sessionId: 'host', instructions: '', cwd: process.cwd() });

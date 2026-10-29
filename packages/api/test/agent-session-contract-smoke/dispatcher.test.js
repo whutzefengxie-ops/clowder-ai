@@ -138,32 +138,37 @@ test('[8] dispatch forwards text, images, messageIds and the deliveryId verbatim
   await closeTurn(turn);
 });
 
-test('[14] the handle falls back to the host ids when no native id is known yet', async () => {
-  const turn = await openTurn({
+test('[14] no dispatcher is registered while no native id is known', async () => {
+  const registrations = [];
+  const releases = [];
+  const activeRunDispatch = {
+    invocationId: INVOCATION_ID,
+    register(dispatcher) {
+      registrations.push(dispatcher);
+      return () => releases.push(dispatcher);
+    },
+  };
+  const inbox = new AsyncInbox();
+  const { provider, calls } = createFakeProvider({
+    inputSupport: 'supported',
     binding: { state: 'pending_first_input' },
     nativeTurnId: null,
+    events: inbox,
   });
+  const service = bridgeFor(provider);
+  const stream = service.invoke('p', { invocationId: INVOCATION_ID, activeRunDispatch });
+  const iterator = stream[Symbol.asyncIterator]();
+  const firstMessage = iterator.next();
+  inbox.push(outputEvent(1));
+  assert.equal((await firstMessage).value.type, 'text');
 
-  assert.deepEqual(turn.registrations[0].handle, {
-    provider: 'other',
-    carrier: 'other',
-    threadId: HOST_SESSION_ID,
-    turnId: INVOCATION_ID,
-  });
+  assert.equal(registrations.length, 0, 'Host ids must never be substituted for native ids');
+  assert.equal(calls.input.length, 0);
 
-  assert.equal(turn.calls.input.length, 0);
-  const result = await turn.registrations[0].dispatch(
-    { text: 'supplement', messageIds: ['message-1'], deliveryId: 'delivery-1' },
-    { force: false, expectedInvocationId: INVOCATION_ID },
-  );
-  assert.equal(result.accepted, true);
-  assert.deepEqual(
-    turn.calls.input[0].expected,
-    { invocationId: INVOCATION_ID },
-    'no nativeTurnId is invented when the turn did not report one',
-  );
-
-  await closeTurn(turn);
+  inbox.push(doneEvent(2));
+  inbox.close();
+  await collectIterator(iterator);
+  assert.equal(releases.length, 0);
 });
 
 test('[15] dispatch after the turn ended is refused without reaching the provider', async () => {
@@ -255,7 +260,7 @@ test('[19] a dispatch fenced to another invocation is refused before reaching th
   await closeTurn(turn);
 });
 
-test('[26] the dispatcher is registered before the first event, and native_bound leaves its handle alone', async () => {
+test('[26] the dispatcher waits for a real native bind and then registers the native ids', async () => {
   const harness = dispatchHarness();
   const inbox = new AsyncInbox();
   const { provider, calls } = createFakeProvider({
@@ -271,14 +276,8 @@ test('[26] the dispatcher is registered before the first event, and native_bound
   const firstMessage = iterator.next();
 
   await waitFor(() => calls.startTurn.length === 1, 'startTurn');
-  // No event has been produced yet: registration must not wait for one.
-  await waitFor(() => harness.registrations.length === 1, 'registration before the first event');
-  assert.deepEqual(harness.registrations[0].handle, {
-    provider: 'other',
-    carrier: 'other',
-    threadId: HOST_SESSION_ID,
-    turnId: 'turn-1',
-  });
+  // No native session id exists yet: the bridge must not invent the Host id.
+  assert.equal(harness.registrations.length, 0);
 
   inbox.push({
     scope: 'session',
@@ -300,11 +299,13 @@ test('[26] the dispatcher is registered before the first event, and native_bound
   const first = await firstMessage;
   assert.equal(first.value.type, 'session_init');
   assert.equal(first.value.sessionId, 'native-late');
-  assert.equal(
-    harness.registrations[0].handle.threadId,
-    HOST_SESSION_ID,
-    'a mid-turn binding must not rewrite the live handle in 1a',
-  );
+  await waitFor(() => harness.registrations.length === 1, 'registration after native_bound');
+  assert.deepEqual(harness.registrations[0].handle, {
+    provider: 'other',
+    carrier: 'other',
+    threadId: 'native-late',
+    turnId: 'turn-1',
+  });
 
   inbox.push(doneEvent(3));
   inbox.close();

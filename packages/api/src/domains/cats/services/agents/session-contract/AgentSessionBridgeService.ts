@@ -1,19 +1,33 @@
-import { randomUUID } from 'node:crypto';
-import type { CatId } from '@cat-cafe/shared';
+import type { CatId, IdentityAdoptionArtifact } from '@cat-cafe/shared';
 import type * as Service from '../../types.js';
 import type { AgentMessage, AgentServiceOptions as InvokeOptions, MessageMetadata } from '../../types.js';
+import { createActiveRunDispatcher } from './active-run-dispatcher.js';
+import type { CompatibilityStructure } from './compatibility-key.js';
 import { projectSessionEvent } from './event-projection.js';
+import { SessionOpenCache } from './session-open-cache.js';
+import type { BridgeHostSession, BridgeOpenProfile, FragmentSwitchEvent } from './session-open-cache.js';
 import type * as Contract from './types.js';
 
-export interface BridgeHostSession {
-  sessionId: string;
-  resumeNativeSessionId?: string;
-}
+export type { BridgeHostSession, BridgeOpenProfile, FragmentSwitchEvent };
+
 interface BridgeInput {
   catId: CatId;
   provider: Contract.AgentSessionProvider;
   resolveHostSession(options: InvokeOptions | undefined): BridgeHostSession;
   resolveMcpServers?(options: InvokeOptions | undefined): Contract.McpServerDescriptor[];
+  /** Frozen model/config for openSession; absent = adapter/native defaults. */
+  resolveOpenProfile?(options: InvokeOptions | undefined): BridgeOpenProfile | undefined;
+  /** Structural facts the Host knows beyond the bridge-derived instruction/workspace/account. */
+  resolveCompatibility?(options: InvokeOptions | undefined): CompatibilityStructure | undefined;
+  /** Persisted evidence that the current instructions were adopted in place (C10 gate). */
+  resolveIdentityArtifact?(options: InvokeOptions | undefined): IdentityAdoptionArtifact | undefined;
+  /** Caller's explicit resume choice; defaults to requireExactResume ? fail : start_new. */
+  resumeOnUnavailable?: 'fail' | 'start_new';
+  onContinuityEvidence?(
+    evidence: Service.ProviderContinuityEvidence,
+    ctx: { sessionId: string },
+  ): void | Promise<void>;
+  onFragmentSwitch?(event: FragmentSwitchEvent): void | Promise<void>;
   onCompactionObserved?(
     observation: Service.ProviderCompactionObservation,
     ctx: { sessionId: string },
@@ -22,13 +36,21 @@ interface BridgeInput {
   metadata?: { provider: string; model: string };
   log?: { info(...a: unknown[]): void; warn(...a: unknown[]): void };
 }
+
 interface LiveTurn {
   sessionId: string;
   turn: Contract.TurnRef;
   accepting: boolean;
   receipts: Map<string, () => Promise<void>>;
   release?: () => void;
+  dispatchRegistration?: Service.AgentClientActiveRunDispatchRegistration;
+  registered?: boolean;
+  /** Real provider-native session id; absent until the provider binds one. */
+  nativeSessionId?: string;
+  /** Set once cancellation was requested; awaited before any busy binding is released. */
+  cancel?: Promise<Contract.CancelResult | undefined>;
 }
+
 class SessionFailure extends Error {
   constructor(
     readonly code: string,
@@ -37,24 +59,24 @@ class SessionFailure extends Error {
     super(reason ?? code);
   }
 }
-function dispatchResult(
-  result: Contract.InputResult,
-  handle: Service.AgentClientActiveRunHandle,
-): Service.AgentClientDispatchResult {
-  if (result.status === 'accepted') return { accepted: true, handle };
-  const reasons = { unknown: 'exception', turn_ended: 'active_run_closed', unsupported: 'provider_rejected' } as const;
-  return {
-    accepted: false,
-    reason: result.status === 'rejected' ? result.reason : reasons[result.status],
-    acceptance: result.status === 'unknown' ? 'unknown' : 'not_accepted',
-  };
-}
 
 /** Internal / unstable. No provider-specific policy or Host invocation machinery crosses this boundary. */
 export class AgentSessionBridgeService implements Service.AgentService {
-  private readonly sessions = new Map<string, Promise<Contract.OpenSessionResult>>();
+  /** Host sessions with a live turn; a turn keeps its busy fence until it is proofably over. */
   private readonly active = new Set<string>();
-  constructor(private readonly input: BridgeInput) {}
+  private readonly opens: SessionOpenCache;
+  constructor(private readonly input: BridgeInput) {
+    this.opens = new SessionOpenCache({
+      provider: input.provider,
+      ...(input.resolveOpenProfile ? { resolveOpenProfile: input.resolveOpenProfile } : {}),
+      ...(input.resolveCompatibility ? { resolveCompatibility: input.resolveCompatibility } : {}),
+      ...(input.resolveIdentityArtifact ? { resolveIdentityArtifact: input.resolveIdentityArtifact } : {}),
+      ...(input.resumeOnUnavailable ? { resumeOnUnavailable: input.resumeOnUnavailable } : {}),
+      ...(input.onFragmentSwitch ? { onFragmentSwitch: input.onFragmentSwitch } : {}),
+      ...(input.log ? { log: input.log } : {}),
+      isActive: (sessionId) => this.active.has(sessionId),
+    });
+  }
   invoke(prompt: string, options?: InvokeOptions): AsyncIterable<AgentMessage> {
     return this.run({ kind: 'frozen', text: prompt }, options);
   }
@@ -65,91 +87,27 @@ export class AgentSessionBridgeService implements Service.AgentService {
     return this.run({ kind: 'deferred', settle: (facts) => preflight.settle(facts) }, options);
   }
   async releaseAll(reason: string): Promise<void> {
-    const sessions = [...this.sessions];
-    this.sessions.clear();
-    await Promise.all(
-      sessions.map(async ([id, opened]) => {
-        try {
-          if (!(await opened).ok) return;
-          const result = await this.input.provider.release(id, reason);
-          if (!result.ok) this.input.log?.warn('Session release failed', result.reason);
-        } catch {
-          this.input.log?.warn('Session release failed');
-        }
-      }),
-    );
+    this.active.clear();
+    await this.opens.releaseAll(reason);
   }
-  private open(
-    host: BridgeHostSession,
-    options: InvokeOptions,
-    signal: AbortSignal,
-  ): Promise<Contract.OpenSessionResult> {
-    const cached = this.sessions.get(host.sessionId);
-    if (cached) return cached;
-    const opened = Promise.resolve().then(() =>
-      this.input.provider.openSession(
-        {
-          sessionId: host.sessionId,
-          instructions: options.systemPrompt ?? '',
-          cwd: options.workingDirectory ?? process.cwd(),
-          ...(host.resumeNativeSessionId
-            ? { resume: { nativeSessionId: host.resumeNativeSessionId, onUnavailable: 'start_new' as const } }
-            : {}),
-        },
-        signal,
-      ),
-    );
-    this.sessions.set(host.sessionId, opened);
-    const forget = () => {
-      if (this.sessions.get(host.sessionId) === opened) this.sessions.delete(host.sessionId);
-    };
-    void opened.then((result) => {
-      if (!result.ok) forget();
-    }, forget);
-    return opened;
-  }
-  private register(live: LiveTurn, metadata: MessageMetadata, options: InvokeOptions): void {
-    const { provider } = this.input;
-    const registration = options.activeRunDispatch;
-    const capabilities = provider.capabilities(live.sessionId);
-    if (!registration || capabilities.input !== 'supported') return;
-    const expected = { ...live.turn, invocationId: registration.invocationId };
-    const handle: Service.AgentClientActiveRunHandle = {
-      provider: 'other',
-      carrier: 'other',
-      threadId: metadata.sessionId ?? live.sessionId,
-      turnId: live.turn.nativeTurnId ?? expected.invocationId,
-    };
-    const dispatcher: Service.AgentClientActiveRunDispatcher = {
-      invocationId: registration.invocationId,
-      handle,
-      capabilities: { append: true, steer: false, inputReadReceipt: capabilities.inputReadReceipt === 'supported' },
-      dispatch: async (input, options) => {
-        if (!live.accepting) return { accepted: false, reason: 'active_run_closed', acceptance: 'not_accepted' };
-        if (options.expectedInvocationId !== expected.invocationId)
-          return { accepted: false, reason: 'active_run_mismatch', acceptance: 'not_accepted' };
-        if (options.force) return { accepted: false, reason: 'provider_rejected', acceptance: 'not_accepted' };
-        const deliveryId = input.deliveryId ?? randomUUID();
-        if (input.onInputRead) live.receipts.set(deliveryId, input.onInputRead);
-        try {
-          const result = await provider.input(live.sessionId, expected, {
-            text: input.text,
-            images: input.imagePaths,
-            messageIds: input.messageIds,
-            deliveryId,
-          });
-          if (result.status !== 'accepted' && result.status !== 'unknown') live.receipts.delete(deliveryId);
-          return dispatchResult(result, handle);
-        } catch {
-          return dispatchResult({ status: 'unknown' }, handle);
-        }
-      },
-    };
-    const inspect = provider.inspectInput;
-    if (inspect)
-      dispatcher.inspectInput = (deliveryId) =>
-        live.accepting ? inspect.call(provider, live.sessionId, expected, deliveryId) : Promise.resolve('unknown');
-    live.release = registration.register(dispatcher);
+  private register(live: LiveTurn): void {
+    if (live.registered || !live.dispatchRegistration || !live.nativeSessionId || !live.turn.nativeTurnId) return;
+    const capabilities = this.input.provider.capabilities(live.sessionId);
+    if (capabilities.input !== 'supported') return;
+    const { dispatcher } = createActiveRunDispatcher({
+      provider: this.input.provider,
+      sessionId: live.sessionId,
+      nativeSessionId: live.nativeSessionId,
+      nativeTurnId: live.turn.nativeTurnId,
+      invocationId: live.dispatchRegistration.invocationId,
+      turn: live.turn,
+      capabilities,
+      isAccepting: () => live.accepting,
+      receipts: live.receipts,
+      warn: (message) => this.input.log?.warn(message),
+    });
+    live.release = live.dispatchRegistration.register(dispatcher);
+    live.registered = true;
   }
   private close(live: LiveTurn): void {
     live.accepting = false;
@@ -157,6 +115,29 @@ export class AgentSessionBridgeService implements Service.AgentService {
     live.release = undefined;
     live.receipts.clear();
     release?.();
+  }
+  /**
+   * The busy fence and the live-input registration are only released after the
+   * provider confirms cancellation. A phase that stops short of stopped
+   * execution (or a failed/unknown cancel) keeps the fence instead of claiming
+   * a state the Host cannot prove (C12).
+   */
+  private async settleCancel(live: LiveTurn): Promise<boolean> {
+    const pending = live.cancel;
+    if (!pending) {
+      this.active.delete(live.sessionId);
+      this.close(live);
+      return true;
+    }
+    const result = await pending;
+    if (result?.phase) this.input.log?.info('Session cancel phase', result.phase);
+    const confirmed = result?.ok === true || result?.code === 'turn_ended';
+    const stopped =
+      result?.phase === undefined || result.phase === 'execution_stopped' || result.phase === 'host_terminal';
+    if (!confirmed || !stopped) return false;
+    this.active.delete(live.sessionId);
+    this.close(live);
+    return true;
   }
   private async observe(event: Contract.AgentSessionEvent, live: LiveTurn): Promise<void> {
     if (event.type === 'input_read') {
@@ -166,7 +147,12 @@ export class AgentSessionBridgeService implements Service.AgentService {
         .then(receipt)
         .catch(() => this.input.log?.warn('Input receipt failed'));
     }
-    if (event.type === 'continuity') this.input.log?.info('Session continuity', event.evidence);
+    if (event.type === 'continuity') {
+      this.input.log?.info('Session continuity', event.evidence);
+      void Promise.resolve(this.input.onContinuityEvidence?.(event.evidence, { sessionId: live.sessionId })).catch(
+        () => this.input.log?.warn('Continuity evidence callback failed'),
+      );
+    }
     if (event.type === 'compaction_observed') {
       try {
         await this.input.onCompactionObserved?.(event.observation, { sessionId: live.sessionId });
@@ -187,11 +173,16 @@ export class AgentSessionBridgeService implements Service.AgentService {
       wake = () => resolve(undefined);
     });
     const cancel = () => {
-      this.close(live);
+      live.accepting = false;
       wake();
-      void this.input.provider
-        .cancelTurn(live.sessionId, live.turn, 'abort')
-        .catch(() => this.input.log?.warn('Session turn cancellation failed'));
+      if (live.cancel) return;
+      live.cancel = this.input.provider.cancelTurn(live.sessionId, live.turn, 'abort').then(
+        (result) => result,
+        () => {
+          this.input.log?.warn('Session turn cancellation failed');
+          return undefined;
+        },
+      );
     };
     const iterator = events[Symbol.asyncIterator]();
     signal.addEventListener('abort', cancel, { once: true });
@@ -202,8 +193,11 @@ export class AgentSessionBridgeService implements Service.AgentService {
         if (!next || next.done || signal.aborted) return;
         await this.observe(next.value, live);
         if (signal.aborted) return;
-        if (next.value.type === 'native_bound')
+        if (next.value.type === 'native_bound') {
           session.binding = { state: 'bound', nativeSessionId: next.value.nativeSessionId };
+          live.nativeSessionId = next.value.nativeSessionId;
+          this.register(live);
+        }
         for (const message of projectSessionEvent(next.value, { catId: this.input.catId, metadata })) yield message;
         if (next.value.type === 'done') return;
       }
@@ -223,8 +217,10 @@ export class AgentSessionBridgeService implements Service.AgentService {
   ) {
     if (!options) throw new SessionFailure('host_session_unavailable');
     if (!options.invocationId) throw new SessionFailure('invocation_id_missing');
+    // A pre-aborted invocation must not open a native session it will never use.
+    if (signal.aborted) throw new SessionFailure('cancelled');
     const host = this.input.resolveHostSession(options);
-    const session = await this.open(host, options, signal);
+    const session = await this.opens.open(host, options, signal);
     if (!session.ok) throw new SessionFailure(session.code, session.reason);
     const invocation = {
       invocationId: options.invocationId,
@@ -247,12 +243,25 @@ export class AgentSessionBridgeService implements Service.AgentService {
       turn: { invocationId: invocation.invocationId },
       accepting: true,
       receipts: new Map(),
+      ...(session.binding.state === 'bound' ? { nativeSessionId: session.binding.nativeSessionId } : {}),
+      ...(options.activeRunDispatch ? { dispatchRegistration: options.activeRunDispatch } : {}),
     };
     return { host, session, invocation, live };
   }
   private failure(error: unknown): SessionFailure {
     if (error instanceof SessionFailure) return error;
     return new SessionFailure('session_contract_failed', error instanceof Error ? error.message : String(error));
+  }
+  private terminalMessage(
+    terminal: AgentMessage | undefined,
+    metadata: MessageMetadata,
+    signal: AbortSignal,
+    cancelUnconfirmed: boolean,
+  ): AgentMessage {
+    // A synthetic terminal uses the final session context; a provider terminal keeps its own usage fact.
+    const done = terminal ?? this.message('done', metadata, { errorCode: 'provider_stream_ended_without_done' });
+    if (signal.aborted) done.errorCode = cancelUnconfirmed ? 'cancel_unconfirmed' : 'cancelled';
+    return done;
   }
   private async *run(prompt: Contract.PromptSource, options?: InvokeOptions): AsyncIterable<AgentMessage> {
     const metadata: MessageMetadata = {
@@ -261,6 +270,7 @@ export class AgentSessionBridgeService implements Service.AgentService {
     const signal = options?.signal ?? new AbortController().signal;
     let live: LiveTurn | undefined;
     let terminal: AgentMessage | undefined;
+    let cancelUnconfirmed = false;
     try {
       const prepared = await this.prepare(options, signal, prompt, metadata);
       live = prepared.live;
@@ -272,7 +282,7 @@ export class AgentSessionBridgeService implements Service.AgentService {
       );
       if (!started.ok) throw new SessionFailure(started.code, started.reason);
       live.turn = started.turn;
-      if (!signal.aborted) this.register(live, metadata, options ?? {});
+      if (!signal.aborted) this.register(live);
       for await (const message of this.consume(started.events, live, metadata, signal, session)) {
         if (message.type === 'done') {
           terminal = message;
@@ -285,14 +295,8 @@ export class AgentSessionBridgeService implements Service.AgentService {
       terminal = this.message('done', metadata, { errorCode: failure.code });
       if (!signal.aborted) yield this.message('error', metadata, { errorCode: failure.code, error: failure.message });
     } finally {
-      if (live) {
-        this.active.delete(live.sessionId);
-        this.close(live);
-      }
+      if (live) cancelUnconfirmed = !(await this.settleCancel(live));
     }
-    // A synthetic terminal uses the final session context; a provider terminal keeps its own usage fact.
-    terminal ??= this.message('done', metadata, { errorCode: 'provider_stream_ended_without_done' });
-    if (signal.aborted) terminal.errorCode = 'cancelled';
-    yield terminal;
+    yield this.terminalMessage(terminal, metadata, signal, cancelUnconfirmed);
   }
 }
