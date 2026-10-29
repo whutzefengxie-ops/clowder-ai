@@ -283,3 +283,5 @@ F326 Phase D resolves the existing member id, then projects its one member-avata
 Host 通过现有 AgentService 的内部 cancellationMode:drain 声明识别 adapter 对取消及清理的所有权，不用 vendor 名推断。invocation 对该流等待清理，parallel merge 不提前合成其终态；声明固定在 Registered invocation view。未声明的 legacy 继续原有有界退出。该声明不是对未知/失败停止或全部平台的认证。
 
 并行 invocation 的局部 AbortController 合入 batch/per-cat 信号；merger 对声明 drain 的 child 拥有退出取消与等待责任，所有受控 child 清理结束后再报告错误。原生 ACP 提前 return 时必须先在仍有活动请求的内层边界取消，再关闭 promptStream，不能把移除本地监听误认成上游停止。关闭失败的 unknown/恢复仍由既有执行 owner 待闭环。
+
+启动恢复的原 interruptRunningBefore 不以 Host 年龄证明 native 停止：providerLifecycleTracked 且已有 providerStartedAt、没有 providerTeardownAt 的 child 继续 running，不进入 response 终态收尾。停止证明由原执行 owner 写回原字段之后，才可沿已有恢复收敛；这是原记录的判断，不是新的取消状态权威。

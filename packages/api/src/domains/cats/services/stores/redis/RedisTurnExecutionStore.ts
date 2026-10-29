@@ -9,6 +9,7 @@ import {
   type CreateTurnExecutionResult,
   cloneTurnExecutionRecord,
   createdOutputFence,
+  hasUnconfirmedProviderTeardown,
   type InterruptRunningTurnExecutionsInput,
   type ITurnExecutionStore,
   matchesTurnExecutionSource,
@@ -306,7 +307,8 @@ export class RedisTurnExecutionStore implements ITurnExecutionStore {
         await this.redis.srem(TurnExecutionKeys.running, invocationId);
         continue;
       }
-      if (record.startedAt >= cutoffStartedAt || excluded.has(invocationId)) continue;
+      if (record.startedAt >= cutoffStartedAt || excluded.has(invocationId) || hasUnconfirmedProviderTeardown(record))
+        continue;
       const result = await this.transitionTerminal(invocationId, {
         status: 'interrupted',
         endedAt: input.endedAt,

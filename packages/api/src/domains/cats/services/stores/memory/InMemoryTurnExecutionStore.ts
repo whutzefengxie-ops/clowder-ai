@@ -9,6 +9,7 @@ import {
   type CreateTurnExecutionResult,
   cloneTurnExecutionRecord,
   createdOutputFence,
+  hasUnconfirmedProviderTeardown,
   type InterruptRunningTurnExecutionsInput,
   type ITurnExecutionStore,
   matchesTurnExecutionSource,
@@ -166,7 +167,12 @@ export class InMemoryTurnExecutionStore implements ITurnExecutionStore {
     const interrupted: TurnExecutionRecord[] = [];
     const excluded = new Set(input.excludedInvocationIds ?? []);
     for (const record of this.records.values()) {
-      if (record.status !== 'running' || record.startedAt >= cutoffStartedAt || excluded.has(record.invocationId)) {
+      if (
+        record.status !== 'running' ||
+        record.startedAt >= cutoffStartedAt ||
+        excluded.has(record.invocationId) ||
+        hasUnconfirmedProviderTeardown(record)
+      ) {
         continue;
       }
       const result = this.transitionTerminal(record.invocationId, {

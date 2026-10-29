@@ -576,3 +576,11 @@ checkpoint_review 对 0c7bd2f86ce4231513301b519ea0a66802af86ba 返回 approved�
 关闭失败的下一条事实核验已加入真实 InMemoryTurnExecutionStore：cancel-routing-failure-records-red.log 两条有效 FAIL。native-route-failure-records/owned native state OPqcZC（serial）和 gUZOwB（parallel）的 wire-evidence.json 显示 nativeAliveAtTerminal=true，response/execution 均 canceled、providerTeardownAt 却已写入，activeChildren=0。两实例均在 finally 受控关闭并保留数据。不能仅修改错误码或 toast；必须贯通停止未确认的实际事实，保持原 child/R 与同一资源准入阻断，待原恢复 owner 精确确认后收敛。
 
 独立 advisory 已确认最小边界（不是实现批准）：原 Turn/Message/queue owner 保持权威；保留原 native owner 的句柄及精确归属，池移除 entry 和 closed 标志不能代替 OS exit；recovery 核对同 parent/child/资源，先证实 gone 或受控停止再持久化/解阻；启动恢复不能直接把未知 running interrupt 后复用原生会话。源码追踪进一步确认 cli-process-ownership 的进程快照在 Windows 返回 null，ACP 只在非 Windows 使用既有 Unix supervisor；跨平台恢复不能套用未经证明的 Unix 完整性。这与 W2 尚未完成的持久引用/绑定来源和 W3 兼容片段相关，下一实施需同时补真实 owner 依据，禁止新建取消数据库或用无界空 Promise 暂存未知状态。当前没有提交这部分未经验证的恢复实现。
+
+## W3 启动恢复保留未确认停止的执行（尚未完成 W3）
+
+真实 InMemoryTurnExecutionStore→TurnExecutionStartupReconciler 的 unknown-restart-red.log 两条 FAIL，覆盖 startedAt=0/50：tracked provider 已启动、没有 providerTeardownAt，单凭 Host restart 会把 child interrupted 并进入 response settlement。现在内存/Redis 原 interruptRunningBefore 共用既有三字段的纯判断，保留该 running child；未发出、旧无 tracking 字段、已证实 teardown 以及本来已终态的处理保持原流程。拿到精确停止证明写入原 providerTeardownAt 后，同一 child 再次恢复可以收尾，不需新字段或取消数据库。
+
+API tsc exit 0 后，unknown-restart-green.log 27 PASS，包含新三条及原内存/启动恢复/历史记录检查。Redis 分支使用真实 RedisTurnExecutionStore 和正式 codec 读取合法 hash，验证未知记录不会调用 terminal Lua 或移除 running index；该分支是受控读取边界测试，不是实际 Redis 服务、跨进程或最终发行物验收。四文件 Biome 无错误，两条既有复杂度警告保留，无服务/端口/原生进程或业务数据操作。
+
+复杂度复核：只复用现有 owner 字段、两个存储实现共用一项判断；无新状态库、watcher、恢复器或定时器。缺证明时旧 tracked 执行会继续阻止恢复收尾，这是本切片的明确行为；受控停止/精确 OS owner 证据的后续接线尚未完成。它不能修复已经被旧取消路径误写的 terminal 历史，也不能代替仍开放的 live close 失败两个反例。完整 C12/W3 仍未验收，等待独立审查。
