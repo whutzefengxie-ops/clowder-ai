@@ -272,18 +272,24 @@
       "status": "NOT_STARTED"
     }
   ],
-  "lastProgressAt": "2026-10-29T22:58:10Z",
+  "lastProgressAt": "2026-10-29T23:06:46Z",
   "cancelBroadcastCheckpointReview": {
-    "verdict": "PENDING",
+    "verdict": "PENDING_RE_REVIEW",
+    "lastReviewedHead": "91d5c02b9e7c1e9365a4d2236b302ae43a4097b8",
+    "lastVerdict": "changes_requested",
+    "findings": ["P2 confirmed-gone REST recovery lost its terminal projection"],
     "evidence": "README.md#W3-取消请求广播与前端消费尚未完成-W3",
-    "tests": { "red": "1 PASS + 2 FAIL", "api": "35 PASS", "web": "19 PASS" },
+    "tests": { "red": "1 PASS + 2 FAIL", "recoveryRed": "1 PASS + 1 FAIL", "api": "161 PASS", "ownedTerminalAssertions": "40 PASS", "web": "19 PASS" },
     "scope": "Request projection and real existing consumers only; native unknown recovery and complete C12 remain incomplete"
   },
   "cancelQuiescenceCheckpointReview": {
     "verdict": "PENDING_RE_REVIEW",
     "originalReviewedHead": "cbb5124c2d48f888ebfb02127081c8f27ba9de25",
     "originalVerdict": "changes_requested",
-    "findings": ["P2 next-path cleanup failure clears active", "P2 unstarted concurrent return/next leaves permanent busy"],
+    "closedFindings": ["P2 next-path cleanup failure clears active", "P2 unstarted concurrent return/next leaves permanent busy"],
+    "lastReviewedHead": "91d5c02b9e7c1e9365a4d2236b302ae43a4097b8",
+    "lastVerdict": "changes_requested",
+    "findings": ["P2 confirmed-gone REST recovery lost its terminal projection"],
     "evidence": "README.md#W3-取消终态与迭代器清理纵向切片尚未完成-W3",
     "tests": { "red": "5 FAIL", "reviewRed": "7 PASS + 2 FAIL", "contracts": "197 PASS", "authorReplay": "5 PASS" },
     "scope": "Existing bridge/ACP iterator and terminal boundary; native unknown recovery/transport terminal/full C12 remain incomplete"

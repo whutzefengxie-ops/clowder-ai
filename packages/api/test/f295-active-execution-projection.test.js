@@ -812,6 +812,13 @@ describe('F295 active execution projection', () => {
     assert.equal(cancel.statusCode, 200);
     assert.equal(cancel.json().cancelled, true);
     assert.equal(deps._turnTerminalCalls.at(-1)?.invocationId, 'turn-natural-exit');
+    const terminals = deps.socketManager.broadcastAgentMessage.mock.calls
+      .map((call) => call.arguments[0])
+      .filter((message) => message.type === 'done');
+    assert.equal(terminals.length, 1);
+    assert.equal(terminals[0].invocationId, 'inv-natural-exit');
+    assert.equal(terminals[0].turnInvocationId, 'turn-natural-exit');
+    assert.equal(terminals[0].errorCode, 'cancelled');
   });
 
   it('keeps process cancellation successful when tracker-less terminalization needs recovery', async () => {
@@ -1307,6 +1314,13 @@ describe('F295 active execution projection', () => {
     assert.equal(deps.cliExecutionOwnerService.terminateExact.mock.callCount(), 3);
     assert.equal(deps._turnTerminalCalls.at(-1)?.terminal.status, 'failed');
     assert.equal(deps._turnTerminalCalls.at(-1)?.terminal.terminalReason, 'control_plane_unavailable');
+    const terminals = deps.socketManager.broadcastAgentMessage.mock.calls
+      .map((call) => call.arguments[0])
+      .filter((message) => message.type === 'done');
+    assert.equal(terminals.length, 1);
+    assert.equal(terminals[0].invocationId, 'inv-terminate-degraded');
+    assert.equal(terminals[0].turnInvocationId, 'turn-terminate-degraded');
+    assert.equal(terminals[0].errorCode, 'control_plane_unavailable');
   });
 
   it('persists control-plane failure through the ordinary response and input settlement chain', async () => {

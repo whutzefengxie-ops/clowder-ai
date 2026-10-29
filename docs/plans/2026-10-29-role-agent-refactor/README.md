@@ -518,3 +518,11 @@ buildCancelMessages 原先收到本地取消即发无原生停止证据的 done/
 `cancel-request-state-web-final.log` 19 PASS，包括新两条真实 Zustand store 的当前/后台 consumer 检查、既有并发取消与停止按钮：请求到来保留执行槽位/loading，真实 done 后才清理。API tsc、Web tsc 均 exit 0，六文件 Biome 无错误。首次 Web 包装器无法直接 spawn Windows pnpm shim，保留 ENOENT 日志；改由本机已安装 Vitest package 的实际 Node 入口执行，无依赖安装。既有组件测试的 React act 警告保留，没有修改组件行为。
 
 复杂度复核及 map delta：transport→现有消息消费者只投影请求，lifecycle 继续是终态 owner；函数更短，不新增 store、重试器、消息类型或状态 DSL，更新 transport cell。前端只补回归，没有增加产品状态。此处仍不证明 native 进程已停止、取消断线/未知执行已恢复、release 失败或重启已安全、最终安装物验收通过，C12/W3 继续未完成。等待与取消清理切片一起独立复核。
+
+checkpoint_review 对 `91d5c02b9e7c1e9365a4d2236b302ae43a4097b8` 返回 changes_requested：原两个 iterator P2 均独立 GREEN，但新增一条恢复 P2。真实 Fastify→queueRoutes 的完整权威来源均确认旧执行已消失、返回 reconciled:true 并释放 slot，此时共享函数只发 status，没有 producer 再发 done，聊天槽位不收敛。独立 37 PASS+1 FAIL，原反例和日志保留。
+
+作者采用该实际路由反例，新增“完整已消失”与“来源不完整且不能落盘失败”两个对照；`cancel-recovery-terminal-red.log` 2 项=1 PASS+1 FAIL。修复不新增广播模式参数：由既有恢复 owner 在本身已经有证据的三个位置直接发终态。完整来源确认 gone 后为已知 parent 发 done；terminateExact.complete 且子终态写入后按精确 parent/child 发 cancelled done；控制失败的修复已落盘后按精确身份发带 control_plane_unavailable 等原因的失败 done。普通 tracker 取消、lock-only、未经 native 确认的孤儿记录和混合 force-reset 仍只发请求，不由名字推断停止。
+
+`cancel-recovery-regression.log` 161 PASS，含新恢复对照、F295 的多来源/精确进程/替代执行保护、全部 queue API、真实 Socket/ACP 及 cancel-auto-resume；追加 owned done 的 parent/child/errorCode 断言后 `cancel-recovery-owner-final.log` 40 PASS。作者回放 reviewer 原恢复反例 `cancel-recovery-reviewer-replay.log` 1 PASS，未冒充独立批准。之前 queue API 扩查的 86 项中 3 条旧普通请求 done 断言已迁到 status 且明确禁止 done，最终全过；不恢复这些错误的终态断言。API tsc exit 0、四文件 Biome 无错误。
+
+复杂度复核：三个既有 owner 的少量明确投影，保留其原控制流与前置证明；无广播开关、通用状态机、新存储或重试层。force-reset/lock-only 等未知 native 状态未被改成虚假成功，完整 C12 的恢复/阻止新 turn 仍需继续验证。独立复核待重发至修复 SHA。

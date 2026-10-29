@@ -92,6 +92,8 @@ F247 owns the cloud Host append, while this cell owns how its result becomes thr
 
 既有 SocketManager/REST 取消广播仅报告明确目标的非终态 status，不因本地 AbortController 或 mutex 恢复就发 done，也不为缺失目标编造默认成员。实际 done 仍由原 execution/lifecycle 路由收敛；前端当前/后台线程的既有消费者保持执行槽位，直到收到该终态。本边界不成为原生取消确认、未知状态恢复或会话资源释放的新 owner。
 
+没有后续 producer 的恢复由既有 queue execution owner 直接投影终态：完整来源确认执行消失、terminateExact 完成并写入子终态、或失败终态已持久化。消息携带精确 parent/child 身份；失败保留原因，不声称 native 已取消。仅释放锁、孤儿旧记录或混合 force-reset 不自动取得这些证明。请求广播不承担该裁决，也不提供隐藏的“强制终态”开关。
+
 ## Static Scan Hints
 
 Watch for new or renamed `ConnectorRouter`, `MessageEnvelope`, `Adapter`, `BindingStore`, `OutboundDeliveryHook`, `StreamingOutboundHook`, `CrossThreadCoordination`, `resolveCrossThreadCoordination`, `cancel_invocation`, `clientInstanceId`, `actionId`, `coordinationId`, `effectClass`, `onClosureCatchingUp`, `onClosureBlocked`, `published_with_unseen`, `supplement_declined`, `OutputCommitDecision`, `sendReply`, `sendFormattedReply`, and `sendMedia` implementations.

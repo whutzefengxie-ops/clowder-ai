@@ -16,7 +16,7 @@ import { isTaskHandoffSource } from '../domains/ball-custody/OrdinaryTaskHandoff
  */
 
 import { randomUUID } from 'node:crypto';
-import type { CatId, FreshnessCarrierCapability } from '@cat-cafe/shared';
+import { type CatId, createCatId, type FreshnessCarrierCapability } from '@cat-cafe/shared';
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import {
@@ -603,13 +603,20 @@ export const queueRoutes: FastifyPluginAsync<QueueRoutesOptions> = async (app, o
         queueProcessor.releaseSlot(input.threadId, input.catId);
       }
     }
-    for (const message of buildCancelMessages({
-      cancelled: true,
-      catIds: [input.catId],
-      executionIds: [input.executionId],
-    })) {
-      socketManager.broadcastAgentMessage(message, input.threadId);
-    }
+    // Durable repair owns this failed Host terminal. It does not claim that
+    // an unavailable native control plane confirmed successful cancellation.
+    socketManager.broadcastAgentMessage(
+      {
+        type: 'done',
+        catId: createCatId(input.catId),
+        invocationId: input.executionId,
+        ...(input.invocationId ? { turnInvocationId: input.invocationId } : {}),
+        errorCode: failureReason,
+        isFinal: true,
+        timestamp: Date.now(),
+      },
+      input.threadId,
+    );
     return { reconciled: true };
   };
 
@@ -664,13 +671,20 @@ export const queueRoutes: FastifyPluginAsync<QueueRoutesOptions> = async (app, o
       'cancel',
       [input.executionId],
     );
-    for (const message of buildCancelMessages({
-      cancelled: true,
-      catIds: [input.catId],
-      executionIds: [input.executionId],
-    })) {
-      socketManager.broadcastAgentMessage(message, input.threadId);
-    }
+    // terminateExact completed and durable child terminalization succeeded;
+    // no live provider remains to publish this exact execution's terminal.
+    socketManager.broadcastAgentMessage(
+      {
+        type: 'done',
+        catId: createCatId(input.catId),
+        invocationId: input.executionId,
+        turnInvocationId: input.invocationId,
+        errorCode: 'cancelled',
+        isFinal: true,
+        timestamp: Date.now(),
+      },
+      input.threadId,
+    );
     return { cancelled: true };
   };
 
@@ -829,13 +843,16 @@ export const queueRoutes: FastifyPluginAsync<QueueRoutesOptions> = async (app, o
     // The socket projection is only a legacy witness. Once every authoritative
     // source says the exact run is gone, publish convergence even when there was
     // no remaining local artifact to remove.
-    for (const message of buildCancelMessages({
-      cancelled: true,
-      catIds: [input.catId],
-      executionIds: [input.executionId],
-    })) {
-      socketManager.broadcastAgentMessage(message, input.threadId);
-    }
+    socketManager.broadcastAgentMessage(
+      {
+        type: 'done',
+        catId: createCatId(input.catId),
+        invocationId: input.executionId,
+        isFinal: true,
+        timestamp: Date.now(),
+      },
+      input.threadId,
+    );
     return {
       reconciled: Boolean(
         inflight ||
