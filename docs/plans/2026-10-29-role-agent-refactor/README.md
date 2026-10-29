@@ -252,3 +252,5 @@ Kimi 无法完全关闭原生自动发现，因此启动前仍读取下层配置
 独立审查 `a1fae7d67d33c7be0d868bf7b06c7c2af7dba06d` 发现 P2：普通对象的 `__proto__` 赋值丢掉原生 MCP 拒绝项。最初 0.34 loader 会过滤该名称，不能证明真实后果；reviewer 进一步获取方案所引的 Kimi 2.2 提交 `472192c34c1efad89a369870eff0da0b708ce9bb`，直接执行其 `packages/agent-core-v2/src/app/mcpConfig/configLoader.ts`，证明该名称被保留，缺拒绝时 enabled 非 false；同版连接 owner 据 enabled 判定是否启用，P2 因而成立。源文件、loader 映射与独立反例保留在 reviewer artifacts，未将不同版本的结果混为一谈，也未启动模型。
 
 现仅在原拒绝函数以 Object.defineProperty 创建可枚举自有项，恢复原 map 对特殊名称的语义；捕获与启动补拒绝两处共用。两条公开反例分别覆盖准入前已有及准入后新增名称，`kimi-mcp-prototype-red.log` 先 RED；修复后 `kimi-mcp-prototype-green.log` 51 项=50 PASS+原 Windows URL.pathname FAIL，API tsc 通过，未改变 MCP 策略或验证门槛。修复等待同一 reviewer 以原 2.2 实际消费者复审。
+
+checkpoint_review 对 `30ebd15fd8d2fd49069f289536d54650a866949d` 复审确认上述 2.2 effective 拒绝反例 GREEN；另返回 P2：嵌套 cwd 的可选 `.mcp.json` 被无条件纳入 strict 拒绝层，损坏 JSON 阻断准入，原基线与实际 2.2 均会忽略该非原生发现层。现恢复原 `mcpSupport === false` 纳入条件，未新建宽松解析或绕过权限。两条公开反例分别在准入前损坏、准入后变损坏，先 RED，修复后冻结允许项仍保持原值，原生 HOME/根目录拒绝继续生效。`kimi-mcp-nested-green.log` 53 项=52 PASS+原 Windows URL.pathname FAIL，API tsc 通过；等待同一 reviewer 对新提交复审，无真实模型调用。

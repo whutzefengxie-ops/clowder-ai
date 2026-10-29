@@ -27,6 +27,8 @@ for (const scenario of [
   'project-root-change',
   'prototype-native-before',
   'prototype-native-after',
+  'nested-optional-malformed',
+  'nested-optional-changed',
 ]) {
   test(`Kimi native MCP writer consumes its admitted configuration: ${scenario}`, async (t) => {
     const artifacts = join(process.cwd(), 'artifacts', 'role-agent-refactor', 'kimi-mcp-freeze');
@@ -35,6 +37,7 @@ for (const scenario of [
     t.diagnostic(`retained isolated Kimi MCP fixture: ${root}`);
     const host = join(root, 'host');
     const project = join(root, 'project');
+    const workingDirectory = scenario.startsWith('nested-optional-') ? join(project, 'nested') : project;
     const nativeBefore = join(root, 'native-before');
     const nativeAfter = join(root, 'native-after');
     const mcpServerPath = join(host, 'packages', 'mcp-server', 'dist', 'index.js');
@@ -42,6 +45,7 @@ for (const scenario of [
       join(host, '.cat-cafe'),
       join(host, 'packages', 'mcp-server', 'dist'),
       join(project, '.git'),
+      workingDirectory,
       nativeBefore,
       nativeAfter,
     ])
@@ -90,15 +94,19 @@ for (const scenario of [
         JSON.stringify({
           version: 1,
           capabilities:
-            scenario === 'project-mcp'
+            scenario === 'project-mcp' || scenario === 'nested-optional-changed'
               ? []
               : [{ id: 'fixture-server', type: 'mcp', globalEnabled: true, enabled: true, mcpServer: server }],
         }),
       );
-      if (scenario === 'project-mcp')
-        writeFileSync(join(project, '.mcp.json'), JSON.stringify({ mcpServers: { 'fixture-server': server } }));
+      if (scenario === 'project-mcp' || scenario === 'nested-optional-changed')
+        writeFileSync(
+          join(workingDirectory, '.mcp.json'),
+          JSON.stringify({ mcpServers: { 'fixture-server': server } }),
+        );
     };
     writeConfig('before');
+    if (scenario === 'nested-optional-malformed') writeFileSync(join(workingDirectory, '.mcp.json'), '{malformed');
     const configuredPath = scenario === 'injection-disabled' ? '' : mcpServerPath;
     const proc = createMockProcess();
     let launched;
@@ -110,14 +118,14 @@ for (const scenario of [
       spawnFn: (_command, _args, options) => {
         launched = {
           env: options.env,
-          servers: JSON.parse(readFileSync(join(project, '.kimi-code', 'mcp.json'), 'utf8')).mcpServers,
+          servers: JSON.parse(readFileSync(join(workingDirectory, '.kimi-code', 'mcp.json'), 'utf8')).mcpServers,
         };
         setImmediate(() => void emitEvents(proc, [{ role: 'assistant', content: 'owned-fixture-reply' }]));
         return proc;
       },
     });
     const binding = await prepareInvocationExecutionBinding(
-      { threadStore: { get: () => ({ id: 'thread', projectPath: project, createdBy: 'owner' }) } },
+      { threadStore: { get: () => ({ id: 'thread', projectPath: workingDirectory, createdBy: 'owner' }) } },
       {
         catId: id,
         threadId: 'thread',
@@ -131,6 +139,7 @@ for (const scenario of [
       assert.equal(servers.__proto__.enabled, false);
     }
     writeConfig('after');
+    if (scenario === 'nested-optional-changed') writeFileSync(join(workingDirectory, '.mcp.json'), '{malformed');
     if (scenario === 'member-off') {
       catRegistry.reset();
       Object.entries(all).forEach(([key, config]) => catRegistry.register(key, config));
@@ -153,7 +162,7 @@ for (const scenario of [
     const prepare = () =>
       prepareKimiMcpConfig({
         ...binding.providerOptions,
-        workingDirectory: project,
+        workingDirectory,
         mcpServerPath: configuredPath,
         callbackEnv: { CAT_CAFE_CAT_ID: id },
       });
@@ -162,7 +171,7 @@ for (const scenario of [
         const unexpected = await prepare();
         await unexpected.dispose();
       }, /native project root changed/i);
-      assert.equal(existsSync(join(project, '.kimi-code', 'mcp.json')), false);
+      assert.equal(existsSync(join(workingDirectory, '.kimi-code', 'mcp.json')), false);
       return;
     }
     if (scenario === 'actual-invoke') {
@@ -171,7 +180,7 @@ for (const scenario of [
           ...binding.providerOptions,
           frozenL0Input: binding.frozenL0Input,
           executionPreferences: binding.executionPreferences,
-          workingDirectory: project,
+          workingDirectory,
           callbackEnv: { CAT_CAFE_CAT_ID: id },
         }),
       );
@@ -184,7 +193,7 @@ for (const scenario of [
       assert.equal(launched.servers.homeTool.enabled, false);
       assert.equal(existsSync(join(nativeAfter, 'config.toml')), false, 'secret hooks must not write the later HOME');
       assert.equal(
-        existsSync(join(project, '.kimi-code', 'mcp.json')),
+        existsSync(join(workingDirectory, '.kimi-code', 'mcp.json')),
         false,
         'actual invocation releases its project config lease',
       );
@@ -198,10 +207,10 @@ for (const scenario of [
           nativeBefore,
           'native discovery and actual execution must use the same HOME',
         );
-        assert.equal(existsSync(join(project, '.kimi-code', 'mcp.json')), false);
+        assert.equal(existsSync(join(workingDirectory, '.kimi-code', 'mcp.json')), false);
         return;
       }
-      const servers = JSON.parse(readFileSync(join(project, '.kimi-code', 'mcp.json'), 'utf8')).mcpServers;
+      const servers = JSON.parse(readFileSync(join(workingDirectory, '.kimi-code', 'mcp.json'), 'utf8')).mcpServers;
       if (scenario === 'native-file-change')
         assert.equal(servers.newHomeTool.enabled, false, 'new ambient tools must not widen the admitted surface');
       if (scenario.startsWith('prototype-native-')) {

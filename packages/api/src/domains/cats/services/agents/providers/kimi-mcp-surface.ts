@@ -112,7 +112,7 @@ export async function captureKimiMcpSurface(input: {
   const layers = [
     { path: join(input.nativeDirectory, 'mcp.json'), cwd: input.workingDirectory },
     { path: join(projectRoot, '.mcp.json'), cwd: projectRoot },
-    ...(input.workingDirectory !== projectRoot
+    ...(input.mcpSupport === false
       ? [{ path: join(input.workingDirectory, '.mcp.json'), cwd: input.workingDirectory }]
       : []),
   ];
