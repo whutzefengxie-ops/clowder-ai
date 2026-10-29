@@ -270,6 +270,10 @@ Generic ACP's explicit account reference is resolved by the existing account own
 
 Catalog ACP construction retains owned launch settings and its existing catalog accessor. Invocation capture validates that source before and after MCP capture; admitted plans and the L0 child do not call the accessor. Plugin lifecycle remains with implementation registration rather than a new launch registry.
 
+## 会话取消与终态边界
+
+现有 session bridge 在取消时关闭补充输入，但继续收束原 provider 事件；取消回包不作为终态。ACP session provider 在原源迭代器清理完成之后才发布终态和解除 active；清理失败不被本地 cancelled 覆盖，也不能经包装器二次 return 清除 busy。该边界复用现有 session/iterator owner，不新增取消状态库。传输层提前 done、未知执行恢复、原生停机证明与完整 C12 仍须在各自 owner 闭环。
+
 ## Canon Member Avatar Consumer
 
 F326 Phase D resolves the existing member id, then projects its one member-avatar slot from collaborative-content-plane. The direct Human selects it with its own receipt; mixed avatar/profile PATCH is rejected before either write. Linked members keep the canon projection after profile-only saves, clear remains linked, and unreadable bound bytes never fall back to catalog or another image. This consumer does not move roster or member authority.

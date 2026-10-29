@@ -182,13 +182,8 @@ export class AgentSessionBridgeService implements Service.AgentService {
     signal: AbortSignal,
     session: Extract<Contract.OpenSessionResult, { ok: true }>,
   ): AsyncIterable<AgentMessage> {
-    let wake = () => {};
-    const aborted = new Promise<undefined>((resolve) => {
-      wake = () => resolve(undefined);
-    });
     const cancel = () => {
       this.close(live);
-      wake();
       void this.input.provider
         .cancelTurn(live.sessionId, live.turn, 'abort')
         .catch(() => this.input.log?.warn('Session turn cancellation failed'));
@@ -197,19 +192,21 @@ export class AgentSessionBridgeService implements Service.AgentService {
     signal.addEventListener('abort', cancel, { once: true });
     if (signal.aborted) cancel();
     try {
-      while (!signal.aborted) {
-        const next = await Promise.race([iterator.next(), aborted]);
-        if (!next || next.done || signal.aborted) return;
+      while (true) {
+        const next = await iterator.next();
+        if (next.done) return;
         await this.observe(next.value, live);
-        if (signal.aborted) return;
         if (next.value.type === 'native_bound')
           session.binding = { state: 'bound', nativeSessionId: next.value.nativeSessionId };
+        // Cancellation closes supplementary input immediately, but only provider
+        // terminal evidence may end this turn. Drain and suppress late output.
+        if (signal.aborted && next.value.type !== 'done') continue;
         for (const message of projectSessionEvent(next.value, { catId: this.input.catId, metadata })) yield message;
         if (next.value.type === 'done') return;
       }
     } finally {
       signal.removeEventListener('abort', cancel);
-      void iterator.return?.().catch(() => {});
+      await iterator.return?.();
     }
   }
   private message(type: AgentMessage['type'], metadata: MessageMetadata, extra: Partial<AgentMessage>): AgentMessage {
@@ -292,7 +289,7 @@ export class AgentSessionBridgeService implements Service.AgentService {
     }
     // A synthetic terminal uses the final session context; a provider terminal keeps its own usage fact.
     terminal ??= this.message('done', metadata, { errorCode: 'provider_stream_ended_without_done' });
-    if (signal.aborted) terminal.errorCode = 'cancelled';
+    if (signal.aborted && !terminal.errorCode) terminal.errorCode = 'cancelled';
     yield terminal;
   }
 }

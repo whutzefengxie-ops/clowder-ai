@@ -114,7 +114,7 @@
     {
       "id": "C12",
       "status": "NOT_RUN",
-      "evidence": []
+      "evidence": ["README.md#W3-取消终态与迭代器清理纵向切片尚未完成-W3：局部终态/清理证据，整条未完成"]
     },
     {
       "id": "C13",
@@ -253,7 +253,7 @@
     },
     {
       "id": "W3",
-      "status": "NOT_STARTED"
+      "status": "IN_PROGRESS"
     },
     {
       "id": "W4",
@@ -272,7 +272,13 @@
       "status": "NOT_STARTED"
     }
   ],
-  "lastProgressAt": "2026-10-29T22:42:00Z",
+  "lastProgressAt": "2026-10-29T23:04:00Z",
+  "cancelQuiescenceCheckpointReview": {
+    "verdict": "PENDING",
+    "evidence": "README.md#W3-取消终态与迭代器清理纵向切片尚未完成-W3",
+    "tests": { "red": "5 FAIL", "contracts": "195 PASS" },
+    "scope": "Existing bridge/ACP iterator and terminal boundary; native unknown recovery/transport terminal/full C12 remain incomplete"
+  },
   "catalogPublicationCheckpointReview": {
     "reviewer": "checkpoint_review",
     "verdict": "approved",

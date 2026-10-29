@@ -490,3 +490,15 @@ checkpoint_review 对 `4c91c38852737620d90ac941b0d955d6b8e2c5aa` 返回 approved
 复杂度复核及 map delta：目录 owner→已有 registry→invocation 的原边增加来源证明，WeakMap 只附短期校验，不提供身份数据/编辑接口/持久状态。两个实际发布点共用同一个注册函数，无新身份库、revision 总线、队列或 launcher。全部策略/env/CA、常规插件激活、合法写入通知、持久审计和完整 W2/C05/C15 仍未完成；性能 20 次对照仍需总验收，不把本切片测试耗时当性能结论。等待独立审查。
 
 checkpoint_review 对 `1ef2f234401e51cdc8cc7697dbc5a8af33948983` 返回 approved，subject 为 checkpoint-catalog-publication。独立 42 PASS，确认失败发布保留旧 registry/额外成员、两个来源隔离、legacy 非持久读取不改字节、最后等待期间真实 locked writer 变更被拒绝及原身份/串并行重解析；无未关闭 finding。批准仅限此切片，完整 W2 与性能验收继续未完成。此轮四个切片均已独立批准，全部 34 个 C/E/Q 整体验收状态保持 NOT_RUN。
+
+## W3 取消终态与迭代器清理纵向切片（尚未完成 W3）
+
+现有 ACP 的公共冻结消费端已经确定，本切片沿同一纵向路径修正既有取消错误，不启用新绑定，也不宣称 W2/W4 已全部完成。Bridge 原先收到 abort 即退出并清除 active，ACP adapter 也在 abort 后合成 cancelled/提前 cleanup、忽略异步 iterator.return。现在取消立即关闭补充输入，但继续等待 provider 终态，抑制取消后的普通输出；ACP 终态及 active 清除等待原源迭代器 finally/租约清理完成。缺少 done 的 EOF 明确失败，不再伪装完成；清理异常不由 cancelled 掩盖。
+
+`cancel-quiescence-red.log` 五条行为反例均 FAIL，覆盖取消受理/失败/异常但原 turn 仍活跃、普通与取消 turn 的延迟清理。修复后五条通过；追加 unsupported 与清理失败保护时，`cancel-quiescence-expanded.log` 发现包装器对已失败 generator 再次 return 会清除 active。现区分尚未开始消费的 generator，仅它需要包装器自行清理；已消费的 active 只由源 finally 在成功清理后清除。无新增状态对象或取消框架。
+
+`cancel-quiescence-contracts-closure.log` 最终 195 PASS，覆盖新七条、Bridge/input receipt/插件注册生命周期、实际工厂→ACP 子进程双轮/续接/取消与原生/bridge 路由取消诊断。API tsc exit 0 后测试，七个源码/测试文件 Biome 无错误。整个集合只在测试子进程使用既有 trusted-host bootstrap 模式，不认证 strict Windows 父 ACL；无真实模型或生产调用。
+
+旧夹具同步了真实语义：主动提供 provider 停止事件、先释放执行 gate 再等待取消终态；EOF 断言改为明确缺失终态失败。第一次全组因旧插件假 release 不发停止事件而等待，确认父子 PID/准确测试文件后仅停止本次 worker 48800（父 48516），日志和其临时文件保留；未停止用户或其他任务进程。原 built-in 取消基线还以 OpenAI 成员配通用 ACP，诊断 `cancel-quiescence-baseline-diagnosis.log` 明确 execution_client_changed；夹具现注册实际 ACP 配置并恢复原内存 registry，没有放宽产品检查。完整重新运行已结束，无新增常驻实例。
+
+复杂度复核及 map delta：复用 session bridge/provider 的既有事件和 iterator 所有权，删除把 abort 当终态的分支，等待既有清理；不增加数据库、后台恢复器或重试系统。更新 identity-session cell 的原依赖边。该片段不把标准取消 ACK 解释为原生已停止证明；AcpAgentService/pool 的 unknown/隔离、release 失败/Host 重启、compatibility/片段与审计仍待整体完成。原 SocketManager 取消广播仍提前发 done，现有路由诊断仍有两个广播；下一步应在 transport/lifecycle owner 区分取消请求与终态。C12 整体继续 NOT_RUN，等待本切片独立审查。
