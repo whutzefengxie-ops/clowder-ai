@@ -18,7 +18,11 @@ export async function resolveAgentClientLibrary(input: {
 }): Promise<AgentProviderDeclaration[]> {
   const { configurationKey } = input.declaration;
   if (!configurationKey) {
-    if ('id' in input.declaration) return [input.declaration];
+    if ('id' in input.declaration) {
+      if (input.declaration.acp.permissionPolicy === 'auto_allow')
+        throw new Error('ACP 权限自动允许需要 owner 显式保存选择，不能来自插件声明');
+      return [input.declaration];
+    }
     throw new Error('ACP 客户端缺少配置项声明');
   }
   const field = input.admission.packageRecord.manifest.configuration?.find((field) => field.key === configurationKey);
@@ -29,9 +33,13 @@ export async function resolveAgentClientLibrary(input: {
       packageRoot: input.packageRoot,
     });
     if (!result.ok) throw new Error(`ACP 客户端配置无效，请在插件配置中修复：${result.reason}`);
+    if (typeof stored !== 'string' && result.declaration.acp.permissionPolicy === 'auto_allow')
+      throw new Error('ACP 权限自动允许需要 owner 显式保存选择，不能来自插件默认配置');
     return [result.declaration];
   }
   const result = parseAgentClientProfiles(stored ?? field.default ?? '[]', { packageRoot: input.packageRoot });
   if (!result.ok) throw new Error(`ACP 客户端配置无效，请在插件配置中修复：${result.reason}`);
+  if (typeof stored !== 'string' && result.profiles.some((profile) => profile.acp.permissionPolicy === 'auto_allow'))
+    throw new Error('ACP 权限自动允许需要 owner 显式保存选择，不能来自插件默认配置');
   return result.profiles;
 }

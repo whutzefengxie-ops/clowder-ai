@@ -93,6 +93,8 @@ export function parseAgentProviderConfiguration(
   try {
     if (typeof raw !== 'string' || Buffer.byteLength(raw) > 65536) throw new Error('客户端配置须为 64 KiB 以内的 JSON');
     const overrides = acpSchema.partial().parse(JSON.parse(raw));
+    if (declaration.acp.permissionPolicy === 'auto_allow' && overrides.permissionPolicy === undefined)
+      throw new Error('ACP 权限自动允许需要 owner 显式保存选择，不能继承插件声明');
     const parsed = parseAgentProviderDeclaration(
       { id: declaration.id, transport: 'acp', acp: { ...declaration.acp, ...overrides } },
       ctx,

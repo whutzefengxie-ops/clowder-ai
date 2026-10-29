@@ -59,6 +59,33 @@ test('standalone owner overrides preserve argv and identity, including explicit 
   assert.deepEqual(profile.acp, { command, startupArgs, permissionPolicy: 'auto_allow' });
 });
 
+test('package declarations and manifest defaults cannot authorize ACP permissions for the owner', async () => {
+  for (const stored of [undefined, '{}']) {
+    const input = fixedConfiguration(stored);
+    input.declaration = { ...fixedClient, acp: { ...fixedClient.acp, permissionPolicy: 'auto_allow' } };
+    await assert.rejects(resolveAgentClientLibrary(input), /owner|显式/i);
+  }
+  for (const stored of [undefined, null])
+    await assert.rejects(
+      resolveAgentClientLibrary(fixedConfiguration(stored, '{"permissionPolicy":"auto_allow"}')),
+      /owner|显式/i,
+    );
+  const input = fixedConfiguration(undefined);
+  input.declaration = { id: 'fixed', transport: 'acp', acp: { ...fixedClient.acp, permissionPolicy: 'auto_allow' } };
+  await assert.rejects(resolveAgentClientLibrary(input), /owner|显式/i);
+});
+
+test('a library default cannot approve permissions, while a saved owner profile can', async () => {
+  const profiles = JSON.stringify([
+    { id: 'dsh', name: 'DSH', command: 'dsh', startupArgs: ['--profile', 'acp'], permissionPolicy: 'auto_allow' },
+  ]);
+  const input = fixedConfiguration(undefined, profiles);
+  input.declaration = { configurationKey: 'connection' };
+  await assert.rejects(resolveAgentClientLibrary(input), /owner|显式/i);
+  input.configuration.readConfig = async () => profiles;
+  assert.equal((await resolveAgentClientLibrary(input))[0].acp.permissionPolicy, 'auto_allow');
+});
+
 test('standalone configuration rejects identity changes, credentials, malformed values and package executables', async () => {
   for (const value of [
     '[]',

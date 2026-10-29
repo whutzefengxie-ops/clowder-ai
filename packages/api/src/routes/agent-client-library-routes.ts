@@ -70,18 +70,15 @@ export function registerAgentClientLibraryRoutes(
         configurationKey = parsed.declaration.configurationKey ?? null;
         if ('id' in parsed.declaration)
           defaultClient = { id: parsed.declaration.id, name: pluginName, ...parsed.declaration.acp };
-        const profiles =
-          'configurationKey' in parsed.declaration
-            ? await resolveAgentClientLibrary({
-                declaration: parsed.declaration,
-                admission: {
-                  instance,
-                  packageRecord: { ...record, manifest: record.manifest },
-                },
-                packageRoot: located.rootDir,
-                configuration: input.configuration,
-              })
-            : [parsed.declaration];
+        const profiles = await resolveAgentClientLibrary({
+          declaration: parsed.declaration,
+          admission: {
+            instance,
+            packageRecord: { ...record, manifest: record.manifest },
+          },
+          packageRoot: located.rootDir,
+          configuration: input.configuration,
+        });
         libraries.push({
           pluginId: instance.pluginId,
           presets: 'presets' in parsed.declaration ? (parsed.declaration.presets ?? []) : [],

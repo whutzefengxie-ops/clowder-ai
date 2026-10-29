@@ -17,7 +17,7 @@ created: 2026-10-30
 | RED：UI | Web `agent-client-identity.test.tsx` | 新增 2 项先失败；实现后共 3/3 通过 |
 | RED：恢复 | `acp-bootstrap-config-recovery.test.js` + `client-library-lifecycle.test.js` | 固定对象 root-only 保存与无旧释放句柄的注册恢复，先观察 2 个语义失败后修复；初始测试夹具 ReferenceError 已纠正，未作为 RED 依据 |
 | API 小回归 | 上述恢复/生命周期 + `client-library.test.js` | 41/41；后补固定目录元数据及真实刷新失败恢复用例，生命周期 6/6 |
-| API 扩大回归 | 三个 `agent-session-contract*` 目录的所有 `.test.js` + root-only 恢复；`--test-concurrency=2` | 隔离进程显式 `CAT_CAFE_WINDOWS_ACP_BOOTSTRAP_MODE=trusted-host`：362/362，通过，无 skip |
+| API 扩大回归 | 三个 `agent-session-contract*` 目录的所有 `.test.js` + root-only 恢复；`--test-concurrency=2` | 隔离进程显式 `CAT_CAFE_WINDOWS_ACP_BOOTSTRAP_MODE=trusted-host`：初次 362/362；权限修复后 365/365，通过，无 skip；最后补充 null 边界后定向集合 64/64 |
 | 严格模式诊断 | 同一扩大集合，未设置兼容模式 | 348 pass / 14 fail；失败均为 `client-library-home-capabilities` 的 Temp 祖先信任/工厂未准备，与基础验收记录所列同类 Windows 环境限制一致；不宣称该模式全绿 |
 | 类型与格式 | API `tsc --incremental --pretty false`；Web `tsc --noEmit --pretty false`；本次文件 Biome；`git diff --check` | 通过；Biome 仍有警告级复杂度/既有非空断言，未为消警告扩范围 |
 | 插件源码/产物 | CodeAgent Node package test；`pnpm pack --pack-destination <artifact>` → 解包 → `CODEAGENT_PACKAGE_DIR=<package> node --test test/package.test.mjs` | 源码及实际产物均通过；无运行依赖、原生 binary 或认证副本 |
@@ -28,10 +28,16 @@ API 测试由 `packages/api/scripts/with-test-home.mjs` 配合 `--import ./test/
 
 ## 证据边界与保留
 
-产物候选为 `@clowder-ai/codeagent@0.1.0-beta.2`，本轮已验 tgz SHA-256 为 `83c3a06bb2a1d9501a4fea34bd82a4adf562f75bd9143635f5392c16ecbddf9e`。后续发布前仍需按最终提交核包字节；不能将版本号相同视为哈希相同。
+产物候选为 `@clowder-ai/codeagent@0.1.0-beta.2`，插件提交 `e587b2105f5c68349525272fb0526e0944752321` 重新打包、解包校验后，tgz SHA-256 仍为 `83c3a06bb2a1d9501a4fea34bd82a4adf562f75bd9143635f5392c16ecbddf9e`。不能将版本号相同视为哈希相同；后续修改须重新核字节。
 
 执行端是明确命名的 `fake-acp-agent.mjs` 协议 fixture，通过 Host 正常命令覆盖引用外部脚本，未伪造 PATH 上的 CodeAgent。它证明 ACP wire/Host 插件链路，不证明企业 CodeAgent 模型、登录、MCP 真调用或角色协作；现有 `#tool` 只产生协议事件，不称为 Clowder MCP 调用。
 
 真实企业 CodeAgent 由用户在内网验收，已按用户指示取消要求提供本机 binary。新内网 EXE、自动预置、完整 UI 导航、真实客户端 MCP/协作以及企业账号/代理/CA 尚未验证，不提前记为完成；基础重构其他残余以其自身验收记录为准。
 
-本机证据集中于任务 artifacts 的 `codeagent-plugin-extension-20261030`：RED/GREEN/扩大回归日志、tgz、配置截图、测试实例台账。浏览器验证服务 PID 39204 已按完整命令行核归属后停止，4318/4325 已确认释放；测试配置、审计与截图保留在隔离目录。未修改系统盘/祖先 ACL、用户配置、原生客户端 HOME 或业务历史。
+本机证据集中于任务 artifacts 的 `codeagent-plugin-extension-20261030`：RED/GREEN/扩大回归日志、tgz、配置截图、测试实例台账。原全页截图因采集尺寸异常不可读，已替换为 1280 宽的可读上/下两张视口证据。浏览器验证服务 PID 39204、39872 已按完整命令行核归属后停止，4318/4325 已确认释放；测试配置、审计与截图保留在隔离目录。未修改系统盘/祖先 ACL、用户配置、原生客户端 HOME 或业务历史。
+
+## 独立审查修复
+
+首轮非作者审查目标为 Host `ee791dc05932674d40689bed9a9b2c025bcf4ecc` 与插件 `e587b2105f5c68349525272fb0526e0944752321`，结论 block：插件声明或 manifest 默认值可以在未保存 owner 选择时授予 `auto_allow`，包括无配置键固定声明绕过解析器的路径。
+
+已补 2 个失败回归后修复：固定配置禁止继承自动允许；未持久保存的默认值不能授予权限；固定无配置键声明也必须经过同一 resolver。library 默认配置的同型路径一并覆盖，owner 显式保存的合法 `auto_allow` 仍可用。另有真实 activation 回归保证静态声明不能绕过。修后 64/64 定向通过，扩大集合 365/365；最终审查状态待非作者复核，不自称已批准。
