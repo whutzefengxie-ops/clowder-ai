@@ -126,7 +126,7 @@
     {
       "id": "C15",
       "status": "NOT_RUN",
-      "evidence": []
+      "evidence": ["README.md#W2-实现-generation-准入切片尚未完成-W2：正式准入期间注册/服务代次变更409及下一调用新代次；跨owner重解析与会话兼容仍未完成"]
     },
     {
       "id": "C16",
@@ -368,5 +368,14 @@
     "subject": "task:01a1881e-1a7b-78d0-9a62-ff99b0ab7a01/checkpoint-shared-mcp",
     "findings": [],
     "evidence": "README.md#W2-Host-shared-MCP-上下文消费切片尚未完成-W2"
+  },
+  "capabilityNotificationCheckpointReview": {
+    "reviewer": "checkpoint_review",
+    "verdict": "approved",
+    "reviewedHead": "52ad776284536bd8eaa93d847e271d478d51c604",
+    "subject": "task:01a1881e-1a7b-78d0-9a62-ff99b0ab7a01/checkpoint-capability-notification",
+    "findings": [],
+    "remainingBoundary": "scripts/sync-skills.sh direct cross-process writer is not yet notified; no capabilities revision/cache switch is certified",
+    "evidence": "README.md#W2-capabilities-写入通知切片尚未完成-W2"
   }
 }

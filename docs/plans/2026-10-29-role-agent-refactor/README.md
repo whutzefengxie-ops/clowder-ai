@@ -310,3 +310,17 @@ checkpoint_review 对 `8f3e191c303e18283604c4d5f960a331b87de3af` 给出 approved
 扩大首次集合 `capabilities-notification-green.log` 165 项=154 PASS+11 FAIL，均在 capabilities 读路由。将仅本次两个源码文件的补丁保存在 artifacts 并暂时反向应用，编译未改 HEAD 后单独复跑该文件，`capabilities-notification-route-baseline.log` 89 项=78 PASS+相同 11 FAIL；包含 config_missing、挂载健康与读时发现/路径重写的旧预期，未在本任务中逐一诊断或放宽。随后恢复原补丁并重新编译，完成上述 109 PASS。基线源码差异/原日志保留，不把旧失败计通过。
 
 复杂度复核：实现增加的是一个既有事件 source、两个提交点和共用短通知，没有将无关的账号/成员写入合并成事务。其他配置族的写入通知仍须按真实 owner 审计；跨 owner 读前读后核验、重解析、generation 和会话语义继续未完成。无模型或常驻服务调用；当前通知切片等待独立审查。
+
+checkpoint_review 对 `52ad776284536bd8eaa93d847e271d478d51c604` 给出 approved，subject 为 `task:01a1881e-1a7b-78d0-9a62-ff99b0ab7a01/checkpoint-capability-notification`。独立 19 PASS，含原子 rename 失败、相对根规范化、每次提交唯一 ID、观察者异常隔离及实际账号/成员/VAPID 订阅者隔离；最终提交仅修正文档审计范围，产品未变。跨进程脚本缺口继续保留，不将此批准当作所有写方或完整 W2 验收。
+
+## W2 实现 generation 准入切片（尚未完成 W2）
+
+现有实现 registry 的注册 entry 增加进程内 generation token；现有 AgentRegistry 同目录维护具体服务对象的弱引用 token，InvocationServiceScope 给调用视图继承原服务 token，避免每次 pin 都冒充实现替换。RegisteredSessionAgentService 将原注册/服务 fence 提取为两个真实调用方共用的检查，暴露捕获的 key/generation，并在正式准入读取前后验证同一绑定。注册或实际服务在异步捕获期间变化时，准入返回可重试 409，不等到模型启动后才发现。binding 保存自有冻结投影；不存回调 token、账号 secret、原始 env 或模型能力断言。
+
+该 token 表示本进程的实现/服务代次，不是 CLI 版本或持久兼容键；不能拿它证明跨重启 resume。原生 key 使用显式 clientId 和已声明的 carrier，缺声明保持 unknown，不从命令/模型/类名猜测。已有原生/ACP 租约、注册式启动 fence、禁用/升级释放和高级操作路径保持原语义；不会据此宣称已解决升级后旧片段继续执行或完整 C15。会话兼容键、版本证明与生命周期仍归后续 W3/W4。
+
+`implementation-freeze-red.log` 三条正式准入反例先 RED：捕获期间实际服务 revision 变化、实现注册替换均未被准入发现，原生 pin 也没有身份投影。修复后注册/服务变化明确 409，下一次新视图捕获新 generation；同一原生服务的不同 pin 保持同代次，实际替换获得新代次。`implementation-freeze-consumers-final.log` 105 PASS，覆盖注册/插件生命周期、高级能力与旧启动 fence、真实 ACP provider、L0、线程偏好及已迁入的所有 MCP 消费路径；API tsc 通过，8 文件 Biome 无错误。
+
+`implementation-freeze-invocation-final.log` 289 项=285 PASS+原 AGY Native Windows birth-identity 4 FAIL。首轮 `implementation-freeze-green.log` 65 项=60 PASS+原 strict ACP Windows bootstrap ACL 5 FAIL，错误在 factory 准备目录时即因父目录其他 SID 的 Modify 权限而出现，bootstrap 实现未改。单独进程设置仓库已有 trusted-host 模式后的 `implementation-freeze-pool-process-only.log` 5 PASS，仅证明原 pool pin/reset/replacement/release 路径，不认证 strict ACL，不改变用户/生产设置，也不新增 skip。
+
+复杂度复核：一份弱引用 token 表、原 registry entry 的 token 和原校验函数共用，无新服务/版本总线/launcher/持久模型。此 token 尚未接入原生片段兼容或持久审计，不把绑定投影当作完整接线。所有 owner 的一致性重解析、其他通知、完整 env 和会话语义仍继续未完成；无真实模型或常驻环境，此 generation 切片等待独立审查。

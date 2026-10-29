@@ -1,4 +1,5 @@
 import type { AgentService } from '../../types.js';
+import { agentServiceGeneration } from '../registry/AgentRegistry.js';
 
 /** Own preflight pins independently of whether a provider stream is ever started. */
 export class InvocationServiceScope {
@@ -8,6 +9,7 @@ export class InvocationServiceScope {
   pin(service: AgentService): AgentService {
     if (this.disposed) throw new Error('Invocation service scope released');
     const view = service.forInvocation?.() ?? service;
+    agentServiceGeneration(view, service);
     this.views.add(view);
     return view;
   }

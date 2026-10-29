@@ -6,6 +6,7 @@ import type {
 } from '../../../../memory/cue/ContextSourceAdmission.js';
 import { ContextSourceWorkBudget } from '../../../../memory/cue/ContextSourceWorkBudget.js';
 import { captureInvocationL0Input } from '../providers/l0-input-capture.js';
+import { agentServiceGeneration } from '../registry/AgentRegistry.js';
 import { deepFreeze, type FrozenExecutionBinding, freezeExecutionAccountBinding } from './execution-account-binding.js';
 import { freezeExecutionWorkspace } from './execution-workspace.js';
 import { InvocationServiceScope } from './invocation-service-scope.js';
@@ -1435,6 +1436,15 @@ export async function prepareInvocationExecutionBinding(
   const memberRegistryRevision = catRegistry.getRevision();
   const catConfig = catRegistry.tryGet(input.catId as string)?.config;
   const carrier = input.service?.freshnessCarrierCapability?.();
+  const implementationSource =
+    input.service?.implementationSnapshot?.() ??
+    (input.service
+      ? {
+          key: `builtin:${catConfig?.clientId ?? 'unknown'}/${carrier?.carrier ?? 'unknown'}`,
+          generation: agentServiceGeneration(input.service),
+        }
+      : undefined);
+  const implementation = implementationSource ? Object.freeze({ ...implementationSource }) : undefined;
   const workspace = await freezeExecutionWorkspace({
     threadStore: deps.threadStore,
     threadId: input.threadId,
@@ -1546,6 +1556,11 @@ export async function prepareInvocationExecutionBinding(
     throw Object.assign(new Error('Member configuration changed during execution admission; retry this invocation.'), {
       statusCode: 409,
     });
+  if (
+    input.service?.implementationSnapshot &&
+    !isDeepStrictEqual(input.service.implementationSnapshot(), implementation)
+  )
+    throw Object.assign(new Error('session_host_generation_changed'), { statusCode: 409 });
   const frozenL0Input =
     catConfig && (input.service?.injectsL0Natively?.() || catConfig.clientId === 'opencode')
       ? captureInvocationL0Input({
@@ -1560,6 +1575,7 @@ export async function prepareInvocationExecutionBinding(
     ...binding,
     ...deepFreeze(captured),
     memberRegistryRevision,
+    ...(implementation ? { implementation } : {}),
     threadPreferences,
     ...(frozenL0Input ? { frozenL0Input } : {}),
   });

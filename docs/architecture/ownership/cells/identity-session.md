@@ -21,6 +21,10 @@ code_anchors:
   - packages/api/src/domains/cats/services/agents/providers/member-execution-preferences.ts
   - packages/api/src/domains/cats/services/agents/invocation/execution-account-binding.ts
   - packages/api/src/domains/cats/services/agents/invocation/execution-workspace.ts
+  - packages/api/src/domains/cats/services/agents/invocation/invocation-service-scope.ts
+  - packages/api/src/domains/cats/services/agents/registry/AgentRegistry.ts
+  - packages/api/src/domains/cats/services/agents/session-contract/implementation-registry.ts
+  - packages/api/src/domains/cats/services/agents/session-contract/registered-session-agent-service.ts
   - packages/api/src/domains/cats/services/agents/invocation/shared-mcp-launch.ts
   - packages/api/src/config/codex-cli.ts
   - packages/api/src/domains/cats/services/agents/providers/acp/AcpAgentService.ts
@@ -205,6 +209,7 @@ F209's entity registry is adjacent but not canonical for agent identity. Its `en
 - For thread-scoped agent runtime config, persist only raw intent and project it through the current roster/provider/model capability after actual-cat routing; keep typed invocation options and provider argv validation as the execution boundary. Existing execution admission captures member model/effort and thread effort/speed before leases; the provider consumes that snapshot while adopted values remain separate observations. Workspace capture copies the ThreadStore record rather than retaining a mutable in-memory store reference.
 - ACP admission consumes the existing MCP resolver through the concrete pinned service and stores owned descriptors in the execution binding. Session ownership still materializes the current turn's callback credentials; descriptor capture does not move credential or tool authority.
 - Host admission also captures the existing shared MCP context and transport in that binding. Invocation creation and callback materialization consume the same immutable deployment, data/workspace roots and admitted families; they do not repeat discovery after admission. This does not replace the MCP request authority or its revocation checks.
+- Implementation registration and concrete service generations remain process-local to their existing registry owners. Invocation pins inherit the concrete service token; registered views validate their captured registration and service again before admission completes. The binding carries only the owned key/generation pair. This is neither a persistent client version nor proof of cross-restart session compatibility, and it does not replace the existing launch fence or lease lifecycle.
 - For connector binding, use `ConnectorThreadBindingStore` and connector binding keys instead of ad hoc thread maps.
 - For bubble identity, follow ADR-033 and route through `bubble-pipeline` contracts and tests.
 - For runtime session binding, use Session Chain / runtime-session metadata keyed by Clowder AI session id and runtime session id. IDE-direct registration belongs behind the external runtime registration contract and agent-key authorization, not ad hoc JSON maps.

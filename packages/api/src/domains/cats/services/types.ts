@@ -1243,6 +1243,8 @@ export interface ProviderRequestGenerationCommitV1 {
  * Interface that all agent services must implement
  */
 export interface AgentService {
+  /** Host-owned implementation identity; a pinned registered view rejects a replaced generation. */
+  implementationSnapshot?(): Readonly<{ key: string; generation: string }>;
   /** Read configuration before any provider lease. Returns owned descriptors, never starts a model turn. */
   captureInvocationOptions?(input: {
     workingDirectory?: string;
