@@ -195,7 +195,6 @@ async function attachRuntimeSessionSummaries<T extends { id: string }>(
   sessions: T[],
   runtimeSessionStore?: IRuntimeSessionStore,
 ): Promise<Array<Omit<T, 'hostExecutionBoundary'> & { runtimeSession?: RuntimeSessionSummary }>> {
-  if (!runtimeSessionStore) return sessions;
   return Promise.all(sessions.map((session) => attachRuntimeSessionSummary(session, runtimeSessionStore)));
 }
 
