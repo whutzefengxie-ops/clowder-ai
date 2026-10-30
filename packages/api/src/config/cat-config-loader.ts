@@ -173,6 +173,8 @@ const catVariantSchema = z
     teamStrengths: z.string().optional(), // F-Ground-3: human-readable strengths
     caution: z.string().nullable().optional(), // F-Ground-3: null = explicit no-caution (R1 fix)
     restrictions: z.array(z.string().min(1)).optional(), // F167 Phase E: hard task bans
+    /** Owner-edited identity groups; outrank dossier free text (older readers strip it). */
+    configuredIdentity: z.array(z.enum(['role', 'roster'])).optional(),
   })
   .superRefine((variant, ctx) => {
     const carrier = resolveCatCarrier(variant);
@@ -801,6 +803,7 @@ export function toAllCatConfigs(config: CatCafeConfig): Record<string, CatConfig
         // F167 Phase E: preserve restrictions list for teammate roster + self-awareness injection
         ...(restrictions != null && restrictions.length > 0 ? { restrictions: [...restrictions] } : {}),
         ...(variant.strengths != null ? { strengths: variant.strengths } : {}),
+        ...(variant.configuredIdentity?.length ? { configuredIdentity: [...variant.configuredIdentity] } : {}),
         ...(variant.sessionChain !== undefined
           ? { sessionChain: variant.sessionChain }
           : breed.features?.sessionChain !== undefined

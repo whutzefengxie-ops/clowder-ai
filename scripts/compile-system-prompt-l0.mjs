@@ -47,7 +47,7 @@ import {
   resolveL0Projections,
   resolvePromptTemplateVariables,
 } from '@cat-cafe/shared';
-import { getDossierL0Pronouns, getDossierL0RoutingNote, getDossierL0SelfDescription } from '@cat-cafe/shared/dossier';
+import { getDossierProfile, resolveRoleIdentity } from '@cat-cafe/shared/dossier';
 import {
   CURRENT_CORPUS_PROFILE_URI,
   CURRENT_RELATIONSHIP_PROFILE_URI,
@@ -257,7 +257,8 @@ function buildIdentityBlock(config, runtimeModel, dossierRoot) {
   if (config.nickname) {
     lines.push(`昵称 "${config.nickname}" 的由来见 \`docs/stories/cat-names/\`。`);
   }
-  const selfDescription = getDossierL0SelfDescription(config.catId, dossierRoot);
+  // K1/O7: owner-edited identity outranks dossier free text (same rule as the roster).
+  const { selfDescription } = resolveRoleIdentity(config, getDossierProfile(config.catId, dossierRoot));
   if (selfDescription) {
     lines.push(`角色与自我校准：${selfDescription}`);
   } else {
@@ -316,7 +317,8 @@ function buildRosterRow(id, cfg, dossierRoot, familyLabels) {
   const mention = cfg.mentionPatterns?.[0] ?? `@${id}`;
   const model = resolveModel(id, cfg);
   const cell = model ? `${mention} · ${model}` : mention;
-  const pronouns = getDossierL0Pronouns(id, dossierRoot)?.split('/')[0]?.trim();
+  const identity = resolveRoleIdentity(cfg, getDossierProfile(id, dossierRoot));
+  const pronouns = identity.pronouns?.split('/')[0]?.trim();
   // Chinese L0 only needs the Chinese pronoun. The dossier marker limits this
   // scarce surface to evidence-backed repeat failures instead of every profile.
   // Prefer the shorter nickname for marked rows so the reminder is token-negative.
@@ -328,7 +330,7 @@ function buildRosterRow(id, cfg, dossierRoot, familyLabels) {
   // capability dossier. Prefer the explicit compact route note; keep config
   // caution as a compatibility fallback for runtime/custom cats that have not
   // yet acquired a structured dossier profile. Hard restrictions always stay.
-  const routingNote = getDossierL0RoutingNote(id, dossierRoot) ?? cfg.caution;
+  const routingNote = identity.routingNote;
   const routeContract = [routingNote, restrictions].filter(Boolean).join('；') || '—';
   return `| ${label} | ${cell} | ${routeContract} |`;
 }
