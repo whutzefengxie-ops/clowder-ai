@@ -47,7 +47,11 @@ export interface FrozenExecutionBinding {
   readonly providerOptions?: Readonly<
     Pick<
       AgentServiceOptions,
-      'frozenAcpMcpServers' | 'frozenNativeMcpConfig' | 'frozenKimiMcpConfig' | 'frozenCodexMcpInput'
+      | 'frozenAcpMcpServers'
+      | 'frozenNativeMcpConfig'
+      | 'frozenKimiMcpConfig'
+      | 'frozenCodexMcpInput'
+      | 'claudeSdkRuntime'
     >
   >;
   readonly codexLaunchPolicy?: CodexLaunchPolicy;

@@ -1,3 +1,4 @@
+import { claudeSdkRuntimeFixture } from './helpers/claude-sdk-runtime-fixture.js';
 import './helpers/setup-cat-registry.js';
 import assert from 'node:assert/strict';
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
@@ -109,7 +110,7 @@ for (const scenario of [
     });
     let service =
       scenario === 'agent-sdk'
-        ? new ClaudeSdkAgentService({ catId: id, mcpServerPath })
+        ? new ClaudeSdkAgentService({ runtimeResolver: claudeSdkRuntimeFixture, catId: id, mcpServerPath })
         : new ClaudeAgentService({
             catId: id,
             spawnFn,
@@ -188,6 +189,7 @@ for (const scenario of [
     };
     if (scenario === 'agent-sdk') {
       const launch = await prepareClaudeSdkLaunch({
+        runtime: claudeSdkRuntimeFixture(),
         catId: id,
         model: 'claude-sonnet-4-6',
         prompt: 'isolated task',

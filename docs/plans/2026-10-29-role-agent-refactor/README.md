@@ -8,6 +8,8 @@ status: implementing
 
 # 角色与 Agent 接入综合重构实施记录
 
+PR 为 [#1748](https://github.com/zts212653/clowder-ai/pull/1748)，目标上游 **develop**（2026-10-30 用户更正并已远端回读）。Claude 主包减重实施及证据见 [claude-package-reduction.md](claude-package-reduction.md)；完整重构验收仍按总账单独判断。
+
 接受的规范为 `C:/Users/Administrator/Desktop/猫猫咖啡馆/技术方案/综合重构方案-20261029` 内六份文件，哈希及全部验收条目见 [acceptance-ledger.json](acceptance-ledger.json)。以该综合方案为准：原生与 ACP 长期共存、配置为身份权威、纯投影不迁移配置库、现有 owner 承担保存/冻结/会话/权限。
 
 目标分支 `feat/role-agent-refactor-20261029-gpt-sol`，基线 `6d8d4915bcd84edfeb42edf76466cf6318cecdbd`。本任务工位为 `G:/AIwork/clowder-ai/worktrees/role-agent-refactor-20261029-gpt-sol`；主工位和生产环境不改写。桌面 App 的 worktree 工具因聊天工作目录为 Git 外层目录而拒绝 sourceRoot，已改用仓库 `scripts/worktree-new.mjs`，先建 feature 分支再创建并登记 owner=codex/policy=merged。

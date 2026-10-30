@@ -1054,6 +1054,8 @@ export interface LocalSessionReadInput {
 }
 
 export interface AgentServiceOptions {
+  /** Host-selected external Claude program; never fall back to the SDK's bundled engine. */
+  claudeSdkRuntime?: ReturnType<typeof import('./agents/providers/claude-sdk-runtime.js').captureClaudeSdkRuntime>;
   /** Admission-owned MCP descriptors; callback credentials are materialized for the current turn. */
   frozenAcpMcpServers?: import('./agents/providers/acp/types.js').AcpMcpServer[];
   frozenNativeMcpConfig?: import('./agents/providers/provider-mcp-config.js').ProviderMcpConfigPlan;
@@ -1262,7 +1264,11 @@ export interface AgentService {
   }): Promise<
     Pick<
       AgentServiceOptions,
-      'frozenAcpMcpServers' | 'frozenNativeMcpConfig' | 'frozenKimiMcpConfig' | 'frozenCodexMcpInput'
+      | 'frozenAcpMcpServers'
+      | 'frozenNativeMcpConfig'
+      | 'frozenKimiMcpConfig'
+      | 'frozenCodexMcpInput'
+      | 'claudeSdkRuntime'
     >
   >;
   /** Pin one prepared carrier generation before Host policy, L0 and capacity admission. Idempotent on a pinned view. */
