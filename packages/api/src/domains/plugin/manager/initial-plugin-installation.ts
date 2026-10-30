@@ -233,13 +233,15 @@ export async function prepareInitialPluginInstallation(options: InitialPluginIns
 }
 
 /** The same Manager installation/configuration/lifecycle used by explicit owner operations. */
-export function prepareHostInitialPlugins(options: {
+export async function prepareHostInitialPlugins(options: {
+  readonly hostListening: Promise<void>;
   readonly runtime: DormantPluginRuntimeComposition;
   readonly managerRuntime: PluginManagerRuntimeComposition;
   readonly catalog: OfficialPluginCatalogProvider;
   readonly loadSelection?: () => Promise<unknown>;
   readonly onFailure: InitialPluginInstallationOptions['onFailure'];
 }) {
+  await options.hostListening;
   const { runtime, managerRuntime } = options;
   let managerCatalogSnapshot: ReturnType<typeof managerRuntime.officialCatalog.projectSnapshot> | undefined;
   return prepareInitialPluginInstallation({

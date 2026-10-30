@@ -15,6 +15,10 @@ created: 2026-10-30
 
 已复现：成员创建前置提醒失败被误记为不确定写入；ACP 工厂拒绝后残留 active turn 阻止重试。修复分别把前置步骤移到写入意图落盘前、把工厂准备移到 turn 占用前。目录门禁通过将一个注册清理文件移入既有 lifecycle 目录解决。测试同步新的缺失终态失败语义、平台路径大小写、冻结参数和目录发布入口；超时测试使用真实内存执行 store，置换测试先绑定新会话执行边界再声明既有原生历史，不改变产品的未知旧会话拒绝规则。
 
-Windows 诊断使用既有 e184 冻结程序及独立临时实例，90秒仍失败。仅用于诊断的逐路由标记将停顿定位在默认插件准备阶段，安装 journal 已记录多个 prepared 项，尚未到 HTTP 监听；该诊断运行不计验收通过。继续用明确的 listen 屏障验证初始插件安装与 HTTP 就绪的关系。
+Windows 诊断使用既有 e184 冻结程序及独立临时实例。逐路由标记记录了默认插件准备阶段约38秒的等待，安装 journal 记录16项 prepared；诊断脚本最初用两条语句替换单条注册语句，破坏了无花括号 for 的作用域并导致 ReferenceError，此错误来自诊断本身，不是产品故障，已改为单个 await 表达式。诊断运行不计验收通过。继续用明确的 listen 屏障验证初始插件安装与 HTTP 就绪的关系。
 
 Architecture cell：identity-session / transport / runtime-host；Map delta：none；Why：沿用配置 writer、会话 provider、插件安装 journal、既有 Host listen 屏障和发行构建，不引入新持久对象或调度体系。
+
+首次修复已推送 `df3a14e60053b6464575ff0265904c81603ca85d`：Web 重试5 PASS；API首批集合54 PASS、3 FAIL，其中两条置换夹具随后通过先 bind 后设置 cliSessionId 转绿（该文件7 PASS），另一条为本机私有目录 ACL 的严格拒绝，不改 ACL、不计通过。目录门禁通过。CI 继续运行后 Lint 暴露 OS 的 ComSpec 未登记，按现有 OS 变量分类补充原因，注册完整性10 PASS。
+
+修正标记表达式后的第二次诊断中，原 e184 冻结程序在温缓存条件下通过，说明不能把冷启动超时称为必现死锁。诊断证据支持去除默认插件准备对 HTTP 监听的阻塞，而不延长门禁。本轮在既有 prepareHostInitialPlugins 加入必需的 hostListening 屏障，index 不等待准备完成才能监听；准备完成后仍按原 journal 激活。失败监听不应触发插件发现的新测试先出现 Missing expected rejection，修复后插件安装、catalog 与监听集合27 PASS，API tsc通过。完整干净 Windows 构建结果仍待验证。
