@@ -606,6 +606,19 @@
     },
     "scope": "Existing process-local Host message-prefix cache only; not PersonaDigest, native InstructionDigest, versioned CompatKey, durable adopted identity or full C06/C07/C10"
   },
+  "hostExecutionBoundaryCheckpointReview": {
+    "reviewer": "checkpoint_review",
+    "verdict": "approved",
+    "reviewedHead": "0cf338afa2c8e270501cec47e0863b66e7ff15fb",
+    "subject": "task:01a1881e-1a7b-78d0-9a62-ff99b0ab7a01/checkpoint-host-execution-boundary",
+    "acceptedSourceRef": "C:/Users/Administrator/Desktop/猫猫咖啡馆/技术方案/综合重构方案-20261029/重构技术方案.md",
+    "acceptedRevision": "sha256:ba844e3a7030827d61deffe1c69424d631eae507f2423bcb414c4fb4f5be22c2",
+    "findings": [],
+    "independentTests": "55 PASS; no model, Agent, Redis or resident service",
+    "authorTests": "19 PASS + 6 default Redis skips; route redaction 43 PASS",
+    "evidence": "packages/api/artifacts/role-agent-checkpoint-review/execution-boundary-0cf-final.log",
+    "scope": "Host execution boundary projection and resume fence only; not full CompatKey, native adoption, state-root proof, credential revision, W3/W4 or complete C/E/Q acceptance"
+  },
   "clientMcpCurrentnessCheckpointReview": {
     "reviewer": "checkpoint_review",
     "verdict": "approved",
