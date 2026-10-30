@@ -539,10 +539,14 @@
     "scope": "Mock strict contribution and manual Host registration journey only; no discovery, enterprise, strong identity, quality or full E03 acceptance"
   },
   "sessionEventIdentityCheckpointReview": {
-    "verdict": "PENDING_REVIEW",
-    "lastReviewedHead": "9e215d214aee33c7d42c547ad611fd3ed5be659a",
-    "lastVerdict": "changes_requested",
-    "authorFixedPendingReview": ["P2 provider-returned Host invocationId replaced the event fence"],
+    "verdict": "approved",
+    "reviewedHead": "1a780d4f54027ee9746879796bc5baad826fae4a",
+    "subject": "task:01a1881e-1a7b-78d0-9a62-ff99b0ab7a01/checkpoint-session-event-identity",
+    "previousReviewedHead": "9e215d214aee33c7d42c547ad611fd3ed5be659a",
+    "previousVerdict": "changes_requested",
+    "closedByReviewer": ["P2 provider-returned Host invocationId replaced the event fence"],
+    "findings": [],
+    "independentTests": "Shared collection 59 PASS + 1 prior-provider-admission failure; event identity cases pass, not double counted as another collection",
     "evidence": "README.md#W3-会话事件归属核验尚未完成-W3",
     "tests": {
       "red": "1 PASS + 4 FAIL",
@@ -556,8 +560,17 @@
   },
   "priorProviderAdmissionCheckpointReview": {
     "verdict": "PENDING_REVIEW",
+    "lastReviewedHead": "1a780d4f54027ee9746879796bc5baad826fae4a",
+    "lastVerdict": "changes_requested",
+    "authorFixedPendingReview": ["P2 creating an async owner read after cancellation leaves its rejection unobserved"],
     "evidence": "README.md#W3-已知未停止的旧执行阻止新准入尚未完成-W3",
-    "tests": { "red": "5 PASS + 3 FAIL", "combinedRegression": "385 PASS", "finalTargeted": "74 PASS" },
+    "tests": {
+      "red": "5 PASS + 3 FAIL",
+      "combinedRegression": "385 PASS",
+      "finalTargeted": "74 PASS",
+      "strictProcessCancelRed": "1 PASS + 1 FAIL; real child exits 1",
+      "cancelFixTargeted": "99 PASS, no failures or skips"
+    },
     "scope": "Existing canonical running-child read and ordinary same-conversation admission only; no cross-thread binding registry, process identity recovery or full C12/C16"
   },
   "clientMcpCurrentnessCheckpointReview": {

@@ -2950,6 +2950,7 @@ async function* invokePreparedSingleCat(deps: InvocationDeps, params: Invocation
     }
 
     if (deps.turnExecutionStore) {
+      signal.throwIfAborted();
       const running = await preflightRace(
         Promise.resolve(deps.turnExecutionStore.listRunningByUser(userId)),
         'turnExecutionStore.priorProviderStop',
