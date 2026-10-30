@@ -642,3 +642,17 @@ checkpoint_review 对 6add2c8e8276324cc0a3abb20e9e4b889a0168e2 仍返回 changes
 cli-execution-late-stop-proof.test.js 采用独立真实文件 I/O 反例，并补无关 scope 对照：late-stop-proof-red.log 为 1 PASS+2 FAIL。修复后 late-stop-proof-final.log 共 104 PASS+2 原平台 SKIP，同一个未改动的 POSIX-only socket 用例仍在 Windows 明确排除、不计通过；新增 REST late-sibling 实际写入第二份 child record/manifest，确认旧/新 child 及 parent 都保持 running、无 teardown/done/解锁。API tsc exit 0，两文件 Biome 无错误；控制进程表和信号边界不造 OS 进程，工件继续保留。
 
 此复核只建立最后一次观测与当时已登记身份的一致性，不宣称跨进程原子锁、未知子树、缺失 Windows birth 或重启资源准入均已完成。完整 C12/W3 仍未完成、34 项仍 NOT_RUN，待修复 SHA 独立复核。
+
+checkpoint_review 对 341e3da42d6b0ca8370239fa5383563a41bd5de9 返回 approved，独立 29 PASS、0 FAIL、0 SKIP：最后 await 内 root/sibling 文件 I/O、REST 新 child、原 signal ACK、9 种 stop、异 scope/ack-only 与 HTTP/stdio 对照全部通过；原五条相关 P2 已闭环。旧 SHA 的失败证据保留，独立最终日志为 api/artifacts/role-agent-checkpoint-review/teardown-stop-final-341e3da.log。批准仍只限当前切片，不代表完整 C12、未知树、Windows birth 和持久资源重新准入验收。
+
+## W2 ACP 基础进程环境冻结（尚未完成 W2）
+
+2026-10-30 00:31 UTC。实际 factory→AcpClient/HTTP-stream→spawn 边界的 acp-launch-environment-red.log 两条 FAIL：准入后更改宿主 marker，实际冷启动仍读取新值。现在在原 factory 使用既有 buildChildEnv 处理账号覆盖、剥离生命周期变量和 bootstrap cwd，保留私有基础环境快照；capture 前后核验其来源，变化要求重新解析。两个原 client 复制并消费该快照，不再次继承宿主环境；bootstrap 校验也使用同一快照。
+
+连接池仍沿原 spawn signature/retirement owner 管理。完整环境含继承凭据，未把明文环境塞进 signature；仅加入用进程内随机密钥计算的 HMAC 指纹。密钥和环境都只在当前 Host 私有内存，不写日志/兼容摘要/数据库；这只是进程池身份，不能当持久 session compatKey。环境键先排序，避免字段顺序造成重建；既有 buildChildEnv 剥离的 invocation 生命周期输入不参与新池身份。不新增 launch 服务、配置项、环境数据库或通用框架。
+
+API tsc exit 0 后，acp-launch-environment-green.log 43 PASS，含原工厂/bootstrap、账号来源/改选、目录配置、pool generation 和 error/exit。最终 acp-launch-environment-regression.log 344 PASS、无 skip，包含完整 Bridge 合同、两传输、iCode、进程池和实际 CodeAgent Node mock。新两条还覆盖捕获 await 期间变化拒绝、准入后冷启动保留旧值、下一合法 factory 用新池/新值，以及被剥离的生命周期 nonce 不触发无变化重建。实际 spawn 观察使用受控 ChildProcess，不冒充真实系统环境验收。
+
+五文件 Biome 无错误，16 warning/5 info 未扩散治理。24 份 native-unconfirmed-lifecycle 作者实例全部 closed-data-retained/running:false，汇总 acp-launch-environment-native-instances.json；全组内其他 mock 沿原逐实例台账关闭，不产生真实模型/认证调用。数据保留，未启动常驻服务。
+
+复杂度复核：两 client 只加同一可选内部环境输入；factory 复用现有构造核验/池 owner，单个准备函数在捕获与读后核验复用。仍未冻结具体 bare command/Windows shim/macOS binDir 选择及客户端特定启动增量，未处理 CA 文件内容版本、发现/探测统一计划、持久引用或全部 owner 激活通知，因此不能据此认证 C05/C13/C23、W2 或平台发行物。完整 34 项继续 NOT_RUN；待独立复核。

@@ -113,7 +113,9 @@ export class AcpHttpStreamClient {
     const doSpawn = this.config.spawnFn ?? nodeSpawn;
     let command = resolveCliCommandOrBare(this.config.command);
     let args = [...this.config.args];
-    const childEnv = buildChildEnv(this.config.env, { workingDirectory: this.config.cwd });
+    const childEnv = this.config.preparedEnv
+      ? { ...this.config.preparedEnv }
+      : buildChildEnv(this.config.env, { workingDirectory: this.config.cwd });
     if (!IS_WINDOWS && isAbsolute(command)) {
       const binDir = dirname(command);
       childEnv.PATH = childEnv.PATH ? `${binDir}:${childEnv.PATH}` : binDir;

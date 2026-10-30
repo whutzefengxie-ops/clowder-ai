@@ -1,3 +1,4 @@
+import { createHmac, randomBytes } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import type { CatConfig } from '@cat-cafe/shared';
 import type { FastifyBaseLogger } from 'fastify';
@@ -16,6 +17,7 @@ import {
 import type { AcpVariantConfig } from '../../../../../../config/cat-config-loader.js';
 import { resolveContextCapacity } from '../../../../../../config/context-capacity.js';
 import { resolveEffectiveOpenCodeModel } from '../../../../../../config/opencode-model.js';
+import { buildChildEnv } from '../../../../../../utils/cli-spawn.js';
 import { saveSpan } from '../../../../../../utils/member-save-diagnostics.js';
 import type { AgentRegistrationFailure } from '../../registry/AgentServiceUnavailableError.js';
 import { ExecutionAdmissionConflict } from '../../registry/AgentServiceUnavailableError.js';
@@ -88,6 +90,9 @@ interface AcpContextPolicy {
 }
 
 const CONTEXT_POLICY_ACP_CLIENTS = new Set(['opencode', 'google', 'kimi']);
+// Process-local pool identity: neither raw inherited credentials nor a guessable
+// secret hash belongs in diagnostic objects or persistent session compatibility.
+const environmentFingerprintKey = randomBytes(32);
 
 function resolveAcpContextPolicy(config: CatConfig, effectiveModel: string): AcpContextPolicy | null {
   if (!CONTEXT_POLICY_ACP_CLIENTS.has(config.clientId)) return null;
@@ -225,6 +230,7 @@ async function ensureAcpPool(
   input: CreateAcpServiceForConfigInput,
   bootstrap: VerifiedAcpBootstrapContext,
   spawn: AcpSpawnContext,
+  preparedEnv: Readonly<Record<string, string>>,
 ): Promise<{ pool: AcpProcessPool; lease: AcpServicePoolLease }> {
   const { profileId, acpConfig, poolRegistry } = input;
   const spawnSignature = createAcpPoolSpawnSignature({
@@ -232,7 +238,9 @@ async function ensureAcpPool(
     args: bootstrap.args,
     cwd: bootstrap.cwd,
     bootstrapIsolation: bootstrap.isolation,
-    env: spawn.env ?? null,
+    environmentFingerprint: createHmac('sha256', environmentFingerprintKey)
+      .update(JSON.stringify(preparedEnv))
+      .digest('hex'),
     openCodeRuntimeConfig: spawn.openCodeRuntimeConfig,
     contextPolicy: spawn.contextPolicy,
     maxLiveProcesses: acpConfig.pool?.maxLiveProcesses ?? 3,
@@ -266,7 +274,8 @@ async function ensureAcpPool(
         args: bootstrap.args,
         // Cold starts must recreate a lost cwd and revalidate its permissions.
         // Existing live processes keep their cwd and drain under pool policy.
-        cwd: bootstrap.verifyCwd(),
+        cwd: bootstrap.verifyCwd(bootstrap.command, bootstrap.args, preparedEnv),
+        preparedEnv,
         ...(process.platform === 'win32' ? { verifyBootstrapCwd: bootstrap.verifyCwd } : {}),
         ...(spawn.env ? { env: spawn.env } : {}),
         // iCode fail-closed policy: flagged native effects must never be
@@ -364,12 +373,6 @@ export async function createAcpServiceForConfig(
     }
   }
   const accountSource = structuredClone(accountContext);
-  const assertConstructionCurrent = () => {
-    if (resolveCurrentAcpConfig && !isDeepStrictEqual(acpConfig, resolveCurrentAcpConfig()))
-      throw new ExecutionAdmissionConflict('ACP launch source changed; refresh this member before admission.');
-    if (!isDeepStrictEqual(accountSource, resolveAcpAccount(bootstrap.projectRoot, config)))
-      throw new ExecutionAdmissionConflict('ACP account source changed; refresh this member before admission.');
-  };
   const spawn = await saveSpan('acp.prepare', () => prepareAcpSpawnContext(effectiveInput, bootstrap, accountContext));
   if (!spawn) return null;
   bootstrap.args = piBridgeStorageArgs(
@@ -391,7 +394,27 @@ export async function createAcpServiceForConfig(
       return verifyCwd(...args);
     };
   }
-  const { pool, lease } = await saveSpan('acp.pool', () => ensureAcpPool(effectiveInput, verified, spawn));
+  const prepareEnvironment = () =>
+    Object.fromEntries(
+      Object.entries(
+        buildChildEnv(spawn.env, {
+          workingDirectory: verified.cwd,
+          ...(spawn.antigravity ? { inheritParentEnv: false } : {}),
+        }),
+      )
+        .filter((entry): entry is [string, string] => entry[1] !== undefined)
+        .sort(([left], [right]) => left.localeCompare(right)),
+    );
+  const preparedEnv = Object.freeze(prepareEnvironment());
+  const assertConstructionCurrent = () => {
+    if (resolveCurrentAcpConfig && !isDeepStrictEqual(acpConfig, resolveCurrentAcpConfig()))
+      throw new ExecutionAdmissionConflict('ACP launch source changed; refresh this member before admission.');
+    if (!isDeepStrictEqual(accountSource, resolveAcpAccount(bootstrap.projectRoot, config)))
+      throw new ExecutionAdmissionConflict('ACP account source changed; refresh this member before admission.');
+    if (!isDeepStrictEqual(preparedEnv, prepareEnvironment()))
+      throw new ExecutionAdmissionConflict('ACP process environment changed; refresh this member before admission.');
+  };
+  const { pool, lease } = await saveSpan('acp.pool', () => ensureAcpPool(effectiveInput, verified, spawn, preparedEnv));
 
   // #712 P1-1: pass whitelist — MCP resolution happens at invoke time in
   // AcpAgentService so capability toggles take effect without registry rebuild.

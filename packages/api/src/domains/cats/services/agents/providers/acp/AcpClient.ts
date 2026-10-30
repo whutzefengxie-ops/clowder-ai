@@ -93,6 +93,8 @@ export interface AcpClientConfig {
   verifyBootstrapCwd?: (command: string, args: string[], env: NodeJS.ProcessEnv) => void;
   /** Extra env vars to pass to the process */
   env?: Record<string, string>;
+  /** Final private environment captured by the existing factory before admission. */
+  preparedEnv?: Readonly<Record<string, string>>;
   /** Isolated subscription profiles must not inherit API keys or host credentials. */
   inheritParentEnv?: boolean;
   /** Official AGY 1.4 reports some errors as text + end_turn; exact provider stderr supplies failure provenance. */
@@ -266,10 +268,12 @@ export class AcpClient {
     // PATH so `#!/usr/bin/env node` shims can find the node interpreter.
     let command = resolveCliCommandOrBare(this.config.command);
     let args = [...this.config.args];
-    const childEnv = buildChildEnv(this.config.env, {
-      workingDirectory: this.config.cwd,
-      inheritParentEnv: this.config.inheritParentEnv,
-    });
+    const childEnv = this.config.preparedEnv
+      ? { ...this.config.preparedEnv }
+      : buildChildEnv(this.config.env, {
+          workingDirectory: this.config.cwd,
+          inheritParentEnv: this.config.inheritParentEnv,
+        });
     if (!IS_WINDOWS && isAbsolute(command)) {
       const binDir = dirname(command);
       childEnv.PATH = childEnv.PATH ? `${binDir}:${childEnv.PATH}` : binDir;

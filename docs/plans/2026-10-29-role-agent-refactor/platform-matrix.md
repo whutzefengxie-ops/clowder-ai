@@ -53,3 +53,17 @@ status: in-progress
 - 浏览器：生产 SettingsShell/MemberSettingsPage + 本工位真实 Fastify 路由，网络/Next router 使用现有隔离夹具。编辑职责与全局参数、刷新后读回通过；浏览器及 Fastify 已关闭。假 catalog 在 result.json 指向的独立临时根保留；无模型调用、无真实 HOME。
 - CodeAgent mock：每个独立状态根记录 instance.json，实际 AcpClient 启动 Node 子进程后统一 close；断线与取消场景按未知/受控停止处理。测试始终使用独立 HOME/USERPROFILE，不读写真实原生会话。
 - 不运行本任务交互服务，没有占用 3003/3004；未修改/停止用户验收环境。上述本地证据都不是最终包或 macOS 实机证据。
+
+## Windows 当前安装候选的只读盘点（未认证实际绑定）
+
+2026-10-30 在本机只读取 PATH shim、安装包 package.json 和文件元数据，未启动客户端、登录、模型任务或原生会话。证据 windows-command-inventory.json 与 windows-shim-inventory.json 位于本任务 artifacts；后者从实际 shim 解析 package 路径，不按产品名猜 npm 包名。
+
+| 命令候选 | 实际 shim 所指包元数据 | 证据边界 |
+|---|---|---|
+| Claude | @anthropic-ai/claude-code 2.1.312 | 未证明 Host 最终选中该入口或该版本任务通过 |
+| Codex npm | @openai/codex 0.161.0 | PATH 另有桌面 codex.exe，不能将两者合并为同一绑定 |
+| Gemini | @google/gemini-cli 0.66.0 | 仅安装元数据 |
+| Pi | @earendil-works/pi-coding-agent 1.3.0 | 不能按另一发行包或旧 API 的版本推断能力 |
+| OpenCode | @opencode/cli 2.0.28 | 仅安装元数据 |
+
+Kimi 有独立 exe；其 Windows 文件版本为 24.15.0，该信息可能属于嵌入运行时，未当作 Kimi 客户端版本。DSH 有本地仓库 shim，真实发布版本尚未由同一 launch owner 核验。PATH 未发现 CodeAgent/iCode/AGY 不代表所有 Host 配置不存在；CodeAgent 继续使用用户授权 mock。此次盘点不更新任一 E/Q 项为通过，也不代替 C23 的发现→探测→实际执行路径一致性。

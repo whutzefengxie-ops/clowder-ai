@@ -388,15 +388,18 @@
     "scope": "Existing client error/exit boundary only; native-tree stop, cross-process recovery, live close failure/full C12 incomplete"
   },
   "unconfirmedLifecycleCheckpointReview": {
-    "verdict": "PENDING_REVIEW",
-    "lastReviewedHead": "533741c694da64133538f3fa98bb49ccec0ae937",
-    "lastVerdict": "changes_requested",
+    "verdict": "approved",
+    "reviewedHead": "341e3da42d6b0ca8370239fa5383563a41bd5de9",
+    "independentTests": "29 PASS, no failures or skips",
+    "findings": [],
+    "lastReviewedHead": "341e3da42d6b0ca8370239fa5383563a41bd5de9",
+    "lastVerdict": "approved",
     "closedByReviewer": [
       "P2 explicit start rejection misclassified as unknown teardown",
       "P2 batch abort swallows a confirmed healthy sibling terminal",
       "P2 serial consumer return cleanup failure masked by final safety-net done"
     ],
-    "authorFixedPendingReview": ["P2 signal acknowledgement mistaken for native stop proof"],
+    "additionalClosedFindings": ["P2 signal acknowledgement mistaken for native stop proof", "P2 late identity publication during the final OS read"],
     "evidence": "README.md#W3-live-停止未确认贯通现有执行与队列尚未完成-W3",
     "tests": {
       "producerRed": "2 FAIL with nativeAliveAtTerminal=true and false providerTeardownAt",
@@ -409,12 +412,14 @@
     "scope": "Existing Bridge/invoker/routes/Queue negative teardown fact only; exact recovery, durable native owner, manual/reaper terminal writers and full C12 remain incomplete"
   },
   "teardownWriterCheckpointReview": {
-    "verdict": "PENDING_REVIEW",
-    "lastReviewedHead": "6add2c8e8276324cc0a3abb20e9e4b889a0168e2",
-    "lastVerdict": "changes_requested",
+    "verdict": "approved",
+    "lastReviewedHead": "341e3da42d6b0ca8370239fa5383563a41bd5de9",
+    "lastVerdict": "approved",
     "independentPreviousTests": "92 PASS + 1 Redis reaper SKIP; new signal proof counterexample 1 FAIL",
-    "independentLatestTests": "44 PASS + 3 FAIL; same late root/sibling manifest P2, no OS process created",
-    "authorFixedPendingReview": ["P2 a same-scope identity published during the final OS read was not observed"],
+    "independentPreviousLateIdentityTests": "44 PASS + 3 FAIL; same late root/sibling manifest P2, no OS process created",
+    "independentLatestTests": "29 PASS, no failures or skips",
+    "closedByReviewer": ["P2 a same-scope identity published during the final OS read was not observed"],
+    "findings": [],
     "evidence": "README.md#W3-停止证明约束现有终态写入与恢复尚未完成-W3",
     "tests": {
       "ownerRed": "2 PASS + 7 FAIL",
@@ -430,10 +435,21 @@
     "scope": "Existing memory/atomic Redis writer, controlled stop commit, empty-snapshot recovery and existing exact-exit reaper only; durable native owner/resource recovery, cross-platform/package and full C12 incomplete"
   },
   "httpstreamCloseProofCheckpointReview": {
-    "verdict": "PENDING_REVIEW",
+    "verdict": "approved",
+    "reviewedHead": "341e3da42d6b0ca8370239fa5383563a41bd5de9",
     "evidence": "README.md#W3-信号确认与已知进程停止证明分开尚未完成-W3",
     "tests": "2 PASS + 1 FAIL RED; targeted HTTP/stdio client and retirement regression included in signalProofFix",
     "scope": "HTTP transport error versus actual carrier exit only; no OS/native-tree/platform certification"
+  },
+  "acpLaunchEnvironmentCheckpointReview": {
+    "verdict": "PENDING_REVIEW",
+    "evidence": "README.md#W2-ACP-基础进程环境冻结尚未完成-W2",
+    "tests": {
+      "red": "2 FAIL at actual spawn boundary",
+      "factoryAndAccount": "43 PASS",
+      "contractsAndClients": "344 PASS"
+    },
+    "scope": "Existing factory-owned sanitized base environment and private process-pool fingerprint only; command/shim selection, discovery/probe, CA file contents, persisted references and full W2 incomplete"
   },
   "catalogPublicationCheckpointReview": {
     "reviewer": "checkpoint_review",
