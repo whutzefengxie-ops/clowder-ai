@@ -10,14 +10,17 @@ import { contentApiBase } from './file-source';
 import { ReviewToolbarIcon } from './ReviewToolbarIcon';
 /** Keep keyboard focus on visible actions when narrow-only actions are disclosed. */
 export function fileMenuItems(menu: HTMLDivElement | null) {
-  return Array.from(menu?.querySelectorAll<HTMLElement>('button:not(:disabled),a[href]') ?? []).filter(
-    (node) => getComputedStyle(node).display !== 'none' && getComputedStyle(node).visibility !== 'hidden',
-  );
+  return Array.from(menu?.querySelectorAll<HTMLElement>('button:not(:disabled),a[href]') ?? []).filter((node) => {
+    for (let current: HTMLElement | null = node; current && current !== menu; current = current.parentElement) {
+      const style = getComputedStyle(current);
+      if (style.display === 'none' || style.visibility === 'hidden') return false;
+    }
+    return true;
+  });
 }
 export function FileActionMenu({
   position,
   menu,
-  trigger,
   info,
   link,
   filename,
@@ -43,7 +46,6 @@ export function FileActionMenu({
 }: {
   position: { x: number; y: number };
   menu: RefObject<HTMLDivElement>;
-  trigger: RefObject<HTMLButtonElement>;
   info: ContentFileInfo | null;
   link: string;
   filename: string;
@@ -95,7 +97,6 @@ export function FileActionMenu({
           event.preventDefault();
           event.stopPropagation();
           close();
-          trigger.current?.focus();
         }
         if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
           event.preventDefault();

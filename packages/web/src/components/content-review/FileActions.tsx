@@ -109,7 +109,7 @@ export function FileActions(props: FileActionsProps) {
         <button
           ref={trigger}
           type="button"
-          className={styles.trigger}
+          className={appearance === 'toolbar' ? styles.toolbarTrigger : styles.trigger}
           aria-label={t.more}
           aria-haspopup="menu"
           aria-expanded={!!position}
@@ -128,7 +128,6 @@ export function FileActions(props: FileActionsProps) {
         <FileActionMenu
           position={position}
           menu={menu}
-          trigger={trigger}
           info={info}
           link={link}
           filename={filename}
