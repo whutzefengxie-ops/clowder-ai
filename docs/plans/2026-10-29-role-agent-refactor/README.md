@@ -656,3 +656,19 @@ API tsc exit 0 后，acp-launch-environment-green.log 43 PASS，含原工厂/boo
 五文件 Biome 无错误，16 warning/5 info 未扩散治理。24 份 native-unconfirmed-lifecycle 作者实例全部 closed-data-retained/running:false，汇总 acp-launch-environment-native-instances.json；全组内其他 mock 沿原逐实例台账关闭，不产生真实模型/认证调用。数据保留，未启动常驻服务。
 
 复杂度复核：两 client 只加同一可选内部环境输入；factory 复用现有构造核验/池 owner，单个准备函数在捕获与读后核验复用。仍未冻结具体 bare command/Windows shim/macOS binDir 选择及客户端特定启动增量，未处理 CA 文件内容版本、发现/探测统一计划、持久引用或全部 owner 激活通知，因此不能据此认证 C05/C13/C23、W2 或平台发行物。完整 34 项继续 NOT_RUN；待独立复核。
+
+checkpoint_review 对 a55db0e62a8f9fdb0250c91ed2ba7868236ebbde 返回 approved，独立 26 PASS、无失败/跳过，包含显式账号覆盖、HOME、AGY inheritParentEnv:false/凭据隔离、两传输实际受控 spawn 和 nonce 不重建。批准仅基础环境；命令/shim 和完整 C23 尚未认证。
+
+## W2 ACP 选定程序与 Windows shim 冻结（尚未完成 W2）
+
+基础环境修复后继续检查程序选择。私有直接 client 反例显示 prepared PATH=A 而实际选择宿主 PATH=B；大小写归一后仍有效 FAIL。接至实际 factory 时发现 bootstrap 审计提前填充的共享缓存会偶然保留 A，但下一 factory 仍错误沿用 A：acp-factory-command-red.log 两条 FAIL。再通过现有合法 invalidateCliCommand 操作清理共享缓存，实际 factory 的已准入调用又切到 B，acp-factory-command-cache-red.log 两条 FAIL。不能以共享缓存偶然命中代替绑定。
+
+现有 factory 在准备阶段选定 command/argv/shell，保存只读 preparedSpawn；两 client 复制并消费，不在冷启动重算路径或再次处理 Windows 参数。每个新 factory 沿已有 CLI resolver 重新解析；Windows 原 spawn helper 的可选 refresh 只为该调用更新 shim/Node 查找缓存，默认消费者语义不变。池签名使用实际选定程序、参数与 shell，bootstrap 验证也看同一计划；既有 Unix supervisor 仍在实际启动时添加自己的运行期归属。没有新通用 launcher、持久状态或插件脚本执行入口。
+
+API tsc exit 0。acp-frozen-command-green.log 45 PASS+6 原平台专属 SKIP，含工厂、基础环境、原 Windows spawn/解析/转义与签名；acp-frozen-shim-green.log 两条 PASS 使用原 spawn 边界（Node builtin 受控），Windows 中文/空格目录下旧调用保留 entry-A，原 shim 更新且 A/B 同时存在后新 factory 使用 entry-B，含双引号、&、^、| 的参数保持原值，不再重复转换。acp-frozen-command-regression.log 362 PASS、无失败/跳过，含完整 Bridge、账号来源/改选、stdio/HTTP、iCode、进程池和真实 CodeAgent Node mock。
+
+七文件 Biome 无错误，19 warning/8 info 未扩散治理。28 份 native-unconfirmed-lifecycle 实例均 closed-data-retained/running:false，汇总 acp-frozen-command-native-instances.json。新程序/脚本候选只是受控占位文件，未执行 native agent；Windows helper 的只读系统 Node 查找不是认证/模型调用。所有原生测试数据和命令证据保留。
+
+复杂度复核：只在现有工厂/两 client/Windows helper 传递一个内部计划，复用既有缓存失效和池退休；原插件严格数据声明没有新增 prepared 字段。没有冻结/复制整套客户端发行目录；同路径可执行文件或 JS 内容版本、发现/探测共用计划、CA 文件更新、持久引用和实际 macOS/内网/安装物仍待完成。因此不认证完整 C05/C13/C23 或 W2，34 项仍 NOT_RUN。待独立复核。
+
+作者 fallback 复核将两 client 的 command/args 分别回退收敛为一次整体 preparedSpawn 选择：内部类型已经保证完整计划，不允许按字段混合旧/新来源。最终 API tsc exit 0 后，acp-frozen-command-final.log 71 PASS、无 skip，包含两传输原 client、Windows 原 spawn、两新命令/两新 shim/基础环境。362 全组运行早于这个等价的整体选择收敛，未把旧结果伪装成该机械变化后的重跑；最终 client 实际消费由 71 条覆盖。每 client 一个兼容旧内部调用的回退不可移除，未新增失败重试或替代客户端。

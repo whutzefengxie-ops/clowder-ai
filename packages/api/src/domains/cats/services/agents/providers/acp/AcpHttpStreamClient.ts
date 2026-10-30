@@ -111,8 +111,12 @@ export class AcpHttpStreamClient {
     this.liveSessions.clear();
     // Phase 1: spawn the process
     const doSpawn = this.config.spawnFn ?? nodeSpawn;
-    let command = resolveCliCommandOrBare(this.config.command);
-    let args = [...this.config.args];
+    const selectedSpawn = this.config.preparedSpawn ?? {
+      command: resolveCliCommandOrBare(this.config.command),
+      args: this.config.args,
+    };
+    let { command } = selectedSpawn;
+    let args = [...selectedSpawn.args];
     const childEnv = this.config.preparedEnv
       ? { ...this.config.preparedEnv }
       : buildChildEnv(this.config.env, { workingDirectory: this.config.cwd });
@@ -133,8 +137,9 @@ export class AcpHttpStreamClient {
       cwd: this.config.cwd,
       stdio: ['pipe', 'pipe', 'pipe'],
       env: childEnv,
+      ...(this.config.preparedSpawn?.shell !== undefined ? { shell: this.config.preparedSpawn.shell } : {}),
     };
-    if (IS_WINDOWS && !this.config.spawnFn) {
+    if (IS_WINDOWS && !this.config.spawnFn && !this.config.preparedSpawn) {
       const spawnPlan = resolveWindowsSpawnPlan(command, args);
       command = spawnPlan.command;
       args = spawnPlan.args;

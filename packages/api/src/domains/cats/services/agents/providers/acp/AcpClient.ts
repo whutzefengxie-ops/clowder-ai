@@ -95,6 +95,8 @@ export interface AcpClientConfig {
   env?: Record<string, string>;
   /** Final private environment captured by the existing factory before admission. */
   preparedEnv?: Readonly<Record<string, string>>;
+  /** Existing factory's selected executable/argv/shell, before platform supervisor wrapping. */
+  preparedSpawn?: { readonly command: string; readonly args: readonly string[]; readonly shell?: true | string };
   /** Isolated subscription profiles must not inherit API keys or host credentials. */
   inheritParentEnv?: boolean;
   /** Official AGY 1.4 reports some errors as text + end_turn; exact provider stderr supplies failure provenance. */
@@ -266,8 +268,12 @@ export class AcpClient {
     // On macOS GUI apps (Electron), resolve bare command names (e.g. 'gemini') to
     // full paths via resolveCliCommandOrBare, then inject the bin directory into
     // PATH so `#!/usr/bin/env node` shims can find the node interpreter.
-    let command = resolveCliCommandOrBare(this.config.command);
-    let args = [...this.config.args];
+    const selectedSpawn = this.config.preparedSpawn ?? {
+      command: resolveCliCommandOrBare(this.config.command),
+      args: this.config.args,
+    };
+    let { command } = selectedSpawn;
+    let args = [...selectedSpawn.args];
     const childEnv = this.config.preparedEnv
       ? { ...this.config.preparedEnv }
       : buildChildEnv(this.config.env, {
@@ -294,8 +300,9 @@ export class AcpClient {
       cwd: this.config.cwd,
       stdio: ['pipe', 'pipe', 'pipe'],
       env: childEnv,
+      ...(this.config.preparedSpawn?.shell !== undefined ? { shell: this.config.preparedSpawn.shell } : {}),
     };
-    if (IS_WINDOWS && !this.config.spawnFn) {
+    if (IS_WINDOWS && !this.config.spawnFn && !this.config.preparedSpawn) {
       const spawnPlan = resolveWindowsSpawnPlan(command, args);
       log.debug(
         {

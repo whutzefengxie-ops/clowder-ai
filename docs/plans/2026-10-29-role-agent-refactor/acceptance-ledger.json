@@ -442,7 +442,10 @@
     "scope": "HTTP transport error versus actual carrier exit only; no OS/native-tree/platform certification"
   },
   "acpLaunchEnvironmentCheckpointReview": {
-    "verdict": "PENDING_REVIEW",
+    "verdict": "approved",
+    "reviewedHead": "a55db0e62a8f9fdb0250c91ed2ba7868236ebbde",
+    "independentTests": "26 PASS, no failures or skips",
+    "findings": [],
     "evidence": "README.md#W2-ACP-基础进程环境冻结尚未完成-W2",
     "tests": {
       "red": "2 FAIL at actual spawn boundary",
@@ -450,6 +453,18 @@
       "contractsAndClients": "344 PASS"
     },
     "scope": "Existing factory-owned sanitized base environment and private process-pool fingerprint only; command/shim selection, discovery/probe, CA file contents, persisted references and full W2 incomplete"
+  },
+  "acpLaunchCommandCheckpointReview": {
+    "verdict": "PENDING_REVIEW",
+    "evidence": "README.md#W2-ACP-选定程序与-Windows-shim-冻结尚未完成-W2",
+    "tests": {
+      "red": "2 FAIL for stale next selection; 2 FAIL for admitted selection after normal shared-cache invalidation",
+      "targeted": "45 PASS + 6 existing platform SKIP",
+      "windowsShim": "2 PASS",
+      "wholePlanSelectionFinal": "71 PASS after consolidating each client's single prepared-plan fallback",
+      "regression": "362 PASS, no failures or skips"
+    },
+    "scope": "Existing ACP factory selected executable/argv/shell only; same-path executable contents/version, discovery/probe unification, CA contents, persisted refs and full C23/W2 remain incomplete"
   },
   "catalogPublicationCheckpointReview": {
     "reviewer": "checkpoint_review",
