@@ -165,7 +165,7 @@ try {
   await panel.getByLabel('标题（选填）').fill('分析同时的新问题');
   await panel.getByLabel('描述').fill('另一条反馈独立保存');
   await history();
-  const analysisRow=()=>panel.locator('.history-item').filter({hasText:'bug: 分析反馈测试'});
+  const analysisRow=()=>panel.locator('.history-item').filter({hasText:'bug: 分析后的标题'});
   await analysisRow().getByText('分析完成 · 待投递',{exact:true}).waitFor();
   await panel.locator('.history-item').filter({hasText:'bug: 分析同时的新问题'}).getByRole('button',{name:'继续填写'}).click();
   assert.equal(await panel.getByLabel('描述').inputValue(),'另一条反馈独立保存');
