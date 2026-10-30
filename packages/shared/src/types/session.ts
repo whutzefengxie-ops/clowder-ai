@@ -62,6 +62,9 @@ export interface HostExecutionBoundary {
   /** Process-local generation: a restart conservatively requires a new segment. */
   readonly implementationGeneration: string;
   readonly accountRef: string | null;
+  /** Adapter-provided native state root; absent when the adapter has no verified fact. */
+  readonly accountStateRoot?: string;
+  readonly accountOwnerRoot?: string;
   readonly workspaceRoot: string;
   readonly projectRoot: string;
 }

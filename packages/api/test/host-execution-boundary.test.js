@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { resolve } from 'node:path';
 import { test } from 'node:test';
 import {
   captureHostExecutionBoundary,
@@ -43,4 +44,16 @@ test('hard-boundary changes report their concrete dimension and unknown records 
     ['projectRoot', '/other-project'],
   ])
     assert.deepEqual(changedHostExecutionBoundary(before, { ...before, [key]: value }), [key]);
+});
+
+test('Codex adapter state roots are recorded only from its selected launch descriptor', () => {
+  const boundary = captureHostExecutionBoundary(
+    {
+      ...binding,
+      codexAccountLaunch: { stateRoot: 'C:/state-root', accountOwnerRoot: 'C:/account-owner' },
+    },
+    'native_cli',
+  );
+  assert.equal(boundary.accountStateRoot, resolve('C:/state-root').toLowerCase());
+  assert.equal(boundary.accountOwnerRoot, resolve('C:/account-owner').toLowerCase());
 });

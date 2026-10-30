@@ -16,6 +16,12 @@ export function captureHostExecutionBoundary(
 ): Boundary {
   const workspaceRoot = resolve(binding.workspace.workingDirectory ?? binding.projectRoot);
   const projectRoot = resolve(binding.workspace.workingProjectRoot ?? binding.projectRoot);
+  const normalizePath = (value: string): string => {
+    const normalized = resolve(value);
+    return process.platform === 'win32' ? normalized.toLowerCase() : normalized;
+  };
+  const stateRoot = binding.codexAccountLaunch?.stateRoot;
+  const accountOwnerRoot = binding.codexAccountLaunch?.accountOwnerRoot ?? binding.resolvedAccount?.accountOwnerRoot;
   return Object.freeze({
     v: 1,
     clientId: current?.clientId ?? binding.catConfig?.clientId ?? 'undeclared',
@@ -23,8 +29,10 @@ export function captureHostExecutionBoundary(
     implementationKey: current?.implementation?.key ?? binding.implementation?.key ?? 'undeclared',
     implementationGeneration: current?.implementation?.generation ?? binding.implementation?.generation ?? 'undeclared',
     accountRef: binding.resolvedAccount?.id ?? binding.effectiveAccountRef ?? null,
-    workspaceRoot: process.platform === 'win32' ? workspaceRoot.toLowerCase() : workspaceRoot,
-    projectRoot: process.platform === 'win32' ? projectRoot.toLowerCase() : projectRoot,
+    ...(stateRoot ? { accountStateRoot: normalizePath(stateRoot) } : {}),
+    ...(accountOwnerRoot ? { accountOwnerRoot: normalizePath(accountOwnerRoot) } : {}),
+    workspaceRoot: normalizePath(workspaceRoot),
+    projectRoot: normalizePath(projectRoot),
   });
 }
 
