@@ -2269,6 +2269,15 @@ async function* invokePreparedSingleCat(deps: InvocationDeps, params: Invocation
   const toolSpanTracker = new ToolSpanTracker(invocationSpan, catId as string);
   let activeServiceIterator: AsyncIterator<AgentMessage> | null = null;
   const unclosedServiceIterators = new Set<AsyncIterator<AgentMessage>>();
+  let providerTeardownUnconfirmed = false;
+  const unconfirmedTeardownMessage = () => ({
+    type: 'status' as const,
+    catId,
+    invocationId,
+    providerTeardown: 'unconfirmed' as const,
+    content: '停止尚未确认，执行绑定仍被占用',
+    timestamp: Date.now(),
+  });
   let ordinaryTaskExecutionId: string | undefined;
   let presentationDelivery: { confirm(): Promise<AgentMessage[]>; release(reason: string): Promise<void> } | undefined;
   let currentPresentationAttempt: ProviderPresentationAttempt<InvocationPresentationReceipt> | undefined;
@@ -2313,10 +2322,13 @@ async function* invokePreparedSingleCat(deps: InvocationDeps, params: Invocation
     try {
       if (!(await closeServiceIterator(iterator, service.cancellationMode === 'drain'))) {
         log.warn({ catId, threadId, invocationId }, 'Timed out closing abandoned provider iterator');
-      } else unclosedServiceIterators.delete(iterator);
+      } else if (!providerTeardownUnconfirmed) unclosedServiceIterators.delete(iterator);
     } catch (err) {
       log.warn({ catId, threadId, invocationId, err }, 'Failed to close abandoned provider iterator');
-      if (service.cancellationMode === 'drain') throw err;
+      if (service.cancellationMode === 'drain') {
+        providerTeardownUnconfirmed = true;
+        throw err;
+      }
     }
   };
 
@@ -5811,6 +5823,12 @@ async function* invokePreparedSingleCat(deps: InvocationDeps, params: Invocation
           break;
         }
         let msg = await protectNativeProviderResult(iterResult.value, options);
+        if (msg.providerTeardown === 'unconfirmed') {
+          providerTeardownUnconfirmed = true;
+          await closeActiveServiceIterator();
+          yield unconfirmedTeardownMessage();
+          return;
+        }
         if (msg.nativeGoalObservation) {
           if (!threadStore || !deps.sessionChainStore) continue;
           const projected = await projectNativeGoalMessage({
@@ -6162,6 +6180,8 @@ async function* invokePreparedSingleCat(deps: InvocationDeps, params: Invocation
             ? { ...msg, type: 'system_info' as const }
             : msg;
         const providerCancelled = msg.errorCode === 'INVOCATION_CANCELLED';
+        // Adapter-owned cancellation still needs its source's teardown verdict.
+        if (msg.type === 'error' && signal.aborted && service.cancellationMode === 'drain') continue;
         if (msg.type === 'error')
           await terminateCurrentRequestGeneration(
             providerCancelled ? 'cancelled' : 'error',
@@ -6592,7 +6612,14 @@ async function* invokePreparedSingleCat(deps: InvocationDeps, params: Invocation
     }
     didComplete = true; // F118 AC-C5: Normal completion reached
   } catch (err) {
-    await closeActiveServiceIterator();
+    if (service.cancellationMode === 'drain' && unclosedServiceIterators.size > 0) providerTeardownUnconfirmed = true;
+    // Preserve the execution failure; the owner records any additional teardown failure.
+    await closeActiveServiceIterator().catch(() => {});
+    if (providerTeardownUnconfirmed) {
+      await terminateCurrentRequestGeneration('unknown', 'provider_teardown_unconfirmed');
+      yield unconfirmedTeardownMessage();
+      return;
+    }
     // F117 KD-22: a member stopped by its output timeout failed; any other stop cancelled it.
     await terminateCurrentRequestGeneration(
       signal.aborted && signal.reason !== MEMBER_TIMEOUT_REASON ? 'cancelled' : 'error',
@@ -6648,20 +6675,25 @@ async function* invokePreparedSingleCat(deps: InvocationDeps, params: Invocation
     memberTimeout?.close();
     // F117 KD-22: a member stopped by its output timeout failed; any other stop cancelled it.
     const timedOut = callerSignal?.aborted === true && callerSignal.reason === MEMBER_TIMEOUT_REASON;
-    await closeActiveServiceIterator();
+    let teardownFailure: unknown;
+    await closeActiveServiceIterator().catch((error: unknown) => {
+      teardownFailure = error;
+    });
     if (invocationMcpCredentialFile) releaseInvocationCredentialFile(invocationMcpCredentialFile);
     await terminateCurrentRequestGeneration(
-      turnExecutionCompletedSuccessfully
-        ? 'accepted'
-        : (callerSignal?.aborted || hadProviderCancellation) && !timedOut
-          ? 'cancelled'
-          : timedOut || hadError || turnExecutionFailureReason !== undefined
-            ? 'error'
-            : 'unknown',
+      providerTeardownUnconfirmed
+        ? 'unknown'
+        : turnExecutionCompletedSuccessfully
+          ? 'accepted'
+          : (callerSignal?.aborted || hadProviderCancellation) && !timedOut
+            ? 'cancelled'
+            : timedOut || hadError || turnExecutionFailureReason !== undefined
+              ? 'error'
+              : 'unknown',
       timedOut ? MEMBER_TIMEOUT_REASON : (turnExecutionFailureReason ?? turnExecutionInterruptionReason),
     );
     await presentationDelivery?.release('invocation_finalized_without_delivery');
-    if (deps.turnExecutionStore && ownsTurnExecution) {
+    if (deps.turnExecutionStore && ownsTurnExecution && !providerTeardownUnconfirmed) {
       let terminal: TurnExecutionTerminalInput;
       if (turnExecutionCompletedSuccessfully) {
         terminal = { status: 'succeeded', endedAt: Date.now() };
@@ -6744,9 +6776,9 @@ async function* invokePreparedSingleCat(deps: InvocationDeps, params: Invocation
 
     // F118/#1329: Release runtime resume custody before conversation policy
     // custody. Every release is idempotent, including partial acquisition.
-    for (const release of sessionMutexReleases.reverse()) release();
+    if (!providerTeardownUnconfirmed) for (const release of sessionMutexReleases.reverse()) release();
 
-    if (openCodeRuntimeConfigPath) {
+    if (openCodeRuntimeConfigPath && !providerTeardownUnconfirmed) {
       const openCodeRuntimeConfigDir = dirname(openCodeRuntimeConfigPath);
       await rm(openCodeRuntimeConfigDir, { recursive: true, force: true }).catch((err) => {
         log.warn({ invocationId, path: openCodeRuntimeConfigDir, err }, 'Failed to remove OpenCode runtime config dir');
@@ -6818,5 +6850,7 @@ async function* invokePreparedSingleCat(deps: InvocationDeps, params: Invocation
       emitOtelLog('INFO', 'invocation_completed', { [AGENT_ID]: catId, [STATUS]: 'ok' }, invocationSpan);
     }
     invocationSpan.end();
+    // biome-ignore lint/correctness/noUnsafeFinally: explicit consumer return must report failed teardown after local cleanup.
+    if (teardownFailure !== undefined) throw teardownFailure;
   }
 }

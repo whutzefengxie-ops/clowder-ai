@@ -280,7 +280,10 @@ export class AgentSessionBridgeService implements Service.AgentService {
       }
     } catch (error) {
       const failure = this.failure(error);
-      terminal = this.message('done', metadata, { errorCode: failure.code });
+      terminal = this.message('done', metadata, {
+        errorCode: failure.code,
+        ...(live ? { providerTeardown: 'unconfirmed' as const } : {}),
+      });
       if (!signal.aborted) yield this.message('error', metadata, { errorCode: failure.code, error: failure.message });
     } finally {
       if (live) {

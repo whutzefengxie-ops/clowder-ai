@@ -293,6 +293,8 @@ export type AgentMessageType =
  * A message yielded from an agent during invocation
  */
 export interface AgentMessage {
+  /** Negative teardown fact: Host completion cannot attest that this provider stopped. */
+  providerTeardown?: 'unconfirmed';
   /** The type of this message */
   type: AgentMessageType;
   /** F306: provider-neutral user-meaning event; native wire names stop in the adapter. */

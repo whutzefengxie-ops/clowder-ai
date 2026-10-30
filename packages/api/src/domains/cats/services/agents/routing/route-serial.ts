@@ -547,6 +547,7 @@ export async function* routeSerial(
   // done-guarantee: Track whether we yielded a done(isFinal=true) so the finally block can
   // synthesize one if the loop exits early (e.g. signal.aborted break at top of while).
   let yieldedFinalDone = false;
+  let providerTeardownUnconfirmed = false;
   // F042 Wave 3: Fetch thread participant activity once before loop (threadId doesn't change).
   let activeParticipants: { catId: CatId; lastMessageAt: number; messageCount: number }[] = [];
   if (deps.invocationDeps.threadStore) {
@@ -2069,6 +2070,11 @@ export async function* routeSerial(
         isLastCat: false,
       })) {
         // F39 bugfix: stop yielding after cancel (pipe buffer may still drain)
+        if (msg.providerTeardown === 'unconfirmed') {
+          providerTeardownUnconfirmed = true;
+          yield msg;
+          break;
+        }
         if (catSignal?.aborted) break;
         if (isFinalGenerationBriefingBoundary(msg)) await materializeFinalGenerationBriefing();
         while (pendingContextProjectionMessages.length > 0) {
@@ -2425,6 +2431,7 @@ export async function* routeSerial(
         }
       }
 
+      if (providerTeardownUnconfirmed) return;
       // F117 KD-22: a member stopped by its output timeout failed, like a provider failure. The
       // events it produced after the stop were dropped above, so its failure text and diagnostics
       // come from what its timer kept before stopping it, and it ends with a done that names the
@@ -3979,7 +3986,7 @@ export async function* routeSerial(
     // done-guarantee safety net: If loop exited without yielding a final done
     // (e.g. signal.aborted break at top of while, or provider threw before done),
     // synthesize one so the frontend always receives isFinal=true and clears its timer.
-    if (!yieldedFinalDone && worklist.length > 0) {
+    if (!yieldedFinalDone && worklist.length > 0 && !providerTeardownUnconfirmed) {
       const lastCatId = worklist[Math.min(index, worklist.length - 1)]!;
       yield {
         type: 'done' as AgentMessageType,

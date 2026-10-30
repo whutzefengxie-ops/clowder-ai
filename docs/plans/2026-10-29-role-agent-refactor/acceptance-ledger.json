@@ -375,7 +375,10 @@
     "findings": []
   },
   "acpCloseProofCheckpointReview": {
-    "verdict": "PENDING_REVIEW",
+    "verdict": "approved",
+    "reviewedHead": "d695edeeda86e5d5178f039f19bc19af1374b8ec",
+    "independentTests": "60 PASS",
+    "findings": [],
     "evidence": "README.md#W3-ACP-error-与真实-exit-区分尚未完成-W3",
     "tests": {
       "red": "1 PASS + 1 FAIL",
@@ -383,6 +386,19 @@
       "regression": "55 PASS"
     },
     "scope": "Existing client error/exit boundary only; native-tree stop, cross-process recovery, live close failure/full C12 incomplete"
+  },
+  "unconfirmedLifecycleCheckpointReview": {
+    "verdict": "PENDING_REVIEW",
+    "evidence": "README.md#W3-live-停止未确认贯通现有执行与队列尚未完成-W3",
+    "tests": {
+      "producerRed": "2 FAIL with nativeAliveAtTerminal=true and false providerTeardownAt",
+      "queueRed": "2 FAIL",
+      "finalNativeAndQueue": "6 PASS",
+      "queueRegression": "226 PASS",
+      "ownerRegression": "24 PASS",
+      "contractsBeforeQueueChange": "212 PASS"
+    },
+    "scope": "Existing Bridge/invoker/routes/Queue negative teardown fact only; exact recovery, durable native owner, manual/reaper terminal writers and full C12 remain incomplete"
   },
   "catalogPublicationCheckpointReview": {
     "reviewer": "checkpoint_review",

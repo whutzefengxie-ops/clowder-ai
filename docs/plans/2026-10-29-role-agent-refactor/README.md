@@ -592,3 +592,17 @@ checkpoint_review 对 32911e9fa34e708238d32b01de229617208c9968 返回 approved�
 acp-close-proof-red.log 为 1 PASS+1 FAIL：真实 AcpClient 配受控 ChildProcess，在初始化后先收到 error、随后 close，原 error handler 已把 exited=true，close 跳过 SIGTERM 并成功返回；从未收到 exit。关闭期间发生 error 的对照正确报告未确认。现在 error 只把 client 标为 closed/不可复用，exited 仍只由真实 exit 设置；确实没有 spawn 到 PID 的启动失败无需信号。两个既有字段的两行修改，不增加 shutdown 框架、重试、字段或状态 owner。
 
 API tsc exit 0 后，acp-close-proof-green.log 13 PASS，含新三条、原 retirement 及真实 mock 取消/失败/direct return；acp-close-proof-regression.log 55 PASS，含原 ACP client、Windows spawn 和 AGY ACP 协议/权限。两文件 Biome 无错误，原九条 warning/五条 info 未扩散清理。受控 ChildProcess 用例不创建 OS 进程；真实 mock 用例沿原逐实例台账关闭、隔离数据保留。此处证明 error 不冒充载体 exit，不证明 Pi native 子树、Windows 跨进程恢复或上层 close failure 的正确持久化；两个 live failure RED 与完整 C12 仍待继续。等待独立审查。
+
+checkpoint_review 对 d695edeeda86e5d5178f039f19bc19af1374b8ec 返回 approved，独立 60 PASS，包括同一 close Promise、重复信号及自然退出。批准仍仅限 error/exit 边界。
+
+## W3 live 停止未确认贯通现有执行与队列（尚未完成 W3）
+
+2026-10-30 00:03 UTC 核验。真实 Node mock 的前述 serial/parallel 两条 RED 表明 provider 未退出却已经写入 canceled/providerTeardownAt。现有 AgentMessage 只增加负向事实 providerTeardown:unconfirmed；Bridge 保留清理失败，invokeSingleCat 保留原 running child、会话锁和资源配置，不伪造 providerTeardownAt；现有串/并行路由传递该事实，不合成 done。QueueProcessor 在既有 owner 内保留 parent/R、processing reservation 和完成 hooks，不能由本地 abort 抹去该事实并提前解锁。没有新状态库、关闭器或无界等待 Promise。
+
+cancel-unconfirmed-lifecycle.test.js 以实际工厂/ACP 子进程/Bridge/串并行/Socket/MessageStore/TurnExecutionStore 验证四种组合；停止失败时 PID 仍存活、R 为 processing、child 为 running 且无 teardown，第二任务标记未进入原生 session 文件。cancel-unconfirmed-queue.test.js 另以实际 QueueProcessor 消费者验证单成员/整批取消；RED 两条 parent canceled，修复后仍 running、R processing、队列占用保留且不执行完成 hook。两个消费者测试使用受控路由，不冒充真实 native→Queue 单一完整旅程。
+
+API tsc exit 0 后，cancel-unconfirmed-final.log 为 6 PASS；queue-regression.log 的完整文件名 cancel-unconfirmed-queue-regression.log 为 226 PASS，cancel-unconfirmed-owner-regression.log 为 24 PASS。Bridge/invoker/routes 修改后的合同集 cancel-unconfirmed-lifecycle-contracts.log 为 212 PASS，运行早于 Queue 修改，未重复声称为最终全组。八文件 Biome 无错误，114 条 warning/4 条 info 未扩散治理；Queue finally 的 guard 使格式化 diff 变大，忽略空白后 Queue 仅 30 增/1 删语义行。
+
+复杂度复核保留现有记录、队列槽和锁作为权威；未抽新管理器。16 份作者 native-unconfirmed-lifecycle 台账均 closed-data-retained/running:false，准确命令行回读无存活进程，汇总 cancel-unconfirmed-instances.json；HOME 和日志保留。首次新增测试两条还误把 R 的现有 processing 枚举期望为 running，已纠正夹具，未将该失败冒充产品缺陷。
+
+当前仅闭环 live 负向事实传播；manual/reaper 等其他 terminal writer、成功受控停止后的精确恢复、native owner 持久依据、多路复用和完整 C12/W3 仍未完成。两组新测试覆盖生产者/消费者，不能替代实际 Redis、跨进程、macOS、真实 CodeAgent 或最终安装物验收。全部 34 个完整验收项仍 NOT_RUN。待独立审查本切片。
