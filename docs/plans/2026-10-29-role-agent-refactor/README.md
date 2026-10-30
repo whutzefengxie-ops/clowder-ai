@@ -27,6 +27,8 @@ status: implementing
 
 当前状态：实现已推进到配置纯投影、条件保存、调用冻结和取消终态的局部切片；ACP 命令、启动审计和 Windows shell 固定（`871990137cdd5da27c10d15b64a64d19fe0e5a10`）及普通部署插件 MCP 激活冻结（`f7c628e836625d6ebadd76b5ead9988ebe6ac705`）均已获独立审查通过。CodeAgent mock 已补正式声明/注册/适配调用链，详见 [本机模拟说明](codeagent-mock.md)。W2/W3 仍有持久兼容引用、恢复和逐客户端采用工作；34 条 C/E/Q 全量验收尚未完成，macOS、企业真实 CodeAgent、最终安装包和真实模型质量没有通过证据。以下“已核对的现状”是初始基线，实际变更及局部证据按后续阶段记录和总账查看。
 
+最新产品提交 `eb0f9383e4269002f98cd3b68ab289f01ad8942c`：事件归属核验保留 Host 私有 turn 身份；同一用户/线程/成员的旧执行停止未确认时阻止普通新任务。两项均已独立审查通过，最近取消边界定向 99 PASS、独立复核 19 PASS。下一工作重点是 W2 的安全持久引用和完整启动输入版本，以及 W3 的稳定兼容结构/原生片段/采用后落盘；然后逐客户端推进 W4。此处的通过只对应局部提交，不覆盖这些剩余依赖。
+
 ## 已核对的现状
 
 - 正式成员入口是 MemberSettingsHost/MemberSettingsPage/useMemberEditor、MemberCreationPage；不复活旧 HubCatEditor。
@@ -38,9 +40,9 @@ status: implementing
 
 ## 验收边界与环境
 
-用户确认本机没有 CodeAgent 程序，允许简单 mock。它可证明接入合同和故障处理，不能证明企业发行物、真实认证或模型质量。macOS 未提供实际连接信息；按既有发布承诺确定所需组合后记录具体缺口，不虚构实机结果。
+用户确认本机没有 CodeAgent 程序，允许简单 mock。它可证明接入合同和故障处理，不能证明企业发行物、真实认证或模型质量。用户已明确确认暂无 Mac；既有承诺的 macOS 实机/安装包项目因环境缺失 BLOCKED，保留必需项，不改成 N/A 或虚构通过。
 
-尚未启动本任务服务。之后实例必须维护任务台账；使用独立 HOME/原生状态根、无生产 3003/3004/6399，测试 Redis 端口先核归属；禁止清空任何持久数据。依赖和构建产物属于本工位，用户在用环境不停止。
+当前没有本任务常驻交互服务。已使用的临时 Redis、Node mock、浏览器/路由夹具按各阶段实例台账收尾，数据和证据保留；后续仍使用独立 HOME/原生状态根，不访问生产 3003/3004/6399，测试 Redis 端口先核归属，禁止清空持久数据。依赖和构建产物属于本工位，用户在用环境不停止。
 
 Architecture ownership：涉及现有配置、context、invocation/session、approval 和 client adapter。准确 cell 和依赖映射在对应工作包实改前核对；不新增数据库、队列或通用 launcher。代码先观察可信 RED，再最小 GREEN；每个提交保存检查命令、结果与仍未覆盖的边界。
 
@@ -713,3 +715,5 @@ API tsc 退出 0。prior-stop-and-host-authority-green.log 为 385 PASS，无失
 独立审查 1a780d4f54027ee9746879796bc5baad826fae4a 分别裁决：session-event-identity approved（原 P2 及可变请求对象变体闭环）；prior-provider-admission changes_requested。共用集合 59 PASS/1 FAIL，失败属于新增准入读取的取消时序，未叠计成两组通过。旧记录保护、精确停止证明后放行及其他作用域均通过。
 
 该 P2 在真实 routeSerial → 会话 custody → 新读取边界复现：custody await 返回时 signal 已取消，原代码仍先创建读取 Promise；preflightRace 随即拒绝，读取稍后的异常成为未处理拒绝。永久 prior-admission-cancel.test.js 和独立 Node helper 以 --unhandled-rejections=strict 验证；prior-stop-admission-cancel-red.log 为 1 PASS/1 FAIL，真实子进程 exit 1。只在创建这次读取前增加 signal.throwIfAborted，不改全局 helper。取消发生在已开始读取中仍由原 race 处理。API tsc exit 0，prior-stop-admission-cancel-green.log 99 PASS，无失败/跳过，包含两条真实严格子进程、原八条准入、所有归属反例以及相关取消/恢复/Bridge/dispatcher/ACP 回归。子进程均已退出，未启动真实 Agent、模型、Redis 或交互服务。该单行修复等待新 SHA 独立回执。
+
+checkpoint_review 对 eb0f9383e4269002f98cd3b68ab289f01ad8942c 给出 approved，独立精确路径集合 19 PASS/0 FAIL/0 SKIP。原独立 strict 子进程现在 exit 0/read 0，永久取消前/读取中两个 strict worker 为 read 0/read 1 且退出 0；原八个准入控制和事件归属回归通过。原 P2 已闭环，见 packages/api/artifacts/role-agent-checkpoint-review/prior-admission-eb0f938-final.log。无 Agent、模型、Redis 或常驻服务实例遗留，dist 已释放；批准只限本次准入切片。用户最新确认暂无 Mac 已同步平台矩阵，必需组合暂 BLOCKED；其他实现继续。

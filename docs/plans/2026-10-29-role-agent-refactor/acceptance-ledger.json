@@ -559,10 +559,14 @@
     "scope": "Existing Bridge event consumer only; no full C11/C24 or persisted compatibility/restart acceptance"
   },
   "priorProviderAdmissionCheckpointReview": {
-    "verdict": "PENDING_REVIEW",
-    "lastReviewedHead": "1a780d4f54027ee9746879796bc5baad826fae4a",
-    "lastVerdict": "changes_requested",
-    "authorFixedPendingReview": ["P2 creating an async owner read after cancellation leaves its rejection unobserved"],
+    "verdict": "approved",
+    "reviewedHead": "eb0f9383e4269002f98cd3b68ab289f01ad8942c",
+    "subject": "task:01a1881e-1a7b-78d0-9a62-ff99b0ab7a01/checkpoint-prior-provider-admission",
+    "previousReviewedHead": "1a780d4f54027ee9746879796bc5baad826fae4a",
+    "previousVerdict": "changes_requested",
+    "closedByReviewer": ["P2 creating an async owner read after cancellation leaves its rejection unobserved"],
+    "findings": [],
+    "independentTests": "19 PASS, no failures or skips",
     "evidence": "README.md#W3-已知未停止的旧执行阻止新准入尚未完成-W3",
     "tests": {
       "red": "5 PASS + 3 FAIL",
