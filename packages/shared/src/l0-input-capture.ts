@@ -18,7 +18,7 @@ import {
 import type { CatConfig } from './types/cat.js';
 import type { CoCreatorConfig } from './types/cat-breed.js';
 
-const sectionFiles = {
+export const L0_SECTION_TEMPLATES = {
   L1_CONTENT: 'l1-parallel-world.md',
   L2_CONTENT: 'l2-carry-over.md',
   L3_CONTENT: 'l3-routing-rules.md',
@@ -215,7 +215,7 @@ export function captureFrozenL0Input(
       readFileSync(resolve(input.installRoot, 'assets/system-prompts/system-prompt-l0.md'), 'utf8'),
     ),
     sections: Object.fromEntries(
-      Object.entries(sectionFiles).map(([key, file]) => [
+      Object.entries(L0_SECTION_TEMPLATES).map(([key, file]) => [
         key,
         withoutAnnotations(readFileSync(resolve(templates, file), 'utf8')).trim(),
       ]),

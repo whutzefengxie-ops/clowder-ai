@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { afterEach, test } from 'node:test';
+import { afterEach, beforeEach, test } from 'node:test';
 import { catRegistry } from '@cat-cafe/shared';
 import { compileL0 } from '../../../scripts/compile-system-prompt-l0.mjs';
 import {
@@ -15,6 +15,7 @@ import { buildTeammateRoster } from '../dist/domains/cats/services/context/Syste
 import { writeDossierFixture } from './helpers/dossier-fixture.js';
 
 const originalTemplate = process.env.CAT_TEMPLATE_PATH;
+beforeEach(() => catRegistry.reset());
 afterEach(() => {
   catRegistry.reset();
   _resetCachedConfig();
