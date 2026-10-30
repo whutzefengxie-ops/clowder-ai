@@ -645,6 +645,7 @@ describe('F295 active execution projection', () => {
         terminal: {
           status: 'canceled',
           endedAt: deps._turnTerminalCalls[0]?.terminal.endedAt,
+          providerTeardownAt: deps._turnTerminalCalls[0]?.terminal.endedAt,
           terminalReason: 'user_cancel',
         },
       },
@@ -821,7 +822,7 @@ describe('F295 active execution projection', () => {
     assert.equal(terminals[0].errorCode, 'cancelled');
   });
 
-  it('keeps process cancellation successful when tracker-less terminalization needs recovery', async () => {
+  it('retains ownership when a controlled stop cannot commit its child terminal', async () => {
     deps._processOwners.push({
       executionId: 'inv-terminal-write-fails',
       invocationId: 'turn-terminal-write-fails',
@@ -841,8 +842,13 @@ describe('F295 active execution projection', () => {
       payload: { catId: 'opus5' },
     });
 
-    assert.equal(cancel.statusCode, 200);
-    assert.equal(cancel.json().cancelled, true);
+    assert.equal(cancel.statusCode, 503);
+    assert.equal(cancel.json().code, 'EXECUTION_CONTROL_UNAVAILABLE');
+    assert.equal(
+      deps.socketManager.broadcastAgentMessage.mock.calls.some((call) => call.arguments[0].type === 'done'),
+      false,
+    );
+    assert.equal(deps.agentSessionMutex.forceReleaseByScope.mock.callCount(), 0);
   });
 
   it('keeps a process-owner-only execution inside a complete sparse project snapshot', async () => {

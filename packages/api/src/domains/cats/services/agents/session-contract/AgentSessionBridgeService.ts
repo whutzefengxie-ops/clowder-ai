@@ -258,17 +258,22 @@ export class AgentSessionBridgeService implements Service.AgentService {
     };
     const signal = options?.signal ?? new AbortController().signal;
     let live: LiveTurn | undefined;
+    let startMayHaveAccepted = false;
     let terminal: AgentMessage | undefined;
     try {
       const prepared = await this.prepare(options, signal, prompt, metadata);
       live = prepared.live;
       const { host, session, invocation } = prepared;
+      startMayHaveAccepted = true;
       const started = await this.input.provider.startTurn(
         host.sessionId,
         { invocation, prompt, ...(this.input.passHostOptions ? { hostOptions: options } : {}) },
         signal,
       );
-      if (!started.ok) throw new SessionFailure(started.code, started.reason);
+      if (!started.ok) {
+        startMayHaveAccepted = false;
+        throw new SessionFailure(started.code, started.reason);
+      }
       live.turn = started.turn;
       if (!signal.aborted) this.register(live, metadata, options ?? {});
       for await (const message of this.consume(started.events, live, metadata, signal, session)) {
@@ -282,7 +287,7 @@ export class AgentSessionBridgeService implements Service.AgentService {
       const failure = this.failure(error);
       terminal = this.message('done', metadata, {
         errorCode: failure.code,
-        ...(live ? { providerTeardown: 'unconfirmed' as const } : {}),
+        ...(startMayHaveAccepted ? { providerTeardown: 'unconfirmed' as const } : {}),
       });
       if (!signal.aborted) yield this.message('error', metadata, { errorCode: failure.code, error: failure.message });
     } finally {

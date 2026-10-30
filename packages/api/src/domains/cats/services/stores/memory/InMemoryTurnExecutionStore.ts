@@ -130,6 +130,8 @@ export class InMemoryTurnExecutionStore implements ITurnExecutionStore {
     if (record.status !== 'running') {
       return { outcome: 'already_terminal', record: cloneTurnExecutionRecord(record) };
     }
+    if (hasUnconfirmedProviderTeardown(record) && input.providerTeardownAt === undefined)
+      throw new Error('provider_teardown_unconfirmed');
     record.status = input.status;
     record.endedAt = input.endedAt;
     if (input.terminalReason !== undefined) record.terminalReason = input.terminalReason;

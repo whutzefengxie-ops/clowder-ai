@@ -5831,9 +5831,9 @@ export class QueueProcessor {
           );
           continue;
         }
-        if (controller.signal.aborted) {
-          break;
-        }
+        // The router owns provider teardown. Drain its terminal/control facts
+        // after batch cancellation while suppressing late visible output.
+        if (controller.signal.aborted && msg.type !== 'done') continue;
         const awakened = readOrdinaryInvocationCreated(msg);
         if (awakened && messageIds.length > 0) {
           await this.markPromptMessagesAwakened({
@@ -6018,9 +6018,7 @@ export class QueueProcessor {
             });
           }
         }
-        if (controller.signal.aborted) {
-          break;
-        }
+        if (controller.signal.aborted && msg.type !== 'done') continue;
 
         // F194 Phase Z9 (砚砚 R1 P1-2): unified visible turn stamp via helper.
         const msgInvocationId = (msg as { invocationId?: string }).invocationId;

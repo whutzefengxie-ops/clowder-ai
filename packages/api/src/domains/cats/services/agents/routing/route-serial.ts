@@ -548,6 +548,7 @@ export async function* routeSerial(
   // synthesize one if the loop exits early (e.g. signal.aborted break at top of while).
   let yieldedFinalDone = false;
   let providerTeardownUnconfirmed = false;
+  let routeFailed = false;
   // F042 Wave 3: Fetch thread participant activity once before loop (threadId doesn't change).
   let activeParticipants: { catId: CatId; lastMessageAt: number; messageCount: number }[] = [];
   if (deps.invocationDeps.threadStore) {
@@ -3942,6 +3943,11 @@ export async function* routeSerial(
 
       index++;
     }
+  } catch (error) {
+    // A failed iterator return must propagate without a synthetic terminal
+    // masking the provider's unconfirmed teardown.
+    routeFailed = true;
+    throw error;
   } finally {
     await invocationServices.dispose();
     // Turn-custody observation is recorded after the turn settles: current output persistence,
@@ -3986,7 +3992,7 @@ export async function* routeSerial(
     // done-guarantee safety net: If loop exited without yielding a final done
     // (e.g. signal.aborted break at top of while, or provider threw before done),
     // synthesize one so the frontend always receives isFinal=true and clears its timer.
-    if (!yieldedFinalDone && worklist.length > 0 && !providerTeardownUnconfirmed) {
+    if (!yieldedFinalDone && worklist.length > 0 && !providerTeardownUnconfirmed && !routeFailed) {
       const lastCatId = worklist[Math.min(index, worklist.length - 1)]!;
       yield {
         type: 'done' as AgentMessageType,

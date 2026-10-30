@@ -606,3 +606,17 @@ API tsc exit 0 后，cancel-unconfirmed-final.log 为 6 PASS；queue-regression.
 复杂度复核保留现有记录、队列槽和锁作为权威；未抽新管理器。16 份作者 native-unconfirmed-lifecycle 台账均 closed-data-retained/running:false，准确命令行回读无存活进程，汇总 cancel-unconfirmed-instances.json；HOME 和日志保留。首次新增测试两条还误把 R 的现有 processing 枚举期望为 running，已纠正夹具，未将该失败冒充产品缺陷。
 
 当前仅闭环 live 负向事实传播；manual/reaper 等其他 terminal writer、成功受控停止后的精确恢复、native owner 持久依据、多路复用和完整 C12/W3 仍未完成。两组新测试覆盖生产者/消费者，不能替代实际 Redis、跨进程、macOS、真实 CodeAgent 或最终安装物验收。全部 34 个完整验收项仍 NOT_RUN。待独立审查本切片。
+
+checkpoint_review 对 5a0e5ec46d2e518c71b9c6d71fedb2a34b61fe97 返回 changes_requested，独立 3 PASS+7 FAIL，归为三条 P2：prepare 的 live 并非 provider 已接受，明确 start 拒绝误标 unknown；batch abort 吞掉另一个已经 committed completed 的 sibling done；serial consumer return 清理失败被 finally 安全网 done 覆盖。作者已将其采用为永久回归：明确拒绝维持普通失败、start 抛错维持接受未知；Queue 在取消后继续 drain 终态/control、抑制普通输出；serial 逃逸异常保留原失败，不补成功外观。teardown-review-replay.log 对独立原反例回放 10 PASS，仍待原 reviewer 复核。
+
+## W3 停止证明约束现有终态写入与恢复（尚未完成 W3）
+
+2026-10-30 00:10 UTC。继续检查真实 writer，teardown-owner-red.log 为 2 PASS+7 FAIL：内存 owner 四种 terminal status 都可抹去 tracked/started/no-teardown 的 child；完整但为空的 OS 快照提前释放；真实受控 stop 未记录 proof；终态写入失败仍发 done。修复在原 memory transitionTerminal 和 Redis 原 Lua 终态写入中复用三字段判断，未证明停止就拒绝新 running→terminal。Redis 校验发生在原子 Lua 内，避免 JS 预读后 provider 才启动的竞态。已有 terminal 历史仍可读取/幂等 replay，未发出及 legacy 不因新约束改写。
+
+精确 terminateExact 成功后以同一时刻原子提交 canceled+providerTeardownAt；持久化失败返回 503，不释放锁、不发 done。空 snapshot 不再替代 tracked child 的停止证明。原 reaper 已有精确 exit 观测和同步 owner fence，将该 exit 时刻写入原字段；没有新增恢复器或 owner。移除只使用一次且吞掉持久化错误的 tracker-less helper，逻辑回到原取消 owner。
+
+API tsc exit 0；最终 teardown-owner-regression.log 共 389 PASS+1 Redis reaper SKIP，覆盖全部 Bridge 合同、四种真实 Node mock、串并行取消/return、Queue/zombie、恢复、原 Turn store、真实内存 reaper。首次扩大集合 94 PASS+1 FAIL+1 SKIP，仅旧 scheduler 夹具未期望新增 proof 字段，已对齐同 endedAt 的精确 proof 后最终全组通过。15 文件 Biome 无错误，105 warning/2 info 保留，不扩散治理。
+
+真实 Windows Redis 另独占 6398/DB15：teardown-owner-redis-red.log 为 1 PASS+5 FAIL；修复后 teardown-owner-redis-green.log 为 6 PASS，无 skip，包含四种状态、零时间值、正式 codec/跨 store 读取及预读→Lua 间实际标记 provider started 的交错。使用本任务已有 Windows Redis runner 改测试列表，不调用通用清空 helper、不删除 key、不连接生产6399。两次各自的 redis-teardown-*/instance.json 登记 PID/程序哈希/目录；均 SHUTDOWN SAVE、stopped-data-retained、portReleased:true。最终回归中的 reaper Redis SKIP 是独立未接线用例，不能用另六条通过假称该 skip 已跑。
+
+复杂度复核：约束落在两个原 writer 和原恢复 owner，共享已有 provider 字段，不加数据库、线程、watcher、timer 或错误重试；Queue 继续 drain 是取消控制流修正。原生 owner 句柄/PID birth 与资源绑定的持久引用、真正未知情况下的精确恢复/重新准入、多路复用、Windows/macOS/内外网/最终安装物仍未认证。源六文档哈希全未变，见 source-integrity-teardown-owner.json；全 34 项仍 NOT_RUN，不将本切片当作完整 C12 或 W3 完成。待独立审查。

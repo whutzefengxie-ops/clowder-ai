@@ -389,6 +389,13 @@
   },
   "unconfirmedLifecycleCheckpointReview": {
     "verdict": "PENDING_REVIEW",
+    "lastReviewedHead": "5a0e5ec46d2e518c71b9c6d71fedb2a34b61fe97",
+    "lastVerdict": "changes_requested",
+    "authorFixedPendingReview": [
+      "P2 explicit start rejection misclassified as unknown teardown",
+      "P2 batch abort swallows a confirmed healthy sibling terminal",
+      "P2 serial consumer return cleanup failure masked by final safety-net done"
+    ],
     "evidence": "README.md#W3-live-停止未确认贯通现有执行与队列尚未完成-W3",
     "tests": {
       "producerRed": "2 FAIL with nativeAliveAtTerminal=true and false providerTeardownAt",
@@ -399,6 +406,18 @@
       "contractsBeforeQueueChange": "212 PASS"
     },
     "scope": "Existing Bridge/invoker/routes/Queue negative teardown fact only; exact recovery, durable native owner, manual/reaper terminal writers and full C12 remain incomplete"
+  },
+  "teardownWriterCheckpointReview": {
+    "verdict": "PENDING_REVIEW",
+    "evidence": "README.md#W3-停止证明约束现有终态写入与恢复尚未完成-W3",
+    "tests": {
+      "ownerRed": "2 PASS + 7 FAIL",
+      "realRedisRed": "1 PASS + 5 FAIL",
+      "regression": "389 PASS + 1 Redis reaper SKIP",
+      "realRedis": "6 PASS",
+      "independentCounterexampleReplay": "10 PASS"
+    },
+    "scope": "Existing memory/atomic Redis writer, controlled stop commit, empty-snapshot recovery and existing exact-exit reaper only; durable native owner/resource recovery, cross-platform/package and full C12 incomplete"
   },
   "catalogPublicationCheckpointReview": {
     "reviewer": "checkpoint_review",
