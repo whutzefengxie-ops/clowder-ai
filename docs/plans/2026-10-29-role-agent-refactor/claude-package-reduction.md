@@ -44,7 +44,7 @@ Architecture cell：identity-session / transport；Map delta：沿用原 capture
 
 `claude-size-8iwVM4/measurement.json` 记录同一 SDK 0.3.285、同一布局、gzip level 1 的前后清单与逐文件 SHA-256。通过新的 materialize 实际导出，移除 243,751,648 bytes（其中 claude.exe 243,751,072 bytes）；压缩组件从 120,156,778 bytes 降至 1,757,785 bytes，减少 118,398,993 bytes，约 112.91 MiB。保留 JavaScript SDK。此数是 Claude 组件差值，不能冒充最终 EXE/DMG 的净减量；其他依赖与首次单独准备 Claude 的占用没有在该比较中消失。
 
-当前仍待：Windows 最终安装物构建与核查、独立审查、macOS 实机/DMG、内网离线环境及全量 34 项 C/E/Q。此处不把本机合成提供方说成真实质量或企业验收。
+仍须完成 Windows 最终安装物构建与核查、macOS 实机/DMG、内网离线环境及全量 34 项 C/E/Q。本切片的独立审查结果见文末；本机合成提供方不代表真实质量或企业验收。
 
 ## 独立审查后的响应性修复
 
@@ -52,7 +52,7 @@ Architecture cell：identity-session / transport；Map delta：沿用原 capture
 
 已改为异步 execFile 和流式异步 SHA-256，原 captureInvocationOptions、模型发现及启动准备等待同一快照；传递现有 AbortSignal，可取消版本探测与文件读取，没有增加轮询或缓存。原反例转绿，capture 结束前心跳已执行；永久用例同时覆盖慢启动期间的事件循环和取消。API tsc 通过，`claude-runtime-async-regression.log` 为 123 项：122 PASS、1 既有 SKIP、无失败；包括全部本切片 SDK/调用链/配置冻结测试。
 
-异步版本又用真实 CLI 2.1.312 和本地合成提供方复验同一十项，全部通过（`claude-real-external-async.log`），新数据根为 `C:/Users/Administrator/AppData/Local/Temp/ca-OcBUum`，两条原生进程 code=0、测试端口关闭，数据保留。独立的 SDK JavaScript 副本还实际读取了前次原生会话：8 条消息可读，没有 native 平台包（`claude-library-history.log`）。等待修复 SHA 的同一 reviewer 复审，未将旧批准转录为新批准。
+异步版本又用真实 CLI 2.1.312 和本地合成提供方复验同一十项，全部通过（`claude-real-external-async.log`），新数据根为 `C:/Users/Administrator/AppData/Local/Temp/ca-OcBUum`，两条原生进程 code=0、测试端口关闭，数据保留。独立的 SDK JavaScript 副本还实际读取了前次原生会话：8 条消息可读，没有 native 平台包（`claude-library-history.log`）。同一 reviewer 随后针对修复 SHA 复审，没有沿用旧提交的批准。
 
 发布构建在原工位因历史未跟踪测试证据被 clean-check 拒绝，证据保留。已按原 managed worktree 入口创建 `build/pr1748-claude-gpt-sol` 独立构建工位，owner=codex、ttl=7天；仅在那里构建，不清理或覆盖原记录，不使用 -AllowDirtyInputs 绕过发布检查。
 
@@ -62,4 +62,42 @@ Architecture cell：identity-session / transport；Map delta：沿用原 capture
 
 用同一冻结产物、同一90秒门禁，仅通过既有 profileRoot 参数放在 Git 之外，启动分析通过，生成1581个程序文件的便携预读清单。新集成反例在合成API启动中实际检查 Git：原默认目录令它继承父仓库并失败。修复只将默认 profileRoot 放到系统临时目录，显式覆盖参数保持；不更改产品工作区或启动时限。修复后分析/取消/资源/打包集合15 PASS，Biome无错误、1条已有复杂度warning。
 
-源码和CI的其他状态：`9c6d4ff71` 获同一非作者 reviewer approved，原响应性 P2 闭环，无开放 finding（独立5项协议/取消、33项SDK回归，64MiB散列期间171次心跳且可取消）。`a2ed4ead8` 仅将 PR CI 目标从 main 扩展至 main/develop，push与发布规则不变；GitHub 当前尚未返回本PR checks，不计为通过。整个重构和平台验收状态没有改成完成。
+`9c6d4ff71` 获同一非作者 reviewer approved，原响应性 P2 闭环，无开放 finding（独立5项协议/取消、33项SDK回归，64MiB散列期间171次心跳且可取消）。`a2ed4ead8` 将 PR CI 目标扩展至 main/develop；此提交本身没有修改 push 与发布规则。后续合并 develop 后的实际 CI 结果如下，不再使用当时尚无 checks 的状态。
+
+## develop 集成后的最终记录（2026-10-30）
+
+PR 远端 base 为 `develop`，不是只修改文档。为使上游审阅基于真实目标分支，`e184a34aca09004923ee95977165dcafc0d154cd` 合并了 upstream/develop `f27e6b0f40b119f43b68312b0dcb28ecf12b2121`，没有 rebase 或强推。两个手工冲突保留了双方需求：`.gitattributes` 保留两组 LF 规则，runtime-catalog-probe 同时保留外部 Claude 与上游 ACP 会话配置应用。上游自带的 push/develop CI 规则也随合并保留。
+
+独立复审发现 develop 新增的 SDK entrypoint 测试未声明外部程序前提：无 Claude 的 CI 中四项失败。`7004b1ddcea387abfa7680dcf6cbb204524c869a` 只在两个 prepare 调用中接入既有测试 runtime，保留模型、续接、身份、凭证隔离和非法标签的原断言；无程序环境的原反例现为4 PASS。该提交没有发行程序差异。同一非作者 reviewer 对该 exact SHA 给出 approved，本切片没有开放 finding。此为本地独立审查，不代表 GitHub 整份 PR 已获批准。
+
+合并后的 shared build/API tsc 通过；调用/模型/会话集合133 PASS、6项既有 Redis SKIP，适配器集合48 PASS，无客户端环境的 entrypoint 集合4 PASS。证据分别为 `claude-develop-integration.log`、`claude-develop-adapter-regression.log`、`claude-develop-entrypoint-no-cli-green.log`，集合不相加为全分支通过率。真实 CLI 的第三次定向运行使用产品默认持久化参数（无 persistSession 覆盖），仍为10项通过、真实模型请求0；数据根 `ca-JOy0uS` 与回执独立保留。
+
+### Windows 构建与实际 CI
+
+四次干净完整构建分别使用 `6eb09adb7`、`9c6d4ff71`、`35485b2a0`、`e184a34ac`，均停在原90秒 API 启动分析门禁，**没有产生本次可交付的 EXE/ZIP**。最新完整日志为 `windows-claude-develop-build.log`，冻结目录为 `bundled/deploy-20261030091749734`。7004 与 e184 之间只有测试夹具差异，不能声称曾从7004完整构建安装器。
+
+物理隔离解决了验收项目错误继承作者 Git 根的问题，但不是全部冷启动耗时的根因：最新实例已在系统临时目录，仍发生模块读取及 worktree 扫描等待并超时。两次单独启动分析成功不能替代重新完整构建。没有放宽90秒时限、绕过 clean-check 或使用 AllowDirtyInputs。
+
+7004 的 GitHub 结果已实际回读，完整快照为 `claude-final-ci-snapshot.json`：
+
+| 检查 | 实际结果与后续范围 |
+| --- | --- |
+| Build、Public contract surfaces、Public test plan、serial-shared | SUCCESS，仅代表相应任务 |
+| Windows installed layout | SUCCESS，不代表已生成/安装本次 EXE |
+| macOS Preview lifecycle、Native launchd identity witness | SUCCESS；完整真实客户端、DMG 和端到端验收仍缺环境 |
+| Directory Size Guard、Lint | FAILURE；ACP 目录25文件触发现有门禁；Lint 在该检查停止 |
+| Web First-run Onboarding | FAILURE；member-first-entry 的失败读回/重试用例找不到真实创建控件 |
+| Public distributable 1–6 / Test (Public) | FAILURE；首批失败涉及 ACP 完成事件、F296 置换、成员超时停止、Host boundary、AGY 身份和启动接线；不是完整剩余失败清单 |
+| Windows | FAILURE；ACP factory throw/null 后下次重试的两项断言失败 |
+
+运行链接：[CI](https://github.com/zts212653/clowder-ai/actions/runs/41032278424)、[Windows](https://github.com/zts212653/clowder-ai/actions/runs/41032278501)、[macOS smoke](https://github.com/zts212653/clowder-ai/actions/runs/41032278454)。失败日志 `ci-final-linux-failures.log` / `ci-final-windows-failures.log` 已保存。尚未定位的整份 PR 失败不标为基线问题、不增加 skip，也不把局部通过当成已经修复。**当前 PR 保留 Draft，不能合入或发布。**
+
+### 收尾、方案核对与剩余边界
+
+本次测试没有安装 EXE、创建快捷方式、绑定用户原生 HOME 或调用真实模型。三次真实外部 CLI 的6条原生进程均记录正常退出；合成 HTTP 服务关闭。四次构建启动的 API 均在失败处理后退出；单独分析的服务也已停止。按程序路径和数据根复核没有本切片遗留服务，不按 PID 数字或通用进程名判断归属。未操作生产端口和持久数据。
+
+统一收尾台账为 `artifacts/role-agent-refactor-20261029-gpt-sol/claude-package-lifecycle-final.json`，逐项记录源码、程序/数据目录、端口、进程和保留原因。保留当前构建工位、失败对照冻结程序和压缩比较证据用于冷启动诊断，2026-11-06 复查额外程序副本；所有实例数据、原生会话和日志保留，未声称完成删除或卸载。用户原有 Claude 安装只读复用，不属于清理对象。
+
+按原需求复核，当前实现仅在既有 SDK 准入/启动及发行导出处增加外部程序边界，模型发现复用同一解析，没有新下载器、缓存、持久库或可扩展 launcher 框架；不强制切换 ACP。移出主包不等于系统不再需要 Claude；使用者仍须准备可用的外部客户端，内网可另行提供离线运行物。本次没有用删除 SDK 库换取体积收益。
+
+全量34项 C/E/Q、真实企业 CodeAgent、内外网和 Windows/macOS 最终安装物验收仍按原总账保留未完成。另一次只读来源校验发现桌面接受方案中的 `重构技术方案.md` 与 `评审问题闭环.md` 在 2026-10-30 已不同于原接受快照（另4份相同）；原哈希未覆盖，本任务没有写入这些源文件。证据见 `claude-package-source-integrity.json`，继续整份重构前应对齐差异；本切片依据为用户明确的 Claude 主包减重与 develop 指令。
