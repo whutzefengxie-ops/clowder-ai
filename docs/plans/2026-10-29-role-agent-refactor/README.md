@@ -25,6 +25,8 @@ status: implementing
 
 分步提交不改变完成定义。总账中 NOT_RUN/BLOCKED/FAIL 不计通过；不会用一个局部绿灯宣称完整实施完成。
 
+当前状态：实现已推进到配置纯投影、条件保存、调用冻结和取消终态的局部切片；最新产品提交 `871990137cdd5da27c10d15b64a64d19fe0e5a10` 的 ACP 命令、启动审计和 Windows shell 固定已获独立审查通过（20 PASS、2 条既有条件 SKIP）。W2/W3 仍有持久兼容引用、恢复和逐客户端采用工作；34 条 C/E/Q 全量验收尚未完成，macOS、企业真实 CodeAgent、最终安装包和真实模型质量没有通过证据。以下“已核对的现状”是初始基线，实际变更及局部证据按后续阶段记录和总账查看。
+
 ## 已核对的现状
 
 - 正式成员入口是 MemberSettingsHost/MemberSettingsPage/useMemberEditor、MemberCreationPage；不复活旧 HubCatEditor。

@@ -455,13 +455,17 @@
     "scope": "Existing factory-owned sanitized base environment and private process-pool fingerprint only; command/shim selection, discovery/probe, CA file contents, persisted references and full W2 incomplete"
   },
   "acpLaunchCommandCheckpointReview": {
-    "verdict": "PENDING_REVIEW",
-    "lastReviewedHead": "18cf7c4b6bf5bb94fb68ea27f9bacf17ee2f290d",
-    "lastVerdict": "changes_requested",
-    "authorFixedPendingReview": [
+    "verdict": "approved",
+    "reviewedHead": "871990137cdd5da27c10d15b64a64d19fe0e5a10",
+    "subject": "task:01a1881e-1a7b-78d0-9a62-ff99b0ab7a01/checkpoint-acp-launch-command",
+    "previousReviewedHead": "18cf7c4b6bf5bb94fb68ea27f9bacf17ee2f290d",
+    "previousVerdict": "changes_requested",
+    "closedByReviewer": [
       "P2 initial startup audit and selected executable use different shim-cache generations",
       "P2 shell:true lets Node re-read live ComSpec at spawn"
     ],
+    "findings": [],
+    "independentTests": "20 PASS + 2 existing conditional SKIP; two argv-equivalence replays cover the same cases and are not counted again",
     "evidence": "README.md#W2-ACP-选定程序与-Windows-shim-冻结尚未完成-W2",
     "tests": {
       "red": "2 FAIL for stale next selection; 2 FAIL for admitted selection after normal shared-cache invalidation",
