@@ -24,10 +24,10 @@ status: in-progress
 |---|---|---|---|
 | WIN-PUBLIC | Windows x64，外网，EXE / ZIP | E01–E04 适用旅程；真实 native 与 ACP 绑定；首装/升级/回退；Q 样本 | 本机 win32 的源代码、真实浏览器及隔离 Redis 部分通过。没有本分支最终包、真实模型 Q 结果；整项 NOT_RUN |
 | WIN-INTRANET | Windows x64，无公网出口，企业发行物 | E01/E04；CodeAgent E03；CA/代理/认证/组件源及端口/数据边界 | 本机 CodeAgent mock 的进程/协议契约已通过，未证明当前主机无公网出口或企业认证。真实企业发行物 NOT_RUN；本地 mock 结果单列 |
-| MAC-ARM-PUBLIC | macOS arm64，外网，DMG | E01–E04 适用旅程；GUI 环境发现、原生状态根；Q 样本 | 已有发行目标，required；当前没有实机/远程入口，NOT_RUN，不计 N/A |
-| MAC-X64-PUBLIC | macOS x64，外网，DMG | 同上，须使用 x64 安装包/客户端；不以 arm64 转译或静态测试代替 | 已有发行目标，required；当前没有实机/远程入口，NOT_RUN |
-| MAC-ARM-INTRANET | macOS arm64，无公网出口，已承诺的企业绑定 | Host E01/E04、离线组件/CA/代理；企业已承诺的客户端执行 E02/E03 | Host 内网检查保留待验；尚无已核验企业 macOS CodeAgent 发布物，不新增该绑定承诺。Host NOT_RUN；CodeAgent 为候选、未声明支持 |
-| MAC-X64-INTRANET | macOS x64，无公网出口，已承诺的企业绑定 | 同上，核对 x64 企业组件实际存在 | 与 arm64 分开记录。Host NOT_RUN；CodeAgent 为候选、未声明支持 |
+| MAC-ARM-PUBLIC | macOS arm64，外网，DMG | E01–E04 适用旅程；GUI 环境发现、原生状态根；Q 样本 | 已有发行目标，required；用户 2026-10-30 确认暂无 Mac，环境缺失 BLOCKED，不计 N/A |
+| MAC-X64-PUBLIC | macOS x64，外网，DMG | 同上，须使用 x64 安装包/客户端；不以 arm64 转译或静态测试代替 | 已有发行目标，required；用户确认暂无 Mac，环境缺失 BLOCKED |
+| MAC-ARM-INTRANET | macOS arm64，无公网出口，已承诺的企业绑定 | Host E01/E04、离线组件/CA/代理；企业已承诺的客户端执行 E02/E03 | 用户确认暂无 Mac，Host 实机检查 BLOCKED；尚无已核验企业 macOS CodeAgent 发布物，不新增该绑定承诺。CodeAgent 为候选、未声明支持 |
+| MAC-X64-INTRANET | macOS x64，无公网出口，已承诺的企业绑定 | 同上，核对 x64 企业组件实际存在 | 与 arm64 分开记录。用户确认暂无 Mac，Host 实机检查 BLOCKED；CodeAgent 为候选、未声明支持 |
 
 本矩阵不替代逐客户端 C14：Claude、Codex、Google/AGY、Kimi、Pi、DSH、OpenCode、CatAgent、A2A、通用 ACP/iCode 保留其原生或 ACP 实际载体。每个已承诺的 `(OS, CPU, 网络, client, carrier, version)` 形成一条结果；名称相似、命令包含某字符串或同为 ACP 都不能合并为同一个通过项。
 

@@ -31,7 +31,7 @@
   ],
   "userSteering": {
     "codeagent": "用户确认本机没有 CodeAgent，授权简单 mock；区分模拟契约证据与真实企业能力",
-    "macos": "尚无实际连接信息"
+    "macos": "2026-10-30 用户明确确认暂无 Mac；必需实机/安装包项因环境缺失 BLOCKED，不计 N/A 或 PASS，本机工作继续"
   },
   "cases": [
     {
