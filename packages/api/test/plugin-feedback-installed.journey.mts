@@ -47,6 +47,14 @@ try {
   assert.equal(await panel.getByText('请描述发生前的操作、实际现象与预期结果',{exact:false}).count(),0);
   await panel.getByLabel('标题（选填）').fill('未投递的 Bug');
   await panel.getByLabel('描述').fill('第一条还没有投递');
+  await panel.getByRole('button',{name:'保存草稿',exact:true}).click();
+  await panel.getByText('草稿已保存到反馈记录',{exact:true}).waitFor();
+  await page.getByRole('button',{name:'关闭插件面板',exact:true}).click();
+  await page.getByRole('button',{name:'问题反馈',exact:true}).click();
+  assert.equal(await panel.getByLabel('描述').inputValue(),'');
+  await history();
+  await panel.locator('.history-item').filter({hasText:'bug: 未投递的 Bug'}).getByRole('button',{name:'继续填写'}).click();
+  assert.equal(await panel.getByLabel('描述').inputValue(),'第一条还没有投递');
   await newFeedback();
   await panel.getByRole('radio',{name:'功能建议',exact:true}).check();
   await panel.getByLabel('标题（选填）').fill('独立的功能建议');
@@ -169,6 +177,12 @@ try {
   assert.ok(!(await panel.getByLabel('报告正文预览').innerText()).includes('model-secret-canary'));
   assert.equal(await panel.getByRole('checkbox', { name: '同意将上述脱敏材料' }).count(), 0);
   await page.screenshot({ path: join(artifactRoot, 'analysis-report.png'), fullPage: true });
+  await history();
+  await panel.locator('.history-item').filter({hasText:'bug: 分析同时的新问题'}).getByRole('button',{name:'继续填写'}).click();
+  assert.equal(await panel.getByRole('button',{name:'查看本条分析报告',exact:true}).count(),0);
+  assert.equal(await panel.getByLabel('描述').inputValue(),'另一条反馈独立保存');
+  await history();
+  await panel.locator('.history-item').filter({hasText:'bug: 分析后的标题'}).getByRole('button',{name:'继续投递'}).click();
   await page.setViewportSize({ width: 420, height: 850 });
   await page.screenshot({ path: join(artifactRoot, 'narrow-report.png'), fullPage: true });
   await page.setViewportSize({ width: 1200, height: 980 });
@@ -218,6 +232,8 @@ try {
     JSON.stringify(
       {
         checks: [
+          'explicitly saved draft survives close and reopen',
+          'opening a draft after an analyzed record clears the prior analysis',
           'blank new form instead of resuming an old report',
           'unfinished drafts coexist and switch without overwriting',
           'bug and feat title prefixes persist',
@@ -254,7 +270,7 @@ try {
       2,
     ),
   );
-  process.stdout.write('PASS: 28 packed-plugin / Host browser journey checks\n');
+  process.stdout.write('PASS: 30 packed-plugin / Host browser journey checks\n');
 } catch (error) {
   if (currentPage) {
     await currentPage.screenshot({ path: join(artifactRoot, 'failure.png'), fullPage: true });
