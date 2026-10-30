@@ -92,6 +92,8 @@ jobs:
           src/components/__tests__/member-runtime-catalog.test.tsx
           src/components/settings/plugin-manager/__tests__/agent-client-identity.test.tsx
           src/hooks/__tests__/useSendMessage-routing-confirmation.test.ts
+      - name: Owner-confirmed plugin feedback and private-context suppression
+        run: pnpm --filter @cat-cafe/api test:plugin-feedback
       - name: Managed Codex layout link diagnostic
         run: >-
           pnpm --filter @cat-cafe/api exec node ./scripts/with-test-home.mjs
