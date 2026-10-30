@@ -9,7 +9,7 @@ on:
       - 'designs/**'
       - 'assets/**'
   pull_request:
-    branches: [main]
+    branches: [main, develop]
     paths-ignore:
       - 'docs/**'
       - '*.md'
