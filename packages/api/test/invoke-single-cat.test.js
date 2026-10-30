@@ -10965,6 +10965,10 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
     const previousConfigRoot = process.env.CAT_CAFE_CONFIG_ROOT;
     await mkdir(join(testGlobalConfigRoot, '.cat-cafe'), { recursive: true });
     await writeFile(
+      join(testGlobalConfigRoot, 'cat-template.json'),
+      await readFile(join(workspaceRoot, 'cat-template.json')),
+    );
+    await writeFile(
       join(testGlobalConfigRoot, '.cat-cafe/capabilities.json'),
       JSON.stringify({ version: 1, capabilities: [] }),
     );
