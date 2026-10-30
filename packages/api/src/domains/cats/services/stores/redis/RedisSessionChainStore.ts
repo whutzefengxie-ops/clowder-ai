@@ -135,6 +135,11 @@ local previous = redis.call('HGET', KEYS[1], 'hostExecutionBoundary')
 if previous then
   local old = cjson.decode(previous)
   local next = cjson.decode(ARGV[3])
+  local oldCount = 0
+  local nextCount = 0
+  for _ in pairs(old) do oldCount = oldCount + 1 end
+  for _ in pairs(next) do nextCount = nextCount + 1 end
+  if oldCount ~= nextCount then return 0 end
   for key, value in pairs(next) do if old[key] ~= value then return 0 end end
 else
   if cli ~= '' then return 0 end

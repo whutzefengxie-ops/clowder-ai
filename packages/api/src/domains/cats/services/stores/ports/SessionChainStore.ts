@@ -366,10 +366,11 @@ export class SessionChainStore implements ISessionChainStore {
     )
       return null;
     if (record.hostExecutionBoundary) {
+      const previousEntries = Object.entries(record.hostExecutionBoundary);
+      const nextEntries = Object.entries(boundary);
       if (
-        !Object.entries(boundary).every(
-          ([key, value]) => record.hostExecutionBoundary?.[key as keyof typeof boundary] === value,
-        )
+        previousEntries.length !== nextEntries.length ||
+        !nextEntries.every(([key, value]) => record.hostExecutionBoundary?.[key as keyof typeof boundary] === value)
       )
         return null;
     } else {
