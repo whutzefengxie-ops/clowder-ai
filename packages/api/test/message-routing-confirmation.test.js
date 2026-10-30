@@ -120,6 +120,14 @@ test('confirmed recipient is exact and an identical retry retains its source and
   );
 });
 
+test('an empty structured mention list cannot skip confirmation for an unavailable prose mention', async (t) => {
+  const f = await fixture(t);
+  const response = await f.send({ mentions: [] });
+  assert.equal(response.statusCode, 409, response.body);
+  assert.equal(response.json().code, 'ROUTING_CONFIRMATION_REQUIRED');
+  assert.equal(f.queue.list(f.thread.id, 'owner').length, 0);
+});
+
 test('confirmed recipient becoming unavailable cannot silently substitute Codex', async (t) => {
   const f = await fixture(t);
   f.agents.markUnavailable('kimi', { code: 'CLI_UNAVAILABLE', message: 'fixture offline after confirmation' });
@@ -176,6 +184,48 @@ test('confirmed replacement remains exact if it becomes unavailable before Queue
   assert.ok(f.messages.getByThread(f.thread.id).some((row) => row.lifecycle?.reason === 'invalid_explicit_target'));
 });
 
+test('a ready named member becoming unavailable after preview cannot silently substitute Kimi', async (t) => {
+  const f = await fixture(t, false);
+  const preview = f.router.previewTargets.bind(f.router);
+  f.router.previewTargets = async (...args) => {
+    const result = await preview(...args);
+    f.agents.markUnavailable('dsh', { code: 'CLI_UNAVAILABLE', message: 'offline after preview' });
+    f.router.refreshFromRegistry(f.agents);
+    return result;
+  };
+  const response = await f.send();
+  assert.equal(response.statusCode, 202, response.body);
+  assert.deepEqual(
+    response.json().entries.map((entry) => entry.targetCatId),
+    ['dsh'],
+  );
+  const retry = await f.send();
+  assert.equal(retry.statusCode, 202, retry.body);
+  assert.equal(retry.json().userMessageId, response.json().userMessageId);
+});
+
+test('a ready named member becoming unavailable before drain cannot invoke another member', async (t) => {
+  const f = await fixture(t, false);
+  assert.equal((await f.send()).statusCode, 202);
+  f.agents.markUnavailable('dsh', { code: 'CLI_UNAVAILABLE', message: 'offline before drain' });
+  f.router.refreshFromRegistry(f.agents);
+  const deliveries = [];
+  f.router.routeExecution = async function* (...args) {
+    deliveries.push(args[4]);
+  };
+  const processor = new QueueProcessor({
+    queue: f.queue,
+    invocationTracker: new InvocationTracker(),
+    messageStore: f.messages,
+    router: f.router,
+    socketManager: { emitToUser() {}, broadcastAgentMessage() {}, broadcastToRoom() {} },
+    log: { info() {}, warn() {}, error() {} },
+  });
+  await processor.requestDrain(f.thread.id);
+  assert.deepEqual(deliveries, []);
+  assert.ok(f.messages.getByThread(f.thread.id).some((row) => row.lifecycle?.reason === 'invalid_explicit_target'));
+});
+
 test('@all and a named DSH member both include the actual DSH service once ready', async (t) => {
   const f = await fixture(t, false);
   const group = await f.send({ content: '@all 打个招呼吧' });
@@ -189,5 +239,28 @@ test('@all and a named DSH member both include the actual DSH service once ready
   assert.deepEqual(
     named.json().entries.map((entry) => entry.targetCatId),
     ['dsh'],
+  );
+});
+
+test('@all retry retains the admitted members after the available roster changes', async (t) => {
+  const f = await fixture(t, false);
+  const first = await f.send({ content: '@all hello' });
+  assert.equal(first.statusCode, 202, first.body);
+  f.agents.markUnavailable('dsh', { code: 'CLI_UNAVAILABLE', message: 'offline before retry' });
+  f.router.refreshFromRegistry(f.agents);
+  const retry = await f.send({ content: '@all hello' });
+  assert.equal(retry.statusCode, 202, retry.body);
+  assert.equal(retry.json().userMessageId, first.json().userMessageId);
+  assert.deepEqual(retry.json().entries, first.json().entries);
+});
+
+test('a different confirmed recipient cannot rewrite an admitted message key', async (t) => {
+  const f = await fixture(t);
+  assert.equal((await f.send({ confirmedTargetCats: ['kimi'] })).statusCode, 202);
+  const conflict = await f.send({ confirmedTargetCats: ['codex'] });
+  assert.ok(conflict.statusCode >= 400, conflict.body);
+  assert.deepEqual(
+    f.queue.list(f.thread.id, 'owner').map((entry) => entry.targets),
+    [['kimi']],
   );
 });
