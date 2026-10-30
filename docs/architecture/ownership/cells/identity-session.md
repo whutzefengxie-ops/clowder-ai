@@ -20,6 +20,7 @@ code_anchors:
   - packages/api/src/domains/cats/services/agents/providers/l0-input-capture.ts
   - packages/api/src/domains/cats/services/agents/providers/member-execution-preferences.ts
   - packages/api/src/domains/cats/services/agents/invocation/execution-account-binding.ts
+  - packages/api/src/domains/cats/services/agents/invocation/host-execution-boundary.ts
   - packages/api/src/domains/cats/services/agents/invocation/execution-workspace.ts
   - packages/api/src/domains/cats/services/agents/invocation/invocation-service-scope.ts
   - packages/api/src/domains/cats/services/agents/registry/AgentRegistry.ts
@@ -218,6 +219,7 @@ F209's entity registry is adjacent but not canonical for agent identity. Its `en
 - For connector binding, use `ConnectorThreadBindingStore` and connector binding keys instead of ad hoc thread maps.
 - For bubble identity, follow ADR-033 and route through `bubble-pipeline` contracts and tests.
 - For runtime session binding, use Session Chain / runtime-session metadata keyed by Clowder AI session id and runtime session id. IDE-direct registration belongs behind the external runtime registration contract and agent-key authorization, not ad hoc JSON maps.
+- Managed invocation records selected Host client/carrier, process-local implementation generation, account reference and normalized workspace/project in the existing SessionRecord before provider entry. SessionChainStore owns write-once/CAS comparison; a changed or unknown native binding uses the existing seal/rebuild flow, while an unproven explicit import fails in place. These facts are not native adoption evidence, a stable implementation version, native state-root proof, credential revision or the complete CompatKey. AGY Native binding checks remain independent.
 - For context continuity, extend `session/context/` and preserve its separation from transcript persistence, Session lifecycle and F299 request-generation evidence. Source domains retain body/revision/invalidator truth; provider receipt is the only delivery-commit authority.
 - For session-backed thread reads, call `thread-access-policy`; a user index grants current-user-scoped reads, never access to every user's records under that thread id.
 - For request-generation evidence, append to the generation's active Session and join through the exact child invocation. Keep source bodies behind their existing owner resolvers; typed `unknown` is the safe result when no owner resolver exists.

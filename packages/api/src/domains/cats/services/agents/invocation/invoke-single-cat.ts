@@ -11,6 +11,7 @@ import { agentServiceGeneration } from '../registry/AgentRegistry.js';
 import { ExecutionAdmissionConflict } from '../registry/AgentServiceUnavailableError.js';
 import { deepFreeze, type FrozenExecutionBinding, freezeExecutionAccountBinding } from './execution-account-binding.js';
 import { freezeExecutionWorkspace } from './execution-workspace.js';
+import { captureHostExecutionBoundary, changedHostExecutionBoundary } from './host-execution-boundary.js';
 import { InvocationServiceScope } from './invocation-service-scope.js';
 import {
   isConfirmedNativeAuthFailure,
@@ -1624,13 +1625,17 @@ export async function prepareInvocationExecutionBinding(
           profileRepository: deps.profileRepository,
         })
       : undefined;
-  return Object.freeze({
+  const prepared = {
     ...binding,
     ...deepFreeze(captured),
     memberRegistryRevision,
     ...(implementation ? { implementation } : {}),
     threadPreferences,
     ...(frozenL0Input ? { frozenL0Input } : {}),
+  };
+  return Object.freeze({
+    ...prepared,
+    hostExecutionBoundary: captureHostExecutionBoundary(prepared, carrier?.carrier ?? 'undeclared'),
   });
 }
 
@@ -2975,6 +2980,76 @@ async function* invokePreparedSingleCat(deps: InvocationDeps, params: Invocation
     const provider = catConfig?.clientId;
     let firstReplyNamingInstruction = '';
     const { workingDirectory, threadProjectPath } = frozenExecutionBinding.workspace;
+    const hostExecutionBoundary = frozenExecutionBinding.hostExecutionBoundary;
+    if (deps.sessionChainStore && !hostExecutionBoundary) throw new Error('execution_boundary_missing');
+    const boundaryPreflight = <T>(label: string, run: () => T | Promise<T>): Promise<T> => {
+      signal.throwIfAborted();
+      // Attach the race observer before calling an owner that may synchronously abort and reject.
+      return preflightRace(Promise.resolve().then(run), label, signal);
+    };
+    if (deps.sessionChainStore && activeSessionRecordForResume && hostExecutionBoundary) {
+      const prior = activeSessionRecordForResume;
+      const changes = changedHostExecutionBoundary(prior.hostExecutionBoundary, hostExecutionBoundary);
+      if (changes.length > 0 && (prior.cliSessionId || prior.hostExecutionBoundary)) {
+        if (prior.externalImport)
+          throw new Error(
+            'imported_session_execution_boundary_unproven: 无法核验导入会话的执行绑定，未发送任务或替换历史。请先核验原客户端、账号和工作区。',
+          );
+        // Do not seal a history unless a replacement can receive authorized context.
+        if (!deps.sessionSealer || (!params.contextPromptFactory && !params.rebuildPromptAfterSessionSeal))
+          throw new Error(
+            'execution_boundary_rollover_unavailable: 会话执行绑定已变化或无法核验，当前入口不能安全建立带上下文的新片段，未发送任务。',
+          );
+        const reason = `execution_boundary:${changes.join(',')}`;
+        const sealer = deps.sessionSealer;
+        const sealed = await boundaryPreflight('executionBoundary.requestSeal', () =>
+          sealer.requestSeal({ sessionId: prior.id, reason }),
+        );
+        if (!sealed.accepted) throw new Error('execution_boundary_seal_conflict');
+        const finalized = await boundaryPreflight('executionBoundary.finalize', () =>
+          sealer.finalize({ sessionId: prior.id }),
+        );
+        if (!finalized.sealed) throw new Error('execution_boundary_finalize_failed');
+        await boundaryPreflight('executionBoundary.clearResume', () => sessionManager.delete(userId, catId, threadId));
+        sessionId = undefined;
+        const store = deps.sessionChainStore;
+        const replacement = await boundaryPreflight('executionBoundary.replacement', () =>
+          getOrCreateManagedSessionRecord(store, {
+            threadId,
+            catId,
+            userId,
+            ...(bgChainKey ? { chainKey: bgChainKey } : {}),
+            compressionCount: invocationCapacitySnapshot?.capability.observesCompression === true ? 0 : null,
+          }),
+        );
+        if (replacement.id === prior.id || replacement.cliSessionId)
+          throw new Error('execution_boundary_replacement_conflict');
+        activeSessionRecordForResume = replacement;
+        invocationPolicyRecordId = replacement.id;
+        invocationHasAuthoritativeUsage = false;
+        await refreshInvocationPolicyExecution();
+        if (params.rebuildPromptAfterSessionSeal) prompt = await params.rebuildPromptAfterSessionSeal();
+        yield {
+          type: 'system_info',
+          catId,
+          timestamp: Date.now(),
+          content: JSON.stringify({
+            type: 'session_seal_requested',
+            sessionId: prior.id,
+            sessionSeq: prior.seq + 1,
+            catId,
+            reason,
+          }),
+        };
+      }
+      const store = deps.sessionChainStore;
+      const target = activeSessionRecordForResume;
+      const bound = await boundaryPreflight('executionBoundary.persist', () =>
+        store.bindHostExecutionBoundary(target.id, target.cliSessionId, hostExecutionBoundary),
+      );
+      if (!bound) throw new Error('execution_boundary_binding_conflict');
+      activeSessionRecordForResume = bound;
+    }
     if (frozenExecutionBinding.workspace.usesDefaultWorkspace)
       yield { type: 'system_info', catId, content: `本次使用默认工作区：${workingDirectory}`, timestamp: Date.now() };
     if (threadStore) {
@@ -5800,6 +5875,19 @@ async function* invokePreparedSingleCat(deps: InvocationDeps, params: Invocation
       };
       if (ordinaryTaskExecutionId && unclosedServiceIterators.size > 0)
         throw new Error('task_provider_teardown_unconfirmed');
+      if (deps.sessionChainStore && invocationPolicyRecordId && hostExecutionBoundary) {
+        const store = deps.sessionChainStore;
+        const logicalId = invocationPolicyRecordId;
+        const target = activeSessionRecordForResume;
+        const bound = await boundaryPreflight('executionBoundary.providerEntry', () =>
+          store.bindHostExecutionBoundary(
+            logicalId,
+            target?.id === logicalId ? target.cliSessionId : undefined,
+            hostExecutionBoundary,
+          ),
+        );
+        if (!bound) throw new Error('execution_boundary_provider_entry_conflict');
+      }
       if (
         deps.turnExecutionStore?.markProviderStarted &&
         !(await deps.turnExecutionStore.markProviderStarted(invocationId, Date.now()))

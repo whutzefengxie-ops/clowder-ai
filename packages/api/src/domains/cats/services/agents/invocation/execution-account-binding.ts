@@ -8,6 +8,7 @@ import {
   type ExecutionProfile,
   projectMemberProfiles,
   type RoleProfile,
+  type SessionRecord,
 } from '@cat-cafe/shared';
 import type { FrozenL0Input } from '@cat-cafe/shared/l0-input';
 import {
@@ -36,6 +37,7 @@ import {
 import type { FrozenExecutionWorkspace } from './execution-workspace.js';
 
 export interface FrozenExecutionBinding {
+  readonly hostExecutionBoundary?: Readonly<NonNullable<SessionRecord['hostExecutionBoundary']>>;
   readonly implementation?: Readonly<{ key: string; generation: string; clientId?: CatConfig['clientId'] }>;
   readonly sharedMcpLaunch?: Readonly<{ transport: string; context?: SharedInvocationContext }>;
   readonly openCodeMcpConfig?: import('../providers/opencode-config-writer.js').OpenCodeMcpConfigPlan;

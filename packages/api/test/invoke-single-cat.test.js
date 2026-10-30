@@ -18,9 +18,11 @@ const hasSourceStagingContent = existsSync(
 
 import { afterEach, before, beforeEach, describe, it } from 'node:test';
 import { catRegistry } from '@cat-cafe/shared';
+import { agentServiceGeneration } from '../dist/domains/cats/services/agents/registry/AgentRegistry.js';
 import { ContextEpochOwner } from '../dist/domains/cats/services/session/context/ContextEpochOwner.js';
 import { InMemoryContextEpochStore } from '../dist/domains/cats/services/stores/ports/ContextEpochStore.js';
 import { openCodeDirectMcpContract } from './helpers/direct-mcp-contract.js';
+import { declareKnownHostSessionFixture } from './helpers/known-host-session-fixture.js';
 
 function assertStagingPromptContract(prompt, mode) {
   if (hasSourceStagingContent) {
@@ -257,6 +259,8 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
                 reason: 'invoke-single-cat test double',
               }),
             };
+        // A wrapper is a view of this same fake implementation, not a new generation.
+        agentServiceGeneration(service, params.service);
         const capacitySnapshot =
           params.capacitySnapshot ??
           (await resolveInvocationCapacitySnapshot({
@@ -265,7 +269,11 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
             service,
             sessionChainStore: deps.sessionChainStore,
           }));
-        yield* invokeSingleCatRaw(deps, { ...params, service, capacitySnapshot });
+        const executionBinding = deps.sessionChainStore
+          ? (params.executionBinding ?? (await mod.prepareInvocationExecutionBinding(deps, { ...params, service })))
+          : params.executionBinding;
+        if (executionBinding) await declareKnownHostSessionFixture(deps, params, executionBinding);
+        yield* invokeSingleCatRaw(deps, { ...params, service, capacitySnapshot, executionBinding });
       })();
   });
 
@@ -6136,6 +6144,12 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
     const { SessionChainStore } = await import('../dist/domains/cats/services/stores/ports/SessionChainStore.js');
     const { SessionSealer } = await import('../dist/domains/cats/services/session/SessionSealer.js');
     const sessionChainStore = new SessionChainStore();
+    sessionChainStore.create({
+      cliSessionId: 'old-sess',
+      catId: 'opus',
+      threadId: 'thread-seal-race',
+      userId: 'user-seal',
+    });
     // Create a sealer whose finalize is slow (simulates async flush)
     let finalizeResolved = false;
     const realSealer = new SessionSealer(sessionChainStore);
@@ -6221,6 +6235,7 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
     const { SessionChainStore } = await import('../dist/domains/cats/services/stores/ports/SessionChainStore.js');
     const { SessionSealer } = await import('../dist/domains/cats/services/session/SessionSealer.js');
     const sessionChainStore = new SessionChainStore();
+    sessionChainStore.create({ cliSessionId: 'old-sess', catId: 'opus', threadId: 'thread-seal-clean', userId: 'u1' });
     const sealer = new SessionSealer(sessionChainStore);
 
     // After delete, sessionManager.get returns undefined
@@ -6319,6 +6334,7 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
     const { SessionChainStore } = await import('../dist/domains/cats/services/stores/ports/SessionChainStore.js');
     const { SessionSealer } = await import('../dist/domains/cats/services/session/SessionSealer.js');
     const sessionChainStore = new SessionChainStore();
+    sessionChainStore.create({ cliSessionId: 'old-sess', catId: 'opus', threadId: 'thread-slow-delete', userId: 'u1' });
     const sealer = new SessionSealer(sessionChainStore);
 
     // sessionManager.delete is intentionally slow — simulates Redis latency
@@ -6433,18 +6449,20 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
 
     // The chain read fails, but creating the mandatory replacement logical
     // node remains available after the stale resume identity is discarded.
+    let active;
     const failingChainStore = {
       getChain() {
         throw new Error('Redis connection lost');
       },
       getActive() {
-        return null;
+        return active ?? null;
       },
       get() {
         return null;
       },
       create() {
-        return { id: 'x', seq: 0, status: 'active' };
+        active = { id: 'x', seq: 0, status: 'active' };
+        return active;
       },
       update() {
         return {};

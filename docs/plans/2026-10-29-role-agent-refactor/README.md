@@ -31,6 +31,18 @@ status: implementing
 
 ## 已核对的现状
 
+### W3 Host 执行边界持久化（W3 尚未完成）
+
+在原 SessionRecord 新增 `hostExecutionBoundary`，由既有 SessionChainStore 持有写一次/比较的原子入口。字段仅包含 Host 选定的客户端、载体、实现 key/进程内 generation、账号引用和规范化工作区/项目根；不保存账号对象、secret 哈希、env、callback token 或私有指令。此 generation 跨 Host 重启即变化，默认换片段，不能冒充稳定实现版本、完整 CompatKey 或原生采用证据。实际 HOME/原生状态根、权限/MCP/指令兼容与 credential revision 仍须继续接入。
+
+普通调用在既有会话独占权和旧执行停止检查后比较结构；变化或未知旧绑定进入既有封存、授权上下文重建和新逻辑节点流程，旧原生 ID/历史保留。无法重建上下文、封存/持久化失败或最后一次 provider 入口比较失败均不发送任务。明确导入但无法核验绑定时原位失败，不能替用户换历史。AGY 原生绑定验证未改变。
+
+有效 RED 为 `execution-boundary-red.log`；首批修正后 13 PASS，6 个 Redis 默认跳过随后单独实测。最终 `execution-boundary-final-focused.log` 18 PASS+6 Redis 默认 SKIP；真实 Redis `redis-execution-boundary-6b7a817d4f624e99ab185cc2701037b2/tests.log` 11 PASS、0 SKIP，覆盖反序 JSON 键、不可覆盖、并发账号引用竞争、原生 ID 不符、非活动/已被置换 owner、初读后 active 指针变化和 scoped 禁入。新调用链实际覆盖稳定续接、客户端/工作区/实现更换、头像保留、未知旧记录、明确导入拒绝、缺上下文重建、绑定及最终入口失败，以及同步 abort+reject。`execution-boundary-contracts.log` 342 PASS；`execution-boundary-owner-final.log` 188 PASS，四项 Windows AGY Native 场景用精确名称明确排除，不计通过。shared build/API tsc 最终 exit 0；先前 tsc 缩窄错误日志保留，修正后才运行最终回归。
+
+扩大回归的原失败证据保留：第一轮旧夹具未声明已知 Host 绑定、BG 每轮新对象被当成新实现，以及部分 store 替身缺新接口，出现 40 FAIL+1 cancelled，挂起 worker 经路径/父子关系/创建时间确认后仅停止该 worker。`known-host-session-fixture.js` 仅为原 owner 测试显式补其“已知既有会话”前提，真实 store 原子方法不替换；新边界/未知旧记录用例不用此 helper。BG 夹具声明同一具体实现；三条封存竞争夹具先创建其已知逻辑节点。中间夹具准备越过原错误投影的失败也保留；最终保留原行为断言通过，未在产品中新增 legacy 放行。
+
+真实 Redis 测试台账为上述目录 `instance.json`：仅 6398/DB15，自建进程 PID 51932（MSYS 内部 PID 2356），SHUTDOWN SAVE 完成、端口释放、数据保留。六份接受规范哈希仍一致，见 `source-integrity-host-boundary.json`。新增文件均低于 350 行硬限，调用链测试 213 行触发 200 行提醒，保留完整旅程。未调用真实模型或企业 CodeAgent，Mac/最终包/Q 项未完成。独立审查待回执。
+
 - 正式成员入口是 MemberSettingsHost/MemberSettingsPage/useMemberEditor、MemberCreationPage；不复活旧 HubCatEditor。
 - S1 已有成员 revision；S2 runtime override 已存 revision 但路由无 CAS；S3 ConfigStore 同步按键写入，正式端点无版本前置。
 - 当前 ACP 缺 permission handler 的默认分支仍可允许；必须在真实 consumer 和 wire 验证拒绝语义。
