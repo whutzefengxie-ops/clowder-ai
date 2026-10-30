@@ -61,6 +61,7 @@ export class AcpSessionProvider implements Contract.AgentSessionProvider {
     signal: AbortSignal,
   ): Promise<Contract.StartTurnResult> {
     if (input.prompt.kind !== 'frozen') return { ok: false, code: 'failed', reason: 'deferred_prompt_unsupported' };
+    if (this.deps.prepareHostService) await this.deps.prepareHostService();
     const session = this.sessions.get(sessionId);
     if (!session) return { ok: false, code: 'session_unavailable' };
     if (session.active) return { ok: false, code: 'busy' };

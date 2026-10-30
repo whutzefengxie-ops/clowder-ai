@@ -55,8 +55,10 @@ test('Codex adapter state roots are recorded only from its selected launch descr
     },
     'native_cli',
   );
-  assert.equal(boundary.accountStateRoot, resolve('C:/state-root').toLowerCase());
-  assert.equal(boundary.accountOwnerRoot, resolve('C:/account-owner').toLowerCase());
+  const stateRoot = resolve('C:/state-root');
+  const ownerRoot = resolve('C:/account-owner');
+  assert.equal(boundary.accountStateRoot, process.platform === 'win32' ? stateRoot.toLowerCase() : stateRoot);
+  assert.equal(boundary.accountOwnerRoot, process.platform === 'win32' ? ownerRoot.toLowerCase() : ownerRoot);
 });
 
 test('generic adapters do not promote an account profile owner root into a native state root', () => {

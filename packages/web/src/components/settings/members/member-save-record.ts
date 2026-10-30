@@ -59,9 +59,9 @@ export async function saveMemberRecord(input: {
     if (pending.catId !== catId) throw new Error('上次创建结果尚未确认，请先核对原成员 ID，不能换 ID 重复创建。');
     if (!pending.create && !member) throw new Error('该成员已不存在，草稿已保留。');
   }
+  if (!baseline && input.onBeforeCreate) await trace.phase('onboarding.entry', input.onBeforeCreate);
   const pendingWrite = { catId, create: !baseline, form, payload, context };
   commit({ ...snapshot, pendingWrite });
-  if (!baseline && input.onBeforeCreate) await trace.phase('onboarding.entry', input.onBeforeCreate);
   let rejected = false;
   return trace.phase('member.write', () =>
     apiFetch(baseline ? `/api/cats/${baseline.id}` : '/api/cats', {
