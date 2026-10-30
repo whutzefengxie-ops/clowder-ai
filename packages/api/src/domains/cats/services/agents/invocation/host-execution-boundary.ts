@@ -21,7 +21,7 @@ export function captureHostExecutionBoundary(
     return process.platform === 'win32' ? normalized.toLowerCase() : normalized;
   };
   const stateRoot = binding.codexAccountLaunch?.stateRoot;
-  const accountOwnerRoot = binding.codexAccountLaunch?.accountOwnerRoot ?? binding.resolvedAccount?.accountOwnerRoot;
+  const accountOwnerRoot = binding.codexAccountLaunch?.accountOwnerRoot;
   return Object.freeze({
     v: 1,
     clientId: current?.clientId ?? binding.catConfig?.clientId ?? 'undeclared',

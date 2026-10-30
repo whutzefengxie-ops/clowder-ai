@@ -57,3 +57,16 @@ test('Codex adapter state roots are recorded only from its selected launch descr
   assert.equal(boundary.accountStateRoot, resolve('C:/state-root').toLowerCase());
   assert.equal(boundary.accountOwnerRoot, resolve('C:/account-owner').toLowerCase());
 });
+
+test('generic adapters do not promote an account profile owner root into a native state root', () => {
+  const boundary = captureHostExecutionBoundary(
+    {
+      ...binding,
+      catConfig: { ...binding.catConfig, clientId: 'acp' },
+      resolvedAccount: { ...binding.resolvedAccount, accountOwnerRoot: 'C:/generic-owner' },
+    },
+    'acp_stdio',
+  );
+  assert.equal(boundary.accountStateRoot, undefined);
+  assert.equal(boundary.accountOwnerRoot, undefined);
+});
