@@ -43,7 +43,19 @@ export function createCatalogCache(probe: typeof probeRuntimeCatalog = probeRunt
       })
       .catch(() =>
         previous
-          ? { ...previous.value, status: 'configured' as const, message: 'refresh_failed' }
+          ? {
+              ...previous.value,
+              status: 'configured' as const,
+              message: 'refresh_failed',
+              ...(previous.value.defaultModelStatus === undefined
+                ? {}
+                : {
+                    defaultModel: undefined,
+                    defaultModelLabel: undefined,
+                    selectedModel: undefined,
+                    defaultModelStatus: 'unreported' as const,
+                  }),
+            }
           : { status: 'unavailable' as const, models: [], message: 'discovery_failed' },
       )
       .finally(() => inflight.delete(key));

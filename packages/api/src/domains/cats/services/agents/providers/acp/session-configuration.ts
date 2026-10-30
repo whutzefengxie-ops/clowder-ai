@@ -6,6 +6,22 @@ export interface SessionConfigurationClient {
 function record(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object';
 }
+
+/** Absence/opaque unknown sentinels are not evidence of a selected model. */
+export function reportedSessionModel(session: { configOptions?: unknown; models?: unknown }): string | undefined {
+  const option = Array.isArray(session.configOptions)
+    ? session.configOptions.find((value) => record(value) && (value.category === 'model' || value.id === 'model'))
+    : undefined;
+  const value =
+    record(option) && typeof option.currentValue === 'string'
+      ? option.currentValue
+      : record(session.models)
+        ? session.models.currentModelId
+        : undefined;
+  if (typeof value !== 'string' || !value.trim() || value.trim().toLowerCase() === 'unknown') return;
+  if (/^\[\s*"unknown"\s*,\s*"unknown"\s*\]$/.test(value)) return;
+  return value;
+}
 function values(options: unknown): Array<{ value: string; name?: string }> {
   if (!Array.isArray(options)) return [];
   return options.flatMap((option) => {

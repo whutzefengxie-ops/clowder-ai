@@ -1,6 +1,10 @@
-import { applySessionConfiguration, type SessionConfigurationClient } from './session-configuration.js';
+import {
+  applySessionConfiguration,
+  reportedSessionModel,
+  type SessionConfigurationClient,
+} from './session-configuration.js';
 
-type Session = { sessionId: string; configOptions?: unknown };
+type Session = { sessionId: string; configOptions?: unknown; models?: unknown };
 type Preferences = { model?: string; effort?: string };
 // A concrete client belongs to one spawn generation (account + profile). Cwd and
 // requested model are separate cache keys; no defaults cross identities/workspaces.
@@ -17,23 +21,12 @@ function cache(client: SessionConfigurationClient) {
   }
   return result;
 }
-function isUnknownModelPreference(value: string): boolean {
-  try {
-    const parsed: unknown = JSON.parse(value);
-    return Array.isArray(parsed) && parsed.length === 2 && parsed.every((part) => part === 'unknown');
-  } catch {
-    return value.trim().toLowerCase() === 'unknown';
-  }
-}
 function currentPreferences(session: Session): Preferences {
-  const result: Preferences = {};
+  const model = reportedSessionModel(session);
+  const result: Preferences = model ? { model } : {};
   if (!Array.isArray(session.configOptions)) return result;
   for (const option of session.configOptions) {
     if (!option || typeof option !== 'object' || typeof option.currentValue !== 'string') continue;
-    if (option.category === 'model' || option.id === 'model') {
-      if (isUnknownModelPreference(option.currentValue)) continue;
-      result.model = option.currentValue;
-    }
     if (option.category === 'thought_level' || option.id === 'reasoning_effort') result.effort = option.currentValue;
   }
   return result;
