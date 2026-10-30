@@ -55,3 +55,11 @@ Architecture cell：identity-session / transport；Map delta：沿用原 capture
 异步版本又用真实 CLI 2.1.312 和本地合成提供方复验同一十项，全部通过（`claude-real-external-async.log`），新数据根为 `C:/Users/Administrator/AppData/Local/Temp/ca-OcBUum`，两条原生进程 code=0、测试端口关闭，数据保留。独立的 SDK JavaScript 副本还实际读取了前次原生会话：8 条消息可读，没有 native 平台包（`claude-library-history.log`）。等待修复 SHA 的同一 reviewer 复审，未将旧批准转录为新批准。
 
 发布构建在原工位因历史未跟踪测试证据被 clean-check 拒绝，证据保留。已按原 managed worktree 入口创建 `build/pr1748-claude-gpt-sol` 独立构建工位，owner=codex、ttl=7天；仅在那里构建，不清理或覆盖原记录，不使用 -AllowDirtyInputs 绕过发布检查。
+
+## 构建验证的项目隔离
+
+干净工位的两次完整构建均在原90秒启动分析门禁超时，未生成安装器。日志显示大量程序读取及 worktree 通知扫描；`git -C <profile>/instance/project rev-parse --show-toplevel` 实际返回外层构建工位。这个新安装项目原本不应继承作者的 Git 仓库。
+
+用同一冻结产物、同一90秒门禁，仅通过既有 profileRoot 参数放在 Git 之外，启动分析通过，生成1581个程序文件的便携预读清单。新集成反例在合成API启动中实际检查 Git：原默认目录令它继承父仓库并失败。修复只将默认 profileRoot 放到系统临时目录，显式覆盖参数保持；不更改产品工作区或启动时限。修复后分析/取消/资源/打包集合15 PASS，Biome无错误、1条已有复杂度warning。
+
+源码和CI的其他状态：`9c6d4ff71` 获同一非作者 reviewer approved，原响应性 P2 闭环，无开放 finding（独立5项协议/取消、33项SDK回归，64MiB散列期间171次心跳且可取消）。`a2ed4ead8` 仅将 PR CI 目标从 main 扩展至 main/develop，push与发布规则不变；GitHub 当前尚未返回本PR checks，不计为通过。整个重构和平台验收状态没有改成完成。
