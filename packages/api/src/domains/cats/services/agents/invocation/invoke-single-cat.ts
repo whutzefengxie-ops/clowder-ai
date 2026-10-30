@@ -630,11 +630,12 @@ import type { TranscriptSessionInfo, TranscriptWriter } from '../../session/Tran
 import type { CreateSessionInput, ISessionChainStore } from '../../stores/ports/SessionChainStore.js';
 import type { IThreadStore } from '../../stores/ports/ThreadStore.js';
 import { DEFAULT_THREAD_ID } from '../../stores/ports/ThreadStore.js';
-import type {
-  ITurnExecutionStore,
-  TurnExecutionCausalRefs,
-  TurnExecutionKind,
-  TurnExecutionTerminalInput,
+import {
+  hasUnconfirmedProviderTeardown,
+  type ITurnExecutionStore,
+  type TurnExecutionCausalRefs,
+  type TurnExecutionKind,
+  type TurnExecutionTerminalInput,
 } from '../../stores/ports/TurnExecutionStore.js';
 import type {
   AgentMessage,
@@ -2946,6 +2947,26 @@ async function* invokePreparedSingleCat(deps: InvocationDeps, params: Invocation
     if (deps.sessionChainStore && invocationPolicyRecordId) {
       invocationPolicyPersistenceReady = true;
       await refreshInvocationPolicyExecution();
+    }
+
+    if (deps.turnExecutionStore) {
+      const running = await preflightRace(
+        Promise.resolve(deps.turnExecutionStore.listRunningByUser(userId)),
+        'turnExecutionStore.priorProviderStop',
+        signal,
+      );
+      if (
+        running.some(
+          (record) =>
+            record.invocationId !== invocationId &&
+            record.threadId === threadId &&
+            record.catId === catId &&
+            hasUnconfirmedProviderTeardown(record),
+        )
+      ) {
+        turnExecutionFailureReason = 'prior_provider_teardown_unconfirmed';
+        throw new Error('同一角色的上一轮执行尚未确认停止，暂不能开始新任务。请先核对或受控停止原执行。');
+      }
     }
 
     const catConfig = frozenExecutionBinding.catConfig;

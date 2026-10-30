@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { liveFixture, session, turn } from './fake-session-provider.js';
+import { collect, fixture, Inbox, liveFixture, options, session, turn } from './fake-session-provider.js';
 
 const dispatchOptions = { expectedInvocationId: 'inv', force: false };
 const foreign = {
@@ -62,4 +62,84 @@ test('absent native turn IDs preserve the existing Host invocation authority', a
   t.after(() => f.finish());
   f.provider.inbox.push(turn('output', { text: 'current', textMode: 'append', turn: { invocationId: 'inv' } }));
   assert.equal((await f.iterator.next()).value.content, 'current');
+});
+
+for (const mutateRequest of [false, true])
+  test(`a provider-returned old invocation cannot replace the requested Host turn; mutate request=${mutateRequest}`, async (t) => {
+    const f = fixture();
+    t.after(() => f.bridge.releaseAll('test_complete'));
+    const wrong = { invocationId: 'previous', nativeTurnId: 'native-turn' };
+    f.provider.startResult = {
+      ok: true,
+      turn: wrong,
+      events: (async function* () {
+        yield turn('output', { turn: wrong, text: 'foreign accepted', textMode: 'append' });
+        yield turn('done', { turn: wrong, outcome: 'completed' });
+      })(),
+    };
+    const start = f.provider.startTurn.bind(f.provider);
+    f.provider.startTurn = (id, input, signal) => {
+      if (mutateRequest) input.invocation.invocationId = 'previous';
+      return start(id, input, signal);
+    };
+    const messages = await collect(f.bridge.invoke('current', options()));
+    assert.equal(
+      messages.some((message) => message.type === 'text'),
+      false,
+    );
+    assert.equal(messages.at(-1).errorCode, 'provider_stream_ended_without_done');
+  });
+
+test('a returned old invocation cannot consume the Host-current supplementary receipt', async (t) => {
+  const f = fixture();
+  const inbox = new Inbox();
+  const wrong = { invocationId: 'previous', nativeTurnId: 'native-turn' };
+  f.provider.support.input = f.provider.support.inputReadReceipt = 'supported';
+  f.provider.startResult = { ok: true, turn: wrong, events: inbox };
+  let dispatcher;
+  let reads = 0;
+  const iterator = f.bridge
+    .invoke(
+      'current',
+      options({
+        activeRunDispatch: {
+          invocationId: 'inv',
+          register: (value) => {
+            dispatcher = value;
+            return () => {};
+          },
+        },
+      }),
+    )
+    [Symbol.asyncIterator]();
+  t.after(async () => {
+    inbox.end();
+    await iterator.return();
+    await f.bridge.releaseAll('test_complete');
+  });
+  inbox.push(turn('status', { turn: wrong, phase: 'old-turn' }));
+  inbox.push(turn('status', { phase: 'current-turn' }));
+  await iterator.next();
+  await dispatcher.dispatch(
+    {
+      text: 'supplement',
+      messageIds: ['owned'],
+      deliveryId: 'same-id',
+      onInputRead: async () => {
+        reads++;
+      },
+    },
+    dispatchOptions,
+  );
+  inbox.push(turn('input_read', { turn: wrong, deliveryId: 'same-id' }));
+  inbox.push(turn('status', { turn: wrong, phase: 'old-receipt' }));
+  inbox.push(turn('status', { phase: 'current-receipt' }));
+  const next = await iterator.next();
+  assert.equal(f.provider.calls.input[0].expected.invocationId, 'inv');
+  assert.equal(reads, 0);
+  assert.equal(next.value.content, 'current-receipt');
+  inbox.push(turn('input_read', { deliveryId: 'same-id' }));
+  inbox.push(turn('status', { phase: 'confirmed' }));
+  await iterator.next();
+  assert.equal(reads, 1);
 });

@@ -701,3 +701,12 @@ checkpoint_review 对 f7c628e836625d6ebadd76b5ead9988ebe6ac705 给出 approved�
 API tsc 退出 0。首次完整合同回归为 222 PASS/4 FAIL，新增五条已通过；四条既有取消用例的“停止后下一轮”仍发送旧 invocationId=inv 的假 done。将该后继夹具明确标为它请求的 next（只改原测试三行），保留取消等待断言和所有旧实际行为。session-event-identity-green.log 为 351 PASS，无失败/跳过，包含全部 session-contract 及原 append 发送/已读/未知/回读核对/HTTP/完成/重入边界。Biome 三文件无错误，三条原复杂度/受控 finally throw 警告。生产 Bridge 314 行，未拆出一次性函数。
 
 独立审查待回执。该检查不替代实际客户端/父子工具持久回读、未知输入重启恢复、兼容键与身份采用；C11/C24 全项仍未完成。真实 Node mock 只跑既有用例，沿原台账等待关闭并保留数据，没有调用模型或企业认证。
+checkpoint_review 对 9e215d214aee33c7d42c547ad611fd3ed5be659a 返回 changes_requested：独立 51 PASS/2 FAIL，同一 P2 是 start 返回的 turn.invocationId 替换了 Host 比较基准。新增永久反例，session-event-host-authority-red.log 为 5 PASS/2 FAIL；补充客户端修改传入 invocation 对象的对照，private-authority-red 为 1 PASS/1 FAIL。修复保留 start 前已复制到私有 live.turn 的 Host invocationId，只接纳返回的原生 turn 信息，不从已传给 provider 的对象重新取 Host 身份。两条返回旧 ID 的永久反例中补入合法当前 status，允许“忽略旧帧后继续等待当前帧”的正确实现推进；独立原失败见证原文件未修改。
+
+## W3 已知未停止的旧执行阻止新准入（尚未完成 W3）
+
+此前虽保留了 provider 已启动/停止未确认的规范 child，重新走普通串/并行入口仍会调用 provider；prior-stop-admission-red.log 为 5 PASS/3 FAIL，包含两条实际路由反例和规范 owner 读取失败仍发任务。现于既有会话独占权取得后、provider 启动前调用现有 listRunningByUser，按当前 thread/cat 排除本次 child，复用 hasUnconfirmedProviderTeardown。存在未确认旧执行则以可操作的中文原因失败；当前新 child 未标 providerStarted、原 child 和历史保留。读取失败也不发任务；既有 owner 写入实际停止证明后再准入，不新增锁、数据库、租约或自动重投。
+
+八条路由检查覆盖零时间戳、普通串/并行、停止证明解除限制，以及其他用户/线程/成员、未启动和已停止对照。这个边界只使用当前规范记录，不是持久绑定注册表；尚不能证明跨线程同一 native 状态根资源隔离、PID birth 重建或真实 Host 重启后的控制能力。C12/C16 不据此全过。
+
+API tsc 退出 0。prior-stop-and-host-authority-green.log 为 385 PASS，无失败或跳过，涵盖全部 session-contract、1398 输入回执/未知核对/HTTP/完成链、取消 Queue/sibling/受控恢复、终态写入、晚到停止证明及真实 Node CodeAgent mock；此集合在将 Host 身份来源进一步改为私有 live.turn 之前完成。最终同一私有来源修正后再 tsc 退出 0，prior-stop-and-host-authority-final.log 为 74 PASS（Bridge/dispatcher/真实 ACP provider、八个归属用例与八个准入用例），无失败或跳过；没有把修正前 385 项冒充最终全量重跑。Biome 无错误，原巨函数和受控清理等 warning 未扩散为额外治理。source-integrity-prior-stop.json 六份接受方案哈希完全一致。两项均等待修复 SHA 的独立复核。

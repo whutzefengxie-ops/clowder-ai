@@ -284,7 +284,7 @@ export class AgentSessionBridgeService implements Service.AgentService {
         startMayHaveAccepted = false;
         throw new SessionFailure(started.code, started.reason);
       }
-      live.turn = started.turn;
+      live.turn = { ...started.turn, invocationId: live.turn.invocationId };
       if (!signal.aborted) this.register(live, metadata, options ?? {});
       for await (const message of this.consume(started.events, live, metadata, signal, session)) {
         if (message.type === 'done') {

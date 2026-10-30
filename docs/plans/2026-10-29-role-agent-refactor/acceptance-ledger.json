@@ -109,12 +109,15 @@
     {
       "id": "C11",
       "status": "NOT_RUN",
-      "evidence": []
+      "evidence": ["README.md#W3-会话事件归属核验尚未完成-W3：事件与当前会话/Host turn 的局部回执核验；完整客户端与重启回读未完成"]
     },
     {
       "id": "C12",
       "status": "NOT_RUN",
-      "evidence": ["README.md#W3-取消终态与迭代器清理纵向切片尚未完成-W3：局部终态/清理证据，整条未完成"]
+      "evidence": [
+        "README.md#W3-取消终态与迭代器清理纵向切片尚未完成-W3：局部终态/清理证据，整条未完成",
+        "README.md#W3-已知未停止的旧执行阻止新准入尚未完成-W3：现有规范执行记录的同用户/线程/成员发送前保护；非完整跨绑定或真实重启证明"
+      ]
     },
     {
       "id": "C13",
@@ -537,9 +540,25 @@
   },
   "sessionEventIdentityCheckpointReview": {
     "verdict": "PENDING_REVIEW",
+    "lastReviewedHead": "9e215d214aee33c7d42c547ad611fd3ed5be659a",
+    "lastVerdict": "changes_requested",
+    "authorFixedPendingReview": ["P2 provider-returned Host invocationId replaced the event fence"],
     "evidence": "README.md#W3-会话事件归属核验尚未完成-W3",
-    "tests": { "red": "1 PASS + 4 FAIL", "contractsAndAppendRecovery": "351 PASS" },
+    "tests": {
+      "red": "1 PASS + 4 FAIL",
+      "contractsAndAppendRecovery": "351 PASS",
+      "hostAuthorityRed": "5 PASS + 2 FAIL",
+      "privateAuthorityRed": "1 PASS + 1 FAIL",
+      "combinedRegressionBeforePrivateAuthorityRefinement": "385 PASS",
+      "finalTargeted": "74 PASS"
+    },
     "scope": "Existing Bridge event consumer only; no full C11/C24 or persisted compatibility/restart acceptance"
+  },
+  "priorProviderAdmissionCheckpointReview": {
+    "verdict": "PENDING_REVIEW",
+    "evidence": "README.md#W3-已知未停止的旧执行阻止新准入尚未完成-W3",
+    "tests": { "red": "5 PASS + 3 FAIL", "combinedRegression": "385 PASS", "finalTargeted": "74 PASS" },
+    "scope": "Existing canonical running-child read and ordinary same-conversation admission only; no cross-thread binding registry, process identity recovery or full C12/C16"
   },
   "clientMcpCurrentnessCheckpointReview": {
     "reviewer": "checkpoint_review",
