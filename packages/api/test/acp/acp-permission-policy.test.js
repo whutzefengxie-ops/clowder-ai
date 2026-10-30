@@ -229,3 +229,78 @@ describe('AcpAgentService permission policy wiring (C09)', () => {
     assert.deepEqual(client.installs, []);
   });
 });
+
+describe('ACP permission policy against the real RuntimeInteractionService (review P2-1/P2-2)', async () => {
+  const { RuntimeInteractionService } = await import(
+    '../../dist/domains/runtime-interaction/RuntimeInteractionService.js'
+  );
+  const { InMemoryRuntimeInteractionStore } = await import(
+    '../../dist/domains/runtime-interaction/stores/InMemoryRuntimeInteractionStore.js'
+  );
+  const realService = () => {
+    const store = new InMemoryRuntimeInteractionStore();
+    const service = new RuntimeInteractionService({
+      store,
+      hostEpoch: 'host-epoch-1',
+      now: () => 1_777_000_000_100,
+      cardPublisher: {
+        prepare: async (request) => ({ threadId: 't1', messageId: 'm1', blockId: `ri:${request.interactionId}` }),
+        publish: async () => {},
+        isLive: async () => true,
+      },
+    });
+    return { store, service };
+  };
+  const pending = async (store, id) => {
+    for (let i = 0; i < 50; i += 1) {
+      const record = await store.get(id);
+      if (record?.status === 'pending') return record;
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    assert.fail(`interaction ${id} never became pending`);
+  };
+
+  it('a second request in the same invocation waits for the first card instead of being auto-denied', async () => {
+    const { store, service } = realService();
+    let n = 0;
+    const handler = createAcpPermissionHandler(
+      baseInput({ port: service, owner: OWNER, createInteractionId: () => `ix-${++n}` }),
+    );
+    const answers = [];
+    const first = handler({ ...request(), id: 'p1' }, (answer) => answers.push(['p1', answer]));
+    const second = handler({ ...request(), id: 'p2' }, (answer) => answers.push(['p2', answer]));
+    const card1 = await pending(store, 'ix-1');
+    await service.respond({
+      interactionId: 'ix-1',
+      ownerUserId: 'u1',
+      cardRef: card1.cardRef,
+      response: { kind: 'decision', decisionId: 'approve' },
+    });
+    await first;
+    const card2 = await pending(store, 'ix-2');
+    await service.respond({
+      interactionId: 'ix-2',
+      ownerUserId: 'u1',
+      cardRef: card2.cardRef,
+      response: { kind: 'decision', decisionId: 'deny' },
+    });
+    await second;
+    assert.deepEqual(answers, [
+      ['p1', { optionId: 'approve' }],
+      ['p2', { optionId: 'deny' }],
+    ]);
+  });
+
+  it('an unanswered card times out, is invalidated, and the request fails closed', async () => {
+    const { store, service } = realService();
+    const handler = createAcpPermissionHandler(
+      baseInput({ port: service, owner: OWNER, approvalTimeoutMs: 30, createInteractionId: () => 'ix-timeout' }),
+    );
+    let answer;
+    await handler(request(), (value) => {
+      answer = value;
+    });
+    assert.deepEqual(answer, { optionId: 'deny' });
+    assert.notEqual((await store.get('ix-timeout'))?.status, 'pending', 'no orphaned card outlives the request');
+  });
+});

@@ -54,7 +54,7 @@ import {
 import { createAcpSessionState, flushAcpThinking, transformAcpEvent } from './acp-event-transformer.js';
 import { readAcpImageBlocks, withAcpImages } from './acp-image-input.js';
 import { resolveAcpMcpServers, resolveDisabledServerIds, resolveUserProjectMcpServers } from './acp-mcp-resolver.js';
-import { createAcpPermissionHandler } from './acp-permission-policy.js';
+import { createAcpApprovalQueue, createAcpPermissionHandler } from './acp-permission-policy.js';
 import { AcpImageInputError, type AcpPromptInput } from './acp-prompt-content.js';
 import {
   callbackEnvDiagnostic,
@@ -518,6 +518,7 @@ export class AcpAgentService implements AgentService {
     // default). Every other ACP member gets an invocation-scoped fail-closed policy.
     const usesGenericPermissionPolicy = !this.antigravity && this.protocolAdapter !== 'icode';
     const permissionSessionIds = new Set<string>();
+    const approvalQueue = createAcpApprovalQueue();
     const installGenericPermissionPolicy = (permissionSessionId: string) => {
       if (!usesGenericPermissionPolicy) return;
       const audit = options?.auditContext;
@@ -533,6 +534,7 @@ export class AcpAgentService implements AgentService {
           providerId: this.providerName,
           sessionId: permissionSessionId,
           autoApprove: this.autoApprove,
+          queue: approvalQueue,
           ...(options?.runtimeInteractionPort ? { port: options.runtimeInteractionPort } : {}),
           ...(owner ? { owner } : {}),
           ...(options?.signal ? { signal: options.signal } : {}),

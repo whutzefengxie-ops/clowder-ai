@@ -257,26 +257,34 @@ export class AgentSessionBridgeService implements Service.AgentService {
     if (!options) throw new SessionFailure('host_session_unavailable');
     if (!options.invocationId) throw new SessionFailure('invocation_id_missing');
     const host = this.input.resolveHostSession(options);
-    // Checked before open: a changed identity must never retire a session with a live turn.
+    // Claimed before open, so a concurrent invocation with changed instructions
+    // can never retire this session while it is opening or running a turn.
     if (this.active.has(host.sessionId)) throw new SessionFailure('session_busy');
-    const session = await this.open(host, options, signal);
-    if (!session.ok) throw new SessionFailure(session.code, session.reason);
-    const invocation = {
-      invocationId: options.invocationId,
-      callbackEnv: options.callbackEnv ?? {},
-      mcpServers: this.input.resolveMcpServers?.(options) ?? [],
-      ...(options.toolExecutionPolicy ? { toolExecutionPolicy: options.toolExecutionPolicy } : {}),
-      ...(options.requiredTools ? { requiredTools: options.requiredTools } : {}),
-    };
-    if (this.active.has(host.sessionId)) throw new SessionFailure('session_busy');
-    if (session.binding.state === 'bound') metadata.sessionId = session.binding.nativeSessionId;
-    if (
-      prompt.kind === 'deferred' &&
-      this.input.provider.capabilities(host.sessionId).continuityEvidence !== 'pre_send'
-    )
-      throw new SessionFailure('continuity_preflight_unsupported');
-    if (signal.aborted) throw new SessionFailure('cancelled');
     this.active.add(host.sessionId);
+    try {
+      const session = await this.open(host, options, signal);
+      if (!session.ok) throw new SessionFailure(session.code, session.reason);
+      const invocation = {
+        invocationId: options.invocationId,
+        callbackEnv: options.callbackEnv ?? {},
+        mcpServers: this.input.resolveMcpServers?.(options) ?? [],
+        ...(options.toolExecutionPolicy ? { toolExecutionPolicy: options.toolExecutionPolicy } : {}),
+        ...(options.requiredTools ? { requiredTools: options.requiredTools } : {}),
+      };
+      if (session.binding.state === 'bound') metadata.sessionId = session.binding.nativeSessionId;
+      if (
+        prompt.kind === 'deferred' &&
+        this.input.provider.capabilities(host.sessionId).continuityEvidence !== 'pre_send'
+      )
+        throw new SessionFailure('continuity_preflight_unsupported');
+      if (signal.aborted) throw new SessionFailure('cancelled');
+      return this.prepared(host, session, invocation);
+    } catch (error) {
+      this.active.delete(host.sessionId);
+      throw error;
+    }
+  }
+  private prepared<S, I extends { invocationId: string }>(host: BridgeHostSession, session: S, invocation: I) {
     const live: LiveTurn = {
       sessionId: host.sessionId,
       turn: { invocationId: invocation.invocationId },

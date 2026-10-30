@@ -118,3 +118,36 @@ describe('member saves record configured identity only on real changes', () => {
     assert.equal(read('identity-c').configuredIdentity, undefined);
   });
 });
+
+describe('identity marker ignores no-op saves (review P3-5)', () => {
+  it('resending unset caution as null or blank teamStrengths does not claim the roster group', async (context) => {
+    const root = mkdtempSync(join(tmpdir(), 'role-identity-noop-'));
+    context.after(() => rmSync(root, { recursive: true, force: true }));
+    const template = join(root, 'cat-template.json');
+    copyFileSync(new URL('../../../cat-template.json', import.meta.url), template);
+    bootstrapCatCatalog(root, template);
+    const read = (catId) => toAllCatConfigs(loadResolvedCatConfig(template))[catId];
+    await createRuntimeCat(root, {
+      catId: 'identity-noop',
+      name: 'identity-noop',
+      displayName: 'identity-noop',
+      avatar: '/avatars/default.png',
+      color: { primary: '#765843', secondary: '#eadccc' },
+      mentionPatterns: ['@identity-noop'],
+      roleDescription: 'initial role',
+      configurationSource: 'native_tool',
+      clientId: 'anthropic',
+      carrier: 'cli',
+      defaultModel: '',
+      mcpSupport: false,
+      cli: { command: 'claude', outputFormat: 'stream-json' },
+    });
+    assert.equal(read('identity-noop').caution, undefined);
+    await updateRuntimeCat(root, 'identity-noop', {
+      caution: null,
+      teamStrengths: '  ',
+      roleDescription: 'initial role',
+    });
+    assert.equal(read('identity-noop').configuredIdentity, undefined);
+  });
+});

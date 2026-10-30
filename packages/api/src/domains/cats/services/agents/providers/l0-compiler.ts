@@ -33,7 +33,7 @@ import { profilePointerEmitted } from '../../../../../infrastructure/telemetry/i
 import { saveSpan } from '../../../../../utils/member-save-diagnostics.js';
 import { FileProfileRepository } from '../../profile/ProfileRepository.js';
 import { L0DependencySignatureTracker } from './l0-dependency-signature.js';
-import { type FrozenL0Input, frozenL0InputDigest, writeFrozenL0Input } from './l0-frozen-input.js';
+import { type FrozenL0Input, freezeL0Input, frozenL0InputDigest, writeFrozenL0Input } from './l0-frozen-input.js';
 import { type L0CacheGeneration, L0ProfileCache, type L0Projection } from './l0-profile-cache.js';
 
 const SCRIPT_BASENAME = 'compile-system-prompt-l0.mjs';
@@ -75,9 +75,19 @@ export async function warmL0Cache(
   logger?: { warn: (obj: Record<string, unknown>, msg: string) => void },
   userId: string = process.env.CAT_CAFE_USER_ID ?? DEFAULT_PROFILE_USER_ID,
 ): Promise<void> {
+  // Invocations compile from an admission snapshot, whose digest is in the
+  // cache key; warm the same key or the first invoke still compiles cold.
+  let frozenInput: FrozenL0Input | undefined;
+  try {
+    frozenInput = freezeL0Input();
+  } catch (err) {
+    logger?.warn({ err: (err as Error).message }, 'L0 warm-up could not snapshot members; warming the live key');
+  }
   await Promise.all(
     catIds.map((catId) =>
-      saveSpan('l0.compile', () => compileL0ViaSubprocess({ catId, userId }), { catId }).catch((err: unknown) => {
+      saveSpan('l0.compile', () => compileL0ViaSubprocess({ catId, userId, ...(frozenInput ? { frozenInput } : {}) }), {
+        catId,
+      }).catch((err: unknown) => {
         logger?.warn({ catId, err: (err as Error).message }, 'L0 pre-compile failed at startup (will retry on invoke)');
       }),
     ),

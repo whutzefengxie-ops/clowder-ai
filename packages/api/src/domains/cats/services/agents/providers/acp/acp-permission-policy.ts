@@ -87,11 +87,16 @@ export interface AcpPermissionHandlerInput {
   port?: Pick<RuntimeInteractionPort, 'request'>;
   owner?: RuntimeInteractionOwner;
   signal?: AbortSignal;
+  /** Shared by every session handler of one invocation (fresh-session retries). */
+  queue?: AcpApprovalQueue;
+  /** Defaults to ACP_APPROVAL_TIMEOUT_MS. */
+  approvalTimeoutMs?: number;
   createInteractionId?: () => string;
   now?: () => number;
 }
 
 export function createAcpPermissionHandler(input: AcpPermissionHandlerInput): AcpPermissionHandler {
+  const ownQueue = createAcpApprovalQueue();
   const decide = (
     req: AcpAgentRequest,
     respond: (result: AcpPermissionResult) => void,
@@ -138,6 +143,7 @@ export function createAcpPermissionHandler(input: AcpPermissionHandlerInput): Ac
     if (!decisions.some((decision) => decision.outcome !== 'accept')) {
       decisions.push({ id: '__cancel__', label: '拒绝并取消', outcome: 'cancel' });
     }
+    const port = input.port;
     const description = describePermission(req.params);
     const request: RuntimeInteractionRequest = {
       version: 1,
@@ -155,10 +161,24 @@ export function createAcpPermissionHandler(input: AcpPermissionHandlerInput): Ac
       ...(description ? { description } : {}),
       decisions,
     };
+    // One provider interaction may be active per invocation, so parallel tool
+    // calls wait their turn instead of being rejected as duplicates. Each card's
+    // wait is bounded: on timeout or abort the card is invalidated and we deny.
+    const queue = input.queue ?? ownQueue;
+    const run = queue.tail
+      .catch(() => undefined)
+      .then(async () => {
+        if (input.signal?.aborted) throw new Error('invocation aborted before the approval card opened');
+        const timeout = AbortSignal.timeout(input.approvalTimeoutMs ?? ACP_APPROVAL_TIMEOUT_MS);
+        const signal = input.signal ? AbortSignal.any([input.signal, timeout]) : timeout;
+        const response = await port.request(request, { signal });
+        if (response.kind !== 'decision') throw new Error('approval interaction requires a decision response');
+        return response.decisionId;
+      });
+    queue.tail = run;
     try {
-      const response = await input.port.request(request, input.signal ? { signal: input.signal } : undefined);
-      if (response.kind !== 'decision') throw new Error('approval interaction requires a decision response');
-      const chosen = options.find((option) => option.optionId === response.decisionId);
+      const decisionId = await run;
+      const chosen = options.find((option) => option.optionId === decisionId);
       decide(req, respond, 'runtime_interaction', chosen ? { optionId: chosen.optionId } : { cancelled: true });
     } catch (error) {
       decide(
@@ -170,6 +190,18 @@ export function createAcpPermissionHandler(input: AcpPermissionHandlerInput): Ac
       );
     }
   };
+}
+
+/** A human decision is awaited this long before the request fails closed. */
+export const ACP_APPROVAL_TIMEOUT_MS = 10 * 60_000;
+
+/** Serializes approval cards across the sessions of one invocation. */
+export interface AcpApprovalQueue {
+  tail: Promise<unknown>;
+}
+
+export function createAcpApprovalQueue(): AcpApprovalQueue {
+  return { tail: Promise.resolve() };
 }
 
 function optionKind(params: unknown, optionId: string): string | undefined {

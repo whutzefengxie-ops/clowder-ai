@@ -412,3 +412,17 @@ test('D1/C10: a resumed turn that omits systemPrompt keeps the open session (ide
   assert.equal(provider.calls.open.length, 1);
   assert.equal(provider.calls.release.length, 0);
 });
+
+test('review P3-6: a changed identity cannot retire a session that is still opening', async () => {
+  const { bridge, provider } = fixture();
+  provider.openGate = deferred();
+  const first = collect(bridge.invoke('a', options({ invocationId: 'inv-1', systemPrompt: 'role A' })));
+  await new Promise((resolve) => setImmediate(resolve));
+  const second = await collect(bridge.invoke('b', options({ invocationId: 'inv-2', systemPrompt: 'role B' })));
+  assert.equal(second[0].errorCode, 'session_busy');
+  provider.openGate.resolve();
+  await first;
+  assert.equal(provider.calls.release.length, 0, 'the opening session was not retired');
+  assert.equal(provider.calls.open.length, 1);
+  assert.equal(provider.calls.start.length, 1);
+});
