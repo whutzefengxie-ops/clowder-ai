@@ -70,9 +70,13 @@ export type QueueEntry = QueueLedgerEntry;
 /** Sent or uncertain input still belongs to its original run, even while its row is queued. */
 export function hasInFlightLifecycleAppend(entry: Pick<QueueEntry, 'delivery'>): boolean {
   return (
-    Object.keys(entry.delivery.appendPendingByTarget ?? {}).length > 0 ||
+    hasPendingLifecycleAppend(entry) ||
     Object.values(entry.delivery.appendRecoveryByTarget ?? {}).some((failure) => failure.acceptance === 'unknown')
   );
+}
+
+function hasPendingLifecycleAppend(entry: Pick<QueueEntry, 'delivery'>): boolean {
+  return Object.keys(entry.delivery.appendPendingByTarget ?? {}).length > 0;
 }
 
 type QueueAttemptSettlementOutcome = 'handled' | 'failed' | 'interrupted' | 'cancelled';
@@ -91,6 +95,8 @@ type LifecycleTargetRetirementResult =
 export interface QueueEnqueueInput {
   /** Server-owned deliberate repeat keeps the originally selected recipient. */
   exactTargets?: boolean;
+  /** A public named recipient passed preflight; later unavailability must not choose another member. */
+  allowConversationFallback?: false;
   /** Consumer observers register after commit and before the shared drain notification. Not persisted. */
   onQueueEntriesAdmitted?: (entries: readonly QueueEntry[], message?: StoredMessage) => void | Promise<void>;
   threadId: string;
@@ -791,7 +797,12 @@ export class InvocationQueue {
       targetCats:
         committedRow && !exactTargets
           ? [...committedRow.targets]
-          : await this.resolveSendTargets(input.targetCats, input.threadId, input.content, exactTargets),
+          : await this.resolveSendTargets(
+              input.targetCats,
+              input.threadId,
+              input.content,
+              exactTargets || input.allowConversationFallback === false,
+            ),
     };
     const enqueuedAt = this.nextEnqueuedAt();
     const result = await messageStore.appendWithQueueLedgerAdmission(
@@ -1328,11 +1339,14 @@ export class InvocationQueue {
   /** Claim one queued row before an external withdrawal side effect. */
   async claimQueuedEntryForWithdrawal(threadId: string, userId: string, entryId: string): Promise<QueueEntry | null> {
     const entry = this.findEntry(threadId, userId, entryId);
-    if (!entry || entry.status !== 'queued' || hasInFlightLifecycleAppend(entry)) return null;
+    // Withdrawal stops future work; an uncertain *finished* handoff stays in
+    // History and does not permanently veto this owner action. True recall
+    // still uses hasInFlightLifecycleAppend because it retracts source content.
+    if (!entry || entry.status !== 'queued' || hasPendingLifecycleAppend(entry)) return null;
     const claimed = await this.claimLedgerEntry(entry);
     // The cache can predate a concurrent Append. Inspect the canonical claim
     // before any History cancellation or ledger withdrawal side effect.
-    if (claimed && hasInFlightLifecycleAppend(claimed)) {
+    if (claimed && hasPendingLifecycleAppend(claimed)) {
       await this.restoreClaimedEntries(threadId, [claimed.id]);
       return null;
     }
