@@ -6,6 +6,7 @@ import {
   type CodexSpeedValue,
   type ExecutionAccountSnapshot,
   type ExecutionProfile,
+  memberPersonaDigest,
   projectMemberProfiles,
   type RoleProfile,
   type SessionRecord,
@@ -37,6 +38,8 @@ import {
 import type { FrozenExecutionWorkspace } from './execution-workspace.js';
 
 export interface FrozenExecutionBinding {
+  /** Pure role semantics reference; not the actual client instruction digest or CompatKey. */
+  readonly personaDigest?: string;
   readonly hostExecutionBoundary?: Readonly<NonNullable<SessionRecord['hostExecutionBoundary']>>;
   readonly implementation?: Readonly<{ key: string; generation: string; clientId?: CatConfig['clientId'] }>;
   readonly sharedMcpLaunch?: Readonly<{ transport: string; context?: SharedInvocationContext }>;
@@ -144,6 +147,7 @@ export function freezeExecutionAccountBinding(input: {
                 .digest('hex'),
             })
           : undefined;
+  const projectedProfiles = catConfig ? deepFreeze(projectMemberProfiles(catConfig)) : undefined;
   return Object.freeze({
     catConfig,
     ...(input.providerOptions ? { providerOptions: deepFreeze(input.providerOptions) } : {}),
@@ -151,7 +155,9 @@ export function freezeExecutionAccountBinding(input: {
     ...(catConfig
       ? { executionPreferences: captureMemberExecutionPreferences(input.catId, catConfig, input.model) }
       : {}),
-    ...(catConfig ? deepFreeze(projectMemberProfiles(catConfig)) : {}),
+    ...(projectedProfiles
+      ? { ...projectedProfiles, personaDigest: memberPersonaDigest(projectedProfiles.roleProfile) }
+      : {}),
     workspace: input.workspace,
     projectRoot,
     effectiveAccountRef,

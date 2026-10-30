@@ -31,6 +31,7 @@ describe('member identity and execution projections at admission', () => {
     });
     assert.equal(binding.roleProfile?.id, member.id);
     assert.equal(binding.roleProfile?.roleDescription, member.roleDescription);
+    assert.match(binding.personaDigest, /^sha256:[a-f0-9]{64}$/);
     assert.equal('clientId' in binding.roleProfile, false);
     assert.equal('defaultModel' in binding.roleProfile, false);
     assert.equal(binding.executionProfile?.clientId, 'acp');
@@ -58,5 +59,19 @@ describe('member identity and execution projections at admission', () => {
     assert.equal(binding.executionPreferences.effort, 'medium');
     assert.ok(Object.isFrozen(binding.roleProfile));
     assert.ok(Object.isFrozen(binding.executionProfile));
+  });
+
+  it('keeps presentation-only edits out of the pure persona digest', () => {
+    const first = freezeExecutionAccountBinding({
+      catId: member.id,
+      catConfig: member,
+      workspace: { usesDefaultWorkspace: false },
+    });
+    const second = freezeExecutionAccountBinding({
+      catId: member.id,
+      catConfig: { ...member, avatar: '/new.png', color: { primary: '#fff', secondary: '#000' } },
+      workspace: { usesDefaultWorkspace: false },
+    });
+    assert.equal(second.personaDigest, first.personaDigest);
   });
 });
