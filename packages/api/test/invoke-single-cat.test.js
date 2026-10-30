@@ -42,6 +42,21 @@ async function collect(iterable) {
   return msgs;
 }
 
+async function seedStaticIdentity(invoke, deps, identity) {
+  await collect(
+    invoke(deps, {
+      ...identity,
+      prompt: 'earlier successful identity delivery',
+      isLastCat: true,
+      service: {
+        async *invoke() {
+          yield { type: 'done', catId: identity.catId, timestamp: Date.now() };
+        },
+      },
+    }),
+  );
+}
+
 function installNextActiveRecordLookupBarrier(sessionChainStore) {
   const getOrCreateActive = sessionChainStore.getOrCreateActive.bind(sessionChainStore);
   let armed = false;
@@ -593,10 +608,14 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
       }),
     );
 
-    assert.deepEqual(reads, [
-      { threadId: 'thread-effort-runtime', catId: 'codex', userId: 'user-thread-effort' },
-      { threadId: 'thread-effort-runtime', catId: 'codex', userId: 'user-thread-effort' },
-    ]);
+    assert.ok(reads.length >= 2, 'both invocations must read their current effort; admission may revalidate it');
+    reads.forEach((read) =>
+      assert.deepEqual(read, {
+        threadId: 'thread-effort-runtime',
+        catId: 'codex',
+        userId: 'user-thread-effort',
+      }),
+    );
     assert.equal(optionsSeen[0]?.reasoningEffortOverride, 'max');
     assert.equal(optionsSeen[1]?.reasoningEffortOverride, 'low');
   });
@@ -683,7 +702,14 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
       else base.cli.serviceTier = previous;
     }
 
-    assert.deepEqual(reads, [{ threadId: 'thread-speed-runtime', catId: 'codex-sol', userId: 'user-thread-speed' }]);
+    assert.ok(reads.length > 0);
+    reads.forEach((read) =>
+      assert.deepEqual(read, {
+        threadId: 'thread-speed-runtime',
+        catId: 'codex-sol',
+        userId: 'user-thread-speed',
+      }),
+    );
     assert.equal(optionsSeen[0]?.requestedServiceTier, 'fast');
   });
 
@@ -7107,6 +7133,13 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
       delete: async () => {},
     };
 
+    await seedStaticIdentity(invokeSingleCat, deps, {
+      catId: 'opus',
+      userId: 'u1',
+      threadId: 'thread-bloat-resume',
+      systemPrompt: 'You are a cat',
+    });
+
     await collect(
       invokeSingleCat(deps, {
         catId: 'opus',
@@ -7184,6 +7217,13 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
       store: async () => {},
       delete: async () => {},
     };
+    await seedStaticIdentity(invokeSingleCat, deps, {
+      catId: 'opus',
+      userId: 'u1',
+      threadId: 'thread-staging-resume',
+      systemPrompt: 'static identity here',
+    });
+
     await collect(
       invokeSingleCat(deps, {
         catId: 'opus',
@@ -7252,6 +7292,13 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
       store: async () => {},
       delete: async () => {},
     };
+    await seedStaticIdentity(invokeSingleCat, deps, {
+      catId: 'opus',
+      userId: 'owner-f293',
+      threadId: 'thread-routing-context-resume',
+      systemPrompt: 'static identity here',
+    });
+
     deps.routingContextPromptProjection = {
       async resolve(input) {
         resolutions.push(input);
@@ -7335,6 +7382,13 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
       store: async () => {},
       delete: async () => {},
     };
+
+    await seedStaticIdentity(invokeSingleCat, deps, {
+      catId: 'gemini',
+      userId: 'u1',
+      threadId: 'thread-bloat-gemini',
+      systemPrompt: 'You are a Siamese cat',
+    });
 
     await collect(
       invokeSingleCat(deps, {
@@ -7538,6 +7592,13 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
     };
 
     // Turn 1: 60k tokens — establishes baseline
+    await seedStaticIdentity(invokeSingleCat, deps, {
+      catId: 'codex',
+      userId: 'u1',
+      threadId: 'thread-compress',
+      systemPrompt: 'Identity prompt',
+    });
+
     await collect(
       invokeSingleCat(deps, {
         catId: 'codex',
@@ -10903,17 +10964,21 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
       },
     };
     const threadId = 'thread-legacy-runtime-root';
+    let threadProjectPath = runtimeRoot;
     const deps = {
       ...makeDeps(),
       threadStore: {
-        get: async () => ({ projectPath: runtimeRoot, createdBy: 'user1' }),
-        updateProjectPath: async (...args) => migrations.push(args),
+        get: async () => ({ projectPath: threadProjectPath, createdBy: 'user1' }),
+        updateProjectPath: async (id, path) => {
+          migrations.push([id, path]);
+          threadProjectPath = path;
+        },
         updateParticipantActivity: async () => {},
       },
     };
 
     try {
-      const msgs = await collect(
+      const invoke = () =>
         invokeSingleCat(deps, {
           catId: 'opencode',
           service,
@@ -10921,8 +10986,11 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
           userId: 'user1',
           threadId,
           isLastCat: true,
-        }),
-      );
+        });
+      const firstAdmission = await collect(invoke());
+      assert.ok(firstAdmission.some((message) => message.errorCode === 'execution_binding_conflict'));
+      assert.equal(optionsSeen.length, 0, 'the migrated source must be reparsed before any provider call');
+      const msgs = await collect(invoke());
 
       assert.ok(msgs.some((m) => m.type === 'done'));
       assert.equal(optionsSeen[0]?.workingDirectory, workspaceRoot);

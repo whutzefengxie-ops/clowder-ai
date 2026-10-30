@@ -84,12 +84,12 @@
     {
       "id": "C06",
       "status": "NOT_RUN",
-      "evidence": []
+      "evidence": ["README.md#W3-静态身份前缀按实际正文与片段复用尚未完成-W3：Host 前缀缓存的正文/成功/压缩失效局部证据；非完整 L0 编译验收"]
     },
     {
       "id": "C07",
       "status": "NOT_RUN",
-      "evidence": []
+      "evidence": ["README.md#W3-静态身份前缀按实际正文与片段复用尚未完成-W3：头像/正文/原生片段变化的消息前缀局部证据；持久兼容键、硬边界及 Native 采用未完成"]
     },
     {
       "id": "C08",
@@ -576,6 +576,20 @@
       "cancelFixTargeted": "99 PASS, no failures or skips"
     },
     "scope": "Existing canonical running-child read and ordinary same-conversation admission only; no cross-thread binding registry, process identity recovery or full C12/C16"
+  },
+  "staticIdentityPrefixCheckpointReview": {
+    "verdict": "PENDING_REVIEW",
+    "evidence": "README.md#W3-静态身份前缀按实际正文与片段复用尚未完成-W3",
+    "tests": {
+      "initialRed": "1 PASS + 4 FAIL after correcting the registry reload fixture",
+      "segmentRed": "1 FAIL",
+      "compressionRed": "1 FAIL at the fourth turn after supplying the production capacity snapshot contract",
+      "finalFocused": "8 PASS",
+      "portableInvocationOwner": "181 PASS; four Windows AGY Native cases explicitly excluded, not counted as PASS",
+      "contractsBgResumeTimeout": "252 PASS",
+      "requestAudit": "15 PASS"
+    },
+    "scope": "Existing process-local Host message-prefix cache only; not PersonaDigest, native InstructionDigest, versioned CompatKey, durable adopted identity or full C06/C07/C10"
   },
   "clientMcpCurrentnessCheckpointReview": {
     "reviewer": "checkpoint_review",

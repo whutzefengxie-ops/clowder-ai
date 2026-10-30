@@ -717,3 +717,16 @@ API tsc 退出 0。prior-stop-and-host-authority-green.log 为 385 PASS，无失
 该 P2 在真实 routeSerial → 会话 custody → 新读取边界复现：custody await 返回时 signal 已取消，原代码仍先创建读取 Promise；preflightRace 随即拒绝，读取稍后的异常成为未处理拒绝。永久 prior-admission-cancel.test.js 和独立 Node helper 以 --unhandled-rejections=strict 验证；prior-stop-admission-cancel-red.log 为 1 PASS/1 FAIL，真实子进程 exit 1。只在创建这次读取前增加 signal.throwIfAborted，不改全局 helper。取消发生在已开始读取中仍由原 race 处理。API tsc exit 0，prior-stop-admission-cancel-green.log 99 PASS，无失败/跳过，包含两条真实严格子进程、原八条准入、所有归属反例以及相关取消/恢复/Bridge/dispatcher/ACP 回归。子进程均已退出，未启动真实 Agent、模型、Redis 或交互服务。该单行修复等待新 SHA 独立回执。
 
 checkpoint_review 对 eb0f9383e4269002f98cd3b68ab289f01ad8942c 给出 approved，独立精确路径集合 19 PASS/0 FAIL/0 SKIP。原独立 strict 子进程现在 exit 0/read 0，永久取消前/读取中两个 strict worker 为 read 0/read 1 且退出 0；原八个准入控制和事件归属回归通过。原 P2 已闭环，见 packages/api/artifacts/role-agent-checkpoint-review/prior-admission-eb0f938-final.log。无 Agent、模型、Redis 或常驻服务实例遗留，dist 已释放；批准只限本次准入切片。用户最新确认暂无 Mac 已同步平台矩阵，必需组合暂 BLOCKED；其他实现继续。
+## W3 静态身份前缀按实际正文与片段复用（尚未完成 W3）
+
+在进入持久兼容结构前，现有普通消息前缀还有两个错误来源：全局 registry revision 与实际正文不对应，而且在发送前就记为已注入。正式 invokeSingleCat → provider 边界复现头像变化导致无谓补发、正文变化但 revision 不变时漏发、失败后错记采用、未知旧原生 ID 首轮漏发；改正“重复 register”夹具为真实 reload 后，static-identity-content-red-valid.log 为 1 PASS/4 FAIL。另有 static-identity-segment-red.log 证实不同原生片段错误共用缓存；static-identity-compression-red-valid.log 在声明真实调用方 capacity snapshot 合同后，准确复现压缩后第三轮失败、第四轮不再补发的问题。最初未声明 capacity 的压缩夹具在第三轮失败，不当作该第四轮反例。
+
+沿用原私有 Map，只保存已成功处理的实际 params.systemPrompt 正文 SHA 与原生坐标，不存正文。普通载体比较实际 native session ID；bg 沿已有逻辑 record/chainKey，不用每轮 daemon shortId 作上下文边界。session_init 经既有绑定 owner 接受后才更新待记坐标，typed done、无 error/取消且清理流程成功走完后才记缓存；原生认证续接的固定正文不记成身份投递。压缩或冷连续性判定先使旧缓存失去可信度，失败后仍须补发。未知旧坐标在既有一般任务路径补当前消息前缀，不宣称原地更新系统身份。
+
+本改动没有持久化这个 SHA，没有把它叫作 PersonaDigest、实际 Native InstructionDigest 或 CompatKey，没有复用它作进程池键，也没有放宽 AGY 原生绑定。W2 安全持久引用、W3 稳定兼容结构/新片段、系统级身份采用后落盘和强任务档准入仍必须继续实现；本切片不能充作 C07/C10 全量通过。
+
+生产修改限原 invocation owner：替换一个原 Map 值、按正文/片段判断、将记账移至成功终态，并在现有 session_init 分支记实际坐标；代码总体保持同一函数，没有新服务、配置、数据库、会话管理器或重投框架。测试新增八项（184 行），包括真实 routeSerial 两轮消费，未只验证哈希对象。五个旧“warm”夹具先走一次真实成功的静态前缀投递，再保留原“不重复注入/压缩后补发/staging/动态路由内容”断言。旧 effort/speed 测试改验每次调用的实际选值及所有读取的 owner 范围，允许准入前后核对，不再把单次读取次数当外部行为。旧迁移夹具真实保存新路径并验证首次准入冲突无 provider、一次重解析后仅调用一次，保留单次迁移断言。
+
+API tsc 最终退出 0（最初一次缺 createHash import 的类型错误已纠正，未用失败构建跑断言）。static-identity-content-final-green.log 八项 PASS；static-identity-content-contracts.log 为 252 PASS，含全部 session-contract、bg chain、resume health 和 timeout；static-identity-request-audit.log 为 15 PASS，涵盖实际准备字节、投递回执、保密字段和持久失败阻止发送。Biome 三文件无错误，33 条既有复杂度/测试控制等 warning，未扩大治理改动。
+
+扩大前的 static-identity-content-first-green.log 实际是 170 PASS/22 FAIL（文件名不代表通过），失败为 14 个当前 Windows AGY Native 进程出生身份/其后无 effect 文件的问题，及上述 8 个旧夹具假设。相关 F325 支持限制仍保留 FAIL，不以消息前缀替代认证或关闭原生 guard。移出十项 Native-auth 文件、明确排除四项相同 Windows Native guard 场景后的普通 owner 集合第一次为 179 PASS/1 FAIL；最后一个旧迁移夹具反映真实写回后需重解析，修正后独立目标一项 PASS。static-identity-content-owner-final.log 最终普通 owner 集合 181 PASS/0 FAIL；四项已明确排除而不进入 Node 结果分母，不计通过。十项 Native-auth 的失败证据单独保留；两个触发 birth guard 的原生 owner 文件相对 6d8 基线未改动（Git diff 为空）。原失败见证均保留。完整 Native/macOS/最终包与 Q 仍未完成，独立审查待回执。

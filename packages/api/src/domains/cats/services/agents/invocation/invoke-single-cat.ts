@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { redactClaudeLaunchToken } from '../../../../../config/claude-token-account.js';
 import type {
   ContextSourceAdmission,
@@ -822,7 +823,7 @@ function registerProxyUpstream(projectRoot: string, slug: string, targetUrl: str
  */
 const _prevContextFill = new Map<string, number>();
 const _needsReinjection = new Set<string>();
-const _staticIdentityRegistryRevision = new Map<string, number>();
+const _staticIdentityDigest = new Map<string, { coordinate: string; digest: string }>();
 
 /** @internal Exposed for testing */
 export function _resetCompressionDetection(): void {
@@ -832,7 +833,7 @@ export function _resetCompressionDetection(): void {
 
 /** @internal Exposed for testing */
 export function _resetStaticIdentityRegistryRevisionForTests(): void {
-  _staticIdentityRegistryRevision.clear();
+  _staticIdentityDigest.clear();
 }
 
 function sessionIdentityKey(userId: string, catId: CatId, threadId: string): string {
@@ -3707,8 +3708,8 @@ async function* invokePreparedSingleCat(deps: InvocationDeps, params: Invocation
       await resolveAsrPersonMemoryOpportunities(contextContinuityHandshake);
     };
 
-    // F-BLOAT: Only inject staticIdentity (systemPrompt) on new provider sessions.
-    // Exception: compression detected → force re-inject (see _needsReinjection).
+    // Reuse only a successfully delivered prefix with the same content and native coordinate.
+    // Compression or a cold continuity verdict invalidates the previous delivery evidence.
     //
     // Injection method: prepend to prompt string (universal, all CLIs).
     // --append-system-prompt proved unreliable (cats didn't receive content).
@@ -3718,15 +3719,18 @@ async function* invokePreparedSingleCat(deps: InvocationDeps, params: Invocation
     const canSkipOnResume = true;
     const compressionKey = `${userId}:${catId as string}:${threadId}`;
     const forceReinjection = _needsReinjection.delete(compressionKey);
-    const registryRevision = catRegistry.getRevision();
     const identityKey = sessionIdentityKey(userId, catId, threadId);
-    const lastStaticIdentityRevision = _staticIdentityRegistryRevision.get(identityKey);
-    const registryChangedSinceStaticIdentity =
-      canSkipOnResume &&
-      isResume &&
-      lastStaticIdentityRevision !== undefined &&
-      lastStaticIdentityRevision !== registryRevision;
-    let injectSystemPrompt = !canSkipOnResume || !isResume || forceReinjection || registryChangedSinceStaticIdentity;
+    if (forceReinjection) _staticIdentityDigest.delete(identityKey);
+    let staticIdentityNativeSessionId = sessionId;
+    const identityCoordinate = isBgCarrier ? (invocationPolicyRecordId ?? bgChainKey) : sessionId;
+    const staticIdentityDigest = createHash('sha256')
+      .update(params.systemPrompt ?? '')
+      .digest('hex');
+    const previousStaticIdentity = _staticIdentityDigest.get(identityKey);
+    const staticIdentityChanged =
+      previousStaticIdentity?.digest !== staticIdentityDigest ||
+      previousStaticIdentity.coordinate !== identityCoordinate;
+    let injectSystemPrompt = !canSkipOnResume || !isResume || forceReinjection || staticIdentityChanged;
     /**
      * F296 B4a: whether a cold epoch forces identity re-injection can only be
      * known after the epoch owner has seen the provider continuity verdict, so
@@ -3736,19 +3740,9 @@ async function* invokePreparedSingleCat(deps: InvocationDeps, params: Invocation
       const forceContinuityColdIdentity = Boolean(
         hasTargetContinuityHandshake && contextEpochDecision?.contextMode === 'cold',
       );
+      if (forceContinuityColdIdentity) _staticIdentityDigest.delete(identityKey);
       injectSystemPrompt =
-        !canSkipOnResume ||
-        !isResume ||
-        forceReinjection ||
-        registryChangedSinceStaticIdentity ||
-        forceContinuityColdIdentity;
-      if (canSkipOnResume) {
-        if (injectSystemPrompt) {
-          _staticIdentityRegistryRevision.set(identityKey, registryRevision);
-        } else if (isResume && lastStaticIdentityRevision === undefined) {
-          _staticIdentityRegistryRevision.set(identityKey, registryRevision);
-        }
-      }
+        !canSkipOnResume || !isResume || forceReinjection || staticIdentityChanged || forceContinuityColdIdentity;
     };
 
     // F225 软层: deliver a pending context-management hint into the cat's actual
@@ -5081,6 +5075,7 @@ async function* invokePreparedSingleCat(deps: InvocationDeps, params: Invocation
         }
 
         if (sessionRuntimeBindingAccepted) {
+          staticIdentityNativeSessionId = msg.sessionId;
           try {
             await sessionManager.store(userId, catId, threadId, msg.sessionId);
           } catch {
@@ -6624,6 +6619,16 @@ async function* invokePreparedSingleCat(deps: InvocationDeps, params: Invocation
       !hadError &&
       turnExecutionFailureReason === undefined &&
       signal?.aborted !== true;
+    const appliedIdentityCoordinate = isBgCarrier
+      ? (invocationPolicyRecordId ?? bgChainKey)
+      : staticIdentityNativeSessionId;
+    if (
+      turnExecutionCompletedSuccessfully &&
+      injectSystemPrompt &&
+      !nativeAuthContinuation &&
+      appliedIdentityCoordinate
+    )
+      _staticIdentityDigest.set(identityKey, { coordinate: appliedIdentityCoordinate, digest: staticIdentityDigest });
     if (
       !turnExecutionCompletedSuccessfully &&
       !hadError &&
