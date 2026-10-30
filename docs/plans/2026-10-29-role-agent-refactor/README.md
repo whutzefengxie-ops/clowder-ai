@@ -27,7 +27,7 @@ status: implementing
 
 当前状态：实现已推进到配置纯投影、条件保存、调用冻结和取消终态的局部切片；ACP 命令、启动审计和 Windows shell 固定（`871990137cdd5da27c10d15b64a64d19fe0e5a10`）及普通部署插件 MCP 激活冻结（`f7c628e836625d6ebadd76b5ead9988ebe6ac705`）均已获独立审查通过。CodeAgent mock 已补正式声明/注册/适配调用链，详见 [本机模拟说明](codeagent-mock.md)。W2/W3 仍有持久兼容引用、恢复和逐客户端采用工作；34 条 C/E/Q 全量验收尚未完成，macOS、企业真实 CodeAgent、最终安装包和真实模型质量没有通过证据。以下“已核对的现状”是初始基线，实际变更及局部证据按后续阶段记录和总账查看。
 
-最新产品提交 `eb0f9383e4269002f98cd3b68ab289f01ad8942c`：事件归属核验保留 Host 私有 turn 身份；同一用户/线程/成员的旧执行停止未确认时阻止普通新任务。两项均已独立审查通过，最近取消边界定向 99 PASS、独立复核 19 PASS。下一工作重点是 W2 的安全持久引用和完整启动输入版本，以及 W3 的稳定兼容结构/原生片段/采用后落盘；然后逐客户端推进 W4。此处的通过只对应局部提交，不覆盖这些剩余依赖。
+最近已独立通过的底线提交 `eb0f9383e4269002f98cd3b68ab289f01ad8942c`：事件归属核验保留 Host 私有 turn 身份；同一用户/线程/成员的旧执行停止未确认时阻止普通新任务。两项均已独立审查通过，取消边界定向 99 PASS、独立复核 19 PASS。本轮继续修正静态消息前缀的内容/坐标证据，尚待独立修复回执；它不能替代持久兼容绑定。后续仍必须完成 W2 的安全持久引用和完整启动输入版本，以及 W3 的稳定兼容结构/原生片段/采用后落盘；然后逐客户端推进 W4。此处的通过只对应局部提交，不覆盖这些剩余依赖。
 
 ## 已核对的现状
 
@@ -730,3 +730,9 @@ checkpoint_review 对 eb0f9383e4269002f98cd3b68ab289f01ad8942c 给出 approved�
 API tsc 最终退出 0（最初一次缺 createHash import 的类型错误已纠正，未用失败构建跑断言）。static-identity-content-final-green.log 八项 PASS；static-identity-content-contracts.log 为 252 PASS，含全部 session-contract、bg chain、resume health 和 timeout；static-identity-request-audit.log 为 15 PASS，涵盖实际准备字节、投递回执、保密字段和持久失败阻止发送。Biome 三文件无错误，33 条既有复杂度/测试控制等 warning，未扩大治理改动。
 
 扩大前的 static-identity-content-first-green.log 实际是 170 PASS/22 FAIL（文件名不代表通过），失败为 14 个当前 Windows AGY Native 进程出生身份/其后无 effect 文件的问题，及上述 8 个旧夹具假设。相关 F325 支持限制仍保留 FAIL，不以消息前缀替代认证或关闭原生 guard。移出十项 Native-auth 文件、明确排除四项相同 Windows Native guard 场景后的普通 owner 集合第一次为 179 PASS/1 FAIL；最后一个旧迁移夹具反映真实写回后需重解析，修正后独立目标一项 PASS。static-identity-content-owner-final.log 最终普通 owner 集合 181 PASS/0 FAIL；四项已明确排除而不进入 Node 结果分母，不计通过。十项 Native-auth 的失败证据单独保留；两个触发 birth guard 的原生 owner 文件相对 6d8 基线未改动（Git diff 为空）。原失败见证均保留。完整 Native/macOS/最终包与 Q 仍未完成，独立审查待回执。
+
+checkpoint_review 对 c4d5f2dbaf63623caa4946c0ac0b307efb869382 返回 changes_requested，独立 15 PASS/3 FAIL，两条 P2：A 成功后 B 失败/取消，回退 A 却继续用旧 A 缓存（两个变体）；session_init 报 B 但原绑定 owner 读取失败未接受，仍借旧 resume A 为 B 正文记缓存。BG daemon/逻辑片段及清理异常的独立对照通过。原独立失败文件、日志保留，未重写为绿灯。
+
+采用三条原反例为 static-identity-evidence.test.js（167 行），只调整 imports，未删改输入/核心断言；static-identity-evidence-red.log 三条 FAIL。生产只四处原行修改：开始交付前缀前清除旧证据；待提交坐标从已知 warm 值开始，一旦出现 session_init 就先置未知，只有原 binding owner 接受才重设；成功时使用这个待提交值，不重新取旧 resume/logical ID 代证。无 session_init 的既有 warm 路径保留自身已知坐标，原 auth continuation 仍不记成身份正文；没有改 session store 的既有 best-effort 行为或放宽 Native 绑定。
+
+API tsc 退出 0，static-identity-evidence-green.log 26 PASS（十一条身份证据及十五条请求审计），static-identity-evidence-owner.log 22 PASS（原 warm/staging/压缩/名册/路由/迁移用例），static-identity-evidence-contracts.log 252 PASS（原全部 session-contract、BG chain、resume health、timeout）。均无失败或跳过。181 项普通 owner 是该补丁前的完整结果，未把它冒充修复后全量重跑；同一已知 Windows Native 限制仍保留，不重复制造相关调用。两文件 Biome 无错误，24 条既有 warning。单文件生产逻辑净减少一行；修复后独立回执待补。所有模型/企业能力/平台/持久兼容缺口保持不变。

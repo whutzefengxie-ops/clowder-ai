@@ -3721,8 +3721,8 @@ async function* invokePreparedSingleCat(deps: InvocationDeps, params: Invocation
     const forceReinjection = _needsReinjection.delete(compressionKey);
     const identityKey = sessionIdentityKey(userId, catId, threadId);
     if (forceReinjection) _staticIdentityDigest.delete(identityKey);
-    let staticIdentityNativeSessionId = sessionId;
     const identityCoordinate = isBgCarrier ? (invocationPolicyRecordId ?? bgChainKey) : sessionId;
+    let appliedIdentityCoordinate = identityCoordinate;
     const staticIdentityDigest = createHash('sha256')
       .update(params.systemPrompt ?? '')
       .digest('hex');
@@ -4613,6 +4613,7 @@ async function* invokePreparedSingleCat(deps: InvocationDeps, params: Invocation
       }
 
       if (msg.type === 'session_init' && msg.sessionId) {
+        appliedIdentityCoordinate = undefined;
         if (requiresImportedHistory && msg.sessionId !== activeSessionRecordForResume?.externalImport?.cliSessionId) {
           throw new Error('The imported native session was not resumed; refusing to replace its history');
         }
@@ -5075,7 +5076,7 @@ async function* invokePreparedSingleCat(deps: InvocationDeps, params: Invocation
         }
 
         if (sessionRuntimeBindingAccepted) {
-          staticIdentityNativeSessionId = msg.sessionId;
+          appliedIdentityCoordinate = isBgCarrier ? (invocationPolicyRecordId ?? bgChainKey) : msg.sessionId;
           try {
             await sessionManager.store(userId, catId, threadId, msg.sessionId);
           } catch {
@@ -5806,6 +5807,7 @@ async function* invokePreparedSingleCat(deps: InvocationDeps, params: Invocation
         throw new Error('provider_entry_fence_rejected');
       const localPluginMcpView = await deps.resolveInvocationPluginMcpView?.();
       const exposureProject = pluginMcpExposureProject(threadProjectPath, workingDirectory);
+      if (injectSystemPrompt && !nativeAuthContinuation) _staticIdentityDigest.delete(identityKey);
       const serviceIter = bindInvocationPluginMcpView(
         () =>
           (usesProviderContinuityPreflight && service.invokeWithContinuityPreflight
@@ -6619,9 +6621,6 @@ async function* invokePreparedSingleCat(deps: InvocationDeps, params: Invocation
       !hadError &&
       turnExecutionFailureReason === undefined &&
       signal?.aborted !== true;
-    const appliedIdentityCoordinate = isBgCarrier
-      ? (invocationPolicyRecordId ?? bgChainKey)
-      : staticIdentityNativeSessionId;
     if (
       turnExecutionCompletedSuccessfully &&
       injectSystemPrompt &&

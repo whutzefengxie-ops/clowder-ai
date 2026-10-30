@@ -579,6 +579,13 @@
   },
   "staticIdentityPrefixCheckpointReview": {
     "verdict": "PENDING_REVIEW",
+    "lastReviewedHead": "c4d5f2dbaf63623caa4946c0ac0b307efb869382",
+    "lastVerdict": "changes_requested",
+    "authorFixedPendingReview": [
+      "P2 a failed/cancelled different prefix left the previous successful prefix evidence usable",
+      "P2 an unaccepted session_init borrowed the prior resume coordinate for new prefix evidence"
+    ],
+    "independentBeforeFix": "15 PASS + 3 FAIL; two findings, no duplicate counting",
     "evidence": "README.md#W3-静态身份前缀按实际正文与片段复用尚未完成-W3",
     "tests": {
       "initialRed": "1 PASS + 4 FAIL after correcting the registry reload fixture",
@@ -588,6 +595,10 @@
       "portableInvocationOwner": "181 PASS; four Windows AGY Native cases explicitly excluded, not counted as PASS",
       "contractsBgResumeTimeout": "252 PASS",
       "requestAudit": "15 PASS"
+      ,"reviewCounterexampleRed": "3 FAIL",
+      "reviewFixIdentityAndAudit": "26 PASS",
+      "reviewFixWarmOwner": "22 PASS",
+      "reviewFixContracts": "252 PASS"
     },
     "scope": "Existing process-local Host message-prefix cache only; not PersonaDigest, native InstructionDigest, versioned CompatKey, durable adopted identity or full C06/C07/C10"
   },
