@@ -27,7 +27,7 @@ status: implementing
 
 当前状态：实现已推进到配置纯投影、条件保存、调用冻结和取消终态的局部切片；ACP 命令、启动审计和 Windows shell 固定（`871990137cdd5da27c10d15b64a64d19fe0e5a10`）及普通部署插件 MCP 激活冻结（`f7c628e836625d6ebadd76b5ead9988ebe6ac705`）均已获独立审查通过。CodeAgent mock 已补正式声明/注册/适配调用链，详见 [本机模拟说明](codeagent-mock.md)。W2/W3 仍有持久兼容引用、恢复和逐客户端采用工作；34 条 C/E/Q 全量验收尚未完成，macOS、企业真实 CodeAgent、最终安装包和真实模型质量没有通过证据。以下“已核对的现状”是初始基线，实际变更及局部证据按后续阶段记录和总账查看。
 
-最近已独立通过的底线提交 `eb0f9383e4269002f98cd3b68ab289f01ad8942c`：事件归属核验保留 Host 私有 turn 身份；同一用户/线程/成员的旧执行停止未确认时阻止普通新任务。两项均已独立审查通过，取消边界定向 99 PASS、独立复核 19 PASS。本轮继续修正静态消息前缀的内容/坐标证据，尚待独立修复回执；它不能替代持久兼容绑定。后续仍必须完成 W2 的安全持久引用和完整启动输入版本，以及 W3 的稳定兼容结构/原生片段/采用后落盘；然后逐客户端推进 W4。此处的通过只对应局部提交，不覆盖这些剩余依赖。
+已独立通过的取消底线提交 `eb0f9383e4269002f98cd3b68ab289f01ad8942c`：事件归属核验保留 Host 私有 turn 身份；同一用户/线程/成员的旧执行停止未确认时阻止普通新任务，定向 99 PASS、独立复核 19 PASS。最新静态消息前缀提交 `022526e2b16915c0b474dfd183b771eb89fca68a` 修正内容/坐标和不确定交付证据，独立 23 PASS；它不能替代持久兼容绑定。后续仍必须完成 W2 的安全持久引用和完整启动输入版本，以及 W3 的稳定兼容结构/原生片段/采用后落盘；然后逐客户端推进 W4。此处的通过只对应局部提交，不覆盖这些剩余依赖。
 
 ## 已核对的现状
 
@@ -736,3 +736,5 @@ checkpoint_review 对 c4d5f2dbaf63623caa4946c0ac0b307efb869382 返回 changes_re
 采用三条原反例为 static-identity-evidence.test.js（167 行），只调整 imports，未删改输入/核心断言；static-identity-evidence-red.log 三条 FAIL。生产只四处原行修改：开始交付前缀前清除旧证据；待提交坐标从已知 warm 值开始，一旦出现 session_init 就先置未知，只有原 binding owner 接受才重设；成功时使用这个待提交值，不重新取旧 resume/logical ID 代证。无 session_init 的既有 warm 路径保留自身已知坐标，原 auth continuation 仍不记成身份正文；没有改 session store 的既有 best-effort 行为或放宽 Native 绑定。
 
 API tsc 退出 0，static-identity-evidence-green.log 26 PASS（十一条身份证据及十五条请求审计），static-identity-evidence-owner.log 22 PASS（原 warm/staging/压缩/名册/路由/迁移用例），static-identity-evidence-contracts.log 252 PASS（原全部 session-contract、BG chain、resume health、timeout）。均无失败或跳过。181 项普通 owner 是该补丁前的完整结果，未把它冒充修复后全量重跑；同一已知 Windows Native 限制仍保留，不重复制造相关调用。两文件 Biome 无错误，24 条既有 warning。单文件生产逻辑净减少一行；修复后独立回执待补。所有模型/企业能力/平台/持久兼容缺口保持不变。
+
+checkpoint_review 对 022526e2b16915c0b474dfd183b771eb89fca68a 给出 approved，独立 23 PASS/0 FAIL/0 SKIP。原三反例、公开十一条身份证据、BG 稳定/已 sealed 新片段、typed done 后 source 清理失败与精确恢复，以及 warm 无 session_init/cold 无已知坐标对照均通过。证据为 packages/api/artifacts/role-agent-checkpoint-review/static-prefix-022526e-final.log（21 PASS）和 static-prefix-no-init-022526e.log（2 PASS），不重复计数。两条 P2 闭环，旧失败日志保留；仅内存服务/store，无 Agent、模型、Redis 或常驻服务遗留，dist 已释放。此批准严格限定普通前缀缓存，不扩大为持久兼容或强身份验收。

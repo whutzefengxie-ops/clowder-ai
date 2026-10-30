@@ -578,13 +578,17 @@
     "scope": "Existing canonical running-child read and ordinary same-conversation admission only; no cross-thread binding registry, process identity recovery or full C12/C16"
   },
   "staticIdentityPrefixCheckpointReview": {
-    "verdict": "PENDING_REVIEW",
-    "lastReviewedHead": "c4d5f2dbaf63623caa4946c0ac0b307efb869382",
-    "lastVerdict": "changes_requested",
-    "authorFixedPendingReview": [
+    "verdict": "approved",
+    "reviewedHead": "022526e2b16915c0b474dfd183b771eb89fca68a",
+    "subject": "task:01a1881e-1a7b-78d0-9a62-ff99b0ab7a01/checkpoint-static-identity-prefix",
+    "previousReviewedHead": "c4d5f2dbaf63623caa4946c0ac0b307efb869382",
+    "previousVerdict": "changes_requested",
+    "closedByReviewer": [
       "P2 a failed/cancelled different prefix left the previous successful prefix evidence usable",
       "P2 an unaccepted session_init borrowed the prior resume coordinate for new prefix evidence"
     ],
+    "findings": [],
+    "independentTests": "23 PASS, no failures or skips",
     "independentBeforeFix": "15 PASS + 3 FAIL; two findings, no duplicate counting",
     "evidence": "README.md#W3-静态身份前缀按实际正文与片段复用尚未完成-W3",
     "tests": {
@@ -594,8 +598,8 @@
       "finalFocused": "8 PASS",
       "portableInvocationOwner": "181 PASS; four Windows AGY Native cases explicitly excluded, not counted as PASS",
       "contractsBgResumeTimeout": "252 PASS",
-      "requestAudit": "15 PASS"
-      ,"reviewCounterexampleRed": "3 FAIL",
+      "requestAudit": "15 PASS",
+      "reviewCounterexampleRed": "3 FAIL",
       "reviewFixIdentityAndAudit": "26 PASS",
       "reviewFixWarmOwner": "22 PASS",
       "reviewFixContracts": "252 PASS"
