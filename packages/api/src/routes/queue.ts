@@ -611,13 +611,13 @@ export const queueRoutes: FastifyPluginAsync<QueueRoutesOptions> = async (app, o
     let processResult = await opts.cliExecutionOwnerService?.terminateExact(executionOwner);
     for (
       let attempt = 1;
-      processResult && !processResult.complete && attempt < CONTROL_PLANE_RETRY_ATTEMPTS;
+      processResult && (!processResult.complete || !processResult.stopped) && attempt < CONTROL_PLANE_RETRY_ATTEMPTS;
       attempt += 1
     ) {
       await waitForControlPlaneRetry();
       processResult = await opts.cliExecutionOwnerService?.terminateExact(executionOwner);
     }
-    if (!processResult?.complete) {
+    if (!processResult?.complete || !processResult.stopped) {
       try {
         await failUncontrollableInvocation({ ...input, invocationId: input.invocationId });
         return { cancelled: false, reconciled: true };

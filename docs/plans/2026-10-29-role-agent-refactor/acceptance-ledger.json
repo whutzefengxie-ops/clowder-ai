@@ -389,13 +389,14 @@
   },
   "unconfirmedLifecycleCheckpointReview": {
     "verdict": "PENDING_REVIEW",
-    "lastReviewedHead": "5a0e5ec46d2e518c71b9c6d71fedb2a34b61fe97",
+    "lastReviewedHead": "533741c694da64133538f3fa98bb49ccec0ae937",
     "lastVerdict": "changes_requested",
-    "authorFixedPendingReview": [
+    "closedByReviewer": [
       "P2 explicit start rejection misclassified as unknown teardown",
       "P2 batch abort swallows a confirmed healthy sibling terminal",
       "P2 serial consumer return cleanup failure masked by final safety-net done"
     ],
+    "authorFixedPendingReview": ["P2 signal acknowledgement mistaken for native stop proof"],
     "evidence": "README.md#W3-live-停止未确认贯通现有执行与队列尚未完成-W3",
     "tests": {
       "producerRed": "2 FAIL with nativeAliveAtTerminal=true and false providerTeardownAt",
@@ -409,6 +410,9 @@
   },
   "teardownWriterCheckpointReview": {
     "verdict": "PENDING_REVIEW",
+    "lastReviewedHead": "533741c694da64133538f3fa98bb49ccec0ae937",
+    "lastVerdict": "changes_requested",
+    "independentPreviousTests": "92 PASS + 1 Redis reaper SKIP; new signal proof counterexample 1 FAIL",
     "evidence": "README.md#W3-停止证明约束现有终态写入与恢复尚未完成-W3",
     "tests": {
       "ownerRed": "2 PASS + 7 FAIL",
@@ -417,7 +421,17 @@
       "realRedis": "6 PASS",
       "independentCounterexampleReplay": "10 PASS"
     },
+    "signalProofFix": {
+      "tests": "100 PASS + 2 existing platform SKIP; 1 unchanged POSIX-only socket test explicitly excluded on Windows",
+      "evidence": "README.md#W3-信号确认与已知进程停止证明分开尚未完成-W3"
+    },
     "scope": "Existing memory/atomic Redis writer, controlled stop commit, empty-snapshot recovery and existing exact-exit reaper only; durable native owner/resource recovery, cross-platform/package and full C12 incomplete"
+  },
+  "httpstreamCloseProofCheckpointReview": {
+    "verdict": "PENDING_REVIEW",
+    "evidence": "README.md#W3-信号确认与已知进程停止证明分开尚未完成-W3",
+    "tests": "2 PASS + 1 FAIL RED; targeted HTTP/stdio client and retirement regression included in signalProofFix",
+    "scope": "HTTP transport error versus actual carrier exit only; no OS/native-tree/platform certification"
   },
   "catalogPublicationCheckpointReview": {
     "reviewer": "checkpoint_review",

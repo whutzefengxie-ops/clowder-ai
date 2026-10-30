@@ -620,3 +620,17 @@ API tsc exit 0；最终 teardown-owner-regression.log 共 389 PASS+1 Redis reape
 真实 Windows Redis 另独占 6398/DB15：teardown-owner-redis-red.log 为 1 PASS+5 FAIL；修复后 teardown-owner-redis-green.log 为 6 PASS，无 skip，包含四种状态、零时间值、正式 codec/跨 store 读取及预读→Lua 间实际标记 provider started 的交错。使用本任务已有 Windows Redis runner 改测试列表，不调用通用清空 helper、不删除 key、不连接生产6399。两次各自的 redis-teardown-*/instance.json 登记 PID/程序哈希/目录；均 SHUTDOWN SAVE、stopped-data-retained、portReleased:true。最终回归中的 reaper Redis SKIP 是独立未接线用例，不能用另六条通过假称该 skip 已跑。
 
 复杂度复核：约束落在两个原 writer 和原恢复 owner，共享已有 provider 字段，不加数据库、线程、watcher、timer 或错误重试；Queue 继续 drain 是取消控制流修正。原生 owner 句柄/PID birth 与资源绑定的持久引用、真正未知情况下的精确恢复/重新准入、多路复用、Windows/macOS/内外网/最终安装物仍未认证。源六文档哈希全未变，见 source-integrity-teardown-owner.json；全 34 项仍 NOT_RUN，不将本切片当作完整 C12 或 W3 完成。待独立审查。
+
+checkpoint_review 对 533741c694da64133538f3fa98bb49ccec0ae937 返回 changes_requested：原三条 P2 已闭环，独立 92 PASS+1 Redis reaper SKIP；新增真实 owner service 反例 1 FAIL。错误在于把原 terminateExact.complete 当停止证明，但原 complete 仅表示信号步骤无失败。首个无效 createdAt=0 manifest 夹具已由 reviewer 纠正，不算行为证据；有效反例保留在其 teardown-signal-proof-533741.log/result.json。
+
+## W3 信号确认与已知进程停止证明分开（尚未完成 W3）
+
+2026-10-30 00:18 UTC。原 CliExecutionOwnerTermination 增加 stopped 事实，complete 仍保持控制面步骤完整的原义。原 owner 发信号后重新读取既有 manifest 和进程快照，按原出生身份检查 supervisor 和已登记 native root；原 manifest 消失仍保留本次开始时的身份，新出现同 scope child 也必须核验。缺原身份、不完整快照、仍有已知进程时 stopped=false。原恢复 owner 继续使用既有三次有界重试，只有 complete && stopped 才提交原 canceled+providerTeardownAt 并释放/发 done。没有新停止器、定时器、存储或原生会话重放。
+
+实际 Fastify→真实 owner service→原 TurnExecutionStore 的永久 cancel-signal-proof.test.js 覆盖 live、gone、PID reused、晚退出、快照未知、manifest 可恢复移位、同 scope sibling、supervisor 已无但已知 root 仍活着。最后一条额外先见 signal-stop-root-red.log 1 FAIL，已将 root 纳入同一证明。控制进程表/kill 边界，不创建 OS 进程；所有 manifest/结果保留在 api/artifacts/role-agent-refactor/signal-proof。ack-only 服务缺 stopped 的对照明确拒绝假终态。
+
+同型扫描在 HTTP-stream client 复现 stdio 已修的 error→exited 缺陷；httpstream-close-proof-red.log 为 2 PASS+1 FAIL。HTTP 亦只在真实 exit 设置 exited，error 仅置 closed，确实无 PID 的 spawn 失败不发信号。两行生产修复，受控 ChildProcess 三条新测试不使用网络/OS进程；未把该替身当原生树停止证明。
+
+API 最终 tsc exit 0。signal-stop-proof-final.log 共 100 PASS+2 既有平台 SKIP，含八条真实 owner/REST、ack-only、原 F295/权限隔离、两传输 error/exit、HTTP client/pool-retirement 与取消恢复。首次全组 99 PASS+1 FAIL+2 SKIP：旧 manifest parsing and socket cleanup paths fail closed 用例在 Windows 调用基线明确禁止的 Unix socket 构造；基线 6d8 源及该旧用例已核对一致。未修改或放宽 Windows 禁用，最终仅通过 test-skip-pattern 明确排除该一个 POSIX 用例，排除项不能计通过。一次 name-pattern 过滤未命中该完整测试名，仍保留失败日志，未声称通过。
+
+复杂度/fallback 复核：前一提交自动扫描净+3，实际 production 只多一个 serial catch，作用是重新抛出原清理异常而非 finally 覆盖为 done；queue 原吞错 helper 的 catch 被取消 owner 内持久化失败处理替代，净0；其余两项为测试清理 catch。本次沿原进程 owner 核验已有身份，未新增 catch/fallback 链。停止证明只覆盖已登记身份，不能替代未知子树、Windows birth 接线、跨 Host 持久资源绑定及完整 C12。34 全项仍 NOT_RUN。待原 reviewer 对修复 SHA 复核。

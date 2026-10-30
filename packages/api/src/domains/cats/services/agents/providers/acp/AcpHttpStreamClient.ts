@@ -168,7 +168,7 @@ export class AcpHttpStreamClient {
 
     this.child.on('error', (err) => {
       log.error('ACP HTTP process error: %s', err.message);
-      this.exited = true;
+      this.closed = true;
     });
 
     this.child.on('exit', (code, signal) => {
@@ -633,7 +633,7 @@ export class AcpHttpStreamClient {
   private async closeOwnedProcess(): Promise<void> {
     this.liveSessions.clear();
     this.closed = true;
-    if (this.child && !this.exited) await shutdownAcpChild(this.child, KILL_GRACE_MS, false);
+    if (this.child?.pid !== undefined && !this.exited) await shutdownAcpChild(this.child, KILL_GRACE_MS, false);
   }
 
   get pid(): number | undefined {

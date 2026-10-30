@@ -235,7 +235,7 @@ function buildDeps() {
       listLive: mock.fn(async () => ({ owners: processOwners, complete: true })),
       terminateExact: mock.fn(async (execution) => {
         processOwnerCancelCalls.push(execution);
-        return { matched: 1, signaled: 1, complete: true };
+        return { matched: 1, signaled: 1, complete: true, stopped: true };
       }),
     },
     turnExecutionStore: {
@@ -800,7 +800,7 @@ describe('F295 active execution projection', () => {
     });
     deps.cliExecutionOwnerService.terminateExact.mock.mockImplementationOnce(async (execution) => {
       deps._processOwnerCancelCalls.push(execution);
-      return { matched: 1, signaled: 0, complete: true };
+      return { matched: 1, signaled: 0, complete: true, stopped: true };
     });
 
     const cancel = await app.inject({
@@ -1306,6 +1306,7 @@ describe('F295 active execution projection', () => {
       matched: 0,
       signaled: 0,
       complete: false,
+      stopped: false,
     }));
 
     const cancel = await app.inject({

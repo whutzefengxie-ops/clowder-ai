@@ -5,7 +5,7 @@ import { InvocationQueue } from '../dist/domains/cats/services/agents/invocation
 import { InMemoryTurnExecutionStore } from '../dist/domains/cats/services/stores/memory/InMemoryTurnExecutionStore.js';
 import { queueRoutes } from '../dist/routes/queue.js';
 
-for (const mode of ['incomplete', 'empty', 'controlled', 'write-failure'])
+for (const mode of ['incomplete', 'empty', 'controlled', 'write-failure', 'ack-only'])
   test(`REST stop keeps exact provider ownership until proof commits: ${mode}`, async (t) => {
     const scope = {
       invocationId: 'proof-child',
@@ -65,23 +65,22 @@ for (const mode of ['incomplete', 'empty', 'controlled', 'write-failure'])
       cliExecutionOwnerService: {
         listLive: async () => ({
           complete: mode !== 'incomplete',
-          owners:
-            mode === 'controlled' || mode === 'write-failure'
-              ? [
-                  {
-                    executionId: parent.id,
-                    invocationId: scope.invocationId,
-                    threadId: scope.threadId,
-                    userId: scope.userId,
-                    catId: scope.catId,
-                    startedAt: 0,
-                  },
-                ]
-              : [],
+          owners: ['controlled', 'write-failure', 'ack-only'].includes(mode)
+            ? [
+                {
+                  executionId: parent.id,
+                  invocationId: scope.invocationId,
+                  threadId: scope.threadId,
+                  userId: scope.userId,
+                  catId: scope.catId,
+                  startedAt: 0,
+                },
+              ]
+            : [],
         }),
         terminateExact: async (owner) => {
           controls.push(owner);
-          return { matched: 1, signaled: 1, complete: true };
+          return { matched: 1, signaled: 1, complete: true, ...(mode !== 'ack-only' ? { stopped: true } : {}) };
         },
       },
       socketManager: {
