@@ -456,13 +456,23 @@
   },
   "acpLaunchCommandCheckpointReview": {
     "verdict": "PENDING_REVIEW",
+    "lastReviewedHead": "18cf7c4b6bf5bb94fb68ea27f9bacf17ee2f290d",
+    "lastVerdict": "changes_requested",
+    "authorFixedPendingReview": [
+      "P2 initial startup audit and selected executable use different shim-cache generations",
+      "P2 shell:true lets Node re-read live ComSpec at spawn"
+    ],
     "evidence": "README.md#W2-ACP-选定程序与-Windows-shim-冻结尚未完成-W2",
     "tests": {
       "red": "2 FAIL for stale next selection; 2 FAIL for admitted selection after normal shared-cache invalidation",
       "targeted": "45 PASS + 6 existing platform SKIP",
       "windowsShim": "2 PASS",
       "wholePlanSelectionFinal": "71 PASS after consolidating each client's single prepared-plan fallback",
-      "regression": "362 PASS, no failures or skips"
+      "regression": "362 PASS, no failures or skips",
+      "auditShellRed": "4 FAIL",
+      "auditShellFixed": "17 PASS",
+      "startupPolicy": "77 PASS + 5 existing platform SKIP",
+      "auditShellRegression": "366 PASS, no failures or skips"
     },
     "scope": "Existing ACP factory selected executable/argv/shell only; same-path executable contents/version, discovery/probe unification, CA contents, persisted refs and full C23/W2 remain incomplete"
   },

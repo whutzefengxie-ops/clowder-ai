@@ -672,3 +672,11 @@ API tsc exit 0。acp-frozen-command-green.log 45 PASS+6 原平台专属 SKIP，�
 复杂度复核：只在现有工厂/两 client/Windows helper 传递一个内部计划，复用既有缓存失效和池退休；原插件严格数据声明没有新增 prepared 字段。没有冻结/复制整套客户端发行目录；同路径可执行文件或 JS 内容版本、发现/探测共用计划、CA 文件更新、持久引用和实际 macOS/内网/安装物仍待完成。因此不认证完整 C05/C13/C23 或 W2，34 项仍 NOT_RUN。待独立复核。
 
 作者 fallback 复核将两 client 的 command/args 分别回退收敛为一次整体 preparedSpawn 选择：内部类型已经保证完整计划，不允许按字段混合旧/新来源。最终 API tsc exit 0 后，acp-frozen-command-final.log 71 PASS、无 skip，包含两传输原 client、Windows 原 spawn、两新命令/两新 shim/基础环境。362 全组运行早于这个等价的整体选择收敛，未把旧结果伪装成该机械变化后的重跑；最终 client 实际消费由 71 条覆盖。每 client 一个兼容旧内部调用的回退不可移除，未新增失败重试或替代客户端。
+
+checkpoint_review 对 18cf7c4b6bf5bb94fb68ea27f9bacf17ee2f290d 返回 changes_requested，独立原定向 12 PASS+2 原平台 SKIP，新四条 FAIL 对应两个 P2（各 stdio/HTTP）：初始 bootstrap 审计在刷新前读旧 shim 并固定旧 isolation，随后新计划却选 entry B；cmd fallback 的 shell:true 让真实 Node spawn 归一化阶段重新读当前 ComSpec。独立数据及原 SHA 失败日志保留，未改写为修复结果。
+
+现在在同一 factory 先刷新并选定计划，再将它显式传给原 verifyAcpBootstrap。该 helper 默认仍用原 base，初始审计和默认 cold guard 都消费同一 chosen command/args；原目录安全、严格 root 及冷启动检查未放宽。cmd fallback 在 factory 解析为显式 shell 字符串，preparedSpawn 的类型也只接受已选定的 string，不保留 true 给 Node 晚读。没有新增启动器或降级策略。
+
+采用独立原反例为永久 acp-command-startup-audit.test.js 和 acp-frozen-shell.test.js，acp-audit-shell-red.log 四条有效 FAIL。API tsc exit 0 后 acp-audit-shell-green.log 17 PASS；acp-audit-shell-policy.log 77 PASS+5 原平台 SKIP，覆盖原 Pi/AGY/Windows cwd、volume root、冷启动复核及新四条；acp-audit-shell-regression.log 366 PASS、无失败/跳过，覆盖此前整个合同/账号/两传输/iCode/进程池/Node mock 集合和新例。shell 见证只在 ChildProcess.prototype.spawn 的 OS 边界截获，保留真实 Node 参数归一化，没有执行 native Agent；原进程对象在 fixture 内关闭。
+
+五文件 Biome 无错误，11 warning/6 info 未扩散治理。32 份 native-unconfirmed-lifecycle 台账全部 closed-data-retained/running:false，见 acp-audit-shell-native-instances.json；六份原方案哈希仍完全相同，见 source-integrity-acp-audit-shell.json。未连接生产 Redis、未使用真实认证/模型；测试和诊断目录保留。复杂度复核仍仅三处原生产文件，选择提前、原 helper 显式消费、隐式 shell 转显式，不新增 fallback 链。上述其余版本/CA/持久引用/平台缺口及 34 个 NOT_RUN 保持，待修复 SHA 独立复核。

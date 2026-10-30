@@ -1,4 +1,5 @@
 import { createHmac, randomBytes } from 'node:crypto';
+import { isAbsolute } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import type { CatConfig } from '@cat-cafe/shared';
 import type { FastifyBaseLogger } from 'fastify';
@@ -19,7 +20,7 @@ import { resolveContextCapacity } from '../../../../../../config/context-capacit
 import { resolveEffectiveOpenCodeModel } from '../../../../../../config/opencode-model.js';
 import { invalidateCliCommand, resolveCliCommandOrBare } from '../../../../../../utils/cli-resolve.js';
 import { buildChildEnv } from '../../../../../../utils/cli-spawn.js';
-import { resolveWindowsSpawnPlan } from '../../../../../../utils/cli-spawn-win.js';
+import { resolveWindowsSpawnPlan, type WindowsSpawnPlan } from '../../../../../../utils/cli-spawn-win.js';
 import { saveSpan } from '../../../../../../utils/member-save-diagnostics.js';
 import type { AgentRegistrationFailure } from '../../registry/AgentServiceUnavailableError.js';
 import { ExecutionAdmissionConflict } from '../../registry/AgentServiceUnavailableError.js';
@@ -388,8 +389,33 @@ export async function createAcpServiceForConfig(
   );
   const originalArgs = bootstrap.args;
   bootstrap.args = await prepareDshSecretPatch(bootstrap.command, originalArgs, bootstrap.projectRoot);
+  // Audit and execution consume one fresh plan, rather than separate cache generations.
+  invalidateCliCommand(bootstrap.command);
+  const selectedCommand = resolveCliCommandOrBare(bootstrap.command);
+  const selected: Pick<WindowsSpawnPlan, 'command' | 'args' | 'shell'> =
+    process.platform === 'win32'
+      ? resolveWindowsSpawnPlan(selectedCommand, bootstrap.args, { refresh: true })
+      : { command: selectedCommand, args: [...bootstrap.args] };
+  let shell = selected.shell;
+  if (shell === true) {
+    const command = process.env.ComSpec || 'cmd.exe';
+    if (!isAbsolute(command)) invalidateCliCommand(command);
+    shell = isAbsolute(command) ? command : resolveCliCommandOrBare(command);
+  }
+  const preparedSpawn = Object.freeze({
+    command: selected.command,
+    args: Object.freeze([...selected.args]),
+    ...(shell !== undefined ? { shell } : {}),
+  });
   const root = input.bootstrapRoot ?? acpConfig.bootstrapRoot;
-  const verified = verifyAcpBootstrap(bootstrap, profileId, root, spawn.env, acpConfig.bootstrapRoot !== undefined);
+  const verified = verifyAcpBootstrap(
+    bootstrap,
+    profileId,
+    root,
+    spawn.env,
+    acpConfig.bootstrapRoot !== undefined,
+    preparedSpawn,
+  );
   if (bootstrap.args !== originalArgs) {
     const patch = bootstrap.args.at(-1);
     if (!patch) throw new Error('secret_dsh_patch_unavailable');
@@ -411,15 +437,6 @@ export async function createAcpServiceForConfig(
         .sort(([left], [right]) => left.localeCompare(right)),
     );
   const preparedEnv = Object.freeze(prepareEnvironment());
-  // Re-resolve for this new factory; an existing admitted factory already owns
-  // its immutable plan and must not depend on these shared lookup caches.
-  invalidateCliCommand(verified.command);
-  const selectedCommand = resolveCliCommandOrBare(verified.command);
-  const selected: NonNullable<AcpClientConfig['preparedSpawn']> =
-    process.platform === 'win32'
-      ? resolveWindowsSpawnPlan(selectedCommand, verified.args, { refresh: true })
-      : { command: selectedCommand, args: [...verified.args] };
-  const preparedSpawn = Object.freeze({ ...selected, args: Object.freeze([...selected.args]) });
   const assertConstructionCurrent = () => {
     if (resolveCurrentAcpConfig && !isDeepStrictEqual(acpConfig, resolveCurrentAcpConfig()))
       throw new ExecutionAdmissionConflict('ACP launch source changed; refresh this member before admission.');

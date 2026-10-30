@@ -96,7 +96,7 @@ export interface AcpClientConfig {
   /** Final private environment captured by the existing factory before admission. */
   preparedEnv?: Readonly<Record<string, string>>;
   /** Existing factory's selected executable/argv/shell, before platform supervisor wrapping. */
-  preparedSpawn?: { readonly command: string; readonly args: readonly string[]; readonly shell?: true | string };
+  preparedSpawn?: { readonly command: string; readonly args: readonly string[]; readonly shell?: string };
   /** Isolated subscription profiles must not inherit API keys or host credentials. */
   inheritParentEnv?: boolean;
   /** Official AGY 1.4 reports some errors as text + end_turn; exact provider stderr supplies failure provenance. */
