@@ -229,6 +229,7 @@ export class KimiAgentService implements AgentService {
       const l0 = await this.l0CompilerFn({
         catId: this.catId as string,
         userId: options?.callbackEnv?.CAT_CAFE_USER_ID,
+        ...(options?.frozenL0Input ? { frozenInput: options.frozenL0Input } : {}),
       });
       l0Fingerprint = computeKimiL0Fingerprint(l0);
       let freshStartReason: 'stale' | 'unverifiable' | undefined;

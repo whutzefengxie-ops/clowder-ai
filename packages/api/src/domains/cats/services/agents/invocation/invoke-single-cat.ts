@@ -5,6 +5,7 @@ import type {
   ContextSourceIngress,
 } from '../../../../memory/cue/ContextSourceAdmission.js';
 import { ContextSourceWorkBudget } from '../../../../memory/cue/ContextSourceWorkBudget.js';
+import { freezeL0Input } from '../providers/l0-frozen-input.js';
 import { type FrozenExecutionBinding, freezeExecutionAccountBinding } from './execution-account-binding.js';
 import { freezeExecutionWorkspace } from './execution-workspace.js';
 import { InvocationServiceScope } from './invocation-service-scope.js';
@@ -1425,6 +1426,7 @@ export async function prepareInvocationExecutionBinding(
   const catConfig = catRegistry.tryGet(input.catId as string)?.config;
   // Same tick as the catConfig read: no config write can land between them.
   const runtimeSelection = freezeRuntimeSelection(input.catId as string, catConfig);
+  const frozenL0Input = freezeL0Input();
   const carrier = input.service?.freshnessCarrierCapability?.();
   const workspace = await freezeExecutionWorkspace({
     threadStore: deps.threadStore,
@@ -1439,6 +1441,7 @@ export async function prepareInvocationExecutionBinding(
     catId: input.catId,
     catConfig,
     runtimeSelection,
+    frozenL0Input,
     model: input.model,
     workspace,
   });
@@ -3920,6 +3923,7 @@ async function* invokePreparedSingleCat(deps: InvocationDeps, params: Invocation
         : {}),
       ...(reasoningEffortOverride ? { reasoningEffortOverride } : {}),
       ...(frozenExecutionBinding.runtimeSelection ? { runtimeSelection: frozenExecutionBinding.runtimeSelection } : {}),
+      ...(frozenExecutionBinding.frozenL0Input ? { frozenL0Input: frozenExecutionBinding.frozenL0Input } : {}),
       ...(requestedServiceTier ? { requestedServiceTier } : {}),
       ...(accountEnv ? { accountEnv } : {}),
       ...(resolvedAccount?.claude ? { claudeTokenAccount: true } : {}),

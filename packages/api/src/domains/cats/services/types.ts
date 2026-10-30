@@ -1108,6 +1108,8 @@ export interface AgentServiceOptions {
    * waits (e.g. for a pool lease) apply only to the next invocation.
    */
   runtimeSelection?: import('./agents/invocation/runtime-selection.js').FrozenRuntimeSelection;
+  /** C06: member snapshot frozen at admission for the L0 identity/roster compile. */
+  frozenL0Input?: import('./agents/providers/l0-frozen-input.js').FrozenL0Input;
   /** F291: Resolved Codex OAuth requested tier. Undefined means inherit Codex user config. */
   requestedServiceTier?: CodexSpeedValue;
   /** Working directory for the agent */

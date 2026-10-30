@@ -210,6 +210,7 @@ import {
 } from './codex-served-model.js';
 import { createDirectAgentCarrierSession } from './DirectAgentCarrierSession.js';
 import { compileL0ViaSubprocess } from './l0-compiler.js';
+import type { FrozenL0Input } from './l0-frozen-input.js';
 import {
   createMcpSchemaDeliveryLaunchConfig,
   resolveMcpSchemaDeliveryDiscoverySurface,
@@ -1615,9 +1616,15 @@ export class CodexAgentService implements AgentService {
     cliModel: string,
     userId?: string,
     projection: 'owner' | 'public' = 'owner',
+    frozenInput?: FrozenL0Input,
   ): Promise<{ value: string } | { error: string; metadata: MessageMetadata }> {
     try {
-      const compiledL0 = await this.l0CompilerFn({ catId: this.catId as string, userId, projection });
+      const compiledL0 = await this.l0CompilerFn({
+        catId: this.catId as string,
+        userId,
+        projection,
+        ...(frozenInput ? { frozenInput } : {}),
+      });
       const separator = compiledL0.endsWith('\n') ? '\n' : '\n\n';
       const providerInstructions = `${compiledL0}${separator}${CODEX_SIGNATURE_BOUNDARY_INSTRUCTION}`;
       return { value: providerInstructions };
@@ -1938,6 +1945,7 @@ export class CodexAgentService implements AgentService {
       cliModel,
       native ? undefined : options?.callbackEnv?.CAT_CAFE_USER_ID,
       native ? 'public' : 'owner',
+      options?.frozenL0Input,
     );
     if (native) await native.assertCurrent();
     if ('error' in l0Result) {
