@@ -14,7 +14,7 @@ import {
 import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
-import { debuglog } from 'node:util';
+import { debuglog, isDeepStrictEqual } from 'node:util';
 import { macProcessEnvironmentCommand } from '#process-environment-snapshot';
 import { CLI_PROCESS_OWNER_ENV } from './cli-process-environment.js';
 
@@ -678,6 +678,10 @@ export function createCliExecutionOwnerService(
         manifest.root ? [manifest.supervisor, manifest.root] : [manifest.supervisor],
       );
       const observed = await processSnapshotReader({ pids: [...new Set(identities.map(({ pid }) => pid))] });
+      const current = readRecoverableRecords();
+      const sameScopeObserved = current.records
+        .filter(({ manifest }) => manifest.execution && sameCliExecutionScope(manifest.execution, execution))
+        .every(({ manifest }) => scope.some((record) => isDeepStrictEqual(record.manifest, manifest)));
       return {
         matched: result.matched,
         signaled: result.signaled,
@@ -685,6 +689,8 @@ export function createCliExecutionOwnerService(
         stopped:
           result.failed === 0 &&
           after.complete &&
+          current.complete &&
+          sameScopeObserved &&
           originalScope.length > 0 &&
           observed !== null &&
           identities.every((identity) => !sameUnixProcess(identity, observed.get(identity.pid))),

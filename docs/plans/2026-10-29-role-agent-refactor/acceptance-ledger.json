@@ -410,9 +410,11 @@
   },
   "teardownWriterCheckpointReview": {
     "verdict": "PENDING_REVIEW",
-    "lastReviewedHead": "533741c694da64133538f3fa98bb49ccec0ae937",
+    "lastReviewedHead": "6add2c8e8276324cc0a3abb20e9e4b889a0168e2",
     "lastVerdict": "changes_requested",
     "independentPreviousTests": "92 PASS + 1 Redis reaper SKIP; new signal proof counterexample 1 FAIL",
+    "independentLatestTests": "44 PASS + 3 FAIL; same late root/sibling manifest P2, no OS process created",
+    "authorFixedPendingReview": ["P2 a same-scope identity published during the final OS read was not observed"],
     "evidence": "README.md#W3-停止证明约束现有终态写入与恢复尚未完成-W3",
     "tests": {
       "ownerRed": "2 PASS + 7 FAIL",
@@ -422,7 +424,7 @@
       "independentCounterexampleReplay": "10 PASS"
     },
     "signalProofFix": {
-      "tests": "100 PASS + 2 existing platform SKIP; 1 unchanged POSIX-only socket test explicitly excluded on Windows",
+      "tests": "104 PASS + 2 existing platform SKIP; 1 unchanged POSIX-only socket test explicitly excluded on Windows",
       "evidence": "README.md#W3-信号确认与已知进程停止证明分开尚未完成-W3"
     },
     "scope": "Existing memory/atomic Redis writer, controlled stop commit, empty-snapshot recovery and existing exact-exit reaper only; durable native owner/resource recovery, cross-platform/package and full C12 incomplete"

@@ -634,3 +634,11 @@ checkpoint_review 对 533741c694da64133538f3fa98bb49ccec0ae937 返回 changes_re
 API 最终 tsc exit 0。signal-stop-proof-final.log 共 100 PASS+2 既有平台 SKIP，含八条真实 owner/REST、ack-only、原 F295/权限隔离、两传输 error/exit、HTTP client/pool-retirement 与取消恢复。首次全组 99 PASS+1 FAIL+2 SKIP：旧 manifest parsing and socket cleanup paths fail closed 用例在 Windows 调用基线明确禁止的 Unix socket 构造；基线 6d8 源及该旧用例已核对一致。未修改或放宽 Windows 禁用，最终仅通过 test-skip-pattern 明确排除该一个 POSIX 用例，排除项不能计通过。一次 name-pattern 过滤未命中该完整测试名，仍保留失败日志，未声称通过。
 
 复杂度/fallback 复核：前一提交自动扫描净+3，实际 production 只多一个 serial catch，作用是重新抛出原清理异常而非 finally 覆盖为 done；queue 原吞错 helper 的 catch 被取消 owner 内持久化失败处理替代，净0；其余两项为测试清理 catch。本次沿原进程 owner 核验已有身份，未新增 catch/fallback 链。停止证明只覆盖已登记身份，不能替代未知子树、Windows birth 接线、跨 Host 持久资源绑定及完整 C12。34 全项仍 NOT_RUN。待原 reviewer 对修复 SHA 复核。
+
+checkpoint_review 对 6add2c8e8276324cc0a3abb20e9e4b889a0168e2 仍返回 changes_requested，独立 44 PASS+3 FAIL；三个失败是同一个 P2 的低层 root/sibling 和实际 REST 变体。原 signal ACK 及前三条 P2、HTTP/stdio 对照均通过。最后一次 OS await 内才发布的身份没有被所查询 PID 覆盖，旧 child 及 parent 不得因此终结；真实新 child 仍 running 的证据保留在 reviewer teardown-signal-proof-late-6add2c8.json。
+
+现在原 owner 在最后 await 后同步读取正式 manifest，当前同 scope 的每份记录必须已出现在 OS 观测前的集合且内容相同，否则 stopped=false，沿原有界重试。比较使用解析后的正式对象 isDeepStrictEqual；不引入 manifest revision、哈希协议、锁、恢复器或额外轮询。原 manifest 移位仍保留先前捕获的出生身份；异 scope 的新增 manifest 不阻塞该执行。
+
+cli-execution-late-stop-proof.test.js 采用独立真实文件 I/O 反例，并补无关 scope 对照：late-stop-proof-red.log 为 1 PASS+2 FAIL。修复后 late-stop-proof-final.log 共 104 PASS+2 原平台 SKIP，同一个未改动的 POSIX-only socket 用例仍在 Windows 明确排除、不计通过；新增 REST late-sibling 实际写入第二份 child record/manifest，确认旧/新 child 及 parent 都保持 running、无 teardown/done/解锁。API tsc exit 0，两文件 Biome 无错误；控制进程表和信号边界不造 OS 进程，工件继续保留。
+
+此复核只建立最后一次观测与当时已登记身份的一致性，不宣称跨进程原子锁、未知子树、缺失 Windows birth 或重启资源准入均已完成。完整 C12/W3 仍未完成、34 项仍 NOT_RUN，待修复 SHA 独立复核。

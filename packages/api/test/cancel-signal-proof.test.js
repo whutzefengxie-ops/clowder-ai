@@ -18,6 +18,7 @@ for (const mode of [
   'missing-owner',
   'sibling',
   'root-live',
+  'late-sibling',
 ])
   test(`real recovery distinguishes signal acknowledgement and stop proof: ${mode}`, async (t) => {
     const scope = {
@@ -59,11 +60,31 @@ for (const mode of [
     );
     const signals = [];
     let moved = false;
+    let published = false;
     const sibling = { ...identity, pid: identity.pid + 1, pgid: identity.pid + 1 };
     const owners = createCliExecutionOwnerService({
       dataDir,
-      readProcessSnapshot: async () => {
+      readProcessSnapshot: async ({ pids }) => {
         if (signals.length === 0) return new Map([[identity.pid, identity]]);
+        if (mode === 'late-sibling') {
+          if (!published) {
+            published = true;
+            turns.createRunning({ ...scope, invocationId: 'late-sibling' });
+            turns.markProviderStarted('late-sibling', 0);
+            const siblingId = '22345678-1234-4234-8234-123456789abc';
+            await writeFile(
+              join(ownerDir, `${siblingId}.json`),
+              JSON.stringify({
+                v: 1,
+                ownerId: siblingId,
+                createdAt: 1001,
+                supervisor: sibling,
+                execution: { ...execution, invocationId: 'late-sibling' },
+              }),
+            );
+          }
+          return new Map(pids.includes(sibling.pid) ? [[sibling.pid, sibling]] : []);
+        }
         if (mode === 'snapshot-unknown') return null;
         if (mode === 'root-live') return new Map([[nativeRoot.pid, nativeRoot]]);
         if (mode === 'gone' || (mode === 'late-exit' && signals.length > 1)) return new Map();
@@ -158,6 +179,7 @@ for (const mode of [
       signals,
       liveAfter,
       turn: turns.get(scope.invocationId),
+      siblingTurn: turns.get('late-sibling'),
       messages,
       releases,
       noOsProcessCreated: true,
@@ -175,6 +197,7 @@ for (const mode of [
       assert.equal(turns.get(scope.invocationId).status, 'running');
       assert.equal(turns.get(scope.invocationId).providerTeardownAt, undefined);
       assert.equal(parent.status, 'running');
+      if (mode === 'late-sibling') assert.equal(turns.get('late-sibling').status, 'running');
       assert.deepEqual(releases, []);
       assert.equal(
         messages.some((m) => m.type === 'done'),
