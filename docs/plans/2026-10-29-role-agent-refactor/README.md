@@ -682,6 +682,8 @@ checkpoint_review 对 a55db0e62a8f9fdb0250c91ed2ba7868236ebbde 返回 approved�
 
 现有 factory 在准备阶段选定 command/argv/shell，保存只读 preparedSpawn；两 client 复制并消费，不在冷启动重算路径或再次处理 Windows 参数。每个新 factory 沿已有 CLI resolver 重新解析；Windows 原 spawn helper 的可选 refresh 只为该调用更新 shim/Node 查找缓存，默认消费者语义不变。池签名使用实际选定程序、参数与 shell，bootstrap 验证也看同一计划；既有 Unix supervisor 仍在实际启动时添加自己的运行期归属。没有新通用 launcher、持久状态或插件脚本执行入口。
 
+2026-10-30 本机补跑命令冻结、shell、启动审计、环境/MCP 冻结、iCode、模型身份、注册可用性、池签名、恢复重试和 factory 回归：`artifacts/role-agent-refactor-20261029-gpt-sol/acp-local-adapter-regression.log` 共 57 PASS、0 FAIL、0 SKIP。该结果只增加 Windows 隔离回归证据，仍不证明同一路径的可执行文件内容/版本、正式 discovery/probe、CA 内容、企业 CodeAgent 或 C23/W2 完整验收。
+
 API tsc exit 0。acp-frozen-command-green.log 45 PASS+6 原平台专属 SKIP，含工厂、基础环境、原 Windows spawn/解析/转义与签名；acp-frozen-shim-green.log 两条 PASS 使用原 spawn 边界（Node builtin 受控），Windows 中文/空格目录下旧调用保留 entry-A，原 shim 更新且 A/B 同时存在后新 factory 使用 entry-B，含双引号、&、^、| 的参数保持原值，不再重复转换。acp-frozen-command-regression.log 362 PASS、无失败/跳过，含完整 Bridge、账号来源/改选、stdio/HTTP、iCode、进程池和真实 CodeAgent Node mock。
 
 七文件 Biome 无错误，19 warning/8 info 未扩散治理。28 份 native-unconfirmed-lifecycle 实例均 closed-data-retained/running:false，汇总 acp-frozen-command-native-instances.json。新程序/脚本候选只是受控占位文件，未执行 native agent；Windows helper 的只读系统 Node 查找不是认证/模型调用。所有原生测试数据和命令证据保留。
