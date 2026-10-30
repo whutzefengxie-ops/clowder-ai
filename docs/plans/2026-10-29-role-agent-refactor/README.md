@@ -25,7 +25,7 @@ status: implementing
 
 分步提交不改变完成定义。总账中 NOT_RUN/BLOCKED/FAIL 不计通过；不会用一个局部绿灯宣称完整实施完成。
 
-当前状态：实现已推进到配置纯投影、条件保存、调用冻结和取消终态的局部切片；最新产品提交 `871990137cdd5da27c10d15b64a64d19fe0e5a10` 的 ACP 命令、启动审计和 Windows shell 固定已获独立审查通过（20 PASS、2 条既有条件 SKIP）。W2/W3 仍有持久兼容引用、恢复和逐客户端采用工作；34 条 C/E/Q 全量验收尚未完成，macOS、企业真实 CodeAgent、最终安装包和真实模型质量没有通过证据。以下“已核对的现状”是初始基线，实际变更及局部证据按后续阶段记录和总账查看。
+当前状态：实现已推进到配置纯投影、条件保存、调用冻结和取消终态的局部切片；ACP 命令、启动审计和 Windows shell 固定（`871990137cdd5da27c10d15b64a64d19fe0e5a10`）已获独立审查通过，普通部署插件 MCP 激活冻结正在审查。W2/W3 仍有持久兼容引用、恢复和逐客户端采用工作；34 条 C/E/Q 全量验收尚未完成，macOS、企业真实 CodeAgent、最终安装包和真实模型质量没有通过证据。以下“已核对的现状”是初始基线，实际变更及局部证据按后续阶段记录和总账查看。
 
 ## 已核对的现状
 
@@ -682,3 +682,11 @@ checkpoint_review 对 18cf7c4b6bf5bb94fb68ea27f9bacf17ee2f290d 返回 changes_re
 采用独立原反例为永久 acp-command-startup-audit.test.js 和 acp-frozen-shell.test.js，acp-audit-shell-red.log 四条有效 FAIL。API tsc exit 0 后 acp-audit-shell-green.log 17 PASS；acp-audit-shell-policy.log 77 PASS+5 原平台 SKIP，覆盖原 Pi/AGY/Windows cwd、volume root、冷启动复核及新四条；acp-audit-shell-regression.log 366 PASS、无失败/跳过，覆盖此前整个合同/账号/两传输/iCode/进程池/Node mock 集合和新例。shell 见证只在 ChildProcess.prototype.spawn 的 OS 边界截获，保留真实 Node 参数归一化，没有执行 native Agent；原进程对象在 fixture 内关闭。
 
 五文件 Biome 无错误，11 warning/6 info 未扩散治理。32 份 native-unconfirmed-lifecycle 台账全部 closed-data-retained/running:false，见 acp-audit-shell-native-instances.json；六份原方案哈希仍完全相同，见 source-integrity-acp-audit-shell.json。未连接生产 Redis、未使用真实认证/模型；测试和诊断目录保留。复杂度复核仍仅三处原生产文件，选择提前、原 helper 显式消费、隐式 shell 转显式，不新增 fallback 链。上述其余版本/CA/持久引用/平台缺口及 34 个 NOT_RUN 保持，待修复 SHA 独立复核。
+
+## W2 普通部署插件 MCP 激活冻结（尚未完成 W2）
+
+普通部署原先 `resolveMemberMcpView()` 直接返回 undefined，读取已持久化 MCP 描述符时没有接上现有激活 owner 的代次检查，且 ACP 冻结值仍可能是稳定环境引用。复用 `NativeMcpLaunches.memberView()`，让所有有资源 owner 的 Host 都核验本地激活；仅隔离部署提供 localCapabilityRoot 来补未发布策略，普通部署保留持久配置对启用、blockedCats 和显式 override 的权威。没有新增 revision、存储、配置项或通用启动器。
+
+真实 runtime composition → 正式 prepareInvocationExecutionBinding → ACP capture 的六个用例，分别覆盖普通/隔离部署、无变更、准入期间只改变 action generation、真实 configRefresh。校正测试对 ACP env 数组及 Host 生命周期稳定 token 的理解后，`persisted-plugin-currentness-red-owner.log` 为 3 PASS/3 FAIL；普通部署三个反例均成立，隔离部署三个对照通过。冻结后禁用仍保留旧值，下一调用不再取得已禁用工具；重新启用取得本 Host 的实际激活值。稳定 token 不被误当作 generation 指标。
+
+`persisted-plugin-currentness-tsc.log` API tsc 退出 0；`persisted-plugin-currentness-green.log` 49 PASS；`persisted-plugin-currentness-regression.log` 237 PASS，无失败或跳过，包含全部现有 session-contract、客户端 MCP 当前性、持久根和生产 composition 激活回归。Biome 三文件退出 0。没有调用模型、启动 MCP 程序、访问原生历史或 Redis；测试临时 composition 由原有 fixture shutdown 收尾。独立审查待回执，不据此宣称 W2/C05/C15/C20 全量通过。
