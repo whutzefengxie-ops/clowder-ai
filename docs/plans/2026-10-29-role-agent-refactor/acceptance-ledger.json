@@ -170,7 +170,7 @@
     {
       "id": "C21",
       "status": "NOT_RUN",
-      "evidence": []
+      "evidence": ["codeagent-mock.md：严格样本、非法顶层字段、显式坏引用及注册/停用的 mock 局部证据；正式发现和完整成员引用旅程尚未验收"]
     },
     {
       "id": "C22",
@@ -512,6 +512,17 @@
     "evidence": "README.md#W2-本地插件-MCP-激活准入核验尚未完成-W2",
     "tests": { "red": "2 PASS + 4 FAIL", "green": "49 PASS", "consumers": "52 PASS" },
     "scope": "Existing local activation views only; ordinary publication and full W2 remain incomplete"
+  },
+  "persistedPluginMcpCurrentnessCheckpointReview": {
+    "reviewer": "checkpoint_review",
+    "verdict": "approved",
+    "reviewedHead": "f7c628e836625d6ebadd76b5ead9988ebe6ac705",
+    "subject": "task:01a1881e-1a7b-78d0-9a62-ff99b0ab7a01/checkpoint-persisted-plugin-mcp-currentness",
+    "findings": [],
+    "independentTests": "31 PASS, no failures or skips",
+    "tests": { "red": "3 PASS + 3 FAIL", "targeted": "49 PASS", "regression": "237 PASS" },
+    "evidence": "README.md#W2-普通部署插件-MCP-激活冻结尚未完成-W2",
+    "scope": "Existing persistent and isolated Host activation views only; no full C05/C15/C20 or W2 acceptance"
   },
   "clientMcpCurrentnessCheckpointReview": {
     "reviewer": "checkpoint_review",

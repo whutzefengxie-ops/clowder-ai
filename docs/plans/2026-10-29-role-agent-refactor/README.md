@@ -25,7 +25,7 @@ status: implementing
 
 分步提交不改变完成定义。总账中 NOT_RUN/BLOCKED/FAIL 不计通过；不会用一个局部绿灯宣称完整实施完成。
 
-当前状态：实现已推进到配置纯投影、条件保存、调用冻结和取消终态的局部切片；ACP 命令、启动审计和 Windows shell 固定（`871990137cdd5da27c10d15b64a64d19fe0e5a10`）已获独立审查通过，普通部署插件 MCP 激活冻结正在审查。W2/W3 仍有持久兼容引用、恢复和逐客户端采用工作；34 条 C/E/Q 全量验收尚未完成，macOS、企业真实 CodeAgent、最终安装包和真实模型质量没有通过证据。以下“已核对的现状”是初始基线，实际变更及局部证据按后续阶段记录和总账查看。
+当前状态：实现已推进到配置纯投影、条件保存、调用冻结和取消终态的局部切片；ACP 命令、启动审计和 Windows shell 固定（`871990137cdd5da27c10d15b64a64d19fe0e5a10`）及普通部署插件 MCP 激活冻结（`f7c628e836625d6ebadd76b5ead9988ebe6ac705`）均已获独立审查通过。CodeAgent mock 已补正式声明/注册/适配调用链，详见 [本机模拟说明](codeagent-mock.md)。W2/W3 仍有持久兼容引用、恢复和逐客户端采用工作；34 条 C/E/Q 全量验收尚未完成，macOS、企业真实 CodeAgent、最终安装包和真实模型质量没有通过证据。以下“已核对的现状”是初始基线，实际变更及局部证据按后续阶段记录和总账查看。
 
 ## 已核对的现状
 
@@ -690,3 +690,4 @@ checkpoint_review 对 18cf7c4b6bf5bb94fb68ea27f9bacf17ee2f290d 返回 changes_re
 真实 runtime composition → 正式 prepareInvocationExecutionBinding → ACP capture 的六个用例，分别覆盖普通/隔离部署、无变更、准入期间只改变 action generation、真实 configRefresh。校正测试对 ACP env 数组及 Host 生命周期稳定 token 的理解后，`persisted-plugin-currentness-red-owner.log` 为 3 PASS/3 FAIL；普通部署三个反例均成立，隔离部署三个对照通过。冻结后禁用仍保留旧值，下一调用不再取得已禁用工具；重新启用取得本 Host 的实际激活值。稳定 token 不被误当作 generation 指标。
 
 `persisted-plugin-currentness-tsc.log` API tsc 退出 0；`persisted-plugin-currentness-green.log` 49 PASS；`persisted-plugin-currentness-regression.log` 237 PASS，无失败或跳过，包含全部现有 session-contract、客户端 MCP 当前性、持久根和生产 composition 激活回归。Biome 三文件退出 0。没有调用模型、启动 MCP 程序、访问原生历史或 Redis；测试临时 composition 由原有 fixture shutdown 收尾。独立审查待回执，不据此宣称 W2/C05/C15/C20 全量通过。
+checkpoint_review 对 f7c628e836625d6ebadd76b5ead9988ebe6ac705 给出 approved，独立 31 PASS、无失败或跳过。补充真实普通 composition → 原 memberView → 原 native resolver 的 canonical blockedCats/禁用、显式 override（active/空 view）、foreign plugin 与 healthy、external MCP 对照。原代次/并发 scope/准入漂移组通过。typed 回执的初始 subject 沿用旧值，审查者已单独更正为 checkpoint-persisted-plugin-mcp-currentness；无重跑、无改变 SHA 或结论。日志 packages/api/artifacts/role-agent-checkpoint-review/persisted-plugin-currentness-f7c628e.log；dist 已释放。只批准本切片。
