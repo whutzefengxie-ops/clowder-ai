@@ -1102,6 +1102,12 @@ export interface AgentServiceOptions {
   contextNativeWindowTokens?: number | null;
   /** F262: Raw per-thread member effort. Providers validate against the effective model before applying it. */
   reasoningEffortOverride?: CliEffortPreset;
+  /**
+   * Model/effort/configuration source frozen at invocation admission. Providers
+   * read it instead of the live registry, so edits made while this invocation
+   * waits (e.g. for a pool lease) apply only to the next invocation.
+   */
+  runtimeSelection?: import('./agents/invocation/runtime-selection.js').FrozenRuntimeSelection;
   /** F291: Resolved Codex OAuth requested tier. Undefined means inherit Codex user config. */
   requestedServiceTier?: CodexSpeedValue;
   /** Working directory for the agent */

@@ -1184,6 +1184,12 @@ export interface AcpVariantConfig {
   experimental?: boolean;
   mcpWhitelist?: string[];
   supportsMultiplexing?: boolean;
+  /**
+   * Explicit member opt-in to grant this agent's permission requests without a
+   * human decision. Absent/false = interactive approval when an owner exists,
+   * otherwise fail closed. Not honored for the iCode adapter (reject-only).
+   */
+  autoApprove?: boolean;
   /** iCode protocol adapter: switches AcpAgentService onto iCode's ACP dialect (session/set_model, per-turn session/close, no stdio MCP injection). */
   protocolAdapter?: 'icode';
   /** iCode: model configuration id sent to session/set_model (distinct from defaultModel). */

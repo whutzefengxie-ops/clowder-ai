@@ -13,6 +13,7 @@ import {
   NATIVE_AUTH_CONTINUATION_PROMPT,
   type NativeAuthContinuation,
 } from './native-auth-continuation.js';
+import { freezeRuntimeSelection } from './runtime-selection.js';
 import { protectNativeProviderResult } from './secret-provider-result.js';
 /**
  * Single Cat Invocation
@@ -1422,6 +1423,8 @@ export async function prepareInvocationExecutionBinding(
   },
 ): Promise<FrozenExecutionBinding> {
   const catConfig = catRegistry.tryGet(input.catId as string)?.config;
+  // Same tick as the catConfig read: no config write can land between them.
+  const runtimeSelection = freezeRuntimeSelection(input.catId as string, catConfig);
   const carrier = input.service?.freshnessCarrierCapability?.();
   const workspace = await freezeExecutionWorkspace({
     threadStore: deps.threadStore,
@@ -1432,7 +1435,13 @@ export async function prepareInvocationExecutionBinding(
     requiresAgyWorkspace:
       Boolean(input.service && usesAgyNativeCarrier(input.service)) || carrier?.carrier === 'agy_acp',
   });
-  return freezeExecutionAccountBinding({ catId: input.catId, catConfig, model: input.model, workspace });
+  return freezeExecutionAccountBinding({
+    catId: input.catId,
+    catConfig,
+    runtimeSelection,
+    model: input.model,
+    workspace,
+  });
 }
 
 export async function* invokeSingleCat(deps: InvocationDeps, params: InvocationParams): AsyncIterable<AgentMessage> {
@@ -3910,6 +3919,7 @@ async function* invokePreparedSingleCat(deps: InvocationDeps, params: Invocation
           }
         : {}),
       ...(reasoningEffortOverride ? { reasoningEffortOverride } : {}),
+      ...(frozenExecutionBinding.runtimeSelection ? { runtimeSelection: frozenExecutionBinding.runtimeSelection } : {}),
       ...(requestedServiceTier ? { requestedServiceTier } : {}),
       ...(accountEnv ? { accountEnv } : {}),
       ...(resolvedAccount?.claude ? { claudeTokenAccount: true } : {}),

@@ -371,6 +371,7 @@ export class ClaudeBgCarrierService implements AgentService {
         this.catId as string,
         effectiveModel,
         options?.reasoningEffortOverride,
+        options?.runtimeSelection,
       );
       // #840 R2 (砚砚 review 2026-06-02): bg carrier prompt also rides argv
       // historically — same ENAMETOOLONG risk as the `-p` carrier. Spike

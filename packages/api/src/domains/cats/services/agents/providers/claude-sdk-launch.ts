@@ -97,7 +97,9 @@ export async function prepareClaudeSdkLaunch(input: {
   );
   const prompt = appendLocalImagePathHints(input.prompt, imagePaths);
   const { effectiveModel, useEnvModelOverride } = resolveClaudeModelSelection(options?.callbackEnv, input.model);
-  const effort = effortValue(resolveClaudeEffortLevel(catId, effectiveModel, options?.reasoningEffortOverride));
+  const effort = effortValue(
+    resolveClaudeEffortLevel(catId, effectiveModel, options?.reasoningEffortOverride, options?.runtimeSelection),
+  );
   const l0 = await input.l0CompilerFn({
     catId,
     userId: options?.callbackEnv?.CAT_CAFE_USER_ID ?? options?.auditContext?.userId,

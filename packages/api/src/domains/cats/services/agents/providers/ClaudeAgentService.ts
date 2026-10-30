@@ -45,6 +45,7 @@ import type {
   PreparedProviderRequestV1,
   ToolExecutionPolicy,
 } from '../../types.js';
+import { type FrozenRuntimeSelection, inheritedEffortFor } from '../invocation/runtime-selection.js';
 import type { RawArchiveSink } from '../providers/codex-audit-hooks.js';
 import { sanitizeRawEvent } from '../providers/codex-audit-hooks.js';
 import { appendLocalImagePathHints, collectImageAccessDirectories } from '../providers/image-cli-bridge.js';
@@ -131,9 +132,16 @@ export function resolveClaudeEffortLevel(
   catId: string,
   effectiveModel: string,
   override: CliEffortPreset | null | undefined,
+  /** Admission snapshot; absent only for direct (non-queue) callers. */
+  runtimeSelection?: FrozenRuntimeSelection,
 ): string {
-  const inherited = getCatEffort(catId, undefined, 'anthropic', effectiveModel);
-  if (!inherited && !override && catRegistry.tryGet(catId)?.config.configurationSource === 'native_tool') return '';
+  const inherited = runtimeSelection
+    ? inheritedEffortFor(runtimeSelection, 'anthropic')
+    : getCatEffort(catId, undefined, 'anthropic', effectiveModel);
+  const nativeTool = runtimeSelection
+    ? runtimeSelection.nativeTool
+    : catRegistry.tryGet(catId)?.config.configurationSource === 'native_tool';
+  if (!inherited && !override && nativeTool) return '';
   return resolveCliEffortOverride('anthropic', effectiveModel, inherited, override).effective;
 }
 
@@ -445,10 +453,11 @@ export class ClaudeAgentService implements AgentService {
 
     // F198 B-prime refactor: model selection delegates to shared helper so
     // ClaudeBgCarrierService reuses the same rules (single source of truth).
+    const selection = options?.runtimeSelection;
     const { effectiveModel, useEnvModelOverride } = resolveClaudeModelSelection(
       options?.callbackEnv,
-      catRegistry.tryGet(this.catId)?.config.configurationSource === 'native_tool'
-        ? getCatModel(this.catId)
+      (selection ? selection.nativeTool : catRegistry.tryGet(this.catId)?.config.configurationSource === 'native_tool')
+        ? (selection?.model ?? getCatModel(this.catId))
         : this.model,
     );
     const isApiKeyMode = options?.callbackEnv?.[ANTHROPIC_PROFILE_MODE_KEY] === 'api_key';
@@ -471,6 +480,7 @@ export class ClaudeAgentService implements AgentService {
       this.catId as string,
       effectiveModel,
       options?.reasoningEffortOverride,
+      options?.runtimeSelection,
     );
 
     const args: string[] = [
