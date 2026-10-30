@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { resolve } from 'node:path';
 import type { SessionRecord } from '@cat-cafe/shared';
 import type { FrozenExecutionBinding } from './execution-account-binding.js';
@@ -40,4 +41,9 @@ export function captureHostExecutionBoundary(
 export function changedHostExecutionBoundary(previous: Boundary | undefined, next: Boundary): string[] {
   if (!previous) return ['unknown'];
   return (Object.keys(next) as (keyof Boundary)[]).filter((key) => previous[key] !== next[key]);
+}
+
+/** Private append-only audit reference; boundary values stay in the SessionRecord only. */
+export function hostExecutionBoundaryRef(boundary: Boundary): string {
+  return `host-boundary:v${boundary.v}:${createHash('sha256').update(JSON.stringify(boundary)).digest('hex')}`;
 }

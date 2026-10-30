@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import {
   captureHostExecutionBoundary,
   changedHostExecutionBoundary,
+  hostExecutionBoundaryRef,
 } from '../dist/domains/cats/services/agents/invocation/host-execution-boundary.js';
 
 const binding = {
@@ -69,4 +70,11 @@ test('generic adapters do not promote an account profile owner root into a nativ
   );
   assert.equal(boundary.accountStateRoot, undefined);
   assert.equal(boundary.accountOwnerRoot, undefined);
+});
+
+test('the durable audit reference contains no private boundary values', () => {
+  const boundary = captureHostExecutionBoundary(binding, 'acp_stdio');
+  const ref = hostExecutionBoundaryRef(boundary);
+  assert.match(ref, /^host-boundary:v1:[0-9a-f]{64}$/);
+  assert.doesNotMatch(ref, /private-|workspace|account|acp_stdio/);
 });

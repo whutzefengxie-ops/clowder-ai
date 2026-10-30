@@ -11,7 +11,11 @@ import { agentServiceGeneration } from '../registry/AgentRegistry.js';
 import { ExecutionAdmissionConflict } from '../registry/AgentServiceUnavailableError.js';
 import { deepFreeze, type FrozenExecutionBinding, freezeExecutionAccountBinding } from './execution-account-binding.js';
 import { freezeExecutionWorkspace } from './execution-workspace.js';
-import { captureHostExecutionBoundary, changedHostExecutionBoundary } from './host-execution-boundary.js';
+import {
+  captureHostExecutionBoundary,
+  changedHostExecutionBoundary,
+  hostExecutionBoundaryRef,
+} from './host-execution-boundary.js';
 import { InvocationServiceScope } from './invocation-service-scope.js';
 import {
   isConfirmedNativeAuthFailure,
@@ -3048,6 +3052,20 @@ async function* invokePreparedSingleCat(deps: InvocationDeps, params: Invocation
         store.bindHostExecutionBoundary(target.id, target.cliSessionId, hostExecutionBoundary),
       );
       if (!bound) throw new Error('execution_boundary_binding_conflict');
+      try {
+        await auditLog.append({
+          type: AuditEventTypes.SESSION_EXECUTION_BOUNDARY_RECORDED,
+          threadId,
+          data: {
+            sessionId: bound.id,
+            invocationId,
+            boundaryRef: hostExecutionBoundaryRef(hostExecutionBoundary),
+            changedDimensions: changes,
+          },
+        });
+      } catch (error) {
+        throw new Error('execution_boundary_audit_write_failed', { cause: error });
+      }
       activeSessionRecordForResume = bound;
     }
     if (frozenExecutionBinding.workspace.usesDefaultWorkspace)
