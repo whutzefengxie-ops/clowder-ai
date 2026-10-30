@@ -1055,7 +1055,7 @@ export interface LocalSessionReadInput {
 
 export interface AgentServiceOptions {
   /** Host-selected external Claude program; never fall back to the SDK's bundled engine. */
-  claudeSdkRuntime?: ReturnType<typeof import('./agents/providers/claude-sdk-runtime.js').captureClaudeSdkRuntime>;
+  claudeSdkRuntime?: import('./agents/providers/claude-sdk-runtime.js').ClaudeSdkRuntime;
   /** Admission-owned MCP descriptors; callback credentials are materialized for the current turn. */
   frozenAcpMcpServers?: import('./agents/providers/acp/types.js').AcpMcpServer[];
   frozenNativeMcpConfig?: import('./agents/providers/provider-mcp-config.js').ProviderMcpConfigPlan;
@@ -1254,6 +1254,7 @@ export interface AgentService {
   implementationSnapshot?(): Readonly<{ key: string; generation: string; clientId?: ClientId }>;
   /** Read configuration before any provider lease. Returns owned descriptors, never starts a model turn. */
   captureInvocationOptions?(input: {
+    signal?: AbortSignal;
     workingDirectory?: string;
     toolExecutionPolicy?: ToolExecutionPolicy;
     accountEnv?: Record<string, string>;

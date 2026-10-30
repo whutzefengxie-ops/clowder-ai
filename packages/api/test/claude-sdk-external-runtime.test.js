@@ -39,8 +39,8 @@ test('SDK launch consumes the frozen external program instead of its bundled exe
   await assert.rejects(prepare(), /claude_runtime_changed/);
 });
 
-test('missing external Claude is actionable before any SDK/model call', () => {
-  assert.throws(
+test('missing external Claude is actionable before any SDK/model call', async () => {
+  await assert.rejects(
     () => captureClaudeSdkRuntime(join(tmpdir(), 'not-installed-claude-1748')),
     /claude_runtime_missing.*安装/,
   );
@@ -67,7 +67,7 @@ test(
     const executable = join(root, 'external-cli.js');
     cpSync(fileURLToPath(new URL('./fixtures/fake-claude-sdk-external.cjs', import.meta.url)), executable);
     chmodSync(executable, 0o755);
-    const runtime = captureClaudeSdkRuntime(executable);
+    const runtime = await captureClaudeSdkRuntime(executable);
     assert.equal(runtime.path, executable);
     assert.equal(runtime.version, '2.1.312');
     const service = new ClaudeSdkAgentService({
@@ -109,4 +109,21 @@ test('a missing runtime prevents the carrier from entering the SDK', async () =>
   for await (const event of service.invoke('fixture')) events.push(event);
   assert.equal(calls, 0);
   assert.ok(events.some((event) => event.type === 'error' && event.error.includes('claude_runtime_missing')));
+});
+
+test('a slow version probe yields to the Host event loop and can be cancelled', async (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'sdk-version-async-'));
+  t.after(() => rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 }));
+  const path = join(root, 'slow-cli.js');
+  writeFileSync(path, 'setTimeout(() => console.log("2.1.312 (Claude Code)"), 250);');
+  chmodSync(path, 0o755);
+  let heartbeat = false;
+  const timer = setTimeout(() => {
+    heartbeat = true;
+  }, 20);
+  t.after(() => clearTimeout(timer));
+  const captured = await captureClaudeSdkRuntime(path);
+  assert.equal(heartbeat, true, 'other Host work must run while the external process starts');
+  assert.equal(captured.version, '2.1.312');
+  await assert.rejects(captureClaudeSdkRuntime(path, AbortSignal.timeout(20)), { name: 'AbortError' });
 });

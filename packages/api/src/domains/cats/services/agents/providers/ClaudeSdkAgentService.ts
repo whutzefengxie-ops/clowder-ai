@@ -23,7 +23,7 @@ import { extractClaudeUsage, transformClaudeEvent } from './claude-ndjson-parser
 import { sdkCompactionHooks } from './claude-sdk-compaction-hooks.js';
 import { prepareClaudeSdkLaunch } from './claude-sdk-launch.js';
 import { loadClaudeSdkQuery } from './claude-sdk-query.js';
-import { captureClaudeSdkRuntime } from './claude-sdk-runtime.js';
+import { type ClaudeSdkRuntime, captureClaudeSdkRuntime } from './claude-sdk-runtime.js';
 import { withActiveRunControlDeadline } from './claude-sdk-runtime-helpers.js';
 import { ClaudeSdkTurnInputState, createSdkUserMessage } from './claude-sdk-turn-input-state.js';
 import { type RawArchiveSink, sanitizeRawEvent } from './codex-audit-hooks.js';
@@ -42,7 +42,7 @@ interface ClaudeSdkAgentServiceOptions {
   mcpServerPath?: string;
   l0CompilerFn?: typeof compileL0ViaSubprocess;
   queryFn?: ClaudeSdkQueryFn;
-  runtimeResolver?: typeof captureClaudeSdkRuntime;
+  runtimeResolver?: (signal?: AbortSignal) => ClaudeSdkRuntime | Promise<ClaudeSdkRuntime>;
   rawArchive?: RawArchiveSink;
   activeRunControlTimeoutMs?: number;
 }
@@ -87,7 +87,7 @@ export class ClaudeSdkAgentService implements AgentService {
   private readonly mcpServerPath: string | undefined;
   private readonly l0CompilerFn: typeof compileL0ViaSubprocess;
   private readonly queryFn: ClaudeSdkQueryFn | undefined;
-  private readonly runtimeResolver: typeof captureClaudeSdkRuntime;
+  private readonly runtimeResolver: NonNullable<ClaudeSdkAgentServiceOptions['runtimeResolver']>;
   private readonly rawArchive: RawArchiveSink;
   private readonly activeRunControlTimeoutMs: number;
 
@@ -96,7 +96,7 @@ export class ClaudeSdkAgentService implements AgentService {
     this.model = options?.model ?? getCatModel(this.catId as string);
     this.l0CompilerFn = options?.l0CompilerFn ?? compileL0ViaSubprocess;
     this.queryFn = options?.queryFn;
-    this.runtimeResolver = options?.runtimeResolver ?? captureClaudeSdkRuntime;
+    this.runtimeResolver = options?.runtimeResolver ?? ((signal) => captureClaudeSdkRuntime('claude', signal));
     this.rawArchive = options?.rawArchive ?? new CliRawArchive();
     this.activeRunControlTimeoutMs = options?.activeRunControlTimeoutMs ?? DEFAULT_ACTIVE_RUN_CONTROL_TIMEOUT_MS;
     const configuredPath = options?.mcpServerPath ?? process.env.CAT_CAFE_MCP_SERVER_PATH;
@@ -115,7 +115,7 @@ export class ClaudeSdkAgentService implements AgentService {
   }
 
   async captureInvocationOptions(input: Parameters<NonNullable<AgentService['captureInvocationOptions']>>[0]) {
-    const claudeSdkRuntime = this.runtimeResolver();
+    const claudeSdkRuntime = await this.runtimeResolver(input.signal);
     return {
       claudeSdkRuntime,
       ...(await captureClaudeMcpConfig({ ...input, catId: this.catId, mcpServerPath: this.mcpServerPath })),
@@ -249,7 +249,7 @@ export class ClaudeSdkAgentService implements AgentService {
         mcpServerPath: this.mcpServerPath,
         l0CompilerFn: this.l0CompilerFn,
         abortController,
-        runtime: options?.claudeSdkRuntime ?? this.runtimeResolver(),
+        runtime: options?.claudeSdkRuntime ?? (await this.runtimeResolver(abortController.signal)),
         options,
       });
       const queryFn = this.queryFn ?? (await loadClaudeSdkQuery(abortController.signal));

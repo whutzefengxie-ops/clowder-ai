@@ -1539,6 +1539,7 @@ export async function prepareInvocationExecutionBinding(
               async () => {
                 const providerOptions = captureOptions
                   ? await captureOptions({
+                      signal: input.signal,
                       workingDirectory: workspace.workingDirectory,
                       toolExecutionPolicy: input.toolExecutionPolicy,
                       accountEnv: binding.accountEnv,

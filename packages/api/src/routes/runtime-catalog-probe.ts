@@ -71,14 +71,18 @@ async function probeClaude(target: CatalogTarget): Promise<RuntimeModelCatalog> 
   }
   let session: ReturnType<typeof sdkQuery> | undefined;
   try {
-    const runtime = captureClaudeSdkRuntime(target.command);
+    const runtime = await captureClaudeSdkRuntime(target.command, controller.signal);
     const { query } = await import('@anthropic-ai/claude-agent-sdk');
     if (controller.signal.aborted) throw new Error('Model discovery cancelled before SDK query startup');
     session = query({
       prompt: noPrompts(),
       options: {
         cwd: target.cwd,
-        ...claudeSdkRuntimeOptions(runtime, buildChildEnv(undefined, { workingDirectory: target.cwd })),
+        ...(await claudeSdkRuntimeOptions(
+          runtime,
+          buildChildEnv(undefined, { workingDirectory: target.cwd }),
+          controller.signal,
+        )),
         abortController: controller,
         settingSources: ['user', 'project', 'local'],
         tools: [],

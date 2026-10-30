@@ -45,3 +45,13 @@ Architecture cell：identity-session / transport；Map delta：沿用原 capture
 `claude-size-8iwVM4/measurement.json` 记录同一 SDK 0.3.285、同一布局、gzip level 1 的前后清单与逐文件 SHA-256。通过新的 materialize 实际导出，移除 243,751,648 bytes（其中 claude.exe 243,751,072 bytes）；压缩组件从 120,156,778 bytes 降至 1,757,785 bytes，减少 118,398,993 bytes，约 112.91 MiB。保留 JavaScript SDK。此数是 Claude 组件差值，不能冒充最终 EXE/DMG 的净减量；其他依赖与首次单独准备 Claude 的占用没有在该比较中消失。
 
 当前仍待：Windows 最终安装物构建与核查、独立审查、macOS 实机/DMG、内网离线环境及全量 34 项 C/E/Q。此处不把本机合成提供方说成真实质量或企业验收。
+
+## 独立审查后的响应性修复
+
+非作者 claude_package_review 对 `6eb09adb7e318a562220806a383699e0f544e214` 独立验证打包 12 PASS、协议 4 PASS、SDK/MCP 43 PASS，发现一个 P2：同步版本探测会阻塞共享 API；600ms 延迟夹具令 25ms 心跳延迟至约801ms。原反例保留于 artifacts/claude-package-peer-review/nonblocking-runtime-probe.mjs 和 nonblocking-runtime-red.log。
+
+已改为异步 execFile 和流式异步 SHA-256，原 captureInvocationOptions、模型发现及启动准备等待同一快照；传递现有 AbortSignal，可取消版本探测与文件读取，没有增加轮询或缓存。原反例转绿，capture 结束前心跳已执行；永久用例同时覆盖慢启动期间的事件循环和取消。API tsc 通过，`claude-runtime-async-regression.log` 为 123 项：122 PASS、1 既有 SKIP、无失败；包括全部本切片 SDK/调用链/配置冻结测试。
+
+异步版本又用真实 CLI 2.1.312 和本地合成提供方复验同一十项，全部通过（`claude-real-external-async.log`），新数据根为 `C:/Users/Administrator/AppData/Local/Temp/ca-OcBUum`，两条原生进程 code=0、测试端口关闭，数据保留。独立的 SDK JavaScript 副本还实际读取了前次原生会话：8 条消息可读，没有 native 平台包（`claude-library-history.log`）。等待修复 SHA 的同一 reviewer 复审，未将旧批准转录为新批准。
+
+发布构建在原工位因历史未跟踪测试证据被 clean-check 拒绝，证据保留。已按原 managed worktree 入口创建 `build/pr1748-claude-gpt-sol` 独立构建工位，owner=codex、ttl=7天；仅在那里构建，不清理或覆盖原记录，不使用 -AllowDirtyInputs 绕过发布检查。
