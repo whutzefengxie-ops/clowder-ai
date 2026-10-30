@@ -196,6 +196,16 @@ export class AgentSessionBridgeService implements Service.AgentService {
       while (true) {
         const next = await iterator.next();
         if (next.done) return;
+        const event = next.value;
+        const nativeTurnId = event.scope === 'turn' ? event.turn.nativeTurnId : event.nativeTurnRef;
+        if (
+          event.sessionId !== live.sessionId ||
+          (event.scope === 'turn' && event.turn.invocationId !== live.turn.invocationId) ||
+          (nativeTurnId && live.turn.nativeTurnId && nativeTurnId !== live.turn.nativeTurnId)
+        ) {
+          this.input.log?.warn('Ignoring session event outside the active session or turn');
+          continue;
+        }
         await this.observe(next.value, live);
         if (next.value.type === 'native_bound')
           session.binding = { state: 'bound', nativeSessionId: next.value.nativeSessionId };

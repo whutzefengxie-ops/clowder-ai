@@ -41,6 +41,9 @@ for (const reply of ['accepted', 'failed', 'throws', 'unsupported']) {
       assert.equal(result.value.errorCode, 'cancelled');
       assert.equal((await f.iterator.next()).done, true);
       f.provider.inbox = undefined;
+      f.provider.events = [
+        turn('done', { outcome: 'completed', turn: { invocationId: 'next', nativeTurnId: 'native-turn' } }),
+      ];
       assert.equal(
         (await collect(f.bridge.invoke('after stopped', options({ invocationId: 'next' })))).at(-1).errorCode,
         undefined,

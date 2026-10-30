@@ -691,3 +691,13 @@ checkpoint_review 对 18cf7c4b6bf5bb94fb68ea27f9bacf17ee2f290d 返回 changes_re
 
 `persisted-plugin-currentness-tsc.log` API tsc 退出 0；`persisted-plugin-currentness-green.log` 49 PASS；`persisted-plugin-currentness-regression.log` 237 PASS，无失败或跳过，包含全部现有 session-contract、客户端 MCP 当前性、持久根和生产 composition 激活回归。Biome 三文件退出 0。没有调用模型、启动 MCP 程序、访问原生历史或 Redis；测试临时 composition 由原有 fixture shutdown 收尾。独立审查待回执，不据此宣称 W2/C05/C15/C20 全量通过。
 checkpoint_review 对 f7c628e836625d6ebadd76b5ead9988ebe6ac705 给出 approved，独立 31 PASS、无失败或跳过。补充真实普通 composition → 原 memberView → 原 native resolver 的 canonical blockedCats/禁用、显式 override（active/空 view）、foreign plugin 与 healthy、external MCP 对照。原代次/并发 scope/准入漂移组通过。typed 回执的初始 subject 沿用旧值，审查者已单独更正为 checkpoint-persisted-plugin-mcp-currentness；无重跑、无改变 SHA 或结论。日志 packages/api/artifacts/role-agent-checkpoint-review/persisted-plugin-currentness-f7c628e.log；dist 已释放。只批准本切片。
+
+## W3 会话事件归属核验（尚未完成 W3）
+
+在真实 AgentSessionBridgeService 事件消费边界，迟到事件只需碰巧拥有当前 deliveryId 就能消耗当前 read callback；异会话 native_bound 还会错误投影为当前 session_init。session-event-identity-red.log 为 1 PASS/4 FAIL，分别复现 Host session、invocation、已知 native turn 不匹配和外部 session 元数据污染。
+
+现在在 observe、绑定及投影之前比较事件 sessionId、turn invocationId，并在双方已有 native turn 时比较该 ID；session 级事件明确携带 nativeTurnRef 时也适用。忽略不属于当前调用的事件，不认领其回执、不终结本轮、不投影其内容。缺少原生 turn ID 时仍使用已有 Host session/invocation 权威，不编造原生证明。没有持久状态、额外缓存或后台清理器；同一 consumer 加十行。
+
+API tsc 退出 0。首次完整合同回归为 222 PASS/4 FAIL，新增五条已通过；四条既有取消用例的“停止后下一轮”仍发送旧 invocationId=inv 的假 done。将该后继夹具明确标为它请求的 next（只改原测试三行），保留取消等待断言和所有旧实际行为。session-event-identity-green.log 为 351 PASS，无失败/跳过，包含全部 session-contract 及原 append 发送/已读/未知/回读核对/HTTP/完成/重入边界。Biome 三文件无错误，三条原复杂度/受控 finally throw 警告。生产 Bridge 314 行，未拆出一次性函数。
+
+独立审查待回执。该检查不替代实际客户端/父子工具持久回读、未知输入重启恢复、兼容键与身份采用；C11/C24 全项仍未完成。真实 Node mock 只跑既有用例，沿原台账等待关闭并保留数据，没有调用模型或企业认证。
