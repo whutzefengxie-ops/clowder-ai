@@ -5876,6 +5876,21 @@ async function* invokePreparedSingleCat(deps: InvocationDeps, params: Invocation
       if (ordinaryTaskExecutionId && unclosedServiceIterators.size > 0)
         throw new Error('task_provider_teardown_unconfirmed');
       if (deps.sessionChainStore && invocationPolicyRecordId && hostExecutionBoundary) {
+        const currentImplementation = service.implementationSnapshot?.();
+        const currentCarrier = service.freshnessCarrierCapability?.();
+        const providerEntryBoundary = captureHostExecutionBoundary(
+          {
+            ...frozenExecutionBinding,
+            ...(currentImplementation ? { implementation: currentImplementation } : {}),
+          },
+          currentCarrier?.carrier ?? hostExecutionBoundary.carrier,
+          currentImplementation
+            ? { clientId: currentImplementation.clientId, implementation: currentImplementation }
+            : undefined,
+        );
+        const entryChanges = changedHostExecutionBoundary(hostExecutionBoundary, providerEntryBoundary);
+        if (entryChanges.length > 0)
+          throw new Error(`execution_boundary_changed_before_provider_entry:${entryChanges.join(',')}`);
         const store = deps.sessionChainStore;
         const logicalId = invocationPolicyRecordId;
         const target = activeSessionRecordForResume;
