@@ -5358,8 +5358,12 @@ async function main(): Promise<void> {
   let initialPluginInstallation = Promise.resolve();
   registerPluginRuntimeShutdown(app, pluginRuntime, async () => {
     initialPluginController.abort();
-    await pluginRuntime.supervisor.stopAll('api_shutdown');
-    await initialPluginInstallation;
+    const results = await Promise.allSettled([
+      pluginRuntime.supervisor.stopAll('api_shutdown'),
+      initialPluginInstallation,
+    ]);
+    const failures = results.filter((result) => result.status === 'rejected').map((result) => result.reason);
+    if (failures.length) throw new AggregateError(failures, 'Initial plugin shutdown failed');
   });
   const { OFFICIAL_BUNDLED_MANIFESTS } = await import('./domains/plugin/official-catalog.js');
   const { createHostOfficialPluginCatalog } = await import('./domains/plugin/manager/host-official-catalog.js');

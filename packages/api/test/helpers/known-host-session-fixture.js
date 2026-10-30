@@ -24,3 +24,11 @@ export async function declareKnownHostSessionFixture(deps, params, binding) {
       return record;
     };
 }
+
+/** Owner regressions that begin with certified native history, rather than legacy unknown state. */
+export async function* invokeKnownHostSession(deps, params) {
+  const invocation = await import('../../dist/domains/cats/services/agents/invocation/invoke-single-cat.js');
+  const executionBinding = await invocation.prepareInvocationExecutionBinding(deps, params);
+  await declareKnownHostSessionFixture(deps, params, executionBinding);
+  yield* invocation.invokeSingleCat(deps, { ...params, executionBinding });
+}

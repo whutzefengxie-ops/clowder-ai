@@ -10,8 +10,11 @@ export function registerPluginRuntimeShutdown(
   // would keep that drain alive and prevent its own shutdown from starting.
   app.addHook('preClose', async () => {
     app.log.info('[api] Plugin shutdown entered');
-    await beforeShutdown?.();
-    await runtime.shutdown('api_shutdown');
+    try {
+      await beforeShutdown?.();
+    } finally {
+      await runtime.shutdown('api_shutdown');
+    }
     app.log.info('[api] Plugin shutdown complete');
   });
 }

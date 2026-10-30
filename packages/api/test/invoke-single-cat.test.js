@@ -11011,7 +11011,7 @@ describe('invokeSingleCat audit events (P1 fix)', () => {
       const msgs = await collect(invoke());
 
       assert.ok(msgs.some((m) => m.type === 'done'));
-      assert.equal(optionsSeen[0]?.workingDirectory, workspaceRoot);
+      assert.equal(optionsSeen[0]?.workingDirectory, workspaceRoot, JSON.stringify(msgs));
       assert.deepEqual(migrations, [[threadId, workspaceRoot]]);
     } finally {
       if (previousRuntimeRoot === undefined) delete process.env.CAT_CAFE_RUNTIME_ROOT;

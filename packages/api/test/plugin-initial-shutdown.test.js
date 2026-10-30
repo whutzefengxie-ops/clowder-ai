@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { mkdtemp, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -13,9 +14,32 @@ import { prepareHostInitialPlugins } from '../dist/domains/plugin/manager/initia
 import { registerPluginRuntimeShutdown } from '../dist/routes/plugin-runtime-shutdown.js';
 import { catalogEntry, manifest, packageArchive } from './plugin-official-package-installer.fixture.js';
 
-for (const heldStage of ['discovery', 'archive'])
+test('a failed initial stop still invokes final runtime shutdown and rejects Host close', async () => {
+  const app = Fastify();
+  let finalStops = 0;
+  registerPluginRuntimeShutdown(
+    app,
+    {
+      shutdown: async () => {
+        finalStops++;
+      },
+    },
+    async () => {
+      throw new Error('initial cleanup failed');
+    },
+  );
+  await app.ready();
+  await assert.rejects(app.close(), /initial cleanup failed/);
+  assert.equal(finalStops, 1);
+});
+
+for (const heldStage of ['discovery', 'archive', 'activation'])
   test(`Host shutdown cancels pending ${heldStage} and drains any admitted write before final stop`, async () => {
     const root = await mkdtemp(join(tmpdir(), 'initial-shutdown-'));
+    const entered = Promise.withResolvers(),
+      release = Promise.withResolvers();
+    const gateKey = `initial_shutdown_${randomUUID()}`;
+    globalThis[gateKey] = { entered, release };
     const archive = await packageArchive({
       packageManifest: manifest({
         signals: undefined,
@@ -23,13 +47,14 @@ for (const heldStage of ['discovery', 'archive'])
         runtime: { transport: 'builtin', entrypoint: 'dist/entrypoint.js' },
       }),
       extraFiles: {
-        'dist/entrypoint.js': 'export default {create(){return {async start(){return {actions:{},async stop(){}}}}}};',
+        'dist/entrypoint.js':
+          heldStage === 'activation'
+            ? `export default {create(){return {async start(){const gate=globalThis[${JSON.stringify(gateKey)}];gate.entered.resolve();await gate.release.promise;return {actions:{},async stop(){}}}}}};`
+            : 'export default {create(){return {async start(){return {actions:{},async stop(){}}}}}};',
       },
     });
     const entry = catalogEntry(archive.integrity, {});
     const catalog = { snapshot: async () => ({ entries: [entry], status: 'fresh', checkedAt: 1 }) };
-    const entered = Promise.withResolvers(),
-      release = Promise.withResolvers();
     const runtime = createDormantPluginRuntimeComposition({ projectRoot: root, messageStore: new MessageStore() });
     const managerRuntime = createPluginManagerRuntimeComposition({
       runtime,
@@ -48,8 +73,9 @@ for (const heldStage of ['discovery', 'archive'])
     let task = Promise.resolve();
     registerPluginRuntimeShutdown(app, runtime, async () => {
       controller.abort();
-      await runtime.supervisor.stopAll('api_shutdown');
-      await task;
+      const results = await Promise.allSettled([runtime.supervisor.stopAll('api_shutdown'), task]);
+      const failures = results.filter((result) => result.status === 'rejected').map((result) => result.reason);
+      if (failures.length) throw new AggregateError(failures, 'Initial plugin shutdown failed');
     });
     task = prepareHostInitialPlugins({
       runtime,
@@ -92,10 +118,10 @@ for (const heldStage of ['discovery', 'archive'])
       const inventory = await runtime.inventoryStore.snapshot();
       assert.equal(inventory.instances.length, heldStage === 'discovery' ? 0 : 1);
       for (const instance of inventory.instances) {
-        assert.equal(instance.activationState, 'disabled');
+        assert.equal(instance.activationState, heldStage === 'activation' ? 'error' : 'disabled');
         assert.equal(instance.runtimeState, 'stopped');
       }
-      if (heldStage === 'archive') {
+      if (heldStage !== 'discovery') {
         const journal = JSON.parse(
           await readFile(join(root, '.cat-cafe/plugin-host/initial-installation.json'), 'utf8'),
         );
@@ -108,5 +134,6 @@ for (const heldStage of ['discovery', 'archive'])
       await task;
       await app.close();
       await runtime.shutdown('test_cleanup');
+      delete globalThis[gateKey];
     }
   });
