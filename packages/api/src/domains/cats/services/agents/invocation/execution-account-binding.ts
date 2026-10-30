@@ -6,7 +6,6 @@ import {
   type CodexSpeedValue,
   type ExecutionAccountSnapshot,
   type ExecutionProfile,
-  memberPersonaDigest,
   projectMemberProfiles,
   type RoleProfile,
   type SessionRecord,
@@ -70,6 +69,26 @@ export interface FrozenExecutionBinding {
   readonly resolvedAccount: RuntimeProviderProfile | null;
   readonly codexAccountLaunch?: CodexAccountLaunchDescriptor;
   readonly executionAccount?: ExecutionAccountSnapshot;
+}
+
+function memberPersonaDigest(profile: RoleProfile): string {
+  const semantics = {
+    id: profile.id,
+    name: profile.name,
+    displayName: profile.displayName,
+    nickname: profile.nickname,
+    roleDescription: profile.roleDescription,
+    personality: profile.personality,
+    breedId: profile.breedId,
+    relationshipKey: profile.relationshipKey,
+    variantLabel: profile.variantLabel,
+    breedDisplayName: profile.breedDisplayName,
+    teamStrengths: profile.teamStrengths,
+    caution: profile.caution,
+    restrictions: profile.restrictions,
+    strengths: profile.strengths,
+  };
+  return `sha256:${createHash('sha256').update(JSON.stringify(semantics)).digest('hex')}`;
 }
 
 export function deepFreeze<T>(value: T): T {
