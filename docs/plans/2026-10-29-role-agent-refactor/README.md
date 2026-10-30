@@ -69,6 +69,7 @@ Architecture ownership：涉及现有配置、context、invocation/session、app
 - 正式 useMemberEditor 改为分步保存/局部提交，冲突保留草稿；S1 创建/PATCH 结果不明时先读回，重新进入按原 catId 核对后再写，不能换 ID 悄悄创建另一成员。S2/S3 只补交已修改且未采用的字段，读回成功的超时不假报总体失败。
 - ACP stdio / HTTP 缺审批处理器时默认拒绝；明确允许仍需显式策略或 handler，仅选择协议实际提供的允许选项。未新增审批 owner。
 - 用户授权的简单 CodeAgent mock 位于 `packages/api/test/fixtures/codeagent-mock.mjs`，包含 NDJSON 握手、身份文本、固定隔离文件工具、权限、持久两轮续接、取消未知与断线。由真正 AcpClient 启动独立 Node 子进程；不是企业 CodeAgent 或模型质量证明，专属发现/合法声明/适配接线尚待 W5。
+- 本轮从同一 worktree 重跑 CodeAgent mock/声明/注册测试：`artifacts/role-agent-refactor-20261029-gpt-sol/codeagent-mock-regression-current.log` 为 54 PASS、0 FAIL、0 SKIP；仍只证明 mock 协议和严格声明链，不改变企业 CodeAgent、真实 discovery/probe、Mac 或 C/E/Q 的状态。
 
 本阶段验证集合分别记录，不相加为全量通过率：
 
