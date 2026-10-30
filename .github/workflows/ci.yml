@@ -73,6 +73,7 @@ jobs:
           packages/api/test/acp-model-adoption.test.js
           packages/api/test/acp-model-probe-adoption.test.js
           packages/api/test/acp-plugin-permission-policy.test.js
+          packages/api/test/acp/acp-native-model-identity.test.js
           packages/api/test/agent-session-contract/fixed-client-package.test.js
           packages/api/test/agent-session-contract/client-library-lifecycle.test.js
           packages/api/test/acp-bootstrap-config-recovery.test.js

@@ -68,7 +68,7 @@ export function resolveSessionOption(
 }
 export async function applySessionConfiguration(
   client: SessionConfigurationClient,
-  session: { sessionId: string; configOptions?: unknown },
+  session: { sessionId: string; configOptions?: unknown; models?: unknown },
   preferences: { model?: string; effort?: string },
 ) {
   let current = session;

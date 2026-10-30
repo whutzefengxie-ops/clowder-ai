@@ -22,7 +22,8 @@ function cache(client: SessionConfigurationClient) {
   return result;
 }
 function currentPreferences(session: Session): Preferences {
-  const model = reportedSessionModel(session);
+  // Only configOptions advertise a preference that can be replayed on resume.
+  const model = reportedSessionModel({ configOptions: session.configOptions });
   const result: Preferences = model ? { model } : {};
   if (!Array.isArray(session.configOptions)) return result;
   for (const option of session.configOptions) {

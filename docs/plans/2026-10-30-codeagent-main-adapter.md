@@ -39,13 +39,15 @@ Architecture cell: 既有 plugin admission、AgentService、runtime model discov
 
 复用 `tdd`：先在本树观察固定配置、插件探测/未知默认/拒绝未采用模型的 RED，再补实现。运行相应 API、Web、ACP/native defaults 和生命周期回归，API/Web TypeScript 与定向 Biome。真实 subprocess fixture 仅用临时项目；常驻服务若有，单独端口并登记、采证后停止，不使用 3003/3004/6399。
 
-潜在在飞重叠：上游 #1596 与 #1674 都修改 AcpAgentService/AcpClient；本片不合入其分支，不替代工具结果或取消专项修复，最终记录局部合并热点。先有可验证增量，再按风险独立审查；保持 WIP/Draft、不合并主线。未执行或未知项明确列出。
+潜在在飞重叠：上游 #1596 与 #1674 都修改 AcpAgentService/AcpClient；本片不合入其分支，不替代工具结果或取消专项修复。审查发现仅有 legacy models 的客户端不能将观测模型当成可回放配置，因此在 AcpAgentService.configureNative 内最小调整模型观测时点，三个分支复用同一处；该函数是后续合入热点，AcpClient 不改。先有可验证增量，再按风险独立审查；保持 WIP/Draft、不合并主线。未执行或未知项明确列出。
 
 ## 已执行证据（2026-10-30）
 
-- API/shared/MCP 构建与 Web TypeScript 通过。API 定向回归 57 项：51 通过，6 项 POSIX 进程回收检查在 Windows 明确跳过；没有失败。Web 三组 9/9 通过。原生账号默认值既有回归另 4/4 通过。
+- API/shared/MCP 构建与 Web TypeScript 通过。最终 API 定向回归 60 项（含自建插件包纵向用例）：54 通过，6 项 POSIX 进程回收检查在 Windows 明确跳过；没有失败。Web 三组 9/9 通过。原生账号默认值既有回归另 4/4 通过。
 - 固定配置、请求模型与实际采用不一致、插件模型路由缺失、权限池签名、刷新后过期默认、错误配置 500 等均先观察到 RED，再修复为 GREEN。
 - 生产 Manager + 实际 CodeAgent 插件 tgz 的协议纵向测试 1/1；CI 自建无网络 fixture 包模式另 1/1。验证拒绝/允许的实际 ACP 请求结果，未运行企业 CodeAgent。
 - 浏览器 `http://127.0.0.1:4335`：当前工作树生产插件/成员表单 + API，隔离测试 owner。默认未知提示、保存去掉 `--unknown` 的参数、刷新报告 Model A、显式选择 Model B、重开回读连接均通过。请求 trace 无 `session/prompt`，含 `session/set_config_option(model-b)`。预览非完整 Settings 导航验收。
 - CI 增加上述 ACP 插件与 Web 定向用例。Windows 的现有 `run-with-node-env-test.mjs pnpm` 子命令报 `spawn pnpm ENOENT`；本机设置进程级 NODE_ENV=test 后直接运行同一 Vitest 用例通过，Linux CI 继续沿用现有 wrapper。
 - 本地日志/截图/实例回执：`G:/AIwork/clowder-ai/artifacts/codeagent-main-adapter-20261030`（仓库外，不发布临时数据）。部署和现场验收说明：[CodeAgent 使用指南](../ops/codeagent-main-acp-plugin.md)。
+- 独立审查在初版发现两项：刷新抛错/返回非 live 后旧缓存复活；legacy models 观测值被错误回放。均新增连续操作/实际 AgentService 首轮与续聊 RED 后修正，不将模型观测当作 configOptions 能力。
+- 修后 `api-final-regression.log` 为上述 60 项结果，`packed-host-final-e2e.log` 为实际 tgz 再验证 1/1；`review-final-api-build.log` 和定向 Biome 均通过。仓库 fallback 诊断已按精确公共基线运行；提醒中包含 schema 布尔校验和单/多客户端二选一，不是新增运行失败回退路径，未为消除计数而重构。
