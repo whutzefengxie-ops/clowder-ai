@@ -41,37 +41,45 @@ try {
   assert.ok(png.toString('base64').length > 1_048_576, 'large screenshot must exceed the actual CAS value budget');
   await page.getByRole('button', { name: '问题反馈', exact: true }).click();
   const panel = page.frameLocator('iframe[title="问题反馈"]');
-  const newFeedback=()=>panel.locator('header').getByRole('button',{name:'新建反馈',exact:true}).click();
-  const history=()=>panel.locator('header').getByRole('button',{name:'反馈记录',exact:true}).click();
-  assert.equal(await panel.getByLabel('标题（选填）').inputValue(),'');
-  assert.equal(await panel.getByText('请描述发生前的操作、实际现象与预期结果',{exact:false}).count(),0);
+  const newFeedback = () => panel.locator('header').getByRole('button', { name: '新建反馈', exact: true }).click();
+  const history = () => panel.locator('header').getByRole('button', { name: '反馈记录', exact: true }).click();
+  assert.equal(await panel.getByLabel('标题（选填）').inputValue(), '');
+  assert.equal(await panel.getByText('请描述发生前的操作、实际现象与预期结果', { exact: false }).count(), 0);
   await panel.getByLabel('标题（选填）').fill('未投递的 Bug');
   await panel.getByLabel('描述').fill('第一条还没有投递');
-  await panel.getByRole('button',{name:'保存草稿',exact:true}).click();
-  await panel.getByText('草稿已保存到反馈记录',{exact:true}).waitFor();
-  await page.getByRole('button',{name:'关闭插件面板',exact:true}).click();
-  await page.getByRole('button',{name:'问题反馈',exact:true}).click();
-  assert.equal(await panel.getByLabel('描述').inputValue(),'');
+  await panel.getByRole('button', { name: '保存草稿', exact: true }).click();
+  await panel.getByText('草稿已保存到反馈记录', { exact: true }).waitFor();
+  await page.getByRole('button', { name: '关闭插件面板', exact: true }).click();
+  await page.getByRole('button', { name: '问题反馈', exact: true }).click();
+  assert.equal(await panel.getByLabel('描述').inputValue(), '');
   await history();
-  await panel.locator('.history-item').filter({hasText:'bug: 未投递的 Bug'}).getByRole('button',{name:'继续填写'}).click();
-  assert.equal(await panel.getByLabel('描述').inputValue(),'第一条还没有投递');
+  await panel
+    .locator('.history-item')
+    .filter({ hasText: 'bug: 未投递的 Bug' })
+    .getByRole('button', { name: '继续填写' })
+    .click();
+  assert.equal(await panel.getByLabel('描述').inputValue(), '第一条还没有投递');
   await newFeedback();
-  await panel.getByRole('radio',{name:'功能建议',exact:true}).check();
+  await panel.getByRole('radio', { name: '功能建议', exact: true }).check();
   await panel.getByLabel('标题（选填）').fill('独立的功能建议');
   await panel.getByLabel('描述').fill('希望支持批量导出');
-  await page.screenshot({path:join(artifactRoot,'new-feedback.png'),fullPage:true});
+  await page.screenshot({ path: join(artifactRoot, 'new-feedback.png'), fullPage: true });
   await history();
-  await panel.locator('.history-item').filter({hasText:'feat: 独立的功能建议'}).waitFor();
-  assert.equal(await panel.locator('.history-item').count(),2);
-  await page.screenshot({path:join(artifactRoot,'feedback-history.png'),fullPage:true});
-  await panel.locator('.history-item').filter({hasText:'bug: 未投递的 Bug'}).getByRole('button',{name:'继续填写'}).click();
-  assert.equal(await panel.getByLabel('描述').inputValue(),'第一条还没有投递');
+  await panel.locator('.history-item').filter({ hasText: 'feat: 独立的功能建议' }).waitFor();
+  assert.equal(await panel.locator('.history-item').count(), 2);
+  await page.screenshot({ path: join(artifactRoot, 'feedback-history.png'), fullPage: true });
+  await panel
+    .locator('.history-item')
+    .filter({ hasText: 'bug: 未投递的 Bug' })
+    .getByRole('button', { name: '继续填写' })
+    .click();
+  assert.equal(await panel.getByLabel('描述').inputValue(), '第一条还没有投递');
   await newFeedback();
-  await panel.locator('input[type=file]').setInputFiles({name:'image-only.png',mimeType:'image/png',buffer:png});
-  await panel.getByRole('button',{name:'直接反馈',exact:true}).click();
+  await panel.locator('input[type=file]').setInputFiles({ name: 'image-only.png', mimeType: 'image/png', buffer: png });
+  await panel.getByRole('button', { name: '直接反馈', exact: true }).click();
   await panel.getByLabel('报告正文预览').waitFor();
-  assert.equal(await panel.getByLabel('报告正文预览').innerText(),'');
-  assert.equal(await panel.locator('.picture img').count(),1);
+  assert.equal(await panel.getByLabel('报告正文预览').innerText(), '');
+  assert.equal(await panel.locator('.picture img').count(), 1);
   await newFeedback();
   await panel
     .getByLabel('标题（选填）')
@@ -161,16 +169,20 @@ try {
   await page.getByRole('button', { name: '关闭插件面板', exact: true }).click();
   await page.getByRole('button', { name: '问题反馈', exact: true }).click();
   await panel.getByLabel('标题（选填）').waitFor();
-  assert.equal(await panel.getByLabel('标题（选填）').inputValue(),'','opening never occupies the new form');
+  assert.equal(await panel.getByLabel('标题（选填）').inputValue(), '', 'opening never occupies the new form');
   await panel.getByLabel('标题（选填）').fill('分析同时的新问题');
   await panel.getByLabel('描述').fill('另一条反馈独立保存');
   await history();
-  const analysisRow=()=>panel.locator('.history-item').filter({hasText:'bug: 分析反馈测试'});
-  await analysisRow().getByText('分析完成 · 待投递',{exact:true}).waitFor();
-  await panel.locator('.history-item').filter({hasText:'bug: 分析同时的新问题'}).getByRole('button',{name:'继续填写'}).click();
-  assert.equal(await panel.getByLabel('描述').inputValue(),'另一条反馈独立保存');
+  const analysisRow = () => panel.locator('.history-item').filter({ hasText: 'bug: 分析反馈测试' });
+  await analysisRow().getByText('分析完成 · 待投递', { exact: true }).waitFor();
+  await panel
+    .locator('.history-item')
+    .filter({ hasText: 'bug: 分析同时的新问题' })
+    .getByRole('button', { name: '继续填写' })
+    .click();
+  assert.equal(await panel.getByLabel('描述').inputValue(), '另一条反馈独立保存');
   await history();
-  await analysisRow().getByRole('button',{name:'继续投递'}).click();
+  await analysisRow().getByRole('button', { name: '继续投递' }).click();
   await panel.getByText('我已检查完整报告和所有图片').waitFor();
   assert.equal(fixture.modelRuns(), 2, 'only the explicit restart invokes again; reopening does not');
   assert.ok(fixture.modelPrompt().endsWith(materials));
@@ -178,11 +190,19 @@ try {
   assert.equal(await panel.getByRole('checkbox', { name: '同意将上述脱敏材料' }).count(), 0);
   await page.screenshot({ path: join(artifactRoot, 'analysis-report.png'), fullPage: true });
   await history();
-  await panel.locator('.history-item').filter({hasText:'bug: 分析同时的新问题'}).getByRole('button',{name:'继续填写'}).click();
-  assert.equal(await panel.getByRole('button',{name:'查看本条分析报告',exact:true}).count(),0);
-  assert.equal(await panel.getByLabel('描述').inputValue(),'另一条反馈独立保存');
+  await panel
+    .locator('.history-item')
+    .filter({ hasText: 'bug: 分析同时的新问题' })
+    .getByRole('button', { name: '继续填写' })
+    .click();
+  assert.equal(await panel.getByRole('button', { name: '查看本条分析报告', exact: true }).count(), 0);
+  assert.equal(await panel.getByLabel('描述').inputValue(), '另一条反馈独立保存');
   await history();
-  await panel.locator('.history-item').filter({hasText:'bug: 分析后的标题'}).getByRole('button',{name:'继续投递'}).click();
+  await panel
+    .locator('.history-item')
+    .filter({ hasText: 'bug: 分析后的标题' })
+    .getByRole('button', { name: '继续投递' })
+    .click();
   await page.setViewportSize({ width: 420, height: 850 });
   await page.screenshot({ path: join(artifactRoot, 'narrow-report.png'), fullPage: true });
   await page.setViewportSize({ width: 1200, height: 980 });
@@ -198,7 +218,11 @@ try {
   await panel.getByLabel('标题（选填）').fill('待核对期间的新反馈');
   await panel.getByLabel('描述').fill('不会被旧投递锁住');
   await history();
-  await panel.locator('.history-item').filter({hasText:'投递结果待核对'}).getByRole('button',{name:'核对结果'}).click();
+  await panel
+    .locator('.history-item')
+    .filter({ hasText: '投递结果待核对' })
+    .getByRole('button', { name: '核对结果' })
+    .click();
   await panel.getByRole('button', { name: '核对提交结果', exact: true }).click();
   await panel.getByRole('link', { name: '打开 Issue', exact: true }).waitFor();
   assert.equal(fixture.posts(), 2, 'readback retry cannot create again');
