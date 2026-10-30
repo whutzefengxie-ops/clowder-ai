@@ -7,8 +7,8 @@ import {
   initialState,
   type StrategyFormState,
 } from '../../hub-cat-editor.model';
-import { normalizeMemberDraftBaseline, normalizeMemberDraftForm } from './member-carrier-compat';
 import type { CatPayloadContext } from '../../hub-cat-editor.payload';
+import { normalizeMemberDraftBaseline, normalizeMemberDraftForm } from './member-carrier-compat';
 import type { RuntimeDrafts } from './member-runtime-draft';
 
 export interface MemberDraft {

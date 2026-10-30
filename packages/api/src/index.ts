@@ -5354,7 +5354,13 @@ async function main(): Promise<void> {
   const { registerConciergeDesktopRoutes } = await import('./routes/concierge-desktop.js');
   registerConciergeDesktopRoutes(app, { ownerUserId: privateUserId, desktop: pluginRuntime.ownerDesktop });
   const { registerPluginRuntimeShutdown } = await import('./routes/plugin-runtime-shutdown.js');
-  registerPluginRuntimeShutdown(app, pluginRuntime);
+  const initialPluginController = new AbortController();
+  let initialPluginInstallation = Promise.resolve();
+  registerPluginRuntimeShutdown(app, pluginRuntime, async () => {
+    initialPluginController.abort();
+    await pluginRuntime.supervisor.stopAll('api_shutdown');
+    await initialPluginInstallation;
+  });
   const { OFFICIAL_BUNDLED_MANIFESTS } = await import('./domains/plugin/official-catalog.js');
   const { createHostOfficialPluginCatalog } = await import('./domains/plugin/manager/host-official-catalog.js');
   const { GitMarketplaceRepository } = await import(
@@ -5461,8 +5467,9 @@ async function main(): Promise<void> {
   const hostListening = new Promise<void>((resolve) => {
     releaseHostListening = resolve;
   });
-  void prepareHostInitialPlugins({
+  initialPluginInstallation = prepareHostInitialPlugins({
     hostListening,
+    signal: initialPluginController.signal,
     runtime: pluginRuntime,
     managerRuntime: pluginManagerRuntime,
     catalog: pluginManagerCatalog,
@@ -5470,6 +5477,7 @@ async function main(): Promise<void> {
   })
     .then((prepared) => prepared.activate())
     .catch((error: unknown) => {
+      if (initialPluginController.signal.aborted) return;
       // The existing journal retries interrupted installation on restart.
       app.log.warn({ err: error }, '[api] Initial plugin installation deferred until next startup');
     });

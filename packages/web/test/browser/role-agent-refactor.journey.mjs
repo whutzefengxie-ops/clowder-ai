@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { resolve, join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { test } from 'node:test';
-import { scene } from './f322-members-fixture.mjs';
-import { nativeMemberProducer } from './f322-members-native-producer.fixture.mjs';
+import { configStore } from '../../../api/dist/config/ConfigStore.js';
 import { configRoutes } from '../../../api/dist/routes/config.js';
 import { sessionStrategyConfigRoutes } from '../../../api/dist/routes/session-strategy-config.js';
-import { configStore } from '../../../api/dist/config/ConfigStore.js';
+import { scene } from './f322-members-fixture.mjs';
+import { nativeMemberProducer } from './f322-members-native-producer.fixture.mjs';
 
 const evidence = resolve('../../artifacts/role-agent-refactor-20261029-gpt-sol/browser');
 mkdirSync(evidence, { recursive: true });

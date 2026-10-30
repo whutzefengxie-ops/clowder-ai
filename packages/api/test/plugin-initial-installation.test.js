@@ -210,6 +210,7 @@ for (const requiresConfig of [false, true])
         managerRuntime,
         catalog,
         hostListening: Promise.resolve(),
+        signal: new AbortController().signal,
         loadSelection: async () => ({ schemaVersion: 1, plugins: [{ pluginId: entry.pluginId, enabled: true }] }),
         onFailure: (_id, error) => {
           throw error;

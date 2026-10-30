@@ -84,12 +84,16 @@
     {
       "id": "C06",
       "status": "NOT_RUN",
-      "evidence": ["README.md#W3-静态身份前缀按实际正文与片段复用尚未完成-W3：Host 前缀缓存的正文/成功/压缩失效局部证据；非完整 L0 编译验收"]
+      "evidence": [
+        "README.md#W3-静态身份前缀按实际正文与片段复用尚未完成-W3：Host 前缀缓存的正文/成功/压缩失效局部证据；非完整 L0 编译验收"
+      ]
     },
     {
       "id": "C07",
       "status": "NOT_RUN",
-      "evidence": ["README.md#W3-静态身份前缀按实际正文与片段复用尚未完成-W3：头像/正文/原生片段变化的消息前缀局部证据；持久兼容键、硬边界及 Native 采用未完成"]
+      "evidence": [
+        "README.md#W3-静态身份前缀按实际正文与片段复用尚未完成-W3：头像/正文/原生片段变化的消息前缀局部证据；持久兼容键、硬边界及 Native 采用未完成"
+      ]
     },
     {
       "id": "C08",
@@ -109,7 +113,9 @@
     {
       "id": "C11",
       "status": "NOT_RUN",
-      "evidence": ["README.md#W3-会话事件归属核验尚未完成-W3：事件与当前会话/Host turn 的局部回执核验；完整客户端与重启回读未完成"]
+      "evidence": [
+        "README.md#W3-会话事件归属核验尚未完成-W3：事件与当前会话/Host turn 的局部回执核验；完整客户端与重启回读未完成"
+      ]
     },
     {
       "id": "C12",
@@ -173,7 +179,9 @@
     {
       "id": "C21",
       "status": "NOT_RUN",
-      "evidence": ["codeagent-mock.md：严格样本、非法顶层字段、显式坏引用及注册/停用的 mock 局部证据；正式发现和完整成员引用旅程尚未验收"]
+      "evidence": [
+        "codeagent-mock.md：严格样本、非法顶层字段、显式坏引用及注册/停用的 mock 局部证据；正式发现和完整成员引用旅程尚未验收"
+      ]
     },
     {
       "id": "C22",
@@ -402,7 +410,10 @@
       "P2 batch abort swallows a confirmed healthy sibling terminal",
       "P2 serial consumer return cleanup failure masked by final safety-net done"
     ],
-    "additionalClosedFindings": ["P2 signal acknowledgement mistaken for native stop proof", "P2 late identity publication during the final OS read"],
+    "additionalClosedFindings": [
+      "P2 signal acknowledgement mistaken for native stop proof",
+      "P2 late identity publication during the final OS read"
+    ],
     "evidence": "README.md#W3-live-停止未确认贯通现有执行与队列尚未完成-W3",
     "tests": {
       "producerRed": "2 FAIL with nativeAliveAtTerminal=true and false providerTeardownAt",
@@ -796,7 +807,9 @@
     "verdict": "approved",
     "reviewedHead": "1f1453ee56de361f2681ae373e0e76d7a561a400",
     "subject": "task:01a1881e-1a7b-78d0-9a62-ff99b0ab7a01/checkpoint-acp-account-selection",
-    "closedFindings": ["P2 implicit app default and native/unbound share an undefined explicit ref; native whitespace resolves inconsistently"],
+    "closedFindings": [
+      "P2 implicit app default and native/unbound share an undefined explicit ref; native whitespace resolves inconsistently"
+    ],
     "findings": [],
     "evidence": "README.md#W2-ACP-成员改选账号的准入匹配尚未完成-W2"
   },

@@ -13,6 +13,7 @@ test('a failed Host listen never starts initial plugin discovery or installation
   const root = await mkdtemp(join(tmpdir(), 'initial-listen-'));
   const preparing = prepareHostInitialPlugins({
     hostListening,
+    signal: new AbortController().signal,
     runtime: {
       paths: { inventorySnapshotPath: join(root, 'inventory.json') },
       inventoryStore: { snapshot: async () => ({ instances: [], packages: [] }) },

@@ -22,3 +22,9 @@ Architecture cell：identity-session / transport / runtime-host；Map delta：no
 首次修复已推送 `df3a14e60053b6464575ff0265904c81603ca85d`：Web 重试5 PASS；API首批集合54 PASS、3 FAIL，其中两条置换夹具随后通过先 bind 后设置 cliSessionId 转绿（该文件7 PASS），另一条为本机私有目录 ACL 的严格拒绝，不改 ACL、不计通过。目录门禁通过。CI 继续运行后 Lint 暴露 OS 的 ComSpec 未登记，按现有 OS 变量分类补充原因，注册完整性10 PASS。
 
 修正标记表达式后的第二次诊断中，原 e184 冻结程序在温缓存条件下通过，说明不能把冷启动超时称为必现死锁。诊断证据支持去除默认插件准备对 HTTP 监听的阻塞，而不延长门禁。本轮在既有 prepareHostInitialPlugins 加入必需的 hostListening 屏障，index 不等待准备完成才能监听；准备完成后仍按原 journal 激活。失败监听不应触发插件发现的新测试先出现 Missing expected rejection，修复后插件安装、catalog 与监听集合27 PASS，API tsc通过。完整干净 Windows 构建结果仍待验证。
+
+`d224f138b949a46392ed72d25a68d4078dec5e24` 的正常完整 Windows 构建已通过原90秒启动分析：deploy-20261030101301834、profile-fe2f7e11-6617-41fc-a8b7-5d4fc2a34472、端口62650、1581个文件/40,366,210 bytes；实例已停止、数据保留。随后在 Redis 下载遇到匿名 GitHub API rate limit，构建退出，尚无最终安装器；不能把启动门禁通过称为整包完成。
+
+非作者对整个阶段性交付风险审查给出 changes_requested：一个P2，后台初始安装未归入关闭流程。真实runtime/Manager/installer反例证明关闭后释放延迟发现仍会启用插件。现沿既有 preClose 先 abort 初始任务、停止当前carrier并排空已进入的写操作，再调用原runtime.shutdown。只读listen/发现/catalog等待可取消；已进入的安装仍写完整receipt后排空，取消不会将未完成项记done；不创建通用任务注册中心。两条真实runtime/Fastify关闭回归覆盖挂起发现和在途archive，连同原安装/catalog/关闭集合32 PASS，API tsc通过。仍待同一reviewer对修复SHA复审。
+
+CI后续暴露三条Biome问题：总账格式、一个type import位置和旧browser测试import顺序。只运行精确三文件修正；JSON解析后逐项比较完全一致，34项状态未变化。d224的六条public shard又暴露下一批首次失败，原日志已保存并继续按根因处理，不把先前修复说成全量CI已通过。
