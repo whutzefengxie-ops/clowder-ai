@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { openWorkspaceTools } from './f307-workspace-open.mjs';
 import { assertHistoricalMapGeometry, assertSelectedCardInsideCanvas } from './f311-history-map-assertions.mjs';
 import { assetReview, PROGRAM_ID } from './f311-v2-closure.fixture.mjs';
 import { CONTRACT_THREAD_ID } from './f311-workspace-browser.harness.mjs';
@@ -82,6 +83,17 @@ function v3HistoryIndex(rawIndex) {
     })),
   };
   next.story.sources[0].futureSourcePresentation = 'future';
+  return next;
+}
+
+function historyIndexWithWrappedOriginNote(rawIndex) {
+  const next = structuredClone(rawIndex);
+  const node = next.story.nodes.find((entry, index) => index > 0 && entry.parents.length === 0);
+  assert(node, 'history fixture must keep a later step without an authored parent');
+  node.title = '必须完整显示的两行合约步骤标题';
+  const origin = next.story.cases.find((entry) => entry.nodeId === node.id);
+  assert(origin, 'the parentless history step must keep an origin case');
+  origin.title = '一条很长、必须完整显示的合约来源标题';
   return next;
 }
 
@@ -202,10 +214,12 @@ export async function verifyHistoryEntryJourney({ fixture, browser, capture }) {
   const snapshot = snapshots.programs.find((entry) => entry.program.programId === PROGRAM_ID);
   assert(snapshot, 'F314 Program snapshot must remain registered');
   const projection = structuredClone(snapshot);
-  const rawIndex = JSON.parse(
-    await readFile(
-      new URL('../../../shared/src/__tests__/fixtures/f314-history-publication-contract.json', import.meta.url),
-      'utf8',
+  const rawIndex = historyIndexWithWrappedOriginNote(
+    JSON.parse(
+      await readFile(
+        new URL('../../../shared/src/__tests__/fixtures/f314-history-publication-contract.json', import.meta.url),
+        'utf8',
+      ),
     ),
   );
   const authoredStory = structuredClone(rawIndex.story);
@@ -243,9 +257,7 @@ export async function verifyHistoryEntryJourney({ fixture, browser, capture }) {
   try {
     await page.goto(`${fixture.apiUrl}/api/session`);
     await page.goto(`${fixture.webUrl}/thread/${CONTRACT_THREAD_ID}?shell=v2`);
-    await page.getByTestId('settings-button').click();
-    await page.getByTestId('settings-v2').waitFor();
-    await page.getByTestId('settings-entry-evolution').click();
+    await (await openWorkspaceTools(page)).getByTestId('workspace-launcher-capability-evolution').click();
     const home = page.getByTestId('capability-evolution-workspace');
     await home.getByTestId(`capability-evolution-program-${PROGRAM_ID}`).click();
     let detail = home.getByTestId('capability-evolution-program-detail');

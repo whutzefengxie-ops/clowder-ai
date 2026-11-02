@@ -6,10 +6,31 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import { decideAgyNativeHookPayload } from '../../../scripts/agy-native-effect-guard.mjs';
 import { decideNativeHookPayload } from '../../../scripts/native-effect-target-guard.mjs';
+import { nativeHookTestEnv } from './helpers/native-hook-programs.js';
 
 const cwd = '/tmp/ordinary-workspace';
 const options = { selfHost: () => ({ confidence: 'none' }) };
 const payload = (name, args) => ({ toolCall: { name, args }, workspacePaths: [cwd] });
+
+test('official ACP tokens, settings and trust decisions remain protected under the shared AGY policy', () => {
+  const profileHome = '/tmp/acp-profile';
+  for (const name of ['settings.json', 'acp_token.json', 'acp_business_token.json', 'trusted_workspaces.json']) {
+    const path = join(profileHome, '.gemini/antigravity-acp', name);
+    assert.equal(
+      decideAgyNativeHookPayload(payload('write_to_file', { TargetFile: path }), { ...options, profileHome }).decision,
+      'deny',
+      name,
+    );
+    assert.equal(
+      decideAgyNativeHookPayload(payload('run_command', { CommandLine: `echo changed > ${path}` }), {
+        ...options,
+        profileHome,
+      }).decision,
+      'deny',
+      name,
+    );
+  }
+});
 
 test('per-run data aliases keep native artifacts writable while control roots remain protected', () => {
   const root = mkdtempSync(join(tmpdir(), 'native-artifact-alias-'));
@@ -139,7 +160,11 @@ test('the official CLI settings and mounted skill view are host control data, in
 test('bad hook input always prints a concrete deny instead of AGY empty-output allow', () => {
   const script = new URL('../../../scripts/agy-native-effect-guard.mjs', import.meta.url);
   for (const input of ['not json', '{}', '{"toolCall":{"name":"run_command","args":{}}}']) {
-    const stdout = execFileSync(process.execPath, [script.pathname], { input, encoding: 'utf8' });
+    const stdout = execFileSync(process.execPath, [script.pathname], {
+      input,
+      encoding: 'utf8',
+      env: nativeHookTestEnv(),
+    });
     assert.equal(JSON.parse(stdout).decision, 'deny');
   }
 });

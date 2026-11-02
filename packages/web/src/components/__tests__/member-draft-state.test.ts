@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { CatData } from '@/hooks/useCatData';
 import { initialState } from '../hub-cat-editor.model';
 import { buildMemberPatchPayload } from '../hub-cat-editor.payload';
+import { commitMemberAvatar } from '../settings/members/member-avatar-draft';
 import {
   type MemberDraft,
   persistMemberDraft,
@@ -27,6 +28,52 @@ const original = {
 } as CatData;
 
 describe('member drafts survive navigation and concurrent edits', () => {
+  it('isolates AGY profile permissions per tool and restores the exact persisted profile draft', () => {
+    const agy = {
+      ...original,
+      clientId: 'google',
+      carrier: 'acp',
+      defaultModel: 'gemini-4-argon-high',
+      agyProfile: {
+        enabled: false,
+        carrier: 'acp',
+        profileId: 'isolated-argon',
+        homeRoot: '/profiles',
+        model: 'gemini-4-argon-high',
+        autoApprove: true,
+        trustedWorkspaces: ['/approved'],
+      },
+      acp: { command: '/installed/agy_acp_server.par', startupArgs: [] },
+    } as CatData;
+    const start: MemberDraft = {
+      version: 1,
+      baseline: agy,
+      form: initialState(agy),
+      section: 'advanced',
+      templateId: null,
+    };
+    const away = switchMemberRuntime(start, {
+      id: 'codex',
+      label: 'Codex',
+      clientId: 'openai',
+      installed: true,
+      models: [],
+    });
+    expect(away.form.agyAcpEnabled).toBe(false);
+    expect(away.form.agyAutoApprove).toBe(false);
+    expect(away.form.agyHomeRoot).toBe('');
+    persistMemberDraft('agy-roundtrip', away);
+    const back = switchMemberRuntime(readMemberDraft('agy-roundtrip')!, {
+      id: 'agy',
+      label: 'AGY ACP',
+      clientId: 'google',
+      installed: true,
+      models: [],
+      acp: { command: agy.acp!.command, startupArgs: [] },
+    });
+    expect(back.form).toEqual(start.form);
+    expect(buildMemberPatchPayload(back.form, agy)).toEqual({});
+  });
   it('preserves ACP commands, pool settings and hidden extensions across a persisted runtime round trip', () => {
     const acpCat = {
       ...original,
@@ -116,4 +163,23 @@ describe('member drafts survive navigation and concurrent edits', () => {
     expect(rebased.form).toMatchObject({ nickname: 'local nickname', carrier: 'cli' });
     expect(buildMemberPatchPayload(rebased.form, latest)).toEqual({ nickname: 'local nickname' });
   });
+});
+
+it('commits the separately saved canon avatar without dropping other unsaved member fields', () => {
+  const draft: MemberDraft = {
+    version: 1,
+    baseline: original,
+    form: { ...initialState(original), nickname: '还没保存的昵称', avatar: '/old-unsaved.png' },
+    templateId: null,
+    section: 'identity',
+  };
+  const committed = commitMemberAvatar(draft, {
+    avatar: '/api/cats/draft/avatar?bindingRevision=1',
+    visualAssets: { state: 'selected', bindingRevision: 1 },
+  });
+  expect(committed.form.nickname).toBe('还没保存的昵称');
+  expect(committed.form.avatar).toBe(committed.baseline?.avatar);
+  const patch = buildMemberPatchPayload(committed.form, committed.baseline!);
+  expect(patch.nickname).toBe('还没保存的昵称');
+  expect(patch).not.toHaveProperty('avatar');
 });

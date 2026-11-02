@@ -40,6 +40,7 @@ import {
 import { AcpCwdIdentityTracker } from './acp-cwd-identity.js';
 import { type AcpPromptInput, toAcpPromptContent } from './acp-prompt-content.js';
 import { AcpSessionBindingError, ActiveSessionCache } from './active-session-cache.js';
+import { shutdownAcpChild } from './lifecycle/acp-child-shutdown.js';
 import type {
   AcpAgentRequest,
   AcpInitializeResult,
@@ -85,6 +86,7 @@ export class AcpHttpStreamClient {
   private readonly liveSessions = new ActiveSessionCache();
   private child: ChildProcess | null = null;
   private closed = false;
+  private closing?: Promise<void>;
   private exited = false;
   /** Sessions whose local prompt ended before provider completion was acknowledged. */
   private readonly unquiescedSessionIds = new Set<string>();
@@ -119,12 +121,11 @@ export class AcpHttpStreamClient {
     // #712: Re-create bootstrap CWD if cleaned up by OS temp-dir rotation or agent exit.
     // Skip when a test spawnFn is injected — the directory may be a fake path
     // (e.g. '/my/project') that can't be created on CI runners.
-    if (!this.config.spawnFn) {
+    if (!this.config.spawnFn && !(IS_WINDOWS && this.config.verifyBootstrapCwd)) {
       mkdirSync(this.config.cwd, { recursive: true, mode: 0o700 });
     }
     // #1203: Capture the cwd's directory identity at spawn so isCwdIntact can
     // detect delete→recreate at the same path, not just deletion.
-    this.cwdIdentityTracker.capture();
 
     const spawnOpts: SpawnOptions & { stdio: ['pipe', 'pipe', 'pipe'] } = {
       cwd: this.config.cwd,
@@ -150,6 +151,8 @@ export class AcpHttpStreamClient {
       spawnOpts.env = supervised.env;
     }
 
+    if (IS_WINDOWS && !this.config.spawnFn) this.config.verifyBootstrapCwd?.(command, args, childEnv);
+    this.cwdIdentityTracker.capture();
     this.child = doSpawn(command, args, spawnOpts) as ChildProcess;
 
     // Stderr: capacity detection (shared with stdio client)
@@ -622,24 +625,15 @@ export class AcpHttpStreamClient {
     if (cb) cb();
   }
 
-  async close(): Promise<void> {
-    this.liveSessions.clear();
-    if (this.closed) return;
-    this.closed = true;
+  close(): Promise<void> {
+    this.closing ??= this.closeOwnedProcess();
+    return this.closing;
+  }
 
-    if (this.child && !this.child.killed) {
-      await new Promise<void>((resolve) => {
-        const timer = setTimeout(() => {
-          if (this.child && !this.child.killed) this.child.kill('SIGKILL');
-          resolve();
-        }, KILL_GRACE_MS);
-        this.child!.once('exit', () => {
-          clearTimeout(timer);
-          resolve();
-        });
-        this.child!.kill('SIGTERM');
-      });
-    }
+  private async closeOwnedProcess(): Promise<void> {
+    this.liveSessions.clear();
+    this.closed = true;
+    if (this.child && !this.exited) await shutdownAcpChild(this.child, KILL_GRACE_MS, false);
   }
 
   get pid(): number | undefined {
@@ -788,9 +782,12 @@ export class AcpHttpStreamClient {
     };
 
     if (req.method === ACP_METHODS.requestPermission) {
-      const respond = (result: { optionId: string }) => {
+      const respond = (result: { optionId: string } | { cancelled: true }) => {
         const acpResult = {
-          outcome: { outcome: 'selected' as const, optionId: result.optionId },
+          outcome:
+            'cancelled' in result
+              ? { outcome: 'cancelled' as const }
+              : { outcome: 'selected' as const, optionId: result.optionId },
         };
         return this.sendAgentResponse({ jsonrpc: '2.0', id: req.id, result: acpResult }, responseOptions);
       };
@@ -798,7 +795,7 @@ export class AcpHttpStreamClient {
       if (this.config.permissionHandler) {
         let responsePromise: Promise<void> | null = null;
         try {
-          this.config.permissionHandler(req, (result) => {
+          await this.config.permissionHandler(req, (result) => {
             responsePromise = respond(result);
           });
         } catch (err) {

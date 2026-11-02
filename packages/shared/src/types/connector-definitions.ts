@@ -3,6 +3,7 @@
  * Split from connector.ts so registry types and lookup stay under the file-size
  * budget; only Host-owned notice identities are defined here. Plugins declare their own identity.
  */
+import { deploymentDefaults } from '../deployment-defaults.js';
 import type { ConnectorDefinition } from './connector.js';
 
 export const CONNECTOR_DEFINITIONS: readonly ConnectorDefinition[] = [
@@ -44,7 +45,7 @@ export const CONNECTOR_DEFINITIONS: readonly ConnectorDefinition[] = [
   },
   {
     id: 'system-command',
-    displayName: 'Clowder AI',
+    displayName: `${deploymentDefaults.brand.displayName}`,
     icon: { type: 'svg', iconId: 'settings' },
     themeColor: '#6B7280',
     description: '系统命令响应',
@@ -76,6 +77,13 @@ export const CONNECTOR_DEFINITIONS: readonly ConnectorDefinition[] = [
     icon: { type: 'svg', iconId: 'refresh-cw' },
     themeColor: '#475569',
     description: '部署条件满足后接回原任务',
+  },
+  {
+    id: 'worktree-lifecycle',
+    displayName: '工位通知',
+    icon: { type: 'svg', iconId: 'settings' },
+    themeColor: '#6B7280',
+    description: '工位保留、清理及恢复结果',
   },
   {
     id: 'physical-limb.stackchan',

@@ -65,6 +65,10 @@ import { ThreadSidebarV2Header } from './ThreadSidebarV2Header';
 import { openTheaterReplay } from './theater-navigation';
 import { pushThreadRouteWithHistory } from './thread-navigation';
 import { isGroupableThread, matchesThreadSearch } from './thread-search';
+import {
+  saveThreadLabels as handleUpdateLabels,
+  saveThreadPreferredCats as handleUpdatePreferredCats,
+} from './thread-settings-commands';
 import { threadSignalsCopy } from './thread-signals.shell-copy';
 import {
   buildSidebarTabContent,
@@ -400,13 +404,10 @@ export function ThreadSidebar({ onClose, className, routeThreadId, activeDestina
   );
 
   // I-1: Show confirmation dialog instead of deleting immediately
-  const handleDeleteRequest = useCallback(
-    (threadId: string) => {
-      const thread = threads.find((t) => t.id === threadId);
-      if (thread) setDeleteTarget(thread);
-    },
-    [threads],
-  );
+  const handleDeleteRequest = useCallback((threadId: string) => {
+    const thread = projectSidebarRows(useSidebarProjectionStore.getState()).find((row) => row.id === threadId);
+    if (thread) setDeleteTarget(thread);
+  }, []);
 
   const handleDeleteConfirm = useCallback(async () => {
     if (!deleteTarget) return;
@@ -483,38 +484,6 @@ export function ThreadSidebar({ onClose, className, routeThreadId, activeDestina
     });
   }, []);
 
-  const handleUpdatePreferredCats = useCallback(async (threadId: string, cats: string[]) => {
-    const ok = await executeSidebarFieldCommand({
-      threadId,
-      field: 'preferredCats',
-      value: cats,
-      request: (signal) =>
-        apiFetch(`/api/threads/${threadId}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ preferredCats: cats }),
-          signal,
-        }),
-    });
-    if (!ok) throw new Error('保存失败');
-  }, []);
-
-  const handleUpdateLabels = useCallback(async (threadId: string, labels: string[]) => {
-    const ok = await executeSidebarFieldCommand({
-      threadId,
-      field: 'labels',
-      value: labels,
-      request: (signal) =>
-        apiFetch(`/api/threads/${threadId}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ labels }),
-          signal,
-        }),
-    });
-    if (!ok) throw new Error('保存失败');
-  }, []);
-
   // F252 Phase E: route replay to the always-mounted AppShell host.
   const handleReplay = useCallback((threadId: string) => openTheaterReplay(threadId), []);
 
@@ -526,7 +495,11 @@ export function ThreadSidebar({ onClose, className, routeThreadId, activeDestina
         hasUserMention: false,
       });
       useChatStore.getState().clearUnread(threadId);
-      if (threadId === currentConversationId) return;
+      // Read selection at the action boundary so changing it does not replace
+      // every memoized row's onSelect handler. A Café destination still needs
+      // navigation back to the remembered conversation.
+      const selectedConversationId = activeDestination === null ? useChatStore.getState().currentThreadId : null;
+      if (threadId === selectedConversationId) return;
       // Let the new thread restore projectPath after the route switch.
       // Pre-navigation global store writes can stall SPA thread navigation.
       navigateToThread(threadId);
@@ -535,7 +508,7 @@ export function ThreadSidebar({ onClose, className, routeThreadId, activeDestina
         onClose?.();
       }
     },
-    [currentConversationId, navigateToThread, onClose],
+    [activeDestination, navigateToThread, onClose],
   );
 
   // F095 Phase F: Project action handlers
@@ -594,6 +567,7 @@ export function ThreadSidebar({ onClose, className, routeThreadId, activeDestina
     titleFor: attentionClusterTitle,
     rename: renameAttentionCluster,
     savedGroups: attentionSavedGroups,
+    recentGroupIds: attentionRecentGroupIds,
     mutateGroup: mutateAttentionGroup,
     preferenceError: attentionPreferenceError,
     groupLoadState: attentionLoadState,
@@ -607,7 +581,7 @@ export function ThreadSidebar({ onClose, className, routeThreadId, activeDestina
     collapsedPeek: attentionCollapsedPeek,
     toggleCollapsedPeek: toggleAttentionCollapsedPeek,
   } = useAttentionClusters(liveThreads, currentThreadId, normalizedQuery);
-  const groupDecisions = useGroupDecisions(isV2 && attentionClusters.length > 0);
+  const groupDecisions = useGroupDecisions(isV2);
   const [attentionArrangeMode, setAttentionArrangeMode] = useState(false);
   const [searchGroupRequest, setSearchGroupRequest] = useState<SearchGroupRequest | null>(null);
   const searchGroupOperation = useRef(0);
@@ -618,6 +592,7 @@ export function ThreadSidebar({ onClose, className, routeThreadId, activeDestina
     setAttentionArrangeMode(false);
     setSearchGroupRequest(request);
   }, []);
+  const organizeThread = useCallback((threadId: string) => openSearchGroup({ query: '', threadId }), [openSearchGroup]);
   const searchGroupMatches = useMemo(
     () =>
       normalizedQuery
@@ -1098,7 +1073,7 @@ export function ThreadSidebar({ onClose, className, routeThreadId, activeDestina
       })),
     [activeTabContent.threads],
   );
-  const threadRowHeight = useSidebarRowHeight(liveThreads, currentConversationId, isV2);
+  const threadRowHeight = useSidebarRowHeight(liveThreads, currentConversationId, isV2, groupDecisions);
   const attentionRowHeight = useCallback(
     (row: AttentionListRow) => {
       if (!isV2) return 80;
@@ -1453,17 +1428,14 @@ export function ThreadSidebar({ onClose, className, routeThreadId, activeDestina
             onToggleFavorite={handleToggleFavorite}
             onUpdatePreferredCats={handleUpdatePreferredCats}
             onUpdateLabels={handleUpdateLabels}
-            onOrganize={
-              groupable && attentionLoadState === 'ready'
-                ? () => openSearchGroup({ query: '', threadId: thread.id })
-                : undefined
-            }
+            onOrganize={groupable && attentionLoadState === 'ready' ? organizeThread : undefined}
             onReplay={handleReplay}
             isPinned={thread.pinned}
             isFavorited={thread.favorited}
             presence={thread.presence}
             unreadCount={thread.unreadCount}
             hasUserMention={thread.hasUserMention}
+            hasPendingDecision={groupDecisions.status === 'ready' && groupDecisions.threadIds.has(thread.id)}
             projectPath={thread.projectPath}
             indented={indented}
             preferredCats={thread.preferredCats}
@@ -1477,18 +1449,17 @@ export function ThreadSidebar({ onClose, className, routeThreadId, activeDestina
     [
       attentionArrangeMode,
       attentionLoadState,
-      openSearchGroup,
+      organizeThread,
       commitAttentionThreadDrop,
       currentConversationId,
       draggedAttentionThreadId,
+      groupDecisions,
       handleDeleteRequest,
       handleRename,
       handleReplay,
       handleSelect,
       handleToggleFavorite,
       handleTogglePin,
-      handleUpdateLabels,
-      handleUpdatePreferredCats,
     ],
   );
 
@@ -1710,6 +1681,7 @@ export function ThreadSidebar({ onClose, className, routeThreadId, activeDestina
         className={`${sidebarWidthClass} flex flex-col h-full ${isV2 ? '' : 'bg-[var(--console-panel-bg)]'}`}
         style={isV2 ? { background: 'var(--shell-frame)', borderRight: '1px solid var(--shell-hairline)' } : undefined}
         data-shell-sidebar={isV2 ? 'v2' : undefined}
+        data-chat-background-surface={isV2 ? 'frame' : undefined}
       >
         {isV2 ? (
           <ThreadSidebarV2Header
@@ -1930,6 +1902,7 @@ export function ThreadSidebar({ onClose, className, routeThreadId, activeDestina
                 request={searchGroupRequest}
                 threads={liveThreads}
                 groups={attentionSavedGroups}
+                recentGroupIds={attentionRecentGroupIds}
                 renderThread={renderThreadItem}
                 onCommand={mutateAttentionGroup}
                 onReload={reloadAttentionGroups}

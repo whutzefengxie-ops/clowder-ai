@@ -130,12 +130,11 @@ describe('F322 B segment 1 — cat nameplate, no outer bubble', () => {
       const avatars = container.querySelectorAll('img');
       expect(avatars).toHaveLength(1);
       expect(p?.contains(avatars[0] as Node)).toBe(true);
-      const frame = p?.querySelector('[data-sender-avatar="message"]') as HTMLElement;
+      const frame = p?.querySelector('[data-sender-avatar="nameplate"]') as HTMLElement;
       expect(frame).not.toBeNull();
       expect(frame.className).toContain('w-8 h-8');
-      expect((frame.querySelector('[data-member-avatar-ring]') as HTMLElement).style.boxShadow).toBe(
-        'inset 0 0 0 1px #9B7EBD',
-      );
+      expect(frame.querySelector('[data-member-avatar-ring]')).toBeNull();
+      expect(frame.style.backgroundColor).toBe('var(--shell-work)');
       expect(avatars[0]?.className).toContain('w-full h-full');
       expect(frame.parentElement?.style.boxShadow).toBe('');
       expect(p?.textContent).toContain('布偶猫');
@@ -255,7 +254,7 @@ describe('F322 B segment 1 — cat nameplate, no outer bubble', () => {
       expect(bubble().className).toContain('px-4 py-3');
     });
 
-    it('falls back to the old bubble where the cat is not known to the registry', () => {
+    it('does not invent a nameplate for an author absent from the registry', () => {
       registry.cats = [];
       render(catMessage({ catId: 'ghost' }));
 

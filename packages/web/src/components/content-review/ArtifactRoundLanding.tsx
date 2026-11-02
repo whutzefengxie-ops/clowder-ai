@@ -16,6 +16,7 @@ import { ArtifactMediaCompare } from './media-compare/ArtifactMediaCompare';
 import { reviewAuthorityMessages } from './media-compare/review-authority-messages';
 import { ReviewComments } from './ReviewComments';
 import { ReviewDiscussionPanel } from './ReviewDiscussionPanel';
+import { ReviewResponseJudgments } from './ReviewResponseJudgments';
 import { ReviewRoundDecision } from './ReviewRoundDecision';
 import { ReviewVersionDetails } from './ReviewVersionDetails';
 import { useArtifactChatDiscussion } from './useArtifactChatDiscussion';
@@ -23,6 +24,7 @@ import type { useArtifactReview } from './useArtifactReview';
 import { useArtifactRoundComparison } from './useArtifactRoundComparison';
 import { useReviewDraft } from './useReviewDraft';
 import { useReviewMediaSource } from './useReviewMediaSource';
+import { WorkSubmissionRecovery } from './WorkSubmissionRecovery';
 
 export type ArtifactRoundProps = {
   view: ArtifactReviewView;
@@ -241,7 +243,10 @@ export function ArtifactRoundLanding({
             </>
           }
           workflow={{
-            mediaSource: source,
+            mediaSource: {
+              ...source,
+              downloadSrc: `/api/artifact-reviews/${encodeURIComponent(view.review.reviewId)}/media/${round.number}`,
+            },
             canvasDraftKey: linked ? undefined : `${prefix}round:${round.number}:markup`,
             annotationMaxLength: 8000,
             // 「引用到聊天」 names the same round (or ledger) and Task a modification request does.
@@ -263,6 +268,13 @@ export function ArtifactRoundLanding({
                   <p role="status">{reviewAuthorityMessages[view.authority.state]}</p>
                 ) : null}
                 {view.pendingVersion ? <p role="status">新版正在保存和恢复，旧版讨论仍然完整保留。</p> : null}
+                {view.pendingSubmission ? (
+                  <WorkSubmissionRecovery
+                    key={view.pendingSubmission.operationId}
+                    view={view}
+                    onRecovered={controller.refresh}
+                  />
+                ) : null}
                 {history ? (
                   <p>
                     第 {round.number} 版 ·{' '}
@@ -327,14 +339,30 @@ export function ArtifactRoundLanding({
               ) : panel === 'details' ? (
                 <ReviewVersionDetails
                   contextControl={isV2 ? contextControl : undefined}
-                  round={round}
+                  responseControl={
+                    round.responses.length ? (
+                      <ReviewResponseJudgments
+                        review={view.review}
+                        round={round}
+                        canJudge={
+                          !controller.saving &&
+                          !controller.pending &&
+                          !view.pendingVersion &&
+                          (view.authority.state === 'current' || view.authority.state === 'asset_changed')
+                        }
+                        onJudge={async (action, number) => {
+                          const saved = await controller.act(action, number);
+                          if (saved) await linked?.refreshSource();
+                          return saved;
+                        }}
+                        onSource={onVersion}
+                      />
+                    ) : null
+                  }
                   reviewId={view.review.reviewId}
                   revision={view.review.revision}
                   ownerUserId={view.review.task.ownerUserId}
                   onClose={() => setPanel(null)}
-                  onPreviousRound={() => {
-                    onVersion(round.number - 1);
-                  }}
                 />
               ) : null,
           }}

@@ -12,7 +12,7 @@ import type {
   CoCreatorConfig,
   VoiceConfig,
 } from '@cat-cafe/shared';
-import { createCatId } from '@cat-cafe/shared';
+import { backgroundImageUrlSchema, createCatId } from '@cat-cafe/shared';
 import { saveSpan } from '../utils/member-save-diagnostics.js';
 import { clearBudgetCache } from './cat-budgets.js';
 import { bootstrapCatCatalog, readCatCatalog, resolveCatCatalogPath } from './cat-catalog-store.js';
@@ -20,6 +20,7 @@ import type { AcpVariantConfig } from './cat-config-loader.js';
 import { _resetCachedConfig, loadCatConfig, parseRawCatConfig, toAllCatConfigs } from './cat-config-loader.js';
 import { clearVoiceCache } from './cat-voices.js';
 import { planClaudeAccountBinding } from './claude-account-binding.js';
+import { coCreatorMentionInputSchema } from './co-creator-mention.js';
 import {
   assertCodexMemberMutationReady,
   type CodexBindingSelection,
@@ -85,10 +86,12 @@ export interface RuntimeCatInput {
   variantLabel?: string;
   nickname?: string;
   avatar: string;
+  banner?: string;
   color: CatColor;
   mentionPatterns: string[];
   accountRef?: string;
   configurationSource?: 'native_tool' | 'managed_account';
+  agentProvider?: string | null;
   roleDescription: string;
   personality?: string;
   teamStrengths?: string;
@@ -122,10 +125,12 @@ export interface RuntimeCatUpdate {
   variantLabel?: string | null;
   nickname?: string;
   avatar?: string;
+  banner?: string | null;
   color?: CatColor;
   mentionPatterns?: string[];
   accountRef?: string | null;
   configurationSource?: 'native_tool' | 'managed_account' | null;
+  agentProvider?: string | null;
   accountBindingMode?: 'follow' | 'override';
   roleDescription?: string;
   personality?: string;
@@ -182,7 +187,7 @@ function normalizeCoCreatorMentionPatterns(mentionPatterns: readonly string[]): 
   const values = mentionPatterns
     .map((pattern) => pattern.trim())
     .filter((pattern) => pattern.length > 0)
-    .map((pattern) => (pattern.startsWith('@') ? pattern : `@${pattern}`));
+    .map((pattern) => coCreatorMentionInputSchema.parse(pattern));
   return Array.from(new Set(values));
 }
 
@@ -329,9 +334,11 @@ function createBreedFromInput(input: RuntimeCatInput): CatBreed {
     variants: [
       {
         id: variantId,
+        ...(input.banner ? { banner: input.banner } : {}),
         clientId: input.clientId,
         ...(input.creationReceipt ? { creationReceipt: input.creationReceipt } : {}),
         ...(input.configurationSource ? { configurationSource: input.configurationSource } : {}),
+        ...(input.agentProvider !== undefined ? { agentProvider: input.agentProvider } : {}),
         carrier: input.carrier,
         ...(input.variantLabel != null && input.variantLabel.trim().length > 0
           ? { variantLabel: input.variantLabel.trim() }
@@ -459,6 +466,7 @@ function bindRuntimeLocalAccounts(
 }
 
 export function createRuntimeCat(projectRoot: string, input: RuntimeCatInput): CatCafeConfig {
+  if (input.banner !== undefined) backgroundImageUrlSchema.parse(input.banner);
   const catalog = cloneCatalog(readOrBootstrapCatalog(projectRoot));
   if (findBreedVariant(catalog as unknown as CatCafeConfig, input.catId)) {
     throw new Error(`Cat "${input.catId}" already exists in runtime catalog`);
@@ -502,6 +510,7 @@ export function createRuntimeCat(projectRoot: string, input: RuntimeCatInput): C
 }
 
 export function updateRuntimeCat(projectRoot: string, catId: string, patch: RuntimeCatUpdate): CatCafeConfig {
+  if (patch.banner != null) backgroundImageUrlSchema.parse(patch.banner);
   const catalog = cloneCatalog(readOrBootstrapCatalog(projectRoot));
   const previous = {
     cat: toAllCatConfigs(catalog as unknown as CatCafeConfig)[catId],
@@ -586,6 +595,11 @@ export function updateRuntimeCat(projectRoot: string, catId: string, patch: Runt
     }
   }
 
+  if (patch.banner !== undefined) {
+    // Null is a durable removal, including a value inherited from the shipped template.
+    variant.banner = patch.banner;
+  }
+
   if (patch.color !== undefined) {
     if (located.isDefaultVariant) {
       breed.color = patch.color;
@@ -609,6 +623,7 @@ export function updateRuntimeCat(projectRoot: string, catId: string, patch: Runt
     if (patch.configurationSource) variant.configurationSource = patch.configurationSource;
     else delete variant.configurationSource;
   }
+  if (patch.agentProvider !== undefined) variant.agentProvider = patch.agentProvider;
   if (patch.personality !== undefined) {
     if (patch.personality && patch.personality.trim().length > 0) {
       variant.personality = patch.personality;
@@ -870,6 +885,7 @@ export function updateRuntimeCoCreator(projectRoot: string, patch: RuntimeCoCrea
 
   const normalizedOwner: CoCreatorConfig = {
     name: String(nextOwner.name ?? currentOwner.name),
+    ...(typeof nextOwner.nickname === 'string' ? { nickname: nextOwner.nickname } : {}),
     aliases: Array.isArray(nextOwner.aliases) ? (nextOwner.aliases as string[]) : [...currentOwner.aliases],
     mentionPatterns: Array.isArray(nextOwner.mentionPatterns)
       ? (nextOwner.mentionPatterns as string[])

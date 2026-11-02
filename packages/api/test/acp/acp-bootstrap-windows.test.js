@@ -4,7 +4,7 @@ import { existsSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSy
 import { syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, it, mock } from 'node:test';
+import { afterEach, beforeEach, describe, it, mock } from 'node:test';
 import { resolveAcpBootstrapCwd } from '../../dist/domains/cats/services/agents/providers/acp/acp-bootstrap-cwd.js';
 import { ensureWindowsAcpBootstrapDirectories } from '../../dist/domains/cats/services/agents/providers/acp/acp-bootstrap-windows-directory.js';
 
@@ -90,14 +90,49 @@ describe('Windows PowerShell child environment', () => {
   }
 });
 
+describe('Windows ACL verifier failure reporting', () => {
+  for (const [label, stderr] of [
+    ['undefined', undefined],
+    ['null', null],
+    ['empty string', ''],
+    ['whitespace', ' \r\n'],
+    ['empty buffer', Buffer.alloc(0)],
+  ]) {
+    it(`reports unavailable verification for ${label} stderr`, () => {
+      const stub = mock.method(childProcess, 'execFileSync', () => {
+        throw Object.assign(new Error('spawn failed'), { stderr });
+      });
+      syncBuiltinESMExports();
+      try {
+        assert.throws(() => ensureWindowsAcpBootstrapDirectories(tmpdir(), join(tmpdir(), 'fixture-cwd')), {
+          code: 'VERIFICATION_UNAVAILABLE',
+          message: 'Windows ACP bootstrap privacy check failed: verification unavailable',
+        });
+      } finally {
+        stub.mock.restore();
+        syncBuiltinESMExports();
+      }
+    });
+  }
+});
+
 describe('native Windows ACP bootstrap privacy', { skip: process.platform !== 'win32' }, () => {
   const fixtures = new Set();
+  let previousMode;
+  beforeEach(() => {
+    previousMode = process.env.CAT_CAFE_WINDOWS_ACP_BOOTSTRAP_MODE;
+    // Exercise the real leaf verifier independently of the runner's Temp ancestors.
+    // Ancestor rejection is explicitly strict below and in acp-bootstrap-strict-native.
+    process.env.CAT_CAFE_WINDOWS_ACP_BOOTSTRAP_MODE = 'trusted-host';
+  });
   const fixture = () => {
     const parent = mkdtempSync(join(tmpdir(), 'acp-win-private-test-'));
     fixtures.add(parent);
     return { parent, root: join(parent, 'bootstrap'), project: join(parent, 'project') };
   };
   afterEach(() => {
+    if (previousMode === undefined) delete process.env.CAT_CAFE_WINDOWS_ACP_BOOTSTRAP_MODE;
+    else process.env.CAT_CAFE_WINDOWS_ACP_BOOTSTRAP_MODE = previousMode;
     // Only roots created by this test process; never enumerate a runtime root.
     for (const path of fixtures) rmSync(path, { recursive: true, force: true });
     fixtures.clear();
@@ -208,6 +243,7 @@ describe('native Windows ACP bootstrap privacy', { skip: process.platform !== 'w
   }
 
   it('rejects unsafe parent delete-child grants before creating a private root', () => {
+    process.env.CAT_CAFE_WINDOWS_ACP_BOOTSTRAP_MODE = 'strict';
     const { parent, root, project } = fixture();
     inspectOrChangeAcl(
       parent,

@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, it } from 'node:test';
-import { validateEffectiveGrants, validateManifest } from '@clowder-ai/plugin-contract';
+import { validateManifest } from '@clowder-ai/plugin-contract';
 import Fastify from 'fastify';
 
 import { MessageStore } from '../dist/domains/cats/services/stores/ports/MessageStore.js';
@@ -12,10 +12,85 @@ import {
   createPluginManagerRuntimeComposition,
 } from '../dist/domains/plugin/index.js';
 import { InstalledPluginOperations } from '../dist/domains/plugin/operations/plugin-operation-routes.js';
-import { registerPluginManagerRoutes } from '../dist/routes/plugin-manager-routes.js';
+import { pluginManagerUploadRoutes, registerPluginManagerRoutes } from '../dist/routes/plugin-manager-routes.js';
 import { catalogEntry, manifest, packageArchive } from './plugin-official-package-installer.fixture.js';
 
 const roots = [];
+
+it('real Manager JSON and upload routes confirm replacement of the same legacy instance', async () => {
+  const { composition, entry, projectRoot, runtime } = await harness();
+  const installed = await composition.manager.install({
+    source: { kind: 'catalog', catalogId: entry.catalogId },
+    expectedVersion: entry.version,
+    expectedDigest: entry.packageDigest,
+  });
+  await runtime.inventoryStore.transaction((tx) => {
+    const { provenance: _oldSource, ...legacy } = tx.packages.get(entry.packageDigest);
+    tx.packages.put(legacy);
+  });
+  const before = await runtime.inventoryStore.snapshot();
+  const next = await packageArchive({ packageManifest: manifest({ version: '0.2.0' }) });
+  const path = join(projectRoot, 'replacement.tgz');
+  await writeFile(path, next.bytes);
+  const app = Fastify();
+  const owner = process.env.DEFAULT_OWNER_USER_ID ?? 'owner-user';
+  app.addHook('preHandler', async (request) => {
+    request.sessionUserId = request.headers['x-test-session-user'];
+  });
+  const options = { manager: composition.manager, auditLog: { append: async () => {} } };
+  registerPluginManagerRoutes(app, options);
+  await app.register(pluginManagerUploadRoutes, options);
+  const headers = { host: 'localhost:3004', origin: 'http://localhost:5173', 'x-test-session-user': owner };
+  try {
+    const offer = await app.inject({
+      method: 'POST',
+      url: '/api/plugin-manager/plugins/install',
+      headers,
+      remoteAddress: '127.0.0.1',
+      payload: { source: { kind: 'local-archive', path } },
+    });
+    assert.equal(offer.statusCode, 409, offer.payload);
+    assert.equal(offer.json().code, 'ARCHIVE_REPLACEMENT_CONFIRMATION_REQUIRED');
+    assert.deepEqual(await runtime.inventoryStore.snapshot(), before);
+    const replacement = offer.json().replacement.confirmation;
+    assert.equal(replacement.pluginInstanceId, installed.pluginInstanceId);
+    const boundary = 'legacy-replacement-boundary';
+    const payload = Buffer.concat([
+      Buffer.from(
+        `--${boundary}\r\nContent-Disposition: form-data; name="replacement"\r\n\r\n${JSON.stringify(replacement)}\r\n`,
+      ),
+      Buffer.from(
+        `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="replacement.tgz"\r\nContent-Type: application/gzip\r\n\r\n`,
+      ),
+      next.bytes,
+      Buffer.from(`\r\n--${boundary}--\r\n`),
+    ]);
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/plugin-manager/plugins/install/upload',
+      remoteAddress: '127.0.0.1',
+      headers: { ...headers, 'content-type': `multipart/form-data; boundary=${boundary}` },
+      payload,
+    });
+    assert.equal(response.statusCode, 201, response.payload);
+    assert.equal(response.json().pluginInstanceId, installed.pluginInstanceId);
+    const after = await runtime.inventoryStore.snapshot();
+    assert.equal(after.instances.length, 1);
+    assert.equal(after.instances[0].packageDigest, next.integrity);
+    const stale = await app.inject({
+      method: 'POST',
+      url: '/api/plugin-manager/plugins/install',
+      headers,
+      remoteAddress: '127.0.0.1',
+      payload: { source: { kind: 'local-archive', path }, replacement },
+    });
+    assert.equal(stale.statusCode, 409, stale.payload);
+    assert.equal(stale.json().code, 'STALE_ARCHIVE_REPLACEMENT');
+    assert.deepEqual(await runtime.inventoryStore.snapshot(), after);
+  } finally {
+    await app.close();
+  }
+});
 
 afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
@@ -32,15 +107,14 @@ async function harness({
   offline = () => false,
   contract,
   machinePresentation = false,
+  catalogManifests,
   extraFiles = {},
-  effectiveGrants,
 } = {}) {
   const projectRoot = await root('cat-cafe-f202-manager-composition-');
   let archive = await packageArchive({ packageManifest, extraFiles });
   const entry = catalogEntry(archive.integrity, {
     pluginId: packageManifest.pluginId,
     version: packageManifest.version,
-    ...(effectiveGrants ? { effectiveGrants } : {}),
     ...(machinePresentation
       ? {
           presentation: {
@@ -75,7 +149,7 @@ async function harness({
   const composition = createPluginManagerRuntimeComposition({
     runtime,
     catalogProvider: provider,
-    catalogManifests: [packageManifest],
+    catalogManifests: catalogManifests ?? [packageManifest],
     fetchOfficialArchive: async () => archive.bytes,
     now: () => 9_000,
   });
@@ -96,8 +170,7 @@ async function harness({
 
 function contributionContractRuntime() {
   return {
-    manifestContractVersions: ['0.1.0'],
-    validateEffectiveGrants,
+    manifestContractRange: '0.1.0',
     validateManifest,
   };
 }
@@ -125,7 +198,6 @@ describe('F202 Plugin Manager runtime composition', () => {
       const inventory = await runtime.inventoryStore.snapshot();
       assert.deepEqual(inventory.packages, []);
       assert.deepEqual(inventory.instances, []);
-      assert.deepEqual(inventory.grants, []);
     } finally {
       await runtime.shutdown('empty_host_test');
     }
@@ -141,9 +213,6 @@ describe('F202 Plugin Manager runtime composition', () => {
       [entry.pluginId],
     );
     assert.equal(before.plugins[0].actions.install, true);
-    assert.deepEqual(before.plugins[0].capabilitySummary, [
-      { id: 'messaging.send', kind: 'messaging', name: 'Source', active: false },
-    ]);
 
     const installed = await composition.manager.install({
       source: { kind: 'catalog', catalogId: entry.catalogId },
@@ -267,7 +336,6 @@ export default { create() { return { async start(host) {
     const { composition, entry, runtime } = await harness({
       packageManifest,
       contract: contributionContractRuntime(),
-      effectiveGrants: ['plugin.config.read'],
       extraFiles: { 'dist/entrypoint.js': entrypoint },
     });
     const manager = composition.manager;
@@ -683,7 +751,6 @@ export default { create() { return { async start() {
         const after = await runtime.inventoryStore.snapshot();
         assert.equal(after.instances[0].packageDigest, before.instances[0].packageDigest);
         assert.equal(after.instances[0].pluginInstanceId, before.instances[0].pluginInstanceId);
-        assert.deepEqual(after.grants[0].effectiveGrants, before.grants[0].effectiveGrants);
         const current = (await composition.manager.get(entry.pluginId)).plugin;
         assert.equal(current.intent, 'enabled');
         assert.equal(current.live, failOld ? 'crashed' : 'running');
@@ -786,7 +853,7 @@ export default { create() { return { async start() {
     assert.equal((await runtime.inventoryStore.snapshot()).instances[0].lifecycleState, 'retired');
   });
 
-  it('fails closed for legacy inventory whose admission provenance cannot be proven', async () => {
+  it('keeps installed legacy inventory visible with unknown origin when catalog discovery is offline', async () => {
     let offline = false;
     const { composition, entry, runtime } = await harness({ offline: () => offline });
     await composition.manager.install({
@@ -802,10 +869,15 @@ export default { create() { return { async start() {
     });
     offline = true;
 
-    assert.deepEqual((await composition.manager.list()).plugins, [], 'only admitted packages are projected');
+    const before = await runtime.inventoryStore.snapshot();
+    const listed = (await composition.manager.list()).plugins;
+    assert.equal(listed.length, 1);
+    assert.equal(listed[0].pluginId, entry.pluginId);
+    assert.deepEqual(listed[0].source, { kind: 'unknown', packageName: null, trust: 'unknown' });
+    assert.deepEqual(await runtime.inventoryStore.snapshot(), before, 'legacy display does not rewrite admission');
   });
 
-  it('admits a local archive without persisting its raw host path or granting requested authority', async () => {
+  it('admits a local archive without persisting its raw host path', async () => {
     const packageManifest = manifest({ pluginId: 'local.test-source', name: 'Local Test Source' });
     const { archive, composition, projectRoot, runtime } = await harness({ packageManifest });
     const archivePath = join(projectRoot, 'local-plugin.tgz');
@@ -822,7 +894,6 @@ export default { create() { return { async start() {
       kind: 'local-archive',
       packageName: '@clowder-ai/official-test-source',
     });
-    assert.deepEqual(snapshot.grants[0].effectiveGrants, []);
     assert.deepEqual(listed.plugin.source, {
       kind: 'local-archive',
       packageName: '@clowder-ai/official-test-source',
@@ -870,10 +941,9 @@ export default { create() { return { async start() {
     const snapshot = await runtime.inventoryStore.snapshot();
     assert.equal(snapshot.instances[0].lifecycleState, 'installed');
     assert.equal(snapshot.instances[0].lifecycleRevision, 2);
-    assert.equal(snapshot.grants.length, 1);
   });
 
-  it('projects runtime-less declared MCP capabilities from the canonical capability state', async () => {
+  it('projects runtime-less declared MCP contributions from the canonical registration state', async () => {
     let catalogOffline = false;
     const packageManifest = manifest({
       runtime: { transport: 'builtin' },
@@ -920,9 +990,6 @@ export default { create() { return { async start() {
 
     const running = (await composition.manager.get(entry.pluginId)).plugin;
     assert.equal(running.live, 'running');
-    assert.deepEqual(running.capabilitySummary, [
-      { id: 'messaging.send', kind: 'messaging', name: 'Source', active: true },
-    ]);
     assert.equal(
       (await runtime.mcpConfigIO.readConfig()).capabilities.find(
         (capability) => capability.id === `plugin:${entry.pluginId}:fixture-tools`,
@@ -933,16 +1000,44 @@ export default { create() { return { async start() {
     catalogOffline = true;
     const degraded = await composition.manager.list();
     assert.equal(degraded.catalog.status, 'unavailable');
-    assert.deepEqual(degraded.plugins[0].capabilitySummary, [
-      { id: 'messaging.send', kind: 'messaging', name: 'Source', active: true },
-    ]);
     catalogOffline = false;
 
     await composition.manager.setEnabled(entry.pluginId, { enabled: false, expectedRevision: 4 });
     const stopped = (await composition.manager.get(entry.pluginId)).plugin;
     assert.equal(stopped.live, 'stopped');
-    assert.deepEqual(stopped.capabilitySummary, [
-      { id: 'messaging.send', kind: 'messaging', name: 'Source', active: false },
-    ]);
   });
+});
+
+// Production ships bundled metadata only for dot; ordinary releases are verified on update.
+it('offers and verifies an exact catalog update without a bundled package manifest', async () => {
+  const h = await harness({ machinePresentation: true, catalogManifests: [] });
+  const installed = await h.composition.manager.install({
+    source: { kind: 'catalog', catalogId: h.entry.catalogId },
+    expectedVersion: h.entry.version,
+    expectedDigest: h.entry.packageDigest,
+  });
+  await h.setRelease(manifest({ version: '0.2.0' }));
+  const item = (await h.composition.manager.get(h.entry.pluginId)).plugin;
+  assert.equal(item.actions.install, true, 'the remote release must expose Update');
+  await h.composition.manager.update(h.entry.pluginId, {
+    expectedVersion: '0.2.0',
+    expectedRevision: item.lifecycleRevision,
+  });
+  const updated = (await h.composition.manager.get(h.entry.pluginId)).plugin;
+  assert.equal(updated.pluginInstanceId, installed.pluginInstanceId);
+  assert.equal(updated.installedVersion, '0.2.0');
+  const before = await h.runtime.inventoryStore.snapshot();
+  await h.setRelease(manifest({ version: '0.3.0', contractVersion: '999.0.0' }));
+  const invalid = (await h.composition.manager.get(h.entry.pluginId)).plugin;
+  await assert.rejects(
+    h.composition.manager.update(h.entry.pluginId, {
+      expectedVersion: '0.3.0',
+      expectedRevision: invalid.lifecycleRevision,
+    }),
+  );
+  assert.deepEqual(
+    await h.runtime.inventoryStore.snapshot(),
+    before,
+    'validation must reject before changing the installed package',
+  );
 });

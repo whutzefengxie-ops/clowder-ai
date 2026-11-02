@@ -1,12 +1,14 @@
 'use client';
 
 import type { BuiltinCloudIdentityProtectedField, BuiltinCloudIdentityProtection } from '@cat-cafe/shared';
+import { deploymentDefaults } from '@cat-cafe/shared';
 import { useMemo, useRef } from 'react';
 import type { CatData } from '@/hooks/useCatData';
+import { useCoCreatorDisplay } from '@/hooks/useCoCreatorConfig';
 import { AvatarImageWithFallback } from './AvatarImageWithFallback';
 import { MemberAccountFollowing } from './accounts/MemberAccountFollowing';
 import type { ProfileItem } from './hub-accounts.types';
-import { usesAgyNative } from './hub-cat-editor.agy';
+import { usesAgyAcp, usesAgyNative } from './hub-cat-editor.agy';
 import {
   autoSlug,
   CLIENT_OPTIONS,
@@ -21,6 +23,7 @@ import {
   splitStrengthTags,
 } from './hub-cat-editor.model';
 import { AgyNativeFields } from './hub-cat-editor-agy';
+import { MemberCarrierSelect } from './hub-cat-editor-carrier';
 import { CatColorField } from './hub-cat-editor-color-field';
 import { SectionCard, SelectField, TextField } from './hub-cat-editor-fields';
 import { VoiceConfigSection } from './hub-cat-editor-voice';
@@ -34,6 +37,7 @@ import {
 } from './members/editor-presentation';
 import { MemberChangedField, MemberChangeMark, useMemberChanged } from './members/MemberChangeMark';
 import { MemberOperationFeedback } from './members/MemberOperationFeedback';
+import { PluginAgentClientPicker } from './PluginAgentClientPicker';
 
 type FormPatch = Partial<HubCatEditorFormState>;
 
@@ -88,6 +92,7 @@ export function IdentitySection({
   onAvatarUpload: (file: File) => Promise<void>;
   onRefAudioUpload: (file: File) => Promise<void>;
 }) {
+  const owner = useCoCreatorDisplay();
   const page = useMemberEditorPresentation();
   const t = useEditorText();
   const strengthTags = splitStrengthTags(form.strengths);
@@ -146,7 +151,7 @@ export function IdentitySection({
         ariaLabel="Nickname"
         value={form.nickname}
         onChange={(value) => onChange({ nickname: value })}
-        placeholder="可选，co-creator给的昵称"
+        placeholder={`可选，${owner.nickname}给的昵称`}
       />
       <TextField
         label="显示后缀"
@@ -379,6 +384,7 @@ const PROTECTED_IDENTITY_FIELD_LABELS: Record<BuiltinCloudIdentityProtectedField
   commandArgs: '启动参数',
   cliConfigArgs: 'CLI 配置',
   acp: 'ACP 传输',
+  agentProvider: '插件客户端绑定',
   mentionPatterns: '主句柄 @gpt-pro',
 };
 
@@ -410,7 +416,8 @@ export function ProtectedCloudIdentitySection({
               copy.protectedCloudDescription
             ) : (
               <>
-                @gpt-pro 是 Clowder AI 的固定云端入口。它必须保持 ChatGPT Pro 与 Remote MCP 身份，云端回复才能回到正确的
+                @gpt-pro 是 {deploymentDefaults.brand.displayName} 的固定云端入口。它必须保持 ChatGPT Pro 与 Remote MCP
+                身份，云端回复才能回到正确的
                 Thread；因此这里不允许改所属家族、Client、模型、账号或本地运行方式。可以增加别名，主句柄 @gpt-pro
                 固定。需要本地 Codex，请新建另一位成员。
               </>
@@ -526,7 +533,9 @@ export function AccountSection({
   const copy = useMembersCopy();
   const selectedProfile = availableProfiles.find((p) => p.id === form.accountRef);
   const native = usesAgyNative(form);
-  const callHint = native ? null : buildCallHint(form.clientId, selectedProfile, form.defaultModel, form.provider);
+  const officialAcp = usesAgyAcp(form);
+  const callHint =
+    native || officialAcp ? null : buildCallHint(form.clientId, selectedProfile, form.defaultModel, form.provider);
   const selectedModel = form.defaultModel.trim();
   const modelNotListed = selectedModel.length > 0 && modelOptions.length > 0 && !modelOptions.includes(selectedModel);
   const modelSuggestions = useMemo(
@@ -555,10 +564,12 @@ export function AccountSection({
             const nextCarrier = carrierOptionsForClient(nextClient)[0]?.value ?? 'cli';
             onChange({
               clientId: nextClient,
+              acpAgentProvider: null,
               provider: '',
               cliEffort: '',
               carrier: nextCarrier,
               agyNativeEnabled: nextClient === 'google',
+              agyAcpEnabled: false,
               ...(nextClient === 'google'
                 ? { agyProfileEnabled: true, agyProfileId: form.agyProfileId || form.catId }
                 : {}),
@@ -569,36 +580,10 @@ export function AccountSection({
         />
 
         {carrierOptionsForClient(form.clientId).length > 1 || form.clientId === 'acp' || form.clientId === 'google' ? (
-          <SelectField
-            label="接入方式"
+          <MemberCarrierSelect
+            form={form}
+            onChange={(patch) => onChange({ ...patch, acpAgentProvider: null })}
             ariaLabel={page ? 'Transport' : '接入方式'}
-            value={form.clientId === 'google' ? (native ? 'agy-native' : 'retired') : form.carrier}
-            options={[
-              ...(form.clientId === 'google'
-                ? !native
-                  ? [{ value: 'retired', label: '旧入口已退役，请配置 Native' }]
-                  : []
-                : carrierOptionsForClient(form.clientId)),
-              ...(form.clientId === 'google' ? [{ value: 'agy-native', label: 'AGY Native' }] : []),
-            ]}
-            onChange={(value) => {
-              if (value === 'agy-native') {
-                onChange({ carrier: 'cli', agyNativeEnabled: true });
-                return;
-              }
-              const carrier = value as HubCatEditorFormState['carrier'];
-              onChange({
-                carrier,
-                agyNativeEnabled: false,
-                ...(carrier === 'acp' && !form.acpCommand.trim()
-                  ? { acpCommand: defaultAcpCommandForClient(form.clientId) }
-                  : {}),
-                ...(carrier === 'acp' && !form.acpStartupArgs.trim()
-                  ? { acpStartupArgs: defaultAcpStartupArgsForClient(form.clientId) }
-                  : {}),
-              });
-            }}
-            required
           />
         ) : null}
 
@@ -677,7 +662,7 @@ export function AccountSection({
                     : '模型标识符，如 claude-sonnet-4-5'
               }
             />
-            {native ? <AgyNativeFields form={form} onChange={onChange} /> : null}
+            {native || officialAcp ? <AgyNativeFields form={form} onChange={onChange} /> : null}
             {modelNotListed ? (
               <div className="rounded-[10px] bg-[var(--console-field-bg,var(--console-card-bg))] px-3 py-2">
                 <p className="text-xs leading-4 text-conn-amber-text">
@@ -739,38 +724,51 @@ export function AccountSection({
             ) : null}
             {form.carrier === 'acp' ? (
               <>
-                <TextField
-                  label="ACP Command"
-                  value={form.acpCommand}
-                  onChange={(value) => onChange({ acpCommand: value })}
-                  required
-                  placeholder={defaultAcpCommandForClient(form.clientId) || 'agent-cli'}
-                />
-                <TextField
-                  label="ACP Startup Args"
-                  value={form.acpStartupArgs}
-                  onChange={(value) => onChange({ acpStartupArgs: value })}
-                  required
-                  placeholder={defaultAcpStartupArgsForClient(form.clientId) || '--acp'}
-                />
-                <p className="-mt-1 text-micro leading-4 text-cafe-muted">
-                  空格分隔，如 <code className="text-cafe-secondary">acp --pure</code> 或{' '}
-                  <code className="text-cafe-secondary">--acp --mode agent</code>。带空格的值用引号包裹。
-                </p>
-                <TextField
-                  label="ACP Max Processes"
-                  value={form.acpMaxLiveProcesses}
-                  onChange={(value) => onChange({ acpMaxLiveProcesses: value })}
-                  inputMode="numeric"
-                  placeholder="3"
-                />
-                <TextField
-                  label="ACP Idle TTL (min)"
-                  value={form.acpIdleTtlMinutes}
-                  onChange={(value) => onChange({ acpIdleTtlMinutes: value })}
-                  inputMode="numeric"
-                  placeholder="30"
-                />
+                {!officialAcp && <PluginAgentClientPicker form={form} onChange={onChange} />}
+                {!form.acpAgentProvider && (
+                  <>
+                    <TextField
+                      label="ACP Command"
+                      value={form.acpCommand}
+                      onChange={(value) => onChange({ acpCommand: value })}
+                      required
+                      placeholder={
+                        officialAcp ? 'agy_acp_server.par' : defaultAcpCommandForClient(form.clientId) || 'agent-cli'
+                      }
+                    />
+                    <TextField
+                      label="ACP Startup Args"
+                      value={form.acpStartupArgs}
+                      onChange={(value) => onChange({ acpStartupArgs: value })}
+                      required={!officialAcp}
+                      placeholder={officialAcp ? '' : defaultAcpStartupArgsForClient(form.clientId) || '--acp'}
+                    />
+                    <p className="-mt-1 text-micro leading-4 text-cafe-muted">
+                      {officialAcp ? (
+                        t('官方 ACP 可留空；Command 填已安装程序的路径。')
+                      ) : (
+                        <>
+                          空格分隔，如 <code className="text-cafe-secondary">acp --pure</code> 或{' '}
+                          <code className="text-cafe-secondary">--acp --mode agent</code>。带空格的值用引号包裹。
+                        </>
+                      )}
+                    </p>
+                    <TextField
+                      label="ACP Max Processes"
+                      value={form.acpMaxLiveProcesses}
+                      onChange={(value) => onChange({ acpMaxLiveProcesses: value })}
+                      inputMode="numeric"
+                      placeholder="3"
+                    />
+                    <TextField
+                      label="ACP Idle TTL (min)"
+                      value={form.acpIdleTtlMinutes}
+                      onChange={(value) => onChange({ acpIdleTtlMinutes: value })}
+                      inputMode="numeric"
+                      placeholder="30"
+                    />
+                  </>
+                )}
               </>
             ) : null}
           </>
@@ -787,7 +785,7 @@ export function AccountSection({
         <p className="-mt-1 text-micro leading-4 text-cafe-muted">
           {page
             ? t('发送消息、查记忆等协作工具。关闭后这个成员只能回复，不能使用这些工具协作。')
-            : '控制该成员是否接收 Clowder AI MCP 工具（post_message、search_evidence 等）。关闭后该成员无法使用协作和记忆工具。'}
+            : `控制该成员是否接收 ${deploymentDefaults.brand.name} MCP 工具（post_message、search_evidence 等）。关闭后该成员无法使用协作和记忆工具。`}
         </p>
       </div>
     </SectionCard>

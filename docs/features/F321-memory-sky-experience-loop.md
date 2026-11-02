@@ -13,7 +13,16 @@ description_updated_at: 2026-09-25T17:48:00Z
 
 # F321: 记忆星空与「经历 → 下一次」｜Memory Sky & Experience Loop
 
-> **Status**: in-progress | **Owner**: Ragdoll（@opus55, claude-opus-5-5）任指挥猫——编排、排序与验收，不写实现；各 Phase 执行猫另派 | **Priority**: P1
+> **Status**: closed (consolidated into F332; 未完成结果继续承接，非全部交付) | **Owner**: Ragdoll（@opus55, claude-opus-5-5）任指挥猫——编排、排序与验收，不写实现；各 Phase 执行猫另派 | **Priority**: P1
+
+## 2026-10-23 项目收拢至 F332
+
+You 在 `[thread-id]#private-source-id` 明确要求关闭旧记忆项目、
+保留有价值的结果并新立一项。本项目登记据此归入 [F332](F332-experience-informed-memory.md)；
+**本文件仍保留原合同及历史证据的权威，未被逐项替代的合同继续有效。**
+原 AC 实情、Task、owner、accepted scope 和等待不变；本次不声称全部完成、不关闭来源、不迁移数据。
+
+> **关闭前状态快照**: in-progress | **Owner**: Ragdoll（@opus55, claude-opus-5-5）任指挥猫——编排、排序与验收，不写实现；各 Phase 执行猫另派 | **Priority**: P1
 
 ## Why
 
@@ -88,9 +97,26 @@ Workspace 的“记忆”本身保留）。
 
 ### Phase B: 想得起｜换个说法也能用上当前约定
 
+**2026-10-20 首包范围纠偏与续办**：执行现场 `[thread-id]` 已更名为
+“记忆优化①｜经验留下来，下次用得上”。You 在母现场 `private-source-id`、
+`private-source-id` 明确否定只做称呼案例及逐请求灌画像的首包定义；
+交付“经验有据留下 → 新任务自行找到并用对 → 更正后再用”。npm 发布、关系来历、设计约定验证同一链，
+不各写关键词特例。Astra 沿整包 Task `private-source-id` 负责设计、整合与验收，
+Sol6.1 的原实现 Task001470 及合后返修 Task002367 已完成并释放工位。
+**2026-10-23 首包使用与加载验收完成**：#5794 移除旧逐请求全量画像；#5813 按原负责人
+#5932 修正 Handle 呈现，#5966 修复授权摘要的字段顺序误撤权。真实 Alpha 验成合法记录、
+自然读源与采用、来历、更正与现行约定撤销、原包离线发布、设计实图及授权外仓 A2A。
+最后一个 A2A 样本读到当前批准版本并采用正确称呼，没有被协作来信中的旧称呼带偏。
+正式 runtime boot48 / `0c3b28eb` 已包含最后修复 `c111b2f`，原整合 g4 到版等待已消费；
+页面/API/编译版本一致，本轮正式认证读源与 revision 拒绝检查通过。
+项目案例走正常主动读取，未声明 Alpha 自动向量指针通过；现行约定撤销不等于物理擦除历史；
+耗时不外推为性能改善。早期认证/启动/消费失败及无关 smoke 原件继续保留。
+本首包不以完整 M3 为前置；Phase A、KD-8、Luna、F316、F324 与外仓自动接续保持原责任，
+Phase B/C 及 F321 整体不因此结账。
+
 - F316 AC-B1 / B3 的验收与收口：F316 owner（小太阳）。两项仍为 `blocked:ineligible_invocation` / `blocked:historical_coordinates_unavailable`；
   关闭路径分别是重跑一次合法的 owner 鉴权交互旅程、跑一条新的当前 revision Person 旅程，或由 operator 作终态处置。
-- 研究 R1（当前关系状态纵切）：研究已完成并通过独立审阅，**尚无实现 owner**。三臂诊断可由小太阳沿研究责任承接；
+- 研究 R1（当前关系状态纵切）：研究已完成并通过独立审阅；2026-10-20 起其 R7/R14 作为上列跨领域首包的关系验收，由 Sol6.1 实现、Astra 整合。保留三臂诊断的来源边界；
   canonical 关系 facet 归 F231 Profile owner（或经裁决的 F260）；呈现归 F296。F321 负责落实实现 owner、排序与联合验收。
 - 是否修订 F287 现行合同（R2：允许模型判断“这个问题需要查关系状态”）须由 F287 原 owner 与 operator 另过合同门，不经 F321 带入。
 - Phase A 不等 Phase B：Phase A 照亮“这一轮实际投了什么、什么根本没投”，正是 R1 诊断所缺的可观察面；但它本身不关闭 F316。

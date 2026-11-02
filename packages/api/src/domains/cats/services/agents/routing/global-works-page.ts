@@ -20,7 +20,9 @@ const cursorSchema = z
     current: z
       .object({
         threadId: z.string().min(1).max(256),
-        phase: z.enum(['tasks', 'messages']),
+        phase: z.enum(['works', 'tasks', 'messages']),
+        workAfter: z.string().max(2048).optional(),
+        workSnapshot: z.string().max(256).optional(),
         taskAfter: z.string().max(256).optional(),
         before: positionSchema.optional(),
         resume: z
@@ -69,6 +71,15 @@ export async function readGlobalWorksPage(input: {
   messages?: IMessageStore;
   tasks?: ITaskStore;
   accepted: (threadId: string, messages: readonly StoredMessage[]) => Promise<ThreadArtifactDTO[]>;
+  ownedWorks?: (
+    threadId: string,
+    after?: string,
+    snapshot?: string,
+  ) => Promise<{
+    artifacts: ThreadArtifactDTO[];
+    snapshot: string;
+    nextCursor?: string;
+  }>;
 }) {
   if (!input.messages || !input.tasks?.listByThreadPage) throw new WorksPageError('Works source unavailable', 503);
   const readTasks = input.tasks.listByThreadPage.bind(input.tasks);
@@ -97,7 +108,10 @@ export async function readGlobalWorksPage(input: {
       break;
     }
     visitedThreads += 1;
-    const position = state.current ?? { threadId: thread.id, phase: 'tasks' as const };
+    const position = state.current ?? {
+      threadId: thread.id,
+      phase: input.ownedWorks ? ('works' as const) : ('tasks' as const),
+    };
     state.current = position;
     const append = (items: readonly ThreadArtifactDTO[]) =>
       artifacts.push(
@@ -107,6 +121,23 @@ export async function readGlobalWorksPage(input: {
           threadTitle: thread.title ?? '',
         })),
       );
+    if (position.phase === 'works') {
+      if (artifacts.length > 502) break;
+      if (!input.ownedWorks) throw new WorksPageError('Work owner source unavailable', 503);
+      const page = await input.ownedWorks(thread.id, position.workAfter, position.workSnapshot);
+      if (page.artifacts.length > 10 || (page.nextCursor && page.nextCursor === position.workAfter))
+        throw new WorksPageError('Invalid owner work page', 503);
+      append(page.artifacts);
+      if (page.nextCursor) {
+        position.workAfter = page.nextCursor;
+        position.workSnapshot = page.snapshot;
+        break;
+      }
+      position.phase = 'tasks';
+      delete position.workAfter;
+      delete position.workSnapshot;
+    }
+    if (artifacts.length >= 512) break;
     if (position.phase === 'tasks') {
       if (scannedTasks >= 64) break;
       const page = await (async () => {
@@ -125,7 +156,8 @@ export async function readGlobalWorksPage(input: {
       if (position.resume && page.tasks[0]?.id !== position.resume.id)
         throw new WorksPageError('Work attachment changed; reload catalogue', 409);
       for (const task of page.tasks) {
-        const digest = createHash('sha256').update(JSON.stringify(task)).digest('hex');
+        // Complete items have no continuation payload to fingerprint.
+        const digest = position.resume ? createHash('sha256').update(JSON.stringify(task)).digest('hex') : undefined;
         if (position.resume && digest !== position.resume.fingerprint)
           throw new WorksPageError('Work attachment changed; reload catalogue', 409);
         const items = aggregateProjectedThreadArtifacts({
@@ -137,7 +169,11 @@ export async function readGlobalWorksPage(input: {
         const selected = items.slice(offset, offset + 512 - artifacts.length);
         append(selected);
         if (offset + selected.length < items.length) {
-          position.resume = { id: task.id, offset: offset + selected.length, fingerprint: digest };
+          position.resume = {
+            id: task.id,
+            offset: offset + selected.length,
+            fingerprint: digest ?? createHash('sha256').update(JSON.stringify(task)).digest('hex'),
+          };
           break;
         }
         delete position.resume;
@@ -173,7 +209,7 @@ export async function readGlobalWorksPage(input: {
     let split = false;
     for (const message of messages) {
       const offset = position.resume?.offset ?? 0;
-      const digest = fingerprint(message);
+      const digest = position.resume ? fingerprint(message) : undefined;
       if (position.resume && digest !== position.resume.fingerprint)
         throw new WorksPageError('Work publication changed; reload catalogue', 409);
       const accepted = await input.accepted(thread.id, [message]);
@@ -187,7 +223,7 @@ export async function readGlobalWorksPage(input: {
       append([...acceptedSlice, ...projection.artifacts]);
       const consumed = offset + acceptedSlice.length + projection.artifacts.length;
       if (consumed < accepted.length + projection.total) {
-        position.resume = { id: message.id, offset: consumed, fingerprint: digest };
+        position.resume = { id: message.id, offset: consumed, fingerprint: digest ?? fingerprint(message) };
         split = true;
         break;
       }

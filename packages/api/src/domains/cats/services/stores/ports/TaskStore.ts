@@ -25,7 +25,18 @@ import {
   type TypedWaitRegistrationSnapshot,
 } from '../../../../ball-custody/TypedWaitRegistration.js';
 import type { DevelopmentWorkTransition } from './DevelopmentWorkTransition.js';
+import {
+  advanceOrdinaryTaskAssignment,
+  mutateOrdinaryTask,
+  type OrdinaryTaskMutation,
+  type OrdinaryTaskMutationResult,
+} from './OrdinaryTaskMutation.js';
 import { mergeTaskAutomationState } from './TaskAutomationState.js';
+import {
+  type EntrustedTaskDataControllerTransition,
+  type EntrustedTaskDataControllerTransitionResult,
+  transitionEntrustedTaskDataController,
+} from './TaskDataControllerTransition.js';
 import { reconcileDeploymentWaitTaskMutation } from './TaskDeploymentWaitState.js';
 import { TaskDevelopmentWorkStore } from './TaskDevelopmentWorkStore.js';
 import { TaskEntrustedWorkMutationStore } from './TaskEntrustedWorkMutationStore.js';
@@ -46,6 +57,7 @@ import {
   isEntrustedWorkSubjectKey,
   type ReplaceAutomationStateIfGenerationInput,
   type ReplaceDeploymentWaitIfGenerationInput,
+  type TaskMutationWriteFence,
   TaskPageCursorExpiredError,
   type TaskSubjectUpsertCondition,
   type UpdateEntrustedWorkStoreInput,
@@ -69,6 +81,17 @@ const MAX_TASKS = 500;
  * #320: Extended with kind/subject indexes.
  */
 export class TaskStore implements ITaskStore {
+  mutateOrdinaryTask(
+    command: OrdinaryTaskMutation,
+    writeFence?: TaskMutationWriteFence,
+  ): OrdinaryTaskMutationResult | Promise<OrdinaryTaskMutationResult> {
+    const apply = () => {
+      const result = mutateOrdinaryTask(this.tasks.get(command.taskId) ?? null, command, Date.now());
+      if (result.kind === 'updated') this.tasks.set(command.taskId, result.task);
+      return result;
+    };
+    return writeFence ? Promise.resolve(writeFence.assertCurrent()).then(apply) : apply();
+  }
   private tasks: Map<string, TaskItem> = new Map();
   private readonly waitRegistrations = new Map<string, TypedWaitRegistration>();
   /** subject_key → taskId reverse index */
@@ -99,6 +122,25 @@ export class TaskStore implements ITaskStore {
     });
     this.waitMutations = new TaskWaitMutationStore(this.tasks, this.waitRegistrations, this.managedWorkRegistration);
     this.entrustedWorkMutations = new TaskEntrustedWorkMutationStore(this.tasks);
+  }
+
+  transitionEntrustedTaskDataController(
+    input: EntrustedTaskDataControllerTransition,
+  ): EntrustedTaskDataControllerTransitionResult;
+  transitionEntrustedTaskDataController(
+    input: EntrustedTaskDataControllerTransition,
+    writeFence: TaskMutationWriteFence,
+  ): Promise<EntrustedTaskDataControllerTransitionResult>;
+  transitionEntrustedTaskDataController(
+    input: EntrustedTaskDataControllerTransition,
+    writeFence?: TaskMutationWriteFence,
+  ): EntrustedTaskDataControllerTransitionResult | Promise<EntrustedTaskDataControllerTransitionResult> {
+    const apply = () => {
+      const result = transitionEntrustedTaskDataController(this.tasks.get(input.taskId) ?? null, input);
+      if (result.kind === 'bound' || result.kind === 'revoked') this.tasks.set(input.taskId, result.task);
+      return result;
+    };
+    return writeFence ? Promise.resolve(writeFence.assertCurrent()).then(apply) : apply();
   }
 
   create(input: CreateTaskInput): TaskItem {
@@ -222,14 +264,38 @@ export class TaskStore implements ITaskStore {
     return admitEntrustedTaskInMemory(this.tasks, this.subjectIndex, input, () => this.evictDoneIfNeeded());
   }
 
-  closeEntrustedWork(taskId: string, input: CloseEntrustedWorkStoreInput): CloseEntrustedWorkStoreResult {
-    const result = this.entrustedWorkMutations.close(taskId, input);
-    if (result.kind === 'closed') this.developmentWork.closed(result.task);
-    return result;
+  closeEntrustedWork(taskId: string, input: CloseEntrustedWorkStoreInput): CloseEntrustedWorkStoreResult;
+  closeEntrustedWork(
+    taskId: string,
+    input: CloseEntrustedWorkStoreInput,
+    writeFence: TaskMutationWriteFence,
+  ): Promise<CloseEntrustedWorkStoreResult>;
+  closeEntrustedWork(
+    taskId: string,
+    input: CloseEntrustedWorkStoreInput,
+    writeFence?: TaskMutationWriteFence,
+  ): CloseEntrustedWorkStoreResult | Promise<CloseEntrustedWorkStoreResult> {
+    const apply = () => {
+      const result = this.entrustedWorkMutations.close(taskId, input);
+      if (result.kind === 'closed') this.developmentWork.closed(result.task);
+      return result;
+    };
+    return writeFence ? Promise.resolve(writeFence.assertCurrent()).then(apply) : apply();
   }
 
-  updateEntrustedWork(taskId: string, input: UpdateEntrustedWorkStoreInput): UpdateEntrustedWorkStoreResult {
-    return this.entrustedWorkMutations.update(taskId, input);
+  updateEntrustedWork(taskId: string, input: UpdateEntrustedWorkStoreInput): UpdateEntrustedWorkStoreResult;
+  updateEntrustedWork(
+    taskId: string,
+    input: UpdateEntrustedWorkStoreInput,
+    writeFence: TaskMutationWriteFence,
+  ): Promise<UpdateEntrustedWorkStoreResult>;
+  updateEntrustedWork(
+    taskId: string,
+    input: UpdateEntrustedWorkStoreInput,
+    writeFence?: TaskMutationWriteFence,
+  ): UpdateEntrustedWorkStoreResult | Promise<UpdateEntrustedWorkStoreResult> {
+    const apply = () => this.entrustedWorkMutations.update(taskId, input);
+    return writeFence ? Promise.resolve(writeFence.assertCurrent()).then(apply) : apply();
   }
 
   attachEntrustedWorkArtifactEvidence(taskId: string, input: AttachEntrustedWorkArtifactInput) {
@@ -265,9 +331,12 @@ export class TaskStore implements ITaskStore {
       updatedAt: Date.now(),
     };
 
-    const reconciled = reconcilePluginWaitTaskMutation(
+    const reconciled = advanceOrdinaryTaskAssignment(
       existing,
-      reconcileDeploymentWaitTaskMutation(existing, updated),
+      reconcilePluginWaitTaskMutation(
+        existing,
+        reconcileDeploymentWaitTaskMutation(existing, updated, { statusIsExplicit: input.status !== undefined }),
+      ),
     );
     this.tasks.set(taskId, reconciled);
     return reconciled;

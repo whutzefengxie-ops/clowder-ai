@@ -10,7 +10,9 @@
  * after selection instead.
  */
 
-import { useRef, useState } from 'react';
+import { type PluginArchiveReplacementOffer, PluginArchiveReplacementOfferSchema } from '@cat-cafe/shared';
+import { type ReactNode, useRef, useState } from 'react';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { apiFetch } from '@/utils/api-client';
 
 interface Props {
@@ -19,6 +21,7 @@ interface Props {
   label?: string;
   docsHref?: string | false;
   docsLabel?: string;
+  renderTrigger?: (open: () => void, disabled: boolean) => ReactNode;
 }
 
 export function PluginArchiveInstallButton({
@@ -27,12 +30,15 @@ export function PluginArchiveInstallButton({
   label = '离线安装',
   docsHref = false,
   docsLabel = '插件开发文档',
+  renderTrigger,
 }: Props) {
   const [uploading, setUploading] = useState(false);
+  const [pending, setPending] = useState<{ file: File; offer: PluginArchiveReplacementOffer } | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleUpload = async (file: File) => {
+  const handleUpload = async (file: File, offer?: PluginArchiveReplacementOffer) => {
+    setPending(null);
     if (!file.name.endsWith('.tar.gz') && !file.name.endsWith('.tgz')) {
       setMessage({ type: 'error', text: '请选择 .tar.gz 或 .tgz 格式的插件包' });
       return;
@@ -42,6 +48,7 @@ export function PluginArchiveInstallButton({
     try {
       const formData = new FormData();
       formData.append('file', file);
+      if (offer) formData.append('replacement', JSON.stringify(offer.confirmation));
       const res = await apiFetch(endpoint, {
         method: 'POST',
         body: formData,
@@ -50,9 +57,15 @@ export function PluginArchiveInstallButton({
       if (res.ok) {
         setMessage({ type: 'success', text: `安装成功: ${data.pluginId}` });
         onInstalled?.();
-      } else {
-        setMessage({ type: 'error', text: data.error ?? '安装失败' });
+        return;
       }
+      if (!offer && res.status === 409 && data.code === 'ARCHIVE_REPLACEMENT_CONFIRMATION_REQUIRED') {
+        const parsed = PluginArchiveReplacementOfferSchema.safeParse(data.replacement);
+        if (parsed.success) setPending({ file, offer: parsed.data });
+        else setMessage({ type: 'error', text: '替换信息无效，请重新选择插件包' });
+        return;
+      }
+      setMessage({ type: 'error', text: data.error ?? '安装失败' });
     } catch (err) {
       setMessage({ type: 'error', text: `上传失败: ${(err as Error).message}` });
     } finally {
@@ -62,23 +75,40 @@ export function PluginArchiveInstallButton({
   };
 
   return (
-    <div className="flex flex-col items-end gap-1.5">
-      <label
-        className={`inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-cafe-border px-3 py-1.5 text-xs font-medium text-cafe-secondary transition-colors hover:bg-cafe-hover ${uploading ? 'pointer-events-none opacity-50' : ''}`}
-        title="上传 .tar.gz / .tgz 插件包"
-      >
-        <UploadIcon />
-        {uploading ? '安装中...' : label}
-        <input
-          ref={fileInputRef}
-          type="file"
-          className="hidden"
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) handleUpload(f);
-          }}
-        />
-      </label>
+    <div className={renderTrigger ? 'contents' : 'flex flex-col items-end gap-1.5'}>
+      {renderTrigger ? (
+        <>
+          {renderTrigger(() => fileInputRef.current?.click(), uploading || pending !== null)}
+          <input
+            ref={fileInputRef}
+            type="file"
+            disabled={uploading || pending !== null}
+            className="hidden"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) void handleUpload(file);
+            }}
+          />
+        </>
+      ) : (
+        <label
+          className={`inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-cafe-border px-3 py-1.5 text-xs font-medium text-cafe-secondary transition-colors hover:bg-cafe-hover ${uploading ? 'pointer-events-none opacity-50' : ''}`}
+          title="上传 .tar.gz / .tgz 插件包"
+        >
+          <UploadIcon />
+          {uploading ? '安装中...' : label}
+          <input
+            ref={fileInputRef}
+            type="file"
+            disabled={uploading || pending !== null}
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) handleUpload(f);
+            }}
+          />
+        </label>
+      )}
       {docsHref !== false && (
         <a
           href={docsHref}
@@ -100,6 +130,21 @@ export function PluginArchiveInstallButton({
           {message.text}
         </div>
       )}
+      <ConfirmDialog
+        open={pending !== null}
+        title="替换已安装的插件"
+        message={
+          pending
+            ? `将 ${pending.offer.displayName} 从 ${pending.offer.currentVersion} 替换为 ${pending.offer.candidateVersion}。保留原实例及已保存的配置和数据。`
+            : ''
+        }
+        confirmLabel="确认替换"
+        returnFocusRef={fileInputRef}
+        onCancel={() => setPending(null)}
+        onConfirm={() => {
+          if (pending) void handleUpload(pending.file, pending.offer);
+        }}
+      />
     </div>
   );
 }

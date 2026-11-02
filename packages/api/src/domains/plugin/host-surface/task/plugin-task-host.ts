@@ -13,13 +13,20 @@ import { isTaskSubjectSnapshotConflictError } from '../../../cats/services/store
 import type { IThreadStore } from '../../../cats/services/stores/ports/ThreadStore.js';
 import { currentPluginCallContext, currentPluginOwnerRequestContext } from '../../carrier/plugin-call-context.js';
 import { ExternalPluginRuntimeError } from '../../external-runtime/types.js';
-import { hostCapabilityRefusal } from '../host-capability-refusal.js';
 import {
   createPluginTaskWorkData,
   type PluginTaskWorkData,
   type PluginTaskWorkMutation,
   updatePluginTaskWorkData,
 } from './plugin-task-data.js';
+import {
+  bindPluginTaskDataController,
+  currentTaskDataControllerProjection,
+  type PluginTaskDataControllerBindInput,
+  type PluginTaskDataControllerMutationResult,
+  type PluginTaskDataControllerRevokeInput,
+  revokePluginTaskDataController,
+} from './plugin-task-data-controller.js';
 import type { PluginTaskAdmissionServices } from './plugin-task-data-services.js';
 import { assertPluginTaskGovernance } from './plugin-task-governance.js';
 import { type PluginTaskReadItem, projectOwnedPluginTasks } from './plugin-task-read.js';
@@ -73,6 +80,8 @@ export interface PluginTaskHost {
     patch: PluginTaskUpdateInput,
     conditions?: PluginTaskUpdateConditions,
   ): Promise<TaskItem | null>;
+  bindDataController(input: PluginTaskDataControllerBindInput): Promise<PluginTaskDataControllerMutationResult>;
+  revokeDataController(input: PluginTaskDataControllerRevokeInput): Promise<PluginTaskDataControllerMutationResult>;
 }
 
 export interface PluginTaskHostDeps {
@@ -81,7 +90,6 @@ export interface PluginTaskHostDeps {
   readonly admission?: PluginTaskAdmissionServices;
   readonly pluginInstanceId?: string;
   readonly pluginId: string;
-  readonly effectiveGrants: readonly string[];
   readonly taskStore: ITaskStore | undefined;
   readonly threadStore?: Pick<IThreadStore, 'get'>;
   readonly readThreadStore?: Pick<IThreadStore, 'get'> & Partial<Pick<IThreadStore, 'ensureOwnedThread'>>;
@@ -160,13 +168,7 @@ function subjectUpsertInput(value: PluginTaskCreateInput): CreateTaskInput {
 export function createPluginTaskHost(input: PluginTaskHostDeps): PluginTaskHost {
   const readOwnerUserId = input.ownerUserId;
   const assertCurrentCall = () => currentPluginCallContext(input.pluginInstanceId)?.assertCurrent();
-  const requireGrant = (capability: 'task.read' | 'task.write') => {
-    if (!input.effectiveGrants.includes(capability)) {
-      throw hostCapabilityRefusal(
-        new ExternalPluginRuntimeError('DELIVERY_REJECTED', `${input.pluginId} lacks ${capability}`),
-        capability,
-      );
-    }
+  const requireService = () => {
     if (!input.taskStore) {
       throw new ExternalPluginRuntimeError('UNSUPPORTED_TRANSPORT', 'Host task store is unavailable');
     }
@@ -178,7 +180,7 @@ export function createPluginTaskHost(input: PluginTaskHostDeps): PluginTaskHost 
   };
   const authorizeTask = async (task: Pick<CreateTaskInput, 'kind' | 'threadId' | 'subjectKey'>) => {
     await assertPluginTaskGovernance(
-      requireGrant('task.write'),
+      requireService(),
       input.threadStore,
       task,
       currentPluginCallContext(input.pluginInstanceId)?.threadId,
@@ -188,7 +190,7 @@ export function createPluginTaskHost(input: PluginTaskHostDeps): PluginTaskHost 
   const read = async (
     operation: (store: ITaskStore) => readonly TaskItem[] | Promise<readonly TaskItem[]>,
   ): Promise<readonly PluginTaskReadItem[]> => {
-    const store = requireGrant('task.read');
+    const store = requireService();
     if (!readOwnerUserId)
       throw new ExternalPluginRuntimeError('UNSUPPORTED_TRANSPORT', 'Host task owner is unavailable');
     const native = currentPluginCallContext(input.pluginInstanceId);
@@ -196,18 +198,30 @@ export function createPluginTaskHost(input: PluginTaskHostDeps): PluginTaskHost 
     if ((native && native.userId !== readOwnerUserId) || (owner && owner.userId !== readOwnerUserId))
       throw new ExternalPluginRuntimeError('DELIVERY_REJECTED', 'Task caller does not match installation owner');
     const current = async () => {
-      requireGrant('task.read');
+      requireService();
       await input.assertCurrent?.();
       await native?.assertCurrent();
       await owner?.assertCurrent();
       await input.assertCurrent?.();
-      requireGrant('task.read');
+      requireService();
     };
     const once = async () => {
       await current();
       const tasks = structuredClone(await operation(store));
       await current();
-      const result = await projectOwnedPluginTasks(tasks, readOwnerUserId, input.readThreadStore);
+      const controllerCurrency = await currentTaskDataControllerProjection(
+        tasks,
+        input.pluginInstanceId,
+        input.admission,
+      );
+      await current();
+      const result = await projectOwnedPluginTasks(
+        tasks,
+        readOwnerUserId,
+        input.readThreadStore,
+        controllerCurrency,
+        input.admission?.messageStore,
+      );
       await current();
       return result;
     };
@@ -218,6 +232,8 @@ export function createPluginTaskHost(input: PluginTaskHostDeps): PluginTaskHost 
     return after;
   };
   return {
+    bindDataController: (value) => bindPluginTaskDataController(input, value),
+    revokeDataController: (value) => revokePluginTaskDataController(input, value),
     get: async (selector) => {
       objectKeys(selector, ['id', 'subjectKey'], 'task selector');
       if (Object.keys(selector).length !== 1)
@@ -248,7 +264,7 @@ export function createPluginTaskHost(input: PluginTaskHostDeps): PluginTaskHost 
       objectKeys(options, ['onConflict'], 'task create options');
       const mode = options.onConflict ?? 'error';
       if (mode !== 'error' && mode !== 'update') throw new TypeError('onConflict must be error or update');
-      const store = requireGrant('task.write');
+      const store = requireService();
       await assertCurrentCall();
       const task = withCallerUser(mode === 'update' ? subjectUpsertInput(value) : createInput(value));
       await authorizeTask(task);
@@ -275,7 +291,7 @@ export function createPluginTaskHost(input: PluginTaskHostDeps): PluginTaskHost 
         conditions.expectedThreadId === undefined
           ? undefined
           : boundedString(conditions.expectedThreadId, 'expectedThreadId', 500);
-      const store = requireGrant('task.write');
+      const store = requireService();
       await assertCurrentCall();
       const id = boundedString(taskId, 'taskId', 500);
       if (Object.hasOwn(value, 'wait')) {

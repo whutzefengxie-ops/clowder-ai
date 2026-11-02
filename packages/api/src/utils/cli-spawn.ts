@@ -1,3 +1,4 @@
+import { secretRuntimeScript } from '@cat-cafe/mcp-server/dist/secret-runtime.js';
 /**
  * CLI Process Spawner
  * 通用 CLI 子进程管理器，处理生命周期、超时和清理
@@ -7,6 +8,7 @@ import { spawn as nodeSpawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { deploymentDefaults } from '@cat-cafe/shared';
 import type { Span } from '@opentelemetry/api';
 import { context, SpanStatusCode, trace } from '@opentelemetry/api';
 import { createModuleLogger } from '../infrastructure/logger.js';
@@ -51,8 +53,8 @@ const log = createModuleLogger('cli-spawn');
 
 const IS_WINDOWS = process.platform === 'win32';
 const CAT_CAFE_RUNTIME_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
-const GUARDED_GH_BIN = resolve(CAT_CAFE_RUNTIME_ROOT, 'scripts', 'guarded-bin');
-const GUARDED_ZSH_SOURCE_DIR = resolve(CAT_CAFE_RUNTIME_ROOT, 'scripts', 'guarded-zsh');
+const GUARDED_GH_BIN = secretRuntimeScript('guarded-bin');
+const GUARDED_ZSH_SOURCE_DIR = secretRuntimeScript('guarded-zsh');
 const GUARDED_ZSH_DIR = resolve(CAT_CAFE_RUNTIME_ROOT, '.cat-cafe', 'tmp', 'guarded-zsh');
 type GuardedChildEnv = Record<string, string | null | undefined>;
 type SourceEnvOverrides = Readonly<Record<string, string | null>> | undefined;
@@ -112,7 +114,9 @@ export function withVerdictGhGuardEnv<T extends Record<string, string | null | u
   }
   if (!mutable.CAT_CAFE_VERDICT_REPO_FULL_NAME) {
     mutable.CAT_CAFE_VERDICT_REPO_FULL_NAME =
-      process.env.CAT_CAFE_VERDICT_REPO_FULL_NAME ?? process.env.CAT_CAFE_REPO_FULL_NAME ?? 'zts212653/clowder-ai';
+      process.env.CAT_CAFE_VERDICT_REPO_FULL_NAME ??
+      process.env.CAT_CAFE_REPO_FULL_NAME ??
+      deploymentDefaults.repositoryFullName;
   }
   return env;
 }
@@ -351,6 +355,9 @@ export function buildChildEnv(
   const workingDirectory = resolve(options.workingDirectory ?? process.cwd());
   merged.PWD = workingDirectory;
   merged.INIT_CWD = workingDirectory;
+  if (['shared', 'stdio'].includes(merged.CAT_CAFE_MCP_TRANSPORT ?? '') && merged.CAT_CAFE_CREDENTIAL_FILE) {
+    delete merged.CAT_CAFE_CALLBACK_TOKEN;
+  }
   return withVerdictGhGuardEnv(merged, overrides);
 }
 

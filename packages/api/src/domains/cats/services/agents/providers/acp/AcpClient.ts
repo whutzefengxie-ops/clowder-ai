@@ -21,9 +21,11 @@ import { resolveCliCommandOrBare } from '../../../../../../utils/cli-resolve.js'
 import { buildChildEnv } from '../../../../../../utils/cli-spawn.js';
 import { resolveWindowsSpawnPlan } from '../../../../../../utils/cli-spawn-win.js';
 import { buildUnixSupervisedSpawnPlan } from '../../../../../../utils/cli-supervised-process.js';
+import { PI_BRIDGE_NAME, PI_SESSION_BINDING_ERROR } from '../pi/pi-bridge-contract.js';
 import { AcpCwdIdentityTracker } from './acp-cwd-identity.js';
 import { type AcpPromptInput, toAcpPromptContent } from './acp-prompt-content.js';
 import { AcpSessionBindingError, ActiveSessionCache } from './active-session-cache.js';
+import { shutdownAcpChild } from './lifecycle/acp-child-shutdown.js';
 import type {
   AcpAgentRequest,
   AcpContentBlock,
@@ -69,7 +71,16 @@ export function resolveAcpPromptRequestCeilingMs(activityBudgetMs: number): numb
 // ─── Config ──────────────────────────────────────────────���─────
 
 /** Callback for handling ACP permission requests. Call `respond` with the chosen option. */
-export type AcpPermissionHandler = (req: AcpAgentRequest, respond: (result: { optionId: string }) => void) => void;
+export type AcpPermissionHandler = (
+  req: AcpAgentRequest,
+  respond: (result: { optionId: string } | { cancelled: true }) => void,
+) => void | Promise<void>;
+
+/**
+ * Callback for agent-initiated session-scoped requests (e.g. iCode `_chrys/request_input`).
+ * Return value is written back verbatim as the JSON-RPC result.
+ */
+export type AcpSessionRequestHandler = (req: AcpAgentRequest) => Promise<Record<string, unknown>>;
 
 export interface AcpClientConfig {
   /** CLI command (e.g. 'gemini') */
@@ -78,12 +89,24 @@ export interface AcpClientConfig {
   args: string[];
   /** Working directory for the ACP process */
   cwd: string;
+  /** Factory-owned Windows verification, bound to the root in the pool signature. */
+  verifyBootstrapCwd?: (command: string, args: string[], env: NodeJS.ProcessEnv) => void;
   /** Extra env vars to pass to the process */
   env?: Record<string, string>;
+  /** Isolated subscription profiles must not inherit API keys or host credentials. */
+  inheritParentEnv?: boolean;
+  /** Official AGY 1.4 reports some errors as text + end_turn; exact provider stderr supplies failure provenance. */
+  antigravityDiagnostics?: boolean;
   /** Inject spawn function for testing */
   spawnFn?: typeof nodeSpawn;
   /** Custom permission request handler. Defaults to auto-approve (allow_once). */
   permissionHandler?: AcpPermissionHandler;
+  /**
+   * Default decision when no permissionHandler is set and the agent asks for
+   * permission. 'reject' (iCode fail-closed policy) selects a reject option
+   * instead of auto-approving flagged native effects. Defaults to 'allow'.
+   */
+  defaultPermissionDecision?: 'allow' | 'reject';
 }
 
 export interface AcpSpawnLogFields {
@@ -175,6 +198,18 @@ interface PendingAcpRequest {
 }
 
 export class AcpClient {
+  private providerDiagnosticTail = '';
+  private readonly failedProviderSessions = new Set<string>();
+  private readonly sessionPermissionHandlers = new Map<string, AcpPermissionHandler>();
+
+  get agentCapabilities(): AcpInitializeResult['agentCapabilities'] | undefined {
+    return this.initResult?.agentCapabilities;
+  }
+
+  setSessionPermissionHandler(sessionId: string, handler?: AcpPermissionHandler): void {
+    if (handler) this.sessionPermissionHandlers.set(sessionId, handler);
+    else this.sessionPermissionHandlers.delete(sessionId);
+  }
   private readonly liveSessions = new ActiveSessionCache();
   private child: ChildProcess | null = null;
   private rl: ReadlineInterface | null = null;
@@ -183,6 +218,7 @@ export class AcpClient {
   private initResult: AcpInitializeResult | null = null;
   private negotiatedPromptCapabilities?: Readonly<AcpPromptCapabilities>;
   private closed = false;
+  private closing?: Promise<void>;
   private exited = false;
   /** Sessions whose local prompt ended before provider completion was acknowledged. */
   private readonly unquiescedSessionIds = new Set<string>();
@@ -203,6 +239,12 @@ export class AcpClient {
    * could be reused while the old request is unresolved.
    */
   private readonly sessionPromptPendingIds = new Map<string, string>();
+  /**
+   * Session-scoped handlers for agent-initiated requests (iCode `_chrys/request_input`).
+   * Keyed by sessionId so a request is only answerable while that session is
+   * actively driven by us; clearing the entry invalidates late requests.
+   */
+  private readonly sessionRequestHandlers = new Map<string, AcpSessionRequestHandler>();
   /** Client-level capacity signal — always captured regardless of listeners.
    *  Fallback for delayed stderr arriving after invoke listener is removed. */
   private _recentCapacitySignal: AcpCapacitySignal | null = null;
@@ -225,7 +267,10 @@ export class AcpClient {
     // PATH so `#!/usr/bin/env node` shims can find the node interpreter.
     let command = resolveCliCommandOrBare(this.config.command);
     let args = [...this.config.args];
-    const childEnv = buildChildEnv(this.config.env, { workingDirectory: this.config.cwd });
+    const childEnv = buildChildEnv(this.config.env, {
+      workingDirectory: this.config.cwd,
+      inheritParentEnv: this.config.inheritParentEnv,
+    });
     if (!IS_WINDOWS && isAbsolute(command)) {
       const binDir = dirname(command);
       childEnv.PATH = childEnv.PATH ? `${binDir}:${childEnv.PATH}` : binDir;
@@ -236,12 +281,11 @@ export class AcpClient {
     // message misleadingly points at the command path.
     // Skip when a test spawnFn is injected — the directory may be a fake path
     // (e.g. '/my/project') that can't be created on CI runners.
-    if (!this.config.spawnFn) {
+    if (!this.config.spawnFn && !(IS_WINDOWS && this.config.verifyBootstrapCwd)) {
       mkdirSync(this.config.cwd, { recursive: true, mode: 0o700 });
     }
     // #1203: Capture the cwd's directory identity at spawn so isCwdIntact can
     // detect delete→recreate at the same path, not just deletion.
-    this.cwdIdentityTracker.capture();
 
     const spawnOpts: SpawnOptions & { stdio: ['pipe', 'pipe', 'pipe'] } = {
       cwd: this.config.cwd,
@@ -278,9 +322,23 @@ export class AcpClient {
       spawnOpts.env = supervised.env;
     }
 
+    if (IS_WINDOWS && !this.config.spawnFn) this.config.verifyBootstrapCwd?.(command, args, childEnv);
+    this.cwdIdentityTracker.capture();
     this.child = doSpawn(command, args, spawnOpts) as ChildProcess;
 
     this.child.stderr?.on('data', (chunk: Buffer) => {
+      if (this.config.antigravityDiagnostics) {
+        this.providerDiagnosticTail = (this.providerDiagnosticTail + chunk.toString()).slice(-8192);
+        const lines = this.providerDiagnosticTail.split('\n');
+        this.providerDiagnosticTail = lines.pop() ?? '';
+        for (const line of lines) {
+          const session =
+            /(?:Antigravity SDK error processing prompt for session|Agent connection lost for session|Failed to rebuild agent for session)\s+([A-Za-z0-9_-]+)(?:\s|$)/.exec(
+              line,
+            )?.[1];
+          if (session && this.sessionPromptPendingIds.has(session)) this.failedProviderSessions.add(session);
+        }
+      }
       const text = chunk.toString().trimEnd();
       log.warn({ pid: this.child?.pid }, '[acp stderr] %s', text);
       if (CAPACITY_RE.test(text)) {
@@ -329,7 +387,11 @@ export class AcpClient {
     return this.initResult;
   }
 
-  async newSession(cwd?: string, mcpServers: AcpMcpServer[] = []): Promise<AcpNewSessionResult> {
+  async newSession(
+    cwd?: string,
+    mcpServers: AcpMcpServer[] = [],
+    meta?: Record<string, unknown>,
+  ): Promise<AcpNewSessionResult> {
     // F161: Filter MCP servers by client's announced mcpCapabilities.
     // Per ACP spec: stdio is mandatory (always passes), http/sse are optional.
     const compatible = this.filterMcpByCapabilities(mcpServers);
@@ -372,12 +434,23 @@ export class AcpClient {
     const resp = await this.sendRequest(ACP_METHODS.sessionNew, {
       cwd: effectiveCwd,
       mcpServers: compatible,
+      ...(meta ? { _meta: meta } : {}),
     });
     log.info({ durationMs: Date.now() - t0, hasResult: !!resp.result }, 'ACP session/new: response received');
     return this.liveSessions.remember(resp.result as unknown as AcpNewSessionResult, effectiveCwd, compatible);
   }
 
-  async loadSession(sessionId: string, cwd?: string, mcpServers: AcpMcpServer[] = []): Promise<AcpNewSessionResult> {
+  /** Explicit operator setup only; invoking a chat never initiates OAuth. */
+  async authenticate(methodId: string): Promise<void> {
+    await this.sendRequest(ACP_METHODS.authenticate, { methodId }, 0);
+  }
+
+  async loadSession(
+    sessionId: string,
+    cwd?: string,
+    mcpServers: AcpMcpServer[] = [],
+    meta?: Record<string, unknown>,
+  ): Promise<AcpNewSessionResult> {
     const compatible = this.filterMcpByCapabilities(mcpServers);
     if (compatible.length !== mcpServers.length) {
       log.info(
@@ -418,6 +491,15 @@ export class AcpClient {
       sessionId,
       cwd: effectiveCwd,
       mcpServers: compatible,
+      ...(meta ? { _meta: meta } : {}),
+    }).catch((error: unknown) => {
+      if (
+        this.initResult?.agentInfo?.name === PI_BRIDGE_NAME &&
+        error instanceof AcpProtocolError &&
+        error.code === PI_SESSION_BINDING_ERROR
+      )
+        throw new AcpSessionBindingError(error.message);
+      throw error;
     });
     log.info(
       { sessionId, durationMs: Date.now() - t0, hasResult: !!resp.result },
@@ -433,10 +515,42 @@ export class AcpClient {
     );
   }
 
+  /** Resume avoids replaying historical tool/text notifications into the current turn. */
+  async resumeSession(
+    sessionId: string,
+    cwd: string,
+    mcpServers: AcpMcpServer[],
+    meta?: Record<string, unknown>,
+  ): Promise<AcpNewSessionResult> {
+    const resp = await this.sendRequest('session/resume', {
+      sessionId,
+      cwd,
+      mcpServers: this.filterMcpByCapabilities(mcpServers),
+      ...(meta ? { _meta: meta } : {}),
+    });
+    if (resp.result?.sessionId && resp.result.sessionId !== sessionId)
+      throw new Error('ACP resume returned a different session ID');
+    return { ...resp.result, sessionId } as unknown as AcpNewSessionResult;
+  }
+
+  /**
+   * Close a live session instance via the standard ACP `session/close` method.
+   * The provider keeps its persisted conversation; only the running instance
+   * ends. A successful close invalidates the live-session cache so the next
+   * `session/load` re-injects its per-turn configuration and credentials.
+   */
   async closeSession(sessionId: string): Promise<void> {
+    const trimmedSessionId = sessionId.trim();
+    if (!trimmedSessionId) {
+      throw new Error('session/close requires non-empty sessionId');
+    }
     if (!this.initResult?.agentCapabilities?.sessionCapabilities?.close) return;
-    await this.sendRequest(ACP_METHODS.sessionClose, { sessionId });
-    this.liveSessions.forget(sessionId);
+
+    log.info({ sessionId: trimmedSessionId, pid: this.child?.pid }, 'ACP session/close: sending request');
+    const t0 = Date.now();
+    await this.sendRequest(ACP_METHODS.sessionClose, { sessionId: trimmedSessionId });
+    this.liveSessions.forget(trimmedSessionId);
+    log.info({ sessionId: trimmedSessionId, durationMs: Date.now() - t0 }, 'ACP session/close: response received');
   }
 
   async setSessionConfigOption(
@@ -461,6 +575,47 @@ export class AcpClient {
     log.info({ sessionId, durationMs: Date.now() - t0 }, 'ACP session/set_config_option: response received');
     this.liveSessions.update(sessionId, resp.result);
     return resp.result;
+  }
+
+  /**
+   * Select the model for a session via the standard ACP `session/set_model`
+   * method (iCode: `modelId` is the agent's model configuration id).
+   * Throws on empty ids — a silently-skipped model switch must not be
+   * reported as success.
+   */
+  async setSessionModel(sessionId: string, modelId: string): Promise<void> {
+    const trimmedSessionId = sessionId.trim();
+    const trimmedModelId = modelId.trim();
+    if (!trimmedSessionId || !trimmedModelId) {
+      throw new Error(
+        `session/set_model requires non-empty sessionId and modelId (got sessionId=${JSON.stringify(sessionId)}, modelId=${JSON.stringify(modelId)})`,
+      );
+    }
+
+    log.info(
+      { sessionId: trimmedSessionId, modelId: trimmedModelId, pid: this.child?.pid },
+      'ACP session/set_model: sending request',
+    );
+    const t0 = Date.now();
+    await this.sendRequest(ACP_METHODS.sessionSetModel, {
+      sessionId: trimmedSessionId,
+      modelId: trimmedModelId,
+    });
+    log.info({ sessionId: trimmedSessionId, durationMs: Date.now() - t0 }, 'ACP session/set_model: response received');
+  }
+
+  /**
+   * Register (or clear) the handler for agent-initiated session-scoped
+   * requests such as iCode `_chrys/request_input`. Requests for sessions
+   * without a handler are answered with an honest JSON-RPC error instead of
+   * being silently dropped or auto-answered.
+   */
+  setSessionRequestHandler(sessionId: string, handler: AcpSessionRequestHandler | undefined): void {
+    if (handler === undefined) {
+      this.sessionRequestHandlers.delete(sessionId);
+    } else {
+      this.sessionRequestHandlers.set(sessionId, handler);
+    }
   }
 
   /**
@@ -510,6 +665,10 @@ export class AcpClient {
     input: AcpPromptInput,
     options?: { timeoutMs?: number; idleWarningMs?: number; idleStallMs?: number },
   ): AsyncGenerator<AcpSessionUpdate, AcpStopReason> {
+    if (this.sessionPromptPendingIds.has(sessionId)) {
+      throw new AcpProtocolError(-32600, 'ACP session already has an active prompt');
+    }
+    this.failedProviderSessions.delete(sessionId);
     const prompt = toAcpPromptContent(input, this.promptCapabilities);
     // KD-12: Activity-based turn budget — resets on each event.
     // If agent produces events continuously, budget never fires. Only triggers
@@ -777,12 +936,20 @@ export class AcpClient {
         yield queue.shift()!;
       }
       if (promptError) throw promptError;
+      if (this.config.antigravityDiagnostics) {
+        // stdout/stderr use distinct pipes. Drain ready diagnostics emitted by
+        // this provider before accepting its otherwise-successful RPC result.
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        if (this.failedProviderSessions.has(sessionId))
+          throw new AcpProtocolError(-32000, 'AGY ACP provider execution failed (session-scoped stderr diagnostic)');
+      }
       return stopReason;
     } finally {
       if (idleTimer) clearTimeout(idleTimer);
       if (budgetTimer) clearTimeout(budgetTimer);
       this.sessionCancelCallbacks.delete(sessionId);
       this.sessionPromptPendingIds.delete(sessionId);
+      this.failedProviderSessions.delete(sessionId);
       this.capacityListeners.delete(capacityInjector);
       const idx = this.notificationListeners.indexOf(listener);
       if (idx >= 0) this.notificationListeners.splice(idx, 1);
@@ -828,29 +995,19 @@ export class AcpClient {
     }
   }
 
-  async close(): Promise<void> {
+  close(): Promise<void> {
+    this.closing ??= this.closeOwnedProcess();
+    return this.closing;
+  }
+
+  private async closeOwnedProcess(): Promise<void> {
     this.liveSessions.clear();
-    if (this.closed) return;
     this.closed = true;
 
     this.rl?.close();
-    if (this.child && !this.child.killed) {
-      // Register exit listener BEFORE kill to avoid race with sync emitters
-      await new Promise<void>((resolve) => {
-        const timer = setTimeout(() => {
-          if (this.child && !this.child.killed) {
-            this.child.kill('SIGKILL');
-          }
-          resolve();
-        }, KILL_GRACE_MS);
-        this.child!.once('exit', () => {
-          clearTimeout(timer);
-          resolve();
-        });
-        this.child!.kill('SIGTERM');
-      });
-    }
     this.rejectAllPending(new Error('ACP client closed'));
+    if (this.child && !this.exited)
+      await shutdownAcpChild(this.child, KILL_GRACE_MS, this.initResult?.agentInfo?.name === PI_BRIDGE_NAME);
   }
 
   get pid(): number | undefined {
@@ -1085,19 +1242,27 @@ export class AcpClient {
 
   private handleAgentRequest(req: AcpAgentRequest): void {
     if (req.method === ACP_METHODS.requestPermission) {
-      const respond = (result: { optionId: string }) => {
+      let responded = false;
+      const respond = (result: { optionId: string } | { cancelled: true }) => {
+        if (responded) return;
+        responded = true;
         // ACP spec: response must wrap in { outcome: { outcome: "selected", optionId } }
         const acpResult = {
-          outcome: { outcome: 'selected' as const, optionId: result.optionId },
+          outcome:
+            'cancelled' in result
+              ? { outcome: 'cancelled' as const }
+              : { outcome: 'selected' as const, optionId: result.optionId },
         };
         const response = { jsonrpc: '2.0' as const, id: req.id, result: acpResult };
         this.child?.stdin?.write(JSON.stringify(response) + '\n');
-        log.debug('Permission response for %s: %s', req.id, result.optionId);
+        log.debug('Permission response for %s', req.id);
       };
 
-      if (this.config.permissionHandler) {
+      const sessionId = typeof req.params.sessionId === 'string' ? req.params.sessionId : '';
+      const permissionHandler = this.sessionPermissionHandlers.get(sessionId) ?? this.config.permissionHandler;
+      if (permissionHandler) {
         try {
-          this.config.permissionHandler(req, respond);
+          Promise.resolve(permissionHandler(req, respond)).catch(() => respond({ cancelled: true }));
         } catch (err) {
           log.error('permissionHandler threw: %s', (err as Error).message);
           const errResponse = {
@@ -1106,6 +1271,28 @@ export class AcpClient {
             error: { code: -32603, message: `Permission handler error: ${(err as Error).message}` },
           };
           this.child?.stdin?.write(JSON.stringify(errResponse) + '\n');
+        }
+      } else if (this.config.defaultPermissionDecision === 'reject') {
+        // iCode fail-closed policy: never auto-approve. Select an explicit
+        // reject option; if the agent offers none, cancel rather than allow.
+        const params = req.params as unknown as AcpPermissionRequest;
+        const rejectOption =
+          params.options?.find((o) => o.kind === 'reject_once') ??
+          params.options?.find((o) => o.kind === 'reject_always') ??
+          params.options?.find((o) => o.optionId === 'reject');
+        if (rejectOption) {
+          respond({ optionId: rejectOption.optionId });
+        } else {
+          log.warn(
+            { method: req.method, id: req.id, sessionId: params.sessionId },
+            'ACP permission: reject policy but no reject option offered — cancelling',
+          );
+          const response = {
+            jsonrpc: '2.0' as const,
+            id: req.id,
+            result: { outcome: { outcome: 'cancelled' as const } },
+          };
+          this.child?.stdin?.write(JSON.stringify(response) + '\n');
         }
       } else {
         // Default: auto-approve (allow_once)
@@ -1118,6 +1305,8 @@ export class AcpClient {
           params.options?.[0];
         respond({ optionId: allowOption?.optionId ?? 'allow_once' });
       }
+    } else if (req.method === ACP_METHODS.chrysRequestInput) {
+      this.handleChrysRequestInput(req);
     } else {
       // Unknown agent request — respond with method not found
       log.warn('Unhandled agent request: %s', req.method);
@@ -1128,6 +1317,54 @@ export class AcpClient {
       };
       this.child?.stdin?.write(JSON.stringify(response) + '\n');
     }
+  }
+
+  /** Write a JSON-RPC response to the agent, tolerating a dead/destroyed pipe. */
+  private writeAgentResponse(response: Record<string, unknown>): void {
+    const stdin = this.child?.stdin;
+    if (!stdin || stdin.destroyed || !stdin.writable) {
+      log.warn({ id: response['id'] }, 'ACP client dropped a response: agent stdin is no longer writable');
+      return;
+    }
+    stdin.write(JSON.stringify(response) + '\n');
+  }
+
+  /** Dispatch `_chrys/request_input` to the session-scoped handler, if any. */
+  private handleChrysRequestInput(req: AcpAgentRequest): void {
+    const params = (req.params ?? {}) as { sessionId?: string };
+    const sessionId = typeof params.sessionId === 'string' ? params.sessionId : '';
+    const handler = sessionId ? this.sessionRequestHandlers.get(sessionId) : undefined;
+
+    if (!handler) {
+      log.warn(
+        { method: req.method, id: req.id, sessionId: sessionId || null },
+        'ACP request_input: no handler registered for session — answering with error',
+      );
+      const response = {
+        jsonrpc: '2.0' as const,
+        id: req.id,
+        error: { code: -32603, message: `No request handler for session ${sessionId || '<missing>'}` },
+      };
+      this.writeAgentResponse(response);
+      return;
+    }
+
+    void (async () => {
+      try {
+        const result = await handler(req);
+        const response = { jsonrpc: '2.0' as const, id: req.id, result };
+        this.writeAgentResponse(response);
+        log.debug({ id: req.id, sessionId }, 'ACP request_input: answered');
+      } catch (err) {
+        log.error('request_input handler threw: %s', (err as Error).message);
+        const response = {
+          jsonrpc: '2.0' as const,
+          id: req.id,
+          error: { code: -32603, message: `request_input handler error: ${(err as Error).message}` },
+        };
+        this.writeAgentResponse(response);
+      }
+    })();
   }
 
   private rejectAllPending(error: Error): void {

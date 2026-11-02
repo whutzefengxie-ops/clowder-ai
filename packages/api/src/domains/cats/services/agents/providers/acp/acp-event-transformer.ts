@@ -30,6 +30,7 @@ export interface AcpSessionState {
   emittedToolUseByCallId: Set<string>;
   /** toolCallIds that have already emitted a final `tool_result`. */
   finalEmittedByCallId: Set<string>;
+  toolDetailsByCallId: Map<string, { name?: string; source: AgentMessage['toolSource'] }>;
   /** Latest optional tool facts by native ID; scoped to this invocation and discarded after final. */
   toolCallsByCallId: Map<string, AcpToolSnapshot>;
   /** Accumulated thinking text — flushed as a single event when a non-thinking event arrives. */
@@ -48,6 +49,7 @@ export function createAcpSessionState(): AcpSessionState {
   return {
     emittedToolUseByCallId: new Set<string>(),
     finalEmittedByCallId: new Set<string>(),
+    toolDetailsByCallId: new Map(),
     toolCallsByCallId: new Map<string, AcpToolSnapshot>(),
     thinkingBuffer: '',
     scratchpadDetected: false,
@@ -93,6 +95,76 @@ export function flushAcpThinking(state: AcpSessionState, catId: CatId, metadata:
   };
 }
 
+/**
+ * Project iCode's structured plan entries onto the provider-neutral semantic
+ * plan event (the same contract Codex uses). Raw entry objects never reach
+ * chat, and an empty entries[] has no canonical "clear" projection, so it is
+ * dropped instead of leaking JSON.
+ */
+function projectIcodePlanEntries(
+  entries: readonly unknown[],
+  catId: CatId,
+  metadata: MessageMetadata,
+  now: number,
+): AgentMessage | null {
+  const items: string[] = [];
+  let completedItems = 0;
+  for (const entry of entries) {
+    if (typeof entry === 'string') {
+      const text = entry.trim();
+      if (text) items.push(text);
+      continue;
+    }
+    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) continue;
+    const record = entry as Record<string, unknown>;
+    const text =
+      typeof record.content === 'string'
+        ? record.content.trim()
+        : typeof record.step === 'string'
+          ? record.step.trim()
+          : '';
+    if (!text) continue;
+    if (record.status === 'completed') completedItems += 1;
+    const marker = record.status === 'completed' ? '✓' : record.status === 'in_progress' ? '▸' : '○';
+    items.push(`${marker} ${text}`);
+  }
+  if (items.length === 0) return null;
+  return {
+    type: 'provider_signal',
+    catId,
+    semanticEvent: {
+      v: 1,
+      id: `plan:chrys:${catId}:${now}`,
+      kind: 'plan',
+      occurredAt: now,
+      stage: completedItems === entries.length ? 'completed' : 'updated',
+      text: items.join(' · '),
+      completedItems,
+      totalItems: entries.length,
+      provenance: { provider: 'chrys', carrier: 'native', nativeType: 'plan' },
+    },
+    metadata,
+    timestamp: now,
+  };
+}
+
+function toolResultText(inner: Record<string, unknown>): string {
+  const text = (value: unknown): string => {
+    if (typeof value === 'string') return value;
+    if (!value || typeof value !== 'object') return '';
+    if (Array.isArray(value)) return value.map(text).filter(Boolean).join('\n');
+    const record = value as Record<string, unknown>;
+    return typeof record.text === 'string' ? record.text : text(record.content);
+  };
+  const content = text(inner.content);
+  if (content) return content;
+  return inner.rawOutput === undefined
+    ? ''
+    : typeof inner.rawOutput === 'string'
+      ? inner.rawOutput
+      : JSON.stringify(inner.rawOutput);
+}
+
 export function transformAcpEvent(
   update: AcpSessionUpdate,
   catId: CatId,
@@ -131,6 +203,28 @@ export function transformAcpEvent(
 
   /** Wrap result with flushed thinking (if any) — returns array when both exist. */
   function withFlush(msg: AgentMessage | AgentMessage[] | null): AgentMessage | AgentMessage[] | null {
+    const toolIdentity = (message: AgentMessage): AgentMessage => {
+      if (message.type !== 'tool_use' && message.type !== 'tool_result') return message;
+      const id = typeof inner.toolCallId === 'string' ? inner.toolCallId : undefined;
+      const previous = id ? state?.toolDetailsByCallId?.get(id) : undefined;
+      const meta = inner._meta as { is_mcp_tool_call?: boolean } | undefined;
+      const source = previous?.source ?? (meta?.is_mcp_tool_call === true ? 'mcp' : 'host_cli');
+      const name = message.toolName ?? previous?.name;
+      if (id) state?.toolDetailsByCallId?.set(id, { ...(name ? { name } : {}), source });
+      return {
+        ...message,
+        ...(id ? { toolUseId: id } : {}),
+        ...(name ? { toolName: name } : {}),
+        toolSource: source,
+        ...(message.type === 'tool_result'
+          ? {
+              content: message.content || toolResultText(inner),
+              toolResultStatus: inner.status === 'failed' ? 'error' : inner.status === 'completed' ? 'ok' : 'unknown',
+            }
+          : {}),
+      };
+    };
+    msg = Array.isArray(msg) ? msg.map(toolIdentity) : msg ? toolIdentity(msg) : null;
     if (!flushPending) return msg;
     if (!msg) return flushPending;
     if (Array.isArray(msg)) return [flushPending, ...msg];
@@ -206,7 +300,15 @@ export function transformAcpEvent(
       // frontend has no plan formatter — drop it instead of leaking raw
       // `{"type":"plan","text":""}` JSON into chat. Non-empty plans unchanged.
       const planText = typeof content?.text === 'string' ? content.text : '';
-      if (!planText.trim()) return withFlush(null);
+      if (!planText.trim()) {
+        // iCode (Chrys) sends structured entries[] instead of text. Project
+        // them onto the canonical semantic plan; an empty array has no
+        // canonical clear stage, so it stays suppressed like empty text.
+        if (Array.isArray(inner.entries)) {
+          return withFlush(projectIcodePlanEntries(inner.entries, catId, metadata, now));
+        }
+        return withFlush(null);
+      }
       return withFlush({
         type: 'system_info',
         catId,

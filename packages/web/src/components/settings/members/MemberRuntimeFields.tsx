@@ -1,21 +1,18 @@
 'use client';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { useAgentClientLibraries } from '@/hooks/useAgentClientLibraries';
 import { apiFetch } from '@/utils/api-client';
 import type { ProfileItem } from '../../hub-accounts.types';
+import { usesAgyAcp, usesAgyNative } from '../../hub-cat-editor.agy';
 import { builtinAccountIdForClient, filterAccounts, type HubCatEditorFormState } from '../../hub-cat-editor.model';
 import { SelectField } from '../../hub-cat-editor-fields';
-import { KimiLoginHelp } from './KimiLoginHelp';
 import { MemberChoicePicker } from './MemberChoicePicker';
-import { MANUAL_RUNTIME_CHOICES } from './manual-runtime-choices';
-import {
-  matchesRuntime,
-  type RuntimeChoice,
-  type RuntimeDrafts,
-  rememberedRuntimes,
-  runtimeDefaults,
-} from './member-runtime-draft';
-import { nativeAcpProfileLabel, nativeAcpProfileMessage } from './native-acp-profile-status';
+import { MemberConfigurationDetails } from './MemberConfigurationDetails';
+import { MemberDshProviderSetup } from './MemberDshProviderSetup';
+import { matchesRuntime, type RuntimeChoice, type RuntimeDrafts, runtimeDefaults } from './member-runtime-draft';
+import { memberRuntimeOptions, memberRuntimeTools } from './member-runtime-tools';
+import { nativeAcpProfileMessage } from './native-acp-profile-status';
 import { usesDefaultNativeIdentity } from './native-login-state';
 import { useRuntimeCatalog } from './useRuntimeCatalog';
 export type MemberText = (zh: string, en: string) => string;
@@ -47,6 +44,7 @@ export function MemberRuntimeFields({
     [error, setError] = useState(false),
     [loading, setLoading] = useState(true),
     [refresh, setRefresh] = useState(0);
+  const { libraries: clientLibraries, error: libraryError } = useAgentClientLibraries(String(refresh), !nativeSetup);
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
@@ -67,18 +65,11 @@ export function MemberRuntimeFields({
       });
     return () => controller.abort();
   }, [refresh]);
-  const tools = [
-    ...runtimes,
-    ...rememberedRuntimes(runtimeDrafts).filter(
-      (old) => !runtimes.some((item) => matchesRuntime(runtimeDefaults(old), item)),
-    ),
-    ...MANUAL_RUNTIME_CHOICES.filter(
-      (item) => item.clientId === 'acp' || !runtimes.some((runtime) => runtime.clientId === item.clientId),
-    ),
-  ];
+  const tools = memberRuntimeTools(runtimes, clientLibraries, runtimeDrafts);
   const selected = tools.find((item) => matchesRuntime(form, item));
+  const agy = usesAgyNative(form) || usesAgyAcp(form);
   const tool =
-    selected?.label ??
+    (usesAgyAcp(form) ? t('AGY 官方 ACP', 'AGY official ACP') : usesAgyNative(form) ? 'AGY Native' : selected?.label) ??
     (form.clientId === 'openai'
       ? 'Codex'
       : form.clientId === 'anthropic'
@@ -92,7 +83,12 @@ export function MemberRuntimeFields({
   const defaultIdentity = usesDefaultNativeIdentity(form);
   const needsLogin = defaultIdentity && selected?.readiness?.status === 'login_required';
   const { catalog, loading: catalogLoading } = useRuntimeCatalog(
-    needsLogin || selected?.id.startsWith('draft:') || selected?.id.startsWith('manual:') ? undefined : selected?.id,
+    needsLogin ||
+      selected?.id.startsWith('draft:') ||
+      selected?.id.startsWith('manual:') ||
+      selected?.id.startsWith('plugin:')
+      ? undefined
+      : selected?.id,
     editing ? form.catId : undefined,
     form.accountRef,
     form.defaultModel,
@@ -124,11 +120,19 @@ export function MemberRuntimeFields({
   );
   const follow = t(native ? `跟随 ${tool} 设置` : '跟随连接设置', `Follow ${native ? tool : 'connection'} settings`);
   const accountOptions = [
-    { value: '', label: t(`使用 ${tool} 当前配置`, `Use current ${tool} configuration`), disabled: false },
+    {
+      value: '',
+      label: agy
+        ? t('使用隔离 Profile 的个人登录', 'Use personal sign-in in the isolated Profile')
+        : t(`使用 ${tool} 当前配置`, `Use current ${tool} configuration`),
+      disabled: false,
+    },
     ...availableAccounts.map((item) => ({
       value: item.id,
       label: item.displayName || item.name,
-      disabled: native && item.authType === 'oauth' && item.id !== builtinAccountIdForClient(form.clientId),
+      disabled:
+        (agy && item.authType === 'api_key') ||
+        (native && item.authType === 'oauth' && item.id !== builtinAccountIdForClient(form.clientId)),
     })),
   ];
   if (form.accountRef && !identity)
@@ -137,11 +141,7 @@ export function MemberRuntimeFields({
       label: `${form.accountRef} · ${t('暂不可读取', 'Unavailable')}`,
       disabled: false,
     });
-  const choices = tools.map((item) => ({
-    value: item.id,
-    disabled: item.discoveryStatus === 'acp_profile_invalid',
-    label: `${item.label} · ${item.id.startsWith('draft:') ? t('已保留的配置', 'Retained configuration') : (nativeAcpProfileLabel(item.discoveryStatus, t) ?? (item.installed ? t('已安装', 'Installed') : t('未找到', 'Not found')))}`,
-  }));
+  const choices = memberRuntimeOptions(tools, t);
   if (!selected)
     choices.unshift({
       value: 'current',
@@ -182,6 +182,26 @@ export function MemberRuntimeFields({
           )}
         </p>
       )}
+      {form.acpAgentProvider && (
+        <p className="text-sm text-cafe-secondary">
+          {t(
+            '启动配置来自插件，认证与默认模型由 client 管理；实际连接待验证。',
+            'Launch settings come from the plugin. The client owns authentication and model defaults; connection is not yet verified.',
+          )}
+        </p>
+      )}
+      {libraryError && (
+        <p role="alert" className="text-sm text-cafe-secondary">
+          {libraryError}
+        </p>
+      )}
+      {clientLibraries
+        .filter((library) => library.error)
+        .map((library) => (
+          <p key={library.pluginId} role="alert" className="text-sm text-cafe-secondary">
+            {library.pluginId}: {library.error}
+          </p>
+        ))}
       {needsLogin && (
         <div role="status" className="rounded-xl bg-conn-amber-bg p-4 text-sm text-conn-amber-text">
           <p className="font-semibold">{t(`${tool} 尚未登录`, `${tool} is not signed in`)}</p>
@@ -199,6 +219,17 @@ export function MemberRuntimeFields({
           {t('已检测登录 · 实际连接待验证', 'Sign-in detected · Connection not yet verified')}
         </p>
       )}
+      {native &&
+        !form.accountRef &&
+        form.clientId === 'acp' &&
+        /dsh|deepseek/i.test(form.acpCommand + form.acpStartupArgs) && (
+          <MemberDshProviderSetup
+            form={form}
+            runtimeId={selected?.id ?? (editing ? `acp:${form.catId}` : 'dsh')}
+            t={t}
+            patch={patch}
+          />
+        )}
       <div className="grid gap-4 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
         <MemberChoicePicker
           label={t('模型', 'Model')}
@@ -223,7 +254,14 @@ export function MemberRuntimeFields({
         />
       </div>
       <div className="space-y-1 text-sm text-cafe-secondary" role="status">
-        {needsLogin ? (
+        {form.acpAgentProvider ? (
+          <p>
+            {t(
+              '默认使用客户端当前模型；也可手动填写该客户端支持的模型 ID。',
+              'Uses the client model by default. You can also enter a model ID supported by that client.',
+            )}
+          </p>
+        ) : needsLogin ? (
           <p>
             {t(
               '登录后可读取模型目录；当前可以保留跟随工具设置。',
@@ -272,6 +310,14 @@ export function MemberRuntimeFields({
           </p>
         )}
       </div>
+      {!nativeSetup && agy && (
+        <p className="text-sm text-cafe-secondary">
+          {t(
+            '身份使用“高级接入”中的隔离 Profile；个人登录与执行权限也在那里配置。保存不会登录或调用模型。',
+            'Identity uses the isolated Profile in Advanced connection. Configure personal sign-in and execution permissions there. Saving does not sign in or call a model.',
+          )}
+        </p>
+      )}
       {!nativeSetup && (
         <div className="border-t border-[var(--console-border-soft)] pt-4">
           {accountOptions.length > 1 ? (
@@ -281,38 +327,26 @@ export function MemberRuntimeFields({
               options={accountOptions}
               onChange={(accountRef) => patch({ accountRef })}
             />
-          ) : (
+          ) : !agy ? (
             <p className="text-sm text-cafe-secondary">
               {t(`使用 ${tool} 当前配置`, `Using current ${tool} configuration`)}
             </p>
+          ) : null}
+          {!agy && (
+            <Link href={accountHref} className="mt-1 inline-flex min-h-10 items-center text-sm text-cafe-accent">
+              {t('管理连接', 'Manage connections')} →
+            </Link>
           )}
-          <Link href={accountHref} className="mt-1 inline-flex min-h-10 items-center text-sm text-cafe-accent">
-            {t('管理连接', 'Manage connections')} →
-          </Link>
         </div>
       )}
       {!nativeSetup && (
-        <details className="text-sm text-cafe-secondary">
-          <summary className="min-h-10 cursor-pointer py-2">{t('配置详情', 'Configuration details')}</summary>
-          {defaultIdentity && form.clientId === 'kimi' && selected?.readiness && (
-            <KimiLoginHelp readiness={selected.readiness} t={t} />
-          )}
-          <p className="mb-3">
-            {t(
-              '只调整这位伙伴的偏好。安装状态和模型目录不代表调用已验证。',
-              'Changes apply to this teammate. Installation and model discovery do not verify an invocation.',
-            )}
-          </p>
-          <SelectField
-            label={t('默认值来源', 'Default source')}
-            value={form.configurationSource ?? 'managed_account'}
-            options={[
-              { value: 'native_tool', label: t('工具配置', 'Tool configuration') },
-              { value: 'managed_account', label: t('已有连接配置', 'Existing connection configuration') },
-            ]}
-            onChange={(value) => patch({ configurationSource: value as HubCatEditorFormState['configurationSource'] })}
-          />
-        </details>
+        <MemberConfigurationDetails
+          form={form}
+          patch={patch}
+          defaultIdentity={defaultIdentity}
+          readiness={selected?.readiness}
+          t={t}
+        />
       )}
     </div>
   );

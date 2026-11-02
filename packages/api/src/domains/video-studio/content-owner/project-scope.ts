@@ -19,11 +19,17 @@ export function validateContentOperationContext(
     return;
   }
   if (context === undefined) return;
+  if (!context || typeof context !== 'object' || Array.isArray(context))
+    throw new TypeError('Invalid video project operation context');
+  if (
+    (context.kind === 'work:create' || context.kind === 'work:submit') &&
+    !scope &&
+    /^sha256:[a-f0-9]{64}$/.test(context.requestDigest) &&
+    Object.keys(context).every((key) => key === 'kind' || key === 'requestDigest')
+  )
+    return;
   if (
     !scope ||
-    !context ||
-    typeof context !== 'object' ||
-    Array.isArray(context) ||
     ![
       'video-project:create',
       'video-project:save',

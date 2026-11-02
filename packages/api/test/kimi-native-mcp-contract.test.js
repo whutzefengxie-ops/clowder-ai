@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 import { readFile, rm, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { test } from 'node:test';
+import { catRegistry } from '@cat-cafe/shared';
+import { prepareKimiMcpConfig } from '../dist/domains/cats/services/agents/providers/kimi-mcp-config.js';
+import { directMcpContract } from './helpers/direct-mcp-contract.js';
 import { nativeLoaders, nativeSchemas } from './helpers/kimi-native-contract.js';
 import { kimiNativeFixture, managedCapability } from './helpers/kimi-native-fixture.js';
 
@@ -11,6 +14,57 @@ const transports = {
   http: { transport: 'http', url: 'https://example.invalid/mcp' },
   sse: { transport: 'sse', url: 'https://example.invalid/events' },
 };
+
+for (const injectionDisabled of [false, true]) {
+  test(`member MCP off denies every native layer with injection ${injectionDisabled ? 'disabled' : 'configured'}`, async (t) => {
+    const member = catRegistry.getOrThrow('kimi').config;
+    const previous = member.mcpSupport;
+    t.after(() => {
+      if (previous === undefined) delete member.mcpSupport;
+      else member.mcpSupport = previous;
+    });
+    const f = await kimiNativeFixture(t, { capabilities: [managedCapability()] });
+    const originals = new Map([
+      [join(f.native, 'mcp.json'), { mcpServers: { homeTool: transports.http } }],
+      [join(f.project, '.mcp.json'), { mcpServers: { rootTool: transports.stdio } }],
+      [join(f.cwd, '.mcp.json'), { mcpServers: { cwdTool: transports.sse } }],
+      [f.file, { mcpServers: { originalProjectTool: transports.stdio } }],
+    ]);
+    for (const [file, value] of originals) {
+      await f.put(file, value);
+      originals.set(file, await readFile(file));
+    }
+    member.mcpSupport = false;
+    const lease = injectionDisabled
+      ? await prepareKimiMcpConfig({
+          workingDirectory: f.cwd,
+          mcpServerPath: '',
+          callbackEnv: { CAT_CAFE_CAT_ID: 'kimi', KIMI_CODE_HOME: f.native },
+        })
+      : await f.lease();
+    try {
+      await assertNativeDisabled(f);
+    } finally {
+      await lease.dispose();
+    }
+    for (const [file, before] of originals) assert.deepEqual(await readFile(file), before);
+    if (!injectionDisabled) {
+      member.mcpSupport = true;
+      const enabled = await f.lease();
+      try {
+        for (const load of Object.values(nativeLoaders)) {
+          const effective = await load(f.loadInput);
+          for (const name of ['cat-cafe-collab', 'rootTool', 'cwdTool']) {
+            assert.ok(effective[name] && effective[name].enabled !== false, `${name}: explicit enable must still work`);
+          }
+          assert.equal(effective.homeTool.enabled, false);
+        }
+      } finally {
+        await enabled.dispose();
+      }
+    }
+  });
+}
 
 test('native transport inference ignores foreign type hints on valid HOME entries', async (t) => {
   const f = await kimiNativeFixture(t);
@@ -40,7 +94,9 @@ async function assertNativeDisabled(f, names) {
   }
   for (const [version, load] of Object.entries(nativeLoaders)) {
     const effective = await load(f.loadInput);
-    for (const name of names) assert.equal(effective[name]?.enabled, false, `${version}: ${name} must stay disabled`);
+    for (const name of names ?? Object.keys(effective)) {
+      assert.equal(effective[name]?.enabled, false, `${version}: ${name} must stay disabled`);
+    }
   }
 }
 
@@ -98,8 +154,12 @@ test('root user MCP keeps its source-relative cwd while retired and managed alia
     for (const load of Object.values(nativeLoaders)) {
       const effective = await load(f.loadInput);
       assert.notEqual(effective.filesystem.enabled, false);
-      assert.equal(resolve(effective.filesystem.cwd), join(f.project, 'tools'));
-      assert.deepEqual(effective.filesystem.args, ['relative-script.js']);
+      const { upstream: filesystem } = directMcpContract(effective.filesystem);
+
+      assert.equal(filesystem.command, 'never-executed');
+      assert.equal(resolve(filesystem.cwd), join(f.project, 'tools'));
+      assert.deepEqual(filesystem.args, ['relative-script.js']);
+      assert.deepEqual(filesystem.env, {}, 'foreign upstream must not acquire host identity or callback env');
     }
   } finally {
     await lease.dispose();
@@ -161,8 +221,16 @@ test('gitdir worktree discovery and nested user MCP paths follow their actual so
   try {
     for (const load of Object.values(nativeLoaders)) {
       const effective = await load(f.loadInput);
-      assert.equal(resolve(effective.inherited.cwd), join(f.project, 'root-tools'));
-      assert.equal(resolve(effective.override.cwd), join(f.cwd, 'local-tools'));
+      for (const [name, cwd] of [
+        ['inherited', join(f.project, 'root-tools')],
+        ['override', join(f.cwd, 'local-tools')],
+      ]) {
+        const { upstream } = directMcpContract(effective[name]);
+
+        assert.equal(upstream.command, 'never-executed');
+        assert.equal(resolve(upstream.cwd), cwd);
+        assert.deepEqual(upstream.env, {}, 'foreign upstream must not acquire host identity or callback env');
+      }
     }
   } finally {
     await lease.dispose();
@@ -177,7 +245,14 @@ test('host-approved collaboration remains executable and per-cat denial cannot l
     for (const load of Object.values(nativeLoaders)) {
       const effective = await load(f.loadInput);
       assert.notEqual(effective['cat-cafe-collab'].enabled, false);
-      assert.deepEqual(effective['cat-cafe-collab'].args, [join(f.dist, 'collab.js')]);
+      const { upstream: collab, launchEnv } = directMcpContract(effective['cat-cafe-collab']);
+
+      assert.equal(collab.command, process.execPath);
+      assert.deepEqual(collab.args, [join(f.dist, 'collab.js')]);
+      assert.equal(collab.env.CAT_CAFE_CAT_ID, 'kimi');
+      assert.ok(collab.env.ALLOWED_WORKSPACE_DIRS, 'the workspace boundary stays on the upstream reader');
+      assert.equal(launchEnv.CAT_CAFE_CAT_ID, 'kimi');
+      assert.equal(launchEnv.CAT_CAFE_SECRET_MCP_PROXY_SPEC, undefined);
     }
   } finally {
     await lease.dispose();
@@ -188,5 +263,41 @@ test('host-approved collaboration remains executable and per-cat denial cannot l
     await assertNativeDisabled(f, ['cat-cafe-collab']);
   } finally {
     await denied.dispose();
+  }
+});
+
+test('Kimi native parsers accept private shared HTTP headers with the six unchanged server names', async (t) => {
+  const f = await kimiNativeFixture(t, {
+    capabilities: ['collab', 'memory', 'signals', 'limb', 'audio', 'finance'].map((name) =>
+      managedCapability({ id: `cat-cafe-${name}` }),
+    ),
+  });
+  const mcpServerPath = new URL('../../mcp-server/dist/index.js', import.meta.url).pathname;
+  const lease = await prepareKimiMcpConfig({
+    workingDirectory: f.cwd,
+    mcpServerPath,
+    callbackEnv: {
+      KIMI_CODE_HOME: f.native,
+      CAT_CAFE_CAT_ID: 'kimi',
+      CAT_CAFE_API_URL: 'http://127.0.0.1:59999',
+      CAT_CAFE_INVOCATION_ID: 'owned-kimi-A',
+      CAT_CAFE_CALLBACK_TOKEN: 'owned-kimi-token',
+      CAT_CAFE_THREAD_ID: 'owned-kimi-thread',
+      CAT_CAFE_MCP_TRANSPORT: 'shared',
+    },
+  });
+  try {
+    for (const load of Object.values(nativeLoaders)) {
+      const servers = await load(f.loadInput);
+      assert.equal(Object.keys(servers).length, 6);
+      for (const [name, server] of Object.entries(servers)) {
+        assert.equal(server.command, undefined);
+        assert.equal(new URL(server.url).searchParams.get('family'), name.slice('cat-cafe-'.length));
+        assert.equal(server.headers['x-invocation-id'], 'owned-kimi-A');
+        assert.equal(server.headers['x-callback-token'], 'owned-kimi-token');
+      }
+    }
+  } finally {
+    await lease.dispose();
   }
 });

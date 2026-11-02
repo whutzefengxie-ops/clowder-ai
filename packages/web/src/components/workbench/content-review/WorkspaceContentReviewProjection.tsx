@@ -133,7 +133,7 @@ export function WorkspaceContentReviewProjection({
     source.kind !== 'collective-artifact' &&
     source.kind !== 'collective-media' &&
     !!mediaChatMime(source.mime) &&
-    (source.media.kind === 'image' || isV2);
+    (source.media.kind === 'image' || isV2 || Boolean(workflow?.videoWork));
   const mediaRoot = useRef<HTMLDivElement>(null);
   const mediaChat = useWorkspaceMediaChat({
     view,
@@ -292,9 +292,27 @@ export function WorkspaceContentReviewProjection({
   return (
     <div
       ref={mediaRoot}
-      className={`${styles.workspace} ${imageChatPrimary ? styles.imageWorkspace : ''}`}
+      className={`${styles.workspace} ${imageChatPrimary ? styles.imageWorkspace : ''} ${workflow?.videoWork ? styles.videoWorkspace : ''}`}
       data-comparing={comparing ? 'true' : undefined}
+      data-video-work-canvas={workflow?.videoWork ? '' : undefined}
+      data-video-discussion-open={workflow?.videoWork ? String(discussionOpen || !!workflow.assetDetail) : undefined}
+      style={workflow?.playbackHidden ? { display: 'none' } : undefined}
     >
+      {workflow?.videoWork ? (
+        <div className="flex shrink-0 justify-end px-3 pt-2">
+          <button
+            type="button"
+            className="rounded border border-cafe-subtle px-2 py-1 text-xs"
+            aria-expanded={discussionOpen}
+            onClick={() => {
+              workflow?.onCloseAssetDetail?.();
+              setDiscussionOpen(!discussionOpen);
+            }}
+          >
+            一起讨论{view.review.annotations.length ? ` · ${view.review.annotations.length}` : ''}
+          </button>
+        </div>
+      ) : null}
       {sourceState}
       {imageChatPrimary ? <ImageWorkProgress target={mediaChat.target} /> : null}
       {imageChatPrimary && draft.trim() ? (
@@ -305,6 +323,12 @@ export function WorkspaceContentReviewProjection({
       ) : null}
       {view.sourceState === 'current' ? (
         <WorkspaceContentReviewMedia
+          seekRequest={workflow?.seekRequest}
+          markRequest={workflow?.markRequest}
+          selectionRequest={workflow?.selectionRequest}
+          playbackHidden={workflow?.playbackHidden}
+          onPlaybackTime={workflow?.onPlaybackTime}
+          chapterNavigation={workflow?.chapterNavigation}
           draftKey={workflow?.canvasDraftKey}
           canMarkup={capabilities.markup.state === 'available'}
           key={`${view.review.reviewId}:${source.revision}`}
@@ -400,18 +424,48 @@ export function WorkspaceContentReviewProjection({
       ) : null}
       {imageChatPrimary || !mediaChat.offered ? <AddToChatNotice chat={mediaChat} /> : null}
       <div className={styles.modificationRegion}>{modification}</div>
-      {discussionOpen || view.sourceState !== 'current' ? (
+      {workflow?.assetDetail || discussionOpen || view.sourceState !== 'current' ? (
         <aside className={styles.drawer} aria-label="作品讨论">
           <div className={styles.drawerHeader}>
-            <h3 className={styles.drawerTitle}>
-              <ReviewToolbarIcon name="comment" />
-              一起讨论
-            </h3>
-            <button type="button" className={toolbarStyles.iconButton} aria-label="关闭讨论" onClick={closeDiscussion}>
-              <ReviewToolbarIcon name="close" />
-            </button>
+            {workflow?.assetDetail ? (
+              <button
+                type="button"
+                className="text-sm text-cafe-muted"
+                onClick={() => {
+                  workflow.onCloseAssetDetail?.();
+                  setDiscussionOpen(true);
+                }}
+              >
+                ‹ 一起讨论
+              </button>
+            ) : (
+              <>
+                <h3 className={styles.drawerTitle}>
+                  <ReviewToolbarIcon name="comment" />
+                  一起讨论
+                </h3>
+                <button
+                  type="button"
+                  className={toolbarStyles.iconButton}
+                  aria-label="关闭讨论"
+                  onClick={closeDiscussion}
+                >
+                  <ReviewToolbarIcon name="close" />
+                </button>
+              </>
+            )}
           </div>
-          <div className={styles.drawerBody}>{comments}</div>
+          <div className={styles.drawerBody}>
+            {workflow?.assetDetail ?? (
+              <>
+                {workflow?.videoWork && !view.review.annotations.length ? (
+                  <p className="p-3 text-xs text-cafe-muted">没标的都算通过。</p>
+                ) : null}
+                {workflow?.responseDiscussion}
+                {comments}
+              </>
+            )}
+          </div>
         </aside>
       ) : null}
     </div>

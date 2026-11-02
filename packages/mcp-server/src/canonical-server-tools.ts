@@ -30,6 +30,7 @@ import {
   libraryLifecycleTools,
   limbTools,
   pawFeelDispositionTools,
+  pawFeelInboxAuditScanTools,
   perspectiveTools,
   pluginManagementTools,
   publishVerdictTools,
@@ -44,6 +45,7 @@ import {
   signalStudyTools,
   signalsTools,
   skillConsumptionTools,
+  workTools,
 } from './tools/index.js';
 import { liveMeetingTools } from './tools/live-meeting-tools.js';
 import { memberImageTools } from './tools/member-image-tools.js';
@@ -61,6 +63,7 @@ export const CANONICAL_TOOL_SOURCES = {
     ...contentEditorTools,
     ...artifactReviewTools,
     ...contentModificationTools,
+    ...workTools,
     ...externalRuntimeSessionCallbackTools,
     ...hubActionTools,
     ...pageActionTools,
@@ -75,6 +78,7 @@ export const CANONICAL_TOOL_SOURCES = {
     ...publishVerdictTools,
     ...evalLifecycleTools,
     ...pawFeelDispositionTools,
+    ...pawFeelInboxAuditScanTools,
     ...richBlockRulesTools,
     ...runtimeInteractionTools,
     ...scheduleTools,

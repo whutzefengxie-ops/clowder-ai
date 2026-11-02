@@ -1,3 +1,5 @@
+import { getCoCreatorDisplay } from '../../../../config/co-creator-display.js';
+import { sliceUnicodeSafe } from '../../../../utils/unicode-safe-slice.js';
 /**
  * Context Assembler
  * 从 messageStore 历史消息组装上下文字符串，prepend 到猫的 prompt 中。
@@ -54,7 +56,7 @@ export function buildMessageMap(messages: readonly StoredMessage[]): ReadonlyMap
  * For variant cats (e.g. sonnet, opus-45), includes variantLabel to distinguish same-family members.
  */
 export function getSenderName(catId: string | null): string {
-  if (catId === null) return 'co-creator';
+  if (catId === null) return `${getCoCreatorDisplay().nickname}`;
   const entry = catRegistry.tryGet(catId);
   const config = entry?.config;
   if (!config) return catId;
@@ -121,7 +123,7 @@ function getMessageSenderName(
   const from = messageFrom(msg);
   switch (from.kind) {
     case 'user':
-      return 'co-creator';
+      return `${getCoCreatorDisplay().nickname}`;
     case 'agent':
       return `${getSenderName(from.catId)}${servedModelMarker(msg)}`;
     case 'external': {
@@ -144,10 +146,10 @@ function truncateHeadTail(content: string, limit: number): string {
   const dropped = content.length - limit;
   const marker = `\n\n[...truncated ${dropped} chars...]\n\n`;
   const available = limit - marker.length;
-  if (available <= 0) return content.slice(0, limit);
+  if (available <= 0) return sliceUnicodeSafe(content, 0, limit);
   const headSize = Math.floor(available * 0.4);
   const tailSize = available - headSize;
-  return content.slice(0, headSize) + marker + content.slice(-tailSize);
+  return sliceUnicodeSafe(content, 0, headSize) + marker + sliceUnicodeSafe(content, -tailSize);
 }
 
 /**
@@ -188,7 +190,7 @@ export function formatMessage(
       const parentSender = getMessageDisplayName(parent);
       const sanitized = options?.sanitizeContent ? options.sanitizeContent(parent.content) : parent.content;
       const raw = sanitized.replaceAll('\n', ' ');
-      const preview = raw.length > REPLY_PREVIEW_LENGTH ? `${raw.slice(0, REPLY_PREVIEW_LENGTH)}…` : raw;
+      const preview = raw.length > REPLY_PREVIEW_LENGTH ? `${sliceUnicodeSafe(raw, 0, REPLY_PREVIEW_LENGTH)}…` : raw;
       replyPrefix = `[↩ ${parentSender}: ${preview}] `;
     }
   }

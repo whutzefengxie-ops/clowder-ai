@@ -30,13 +30,29 @@ async function fixture(tasks = new TaskStore()) {
     pluginId: 'fixture',
     pluginInstanceId: 'instance',
     ownerUserId: 'owner',
-    effectiveGrants: ['task.read', 'task.write', 'task.admitEntrusted'],
     taskStore: tasks,
     threadStore: threads,
     readThreadStore: threads,
     assertCurrent: async () => {},
     onTaskDataChanged: (task) => changes.push(task.id),
-    admission: { messageStore: messages, isCatAvailable: (id) => id === 'codex', assertCurrent: async () => {} },
+    admission: {
+      messageStore: messages,
+      isCatAvailable: (id) => id === 'codex',
+      assertCurrent: async () => {},
+      readCurrentDataControllerAuthority: async () => ({
+        pluginId: 'fixture',
+        pluginInstanceId: 'instance',
+        moduleRef: 'plugin:fixture',
+        lifecycleRevision: 1,
+      }),
+      withCurrentDataControllerAuthority: async (run) =>
+        run({
+          pluginId: 'fixture',
+          pluginInstanceId: 'instance',
+          moduleRef: 'plugin:fixture',
+          lifecycleRevision: 1,
+        }),
+    },
   };
   const host = createPluginTaskHost(deps);
   const data = {
@@ -55,7 +71,10 @@ async function fixture(tasks = new TaskStore()) {
   };
   const ownerRead = new EntrustedWorkOwnerReadService({
     tasks,
-    producerCatalog: { listCurrentReceipts: async () => [] },
+    producerCatalog: {
+      listCurrentReceipts: async () => [],
+      readCurrentReceipts: async () => ({ receipts: [], coverage: { state: 'complete' } }),
+    },
   });
   return { tasks, messages, threads, thread, source, changes, deps, host, input, ownerRead };
 }
@@ -107,12 +126,8 @@ test('same Task has a Schedule deadline, changes it, then closes without any exe
   assert.equal(f.messages.getRecent(100, 'owner').length, 1, 'no execution/admission carrier message');
 });
 
-test('foreign source, absent grant, foreign Task and conflicting bare Task cannot be adopted', async () => {
+test('foreign source, foreign Task and conflicting bare Task cannot be adopted', async () => {
   const f = await fixture();
-  await assert.rejects(
-    createPluginTaskHost({ ...f.deps, effectiveGrants: ['task.write'] }).create(f.input, { onConflict: 'update' }),
-    /task.admitEntrusted/,
-  );
   await assert.rejects(
     createPluginTaskHost({ ...f.deps, pluginInstanceId: 'other' }).create(f.input, { onConflict: 'update' }),
     /source|installation/i,
@@ -309,7 +324,10 @@ async function materialFixture() {
   const host = createPluginTaskHost({ ...f.deps, artifactReader });
   const ownerRead = new EntrustedWorkOwnerReadService({
     tasks: f.tasks,
-    producerCatalog: { listCurrentReceipts: async () => [] },
+    producerCatalog: {
+      listCurrentReceipts: async () => [],
+      readCurrentReceipts: async () => ({ receipts: [], coverage: { state: 'complete' } }),
+    },
     artifactReader,
   });
   return { ...f, host, ownerRead, artifactReader, artifactRef, publication };

@@ -22,6 +22,8 @@ export const SIGNAL_SOURCE_LABELS = {
   health_probe: '健康检查',
   dispatch_success: '最近一次接活顺利完成',
 };
+/** Recovery is evidence for availability, rather than a fifth current state. */
+export const memberStatusLabel = (status: MemberStatus) => (status.label === '已恢复' ? '可用' : status.label);
 export function memberSignalDeadline(signal: { validUntil?: number; resetAt?: number }): number {
   return Math.min(signal.validUntil ?? Infinity, signal.resetAt ?? Infinity);
 }
@@ -37,6 +39,9 @@ const reasonLabels: Record<string, string> = {
   daily_quota_low: '今日额度不足',
   provider_error: '服务报错',
   provider_timeout: '服务响应超时',
+  quota_exhausted: '额度已用完',
+  authentication_rejected: '登录验证未通过',
+  provider_unreachable: '没连上服务',
   dispatch_success_probe: '最近一次接活顺利完成',
   routing_signal_expired: '记录已失效，尚未确认恢复',
   routing_signal_retracted: '限制已撤回',
@@ -125,6 +130,32 @@ export function memberStatus(
           : candidate.availability === 'unavailable'
             ? 'error'
             : 'warning',
+  };
+}
+/** Work outcomes are historical dispatch facts, independent of current availability/recovery. */
+export function memberLatestWork(
+  catId: string,
+  model: RoutingContextReadModelV1 | null,
+  now: number,
+): Pick<MemberStatus, 'detail' | 'observedAt'> | undefined {
+  const event = model?.signalEvents
+    .filter(
+      (item) =>
+        item.subjectRef.type === 'cat' &&
+        item.subjectRef.catId === catId &&
+        item.observedAt > 0 &&
+        item.observedAt <= now &&
+        ((item.source === 'dispatch_success' && item.eventType === 'recovered') ||
+          (item.source === 'provider_error' && item.eventType === 'asserted')),
+    )
+    .sort((a, b) => b.observedAt - a.observedAt)[0];
+  if (!event) return;
+  return {
+    detail:
+      event.source === 'dispatch_success'
+        ? '最近一次接活顺利完成'
+        : (reasonLabels[event.reasonCode] ?? '最近一次接活未成功'),
+    observedAt: event.observedAt,
   };
 }
 export function memberTransport(cat: CatData): string {

@@ -1,16 +1,16 @@
 ---
 feature_ids: [F309]
-related_features: [F063, F138, F202, F290, F307, F310, F322]
-topics: [collaborative-content, co-editing, change-awareness, selection-anchors, annotations, agent-patch, office, media]
+related_features: [F063, F138, F202, F232, F290, F307, F310, F322]
+topics: [artifacts, collaborative-content, co-editing, change-awareness, selection-anchors, annotations, agent-patch, office, media, html-widget]
 doc_kind: spec
 tips_exempt: "Renewed 2026-10-02 for Studio K1/K2 backend: the new takeover MCP is an authenticated Cat-internal bridge from the Human's already-sent, revision-bound message; the Human action remains the mounted Chat/candidate/receipt journey and teaches itself in context. A generic tip would expose internal sourceMessageId/operationId mechanics before the Sonnet consumer and parent Alpha are accepted. The 2026-09-26 artwork-focus in-canvas rationale remains unchanged."
 design_gate_claim_contracts:
   - docs/design-gate-claims/f309-artwork-review-real-shell.json
 created: 2026-08-27
-description: "让人和猫在异质内容上共同编辑、感知有版本的变化、精确批注并安全审阅 Agent patch，同时让 canonical 内容和版本留在各自 owner。"
+description: "产物协作：让人和猫围绕文档、图片、视频、网页与交互作品共同查看、编辑、批注、迭代版本并审阅修改，感知彼此有版本的变化；内容和版本由各自 owner 管理，Office 插件是其中一种内容能力。"
 description_source: human
-description_author: codex-sol
-description_updated_at: 2026-09-13T20:42:00Z
+description_author: codex61-sol
+description_updated_at: 2026-10-20T11:14:40Z
 mcp_admission_status: accepted
 mcp_admission_ref: "file:docs/features/F309-collaborative-content-plane.md"
 mcp_admission_claims:
@@ -46,16 +46,31 @@ mcp_admission_claims:
     decision: accepted
 ---
 
-# F309: Collaborative Content Plane — 跨媒介内容协作平面
+# F309: 产物协作 — Artifact Collaboration / Collaborative Content Plane
 
-> **Status**: in-progress / Phase R 历史有界交付保留；Phase U 的 Studio 297 作品体验工作单元已在 #5507/#5521 合入后通过父 Alpha 与原设计负责人实页复看；其余 Phase U、Office/video Admission Gate 与未勾 AC 仍开放
-> **Owner**: 小太阳·Maine Coon (@codex-sol, GPT-5.6 Sol)
+**F309 面向人和猫共同创作的产物：文档、图片、视频、网页、可运行原型及其他交互作品。**
+它要让同一件作品可以被找回、精确指出位置、讨论、修改、比较版本并由有权的人决定采用，
+最终支持人猫共同编辑和变化感知。Office 文档是其中一类产物，Office provider plugin 是接入
+这类内容的一条实现支线；不能用“Office/PPT 插件”概括整个 F309。
+
+这里的交互作品指网页、小工具、可运行原型等内容；审批、投票、选择卡仍是交互记录，
+不会因为出现在聊天中就自动成为可版本化作品。
+
+产品定位澄清来源：You `[thread-id]#private-source-id`
+（2026-10-20：“应该是产物……视频 图片 文档”）。本次修正描述与检索入口；具体能力仍按下列
+阶段和原验收证据交付，不把网页作品版本化或 Office 完整共编记成已经完成。
+
+> **Status**: in-progress / Phase R、Studio 297 历史有界交付保留；Phase U 归一四项补漏、#6264 prepared、#6275 卡片与 #6277 raw缩略/目录阅读器均已过父 Alpha；Human829工具栏修复#6292已过父Alpha与正式boot59五宽度；原讨论稿Chat/Works/Home全部路径正式往返通过，共同Markdown卡片YAML问题已由#6296审合并过父Alpha及正式boot60三入口，原Task414/g22这处正式验收闭合；菜单叠留#6314已过父Alpha与正式boot64原消息六阶段，完整正式体验、Phase U、Office/video Admission Gate与未勾AC仍开放
+> **Owner**: 小星星·Maine Coon (@codex-astra, GPT-6 Astra)，F309 统筹与最终交付
 > **Priority**: P1
-> **Source thread**: `[thread-id]`
+> **Source thread**: `[thread-id]` — F309「指挥」
+> **Original source thread**: `[thread-id]`（保留初始设计与授权来源）
 > **operator origin**: 从 F290 完整剥离 Office、富文本、图片、视频、画布的编辑、选区、批注与 Agent patch；“能用开源就用开源集成”；最终要支持人猫共同编辑，猫能感知人的编辑。来源：`private-source-id`。
 > **operator final-state correction**: DOCX + video 必须优先直接集成成熟开源能力；禁止用 fake owner、最小编辑器或独立脚手架证明“可行”，开发从真实候选的最终宿主/内容边界起步。来源：`private-source-id`。
 > **operator Workspace correction**: Office 不是孤立工具或多内核拼盘；家里只维护一条 Office 主线，把它嵌入现有浏览器 Workspace。人和具名猫都是同一实时内容模型里的第一等 writer，不能让猫离线改旧文件或借用人的光标、身份冒充共同编辑。来源：`private-source-id`、`private-source-id`。
 > **operator plugin choice**: Office 是用户可选择安装/启用的 provider plugin，不是 core 默认重依赖；GenOffice 是第一个真实 admission candidate。第一轮只开 DOCX vertical slice，验证通过后 XLSX/PPTX/PDF 才在同一插件内逐项开放。来源：`private-source-id`。
+
+> **F309 统筹归属（2026-10-27）**：You 将 `[thread-id]` 改名为 F309「指挥」，明确托付 Astra 今后统筹整个 F309。直接来源：`[thread-id]#private-source-id`；持久托付：`task:work:private-source-id`。本线程负责已接受范围、路线顺序、执行分工、跨线程依赖、状态同步与最终用户交付。具体实现、独立审查和内容写入仍沿各原 Task、执行线程与内容 owner；新 Phase、愿景变更及 Feature 结项继续由 You 决定。原 Task909/414、GenOffice 任务和历史证据不迁移、不重建。
 
 Architecture cell: `collaborative-content-plane`
 
@@ -92,7 +107,7 @@ F309 把这条协作关系做成公共 plane，同时守住两条边界：不自
 ## Vision / 终态远景
 
 F309 的终态不是“聊天旁边多几个可看的附件”，也不是把所有媒介塞进一个新的万能编辑器。它要让
-文档、表格、图片、视频、画布等内容都成为人和猫可以**共同看见、共同指向、共同修改、共同裁决**
+文档、表格、图片、视频、画布、网页与交互作品等产物都成为人和猫可以**共同看见、共同指向、共同修改、共同裁决**
 的活内容：
 
 1. **原生地编辑**：用户在内容 owner 提供的真实编辑器里直接编辑，不需要把正文复制回聊天框。
@@ -141,6 +156,16 @@ anchor。结论：F309 不是 F307/F290/F063/F138 的 Phase 或 adapter 子任�
 独立 contract plane。
 
 ## Product and Architecture Boundary
+
+### 产物、目录、宿主与内容实现
+
+| 关注点 | 负责方与本 Feature 的关系 |
+|---|---|
+| 找到产物、列出当前对话或全部作品 | F232 负责目录、筛选与打开投影；内容的稳定身份和版本仍由内容 owner 提供。 |
+| 围绕产物讨论、批注、提修改、审阅和处理版本变化 | F309 提供跨内容类型的协作契约与体验，既包括现有图片/视频审阅、文本修改回流，也包括仍开放的共同编辑目标。 |
+| 正文、媒体字节、真实编辑器与版本写入 | 各内容 owner 与成熟引擎负责。Office 插件只是文档接入支线，视频引擎是视频接入支线，不替代 F309 的产品总定位。 |
+| 页面和作品显示在哪里、怎样返回、操作是否易懂 | F307 承载工作面与恢复，F322 统筹 v2 UI/UX；不另造内容或版本真相。 |
+| 网页与可运行作品持续迭代 | 已有 `html_widget` 展示与产物目录基础；社区 [#1621](https://github.com/zts212653/clowder-ai/issues/1621) 提出的稳定句柄、显式新版、重启读回与旧版回看仍待内容 owner 接入收敛。参见 [F232 OQ-B4](F232-thread-artifacts-panel.md#open-questions)，不因改描述接纳独立 `artifact:` 身份/版本库或扩大分享权限。 |
 
 ### F309 拥有
 
@@ -1038,10 +1063,11 @@ Why: F309 derives request identity, Task continuation and result projection with
 
 ## Thread Topology（执行载体，不是真相源）
 
-1. **指挥与理论 thread**：当前 source thread；责任猫维护验收后的 vision、边界与 Phase 状态，并持续驱动下一步。
+1. **F309 指挥 thread**：`[thread-id]` / Astra；按 CVO1601 统筹整个 Feature 的范围、分工、依赖、交付与验收。初始 source thread `[thread-id]` 保留历史来源，当前协调回到指挥线程。
 2. **Phase execution threads**：每个 Phase 单独承载实现、证据与 review，不在指挥 thread 堆执行噪音。
 3. **runtime 重启后的验收 thread**：只消费已合入 main 的 exact SHA，在隔离验收环境复跑真实用户旅程。
 4. **CVO517作品体验执行批次**：新thread以 `codex6-sol` 为实现/交付owner、`codex-sol`（GPT-5.6）为独立reviewer；在自身隔离worktree自治实现、修复、review、commit/push及merge，最终回父 `[thread-id]` / `codex-astra` 做Alpha。创建以F128返回的实际thread为准，pending proposal不冒称已开工；原child其余责任及Task909保留。
+5. **当前全入口归一施工**：原 Task414 / `[thread-id]` 的 Sol6.1 单写实现、处理审查意见与合入；Sonnet 负责 #6249 独立审查，Astra 在本指挥线程持合后 Alpha 和整体结果。此批次沿既有 Phase U，不新开 Phase 或转移其他内容 owner。
 
 Feature、Research、ownership、commit/PR 与 task 状态仍是 canonical truth；thread 只是协作载体。这里复用家里
 现有 Feature/Phase/验收概念，不新增 Stage、Queue、Registry 或另一套状态机。

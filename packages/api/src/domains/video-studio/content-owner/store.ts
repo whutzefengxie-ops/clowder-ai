@@ -1,11 +1,13 @@
 import { createHash } from 'node:crypto';
-import { type BigIntStats, constants, type Dirent } from 'node:fs';
-import { type FileHandle, link, mkdir, open, opendir, readFile, rename, unlink } from 'node:fs/promises';
+import { type BigIntStats, constants } from 'node:fs';
+import { type FileHandle, link, mkdir, open, readFile, rename, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { CollectiveContentCustodyFence } from './collective-custody-fence.js';
+import { contentKey, readOwnerManifests } from './manifest-reader.js';
 import { commitInitialOwnerState } from './state/initial-commit.js';
 import { type ProjectContentStateV1, parseProjectContentState } from './state/manifest.js';
-import type { VideoProjectScopeV1 } from './types.js';
+import { type ContentStream, writeOwnerPayload } from './stream-content.js';
+import type { ContentActorV1, ContentPublicationScopeV1, VideoProjectScopeV1 } from './types.js';
 
 export type { ProjectContentStateV1 } from './state/manifest.js';
 
@@ -21,6 +23,14 @@ export interface SourcePublicationMatch {
   readonly contentRef: string;
   readonly ownerRevision: number;
   readonly sourceRevision: string;
+}
+
+export interface RetainedMediaHead {
+  readonly contentRef: string;
+  readonly ownerRevision: number;
+  readonly publicationScope: ContentPublicationScopeV1;
+  readonly committedAt: string;
+  readonly committedBy: ContentActorV1;
 }
 
 export class ProjectContentOwnerStore {
@@ -88,10 +98,7 @@ export class ProjectContentOwnerStore {
     const { matches, lookupIdsByPublication } = indexSourcePublicationLookups(inputs);
     if (inputs.length === 0) return matches;
 
-    const directory = await openOwnerManifestDirectory(this.rootDir);
-    if (!directory) return matches;
-    for await (const entry of directory) {
-      const state = await readOwnerManifest(this.rootDir, entry);
+    for await (const state of readOwnerManifests(this.rootDir)) {
       if (state) appendSourcePublicationMatches(state, lookupIdsByPublication, matches);
     }
     sortSourcePublicationMatches(matches);
@@ -101,10 +108,7 @@ export class ProjectContentOwnerStore {
   /** Discover projects through the same complete canonical manifest reader as publication batches. */
   async listVideoProjects(ownerUserId: string): Promise<{ contentRef: string; projectScope: VideoProjectScopeV1 }[]> {
     const matches: { contentRef: string; projectScope: VideoProjectScopeV1 }[] = [];
-    const directory = await openOwnerManifestDirectory(this.rootDir);
-    if (!directory) return matches;
-    for await (const entry of directory) {
-      const state = await readOwnerManifest(this.rootDir, entry);
+    for await (const state of readOwnerManifests(this.rootDir)) {
       if (state?.projectScope?.ownerUserId === ownerUserId)
         matches.push({ contentRef: state.contentRef, projectScope: { ...state.projectScope } });
     }
@@ -112,30 +116,52 @@ export class ProjectContentOwnerStore {
   }
 
   /** Bounded manifest discovery only; callers must reauthorize every resulting publication. */
-  async listRetainedMedia(ownerUserId: string, after = '', limit = 30) {
+  async listRetainedMedia(ownerUserId: string, after = '', limit = 30, includeHtmlWorks = false) {
     if (!Number.isSafeInteger(limit) || limit < 1 || limit > 30) throw new TypeError('Invalid media page');
     const items: { contentRef: string; ownerRevision: number }[] = [];
-    const directory = await openOwnerManifestDirectory(this.rootDir);
-    if (directory)
-      for await (const entry of directory) {
-        const state = await readOwnerManifest(this.rootDir, entry);
-        if (
-          state?.publicationScope?.ownerUserId !== ownerUserId ||
-          state.contentRef.localeCompare(after) <= 0 ||
-          !['image/png', 'video/mp4'].includes(state.mediaType)
-        )
-          continue;
-        items.push({ contentRef: state.contentRef, ownerRevision: state.currentOwnerRevision });
-        items.sort((a, b) => a.contentRef.localeCompare(b.contentRef));
-        if (items.length > limit + 1) items.pop();
-      }
+    for await (const head of this.retainedMediaHeads(ownerUserId, includeHtmlWorks)) {
+      if (head.contentRef.localeCompare(after) <= 0) continue;
+      items.push({ contentRef: head.contentRef, ownerRevision: head.ownerRevision });
+      items.sort((a, b) => a.contentRef.localeCompare(b.contentRef));
+      if (items.length > limit + 1) items.pop();
+    }
     return {
       items: items.slice(0, limit),
       ...(items.length > limit ? { nextCursor: items[limit - 1]?.contentRef } : {}),
     };
   }
 
-  async commitInitialState(state: ProjectContentStateV1, bytes: Uint8Array, authorizeEffect: () => Promise<void>) {
+  /** One canonical manifest walk. The consumer bounds retention and freshly authorizes selected versions. */
+  async *retainedMediaHeads(ownerUserId: string, includeHtmlWorks = false): AsyncGenerator<RetainedMediaHead> {
+    for await (const state of readOwnerManifests(this.rootDir)) {
+      if (
+        state?.publicationScope?.ownerUserId !== ownerUserId ||
+        (!['image/png', 'video/mp4'].includes(state.mediaType) &&
+          !(
+            includeHtmlWorks &&
+            state.mediaType === 'text/html' &&
+            'kind' in state.publicationScope &&
+            state.publicationScope.kind === 'work'
+          ))
+      )
+        continue;
+      const revision = state.revisions[state.currentOwnerRevision - 1];
+      if (!revision) throw new Error('Canonical current revision unavailable');
+      yield {
+        contentRef: state.contentRef,
+        ownerRevision: state.currentOwnerRevision,
+        publicationScope: { ...state.publicationScope },
+        committedAt: revision.committedAt,
+        committedBy: { ...revision.committedBy },
+      };
+    }
+  }
+
+  async commitInitialState(
+    state: ProjectContentStateV1,
+    bytes: Uint8Array | ContentStream,
+    authorizeEffect: () => Promise<void>,
+  ) {
     await commitInitialOwnerState({
       root: this.rootDir,
       target: this.contentRoot(state.contentRef),
@@ -170,27 +196,25 @@ export class ProjectContentOwnerStore {
     }
   }
 
-  async writeBlob(contentRef: string, digest: `sha256:${string}`, bytes: Uint8Array): Promise<void> {
+  async writeBlob(contentRef: string, digest: `sha256:${string}`, bytes: Uint8Array | ContentStream): Promise<void> {
     const directory = join(this.contentRoot(contentRef), 'blobs');
     await mkdir(directory, { recursive: true, mode: 0o700 });
     const target = join(directory, digest.slice('sha256:'.length));
     const temporary = join(directory, `.blob-${process.pid}-${cryptoRandomSuffix()}.tmp`);
-    const handle = await open(temporary, 'wx', 0o600);
     try {
-      await handle.writeFile(bytes);
-      await handle.sync();
-    } finally {
-      await handle.close();
-    }
-    try {
-      await link(temporary, target);
-    } catch (error: unknown) {
-      if (!isErrno(error, 'EEXIST')) {
-        await unlink(temporary).catch(() => undefined);
-        throw error;
+      const handle = await open(temporary, 'wx', 0o600);
+      try {
+        await writeOwnerPayload(handle, bytes);
+        await handle.sync();
+      } finally {
+        await handle.close();
       }
+      await link(temporary, target).catch((error: unknown) => {
+        if (!isErrno(error, 'EEXIST')) throw error;
+      });
+    } finally {
+      await unlink(temporary).catch(() => undefined);
     }
-    await unlink(temporary);
   }
 
   async readBlob(contentRef: string, digest: `sha256:${string}`): Promise<Buffer> {
@@ -264,32 +288,6 @@ function indexSourcePublicationLookups(inputs: readonly SourcePublicationBatchLo
   return { matches, lookupIdsByPublication };
 }
 
-async function openOwnerManifestDirectory(rootDir: string): Promise<Awaited<ReturnType<typeof opendir>> | undefined> {
-  try {
-    return await opendir(rootDir);
-  } catch (error) {
-    if (isErrno(error, 'ENOENT')) return undefined;
-    throw error;
-  }
-}
-
-async function readOwnerManifest(rootDir: string, entry: Dirent): Promise<ProjectContentStateV1 | undefined> {
-  if (!entry.isDirectory()) return undefined;
-  if (!/^[a-f0-9]{64}$/.test(entry.name)) return undefined;
-  let raw: string;
-  try {
-    raw = await readFile(join(rootDir, entry.name, 'state.json'), 'utf8');
-  } catch (error) {
-    if (isErrno(error, 'ENOENT')) throw new Error(`Incomplete content owner manifest: ${entry.name}`, { cause: error });
-    throw error;
-  }
-  const identity: unknown = JSON.parse(raw);
-  if (!isRecord(identity)) throw new Error('Invalid content owner manifest identity');
-  if (typeof identity.contentRef !== 'string') throw new Error('Invalid content owner manifest identity');
-  if (contentKey(identity.contentRef) !== entry.name) throw new Error('Invalid content owner manifest identity');
-  return parseProjectContentState(raw, identity.contentRef);
-}
-
 function appendSourcePublicationMatches(
   state: ProjectContentStateV1,
   lookupIdsByPublication: ReadonlyMap<string, ReadonlySet<string>>,
@@ -354,10 +352,6 @@ async function verifyBlob(handle: FileHandle, byteLength: number, digest: `sha25
   if (`sha256:${hash.digest('hex')}` !== digest) throw new Error('Content blob digest mismatch');
 }
 
-function contentKey(contentRef: string): string {
-  return createHash('sha256').update(contentRef).digest('hex');
-}
-
 function publicationLookupKey(ownerUserId: string, sourceRef: string, artifactRef: string, revision: string): string {
   return JSON.stringify([ownerUserId, sourceRef, artifactRef, revision]);
 }
@@ -371,8 +365,4 @@ function cryptoRandomSuffix(): string {
 
 function isErrno(error: unknown, code: string): error is NodeJS.ErrnoException {
   return error instanceof Error && 'code' in error && error.code === code;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

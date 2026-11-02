@@ -24,7 +24,14 @@ const validResult = () => ({ render: 'status', data: { checked: true } });
 async function fixture(
   t,
   handler,
-  { timeoutMs = 1000, beforeStateRead, disk = false, beforeCommit, cookieAuth = false } = {},
+  {
+    timeoutMs = 1000,
+    beforeStateRead,
+    disk = false,
+    beforeCommit,
+    cookieAuth = false,
+    requiresConfirmation = false,
+  } = {},
 ) {
   const instance = {
     pluginId,
@@ -51,7 +58,15 @@ async function fixture(
         label: 'Recovery',
         required: false,
         target: ['recoveryToken'],
-        actions: [{ id: 'reconcile', label: 'Reconcile', render: 'row', action: { method: 'recovery.reconcile' } }],
+        actions: [
+          {
+            id: 'reconcile',
+            label: 'Reconcile',
+            render: 'row',
+            ...(requiresConfirmation ? { confirm: 'Confirm exact recovery?' } : {}),
+            action: { method: 'recovery.reconcile' },
+          },
+        ],
       },
     ],
     features: [{ id: 'main', name: 'Main', capabilities: [], contributions: [] }],
@@ -59,7 +74,6 @@ async function fixture(
   };
   const records = [];
   const writes = [];
-  const grant = { pluginInstanceId: instanceId, grantRevision: 1 };
   const activation = new AbortController();
   let authenticatedSessionCurrent = true;
   const actions = {
@@ -79,16 +93,14 @@ async function fixture(
     snapshot: async () => ({
       schemaVersion: 1,
       instances: [structuredClone(instance)],
-      grants: [structuredClone(grant)],
       packages: [structuredClone(packageRecord)],
     }),
     transaction: async (work) => {
       // Delay happens before the synchronous production storage callback, like a queued lock.
-      await beforeCommit?.({ instance, grant });
+      await beforeCommit?.({ instance });
       return work({
         instances: { getCurrent: () => structuredClone(instance), put: (next) => Object.assign(instance, next) },
         packages: { get: () => structuredClone(packageRecord) },
-        grants: { get: () => structuredClone(grant) },
       });
     },
   };
@@ -161,7 +173,6 @@ async function fixture(
   }
   return {
     instance,
-    grant,
     activation,
     records,
     writes,
@@ -171,7 +182,11 @@ async function fixture(
     revokeSession: () => {
       authenticatedSessionCurrent = false;
     },
-    call: ({ authenticated = true, payload = { operationId: 'held-1', userId: 'forged-owner' } } = {}) =>
+    call: ({
+      authenticated = true,
+      confirmed = false,
+      payload = { operationId: 'held-1', userId: 'forged-owner' },
+    } = {}) =>
       app.inject({
         method: 'POST',
         url: `/api/plugins/${pluginId}/actions/recovery/reconcile`,
@@ -179,6 +194,7 @@ async function fixture(
         headers: {
           host: 'localhost:5173',
           origin: 'http://localhost:5173',
+          ...(confirmed ? { 'x-cat-cafe-owner-confirmed': 'true' } : {}),
           ...(authenticated ? (cookieAuth ? { cookie: sessionCookie } : { 'x-test-auth': 'authenticated' }) : {}),
         },
         payload,
@@ -222,9 +238,23 @@ test('authenticated Manager action supplies exact owner tuple independently of i
   assert.equal(context.pluginInstanceId, instanceId);
   assert.equal(context.operationKey, 'recovery');
   assert.equal(context.actionId, 'reconcile');
+  assert.equal(context.confirmed, false);
   assert.equal(typeof context.requestId, 'string');
   assert.ok(context.requestId.length > 0);
   assert.equal(Object.isFrozen(context), true);
+});
+
+test('a declared confirmation reaches the module only after the authenticated owner confirms that exact action', async (t) => {
+  const f = await fixture(t, validResult, { requiresConfirmation: true });
+  const unconfirmed = await f.call();
+  assert.equal(unconfirmed.statusCode, 400, unconfirmed.payload);
+  assert.equal(f.records.length, 0);
+  const confirmed = await f.call({ confirmed: true });
+  assert.equal(confirmed.statusCode, 200, confirmed.payload);
+  assert.equal(f.records.length, 1);
+  assert.equal(f.records[0].context.confirmed, true);
+  assert.equal(f.records[0].context.operationKey, 'recovery');
+  assert.equal(f.records[0].context.actionId, 'reconcile');
 });
 
 test('completed Manager action invalidates its saved owner authority', async (t) => {
@@ -297,17 +327,6 @@ test('a nested ordinary invoke cannot inherit the Manager owner context', async 
   assert.equal(f.records.length, 2);
 });
 
-test('grant revision changes invalidate the live context and prevent state commit', async (t) => {
-  let f;
-  f = await fixture(t, async ({ context }) => {
-    f.grant.grantRevision += 1;
-    await assert.rejects(() => context.assertCurrent());
-    return validResult();
-  });
-  assert.equal((await f.call()).statusCode, 409);
-  assert.equal(f.writes.length, 0);
-});
-
 test('stopped activation aborts the context and fences a late result', async (t) => {
   let f;
   f = await fixture(t, async ({ context }) => {
@@ -363,14 +382,14 @@ test('current owner result persists target values and operation state in real co
 });
 
 for (const edge of ['target', 'state']) {
-  test(`revocation while waiting for the ${edge} transaction leaves real storage untouched`, async (t) => {
+  test(`lifecycle change while waiting for the ${edge} transaction leaves real storage untouched`, async (t) => {
     const f = await fixture(
       t,
       () => ({ ...validResult(), ...(edge === 'target' ? { targetValues: { recoveryToken: 'stale' } } : {}) }),
       {
         disk: true,
-        beforeCommit: async ({ grant }) => {
-          grant.grantRevision += 1;
+        beforeCommit: async ({ instance }) => {
+          instance.lifecycleRevision += 1;
         },
       },
     );

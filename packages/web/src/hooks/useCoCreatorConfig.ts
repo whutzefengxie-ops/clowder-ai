@@ -1,5 +1,6 @@
 'use client';
 
+import { coCreatorDisplay } from '@cat-cafe/shared';
 import { useEffect, useSyncExternalStore } from 'react';
 import type { CoCreatorConfig } from '@/components/config-viewer-types';
 import { refreshCoCreatorMentionData, resetMentionDataForTest } from '@/lib/mention-highlight';
@@ -16,6 +17,7 @@ const DEFAULT_CO_CREATOR: CoCreatorConfig = {
 
 let cachedCoCreator: CoCreatorConfig | null = null;
 let fetchCoCreatorPromise: Promise<CoCreatorConfig> | null = null;
+let generation = 0;
 const listeners = new Set<(cc: CoCreatorConfig) => void>();
 
 function publishCoCreator(next: CoCreatorConfig): void {
@@ -49,19 +51,21 @@ export function useCoCreatorConfig(): CoCreatorConfig {
   useEffect(() => {
     if (cachedCoCreator) return;
     if (!fetchCoCreatorPromise) {
+      const ticket = ++generation;
       fetchCoCreatorPromise = fetchCoCreator()
         .then((next) => {
-          publishCoCreator(next);
+          if (ticket === generation) publishCoCreator(next);
           return next;
         })
         .catch((error) => {
-          fetchCoCreatorPromise = null;
+          if (ticket === generation) fetchCoCreatorPromise = null;
           throw error;
         });
     }
+    const ticket = generation;
     let cancelled = false;
     fetchCoCreatorPromise.catch(() => {
-      if (!cancelled) {
+      if (!cancelled && ticket === generation) {
         refreshCoCreatorMentionData(DEFAULT_CO_CREATOR.mentionPatterns);
       }
     });
@@ -74,6 +78,7 @@ export function useCoCreatorConfig(): CoCreatorConfig {
 }
 
 export function resetCoCreatorConfigCacheForTest(): void {
+  generation += 1;
   cachedCoCreator = null;
   fetchCoCreatorPromise = null;
   listeners.clear();
@@ -81,6 +86,11 @@ export function resetCoCreatorConfigCacheForTest(): void {
 }
 
 export function primeCoCreatorConfigCache(cc: CoCreatorConfig): void {
+  generation += 1;
   publishCoCreator(cc);
   fetchCoCreatorPromise = Promise.resolve(cc);
+}
+
+export function useCoCreatorDisplay() {
+  return coCreatorDisplay(useCoCreatorConfig());
 }

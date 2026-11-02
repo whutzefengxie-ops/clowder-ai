@@ -1,3 +1,4 @@
+import { deploymentDefaults } from '@cat-cafe/shared';
 /**
  * Capabilities Route — F041 统一能力看板 API
  *
@@ -247,7 +248,13 @@ function getCliConfigPaths(projectRoot: string) {
 
 // ────────── Route Plugin ──────────
 
-export const capabilitiesRoutes: FastifyPluginAsync = async (app) => {
+export interface CapabilitiesRoutesOptions {
+  readonly resolvePluginMcpView?: () => Promise<
+    import('../config/capabilities/invocation-plugin-mcp-view.js').InvocationPluginMcpView | undefined
+  >;
+}
+
+export const capabilitiesRoutes: FastifyPluginAsync<CapabilitiesRoutesOptions> = async (app, options) => {
   const persistentProjectRoot = await resolveInvokeCapabilityRoot(PROJECT_ROOT);
   if (!persistentProjectRoot) throw new Error('Unable to resolve persistent global capabilities root');
   const getProjectRoot = (): string => persistentProjectRoot;
@@ -278,9 +285,9 @@ export const capabilitiesRoutes: FastifyPluginAsync = async (app) => {
       projectRoot = validated;
     }
     const mainRoot = getProjectRoot();
-    // Alpha reads the canonical snapshot; implicit bootstrap, healing, discovery,
+    // Previews read the canonical snapshot; implicit bootstrap, healing, discovery,
     // skill pruning and CLI regeneration have the same authority as startup.
-    if (allowsImplicitCapabilityWrites()) {
+    if (allowsImplicitCapabilityWrites(process.env, PROJECT_ROOT)) {
       const home = homedir();
       const mountRules = await readMountRules(projectRoot, mainRoot);
       const catCafeRepoRoot = await resolveMainRepoPath();
@@ -415,6 +422,7 @@ export const capabilitiesRoutes: FastifyPluginAsync = async (app) => {
       isProjectView: !!query.projectPath,
       config: await readCapabilitiesConfigState(projectRoot),
       scope: { kind: 'console' },
+      pluginMcpView: await options.resolvePluginMcpView?.(),
       secrets: { launchFields: includeMcpLaunchFields, values: includeMcpSecrets },
       ...(probeEnabled ? { resolvers: { probeMcp: (cap) => probeMcpCapability(cap, { projectRoot }) } } : {}),
     });
@@ -891,7 +899,7 @@ export const capabilitiesRoutes: FastifyPluginAsync = async (app) => {
       return {
         error:
           validatedResult.reason === 'cat_cafe_owned_path'
-            ? 'Cannot confirm governance inside Clowder AI; choose an external project'
+            ? `Cannot confirm governance inside ${deploymentDefaults.brand.name}; choose an external project`
             : 'Invalid project path',
       };
     }

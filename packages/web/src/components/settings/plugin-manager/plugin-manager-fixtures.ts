@@ -21,13 +21,15 @@ export type PluginManagerReadmeState =
 export interface PluginManagerDesignFixture {
   bindings?: PluginManagerDetail['bindings'];
   id: string;
+  pluginInstanceId?: string | null;
+  packageDigest?: string | null;
   displayName: string;
   description: PluginDescription;
   icon: PluginIconSpec;
   iconBg?: string;
   publisher: string;
   packageName: string;
-  source: 'catalog' | 'local';
+  source: 'catalog' | 'local' | 'unknown';
   repositoryName?: string;
   trust: 'official' | 'first-party' | 'unverified' | 'unknown';
   dependencyClosure?: 'shipped' | 'materialized';

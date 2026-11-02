@@ -3,11 +3,12 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import { chromium } from '../../../ppt-forge/node_modules/playwright/index.mjs';
+import { chromium } from 'playwright';
 import { startReviewHost } from './fixtures/f309-artifact-review-host.mjs';
 import { mediaFixture } from './fixtures/f309-artifact-review-media.mjs';
 import { openReviewPanel } from './fixtures/f309-artwork-controls.mjs';
 import './f309-publication-display.journey.mjs';
+import './f326-work-response.journey.mjs';
 
 async function setup(t, name, kind = 'png') {
   const root = await mkdtemp(path.join(tmpdir(), `f309-passive-${name}-`));

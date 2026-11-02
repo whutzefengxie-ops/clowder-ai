@@ -61,6 +61,7 @@ export interface CatVariant {
   readonly accountRef?: string;
   /** Native tools own authentication and omitted model/effort defaults. */
   readonly configurationSource?: 'native_tool' | 'managed_account';
+  readonly agentProvider?: string | null;
   /** A local tool's selection, or an explicit per-member exception. */
   readonly accountBindingMode?: 'follow' | 'override';
   /** Internal creation ownership; not part of the public member projection. */
@@ -83,6 +84,8 @@ export interface CatVariant {
   readonly strengths?: readonly string[];
   /** F32-b P4c: Override breed-level avatar for this variant */
   readonly avatar?: string;
+  /** Member-only banner. Null explicitly removes a template value; siblings never inherit it. */
+  readonly banner?: string | null;
   /** F32-b P4c: Override breed-level color for this variant */
   readonly color?: CatColor;
   /**
@@ -260,6 +263,8 @@ export interface CredentialEntry {
  */
 export interface CatCafeConfigV1 {
   readonly version: 1;
+  /** Persisted enrollment policy; retain it when parsing or writing a catalog. */
+  readonly memberInitialization?: string;
   readonly breeds: readonly CatBreed[];
   readonly selectedAccountRefs?: Readonly<Record<string, string>>;
 }
@@ -270,6 +275,8 @@ export interface CatCafeConfigV1 {
 export interface CoCreatorConfig {
   /** Primary display name (e.g. "You") */
   readonly name: string;
+  /** Optional familiar form of address, already present in the install template. */
+  readonly nickname?: string;
   /** Alternative names cats may use (e.g. ["L.S.", "you"]) */
   readonly aliases: readonly string[];
   /** Line-start mention patterns for routing detection (e.g. ["@co-creator", "@co-creator"]) */
@@ -287,6 +294,8 @@ export interface CoCreatorConfig {
  */
 export interface CatCafeConfigV2 {
   readonly version: 2;
+  /** Persisted enrollment policy; retain it when parsing or writing a catalog. */
+  readonly memberInitialization?: string;
   readonly breeds: readonly CatBreed[];
   readonly selectedAccountRefs?: Readonly<Record<string, string>>;
   readonly roster: Roster;

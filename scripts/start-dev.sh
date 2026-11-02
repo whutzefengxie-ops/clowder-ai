@@ -75,7 +75,8 @@ source "$SCRIPT_DIR/lib/redis-rdb-first.sh"
 source "$SCRIPT_DIR/download-source-overrides.sh"
 cd "$PROJECT_DIR"
 
-echo "🐱 Clowder AI 启动"
+STARTUP_DISPLAY_NAME="$(node "$SCRIPT_DIR/read-deployment-default.mjs" brand.displayName)"
+printf '🐱 %s 启动\n' "$STARTUP_DISPLAY_NAME"
 echo "================"
 
 # 颜色定义
@@ -388,63 +389,20 @@ normalize_raw_dev_redis_defaults() {
 
 # Profile 默认值（env 变量优先，profile 作 fallback）
 apply_profile_defaults() {
-    local profile="$1"
+    local profile="${1:-unprofiled}"
     # Clear previous profile state
     unset _PROF_ANTHROPIC_PROXY_ENABLED _PROF_ASR_ENABLED _PROF_TTS_ENABLED
     unset _PROF_LLM_POSTPROCESS_ENABLED _PROF_AUDIO_SERVICE_ENABLED _PROF_REDIS_PROFILE
     unset _PROF_MESSAGE_TTL_SECONDS _PROF_THREAD_TTL_SECONDS
     unset _PROF_TASK_TTL_SECONDS _PROF_SUMMARY_TTL_SECONDS
-    case "$profile" in
-        dev)
-            _PROF_ANTHROPIC_PROXY_ENABLED=1
-            # Sidecar lifecycle is owned by the API startup reconciler. The dev
-            # profile keeps proxy ON but no longer auto-spawns ML sidecars here.
-            # Enable services in Console; the API starts them via lifecycle routes.
-            _PROF_ASR_ENABLED=0
-            _PROF_TTS_ENABLED=0
-            _PROF_LLM_POSTPROCESS_ENABLED=0
-            _PROF_AUDIO_SERVICE_ENABLED=0
-            _PROF_MESSAGE_TTL_SECONDS=0
-            _PROF_THREAD_TTL_SECONDS=0
-            _PROF_TASK_TTL_SECONDS=0
-            _PROF_SUMMARY_TTL_SECONDS=0
-            _PROF_REDIS_PROFILE=dev
-            ;;
-        production)
-            _PROF_ANTHROPIC_PROXY_ENABLED=0
-            _PROF_ASR_ENABLED=0
-            _PROF_TTS_ENABLED=0
-            _PROF_LLM_POSTPROCESS_ENABLED=0
-            _PROF_AUDIO_SERVICE_ENABLED=0
-            _PROF_MESSAGE_TTL_SECONDS=0
-            _PROF_THREAD_TTL_SECONDS=0
-            _PROF_TASK_TTL_SECONDS=0
-            _PROF_SUMMARY_TTL_SECONDS=0
-            _PROF_REDIS_PROFILE=opensource
-            ;;
-        opensource)
-            _PROF_ANTHROPIC_PROXY_ENABLED=0
-            _PROF_ASR_ENABLED=0
-            _PROF_TTS_ENABLED=0
-            _PROF_LLM_POSTPROCESS_ENABLED=0
-            _PROF_AUDIO_SERVICE_ENABLED=0
-            _PROF_MESSAGE_TTL_SECONDS=0
-            _PROF_THREAD_TTL_SECONDS=0
-            _PROF_TASK_TTL_SECONDS=0
-            _PROF_SUMMARY_TTL_SECONDS=0
-            _PROF_REDIS_PROFILE=opensource
-            ;;
-        "")
-            # No profile — all _PROF_ vars stay unset, existing behavior preserved
-            ;;
-        *)
-            echo -e "${RED}ERROR: Unknown profile '$profile'. Valid: dev, production, opensource${NC}"
-            exit 1
-            ;;
-    esac
+    local defaults key value
+    defaults="$(node "$SCRIPT_DIR/read-deployment-default.mjs" --startup-profile "$profile" posix --shell)" || return 1
+    while IFS='=' read -r key value; do
+        printf -v "_PROF_${key}" '%s' "$value"
+    done <<< "$defaults"
 }
 
-apply_profile_defaults "$PROFILE"
+apply_profile_defaults "$PROFILE" || exit 1
 
 # resolve_config: env override > profile default (sets var + _SRC_ annotation)
 # Usage: resolve_config "VAR_NAME" — sets VAR_NAME and _SRC_VAR_NAME in current shell
@@ -456,7 +414,11 @@ resolve_config() {
     if [ -n "$env_val" ]; then
         eval "_SRC_${var_name}=\".env override\""
     elif [ -n "$prof_val" ]; then
-        eval "_SRC_${var_name}=\"profile default ($PROFILE)\""
+        if [ -n "$PROFILE" ]; then
+            eval "_SRC_${var_name}=\"profile default ($PROFILE)\""
+        else
+            eval "_SRC_${var_name}=\"built-in default\""
+        fi
         eval "${var_name}=\"${prof_val}\""
     else
         eval "_SRC_${var_name}=\"built-in default\""
@@ -478,9 +440,11 @@ print_config_summary() {
     done
 }
 
-# 默认端口 (not profile-dependent)
-API_PORT=${API_SERVER_PORT:-3004}
-WEB_PORT=${FRONTEND_PORT:-3003}
+# Deployment defaults; explicit environment values retain precedence.
+DEFAULT_API_PORT="$(node "$SCRIPT_DIR/read-deployment-default.mjs" apiPort)"
+DEFAULT_WEB_PORT="$(node "$SCRIPT_DIR/read-deployment-default.mjs" webPort)"
+API_PORT=${API_SERVER_PORT:-$DEFAULT_API_PORT}
+WEB_PORT=${FRONTEND_PORT:-$DEFAULT_WEB_PORT}
 export CAT_CAFE_RUNTIME_WEB_PORT="$WEB_PORT"
 REDIS_PORT=${REDIS_PORT:-$(default_redis_port)}
 normalize_raw_dev_redis_defaults
@@ -501,17 +465,7 @@ resolve_config "TASK_TTL_SECONDS"
 resolve_config "SUMMARY_TTL_SECONDS"
 resolve_config "REDIS_PROFILE"
 
-# Apply built-in fallbacks for vars with no profile and no env
-: "${ANTHROPIC_PROXY_ENABLED:=0}"
-: "${ASR_ENABLED:=0}"
-: "${TTS_ENABLED:=0}"
-: "${LLM_POSTPROCESS_ENABLED:=0}"
-: "${AUDIO_SERVICE_ENABLED:=0}"
-: "${MESSAGE_TTL_SECONDS:=0}"
-: "${THREAD_TTL_SECONDS:=0}"
-: "${TASK_TTL_SECONDS:=0}"
-: "${SUMMARY_TTL_SECONDS:=0}"
-: "${REDIS_PROFILE:=dev}"
+# The unprofiled fallback values are resolved from the same deployment artifact.
 
 derive_embed_enabled() {
     # EMBED_MODE controls the API in-process embedding mode (off/shadow/on).
@@ -597,6 +551,7 @@ REDIS_PIDFILE="${REDIS_DATA_DIR}/redis-${REDIS_PORT}.pid"
 REDIS_LOGFILE="${REDIS_DATA_DIR}/redis-${REDIS_PORT}.log"
 STARTED_REDIS=false
 REDIS_STARTUP_DATA_UNVERIFIED=false
+REDIS_STARTUP_READINESS_FAILED=false
 NAMED_ALPHA_REDIS_IDENTITY=""
 NAMED_ALPHA_REDIS_LEASE_FILE=""
 F247_CLOUD_OWNER_FILE=""
@@ -721,7 +676,10 @@ remove_named_alpha_redis_lease() {
 if [ -n "${CAT_CAFE_ALPHA_COORDINATES:-}" ]; then
     redis-cli() {
         named_alpha_redis_is_owned || { echo "[start-dev] refusing unproven named Alpha Redis command" >&2; return 1; }
-        command redis-cli "$@"
+        case "${@: -1}" in
+            ping|PING) cat_cafe_redis_ping_command "$@" ;;
+            *) command redis-cli "$@" ;;
+        esac
     }
 fi
 
@@ -903,9 +861,50 @@ terminate_pid_tree_with_signal() {
     kill "-$signal" "$pid" 2>/dev/null || true
 }
 
+process_started_at() {
+    ps -p "$1" -o lstart= 2>/dev/null | awk '{ $1 = $1; print }' || true
+}
+
+# "<pid> <start time>" for every descendant of the given roots, from one read of the process table so
+# TERM is not delayed per process; the start time keeps a pid recycled during the grace from being signalled.
+list_descendant_identities() {
+    ps -A -o pid=,ppid=,lstart= 2>/dev/null | awk -v roots="$*" '
+        {
+            pid = $1
+            parent = $2
+            $1 = ""
+            $2 = ""
+            $0 = $0
+            $1 = $1
+            started[pid] = $0
+            children[parent] = children[parent] " " pid
+        }
+        END {
+            count = split(roots, queue, " ")
+            for (head = 1; head <= count; head++) {
+                found = split(children[queue[head]], kids, " ")
+                for (i = 1; i <= found; i++) {
+                    if (kids[i] in seen) continue
+                    seen[kids[i]] = 1
+                    print kids[i] " " started[kids[i]]
+                    queue[++count] = kids[i]
+                }
+            }
+        }
+    ' || true
+}
+
 terminate_managed_pids() {
     local pid
+    local started
+    local entry
     local signaled=false
+    local descendants=()
+    if [ "${#MANAGED_PIDS[@]}" -gt 0 ]; then
+        while IFS= read -r entry; do
+            descendants+=("$entry")
+        done < <(list_descendant_identities "${MANAGED_PIDS[@]}")
+    fi
     for pid in "${MANAGED_PIDS[@]}"; do
         if kill -0 "$pid" 2>/dev/null; then
             signaled=true
@@ -917,6 +916,15 @@ terminate_managed_pids() {
     fi
     for pid in "${MANAGED_PIDS[@]}"; do
         if kill -0 "$pid" 2>/dev/null; then
+            terminate_pid_tree_with_signal KILL "$pid"
+        fi
+    done
+    # A child still draining (next-server waiting on open browser connections) outlives a parent
+    # that exited on TERM; reparented to init, the walk above no longer reaches it.
+    for entry in ${descendants[@]+"${descendants[@]}"}; do
+        pid=${entry%% *}
+        started=${entry#* }
+        if [ "$(process_started_at "$pid")" = "$started" ]; then
             terminate_pid_tree_with_signal KILL "$pid"
         fi
     done
@@ -1489,7 +1497,7 @@ maybe_start_f247_cloud_services() {
         node "$helper" stop-owned --owner-file="$F247_CLOUD_OWNER_FILE" >/dev/null 2>&1 || true
         rm -f "$F247_CLOUD_OWNER_FILE"
         F247_CLOUD_OWNER_FILE=""
-        echo -e "${YELLOW}  ⚠ F247 cloud supporting services degraded; local Clowder AI startup will continue.${NC}"
+        printf '%b  ⚠ F247 cloud supporting services degraded; local %s startup will continue.%b\n' "$YELLOW" "$STARTUP_DISPLAY_NAME" "$NC"
         return 0
     fi
 
@@ -1550,7 +1558,7 @@ assert_alpha_redis_runtime_dir() {
             # The directory identity was verified above. An ordinary shutdown
             # would rewrite the RDB with this empty state and destroy the copy
             # we need for recovery, so stop only this Alpha instance nosave.
-            redis-cli -h 127.0.0.1 -p "$REDIS_PORT" shutdown nosave >/dev/null 2>&1 || true
+            redis-cli -e -h 127.0.0.1 -p "$REDIS_PORT" shutdown nosave >/dev/null 2>&1 || true
             for _ in $(seq 1 20); do
                 if ! redis-cli -h 127.0.0.1 -p "$REDIS_PORT" ping >/dev/null 2>&1; then
                     return 1
@@ -1567,6 +1575,10 @@ assert_alpha_redis_runtime_dir() {
 redis_startup_data_allows_save() {
     [ "${REDIS_STARTUP_DATA_UNVERIFIED:-false}" = true ] || return 0
     [ "$(cat_cafe_file_size_bytes "$REDIS_DATA_DIR/dump.rdb")" -ge 1024 ] || return 0
+    if [ "${REDIS_STARTUP_READINESS_FAILED:-false}" = true ]; then
+        echo "[start-dev] preserving snapshot after Redis readiness refusal; no saving cleanup" >&2
+        return 1
+    fi
     local size
     # A failed startup read is not evidence that saving over its snapshot is safe.
     # This read uses the same strict per-command ownership wrapper as cleanup.
@@ -1619,7 +1631,7 @@ setup_storage() {
             --daemonize yes \
             --pidfile "$REDIS_PIDFILE" \
             --logfile "$REDIS_LOGFILE" "${ownership_args[@]}" \
-            || { if [ -n "${CAT_CAFE_ALPHA_COORDINATES:-}" ]; then exit 1; fi; }
+            || exit 1
         if redis_startup_ping; then
             assert_alpha_redis_runtime_dir || exit 1
             STARTED_REDIS=true
@@ -1683,7 +1695,7 @@ cleanup() {
                 CLEANUP_STATUS=1
             else
                 archive_redis_snapshot "pre-stop"
-                if shutdown_output="$(redis-cli -p "$REDIS_PORT" shutdown save 2>&1)"; then
+                if shutdown_output="$(redis-cli -e -p "$REDIS_PORT" shutdown save 2>&1)"; then
                     echo "  Redis (端口 $REDIS_PORT) 已关闭"
                 else
                     shutdown_status=$?
@@ -1728,24 +1740,24 @@ claim_preview_cleanup_result() {
 publish_preview_cleanup_result() {
     [ -n "$CLI_PREVIEW_CLEANUP_RESULT" ] || return 0
     local temporary="${CLI_PREVIEW_CLEANUP_RESULT}.$$"
-    (umask 077; printf '{"pid":%s,"processGroupId":%s,"exitCode":%s}\n' \
-        "$$" "$PREVIEW_CLEANUP_PROCESS_GROUP" "$1" > "$temporary") || return 1
+    (umask 077; printf '{"version":2,"pid":%s,"processGroupId":%s,"exitCode":%s,"cleanupExitCode":%s,"commandExitCode":%s}\n' \
+        "$$" "$PREVIEW_CLEANUP_PROCESS_GROUP" "$1" "$1" "$2" > "$temporary") || return 1
     mv -f "$temporary" "$CLI_PREVIEW_CLEANUP_RESULT"
 }
 
 finish_launcher() {
-    local exit_status="$1" cleanup_result="$2"
+    local exit_status="$1" command_exit="$1" cleanup_result=0
     trap - EXIT
     trap '' INT TERM
     if ! cleanup; then exit_status=1; cleanup_result=1; fi
-    publish_preview_cleanup_result "$cleanup_result" || exit_status=1
+    publish_preview_cleanup_result "$cleanup_result" "$command_exit" || exit_status=1
     exit "$exit_status"
 }
 
 claim_preview_cleanup_result || exit 1
-trap 'finish_launcher "$?" "$?"' EXIT
-trap 'finish_launcher 130 0' INT
-trap 'finish_launcher 143 0' TERM
+trap 'finish_launcher "$?"' EXIT
+trap 'finish_launcher 130' INT
+trap 'finish_launcher 143' TERM
 
 guard_main_branch_start() {
     if [ "${CAT_CAFE_ALLOW_MAIN_DEV:-0}" = "1" ]; then
@@ -2001,9 +2013,9 @@ main() {
     echo ""
     echo "========================"
     if [ "$API_READY" = true ]; then
-        echo -e "${GREEN}🎉 Clowder AI 已就绪！${NC}"
+        printf '%b🎉 %s 已就绪！%b\n' "$GREEN" "$STARTUP_DISPLAY_NAME" "$NC"
     else
-        echo -e "${YELLOW}Clowder AI 已监听，但 API 尚未就绪${NC}"
+        printf '%b%s 已监听，但 API 尚未就绪%b\n' "$YELLOW" "$STARTUP_DISPLAY_NAME" "$NC"
     fi
     [ -n "$PROFILE" ] && echo -e "  Profile: ${CYAN}${PROFILE}${NC}"
     echo ""
@@ -2050,17 +2062,18 @@ fi
 if [[ "${1:-}" == "--stop" ]] || [[ "${1:-}" == "stop" ]]; then
     maybe_migrate_legacy_daemon_state
     daemon_state stop
-    echo "Clowder AI $DAEMON_DEPLOYMENT_ID daemon 已停止 🐾"
+    printf '%s %s daemon 已停止 🐾\n' "$STARTUP_DISPLAY_NAME" "$DAEMON_DEPLOYMENT_ID"
     exit 0
 fi
 
 if [[ "${1:-}" == "--status" ]] || [[ "${1:-}" == "status" ]]; then
     maybe_migrate_legacy_daemon_state
-    daemon_state status
+    status_rc=0
+    daemon_state status || status_rc=$?
     print_f247_cloud_status_summary
     echo "  停止: $(daemon_stop_hint)"
     echo "  查看日志: tail -f $DAEMON_LOG_FILE"
-    exit 0
+    exit "$status_rc"
 fi
 
 if [ "$DAEMON_MODE" = true ]; then
@@ -2079,7 +2092,7 @@ if [ "$DAEMON_MODE" = true ]; then
     done
 
     DAEMON_LAUNCH_TOKEN=$(node -e "console.log(require('node:crypto').randomUUID())")
-    echo "🐱 Clowder AI 以后台模式启动..."
+    printf '🐱 %s 以后台模式启动...\n' "$STARTUP_DISPLAY_NAME"
     echo "  Deployment: $DAEMON_DEPLOYMENT_ID"
     echo "  日志输出: $DAEMON_LOG_FILE"
     launch_daemon_child "$0" "$DAEMON_LAUNCH_TOKEN" "${RESTART_ARGS[@]}"

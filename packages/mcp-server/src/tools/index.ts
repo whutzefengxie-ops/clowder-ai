@@ -231,6 +231,11 @@ export {
   triagePawFeelInputSchema,
 } from './paw-feel-disposition-tools.js';
 export {
+  handleScanPawFeelInbox,
+  pawFeelInboxAuditScanTools,
+  scanPawFeelInboxInputSchema,
+} from './paw-feel-inbox-audit-scan-tool.js';
+export {
   handleRunPerspective,
   perspectiveTools,
   runPerspectiveInputSchema,
@@ -354,3 +359,4 @@ export {
   recordRequestReviewOwnerFactInputSchema,
   skillConsumptionTools,
 } from './skill-consumption-tools.js';
+export { workTools } from './work-tools.js';

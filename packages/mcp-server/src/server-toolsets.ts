@@ -1,15 +1,20 @@
 import { hasUsableAgentKeyCredentials } from '@cat-cafe/shared/utils';
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { McpServer, type RegisteredTool } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { projectAgentKeyCollaborationContract } from './agent-key-collaboration-contract.js';
 import { CANONICAL_TOOL_REGISTRY } from './canonical-server-tools.js';
 import { derivedProfileSet, projectServerFamily } from './canonical-tool-registry.js';
-import { jsonSchemaToZod } from './json-schema-to-zod.js';
+import { registerCoCreatorPresentation } from './co-creator-presentation.js';
 import { runWithNativeTurnAuth } from './native-turn-auth.js';
+import { guardSecretToolCall } from './secret-tool-guard.js';
 import type { FamilyToolDefinition, McpServerFamily } from './tool-governance-snapshot.js';
+import { projectRegistrationContract } from './tool-registration-contract.js';
 import { protectToolResponse } from './tool-response-budget.js';
-import { type PostMessageRegistrationPrincipal, projectPostMessageInputSchema } from './tools/callback-tools.js';
-import { getInvocationAuthSignal } from './tools/invocation-auth.js';
+import type { PostMessageRegistrationPrincipal } from './tools/callback-tools.js';
+import {
+  authorizeInvocationTool,
+  getInvocationAuthSignal,
+  resolveInvocationRequestSignal,
+} from './tools/invocation-auth.js';
 
 export { CANONICAL_TOOL_REGISTRY } from './canonical-server-tools.js';
 
@@ -38,6 +43,12 @@ export interface ToolsetEnv {
    * widen the surface on their own.
    */
   agentKeyUnion?: boolean;
+  /**
+   * Exact durable invocation policy projection (member MCP gateway). When
+   * present, only these tool names are registered; an empty array denies every
+   * tool. `undefined` means no durable policy and the profile surface applies.
+   */
+  allowedToolNames?: readonly string[];
 }
 
 /**
@@ -174,25 +185,6 @@ function resolvePostMessageRegistrationPrincipal(env: ToolsetEnv): PostMessageRe
   return 'unconfigured';
 }
 
-function projectRegistrationContract(tool: ToolDef, principal: PostMessageRegistrationPrincipal) {
-  const isPostMessage = tool.name === 'cat_cafe_post_message';
-  const canonicalSchema = isPostMessage ? projectPostMessageInputSchema(principal) : tool.inputSchema;
-  const agentContract =
-    principal === 'agent-key'
-      ? projectAgentKeyCollaborationContract(tool.name, canonicalSchema, tool.description)
-      : undefined;
-  const schema = agentContract?.inputSchema ?? canonicalSchema;
-  let inputSchema =
-    typeof schema.type === 'string' && typeof schema.properties === 'object' && schema.properties !== null
-      ? jsonSchemaToZod(schema)
-      : z.object(schema as z.ZodRawShape);
-  if ((isPostMessage && principal === 'invocation') || agentContract || tool.name === 'cat_cafe_get_recall_metrics') {
-    // Reject unsupported fields before default Zod stripping erases their evidence.
-    inputSchema = (inputSchema as z.ZodObject<z.ZodRawShape>).strict();
-  }
-  return { description: agentContract?.description ?? tool.description, inputSchema };
-}
-
 function registerTools(server: McpServer, tools: readonly ToolDef[], env: ToolsetEnv = parseToolsetEnv()): void {
   // Use server.registerTool(name, config, cb) — the explicit config-object API.
   // server.tool()'s overload parser uses isZodRawShapeCompat to detect whether
@@ -203,23 +195,39 @@ function registerTools(server: McpServer, tools: readonly ToolDef[], env: Toolse
     name: string,
     config: RegisterToolConfig,
     cb: RegisteredToolHandler,
-  ) => void;
+  ) => RegisteredTool;
   const principal = resolvePostMessageRegistrationPrincipal(env);
+  const allowedToolNames = env.allowedToolNames ? new Set(env.allowedToolNames) : null;
   for (const tool of tools) {
+    // The durable invocation policy is an exact allowlist, not a profile:
+    // unregistered tools fail closed at tools/call.
+    if (allowedToolNames && !allowedToolNames.has(tool.name)) continue;
     const annotations = tool.annotations;
     const deliveryMeta = projectSchemaDeliveryMeta(tool);
-    registerExplicit(
+    const registered = registerExplicit(
       tool.name,
       {
         ...projectRegistrationContract(tool, principal),
         annotations,
         ...(deliveryMeta ? { _meta: deliveryMeta } : {}),
       },
-      async (args: never, extra: { signal: AbortSignal; _meta?: unknown }) =>
-        runWithNativeTurnAuth(extra._meta, extra.signal, async () => {
-          const result = tool.implementation.runWithExtra
-            ? await tool.implementation.runWithExtra(args, { signal: extra.signal })
-            : await tool.handler(args);
+      async (args: never, extra: { signal: AbortSignal; _meta?: unknown; requestId?: string | number }) => {
+        const scopedSignal = resolveInvocationRequestSignal();
+        const signal = scopedSignal ? AbortSignal.any([extra.signal, scopedSignal]) : extra.signal;
+        return runWithNativeTurnAuth(extra._meta, signal, async () => {
+          await authorizeInvocationTool(tool.name);
+          const result = await guardSecretToolCall(
+            tool.name,
+            args,
+            async (safeArgs) => {
+              await authorizeInvocationTool(tool.name);
+              signal.throwIfAborted();
+              return tool.implementation.runWithExtra
+                ? tool.implementation.runWithExtra(safeArgs as never, { signal })
+                : tool.handler(safeArgs as never);
+            },
+            extra.requestId === undefined ? undefined : String(extra.requestId),
+          );
           const typed = {
             ...(result as Record<string, unknown>),
           } as {
@@ -229,8 +237,10 @@ function registerTools(server: McpServer, tools: readonly ToolDef[], env: Toolse
           };
 
           return protectToolResponse(tool.name, typed, annotations.readOnlyHint);
-        }),
+        });
+      },
     );
+    registerCoCreatorPresentation(server, tool.name, registered);
   }
 }
 

@@ -1,3 +1,4 @@
+import { deploymentDefaults } from '@cat-cafe/shared';
 import { HeaderFrame } from '@cat-cafe/ui';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -12,7 +13,7 @@ import { ConversationViewMenu } from './shell/ConversationViewMenu';
 import { ThreadTasksButton, ThreadWorksButton } from './shell/HeaderCounts';
 import { ShellGlyph } from './shell/ShellIcons';
 import { useShellPresentation } from './shell/shell-presentation';
-import { ThreadMetadataMenu } from './shell/ThreadMetadataMenu';
+import { ThreadSettingsButton } from './shell/ThreadSettingsButton';
 import { useSettingsReadingEntry } from './shell/useSettingsSourceReturn';
 import { ThreadCatPill } from './ThreadCatPill';
 import { ThreadIndicator } from './ThreadIndicator';
@@ -56,6 +57,7 @@ export function ChatContainerHeader({
     return (
       <header
         className="safe-area-top"
+        data-chat-background-surface="work"
         style={{ background: 'var(--shell-work)', borderBottom: '1px solid var(--shell-hairline)' }}
         data-shell-header="v2"
       >
@@ -93,7 +95,7 @@ export function ChatContainerHeader({
               messages={conversationViewMessages}
               queue={conversationViewQueue}
             />
-            <ThreadMetadataMenu key={`metadata:${threadId}`} threadId={threadId} />
+            <ThreadSettingsButton threadId={threadId} />
           </div>
           <div className="shell-chat-header-actions flex flex-none flex-wrap items-center justify-end gap-1 sm:gap-1.5">
             {onOpenMessageSearch && <MessageSearchButton onOpen={onOpenMessageSearch} open={messageSearchOpen} />}
@@ -130,7 +132,7 @@ export function ChatContainerHeader({
         </button>
         <CatCafeLogo className="h-16 w-auto -my-3" />
         <div className="flex-1 min-w-0">
-          <h1 className="text-lg font-bold text-cafe-black">Clowder AI</h1>
+          <h1 className="text-lg font-bold text-cafe-black">{deploymentDefaults.brand.displayName}</h1>
           <div className="flex items-center gap-2 min-w-0">
             <ThreadIndicator threadId={threadId} />
             {/* F198 Phase C AC-C5: Daemon active indicator */}
