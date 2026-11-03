@@ -1,0 +1,7 @@
+Exact retained probe lines 71-75 (excerpt only). Full source SHA256 in manifest.
+Baseline is a counterfactual environment control on the same repaired production code, not an old binary.
+  spawnCliOverride: async function* (options) {
+    record(options);
+    const launch = mode === 'baseline' ? { ...options, env: { ...options.env, NO_PROXY: 'existing.corp.fixture' } } : options;
+    yield* spawnCli({ ...launch, timeoutMs: 100000 });
+  },

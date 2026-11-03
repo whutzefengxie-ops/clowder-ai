@@ -1,0 +1,83 @@
+{
+  "experimentHead": "e1fcfb3372d469b294ce54b1b3b17de452de5a71",
+  "candidateHead": "6852774b343077f7916c831b6bb254c6e5a885b0",
+  "gatewayVersion": "4.0.13",
+  "gatewayExeSha256": "2FA11B13522708D7E8C02528FE04DA4BB493CDC03B0BE41CF69EDC2EBDEFE130",
+  "codexVersion": "0.163.0",
+  "codexExeSha256": "2692C8C7BB2CF8B0AEFE638741FC90236F4B824C59578CE84994F9DE58200993",
+  "originalsSha256": {
+    "baseline-events.jsonl": "3add643fa09cbcfcb264c8a2a966865f41496ccd69391b22de78338a9f9d4d88",
+    "baseline-result.json": "a18954724d458c18e5e6b2453a013e2762125727aba05d748404f1da09737dcc",
+    "exec-first-events.jsonl": "fae0d2b4a27c392c8fca7aa0d2dfd5584f285f34cd68772e3d0f4f5374648f34",
+    "exec-first-result.json": "1cf84fc1297a10deaf7738f10d4e4ad665881a86b7e5244197129acae740b055",
+    "exec-resume-events.jsonl": "c16106e7c6a399f168ba5b108391c44f31739dca3be38e2f1465f393f9613fa5",
+    "exec-resume-result.json": "a4bf665df51bac6401cb4b473e941923266d24a7d9c958d195bccd0f5d0ffda3",
+    "direct-first-events.jsonl": "3b65e1da7bcc53f4a55bfcd90ac2d2ad06ebcd05f107233e4e3217c8bc660680",
+    "direct-first-result.json": "0aa9438eaedcc40871655a3f1b242ebcee39ca2859598f3cc3d880c5714bac06",
+    "direct-resume-events.jsonl": "ff1de8d381619312e722aad5dcaf74eec0bbe1e0f35bc57e4434385370da74ff",
+    "direct-resume-result.json": "ae645f0425bb3545d1cc1cd8870e5572ffaf13a7de17041e7db59b3eadf7a952",
+    "system-native-events.jsonl": "9450980f25f6d51b1b192eb02069dfc1a74a31fb08df2f4f5e265b335fa0bf5d",
+    "system-native-result.json": "309d8ea8171faf47b3fca02a767bbce7c0c09fd906d3339bfa8d5afda687bcf5",
+    "real-gateway-request-evidence.json": "2c59bdb648f25cfabc83fee56771cbcd109afa238f55e59cf7b3778a4357d024",
+    "controlled-proxy-results.json": "bd8be4d13d0867ea3afc175aed2dc5ebdb125018de8d23efa6abe8a5c3860b45",
+    "remote-proxy-control-observation.txt": "f946a4ba25adaa3752ca60df7b6f6e99ee7e578ac315eeedb87f3d64116bba02",
+    "real-provider-probe.mjs": "be1ee5b809f1c19d42898d31b3e7d4c1f5012750015a5ff053f310e376c58d0b"
+  },
+  "productionContinuity": [
+    {
+      "path": "packages/api/src/domains/cats/services/agents/providers/CodexAgentService.ts",
+      "experimentBlob": "c6a2ebd4a67947b09d93eee4efd976a7a70ab5fb",
+      "candidateBlob": "c6a2ebd4a67947b09d93eee4efd976a7a70ab5fb"
+    },
+    {
+      "path": "packages/api/src/domains/cats/services/agents/providers/CodexUnixWebSocketSession.ts",
+      "experimentBlob": "d00006577024a6f1bde13c0082ccacee19ce0d2b",
+      "candidateBlob": "d00006577024a6f1bde13c0082ccacee19ce0d2b"
+    },
+    {
+      "path": "packages/api/src/domains/cats/services/agents/providers/DirectAgentCarrierSession.ts",
+      "experimentBlob": "dc0a958764c3fb8a13b288d635e95eaf509a848d",
+      "candidateBlob": "dc0a958764c3fb8a13b288d635e95eaf509a848d"
+    },
+    {
+      "path": "packages/api/src/domains/cats/services/types.ts",
+      "experimentBlob": "f571c79e668eb9bb39310eb11f164f3407017fe6",
+      "candidateBlob": "f571c79e668eb9bb39310eb11f164f3407017fe6"
+    },
+    {
+      "path": "packages/api/src/domains/terminal/tmux-agent-carrier-session.ts",
+      "experimentBlob": "3f1daee3a48fa91d39a19f7b375c250938fa84c4",
+      "candidateBlob": "3f1daee3a48fa91d39a19f7b375c250938fa84c4"
+    },
+    {
+      "path": "packages/api/src/domains/terminal/tmux-command-file.ts",
+      "experimentBlob": "baf015429c31f9ca475db9dba49540ee9cc261aa",
+      "candidateBlob": "baf015429c31f9ca475db9dba49540ee9cc261aa"
+    },
+    {
+      "path": "packages/api/src/utils/codex-network-environment.ts",
+      "experimentBlob": "32278acc59e913def025210adb245ab4ce509c06",
+      "candidateBlob": "32278acc59e913def025210adb245ab4ce509c06"
+    },
+    {
+      "path": "packages/api/src/utils/windows-system-proxy.ts",
+      "experimentBlob": "5d8d8e12de63fb81d8af46a6eaf83f83295ab7a6",
+      "candidateBlob": "5d8d8e12de63fb81d8af46a6eaf83f83295ab7a6"
+    }
+  ],
+  "publicFilesSha256": {
+    "baseline-spawn-excerpt.txt": "869d04933660e1b47d286cd15163f830268eb2efded0b6cbaa10cb70471f4ca8",
+    "events-baseline.jsonl": "a8158d57ae8c2d6752875df1615b7ea8e66194db852a7d7a77277c4c7b5ec48c",
+    "events-direct-first.jsonl": "9cc4308fdf95775be03be9d96357e2cef60d870f78c8b58e8c6c8c0c8444fc72",
+    "events-direct-resume.jsonl": "48c92faadbd737ab594d2203ba19b85c07b0096f1dbd934f07be50f63021dc20",
+    "events-exec-first.jsonl": "f97276099f728ef07e3f7dea33c9f4fab5c3c51dd8c32b200b0bdaf3706e1ae2",
+    "events-exec-resume.jsonl": "b659c084203626acfa6c669bb3f1d33f0570a8499c3f636bd4d1209f961343d6",
+    "events-system-native.jsonl": "3ca0ca9b11d6534c834315ee60bf5d1e623297a807b94e730cf2a4b0b26a6e3e",
+    "gateway-records.json": "54c5b4fe432a7f44336f39e6ed7e8e107f27570b6cffa94964ffd2ba6cca0024",
+    "invocation-results.json": "dfd7a6edb717857076bb633df397d4911f08002fe7f421d110faf0f81152e8ae",
+    "native-session-headers.json": "4119b5aa3ec6133f2004a23e7988090db7a74d265ea8caa6f1e258fcaf02b385",
+    "proxy-records.json": "cfe55677d6f6eff13592e246e6a8f0bdbc6cd2fcd46c4f00b15a7868bc85c0e4",
+    "README.md": "8d5172802766a81ea08e08d41160287fa0ddce0aabf3a7beeb0eb239b6752942",
+    "remote-proxy-control.txt": "f946a4ba25adaa3752ca60df7b6f6e99ee7e578ac315eeedb87f3d64116bba02"
+  }
+}

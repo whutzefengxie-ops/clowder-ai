@@ -1,0 +1,4 @@
+{"type":"session_init","timestamp":1793669328422,"sessionId":"01a19f05-edf9-71d3-84dc-ccb45ab84dfb"}
+{"type":"system_info","timestamp":1793669328476,"sessionId":"01a19f05-edf9-71d3-84dc-ccb45ab84dfb"}
+{"type":"error","timestamp":1793669328701,"sessionId":"01a19f05-edf9-71d3-84dc-ccb45ab84dfb","content":"Codex CLI: CLI 异常退出 (code: 1, signal: none)\n最近流错误:\n- unexpected status 504 Gateway Timeout: Proxy Notification: controlled local-target 504, url: http://127.0.0.1:15721/v1/responses"}
+{"type":"done","timestamp":1793669328705,"sessionId":"01a19f05-edf9-71d3-84dc-ccb45ab84dfb"}

@@ -1,0 +1,6 @@
+{"type":"session_init","timestamp":1793669350007,"sessionId":"01a19f06-4233-7142-8acb-4d0a08799724"}
+{"type":"system_info","timestamp":1793669350043,"sessionId":"01a19f06-4233-7142-8acb-4d0a08799724"}
+{"type":"text","timestamp":1793669355817,"sessionId":"01a19f06-4233-7142-8acb-4d0a08799724","outputMessage":{"provider":"codex","nativeId":"item_1","channel":"unknown","complete":true,"textMode":"replace"},"content":"ISSUE1666_EXEC_FIRST_OK"}
+{"type":"text","timestamp":1793669356055,"sessionId":"01a19f06-4233-7142-8acb-4d0a08799724","content":"[host signature redacted]","usage":{"inputTokens":15612,"outputTokens":11,"cacheReadTokens":11392,"lastTurnInputTokens":15612}}
+{"type":"provider_signal","timestamp":1793669356056,"sessionId":"01a19f06-4233-7142-8acb-4d0a08799724","servedResponseId":"resp_02fb73fd78d9c5cc016ae938e9ef2481908a91ab52bcf4fa38","servedModel":"gpt-6.1-sol","usage":{"inputTokens":15612,"outputTokens":11,"cacheReadTokens":11392,"lastTurnInputTokens":15612}}
+{"type":"done","timestamp":1793669356061,"sessionId":"01a19f06-4233-7142-8acb-4d0a08799724","servedResponseId":"resp_02fb73fd78d9c5cc016ae938e9ef2481908a91ab52bcf4fa38","servedModel":"gpt-6.1-sol","usage":{"inputTokens":15612,"outputTokens":11,"cacheReadTokens":11392,"lastTurnInputTokens":15612,"contextUsedTokens":15612,"contextWindowSize":258400}}

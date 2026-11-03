@@ -1,0 +1,133 @@
+{
+  "baseline": {
+    "nativeSessionId": "01a19f05-edf9-71d3-84dc-ccb45ab84dfb",
+    "marker": "ISSUE1666_BASELINE_OK",
+    "reply": "",
+    "markerMatched": false,
+    "errors": [
+      "Codex CLI: CLI 异常退出 (code: 1, signal: none)\n最近流错误:\n- unexpected status 504 Gateway Timeout: Proxy Notification: controlled local-target 504, url: http://127.0.0.1:15721/v1/responses"
+    ],
+    "proxyHttpRequestDelta": 1,
+    "eventWindowMs": [
+      1793669328422,
+      1793669328705
+    ],
+    "observations": [
+      {
+        "inheritParentEnv": false,
+        "preparedNO_PROXY": "existing.corp.fixture,localhost,127.0.0.1,::1",
+        "actualSpawnNO_PROXY": "existing.corp.fixture",
+        "HTTP_PROXY": "http://127.0.0.1:61071",
+        "authKeysInEnvironment": [],
+        "modelProviderOverride": false
+      }
+    ]
+  },
+  "exec-first": {
+    "nativeSessionId": "01a19f06-4233-7142-8acb-4d0a08799724",
+    "marker": "ISSUE1666_EXEC_FIRST_OK",
+    "reply": "ISSUE1666_EXEC_FIRST_OK",
+    "markerMatched": true,
+    "errors": [],
+    "proxyHttpRequestDelta": 0,
+    "eventWindowMs": [
+      1793669350007,
+      1793669356061
+    ],
+    "observations": [
+      {
+        "inheritParentEnv": false,
+        "preparedNO_PROXY": "existing.corp.fixture,localhost,127.0.0.1,::1",
+        "actualSpawnNO_PROXY": "existing.corp.fixture,localhost,127.0.0.1,::1",
+        "HTTP_PROXY": "http://127.0.0.1:61071",
+        "authKeysInEnvironment": [],
+        "modelProviderOverride": false
+      }
+    ]
+  },
+  "exec-resume": {
+    "nativeSessionId": "01a19f06-4233-7142-8acb-4d0a08799724",
+    "marker": "ISSUE1666_EXEC_RESUME_OK",
+    "reply": "ISSUE1666_EXEC_RESUME_OK",
+    "markerMatched": true,
+    "errors": [],
+    "proxyHttpRequestDelta": 0,
+    "eventWindowMs": [
+      1793669394780,
+      1793669398300
+    ],
+    "observations": [
+      {
+        "inheritParentEnv": false,
+        "preparedNO_PROXY": "existing.corp.fixture,localhost,127.0.0.1,::1",
+        "actualSpawnNO_PROXY": "existing.corp.fixture,localhost,127.0.0.1,::1",
+        "HTTP_PROXY": "http://127.0.0.1:61071",
+        "authKeysInEnvironment": [],
+        "modelProviderOverride": false
+      }
+    ]
+  },
+  "direct-first": {
+    "nativeSessionId": "01a19f07-2aec-7983-887a-40b4b6c9f4ea",
+    "marker": "ISSUE1666_DIRECT_FIRST_OK",
+    "reply": "ISSUE1666_DIRECT_FIRST_OK",
+    "markerMatched": true,
+    "errors": [],
+    "proxyHttpRequestDelta": 0,
+    "eventWindowMs": [
+      1793669409336,
+      1793669415453
+    ],
+    "observations": [
+      {
+        "inheritParentEnv": false,
+        "preparedNO_PROXY": "existing.corp.fixture,localhost,127.0.0.1,::1",
+        "actualSpawnNO_PROXY": "existing.corp.fixture,localhost,127.0.0.1,::1",
+        "HTTP_PROXY": "http://127.0.0.1:61071",
+        "authKeysInEnvironment": [],
+        "modelProviderOverride": false
+      }
+    ]
+  },
+  "direct-resume": {
+    "nativeSessionId": "01a19f07-2aec-7983-887a-40b4b6c9f4ea",
+    "marker": "ISSUE1666_DIRECT_RESUME_OK",
+    "reply": "ISSUE1666_DIRECT_RESUME_OK",
+    "markerMatched": true,
+    "errors": [],
+    "proxyHttpRequestDelta": 0,
+    "eventWindowMs": [
+      1793669471795,
+      1793669477586
+    ],
+    "observations": [
+      {
+        "inheritParentEnv": false,
+        "preparedNO_PROXY": "existing.corp.fixture,localhost,127.0.0.1,::1",
+        "actualSpawnNO_PROXY": "existing.corp.fixture,localhost,127.0.0.1,::1",
+        "HTTP_PROXY": "http://127.0.0.1:61071",
+        "authKeysInEnvironment": [],
+        "modelProviderOverride": false
+      }
+    ]
+  },
+  "system-native": {
+    "nativeSessionId": "01a19f09-0b7d-7ca0-bc16-bf70ef41cc1e",
+    "marker": "ISSUE1666_SYSTEM_NATIVE_OK",
+    "reply": "ISSUE1666_SYSTEM_NATIVE_OK",
+    "markerMatched": true,
+    "errors": [],
+    "proxyHttpRequestDelta": 0,
+    "eventWindowMs": [
+      1793669532599,
+      1793669541515
+    ],
+    "observations": [
+      {
+        "inheritParentEnv": false,
+        "authKeysInEnvironment": [],
+        "modelProviderOverride": false
+      }
+    ]
+  }
+}

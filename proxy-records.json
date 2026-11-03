@@ -1,0 +1,28 @@
+{
+  "pid": "[task process stopped]",
+  "port": 61071,
+  "requests": [
+    {
+      "method": "POST",
+      "host": "127.0.0.1",
+      "port": "15721",
+      "status": 504
+    }
+  ],
+  "connects": [
+    {
+      "target": "kitcoding.com:443",
+      "allowed": true
+    },
+    {
+      "target": "outside allowlist",
+      "allowed": false
+    },
+    {
+      "target": "outside allowlist",
+      "allowed": false
+    }
+  ],
+  "purpose": "Controlled loopback 504 fault injection; not an enterprise appliance",
+  "countScope": "proxyRequestDelta is controlledProxy.requests HTTP-array delta, not CONNECT/all traffic. One allowed CONNECT attempt and two outside-allowlist rejects exist; rejected attempts lack timestamps and are not assigned to calls."
+}

@@ -1,0 +1,9 @@
+Author tool observation from functions.exec / exec_command output chunk ae24e9.
+Stage: run in parallel with exec-first, before direct/app-server calls.
+Command: curl.exe --proxy http://127.0.0.1:61071 --noproxy '' --connect-timeout 10 --max-time 20 --output NUL --silent --show-error --write-out 'remote_control_http=%{http_code};proxy_connect=%{http_connect}' https://kitcoding.com/
+Exact returned stdout:
+remote_control_http=200;proxy_connect=200 curl_exit=0
+
+This is a preserved author tool observation, not an independent rerun.
+controlled-proxy-results.json records the allowlisted CONNECT attempt; its allowed=true field alone does not prove CONNECT establishment or final HTTP status.
+No authentication or model request was used for this GET.

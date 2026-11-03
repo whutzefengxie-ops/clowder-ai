@@ -1,0 +1,30 @@
+[
+  {
+    "id": "01a19f05-edf9-71d3-84dc-ccb45ab84dfb",
+    "model_provider": "custom",
+    "cli_version": "0.163.0",
+    "rawRolloutSha256": "6b17ef90e647a644fda2db3428816c23406990c79ee75c794e47e20d3e598bbb",
+    "cwd": "[same isolated author test workspace]"
+  },
+  {
+    "id": "01a19f06-4233-7142-8acb-4d0a08799724",
+    "model_provider": "custom",
+    "cli_version": "0.163.0",
+    "rawRolloutSha256": "04c67f571ce003fb438482a51fb8d5810370a7be1c958bb6addfb0e971cac45b",
+    "cwd": "[same isolated author test workspace]"
+  },
+  {
+    "id": "01a19f07-2aec-7983-887a-40b4b6c9f4ea",
+    "model_provider": "custom",
+    "cli_version": "0.163.0",
+    "rawRolloutSha256": "21e879e6f98d46fd91a820d8e36a45a8e88c74c5f93b6aed60058d7f23452aa6",
+    "cwd": "[same isolated author test workspace]"
+  },
+  {
+    "id": "01a19f09-0b7d-7ca0-bc16-bf70ef41cc1e",
+    "model_provider": "custom",
+    "cli_version": "0.163.0",
+    "rawRolloutSha256": "54002205b0277448d77256078fbb4dd6e177738f0199959f4a7ee3c8e27342af",
+    "cwd": "[same isolated author test workspace]"
+  }
+]

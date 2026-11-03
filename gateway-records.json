@@ -1,0 +1,107 @@
+[
+  {
+    "mode": "exec-first",
+    "request_id": "session:codex:third-party-api-key:resp_02fb73fd78d9c5cc016ae938e9ef2481908a91ab52bcf4fa38",
+    "app_type": "codex",
+    "provider_id": "[third-party API-key provider]",
+    "model": "gpt-6.1-sol",
+    "status_code": 200,
+    "input_tokens": 15612,
+    "output_tokens": 11,
+    "total_cost_usd": "0.0096892",
+    "session_id": "0bcedcd0-769e-4e2e-88a2-d2f6da41e1bf",
+    "created_at": 1793669355,
+    "correlation": {
+      "mode": "exec-first",
+      "nativeSessionId": "01a19f06-4233-7142-8acb-4d0a08799724",
+      "gatewayRequestId": "session:codex:third-party-api-key:resp_02fb73fd78d9c5cc016ae938e9ef2481908a91ab52bcf4fa38",
+      "gatewayRequestSessionId": "0bcedcd0-769e-4e2e-88a2-d2f6da41e1bf",
+      "withinOwnInvocationWindow": true,
+      "responseIdInOwnClientTrace": true
+    }
+  },
+  {
+    "mode": "exec-resume",
+    "request_id": "session:codex:third-party-api-key:resp_02fb73fd78d9c5cc016ae9391568708190805823a669fd96a5",
+    "app_type": "codex",
+    "provider_id": "[third-party API-key provider]",
+    "model": "gpt-6.1-sol",
+    "status_code": 200,
+    "input_tokens": 15746,
+    "output_tokens": 12,
+    "total_cost_usd": "0.009724",
+    "session_id": "2a159c8e-2270-4b6e-98f5-9cb5f201b3f1",
+    "created_at": 1793669398,
+    "correlation": {
+      "mode": "exec-resume",
+      "nativeSessionId": "01a19f06-4233-7142-8acb-4d0a08799724",
+      "gatewayRequestId": "session:codex:third-party-api-key:resp_02fb73fd78d9c5cc016ae9391568708190805823a669fd96a5",
+      "gatewayRequestSessionId": "2a159c8e-2270-4b6e-98f5-9cb5f201b3f1",
+      "withinOwnInvocationWindow": true,
+      "responseIdInOwnClientTrace": true
+    }
+  },
+  {
+    "mode": "direct-first",
+    "request_id": "session:codex:third-party-api-key:resp_ft_900715889c9cb357a7624d3a319a9777",
+    "app_type": "codex",
+    "provider_id": "[third-party API-key provider]",
+    "model": "gpt-6.1-sol",
+    "status_code": 200,
+    "input_tokens": 12471,
+    "output_tokens": 35,
+    "total_cost_usd": "0.025292",
+    "session_id": "fffa72da-7640-48ad-a1db-dfe4baaef1b1",
+    "created_at": 1793669415,
+    "correlation": {
+      "mode": "direct-first",
+      "nativeSessionId": "01a19f07-2aec-7983-887a-40b4b6c9f4ea",
+      "gatewayRequestId": "session:codex:third-party-api-key:resp_ft_900715889c9cb357a7624d3a319a9777",
+      "gatewayRequestSessionId": "fffa72da-7640-48ad-a1db-dfe4baaef1b1",
+      "withinOwnInvocationWindow": true,
+      "responseIdInOwnClientTrace": false
+    }
+  },
+  {
+    "mode": "direct-resume",
+    "request_id": "session:codex:third-party-api-key:resp_ft_9bd37e1dccbb5078879ba4ff5689667f",
+    "app_type": "codex",
+    "provider_id": "[third-party API-key provider]",
+    "model": "gpt-6.1-sol",
+    "status_code": 200,
+    "input_tokens": 12537,
+    "output_tokens": 12,
+    "total_cost_usd": "0.0188708",
+    "session_id": "b5634b3c-aa72-49e0-9004-e88b01294d83",
+    "created_at": 1793669477,
+    "correlation": {
+      "mode": "direct-resume",
+      "nativeSessionId": "01a19f07-2aec-7983-887a-40b4b6c9f4ea",
+      "gatewayRequestId": "session:codex:third-party-api-key:resp_ft_9bd37e1dccbb5078879ba4ff5689667f",
+      "gatewayRequestSessionId": "b5634b3c-aa72-49e0-9004-e88b01294d83",
+      "withinOwnInvocationWindow": true,
+      "responseIdInOwnClientTrace": false
+    }
+  },
+  {
+    "mode": "system-native",
+    "request_id": "session:codex:third-party-api-key:resp_0bae2aa4a2126608016ae939a1a2108190870c7b98d7515481",
+    "app_type": "codex",
+    "provider_id": "[third-party API-key provider]",
+    "model": "gpt-6.1-sol",
+    "status_code": 200,
+    "input_tokens": 15776,
+    "output_tokens": 11,
+    "total_cost_usd": "0.0083148",
+    "session_id": "e76f7563-b6c9-4713-9ea8-dba23b3b29d1",
+    "created_at": 1793669541,
+    "correlation": {
+      "mode": "system-native",
+      "nativeSessionId": "01a19f09-0b7d-7ca0-bc16-bf70ef41cc1e",
+      "gatewayRequestId": "session:codex:third-party-api-key:resp_0bae2aa4a2126608016ae939a1a2108190870c7b98d7515481",
+      "gatewayRequestSessionId": "e76f7563-b6c9-4713-9ea8-dba23b3b29d1",
+      "withinOwnInvocationWindow": true,
+      "responseIdInOwnClientTrace": true
+    }
+  }
+]
