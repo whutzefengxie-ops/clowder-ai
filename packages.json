@@ -1,0 +1,42 @@
+[
+  {
+    "role": "old-917120d5",
+    "name": "ClowderAI-Setup-1.14.0-old-917120d5.exe",
+    "bytes": 744022697,
+    "sha256": "8663b1d0524e135e70041e6b6efeb70c0a77f9b8fc32bea07c45407747d48c20",
+    "runtimeSource": "917120d55bb5bf618a3cc49c0749d5f5172ace46",
+    "installerSource": "917120d55bb5bf618a3cc49c0749d5f5172ace46"
+  },
+  {
+    "role": "final-a",
+    "name": "ClowderAI-Setup-1.14.0-final-a.exe",
+    "bytes": 626485120,
+    "sha256": "3771a79afda6c50aa7348e61a4c270f71f58a735a16c20abb015a19b68ef6ec9",
+    "runtimeSource": "471b56a4bbe45f331902adeb6c03ca99d19bb30c",
+    "installerSource": "7039d70ec6c8b2750ff19b80861f793df941c618"
+  },
+  {
+    "role": "final-b",
+    "name": "ClowderAI-Setup-1.14.0-final-b.exe",
+    "bytes": 626488517,
+    "sha256": "47abcf454998a4b126f45d1ee9cff9c28bd1de1a16ea7fe9b08cdd5e4ab9e491",
+    "runtimeSource": "471b56a4bbe45f331902adeb6c03ca99d19bb30c",
+    "installerSource": "2b271b8670c8858de3a4b8e8ed2844d6952212aa"
+  },
+  {
+    "role": "production",
+    "name": "ClowderAI-Setup-1.14.0-production.exe",
+    "bytes": 626488466,
+    "sha256": "fac3f885acbdc19d39476f82521fea3654f203730342c16f649e6a4beb8d9dd6",
+    "runtimeSource": "471b56a4bbe45f331902adeb6c03ca99d19bb30c",
+    "installerSource": "2b271b8670c8858de3a4b8e8ed2844d6952212aa"
+  },
+  {
+    "role": "digest-fault",
+    "name": "ClowderAI-Setup-1.14.0-digest-fault.exe",
+    "bytes": 626488483,
+    "sha256": "4e1aa82e58b38a7ac1e4429925cc5b18e2f2890976c0284ac8d53fe9af00e974",
+    "runtimeSource": "471b56a4bbe45f331902adeb6c03ca99d19bb30c",
+    "installerSource": "2b271b8670c8858de3a4b8e8ed2844d6952212aa"
+  }
+]

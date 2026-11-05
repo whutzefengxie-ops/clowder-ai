@@ -1,0 +1,958 @@
+[
+  {
+    "run": "01-old-seed",
+    "packageSha256": "8663B1D0524E135E70041E6B6EFEB70C0A77F9B8FC32BEA07C45407747D48C20",
+    "cpuBefore": 62,
+    "diskQueueBefore": [
+      {
+        "Name": "0 D: I: J:",
+        "CurrentDiskQueueLength": 0
+      },
+      {
+        "Name": "1 C: E: F:",
+        "CurrentDiskQueueLength": 0
+      },
+      {
+        "Name": "2 G:",
+        "CurrentDiskQueueLength": 0
+      },
+      {
+        "Name": "_Total",
+        "CurrentDiskQueueLength": 0
+      }
+    ],
+    "exit": 0,
+    "clickToFirstScriptRecordMs": 171,
+    "clickToFirstVisibleStatusMs": null,
+    "clickToReadyCallbackMs": null,
+    "readyCallbackToHelperMs": null,
+    "clickToInstallMs": 6139,
+    "identityExtractFromNativeLogMs": 1970,
+    "stages": {},
+    "restartManagerRegistrationMs": null,
+    "restartManagerGetListMs": 20,
+    "clickToNativeFileUsePromptMs": null,
+    "installToFilesSucceededMs": 75494,
+    "installToPostInstallEndMs": 90704,
+    "archiveExec": {
+      "node.tar.gz": {
+        "exit": 0,
+        "detail": ""
+      },
+      "deploy-dependencies.tar.gz": {
+        "exit": 0,
+        "detail": ""
+      },
+      "deploy-api.tar.gz": {
+        "exit": 0,
+        "detail": ""
+      },
+      "deploy-web.tar.gz": {
+        "exit": 0,
+        "detail": ""
+      },
+      "deploy-mcp-server.tar.gz": {
+        "exit": 0,
+        "detail": ""
+      },
+      "electron.tar.gz": {
+        "exit": 0,
+        "detail": ""
+      }
+    },
+    "archivePhases": {
+      "deploy-dependencies.tar.gz": {
+        "status": "complete",
+        "elapsedMs": 41720,
+        "verifyMs": 4253,
+        "extractMs": 37467,
+        "entries": 56085,
+        "totalEntries": 56085
+      },
+      "deploy-api.tar.gz": {
+        "status": "complete",
+        "elapsedMs": 8495,
+        "verifyMs": 622,
+        "extractMs": 7873,
+        "entries": 12478,
+        "totalEntries": 12478
+      },
+      "deploy-web.tar.gz": {
+        "status": "complete",
+        "elapsedMs": 2471,
+        "verifyMs": 1019,
+        "extractMs": 1452,
+        "entries": 1568,
+        "totalEntries": 1568
+      },
+      "deploy-mcp-server.tar.gz": {
+        "status": "complete",
+        "elapsedMs": 1096,
+        "verifyMs": 110,
+        "extractMs": 986,
+        "entries": 1541,
+        "totalEntries": 1541
+      },
+      "electron.tar.gz": {
+        "status": "complete",
+        "elapsedMs": 2160,
+        "verifyMs": 1193,
+        "extractMs": 967,
+        "entries": 82,
+        "totalEntries": 82
+      }
+    },
+    "ui": []
+  },
+  {
+    "run": "03-old-over-old",
+    "packageSha256": "8663B1D0524E135E70041E6B6EFEB70C0A77F9B8FC32BEA07C45407747D48C20",
+    "cpuBefore": 45,
+    "diskQueueBefore": [
+      {
+        "Name": "0 D: I: J:",
+        "CurrentDiskQueueLength": 0
+      },
+      {
+        "Name": "1 C: E: F:",
+        "CurrentDiskQueueLength": 0
+      },
+      {
+        "Name": "2 G:",
+        "CurrentDiskQueueLength": 0
+      },
+      {
+        "Name": "_Total",
+        "CurrentDiskQueueLength": 0
+      }
+    ],
+    "exit": 7,
+    "clickToFirstScriptRecordMs": 8422,
+    "clickToFirstVisibleStatusMs": 16734,
+    "clickToReadyCallbackMs": null,
+    "readyCallbackToHelperMs": null,
+    "clickToInstallMs": null,
+    "identityExtractFromNativeLogMs": 1928,
+    "stages": {},
+    "restartManagerRegistrationMs": null,
+    "restartManagerGetListMs": 1315,
+    "clickToNativeFileUsePromptMs": null,
+    "installToFilesSucceededMs": null,
+    "installToPostInstallEndMs": null,
+    "archiveExec": {},
+    "archivePhases": {},
+    "ui": [
+      {
+        "ms": 18081,
+        "caption": "以下应用程序正在使用将由安装程序更新的文件。建议您允许安装程序自动关闭这些应用程序。安装完成后，安装程序将尝试重新启动这些应用程序。",
+        "png": "stage-02.png",
+        "enabled": true,
+        "sinceClickMs": 16734
+      }
+    ]
+  },
+  {
+    "run": "r3-01-old-restored",
+    "packageSha256": "8663B1D0524E135E70041E6B6EFEB70C0A77F9B8FC32BEA07C45407747D48C20",
+    "cpuBefore": 11,
+    "diskQueueBefore": [
+      {
+        "Name": "0 D: I: J:",
+        "CurrentDiskQueueLength": 0
+      },
+      {
+        "Name": "1 C: E: F:",
+        "CurrentDiskQueueLength": 0
+      },
+      {
+        "Name": "2 G:",
+        "CurrentDiskQueueLength": 0
+      },
+      {
+        "Name": "_Total",
+        "CurrentDiskQueueLength": 0
+      }
+    ],
+    "exit": 0,
+    "clickToFirstScriptRecordMs": 8346,
+    "clickToFirstVisibleStatusMs": null,
+    "clickToReadyCallbackMs": null,
+    "readyCallbackToHelperMs": null,
+    "clickToInstallMs": 16220,
+    "identityExtractFromNativeLogMs": 1941,
+    "stages": {},
+    "restartManagerRegistrationMs": null,
+    "restartManagerGetListMs": 951,
+    "clickToNativeFileUsePromptMs": null,
+    "installToFilesSucceededMs": 92814,
+    "installToPostInstallEndMs": 108545,
+    "archiveExec": {
+      "node.tar.gz": {
+        "exit": 0,
+        "detail": ""
+      },
+      "deploy-dependencies.tar.gz": {
+        "exit": 0,
+        "detail": ""
+      },
+      "deploy-api.tar.gz": {
+        "exit": 0,
+        "detail": ""
+      },
+      "deploy-web.tar.gz": {
+        "exit": 0,
+        "detail": ""
+      },
+      "deploy-mcp-server.tar.gz": {
+        "exit": 0,
+        "detail": ""
+      },
+      "electron.tar.gz": {
+        "exit": 0,
+        "detail": ""
+      }
+    },
+    "archivePhases": {
+      "deploy-dependencies.tar.gz": {
+        "status": "complete",
+        "elapsedMs": 33318,
+        "verifyMs": 3330,
+        "extractMs": 29988,
+        "entries": 56085,
+        "totalEntries": 56085
+      },
+      "deploy-api.tar.gz": {
+        "status": "complete",
+        "elapsedMs": 13959,
+        "verifyMs": 630,
+        "extractMs": 13329,
+        "entries": 12478,
+        "totalEntries": 12478
+      },
+      "deploy-web.tar.gz": {
+        "status": "complete",
+        "elapsedMs": 2623,
+        "verifyMs": 1084,
+        "extractMs": 1539,
+        "entries": 1568,
+        "totalEntries": 1568
+      },
+      "deploy-mcp-server.tar.gz": {
+        "status": "complete",
+        "elapsedMs": 1126,
+        "verifyMs": 79,
+        "extractMs": 1047,
+        "entries": 1541,
+        "totalEntries": 1541
+      },
+      "electron.tar.gz": {
+        "status": "complete",
+        "elapsedMs": 2372,
+        "verifyMs": 1293,
+        "extractMs": 1079,
+        "entries": 82,
+        "totalEntries": 82
+      }
+    },
+    "ui": []
+  },
+  {
+    "run": "r3-02-a-lock-cancel-r2",
+    "packageSha256": "3771A79AFDA6C50AA7348E61A4C270F71F58A735A16C20ABB015A19B68EF6EC9",
+    "cpuBefore": 37,
+    "diskQueueBefore": [
+      {
+        "Name": "0 D: I: J:",
+        "CurrentDiskQueueLength": 0
+      },
+      {
+        "Name": "1 C: E: F:",
+        "CurrentDiskQueueLength": 0
+      },
+      {
+        "Name": "2 G:",
+        "CurrentDiskQueueLength": 0
+      },
+      {
+        "Name": "_Total",
+        "CurrentDiskQueueLength": 0
+      }
+    ],
+    "exit": 7,
+    "clickToFirstScriptRecordMs": 7801,
+    "clickToFirstVisibleStatusMs": 9810,
+    "clickToReadyCallbackMs": 2,
+    "readyCallbackToHelperMs": 7799,
+    "clickToInstallMs": null,
+    "identityExtractFromNativeLogMs": 1880,
+    "stages": {
+      "identity-extract": {
+        "elapsedMs": 1875,
+        "detail": ""
+      },
+      "identity-check": {
+        "elapsedMs": 1328,
+        "detail": "started=1, exit=0"
+      },
+      "shutdown-extract": {
+        "elapsedMs": 0,
+        "detail": ""
+      },
+      "shutdown": {
+        "elapsedMs": 1968,
+        "detail": "started=1, exit=0"
+      },
+      "file-use-check": {
+        "elapsedMs": 922,
+        "detail": "outcome=prompt"
+      },
+      "file-use-prompt": {
+        "elapsedMs": 235,
+        "detail": "outcome=setup-exited"
+      }
+    },
+    "restartManagerRegistrationMs": 781,
+    "restartManagerGetListMs": 116,
+    "clickToNativeFileUsePromptMs": 13900,
+    "installToFilesSucceededMs": null,
+    "installToPostInstallEndMs": null,
+    "archiveExec": {},
+    "archivePhases": {},
+    "ui": [
+      {
+        "ms": 11146,
+        "caption": "正在检查安装实例身份…",
+        "png": "stage-01.png",
+        "enabled": false,
+        "sinceClickMs": 9810
+      },
+      {
+        "ms": 12378,
+        "caption": "正在等待旧版程序退出…",
+        "png": "stage-02.png",
+        "enabled": false,
+        "sinceClickMs": 11051
+      },
+      {
+        "ms": 15263,
+        "caption": "以下应用程序正在使用将由安装程序更新的文件。建议您允许安装程序自动关闭这些应用程序。安装完成后，安装程序将尝试重新启动这些应用程序。",
+        "png": "stage-03.png",
+        "enabled": true,
+        "sinceClickMs": 13935
+      }
+    ]
+  },
+  {
+    "run": "r3-03-b-lock-release-upgrade",
+    "packageSha256": "47ABCF454998A4B126F45D1EE9CFF9C28BD1DE1A16EA7FE9B08CDD5E4AB9E491",
+    "cpuBefore": 19,
+    "diskQueueBefore": [
+      {
+        "Name": "0 D: I: J:",
+        "CurrentDiskQueueLength": 0
+      },
+      {
+        "Name": "1 C: E: F:",
+        "CurrentDiskQueueLength": 0
+      },
+      {
+        "Name": "2 G:",
+        "CurrentDiskQueueLength": 0
+      },
+      {
+        "Name": "_Total",
+        "CurrentDiskQueueLength": 0
+      }
+    ],
+    "exit": 0,
+    "clickToFirstScriptRecordMs": 7395,
+    "clickToFirstVisibleStatusMs": 7527,
+    "clickToReadyCallbackMs": 1,
+    "readyCallbackToHelperMs": 7394,
+    "clickToInstallMs": 12631,
+    "identityExtractFromNativeLogMs": 3,
+    "stages": {
+      "identity-extract": {
+        "elapsedMs": 0,
+        "detail": ""
+      },
+      "identity-check": {
+        "elapsedMs": 1297,
+        "detail": "started=1, exit=0"
+      },
+      "shutdown-extract": {
+        "elapsedMs": 0,
+        "detail": ""
+      },
+      "shutdown": {
+        "elapsedMs": 1907,
+        "detail": "started=1, exit=0"
+      },
+      "file-use-check": {
+        "elapsedMs": 985,
+        "detail": "outcome=prompt"
+      },
+      "file-use-prompt": {
+        "elapsedMs": 1000,
+        "detail": "outcome=continue-requested"
+      },
+      "preparation": {
+        "elapsedMs": 12610,
+        "detail": "outcome=installing"
+      },
+      "payload-replacement": {
+        "elapsedMs": 15656,
+        "detail": ""
+      }
+    },
+    "restartManagerRegistrationMs": 858,
+    "restartManagerGetListMs": 97,
+    "clickToNativeFileUsePromptMs": 11603,
+    "installToFilesSucceededMs": 80404,
+    "installToPostInstallEndMs": 89341,
+    "archiveExec": {
+      "node.tar.gz": {
+        "exit": 0,
+        "detail": "started=1, elapsedMs=1562"
+      },
+      "deploy-dependencies.tar.gz": {
+        "exit": 0,
+        "detail": "started=1, elapsedMs=33781"
+      },
+      "deploy-api.tar.gz": {
+        "exit": 0,
+        "detail": "started=1, elapsedMs=6735"
+      },
+      "deploy-web.tar.gz": {
+        "exit": 0,
+        "detail": "started=1, elapsedMs=2500"
+      },
+      "deploy-mcp-server.tar.gz": {
+        "exit": 0,
+        "detail": "started=1, elapsedMs=859"
+      },
+      "electron.tar.gz": {
+        "exit": 0,
+        "detail": "started=1, elapsedMs=2250"
+      }
+    },
+    "archivePhases": {
+      "deploy-dependencies.tar.gz": {
+        "status": "complete",
+        "elapsedMs": 31485,
+        "verifyMs": 2130,
+        "extractMs": 29355,
+        "entries": 56143,
+        "totalEntries": 56143
+      },
+      "deploy-api.tar.gz": {
+        "status": "complete",
+        "elapsedMs": 6603,
+        "verifyMs": 578,
+        "extractMs": 6025,
+        "entries": 12718,
+        "totalEntries": 12718
+      },
+      "deploy-web.tar.gz": {
+        "status": "complete",
+        "elapsedMs": 2354,
+        "verifyMs": 935,
+        "extractMs": 1419,
+        "entries": 1556,
+        "totalEntries": 1556
+      },
+      "deploy-mcp-server.tar.gz": {
+        "status": "complete",
+        "elapsedMs": 747,
+        "verifyMs": 75,
+        "extractMs": 672,
+        "entries": 1550,
+        "totalEntries": 1550
+      },
+      "electron.tar.gz": {
+        "status": "complete",
+        "elapsedMs": 2130,
+        "verifyMs": 1170,
+        "extractMs": 960,
+        "entries": 82,
+        "totalEntries": 82
+      }
+    },
+    "ui": [
+      {
+        "ms": 8804,
+        "caption": "正在检查安装实例身份…",
+        "png": "stage-01.png",
+        "enabled": false,
+        "sinceClickMs": 7527
+      },
+      {
+        "ms": 10023,
+        "caption": "正在等待旧版程序退出…",
+        "png": "stage-02.png",
+        "enabled": false,
+        "sinceClickMs": 8750
+      },
+      {
+        "ms": 13009,
+        "caption": "以下应用程序正在使用将由安装程序更新的文件。建议您允许安装程序自动关闭这些应用程序。安装完成后，安装程序将尝试重新启动这些应用程序。",
+        "png": "stage-03.png",
+        "enabled": true,
+        "sinceClickMs": 11728
+      }
+    ]
+  },
+  {
+    "run": "r2-04-identity-refusal",
+    "packageSha256": "4E038765F8C2AF10590ED9628D5889D2537F7E4781D570AE6CC1FDED56F4197D",
+    "cpuBefore": 35,
+    "diskQueueBefore": [
+      {
+        "Name": "0 D: I: J:",
+        "CurrentDiskQueueLength": 0
+      },
+      {
+        "Name": "1 C: E: F:",
+        "CurrentDiskQueueLength": 0
+      },
+      {
+        "Name": "2 G:",
+        "CurrentDiskQueueLength": 0
+      },
+      {
+        "Name": "_Total",
+        "CurrentDiskQueueLength": 0
+      }
+    ],
+    "exit": 7,
+    "clickToFirstScriptRecordMs": 7916,
+    "clickToFirstVisibleStatusMs": 8016,
+    "clickToReadyCallbackMs": 1,
+    "readyCallbackToHelperMs": 7915,
+    "clickToInstallMs": null,
+    "identityExtractFromNativeLogMs": 3,
+    "stages": {
+      "identity-extract": {
+        "elapsedMs": 0,
+        "detail": ""
+      },
+      "identity-check": {
+        "elapsedMs": 1734,
+        "detail": "started=1, exit=1"
+      }
+    },
+    "restartManagerRegistrationMs": null,
+    "restartManagerGetListMs": null,
+    "clickToNativeFileUsePromptMs": null,
+    "installToFilesSucceededMs": null,
+    "installToPostInstallEndMs": null,
+    "archiveExec": {},
+    "archivePhases": {},
+    "ui": [
+      {
+        "ms": 9075,
+        "caption": "正在检查安装实例身份…",
+        "png": "stage-01.png",
+        "enabled": false,
+        "sinceClickMs": 8016
+      },
+      {
+        "ms": 10845,
+        "caption": "无法保留目标安装实例的身份信息。请查看安装日志。\r\n\r\n\r\n安装程序不能继续。请点击“取消”退出。",
+        "png": "stage-02.png",
+        "enabled": true,
+        "sinceClickMs": 9776
+      }
+    ]
+  },
+  {
+    "run": "r3-04-digest-failure",
+    "packageSha256": "4E1AA82E58B38A7AC1E4429925CC5B18E2F2890976C0284AC8D53FE9AF00E974",
+    "cpuBefore": 18,
+    "diskQueueBefore": [
+      {
+        "Name": "0 D: I: J:",
+        "CurrentDiskQueueLength": 0
+      },
+      {
+        "Name": "1 C: E: F:",
+        "CurrentDiskQueueLength": 0
+      },
+      {
+        "Name": "2 G:",
+        "CurrentDiskQueueLength": 5
+      },
+      {
+        "Name": "_Total",
+        "CurrentDiskQueueLength": 5
+      }
+    ],
+    "exit": 5,
+    "clickToFirstScriptRecordMs": 7463,
+    "clickToFirstVisibleStatusMs": 7596,
+    "clickToReadyCallbackMs": 2,
+    "readyCallbackToHelperMs": 7461,
+    "clickToInstallMs": 13990,
+    "identityExtractFromNativeLogMs": 3,
+    "stages": {
+      "identity-extract": {
+        "elapsedMs": 0,
+        "detail": ""
+      },
+      "identity-check": {
+        "elapsedMs": 1500,
+        "detail": "started=1, exit=0"
+      },
+      "shutdown-extract": {
+        "elapsedMs": 0,
+        "detail": ""
+      },
+      "shutdown": {
+        "elapsedMs": 2125,
+        "detail": "started=1, exit=0"
+      },
+      "file-use-check": {
+        "elapsedMs": 2890,
+        "detail": "outcome=installing"
+      },
+      "preparation": {
+        "elapsedMs": 13984,
+        "detail": "outcome=installing"
+      },
+      "payload-replacement": {
+        "elapsedMs": 12078,
+        "detail": ""
+      }
+    },
+    "restartManagerRegistrationMs": 763,
+    "restartManagerGetListMs": 2101,
+    "clickToNativeFileUsePromptMs": null,
+    "installToFilesSucceededMs": null,
+    "installToPostInstallEndMs": null,
+    "archiveExec": {
+      "node.tar.gz": {
+        "exit": 0,
+        "detail": "started=1, elapsedMs=1578"
+      },
+      "deploy-dependencies.tar.gz": {
+        "exit": 1,
+        "detail": "started=1, elapsedMs=4750"
+      }
+    },
+    "archivePhases": {},
+    "ui": [
+      {
+        "ms": 9862,
+        "caption": "正在检查安装实例身份…",
+        "png": "stage-01.png",
+        "enabled": false,
+        "sinceClickMs": 7596
+      },
+      {
+        "ms": 10648,
+        "caption": "正在等待旧版程序退出…",
+        "png": "stage-02.png",
+        "enabled": false,
+        "sinceClickMs": 9003
+      }
+    ]
+  },
+  {
+    "run": "r3-05-repair",
+    "packageSha256": "47ABCF454998A4B126F45D1EE9CFF9C28BD1DE1A16EA7FE9B08CDD5E4AB9E491",
+    "cpuBefore": 27,
+    "diskQueueBefore": [
+      {
+        "Name": "0 D: I: J:",
+        "CurrentDiskQueueLength": 0
+      },
+      {
+        "Name": "1 C: E: F:",
+        "CurrentDiskQueueLength": 0
+      },
+      {
+        "Name": "2 G:",
+        "CurrentDiskQueueLength": 2
+      },
+      {
+        "Name": "_Total",
+        "CurrentDiskQueueLength": 2
+      }
+    ],
+    "exit": 0,
+    "clickToFirstScriptRecordMs": 523,
+    "clickToFirstVisibleStatusMs": 659,
+    "clickToReadyCallbackMs": 4,
+    "readyCallbackToHelperMs": 519,
+    "clickToInstallMs": 4516,
+    "identityExtractFromNativeLogMs": 2,
+    "stages": {
+      "identity-extract": {
+        "elapsedMs": 0,
+        "detail": ""
+      },
+      "identity-check": {
+        "elapsedMs": 1672,
+        "detail": "started=1, exit=0"
+      },
+      "shutdown-extract": {
+        "elapsedMs": 16,
+        "detail": ""
+      },
+      "shutdown": {
+        "elapsedMs": 2141,
+        "detail": "started=1, exit=0"
+      },
+      "file-use-check": {
+        "elapsedMs": 125,
+        "detail": "outcome=installing"
+      },
+      "preparation": {
+        "elapsedMs": 4500,
+        "detail": "outcome=installing"
+      },
+      "payload-replacement": {
+        "elapsedMs": 453,
+        "detail": ""
+      }
+    },
+    "restartManagerRegistrationMs": 83,
+    "restartManagerGetListMs": 29,
+    "clickToNativeFileUsePromptMs": null,
+    "installToFilesSucceededMs": 61246,
+    "installToPostInstallEndMs": 68056,
+    "archiveExec": {
+      "node.tar.gz": {
+        "exit": 0,
+        "detail": "started=1, elapsedMs=1484"
+      },
+      "deploy-dependencies.tar.gz": {
+        "exit": 0,
+        "detail": "started=1, elapsedMs=30078"
+      },
+      "deploy-api.tar.gz": {
+        "exit": 0,
+        "detail": "started=1, elapsedMs=6594"
+      },
+      "deploy-web.tar.gz": {
+        "exit": 0,
+        "detail": "started=1, elapsedMs=2437"
+      },
+      "deploy-mcp-server.tar.gz": {
+        "exit": 0,
+        "detail": "started=1, elapsedMs=938"
+      },
+      "electron.tar.gz": {
+        "exit": 0,
+        "detail": "started=1, elapsedMs=2453"
+      }
+    },
+    "archivePhases": {
+      "deploy-dependencies.tar.gz": {
+        "status": "complete",
+        "elapsedMs": 27876,
+        "verifyMs": 2030,
+        "extractMs": 25846,
+        "entries": 56143,
+        "totalEntries": 56143
+      },
+      "deploy-api.tar.gz": {
+        "status": "complete",
+        "elapsedMs": 6475,
+        "verifyMs": 595,
+        "extractMs": 5880,
+        "entries": 12718,
+        "totalEntries": 12718
+      },
+      "deploy-web.tar.gz": {
+        "status": "complete",
+        "elapsedMs": 2295,
+        "verifyMs": 996,
+        "extractMs": 1299,
+        "entries": 1556,
+        "totalEntries": 1556
+      },
+      "deploy-mcp-server.tar.gz": {
+        "status": "complete",
+        "elapsedMs": 815,
+        "verifyMs": 73,
+        "extractMs": 742,
+        "entries": 1550,
+        "totalEntries": 1550
+      },
+      "electron.tar.gz": {
+        "status": "complete",
+        "elapsedMs": 2338,
+        "verifyMs": 1177,
+        "extractMs": 1161,
+        "entries": 82,
+        "totalEntries": 82
+      }
+    },
+    "ui": [
+      {
+        "ms": 2217,
+        "caption": "正在检查安装实例身份…",
+        "png": "stage-01.png",
+        "enabled": false,
+        "sinceClickMs": 659
+      },
+      {
+        "ms": 3917,
+        "caption": "正在等待旧版程序退出…",
+        "png": "stage-02.png",
+        "enabled": false,
+        "sinceClickMs": 2260
+      }
+    ]
+  },
+  {
+    "run": "r3-07-fresh",
+    "packageSha256": "47ABCF454998A4B126F45D1EE9CFF9C28BD1DE1A16EA7FE9B08CDD5E4AB9E491",
+    "cpuBefore": 18,
+    "diskQueueBefore": [
+      {
+        "Name": "0 D: I: J:",
+        "CurrentDiskQueueLength": 0
+      },
+      {
+        "Name": "1 C: E: F:",
+        "CurrentDiskQueueLength": 0
+      },
+      {
+        "Name": "2 G:",
+        "CurrentDiskQueueLength": 0
+      },
+      {
+        "Name": "_Total",
+        "CurrentDiskQueueLength": 0
+      }
+    ],
+    "exit": 0,
+    "clickToFirstScriptRecordMs": 172,
+    "clickToFirstVisibleStatusMs": 224,
+    "clickToReadyCallbackMs": 7,
+    "readyCallbackToHelperMs": 165,
+    "clickToInstallMs": 3430,
+    "identityExtractFromNativeLogMs": 2,
+    "stages": {
+      "identity-extract": {
+        "elapsedMs": 15,
+        "detail": ""
+      },
+      "identity-check": {
+        "elapsedMs": 1500,
+        "detail": "started=1, exit=0"
+      },
+      "shutdown-extract": {
+        "elapsedMs": 0,
+        "detail": ""
+      },
+      "shutdown": {
+        "elapsedMs": 1704,
+        "detail": "started=1, exit=0"
+      },
+      "file-use-check": {
+        "elapsedMs": 31,
+        "detail": "outcome=installing"
+      },
+      "preparation": {
+        "elapsedMs": 3406,
+        "detail": "outcome=installing"
+      },
+      "payload-replacement": {
+        "elapsedMs": 0,
+        "detail": ""
+      }
+    },
+    "restartManagerRegistrationMs": 6,
+    "restartManagerGetListMs": 8,
+    "clickToNativeFileUsePromptMs": null,
+    "installToFilesSucceededMs": 53962,
+    "installToPostInstallEndMs": 67902,
+    "archiveExec": {
+      "node.tar.gz": {
+        "exit": 0,
+        "detail": "started=1, elapsedMs=1406"
+      },
+      "deploy-dependencies.tar.gz": {
+        "exit": 0,
+        "detail": "started=1, elapsedMs=27453"
+      },
+      "deploy-api.tar.gz": {
+        "exit": 0,
+        "detail": "started=1, elapsedMs=6156"
+      },
+      "deploy-web.tar.gz": {
+        "exit": 0,
+        "detail": "started=1, elapsedMs=2204"
+      },
+      "deploy-mcp-server.tar.gz": {
+        "exit": 0,
+        "detail": "started=1, elapsedMs=1000"
+      },
+      "electron.tar.gz": {
+        "exit": 0,
+        "detail": "started=1, elapsedMs=2172"
+      }
+    },
+    "archivePhases": {
+      "deploy-dependencies.tar.gz": {
+        "status": "complete",
+        "elapsedMs": 24861,
+        "verifyMs": 2287,
+        "extractMs": 22574,
+        "entries": 56143,
+        "totalEntries": 56143
+      },
+      "deploy-api.tar.gz": {
+        "status": "complete",
+        "elapsedMs": 6034,
+        "verifyMs": 492,
+        "extractMs": 5542,
+        "entries": 12718,
+        "totalEntries": 12718
+      },
+      "deploy-web.tar.gz": {
+        "status": "complete",
+        "elapsedMs": 2095,
+        "verifyMs": 833,
+        "extractMs": 1262,
+        "entries": 1556,
+        "totalEntries": 1556
+      },
+      "deploy-mcp-server.tar.gz": {
+        "status": "complete",
+        "elapsedMs": 889,
+        "verifyMs": 68,
+        "extractMs": 821,
+        "entries": 1550,
+        "totalEntries": 1550
+      },
+      "electron.tar.gz": {
+        "status": "complete",
+        "elapsedMs": 2049,
+        "verifyMs": 1148,
+        "extractMs": 901,
+        "entries": 82,
+        "totalEntries": 82
+      }
+    },
+    "ui": [
+      {
+        "ms": 1886,
+        "caption": "正在检查安装实例身份…",
+        "png": "stage-01.png",
+        "enabled": false,
+        "sinceClickMs": 224
+      },
+      {
+        "ms": 3387,
+        "caption": "正在等待旧版程序退出…",
+        "png": "stage-02.png",
+        "enabled": false,
+        "sinceClickMs": 1727
+      }
+    ]
+  }
+]

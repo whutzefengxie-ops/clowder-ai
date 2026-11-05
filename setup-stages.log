@@ -1,0 +1,216 @@
+=== 01-old-seed ===
+Install click observer: 2026-11-06T01:41:39.2713096+08:00
+2026-11-06 01:41:45.355   Found 11 files to register with RestartManager.
+2026-11-06 01:41:45.355   Calling RestartManager's RmGetList.
+2026-11-06 01:41:45.375   RmGetList finished successfully.
+2026-11-06 01:41:45.375   RestartManager found no applications using one of our files.
+2026-11-06 01:41:45.410   Starting the installation process.
+2026-11-06 01:41:47.506   Runtime extraction node.tar.gz: exit=0
+2026-11-06 01:42:34.693   Runtime extraction deploy-dependencies.tar.gz: exit=0
+2026-11-06 01:42:43.747   Runtime extraction deploy-api.tar.gz: exit=0
+2026-11-06 01:42:48.045   Runtime extraction deploy-web.tar.gz: exit=0
+2026-11-06 01:42:49.329   Runtime extraction deploy-mcp-server.tar.gz: exit=0
+2026-11-06 01:42:52.962   Runtime extraction electron.tar.gz: exit=0
+2026-11-06 01:43:00.904   Installation process succeeded.
+2026-11-06 01:43:01.014   Process exit code: 0
+2026-11-06 01:43:01.137   Process exit code: 0
+2026-11-06 01:43:01.182   Process exit code: 0
+2026-11-06 01:43:01.696   Process exit code: 0
+2026-11-06 01:43:02.108   Process exit code: 0
+2026-11-06 01:43:15.735   Process exit code: 0
+2026-11-06 01:43:16.090   Process exit code: 0
+2026-11-06 01:43:16.114   Need to restart Windows? No
+
+=== 03-old-over-old ===
+Install click observer: 2026-11-06T01:47:02.9755503+08:00
+2026-11-06 01:47:18.318   Found 34 files to register with RestartManager.
+2026-11-06 01:47:18.318   Calling RestartManager's RmGetList.
+2026-11-06 01:47:19.633   RmGetList finished successfully.
+
+=== r3-01-old-restored ===
+Install click observer: 2026-11-06T02:05:44.7322020+08:00
+2026-11-06 02:05:59.958   Found 33 files to register with RestartManager.
+2026-11-06 02:05:59.958   Calling RestartManager's RmGetList.
+2026-11-06 02:06:00.909   RmGetList finished successfully.
+2026-11-06 02:06:00.909   RestartManager found no applications using one of our files.
+2026-11-06 02:06:00.952   Starting the installation process.
+2026-11-06 02:06:20.288   Runtime extraction node.tar.gz: exit=0
+2026-11-06 02:06:58.677   Runtime extraction deploy-dependencies.tar.gz: exit=0
+2026-11-06 02:07:13.158   Runtime extraction deploy-api.tar.gz: exit=0
+2026-11-06 02:07:17.624   Runtime extraction deploy-web.tar.gz: exit=0
+2026-11-06 02:07:18.910   Runtime extraction deploy-mcp-server.tar.gz: exit=0
+2026-11-06 02:07:22.583   Runtime extraction electron.tar.gz: exit=0
+2026-11-06 02:07:33.766   Installation process succeeded.
+2026-11-06 02:07:33.895   Process exit code: 0
+2026-11-06 02:07:34.029   Process exit code: 0
+2026-11-06 02:07:34.092   Process exit code: 0
+2026-11-06 02:07:34.777   Process exit code: 0
+2026-11-06 02:07:35.180   Process exit code: 0
+2026-11-06 02:07:49.053   Process exit code: 0
+2026-11-06 02:07:49.473   Process exit code: 0
+2026-11-06 02:07:49.497   Need to restart Windows? No
+
+=== r3-02-a-lock-cancel-r2 ===
+Install click observer: 2026-11-06T02:09:15.6220542+08:00
+2026-11-06 02:09:15.624   Setup stage native-preparation: ready confirmed
+2026-11-06 02:09:23.423   Setup stage identity-extract: started
+2026-11-06 02:09:25.302   Setup stage identity-extract: finished, elapsedMs=1875
+2026-11-06 02:09:25.303   Setup stage identity-check: started
+2026-11-06 02:09:26.627   Setup stage identity-check: finished, elapsedMs=1328, started=1, exit=0
+2026-11-06 02:09:26.628   Setup stage shutdown-extract: started
+2026-11-06 02:09:26.630   Setup stage shutdown-extract: finished, elapsedMs=0
+2026-11-06 02:09:26.631   Setup stage shutdown: started
+2026-11-06 02:09:28.594   Setup stage shutdown: finished, elapsedMs=1968, started=1, exit=0
+2026-11-06 02:09:28.602   Setup stage file-use-check: started (Windows Restart Manager handoff)
+2026-11-06 02:09:29.383   Found 34 files to register with RestartManager.
+2026-11-06 02:09:29.383   Calling RestartManager's RmGetList.
+2026-11-06 02:09:29.499   RmGetList finished successfully.
+2026-11-06 02:09:29.522   Setup stage file-use-check: finished, elapsedMs=922, outcome=prompt
+2026-11-06 02:09:29.522   Setup stage file-use-prompt: started
+2026-11-06 02:09:29.762   Setup stage file-use-prompt: finished, elapsedMs=235, outcome=setup-exited
+
+=== r3-03-b-lock-release-upgrade ===
+Install click observer: 2026-11-06T02:09:33.5703787+08:00
+2026-11-06 02:09:33.571   Setup stage native-preparation: ready confirmed
+2026-11-06 02:09:40.965   Setup stage identity-extract: started
+2026-11-06 02:09:40.966   Setup stage identity-extract: finished, elapsedMs=0
+2026-11-06 02:09:40.968   Setup stage identity-check: started
+2026-11-06 02:09:42.271   Setup stage identity-check: finished, elapsedMs=1297, started=1, exit=0
+2026-11-06 02:09:42.273   Setup stage shutdown-extract: started
+2026-11-06 02:09:42.274   Setup stage shutdown-extract: finished, elapsedMs=0
+2026-11-06 02:09:42.276   Setup stage shutdown: started
+2026-11-06 02:09:44.184   Setup stage shutdown: finished, elapsedMs=1907, started=1, exit=0
+2026-11-06 02:09:44.193   Setup stage file-use-check: started (Windows Restart Manager handoff)
+2026-11-06 02:09:45.051   Found 34 files to register with RestartManager.
+2026-11-06 02:09:45.051   Calling RestartManager's RmGetList.
+2026-11-06 02:09:45.148   RmGetList finished successfully.
+2026-11-06 02:09:45.173   Setup stage file-use-check: finished, elapsedMs=985, outcome=prompt
+2026-11-06 02:09:45.173   Setup stage file-use-prompt: started
+2026-11-06 02:09:46.175   Setup stage file-use-prompt: finished, elapsedMs=1000, outcome=continue-requested
+2026-11-06 02:09:46.186   Setup stage preparation: finished, elapsedMs=12610, outcome=installing
+2026-11-06 02:09:46.201   Starting the installation process.
+2026-11-06 02:09:46.208   Setup stage payload-replacement: started
+2026-11-06 02:10:01.859   Setup stage payload-replacement: finished, elapsedMs=15656
+2026-11-06 02:10:03.766   Runtime extraction node.tar.gz: exit=0, started=1, elapsedMs=1562
+2026-11-06 02:10:38.950   Runtime extraction deploy-dependencies.tar.gz: exit=0, started=1, elapsedMs=33781
+2026-11-06 02:10:46.057   Runtime extraction deploy-api.tar.gz: exit=0, started=1, elapsedMs=6735
+2026-11-06 02:10:50.002   Runtime extraction deploy-web.tar.gz: exit=0, started=1, elapsedMs=2500
+2026-11-06 02:10:50.901   Runtime extraction deploy-mcp-server.tar.gz: exit=0, started=1, elapsedMs=859
+2026-11-06 02:10:54.278   Runtime extraction electron.tar.gz: exit=0, started=1, elapsedMs=2250
+2026-11-06 02:11:06.605   Installation process succeeded.
+2026-11-06 02:11:06.708   Process exit code: 0
+2026-11-06 02:11:06.835   Process exit code: 0
+2026-11-06 02:11:06.900   Process exit code: 0
+2026-11-06 02:11:07.548   Process exit code: 0
+2026-11-06 02:11:07.949   Process exit code: 0
+2026-11-06 02:11:15.088   Process exit code: 0
+2026-11-06 02:11:15.519   Process exit code: 0
+2026-11-06 02:11:15.542   Need to restart Windows? No
+
+=== r2-04-identity-refusal ===
+Install click observer: 2026-11-06T01:57:08.9615218+08:00
+2026-11-06 01:57:08.963   Setup stage native-preparation: ready confirmed
+2026-11-06 01:57:16.878   Setup stage identity-extract: started
+2026-11-06 01:57:16.879   Setup stage identity-extract: finished, elapsedMs=0
+2026-11-06 01:57:16.881   Setup stage identity-check: started
+2026-11-06 01:57:18.613   Setup stage identity-check: finished, elapsedMs=1734, started=1, exit=1
+2026-11-06 01:57:18.621   PrepareToInstall failed: 无法保留目标安装实例的身份信息。请查看安装日志。
+2026-11-06 01:57:18.621   Need to restart Windows? No
+
+=== r3-04-digest-failure ===
+Install click observer: 2026-11-06T02:11:20.9585010+08:00
+2026-11-06 02:11:20.961   Setup stage native-preparation: ready confirmed
+2026-11-06 02:11:28.422   Setup stage identity-extract: started
+2026-11-06 02:11:28.423   Setup stage identity-extract: finished, elapsedMs=0
+2026-11-06 02:11:28.425   Setup stage identity-check: started
+2026-11-06 02:11:29.921   Setup stage identity-check: finished, elapsedMs=1500, started=1, exit=0
+2026-11-06 02:11:29.924   Setup stage shutdown-extract: started
+2026-11-06 02:11:29.925   Setup stage shutdown-extract: finished, elapsedMs=0
+2026-11-06 02:11:29.926   Setup stage shutdown: started
+2026-11-06 02:11:32.050   Setup stage shutdown: finished, elapsedMs=2125, started=1, exit=0
+2026-11-06 02:11:32.056   Setup stage file-use-check: started (Windows Restart Manager handoff)
+2026-11-06 02:11:32.819   Found 33 files to register with RestartManager.
+2026-11-06 02:11:32.819   Calling RestartManager's RmGetList.
+2026-11-06 02:11:34.920   RmGetList finished successfully.
+2026-11-06 02:11:34.920   RestartManager found no applications using one of our files.
+2026-11-06 02:11:34.939   Setup stage file-use-check: finished, elapsedMs=2890, outcome=installing
+2026-11-06 02:11:34.939   Setup stage preparation: finished, elapsedMs=13984, outcome=installing
+2026-11-06 02:11:34.949   Starting the installation process.
+2026-11-06 02:11:34.954   Setup stage payload-replacement: started
+2026-11-06 02:11:47.030   Setup stage payload-replacement: finished, elapsedMs=12078
+2026-11-06 02:11:49.022   Runtime extraction node.tar.gz: exit=0, started=1, elapsedMs=1578
+2026-11-06 02:11:55.331   Runtime extraction deploy-dependencies.tar.gz: exit=1, started=1, elapsedMs=4750
+
+=== r3-05-repair ===
+Install click observer: 2026-11-06T02:12:01.4444506+08:00
+2026-11-06 02:12:01.448   Setup stage native-preparation: ready confirmed
+2026-11-06 02:12:01.967   Setup stage identity-extract: started
+2026-11-06 02:12:01.968   Setup stage identity-extract: finished, elapsedMs=0
+2026-11-06 02:12:01.969   Setup stage identity-check: started
+2026-11-06 02:12:03.652   Setup stage identity-check: finished, elapsedMs=1672, started=1, exit=0
+2026-11-06 02:12:03.653   Setup stage shutdown-extract: started
+2026-11-06 02:12:03.654   Setup stage shutdown-extract: finished, elapsedMs=16
+2026-11-06 02:12:03.655   Setup stage shutdown: started
+2026-11-06 02:12:05.809   Setup stage shutdown: finished, elapsedMs=2141, started=1, exit=0
+2026-11-06 02:12:05.818   Setup stage file-use-check: started (Windows Restart Manager handoff)
+2026-11-06 02:12:05.901   Found 12 files to register with RestartManager.
+2026-11-06 02:12:05.901   Calling RestartManager's RmGetList.
+2026-11-06 02:12:05.930   RmGetList finished successfully.
+2026-11-06 02:12:05.930   RestartManager found no applications using one of our files.
+2026-11-06 02:12:05.948   Setup stage file-use-check: finished, elapsedMs=125, outcome=installing
+2026-11-06 02:12:05.948   Setup stage preparation: finished, elapsedMs=4500, outcome=installing
+2026-11-06 02:12:05.960   Starting the installation process.
+2026-11-06 02:12:05.963   Setup stage payload-replacement: started
+2026-11-06 02:12:06.407   Setup stage payload-replacement: finished, elapsedMs=453
+2026-11-06 02:12:08.323   Runtime extraction node.tar.gz: exit=0, started=1, elapsedMs=1484
+2026-11-06 02:12:39.782   Runtime extraction deploy-dependencies.tar.gz: exit=0, started=1, elapsedMs=30078
+2026-11-06 02:12:46.701   Runtime extraction deploy-api.tar.gz: exit=0, started=1, elapsedMs=6594
+2026-11-06 02:12:50.493   Runtime extraction deploy-web.tar.gz: exit=0, started=1, elapsedMs=2437
+2026-11-06 02:12:51.458   Runtime extraction deploy-mcp-server.tar.gz: exit=0, started=1, elapsedMs=938
+2026-11-06 02:12:55.074   Runtime extraction electron.tar.gz: exit=0, started=1, elapsedMs=2453
+2026-11-06 02:13:07.206   Installation process succeeded.
+2026-11-06 02:13:07.326   Process exit code: 0
+2026-11-06 02:13:07.446   Process exit code: 0
+2026-11-06 02:13:07.503   Process exit code: 0
+2026-11-06 02:13:08.126   Process exit code: 0
+2026-11-06 02:13:08.454   Process exit code: 0
+2026-11-06 02:13:13.587   Process exit code: 0
+2026-11-06 02:13:13.996   Process exit code: 0
+2026-11-06 02:13:14.016   Need to restart Windows? No
+
+=== r3-07-fresh ===
+Install click observer: 2026-11-06T02:15:35.9190489+08:00
+2026-11-06 02:15:35.926   Setup stage native-preparation: ready confirmed
+2026-11-06 02:15:36.091   Setup stage identity-extract: started
+2026-11-06 02:15:36.092   Setup stage identity-extract: finished, elapsedMs=15
+2026-11-06 02:15:36.093   Setup stage identity-check: started
+2026-11-06 02:15:37.602   Setup stage identity-check: finished, elapsedMs=1500, started=1, exit=0
+2026-11-06 02:15:37.603   Setup stage shutdown-extract: started
+2026-11-06 02:15:37.604   Setup stage shutdown-extract: finished, elapsedMs=0
+2026-11-06 02:15:37.605   Setup stage shutdown: started
+2026-11-06 02:15:39.304   Setup stage shutdown: finished, elapsedMs=1704, started=1, exit=0
+2026-11-06 02:15:39.310   Setup stage file-use-check: started (Windows Restart Manager handoff)
+2026-11-06 02:15:39.316   Found 11 files to register with RestartManager.
+2026-11-06 02:15:39.316   Calling RestartManager's RmGetList.
+2026-11-06 02:15:39.324   RmGetList finished successfully.
+2026-11-06 02:15:39.324   RestartManager found no applications using one of our files.
+2026-11-06 02:15:39.339   Setup stage file-use-check: finished, elapsedMs=31, outcome=installing
+2026-11-06 02:15:39.339   Setup stage preparation: finished, elapsedMs=3406, outcome=installing
+2026-11-06 02:15:39.349   Starting the installation process.
+2026-11-06 02:15:39.352   Setup stage payload-replacement: started
+2026-11-06 02:15:39.352   Setup stage payload-replacement: finished, elapsedMs=0
+2026-11-06 02:15:41.109   Runtime extraction node.tar.gz: exit=0, started=1, elapsedMs=1406
+2026-11-06 02:16:10.134   Runtime extraction deploy-dependencies.tar.gz: exit=0, started=1, elapsedMs=27453
+2026-11-06 02:16:16.593   Runtime extraction deploy-api.tar.gz: exit=0, started=1, elapsedMs=6156
+2026-11-06 02:16:20.049   Runtime extraction deploy-web.tar.gz: exit=0, started=1, elapsedMs=2204
+2026-11-06 02:16:21.075   Runtime extraction deploy-mcp-server.tar.gz: exit=0, started=1, elapsedMs=1000
+2026-11-06 02:16:24.305   Runtime extraction electron.tar.gz: exit=0, started=1, elapsedMs=2172
+2026-11-06 02:16:33.311   Installation process succeeded.
+2026-11-06 02:16:33.437   Process exit code: 0
+2026-11-06 02:16:33.569   Process exit code: 0
+2026-11-06 02:16:33.633   Process exit code: 0
+2026-11-06 02:16:34.290   Process exit code: 0
+2026-11-06 02:16:34.793   Process exit code: 0
+2026-11-06 02:16:46.783   Process exit code: 0
+2026-11-06 02:16:47.228   Process exit code: 0
+2026-11-06 02:16:47.251   Need to restart Windows? No
