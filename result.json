@@ -1,0 +1,41 @@
+{
+  "passed": true,
+  "head": "424d8f1ac0f81b639ae7c41645dce73c6c7a2a5e",
+  "url": "http://127.0.0.1:55913/settings?s=members&cat=dsh&lang=zh&standalone=1",
+  "writes": [
+    {
+      "defaultModel": "",
+      "expectedRevision": "1111111111111111111111111111111111111111111111111111111111111111"
+    },
+    {
+      "defaultModel": "[\"deepseek-official\",\"deepseek-flash\"]",
+      "expectedRevision": "2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    {
+      "defaultModel": "",
+      "expectedRevision": "2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    {
+      "defaultModel": "[\"gateway-a\",\"flash\"]",
+      "expectedRevision": "2222222222222222222222222222222222222222222222222222222222222222"
+    }
+  ],
+  "deferredModelChange": true,
+  "duplicateRouteSelection": true,
+  "effectivePluginBinding": true,
+  "screenshots": [
+    "loading.png",
+    "catalog.png",
+    "inherited.png",
+    "unavailable.png",
+    "mobile.png",
+    "overview.png",
+    "list.png",
+    "pending-model.png",
+    "duplicate-explicit.png",
+    "duplicate-inherited.png",
+    "duplicate-list.png",
+    "plugin-binding.png",
+    "plugin-list.png"
+  ]
+}
