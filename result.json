@@ -1,0 +1,51 @@
+{
+  "passed": true,
+  "head": "bb740fa7a0d3199262fa77a3106ab8b2d8391157",
+  "url": "http://127.0.0.1:60959/settings?s=members&cat=dsh&lang=zh&standalone=1",
+  "writes": [
+    {
+      "defaultModel": "",
+      "expectedRevision": "1111111111111111111111111111111111111111111111111111111111111111"
+    },
+    {
+      "defaultModel": "[\"deepseek-official\",\"deepseek-flash\"]",
+      "expectedRevision": "2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    {
+      "defaultModel": "",
+      "expectedRevision": "2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    {
+      "defaultModel": "[\"gateway-a\",\"flash\"]",
+      "expectedRevision": "2222222222222222222222222222222222222222222222222222222222222222"
+    }
+  ],
+  "verifiedNonstandardInstall": true,
+  "startupDescriptor": {
+    "command": "node",
+    "startupArgs": [
+      "/some/install/dsh/lib/bin.js",
+      "--profile",
+      "acp"
+    ],
+    "transport": "stdio"
+  },
+  "deferredModelChange": true,
+  "duplicateRouteSelection": true,
+  "effectivePluginBinding": true,
+  "screenshots": [
+    "loading.png",
+    "catalog.png",
+    "inherited.png",
+    "unavailable.png",
+    "mobile.png",
+    "overview.png",
+    "list.png",
+    "pending-model.png",
+    "duplicate-explicit.png",
+    "duplicate-inherited.png",
+    "duplicate-list.png",
+    "plugin-binding.png",
+    "plugin-list.png"
+  ]
+}
