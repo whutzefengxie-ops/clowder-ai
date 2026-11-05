@@ -1,0 +1,24 @@
+{
+  "passed": true,
+  "head": "27ecc0d92023a8ee677c82f96c2492912fdaa816",
+  "url": "http://127.0.0.1:57149/settings?s=members&cat=dsh&lang=zh&standalone=1",
+  "writes": [
+    {
+      "defaultModel": "",
+      "expectedRevision": "1111111111111111111111111111111111111111111111111111111111111111"
+    },
+    {
+      "defaultModel": "[\"deepseek-official\",\"deepseek-flash\"]",
+      "expectedRevision": "2222222222222222222222222222222222222222222222222222222222222222"
+    }
+  ],
+  "screenshots": [
+    "loading.png",
+    "catalog.png",
+    "inherited.png",
+    "unavailable.png",
+    "mobile.png",
+    "overview.png",
+    "list.png"
+  ]
+}
