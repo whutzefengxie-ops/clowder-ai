@@ -69,10 +69,11 @@ export class FlatScanner implements RepoScanner {
         if (stat.isSymbolicLink()) continue;
         if (stat.isDirectory()) {
           if (SKIP_DIRS.has(entry)) continue;
-          if (this.isExcluded(relative(root, fullPath))) continue;
+          if (this.isExcluded(scanRelativePath(root, fullPath))) continue;
+          if (isNestedGitRoot(fullPath)) continue;
           this.walkDir(fullPath, root, results, depth + 1);
         } else if (stat.isFile() && entry.endsWith('.md')) {
-          if (this.isExcluded(relative(root, fullPath))) continue;
+          if (this.isExcluded(scanRelativePath(root, fullPath))) continue;
           const evidence = this.parseFile(fullPath, root);
           if (evidence) results.push(evidence);
         }
@@ -90,7 +91,7 @@ export class FlatScanner implements RepoScanner {
       return null;
     }
 
-    const rel = relative(root, filePath);
+    const rel = scanRelativePath(root, filePath);
     const stem = basename(filePath, '.md');
     const anchor = `${this.collectionId}:doc/${rel.replace(/\.md$/, '')}`;
     const title = extractTitle(content) ?? stem;
@@ -117,6 +118,20 @@ export class FlatScanner implements RepoScanner {
   private isExcluded(relPath: string): boolean {
     if (!this.exclude?.length) return false;
     return this.exclude.some((pattern) => matchGlob(pattern, relPath));
+  }
+}
+
+export function scanRelativePath(root: string, target: string): string {
+  return relative(root, target).replaceAll('\\', '/');
+}
+
+/** Stops traversal at nested repositories, linked worktrees, and symlinked Git metadata. */
+export function isNestedGitRoot(dir: string): boolean {
+  try {
+    const marker = lstatSync(join(dir, '.git'));
+    return marker.isDirectory() || marker.isFile() || marker.isSymbolicLink();
+  } catch {
+    return false;
   }
 }
 

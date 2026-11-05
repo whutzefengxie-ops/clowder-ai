@@ -23,6 +23,10 @@ const PATTERNS: Pattern[] = [
 const CODE_FENCE_RE = /^\s{0,3}[`~]{3,}/;
 const PLACEHOLDER_RE = /EXAMPLE|PLACEHOLDER|YOUR[_-]|REPLACE|CHANGEME|xxx/i;
 const KEY_CONTEXT_RE = /(?:key|token|secret|password|credential|auth)\s*[:=]/i;
+const SCHEMA_FIELD_RE = /^[a-z][A-Za-z0-9_]{1,63}$/;
+const SCHEMA_FIELD_CONTEXT_RE =
+  /(?:correlation\s+key|schema(?:\s+fields?)?|fields?(?:\s+(?:names?|list))?|propert(?:y|ies)(?:\s+(?:names?|list))?|columns?(?:\s+(?:names?|list))?)\s*[:=]/i;
+const SCHEMA_FIELD_SUFFIX_RE = /(?:Id|Ref|Key|At|Type|Tool|Event|Path|Name|Status|Source)$/;
 
 export class SecretScanner {
   static scan(content: string, filePath: string): SecretFinding[] {
@@ -55,7 +59,7 @@ export class SecretScanner {
 
       if (!found && KEY_CONTEXT_RE.test(line)) {
         const valueMatch = line.match(/[:=]\s*["']?([A-Za-z0-9_\-/.+=]{32,})["']?/);
-        if (valueMatch && !PLACEHOLDER_RE.test(valueMatch[1]) && shannonEntropy(valueMatch[1]) > 3.5) {
+        if (valueMatch && isHighEntropySecretCandidate(valueMatch[1], line)) {
           findings.push({
             type: 'high-entropy-secret',
             file: filePath,
@@ -81,6 +85,22 @@ export class SecretScanner {
     }
     return { findings, filesWithSecrets };
   }
+}
+
+function isHighEntropySecretCandidate(value: string, line: string): boolean {
+  return !PLACEHOLDER_RE.test(value) && !isSlashSeparatedSchemaFieldList(value, line) && shannonEntropy(value) > 3.5;
+}
+
+function isSlashSeparatedSchemaFieldList(value: string, line: string): boolean {
+  if (!SCHEMA_FIELD_CONTEXT_RE.test(line)) return false;
+  const fields = value.split('/');
+  const schemaSuffixes = fields.filter((field) => SCHEMA_FIELD_SUFFIX_RE.test(field)).length;
+  return (
+    fields.length >= 3 &&
+    new Set(fields).size === fields.length &&
+    schemaSuffixes >= 2 &&
+    fields.every((field) => SCHEMA_FIELD_RE.test(field) && /[A-Z_]/.test(field) && shannonEntropy(field) <= 3.5)
+  );
 }
 
 function maskSecret(line: string): string {

@@ -38,6 +38,39 @@ describe('SecretScanner', () => {
     assert.equal(findings[0].type, 'high-entropy-secret');
   });
 
+  it('does not flag slash-separated schema fields as a high-entropy secret', () => {
+    const content =
+      'correlation key = messageId/taskId/sourceTool/previewEventId; high-cardinality ids belong in event records.\n';
+    const findings = SecretScanner.scan(content, 'docs/features/F236-anchor-first-context-entry.md');
+    assert.deepEqual(findings, []);
+  });
+
+  it('does not exempt repeated schema-looking fields from high-entropy secret detection', () => {
+    const content = 'correlation key = configurationPath/configurationPath/configurationPath\n';
+    const findings = SecretScanner.scan(content, 'design.md');
+    assert.equal(findings.length, 1);
+    assert.equal(findings[0].type, 'high-entropy-secret');
+  });
+
+  it('still flags high-entropy slash-separated credential material', () => {
+    const content = 'api_key = aB3dE9xKq2LmN7pR/zV8cS1hJ4qT6yW9b/mN5fK2dR7pU3xA8l\n';
+    const findings = SecretScanner.scan(content, 'env.md');
+    assert.equal(findings.length, 1);
+    assert.equal(findings[0].type, 'high-entropy-secret');
+  });
+
+  it('does not suppress low-segment-entropy slash-separated passwords', () => {
+    const contents = [
+      'password = correcthorse/batterystaple/orangeplanet\n',
+      'api_key = abcd1234/efgh5678/ijkl9012/mnop3456\n',
+    ];
+    for (const content of contents) {
+      const findings = SecretScanner.scan(content, 'env.md');
+      assert.equal(findings.length, 1);
+      assert.equal(findings[0].type, 'high-entropy-secret');
+    }
+  });
+
   it('returns empty for safe content', () => {
     const content = '# Design Notes\n\nThis is a safe document about architecture.\n';
     const findings = SecretScanner.scan(content, 'design.md');
