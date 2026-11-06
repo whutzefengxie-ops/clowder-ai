@@ -1,0 +1,43 @@
+--- 02-baseline-failure ---
+2026-11-06 09:36:30.611   Setup stage native-preparation: ready confirmed
+2026-11-06 09:36:40.119   Setup stage identity-extract: started
+2026-11-06 09:36:40.121   Setup stage identity-extract: finished, elapsedMs=0
+2026-11-06 09:36:40.123   Setup stage identity-check: started
+2026-11-06 09:36:41.871   Setup stage identity-check: finished, elapsedMs=1750, started=1, exit=1
+2026-11-06 09:36:41.881   PrepareToInstall failed: 无法保留目标安装实例的身份信息。请查看安装日志。
+--- 03-candidate-failure ---
+2026-11-06 09:36:48.277   Setup stage native-preparation: ready confirmed
+2026-11-06 09:36:57.613   Setup stage identity-extract: started
+2026-11-06 09:36:57.614   Setup stage identity-extract: finished, elapsedMs=0
+2026-11-06 09:36:57.619   Setup stage identity-check: started
+2026-11-06 09:36:58.931   Setup stage identity-check: finished, elapsedMs=1313, started=1, exit=1
+2026-11-06 09:36:58.937   PrepareToInstall failed: 无法保留目标安装实例的身份信息。请查看安装日志。
+--- 04-candidate-lock-back ---
+2026-11-06 09:39:38.900   Setup stage native-preparation: ready confirmed
+2026-11-06 09:39:48.021   Setup stage identity-extract: started
+2026-11-06 09:39:48.023   Setup stage identity-extract: finished, elapsedMs=0
+2026-11-06 09:39:48.027   Setup stage identity-check: started
+2026-11-06 09:39:49.436   Setup stage identity-check: finished, elapsedMs=1422, started=1, exit=0
+2026-11-06 09:39:49.442   Setup stage shutdown-extract: started
+2026-11-06 09:39:49.443   Setup stage shutdown-extract: finished, elapsedMs=0
+2026-11-06 09:39:49.447   Setup stage shutdown: started
+2026-11-06 09:39:51.572   Setup stage shutdown: finished, elapsedMs=2125, started=1, exit=0
+2026-11-06 09:39:51.583   Setup stage file-use-check: started (Windows Restart Manager handoff)
+2026-11-06 09:39:53.667   Setup stage file-use-check: finished, elapsedMs=2078, outcome=prompt
+2026-11-06 09:39:53.667   Setup stage file-use-prompt: started
+2026-11-06 09:39:53.746   Setup stage file-use-prompt: finished, elapsedMs=78, outcome=returned-to-ready
+--- 05-candidate-upgrade ---
+2026-11-06 09:39:59.545   Setup stage native-preparation: ready confirmed
+2026-11-06 09:40:08.530   Setup stage identity-extract: started
+2026-11-06 09:40:08.531   Setup stage identity-extract: finished, elapsedMs=0
+2026-11-06 09:40:08.536   Setup stage identity-check: started
+2026-11-06 09:40:09.675   Setup stage identity-check: finished, elapsedMs=1141, started=1, exit=0
+2026-11-06 09:40:09.678   Setup stage shutdown-extract: started
+2026-11-06 09:40:09.680   Setup stage shutdown-extract: finished, elapsedMs=0
+2026-11-06 09:40:09.683   Setup stage shutdown: started
+2026-11-06 09:40:11.659   Setup stage shutdown: finished, elapsedMs=1984, started=1, exit=0
+2026-11-06 09:40:11.669   Setup stage file-use-check: started (Windows Restart Manager handoff)
+2026-11-06 09:40:12.409   Setup stage file-use-check: finished, elapsedMs=750, outcome=installing
+2026-11-06 09:40:12.409   Setup stage preparation: finished, elapsedMs=12875, outcome=installing
+2026-11-06 09:40:12.426   Setup stage payload-replacement: started
+2026-11-06 09:40:25.845   Setup stage payload-replacement: finished, elapsedMs=13421

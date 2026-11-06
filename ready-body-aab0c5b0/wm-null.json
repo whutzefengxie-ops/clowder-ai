@@ -1,0 +1,418 @@
+[
+  {
+    "elapsedMs": 253,
+    "responded": false
+  },
+  {
+    "elapsedMs": 662,
+    "responded": false
+  },
+  {
+    "elapsedMs": 1059,
+    "responded": false
+  },
+  {
+    "elapsedMs": 1460,
+    "responded": false
+  },
+  {
+    "elapsedMs": 1862,
+    "responded": false
+  },
+  {
+    "elapsedMs": 2264,
+    "responded": false
+  },
+  {
+    "elapsedMs": 2672,
+    "responded": false
+  },
+  {
+    "elapsedMs": 3076,
+    "responded": false
+  },
+  {
+    "elapsedMs": 3492,
+    "responded": false
+  },
+  {
+    "elapsedMs": 3896,
+    "responded": false
+  },
+  {
+    "elapsedMs": 4299,
+    "responded": false
+  },
+  {
+    "elapsedMs": 4702,
+    "responded": false
+  },
+  {
+    "elapsedMs": 5106,
+    "responded": false
+  },
+  {
+    "elapsedMs": 5215,
+    "responded": false
+  },
+  {
+    "elapsedMs": 5325,
+    "responded": false
+  },
+  {
+    "elapsedMs": 5435,
+    "responded": false
+  },
+  {
+    "elapsedMs": 5542,
+    "responded": false
+  },
+  {
+    "elapsedMs": 5653,
+    "responded": false
+  },
+  {
+    "elapsedMs": 5762,
+    "responded": false
+  },
+  {
+    "elapsedMs": 5871,
+    "responded": false
+  },
+  {
+    "elapsedMs": 5982,
+    "responded": false
+  },
+  {
+    "elapsedMs": 6092,
+    "responded": false
+  },
+  {
+    "elapsedMs": 6213,
+    "responded": false
+  },
+  {
+    "elapsedMs": 6324,
+    "responded": false
+  },
+  {
+    "elapsedMs": 6434,
+    "responded": false
+  },
+  {
+    "elapsedMs": 6557,
+    "responded": false
+  },
+  {
+    "elapsedMs": 6680,
+    "responded": false
+  },
+  {
+    "elapsedMs": 6806,
+    "responded": false
+  },
+  {
+    "elapsedMs": 6929,
+    "responded": false
+  },
+  {
+    "elapsedMs": 7035,
+    "responded": false
+  },
+  {
+    "elapsedMs": 7146,
+    "responded": false
+  },
+  {
+    "elapsedMs": 7254,
+    "responded": false
+  },
+  {
+    "elapsedMs": 7362,
+    "responded": false
+  },
+  {
+    "elapsedMs": 7472,
+    "responded": false
+  },
+  {
+    "elapsedMs": 7582,
+    "responded": false
+  },
+  {
+    "elapsedMs": 7693,
+    "responded": false
+  },
+  {
+    "elapsedMs": 7801,
+    "responded": false
+  },
+  {
+    "elapsedMs": 7910,
+    "responded": false
+  },
+  {
+    "elapsedMs": 8020,
+    "responded": false
+  },
+  {
+    "elapsedMs": 8129,
+    "responded": false
+  },
+  {
+    "elapsedMs": 8236,
+    "responded": false
+  },
+  {
+    "elapsedMs": 8345,
+    "responded": false
+  },
+  {
+    "elapsedMs": 8454,
+    "responded": false
+  },
+  {
+    "elapsedMs": 8562,
+    "responded": false
+  },
+  {
+    "elapsedMs": 8672,
+    "responded": false
+  },
+  {
+    "elapsedMs": 8780,
+    "responded": false
+  },
+  {
+    "elapsedMs": 8890,
+    "responded": false
+  },
+  {
+    "elapsedMs": 9000,
+    "responded": false
+  },
+  {
+    "elapsedMs": 9110,
+    "responded": true
+  },
+  {
+    "elapsedMs": 9266,
+    "responded": true
+  },
+  {
+    "elapsedMs": 9391,
+    "responded": true
+  },
+  {
+    "elapsedMs": 9517,
+    "responded": true
+  },
+  {
+    "elapsedMs": 9641,
+    "responded": true
+  },
+  {
+    "elapsedMs": 9766,
+    "responded": true
+  },
+  {
+    "elapsedMs": 9891,
+    "responded": true
+  },
+  {
+    "elapsedMs": 10017,
+    "responded": true
+  },
+  {
+    "elapsedMs": 10173,
+    "responded": true
+  },
+  {
+    "elapsedMs": 10343,
+    "responded": true
+  },
+  {
+    "elapsedMs": 10468,
+    "responded": true
+  },
+  {
+    "elapsedMs": 10593,
+    "responded": true
+  },
+  {
+    "elapsedMs": 10715,
+    "responded": true
+  },
+  {
+    "elapsedMs": 10854,
+    "responded": true
+  },
+  {
+    "elapsedMs": 10977,
+    "responded": true
+  },
+  {
+    "elapsedMs": 11100,
+    "responded": true
+  },
+  {
+    "elapsedMs": 11224,
+    "responded": true
+  },
+  {
+    "elapsedMs": 11363,
+    "responded": true
+  },
+  {
+    "elapsedMs": 11503,
+    "responded": true
+  },
+  {
+    "elapsedMs": 11645,
+    "responded": true
+  },
+  {
+    "elapsedMs": 11785,
+    "responded": true
+  },
+  {
+    "elapsedMs": 11909,
+    "responded": true
+  },
+  {
+    "elapsedMs": 12034,
+    "responded": true
+  },
+  {
+    "elapsedMs": 12296,
+    "responded": false
+  },
+  {
+    "elapsedMs": 12703,
+    "responded": false
+  },
+  {
+    "elapsedMs": 13108,
+    "responded": false
+  },
+  {
+    "elapsedMs": 13512,
+    "responded": false
+  },
+  {
+    "elapsedMs": 13913,
+    "responded": false
+  },
+  {
+    "elapsedMs": 14315,
+    "responded": false
+  },
+  {
+    "elapsedMs": 14714,
+    "responded": false
+  },
+  {
+    "elapsedMs": 15134,
+    "responded": false
+  },
+  {
+    "elapsedMs": 15535,
+    "responded": false
+  },
+  {
+    "elapsedMs": 15938,
+    "responded": false
+  },
+  {
+    "elapsedMs": 16340,
+    "responded": false
+  },
+  {
+    "elapsedMs": 16759,
+    "responded": false
+  },
+  {
+    "elapsedMs": 17164,
+    "responded": false
+  },
+  {
+    "elapsedMs": 17569,
+    "responded": false
+  },
+  {
+    "elapsedMs": 17975,
+    "responded": false
+  },
+  {
+    "elapsedMs": 18084,
+    "responded": false
+  },
+  {
+    "elapsedMs": 18193,
+    "responded": false
+  },
+  {
+    "elapsedMs": 18302,
+    "responded": false
+  },
+  {
+    "elapsedMs": 18411,
+    "responded": false
+  },
+  {
+    "elapsedMs": 18520,
+    "responded": false
+  },
+  {
+    "elapsedMs": 18628,
+    "responded": false
+  },
+  {
+    "elapsedMs": 18735,
+    "responded": false
+  },
+  {
+    "elapsedMs": 18842,
+    "responded": false
+  },
+  {
+    "elapsedMs": 18949,
+    "responded": false
+  },
+  {
+    "elapsedMs": 19058,
+    "responded": false
+  },
+  {
+    "elapsedMs": 19182,
+    "responded": false
+  },
+  {
+    "elapsedMs": 19306,
+    "responded": false
+  },
+  {
+    "elapsedMs": 19430,
+    "responded": false
+  },
+  {
+    "elapsedMs": 19539,
+    "responded": false
+  },
+  {
+    "elapsedMs": 19646,
+    "responded": false
+  },
+  {
+    "elapsedMs": 19756,
+    "responded": false
+  },
+  {
+    "elapsedMs": 19865,
+    "responded": false
+  },
+  {
+    "elapsedMs": 19974,
+    "responded": false
+  }
+]
