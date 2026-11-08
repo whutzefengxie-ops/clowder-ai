@@ -1,0 +1,76 @@
+{
+  "passed": true,
+  "head": "85f935455add45dd4d1dd62bf1c14b820f0184a6",
+  "url": "https://dsh-model-proof.test/settings?s=members&cat=dsh&lang=zh&standalone=1",
+  "harness": "Production SettingsShell via Vite; only Next router and API boundaries are synthetic",
+  "writes": [
+    {
+      "defaultModel": "",
+      "expectedRevision": "1111111111111111111111111111111111111111111111111111111111111111"
+    },
+    {
+      "defaultModel": "[\"deepseek-official\",\"deepseek-flash\"]",
+      "expectedRevision": "2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    {
+      "defaultModel": "",
+      "expectedRevision": "2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    {
+      "defaultModel": "[\"gateway-a\",\"flash\"]",
+      "expectedRevision": "2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    {
+      "agentProvider": null,
+      "acp": {
+        "command": "node",
+        "startupArgs": [
+          "/some/install/dsh/lib/bin.js",
+          "--profile",
+          "acp",
+          "--patch",
+          "/fixture/host/display.yml"
+        ]
+      },
+      "defaultModel": "",
+      "expectedRevision": "2222222222222222222222222222222222222222222222222222222222222222"
+    }
+  ],
+  "verifiedNonstandardInstall": true,
+  "discoveryFailureReopen": true,
+  "transportBoundaryAndDiscard": true,
+  "prepareDiscardReprepareSectionSwitchDraftRestoreSaveReopen": true,
+  "startupDescriptor": {
+    "command": "node",
+    "startupArgs": [
+      "/some/install/dsh/lib/bin.js",
+      "--profile",
+      "acp",
+      "--patch",
+      "/fixture/host/display.yml"
+    ]
+  },
+  "deferredModelChange": true,
+  "duplicateRouteSelection": true,
+  "effectivePluginBinding": true,
+  "screenshots": [
+    "loading.png",
+    "catalog.png",
+    "inherited.png",
+    "unavailable.png",
+    "mobile.png",
+    "overview.png",
+    "list.png",
+    "pending-model.png",
+    "duplicate-explicit.png",
+    "duplicate-inherited.png",
+    "duplicate-list.png",
+    "plugin-binding.png",
+    "plugin-list.png",
+    "native-reopen.png",
+    "transport-boundary.png",
+    "prepared-section.png",
+    "prepared-draft-reopen.png",
+    "prepared-saved-reopen.png"
+  ]
+}
