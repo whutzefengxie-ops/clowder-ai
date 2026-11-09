@@ -3,10 +3,12 @@ feature_ids: []
 topics: [issue-1703, packaging, avatars, lossless]
 doc_kind: implementation-plan
 created: 2026-11-09
-status: experimental
+status: evaluated-not-adopted
 ---
 
 # 头像 PNG 压缩层无损实验
+
+**最终处置（2026-11-09）：不纳入当前发行。** 修正版保全实际内容绑定后，50 张仅从 54,900,055 降至 54,295,850 字节，少 604,205 图片逻辑字节；未生成对应 EXE，也不把它写成安装包收益。鲸鲸独立复核同意继续验证的价值不足，PWA byte revision 仍有后续闭合成本。本片源码与证据保留，构建已停止；当前交付继续使用完全不改写头像的原 #1722 三项规则。
 
 用户授权在保留功能的前提下尝试安装包瘦身。本实验独立于 PR #1722 的三项发布规则；基于该 PR 整合 next@2a653d3e6 的续作提交 5bed18bd650ff3dde6fbc5eef2122c60540e2041。
 
