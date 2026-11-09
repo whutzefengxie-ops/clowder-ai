@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { appGlobalCssFiles } from '../../packages/web/scripts/sync-vendor-assets.mjs';
+import { recompressPng } from './recompress-png.mjs';
 
 /** Generated public/vendor and serviceworker files are not in git's source inventory. */
 export function stageBuiltWeb(source, destination) {
@@ -22,5 +23,13 @@ export function stageBuiltWeb(source, destination) {
       },
     });
   copy(path.join(source, 'public'), path.join(destination, 'public'));
+  fs.readdirSync(path.join(destination, 'public'), { recursive: true })
+    .filter((file) => /^avatars[\\/].+\.png$/i.test(file))
+    .forEach((file) => {
+      const target = path.join(destination, 'public', file);
+      const original = fs.readFileSync(target);
+      const compressed = recompressPng(original);
+      if (compressed !== original) fs.writeFileSync(target, compressed);
+    });
   copy(path.join(source, '.next'), path.join(destination, '.next'));
 }
