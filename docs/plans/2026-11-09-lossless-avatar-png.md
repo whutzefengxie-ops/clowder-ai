@@ -16,7 +16,9 @@ status: experimental
 
 只在 `stageBuiltWeb` 已复制的 `public/avatars/**/*.png` 中尝试重新压缩 IDAT zlib 流。输入是源仓的发行资源，用户 uploads 不参与。只接受更小的输出；源文件保持原位、原字节。
 
-`recompress-png.mjs` 保持解压后的扫描行逐字节一致，签名及全部非 IDAT 块原样保留，包括尺寸、位深、调色板、透明度、ICC、EXIF、DPI 与文字元数据。不改变 URL、文件格式、MIME、像素、动画或角色配置，不新增映射层或原生依赖。已有 .png URL 实为 JPEG 的两张资源原样保留，APNG 原样保留。
+`recompress-png.mjs` 保持解压后的扫描行逐字节一致，PNG 文件签名及全部非 IDAT 块原样保留，包括尺寸、位深、调色板、透明度、ICC、EXIF、DPI 与文字元数据。不改变 URL、文件格式、MIME、像素、动画或角色配置，不新增映射层或原生依赖。已有 .png URL 实为 JPEG 的两张资源原样保留，APNG 原样保留。
+
+当前源资源实际包含 10 张带 `caBX` 内容凭证的 PNG、4 张带 `iDOT` 偏移块的 PNG。仅保持这些块原字节不保证其绑定仍有效；遇到未理解的 unsafe-to-copy 块时整图原样保留，不改签名、偏移或图片内容。规则依据 [W3C PNG §14.2](https://www.w3.org/TR/png-3/#14EditorsExt) 和 [C2PA 2.5 内容硬绑定](https://spec.c2pa.org/specifications/specifications/2.5/specs/ContentCredentials.html#_general_box_hash)。这不是增加假想兜底，已在真实发行资源中观察到此类约束。
 
 PWA 的源内容版本 token 与 sw.js 均保持原样。它仍随源图变化而变化；压缩前后相同版本的图像像素及元数据相同，可交换使用。实际交付字节和归档哈希由构建 manifest 记录，不把源版本 token 当作交付文件 SHA。
 
@@ -27,8 +29,10 @@ PWA 的源内容版本 token 与 sw.js 均保持原样。它仍随源图变化�
 - 新增的生产 Web staging 测试先观察到“交付 PNG 未使用更强无损压缩”的精准 RED，再实现转绿。检查多 IDAT 块、CRC、解压扫描行、元数据块、原 URL、源图保全、伪 PNG 的 JPEG 保留以及 uploads 不改写。
 - 原有 Web staging 检查继续覆盖生成 CSS、WASM、service worker 和运行期 cache 保留。
 - 直接用生产函数处理全部 50 张当前头像，并用现有 sharp/libvips 独立解码：全部 RGBA、尺寸及除文件长度外的全部 decoder metadata 一致，源文件 SHA 未变。
-- Node 24.16.0 生产实现输出：54,900,055 → 48,587,856 字节，少 6,312,199 字节。记录为 `png-production-verification.json`。这只是图片逻辑字节，尚非 EXE 收益。
-- 独立 Python 原型因 zlib 实现不同得到少 6,057,932 字节；它不替代 Node 生产输出结果，不混加收益。
+- 第一版 Node 输出少 6,312,199 字节，但没有保护上述内容绑定，已拒绝作为可交付收益；该版源码 43b62a66 的构建已停止，旧输出仅保留为反例证据。
+- 独立 Python 原型因 zlib 实现不同得到少 6,057,932 字节，也没有覆盖内容绑定约束；它不替代修正后的 Node 输出，不混加收益。
+
+- 内容绑定回归先在第一版实现上得到精准 RED，再修正保护条件转绿；修正版的收益必须重新测量，不能继承第一版数字。
 
 ## 必须继续完成
 

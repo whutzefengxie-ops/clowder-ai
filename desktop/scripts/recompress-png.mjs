@@ -4,6 +4,30 @@ import { crc32, deflateSync, inflateSync } from 'node:zlib';
 export function recompressPng(bytes) {
   // Some shipped .png avatar URLs contain JPEG bytes. Keep their existing format.
   if (!bytes.subarray(0, 8).equals(Buffer.from('89504e470d0a1a0a', 'hex'))) return bytes;
+  const understood = new Set([
+    'IHDR',
+    'PLTE',
+    'IDAT',
+    'IEND',
+    'cHRM',
+    'gAMA',
+    'iCCP',
+    'sBIT',
+    'sRGB',
+    'bKGD',
+    'hIST',
+    'tRNS',
+    'pHYs',
+    'sPLT',
+    'tIME',
+    'iTXt',
+    'tEXt',
+    'zTXt',
+    'eXIf',
+    'cICP',
+    'mDCV',
+    'cLLI',
+  ]);
   const chunks = [];
   let offset = 8;
   while (offset < bytes.length) {
@@ -12,7 +36,9 @@ export function recompressPng(bytes) {
     const raw = bytes.subarray(offset, end);
     if (crc32(raw.subarray(4, -4)) !== raw.readUInt32BE(raw.length - 4)) throw new Error('Invalid avatar PNG CRC');
     const kind = raw.toString('ascii', 4, 8);
-    if (kind === 'acTL') return bytes;
+    // caBX credentials and iDOT offsets occur in shipped avatars. PNG requires
+    // preserving unknown unsafe-to-copy chunks together with their original IDAT.
+    if (kind === 'acTL' || (!understood.has(kind) && (raw[7] & 32) === 0)) return bytes;
     chunks.push({ kind, raw });
     offset = end;
   }

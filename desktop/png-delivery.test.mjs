@@ -5,6 +5,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { crc32, deflateSync, inflateSync } from 'node:zlib';
 import { appGlobalCssFiles } from '../packages/web/scripts/sync-vendor-assets.mjs';
+import { recompressPng } from './scripts/recompress-png.mjs';
 import { stageBuiltWeb } from './scripts/stage-built-web.mjs';
 
 const chunk = (kind, data) => {
@@ -81,4 +82,17 @@ test('Web staging recompresses avatar PNG bytes without changing scanlines, meta
   assert.deepEqual(fs.readFileSync(path.join(destination, 'public/avatars/jpeg-with-png-name.png')), jpeg);
   assert.deepEqual(fs.readFileSync(path.join(destination, 'public/uploads/user.png')), png);
   assert.equal(fs.readFileSync(path.join(destination, 'public/sw.js'), 'utf8'), 'source-derived cache revision');
+});
+
+test('PNG content credentials and offset-dependent chunks retain the entire original file', () => {
+  ['caBX', 'iDOT'].forEach((kind) => {
+    const original = Buffer.concat([
+      Buffer.from('89504e470d0a1a0a', 'hex'),
+      chunk('IHDR', Buffer.from('00000010000000100806000000', 'hex')),
+      chunk(kind, Buffer.alloc(28)),
+      chunk('IDAT', deflateSync(Buffer.alloc(16 * (16 * 4 + 1)), { level: 0 })),
+      chunk('IEND', Buffer.alloc(0)),
+    ]);
+    assert.deepEqual(recompressPng(original), original, `${kind} must retain the original byte bindings`);
+  });
 });
