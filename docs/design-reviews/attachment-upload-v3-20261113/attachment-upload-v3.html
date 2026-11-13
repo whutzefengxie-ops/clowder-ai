@@ -1,0 +1,982 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>附件上传状态 · 输入区局部</title>
+<style>
+  /* ============ 设计 Token（对齐 DESIGN.md 浅色 T1 四层 + 赭红 ============ */
+  :root{
+    --paper:#fffbf6;
+    --work:#fcf7f0;
+    --frame:#f7f2ea;
+    --selected:#efe9e3;
+    --hairline:#e5dfd5;
+    --hairline-strong:#d8d1c6;
+    --ink:#141413;
+    --body:#3d3d3a;
+    --muted:#5f5d57;
+    --primary:#b05f45;
+    --primary-active:#8f4730;
+    --primary-soft:#f3e3da;
+    --info:#4d7fa3;
+    --info-text:#3f647f;
+    --critical:#c64545;
+    --critical-text:#9a3938;
+    --ok:#3f8552;
+    --ok-text:#346942;
+    --r:14px;
+    --panel-pad:10px;
+    --font:"Mona Sans VF",-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans SC","PingFang SC","Noto Sans",Helvetica,Arial,sans-serif,"Apple Color Emoji","Segoe UI Emoji";
+    --mono:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;
+  }
+
+  *,*::before,*::after{box-sizing:border-box}
+  [hidden]{display:none !important}
+  html,body{margin:0}
+  body{
+    background:var(--work);
+    color:var(--ink);
+    font:14.5px/1.6 var(--font);
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+  }
+  button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;text-align:left}
+  button:disabled{cursor:not-allowed}
+  svg{display:block}
+  .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+  :focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+
+  /* ============ 稿纸外壳（不属于产品界面） ============ */
+  .specbar{
+    position:sticky;top:0;z-index:30;
+    display:flex;flex-wrap:wrap;gap:10px 20px;align-items:center;justify-content:space-between;
+    padding:9px 20px;
+    background:var(--frame);
+    border-bottom:1px solid var(--hairline);
+  }
+  .spec-title{display:flex;align-items:baseline;gap:9px;min-width:0}
+  .spec-title b{font-size:13.5px;font-weight:600;letter-spacing:.01em;white-space:nowrap}
+  .spec-title span{font-size:11.5px;color:var(--muted);white-space:nowrap}
+  .spec-controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .seg{display:inline-flex;gap:2px;padding:2px;background:var(--selected);border-radius:9px}
+  .seg button{height:26px;padding:0 10px;border-radius:7px;font-size:12.5px;color:var(--muted);white-space:nowrap;transition:background .12s,color .12s}
+  .seg button:hover{color:var(--body)}
+  .seg button[aria-pressed="true"]{background:var(--paper);color:var(--ink);font-weight:600;box-shadow:0 1px 2px rgba(20,20,19,.08)}
+
+  .stage{display:flex;justify-content:center;padding:26px 20px 40px}
+  .stage-inner{width:720px;max-width:100%;display:flex;flex-direction:column;gap:12px}
+  .stage-inner[data-width="390"]{width:390px}
+
+  .device{position:relative;width:100%;height:min(680px,calc(100vh - 150px));min-height:560px}
+  .device[data-width="390"]{
+    height:min(780px,calc(100vh - 130px));min-height:600px;
+    border:1px solid var(--hairline-strong);
+    border-radius:26px;
+    box-shadow:0 18px 50px rgba(64,42,28,.12);
+    overflow:hidden;
+  }
+
+  /* ============ 产品界面：对话区 ============ */
+  .chat{display:flex;flex-direction:column;height:100%;min-height:0}
+  .thread{flex:1;min-height:0;overflow:hidden;padding:22px 24px 8px}
+  .msg{max-width:66ch}
+  .msg-head{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+  .avatar{width:22px;height:22px;border-radius:50%;background:var(--selected);color:var(--body);font-size:10.5px;font-weight:600;display:grid;place-items:center;flex:none}
+  .msg-name{font-size:12.5px;font-weight:600;color:var(--body)}
+  .msg-time{font-size:11.5px;color:var(--muted)}
+  .msg p{margin:0 0 9px;font-size:14.5px;line-height:1.78;color:var(--ink)}
+  .msg p:last-child{margin-bottom:0}
+
+  .bottom{position:relative;display:flex;flex-direction:column;gap:10px;padding:0 24px 18px}
+
+  /* 执行中状态栏：沿用现有蓝色条，不参与附件状态 */
+  .runbar{
+    display:flex;align-items:center;gap:8px;width:100%;height:34px;padding:0 10px;
+    background:#e6f3f7;border:1px solid #c7e2e9;border-radius:10px;
+    color:#2f6774;font-size:12.5px;
+  }
+  .runbar:hover{background:#dceef3}
+  .rb-avatars{display:flex;flex:none}
+  .rb-avatars i{
+    width:19px;height:19px;border-radius:50%;background:var(--paper);border:1px solid #bcd8e0;
+    display:grid;place-items:center;font-size:9px;font-style:normal;font-weight:600;color:#2f6774;
+  }
+  .rb-avatars i + i{margin-left:-6px}
+  .runbar .chev{margin-left:3px;color:#3f7d8a}
+
+  /* ============ 输入框 ============ */
+  .composer{position:relative;display:flex;flex-direction:column}
+  .panel{
+    background:var(--paper);
+    border:1px solid var(--hairline-strong);
+    border-radius:var(--r);
+    padding:8px var(--panel-pad) 6px;
+    display:flex;flex-direction:column;
+    transition:border-color .12s;
+  }
+  /* 鼠标点进输入框：边线只加深一档；Tab 进来才出环（只在外层） */
+  .panel:focus-within{border-color:#c9bfb2}
+  .panel:has(textarea:focus-visible){outline:2px solid var(--primary);outline-offset:2px}
+  .panel textarea{
+    display:block;width:100%;border:0;background:transparent;resize:none;
+    font:inherit;font-size:14.5px;line-height:1.65;color:var(--ink);
+    min-height:26px;max-height:120px;padding:2px 2px;
+  }
+  .panel textarea:focus{outline:none}
+  .panel textarea::placeholder{color:var(--muted);opacity:.9}
+
+  .row{display:flex;align-items:center;gap:2px;min-height:32px;margin-top:2px}
+  .iconbtn{width:32px;height:32px;border-radius:8px;display:grid;place-items:center;color:var(--muted);flex:none}
+  .iconbtn:hover{background:var(--selected);color:var(--ink)}
+  .iconbtn[aria-disabled="true"]{opacity:.35}
+  .iconbtn[aria-disabled="true"]:hover{background:none;color:var(--muted)}
+  .project{display:flex;align-items:center;gap:4px;height:32px;padding:0 7px;border-radius:8px;font-size:13px;color:var(--muted);flex:none}
+  .project:hover{background:var(--selected);color:var(--body)}
+  .spacer{flex:1}
+  .recipient{display:flex;align-items:center;gap:5px;height:32px;padding:0 6px;border-radius:8px;font-size:12.5px;color:var(--muted);white-space:nowrap;flex:none}
+  .recipient:hover{background:var(--selected)}
+  .who-avatar{width:16px;height:16px;border-radius:50%;background:#e9dccf;color:#6b5443;font-size:8.5px;font-weight:600;display:grid;place-items:center;flex:none}
+  .who{color:var(--body);font-weight:600}
+  .model{color:var(--muted);font-weight:400}
+  .send{width:30px;height:30px;border-radius:50%;background:var(--primary);color:#fff;display:grid;place-items:center;flex:none;margin-left:4px;transition:background .12s}
+  .send:hover:not(:disabled){background:var(--primary-active)}
+  .send:disabled{background:#d9cfc3;color:#fdfaf6}
+  .stop-run{width:30px;height:30px;border-radius:50%;background:var(--critical);display:grid;place-items:center;flex:none;margin-left:6px}
+  .stop-run span{width:10px;height:10px;border-radius:1px;background:#fff}
+  .stop-run:disabled{background:var(--muted);opacity:.5}
+
+  /* ============ 附件：公共 ============ */
+  .fname{display:block;font-size:13px;line-height:1.35;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .fmeta{display:flex;align-items:center;gap:4px;font-size:11.5px;line-height:1.4;color:var(--muted);white-space:nowrap;min-width:0}
+  .s-info{color:var(--info-text)}
+  .s-bad{color:var(--critical-text)}
+  .s-ok{color:var(--ok-text)}
+  .fmeta .s-ok{display:inline-flex;align-items:center;gap:3px}
+  .fmeta .sep{color:var(--hairline-strong)}
+  .link{padding:1px 4px;margin-left:-2px;border-radius:4px;font-size:11.5px;font-weight:500;color:var(--primary-active)}
+  .link:hover{background:var(--primary-soft)}
+  .xbtn{width:28px;height:28px;border-radius:7px;display:grid;place-items:center;color:var(--muted);flex:none;opacity:.7}
+  .xbtn:hover{background:var(--selected);color:var(--ink);opacity:1}
+  .thumb{position:relative;flex:none;width:38px;height:38px;border-radius:7px;overflow:hidden;border:1px solid var(--hairline);background:var(--selected)}
+  .thumb svg{width:100%;height:100%}
+  .thumb .scrim{position:absolute;inset:0;display:grid;place-items:center;background:rgba(255,251,246,.66)}
+  .thumb .badge{
+    position:absolute;right:2px;bottom:2px;width:15px;height:15px;border-radius:50%;
+    background:var(--critical);color:#fff;display:grid;place-items:center;box-shadow:0 0 0 2px var(--paper);
+  }
+  .spin{
+    width:11px;height:11px;flex:none;border-radius:50%;
+    border:1.5px solid rgba(77,127,163,.28);border-top-color:var(--info);
+    animation:spin .8s linear infinite;
+  }
+  .spin.lg{width:16px;height:16px;border-width:2px}
+  .note .spin{display:inline-block;vertical-align:middle;margin-right:6px}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  /* ============ 方案 A：框内附件卡 ============ */
+  .attach-a{
+    margin:0 calc(-1 * var(--panel-pad)) 3px;
+    padding:0 var(--panel-pad) 7px;
+    border-bottom:1px solid var(--hairline);
+  }
+  .note{display:block;margin:0 0 6px;font-size:12.5px;line-height:1.45;color:var(--muted)}
+  .note .info{color:var(--info-text)}
+  .note .warn{color:var(--critical-text)}
+  .note .sep,.tray-status .sep{margin:0 3px;color:#b6aa9b}
+  .chips{list-style:none;display:flex;flex-wrap:wrap;gap:2px 6px;margin:0;padding:0}
+  .chip{display:flex;align-items:center;gap:7px;flex:0 1 auto;min-width:0;max-width:224px;padding:3px 2px 3px 3px;border-radius:9px}
+  .chip:hover{background:color-mix(in srgb, var(--selected) 55%, transparent)}
+  .chip-text{display:flex;flex-direction:column;min-width:0;flex:1}
+
+  /* ============ 方案 B：上方附件托盘 ============ */
+  .tray-b{
+    background:var(--paper);
+    border:1px solid var(--hairline-strong);
+    border-bottom:1px solid var(--hairline);
+    border-radius:var(--r) var(--r) 0 0;
+    padding:10px 12px 9px;
+  }
+  .composer[data-variant="B"][data-has-attach="true"] .panel{border-top:0;border-radius:0 0 var(--r) var(--r)}
+  .tray-head{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:2px 12px;margin-bottom:7px}
+  .tray-title{font-size:13px;font-weight:600;color:var(--ink)}
+  .tray-status{font-size:12px;line-height:1.45;color:var(--muted)}
+  .tray-status .info{color:var(--info-text)}
+  .tray-status .warn{color:var(--critical-text)}
+  .thumbs{list-style:none;display:flex;gap:10px;margin:0;padding:1px 0 2px;overflow-x:auto;scrollbar-width:thin}
+  .thumb-lg{width:84px;flex:none;position:relative}
+  .thumb-lg .box{position:relative;width:84px;height:60px;border-radius:9px;overflow:hidden;border:1px solid var(--hairline);background:var(--selected)}
+  .thumb-lg .box svg{width:100%;height:100%}
+  .thumb-lg.is-bad .box{border-color:color-mix(in srgb, var(--critical) 45%, var(--hairline))}
+  .thumb-lg .overlay{position:absolute;inset:0;display:grid;place-items:center;background:rgba(255,251,246,.7)}
+  .thumb-lg .overlay.is-bad{place-items:end center;padding-bottom:5px;background:rgba(255,251,246,.82)}
+  .retry-pill{
+    display:inline-flex;align-items:center;gap:3px;height:24px;padding:0 8px;border-radius:6px;
+    background:var(--paper);border:1px solid var(--hairline-strong);color:var(--primary-active);
+    font-size:11.5px;font-weight:500;white-space:nowrap;flex:none;box-shadow:0 1px 2px rgba(20,20,19,.05);
+  }
+  .retry-pill:hover{border-color:var(--primary);background:var(--primary-soft)}
+  .thumb-lg .retry-pill svg{width:12px;height:12px;flex:none}
+  .thumb-lg .xbtn{position:absolute;top:2px;right:2px;width:22px;height:22px;background:var(--paper);border:1px solid var(--hairline);opacity:1;z-index:2}
+  .thumb-lg .fname2{display:block;margin-top:5px;font-size:11.5px;line-height:1.35;color:var(--body);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .thumb-lg .fstatus2{display:flex;align-items:center;gap:4px;font-size:11px;line-height:1.4;color:var(--muted);margin-top:1px}
+  .thumb-lg .fstatus2.is-up{color:var(--info-text)}
+  .thumb-lg .fstatus2.is-bad{color:var(--critical-text)}
+  .thumb-lg .fstatus2.is-ok{color:var(--ok-text)}
+
+  /* ============ 方案 C：框内紧凑行 ============ */
+  .attach-c{
+    display:flex;align-items:center;gap:8px;
+    margin:0 calc(-1 * var(--panel-pad)) 2px;
+    padding:2px var(--panel-pad) 6px;
+    border-bottom:1px solid var(--hairline);
+    min-height:34px;
+  }
+  .c-main{display:flex;align-items:center;gap:8px;min-width:0;flex:1;height:28px;border-radius:7px}
+  .c-main:hover .c-text{color:var(--body)}
+  .stack{display:flex;flex:none;padding-left:2px}
+  .stack .s{width:24px;height:24px;border-radius:6px;overflow:hidden;border:1.5px solid var(--paper);background:var(--selected);display:grid;place-items:center;color:var(--muted);font-size:9px}
+  .stack .s + .s{margin-left:-8px}
+  .stack .s svg{width:100%;height:100%}
+  .stack .s.more{background:var(--selected);color:var(--body);font-weight:600}
+  .c-text{font-size:12.5px;color:var(--muted);min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .c-text b{font-weight:600;color:var(--body)}
+
+  /* ============ C 的附件明细浮层 ============ */
+  .popover{
+    position:absolute;left:0;right:0;bottom:calc(100% + 6px);z-index:14;
+    background:var(--paper);border:1px solid var(--hairline-strong);border-radius:12px;
+    box-shadow:0 12px 32px rgba(64,42,28,.14);
+    padding:7px;
+  }
+  .pop-head{display:flex;align-items:center;justify-content:space-between;padding:1px 3px 5px;font-size:12px;color:var(--muted)}
+  .pop-head .xbtn{width:24px;height:24px}
+  .pop-list{list-style:none;margin:0;padding:0;max-height:228px;overflow:auto}
+  .pop-row{display:flex;align-items:center;gap:8px;padding:5px 3px;border-radius:8px}
+  .pop-row:hover{background:color-mix(in srgb, var(--selected) 50%, transparent)}
+  .pop-row .thumb{width:30px;height:30px;border-radius:6px}
+  .pop-text{display:flex;flex-direction:column;min-width:0;flex:1}
+  .pop-text .fname{font-size:12.5px}
+  .pop-text .fmeta{font-size:11px}
+  .pop-actions{display:flex;align-items:center;gap:2px;flex:none}
+
+  /* ============ 撤销提示（移除后的反馈） ============ */
+  .toast{
+    position:absolute;left:50%;bottom:calc(100% + 8px);z-index:16;
+    transform:translateX(-50%);
+    display:flex;align-items:center;gap:12px;
+    max-width:calc(100% - 8px);
+    padding:8px 10px 8px 12px;border-radius:10px;
+    background:#2b2724;color:#fdf9f2;
+    font-size:12.5px;line-height:1.4;
+    box-shadow:0 8px 24px rgba(20,20,19,.22);
+  }
+  .toast-text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .toast-undo{flex:none;font-size:12.5px;font-weight:600;color:#f0c9b4;padding:2px 4px;border-radius:5px}
+  .toast-undo:hover{background:rgba(255,255,255,.1);color:#fff}
+
+  /* ============ 稿纸说明 ============ */
+  .hint{margin:0;font-size:12.5px;line-height:1.6;color:var(--muted)}
+  .hint b{color:var(--body);font-weight:600}
+  .hint.sub{font-size:11.5px;color:#6f6b62}
+
+  /* ============ 手机 390 ============ */
+  .device[data-width="390"]{--r:12px;--panel-pad:8px}
+  .device[data-width="390"]{height:min(680px,calc(100svh - 230px));min-height:420px}
+  .device[data-width="390"] .thread{padding:14px 14px 6px}
+  .device[data-width="390"] .msg p{font-size:14px;line-height:1.72}
+  .device[data-width="390"] .bottom{padding:0 12px 12px;gap:8px}
+  .device[data-width="390"] .runbar{height:32px;font-size:12px;padding:0 8px}
+  .device[data-width="390"] .panel{padding-top:7px}
+  .device[data-width="390"] .model{display:none}
+  .device[data-width="390"] .recipient{padding:0 4px;gap:4px}
+  .device[data-width="390"] .row{gap:0}
+  .device[data-width="390"] .project{padding:0 5px}
+  .device[data-width="390"] .project span,.device[data-width="390"] .project svg:last-child{display:none}
+  .device[data-width="390"] .stop-run{margin-left:2px}
+  .device[data-width="390"] .send{width:30px;height:30px;margin-left:2px;flex:none}
+  .device[data-width="390"] .iconbtn{width:30px;height:30px}
+
+  /* A：窄屏用两列，失败附件与重试入口直接可见 */
+  .device[data-width="390"] .chip{width:auto;max-width:none;flex:none}
+  .device[data-width="390"] .chips{
+    display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:2px 6px;
+    margin:0;padding:0;
+  }
+  .device[data-width="390"] .attach-a{padding-bottom:6px;margin-bottom:0}
+  .device[data-width="390"] .tray-b{padding:9px 10px 8px}
+  .device[data-width="390"] .tray-head{flex-direction:column;align-items:flex-start;gap:1px;margin-bottom:6px}
+  .device[data-width="390"] .thumbs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;overflow:visible}
+  .device[data-width="390"] .thumb-lg{width:auto;min-width:0}
+  .device[data-width="390"] .thumb-lg .box{width:100%;height:56px}
+  .device[data-width="390"] .popover{left:-1px;right:-1px;padding:6px}
+  .device[data-width="390"] .pop-list{max-height:200px}
+  .device[data-width="390"] .toast{font-size:12px;gap:8px}
+
+  @media (prefers-reduced-motion:reduce){
+    .spin{animation:none;border-top-color:var(--info);border-color:rgba(77,127,163,.35)}
+    .send,.seg button,.panel{transition:none}
+    .toast{transition:none}
+  }
+  @media (max-width:640px){
+    .stage{padding:16px 10px 28px}
+    .specbar{padding:8px 12px}
+    .spec-title span{display:none}
+  }
+</style>
+</head>
+<body>
+
+<header class="specbar">
+  <div class="spec-title">
+    <b>附件上传状态</b>
+    <span>输入区局部 · 单文件稿 · 状态跟着附件走</span>
+  </div>
+  <div class="spec-controls">
+    <div class="seg" id="variantSeg" role="group" aria-label="结构方案">
+      <button type="button" data-variant="A" aria-pressed="true">A 框内附件卡</button>
+      <button type="button" data-variant="B" aria-pressed="false">B 上方托盘</button>
+      <button type="button" data-variant="C" aria-pressed="false">C 紧凑行</button>
+    </div>
+    <div class="seg" id="presetSeg" role="group" aria-label="上传状态">
+      <button type="button" data-preset="uploading" aria-pressed="true">上传中</button>
+      <button type="button" data-preset="done" aria-pressed="false">完成</button>
+      <button type="button" data-preset="failed" aria-pressed="false">失败</button>
+      <button type="button" data-preset="mixed" aria-pressed="false">混合</button>
+      <button type="button" data-preset="uploadingEmpty" aria-pressed="false">预览已收起</button>
+    </div>
+    <div class="seg" id="viewportSeg" role="group" aria-label="预览视口">
+      <button type="button" data-width="720" aria-pressed="true">桌面 720</button>
+      <button type="button" data-width="390" aria-pressed="false">手机 390</button>
+    </div>
+  </div>
+</header>
+
+<main class="stage">
+  <div class="stage-inner" id="stageInner" data-width="720">
+    <div class="device" id="device" data-width="720">
+      <div class="chat">
+        <div class="thread">
+          <article class="msg">
+            <div class="msg-head">
+              <span class="avatar" aria-hidden="true">砚</span>
+              <span class="msg-name">缅因猫 sol</span>
+              <span class="msg-time">12:21</span>
+            </div>
+            <p>截图里「附件上传中」贴在页面左边缘，和输入框脱开了。它现在挂在输入框外面，读起来像一条全局通知。</p>
+            <p>我把附件状态收回输入框里：状态跟着具体附件走，失败就地重试，上传没完成时发送先禁用。</p>
+          </article>
+        </div>
+
+        <div class="bottom">
+          <button class="runbar" type="button" aria-label="2 项运行中，展开详情">
+            <span class="rb-avatars" aria-hidden="true"><i>砚</i><i>鲸</i></span>
+            <span>2 项运行中</span>
+            <svg class="chev" width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8.5l4 4 4-4"/></svg>
+          </button>
+
+          <div class="composer" id="composer" data-variant="A" data-has-attach="false">
+            <section class="tray-b" id="trayB" aria-label="待发送附件" hidden></section>
+
+            <div class="panel">
+              <div class="attach-a" id="trayA" role="group" aria-label="待发送附件" hidden></div>
+              <div class="attach-c" id="trayC" role="group" aria-label="待发送附件" hidden></div>
+
+              <textarea id="draft" rows="1" aria-label="消息输入框"
+                placeholder="想调整方向？可直接给缅因猫 sol / 小鲸鱼 flash 发消息，引导回复。"></textarea>
+
+              <div class="row" data-testid="composer-controls">
+                <button class="iconbtn" id="addBtn" type="button" data-action="add" aria-label="添加附件" aria-disabled="false" title="添加附件">
+                  <svg width="19" height="19" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M10 4.5v11M4.5 10h11"/></svg>
+                </button>
+                <button class="project" type="button">
+                  <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 6.5a1 1 0 0 1 1-1h3l1.5 1.5h5.5a1 1 0 0 1 1 1v5.5a1 1 0 0 1-1 1h-10a1 1 0 0 1-1-1z"/></svg>
+                  <span>project</span>
+                  <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 8.5l3.5 3.5 3.5-3.5"/></svg>
+                </button>
+                <span class="spacer"></span>
+                <button class="recipient" type="button" aria-label="收件人：砚砚 GPT-6.1-Sol xhigh">
+                  <span class="who-avatar" aria-hidden="true">砚</span>
+                  <span>发给 <span class="who">砚砚</span> <span class="model">GPT-6.1-Sol · xhigh</span></span>
+                  <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 8.5l3.5 3.5 3.5-3.5"/></svg>
+                </button>
+                <button class="iconbtn" type="button" aria-label="语音输入">
+                  <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7.75" y="3.5" width="4.5" height="8" rx="2.25"/><path d="M5.5 9.5a4.5 4.5 0 0 0 9 0M10 14v2.5"/></svg>
+                </button>
+                <button class="send" id="sendBtn" type="button" aria-label="发送">
+                  <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 15.5V5M5.8 9.2 10 5l4.2 4.2"/></svg>
+                </button>
+                <button class="stop-run" id="stopBtn" type="button" aria-label="停止当前运行" title="停止当前运行"><span></span></button>
+              </div>
+            </div>
+
+            <div class="popover" id="popover" role="dialog" aria-label="附件明细" hidden></div>
+            <div class="toast" id="toast" role="status" hidden></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p class="hint" id="variantHint"></p>
+    <p class="hint sub">＋ 添加附件（最多 5 个）· 失败条目点「重试」· × 移除后 6 秒内可撤销 · 切换状态会重放场景</p>
+  </div>
+</main>
+
+<p class="sr-only" id="sr" role="status" aria-live="polite"></p>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ---------------- 图标与缩略图（全部内联，无外部依赖） ---------------- */
+  var ICONS = {
+    x: '<path d="M5.5 5.5l9 9M14.5 5.5l-9 9"/>',
+    check: '<path d="M4.2 10.6l3.6 3.6 8-8.4"/>',
+    retry: '<path d="M15.5 10a5.5 5.5 0 1 1-1.7-4M15.5 3.8v3.6h-3.6"/>',
+    alert: '<path d="M10 5.6v4.8M10 14.1v.3"/>'
+  };
+  function svg(name, size) {
+    return '<svg width="' + size + '" height="' + size + '" viewBox="0 0 20 20" fill="none" stroke="currentColor" ' +
+      'stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ICONS[name] + '</svg>';
+  }
+
+  // 缩略图用矢量示意（不引入图片文件）：窗口 / 压缩包 / 文档，裁切填充
+  var ART = {
+    image: '<svg viewBox="0 0 40 40" preserveAspectRatio="xMidYMid slice" aria-hidden="true">' +
+      '<rect width="40" height="40" fill="#f2ece4"/>' +
+      '<rect x="5" y="8" width="30" height="24" rx="3" fill="#fffbf6" stroke="#d8d1c6"/>' +
+      '<path d="M5 11a3 3 0 0 1 3-3h24a3 3 0 0 1 3 3v2H5z" fill="#efe9e3"/>' +
+      '<circle cx="9" cy="10.5" r=".9" fill="#c9bfb2"/>' +
+      '<rect x="9" y="17" width="10" height="11.5" rx="1.5" fill="#e9dccf"/>' +
+      '<rect x="22" y="17" width="9" height="3" rx="1" fill="#d8d1c6"/>' +
+      '<rect x="22" y="22" width="7" height="2.4" rx="1" fill="#e5dfd5"/>' +
+      '<rect x="22" y="26.4" width="9" height="2.4" rx="1" fill="#e5dfd5"/></svg>',
+    archive: '<svg viewBox="0 0 40 40" preserveAspectRatio="xMidYMid slice" aria-hidden="true">' +
+      '<rect width="40" height="40" fill="#f2ece4"/>' +
+      '<path d="M12 16h16v12a2 2 0 0 1-2 2H14a2 2 0 0 1-2-2z" fill="#fffbf6" stroke="#c9bfb2" stroke-width="1.4"/>' +
+      '<path d="M12.5 16l1.8-5h11.4l1.8 5" fill="#efe9e3" stroke="#c9bfb2" stroke-width="1.4" stroke-linejoin="round"/>' +
+      '<path d="M18 20h4v3h-4z" fill="#d8d1c6"/>' +
+      '<path d="M18 26h4" stroke="#e0d8cc" stroke-width="1.4"/></svg>',
+    doc: '<svg viewBox="0 0 40 40" preserveAspectRatio="xMidYMid slice" aria-hidden="true">' +
+      '<rect width="40" height="40" fill="#f2ece4"/>' +
+      '<path d="M13 8.5h9.5L28 14v17.5H13z" fill="#fffbf6" stroke="#c9bfb2" stroke-width="1.4" stroke-linejoin="round"/>' +
+      '<path d="M22.5 8.5V14H28" fill="none" stroke="#c9bfb2" stroke-width="1.4"/>' +
+      '<path d="M17 19h9M17 23h9M17 27h6" stroke="#d8d1c6" stroke-width="1.6" stroke-linecap="round"/></svg>'
+  };
+  function art(kind) { return ART[kind] || ART.doc; }
+
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  /* ---------------- 数据 ---------------- */
+  var seq = 0;
+  function mk(name, kind, size, status) {
+    return { id: 'f' + (++seq), name: name, kind: kind, size: size, status: status, justDone: false };
+  }
+
+  var PRESETS = {
+    uploadingEmpty: function () { return []; },
+    uploading: function () {
+      return [
+        mk('clouder-ai-superagent-0.1.0.alpha.4.tgz', 'archive', '22.8 KB', 'uploading'),
+        mk('composer-shot.png', 'image', '1.2 MB', 'done'),
+        mk('wake-coordinator.md', 'doc', '2.1 KB', 'uploading')
+      ];
+    },
+    done: function () {
+      return [
+        mk('composer-shot.png', 'image', '1.2 MB', 'done'),
+        mk('clouder-ai-superagent-0.1.0.alpha.4.tgz', 'archive', '22.8 KB', 'done'),
+        mk('wake-coordinator.md', 'doc', '2.1 KB', 'done')
+      ];
+    },
+    failed: function () {
+      return [
+        mk('composer-shot.png', 'image', '1.2 MB', 'done'),
+        mk('clouder-ai-superagent-0.1.0.alpha.4.tgz', 'archive', '22.8 KB', 'done'),
+        mk('candidate-preview.png', 'image', '480 KB', 'failed')
+      ];
+    },
+    mixed: function () {
+      return [
+        mk('clouder-ai-superagent-0.1.0.alpha.4.tgz', 'archive', '22.8 KB', 'uploading'),
+        mk('composer-shot.png', 'image', '1.2 MB', 'done'),
+        mk('wake-coordinator.md', 'doc', '2.1 KB', 'done'),
+        mk('candidate-preview.png', 'image', '480 KB', 'failed')
+      ];
+    }
+  };
+
+  var ADD_POOL = [
+    { name: 'quick-check.png', kind: 'image', size: '640 KB' },
+    { name: 'notes.md', kind: 'doc', size: '3.4 KB' },
+    { name: 'bundle.zip', kind: 'archive', size: '1.8 MB' },
+    { name: 'frame-02.png', kind: 'image', size: '910 KB' }
+  ];
+  var addIdx = 0;
+
+  var HINTS = {
+    A: 'A · 框内附件卡（推荐）—— 附件状态留在输入框内顶部，跟着具体文件走：上传中、失败、就绪就地显示；失败就地重试，上传完成前发送保持禁用。',
+    B: 'B · 上方附件托盘 —— 发送前先核对文件：托盘与输入框连成一张卡（同宽、无间隙、共享外框），输入框本身不增高。若断开连接，就会退化成“全局通知”，也就是现在这个 bug。',
+    C: 'C · 框内紧凑行 —— 只占一行 34px：缩略图叠放加一句汇总，逐项明细点开处理；附件多时最省空间，代价是失败要读这一行字。'
+  };
+
+  var LONG_PLACEHOLDER = '想调整方向？可直接给缅因猫 sol / 小鲸鱼 flash 发消息，引导回复。';
+  var SHORT_PLACEHOLDER = '输入消息…';
+
+  var state = { variant: 'A', preset: 'uploading', width: 720, files: [], popover: false, toast: null, focus: null };
+  var timers = new Map();
+  var flashTimers = new Map();
+  var toastTimer = 0;
+
+  /* ---------------- DOM ---------------- */
+  var $ = function (id) { return document.getElementById(id); };
+  var els = {
+    device: $('device'), stageInner: $('stageInner'),
+    composer: $('composer'), trayA: $('trayA'), trayB: $('trayB'), trayC: $('trayC'),
+    popover: $('popover'), toast: $('toast'), send: $('sendBtn'), add: $('addBtn'),
+    draft: $('draft'), hint: $('variantHint'), sr: $('sr'),
+    variantSeg: $('variantSeg'), presetSeg: $('presetSeg'), viewportSeg: $('viewportSeg')
+  };
+
+  /* ---------------- 片段 ---------------- */
+  function count(status) {
+    return state.files.filter(function (f) { return f.status === status; }).length;
+  }
+
+  function noteHtml() {
+    var up = count('uploading');
+    var bad = count('failed');
+    if (!state.files.length || (!up && !bad)) return '';
+    if (up && bad) {
+      return '<span class="info">' + up + ' 个上传中</span><span class="sep">·</span>' +
+        '<span class="warn">' + bad + ' 个上传失败</span><span class="sep">·</span>重试后才能发送';
+    }
+    if (bad) {
+      return '<span class="warn">' + bad + ' 个附件上传失败</span><span class="sep">·</span>重试后才能发送';
+    }
+    return '<span class="info">正在上传 ' + up + ' 个附件</span><span class="sep">·</span>完成后即可发送';
+  }
+
+  function chipHtml(f) {
+    var meta;
+    if (f.status === 'uploading') {
+      meta = '<span class="spin" aria-hidden="true"></span><span class="s-info">上传中</span>';
+    } else if (f.status === 'failed') {
+      meta = '<span class="s-bad">上传失败</span><span class="sep">·</span>' +
+        '<button type="button" class="link" data-action="retry" data-id="' + f.id + '">重试</button>';
+    } else if (f.justDone) {
+      meta = '<span class="s-ok">' + svg('check', 11) + '<span>已上传</span></span>';
+    } else {
+      meta = '<span>' + esc(f.size) + '</span>';
+    }
+    return '<li class="chip" data-id="' + f.id + '" tabindex="-1">' +
+      '<span class="thumb">' + art(f.kind) +
+        (f.status === 'failed' ? '<span class="badge">' + svg('alert', 10) + '</span>' : '') +
+      '</span>' +
+      '<span class="chip-text">' +
+        '<span class="fname" title="' + esc(f.name) + '">' + esc(f.name) + '</span>' +
+        '<span class="fmeta">' + meta + '</span>' +
+      '</span>' +
+      '<button type="button" class="xbtn" data-action="remove" data-id="' + f.id + '" aria-label="移除 ' + esc(f.name) + '">' +
+        svg('x', 13) + '</button>' +
+    '</li>';
+  }
+
+  function statusText(f) {
+    if (f.status === 'uploading') return '上传中';
+    if (f.status === 'failed') return '上传失败';
+    if (f.justDone) return '已上传';
+    return f.size;
+  }
+  function statusClass(f) {
+    if (f.status === 'uploading') return 'is-up';
+    if (f.status === 'failed') return 'is-bad';
+    if (f.justDone) return 'is-ok';
+    return '';
+  }
+
+  function fileCardHtml(f) {
+    var overlay = '';
+    if (f.status === 'uploading') {
+      overlay = '<span class="overlay"><span class="spin lg" aria-hidden="true"></span></span>';
+    } else if (f.status === 'failed') {
+      overlay = '<span class="overlay is-bad"><button type="button" class="retry-pill" data-action="retry" data-id="' + f.id + '">' +
+        svg('retry', 12) + '重试</button></span>';
+    }
+    return '<li class="thumb-lg ' + (f.status === 'failed' ? 'is-bad' : '') + '" data-id="' + f.id + '" tabindex="-1">' +
+      '<div class="box">' + art(f.kind) + overlay +
+        '<button type="button" class="xbtn" data-action="remove" data-id="' + f.id + '" aria-label="移除 ' + esc(f.name) + '">' + svg('x', 12) + '</button>' +
+      '</div>' +
+      '<span class="fname2" title="' + esc(f.name) + '">' + esc(f.name) + '</span>' +
+      '<span class="fstatus2 ' + statusClass(f) + '">' +
+        (f.status === 'uploading' ? '<span class="spin" aria-hidden="true"></span>' : '') +
+        (f.justDone ? svg('check', 11) : '') +
+        '<span>' + esc(statusText(f)) + '</span>' +
+      '</span>' +
+    '</li>';
+  }
+
+  function trayBHtml(note) {
+    return '<div class="tray-head">' +
+        '<span class="tray-title">待发送 · ' + state.files.length + ' 个附件</span>' +
+        (note ? '<span class="tray-status">' + note + '</span>' : '') +
+      '</div>' +
+      '<ul class="thumbs">' + state.files.map(fileCardHtml).join('') + '</ul>';
+  }
+
+  function trayCHtml() {
+    var up = count('uploading');
+    var bad = count('failed');
+    var stack = state.files.slice(0, 3).map(function (f) {
+      return '<span class="s">' + art(f.kind) + '</span>';
+    }).join('');
+    if (state.files.length > 3) {
+      stack += '<span class="s more">+' + (state.files.length - 3) + '</span>';
+    }
+    return '<button type="button" class="c-main" data-action="open-detail" aria-haspopup="dialog" aria-expanded="' + (state.popover ? 'true' : 'false') + '">' +
+        '<span class="stack" aria-hidden="true">' + stack + '</span>' +
+        '<span class="c-text"><b>' + state.files.length + ' 个附件</b>' +
+          (up ? ' · ' + up + ' 个上传中' : '') +
+          (!up && !bad ? ' · 已就绪' : '') +
+        '</span>' +
+      '</button>' +
+      (bad ? '<button type="button" class="link" data-action="open-detail" aria-haspopup="dialog" aria-expanded="' + (state.popover ? 'true' : 'false') + '">' +
+        '<span class="s-bad">' + bad + ' 个失败</span> · 处理</button>' : '');
+  }
+
+  function popoverHtml() {
+    var rows = state.files.map(function (f) {
+      return '<li class="pop-row" data-id="' + f.id + '">' +
+        '<span class="thumb">' + art(f.kind) + '</span>' +
+        '<span class="pop-text">' +
+          '<span class="fname" title="' + esc(f.name) + '">' + esc(f.name) + '</span>' +
+          '<span class="fmeta ' + (f.status === 'failed' ? 's-bad' : f.justDone ? 's-ok' : '') + '">' + esc(statusText(f)) + '</span>' +
+        '</span>' +
+        '<span class="pop-actions">' +
+          (f.status === 'failed'
+            ? '<button type="button" class="link" data-action="retry" data-id="' + f.id + '">重试</button>'
+            : '') +
+          '<button type="button" class="xbtn" data-action="remove" data-id="' + f.id + '" aria-label="移除 ' + esc(f.name) + '">' + svg('x', 13) + '</button>' +
+        '</span>' +
+      '</li>';
+    }).join('');
+    return '<div class="pop-head"><span>附件明细 · ' + state.files.length + '</span>' +
+        '<button type="button" class="xbtn" data-action="close-detail" aria-label="收起明细">' + svg('x', 13) + '</button></div>' +
+      '<ul class="pop-list">' + rows + '</ul>';
+  }
+
+  function toastHtml() {
+    return '<span class="toast-text">' + esc(state.toast.text) + '</span>' +
+      (state.toast.undo ? '<button type="button" class="toast-undo" data-action="undo">撤销</button>' : '');
+  }
+
+  /* ---------------- 渲染 ---------------- */
+  function render() {
+    var batchUploading = state.preset === 'uploadingEmpty';
+    var has = state.files.length > 0 || batchUploading;
+    var note = batchUploading
+      ? '<span class="spin" aria-hidden="true"></span><span class="info">附件上传中…</span>'
+      : noteHtml();
+
+    els.trayA.innerHTML = has
+      ? (note ? '<p class="note">' + note + '</p>' : '') +
+        '<ul class="chips">' + state.files.map(chipHtml).join('') + '</ul>'
+      : '';
+    els.trayB.innerHTML = batchUploading ? '<p class="note">' + note + '</p>' : has ? trayBHtml(note) : '';
+    els.trayC.innerHTML = batchUploading ? '<p class="note">' + note + '</p>' : has ? trayCHtml() : '';
+
+    els.trayA.hidden = !(has && state.variant === 'A');
+    els.trayB.hidden = !(has && state.variant === 'B');
+    els.trayC.hidden = !(has && state.variant === 'C');
+
+    els.composer.dataset.variant = state.variant;
+    els.composer.dataset.hasAttach = has ? 'true' : 'false';
+
+    var popOpen = state.popover && has;
+    els.popover.hidden = !popOpen;
+    els.popover.innerHTML = popOpen ? popoverHtml() : '';
+
+    els.toast.hidden = !state.toast;
+    els.toast.innerHTML = state.toast ? toastHtml() : '';
+
+    var failed = count('failed');
+    var blocked = batchUploading || failed > 0 || count('uploading') > 0;
+    els.send.disabled = blocked;
+    els.send.title = !blocked ? '' : (failed ? '先重试失败的附件' : '上传完成后才能发送');
+
+    var full = state.files.length >= 5;
+    els.add.setAttribute('aria-disabled', full ? 'true' : 'false');
+    els.add.title = full ? '最多 5 个附件' : '添加附件';
+
+    els.hint.textContent = HINTS[state.variant];
+    restoreFocus();
+  }
+
+  function restoreFocus() {
+    var f = state.focus;
+    if (!f) return;
+    if (document.activeElement && document.activeElement !== document.body) return;
+    if (f.action === 'open-detail') {
+      var t = state.popover
+        ? document.querySelector('[data-action="close-detail"]')
+        : document.querySelector('[data-action="open-detail"]');
+      if (t) t.focus();
+      state.focus = null;
+      return;
+    }
+    var target = (f.id ? document.querySelector('[data-action="' + f.action + '"][data-id="' + f.id + '"]') : null) ||
+      (f.id ? document.querySelector('[data-id="' + f.id + '"]') : null) ||
+      els.add;
+    if (target) target.focus();
+    state.focus = null;
+  }
+
+  function rememberFocus(action, id) {
+    state.focus = { action: action, id: id || '' };
+  }
+
+  function syncSeg() {
+    Array.prototype.forEach.call(els.variantSeg.querySelectorAll('button'), function (b) {
+      b.setAttribute('aria-pressed', b.dataset.variant === state.variant ? 'true' : 'false');
+    });
+    Array.prototype.forEach.call(els.presetSeg.querySelectorAll('button'), function (b) {
+      b.setAttribute('aria-pressed', b.dataset.preset === state.preset ? 'true' : 'false');
+    });
+    Array.prototype.forEach.call(els.viewportSeg.querySelectorAll('button'), function (b) {
+      b.setAttribute('aria-pressed', b.dataset.width === String(state.width) ? 'true' : 'false');
+    });
+  }
+
+  function sr(msg) {
+    els.sr.textContent = '';
+    setTimeout(function () { els.sr.textContent = msg; }, 30);
+  }
+
+  /* ---------------- 计时器 ---------------- */
+  function clearTimers() {
+    timers.forEach(function (t) { clearTimeout(t); });
+    timers.clear();
+    flashTimers.forEach(function (t) { clearTimeout(t); });
+    flashTimers.clear();
+  }
+
+  function scheduleUpload(f, ms) {
+    var old = timers.get(f.id);
+    if (old) clearTimeout(old);
+    timers.set(f.id, setTimeout(function () {
+      timers.delete(f.id);
+      completeUpload(f);
+    }, ms));
+  }
+
+  function completeUpload(f) {
+    if (state.files.indexOf(f) < 0) return;
+    f.status = 'done';
+    f.justDone = true;
+    render();
+    sr(f.name + ' 上传完成');
+    var old = flashTimers.get(f.id);
+    if (old) clearTimeout(old);
+    flashTimers.set(f.id, setTimeout(function () {
+      f.justDone = false;
+      render();
+    }, 1800));
+  }
+
+  /* ---------------- 动作 ---------------- */
+  function findFile(id) {
+    for (var i = 0; i < state.files.length; i++) {
+      if (state.files[i].id === id) return state.files[i];
+    }
+    return null;
+  }
+
+  function addFile() {
+    if (state.files.length >= 5) {
+      showToast({ text: '最多 5 个附件', undo: null });
+      return;
+    }
+    var p = ADD_POOL[addIdx++ % ADD_POOL.length];
+    var f = mk(p.name, p.kind, p.size, 'uploading');
+    state.files.push(f);
+    render();
+    sr('正在上传 ' + f.name);
+    scheduleUpload(f, 2200);
+  }
+
+  function retryFile(id) {
+    var f = findFile(id);
+    if (!f || f.status !== 'failed') return;
+    f.status = 'uploading';
+    f.justDone = false;
+    rememberFocus('retry', id);
+    render();
+    sr('正在重试上传 ' + f.name);
+    scheduleUpload(f, 1600);
+  }
+
+  function removeFile(id) {
+    var idx = -1;
+    for (var i = 0; i < state.files.length; i++) {
+      if (state.files[i].id === id) { idx = i; break; }
+    }
+    if (idx < 0) return;
+    var f = state.files.splice(idx, 1)[0];
+    var t = timers.get(id);
+    if (t) { clearTimeout(t); timers.delete(id); }
+
+    rememberFocus('remove', id);
+    if (!state.files.length) state.popover = false;
+    render();
+
+    showToast({
+      text: '已移除「' + f.name + '」',
+      undo: function () {
+        var at = Math.min(idx, state.files.length);
+        state.files.splice(at, 0, f);
+        if (f.status === 'uploading') scheduleUpload(f, 1400);
+        hideToast(false);
+        render();
+        sr('已恢复 ' + f.name);
+      }
+    });
+  }
+
+  function showToast(opt) {
+    clearTimeout(toastTimer);
+    state.toast = { text: opt.text, undo: opt.undo || null };
+    render();
+    toastTimer = setTimeout(function () {
+      state.toast = null;
+      render();
+    }, 6000);
+  }
+
+  function hideToast(doRender) {
+    clearTimeout(toastTimer);
+    state.toast = null;
+    if (doRender) render();
+  }
+
+  function setPreset(name) {
+    if (!PRESETS[name]) return;
+    clearTimers();
+    hideToast(false);
+    state.preset = name;
+    state.files = PRESETS[name]();
+    state.popover = false;
+    state.focus = null;
+    syncSeg();
+    render();
+  }
+
+  function setVariant(v) {
+    state.variant = v;
+    state.popover = false;
+    state.focus = null;
+    syncSeg();
+    render();
+  }
+
+  function setWidth(w) {
+    state.width = w;
+    els.device.dataset.width = String(w);
+    els.stageInner.dataset.width = String(w);
+    els.draft.placeholder = w === 390 ? SHORT_PLACEHOLDER : LONG_PLACEHOLDER;
+    syncSeg();
+    render();
+  }
+
+  /* ---------------- 事件（全部 addEventListener，无内联 onclick） ---------------- */
+  els.variantSeg.addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-variant]');
+    if (b) setVariant(b.dataset.variant);
+  });
+
+  els.presetSeg.addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-preset]');
+    if (b) setPreset(b.dataset.preset);
+  });
+
+  els.viewportSeg.addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-width]');
+    if (b) setWidth(Number(b.dataset.width));
+  });
+
+  els.composer.addEventListener('click', function (e) {
+    var btn = e.target.closest('[data-action]');
+    if (!btn) return;
+    var action = btn.dataset.action;
+    var id = btn.dataset.id;
+
+    if (action === 'add') {
+      addFile();
+    } else if (action === 'retry') {
+      retryFile(id);
+    } else if (action === 'remove') {
+      removeFile(id);
+    } else if (action === 'undo') {
+      if (state.toast && state.toast.undo) state.toast.undo();
+    } else if (action === 'open-detail') {
+      state.popover = !state.popover;
+      state.focus = { action: 'open-detail', id: '' };
+      render();
+    } else if (action === 'close-detail') {
+      state.popover = false;
+      state.focus = { action: 'open-detail', id: '' };
+      render();
+    }
+  });
+
+  document.addEventListener('pointerdown', function (e) {
+    if (!state.popover) return;
+    if (e.target.closest('.popover') || e.target.closest('[data-action="open-detail"]')) return;
+    state.popover = false;
+    render();
+  }, true);
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && state.popover) {
+      state.popover = false;
+      state.focus = { action: 'open-detail', id: '' };
+      render();
+    }
+  });
+
+  els.draft.addEventListener('input', function () {
+    els.draft.style.height = 'auto';
+    els.draft.style.height = Math.min(els.draft.scrollHeight, 120) + 'px';
+  });
+
+  $('stopBtn').addEventListener('click', function () {
+    this.disabled = true;
+    document.querySelector('.runbar').textContent = '当前运行已停止';
+    document.querySelector('.runbar').setAttribute('aria-label', '当前运行已停止');
+    sr('当前运行已停止，附件状态保留');
+  });
+
+  /* ---------------- 启动 ---------------- */
+  // 可用 #v=A|B|C&s=uploading|done|failed|mixed&w=720|390 直接落到某一格，便于截图比对
+  // （file:// 下部分 Chromium 会丢掉 ?query，所以优先读 hash）
+  var params = new URLSearchParams((window.location.hash || '').replace(/^#/, '') || window.location.search);
+  var qv = params.get('v');
+  var qs = params.get('s');
+  if (qv === 'A' || qv === 'B' || qv === 'C') state.variant = qv;
+  if (qs && PRESETS[qs]) state.preset = qs;
+  if (params.get('w') === '390') state.width = 390;
+
+  state.files = PRESETS[state.preset]();
+  els.device.dataset.width = String(state.width);
+  els.stageInner.dataset.width = String(state.width);
+  els.draft.placeholder = state.width === 390 ? SHORT_PLACEHOLDER : LONG_PLACEHOLDER;
+  syncSeg();
+  render();
+})();
+</script>
+</body>
+</html>
