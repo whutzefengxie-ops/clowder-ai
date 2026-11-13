@@ -1,0 +1,35 @@
+{
+  "scope": "Standalone UI design prototype with simulated receipts; not production or provider acceptance.",
+  "results": [
+    {
+      "journey": "normal",
+      "nextPaintMs": 84,
+      "visible": true,
+      "oneBubbleAfterReceipt": true
+    },
+    {
+      "journey": "known_failure",
+      "textAndAttachmentRetained": true,
+      "sameAttemptOnRetry": true,
+      "keyboardFocusRestored": true
+    },
+    {
+      "journey": "unknown_recovery",
+      "survivesThreadSwitchAndReload": true,
+      "checksWithoutSendingAgain": true,
+      "sameAttemptAfterReconciliation": true
+    },
+    {
+      "journey": "narrow_and_accessibility",
+      "noHorizontalOverflow": true,
+      "recoveryTouchTarget44px": true,
+      "reducedMotionPreservesVisibleStatus": true
+    },
+    {
+      "journey": "shared_scene_recovery",
+      "interactiveResultSurvivesReloadAfterOpeningStateLink": true
+    }
+  ],
+  "consoleErrors": [],
+  "externalRequests": []
+}
