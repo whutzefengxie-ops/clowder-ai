@@ -1,0 +1,614 @@
+{
+  "sourceHead": "a9bf14fca9265e337bc596478ba1b7072cd11322",
+  "subject": "zts212653/clowder-ai#1975",
+  "approvedScope": "https://github.com/zts212653/clowder-ai/pull/1975#issuecomment-6924888881",
+  "fixture": "packages/web/test/browser/fixtures/conversation-feedback.tsx",
+  "journey": "packages/web/test/browser/conversation-feedback.test.mjs",
+  "deviceScaleFactor": 2,
+  "environment": "Real ChatMessage and feedback components in an isolated synthetic provider fixture; all non-fixture network requests blocked. Not an installed runtime or real-account publishing acceptance.",
+  "simulatedSuccessUrl": "https://github.com/fixture/repo/issues/7",
+  "realGitHubIssuesCreated": 0,
+  "browserExitCode": 0,
+  "journeys": [
+    {
+      "entry": "agent",
+      "scenario": "conflict",
+      "simulatedDraftCreates": 0,
+      "simulatedPublishes": 0,
+      "widths": [
+        {
+          "stage": "review",
+          "width": 672,
+          "primaryContrast": 6.4533702840008145,
+          "primaryHoverContrast": 7.501305741909511
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "entry": "agent",
+      "scenario": "empty",
+      "simulatedDraftCreates": 0,
+      "simulatedPublishes": 0,
+      "widths": [
+        {
+          "stage": "review",
+          "width": 672
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "entry": "agent",
+      "scenario": "offline",
+      "simulatedDraftCreates": 0,
+      "simulatedPublishes": 0,
+      "widths": [
+        {
+          "stage": "review",
+          "width": 332
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "entry": "agent",
+      "scenario": "ready-mobile",
+      "simulatedDraftCreates": 1,
+      "simulatedPublishes": 1,
+      "widths": [
+        {
+          "stage": "review",
+          "width": 332,
+          "primaryContrast": 9.714038907236372,
+          "primaryHoverContrast": 9.714038907236372
+        },
+        {
+          "stage": "editing",
+          "width": 332,
+          "primaryContrast": 9.714038907236372
+        },
+        {
+          "stage": "edited-confirmation",
+          "width": 332,
+          "primaryContrast": 9.714038907236372
+        },
+        {
+          "stage": "collapsed",
+          "width": 332
+        },
+        {
+          "stage": "published-simulated",
+          "width": 332
+        },
+        {
+          "stage": "published-report",
+          "width": 332
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "entry": "agent",
+      "scenario": "ready",
+      "simulatedDraftCreates": 1,
+      "simulatedPublishes": 1,
+      "widths": [
+        {
+          "stage": "review",
+          "width": 672,
+          "primaryContrast": 6.4533702840008145,
+          "primaryHoverContrast": 7.501305741909511
+        },
+        {
+          "stage": "editing",
+          "width": 672,
+          "primaryContrast": 6.4533702840008145
+        },
+        {
+          "stage": "edited-confirmation",
+          "width": 672,
+          "primaryContrast": 6.4533702840008145
+        },
+        {
+          "stage": "collapsed",
+          "width": 672
+        },
+        {
+          "stage": "published-simulated",
+          "width": 672
+        },
+        {
+          "stage": "published-report",
+          "width": 672
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "entry": "agent",
+      "scenario": "uncertain-mobile",
+      "simulatedDraftCreates": 1,
+      "simulatedPublishes": 1,
+      "widths": [
+        {
+          "stage": "review",
+          "width": 332,
+          "primaryContrast": 9.714038907236372,
+          "primaryHoverContrast": 9.714038907236372
+        },
+        {
+          "stage": "editing",
+          "width": 332,
+          "primaryContrast": 9.714038907236372
+        },
+        {
+          "stage": "edited-confirmation",
+          "width": 332,
+          "primaryContrast": 9.714038907236372
+        },
+        {
+          "stage": "collapsed",
+          "width": 332
+        },
+        {
+          "stage": "uncertain",
+          "width": 332,
+          "primaryContrast": 9.714038907236372
+        },
+        {
+          "stage": "published-simulated",
+          "width": 332
+        },
+        {
+          "stage": "published-report",
+          "width": 332
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "entry": "agent",
+      "scenario": "uncertain",
+      "simulatedDraftCreates": 1,
+      "simulatedPublishes": 1,
+      "widths": [
+        {
+          "stage": "review",
+          "width": 672,
+          "primaryContrast": 6.4533702840008145,
+          "primaryHoverContrast": 7.501305741909511
+        },
+        {
+          "stage": "editing",
+          "width": 672,
+          "primaryContrast": 6.4533702840008145
+        },
+        {
+          "stage": "edited-confirmation",
+          "width": 672,
+          "primaryContrast": 6.4533702840008145
+        },
+        {
+          "stage": "collapsed",
+          "width": 672
+        },
+        {
+          "stage": "uncertain",
+          "width": 672,
+          "primaryContrast": 6.512935428768494
+        },
+        {
+          "stage": "published-simulated",
+          "width": 672
+        },
+        {
+          "stage": "published-report",
+          "width": 672
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "entry": "connector",
+      "scenario": "cancel",
+      "simulatedDraftCreates": 0,
+      "simulatedPublishes": 0,
+      "widths": [
+        {
+          "stage": "review",
+          "width": 672,
+          "primaryContrast": 6.4533702840008145,
+          "primaryHoverContrast": 7.501305741909511
+        },
+        {
+          "stage": "cancelled",
+          "width": 672
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "entry": "connector",
+      "scenario": "ready",
+      "simulatedDraftCreates": 0,
+      "simulatedPublishes": 1,
+      "widths": [
+        {
+          "stage": "review",
+          "width": 672,
+          "primaryContrast": 6.4533702840008145,
+          "primaryHoverContrast": 7.501305741909511
+        },
+        {
+          "stage": "editing",
+          "width": 672,
+          "primaryContrast": 6.519450861042046
+        },
+        {
+          "stage": "edited-confirmation",
+          "width": 672,
+          "primaryContrast": 6.4533702840008145
+        },
+        {
+          "stage": "published-simulated",
+          "width": 672
+        },
+        {
+          "stage": "published-report",
+          "width": 672
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "entry": "local",
+      "scenario": "conflict",
+      "simulatedDraftCreates": 0,
+      "simulatedPublishes": 0,
+      "widths": [
+        {
+          "stage": "review",
+          "width": 672,
+          "primaryContrast": 6.4533702840008145,
+          "primaryHoverContrast": 7.501305741909511
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "entry": "local",
+      "scenario": "empty",
+      "simulatedDraftCreates": 0,
+      "simulatedPublishes": 0,
+      "widths": [
+        {
+          "stage": "review",
+          "width": 672
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "entry": "local",
+      "scenario": "offline",
+      "simulatedDraftCreates": 0,
+      "simulatedPublishes": 0,
+      "widths": [
+        {
+          "stage": "review",
+          "width": 332
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "entry": "local",
+      "scenario": "ready-mobile",
+      "simulatedDraftCreates": 1,
+      "simulatedPublishes": 1,
+      "widths": [
+        {
+          "stage": "review",
+          "width": 332,
+          "primaryContrast": 9.714038907236372,
+          "primaryHoverContrast": 9.714038907236372
+        },
+        {
+          "stage": "local-evidence",
+          "width": 332,
+          "primaryContrast": 9.714038907236372
+        },
+        {
+          "stage": "editing",
+          "width": 332,
+          "primaryContrast": 9.714038907236372
+        },
+        {
+          "stage": "edited-confirmation",
+          "width": 332,
+          "primaryContrast": 9.714038907236372
+        },
+        {
+          "stage": "collapsed",
+          "width": 332
+        },
+        {
+          "stage": "published-simulated",
+          "width": 332
+        },
+        {
+          "stage": "published-report",
+          "width": 332
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "entry": "local",
+      "scenario": "ready",
+      "simulatedDraftCreates": 1,
+      "simulatedPublishes": 1,
+      "widths": [
+        {
+          "stage": "review",
+          "width": 672,
+          "primaryContrast": 6.4533702840008145,
+          "primaryHoverContrast": 7.501305741909511
+        },
+        {
+          "stage": "local-evidence",
+          "width": 672,
+          "primaryContrast": 6.4533702840008145
+        },
+        {
+          "stage": "editing",
+          "width": 672,
+          "primaryContrast": 6.4533702840008145
+        },
+        {
+          "stage": "edited-confirmation",
+          "width": 672,
+          "primaryContrast": 6.4533702840008145
+        },
+        {
+          "stage": "collapsed",
+          "width": 672
+        },
+        {
+          "stage": "published-simulated",
+          "width": 672
+        },
+        {
+          "stage": "published-report",
+          "width": 672
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "entry": "local",
+      "scenario": "uncertain-mobile",
+      "simulatedDraftCreates": 1,
+      "simulatedPublishes": 1,
+      "widths": [
+        {
+          "stage": "review",
+          "width": 332,
+          "primaryContrast": 9.714038907236372,
+          "primaryHoverContrast": 9.714038907236372
+        },
+        {
+          "stage": "local-evidence",
+          "width": 332,
+          "primaryContrast": 9.714038907236372
+        },
+        {
+          "stage": "editing",
+          "width": 332,
+          "primaryContrast": 9.714038907236372
+        },
+        {
+          "stage": "edited-confirmation",
+          "width": 332,
+          "primaryContrast": 9.714038907236372
+        },
+        {
+          "stage": "collapsed",
+          "width": 332
+        },
+        {
+          "stage": "uncertain",
+          "width": 332,
+          "primaryContrast": 9.714038907236372
+        },
+        {
+          "stage": "published-simulated",
+          "width": 332
+        },
+        {
+          "stage": "published-report",
+          "width": 332
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "entry": "local",
+      "scenario": "uncertain",
+      "simulatedDraftCreates": 1,
+      "simulatedPublishes": 1,
+      "widths": [
+        {
+          "stage": "review",
+          "width": 672,
+          "primaryContrast": 6.4533702840008145,
+          "primaryHoverContrast": 7.501305741909511
+        },
+        {
+          "stage": "local-evidence",
+          "width": 672,
+          "primaryContrast": 6.456758253418621
+        },
+        {
+          "stage": "editing",
+          "width": 672,
+          "primaryContrast": 6.4533702840008145
+        },
+        {
+          "stage": "edited-confirmation",
+          "width": 672,
+          "primaryContrast": 6.4533702840008145
+        },
+        {
+          "stage": "collapsed",
+          "width": 672
+        },
+        {
+          "stage": "uncertain",
+          "width": 672,
+          "primaryContrast": 6.512935428768494
+        },
+        {
+          "stage": "published-simulated",
+          "width": 672
+        },
+        {
+          "stage": "published-report",
+          "width": 672
+        }
+      ],
+      "pageErrors": []
+    }
+  ],
+  "files": [
+    {
+      "name": "local-ready-entry.png",
+      "title": "本地失败记录入口",
+      "explanation": "已记录到本地；点击后在同一宽度内阅读报告。",
+      "width": 2560,
+      "height": 1800,
+      "sha256": "9f20b652f17522b4a5a357f1d07b7d59bce2344490a11106bf228c793e1485cd"
+    },
+    {
+      "name": "local-ready-review.png",
+      "title": "本地报告审阅",
+      "explanation": "纸面标题与正文、目标仓库、复制报告；核对并继续只创建或读取插件草稿。原失败记录仍可展开。",
+      "width": 2560,
+      "height": 1800,
+      "sha256": "7e321be1500caf6386411de1e9633979f69272531b8ba33dccf059d654dddbd2"
+    },
+    {
+      "name": "local-ready-edited-confirmation.png",
+      "title": "同卡编辑并明确确认",
+      "explanation": "实际修改合成标题与正文。只有最终点击发布到 GitHub才会外发。",
+      "width": 2560,
+      "height": 1800,
+      "sha256": "0f81115e48221695a98b60d14c20228da315e5504acd81a98d4b68219691d50a"
+    },
+    {
+      "name": "local-ready-published-simulated.png",
+      "title": "成功单行回执：模拟回链",
+      "explanation": "链接为隔离 provider 返回的模拟 fixture/repo#7，未在 GitHub 创建测试 Issue。",
+      "width": 2560,
+      "height": 1800,
+      "sha256": "e3fdcd9e74852cac8d2dd83506c8a4ab2c6919a766373442536f7f000f9c3159"
+    },
+    {
+      "name": "local-ready-published-report.png",
+      "title": "回看返回的报告",
+      "explanation": "成功后展开报告，显示插件返回的已编辑标题和正文。",
+      "width": 2560,
+      "height": 1800,
+      "sha256": "9eea65adcd4139116955ac4bee74098b4ec5d355168a9fc21390a6d76058cddc"
+    },
+    {
+      "name": "agent-ready-review.png",
+      "title": "Agent 提议入口",
+      "explanation": "猫整理的合成公开报告使用同一套审阅、继续和发布流程。",
+      "width": 2560,
+      "height": 1800,
+      "sha256": "e414bb89318073ebac4c7aafc95ee2024b252ccd55e6e2afb72c6149aedd102f"
+    },
+    {
+      "name": "agent-ready-mobile-review.png",
+      "title": "375px 暗色：Markdown 原文审阅",
+      "explanation": "保留 ## 标题和 **强调** 原文，便于核对实际外发文本；本轮不增加 Markdown 渲染或附件加载。",
+      "width": 750,
+      "height": 1800,
+      "sha256": "8e76ff8a9300b998e9724ec13bb298b99ab4f10029ee9cb400061cc76c2c6aaa"
+    },
+    {
+      "name": "agent-ready-mobile-edited-confirmation.png",
+      "title": "375px 暗色：编辑",
+      "explanation": "与审阅、回执保持 332px 卡片宽度，控件原位变化，无横向溢出。",
+      "width": 750,
+      "height": 1800,
+      "sha256": "a8e76072f8751238f068d1fda65e528e2c46593d492a409ad689bf52a74dabfd"
+    },
+    {
+      "name": "agent-ready-mobile-published-simulated.png",
+      "title": "375px 暗色：成功模拟回链",
+      "explanation": "保持同一宽度，状态点和文字收口；#7 仍为隔离 provider 模拟。",
+      "width": 750,
+      "height": 1800,
+      "sha256": "ca6868037d91c54cf1d054ee199bcd24ad0c4d77adc3651f6c3bc0b36ed16692"
+    },
+    {
+      "name": "local-uncertain-uncertain.png",
+      "title": "真实 409 契约：结果未知",
+      "explanation": "采用返回的 publishing draft，锁定修改，中文提示并核对同一份草稿；不伪装成功。",
+      "width": 2560,
+      "height": 1800,
+      "sha256": "d54260a326bd5704fdb37f4e2d09f1ffe74c984f655c62f7595b8eeda803aaf8"
+    },
+    {
+      "name": "agent-uncertain-mobile-uncertain.png",
+      "title": "375px 暗色：同稿核对结果",
+      "explanation": "未知结果也保持同宽，主按钮使用既有深浅主题角色；编辑和取消暂时禁用，不创建替代草稿。",
+      "width": 750,
+      "height": 1800,
+      "sha256": "032e9ee1233fec8546929fc835418798df574eb78af62b17d835b27261c416e7"
+    },
+    {
+      "name": "agent-conflict.png",
+      "title": "同源内容冲突",
+      "explanation": "真实 create 409 无 draft，原位中文恢复提示，不读取不存在的草稿或创建替代单。",
+      "width": 2560,
+      "height": 1800,
+      "sha256": "247abf7a680436f35146a07cb90b47026d89f8dfaf2ee9de8f2084426d82d075"
+    },
+    {
+      "name": "agent-offline.png",
+      "title": "插件不可用",
+      "explanation": "375px 暗色，保留编辑与复制报告；没有发布动作和未配置的手工仓库链接。",
+      "width": 750,
+      "height": 1800,
+      "sha256": "d6f9aa1ea54489cb4588c4ca17b59d2c369517a716ed280bdd1bc70fa6c39dc6"
+    },
+    {
+      "name": "connector-ready-editing.png",
+      "title": "独立插件 connector 入口",
+      "explanation": "可信 community-publisher 卡片从原 meta.draftId 读取草稿，保持编辑、取消和最终确认契约。",
+      "width": 2560,
+      "height": 1800,
+      "sha256": "a2c3bc8f3431ed765b689f234b2983b1464f409c547bbc6555e6bdc6d9844dd3"
+    },
+    {
+      "name": "connector-ready-published-simulated.png",
+      "title": "独立 connector 成功：模拟回链",
+      "explanation": "与会话内联入口共享成功呈现；模拟 fixture/repo#7，未创建真实测试 Issue。",
+      "width": 2560,
+      "height": 1800,
+      "sha256": "b9b1c828a1e60118e7efe5cb62d3913521d6cb6ef985e67859c5485d49681656"
+    },
+    {
+      "name": "connector-cancel-cancelled.png",
+      "title": "独立 connector：取消终态",
+      "explanation": "真实 cancel 响应后显示不可重新发布；刷新不冒充可重新打开，也不发起 publish。",
+      "width": 2560,
+      "height": 1800,
+      "sha256": "0e6a2718e0cf1a3287c9cec605fa61f2966a28c2ba9ad1fcf61623100593fa00"
+    }
+  ]
+}
