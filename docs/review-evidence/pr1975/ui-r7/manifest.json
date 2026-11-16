@@ -1,0 +1,1155 @@
+{
+  "sourceHead": "0e27f1cb32bd3eb2ef84a0943a03a0cedf7535f2",
+  "subject": "zts212653/clowder-ai#1975",
+  "approvedScope": "https://github.com/zts212653/clowder-ai/pull/1975#issuecomment-6924888881",
+  "fixture": "packages/web/test/browser/fixtures/conversation-feedback.tsx",
+  "journey": "packages/web/test/browser/conversation-feedback.test.mjs",
+  "deviceScaleFactor": 2,
+  "environment": "Real ChatMessage and feedback components in an isolated synthetic provider fixture; all non-fixture network requests blocked. Not an installed runtime or real-account publishing acceptance.",
+  "simulatedSuccessUrl": "https://github.com/fixture/repo/issues/7",
+  "realGitHubIssuesCreated": 0,
+  "browserExitCode": 0,
+  "clipboard": "Clipboard API stub validates current text without changing the operating-system clipboard",
+  "journeys": [
+    {
+      "entry": "agent",
+      "scenario": "conflict",
+      "simulatedDraftCreates": 0,
+      "simulatedPublishes": 0,
+      "widths": [
+        {
+          "stage": "review",
+          "width": 672,
+          "primaryContrast": 6.4533702840008145,
+          "primaryHoverContrast": 7.501305741909511
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "entry": "agent",
+      "scenario": "denied",
+      "simulatedDraftCreates": 1,
+      "simulatedPublishes": 0,
+      "widths": [
+        {
+          "stage": "review",
+          "width": 672,
+          "primaryContrast": 6.4533702840008145,
+          "primaryHoverContrast": 7.501305741909511
+        },
+        {
+          "stage": "editing",
+          "width": 672,
+          "primaryContrast": 6.4533702840008145,
+          "editorContrasts": [
+            {
+              "name": "报告标题",
+              "contrast": 15.716890547316728,
+              "color": "oklch(0.2 0.005 30)",
+              "background": "oklch(0.95 0.012 80)"
+            },
+            {
+              "name": "公开报告",
+              "contrast": 15.716890547316728,
+              "color": "oklch(0.2 0.005 30)",
+              "background": "oklch(0.95 0.012 80)"
+            }
+          ]
+        },
+        {
+          "stage": "edited-confirmation",
+          "width": 672,
+          "primaryContrast": 6.4533702840008145
+        },
+        {
+          "stage": "collapsed",
+          "width": 672
+        },
+        {
+          "stage": "rejected",
+          "width": 672,
+          "primaryContrast": 6.512935428768494
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "entry": "agent",
+      "scenario": "empty",
+      "simulatedDraftCreates": 0,
+      "simulatedPublishes": 0,
+      "widths": [
+        {
+          "stage": "review",
+          "width": 672
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "entry": "agent",
+      "scenario": "gateway-mobile",
+      "simulatedDraftCreates": 1,
+      "simulatedPublishes": 1,
+      "widths": [
+        {
+          "stage": "review",
+          "width": 332,
+          "primaryContrast": 9.714038907236372,
+          "primaryHoverContrast": 9.714038907236372
+        },
+        {
+          "stage": "editing",
+          "width": 332,
+          "primaryContrast": 9.714038907236372,
+          "editorContrasts": [
+            {
+              "name": "报告标题",
+              "contrast": 12.63457021085864,
+              "color": "oklch(0.95 0.005 30)",
+              "background": "oklch(0.28 0.0018 30)"
+            },
+            {
+              "name": "公开报告",
+              "contrast": 12.63457021085864,
+              "color": "oklch(0.95 0.005 30)",
+              "background": "oklch(0.28 0.0018 30)"
+            }
+          ]
+        },
+        {
+          "stage": "edited-confirmation",
+          "width": 332,
+          "primaryContrast": 9.714038907236372
+        },
+        {
+          "stage": "collapsed",
+          "width": 332
+        },
+        {
+          "stage": "uncertain",
+          "width": 332,
+          "primaryContrast": 9.714038907236372
+        },
+        {
+          "stage": "published-simulated",
+          "width": 332
+        },
+        {
+          "stage": "published-report",
+          "width": 332
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "entry": "agent",
+      "scenario": "gateway",
+      "simulatedDraftCreates": 1,
+      "simulatedPublishes": 1,
+      "widths": [
+        {
+          "stage": "review",
+          "width": 672,
+          "primaryContrast": 6.4533702840008145,
+          "primaryHoverContrast": 7.501305741909511
+        },
+        {
+          "stage": "editing",
+          "width": 672,
+          "primaryContrast": 6.4533702840008145,
+          "editorContrasts": [
+            {
+              "name": "报告标题",
+              "contrast": 15.716890547316728,
+              "color": "oklch(0.2 0.005 30)",
+              "background": "oklch(0.95 0.012 80)"
+            },
+            {
+              "name": "公开报告",
+              "contrast": 15.716890547316728,
+              "color": "oklch(0.2 0.005 30)",
+              "background": "oklch(0.95 0.012 80)"
+            }
+          ]
+        },
+        {
+          "stage": "edited-confirmation",
+          "width": 672,
+          "primaryContrast": 6.4533702840008145
+        },
+        {
+          "stage": "collapsed",
+          "width": 672
+        },
+        {
+          "stage": "uncertain",
+          "width": 672,
+          "primaryContrast": 6.640799009619375
+        },
+        {
+          "stage": "published-simulated",
+          "width": 672
+        },
+        {
+          "stage": "published-report",
+          "width": 672
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "entry": "agent",
+      "scenario": "invalid-mobile",
+      "simulatedDraftCreates": 1,
+      "simulatedPublishes": 1,
+      "widths": [
+        {
+          "stage": "review",
+          "width": 332,
+          "primaryContrast": 9.714038907236372,
+          "primaryHoverContrast": 9.714038907236372
+        },
+        {
+          "stage": "editing",
+          "width": 332,
+          "primaryContrast": 9.714038907236372,
+          "editorContrasts": [
+            {
+              "name": "报告标题",
+              "contrast": 12.63457021085864,
+              "color": "oklch(0.95 0.005 30)",
+              "background": "oklch(0.28 0.0018 30)"
+            },
+            {
+              "name": "公开报告",
+              "contrast": 12.63457021085864,
+              "color": "oklch(0.95 0.005 30)",
+              "background": "oklch(0.28 0.0018 30)"
+            }
+          ]
+        },
+        {
+          "stage": "edited-confirmation",
+          "width": 332,
+          "primaryContrast": 9.714038907236372
+        },
+        {
+          "stage": "collapsed",
+          "width": 332
+        },
+        {
+          "stage": "uncertain",
+          "width": 332,
+          "primaryContrast": 9.714038907236372
+        },
+        {
+          "stage": "published-simulated",
+          "width": 332
+        },
+        {
+          "stage": "published-report",
+          "width": 332
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "entry": "agent",
+      "scenario": "invalid",
+      "simulatedDraftCreates": 1,
+      "simulatedPublishes": 1,
+      "widths": [
+        {
+          "stage": "review",
+          "width": 672,
+          "primaryContrast": 6.4533702840008145,
+          "primaryHoverContrast": 7.501305741909511
+        },
+        {
+          "stage": "editing",
+          "width": 672,
+          "primaryContrast": 6.4533702840008145,
+          "editorContrasts": [
+            {
+              "name": "报告标题",
+              "contrast": 15.716890547316728,
+              "color": "oklch(0.2 0.005 30)",
+              "background": "oklch(0.95 0.012 80)"
+            },
+            {
+              "name": "公开报告",
+              "contrast": 15.716890547316728,
+              "color": "oklch(0.2 0.005 30)",
+              "background": "oklch(0.95 0.012 80)"
+            }
+          ]
+        },
+        {
+          "stage": "edited-confirmation",
+          "width": 672,
+          "primaryContrast": 6.4533702840008145
+        },
+        {
+          "stage": "collapsed",
+          "width": 672
+        },
+        {
+          "stage": "uncertain",
+          "width": 672,
+          "primaryContrast": 6.512935428768494
+        },
+        {
+          "stage": "published-simulated",
+          "width": 672
+        },
+        {
+          "stage": "published-report",
+          "width": 672
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "entry": "agent",
+      "scenario": "missing-mobile",
+      "simulatedDraftCreates": 1,
+      "simulatedPublishes": 0,
+      "widths": [
+        {
+          "stage": "review",
+          "width": 332,
+          "primaryContrast": 9.714038907236372,
+          "primaryHoverContrast": 9.714038907236372
+        },
+        {
+          "stage": "editing",
+          "width": 332,
+          "primaryContrast": 9.714038907236372,
+          "editorContrasts": [
+            {
+              "name": "报告标题",
+              "contrast": 12.63457021085864,
+              "color": "oklch(0.95 0.005 30)",
+              "background": "oklch(0.28 0.0018 30)"
+            },
+            {
+              "name": "公开报告",
+              "contrast": 12.63457021085864,
+              "color": "oklch(0.95 0.005 30)",
+              "background": "oklch(0.28 0.0018 30)"
+            }
+          ]
+        },
+        {
+          "stage": "edited-confirmation",
+          "width": 332,
+          "primaryContrast": 9.714038907236372
+        },
+        {
+          "stage": "collapsed",
+          "width": 332
+        },
+        {
+          "stage": "missing-report",
+          "width": 332
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "entry": "agent",
+      "scenario": "missing",
+      "simulatedDraftCreates": 1,
+      "simulatedPublishes": 0,
+      "widths": [
+        {
+          "stage": "review",
+          "width": 672,
+          "primaryContrast": 6.4533702840008145,
+          "primaryHoverContrast": 7.501305741909511
+        },
+        {
+          "stage": "editing",
+          "width": 672,
+          "primaryContrast": 6.4533702840008145,
+          "editorContrasts": [
+            {
+              "name": "报告标题",
+              "contrast": 15.716890547316728,
+              "color": "oklch(0.2 0.005 30)",
+              "background": "oklch(0.95 0.012 80)"
+            },
+            {
+              "name": "公开报告",
+              "contrast": 15.716890547316728,
+              "color": "oklch(0.2 0.005 30)",
+              "background": "oklch(0.95 0.012 80)"
+            }
+          ]
+        },
+        {
+          "stage": "edited-confirmation",
+          "width": 672,
+          "primaryContrast": 6.4533702840008145
+        },
+        {
+          "stage": "collapsed",
+          "width": 672
+        },
+        {
+          "stage": "missing-report",
+          "width": 672
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "entry": "agent",
+      "scenario": "network-mobile",
+      "simulatedDraftCreates": 1,
+      "simulatedPublishes": 1,
+      "widths": [
+        {
+          "stage": "review",
+          "width": 332,
+          "primaryContrast": 9.714038907236372,
+          "primaryHoverContrast": 9.714038907236372
+        },
+        {
+          "stage": "editing",
+          "width": 332,
+          "primaryContrast": 9.714038907236372,
+          "editorContrasts": [
+            {
+              "name": "报告标题",
+              "contrast": 12.63457021085864,
+              "color": "oklch(0.95 0.005 30)",
+              "background": "oklch(0.28 0.0018 30)"
+            },
+            {
+              "name": "公开报告",
+              "contrast": 12.63457021085864,
+              "color": "oklch(0.95 0.005 30)",
+              "background": "oklch(0.28 0.0018 30)"
+            }
+          ]
+        },
+        {
+          "stage": "edited-confirmation",
+          "width": 332,
+          "primaryContrast": 9.714038907236372
+        },
+        {
+          "stage": "collapsed",
+          "width": 332
+        },
+        {
+          "stage": "uncertain",
+          "width": 332,
+          "primaryContrast": 9.714038907236372
+        },
+        {
+          "stage": "published-simulated",
+          "width": 332
+        },
+        {
+          "stage": "published-report",
+          "width": 332
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "entry": "agent",
+      "scenario": "network",
+      "simulatedDraftCreates": 1,
+      "simulatedPublishes": 1,
+      "widths": [
+        {
+          "stage": "review",
+          "width": 672,
+          "primaryContrast": 6.4533702840008145,
+          "primaryHoverContrast": 7.501305741909511
+        },
+        {
+          "stage": "editing",
+          "width": 672,
+          "primaryContrast": 6.4533702840008145,
+          "editorContrasts": [
+            {
+              "name": "报告标题",
+              "contrast": 15.716890547316728,
+              "color": "oklch(0.2 0.005 30)",
+              "background": "oklch(0.95 0.012 80)"
+            },
+            {
+              "name": "公开报告",
+              "contrast": 15.716890547316728,
+              "color": "oklch(0.2 0.005 30)",
+              "background": "oklch(0.95 0.012 80)"
+            }
+          ]
+        },
+        {
+          "stage": "edited-confirmation",
+          "width": 672,
+          "primaryContrast": 6.4533702840008145
+        },
+        {
+          "stage": "collapsed",
+          "width": 672
+        },
+        {
+          "stage": "uncertain",
+          "width": 672,
+          "primaryContrast": 6.640799009619375
+        },
+        {
+          "stage": "published-simulated",
+          "width": 672
+        },
+        {
+          "stage": "published-report",
+          "width": 672
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "entry": "agent",
+      "scenario": "offline",
+      "simulatedDraftCreates": 0,
+      "simulatedPublishes": 0,
+      "widths": [
+        {
+          "stage": "review",
+          "width": 332
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "entry": "agent",
+      "scenario": "ready-mobile",
+      "simulatedDraftCreates": 1,
+      "simulatedPublishes": 1,
+      "widths": [
+        {
+          "stage": "review",
+          "width": 332,
+          "primaryContrast": 9.714038907236372,
+          "primaryHoverContrast": 9.714038907236372
+        },
+        {
+          "stage": "editing",
+          "width": 332,
+          "primaryContrast": 9.714038907236372,
+          "editorContrasts": [
+            {
+              "name": "报告标题",
+              "contrast": 12.63457021085864,
+              "color": "oklch(0.95 0.005 30)",
+              "background": "oklch(0.28 0.0018 30)"
+            },
+            {
+              "name": "公开报告",
+              "contrast": 12.63457021085864,
+              "color": "oklch(0.95 0.005 30)",
+              "background": "oklch(0.28 0.0018 30)"
+            }
+          ]
+        },
+        {
+          "stage": "edited-confirmation",
+          "width": 332,
+          "primaryContrast": 9.714038907236372
+        },
+        {
+          "stage": "collapsed",
+          "width": 332
+        },
+        {
+          "stage": "published-simulated",
+          "width": 332
+        },
+        {
+          "stage": "published-report",
+          "width": 332
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "entry": "agent",
+      "scenario": "ready",
+      "simulatedDraftCreates": 1,
+      "simulatedPublishes": 1,
+      "widths": [
+        {
+          "stage": "review",
+          "width": 672,
+          "primaryContrast": 6.4533702840008145,
+          "primaryHoverContrast": 7.501305741909511
+        },
+        {
+          "stage": "editing",
+          "width": 672,
+          "primaryContrast": 6.4533702840008145,
+          "editorContrasts": [
+            {
+              "name": "报告标题",
+              "contrast": 15.716890547316728,
+              "color": "oklch(0.2 0.005 30)",
+              "background": "oklch(0.95 0.012 80)"
+            },
+            {
+              "name": "公开报告",
+              "contrast": 15.716890547316728,
+              "color": "oklch(0.2 0.005 30)",
+              "background": "oklch(0.95 0.012 80)"
+            }
+          ]
+        },
+        {
+          "stage": "edited-confirmation",
+          "width": 672,
+          "primaryContrast": 6.4533702840008145
+        },
+        {
+          "stage": "collapsed",
+          "width": 672
+        },
+        {
+          "stage": "published-simulated",
+          "width": 672
+        },
+        {
+          "stage": "published-report",
+          "width": 672
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "entry": "agent",
+      "scenario": "rejected",
+      "simulatedDraftCreates": 1,
+      "simulatedPublishes": 0,
+      "widths": [
+        {
+          "stage": "review",
+          "width": 672,
+          "primaryContrast": 6.4533702840008145,
+          "primaryHoverContrast": 7.501305741909511
+        },
+        {
+          "stage": "editing",
+          "width": 672,
+          "primaryContrast": 6.4533702840008145,
+          "editorContrasts": [
+            {
+              "name": "报告标题",
+              "contrast": 15.716890547316728,
+              "color": "oklch(0.2 0.005 30)",
+              "background": "oklch(0.95 0.012 80)"
+            },
+            {
+              "name": "公开报告",
+              "contrast": 15.716890547316728,
+              "color": "oklch(0.2 0.005 30)",
+              "background": "oklch(0.95 0.012 80)"
+            }
+          ]
+        },
+        {
+          "stage": "edited-confirmation",
+          "width": 672,
+          "primaryContrast": 6.4533702840008145
+        },
+        {
+          "stage": "collapsed",
+          "width": 672
+        },
+        {
+          "stage": "rejected",
+          "width": 672,
+          "primaryContrast": 6.512935428768494
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "entry": "agent",
+      "scenario": "uncertain-mobile",
+      "simulatedDraftCreates": 1,
+      "simulatedPublishes": 1,
+      "widths": [
+        {
+          "stage": "review",
+          "width": 332,
+          "primaryContrast": 9.714038907236372,
+          "primaryHoverContrast": 9.714038907236372
+        },
+        {
+          "stage": "editing",
+          "width": 332,
+          "primaryContrast": 9.714038907236372,
+          "editorContrasts": [
+            {
+              "name": "报告标题",
+              "contrast": 12.63457021085864,
+              "color": "oklch(0.95 0.005 30)",
+              "background": "oklch(0.28 0.0018 30)"
+            },
+            {
+              "name": "公开报告",
+              "contrast": 12.63457021085864,
+              "color": "oklch(0.95 0.005 30)",
+              "background": "oklch(0.28 0.0018 30)"
+            }
+          ]
+        },
+        {
+          "stage": "edited-confirmation",
+          "width": 332,
+          "primaryContrast": 9.714038907236372
+        },
+        {
+          "stage": "collapsed",
+          "width": 332
+        },
+        {
+          "stage": "uncertain",
+          "width": 332,
+          "primaryContrast": 9.714038907236372
+        },
+        {
+          "stage": "published-simulated",
+          "width": 332
+        },
+        {
+          "stage": "published-report",
+          "width": 332
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "entry": "agent",
+      "scenario": "uncertain",
+      "simulatedDraftCreates": 1,
+      "simulatedPublishes": 1,
+      "widths": [
+        {
+          "stage": "review",
+          "width": 672,
+          "primaryContrast": 6.4533702840008145,
+          "primaryHoverContrast": 7.501305741909511
+        },
+        {
+          "stage": "editing",
+          "width": 672,
+          "primaryContrast": 6.4533702840008145,
+          "editorContrasts": [
+            {
+              "name": "报告标题",
+              "contrast": 15.716890547316728,
+              "color": "oklch(0.2 0.005 30)",
+              "background": "oklch(0.95 0.012 80)"
+            },
+            {
+              "name": "公开报告",
+              "contrast": 15.716890547316728,
+              "color": "oklch(0.2 0.005 30)",
+              "background": "oklch(0.95 0.012 80)"
+            }
+          ]
+        },
+        {
+          "stage": "edited-confirmation",
+          "width": 672,
+          "primaryContrast": 6.4533702840008145
+        },
+        {
+          "stage": "collapsed",
+          "width": 672
+        },
+        {
+          "stage": "uncertain",
+          "width": 672,
+          "primaryContrast": 6.640799009619375
+        },
+        {
+          "stage": "published-simulated",
+          "width": 672
+        },
+        {
+          "stage": "published-report",
+          "width": 672
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "entry": "connector",
+      "scenario": "cancel",
+      "simulatedDraftCreates": 0,
+      "simulatedPublishes": 0,
+      "widths": [
+        {
+          "stage": "review",
+          "width": 672,
+          "primaryContrast": 6.4533702840008145,
+          "primaryHoverContrast": 7.501305741909511
+        },
+        {
+          "stage": "cancelled",
+          "width": 672
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "entry": "connector",
+      "scenario": "ready",
+      "simulatedDraftCreates": 0,
+      "simulatedPublishes": 1,
+      "widths": [
+        {
+          "stage": "review",
+          "width": 672,
+          "primaryContrast": 6.4533702840008145,
+          "primaryHoverContrast": 7.501305741909511
+        },
+        {
+          "stage": "editing",
+          "width": 672,
+          "primaryContrast": 6.519450861042046,
+          "editorContrasts": [
+            {
+              "name": "报告标题",
+              "contrast": 15.716890547316728,
+              "color": "oklch(0.2 0.005 30)",
+              "background": "oklch(0.95 0.012 80)"
+            },
+            {
+              "name": "公开报告",
+              "contrast": 15.716890547316728,
+              "color": "oklch(0.2 0.005 30)",
+              "background": "oklch(0.95 0.012 80)"
+            }
+          ]
+        },
+        {
+          "stage": "edited-confirmation",
+          "width": 672,
+          "primaryContrast": 6.4533702840008145
+        },
+        {
+          "stage": "published-simulated",
+          "width": 672
+        },
+        {
+          "stage": "published-report",
+          "width": 672
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "entry": "local",
+      "scenario": "conflict",
+      "simulatedDraftCreates": 0,
+      "simulatedPublishes": 0,
+      "widths": [
+        {
+          "stage": "review",
+          "width": 672,
+          "primaryContrast": 6.4533702840008145,
+          "primaryHoverContrast": 7.501305741909511
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "entry": "local",
+      "scenario": "empty",
+      "simulatedDraftCreates": 0,
+      "simulatedPublishes": 0,
+      "widths": [
+        {
+          "stage": "review",
+          "width": 672
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "entry": "local",
+      "scenario": "offline",
+      "simulatedDraftCreates": 0,
+      "simulatedPublishes": 0,
+      "widths": [
+        {
+          "stage": "review",
+          "width": 332
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "entry": "local",
+      "scenario": "ready-mobile",
+      "simulatedDraftCreates": 1,
+      "simulatedPublishes": 1,
+      "widths": [
+        {
+          "stage": "review",
+          "width": 332,
+          "primaryContrast": 9.714038907236372,
+          "primaryHoverContrast": 9.714038907236372
+        },
+        {
+          "stage": "local-evidence",
+          "width": 332,
+          "primaryContrast": 9.714038907236372
+        },
+        {
+          "stage": "editing",
+          "width": 332,
+          "primaryContrast": 9.714038907236372,
+          "editorContrasts": [
+            {
+              "name": "报告标题",
+              "contrast": 12.63457021085864,
+              "color": "oklch(0.95 0.005 30)",
+              "background": "oklch(0.28 0.0018 30)"
+            },
+            {
+              "name": "公开报告",
+              "contrast": 12.63457021085864,
+              "color": "oklch(0.95 0.005 30)",
+              "background": "oklch(0.28 0.0018 30)"
+            }
+          ]
+        },
+        {
+          "stage": "edited-confirmation",
+          "width": 332,
+          "primaryContrast": 9.714038907236372
+        },
+        {
+          "stage": "collapsed",
+          "width": 332
+        },
+        {
+          "stage": "published-simulated",
+          "width": 332
+        },
+        {
+          "stage": "published-report",
+          "width": 332
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "entry": "local",
+      "scenario": "ready",
+      "simulatedDraftCreates": 1,
+      "simulatedPublishes": 1,
+      "widths": [
+        {
+          "stage": "review",
+          "width": 672,
+          "primaryContrast": 6.4533702840008145,
+          "primaryHoverContrast": 7.501305741909511
+        },
+        {
+          "stage": "local-evidence",
+          "width": 672,
+          "primaryContrast": 6.4533702840008145
+        },
+        {
+          "stage": "editing",
+          "width": 672,
+          "primaryContrast": 6.4533702840008145,
+          "editorContrasts": [
+            {
+              "name": "报告标题",
+              "contrast": 15.716890547316728,
+              "color": "oklch(0.2 0.005 30)",
+              "background": "oklch(0.95 0.012 80)"
+            },
+            {
+              "name": "公开报告",
+              "contrast": 15.716890547316728,
+              "color": "oklch(0.2 0.005 30)",
+              "background": "oklch(0.95 0.012 80)"
+            }
+          ]
+        },
+        {
+          "stage": "edited-confirmation",
+          "width": 672,
+          "primaryContrast": 6.4533702840008145
+        },
+        {
+          "stage": "collapsed",
+          "width": 672
+        },
+        {
+          "stage": "published-simulated",
+          "width": 672
+        },
+        {
+          "stage": "published-report",
+          "width": 672
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "entry": "local",
+      "scenario": "uncertain-mobile",
+      "simulatedDraftCreates": 1,
+      "simulatedPublishes": 1,
+      "widths": [
+        {
+          "stage": "review",
+          "width": 332,
+          "primaryContrast": 9.714038907236372,
+          "primaryHoverContrast": 9.714038907236372
+        },
+        {
+          "stage": "local-evidence",
+          "width": 332,
+          "primaryContrast": 9.714038907236372
+        },
+        {
+          "stage": "editing",
+          "width": 332,
+          "primaryContrast": 9.714038907236372,
+          "editorContrasts": [
+            {
+              "name": "报告标题",
+              "contrast": 12.63457021085864,
+              "color": "oklch(0.95 0.005 30)",
+              "background": "oklch(0.28 0.0018 30)"
+            },
+            {
+              "name": "公开报告",
+              "contrast": 12.63457021085864,
+              "color": "oklch(0.95 0.005 30)",
+              "background": "oklch(0.28 0.0018 30)"
+            }
+          ]
+        },
+        {
+          "stage": "edited-confirmation",
+          "width": 332,
+          "primaryContrast": 9.714038907236372
+        },
+        {
+          "stage": "collapsed",
+          "width": 332
+        },
+        {
+          "stage": "uncertain",
+          "width": 332,
+          "primaryContrast": 9.714038907236372
+        },
+        {
+          "stage": "published-simulated",
+          "width": 332
+        },
+        {
+          "stage": "published-report",
+          "width": 332
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "entry": "local",
+      "scenario": "uncertain",
+      "simulatedDraftCreates": 1,
+      "simulatedPublishes": 1,
+      "widths": [
+        {
+          "stage": "review",
+          "width": 672,
+          "primaryContrast": 6.4533702840008145,
+          "primaryHoverContrast": 7.501305741909511
+        },
+        {
+          "stage": "local-evidence",
+          "width": 672,
+          "primaryContrast": 6.4533702840008145
+        },
+        {
+          "stage": "editing",
+          "width": 672,
+          "primaryContrast": 6.4533702840008145,
+          "editorContrasts": [
+            {
+              "name": "报告标题",
+              "contrast": 15.716890547316728,
+              "color": "oklch(0.2 0.005 30)",
+              "background": "oklch(0.95 0.012 80)"
+            },
+            {
+              "name": "公开报告",
+              "contrast": 15.716890547316728,
+              "color": "oklch(0.2 0.005 30)",
+              "background": "oklch(0.95 0.012 80)"
+            }
+          ]
+        },
+        {
+          "stage": "edited-confirmation",
+          "width": 672,
+          "primaryContrast": 6.4533702840008145
+        },
+        {
+          "stage": "collapsed",
+          "width": 672
+        },
+        {
+          "stage": "uncertain",
+          "width": 672,
+          "primaryContrast": 6.640799009619375
+        },
+        {
+          "stage": "published-simulated",
+          "width": 672
+        },
+        {
+          "stage": "published-report",
+          "width": 672
+        }
+      ],
+      "pageErrors": []
+    }
+  ],
+  "files": [
+    {
+      "name": "agent-missing-missing-report.png",
+      "title": "持续 404：浅色桌面",
+      "explanation": "实际编辑后 publish 和 reload 都返回 404；当前标题/正文可读，复制使用当前编辑文本，重载只读取原 draftId。",
+      "width": 2560,
+      "height": 1800,
+      "sha256": "cf42cc7981c0574793d34d1a052f2c5b3109254341805a21b925f1f571c67508"
+    },
+    {
+      "name": "agent-missing-mobile-missing-report.png",
+      "title": "持续 404：375px 暗色",
+      "explanation": "同一恢复路径在窄屏中保持报告可读、可复制；没有额外 create/publish 或模拟 Issue。",
+      "width": 750,
+      "height": 1800,
+      "sha256": "4777a48dde66ca811145a489b5b340d6c1d19238e7b7a282a655cfca04d7fb00"
+    }
+  ]
+}
