@@ -1,0 +1,140 @@
+{
+  "subject": "zts212653/clowder-ai#1975",
+  "sourceHead": "bebe2b9e8c0b65a3eb2e5acacad23b2a4c699e70",
+  "fixture": "packages/web/test/browser/fixtures/conversation-feedback.tsx",
+  "baseJourney": "packages/web/test/browser/conversation-feedback.test.mjs",
+  "captureScriptSha256": "9099e121c934ac585c446c881ba6db6434c559406d59ef3108070427c3a5d0dd",
+  "deviceScaleFactor": 2,
+  "normalViewport": {
+    "width": 1280,
+    "height": 900
+  },
+  "offlineViewport": {
+    "width": 375,
+    "height": 900
+  },
+  "environment": "Real ChatMessage and feedback components in an isolated browser fixture; API responses are synthetic. Non-fixture network traffic is blocked. No running desktop runtime or installed plugin is used.",
+  "simulatedSuccessUrl": "https://github.com/fixture/repo/issues/7",
+  "realGitHubIssuesCreated": 0,
+  "captureExitCode": 0,
+  "captureJourneys": [
+    {
+      "entry": "local",
+      "scenario": "ready",
+      "simulatedDraftCreates": 1,
+      "simulatedPublishes": 1,
+      "pageErrors": []
+    },
+    {
+      "entry": "agent",
+      "scenario": "ready",
+      "simulatedDraftCreates": 1,
+      "simulatedPublishes": 1,
+      "pageErrors": []
+    },
+    {
+      "entry": "local",
+      "scenario": "offline",
+      "simulatedDraftCreates": 0,
+      "simulatedPublishes": 0,
+      "pageErrors": []
+    },
+    {
+      "entry": "agent",
+      "scenario": "offline",
+      "simulatedDraftCreates": 0,
+      "simulatedPublishes": 0,
+      "pageErrors": []
+    }
+  ],
+  "files": [
+    {
+      "name": "local-ready-entry.png",
+      "title": "1. 本地失败报告入口",
+      "explanation": "会话内的已记录卡片可以展开；此时没有创建插件草稿或 GitHub Issue。",
+      "sha256": "c2f4d6f14d5afaaa74ad0c10cfb750a640d1ee676d0aa2a4eabd518ae368d49c",
+      "width": 2560,
+      "height": 1800
+    },
+    {
+      "name": "local-ready-report-review.png",
+      "title": "2. 本地报告审阅与仓库选择",
+      "explanation": "公开报告和隐私提示、已配置目标仓库、复制报告与手动提交入口。预览不会创建远端 Issue。",
+      "sha256": "1a7965519037362379f9c18337bac223d31413edf781434c18375908b15d2fff",
+      "width": 2560,
+      "height": 1800
+    },
+    {
+      "name": "local-ready-draft-preview.png",
+      "title": "3. 插件草稿预览",
+      "explanation": "点击“预览并提交”后进入可编辑草稿，显示仓库和 Submit to GitHub；此时隔离 provider 的发布计数仍为 0。",
+      "sha256": "c94607b1e2fe498b9c245580868b296d3e3fa2bf0700f05aeb53c13fe2a65a54",
+      "width": 2560,
+      "height": 1800
+    },
+    {
+      "name": "local-ready-edited-confirmation.png",
+      "title": "4. 编辑后等待明确确认",
+      "explanation": "通过真实输入框修改了合成标题和正文；只有再点击 Submit to GitHub 才会调用发布接口。",
+      "sha256": "c1869886b65e7bea787c647d875bdc77eb715eef134722e2dd46eb668c80bbe3",
+      "width": 2560,
+      "height": 1800
+    },
+    {
+      "name": "local-ready-published-simulated-link.png",
+      "title": "5. 本地入口成功状态：模拟回链",
+      "explanation": "真实成功组件显示已修改的标题和 #7 链接。链接来自隔离 provider：模拟 https://github.com/fixture/repo/issues/7；没有在 GitHub 创建测试 Issue。",
+      "sha256": "27b987464d82243437d5782ad8f915d061e0d122d1939690cdc91ecb92489861",
+      "width": 2560,
+      "height": 1800
+    },
+    {
+      "name": "agent-ready-report-review.png",
+      "title": "6. Agent 提议入口与报告审阅",
+      "explanation": "Agent 消息内直接显示 Issue 报告，沿用同一发布流程；示例仓库 fixture/repo、标签 bug。",
+      "sha256": "ed0c06d0931b1814e290fcff53d40a7a4ed4e11ce860eeddfacfa0a1a29cffe4",
+      "width": 2560,
+      "height": 1800
+    },
+    {
+      "name": "agent-ready-draft-preview.png",
+      "title": "7. Agent 提议进入插件草稿",
+      "explanation": "显示真实可编辑预览、目标仓库和标签，尚未发布。",
+      "sha256": "a617262325454750ddc460a89e928c5cf31352a5c43c6103a3a25e0def73f37f",
+      "width": 2560,
+      "height": 1800
+    },
+    {
+      "name": "agent-ready-edited-confirmation.png",
+      "title": "8. Agent 草稿编辑与明确确认",
+      "explanation": "修改合成报告后，仍由用户点击 Submit to GitHub 才发布。",
+      "sha256": "4c7f84fe182d1bb6993b76446c70f0c7268ee2d2c5ef1ef9fcf9e5f00722fc73",
+      "width": 2560,
+      "height": 1800
+    },
+    {
+      "name": "agent-ready-published-simulated-link.png",
+      "title": "9. Agent 入口成功状态：模拟回链",
+      "explanation": "隔离 provider 返回的模拟 #7 回链，未创建真实 GitHub Issue。",
+      "sha256": "e0aabfb3699d9312a91a6542195c08af47fb79166d2ad48175a80aaa866117b4",
+      "width": 2560,
+      "height": 1800
+    },
+    {
+      "name": "local-offline-report-review.png",
+      "title": "10. 插件不可用：本地报告仍可复制",
+      "explanation": "375px 窄屏、暗色；配置请求模拟 503。复制报告可用，不展示发布按钮或未核验的手动仓库链接。",
+      "sha256": "6de7bcfba84827208613402bbcaa5ffabd3d610e1eb46473040e40e27d338f10",
+      "width": 750,
+      "height": 1800
+    },
+    {
+      "name": "agent-offline-report-review.png",
+      "title": "11. 插件不可用：Agent 报告仍可复制",
+      "explanation": "同样保留报告和复制入口，允许暂不处理；不请求创建插件草稿或发布 Issue。",
+      "sha256": "2ba78cbcd49a08407b726d7ec75e6cd7e7f7fc365ab73cb1e543dc554dd28dd3",
+      "width": 750,
+      "height": 1800
+    }
+  ]
+}
