@@ -1,5 +1,6 @@
 import type { CollectionManifest, IEvidenceStore, SearchOptions } from '../domains/memory/interfaces.js';
 import type { MessageSearchService } from '../domains/memory/MessageSearchService.js';
+import type { MemoryPluginHost } from '../domains/plugin/host-surface/memory/memory-plugin-host.js';
 import type { createTasteBrowseProvider } from '../domains/plugin/host-surface/memory/taste-browse-provider.js';
 
 export type MemorySearchType = 'memory' | 'documents' | 'conversations';
@@ -10,6 +11,7 @@ export interface MemorySearchQuery {
   limit: number;
 }
 export interface MemorySearchSources {
+  searchProjectDocuments?: MemoryPluginHost['searchDocuments'];
   tasteBrowse?: Pick<ReturnType<typeof createTasteBrowseProvider>, 'list'>;
   messageSearchService?: Pick<MessageSearchService, 'search'>;
 }

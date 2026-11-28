@@ -421,3 +421,29 @@ test('memory dispatch binds embedding to the dispatched search and its Host canc
   await provider.attempt({ operation: 'kv.get', input: { threadRef: 'thread', key: 'one' } }, caller);
   assert.deepEqual(observed, [{ query: 'evidence query', signal }, undefined]);
 });
+
+test('workbench search validates the response and binds query cancellation to the approved plugin', async () => {
+  const provider = new MemoryPluginHost();
+  const input = { query: 'synthetic query', options: { scope: 'docs', mode: 'hybrid', depth: 'summary', limit: 11 } };
+  const controller = new AbortController();
+  const hit = { anchor: 'D1', kind: 'architecture', sourcePath: 'design.md', sourceHash: 'source' };
+  let value = { hits: [{ ...hit, snippet: 'use only canonical document text' }], degraded: true };
+  await provider.admit(admission, {
+    exposes: async () => true,
+    async attempt(instanceId, method, request) {
+      if (method === 'memory.describe') return { status: 'returned', value: supportedDescriptor() };
+      assert.equal(method, 'memory.dispatch');
+      assert.deepEqual(request, { operation: 'search.query', input });
+      const caller = currentPluginCallContext(instanceId);
+      assert.equal(caller?.userId, 'owner');
+      assert.deepEqual(caller?.memorySearch, { query: input.query, signal: controller.signal });
+      return { status: 'returned', value };
+    },
+  });
+  provider.markReady(pluginInstanceId);
+  assert.deepEqual(await provider.searchDocuments(input, 'owner', controller.signal), { hits: [hit], degraded: true });
+  value = { hits: [{ anchor: 12 }], degraded: false };
+  await assert.rejects(provider.searchDocuments(input, 'owner', controller.signal), /memory_unavailable/);
+  controller.abort();
+  await assert.rejects(async () => provider.searchDocuments(input, 'owner', controller.signal), { name: 'AbortError' });
+});

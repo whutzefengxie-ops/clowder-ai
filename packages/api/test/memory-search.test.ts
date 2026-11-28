@@ -4,7 +4,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, test } from 'node:test';
 import Fastify from 'fastify';
-import type { CollectionManifest, EvidenceItem, IEvidenceStore } from '../src/domains/memory/interfaces.js';
+import type {
+  CollectionManifest,
+  EvidenceItem,
+  IEvidenceStore,
+  SearchOptions,
+} from '../src/domains/memory/interfaces.js';
 import { SqliteEvidenceStore } from '../src/domains/memory/SqliteEvidenceStore.js';
 import { memoryPageReadRoutes } from '../src/routes/memory-page-read.js';
 import { createTasteBrowseFixture } from './helpers/taste-browse-fixture.js';
@@ -54,15 +59,34 @@ async function fixture() {
     manifest,
     { ...manifest, id: 'domain:foreign', sensitivity: 'private' as const, ownerUserId: 'another' },
   ];
-  const store: Pick<IEvidenceStore, 'search' | 'getByAnchor'> = {
-    search: async (_q, opts) => {
+  const store = {
+    initialDocumentIndexPending: false,
+    search: async (_query: string, opts?: SearchOptions) => {
       calls.push({ owner: 'docs', depth: opts?.depth, scope: opts?.scope });
       if (documentFailure) throw new Error('unavailable');
       return [...items.values()];
     },
-    getByAnchor: async (anchor) => items.get(anchor) ?? null,
+    getByAnchor: async (anchor: string) => items.get(anchor) ?? null,
   };
+  const pluginQueries: Array<{ query: string; userId: string; limit: number; depth: string; signal?: AbortSignal }> =
+    [];
+  let pluginFailure = false;
   const searchSources = {
+    searchProjectDocuments: async (
+      input: { query: string; options: { limit: number; depth: string } },
+      userId: string,
+      signal?: AbortSignal,
+    ) => {
+      pluginQueries.push({ query: input.query, userId, ...input.options, signal });
+      if (pluginFailure) throw new Error('memory_unavailable');
+      return {
+        hits: [
+          { anchor: 'missing', kind: 'architecture', sourcePath: 'design.md' },
+          { anchor: 'D1', kind: 'architecture', sourcePath: 'design.md' },
+        ],
+        degraded: false,
+      };
+    },
     tasteBrowse: createTasteBrowseFixture({ canonicalRoot: () => root, approvalLockKey: () => 'unused' }),
     messageSearchService: {
       search: async (_input: unknown, principal: { userId: string }) => {
@@ -104,6 +128,18 @@ async function fixture() {
     items,
     calls,
     manifests,
+    pluginQueries,
+    markDocumentIndexPending: () => {
+      store.initialDocumentIndexPending = true;
+    },
+    useMainCollection: () => {
+      manifest.id = 'project:cat-cafe';
+      opts.stores.delete('project:visible');
+      opts.stores.set(manifest.id, store as IEvidenceStore);
+    },
+    failPlugin: () => {
+      pluginFailure = true;
+    },
     get: (query = '?q=搜索') =>
       app.inject({
         url: `/api/memory/search${query}`,
@@ -166,6 +202,61 @@ test('unifies approved memory, typed documents and canonical message results wit
   assert.ok(f.calls.some((c) => c.owner === 'owner'));
   assert.ok(!JSON.stringify(body).includes('domain:foreign'));
   assert.ok(!JSON.stringify(body).includes('pending.md'));
+});
+
+test('local workbench searches the main collection through the plugin and projects canonical documents', async () => {
+  f.useMainCollection();
+  const response = await f.get('?q=%E6%90%9C%E7%B4%A2&type=documents&depth=raw&limit=20');
+  assert.equal(response.statusCode, 200);
+  assert.equal(f.pluginQueries.length, 1);
+  const [request] = f.pluginQueries;
+  assert.deepEqual(
+    { ...request, signal: undefined },
+    {
+      query: '\u641c\u7d22',
+      userId: 'owner',
+      scope: 'docs',
+      mode: 'hybrid',
+      depth: 'raw',
+      limit: 20,
+      signal: undefined,
+    },
+  );
+  assert.ok(request.signal instanceof AbortSignal);
+  assert.equal(f.calls.length, 0);
+  const [group] = response.json().groups;
+  assert.equal(group.status, 'partial');
+  assert.equal(group.results.length, 1);
+  assert.deepEqual(group.results[0].destination, { kind: 'document', collection: 'project:cat-cafe', anchor: 'D1' });
+  assert.match(group.results[0].snippet, /\u771f\u5b9e\u6587\u6863\u539f\u6587/u);
+});
+
+test('does not start plugin search while the primary document index is initializing', async () => {
+  f.useMainCollection();
+  f.markDocumentIndexPending();
+  const [group] = (await f.get('?type=documents&q=search')).json().groups;
+  assert.equal(group.status, 'partial');
+  assert.equal(group.degraded, true);
+  assert.deepEqual(group.results, []);
+  assert.equal(f.pluginQueries.length, 0);
+  assert.equal(f.calls.length, 0);
+});
+
+test('unavailable plugin leaves the local main collection unavailable and preserves remote document reads', async () => {
+  f.useMainCollection();
+  f.failPlugin();
+  const local = await f.get('?q=%E6%90%9C%E7%B4%A2&type=documents');
+  assert.equal(local.json().groups[0].status, 'unavailable');
+  assert.equal(f.calls.length, 0);
+
+  const remote = await f.app.inject({
+    url: '/api/memory/search?q=%E6%90%9C%E7%B4%A2&type=documents',
+    remoteAddress: '192.0.2.2',
+    headers: { 'x-test-session': 'owner' },
+  });
+  assert.equal(remote.statusCode, 200);
+  assert.equal(remote.json().groups[0].results[0].destination.anchor, 'D1');
+  assert.equal(f.pluginQueries.length, 1);
 });
 
 test('remote owner sessions read public sources without private taste or foreign collection metadata', async () => {

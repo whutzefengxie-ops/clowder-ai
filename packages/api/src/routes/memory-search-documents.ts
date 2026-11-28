@@ -15,6 +15,8 @@ import {
   type SearchExecution,
 } from './memory-search-types.js';
 
+type DocumentCandidate = Pick<EvidenceItem, 'anchor' | 'sourcePath' | 'sourceHash'> & { kind: string };
+
 async function sourceSnippet(item: EvidenceItem, path: string | null, query: MemorySearchQuery) {
   if (query.depth !== 'raw' || !path) return item.summary ?? '';
   const preview = await readWorkspaceFilePreview(path, { maxBytes: 32_768 });
@@ -62,13 +64,14 @@ export async function searchMemoryDocuments(
   );
   let partial = false;
   let degraded = false;
-  const sources: KnowledgeDiscoverySource<EvidenceItem, MemorySearchGroup['results'][number]>[] = [];
+  const sources: KnowledgeDiscoverySource<DocumentCandidate, MemorySearchGroup['results'][number]>[] = [];
   for (const manifest of visible) {
     const store = opts.stores.get(manifest.id);
     if (!store) {
       partial = true;
       continue;
     }
+    const searchProject = manifest.id === 'project:cat-cafe' && privateUserId ? opts.searchProjectDocuments : undefined;
     const adapter = documentDiscoverySource({
       id: manifest.id,
       store,
@@ -81,11 +84,16 @@ export async function searchMemoryDocuments(
       },
     });
     const observed = new Map<string, EvidenceItem>();
-    const project = async (item: EvidenceItem) => {
+    const project = async (item: DocumentCandidate) => {
       checkMemorySearchExecution(execution);
       if (isMemoryIndexPath(item.sourcePath ?? '') || /^(thread|session)$/.test(item.kind)) return null;
       const canonical = await store.getByAnchor(item.anchor);
-      if (!canonical || canonical.kind !== item.kind || canonical.sourcePath !== item.sourcePath) {
+      if (
+        !canonical ||
+        canonical.kind !== item.kind ||
+        canonical.sourcePath !== item.sourcePath ||
+        (item.sourceHash !== undefined && canonical.sourceHash !== item.sourceHash)
+      ) {
         partial = true;
         return null;
       }
@@ -95,7 +103,27 @@ export async function searchMemoryDocuments(
     };
     sources.push({
       id: adapter.id,
-      read: adapter.read,
+      read: searchProject
+        ? async ({ query: text, signal }) => {
+            if (store.initialDocumentIndexPending) {
+              partial = true;
+              degraded = true;
+              return { candidates: [] };
+            }
+            // The package contract caps a single query at 20 candidates and has no cursor.
+            const limit = Math.min(query.limit + 1, 20);
+            const result = await searchProject(
+              { query: text, options: { scope: 'docs', mode: 'hybrid', depth: query.depth, limit } },
+              opts.ownerUserId,
+              signal,
+            );
+            if (result.degraded) {
+              partial = true;
+              degraded = true;
+            }
+            return { candidates: [...result.hits], truncated: result.hits.length >= limit };
+          }
+        : adapter.read,
       project,
       key: (row) => row.id,
       tolerateError: true,

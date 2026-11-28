@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { RECALL_DISPLAY_DOC_KINDS } from '@cat-cafe/shared';
-import type { DispatchInput } from '@clowder-ai/plugin-memory-contract';
+import type { DispatchInput, SearchInput } from '@clowder-ai/plugin-memory-contract';
 import {
   explainDescriptor,
   isCompatibleDescriptor,
@@ -59,6 +59,20 @@ export const MEMORY_HOST_REQUIRED_OPERATIONS = [
   ...Object.keys(tasteBrowseOutputSchemas),
 ];
 
+const documentSearchResult = z.object({
+  hits: z
+    .array(
+      z.object({
+        anchor: z.string().min(1),
+        kind: z.string().min(1),
+        sourcePath: z.string().optional(),
+        sourceHash: z.string().optional(),
+      }),
+    )
+    .max(20),
+  degraded: z.boolean(),
+});
+
 export class MemoryProviderCallError extends Error {
   constructor(readonly effect: PluginInvocationEffect) {
     super('memory_unavailable');
@@ -87,16 +101,20 @@ export async function callMemoryOwner<T>(
   request: MemoryDispatch,
   schema: z.ZodType<T>,
   userId: string,
-  scope: { threadId?: string; invocationId?: string; privateOwnerAccess?: boolean } = {},
+  scope: { threadId?: string; invocationId?: string; privateOwnerAccess?: boolean; signal?: AbortSignal } = {},
 ): Promise<T> {
-  const outcome = await provider.attempt(request, {
-    catId: 'user',
-    userId,
-    threadId: scope.threadId ?? 'default',
-    memoryPrivateOwnerAccess: scope.privateOwnerAccess,
-    invocationId: scope.invocationId ?? randomUUID(),
-    assertCurrent: async () => {},
-  });
+  const outcome = await provider.attempt(
+    request,
+    {
+      catId: 'user',
+      userId,
+      threadId: scope.threadId ?? 'default',
+      memoryPrivateOwnerAccess: scope.privateOwnerAccess,
+      invocationId: scope.invocationId ?? randomUUID(),
+      assertCurrent: async () => scope.signal?.throwIfAborted(),
+    },
+    scope.signal,
+  );
   if (outcome.status === 'failed') throw new MemoryProviderCallError(outcome.effect);
   const response = schema.safeParse(outcome.value);
   if (!response.success) throw new MemoryProviderCallError('unknown');
@@ -173,6 +191,11 @@ export class MemoryPluginHost {
 
   isReady() {
     return this.#binding?.ready === true;
+  }
+
+  searchDocuments(input: SearchInput, userId: string, signal?: AbortSignal) {
+    signal?.throwIfAborted();
+    return callMemoryOwner(this, { operation: 'search.query', input }, documentSearchResult, userId, { signal });
   }
 
   readIndexStatus(generationId: MemoryIndexStatusRequest['input']['generationId'], userId: string) {

@@ -7781,7 +7781,11 @@ async function initializeApi(
       ownerUserId: privateUserId,
       catalog: memoryServices.catalog,
       stores: libraryStores,
-      searchSources: { tasteBrowse, messageSearchService },
+      searchSources: {
+        tasteBrowse,
+        messageSearchService,
+        searchProjectDocuments: (input, userId, signal) => memoryProvider.searchDocuments(input, userId, signal),
+      },
       brakeSources: { eventMemoryStore, threadStore, messageStore },
       recallSources: {
         ...recallOwnerMessageSources,

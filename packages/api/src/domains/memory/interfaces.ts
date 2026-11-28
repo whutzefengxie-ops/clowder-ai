@@ -383,6 +383,7 @@ export interface ReflectionContext {
 // ── Interfaces ───────────────────────────────────────────────────────
 
 export interface IEvidenceStore {
+  readonly initialDocumentIndexPending?: boolean;
   readMessagePassageState?(
     candidate: import('./message-passage-search-types.js').MessagePassageCandidate,
   ): import('./message-passage-search-types.js').MessagePassageIndexState;
